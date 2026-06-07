@@ -1,7 +1,9 @@
 # nextpas.core.lockfree
 
-`nextpas.core.lockfree` 提供 nextpas.core 内部可复用的无锁数据结构。当前模块优先服务
-runtime/framework 内部热路径，而不是公开宣称完整替代 Rust std、Go std 或 C++ std 的并发容器。
+`nextpas.core.lockfree` 提供 nextpas.core 内部可复用的 lock-free-oriented / non-blocking fast-path
+数据结构。当前模块优先服务 runtime/framework 内部热路径，而不是公开宣称完整替代 Rust std、
+Go std 或 C++ std 的并发容器；lock-free progress claim 只适用于目标平台底层 atomic 操作本身
+也是 lock-free 的路径。
 所有结构只接受 unmanaged element type；`string`、interface、dynamic array 等 managed 类型会被拒绝。
 `TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`, `TLockFreeStack<T>`, and `TWorkStealingDeque<T>` reject managed element types at construction time with `EArgumentError`.
 
@@ -37,9 +39,11 @@ batch API 是连续单元素操作的批量便利方法，不表示整个 batch 
 `TSpscQueue<T>.EnqueueBatch` returns 0 after `Close` and must not publish new items.
 
 `TMpmcQueue<T>` 支持多个 producer 和多个 consumer。队列是固定容量 ring，构造时把容量提升到
-power-of-two。`Close` 会阻止新的 `TryEnqueue` 成功并唤醒等待者；consumer 仍可 drain 已发布元素。
+power-of-two。`Close` 会阻止观察到 closed flag 的 `TryEnqueue` 成功并唤醒等待者；已经进入
+admitted enqueue 区间的 producer 仍可在自己的 per-item linearization point 发布元素，consumer 会等到
+closed、当前为空且没有 admitted producer 仍可能发布时才把 closed-empty 视为终止状态。
 `TMpmcQueue<T>.EnqueueBatch` / `DequeueBatch` are convenience loops over consecutive `TryEnqueue` / `TryDequeue` calls: they return the successful prefix so far when the next single-item operation would fail, instead of waiting for the remainder or promising a shared batch linearization point.
-`TMpmcQueue<T>.EnqueueBatch` returns 0 after `Close` and must not publish new items.
+`TMpmcQueue<T>.EnqueueBatch` returns 0 when it observes `Close` before publishing any item; under concurrent `Close`, it returns the prefix already published by its underlying `TryEnqueue` calls.
 `TMpmcQueue<T>` accepts requested capacity 1; its per-slot sequence token uses separate empty/full states so a single-slot queue still distinguishes full from empty.
 
 `TMpscQueue<T>` 是多 producer、单 consumer 队列。`Enqueue` 是过程，不返回 close 结果；`Close`
@@ -62,7 +66,7 @@ power-of-two；超过最大可表示 power-of-two 的容量会被拒绝，而不
 ## Thread safety contract
 
 `TSpscQueue<T>` permits exactly one producer-side caller and exactly one consumer-side caller; multiple producers or multiple consumers on the same queue are outside the contract.
-`TMpmcQueue<T>` permits multiple concurrent producers and consumers; `Close` may race with producers, after which new enqueue attempts fail while consumers may drain already published items.
+`TMpmcQueue<T>` permits multiple concurrent producers and consumers; `Close` may race with producers. Enqueue calls admitted before observing the closed flag may still publish at their normal per-item linearization point; calls that observe `Close` fail, and consumers only treat closed-empty as terminal after no admitted producer can still publish.
 `TMpscQueue<T>` permits multiple producers and exactly one consumer; `Enqueue` does not observe `Close`, so callers must stop and join producers before destroy.
 `TLockFreeStack<T>` permits multiple concurrent `TryPush` / `TryPop` callers over its fixed slot pool; capacity bounds and unmanaged element restrictions still apply.
 `TWorkStealingDeque<T>` permits exactly one owner thread for `TryPush` / `TryPop` and multiple thief threads for `TrySteal`; owner methods are not multi-owner safe.
@@ -111,6 +115,7 @@ count reclamation；安全边界依赖 single-consumer contract，以及销毁�
 
 `TSpscQueue<T>` 和 `TMpmcQueue<T>` 的 `Close` 会设置 closed flag 并唤醒 data/space waiters。close 后
 producer 侧等待操作应返回失败，consumer 侧可继续 drain 已发布元素。
+`Close` is not a lifetime barrier: callers must keep the queue object alive until all producer and consumer calls have returned, then join/quiesce those threads before `Free`.
 `TSpscQueue<T>.Close` wakes already-blocked `EnqueueWait` / `DequeueWait` calls so a closed queue stops waiting even without a timeout.
 `TSpscQueue<T>.Close` wakes already-blocked `EnqueueTimeout` / `DequeueTimeout` calls so a closed queue stops waiting promptly instead of sleeping until the full timeout.
 `TMpmcQueue<T>.Close` wakes already-blocked `EnqueueWait` / `DequeueWait` calls so blocked producers and consumers stop waiting even without a timeout.

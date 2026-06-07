@@ -580,6 +580,148 @@ begin
 end;
 
 { ============================================================ }
+{ TEST 6B: MPMC Close Races Active Producers                   }
+{ Close while producers are live; consumed must match accepted  }
+{ ============================================================ }
+
+const
+  MPMC_CLOSE_RACE_PRODUCERS = 6;
+  MPMC_CLOSE_RACE_CONSUMERS = 4;
+  MPMC_CLOSE_RACE_CAPACITY = 4;
+  MPMC_CLOSE_RACE_MAX_VALUES = 65536;
+
+var
+  GMpmcCloseRaceQ: TIntMpmc;
+  GMpmcCloseRaceStart: Int32;
+  GMpmcCloseRaceStarted: Int32;
+  GMpmcCloseRaceDone: Int32;
+  GMpmcCloseRaceNextValue: Int64;
+  GMpmcCloseRacePublished: Int64;
+  GMpmcCloseRaceConsumed: Int64;
+  GMpmcCloseRaceOutOfRange: Int64;
+  GMpmcCloseRaceConsumedMap: array[0..MPMC_CLOSE_RACE_MAX_VALUES - 1] of Int32;
+
+function MpmcCloseRaceProducer(AArg: Pointer): Pointer; cdecl;
+var
+  LValue: Integer;
+begin
+  Result := nil;
+  AtomicFetchAdd32(GMpmcCloseRaceStarted, 1, moAcqRel);
+  while AtomicLoad32(GMpmcCloseRaceStart, moAcquire) = 0 do
+    CpuPause;
+
+  while True do
+  begin
+    LValue := Integer(AtomicFetchAdd64(GMpmcCloseRaceNextValue, 1, moRelaxed));
+    if LValue >= MPMC_CLOSE_RACE_MAX_VALUES then
+      Break;
+    if GMpmcCloseRaceQ.TryEnqueue(LValue) then
+      AtomicFetchAdd64(GMpmcCloseRacePublished, 1, moRelease)
+    else if GMpmcCloseRaceQ.IsClosed then
+      Break
+    else
+      CpuPause;
+  end;
+  AtomicFetchAdd32(GMpmcCloseRaceDone, 1, moAcqRel);
+end;
+
+function MpmcCloseRaceConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+begin
+  Result := nil;
+  while GMpmcCloseRaceQ.DequeueWait(LV) do
+  begin
+    if (LV >= 0) and (LV < MPMC_CLOSE_RACE_MAX_VALUES) then
+      AtomicFetchAdd32(GMpmcCloseRaceConsumedMap[LV], 1, moRelaxed)
+    else
+      AtomicFetchAdd64(GMpmcCloseRaceOutOfRange, 1, moRelaxed);
+    AtomicFetchAdd64(GMpmcCloseRaceConsumed, 1, moRelease);
+  end;
+end;
+
+procedure TestMpmcCloseRacesActiveProducers;
+var
+  LProducers: array[0..MPMC_CLOSE_RACE_PRODUCERS - 1] of TPlatformThreadHandle;
+  LConsumers: array[0..MPMC_CLOSE_RACE_CONSUMERS - 1] of TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LI, LDuplicates: Integer;
+  LV: Integer;
+  LLeftover: Int64;
+begin
+  GMpmcCloseRaceQ := TIntMpmc.Create(MPMC_CLOSE_RACE_CAPACITY);
+  try
+    AtomicStore32(GMpmcCloseRaceStart, 0, moRelease);
+    AtomicStore32(GMpmcCloseRaceStarted, 0, moRelease);
+    AtomicStore32(GMpmcCloseRaceDone, 0, moRelease);
+    AtomicStore64(GMpmcCloseRaceNextValue, 0, moRelease);
+    AtomicStore64(GMpmcCloseRacePublished, 0, moRelease);
+    AtomicStore64(GMpmcCloseRaceConsumed, 0, moRelease);
+    AtomicStore64(GMpmcCloseRaceOutOfRange, 0, moRelease);
+    for LI := 0 to MPMC_CLOSE_RACE_MAX_VALUES - 1 do
+      AtomicStore32(GMpmcCloseRaceConsumedMap[LI], 0, moRelaxed);
+
+    for LI := 0 to MPMC_CLOSE_RACE_CONSUMERS - 1 do
+      CheckEqual(Int64(0), Int64(platform_thread_create(LConsumers[LI], @MpmcCloseRaceConsumer, nil)),
+        'MPMC close-race consumer thread must start');
+    for LI := 0 to MPMC_CLOSE_RACE_PRODUCERS - 1 do
+      CheckEqual(Int64(0), Int64(platform_thread_create(LProducers[LI], @MpmcCloseRaceProducer, Pointer(PtrInt(LI)))),
+        'MPMC close-race producer thread must start');
+
+    for LI := 1 to 1000 do
+    begin
+      if AtomicLoad32(GMpmcCloseRaceStarted, moAcquire) = MPMC_CLOSE_RACE_PRODUCERS then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(MPMC_CLOSE_RACE_PRODUCERS),
+      Int64(AtomicLoad32(GMpmcCloseRaceStarted, moAcquire)),
+      'MPMC close race producers must all start before release');
+
+    AtomicStore32(GMpmcCloseRaceStart, 1, moRelease);
+    for LI := 1 to 1000 do
+    begin
+      if AtomicLoad64(GMpmcCloseRacePublished, moAcquire) >= MPMC_CLOSE_RACE_CAPACITY then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    Check(AtomicLoad64(GMpmcCloseRacePublished, moAcquire) > 0,
+      'MPMC close race must publish at least one item before close');
+    Check(AtomicLoad32(GMpmcCloseRaceDone, moAcquire) < MPMC_CLOSE_RACE_PRODUCERS,
+      'MPMC close race must close while producers are still live');
+
+    GMpmcCloseRaceQ.Close;
+
+    for LI := 0 to MPMC_CLOSE_RACE_PRODUCERS - 1 do
+      platform_thread_join(LProducers[LI], LRetVal);
+    for LI := 0 to MPMC_CLOSE_RACE_CONSUMERS - 1 do
+      platform_thread_join(LConsumers[LI], LRetVal);
+
+    LLeftover := 0;
+    while GMpmcCloseRaceQ.TryDequeue(LV) do
+      Inc(LLeftover);
+
+    LDuplicates := 0;
+    for LI := 0 to MPMC_CLOSE_RACE_MAX_VALUES - 1 do
+    begin
+      if AtomicLoad32(GMpmcCloseRaceConsumedMap[LI], moRelaxed) > 1 then
+        Inc(LDuplicates);
+    end;
+
+    CheckEqual(Int64(0), GMpmcCloseRaceOutOfRange,
+      'close race no out-of-range messages');
+    CheckEqual(Int64(0), Int64(LDuplicates),
+      'close race no duplicate messages');
+    CheckEqual(GMpmcCloseRacePublished, GMpmcCloseRaceConsumed,
+      'close race consumed all accepted enqueue operations');
+    CheckEqual(Int64(0), LLeftover,
+      'close race leaves no drainable items after consumers exit');
+  finally
+    GMpmcCloseRaceQ.Free;
+  end;
+end;
+
+{ ============================================================ }
 { TEST 7: Stack Capacity Exhaustion + Recovery                 }
 { 4 threads hammer a capacity-8 stack with push/pop            }
 { Verify: no corruption, stack drains to empty                 }
@@ -654,6 +796,7 @@ begin
   T.Run('Deque extreme steal (1 owner + 7 thieves, 200K)', @TestDequeExtremeSteal);
   T.Run('SPSC full + close race', @TestSpscFullClose);
   T.Run('MPMC rapid create/close cycles (50 rounds)', @TestMpmcRapidCycles);
+  T.Run('MPMC close races active producers', @TestMpmcCloseRacesActiveProducers);
   T.Run('Stack exhaustion + recovery (4T, cap=8)', @TestStackExhaustion);
   T.Summary;
 end.

@@ -1572,7 +1572,13 @@ begin
   CheckEqual(Int64(4), Int64(LN), 'mpmc batch deq');
   CheckEqual(Int64(5), Int64(LOut[0]));
   CheckEqual(Int64(8), Int64(LOut[3]));
+  LN := LQ.EnqueueBatch(LIn);
+  CheckEqual(Int64(4), Int64(LN), 'mpmc batch re-enqueue before close');
   LQ.Close;
+  LN := LQ.DequeueBatch(LOut, 4);
+  CheckEqual(Int64(4), Int64(LN), 'mpmc batch dequeue drains already-published items after close');
+  CheckEqual(Int64(5), Int64(LOut[0]));
+  CheckEqual(Int64(8), Int64(LOut[3]));
   LN := LQ.EnqueueBatch(LIn);
   CheckEqual(Int64(0), Int64(LN), 'mpmc batch enqueue after close rejected');
   Check(LQ.IsEmpty, 'closed MPMC queue remains empty after rejected batch enqueue');
@@ -2017,6 +2023,11 @@ var
   LMpmcCloseWakeWaitTestSection: string;
   LMpmcPublishWakeTestSection: string;
   LMpmcSpaceWakeTestSection: string;
+  LMpmcTryEnqueueSourceSection: string;
+  LMpmcLeaveActiveSourceSection: string;
+  LMpmcDequeueWaitSourceSection: string;
+  LMpmcDequeueTimeoutSourceSection: string;
+  LMpmcActiveCloseStressSection: string;
   LSpscBatchSourceSection: string;
   LSpscDequeueBatchSourceSection: string;
   LSpscBatchTestSection: string;
@@ -2100,6 +2111,26 @@ begin
     'procedure TestMpmcEnqueueTimeoutWakesOnSpace;',
     '{ MPMC contention helpers }',
     'MPMC space wake test source section');
+  LMpmcTryEnqueueSourceSection := ExtractSection(LMpmcSource,
+    'function TMpmcQueueImpl.TryEnqueue',
+    'function TMpmcQueueImpl.TryDequeue',
+    'MPMC TryEnqueue source section');
+  LMpmcLeaveActiveSourceSection := ExtractSection(LMpmcSource,
+    'procedure TMpmcQueueImpl.LeaveActiveEnqueue;',
+    'function TMpmcQueueImpl.TryEnqueue',
+    'MPMC active enqueue leave source section');
+  LMpmcDequeueWaitSourceSection := ExtractSection(LMpmcSource,
+    'function TMpmcQueueImpl.DequeueWait',
+    'function TMpmcQueueImpl.EnqueueTimeout',
+    'MPMC DequeueWait source section');
+  LMpmcDequeueTimeoutSourceSection := ExtractSection(LMpmcSource,
+    'function TMpmcQueueImpl.DequeueTimeout',
+    'procedure TMpmcQueueImpl.Close',
+    'MPMC DequeueTimeout source section');
+  LMpmcActiveCloseStressSection := ExtractSection(LStressTestSource,
+    'procedure TestMpmcCloseRacesActiveProducers;',
+    '{ TEST 7: Stack Capacity Exhaustion + Recovery',
+    'MPMC active-producer close stress source section');
   LSpscBatchSourceSection := ExtractSection(LSpscSource,
     'function TSpscQueueImpl.EnqueueBatch',
     'function TSpscQueueImpl.DequeueBatch',
@@ -2236,8 +2267,8 @@ begin
     '`TSpscQueue<T>` permits exactly one producer-side caller and exactly one consumer-side caller; multiple producers or multiple consumers on the same queue are outside the contract.',
     'lockfree README must document the SPSC caller-role contract');
   CheckContains(LDocsReadme,
-    '`TMpmcQueue<T>` permits multiple concurrent producers and consumers; `Close` may race with producers, after which new enqueue attempts fail while consumers may drain already published items.',
-    'lockfree README must document the MPMC caller-role and close contract');
+    '`TMpmcQueue<T>` permits multiple concurrent producers and consumers; `Close` may race with producers. Enqueue calls admitted before observing the closed flag may still publish at their normal per-item linearization point; calls that observe `Close` fail, and consumers only treat closed-empty as terminal after no admitted producer can still publish.',
+    'lockfree README must document the MPMC caller-role and active-producer close contract');
   CheckContains(LDocsReadme,
     '`TSpscQueue<T>.EnqueueBatch` returns 0 after `Close` and must not publish new items.',
     'lockfree README must document SPSC batch close semantics');
@@ -2245,7 +2276,7 @@ begin
     '`TSpscQueue<T>.EnqueueBatch` / `DequeueBatch` publish or consume only the prefix that currently fits or is available, capped by the caller-provided array/count, and return that partial count instead of waiting for the remainder.',
     'lockfree README must document the SPSC batch partial-progress contract');
   CheckContains(LDocsReadme,
-    '`TMpmcQueue<T>.EnqueueBatch` returns 0 after `Close` and must not publish new items.',
+    '`TMpmcQueue<T>.EnqueueBatch` returns 0 when it observes `Close` before publishing any item; under concurrent `Close`, it returns the prefix already published by its underlying `TryEnqueue` calls.',
     'lockfree README must document MPMC batch close semantics');
   CheckContains(LDocsReadme,
     '`TMpmcQueue<T>.EnqueueBatch` / `DequeueBatch` are convenience loops over consecutive `TryEnqueue` / `TryDequeue` calls: they return the successful prefix so far when the next single-item operation would fail, instead of waiting for the remainder or promising a shared batch linearization point.',
@@ -2265,6 +2296,9 @@ begin
   CheckContains(LDocsReadme,
     '`TMpmcQueue<T>.Close` wakes already-blocked `EnqueueTimeout` / `DequeueTimeout` calls so blocked producers and consumers stop waiting promptly instead of sleeping until the full timeout.',
     'lockfree README must document the MPMC close wake contract for blocked timeout waits');
+  CheckContains(LDocsReadme,
+    '`Close` is not a lifetime barrier: callers must keep the queue object alive until all producer and consumer calls have returned, then join/quiesce those threads before `Free`.',
+    'lockfree README must document that Close is not a lifetime or destroy barrier');
   CheckContains(LDocsReadme,
     '`TMpmcQueue<T>.Close` wakes already-blocked `EnqueueWait` / `DequeueWait` calls so blocked producers and consumers stop waiting even without a timeout.',
     'lockfree README must document the MPMC close wake contract for blocked wait calls');
@@ -2494,6 +2528,32 @@ begin
     'MPMC enqueue must compare against the empty-state token for the target position');
   CheckContains(LMpmcSource, 'AtomicStore64(FSlots[LIdx].Sequence, FullSequence(LPos), moRelease)',
     'MPMC enqueue linearization must publish slot sequence with release ordering');
+  CheckContains(LMpmcSource, 'FActiveEnqueues: Int32;',
+    'MPMC queue must track admitted producer operations that may still publish after Close');
+  CheckContains(LMpmcSource, 'function ClosedAndNoActiveEnqueues: Boolean; inline;',
+    'MPMC queue must centralize closed-empty terminal checks behind active producer tracking');
+  CheckContains(LMpmcSource, 'procedure LeaveActiveEnqueue; inline;',
+    'MPMC queue must centralize active producer decrement and wake handling');
+  CheckContains(LMpmcTryEnqueueSourceSection, 'AtomicFetchAdd32(FActiveEnqueues, 1, moAcqRel);',
+    'MPMC TryEnqueue must admit active producers before any slot reservation can happen');
+  CheckContains(LMpmcTryEnqueueSourceSection, 'LeaveActiveEnqueue;',
+    'MPMC TryEnqueue must decrement active producer tracking on every exit path');
+  CheckContains(LMpmcTryEnqueueSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then' + LineEnding + '      Exit(False);',
+    'MPMC TryEnqueue must re-check Close after admission but before reserving a slot');
+  CheckContains(LMpmcLeaveActiveSourceSection, 'AtomicFetchSub32(FActiveEnqueues, 1, moAcqRel) = 1',
+    'MPMC active producer tracking must decrement with acquire-release ordering');
+  CheckContains(LMpmcLeaveActiveSourceSection, 'LockFreeWakeAll(@FDataEpoch);',
+    'MPMC active producer completion must wake all closed consumers waiting for terminal closed-empty');
+  CheckContains(LMpmcDequeueWaitSourceSection, 'ClosedAndNoActiveEnqueues',
+    'MPMC DequeueWait must not return closed-empty while an admitted producer may still publish');
+  CheckContains(LMpmcDequeueWaitSourceSection,
+    'if ClosedAndNoActiveEnqueues then' + LineEnding + '    begin' + LineEnding + '      if TryDequeue(AValue) then',
+    'MPMC DequeueWait must prove the queue is still empty after observing no active producers');
+  CheckContains(LMpmcDequeueTimeoutSourceSection, 'ClosedAndNoActiveEnqueues',
+    'MPMC DequeueTimeout must not return closed-empty early before timeout while an admitted producer may still publish');
+  CheckContains(LMpmcDequeueTimeoutSourceSection,
+    'if ClosedAndNoActiveEnqueues then' + LineEnding + '    begin' + LineEnding + '      if TryDequeue(AValue) then',
+    'MPMC DequeueTimeout must prove the queue is still empty after observing no active producers');
   CheckContains(LMpmcSource, 'LExpected := FullSequence(LPos);',
     'MPMC dequeue must compare against the full-state token for the target position');
   CheckContains(LMpmcSource, 'AtomicStore64(FSlots[LIdx].Sequence, EmptySequence(LPos + Int64(FCapacity)), moRelease)',
@@ -2608,6 +2668,8 @@ begin
     'MPMC batch enqueue must reject new items after close');
   CheckContains(LMpmcBatchTestSection, 'mpmc batch enqueue after close rejected',
     'MPMC batch behavior test must cover close rejection');
+  CheckContains(LMpmcBatchTestSection, 'mpmc batch dequeue drains already-published items after close',
+    'MPMC batch behavior test must cover batch drain after close');
   CheckContains(LMpmcBatchTestSection, 'mpmc partial batch enqueue publishes only currently available slots',
     'MPMC batch behavior test must cover partial enqueue under limited space');
   CheckContains(LMpmcBatchTestSection, 'mpmc partial batch dequeue is capped by output buffer length',
@@ -2616,6 +2678,13 @@ begin
     'MPMC batch behavior test must cover refill progress against the live free-space bound');
   CheckContains(LMpmcBatchTestSection, 'mpmc partial batch dequeue drains all currently available items',
     'MPMC batch behavior test must cover available-data-limited dequeue progress');
+  CheckContains(LStressTestSource,
+    'T.Run(''MPMC close races active producers'', @TestMpmcCloseRacesActiveProducers);',
+    'MPMC stress suite must run active-producer close race coverage');
+  CheckContains(LMpmcActiveCloseStressSection, 'GMpmcCloseRaceQ.Close;',
+    'MPMC active-producer close stress must close while producers are still live');
+  CheckContains(LMpmcActiveCloseStressSection, 'close race leaves no drainable items after consumers exit',
+    'MPMC active-producer close stress must prove consumers do not exit before admitted items are drained');
   CheckContains(LStackSource, 'FFreeHead: Int64',
     'stack must keep a tagged free-list head');
   CheckContains(LStackSource, 'function PackTagIdx',

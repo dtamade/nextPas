@@ -1,6 +1,6 @@
 # nextPas Core Framework — 目标树
 
-> 最后更新: 2026-06-08 | 本轮证据: 本地 Linux x86_64 focused gate: atomic 39/39, heaptrc 0
+> 最后更新: 2026-06-08 | 本轮证据: 本地 Linux x86_64 focused gate: atomic 39/39 + lockfree 46/46 + lockfree stress 9/9, heaptrc 0
 > 证据边界: 未有目标机 runtime gate 的平台只声明 source-contract 覆盖，不声明跨平台实机全绿。
 
 ## 定位
@@ -33,7 +33,7 @@ nextPas Core 是 FreePascal 领域最优秀的框架之一。分三层：
 | `collections` | 20+ 容器 (Vec/HashMap/Deque/BTree/SwissTable/SkipList/LRU/Trie) | ✅ 完成 (422+ tests, SwissTable Get 超越 Rust 7%) |
 | `sync` | 同步原语 (Mutex/RWLock/CondVar/WaitGroup/Once/Semaphore/Barrier/SpinLock) | ✅ 完成 (28 tests, Codex审查) |
 | `thread` | 线程池/WorkStealing/Channel/Future/Cancel | ✅ 完成 (18 tests, Codex审查) |
-| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | ✅ 完成/强化中 (46 default + 46 debug + 8 stress, SPSC publish-wake + space-release, MPMC publish-wake + space-release, and MPSC publish-wake timeout progress runtime checks, wait helper stale-epoch guard, SPSC + MPMC batch partial-progress contracts, Close wait/timeout wake contract, MPMC single-slot sequence states, managed-type rejection cleanup, stack/deque query contract, tagged-ptr ABA) |
+| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | ✅ 完成/强化中 (46 default + 46 debug + 9 stress, SPSC publish-wake + space-release, MPMC publish-wake + space-release, MPSC publish-wake timeout progress runtime checks, wait helper stale-epoch guard, SPSC + MPMC batch partial-progress contracts, Close wait/timeout wake contract, MPMC active-producer close/drain contract, MPMC single-slot sequence states, managed-type rejection cleanup, stack/deque query contract, tagged-index ABA-risk mitigation/source-contract + stress coverage) |
 | `async` | 事件循环 (io_uring+epoll双后端, timer heap, timeout) | ✅ 完成 (31 tests, Codex审查5项修复) |
 | `io` | 流抽象 (IReader/IWriter/IStream/Buffer/Scanner/Pipe) | ✅ 完成 (46 tests, Go parity) |
 | `time` | DateTime/Duration/Deadline/Sleep/Timer/Ticker/Period | ✅ 完成 (Wave 1-5, 49 tests, ISO 8601) |
