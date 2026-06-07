@@ -111,7 +111,7 @@ documents them here but does not claim implementation readiness in this slice:
 | `np.system.unit_init` | run a unit initialization entry | future compiler/runtime only |
 | `np.system.unit_fini` | run a unit finalization entry | future compiler/runtime only |
 | `np.system.halt` | explicit program termination | future compiler/runtime only |
-| `np.system.object_free` | object `Free` nil guard, destructor and release intent | future compiler/runtime only |
+| `np.system.object_free` | object `Free` nil guard, destructor, optional cleanup and release intent | compiler/HIR contract live; no callable public facade |
 | `np.system.runtime_fault` | non-ignorable runtime fault | future compiler/runtime only |
 
 ## non-goals

@@ -475,6 +475,9 @@ require_token "docs/system/README.md" "delegating to owner"
 require_token "docs/system/README.md" "compiler/System compile-truth"
 require_token "docs/system/README.md" "not unit-owned wrapper functions"
 require_token "docs/system/README.md" "FillMem"
+require_token "docs/system/README.md" "compiler/HIR contract live; no callable public facade"
+require_token "docs/system/rtl-mapping.md" "compiler/HIR contract live; no public facade"
+require_token "docs/system/rtl-mapping.md" "np.system.object_free"
 
 for unit_name in System SysUtils TypInfo Classes ObjPas; do
   require_token "docs/system/rtl-mapping.md" "$unit_name"
@@ -628,6 +631,22 @@ for helper in \
   "np.system.heap_free"; do
   require_token "docs/system/runtime-contracts.md" "$helper"
 done
+for helper in \
+  "np.system.object_free" \
+  "np.system.object_free.destroy" \
+  "np.system.object_free.cleanup" \
+  "np.system.object_free.release"; do
+  require_token "docs/system/runtime-contracts.md" "$helper"
+done
+require_token "docs/system/runtime-contracts.md" "object-free-runtime"
+require_token "docs/system/runtime-contracts.md" "cleanup-class"
+require_token "docs/system/runtime-contracts.md" "nil-guard true"
+require_token "docs/system/runtime-contracts.md" "heap-release true"
+require_token "docs/system/runtime-contracts.md" "@np_object_free_release"
+require_token "docs/system/runtime-contracts.md" "backend-private helper"
+require_token "docs/system/runtime-contracts.md" "must not walk object fields"
+require_token "docs/system/runtime-contracts.md" "compiler-planned cleanup"
+require_token "docs/system/runtime-contracts.md" "field-agnostic"
 require_token "docs/system/runtime-contracts.md" "Compiler HIR may project"
 require_token "docs/system/runtime-contracts.md" "array of interface"
 require_token "docs/system/runtime-contracts.md" "@np_dynarray_resize"
@@ -802,6 +821,24 @@ require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.dynarray_
 require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.dynarray_fini"
 require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.string_fini"
 require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.interface_release"
+require_repo_file "tests/hir/test_hir_object_free_contract.pas"
+require_repo_file "tests/semantic/test_semantic_call_bindings.pas"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "object-free-runtime"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free.destroy"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free.release"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "@np_object_free_release"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "object-free-release-helper-must-not-walk-fields"
+require_repo_token "tests/semantic/test_semantic_call_bindings.pas" "np.system.object_free"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "object-free-runtime"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "cleanup-class "
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "nil-guard true"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "heap-release true"
+require_repo_token "compiler/ir/np_hir_builder.pas" "np.system.object_free.destroy"
+require_repo_token "compiler/ir/np_hir_builder.pas" "np.system.object_free.cleanup"
+require_repo_token "compiler/ir/np_hir_builder.pas" "np.system.object_free.release"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "np.system.object_free"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_object_free_release"
 
 for path in \
   "core/src/nextpas.core.collections.arr.pas" \
