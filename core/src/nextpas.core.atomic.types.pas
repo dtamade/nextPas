@@ -487,8 +487,7 @@ end;
 
 class function TAtomicInt32.is_lock_free: Boolean;
 begin
-  // 32-bit atomic operations are always lock-free on modern platforms
-  Result := True;
+  Result := atomic_is_lock_free_32;
 end;
 
 function TAtomicInt32.Load(AOrder: memory_order_t): Int32;
@@ -582,8 +581,7 @@ end;
 
 class function TAtomicUInt32.is_lock_free: Boolean;
 begin
-  // 32-bit atomic operations are always lock-free on modern platforms
-  Result := True;
+  Result := atomic_is_lock_free_32;
 end;
 
 function TAtomicUInt32.Load(AOrder: memory_order_t): UInt32;

@@ -286,6 +286,8 @@ var
   LSingleWeakCasSection: string;
   LCompatFailureSection: string;
   LTypesFailureSection: string;
+  LTypesInt32LockFreeSection: string;
+  LTypesUInt32LockFreeSection: string;
   LTypesInt64LockFreeSection: string;
   LTypesUInt64LockFreeSection: string;
   LTypesISizeLockFreeSection: string;
@@ -403,6 +405,12 @@ begin
   LTypesFailureSection := ExtractImplementationSection(LAtomicTypesSource,
     'function _cas_failure_order(const ASuccessOrder: memory_order_t): memory_order_t; inline;',
     '{ TAtomicInt32 }');
+  LTypesInt32LockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
+    'class function TAtomicInt32.is_lock_free: Boolean;',
+    'function TAtomicInt32.Load(AOrder: memory_order_t): Int32;');
+  LTypesUInt32LockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
+    'class function TAtomicUInt32.is_lock_free: Boolean;',
+    'function TAtomicUInt32.Load(AOrder: memory_order_t): UInt32;');
   LTypesInt64LockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
     'class function TAtomicInt64.is_lock_free: Boolean;',
     'function TAtomicInt64.Load(AOrder: memory_order_t): Int64;');
@@ -731,6 +739,9 @@ begin
   CheckContains(LAtomicDocsReadme, 'facade exposes scalar typed records, `TAtomicRefCount`, and generic `TAtomicPtr<T>`',
     'atomic README must document the typed-record facade boundary');
   CheckContains(LAtomicDocsReadme,
+    '`TAtomicInt32` and `TAtomicUInt32` follow `atomic_is_lock_free_32`; `Increment`/`Decrement` return the new value after adding or subtracting one, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
+    'atomic README must document the 32-bit typed-record lock-free and convenience contract');
+  CheckContains(LAtomicDocsReadme,
     '`TAtomicBool` stores a normalized `0/1` Int32 payload, `Load`/`Store`/`Exchange` map that payload to Boolean, `FetchAnd/Or/Xor/Nand` return the previous Boolean value while keeping the stored domain within `False/True`, and `is_lock_free` follows `atomic_is_lock_free_32`.',
     'atomic README must document the TAtomicBool normalized bool-domain contract');
   CheckContains(LAtomicDocsReadme,
@@ -961,6 +972,14 @@ begin
     'AtomicCompatFailureOrder must treat consume explicitly');
   CheckContains(LTypesFailureSection, 'mo_consume',
     'typed CAS failure-order helper must treat consume explicitly');
+  CheckContains(LTypesInt32LockFreeSection, 'atomic_is_lock_free_32',
+    'typed Int32 lock-free query must delegate to Int32 runtime truth');
+  CheckNotContains(LTypesInt32LockFreeSection, 'Result := True',
+    'typed Int32 lock-free query must not hardcode a guaranteed-true result');
+  CheckContains(LTypesUInt32LockFreeSection, 'atomic_is_lock_free_32',
+    'typed UInt32 lock-free query must delegate to Int32 runtime truth');
+  CheckNotContains(LTypesUInt32LockFreeSection, 'Result := True',
+    'typed UInt32 lock-free query must not hardcode a guaranteed-true result');
   CheckContains(LTypesInt64LockFreeSection, 'atomic_is_lock_free_64',
     'typed Int64 lock-free query must delegate to runtime truth');
   CheckContains(LTypesUInt64LockFreeSection, 'atomic_is_lock_free_64',
@@ -1406,6 +1425,54 @@ begin
     'facade TAtomicPtr strong CAS should update when expected matches');
   Check(LPtr.Load = @LValueB,
     'facade TAtomicPtr default Load should observe the CAS result');
+end;
+
+procedure TestAtomicInt32UInt32Contract;
+var
+  LAtomicInt32: TAtomicInt32;
+  LAtomicUInt32: TAtomicUInt32;
+  LExpectedInt32: Int32;
+  LMutInt32: PInt32;
+  LMutUInt32: PUInt32;
+begin
+  Check(TAtomicInt32.is_lock_free = atomic_is_lock_free_32,
+    'TAtomicInt32 lock-free surface must match Int32 runtime truth');
+  Check(TAtomicUInt32.is_lock_free = atomic_is_lock_free_32,
+    'TAtomicUInt32 lock-free surface must match Int32 runtime truth');
+
+  LAtomicInt32 := TAtomicInt32.Create(-2);
+  CheckEqual(Int64(-2), Int64(LAtomicInt32.Load(mo_relaxed)),
+    'TAtomicInt32.Create should publish the initial value');
+  CheckEqual(Int64(-1), Int64(LAtomicInt32.Increment(mo_acq_rel)),
+    'TAtomicInt32.Increment should return the new value');
+  CheckEqual(Int64(-1), Int64(LAtomicInt32.Load(mo_acquire)),
+    'TAtomicInt32.Increment should publish the incremented value');
+  CheckEqual(Int64(-2), Int64(LAtomicInt32.Decrement(mo_acq_rel)),
+    'TAtomicInt32.Decrement should return the new value');
+
+  LExpectedInt32 := -2;
+  Check(LAtomicInt32.CompareExchangeStrong(LExpectedInt32, 4, mo_seq_cst),
+    'TAtomicInt32 strong CAS should update when expected matches');
+  CheckEqual(Int64(4), Int64(LAtomicInt32.Load),
+    'TAtomicInt32 default Load should observe the CAS result');
+
+  LMutInt32 := LAtomicInt32.GetMut;
+  LMutInt32^ := 9;
+  CheckEqual(Int64(9), Int64(LAtomicInt32.IntoInner),
+    'TAtomicInt32.GetMut/IntoInner should expose the exclusive-access value');
+
+  LAtomicUInt32 := TAtomicUInt32.Create(3);
+  CheckEqual(Int64(3), Int64(LAtomicUInt32.IntoInner),
+    'TAtomicUInt32.IntoInner should expose the initial value');
+  CheckEqual(Int64(4), Int64(LAtomicUInt32.Increment(mo_acq_rel)),
+    'TAtomicUInt32.Increment should return the new value');
+  CheckEqual(Int64(3), Int64(LAtomicUInt32.Decrement(mo_acq_rel)),
+    'TAtomicUInt32.Decrement should return the new value');
+
+  LMutUInt32 := LAtomicUInt32.GetMut;
+  LMutUInt32^ := 11;
+  CheckEqual(Int64(11), Int64(LAtomicUInt32.Load(mo_relaxed)),
+    'TAtomicUInt32.GetMut should expose the exclusive-access storage');
 end;
 
 procedure TestAtomicBoolContract;
@@ -2112,6 +2179,7 @@ begin
   T.Run('Concurrent FetchAdd (4 threads x 10000)', @TestConcurrentFetchAdd);
   T.Run('fafafa-style atomic API', @TestFafafaStyleAtomicApi);
   T.Run('typed atomic record API', @TestAtomicRecordTypes);
+  T.Run('typed atomic int32/uint32 contract', @TestAtomicInt32UInt32Contract);
   T.Run('typed atomic bool contract', @TestAtomicBoolContract);
   T.Run('atomic flag API', @TestAtomicFlagApi);
   T.Run('fetch max/min/nand contract', @TestAtomicFetchMaxMinNandContract);

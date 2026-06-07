@@ -41,6 +41,7 @@ Compatibility boundary: pointer arithmetic/bitwise overloads stay in `nextpas.co
 
 `nextpas.core.atomic` facade exposes scalar typed records, `TAtomicRefCount`, and generic `TAtomicPtr<T>`;
 consumers should not need to import `nextpas.core.atomic.types` just to use the public typed-record surface.
+`TAtomicInt32` and `TAtomicUInt32` follow `atomic_is_lock_free_32`; `Increment`/`Decrement` return the new value after adding or subtracting one, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.
 `TAtomicBool` stores a normalized `0/1` Int32 payload, `Load`/`Store`/`Exchange` map that payload to Boolean, `FetchAnd/Or/Xor/Nand` return the previous Boolean value while keeping the stored domain within `False/True`, and `is_lock_free` follows `atomic_is_lock_free_32`.
 
 ## 内存序语义
