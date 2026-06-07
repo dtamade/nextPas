@@ -59,6 +59,8 @@ type
     FContinueLabels: array of string;
     FRuntimeVarNames: array of string;
     FRuntimeStrVarNames: array of string;
+    FOwnedRuntimeStrVarNames: array of string;
+    FBorrowedRuntimeStrVarNames: array of string;
     FRuntimeArrVarNames: array of string;
     FBorrowedRuntimeArrVarNames: array of string;
     FCurrentMethodClass: string;
@@ -76,6 +78,8 @@ type
     FImportedUnitOwners: array of string;
     procedure RegisterRuntimeVar(const AName: string);
     procedure RegisterRuntimeStrVar(const AName: string);
+    procedure RegisterOwnedRuntimeStrVar(const AName: string);
+    procedure RegisterBorrowedRuntimeStrVar(const AName: string);
     procedure RegisterRuntimeArrVar(const AName: string);
     procedure RegisterBorrowedRuntimeArrVar(const AName: string);
     procedure RegisterClassVar(const AName, AClassName: string);
@@ -87,10 +91,13 @@ type
       const AOwnerUnitId: string);
     function IsRuntimeVar(const AName: string): Boolean;
     function IsRuntimeStrVar(const AName: string): Boolean;
+    function IsOwnedRuntimeStrVar(const AName: string): Boolean;
+    function IsBorrowedRuntimeStrVar(const AName: string): Boolean;
     function IsRuntimeArrVar(const AName: string): Boolean;
     function IsBorrowedRuntimeArrVar(const AName: string): Boolean;
     function IsStaticRuntimeArrVar(const AName: string): Boolean;
     function DynArrayElemSizeOfVar(const AName: string): Int64;
+    procedure EmitOwnedStringCleanupNodes(const AExceptName: string = '');
     procedure EmitOwnedDynArrayCleanupNodes;
     function IsRecordVar(const AName: string): Boolean;
     function IsVarParam(const AName: string): Boolean;
@@ -587,12 +594,62 @@ begin
   FRuntimeStrVarNames[NextIndex] := AName;
 end;
 
+procedure TSemanticAnalyzer.RegisterOwnedRuntimeStrVar(const AName: string);
+var
+  Idx: LongInt;
+  NextIndex: SizeInt;
+begin
+  if AName = '' then
+    Exit;
+  for Idx := 0 to Length(FOwnedRuntimeStrVarNames) - 1 do
+    if SameText(FOwnedRuntimeStrVarNames[Idx], AName) then
+      Exit;
+  NextIndex := Length(FOwnedRuntimeStrVarNames);
+  SetLength(FOwnedRuntimeStrVarNames, NextIndex + 1);
+  FOwnedRuntimeStrVarNames[NextIndex] := AName;
+end;
+
+procedure TSemanticAnalyzer.RegisterBorrowedRuntimeStrVar(const AName: string);
+var
+  Idx: LongInt;
+  NextIndex: SizeInt;
+begin
+  if AName = '' then
+    Exit;
+  for Idx := 0 to Length(FBorrowedRuntimeStrVarNames) - 1 do
+    if SameText(FBorrowedRuntimeStrVarNames[Idx], AName) then
+      Exit;
+  NextIndex := Length(FBorrowedRuntimeStrVarNames);
+  SetLength(FBorrowedRuntimeStrVarNames, NextIndex + 1);
+  FBorrowedRuntimeStrVarNames[NextIndex] := AName;
+end;
+
 function TSemanticAnalyzer.IsRuntimeStrVar(const AName: string): Boolean;
 var
   Idx: LongInt;
 begin
   for Idx := 0 to Length(FRuntimeStrVarNames) - 1 do
     if SameText(FRuntimeStrVarNames[Idx], AName) then
+      Exit(True);
+  Result := False;
+end;
+
+function TSemanticAnalyzer.IsOwnedRuntimeStrVar(const AName: string): Boolean;
+var
+  Idx: LongInt;
+begin
+  for Idx := 0 to Length(FOwnedRuntimeStrVarNames) - 1 do
+    if SameText(FOwnedRuntimeStrVarNames[Idx], AName) then
+      Exit(True);
+  Result := False;
+end;
+
+function TSemanticAnalyzer.IsBorrowedRuntimeStrVar(const AName: string): Boolean;
+var
+  Idx: LongInt;
+begin
+  for Idx := 0 to Length(FBorrowedRuntimeStrVarNames) - 1 do
+    if SameText(FBorrowedRuntimeStrVarNames[Idx], AName) then
       Exit(True);
   Result := False;
 end;
@@ -656,6 +713,27 @@ begin
   Result := 8;
   if not FModel.LookupConstValue(AName + '$arr_elem_size', Result) then
     Result := 8;
+end;
+
+procedure TSemanticAnalyzer.EmitOwnedStringCleanupNodes(const AExceptName: string);
+var
+  I: LongInt;
+  VarName: string;
+begin
+  for I := 0 to Length(FOwnedRuntimeStrVarNames) - 1 do
+  begin
+    VarName := FOwnedRuntimeStrVarNames[I];
+    if (VarName = '') or IsBorrowedRuntimeStrVar(VarName) or
+      SameText(VarName, AExceptName) then
+      Continue;
+    FModel.AddTypedHirNode(
+      'string-cleanup-runtime',
+      VarName,
+      0,
+      0,
+      VarName
+    );
+  end;
 end;
 
 procedure TSemanticAnalyzer.EmitOwnedDynArrayCleanupNodes;
@@ -10286,6 +10364,7 @@ begin
     if (Child.NodeKind = gnkExitStatement) and FNoFold then
     begin
       EmitOwnedDynArrayCleanupNodes;
+      EmitOwnedStringCleanupNodes(FCurrentRetVarName);
       if (FCurrentRetVarName <> '') and IsRuntimeStrVar(FCurrentRetVarName) then
         FModel.AddTypedHirNode('ret-str-runtime', FCurrentRetVarName, 0, 0, FCurrentRetVarName)
       else if FCurrentRetVarName <> '' then
@@ -10689,10 +10768,18 @@ begin
             SameText(Arg.ChildAt(0).Text, 'IntToStr') then
           begin
             if EncodeRuntimeIntExprFold(Arg.ChildAt(1), Operand) then
-              FModel.AddTypedHirNode(
-                'int-to-str-runtime', Decoded, 0, 0,
-                Decoded + #9 + Operand
-              );
+            begin
+              if IsOwnedRuntimeStrVar(Decoded) then
+                FModel.AddTypedHirNode(
+                  'int-to-str-owned-runtime', Decoded, 0, 0,
+                  Decoded + #9 + Operand
+                )
+              else
+                FModel.AddTypedHirNode(
+                  'int-to-str-runtime', Decoded, 0, 0,
+                  Decoded + #9 + Operand
+                );
+            end;
           end
           else if (Arg.NodeKind = gnkFunctionCall) and
             (Arg.ChildCount >= 4) and (Arg.ChildAt(0) <> nil) and
@@ -10722,7 +10809,8 @@ begin
             LookupProcedureBody(Arg.Text, BranchNode, DeclNode) and
             IsRuntimeStrVar(Arg.Text) then
             FModel.AddTypedHirNode(
-              'assign-str-call-runtime', Arg.Text, 0, 0, Decoded
+              'assign-str-call-runtime', Decoded, 0, 0,
+              Decoded + #9 + 'callee ' + Arg.Text
             )
           else if (Arg.NodeKind = gnkFunctionCall) and
             LookupProcedureBody(Arg.Text, BranchNode, DeclNode) and
@@ -10730,8 +10818,8 @@ begin
           begin
             Operand := EncodeStrCallArgs(Arg, Decoded);
             FModel.AddTypedHirNode(
-              'assign-str-call-runtime', Arg.Text, 0, 0,
-              Decoded + #9 + Operand
+              'assign-str-call-runtime', Decoded, 0, 0,
+              Decoded + #9 + 'callee ' + Arg.Text + #9 + Operand
             );
           end
           else if (Arg.NodeKind = gnkDotAccess) and
@@ -10772,11 +10860,21 @@ begin
             begin
               Operand := EmitStrConcatOperand(Arg.ChildAt(1), Decoded);
               if Operand <> '' then
-                FModel.AddTypedHirNode(
-                  'assign-str-concat-runtime',
-                  StringValue + #9 + Operand,
-                  0, 0, Decoded
-                );
+              begin
+                if IsOwnedRuntimeStrVar(Decoded) then
+                  FModel.AddTypedHirNode(
+                    'assign-str-owned-concat-runtime',
+                    Decoded,
+                    0, 0,
+                    StringValue + #9 + Operand
+                  )
+                else
+                  FModel.AddTypedHirNode(
+                    'assign-str-concat-runtime',
+                    StringValue + #9 + Operand,
+                    0, 0, Decoded
+                  );
+              end;
             end;
           end;
         end
@@ -10997,6 +11095,7 @@ begin
           if EncodeRuntimeIntExprFold(Arg, Operand) then
           begin
             EmitOwnedDynArrayCleanupNodes;
+            EmitOwnedStringCleanupNodes;
             NodeId := FModel.AddTypedHirNode(
               'halt-call-runtime', 'Halt', 0, 0, Operand);
             if BuildRuntimeScalarHirExpr(Arg, ExprId) then
@@ -11011,6 +11110,7 @@ begin
             Operand := IntToStr(Value);
         end;
         EmitOwnedDynArrayCleanupNodes;
+        EmitOwnedStringCleanupNodes;
         FModel.AddTypedHirNode('halt-call', 'Halt', 0, 0, Operand);
         FCurrentBlockTerminated := True;
         Continue;
@@ -12152,8 +12252,9 @@ begin
         if IsStr then
         begin
           RegisterRuntimeStrVar(Decl.Text);
+          RegisterOwnedRuntimeStrVar(Decl.Text);
           FModel.AddTypedHirNode(
-            'var-decl-str-runtime', Decl.Text, 0, 0, Decl.Text
+            'var-decl-str-owned-runtime', Decl.Text, 0, 0, Decl.Text
           );
         end
         else if ArrayTypeNode <> nil then
@@ -12238,6 +12339,7 @@ begin
   if FNoFold and not FCurrentBlockTerminated then
   begin
     EmitOwnedDynArrayCleanupNodes;
+    EmitOwnedStringCleanupNodes;
     FModel.AddTypedHirNode('halt-call-runtime', 'Halt', 0, 0, 'int 0' + #10);
     FCurrentBlockTerminated := True;
   end;
@@ -12332,6 +12434,8 @@ begin
     SetLength(FRuntimeArrVarNames, 0);
     SetLength(FBorrowedRuntimeArrVarNames, 0);
     SetLength(FRuntimeStrVarNames, 0);
+    SetLength(FOwnedRuntimeStrVarNames, 0);
+    SetLength(FBorrowedRuntimeStrVarNames, 0);
     SetLength(FClassVarNames, 0);
     SetLength(FClassVarTypes, 0);
     SetLength(FRecordVarNames, 0);
@@ -12381,6 +12485,7 @@ begin
                 begin
                   IsStrParam := True;
                   RegisterRuntimeStrVar(RetVarName);
+                  RegisterBorrowedRuntimeStrVar(RetVarName);
                 end
                 else if (TypeChild <> nil) and
                   ((TypeChild.NodeKind = gnkArrayType) or
@@ -12508,7 +12613,7 @@ begin
                 (Copy(RetVarName, 1, 4) = 'var:') then
                 RetVarName := Copy(RetVarName, 5, Length(RetVarName));
               if IsRuntimeStrVar(RetVarName) then
-                FModel.AddTypedHirNode('var-decl-str-runtime', RetVarName,
+                FModel.AddTypedHirNode('var-decl-str-borrowed-runtime', RetVarName,
                   0, 0, RetVarName)
               else if IsRuntimeArrVar(RetVarName) then
               begin
@@ -12590,8 +12695,9 @@ begin
                SameText(Decl.ChildAt(0).Text, 'AnsiString')) then
             begin
               RegisterRuntimeStrVar(Decl.Text);
+              RegisterOwnedRuntimeStrVar(Decl.Text);
               FModel.AddTypedHirNode(
-                'var-decl-str-runtime', Decl.Text, 0, 0, Decl.Text);
+                'var-decl-str-owned-runtime', Decl.Text, 0, 0, Decl.Text);
             end
             else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
               (Length(Decl.ChildAt(0).Text) > 1) and
@@ -12614,6 +12720,7 @@ begin
     if not FCurrentBlockTerminated then
     begin
       EmitOwnedDynArrayCleanupNodes;
+      EmitOwnedStringCleanupNodes(RetVarName);
       if IsStrReturn then
         FModel.AddTypedHirNode('ret-str-runtime', RetVarName, 0, 0, RetVarName)
       else

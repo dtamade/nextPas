@@ -241,8 +241,8 @@ begin
     '  br i1 %large.len.ok, label %large.last, label %fail' + LineEnding +
     'large.last:' + LineEnding +
     '  %large.lastp = getelementptr i8, ptr %large.ptr, i64 65540' + LineEnding +
-    '  %large.last = load i8, ptr %large.lastp' + LineEnding +
-    '  %large.last.ok = icmp eq i8 %large.last, 116' + LineEnding +
+    '  %large.last.byte = load i8, ptr %large.lastp' + LineEnding +
+    '  %large.last.ok = icmp eq i8 %large.last.byte, 116' + LineEnding +
     '  br i1 %large.last.ok, label %release.large, label %fail' + LineEnding +
     'release.large:' + LineEnding +
     '  call void @np_string_release(ptr %large.owner, i64 %large.alloc)' + LineEnding +

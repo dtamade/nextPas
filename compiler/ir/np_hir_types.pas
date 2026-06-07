@@ -34,6 +34,8 @@ type
   THirNodeKind = (
     hnkVarDeclRuntime,
     hnkVarDeclStrRuntime,
+    hnkVarDeclStrOwnedRuntime,
+    hnkVarDeclStrBorrowedRuntime,
     hnkVarDeclArrRuntime,
     hnkVarDeclArrBorrowedRuntime,
     hnkVarDeclPtrRuntime,
@@ -46,6 +48,7 @@ type
     hnkAssignStrVcallRuntime,
     hnkAssignStrIvcallRuntime,
     hnkAssignStrConcatRuntime,
+    hnkAssignStrOwnedConcatRuntime,
     hnkHaltCallRuntime,
     hnkHaltCall,
     hnkCondBrRuntime,
@@ -59,6 +62,7 @@ type
     hnkCallRuntime,
     hnkObjectFreeRuntime,
     hnkIntToStrRuntime,
+    hnkIntToStrOwnedRuntime,
     hnkCopyStrRuntime,
     hnkWriteIntRuntime,
     hnkWriteStringRuntime,
@@ -67,6 +71,7 @@ type
     hnkSetLengthArrRuntime,
     hnkSetLengthFieldArrRuntime,
     hnkDynArrayCleanupRuntime,
+    hnkStringCleanupRuntime,
     hnkAssignArrElemRuntime,
     hnkMethodBodyBegin,
     hnkClassNewRuntime,
@@ -163,6 +168,8 @@ begin
   case AKind of
     'var-decl-runtime': Result := hnkVarDeclRuntime;
     'var-decl-str-runtime': Result := hnkVarDeclStrRuntime;
+    'var-decl-str-owned-runtime': Result := hnkVarDeclStrOwnedRuntime;
+    'var-decl-str-borrowed-runtime': Result := hnkVarDeclStrBorrowedRuntime;
     'var-decl-arr-runtime': Result := hnkVarDeclArrRuntime;
     'var-decl-arr-borrowed-runtime': Result := hnkVarDeclArrBorrowedRuntime;
     'var-decl-ptr-runtime': Result := hnkVarDeclPtrRuntime;
@@ -175,6 +182,7 @@ begin
     'assign-str-vcall-runtime': Result := hnkAssignStrVcallRuntime;
     'assign-str-ivcall-runtime': Result := hnkAssignStrIvcallRuntime;
     'assign-str-concat-runtime': Result := hnkAssignStrConcatRuntime;
+    'assign-str-owned-concat-runtime': Result := hnkAssignStrOwnedConcatRuntime;
     'halt-call-runtime': Result := hnkHaltCallRuntime;
     'halt-call': Result := hnkHaltCall;
     'cond-br-runtime': Result := hnkCondBrRuntime;
@@ -188,6 +196,7 @@ begin
     'call-runtime': Result := hnkCallRuntime;
     'object-free-runtime': Result := hnkObjectFreeRuntime;
     'int-to-str-runtime': Result := hnkIntToStrRuntime;
+    'int-to-str-owned-runtime': Result := hnkIntToStrOwnedRuntime;
     'copy-str-runtime': Result := hnkCopyStrRuntime;
     'write-int-runtime': Result := hnkWriteIntRuntime;
     'write-string-runtime': Result := hnkWriteStringRuntime;
@@ -196,6 +205,7 @@ begin
     'setlength-arr-runtime': Result := hnkSetLengthArrRuntime;
     'setlength-field-arr-runtime': Result := hnkSetLengthFieldArrRuntime;
     'dynarray-cleanup-runtime': Result := hnkDynArrayCleanupRuntime;
+    'string-cleanup-runtime': Result := hnkStringCleanupRuntime;
     'assign-arr-elem-runtime': Result := hnkAssignArrElemRuntime;
     'method-body-begin': Result := hnkMethodBodyBegin;
     'class-new-runtime': Result := hnkClassNewRuntime;

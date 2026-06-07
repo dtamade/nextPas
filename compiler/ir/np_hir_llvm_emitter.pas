@@ -30,6 +30,7 @@ type
     FNeedsFree: Boolean;
     FNeedsMemcpy: Boolean;
     FNeedsStrConcat: Boolean;
+    FNeedsStringOwnership: Boolean;
     FNeedsStrCmp: Boolean;
     FNeedsIntToStr: Boolean;
     FNeedsObjectAlloc: Boolean;
@@ -71,6 +72,7 @@ type
     procedure EmitMemcpyHelper;
     procedure EmitMemzeroHelper;
     procedure EmitStrConcatHelper;
+    procedure EmitStringOwnershipHelpers;
     procedure EmitDynArrayHelpers;
     procedure EmitObjectAllocHelper;
     procedure EmitObjectFreeReleaseHelper;
@@ -127,6 +129,7 @@ begin
   FNeedsFree := False;
   FNeedsMemcpy := False;
   FNeedsStrConcat := False;
+  FNeedsStringOwnership := False;
   FNeedsStrCmp := False;
   FNeedsIntToStr := False;
   FNeedsObjectAlloc := False;
@@ -366,11 +369,21 @@ begin
     begin
       if (AInstr.IntrinsicName <> '') and
         (Copy(AInstr.IntrinsicName, 1, 7) = 'record:') then
-        Emit('  ' + ValueRef(AInstr.ResultId) + ' = alloca [' +
+      begin
+        Op := '  ' + ValueRef(AInstr.ResultId) + ' = alloca [' +
           Copy(AInstr.IntrinsicName, 8, Length(AInstr.IntrinsicName)) +
-          ' x i64]')
+          ' x i64]';
+        if AInstr.CallTarget <> '' then
+          Op := Op + ' ; ' + AInstr.CallTarget;
+        Emit(Op);
+      end
       else
-        Emit('  ' + ValueRef(AInstr.ResultId) + ' = alloca ' + LlvmType);
+      begin
+        Op := '  ' + ValueRef(AInstr.ResultId) + ' = alloca ' + LlvmType;
+        if AInstr.CallTarget <> '' then
+          Op := Op + ' ; ' + AInstr.CallTarget;
+        Emit(Op);
+      end;
     end;
     hikLoad:
     begin
@@ -563,6 +576,68 @@ begin
             '.l, ptr ' + ValueRef(AInstr.Operands[5].ValueId));
         end;
       end
+      else if AInstr.IntrinsicName = 'str_concat_owned' then
+      begin
+        FNeedsAlloc := True;
+        FNeedsFree := True;
+        FNeedsMemcpy := True;
+        FNeedsStringOwnership := True;
+        if Length(AInstr.Operands) >= 4 then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = call {ptr, i64, ptr, i64} @np_str_concat_owned(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', ptr ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[3].ValueId) + ')');
+      end
+      else if AInstr.IntrinsicName = 'string_owned_extract_ptr' then
+      begin
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = extractvalue {ptr, i64, ptr, i64} ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', 0');
+      end
+      else if AInstr.IntrinsicName = 'string_owned_extract_len' then
+      begin
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = extractvalue {ptr, i64, ptr, i64} ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', 1');
+      end
+      else if AInstr.IntrinsicName = 'string_owned_extract_owner' then
+      begin
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = extractvalue {ptr, i64, ptr, i64} ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', 2');
+      end
+      else if AInstr.IntrinsicName = 'string_owned_extract_alloc_size' then
+      begin
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = extractvalue {ptr, i64, ptr, i64} ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', 3');
+      end
+      else if AInstr.IntrinsicName = 'string_release' then
+      begin
+        FNeedsAlloc := True;
+        FNeedsFree := True;
+        FNeedsStringOwnership := True;
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  call void @np_string_release(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ')');
+      end
+      else if AInstr.IntrinsicName = 'string_owner_clear' then
+      begin
+        if Length(AInstr.Operands) >= 2 then
+        begin
+          Emit('  store ptr null, ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId));
+          Emit('  store i64 0, ptr ' +
+            ValueRef(AInstr.Operands[1].ValueId));
+        end;
+      end
       else if AInstr.IntrinsicName = 'ret_str' then
       begin
         if Length(AInstr.Operands) >= 2 then
@@ -647,6 +722,18 @@ begin
           Emit('  store i64 %its.' + IntToStr(AInstr.ResultId) +
             '.l, ptr ' + ValueRef(AInstr.Operands[2].ValueId));
           FNeedsIntToStr := True;
+        end;
+      end
+      else if AInstr.IntrinsicName = 'int_to_str_owned' then
+      begin
+        if Length(AInstr.Operands) >= 1 then
+        begin
+          FNeedsAlloc := True;
+          FNeedsFree := True;
+          FNeedsStringOwnership := True;
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = call {ptr, i64, ptr, i64} @np_int_to_str_owned(i64 ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
         end;
       end
       else if AInstr.IntrinsicName = 'str_cmp' then
@@ -1006,6 +1093,7 @@ begin
   FNeedsFree := False;
   FNeedsMemcpy := False;
   FNeedsStrConcat := False;
+  FNeedsStringOwnership := False;
   FNeedsStrCmp := False;
   FNeedsIntToStr := False;
   FNeedsObjectAlloc := False;
@@ -1048,7 +1136,7 @@ begin
   if FNeedsAlloc then
     EmitAllocHelper;
 
-  if FNeedsMemcpy then
+  if FNeedsMemcpy or FNeedsStringOwnership then
     EmitMemcpyHelper;
 
   if FNeedsObjectAlloc then
@@ -1056,6 +1144,9 @@ begin
 
   if FNeedsStrConcat then
     EmitStrConcatHelper;
+
+  if FNeedsStringOwnership then
+    EmitStringOwnershipHelpers;
 
   if FNeedsDynArrayHelpers then
     EmitDynArrayHelpers;
@@ -1402,6 +1493,100 @@ begin
   Emit('  %r1 = insertvalue {ptr, i64} undef, ptr %buf, 0');
   Emit('  %r2 = insertvalue {ptr, i64} %r1, i64 %total, 1');
   Emit('  ret {ptr, i64} %r2');
+  Emit('}');
+end;
+
+procedure THIRLlvmEmitter.EmitStringOwnershipHelpers;
+begin
+  Emit('');
+  Emit('define internal void @np_string_fault(i64 %code, i64 %arg0, i64 %arg1) {');
+  Emit('entry:');
+  Emit('  call void @llvm.trap()');
+  Emit('  unreachable');
+  Emit('}');
+  Emit('');
+  Emit('define internal void @np_string_release(ptr %owner, i64 %alloc_size) {');
+  Emit('entry:');
+  Emit('  %isnull = icmp eq ptr %owner, null');
+  Emit('  br i1 %isnull, label %done, label %size.check');
+  Emit('size.check:');
+  Emit('  %size.zero = icmp eq i64 %alloc_size, 0');
+  Emit('  br i1 %size.zero, label %size.fault, label %release');
+  Emit('size.fault:');
+  Emit('  call void @np_string_fault(i64 1, i64 %alloc_size, i64 0)');
+  Emit('  unreachable');
+  Emit('release:');
+  Emit('  call void @np_free(ptr %owner, i64 %alloc_size)');
+  Emit('  br label %done');
+  Emit('done:');
+  Emit('  ret void');
+  Emit('}');
+  Emit('');
+  Emit('define internal {ptr, i64, ptr, i64} @np_str_concat_owned(ptr %a_ptr, i64 %a_len, ptr %b_ptr, i64 %b_len) {');
+  Emit('entry:');
+  Emit('  %total = add i64 %a_len, %b_len');
+  Emit('  %total.overflow = icmp ult i64 %total, %a_len');
+  Emit('  br i1 %total.overflow, label %fault.total, label %zero.check');
+  Emit('fault.total:');
+  Emit('  call void @np_string_fault(i64 2, i64 %a_len, i64 %b_len)');
+  Emit('  unreachable');
+  Emit('zero.check:');
+  Emit('  %is.zero = icmp eq i64 %total, 0');
+  Emit('  br i1 %is.zero, label %zero, label %alloc');
+  Emit('zero:');
+  Emit('  %z1 = insertvalue {ptr, i64, ptr, i64} undef, ptr null, 0');
+  Emit('  %z2 = insertvalue {ptr, i64, ptr, i64} %z1, i64 0, 1');
+  Emit('  %z3 = insertvalue {ptr, i64, ptr, i64} %z2, ptr null, 2');
+  Emit('  %z4 = insertvalue {ptr, i64, ptr, i64} %z3, i64 0, 3');
+  Emit('  ret {ptr, i64, ptr, i64} %z4');
+  Emit('alloc:');
+  Emit('  %buf = call ptr @np_alloc(i64 %total)');
+  Emit('  call void @np_memcpy(ptr %buf, ptr %a_ptr, i64 %a_len)');
+  Emit('  %dst2 = getelementptr i8, ptr %buf, i64 %a_len');
+  Emit('  call void @np_memcpy(ptr %dst2, ptr %b_ptr, i64 %b_len)');
+  Emit('  %r1 = insertvalue {ptr, i64, ptr, i64} undef, ptr %buf, 0');
+  Emit('  %r2 = insertvalue {ptr, i64, ptr, i64} %r1, i64 %total, 1');
+  Emit('  %r3 = insertvalue {ptr, i64, ptr, i64} %r2, ptr %buf, 2');
+  Emit('  %r4 = insertvalue {ptr, i64, ptr, i64} %r3, i64 %total, 3');
+  Emit('  ret {ptr, i64, ptr, i64} %r4');
+  Emit('}');
+  Emit('');
+  Emit('define internal {ptr, i64, ptr, i64} @np_int_to_str_owned(i64 %val) {');
+  Emit('entry:');
+  Emit('  %buf = call ptr @np_alloc(i64 21)');
+  Emit('  %is_neg = icmp slt i64 %val, 0');
+  Emit('  %neg_val = sub i64 0, %val');
+  Emit('  %work = select i1 %is_neg, i64 %neg_val, i64 %val');
+  Emit('  br label %digit_loop');
+  Emit('digit_loop:');
+  Emit('  %n = phi i64 [ %work, %entry ], [ %n_next, %digit_loop ]');
+  Emit('  %pos = phi i64 [ 20, %entry ], [ %pos_next, %digit_loop ]');
+  Emit('  %d = urem i64 %n, 10');
+  Emit('  %c = add i64 %d, 48');
+  Emit('  %ct = trunc i64 %c to i8');
+  Emit('  %pos_next = sub i64 %pos, 1');
+  Emit('  %dp = getelementptr i8, ptr %buf, i64 %pos_next');
+  Emit('  store i8 %ct, ptr %dp');
+  Emit('  %n_next = udiv i64 %n, 10');
+  Emit('  %done = icmp eq i64 %n_next, 0');
+  Emit('  br i1 %done, label %finish, label %digit_loop');
+  Emit('finish:');
+  Emit('  %final_pos = phi i64 [ %pos_next, %digit_loop ]');
+  Emit('  br i1 %is_neg, label %write_neg, label %ret');
+  Emit('write_neg:');
+  Emit('  %neg_pos = sub i64 %final_pos, 1');
+  Emit('  %negp = getelementptr i8, ptr %buf, i64 %neg_pos');
+  Emit('  store i8 45, ptr %negp');
+  Emit('  br label %ret');
+  Emit('ret:');
+  Emit('  %result_pos = phi i64 [ %final_pos, %finish ], [ %neg_pos, %write_neg ]');
+  Emit('  %result_ptr = getelementptr i8, ptr %buf, i64 %result_pos');
+  Emit('  %result_len = sub i64 20, %result_pos');
+  Emit('  %r1 = insertvalue {ptr, i64, ptr, i64} undef, ptr %result_ptr, 0');
+  Emit('  %r2 = insertvalue {ptr, i64, ptr, i64} %r1, i64 %result_len, 1');
+  Emit('  %r3 = insertvalue {ptr, i64, ptr, i64} %r2, ptr %buf, 2');
+  Emit('  %r4 = insertvalue {ptr, i64, ptr, i64} %r3, i64 21, 3');
+  Emit('  ret {ptr, i64, ptr, i64} %r4');
   Emit('}');
 end;
 

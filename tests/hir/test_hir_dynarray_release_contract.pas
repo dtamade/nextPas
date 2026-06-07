@@ -210,11 +210,12 @@ begin
       Fail('string-model-nil');
     if not FindFirstNodeByKind(Model, 'assign-str-copy-runtime', Node) then
       Fail('missing-string-copy-node');
-    if not FindFirstNodeByKind(Model, 'assign-str-concat-runtime', Node) then
-      Fail('missing-string-concat-node');
+    if not FindFirstNodeByKind(Model, 'assign-str-owned-concat-runtime',
+      Node) then
+      Fail('missing-owned-string-concat-node');
     LlvmText := EmitLlvm(Model);
-    if Pos('call {ptr, i64} @np_str_concat(', LlvmText) = 0 then
-      Fail('missing-string-concat-helper-call');
+    if Pos('call {ptr, i64, ptr, i64} @np_str_concat_owned(', LlvmText) = 0 then
+      Fail('missing-owned-string-concat-helper-call');
   finally
     Model.Free;
   end;
