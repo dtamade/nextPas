@@ -688,6 +688,7 @@ markers:
 - `workload=<direct_root|direct_1k|plaintext|json|echo_1k|sink_16k|param_route>`
 - `response_body_bytes=<13|1024|...>`
 - `backend=<threaded|epoll>`
+- `nextpas_h1_path=<fast|llhttp>`
 - `iterations`
 - `completed`
 - `elapsed_ns`
@@ -709,6 +710,14 @@ Each full-chain row now also reports `response_body_bytes=...`, so saved
 single-connection artifacts do not need to infer whether a row was the tiny
 hello-world shape, the direct 1 KiB shape, or another fixed-body workload from
 the workload name alone.
+
+Full-chain rows now also report `nextpas_h1_path=...` for the current nextPas
+ingress choice:
+
+- `direct_root`, `direct_1k`, `plaintext`, `json`, and `param_route` are
+  current no-body HTTP/1.1 GET requests and report `nextpas_h1_path=fast`.
+- `echo_1k` and `sink_16k` are body-bearing requests and report
+  `nextpas_h1_path=llhttp`.
 
 The filter is still substring-based, so the direct workload is intentionally
 named `direct_root` rather than `direct_plaintext`; this keeps
@@ -765,6 +774,18 @@ The durable conclusion is narrower: `bench_fullchain` now has a real-socket,
 single-connection, no-router 1 KiB response row that sits between the
 in-memory writer/outbound benches and the broader `bench_server response_1k`
 throughput workload.
+
+Fresh local threaded smoke row from 2026-06-07 for the body-bearing llhttp
+path:
+
+| workload | nextpas_h1_path | iterations | completed | elapsed_ns | ns/op | req/s |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| echo_1k | llhttp | 128 | 128 | 5060196 | 39532.8 | 25295 |
+
+Treat this as local harness proof, not a stable performance ranking. The
+durable conclusion is that `bench_fullchain` now exposes the fast-vs-llhttp
+ingress split directly on saved nextPas rows instead of leaving it implicit in
+request shape.
 
 ## Optimization Evidence: Full-Chain Benchmark Buffered Client Read
 

@@ -11872,3 +11872,54 @@ Hello from nextPas!
     of leaving consumers to infer body size from workload names
   - this is metadata-contract tightening only; it does not claim a new
     optimization or a new throughput result
+
+## Session: 2026-06-07 full-chain H1 path marker slice
+
+- **Status:** completed.
+- Objective:
+  - make `bench_fullchain` expose the current nextPas ingress path explicitly
+  - keep fast-path vs llhttp interpretation visible on saved full-chain rows
+  - add at least one focused body-bearing full-chain smoke instead of locking
+    only no-body rows
+- Scope and safety:
+  - touched only `bench_fullchain`, the benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 runtime behavior, lower-layer modules,
+    benchmark math, comparison runner behavior, comparator binaries, or
+    generated artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `69 total, 64 passed, 5 failed`
+    - failed at:
+      - `bench_fullchain plaintext smoke`
+      - `bench_fullchain direct plaintext smoke`
+      - `bench_fullchain direct 1k smoke`
+      - `bench_fullchain echo 1k smoke`
+      - `bench_fullchain epoll direct plaintext smoke`
+    - common failure: missing `nextpas_h1_path=` marker
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_fullchain` now emits `nextpas_h1_path=<fast|llhttp>` on each row
+  - current focused smokes lock:
+    - `plaintext` -> `fast`
+    - `direct_root` -> `fast`
+    - `direct_1k` -> `fast`
+    - `echo_1k` -> `llhttp`
+    - `epoll direct_root` -> `fast`
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `69 total, 69 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `env NEXTPAS_BENCH_MAX_ITERS=128 NEXTPAS_BENCH_FILTER=echo_1k ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `workload=echo_1k`
+    - `response_body_bytes=1024`
+    - `nextpas_h1_path=llhttp`
+    - `completed=128`
+    - `ns/op=39532.8`
+    - `req/s=25295`
+- Outcome:
+  - full-chain saved rows now state whether they exercised the current fast
+    ingress or the llhttp adapter path
+  - this remains benchmark-truth tightening, not a runtime change or a new
+    cross-language result

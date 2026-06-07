@@ -603,7 +603,8 @@ begin
 end;
 
 procedure CheckFullchainBenchmarkOutput(const AOutput, AWorkload,
-  AFilter, AResponseBodyBytes: string; const ABackend: string = 'threaded');
+  AFilter, AResponseBodyBytes: string; const ABackend: string = 'threaded';
+  const AH1Path: string = 'fast');
 begin
   CheckContains(AOutput, 'operation=http.fullchain.keepalive',
     'fullchain operation marker');
@@ -611,6 +612,8 @@ begin
     'fullchain client read mode marker');
   CheckContains(AOutput, 'backend=' + ABackend,
     'fullchain backend marker');
+  CheckContains(AOutput, 'nextpas_h1_path=' + AH1Path,
+    'fullchain H1 path marker');
   CheckContains(AOutput, 'workload=' + AWorkload,
     'fullchain workload marker');
   CheckContains(AOutput, 'response_body_bytes=' + AResponseBodyBytes,
@@ -1573,6 +1576,35 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_fullchain direct 1k smoke exit code: ' + LOutput);
   CheckFullchainBenchmarkOutput(LOutput, 'direct_1k', 'direct_1k', '1024');
+end;
+
+procedure TestBenchFullchainEcho1KSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchFullchainRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain echo 1k build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchFullchainBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_fullchain echo 1k binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + FullchainSmokeIterations,
+     BenchFilterEnvName + '=echo_1k'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain echo 1k smoke exit code: ' + LOutput);
+  CheckFullchainBenchmarkOutput(LOutput, 'echo_1k', 'echo_1k', '1024',
+    'threaded', 'llhttp');
 end;
 
 procedure TestBenchFullchainRejectsInvalidBackend;
@@ -3082,6 +3114,8 @@ begin
     @TestBenchFullchainDirectPlaintextSmoke);
   T.Run('bench_fullchain direct 1k smoke',
     @TestBenchFullchainDirect1KSmoke);
+  T.Run('bench_fullchain echo 1k smoke',
+    @TestBenchFullchainEcho1KSmoke);
   T.Run('bench_fullchain rejects invalid backend',
     @TestBenchFullchainRejectsInvalidBackend);
   T.Run('bench_fullchain epoll direct plaintext smoke',

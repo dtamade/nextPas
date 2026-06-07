@@ -113,6 +113,13 @@ begin
   end;
 end;
 
+function ExpectedH1PathForWorkload(const AWorkload: string): string;
+begin
+  if (AWorkload = 'echo_1k') or (AWorkload = 'sink_16k') then
+    Exit('llhttp');
+  Result := 'fast';
+end;
+
 function ShouldRunScenario(const AWorkload, AName: string): Boolean;
 var
   LFilter: string;
@@ -352,6 +359,7 @@ begin
   WriteLn('workload=', AWorkload);
   WriteLn('response_body_bytes=', AResponseBodyBytes);
   WriteLn('backend=', BackendName);
+  WriteLn('nextpas_h1_path=', ExpectedH1PathForWorkload(AWorkload));
   WriteLn('iterations=', GIterations);
   WriteLn('completed=', Result.Completed);
   WriteLn('elapsed_ns=', Result.ElapsedNs);

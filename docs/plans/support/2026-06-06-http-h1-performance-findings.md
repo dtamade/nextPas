@@ -5233,3 +5233,26 @@
   现在 `bench_fullchain` 和 `bench_server`/comparators 一样，都会把 response
   size 当作 machine-readable metadata 输出，后续分析 `direct_root` vs `direct_1k`
   时不必再靠 workload 名字猜测 body 规模。
+
+## 2026-06-07 full-chain H1 path marker findings
+
+- `bench_server` 早就输出了 `nextpas_h1_path=...`，但 `bench_fullchain` 之前没有。
+  这会让 full-chain saved row 难以直接说明自己是在当前 conservative fast path，
+  还是已经落回 llhttp adapter path。
+- 这轮选择的最小收口不是扩 comparison runner，也不是去改 H1 fast path 本身：
+  - 只让 `bench_fullchain` 每条 nextPas row 输出 `nextpas_h1_path=...`
+  - 当前 no-body GET rows 锁成 `fast`
+  - body-bearing `echo_1k` / `sink_16k` rows 锁成 `llhttp`
+- focused gate 这次不仅锁 metadata，还顺手补上了一个之前缺失的 full-chain
+  body-bearing smoke：
+  - `plaintext` / `direct_root` / `direct_1k` / `epoll direct_root`
+    都因为缺 `nextpas_h1_path=fast` marker 而 RED
+  - 新增 `echo_1k` smoke 进一步证明 llhttp path row 真实存在，并要求
+    `nextpas_h1_path=llhttp`
+- 本地手工 smoke 也给出了最窄的 llhttp full-chain row：
+  - `echo_1k` threaded 128 次约 `39532.8 ns/op`
+  - row 同时带 `response_body_bytes=1024` 与 `nextpas_h1_path=llhttp`
+- 这轮的价值不在于又多了一条 benchmark 数字，而在于：
+  - full-chain row 终于能直接说明自己测的是 fast ingress 还是 llhttp ingress
+  - 后续把 `direct_root/direct_1k` 和 `echo_1k/sink_16k` 放在一起看时，不必再从
+    request shape 间接推断 parser path
