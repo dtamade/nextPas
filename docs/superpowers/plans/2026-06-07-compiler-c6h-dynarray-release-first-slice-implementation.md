@@ -528,8 +528,19 @@ Keep `__field_setlength__` on the current `arr_alloc` path.
 Add new emitter flags:
 
 ```pascal
+FNeedsMemcpy: Boolean;
 FNeedsDynArrayResize: Boolean;
 FNeedsDynArrayRelease: Boolean;
+```
+
+Emit `@np_memcpy` from its own dependency bit, not by piggybacking on string
+concat. The updated helper-emission rule should be:
+
+```pascal
+if FNeedsMemcpy then
+  EmitMemcpyHelper;
+if FNeedsStrConcat or FNeedsIntToStr then
+  EmitStrConcatHelper;
 ```
 
 Map the new intrinsics:
@@ -538,7 +549,7 @@ Map the new intrinsics:
 else if AInstr.IntrinsicName = 'dynarray_resize' then
 begin
   FNeedsAlloc := True;
-  FNeedsStrConcat := True;
+  FNeedsMemcpy := True;
   FNeedsDynArrayResize := True;
   Emit('  ' + ValueRef(AInstr.ResultId) +
     ' = call ptr @np_dynarray_resize(ptr ' + ValueRef(AInstr.Operands[0].ValueId) +
@@ -635,6 +646,8 @@ entry:
 ```
 
 Keep `@np_alloc`, `@np_free`, `@np_object_alloc`, `@np_object_free_release`, and `@np_str_concat` behavior unchanged except for the new dynarray helper callers.
+`@np_memcpy` becomes a shared low-level helper with an explicit emitter
+dependency bit; it is not part of the string-ownership surface.
 
 - [ ] **Step 5: Run the focused contracts and runtime smokes until GREEN**
 
