@@ -350,6 +350,9 @@ HIR_CLASS_ALLOC_OUTPUT=$(mktemp)
 HIR_OBJECT_FREE_BUILD_DIR=$(mktemp -d)
 HIR_OBJECT_FREE_BINARY="$HIR_OBJECT_FREE_BUILD_DIR/test_hir_object_free_contract"
 HIR_OBJECT_FREE_OUTPUT=$(mktemp)
+HIR_NODE_KIND_BUILD_DIR=$(mktemp -d)
+HIR_NODE_KIND_BINARY="$HIR_NODE_KIND_BUILD_DIR/test_hir_node_kind"
+HIR_NODE_KIND_OUTPUT=$(mktemp)
 HIR_DYNARRAY_RELEASE_BUILD_DIR=$(mktemp -d)
 HIR_DYNARRAY_RELEASE_BINARY="$HIR_DYNARRAY_RELEASE_BUILD_DIR/test_hir_dynarray_release_contract"
 HIR_DYNARRAY_RELEASE_OUTPUT=$(mktemp)
@@ -916,6 +919,7 @@ require_path tests/toolchain/toolchain_contract_smoke.pas
 require_path tests/hir/test_hir_late_alloca_hoist.pas
 require_path tests/hir/test_hir_class_alloc_contract.pas
 require_path tests/hir/test_hir_object_free_contract.pas
+require_path tests/hir/test_hir_node_kind.pas
 require_path tests/hir/test_hir_dynarray_release_contract.pas
 require_path tests/hir/test_hir_dynarray_release_runtime_smoke.pas
 require_path tests/hir/test_hir_field_dynarray_contract.pas
@@ -1141,6 +1145,24 @@ fi
 cat "$HIR_OBJECT_FREE_OUTPUT"
 require_output_pattern '^hir-object-free-contract-status=pass$' "$HIR_OBJECT_FREE_OUTPUT" 'missing-hir-object-free-contract-pass'
 printf 'hir-object-free-contract=pass\n'
+
+printf 'hir-node-kind=running\n'
+printf 'hir-node-kind-command=fpc -Fucompiler/ir -FE%s -FU%s tests/hir/test_hir_node_kind.pas\n' "$HIR_NODE_KIND_BUILD_DIR" "$HIR_NODE_KIND_BUILD_DIR"
+if ! fpc -Fucompiler/ir -FE"$HIR_NODE_KIND_BUILD_DIR" -FU"$HIR_NODE_KIND_BUILD_DIR" tests/hir/test_hir_node_kind.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/ir -FE"$HIR_NODE_KIND_BUILD_DIR" -FU"$HIR_NODE_KIND_BUILD_DIR" tests/hir/test_hir_node_kind.pas
+  fail 'hir-node-kind-build-failed'
+fi
+if [ ! -x "$HIR_NODE_KIND_BINARY" ]; then
+  fail 'missing-hir-node-kind-binary'
+fi
+printf 'hir-node-kind-run-command=%s\n' "$HIR_NODE_KIND_BINARY"
+if ! "$HIR_NODE_KIND_BINARY" >"$HIR_NODE_KIND_OUTPUT" 2>&1; then
+  cat "$HIR_NODE_KIND_OUTPUT"
+  fail 'hir-node-kind-run-failed'
+fi
+cat "$HIR_NODE_KIND_OUTPUT"
+require_output_pattern '^hir-node-kind-status=pass$' "$HIR_NODE_KIND_OUTPUT" 'missing-hir-node-kind-pass'
+printf 'hir-node-kind=pass\n'
 
 printf 'hir-dynarray-release-contract=running\n'
 printf 'hir-dynarray-release-contract-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_dynarray_release_contract.pas\n' "$HIR_DYNARRAY_RELEASE_BUILD_DIR" "$HIR_DYNARRAY_RELEASE_BUILD_DIR"
