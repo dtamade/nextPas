@@ -72,7 +72,24 @@ require_hygiene_line '^tracked generated artifacts:$'
 require_hygiene_line '^docs/tracked_generated\.so$'
 require_hygiene_line '^build-hygiene=failed$'
 
-make -C "$FIXTURE_REPO" clean-artifacts >/dev/null
+CLEAN_OUTPUT=$(make -C "$FIXTURE_REPO" clean-artifacts 2>&1) && {
+  printf 'expected clean-artifacts to fail on tracked generated artifacts\n' >&2
+  printf '%s\n' "$CLEAN_OUTPUT" >&2
+  exit 1
+}
+
+require_clean_line() {
+  pattern="$1"
+  if ! printf '%s\n' "$CLEAN_OUTPUT" | grep -E "$pattern" >/dev/null; then
+    printf 'missing expected clean artifact line: %s\n' "$pattern" >&2
+    printf '%s\n' "$CLEAN_OUTPUT" >&2
+    exit 1
+  fi
+}
+
+require_clean_line '^tracked generated artifacts:$'
+require_clean_line '^docs/tracked_generated\.so$'
+require_clean_line '^build-artifact-clean=failed$'
 
 if [ -e "$FIXTURE_REPO/tools/stage0/nextpas" ] || [ -e "$FIXTURE_REPO/core/tests/nextpas.core.fake/test_fake/test_fake" ]; then
   printf 'expected clean-artifacts to remove extensionless artifacts\n' >&2

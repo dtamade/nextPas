@@ -96,7 +96,12 @@ collect_source_artifacts() {
   done
 }
 
+collect_tracked_artifacts() {
+  git -C "$REPO_ROOT" ls-files | grep -E '(^|/)([^/]+\.o|[^/]+\.ppu|[^/]+\.compiled|link[^/]*\.res|[^/]+\.test\.res|ppas\.sh|[^/]+\.pyc|[^/]+\.exe|[^/]+\.dll|[^/]+\.so|[^/]+\.dylib|libimp[^/]*\.a|[^/]+\.a)$' >"$TRACKED_FILE" || true
+}
+
 collect_source_artifacts
+collect_tracked_artifacts
 
 if [ "$MODE" = "clean-source-artifacts" ]; then
   if [ -s "$WORKTREE_FILE" ]; then
@@ -104,11 +109,15 @@ if [ "$MODE" = "clean-source-artifacts" ]; then
       rm -f "$artifact_path"
     done <"$WORKTREE_FILE"
   fi
+  if [ -s "$TRACKED_FILE" ]; then
+    printf 'tracked generated artifacts:\n'
+    sort "$TRACKED_FILE"
+    printf 'build-artifact-clean=failed\n' >&2
+    exit 1
+  fi
   printf 'build-artifact-clean=pass\n'
   exit 0
 fi
-
-git -C "$REPO_ROOT" ls-files | grep -E '(^|/)([^/]+\.o|[^/]+\.ppu|[^/]+\.compiled|link[^/]*\.res|[^/]+\.test\.res|ppas\.sh|[^/]+\.pyc|[^/]+\.exe|[^/]+\.dll|[^/]+\.so|[^/]+\.dylib|libimp[^/]*\.a|[^/]+\.a)$' >"$TRACKED_FILE" || true
 
 FAILED=0
 
