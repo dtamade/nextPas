@@ -186,6 +186,36 @@ worktree 位置正确不代表分支可以合并。
 6. 只用 `ff-only` 或等价的已审查 landing commit 进入主线。
 7. 分支完全吸收后，清理对应临时 worktree。
 
+推荐先用只读 landing evidence gate 固化这些事实：
+
+```bash
+make landing-check \
+  BASE_REF=main \
+  ALLOW_PATHS="scripts tests/tooling docs/worktrees.md" \
+  FOCUS=core/tests/<module>/<gate>
+```
+
+`ALLOW_PATHS` 是允许带入候选分支的路径前缀清单；多个前缀用空格分隔。
+如果当前 slice 没有对应的 core focused gate，可以省略 `FOCUS`，但 `Ready` 或
+landing 报告必须说明用了哪些替代 verification。
+
+`make landing-check` 会运行：
+
+1. `make hygiene`。
+2. `scripts/landing-candidate-check.sh --base <BASE_REF> --allow-path <prefix>...`。
+3. `git diff --check <BASE_REF>...HEAD`。
+4. 如果设置了 `FOCUS`，再运行根目录 `make focused FOCUS=<gate>`。
+5. 最后再运行一次 `make hygiene`。
+
+`scripts/landing-candidate-check.sh` 只读取当前 worktree 状态并打印证据：branch、
+worktree、HEAD、base、ahead、behind、allowed paths 和 changed files。它会在 dirty、
+detached、`behind != 0`、worktree 不在仓库根或 `.worktrees/`、或改动路径超出
+`ALLOW_PATHS` 时失败。该 helper 不会 rebase、merge、cherry-pick、replay 或修改分支。
+
+这个 gate 只是 landing evidence，不是合并批准。它不能替代 diff review、模块 focused
+verification、heaptrc/no-leak 证据、source/compile/runtime truth 分类，也不能授权 raw merge
+长期 lane 到 `main`。
+
 成功 landing 后清理：
 
 ```bash

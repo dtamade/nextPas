@@ -1,6 +1,7 @@
 TEST_FILTER ?= smoke
+BASE_REF ?= main
 
-.PHONY: rebuild-compiler stage0 verify test test-smoke test-tooling focused self-compile-module self-compile-modules c8-probe-np-allocator hygiene clean clean-artifacts
+.PHONY: rebuild-compiler stage0 verify test test-smoke test-tooling focused landing-check self-compile-module self-compile-modules c8-probe-np-allocator hygiene clean clean-artifacts
 
 rebuild-compiler:
 	./scripts/rebuild-compiler.sh
@@ -32,6 +33,13 @@ focused: hygiene
 	@awk -v target=test 'BEGIN { found = 0 } /^[^#[:space:]][^:]*:/ { split($$0, parts, ":"); n = split(parts[1], names, /[[:space:]]+/); for (i = 1; i <= n; i++) if (names[i] == target) found = 1 } END { exit found ? 0 : 1 }' "$(FOCUS)/Makefile" || { echo "FOCUS Makefile must expose a test target: $(FOCUS)" >&2; exit 1; }
 	$(MAKE) -C "$(FOCUS)" clean
 	$(MAKE) -C "$(FOCUS)" test
+	$(MAKE) hygiene
+
+landing-check: hygiene
+	@test -n "$(ALLOW_PATHS)" || { echo "ALLOW_PATHS is required, e.g. make landing-check ALLOW_PATHS='scripts tests/tooling docs/worktrees.md'" >&2; exit 1; }
+	./scripts/landing-candidate-check.sh --base "$(BASE_REF)" $(foreach path,$(ALLOW_PATHS),--allow-path "$(path)")
+	git diff --check "$(BASE_REF)...HEAD"
+	@if [ -n "$(FOCUS)" ]; then $(MAKE) focused FOCUS="$(FOCUS)"; fi
 	$(MAKE) hygiene
 
 self-compile-module: rebuild-compiler
