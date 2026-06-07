@@ -3,7 +3,7 @@ program test_poller;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils, BaseUnix,
+  Classes, SysUtils, BaseUnix,
   nextpas.core.testing,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
@@ -15,6 +15,54 @@ var
   GCallbackCount: Int32;
   GLastResult: Int32;
   GLastUserData: UInt64;
+
+function ExpandRepoPath(const ARelativePath: string): string;
+begin
+  Result := ExpandFileName('../../../' + ARelativePath);
+end;
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LSourcePath: string;
+  LLines: TStringList;
+begin
+  LSourcePath := ExpandRepoPath(ARelativePath);
+  Check(FileExists(LSourcePath), 'source file should exist: ' + LSourcePath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(LSourcePath);
+    Result := LowerCase(LLines.Text);
+  finally
+    LLines.Free;
+  end;
+end;
+
+function ExtractBetween(const ASource, AStartToken, AEndToken: string): string;
+var
+  LStartPos, LEndPos: SizeInt;
+begin
+  LStartPos := Pos(AStartToken, ASource);
+  Check(LStartPos > 0, 'source range start should exist: ' + AStartToken);
+  LEndPos := Pos(AEndToken, Copy(ASource, LStartPos + Length(AStartToken),
+    Length(ASource)));
+  Check(LEndPos > 0, 'source range end should exist: ' + AEndToken);
+  Result := Copy(ASource, LStartPos, Length(AStartToken) + LEndPos - 1);
+end;
+
+function CountOccurrences(const ASource, AToken: string): SizeInt;
+var
+  LPos, LOffset: SizeInt;
+begin
+  Result := 0;
+  LOffset := 1;
+  repeat
+    LPos := Pos(AToken, Copy(ASource, LOffset, Length(ASource)));
+    if LPos = 0 then
+      Break;
+    Inc(Result);
+    Inc(LOffset, LPos + Length(AToken) - 1);
+  until False;
+end;
 
 procedure OnComplete(AUserData: UInt64; AResult: Int32; AContext: Pointer);
 begin
@@ -30,6 +78,23 @@ begin
   LBackend := PollerDetectBackend;
   { On kernel 6.12, io_uring should be available }
   Check(LBackend = pbIoUring, 'detected io_uring on modern kernel');
+end;
+
+procedure TestBackendUsabilityContract;
+var
+  LPollerSource: string;
+  LProbeBody: string;
+begin
+  LPollerSource := LoadSourceText('src/nextpas.core.io.poller.pas');
+  LProbeBody := ExtractBetween(LPollerSource, 'function tryiouringprobe',
+    '{$endif}');
+
+  CheckEqual(Int64(1), Int64(CountOccurrences(LProbeBody, 'result := true;')),
+    'io_uring probe must only report usable truth after a successful setup');
+  Check(Pos('lfd >= 0', LProbeBody) > 0,
+    'io_uring probe must tie usable truth to an opened setup fd');
+  Check(Pos('result := false;', LProbeBody) > 0,
+    'io_uring probe must fall back when setup cannot produce a usable fd');
 end;
 
 procedure TestCreateClose;
@@ -234,6 +299,7 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.io.poller');
   T.Run('Backend detection', @TestBackendDetection);
+  T.Run('Backend usability contract', @TestBackendUsabilityContract);
   T.Run('Create/Close', @TestCreateClose);
   T.Run('Async Read/Write (memfd)', @TestAsyncReadWrite);
   T.Run('Multiple async ops', @TestMultipleAsync);

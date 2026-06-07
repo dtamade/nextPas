@@ -69,28 +69,18 @@ uses
   nextpas.core.platform.linux.modern,
   nextpas.core.platform.linux.ffi;
 
-const
-  ENOSYS = 38;
-
 function TryIoUringProbe: Boolean;
 var
   LParams: TIoUringParams;
   LFd: cint;
 begin
+  Result := False;
   FillChar(LParams, SizeOf(LParams), 0);
   LFd := cint(syscall(SYS_io_uring_setup, 1, PtrUInt(@LParams), 0, 0, 0, 0));
   if LFd >= 0 then
   begin
     nextpas.core.platform.posix.ffi.close(LFd);
     Result := True;
-  end
-  else
-  begin
-    { LFd is negative errno on failure }
-    if LFd = -ENOSYS then
-      Result := False
-    else
-      Result := True; { io_uring exists but params were invalid }
   end;
 end;
 {$ENDIF}
