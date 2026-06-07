@@ -22,6 +22,9 @@ const
   PATH_SEP = ':';
 {$ENDIF}
 
+type
+  TAnsiCharArray = array of AnsiChar;
+
 function IsExecutable(const APath: PAnsiChar): Boolean;
 begin
 {$IFDEF NEXTPAS_UNIX}
@@ -31,11 +34,26 @@ begin
 {$ENDIF}
 end;
 
+function LoadPathEnv(out APath: TAnsiCharArray; out APathLen: Int32): Boolean;
+begin
+  Result := False;
+  repeat
+    if platform_env_get('PATH', nil, 0, APathLen) <> 0 then
+      Exit;
+    if APathLen <= 0 then
+      Exit;
+    SetLength(APath, APathLen + 1);
+    if platform_env_get('PATH', @APath[0], Length(APath), APathLen) <> 0 then
+      Exit;
+  until APathLen < Length(APath);
+  Result := True;
+end;
+
 function platform_which(const AName: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 var
-  LPathBuf: array[0..4095] of AnsiChar;
   LCandidate: array[0..1023] of AnsiChar;
+  LPathBuf: array of AnsiChar;
   LPathLen, I, LStart, LDirLen, LNameLen: Int32;
 begin
   if (AName = nil) or (AName[0] = #0) then
@@ -56,7 +74,7 @@ begin
     Exit(-1);
   end;
 
-  if platform_env_get('PATH', @LPathBuf[0], 4096, LPathLen) <> 0 then
+  if not LoadPathEnv(LPathBuf, LPathLen) then
     Exit(-1);
 
   I := 0;
