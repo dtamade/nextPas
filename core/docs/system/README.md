@@ -40,6 +40,10 @@ Root facade live surface:
 
 S2 runtime/managed lifetime contract names live in `runtime-contracts.md`. They are documented
 compiler/runtime handshake names, not public ABI and not current facade functions.
+The compiler may project managed dynamic-array operations as
+`np.system.dynarray_set_length`, `np.system.dynarray_fini` and nested element
+contracts such as `np.system.string_fini` and `np.system.interface_release`;
+those names describe semantics and do not freeze backend-private helper symbols.
 
 S3 lifecycle contract names and evidence categories live in `lifecycle-contracts.md`. They cover
 exception raise/unwind ownership, RTTI / TypeInfo boundary rules, unit initialization/finalization

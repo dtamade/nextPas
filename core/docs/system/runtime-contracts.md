@@ -52,6 +52,12 @@ Rules:
 - Resizing must define failure behavior before implementation appears.
 - Element finalization must be explicit for managed element types.
 - Allocation must route through the heap manager owned by `nextpas.core.mem`.
+- Compiler HIR may project `np.system.dynarray_set_length`,
+  `np.system.dynarray_fini` and element contracts such as
+  `np.system.string_fini` for `array of string` and
+  `np.system.interface_release` for `array of interface`. Backend-private
+  helpers such as `@np_dynarray_resize` and `@np_dynarray_release` remain
+  implementation details, not public ABI.
 
 ## Interface Reference
 

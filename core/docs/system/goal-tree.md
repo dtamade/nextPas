@@ -80,7 +80,9 @@ Current phase note:
 
 ## S5 Compiler / Runtime Integration Readiness
 
-- [ ] Align facade docs with compiler runtime contract names and source-backed `System` truth.
-- [ ] Prove runtime helper references are explicit, stable and not backend-private magic strings.
+- [x] Align managed dynamic-array compiler contract projection with system runtime contract names.
+- [x] Prove managed dynamic-array contract vocabulary is explicit without freezing backend-private helper symbols.
+- [ ] Align remaining facade docs with compiler runtime contract names and source-backed `System` truth.
+- [ ] Prove remaining runtime helper references are explicit, stable and not backend-private magic strings.
 - [ ] Add integration smoke once compiler/runtime can consume the core-system contract directly.
 - [ ] Prepare a landing candidate only after focused gates and cross-module risks are clean.

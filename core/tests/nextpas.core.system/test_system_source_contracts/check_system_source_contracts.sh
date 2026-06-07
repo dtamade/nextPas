@@ -628,6 +628,12 @@ for helper in \
   "np.system.heap_free"; do
   require_token "docs/system/runtime-contracts.md" "$helper"
 done
+require_token "docs/system/runtime-contracts.md" "Compiler HIR may project"
+require_token "docs/system/runtime-contracts.md" "array of interface"
+require_token "docs/system/runtime-contracts.md" "@np_dynarray_resize"
+require_token "docs/system/runtime-contracts.md" "not public ABI"
+require_token "docs/system/README.md" "managed dynamic-array operations"
+require_token "docs/system/goal-tree.md" "managed dynamic-array compiler contract projection"
 
 for token in \
   "exception raise" \
@@ -773,6 +779,20 @@ require_repo_token "core/src/nextpas.core.collections.hashmap.swiss.pas" "GetTyp
 require_repo_token "core/tests/nextpas.core.collections/test_managed_types/test_managed_types.lpr" "TArray string managed TypeInfo consumer contract"
 require_repo_token "core/tests/nextpas.core.collections/test_managed_types/test_managed_types.lpr" "LA.Copy(0, 1, 4)"
 require_repo_token "core/tests/nextpas.core.collections/test_managed_types/test_managed_types.lpr" "LA.Read(0, LReadBack, 6)"
+require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "ManagedStringDynArraySource"
+require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "ManagedInterfaceDynArraySource"
+require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "np.system.dynarray_set_length"
+require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "np.system.dynarray_fini"
+require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "np.system.string_fini"
+require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "np.system.interface_release"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "MarkDynArraySetLengthContract"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "MarkDynArrayFiniContract"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "DynArrayElemTypeNeedsManagedContract"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "DynArrayElemTypeIsManagedInterface"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.dynarray_set_length"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.dynarray_fini"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.string_fini"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.interface_release"
 
 for path in \
   "core/src/nextpas.core.collections.arr.pas" \
@@ -966,6 +986,12 @@ require_root_facade_surface_allowlist
 reject_token "src/nextpas.core.system.pas" "SysUtils"
 reject_token "src/nextpas.core.system.pas" "TypInfo"
 reject_token "src/nextpas.core.system.pas" "Classes"
+reject_token "src/nextpas.core.system.pas" "DynArraySetLength"
+reject_token "src/nextpas.core.system.pas" "DynArrayResize"
+reject_token "src/nextpas.core.system.pas" "DynArrayRelease"
+reject_token "src/nextpas.core.system.typinfo.pas" "DynArraySetLength"
+reject_token "src/nextpas.core.system.typinfo.pas" "DynArrayResize"
+reject_token "src/nextpas.core.system.typinfo.pas" "DynArrayRelease"
 
 require_token "src/nextpas.core.system.sysutils.pas" "unit nextpas.core.system.sysutils;"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.exception"
