@@ -168,14 +168,6 @@ begin
   Result := platform_fs_mkdir_p(PAnsiChar(APath), UInt32(APerm)) = 0;
 end;
 
-function FsRemove(const APath: string): Boolean;
-begin
-  if platform_fs_is_dir(PAnsiChar(APath)) then
-    Result := platform_file_rmdir(PAnsiChar(APath)) = 0
-  else
-    Result := platform_file_unlink(PAnsiChar(APath)) = 0;
-end;
-
 { True only for a real directory; a symlink to a directory returns False so
   callers unlink the link instead of recursing into its target. }
 function IsRealDir(const APath: string): Boolean;
@@ -185,6 +177,14 @@ begin
   if platform_file_lstat(PAnsiChar(APath), LStat) <> 0 then
     Exit(False);
   Result := LStat.FileType = nextpas.core.platform.files.base.ftDirectory;
+end;
+
+function FsRemove(const APath: string): Boolean;
+begin
+  if IsRealDir(APath) then
+    Result := platform_file_rmdir(PAnsiChar(APath)) = 0
+  else
+    Result := platform_file_unlink(PAnsiChar(APath)) = 0;
 end;
 
 function FsRemoveAll(const APath: string): Boolean;
