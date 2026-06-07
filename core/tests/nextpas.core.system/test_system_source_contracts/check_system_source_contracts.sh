@@ -83,6 +83,163 @@ require_repo_not_uses_unit() {
   fi
 }
 
+list_root_facade_surface() {
+  awk '
+    function trim(s) {
+      gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", s)
+      return s
+    }
+    BEGIN {
+      in_interface = 0
+      section = ""
+    }
+    /^[ \t]*interface[ \t]*$/ {
+      in_interface = 1
+      next
+    }
+    /^[ \t]*implementation[ \t]*$/ {
+      exit
+    }
+    !in_interface {
+      next
+    }
+    {
+      line = $0
+      gsub(/\{[^}]*\}/, "", line)
+      sub(/\/\/.*/, "", line)
+      line = trim(line)
+      if (line == "") {
+        next
+      }
+      lower_line = tolower(line)
+      if (lower_line == "uses") {
+        section = "uses"
+        next
+      }
+      if (section == "uses") {
+        if (line ~ /;/) {
+          section = ""
+        }
+        next
+      }
+      if (lower_line == "const") {
+        section = "const"
+        next
+      }
+      if (lower_line == "type") {
+        section = "type"
+        next
+      }
+      if (match(line, /^procedure[ \t]+([A-Za-z_][A-Za-z0-9_]*)/, parts)) {
+        section = ""
+        print "procedure " parts[1]
+        next
+      }
+      if (match(line, /^function[ \t]+([A-Za-z_][A-Za-z0-9_]*)/, parts)) {
+        section = ""
+        print "function " parts[1]
+        next
+      }
+      if (section == "const" && match(line, /^([A-Za-z_][A-Za-z0-9_]*)[ \t=]/, parts)) {
+        print "const " parts[1]
+        next
+      }
+      if (section == "type" && match(line, /^([A-Za-z_][A-Za-z0-9_]*)[ \t=]/, parts)) {
+        print "type " parts[1]
+        next
+      }
+    }
+  ' "$CORE_ROOT/src/nextpas.core.system.pas"
+}
+
+require_root_facade_surface_allowlist() {
+  local actual expected
+  actual="$(list_root_facade_surface)"
+  expected="$(cat <<'EOF'
+const NEXTPAS_SYSTEM_NAME
+const MAX_SIZE_INT
+const MAX_SIZE_UINT
+const MIN_SIZE_INT
+const SIZE_PTR
+const SIZE_8
+const SIZE_16
+const SIZE_32
+const SIZE_64
+type TBytes
+type TByteSpan
+type THashCode
+type Exception
+type ExceptClass
+type EConvertError
+type EAssertionFailed
+type TErrorCategory
+type ENextPasError
+type ECore
+type EInvariantViolation
+type EArgumentNil
+type EEmptyCollection
+type EInvalidArgument
+type EInvalidResult
+type EInvalidState
+type EOutOfRange
+type ENotSupported
+type ENotCompatible
+type EInvalidOperation
+type EOverflow
+type EArgumentError
+type ENullReferenceError
+type EInvalidOperationError
+type ENotImplementedError
+type ENotSupportedError
+type ETimeoutError
+type ECancelledError
+type EPermissionError
+type ENotFoundError
+type EAlreadyExistsError
+type EResourceExhaustedError
+type EIOError
+type ENetworkError
+type EParseError
+type EIndexOutOfRangeError
+type EOutOfMemoryError
+type EOutOfMemory
+const ecNone
+const ecInvalidArgument
+const ecNullReference
+const ecInvalidOperation
+const ecNotImplemented
+const ecNotSupported
+const ecTimeout
+const ecCancelled
+const ecInterrupted
+const ecWouldBlock
+const ecPermission
+const ecNotFound
+const ecAlreadyExists
+const ecResourceExhausted
+const ecIO
+const ecNetwork
+const ecParse
+const ecInternal
+procedure FreeAndNil
+procedure SafeFree
+procedure ZeroMem
+procedure CopyMem
+function CompareMem
+function Supports
+function Supports
+EOF
+)"
+  if [[ "$actual" != "$expected" ]]; then
+    printf '[FAIL] root facade public surface drifted\n' >&2
+    printf '%s\n' '--- expected' >&2
+    printf '%s\n' "$expected" >&2
+    printf '%s\n' '--- actual' >&2
+    printf '%s\n' "$actual" >&2
+    exit 1
+  fi
+}
+
 reject_repo_uses_unit_under() {
   local root="$1"
   local forbidden_unit="$2"
@@ -122,6 +279,10 @@ require_token "docs/system/README.md" "nextpas.core.system.typinfo"
 require_token "docs/system/README.md" "nextpas.core.system.sysutils"
 require_token "docs/system/README.md" "minimal live unit"
 require_token "docs/system/README.md" "Classes remain deferred"
+require_token "docs/system/README.md" "Root facade live surface"
+require_token "docs/system/README.md" "delegating to owner"
+require_token "docs/system/README.md" "compiler/System compile-truth"
+require_token "docs/system/README.md" "not unit-owned wrapper functions"
 
 for unit_name in System SysUtils TypInfo Classes ObjPas; do
   require_token "docs/system/rtl-mapping.md" "$unit_name"
@@ -139,6 +300,8 @@ done
 for phase in S0 S1 S2 S3 S4 S5; do
   require_token "docs/system/goal-tree.md" "$phase"
 done
+require_token "docs/system/goal-tree.md" "TypeInfo and GetTypeKind are compiler/System compile-truth imports"
+require_token "docs/system/goal-tree.md" "not unit-owned wrapper functions"
 
 for token in \
   "S4" \
@@ -407,14 +570,89 @@ require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system
 require_token "tests/nextpas.core.system/Makefile" "test-typinfo-minimal"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/Makefile" "test: run compiler-contract"
 
+require_token "src/nextpas.core.system.pas" "NEXTPAS_SYSTEM_NAME = 'nextpas.core.system';"
+require_token "src/nextpas.core.system.pas" "MAX_SIZE_INT = nextpas.core.base.MAX_SIZE_INT;"
+require_token "src/nextpas.core.system.pas" "MAX_SIZE_UINT = nextpas.core.base.MAX_SIZE_UINT;"
+require_token "src/nextpas.core.system.pas" "MIN_SIZE_INT = nextpas.core.base.MIN_SIZE_INT;"
+require_token "src/nextpas.core.system.pas" "SIZE_PTR = nextpas.core.base.SIZE_PTR;"
+require_token "src/nextpas.core.system.pas" "SIZE_8 = nextpas.core.base.SIZE_8;"
+require_token "src/nextpas.core.system.pas" "SIZE_16 = nextpas.core.base.SIZE_16;"
+require_token "src/nextpas.core.system.pas" "SIZE_32 = nextpas.core.base.SIZE_32;"
+require_token "src/nextpas.core.system.pas" "SIZE_64 = nextpas.core.base.SIZE_64;"
+require_token "src/nextpas.core.system.pas" "TBytes = nextpas.core.base.TBytes;"
+require_token "src/nextpas.core.system.pas" "TByteSpan = nextpas.core.base.TByteSpan;"
+require_token "src/nextpas.core.system.pas" "THashCode = nextpas.core.base.THashCode;"
 require_token "src/nextpas.core.system.pas" "procedure FreeAndNil"
 require_token "src/nextpas.core.system.pas" "procedure SafeFree"
+require_token "src/nextpas.core.system.pas" "procedure ZeroMem"
+require_token "src/nextpas.core.system.pas" "procedure CopyMem"
+require_token "src/nextpas.core.system.pas" "function CompareMem"
 require_token "src/nextpas.core.system.pas" "function Supports"
 require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.FreeAndNil"
 require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.SafeFree"
+require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.ZeroMem"
+require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.CopyMem"
+require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.CompareMem"
 require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.Supports"
+require_token "src/nextpas.core.system.pas" "Exception = nextpas.core.exception.Exception;"
+require_token "src/nextpas.core.system.pas" "ExceptClass = nextpas.core.exception.ExceptClass;"
+require_token "src/nextpas.core.system.pas" "TErrorCategory = nextpas.core.exception.TErrorCategory;"
+require_token "src/nextpas.core.system.pas" "ENextPasError = nextpas.core.exception.ENextPasError;"
+require_token "src/nextpas.core.system.pas" "ECore = nextpas.core.base.ECore;"
+require_token "src/nextpas.core.system.pas" "EInvariantViolation = nextpas.core.base.EInvariantViolation;"
+require_token "src/nextpas.core.system.pas" "EArgumentNil = nextpas.core.base.EArgumentNil;"
+require_token "src/nextpas.core.system.pas" "EEmptyCollection = nextpas.core.base.EEmptyCollection;"
+require_token "src/nextpas.core.system.pas" "EInvalidArgument = nextpas.core.base.EInvalidArgument;"
+require_token "src/nextpas.core.system.pas" "EInvalidResult = nextpas.core.base.EInvalidResult;"
+require_token "src/nextpas.core.system.pas" "EInvalidState = nextpas.core.base.EInvalidState;"
+require_token "src/nextpas.core.system.pas" "EOutOfRange = nextpas.core.base.EOutOfRange;"
+require_token "src/nextpas.core.system.pas" "ENotSupported = nextpas.core.base.ENotSupported;"
+require_token "src/nextpas.core.system.pas" "ENotCompatible = nextpas.core.base.ENotCompatible;"
+require_token "src/nextpas.core.system.pas" "EInvalidOperation = nextpas.core.base.EInvalidOperation;"
+require_token "src/nextpas.core.system.pas" "EOverflow = nextpas.core.base.EOverflow;"
+require_token "src/nextpas.core.system.pas" "EArgumentError = nextpas.core.errors.EArgumentError;"
+require_token "src/nextpas.core.system.pas" "ENullReferenceError = nextpas.core.errors.ENullReferenceError;"
+require_token "src/nextpas.core.system.pas" "EInvalidOperationError = nextpas.core.errors.EInvalidOperationError;"
+require_token "src/nextpas.core.system.pas" "ENotImplementedError = nextpas.core.errors.ENotImplementedError;"
+require_token "src/nextpas.core.system.pas" "ENotSupportedError = nextpas.core.errors.ENotSupportedError;"
+require_token "src/nextpas.core.system.pas" "ETimeoutError = nextpas.core.errors.ETimeoutError;"
+require_token "src/nextpas.core.system.pas" "ECancelledError = nextpas.core.errors.ECancelledError;"
+require_token "src/nextpas.core.system.pas" "EPermissionError = nextpas.core.errors.EPermissionError;"
+require_token "src/nextpas.core.system.pas" "ENotFoundError = nextpas.core.errors.ENotFoundError;"
+require_token "src/nextpas.core.system.pas" "EAlreadyExistsError = nextpas.core.errors.EAlreadyExistsError;"
+require_token "src/nextpas.core.system.pas" "EResourceExhaustedError = nextpas.core.errors.EResourceExhaustedError;"
+require_token "src/nextpas.core.system.pas" "EIOError = nextpas.core.errors.EIOError;"
+require_token "src/nextpas.core.system.pas" "ENetworkError = nextpas.core.errors.ENetworkError;"
+require_token "src/nextpas.core.system.pas" "EParseError = nextpas.core.errors.EParseError;"
+require_token "src/nextpas.core.system.pas" "EIndexOutOfRangeError = nextpas.core.errors.EIndexOutOfRangeError;"
+require_token "src/nextpas.core.system.pas" "EOutOfMemoryError = nextpas.core.errors.EOutOfMemoryError;"
+require_token "src/nextpas.core.system.pas" "EOutOfMemory = nextpas.core.errors.EOutOfMemory;"
 require_token "src/nextpas.core.system.pas" "EConvertError = nextpas.core.exception.EConvertError;"
 require_token "src/nextpas.core.system.pas" "EAssertionFailed = nextpas.core.exception.EAssertionFailed;"
+require_token "src/nextpas.core.system.pas" "ecNone = nextpas.core.errors.ecNone;"
+require_token "src/nextpas.core.system.pas" "ecInvalidArgument = nextpas.core.errors.ecInvalidArgument;"
+require_token "src/nextpas.core.system.pas" "ecNullReference = nextpas.core.errors.ecNullReference;"
+require_token "src/nextpas.core.system.pas" "ecInvalidOperation = nextpas.core.errors.ecInvalidOperation;"
+require_token "src/nextpas.core.system.pas" "ecNotImplemented = nextpas.core.errors.ecNotImplemented;"
+require_token "src/nextpas.core.system.pas" "ecNotSupported = nextpas.core.errors.ecNotSupported;"
+require_token "src/nextpas.core.system.pas" "ecTimeout = nextpas.core.errors.ecTimeout;"
+require_token "src/nextpas.core.system.pas" "ecCancelled = nextpas.core.errors.ecCancelled;"
+require_token "src/nextpas.core.system.pas" "ecInterrupted = nextpas.core.errors.ecInterrupted;"
+require_token "src/nextpas.core.system.pas" "ecWouldBlock = nextpas.core.errors.ecWouldBlock;"
+require_token "src/nextpas.core.system.pas" "ecPermission = nextpas.core.errors.ecPermission;"
+require_token "src/nextpas.core.system.pas" "ecNotFound = nextpas.core.errors.ecNotFound;"
+require_token "src/nextpas.core.system.pas" "ecAlreadyExists = nextpas.core.errors.ecAlreadyExists;"
+require_token "src/nextpas.core.system.pas" "ecResourceExhausted = nextpas.core.errors.ecResourceExhausted;"
+require_token "src/nextpas.core.system.pas" "ecIO = nextpas.core.errors.ecIO;"
+require_token "src/nextpas.core.system.pas" "ecNetwork = nextpas.core.errors.ecNetwork;"
+require_token "src/nextpas.core.system.pas" "ecParse = nextpas.core.errors.ecParse;"
+require_token "src/nextpas.core.system.pas" "ecInternal = nextpas.core.errors.ecInternal;"
+require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system constants mirror base compile-truth"
+require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system base carrier aliases mirror base compile-truth"
+require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system memory facade delegates full base utils contract"
+require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system base error aliases mirror base compile-truth"
+require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system error taxonomy aliases mirror canonical owners"
+require_root_facade_surface_allowlist
 reject_token "src/nextpas.core.system.pas" "SysUtils"
 reject_token "src/nextpas.core.system.pas" "TypInfo"
 reject_token "src/nextpas.core.system.pas" "Classes"

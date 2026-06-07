@@ -13,6 +13,7 @@ uses
 type
   PObjectRef = ^TObject;
   PIntegerRef = ^Integer;
+  PBooleanRef = ^Boolean;
 
   ISystemFacadeProbe = interface
     ['{04BE096F-2108-4D91-A781-35939E37FC01}']
@@ -28,30 +29,86 @@ type
   private
     FTarget: PObjectRef;
     FDestroyCount: PIntegerRef;
+    FReferenceWasNil: PBooleanRef;
   public
-    constructor Create(ATarget: PObjectRef; ADestroyCount: PIntegerRef);
+    constructor Create(ATarget: PObjectRef; ADestroyCount: PIntegerRef; AReferenceWasNil: PBooleanRef);
     destructor Destroy; override;
   end;
 
 var
   T: TTestRunner;
 
+procedure TestSystemConstantsMirrorBaseCompileTruth;
+begin
+  CheckEqual('nextpas.core.system', nextpas.core.system.NEXTPAS_SYSTEM_NAME,
+    'system name should identify the root facade');
+  Check(nextpas.core.system.MAX_SIZE_INT = nextpas.core.base.MAX_SIZE_INT,
+    'system MAX_SIZE_INT should mirror base');
+  Check(nextpas.core.system.MAX_SIZE_UINT = nextpas.core.base.MAX_SIZE_UINT,
+    'system MAX_SIZE_UINT should mirror base');
+  Check(nextpas.core.system.MIN_SIZE_INT = nextpas.core.base.MIN_SIZE_INT,
+    'system MIN_SIZE_INT should mirror base');
+  Check(nextpas.core.system.SIZE_PTR = nextpas.core.base.SIZE_PTR,
+    'system SIZE_PTR should mirror base');
+  Check(nextpas.core.system.SIZE_8 = SizeOf(UInt8),
+    'system SIZE_8 should stay tied to UInt8');
+  Check(nextpas.core.system.SIZE_16 = SizeOf(UInt16),
+    'system SIZE_16 should stay tied to UInt16');
+  Check(nextpas.core.system.SIZE_32 = SizeOf(UInt32),
+    'system SIZE_32 should stay tied to UInt32');
+  Check(nextpas.core.system.SIZE_64 = SizeOf(UInt64),
+    'system SIZE_64 should stay tied to UInt64');
+end;
+
+procedure TestSystemBaseCarrierAliasesMirrorBaseCompileTruth;
+var
+  LSystemBytes: nextpas.core.system.TBytes;
+  LBaseBytes: nextpas.core.base.TBytes;
+  LSystemSpan: nextpas.core.system.TByteSpan;
+  LBaseSpan: nextpas.core.base.TByteSpan;
+  LSystemHash: nextpas.core.system.THashCode;
+  LBaseHash: nextpas.core.base.THashCode;
+begin
+  SetLength(LSystemBytes, 2);
+  LSystemBytes[0] := 11;
+  LSystemBytes[1] := 22;
+
+  LBaseBytes := LSystemBytes;
+  LSystemSpan := nextpas.core.system.TByteSpan.FromBytes(LSystemBytes);
+  LBaseSpan := LSystemSpan;
+
+  CheckEqual(Int64(2), Int64(Length(LBaseBytes)),
+    'system TBytes should be assignable to base TBytes');
+  CheckEqual(Int64(2), Int64(LBaseSpan.Len),
+    'system TByteSpan should be assignable to base TByteSpan');
+  CheckEqual(Int64(11), Int64(LBaseSpan[0]),
+    'system TByteSpan should keep base byte access semantics');
+  CheckEqual(Int64(22), Int64(LBaseSpan[1]),
+    'system TByteSpan should keep base byte access semantics for later bytes');
+
+  LSystemHash := nextpas.core.system.THashCode(12345);
+  LBaseHash := LSystemHash;
+  Check(LBaseHash = nextpas.core.base.THashCode(12345),
+    'system THashCode should be assignable to base THashCode');
+end;
+
 function TSystemFacadeProbe.Value: Integer;
 begin
   Result := 42;
 end;
 
-constructor TDestructorProbe.Create(ATarget: PObjectRef; ADestroyCount: PIntegerRef);
+constructor TDestructorProbe.Create(ATarget: PObjectRef; ADestroyCount: PIntegerRef; AReferenceWasNil: PBooleanRef);
 begin
   inherited Create;
   FTarget := ATarget;
   FDestroyCount := ADestroyCount;
+  FReferenceWasNil := AReferenceWasNil;
 end;
 
 destructor TDestructorProbe.Destroy;
 begin
   Inc(FDestroyCount^);
-  Check(FTarget^ = nil, 'system FreeAndNil should nil the reference before destructor execution');
+  FReferenceWasNil^ := FTarget^ = nil;
   inherited Destroy;
 end;
 
@@ -132,16 +189,57 @@ begin
   Check(LCaught, 'system CopyMem should preserve nil source guard');
 end;
 
+procedure TestSystemMemoryFacadeDelegatesFullBaseUtilsContract;
+var
+  LSource: array[0..3] of Byte = (5, 6, 7, 8);
+  LTarget: array[0..3] of Byte = (0, 0, 0, 0);
+  LCaught: Boolean;
+begin
+  nextpas.core.system.ZeroMem(nil, 0);
+  nextpas.core.system.CopyMem(nil, nil, 0);
+  Check(nextpas.core.system.CompareMem(nil, nil, 0),
+    'system CompareMem should preserve base zero-size true semantics');
+
+  nextpas.core.system.CopyMem(@LTarget[0], @LSource[0], SizeOf(LSource));
+  Check(nextpas.core.system.CompareMem(@LTarget[0], @LSource[0], SizeOf(LSource)),
+    'system CopyMem should delegate copying to base utils');
+
+  nextpas.core.system.ZeroMem(@LTarget[0], SizeOf(LTarget));
+  CheckEqual(Int64(0), Int64(LTarget[0]), 'system ZeroMem should clear byte 0');
+  CheckEqual(Int64(0), Int64(LTarget[3]), 'system ZeroMem should clear byte 3');
+
+  LCaught := False;
+  try
+    nextpas.core.system.ZeroMem(nil, 1);
+  except
+    on E: nextpas.core.base.EArgumentNil do
+      LCaught := E is nextpas.core.exception.ENextPasError;
+  end;
+  Check(LCaught, 'system ZeroMem should preserve base nil destination exception root');
+
+  LCaught := False;
+  try
+    nextpas.core.system.CopyMem(nil, @LSource[0], 1);
+  except
+    on E: nextpas.core.base.EArgumentNil do
+      LCaught := E is nextpas.core.exception.ENextPasError;
+  end;
+  Check(LCaught, 'system CopyMem should preserve base nil destination exception root');
+end;
+
 procedure TestObjectLifecycleHelpersDelegateToBaseUtils;
 var
   LObject: TObject;
   LDestroyCount: Integer;
+  LReferenceWasNil: Boolean;
 begin
   LDestroyCount := 0;
-  LObject := TDestructorProbe.Create(@LObject, @LDestroyCount);
+  LReferenceWasNil := False;
+  LObject := TDestructorProbe.Create(@LObject, @LDestroyCount, @LReferenceWasNil);
   nextpas.core.system.FreeAndNil(LObject);
   Check(LObject = nil, 'system FreeAndNil should nil the object reference');
   CheckEqual(Int64(1), Int64(LDestroyCount), 'system FreeAndNil should destroy the object once');
+  Check(LReferenceWasNil, 'system FreeAndNil should nil the reference before destructor execution');
 
   LObject := TObject.Create;
   nextpas.core.system.SafeFree(LObject);
@@ -203,6 +301,87 @@ begin
   end;
 end;
 
+procedure TestSystemBaseErrorAliasesMirrorBaseCompileTruth;
+var
+  LCore: nextpas.core.system.ECore;
+  LInvariant: nextpas.core.system.EInvariantViolation;
+  LArgumentNil: nextpas.core.system.EArgumentNil;
+  LEmptyCollection: nextpas.core.system.EEmptyCollection;
+  LInvalidArgument: nextpas.core.system.EInvalidArgument;
+  LInvalidResult: nextpas.core.system.EInvalidResult;
+  LInvalidState: nextpas.core.system.EInvalidState;
+  LOutOfRange: nextpas.core.system.EOutOfRange;
+  LNotSupported: nextpas.core.system.ENotSupported;
+  LNotCompatible: nextpas.core.system.ENotCompatible;
+  LInvalidOperation: nextpas.core.system.EInvalidOperation;
+  LOverflow: nextpas.core.system.EOverflow;
+begin
+  LCore := nil;
+  LInvariant := nil;
+  LArgumentNil := nil;
+  LEmptyCollection := nil;
+  LInvalidArgument := nil;
+  LInvalidResult := nil;
+  LInvalidState := nil;
+  LOutOfRange := nil;
+  LNotSupported := nil;
+  LNotCompatible := nil;
+  LInvalidOperation := nil;
+  LOverflow := nil;
+  try
+    LCore := nextpas.core.system.ECore.Create('core');
+    LInvariant := nextpas.core.system.EInvariantViolation.Create('invariant');
+    LArgumentNil := nextpas.core.system.EArgumentNil.Create('argument nil');
+    LEmptyCollection := nextpas.core.system.EEmptyCollection.Create('empty');
+    LInvalidArgument := nextpas.core.system.EInvalidArgument.Create('invalid argument');
+    LInvalidResult := nextpas.core.system.EInvalidResult.Create('invalid result');
+    LInvalidState := nextpas.core.system.EInvalidState.Create('invalid state');
+    LOutOfRange := nextpas.core.system.EOutOfRange.Create('out of range');
+    LNotSupported := nextpas.core.system.ENotSupported.Create('not supported');
+    LNotCompatible := nextpas.core.system.ENotCompatible.Create('not compatible');
+    LInvalidOperation := nextpas.core.system.EInvalidOperation.Create('invalid operation');
+    LOverflow := nextpas.core.system.EOverflow.Create('overflow');
+
+    Check(LCore.ClassType = nextpas.core.base.ECore,
+      'system ECore should be canonical base owner alias');
+    Check(LInvariant.ClassType = nextpas.core.base.EInvariantViolation,
+      'system EInvariantViolation should be canonical base owner alias');
+    Check(LArgumentNil.ClassType = nextpas.core.base.EArgumentNil,
+      'system EArgumentNil should be canonical base owner alias');
+    Check(LEmptyCollection.ClassType = nextpas.core.base.EEmptyCollection,
+      'system EEmptyCollection should be canonical base owner alias');
+    Check(LInvalidArgument.ClassType = nextpas.core.base.EInvalidArgument,
+      'system EInvalidArgument should be canonical base owner alias');
+    Check(LInvalidResult.ClassType = nextpas.core.base.EInvalidResult,
+      'system EInvalidResult should be canonical base owner alias');
+    Check(LInvalidState.ClassType = nextpas.core.base.EInvalidState,
+      'system EInvalidState should be canonical base owner alias');
+    Check(LOutOfRange.ClassType = nextpas.core.base.EOutOfRange,
+      'system EOutOfRange should be canonical base owner alias');
+    Check(LNotSupported.ClassType = nextpas.core.base.ENotSupported,
+      'system ENotSupported should be canonical base owner alias');
+    Check(LNotCompatible.ClassType = nextpas.core.base.ENotCompatible,
+      'system ENotCompatible should be canonical base owner alias');
+    Check(LInvalidOperation.ClassType = nextpas.core.base.EInvalidOperation,
+      'system EInvalidOperation should be canonical base owner alias');
+    Check(LOverflow.ClassType = nextpas.core.base.EOverflow,
+      'system EOverflow should be canonical base owner alias');
+  finally
+    LOverflow.Free;
+    LInvalidOperation.Free;
+    LNotCompatible.Free;
+    LNotSupported.Free;
+    LOutOfRange.Free;
+    LInvalidState.Free;
+    LInvalidResult.Free;
+    LInvalidArgument.Free;
+    LEmptyCollection.Free;
+    LArgumentNil.Free;
+    LInvariant.Free;
+    LCore.Free;
+  end;
+end;
+
 procedure TestErrorsFacadeStillCatchesThroughSystemRoot;
 var
   LCaught: Boolean;
@@ -240,15 +419,176 @@ begin
   end;
 end;
 
+procedure TestSystemErrorTaxonomyAliasesMirrorCanonicalOwners;
+var
+  LArgumentError: nextpas.core.system.EArgumentError;
+  LNullError: nextpas.core.system.ENullReferenceError;
+  LInvalidOperationError: nextpas.core.system.EInvalidOperationError;
+  LNotImplementedError: nextpas.core.system.ENotImplementedError;
+  LNotSupportedError: nextpas.core.system.ENotSupportedError;
+  LTimeoutError: nextpas.core.system.ETimeoutError;
+  LCancelledError: nextpas.core.system.ECancelledError;
+  LPermissionError: nextpas.core.system.EPermissionError;
+  LNotFoundError: nextpas.core.system.ENotFoundError;
+  LAlreadyExistsError: nextpas.core.system.EAlreadyExistsError;
+  LResourceError: nextpas.core.system.EResourceExhaustedError;
+  LIOError: nextpas.core.system.EIOError;
+  LNetworkError: nextpas.core.system.ENetworkError;
+  LParseError: nextpas.core.system.EParseError;
+  LIndexError: nextpas.core.system.EIndexOutOfRangeError;
+  LOutOfMemoryError: nextpas.core.system.EOutOfMemoryError;
+  LOutOfMemory: nextpas.core.system.EOutOfMemory;
+begin
+  Check(nextpas.core.system.ecNone = nextpas.core.errors.ecNone,
+    'system ecNone should mirror errors owner');
+  Check(nextpas.core.system.ecInvalidArgument = nextpas.core.errors.ecInvalidArgument,
+    'system ecInvalidArgument should mirror errors owner');
+  Check(nextpas.core.system.ecNullReference = nextpas.core.errors.ecNullReference,
+    'system ecNullReference should mirror errors owner');
+  Check(nextpas.core.system.ecInvalidOperation = nextpas.core.errors.ecInvalidOperation,
+    'system ecInvalidOperation should mirror errors owner');
+  Check(nextpas.core.system.ecNotImplemented = nextpas.core.errors.ecNotImplemented,
+    'system ecNotImplemented should mirror errors owner');
+  Check(nextpas.core.system.ecNotSupported = nextpas.core.errors.ecNotSupported,
+    'system ecNotSupported should mirror errors owner');
+  Check(nextpas.core.system.ecTimeout = nextpas.core.errors.ecTimeout,
+    'system ecTimeout should mirror errors owner');
+  Check(nextpas.core.system.ecCancelled = nextpas.core.errors.ecCancelled,
+    'system ecCancelled should mirror errors owner');
+  Check(nextpas.core.system.ecInterrupted = nextpas.core.errors.ecInterrupted,
+    'system ecInterrupted should mirror errors owner');
+  Check(nextpas.core.system.ecWouldBlock = nextpas.core.errors.ecWouldBlock,
+    'system ecWouldBlock should mirror errors owner');
+  Check(nextpas.core.system.ecPermission = nextpas.core.errors.ecPermission,
+    'system ecPermission should mirror errors owner');
+  Check(nextpas.core.system.ecNotFound = nextpas.core.errors.ecNotFound,
+    'system ecNotFound should mirror errors owner');
+  Check(nextpas.core.system.ecAlreadyExists = nextpas.core.errors.ecAlreadyExists,
+    'system ecAlreadyExists should mirror errors owner');
+  Check(nextpas.core.system.ecResourceExhausted = nextpas.core.errors.ecResourceExhausted,
+    'system ecResourceExhausted should mirror errors owner');
+  Check(nextpas.core.system.ecIO = nextpas.core.errors.ecIO,
+    'system ecIO should mirror errors owner');
+  Check(nextpas.core.system.ecNetwork = nextpas.core.errors.ecNetwork,
+    'system ecNetwork should mirror errors owner');
+  Check(nextpas.core.system.ecParse = nextpas.core.errors.ecParse,
+    'system ecParse should mirror errors owner');
+  Check(nextpas.core.system.ecInternal = nextpas.core.errors.ecInternal,
+    'system ecInternal should mirror errors owner');
+
+  LArgumentError := nil;
+  LNullError := nil;
+  LInvalidOperationError := nil;
+  LNotImplementedError := nil;
+  LNotSupportedError := nil;
+  LTimeoutError := nil;
+  LCancelledError := nil;
+  LPermissionError := nil;
+  LNotFoundError := nil;
+  LAlreadyExistsError := nil;
+  LResourceError := nil;
+  LIOError := nil;
+  LNetworkError := nil;
+  LParseError := nil;
+  LIndexError := nil;
+  LOutOfMemoryError := nil;
+  LOutOfMemory := nil;
+  try
+    LArgumentError := nextpas.core.system.EArgumentError.Create('argument');
+    LNullError := nextpas.core.system.ENullReferenceError.Create('null');
+    LInvalidOperationError := nextpas.core.system.EInvalidOperationError.Create('invalid operation');
+    LNotImplementedError := nextpas.core.system.ENotImplementedError.Create('not implemented');
+    LNotSupportedError := nextpas.core.system.ENotSupportedError.Create('not supported');
+    LTimeoutError := nextpas.core.system.ETimeoutError.Create('timeout');
+    LCancelledError := nextpas.core.system.ECancelledError.Create('cancelled');
+    LPermissionError := nextpas.core.system.EPermissionError.Create('permission');
+    LNotFoundError := nextpas.core.system.ENotFoundError.Create('not found');
+    LAlreadyExistsError := nextpas.core.system.EAlreadyExistsError.Create('already exists');
+    LResourceError := nextpas.core.system.EResourceExhaustedError.Create('resource');
+    LIOError := nextpas.core.system.EIOError.Create('io');
+    LNetworkError := nextpas.core.system.ENetworkError.Create('network');
+    LParseError := nextpas.core.system.EParseError.Create('parse');
+    LIndexError := nextpas.core.system.EIndexOutOfRangeError.Create('index');
+    LOutOfMemoryError := nextpas.core.system.EOutOfMemoryError.Create('oom');
+    LOutOfMemory := nextpas.core.system.EOutOfMemory.Create('oom short');
+
+    Check(LArgumentError.ClassType = nextpas.core.errors.EArgumentError,
+      'system EArgumentError should be canonical errors owner alias');
+    Check(LArgumentError.Category = nextpas.core.errors.ecInvalidArgument,
+      'system EArgumentError should preserve canonical category');
+    Check(LNullError.ClassType = nextpas.core.errors.ENullReferenceError,
+      'system ENullReferenceError should be canonical errors owner alias');
+    Check(LNullError.Category = nextpas.core.errors.ecNullReference,
+      'system ENullReferenceError should preserve canonical category');
+    Check(LInvalidOperationError.ClassType = nextpas.core.errors.EInvalidOperationError,
+      'system EInvalidOperationError should be canonical errors owner alias');
+    Check(LInvalidOperationError.Category = nextpas.core.errors.ecInvalidOperation,
+      'system EInvalidOperationError should preserve canonical category');
+    Check(LNotImplementedError.ClassType = nextpas.core.errors.ENotImplementedError,
+      'system ENotImplementedError should be canonical errors owner alias');
+    Check(LNotSupportedError.ClassType = nextpas.core.errors.ENotSupportedError,
+      'system ENotSupportedError should be canonical errors owner alias');
+    Check(LTimeoutError.ClassType = nextpas.core.errors.ETimeoutError,
+      'system ETimeoutError should be canonical errors owner alias');
+    Check(LCancelledError.ClassType = nextpas.core.errors.ECancelledError,
+      'system ECancelledError should be canonical errors owner alias');
+    Check(LPermissionError.ClassType = nextpas.core.errors.EPermissionError,
+      'system EPermissionError should be canonical errors owner alias');
+    Check(LNotFoundError.ClassType = nextpas.core.errors.ENotFoundError,
+      'system ENotFoundError should be canonical errors owner alias');
+    Check(LAlreadyExistsError.ClassType = nextpas.core.errors.EAlreadyExistsError,
+      'system EAlreadyExistsError should be canonical errors owner alias');
+    Check(LResourceError.ClassType = nextpas.core.errors.EResourceExhaustedError,
+      'system EResourceExhaustedError should be canonical errors owner alias');
+    Check(LResourceError.Category = nextpas.core.errors.ecResourceExhausted,
+      'system EResourceExhaustedError should preserve canonical category');
+    Check(LIOError.ClassType = nextpas.core.errors.EIOError,
+      'system EIOError should be canonical errors owner alias');
+    Check(LNetworkError.ClassType = nextpas.core.errors.ENetworkError,
+      'system ENetworkError should be canonical errors owner alias');
+    Check(LParseError.ClassType = nextpas.core.errors.EParseError,
+      'system EParseError should be canonical errors owner alias');
+    Check(LIndexError.ClassType = nextpas.core.errors.EIndexOutOfRangeError,
+      'system EIndexOutOfRangeError should be canonical errors owner alias');
+    Check(LOutOfMemoryError.ClassType = nextpas.core.errors.EOutOfMemoryError,
+      'system EOutOfMemoryError should be canonical errors owner alias');
+    Check(LOutOfMemory.ClassType = nextpas.core.errors.EOutOfMemory,
+      'system EOutOfMemory should be canonical errors owner alias');
+  finally
+    LOutOfMemory.Free;
+    LOutOfMemoryError.Free;
+    LIndexError.Free;
+    LParseError.Free;
+    LNetworkError.Free;
+    LIOError.Free;
+    LResourceError.Free;
+    LAlreadyExistsError.Free;
+    LNotFoundError.Free;
+    LPermissionError.Free;
+    LCancelledError.Free;
+    LTimeoutError.Free;
+    LNotSupportedError.Free;
+    LNotImplementedError.Free;
+    LInvalidOperationError.Free;
+    LNullError.Free;
+    LArgumentError.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.system facade');
+  T.Run('system constants mirror base compile-truth', @TestSystemConstantsMirrorBaseCompileTruth);
+  T.Run('system base carrier aliases mirror base compile-truth', @TestSystemBaseCarrierAliasesMirrorBaseCompileTruth);
   T.Run('base and system byte aliases coexist', @TestBaseAndSystemByteAliasesCoexist);
   T.Run('system memory guards delegate to base contract', @TestSystemMemoryGuardsDelegateToBaseContract);
   T.Run('copy and compare facade delegates to base utils', @TestCopyAndCompareFacadeDelegatesToBaseUtils);
+  T.Run('system memory facade delegates full base utils contract', @TestSystemMemoryFacadeDelegatesFullBaseUtilsContract);
   T.Run('object lifecycle helpers delegate to base utils', @TestObjectLifecycleHelpersDelegateToBaseUtils);
   T.Run('supports facade delegates object and interface queries', @TestSupportsFacadeDelegatesObjectAndInterfaceQueries);
   T.Run('system exception root is canonical', @TestSystemExceptionRootIsCanonical);
+  T.Run('system base error aliases mirror base compile-truth', @TestSystemBaseErrorAliasesMirrorBaseCompileTruth);
   T.Run('errors facade catches through system root', @TestErrorsFacadeStillCatchesThroughSystemRoot);
   T.Run('system exception aliases stay canonical', @TestSystemExceptionAliasesStayCanonical);
+  T.Run('system error taxonomy aliases mirror canonical owners', @TestSystemErrorTaxonomyAliasesMirrorCanonicalOwners);
   T.Summary;
 end.

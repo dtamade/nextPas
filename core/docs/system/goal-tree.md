@@ -67,7 +67,10 @@ Current phase note:
 - SysUtils path, file, environment, time, and broad string-helper compatibility
   remain deferred.
 - TypInfo minimal unlock was preceded by a dedicated `Needs Review` packet and is limited to
-  `PTypeInfo`, `TTypeKind`, `TypeInfo`, `GetTypeKind`, `InitializeArray`, `FinalizeArray`, and `CopyArray`.
+  `PTypeInfo`, `TTypeKind`, `InitializeArray`, `FinalizeArray`, `CopyArray`,
+  required `TTypeKind` aliases, plus consumer access to `TypeInfo` and
+  `GetTypeKind`.
+- TypeInfo and GetTypeKind are compiler/System compile-truth imports, not unit-owned wrapper functions in `nextpas.core.system.typinfo`.
 - TypInfo `TTypeKind` aliases cover current collections comparer/equality
   dispatch needs without expanding into reflection metadata.
 - S4 is not a current phase gate for this lane.
