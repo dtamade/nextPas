@@ -711,12 +711,14 @@ function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;
 begin
   if AHandle.Fd >= 0 then
   begin
-    close(AHandle.Fd);
+    if close(AHandle.Fd) = 0 then
+      Result := 0
+    else
+      Result := platform_get_errno;
     AHandle.Fd := -1;
-    Result := 0;
   end
   else
-    Result := platform_get_errno;
+    Result := 9;
 end;
 {$ENDIF}
 

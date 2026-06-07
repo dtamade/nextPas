@@ -119,11 +119,15 @@ begin
 end;
 
 procedure TDirIterator.Close;
+var
+  LResult: Int32;
 begin
   if FOpen then
   begin
-    platform_dir_close(FHandle);
+    LResult := platform_dir_close(FHandle);
     FOpen := False;
+    if LResult <> 0 then
+      RaiseFsError(LResult, 'closedir', FName);
   end;
 end;
 

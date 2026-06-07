@@ -391,6 +391,55 @@ begin
   CheckEqual(Int64(2), Int64(LCount), '2 entries');
 end;
 
+{$IFDEF NEXTPAS_LINUX}
+function FindDirIteratorFd(const APath: string): Int32;
+var
+  I: Int32;
+  LFdPath: string;
+  LBuf: array[0..1023] of AnsiChar;
+  LLen: nextpas.core.platform.posix.base.ssize_t;
+  LTarget: string;
+begin
+  Result := -1;
+  for I := 3 to 1024 do
+  begin
+    LFdPath := '/proc/self/fd/' + IntToStr(I);
+    FillChar(LBuf, SizeOf(LBuf), 0);
+    LLen := nextpas.core.platform.posix.ffi.readlink(PAnsiChar(LFdPath),
+      @LBuf[0], SizeOf(LBuf) - 1);
+    if LLen <= 0 then
+      Continue;
+    LBuf[LLen] := #0;
+    LTarget := StrPas(@LBuf[0]);
+    if LTarget = APath then
+      Exit(I);
+  end;
+end;
+
+procedure TestDirIteratorCloseReportsPlatformError;
+var
+  LIter: IDirIterator;
+  LFd: Int32;
+  LGot: Boolean;
+begin
+  FsMkdir(GTmpDir + '/iter-close-error');
+  LIter := FsOpenDir(GTmpDir + '/iter-close-error');
+  LFd := FindDirIteratorFd(GTmpDir + '/iter-close-error');
+  Check(LFd >= 0, 'found open dir fd');
+  Check(nextpas.core.platform.posix.ffi.close(LFd) = 0,
+    'external close of dir fd succeeds');
+
+  LGot := False;
+  try
+    LIter.Close;
+  except
+    on E: EIOError do
+      LGot := True;
+  end;
+  Check(LGot, 'DirIterator.Close raises EIOError when platform close fails');
+end;
+{$ENDIF}
+
 { Path tests }
 
 procedure TestPathJoin;
@@ -735,6 +784,10 @@ begin
     T.Run('RemoveAll', @TestRemoveAll);
     T.Run('Rename', @TestRename);
     T.Run('DirIterator', @TestDirIterator);
+{$IFDEF NEXTPAS_LINUX}
+    T.Run('DirIterator close reports platform error',
+      @TestDirIteratorCloseReportsPlatformError);
+{$ENDIF}
 
     T.Run('PathJoin', @TestPathJoin);
     T.Run('PathDir', @TestPathDir);
