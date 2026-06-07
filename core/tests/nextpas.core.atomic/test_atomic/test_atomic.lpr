@@ -1113,11 +1113,18 @@ begin
   CheckContains(LAtomicDocsReadme,
     'Single-order typed CAS treats `mo_consume` as `mo_acquire` for the success order and derives a legal acquire failure order instead of exposing release/acq_rel on failure.',
     'atomic README must document typed CAS consume normalization and failure-order derivation');
+  CheckContains(LAtomicDocsReadme,
+    'Strong and weak typed CAS share the same `mo_consume` normalization and failure-order derivation contract.',
+    'atomic README must explicitly keep strong and weak typed CAS on the same consume-normalization contract');
   CheckContains(LAtomicTestSource, 'procedure TestAtomicTypedCasConsumeContract;',
     'atomic tests must keep runtime coverage for typed CAS consume normalization');
   CheckContains(LAtomicTestSource,
     'T.Run(''typed atomic CAS consume contract'', @TestAtomicTypedCasConsumeContract);',
     'atomic runner must register typed CAS consume runtime coverage');
+  CheckContains(LAtomicTestSource, 'CompareExchangeWeak(LExpectedInt32, 12, mo_consume)',
+    'typed CAS consume runtime coverage must include weak Int32 CAS');
+  CheckContains(LAtomicTestSource, 'CompareExchangeWeak(LExpectedPtr, @LValueC, mo_consume)',
+    'typed CAS consume runtime coverage must include weak pointer CAS');
   CheckContains(LTypedNaturalAlignmentSection, 'CheckNaturalAlignment(PtrUInt(@LInt32), SizeOf(Int32),',
     'atomic tests must keep local storage runtime coverage for typed atomic natural alignment');
   CheckContains(LTypedNaturalAlignmentSection, 'TAtomicInt64 local storage must be naturally aligned',
@@ -3911,6 +3918,15 @@ begin
     'TAtomicInt32 consume CAS should update when expected matches');
   CheckEqual(Int64(11), Int64(LInt32.Load(mo_acquire)),
     'TAtomicInt32 consume CAS should publish the desired value');
+  LExpectedInt32 := 10;
+  Check(not LInt32.CompareExchangeWeak(LExpectedInt32, 12, mo_consume),
+    'TAtomicInt32 weak consume CAS should remain legal on mismatch');
+  CheckEqual(Int64(11), Int64(LExpectedInt32),
+    'TAtomicInt32 weak consume CAS mismatch should write back the observed value');
+  Check(LInt32.CompareExchangeWeak(LExpectedInt32, 12, mo_consume),
+    'TAtomicInt32 weak consume CAS should update when expected matches');
+  CheckEqual(Int64(12), Int64(LInt32.Load(mo_acquire)),
+    'TAtomicInt32 weak consume CAS should publish the desired value');
 
   LUInt32 := TAtomicUInt32.Create(20);
   LExpectedUInt32 := 19;
@@ -3993,6 +4009,15 @@ begin
     'TAtomicPtr consume CAS should update when expected matches');
   Check(LPtr.Load(mo_acquire) = @LValueB,
     'TAtomicPtr consume CAS should publish the desired pointer');
+  LExpectedPtr := @LValueA;
+  Check(not LPtr.CompareExchangeWeak(LExpectedPtr, @LValueC, mo_consume),
+    'TAtomicPtr weak consume CAS should remain legal on mismatch');
+  Check(LExpectedPtr = @LValueB,
+    'TAtomicPtr weak consume CAS mismatch should write back the observed pointer');
+  Check(LPtr.CompareExchangeWeak(LExpectedPtr, @LValueC, mo_consume),
+    'TAtomicPtr weak consume CAS should update when expected matches');
+  Check(LPtr.Load(mo_acquire) = @LValueC,
+    'TAtomicPtr weak consume CAS should publish the desired pointer');
 end;
 
 procedure TestAtomicCompatFacade;
