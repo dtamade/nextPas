@@ -33,6 +33,7 @@ constructors, not Pascal type aliases.
 `TSpscQueue<T>` 只有一个 producer 和一个 consumer 可以并发使用。`TryEnqueue` / `TryDequeue`
 是非阻塞操作；`EnqueueWait` / `DequeueWait` 通过 wait-address seam 阻塞；timeout 版本使用纳秒超时。
 batch API 是连续单元素操作的批量便利方法，不表示整个 batch 具有一个共同线性化点。
+`TSpscQueue<T>.EnqueueBatch` / `DequeueBatch` publish or consume only the prefix that currently fits or is available, capped by the caller-provided array/count, and return that partial count instead of waiting for the remainder.
 `TSpscQueue<T>.EnqueueBatch` returns 0 after `Close` and must not publish new items.
 
 `TMpmcQueue<T>` 支持多个 producer 和多个 consumer。队列是固定容量 ring，构造时把容量提升到

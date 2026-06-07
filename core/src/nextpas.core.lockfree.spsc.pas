@@ -234,14 +234,10 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(0);
   LTail := FTail;
+  FHeadCache := AtomicLoad64(FHeadPublished, moAcquire);
   LAvail := Int64(FCapacity) - (LTail - FHeadCache);
   if LAvail <= 0 then
-  begin
-    FHeadCache := AtomicLoad64(FHeadPublished, moAcquire);
-    LAvail := Int64(FCapacity) - (LTail - FHeadCache);
-    if LAvail <= 0 then
-      Exit(0);
-  end;
+    Exit(0);
   LCount := PtrUInt(Length(AValues));
   if LCount > PtrUInt(LAvail) then
     LCount := PtrUInt(LAvail);
@@ -262,14 +258,10 @@ begin
   if (AMaxCount = 0) or (Length(AValues) = 0) then
     Exit(0);
   LHead := FHead;
+  FTailCache := AtomicLoad64(FTailPublished, moAcquire);
   LAvail := FTailCache - LHead;
   if LAvail <= 0 then
-  begin
-    FTailCache := AtomicLoad64(FTailPublished, moAcquire);
-    LAvail := FTailCache - LHead;
-    if LAvail <= 0 then
-      Exit(0);
-  end;
+    Exit(0);
   LCount := AMaxCount;
   if LCount > PtrUInt(LAvail) then
     LCount := PtrUInt(LAvail);

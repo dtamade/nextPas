@@ -791,6 +791,47 @@ begin
   LQ.Free;
 end;
 
+procedure TestSpscBatchPartialProgress;
+var
+  LQ: TIntSpsc;
+  LIn: array[0..4] of Integer;
+  LRefill: array[0..2] of Integer;
+  LOutSmall: array[0..1] of Integer;
+  LOutWide: array[0..4] of Integer;
+  LV: Integer;
+  LN: PtrUInt;
+begin
+  LQ := TIntSpsc.Create(4);
+  try
+    LIn[0] := 10; LIn[1] := 20; LIn[2] := 30; LIn[3] := 40; LIn[4] := 50;
+    LN := LQ.EnqueueBatch(LIn);
+    CheckEqual(Int64(4), Int64(LN), 'partial batch enqueue publishes only currently available slots');
+
+    LN := LQ.DequeueBatch(LOutSmall, 5);
+    CheckEqual(Int64(2), Int64(LN), 'partial batch dequeue is capped by output buffer length');
+    CheckEqual(Int64(10), Int64(LOutSmall[0]));
+    CheckEqual(Int64(20), Int64(LOutSmall[1]));
+
+    Check(LQ.TryEnqueue(50), 'partial batch test seeds producer cache after partial drain');
+    Check(LQ.TryDequeue(LV), 'partial batch test drains one item before refill');
+    CheckEqual(Int64(30), Int64(LV));
+
+    LRefill[0] := 60; LRefill[1] := 70; LRefill[2] := 80;
+    LN := LQ.EnqueueBatch(LRefill);
+    CheckEqual(Int64(2), Int64(LN), 'partial batch refill uses all currently available slots');
+
+    LN := LQ.DequeueBatch(LOutWide, 5);
+    CheckEqual(Int64(4), Int64(LN), 'partial batch dequeue drains all currently available items');
+    CheckEqual(Int64(40), Int64(LOutWide[0]));
+    CheckEqual(Int64(50), Int64(LOutWide[1]));
+    CheckEqual(Int64(60), Int64(LOutWide[2]));
+    CheckEqual(Int64(70), Int64(LOutWide[3]));
+    Check(LQ.IsEmpty, 'partial batch dequeue leaves queue empty');
+  finally
+    LQ.Free;
+  end;
+end;
+
 { MPMC Timeout }
 
 procedure TestMpmcTimeout;
@@ -1440,6 +1481,7 @@ var
   LMpmcCloseTestSection: string;
   LMpmcCloseWakeWaitTestSection: string;
   LSpscBatchSourceSection: string;
+  LSpscDequeueBatchSourceSection: string;
   LSpscBatchTestSection: string;
   LMpmcBatchSourceSection: string;
   LMpmcBatchTestSection: string;
@@ -1506,6 +1548,10 @@ begin
     'function TSpscQueueImpl.EnqueueBatch',
     'function TSpscQueueImpl.DequeueBatch',
     'SPSC batch source section');
+  LSpscDequeueBatchSourceSection := ExtractSection(LSpscSource,
+    'function TSpscQueueImpl.DequeueBatch',
+    'procedure TSpscQueueImpl.Close',
+    'SPSC dequeue batch source section');
   LSpscBatchTestSection := ExtractSection(LTestSource,
     'procedure TestSpscBatch;',
     '{ MPMC Timeout }',
@@ -1635,6 +1681,9 @@ begin
   CheckContains(LDocsReadme,
     '`TSpscQueue<T>.EnqueueBatch` returns 0 after `Close` and must not publish new items.',
     'lockfree README must document SPSC batch close semantics');
+  CheckContains(LDocsReadme,
+    '`TSpscQueue<T>.EnqueueBatch` / `DequeueBatch` publish or consume only the prefix that currently fits or is available, capped by the caller-provided array/count, and return that partial count instead of waiting for the remainder.',
+    'lockfree README must document the SPSC batch partial-progress contract');
   CheckContains(LDocsReadme,
     '`TMpmcQueue<T>.EnqueueBatch` returns 0 after `Close` and must not publish new items.',
     'lockfree README must document MPMC batch close semantics');
@@ -1818,8 +1867,28 @@ begin
     'SPSC close wait test must prove the closed empty queue stays empty after the blocked consumer wait returns');
   CheckContains(LSpscBatchSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then',
     'SPSC batch enqueue must reject new items after close');
+  CheckContains(LSpscBatchSourceSection, 'FHeadCache := AtomicLoad64(FHeadPublished, moAcquire);',
+    'SPSC batch enqueue must refresh published head before sizing batch progress');
+  CheckContains(LSpscBatchSourceSection, 'if LCount > PtrUInt(LAvail) then',
+    'SPSC batch enqueue must cap published items to currently available space');
+  CheckContains(LSpscDequeueBatchSourceSection, 'FTailCache := AtomicLoad64(FTailPublished, moAcquire);',
+    'SPSC batch dequeue must refresh published tail before sizing batch progress');
+  CheckContains(LSpscDequeueBatchSourceSection, 'if LCount > PtrUInt(LAvail) then',
+    'SPSC batch dequeue must cap returned items to currently available data');
+  CheckContains(LSpscDequeueBatchSourceSection, 'if LCount > PtrUInt(Length(AValues)) then',
+    'SPSC batch dequeue must cap returned items to the caller buffer length');
   CheckContains(LSpscBatchTestSection, 'batch enqueue after close rejected',
     'SPSC batch behavior test must cover close rejection');
+  CheckContains(LSpscBatchTestSection, 'partial batch enqueue publishes only currently available slots',
+    'SPSC batch behavior test must cover partial enqueue under limited space');
+  CheckContains(LSpscBatchTestSection, 'partial batch dequeue is capped by output buffer length',
+    'SPSC batch behavior test must cover output-buffer-limited dequeue progress');
+  CheckContains(LSpscBatchTestSection, 'partial batch test seeds producer cache after partial drain',
+    'SPSC batch behavior test must exercise producer-side stale-cache refill progress');
+  CheckContains(LSpscBatchTestSection, 'partial batch refill uses all currently available slots',
+    'SPSC batch behavior test must cover refill progress against the live free-space bound');
+  CheckContains(LSpscBatchTestSection, 'partial batch dequeue drains all currently available items',
+    'SPSC batch behavior test must cover available-data-limited dequeue progress');
   CheckContains(LMpmcSource, 'class function EmptySequence(const APos: Int64): Int64; static; inline;',
     'MPMC queue must define the empty-state slot sequence helper');
   CheckContains(LMpmcSource, 'class function FullSequence(const APos: Int64): Int64; static; inline;',
@@ -2238,6 +2307,7 @@ begin
   T.Run('MPMC single-slot', @TestMpmcSingleSlot);
   T.Run('Stack capacity index limit reject', @TestStackCapacityIndexLimitReject);
   T.Run('SPSC batch', @TestSpscBatch);
+  T.Run('SPSC batch partial progress', @TestSpscBatchPartialProgress);
   T.Run('MPMC timeout', @TestMpmcTimeout);
   T.Run('Stack basic', @TestStackBasic);
   T.Run('Stack query contract', @TestStackQueryContract);
