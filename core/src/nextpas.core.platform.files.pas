@@ -1240,10 +1240,14 @@ function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;
 begin
   if AHandle.FindHandle <> HANDLE(PtrInt(-1)) then
   begin
-    FindClose(AHandle.FindHandle);
+    if FindClose(AHandle.FindHandle) then
+      Result := 0
+    else
+      Result := Int32(GetLastError);
     AHandle.FindHandle := HANDLE(PtrInt(-1));
-  end;
-  Result := 0;
+  end
+  else
+    Result := Int32(ERROR_INVALID_HANDLE);
 end;
 {$ENDIF}
 

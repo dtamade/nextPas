@@ -3,6 +3,7 @@ program test_platform_files;
 {$I nextpas.core.settings.inc}
 
 uses
+  Classes,
   SysUtils,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
@@ -15,6 +16,42 @@ var
 const
   TEST_PATH = '/tmp/nextpas_test_platform_file.tmp';
   TEST_DATA = 'Hello, nextPas platform.files!';
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LLines: TStringList;
+begin
+  Check(FileExists(ARelativePath), 'source file exists: ' + ARelativePath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(ARelativePath);
+    Result := LLines.Text;
+  finally
+    LLines.Free;
+  end;
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) > 0, AMessage + ': ' + AToken);
+end;
+
+procedure CheckAbsent(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) = 0, AMessage + ': ' + AToken);
+end;
+
+function SourceSlice(const ASource, AStartToken, AEndToken: string): string;
+var
+  LStart, LEnd: SizeInt;
+begin
+  LStart := Pos(AStartToken, ASource);
+  Check(LStart > 0, 'source slice start exists: ' + AStartToken);
+  LEnd := Pos(AEndToken, Copy(ASource, LStart + Length(AStartToken),
+    Length(ASource)));
+  Check(LEnd > 0, 'source slice end exists: ' + AEndToken);
+  Result := Copy(ASource, LStart, Length(AStartToken) + LEnd - 1);
+end;
 
 procedure TestOpenCreateClose;
 var
@@ -450,6 +487,32 @@ begin
   platform_file_unlink(PATH);
 end;
 
+procedure TestDirectoryCloseContract;
+var
+  LSource: string;
+  LWindowsClose: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.files.pas');
+  LWindowsClose := SourceSlice(LSource,
+    'AHandle.FindHandle := FindFirstFileW',
+    '{$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}');
+  LWindowsClose := SourceSlice(LWindowsClose,
+    'function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;',
+    '{$ENDIF}');
+
+  CheckContains(LWindowsClose, 'if FindClose(AHandle.FindHandle) then',
+    'Windows dir_close must check FindClose return value');
+  CheckContains(LWindowsClose, 'Result := Int32(GetLastError)',
+    'Windows dir_close must surface FindClose failure');
+  CheckContains(LWindowsClose, 'AHandle.FindHandle := HANDLE(PtrInt(-1))',
+    'Windows dir_close must invalidate the handle after close attempt');
+  CheckAbsent(LWindowsClose, 'FindClose(AHandle.FindHandle);' + LineEnding +
+    '    AHandle.FindHandle := HANDLE(PtrInt(-1));' + LineEnding +
+    '  end;' + LineEnding +
+    '  Result := 0;',
+    'Windows dir_close must not ignore FindClose failure');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.files');
   T.Run('open/create/close', @TestOpenCreateClose);
@@ -478,7 +541,6 @@ begin
   T.Run('fstat', @TestFstat);
   T.Run('chmod', @TestChmod);
   T.Run('truncate_path', @TestTruncatePath);
-  T.Summary;
-end.
+  T.Run('directory close contract', @TestDirectoryCloseContract);
   T.Summary;
 end.
