@@ -686,6 +686,7 @@ markers:
 
 - `operation=http.fullchain.keepalive`
 - `workload=<direct_root|direct_1k|plaintext|json|echo_1k|sink_16k|param_route>`
+- `response_body_bytes=<13|1024|...>`
 - `backend=<threaded|epoll>`
 - `iterations`
 - `completed`
@@ -703,6 +704,11 @@ from the rest of the keep-alive server path:
   `GET /1k` and a fixed 1 KiB body, so it can isolate large-response
   runtime/socket cost without reintroducing router dispatch.
 - `plaintext` still sends `GET /` through the router path.
+
+Each full-chain row now also reports `response_body_bytes=...`, so saved
+single-connection artifacts do not need to infer whether a row was the tiny
+hello-world shape, the direct 1 KiB shape, or another fixed-body workload from
+the workload name alone.
 
 The filter is still substring-based, so the direct workload is intentionally
 named `direct_root` rather than `direct_plaintext`; this keeps

@@ -11831,3 +11831,44 @@ Hello from nextPas!
     alongside the earlier tiny-body `direct_root` row
   - this slice sharpens runtime/socket attribution for larger responses; it
     does not claim a new cross-language result or a stable backend ranking
+
+## Session: 2026-06-07 full-chain response-body-bytes marker slice
+
+- **Status:** completed.
+- Objective:
+  - make `bench_fullchain` report response size as explicit row metadata
+  - align full-chain artifact truth with `bench_server` and the Go/Rust
+    comparator binaries
+  - keep the change limited to benchmark evidence, not runtime or runner behavior
+- Scope and safety:
+  - touched only `bench_fullchain`, the benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 runtime behavior, lower-layer modules,
+    benchmark math, comparison runner behavior, comparator binaries, or
+    generated artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `68 total, 64 passed, 4 failed`
+    - failed at:
+      - `bench_fullchain plaintext smoke`
+      - `bench_fullchain direct plaintext smoke`
+      - `bench_fullchain direct 1k smoke`
+      - `bench_fullchain epoll direct plaintext smoke`
+    - common failure: missing `response_body_bytes=` marker
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_fullchain` now emits `response_body_bytes=<...>` on each benchmark row
+  - current focused rows lock:
+    - `plaintext` -> `response_body_bytes=13`
+    - `direct_root` -> `response_body_bytes=13`
+    - `direct_1k` -> `response_body_bytes=1024`
+    - `epoll direct_root` -> `response_body_bytes=13`
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `68 total, 68 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - full-chain saved artifacts now carry explicit response-size truth instead
+    of leaving consumers to infer body size from workload names
+  - this is metadata-contract tightening only; it does not claim a new
+    optimization or a new throughput result

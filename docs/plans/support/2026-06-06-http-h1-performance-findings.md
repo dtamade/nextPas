@@ -5214,3 +5214,22 @@
     `direct_root`、`direct_1k`、`bench_server response_1k` 和
     writer/outbound 1 KiB rows 串起来看，而不是继续把这些成本混成一条笼统
     的 “response_1k 很快/很慢” 结论。
+
+## 2026-06-07 full-chain response-body-bytes marker findings
+
+- `bench_server`、Go comparator、Rust std-only comparator 与 Hyper/Tokio comparator
+  都已经公开 `response_body_bytes=...`，但 `bench_fullchain` 之前只有
+  `client_read_mode=buffered`，没有 row-level response size marker。
+- 这会让 `direct_root`、`direct_1k`、`plaintext` 等 full-chain row 的“完成条件”
+  只能靠 workload 名称间接推断，不利于后续 grep、脚本消费和 saved artifact 对照。
+- 本轮选择的最小收口不是改 full-chain client read mode，也不是扩 runner：
+  - 只让 `bench_fullchain` 每条 row 追加 `response_body_bytes=...`
+  - `direct_root` / `plaintext` 锁成 `13`
+  - `direct_1k` 锁成 `1024`
+- focused gate RED 直接暴露了 contract 缺口：
+  `bench_fullchain plaintext` / `direct_root` / `direct_1k` / `epoll direct_root`
+  smoke 全都因为缺失 `response_body_bytes=` marker 而失败。
+- 这个 slice 没有新增任何性能数字；它补的是 full-chain artifact truth。
+  现在 `bench_fullchain` 和 `bench_server`/comparators 一样，都会把 response
+  size 当作 machine-readable metadata 输出，后续分析 `direct_root` vs `direct_1k`
+  时不必再靠 workload 名字猜测 body 规模。
