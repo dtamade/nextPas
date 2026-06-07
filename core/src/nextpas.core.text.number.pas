@@ -138,7 +138,9 @@ function ParseUInt64(const AData: PAnsiChar; const ALen: SizeUInt;
 var
   I: SizeUInt;
   D: Int32;
-  LPrev: UInt64;
+const
+  MAX_DIV_10 = High(UInt64) div 10;
+  MAX_MOD_10 = High(UInt64) mod 10;
 begin
   AValue := 0;
   if ALen = 0 then
@@ -146,12 +148,18 @@ begin
   for I := 0 to ALen - 1 do
   begin
     if not IsDigit(Byte(AData[I])) then
+    begin
+      AValue := 0;
       Exit(False);
+    end;
     D := Byte(AData[I]) - Ord('0');
-    LPrev := AValue;
-    AValue := AValue * 10 + UInt64(D);
-    if AValue < LPrev then
+    if (AValue > MAX_DIV_10) or
+       ((AValue = MAX_DIV_10) and (UInt64(D) > MAX_MOD_10)) then
+    begin
+      AValue := 0;
       Exit(False);
+    end;
+    AValue := AValue * 10 + UInt64(D);
   end;
   Result := True;
 end;

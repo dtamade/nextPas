@@ -109,6 +109,32 @@ begin
   Check(not ParseUInt64(PAnsiChar('x'), 1, V), 'non-digit');
 end;
 
+procedure TestParseIntegerOverflow;
+var
+  I: Int64;
+  U: UInt64;
+begin
+  U := 123;
+  Check(not ParseUInt64(PAnsiChar('18446744073709551616'), 20, U), 'uint64 max + 1 rejected');
+  CheckEqual(Int64(0), Int64(U), 'uint64 failed parse resets output');
+
+  U := 123;
+  Check(not ParseUInt64(PAnsiChar('46116860184273879040'), 20, U), 'uint64 wrapped multiply rejected');
+  CheckEqual(Int64(0), Int64(U), 'uint64 wrapped parse resets output');
+
+  I := 123;
+  Check(not ParseInt64(PAnsiChar('9223372036854775808'), 19, I), 'int64 max + 1 rejected');
+  CheckEqual(Int64(0), I, 'positive int64 overflow resets output');
+
+  I := 123;
+  Check(not ParseInt64(PAnsiChar('-9223372036854775809'), 20, I), 'int64 min - 1 rejected');
+  CheckEqual(Int64(0), I, 'negative int64 overflow resets output');
+
+  I := 123;
+  Check(not ParseInt64(PAnsiChar('-46116860184273879040'), 21, I), 'negative wrapped multiply rejected');
+  CheckEqual(Int64(0), I, 'negative wrapped parse resets output');
+end;
+
 procedure TestViewToInt;
 var
   V: TStringView;
@@ -248,6 +274,7 @@ begin
   T.Run('IntToHexBuffer', @TestHexBuffer);
   T.Run('ParseInt64', @TestParseInt64);
   T.Run('ParseUInt64', @TestParseUInt64);
+  T.Run('Parse integer overflow', @TestParseIntegerOverflow);
   T.Run('ViewToInt64', @TestViewToInt);
   T.Run('digit pairs 0-999', @TestDigitPairsCorrectness);
   T.Run('FloatToBuffer', @TestFloatToBuffer);
