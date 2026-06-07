@@ -2625,6 +2625,49 @@ begin
   CheckServerBenchmarkOutput(LReport, 'nextpas', '8', '1', 'no_url', 'epoll');
 end;
 
+procedure TestServerComparisonRunnerEpollUrlPathSmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LReportPath: string;
+  LReport: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  {$IFNDEF LINUX}
+  Exit;
+  {$ENDIF}
+
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath),
+    'server comparison epoll url_path runner exists');
+  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_epoll_url_path_smoke.txt');
+  DeleteFile(LReportPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--workload', 'url_path', '--nextpas-backend', 'epoll',
+    '--output', LReportPath], LRootDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison epoll url_path runner exit code: ' + LOutput);
+  CheckNextpasBackendHeader(LOutput, 'epoll', 'comparison epoll url_path');
+  CheckContains(LOutput, 'workload=url_path',
+    'comparison epoll url_path workload marker');
+  CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1', 'url_path', 'epoll');
+  CheckServerBenchmarkOutput(LOutput, 'go', '8', '1', 'url_path');
+  CheckServerBenchmarkOutput(LOutput, 'rust_std', '8', '1', 'url_path');
+
+  Check(FileExists(LReportPath), 'server comparison epoll url_path report exists');
+  LReport := LoadTextFile(LReportPath);
+  CheckNextpasBackendHeader(LReport, 'epoll', 'report epoll url_path');
+  CheckContains(LReport, 'workload=url_path',
+    'report epoll url_path workload marker');
+  CheckServerBenchmarkOutput(LReport, 'nextpas', '8', '1', 'url_path', 'epoll');
+  CheckServerBenchmarkOutput(LReport, 'go', '8', '1', 'url_path');
+  CheckServerBenchmarkOutput(LReport, 'rust_std', '8', '1', 'url_path');
+end;
+
 procedure TestServerComparisonSnapshotSmallSmoke;
 var
   LRootDir: string;
@@ -3577,6 +3620,8 @@ begin
     @TestServerComparisonRunnerRejectsInvalidNextpasBackend);
   T.Run('server comparison runner epoll smoke',
     @TestServerComparisonRunnerEpollSmoke);
+  T.Run('server comparison runner epoll url_path smoke',
+    @TestServerComparisonRunnerEpollUrlPathSmoke);
   T.Run('server comparison snapshot small smoke',
     @TestServerComparisonSnapshotSmallSmoke);
   T.Run('server comparison snapshot url_path smoke',

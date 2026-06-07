@@ -12351,3 +12351,36 @@ Hello from nextPas!
     comparator contract
   - this is coverage tightening only; it does not claim a new runner schema,
     a new comparator behavior, or a new performance result
+
+## Session: 2026-06-07 runner epoll url_path focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the raw runner `--nextpas-backend epoll + --workload url_path`
+    combination into the focused benchmark gate
+  - keep the slice limited to nextPas backend evidence on the public
+    request-target comparison seam, not runner or server implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch runner behavior, server/runtime behavior, comparator
+    binaries, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `80 total, 80 passed, 0 failed`
+    - new focused row:
+      `server comparison runner epoll url_path smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `run_server_comparison.sh --requests 8 --threads 1 --workload url_path --nextpas-backend epoll`
+  - the focused smoke locks:
+    - `nextpas_backend=epoll`
+    - `workload=url_path`
+    - nextPas row reports `backend=epoll`
+    - Go and Rust std-only rows stay on the same public `url_path` workload
+- Outcome:
+  - the cross-language request-target raw report now has durable epoll evidence
+    instead of preserving epoll only on the default no-URL comparison
+  - this is coverage tightening only; it does not claim a backend ranking or a
+    new comparison schema

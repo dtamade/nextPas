@@ -5467,3 +5467,23 @@
   Hyper/Tokio 的 body-bearing raw runner row 现在也有 durable regression proof，
   request-target 和 body-bearing 两条高信息量 workload 都不再只靠 snapshot
   或 indirect contract 覆盖。
+
+## 2026-06-07 runner epoll url_path focused smoke findings
+
+- 当前 `--nextpas-backend epoll` 的 comparison proof 还停在默认 `no_url` workload。
+  这意味着 nextPas epoll 虽然已经能进入 cross-language runner，但 public
+  request-target seam 还没有 durable raw report。
+- 这不是机械补一条同型 row：
+  - `no_url` 更像 fast-path baseline；
+  - `url_path` 代表的是 nextPas 在公开 request-target 访问面上的 backend 证据。
+- 本轮继续保持窄刀，没有扩 snapshot，也没有碰 runner/HTTP 生产逻辑：
+  - 只把
+    `run_server_comparison.sh --requests 8 --threads 1 --workload url_path --nextpas-backend epoll`
+    提升进 focused gate
+  - 锁住 `nextpas_backend=epoll`
+  - 锁住 `workload=url_path`
+  - 锁住 nextPas row 的 `backend=epoll`
+  - 同时保留 Go / Rust std-only 的同 workload 对照行
+- 这轮的价值仍是 benchmark truth：
+  epoll backend 现在不再只在默认 no-URL comparison 上有 durable proof，而是进入了
+  public request-target cross-language report。

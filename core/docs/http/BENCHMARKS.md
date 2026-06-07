@@ -2568,6 +2568,9 @@ The raw comparison runner now also locks `--include-hyper + --workload response_
 so the body-bearing saved text report carries the Hyper/Tokio row directly
 instead of leaving that workload covered only by the snapshot artifact or the
 shared direct comparator contract.
+The raw comparison runner now also locks `--nextpas-backend epoll + --workload url_path`,
+so the cross-language request-target report no longer preserves epoll only on
+the default no-URL nextPas row.
 
 Fresh local `no_url` 50k/4 3-run summary:
 
