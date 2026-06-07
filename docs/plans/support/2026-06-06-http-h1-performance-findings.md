@@ -5551,3 +5551,27 @@
 - 这轮的价值仍是 benchmark truth：
   epoll backend 现在在 raw runner 和 durable snapshot 两层都覆盖到了 public
   body-bearing comparison seam。
+
+## 2026-06-07 runner include-hyper epoll response-1k focused smoke findings
+
+- 之前的 focused coverage 已分别证明：
+  - `--include-hyper + --workload response_1k`
+  - `--nextpas-backend epoll + --workload response_1k`
+  但还没有一条测试证明这两个 opt-in knob 能在同一个 public raw report 里稳定共存。
+- 这不是机械补笛卡尔积：
+  它锁的是“真实用户会一起打开的两条非默认 comparison 维度是否能组合”，也就是
+  Rust Hyper/Tokio comparator 与 nextPas epoll backend 能否同时进入同一条
+  body-bearing cross-language report。
+- 本轮继续保持窄刀，没有改 runner 或 comparator 实现：
+  - 只把
+    `run_server_comparison.sh --requests 8 --threads 1 --workload response_1k --include-hyper --nextpas-backend epoll`
+    提升进 focused gate
+  - 锁住 `include_hyper=1`
+  - 锁住 `nextpas_backend=epoll`
+  - 锁住 `workload=response_1k`
+  - 锁住 nextPas row 的 `backend=epoll`
+  - 锁住 `rust_hyper` row 的 `rust_profile=hyper_tokio`
+  - 锁住 `response_body_bytes=1024` 与 `summary_impl=rust_hyper`
+- 这轮的价值仍是 benchmark truth：
+  它证明 dual opt-in body-bearing public comparison 能稳定组合，而不是只在两个分离的
+  focused seam 里各自成立。

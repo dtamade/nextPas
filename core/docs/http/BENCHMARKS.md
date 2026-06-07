@@ -2580,6 +2580,10 @@ of stopping at no-URL or request-target-only rows.
 The snapshot helper now locks the same `--nextpas-backend epoll + --workload response_1k`
 combination, so the durable Markdown artifact also preserves epoll backend
 evidence on the public body-bearing comparison seam.
+The raw comparison runner now also locks the full dual opt-in
+`--include-hyper + --nextpas-backend epoll + --workload response_1k` shape, so
+the body-bearing report proves those two optional axes compose instead of only
+working in separate focused seams.
 
 Fresh local `no_url` 50k/4 3-run summary:
 
