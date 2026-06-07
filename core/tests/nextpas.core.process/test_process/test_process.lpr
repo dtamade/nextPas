@@ -16,6 +16,54 @@ uses
 var
   LPassed, LFailed: Integer;
 
+procedure Check(const AName: string; ACondition: Boolean); forward;
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LSourcePath: string;
+  LLines: TStringList;
+begin
+  LSourcePath := ExpandFileName('../../../' + ARelativePath);
+  Check('Source exists — ' + ARelativePath, FileExists(LSourcePath));
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(LSourcePath);
+    Result := LLines.Text;
+  finally
+    LLines.Free;
+  end;
+end;
+
+function ExtractMethodBody(const ASource, AStartToken, ANextToken: string): string;
+var
+  LStart, LNext: Integer;
+begin
+  Result := '';
+  LStart := Pos(AStartToken, ASource);
+  if LStart = 0 then
+    Exit;
+  LNext := Pos(ANextToken, Copy(ASource, LStart + Length(AStartToken),
+    Length(ASource)));
+  if LNext = 0 then
+    Exit(Copy(ASource, LStart, Length(ASource)));
+  Result := Copy(ASource, LStart, Length(AStartToken) + LNext - 1);
+end;
+
+procedure CheckContains(const AName, ASource, AToken: string);
+begin
+  Check(AName, Pos(AToken, ASource) > 0);
+end;
+
+procedure CheckTokenBefore(const AName, ASource, AFirstToken,
+  ASecondToken: string);
+var
+  LFirst, LSecond: Integer;
+begin
+  LFirst := Pos(AFirstToken, ASource);
+  LSecond := Pos(ASecondToken, ASource);
+  Check(AName, (LFirst > 0) and (LSecond > 0) and (LFirst < LSecond));
+end;
+
 procedure Check(const AName: string; ACondition: Boolean);
 begin
   if ACondition then
@@ -185,6 +233,41 @@ begin
   end
   else
     Check('Detach — child completed work', False);
+end;
+
+procedure TestDetachedLifecycleGuards;
+var
+  LSource, LMethod: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.process.child.pas');
+  CheckContains('Detached guard — helper exists', LSource,
+    'procedure TChild.EnsureAttached');
+  CheckContains('Detached guard — helper checks state', LSource,
+    'if FDetached then');
+  CheckContains('Detached guard — helper raises process error', LSource,
+    'raise EProcessError.Create(''process child is detached'')');
+
+  LMethod := ExtractMethodBody(LSource, 'function TChild.Wait: TProcessOutput;',
+    'function TChild.TryWait');
+  CheckTokenBefore('Detached guard — Wait checks before platform wait', LMethod,
+    'EnsureAttached;', 'platform_process_wait');
+
+  LMethod := ExtractMethodBody(LSource,
+    'function TChild.TryWait(out AOutput: TProcessOutput): Boolean;',
+    'procedure TChild.Detach;');
+  CheckTokenBefore('Detached guard — TryWait checks before platform wait',
+    LMethod, 'EnsureAttached;', 'platform_process_try_wait');
+
+  LMethod := ExtractMethodBody(LSource, 'procedure TChild.Kill;',
+    'function TChild.Pid');
+  CheckTokenBefore('Detached guard — Kill checks before platform kill', LMethod,
+    'EnsureAttached;', 'platform_process_kill');
+
+  LMethod := ExtractMethodBody(LSource,
+    'function TChild.WaitWithOutput: TProcessOutput;',
+    'function TChild.FinishWaitResult');
+  CheckTokenBefore('Detached guard — WaitWithOutput checks before platform wait',
+    LMethod, 'EnsureAttached;', 'platform_process_try_wait');
 end;
 
 procedure TestSpawnStdinPipe;
@@ -658,6 +741,7 @@ begin
   TestSpawnTryWait;
   TestSpawnKill;
   TestSpawnDetach;
+  TestDetachedLifecycleGuards;
   TestSpawnStdinPipe;
   TestSpawnStdoutReader;
   TestCommandEnv;

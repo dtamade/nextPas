@@ -55,6 +55,7 @@ type
     FDetached: Boolean;
     FTimeout: TDuration;
     FLastOutput: TProcessOutput;
+    procedure EnsureAttached;
     function FinishWaitResult(const AResult: TPlatformProcessResult;
       const AStdOut, AStdErr: string): TProcessOutput;
   public
@@ -121,6 +122,12 @@ begin
   FillChar(FLastOutput, SizeOf(FLastOutput), 0);
 end;
 
+procedure TChild.EnsureAttached;
+begin
+  if FDetached then
+    raise EProcessError.Create('process child is detached');
+end;
+
 destructor TChild.Destroy;
 var
   LResult: TPlatformProcessResult;
@@ -146,6 +153,7 @@ var
 begin
   if FWaited then
     Exit(FLastOutput);
+  EnsureAttached;
 
   Result.ExitCode := 0;
   Result.Status := nextpas.core.process.base.psUnknown;
@@ -186,6 +194,7 @@ begin
     AOutput := FLastOutput;
     Exit(True);
   end;
+  EnsureAttached;
 
   AOutput.ExitCode := 0;
   AOutput.Status := nextpas.core.process.base.psUnknown;
@@ -212,6 +221,7 @@ end;
 procedure TChild.Kill;
 begin
   if FWaited then Exit;
+  EnsureAttached;
   platform_process_kill(FProc);
 end;
 
@@ -256,6 +266,7 @@ var
 begin
   if FWaited then
     Exit(FLastOutput);
+  EnsureAttached;
 
   if FStdinWriter <> nil then
     (FStdinWriter as TPipeWriter).Close;
