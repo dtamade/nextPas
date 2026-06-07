@@ -265,6 +265,11 @@ begin
     Exit(IocpFail(ACallback, AContext, 0, ERROR_INVALID_PARAMETER));
   if AOffset < 0 then
     Exit(IocpFail(ACallback, AContext, 0, ERROR_INVALID_PARAMETER));
+  if AReactor.FPort = 0 then
+  begin
+    SetLastError(ERROR_INVALID_HANDLE);
+    Exit(False);
+  end;
 
   LHandle := IocpHandleFromFd(AFd);
   if not IocpEnsureAssociatedHandle(AReactor, LHandle, LError) then

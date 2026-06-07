@@ -445,6 +445,31 @@ begin
     'IOCP dispatch must make the cast-back invariant explicit');
 end;
 
+procedure TestIocpClosedSubmitOwnershipContract;
+var
+  LIocp: string;
+  LSubmitBody: string;
+begin
+  LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
+  LSubmitBody := ExtractBetween(LIocp, 'function iocpsubmitfileop',
+    'function iocpdispatchcompletion');
+
+  CheckContains(LSubmitBody, 'if areactor.fport = 0 then',
+    'closed IOCP reactor must reject stale-owner file submissions');
+  CheckContains(LSubmitBody, 'setlasterror(error_invalid_handle);',
+    'closed IOCP reactor must publish invalid-handle failure truth');
+  CheckContains(LSubmitBody, 'exit(false);',
+    'closed IOCP reactor must reject ownership transfer without callback dispatch');
+  CheckBefore(LSubmitBody, 'if areactor.fport = 0 then',
+    'iocpensureassociatedhandle',
+    'closed IOCP reactor must reject before handle association');
+  CheckBefore(LSubmitBody, 'if areactor.fport = 0 then', 'iocpallocop',
+    'closed IOCP reactor must reject before pending operation allocation');
+  CheckBefore(LSubmitBody, 'if areactor.fport = 0 then',
+    'iocpfail(acallback, acontext, 0, lerror)',
+    'closed IOCP reactor must not reuse synchronous completion ownership transfer');
+end;
+
 procedure TestIocpUnsupportedAsyncOwnershipContract;
 var
   LIocp: string;
@@ -731,6 +756,8 @@ begin
     @TestIocpSynchronousFailureOwnershipContract);
   T.Run('Windows completion FFI ABI contract',
     @TestWindowsCompletionFfiAbiContract);
+  T.Run('IOCP closed submit ownership contract',
+    @TestIocpClosedSubmitOwnershipContract);
   T.Run('IOCP unsupported async ownership contract',
     @TestIocpUnsupportedAsyncOwnershipContract);
   T.Run('IOCP pending operation ownership contract',
