@@ -224,6 +224,12 @@ begin
     'full-write helper must advance after positive short writes');
   CheckContains(LSource, 'LR := platform_fs_write_all(LDstH, @LBuf[0], LRead)',
     'copy_file must write each read chunk fully');
+  CheckContains(LSource, 'LCloseR := platform_file_close(LDstH)',
+    'copy_file must check destination close failure');
+  CheckContains(LSource, 'LCloseR := platform_file_close(LSrcH)',
+    'copy_file must check source close failure');
+  CheckContains(LSource, 'if (LR = 0) and (LCloseR <> 0) then',
+    'copy_file must report close failure when copy body succeeds');
   CheckContains(LSource, 'LR := platform_fs_write_all(LH, AData, ALen)',
     'write_atomic must write the full payload');
   CheckContains(LSource, 'LR := platform_file_sync(LH)',
@@ -236,6 +242,10 @@ begin
     'read_file must read the full stat-sized payload');
   CheckAbsent(LSource, 'until (LR <> 0) or (LWritten < LRead)',
     'copy_file must not report success after a short write exit');
+  CheckAbsent(LSource, 'platform_file_close(LDstH);' + LineEnding +
+    '  platform_file_close(LSrcH);' + LineEnding +
+    '  Result := LR;',
+    'copy_file must not ignore close failures');
   CheckAbsent(LSource, 'if (LR <> 0) or (LWritten <> ALen) then',
     'write_atomic must not depend on one write call for full payload');
   CheckAbsent(LSource, 'platform_file_sync(LH);' + LineEnding +

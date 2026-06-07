@@ -230,7 +230,7 @@ var
   LSrcH, LDstH: TPlatformFileHandle;
   LBuf: array[0..8191] of Byte;
   LRead: PtrUInt;
-  LR: Int32;
+  LR, LCloseR: Int32;
 begin
   LR := platform_file_open(ASrc, fomReadOnly, fcmOpenExisting, LSrcH);
   if LR <> 0 then Exit(LR);
@@ -245,8 +245,12 @@ begin
     if (LR <> 0) or (LRead = 0) then Break;
     LR := platform_fs_write_all(LDstH, @LBuf[0], LRead);
   until LR <> 0;
-  platform_file_close(LDstH);
-  platform_file_close(LSrcH);
+  LCloseR := platform_file_close(LDstH);
+  if (LR = 0) and (LCloseR <> 0) then
+    LR := LCloseR;
+  LCloseR := platform_file_close(LSrcH);
+  if (LR = 0) and (LCloseR <> 0) then
+    LR := LCloseR;
   Result := LR;
 end;
 
