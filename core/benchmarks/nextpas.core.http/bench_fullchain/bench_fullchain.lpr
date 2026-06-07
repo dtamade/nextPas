@@ -32,6 +32,7 @@ const
   BENCH_BACKEND_ENV = 'NEXTPAS_BENCH_BACKEND';
   BENCH_BACKEND_THREADED = 'threaded';
   BENCH_BACKEND_EPOLL = 'epoll';
+  BENCH_SERVER_READY_TIMEOUT_MS = 5000;
   ROUTER_HOST = 'router';
   DIRECT_HOST = 'direct';
 
@@ -170,6 +171,22 @@ begin
   end;
 end;
 
+function WaitForServerReady: Boolean;
+var
+  LStartNs: UInt64;
+  LTimeoutNs: UInt64;
+begin
+  LStartNs := platform_monotonic_ns;
+  LTimeoutNs := UInt64(BENCH_SERVER_READY_TIMEOUT_MS) * 1000000;
+  while not GServer.IsRunning do
+  begin
+    if platform_monotonic_ns - LStartNs >= LTimeoutNs then
+      Exit(False);
+    platform_thread_sleep_ns(1000000);
+  end;
+  Result := True;
+end;
+
 procedure SetupServer;
 var
   LRouter: THttpRouter;
@@ -267,8 +284,11 @@ begin
     StopServer;
     raise Exception.Create('bench_fullchain server thread create failed');
   end;
-  while not GServer.IsRunning do
-    platform_thread_sleep_ns(1000000);
+  if not WaitForServerReady then
+  begin
+    StopServer;
+    raise Exception.Create('bench_fullchain server did not become ready');
+  end;
   GPort := GServer.LocalAddr.Port;
 end;
 

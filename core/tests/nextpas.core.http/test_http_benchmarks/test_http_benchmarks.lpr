@@ -1590,6 +1590,19 @@ begin
   CheckContains(LSetupBody, 'if not GServerThreadStarted then' + LineEnding +
     '  begin' + LineEnding + '    StopServer;',
     'bench_fullchain should free server when thread creation fails');
+  CheckContains(LSource, 'BENCH_SERVER_READY_TIMEOUT_MS = 5000;',
+    'bench_fullchain should define a bounded server readiness timeout');
+  CheckContains(LSource, 'function WaitForServerReady: Boolean;',
+    'bench_fullchain should isolate bounded server readiness waiting');
+  CheckContains(LSetupBody, 'if not WaitForServerReady then',
+    'bench_fullchain SetupServer should not wait forever for readiness');
+  CheckContains(LSetupBody, 'bench_fullchain server did not become ready',
+    'bench_fullchain should diagnose readiness timeout');
+  CheckContains(LSetupBody, 'if not WaitForServerReady then' + LineEnding +
+    '  begin' + LineEnding + '    StopServer;',
+    'bench_fullchain should teardown on readiness timeout');
+  CheckNotContains(LSetupBody, 'while not GServer.IsRunning do',
+    'bench_fullchain should avoid unbounded IsRunning polling');
   CheckContains(LSource, 'procedure StopServer;',
     'bench_fullchain should centralize shutdown/join/free');
   CheckContains(LStopBody, 'platform_thread_join(GServerThreadHandle, LThreadResult);',
