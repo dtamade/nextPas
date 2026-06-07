@@ -183,36 +183,30 @@ end;
 
 function FsPathChangeExt(const APath, ANewExt: string): string;
 var
-  I: SizeInt;
+  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LNeed: Int32;
+  LHeap: array of AnsiChar;
 begin
-  for I := Length(APath) downto 1 do
+  if APath = '' then
+    Exit('');
+  LNeed := platform_path_change_ext(PAnsiChar(APath), PAnsiChar(ANewExt),
+    @LStack[0], PATH_BUF_SIZE);
+  if LNeed < 0 then
+    Exit(APath);
+  if LNeed < PATH_BUF_SIZE then
   begin
-    if APath[I] = '.' then
-    begin
-      Result := Copy(APath, 1, I - 1) + ANewExt;
-      Exit;
-    end;
-    if APath[I] = PLATFORM_PATH_SEP then
-      Break;
+    SetString(Result, PAnsiChar(@LStack[0]), LNeed);
+    Exit;
   end;
-  Result := APath + ANewExt;
+  SetLength(LHeap, LNeed + 1);
+  platform_path_change_ext(PAnsiChar(APath), PAnsiChar(ANewExt),
+    @LHeap[0], Length(LHeap));
+  SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
 end;
 
 function FsPathWithoutExt(const APath: string): string;
-var
-  I: SizeInt;
 begin
-  for I := Length(APath) downto 1 do
-  begin
-    if APath[I] = '.' then
-    begin
-      Result := Copy(APath, 1, I - 1);
-      Exit;
-    end;
-    if APath[I] = PLATFORM_PATH_SEP then
-      Break;
-  end;
-  Result := APath;
+  Result := FsPathChangeExt(APath, '');
 end;
 
 function FsSameFileName(const A, B: string): Boolean;

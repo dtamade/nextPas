@@ -372,6 +372,26 @@ begin
   CheckEqual('.txt', FsPathExt('/home/user/file.txt'), 'ext');
 end;
 
+procedure TestPathChangeExtDotfiles;
+begin
+  CheckEqual('.gitignore.bak', FsPathChangeExt('.gitignore', '.bak'),
+    'dotfile without ext appends new ext');
+  CheckEqual('/path/.config.bak', FsPathChangeExt('/path/.config', '.bak'),
+    'path dotfile without ext appends new ext');
+  CheckEqual('.bashrc.old', FsPathChangeExt('.bashrc.bak', '.old'),
+    'dotfile with ext replaces last ext');
+end;
+
+procedure TestPathWithoutExtDotfiles;
+begin
+  CheckEqual('.gitignore', FsPathWithoutExt('.gitignore'),
+    'dotfile without ext is preserved');
+  CheckEqual('/path/.config', FsPathWithoutExt('/path/.config'),
+    'path dotfile without ext is preserved');
+  CheckEqual('.bashrc', FsPathWithoutExt('.bashrc.bak'),
+    'dotfile with ext removes last ext');
+end;
+
 procedure TestPathIsAbs;
 begin
   Check(FsPathIsAbs('/home/user'), 'abs');
@@ -606,6 +626,8 @@ begin
     T.Run('PathDir', @TestPathDir);
     T.Run('PathBase', @TestPathBase);
     T.Run('PathExt', @TestPathExt);
+    T.Run('PathChangeExt dotfiles', @TestPathChangeExtDotfiles);
+    T.Run('PathWithoutExt dotfiles', @TestPathWithoutExtDotfiles);
     T.Run('PathIsAbs', @TestPathIsAbs);
     T.Run('PathClean empty', @TestPathCleanEmpty);
     T.Run('PathJoin long', @TestPathLong);
