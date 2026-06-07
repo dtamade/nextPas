@@ -33,6 +33,7 @@ const
   H1FastUnitPath = 'src/nextpas.core.http.impl.h1.fast.pas';
   H1OutboundUnitPath = 'src/nextpas.core.http.impl.h1.outbound.pas';
   H1WriterUnitPath = 'src/nextpas.core.http.impl.h1.writer.pas';
+  BenchmarksDocPath = 'docs/http/BENCHMARKS.md';
   BenchFullchainUnitPath =
     'benchmarks/nextpas.core.http/bench_fullchain/bench_fullchain.lpr';
   CompareGoRelativeDir = 'benchmarks/nextpas.core.http/compare_go';
@@ -348,7 +349,8 @@ end;
 
 procedure CheckServerBenchmarkOutput(const AOutput, AImplementation: string;
   const AIterations, AThreads: string; const AWorkload: string = 'no_url';
-  const ANextpasBackend: string = 'threaded');
+  const ANextpasBackend: string = 'threaded';
+  const ANextpasH1Path: string = '');
 begin
   CheckLineContains(AOutput, 'operation=http.server.keepalive',
     'operation marker');
@@ -366,7 +368,11 @@ begin
   begin
     CheckLineContains(AOutput, 'backend=' + ANextpasBackend,
       'nextPas backend marker');
-    CheckContains(AOutput, 'nextpas_h1_path=', 'nextPas H1 path marker');
+    if ANextpasH1Path <> '' then
+      CheckLineContains(AOutput, 'nextpas_h1_path=' + ANextpasH1Path,
+        'nextPas H1 path marker')
+    else
+      CheckContains(AOutput, 'nextpas_h1_path=', 'nextPas H1 path marker');
   end;
   if AImplementation = 'rust_std' then
     CheckContains(AOutput, 'rust_profile=std_only',
@@ -1614,6 +1620,31 @@ begin
     'bench_fullchain main should not shutdown server outside StopServer');
 end;
 
+procedure TestBenchmarkDocsAdapterNoUrlFastPathSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+  LAdapterBlock: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, BenchmarksDocPath));
+  LAdapterBlock := ExtractSourceBlock(LSource,
+    '## Full-Chain Correlation: Explicit Keep-Alive No-URL Workload',
+    '## Full-Chain Correlation: 1 KiB Response Workload',
+    'BENCHMARKS adapter_no_url section');
+
+  CheckContains(LAdapterBlock, '`Connection: keep-alive`',
+    'adapter_no_url docs should identify the explicit keep-alive request');
+  CheckContains(LAdapterBlock, '`nextpas_h1_path=fast`',
+    'adapter_no_url docs should record current nextPas H1 path marker');
+  CheckNotContains(LAdapterBlock, 'forced-adapter',
+    'adapter_no_url docs should not call current keep-alive row forced-adapter');
+  CheckNotContains(LAdapterBlock, 'forces `TryUseFastRequestParser`',
+    'adapter_no_url docs should not claim keep-alive rejects the fast path');
+  CheckNotContains(LAdapterBlock, '`HasConnection`',
+    'adapter_no_url docs should not cite old HasConnection rejection');
+end;
+
 procedure TestBenchFullchainPlaintextSmoke;
 var
   LRootDir: string;
@@ -2392,7 +2423,8 @@ begin
     'adapter_no_url comparison marker');
   CheckContains(LOutput, 'workload=adapter_no_url',
     'adapter_no_url comparison workload marker');
-  CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1', 'adapter_no_url');
+  CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1', 'adapter_no_url',
+    'threaded', 'fast');
   CheckServerBenchmarkOutput(LOutput, 'go', '8', '1', 'adapter_no_url');
   CheckServerBenchmarkOutput(LOutput, 'rust_std', '8', '1', 'adapter_no_url');
 
@@ -2402,7 +2434,8 @@ begin
     'adapter_no_url report comparison marker');
   CheckContains(LReport, 'workload=adapter_no_url',
     'adapter_no_url report workload marker');
-  CheckServerBenchmarkOutput(LReport, 'nextpas', '8', '1', 'adapter_no_url');
+  CheckServerBenchmarkOutput(LReport, 'nextpas', '8', '1', 'adapter_no_url',
+    'threaded', 'fast');
   CheckServerBenchmarkOutput(LReport, 'go', '8', '1', 'adapter_no_url');
   CheckServerBenchmarkOutput(LReport, 'rust_std', '8', '1', 'adapter_no_url');
 end;
@@ -4297,6 +4330,8 @@ begin
     @TestBenchFullchainDirectDispatchSourceContract);
   T.Run('bench_fullchain server thread lifecycle source contract',
     @TestBenchFullchainServerThreadLifecycleSourceContract);
+  T.Run('benchmark docs adapter_no_url fast-path source contract',
+    @TestBenchmarkDocsAdapterNoUrlFastPathSourceContract);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',

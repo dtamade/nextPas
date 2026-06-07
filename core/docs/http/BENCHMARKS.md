@@ -2455,16 +2455,20 @@ The `url_path` row keeps nextPas ahead of the Go comparator and still behind the
 Rust std-only comparator. It does not prove that Pascal-translated llhttp is the
 full-chain bottleneck: this request still fits the H1 server fast path, and URL
 projection is paid lazily only when the handler reads `Req.Url.Path`. The next
-useful isolation step is a forced-adapter workload, or a narrower parser
-comparison against C llhttp with hardware counters on a perf-enabled machine.
+useful isolation step is a deliberate adapter-only workload, or a narrower
+parser comparison against C llhttp with hardware counters on a perf-enabled
+machine.
 
-## Full-Chain Correlation: Forced Adapter No-URL Workload
+## Full-Chain Correlation: Explicit Keep-Alive No-URL Workload
 
 On 2026-06-05 local time, `adapter_no_url` was added as a full-chain isolation
 workload. It keeps the request target at `/` and keeps the handler from reading
-the URL, but adds `Connection: keep-alive` to the request. In nextPas this
-forces `TryUseFastRequestParser` to reject the H1 fast path (`HasConnection`)
-and use the llhttp adapter path.
+the URL, but adds `Connection: keep-alive` to the request. The original purpose
+was to expose nextPas' connection-policy gate. Current nextPas treats explicit
+HTTP/1.1 keep-alive as fast-path compatible, so fresh rows must be interpreted
+from the nextPas `nextpas_h1_path=fast` marker rather than as llhttp-adapter
+evidence. The row remains useful as a regression guard against reintroducing the
+old fast-parse-then-llhttp double parse cost for explicit keep-alive.
 
 Focused RED/GREEN:
 
@@ -2493,12 +2497,12 @@ command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 -
 | Go `net/http` | adapter_no_url |     50000 | 2891101718 | 57822 | 17294 |
 | Rust std-only | adapter_no_url |     50000 |  521882998 | 10437 | 95806 |
 
-The forced-adapter row keeps nextPas in the same local band as the no-URL and
-URL-path rows, still ahead of Go and behind the Rust std-only comparator. That
-does not erase the raw Pascal-vs-C llhttp gap below, but it shows that the
-current full-chain server gap is not explained by the H1 fast path alone. The
-next useful step is to split adapter materialization, response writer/drain, and
-runtime/socket overhead with narrower benchmarks or profiling.
+The explicit keep-alive row keeps nextPas in the same local band as the no-URL
+and URL-path rows, still ahead of Go and behind the Rust std-only comparator.
+It does not erase the raw Pascal-vs-C llhttp gap below, but current
+`nextpas_h1_path=fast` output means this row no longer isolates the llhttp
+adapter path. The next useful step is to split adapter materialization, response
+writer/drain, and runtime/socket overhead with narrower benchmarks or profiling.
 
 ## Full-Chain Correlation: 1 KiB Response Workload
 
