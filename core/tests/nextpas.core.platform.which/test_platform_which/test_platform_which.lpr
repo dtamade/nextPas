@@ -53,6 +53,18 @@ begin
   Check(Buf[0] = '/', 'starts with /');
 end;
 
+procedure TestOutputBufferTooSmallReturnsRequiredLength;
+var
+  Buf: array[0..3] of AnsiChar;
+  R: Int32;
+begin
+  FillChar(Buf, SizeOf(Buf), Ord('?'));
+  R := platform_which('/bin/sh', @Buf[0], Length(Buf));
+  Check(R = 7, 'small output buffer returns required path length');
+  Check(Buf[0] = '/', 'small output buffer preserves first byte');
+  Check(Buf[Length(Buf) - 1] = #0, 'small output buffer is NUL terminated');
+end;
+
 procedure TestAbsoluteNotExist;
 var
   Buf: array[0..255] of AnsiChar;
@@ -144,6 +156,8 @@ begin
   T.Run('find ls', @TestFindLs);
   T.Run('not found', @TestNotFound);
   T.Run('absolute path', @TestAbsolutePath);
+  T.Run('output buffer too small returns required length',
+    @TestOutputBufferTooSmallReturnsRequiredLength);
   T.Run('absolute not exist', @TestAbsoluteNotExist);
 {$IFDEF NEXTPAS_LINUX}
   T.Run('long PATH finds tail entry', @TestLongPathFindsTailEntry);

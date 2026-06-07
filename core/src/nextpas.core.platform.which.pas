@@ -49,6 +49,26 @@ begin
   Result := True;
 end;
 
+function CopyFoundPath(const APath: PAnsiChar; ABuf: PAnsiChar;
+  ABufLen: Int32): Int32;
+var
+  LCopyLen: Int32;
+begin
+  Result := 0;
+  while APath[Result] <> #0 do
+    Inc(Result);
+
+  if (ABuf = nil) or (ABufLen <= 0) then
+    Exit;
+
+  LCopyLen := Result;
+  if LCopyLen >= ABufLen then
+    LCopyLen := ABufLen - 1;
+  if LCopyLen > 0 then
+    Move(APath^, ABuf^, LCopyLen);
+  ABuf[LCopyLen] := #0;
+end;
+
 function platform_which(const AName: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 var
@@ -65,12 +85,7 @@ begin
   if platform_path_is_absolute(AName) then
   begin
     if IsExecutable(AName) then
-    begin
-      if LNameLen >= ABufLen then LNameLen := ABufLen - 1;
-      Move(AName^, ABuf^, LNameLen);
-      ABuf[LNameLen] := #0;
-      Exit(LNameLen);
-    end;
+      Exit(CopyFoundPath(AName, ABuf, ABufLen));
     Exit(-1);
   end;
 
@@ -94,14 +109,7 @@ begin
     LPathBuf[LStart + LDirLen] := PATH_SEP; // restore
 
     if IsExecutable(@LCandidate[0]) then
-    begin
-      LDirLen := 0;
-      while LCandidate[LDirLen] <> #0 do Inc(LDirLen);
-      if LDirLen >= ABufLen then LDirLen := ABufLen - 1;
-      Move(LCandidate[0], ABuf^, LDirLen);
-      ABuf[LDirLen] := #0;
-      Exit(LDirLen);
-    end;
+      Exit(CopyFoundPath(@LCandidate[0], ABuf, ABufLen));
   end;
 
   if ABuf <> nil then ABuf[0] := #0;
