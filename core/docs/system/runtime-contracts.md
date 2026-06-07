@@ -18,6 +18,30 @@ The purpose is to keep managed lifetime work explicit before implementation star
 - Managed lifetime helpers must be safe under early exits and partial initialization.
 - Any future implementation that owns memory must include heaptrc or equivalent leak-sensitive evidence.
 
+## Program Termination
+
+`np.system.halt` is the compiler/runtime contract for explicit program
+termination. It describes the language-runtime intent to terminate the current
+program with an exit code; it is not a callable `nextpas.core.system` facade and
+does not freeze a backend syscall ABI.
+
+| Contract | Meaning | Owner boundary |
+| --- | --- | --- |
+| `np.system.halt` | explicit program termination with compiler-selected exit-code expression | system contract vocabulary, compiler/HIR implementation |
+
+Rules:
+
+- The semantic source node is `halt-call-runtime`; sema owns selecting the exit
+  expression and sequencing required cleanup before termination.
+- HIR may project the contract as HIR intrinsic `halt`; this is a compiler/HIR
+  lowering detail, not a public Pascal symbol.
+- Current LLVM output may use syscall inline assembly as backend-private
+  termination lowering evidence. This backend-private termination lowering is
+  not public ABI and must not become a facade contract.
+- Future process shutdown and unit finalization integration must preserve the
+  separation between explicit termination intent and backend-private process
+  exit mechanics.
+
 ## Managed String
 
 Managed string runtime work covers reference tracking, assignment, finalization and copy-on-write decisions

@@ -20,6 +20,17 @@ require_token() {
   rg -F --quiet -- "$token" "$CORE_ROOT/$path" || fail "core/$path missing token: $token"
 }
 
+require_repo_file() {
+  local path="$1"
+  [[ -s "$REPO_ROOT/$path" ]] || fail "required non-empty repo file missing: $path"
+}
+
+require_repo_token() {
+  local path="$1"
+  local token="$2"
+  rg -F --quiet -- "$token" "$REPO_ROOT/$path" || fail "$path missing token: $token"
+}
+
 reject_token() {
   local path="$1"
   local token="$2"
@@ -645,6 +656,21 @@ require_token "docs/system/runtime-contracts.md" "heap-release true"
 require_token "docs/system/runtime-contracts.md" "@np_object_free_release"
 require_token "docs/system/runtime-contracts.md" "backend-private helper"
 require_token "docs/system/runtime-contracts.md" "must not walk object fields"
+for token in \
+  "np.system.halt" \
+  "halt-call-runtime" \
+  "explicit program termination" \
+  'HIR intrinsic `halt`' \
+  "backend-private termination lowering" \
+  "syscall inline assembly"; do
+  require_token "docs/system/runtime-contracts.md" "$token"
+done
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "halt-call-runtime"
+require_repo_token "compiler/ir/np_hir_builder.pas" "Instr.IntrinsicName := 'halt';"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" 'movq $$60, %rax; syscall'
+require_repo_token "compiler/ir/np_hir_types.pas" "hnkHaltCallRuntime"
+require_repo_token "compiler/tests/test_semantic_hir_expr_producer.pas" "TestHaltRuntimeExprProducer"
+require_repo_token "tests/hir/test_hir_node_kind.pas" "halt-call-runtime"
 require_token "docs/system/runtime-contracts.md" "compiler-planned cleanup"
 require_token "docs/system/runtime-contracts.md" "field-agnostic"
 require_token "docs/system/runtime-contracts.md" "Compiler HIR may project"
@@ -753,17 +779,6 @@ require_system_unit_filename_allowlist
 reject_repo_uses_unit_prefix_under "$REPO_ROOT/compiler" "nextpas.core.system.classes"
 reject_repo_uses_unit_prefix_under "$CORE_ROOT/src" "nextpas.core.system.classes"
 reject_repo_uses_unit_prefix_under "$CORE_ROOT/tests" "nextpas.core.system.classes"
-
-require_repo_file() {
-  local path="$1"
-  [[ -s "$REPO_ROOT/$path" ]] || fail "required non-empty repo file missing: $path"
-}
-
-require_repo_token() {
-  local path="$1"
-  local token="$2"
-  rg -F --quiet -- "$token" "$REPO_ROOT/$path" || fail "$path missing token: $token"
-}
 
 require_repo_file "compiler/tests/test_sysutils_createfmt_contract.pas"
 require_repo_file "compiler/tests/test_typinfo_contract.pas"
