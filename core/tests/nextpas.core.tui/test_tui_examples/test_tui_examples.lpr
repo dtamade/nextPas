@@ -49,6 +49,21 @@ begin
     ALabel + ' must not contain token: ' + AToken);
 end;
 
+procedure CheckNoDirectTuiImplementationImports(const ASource, ALabel: string);
+begin
+  CheckTokenAbsent(ASource, 'nextpas.core.tui.base', ALabel);
+  CheckTokenAbsent(ASource, 'nextpas.core.tui.color', ALabel);
+  CheckTokenAbsent(ASource, 'nextpas.core.tui.style', ALabel);
+  CheckTokenAbsent(ASource, 'nextpas.core.tui.cell', ALabel);
+  CheckTokenAbsent(ASource, 'nextpas.core.tui.buffer', ALabel);
+  CheckTokenAbsent(ASource, 'nextpas.core.tui.borders', ALabel);
+  CheckTokenAbsent(ASource, 'nextpas.core.tui.layout', ALabel);
+  CheckTokenAbsent(ASource, 'nextpas.core.tui.terminal', ALabel);
+  CheckTokenAbsent(ASource, 'nextpas.core.tui.event', ALabel);
+  CheckTokenAbsent(ASource, 'nextpas.core.tui.text', ALabel);
+  CheckTokenAbsent(ASource, 'nextpas.core.tui.widget.', ALabel);
+end;
+
 procedure TestLayoutDemoTeachesAppFirstExtPath;
 var
   LSource: string;
@@ -85,6 +100,7 @@ begin
   CheckTokenPresent(LSource, 'procedure Render', 'demo_widgets');
   CheckTokenPresent(LSource, 'procedure HandleEvent', 'demo_widgets');
   CheckTokenPresent(LSource, 'TGauge', 'demo_widgets');
+  CheckNoDirectTuiImplementationImports(LSource, 'demo_widgets');
 
   CheckTokenAbsent(LSource, 'TTerminal', 'demo_widgets');
   CheckTokenAbsent(LSource, 'EnterTui', 'demo_widgets');
@@ -94,9 +110,23 @@ begin
   CheckTokenAbsent(LSource, 'repeat', 'demo_widgets');
 end;
 
+procedure TestFullRenderBenchmarkUsesFullFacade;
+var
+  LSource: string;
+begin
+  LSource := ReadLowerSourceFile(ResolvePath(
+    '../../../benchmarks/nextpas.core.tui/bench_render/bench_render.lpr',
+    'core/benchmarks/nextpas.core.tui/bench_render/bench_render.lpr'));
+
+  CheckTokenPresent(LSource, 'nextpas.core.tui.full', 'bench_render');
+  CheckTokenPresent(LSource, 'TGauge', 'bench_render');
+  CheckNoDirectTuiImplementationImports(LSource, 'bench_render');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.tui.examples');
   T.Run('layout demo teaches app-first ext path', @TestLayoutDemoTeachesAppFirstExtPath);
   T.Run('widgets demo teaches app-first full path', @TestWidgetsDemoTeachesAppFirstFullPath);
+  T.Run('full render benchmark uses full facade', @TestFullRenderBenchmarkUsesFullFacade);
   T.Summary;
 end.
