@@ -485,6 +485,7 @@ var
   LLocation: string;
   LNewUrl: TUrl;
   LNewReq: IHttpRequest;
+  LRespHeaders: IHttpHeaders;
   LNewHeaders: IHttpHeaders;
   LBodyStream: IStream;
   LBodyStartPosition: Int64;
@@ -508,7 +509,14 @@ begin
       raise EHttpError.Create('too many redirects');
     end;
 
-    LLocation := LResp.Headers.Get('location');
+    LRespHeaders := LResp.Headers;
+    if LRespHeaders = nil then
+    begin
+      ReleaseResponseBody(LResp);
+      raise EHttpError.Create('redirect with no response headers');
+    end;
+
+    LLocation := LRespHeaders.Get('location');
     if LLocation = '' then
     begin
       ReleaseResponseBody(LResp);

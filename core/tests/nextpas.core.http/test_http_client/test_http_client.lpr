@@ -101,6 +101,18 @@ type
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
   end;
 
+  TNilHeadersRedirectTransport = class(TInterfacedObject, IHttpTransport)
+  public
+    function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+  end;
+
+  TNilHeadersRedirectResponse = class(TInterfacedObject, IHttpResponse)
+  public
+    function GetStatusCode: THttpStatus;
+    function GetHeaders: IHttpHeaders;
+    function GetBody: IReader;
+  end;
+
   TOneShotReader = class(TInterfacedObject, IReader)
   private
     FData: string;
@@ -645,6 +657,27 @@ begin
   Result := nil;
 end;
 
+function TNilHeadersRedirectTransport.RoundTrip(
+  const AReq: IHttpRequest): IHttpResponse;
+begin
+  Result := TNilHeadersRedirectResponse.Create as IHttpResponse;
+end;
+
+function TNilHeadersRedirectResponse.GetStatusCode: THttpStatus;
+begin
+  Result := HTTP_STATUS_FOUND;
+end;
+
+function TNilHeadersRedirectResponse.GetHeaders: IHttpHeaders;
+begin
+  Result := nil;
+end;
+
+function TNilHeadersRedirectResponse.GetBody: IReader;
+begin
+  Result := nil;
+end;
+
 constructor TOneShotReader.Create(const AData: string);
 begin
   inherited Create;
@@ -1009,7 +1042,27 @@ begin
   Check(LRaised, 'Client.Send rejects nil transport response');
 end;
 
-// PLACEHOLDER_TEST2
+procedure TestClientSendRejectsRedirectWithNilHeaders;
+var
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LRaised: Boolean;
+begin
+  LTransport := TNilHeadersRedirectTransport.Create as IHttpTransport;
+  LClient := NewHttpClient(LTransport);
+  LReq := NewRequest(hmGet, 'http://example.test/');
+
+  LRaised := False;
+  try
+    LClient.Send(LReq);
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'Client.Send rejects redirect response with nil headers');
+end;
 
 { Test 2: Client GET with custom headers }
 procedure TestClientGetCustomHeaders;
@@ -3927,6 +3980,8 @@ begin
   T.Run('Client Send rejects nil request', @TestClientSendRejectsNilRequest);
   T.Run('Client Send rejects nil transport response',
     @TestClientSendRejectsNilTransportResponse);
+  T.Run('Client Send rejects redirect with nil headers',
+    @TestClientSendRejectsRedirectWithNilHeaders);
   T.Run('Client GET with custom headers', @TestClientGetCustomHeaders);
   T.Run('Client Send forwards Basic auth helper header',
     @TestClientSendWithBasicAuthHelper);
