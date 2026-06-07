@@ -612,7 +612,7 @@ begin
     'procedure TestAtomicInt64UInt64FetchContract;',
     '{$ENDIF}' + LineEnding +
     LineEnding +
-    'procedure TestAtomicBoolContract;');
+    'procedure TestAtomicUnsignedWrapContract;');
   LRunnerSection := ExtractSection(LAtomicTestSource,
     'begin' + LineEnding +
     '  T := TTestRunner.Create(''nextpas.core.atomic'');',
@@ -892,6 +892,9 @@ begin
   CheckContains(LAtomicDocsReadme,
     '`TAtomicInt32` and `TAtomicUInt32` keep the scalar RMW return-old semantics in typed form: `FetchAdd` / `FetchSub` / `FetchAnd` / `FetchOr` / `FetchXor` return the previous value and publish the updated Int32/UInt32 payload through the wrapper storage.',
     'atomic README must document the 32-bit typed-record RMW contract');
+  CheckContains(LAtomicDocsReadme,
+    '`TAtomicUInt32` uses modulo-2^32 unsigned arithmetic for `Increment`/`Decrement` and `FetchAdd`/`FetchSub`; `TAtomicUInt64` uses modulo-2^64 arithmetic when its public 64-bit surface is compiled; `TAtomicUSize` uses modulo pointer-width unsigned arithmetic.',
+    'atomic README must document unsigned typed-record wrap semantics');
   CheckContains(LAtomicDocsReadme,
     '`TAtomicInt64` and `TAtomicUInt64` follow `atomic_is_lock_free_64`; `Increment`/`Decrement` return the new value after adding or subtracting one, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
     'atomic README must document the 64-bit typed-record lock-free and convenience contract');
@@ -1211,6 +1214,41 @@ begin
     'typed Int64/UInt64 fetch runtime contract section must start with the production 64-bit API gate');
   CheckContains(LTypedInt64FetchContractSection, 'TAtomicUInt64.FetchAdd',
     'typed Int64/UInt64 fetch runtime contract must remain inside the production 64-bit API gate');
+  CheckContains(LAtomicTestSource, 'procedure TestAtomicUnsignedWrapContract;',
+    'typed unsigned wrap runtime contract must exist');
+  CheckContains(LAtomicTestSource, 'TAtomicUInt32.Increment should wrap High(UInt32) to zero',
+    'typed UInt32 wrap runtime contract must cover Increment');
+  CheckContains(LAtomicTestSource, 'TAtomicUInt64.FetchAdd should publish the modulo-2^64 result',
+    'typed UInt64 wrap runtime contract must cover FetchAdd publication');
+  CheckContains(LAtomicTestSource, 'TAtomicUSize.Increment should wrap High(PtrUInt) to zero',
+    'typed USize wrap runtime contract must cover Increment');
+  CheckContains(LAtomicTestSource, 'root atomic_fetch_sub(UInt32) should accept high-bit unsigned deltas under overflow checks',
+    'root UInt32 fetch-sub contract must cover checked high-bit unsigned deltas');
+  CheckContains(LAtomicTestSource, 'TAtomicUSize.FetchSub should accept high-bit unsigned deltas under overflow checks',
+    'typed USize fetch-sub contract must cover checked high-bit unsigned deltas');
+  CheckContains(LAtomicTypesSource, 'Result := _uint32_inc_result(FetchAdd(1, AOrder));',
+    'typed UInt32 Increment must compute the returned wrap value without a second checked add');
+  CheckContains(LAtomicTypesSource, 'Result := _uint64_inc_result(FetchAdd(1, AOrder));',
+    'typed UInt64 Increment must compute the returned wrap value without a second checked add');
+  CheckContains(LAtomicTypesSource, 'Result := _ptruint_inc_result(FetchAdd(1, AOrder));',
+    'typed USize Increment must compute the returned wrap value without a second checked add');
+  CheckContains(LAtomicSource, 'LDelta := _uint32_neg_delta(aArg);',
+    'root UInt32 FetchSub must compute unsigned subtraction delta without signed negation overflow');
+  CheckContains(LAtomicSource, 'LDelta := _uint64_neg_delta(aArg);',
+    'root UInt64 FetchSub must compute unsigned subtraction delta without signed negation overflow');
+  CheckContains(LAtomicSource, 'LDelta := _ptruint_neg_delta(aArg);',
+    'root USize FetchSub must compute unsigned subtraction delta without signed negation overflow');
+  CheckContains(LAtomicSource, 'aObj := _int64_wrapping_add(aObj, aArg);',
+    'x86 64-bit fallback FetchAdd must use checked-safe wrapping addition');
+  CheckContains(LAtomicTypesSource, 'Result := _uint32_dec_result(FetchSub(1, AOrder));',
+    'typed UInt32 Decrement must compute the returned wrap value without a second checked subtract');
+  CheckContains(LAtomicTypesSource, 'Result := _uint64_dec_result(FetchSub(1, AOrder));',
+    'typed UInt64 Decrement must compute the returned wrap value without a second checked subtract');
+  CheckContains(LAtomicTypesSource, 'Result := _ptruint_dec_result(FetchSub(1, AOrder));',
+    'typed USize Decrement must compute the returned wrap value without a second checked subtract');
+  CheckContains(LAtomicTestSource,
+    'T.Run(''typed atomic unsigned wrap contract'', @TestAtomicUnsignedWrapContract);',
+    'typed unsigned wrap runtime contract must be registered');
   CheckContains(LRunnerSection,
     '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}' + LineEnding +
     '  T.Run(''typed atomic int64/uint64 contract'', @TestAtomicInt64UInt64Contract);' + LineEnding +
@@ -1980,6 +2018,192 @@ begin
     'TAtomicUInt64.FetchXor should publish the XOR result');
 end;
 {$ENDIF}
+
+procedure TestAtomicUnsignedWrapContract;
+var
+  LAtomicUInt32: TAtomicUInt32;
+  LAtomicUSize: TAtomicUSize;
+  LOldUInt32: UInt32;
+  LOldUSize: PtrUInt;
+  LRootUInt32: UInt32;
+  LHighBitUInt32: UInt32;
+  LHighBitUSize: PtrUInt;
+  {$IFDEF CPU64}
+  LRootUSize: PtrUInt;
+  {$ENDIF}
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  LAtomicUInt64: TAtomicUInt64;
+  LOldUInt64: UInt64;
+  LRootUInt64: UInt64;
+  LHighBitUInt64: UInt64;
+  {$ENDIF}
+begin
+  LAtomicUInt32 := TAtomicUInt32.Create(High(UInt32));
+  CheckEqual(Int64(0), Int64(LAtomicUInt32.Increment(mo_acq_rel)),
+    'TAtomicUInt32.Increment should wrap High(UInt32) to zero');
+  CheckEqual(Int64(0), Int64(LAtomicUInt32.Load(mo_acquire)),
+    'TAtomicUInt32.Increment should publish the modulo-2^32 result');
+  CheckEqual(Int64(High(UInt32)), Int64(LAtomicUInt32.Decrement(mo_acq_rel)),
+    'TAtomicUInt32.Decrement should wrap zero to High(UInt32)');
+  CheckEqual(Int64(High(UInt32)), Int64(LAtomicUInt32.Load(mo_acquire)),
+    'TAtomicUInt32.Decrement should publish the modulo-2^32 result');
+
+  LAtomicUInt32.Store(High(UInt32) - UInt32(1), mo_release);
+  LOldUInt32 := LAtomicUInt32.FetchAdd(3, mo_acq_rel);
+  CheckEqual(Int64(High(UInt32) - UInt32(1)), Int64(LOldUInt32),
+    'TAtomicUInt32.FetchAdd should return the previous value before wrap');
+  CheckEqual(Int64(1), Int64(LAtomicUInt32.Load(mo_acquire)),
+    'TAtomicUInt32.FetchAdd should publish the modulo-2^32 result');
+  LAtomicUInt32.Store(1, mo_release);
+  LOldUInt32 := LAtomicUInt32.FetchSub(3, mo_acq_rel);
+  CheckEqual(Int64(1), Int64(LOldUInt32),
+    'TAtomicUInt32.FetchSub should return the previous value before wrap');
+  CheckEqual(Int64(High(UInt32) - UInt32(1)), Int64(LAtomicUInt32.Load(mo_acquire)),
+    'TAtomicUInt32.FetchSub should publish the modulo-2^32 result');
+
+  LHighBitUInt32 := UInt32(1);
+  LHighBitUInt32 := LHighBitUInt32 shl 31;
+  LAtomicUInt32.Store(LHighBitUInt32, mo_release);
+  LOldUInt32 := LAtomicUInt32.FetchAdd(LHighBitUInt32, mo_acq_rel);
+  CheckEqual(Int64(LHighBitUInt32), Int64(LOldUInt32),
+    'TAtomicUInt32.FetchAdd should accept high-bit unsigned deltas under overflow checks');
+  CheckEqual(Int64(0), Int64(LAtomicUInt32.Load(mo_acquire)),
+    'TAtomicUInt32.FetchAdd should publish modulo-2^32 addition for high-bit deltas');
+  LAtomicUInt32.Store(LHighBitUInt32, mo_release);
+  LOldUInt32 := LAtomicUInt32.FetchSub(LHighBitUInt32, mo_acq_rel);
+  CheckEqual(Int64(LHighBitUInt32), Int64(LOldUInt32),
+    'TAtomicUInt32.FetchSub should accept high-bit unsigned deltas under overflow checks');
+  CheckEqual(Int64(0), Int64(LAtomicUInt32.Load(mo_acquire)),
+    'TAtomicUInt32.FetchSub should publish modulo-2^32 subtraction for high-bit deltas');
+
+  LRootUInt32 := High(UInt32);
+  CheckEqual(Int64(0), Int64(atomic_increment(LRootUInt32)),
+    'root atomic_increment(UInt32) should wrap High(UInt32) to zero');
+  CheckEqual(Int64(High(UInt32)), Int64(atomic_decrement(LRootUInt32)),
+    'root atomic_decrement(UInt32) should wrap zero to High(UInt32)');
+  LRootUInt32 := LHighBitUInt32;
+  CheckEqual(Int64(LHighBitUInt32), Int64(atomic_fetch_add(LRootUInt32, LHighBitUInt32, mo_acq_rel)),
+    'root atomic_fetch_add(UInt32) should accept high-bit unsigned deltas under overflow checks');
+  CheckEqual(Int64(0), Int64(LRootUInt32),
+    'root atomic_fetch_add(UInt32) should publish modulo-2^32 addition for high-bit deltas');
+  LRootUInt32 := LHighBitUInt32;
+  CheckEqual(Int64(LHighBitUInt32), Int64(atomic_fetch_sub(LRootUInt32, LHighBitUInt32, mo_acq_rel)),
+    'root atomic_fetch_sub(UInt32) should accept high-bit unsigned deltas under overflow checks');
+  CheckEqual(Int64(0), Int64(LRootUInt32),
+    'root atomic_fetch_sub(UInt32) should publish modulo-2^32 subtraction for high-bit deltas');
+
+  LAtomicUSize := TAtomicUSize.Create(High(PtrUInt));
+  Check(LAtomicUSize.Increment(mo_acq_rel) = PtrUInt(0),
+    'TAtomicUSize.Increment should wrap High(PtrUInt) to zero');
+  Check(LAtomicUSize.Load(mo_acquire) = PtrUInt(0),
+    'TAtomicUSize.Increment should publish the modulo pointer-width result');
+  Check(LAtomicUSize.Decrement(mo_acq_rel) = High(PtrUInt),
+    'TAtomicUSize.Decrement should wrap zero to High(PtrUInt)');
+  Check(LAtomicUSize.Load(mo_acquire) = High(PtrUInt),
+    'TAtomicUSize.Decrement should publish the modulo pointer-width result');
+
+  LAtomicUSize.Store(High(PtrUInt) - PtrUInt(1), mo_release);
+  LOldUSize := LAtomicUSize.FetchAdd(PtrUInt(3), mo_acq_rel);
+  Check(LOldUSize = High(PtrUInt) - PtrUInt(1),
+    'TAtomicUSize.FetchAdd should return the previous value before wrap');
+  Check(LAtomicUSize.Load(mo_acquire) = PtrUInt(1),
+    'TAtomicUSize.FetchAdd should publish the modulo pointer-width result');
+  LAtomicUSize.Store(PtrUInt(1), mo_release);
+  LOldUSize := LAtomicUSize.FetchSub(PtrUInt(3), mo_acq_rel);
+  Check(LOldUSize = PtrUInt(1),
+    'TAtomicUSize.FetchSub should return the previous value before wrap');
+  Check(LAtomicUSize.Load(mo_acquire) = High(PtrUInt) - PtrUInt(1),
+    'TAtomicUSize.FetchSub should publish the modulo pointer-width result');
+
+  LHighBitUSize := PtrUInt(1);
+  LHighBitUSize := LHighBitUSize shl (SizeOf(PtrUInt) * 8 - 1);
+  LAtomicUSize.Store(LHighBitUSize, mo_release);
+  LOldUSize := LAtomicUSize.FetchAdd(LHighBitUSize, mo_acq_rel);
+  Check(LOldUSize = LHighBitUSize,
+    'TAtomicUSize.FetchAdd should accept high-bit unsigned deltas under overflow checks');
+  Check(LAtomicUSize.Load(mo_acquire) = PtrUInt(0),
+    'TAtomicUSize.FetchAdd should publish modulo pointer-width addition for high-bit deltas');
+  LAtomicUSize.Store(LHighBitUSize, mo_release);
+  LOldUSize := LAtomicUSize.FetchSub(LHighBitUSize, mo_acq_rel);
+  Check(LOldUSize = LHighBitUSize,
+    'TAtomicUSize.FetchSub should accept high-bit unsigned deltas under overflow checks');
+  Check(LAtomicUSize.Load(mo_acquire) = PtrUInt(0),
+    'TAtomicUSize.FetchSub should publish modulo pointer-width subtraction for high-bit deltas');
+
+  {$IFDEF CPU64}
+  LRootUSize := High(PtrUInt);
+  Check(atomic_increment(LRootUSize) = PtrUInt(0),
+    'root atomic_increment(PtrUInt) should wrap High(PtrUInt) to zero');
+  Check(atomic_decrement(LRootUSize) = High(PtrUInt),
+    'root atomic_decrement(PtrUInt) should wrap zero to High(PtrUInt)');
+  LRootUSize := LHighBitUSize;
+  Check(atomic_fetch_add(LRootUSize, LHighBitUSize, mo_acq_rel) = LHighBitUSize,
+    'root atomic_fetch_add(PtrUInt) should accept high-bit unsigned deltas under overflow checks');
+  Check(LRootUSize = PtrUInt(0),
+    'root atomic_fetch_add(PtrUInt) should publish modulo pointer-width addition for high-bit deltas');
+  LRootUSize := LHighBitUSize;
+  Check(atomic_fetch_sub(LRootUSize, LHighBitUSize, mo_acq_rel) = LHighBitUSize,
+    'root atomic_fetch_sub(PtrUInt) should accept high-bit unsigned deltas under overflow checks');
+  Check(LRootUSize = PtrUInt(0),
+    'root atomic_fetch_sub(PtrUInt) should publish modulo pointer-width subtraction for high-bit deltas');
+  {$ENDIF}
+
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  LAtomicUInt64 := TAtomicUInt64.Create(High(UInt64));
+  Check(LAtomicUInt64.Increment(mo_acq_rel) = UInt64(0),
+    'TAtomicUInt64.Increment should wrap High(UInt64) to zero');
+  Check(LAtomicUInt64.Load(mo_acquire) = UInt64(0),
+    'TAtomicUInt64.Increment should publish the modulo-2^64 result');
+  Check(LAtomicUInt64.Decrement(mo_acq_rel) = High(UInt64),
+    'TAtomicUInt64.Decrement should wrap zero to High(UInt64)');
+  Check(LAtomicUInt64.Load(mo_acquire) = High(UInt64),
+    'TAtomicUInt64.Decrement should publish the modulo-2^64 result');
+
+  LAtomicUInt64.Store(High(UInt64) - UInt64(1), mo_release);
+  LOldUInt64 := LAtomicUInt64.FetchAdd(UInt64(3), mo_acq_rel);
+  Check(LOldUInt64 = High(UInt64) - UInt64(1),
+    'TAtomicUInt64.FetchAdd should return the previous value before wrap');
+  Check(LAtomicUInt64.Load(mo_acquire) = UInt64(1),
+    'TAtomicUInt64.FetchAdd should publish the modulo-2^64 result');
+  LAtomicUInt64.Store(UInt64(1), mo_release);
+  LOldUInt64 := LAtomicUInt64.FetchSub(UInt64(3), mo_acq_rel);
+  Check(LOldUInt64 = UInt64(1),
+    'TAtomicUInt64.FetchSub should return the previous value before wrap');
+  Check(LAtomicUInt64.Load(mo_acquire) = High(UInt64) - UInt64(1),
+    'TAtomicUInt64.FetchSub should publish the modulo-2^64 result');
+
+  LHighBitUInt64 := UInt64(1);
+  LHighBitUInt64 := LHighBitUInt64 shl 63;
+  LAtomicUInt64.Store(LHighBitUInt64, mo_release);
+  LOldUInt64 := LAtomicUInt64.FetchAdd(LHighBitUInt64, mo_acq_rel);
+  Check(LOldUInt64 = LHighBitUInt64,
+    'TAtomicUInt64.FetchAdd should accept high-bit unsigned deltas under overflow checks');
+  Check(LAtomicUInt64.Load(mo_acquire) = UInt64(0),
+    'TAtomicUInt64.FetchAdd should publish modulo-2^64 addition for high-bit deltas');
+  LAtomicUInt64.Store(LHighBitUInt64, mo_release);
+  LOldUInt64 := LAtomicUInt64.FetchSub(LHighBitUInt64, mo_acq_rel);
+  Check(LOldUInt64 = LHighBitUInt64,
+    'TAtomicUInt64.FetchSub should accept high-bit unsigned deltas under overflow checks');
+  Check(LAtomicUInt64.Load(mo_acquire) = UInt64(0),
+    'TAtomicUInt64.FetchSub should publish modulo-2^64 subtraction for high-bit deltas');
+
+  LRootUInt64 := High(UInt64);
+  Check(atomic_increment_64(LRootUInt64) = UInt64(0),
+    'root atomic_increment_64(UInt64) should wrap High(UInt64) to zero');
+  Check(atomic_decrement_64(LRootUInt64) = High(UInt64),
+    'root atomic_decrement_64(UInt64) should wrap zero to High(UInt64)');
+  LRootUInt64 := LHighBitUInt64;
+  Check(atomic_fetch_add_64(LRootUInt64, LHighBitUInt64, mo_acq_rel) = LHighBitUInt64,
+    'root atomic_fetch_add_64(UInt64) should accept high-bit unsigned deltas under overflow checks');
+  Check(LRootUInt64 = UInt64(0),
+    'root atomic_fetch_add_64(UInt64) should publish modulo-2^64 addition for high-bit deltas');
+  LRootUInt64 := LHighBitUInt64;
+  Check(atomic_fetch_sub_64(LRootUInt64, LHighBitUInt64, mo_acq_rel) = LHighBitUInt64,
+    'root atomic_fetch_sub_64(UInt64) should accept high-bit unsigned deltas under overflow checks');
+  Check(LRootUInt64 = UInt64(0),
+    'root atomic_fetch_sub_64(UInt64) should publish modulo-2^64 subtraction for high-bit deltas');
+  {$ENDIF}
+end;
 
 procedure TestAtomicBoolContract;
 var
@@ -3273,6 +3497,7 @@ begin
   T.Run('typed atomic int64/uint64 contract', @TestAtomicInt64UInt64Contract);
   T.Run('typed atomic int64/uint64 fetch contract', @TestAtomicInt64UInt64FetchContract);
   {$ENDIF}
+  T.Run('typed atomic unsigned wrap contract', @TestAtomicUnsignedWrapContract);
   T.Run('typed atomic bool contract', @TestAtomicBoolContract);
   T.Run('typed atomic isize/usize contract', @TestAtomicISizeUSizeContract);
   T.Run('typed atomic isize/usize fetch contract', @TestAtomicISizeUSizeFetchContract);

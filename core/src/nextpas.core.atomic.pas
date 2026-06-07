@@ -702,6 +702,96 @@ begin
   _consume_memory_order(aFailureOrder);
 end;
 
+function _uint32_inc_result(const AOld: UInt32): UInt32; inline;
+begin
+  if AOld = High(UInt32) then
+    Result := UInt32(0)
+  else
+    Result := AOld + UInt32(1);
+end;
+
+function _uint32_dec_result(const AOld: UInt32): UInt32; inline;
+begin
+  if AOld = UInt32(0) then
+    Result := High(UInt32)
+  else
+    Result := AOld - UInt32(1);
+end;
+
+function _uint64_inc_result(const AOld: UInt64): UInt64; inline;
+begin
+  if AOld = High(UInt64) then
+    Result := UInt64(0)
+  else
+    Result := AOld + UInt64(1);
+end;
+
+function _uint64_dec_result(const AOld: UInt64): UInt64; inline;
+begin
+  if AOld = UInt64(0) then
+    Result := High(UInt64)
+  else
+    Result := AOld - UInt64(1);
+end;
+
+function _ptruint_inc_result(const AOld: PtrUInt): PtrUInt; inline;
+begin
+  if AOld = High(PtrUInt) then
+    Result := PtrUInt(0)
+  else
+    Result := AOld + PtrUInt(1);
+end;
+
+function _ptruint_dec_result(const AOld: PtrUInt): PtrUInt; inline;
+begin
+  if AOld = PtrUInt(0) then
+    Result := High(PtrUInt)
+  else
+    Result := AOld - PtrUInt(1);
+end;
+
+function _uint32_neg_delta(const AValue: UInt32): UInt32; inline;
+begin
+  if AValue = UInt32(0) then
+    Result := UInt32(0)
+  else
+    Result := UInt32(not AValue) + UInt32(1);
+end;
+
+function _uint64_neg_delta(const AValue: UInt64): UInt64; inline;
+begin
+  if AValue = UInt64(0) then
+    Result := UInt64(0)
+  else
+    Result := UInt64(not AValue) + UInt64(1);
+end;
+
+function _ptruint_neg_delta(const AValue: PtrUInt): PtrUInt; inline;
+begin
+  if AValue = PtrUInt(0) then
+    Result := PtrUInt(0)
+  else
+    Result := PtrUInt(not AValue) + PtrUInt(1);
+end;
+
+function _int64_wrapping_add(const ALeft, ARight: Int64): Int64; inline;
+var
+  LLeftBits: UInt64;
+  LRightBits: UInt64;
+  LLowSum: UInt64;
+  LHighSum: UInt64;
+  LResultBits: UInt64;
+begin
+  LLeftBits := PUInt64(@ALeft)^;
+  LRightBits := PUInt64(@ARight)^;
+  LLowSum := UInt64(UInt32(LLeftBits)) + UInt64(UInt32(LRightBits));
+  LHighSum := UInt64(UInt32(LLeftBits shr 32)) +
+    UInt64(UInt32(LRightBits shr 32)) + (LLowSum shr 32);
+  LResultBits := ((LHighSum and UInt64($FFFFFFFF)) shl 32) or
+    (LLowSum and UInt64($FFFFFFFF));
+  Result := PInt64(@LResultBits)^;
+end;
+
 procedure AtomicValidateLoadOrder(const AOrder: memory_order_t);
 begin
   case Ord(AOrder) of
@@ -1156,7 +1246,7 @@ begin
     _atomic64_fallback_lock;
     try
       Result := aObj;
-      aObj := Int64(UInt64(aObj) + UInt64(aArg));
+      aObj := _int64_wrapping_add(aObj, aArg);
     finally
       _atomic64_fallback_unlock;
     end;
@@ -1846,10 +1936,7 @@ end;
 
 function atomic_increment_64(var aObj: UInt64): UInt64;
 begin
-  {$PUSH}
-  {$WARN 4055 OFF}
-  Result := UInt64(atomic_increment_64(PInt64(@aObj)^));
-  {$POP}
+  Result := _uint64_inc_result(atomic_fetch_add_64(aObj, UInt64(1), mo_seq_cst));
 end;
 {$ENDIF}
 
@@ -2260,10 +2347,7 @@ end;
 
 function atomic_increment(var aObj: UInt32): UInt32;
 begin
-  {$PUSH}
-  {$WARN 4055 OFF}
-  Result := UInt32(atomic_increment(PInt32(@aObj)^));
-  {$POP}
+  Result := _uint32_inc_result(atomic_fetch_add(aObj, UInt32(1), mo_seq_cst));
 end;
 
 {$IFDEF CPU64}
@@ -2281,14 +2365,7 @@ end;
 
 function atomic_increment(var aObj: PtrUInt): PtrUInt;
 begin
-  {$PUSH}
-  {$WARN 4055 OFF}
-  {$IF SIZEOF(PtrInt) = 4}
-    Result := PtrUInt(atomic_increment(PInt32(@aObj)^));
-  {$ELSE}
-    Result := PtrUInt(atomic_increment_64(PInt64(@aObj)^));
-  {$ENDIF}
-  {$POP}
+  Result := _ptruint_inc_result(atomic_fetch_add(aObj, PtrUInt(1), mo_seq_cst));
 end;
 {$ENDIF}
 
@@ -2301,10 +2378,7 @@ end;
 
 function atomic_decrement_64(var aObj: UInt64): UInt64;
 begin
-  {$PUSH}
-  {$WARN 4055 OFF}
-  Result := UInt64(atomic_decrement_64(PInt64(@aObj)^));
-  {$POP}
+  Result := _uint64_dec_result(atomic_fetch_sub_64(aObj, UInt64(1), mo_seq_cst));
 end;
 {$ENDIF}
 
@@ -2316,10 +2390,7 @@ end;
 
 function atomic_decrement(var aObj: UInt32): UInt32;
 begin
-  {$PUSH}
-  {$WARN 4055 OFF}
-  Result := UInt32(atomic_decrement(PInt32(@aObj)^));
-  {$POP}
+  Result := _uint32_dec_result(atomic_fetch_sub(aObj, UInt32(1), mo_seq_cst));
 end;
 
 {$IFDEF CPU64}
@@ -2337,10 +2408,7 @@ end;
 
 function atomic_decrement(var aObj: PtrUInt): PtrUInt;
 begin
-  {$PUSH}
-  {$WARN 4055 OFF}
-  Result := PtrUInt(atomic_decrement(PPtrInt(@aObj)^));
-  {$POP}
+  Result := _ptruint_dec_result(atomic_fetch_sub(aObj, PtrUInt(1), mo_seq_cst));
 end;
 {$ENDIF}
 
@@ -2412,8 +2480,14 @@ begin
 end;
 
 function atomic_fetch_sub_64(var aObj: UInt64; aArg: UInt64): UInt64;
+var
+  LDelta: UInt64;
 begin
-  Result := UInt64(atomic_fetch_sub_64(PInt64(@aObj)^, PInt64(@aArg)^));
+  LDelta := _uint64_neg_delta(aArg);
+  {$PUSH}
+  {$WARN 4055 OFF}
+  Result := UInt64(atomic_fetch_add_64(PInt64(@aObj)^, PInt64(@LDelta)^, mo_seq_cst));
+  {$POP}
 end;
 {$ENDIF}
 
@@ -2423,10 +2497,13 @@ begin
 end;
 
 function atomic_fetch_sub(var aObj: UInt32; aArg: UInt32): UInt32;
+var
+  LDelta: UInt32;
 begin
+  LDelta := _uint32_neg_delta(aArg);
   {$PUSH}
   {$WARN 4055 OFF}
-  Result := UInt32(atomic_fetch_sub(PInt32(@aObj)^, PInt32(@aArg)^));
+  Result := UInt32(atomic_fetch_add(PInt32(@aObj)^, PInt32(@LDelta)^, mo_seq_cst));
   {$POP}
 end;
 
@@ -2441,10 +2518,13 @@ begin
 end;
 
 function atomic_fetch_sub(var aObj: PtrUInt; aArg: PtrUInt): PtrUInt;
+var
+  LDelta: PtrUInt;
 begin
+  LDelta := _ptruint_neg_delta(aArg);
   {$PUSH}
   {$WARN 4055 OFF}
-  Result := PtrUInt(atomic_fetch_sub(PPtrInt(@aObj)^, PPtrInt(@aArg)^));
+  Result := PtrUInt(atomic_fetch_add(PPtrInt(@aObj)^, PPtrInt(@LDelta)^, mo_seq_cst));
   {$POP}
 end;
 {$ENDIF}
@@ -2708,10 +2788,13 @@ begin
 end;
 
 function atomic_fetch_sub(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32;
+var
+  LDelta: UInt32;
 begin
+  LDelta := _uint32_neg_delta(aArg);
   {$PUSH}
   {$WARN 4055 OFF}
-  Result := UInt32(atomic_fetch_sub(PInt32(@aObj)^, PInt32(@aArg)^, aOrder));
+  Result := UInt32(atomic_fetch_add(PInt32(@aObj)^, PInt32(@LDelta)^, aOrder));
   {$POP}
 end;
 
@@ -2726,10 +2809,13 @@ begin
 end;
 
 function atomic_fetch_sub(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t): PtrUInt;
+var
+  LDelta: PtrUInt;
 begin
+  LDelta := _ptruint_neg_delta(aArg);
   {$PUSH}
   {$WARN 4055 OFF}
-  Result := PtrUInt(atomic_fetch_sub(PPtrInt(@aObj)^, PPtrInt(@aArg)^, aOrder));
+  Result := PtrUInt(atomic_fetch_add(PPtrInt(@aObj)^, PPtrInt(@LDelta)^, aOrder));
   {$POP}
 end;
 {$ENDIF}
@@ -2741,10 +2827,13 @@ begin
 end;
 
 function atomic_fetch_sub_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64;
+var
+  LDelta: UInt64;
 begin
+  LDelta := _uint64_neg_delta(aArg);
   {$PUSH}
   {$WARN 4055 OFF}
-  Result := UInt64(atomic_fetch_sub_64(PInt64(@aObj)^, PInt64(@aArg)^, aOrder));
+  Result := UInt64(atomic_fetch_add_64(PInt64(@aObj)^, PInt64(@LDelta)^, aOrder));
   {$POP}
 end;
 {$ENDIF}

@@ -447,6 +447,54 @@ begin
     Result := mo_seq_cst;
 end;
 
+function _uint32_inc_result(const AOld: UInt32): UInt32; inline;
+begin
+  if AOld = High(UInt32) then
+    Result := UInt32(0)
+  else
+    Result := AOld + UInt32(1);
+end;
+
+function _uint32_dec_result(const AOld: UInt32): UInt32; inline;
+begin
+  if AOld = UInt32(0) then
+    Result := High(UInt32)
+  else
+    Result := AOld - UInt32(1);
+end;
+
+function _uint64_inc_result(const AOld: UInt64): UInt64; inline;
+begin
+  if AOld = High(UInt64) then
+    Result := UInt64(0)
+  else
+    Result := AOld + UInt64(1);
+end;
+
+function _uint64_dec_result(const AOld: UInt64): UInt64; inline;
+begin
+  if AOld = UInt64(0) then
+    Result := High(UInt64)
+  else
+    Result := AOld - UInt64(1);
+end;
+
+function _ptruint_inc_result(const AOld: PtrUInt): PtrUInt; inline;
+begin
+  if AOld = High(PtrUInt) then
+    Result := PtrUInt(0)
+  else
+    Result := AOld + PtrUInt(1);
+end;
+
+function _ptruint_dec_result(const AOld: PtrUInt): PtrUInt; inline;
+begin
+  if AOld = PtrUInt(0) then
+    Result := High(PtrUInt)
+  else
+    Result := AOld - PtrUInt(1);
+end;
+
 function _refcount_load_relaxed(var AValue: PtrUInt): PtrUInt; inline;
 begin
   {$IF SIZEOF(PtrUInt) = 4}
@@ -648,12 +696,12 @@ end;
 
 function TAtomicUInt32.Increment(AOrder: memory_order_t): UInt32;
 begin
-  Result := FetchAdd(1, AOrder) + 1;
+  Result := _uint32_inc_result(FetchAdd(1, AOrder));
 end;
 
 function TAtomicUInt32.Decrement(AOrder: memory_order_t): UInt32;
 begin
-  Result := FetchSub(1, AOrder) - 1;
+  Result := _uint32_dec_result(FetchSub(1, AOrder));
 end;
 
 function TAtomicUInt32.GetMut: PUInt32;
@@ -837,12 +885,12 @@ end;
 
 function TAtomicUInt64.Increment(AOrder: memory_order_t): UInt64;
 begin
-  Result := FetchAdd(1, AOrder) + 1;
+  Result := _uint64_inc_result(FetchAdd(1, AOrder));
 end;
 
 function TAtomicUInt64.Decrement(AOrder: memory_order_t): UInt64;
 begin
-  Result := FetchSub(1, AOrder) - 1;
+  Result := _uint64_dec_result(FetchSub(1, AOrder));
 end;
 
 function TAtomicUInt64.GetMut: PUInt64;
@@ -1318,12 +1366,12 @@ end;
 
 function TAtomicUSize.Increment(AOrder: memory_order_t): PtrUInt;
 begin
-  Result := FetchAdd(1, AOrder) + 1;
+  Result := _ptruint_inc_result(FetchAdd(1, AOrder));
 end;
 
 function TAtomicUSize.Decrement(AOrder: memory_order_t): PtrUInt;
 begin
-  Result := FetchSub(1, AOrder) - 1;
+  Result := _ptruint_dec_result(FetchSub(1, AOrder));
 end;
 
 function TAtomicUSize.GetMut: PPtrUInt;
