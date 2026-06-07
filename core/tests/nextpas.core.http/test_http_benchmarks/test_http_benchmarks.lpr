@@ -33,6 +33,8 @@ const
   H1FastUnitPath = 'src/nextpas.core.http.impl.h1.fast.pas';
   H1OutboundUnitPath = 'src/nextpas.core.http.impl.h1.outbound.pas';
   H1WriterUnitPath = 'src/nextpas.core.http.impl.h1.writer.pas';
+  BenchFullchainUnitPath =
+    'benchmarks/nextpas.core.http/bench_fullchain/bench_fullchain.lpr';
   CompareGoRelativeDir = 'benchmarks/nextpas.core.http/compare_go';
   CompareRustRelativeDir = 'benchmarks/nextpas.core.http/compare_rust';
   CompareHyperRelativeDir = 'benchmarks/nextpas.core.http/compare_hyper';
@@ -1494,6 +1496,57 @@ begin
     'H1 writer outbound-drain row should serialize through TH1ResponseWriter');
   CheckContains(LBody, 'LOutbound.DrainAllTo(LSinkWriter);',
     'H1 writer outbound-drain row should drain the outbound buffer');
+end;
+
+procedure TestBenchFullchainDirectDispatchSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+  LDispatchBody: string;
+  LDirectHostBranch: string;
+  LScenarioBlock: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, BenchFullchainUnitPath));
+  LDispatchBody := ExtractSourceBlock(LSource,
+    'function ExpectedDispatchPathForWorkload',
+    'function ShouldRunScenario',
+    'bench_fullchain dispatch path mapper');
+  LDirectHostBranch := ExtractSourceBlock(LSource,
+    'if AReq.Headers.Get(''host'') = DIRECT_HOST then',
+    'LRouterHandler.ServeHTTP(AReq, AW);',
+    'bench_fullchain direct host branch');
+  LScenarioBlock := ExtractSourceBlock(LSource,
+    '{ Scenario 1: Plaintext without router dispatch }',
+    '{ Scenario 1: Plaintext }',
+    'bench_fullchain direct scenario block');
+
+  CheckContains(LDispatchBody, 'AWorkload = ''direct_root''',
+    'bench_fullchain dispatch mapper should mark direct_root');
+  CheckContains(LDispatchBody, 'AWorkload = ''direct_1k''',
+    'bench_fullchain dispatch mapper should mark direct_1k');
+  CheckContains(LDispatchBody, 'Exit(''direct_handler'')',
+    'bench_fullchain direct workloads should map to direct_handler');
+  CheckNotContains(LDispatchBody, 'AWorkload = ''plaintext''',
+    'bench_fullchain plaintext should not map to direct_handler');
+
+  CheckContains(LDirectHostBranch, 'WritePlaintextResponse(AW);' + LineEnding +
+    '        Exit;',
+    'bench_fullchain direct root should exit before router dispatch');
+  CheckContains(LDirectHostBranch, 'WriteBody1KResponse(AW, LBody1K);' +
+    LineEnding + '          Exit;',
+    'bench_fullchain direct 1k should exit before router dispatch');
+  CheckNotContains(LDirectHostBranch, 'LRouterHandler.ServeHTTP',
+    'bench_fullchain direct host branch should not call router');
+
+  CheckContains(LScenarioBlock, 'Host: '' + DIRECT_HOST',
+    'bench_fullchain direct scenarios should use direct host');
+  CheckContains(LScenarioBlock, '''GET / HTTP/1.1''',
+    'bench_fullchain direct_root should use root request');
+  CheckContains(LScenarioBlock, '''GET /1k HTTP/1.1''',
+    'bench_fullchain direct_1k should use 1k request');
+  CheckNotContains(LScenarioBlock, 'Host: '' + ROUTER_HOST',
+    'bench_fullchain direct scenarios should not use router host');
 end;
 
 procedure TestBenchFullchainPlaintextSmoke;
@@ -4175,6 +4228,8 @@ begin
     @TestH1WriterKnownStatusLineSourceContract);
   T.Run('H1 writer outbound drain source contract',
     @TestH1WriterOutboundDrainSourceContract);
+  T.Run('bench_fullchain direct dispatch source contract',
+    @TestBenchFullchainDirectDispatchSourceContract);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',

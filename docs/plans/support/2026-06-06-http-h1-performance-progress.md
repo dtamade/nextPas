@@ -13063,3 +13063,32 @@ Hello from nextPas!
     response body sizes, and dispatch path as explicit metadata
   - this supports later runtime/socket attribution without claiming a new
     throughput result
+
+## Session: 2026-06-07 fullchain direct-dispatch source contract slice
+
+- **Status:** completed.
+- Objective:
+  - prove that `nextpas_dispatch_path=direct_handler` is backed by the
+    benchmark's direct host branch and direct request construction, not just by
+    workload names
+  - keep the slice limited to source-contract evidence
+- Scope and safety:
+  - touched only the benchmark focused test and this support evidence
+  - did not touch `bench_fullchain` runtime code, server behavior, public HTTP
+    API, comparison runners, lower-layer modules, or generated artifacts
+- Verification:
+  - first run:
+    `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - new source-contract row passed:
+      `bench_fullchain direct dispatch source contract`
+    - unrelated known transient recurred in
+      `bench_fullchain epoll sink 16k smoke` with exit `217`
+    - `98 total, 97 passed, 1 failed`
+    - heaptrc: `0 unfreed memory blocks`
+  - immediate rerun of the same command:
+    - `98 total, 98 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - the focused gate now checks that direct workloads use `DIRECT_HOST`, root
+    and `/1k` direct requests, and an early `Exit` before router dispatch
+  - it also checks that `plaintext` is not mapped to `direct_handler`

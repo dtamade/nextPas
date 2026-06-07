@@ -5884,3 +5884,16 @@
   fullchain 行现在同时带有 backend、H1 ingress path、dispatch path、request body
   bytes、response body bytes。后续看 runtime/socket 开销时，不需要从 workload
   名字反推这些维度。
+
+## 2026-06-07 fullchain direct-dispatch source-contract findings
+
+- `nextpas_dispatch_path=direct_handler` 不能只靠 workload 名称自证；它需要和
+  `bench_fullchain` 的实际 direct host branch 绑定。
+- 本轮新增 source-contract 后，focused gate 明确检查：
+  - `direct_root` / `direct_1k` 才映射到 `direct_handler`
+  - `plaintext` 不映射到 `direct_handler`
+  - direct scenario request 使用 `DIRECT_HOST`
+  - direct root 和 direct 1 KiB response 分支都在进入 router 前 `Exit`
+  - direct scenario block 不使用 `ROUTER_HOST`
+- 这仍然是 benchmark truth guard，不是 runtime fix；已知的 epoll sink 16k exit
+  `217` transient 在第一轮验证中再次出现并在立即重跑时消失，仍作为残余风险记录。
