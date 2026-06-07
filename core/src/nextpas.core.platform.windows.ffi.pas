@@ -58,8 +58,8 @@ function VirtualUnlock(lpAddress: Pointer; dwSize: PtrUInt): BOOL; stdcall; exte
 function VirtualQuery(lpAddress: Pointer; lpBuffer: PMEMORY_BASIC_INFORMATION; dwLength: PtrUInt): PtrUInt; stdcall; external 'kernel32' name 'VirtualQuery';
 function CreateFileA(lpFileName: LPCSTR; dwDesiredAccess: DWORD; dwShareMode: DWORD; lpSecurityAttributes: Pointer; dwCreationDisposition: DWORD; dwFlagsAndAttributes: DWORD; hTemplateFile: HANDLE): HANDLE; stdcall; external 'kernel32' name 'CreateFileA';
 function CreateFileW(lpFileName: LPCWSTR; dwDesiredAccess: DWORD; dwShareMode: DWORD; lpSecurityAttributes: Pointer; dwCreationDisposition: DWORD; dwFlagsAndAttributes: DWORD; hTemplateFile: HANDLE): HANDLE; stdcall; external 'kernel32' name 'CreateFileW';
-function ReadFile(hFile: HANDLE; lpBuffer: Pointer; nNumberOfBytesToRead: DWORD; lpNumberOfBytesRead: LPDWORD; lpOverlapped: Pointer): BOOL; stdcall; external 'kernel32' name 'ReadFile';
-function WriteFile(hFile: HANDLE; lpBuffer: Pointer; nNumberOfBytesToWrite: DWORD; lpNumberOfBytesWritten: LPDWORD; lpOverlapped: Pointer): BOOL; stdcall; external 'kernel32' name 'WriteFile';
+function ReadFile(hFile: HANDLE; lpBuffer: Pointer; nNumberOfBytesToRead: DWORD; lpNumberOfBytesRead: LPDWORD; lpOverlapped: LPOVERLAPPED): BOOL; stdcall; external 'kernel32' name 'ReadFile';
+function WriteFile(hFile: HANDLE; lpBuffer: Pointer; nNumberOfBytesToWrite: DWORD; lpNumberOfBytesWritten: LPDWORD; lpOverlapped: LPOVERLAPPED): BOOL; stdcall; external 'kernel32' name 'WriteFile';
 function GetFileSize(hFile: HANDLE; lpFileSizeHigh: LPDWORD): DWORD; stdcall; external 'kernel32' name 'GetFileSize';
 function FlushFileBuffers(hFile: HANDLE): WINBOOL; stdcall; external 'kernel32' name 'FlushFileBuffers';
 function SetEndOfFile(hFile: HANDLE): WINBOOL; stdcall; external 'kernel32' name 'SetEndOfFile';
@@ -106,7 +106,7 @@ function GetExitCodeProcess(hProcess: HANDLE; lpExitCode: LPDWORD): WINBOOL; std
 procedure ExitProcess(uExitCode: UINT); stdcall; external 'kernel32' name 'ExitProcess';
 
 function CreateIoCompletionPort(FileHandle: HANDLE; ExistingCompletionPort: HANDLE; CompletionKey: ULONG_PTR; NumberOfConcurrentThreads: DWORD): HANDLE; stdcall; external 'kernel32' name 'CreateIoCompletionPort';
-function GetQueuedCompletionStatus(CompletionPort: HANDLE; lpNumberOfBytesTransferred: LPDWORD; lpCompletionKey: Pointer; lpOverlapped: Pointer; dwMilliseconds: DWORD): WINBOOL; stdcall; external 'kernel32' name 'GetQueuedCompletionStatus';
+function GetQueuedCompletionStatus(CompletionPort: HANDLE; lpNumberOfBytesTransferred: LPDWORD; lpCompletionKey: PULONG_PTR; lpOverlapped: PLPOVERLAPPED; dwMilliseconds: DWORD): WINBOOL; stdcall; external 'kernel32' name 'GetQueuedCompletionStatus';
 function PostQueuedCompletionStatus(CompletionPort: HANDLE; dwNumberOfBytesTransferred: DWORD; dwCompletionKey: ULONG_PTR; lpOverlapped: LPOVERLAPPED): WINBOOL; stdcall; external 'kernel32' name 'PostQueuedCompletionStatus';
 function FindFirstFileW(lpFileName: LPCWSTR; lpFindFileData: LPWIN32_FIND_DATAW): HANDLE; stdcall; external 'kernel32' name 'FindFirstFileW';
 function FindNextFileW(hFindFile: HANDLE; lpFindFileData: LPWIN32_FIND_DATAW): WINBOOL; stdcall; external 'kernel32' name 'FindNextFileW';

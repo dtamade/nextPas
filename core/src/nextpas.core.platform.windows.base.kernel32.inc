@@ -96,6 +96,7 @@ const
 
 type
   ULONG_PTR = PtrUInt;
+  PULONG_PTR = ^ULONG_PTR;
   DWORD_PTR = ULONG_PTR;
   SIZE_T_WIN = ULONG_PTR;
   INT_PTR = PtrInt;
@@ -117,6 +118,7 @@ type
     hEvent: HANDLE;
   end;
   LPOVERLAPPED = ^OVERLAPPED;
+  PLPOVERLAPPED = ^LPOVERLAPPED;
 
   TRTLCriticalSection = packed record
     DebugInfo: Pointer;

@@ -365,6 +365,46 @@ begin
     'IOCP synchronous failure helper must report callback ownership transfer');
 end;
 
+procedure TestWindowsCompletionFfiAbiContract;
+var
+  LBase: string;
+  LFfi: string;
+  LIocp: string;
+  LPendingOpBody: string;
+begin
+  LBase := LoadSourceText('src/nextpas.core.platform.windows.base.kernel32.inc');
+  LFfi := LoadSourceText('src/nextpas.core.platform.windows.ffi.pas');
+  LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
+  LPendingOpBody := ExtractBetween(LIocp, 'tiocppendingop = record',
+    'end;');
+
+  CheckContains(LBase, 'pulong_ptr = ^ulong_ptr;',
+    'Windows base must expose a typed completion-key out pointer');
+  CheckContains(LBase, 'plpoverlapped = ^lpoverlapped;',
+    'Windows base must expose a typed overlapped out pointer');
+  CheckContains(LFfi,
+    'function readfile(hfile: handle; lpbuffer: pointer; nnumberofbytestoread: dword; lpnumberofbytesread: lpdword; lpoverlapped: lpoverlapped): bool;',
+    'ReadFile raw FFI must type the overlapped parameter');
+  CheckContains(LFfi,
+    'function writefile(hfile: handle; lpbuffer: pointer; nnumberofbytestowrite: dword; lpnumberofbyteswritten: lpdword; lpoverlapped: lpoverlapped): bool;',
+    'WriteFile raw FFI must type the overlapped parameter');
+  CheckContains(LFfi,
+    'function getqueuedcompletionstatus(completionport: handle; lpnumberofbytestransferred: lpdword; lpcompletionkey: pulong_ptr; lpoverlapped: plpoverlapped; dwmilliseconds: dword): winbool;',
+    'GetQueuedCompletionStatus raw FFI must type completion key and overlapped out pointers');
+  CheckAbsent(LFfi,
+    'getqueuedcompletionstatus(completionport: handle; lpnumberofbytestransferred: lpdword; lpcompletionkey: pointer; lpoverlapped: pointer;',
+    'GetQueuedCompletionStatus must not expose untyped completion out parameters');
+
+  CheckBefore(LPendingOpBody, 'overlapped: overlapped;',
+    'kind: tiocpopkind;',
+    'IOCP pending op must keep OVERLAPPED as the first field for ABI cast-back');
+  CheckBefore(LPendingOpBody, 'overlapped: overlapped;',
+    'handle: handle;',
+    'IOCP pending op must keep OVERLAPPED before owned handle fields');
+  CheckContains(LIocp, 'piocppendingop(aoverlapped)',
+    'IOCP dispatch must make the cast-back invariant explicit');
+end;
+
 procedure TestIocpUnsupportedAsyncOwnershipContract;
 var
   LIocp: string;
@@ -645,6 +685,8 @@ begin
     @TestAsyncLoopTimeoutSingleFireCleanupContract);
   T.Run('IOCP synchronous failure ownership contract',
     @TestIocpSynchronousFailureOwnershipContract);
+  T.Run('Windows completion FFI ABI contract',
+    @TestWindowsCompletionFfiAbiContract);
   T.Run('IOCP unsupported async ownership contract',
     @TestIocpUnsupportedAsyncOwnershipContract);
   T.Run('IOCP pending operation ownership contract',
