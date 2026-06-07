@@ -8,11 +8,19 @@ uses
 type
   TStringSlots = array[0..1] of AnsiString;
   TInterfaceSlots = array[0..1] of IInterface;
+  TSystemTypInfoKindSet = set of (ksFirst, ksSecond);
+  TSystemTypInfoProcVar = procedure;
+  TSystemTypInfoStaticArray = array[0..1] of Integer;
+  TSystemTypInfoRecord = record
+    Value: Integer;
+  end;
 
   ISystemTypInfoContractProbe = interface
     ['{2067BC61-96D0-4DF4-B40E-D07AAB99E218}']
     function Value: Integer;
   end;
+
+  TSystemTypInfoContractProbeClass = class of TSystemTypInfoContractProbe;
 
   TSystemTypInfoContractProbe = class(TInterfacedObject, ISystemTypInfoContractProbe)
   private
@@ -53,6 +61,20 @@ begin
     Halt(1);
   if TypeInfoPtr^.Kind <> tkAString then
     Halt(2);
+  if GetTypeKind(ISystemTypInfoContractProbe) <> tkInterface then
+    Halt(7);
+  if GetTypeKind(TSystemTypInfoContractProbe) <> tkClass then
+    Halt(8);
+  if GetTypeKind(TSystemTypInfoContractProbeClass) <> tkClassRef then
+    Halt(9);
+  if GetTypeKind(TSystemTypInfoKindSet) <> tkSet then
+    Halt(10);
+  if GetTypeKind(TSystemTypInfoProcVar) <> tkProcVar then
+    Halt(11);
+  if GetTypeKind(TSystemTypInfoStaticArray) <> tkArray then
+    Halt(12);
+  if GetTypeKind(TSystemTypInfoRecord) <> tkRecord then
+    Halt(13);
 
   GetMem(SourceValues, SizeOf(TStringSlots));
   GetMem(DestValues, SizeOf(TStringSlots));

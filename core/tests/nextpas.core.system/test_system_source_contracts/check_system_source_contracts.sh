@@ -362,15 +362,22 @@ const tkEnumeration
 const tkInt64
 const tkQWord
 const tkFloat
+const tkSet
+const tkClass
+const tkMethod
 const tkSString
 const tkAString
 const tkLString
 const tkUString
 const tkWString
 const tkVariant
-const tkMethod
+const tkArray
+const tkRecord
+const tkInterface
+const tkClassRef
 const tkPointer
 const tkDynArray
+const tkProcVar
 procedure InitializeArray
 procedure FinalizeArray
 procedure CopyArray
@@ -541,7 +548,7 @@ require_token "docs/system/rtl-mapping.md" "typinfo-minimal-pressure.md"
 require_token "docs/system/compatibility-matrix.md" "minimal live unit"
 require_token "docs/system/compatibility-matrix.md" "minimal live compile-truth contract"
 require_token "docs/system/compatibility-matrix.md" "minimal live exception-formatting facade"
-require_token "docs/system/compatibility-matrix.md" "TTypeKind collections coverage"
+require_token "docs/system/compatibility-matrix.md" "TTypeKind collections and structured kind coverage"
 
 for token in \
   "S4 TypInfo Minimal Pressure Audit" \
@@ -749,6 +756,10 @@ require_repo_token "compiler/tests/test_typinfo_contract.pas" "FinalizeArray"
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "compiler TypInfo interface reference lifecycle contract"
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "CopyArray(InterfaceDestValues, InterfaceSourceValues, TypeInfo(ISystemTypInfoContractProbe)"
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "FinalizeArray(InterfaceSourceValues, TypeInfo(ISystemTypInfoContractProbe)"
+require_repo_token "compiler/tests/test_typinfo_contract.pas" "GetTypeKind(ISystemTypInfoContractProbe) <> tkInterface"
+require_repo_token "compiler/tests/test_typinfo_contract.pas" "GetTypeKind(TSystemTypInfoContractProbeClass) <> tkClassRef"
+require_repo_token "compiler/tests/test_typinfo_contract.pas" "GetTypeKind(TSystemTypInfoProcVar) <> tkProcVar"
+require_repo_token "compiler/tests/test_typinfo_contract.pas" "GetTypeKind(TSystemTypInfoRecord) <> tkRecord"
 require_repo_reject_regex "compiler/tests/test_typinfo_contract.pas" '^[[:space:]]*TypInfo[,;]'
 require_repo_not_uses_unit "compiler/tests/test_typinfo_contract.pas" "TypInfo"
 require_repo_token "compiler/toolchain/np_toolchain_runner.pas" "TFileStream"
@@ -796,15 +807,22 @@ require_token "src/nextpas.core.system.typinfo.pas" "tkEnumeration"
 require_token "src/nextpas.core.system.typinfo.pas" "tkInt64"
 require_token "src/nextpas.core.system.typinfo.pas" "tkQWord"
 require_token "src/nextpas.core.system.typinfo.pas" "tkFloat"
+require_token "src/nextpas.core.system.typinfo.pas" "tkSet"
+require_token "src/nextpas.core.system.typinfo.pas" "tkClass"
+require_token "src/nextpas.core.system.typinfo.pas" "tkMethod"
 require_token "src/nextpas.core.system.typinfo.pas" "tkSString"
 require_token "src/nextpas.core.system.typinfo.pas" "tkAString"
 require_token "src/nextpas.core.system.typinfo.pas" "tkLString"
 require_token "src/nextpas.core.system.typinfo.pas" "tkUString"
 require_token "src/nextpas.core.system.typinfo.pas" "tkWString"
 require_token "src/nextpas.core.system.typinfo.pas" "tkVariant"
-require_token "src/nextpas.core.system.typinfo.pas" "tkMethod"
+require_token "src/nextpas.core.system.typinfo.pas" "tkArray"
+require_token "src/nextpas.core.system.typinfo.pas" "tkRecord"
+require_token "src/nextpas.core.system.typinfo.pas" "tkInterface"
+require_token "src/nextpas.core.system.typinfo.pas" "tkClassRef"
 require_token "src/nextpas.core.system.typinfo.pas" "tkPointer"
 require_token "src/nextpas.core.system.typinfo.pas" "tkDynArray"
+require_token "src/nextpas.core.system.typinfo.pas" "tkProcVar"
 require_token "src/nextpas.core.system.typinfo.pas" "InitializeArray"
 require_token "src/nextpas.core.system.typinfo.pas" "FinalizeArray"
 require_token "src/nextpas.core.system.typinfo.pas" "CopyArray"
@@ -826,6 +844,11 @@ reject_token "src/nextpas.core.system.typinfo.pas" "function TypeInfo"
 reject_token "src/nextpas.core.system.typinfo.pas" "function GetTypeKind"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "integer PTypeInfo identity compile-truth"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "PTypeInfo kind consistency compile-truth"
+require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "structured kind aliases compile-truth"
+require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "tkInterface"
+require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "tkClassRef"
+require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "tkProcVar"
+require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "tkRecord"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "managed array lifecycle helpers"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "InitializeArray(LSource"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "CopyArray(LDest"

@@ -134,6 +134,12 @@ for comparer/equality dispatch. If nextPas changes these names or grouping
 semantics, collection hashing and ordering behavior can change without visible
 type errors.
 
+The live kind-name coverage now also includes compiler-proven structured kinds:
+`tkInterface`, `tkClass`, `tkClassRef`, `tkSet`, `tkProcVar`, `tkArray`, and
+`tkRecord`. These names are still part of the existing `TTypeKind` identity/kind
+contract. They do not unlock property reflection, class metadata layout, method
+tables, or `Classes` ownership semantics.
+
 ### Managed-array lifecycle risk
 
 `InitializeArray`, `FinalizeArray`, and `CopyArray` touch string/interface and
@@ -164,11 +170,13 @@ below to stay true:
    kind truth only; no property reflection is implied.
 4. `TypeInfo` and `GetTypeKind` behavior is covered for the kinds used by
    collections.
-5. `InitializeArray`, `FinalizeArray`, and `CopyArray` have focused
+5. Structured `TTypeKind` names are covered by compiler/System compile-truth
+   tests before being exposed by the facade.
+6. `InitializeArray`, `FinalizeArray`, and `CopyArray` have focused
    managed-lifetime tests with heaptrc zero-leak evidence.
-6. The implementation route does not freeze host FPC metadata as nextPas target
+7. The implementation route does not freeze host FPC metadata as nextPas target
    ABI.
-7. Source-contract tests continue to prove that broader SysUtils and Classes
+8. Source-contract tests continue to prove that broader SysUtils and Classes
    facades are not reopened by the TypInfo slice.
 
 ## Minimum Verification Gate
@@ -181,6 +189,8 @@ The first live TypInfo slice includes at least:
 - collection specialization coverage for `GetTypeKind`-driven hash/tree paths;
 - TTypeKind collections coverage for comparer/equality dispatch in
   `core/src/nextpas.core.collections.base.pas`;
+- structured TTypeKind compile-truth coverage for interface, class, classref,
+  set, procedure variable, static array, and record kinds;
 - heaptrc zero-leak evidence for managed string arrays;
 - source-contract proof that no property reflection, Classes surface, or
   broader SysUtils surface leaked into the unit.

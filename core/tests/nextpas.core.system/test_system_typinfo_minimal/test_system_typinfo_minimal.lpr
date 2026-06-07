@@ -14,12 +14,20 @@ type
   TInterfaceSlots = array[0..1] of IInterface;
   TIntDynArray = array of Int32;
   TObjectMethod = procedure of object;
+  TProcVar = procedure;
   TKindEnum = (keFirst, keSecond);
+  TKindSet = set of TKindEnum;
+  TStaticArray = array[0..1] of Integer;
+  TKindRecord = record
+    Value: Integer;
+  end;
 
   ISystemTypInfoProbe = interface
     ['{A1980734-1B05-44E2-AC4B-D15C65E96483}']
     function Value: Integer;
   end;
+
+  TSystemTypInfoProbeClass = class of TSystemTypInfoProbe;
 
   TSystemTypInfoProbe = class(TInterfacedObject, ISystemTypInfoProbe)
   private
@@ -162,6 +170,24 @@ begin
     nextpas.core.system.typinfo.tkDynArray);
 end;
 
+procedure TestStructuredKindAliasesCompileTruth;
+begin
+  CheckTypeInfoKind('ISystemTypInfoProbe', TypeInfo(ISystemTypInfoProbe), GetTypeKind(ISystemTypInfoProbe),
+    nextpas.core.system.typinfo.tkInterface);
+  CheckTypeInfoKind('TSystemTypInfoProbe', TypeInfo(TSystemTypInfoProbe), GetTypeKind(TSystemTypInfoProbe),
+    nextpas.core.system.typinfo.tkClass);
+  CheckTypeInfoKind('TSystemTypInfoProbeClass', TypeInfo(TSystemTypInfoProbeClass), GetTypeKind(TSystemTypInfoProbeClass),
+    nextpas.core.system.typinfo.tkClassRef);
+  CheckTypeInfoKind('TKindSet', TypeInfo(TKindSet), GetTypeKind(TKindSet),
+    nextpas.core.system.typinfo.tkSet);
+  CheckTypeInfoKind('TProcVar', TypeInfo(TProcVar), GetTypeKind(TProcVar),
+    nextpas.core.system.typinfo.tkProcVar);
+  CheckTypeInfoKind('TStaticArray', TypeInfo(TStaticArray), GetTypeKind(TStaticArray),
+    nextpas.core.system.typinfo.tkArray);
+  CheckTypeInfoKind('TKindRecord', TypeInfo(TKindRecord), GetTypeKind(TKindRecord),
+    nextpas.core.system.typinfo.tkRecord);
+end;
+
 procedure TestManagedArrayLifecycleHelpers;
 var
   LTypeInfo: nextpas.core.system.typinfo.PTypeInfo;
@@ -291,6 +317,7 @@ begin
   T.Run('TypeInfo and GetTypeKind compile-truth', @TestTypeInfoAndGetTypeKindCompileTruth);
   T.Run('integer PTypeInfo identity compile-truth', @TestIntegerPTypeInfoIdentityCompileTruth);
   T.Run('PTypeInfo kind consistency compile-truth', @TestPTypeInfoKindConsistencyCompileTruth);
+  T.Run('structured kind aliases compile-truth', @TestStructuredKindAliasesCompileTruth);
   T.Run('managed array lifecycle helpers', @TestManagedArrayLifecycleHelpers);
   T.Run('interface reference array lifecycle helpers', @TestInterfaceReferenceArrayLifecycleHelpers);
   T.Run('collection kind aliases compile-truth', @TestCollectionKindAliasesCompileTruth);
