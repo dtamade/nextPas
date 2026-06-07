@@ -5401,3 +5401,24 @@
   Hyper/Tokio 现在不仅有 direct `url_path` smoke，也有 raw runner 级别的
   `url_path` durable proof；但没有借机扩大到新的 snapshot 组合或内部
   `adapter_no_url` 变体。
+
+## 2026-06-07 full-chain epoll direct-1k focused smoke findings
+
+- `direct_1k` 这个 1 KiB full-chain isolation row 之前已经有 threaded focused
+  smoke，也在文档里记过本地 `epoll` 数字，但 regression gate 还没有把
+  `epoll + direct_1k` 这条 nextPas-only egress-heavy seam 锁住。
+- 这会留下一个真实 evidence gap：
+  后续如果继续用 `direct_root` / `direct_1k` 对比 threaded 与 epoll 的
+  runtime/socket开销，`direct_1k` 的 epoll 侧只能依赖文档里的手工 smoke，
+  不够 durable。
+- 本轮继续保持窄刀，没有扩 `bench_fullchain` 生产逻辑，也没有去碰 runner /
+  comparator：
+  - 只把 `NEXTPAS_BENCH_FILTER=direct_1k NEXTPAS_BENCH_BACKEND=epoll`
+    提升进 focused gate
+  - 锁住 `backend=epoll`
+  - 锁住 `workload=direct_1k`
+  - 锁住 `request_body_bytes=0`、`response_body_bytes=1024`、
+    `nextpas_h1_path=fast`
+- 这轮的价值仍是 benchmark truth：
+  `direct_1k` 的 backend split 现在两侧都有 durable regression proof，更适合后续
+  继续拆 runtime/socket overhead；但没有借机包装成 threaded-vs-epoll 排名。

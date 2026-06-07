@@ -1728,6 +1728,40 @@ begin
     'epoll');
 end;
 
+procedure TestBenchFullchainEpollDirect1KSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  {$IFNDEF LINUX}
+  Exit;
+  {$ENDIF}
+
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchFullchainRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain epoll direct 1k build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchFullchainBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_fullchain epoll direct 1k binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + FullchainSmokeIterations,
+     BenchFilterEnvName + '=direct_1k',
+     BenchBackendEnvName + '=epoll'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain epoll direct 1k smoke exit code: ' + LOutput);
+  CheckFullchainBenchmarkOutput(LOutput, 'direct_1k', 'direct_1k', '0',
+    '1024', 'epoll');
+end;
+
 procedure TestBenchFullchainEpollEcho1KSmoke;
 var
   LRootDir: string;
@@ -3390,6 +3424,8 @@ begin
     @TestBenchFullchainRejectsInvalidBackend);
   T.Run('bench_fullchain epoll direct plaintext smoke',
     @TestBenchFullchainEpollDirectPlaintextSmoke);
+  T.Run('bench_fullchain epoll direct 1k smoke',
+    @TestBenchFullchainEpollDirect1KSmoke);
   T.Run('bench_fullchain epoll echo 1k smoke',
     @TestBenchFullchainEpollEcho1KSmoke);
   T.Run('bench_fullchain epoll sink 16k smoke',

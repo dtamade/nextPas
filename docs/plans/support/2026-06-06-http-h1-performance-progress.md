@@ -12245,3 +12245,38 @@ Hello from nextPas!
     smoke
   - this is coverage tightening only; it does not claim a new runner schema,
     a new comparator behavior, or a new performance result
+
+## Session: 2026-06-07 full-chain epoll direct-1k focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the `bench_fullchain` `epoll + direct_1k` row into the focused
+    benchmark gate
+  - keep the slice limited to nextPas-only runtime/socket evidence, not server
+    behavior or backend implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch `bench_fullchain` production code, server/runtime behavior,
+    comparison runner behavior, comparator binaries, public HTTP API, lower
+    layers, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `77 total, 77 passed, 0 failed`
+    - new focused row:
+      `bench_fullchain epoll direct 1k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_fullchain` with:
+    `NEXTPAS_BENCH_FILTER=direct_1k NEXTPAS_BENCH_BACKEND=epoll`
+  - the focused smoke locks:
+    - `backend=epoll`
+    - `workload=direct_1k`
+    - `request_body_bytes=0`
+    - `response_body_bytes=1024`
+    - `nextpas_h1_path=fast`
+- Outcome:
+  - the direct 1 KiB full-chain backend split is now durable benchmark truth
+    instead of relying only on the local doc row
+  - this is coverage tightening only; it does not claim a backend ranking or a
+    new runtime optimization

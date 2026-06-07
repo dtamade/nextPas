@@ -781,6 +781,8 @@ The durable conclusion is narrower: `bench_fullchain` now has a real-socket,
 single-connection, no-router 1 KiB response row that sits between the
 in-memory writer/outbound benches and the broader `bench_server response_1k`
 throughput workload.
+The focused gate now also locks the `epoll` variant directly, so this backend
+split is no longer preserved only as a manual local row in the docs.
 
 Fresh local threaded smoke row from 2026-06-07 for the body-bearing llhttp
 path:
