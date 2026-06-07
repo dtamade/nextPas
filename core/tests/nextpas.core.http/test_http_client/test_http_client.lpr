@@ -1090,12 +1090,14 @@ var
   LReq: IHttpRequest;
   LHeaders: IHttpHeaders;
   LGotHeader: string;
+  LGotHasContentLengthHeader: Boolean;
   LGotContentLength: Int64;
   LGotBodyWasNil: Boolean;
   LGotPath: string;
   LGotQuery: string;
 begin
   LGotHeader := '';
+  LGotHasContentLengthHeader := True;
   LGotContentLength := -1;
   LGotBodyWasNil := False;
   LGotPath := '';
@@ -1107,6 +1109,7 @@ begin
     LB: string;
   begin
     LGotHeader := AReq.Headers.Get('x-client');
+    LGotHasContentLengthHeader := AReq.Headers.Has('content-length');
     LGotContentLength := AReq.ContentLength;
     LGotBodyWasNil := AReq.Body = nil;
     LGotPath := AReq.Path;
@@ -1124,11 +1127,15 @@ begin
     LReq := nextpas.core.http.NewRequest(hmGet,
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/headers-only?x=1',
       LHeaders);
+    Check(not LReq.Headers.Has('content-length'),
+      'headers-only helper does not populate content-length during request construction');
 
     LResp := LClient.Do_(LReq);
 
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     CheckEqual('headers-only', LGotHeader, 'custom header forwarded');
+    Check(not LGotHasContentLengthHeader,
+      'headers-only helper does not publish content-length header to the server');
     CheckEqual(Int64(0), LGotContentLength, 'headers-only helper keeps zero content-length');
     Check(LGotBodyWasNil, 'headers-only helper keeps request body nil');
     CheckEqual('/headers-only', LGotPath, 'headers-only helper preserves path');
