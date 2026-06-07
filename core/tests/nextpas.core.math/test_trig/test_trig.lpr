@@ -114,6 +114,38 @@ begin
   Result := LValue.Bits = $7FF0000000000000;
 end;
 
+function IsSingleNegativeInfinity(const AValue: Single): Boolean;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AValue;
+  Result := LValue.Bits = LongWord($FF800000);
+end;
+
+function IsDoubleNegativeInfinity(const AValue: Double): Boolean;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Value := AValue;
+  Result := LValue.Bits = QWord($FFF0000000000000);
+end;
+
+function IsSinglePositiveZero(const AValue: Single): Boolean;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AValue;
+  Result := LValue.Bits = 0;
+end;
+
+function IsDoublePositiveZero(const AValue: Double): Boolean;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Value := AValue;
+  Result := LValue.Bits = 0;
+end;
+
 function IsSingleNegativeZero(const AValue: Single): Boolean;
 var
   LValue: TSingleBitCast;
@@ -243,6 +275,22 @@ begin
     'Power zero negative exponent returns +Inf');
   Check(IsSinglePositiveInfinity(Power(Single(0.0), Single(-1.0))),
     'Power Single zero negative exponent returns +Inf');
+  Check(IsDoubleNegativeZero(Power(DoubleNegativeZero, 3.0)),
+    'Power negative zero odd positive exponent returns -0');
+  Check(IsSingleNegativeZero(Power(SingleNegativeZero, Single(3.0))),
+    'Power Single negative zero odd positive exponent returns -0');
+  Check(IsDoublePositiveZero(Power(DoubleNegativeZero, 2.0)),
+    'Power negative zero even positive exponent returns +0');
+  Check(IsSinglePositiveZero(Power(SingleNegativeZero, Single(2.0))),
+    'Power Single negative zero even positive exponent returns +0');
+  Check(IsDoubleNegativeInfinity(Power(DoubleNegativeZero, -3.0)),
+    'Power negative zero odd negative exponent returns -Inf');
+  Check(IsSingleNegativeInfinity(Power(SingleNegativeZero, Single(-3.0))),
+    'Power Single negative zero odd negative exponent returns -Inf');
+  Check(IsDoublePositiveInfinity(Power(DoubleNegativeZero, -2.0)),
+    'Power negative zero even negative exponent returns +Inf');
+  Check(IsSinglePositiveInfinity(Power(SingleNegativeZero, Single(-2.0))),
+    'Power Single negative zero even negative exponent returns +Inf');
 end;
 
 procedure TestAngleConversions;

@@ -1374,6 +1374,22 @@ def scan_legacy_public_names(root: Path, path: Path, text: str) -> list[Finding]
     return findings
 
 
+def scan_legacy_production_names(root: Path, path: Path, text: str) -> list[Finding]:
+    findings: list[Finding] = []
+    code = strip_pascal_comments_and_strings(text)
+    for match in LEGACY_PUBLIC_RE.finditer(code):
+        line = line_no_at(code, match.start())
+        add_finding(
+            findings,
+            "no-legacy-production-math-symbol",
+            root,
+            path,
+            line,
+            original_line(text, line),
+        )
+    return findings
+
+
 def scan_allowed_math_units(root: Path, path: Path, text: str) -> list[Finding]:
     findings: list[Finding] = []
     code = strip_pascal_comments_and_strings(text)
@@ -1851,6 +1867,66 @@ def run_public_math_source_simd_wiring_self_tests() -> None:
                     "public-math-source-simd-wiring self-test "
                     + case_name
                     + " expected no findings"
+                )
+
+
+def run_legacy_production_name_self_tests() -> None:
+    cases = (
+        (
+            "interface-public-legacy-name",
+            "unit nextpas.core.math.mat;\n"
+            "interface\n"
+            "type\n"
+            "  TMatrix4f = record end;\n"
+            "implementation\n"
+            "end.\n",
+            {"no-legacy-public-vector-api", "no-legacy-production-math-symbol"},
+        ),
+        (
+            "implementation-legacy-name",
+            "unit nextpas.core.math.mat;\n"
+            "interface\n"
+            "implementation\n"
+            "type\n"
+            "  TMatrix4Work = array[0..3, 0..3] of Double;\n"
+            "end.\n",
+            {"no-legacy-production-math-symbol"},
+        ),
+        (
+            "comment-and-string-only",
+            "unit nextpas.core.math.mat;\n"
+            "interface\n"
+            "const Msg = 'TMatrix4Work';\n"
+            "// TMatrix4Work\n"
+            "{ TVector3f }\n"
+            "implementation\n"
+            "(* TQuaterniond *)\n"
+            "end.\n",
+            set(),
+        ),
+    )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        path = root / "src/nextpas.core.math.mat.pas"
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        for case_name, text, expected_rules in cases:
+            path.write_text(text, encoding="utf-8")
+            findings = scan_legacy_public_names(
+                root,
+                path,
+                text,
+            ) + scan_legacy_production_names(root, path, text)
+            rules = {finding.rule for finding in findings}
+            if rules != expected_rules:
+                raise AssertionError(
+                    "legacy-production-name self-test "
+                    + case_name
+                    + " expected "
+                    + ",".join(sorted(expected_rules))
+                    + " got "
+                    + ",".join(sorted(rules))
                 )
 
 
@@ -3075,6 +3151,7 @@ def build_report(root: Path) -> Report:
         findings.extend(scan_math_ffi_uses(root, path, text))
         findings.extend(scan_external_m(root, path, text))
         findings.extend(scan_legacy_public_names(root, path, text))
+        findings.extend(scan_legacy_production_names(root, path, text))
         findings.extend(scan_private_simd(root, path, text))
         findings.extend(scan_public_math_source_simd_wiring(root, path, text))
         findings.extend(scan_forbidden_trig_scalar_names(root, path, text))
@@ -3125,6 +3202,7 @@ def main() -> int:
     if args.self_test:
         run_behavior_marker_self_tests()
         run_public_math_source_simd_wiring_self_tests()
+        run_legacy_production_name_self_tests()
         run_trig_host_safe_route_self_tests()
         run_required_trig_host_compile_gate_self_tests()
         run_required_doc_truth_self_tests()

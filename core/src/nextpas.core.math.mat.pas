@@ -161,7 +161,7 @@ const
 type
   TWork3 = array[0..2, 0..5] of Double;
   TWork4 = array[0..3, 0..7] of Double;
-  TMatrix4Work = array[0..3, 0..3] of Double;
+  TWork4Determinant = array[0..3, 0..3] of Double;
 
 function AbsDouble(const AValue: Double): Double; inline;
 begin
@@ -281,7 +281,7 @@ begin
   Result := True;
 end;
 
-function DeterminantWork4(var AWork: TMatrix4Work): Double;
+function DeterminantWork4(var AWork: TWork4Determinant): Double;
 var
   I: Integer;
   J: Integer;
@@ -703,7 +703,7 @@ end;
 
 function TMat4f.Determinant: Single;
 var
-  Work: TMatrix4Work;
+  Work: TWork4Determinant;
   C: TIndex;
   R: TIndex;
 begin
@@ -1093,7 +1093,7 @@ end;
 
 function TMat4d.Determinant: Double;
 var
-  Work: TMatrix4Work;
+  Work: TWork4Determinant;
   C: TIndex;
   R: TIndex;
 begin

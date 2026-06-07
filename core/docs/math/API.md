@@ -116,6 +116,10 @@ Trig helpers:
 - Exponential and logarithmic: `Exp`, `Ln`, `Log2`, `Log10`
 - Power helpers: `Power`, `Sqrt`
 
+`Power` preserves negative-zero sign only for odd integer exponents: positive odd exponents return
+`-0`, and negative odd exponents return negative infinity. Non-odd zero-base exponents follow the
+positive-zero / positive-infinity zero-base behavior.
+
 Most scalar and trig helpers have both `Single` and `Double` overloads. Integer helper overloads are
 limited to the signed and unsigned sizes declared in the source interface.
 

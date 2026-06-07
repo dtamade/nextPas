@@ -64,6 +64,17 @@ begin
     Result := -Result;
 end;
 
+function DoubleSignedInfinity(const ANegative: Boolean): Double; inline;
+var
+  LBits: UInt64;
+begin
+  if ANegative then
+    LBits := UInt64($FFF0000000000000)
+  else
+    LBits := UInt64($7FF0000000000000);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
 function Sin(const AX: Single): Single;
 begin
   Result := Single(System.Sin(Double(AX)));
@@ -233,6 +244,18 @@ begin
   Result := AValue = System.Int(AValue);
 end;
 
+function IsOddIntegerValue(const AValue: Double): Boolean;
+var
+  LExponent: Int64;
+begin
+  if (not IsIntegerValue(AValue)) or
+    (AValue < -9223372036854775808.0) or
+    (AValue >= 9223372036854775808.0) then
+    Exit(False);
+  LExponent := System.Trunc(AValue);
+  Result := (LExponent and 1) <> 0;
+end;
+
 function Power(const ABase, AExponent: Double): Double;
 var
   LAbsBase: Double;
@@ -244,8 +267,10 @@ begin
   if ABase = 0.0 then
   begin
     if AExponent > 0.0 then
-      Exit(0.0);
-    Exit(1.0 / 0.0);
+      Exit(DoubleSignedZero(DoubleHasSignBit(ABase) and IsOddIntegerValue(AExponent)));
+    if DoubleHasSignBit(ABase) and IsOddIntegerValue(AExponent) then
+      Exit(DoubleSignedInfinity(True));
+    Exit(DoubleSignedInfinity(False));
   end;
 
   if (ABase < 0.0) and IsIntegerValue(AExponent) and

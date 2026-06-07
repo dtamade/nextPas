@@ -21,7 +21,7 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - M0 design/control is committed as `21e1f510 docs(math): plan final api migration`.
 - Earlier slices added scalar/trig/facade/symbol-scope tests and the final vector types.
 - `nextpas.core.math.scalar` and `nextpas.core.math.impl.scalar` now exist.
-- `nextpas.core.math` is now a scalar/trig facade.
+- `nextpas.core.math` is now the scalar/trig/vector/matrix/quaternion/transform/easing/random/noise facade.
 - `nextpas.core.math.trig` no longer depends on `nextpas.core.math.ffi`.
 - `nextpas.core.math.ffi.pas` is deleted in this branch.
 - `nextpas.core.simd.mathutil` no longer exports common bare math-compatible helper names.
@@ -31,7 +31,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   `Single` fail-fast parity for the conversion-boundary message families, `GCD` / `LCM`,
   `Abs(Low(...))`, `Hypot(+Inf,+Inf)`, trig NaN/out-of-domain/double-infinity cases plus direct
   `Log2` / `Log10` coverage, selected missing `Single`-path trig parity, and `Power`
-  negative-base / zero-base edge semantics, and `SimdLnF32(NaN)`.
+  negative-base / zero-base edge semantics including negative-zero odd-exponent sign preservation,
+  and `SimdLnF32(NaN)`.
 - `Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.
 - `Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.
 - `FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.
@@ -468,7 +469,7 @@ Status:
   and noise.
 - Local Linux closeout gates have been rerun for the current docs/API surface: `make -C
 core/tests/nextpas.core.math clean test` exits 0, `test_api_surface` reports
-  `MATH_API_SURFACE OK: scanned=43 findings=0`, allocation-bearing math tests report heaptrc
+  `MATH_API_SURFACE OK: scanned=45 findings=0`, allocation-bearing math tests report heaptrc
   `0 unfreed memory blocks`, `make hygiene` reports `build-hygiene=pass`, and `git diff --check`
   has no findings.
 - `core/Makefile` now exposes `core-math-api-surface-smoke`, reachable as
@@ -497,7 +498,11 @@ core/tests/nextpas.core.math clean test` exits 0, `test_api_surface` reports
   `test_api_surface` now extracts root facade constants, public type aliases, and public function
   names, then fails if any name is missing from `docs/math/API.md`. The rule was mutation-tested by
   removing `Fmod` from a temporary API doc copy and observing
-  `api-doc-missing-root-facade-name:Fmod`; the real docs pass with `scanned=43 findings=0`.
+  `api-doc-missing-root-facade-name:Fmod`; the real docs pass with `scanned=45 findings=0`.
+- `test_api_surface` also scans production `nextpas.core.math*.pas` source for legacy-style
+  vector/matrix/quaternion symbols, so compatibility bridge names cannot survive as internal
+  production identifiers while the module converges on final `TVec*`, `TMat*`, and `TQuat*`
+  naming.
 - `test_api_surface` also locks required behavior-test runner markers across the current facade,
   scalar, trig, vector, matrix, quaternion, transform, easing, random/noise, and internal SIMD seam
   tests. This gate was mutation-tested by removing the scalar `T.Run('constants')` marker from a
