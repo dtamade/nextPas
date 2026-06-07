@@ -398,6 +398,7 @@ require_token "docs/system/README.md" "not unit-owned wrapper functions"
 require_token "docs/system/README.md" "S5 compiler integration contract"
 require_token "docs/system/README.md" "source-backed System truth"
 require_token "docs/system/README.md" "backend-private magic strings"
+require_token "docs/system/README.md" "compiler/HIR contract live; no callable public facade"
 
 require_token "docs/system/fpc-rtl-route-boundary.md" "root kernel boundary"
 require_token "docs/system/fpc-rtl-route-boundary.md" "FPC-routed stage0"
@@ -474,6 +475,8 @@ require_token "docs/system/lifecycle-contracts.md" "stage0 host fallback"
 require_token "docs/system/lifecycle-contracts.md" "compiler/runtime metadata"
 require_token "docs/system/lifecycle-contracts.md" "seven-symbol bridge"
 require_token "docs/system/lifecycle-contracts.md" "does not freeze metadata ABI"
+require_token "docs/system/rtl-mapping.md" "compiler/HIR contract live; no public facade"
+require_token "docs/system/rtl-mapping.md" "np.system.object_free"
 
 for unit_name in System SysUtils TypInfo Classes ObjPas; do
   require_token "docs/system/rtl-mapping.md" "$unit_name"
@@ -630,6 +633,22 @@ for helper in \
   "np.system.heap_free"; do
   require_token "docs/system/runtime-contracts.md" "$helper"
 done
+for helper in \
+  "np.system.object_free" \
+  "np.system.object_free.destroy" \
+  "np.system.object_free.cleanup" \
+  "np.system.object_free.release"; do
+  require_token "docs/system/runtime-contracts.md" "$helper"
+done
+require_token "docs/system/runtime-contracts.md" "object-free-runtime"
+require_token "docs/system/runtime-contracts.md" "cleanup-class"
+require_token "docs/system/runtime-contracts.md" "nil-guard true"
+require_token "docs/system/runtime-contracts.md" "heap-release true"
+require_token "docs/system/runtime-contracts.md" "@np_object_free_release"
+require_token "docs/system/runtime-contracts.md" "backend-private helper"
+require_token "docs/system/runtime-contracts.md" "must not walk object fields"
+require_token "docs/system/runtime-contracts.md" "compiler-planned cleanup"
+require_token "docs/system/runtime-contracts.md" "field-agnostic"
 
 for token in \
   "exception raise" \
@@ -780,6 +799,24 @@ require_token "docs/system/README.md" "nextPas-owned semantic authority"
 require_repo_token "core/src/nextpas.core.collections.element_manager.pas" "InitializeArray"
 require_repo_token "core/src/nextpas.core.collections.element_manager.pas" "CopyArray"
 require_repo_token "core/src/nextpas.core.collections.hashmap.swiss.pas" "GetTypeKind"
+require_repo_file "tests/hir/test_hir_object_free_contract.pas"
+require_repo_file "tests/semantic/test_semantic_call_bindings.pas"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "object-free-runtime"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free.destroy"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free.release"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "@np_object_free_release"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "object-free-release-helper-must-not-walk-fields"
+require_repo_token "tests/semantic/test_semantic_call_bindings.pas" "np.system.object_free"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "object-free-runtime"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "cleanup-class "
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "nil-guard true"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "heap-release true"
+require_repo_token "compiler/ir/np_hir_builder.pas" "np.system.object_free.destroy"
+require_repo_token "compiler/ir/np_hir_builder.pas" "np.system.object_free.cleanup"
+require_repo_token "compiler/ir/np_hir_builder.pas" "np.system.object_free.release"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "np.system.object_free"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_object_free_release"
 
 for path in \
   "core/src/nextpas.core.collections.arr.pas" \

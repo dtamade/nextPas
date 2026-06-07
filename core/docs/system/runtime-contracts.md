@@ -77,6 +77,37 @@ Rules:
 - Release ordering must be deterministic and testable.
 - Any interaction with object destruction must align with `np.system.object_free`.
 
+## Object Free
+
+`np.system.object_free` is the compiler/runtime contract for object `Free`
+lowering. It describes the semantic lifecycle group for a class instance, not a
+callable Pascal facade and not a public ABI exported from `nextpas.core.system`.
+
+| Contract | Meaning | Owner boundary |
+| --- | --- | --- |
+| `np.system.object_free` | nil-safe object `Free` operation with effective destroy and heap-release intent | system contract vocabulary, compiler/runtime implementation |
+| `np.system.object_free.destroy` | owned destructor call inside the object-free lifecycle group | compiler selects the effective `Destroy`; runtime preserves ordering |
+| `np.system.object_free.cleanup` | optional compiler-planned field cleanup before heap release | compiler owns class field cleanup plan; nested managed contracts own element cleanup |
+| `np.system.object_free.release` | release the object allocation after destroy and cleanup have run | system contract over allocator/mem owner |
+
+Rules:
+
+- The semantic source node is `object-free-runtime`; its operand records the
+  receiver, effective `destroy`, `cleanup-class`, `nil-guard true`, and
+  `heap-release true`.
+- Compiler HIR may project the lifecycle group as
+  `np.system.object_free`, `np.system.object_free.destroy`,
+  `np.system.object_free.cleanup`, and `np.system.object_free.release`.
+- A backend-private helper such as `@np_object_free_release` is an implementation
+  detail. It may appear in LLVM-focused tests as backend evidence, but it
+  is not public ABI and must not become a callable facade symbol.
+- The release helper must stay field-agnostic and must not walk object fields.
+  Field dynamic-array, string, interface, and managed-record cleanup stays in
+  compiler-planned cleanup calls or the relevant managed runtime contracts.
+- Allocation header shape, magic values, free-list policy, invalid-release
+  handling, and allocator internals remain compiler/runtime/mem details. The
+  stable system contract is nil-safe destroy, cleanup, and release ordering.
+
 ## Managed Record
 
 Managed record contracts describe initialization and finalization points for record fields that contain
