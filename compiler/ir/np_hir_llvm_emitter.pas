@@ -69,6 +69,7 @@ type
     procedure EmitStrConstants;
     procedure EmitAllocHelper;
     procedure EmitMemcpyHelper;
+    procedure EmitMemzeroHelper;
     procedure EmitStrConcatHelper;
     procedure EmitDynArrayHelpers;
     procedure EmitObjectAllocHelper;
@@ -1050,6 +1051,9 @@ begin
   if FNeedsMemcpy then
     EmitMemcpyHelper;
 
+  if FNeedsObjectAlloc then
+    EmitMemzeroHelper;
+
   if FNeedsStrConcat then
     EmitStrConcatHelper;
 
@@ -1366,6 +1370,25 @@ begin
   Emit('}');
 end;
 
+procedure THIRLlvmEmitter.EmitMemzeroHelper;
+begin
+  Emit('');
+  Emit('define internal void @np_memzero(ptr %dst, i64 %n) {');
+  Emit('entry:');
+  Emit('  %cmp0 = icmp eq i64 %n, 0');
+  Emit('  br i1 %cmp0, label %done, label %loop');
+  Emit('loop:');
+  Emit('  %i = phi i64 [ 0, %entry ], [ %i_next, %loop ]');
+  Emit('  %dp = getelementptr i8, ptr %dst, i64 %i');
+  Emit('  store i8 0, ptr %dp');
+  Emit('  %i_next = add i64 %i, 1');
+  Emit('  %cond = icmp eq i64 %i_next, %n');
+  Emit('  br i1 %cond, label %done, label %loop');
+  Emit('done:');
+  Emit('  ret void');
+  Emit('}');
+end;
+
 procedure THIRLlvmEmitter.EmitStrConcatHelper;
 begin
   Emit('');
@@ -1500,6 +1523,7 @@ begin
   Emit('  %rcp = getelementptr i8, ptr %raw, i64 16');
   Emit('  store i64 0, ptr %rcp');
   Emit('  %obj = getelementptr i8, ptr %raw, i64 24');
+  Emit('  call void @np_memzero(ptr %obj, i64 %size)');
   Emit('  ret ptr %obj');
   Emit('}');
 end;

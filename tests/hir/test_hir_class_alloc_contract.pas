@@ -91,6 +91,10 @@ begin
       Fail('missing-hir-class-alloc-refcount-init');
     if Pos('%obj = getelementptr i8, ptr %raw, i64 24', LlvmText) = 0 then
       Fail('missing-hir-class-alloc-payload-pointer');
+    if Pos('call void @np_memzero(ptr %obj, i64 %size)', LlvmText) = 0 then
+      Fail('missing-hir-class-alloc-payload-zero-init');
+    if Pos('define internal void @np_memzero(ptr %dst, i64 %n)', LlvmText) = 0 then
+      Fail('missing-hir-class-alloc-memzero-helper');
     if Pos(' = call ptr @np_alloc(i64 %v', LlvmText) <> 0 then
       Fail('direct-hir-class-alloc-base-alloc-call');
 
