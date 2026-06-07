@@ -33,17 +33,27 @@ require_doc_pattern() {
   fi
 }
 
+require_doc_text() {
+  text="$1"
+  description="$2"
+
+  if ! grep -Fq "$text" "$DOC"; then
+    printf 'missing CI evidence matrix doc contract: %s\n' "$description" >&2
+    exit 1
+  fi
+}
+
 require_workflow_command_documented() {
   workflow="$1"
   command="$2"
   description="$3"
 
-  if ! grep -Fq "run: $command" "$workflow"; then
+  if ! grep -Fq "$command" "$workflow"; then
     printf 'CI evidence matrix workflow command missing from workflow: %s\n' "$description" >&2
     exit 1
   fi
 
-  require_doc_pattern "$command" "$description"
+  require_doc_text "$command" "$description"
 }
 
 require_file "$DOC" 'docs/architecture/ci-evidence-matrix.md'
@@ -62,7 +72,8 @@ require_doc_pattern 'make test-tooling.*make verify|make verify.*make test-tooli
 
 require_workflow_command_documented "$ROOT_CI" 'make test-tooling' 'root tooling command'
 require_workflow_command_documented "$ROOT_CI" 'make verify' 'root verify command'
-require_workflow_command_documented "$CORE_CI" 'make test' 'core test command'
-require_workflow_command_documented "$CORE_CI" 'FPC=fpc benchmarks/nextpas.core.tui/run_all.sh' 'core TUI benchmark smoke command'
+require_workflow_command_documented "$CORE_CI" 'make -C .. core-ci-test' 'core Linux test command'
+require_workflow_command_documented "$CORE_CI" 'make -C .. core-ci-best-effort-test CORE_CI_HOST=macOS' 'core macOS best-effort command'
+require_workflow_command_documented "$CORE_CI" 'make -C "$GITHUB_WORKSPACE" core-ci-best-effort-test CORE_CI_HOST=FreeBSD' 'core FreeBSD best-effort command'
 
 printf 'ci-evidence-matrix-doc-contract=pass\n'

@@ -1,7 +1,8 @@
 TEST_FILTER ?= smoke
 BASE_REF ?= main
+CORE_CI_HOST ?= host
 
-.PHONY: rebuild-compiler stage0 verify test test-smoke test-tooling focused lane-focused landing-check self-compile-module self-compile-modules c8-probe-np-allocator hygiene clean clean-artifacts
+.PHONY: rebuild-compiler stage0 verify test test-smoke test-tooling focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator hygiene clean clean-artifacts
 
 rebuild-compiler:
 	./scripts/rebuild-compiler.sh
@@ -53,6 +54,36 @@ landing-check: hygiene
 		$(MAKE) focused FOCUS="$$lane_focus"; \
 	fi
 	$(MAKE) hygiene
+
+core-ci-test:
+	$(MAKE) -C core test
+	cd core && FPC="$${FPC:-fpc}" benchmarks/nextpas.core.tui/run_all.sh
+
+core-ci-best-effort-test:
+	@cd core && \
+	total=0; passed=0; skipped=0; first_fail=""; log_file=$$(mktemp); \
+	trap 'rm -f "$$log_file"' EXIT HUP INT TERM; \
+	for mk in $$(find tests -mindepth 2 -name Makefile | sort); do \
+		dir=$$(dirname "$$mk"); \
+		total=$$((total + 1)); \
+		if $(MAKE) -C "$$dir" test >"$$log_file" 2>&1; then \
+			passed=$$((passed + 1)); \
+			echo "PASS: $$dir"; \
+		else \
+			skipped=$$((skipped + 1)); \
+			if [ -z "$$first_fail" ]; then \
+				first_fail="$$dir"; \
+				echo "SKIP: $$dir (first failure details below)"; \
+				tail -20 "$$log_file"; \
+			else \
+				echo "SKIP: $$dir"; \
+			fi; \
+		fi; \
+	done; \
+	rm -f "$$log_file"; \
+	echo ""; \
+	echo "=== $(CORE_CI_HOST): $$passed passed, $$skipped skipped, $$total total ==="; \
+	if [ "$$passed" -eq 0 ]; then exit 1; fi
 
 self-compile-module: rebuild-compiler
 	@test -n "$(MODULE)" || { echo "MODULE is required, e.g. make self-compile-module MODULE=rtl/core/mem/np_allocator.pas" >&2; exit 1; }

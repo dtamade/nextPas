@@ -19,10 +19,9 @@ runtime evidence。
 | --- | --- | --- | --- | --- |
 | Linux Verification (`.github/workflows/ci.yml`) | `verify-linux-x86_64` | `make test-tooling` | `CI truth` and `source-contract` | Tooling contracts must run before local verification. |
 | Linux Verification (`.github/workflows/ci.yml`) | `verify-linux-x86_64` | `make verify` | `runtime`, `forced-compile`, and `CI truth` | Mirrors `build/verify_local.sh` through the root Makefile. |
-| Core CI (`.github/workflows/core-ci.yml`) | `test-linux` | `make test` | `runtime` | Runs from `core/` with FPC trunk on Linux. |
-| Core CI (`.github/workflows/core-ci.yml`) | `test-linux` | `FPC=fpc benchmarks/nextpas.core.tui/run_all.sh` | `runtime` | TUI benchmark smoke, not a replacement for module focused gates. |
-| Core CI (`.github/workflows/core-ci.yml`) | `test-macos` | best-effort `make -C <test> test` loop | `runtime` evidence where tests pass | Pass count 是有用的 host 覆盖；skipped rows 不是模块 readiness。 |
-| Core CI (`.github/workflows/core-ci.yml`) | `test-freebsd` | best-effort `make -C <test> test` loop | `runtime` evidence where tests pass | Push-only FreeBSD 覆盖；skipped rows 仍然是显式 non-evidence。 |
+| Core CI (`.github/workflows/core-ci.yml`) | `test-linux` | `make -C .. core-ci-test` | `runtime` | Runs core tests and TUI benchmark smoke through the root Makefile gate. |
+| Core CI (`.github/workflows/core-ci.yml`) | `test-macos` | `make -C .. core-ci-best-effort-test CORE_CI_HOST=macOS` | `runtime` evidence where tests pass | Pass count 是有用的 host 覆盖；skipped rows 不是模块 readiness。 |
+| Core CI (`.github/workflows/core-ci.yml`) | `test-freebsd` | `make -C "$GITHUB_WORKSPACE" core-ci-best-effort-test CORE_CI_HOST=FreeBSD` | `runtime` evidence where tests pass | Push-only FreeBSD 覆盖；skipped rows 仍然是显式 non-evidence。 |
 
 ## Local Helpers Are Not CI Matrix Rows
 

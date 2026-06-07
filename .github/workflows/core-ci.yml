@@ -52,10 +52,7 @@ jobs:
         run: fpc -iV
 
       - name: Run all tests
-        run: make test
-
-      - name: Run TUI benchmark smoke
-        run: FPC=fpc benchmarks/nextpas.core.tui/run_all.sh
+        run: make -C .. core-ci-test
 
   test-macos:
     runs-on: macos-14
@@ -110,28 +107,7 @@ jobs:
           fpc -vt -Fu$(pwd)/src -Fi$(pwd)/src tests/nextpas.core.platform/test_platform_ctypes_abi/test_platform_ctypes_abi.lpr -FE/tmp 2>&1 | tail -5 || true
 
       - name: Run tests (best-effort)
-        run: |
-          TOTAL=0; PASSED=0; SKIPPED=0; FIRST_FAIL=""
-          while IFS= read -r mk; do
-            dir=$(dirname "$mk")
-            TOTAL=$((TOTAL + 1))
-            if make -C "$dir" test 2>&1 | tail -5 | grep -q "passed"; then
-              PASSED=$((PASSED + 1))
-              echo "PASS: $dir"
-            else
-              SKIPPED=$((SKIPPED + 1))
-              if [ -z "$FIRST_FAIL" ]; then
-                FIRST_FAIL="$dir"
-                echo "SKIP: $dir (first failure details below)"
-                make -C "$dir" test 2>&1 | tail -20
-              else
-                echo "SKIP: $dir"
-              fi
-            fi
-          done < <(find tests -mindepth 2 -name Makefile | sort)
-          echo ""
-          echo "=== macOS: $PASSED passed, $SKIPPED skipped, $TOTAL total ==="
-          if [ $PASSED -eq 0 ]; then exit 1; fi
+        run: make -C .. core-ci-best-effort-test CORE_CI_HOST=macOS
 
   test-freebsd:
     runs-on: ubuntu-latest
@@ -147,18 +123,4 @@ jobs:
           run: |
             sudo pkg install -y fpc
             fpc -iV
-            cd core
-            TOTAL=0; PASSED=0; SKIPPED=0
-            for mk in $(find tests -mindepth 2 -name Makefile | sort); do
-              dir=$(dirname "$mk")
-              TOTAL=$((TOTAL + 1))
-              if make -C "$dir" test >/dev/null 2>&1; then
-                PASSED=$((PASSED + 1))
-                echo "PASS: $dir"
-              else
-                SKIPPED=$((SKIPPED + 1))
-                echo "SKIP: $dir"
-              fi
-            done
-            echo ""
-            echo "=== FreeBSD: $PASSED passed, $SKIPPED skipped, $TOTAL total ==="
+            make -C "$GITHUB_WORKSPACE" core-ci-best-effort-test CORE_CI_HOST=FreeBSD
