@@ -24,10 +24,16 @@ const
   tkEnumeration = TypInfo.tkEnumeration;
   tkInt64 = TypInfo.tkInt64;
   tkQWord = TypInfo.tkQWord;
+  tkFloat = TypInfo.tkFloat;
+  tkSString = TypInfo.tkSString;
   tkAString = TypInfo.tkAString;
   tkLString = TypInfo.tkLString;
   tkUString = TypInfo.tkUString;
   tkWString = TypInfo.tkWString;
+  tkVariant = TypInfo.tkVariant;
+  tkMethod = TypInfo.tkMethod;
+  tkPointer = TypInfo.tkPointer;
+  tkDynArray = TypInfo.tkDynArray;
 
 procedure InitializeArray(APtr: Pointer; ATypeInfo: PTypeInfo; ACount: SizeInt); inline;
 procedure FinalizeArray(APtr: Pointer; ATypeInfo: PTypeInfo; ACount: SizeInt); inline;

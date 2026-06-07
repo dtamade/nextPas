@@ -156,6 +156,11 @@ The live contract is exactly:
 - `FinalizeArray`
 - `CopyArray`
 
+`TTypeKind` includes the aliases required by live collections consumers,
+including ordinal, string, float, variant, method, pointer, and dynamic-array
+kind names. This is kind coverage inside the existing `TTypeKind` contract, not
+a broader reflection API.
+
 Anything larger should trigger `Needs Review`.
 
 ## `nextpas.core.system.classes`

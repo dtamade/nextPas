@@ -68,6 +68,8 @@ Current phase note:
   remain deferred.
 - TypInfo minimal unlock was preceded by a dedicated `Needs Review` packet and is limited to
   `PTypeInfo`, `TTypeKind`, `TypeInfo`, `GetTypeKind`, `InitializeArray`, `FinalizeArray`, and `CopyArray`.
+- TypInfo `TTypeKind` aliases cover current collections comparer/equality
+  dispatch needs without expanding into reflection metadata.
 - S4 is not a current phase gate for this lane.
 - no public unit yet should exist for `nextpas.core.system.classes`.
 - If real consumer pressure appears, reopen as `Needs Review` with focused evidence instead of creating

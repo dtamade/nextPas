@@ -75,6 +75,8 @@ S4 boundary note:
   `EConvertError`, and `EAssertionFailed`
 - `system.typinfo` is live only for `PTypeInfo`, `TTypeKind`, `TypeInfo`,
   `GetTypeKind`, `InitializeArray`, `FinalizeArray`, and `CopyArray`
+- `TTypeKind` aliases cover live collections kind consumers, but do not expose
+  property metadata or reflection layout
 - deferred means “documented and guarded by source-contract”, not “silently available”
 - any broader compatibility facade must arrive with real consumer pressure and focused API tests
 

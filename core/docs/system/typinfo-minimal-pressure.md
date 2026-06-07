@@ -128,8 +128,11 @@ or binary layout should be exposed.
 
 `GetTypeKind(K)` users branch on values such as `tkInteger`, `tkAString`,
 `tkLString`, `tkUString`, `tkWString`, `tkEnumeration`, `tkInt64`, and
-`tkQWord`. If nextPas changes these names or grouping semantics, collection
-hashing and ordering behavior can change without visible type errors.
+`tkQWord`. `core/src/nextpas.core.collections.base.pas` also consumes
+`tkFloat`, `tkSString`, `tkVariant`, `tkMethod`, `tkPointer`, and `tkDynArray`
+for comparer/equality dispatch. If nextPas changes these names or grouping
+semantics, collection hashing and ordering behavior can change without visible
+type errors.
 
 ### Managed-array lifecycle risk
 
@@ -176,6 +179,8 @@ The first live TypInfo slice includes at least:
 - a collections managed-lifetime gate around
   `nextpas.core.collections.element_manager`;
 - collection specialization coverage for `GetTypeKind`-driven hash/tree paths;
+- TTypeKind collections coverage for comparer/equality dispatch in
+  `core/src/nextpas.core.collections.base.pas`;
 - heaptrc zero-leak evidence for managed string arrays;
 - source-contract proof that no property reflection, Classes surface, or
   broader SysUtils surface leaked into the unit.

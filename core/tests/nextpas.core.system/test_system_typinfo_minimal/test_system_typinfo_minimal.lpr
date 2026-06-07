@@ -3,12 +3,15 @@ program test_system_typinfo_minimal;
 {$I nextpas.core.settings.inc}
 
 uses
+  Variants,
   nextpas.core.testing,
   nextpas.core.system.typinfo;
 
 type
   PAnsiStringSlots = ^TAnsiStringSlots;
   TAnsiStringSlots = array[0..1] of AnsiString;
+  TIntDynArray = array of Integer;
+  TObjectMethod = procedure of object;
 
 var
   T: TTestRunner;
@@ -71,9 +74,26 @@ begin
   end;
 end;
 
+procedure TestCollectionKindAliasesCompileTruth;
+begin
+  Check(GetTypeKind(Double) = nextpas.core.system.typinfo.tkFloat,
+    'GetTypeKind should classify Double as tkFloat');
+  Check(GetTypeKind(ShortString) = nextpas.core.system.typinfo.tkSString,
+    'GetTypeKind should classify ShortString as tkSString');
+  Check(GetTypeKind(Variant) = nextpas.core.system.typinfo.tkVariant,
+    'GetTypeKind should classify Variant as tkVariant');
+  Check(GetTypeKind(TObjectMethod) = nextpas.core.system.typinfo.tkMethod,
+    'GetTypeKind should classify object method pointers as tkMethod');
+  Check(GetTypeKind(Pointer) = nextpas.core.system.typinfo.tkPointer,
+    'GetTypeKind should classify Pointer as tkPointer');
+  Check(GetTypeKind(TIntDynArray) = nextpas.core.system.typinfo.tkDynArray,
+    'GetTypeKind should classify dynamic arrays as tkDynArray');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.system.typinfo');
   T.Run('TypeInfo and GetTypeKind compile-truth', @TestTypeInfoAndGetTypeKindCompileTruth);
   T.Run('managed array lifecycle helpers', @TestManagedArrayLifecycleHelpers);
+  T.Run('collection kind aliases compile-truth', @TestCollectionKindAliasesCompileTruth);
   T.Summary;
 end.
