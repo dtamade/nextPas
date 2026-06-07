@@ -175,6 +175,7 @@ begin
     Exit(False);
   if not platform_windows_utf8_to_wide_checked(AName, LName) then
     Exit(False);
+  SetLastError(ERROR_SUCCESS);
   Result := (GetEnvironmentVariableW(PWideChar(LName), nil, 0) > 0) or
             (GetLastError <> ERROR_ENVVAR_NOT_FOUND);
 end;
