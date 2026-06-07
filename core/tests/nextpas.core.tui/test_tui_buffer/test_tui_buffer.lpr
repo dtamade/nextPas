@@ -167,6 +167,54 @@ begin
   end;
 end;
 
+procedure TestFillRectOverwritesWideGlyphTailWithNarrow;
+var
+  LBuf: TBuffer;
+  LLead, LTail: PCell;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 6, 1));
+  try
+    LBuf.SetString(0, 0, #$E4#$B8#$AD, StyleDefault);
+    LBuf.FillRect(TRect.Make(1, 0, 1, 1), '#', StyleDefault);
+
+    LLead := LBuf.CellAt(0, 0);
+    LTail := LBuf.CellAt(1, 0);
+    CheckEqual(Int64(1), Int64(LLead^.Width), 'fill rect clears stale wide lead');
+    Check(not LLead^.Skip, 'fill rect clears stale lead skip state');
+    CheckEqual(' ', CellGlyphAsString(LLead^), 'fill rect resets stale lead to blank');
+    CheckEqual(Int64(1), Int64(LTail^.Width), 'fill rect tail becomes regular narrow cell');
+    Check(not LTail^.Skip, 'fill rect tail is not a skip sentinel');
+    CheckEqual('#', CellGlyphAsString(LTail^), 'fill rect writes replacement glyph');
+    AssertRows(LBuf, [' #    '], 'fill rect overwrite wide tail with narrow');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestClearRectClearsWideGlyphTailOverlap;
+var
+  LBuf: TBuffer;
+  LLead, LTail: PCell;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 6, 1));
+  try
+    LBuf.SetString(0, 0, #$E4#$B8#$AD, StyleDefault);
+    LBuf.ClearRect(TRect.Make(1, 0, 1, 1));
+
+    LLead := LBuf.CellAt(0, 0);
+    LTail := LBuf.CellAt(1, 0);
+    CheckEqual(Int64(1), Int64(LLead^.Width), 'clear rect clears stale wide lead');
+    Check(not LLead^.Skip, 'clear rect clears stale lead skip state');
+    CheckEqual(' ', CellGlyphAsString(LLead^), 'clear rect resets stale lead to blank');
+    CheckEqual(Int64(1), Int64(LTail^.Width), 'clear rect tail becomes regular blank cell');
+    Check(not LTail^.Skip, 'clear rect tail is not a skip sentinel');
+    CheckEqual(' ', CellGlyphAsString(LTail^), 'clear rect clears tail glyph');
+    AssertRows(LBuf, ['      '], 'clear rect clears wide tail overlap');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 procedure TestDiffSameSize;
 var
   LPrev, LCurr: TBuffer;
@@ -380,6 +428,8 @@ begin
   T.Run('cell at bounds', @TestCellAt);
   T.Run('cjk width', @TestCJKWidth);
   T.Run('fill rect', @TestFillRect);
+  T.Run('fill rect overwrite wide tail with narrow', @TestFillRectOverwritesWideGlyphTailWithNarrow);
+  T.Run('clear rect clears wide tail overlap', @TestClearRectClearsWideGlyphTailOverlap);
   T.Run('diff same size', @TestDiffSameSize);
   T.Run('diff into', @TestDiffInto);
   T.Run('resize', @TestResize);

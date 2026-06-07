@@ -454,6 +454,7 @@ begin
     MarkRowDirty(LY - FArea.Y);
     for LX := LClip.Left to LClip.Right - 1 do
     begin
+      PrepareWriteSpan(LX, LY, 1);
       LCP := @FContent[IndexOfPos(LX, LY)];
       LCP^ := LCell;
     end;
@@ -473,6 +474,7 @@ begin
     MarkRowDirty(LY - FArea.Y);
     for LX := LClip.Left to LClip.Right - 1 do
     begin
+      PrepareWriteSpan(LX, LY, 1);
       LCP := @FContent[IndexOfPos(LX, LY)];
       LCP^ := CELL_EMPTY;
     end;
