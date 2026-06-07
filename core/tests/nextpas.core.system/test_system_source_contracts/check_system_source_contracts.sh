@@ -20,6 +20,17 @@ require_token() {
   rg -F --quiet -- "$token" "$CORE_ROOT/$path" || fail "core/$path missing token: $token"
 }
 
+require_repo_file() {
+  local path="$1"
+  [[ -s "$REPO_ROOT/$path" ]] || fail "required non-empty repo file missing: $path"
+}
+
+require_repo_token() {
+  local path="$1"
+  local token="$2"
+  rg -F --quiet -- "$token" "$REPO_ROOT/$path" || fail "$path missing token: $token"
+}
+
 reject_token() {
   local path="$1"
   local token="$2"
@@ -647,6 +658,21 @@ require_token "docs/system/runtime-contracts.md" "heap-release true"
 require_token "docs/system/runtime-contracts.md" "@np_object_free_release"
 require_token "docs/system/runtime-contracts.md" "backend-private helper"
 require_token "docs/system/runtime-contracts.md" "must not walk object fields"
+for token in \
+  "np.system.halt" \
+  "halt-call-runtime" \
+  "explicit program termination" \
+  'HIR intrinsic `halt`' \
+  "backend-private termination lowering" \
+  "syscall inline assembly"; do
+  require_token "docs/system/runtime-contracts.md" "$token"
+done
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "halt-call-runtime"
+require_repo_token "compiler/ir/np_hir_builder.pas" "Instr.IntrinsicName := 'halt';"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" 'movq $$60, %rax; syscall'
+require_repo_token "compiler/ir/np_hir_types.pas" "hnkHaltCallRuntime"
+require_repo_token "compiler/tests/test_semantic_hir_expr_producer.pas" "TestHaltRuntimeExprProducer"
+require_repo_token "tests/hir/test_hir_node_kind.pas" "halt-call-runtime"
 require_token "docs/system/runtime-contracts.md" "compiler-planned cleanup"
 require_token "docs/system/runtime-contracts.md" "field-agnostic"
 
@@ -673,17 +699,6 @@ for helper in \
   "np.system.runtime_fault"; do
   require_token "docs/system/lifecycle-contracts.md" "$helper"
 done
-
-require_repo_file() {
-  local path="$1"
-  [[ -s "$REPO_ROOT/$path" ]] || fail "required non-empty repo file missing: $path"
-}
-
-require_repo_token() {
-  local path="$1"
-  local token="$2"
-  rg -F --quiet -- "$token" "$REPO_ROOT/$path" || fail "$path missing token: $token"
-}
 
 require_file "src/nextpas.core.system.contracts.pas"
 require_token "src/nextpas.core.system.contracts.pas" "unit nextpas.core.system.contracts;"
@@ -721,7 +736,6 @@ require_repo_reject_token "compiler/ir/np_hir_llvm_emitter.pas" "'np.system.obje
 require_repo_reject_token "compiler/ir/np_hir_llvm_emitter.pas" "'np.system.object_free.destroy'"
 require_repo_reject_token "compiler/ir/np_hir_llvm_emitter.pas" "'np.system.object_free.cleanup'"
 require_repo_reject_token "compiler/ir/np_hir_llvm_emitter.pas" "'np.system.object_free.release'"
-
 [[ ! -e "$CORE_ROOT/src/System.pas" ]] || fail "must not create bare FPC-conflicting System.pas"
 [[ ! -e "$CORE_ROOT/src/system.pas" ]] || fail "must not create bare FPC-conflicting system.pas"
 [[ ! -e "$CORE_ROOT/src/nextpas.core.system.classes.pas" ]] || fail "S4 deferred: no live nextpas.core.system.classes unit expected yet"

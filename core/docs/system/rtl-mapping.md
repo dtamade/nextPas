@@ -18,7 +18,7 @@ ownership status so future slices can expand the module without turning it into 
 | FPC capability | nextPas status | nextPas owner / notes |
 | --- | --- | --- |
 | Program startup and shutdown | `future compiler/runtime only` | `rtl/core/system` contract names `np.system.process_init` and `np.system.process_fini`. |
-| `Halt` / exit code semantics | `future compiler/runtime only` | `np.system.halt`; no public facade until runtime behavior is testable. |
+| `Halt` / exit code semantics | `compiler/HIR contract live; no public facade` | `np.system.halt` maps sema `halt-call-runtime` to HIR intrinsic `halt`; backend termination lowering remains private. |
 | Unit initialization/finalization order | `future compiler/runtime only` | Compiler owns `UnitGraph`; runtime executes `np.system.unit_init` / `np.system.unit_fini`. |
 | Compiler intrinsic names | `future compiler/runtime only` | Intrinsic contract names stay explicit; backend must not invent private helper strings. |
 | Pointer/integer/ABI truth | `system-owned` | Minimal constants can be surfaced from `nextpas.core.base`; host/target ABI remains platform-owned. |
