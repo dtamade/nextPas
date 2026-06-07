@@ -46,6 +46,18 @@ begin
   Check(Pos(AToken, ASource) = 0, AMessage + ': ' + AToken);
 end;
 
+function SourceSlice(const ASource, AStartToken, AEndToken: string): string;
+var
+  LStart, LEnd: SizeInt;
+begin
+  LStart := Pos(AStartToken, ASource);
+  Check(LStart > 0, 'source slice start exists: ' + AStartToken);
+  LEnd := Pos(AEndToken, Copy(ASource, LStart + Length(AStartToken),
+    Length(ASource)));
+  Check(LEnd > 0, 'source slice end exists: ' + AEndToken);
+  Result := Copy(ASource, LStart, Length(AStartToken) + LEnd - 1);
+end;
+
 procedure TestExistsFile;
 var
   H: TPlatformFileHandle;
@@ -212,8 +224,12 @@ end;
 procedure TestFileIoContract;
 var
   LSource: string;
+  LAtomicSource: string;
 begin
   LSource := LoadSourceText('../../../src/nextpas.core.platform.fs.pas');
+  LAtomicSource := SourceSlice(LSource,
+    'function platform_fs_write_atomic',
+    'function platform_fs_mktemp');
   CheckContains(LSource, 'function platform_fs_write_all',
     'platform.fs must centralize full-write retry');
   CheckContains(LSource, 'PLATFORM_FS_SHORT_WRITE_ERROR',
@@ -236,6 +252,12 @@ begin
     'write_atomic must check sync failure');
   CheckContains(LSource, 'LR := platform_file_close(LH)',
     'write_atomic must check close failure');
+  CheckContains(LAtomicSource, 'MAX_ATOMIC_TEMP_ATTEMPTS',
+    'write_atomic must bound temp-name collision retries');
+  CheckContains(LAtomicSource, 'if platform_random_bytes(@LRand[0], 6) <> 0 then',
+    'write_atomic must fail closed when random source fails');
+  CheckContains(LAtomicSource, 'fcmCreateNew',
+    'write_atomic must exclusively create temp files');
   CheckContains(LSource, 'function platform_fs_read_all',
     'platform.fs must centralize full-read retry');
   CheckContains(LSource, 'PLATFORM_FS_SHORT_READ_ERROR',

@@ -258,31 +258,40 @@ function platform_fs_write_atomic(const APath: PAnsiChar;
   AData: Pointer; ALen: PtrUInt): Int32;
 const
   HEX: array[0..15] of AnsiChar = '0123456789abcdef';
+  MAX_ATOMIC_TEMP_ATTEMPTS = 16;
 var
   LTmpPath: array[0..1023] of AnsiChar;
-  LPathLen, I: Int32;
+  LBaseLen, LPathLen, I, LAttempt: Int32;
   LH: TPlatformFileHandle;
   LR: Int32;
   LRand: array[0..5] of Byte;
 begin
   if (APath = nil) or (APath[0] = #0) then
     Exit(-1);
-  LPathLen := 0;
-  while (LPathLen < 1000) and (APath[LPathLen] <> #0) do
+  LBaseLen := 0;
+  while (LBaseLen < 1000) and (APath[LBaseLen] <> #0) do
   begin
-    LTmpPath[LPathLen] := APath[LPathLen];
-    Inc(LPathLen);
+    LTmpPath[LBaseLen] := APath[LBaseLen];
+    Inc(LBaseLen);
   end;
-  LTmpPath[LPathLen] := '.'; Inc(LPathLen);
-  platform_random_bytes(@LRand[0], 6);
-  for I := 0 to 5 do
+  LR := -1;
+  for LAttempt := 0 to MAX_ATOMIC_TEMP_ATTEMPTS - 1 do
   begin
-    LTmpPath[LPathLen] := HEX[LRand[I] shr 4]; Inc(LPathLen);
-    LTmpPath[LPathLen] := HEX[LRand[I] and $0F]; Inc(LPathLen);
-  end;
-  LTmpPath[LPathLen] := #0;
+    LPathLen := LBaseLen;
+    LTmpPath[LPathLen] := '.'; Inc(LPathLen);
+    if platform_random_bytes(@LRand[0], 6) <> 0 then
+      Exit(-1);
+    for I := 0 to 5 do
+    begin
+      LTmpPath[LPathLen] := HEX[LRand[I] shr 4]; Inc(LPathLen);
+      LTmpPath[LPathLen] := HEX[LRand[I] and $0F]; Inc(LPathLen);
+    end;
+    LTmpPath[LPathLen] := #0;
 
-  LR := platform_file_open(@LTmpPath[0], fomWriteOnly, fcmCreateAlways, LH);
+    LR := platform_file_open(@LTmpPath[0], fomWriteOnly, fcmCreateNew, LH);
+    if LR = 0 then
+      Break;
+  end;
   if LR <> 0 then Exit(LR);
 
   if ALen > 0 then
