@@ -824,6 +824,7 @@ end;
 function TSwissTable.GetKeys: TKeyArray;
 var i, j: SizeUInt;
 begin
+  Result := nil;
   SetLength(Result, FCount);
   j := 0;
   if FCapacity > 0 then

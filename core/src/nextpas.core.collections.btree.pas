@@ -1016,6 +1016,7 @@ end;
 function TBTreeMap.GetKeys: TKeyArray;
 var E: TEntry; i: SizeUInt;
 begin
+  Result := nil;
   SetLength(Result, FCount);
   i := 0;
   for E in Self do
@@ -1028,6 +1029,7 @@ end;
 function TBTreeMap.GetValues: TValueArray;
 var E: TEntry; i: SizeUInt;
 begin
+  Result := nil;
   SetLength(Result, FCount);
   i := 0;
   for E in Self do
@@ -1256,6 +1258,7 @@ end;
 function TBTreeSet.ToArray: TItemArray;
 var E: TInner.TEntry; i: SizeUInt;
 begin
+  Result := nil;
   SetLength(Result, FInner.Count);
   i := 0;
   for E in FInner do

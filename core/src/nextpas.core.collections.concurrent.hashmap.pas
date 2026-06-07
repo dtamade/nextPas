@@ -295,6 +295,7 @@ var
   LSeg: TSegmentTable;
 begin
   LTotal := GetCount;
+  Result := nil;
   SetLength(Result, LTotal);
   LIdx := 0;
   for i := 0 to CONCURRENT_SEGMENT_COUNT - 1 do
