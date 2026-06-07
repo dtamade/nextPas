@@ -29,6 +29,9 @@ const
   DEFAULT_ITERATIONS = 5000;
   BENCH_MAX_ITERS_ENV = 'NEXTPAS_BENCH_MAX_ITERS';
   BENCH_FILTER_ENV = 'NEXTPAS_BENCH_FILTER';
+  BENCH_BACKEND_ENV = 'NEXTPAS_BENCH_BACKEND';
+  BENCH_BACKEND_THREADED = 'threaded';
+  BENCH_BACKEND_EPOLL = 'epoll';
   ROUTER_HOST = 'router';
   DIRECT_HOST = 'direct';
 
@@ -45,6 +48,7 @@ var
   GPort: UInt16;
   GIterations: Int64;
   GFilter: string;
+  GBackend: TTcpServerBackend;
 
 procedure WritePlaintextResponse(const AW: IHttpResponseWriter);
 begin
@@ -68,6 +72,37 @@ end;
 function ConfiguredFilter: string;
 begin
   Result := Trim(GetEnvironmentVariable(BENCH_FILTER_ENV));
+end;
+
+procedure RejectInvalidBackend(const AValue: string);
+begin
+  WriteLn(StdErr, 'invalid ', BENCH_BACKEND_ENV, ': ', AValue,
+    '; expected one of: threaded or epoll');
+  Halt(2);
+end;
+
+function ConfiguredBackend: TTcpServerBackend;
+var
+  LValue: string;
+begin
+  LValue := Trim(GetEnvironmentVariable(BENCH_BACKEND_ENV));
+  if (LValue = '') or (LValue = BENCH_BACKEND_THREADED) then
+    Exit(TCP_SERVER_BACKEND_THREADED);
+  if LValue = BENCH_BACKEND_EPOLL then
+    Exit(TCP_SERVER_BACKEND_EPOLL);
+  RejectInvalidBackend(LValue);
+end;
+
+function BackendName: string;
+begin
+  case GBackend of
+    TCP_SERVER_BACKEND_THREADED:
+      Result := BENCH_BACKEND_THREADED;
+    TCP_SERVER_BACKEND_EPOLL:
+      Result := BENCH_BACKEND_EPOLL;
+  else
+    Result := 'unknown';
+  end;
 end;
 
 function ShouldRunScenario(const AWorkload, AName: string): Boolean;
@@ -98,9 +133,12 @@ var
   LHandle: TPlatformThreadHandle;
   LBody1K: string;
   LRouterHandler: IHttpHandler;
+  LServerOptions: THttpServerOptions;
 begin
   SetLength(LBody1K, 1024);
   FillChar(LBody1K[1], 1024, Ord('x'));
+  LServerOptions := THttpServerOptions.Default;
+  LServerOptions.Backend := GBackend;
 
   LRouter := THttpRouter.Create;
   LRouterHandler := LRouter as IHttpHandler;
@@ -175,7 +213,7 @@ begin
         Exit;
       end;
       LRouterHandler.ServeHTTP(AReq, AW);
-    end), THttpServerOptions.Default);
+    end), LServerOptions);
   platform_thread_create(LHandle, @ServerThread, nil);
   while not GServer.IsRunning do
     platform_thread_sleep_ns(1000000);
@@ -299,6 +337,7 @@ begin
     Trunc(LReqPerSec):8, ' req/s');
   WriteLn('operation=http.fullchain.keepalive');
   WriteLn('workload=', AWorkload);
+  WriteLn('backend=', BackendName);
   WriteLn('iterations=', GIterations);
   WriteLn('completed=', Result.Completed);
   WriteLn('elapsed_ns=', Result.ElapsedNs);
@@ -319,11 +358,13 @@ var
 begin
   GIterations := ConfiguredIterations;
   GFilter := ConfiguredFilter;
+  GBackend := ConfiguredBackend;
   LScenariosRun := 0;
 
   WriteLn('=== nextpas.core.http.fullchain benchmark ===');
   WriteLn('operation=http.fullchain.keepalive');
   WriteLn('client_read_mode=buffered');
+  WriteLn('backend=', BackendName);
   WriteLn('bench_max_iters=', GIterations);
   if GFilter <> '' then
     WriteLn('bench_filter=', GFilter);

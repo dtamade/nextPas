@@ -642,12 +642,27 @@ NEXTPAS_BENCH_FILTER=plaintext \
 make -C benchmarks/nextpas.core.http/bench_fullchain clean run
 ```
 
+Run the same nextPas-only full-chain row on a specific backend:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=128 \
+NEXTPAS_BENCH_FILTER=direct_root \
+NEXTPAS_BENCH_BACKEND=threaded \
+make -C benchmarks/nextpas.core.http/bench_fullchain clean run
+
+NEXTPAS_BENCH_MAX_ITERS=128 \
+NEXTPAS_BENCH_FILTER=direct_root \
+NEXTPAS_BENCH_BACKEND=epoll \
+make -C benchmarks/nextpas.core.http/bench_fullchain clean run
+```
+
 This benchmark starts a real `THttpServer`, opens one keep-alive TCP
 connection, sends requests, reads complete responses, and reports stable
 markers:
 
 - `operation=http.fullchain.keepalive`
 - `workload=<direct_root|plaintext|json|echo_1k|sink_16k|param_route>`
+- `backend=<threaded|epoll>`
 - `iterations`
 - `completed`
 - `elapsed_ns`
@@ -665,6 +680,11 @@ of the keep-alive server path:
 The filter is still substring-based, so the direct workload is intentionally
 named `direct_root` rather than `direct_plaintext`; this keeps
 `NEXTPAS_BENCH_FILTER=plaintext` unambiguous.
+
+`NEXTPAS_BENCH_BACKEND` defaults to `threaded`. When set, it must currently be
+`threaded` or `epoll`; invalid values fail fast before the benchmark emits a
+benchmark row. This is a nextPas-only runtime characterization seam, not a
+cross-language comparison flag.
 
 Local focused row from 2026-06-05:
 
@@ -687,6 +707,18 @@ Treat these as single-run harness proof, not stable ranking evidence. The
 durable conclusion is that `bench_fullchain` can now isolate a no-router
 direct-handler path from the router path without reintroducing filter
 ambiguity.
+
+Fresh local backend smoke rows from 2026-06-07 for `direct_root`:
+
+| backend | workload | iterations | completed | elapsed_ns | ns/op | req/s |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| threaded | direct_root | 128 | 128 | 4103527 | 32058.8 | 31193 |
+| epoll | direct_root | 128 | 128 | 11884206 | 92845.4 | 10771 |
+
+Treat these as local backend smoke, not a stable threaded-vs-epoll ranking.
+The durable conclusion is that `bench_fullchain` now records backend selection
+explicitly and can characterize single-connection direct-handler runtime cost
+on either backend without patching the server comparison runner.
 
 ## Optimization Evidence: Full-Chain Benchmark Buffered Client Read
 

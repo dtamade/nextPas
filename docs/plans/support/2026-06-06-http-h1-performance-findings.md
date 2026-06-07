@@ -5098,3 +5098,29 @@
   - backend seam 现在已经进入 benchmark artifact truth；
   - 下一轮若继续追 runtime/socket overhead，可以在 nextPas-only bench 上直接
     对 threaded/epoll 做更窄、更受控的重复测量，而不是先改比较 runner。
+
+## 2026-06-07 bench_fullchain backend marker and epoll smoke findings
+
+- `bench_server --backend` 解决的是多线程吞吐维度，但 `bench_fullchain` 之前仍把
+  backend 选择隐藏在默认 threaded 背景里。这样保存下来的 single-connection
+  `direct_root/plaintext` row 仍无法直接说明自己跑的是哪条 runtime path。
+- 这轮继续沿同一 benchmark-truth 方向走，但不去改 cross-language runner：
+  - 只给 nextPas-only `bench_fullchain` 补 `NEXTPAS_BENCH_BACKEND`
+  - 只让 full-chain header / row 公开 `backend=<...>` truth
+  - 只让 invalid backend fail-fast
+- 这样做的价值在于：
+  - `direct_root` 本来就是当前最窄的 “single-connection runtime/socket +
+    fixed handler response” row；
+  - 有了 backend seam，它终于可以在 threaded / epoll 之间做受控切换；
+  - 而 Go/Rust comparison runner 仍保持原来的 apples-to-apples 边界。
+- focused gate 现在锁住三件事：
+  - 默认 full-chain row 带 `backend=threaded`
+  - invalid `NEXTPAS_BENCH_BACKEND` 不会再产出伪成功 benchmark row
+  - Linux `epoll + direct_root` smoke 确实能跑并带 `backend=epoll`
+- 本地方向性 smoke：
+  - `threaded direct_root 128` 约 `32058.8 ns/op`
+  - `epoll direct_root 128` 约 `92845.4 ns/op`
+- 这组数字仍不是 threaded-vs-epoll 的稳定排名；它只是把 single-connection
+  runtime characterization 从“默认 threaded 的隐含状态”推进到了“backend truth
+  明示且可切换”的状态。下一轮如果继续追 runtime/socket overhead，就可以把
+  `bench_server` 与 `bench_fullchain direct_root` 两条 backend-aware row 结合起来看。

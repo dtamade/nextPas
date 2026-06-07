@@ -11608,3 +11608,55 @@ Hello from nextPas!
   - nextPas-only server benchmark rows now make backend selection explicit
   - the benchmark harness can now characterize threaded vs epoll runtime
     behavior without muddying the existing cross-language comparison runner
+
+## Session: 2026-06-07 bench_fullchain backend marker and epoll smoke slice
+
+- **Status:** completed.
+- Objective:
+  - expose backend selection explicitly on nextPas `bench_fullchain` rows
+  - allow single-connection direct-root threaded vs epoll runtime
+    characterization
+  - keep invalid backend input from silently falling back to the default
+    full-chain server
+- Scope and safety:
+  - touched only `bench_fullchain`, the benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 parser/runtime implementation, lower
+    layers, comparator binaries, or server-comparison runner behavior
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `62 total, 58 passed, 4 failed`
+    - representative failures:
+      - `bench_fullchain plaintext smoke` missing `backend=threaded`
+      - `bench_fullchain rejects invalid backend` still emitted a successful
+        benchmark row
+      - `bench_fullchain epoll direct plaintext smoke` missing `backend=epoll`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_fullchain` now accepts `NEXTPAS_BENCH_BACKEND=threaded|epoll`
+  - full-chain rows and benchmark header now emit `backend=<threaded|epoll>`
+  - the benchmark now threads the parsed backend into
+    `THttpServerOptions.Backend`
+  - `test_http_benchmarks` now locks:
+    - default full-chain rows expose `backend=threaded`
+    - invalid backend input fails fast with `invalid NEXTPAS_BENCH_BACKEND`
+    - Linux epoll direct-root smoke emits `backend=epoll`
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `62 total, 62 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `env NEXTPAS_BENCH_MAX_ITERS=128 NEXTPAS_BENCH_FILTER=direct_root NEXTPAS_BENCH_BACKEND=threaded ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `backend=threaded`
+    - `completed=128`
+    - `ns/op=32058.8`
+    - `req/s=31193`
+  - `env NEXTPAS_BENCH_MAX_ITERS=128 NEXTPAS_BENCH_FILTER=direct_root NEXTPAS_BENCH_BACKEND=epoll ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `backend=epoll`
+    - `completed=128`
+    - `ns/op=92845.4`
+    - `req/s=10771`
+- Outcome:
+  - nextPas-only full-chain rows now make backend selection explicit
+  - the harness can now characterize single-connection direct-handler runtime
+    behavior on threaded vs epoll without changing the cross-language runner

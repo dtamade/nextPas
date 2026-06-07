@@ -40,6 +40,7 @@ const
   LlhttpRootEnvName = 'NEXTPAS_LLHTTP_ROOT';
   BenchMaxItersEnvName = 'NEXTPAS_BENCH_MAX_ITERS';
   BenchFilterEnvName = 'NEXTPAS_BENCH_FILTER';
+  BenchBackendEnvName = 'NEXTPAS_BENCH_BACKEND';
   BenchMaxItersSmokeValue = '2000';
   FullchainSmokeIterations = '128';
 
@@ -426,6 +427,27 @@ begin
     ALabel + ' should not emit a benchmark row');
 end;
 
+procedure CheckInvalidFullchainBackendRejected(const AExecutable: string;
+  const AWorkingDir, ALabel: string);
+var
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  RunProcessAndCaptureWithEnv(AExecutable, [], AWorkingDir,
+    [BenchMaxItersEnvName + '=' + FullchainSmokeIterations,
+     BenchFilterEnvName + '=plaintext',
+     BenchBackendEnvName + '=reactor'],
+    LExitCode, LOutput);
+  Check(LExitCode <> 0, ALabel + ' should reject invalid backend: ' +
+    LOutput);
+  CheckContains(LOutput, 'invalid ' + BenchBackendEnvName,
+    ALabel + ' invalid backend diagnostic');
+  CheckContains(LOutput, 'threaded',
+    ALabel + ' valid backend list diagnostic');
+  CheckNotContains(LOutput, 'operation=http.fullchain.keepalive',
+    ALabel + ' should not emit a benchmark row');
+end;
+
 procedure CheckRequestedAndEffectiveThreads(const AOutput,
   ARequestedThreads, AEffectiveThreads, ALabel: string);
 begin
@@ -575,12 +597,14 @@ begin
 end;
 
 procedure CheckFullchainBenchmarkOutput(const AOutput, AWorkload,
-  AFilter: string);
+  AFilter: string; const ABackend: string = 'threaded');
 begin
   CheckContains(AOutput, 'operation=http.fullchain.keepalive',
     'fullchain operation marker');
   CheckContains(AOutput, 'client_read_mode=buffered',
     'fullchain client read mode marker');
+  CheckContains(AOutput, 'backend=' + ABackend,
+    'fullchain backend marker');
   CheckContains(AOutput, 'workload=' + AWorkload,
     'fullchain workload marker');
   CheckContains(AOutput, 'iterations=' + FullchainSmokeIterations,
@@ -1511,6 +1535,63 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_fullchain direct plaintext smoke exit code: ' + LOutput);
   CheckFullchainBenchmarkOutput(LOutput, 'direct_root', 'direct_root');
+end;
+
+procedure TestBenchFullchainRejectsInvalidBackend;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchFullchainRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain invalid backend build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchFullchainBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_fullchain invalid backend binary exists');
+
+  CheckInvalidFullchainBackendRejected(LBinaryPath, LBenchDir,
+    'bench_fullchain');
+end;
+
+procedure TestBenchFullchainEpollDirectPlaintextSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  {$IFNDEF LINUX}
+  Exit;
+  {$ENDIF}
+
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchFullchainRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain epoll build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchFullchainBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_fullchain epoll binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + FullchainSmokeIterations,
+     BenchFilterEnvName + '=direct_root',
+     BenchBackendEnvName + '=epoll'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain epoll smoke exit code: ' + LOutput);
+  CheckFullchainBenchmarkOutput(LOutput, 'direct_root', 'direct_root',
+    'epoll');
 end;
 
 procedure TestBenchFullchainRejectsNoMatchFilter;
@@ -2815,6 +2896,10 @@ begin
     @TestBenchFullchainPlaintextSmoke);
   T.Run('bench_fullchain direct plaintext smoke',
     @TestBenchFullchainDirectPlaintextSmoke);
+  T.Run('bench_fullchain rejects invalid backend',
+    @TestBenchFullchainRejectsInvalidBackend);
+  T.Run('bench_fullchain epoll direct plaintext smoke',
+    @TestBenchFullchainEpollDirectPlaintextSmoke);
   T.Run('bench_fullchain rejects no-match filter',
     @TestBenchFullchainRejectsNoMatchFilter);
   T.Run('HTTP top-level Pascal benchmark projects have Makefiles',
