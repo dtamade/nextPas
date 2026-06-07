@@ -339,6 +339,12 @@ var
   LFetchMax64Section: string;
   LFetchMin64Section: string;
   LFetchNand64Section: string;
+  LDefaultFetchMax32Section: string;
+  LDefaultFetchMin32Section: string;
+  LDefaultFetchNand32Section: string;
+  LDefaultFetchMax64Section: string;
+  LDefaultFetchMin64Section: string;
+  LDefaultFetchNand64Section: string;
 begin
   LAtomicSource := ReadUtf8TextFile(AtomicSourcePath);
   LAtomicCoreSource := ReadUtf8TextFile(AtomicCoreSourcePath);
@@ -563,6 +569,24 @@ begin
   LFetchNand64Section := ExtractImplementationSection(LAtomicSource,
     'function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;',
     'function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64): Int64;');
+  LDefaultFetchMax32Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_max(var aObj: Int32; aArg: Int32): Int32;',
+    '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}');
+  LDefaultFetchMin32Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_min(var aObj: Int32; aArg: Int32): Int32;',
+    '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}');
+  LDefaultFetchNand32Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_nand(var aObj: Int32; aArg: Int32): Int32;',
+    '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}');
+  LDefaultFetchMax64Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_max_64(var aObj: Int64; aArg: Int64): Int64;',
+    'function atomic_fetch_min(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32;');
+  LDefaultFetchMin64Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_min_64(var aObj: Int64; aArg: Int64): Int64;',
+    'function atomic_fetch_nand(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32;');
+  LDefaultFetchNand64Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64): Int64;',
+    'function atomic_flag_test_and_set(var aFlag: atomic_flag_t): Boolean;');
 
   Check(Pos('mo_relaxed: 无效，会触发运行时错误', LAtomicSource) = 0,
     'atomic_thread_fence docs must not claim mo_relaxed raises runtime error');
@@ -700,6 +724,9 @@ begin
   CheckContains(LAtomicDocsReadme,
     'Invalid explicit orders raise `EArgumentError`: load rejects `mo_release`/`mo_acq_rel`, store rejects `mo_consume`/`mo_acquire`/`mo_acq_rel`, and dual-order CAS rejects release/acq_rel failure orders or failure orders stronger than success.',
     'atomic README must document invalid explicit memory-order contract');
+  CheckContains(LAtomicDocsReadme,
+    '`atomic_fetch_max/min/nand` return the previous value, publish `max(old, arg)` / `min(old, arg)` / `not (old and arg)`, and their no-argument overloads default to `mo_seq_cst`.',
+    'atomic README must document fetch_max/min/nand contract');
   CheckContains(LAtomicDocsReadme,
     'Tagged pointer explicit load/store/CAS APIs follow the same invalid-order contract and raise `EArgumentError` when callers pass illegal explicit orders.',
     'atomic README must document tagged pointer invalid explicit-order contract');
@@ -1208,6 +1235,24 @@ begin
     '    ;' + LineEnding +
     '  end;',
     'atomic_fetch_nand_64 non-x86 read-order case must have explicit else');
+  CheckContains(LDefaultFetchMax32Section,
+    'Result := atomic_fetch_max(aObj, aArg, mo_seq_cst);',
+    'default atomic_fetch_max must use seq_cst');
+  CheckContains(LDefaultFetchMin32Section,
+    'Result := atomic_fetch_min(aObj, aArg, mo_seq_cst);',
+    'default atomic_fetch_min must use seq_cst');
+  CheckContains(LDefaultFetchNand32Section,
+    'Result := atomic_fetch_nand(aObj, aArg, mo_seq_cst);',
+    'default atomic_fetch_nand must use seq_cst');
+  CheckContains(LDefaultFetchMax64Section,
+    'Result := atomic_fetch_max_64(aObj, aArg, mo_seq_cst);',
+    'default atomic_fetch_max_64 must use seq_cst');
+  CheckContains(LDefaultFetchMin64Section,
+    'Result := atomic_fetch_min_64(aObj, aArg, mo_seq_cst);',
+    'default atomic_fetch_min_64 must use seq_cst');
+  CheckContains(LDefaultFetchNand64Section,
+    'Result := atomic_fetch_nand_64(aObj, aArg, mo_seq_cst);',
+    'default atomic_fetch_nand_64 must use seq_cst');
 end;
 
 procedure TestConcurrentFetchAdd;
@@ -1360,6 +1405,74 @@ begin
   LTypedFlag := TAtomicFlag.Create(True);
   Check(LTypedFlag.test(mo_relaxed),
     'TAtomicFlag.Create(True) should create a set flag');
+end;
+
+procedure TestAtomicFetchMaxMinNandContract;
+var
+  LVal32: Int32;
+  LOld32: Int32;
+  LVal64: Int64;
+  LOld64: Int64;
+begin
+  LVal32 := 10;
+  LOld32 := atomic_fetch_max(LVal32, 7);
+  CheckEqual(Int64(10), Int64(LOld32),
+    'atomic_fetch_max must return the previous 32-bit value');
+  CheckEqual(Int64(10), Int64(LVal32),
+    'atomic_fetch_max must keep the larger 32-bit value');
+  LOld32 := atomic_fetch_max(LVal32, 12);
+  CheckEqual(Int64(10), Int64(LOld32),
+    'atomic_fetch_max must still report the previous 32-bit value when it raises the target');
+  CheckEqual(Int64(12), Int64(LVal32),
+    'atomic_fetch_max must publish max(old, arg) for 32-bit values');
+
+  LOld32 := atomic_fetch_min(LVal32, 15);
+  CheckEqual(Int64(12), Int64(LOld32),
+    'atomic_fetch_min must return the previous 32-bit value');
+  CheckEqual(Int64(12), Int64(LVal32),
+    'atomic_fetch_min must keep the smaller 32-bit value');
+  LOld32 := atomic_fetch_min(LVal32, 9);
+  CheckEqual(Int64(12), Int64(LOld32),
+    'atomic_fetch_min must still report the previous 32-bit value when it lowers the target');
+  CheckEqual(Int64(9), Int64(LVal32),
+    'atomic_fetch_min must publish min(old, arg) for 32-bit values');
+
+  LVal32 := $0F0F;
+  LOld32 := atomic_fetch_nand(LVal32, $00FF);
+  CheckEqual(Int64($0F0F), Int64(LOld32),
+    'atomic_fetch_nand must return the previous 32-bit value');
+  CheckEqual(Int64(not ($0F0F and $00FF)), Int64(LVal32),
+    'atomic_fetch_nand must publish not(old and arg) for 32-bit values');
+
+  LVal64 := Int64(High(Int32)) + 10;
+  LOld64 := atomic_fetch_max_64(LVal64, Int64(High(Int32)) + 5);
+  CheckEqual(Int64(High(Int32)) + 10, LOld64,
+    'atomic_fetch_max_64 must return the previous 64-bit value');
+  CheckEqual(Int64(High(Int32)) + 10, LVal64,
+    'atomic_fetch_max_64 must keep the larger 64-bit value');
+  LOld64 := atomic_fetch_max_64(LVal64, Int64(High(Int32)) + 20);
+  CheckEqual(Int64(High(Int32)) + 10, LOld64,
+    'atomic_fetch_max_64 must report the previous 64-bit value when it raises the target');
+  CheckEqual(Int64(High(Int32)) + 20, LVal64,
+    'atomic_fetch_max_64 must publish max(old, arg) for 64-bit values');
+
+  LOld64 := atomic_fetch_min_64(LVal64, Int64(High(Int32)) + 25);
+  CheckEqual(Int64(High(Int32)) + 20, LOld64,
+    'atomic_fetch_min_64 must return the previous 64-bit value');
+  CheckEqual(Int64(High(Int32)) + 20, LVal64,
+    'atomic_fetch_min_64 must keep the smaller 64-bit value');
+  LOld64 := atomic_fetch_min_64(LVal64, Int64(High(Int32)) + 3);
+  CheckEqual(Int64(High(Int32)) + 20, LOld64,
+    'atomic_fetch_min_64 must report the previous 64-bit value when it lowers the target');
+  CheckEqual(Int64(High(Int32)) + 3, LVal64,
+    'atomic_fetch_min_64 must publish min(old, arg) for 64-bit values');
+
+  LVal64 := Int64($0F0F0F0F0F0F0F0F);
+  LOld64 := atomic_fetch_nand_64(LVal64, Int64($00FF00FF00FF00FF));
+  CheckEqual(Int64($0F0F0F0F0F0F0F0F), LOld64,
+    'atomic_fetch_nand_64 must return the previous 64-bit value');
+  CheckEqual(Int64(not (Int64($0F0F0F0F0F0F0F0F) and Int64($00FF00FF00FF00FF))), LVal64,
+    'atomic_fetch_nand_64 must publish not(old and arg) for 64-bit values');
 end;
 
 procedure TestAtomicInvalidMemoryOrderContract;
@@ -1877,6 +1990,7 @@ begin
   T.Run('fafafa-style atomic API', @TestFafafaStyleAtomicApi);
   T.Run('typed atomic record API', @TestAtomicRecordTypes);
   T.Run('atomic flag API', @TestAtomicFlagApi);
+  T.Run('fetch max/min/nand contract', @TestAtomicFetchMaxMinNandContract);
   T.Run('invalid memory-order contract', @TestAtomicInvalidMemoryOrderContract);
   T.Run('compat PascalCase facade', @TestAtomicCompatFacade);
   T.Run('tagged pointer atomic API', @TestAtomicTaggedPointer);
