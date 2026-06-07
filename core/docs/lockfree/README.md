@@ -159,6 +159,8 @@ git status --short --branch
 ```
 
 `test_lockfree` 包含 API 行为、close/timeout、managed type guard 和 source-contract 覆盖。
+`test_lockfree` also covers local Linux x86_64 SPSC timeout wake runtime checks for both
+producer-published data (`DequeueTimeout`) and consumer-released space (`EnqueueTimeout`).
 `test-debug` 用 `-dDEBUG` 编译 focused gate，用来执行 `TMpscQueue<T>.Destroy` 的
 close-before-destroy assert，防止测试代码绕过 MPSC producer-stop / drain 纪律。
 `test_lockfree_stress` 覆盖本地 Linux x86_64 上的多线程压力场景。没有目标机 runtime gate 时，只能声称

@@ -362,6 +362,9 @@ var
   GSpscPublishWakeConsumerStarted: Int32;
   GSpscPublishWakeConsumerResult: Int32;
   GSpscPublishWakeConsumerValue: Integer;
+  GSpscSpaceWakeProducerStarted: Int32;
+  GSpscSpaceWakeProducerObservedFull: Int32;
+  GSpscSpaceWakeProducerResult: Int32;
 
 function SpscPublishWakeConsumer(AArg: Pointer): Pointer; cdecl;
 var
@@ -376,6 +379,22 @@ begin
   end
   else
     AtomicStore32(GSpscPublishWakeConsumerResult, 0, moRelease);
+end;
+
+function SpscSpaceWakeProducer(AArg: Pointer): Pointer; cdecl;
+begin
+  Result := nil;
+  AtomicStore32(GSpscSpaceWakeProducerStarted, 1, moRelease);
+  if GSpscPublishWakeQ.TryEnqueue(99) then
+  begin
+    AtomicStore32(GSpscSpaceWakeProducerResult, 2, moRelease);
+    Exit;
+  end;
+  AtomicStore32(GSpscSpaceWakeProducerObservedFull, 1, moRelease);
+  if GSpscPublishWakeQ.EnqueueTimeout(42, QueuePublishWakeTimeoutNs) then
+    AtomicStore32(GSpscSpaceWakeProducerResult, 1, moRelease)
+  else
+    AtomicStore32(GSpscSpaceWakeProducerResult, 0, moRelease);
 end;
 
 procedure TestSpscDequeueTimeoutWakesOnPublish;
@@ -426,6 +445,72 @@ begin
   finally
     if LThreadCreated and (not LJoined) then
       platform_thread_join(LConsumer, LRetVal);
+    GSpscPublishWakeQ := nil;
+    LQ.Free;
+  end;
+end;
+
+procedure TestSpscEnqueueTimeoutWakesOnSpace;
+var
+  LQ: TIntSpsc;
+  LProducer: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LElapsedMs: QWord;
+  LSpin: Integer;
+  LV: Integer;
+  LThreadCreated: Boolean;
+  LJoined: Boolean;
+begin
+  LQ := TIntSpsc.Create(1);
+  LThreadCreated := False;
+  LJoined := False;
+  try
+    Check(LQ.TryEnqueue(1), 'SPSC queue must be full before space-wake producer starts');
+    GSpscPublishWakeQ := LQ;
+    AtomicStore32(GSpscSpaceWakeProducerStarted, 0, moRelease);
+    AtomicStore32(GSpscSpaceWakeProducerObservedFull, 0, moRelease);
+    AtomicStore32(GSpscSpaceWakeProducerResult, -1, moRelease);
+    CheckEqual(Int64(0), Int64(platform_thread_create(LProducer, @SpscSpaceWakeProducer, nil)),
+      'SPSC space wake producer thread must start');
+    LThreadCreated := True;
+
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GSpscSpaceWakeProducerStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GSpscSpaceWakeProducerStarted, moAcquire)),
+      'SPSC EnqueueTimeout producer thread must start before space release');
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GSpscSpaceWakeProducerObservedFull, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GSpscSpaceWakeProducerObservedFull, moAcquire)),
+      'SPSC EnqueueTimeout producer must observe the full queue before space release');
+    platform_thread_sleep_ns(QueuePublishWakeDelayNs);
+    CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscSpaceWakeProducerResult, moAcquire)),
+      'SPSC EnqueueTimeout producer should still be pending before space release');
+
+    LElapsedMs := GetTickCount64;
+    Check(LQ.TryDequeue(LV), 'SPSC consumer must release queue space');
+    CheckEqual(Int64(1), Int64(LV));
+    platform_thread_join(LProducer, LRetVal);
+    LJoined := True;
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GSpscSpaceWakeProducerResult, moAcquire)),
+      'SPSC EnqueueTimeout must publish after space release');
+    Check(LElapsedMs < QueuePublishWakeBudgetMs,
+      'SPSC EnqueueTimeout producer must wake on space release before the full timeout');
+    Check(LQ.TryDequeue(LV), 'SPSC space-woken producer item must be drainable');
+    CheckEqual(Int64(42), Int64(LV));
+    Check(not LQ.TryDequeue(LV), 'SPSC queue must be empty after draining the space-woken item');
+  finally
+    if LThreadCreated and (not LJoined) then
+      platform_thread_join(LProducer, LRetVal);
     GSpscPublishWakeQ := nil;
     LQ.Free;
   end;
@@ -1667,6 +1752,8 @@ var
   LMpscDestroyDrainTestSection: string;
   LMpscMultiProducerTestSection: string;
   LMpscTimeoutTestSection: string;
+  LSpscPublishWakeTestSection: string;
+  LSpscSpaceWakeTestSection: string;
 begin
   Check(FileExists(LockFreeDocsReadmePath),
     'lockfree README must exist as the module documentation entrypoint');
@@ -1709,6 +1796,14 @@ begin
     'procedure TestSpscCloseWakeTimeouts;',
     'procedure TestSpscApproxCount;',
     'SPSC close wake test source section');
+  LSpscPublishWakeTestSection := ExtractSection(LTestSource,
+    'procedure TestSpscDequeueTimeoutWakesOnPublish;',
+    'procedure TestSpscEnqueueTimeoutWakesOnSpace;',
+    'SPSC publish wake test source section');
+  LSpscSpaceWakeTestSection := ExtractSection(LTestSource,
+    'procedure TestSpscEnqueueTimeoutWakesOnSpace;',
+    '{ MPMC tests }',
+    'SPSC space wake test source section');
   LMpmcCloseTestSection := ExtractSection(LTestSource,
     'procedure TestMpmcClose;',
     'procedure TestMpmcCloseWakeWaits;',
@@ -2003,6 +2098,27 @@ begin
     'SPSC queue must notify data waiters after publish');
   CheckContains(LSpscSource, 'LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters)',
     'SPSC queue must notify space waiters after consume');
+  CheckContains(LSpscPublishWakeTestSection,
+    'SPSC DequeueTimeout consumer should still be pending before publish',
+    'SPSC publish wake runtime test must prove the consumer is pending before publish');
+  CheckContains(LSpscPublishWakeTestSection,
+    'SPSC DequeueTimeout consumer must wake on data publish before the full timeout',
+    'SPSC publish wake runtime test must bound data-wake latency');
+  CheckContains(LSpscSpaceWakeTestSection,
+    'SPSC EnqueueTimeout producer must observe the full queue before space release',
+    'SPSC space wake runtime test must prove the producer observed the full queue before release');
+  CheckContains(LSpscSpaceWakeTestSection,
+    'SPSC EnqueueTimeout producer should still be pending before space release',
+    'SPSC space wake runtime test must prove the producer is pending before space release');
+  CheckContains(LSpscSpaceWakeTestSection,
+    'SPSC consumer must release queue space',
+    'SPSC space wake runtime test must release space through TryDequeue');
+  CheckContains(LSpscSpaceWakeTestSection,
+    'SPSC EnqueueTimeout producer must wake on space release before the full timeout',
+    'SPSC space wake runtime test must bound space-wake latency');
+  CheckContains(LSpscSpaceWakeTestSection,
+    'SPSC space-woken producer item must be drainable',
+    'SPSC space wake runtime test must prove the woken producer published an item');
   CheckContains(LSpscCloseTestSection, 'TryEnqueue after close rejected',
     'SPSC close behavior test must cover TryEnqueue rejection');
   CheckContains(LSpscCloseTestSection, 'EnqueueWait after close rejected',
@@ -2483,6 +2599,7 @@ begin
   T.Run('SPSC blocking', @TestSpscBlocking);
   T.Run('SPSC timeout', @TestSpscTimeout);
   T.Run('SPSC timeout wakes on publish', @TestSpscDequeueTimeoutWakesOnPublish);
+  T.Run('SPSC timeout wakes on space', @TestSpscEnqueueTimeoutWakesOnSpace);
   T.Run('MPMC basic', @TestMpmcBasic);
   T.Run('MPMC close', @TestMpmcClose);
   T.Run('MPMC close wake waits', @TestMpmcCloseWakeWaits);
