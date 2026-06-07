@@ -372,6 +372,16 @@ begin
   CheckEqual('.txt', FsPathExt('/home/user/file.txt'), 'ext');
 end;
 
+procedure TestPathExtLongResult;
+var
+  LExt: string;
+  LPath: string;
+begin
+  LExt := '.' + StringOfChar('x', 2048);
+  LPath := 'file' + LExt;
+  CheckEqual(LExt, FsPathExt(LPath), 'long extension preserves content');
+end;
+
 procedure TestPathChangeExtDotfiles;
 begin
   CheckEqual('.gitignore.bak', FsPathChangeExt('.gitignore', '.bak'),
@@ -626,6 +636,7 @@ begin
     T.Run('PathDir', @TestPathDir);
     T.Run('PathBase', @TestPathBase);
     T.Run('PathExt', @TestPathExt);
+    T.Run('PathExt long result', @TestPathExtLongResult);
     T.Run('PathChangeExt dotfiles', @TestPathChangeExtDotfiles);
     T.Run('PathWithoutExt dotfiles', @TestPathWithoutExtDotfiles);
     T.Run('PathIsAbs', @TestPathIsAbs);

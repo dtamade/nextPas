@@ -101,11 +101,19 @@ function FsPathExt(const APath: string): string;
 var
   LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
   LNeed: Int32;
+  LHeap: array of AnsiChar;
 begin
   LNeed := platform_path_extension(PAnsiChar(APath), @LStack[0], PATH_BUF_SIZE);
   if LNeed <= 0 then
     Exit('');
-  SetString(Result, PAnsiChar(@LStack[0]), LNeed);
+  if LNeed < PATH_BUF_SIZE then
+  begin
+    SetString(Result, PAnsiChar(@LStack[0]), LNeed);
+    Exit;
+  end;
+  SetLength(LHeap, LNeed + 1);
+  platform_path_extension(PAnsiChar(APath), @LHeap[0], Length(LHeap));
+  SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
 end;
 
 function FsPathClean(const APath: string): string;
