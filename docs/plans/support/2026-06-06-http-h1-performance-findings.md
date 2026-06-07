@@ -5291,3 +5291,21 @@
 - 这轮没有改 benchmark runtime，也没有新增 benchmark 输出字段；价值在于：
   request-heavy llhttp row 不再只是文档里的手工 smoke，而是进入了可回归的
   focused benchmark truth。
+
+## 2026-06-07 full-chain epoll-echo focused smoke findings
+
+- 到上一轮为止，`bench_fullchain` 的 epoll focused proof 仍只有
+  `epoll + direct_root`。
+- 这意味着 epoll backend 在 focused gate 里只被证明过 fast-path/no-body row，
+  body-bearing llhttp path 还停留在手工 smoke，而不是持续回归证据。
+- 本轮继续按最小矩阵补洞，不扩到 request-heavy epoll row，也不改 runtime：
+  - 只把 `epoll + echo_1k` 提升进 focused gate
+  - 锁住 `backend=epoll`
+  - 同时锁住 `request_body_bytes=1024`、
+    `response_body_bytes=1024`、`nextpas_h1_path=llhttp`
+- 本地手工 smoke 也说明这条 row 真实存在：
+  - `epoll echo_1k 64` 约 `107034.3 ns/op`
+  - `req/s` 约 `9343`
+- 这轮的价值仍是 benchmark truth：
+  epoll 后端现在不再只靠 `direct_root` fast-path row 代表自己，focused gate 已经
+  覆盖到至少一条 body-bearing llhttp full-chain row。

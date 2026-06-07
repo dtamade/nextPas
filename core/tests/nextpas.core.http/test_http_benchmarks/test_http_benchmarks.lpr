@@ -1699,6 +1699,40 @@ begin
     'epoll');
 end;
 
+procedure TestBenchFullchainEpollEcho1KSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  {$IFNDEF LINUX}
+  Exit;
+  {$ENDIF}
+
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchFullchainRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain epoll echo 1k build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchFullchainBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_fullchain epoll echo 1k binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + FullchainSmokeIterations,
+     BenchFilterEnvName + '=echo_1k',
+     BenchBackendEnvName + '=epoll'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain epoll echo 1k smoke exit code: ' + LOutput);
+  CheckFullchainBenchmarkOutput(LOutput, 'echo_1k', 'echo_1k', '1024', '1024',
+    'epoll', 'llhttp');
+end;
+
 procedure TestBenchFullchainRejectsNoMatchFilter;
 var
   LRootDir: string;
@@ -3157,6 +3191,8 @@ begin
     @TestBenchFullchainRejectsInvalidBackend);
   T.Run('bench_fullchain epoll direct plaintext smoke',
     @TestBenchFullchainEpollDirectPlaintextSmoke);
+  T.Run('bench_fullchain epoll echo 1k smoke',
+    @TestBenchFullchainEpollEcho1KSmoke);
   T.Run('bench_fullchain rejects no-match filter',
     @TestBenchFullchainRejectsNoMatchFilter);
   T.Run('HTTP top-level Pascal benchmark projects have Makefiles',

@@ -797,6 +797,8 @@ rows instead of leaving either dimension implicit in workload names.
 The focused benchmark gate now locks both body-bearing llhttp shapes:
 `echo_1k` for symmetric request/response bodies, and `sink_16k` for the
 request-heavy / empty-response path.
+The same gate now also locks `epoll + echo_1k`, so epoll backend evidence no
+longer depends only on the earlier `direct_root` fast-path row.
 
 ## Optimization Evidence: Full-Chain Benchmark Buffered Client Read
 

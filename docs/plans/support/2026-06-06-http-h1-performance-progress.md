@@ -12006,3 +12006,48 @@ Hello from nextPas!
     benchmark contract instead of living only in docs/manual smoke evidence
   - this is coverage tightening only; it does not claim a new optimization,
     new row schema, or a backend ranking
+
+## Session: 2026-06-07 full-chain epoll-echo focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote one body-bearing llhttp row onto the epoll backend focused matrix
+  - stop relying on `epoll + direct_root` as the only durable full-chain epoll
+    proof
+  - keep the slice limited to benchmark-truth coverage, not runtime behavior
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch `bench_fullchain` runtime behavior, public HTTP API,
+    lower-layer modules, comparison runner behavior, comparator binaries, or
+    generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `71 total, 71 passed, 0 failed`
+    - new focused row:
+      `bench_fullchain epoll echo 1k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `env NEXTPAS_BENCH_MAX_ITERS=64 NEXTPAS_BENCH_FILTER=echo_1k NEXTPAS_BENCH_BACKEND=epoll ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `workload=echo_1k`
+    - `backend=epoll`
+    - `request_body_bytes=1024`
+    - `response_body_bytes=1024`
+    - `nextpas_h1_path=llhttp`
+    - `completed=64`
+    - `ns/op=107034.3`
+    - `req/s=9343`
+- Landed change:
+  - `test_http_benchmarks` now runs `NEXTPAS_BENCH_FILTER=echo_1k` with
+    `NEXTPAS_BENCH_BACKEND=epoll`
+  - the focused smoke locks:
+    - `workload=echo_1k`
+    - `backend=epoll`
+    - `request_body_bytes=1024`
+    - `response_body_bytes=1024`
+    - `nextpas_h1_path=llhttp`
+- Outcome:
+  - the durable full-chain epoll proof now reaches one body-bearing llhttp row
+    instead of stopping at the fast-path `direct_root` row
+  - this is coverage tightening only; it does not claim a new optimization,
+    a backend ranking, or request-heavy epoll completeness
