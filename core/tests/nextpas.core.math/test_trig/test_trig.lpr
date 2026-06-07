@@ -301,14 +301,6 @@ begin
     'Power Single negative zero even negative exponent returns +Inf');
 end;
 
-procedure TestAngleConversions;
-begin
-  CheckNear(PI_VALUE, DegToRad(180.0), 0.0001, 'DegToRad(180)=PI');
-  CheckNear(PI_VALUE, DegToRad(Single(180.0)), 0.0001, 'DegToRad(Single 180)=PI');
-  CheckNear(180.0, RadToDeg(PI_VALUE), 0.0001, 'RadToDeg(PI)=180');
-  CheckNear(180.0, RadToDeg(Single(PI_VALUE)), 0.0001, 'RadToDeg(Single PI)=180');
-end;
-
 begin
   T := TTestRunner.Create('nextpas.core.math.trig');
   T.Run('basic trig values', @TestBasicTrigValues);
@@ -317,6 +309,5 @@ begin
   T.Run('ArcTan2 signed zero contracts', @TestArcTan2SignedZeroContracts);
   T.Run('exp/log/sqrt contracts', @TestExpLogAndSqrtContracts);
   T.Run('power edge contracts', @TestPowerEdgeContracts);
-  T.Run('angle conversions', @TestAngleConversions);
   T.Summary;
 end.

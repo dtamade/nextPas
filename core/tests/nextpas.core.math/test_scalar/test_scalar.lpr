@@ -231,6 +231,14 @@ begin
   CheckNear(1.0, SmoothStep(0.0, 1.0, 2.0), 0.0, 'SmoothStep clamps high');
 end;
 
+procedure TestAngleConversions;
+begin
+  CheckNear(PI_VALUE, DegToRad(180.0), 0.0001, 'DegToRad(180)=PI');
+  CheckNear(PI_VALUE, DegToRad(Single(180.0)), 0.0001, 'DegToRad(Single 180)=PI');
+  CheckNear(180.0, RadToDeg(PI_VALUE), 0.0001, 'RadToDeg(PI)=180');
+  CheckNear(180.0, RadToDeg(Single(PI_VALUE)), 0.0001, 'RadToDeg(Single PI)=180');
+end;
+
 procedure TestRoundingAndSign;
 begin
   CheckEqual(Int64(4), Ceil(Single(3.2)), 'Ceil Single positive');
@@ -762,6 +770,7 @@ begin
   T.Run('float predicates', @TestFloatPredicates);
   T.Run('scalar IEEE edge contracts', @TestScalarIEEEEdgeContracts);
   T.Run('number theory and scalar extras', @TestNumberTheoryAndScalarExtras);
+  T.Run('angle conversions', @TestAngleConversions);
   T.Run('integer rounding boundaries', @TestIntegerRoundingBoundaries);
   T.Run('owner-level boundary messages', @TestOwnerLevelBoundaryMessages);
   T.Run('single-precision boundary messages', @TestSinglePrecisionBoundaryMessages);

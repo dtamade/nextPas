@@ -106,10 +106,14 @@ REQUIRED_ROOT_FACADE_CONSTANTS = {
     "deg_to_rad": ("double", "0.01745329251994329577"),
     "rad_to_deg": ("double", "57.2957795130823208768"),
 }
-ROOT_FACADE_CONSTANT_PARITY_PATHS = (
-    "src/nextpas.core.math.scalar.pas",
-    "src/nextpas.core.math.trig.pas",
-)
+ROOT_FACADE_CONSTANT_PARITY_EXPECTATIONS = {
+    "src/nextpas.core.math.scalar.pas": REQUIRED_ROOT_FACADE_CONSTANTS,
+    "src/nextpas.core.math.trig.pas": {
+        "pi_value": REQUIRED_ROOT_FACADE_CONSTANTS["pi_value"],
+        "two_pi": REQUIRED_ROOT_FACADE_CONSTANTS["two_pi"],
+        "half_pi": REQUIRED_ROOT_FACADE_CONSTANTS["half_pi"],
+    },
+}
 ROOT_FACADE_FORWARD_TARGETS = {
     "isaddoverflow": "scalar",
     "ismuloverflow": "scalar",
@@ -780,11 +784,14 @@ COMPILER_REF_RE = re.compile(
     re.IGNORECASE,
 )
 TRIG_FORBIDDEN_SCALAR_RE = re.compile(
+    r"(?:"
     r"\bfunction\s+("
     r"Min|Max|Floor|Ceil|Round|Trunc|Frac|Abs|Clamp|Sign|Lerp|"
-    r"InverseLerp|Wrap|SmoothStep|GCD|LCM|Hypot|Fmod"
-    r")\s*\(",
-    re.IGNORECASE,
+    r"InverseLerp|Wrap|SmoothStep|DegToRad|RadToDeg|GCD|LCM|Hypot|Fmod"
+    r")\s*\("
+    r"|^\s*(DEG_TO_RAD|RAD_TO_DEG)\s*:"
+    r")",
+    re.IGNORECASE | re.MULTILINE,
 )
 SIMD_MATHUTIL_FORBIDDEN_BARE_RE = re.compile(
     r"\bfunction\s+("
@@ -972,6 +979,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-rounding-sign", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('rounding and sign'"),
     RequiredBehaviorTestMarker("scalar-float-predicates", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('float predicates'"),
     RequiredBehaviorTestMarker("scalar-extras", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('number theory and scalar extras'"),
+    RequiredBehaviorTestMarker("scalar-angle-conversions", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('angle conversions'"),
     RequiredBehaviorTestMarker("scalar-boundaries", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('integer rounding boundaries'"),
     RequiredBehaviorTestMarker("scalar-owner-messages", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('owner-level boundary messages'"),
     RequiredBehaviorTestMarker("scalar-single-boundary-messages", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('single-precision boundary messages'"),
@@ -981,7 +989,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("trig-atan2-special", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('ArcTan2 special cases'"),
     RequiredBehaviorTestMarker("trig-exp-log-sqrt", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('exp/log/sqrt contracts'"),
     RequiredBehaviorTestMarker("trig-power", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('power edge contracts'"),
-    RequiredBehaviorTestMarker("trig-angle-conversions", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('angle conversions'"),
+    RequiredBehaviorTestMarker("facade-angle-conversions", "tests/nextpas.core.math/test_facade/test_facade.lpr", "facade re-exports RadToDeg"),
     RequiredBehaviorTestMarker("vec-2f", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec2f contracts'"),
     RequiredBehaviorTestMarker("vec-2f-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec2f huge finite length + normalize'"),
     RequiredBehaviorTestMarker("vec-3f", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec3f contracts'"),
@@ -1940,6 +1948,34 @@ def run_legacy_production_name_self_tests() -> None:
                 )
 
 
+def run_forbidden_trig_scalar_name_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        path = root / "src/nextpas.core.math.trig.pas"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "unit nextpas.core.math.trig;\n"
+            "interface\n"
+            "const\n"
+            "  DEG_TO_RAD: Double = 0.01745329251994329577;\n"
+            "function DegToRad(const ADeg: Double): Double; overload; inline;\n"
+            "implementation\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+
+        findings = scan_forbidden_trig_scalar_names(
+            root,
+            path,
+            path.read_text(encoding="utf-8"),
+        )
+        rules = [finding.rule for finding in findings]
+        if rules != ["no-scalar-api-in-math-trig", "no-scalar-api-in-math-trig"]:
+            raise AssertionError(
+                "forbidden-trig-scalar-name self-test expected const and function findings"
+            )
+
+
 def run_trig_host_safe_route_self_tests() -> None:
     cases = (
         (
@@ -2787,14 +2823,14 @@ def scan_root_facade_contract(root: Path) -> list[Finding]:
             constants[name][0] + "=" + constants[name][1],
         )
 
-    for rel in ROOT_FACADE_CONSTANT_PARITY_PATHS:
+    for rel, expected_constants in ROOT_FACADE_CONSTANT_PARITY_EXPECTATIONS.items():
         parity_path = root / rel
         if not parity_path.is_file():
             continue
         parity_text = parity_path.read_text(encoding="utf-8", errors="replace")
         parity_unit_name = public_unit_name(parity_text) or rel
         parity_constants = root_facade_constant_values(parity_text)
-        for name, expected in REQUIRED_ROOT_FACADE_CONSTANTS.items():
+        for name, expected in expected_constants.items():
             actual = parity_constants.get(name)
             if actual == expected:
                 continue
@@ -3223,6 +3259,7 @@ def main() -> int:
         run_behavior_marker_self_tests()
         run_public_math_source_simd_wiring_self_tests()
         run_legacy_production_name_self_tests()
+        run_forbidden_trig_scalar_name_self_tests()
         run_trig_host_safe_route_self_tests()
         run_required_trig_host_compile_gate_self_tests()
         run_required_doc_truth_self_tests()

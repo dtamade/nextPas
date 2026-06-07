@@ -17,7 +17,7 @@ Use a narrower submodule only when a file intentionally depends on one math fami
 - `nextpas.core.math.scalar` owns scalar constants, numeric helpers, float predicates, interpolation,
   angle conversion, and integer overflow helpers.
 - `nextpas.core.math.trig` owns trigonometric, exponential, logarithmic, power, square-root, and
-  angle-conversion helpers.
+  related transcendental helpers. Angle conversion belongs to `nextpas.core.math.scalar`.
 - `nextpas.core.math.vec` owns packed vector value types.
 - `nextpas.core.math.mat` owns packed matrix value types.
 - `nextpas.core.math.quat` owns packed quaternion value types.

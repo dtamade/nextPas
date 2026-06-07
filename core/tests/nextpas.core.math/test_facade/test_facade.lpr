@@ -46,6 +46,9 @@ begin
   ExpectArgumentErrorMessage('Clamp: minimum must not exceed maximum',
     'facade Clamp reversed bounds', @RaiseFacadeClampReversedBounds);
   CheckNear(PI_VALUE, DegToRad(180.0), 'facade re-exports DegToRad');
+  CheckNear(PI_VALUE, DegToRad(Single(180.0)), 'facade re-exports Single DegToRad');
+  CheckNear(180.0, RadToDeg(PI_VALUE), 'facade re-exports RadToDeg');
+  CheckNear(180.0, RadToDeg(Single(PI_VALUE)), 'facade re-exports Single RadToDeg');
   CheckNear(1.0, Sin(HALF_PI), 'facade re-exports trig Sin');
   CheckNear(1.0, Sin(Single(HALF_PI)), 'facade re-exports Single trig Sin');
 end;

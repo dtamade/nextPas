@@ -159,7 +159,9 @@ easing/random submodules; the facade uses aliases and inline forwarding.
 - `Sin`, `Cos`, `Tan`
 - `ArcSin`, `ArcCos`, `ArcTan`, `ArcTan2`
 - `Exp`, `Ln`, `Log2`, `Log10`, `Power`, `Sqrt`
-- degree/radian conversions if the facade chooses to place them here; scalar may also re-export them
+
+Degree/radian conversion belongs to `nextpas.core.math.scalar`; the root facade re-exports that
+scalar owner.
 
 `nextpas.core.math.vec` owns value types:
 

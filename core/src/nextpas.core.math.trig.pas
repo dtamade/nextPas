@@ -8,8 +8,6 @@ const
   PI_VALUE: Double = 3.14159265358979323846;
   TWO_PI: Double = 6.28318530717958647692;
   HALF_PI: Double = 1.57079632679489661923;
-  DEG_TO_RAD: Double = 0.01745329251994329577;
-  RAD_TO_DEG: Double = 57.2957795130823208768;
 
 function Sin(const AX: Double): Double; overload; inline;
 function Sin(const AX: Single): Single; overload; inline;
@@ -38,11 +36,6 @@ function Power(const ABase, AExponent: Double): Double; overload; inline;
 function Power(const ABase, AExponent: Single): Single; overload; inline;
 function Sqrt(const AX: Double): Double; overload; inline;
 function Sqrt(const AX: Single): Single; overload; inline;
-
-function DegToRad(const ADeg: Double): Double; overload; inline;
-function DegToRad(const ADeg: Single): Single; overload; inline;
-function RadToDeg(const ARad: Double): Double; overload; inline;
-function RadToDeg(const ARad: Single): Single; overload; inline;
 
 implementation
 
@@ -309,26 +302,6 @@ end;
 function Sqrt(const AX: Single): Single;
 begin
   Result := Single(Sqrt(Double(AX)));
-end;
-
-function DegToRad(const ADeg: Single): Single;
-begin
-  Result := ADeg * Single(DEG_TO_RAD);
-end;
-
-function DegToRad(const ADeg: Double): Double;
-begin
-  Result := ADeg * DEG_TO_RAD;
-end;
-
-function RadToDeg(const ARad: Single): Single;
-begin
-  Result := ARad * Single(RAD_TO_DEG);
-end;
-
-function RadToDeg(const ARad: Double): Double;
-begin
-  Result := ARad * RAD_TO_DEG;
 end;
 
 end.
