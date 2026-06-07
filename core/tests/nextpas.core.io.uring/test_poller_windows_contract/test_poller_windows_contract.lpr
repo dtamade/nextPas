@@ -744,6 +744,28 @@ begin
     'Windows unsupported timeout gate must not bypass timeout wrappers');
 end;
 
+procedure TestAsyncLoopCompletionFacadeParityContract;
+var
+  LAsyncLoop, LConnectBody, LCloseBody: string;
+begin
+  LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
+  LConnectBody := ExtractBetween(LAsyncLoop, 'function tasyncloop.asyncconnect',
+    'function tasyncloop.asyncrecv');
+  LCloseBody := ExtractBetween(LAsyncLoop, 'function tasyncloop.asyncclose',
+    'function tasyncloop.poll');
+
+  CheckContains(LAsyncLoop, 'function asyncconnect(afd: ptrint',
+    'async loop must expose the poller AsyncConnect completion facade');
+  CheckContains(LAsyncLoop, 'function asyncclose(afd: ptrint',
+    'async loop must expose the poller AsyncClose completion facade');
+  CheckContains(LConnectBody,
+    'result := fpoller.asyncconnect(afd, aaddr, aaddrlen, acallback, acontext);',
+    'async loop AsyncConnect must preserve poller unsupported/runtime truth');
+  CheckContains(LCloseBody,
+    'result := fpoller.asyncclose(afd, acallback, acontext);',
+    'async loop AsyncClose must preserve poller unsupported/runtime truth');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.io.poller.windows_contract');
   T.Run('poller Windows backend contract', @TestPollerWindowsBackendContract);
@@ -775,5 +797,7 @@ begin
   T.Run('Windows handle width contract', @TestPollerWindowsHandleWidthContract);
   T.Run('Windows forced compile async file surface contract',
     @TestWindowsForcedCompileAsyncFileSurfaceContract);
+  T.Run('async loop completion facade parity contract',
+    @TestAsyncLoopCompletionFacadeParityContract);
   T.Summary;
 end.

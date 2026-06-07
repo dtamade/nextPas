@@ -113,6 +113,13 @@ begin
   LDeadline := TDeadline.After(TDuration.FromMilliseconds(1));
   LLoop.AsyncRecvTimeout(0, nil, 0, 0, LDeadline, nil, nil);
   LLoop.AsyncSendTimeout(0, nil, 0, 0, LDeadline, nil, nil);
+  LLoop.AsyncRead(0, nil, 0, 0, nil, nil);
+  LLoop.AsyncWrite(0, nil, 0, 0, nil, nil);
+  LLoop.AsyncAccept(0, nil, nil, 0, nil, nil);
+  LLoop.AsyncConnect(0, nil, 0, nil, nil);
+  LLoop.AsyncRecv(0, nil, 0, 0, nil, nil);
+  LLoop.AsyncSend(0, nil, 0, 0, nil, nil);
+  LLoop.AsyncClose(0, nil, nil);
   LLoop.Stop;
   LLoop.Close;
 end;
