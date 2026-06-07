@@ -148,6 +148,18 @@ begin
   Move(LBits, Result, SizeOf(Result));
 end;
 
+function ValidComparisonEpsilon(const AEpsilon: Single): Boolean; inline;
+begin
+  Result := (not SingleIsNaN(AEpsilon)) and (not SingleIsInfinite(AEpsilon)) and
+    (AEpsilon >= 0.0);
+end;
+
+function ValidComparisonEpsilon(const AEpsilon: Double): Boolean; inline;
+begin
+  Result := (not DoubleIsNaN(AEpsilon)) and (not DoubleIsInfinite(AEpsilon)) and
+    (AEpsilon >= 0.0);
+end;
+
 function IsAddOverflow(AA, AB: SizeUInt): Boolean;
 begin
   Result := AA > High(SizeUInt) - AB;
@@ -478,25 +490,37 @@ end;
 
 function FloatEquals(const AA, AB: Single; const AEpsilon: Single): Boolean;
 begin
+  if not ValidComparisonEpsilon(AEpsilon) then
+    Exit(False);
   if IsNaN(AA) or IsNaN(AB) then
     Exit(False);
+  if IsInfinite(AA) or IsInfinite(AB) then
+    Exit(AA = AB);
   Result := Abs(AA - AB) <= AEpsilon;
 end;
 
 function FloatEquals(const AA, AB: Double; const AEpsilon: Double): Boolean;
 begin
+  if not ValidComparisonEpsilon(AEpsilon) then
+    Exit(False);
   if IsNaN(AA) or IsNaN(AB) then
     Exit(False);
+  if IsInfinite(AA) or IsInfinite(AB) then
+    Exit(AA = AB);
   Result := Abs(AA - AB) <= AEpsilon;
 end;
 
 function FloatIsZero(const AValue: Single; const AEpsilon: Single): Boolean;
 begin
+  if (not ValidComparisonEpsilon(AEpsilon)) or IsNaN(AValue) or IsInfinite(AValue) then
+    Exit(False);
   Result := Abs(AValue) <= AEpsilon;
 end;
 
 function FloatIsZero(const AValue: Double; const AEpsilon: Double): Boolean;
 begin
+  if (not ValidComparisonEpsilon(AEpsilon)) or IsNaN(AValue) or IsInfinite(AValue) then
+    Exit(False);
   Result := Abs(AValue) <= AEpsilon;
 end;
 

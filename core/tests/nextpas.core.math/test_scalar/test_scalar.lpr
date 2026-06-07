@@ -51,6 +51,14 @@ begin
   Move(LBits, Result, SizeOf(Result));
 end;
 
+function MakeSingleNegativeInfinity: Single;
+var
+  LBits: UInt32;
+begin
+  LBits := UInt32($FF800000);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
 function MakeSingleNegativeZero: Single;
 var
   LBits: UInt32;
@@ -224,8 +232,46 @@ begin
   Check(IsInfinite(LInf), 'IsInfinite');
   Check(FloatEquals(Single(1.0), Single(1.0 + 0.0000001), Single(0.000001)), 'FloatEquals Single epsilon');
   Check(FloatEquals(1.0, 1.0 + 0.0000001, 0.000001), 'FloatEquals epsilon');
+  Check(FloatEquals(MakeSinglePositiveInfinity, MakeSinglePositiveInfinity, Single(0.0)),
+    'FloatEquals Single +Inf exact');
+  Check(FloatEquals(MakePositiveInfinity, MakePositiveInfinity, 0.0),
+    'FloatEquals Double +Inf exact');
+  Check(FloatEquals(MakeNegativeInfinity, MakeNegativeInfinity, 0.0),
+    'FloatEquals Double -Inf exact');
+  Check(not FloatEquals(MakeSinglePositiveInfinity, MakeSingleNegativeInfinity, Single(1000.0)),
+    'FloatEquals Single rejects opposite infinities');
+  Check(not FloatEquals(MakePositiveInfinity, MakeNegativeInfinity, 1000.0),
+    'FloatEquals Double rejects opposite infinities');
+  Check(not FloatEquals(1.0, MakePositiveInfinity, MakePositiveInfinity),
+    'FloatEquals rejects infinite epsilon');
+  Check(not FloatEquals(Single(1.0), MakeSinglePositiveInfinity, MakeSinglePositiveInfinity),
+    'FloatEquals Single rejects infinite epsilon');
+  Check(not FloatEquals(1.0, 1.0, MakeNaN),
+    'FloatEquals rejects NaN epsilon');
+  Check(not FloatEquals(Single(1.0), Single(1.0), MakeSingleNaN),
+    'FloatEquals Single rejects NaN epsilon');
+  Check(not FloatEquals(1.0, 1.0, -0.000001),
+    'FloatEquals rejects negative epsilon');
+  Check(not FloatEquals(Single(1.0), Single(1.0), Single(-0.000001)),
+    'FloatEquals Single rejects negative epsilon');
   Check(FloatIsZero(Single(0.0000001), Single(0.000001)), 'FloatIsZero Single epsilon');
   Check(FloatIsZero(0.0000001, 0.000001), 'FloatIsZero epsilon');
+  Check(not FloatIsZero(MakeSingleNaN, Single(0.000001)),
+    'FloatIsZero Single rejects NaN value');
+  Check(not FloatIsZero(MakeNaN, 0.000001),
+    'FloatIsZero Double rejects NaN value');
+  Check(not FloatIsZero(0.0, MakePositiveInfinity),
+    'FloatIsZero rejects infinite epsilon');
+  Check(not FloatIsZero(Single(0.0), MakeSinglePositiveInfinity),
+    'FloatIsZero Single rejects infinite epsilon');
+  Check(not FloatIsZero(0.0, MakeNaN),
+    'FloatIsZero rejects NaN epsilon');
+  Check(not FloatIsZero(Single(0.0), MakeSingleNaN),
+    'FloatIsZero Single rejects NaN epsilon');
+  Check(not FloatIsZero(0.0, -0.000001),
+    'FloatIsZero rejects negative epsilon');
+  Check(not FloatIsZero(Single(0.0), Single(-0.000001)),
+    'FloatIsZero Single rejects negative epsilon');
 end;
 
 procedure TestNumberTheoryAndScalarExtras;
