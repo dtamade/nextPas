@@ -826,6 +826,41 @@ class Finding:
 
 
 @dataclass(frozen=True)
+class PublicRoutineSignature:
+    unit_name: str
+    name: str
+    routine_kind: str
+    params: tuple[tuple[str, str], ...]
+    result_type: str
+    line: int
+
+    @property
+    def key(self) -> tuple[str, str, tuple[tuple[str, str], ...], str]:
+        return (
+            self.name.lower(),
+            self.routine_kind.lower(),
+            self.params,
+            self.result_type,
+        )
+
+
+@dataclass(frozen=True)
+class PublicTypeAlias:
+    unit_name: str
+    name: str
+    target: str
+    line: int
+
+
+@dataclass(frozen=True)
+class PublicConstant:
+    unit_name: str
+    name: str
+    type_name: str
+    line: int
+
+
+@dataclass(frozen=True)
 class Report:
     root: str
     scanned_files: int
@@ -1761,6 +1796,272 @@ def scan_root_facade_api_doc_coverage(root: Path) -> list[Finding]:
     return findings
 
 
+def normalize_pascal_type(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip()).lower()
+
+
+def statement_line_index(code: str, statement_start: int) -> int:
+    return code.count("\n", 0, statement_start) + 1
+
+
+def interface_statements(text: str) -> list[tuple[int, str]]:
+    code = interface_text(text)
+    statements: list[tuple[int, str]] = []
+    start = 0
+    for match in re.finditer(r";", code):
+        statement = code[start : match.end()]
+        statements.append((statement_line_index(code, start), statement))
+        start = match.end()
+    return statements
+
+
+def is_top_level_statement(statement: str) -> bool:
+    lines = [line for line in statement.splitlines() if line.strip()]
+    if not lines:
+        return False
+    indent = len(lines[0]) - len(lines[0].lstrip(" "))
+    return indent <= 2
+
+
+def public_unit_name(text: str) -> str:
+    match = UNIT_NAME_RE.search(text)
+    if match is None:
+        return ""
+    return match.group("name")
+
+
+def split_pascal_params(params: str) -> tuple[tuple[str, str], ...]:
+    normalized_params: list[tuple[str, str]] = []
+    for group in params.split(";"):
+        group = group.strip()
+        if not group:
+            continue
+        modifier = ""
+        for candidate in ("const", "var", "out"):
+            prefix = candidate + " "
+            if group.lower().startswith(prefix):
+                modifier = candidate
+                group = group[len(prefix) :].strip()
+                break
+        if ":" not in group:
+            continue
+        names_part, type_part = group.rsplit(":", 1)
+        type_name = normalize_pascal_type(type_part.split("=", 1)[0])
+        param_count = len([name for name in names_part.split(",") if name.strip()])
+        for _ in range(param_count):
+            normalized_params.append((modifier, type_name))
+    return tuple(normalized_params)
+
+
+def parse_public_routine_statement(unit_name: str, line: int, statement: str) -> PublicRoutineSignature | None:
+    if not is_top_level_statement(statement):
+        return None
+    normalized = " ".join(statement.split())
+    match = re.match(
+        r"^(function|procedure)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\((?P<params>.*?)\)"
+        r"(?:\s*:\s*(?P<result>[^;]+?))?\s*(?:;\s*.*)?;$",
+        normalized,
+        re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    result_type = normalize_pascal_type(match.group("result") or "")
+    return PublicRoutineSignature(
+        unit_name=unit_name,
+        name=match.group(2),
+        routine_kind=match.group(1),
+        params=split_pascal_params(match.group("params")),
+        result_type=result_type,
+        line=line,
+    )
+
+
+def parse_public_type_alias_statement(unit_name: str, line: int, statement: str) -> PublicTypeAlias | None:
+    if not is_top_level_statement(statement):
+        return None
+    normalized = " ".join(statement.split())
+    match = re.match(
+        r"^(T[A-Za-z0-9_]*)\s*=\s*(?P<target>.+?)\s*;$",
+        normalized,
+        re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    return PublicTypeAlias(
+        unit_name=unit_name,
+        name=match.group(1),
+        target=normalize_pascal_type(match.group("target")),
+        line=line,
+    )
+
+
+def parse_public_constant_statement(unit_name: str, line: int, statement: str) -> PublicConstant | None:
+    if not is_top_level_statement(statement):
+        return None
+    normalized = " ".join(statement.split())
+    match = re.match(
+        r"^([A-Z][A-Z0-9_]*)\s*:\s*(?P<type>[^=;]+)\s*=",
+        normalized,
+    )
+    if match is None:
+        return None
+    return PublicConstant(
+        unit_name=unit_name,
+        name=match.group(1),
+        type_name=normalize_pascal_type(match.group("type")),
+        line=line,
+    )
+
+
+def extract_public_routines(text: str) -> list[PublicRoutineSignature]:
+    unit_name = public_unit_name(text)
+    routines: list[PublicRoutineSignature] = []
+    for line, statement in interface_statements(text):
+        routine = parse_public_routine_statement(unit_name, line, statement)
+        if routine is not None:
+            routines.append(routine)
+    return routines
+
+
+def extract_public_type_aliases(text: str) -> list[PublicTypeAlias]:
+    unit_name = public_unit_name(text)
+    aliases: list[PublicTypeAlias] = []
+    for line, statement in interface_statements(text):
+        alias = parse_public_type_alias_statement(unit_name, line, statement)
+        if alias is not None:
+            aliases.append(alias)
+    return aliases
+
+
+def extract_public_constants(text: str) -> list[PublicConstant]:
+    unit_name = public_unit_name(text)
+    constants: list[PublicConstant] = []
+    for line, statement in interface_statements(text):
+        constant = parse_public_constant_statement(unit_name, line, statement)
+        if constant is not None:
+            constants.append(constant)
+    return constants
+
+
+def root_facade_alias_targets(root_facade_text: str) -> dict[str, str]:
+    aliases: dict[str, str] = {}
+    for alias in extract_public_type_aliases(root_facade_text):
+        aliases[alias.name.lower()] = alias.target
+    return aliases
+
+
+def root_facade_constants(root_facade_text: str) -> dict[str, str]:
+    constants: dict[str, str] = {}
+    for constant in extract_public_constants(root_facade_text):
+        constants[constant.name.lower()] = constant.type_name
+    return constants
+
+
+def root_facade_routines(root_facade_text: str) -> set[tuple[str, str, tuple[tuple[str, str], ...], str]]:
+    return {routine.key for routine in extract_public_routines(root_facade_text)}
+
+
+def scan_root_facade_reexport_parity(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    root_facade_path = root / ROOT_FACADE_PATH
+    if not root_facade_path.is_file():
+        return findings
+
+    root_facade_text = root_facade_path.read_text(encoding="utf-8", errors="replace")
+    root_aliases = root_facade_alias_targets(root_facade_text)
+    root_constants = root_facade_constants(root_facade_text)
+    root_routines = root_facade_routines(root_facade_text)
+
+    for rel in sorted(PUBLIC_MATH_SOURCE_PATHS):
+        if rel == ROOT_FACADE_PATH:
+            continue
+        path = root / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        unit_name = public_unit_name(text)
+        if not unit_name:
+            continue
+
+        for alias in extract_public_type_aliases(text):
+            expected_target = normalize_pascal_type(unit_name + "." + alias.name)
+            actual_target = root_aliases.get(alias.name.lower())
+            if actual_target == expected_target:
+                continue
+            rule = "missing-root-facade-type-reexport"
+            if actual_target is not None:
+                rule = "wrong-root-facade-type-reexport"
+            add_finding(
+                findings,
+                f"{rule}:{unit_name}:{alias.name}",
+                root,
+                path,
+                alias.line,
+                alias.name,
+            )
+
+        for constant in extract_public_constants(text):
+            actual_type = root_constants.get(constant.name.lower())
+            if actual_type == constant.type_name:
+                continue
+            add_finding(
+                findings,
+                f"missing-root-facade-const-reexport:{unit_name}:{constant.name}",
+                root,
+                path,
+                constant.line,
+                constant.name,
+            )
+
+        for routine in extract_public_routines(text):
+            if routine.key in root_routines:
+                continue
+            add_finding(
+                findings,
+                f"missing-root-facade-function-reexport:{unit_name}:{routine.name}",
+                root,
+                path,
+                routine.line,
+                routine.name,
+            )
+    return findings
+
+
+def run_root_facade_reexport_parity_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        src = root / "src"
+        src.mkdir(parents=True, exist_ok=True)
+        (src / "nextpas.core.math.trig.pas").write_text(
+            "unit nextpas.core.math.trig;\n"
+            "interface\n"
+            "function Log10(const AX: Double): Double; overload; inline;\n"
+            "function Log10(const AX: Single): Single; overload; inline;\n"
+            "implementation\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        (src / "nextpas.core.math.pas").write_text(
+            "unit nextpas.core.math;\n"
+            "interface\n"
+            "uses nextpas.core.math.trig;\n"
+            "function Log10(const AX: Double): Double; overload; inline;\n"
+            "implementation\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+
+        findings = scan_root_facade_reexport_parity(root)
+        rules = {finding.rule for finding in findings}
+        expected_rule = (
+            "missing-root-facade-function-reexport:nextpas.core.math.trig:Log10"
+        )
+        if expected_rule not in rules:
+            raise AssertionError(
+                "root-facade-reexport-parity self-test expected " + expected_rule
+            )
+
+
 def scan_required_core_make_targets(root: Path) -> list[Finding]:
     findings: list[Finding] = []
     path = root / ROOT_MAKEFILE_PATH
@@ -2061,6 +2362,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_missing_required_benchmark_markers(root))
     findings.extend(scan_required_behavior_test_markers(root))
     findings.extend(scan_root_facade_api_doc_coverage(root))
+    findings.extend(scan_root_facade_reexport_parity(root))
     findings.extend(scan_required_core_make_targets(root))
     findings.extend(scan_required_core_make_target_doc_coverage(root))
     findings.extend(scan_required_trig_host_compile_gate(root))
@@ -2160,6 +2462,7 @@ def main() -> int:
         run_trig_host_safe_route_self_tests()
         run_required_trig_host_compile_gate_self_tests()
         run_required_doc_truth_self_tests()
+        run_root_facade_reexport_parity_self_tests()
     report = build_report(args.root)
 
     if args.json_file:
