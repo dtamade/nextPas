@@ -148,6 +148,40 @@ REQUIRED_QUAT_DOC_TRUTH = (
         "`Slerp` and `Nlerp` stay stable for near-identical finite endpoints: they preserve the shared axis and interpolate the small remaining angle instead of collapsing or taking a long arc.",
     ),
 )
+REQUIRED_RANDOM_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "`WeightedChoice` treats `pick = 0` as the first positive-weight slot instead of getting stuck on zero-weight prefixes.",
+    ),
+    (
+        "docs/math/API.md",
+        "`WeightedChoice` treats `pick = 0` as the first positive-weight slot instead of getting stuck on zero-weight prefixes.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`WeightedChoice` treats `pick = 0` as the first positive-weight slot instead of getting stuck on zero-weight prefixes.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`WeightedChoice` treats `pick = 0` as the first positive-weight slot instead of getting stuck on zero-weight prefixes.",
+    ),
+    (
+        "docs/math/README.md",
+        "`NextGaussian` clamps a zero-state first uniform draw to a finite deterministic fallback instead of producing NaN or infinity.",
+    ),
+    (
+        "docs/math/API.md",
+        "`NextGaussian` clamps a zero-state first uniform draw to a finite deterministic fallback instead of producing NaN or infinity.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`NextGaussian` clamps a zero-state first uniform draw to a finite deterministic fallback instead of producing NaN or infinity.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`NextGaussian` clamps a zero-state first uniform draw to a finite deterministic fallback instead of producing NaN or infinity.",
+    ),
+)
 REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
     RequiredCoreMakeTarget(
         target="core-math-api-surface-smoke",
@@ -544,11 +578,13 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("random-large-float", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('large finite float range stays finite and bounded'"),
     RequiredBehaviorTestMarker("random-weight-scale", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('WeightedChoice large finite weights stay scale-invariant'"),
     RequiredBehaviorTestMarker("random-weight-zero", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('WeightedChoice rejects all-zero weights'"),
+    RequiredBehaviorTestMarker("random-weight-zero-pick", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('WeightedChoice zero-pick skips zero-weight prefixes'"),
     RequiredBehaviorTestMarker("random-weight-tail", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('WeightedChoice max pick keeps tail weight reachable'"),
     RequiredBehaviorTestMarker("random-invalid-ranges", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('invalid ranges fail fast'"),
     RequiredBehaviorTestMarker("random-roll-overflow", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('RollMultiple rejects overflowing total'"),
     RequiredBehaviorTestMarker("random-probability-dice", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('probability dice weighted choice and shuffle'"),
     RequiredBehaviorTestMarker("random-gaussian-circle", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('gaussian and circle vectors'"),
+    RequiredBehaviorTestMarker("random-gaussian-zero-state", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('Gaussian zero-state clamp stays finite'"),
     RequiredBehaviorTestMarker("random-non-finite", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('non-finite parameter validation'"),
     RequiredBehaviorTestMarker("random-bool-non-finite", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('NextBool rejects non-finite probability'"),
     RequiredBehaviorTestMarker("noise-repeatability", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('noise repeatability'"),
@@ -1336,6 +1372,15 @@ def scan_required_quat_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_random_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_RANDOM_DOC_TRUTH,
+        "missing-required-random-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def build_report(root: Path) -> Report:
     root = root.resolve()
     findings: list[Finding] = []
@@ -1350,6 +1395,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_m8_residual_truth(root))
     findings.extend(scan_required_transform_doc_truth(root))
     findings.extend(scan_required_quat_doc_truth(root))
+    findings.extend(scan_required_random_doc_truth(root))
 
     source_files = discover_files(root, MATH_SOURCE_GLOBS)
     math_ffi = root / "src/nextpas.core.math.ffi.pas"

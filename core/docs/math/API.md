@@ -290,6 +290,10 @@ non-positive lacunarity and gain. `Noise1D`/`2D`/`3D` and `FBM1D`/`2D`/`3D` reje
 coordinate inputs with `EArgumentError`, and `FBM1D`/`2D`/`3D` also reject finite
 coordinate/lacunarity combinations that would make octave coordinates non-finite and finite gain
 combinations that would make octave amplitudes or accumulated results non-finite.
+`WeightedChoice` treats `pick = 0` as the first positive-weight slot instead of getting stuck on
+zero-weight prefixes.
+`NextGaussian` clamps a zero-state first uniform draw to a finite deterministic fallback instead of
+producing NaN or infinity.
 Noise and FBM operate on the stored `Double` coordinate value. At magnitudes around `2^52` and
 larger, sub-unit coordinate deltas collapse to the same representable `Double`, so those calls use
 stable lattice-equivalent semantics rather than raising an owner-level error.

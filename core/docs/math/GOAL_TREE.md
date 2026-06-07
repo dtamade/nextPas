@@ -343,8 +343,10 @@ Status:
   restore.
 - Invalid integer/float ranges fail fast with `EArgumentError`; `NextBool` clamps probability into
   false/true behavior; dice helpers return `0` for non-positive dice/sides; `RollMultiple`
-  rejects positive dice/side combinations whose maximum total would overflow `Integer`;
-  `NextGaussian` clamps a zero-state first uniform draw back to a finite deterministic fallback;
+  rejects positive dice/side combinations whose maximum total would overflow `Integer`.
+  `WeightedChoice` treats `pick = 0` as the first positive-weight slot instead of getting stuck on
+  zero-weight prefixes. `NextGaussian` clamps a zero-state first uniform draw to a finite
+  deterministic fallback instead of producing NaN or infinity.
   `test_random` now directly locks owner-level messages for reversed and non-finite integer/float
   range validation, exact zero/max-state `[0,1)` boundaries for `NextFloat` / `NextDouble`,
   exact zero/max-state `[AMin, AMax)` boundary behavior for `NextFloatRange`, direct
