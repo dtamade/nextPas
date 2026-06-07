@@ -40,6 +40,4 @@ clean: clean-artifacts
 	rm -rf build/harness build/stage0-bootstrap
 
 clean-artifacts:
-	find compiler core benchmarks tests examples rtl tools units \
-		\( -name .nextpas -o -name .sisyphus -o -name build -o -name .worktrees \) -prune -o \
-		-type f \( -name '*.o' -o -name '*.ppu' -o -name '*.compiled' -o -name 'link*.res' -o -name '*.test.res' -o -name 'ppas.sh' -o -name '*.pyc' -o -name '*.exe' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' -o -name '*.a' -o -name 'libimp*.a' \) -exec rm -f {} +
+	./scripts/build-hygiene-check.sh clean-source-artifacts
