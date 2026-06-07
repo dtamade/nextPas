@@ -34,9 +34,25 @@ begin
   end;
 end;
 
+procedure TestConvertErrorAliasCanonicalRoot;
+var
+  LError: nextpas.core.system.sysutils.Exception;
+begin
+  LError := nextpas.core.system.sysutils.EConvertError.Create('conversion failed');
+  try
+    Check(LError is nextpas.core.exception.EConvertError,
+      'EConvertError should remain the canonical conversion alias');
+    CheckEqual('conversion failed', LError.Message,
+      'EConvertError alias should preserve exception messages');
+  finally
+    LError.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.system.sysutils minimal');
   T.Run('Format delegates to text contract', @TestFormatDelegatesToTextContract);
   T.Run('exception formatting aliases canonical root', @TestExceptionFormattingAliasesCanonicalRoot);
+  T.Run('convert error alias canonical root', @TestConvertErrorAliasCanonicalRoot);
   T.Summary;
 end.
