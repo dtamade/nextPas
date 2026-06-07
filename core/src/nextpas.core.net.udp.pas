@@ -28,6 +28,7 @@ type
     FSocket: TPlatformSocket;
     FLocal: TNetAddress;
     FClosed: Boolean;
+    procedure EnsureOpen(const AOperation: string);
   public
     constructor Create(const ASocket: TPlatformSocket; const ALocal: TNetAddress);
     destructor Destroy; override;
@@ -62,12 +63,19 @@ begin
   inherited;
 end;
 
+procedure TUdpSocket.EnsureOpen(const AOperation: string);
+begin
+  if FClosed then
+    raise ENetworkError.Create('udp socket ' + AOperation + ' after close');
+end;
+
 function TUdpSocket.SendTo(const ABuf; const ACount: SizeUInt; const AAddr: TNetAddress): SizeUInt;
 var
   LSa: sockaddr_in;
   LSent: Int32;
   LResult: Int32;
 begin
+  EnsureOpen('sendto');
   FillChar(LSa, SizeOf(LSa), 0);
   LSa.sin_family := PLATFORM_AF_INET;
   LSa.sin_port := Htons(AAddr.Port);
@@ -87,6 +95,7 @@ var
   LResult: Int32;
   LA: UInt32;
 begin
+  EnsureOpen('recvfrom');
   LSaLen := SizeOf(LSa);
   LResult := platform_socket_recvfrom(FSocket, @ABuf, Int32(ACount), 0,
     @LSa, @LSaLen, LRecvd);
@@ -111,6 +120,7 @@ begin
   begin
     FClosed := True;
     platform_socket_close(FSocket);
+    FSocket := PLATFORM_INVALID_SOCKET;
   end;
 end;
 

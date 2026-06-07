@@ -178,6 +178,37 @@ begin
   LS.Close;
 end;
 
+procedure TestUdpPostCloseGuards;
+var
+  LS: IUdpSocket;
+  LBuf: array[0..31] of Byte;
+  LFrom: TNetAddress;
+  LRaised: Boolean;
+begin
+  LS := UdpBind('127.0.0.1', 0);
+  LS.Close;
+
+  LRaised := False;
+  try
+    LS.SendTo(PAnsiChar('x')^, 1, TNetAddress.Create('127.0.0.1', LS.LocalAddr.Port));
+  except
+    on E: ENetworkError do
+      LRaised := Pos('after close', E.Message) > 0;
+  end;
+  Check(LRaised, 'udp sendto after close raises closed-state ENetworkError');
+
+  LRaised := False;
+  try
+    LS.RecvFrom(LBuf[0], SizeOf(LBuf), LFrom);
+  except
+    on E: ENetworkError do
+      LRaised := Pos('after close', E.Message) > 0;
+  end;
+  Check(LRaised, 'udp recvfrom after close raises closed-state ENetworkError');
+
+  LS.Close;
+end;
+
 { Resolve test }
 
 procedure TestResolve;
@@ -666,6 +697,7 @@ begin
   T.Run('TCP echo', @TestTcpEcho);
   T.Run('TCP large data', @TestTcpLargeData);
   T.Run('UDP send/recv', @TestUdpSendRecv);
+  T.Run('UDP post-close guards', @TestUdpPostCloseGuards);
   T.Run('Resolve', @TestResolve);
   T.Run('Resolve DNS', @TestResolveDNS);
   T.Run('NetAddress', @TestNetAddress);
