@@ -46,6 +46,7 @@ create_repo() {
 .PHONY: test
 
 test:
+	test "$(BASE_REF)" = "main"
 	printf 'test-tooling\n' >> tooling.log
 EOF
   git -C "$repo_path" add Makefile README.md scripts tests/tooling/Makefile
@@ -70,6 +71,7 @@ run_landing_check() {
 
 PASS_REPO="$TMP_ROOT/pass"
 create_repo "$PASS_REPO"
+git -C "$PASS_REPO" update-ref refs/remotes/origin/main refs/heads/main
 create_landing_worktree "$PASS_REPO" landing
 mkdir -p "$PASS_REPO/.worktrees/landing/scripts"
 printf 'helper\n' >"$PASS_REPO/.worktrees/landing/scripts/helper.sh"
@@ -88,7 +90,7 @@ printf '%s\n' "$PASS_OUTPUT" | grep -q '^ahead=1$'
 printf '%s\n' "$PASS_OUTPUT" | grep -q '^behind=0$'
 printf '%s\n' "$PASS_OUTPUT" | grep -q '^scripts/helper\.sh$'
 
-make -C "$PASS_REPO/.worktrees/landing" landing-check ALLOW_PATHS=scripts >/dev/null
+make -C "$PASS_REPO/.worktrees/landing" landing-check BASE_REF=origin/main ALLOW_PATHS=scripts >/dev/null
 grep -q '^test-tooling$' "$PASS_REPO/.worktrees/landing/tests/tooling/tooling.log"
 
 LANE_REPO="$TMP_ROOT/lane"

@@ -53,7 +53,7 @@ landing-check: hygiene
 		test -n "$$lane_focus" || { echo "lane-focused did not report a focus path for LANE=$(LANE)" >&2; exit 1; }; \
 		$(MAKE) focused FOCUS="$$lane_focus"; \
 	else \
-		$(MAKE) test-tooling; \
+		$(MAKE) test-tooling BASE_REF=main; \
 	fi
 	$(MAKE) hygiene
 
