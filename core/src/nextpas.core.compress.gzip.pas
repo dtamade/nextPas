@@ -200,6 +200,8 @@ var
   LFlags: Byte;
   LByte: Byte;
   LSkip: UInt16;
+  LHeaderCRC: UInt32;
+  LExpectedHeaderCRC, LActualHeaderCRC: UInt16;
 begin
   inherited Create;
   FSrc := ASrc;
@@ -214,30 +216,43 @@ begin
     raise EIOError.Create('gzip: unsupported method');
 
   LFlags := LHdr[3];
+  if (LFlags and $E0) <> 0 then
+    raise EIOError.Create('gzip: invalid flags');
+  LHeaderCRC := UInt32(crc32(0, @LHdr[0], 10));
   if (LFlags and $04) <> 0 then // FEXTRA
   begin
     if FSrc.Read(LByte, 1) <> 1 then raise EIOError.Create('gzip: truncated header');
+    LHeaderCRC := UInt32(crc32(ULong(LHeaderCRC), @LByte, 1));
     LSkip := LByte;
     if FSrc.Read(LByte, 1) <> 1 then raise EIOError.Create('gzip: truncated header');
+    LHeaderCRC := UInt32(crc32(ULong(LHeaderCRC), @LByte, 1));
     LSkip := LSkip or (UInt16(LByte) shl 8);
     while LSkip > 0 do
     begin
       if FSrc.Read(LByte, 1) <> 1 then raise EIOError.Create('gzip: truncated header');
+      LHeaderCRC := UInt32(crc32(ULong(LHeaderCRC), @LByte, 1));
       Dec(LSkip);
     end;
   end;
   if (LFlags and $08) <> 0 then // FNAME
     repeat
       if FSrc.Read(LByte, 1) <> 1 then raise EIOError.Create('gzip: truncated FNAME');
+      LHeaderCRC := UInt32(crc32(ULong(LHeaderCRC), @LByte, 1));
     until LByte = 0;
   if (LFlags and $10) <> 0 then // FCOMMENT
     repeat
       if FSrc.Read(LByte, 1) <> 1 then raise EIOError.Create('gzip: truncated FCOMMENT');
+      LHeaderCRC := UInt32(crc32(ULong(LHeaderCRC), @LByte, 1));
     until LByte = 0;
   if (LFlags and $02) <> 0 then // FHCRC
   begin
     if FSrc.Read(LByte, 1) <> 1 then raise EIOError.Create('gzip: truncated header');
+    LExpectedHeaderCRC := UInt16(LByte);
     if FSrc.Read(LByte, 1) <> 1 then raise EIOError.Create('gzip: truncated header');
+    LExpectedHeaderCRC := LExpectedHeaderCRC or (UInt16(LByte) shl 8);
+    LActualHeaderCRC := UInt16(LHeaderCRC);
+    if LExpectedHeaderCRC <> LActualHeaderCRC then
+      raise EIOError.Create('gzip: header CRC mismatch');
   end;
 
   FillChar(FStream, SizeOf(FStream), 0);
@@ -430,6 +445,7 @@ var
   LFlags: Byte;
   LExpectedCRC, LActualCRC: UInt32;
   LExpectedSize: UInt32;
+  LExpectedHeaderCRC, LActualHeaderCRC: UInt16;
   LTrailerOfs: SizeUInt;
 begin
   Result := nil;
@@ -441,6 +457,8 @@ begin
     raise EIOError.Create('gzip: unsupported method');
 
   LFlags := AData[3];
+  if (LFlags and $E0) <> 0 then
+    raise EIOError.Create('gzip: invalid flags');
   LOffset := 10;
   if (LFlags and $04) <> 0 then
   begin
@@ -463,7 +481,16 @@ begin
     Inc(LOffset);
   end;
   if (LFlags and $02) <> 0 then
+  begin
+    if LOffset + 2 > SizeUInt(Length(AData)) then
+      raise EIOError.Create('gzip: truncated header');
+    LActualHeaderCRC := UInt16(crc32(0, @AData[0], LOffset));
+    LExpectedHeaderCRC := UInt16(AData[LOffset]) or
+      (UInt16(AData[LOffset + 1]) shl 8);
+    if LExpectedHeaderCRC <> LActualHeaderCRC then
+      raise EIOError.Create('gzip: header CRC mismatch');
     Inc(LOffset, 2);
+  end;
 
   if LOffset + 8 >= SizeUInt(Length(AData)) then
     raise EIOError.Create('gzip: header too large');

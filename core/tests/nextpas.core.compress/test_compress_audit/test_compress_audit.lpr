@@ -4,6 +4,7 @@ program test_compress_audit;
 
 uses
   SysUtils,
+  zlib,
   nextpas.core.testing,
   nextpas.core.io.base,
   nextpas.core.io.intf,
@@ -279,6 +280,112 @@ begin
   Check(LGot, 'gzip truncated trailer raises');
 end;
 
+procedure TestGzipReservedFlagsRejected;
+const
+  RESERVED_FLAGS: array[0..2] of Byte = ($20, $40, $80);
+var
+  LSrc, LC: TBytes;
+  LReader: IDecompressReader;
+  LGot: Boolean;
+  LI: Integer;
+begin
+  LSrc := TBytes.Create(1, 2, 3, 4);
+  for LI := Low(RESERVED_FLAGS) to High(RESERVED_FLAGS) do
+  begin
+    LC := GzipCompress(LSrc);
+    LC[3] := LC[3] or RESERVED_FLAGS[LI];
+
+    LGot := False;
+    try
+      GzipDecompress(LC);
+    except
+      LGot := True;
+    end;
+    Check(LGot, 'gzip one-shot reserved flag $' + IntToHex(RESERVED_FLAGS[LI], 2) + ' raises');
+
+    LGot := False;
+    try
+      LReader := GzipReader(CreateBytesStreamFrom(LC) as IReader);
+      IoReadAll(LReader as IReader);
+      LReader.Close;
+    except
+      LGot := True;
+    end;
+    Check(LGot, 'gzip stream reserved flag $' + IntToHex(RESERVED_FLAGS[LI], 2) + ' raises');
+  end;
+end;
+
+procedure TestGzipHeaderCrcRejected;
+var
+  LSrc, LC, LD, LWithHeaderCrc, LWithNameAndHeaderCrc: TBytes;
+  LReader: IDecompressReader;
+  LHeaderCRC: UInt16;
+  LGot: Boolean;
+begin
+  LSrc := TBytes.Create(1, 2, 3, 4);
+  LC := GzipCompress(LSrc);
+
+  SetLength(LWithHeaderCrc, Length(LC) + 2);
+  Move(LC[0], LWithHeaderCrc[0], 10);
+  LWithHeaderCrc[3] := LWithHeaderCrc[3] or $02;
+  LHeaderCRC := UInt16(crc32(0, @LWithHeaderCrc[0], 10));
+  LWithHeaderCrc[10] := Byte(LHeaderCRC);
+  LWithHeaderCrc[11] := Byte(LHeaderCRC shr 8);
+  Move(LC[10], LWithHeaderCrc[12], Length(LC) - 10);
+
+  LD := GzipDecompress(LWithHeaderCrc);
+  CheckEqual(Int64(Length(LSrc)), Int64(Length(LD)), 'gzip one-shot valid header CRC length');
+  Check((LD[0] = LSrc[0]) and (LD[High(LD)] = LSrc[High(LSrc)]),
+    'gzip one-shot valid header CRC content');
+
+  LReader := GzipReader(CreateBytesStreamFrom(LWithHeaderCrc) as IReader);
+  LD := IoReadAll(LReader as IReader);
+  LReader.Close;
+  CheckEqual(Int64(Length(LSrc)), Int64(Length(LD)), 'gzip stream valid header CRC length');
+  Check((LD[0] = LSrc[0]) and (LD[High(LD)] = LSrc[High(LSrc)]),
+    'gzip stream valid header CRC content');
+
+  SetLength(LWithNameAndHeaderCrc, Length(LC) + 5);
+  Move(LC[0], LWithNameAndHeaderCrc[0], 10);
+  LWithNameAndHeaderCrc[3] := LWithNameAndHeaderCrc[3] or $0A;
+  LWithNameAndHeaderCrc[10] := Ord('n');
+  LWithNameAndHeaderCrc[11] := Ord('p');
+  LWithNameAndHeaderCrc[12] := 0;
+  LHeaderCRC := UInt16(crc32(0, @LWithNameAndHeaderCrc[0], 13));
+  LWithNameAndHeaderCrc[13] := Byte(LHeaderCRC);
+  LWithNameAndHeaderCrc[14] := Byte(LHeaderCRC shr 8);
+  Move(LC[10], LWithNameAndHeaderCrc[15], Length(LC) - 10);
+
+  LD := GzipDecompress(LWithNameAndHeaderCrc);
+  CheckEqual(Int64(Length(LSrc)), Int64(Length(LD)), 'gzip one-shot FNAME header CRC length');
+
+  LReader := GzipReader(CreateBytesStreamFrom(LWithNameAndHeaderCrc) as IReader);
+  LD := IoReadAll(LReader as IReader);
+  LReader.Close;
+  CheckEqual(Int64(Length(LSrc)), Int64(Length(LD)), 'gzip stream FNAME header CRC length');
+
+  LC := Copy(LWithHeaderCrc, 0, Length(LWithHeaderCrc));
+  LC[10] := LC[10] xor $FF;
+
+  LGot := False;
+  try
+    GzipDecompress(LC);
+  except
+    LGot := True;
+  end;
+  Check(LGot, 'gzip one-shot header CRC raises');
+
+  LGot := False;
+  try
+    LReader := GzipReader(CreateBytesStreamFrom(LC) as IReader);
+    IoReadAll(LReader as IReader);
+    LReader.Close;
+  except
+    LGot := True;
+  end;
+  Check(LGot, 'gzip stream header CRC raises');
+end;
+
 procedure TestGzipTruncatedPayloadRaisesOnRead;
 var
   LSrc, LC: TBytes;
@@ -546,6 +653,8 @@ begin
   T.Run('Gzip wrong size', @TestGzipWrongSize);
   T.Run('Gzip truncated header', @TestGzipTruncatedHeader);
   T.Run('Gzip truncated trailer', @TestGzipTruncatedTrailer);
+  T.Run('Gzip reserved flags', @TestGzipReservedFlagsRejected);
+  T.Run('Gzip header CRC', @TestGzipHeaderCrcRejected);
   T.Run('Gzip truncated payload read', @TestGzipTruncatedPayloadRaisesOnRead);
   T.Run('Deflate stream byte-by-byte', @TestDeflateStreamByteByByte);
   T.Run('Gzip stream byte-by-byte', @TestGzipStreamByteByByte);
