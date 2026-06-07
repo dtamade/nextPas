@@ -63,6 +63,9 @@ function TextFormat(const AFmt: string; const AArgs: array of const): string;
 
 implementation
 
+uses
+  nextpas.core.text.utf8;
+
 function MemEqual(const A, B: Pointer; const ASize: SizeUInt): Boolean;
 var
   LI: SizeUInt;
@@ -350,30 +353,26 @@ end;
 function TextUTF8Length(const AValue: string): Integer;
 var
   LIdx, LLen: Integer;
-  LByte: Byte;
+  LDec: TUTF8DecodeResult;
 begin
   Result := 0;
   LLen := Length(AValue);
   LIdx := 1;
   while LIdx <= LLen do
   begin
-    LByte := Byte(AValue[LIdx]);
+    LDec := UTF8Decode(PByte(@AValue[LIdx]), SizeUInt(LLen - LIdx + 1));
     Inc(Result);
-    if LByte < $80 then
+    if LDec.ByteLen = 0 then
       Inc(LIdx)
-    else if (LByte and $E0) = $C0 then
-      Inc(LIdx, 2)
-    else if (LByte and $F0) = $E0 then
-      Inc(LIdx, 3)
     else
-      Inc(LIdx, 4);
+      Inc(LIdx, LDec.ByteLen);
   end;
 end;
 
 function TextUTF8CodePointAt(const AValue: string; const AIndex: Integer): UInt32;
 var
   LIdx, LLen, LCharIdx: Integer;
-  LByte: Byte;
+  LDec: TUTF8DecodeResult;
 begin
   Result := 0;
   LLen := Length(AValue);
@@ -381,33 +380,19 @@ begin
   LCharIdx := 0;
   while LIdx <= LLen do
   begin
-    LByte := Byte(AValue[LIdx]);
+    LDec := UTF8Decode(PByte(@AValue[LIdx]), SizeUInt(LLen - LIdx + 1));
     if LCharIdx = AIndex then
     begin
-      if LByte < $80 then
-        Result := LByte
-      else if (LByte and $E0) = $C0 then
-        Result := ((UInt32(LByte) and $1F) shl 6) or
-                  (UInt32(Byte(AValue[LIdx + 1])) and $3F)
-      else if (LByte and $F0) = $E0 then
-        Result := ((UInt32(LByte) and $0F) shl 12) or
-                  ((UInt32(Byte(AValue[LIdx + 1])) and $3F) shl 6) or
-                  (UInt32(Byte(AValue[LIdx + 2])) and $3F)
+      if LDec.ByteLen = 0 then
+        Result := $FFFD
       else
-        Result := ((UInt32(LByte) and $07) shl 18) or
-                  ((UInt32(Byte(AValue[LIdx + 1])) and $3F) shl 12) or
-                  ((UInt32(Byte(AValue[LIdx + 2])) and $3F) shl 6) or
-                  (UInt32(Byte(AValue[LIdx + 3])) and $3F);
+        Result := LDec.CodePoint;
       Exit;
     end;
-    if LByte < $80 then
+    if LDec.ByteLen = 0 then
       Inc(LIdx)
-    else if (LByte and $E0) = $C0 then
-      Inc(LIdx, 2)
-    else if (LByte and $F0) = $E0 then
-      Inc(LIdx, 3)
     else
-      Inc(LIdx, 4);
+      Inc(LIdx, LDec.ByteLen);
     Inc(LCharIdx);
   end;
 end;
