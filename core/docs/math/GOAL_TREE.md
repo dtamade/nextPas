@@ -237,7 +237,8 @@ Status:
   identity, zero-quaternion `ToRotationMatrix` / `Rotate` identity behavior, `Conjugate`,
   axis-angle roundtrip, axis normalization, zero-axis identity behavior,
   `ToAxisAngle` canonical shortest-angle output including zero-rotation `+Z` fallback, direct
-  `±3π/2` multi-turn canonicalization, exact half-turn stable-axis canonicalization, and
+  `±3π/2` multi-turn canonicalization, exact half-turn stable-axis canonicalization across
+  `x/y/z` axes, and
   scaled-input normalization, scaled-input normalization for rotation matrix conversion and vector
   rotation, quaternion multiply composition,
   `Slerp`, `Nlerp`, shortest-path handling for opposite-sign equivalent interpolation endpoints

@@ -640,6 +640,10 @@ begin
   CheckVec3f(1.0, 0.0, 0.0, Axisf, 'TQuatf ToAxisAngle canonicalizes x half-turn axis');
   CheckNear(PI_VALUE, Angledf, 0.000001, 'TQuatf ToAxisAngle canonicalizes x half-turn angle');
 
+  TQuatf.Create(0.0, -1.0, 0.0, 0.0).ToAxisAngle(Axisf, Angledf);
+  CheckVec3f(0.0, 1.0, 0.0, Axisf, 'TQuatf ToAxisAngle canonicalizes y half-turn axis');
+  CheckNear(PI_VALUE, Angledf, 0.000001, 'TQuatf ToAxisAngle canonicalizes y half-turn angle');
+
   TQuatd.Create(0.0, 0.0, 0.0, -1.0).ToAxisAngle(Axisd, Angledd);
   CheckVec3d(0.0, 0.0, 1.0, Axisd, 'TQuatd ToAxisAngle canonicalizes negated identity axis');
   CheckNear(0.0, Angledd, 0.0, 'TQuatd ToAxisAngle canonicalizes negated identity angle');
@@ -659,6 +663,11 @@ begin
   CheckVec3d(1.0, 0.0, 0.0, Axisd, 'TQuatd ToAxisAngle canonicalizes x half-turn axis');
   CheckNear(PI_VALUE, Angledd, 0.000000000001,
     'TQuatd ToAxisAngle canonicalizes x half-turn angle');
+
+  TQuatd.Create(0.0, -1.0, 0.0, 0.0).ToAxisAngle(Axisd, Angledd);
+  CheckVec3d(0.0, 1.0, 0.0, Axisd, 'TQuatd ToAxisAngle canonicalizes y half-turn axis');
+  CheckNear(PI_VALUE, Angledd, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes y half-turn angle');
 end;
 
 procedure TestToAxisAngleCanonicalizesMultiTurnInputs;
