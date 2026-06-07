@@ -157,29 +157,90 @@ begin
   Dispose(AOp);
 end;
 
-procedure IocpReleasePendingOps(var AReactor: TIocpReactor; AError: DWORD);
+procedure IocpCancelPendingOps(var AReactor: TIocpReactor; AError: DWORD);
 var
-  LOp, LNext: PIocpPendingOp;
+  LOp: PIocpPendingOp;
 begin
   LOp := PIocpPendingOp(AReactor.FPendingHead);
-  AReactor.FPendingHead := nil;
-  AReactor.FPendingCount := 0;
   while LOp <> nil do
   begin
-    LNext := LOp^.Next;
     CancelIoEx(LOp^.Handle, @LOp^.Overlapped);
-    SetLastError(AError);
-    try
-      if Assigned(LOp^.Callback) then
-        LOp^.Callback(LOp^.UserData, -Int32(AError), LOp^.Context);
-    finally
-      LOp^.Callback := nil;
-      LOp^.Context := nil;
-      LOp^.Next := nil;
-      Dispose(LOp);
-    end;
-    LOp := LNext;
+    LOp := LOp^.Next;
   end;
+end;
+
+function IocpDispatchAbortCompletion(var AReactor: TIocpReactor;
+  AOverlapped: LPOVERLAPPED; AError: DWORD): Boolean;
+var
+  LOp: PIocpPendingOp;
+  LCallback: TIoCompletion;
+  LUserData: UInt64;
+  LContext: Pointer;
+begin
+  if AOverlapped = nil then
+    Exit(False);
+
+  LOp := PIocpPendingOp(AOverlapped);
+  LCallback := LOp^.Callback;
+  LUserData := LOp^.UserData;
+  LContext := LOp^.Context;
+  IocpUnlinkOp(AReactor, LOp);
+  LOp^.Callback := nil;
+  LOp^.Context := nil;
+  LOp^.Next := nil;
+  SetLastError(AError);
+  try
+    if Assigned(LCallback) then
+      LCallback(LUserData, -Int32(AError), LContext);
+  finally
+    Dispose(LOp);
+  end;
+  Result := True;
+end;
+
+procedure IocpAbortRemainingPendingOps(var AReactor: TIocpReactor;
+  AError: DWORD);
+var
+  LOp: PIocpPendingOp;
+begin
+  while AReactor.FPendingCount > 0 do
+  begin
+    LOp := PIocpPendingOp(AReactor.FPendingHead);
+    if LOp = nil then
+      Break;
+    IocpDispatchAbortCompletion(AReactor, @LOp^.Overlapped, AError);
+  end;
+end;
+
+procedure IocpDrainCancelledPendingOps(var AReactor: TIocpReactor;
+  APort: HANDLE; AError: DWORD);
+var
+  LBytes: DWORD;
+  LKey: ULONG_PTR;
+  LOverlapped: LPOVERLAPPED;
+  LOk: BOOL;
+begin
+  while AReactor.FPendingCount > 0 do
+  begin
+    LBytes := 0;
+    LKey := 0;
+    LOverlapped := nil;
+    LOk := GetQueuedCompletionStatus(APort, @LBytes, @LKey,
+      @LOverlapped, INFINITE);
+    if (not LOk) and (LOverlapped = nil) then
+    begin
+      IocpAbortRemainingPendingOps(AReactor, AError);
+      Break;
+    end;
+    IocpDispatchAbortCompletion(AReactor, LOverlapped, AError);
+  end;
+end;
+
+procedure IocpReleasePendingOps(var AReactor: TIocpReactor;
+  APort: HANDLE; AError: DWORD);
+begin
+  IocpCancelPendingOps(AReactor, AError);
+  IocpDrainCancelledPendingOps(AReactor, APort, AError);
 end;
 
 function IocpHasAssociatedHandle(const AReactor: TIocpReactor;
@@ -357,14 +418,17 @@ begin
 end;
 
 procedure TIocpReactor.Close;
+var
+  LPort: PtrUInt;
 begin
   AtomicStore32(FRunning, 0, moRelease);
-  IocpReleasePendingOps(Self, ERROR_OPERATION_ABORTED);
-  IocpReleaseAssociatedHandles(Self);
-  if FPort <> 0 then
+  LPort := FPort;
+  FPort := 0;
+  if LPort <> 0 then
   begin
-    CloseHandle(HANDLE(FPort));
-    FPort := 0;
+    IocpReleasePendingOps(Self, HANDLE(LPort), ERROR_OPERATION_ABORTED);
+    IocpReleaseAssociatedHandles(Self);
+    CloseHandle(HANDLE(LPort));
   end;
   FMaxEvents := 0;
 end;

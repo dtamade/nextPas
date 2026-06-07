@@ -108,7 +108,7 @@ begin
 
   CheckContains(LIocp, 'createiocompletionport',
     'IOCP reactor create must allocate a completion port');
-  CheckContains(LIocp, 'closehandle(handle(fport))',
+  CheckContains(LIocp, 'closehandle(handle(lport))',
     'IOCP reactor close must release the completion port handle');
   CheckContains(LIocp, 'getqueuedcompletionstatus',
     'IOCP reactor poll must consume completion port events');
@@ -213,40 +213,128 @@ begin
   LCloseBody := ExtractBetween(LIocp, 'procedure tiocpreactor.close',
     'function tiocpreactor.isvalid');
 
-  CheckContains(LCloseBody, 'iocpreleasependingops(self, error_operation_aborted);',
+  CheckContains(LCloseBody, 'lport := fport;',
+    'IOCP Close must keep the completion port owner handle in local close scope');
+  CheckContains(LCloseBody, 'fport := 0;',
+    'IOCP Close must detach public submission state before abort callbacks can re-enter');
+  CheckBefore(LCloseBody, 'fport := 0;',
+    'iocpreleasependingops(self, handle(lport), error_operation_aborted);',
+    'IOCP Close must reject re-entrant submissions before abort callbacks');
+  CheckContains(LCloseBody,
+    'iocpreleasependingops(self, handle(lport), error_operation_aborted);',
     'IOCP Close must abort owned pending file operations');
-  CheckBefore(LCloseBody, 'iocpreleasependingops(self, error_operation_aborted);',
+  CheckBefore(LCloseBody,
+    'iocpreleasependingops(self, handle(lport), error_operation_aborted);',
     'iocpreleaseassociatedhandles(self);',
     'IOCP Close must abort pending operations before releasing handle associations');
-  CheckBefore(LCloseBody, 'iocpreleasependingops(self, error_operation_aborted);',
-    'closehandle(handle(fport))',
+  CheckBefore(LCloseBody,
+    'iocpreleasependingops(self, handle(lport), error_operation_aborted);',
+    'closehandle(handle(lport))',
     'IOCP Close must dispatch abort callbacks before closing the port handle');
-  CheckContains(LReleaseBody, 'areactor.fpendinghead := nil;',
-    'IOCP pending release must detach the owned list before callbacks');
-  CheckContains(LReleaseBody, 'areactor.fpendingcount := 0;',
-    'IOCP pending release must clear the pending count before callbacks');
-  CheckContains(LReleaseBody, 'cancelioex(lop^.handle, @lop^.overlapped);',
-    'IOCP pending release must cancel each overlapped operation');
-  CheckContains(LReleaseBody, 'setlasterror(aerror);',
-    'IOCP pending release must publish host abort error truth');
-  CheckBefore(LReleaseBody, 'setlasterror(aerror);',
+  CheckContains(LReleaseBody, 'iocpcancelpendingops(areactor, aerror);',
+    'IOCP pending release must first request cancellation for owned file operations');
+  CheckContains(LReleaseBody, 'iocpdraincancelledpendingops(areactor, aport, aerror);',
+    'IOCP pending release must drain cancellation completions before freeing owners');
+  CheckBefore(LReleaseBody, 'iocpcancelpendingops(areactor, aerror);',
+    'iocpdraincancelledpendingops(areactor, aport, aerror);',
+    'IOCP pending release must cancel before draining completion ownership');
+  CheckAbsent(LReleaseBody, 'areactor.fpendinghead := nil;',
+    'IOCP pending release must keep pending ops linked until completion settle');
+  CheckAbsent(LReleaseBody, 'areactor.fpendingcount := 0;',
+    'IOCP pending release must not clear pending count before completion settle');
+  CheckAbsent(LReleaseBody, 'lop^.callback(lop^.userdata, -int32(aerror), lop^.context);',
+    'IOCP pending release must not dispatch abort callbacks before completion settle');
+  CheckAbsent(LReleaseBody, 'dispose(lop);',
+    'IOCP pending release must not free OVERLAPPED storage before completion settle');
+end;
+
+procedure TestIocpCloseAbortCompletionDrainOwnershipContract;
+var
+  LIocp: string;
+  LCancelBody: string;
+  LAbortDispatchBody: string;
+  LAbortRemainingBody: string;
+  LDrainBody: string;
+  LReleaseBody: string;
+begin
+  LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
+  LCancelBody := ExtractBetween(LIocp, 'procedure iocpcancelpendingops',
+    'function iocpdispatchabortcompletion');
+  LAbortDispatchBody := ExtractBetween(LIocp,
+    'function iocpdispatchabortcompletion',
+    'procedure iocpabortremainingpendingops');
+  LAbortRemainingBody := ExtractBetween(LIocp,
+    'procedure iocpabortremainingpendingops',
+    'procedure iocpdraincancelledpendingops');
+  LDrainBody := ExtractBetween(LIocp, 'procedure iocpdraincancelledpendingops',
+    'procedure iocpreleasependingops');
+  LReleaseBody := ExtractBetween(LIocp, 'procedure iocpreleasependingops',
+    'function iocphasassociatedhandle');
+
+  CheckContains(LCancelBody, 'cancelioex(lop^.handle, @lop^.overlapped);',
+    'IOCP cancellation must request abort for each pending OVERLAPPED');
+  CheckAbsent(LCancelBody, 'dispose(lop);',
+    'IOCP cancellation must not free OVERLAPPED storage');
+  CheckAbsent(LCancelBody,
     'lop^.callback(lop^.userdata, -int32(aerror), lop^.context);',
-    'IOCP pending release must publish abort error before callback dispatch');
-  CheckContains(LReleaseBody,
-    'lop^.callback(lop^.userdata, -int32(aerror), lop^.context);',
-    'IOCP pending release must deliver the abort result to the owned callback');
-  CheckContains(LReleaseBody, 'try',
-    'IOCP pending release must guard callback dispatch cleanup');
-  CheckContains(LReleaseBody, 'finally',
-    'IOCP pending release must free the pending op if callback raises');
-  CheckBefore(LReleaseBody,
-    'lop^.callback(lop^.userdata, -int32(aerror), lop^.context);',
+    'IOCP cancellation must not dispatch before completion settle');
+
+  CheckContains(LDrainBody, 'while areactor.fpendingcount > 0 do',
+    'IOCP close-abort drain must run until all pending completions settle');
+  CheckContains(LDrainBody,
+    'getqueuedcompletionstatus(aport, @lbytes, @lkey',
+    'IOCP close-abort drain must observe completion port packets');
+  CheckContains(LDrainBody, '@loverlapped, infinite)',
+    'IOCP close-abort drain must wait for cancellation completion ownership');
+  CheckContains(LDrainBody,
+    'iocpdispatchabortcompletion(areactor, loverlapped, aerror)',
+    'IOCP close-abort drain must dispatch only after receiving the completion packet');
+  CheckBefore(LDrainBody,
+    'getqueuedcompletionstatus(aport, @lbytes, @lkey',
+    'iocpdispatchabortcompletion(areactor, loverlapped, aerror)',
+    'IOCP close-abort drain must settle OS completion before callback/free');
+
+  CheckContains(LAbortDispatchBody, 'lcallback := lop^.callback;',
+    'IOCP abort dispatch must copy callback before detaching the op');
+  CheckContains(LAbortDispatchBody, 'luserdata := lop^.userdata;',
+    'IOCP abort dispatch must copy userdata before detaching the op');
+  CheckContains(LAbortDispatchBody, 'lcontext := lop^.context;',
+    'IOCP abort dispatch must copy context before detaching the op');
+  CheckContains(LAbortDispatchBody, 'iocpunlinkop(areactor, lop);',
+    'IOCP abort dispatch must detach the settled op before user callback re-entry');
+  CheckContains(LAbortDispatchBody, 'setlasterror(aerror);',
+    'IOCP abort dispatch must publish host abort error truth');
+  CheckBefore(LAbortDispatchBody, 'iocpunlinkop(areactor, lop);',
+    'lcallback(luserdata, -int32(aerror), lcontext);',
+    'IOCP abort dispatch must detach before callback dispatch');
+  CheckBefore(LAbortDispatchBody, 'setlasterror(aerror);',
+    'lcallback(luserdata, -int32(aerror), lcontext);',
+    'IOCP abort dispatch must publish abort error before callback dispatch');
+  CheckContains(LAbortDispatchBody, 'try',
+    'IOCP abort dispatch must guard callback dispatch cleanup');
+  CheckContains(LAbortDispatchBody, 'finally',
+    'IOCP abort dispatch must free the pending op if callback raises');
+  CheckBefore(LAbortDispatchBody,
+    'lcallback(luserdata, -int32(aerror), lcontext);',
     'finally',
-    'IOCP pending release must run cleanup after callback dispatch');
-  CheckContains(LReleaseBody, 'dispose(lop);',
-    'IOCP pending release must free every owned operation');
-  CheckBefore(LReleaseBody, 'finally', 'dispose(lop);',
-    'IOCP pending release must dispose the pending op from the cleanup block');
+    'IOCP abort dispatch must run cleanup after callback dispatch');
+  CheckBefore(LAbortDispatchBody, 'finally', 'dispose(lop);',
+    'IOCP abort dispatch must dispose the pending op from the cleanup block');
+
+  CheckContains(LAbortRemainingBody, 'while areactor.fpendingcount > 0 do',
+    'IOCP abort fallback must release every remaining pending owner');
+  CheckContains(LAbortRemainingBody,
+    'iocpdispatchabortcompletion(areactor, @lop^.overlapped, aerror)',
+    'IOCP abort fallback must reuse the same detach/callback/free owner path');
+  CheckContains(LDrainBody, 'iocpabortremainingpendingops(areactor, aerror);',
+    'IOCP close-abort drain must not leak owners if completion draining fails');
+  CheckBefore(LDrainBody, 'if (not lok) and (loverlapped = nil) then',
+    'iocpabortremainingpendingops(areactor, aerror);',
+    'IOCP close-abort drain must fallback when no completion packet can be observed');
+
+  CheckBefore(LReleaseBody, 'iocpcancelpendingops(areactor, aerror);',
+    'iocpdraincancelledpendingops(areactor, aport, aerror);',
+    'IOCP release orchestration must cancel before completion drain');
 end;
 
 procedure TestAsyncLoopTimeoutCloseLifecycleContract;
@@ -877,6 +965,8 @@ begin
     @TestAsyncLoopRunLifecycleContract);
   T.Run('IOCP close abort ownership contract',
     @TestIocpCloseAbortOwnershipContract);
+  T.Run('IOCP close abort completion drain ownership contract',
+    @TestIocpCloseAbortCompletionDrainOwnershipContract);
   T.Run('async loop timeout close lifecycle contract',
     @TestAsyncLoopTimeoutCloseLifecycleContract);
   T.Run('async loop close stop/wake ownership contract',
