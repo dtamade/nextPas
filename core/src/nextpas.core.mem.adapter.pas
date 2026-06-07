@@ -110,7 +110,7 @@ type
     FLayoutMapLock: TRTLCriticalSection;
     procedure TrackLayout(aPtr: Pointer; aSize, aAlign: SizeUInt);
     procedure UntrackLayout(aPtr: Pointer);
-    function LookupLayout(aPtr: Pointer): TTrackedLayout;
+    function TryLookupLayout(aPtr: Pointer; out aLayout: TTrackedLayout): Boolean;
   protected
     function DoGetMem(aSize: SizeUInt): Pointer; override;
     function DoAllocMem(aSize: SizeUInt): Pointer; override;
@@ -241,19 +241,23 @@ begin
   end;
 end;
 
-function TAllocToAllocatorAdapter.LookupLayout(aPtr: Pointer): TTrackedLayout;
+function TAllocToAllocatorAdapter.TryLookupLayout(aPtr: Pointer; out aLayout: TTrackedLayout): Boolean;
 var
   LIndex: SizeInt;
 begin
-  Result.Size := 0;
-  Result.Align := MEM_DEFAULT_ALIGN;
+  Result := False;
+  aLayout.Size := 0;
+  aLayout.Align := MEM_DEFAULT_ALIGN;
   if aPtr = nil then Exit;
   EnterCriticalSection(FLayoutMapLock);
   try
     if FLayoutMap = nil then Exit;
     LIndex := FLayoutMap.IndexOf(aPtr);
     if LIndex >= 0 then
-      Result := FLayoutMap.Data[LIndex];
+    begin
+      aLayout := FLayoutMap.Data[LIndex];
+      Result := True;
+    end;
   finally
     LeaveCriticalSection(FLayoutMapLock);
   end;
@@ -454,7 +458,9 @@ var
   LResult: TAllocResult;
   LTracked: TTrackedLayout;
 begin
-  LTracked := LookupLayout(aDst);
+  if not TryLookupLayout(aDst, LTracked) then
+    raise EAllocError.Create(aeInvalidPointer, 'TAllocToAllocatorAdapter.ReallocMem: pointer is not tracked');
+
   LOldLayout := TMemLayout.Create(LTracked.Size, LTracked.Align);
   LNewLayout := TMemLayout.Create(aSize, LTracked.Align);
   LResult := FAlloc.Realloc(aDst, LOldLayout, LNewLayout);
@@ -472,7 +478,9 @@ var
   LLayout: TMemLayout;
   LTracked: TTrackedLayout;
 begin
-  LTracked := LookupLayout(aDst);
+  if not TryLookupLayout(aDst, LTracked) then
+    raise EAllocError.Create(aeInvalidPointer, 'TAllocToAllocatorAdapter.FreeMem: pointer is not tracked');
+
   LLayout := TMemLayout.Create(LTracked.Size, LTracked.Align);
   UntrackLayout(aDst);
   FAlloc.Dealloc(aDst, LLayout);
@@ -495,7 +503,9 @@ var
   LLayout: TMemLayout;
   LTracked: TTrackedLayout;
 begin
-  LTracked := LookupLayout(aPtr);
+  if not TryLookupLayout(aPtr, LTracked) then
+    raise EAllocError.Create(aeInvalidPointer, 'TAllocToAllocatorAdapter.FreeAligned: pointer is not tracked');
+
   LLayout := TMemLayout.Create(LTracked.Size, LTracked.Align);
   UntrackLayout(aPtr);
   FAlloc.Dealloc(aPtr, LLayout);

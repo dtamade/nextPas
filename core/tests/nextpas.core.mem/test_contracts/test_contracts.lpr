@@ -22,6 +22,23 @@ type
   TDWordArray = array[0..2] of UInt32;
   TQWordArray = array[0..1] of UInt64;
 
+  TRecordingAlloc = class(TInterfacedObject, IAlloc)
+  public
+    AllocCalls: Integer;
+    ReallocCalls: Integer;
+    DeallocCalls: Integer;
+    LastAllocLayout: TMemLayout;
+    LastReallocOldLayout: TMemLayout;
+    LastReallocNewLayout: TMemLayout;
+    LastDeallocLayout: TMemLayout;
+
+    function Alloc(const aLayout: TMemLayout): TAllocResult;
+    function AllocZeroed(const aLayout: TMemLayout): TAllocResult;
+    procedure Dealloc(aPtr: Pointer; const aLayout: TMemLayout);
+    function Realloc(aPtr: Pointer; const aOldLayout, aNewLayout: TMemLayout): TAllocResult;
+    function Caps: TAllocCaps;
+  end;
+
 var
   T: TTestRunner;
   GGetMemCalls: Integer = 0;
@@ -35,6 +52,66 @@ begin
   GAllocMemCalls := 0;
   GReallocMemCalls := 0;
   GFreeMemCalls := 0;
+end;
+
+function TRecordingAlloc.Alloc(const aLayout: TMemLayout): TAllocResult;
+var
+  LPtr: Pointer;
+begin
+  Inc(AllocCalls);
+  LastAllocLayout := aLayout;
+  if not aLayout.IsValid then
+    Exit(TAllocResult.Err(aeInvalidLayout));
+  if aLayout.IsZeroSized then
+    Exit(TAllocResult.Ok(nil));
+
+  LPtr := System.GetMem(aLayout.Size);
+  if LPtr = nil then
+    Result := TAllocResult.Err(aeOutOfMemory)
+  else
+    Result := TAllocResult.Ok(LPtr);
+end;
+
+function TRecordingAlloc.AllocZeroed(const aLayout: TMemLayout): TAllocResult;
+begin
+  Result := Alloc(aLayout);
+  if Result.IsOk and (Result.Ptr <> nil) then
+    FillChar(Result.Ptr^, aLayout.Size, 0);
+end;
+
+procedure TRecordingAlloc.Dealloc(aPtr: Pointer; const aLayout: TMemLayout);
+begin
+  Inc(DeallocCalls);
+  LastDeallocLayout := aLayout;
+  if (aPtr <> nil) and (aLayout.Size > 0) then
+    System.FreeMem(aPtr);
+end;
+
+function TRecordingAlloc.Realloc(aPtr: Pointer; const aOldLayout, aNewLayout: TMemLayout): TAllocResult;
+var
+  LPtr: Pointer;
+begin
+  Inc(ReallocCalls);
+  LastReallocOldLayout := aOldLayout;
+  LastReallocNewLayout := aNewLayout;
+  if aPtr = nil then
+    Exit(Alloc(aNewLayout));
+  if aNewLayout.IsZeroSized then
+  begin
+    Dealloc(aPtr, aOldLayout);
+    Exit(TAllocResult.Ok(nil));
+  end;
+
+  LPtr := System.ReallocMem(aPtr, aNewLayout.Size);
+  if LPtr = nil then
+    Result := TAllocResult.Err(aeOutOfMemory)
+  else
+    Result := TAllocResult.Ok(LPtr);
+end;
+
+function TRecordingAlloc.Caps: TAllocCaps;
+begin
+  Result := TAllocCaps.Create(False, True, False, True, True, 256);
 end;
 
 function CallbackGetMem(aSize: SizeUInt): Pointer;
@@ -270,6 +347,73 @@ begin
   end;
 end;
 
+procedure TestAllocToAllocatorAdapterTracksLayoutsAndRejectsUntrackedPointers;
+var
+  LRecording: TRecordingAlloc;
+  LAlloc: IAlloc;
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
+  LPtr: Pointer;
+  LForeignByte: Byte;
+begin
+  LRecording := TRecordingAlloc.Create;
+  LAlloc := LRecording as IAlloc;
+  LAllocator := WrapAsAllocator(LAlloc);
+
+  LPtr := LAllocator.AllocAligned(96, 64);
+  try
+    Check(LPtr <> nil, 'tracked adapter allocation should succeed');
+    CheckEqual(Int64(96), Int64(LRecording.LastAllocLayout.Size),
+      'tracked adapter allocation should pass requested size');
+    CheckEqual(Int64(64), Int64(LRecording.LastAllocLayout.Align),
+      'tracked adapter allocation should pass requested alignment');
+
+    LPtr := LAllocator.ReallocMem(LPtr, 160);
+    Check(LPtr <> nil, 'tracked adapter realloc should succeed');
+    CheckEqual(Int64(1), Int64(LRecording.ReallocCalls),
+      'tracked adapter realloc should forward once');
+    CheckEqual(Int64(96), Int64(LRecording.LastReallocOldLayout.Size),
+      'tracked adapter realloc should preserve old size');
+    CheckEqual(Int64(64), Int64(LRecording.LastReallocOldLayout.Align),
+      'tracked adapter realloc should preserve old alignment');
+    CheckEqual(Int64(160), Int64(LRecording.LastReallocNewLayout.Size),
+      'tracked adapter realloc should pass new size');
+    CheckEqual(Int64(64), Int64(LRecording.LastReallocNewLayout.Align),
+      'tracked adapter realloc should preserve new alignment');
+
+    try
+      LAllocator.FreeMem(@LForeignByte);
+      Fail('untracked pointer FreeMem should raise');
+    except
+      on E: EAllocError do
+        CheckEqual(Int64(Ord(aeInvalidPointer)), Int64(Ord(E.Error)),
+          'untracked pointer FreeMem error code');
+    end;
+    CheckEqual(Int64(0), Int64(LRecording.DeallocCalls),
+      'untracked pointer must not be forwarded to IAlloc.Dealloc');
+
+    try
+      LAllocator.ReallocMem(@LForeignByte, 16);
+      Fail('untracked pointer ReallocMem should raise');
+    except
+      on E: EAllocError do
+        CheckEqual(Int64(Ord(aeInvalidPointer)), Int64(Ord(E.Error)),
+          'untracked pointer ReallocMem error code');
+    end;
+    CheckEqual(Int64(1), Int64(LRecording.ReallocCalls),
+      'untracked pointer must not be forwarded to IAlloc.Realloc');
+  finally
+    if LPtr <> nil then
+      LAllocator.FreeMem(LPtr);
+  end;
+
+  CheckEqual(Int64(1), Int64(LRecording.DeallocCalls),
+    'tracked adapter free should forward exactly once');
+  CheckEqual(Int64(160), Int64(LRecording.LastDeallocLayout.Size),
+    'tracked adapter free should pass tracked final size');
+  CheckEqual(Int64(64), Int64(LRecording.LastDeallocLayout.Align),
+    'tracked adapter free should pass tracked final alignment');
+end;
+
 procedure TestMimallocUsableSizeCapabilityFallback;
 var
   LAllocator: nextpas.core.mem.allocator.IAllocator;
@@ -408,6 +552,7 @@ begin
   T.Run('allocator adapter round trip', @TestAllocatorAdapterRoundTrip);
   T.Run('allocator adapter aligned round trip', @TestAllocatorAdapterAlignedRoundTrip);
   T.Run('aligned alloc rejects backing size overflow', @TestAlignedAllocRejectsBackingSizeOverflow);
+  T.Run('alloc adapter tracks layouts and rejects untracked pointers', @TestAllocToAllocatorAdapterTracksLayoutsAndRejectsUntrackedPointers);
   T.Run('mimalloc usable-size capability fallback', @TestMimallocUsableSizeCapabilityFallback);
   T.Run('mem.utils no-op and overlap contract', @TestMemUtilsNoOpAndOverlapContract);
   T.Run('mem.utils copy unchecked handles overlap', @TestMemUtilsCopyUncheckedHandlesOverlap);
