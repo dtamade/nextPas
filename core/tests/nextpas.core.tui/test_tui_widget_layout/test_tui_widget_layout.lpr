@@ -142,6 +142,26 @@ begin
   finally LBuf.Free; end;
 end;
 
+{ === TPopover === }
+procedure TestPopoverBorderedTinyWidthDoesNotLeakContent;
+var
+  Pop: IPopover;
+  State: TPopoverState;
+  LBuf: TBuffer;
+  LRow: AnsiString;
+begin
+  Pop := TPopover.New(['Item']).WithWidth(1).WithBorder(True);
+  State := TPopoverState.Hidden;
+  State.Show;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 12, 6));
+  try
+    Pop.RenderStateful(TRect.Make(0, 0, 1, 1), TRect.Make(0, 0, 12, 6),
+      LBuf, State);
+    LRow := LBuf.RowAsString(2);
+    Check(Pos('Item', LRow) = 0, 'tiny bordered popover does not leak content outside border');
+  finally LBuf.Free; end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.tui.widget.layout');
   T.Run('panel new', @TestPanelNew);
@@ -155,6 +175,8 @@ begin
   T.Run('modal invisible', @TestModalInvisible);
   T.Run('tooltip render at', @TestTooltipRenderAt);
   T.Run('tooltip as IWidget', @TestTooltipAsIWidget);
+  T.Run('popover bordered tiny width does not leak content',
+    @TestPopoverBorderedTinyWidthDoesNotLeakContent);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

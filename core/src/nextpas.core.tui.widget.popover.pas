@@ -160,11 +160,21 @@ var
 begin
   if not AState.Visible then Exit;
   if Length(FItems) = 0 then Exit;
+  if Bounds.IsEmpty then Exit;
 
   PopW := FWidth;
+  if PopW < 0 then PopW := 0;
+  if PopW > Bounds.Width then PopW := Bounds.Width;
+  if PopW <= 0 then Exit;
+
   PopH := Length(FItems);
-  if PopH > FMaxHeight then PopH := FMaxHeight;
+  if FMaxHeight < 0 then
+    PopH := 0
+  else if PopH > FMaxHeight then
+    PopH := FMaxHeight;
   if FHasBorder then Inc(PopH, 2);
+  if PopH > Bounds.Height then PopH := Bounds.Height;
+  if PopH <= 0 then Exit;
 
   case FAnchor of
     paBelow:
@@ -202,6 +212,7 @@ begin
   begin
     TBlock.New.WithBorders(BORDERS_ALL).WithBorderStyle(FStyle)
       .Render(TRect.Make(PopX, PopY, PopW, PopH), ABuffer);
+    if (PopW <= 2) or (PopH <= 2) then Exit;
     Inner := TRect.Make(PopX + 1, PopY + 1, PopW - 2, PopH - 2);
   end
   else
