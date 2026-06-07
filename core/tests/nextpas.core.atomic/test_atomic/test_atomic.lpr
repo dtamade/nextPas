@@ -254,6 +254,7 @@ const
   AtomicCoreSourcePath = '../../../src/nextpas.core.atomic.core.pas';
   AtomicTypesSourcePath = '../../../src/nextpas.core.atomic.types.pas';
   AtomicCompatSourcePath = '../../../src/nextpas.core.atomic.compat.pas';
+  AtomicTestSourcePath = 'test_atomic.lpr';
   AtomicDocsReadmePath = '../../../docs/atomic/README.md';
   AtomicBenchMakefilePath = '../../../benchmarks/nextpas.core.atomic/bench_atomic/Makefile';
   AtomicBenchSourcePath = '../../../benchmarks/nextpas.core.atomic/bench_atomic/bench_atomic.lpr';
@@ -267,6 +268,7 @@ var
   LAtomicCoreSource: string;
   LAtomicTypesSource: string;
   LAtomicCompatSource: string;
+  LAtomicTestSource: string;
   LAtomicDocsReadme: string;
   LAtomicBenchMakefile: string;
   LAtomicBenchSource: string;
@@ -339,6 +341,8 @@ var
   LAtomicWaitSection: string;
   LAtomicNotifyOneSection: string;
   LAtomicNotifyAllSection: string;
+  LCompatFacadeTestSection: string;
+  LCompatAliasTestSection: string;
   LAtomicFlagTestAndSetSection: string;
   LAtomicFlagTestSection: string;
   LAtomicFlagClearSection: string;
@@ -365,6 +369,7 @@ begin
   LAtomicCoreSource := ReadUtf8TextFile(AtomicCoreSourcePath);
   LAtomicTypesSource := ReadUtf8TextFile(AtomicTypesSourcePath);
   LAtomicCompatSource := ReadUtf8TextFile(AtomicCompatSourcePath);
+  LAtomicTestSource := ReadUtf8TextFile(AtomicTestSourcePath);
   LAtomicDocsReadme := ReadUtf8TextFile(AtomicDocsReadmePath);
   Check(FileExists(AtomicBenchMakefilePath),
     'atomic benchmark Makefile must exist as the focused benchmark entrypoint');
@@ -584,6 +589,14 @@ begin
   LAtomicNotifyAllSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_notify_all(var aObj: Int32): Int32;',
     'function atomic_notify_all(var aObj: UInt32): Int32;');
+  LCompatFacadeTestSection := ExtractSection(LAtomicTestSource,
+    'procedure TestAtomicCompatFacade;' + LineEnding +
+    'var',
+    'procedure TestAtomicCompatAliasBehavior;');
+  LCompatAliasTestSection := ExtractSection(LAtomicTestSource,
+    'procedure TestAtomicCompatAliasBehavior;' + LineEnding +
+    'var',
+    'procedure TestAtomicTaggedPointer;');
   LAtomicFlagTestAndSetSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_flag_test_and_set(var aFlag: atomic_flag_t): Boolean;',
     'function atomic_flag_test(var aFlag: atomic_flag_t): Boolean;');
@@ -759,6 +772,76 @@ begin
   CheckContains(LAtomicDocsReadme,
     'pointer arithmetic/bitwise overloads stay in `nextpas.core.atomic.compat` and must not be added to the main facade',
     'atomic README must explicitly freeze legacy pointer overload ownership');
+  CheckContains(LAtomicDocsReadme,
+    'legacy pointer arithmetic/bitwise overloads and helper aliases have focused runtime coverage',
+    'atomic README must document compat alias runtime coverage');
+  CheckContains(LAtomicTestSource,
+    'T.Run(''compat public alias behavior'', @TestAtomicCompatAliasBehavior);',
+    'atomic runner must register compat alias runtime coverage');
+  CheckContains(LCompatFacadeTestSection,
+    'compat AtomicCompareExchange32 must return observed value on mismatch',
+    'compat PascalCase runtime test must cover Int32 CAS mismatch observation');
+  CheckContains(LCompatFacadeTestSection,
+    'compat AtomicCompareExchange32 must publish desired value on match',
+    'compat PascalCase runtime test must cover Int32 CAS match publish');
+  CheckContains(LCompatFacadeTestSection,
+    'compat AtomicCompareExchangePtr must return observed pointer on mismatch',
+    'compat PascalCase runtime test must cover pointer CAS mismatch observation');
+  CheckContains(LCompatFacadeTestSection,
+    'compat AtomicCompareExchangePtr must publish desired pointer on match',
+    'compat PascalCase runtime test must cover pointer CAS match publish');
+  CheckContains(LCompatFacadeTestSection,
+    'AtomicCompareExchange32(LVal, 99, 21, moRelease)',
+    'compat PascalCase runtime test must exercise release success-order CAS failure derivation');
+  CheckContains(LCompatFacadeTestSection,
+    'AtomicCompareExchange32(LVal, 13, 21, moAcqRel)',
+    'compat PascalCase runtime test must exercise acq_rel success-order CAS success path');
+  CheckContains(LCompatFacadeTestSection,
+    'AtomicCompareExchangePtr(LPtr, @LSecond, nil, moRelease)',
+    'compat PascalCase runtime test must exercise pointer release success-order CAS failure derivation');
+  CheckContains(LCompatFacadeTestSection,
+    'AtomicCompareExchangePtr(LPtr, @LFirst, @LSecond, moAcqRel)',
+    'compat PascalCase runtime test must exercise pointer acq_rel success-order CAS success path');
+  CheckContains(LCompatAliasTestSection, 'nextpas.core.atomic.compat.atomic_fetch_add',
+    'compat alias runtime test must call the compat pointer fetch-add overload');
+  CheckContains(LCompatAliasTestSection, 'nextpas.core.atomic.compat.atomic_fetch_sub',
+    'compat alias runtime test must call the compat pointer fetch-sub overload');
+  CheckContains(LCompatAliasTestSection, 'nextpas.core.atomic.compat.atomic_fetch_and',
+    'compat alias runtime test must call the compat pointer fetch-and overload');
+  CheckContains(LCompatAliasTestSection, 'nextpas.core.atomic.compat.atomic_fetch_or',
+    'compat alias runtime test must call the compat pointer fetch-or overload');
+  CheckContains(LCompatAliasTestSection, 'nextpas.core.atomic.compat.atomic_fetch_xor',
+    'compat alias runtime test must call the compat pointer fetch-xor overload');
+  CheckContains(LCompatAliasTestSection, 'nextpas.core.atomic.compat.atomic_increment',
+    'compat alias runtime test must call the compat pointer increment overload');
+  CheckContains(LCompatAliasTestSection, 'nextpas.core.atomic.compat.atomic_decrement',
+    'compat alias runtime test must call the compat pointer decrement overload');
+  CheckContains(LCompatAliasTestSection, 'nextpas.core.atomic.compat.atomic_load_ptr',
+    'compat alias runtime test must call the compat pointer helper load alias');
+  CheckContains(LCompatAliasTestSection, 'nextpas.core.atomic.compat.atomic_store_ptr',
+    'compat alias runtime test must call the compat pointer helper store alias');
+  CheckContains(LCompatAliasTestSection, 'nextpas.core.atomic.compat.atomic_compare_exchange_strong_ptr',
+    'compat alias runtime test must call the compat pointer helper CAS alias');
+  CheckContains(LCompatAliasTestSection, 'nextpas.core.atomic.compat.make_atomic_tagged_ptr_t',
+    'compat alias runtime test must call the compat tagged pointer constructor alias');
+  CheckContains(LCompatAliasTestSection, 'nextpas.core.atomic.compat.atomic_load_atomic_tagged_ptr_t',
+    'compat alias runtime test must call the compat tagged pointer load alias');
+  CheckContains(LCompatAliasTestSection, 'nextpas.core.atomic.compat.atomic_store_atomic_tagged_ptr_t',
+    'compat alias runtime test must call the compat tagged pointer store alias');
+  CheckContains(LCompatAliasTestSection, 'nextpas.core.atomic.compat.atomic_compare_exchange_strong_atomic_tagged_ptr_t',
+    'compat alias runtime test must call the compat tagged pointer CAS alias');
+  CheckContains(LCompatAliasTestSection,
+    'compat pointer arithmetic fetch-add must return previous pointer value',
+    'compat alias runtime test must cover pointer-sized fetch-add return-old semantics');
+  CheckContains(LCompatAliasTestSection,
+    'compat pointer bitwise fetch-and must publish masked pointer bits',
+    'compat alias runtime test must cover pointer-sized bitwise semantics');
+  CheckContains(LCompatAliasTestSection,
+    'compat pointer helper CAS must update expected on mismatch',
+    'compat alias runtime test must cover helper pointer CAS mismatch write-back');
+  CheckContains(LCompatAliasTestSection,
+    'compat tagged helper CAS must publish desired tag',
+    'compat alias runtime test must cover tagged helper CAS success semantics');
   CheckContains(LAtomicDocsReadme, 'atomic_*',
     'atomic README must name the canonical function API');
   CheckContains(LAtomicDocsReadme, 'TAtomic*',
@@ -2450,6 +2533,10 @@ procedure TestAtomicCompatFacade;
 var
   LVal: Int32;
   LOld: Int32;
+  LFirst: Int32;
+  LSecond: Int32;
+  LPtr: Pointer;
+  LObservedPtr: Pointer;
 begin
   LVal := 0;
   nextpas.core.atomic.compat.AtomicStore32(LVal, 9, moRelease);
@@ -2458,6 +2545,33 @@ begin
   LOld := nextpas.core.atomic.compat.AtomicFetchAdd32(LVal, 4, moAcqRel);
   CheckEqual(Int64(9), Int64(LOld));
   CheckEqual(Int64(13), Int64(LVal));
+
+  LOld := nextpas.core.atomic.compat.AtomicCompareExchange32(LVal, 99, 21, moRelease);
+  CheckEqual(Int64(13), Int64(LOld),
+    'compat AtomicCompareExchange32 must return observed value on mismatch');
+  CheckEqual(Int64(13), Int64(LVal),
+    'compat AtomicCompareExchange32 mismatch must leave target unchanged');
+
+  LOld := nextpas.core.atomic.compat.AtomicCompareExchange32(LVal, 13, 21, moAcqRel);
+  CheckEqual(Int64(13), Int64(LOld),
+    'compat AtomicCompareExchange32 must return previous value on match');
+  CheckEqual(Int64(21), Int64(LVal),
+    'compat AtomicCompareExchange32 must publish desired value on match');
+
+  LFirst := 1;
+  LSecond := 2;
+  LPtr := @LFirst;
+  LObservedPtr := nextpas.core.atomic.compat.AtomicCompareExchangePtr(LPtr, @LSecond, nil, moRelease);
+  Check(LObservedPtr = @LFirst,
+    'compat AtomicCompareExchangePtr must return observed pointer on mismatch');
+  Check(LPtr = @LFirst,
+    'compat AtomicCompareExchangePtr mismatch must leave target unchanged');
+
+  LObservedPtr := nextpas.core.atomic.compat.AtomicCompareExchangePtr(LPtr, @LFirst, @LSecond, moAcqRel);
+  Check(LObservedPtr = @LFirst,
+    'compat AtomicCompareExchangePtr must return previous pointer on match');
+  Check(LPtr = @LSecond,
+    'compat AtomicCompareExchangePtr must publish desired pointer on match');
 
   nextpas.core.atomic.compat.AtomicThreadFence(moSeqCst);
   nextpas.core.atomic.compat.AtomicSignalFence(moSeqCst);
@@ -2470,6 +2584,112 @@ begin
     'compat AtomicNotifyOne32 should succeed on supported platforms');
   CheckEqual(Int64(0), Int64(nextpas.core.atomic.compat.AtomicNotifyAll32(LVal)),
     'compat AtomicNotifyAll32 should succeed on supported platforms');
+end;
+
+procedure TestAtomicCompatAliasBehavior;
+var
+  LPtr: Pointer;
+  LOldPtr: Pointer;
+  LExpectedPtr: Pointer;
+  LValue: Int32;
+  LTagged: atomic_tagged_ptr_t;
+  LExpectedTagged: atomic_tagged_ptr_t;
+  LDesiredTagged: atomic_tagged_ptr_t;
+begin
+  LPtr := Pointer(PtrUInt($1000));
+  LOldPtr := nextpas.core.atomic.compat.atomic_fetch_add(LPtr, Pointer(PtrUInt($20)));
+  Check(LOldPtr = Pointer(PtrUInt($1000)),
+    'compat pointer arithmetic fetch-add must return previous pointer value');
+  Check(LPtr = Pointer(PtrUInt($1020)),
+    'compat pointer arithmetic fetch-add must publish pointer-sized addition');
+
+  LOldPtr := nextpas.core.atomic.compat.atomic_fetch_sub(LPtr, Pointer(PtrUInt($10)));
+  Check(LOldPtr = Pointer(PtrUInt($1020)),
+    'compat pointer arithmetic fetch-sub must return previous pointer value');
+  Check(LPtr = Pointer(PtrUInt($1010)),
+    'compat pointer arithmetic fetch-sub must publish pointer-sized subtraction');
+
+  LPtr := Pointer(PtrUInt($F0F0));
+  LOldPtr := nextpas.core.atomic.compat.atomic_fetch_and(LPtr, Pointer(PtrUInt($0FF0)));
+  Check(LOldPtr = Pointer(PtrUInt($F0F0)),
+    'compat pointer bitwise fetch-and must return previous pointer value');
+  Check(LPtr = Pointer(PtrUInt($00F0)),
+    'compat pointer bitwise fetch-and must publish masked pointer bits');
+
+  LOldPtr := nextpas.core.atomic.compat.atomic_fetch_or(LPtr, Pointer(PtrUInt($0F00)));
+  Check(LOldPtr = Pointer(PtrUInt($00F0)),
+    'compat pointer bitwise fetch-or must return previous pointer value');
+  Check(LPtr = Pointer(PtrUInt($0FF0)),
+    'compat pointer bitwise fetch-or must publish combined pointer bits');
+
+  LOldPtr := nextpas.core.atomic.compat.atomic_fetch_xor(LPtr, Pointer(PtrUInt($00FF)));
+  Check(LOldPtr = Pointer(PtrUInt($0FF0)),
+    'compat pointer bitwise fetch-xor must return previous pointer value');
+  Check(LPtr = Pointer(PtrUInt($0F0F)),
+    'compat pointer bitwise fetch-xor must publish toggled pointer bits');
+
+  LPtr := Pointer(PtrUInt($2000));
+  LOldPtr := nextpas.core.atomic.compat.atomic_increment(LPtr);
+  Check(LOldPtr = Pointer(PtrUInt($2001)),
+    'compat pointer increment must return updated pointer-sized value');
+  Check(LPtr = Pointer(PtrUInt($2001)),
+    'compat pointer increment must publish updated pointer-sized value');
+
+  LOldPtr := nextpas.core.atomic.compat.atomic_decrement(LPtr);
+  Check(LOldPtr = Pointer(PtrUInt($2000)),
+    'compat pointer decrement must return updated pointer-sized value');
+  Check(LPtr = Pointer(PtrUInt($2000)),
+    'compat pointer decrement must publish updated pointer-sized value');
+
+  LValue := 42;
+  LPtr := @LValue;
+  Check(nextpas.core.atomic.compat.atomic_load_ptr(LPtr, mo_acquire) = @LValue,
+    'compat pointer helper load must return the stored pointer');
+  nextpas.core.atomic.compat.atomic_store_ptr(LPtr, nil, mo_release);
+  Check(nextpas.core.atomic.compat.atomic_load_ptr(LPtr) = nil,
+    'compat pointer helper store must publish the desired pointer');
+
+  LExpectedPtr := @LValue;
+  Check(not nextpas.core.atomic.compat.atomic_compare_exchange_strong_ptr(LPtr, LExpectedPtr, @LValue),
+    'compat pointer helper CAS must fail on expected mismatch');
+  Check(LExpectedPtr = nil,
+    'compat pointer helper CAS must update expected on mismatch');
+
+  LExpectedPtr := nil;
+  Check(nextpas.core.atomic.compat.atomic_compare_exchange_strong_ptr(LPtr, LExpectedPtr, @LValue),
+    'compat pointer helper CAS must succeed on expected match');
+  Check(LPtr = @LValue,
+    'compat pointer helper CAS must publish desired pointer');
+
+  LTagged := nextpas.core.atomic.compat.make_atomic_tagged_ptr_t(@LValue, 1);
+  Check(atomic_tagged_ptr_get_ptr(
+    nextpas.core.atomic.compat.atomic_load_atomic_tagged_ptr_t(LTagged, mo_acquire)) = @LValue,
+    'compat tagged helper load must preserve pointer');
+  CheckEqual(Int64(1), Int64(atomic_tagged_ptr_get_tag(
+    nextpas.core.atomic.compat.atomic_load_atomic_tagged_ptr_t(LTagged, mo_acquire))),
+    'compat tagged helper load must preserve tag');
+
+  LDesiredTagged := nextpas.core.atomic.compat.make_atomic_tagged_ptr_t(@LValue, 2);
+  nextpas.core.atomic.compat.atomic_store_atomic_tagged_ptr_t(LTagged, LDesiredTagged, mo_release);
+  CheckEqual(Int64(2), Int64(atomic_tagged_ptr_get_tag(
+    nextpas.core.atomic.compat.atomic_load_atomic_tagged_ptr_t(LTagged, mo_acquire))),
+    'compat tagged helper store must publish desired tag');
+
+  LExpectedTagged := LDesiredTagged;
+  LDesiredTagged := nextpas.core.atomic.compat.make_atomic_tagged_ptr_t(@LValue, 3);
+  Check(nextpas.core.atomic.compat.atomic_compare_exchange_strong_atomic_tagged_ptr_t(
+    LTagged, LExpectedTagged, LDesiredTagged),
+    'compat tagged helper CAS must succeed on expected match');
+  CheckEqual(Int64(3), Int64(atomic_tagged_ptr_get_tag(
+    nextpas.core.atomic.compat.atomic_load_atomic_tagged_ptr_t(LTagged, mo_acquire))),
+    'compat tagged helper CAS must publish desired tag');
+
+  LExpectedTagged := nextpas.core.atomic.compat.make_atomic_tagged_ptr_t(nil, 0);
+  Check(not nextpas.core.atomic.compat.atomic_compare_exchange_strong_atomic_tagged_ptr_t(
+    LTagged, LExpectedTagged, LDesiredTagged),
+    'compat tagged helper CAS must fail on expected mismatch');
+  CheckEqual(Int64(3), Int64(atomic_tagged_ptr_get_tag(LExpectedTagged)),
+    'compat tagged helper CAS must update expected tag on mismatch');
 end;
 
 procedure TestAtomicTaggedPointer;
@@ -3016,6 +3236,7 @@ begin
   T.Run('pointer offset fetch contract', @TestAtomicPointerOffsetFetchContract);
   T.Run('invalid memory-order contract', @TestAtomicInvalidMemoryOrderContract);
   T.Run('compat PascalCase facade', @TestAtomicCompatFacade);
+  T.Run('compat public alias behavior', @TestAtomicCompatAliasBehavior);
   T.Run('tagged pointer atomic API', @TestAtomicTaggedPointer);
   T.Run('tagged pointer update contracts', @TestAtomicTaggedPointerUpdateContracts);
   T.Run('tagged pointer rejects out-of-range x86_64 pointer', @TestAtomicTaggedPointerRejectsOutOfRangeX8664Pointer);

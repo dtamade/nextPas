@@ -29,6 +29,7 @@ arith/bitwise overload 属于 legacy compatibility surface，只为旧调用点�
 
 Compatibility boundary: pointer arithmetic/bitwise overloads stay in `nextpas.core.atomic.compat` and must not be added to the main facade.
 `atomic_fetch_add/sub(var Pointer; PtrInt)` are the canonical main-facade pointer arithmetic APIs: they apply byte offsets, return the previous pointer, and publish the adjusted pointer; pointer bitwise overloads remain compat-only.
+The legacy pointer arithmetic/bitwise overloads and helper aliases have focused runtime coverage in the atomic test gate; this does not make them preferred APIs for new code.
 
 `TAtomicRefCount` 是专用引用计数器，不是通用 `PtrUInt` 原子类型。它只暴露 `Load`、`Inc`、
 `TryInc`、`Dec`、`IntoInner`，刻意不暴露 `Store`、`Exchange`、`FetchAdd`、`FetchSub`
