@@ -154,11 +154,17 @@ var
   LOffset: UInt16;
   LMatchPos: Int32;
 begin
-  if (Length(AData) = 0) or (AOriginalSize <= 0) then
+  if AOriginalSize < 0 then
+    raise EIOError.Create('lz4: invalid original size');
+  if Length(AData) = 0 then
   begin
+    if AOriginalSize <> 0 then
+      raise EIOError.Create('lz4: empty input with nonzero original size');
     Result := nil;
     Exit;
   end;
+  if AOriginalSize = 0 then
+    raise EIOError.Create('lz4: non-empty input with zero original size');
 
   SetLength(Result, AOriginalSize);
   LSrc := 0;

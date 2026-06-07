@@ -54,11 +54,17 @@ function NativeLz4Decompress(const AData: TBytes; const AOriginalSize: Int32): T
 var
   LDecompressed: Int32;
 begin
-  if (Length(AData) = 0) or (AOriginalSize <= 0) then
+  if AOriginalSize < 0 then
+    raise EIOError.Create('lz4 native: invalid original size');
+  if Length(AData) = 0 then
   begin
+    if AOriginalSize <> 0 then
+      raise EIOError.Create('lz4 native: empty input with nonzero original size');
     Result := nil;
     Exit;
   end;
+  if AOriginalSize = 0 then
+    raise EIOError.Create('lz4 native: non-empty input with zero original size');
   SetLength(Result, AOriginalSize);
   LDecompressed := LZ4_decompress_safe(@AData[0], @Result[0], Length(AData), AOriginalSize);
   if LDecompressed < 0 then

@@ -179,6 +179,37 @@ begin
   Check(LGot, 'lz4 length overflow raises');
 end;
 
+procedure TestLz4MalformedOriginalSizeMetadata;
+var
+  LC: TBytes;
+  LGot: Boolean;
+begin
+  LGot := False;
+  try
+    Lz4Decompress(nil, 1);
+  except
+    LGot := True;
+  end;
+  Check(LGot, 'lz4 empty payload with nonzero original size raises');
+
+  LGot := False;
+  try
+    Lz4Decompress(nil, -1);
+  except
+    LGot := True;
+  end;
+  Check(LGot, 'lz4 negative original size raises');
+
+  LC := Lz4Compress(TBytes.Create(1, 2, 3, 4));
+  LGot := False;
+  try
+    Lz4Decompress(LC, 0);
+  except
+    LGot := True;
+  end;
+  Check(LGot, 'lz4 non-empty payload with zero original size raises');
+end;
+
 procedure TestGzipWrongCRC;
 var LSrc, LC: TBytes;
     LGot: Boolean;
@@ -468,6 +499,7 @@ begin
   T.Run('LZ4 offset before start', @TestLz4MalformedOffsetBeforeStart);
   T.Run('LZ4 zero offset', @TestLz4MalformedZeroOffset);
   T.Run('LZ4 length overflow', @TestLz4MalformedLengthOverflow);
+  T.Run('LZ4 malformed original size metadata', @TestLz4MalformedOriginalSizeMetadata);
   T.Run('Gzip wrong CRC', @TestGzipWrongCRC);
   T.Run('Gzip wrong size', @TestGzipWrongSize);
   T.Run('Gzip truncated header', @TestGzipTruncatedHeader);
