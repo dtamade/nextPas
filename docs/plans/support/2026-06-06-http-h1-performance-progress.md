@@ -12765,3 +12765,41 @@ Hello from nextPas!
     `fast headers` filter group
   - this is benchmark-truth tightening only; it does not claim a new parser
     optimization
+
+## Session: 2026-06-07 h1 fast-headers foreach filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` fast-header full materialization row
+    into the focused benchmark gate
+  - keep the slice limited to parser microbenchmark truth, not parser
+    implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch parser production code, server/runtime behavior, comparison
+    runner behavior, comparator binaries, public HTTP API, lower-layer modules,
+    or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `91 total, 91 passed, 0 failed`
+    - new focused row:
+      `H1 parser benchmark fast-headers foreach filter env`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=fast headers foreach all`
+  - the focused smoke locks:
+    - `bench_filter=fast headers foreach all`
+    - `adapter cost: fast headers foreach all`
+    - filtered output does not include
+      `adapter cost: fast headers get host only`
+    - filtered output does not include
+      `adapter cost: fast headers get all accept`
+    - filtered output does not include unrelated metadata-cache rows
+- Outcome:
+  - the fast lazy-header full materialization row is now a durable standalone
+    microbenchmark instead of only riding along inside the broader
+    `fast headers` filter group
+  - this is benchmark-truth tightening only; it does not claim a new parser
+    optimization

@@ -412,6 +412,12 @@ The same focused gate now also locks the narrower
 as standalone microbenchmark evidence instead of only proving it indirectly
 through the broader `fast headers` filter group.
 
+The same focused gate now also locks the narrower
+`bench_filter=fast headers foreach all` path. This keeps the full
+materialization-plus-iteration row as standalone microbenchmark evidence
+instead of only proving it indirectly through the broader `fast headers`
+filter group.
+
 ## Run the Router Dispatch Benchmark
 
 Run the focused router dispatch row:
