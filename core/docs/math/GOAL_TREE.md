@@ -48,9 +48,10 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   normalization for `ToRotationMatrix` and `Rotate`, quaternion multiply, `Slerp`, `Nlerp`,
   shortest-path handling for opposite-sign equivalent interpolation endpoints including direct
   start/end midpoint parity plus endpoint canonicalization, finite-guard parameter-position parity
-  across `AAxis`, `AAngleRad`, and `AT`, zero-endpoint interpolation normalization, `Equals`, and
-  direct `TQuatd` parity coverage for `Create`, `Data`, `Conjugate`, `ToRotationMatrix`,
-  quaternion multiply composition, and `Nlerp` midpoint.
+  across `AAxis`, `AAngleRad`, and `AT`, zero-endpoint interpolation normalization,
+  near-identical small-angle interpolation stability, `Equals`, and direct `TQuatd` parity
+  coverage for `Create`, `Data`, `Conjugate`, `ToRotationMatrix`, quaternion multiply
+  composition, and `Nlerp` midpoint.
 - Vector tests now also have direct `Double`-path parity coverage for `Data` aliases, `Zero`,
   add/subtract/unary minus, scalar multiply left, and representative length/component-multiply
   contracts.
@@ -253,10 +254,10 @@ Status:
   extrapolation, stable degenerate interpolation for identical, scaled-equivalent, and
   opposite-sign equivalent endpoints, finite-guard parameter-position parity across
   `FromAxisAngle(AAxis, AAngleRad)` and `Slerp`/`Nlerp(AT)`, interpolation endpoint
-  normalization/canonicalization including zero endpoints, component-wise `Equals` semantics
-  including non-canonical opposite-sign behavior and negative epsilon rejection, and direct
-  `TQuatd` parity coverage for `Create`, `Data`, `Conjugate`, `ToRotationMatrix`, quaternion
-  multiply composition, and `Nlerp` midpoint.
+  normalization/canonicalization including zero endpoints plus near-identical small-angle
+  stability, component-wise `Equals` semantics including non-canonical opposite-sign behavior and
+  negative epsilon rejection, and direct `TQuatd` parity coverage for `Create`, `Data`,
+  `Conjugate`, `ToRotationMatrix`, quaternion multiply composition, and `Nlerp` midpoint.
 - M3 is complete for current final Vec/Mat/Quat value-type scope.
 
 ## M4: Transform Builders

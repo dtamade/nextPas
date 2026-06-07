@@ -615,6 +615,44 @@ begin
     'TQuatd Nlerp keeps opposite-sign midpoint stable');
 end;
 
+procedure TestInterpolationStaysStableForNearIdenticalEndpoints;
+var
+  StartQf: TQuatf;
+  EndQf: TQuatf;
+  MidSlerpf: TQuatf;
+  MidNlerpf: TQuatf;
+  Axisf: TVec3f;
+  Anglef: Single;
+  StartQd: TQuatd;
+  EndQd: TQuatd;
+  MidSlerpd: TQuatd;
+  MidNlerpd: TQuatd;
+  Axisd: TVec3d;
+  Angled: Double;
+begin
+  StartQf := QuarterTurnZf;
+  EndQf := TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI + 0.0000019));
+  MidSlerpf := TQuatf.Slerp(StartQf, EndQf, Single(0.75));
+  MidNlerpf := TQuatf.Nlerp(StartQf, EndQf, Single(0.75));
+  Check(TQuatf.Equals(MidSlerpf, MidNlerpf, Single(0.000001)),
+    'TQuatf Slerp stays stable for near-identical endpoints');
+  MidSlerpf.ToAxisAngle(Axisf, Anglef);
+  CheckVec3f(0.0, 0.0, 1.0, Axisf, 'TQuatf Slerp near-identical axis');
+  CheckNear(HALF_PI + 0.000001425, Anglef, 0.000001,
+    'TQuatf Slerp near-identical angle');
+
+  StartQd := QuarterTurnZd;
+  EndQd := TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), HALF_PI + 0.0000000000019);
+  MidSlerpd := TQuatd.Slerp(StartQd, EndQd, 0.75);
+  MidNlerpd := TQuatd.Nlerp(StartQd, EndQd, 0.75);
+  Check(TQuatd.Equals(MidSlerpd, MidNlerpd, 0.000000000001),
+    'TQuatd Slerp stays stable for near-identical endpoints');
+  MidSlerpd.ToAxisAngle(Axisd, Angled);
+  CheckVec3d(0.0, 0.0, 1.0, Axisd, 'TQuatd Slerp near-identical axis');
+  CheckNear(HALF_PI + 0.000000000001425, Angled, 0.000000000001,
+    'TQuatd Slerp near-identical angle');
+end;
+
 procedure TestToAxisAngleCanonicalizesOppositeSignRotations;
 var
   Axisf: TVec3f;
@@ -756,6 +794,8 @@ begin
     @TestInterpolationFollowsShortestPathForOppositeSignEnd);
   T.Run('Interpolation stays stable for equivalent endpoints',
     @TestInterpolationStaysStableForEquivalentEndpoints);
+  T.Run('Interpolation stays stable for near-identical endpoints',
+    @TestInterpolationStaysStableForNearIdenticalEndpoints);
   T.Run('ToAxisAngle canonicalizes opposite-sign rotations',
     @TestToAxisAngleCanonicalizesOppositeSignRotations);
   T.Run('ToAxisAngle canonicalizes multi-turn inputs',
