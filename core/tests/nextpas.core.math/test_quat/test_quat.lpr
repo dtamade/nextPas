@@ -462,18 +462,29 @@ end;
 procedure TestInterpolationEndpointContracts;
 var
   Qf: TQuatf;
+  ZeroQuatf: TQuatf;
   NegatedQf: TQuatf;
   ScaledIdentityf: TQuatf;
   ScaledQf: TQuatf;
   Qd: TQuatd;
+  ZeroQuatd: TQuatd;
   NegatedQd: TQuatd;
   ScaledIdentityd: TQuatd;
   ScaledQd: TQuatd;
 begin
   Qf := QuarterTurnZf;
+  ZeroQuatf := TQuatf.Create(0.0, 0.0, 0.0, 0.0);
   NegatedQf := TQuatf.Create(-Qf.X, -Qf.Y, -Qf.Z, -Qf.W);
   ScaledIdentityf := TQuatf.Create(0.0, 0.0, 0.0, 2.0);
   ScaledQf := TQuatf.Create(Qf.X * 3.0, Qf.Y * 3.0, Qf.Z * 3.0, Qf.W * 3.0);
+  Check(TQuatf.Equals(TQuatf.Slerp(ZeroQuatf, Qf, Single(0.0)), TQuatf.Identity,
+    Single(0.000001)), 'TQuatf Slerp t=0 normalizes zero start');
+  Check(TQuatf.Equals(TQuatf.Nlerp(ZeroQuatf, Qf, Single(0.0)), TQuatf.Identity,
+    Single(0.000001)), 'TQuatf Nlerp t=0 normalizes zero start');
+  Check(TQuatf.Equals(TQuatf.Slerp(Qf, ZeroQuatf, Single(1.0)), TQuatf.Identity,
+    Single(0.000001)), 'TQuatf Slerp t=1 normalizes zero end');
+  Check(TQuatf.Equals(TQuatf.Nlerp(Qf, ZeroQuatf, Single(1.0)), TQuatf.Identity,
+    Single(0.000001)), 'TQuatf Nlerp t=1 normalizes zero end');
   Check(TQuatf.Equals(TQuatf.Slerp(ScaledIdentityf, ScaledQf, Single(0.0)), TQuatf.Identity,
     Single(0.000001)), 'TQuatf Slerp t=0 returns normalized start');
   Check(TQuatf.Equals(TQuatf.Nlerp(ScaledIdentityf, ScaledQf, Single(0.0)), TQuatf.Identity,
@@ -488,9 +499,18 @@ begin
     Single(0.000001)), 'TQuatf Nlerp t=1 canonicalizes opposite-sign end');
 
   Qd := QuarterTurnZd;
+  ZeroQuatd := TQuatd.Create(0.0, 0.0, 0.0, 0.0);
   NegatedQd := TQuatd.Create(-Qd.X, -Qd.Y, -Qd.Z, -Qd.W);
   ScaledIdentityd := TQuatd.Create(0.0, 0.0, 0.0, 2.0);
   ScaledQd := TQuatd.Create(Qd.X * 3.0, Qd.Y * 3.0, Qd.Z * 3.0, Qd.W * 3.0);
+  Check(TQuatd.Equals(TQuatd.Slerp(ZeroQuatd, Qd, 0.0), TQuatd.Identity, 0.000000000001),
+    'TQuatd Slerp t=0 normalizes zero start');
+  Check(TQuatd.Equals(TQuatd.Nlerp(ZeroQuatd, Qd, 0.0), TQuatd.Identity, 0.000000000001),
+    'TQuatd Nlerp t=0 normalizes zero start');
+  Check(TQuatd.Equals(TQuatd.Slerp(Qd, ZeroQuatd, 1.0), TQuatd.Identity, 0.000000000001),
+    'TQuatd Slerp t=1 normalizes zero end');
+  Check(TQuatd.Equals(TQuatd.Nlerp(Qd, ZeroQuatd, 1.0), TQuatd.Identity, 0.000000000001),
+    'TQuatd Nlerp t=1 normalizes zero end');
   Check(TQuatd.Equals(TQuatd.Slerp(ScaledIdentityd, ScaledQd, 0.0), TQuatd.Identity,
     0.000000000001), 'TQuatd Slerp t=0 returns normalized start');
   Check(TQuatd.Equals(TQuatd.Nlerp(ScaledIdentityd, ScaledQd, 0.0), TQuatd.Identity,
