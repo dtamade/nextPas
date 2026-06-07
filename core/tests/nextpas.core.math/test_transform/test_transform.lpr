@@ -232,6 +232,16 @@ begin
   LookAt(TVec3f.Create(0.0, 0.0, 5.0), TVec3f.Zero, TVec3f.Create(0.0, 0.0, -2.0));
 end;
 
+procedure RaiseLookAtAntiParallelUpDouble;
+begin
+  LookAt(TVec3d.Create(0.0, 0.0, 5.0), TVec3d.Zero, TVec3d.Create(0.0, 0.0, 2.0));
+end;
+
+procedure RaiseLookAtAntiParallelUpSingle;
+begin
+  LookAt(TVec3f.Create(0.0, 0.0, 5.0), TVec3f.Zero, TVec3f.Create(0.0, 0.0, 2.0));
+end;
+
 procedure RaiseCamera2DZeroWidthSingle;
 begin
   Camera2D(Single(0.0), Single(0.0), Single(1.0), 0, 100);
@@ -931,6 +941,10 @@ begin
     'LookAt single parallel up', @RaiseLookAtParallelUpSingle);
   ExpectArgumentErrorMessage('LookAt: up vector must not be parallel to forward',
     'LookAt double parallel up', @RaiseLookAtParallelUpDouble);
+  ExpectArgumentErrorMessage('LookAt: up vector must not be parallel to forward',
+    'LookAt single anti-parallel up', @RaiseLookAtAntiParallelUpSingle);
+  ExpectArgumentErrorMessage('LookAt: up vector must not be parallel to forward',
+    'LookAt double anti-parallel up', @RaiseLookAtAntiParallelUpDouble);
   ExpectArgumentErrorMessage('Camera2D: zoom must be positive',
     'Camera2D single zero zoom', @RaiseCamera2DZeroZoom);
   ExpectArgumentErrorMessage('Camera2D: zoom must be positive',

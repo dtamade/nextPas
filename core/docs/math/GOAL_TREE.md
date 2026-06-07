@@ -284,6 +284,7 @@ Status:
   FOV/aspect/near parity plus the
   `Perspective: vertical FOV is invalid` contract and direct far-plane ordering parity for
   `far = near` and `far < near`, exact owner-level finite guard messages for `LookAt`
+  including direct parallel/anti-parallel `AUp` guard parity,
   eye/target/up inputs plus `Translate` / `Scale` axis inputs, `RotateX/Y/Z` radian inputs, and
   `Camera2D` center/zoom finite inputs plus positive-zoom validation for zero and negative zoom,
   with direct `Single` / `Double` parity coverage across those public guard-message families,
