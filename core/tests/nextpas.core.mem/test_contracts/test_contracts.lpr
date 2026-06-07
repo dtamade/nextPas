@@ -152,6 +152,21 @@ begin
   end;
 end;
 
+procedure TestRtlAllocatorAlignedAllocRejectsSizeOverflow;
+var
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
+  LPtr: Pointer;
+begin
+  LAllocator := GetRtlAllocator;
+  LPtr := LAllocator.AllocAligned(High(SizeUInt), SizeOf(Pointer));
+  try
+    Check(LPtr = nil, 'AllocAligned should reject size calculations that overflow SizeUInt');
+  finally
+    if LPtr <> nil then
+      LAllocator.FreeAligned(LPtr);
+  end;
+end;
+
 procedure TestCanonicalAllocatorSurface;
 var
   LAllocator: nextpas.core.mem.intf.IAllocator;
@@ -368,6 +383,7 @@ begin
   T.Run('callback allocator compatibility methods', @TestCallbackAllocatorCompatibilityMethods);
   T.Run('callback allocator supports allocate interface', @TestCallbackAllocatorSupportsAllocateInterface);
   T.Run('rtl allocator zero init traits and aligned alloc', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
+  T.Run('rtl allocator aligned alloc rejects size overflow', @TestRtlAllocatorAlignedAllocRejectsSizeOverflow);
   T.Run('canonical allocator surface', @TestCanonicalAllocatorSurface);
   T.Run('allocator aliases are canonical', @TestAllocatorAliasesAreCanonical);
   T.Run('allocator adapter round trip', @TestAllocatorAdapterRoundTrip);
