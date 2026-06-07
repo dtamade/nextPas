@@ -3533,6 +3533,44 @@ begin
     'H1 parser request-rawquery filter skips unrelated metadata row');
 end;
 
+procedure TestH1ParserBenchmarkRequestPathAndRawQueryFilterEnv;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser request-path+rawquery filter build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveH1ParserBenchBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath),
+    'H1 parser request-path+rawquery filter binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=request direct Path+RawQuery access'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser request-path+rawquery filter smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'bench_filter=request direct Path+RawQuery access',
+    'H1 parser request-path+rawquery filter marker');
+  CheckContains(LOutput, 'adapter cost: request direct Path+RawQuery access',
+    'H1 parser request-path+rawquery filtered row');
+  CheckNotContains(LOutput, 'adapter cost: request direct Path access',
+    'H1 parser request-path+rawquery filter skips direct path row');
+  CheckNotContains(LOutput, 'adapter cost: request direct RawQuery access',
+    'H1 parser request-path+rawquery filter skips direct RawQuery row');
+  CheckNotContains(LOutput, 'adapter cost: request metadata cached expect+cl',
+    'H1 parser request-path+rawquery filter skips unrelated metadata row');
+end;
+
 procedure TestH1ParserBenchmarkFastHeadersFilterEnv;
 var
   LRootDir: string;
@@ -4237,6 +4275,8 @@ begin
     @TestH1ParserBenchmarkRequestPathFilterEnv);
   T.Run('H1 parser benchmark request-rawquery filter env',
     @TestH1ParserBenchmarkRequestRawQueryFilterEnv);
+  T.Run('H1 parser benchmark request-path+rawquery filter env',
+    @TestH1ParserBenchmarkRequestPathAndRawQueryFilterEnv);
   T.Run('H1 parser benchmark fast-headers filter env',
     @TestH1ParserBenchmarkFastHeadersFilterEnv);
   T.Run('H1 parser benchmark fast-headers get-all filter env',
