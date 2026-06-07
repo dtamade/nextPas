@@ -261,7 +261,7 @@ type
 
   { Client }
   IHttpClient = interface
-    function Do_(const AReq: IHttpRequest): IHttpResponse;
+    function Send(const AReq: IHttpRequest): IHttpResponse;
     function Get(const AUrl: string): IHttpResponse;
     function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
   end;

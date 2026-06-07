@@ -130,7 +130,7 @@ type
 
   IHttpClient = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000009}']
-    function Do_(const AReq: IHttpRequest): IHttpResponse;
+    function Send(const AReq: IHttpRequest): IHttpResponse;
     procedure CloseIdleConnections;
     function Get(const AUrl: string): IHttpResponse;
     function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;

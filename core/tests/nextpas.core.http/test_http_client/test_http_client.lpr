@@ -203,7 +203,7 @@ type
     FSeenUrl: string;
   public
     constructor Create(const AResponse: IHttpResponse);
-    function Do_(const AReq: IHttpRequest): IHttpResponse;
+    function Send(const AReq: IHttpRequest): IHttpResponse;
     procedure CloseIdleConnections;
     function Get(const AUrl: string): IHttpResponse;
     function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
@@ -760,7 +760,7 @@ begin
   FResponse := AResponse;
 end;
 
-function TDownloadClient.Do_(const AReq: IHttpRequest): IHttpResponse;
+function TDownloadClient.Send(const AReq: IHttpRequest): IHttpResponse;
 begin
   Result := FResponse;
 end;
@@ -878,7 +878,7 @@ begin
   end;
 end;
 
-procedure TestClientDoRejectsNilRequest;
+procedure TestClientSendRejectsNilRequest;
 var
   LClient: IHttpClient;
   LReq: IHttpRequest;
@@ -888,15 +888,15 @@ begin
   LReq := nil;
   LRaised := False;
   try
-    LClient.Do_(LReq);
+    LClient.Send(LReq);
   except
     on E: EArgumentError do
       LRaised := True;
   end;
-  Check(LRaised, 'Client.Do_ rejects nil request');
+  Check(LRaised, 'Client.Send rejects nil request');
 end;
 
-procedure TestClientDoRejectsNilTransportResponse;
+procedure TestClientSendRejectsNilTransportResponse;
 var
   LTransport: IHttpTransport;
   LClient: IHttpClient;
@@ -909,13 +909,13 @@ begin
 
   LRaised := False;
   try
-    LClient.Do_(LReq);
+    LClient.Send(LReq);
   except
     on E: EHttpError do
       LRaised := True;
   end;
 
-  Check(LRaised, 'Client.Do_ rejects nil transport response');
+  Check(LRaised, 'Client.Send rejects nil transport response');
 end;
 
 // PLACEHOLDER_TEST2
@@ -951,7 +951,7 @@ begin
     LUrl := TUrl.Parse('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/echo-header');
     LReq := THttpRequest.Create(hmGet, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
     LReq.Headers.SetHeader('x-custom', 'hello-from-client');
-    LResp := LClient.Do_(LReq);
+    LResp := LClient.Send(LReq);
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     CheckEqual('hello-from-client', LResp.Headers.Get('x-echo'), 'custom header echoed');
   finally
@@ -959,7 +959,7 @@ begin
   end;
 end;
 
-procedure TestClientDoWithBasicAuthHelper;
+procedure TestClientSendWithBasicAuthHelper;
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -992,7 +992,7 @@ begin
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/auth',
       LHeaders, nil, 0);
 
-    LResp := LClient.Do_(LReq);
+    LResp := LClient.Send(LReq);
 
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     CheckEqual('Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==', LGotAuth,
@@ -1043,7 +1043,7 @@ begin
   end;
 end;
 
-procedure TestClientDoWithRequestHelperHeadersBody;
+procedure TestClientSendWithRequestHelperHeadersBody;
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -1083,7 +1083,7 @@ begin
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/builder',
       LHeaders, 'payload');
 
-    LResp := LClient.Do_(LReq);
+    LResp := LClient.Send(LReq);
 
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     CheckEqual('request-helper', LGotHeader, 'custom header forwarded');
@@ -1095,7 +1095,7 @@ begin
   end;
 end;
 
-procedure TestClientDoWithRequestHelperHeadersOnly;
+procedure TestClientSendWithRequestHelperHeadersOnly;
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -1146,7 +1146,7 @@ begin
     Check(not LReq.Headers.Has('content-length'),
       'headers-only helper does not populate content-length during request construction');
 
-    LResp := LClient.Do_(LReq);
+    LResp := LClient.Send(LReq);
 
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     CheckEqual('headers-only', LGotHeader, 'custom header forwarded');
@@ -1162,7 +1162,7 @@ begin
   end;
 end;
 
-procedure TestClientDoWithRequestHelperBytesBody;
+procedure TestClientSendWithRequestHelperBytesBody;
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -1206,7 +1206,7 @@ begin
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/bytes',
       LHeaders, LBody);
 
-    LResp := LClient.Do_(LReq);
+    LResp := LClient.Send(LReq);
 
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     CheckEqual(Int64(5), LGotContentLength, 'bytes content-length forwarded');
@@ -1217,7 +1217,7 @@ begin
   end;
 end;
 
-procedure TestClientDoWithRequestHelperStringBodyWithoutHeaders;
+procedure TestClientSendWithRequestHelperStringBodyWithoutHeaders;
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -1254,7 +1254,7 @@ begin
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/no-headers-string',
       'payload');
 
-    LResp := LClient.Do_(LReq);
+    LResp := LClient.Send(LReq);
 
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     CheckEqual(Int64(7), LGotContentLength, 'content-length forwarded');
@@ -1267,7 +1267,7 @@ begin
   end;
 end;
 
-procedure TestClientDoWithRequestHelperBytesBodyWithoutHeaders;
+procedure TestClientSendWithRequestHelperBytesBodyWithoutHeaders;
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -1309,7 +1309,7 @@ begin
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/no-headers-bytes',
       LBody);
 
-    LResp := LClient.Do_(LReq);
+    LResp := LClient.Send(LReq);
 
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     CheckEqual(Int64(3), LGotContentLength, 'content-length forwarded');
@@ -1322,7 +1322,7 @@ begin
   end;
 end;
 
-procedure TestClientDoWithRequestHelperStringBodyAndContentTypeWithoutHeaders;
+procedure TestClientSendWithRequestHelperStringBodyAndContentTypeWithoutHeaders;
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -1362,7 +1362,7 @@ begin
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/content-type-string',
       'text/plain; charset=utf-8', 'payload');
 
-    LResp := LClient.Do_(LReq);
+    LResp := LClient.Send(LReq);
 
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     CheckEqual('text/plain; charset=utf-8', LGotContentType,
@@ -1377,7 +1377,7 @@ begin
   end;
 end;
 
-procedure TestClientDoWithRequestHelperBytesBodyAndContentTypeWithoutHeaders;
+procedure TestClientSendWithRequestHelperBytesBodyAndContentTypeWithoutHeaders;
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -1422,7 +1422,7 @@ begin
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/content-type-bytes',
       'application/octet-stream', LBody);
 
-    LResp := LClient.Do_(LReq);
+    LResp := LClient.Send(LReq);
 
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     CheckEqual('application/octet-stream', LGotContentType,
@@ -2128,7 +2128,7 @@ begin
   Check(LRaised, 'release helper rejects nil response');
 end;
 
-procedure TestClientClosesCloseCapableRequestBodyAfterDo;
+procedure TestClientClosesCloseCapableRequestBodyAfterSend;
 var
   LBody: TTrackedRequestBody;
   LTransportObj: TRequestBodyCaptureTransport;
@@ -2144,18 +2144,18 @@ begin
   LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
     LBody as IReader, Int64(7));
 
-  LResp := LClient.Do_(LReq);
+  LResp := LClient.Send(LReq);
 
   CheckEqual(Int64(200), Int64(LResp.StatusCode),
     'request body close success path returns transport response');
   Check(not LTransportObj.TrackedBodyClosedAtEntry,
-    'Do_ keeps request body open at transport entry');
+    'Send keeps request body open at transport entry');
   Check(not LTransportObj.TrackedBodyClosedBeforeReturn,
-    'Do_ keeps request body open while transport runs');
+    'Send keeps request body open while transport runs');
   CheckEqual('payload', LTransportObj.SeenBody,
-    'Do_ still streams the request body to the transport');
+    'Send still streams the request body to the transport');
   Check(LBody.Closed,
-    'Do_ closes close-capable request body after round trip');
+    'Send closes close-capable request body after round trip');
 end;
 
 procedure TestClientClosesCloseCapableRequestBodyOnTransportError;
@@ -2176,7 +2176,7 @@ begin
 
   LRaised := False;
   try
-    LClient.Do_(LReq);
+    LClient.Send(LReq);
   except
     on E: EHttpError do
       LRaised := True;
@@ -2190,7 +2190,7 @@ begin
   CheckEqual('payload', LTransportObj.SeenBody,
     'transport error path still exposes the request body to the transport');
   Check(LBody.Closed,
-    'Do_ closes close-capable request body when transport raises');
+    'Send closes close-capable request body when transport raises');
 end;
 
 procedure TestClientPostReaderClosesSourceBodyAfterBuffering;
@@ -2808,7 +2808,7 @@ begin
   LHeaders.SetHeader('cookie', 'session=abc');
   LHeaders.SetHeader('cookie2', 'legacy=1');
   LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
-  LResp := LClient.Do_(LReq);
+  LResp := LClient.Send(LReq);
   CheckEqual(Int64(2), Int64(LTransportObj.Calls),
     'same-authority redirect performs second round trip');
   CheckEqual(Int64(200), Int64(LResp.StatusCode),
@@ -2846,7 +2846,7 @@ begin
   LHeaders.SetHeader('cookie', 'session=def');
   LHeaders.SetHeader('cookie2', 'legacy=2');
   LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
-  LResp := LClient.Do_(LReq);
+  LResp := LClient.Send(LReq);
   CheckEqual(Int64(2), Int64(LTransportObj.Calls),
     'cross-authority redirect performs second round trip');
   CheckEqual(Int64(200), Int64(LResp.StatusCode),
@@ -2882,7 +2882,7 @@ begin
   LHeaders := NewHeaders;
   LHeaders.SetHeader('host', 'override.test');
   LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
-  LResp := LClient.Do_(LReq);
+  LResp := LClient.Send(LReq);
   CheckEqual(Int64(2), Int64(LTransportObj.Calls),
     'relative redirect with custom host performs second round trip');
   CheckEqual(Int64(200), Int64(LResp.StatusCode),
@@ -2911,7 +2911,7 @@ begin
   LHeaders := NewHeaders;
   LHeaders.SetHeader('host', 'override.test');
   LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
-  LResp := LClient.Do_(LReq);
+  LResp := LClient.Send(LReq);
   CheckEqual(Int64(2), Int64(LTransportObj.Calls),
     'default-port redirect performs second round trip');
   CheckEqual(Int64(200), Int64(LResp.StatusCode),
@@ -3070,7 +3070,7 @@ begin
   LClient := NewHttpClient(LTransport);
   LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
     StringBodyReader('payload'), Int64(7));
-  LResp := LClient.Do_(LReq);
+  LResp := LClient.Send(LReq);
   CheckEqual(Int64(2), Int64(LTransportObj.Calls),
     'temporary redirect performs second round trip');
   CheckEqual(Int64(200), Int64(LResp.StatusCode),
@@ -3103,7 +3103,7 @@ begin
     TOneShotReader.Create('payload') as IReader, Int64(7));
   LRaised := False;
   try
-    LClient.Do_(LReq);
+    LClient.Send(LReq);
   except
     on E: EHttpError do
       LRaised := True;
@@ -3246,7 +3246,7 @@ begin
     LReq := NewRequest(hmPost,
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
       LHeaders, StringBodyReader('payload'), Int64(7));
-    LResp := LClient.Do_(LReq);
+    LResp := LClient.Send(LReq);
 
     CheckEqual(Int64(2), Int64(GRetryAcceptCount),
       'stale pooled connection retry opened a second connection');
@@ -3297,7 +3297,7 @@ begin
       NewHeaders, StringBodyReader('payload'), Int64(7));
     LRaised := False;
     try
-      LClient.Do_(LReq);
+      LClient.Send(LReq);
     except
       on E: Exception do
         LRaised := True;
@@ -3353,7 +3353,7 @@ begin
       LHeaders, TOneShotReader.Create('payload') as IReader, Int64(7));
     LRaised := False;
     try
-      LClient.Do_(LReq);
+      LClient.Send(LReq);
     except
       on E: EHttpError do
         LRaised := True;
@@ -3564,27 +3564,27 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.http.client');
   T.Run('Client GET returns 200 + body', @TestClientGet200);
-  T.Run('Client Do rejects nil request', @TestClientDoRejectsNilRequest);
-  T.Run('Client Do rejects nil transport response',
-    @TestClientDoRejectsNilTransportResponse);
+  T.Run('Client Send rejects nil request', @TestClientSendRejectsNilRequest);
+  T.Run('Client Send rejects nil transport response',
+    @TestClientSendRejectsNilTransportResponse);
   T.Run('Client GET with custom headers', @TestClientGetCustomHeaders);
-  T.Run('Client Do forwards Basic auth helper header',
-    @TestClientDoWithBasicAuthHelper);
+  T.Run('Client Send forwards Basic auth helper header',
+    @TestClientSendWithBasicAuthHelper);
   T.Run('Client POST with body', @TestClientPostBody);
-  T.Run('Client Do uses NewRequest headers/body helper',
-    @TestClientDoWithRequestHelperHeadersBody);
-  T.Run('Client Do uses NewRequest headers-only helper',
-    @TestClientDoWithRequestHelperHeadersOnly);
-  T.Run('Client Do uses NewRequest bytes body helper',
-    @TestClientDoWithRequestHelperBytesBody);
-  T.Run('Client Do uses NewRequest string body helper without headers',
-    @TestClientDoWithRequestHelperStringBodyWithoutHeaders);
-  T.Run('Client Do uses NewRequest bytes body helper without headers',
-    @TestClientDoWithRequestHelperBytesBodyWithoutHeaders);
-  T.Run('Client Do uses NewRequest string body helper with content-type without headers',
-    @TestClientDoWithRequestHelperStringBodyAndContentTypeWithoutHeaders);
-  T.Run('Client Do uses NewRequest bytes body helper with content-type without headers',
-    @TestClientDoWithRequestHelperBytesBodyAndContentTypeWithoutHeaders);
+  T.Run('Client Send uses NewRequest headers/body helper',
+    @TestClientSendWithRequestHelperHeadersBody);
+  T.Run('Client Send uses NewRequest headers-only helper',
+    @TestClientSendWithRequestHelperHeadersOnly);
+  T.Run('Client Send uses NewRequest bytes body helper',
+    @TestClientSendWithRequestHelperBytesBody);
+  T.Run('Client Send uses NewRequest string body helper without headers',
+    @TestClientSendWithRequestHelperStringBodyWithoutHeaders);
+  T.Run('Client Send uses NewRequest bytes body helper without headers',
+    @TestClientSendWithRequestHelperBytesBodyWithoutHeaders);
+  T.Run('Client Send uses NewRequest string body helper with content-type without headers',
+    @TestClientSendWithRequestHelperStringBodyAndContentTypeWithoutHeaders);
+  T.Run('Client Send uses NewRequest bytes body helper with content-type without headers',
+    @TestClientSendWithRequestHelperBytesBodyAndContentTypeWithoutHeaders);
   T.Run('Client shortcut bodies use bytes buffer',
     @TestClientShortcutBodyImplementationUsesBytesBuffer);
   T.Run('Client POST string body overload',
@@ -3625,9 +3625,9 @@ begin
     @TestHttpReleaseResponseBodyNilBodyNoop);
   T.Run('HttpReleaseResponseBody rejects nil response',
     @TestHttpReleaseResponseBodyRejectsNilResponse);
-  T.Run('Client Do closes close-capable request body after round trip',
-    @TestClientClosesCloseCapableRequestBodyAfterDo);
-  T.Run('Client Do closes close-capable request body on transport error',
+  T.Run('Client Send closes close-capable request body after round trip',
+    @TestClientClosesCloseCapableRequestBodyAfterSend);
+  T.Run('Client Send closes close-capable request body on transport error',
     @TestClientClosesCloseCapableRequestBodyOnTransportError);
   T.Run('Client reader shortcut closes source body after buffering',
     @TestClientPostReaderClosesSourceBodyAfterBuffering);

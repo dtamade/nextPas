@@ -28,7 +28,7 @@ type
     constructor Create(const AOptions: THttpClientOptions); overload;
     constructor Create(const ATransport: IHttpTransport;
       const AOptions: THttpClientOptions); overload;
-    function Do_(const AReq: IHttpRequest): IHttpResponse;
+    function Send(const AReq: IHttpRequest): IHttpResponse;
     procedure CloseIdleConnections;
     function Get(const AUrl: string): IHttpResponse;
     function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
@@ -558,7 +558,7 @@ begin
     Result := LResp;
 end;
 
-function THttpClient.Do_(const AReq: IHttpRequest): IHttpResponse;
+function THttpClient.Send(const AReq: IHttpRequest): IHttpResponse;
 begin
   if AReq = nil then
     raise EArgumentError.Create('HTTP request is nil');
@@ -584,7 +584,7 @@ var
 begin
   LUrl := TUrl.Parse(AUrl);
   LReq := THttpRequest.Create(hmGet, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
-  Result := Do_(LReq);
+  Result := Send(LReq);
 end;
 
 function THttpClient.Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
@@ -594,17 +594,17 @@ var
 begin
   LUrl := TUrl.Parse(AUrl);
   LReq := BufferedBodyRequest(hmPost, LUrl, AContentType, ABody);
-  Result := Do_(LReq);
+  Result := Send(LReq);
 end;
 
 function THttpClient.Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
 begin
-  Result := Do_(BufferedBodyRequest(hmPost, AUrl, AContentType, ABody));
+  Result := Send(BufferedBodyRequest(hmPost, AUrl, AContentType, ABody));
 end;
 
 function THttpClient.Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
 begin
-  Result := Do_(BufferedBodyRequest(hmPost, AUrl, AContentType, ABody));
+  Result := Send(BufferedBodyRequest(hmPost, AUrl, AContentType, ABody));
 end;
 
 function THttpClient.Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
@@ -614,17 +614,17 @@ var
 begin
   LUrl := TUrl.Parse(AUrl);
   LReq := BufferedBodyRequest(hmPut, LUrl, AContentType, ABody);
-  Result := Do_(LReq);
+  Result := Send(LReq);
 end;
 
 function THttpClient.Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
 begin
-  Result := Do_(BufferedBodyRequest(hmPut, AUrl, AContentType, ABody));
+  Result := Send(BufferedBodyRequest(hmPut, AUrl, AContentType, ABody));
 end;
 
 function THttpClient.Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
 begin
-  Result := Do_(BufferedBodyRequest(hmPut, AUrl, AContentType, ABody));
+  Result := Send(BufferedBodyRequest(hmPut, AUrl, AContentType, ABody));
 end;
 
 function THttpClient.Delete(const AUrl: string): IHttpResponse;
@@ -634,7 +634,7 @@ var
 begin
   LUrl := TUrl.Parse(AUrl);
   LReq := THttpRequest.Create(hmDelete, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
-  Result := Do_(LReq);
+  Result := Send(LReq);
 end;
 
 function THttpClient.Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
@@ -644,17 +644,17 @@ var
 begin
   LUrl := TUrl.Parse(AUrl);
   LReq := BufferedBodyRequest(hmPatch, LUrl, AContentType, ABody);
-  Result := Do_(LReq);
+  Result := Send(LReq);
 end;
 
 function THttpClient.Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
 begin
-  Result := Do_(BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody));
+  Result := Send(BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody));
 end;
 
 function THttpClient.Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
 begin
-  Result := Do_(BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody));
+  Result := Send(BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody));
 end;
 
 function THttpClient.Head(const AUrl: string): IHttpResponse;
@@ -664,7 +664,7 @@ var
 begin
   LUrl := TUrl.Parse(AUrl);
   LReq := THttpRequest.Create(hmHead, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
-  Result := Do_(LReq);
+  Result := Send(LReq);
 end;
 
 { Factory functions }

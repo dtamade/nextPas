@@ -104,7 +104,7 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   compatible with the older empty-`TBytes` helper and therefore still produces
   a zero-length body with `Content-Length: 0`.
 - `NewRequest(Method, Url, Headers, Body, ContentLength)` — build custom
-  requests for `IHttpClient.Do_`; `Url` can be either a `TUrl` or a URL string,
+  requests for `IHttpClient.Send`; `Url` can be either a `TUrl` or a URL string,
   nil headers create an empty header set, body requests publish
   `Content-Length`, and negative content length raises `EArgumentError`.
   Caller-supplied `Content-Length` is valid only when it is a single numeric
@@ -149,9 +149,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 ### Server / Client (interfaces)
 
 - `IHttpServer.ListenAndServe(Addr, Port)` / `Shutdown` / `LocalAddr` / `IsRunning`
-- `IHttpClient.Do_(Req)` / `CloseIdleConnections` / `Get(Url)` /
+- `IHttpClient.Send(Req)` / `CloseIdleConnections` / `Get(Url)` /
   `Post(Url, ContentType, Body)` / `Put` / `Delete` / `Patch` / `Head`;
-  `Do_(nil)` raises `EArgumentError`
+  `Send(nil)` raises `EArgumentError`
 - `Post` / `Put` / `Patch` expose three shortcut body forms:
   `IReader`, Pascal `string`, and `TBytes`.
 - All three shortcut body forms publish `Content-Length`; a non-empty caller
@@ -160,7 +160,7 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   buffers to bytes rather than routing payload through a Pascal string, while
   the `string` / `TBytes` forms reuse the public `NewRequest(..., BodyText)` /
   `NewRequest(..., BodyBytes)` helpers.
-- `IHttpClient.Do_` owns any close-capable request body for the duration of the
+- `IHttpClient.Send` owns any close-capable request body for the duration of the
   request. After the final round trip or failure, `IReadCloser` / `ICloser` /
   `IStream` request bodies are closed. The `Post` / `Put` / `Patch`
   `IReader` shortcut closes the source reader after buffering it to bytes for
@@ -170,7 +170,7 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   keep-alive state. The public client does not leak H1 pool details; transports
   that own idle pooled connections may implement the optional capability and
   unsupported transports safely no-op.
-- If a transport returns nil from `RoundTrip`, `IHttpClient.Do_` raises
+- If a transport returns nil from `RoundTrip`, `IHttpClient.Send` raises
   `EHttpError` instead of leaking a nil-response access violation through the
   client facade.
 - If a stale pooled keep-alive connection fails during `RoundTrip`, the client
