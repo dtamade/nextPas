@@ -51,6 +51,38 @@ begin
   Move(LBits, Result, SizeOf(Result));
 end;
 
+function MakeSingleNegativeZero: Single;
+var
+  LBits: UInt32;
+begin
+  LBits := UInt32($80000000);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
+function IsSingleNegativeZero(const AValue: Single): Boolean;
+var
+  LBits: UInt32;
+begin
+  Move(AValue, LBits, SizeOf(LBits));
+  Result := LBits = UInt32($80000000);
+end;
+
+function MakeDoubleNegativeZero: Double;
+var
+  LBits: UInt64;
+begin
+  LBits := UInt64($8000000000000000);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
+function IsDoubleNegativeZero(const AValue: Double): Boolean;
+var
+  LBits: UInt64;
+begin
+  Move(AValue, LBits, SizeOf(LBits));
+  Result := LBits = UInt64($8000000000000000);
+end;
+
 function Pow2_63: Double;
 var
   LI: Integer;
@@ -113,6 +145,30 @@ begin
   CheckEqual(Int64(2), Int64(nextpas.core.math.scalar.Max(Int64(1), Int64(2))), 'Max Int64');
   CheckNear(-1.5, nextpas.core.math.scalar.Min(-1.5, 2.0), 0.0, 'Min Double');
   CheckNear(2.0, nextpas.core.math.scalar.Max(-1.5, 2.0), 0.0, 'Max Double');
+  Check(IsNaN(nextpas.core.math.scalar.Min(MakeNaN, 1.0)), 'Min Double propagates NaN first');
+  Check(IsNaN(nextpas.core.math.scalar.Min(1.0, MakeNaN)), 'Min Double propagates NaN second');
+  Check(IsNaN(nextpas.core.math.scalar.Max(MakeNaN, 1.0)), 'Max Double propagates NaN first');
+  Check(IsNaN(nextpas.core.math.scalar.Max(1.0, MakeNaN)), 'Max Double propagates NaN second');
+  Check(IsNaN(nextpas.core.math.scalar.Min(MakeSingleNaN, Single(1.0))), 'Min Single propagates NaN first');
+  Check(IsNaN(nextpas.core.math.scalar.Min(Single(1.0), MakeSingleNaN)), 'Min Single propagates NaN second');
+  Check(IsNaN(nextpas.core.math.scalar.Max(MakeSingleNaN, Single(1.0))), 'Max Single propagates NaN first');
+  Check(IsNaN(nextpas.core.math.scalar.Max(Single(1.0), MakeSingleNaN)), 'Max Single propagates NaN second');
+  Check(IsDoubleNegativeZero(nextpas.core.math.scalar.Min(MakeDoubleNegativeZero, 0.0)),
+    'Min Double keeps negative zero first');
+  Check(IsDoubleNegativeZero(nextpas.core.math.scalar.Min(0.0, MakeDoubleNegativeZero)),
+    'Min Double keeps negative zero second');
+  Check(not IsDoubleNegativeZero(nextpas.core.math.scalar.Max(MakeDoubleNegativeZero, 0.0)),
+    'Max Double keeps positive zero second');
+  Check(not IsDoubleNegativeZero(nextpas.core.math.scalar.Max(0.0, MakeDoubleNegativeZero)),
+    'Max Double keeps positive zero first');
+  Check(IsSingleNegativeZero(nextpas.core.math.scalar.Min(MakeSingleNegativeZero, Single(0.0))),
+    'Min Single keeps negative zero first');
+  Check(IsSingleNegativeZero(nextpas.core.math.scalar.Min(Single(0.0), MakeSingleNegativeZero)),
+    'Min Single keeps negative zero second');
+  Check(not IsSingleNegativeZero(nextpas.core.math.scalar.Max(MakeSingleNegativeZero, Single(0.0))),
+    'Max Single keeps positive zero second');
+  Check(not IsSingleNegativeZero(nextpas.core.math.scalar.Max(Single(0.0), MakeSingleNegativeZero)),
+    'Max Single keeps positive zero first');
   CheckNear(5.0, Clamp(Single(10.0), Single(0.0), Single(5.0)), 0.0, 'Clamp Single high');
   CheckNear(5.0, Clamp(10.0, 0.0, 5.0), 0.0, 'Clamp high');
   CheckNear(0.0, Clamp(-1.0, 0.0, 5.0), 0.0, 'Clamp low');
