@@ -171,6 +171,42 @@ begin
     Result := AValue;
 end;
 
+function IsFiniteDouble(const AValue: Double): Boolean; inline;
+begin
+  Result := (not nextpas.core.math.scalar.IsNaN(AValue)) and
+    (not nextpas.core.math.scalar.IsInfinite(AValue));
+end;
+
+function IsFiniteSingle(const AValue: Single): Boolean; inline;
+begin
+  Result := (not nextpas.core.math.scalar.IsNaN(AValue)) and
+    (not nextpas.core.math.scalar.IsInfinite(AValue));
+end;
+
+function MatrixWork3IsFinite(const AWork: TWork3): Boolean;
+var
+  C: Integer;
+  R: Integer;
+begin
+  for R := 0 to 2 do
+    for C := 0 to 2 do
+      if not IsFiniteDouble(AWork[R, C]) then
+        Exit(False);
+  Result := True;
+end;
+
+function MatrixWork4IsFinite(const AWork: TWork4): Boolean;
+var
+  C: Integer;
+  R: Integer;
+begin
+  for R := 0 to 3 do
+    for C := 0 to 3 do
+      if not IsFiniteDouble(AWork[R, C]) then
+        Exit(False);
+  Result := True;
+end;
+
 function InvertWork3(var AWork: TWork3; const AEpsilon: Double): Boolean;
 var
   I: Integer;
@@ -521,6 +557,11 @@ begin
   for R := 0 to 2 do
     for C := 0 to 2 do
     begin
+      if not IsFiniteSingle(Data[C, R]) then
+      begin
+        AInverse := Zero;
+        Exit(False);
+      end;
       Work[R, C] := Data[C, R];
       Work[R, C + 3] := 0.0;
     end;
@@ -722,6 +763,11 @@ begin
   for R := 0 to 3 do
     for C := 0 to 3 do
     begin
+      if not IsFiniteSingle(Data[C, R]) then
+      begin
+        AInverse := Zero;
+        Exit(False);
+      end;
       Work[R, C] := Data[C, R];
       Work[R, C + 4] := 0.0;
     end;
@@ -917,6 +963,11 @@ begin
   Work[0, 3] := 1.0;
   Work[1, 4] := 1.0;
   Work[2, 5] := 1.0;
+  if not MatrixWork3IsFinite(Work) then
+  begin
+    AInverse := Zero;
+    Exit(False);
+  end;
 
   Result := InvertWork3(Work, DOUBLE_INVERSE_EPSILON);
   if not Result then
@@ -1119,6 +1170,11 @@ begin
   Work[1, 5] := 1.0;
   Work[2, 6] := 1.0;
   Work[3, 7] := 1.0;
+  if not MatrixWork4IsFinite(Work) then
+  begin
+    AInverse := Zero;
+    Exit(False);
+  end;
 
   Result := InvertWork4(Work, DOUBLE_INVERSE_EPSILON);
   if not Result then

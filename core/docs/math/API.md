@@ -174,13 +174,13 @@ Matrix operations:
 - Determinant and inverse: `Determinant`, `TryInverse`, `Inverse`
 - Comparison: `Equals`
 
-`TryInverse` is epsilon-based: it returns `False` for singular and numerically singular matrices
-and sets `AInverse` to `Zero`. `Inverse` raises `EArgumentError` for the same inputs. A non-zero
-determinant alone does not guarantee that inverse APIs will succeed if the pivot falls within the
-precision threshold.
+`TryInverse` is epsilon-based: it returns `False` for singular, numerically singular, and
+non-finite matrices and sets `AInverse` to `Zero`. `Inverse` raises `EArgumentError` for the same
+inputs. A non-zero determinant alone does not guarantee that inverse APIs will succeed if the pivot
+falls within the precision threshold.
 Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular
-matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises
-`EArgumentError` on the same inputs.
+matrices, plus matrices containing `NaN` or infinity, the same: it returns `False`, zeroes the
+failed `out` matrix, and `Inverse` raises `EArgumentError` on the same inputs.
 Matrix inverse success overwrites the `out` parameter completely: `TryInverse` does not depend on
 the previous contents of the destination matrix and fully rewrites it before returning `True`.
 

@@ -466,11 +466,11 @@ Each step is a separate reversible commit.
 Resolved by tests and implementation:
 
 - Constructors use static `Create`; no short free constructors are part of the current public API.
-- `Inverse` raises `EArgumentError` for singular and numerically singular matrices; `TryInverse`
-  returns `False` and zeroes the failed `out` matrix.
-- Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular
-  matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises
-  `EArgumentError` on the same inputs.
+- `Inverse` raises `EArgumentError` for singular, numerically singular, and non-finite matrices;
+  `TryInverse` returns `False` and zeroes the failed `out` matrix.
+- Matrix inverse failure is fail-close: `TryInverse` treats singular, numerically singular, and
+  non-finite matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse`
+  raises `EArgumentError` on the same inputs.
 - Matrix inverse success overwrites the `out` parameter completely: `TryInverse` does not depend on
   the previous contents of the destination matrix and fully rewrites it before returning `True`.
 - Zero vector normalization returns zero; zero quaternion normalization returns identity.

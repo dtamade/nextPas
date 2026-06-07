@@ -155,11 +155,12 @@ rotation, and `AT = 1` returns the normalized end rotation after any opposite-si
 and interpolate the small remaining angle instead of collapsing or taking a long arc.
 `EaseOutBounce` follows the documented four-piece bounce ladder, and the direct branch tests lock
 representative points in each non-endpoint segment.
-`TryInverse` is epsilon-based: it returns `False` and zeroes the `out` matrix for singular and
-numerically singular matrices, and `Inverse` raises `EArgumentError` on the same inputs.
+`TryInverse` is epsilon-based: it returns `False` and zeroes the `out` matrix for singular,
+numerically singular, and non-finite matrices, and `Inverse` raises `EArgumentError` on the same
+inputs.
 Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular
-matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises
-`EArgumentError` on the same inputs.
+matrices, plus matrices containing `NaN` or infinity, the same: it returns `False`, zeroes the
+failed `out` matrix, and `Inverse` raises `EArgumentError` on the same inputs.
 Matrix inverse success overwrites the `out` parameter completely: `TryInverse` does not depend on
 the previous contents of the destination matrix and fully rewrites it before returning `True`.
 

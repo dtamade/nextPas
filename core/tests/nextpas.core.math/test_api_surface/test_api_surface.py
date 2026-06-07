@@ -239,19 +239,19 @@ REQUIRED_SIMD_SEAM_DOC_TRUTH = (
 REQUIRED_MAT_DOC_TRUTH = (
     (
         "docs/math/README.md",
-        "Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises `EArgumentError` on the same inputs.",
+        "Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular matrices, plus matrices containing `NaN` or infinity, the same: it returns `False`, zeroes the failed `out` matrix, and `Inverse` raises `EArgumentError` on the same inputs.",
     ),
     (
         "docs/math/API.md",
-        "Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises `EArgumentError` on the same inputs.",
+        "Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular matrices, plus matrices containing `NaN` or infinity, the same: it returns `False`, zeroes the failed `out` matrix, and `Inverse` raises `EArgumentError` on the same inputs.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises `EArgumentError` on the same inputs.",
+        "Matrix inverse failure is fail-close: `TryInverse` treats singular, numerically singular, and non-finite matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises `EArgumentError` on the same inputs.",
     ),
     (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
-        "Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises `EArgumentError` on the same inputs.",
+        "Matrix inverse failure is fail-close: `TryInverse` treats singular, numerically singular, and non-finite matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises `EArgumentError` on the same inputs.",
     ),
     (
         "docs/math/README.md",

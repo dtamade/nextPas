@@ -11,6 +11,19 @@ uses
 var
   T: TTestRunner;
 
+type
+  TSingleBitCast = packed record
+    case Integer of
+      0: (Value: Single);
+      1: (Bits: LongWord);
+  end;
+
+  TDoubleBitCast = packed record
+    case Integer of
+      0: (Value: Double);
+      1: (Bits: QWord);
+  end;
+
 procedure CheckNear(const AExpected, AActual, AEpsilon: Double; const AMessage: string);
 var
   LDelta: Double;
@@ -19,6 +32,38 @@ begin
   if LDelta < 0.0 then
     LDelta := -LDelta;
   Check(LDelta <= AEpsilon, AMessage);
+end;
+
+function SingleNaN: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7FC00000;
+  Result := LValue.Value;
+end;
+
+function SingleInfinity: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7F800000;
+  Result := LValue.Value;
+end;
+
+function DoubleNaN: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FF8000000000000;
+  Result := LValue.Value;
+end;
+
+function DoubleInfinity: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FF0000000000000;
+  Result := LValue.Value;
 end;
 
 procedure CheckVec3f(const AExpectedX, AExpectedY, AExpectedZ: Single; const AActual: TVec3f;
@@ -335,14 +380,64 @@ begin
   M.Inverse;
 end;
 
+procedure RaiseTMat3fNonFiniteInverse;
+var
+  M: TMat3f;
+begin
+  M := TMat3f.Create(
+    TVec3f.Create(SingleNaN, 0.0, 0.0),
+    TVec3f.Create(0.0, 1.0, 0.0),
+    TVec3f.Create(0.0, 0.0, 1.0));
+  M.Inverse;
+end;
+
+procedure RaiseTMat4fNonFiniteInverse;
+var
+  M: TMat4f;
+begin
+  M := TMat4f.Create(
+    TVec4f.Create(SingleInfinity, 0.0, 0.0, 0.0),
+    TVec4f.Create(0.0, 1.0, 0.0, 0.0),
+    TVec4f.Create(0.0, 0.0, 1.0, 0.0),
+    TVec4f.Create(0.0, 0.0, 0.0, 1.0));
+  M.Inverse;
+end;
+
+procedure RaiseTMat3dNonFiniteInverse;
+var
+  M: TMat3d;
+begin
+  M := TMat3d.Create(
+    TVec3d.Create(DoubleNaN, 0.0, 0.0),
+    TVec3d.Create(0.0, 1.0, 0.0),
+    TVec3d.Create(0.0, 0.0, 1.0));
+  M.Inverse;
+end;
+
+procedure RaiseTMat4dNonFiniteInverse;
+var
+  M: TMat4d;
+begin
+  M := TMat4d.Create(
+    TVec4d.Create(DoubleInfinity, 0.0, 0.0, 0.0),
+    TVec4d.Create(0.0, 1.0, 0.0, 0.0),
+    TVec4d.Create(0.0, 0.0, 1.0, 0.0),
+    TVec4d.Create(0.0, 0.0, 0.0, 1.0));
+  M.Inverse;
+end;
+
 procedure TestSinglePrecisionInverseFailCloseContracts;
 var
   Singular3: TMat3f;
   NearSingular3: TMat3f;
   ThresholdPivot3: TMat3f;
+  NaN3: TMat3f;
+  Infinity3: TMat3f;
   Inverse3: TMat3f;
   NearSingular4: TMat4f;
   ThresholdPivot4: TMat4f;
+  NaN4: TMat4f;
+  Infinity4: TMat4f;
   Inverse4: TMat4f;
 begin
   Singular3 := TMat3f.Create(
@@ -357,6 +452,14 @@ begin
     TVec3f.Create(0.000001, 0.0, 0.0),
     TVec3f.Create(0.0, 1.0, 0.0),
     TVec3f.Create(0.0, 0.0, 1.0));
+  NaN3 := TMat3f.Create(
+    TVec3f.Create(SingleNaN, 0.0, 0.0),
+    TVec3f.Create(0.0, 1.0, 0.0),
+    TVec3f.Create(0.0, 0.0, 1.0));
+  Infinity3 := TMat3f.Create(
+    TVec3f.Create(SingleInfinity, 0.0, 0.0),
+    TVec3f.Create(0.0, 1.0, 0.0),
+    TVec3f.Create(0.0, 0.0, 1.0));
   NearSingular4 := TMat4f.Create(
     TVec4f.Create(0.0000001, 0.0, 0.0, 0.0),
     TVec4f.Create(0.0, 1.0, 0.0, 0.0),
@@ -364,6 +467,16 @@ begin
     TVec4f.Create(0.0, 0.0, 0.0, 1.0));
   ThresholdPivot4 := TMat4f.Create(
     TVec4f.Create(0.000001, 0.0, 0.0, 0.0),
+    TVec4f.Create(0.0, 1.0, 0.0, 0.0),
+    TVec4f.Create(0.0, 0.0, 1.0, 0.0),
+    TVec4f.Create(0.0, 0.0, 0.0, 1.0));
+  NaN4 := TMat4f.Create(
+    TVec4f.Create(SingleNaN, 0.0, 0.0, 0.0),
+    TVec4f.Create(0.0, 1.0, 0.0, 0.0),
+    TVec4f.Create(0.0, 0.0, 1.0, 0.0),
+    TVec4f.Create(0.0, 0.0, 0.0, 1.0));
+  Infinity4 := TMat4f.Create(
+    TVec4f.Create(SingleInfinity, 0.0, 0.0, 0.0),
     TVec4f.Create(0.0, 1.0, 0.0, 0.0),
     TVec4f.Create(0.0, 0.0, 1.0, 0.0),
     TVec4f.Create(0.0, 0.0, 0.0, 1.0));
@@ -380,6 +493,12 @@ begin
   CheckMat3fZero(Inverse3, 'TMat3f TryInverse zeroes exact epsilon pivot result');
   ExpectArgumentErrorMessage('TMat3f.Inverse: matrix is singular',
     'TMat3f exact epsilon pivot inverse', @RaiseTMat3fThresholdInverse);
+  Check(not NaN3.TryInverse(Inverse3), 'TMat3f TryInverse rejects NaN matrix');
+  CheckMat3fZero(Inverse3, 'TMat3f TryInverse zeroes NaN result');
+  Check(not Infinity3.TryInverse(Inverse3), 'TMat3f TryInverse rejects Inf matrix');
+  CheckMat3fZero(Inverse3, 'TMat3f TryInverse zeroes Inf result');
+  ExpectArgumentErrorMessage('TMat3f.Inverse: matrix is singular',
+    'TMat3f non-finite inverse', @RaiseTMat3fNonFiniteInverse);
 
   Check(not TMat4f.Zero.TryInverse(Inverse4), 'TMat4f TryInverse rejects singular matrix');
   CheckMat4fZero(Inverse4, 'TMat4f TryInverse zeroes out result for singular matrix');
@@ -393,6 +512,12 @@ begin
   CheckMat4fZero(Inverse4, 'TMat4f TryInverse zeroes exact epsilon pivot result');
   ExpectArgumentErrorMessage('TMat4f.Inverse: matrix is singular',
     'TMat4f exact epsilon pivot inverse', @RaiseTMat4fThresholdInverse);
+  Check(not NaN4.TryInverse(Inverse4), 'TMat4f TryInverse rejects NaN matrix');
+  CheckMat4fZero(Inverse4, 'TMat4f TryInverse zeroes NaN result');
+  Check(not Infinity4.TryInverse(Inverse4), 'TMat4f TryInverse rejects Inf matrix');
+  CheckMat4fZero(Inverse4, 'TMat4f TryInverse zeroes Inf result');
+  ExpectArgumentErrorMessage('TMat4f.Inverse: matrix is singular',
+    'TMat4f non-finite inverse', @RaiseTMat4fNonFiniteInverse);
 end;
 
 procedure TestDoublePrecisionInverseFailCloseContracts;
@@ -401,8 +526,12 @@ var
   Inverse4: TMat4d;
   NearSingular3: TMat3d;
   ThresholdPivot3: TMat3d;
+  NaN3: TMat3d;
+  Infinity3: TMat3d;
   NearSingular4: TMat4d;
   ThresholdPivot4: TMat4d;
+  NaN4: TMat4d;
+  Infinity4: TMat4d;
 begin
   NearSingular3 := TMat3d.Create(
     TVec3d.Create(0.0000000000001, 0.0, 0.0),
@@ -412,6 +541,14 @@ begin
     TVec3d.Create(0.000000000001, 0.0, 0.0),
     TVec3d.Create(0.0, 1.0, 0.0),
     TVec3d.Create(0.0, 0.0, 1.0));
+  NaN3 := TMat3d.Create(
+    TVec3d.Create(DoubleNaN, 0.0, 0.0),
+    TVec3d.Create(0.0, 1.0, 0.0),
+    TVec3d.Create(0.0, 0.0, 1.0));
+  Infinity3 := TMat3d.Create(
+    TVec3d.Create(DoubleInfinity, 0.0, 0.0),
+    TVec3d.Create(0.0, 1.0, 0.0),
+    TVec3d.Create(0.0, 0.0, 1.0));
   NearSingular4 := TMat4d.Create(
     TVec4d.Create(0.0000000000001, 0.0, 0.0, 0.0),
     TVec4d.Create(0.0, 1.0, 0.0, 0.0),
@@ -419,6 +556,16 @@ begin
     TVec4d.Create(0.0, 0.0, 0.0, 1.0));
   ThresholdPivot4 := TMat4d.Create(
     TVec4d.Create(0.000000000001, 0.0, 0.0, 0.0),
+    TVec4d.Create(0.0, 1.0, 0.0, 0.0),
+    TVec4d.Create(0.0, 0.0, 1.0, 0.0),
+    TVec4d.Create(0.0, 0.0, 0.0, 1.0));
+  NaN4 := TMat4d.Create(
+    TVec4d.Create(DoubleNaN, 0.0, 0.0, 0.0),
+    TVec4d.Create(0.0, 1.0, 0.0, 0.0),
+    TVec4d.Create(0.0, 0.0, 1.0, 0.0),
+    TVec4d.Create(0.0, 0.0, 0.0, 1.0));
+  Infinity4 := TMat4d.Create(
+    TVec4d.Create(DoubleInfinity, 0.0, 0.0, 0.0),
     TVec4d.Create(0.0, 1.0, 0.0, 0.0),
     TVec4d.Create(0.0, 0.0, 1.0, 0.0),
     TVec4d.Create(0.0, 0.0, 0.0, 1.0));
@@ -435,6 +582,12 @@ begin
   CheckMat3dZero(Inverse3, 'TMat3d TryInverse zeroes exact epsilon pivot result');
   ExpectArgumentErrorMessage('TMat3d.Inverse: matrix is singular',
     'TMat3d exact epsilon pivot inverse', @RaiseTMat3dThresholdInverse);
+  Check(not NaN3.TryInverse(Inverse3), 'TMat3d TryInverse rejects NaN matrix');
+  CheckMat3dZero(Inverse3, 'TMat3d TryInverse zeroes NaN result');
+  Check(not Infinity3.TryInverse(Inverse3), 'TMat3d TryInverse rejects Inf matrix');
+  CheckMat3dZero(Inverse3, 'TMat3d TryInverse zeroes Inf result');
+  ExpectArgumentErrorMessage('TMat3d.Inverse: matrix is singular',
+    'TMat3d non-finite inverse', @RaiseTMat3dNonFiniteInverse);
 
   Check(not TMat4d.Zero.TryInverse(Inverse4), 'TMat4d TryInverse rejects singular matrix');
   CheckMat4dZero(Inverse4, 'TMat4d TryInverse zeroes out result for singular matrix');
@@ -448,6 +601,12 @@ begin
   CheckMat4dZero(Inverse4, 'TMat4d TryInverse zeroes exact epsilon pivot result');
   ExpectArgumentErrorMessage('TMat4d.Inverse: matrix is singular',
     'TMat4d exact epsilon pivot inverse', @RaiseTMat4dThresholdInverse);
+  Check(not NaN4.TryInverse(Inverse4), 'TMat4d TryInverse rejects NaN matrix');
+  CheckMat4dZero(Inverse4, 'TMat4d TryInverse zeroes NaN result');
+  Check(not Infinity4.TryInverse(Inverse4), 'TMat4d TryInverse rejects Inf matrix');
+  CheckMat4dZero(Inverse4, 'TMat4d TryInverse zeroes Inf result');
+  ExpectArgumentErrorMessage('TMat4d.Inverse: matrix is singular',
+    'TMat4d non-finite inverse', @RaiseTMat4dNonFiniteInverse);
 end;
 
 procedure TestSinglePrecisionInverseOverwritesOutParameter;

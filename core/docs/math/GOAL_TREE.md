@@ -46,8 +46,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   arithmetic operators, scalar multiply, matrix-vector multiply, matrix-matrix multiply,
   `Transpose`, `Determinant`, `TryInverse`, `Inverse`, exact/epsilon `Equals`, and singular inverse
   behavior, including zeroing the failed `TryInverse` out matrix and directly locking the exact
-  owner-level `Inverse` singular-matrix messages plus exact inverse-epsilon pivot fail-close
-  behavior for `TMat3f`, `TMat4f`, `TMat3d`, and `TMat4d`.
+  owner-level `Inverse` singular-matrix messages plus exact inverse-epsilon pivot and non-finite
+  matrix fail-close behavior for `TMat3f`, `TMat4f`, `TMat3d`, and `TMat4d`.
 - `nextpas.core.math.quat` now provides the final quaternion types: `TQuatf` and `TQuatd`.
 - Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
   identity, zero-quaternion `ToRotationMatrix` / `Rotate` identity behavior, `Conjugate`,
@@ -231,9 +231,9 @@ Completion gate:
 - Vec/Mat/Quat tests cover every public constructor, operator, and method.
 - Singular matrix inversion uses a documented `TryInverse` path, zeroes the failed out matrix, and
   does not return silent garbage.
-- Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular
-  matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises
-  `EArgumentError` on the same inputs.
+- Matrix inverse failure is fail-close: `TryInverse` treats singular, numerically singular, and
+  non-finite matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse`
+  raises `EArgumentError` on the same inputs.
 - Matrix inverse success overwrites the `out` parameter completely: `TryInverse` does not depend on
   the previous contents of the destination matrix and fully rewrites it before returning `True`.
 - Normalize of zero vectors/quaternions is explicitly defined and tested.
@@ -255,9 +255,9 @@ Status:
   write-through semantics, arithmetic operators, scalar multiply, matrix-vector multiply,
   matrix-matrix multiply, transpose, determinant, inverse, near-singular and singular `TryInverse`
   zeroing the out matrix, direct pivot-row-swap inversion parity for permutation matrices, 4x4
-  determinant sign parity across the same row-swap path, exact inverse-epsilon pivot fail-close
-  behavior, exact/epsilon `Equals` including negative-epsilon fail-close behavior, `Inverse`
-  raising `EArgumentError` with exact owner-level `'<TMat*>.Inverse: matrix is singular'`
+  determinant sign parity across the same row-swap path, exact inverse-epsilon pivot and non-finite
+  fail-close behavior, exact/epsilon `Equals` including negative-epsilon fail-close behavior,
+  `Inverse` raising `EArgumentError` with exact owner-level `'<TMat*>.Inverse: matrix is singular'`
   messages for the same failure cases, and double-precision variants.
 - `nextpas.core.math.mat` is a cohesive matrix value-type unit and currently exceeds the 800-line soft
   split guideline; shared inversion/determinant helpers are extracted, and a forced split is deferred
