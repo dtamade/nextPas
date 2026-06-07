@@ -1243,6 +1243,35 @@ begin
   end;
 end;
 
+procedure TestMpmcBatchDequeueRespectsMaxCount;
+var
+  LQ: TIntMpmc;
+  LIn: array[0..3] of Integer;
+  LOut: array[0..5] of Integer;
+  LV: Integer;
+  LN: PtrUInt;
+begin
+  LQ := TIntMpmc.Create(8);
+  try
+    LIn[0] := 11; LIn[1] := 22; LIn[2] := 33; LIn[3] := 44;
+    LN := LQ.EnqueueBatch(LIn);
+    CheckEqual(Int64(4), Int64(LN), 'mpmc dequeue count cap fixture enqueued');
+
+    LN := LQ.DequeueBatch(LOut, 2);
+    CheckEqual(Int64(2), Int64(LN), 'mpmc batch dequeue respects AMaxCount even when output buffer is larger');
+    CheckEqual(Int64(11), Int64(LOut[0]));
+    CheckEqual(Int64(22), Int64(LOut[1]));
+
+    Check(LQ.TryDequeue(LV), 'mpmc dequeue count cap leaves remaining items queued');
+    CheckEqual(Int64(33), Int64(LV));
+    Check(LQ.TryDequeue(LV), 'mpmc dequeue count cap preserves later queued item order');
+    CheckEqual(Int64(44), Int64(LV));
+    Check(LQ.IsEmpty, 'mpmc dequeue count cap leaves queue empty after draining remainder');
+  finally
+    LQ.Free;
+  end;
+end;
+
 procedure TestMpmcCapacity;
 var
   LQ: TIntMpmc;
@@ -2369,6 +2398,7 @@ begin
   T.Run('SPSC capacity/empty/full', @TestSpscCapacity);
   T.Run('MPMC batch', @TestMpmcBatch);
   T.Run('MPMC batch partial progress', @TestMpmcBatchPartialProgress);
+  T.Run('MPMC batch dequeue AMaxCount cap', @TestMpmcBatchDequeueRespectsMaxCount);
   T.Run('MPMC capacity/empty/full', @TestMpmcCapacity);
   T.Run('MPSC dequeue wait', @TestMpscDequeueWait);
   T.Run('MPSC dequeue timeout', @TestMpscDequeueTimeout);
