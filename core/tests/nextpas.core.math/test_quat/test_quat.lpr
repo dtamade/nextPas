@@ -581,6 +581,34 @@ begin
     'TQuatd ToAxisAngle canonicalizes x half-turn angle');
 end;
 
+procedure TestToAxisAngleCanonicalizesMultiTurnInputs;
+var
+  Axisf: TVec3f;
+  Anglef: Single;
+  Axisd: TVec3d;
+  Angled: Double;
+begin
+  TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(3.0 * HALF_PI)).ToAxisAngle(Axisf, Anglef);
+  CheckVec3f(0.0, 0.0, -1.0, Axisf, 'TQuatf ToAxisAngle canonicalizes positive multi-turn axis');
+  CheckNear(HALF_PI, Anglef, 0.000001,
+    'TQuatf ToAxisAngle canonicalizes positive multi-turn angle');
+
+  TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(-3.0 * HALF_PI)).ToAxisAngle(Axisf, Anglef);
+  CheckVec3f(0.0, 0.0, 1.0, Axisf, 'TQuatf ToAxisAngle canonicalizes negative multi-turn axis');
+  CheckNear(HALF_PI, Anglef, 0.000001,
+    'TQuatf ToAxisAngle canonicalizes negative multi-turn angle');
+
+  TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), 3.0 * HALF_PI).ToAxisAngle(Axisd, Angled);
+  CheckVec3d(0.0, 0.0, -1.0, Axisd, 'TQuatd ToAxisAngle canonicalizes positive multi-turn axis');
+  CheckNear(HALF_PI, Angled, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes positive multi-turn angle');
+
+  TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), -3.0 * HALF_PI).ToAxisAngle(Axisd, Angled);
+  CheckVec3d(0.0, 0.0, 1.0, Axisd, 'TQuatd ToAxisAngle canonicalizes negative multi-turn axis');
+  CheckNear(HALF_PI, Angled, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes negative multi-turn angle');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.quat');
   T.Run('TQuatf contracts', @TestQuatfContracts);
@@ -595,5 +623,7 @@ begin
     @TestInterpolationFollowsShortestPathForOppositeSignEnd);
   T.Run('ToAxisAngle canonicalizes opposite-sign rotations',
     @TestToAxisAngleCanonicalizesOppositeSignRotations);
+  T.Run('ToAxisAngle canonicalizes multi-turn inputs',
+    @TestToAxisAngleCanonicalizesMultiTurnInputs);
   T.Summary;
 end.

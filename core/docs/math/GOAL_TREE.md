@@ -231,9 +231,10 @@ Status:
 - `nextpas.core.math.quat` now provides `TQuatf` and `TQuatd`.
 - Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
   identity, `Conjugate`, axis-angle roundtrip, axis normalization, zero-axis identity behavior,
-  `ToAxisAngle` canonical shortest-angle output including zero-rotation `+Z` fallback, exact
-  half-turn stable-axis canonicalization, and scaled-input normalization, scaled-input
-  normalization for rotation matrix conversion and vector rotation, quaternion multiply composition,
+  `ToAxisAngle` canonical shortest-angle output including zero-rotation `+Z` fallback, direct
+  `±3π/2` multi-turn canonicalization, exact half-turn stable-axis canonicalization, and
+  scaled-input normalization, scaled-input normalization for rotation matrix conversion and vector
+  rotation, quaternion multiply composition,
   `Slerp`, `Nlerp`, shortest-path handling for opposite-sign equivalent interpolation endpoints
   including direct start/end midpoint parity plus endpoint canonicalization, finite out-of-range
   extrapolation, finite-guard parameter-position parity across `FromAxisAngle(AAxis, AAngleRad)`
