@@ -77,6 +77,7 @@ type
       const AOutcome: TTcpServerWorkOutcome;
       const AOwnership: TTcpServerConnOwnership);
     procedure DrainPendingCompletions;
+    procedure ReleaseRegisteredPollTargets;
     procedure WakeReactor;
     procedure HandlePollTarget(const ATarget: TTcpServerPollSessionTarget;
       const AEvents: TPlatformPollEvents);
@@ -335,6 +336,28 @@ begin
   end;
 end;
 
+procedure TTcpReadinessServer.ReleaseRegisteredPollTargets;
+var
+  LTargets: TTcpServerPollSessionTargetArray;
+  LI: SizeUInt;
+begin
+  LTargets := FTargetRegistry.Drain;
+  if Length(LTargets) = 0 then
+    Exit;
+  for LI := 0 to SizeUInt(Length(LTargets)) - 1 do
+  begin
+    if LTargets[LI] = nil then
+      Continue;
+    try
+      if LTargets[LI].CurrentEvents <> [] then
+        platform_poller_remove(FPoller, LTargets[LI].SocketHandle);
+    except
+    end;
+    CloseServerOwnedTcpConn(LTargets[LI].Connection);
+    LTargets[LI].Free;
+  end;
+end;
+
 procedure TTcpReadinessServer.WakeReactor;
 begin
   if FPollerReady then
@@ -532,7 +555,7 @@ begin
       DrainPendingCompletions;
       FWorkerHandoff := nil;
       FCompletionQueue.Clear;
-      FTargetRegistry.Clear;
+      ReleaseRegisteredPollTargets;
       if FPollerReady then
       begin
         platform_poller_close(FPoller);

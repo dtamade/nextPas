@@ -346,6 +346,43 @@ type
     property ObservedDeadlineWake: Boolean read FObservedDeadlineWake;
   end;
 
+  TShutdownParkedHandler = class;
+
+  TShutdownParkedSession = class(TInterfacedObject, ITcpServerSession,
+    ITcpServerPollDrivenSession)
+  private
+    FOwner: TShutdownParkedHandler;
+    FConnRuntime: ITcpStreamRuntime;
+    FParked: Boolean;
+  public
+    constructor Create(const AOwner: TShutdownParkedHandler; const AConn: ITcpStream);
+    destructor Destroy; override;
+    function Run: TTcpServerConnOwnership;
+    function PollEvents: TPlatformPollEvents;
+    function Advance(const AEvents: TPlatformPollEvents;
+      out ANextEvents: TPlatformPollEvents;
+      out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+  end;
+
+  TShutdownParkedHandler = class(TInterfacedObject, ITcpServerHandler,
+    ITcpServerSessionFactoryWithContext)
+  private
+    FServeConnCalled: Boolean;
+    FContextFactoryCalled: Boolean;
+    FAdvanceCount: Int32;
+    FParkedCount: Int32;
+    FDestroyCount: Int32;
+  public
+    function ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
+    function NewSession(const AConn: ITcpStream;
+      const AContext: ITcpServerSessionContext): ITcpServerSession;
+    property ServeConnCalled: Boolean read FServeConnCalled;
+    property ContextFactoryCalled: Boolean read FContextFactoryCalled;
+    property AdvanceCount: Int32 read FAdvanceCount;
+    property ParkedCount: Int32 read FParkedCount;
+    property DestroyCount: Int32 read FDestroyCount;
+  end;
+
   TMockServerProvider = class(TInterfacedObject, ITcpServer)
   private
     FListenCalled: Boolean;
@@ -1102,6 +1139,100 @@ begin
   if AContext = nil then
     raise Exception.Create('deadline poll-driven handler requires session context');
   Result := TDeadlinePollDrivenSession.Create(Self, AConn);
+end;
+
+constructor TShutdownParkedSession.Create(const AOwner: TShutdownParkedHandler;
+  const AConn: ITcpStream);
+begin
+  inherited Create;
+  FOwner := AOwner;
+  if not Supports(AConn, ITcpStreamRuntime, FConnRuntime) then
+    raise Exception.Create('shutdown parked session requires stream runtime seam');
+  FParked := False;
+end;
+
+destructor TShutdownParkedSession.Destroy;
+begin
+  InterlockedIncrement(FOwner.FDestroyCount);
+  FConnRuntime := nil;
+  FOwner := nil;
+  inherited;
+end;
+
+function TShutdownParkedSession.Run: TTcpServerConnOwnership;
+begin
+  Fail('shutdown parked poll-driven session should not fall back to Run');
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
+function TShutdownParkedSession.PollEvents: TPlatformPollEvents;
+begin
+  Result := [peReadable];
+end;
+
+function TShutdownParkedSession.Advance(const AEvents: TPlatformPollEvents;
+  out ANextEvents: TPlatformPollEvents;
+  out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+var
+  LByte: Byte;
+  LN: SizeUInt;
+  LResult: TTcpStreamIOResult;
+begin
+  InterlockedIncrement(FOwner.FAdvanceCount);
+  AOwnership := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+
+  if FParked then
+  begin
+    ANextEvents := [];
+    Exit(TCP_SERVER_POLL_WAIT);
+  end;
+
+  if not (peReadable in AEvents) then
+  begin
+    ANextEvents := [peReadable];
+    Exit(TCP_SERVER_POLL_WAIT);
+  end;
+
+  LResult := FConnRuntime.TryRead(LByte, 1, LN);
+  case LResult of
+    tsiorOk:
+      begin
+        if LN = 0 then
+        begin
+          ANextEvents := [];
+          Exit(TCP_SERVER_POLL_DONE);
+        end;
+        FParked := True;
+        InterlockedIncrement(FOwner.FParkedCount);
+        ANextEvents := [];
+        Exit(TCP_SERVER_POLL_WAIT);
+      end;
+    tsiorWouldBlock:
+      begin
+        ANextEvents := [peReadable];
+        Exit(TCP_SERVER_POLL_WAIT);
+      end;
+  else
+    ANextEvents := [];
+    Exit(TCP_SERVER_POLL_DONE);
+  end;
+end;
+
+function TShutdownParkedHandler.ServeConn(
+  const AConn: ITcpStream): TTcpServerConnOwnership;
+begin
+  FServeConnCalled := True;
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+  Fail('shutdown parked handler should bypass ServeConn');
+end;
+
+function TShutdownParkedHandler.NewSession(const AConn: ITcpStream;
+  const AContext: ITcpServerSessionContext): ITcpServerSession;
+begin
+  FContextFactoryCalled := True;
+  if AContext = nil then
+    raise Exception.Create('shutdown parked handler requires session context');
+  Result := TShutdownParkedSession.Create(Self, AConn);
 end;
 
 constructor TMockServerProvider.Create(const AOptions: TTcpServerOptions);
@@ -2611,6 +2742,79 @@ begin
   LServer.Shutdown;
   platform_thread_join(LHandle, LRet);
 end;
+
+procedure TestEpollServerShutdownReleasesParkedPollDrivenSession;
+var
+  LHandler: TShutdownParkedHandler;
+  LHandlerRef: ITcpServerHandler;
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LPort: UInt16;
+  LClient: ITcpStream;
+  LRet: Pointer;
+  LOptions: TTcpServerOptions;
+begin
+  LHandler := TShutdownParkedHandler.Create;
+  LHandlerRef := LHandler;
+  Check(LHandlerRef <> nil, 'shutdown parked handler keepalive installed');
+  LOptions := TTcpServerOptions.Default;
+  LOptions.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LServer := NewTcpServer(LOptions);
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := LHandler;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  LPort := LServer.LocalAddr.Port;
+  Check(LPort > 0, 'shutdown parked server exposes bound port');
+
+  LClient := TcpConnect('127.0.0.1', LPort);
+  try
+    LClient.Write(PAnsiChar('s')^, 1);
+
+    LWait := 0;
+    while (LHandler.ParkedCount = 0) and (LWait < 200) do
+    begin
+      platform_thread_sleep_ns(5000000);
+      Inc(LWait);
+    end;
+
+    Check(LHandler.ContextFactoryCalled,
+      'shutdown parked path uses context-aware session factory');
+    Check(not LHandler.ServeConnCalled,
+      'shutdown parked path bypasses ServeConn');
+    Check(LHandler.AdvanceCount > 0,
+      'shutdown parked session advanced before shutdown');
+    CheckEqual(Int64(1), Int64(LHandler.ParkedCount),
+      'shutdown parked session entered empty-interest wait');
+
+    LServer.Shutdown;
+    platform_thread_join(LHandle, LRet);
+
+    LWait := 0;
+    while (LHandler.DestroyCount = 0) and (LWait < 200) do
+    begin
+      platform_thread_sleep_ns(5000000);
+      Inc(LWait);
+    end;
+
+    CheckEqual(Int64(1), Int64(LHandler.DestroyCount),
+      'shutdown releases empty-interest poll-driven session target');
+  finally
+    LClient.Close;
+  end;
+end;
 {$ENDIF}
 
 begin
@@ -2671,6 +2875,8 @@ begin
     @TestEpollServerWakesPollDrivenSessionAfterWorkerCompletion);
   T.Run('Epoll server wakes poll-driven session on deadline',
     @TestEpollServerWakesPollDrivenSessionOnDeadline);
+  T.Run('Epoll server shutdown releases parked poll-driven session',
+    @TestEpollServerShutdownReleasesParkedPollDrivenSession);
   {$ENDIF}
   T.Summary;
 end.

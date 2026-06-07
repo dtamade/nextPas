@@ -110,6 +110,7 @@ type
     procedure UnregisterTarget(const ATarget: TTcpServerPollSessionTarget);
     function ComputePollTimeoutMs: Int32;
     function CollectExpiredTargets: TTcpServerPollSessionTargetArray;
+    function Drain: TTcpServerPollSessionTargetArray;
     procedure Clear;
   end;
 
@@ -472,6 +473,22 @@ begin
       Inc(LCount);
     end;
   SetLength(Result, LCount);
+end;
+
+function TTcpServerPollTargetRegistry.Drain: TTcpServerPollSessionTargetArray;
+var
+  LI: SizeUInt;
+begin
+  Result := nil;
+  if FCount = 0 then
+    Exit;
+  SetLength(Result, FCount);
+  for LI := 0 to FCount - 1 do
+  begin
+    Result[LI] := FItems[LI];
+    FItems[LI] := nil;
+  end;
+  FCount := 0;
 end;
 
 procedure TTcpServerPollTargetRegistry.Clear;
