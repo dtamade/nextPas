@@ -596,6 +596,10 @@ var
   GMpmcPublishWakeConsumerObservedEmpty: Int32;
   GMpmcPublishWakeConsumerResult: Int32;
   GMpmcPublishWakeConsumerValue: Integer;
+  GMpmcSpaceWakeQ: TIntMpmc;
+  GMpmcSpaceWakeProducerStarted: Int32;
+  GMpmcSpaceWakeProducerObservedFull: Int32;
+  GMpmcSpaceWakeProducerResult: Int32;
 
 function MpmcPublishWakeConsumer(AArg: Pointer): Pointer; cdecl;
 var
@@ -617,6 +621,22 @@ begin
   end
   else
     AtomicStore32(GMpmcPublishWakeConsumerResult, 0, moRelease);
+end;
+
+function MpmcSpaceWakeProducer(AArg: Pointer): Pointer; cdecl;
+begin
+  Result := nil;
+  AtomicStore32(GMpmcSpaceWakeProducerStarted, 1, moRelease);
+  if GMpmcSpaceWakeQ.TryEnqueue(99) then
+  begin
+    AtomicStore32(GMpmcSpaceWakeProducerResult, 2, moRelease);
+    Exit;
+  end;
+  AtomicStore32(GMpmcSpaceWakeProducerObservedFull, 1, moRelease);
+  if GMpmcSpaceWakeQ.EnqueueTimeout(42, QueuePublishWakeTimeoutNs) then
+    AtomicStore32(GMpmcSpaceWakeProducerResult, 1, moRelease)
+  else
+    AtomicStore32(GMpmcSpaceWakeProducerResult, 0, moRelease);
 end;
 
 procedure TestMpmcClose;
@@ -824,6 +844,72 @@ begin
     if LThreadCreated and (not LJoined) then
       platform_thread_join(LConsumer, LRetVal);
     GMpmcPublishWakeQ := nil;
+    LQ.Free;
+  end;
+end;
+
+procedure TestMpmcEnqueueTimeoutWakesOnSpace;
+var
+  LQ: TIntMpmc;
+  LProducer: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LElapsedMs: QWord;
+  LSpin: Integer;
+  LV: Integer;
+  LThreadCreated: Boolean;
+  LJoined: Boolean;
+begin
+  LQ := TIntMpmc.Create(1);
+  LThreadCreated := False;
+  LJoined := False;
+  try
+    Check(LQ.TryEnqueue(1), 'MPMC queue must be full before space-wake producer starts');
+    GMpmcSpaceWakeQ := LQ;
+    AtomicStore32(GMpmcSpaceWakeProducerStarted, 0, moRelease);
+    AtomicStore32(GMpmcSpaceWakeProducerObservedFull, 0, moRelease);
+    AtomicStore32(GMpmcSpaceWakeProducerResult, -1, moRelease);
+    CheckEqual(Int64(0), Int64(platform_thread_create(LProducer, @MpmcSpaceWakeProducer, nil)),
+      'MPMC space wake producer thread must start');
+    LThreadCreated := True;
+
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GMpmcSpaceWakeProducerStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GMpmcSpaceWakeProducerStarted, moAcquire)),
+      'MPMC EnqueueTimeout producer thread must start before space release');
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GMpmcSpaceWakeProducerObservedFull, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GMpmcSpaceWakeProducerObservedFull, moAcquire)),
+      'MPMC EnqueueTimeout producer must observe the full queue before space release');
+    platform_thread_sleep_ns(QueuePublishWakeDelayNs);
+    CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcSpaceWakeProducerResult, moAcquire)),
+      'MPMC EnqueueTimeout producer must not complete before space release');
+
+    LElapsedMs := GetTickCount64;
+    Check(LQ.TryDequeue(LV), 'MPMC consumer must release queue space');
+    CheckEqual(Int64(1), Int64(LV));
+    platform_thread_join(LProducer, LRetVal);
+    LJoined := True;
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GMpmcSpaceWakeProducerResult, moAcquire)),
+      'MPMC EnqueueTimeout must publish after space release');
+    Check(LElapsedMs < QueuePublishWakeBudgetMs,
+      'MPMC EnqueueTimeout producer must progress after space release before the full timeout');
+    Check(LQ.TryDequeue(LV), 'MPMC space-woken producer item must be drainable');
+    CheckEqual(Int64(42), Int64(LV));
+    Check(not LQ.TryDequeue(LV), 'MPMC queue must be empty after draining the space-woken item');
+  finally
+    if LThreadCreated and (not LJoined) then
+      platform_thread_join(LProducer, LRetVal);
+    GMpmcSpaceWakeQ := nil;
     LQ.Free;
   end;
 end;
@@ -1833,6 +1919,7 @@ var
   LMpmcCloseTestSection: string;
   LMpmcCloseWakeWaitTestSection: string;
   LMpmcPublishWakeTestSection: string;
+  LMpmcSpaceWakeTestSection: string;
   LSpscBatchSourceSection: string;
   LSpscDequeueBatchSourceSection: string;
   LSpscBatchTestSection: string;
@@ -1905,12 +1992,16 @@ begin
     'MPMC close timeout wake test source section');
   LMpmcCloseWakeWaitTestSection := ExtractSection(LTestSource,
     'procedure TestMpmcCloseWakeWaits;',
-    '{ MPMC contention helpers }',
+    'procedure TestMpmcDequeueTimeoutWakesOnPublish;',
     'MPMC close wait wake test source section');
   LMpmcPublishWakeTestSection := ExtractSection(LTestSource,
     'procedure TestMpmcDequeueTimeoutWakesOnPublish;',
-    '{ MPMC contention helpers }',
+    'procedure TestMpmcEnqueueTimeoutWakesOnSpace;',
     'MPMC publish wake test source section');
+  LMpmcSpaceWakeTestSection := ExtractSection(LTestSource,
+    'procedure TestMpmcEnqueueTimeoutWakesOnSpace;',
+    '{ MPMC contention helpers }',
+    'MPMC space wake test source section');
   LSpscBatchSourceSection := ExtractSection(LSpscSource,
     'function TSpscQueueImpl.EnqueueBatch',
     'function TSpscQueueImpl.DequeueBatch',
@@ -2130,8 +2221,11 @@ begin
   CheckContains(LDocsReadme, 'source-contract',
     'lockfree README must distinguish source-contract coverage from runtime proof');
   CheckContains(LDocsReadme,
-    'and MPMC producer-published data (`DequeueTimeout`).',
+    'MPMC producer-published data (`DequeueTimeout`)',
     'lockfree README must document the local MPMC publish timeout runtime evidence');
+  CheckContains(LDocsReadme,
+    'MPMC consumer-released space (`EnqueueTimeout`)',
+    'lockfree README must document the local MPMC space-release timeout runtime evidence');
   CheckContains(LDocsReadme,
     'make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree clean run',
     'lockfree README must list the focused benchmark command');
@@ -2387,6 +2481,24 @@ begin
   CheckContains(LTestSource,
     'T.Run(''MPMC timeout wakes on publish'', @TestMpmcDequeueTimeoutWakesOnPublish);',
     'lockfree test runner must register the MPMC publish wake runtime test');
+  CheckContains(LMpmcSpaceWakeTestSection,
+    'MPMC EnqueueTimeout producer must observe the full queue before space release',
+    'MPMC space wake runtime test must prove the producer observed a full queue before release');
+  CheckContains(LMpmcSpaceWakeTestSection,
+    'MPMC EnqueueTimeout producer must not complete before space release',
+    'MPMC space wake runtime test must prove the producer is pending before release');
+  CheckContains(LMpmcSpaceWakeTestSection,
+    'MPMC consumer must release queue space',
+    'MPMC space wake runtime test must release space through TryDequeue');
+  CheckContains(LMpmcSpaceWakeTestSection,
+    'MPMC EnqueueTimeout producer must progress after space release before the full timeout',
+    'MPMC space wake runtime test must bound producer progress latency');
+  CheckContains(LMpmcSpaceWakeTestSection,
+    'MPMC space-woken producer item must be drainable',
+    'MPMC space wake runtime test must prove the woken producer published an item');
+  CheckContains(LTestSource,
+    'T.Run(''MPMC timeout wakes on space release'', @TestMpmcEnqueueTimeoutWakesOnSpace);',
+    'lockfree test runner must register the MPMC space wake runtime test');
   CheckContains(LMpmcBatchSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then',
     'MPMC batch enqueue must reject new items after close');
   CheckContains(LMpmcBatchTestSection, 'mpmc batch enqueue after close rejected',
@@ -2721,6 +2833,7 @@ begin
   T.Run('MPMC close', @TestMpmcClose);
   T.Run('MPMC close wake waits', @TestMpmcCloseWakeWaits);
   T.Run('MPMC timeout wakes on publish', @TestMpmcDequeueTimeoutWakesOnPublish);
+  T.Run('MPMC timeout wakes on space release', @TestMpmcEnqueueTimeoutWakesOnSpace);
   T.Run('MPMC 4P+4C contention', @TestMpmcContention);
   T.Run('Capacity zero reject', @TestCapacityZero);
   T.Run('Capacity overflow reject', @TestCapacityOverflowReject);
