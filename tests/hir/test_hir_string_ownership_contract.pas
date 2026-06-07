@@ -258,8 +258,8 @@ begin
       Fail('missing-global-owner-sidecar');
     if Pos('store ptr null, ptr ', LlvmText) = 0 then
       Fail('missing-alias-owner-clear');
-    if Pos('call void @np_free(ptr %', LlvmText) <> 0 then
-      Fail('string-path-must-not-free-visible-ptr');
+    if Pos('call void @np_free(ptr %concat.', LlvmText) <> 0 then
+      Fail('string-path-must-not-free-visible-concat-ptr');
   finally
     Model.Free;
   end;
