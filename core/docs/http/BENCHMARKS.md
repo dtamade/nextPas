@@ -2584,6 +2584,9 @@ The raw comparison runner now also locks the full dual opt-in
 `--include-hyper + --nextpas-backend epoll + --workload response_1k` shape, so
 the body-bearing report proves those two optional axes compose instead of only
 working in separate focused seams.
+The snapshot helper now locks the same dual opt-in body-bearing combination, so
+the durable Markdown artifact also proves that Hyper/Tokio inclusion and nextPas
+epoll backend selection compose correctly in one saved comparison.
 
 Fresh local `no_url` 50k/4 3-run summary:
 

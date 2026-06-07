@@ -12534,3 +12534,47 @@ Hello from nextPas!
     report
   - this is coverage tightening only; it does not claim a new ranking or a new
     comparison schema
+
+## Session: 2026-06-07 snapshot include-hyper epoll response-1k focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the full dual opt-in
+    `--include-hyper + --nextpas-backend epoll + --workload response_1k`
+    snapshot combination into the focused benchmark gate
+  - keep the slice limited to durable saved-artifact composition truth, not
+    snapshot/runner/comparator/server implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch snapshot behavior, runner behavior, server/runtime behavior,
+    comparator binaries, public HTTP API, lower-layer modules, or generated
+    artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `85 total, 85 passed, 0 failed`
+    - new focused row:
+      `server comparison snapshot include hyper epoll response_1k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload response_1k --include-hyper --nextpas-backend epoll`
+  - the focused smoke locks:
+    - `include_hyper=1`
+    - `nextpas_backend=epoll`
+    - `workload=response_1k`
+    - command block contains
+      `--workload response_1k --include-hyper --nextpas-backend epoll`
+    - `cargo_version=`
+    - `hyper_cargo_lock_sha256=`
+    - nextPas row reports `backend=epoll`
+    - `rust_hyper` row reports `rust_profile=hyper_tokio`
+    - `client_read_mode=header_plus_content_length`
+    - `response_body_bytes=1024`
+    - `summary_impl=rust_hyper`
+- Outcome:
+  - the durable Markdown artifact now also proves that the Hyper/Tokio
+    comparator and nextPas epoll backend compose correctly on the public
+    body-bearing comparison seam
+  - this is coverage tightening only; it does not claim a new ranking or a new
+    snapshot schema

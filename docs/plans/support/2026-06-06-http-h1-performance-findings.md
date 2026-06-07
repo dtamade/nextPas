@@ -5575,3 +5575,28 @@
 - 这轮的价值仍是 benchmark truth：
   它证明 dual opt-in body-bearing public comparison 能稳定组合，而不是只在两个分离的
   focused seam 里各自成立。
+
+## 2026-06-07 snapshot include-hyper epoll response-1k focused smoke findings
+
+- raw runner 的 dual opt-in body-bearing seam 这轮已经有了 focused proof，但 durable
+  snapshot artifact 还没有锁住同一个组合。
+- 这会留下一个 artifact gap：
+  如果调用方只消费保存下来的 Markdown snapshot，仍然无法直接证明 Hyper/Tokio comparator
+  与 nextPas epoll backend 在同一条 public body-bearing report 上稳定共存。
+- 本轮继续保持窄刀，没有扩 snapshot schema，也没有碰 runner/HTTP 生产逻辑：
+  - 只把
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload response_1k --include-hyper --nextpas-backend epoll`
+    提升进 focused gate
+  - 锁住 `include_hyper=1`
+  - 锁住 `nextpas_backend=epoll`
+  - 锁住 `workload=response_1k`
+  - 锁住命令块同时包含
+    `--workload response_1k --include-hyper --nextpas-backend epoll`
+  - 锁住 `cargo_version=`、`hyper_cargo_lock_sha256=`
+  - 锁住 nextPas row 的 `backend=epoll`
+  - 锁住 `rust_hyper` row 的 `rust_profile=hyper_tokio`
+  - 锁住 `client_read_mode=header_plus_content_length`、
+    `response_body_bytes=1024`、`summary_impl=rust_hyper`
+- 这轮的价值仍是 benchmark truth：
+  dual opt-in body-bearing public comparison 现在在 raw runner 和 durable snapshot
+  两层都能稳定取证。
