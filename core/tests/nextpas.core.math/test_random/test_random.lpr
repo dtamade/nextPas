@@ -306,7 +306,9 @@ begin
     CheckEqual(Int64(0), Int64(Rng.Roll(0)), 'Roll with zero sides returns zero');
     CheckEqual(Int64(0), Int64(Rng.Roll(-6)), 'Roll with negative sides returns zero');
     CheckEqual(Int64(0), Int64(Rng.RollMultiple(0, 6)), 'zero dice returns zero');
+    CheckEqual(Int64(0), Int64(Rng.RollMultiple(-3, 6)), 'negative dice returns zero');
     CheckEqual(Int64(0), Int64(Rng.RollMultiple(3, 0)), 'zero-sided dice returns zero');
+    CheckEqual(Int64(0), Int64(Rng.RollMultiple(3, -6)), 'negative-sided dice returns zero');
     Total := Rng.RollMultiple(3, 6);
     Check((Total >= 3) and (Total <= 18), 'RollMultiple stays within dice bounds');
 
