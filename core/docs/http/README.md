@@ -142,11 +142,12 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   `Do_(nil)` raises `EArgumentError`
 - `Post` / `Put` / `Patch` expose three shortcut body forms:
   `IReader`, Pascal `string`, and `TBytes`.
-- All three shortcut body forms publish `Content-Length` and forward the caller
-  supplied `Content-Type`; the `IReader` form still buffers to bytes rather than
-  routing payload through a Pascal string, while the `string` / `TBytes` forms
-  reuse the public `NewRequest(..., BodyText)` / `NewRequest(..., BodyBytes)`
-  helpers.
+- All three shortcut body forms publish `Content-Length`; a non-empty caller
+  supplied `Content-Type` is forwarded, while an empty content type omits the
+  header instead of sending an empty header value. The `IReader` form still
+  buffers to bytes rather than routing payload through a Pascal string, while
+  the `string` / `TBytes` forms reuse the public `NewRequest(..., BodyText)` /
+  `NewRequest(..., BodyBytes)` helpers.
 - `IHttpClient.Do_` owns any close-capable request body for the duration of the
   request. After the final round trip or failure, `IReadCloser` / `ICloser` /
   `IStream` request bodies are closed. The `Post` / `Put` / `Patch`

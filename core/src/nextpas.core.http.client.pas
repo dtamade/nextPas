@@ -245,7 +245,8 @@ var
   LBody: TBytes;
 begin
   LHeaders := NewHttpHeaders;
-  LHeaders.Set_('content-type', AContentType);
+  if AContentType <> '' then
+    LHeaders.Set_('content-type', AContentType);
 
   if ABody <> nil then
   begin
@@ -267,7 +268,8 @@ var
   LHeaders: IHttpHeaders;
 begin
   LHeaders := NewHttpHeaders;
-  LHeaders.Set_('content-type', AContentType);
+  if AContentType <> '' then
+    LHeaders.Set_('content-type', AContentType);
   Result := NewRequest(AMethod, AUrl, LHeaders, ABody);
 end;
 
@@ -277,7 +279,8 @@ var
   LHeaders: IHttpHeaders;
 begin
   LHeaders := NewHttpHeaders;
-  LHeaders.Set_('content-type', AContentType);
+  if AContentType <> '' then
+    LHeaders.Set_('content-type', AContentType);
   Result := NewRequest(AMethod, AUrl, LHeaders, ABody);
 end;
 

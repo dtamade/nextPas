@@ -134,6 +134,10 @@ type
     FTrackedBody: TTrackedRequestBody;
     FRaiseAfterRead: Boolean;
     FSeenBody: string;
+    FSeenMethod: THttpMethod;
+    FSeenContentType: string;
+    FSeenContentTypeHeader: Boolean;
+    FSeenContentLength: Int64;
     FTrackedBodyClosedAtEntry: Boolean;
     FTrackedBodyClosedBeforeReturn: Boolean;
   public
@@ -141,6 +145,10 @@ type
       const ARaiseAfterRead: Boolean = False);
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
     property SeenBody: string read FSeenBody;
+    property SeenMethod: THttpMethod read FSeenMethod;
+    property SeenContentType: string read FSeenContentType;
+    property SeenContentTypeHeader: Boolean read FSeenContentTypeHeader;
+    property SeenContentLength: Int64 read FSeenContentLength;
     property TrackedBodyClosedAtEntry: Boolean read FTrackedBodyClosedAtEntry;
     property TrackedBodyClosedBeforeReturn: Boolean
       read FTrackedBodyClosedBeforeReturn;
@@ -637,6 +645,14 @@ function TRequestBodyCaptureTransport.RoundTrip(
 var
   LHeaders: IHttpHeaders;
 begin
+  FSeenMethod := AReq.Method;
+  FSeenContentLength := AReq.ContentLength;
+  FSeenContentTypeHeader := (AReq.Headers <> nil) and
+    AReq.Headers.Has('content-type');
+  if AReq.Headers <> nil then
+    FSeenContentType := AReq.Headers.Get('content-type')
+  else
+    FSeenContentType := '';
   FTrackedBodyClosedAtEntry := (FTrackedBody <> nil) and FTrackedBody.Closed;
   FSeenBody := ReadReaderStr(AReq.Body);
   FTrackedBodyClosedBeforeReturn := (FTrackedBody <> nil) and FTrackedBody.Closed;
@@ -2205,6 +2221,67 @@ begin
     'reader shortcut closes close-capable source body after buffering');
 end;
 
+procedure CheckShortcutOmitsEmptyContentType(
+  const ALabel: string; const ATransport: TRequestBodyCaptureTransport;
+  const AExpectedMethod: THttpMethod; const AExpectedBody: string);
+begin
+  CheckEqual(Int64(Ord(AExpectedMethod)), Int64(Ord(ATransport.SeenMethod)),
+    ALabel + ' method');
+  Check(not ATransport.SeenContentTypeHeader,
+    ALabel + ' does not publish empty content-type header');
+  CheckEqual('', ATransport.SeenContentType,
+    ALabel + ' exposes no content-type value');
+  CheckEqual(Int64(Length(AExpectedBody)), ATransport.SeenContentLength,
+    ALabel + ' content-length');
+  CheckEqual(AExpectedBody, ATransport.SeenBody,
+    ALabel + ' body');
+end;
+
+procedure TestClientShortcutBodyOverloadsOmitEmptyContentType;
+var
+  LBody: TTrackedRequestBody;
+  LTransportObj: TRequestBodyCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LBytes: TBytes;
+begin
+  LTransportObj := TRequestBodyCaptureTransport.Create(nil);
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LResp := LClient.Post('http://example.test/upload', '', 'payload');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'post string empty content-type returns transport response');
+  CheckShortcutOmitsEmptyContentType('post string', LTransportObj, hmPost,
+    'payload');
+
+  SetLength(LBytes, 3);
+  LBytes[0] := Ord('b');
+  LBytes[1] := 0;
+  LBytes[2] := 255;
+  LTransportObj := TRequestBodyCaptureTransport.Create(nil);
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LResp := LClient.Put('http://example.test/upload', '', LBytes);
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'put bytes empty content-type returns transport response');
+  CheckShortcutOmitsEmptyContentType('put bytes', LTransportObj, hmPut,
+    'b' + #0 + #255);
+
+  LBody := TTrackedRequestBody.Create('stream-body');
+  LTransportObj := TRequestBodyCaptureTransport.Create(LBody);
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LResp := LClient.Patch('http://example.test/upload', '',
+    LBody as IReader);
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'patch reader empty content-type returns transport response');
+  CheckShortcutOmitsEmptyContentType('patch reader', LTransportObj, hmPatch,
+    'stream-body');
+  Check(LBody.Closed,
+    'reader shortcut still closes source body with empty content-type');
+end;
+
 procedure TestHttpGetToFileWritesFinalPathAtomically;
 var
   LRouter: THttpRouter;
@@ -3554,6 +3631,8 @@ begin
     @TestClientClosesCloseCapableRequestBodyOnTransportError);
   T.Run('Client reader shortcut closes source body after buffering',
     @TestClientPostReaderClosesSourceBodyAfterBuffering);
+  T.Run('Client shortcut body overloads omit empty content-type',
+    @TestClientShortcutBodyOverloadsOmitEmptyContentType);
   T.Run('HttpGetToFile writes final path atomically', @TestHttpGetToFileWritesFinalPathAtomically);
   T.Run('HttpGetToFile rejects 404 responses', @TestHttpGetToFileRejects404Responses);
   T.Run('HttpGetToFile cleans temp files on truncated body', @TestHttpGetToFileCleansTempFilesOnTruncatedBody);

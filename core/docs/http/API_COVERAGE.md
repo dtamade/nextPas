@@ -99,7 +99,8 @@
     live POST / PUT / PATCH 行为覆盖。
   - 本轮补齐：`IHttpClient.Post` / `Put` / `Patch` 现在也直接接受 Pascal
     `string` 与 `TBytes` body overload。三种 shortcut body 形状都会发布
-    `Content-Length`，并转发调用方显式提供的 `Content-Type`；`string` /
+    `Content-Length`，并转发调用方显式提供的非空 `Content-Type`；空
+    content type 会省略该 header 而不是发送空 header value。`string` /
     `TBytes` overload 复用现有 `NewRequest(..., BodyText)` /
     `NewRequest(..., BodyBytes)` contract，而不是再扩一层新的 free-function
     facade。`test_http_client` 锁住 live string / bytes body wire 语义，
