@@ -446,6 +446,7 @@ end;
 function TAlignedAlloc.DoAlloc(aSize: SizeUInt; aAlign: SizeUInt): Pointer;
 var
   LActualSize: SizeUInt;
+  LPointerSize: SizeUInt;
   LRawPtr: Pointer;
   LAlignedPtr: Pointer;
 begin
@@ -457,7 +458,13 @@ begin
   end;
 
   // 分配额外空间：原始指针 + 对齐填充
-  LActualSize := aSize + aAlign + SizeOf(Pointer);
+  if aSize > High(SizeUInt) - aAlign then
+    Exit(nil);
+  LActualSize := aSize + aAlign;
+  LPointerSize := SizeOf(Pointer);
+  if LActualSize > High(SizeUInt) - LPointerSize then
+    Exit(nil);
+  Inc(LActualSize, LPointerSize);
   GetMem(LRawPtr, LActualSize);
   if LRawPtr = nil then
   begin

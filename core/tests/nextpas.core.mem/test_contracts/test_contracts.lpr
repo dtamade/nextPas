@@ -12,6 +12,8 @@ uses
 	  nextpas.core.mem.allocator.base,
 	  nextpas.core.mem.allocator.mimalloc,
 	  nextpas.core.mem.alloc,
+	  nextpas.core.mem.error,
+	  nextpas.core.mem.layout,
 	  nextpas.core.mem.adapter;
 
 type
@@ -251,6 +253,23 @@ begin
   end;
 end;
 
+procedure TestAlignedAllocRejectsBackingSizeOverflow;
+var
+  LAlloc: IAlloc;
+  LLayout: TMemLayout;
+  LResult: TAllocResult;
+begin
+  LAlloc := GetAlignedAlloc;
+  LLayout := TMemLayout.Create(High(SizeUInt), 64);
+  LResult := LAlloc.Alloc(LLayout);
+  try
+    Check(LResult.IsErr, 'aligned IAlloc should reject backing size calculations that overflow SizeUInt');
+  finally
+    if LResult.IsOk and (LResult.Ptr <> nil) then
+      LAlloc.Dealloc(LResult.Ptr, LLayout);
+  end;
+end;
+
 procedure TestMimallocUsableSizeCapabilityFallback;
 var
   LAllocator: nextpas.core.mem.allocator.IAllocator;
@@ -388,6 +407,7 @@ begin
   T.Run('allocator aliases are canonical', @TestAllocatorAliasesAreCanonical);
   T.Run('allocator adapter round trip', @TestAllocatorAdapterRoundTrip);
   T.Run('allocator adapter aligned round trip', @TestAllocatorAdapterAlignedRoundTrip);
+  T.Run('aligned alloc rejects backing size overflow', @TestAlignedAllocRejectsBackingSizeOverflow);
   T.Run('mimalloc usable-size capability fallback', @TestMimallocUsableSizeCapabilityFallback);
   T.Run('mem.utils no-op and overlap contract', @TestMemUtilsNoOpAndOverlapContract);
   T.Run('mem.utils copy unchecked handles overlap', @TestMemUtilsCopyUncheckedHandlesOverlap);
