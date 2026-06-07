@@ -426,8 +426,10 @@ begin
   FPort := 0;
   if LPort <> 0 then
   begin
+    PostQueuedCompletionStatus(HANDLE(LPort), 0, 0, nil);
     IocpReleasePendingOps(Self, HANDLE(LPort), ERROR_OPERATION_ABORTED);
     IocpReleaseAssociatedHandles(Self);
+    PostQueuedCompletionStatus(HANDLE(LPort), 0, 0, nil);
     CloseHandle(HANDLE(LPort));
   end;
   FMaxEvents := 0;
@@ -508,7 +510,7 @@ begin
   LOverlapped := nil;
   LOk := GetQueuedCompletionStatus(HANDLE(FPort), @LBytes, @LKey,
     @LOverlapped, 0);
-  if (not LOk) and (LOverlapped = nil) then
+  if LOverlapped = nil then
     Exit(False);
   Result := IocpDispatchCompletion(Self, LBytes, LOk, LOverlapped);
 end;
@@ -532,9 +534,11 @@ begin
       LOverlapped := nil;
       LOk := GetQueuedCompletionStatus(HANDLE(FPort), @LBytes, @LKey,
         @LOverlapped, INFINITE);
-      if (not LOk) and (LOverlapped = nil) then
+      if LOverlapped = nil then
       begin
-        Break;
+        if not LOk then
+          Break;
+        Continue;
       end;
       IocpDispatchCompletion(Self, LBytes, LOk, LOverlapped);
     end;

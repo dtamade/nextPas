@@ -248,6 +248,60 @@ begin
     'IOCP pending release must not free OVERLAPPED storage before completion settle');
 end;
 
+procedure TestIocpCloseRunWakeHandoffContract;
+var
+  LIocp: string;
+  LPollOneBody: string;
+  LRunBody: string;
+  LCloseBody: string;
+  LCloseAfterDrainBody: string;
+begin
+  LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
+  LPollOneBody := ExtractBetween(LIocp, 'function tiocpreactor.pollone',
+    'procedure tiocpreactor.run');
+  LRunBody := ExtractBetween(LIocp, 'procedure tiocpreactor.run',
+    'procedure tiocpreactor.stop');
+  LCloseBody := ExtractBetween(LIocp, 'procedure tiocpreactor.close',
+    'function tiocpreactor.isvalid');
+  LCloseAfterDrainBody := ExtractBetween(LCloseBody,
+    'iocpreleaseassociatedhandles(self);', 'closehandle(handle(lport))');
+
+  CheckContains(LCloseBody,
+    'postqueuedcompletionstatus(handle(lport), 0, 0, nil)',
+    'IOCP Close must wake a blocking Run before releasing the completion port');
+  CheckBefore(LCloseBody, 'atomicstore32(frunning, 0, morelease);',
+    'postqueuedcompletionstatus(handle(lport), 0, 0, nil)',
+    'IOCP Close must publish stopped state before posting the close wake');
+  CheckBefore(LCloseBody, 'postqueuedcompletionstatus(handle(lport), 0, 0, nil)',
+    'iocpreleasependingops(self, handle(lport), error_operation_aborted);',
+    'IOCP Close must wake Run before draining abort completions');
+  CheckBefore(LCloseBody,
+    'iocpreleasependingops(self, handle(lport), error_operation_aborted);',
+    'iocpreleaseassociatedhandles(self);',
+    'IOCP Close must drain abort completions before releasing association metadata');
+  CheckContains(LCloseAfterDrainBody,
+    'postqueuedcompletionstatus(handle(lport), 0, 0, nil);',
+    'IOCP Close must repost the control wake after close-side abort draining');
+  CheckAbsent(LCloseBody, 'postqueuedcompletionstatus(handle(fport), 0, 0, nil)',
+    'IOCP Close must not post through detached public FPort state');
+
+  CheckContains(LPollOneBody, 'if loverlapped = nil then',
+    'IOCP PollOne must recognize control packets without pending operation owners');
+  CheckBefore(LPollOneBody, 'if loverlapped = nil then',
+    'iocpdispatchcompletion(self, lbytes, lok, loverlapped)',
+    'IOCP PollOne must reject nil-overlapped control packets before dispatch');
+  CheckContains(LRunBody, 'if loverlapped = nil then',
+    'IOCP Run must recognize close/stop control packets');
+  CheckContains(LRunBody, 'continue;',
+    'IOCP Run must re-check running state after a successful control packet');
+  CheckBefore(LRunBody, 'if loverlapped = nil then',
+    'continue;',
+    'IOCP Run must handle successful control packets by re-checking running state');
+  CheckBefore(LRunBody, 'continue;',
+    'iocpdispatchcompletion(self, lbytes, lok, loverlapped)',
+    'IOCP Run must not dispatch close/stop control packets as file completions');
+end;
+
 procedure TestIocpCloseAbortCompletionDrainOwnershipContract;
 var
   LIocp: string;
@@ -965,6 +1019,8 @@ begin
     @TestAsyncLoopRunLifecycleContract);
   T.Run('IOCP close abort ownership contract',
     @TestIocpCloseAbortOwnershipContract);
+  T.Run('IOCP close/run wake handoff contract',
+    @TestIocpCloseRunWakeHandoffContract);
   T.Run('IOCP close abort completion drain ownership contract',
     @TestIocpCloseAbortCompletionDrainOwnershipContract);
   T.Run('async loop timeout close lifecycle contract',
