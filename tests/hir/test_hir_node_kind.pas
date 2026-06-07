@@ -15,6 +15,8 @@ procedure TestAllMappings;
 begin
   if ParseHirNodeKind('var-decl-runtime') <> hnkVarDeclRuntime then Fail('var-decl-runtime');
   if ParseHirNodeKind('var-decl-str-runtime') <> hnkVarDeclStrRuntime then Fail('var-decl-str-runtime');
+  if ParseHirNodeKind('var-decl-str-owned-runtime') = hnkUnknown then Fail('var-decl-str-owned-runtime');
+  if ParseHirNodeKind('var-decl-str-borrowed-runtime') = hnkUnknown then Fail('var-decl-str-borrowed-runtime');
   if ParseHirNodeKind('var-decl-arr-runtime') <> hnkVarDeclArrRuntime then Fail('var-decl-arr-runtime');
   if ParseHirNodeKind('var-decl-ptr-runtime') <> hnkVarDeclPtrRuntime then Fail('var-decl-ptr-runtime');
   if ParseHirNodeKind('var-decl-varref-runtime') <> hnkVarDeclVarrefRuntime then Fail('var-decl-varref-runtime');
@@ -25,6 +27,7 @@ begin
   if ParseHirNodeKind('assign-str-call-runtime') <> hnkAssignStrCallRuntime then Fail('assign-str-call-runtime');
   if ParseHirNodeKind('assign-str-vcall-runtime') <> hnkAssignStrVcallRuntime then Fail('assign-str-vcall-runtime');
   if ParseHirNodeKind('assign-str-concat-runtime') <> hnkAssignStrConcatRuntime then Fail('assign-str-concat-runtime');
+  if ParseHirNodeKind('assign-str-owned-concat-runtime') = hnkUnknown then Fail('assign-str-owned-concat-runtime');
   if ParseHirNodeKind('halt-call-runtime') <> hnkHaltCallRuntime then Fail('halt-call-runtime');
   if ParseHirNodeKind('halt-call') <> hnkHaltCall then Fail('halt-call');
   if ParseHirNodeKind('cond-br-runtime') <> hnkCondBrRuntime then Fail('cond-br-runtime');
@@ -38,6 +41,7 @@ begin
   if ParseHirNodeKind('call-runtime') <> hnkCallRuntime then Fail('call-runtime');
   if ParseHirNodeKind('object-free-runtime') <> hnkObjectFreeRuntime then Fail('object-free-runtime');
   if ParseHirNodeKind('int-to-str-runtime') <> hnkIntToStrRuntime then Fail('int-to-str-runtime');
+  if ParseHirNodeKind('int-to-str-owned-runtime') = hnkUnknown then Fail('int-to-str-owned-runtime');
   if ParseHirNodeKind('copy-str-runtime') <> hnkCopyStrRuntime then Fail('copy-str-runtime');
   if ParseHirNodeKind('write-int-runtime') <> hnkWriteIntRuntime then Fail('write-int-runtime');
   if ParseHirNodeKind('write-string-runtime') <> hnkWriteStringRuntime then Fail('write-string-runtime');
@@ -47,6 +51,7 @@ begin
   if ParseHirNodeKind('setlength-field-arr-runtime') = hnkUnknown then Fail('setlength-field-arr-runtime');
   if ParseHirNodeKind('var-decl-arr-borrowed-runtime') = hnkUnknown then Fail('var-decl-arr-borrowed-runtime');
   if ParseHirNodeKind('dynarray-cleanup-runtime') = hnkUnknown then Fail('dynarray-cleanup-runtime');
+  if ParseHirNodeKind('string-cleanup-runtime') = hnkUnknown then Fail('string-cleanup-runtime');
   if ParseHirNodeKind('assign-arr-elem-runtime') <> hnkAssignArrElemRuntime then Fail('assign-arr-elem-runtime');
   if ParseHirNodeKind('method-body-begin') <> hnkMethodBodyBegin then Fail('method-body-begin');
   if ParseHirNodeKind('class-new-runtime') <> hnkClassNewRuntime then Fail('class-new-runtime');
