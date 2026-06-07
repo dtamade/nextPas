@@ -9,6 +9,7 @@ ownership status so future slices can expand the module without turning it into 
 | --- | --- |
 | `system-owned` | `nextpas.core.system` owns the stable contract and will eventually own the implementation. |
 | `system facade delegating to owner` | `system` may expose a compatibility entry point, but implementation remains in the named owner module. |
+| `compiler semantic contract live; runtime execution deferred` | The compiler records this system contract in semantic output, but runtime execution and public Pascal API are not live. |
 | `owned by another module, no system facade yet` | Another module owns it and this slice deliberately exposes no system facade. |
 | `future compiler/runtime only` | This is a compiler/runtime handshake item, not current public Pascal API. |
 | `explicitly out of scope` | The surface is not part of the current nextPas system direction. |
@@ -17,7 +18,7 @@ ownership status so future slices can expand the module without turning it into 
 
 | FPC capability | nextPas status | nextPas owner / notes |
 | --- | --- | --- |
-| Program startup and shutdown | `future compiler/runtime only` | `rtl/core/system` contract names `np.system.process_init` and `np.system.process_fini`. |
+| Program startup and shutdown | `compiler semantic contract live; runtime execution deferred` | Semantic analysis seeds exact `np.system.process_init` then `np.system.process_fini` contracts for program, library and package roots; runtime execution remains deferred. |
 | `Halt` / exit code semantics | `compiler/HIR contract live; no public facade` | `np.system.halt` maps sema `halt-call-runtime` to HIR intrinsic `halt`; backend termination lowering remains private. |
 | Unit initialization/finalization order | `future compiler/runtime only` | Compiler owns `UnitGraph`; runtime executes `np.system.unit_init` / `np.system.unit_fini`. |
 | Compiler intrinsic names | `future compiler/runtime only` | Intrinsic contract names stay explicit; backend must not invent private helper strings. |

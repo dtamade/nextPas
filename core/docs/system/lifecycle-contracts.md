@@ -46,6 +46,24 @@ Current S3 stance:
   `GetTypeKind` stay compiler/System compile-truth, with the minimal facade only naming identity/kind and
   managed-array helper surface.
 
+## Process Lifecycle
+
+Process startup and shutdown are the first lifecycle contracts with compiler
+semantic seed truth. The semantic analyzer records exact process-level
+`runtime-contract` nodes for `np.system.process_init` followed by
+`np.system.process_fini` when the root is a program, library or package.
+
+Current S3 stance:
+
+- `np.system.process_init` and `np.system.process_fini` are live compiler
+  semantic contracts.
+- Runtime execution of process startup/shutdown remains deferred.
+- No callable `nextpas.core.system` facade function is exposed for either
+  contract.
+- Unit initialization and finalization are not upgraded by this contract; they
+  still require compiler-owned unit graph execution evidence before becoming
+  live.
+
 ## Unit Lifecycle
 
 Unit initialization and unit finalization must be deterministic and derived from compiler-owned unit graph

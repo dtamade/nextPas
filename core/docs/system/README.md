@@ -106,13 +106,19 @@ documents them here but does not claim implementation readiness in this slice:
 
 | Contract | Meaning | Current state |
 | --- | --- | --- |
-| `np.system.process_init` | process-level runtime startup | future compiler/runtime only |
-| `np.system.process_fini` | process-level runtime shutdown | future compiler/runtime only |
+| `np.system.process_init` | process-level runtime startup | compiler semantic contract live; runtime execution deferred |
+| `np.system.process_fini` | process-level runtime shutdown | compiler semantic contract live; runtime execution deferred |
 | `np.system.unit_init` | run a unit initialization entry | future compiler/runtime only |
 | `np.system.unit_fini` | run a unit finalization entry | future compiler/runtime only |
 | `np.system.halt` | explicit program termination | compiler/HIR contract live; no callable public facade |
 | `np.system.object_free` | object `Free` nil guard, destructor, optional cleanup and release intent | compiler/HIR contract live; no callable public facade |
 | `np.system.runtime_fault` | non-ignorable runtime fault | future compiler/runtime only |
+
+Process-level startup and shutdown currently have compiler semantic seed truth:
+program, library and package roots project exact `runtime-contract` entries for
+`np.system.process_init` followed by `np.system.process_fini`. Runtime execution,
+unit lifecycle ordering and fault handling are still deferred and must not be
+treated as a public callable facade.
 
 ## non-goals
 

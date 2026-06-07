@@ -487,7 +487,13 @@ require_token "docs/system/README.md" "compiler/System compile-truth"
 require_token "docs/system/README.md" "not unit-owned wrapper functions"
 require_token "docs/system/README.md" "FillMem"
 require_token "docs/system/README.md" "compiler/HIR contract live; no callable public facade"
+require_token "docs/system/README.md" '| `np.system.process_init` | process-level runtime startup | compiler semantic contract live; runtime execution deferred |'
+require_token "docs/system/README.md" '| `np.system.process_fini` | process-level runtime shutdown | compiler semantic contract live; runtime execution deferred |'
+require_token "docs/system/README.md" '| `np.system.unit_init` | run a unit initialization entry | future compiler/runtime only |'
+require_token "docs/system/README.md" '| `np.system.unit_fini` | run a unit finalization entry | future compiler/runtime only |'
+require_token "docs/system/README.md" 'program, library and package roots project exact `runtime-contract` entries'
 require_token "docs/system/rtl-mapping.md" "compiler/HIR contract live; no public facade"
+require_token "docs/system/rtl-mapping.md" 'Program startup and shutdown | `compiler semantic contract live; runtime execution deferred`'
 require_token "docs/system/rtl-mapping.md" "np.system.object_free"
 
 for unit_name in System SysUtils TypInfo Classes ObjPas; do
@@ -497,6 +503,7 @@ done
 for status in \
   "system-owned" \
   "system facade delegating to owner" \
+  "compiler semantic contract live; runtime execution deferred" \
   "owned by another module, no system facade yet" \
   "future compiler/runtime only" \
   "explicitly out of scope"; do
@@ -508,6 +515,8 @@ for phase in S0 S1 S2 S3 S4 S5; do
 done
 require_token "docs/system/goal-tree.md" "TypeInfo and GetTypeKind are compiler/System compile-truth imports"
 require_token "docs/system/goal-tree.md" "not unit-owned wrapper functions"
+require_token "docs/system/goal-tree.md" "process-level startup/shutdown semantic seed"
+require_token "docs/system/goal-tree.md" "without upgrading runtime execution or unit lifecycle"
 
 for token in \
   "S4" \
@@ -699,6 +708,20 @@ for token in \
   require_token "docs/system/lifecycle-contracts.md" "$token"
 done
 
+for token in \
+  "Process Lifecycle" \
+  "compiler" \
+  "semantic seed truth" \
+  "runtime-contract" \
+  "np.system.process_init" \
+  "np.system.process_fini" \
+  "program, library or package" \
+  "Runtime execution of process startup/shutdown remains deferred" \
+  'No callable `nextpas.core.system` facade' \
+  "Unit initialization and finalization are not upgraded"; do
+  require_token "docs/system/lifecycle-contracts.md" "$token"
+done
+
 reject_token "docs/system/lifecycle-contracts.md" 'No `nextpas.core.system.typinfo` unit is created in this slice.'
 require_token "docs/system/lifecycle-contracts.md" "minimal TypInfo facade is live, but S3 still does not freeze RTTI metadata layout"
 require_token "docs/system/lifecycle-contracts.md" "contract vocabulary only, not public Pascal facade"
@@ -710,6 +733,19 @@ for helper in \
   "np.system.runtime_fault"; do
   require_token "docs/system/lifecycle-contracts.md" "$helper"
 done
+
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "SeedRuntimeContracts"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.process_init"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.process_fini"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "FModel.AddRuntimeContract(RuntimeContracts[Index])"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "FModel.AddTypedHirNode('runtime-contract', RuntimeContracts[Index], 0, 0, '')"
+require_repo_token "compiler/sema/np_semantic_model.pas" "function RuntimeContractAt(const AIndex: LongInt): TRuntimeContract;"
+require_repo_file "tests/semantic/test_semantic_runtime_contract_seed.pas"
+require_repo_token "tests/semantic/test_semantic_runtime_contract_seed.pas" "semantic-runtime-contract-seed-status=pass"
+require_repo_token "tests/semantic/test_semantic_runtime_contract_seed.pas" "AssertRuntimeContractAt(Model, 0, 'np.system.process_init')"
+require_repo_token "tests/semantic/test_semantic_runtime_contract_seed.pas" "AssertRuntimeContractAt(Model, 1, 'np.system.process_fini')"
+require_repo_token "tests/semantic/test_semantic_runtime_contract_seed.pas" "program-must-not-seed-unit-init"
+require_repo_token "tests/semantic/test_semantic_runtime_contract_seed.pas" "unit-must-not-seed-process-init"
 
 [[ ! -e "$CORE_ROOT/src/System.pas" ]] || fail "must not create bare FPC-conflicting System.pas"
 [[ ! -e "$CORE_ROOT/src/system.pas" ]] || fail "must not create bare FPC-conflicting system.pas"
