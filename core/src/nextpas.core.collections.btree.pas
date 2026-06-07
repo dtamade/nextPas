@@ -60,6 +60,7 @@ type
     procedure FreeNode(ANode: PNode);
     procedure FreeNodeRecursive(ANode: PNode);
     function SearchNode(ANode: PNode; const AKey: K; out AIndex: Int32): Boolean;
+    function CompareKeys(const A, B: K): SizeInt;
     procedure SplitChild(AParent: PNode; AChildIndex: Int32);
     procedure InsertNonFull(ANode: PNode; const AKey: K; const AValue: V);
     function FindPredecessor(ANode: PNode): PNode;
@@ -196,32 +197,25 @@ end;
 
 { Search }
 
+function TBTreeMap.CompareKeys(const A, B: K): SizeInt;
+begin
+  if Assigned(FCompare) then
+    Exit(FCompare(A, B, FCompareData));
+  Result := Int32(PInt32(@A)^ > PInt32(@B)^) - Int32(PInt32(@A)^ < PInt32(@B)^);
+end;
+
 function TBTreeMap.SearchNode(ANode: PNode; const AKey: K; out AIndex: Int32): Boolean;
-var lo, hi, mid, cmp: Int32;
+var
+  lo, hi, mid: Int32;
+  cmp: SizeInt;
 begin
   lo := 0; hi := ANode^.Count - 1;
-  if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+  while lo <= hi do
   begin
-    while lo <= hi do
-    begin
-      mid := (lo + hi) shr 1;
-      if PInt32(@AKey)^ = PInt32(@ANode^.Keys[mid])^ then
-        begin AIndex := mid; Exit(True); end;
-      if PInt32(@AKey)^ < PInt32(@ANode^.Keys[mid])^ then
-        hi := mid - 1
-      else
-        lo := mid + 1;
-    end;
-  end
-  else
-  begin
-    while lo <= hi do
-    begin
-      mid := (lo + hi) shr 1;
-      cmp := FCompare(AKey, ANode^.Keys[mid], FCompareData);
-      if cmp = 0 then begin AIndex := mid; Exit(True); end;
-      if cmp < 0 then hi := mid - 1 else lo := mid + 1;
-    end;
+    mid := (lo + hi) shr 1;
+    cmp := CompareKeys(AKey, ANode^.Keys[mid]);
+    if cmp = 0 then begin AIndex := mid; Exit(True); end;
+    if cmp < 0 then hi := mid - 1 else lo := mid + 1;
   end;
   AIndex := lo;
   Result := False;
@@ -348,29 +342,18 @@ end;
 
 procedure TBTreeMap.InsertNonFull(ANode: PNode; const AKey: K; const AValue: V);
 var
-  i, cmp: Int32;
+  i: Int32;
+  cmp: SizeInt;
 begin
   i := ANode^.Count - 1;
 
   if ANode^.IsLeaf then
   begin
-    if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+    while (i >= 0) and (CompareKeys(AKey, ANode^.Keys[i]) < 0) do
     begin
-      while (i >= 0) and (PInt32(@AKey)^ < PInt32(@ANode^.Keys[i])^) do
-      begin
-        ANode^.Keys[i + 1] := ANode^.Keys[i];
-        ANode^.Values[i + 1] := ANode^.Values[i];
-        Dec(i);
-      end;
-    end
-    else
-    begin
-      while (i >= 0) and (FCompare(AKey, ANode^.Keys[i], FCompareData) < 0) do
-      begin
-        ANode^.Keys[i + 1] := ANode^.Keys[i];
-        ANode^.Values[i + 1] := ANode^.Values[i];
-        Dec(i);
-      end;
+      ANode^.Keys[i + 1] := ANode^.Keys[i];
+      ANode^.Values[i + 1] := ANode^.Values[i];
+      Dec(i);
     end;
     ANode^.Keys[i + 1] := AKey;
     ANode^.Values[i + 1] := AValue;
@@ -380,41 +363,20 @@ begin
   end
   else
   begin
-    if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
-    begin
-      while (i >= 0) and (PInt32(@AKey)^ < PInt32(@ANode^.Keys[i])^) do
-        Dec(i);
-    end
-    else
-    begin
-      while (i >= 0) and (FCompare(AKey, ANode^.Keys[i], FCompareData) < 0) do
-        Dec(i);
-    end;
+    while (i >= 0) and (CompareKeys(AKey, ANode^.Keys[i]) < 0) do
+      Dec(i);
     Inc(i);
     if ANode^.Children[i]^.Count = BTREE_MAX_KEYS then
     begin
       SplitChild(ANode, i);
-      if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+      cmp := CompareKeys(AKey, ANode^.Keys[i]);
+      if cmp = 0 then
       begin
-        if PInt32(@AKey)^ = PInt32(@ANode^.Keys[i])^ then
-        begin
-          if System.IsManagedType(V) then Finalize(ANode^.Values[i]);
-          ANode^.Values[i] := AValue;
-          Exit;
-        end;
-        if PInt32(@AKey)^ > PInt32(@ANode^.Keys[i])^ then Inc(i);
-      end
-      else
-      begin
-        cmp := FCompare(AKey, ANode^.Keys[i], FCompareData);
-        if cmp = 0 then
-        begin
-          if System.IsManagedType(V) then Finalize(ANode^.Values[i]);
-          ANode^.Values[i] := AValue;
-          Exit;
-        end;
-        if cmp > 0 then Inc(i);
+        if System.IsManagedType(V) then Finalize(ANode^.Values[i]);
+        ANode^.Values[i] := AValue;
+        Exit;
       end;
+      if cmp > 0 then Inc(i);
     end;
     Inc(ANode^.Size);
     InsertNonFull(ANode^.Children[i], AKey, AValue);
@@ -781,12 +743,7 @@ begin
     SearchNode(LNode, AKey, LIdx);
     if (LIdx < LNode^.Count) then
     begin
-      if Assigned(FCompare) then
-      begin
-        if FCompare(AKey, LNode^.Keys[LIdx], FCompareData) = 0 then
-          Inc(LIdx);
-      end
-      else if PInt32(@AKey)^ = PInt32(@LNode^.Keys[LIdx])^ then
+      if CompareKeys(AKey, LNode^.Keys[LIdx]) = 0 then
         Inc(LIdx);
     end;
     if LIdx < LNode^.Count then
@@ -956,23 +913,14 @@ end;
 procedure TBTreeMap.RangeTraverse(ANode: PNode; const ALo, AHi: K;
   ACallback: TForEachCallback; AData: Pointer);
 var i: Int32;
-
-  function CmpKey(const A, B: K): Int32; inline;
-  begin
-    if Assigned(FCompare) then
-      Result := FCompare(A, B, FCompareData)
-    else
-      Result := Int32(PInt32(@A)^ > PInt32(@B)^) - Int32(PInt32(@A)^ < PInt32(@B)^);
-  end;
-
 begin
   if ANode = nil then Exit;
   if ANode^.IsLeaf then
   begin
     for i := 0 to ANode^.Count - 1 do
     begin
-      if CmpKey(ANode^.Keys[i], ALo) < 0 then Continue;
-      if CmpKey(ANode^.Keys[i], AHi) > 0 then Exit;
+      if CompareKeys(ANode^.Keys[i], ALo) < 0 then Continue;
+      if CompareKeys(ANode^.Keys[i], AHi) > 0 then Exit;
       ACallback(ANode^.Keys[i], ANode^.Values[i], AData);
     end;
   end
@@ -980,13 +928,13 @@ begin
   begin
     for i := 0 to ANode^.Count - 1 do
     begin
-      if CmpKey(ANode^.Keys[i], ALo) >= 0 then
+      if CompareKeys(ANode^.Keys[i], ALo) >= 0 then
         RangeTraverse(ANode^.Children[i], ALo, AHi, ACallback, AData);
-      if CmpKey(ANode^.Keys[i], ALo) < 0 then Continue;
-      if CmpKey(ANode^.Keys[i], AHi) > 0 then Exit;
+      if CompareKeys(ANode^.Keys[i], ALo) < 0 then Continue;
+      if CompareKeys(ANode^.Keys[i], AHi) > 0 then Exit;
       ACallback(ANode^.Keys[i], ANode^.Values[i], AData);
     end;
-    if CmpKey(ANode^.Keys[ANode^.Count - 1], AHi) <= 0 then
+    if CompareKeys(ANode^.Keys[ANode^.Count - 1], AHi) <= 0 then
       RangeTraverse(ANode^.Children[ANode^.Count], ALo, AHi, ACallback, AData);
   end;
 end;
