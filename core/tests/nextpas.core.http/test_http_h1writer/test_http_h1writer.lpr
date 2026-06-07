@@ -247,8 +247,14 @@ begin
     Exit(tsiorWouldBlock);
   end;
 
+  if (ACount = 0) or (FMaxPerWrite = 0) then
+  begin
+    AWritten := 0;
+    Exit(tsiorOk);
+  end;
+
   AWritten := ACount;
-  if (FMaxPerWrite > 0) and (AWritten > FMaxPerWrite) then
+  if AWritten > FMaxPerWrite then
     AWritten := FMaxPerWrite;
   if AWritten > 0 then
   begin
@@ -1072,6 +1078,43 @@ begin
   end;
 end;
 
+procedure TestOutboundBufferTryDrainRejectsOkZeroProgress;
+var
+  LBuffer: IH1OutboundBuffer;
+  LRuntime: TMockDrainStreamRuntime;
+  LRuntimeIntf: ITcpStreamRuntime;
+  LData: string;
+  LWritten: SizeUInt;
+  LRaised: Boolean;
+begin
+  LBuffer := NewH1OutboundBuffer;
+  LData := 'hello';
+  LBuffer.Write(LData[1], SizeUInt(Length(LData)));
+
+  LRuntime := TMockDrainStreamRuntime.Create(0, 0);
+  LRuntimeIntf := LRuntime as ITcpStreamRuntime;
+  try
+    LWritten := SizeUInt(High(SizeUInt));
+    LRaised := False;
+    try
+      LBuffer.TryDrainTo(LRuntimeIntf, LWritten);
+    except
+      on E: EIOError do
+        LRaised := True;
+    end;
+
+    Check(LRaised, 'ok zero-progress runtime write is rejected');
+    CheckEqual(Int64(0), Int64(LWritten),
+      'zero-progress runtime reports no bytes written');
+    CheckEqual(Int64(Length(LData)), Int64(LBuffer.PendingBytes),
+      'zero-progress runtime does not drop pending bytes');
+    CheckEqual('', LRuntime.GetOutput,
+      'zero-progress runtime does not append output bytes');
+  finally
+    LRuntimeIntf := nil;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.impl.h1.writer');
   T.Run('WriteHeader writes status line', @TestWriteHeaderStatusLine);
@@ -1129,5 +1172,7 @@ begin
     @TestOutboundBufferDrainAllHandlesShortWriter);
   T.Run('Outbound buffer resumable drain survives would-block',
     @TestOutboundBufferTryDrainResumesAfterWouldBlock);
+  T.Run('Outbound buffer rejects ok zero-progress runtime writes',
+    @TestOutboundBufferTryDrainRejectsOkZeroProgress);
   T.Summary;
 end.
