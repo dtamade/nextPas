@@ -58,6 +58,7 @@ On i386, `atomic_is_lock_free_64` is runtime-detected from CMPXCHG8B support; wh
 Single-order typed CAS treats `mo_consume` as `mo_acquire` for the success order and derives a legal acquire failure order instead of exposing release/acq_rel on failure.
 `TAtomicBool` stores a normalized `0/1` Int32 payload, `Load`/`Store`/`Exchange` map that payload to Boolean, `FetchAnd/Or/Xor/Nand` return the previous Boolean value while keeping the stored domain within `False/True`, and `is_lock_free` follows `atomic_is_lock_free_32`.
 `TAtomicPtr<T>` follows `atomic_is_lock_free_ptr`; `Load`/`Store`/`Exchange` publish the pointed-to address, strong/weak CAS update both the stored pointer and the observed expected pointer, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.
+Direct `nextpas.core.atomic.types.TAtomicPtr<T>` follows the same load/store/exchange/CAS/GetMut/IntoInner contract as the facade pointer wrapper; facade use remains preferred for ordinary consumers.
 
 ## 内存序语义
 

@@ -9,7 +9,8 @@ uses
   nextpas.core.testing,
   nextpas.core.atomic,
   nextpas.core.atomic.compat,
-  nextpas.core.platform.sync;
+  nextpas.core.platform.sync,
+  test_atomic_direct_types_ptr;
 
 var
   T: TTestRunner;
@@ -263,12 +264,14 @@ const
   AtomicBenchCppComparePath = '../../../benchmarks/nextpas.core.atomic/bench_atomic/compare_cpp/main.cpp';
   AtomicX8664SnapshotLegacyPath = '../../../src/nextpas.core.atomic.x86_64.inc';
   AtomicX8664SnapshotArchivePath = '../../../docs/archive/atomic/nextpas.core.atomic.x86_64.snapshot.txt';
+  AtomicDirectTypesPtrTestPath = 'test_atomic_direct_types_ptr.pas';
 var
   LAtomicSource: string;
   LAtomicCoreSource: string;
   LAtomicTypesSource: string;
   LAtomicCompatSource: string;
   LAtomicTestSource: string;
+  LAtomicDirectTypesPtrTestSource: string;
   LAtomicDocsReadme: string;
   LAtomicBenchMakefile: string;
   LAtomicBenchSource: string;
@@ -304,6 +307,8 @@ var
   LTypesBoolLockFreeSection: string;
   LTypesBoolFetchNandSection: string;
   LTypesPtrLockFreeSection: string;
+  LTypesPtrStrongCasSection: string;
+  LTypesPtrWeakCasSection: string;
   LFetchAddFallbackSection: string;
   LLoad32Section: string;
   LLoad64Section: string;
@@ -373,6 +378,7 @@ begin
   LAtomicTypesSource := ReadUtf8TextFile(AtomicTypesSourcePath);
   LAtomicCompatSource := ReadUtf8TextFile(AtomicCompatSourcePath);
   LAtomicTestSource := ReadUtf8TextFile(AtomicTestSourcePath);
+  LAtomicDirectTypesPtrTestSource := ReadUtf8TextFile(AtomicDirectTypesPtrTestPath);
   LAtomicDocsReadme := ReadUtf8TextFile(AtomicDocsReadmePath);
   Check(FileExists(AtomicBenchMakefilePath),
     'atomic benchmark Makefile must exist as the focused benchmark entrypoint');
@@ -470,6 +476,12 @@ begin
   LTypesPtrLockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
     'class function TAtomicPtr.is_lock_free: Boolean;',
     'function TAtomicPtr.Load(AOrder: memory_order_t): PT;');
+  LTypesPtrStrongCasSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicPtr.CompareExchangeStrong(var AExpected: PT; ADesired: PT;',
+    'function TAtomicPtr.CompareExchangeWeak(var AExpected: PT; ADesired: PT;');
+  LTypesPtrWeakCasSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicPtr.CompareExchangeWeak(var AExpected: PT; ADesired: PT;',
+    'function TAtomicPtr.GetMut: Pointer;');
   LFetchAddFallbackSection := ExtractImplementationSection(LAtomicSource,
     'function _atomic_fetch_add_64_x86(var aObj: Int64; aArg: Int64): Int64;',
     '{$ENDIF}');
@@ -927,9 +939,32 @@ begin
   CheckContains(LAtomicDocsReadme,
     '`TAtomicBool` stores a normalized `0/1` Int32 payload, `Load`/`Store`/`Exchange` map that payload to Boolean, `FetchAnd/Or/Xor/Nand` return the previous Boolean value while keeping the stored domain within `False/True`, and `is_lock_free` follows `atomic_is_lock_free_32`.',
     'atomic README must document the TAtomicBool normalized bool-domain contract');
+  CheckContains(LAtomicTestSource, 'procedure TestAtomicBoolRawStorageContract;',
+    'atomic tests must keep runtime coverage for the exposed TAtomicBool raw 0/1 storage contract');
+  CheckContains(LAtomicTestSource,
+    'T.Run(''typed atomic bool raw storage contract'', @TestAtomicBoolRawStorageContract);',
+    'atomic runner must register TAtomicBool raw storage coverage');
   CheckContains(LAtomicDocsReadme,
     '`TAtomicPtr<T>` follows `atomic_is_lock_free_ptr`; `Load`/`Store`/`Exchange` publish the pointed-to address, strong/weak CAS update both the stored pointer and the observed expected pointer, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
     'atomic README must document the TAtomicPtr lock-free and convenience contract');
+  CheckContains(LAtomicDocsReadme,
+    'Direct `nextpas.core.atomic.types.TAtomicPtr<T>` follows the same load/store/exchange/CAS/GetMut/IntoInner contract as the facade pointer wrapper; facade use remains preferred for ordinary consumers.',
+    'atomic README must document direct atomic.types TAtomicPtr parity');
+  CheckContains(LAtomicDirectTypesPtrTestSource, 'procedure TestAtomicTypesPtrContract;',
+    'atomic tests must keep runtime coverage for the direct atomic.types TAtomicPtr surface');
+  CheckContains(LAtomicDirectTypesPtrTestSource,
+    'nextpas.core.atomic,' + LineEnding +
+    '  nextpas.core.atomic.types;',
+    'direct atomic.types TAtomicPtr coverage must import the implementation submodule after the facade');
+  CheckContains(LAtomicDirectTypesPtrTestSource,
+    'TDirectAtomicPtr = specialize TAtomicPtr<Integer>',
+    'direct atomic.types TAtomicPtr coverage must instantiate the implementation submodule generic');
+  CheckContains(LAtomicDirectTypesPtrTestSource,
+    'direct atomic.types TAtomicPtr weak CAS mismatch should write the observed pointer',
+    'direct atomic.types TAtomicPtr coverage must prove weak-CAS mismatch write-back');
+  CheckContains(LAtomicTestSource,
+    'T.Run(''direct atomic.types ptr contract'', @TestAtomicTypesPtrContract);',
+    'atomic runner must register direct atomic.types TAtomicPtr runtime coverage');
   CheckContains(LAtomicDocsReadme,
     '`TAtomicPtr<T>` single-order CAS normalizes `mo_consume` success to acquire and derives a legal failure order; failure order never includes release or acq_rel.',
     'atomic README must document facade TAtomicPtr CAS failure-order derivation');
@@ -1154,6 +1189,26 @@ begin
     'facade TAtomicPtr strong CAS failure order must not include acq_rel');
   CheckContains(LFacadePtrWeakCasSection, 'mo_acq_rel: LFailureOrder := mo_acquire;',
     'facade TAtomicPtr weak CAS failure order must not include acq_rel');
+  CheckContains(LTypesPtrStrongCasSection,
+    'if AOrder = mo_consume then' + LineEnding +
+    '    LSuccessOrder := mo_acquire',
+    'direct atomic.types TAtomicPtr strong CAS must normalize consume to acquire on success path');
+  CheckContains(LTypesPtrWeakCasSection,
+    'if AOrder = mo_consume then' + LineEnding +
+    '    LSuccessOrder := mo_acquire',
+    'direct atomic.types TAtomicPtr weak CAS must normalize consume to acquire on success path');
+  CheckContains(LTypesPtrStrongCasSection, 'mo_release: LFailureOrder := mo_relaxed;',
+    'direct atomic.types TAtomicPtr strong CAS failure order must not include release');
+  CheckContains(LTypesPtrWeakCasSection, 'mo_release: LFailureOrder := mo_relaxed;',
+    'direct atomic.types TAtomicPtr weak CAS failure order must not include release');
+  CheckContains(LTypesPtrStrongCasSection, 'mo_acq_rel: LFailureOrder := mo_acquire;',
+    'direct atomic.types TAtomicPtr strong CAS failure order must not include acq_rel');
+  CheckContains(LTypesPtrWeakCasSection, 'mo_acq_rel: LFailureOrder := mo_acquire;',
+    'direct atomic.types TAtomicPtr weak CAS failure order must not include acq_rel');
+  CheckContains(LTypesPtrStrongCasSection, 'LSuccessOrder, LFailureOrder)',
+    'direct atomic.types TAtomicPtr strong CAS must pass derived success/failure orders');
+  CheckContains(LTypesPtrWeakCasSection, 'LSuccessOrder, LFailureOrder)',
+    'direct atomic.types TAtomicPtr weak CAS must pass derived success/failure orders');
   CheckContains(LCompatFailureSection, 'mo_consume',
     'AtomicCompatFailureOrder must treat consume explicitly');
   CheckContains(LTypesFailureSection, 'mo_consume',
@@ -2277,6 +2332,73 @@ begin
     'TAtomicBool.FetchNand(False) should return the previous false state');
   Check(LBool.Load(mo_acquire),
     'TAtomicBool.FetchNand(False) should clamp the stored value back to True');
+end;
+
+procedure TestAtomicBoolRawStorageContract;
+var
+  LBool: TAtomicBool;
+  LExpected: Boolean;
+  LRaw: PInt32;
+begin
+  LBool := TAtomicBool.Create(False);
+  LRaw := LBool.GetMut;
+  CheckEqual(Int64(0), Int64(LRaw^),
+    'TAtomicBool.Create(False) should store raw 0');
+
+  LBool := TAtomicBool.Create(True);
+  LRaw := LBool.GetMut;
+  CheckEqual(Int64(1), Int64(LRaw^),
+    'TAtomicBool.Create(True) should store raw 1');
+
+  LBool.Store(False, mo_release);
+  CheckEqual(Int64(0), Int64(LRaw^),
+    'TAtomicBool.Store(False) should normalize raw storage to 0');
+  LBool.Store(True, mo_release);
+  CheckEqual(Int64(1), Int64(LRaw^),
+    'TAtomicBool.Store(True) should normalize raw storage to 1');
+
+  Check(LBool.Exchange(False, mo_acq_rel),
+    'TAtomicBool.Exchange(False) should return the previous true state');
+  CheckEqual(Int64(0), Int64(LRaw^),
+    'TAtomicBool.Exchange(False) should normalize raw storage to 0');
+
+  LExpected := False;
+  Check(LBool.CompareExchangeStrong(LExpected, True, mo_seq_cst),
+    'TAtomicBool strong CAS should update from false to true');
+  CheckEqual(Int64(1), Int64(LRaw^),
+    'TAtomicBool strong CAS should normalize raw storage to 1');
+
+  LExpected := True;
+  Check(LBool.CompareExchangeWeak(LExpected, False, mo_acq_rel),
+    'TAtomicBool weak CAS should update from true to false');
+  CheckEqual(Int64(0), Int64(LRaw^),
+    'TAtomicBool weak CAS should normalize raw storage to 0');
+
+  LBool.Store(True, mo_release);
+  Check(LBool.FetchAnd(False, mo_acq_rel),
+    'TAtomicBool.FetchAnd(False) should return the previous true state');
+  CheckEqual(Int64(0), Int64(LRaw^),
+    'TAtomicBool.FetchAnd(False) should normalize raw storage to 0');
+
+  Check(not LBool.FetchOr(True, mo_acq_rel),
+    'TAtomicBool.FetchOr(True) should return the previous false state');
+  CheckEqual(Int64(1), Int64(LRaw^),
+    'TAtomicBool.FetchOr(True) should normalize raw storage to 1');
+
+  Check(LBool.FetchXor(True, mo_acq_rel),
+    'TAtomicBool.FetchXor(True) should return the previous true state');
+  CheckEqual(Int64(0), Int64(LRaw^),
+    'TAtomicBool.FetchXor(True) should normalize raw storage to 0');
+
+  Check(not LBool.FetchNand(False, mo_acq_rel),
+    'TAtomicBool.FetchNand(False) should return the previous false state');
+  CheckEqual(Int64(1), Int64(LRaw^),
+    'TAtomicBool.FetchNand(False) should normalize raw storage to 1');
+
+  Check(LBool.FetchNand(True, mo_acq_rel),
+    'TAtomicBool.FetchNand(True) should return the previous true state');
+  CheckEqual(Int64(0), Int64(LRaw^),
+    'TAtomicBool.FetchNand(True) should normalize raw storage to 0');
 end;
 
 procedure TestAtomicISizeUSizeContract;
@@ -3627,9 +3749,11 @@ begin
   {$ENDIF}
   T.Run('typed atomic unsigned wrap contract', @TestAtomicUnsignedWrapContract);
   T.Run('typed atomic bool contract', @TestAtomicBoolContract);
+  T.Run('typed atomic bool raw storage contract', @TestAtomicBoolRawStorageContract);
   T.Run('typed atomic isize/usize contract', @TestAtomicISizeUSizeContract);
   T.Run('typed atomic isize/usize fetch contract', @TestAtomicISizeUSizeFetchContract);
   T.Run('typed atomic ptr contract', @TestAtomicPtrContract);
+  T.Run('direct atomic.types ptr contract', @TestAtomicTypesPtrContract);
   T.Run('atomic flag API', @TestAtomicFlagApi);
   T.Run('fetch max/min/nand contract', @TestAtomicFetchMaxMinNandContract);
   T.Run('pointer offset fetch contract', @TestAtomicPointerOffsetFetchContract);
