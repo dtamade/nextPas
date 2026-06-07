@@ -748,6 +748,9 @@ begin
     '`TAtomicISize` and `TAtomicUSize` follow `atomic_is_lock_free_ptr`; `Increment`/`Decrement` return the new value after adding or subtracting one, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
     'atomic README must document the pointer-sized typed-record lock-free and convenience contract');
   CheckContains(LAtomicDocsReadme,
+    '`TAtomicInt32`/`TAtomicUInt32`, `TAtomicInt64`/`TAtomicUInt64`, and `TAtomicISize`/`TAtomicUSize` share the same convenience CAS contract: `CompareExchangeStrong` / `CompareExchangeWeak` write the observed value back to `AExpected` on mismatch, and a matching weak CAS publishes the replacement value through the typed record facade.',
+    'atomic README must freeze scalar typed-record CAS failure write-back and weak-CAS convenience truth');
+  CheckContains(LAtomicDocsReadme,
     '`TAtomicBool` stores a normalized `0/1` Int32 payload, `Load`/`Store`/`Exchange` map that payload to Boolean, `FetchAnd/Or/Xor/Nand` return the previous Boolean value while keeping the stored domain within `False/True`, and `is_lock_free` follows `atomic_is_lock_free_32`.',
     'atomic README must document the TAtomicBool normalized bool-domain contract');
   CheckContains(LAtomicDocsReadme,
@@ -999,8 +1002,12 @@ begin
     'typed UInt64 lock-free query must not hardcode a guaranteed-true result');
   CheckContains(LTypesISizeLockFreeSection, 'atomic_is_lock_free_ptr',
     'typed ISize lock-free query must delegate to pointer-sized runtime truth');
+  CheckNotContains(LTypesISizeLockFreeSection, 'Result := True',
+    'typed ISize lock-free query must not hardcode a guaranteed-true result');
   CheckContains(LTypesUSizeLockFreeSection, 'atomic_is_lock_free_ptr',
     'typed USize lock-free query must delegate to pointer-sized runtime truth');
+  CheckNotContains(LTypesUSizeLockFreeSection, 'Result := True',
+    'typed USize lock-free query must not hardcode a guaranteed-true result');
   CheckContains(LTypesRefCountLockFreeSection, 'atomic_is_lock_free_ptr',
     'typed refcount lock-free query must delegate to pointer-sized runtime truth');
   CheckContains(LTypesBoolLockFreeSection, 'atomic_is_lock_free_32',
@@ -1447,6 +1454,7 @@ var
   LAtomicInt32: TAtomicInt32;
   LAtomicUInt32: TAtomicUInt32;
   LExpectedInt32: Int32;
+  LExpectedUInt32: UInt32;
   LMutInt32: PInt32;
   LMutUInt32: PUInt32;
 begin
@@ -1465,11 +1473,22 @@ begin
   CheckEqual(Int64(-2), Int64(LAtomicInt32.Decrement(mo_acq_rel)),
     'TAtomicInt32.Decrement should return the new value');
 
+  LExpectedInt32 := -1;
+  Check(not LAtomicInt32.CompareExchangeStrong(LExpectedInt32, 4, mo_release),
+    'TAtomicInt32 strong CAS should fail when expected mismatches');
+  CheckEqual(Int64(-2), Int64(LExpectedInt32),
+    'TAtomicInt32 strong CAS failure should write the observed value');
+
   LExpectedInt32 := -2;
   Check(LAtomicInt32.CompareExchangeStrong(LExpectedInt32, 4, mo_seq_cst),
     'TAtomicInt32 strong CAS should update when expected matches');
   CheckEqual(Int64(4), Int64(LAtomicInt32.Load),
     'TAtomicInt32 default Load should observe the CAS result');
+  LExpectedInt32 := 4;
+  Check(LAtomicInt32.CompareExchangeWeak(LExpectedInt32, 6, mo_acq_rel),
+    'TAtomicInt32 weak CAS should update when expected matches');
+  CheckEqual(Int64(6), Int64(LAtomicInt32.Load(mo_acquire)),
+    'TAtomicInt32 weak CAS should publish the replacement value');
 
   LMutInt32 := LAtomicInt32.GetMut;
   LMutInt32^ := 9;
@@ -1483,6 +1502,15 @@ begin
     'TAtomicUInt32.Increment should return the new value');
   CheckEqual(Int64(3), Int64(LAtomicUInt32.Decrement(mo_acq_rel)),
     'TAtomicUInt32.Decrement should return the new value');
+  LExpectedUInt32 := 2;
+  Check(not LAtomicUInt32.CompareExchangeStrong(LExpectedUInt32, 7, mo_release),
+    'TAtomicUInt32 strong CAS should fail when expected mismatches');
+  CheckEqual(Int64(3), Int64(LExpectedUInt32),
+    'TAtomicUInt32 strong CAS failure should write the observed value');
+  Check(LAtomicUInt32.CompareExchangeWeak(LExpectedUInt32, 7, mo_acq_rel),
+    'TAtomicUInt32 weak CAS should update when expected matches');
+  CheckEqual(Int64(7), Int64(LAtomicUInt32.Load(mo_acquire)),
+    'TAtomicUInt32 weak CAS should publish the replacement value');
 
   LMutUInt32 := LAtomicUInt32.GetMut;
   LMutUInt32^ := 11;
@@ -1514,11 +1542,22 @@ begin
   CheckEqual(-(Int64(1) shl 40), LAtomicInt64.Decrement(mo_acq_rel),
     'TAtomicInt64.Decrement should return the new value');
 
+  LExpectedInt64 := -(Int64(1) shl 40) + 1;
+  Check(not LAtomicInt64.CompareExchangeStrong(LExpectedInt64, Int64(1) shl 41, mo_release),
+    'TAtomicInt64 strong CAS should fail when expected mismatches');
+  CheckEqual(-(Int64(1) shl 40), LExpectedInt64,
+    'TAtomicInt64 strong CAS failure should write the observed value');
+
   LExpectedInt64 := -(Int64(1) shl 40);
   Check(LAtomicInt64.CompareExchangeStrong(LExpectedInt64, Int64(1) shl 41, mo_seq_cst),
     'TAtomicInt64 strong CAS should update when expected matches');
   CheckEqual(Int64(1) shl 41, LAtomicInt64.Load,
     'TAtomicInt64 default Load should observe the CAS result');
+  LExpectedInt64 := Int64(1) shl 41;
+  Check(LAtomicInt64.CompareExchangeWeak(LExpectedInt64, -(Int64(1) shl 39), mo_acq_rel),
+    'TAtomicInt64 weak CAS should update when expected matches');
+  CheckEqual(-(Int64(1) shl 39), LAtomicInt64.Load(mo_acquire),
+    'TAtomicInt64 weak CAS should publish the replacement value');
 
   LMutInt64 := LAtomicInt64.GetMut;
   LMutInt64^ := -(Int64(1) shl 39);
@@ -1533,11 +1572,22 @@ begin
   CheckEqual(Int64((UInt64(1) shl 40) + 3), Int64(LAtomicUInt64.Decrement(mo_acq_rel)),
     'TAtomicUInt64.Decrement should return the new value');
 
+  LExpectedUInt64 := (UInt64(1) shl 40) + 4;
+  Check(not LAtomicUInt64.CompareExchangeStrong(LExpectedUInt64, (UInt64(1) shl 41) + 7, mo_release),
+    'TAtomicUInt64 strong CAS should fail when expected mismatches');
+  CheckEqual(Int64((UInt64(1) shl 40) + 3), Int64(LExpectedUInt64),
+    'TAtomicUInt64 strong CAS failure should write the observed value');
+
   LExpectedUInt64 := (UInt64(1) shl 40) + 3;
   Check(LAtomicUInt64.CompareExchangeStrong(LExpectedUInt64, (UInt64(1) shl 41) + 7, mo_seq_cst),
     'TAtomicUInt64 strong CAS should update when expected matches');
   CheckEqual(Int64((UInt64(1) shl 41) + 7), Int64(LAtomicUInt64.Load(mo_acquire)),
     'TAtomicUInt64 strong CAS should publish the replacement value');
+  LExpectedUInt64 := (UInt64(1) shl 41) + 7;
+  Check(LAtomicUInt64.CompareExchangeWeak(LExpectedUInt64, (UInt64(1) shl 39) + 11, mo_acq_rel),
+    'TAtomicUInt64 weak CAS should update when expected matches');
+  CheckEqual(Int64((UInt64(1) shl 39) + 11), Int64(LAtomicUInt64.Load(mo_acquire)),
+    'TAtomicUInt64 weak CAS should publish the replacement value');
 
   LMutUInt64 := LAtomicUInt64.GetMut;
   LMutUInt64^ := (UInt64(1) shl 39) + 11;
@@ -1635,11 +1685,22 @@ begin
   CheckEqual(Int64(-2), Int64(LAtomicISize.Decrement(mo_acq_rel)),
     'TAtomicISize.Decrement should return the new value');
 
+  LExpectedISize := -1;
+  Check(not LAtomicISize.CompareExchangeStrong(LExpectedISize, 4, mo_release),
+    'TAtomicISize strong CAS should fail when expected mismatches');
+  CheckEqual(Int64(-2), Int64(LExpectedISize),
+    'TAtomicISize strong CAS failure should write the observed value');
+
   LExpectedISize := -2;
   Check(LAtomicISize.CompareExchangeStrong(LExpectedISize, 4, mo_seq_cst),
     'TAtomicISize strong CAS should update when expected matches');
   CheckEqual(Int64(4), Int64(LAtomicISize.Load),
     'TAtomicISize default Load should observe the CAS result');
+  LExpectedISize := 4;
+  Check(LAtomicISize.CompareExchangeWeak(LExpectedISize, 6, mo_acq_rel),
+    'TAtomicISize weak CAS should update when expected matches');
+  CheckEqual(Int64(6), Int64(LAtomicISize.Load(mo_acquire)),
+    'TAtomicISize weak CAS should publish the replacement value');
 
   LMutISize := LAtomicISize.GetMut;
   LMutISize^ := 9;
@@ -1653,6 +1714,12 @@ begin
     'TAtomicUSize.Increment should return the new value');
   CheckEqual(Int64(3), Int64(LAtomicUSize.Decrement(mo_acq_rel)),
     'TAtomicUSize.Decrement should return the new value');
+
+  LExpectedUSize := 2;
+  Check(not LAtomicUSize.CompareExchangeStrong(LExpectedUSize, 7, mo_release),
+    'TAtomicUSize strong CAS should fail when expected mismatches');
+  CheckEqual(Int64(3), Int64(LExpectedUSize),
+    'TAtomicUSize strong CAS failure should write the observed value');
 
   LExpectedUSize := 3;
   Check(LAtomicUSize.CompareExchangeWeak(LExpectedUSize, 7, mo_acq_rel),
