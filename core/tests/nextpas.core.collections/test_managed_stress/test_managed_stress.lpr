@@ -8,6 +8,7 @@ uses
   nextpas.core.collections.base,
   nextpas.core.collections.vec,
   nextpas.core.collections.vecdeque,
+  nextpas.core.collections.smallvec,
   nextpas.core.collections.hashmap,
   nextpas.core.collections.hashmap.swiss,
   nextpas.core.collections.btree,
@@ -51,6 +52,92 @@ begin
   finally V.Free; end;
   SnapAssert(Snap, 'Vec push 100 + pop all');
   Pass('Vec push 100 + pop all');
+end;
+
+procedure TestSmallVecManagedInlineClearReleasesSlots;
+type TSmallVecT = specialize TSmallVec<ITracked, 4>;
+var
+  SV: TSmallVecT;
+  i: Integer;
+  Snap: TLeakSnapshot;
+  t: ITracked;
+begin
+  Snap := SnapTake;
+  SV.Init;
+  for i := 1 to 4 do
+  begin
+    t := MakeTracked(i);
+    SV.Push(t);
+    t := nil;
+  end;
+
+  SV.Clear;
+  SnapAssert(Snap, 'SmallVec managed inline clear');
+
+  SV.Done;
+  SnapAssert(Snap, 'SmallVec managed inline clear + done');
+  Pass('SmallVec managed inline clear releases slots');
+end;
+
+procedure TestSmallVecManagedInlinePopReleasesSlot;
+type TSmallVecT = specialize TSmallVec<ITracked, 4>;
+var
+  SV: TSmallVecT;
+  Snap: TLeakSnapshot;
+  t, popped: ITracked;
+begin
+  Snap := SnapTake;
+  SV.Init;
+  t := MakeTracked(10);
+  SV.Push(t);
+  t := nil;
+
+  if not SV.Pop(popped) then
+  begin
+    WriteLn('FAIL: SmallVec managed Pop returned false');
+    Halt(1);
+  end;
+
+  if (popped = nil) or (popped.GetId <> 10) then
+  begin
+    WriteLn('FAIL: SmallVec managed Pop returned wrong item');
+    Halt(1);
+  end;
+
+  popped := nil;
+  SnapAssert(Snap, 'SmallVec managed inline pop');
+
+  SV.Done;
+  SnapAssert(Snap, 'SmallVec managed inline pop + done');
+  Pass('SmallVec managed inline pop releases slot');
+end;
+
+procedure TestSmallVecManagedSpillDoneReleasesInlineCopies;
+type TSmallVecT = specialize TSmallVec<ITracked, 2>;
+var
+  SV: TSmallVecT;
+  i: Integer;
+  Snap: TLeakSnapshot;
+  t: ITracked;
+begin
+  Snap := SnapTake;
+  SV.Init;
+  for i := 1 to 3 do
+  begin
+    t := MakeTracked(20 + i);
+    SV.Push(t);
+    t := nil;
+  end;
+
+  if SV.IsInline then
+  begin
+    WriteLn('FAIL: SmallVec managed spill did not switch to heap');
+    Halt(1);
+  end;
+
+  SV.Done;
+  SnapAssert(Snap, 'SmallVec managed spill + done');
+  Pass('SmallVec managed spill done releases inline copies');
 end;
 
 procedure TestVecDequePushPopClear;
@@ -591,6 +678,9 @@ begin
   WriteLn('=== Managed Type Stress Tests ===');
   TestVecPushClear;
   TestVecPopAll;
+  TestSmallVecManagedInlineClearReleasesSlots;
+  TestSmallVecManagedInlinePopReleasesSlot;
+  TestSmallVecManagedSpillDoneReleasesInlineCopies;
   TestVecDequePushPopClear;
   TestVecDequeWrapResize;
   TestVecDequeManagedTryPopPointerOwnsRefsAndSyncsTail;
