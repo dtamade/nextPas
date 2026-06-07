@@ -407,6 +407,11 @@ The same focused gate now also locks the narrower
 lookup row as standalone microbenchmark evidence instead of only proving it
 indirectly through the broader `fast headers` filter group.
 
+The same focused gate now also locks the narrower
+`bench_filter=fast headers count all` path. This keeps the raw header-count row
+as standalone microbenchmark evidence instead of only proving it indirectly
+through the broader `fast headers` filter group.
+
 ## Run the Router Dispatch Benchmark
 
 Run the focused router dispatch row:
