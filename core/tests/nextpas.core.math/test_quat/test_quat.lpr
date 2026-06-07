@@ -555,10 +555,10 @@ begin
     'TQuatf Slerp keeps scaled-equivalent endpoints stable');
   Check(TQuatf.Equals(TQuatf.Nlerp(Qf, ScaledQf, Single(0.25)), Qf, Single(0.000001)),
     'TQuatf Nlerp keeps scaled-equivalent endpoints stable');
-  Check(TQuatf.Equals(TQuatf.Slerp(Qf, NegatedQf, Single(0.25)), Qf, Single(0.000001)),
-    'TQuatf Slerp keeps opposite-sign endpoints stable');
-  Check(TQuatf.Equals(TQuatf.Nlerp(Qf, NegatedQf, Single(0.25)), Qf, Single(0.000001)),
-    'TQuatf Nlerp keeps opposite-sign endpoints stable');
+  Check(TQuatf.Equals(TQuatf.Slerp(Qf, NegatedQf, Single(0.5)), Qf, Single(0.000001)),
+    'TQuatf Slerp keeps opposite-sign midpoint stable');
+  Check(TQuatf.Equals(TQuatf.Nlerp(Qf, NegatedQf, Single(0.5)), Qf, Single(0.000001)),
+    'TQuatf Nlerp keeps opposite-sign midpoint stable');
 
   Qd := QuarterTurnZd;
   ScaledQd := TQuatd.Create(Qd.X * 3.0, Qd.Y * 3.0, Qd.Z * 3.0, Qd.W * 3.0);
@@ -571,10 +571,10 @@ begin
     'TQuatd Slerp keeps scaled-equivalent endpoints stable');
   Check(TQuatd.Equals(TQuatd.Nlerp(Qd, ScaledQd, 0.25), Qd, 0.000000000001),
     'TQuatd Nlerp keeps scaled-equivalent endpoints stable');
-  Check(TQuatd.Equals(TQuatd.Slerp(Qd, NegatedQd, 0.25), Qd, 0.000000000001),
-    'TQuatd Slerp keeps opposite-sign endpoints stable');
-  Check(TQuatd.Equals(TQuatd.Nlerp(Qd, NegatedQd, 0.25), Qd, 0.000000000001),
-    'TQuatd Nlerp keeps opposite-sign endpoints stable');
+  Check(TQuatd.Equals(TQuatd.Slerp(Qd, NegatedQd, 0.5), Qd, 0.000000000001),
+    'TQuatd Slerp keeps opposite-sign midpoint stable');
+  Check(TQuatd.Equals(TQuatd.Nlerp(Qd, NegatedQd, 0.5), Qd, 0.000000000001),
+    'TQuatd Nlerp keeps opposite-sign midpoint stable');
 end;
 
 procedure TestToAxisAngleCanonicalizesOppositeSignRotations;
