@@ -2577,6 +2577,9 @@ comparison instead of only the default no-URL backend row.
 The raw comparison runner now also locks `--nextpas-backend epoll + --workload response_1k`,
 so epoll backend evidence reaches the public body-bearing comparison seam instead
 of stopping at no-URL or request-target-only rows.
+The snapshot helper now locks the same `--nextpas-backend epoll + --workload response_1k`
+combination, so the durable Markdown artifact also preserves epoll backend
+evidence on the public body-bearing comparison seam.
 
 Fresh local `no_url` 50k/4 3-run summary:
 

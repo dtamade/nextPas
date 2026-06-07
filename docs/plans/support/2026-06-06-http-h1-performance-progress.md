@@ -12455,3 +12455,42 @@ Hello from nextPas!
     seam instead of stopping at no-URL or request-target-only rows
   - this is coverage tightening only; it does not claim a backend ranking or a
     new comparison schema
+
+## Session: 2026-06-07 snapshot epoll response-1k focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the snapshot helper `--nextpas-backend epoll + --workload response_1k`
+    combination into the focused benchmark gate
+  - keep the slice limited to durable saved-artifact backend evidence on the
+    public body-bearing comparison seam, not snapshot or server implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch snapshot helper behavior, runner behavior, server/runtime
+    behavior, comparator binaries, public HTTP API, lower-layer modules, or
+    generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - first run red because an existing `bench_fullchain epoll sink 16k` smoke
+      transiently exited with `217/EAccessViolation`
+    - rerun green: `83 total, 83 passed, 0 failed`
+    - new focused row:
+      `server comparison snapshot epoll response_1k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload response_1k --nextpas-backend epoll`
+  - the focused smoke locks:
+    - `nextpas_backend=epoll`
+    - `workload=response_1k`
+    - command block contains `--workload response_1k --nextpas-backend epoll`
+    - nextPas row reports `backend=epoll`
+    - `client_read_mode=header_plus_content_length`
+    - `response_body_bytes=1024`
+    - Go row still reports `client_read_mode=http_client_body_drain`
+- Outcome:
+  - the durable Markdown artifact now preserves epoll backend evidence on the
+    public body-bearing comparison seam instead of only the raw runner report
+  - this is coverage tightening only; it does not claim a backend ranking or a
+    new snapshot schema

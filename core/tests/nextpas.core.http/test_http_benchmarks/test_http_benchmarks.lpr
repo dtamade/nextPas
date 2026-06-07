@@ -3052,6 +3052,55 @@ begin
   CheckServerBenchmarkOutput(LSnapshot, 'rust_std', '8', '1', 'url_path');
 end;
 
+procedure TestServerComparisonSnapshotEpollResponse1KSmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LSnapshotPath: string;
+  LSnapshot: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  {$IFNDEF LINUX}
+  Exit;
+  {$ENDIF}
+
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath),
+    'server comparison snapshot epoll response_1k runner exists');
+  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_snapshot_epoll_response_1k_smoke.md');
+  DeleteFile(LSnapshotPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--workload', 'response_1k', '--nextpas-backend', 'epoll',
+    '--output', LSnapshotPath], LRootDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison snapshot epoll response_1k exit code: ' + LOutput);
+
+  Check(FileExists(LSnapshotPath),
+    'server comparison snapshot epoll response_1k exists');
+  LSnapshot := LoadTextFile(LSnapshotPath);
+  CheckContains(LSnapshot, 'nextpas_backend=epoll',
+    'snapshot epoll response_1k backend marker');
+  CheckContains(LSnapshot, 'workload=response_1k',
+    'snapshot epoll response_1k workload marker');
+  CheckContains(LSnapshot,
+    'run_server_comparison.sh --requests 8 --threads 1 --workload response_1k --runs 1 --nextpas-backend epoll',
+    'snapshot epoll response_1k command marker');
+  CheckServerBenchmarkOutput(LSnapshot, 'nextpas', '8', '1', 'response_1k',
+    'epoll');
+  CheckServerBenchmarkOutput(LSnapshot, 'go', '8', '1', 'response_1k');
+  CheckServerBenchmarkOutput(LSnapshot, 'rust_std', '8', '1', 'response_1k');
+  CheckContains(LSnapshot, 'client_read_mode=header_plus_content_length',
+    'snapshot epoll response_1k direct-read marker');
+  CheckContains(LSnapshot, 'client_read_mode=http_client_body_drain',
+    'snapshot epoll response_1k Go read marker');
+  CheckContains(LSnapshot, 'response_body_bytes=1024',
+    'snapshot epoll response_1k body-bytes marker');
+end;
+
 procedure TestServerComparisonSnapshotRejectsInvalidNextpasBackend;
 var
   LRootDir: string;
@@ -3740,6 +3789,8 @@ begin
     @TestServerComparisonSnapshotIncludeHyperResponse1KSmoke);
   T.Run('server comparison snapshot epoll url_path smoke',
     @TestServerComparisonSnapshotEpollUrlPathSmoke);
+  T.Run('server comparison snapshot epoll response_1k smoke',
+    @TestServerComparisonSnapshotEpollResponse1KSmoke);
   T.Run('server comparison snapshot rejects invalid nextpas backend',
     @TestServerComparisonSnapshotRejectsInvalidNextpasBackend);
   T.Run('server comparison snapshot epoll smoke',

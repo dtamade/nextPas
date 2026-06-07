@@ -5529,3 +5529,25 @@
 - 这轮的价值仍是 benchmark truth：
   epoll backend 现在也进入了 public body-bearing raw comparison seam，不再只停在
   no-URL 和 request-target 两条无请求体 workload。
+
+## 2026-06-07 snapshot epoll response-1k focused smoke findings
+
+- raw runner 的 `--nextpas-backend epoll + --workload response_1k` 现在已有 focused
+  proof，但 durable snapshot artifact 还没有锁住同一个 body-bearing backend 组合。
+- 这会留下一个 artifact gap：
+  后续如果只看 Markdown snapshot，仍然看不到 epoll backend 在 public
+  response-body seam 上的保存结果。
+- 本轮继续保持窄刀，没有扩 snapshot schema，也没有碰 runner/HTTP 生产逻辑：
+  - 只把
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload response_1k --nextpas-backend epoll`
+    提升进 focused gate
+  - 锁住 `nextpas_backend=epoll`
+  - 锁住 `workload=response_1k`
+  - 锁住命令块同时包含 `--workload response_1k --nextpas-backend epoll`
+  - 锁住 nextPas row 的 `backend=epoll`
+  - 锁住 `client_read_mode=header_plus_content_length`、
+    `response_body_bytes=1024`
+  - 同时保留 Go row 的 `client_read_mode=http_client_body_drain`
+- 这轮的价值仍是 benchmark truth：
+  epoll backend 现在在 raw runner 和 durable snapshot 两层都覆盖到了 public
+  body-bearing comparison seam。
