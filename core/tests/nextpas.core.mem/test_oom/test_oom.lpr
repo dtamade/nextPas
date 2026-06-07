@@ -307,6 +307,40 @@ begin
     'capacity exhaustion should not be reported as invalid pointer');
 end;
 
+procedure CheckStateAllocErrorUsesInvalidOperationLeaf(aError: TAllocError;
+  const aName: string);
+var
+  LCaughtAlloc: Boolean;
+  LCaughtInvalidPointer: Boolean;
+begin
+  LCaughtAlloc := False;
+  LCaughtInvalidPointer := False;
+
+  try
+    TAllocResult.Err(aError).ExpectPtr(aName);
+  except
+    on E: EInvalidPointer do
+      LCaughtInvalidPointer := True;
+    on E: EAllocError do
+    begin
+      LCaughtAlloc := E.Error = aError;
+      Check(E.Category = ecInvalidOperation,
+        aName + ' should keep invalid-operation category');
+    end;
+  end;
+
+  Check(LCaughtAlloc,
+    aName + ' should remain catchable as EAllocError with original code');
+  Check(not LCaughtInvalidPointer,
+    aName + ' should not be reported as invalid pointer');
+end;
+
+procedure TestStateAllocErrorsUseInvalidOperationLeaf;
+begin
+  CheckStateAllocErrorUsesInvalidOperationLeaf(aePoolClosed, 'pool closed');
+  CheckStateAllocErrorUsesInvalidOperationLeaf(aeReallocNotSupported, 'realloc not supported');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.oom');
   T.Run('alloc result OOM uses canonical root', @TestAllocResultOomUsesCanonicalRoot);
@@ -315,5 +349,6 @@ begin
   T.Run('allocator-backed mem OOM uses canonical root', @TestAllocatorBackedMemOomUsesCanonicalRoot);
   T.Run('non-OOM allocation error remains EAllocError', @TestNonOomAllocErrorRemainsEAllocError);
   T.Run('capacity exhaustion uses resource-exhausted alloc leaf', @TestCapacityExhaustedUsesResourceExhaustedAllocLeaf);
+  T.Run('state allocation errors use invalid-operation leaf', @TestStateAllocErrorsUseInvalidOperationLeaf);
   T.Summary;
 end.
