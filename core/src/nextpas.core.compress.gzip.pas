@@ -68,6 +68,24 @@ type
     procedure Close;
   end;
 
+procedure GzipReadExact(const ASrc: IReader; var ABuf; const ACount: SizeUInt;
+  const AErrorMessage: string);
+var
+  LDst: PByte;
+  LTotal, LRead: SizeUInt;
+begin
+  LDst := @ABuf;
+  LTotal := 0;
+  while LTotal < ACount do
+  begin
+    LRead := ASrc.Read(LDst^, ACount - LTotal);
+    if LRead = 0 then
+      raise EIOError.Create(AErrorMessage);
+    Inc(LDst, LRead);
+    Inc(LTotal, LRead);
+  end;
+end;
+
 { TGzipWriter }
 
 constructor TGzipWriter.Create(const ADst: IWriter; ALevel: Int32);
@@ -179,7 +197,6 @@ end;
 constructor TGzipReader.Create(const ASrc: IReader);
 var
   LHdr: array[0..9] of Byte;
-  LRead: SizeUInt;
   LFlags: Byte;
   LByte: Byte;
   LSkip: UInt16;
@@ -190,9 +207,7 @@ begin
   FSize := 0;
   FDone := False;
 
-  LRead := FSrc.Read(LHdr[0], 10);
-  if LRead < 10 then
-    raise EIOError.Create('gzip: header too short');
+  GzipReadExact(FSrc, LHdr[0], 10, 'gzip: header too short');
   if (LHdr[0] <> $1F) or (LHdr[1] <> $8B) then
     raise EIOError.Create('gzip: invalid magic');
   if LHdr[2] <> $08 then
@@ -311,8 +326,7 @@ begin
       if LAvail > 0 then
         Move(LNextIn^, LTrailer[0], LAvail);
       LNeed := 8 - LAvail;
-      if FSrc.Read(LTrailer[LAvail], LNeed) <> LNeed then
-        raise EIOError.Create('gzip: truncated trailer');
+      GzipReadExact(FSrc, LTrailer[LAvail], LNeed, 'gzip: truncated trailer');
     end;
 
     LExpectedCRC := UInt32(LTrailer[0]) or (UInt32(LTrailer[1]) shl 8) or

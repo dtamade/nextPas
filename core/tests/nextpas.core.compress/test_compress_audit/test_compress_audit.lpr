@@ -16,6 +16,32 @@ uses
 var
   T: TTestRunner;
 
+type
+  TOneByteReader = class(TInterfacedObject, IReader)
+  private
+    FData: TBytes;
+    FPosition: SizeUInt;
+  public
+    constructor Create(const AData: TBytes);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
+constructor TOneByteReader.Create(const AData: TBytes);
+begin
+  inherited Create;
+  FData := Copy(AData, 0, Length(AData));
+  FPosition := 0;
+end;
+
+function TOneByteReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  if (ACount = 0) or (FPosition >= SizeUInt(Length(FData))) then
+    Exit(0);
+  PByte(@ABuf)^ := FData[FPosition];
+  Inc(FPosition);
+  Result := 1;
+end;
+
 { === A. Boundary Size Tests === }
 
 procedure TestDeflate63Bytes;
@@ -283,6 +309,31 @@ begin
   Check(LOut[127] = 254, 'gzip byte-by-byte last');
 end;
 
+procedure TestGzipStreamOneByteReaderLifecycle;
+var
+  LSrc, LCompressed, LOut: TBytes;
+  LReader: IDecompressReader;
+  LI: Integer;
+begin
+  SetLength(LSrc, 512);
+  for LI := 0 to High(LSrc) do
+    LSrc[LI] := Byte((LI * 17 + 3) mod 251);
+
+  LCompressed := GzipCompress(LSrc);
+  LReader := GzipReader(TOneByteReader.Create(LCompressed));
+  LOut := IoReadAll(LReader as IReader);
+  LReader.Close;
+
+  CheckEqual(Int64(Length(LSrc)), Int64(Length(LOut)), 'gzip one-byte reader length');
+  for LI := 0 to High(LSrc) do
+    if LSrc[LI] <> LOut[LI] then
+    begin
+      Check(False, 'gzip one-byte reader mismatch at ' + IntToStr(LI));
+      Exit;
+    end;
+  Check(True, 'gzip one-byte reader round-trip');
+end;
+
 procedure TestDeflateEmptyStream;
 var
   LBuf: IStream;
@@ -300,6 +351,41 @@ begin
   LReader.Close;
 
   CheckEqual(Int64(0), Int64(Length(LOut)), 'deflate empty stream');
+end;
+
+procedure TestDeflateTruncatedStreamRaises;
+var
+  LBuf: IStream;
+  LWriter: ICompressWriter;
+  LReader: IDecompressReader;
+  LSrc, LRaw: TBytes;
+  LGot: Boolean;
+  LI: Integer;
+begin
+  SetLength(LSrc, 512);
+  for LI := 0 to High(LSrc) do
+    LSrc[LI] := Byte((LI * 9 + 1) mod 253);
+
+  LBuf := CreateBytesStream;
+  LWriter := DeflateWriter(LBuf as IWriter);
+  LWriter.Write(LSrc[0], Length(LSrc));
+  LWriter.Close;
+
+  LBuf.Seek(0, soBeginning);
+  SetLength(LRaw, LBuf.Size);
+  LBuf.Read(LRaw[0], Length(LRaw));
+  SetLength(LRaw, Length(LRaw) - 1);
+
+  LGot := False;
+  try
+    LBuf := CreateBytesStreamFrom(LRaw);
+    LReader := DeflateReader(LBuf as IReader);
+    IoReadAll(LReader as IReader);
+    LReader.Close;
+  except
+    LGot := True;
+  end;
+  Check(LGot, 'deflate truncated stream raises');
 end;
 
 { === D. Stress/Lifecycle Tests === }
@@ -388,7 +474,9 @@ begin
   T.Run('Gzip truncated trailer', @TestGzipTruncatedTrailer);
   T.Run('Deflate stream byte-by-byte', @TestDeflateStreamByteByByte);
   T.Run('Gzip stream byte-by-byte', @TestGzipStreamByteByByte);
+  T.Run('Gzip one-byte reader lifecycle', @TestGzipStreamOneByteReaderLifecycle);
   T.Run('Deflate empty stream', @TestDeflateEmptyStream);
+  T.Run('Deflate truncated stream', @TestDeflateTruncatedStreamRaises);
   T.Run('Deflate 1000 cycles', @TestCompressDecompressCycle1000);
   T.Run('LZ4 1000 cycles', @TestLz4Cycle1000);
   T.Run('Gzip nil round-trip', @TestGzipNilRoundTrip);
