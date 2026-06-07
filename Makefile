@@ -1,6 +1,6 @@
 TEST_FILTER ?= smoke
 
-.PHONY: rebuild-compiler stage0 verify test test-smoke self-compile-module self-compile-modules c8-probe-np-allocator hygiene clean clean-artifacts
+.PHONY: rebuild-compiler stage0 verify test test-smoke test-tooling self-compile-module self-compile-modules c8-probe-np-allocator hygiene clean clean-artifacts
 
 rebuild-compiler:
 	./scripts/rebuild-compiler.sh
@@ -18,6 +18,10 @@ test: hygiene
 
 test-smoke:
 	$(MAKE) test TEST_FILTER=smoke
+
+test-tooling: hygiene
+	$(MAKE) -C tests/tooling test
+	$(MAKE) hygiene
 
 self-compile-module: rebuild-compiler
 	@test -n "$(MODULE)" || { echo "MODULE is required, e.g. make self-compile-module MODULE=rtl/core/mem/np_allocator.pas" >&2; exit 1; }

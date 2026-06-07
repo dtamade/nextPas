@@ -94,9 +94,11 @@ claude
 scripts/worktree-audit.sh
 ```
 
-审计会列出每个 linked worktree、所在分支、是否 dirty，以及是否位于项目本地
-`.worktrees/` 目录内。任何非 `main` 的 linked worktree 如果不在 `.worktrees/`
-下，都属于规范违规。
+审计会列出每个 linked worktree、所在分支、是否 dirty、是否位于项目本地
+`.worktrees/` 目录内，以及相对默认基线分支（优先 `main`，否则 `master`）的
+`ahead` / `behind` 计数。任何非 `main` 的 linked worktree 如果不在 `.worktrees/`
+下，都属于规范违规；任何准备进入 landing 的分支如果 `behind` 不是 `0`，必须先
+基于当前主线 rebase、merge 或 replay，并重新跑 focused verification。
 
 以下场景必须先跑审计：
 
@@ -178,10 +180,11 @@ worktree 位置正确不代表分支可以合并。
 
 1. worktree 是干净的。
 2. 改动路径属于预期模块或治理线。
-3. 已在 landing candidate 上基于当前 `main` rebase、merge 或 replay。
-4. 已运行改动表面的 focused verification。
-5. 只用 `ff-only` 或等价的已审查 landing commit 进入主线。
-6. 分支完全吸收后，清理对应临时 worktree。
+3. `scripts/worktree-audit.sh` 显示 landing candidate 相对当前 `main` 的 `behind` 为 `0`。
+4. 已在 landing candidate 上基于当前 `main` rebase、merge 或 replay。
+5. 已运行改动表面的 focused verification。
+6. 只用 `ff-only` 或等价的已审查 landing commit 进入主线。
+7. 分支完全吸收后，清理对应临时 worktree。
 
 成功 landing 后清理：
 
