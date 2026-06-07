@@ -1,0 +1,77 @@
+program test_tui_examples;
+
+{$I nextpas.core.settings.inc}
+
+uses
+  SysUtils,
+  nextpas.core.testing;
+
+var
+  T: TTestRunner;
+
+function ReadLowerSourceFile(const APath: string): string;
+var
+  LFile: Text;
+  LLine: string;
+begin
+  Result := '';
+  Assign(LFile, APath);
+  Reset(LFile);
+  try
+    while not Eof(LFile) do
+    begin
+      ReadLn(LFile, LLine);
+      Result := Result + LowerCase(LLine) + #10;
+    end;
+  finally
+    Close(LFile);
+  end;
+end;
+
+function ResolvePath(const APathFromTest: string; const APathFromRoot: string): string;
+begin
+  if FileExists(APathFromTest) then
+    Exit(APathFromTest);
+  if FileExists(APathFromRoot) then
+    Exit(APathFromRoot);
+  Result := APathFromTest;
+end;
+
+procedure CheckTokenPresent(const ASource, AToken, ALabel: string);
+begin
+  Check(Pos(LowerCase(AToken), ASource) > 0,
+    ALabel + ' must contain token: ' + AToken);
+end;
+
+procedure CheckTokenAbsent(const ASource, AToken, ALabel: string);
+begin
+  Check(Pos(LowerCase(AToken), ASource) = 0,
+    ALabel + ' must not contain token: ' + AToken);
+end;
+
+procedure TestLayoutDemoTeachesAppFirstExtPath;
+var
+  LSource: string;
+begin
+  LSource := ReadLowerSourceFile(ResolvePath(
+    '../../../examples/nextpas.core.tui/demo_layout/demo_layout.lpr',
+    'core/examples/nextpas.core.tui/demo_layout/demo_layout.lpr'));
+
+  CheckTokenPresent(LSource, 'nextpas.core.tui.ext', 'demo_layout');
+  CheckTokenPresent(LSource, 'class(TScreen)', 'demo_layout');
+  CheckTokenPresent(LSource, 'TApp', 'demo_layout');
+  CheckTokenPresent(LSource, 'App.Screens.Push', 'demo_layout');
+  CheckTokenPresent(LSource, 'procedure Render', 'demo_layout');
+  CheckTokenPresent(LSource, 'procedure HandleEvent', 'demo_layout');
+
+  CheckTokenAbsent(LSource, 'nextpas.core.tui.terminal', 'demo_layout');
+  CheckTokenAbsent(LSource, 'TTerminal', 'demo_layout');
+  CheckTokenAbsent(LSource, 'EnterTui', 'demo_layout');
+  CheckTokenAbsent(LSource, 'PollEvent', 'demo_layout');
+end;
+
+begin
+  T := TTestRunner.Create('nextpas.core.tui.examples');
+  T.Run('layout demo teaches app-first ext path', @TestLayoutDemoTeachesAppFirstExtPath);
+  T.Summary;
+end.
