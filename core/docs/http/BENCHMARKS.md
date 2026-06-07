@@ -799,6 +799,8 @@ The focused benchmark gate now locks both body-bearing llhttp shapes:
 request-heavy / empty-response path.
 The same gate now also locks `epoll + echo_1k`, so epoll backend evidence no
 longer depends only on the earlier `direct_root` fast-path row.
+The focused gate also locks `param_route`, which keeps the full-chain URL path
+plus route-parameter extraction seam under regression coverage.
 
 ## Optimization Evidence: Full-Chain Benchmark Buffered Client Read
 

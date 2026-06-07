@@ -5309,3 +5309,22 @@
 - 这轮的价值仍是 benchmark truth：
   epoll 后端现在不再只靠 `direct_root` fast-path row 代表自己，focused gate 已经
   覆盖到至少一条 body-bearing llhttp full-chain row。
+
+## 2026-06-07 full-chain param-route focused smoke findings
+
+- `bench_fullchain` 里已有 `param_route` row，但此前 focused gate 仍没有锁住它。
+- 这不是“再补一个普通 GET row”：
+  - `plaintext` 只证明静态 route 的 routed path；
+  - `param_route` 代表的是 URL path + router param extraction 这一条更具体的
+    full-chain seam。
+- 本轮继续遵守窄刀纪律：
+  - 不改 runtime，不扩 backend matrix，不引入新 marker
+  - 只把既有 `param_route` row 提升进 focused gate
+  - 锁住 `request_body_bytes=0`、`response_body_bytes=10`、
+    `backend=threaded`、`nextpas_h1_path=fast`
+- 本地手工 smoke 也说明了这条 row 的现实形状：
+  - `param_route 64` 约 `34646.2 ns/op`
+  - `req/s` 约 `28863`
+- 价值在于：
+  full-chain saved artifacts 现在不只锁 “router/no-router/body/no-body”，还把
+  path-params 这一条独立路由成本面纳入了持续回归证据。

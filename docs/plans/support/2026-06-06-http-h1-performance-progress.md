@@ -12051,3 +12051,47 @@ Hello from nextPas!
     instead of stopping at the fast-path `direct_root` row
   - this is coverage tightening only; it does not claim a new optimization,
     a backend ranking, or request-heavy epoll completeness
+
+## Session: 2026-06-07 full-chain param-route focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the existing `param_route` row into the focused benchmark gate
+  - keep URL path plus route-parameter extraction under durable full-chain
+    regression coverage
+  - keep the slice limited to benchmark-truth coverage, not runtime behavior
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch `bench_fullchain` runtime behavior, public HTTP API,
+    lower-layer modules, comparison runner behavior, comparator binaries, or
+    generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `72 total, 72 passed, 0 failed`
+    - new focused row:
+      `bench_fullchain param route smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `env NEXTPAS_BENCH_MAX_ITERS=64 NEXTPAS_BENCH_FILTER=param_route ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `workload=param_route`
+    - `request_body_bytes=0`
+    - `response_body_bytes=10`
+    - `backend=threaded`
+    - `nextpas_h1_path=fast`
+    - `completed=64`
+    - `ns/op=34646.2`
+    - `req/s=28863`
+- Landed change:
+  - `test_http_benchmarks` now runs `NEXTPAS_BENCH_FILTER=param_route`
+  - the focused smoke locks:
+    - `workload=param_route`
+    - `request_body_bytes=0`
+    - `response_body_bytes=10`
+    - `backend=threaded`
+    - `nextpas_h1_path=fast`
+- Outcome:
+  - the full-chain path-params seam is now part of the durable benchmark truth
+    instead of remaining an unlocked workload in the harness inventory
+  - this is coverage tightening only; it does not claim a new optimization,
+    new marker schema, or epoll parity for the same workload

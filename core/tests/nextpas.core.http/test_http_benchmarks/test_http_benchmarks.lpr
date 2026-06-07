@@ -1612,6 +1612,35 @@ begin
     'threaded', 'llhttp');
 end;
 
+procedure TestBenchFullchainParamRouteSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchFullchainRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain param route build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchFullchainBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_fullchain param route binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + FullchainSmokeIterations,
+     BenchFilterEnvName + '=param_route'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain param route smoke exit code: ' + LOutput);
+  CheckFullchainBenchmarkOutput(LOutput, 'param_route', 'param_route', '0',
+    '10');
+end;
+
 procedure TestBenchFullchainSink16KSmoke;
 var
   LRootDir: string;
@@ -3185,6 +3214,8 @@ begin
     @TestBenchFullchainDirect1KSmoke);
   T.Run('bench_fullchain echo 1k smoke',
     @TestBenchFullchainEcho1KSmoke);
+  T.Run('bench_fullchain param route smoke',
+    @TestBenchFullchainParamRouteSmoke);
   T.Run('bench_fullchain sink 16k smoke',
     @TestBenchFullchainSink16KSmoke);
   T.Run('bench_fullchain rejects invalid backend',
