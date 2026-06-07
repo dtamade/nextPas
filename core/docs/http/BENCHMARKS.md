@@ -2300,6 +2300,13 @@ Each raw nextPas row for the current no-body H1 workloads also includes
 `nextpas_h1_path=fast`, which keeps the fast-gate interpretation visible in
 captured reports instead of relying on workload names alone.
 
+On 2026-06-07 local time, the direct nextPas / Go / Rust std-only / Hyper
+comparator rows also gained explicit thread-clamp metadata. They now preserve
+the caller input as `requested_threads=...`, report the actual client
+concurrency as `effective_threads=...`, and keep the legacy `threads=...`
+line aligned with the effective value. This avoids a misleading row when a
+standalone comparator clamps `--threads` down to `--requests`.
+
 Focused RED/GREEN:
 
 ```text
@@ -2329,6 +2336,10 @@ as a Hyper/Tokio or broader Rust ecosystem row. A small live smoke with
 `--requests 8 --threads 1 --workload adapter_no_url --runs 2` produced
 `completed=8`, `nextpas_h1_path=fast`, `rust_profile=std_only`, and
 `median_completed=8` for the comparison summary.
+Another focused clamp smoke now runs each direct comparator with
+`--requests 3 --threads 5` and locks
+`requested_threads=5` plus `effective_threads=3`, so saved raw rows cannot
+silently discard the original caller intent.
 
 Fresh local `no_url` 50k/4 3-run summary:
 

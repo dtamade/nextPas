@@ -168,6 +168,23 @@ begin
     ALabel + ' missing from output: ' + AFragment + LineEnding + AOutput);
 end;
 
+procedure CheckLineContains(const AOutput, AExpectedLine, ALabel: string);
+var
+  LLines: TStringList;
+  I: Integer;
+begin
+  LLines := TStringList.Create;
+  try
+    LLines.Text := AOutput;
+    for I := 0 to LLines.Count - 1 do
+      if LLines[I] = AExpectedLine then
+        Exit;
+  finally
+    LLines.Free;
+  end;
+  Fail(ALabel + ' missing line: ' + AExpectedLine + LineEnding + AOutput);
+end;
+
 procedure CheckNotContains(const AOutput, AFragment, ALabel: string);
 begin
   Check(Pos(AFragment, AOutput) = 0,
@@ -329,12 +346,16 @@ end;
 procedure CheckServerBenchmarkOutput(const AOutput, AImplementation: string;
   const AIterations, AThreads: string; const AWorkload: string = 'no_url');
 begin
-  CheckContains(AOutput, 'operation=http.server.keepalive', 'operation marker');
-  CheckContains(AOutput, 'workload=' + AWorkload, 'workload marker');
-  CheckContains(AOutput, 'impl=' + AImplementation, 'implementation marker');
-  CheckContains(AOutput, 'iterations=' + AIterations, 'iterations marker');
-  CheckContains(AOutput, 'threads=' + AThreads, 'threads marker');
-  CheckContains(AOutput, 'completed=' + AIterations, 'completed marker');
+  CheckLineContains(AOutput, 'operation=http.server.keepalive',
+    'operation marker');
+  CheckLineContains(AOutput, 'workload=' + AWorkload, 'workload marker');
+  CheckLineContains(AOutput, 'impl=' + AImplementation,
+    'implementation marker');
+  CheckLineContains(AOutput, 'iterations=' + AIterations,
+    'iterations marker');
+  CheckLineContains(AOutput, 'threads=' + AThreads, 'threads marker');
+  CheckLineContains(AOutput, 'completed=' + AIterations,
+    'completed marker');
   CheckContains(AOutput, 'ns/op=', 'ns/op marker');
   CheckContains(AOutput, 'req/s=', 'req/s marker');
   if AImplementation = 'nextpas' then
@@ -380,6 +401,15 @@ begin
     ALabel + ' invalid scale diagnostic');
   CheckNotContains(LOutput, 'operation=http.server.keepalive',
     ALabel + ' should not emit a benchmark row');
+end;
+
+procedure CheckRequestedAndEffectiveThreads(const AOutput,
+  ARequestedThreads, AEffectiveThreads, ALabel: string);
+begin
+  CheckLineContains(AOutput, 'requested_threads=' + ARequestedThreads,
+    ALabel + ' requested threads marker');
+  CheckLineContains(AOutput, 'effective_threads=' + AEffectiveThreads,
+    ALabel + ' effective threads marker');
 end;
 
 procedure CheckRouterDispatchBenchmarkOutput(const AOutput: string);
@@ -625,6 +655,96 @@ begin
   CheckInvalidScaleRejected(LBinaryPath,
     ['--requests', '1', '--threads', '0'], LBenchDir, '--threads',
     'bench_server');
+end;
+
+procedure TestServerComparatorsReportRequestedAndEffectiveThreads;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LCompareDir: string;
+  LBuildDir: string;
+  LTargetDir: string;
+  LManifestPath: string;
+  LBenchServerPath: string;
+  LGoBinaryPath: string;
+  LRustBinaryPath: string;
+  LHyperBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LBuildDir := ResolveBenchmarkTestBuildDir(LRootDir);
+  ForceDirectories(LBuildDir);
+
+  LBenchDir := PathJoin(LRootDir, BenchServerRelativeDir);
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_server thread-clamp build exit code: ' + LOutput);
+  LBenchServerPath := ResolveBenchServerBinaryPath(LRootDir);
+  Check(FileExists(LBenchServerPath),
+    'bench_server thread-clamp binary exists');
+
+  LCompareDir := PathJoin(LRootDir, CompareGoRelativeDir);
+  LGoBinaryPath := ResolveGoComparatorBinaryPath(LRootDir);
+  RunProcessAndCapture('go', ['build', '-o', LGoBinaryPath, 'main.go'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'go comparator thread-clamp build exit code: ' + LOutput);
+  Check(FileExists(LGoBinaryPath), 'go comparator thread-clamp binary exists');
+
+  LCompareDir := PathJoin(LRootDir, CompareRustRelativeDir);
+  LRustBinaryPath := ResolveRustComparatorBinaryPath(LRootDir);
+  RunProcessAndCapture('rustc', ['-O', '-o', LRustBinaryPath, 'main.rs'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'rust comparator thread-clamp build exit code: ' + LOutput);
+  Check(FileExists(LRustBinaryPath),
+    'rust comparator thread-clamp binary exists');
+
+  LCompareDir := PathJoin(LRootDir, CompareHyperRelativeDir);
+  LTargetDir := PathJoin(LBuildDir, 'cargo-target');
+  LManifestPath := PathJoin(LCompareDir, 'Cargo.toml');
+  LHyperBinaryPath := ResolveHyperComparatorBinaryPath(LRootDir);
+  RunProcessAndCapture('cargo',
+    ['build', '--release', '--manifest-path', LManifestPath,
+     '--target-dir', LTargetDir],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'hyper comparator thread-clamp build exit code: ' + LOutput);
+  Check(FileExists(LHyperBinaryPath),
+    'hyper comparator thread-clamp binary exists');
+
+  RunProcessAndCapture(LBenchServerPath,
+    ['--requests', '3', '--threads', '5'], LBenchDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_server thread-clamp smoke exit code: ' + LOutput);
+  CheckServerBenchmarkOutput(LOutput, 'nextpas', '3', '3');
+  CheckRequestedAndEffectiveThreads(LOutput, '5', '3', 'bench_server');
+
+  LCompareDir := PathJoin(LRootDir, CompareGoRelativeDir);
+  RunProcessAndCapture(LGoBinaryPath,
+    ['--requests', '3', '--threads', '5'], LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'go comparator thread-clamp smoke exit code: ' + LOutput);
+  CheckServerBenchmarkOutput(LOutput, 'go', '3', '3');
+  CheckRequestedAndEffectiveThreads(LOutput, '5', '3', 'go comparator');
+
+  LCompareDir := PathJoin(LRootDir, CompareRustRelativeDir);
+  RunProcessAndCapture(LRustBinaryPath,
+    ['--requests', '3', '--threads', '5'], LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'rust comparator thread-clamp smoke exit code: ' + LOutput);
+  CheckServerBenchmarkOutput(LOutput, 'rust_std', '3', '3');
+  CheckRequestedAndEffectiveThreads(LOutput, '5', '3', 'rust comparator');
+
+  LCompareDir := PathJoin(LRootDir, CompareHyperRelativeDir);
+  RunProcessAndCapture(LHyperBinaryPath,
+    ['--requests', '3', '--threads', '5'], LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'hyper comparator thread-clamp smoke exit code: ' + LOutput);
+  CheckServerBenchmarkOutput(LOutput, 'rust_hyper', '3', '3');
+  CheckRequestedAndEffectiveThreads(LOutput, '5', '3', 'hyper comparator');
 end;
 
 procedure TestBenchRouterHandlerDispatchSmoke;
@@ -2347,6 +2467,8 @@ begin
     @TestBenchServerRejectsInvalidWorkload);
   T.Run('bench_server rejects invalid scale',
     @TestBenchServerRejectsInvalidScale);
+  T.Run('server comparators report requested/effective threads',
+    @TestServerComparatorsReportRequestedAndEffectiveThreads);
   T.Run('bench_router handler dispatch smoke',
     @TestBenchRouterHandlerDispatchSmoke);
   T.Run('bench_headers lookup smoke',

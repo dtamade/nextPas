@@ -40,6 +40,7 @@ var
   GDone: Int32;
   GSuccess: Int32;
   GRequests: Int32;
+  GRequestedThreads: Int32;
   GThreads: Int32;
   GWorkload: string;
   GResponseBody1K: AnsiString;
@@ -144,6 +145,7 @@ var
   LI: Integer;
 begin
   GRequests := DEFAULT_NUM_REQUESTS;
+  GRequestedThreads := DEFAULT_NUM_THREADS;
   GThreads := DEFAULT_NUM_THREADS;
   GWorkload := WORKLOAD_NO_URL;
   LI := 1;
@@ -156,7 +158,8 @@ begin
     end
     else if (ParamStr(LI) = '--threads') and (LI < ParamCount) then
     begin
-      GThreads := ParsePositiveOption('--threads', ParamStr(LI + 1));
+      GRequestedThreads := ParsePositiveOption('--threads', ParamStr(LI + 1));
+      GThreads := GRequestedThreads;
       Inc(LI, 2);
     end
     else if (ParamStr(LI) = '--workload') and (LI < ParamCount) then
@@ -273,6 +276,8 @@ begin
   WriteLn('impl=nextpas');
   WriteLn('nextpas_h1_path=', ExpectedH1PathForWorkload);
   WriteLn('iterations=', GRequests);
+  WriteLn('requested_threads=', GRequestedThreads);
+  WriteLn('effective_threads=', GThreads);
   WriteLn('threads=', GThreads);
   WriteLn('completed=', GSuccess);
   WriteLn('elapsed_ns=', LElapsedNs);

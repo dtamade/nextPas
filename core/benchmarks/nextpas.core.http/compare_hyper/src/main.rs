@@ -53,7 +53,7 @@ fn reject_invalid_positive_option(name: &str, value: &str) -> ! {
     std::process::exit(2);
 }
 
-fn parse_options() -> (usize, usize, String) {
+fn parse_options() -> (usize, usize, usize, String) {
     let mut requests = 20_000usize;
     let mut threads = 4usize;
     let mut workload = WORKLOAD_NO_URL.to_string();
@@ -85,11 +85,10 @@ fn parse_options() -> (usize, usize, String) {
         }
     }
 
-    if threads > requests {
-        threads = requests;
-    }
+    let requested_threads = threads;
+    let effective_threads = requested_threads.min(requests);
 
-    (requests, threads, workload)
+    (requests, requested_threads, effective_threads, workload)
 }
 
 fn requests_for_thread(index: usize, total_requests: usize, threads: usize) -> usize {
@@ -225,7 +224,8 @@ fn run_client(addr: SocketAddr, requests: usize, workload: String, completed: Ar
 
 fn print_results(
     requests: usize,
-    threads: usize,
+    requested_threads: usize,
+    effective_threads: usize,
     workload: &str,
     completed: usize,
     elapsed: Duration,
@@ -247,7 +247,9 @@ fn print_results(
     println!("impl=rust_hyper");
     println!("rust_profile=hyper_tokio");
     println!("iterations={}", requests);
-    println!("threads={}", threads);
+    println!("requested_threads={}", requested_threads);
+    println!("effective_threads={}", effective_threads);
+    println!("threads={}", effective_threads);
     println!("completed={}", completed);
     println!("elapsed_ns={}", elapsed_ns);
     println!("ns/op={}", ns_per_op);
@@ -255,7 +257,7 @@ fn print_results(
 }
 
 fn main() {
-    let (requests, threads, workload) = parse_options();
+    let (requests, requested_threads, effective_threads, workload) = parse_options();
     let std_listener = StdTcpListener::bind("127.0.0.1:0").expect("bind listener");
     std_listener
         .set_nonblocking(true)
@@ -281,8 +283,8 @@ fn main() {
     let completed = Arc::new(AtomicUsize::new(0));
     let start = Instant::now();
     let mut client_threads = Vec::new();
-    for index in 0..threads {
-        let thread_requests = requests_for_thread(index, requests, threads);
+    for index in 0..effective_threads {
+        let thread_requests = requests_for_thread(index, requests, effective_threads);
         let client_workload = workload.clone();
         let client_completed = Arc::clone(&completed);
         client_threads.push(thread::spawn(move || {
@@ -301,7 +303,8 @@ fn main() {
 
     print_results(
         requests,
-        threads,
+        requested_threads,
+        effective_threads,
         &workload,
         completed.load(Ordering::Relaxed),
         elapsed,
