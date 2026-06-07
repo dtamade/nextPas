@@ -364,10 +364,12 @@ function atomic_compare_exchange_weak_64(var aObj: UInt64; var aExpected: UInt64
 function atomic_compare_exchange_weak(var aObj: Pointer; var aExpected: Pointer; aDesired: Pointer;
   aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
 
-// ✅ P1-002: CAS 带单内存序参数 (aOrder) - 简化常见用法（成功和失败使用相同内存序）
+// ✅ P1-002: CAS 带单内存序参数 (aOrder) - 简化常见用法（自动派生合法 failure order）
 {**
  * @desc 原子比较并交换操作（单内存序版本）
- * @details 简化版本，成功和失败情况使用相同的内存序
+ * @details 简化版本，success path 使用 aOrder（mo_consume 规范化为 acquire），并
+ * automatically derives a legal failure order so release/acq_rel are never
+ * exposed on the failure path.
  *
  * @memory_order_usage
  * 此版本适用于不需要区分成功和失败内存序的常见场景：
@@ -378,7 +380,7 @@ function atomic_compare_exchange_weak(var aObj: Pointer; var aExpected: Pointer;
  * - 使用 mo_relaxed：仅保证原子性，无同步（高级用法）
  *
  * @when_to_use
- * - 当成功和失败都需要相同的内存序时
+ * - 当希望按 single-order CAS 规则自动选择合法 failure order 时
  * - 当不确定如何选择不同的内存序时
  * - 当代码简洁性比性能优化更重要时
  *
@@ -401,8 +403,8 @@ function atomic_compare_exchange_weak(var aObj: Pointer; var aExpected: Pointer;
  *   std::atomic<T>::compare_exchange_weak(expected, desired, order)
  *
  * @rust_equivalent
- *   AtomicT::compare_exchange(expected, desired, order, order)
- *   AtomicT::compare_exchange_weak(expected, desired, order, order)
+ *   Rust compare_exchange requires explicit success/failure orders; this wrapper
+ *   provides C++-style single-order convenience semantics.
  *}
 function atomic_compare_exchange_strong(var aObj: Int32; var aExpected: Int32; aDesired: Int32;
   aOrder: memory_order_t): Boolean; overload; inline;
@@ -2229,8 +2231,9 @@ begin
   Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired, aSuccessOrder, aFailureOrder);
 end;
 
-// ✅ P1-002: CAS 单内存序版本实现 - 简化常见用法（成功和失败使用相同内存序）
-// 说明: 这些函数调用双内存序版本，将相同的内存序用于成功和失败情况
+// ✅ P1-002: CAS 单内存序版本实现 - 简化常见用法（自动派生合法 failure order）
+// 说明: 这些函数调用双内存序版本；success order 使用 aOrder（consume 规范化为 acquire），
+// failure order 由 helper 派生，避免在失败路径暴露 release/acq_rel。
 
 function atomic_compare_exchange_strong(var aObj: Int32; var aExpected: Int32; aDesired: Int32;
   aOrder: memory_order_t): Boolean;

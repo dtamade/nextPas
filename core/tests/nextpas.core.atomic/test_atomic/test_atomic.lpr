@@ -372,6 +372,7 @@ var
   LDefaultFetchMax64Section: string;
   LDefaultFetchMin64Section: string;
   LDefaultFetchNand64Section: string;
+  LInvalidOrderMatrixSection: string;
 begin
   LAtomicSource := ReadUtf8TextFile(AtomicSourcePath);
   LAtomicCoreSource := ReadUtf8TextFile(AtomicCoreSourcePath);
@@ -417,7 +418,7 @@ begin
     'function atomic_tagged_ptr_next(const aTaggedPtr: atomic_tagged_ptr_t):',
     'end.');
   LSingleStrongCasSection := ExtractImplementationSection(LAtomicSource,
-    '// ✅ P1-002: CAS 单内存序版本实现 - 简化常见用法（成功和失败使用相同内存序）',
+    '// ✅ P1-002: CAS 单内存序版本实现 - 简化常见用法（自动派生合法 failure order）',
     'function atomic_compare_exchange_weak(var aObj: Int32; var aExpected: Int32; aDesired: Int32;');
   LSingleWeakCasSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_compare_exchange_weak(var aObj: Int32; var aExpected: Int32; aDesired: Int32;',
@@ -629,6 +630,9 @@ begin
     'begin' + LineEnding +
     '  T := TTestRunner.Create(''nextpas.core.atomic'');',
     '  T.Summary;');
+  LInvalidOrderMatrixSection := ExtractSection(LAtomicTestSource,
+    'procedure ' + 'TestAtomicInvalidMemoryOrderSurfaceMatrix;',
+    'procedure ' + 'TestAtomicTypedCasConsumeContract;');
   LAtomicFlagTestAndSetSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_flag_test_and_set(var aFlag: atomic_flag_t): Boolean;',
     'function atomic_flag_test(var aFlag: atomic_flag_t): Boolean;');
@@ -975,6 +979,35 @@ begin
   CheckContains(LAtomicDocsReadme,
     'Invalid explicit orders raise `EArgumentError`: load rejects `mo_release`/`mo_acq_rel`, store rejects `mo_consume`/`mo_acquire`/`mo_acq_rel`, and dual-order CAS rejects release/acq_rel failure orders or failure orders stronger than success.',
     'atomic README must document invalid explicit memory-order contract');
+  CheckContains(LAtomicSource, 'automatically derives a legal failure order',
+    'single-order CAS docs must explain derived failure-order semantics');
+  CheckNotContains(LAtomicSource, 'success and failure use the same order',
+    'single-order CAS docs must not claim identical success/failure orders');
+  CheckNotContains(LAtomicSource, '成功和失败使用相同',
+    'single-order CAS docs must not claim identical success/failure orders in Chinese comments');
+  CheckContains(LInvalidOrderMatrixSection, 'procedure TestAtomicInvalidMemoryOrderSurfaceMatrix;',
+    'atomic tests must keep runtime coverage for the public invalid memory-order surface matrix');
+  CheckContains(LRunnerSection,
+    'T.Run(''invalid memory-order surface matrix'', @TestAtomicInvalidMemoryOrderSurfaceMatrix);',
+    'atomic runner must register public invalid memory-order surface matrix coverage');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_load_64(LInt64, mo_release)',
+    'invalid memory-order matrix must cover 64-bit load rejection');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_store_64(LInt64, 12, mo_acquire)',
+    'invalid memory-order matrix must cover 64-bit store rejection');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak_64(LInt64, LExpectedInt64, 17, mo_release, mo_acq_rel)',
+    'invalid memory-order matrix must cover 64-bit weak CAS failure-order rejection');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, mo_release, mo_acq_rel)',
+    'invalid memory-order matrix must cover pointer weak CAS failure-order rejection');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_tagged_ptr_compare_exchange_strong(LTaggedStorage, LTaggedExpected, LTaggedDesired, mo_release, mo_acq_rel)',
+    'invalid memory-order matrix must cover tagged pointer strong CAS failure-order rejection');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_tagged_ptr_compare_exchange_weak(LTaggedStorage, LTaggedExpected, LTaggedDesired, mo_release, mo_acq_rel)',
+    'invalid memory-order matrix must cover tagged pointer weak CAS failure-order rejection');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_fetch_max(LInt32, 2, mo_release)',
+    'memory-order matrix must prove fetch_max release-order is legal for RMW operations');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_fetch_min_64(LInt64, 2, mo_acq_rel)',
+    'memory-order matrix must prove 64-bit fetch_min acq_rel-order is legal for RMW operations');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_fetch_nand(LInt32, 2, mo_consume)',
+    'memory-order matrix must prove fetch_nand consume-order is legal for RMW operations');
   CheckContains(LAtomicDocsReadme,
     '`atomic_fetch_add/sub(var Pointer; PtrInt)` are the canonical main-facade pointer arithmetic APIs: they apply byte offsets, return the previous pointer, and publish the adjusted pointer; pointer bitwise overloads remain compat-only.',
     'atomic README must document main-facade pointer arithmetic contract');
@@ -2927,6 +2960,244 @@ begin
   Check(LRaised, 'tagged pointer weak CAS invalid failure ordinal must raise EArgumentError');
 end;
 
+procedure TestAtomicInvalidMemoryOrderSurfaceMatrix;
+var
+  LInt32: Int32;
+  LExpectedInt32: Int32;
+  LValueA: Integer;
+  LValueB: Integer;
+  LPtr: Pointer;
+  LExpectedPtr: Pointer;
+  LTaggedStorage: atomic_tagged_ptr_t;
+  LTaggedExpected: atomic_tagged_ptr_t;
+  LTaggedDesired: atomic_tagged_ptr_t;
+  LRaised: Boolean;
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  LInt64: Int64;
+  LExpectedInt64: Int64;
+  LUInt64: UInt64;
+  LExpectedUInt64: UInt64;
+  {$ENDIF}
+begin
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  LInt64 := 11;
+  LUInt64 := 11;
+
+  LRaised := False;
+  try
+    atomic_load_64(LInt64, mo_release);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '64-bit atomic_load release must raise EArgumentError');
+
+  LRaised := False;
+  try
+    atomic_load_64(LInt64, mo_acq_rel);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '64-bit atomic_load acq_rel must raise EArgumentError');
+
+  LRaised := False;
+  try
+    atomic_load_64(LUInt64, mo_release);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '64-bit unsigned atomic_load release must raise EArgumentError');
+
+  LRaised := False;
+  try
+    atomic_load_64(LUInt64, mo_acq_rel);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '64-bit unsigned atomic_load acq_rel must raise EArgumentError');
+
+  LRaised := False;
+  try
+    atomic_store_64(LInt64, 12, mo_consume);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '64-bit atomic_store consume must raise EArgumentError');
+
+  LRaised := False;
+  try
+    atomic_store_64(LInt64, 12, mo_acquire);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '64-bit atomic_store acquire must raise EArgumentError');
+
+  LRaised := False;
+  try
+    atomic_store_64(LInt64, 12, mo_acq_rel);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '64-bit atomic_store acq_rel must raise EArgumentError');
+
+  LRaised := False;
+  try
+    atomic_store_64(LUInt64, UInt64(12), mo_consume);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '64-bit unsigned atomic_store consume must raise EArgumentError');
+
+  LRaised := False;
+  try
+    atomic_store_64(LUInt64, UInt64(12), mo_acquire);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '64-bit unsigned atomic_store acquire must raise EArgumentError');
+
+  LRaised := False;
+  try
+    atomic_store_64(LUInt64, UInt64(12), mo_acq_rel);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '64-bit unsigned atomic_store acq_rel must raise EArgumentError');
+
+  LExpectedInt64 := 12;
+  LRaised := False;
+  try
+    atomic_compare_exchange_weak_64(LInt64, LExpectedInt64, 17, mo_acquire, mo_release);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '64-bit weak CAS failure release must raise EArgumentError');
+
+  LExpectedInt64 := 12;
+  LRaised := False;
+  try
+    atomic_compare_exchange_weak_64(LInt64, LExpectedInt64, 17, mo_release, mo_acq_rel);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '64-bit weak CAS failure acq_rel must raise EArgumentError');
+
+  LExpectedInt64 := 12;
+  LRaised := False;
+  try
+    atomic_compare_exchange_weak_64(LInt64, LExpectedInt64, 17, mo_relaxed, mo_acquire);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '64-bit weak CAS failure stronger than relaxed success must raise EArgumentError');
+
+  LExpectedUInt64 := 12;
+  LRaised := False;
+  try
+    atomic_compare_exchange_weak_64(LUInt64, LExpectedUInt64, UInt64(17), mo_relaxed, mo_acquire);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '64-bit unsigned weak CAS failure stronger than relaxed success must raise EArgumentError');
+  {$ENDIF}
+
+  LValueA := 31;
+  LValueB := 37;
+  LPtr := @LValueA;
+  LExpectedPtr := @LValueA;
+
+  LRaised := False;
+  try
+    atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, mo_release, mo_acq_rel);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'pointer weak CAS failure acq_rel must raise EArgumentError');
+
+  LExpectedPtr := @LValueA;
+  LRaised := False;
+  try
+    atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, mo_relaxed, mo_acquire);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'pointer weak CAS failure stronger than relaxed success must raise EArgumentError');
+
+  LTaggedStorage := atomic_tagged_ptr(@LValueA, 1);
+  LTaggedExpected := LTaggedStorage;
+  LTaggedDesired := atomic_tagged_ptr(@LValueB, 2);
+
+  LRaised := False;
+  try
+    atomic_tagged_ptr_compare_exchange_strong(LTaggedStorage, LTaggedExpected, LTaggedDesired, mo_release, mo_acq_rel);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'tagged pointer strong CAS failure acq_rel must raise EArgumentError');
+
+  LRaised := False;
+  try
+    atomic_tagged_ptr_compare_exchange_weak(LTaggedStorage, LTaggedExpected, LTaggedDesired, mo_release, mo_acq_rel);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'tagged pointer weak CAS failure acq_rel must raise EArgumentError');
+
+  LTaggedExpected := LTaggedStorage;
+  LRaised := False;
+  try
+    atomic_tagged_ptr_compare_exchange_weak(LTaggedStorage, LTaggedExpected, LTaggedDesired, mo_relaxed, mo_acquire);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'tagged pointer weak CAS failure stronger than relaxed success must raise EArgumentError');
+
+  LInt32 := 5;
+  CheckEqual(Int64(5), Int64(atomic_fetch_max(LInt32, 2, mo_release)),
+    'fetch_max release order must remain legal for RMW operations');
+  CheckEqual(Int64(5), Int64(LInt32),
+    'fetch_max release order should publish max(old, arg)');
+
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  LInt64 := 9;
+  CheckEqual(Int64(9), atomic_fetch_min_64(LInt64, 2, mo_acq_rel),
+    '64-bit fetch_min acq_rel order must remain legal for RMW operations');
+  CheckEqual(Int64(2), LInt64,
+    '64-bit fetch_min acq_rel order should publish min(old, arg)');
+  {$ENDIF}
+
+  LInt32 := $0F0F;
+  CheckEqual(Int64($0F0F), Int64(atomic_fetch_nand(LInt32, 2, mo_consume)),
+    'fetch_nand consume order must remain legal for RMW operations');
+  CheckEqual(Int64(not ($0F0F and 2)), Int64(LInt32),
+    'fetch_nand consume order should publish not(old and arg)');
+
+  LInt32 := 11;
+  LExpectedInt32 := 10;
+  Check(not atomic_compare_exchange_weak(LInt32, LExpectedInt32, 12, mo_release, mo_relaxed),
+    'weak CAS release success with relaxed failure must remain legal on mismatch');
+  CheckEqual(Int64(11), Int64(LExpectedInt32),
+    'weak CAS mismatch should write the observed value');
+end;
+
 procedure TestAtomicTypedCasConsumeContract;
 type
   TIntAtomicPtr = specialize TAtomicPtr<Integer>;
@@ -3758,6 +4029,7 @@ begin
   T.Run('fetch max/min/nand contract', @TestAtomicFetchMaxMinNandContract);
   T.Run('pointer offset fetch contract', @TestAtomicPointerOffsetFetchContract);
   T.Run('invalid memory-order contract', @TestAtomicInvalidMemoryOrderContract);
+  T.Run('invalid memory-order surface matrix', @TestAtomicInvalidMemoryOrderSurfaceMatrix);
   T.Run('typed atomic CAS consume contract', @TestAtomicTypedCasConsumeContract);
   T.Run('compat PascalCase facade', @TestAtomicCompatFacade);
   T.Run('compat public alias behavior', @TestAtomicCompatAliasBehavior);
