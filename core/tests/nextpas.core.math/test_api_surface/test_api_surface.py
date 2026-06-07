@@ -71,6 +71,117 @@ PUBLIC_MATH_SOURCE_PATHS = {
 ROOT_MAKEFILE_PATH = "Makefile"
 ROOT_FACADE_PATH = "src/nextpas.core.math.pas"
 API_DOC_PATH = "docs/math/API.md"
+ROOT_FACADE_ALLOWED_USES = {
+    "nextpas.core.math.scalar",
+    "nextpas.core.math.trig",
+    "nextpas.core.math.vec",
+    "nextpas.core.math.mat",
+    "nextpas.core.math.quat",
+    "nextpas.core.math.transform",
+    "nextpas.core.math.easing",
+    "nextpas.core.math.random",
+}
+REQUIRED_ROOT_FACADE_TYPE_ALIASES = {
+    "tvec2f": "nextpas.core.math.vec.tvec2f",
+    "tvec3f": "nextpas.core.math.vec.tvec3f",
+    "tvec4f": "nextpas.core.math.vec.tvec4f",
+    "tvec2d": "nextpas.core.math.vec.tvec2d",
+    "tvec3d": "nextpas.core.math.vec.tvec3d",
+    "tvec4d": "nextpas.core.math.vec.tvec4d",
+    "tmat3f": "nextpas.core.math.mat.tmat3f",
+    "tmat4f": "nextpas.core.math.mat.tmat4f",
+    "tmat3d": "nextpas.core.math.mat.tmat3d",
+    "tmat4d": "nextpas.core.math.mat.tmat4d",
+    "tquatf": "nextpas.core.math.quat.tquatf",
+    "tquatd": "nextpas.core.math.quat.tquatd",
+    "teasingfunction": "nextpas.core.math.easing.teasingfunction",
+    "trandomstate": "nextpas.core.math.random.trandomstate",
+    "trandomgen": "nextpas.core.math.random.trandomgen",
+    "tnoisegen": "nextpas.core.math.random.tnoisegen",
+}
+REQUIRED_ROOT_FACADE_CONSTANTS = {
+    "pi_value": ("double", "3.14159265358979323846"),
+    "two_pi": ("double", "6.28318530717958647692"),
+    "half_pi": ("double", "1.57079632679489661923"),
+    "deg_to_rad": ("double", "0.01745329251994329577"),
+    "rad_to_deg": ("double", "57.2957795130823208768"),
+}
+ROOT_FACADE_CONSTANT_PARITY_PATHS = (
+    "src/nextpas.core.math.scalar.pas",
+    "src/nextpas.core.math.trig.pas",
+)
+ROOT_FACADE_FORWARD_TARGETS = {
+    "isaddoverflow": "scalar",
+    "ismuloverflow": "scalar",
+    "min": "scalar",
+    "max": "scalar",
+    "clamp": "scalar",
+    "lerp": "scalar",
+    "inverselerp": "scalar",
+    "wrap": "scalar",
+    "smoothstep": "scalar",
+    "floor": "scalar",
+    "ceil": "scalar",
+    "round": "scalar",
+    "trunc": "scalar",
+    "frac": "scalar",
+    "abs": "scalar",
+    "sign": "scalar",
+    "isnan": "scalar",
+    "isinfinite": "scalar",
+    "floatequals": "scalar",
+    "floatiszero": "scalar",
+    "degtorad": "scalar",
+    "radtodeg": "scalar",
+    "gcd": "scalar",
+    "lcm": "scalar",
+    "hypot": "scalar",
+    "fmod": "scalar",
+    "sin": "trig",
+    "cos": "trig",
+    "tan": "trig",
+    "arcsin": "trig",
+    "arccos": "trig",
+    "arctan": "trig",
+    "arctan2": "trig",
+    "exp": "trig",
+    "ln": "trig",
+    "log2": "trig",
+    "log10": "trig",
+    "power": "trig",
+    "sqrt": "trig",
+    "ortho": "transform",
+    "perspective": "transform",
+    "lookat": "transform",
+    "translate": "transform",
+    "scale": "transform",
+    "rotatex": "transform",
+    "rotatey": "transform",
+    "rotatez": "transform",
+    "camera2d": "transform",
+    "easelinear": "easing",
+    "easeinquad": "easing",
+    "easeoutquad": "easing",
+    "easeinoutquad": "easing",
+    "easeincubic": "easing",
+    "easeoutcubic": "easing",
+    "easeinoutcubic": "easing",
+    "easeinquart": "easing",
+    "easeoutquart": "easing",
+    "easeinoutquart": "easing",
+    "easeinexpo": "easing",
+    "easeoutexpo": "easing",
+    "easeinoutexpo": "easing",
+    "easeinelastic": "easing",
+    "easeoutelastic": "easing",
+    "easeinoutelastic": "easing",
+    "easeinback": "easing",
+    "easeoutback": "easing",
+    "easeinoutback": "easing",
+    "easeinbounce": "easing",
+    "easeoutbounce": "easing",
+    "easeinoutbounce": "easing",
+}
 REQUIRED_HOST_GATE_RESIDUAL_TRUTH = (
     (
         "docs/math/README.md",
@@ -544,6 +655,10 @@ UNIT_NAME_RE = re.compile(
 )
 IMPLEMENTATION_RE = re.compile(
     r"^\s*implementation\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+INTERFACE_RE = re.compile(
+    r"^\s*interface\b",
     re.IGNORECASE | re.MULTILINE,
 )
 COMPILER_REF_RE = re.compile(
@@ -1108,6 +1223,14 @@ def interface_text(text: str) -> str:
     if match is None:
         return code
     return code[: match.start()]
+
+
+def interface_body_text_with_line_offset(text: str) -> tuple[str, int]:
+    code = interface_text(text)
+    match = INTERFACE_RE.search(code)
+    if match is None:
+        return code, 0
+    return code[match.end() :], line_no_at(code, match.end()) - 1
 
 
 def scan_legacy_public_names(root: Path, path: Path, text: str) -> list[Finding]:
@@ -1805,12 +1928,12 @@ def statement_line_index(code: str, statement_start: int) -> int:
 
 
 def interface_statements(text: str) -> list[tuple[int, str]]:
-    code = interface_text(text)
+    code, line_offset = interface_body_text_with_line_offset(text)
     statements: list[tuple[int, str]] = []
     start = 0
     for match in re.finditer(r";", code):
         statement = code[start : match.end()]
-        statements.append((statement_line_index(code, start), statement))
+        statements.append((line_offset + statement_line_index(code, start), statement))
         start = match.end()
     return statements
 
@@ -1880,6 +2003,7 @@ def parse_public_type_alias_statement(unit_name: str, line: int, statement: str)
     if not is_top_level_statement(statement):
         return None
     normalized = " ".join(statement.split())
+    normalized = re.sub(r"^(?:type)\s+", "", normalized, flags=re.IGNORECASE)
     match = re.match(
         r"^(T[A-Za-z0-9_]*)\s*=\s*(?P<target>.+?)\s*;$",
         normalized,
@@ -1899,6 +2023,7 @@ def parse_public_constant_statement(unit_name: str, line: int, statement: str) -
     if not is_top_level_statement(statement):
         return None
     normalized = " ".join(statement.split())
+    normalized = re.sub(r"^(?:const)\s+", "", normalized, flags=re.IGNORECASE)
     match = re.match(
         r"^([A-Z][A-Z0-9_]*)\s*:\s*(?P<type>[^=;]+)\s*=",
         normalized,
@@ -2230,6 +2355,381 @@ def scan_required_trig_host_compile_gate(root: Path) -> list[Finding]:
     return findings
 
 
+def root_facade_active_uses(root_facade_text: str) -> set[str]:
+    code = strip_pascal_comments_and_strings(root_facade_text)
+    match = USES_MATH_FFI_RE.search(interface_text(code))
+    if match is None:
+        return set()
+    units: set[str] = set()
+    for unit in re.split(r"[,;\s]+", match.group("body")):
+        unit = unit.strip().lower()
+        if unit:
+            units.add(unit)
+    return units
+
+
+def root_facade_constant_values(root_facade_text: str) -> dict[str, tuple[str, str]]:
+    values: dict[str, tuple[str, str]] = {}
+    for line, statement in interface_statements(root_facade_text):
+        if not is_top_level_statement(statement):
+            continue
+        normalized = " ".join(statement.split())
+        normalized = re.sub(r"^(?:const)\s+", "", normalized, flags=re.IGNORECASE)
+        match = re.match(
+            r"^([A-Z][A-Z0-9_]*)\s*:\s*(?P<type>[^=;]+)\s*=\s*(?P<value>[^;]+)\s*;$",
+            normalized,
+        )
+        if match is None:
+            continue
+        values[match.group(1).lower()] = (
+            normalize_pascal_type(match.group("type")),
+            normalize_pascal_type(match.group("value")),
+        )
+    return values
+
+
+def implementation_text_with_line_offset(text: str) -> tuple[str, int]:
+    code = strip_pascal_comments_and_strings(text)
+    match = IMPLEMENTATION_RE.search(code)
+    if match is None:
+        return "", 0
+    return code[match.end() :], line_no_at(code, match.end()) - 1
+
+
+def implementation_text(text: str) -> str:
+    return implementation_text_with_line_offset(text)[0]
+
+
+def active_uses_units_with_lines(text: str, line_offset: int = 0) -> list[tuple[str, int]]:
+    code = strip_pascal_comments_and_strings(text)
+    units: list[tuple[str, int]] = []
+    for match in USES_MATH_FFI_RE.finditer(code):
+        body = match.group("body")
+        for unit_match in re.finditer(r"[A-Za-z_][A-Za-z0-9_.]*", body):
+            units.append(
+                (
+                    unit_match.group(0).lower(),
+                    line_offset + line_no_at(code, match.start("body") + unit_match.start()),
+                )
+            )
+    return units
+
+
+def normalize_pascal_expression(text: str) -> str:
+    return re.sub(r"\s+", "", text).lower()
+
+
+@dataclass(frozen=True)
+class RootFacadeForwarderBody:
+    name: str
+    routine_kind: str
+    params: tuple[tuple[str, str], ...]
+    param_names: tuple[str, ...]
+    result_type: str
+    body: str
+    line: int
+
+    @property
+    def key(self) -> tuple[str, str, tuple[tuple[str, str], ...], str]:
+        return (
+            self.name.lower(),
+            self.routine_kind.lower(),
+            self.params,
+            self.result_type,
+        )
+
+
+def extract_root_facade_forwarder_bodies(text: str) -> dict[
+    tuple[str, str, tuple[tuple[str, str], ...], str], RootFacadeForwarderBody
+]:
+    code = strip_pascal_comments_and_strings(text)
+    impl_match = IMPLEMENTATION_RE.search(code)
+    if impl_match is None:
+        return {}
+    impl = code[impl_match.end() :]
+    body_re = re.compile(
+        r"\b(?P<kind>function|procedure)\s+"
+        r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*"
+        r"\((?P<params>.*?)\)"
+        r"(?:\s*:\s*(?P<result>[^;]+))?\s*;\s*"
+        r"begin\s*(?P<body>.*?)\s*end\s*;",
+        re.IGNORECASE | re.DOTALL,
+    )
+    bodies: dict[
+        tuple[str, str, tuple[tuple[str, str], ...], str], RootFacadeForwarderBody
+    ] = {}
+    for match in body_re.finditer(impl):
+        param_names: list[str] = []
+        raw_params = match.group("params")
+        for group in raw_params.split(";"):
+            group = group.strip()
+            if not group or ":" not in group:
+                continue
+            for candidate in ("const", "var", "out"):
+                prefix = candidate + " "
+                if group.lower().startswith(prefix):
+                    group = group[len(prefix) :].strip()
+                    break
+            names_part = group.rsplit(":", 1)[0]
+            param_names.extend(name.strip() for name in names_part.split(",") if name.strip())
+
+        body = RootFacadeForwarderBody(
+            name=match.group("name"),
+            routine_kind=match.group("kind"),
+            params=split_pascal_params(raw_params),
+            param_names=tuple(param_names),
+            result_type=normalize_pascal_type(match.group("result") or ""),
+            body=match.group("body"),
+            line=line_no_at(code, impl_match.end() + match.start("body")),
+        )
+        bodies[body.key] = body
+    return bodies
+
+
+def scan_root_facade_contract(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    path = root / ROOT_FACADE_PATH
+    if not path.is_file():
+        return findings
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    code = strip_pascal_comments_and_strings(text)
+
+    uses_units = root_facade_active_uses(text)
+    for unit in sorted(uses_units - ROOT_FACADE_ALLOWED_USES):
+        line = 1
+        match = re.search(r"\b" + re.escape(unit) + r"\b", code, re.IGNORECASE)
+        if match is not None:
+            line = line_no_at(code, match.start())
+        add_finding(
+            findings,
+            "root-facade-disallowed-use:" + unit,
+            root,
+            path,
+            line,
+            unit,
+        )
+    for unit in sorted(ROOT_FACADE_ALLOWED_USES - uses_units):
+        add_finding(
+            findings,
+            "root-facade-missing-required-use:" + unit,
+            root,
+            path,
+            1,
+            unit,
+        )
+
+    impl_text, impl_line_offset = implementation_text_with_line_offset(text)
+    for unit, line in active_uses_units_with_lines(impl_text, impl_line_offset):
+        add_finding(
+            findings,
+            "root-facade-implementation-use:" + unit,
+            root,
+            path,
+            line,
+            unit,
+        )
+
+    aliases = root_facade_alias_targets(text)
+    for name, target in REQUIRED_ROOT_FACADE_TYPE_ALIASES.items():
+        actual = aliases.get(name)
+        if actual == target:
+            continue
+        add_finding(
+            findings,
+            "root-facade-type-alias-drift:" + name,
+            root,
+            path,
+            1,
+            target,
+        )
+    for name in sorted(set(aliases) - set(REQUIRED_ROOT_FACADE_TYPE_ALIASES)):
+        add_finding(
+            findings,
+            "root-facade-extra-type-alias:" + name,
+            root,
+            path,
+            1,
+            aliases[name],
+        )
+
+    constants = root_facade_constant_values(text)
+    for name, expected in REQUIRED_ROOT_FACADE_CONSTANTS.items():
+        actual = constants.get(name)
+        if actual == expected:
+            continue
+        add_finding(
+            findings,
+            "root-facade-constant-drift:" + name,
+            root,
+            path,
+            1,
+            expected[0] + "=" + expected[1],
+        )
+    for name in sorted(set(constants) - set(REQUIRED_ROOT_FACADE_CONSTANTS)):
+        add_finding(
+            findings,
+            "root-facade-extra-constant:" + name,
+            root,
+            path,
+            1,
+            constants[name][0] + "=" + constants[name][1],
+        )
+
+    for rel in ROOT_FACADE_CONSTANT_PARITY_PATHS:
+        parity_path = root / rel
+        if not parity_path.is_file():
+            continue
+        parity_text = parity_path.read_text(encoding="utf-8", errors="replace")
+        parity_unit_name = public_unit_name(parity_text) or rel
+        parity_constants = root_facade_constant_values(parity_text)
+        for name, expected in REQUIRED_ROOT_FACADE_CONSTANTS.items():
+            actual = parity_constants.get(name)
+            if actual == expected:
+                continue
+            add_finding(
+                findings,
+                "root-facade-constant-parity:" + parity_unit_name + ":" + name,
+                root,
+                parity_path,
+                1,
+                expected[0] + "=" + expected[1],
+            )
+
+    forwarder_bodies = extract_root_facade_forwarder_bodies(text)
+    for routine in extract_public_routines(text):
+        expected_owner = ROOT_FACADE_FORWARD_TARGETS.get(routine.name.lower())
+        if expected_owner is None:
+            add_finding(
+                findings,
+                "root-facade-unowned-forwarder:" + routine.name,
+                root,
+                path,
+                routine.line,
+                routine.name,
+            )
+            continue
+        body = forwarder_bodies.get(routine.key)
+        if body is None:
+            add_finding(
+                findings,
+                "root-facade-missing-forwarder-body:" + routine.name,
+                root,
+                path,
+                routine.line,
+                routine.name,
+            )
+            continue
+
+        expected_call = (
+            "Result:=nextpas.core.math."
+            + expected_owner
+            + "."
+            + routine.name
+            + "("
+            + ",".join(body.param_names)
+            + ");"
+        )
+        actual_body = normalize_pascal_expression(body.body)
+        if actual_body == normalize_pascal_expression(expected_call):
+            continue
+        add_finding(
+            findings,
+            "root-facade-forwarder-drift:" + routine.name,
+            root,
+            path,
+            body.line,
+            routine.name + " -> nextpas.core.math." + expected_owner,
+        )
+    return findings
+
+
+def run_root_facade_contract_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        src = root / "src"
+        src.mkdir(parents=True, exist_ok=True)
+        path = src / "nextpas.core.math.pas"
+        (src / "nextpas.core.math.scalar.pas").write_text(
+            "unit nextpas.core.math.scalar;\n"
+            "interface\n"
+            "const\n"
+            "  PI_VALUE: Double = 3.14159265358979323846;\n"
+            "  TWO_PI: Double = 6.28318530717958647692;\n"
+            "  HALF_PI: Double = 1.57079632679489661923;\n"
+            "  DEG_TO_RAD: Double = 0.01745329251994329577;\n"
+            "  RAD_TO_DEG: Double = 57.2957795130823208768;\n"
+            "implementation\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        (src / "nextpas.core.math.trig.pas").write_text(
+            "unit nextpas.core.math.trig;\n"
+            "interface\n"
+            "const\n"
+            "  PI_VALUE: Double = 3.0;\n"
+            "  TWO_PI: Double = 6.28318530717958647692;\n"
+            "  HALF_PI: Double = 1.57079632679489661923;\n"
+            "  DEG_TO_RAD: Double = 0.01745329251994329577;\n"
+            "  RAD_TO_DEG: Double = 57.2957795130823208768;\n"
+            "implementation\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        path.write_text(
+            "unit nextpas.core.math;\n"
+            "interface\n"
+            "uses\n"
+            "  nextpas.core.math.scalar,\n"
+            "  nextpas.core.math.trig,\n"
+            "  nextpas.core.math.vec,\n"
+            "  nextpas.core.math.mat,\n"
+            "  nextpas.core.math.quat,\n"
+            "  nextpas.core.math.transform,\n"
+            "  nextpas.core.math.easing,\n"
+            "  nextpas.core.math.random,\n"
+            "  nextpas.core.math.impl.simd;\n"
+            "const\n"
+            "  PI_VALUE: Double = 3.0;\n"
+            "  EXTRA_CONST: Double = 1.0;\n"
+            "type\n"
+            "  TVec3f = nextpas.core.math.vec.TVec4f;\n"
+            "  TExtraVec = nextpas.core.math.vec.TVec2f;\n"
+            "function Sin(const AX: Double): Double; overload; inline;\n"
+            "function Rogue(const AX: Double): Double; inline;\n"
+            "implementation\n"
+            "uses nextpas.core.math.impl.scalar;\n"
+            "function Sin(const AX: Double): Double;\n"
+            "begin\n"
+            "  Result := nextpas.core.math.scalar.Sin(AX);\n"
+            "end;\n"
+            "function Rogue(const AX: Double): Double;\n"
+            "begin\n"
+            "  Result := AX + 1.0;\n"
+            "end;\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        findings = scan_root_facade_contract(root)
+        rules = {finding.rule for finding in findings}
+        expected_rules = {
+            "root-facade-disallowed-use:nextpas.core.math.impl.simd",
+            "root-facade-type-alias-drift:tvec3f",
+            "root-facade-constant-drift:pi_value",
+            "root-facade-forwarder-drift:Sin",
+            "root-facade-extra-type-alias:textravec",
+            "root-facade-extra-constant:extra_const",
+            "root-facade-implementation-use:nextpas.core.math.impl.scalar",
+            "root-facade-constant-parity:nextpas.core.math.trig:pi_value",
+            "root-facade-unowned-forwarder:Rogue",
+        }
+        missing = expected_rules - rules
+        if missing:
+            raise AssertionError(
+                "root-facade-contract self-test missing " + ", ".join(sorted(missing))
+            )
+
+
 def scan_required_doc_truth(
     root: Path,
     requirements: tuple[tuple[str, str], ...],
@@ -2362,6 +2862,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_missing_required_benchmark_markers(root))
     findings.extend(scan_required_behavior_test_markers(root))
     findings.extend(scan_root_facade_api_doc_coverage(root))
+    findings.extend(scan_root_facade_contract(root))
     findings.extend(scan_root_facade_reexport_parity(root))
     findings.extend(scan_required_core_make_targets(root))
     findings.extend(scan_required_core_make_target_doc_coverage(root))
@@ -2462,6 +2963,7 @@ def main() -> int:
         run_trig_host_safe_route_self_tests()
         run_required_trig_host_compile_gate_self_tests()
         run_required_doc_truth_self_tests()
+        run_root_facade_contract_self_tests()
         run_root_facade_reexport_parity_self_tests()
     report = build_report(args.root)
 
