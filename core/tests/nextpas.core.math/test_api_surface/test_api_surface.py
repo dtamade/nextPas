@@ -474,6 +474,60 @@ REQUIRED_SCALAR_CLAMP_DOC_TRUTH = (
         "`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.",
     ),
 )
+REQUIRED_SCALAR_IEEE_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 overflow helpers must avoid divide-by-zero paths.",
+    ),
+    (
+        "docs/math/API.md",
+        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 overflow helpers must avoid divide-by-zero paths.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 overflow helpers must avoid divide-by-zero paths.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 overflow helpers must avoid divide-by-zero paths.",
+    ),
+)
+REQUIRED_SCALAR_MIN_MAX_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "`Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.",
+    ),
+    (
+        "docs/math/API.md",
+        "`Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.",
+    ),
+)
+REQUIRED_SCALAR_FLOAT_COMPARE_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "`FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.",
+    ),
+    (
+        "docs/math/API.md",
+        "`FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.",
+    ),
+)
 REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
     RequiredCoreMakeTarget(
         target="core-math-api-surface-smoke",
@@ -841,6 +895,12 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-clamp-nan-value", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Clamp Double NaN value propagates NaN"),
     RequiredBehaviorTestMarker("scalar-clamp-reversed-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Clamp: minimum must not exceed maximum"),
     RequiredBehaviorTestMarker("scalar-clamp-finite-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Clamp: minimum and maximum must be finite"),
+    RequiredBehaviorTestMarker("scalar-ieee-edge-contracts", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('scalar IEEE edge contracts'"),
+    RequiredBehaviorTestMarker("scalar-min-max-nan", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Min Double propagates NaN first"),
+    RequiredBehaviorTestMarker("scalar-min-max-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Min Single keeps negative zero first"),
+    RequiredBehaviorTestMarker("scalar-float-compare-infinity", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "FloatEquals Double +Inf exact"),
+    RequiredBehaviorTestMarker("scalar-float-compare-invalid-epsilon", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "FloatEquals rejects infinite epsilon"),
+    RequiredBehaviorTestMarker("scalar-float-is-zero-invalid", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "FloatIsZero Double rejects NaN value"),
     RequiredBehaviorTestMarker("scalar-interpolation", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('interpolation'"),
     RequiredBehaviorTestMarker("scalar-rounding-sign", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('rounding and sign'"),
     RequiredBehaviorTestMarker("scalar-float-predicates", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('float predicates'"),
@@ -2854,6 +2914,33 @@ def scan_required_scalar_clamp_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_scalar_ieee_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_SCALAR_IEEE_DOC_TRUTH,
+        "missing-required-scalar-ieee-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
+def scan_required_scalar_min_max_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_SCALAR_MIN_MAX_DOC_TRUTH,
+        "missing-required-scalar-min-max-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
+def scan_required_scalar_float_compare_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_SCALAR_FLOAT_COMPARE_DOC_TRUTH,
+        "missing-required-scalar-float-compare-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def build_report(root: Path) -> Report:
     root = root.resolve()
     findings: list[Finding] = []
@@ -2877,6 +2964,9 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_easing_doc_truth(root))
     findings.extend(scan_required_noise_doc_truth(root))
     findings.extend(scan_required_scalar_clamp_doc_truth(root))
+    findings.extend(scan_required_scalar_ieee_doc_truth(root))
+    findings.extend(scan_required_scalar_min_max_doc_truth(root))
+    findings.extend(scan_required_scalar_float_compare_doc_truth(root))
 
     source_files = discover_files(root, MATH_SOURCE_GLOBS)
     math_ffi = root / "src/nextpas.core.math.ffi.pas"

@@ -33,6 +33,9 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   `Log2` / `Log10` coverage, selected missing `Single`-path trig parity, and `Power`
   negative-base / zero-base edge semantics, and `SimdLnF32(NaN)`.
 - `Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.
+- `Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.
+- `FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.
+- `Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 overflow helpers must avoid divide-by-zero paths.
 - `nextpas.core.math.mat` now provides the final matrix types: `TMat3f`, `TMat4f`, `TMat3d`, and `TMat4d`.
 - Matrix tests cover compact layout, column-major `Data[column,row]`, `Items`, `Rows`, `Columns`,
   row/column setter write-through semantics over the same backing storage, `Zero`, `Identity`,
@@ -200,6 +203,8 @@ Status:
   facade gate for the repeatable current-host proof path.
 - Current scalar edge coverage now locks the `Clamp` reversed-bounds fail-fast contract, finite
   `Single` / `Double` bounds requirement, and NaN-value propagation.
+- Current scalar IEEE coverage now locks `Round` ties away from zero, signed-zero behavior for
+  `Abs`, `Frac`, and `Fmod`, infinity-dominant `Hypot`, and UInt32 overflow helper edge cases.
 - `nextpas.core.math.ffi.pas` is deleted in this branch.
 - API surface checks reject naked `external 'm'`, public/test `math.ffi` consumers, public impl consumers, and legacy vector bridge names.
 - macOS/Windows host link smokes are not run in this local round.

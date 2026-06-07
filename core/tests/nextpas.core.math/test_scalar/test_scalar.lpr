@@ -75,6 +75,14 @@ begin
   Result := LBits = UInt32($80000000);
 end;
 
+function IsSinglePositiveZero(const AValue: Single): Boolean;
+var
+  LBits: UInt32;
+begin
+  Move(AValue, LBits, SizeOf(LBits));
+  Result := LBits = UInt32(0);
+end;
+
 function MakeDoubleNegativeZero: Double;
 var
   LBits: UInt64;
@@ -89,6 +97,14 @@ var
 begin
   Move(AValue, LBits, SizeOf(LBits));
   Result := LBits = UInt64($8000000000000000);
+end;
+
+function IsDoublePositiveZero(const AValue: Double): Boolean;
+var
+  LBits: UInt64;
+begin
+  Move(AValue, LBits, SizeOf(LBits));
+  Result := LBits = UInt64(0);
 end;
 
 function Pow2_63: Double;
@@ -287,6 +303,80 @@ begin
     'FloatIsZero rejects negative epsilon');
   Check(not FloatIsZero(Single(0.0), Single(-0.000001)),
     'FloatIsZero Single rejects negative epsilon');
+end;
+
+procedure TestScalarIEEEEdgeContracts;
+var
+  LZeroUInt32: UInt32;
+  LHighUInt32: UInt32;
+begin
+  LZeroUInt32 := UInt32(0);
+  LHighUInt32 := High(UInt32);
+
+  CheckEqual(Int64(3), Round(2.5), 'Round Double ties away from zero positive');
+  CheckEqual(Int64(-3), Round(-2.5), 'Round Double ties away from zero negative');
+  CheckEqual(Int64(1), Round(0.5), 'Round Double half positive');
+  CheckEqual(Int64(-1), Round(-0.5), 'Round Double half negative');
+  CheckEqual(Int64(3), Round(Single(2.5)), 'Round Single ties away from zero positive');
+  CheckEqual(Int64(-3), Round(Single(-2.5)), 'Round Single ties away from zero negative');
+
+  Check(IsDoublePositiveZero(nextpas.core.math.scalar.Abs(MakeDoubleNegativeZero)),
+    'Abs Double negative zero returns positive zero');
+  Check(IsSinglePositiveZero(nextpas.core.math.scalar.Abs(MakeSingleNegativeZero)),
+    'Abs Single negative zero returns positive zero');
+
+  CheckNear(-0.25, Frac(-1.25), 0.0, 'Frac Double negative value keeps fractional sign');
+  CheckNear(-0.25, Frac(Single(-1.25)), 0.0, 'Frac Single negative value keeps fractional sign');
+  Check(IsDoubleNegativeZero(Frac(MakeDoubleNegativeZero)),
+    'Frac Double negative zero keeps input sign');
+  Check(IsSingleNegativeZero(Frac(MakeSingleNegativeZero)),
+    'Frac Single negative zero keeps input sign');
+  Check(IsDoubleNegativeZero(Frac(-1.0)),
+    'Frac Double exact negative integer keeps input sign');
+  Check(IsSingleNegativeZero(Frac(Single(-1.0))),
+    'Frac Single exact negative integer keeps input sign');
+
+  Check(IsInfinite(Hypot(MakePositiveInfinity, MakeNaN)) and
+    (Hypot(MakePositiveInfinity, MakeNaN) > 0.0),
+    'Hypot Double positive infinity dominates NaN');
+  Check(IsInfinite(Hypot(MakeNaN, MakeNegativeInfinity)) and
+    (Hypot(MakeNaN, MakeNegativeInfinity) > 0.0),
+    'Hypot Double negative infinity dominates NaN');
+  Check(IsInfinite(Hypot(MakeSinglePositiveInfinity, MakeSingleNaN)) and
+    (Hypot(MakeSinglePositiveInfinity, MakeSingleNaN) > 0.0),
+    'Hypot Single positive infinity dominates NaN');
+  Check(Hypot(1.0e308, 1.0e308) < MakePositiveInfinity,
+    'Hypot Double huge finite inputs stay finite');
+  Check(Hypot(Single(3.0e30), Single(4.0e30)) < MakeSinglePositiveInfinity,
+    'Hypot Single huge finite inputs stay finite');
+
+  Check(IsDoubleNegativeZero(Fmod(MakeDoubleNegativeZero, 3.0)),
+    'Fmod Double keeps negative zero dividend');
+  Check(IsSingleNegativeZero(Fmod(MakeSingleNegativeZero, Single(3.0))),
+    'Fmod Single keeps negative zero dividend');
+  Check(IsDoubleNegativeZero(Fmod(-4.0, 2.0)),
+    'Fmod Double exact negative dividend keeps negative zero remainder');
+  Check(IsSingleNegativeZero(Fmod(Single(-4.0), Single(2.0))),
+    'Fmod Single exact negative dividend keeps negative zero remainder');
+  CheckNear(1.5, Fmod(5.5, -2.0), 0.0, 'Fmod Double negative divisor positive dividend');
+  CheckNear(-1.5, Fmod(-5.5, -2.0), 0.0, 'Fmod Double negative divisor negative dividend');
+  CheckNear(1.0, Fmod(1.0, MakePositiveInfinity), 0.0, 'Fmod Double finite over infinity');
+  Check(IsNaN(Fmod(MakePositiveInfinity, 1.0)), 'Fmod Double infinity dividend returns NaN');
+
+  CheckNear(5.0, Clamp(MakePositiveInfinity, 0.0, 5.0), 0.0,
+    'Clamp Double positive infinity clamps high');
+  CheckNear(0.0, Clamp(MakeNegativeInfinity, 0.0, 5.0), 0.0,
+    'Clamp Double negative infinity clamps low');
+  Check(IsDoubleNegativeZero(Clamp(MakeDoubleNegativeZero, 0.0, 1.0)),
+    'Clamp Double negative zero inside range keeps sign');
+
+  Check(IsAddOverflow(LHighUInt32, UInt32(1)), 'IsAddOverflow UInt32 high plus one');
+  Check(not IsAddOverflow(LHighUInt32 - UInt32(1), UInt32(1)),
+    'IsAddOverflow UInt32 high minus one plus one');
+  Check(not IsMulOverflow(LZeroUInt32, LHighUInt32),
+    'IsMulOverflow UInt32 zero times high');
+  Check(IsMulOverflow(LHighUInt32, UInt32(2)),
+    'IsMulOverflow UInt32 high times two');
 end;
 
 procedure TestNumberTheoryAndScalarExtras;
@@ -626,10 +716,18 @@ begin
 end;
 
 procedure TestOverflowHelpers;
+var
+  LZeroSizeUInt: SizeUInt;
+  LHighSizeUInt: SizeUInt;
 begin
-  Check(IsAddOverflow(High(SizeUInt), SizeUInt(1)), 'IsAddOverflow SizeUInt');
+  LZeroSizeUInt := SizeUInt(0);
+  LHighSizeUInt := High(SizeUInt);
+
+  Check(IsAddOverflow(LHighSizeUInt, SizeUInt(1)), 'IsAddOverflow SizeUInt');
   Check(not IsAddOverflow(SizeUInt(10), SizeUInt(20)), 'IsAddOverflow false');
-  Check(IsMulOverflow(High(SizeUInt), SizeUInt(2)), 'IsMulOverflow SizeUInt');
+  Check(not IsMulOverflow(LZeroSizeUInt, LHighSizeUInt),
+    'IsMulOverflow SizeUInt zero times high');
+  Check(IsMulOverflow(LHighSizeUInt, SizeUInt(2)), 'IsMulOverflow SizeUInt');
   Check(not IsMulOverflow(SizeUInt(10), SizeUInt(20)), 'IsMulOverflow false');
 end;
 
@@ -640,6 +738,7 @@ begin
   T.Run('interpolation', @TestInterpolation);
   T.Run('rounding and sign', @TestRoundingAndSign);
   T.Run('float predicates', @TestFloatPredicates);
+  T.Run('scalar IEEE edge contracts', @TestScalarIEEEEdgeContracts);
   T.Run('number theory and scalar extras', @TestNumberTheoryAndScalarExtras);
   T.Run('integer rounding boundaries', @TestIntegerRoundingBoundaries);
   T.Run('owner-level boundary messages', @TestOwnerLevelBoundaryMessages);

@@ -148,6 +148,24 @@ begin
   Move(LBits, Result, SizeOf(Result));
 end;
 
+function SingleAbsBits(const AValue: Single): Single; inline;
+var
+  LBits: UInt32;
+begin
+  Move(AValue, LBits, SizeOf(LBits));
+  LBits := LBits and UInt32($7FFFFFFF);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
+function DoubleAbsBits(const AValue: Double): Double; inline;
+var
+  LBits: UInt64;
+begin
+  Move(AValue, LBits, SizeOf(LBits));
+  LBits := LBits and UInt64($7FFFFFFFFFFFFFFF);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
 function ValidComparisonEpsilon(const AEpsilon: Single): Boolean; inline;
 begin
   Result := (not SingleIsNaN(AEpsilon)) and (not SingleIsInfinite(AEpsilon)) and
@@ -172,12 +190,16 @@ end;
 
 function IsMulOverflow(AA, AB: SizeUInt): Boolean;
 begin
-  Result := (AA <> 0) and (AB > High(SizeUInt) div AA);
+  if AA = 0 then
+    Exit(False);
+  Result := AB > High(SizeUInt) div AA;
 end;
 
 function IsMulOverflow(AA, AB: UInt32): Boolean;
 begin
-  Result := (AA <> 0) and (AB > High(UInt32) div AA);
+  if AA = 0 then
+    Exit(False);
+  Result := AB > High(UInt32) div AA;
 end;
 
 function Min(AA, AB: SizeUInt): SizeUInt;
@@ -406,9 +428,16 @@ begin
 end;
 
 function Round(const AValue: Double): Int64;
+var
+  LValue: Double;
 begin
   RequireInt64Convertible('Round', AValue);
-  Result := System.Round(AValue);
+  if AValue >= 0.0 then
+    LValue := System.Int(AValue + 0.5)
+  else
+    LValue := System.Int(AValue - 0.5);
+  RequireInt64Convertible('Round', LValue);
+  Result := System.Trunc(LValue);
 end;
 
 function Trunc(const AValue: Single): Int64;
@@ -423,24 +452,32 @@ begin
 end;
 
 function Frac(const AValue: Single): Single;
+var
+  LResult: Double;
 begin
-  Result := Single(Frac(Double(AValue)));
+  LResult := Frac(Double(AValue));
+  if LResult = 0.0 then
+    Result := SingleSignedZero(SingleHasSignBit(AValue))
+  else
+    Result := Single(LResult);
 end;
 
 function Frac(const AValue: Double): Double;
 begin
   RequireInt64Convertible('Frac', AValue);
   Result := AValue - System.Trunc(AValue);
+  if Result = 0.0 then
+    Result := DoubleSignedZero(DoubleHasSignBit(AValue));
 end;
 
 function Abs(const AValue: Single): Single;
 begin
-  if AValue < 0.0 then Result := -AValue else Result := AValue;
+  Result := SingleAbsBits(AValue);
 end;
 
 function Abs(const AValue: Double): Double;
 begin
-  if AValue < 0.0 then Result := -AValue else Result := AValue;
+  Result := DoubleAbsBits(AValue);
 end;
 
 function Abs(const AValue: Int32): Int32;
@@ -596,12 +633,14 @@ function Hypot(const AX, AY: Single): Single;
 var
   LX, LY, LMax, LMin, LRatio: Single;
 begin
-  if IsNaN(AX) or IsNaN(AY) then
-    Exit(SingleQuietNaN);
   LX := Abs(AX);
   LY := Abs(AY);
-  if IsInfinite(LX) or IsInfinite(LY) then
-    Exit(LX + LY);
+  if IsInfinite(LX) then
+    Exit(LX);
+  if IsInfinite(LY) then
+    Exit(LY);
+  if IsNaN(AX) or IsNaN(AY) then
+    Exit(SingleQuietNaN);
   LMax := Max(LX, LY);
   if LMax = 0.0 then
     Exit(0.0);
@@ -614,12 +653,14 @@ function Hypot(const AX, AY: Double): Double;
 var
   LX, LY, LMax, LMin, LRatio: Double;
 begin
-  if IsNaN(AX) or IsNaN(AY) then
-    Exit(DoubleQuietNaN);
   LX := Abs(AX);
   LY := Abs(AY);
-  if IsInfinite(LX) or IsInfinite(LY) then
-    Exit(LX + LY);
+  if IsInfinite(LX) then
+    Exit(LX);
+  if IsInfinite(LY) then
+    Exit(LY);
+  if IsNaN(AX) or IsNaN(AY) then
+    Exit(DoubleQuietNaN);
   LMax := Max(LX, LY);
   if LMax = 0.0 then
     Exit(0.0);
@@ -635,6 +676,8 @@ begin
   if IsInfinite(AY) then
     Exit(AX);
   Result := AX - AY * System.Int(AX / AY);
+  if Result = 0.0 then
+    Result := SingleSignedZero(SingleHasSignBit(AX));
 end;
 
 function Fmod(const AX, AY: Double): Double;
@@ -644,6 +687,8 @@ begin
   if IsInfinite(AY) then
     Exit(AX);
   Result := AX - AY * System.Int(AX / AY);
+  if Result = 0.0 then
+    Result := DoubleSignedZero(DoubleHasSignBit(AX));
 end;
 
 end.

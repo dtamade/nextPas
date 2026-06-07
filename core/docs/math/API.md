@@ -104,6 +104,12 @@ Scalar helpers:
 
 `Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.
 
+`Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.
+
+`FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.
+
+`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 overflow helpers must avoid divide-by-zero paths.
+
 Trig helpers:
 
 - Trig: `Sin`, `Cos`, `Tan`, `ArcSin`, `ArcCos`, `ArcTan`, `ArcTan2`
