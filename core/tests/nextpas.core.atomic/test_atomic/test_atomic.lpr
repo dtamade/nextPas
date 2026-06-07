@@ -337,6 +337,9 @@ var
   LAtomicFlagTestSection: string;
   LAtomicFlagClearSection: string;
   LRefCountTypeSection: string;
+  LRefCountIncSection: string;
+  LRefCountTryIncSection: string;
+  LRefCountDecSection: string;
   LFetchAnd64Section: string;
   LFetchOr64Section: string;
   LFetchXor64Section: string;
@@ -569,6 +572,15 @@ begin
   LRefCountTypeSection := ExtractSection(LAtomicTypesSource,
     '  TAtomicRefCount = record',
     '  { TAtomicPtr - 泛型原子指针 }');
+  LRefCountIncSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicRefCount.Inc: PtrUInt;',
+    'function TAtomicRefCount.TryInc(out ANewValue: PtrUInt): Boolean;');
+  LRefCountTryIncSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicRefCount.TryInc(out ANewValue: PtrUInt): Boolean;',
+    'function TAtomicRefCount.Dec: PtrUInt;');
+  LRefCountDecSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicRefCount.Dec: PtrUInt;',
+    'function TAtomicRefCount.IntoInner: PtrUInt;');
   LFetchAnd64Section := ExtractImplementationSection(LAtomicSource,
     'function atomic_fetch_and_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;',
     'function atomic_fetch_and_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64;');
@@ -730,6 +742,9 @@ begin
   CheckContains(LAtomicDocsReadme,
     '`Load` defaults to `mo_relaxed`; `Inc` must not resurrect a zero refcount, and `TryInc` returns `False` instead of resurrecting when the count is already zero.',
     'atomic README must document TAtomicRefCount zero-state increment rules');
+  CheckContains(LAtomicDocsReadme,
+    '`TryInc` writes `0` to `ANewValue` when the refcount is already zero, so failure leaves a stable non-resurrected out value for destruction-side callers.',
+    'atomic README must document TAtomicRefCount zero-state TryInc out-value contract');
   CheckContains(LAtomicDocsReadme,
     '`Dec` publishes the release-side decrement, and a final drop to zero issues an acquire fence before destruction-side cleanup proceeds.',
     'atomic README must document TAtomicRefCount final-drop ordering');
@@ -1010,6 +1025,8 @@ begin
     'typed USize lock-free query must not hardcode a guaranteed-true result');
   CheckContains(LTypesRefCountLockFreeSection, 'atomic_is_lock_free_ptr',
     'typed refcount lock-free query must delegate to pointer-sized runtime truth');
+  CheckNotContains(LTypesRefCountLockFreeSection, 'Result := True',
+    'typed refcount lock-free query must not hardcode a guaranteed-true result');
   CheckContains(LTypesBoolLockFreeSection, 'atomic_is_lock_free_32',
     'typed bool lock-free query must delegate to Int32 runtime truth');
   CheckNotContains(LTypesBoolLockFreeSection, 'Result := True',
@@ -1198,6 +1215,25 @@ begin
     'TAtomicRefCount must not expose FetchSub');
   CheckNotContains(LRefCountTypeSection, 'function GetMut',
     'TAtomicRefCount must not expose GetMut');
+  CheckContains(LRefCountIncSection, 'cannot resurrect zero refcount',
+    'TAtomicRefCount.Inc must reject zero-state resurrection');
+  CheckContains(LRefCountIncSection,
+    '_refcount_compare_exchange_strong(FValue, LCurrent, LNew, mo_relaxed, mo_relaxed)',
+    'TAtomicRefCount.Inc must keep relaxed success/failure orders');
+  CheckContains(LRefCountTryIncSection, 'ANewValue := 0;',
+    'TAtomicRefCount.TryInc must clear the out value on zero-state failure');
+  CheckContains(LRefCountTryIncSection, 'Exit(False);',
+    'TAtomicRefCount.TryInc must return False when the refcount is already zero');
+  CheckContains(LRefCountTryIncSection,
+    '_refcount_compare_exchange_strong(FValue, LCurrent, LNew, mo_acquire, mo_relaxed)',
+    'TAtomicRefCount.TryInc must publish acquire semantics on successful resurrection-free increments');
+  CheckContains(LRefCountDecSection,
+    '_refcount_compare_exchange_strong(FValue, LCurrent, LNew, mo_release, mo_relaxed)',
+    'TAtomicRefCount.Dec must publish release semantics on decrement');
+  CheckContains(LRefCountDecSection, 'if LNew = 0 then',
+    'TAtomicRefCount.Dec must special-case the final drop');
+  CheckContains(LRefCountDecSection, 'atomic_thread_fence(mo_acquire);',
+    'TAtomicRefCount.Dec must issue an acquire fence on the final drop');
   CheckContains(LLoad32SeqCstSection, '_atomic_seq_cst_load_32_x86',
     'x86/x86_64 seq_cst 32-bit load must use a dedicated locked/fenced helper');
   CheckContains(LLoad64SeqCstSection, '_atomic_seq_cst_load_64_x86',
@@ -2357,12 +2393,16 @@ var
   LRaised: Boolean;
 begin
   LRef := TAtomicRefCount.Create(1);
+  Check(TAtomicRefCount.is_lock_free = atomic_is_lock_free_ptr,
+    'TAtomicRefCount lock-free surface must match pointer-sized runtime truth');
   CheckEqual(Int64(1), Int64(LRef.Load()));
   CheckEqual(Int64(2), Int64(LRef.Inc()));
   CheckEqual(Int64(2), Int64(LRef.Load()));
   Check(LRef.TryInc(LNewValue), 'TryInc should succeed from non-zero refcount');
   CheckEqual(Int64(3), Int64(LNewValue));
   CheckEqual(Int64(3), Int64(LRef.Load()));
+  CheckEqual(Int64(3), Int64(LRef.IntoInner),
+    'IntoInner should expose the current refcount');
   CheckEqual(Int64(2), Int64(LRef.Dec()));
   CheckEqual(Int64(1), Int64(LRef.Dec()));
   CheckEqual(Int64(0), Int64(LRef.Dec()));
@@ -2386,7 +2426,10 @@ begin
   Check(LRaised, 'Inc on zero refcount must raise EInvalidOperationError');
 
   LRef := TAtomicRefCount.Create(0);
+  LNewValue := 1234;
   Check(not LRef.TryInc(LNewValue), 'TryInc should fail from zero refcount');
+  CheckEqual(Int64(0), Int64(LNewValue),
+    'TryInc zero-state failure should clear the out value to 0');
   CheckEqual(Int64(0), Int64(LRef.Load()));
 
   LRef := TAtomicRefCount.Create(High(PtrUInt));
