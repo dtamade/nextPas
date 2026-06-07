@@ -630,6 +630,35 @@ begin
     'AsyncWrite must not remain a generic unsupported stub');
 end;
 
+procedure TestIocpDispatchSingleFireOwnershipContract;
+var
+  LIocp: string;
+  LDispatchBody: string;
+begin
+  LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
+  LDispatchBody := ExtractBetween(LIocp, 'function iocpdispatchcompletion',
+    'class function tiocpreactor.create');
+
+  CheckContains(LDispatchBody, 'lcallback := lop^.callback;',
+    'IOCP dispatch must copy callback before detaching the pending op');
+  CheckContains(LDispatchBody, 'luserdata := lop^.userdata;',
+    'IOCP dispatch must copy userdata before detaching the pending op');
+  CheckContains(LDispatchBody, 'lcontext := lop^.context;',
+    'IOCP dispatch must copy context before detaching the pending op');
+  CheckContains(LDispatchBody, 'iocpunlinkop(areactor, lop);',
+    'IOCP dispatch must detach the completed op before user callback re-entry');
+  CheckBefore(LDispatchBody, 'lcallback := lop^.callback;',
+    'iocpunlinkop(areactor, lop);',
+    'IOCP dispatch must copy callback ownership before detaching the op');
+  CheckBefore(LDispatchBody, 'iocpunlinkop(areactor, lop);',
+    'lcallback(luserdata, lresult, lcontext);',
+    'IOCP dispatch must detach the op before callback dispatch');
+  CheckContains(LDispatchBody, 'lcallback(luserdata, lresult, lcontext);',
+    'IOCP dispatch must use local callback state after detaching');
+  CheckAbsent(LDispatchBody, 'lop^.callback(lop^.userdata, lresult, lop^.context);',
+    'IOCP dispatch must not dispatch from the pending owner record');
+end;
+
 procedure TestPollerWindowsHandleWidthContract;
 var
   LIocp, LPoller, LAsyncLoop: string;
@@ -838,6 +867,8 @@ begin
     @TestIocpUnsupportedAsyncOwnershipContract);
   T.Run('IOCP pending operation ownership contract',
     @TestIocpPendingOperationOwnershipContract);
+  T.Run('IOCP dispatch single-fire ownership contract',
+    @TestIocpDispatchSingleFireOwnershipContract);
   T.Run('Windows handle width contract', @TestPollerWindowsHandleWidthContract);
   T.Run('Windows forced compile async file surface contract',
     @TestWindowsForcedCompileAsyncFileSurfaceContract);

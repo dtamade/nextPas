@@ -308,6 +308,9 @@ function IocpDispatchCompletion(var AReactor: TIocpReactor; ABytes: DWORD;
   ASucceeded: Boolean; AOverlapped: LPOVERLAPPED): Boolean;
 var
   LOp: PIocpPendingOp;
+  LCallback: TIoCompletion;
+  LUserData: UInt64;
+  LContext: Pointer;
   LResult: Int32;
 begin
   if AOverlapped = nil then
@@ -319,11 +322,18 @@ begin
   else
     LResult := -Int32(GetLastError);
 
+  LCallback := LOp^.Callback;
+  LUserData := LOp^.UserData;
+  LContext := LOp^.Context;
+  IocpUnlinkOp(AReactor, LOp);
+  LOp^.Callback := nil;
+  LOp^.Context := nil;
+  LOp^.Next := nil;
   try
-    if Assigned(LOp^.Callback) then
-      LOp^.Callback(LOp^.UserData, LResult, LOp^.Context);
+    if Assigned(LCallback) then
+      LCallback(LUserData, LResult, LContext);
   finally
-    IocpFreeOp(AReactor, LOp);
+    Dispose(LOp);
   end;
   Result := True;
 end;
