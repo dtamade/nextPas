@@ -10,38 +10,57 @@ esac
 SCRIPT_DIR=$(CDPATH= cd -- "${SCRIPT_PATH%/*}" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 CI_WORKFLOW="$REPO_ROOT/.github/workflows/ci.yml"
+CORE_CI_WORKFLOW="$REPO_ROOT/.github/workflows/core-ci.yml"
 
 require_pattern() {
-  pattern="$1"
-  description="$2"
+  file="$1"
+  pattern="$2"
+  description="$3"
 
-  if ! grep -Eq "$pattern" "$CI_WORKFLOW"; then
+  if ! grep -Eq "$pattern" "$file"; then
     printf 'missing CI workflow contract: %s\n' "$description" >&2
     exit 1
   fi
 }
 
 reject_pattern() {
-  pattern="$1"
-  description="$2"
+  file="$1"
+  pattern="$2"
+  description="$3"
 
-  if grep -Eq "$pattern" "$CI_WORKFLOW"; then
+  if grep -Eq "$pattern" "$file"; then
     printf 'forbidden CI workflow contract: %s\n' "$description" >&2
     exit 1
   fi
 }
 
-first_line_number() {
-  pattern="$1"
-  grep -nE "$pattern" "$CI_WORKFLOW" | head -n 1 | cut -d: -f1
+line_number() {
+  file="$1"
+  pattern="$2"
+
+  grep -nE "$pattern" "$file" | head -n 1 | cut -d: -f1
 }
 
-require_pattern '^[[:space:]]+run: make test-tooling$' 'root tooling gate'
-require_pattern '^[[:space:]]+run: make verify$' 'root verify gate'
-reject_pattern '^[[:space:]]+run: ./build/verify_local[.]sh$' 'direct verify_local bypasses Makefile hygiene'
+require_workflow_self_path() {
+  file="$1"
+  workflow_path="$2"
+  description="$3"
 
-tooling_line=$(first_line_number '^[[:space:]]+run: make test-tooling$')
-verify_line=$(first_line_number '^[[:space:]]+run: make verify$')
+  require_pattern "$file" "paths:.*['\"]$workflow_path['\"]|['\"]$workflow_path['\"]" "$description"
+}
+
+root_ci_line_number() {
+  pattern="$1"
+  line_number "$CI_WORKFLOW" "$pattern"
+}
+
+require_pattern "$CI_WORKFLOW" '^[[:space:]]+run: make test-tooling$' 'root tooling gate'
+require_pattern "$CI_WORKFLOW" '^[[:space:]]+run: make verify$' 'root verify gate'
+reject_pattern "$CI_WORKFLOW" '^[[:space:]]+run: ./build/verify_local[.]sh$' 'direct verify_local bypasses Makefile hygiene'
+require_workflow_self_path "$CORE_CI_WORKFLOW" '.github/workflows/core-ci.yml' 'core CI self-trigger path'
+
+tooling_line=$(root_ci_line_number '^[[:space:]]+run: make test-tooling$')
+verify_line=$(root_ci_line_number '^[[:space:]]+run: make verify$')
 
 if [ "$tooling_line" -ge "$verify_line" ]; then
   printf 'CI workflow contract failed: make test-tooling must run before make verify\n' >&2
