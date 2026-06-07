@@ -32,6 +32,7 @@ Root facade live surface:
 | --- | --- | --- |
 | `NEXTPAS_SYSTEM_NAME` | `nextpas.core.system` | root module identity only. |
 | `MAX_SIZE_INT`, `MAX_SIZE_UINT`, `MIN_SIZE_INT`, `SIZE_PTR`, `SIZE_8`, `SIZE_16`, `SIZE_32`, `SIZE_64` | `nextpas.core.base` | mirrored compile-time constants; no new sizing policy. |
+| `SizeInt`, `SizeUInt`, `PtrInt`, `PtrUInt`, `NativeInt`, `NativeUInt` | compiler `System` | ABI carrier aliases; no new target sizing policy or layout promise beyond compiler truth. |
 | `TBytes`, `TByteSpan`, `THashCode` | `nextpas.core.base` | carrier aliases for RTL-root consumers; base remains owner. |
 | `Exception`, `ExceptClass`, `EConvertError`, `EAssertionFailed`, `ENextPasError`, `TErrorCategory` | `nextpas.core.exception` | canonical exception aliases; no shadow taxonomy. |
 | `EArgumentError`, `ETimeoutError`, `EIOError`, `EOutOfMemoryError` and the other `nextpas.core.errors` classes / `ec*` constants | `nextpas.core.errors` public facade; canonical definitions remain in `nextpas.core.exception` | public taxonomy aliases; categories stay canonical. |

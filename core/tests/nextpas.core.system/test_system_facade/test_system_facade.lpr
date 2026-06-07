@@ -92,6 +92,49 @@ begin
     'system THashCode should be assignable to base THashCode');
 end;
 
+procedure TestSystemAbiAliasesMirrorCompilerTruth;
+var
+  LSystemSizeInt: nextpas.core.system.SizeInt;
+  LSystemSizeUInt: nextpas.core.system.SizeUInt;
+  LSystemPtrInt: nextpas.core.system.PtrInt;
+  LSystemPtrUInt: nextpas.core.system.PtrUInt;
+  LSystemNativeInt: nextpas.core.system.NativeInt;
+  LSystemNativeUInt: nextpas.core.system.NativeUInt;
+  LCompilerSizeInt: System.SizeInt;
+  LCompilerSizeUInt: System.SizeUInt;
+  LCompilerPtrInt: System.PtrInt;
+  LCompilerPtrUInt: System.PtrUInt;
+  LCompilerNativeInt: System.NativeInt;
+  LCompilerNativeUInt: System.NativeUInt;
+begin
+  LSystemSizeInt := -42;
+  LSystemSizeUInt := 42;
+  LSystemPtrInt := -21;
+  LSystemPtrUInt := 21;
+  LSystemNativeInt := -7;
+  LSystemNativeUInt := 7;
+
+  LCompilerSizeInt := LSystemSizeInt;
+  LCompilerSizeUInt := LSystemSizeUInt;
+  LCompilerPtrInt := LSystemPtrInt;
+  LCompilerPtrUInt := LSystemPtrUInt;
+  LCompilerNativeInt := LSystemNativeInt;
+  LCompilerNativeUInt := LSystemNativeUInt;
+
+  CheckEqual(Int64(-42), Int64(LCompilerSizeInt),
+    'system SizeInt should mirror compiler/System SizeInt');
+  CheckEqual(Int64(42), Int64(LCompilerSizeUInt),
+    'system SizeUInt should mirror compiler/System SizeUInt');
+  CheckEqual(Int64(-21), Int64(LCompilerPtrInt),
+    'system PtrInt should mirror compiler/System PtrInt');
+  CheckEqual(Int64(21), Int64(LCompilerPtrUInt),
+    'system PtrUInt should mirror compiler/System PtrUInt');
+  CheckEqual(Int64(-7), Int64(LCompilerNativeInt),
+    'system NativeInt should mirror compiler/System NativeInt');
+  CheckEqual(Int64(7), Int64(LCompilerNativeUInt),
+    'system NativeUInt should mirror compiler/System NativeUInt');
+end;
+
 function TSystemFacadeProbe.Value: Integer;
 begin
   Result := 42;
@@ -579,6 +622,7 @@ begin
   T := TTestRunner.Create('nextpas.core.system facade');
   T.Run('system constants mirror base compile-truth', @TestSystemConstantsMirrorBaseCompileTruth);
   T.Run('system base carrier aliases mirror base compile-truth', @TestSystemBaseCarrierAliasesMirrorBaseCompileTruth);
+  T.Run('system ABI aliases mirror compiler truth', @TestSystemAbiAliasesMirrorCompilerTruth);
   T.Run('base and system byte aliases coexist', @TestBaseAndSystemByteAliasesCoexist);
   T.Run('system memory guards delegate to base contract', @TestSystemMemoryGuardsDelegateToBaseContract);
   T.Run('copy and compare facade delegates to base utils', @TestCopyAndCompareFacadeDelegatesToBaseUtils);

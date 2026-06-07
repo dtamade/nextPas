@@ -165,6 +165,12 @@ const SIZE_8
 const SIZE_16
 const SIZE_32
 const SIZE_64
+type SizeInt
+type SizeUInt
+type PtrInt
+type PtrUInt
+type NativeInt
+type NativeUInt
 type TBytes
 type TByteSpan
 type THashCode
@@ -579,6 +585,12 @@ require_token "src/nextpas.core.system.pas" "SIZE_8 = nextpas.core.base.SIZE_8;"
 require_token "src/nextpas.core.system.pas" "SIZE_16 = nextpas.core.base.SIZE_16;"
 require_token "src/nextpas.core.system.pas" "SIZE_32 = nextpas.core.base.SIZE_32;"
 require_token "src/nextpas.core.system.pas" "SIZE_64 = nextpas.core.base.SIZE_64;"
+require_token "src/nextpas.core.system.pas" "SizeInt = System.SizeInt;"
+require_token "src/nextpas.core.system.pas" "SizeUInt = System.SizeUInt;"
+require_token "src/nextpas.core.system.pas" "PtrInt = System.PtrInt;"
+require_token "src/nextpas.core.system.pas" "PtrUInt = System.PtrUInt;"
+require_token "src/nextpas.core.system.pas" "NativeInt = System.NativeInt;"
+require_token "src/nextpas.core.system.pas" "NativeUInt = System.NativeUInt;"
 require_token "src/nextpas.core.system.pas" "TBytes = nextpas.core.base.TBytes;"
 require_token "src/nextpas.core.system.pas" "TByteSpan = nextpas.core.base.TByteSpan;"
 require_token "src/nextpas.core.system.pas" "THashCode = nextpas.core.base.THashCode;"

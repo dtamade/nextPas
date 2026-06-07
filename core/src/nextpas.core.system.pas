@@ -25,6 +25,13 @@ const
   SIZE_64 = nextpas.core.base.SIZE_64;
 
 type
+  SizeInt = System.SizeInt;
+  SizeUInt = System.SizeUInt;
+  PtrInt = System.PtrInt;
+  PtrUInt = System.PtrUInt;
+  NativeInt = System.NativeInt;
+  NativeUInt = System.NativeUInt;
+
   TBytes = nextpas.core.base.TBytes;
   TByteSpan = nextpas.core.base.TByteSpan;
   THashCode = nextpas.core.base.THashCode;

@@ -21,7 +21,7 @@ ownership status so future slices can expand the module without turning it into 
 | `Halt` / exit code semantics | `future compiler/runtime only` | `np.system.halt`; no public facade until runtime behavior is testable. |
 | Unit initialization/finalization order | `future compiler/runtime only` | Compiler owns `UnitGraph`; runtime executes `np.system.unit_init` / `np.system.unit_fini`. |
 | Compiler intrinsic names | `future compiler/runtime only` | Intrinsic contract names stay explicit; backend must not invent private helper strings. |
-| Pointer/integer/ABI truth | `system-owned` | Minimal constants can be surfaced from `nextpas.core.base`; host/target ABI remains platform-owned. |
+| Pointer/integer/ABI truth | `system-owned` | Minimal constants are surfaced from `nextpas.core.base`; `SizeInt`, `SizeUInt`, `PtrInt`, `PtrUInt`, `NativeInt` and `NativeUInt` alias compiler `System` truth. Host/target ABI remains platform-owned. |
 | `TObject`, constructor, destructor, `Free` | `future compiler/runtime only` | Source-backed System truth already exists in compiler/runtime docs; core facade does not re-declare it yet. |
 | `TBytes` and basic byte containers | `system facade delegating to owner` | Delegates to `nextpas.core.base.TBytes`. |
 | Memory primitives: fill/copy/compare | `system facade delegating to owner` | Delegates to `nextpas.core.base.utils`; heap ownership stays with `nextpas.core.mem`. |
