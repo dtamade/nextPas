@@ -118,7 +118,8 @@ Trig helpers:
 
 `Power` preserves negative-zero sign only for odd integer exponents: positive odd exponents return
 `-0`, and negative odd exponents return negative infinity. Non-odd zero-base exponents follow the
-positive-zero / positive-infinity zero-base behavior.
+positive-zero / positive-infinity zero-base behavior. Except for exponent `0`, a NaN exponent takes
+priority over zero-base handling, so `0^NaN` and `-0^NaN` return NaN.
 
 Most scalar and trig helpers have both `Single` and `Double` overloads. Integer helper overloads are
 limited to the signed and unsigned sizes declared in the source interface.

@@ -578,6 +578,16 @@ REQUIRED_SCALAR_FLOAT_COMPARE_DOC_TRUTH = (
         "`FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.",
     ),
 )
+REQUIRED_TRIG_POWER_DOC_TRUTH = (
+    (
+        "docs/math/API.md",
+        "Except for exponent `0`, a NaN exponent takes priority over zero-base handling, so `0^NaN` and `-0^NaN` return NaN.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "zero-base NaN-exponent propagation",
+    ),
+)
 REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
     RequiredCoreMakeTarget(
         target="core-math-api-surface-smoke",
@@ -3091,6 +3101,15 @@ def scan_required_scalar_float_compare_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_trig_power_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_TRIG_POWER_DOC_TRUTH,
+        "missing-required-trig-power-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def build_report(root: Path) -> Report:
     root = root.resolve()
     findings: list[Finding] = []
@@ -3118,6 +3137,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_scalar_ieee_doc_truth(root))
     findings.extend(scan_required_scalar_min_max_doc_truth(root))
     findings.extend(scan_required_scalar_float_compare_doc_truth(root))
+    findings.extend(scan_required_trig_power_doc_truth(root))
 
     source_files = discover_files(root, MATH_SOURCE_GLOBS)
     math_ffi = root / "src/nextpas.core.math.ffi.pas"

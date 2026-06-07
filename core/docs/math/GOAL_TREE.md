@@ -31,8 +31,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   `Single` fail-fast parity for the conversion-boundary message families, `GCD` / `LCM`,
   `Abs(Low(...))`, `Hypot(+Inf,+Inf)`, trig NaN/out-of-domain/double-infinity cases plus direct
   `Log2` / `Log10` coverage, selected missing `Single`-path trig parity, and `Power`
-  negative-base / zero-base edge semantics including negative-zero odd-exponent sign preservation,
-  and `SimdLnF32(NaN)`.
+  negative-base / zero-base edge semantics including negative-zero odd-exponent sign preservation
+  and zero-base NaN-exponent propagation, and `SimdLnF32(NaN)`.
 - `Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.
 - `Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.
 - `FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.

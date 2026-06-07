@@ -262,6 +262,8 @@ var
   LExponent: Int64;
   LResult: Double;
 begin
+  if DoubleIsNaN(AExponent) then
+    Exit(DoubleQuietNaN);
   if AExponent = 0.0 then
     Exit(1.0);
   if ABase = 0.0 then

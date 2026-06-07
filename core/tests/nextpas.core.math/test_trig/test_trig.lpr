@@ -275,6 +275,14 @@ begin
     'Power zero negative exponent returns +Inf');
   Check(IsSinglePositiveInfinity(Power(Single(0.0), Single(-1.0))),
     'Power Single zero negative exponent returns +Inf');
+  Check(IsDoubleNaN(Power(0.0, DoubleNaN)),
+    'Power zero NaN exponent returns NaN');
+  Check(IsSingleNaN(Power(Single(0.0), SingleNaN)),
+    'Power Single zero NaN exponent returns NaN');
+  Check(IsDoubleNaN(Power(DoubleNegativeZero, DoubleNaN)),
+    'Power negative zero NaN exponent returns NaN');
+  Check(IsSingleNaN(Power(SingleNegativeZero, SingleNaN)),
+    'Power Single negative zero NaN exponent returns NaN');
   Check(IsDoubleNegativeZero(Power(DoubleNegativeZero, 3.0)),
     'Power negative zero odd positive exponent returns -0');
   Check(IsSingleNegativeZero(Power(SingleNegativeZero, Single(3.0))),
