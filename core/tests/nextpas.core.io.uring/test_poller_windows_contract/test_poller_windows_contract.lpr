@@ -659,6 +659,36 @@ begin
     'IOCP dispatch must not dispatch from the pending owner record');
 end;
 
+procedure TestIocpAssociatedHandleOwnershipContract;
+var
+  LIocp: string;
+  LEnsureBody: string;
+begin
+  LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
+  LEnsureBody := ExtractBetween(LIocp, 'function iocpensureassociatedhandle',
+    'procedure iocpsetoffset');
+
+  CheckContains(LIocp, 'piocpassociatedhandle',
+    'IOCP reactor must track host handle association metadata');
+  CheckContains(LIocp, 'iocpallocassociatedhandle',
+    'IOCP association metadata must have an explicit owner allocation seam');
+  CheckContains(LIocp, 'iocppushassociatedhandle',
+    'IOCP association metadata must only be linked after host association succeeds');
+  CheckContains(LEnsureBody, 'lnode := iocpallocassociatedhandle(ahandle);',
+    'IOCP ensure must allocate association metadata before mutating host association state');
+  CheckBefore(LEnsureBody, 'lnode := iocpallocassociatedhandle(ahandle);',
+    'createiocompletionport(ahandle, handle(areactor.fport), 0,',
+    'IOCP ensure must own releasable metadata before CreateIoCompletionPort');
+  CheckContains(LEnsureBody, 'dispose(lnode);',
+    'IOCP ensure must release preallocated metadata when host association fails');
+  CheckBefore(LEnsureBody, 'createiocompletionport(ahandle, handle(areactor.fport), 0,',
+    'dispose(lnode);',
+    'IOCP ensure must release metadata on CreateIoCompletionPort failure');
+  CheckBefore(LEnsureBody, 'createiocompletionport(ahandle, handle(areactor.fport), 0,',
+    'iocppushassociatedhandle(areactor, lnode);',
+    'IOCP ensure must link metadata only after CreateIoCompletionPort succeeds');
+end;
+
 procedure TestPollerWindowsHandleWidthContract;
 var
   LIocp, LPoller, LAsyncLoop: string;
@@ -869,6 +899,8 @@ begin
     @TestIocpPendingOperationOwnershipContract);
   T.Run('IOCP dispatch single-fire ownership contract',
     @TestIocpDispatchSingleFireOwnershipContract);
+  T.Run('IOCP associated handle ownership contract',
+    @TestIocpAssociatedHandleOwnershipContract);
   T.Run('Windows handle width contract', @TestPollerWindowsHandleWidthContract);
   T.Run('Windows forced compile async file surface contract',
     @TestWindowsForcedCompileAsyncFileSurfaceContract);

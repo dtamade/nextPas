@@ -197,15 +197,20 @@ begin
   Result := False;
 end;
 
-procedure IocpRememberAssociatedHandle(var AReactor: TIocpReactor;
-  AHandle: HANDLE);
-var
-  LNode: PIocpAssociatedHandle;
+function IocpAllocAssociatedHandle(AHandle: HANDLE): PIocpAssociatedHandle;
 begin
-  New(LNode);
-  LNode^.Handle := AHandle;
-  LNode^.Next := PIocpAssociatedHandle(AReactor.FAssociatedHead);
-  AReactor.FAssociatedHead := LNode;
+  New(Result);
+  Result^.Handle := AHandle;
+  Result^.Next := nil;
+end;
+
+procedure IocpPushAssociatedHandle(var AReactor: TIocpReactor;
+  ANode: PIocpAssociatedHandle);
+begin
+  if ANode = nil then
+    Exit;
+  ANode^.Next := PIocpAssociatedHandle(AReactor.FAssociatedHead);
+  AReactor.FAssociatedHead := ANode;
 end;
 
 procedure IocpReleaseAssociatedHandles(var AReactor: TIocpReactor);
@@ -224,6 +229,8 @@ end;
 
 function IocpEnsureAssociatedHandle(var AReactor: TIocpReactor;
   AHandle: HANDLE; out AError: DWORD): Boolean;
+var
+  LNode: PIocpAssociatedHandle;
 begin
   if (AReactor.FPort = 0) or (AHandle = nil) or
      (AHandle = HANDLE(PtrInt(INVALID_HANDLE_VALUE))) then
@@ -235,14 +242,16 @@ begin
   if IocpHasAssociatedHandle(AReactor, AHandle) then
     Exit(True);
 
+  LNode := IocpAllocAssociatedHandle(AHandle);
   if CreateIoCompletionPort(AHandle, HANDLE(AReactor.FPort), 0,
      AReactor.FMaxEvents) = nil then
   begin
     AError := GetLastError;
+    Dispose(LNode);
     Exit(False);
   end;
 
-  IocpRememberAssociatedHandle(AReactor, AHandle);
+  IocpPushAssociatedHandle(AReactor, LNode);
   Result := True;
 end;
 
