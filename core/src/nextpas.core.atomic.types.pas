@@ -548,6 +548,84 @@ begin
     Result := AOld - PtrUInt(1);
 end;
 
+function _int32_from_bits(const AValue: UInt32): Int32; inline;
+var
+  LBits: UInt32;
+begin
+  LBits := AValue;
+  Result := PInt32(@LBits)^;
+end;
+
+function _int32_to_bits(const AValue: Int32): UInt32; inline;
+var
+  LValue: Int32;
+begin
+  LValue := AValue;
+  Result := PUInt32(@LValue)^;
+end;
+
+function _int64_from_bits(const AValue: UInt64): Int64; inline;
+var
+  LBits: UInt64;
+begin
+  LBits := AValue;
+  Result := PInt64(@LBits)^;
+end;
+
+function _int64_to_bits(const AValue: Int64): UInt64; inline;
+var
+  LValue: Int64;
+begin
+  LValue := AValue;
+  Result := PUInt64(@LValue)^;
+end;
+
+function _ptrint_from_bits(const AValue: PtrUInt): PtrInt; inline;
+var
+  LBits: PtrUInt;
+begin
+  LBits := AValue;
+  Result := PPtrInt(@LBits)^;
+end;
+
+function _ptrint_to_bits(const AValue: PtrInt): PtrUInt; inline;
+var
+  LValue: PtrInt;
+begin
+  LValue := AValue;
+  Result := PPtrUInt(@LValue)^;
+end;
+
+function _int32_inc_result(const AOld: Int32): Int32; inline;
+begin
+  Result := _int32_from_bits(_uint32_inc_result(_int32_to_bits(AOld)));
+end;
+
+function _int32_dec_result(const AOld: Int32): Int32; inline;
+begin
+  Result := _int32_from_bits(_uint32_dec_result(_int32_to_bits(AOld)));
+end;
+
+function _int64_inc_result(const AOld: Int64): Int64; inline;
+begin
+  Result := _int64_from_bits(_uint64_inc_result(_int64_to_bits(AOld)));
+end;
+
+function _int64_dec_result(const AOld: Int64): Int64; inline;
+begin
+  Result := _int64_from_bits(_uint64_dec_result(_int64_to_bits(AOld)));
+end;
+
+function _ptrint_inc_result(const AOld: PtrInt): PtrInt; inline;
+begin
+  Result := _ptrint_from_bits(_ptruint_inc_result(_ptrint_to_bits(AOld)));
+end;
+
+function _ptrint_dec_result(const AOld: PtrInt): PtrInt; inline;
+begin
+  Result := _ptrint_from_bits(_ptruint_dec_result(_ptrint_to_bits(AOld)));
+end;
+
 function _refcount_load_relaxed(var AValue: PtrUInt): PtrUInt; inline;
 begin
   {$IF SIZEOF(PtrUInt) = 4}
@@ -655,12 +733,12 @@ end;
 
 function TAtomicInt32.Increment(AOrder: memory_order_t): Int32;
 begin
-  Result := FetchAdd(1, AOrder) + 1;
+  Result := _int32_inc_result(FetchAdd(1, AOrder));
 end;
 
 function TAtomicInt32.Decrement(AOrder: memory_order_t): Int32;
 begin
-  Result := FetchSub(1, AOrder) - 1;
+  Result := _int32_dec_result(FetchSub(1, AOrder));
 end;
 
 function TAtomicInt32.GetMut: PInt32;
@@ -844,12 +922,12 @@ end;
 
 function TAtomicInt64.Increment(AOrder: memory_order_t): Int64;
 begin
-  Result := FetchAdd(1, AOrder) + 1;
+  Result := _int64_inc_result(FetchAdd(1, AOrder));
 end;
 
 function TAtomicInt64.Decrement(AOrder: memory_order_t): Int64;
 begin
-  Result := FetchSub(1, AOrder) - 1;
+  Result := _int64_dec_result(FetchSub(1, AOrder));
 end;
 
 function TAtomicInt64.GetMut: PInt64;
@@ -1233,12 +1311,12 @@ end;
 
 function TAtomicISize.Increment(AOrder: memory_order_t): PtrInt;
 begin
-  Result := FetchAdd(1, AOrder) + 1;
+  Result := _ptrint_inc_result(FetchAdd(1, AOrder));
 end;
 
 function TAtomicISize.Decrement(AOrder: memory_order_t): PtrInt;
 begin
-  Result := FetchSub(1, AOrder) - 1;
+  Result := _ptrint_dec_result(FetchSub(1, AOrder));
 end;
 
 function TAtomicISize.GetMut: PPtrInt;

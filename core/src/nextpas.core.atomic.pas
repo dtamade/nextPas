@@ -752,6 +752,84 @@ begin
     Result := AOld - PtrUInt(1);
 end;
 
+function _int32_from_bits(const AValue: UInt32): Int32; inline;
+var
+  LBits: UInt32;
+begin
+  LBits := AValue;
+  Result := PInt32(@LBits)^;
+end;
+
+function _int32_to_bits(const AValue: Int32): UInt32; inline;
+var
+  LValue: Int32;
+begin
+  LValue := AValue;
+  Result := PUInt32(@LValue)^;
+end;
+
+function _int64_from_bits(const AValue: UInt64): Int64; inline;
+var
+  LBits: UInt64;
+begin
+  LBits := AValue;
+  Result := PInt64(@LBits)^;
+end;
+
+function _int64_to_bits(const AValue: Int64): UInt64; inline;
+var
+  LValue: Int64;
+begin
+  LValue := AValue;
+  Result := PUInt64(@LValue)^;
+end;
+
+function _ptrint_from_bits(const AValue: PtrUInt): PtrInt; inline;
+var
+  LBits: PtrUInt;
+begin
+  LBits := AValue;
+  Result := PPtrInt(@LBits)^;
+end;
+
+function _ptrint_to_bits(const AValue: PtrInt): PtrUInt; inline;
+var
+  LValue: PtrInt;
+begin
+  LValue := AValue;
+  Result := PPtrUInt(@LValue)^;
+end;
+
+function _int32_inc_result(const AOld: Int32): Int32; inline;
+begin
+  Result := _int32_from_bits(_uint32_inc_result(_int32_to_bits(AOld)));
+end;
+
+function _int32_dec_result(const AOld: Int32): Int32; inline;
+begin
+  Result := _int32_from_bits(_uint32_dec_result(_int32_to_bits(AOld)));
+end;
+
+function _int64_inc_result(const AOld: Int64): Int64; inline;
+begin
+  Result := _int64_from_bits(_uint64_inc_result(_int64_to_bits(AOld)));
+end;
+
+function _int64_dec_result(const AOld: Int64): Int64; inline;
+begin
+  Result := _int64_from_bits(_uint64_dec_result(_int64_to_bits(AOld)));
+end;
+
+function _ptrint_inc_result(const AOld: PtrInt): PtrInt; inline;
+begin
+  Result := _ptrint_from_bits(_ptruint_inc_result(_ptrint_to_bits(AOld)));
+end;
+
+function _ptrint_dec_result(const AOld: PtrInt): PtrInt; inline;
+begin
+  Result := _ptrint_from_bits(_ptruint_dec_result(_ptrint_to_bits(AOld)));
+end;
+
 function _uint32_neg_delta(const AValue: UInt32): UInt32; inline;
 begin
   if AValue = UInt32(0) then
@@ -774,6 +852,21 @@ begin
     Result := PtrUInt(0)
   else
     Result := PtrUInt(not AValue) + PtrUInt(1);
+end;
+
+function _int32_neg_delta(const AValue: Int32): Int32; inline;
+begin
+  Result := _int32_from_bits(_uint32_neg_delta(_int32_to_bits(AValue)));
+end;
+
+function _int64_neg_delta(const AValue: Int64): Int64; inline;
+begin
+  Result := _int64_from_bits(_uint64_neg_delta(_int64_to_bits(AValue)));
+end;
+
+function _ptrint_neg_delta(const AValue: PtrInt): PtrInt; inline;
+begin
+  Result := _ptrint_from_bits(_ptruint_neg_delta(_ptrint_to_bits(AValue)));
 end;
 
 function _int64_wrapping_add(const ALeft, ARight: Int64): Int64; inline;
@@ -1933,7 +2026,7 @@ end;
 function atomic_increment_64(var aObj: Int64): Int64;
 begin
   // Convenience API: seq_cst.
-  Result := atomic_fetch_add_64(aObj, 1, mo_seq_cst) + 1;
+  Result := _int64_inc_result(atomic_fetch_add_64(aObj, Int64(1), mo_seq_cst));
 end;
 
 function atomic_increment_64(var aObj: UInt64): UInt64;
@@ -2345,7 +2438,7 @@ end;
 function atomic_increment(var aObj: Int32): Int32;
 begin
   // Convenience API: seq_cst.
-  Result := atomic_fetch_add(aObj, 1, mo_seq_cst) + 1;
+  Result := _int32_inc_result(atomic_fetch_add(aObj, Int32(1), mo_seq_cst));
 end;
 
 function atomic_increment(var aObj: UInt32): UInt32;
@@ -2356,14 +2449,7 @@ end;
 {$IFDEF CPU64}
 function atomic_increment(var aObj: PtrInt): PtrInt;
 begin
-  {$PUSH}
-  {$WARN 4055 OFF}
-  {$IF SIZEOF(PtrInt) = 4}
-    Result := PtrInt(atomic_increment(PInt32(@aObj)^));
-  {$ELSE}
-    Result := PtrInt(atomic_increment_64(PInt64(@aObj)^));
-  {$ENDIF}
-  {$POP}
+  Result := _ptrint_inc_result(atomic_fetch_add(aObj, PtrInt(1), mo_seq_cst));
 end;
 
 function atomic_increment(var aObj: PtrUInt): PtrUInt;
@@ -2376,7 +2462,7 @@ end;
 function atomic_decrement_64(var aObj: Int64): Int64;
 begin
   // Convenience API: seq_cst.
-  Result := atomic_fetch_add_64(aObj, -1, mo_seq_cst) - 1;
+  Result := _int64_dec_result(atomic_fetch_sub_64(aObj, Int64(1), mo_seq_cst));
 end;
 
 function atomic_decrement_64(var aObj: UInt64): UInt64;
@@ -2388,7 +2474,7 @@ end;
 function atomic_decrement(var aObj: Int32): Int32;
 begin
   // Convenience API: seq_cst.
-  Result := atomic_fetch_add(aObj, -1, mo_seq_cst) - 1;
+  Result := _int32_dec_result(atomic_fetch_sub(aObj, Int32(1), mo_seq_cst));
 end;
 
 function atomic_decrement(var aObj: UInt32): UInt32;
@@ -2399,14 +2485,7 @@ end;
 {$IFDEF CPU64}
 function atomic_decrement(var aObj: PtrInt): PtrInt;
 begin
-  {$PUSH}
-  {$WARN 4055 OFF}
-  {$IF SIZEOF(PtrInt) = 4}
-    Result := PtrInt(atomic_decrement(PInt32(@aObj)^));
-  {$ELSE}
-    Result := PtrInt(atomic_decrement_64(PInt64(@aObj)^));
-  {$ENDIF}
-  {$POP}
+  Result := _ptrint_dec_result(atomic_fetch_sub(aObj, PtrInt(1), mo_seq_cst));
 end;
 
 function atomic_decrement(var aObj: PtrUInt): PtrUInt;
@@ -2479,7 +2558,7 @@ end;
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function atomic_fetch_sub_64(var aObj: Int64; aArg: Int64): Int64;
 begin
-  Result := atomic_fetch_add_64(aObj, -aArg);
+  Result := atomic_fetch_add_64(aObj, _int64_neg_delta(aArg));
 end;
 
 function atomic_fetch_sub_64(var aObj: UInt64; aArg: UInt64): UInt64;
@@ -2496,7 +2575,7 @@ end;
 
 function atomic_fetch_sub(var aObj: Int32; aArg: Int32): Int32;
 begin
-  Result := atomic_fetch_add(aObj, -aArg);
+  Result := atomic_fetch_add(aObj, _int32_neg_delta(aArg));
 end;
 
 function atomic_fetch_sub(var aObj: UInt32; aArg: UInt32): UInt32;
@@ -2513,11 +2592,7 @@ end;
 {$IFDEF CPU64}
 function atomic_fetch_sub(var aObj: PtrInt; aArg: PtrInt): PtrInt;
 begin
-  {$IF SIZEOF(PtrInt) = 4}
-    Result := PtrInt(atomic_fetch_sub(PInt32(@aObj)^, PInt32(@aArg)^));
-  {$ELSE}
-    Result := PtrInt(atomic_fetch_sub_64(PInt64(@aObj)^, PInt64(@aArg)^));
-  {$ENDIF}
+  Result := atomic_fetch_add(aObj, _ptrint_neg_delta(aArg));
 end;
 
 function atomic_fetch_sub(var aObj: PtrUInt; aArg: PtrUInt): PtrUInt;
@@ -2534,7 +2609,7 @@ end;
 
 function atomic_fetch_sub(var aObj: Pointer; aOffset: PtrInt): Pointer;
 begin
-  Result := atomic_fetch_add(aObj, -aOffset);
+  Result := atomic_fetch_add(aObj, _ptrint_neg_delta(aOffset));
 end;
 
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
@@ -2787,7 +2862,7 @@ end;
 // ✅ Phase 3: atomic_fetch_sub 带 memory_order 参数
 function atomic_fetch_sub(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32;
 begin
-  Result := atomic_fetch_add(aObj, -aArg, aOrder);
+  Result := atomic_fetch_add(aObj, _int32_neg_delta(aArg), aOrder);
 end;
 
 function atomic_fetch_sub(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32;
@@ -2804,11 +2879,7 @@ end;
 {$IFDEF CPU64}
 function atomic_fetch_sub(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t): PtrInt;
 begin
-  {$IF SIZEOF(PtrInt) = 4}
-    Result := PtrInt(atomic_fetch_sub(PInt32(@aObj)^, PInt32(@aArg)^, aOrder));
-  {$ELSE}
-    Result := PtrInt(atomic_fetch_sub_64(PInt64(@aObj)^, PInt64(@aArg)^, aOrder));
-  {$ENDIF}
+  Result := atomic_fetch_add(aObj, _ptrint_neg_delta(aArg), aOrder);
 end;
 
 function atomic_fetch_sub(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t): PtrUInt;
@@ -2826,7 +2897,7 @@ end;
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function atomic_fetch_sub_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;
 begin
-  Result := atomic_fetch_add_64(aObj, -aArg, aOrder);
+  Result := atomic_fetch_add_64(aObj, _int64_neg_delta(aArg), aOrder);
 end;
 
 function atomic_fetch_sub_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64;

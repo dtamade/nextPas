@@ -91,6 +91,38 @@ begin
   until False;
 end;
 
+function Int32FromBits(const AValue: UInt32): Int32;
+var
+  LBits: UInt32;
+begin
+  LBits := AValue;
+  Result := PInt32(@LBits)^;
+end;
+
+function Int64FromBits(const AValue: UInt64): Int64;
+var
+  LBits: UInt64;
+begin
+  LBits := AValue;
+  Result := PInt64(@LBits)^;
+end;
+
+function PtrIntFromBits(const AValue: PtrUInt): PtrInt;
+var
+  LBits: PtrUInt;
+begin
+  LBits := AValue;
+  Result := PPtrInt(@LBits)^;
+end;
+
+function PtrIntToBits(const AValue: PtrInt): PtrUInt;
+var
+  LBits: PtrInt;
+begin
+  LBits := AValue;
+  Result := PPtrUInt(@LBits)^;
+end;
+
 procedure CheckNaturalAlignment(const AAddress: PtrUInt; const AAlignment: PtrUInt;
   const AMessage: string);
 begin
@@ -318,14 +350,20 @@ var
   LTypesInt32LockFreeSection: string;
   LTypesUInt32LockFreeSection: string;
   LTypesInt32FetchSection: string;
+  LTypesInt32IncrementSection: string;
+  LTypesInt32DecrementSection: string;
   LTypesUInt32FetchSection: string;
   LTypesInt64LockFreeSection: string;
   LTypesUInt64LockFreeSection: string;
   LTypesInt64FetchSection: string;
+  LTypesInt64IncrementSection: string;
+  LTypesInt64DecrementSection: string;
   LTypesUInt64FetchSection: string;
   LTypesISizeLockFreeSection: string;
   LTypesUSizeLockFreeSection: string;
   LTypesISizeFetchSection: string;
+  LTypesISizeIncrementSection: string;
+  LTypesISizeDecrementSection: string;
   LTypesUSizeFetchSection: string;
   LTypesRefCountLockFreeSection: string;
   LTypesBoolLockFreeSection: string;
@@ -396,6 +434,7 @@ var
   LFetchNand64Section: string;
   LPointerFetchAddSection: string;
   LPointerFetchSubSection: string;
+  LSignedWrapContractSection: string;
   LDefaultFetchMax32Section: string;
   LDefaultFetchMin32Section: string;
   LDefaultFetchNand32Section: string;
@@ -468,6 +507,12 @@ begin
   LTypesInt32FetchSection := ExtractImplementationSection(LAtomicTypesSource,
     'function TAtomicInt32.FetchAdd(ADelta: Int32; AOrder: memory_order_t): Int32;',
     'function TAtomicInt32.Increment(AOrder: memory_order_t): Int32;');
+  LTypesInt32IncrementSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicInt32.Increment(AOrder: memory_order_t): Int32;',
+    'function TAtomicInt32.Decrement(AOrder: memory_order_t): Int32;');
+  LTypesInt32DecrementSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicInt32.Decrement(AOrder: memory_order_t): Int32;',
+    'function TAtomicInt32.GetMut: PInt32;');
   LTypesUInt32FetchSection := ExtractImplementationSection(LAtomicTypesSource,
     'function TAtomicUInt32.FetchAdd(ADelta: UInt32; AOrder: memory_order_t): UInt32;',
     'function TAtomicUInt32.Increment(AOrder: memory_order_t): UInt32;');
@@ -480,6 +525,12 @@ begin
   LTypesInt64FetchSection := ExtractImplementationSection(LAtomicTypesSource,
     'function TAtomicInt64.FetchAdd(ADelta: Int64; AOrder: memory_order_t): Int64;',
     'function TAtomicInt64.Increment(AOrder: memory_order_t): Int64;');
+  LTypesInt64IncrementSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicInt64.Increment(AOrder: memory_order_t): Int64;',
+    'function TAtomicInt64.Decrement(AOrder: memory_order_t): Int64;');
+  LTypesInt64DecrementSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicInt64.Decrement(AOrder: memory_order_t): Int64;',
+    'function TAtomicInt64.GetMut: PInt64;');
   LTypesUInt64FetchSection := ExtractImplementationSection(LAtomicTypesSource,
     'function TAtomicUInt64.FetchAdd(ADelta: UInt64; AOrder: memory_order_t): UInt64;',
     'function TAtomicUInt64.Increment(AOrder: memory_order_t): UInt64;');
@@ -492,6 +543,12 @@ begin
   LTypesISizeFetchSection := ExtractImplementationSection(LAtomicTypesSource,
     'function TAtomicISize.FetchAdd(ADelta: PtrInt; AOrder: memory_order_t): PtrInt;',
     'function TAtomicISize.Increment(AOrder: memory_order_t): PtrInt;');
+  LTypesISizeIncrementSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicISize.Increment(AOrder: memory_order_t): PtrInt;',
+    'function TAtomicISize.Decrement(AOrder: memory_order_t): PtrInt;');
+  LTypesISizeDecrementSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicISize.Decrement(AOrder: memory_order_t): PtrInt;',
+    'function TAtomicISize.GetMut: PPtrInt;');
   LTypesUSizeFetchSection := ExtractImplementationSection(LAtomicTypesSource,
     'function TAtomicUSize.FetchAdd(ADelta: PtrUInt; AOrder: memory_order_t): PtrUInt;',
     'function TAtomicUSize.Increment(AOrder: memory_order_t): PtrUInt;');
@@ -681,6 +738,9 @@ begin
   LInvalidOrderMatrixSection := ExtractSection(LAtomicTestSource,
     'procedure ' + 'TestAtomicInvalidMemoryOrderSurfaceMatrix;',
     'procedure ' + 'TestAtomicTypedCasConsumeContract;');
+  LSignedWrapContractSection := ExtractSection(LAtomicTestSource,
+    'procedure ' + 'TestAtomicSignedWrapContract;',
+    'procedure ' + 'TestAtomicBoolContract;');
   LAtomicFlagTestAndSetSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_flag_test_and_set(var aFlag: atomic_flag_t): Boolean;',
     'function atomic_flag_test(var aFlag: atomic_flag_t): Boolean;');
@@ -1411,18 +1471,74 @@ begin
     'root UInt32 fetch-sub contract must cover checked high-bit unsigned deltas');
   CheckContains(LAtomicTestSource, 'TAtomicUSize.FetchSub should accept high-bit unsigned deltas under overflow checks',
     'typed USize fetch-sub contract must cover checked high-bit unsigned deltas');
+  CheckContains(LAtomicTestSource, 'procedure TestAtomicSignedWrapContract;',
+    'typed signed wrap runtime contract must exist');
+  CheckContains(LSignedWrapContractSection,
+    'TAtomicInt32.Increment should wrap High(Int32) to Low(Int32)',
+    'typed Int32 signed wrap runtime contract must cover Increment');
+  CheckContains(LSignedWrapContractSection,
+    'TAtomicInt64.FetchSub should accept Low(Int64) deltas under overflow checks',
+    'typed Int64 signed wrap runtime contract must cover checked Low(Int64) deltas');
+  CheckContains(LSignedWrapContractSection,
+    'root atomic_fetch_add(Int32) should publish the modulo-2^32 signed result',
+    'root Int32 signed wrap runtime contract must cover FetchAdd publication');
+  CheckContains(LSignedWrapContractSection,
+    'root atomic_fetch_sub(Int32) no-order overload should accept Low(Int32) deltas under overflow checks',
+    'root Int32 no-order FetchSub contract must cover checked Low(Int32) deltas');
+  CheckContains(LSignedWrapContractSection,
+    'root atomic_fetch_add_64(Int64) should publish the modulo-2^64 signed result',
+    'root Int64 signed wrap runtime contract must cover FetchAdd publication');
+  CheckContains(LSignedWrapContractSection,
+    'root atomic_fetch_sub_64(Int64) no-order overload should accept Low(Int64) deltas under overflow checks',
+    'root Int64 no-order FetchSub contract must cover checked Low(Int64) deltas');
+  CheckContains(LSignedWrapContractSection,
+    'root atomic_fetch_sub(PtrInt) no-order overload should accept Low(PtrInt) deltas under overflow checks',
+    'root PtrInt no-order FetchSub contract must cover checked Low(PtrInt) deltas');
+  CheckContains(LSignedWrapContractSection,
+    'root atomic_fetch_sub(Pointer) should accept Low(PtrInt) offsets under overflow checks',
+    'root Pointer FetchSub contract must cover checked Low(PtrInt) offsets');
   CheckContains(LAtomicTypesSource, 'Result := _uint32_inc_result(FetchAdd(1, AOrder));',
     'typed UInt32 Increment must compute the returned wrap value without a second checked add');
   CheckContains(LAtomicTypesSource, 'Result := _uint64_inc_result(FetchAdd(1, AOrder));',
     'typed UInt64 Increment must compute the returned wrap value without a second checked add');
   CheckContains(LAtomicTypesSource, 'Result := _ptruint_inc_result(FetchAdd(1, AOrder));',
     'typed USize Increment must compute the returned wrap value without a second checked add');
+  CheckContains(LAtomicTypesSource, 'Result := _int32_inc_result(FetchAdd(1, AOrder));',
+    'typed Int32 Increment must compute the returned wrap value without a second checked add');
+  CheckContains(LAtomicTypesSource, 'Result := _int64_inc_result(FetchAdd(1, AOrder));',
+    'typed Int64 Increment must compute the returned wrap value without a second checked add');
+  CheckContains(LAtomicTypesSource, 'Result := _ptrint_inc_result(FetchAdd(1, AOrder));',
+    'typed ISize Increment must compute the returned wrap value without a second checked add');
+  CheckNotContains(LTypesInt32IncrementSection, 'FetchAdd(1, AOrder) + 1',
+    'typed Int32 Increment must not use checked signed addition for the returned wrap value');
+  CheckNotContains(LTypesInt64IncrementSection, 'FetchAdd(1, AOrder) + 1',
+    'typed Int64 Increment must not use checked signed addition for the returned wrap value');
+  CheckNotContains(LTypesISizeIncrementSection, 'FetchAdd(1, AOrder) + 1',
+    'typed ISize Increment must not use checked signed addition for the returned wrap value');
   CheckContains(LAtomicSource, 'LDelta := _uint32_neg_delta(aArg);',
     'root UInt32 FetchSub must compute unsigned subtraction delta without signed negation overflow');
   CheckContains(LAtomicSource, 'LDelta := _uint64_neg_delta(aArg);',
     'root UInt64 FetchSub must compute unsigned subtraction delta without signed negation overflow');
   CheckContains(LAtomicSource, 'LDelta := _ptruint_neg_delta(aArg);',
     'root USize FetchSub must compute unsigned subtraction delta without signed negation overflow');
+  CheckContains(LAtomicSource, 'atomic_fetch_add(aObj, _int32_neg_delta(aArg)',
+    'root Int32 FetchSub must compute signed subtraction delta without checked negation overflow');
+  CheckContains(LAtomicSource, 'atomic_fetch_add_64(aObj, _int64_neg_delta(aArg)',
+    'root Int64 FetchSub must compute signed subtraction delta without checked negation overflow');
+  CheckContains(LAtomicSource, 'atomic_fetch_add(aObj, _ptrint_neg_delta(aArg)',
+    'root PtrInt FetchSub must compute signed subtraction delta without checked negation overflow');
+  CheckContains(LAtomicSource, 'atomic_fetch_add(aObj, _ptrint_neg_delta(aOffset)',
+    'root Pointer FetchSub must compute pointer offset subtraction delta without checked negation overflow');
+  CheckContains(LAtomicSource, 'Result := _int32_inc_result(atomic_fetch_add(aObj, Int32(1), mo_seq_cst));',
+    'root Int32 Increment must compute the returned wrap value without a second checked add');
+  CheckContains(LAtomicSource, 'Result := _int64_dec_result(atomic_fetch_sub_64(aObj, Int64(1), mo_seq_cst));',
+    'root Int64 Decrement must compute the returned wrap value without a second checked subtract');
+  CheckNotContains(LAtomicSource, 'Result := atomic_fetch_add(aObj, -aArg',
+    'root signed FetchSub must not use checked signed negation');
+  CheckNotContains(LAtomicSource, 'Result := atomic_fetch_add_64(aObj, -aArg',
+    'root signed FetchSub64 must not use checked signed negation');
+  CheckNotContains(LAtomicSource, 'Result := atomic_fetch_add(aObj, -aOffset',
+    'root Pointer FetchSub must not use checked signed negation');
   CheckContains(LAtomicSource, 'aObj := _int64_wrapping_add(aObj, aArg);',
     'x86 64-bit fallback FetchAdd must use checked-safe wrapping addition');
   CheckContains(LAtomicTypesSource, 'Result := _uint32_dec_result(FetchSub(1, AOrder));',
@@ -1431,9 +1547,24 @@ begin
     'typed UInt64 Decrement must compute the returned wrap value without a second checked subtract');
   CheckContains(LAtomicTypesSource, 'Result := _ptruint_dec_result(FetchSub(1, AOrder));',
     'typed USize Decrement must compute the returned wrap value without a second checked subtract');
+  CheckContains(LAtomicTypesSource, 'Result := _int32_dec_result(FetchSub(1, AOrder));',
+    'typed Int32 Decrement must compute the returned wrap value without a second checked subtract');
+  CheckContains(LAtomicTypesSource, 'Result := _int64_dec_result(FetchSub(1, AOrder));',
+    'typed Int64 Decrement must compute the returned wrap value without a second checked subtract');
+  CheckContains(LAtomicTypesSource, 'Result := _ptrint_dec_result(FetchSub(1, AOrder));',
+    'typed ISize Decrement must compute the returned wrap value without a second checked subtract');
+  CheckNotContains(LTypesInt32DecrementSection, 'FetchSub(1, AOrder) - 1',
+    'typed Int32 Decrement must not use checked signed subtraction for the returned wrap value');
+  CheckNotContains(LTypesInt64DecrementSection, 'FetchSub(1, AOrder) - 1',
+    'typed Int64 Decrement must not use checked signed subtraction for the returned wrap value');
+  CheckNotContains(LTypesISizeDecrementSection, 'FetchSub(1, AOrder) - 1',
+    'typed ISize Decrement must not use checked signed subtraction for the returned wrap value');
   CheckContains(LAtomicTestSource,
     'T.Run(''typed atomic unsigned wrap contract'', @TestAtomicUnsignedWrapContract);',
     'typed unsigned wrap runtime contract must be registered');
+  CheckContains(LAtomicTestSource,
+    'T.Run(''typed atomic signed wrap contract'', @TestAtomicSignedWrapContract);',
+    'typed signed wrap runtime contract must be registered');
   CheckContains(LRunnerSection,
     '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}' + LineEnding +
     '  T.Run(''typed atomic int64/uint64 contract'', @TestAtomicInt64UInt64Contract);' + LineEnding +
@@ -1822,8 +1953,8 @@ begin
     'Result := Pointer(atomic_fetch_add_64(PInt64(@aObj)^, PInt64(@aOffset)^));',
     'pointer atomic_fetch_add 64-bit path must delegate through scalar fetch_add_64');
   CheckContains(LPointerFetchSubSection,
-    'Result := atomic_fetch_add(aObj, -aOffset);',
-    'pointer atomic_fetch_sub must reuse pointer atomic_fetch_add with a negative offset');
+    'Result := atomic_fetch_add(aObj, _ptrint_neg_delta(aOffset));',
+    'pointer atomic_fetch_sub must reuse pointer atomic_fetch_add with a checked-safe negative offset');
   CheckContains(LDefaultFetchMax32Section,
     'Result := atomic_fetch_max(aObj, aArg, mo_seq_cst);',
     'default atomic_fetch_max must use seq_cst');
@@ -2569,6 +2700,187 @@ begin
     'root atomic_fetch_sub_64(UInt64) should accept high-bit unsigned deltas under overflow checks');
   Check(LRootUInt64 = UInt64(0),
     'root atomic_fetch_sub_64(UInt64) should publish modulo-2^64 subtraction for high-bit deltas');
+  {$ENDIF}
+end;
+
+procedure TestAtomicSignedWrapContract;
+var
+  LAtomicInt32: TAtomicInt32;
+  LOldInt32: Int32;
+  LRootInt32: Int32;
+  LLowInt32: Int32;
+  LAtomicISize: TAtomicISize;
+  LOldISize: PtrInt;
+  LLowISize: PtrInt;
+  LRootPointer: Pointer;
+  LOldPointer: Pointer;
+  {$IFDEF CPU64}
+  LRootISize: PtrInt;
+  {$ENDIF}
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  LAtomicInt64: TAtomicInt64;
+  LOldInt64: Int64;
+  LRootInt64: Int64;
+  LLowInt64: Int64;
+  {$ENDIF}
+begin
+  LLowInt32 := Int32FromBits(UInt32(1) shl 31);
+  LLowISize := PtrIntFromBits(PtrUInt(1) shl (SizeOf(PtrUInt) * 8 - 1));
+
+  LAtomicInt32 := TAtomicInt32.Create(High(Int32));
+  CheckEqual(Int64(LLowInt32), Int64(LAtomicInt32.Increment(mo_acq_rel)),
+    'TAtomicInt32.Increment should wrap High(Int32) to Low(Int32)');
+  CheckEqual(Int64(LLowInt32), Int64(LAtomicInt32.Load(mo_acquire)),
+    'TAtomicInt32.Increment should publish the modulo-2^32 signed result');
+  CheckEqual(Int64(High(Int32)), Int64(LAtomicInt32.Decrement(mo_acq_rel)),
+    'TAtomicInt32.Decrement should wrap Low(Int32) to High(Int32)');
+  CheckEqual(Int64(High(Int32)), Int64(LAtomicInt32.Load(mo_acquire)),
+    'TAtomicInt32.Decrement should publish the modulo-2^32 signed result');
+
+  LAtomicInt32.Store(High(Int32) - 1, mo_release);
+  LOldInt32 := LAtomicInt32.FetchAdd(3, mo_acq_rel);
+  CheckEqual(Int64(High(Int32) - 1), Int64(LOldInt32),
+    'TAtomicInt32.FetchAdd should return the previous value before signed wrap');
+  CheckEqual(Int64(LLowInt32 + 1), Int64(LAtomicInt32.Load(mo_acquire)),
+    'TAtomicInt32.FetchAdd should publish the modulo-2^32 signed result');
+  LAtomicInt32.Store(LLowInt32 + 1, mo_release);
+  LOldInt32 := LAtomicInt32.FetchSub(3, mo_acq_rel);
+  CheckEqual(Int64(LLowInt32 + 1), Int64(LOldInt32),
+    'TAtomicInt32.FetchSub should return the previous value before signed wrap');
+  CheckEqual(Int64(High(Int32) - 1), Int64(LAtomicInt32.Load(mo_acquire)),
+    'TAtomicInt32.FetchSub should publish the modulo-2^32 signed result');
+  LAtomicInt32.Store(0, mo_release);
+  LOldInt32 := LAtomicInt32.FetchSub(LLowInt32, mo_acq_rel);
+  CheckEqual(Int64(0), Int64(LOldInt32),
+    'TAtomicInt32.FetchSub should accept Low(Int32) deltas under overflow checks');
+  CheckEqual(Int64(LLowInt32), Int64(LAtomicInt32.Load(mo_acquire)),
+    'TAtomicInt32.FetchSub should publish two-complement subtraction for Low(Int32)');
+
+  LRootInt32 := High(Int32);
+  CheckEqual(Int64(LLowInt32), Int64(atomic_increment(LRootInt32)),
+    'root atomic_increment(Int32) should wrap High(Int32) to Low(Int32)');
+  CheckEqual(Int64(High(Int32)), Int64(atomic_decrement(LRootInt32)),
+    'root atomic_decrement(Int32) should wrap Low(Int32) to High(Int32)');
+  LRootInt32 := 0;
+  CheckEqual(Int64(0), Int64(atomic_fetch_sub(LRootInt32, LLowInt32, mo_acq_rel)),
+    'root atomic_fetch_sub(Int32) should accept Low(Int32) deltas under overflow checks');
+  CheckEqual(Int64(LLowInt32), Int64(LRootInt32),
+    'root atomic_fetch_sub(Int32) should publish two-complement subtraction for Low(Int32)');
+  LRootInt32 := High(Int32) - 1;
+  LOldInt32 := atomic_fetch_add(LRootInt32, Int32(3), mo_acq_rel);
+  CheckEqual(Int64(High(Int32) - 1), Int64(LOldInt32),
+    'root atomic_fetch_add(Int32) should return the previous value before signed wrap');
+  CheckEqual(Int64(LLowInt32 + 1), Int64(LRootInt32),
+    'root atomic_fetch_add(Int32) should publish the modulo-2^32 signed result');
+  LRootInt32 := 0;
+  LOldInt32 := atomic_fetch_sub(LRootInt32, LLowInt32);
+  CheckEqual(Int64(0), Int64(LOldInt32),
+    'root atomic_fetch_sub(Int32) no-order overload should accept Low(Int32) deltas under overflow checks');
+  CheckEqual(Int64(LLowInt32), Int64(LRootInt32),
+    'root atomic_fetch_sub(Int32) no-order overload should publish two-complement subtraction for Low(Int32)');
+
+  LAtomicISize := TAtomicISize.Create(High(PtrInt));
+  Check(LAtomicISize.Increment(mo_acq_rel) = LLowISize,
+    'TAtomicISize.Increment should wrap High(PtrInt) to Low(PtrInt)');
+  Check(LAtomicISize.Load(mo_acquire) = LLowISize,
+    'TAtomicISize.Increment should publish the modulo pointer-width signed result');
+  Check(LAtomicISize.Decrement(mo_acq_rel) = High(PtrInt),
+    'TAtomicISize.Decrement should wrap Low(PtrInt) to High(PtrInt)');
+  Check(LAtomicISize.Load(mo_acquire) = High(PtrInt),
+    'TAtomicISize.Decrement should publish the modulo pointer-width signed result');
+  LAtomicISize.Store(0, mo_release);
+  LOldISize := LAtomicISize.FetchSub(LLowISize, mo_acq_rel);
+  Check(LOldISize = PtrInt(0),
+    'TAtomicISize.FetchSub should accept Low(PtrInt) deltas under overflow checks');
+  Check(LAtomicISize.Load(mo_acquire) = LLowISize,
+    'TAtomicISize.FetchSub should publish two-complement subtraction for Low(PtrInt)');
+
+  LRootPointer := nil;
+  LOldPointer := atomic_fetch_sub(LRootPointer, LLowISize);
+  Check(LOldPointer = nil,
+    'root atomic_fetch_sub(Pointer) should accept Low(PtrInt) offsets under overflow checks');
+  Check(PtrUInt(LRootPointer) = PtrIntToBits(LLowISize),
+    'root atomic_fetch_sub(Pointer) should publish pointer-width subtraction for Low(PtrInt)');
+
+  {$IFDEF CPU64}
+  LRootISize := High(PtrInt);
+  Check(atomic_increment(LRootISize) = LLowISize,
+    'root atomic_increment(PtrInt) should wrap High(PtrInt) to Low(PtrInt)');
+  Check(atomic_decrement(LRootISize) = High(PtrInt),
+    'root atomic_decrement(PtrInt) should wrap Low(PtrInt) to High(PtrInt)');
+  LRootISize := 0;
+  Check(atomic_fetch_sub(LRootISize, LLowISize, mo_acq_rel) = PtrInt(0),
+    'root atomic_fetch_sub(PtrInt) should accept Low(PtrInt) deltas under overflow checks');
+  Check(LRootISize = LLowISize,
+    'root atomic_fetch_sub(PtrInt) should publish two-complement subtraction for Low(PtrInt)');
+  LRootISize := High(PtrInt) - 1;
+  LOldISize := atomic_fetch_add(LRootISize, PtrInt(3), mo_acq_rel);
+  Check(LOldISize = High(PtrInt) - 1,
+    'root atomic_fetch_add(PtrInt) should return the previous value before signed wrap');
+  Check(LRootISize = LLowISize + 1,
+    'root atomic_fetch_add(PtrInt) should publish the modulo pointer-width signed result');
+  LRootISize := 0;
+  LOldISize := atomic_fetch_sub(LRootISize, LLowISize);
+  Check(LOldISize = PtrInt(0),
+    'root atomic_fetch_sub(PtrInt) no-order overload should accept Low(PtrInt) deltas under overflow checks');
+  Check(LRootISize = LLowISize,
+    'root atomic_fetch_sub(PtrInt) no-order overload should publish two-complement subtraction for Low(PtrInt)');
+  {$ENDIF}
+
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  LLowInt64 := Int64FromBits(UInt64(1) shl 63);
+
+  LAtomicInt64 := TAtomicInt64.Create(High(Int64));
+  CheckEqual(LLowInt64, LAtomicInt64.Increment(mo_acq_rel),
+    'TAtomicInt64.Increment should wrap High(Int64) to Low(Int64)');
+  CheckEqual(LLowInt64, LAtomicInt64.Load(mo_acquire),
+    'TAtomicInt64.Increment should publish the modulo-2^64 signed result');
+  CheckEqual(High(Int64), LAtomicInt64.Decrement(mo_acq_rel),
+    'TAtomicInt64.Decrement should wrap Low(Int64) to High(Int64)');
+  CheckEqual(High(Int64), LAtomicInt64.Load(mo_acquire),
+    'TAtomicInt64.Decrement should publish the modulo-2^64 signed result');
+
+  LAtomicInt64.Store(High(Int64) - 1, mo_release);
+  LOldInt64 := LAtomicInt64.FetchAdd(3, mo_acq_rel);
+  CheckEqual(High(Int64) - 1, LOldInt64,
+    'TAtomicInt64.FetchAdd should return the previous value before signed wrap');
+  CheckEqual(LLowInt64 + 1, LAtomicInt64.Load(mo_acquire),
+    'TAtomicInt64.FetchAdd should publish the modulo-2^64 signed result');
+  LAtomicInt64.Store(LLowInt64 + 1, mo_release);
+  LOldInt64 := LAtomicInt64.FetchSub(3, mo_acq_rel);
+  CheckEqual(LLowInt64 + 1, LOldInt64,
+    'TAtomicInt64.FetchSub should return the previous value before signed wrap');
+  CheckEqual(High(Int64) - 1, LAtomicInt64.Load(mo_acquire),
+    'TAtomicInt64.FetchSub should publish the modulo-2^64 signed result');
+  LAtomicInt64.Store(0, mo_release);
+  LOldInt64 := LAtomicInt64.FetchSub(LLowInt64, mo_acq_rel);
+  CheckEqual(Int64(0), LOldInt64,
+    'TAtomicInt64.FetchSub should accept Low(Int64) deltas under overflow checks');
+  CheckEqual(LLowInt64, LAtomicInt64.Load(mo_acquire),
+    'TAtomicInt64.FetchSub should publish two-complement subtraction for Low(Int64)');
+
+  LRootInt64 := High(Int64);
+  CheckEqual(LLowInt64, atomic_increment_64(LRootInt64),
+    'root atomic_increment_64(Int64) should wrap High(Int64) to Low(Int64)');
+  CheckEqual(High(Int64), atomic_decrement_64(LRootInt64),
+    'root atomic_decrement_64(Int64) should wrap Low(Int64) to High(Int64)');
+  LRootInt64 := 0;
+  CheckEqual(Int64(0), atomic_fetch_sub_64(LRootInt64, LLowInt64, mo_acq_rel),
+    'root atomic_fetch_sub_64(Int64) should accept Low(Int64) deltas under overflow checks');
+  CheckEqual(LLowInt64, LRootInt64,
+    'root atomic_fetch_sub_64(Int64) should publish two-complement subtraction for Low(Int64)');
+  LRootInt64 := High(Int64) - 1;
+  LOldInt64 := atomic_fetch_add_64(LRootInt64, Int64(3), mo_acq_rel);
+  CheckEqual(High(Int64) - 1, LOldInt64,
+    'root atomic_fetch_add_64(Int64) should return the previous value before signed wrap');
+  CheckEqual(LLowInt64 + 1, LRootInt64,
+    'root atomic_fetch_add_64(Int64) should publish the modulo-2^64 signed result');
+  LRootInt64 := 0;
+  LOldInt64 := atomic_fetch_sub_64(LRootInt64, LLowInt64);
+  CheckEqual(Int64(0), LOldInt64,
+    'root atomic_fetch_sub_64(Int64) no-order overload should accept Low(Int64) deltas under overflow checks');
+  CheckEqual(LLowInt64, LRootInt64,
+    'root atomic_fetch_sub_64(Int64) no-order overload should publish two-complement subtraction for Low(Int64)');
   {$ENDIF}
 end;
 
@@ -4333,6 +4645,7 @@ begin
   T.Run('typed atomic int64/uint64 fetch contract', @TestAtomicInt64UInt64FetchContract);
   {$ENDIF}
   T.Run('typed atomic unsigned wrap contract', @TestAtomicUnsignedWrapContract);
+  T.Run('typed atomic signed wrap contract', @TestAtomicSignedWrapContract);
   T.Run('typed atomic bool contract', @TestAtomicBoolContract);
   T.Run('typed atomic bool raw storage contract', @TestAtomicBoolRawStorageContract);
   T.Run('typed atomic isize/usize contract', @TestAtomicISizeUSizeContract);
