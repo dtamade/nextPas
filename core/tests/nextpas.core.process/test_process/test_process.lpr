@@ -358,6 +358,64 @@ begin
   Check('Arg single — output', Pos('single', LOut.StdOut) > 0);
 end;
 
+procedure ExpectProcessError(const AName: string; const AProc: TProcedure);
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    AProc;
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  Check(AName, LRaised);
+end;
+
+procedure TestCommandValidation;
+begin
+  ExpectProcessError('Validation — empty command path raises',
+    procedure
+    begin
+      TCommand.New('').Status;
+    end);
+  ExpectProcessError('Validation — command path with NUL raises',
+    procedure
+    begin
+      TCommand.New('/bin/echo' + #0 + 'tail').Status;
+    end);
+  ExpectProcessError('Validation — arg with NUL raises',
+    procedure
+    begin
+      TCommand.New('/bin/echo').Arg('bad' + #0 + 'arg').Status;
+    end);
+  ExpectProcessError('Validation — cwd with NUL raises',
+    procedure
+    begin
+      TCommand.New('/bin/true').Dir('/tmp' + #0 + 'tail').Status;
+    end);
+  ExpectProcessError('Validation — Env empty key raises',
+    procedure
+    begin
+      TCommand.New('/usr/bin/env').Env(['=bad']).Status;
+    end);
+  ExpectProcessError('Validation — Env pair without equals raises',
+    procedure
+    begin
+      TCommand.New('/usr/bin/env').Env(['BAD_PAIR']).Status;
+    end);
+  ExpectProcessError('Validation — EnvAdd empty key raises',
+    procedure
+    begin
+      TCommand.New('/usr/bin/env').EnvAdd('', 'value').Status;
+    end);
+  ExpectProcessError('Validation — EnvAdd key with equals raises',
+    procedure
+    begin
+      TCommand.New('/usr/bin/env').EnvAdd('BAD=KEY', 'value').Status;
+    end);
+end;
+
 
 procedure TestSpawnExecFailRaisesException;
 var LRaised: Boolean;
@@ -533,6 +591,7 @@ begin
   TestTakeStderr;
   TestWaitWithOutputDualPipe;
   TestArgSingle;
+  TestCommandValidation;
 
   WriteLn('');
   WriteLn('--- ', LPassed, ' passed, ', LFailed, ' failed ---');

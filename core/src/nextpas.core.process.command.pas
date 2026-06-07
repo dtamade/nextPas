@@ -99,6 +99,53 @@ uses
 
 { TCommand }
 
+function ContainsNul(const AValue: string): Boolean;
+var
+  I: Integer;
+begin
+  for I := 1 to Length(AValue) do
+    if AValue[I] = #0 then
+      Exit(True);
+  Result := False;
+end;
+
+procedure ValidateNoNul(const AValue, AField: string);
+begin
+  if ContainsNul(AValue) then
+    raise EProcessError.Create(AField + ' must not contain NUL');
+end;
+
+procedure ValidatePath(const APath: string);
+begin
+  if APath = '' then
+    raise EProcessError.Create('command path must not be empty');
+  ValidateNoNul(APath, 'command path');
+end;
+
+procedure ValidateEnvKey(const AKey: string);
+begin
+  if AKey = '' then
+    raise EProcessError.Create('environment variable name must not be empty');
+  if Pos('=', AKey) > 0 then
+    raise EProcessError.Create('environment variable name must not contain "="');
+  ValidateNoNul(AKey, 'environment variable name');
+end;
+
+procedure ValidateEnvValue(const AValue: string);
+begin
+  ValidateNoNul(AValue, 'environment variable value');
+end;
+
+procedure ValidateEnvPair(const APair: string);
+var
+  P: Integer;
+begin
+  ValidateNoNul(APair, 'environment variable pair');
+  P := Pos('=', APair);
+  if P <= 1 then
+    raise EProcessError.Create('environment variable pair must be KEY=VALUE');
+end;
+
 procedure EnvPut(var AItems: TStringArray; const AKey, AValue: string);
 var
   I, P: Integer;
@@ -157,6 +204,7 @@ end;
 constructor TCommand.Create(const APath: string);
 begin
   inherited Create;
+  ValidatePath(APath);
   FPath := APath;
   FArgs := nil;
   FWorkDir := '';
@@ -175,6 +223,7 @@ end;
 
 function TCommand.Arg(const AValue: string): ICommand;
 begin
+  ValidateNoNul(AValue, 'command argument');
   SetLength(FArgs, Length(FArgs) + 1);
   FArgs[High(FArgs)] := AValue;
   Result := Self;
@@ -187,12 +236,16 @@ begin
   LBase := Length(FArgs);
   SetLength(FArgs, LBase + Length(AValues));
   for I := 0 to High(AValues) do
+  begin
+    ValidateNoNul(AValues[I], 'command argument');
     FArgs[LBase + I] := AValues[I];
+  end;
   Result := Self;
 end;
 
 function TCommand.Dir(const AWorkDir: string): ICommand;
 begin
+  ValidateNoNul(AWorkDir, 'working directory');
   FWorkDir := AWorkDir;
   Result := Self;
 end;
@@ -204,12 +257,17 @@ begin
   FEnvMode := pemReplace;
   SetLength(FEnvPairs, Length(AEnvPairs));
   for I := 0 to High(AEnvPairs) do
+  begin
+    ValidateEnvPair(AEnvPairs[I]);
     FEnvPairs[I] := AEnvPairs[I];
+  end;
   Result := Self;
 end;
 
 function TCommand.EnvAdd(const AKey, AValue: string): ICommand;
 begin
+  ValidateEnvKey(AKey);
+  ValidateEnvValue(AValue);
   if FEnvMode = pemInherit then
     FEnvMode := pemOverlay;
   SetLength(FEnvPairs, Length(FEnvPairs) + 1);
