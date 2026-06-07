@@ -397,6 +397,11 @@ raw lookup row as standalone microbenchmark evidence instead of only proving it
 indirectly through the broader `fast headers` filter group that also includes
 `count all` and `foreach all`.
 
+The same focused gate now also locks the narrower
+`bench_filter=fast headers get all accept` path. This keeps the same-name
+multi-value raw lookup row as standalone microbenchmark evidence instead of
+only proving it indirectly through the broader `fast headers` filter group.
+
 ## Run the Router Dispatch Benchmark
 
 Run the focused router dispatch row:

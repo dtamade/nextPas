@@ -5642,3 +5642,25 @@
   fast lazy headers 的单-header raw lookup 现在有了更窄、更适合后续性能 isolation
   的 standalone microbenchmark proof，而不是只附着在更宽的 `fast headers`
   filter 组合里。
+
+## 2026-06-07 h1 fast-headers get-all filter focused smoke findings
+
+- `fast headers get all accept` 之前虽然有独立 row，但 focused gate 仍只证明整组
+  `fast headers` filter 会一起输出。
+- 这会留下同名多值 lookup 的 truth gap：
+  后续如果只想盯住 `GetAllRawValues` 这一层的 raw multi-value lookup，本来的
+  focused gate 还不能证明 `fast headers get all accept` 这条 row 能单独稳定存在，
+  也不能证明过滤器不会顺手带出单值 `get host only`、materialization 更重的
+  `foreach all` 或无关的 metadata-cache row。
+- 本轮继续保持窄刀，没有碰 parser 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=fast headers get all accept` 提升进 focused gate
+  - 锁住 `bench_filter=fast headers get all accept`
+  - 锁住 `adapter cost: fast headers get all accept`
+  - 锁住 filtered output 不包含
+    `adapter cost: fast headers get host only`
+  - 也不包含 `adapter cost: fast headers foreach all`
+  - 也不包含无关的 `request metadata cached expect+cl`
+- 这轮的价值仍是 benchmark truth：
+  fast lazy headers 的 same-name multi-value raw lookup 现在有了更窄、更适合后续
+  性能 isolation 的 standalone microbenchmark proof，而不是只附着在更宽的
+  `fast headers` filter 组合里。
