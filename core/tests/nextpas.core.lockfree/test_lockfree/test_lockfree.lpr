@@ -1254,6 +1254,11 @@ end;
 
 var
   GMpscQ: TIntMpsc;
+  GMpscPublishWakeQ: TIntMpsc;
+  GMpscPublishWakeConsumerStarted: Int32;
+  GMpscPublishWakeConsumerObservedEmpty: Int32;
+  GMpscPublishWakeConsumerResult: Int32;
+  GMpscPublishWakeConsumerValue: Integer;
 
 function MpscProducer(AArg: Pointer): Pointer; cdecl;
 var
@@ -1263,6 +1268,28 @@ begin
   LStart := Integer(PtrUInt(AArg));
   for LI := LStart to LStart + 99 do
     GMpscQ.Enqueue(LI);
+end;
+
+function MpscPublishWakeConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+begin
+  Result := nil;
+  AtomicStore32(GMpscPublishWakeConsumerStarted, 1, moRelease);
+  if GMpscPublishWakeQ.TryDequeue(LV) then
+  begin
+    GMpscPublishWakeConsumerValue := LV;
+    AtomicStore32(GMpscPublishWakeConsumerResult, 2, moRelease);
+    Exit;
+  end;
+  AtomicStore32(GMpscPublishWakeConsumerObservedEmpty, 1, moRelease);
+  if GMpscPublishWakeQ.DequeueTimeout(LV, QueuePublishWakeTimeoutNs) then
+  begin
+    GMpscPublishWakeConsumerValue := LV;
+    AtomicStore32(GMpscPublishWakeConsumerResult, 1, moRelease);
+  end
+  else
+    AtomicStore32(GMpscPublishWakeConsumerResult, 0, moRelease);
 end;
 
 procedure TestMpscBasic;
@@ -1686,6 +1713,76 @@ begin
   GMpscWaitQ.Free;
 end;
 
+procedure TestMpscDequeueTimeoutWakesOnPublish;
+var
+  LQ: TIntMpsc;
+  LConsumer: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LElapsedMs: QWord;
+  LSpin: Integer;
+  LV: Integer;
+  LThreadCreated: Boolean;
+  LJoined: Boolean;
+begin
+  LQ := TIntMpsc.Create;
+  LThreadCreated := False;
+  LJoined := False;
+  try
+    GMpscPublishWakeQ := LQ;
+    AtomicStore32(GMpscPublishWakeConsumerStarted, 0, moRelease);
+    AtomicStore32(GMpscPublishWakeConsumerObservedEmpty, 0, moRelease);
+    AtomicStore32(GMpscPublishWakeConsumerResult, -1, moRelease);
+    GMpscPublishWakeConsumerValue := 0;
+    CheckEqual(Int64(0), Int64(platform_thread_create(LConsumer, @MpscPublishWakeConsumer, nil)),
+      'MPSC publish wake consumer thread must start');
+    LThreadCreated := True;
+
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GMpscPublishWakeConsumerStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GMpscPublishWakeConsumerStarted, moAcquire)),
+      'MPSC DequeueTimeout consumer thread must start before publish');
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GMpscPublishWakeConsumerObservedEmpty, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GMpscPublishWakeConsumerObservedEmpty, moAcquire)),
+      'MPSC DequeueTimeout consumer must observe the empty queue before publish');
+    platform_thread_sleep_ns(QueuePublishWakeDelayNs);
+    CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpscPublishWakeConsumerResult, moAcquire)),
+      'MPSC DequeueTimeout consumer must not complete before publish');
+
+    LElapsedMs := GetTickCount64;
+    LQ.Enqueue(42);
+    platform_thread_join(LConsumer, LRetVal);
+    LJoined := True;
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GMpscPublishWakeConsumerResult, moAcquire)),
+      'MPSC DequeueTimeout must receive the producer-published item');
+    CheckEqual(Int64(42), Int64(GMpscPublishWakeConsumerValue));
+    Check(LElapsedMs < QueuePublishWakeBudgetMs,
+      'MPSC DequeueTimeout consumer must progress after data publish before the full timeout');
+    Check(not LQ.TryDequeue(LV),
+      'MPSC queue must be empty after the publish-woken consumer drains the item');
+  finally
+    if LThreadCreated and (not LJoined) then
+    begin
+      LQ.Close;
+      platform_thread_join(LConsumer, LRetVal);
+    end;
+    GMpscPublishWakeQ := nil;
+    LQ.Close;
+    while LQ.TryDequeue(LV) do;
+    LQ.Free;
+  end;
+end;
+
 procedure TestMpscDequeueTimeout;
 var
   LQ: TIntMpsc;
@@ -1933,6 +2030,7 @@ var
   LMpscCloseWakeWaitTestSection: string;
   LMpscDestroyDrainTestSection: string;
   LMpscMultiProducerTestSection: string;
+  LMpscPublishWakeTestSection: string;
   LMpscTimeoutTestSection: string;
   LSpscPublishWakeTestSection: string;
   LSpscSpaceWakeTestSection: string;
@@ -2054,6 +2152,10 @@ begin
     'procedure TestMpscMultiProducer;',
     '{ Work-stealing Deque }',
     'MPSC multi-producer test source section');
+  LMpscPublishWakeTestSection := ExtractSection(LTestSource,
+    'procedure TestMpscDequeueTimeoutWakesOnPublish;',
+    'procedure TestMpscDequeueTimeout;',
+    'MPSC publish wake test source section');
   LMpscTimeoutTestSection := ExtractSection(LTestSource,
     'procedure TestMpscDequeueTimeout;',
     'procedure TestDequeCapacity;',
@@ -2226,6 +2328,9 @@ begin
   CheckContains(LDocsReadme,
     'MPMC consumer-released space (`EnqueueTimeout`)',
     'lockfree README must document the local MPMC space-release timeout runtime evidence');
+  CheckContains(LDocsReadme,
+    'MPSC producer-published data (`DequeueTimeout`)',
+    'lockfree README must document the local MPSC publish timeout runtime evidence');
   CheckContains(LDocsReadme,
     'make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree clean run',
     'lockfree README must list the focused benchmark command');
@@ -2575,6 +2680,30 @@ begin
     'MPSC destroy drain contract test must drain queued items before the final free');
   CheckContains(LMpscMultiProducerTestSection, 'GMpscQ.Close;' + LineEnding + '  GMpscQ.Free;',
     'MPSC multi-producer test must close after producers stop and before freeing the queue');
+  CheckContains(LMpscPublishWakeTestSection,
+    'MPSC DequeueTimeout consumer must observe the empty queue before publish',
+    'MPSC publish wake runtime test must prove the consumer observed an empty queue before publish');
+  CheckContains(LMpscPublishWakeTestSection,
+    'MPSC DequeueTimeout consumer must not complete before publish',
+    'MPSC publish wake runtime test must prove the consumer is pending before publish');
+  CheckContains(LMpscPublishWakeTestSection,
+    'LQ.Enqueue(42);',
+    'MPSC publish wake runtime test must publish through Enqueue');
+  CheckContains(LMpscPublishWakeTestSection,
+    'MPSC DequeueTimeout consumer must progress after data publish before the full timeout',
+    'MPSC publish wake runtime test must bound consumer progress latency');
+  CheckContains(LMpscPublishWakeTestSection,
+    'MPSC DequeueTimeout must receive the producer-published item',
+    'MPSC publish wake runtime test must prove the woken consumer received the published item');
+  CheckContains(LMpscPublishWakeTestSection, 'LQ.Close;',
+    'MPSC publish wake runtime test must close before freeing the queue');
+  CheckContains(LMpscPublishWakeTestSection, 'while LQ.TryDequeue(LV) do;',
+    'MPSC publish wake runtime test must drain defensively before freeing the queue');
+  CheckContains(LMpscPublishWakeTestSection, 'LQ.Free;',
+    'MPSC publish wake runtime test must release the queue after close and drain');
+  CheckContains(LTestSource,
+    'T.Run(''MPSC timeout wakes on publish'', @TestMpscDequeueTimeoutWakesOnPublish);',
+    'lockfree test runner must register the MPSC publish wake runtime test');
   CheckContains(LMpscTimeoutTestSection, 'LQ.Close;' + LineEnding + '  LQ.Free;',
     'MPSC timeout test must close before freeing the queue');
   CheckContains(LTestMakefile, '.PHONY: build run test test-debug clean',
@@ -2859,6 +2988,7 @@ begin
   T.Run('MPMC capacity/empty/full', @TestMpmcCapacity);
   T.Run('LockFree wait stale epoch guard', @TestLockFreeWaitHelperStaleEpochGuard);
   T.Run('MPSC dequeue wait', @TestMpscDequeueWait);
+  T.Run('MPSC timeout wakes on publish', @TestMpscDequeueTimeoutWakesOnPublish);
   T.Run('MPSC dequeue timeout', @TestMpscDequeueTimeout);
   T.Run('Deque capacity', @TestDequeCapacity);
   T.Run('Stack 4P+4C stress', @TestStackStress);
