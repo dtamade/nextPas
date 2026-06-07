@@ -69,8 +69,13 @@ core-ci-best-effort-test:
 		dir=$$(dirname "$$mk"); \
 		total=$$((total + 1)); \
 		if $(MAKE) -C "$$dir" test >"$$log_file" 2>&1; then \
-			passed=$$((passed + 1)); \
-			echo "PASS: $$dir"; \
+			if grep -q 'SKIP:' "$$log_file"; then \
+				skipped=$$((skipped + 1)); \
+				echo "SKIP: $$dir"; \
+			else \
+				passed=$$((passed + 1)); \
+				echo "PASS: $$dir"; \
+			fi; \
 		else \
 			skipped=$$((skipped + 1)); \
 			if [ -z "$$first_fail" ]; then \

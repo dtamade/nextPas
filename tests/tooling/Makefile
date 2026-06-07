@@ -4,6 +4,7 @@ test:
 	./test_build_hygiene_check.sh
 	./test_ci_evidence_matrix_doc_contract.sh
 	./test_ci_workflow_contract.sh
+	./test_core_ci_best_effort_gate.sh
 	./test_core_focused_makefiles.sh
 	./test_focused_gate_matrix_doc_contract.sh
 	./test_lane_focused_gate.sh
