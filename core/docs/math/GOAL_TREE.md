@@ -221,6 +221,8 @@ Completion gate:
 - Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular
   matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises
   `EArgumentError` on the same inputs.
+- Matrix inverse success overwrites the `out` parameter completely: `TryInverse` does not depend on
+  the previous contents of the destination matrix and fully rewrites it before returning `True`.
 - Normalize of zero vectors/quaternions is explicitly defined and tested.
 
 Status:

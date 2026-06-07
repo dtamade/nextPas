@@ -128,6 +128,15 @@ begin
     TVec4f.Create(5.0, 6.0, 7.0, 1.0));
 end;
 
+function SampleMat4d: TMat4d;
+begin
+  Result := TMat4d.Create(
+    TVec4d.Create(2.0, 0.0, 0.0, 0.0),
+    TVec4d.Create(0.0, 3.0, 0.0, 0.0),
+    TVec4d.Create(0.0, 0.0, 4.0, 0.0),
+    TVec4d.Create(5.0, 6.0, 7.0, 1.0));
+end;
+
 function PivotSwapMat3f: TMat3f;
 begin
   Result := TMat3f.Create(
@@ -160,6 +169,40 @@ begin
     TVec4d.Create(1.0, 0.0, 0.0, 0.0),
     TVec4d.Create(0.0, 0.0, 1.0, 0.0),
     TVec4d.Create(0.0, 0.0, 0.0, 1.0));
+end;
+
+function SentinelMat3f: TMat3f;
+begin
+  Result := TMat3f.Create(
+    TVec3f.Create(-11.0, -12.0, -13.0),
+    TVec3f.Create(-21.0, -22.0, -23.0),
+    TVec3f.Create(-31.0, -32.0, -33.0));
+end;
+
+function SentinelMat4f: TMat4f;
+begin
+  Result := TMat4f.Create(
+    TVec4f.Create(-11.0, -12.0, -13.0, -14.0),
+    TVec4f.Create(-21.0, -22.0, -23.0, -24.0),
+    TVec4f.Create(-31.0, -32.0, -33.0, -34.0),
+    TVec4f.Create(-41.0, -42.0, -43.0, -44.0));
+end;
+
+function SentinelMat3d: TMat3d;
+begin
+  Result := TMat3d.Create(
+    TVec3d.Create(-11.0, -12.0, -13.0),
+    TVec3d.Create(-21.0, -22.0, -23.0),
+    TVec3d.Create(-31.0, -32.0, -33.0));
+end;
+
+function SentinelMat4d: TMat4d;
+begin
+  Result := TMat4d.Create(
+    TVec4d.Create(-11.0, -12.0, -13.0, -14.0),
+    TVec4d.Create(-21.0, -22.0, -23.0, -24.0),
+    TVec4d.Create(-31.0, -32.0, -33.0, -34.0),
+    TVec4d.Create(-41.0, -42.0, -43.0, -44.0));
 end;
 
 procedure RaiseTMat3fSingularInverse;
@@ -407,6 +450,77 @@ begin
     'TMat4d exact epsilon pivot inverse', @RaiseTMat4dThresholdInverse);
 end;
 
+procedure TestSinglePrecisionInverseOverwritesOutParameter;
+var
+  M3: TMat3f;
+  M4: TMat4f;
+  Inverse3FromSentinel: TMat3f;
+  Inverse3FromIdentity: TMat3f;
+  Inverse4FromSentinel: TMat4f;
+  Inverse4FromIdentity: TMat4f;
+begin
+  M3 := SampleMat3f;
+  Inverse3FromSentinel := SentinelMat3f;
+  Inverse3FromIdentity := TMat3f.Identity;
+  Check(M3.TryInverse(Inverse3FromSentinel), 'TMat3f TryInverse succeeds after sentinel prefill');
+  Check(M3.TryInverse(Inverse3FromIdentity), 'TMat3f TryInverse succeeds after identity prefill');
+  CheckMat3fIdentity(M3 * Inverse3FromSentinel, 'TMat3f TryInverse overwrites sentinel output');
+  CheckMat3fIdentity(M3 * Inverse3FromIdentity, 'TMat3f TryInverse overwrites identity output');
+  Check(TMat3f.Equals(Inverse3FromSentinel, Inverse3FromIdentity, Single(0.000001)),
+    'TMat3f TryInverse result does not depend on previous output contents');
+  Check(not TMat3f.Equals(SentinelMat3f, Inverse3FromSentinel, Single(0.0)),
+    'TMat3f TryInverse replaces previous output contents');
+
+  M4 := SampleMat4f;
+  Inverse4FromSentinel := SentinelMat4f;
+  Inverse4FromIdentity := TMat4f.Identity;
+  Check(M4.TryInverse(Inverse4FromSentinel), 'TMat4f TryInverse succeeds after sentinel prefill');
+  Check(M4.TryInverse(Inverse4FromIdentity), 'TMat4f TryInverse succeeds after identity prefill');
+  CheckMat4fIdentity(M4 * Inverse4FromSentinel, 'TMat4f TryInverse overwrites sentinel output');
+  CheckMat4fIdentity(M4 * Inverse4FromIdentity, 'TMat4f TryInverse overwrites identity output');
+  Check(TMat4f.Equals(Inverse4FromSentinel, Inverse4FromIdentity, Single(0.000001)),
+    'TMat4f TryInverse result does not depend on previous output contents');
+  Check(not TMat4f.Equals(SentinelMat4f, Inverse4FromSentinel, Single(0.0)),
+    'TMat4f TryInverse replaces previous output contents');
+end;
+
+procedure TestDoublePrecisionInverseOverwritesOutParameter;
+var
+  M3: TMat3d;
+  M4: TMat4d;
+  Inverse3FromSentinel: TMat3d;
+  Inverse3FromIdentity: TMat3d;
+  Inverse4FromSentinel: TMat4d;
+  Inverse4FromIdentity: TMat4d;
+begin
+  M3 := TMat3d.Create(
+    TVec3d.Create(1.0, 2.0, 3.0),
+    TVec3d.Create(0.0, 1.0, 4.0),
+    TVec3d.Create(5.0, 6.0, 0.0));
+  Inverse3FromSentinel := SentinelMat3d;
+  Inverse3FromIdentity := TMat3d.Identity;
+  Check(M3.TryInverse(Inverse3FromSentinel), 'TMat3d TryInverse succeeds after sentinel prefill');
+  Check(M3.TryInverse(Inverse3FromIdentity), 'TMat3d TryInverse succeeds after identity prefill');
+  CheckMat3dIdentity(M3 * Inverse3FromSentinel, 'TMat3d TryInverse overwrites sentinel output');
+  CheckMat3dIdentity(M3 * Inverse3FromIdentity, 'TMat3d TryInverse overwrites identity output');
+  Check(TMat3d.Equals(Inverse3FromSentinel, Inverse3FromIdentity, 0.000000000001),
+    'TMat3d TryInverse result does not depend on previous output contents');
+  Check(not TMat3d.Equals(SentinelMat3d, Inverse3FromSentinel, 0.0),
+    'TMat3d TryInverse replaces previous output contents');
+
+  M4 := SampleMat4d;
+  Inverse4FromSentinel := SentinelMat4d;
+  Inverse4FromIdentity := TMat4d.Identity;
+  Check(M4.TryInverse(Inverse4FromSentinel), 'TMat4d TryInverse succeeds after sentinel prefill');
+  Check(M4.TryInverse(Inverse4FromIdentity), 'TMat4d TryInverse succeeds after identity prefill');
+  CheckMat4dIdentity(M4 * Inverse4FromSentinel, 'TMat4d TryInverse overwrites sentinel output');
+  CheckMat4dIdentity(M4 * Inverse4FromIdentity, 'TMat4d TryInverse overwrites identity output');
+  Check(TMat4d.Equals(Inverse4FromSentinel, Inverse4FromIdentity, 0.000000000001),
+    'TMat4d TryInverse result does not depend on previous output contents');
+  Check(not TMat4d.Equals(SentinelMat4d, Inverse4FromSentinel, 0.0),
+    'TMat4d TryInverse replaces previous output contents');
+end;
+
 procedure TestMat3fContracts;
 var
   M: TMat3f;
@@ -591,11 +705,7 @@ begin
     'TMat3d determinant preserves exact inverse epsilon pivot');
   Check(not TMat3d.Equals(M3, M3, -0.000000000001), 'TMat3d equals rejects negative epsilon');
 
-  M4 := TMat4d.Create(
-    TVec4d.Create(2.0, 0.0, 0.0, 0.0),
-    TVec4d.Create(0.0, 3.0, 0.0, 0.0),
-    TVec4d.Create(0.0, 0.0, 4.0, 0.0),
-    TVec4d.Create(5.0, 6.0, 7.0, 1.0));
+  M4 := SampleMat4d;
   NearSingular4 := TMat4d.Create(
     TVec4d.Create(0.0000000000001, 0.0, 0.0, 0.0),
     TVec4d.Create(0.0, 1.0, 0.0, 0.0),
@@ -617,11 +727,7 @@ begin
   M4.Columns[0] := TVec4d.Create(11.5, 12.5, 13.5, 14.5);
   CheckVec4d(11.5, 12.5, 13.5, 14.5, M4.Columns[0], 'TMat4d column setter writes column view');
   CheckVec4d(14.5, 8.5, 9.5, 10.5, M4.Rows[3], 'TMat4d column setter updates overlapping row view');
-  M4 := TMat4d.Create(
-    TVec4d.Create(2.0, 0.0, 0.0, 0.0),
-    TVec4d.Create(0.0, 3.0, 0.0, 0.0),
-    TVec4d.Create(0.0, 0.0, 4.0, 0.0),
-    TVec4d.Create(5.0, 6.0, 7.0, 1.0));
+  M4 := SampleMat4d;
   CheckNear(24.0, M4.Determinant, 0.000000000001, 'TMat4d determinant');
   CheckNear(0.0000000000001, NearSingular4.Determinant, 0.000000000000000001,
     'TMat4d determinant preserves small nonzero pivot');
@@ -646,5 +752,9 @@ begin
     @TestSinglePrecisionInverseFailCloseContracts);
   T.Run('double precision inverse fail-close contracts',
     @TestDoublePrecisionInverseFailCloseContracts);
+  T.Run('single precision inverse overwrites out parameter',
+    @TestSinglePrecisionInverseOverwritesOutParameter);
+  T.Run('double precision inverse overwrites out parameter',
+    @TestDoublePrecisionInverseOverwritesOutParameter);
   T.Summary;
 end.

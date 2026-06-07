@@ -113,6 +113,22 @@ REQUIRED_MAT_DOC_TRUTH = (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
         "Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises `EArgumentError` on the same inputs.",
     ),
+    (
+        "docs/math/README.md",
+        "Matrix inverse success overwrites the `out` parameter completely: `TryInverse` does not depend on the previous contents of the destination matrix and fully rewrites it before returning `True`.",
+    ),
+    (
+        "docs/math/API.md",
+        "Matrix inverse success overwrites the `out` parameter completely: `TryInverse` does not depend on the previous contents of the destination matrix and fully rewrites it before returning `True`.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "Matrix inverse success overwrites the `out` parameter completely: `TryInverse` does not depend on the previous contents of the destination matrix and fully rewrites it before returning `True`.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "Matrix inverse success overwrites the `out` parameter completely: `TryInverse` does not depend on the previous contents of the destination matrix and fully rewrites it before returning `True`.",
+    ),
 )
 REQUIRED_TRANSFORM_DOC_TRUTH = (
     (
@@ -615,6 +631,8 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("mat-double", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('double precision matrix contracts'"),
     RequiredBehaviorTestMarker("mat-inverse-fail-close-single", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('single precision inverse fail-close contracts'"),
     RequiredBehaviorTestMarker("mat-inverse-fail-close-double", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('double precision inverse fail-close contracts'"),
+    RequiredBehaviorTestMarker("mat-inverse-overwrite-single", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('single precision inverse overwrites out parameter'"),
+    RequiredBehaviorTestMarker("mat-inverse-overwrite-double", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('double precision inverse overwrites out parameter'"),
     RequiredBehaviorTestMarker("quat-f", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('TQuatf contracts'"),
     RequiredBehaviorTestMarker("quat-d", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('TQuatd contracts'"),
     RequiredBehaviorTestMarker("quat-axis-finite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('FromAxisAngle rejects non-finite inputs'"),
