@@ -476,6 +476,7 @@ end;
 procedure TAsyncLoop.Stop;
 begin
   AtomicStore32(FRunning, 0, moRelease);
+  Wake;
 end;
 
 function TAsyncLoop.AsyncSleep(const ADelay: TDuration; ACallback: TAsyncCallback;

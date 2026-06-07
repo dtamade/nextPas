@@ -199,6 +199,10 @@ begin
     'async loop run must leave running state cleared on every exit path');
   CheckContains(LStopBody, 'atomicstore32(frunning, 0, morelease);',
     'async loop stop must publish stopped state');
+  CheckContains(LStopBody, 'wake;',
+    'async loop stop must wake the platform wait seam');
+  CheckBefore(LStopBody, 'atomicstore32(frunning, 0, morelease);', 'wake;',
+    'async loop stop must publish stopped state before waking waiters');
 end;
 
 procedure TestAsyncLoopWakeSeamContract;
