@@ -3,6 +3,8 @@ program test_uuid;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.text.conv,
   nextpas.core.id.base,
@@ -100,6 +102,21 @@ begin
   CheckEqual(Int64(1717200000000), Int64(LMs), 'exact timestamp preserved');
   CheckEqual(Int64(7), Int64(LU.Version), 'version=7');
   CheckEqual(Int64(2), Int64(LU.Variant), 'variant=2');
+end;
+
+procedure TestV7AtRejectsOverflowTimestamp;
+var LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    TUuid.NewV7At(UInt64($1000000000000));
+  except
+    on E: EOutOfRange do
+      LRaised := True;
+    on E: Exception do
+      Fail('expected EOutOfRange, got ' + E.ClassName + ': ' + E.Message);
+  end;
+  Check(LRaised, 'v7 timestamp must fit 48 bits');
 end;
 
 { --- Parse / TryParse --- }
@@ -479,6 +496,7 @@ begin
   T.Run('V7 variant byte', @TestV7Variant);
   T.Run('V7 timestamp extract', @TestV7TimestampExtract);
   T.Run('V7 at known timestamp', @TestV7AtKnownTimestamp);
+  T.Run('V7 at rejects overflow timestamp', @TestV7AtRejectsOverflowTimestamp);
 
   { Parse / TryParse }
   T.Run('Parse valid', @TestParseValid);

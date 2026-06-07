@@ -43,10 +43,14 @@ function UuidIsValid(const AStr: string): Boolean;
 implementation
 
 uses
+  nextpas.core.base,
   nextpas.core.id.rng,
   nextpas.core.platform.time,
   nextpas.core.hash.intf,
   nextpas.core.hash.sha1;
+
+const
+  UUID_V7_MAX_TIMESTAMP_MS = UInt64($FFFFFFFFFFFF);
 
 const
   HEX_CHARS: array[0..15] of Char = '0123456789abcdef';
@@ -106,6 +110,8 @@ end;
 
 class function TUuid.NewV7At(const ATimestampMs: UInt64): TUuid;
 begin
+  if ATimestampMs > UUID_V7_MAX_TIMESTAMP_MS then
+    raise EOutOfRange.Create('TUuid.NewV7At: timestamp must fit 48 bits');
   Result.FBytes[0] := Byte(ATimestampMs shr 40);
   Result.FBytes[1] := Byte(ATimestampMs shr 32);
   Result.FBytes[2] := Byte(ATimestampMs shr 24);
