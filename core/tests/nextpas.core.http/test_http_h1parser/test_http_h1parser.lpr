@@ -191,6 +191,41 @@ begin
   Check(LP.ShouldKeepAlive, 'content-length response is reusable');
 end;
 
+procedure TestResponseConnectionCloseTokenListDoesNotReuse;
+var
+  LP: IH1Parser;
+  LResp: string;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+           'Content-Length: 2'#13#10 +
+           'Connection: upgrade, CLOSE'#13#10#13#10 +
+           'ok';
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+  Check(LP.IsComplete, 'response complete');
+  Check(not LP.HasError, 'response has no parser error');
+  Check(not LP.ShouldKeepAlive,
+    'close token-list response is not reusable');
+end;
+
+procedure TestResponseConnectionCloseDuplicateHeaderDoesNotReuse;
+var
+  LP: IH1Parser;
+  LResp: string;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+           'Content-Length: 2'#13#10 +
+           'Connection: keep-alive'#13#10 +
+           'Connection: close'#13#10#13#10 +
+           'ok';
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+  Check(LP.IsComplete, 'duplicate connection response complete');
+  Check(not LP.HasError, 'duplicate connection response has no parser error');
+  Check(not LP.ShouldKeepAlive,
+    'close duplicate response header is not reusable');
+end;
+
 procedure TestResponseContentLengthTruncatedAtEof;
 var
   LP: IH1Parser;
@@ -2134,6 +2169,10 @@ begin
   T.Run('Response HEAD skip-body with content-length', @TestResponseHeadSkipBodyWithContentLength);
   T.Run('Response close-delimited needs connection close', @TestResponseCloseDelimitedNeedsConnectionClose);
   T.Run('Response content-length keeps alive', @TestResponseContentLengthKeepsAlive);
+  T.Run('Response Connection close token-list does not reuse',
+    @TestResponseConnectionCloseTokenListDoesNotReuse);
+  T.Run('Response Connection close duplicate header does not reuse',
+    @TestResponseConnectionCloseDuplicateHeaderDoesNotReuse);
   T.Run('Response content-length truncated at EOF', @TestResponseContentLengthTruncatedAtEof);
   T.Run('Response HTTP/1.0 without keep-alive does not reuse', @TestResponseHttp10WithoutKeepAliveDoesNotReuse);
   T.Run('Content-Length body', @TestContentLengthBody);

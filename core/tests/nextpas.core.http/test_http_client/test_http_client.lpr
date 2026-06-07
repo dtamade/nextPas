@@ -34,6 +34,7 @@ var
   GRawResponse1: string;
   GRawResponse2: string;
   GRawAcceptLimit: Int32;
+  GRawAcceptCount: Int32;
   GAcceptCount: Int32;
   GPoolListener: ITcpListener;
   GRetryListener: ITcpListener;
@@ -264,6 +265,7 @@ begin
     end;
     if LConn = nil then
       Break;
+    InterlockedIncrement(GRawAcceptCount);
     try
       LAccum := '';
       repeat
@@ -1876,6 +1878,76 @@ begin
     GRawListener.Close;
     platform_thread_join(LHandle, LRet);
     GRawListener := nil;
+    GRawResponse1 := '';
+    GRawResponse2 := '';
+    GRawAcceptLimit := 0;
+  end;
+end;
+
+procedure TestClientDoesNotPoolResponseWithConnectionCloseTokenList;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LRaised: Boolean;
+begin
+  GRawAcceptCount := 0;
+  GRawResponse1 := 'HTTP/1.1 200 OK'#13#10 +
+                   'Content-Length: 2'#13#10 +
+                   'Connection: keep-alive, close'#13#10 +
+                   #13#10 +
+                   'ok';
+  GRawResponse2 := 'HTTP/1.1 200 OK'#13#10 +
+                   'Content-Length: 8'#13#10 +
+                   'Connection: close'#13#10 +
+                   #13#10 +
+                   'fresh-ok';
+  GRawAcceptLimit := 2;
+  GRawListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRawListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @RawResponseThread, nil);
+
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Get('http://127.0.0.1:' +
+      IntToStr(Int64(LPort)) + '/prime');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'connection close token-list priming response status');
+    CheckEqual('ok', ReadBodyStr(LResp),
+      'connection close token-list priming response body');
+
+    LReq := NewRequest(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
+      NewHeaders, StringBodyReader('payload'), Int64(7));
+    LRaised := False;
+    try
+      LResp := LClient.Send(LReq);
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+
+    Check(not LRaised,
+      'client does not reuse response connection with close token-list');
+    if not LRaised then
+    begin
+      CheckEqual(Int64(200), Int64(LResp.StatusCode),
+        'fresh request after close token-list response succeeds');
+      CheckEqual('fresh-ok', ReadBodyStr(LResp),
+        'fresh request after close token-list response body');
+    end;
+    CheckEqual(Int64(2), Int64(GRawAcceptCount),
+      'close token-list response makes next request open a fresh connection');
+  finally
+    if GRawAcceptCount < 2 then
+      WakeRetryAcceptThread(LPort);
+    GRawListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRawListener := nil;
+    GRawAcceptCount := 0;
     GRawResponse1 := '';
     GRawResponse2 := '';
     GRawAcceptLimit := 0;
@@ -3811,6 +3883,8 @@ begin
   T.Run('Client HEAD sends HEAD and exposes headers', @TestClientHeadSendsHead);
   T.Run('Client reads chunked response body', @TestClientReadsChunkedResponse);
   T.Run('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
+  T.Run('Client does not pool response Connection close token-list',
+    @TestClientDoesNotPoolResponseWithConnectionCloseTokenList);
   T.Run('Client rejects truncated content-length response', @TestClientRejectsTruncatedContentLengthResponse);
   T.Run('Client request body does not exceed ContentLength',
     @TestClientRequestBodyDoesNotExceedContentLength);

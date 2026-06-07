@@ -162,6 +162,38 @@ begin
   Result := LowerCase(TextTrim(AValue));
 end;
 
+function HeaderValueHasToken(const AValue, AToken: string): Boolean;
+var
+  LStart: SizeInt;
+  LPos: SizeInt;
+begin
+  Result := False;
+  if AValue = '' then
+    Exit;
+
+  LStart := 1;
+  while LStart <= Length(AValue) do
+  begin
+    LPos := LStart;
+    while (LPos <= Length(AValue)) and (AValue[LPos] <> ',') do
+      Inc(LPos);
+    if LowerTrim(Copy(AValue, LStart, LPos - LStart)) = AToken then
+      Exit(True);
+    LStart := LPos + 1;
+  end;
+end;
+
+function HeaderValuesHaveToken(const AValues: TStringArray;
+  const AToken: string): Boolean;
+var
+  LI: SizeInt;
+begin
+  Result := False;
+  for LI := Low(AValues) to High(AValues) do
+    if HeaderValueHasToken(AValues[LI], AToken) then
+      Exit(True);
+end;
+
 function LowerAscii(const AChar: AnsiChar): AnsiChar; inline;
 begin
   if (AChar >= 'A') and (AChar <= 'Z') then
@@ -878,7 +910,7 @@ end;
 
 function TH1Parser.ShouldKeepAlive: Boolean;
 var
-  LConn: string;
+  LConnValues: TStringArray;
   LTransferEncoding: string;
 begin
   if (not FSkipBody) and
@@ -896,12 +928,12 @@ begin
       Exit(False);
   end;
 
-  LConn := LowerCase(FHeaders.Get('connection'));
-  if LConn = 'close' then
+  LConnValues := FHeaders.GetAll('connection');
+  if HeaderValuesHaveToken(LConnValues, 'close') then
     Exit(False);
 
   if FVersion = hvHttp10 then
-    Result := (LConn = 'keep-alive')
+    Result := HeaderValuesHaveToken(LConnValues, 'keep-alive')
   else
     Result := True;
 end;
