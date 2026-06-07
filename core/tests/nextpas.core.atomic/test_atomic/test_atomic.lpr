@@ -339,6 +339,8 @@ var
   LFetchMax64Section: string;
   LFetchMin64Section: string;
   LFetchNand64Section: string;
+  LPointerFetchAddSection: string;
+  LPointerFetchSubSection: string;
   LDefaultFetchMax32Section: string;
   LDefaultFetchMin32Section: string;
   LDefaultFetchNand32Section: string;
@@ -569,6 +571,12 @@ begin
   LFetchNand64Section := ExtractImplementationSection(LAtomicSource,
     'function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;',
     'function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64): Int64;');
+  LPointerFetchAddSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_add(var aObj: Pointer; aOffset: PtrInt): Pointer;',
+    '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}');
+  LPointerFetchSubSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_sub(var aObj: Pointer; aOffset: PtrInt): Pointer;',
+    '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}');
   LDefaultFetchMax32Section := ExtractImplementationSection(LAtomicSource,
     'function atomic_fetch_max(var aObj: Int32; aArg: Int32): Int32;',
     '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}');
@@ -724,6 +732,9 @@ begin
   CheckContains(LAtomicDocsReadme,
     'Invalid explicit orders raise `EArgumentError`: load rejects `mo_release`/`mo_acq_rel`, store rejects `mo_consume`/`mo_acquire`/`mo_acq_rel`, and dual-order CAS rejects release/acq_rel failure orders or failure orders stronger than success.',
     'atomic README must document invalid explicit memory-order contract');
+  CheckContains(LAtomicDocsReadme,
+    '`atomic_fetch_add/sub(var Pointer; PtrInt)` are the canonical main-facade pointer arithmetic APIs: they apply byte offsets, return the previous pointer, and publish the adjusted pointer; pointer bitwise overloads remain compat-only.',
+    'atomic README must document main-facade pointer arithmetic contract');
   CheckContains(LAtomicDocsReadme,
     '`atomic_fetch_max/min/nand` return the previous value, publish `max(old, arg)` / `min(old, arg)` / `not (old and arg)`, and their no-argument overloads default to `mo_seq_cst`.',
     'atomic README must document fetch_max/min/nand contract');
@@ -1235,6 +1246,15 @@ begin
     '    ;' + LineEnding +
     '  end;',
     'atomic_fetch_nand_64 non-x86 read-order case must have explicit else');
+  CheckContains(LPointerFetchAddSection,
+    'Result := Pointer(atomic_fetch_add(PInt32(@aObj)^, PInt32(@aOffset)^));',
+    'pointer atomic_fetch_add 32-bit path must delegate through scalar fetch_add');
+  CheckContains(LPointerFetchAddSection,
+    'Result := Pointer(atomic_fetch_add_64(PInt64(@aObj)^, PInt64(@aOffset)^));',
+    'pointer atomic_fetch_add 64-bit path must delegate through scalar fetch_add_64');
+  CheckContains(LPointerFetchSubSection,
+    'Result := atomic_fetch_add(aObj, -aOffset);',
+    'pointer atomic_fetch_sub must reuse pointer atomic_fetch_add with a negative offset');
   CheckContains(LDefaultFetchMax32Section,
     'Result := atomic_fetch_max(aObj, aArg, mo_seq_cst);',
     'default atomic_fetch_max must use seq_cst');
@@ -1473,6 +1493,26 @@ begin
     'atomic_fetch_nand_64 must return the previous 64-bit value');
   CheckEqual(Int64(not (Int64($0F0F0F0F0F0F0F0F) and Int64($00FF00FF00FF00FF))), LVal64,
     'atomic_fetch_nand_64 must publish not(old and arg) for 64-bit values');
+end;
+
+procedure TestAtomicPointerOffsetFetchContract;
+var
+  LBytes: array[0..7] of Byte;
+  LPtr: Pointer;
+  LOld: Pointer;
+begin
+  LPtr := @LBytes[1];
+  LOld := atomic_fetch_add(LPtr, 3);
+  Check(LOld = @LBytes[1],
+    'pointer atomic_fetch_add must return the previous pointer');
+  Check(LPtr = @LBytes[4],
+    'pointer atomic_fetch_add must publish the byte-offset pointer');
+
+  LOld := atomic_fetch_sub(LPtr, 2);
+  Check(LOld = @LBytes[4],
+    'pointer atomic_fetch_sub must return the previous pointer');
+  Check(LPtr = @LBytes[2],
+    'pointer atomic_fetch_sub must publish the byte-offset pointer');
 end;
 
 procedure TestAtomicInvalidMemoryOrderContract;
@@ -1991,6 +2031,7 @@ begin
   T.Run('typed atomic record API', @TestAtomicRecordTypes);
   T.Run('atomic flag API', @TestAtomicFlagApi);
   T.Run('fetch max/min/nand contract', @TestAtomicFetchMaxMinNandContract);
+  T.Run('pointer offset fetch contract', @TestAtomicPointerOffsetFetchContract);
   T.Run('invalid memory-order contract', @TestAtomicInvalidMemoryOrderContract);
   T.Run('compat PascalCase facade', @TestAtomicCompatFacade);
   T.Run('tagged pointer atomic API', @TestAtomicTaggedPointer);
