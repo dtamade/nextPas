@@ -286,6 +286,32 @@ begin
   platform_file_unlink(TARGET);
 end;
 
+procedure TestSymlinkReadlinkSmallBufferReturnsRequiredLength;
+var
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  LBuf: array[0..3] of AnsiChar;
+  LLen: Int32;
+const
+  TARGET = '/tmp/nextpas_readlink_small_target.txt';
+  LINK = '/tmp/nextpas_readlink_small_link.txt';
+begin
+  platform_file_unlink(LINK);
+  platform_file_unlink(TARGET);
+  platform_file_open(TARGET, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('abc'), 3, LWritten);
+  platform_file_close(H);
+  Check(platform_file_symlink(TARGET, LINK) = 0, 'small readlink symlink create');
+  FillChar(LBuf, SizeOf(LBuf), Ord('?'));
+  Check(platform_file_readlink(LINK, @LBuf[0], SizeOf(LBuf), LLen) = 0,
+    'small readlink succeeds');
+  Check(LLen = Length(TARGET), 'small readlink returns required target length');
+  Check(LBuf[0] = '/', 'small readlink preserves first byte');
+  Check(LBuf[SizeOf(LBuf) - 1] = #0, 'small readlink is NUL terminated');
+  platform_file_unlink(LINK);
+  platform_file_unlink(TARGET);
+end;
+
 procedure TestOpenEx;
 var
   H: TPlatformFileHandle;
@@ -416,6 +442,8 @@ begin
   T.Run('file lock exclusive', @TestLockExclusive);
   T.Run('file trylock conflict', @TestTrylockConflict);
   T.Run('symlink/readlink', @TestSymlinkReadlink);
+  T.Run('symlink/readlink small buffer',
+    @TestSymlinkReadlinkSmallBufferReturnsRequiredLength);
   T.Run('open_ex append', @TestOpenEx);
   T.Run('pread/pwrite', @TestPreadPwrite);
   T.Run('fstat', @TestFstat);

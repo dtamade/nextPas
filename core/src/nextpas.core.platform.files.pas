@@ -473,16 +473,28 @@ end;
 
 function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Int32;
 var
+  LStat: TPlatformFileStat;
   LResult: PtrInt;
+  LCopyLen: Int32;
 begin
   ALen := 0;
   if (ABuf = nil) or (ABufLen <= 0) then
     Exit(-1);
-  LResult := readlink(APath, ABuf, ABufLen - 1);
+  Result := platform_file_lstat(APath, LStat);
+  if Result <> 0 then
+    Exit;
+  if LStat.Size < 0 then
+    Exit(-1);
+  if LStat.Size > High(Int32) then
+    Exit(-1);
+  ALen := Int32(LStat.Size);
+  LCopyLen := ALen;
+  if LCopyLen >= ABufLen then
+    LCopyLen := ABufLen - 1;
+  LResult := readlink(APath, ABuf, LCopyLen);
   if LResult < 0 then
     Exit(platform_get_errno);
   ABuf[LResult] := #0;
-  ALen := Int32(LResult);
   Result := 0;
 end;
 
