@@ -47,25 +47,29 @@ Exit evidence:
 
 ## S4 SysUtils / TypInfo / Classes Compatibility Facades
 
-- [x] Record that SysUtils and Classes remain deferred and are not current phase gates.
-- [x] Record that no public units yet should exist for `system.sysutils` or `system.classes`.
+- [x] Record that broad SysUtils and Classes remain deferred and are not current phase gates.
+- [x] Record that no public unit yet should exist for `system.classes`.
 - [x] Record design-only S4 facade boundaries in `compatibility-facades.md`.
 - [x] Record live consumer pressure and migration risk in `compatibility-matrix.md`.
 - [x] Record TypInfo minimal pressure audit in `typinfo-minimal-pressure.md`.
 - [x] Prepare a TypInfo minimal unlock `Needs Review` packet with exact symbol list, owner boundary, file set, and focused gates.
 - [x] Add the minimal live `nextpas.core.system.typinfo` unit for the seven-symbol pressure set.
-- [ ] Decide whether SysUtils or Classes deserve `system.*` facade units.
+- [x] Add the minimal live `nextpas.core.system.sysutils` exception-formatting unit for `Format` and canonical exception aliases.
+- [ ] Decide whether broader SysUtils or Classes deserve `system.*` facade units.
 - [ ] Add only tested aliases or forwarding functions for future compatibility slices; no broad historical copy.
 - [ ] Keep filesystem, time, IO, math, text and collection implementation ownership in their existing modules.
 - [x] Report `Needs Review` before exposing compatibility API with wide consumer impact.
 
 Current phase note:
 
-- S4 is split: TypInfo minimal live unit is unlocked; SysUtils and Classes remain deferred.
+- S4 is split: TypInfo minimal live unit is unlocked; SysUtils has a minimal
+  exception-formatting live unit; Classes remains deferred.
+- SysUtils path, file, environment, time, and broad string-helper compatibility
+  remain deferred.
 - TypInfo minimal unlock was preceded by a dedicated `Needs Review` packet and is limited to
   `PTypeInfo`, `TTypeKind`, `TypeInfo`, `GetTypeKind`, `InitializeArray`, `FinalizeArray`, and `CopyArray`.
 - S4 is not a current phase gate for this lane.
-- no public units yet should exist for `nextpas.core.system.sysutils` or `nextpas.core.system.classes`.
+- no public unit yet should exist for `nextpas.core.system.classes`.
 - If real consumer pressure appears, reopen as `Needs Review` with focused evidence instead of creating
   broad placeholders.
 

@@ -1,18 +1,19 @@
 # S4 Compatibility Facade Design
 
 This document records the S4 compatibility boundary for `nextpas.core.system`.
-It now distinguishes one minimal live TypInfo facade from the still-deferred
-SysUtils and Classes facades. The live TypInfo unit is intentionally narrow; it
-does not convert bootstrap RTL pressure into a broad public compatibility API.
+It now distinguishes minimal live TypInfo and SysUtils facades from the
+still-deferred Classes facade. Both live units are intentionally narrow; they do
+not convert bootstrap RTL pressure into a broad public compatibility API.
 
 ## Current Decision Boundary
 
 - `nextpas.core.system.typinfo` has a minimal live unit for the seven-symbol
   pressure set.
-- `nextpas.core.system.sysutils` and `nextpas.core.system.classes` remain
-  deferred.
-- Deferred does not mean "undefined"; it means the public unit surface is not
-  live yet and is guarded by docs plus source-contract.
+- `nextpas.core.system.sysutils` has a minimal live exception-formatting unit
+  for `Format` and canonical exception aliases.
+- `nextpas.core.system.classes` remains deferred.
+- Deferred does not mean "undefined"; it means the broad public unit surface is
+  not live yet and is guarded by docs plus source-contract.
 - Any future broad compatibility facade still requires named consumer pressure,
   focused tests, and controller review.
 
@@ -24,7 +25,7 @@ The repository already contains bootstrap-oriented RTL source-of-truth files:
 | --- | --- | --- |
 | `rtl/core/sysutils/np_sysutils.pas` | minimal `SysUtils` subset for compiler bootstrap and Stage 2 self-hosting | bootstrap scope is "compiler can build", not "public core API is settled" |
 | `rtl/core/classes/np_classes.pas` | minimal `Classes` subset with `TFileStream` and `TStringList` | current shape is pragmatic bootstrap RTL, not a reviewed owner-boundary facade |
-| `compiler/tests/test_sysutils_createfmt_contract.pas` | proof that compiler bootstrap currently needs `Format`, `Exception.CreateFmt`, and `ExceptClass` behavior | pressure is real, but it is pressure on bootstrap RTL first, not proof that a `nextpas.core.system.sysutils` namespace is ready |
+| `compiler/tests/test_sysutils_createfmt_contract.pas` | proof that compiler bootstrap currently needs `Format`, `Exception.CreateFmt`, and `ExceptClass` behavior | pressure is enough for a minimal exception-formatting facade, but not for path, file, environment, time, or broad string-helper compatibility |
 | `compiler/tests/test_typinfo_contract.pas` | proof that compiler/runtime contracts already need `PTypeInfo`, `TypeInfo`, `InitializeArray`, `CopyArray`, and `FinalizeArray` | this proves RTTI lifecycle pressure, but also proves ABI/layout truth must stay compiler/runtime-led |
 
 S4 therefore must distinguish two concerns:
@@ -51,7 +52,7 @@ The pressure clusters into a few narrow capability families:
 
 | Capability family | Example symbols | Current pressure | Owner stance |
 | --- | --- | --- | --- |
-| exception formatting | `Format`, `Exception.CreateFmt`, `ExceptClass`, `EAssertionFailed` | real bootstrap/compiler pressure | exception taxonomy already lives in `nextpas.core.exception`; formatting should not automatically become `system.sysutils` ownership |
+| exception formatting | `Format`, `Exception.CreateFmt`, `ExceptClass`, `EAssertionFailed` | real bootstrap/compiler pressure | minimal live facade delegates `Format` to `nextpas.core.text.conv` and exception aliases to `nextpas.core.exception` |
 | path normalization | `ExpandFileName`, `ExtractFileDir`, `ExtractFileName`, `IncludeTrailingPathDelimiter`, `ExcludeTrailingPathDelimiter` | real toolchain/workspace pressure | path and filesystem semantics belong to `fs` / platform / process owners |
 | file and environment discovery | `FileExists`, `DirectoryExists`, `ForceDirectories`, `FileSearch`, `GetEnvironmentVariable` | real toolchain pressure | keep implementation ownership outside system |
 | string convenience | `Trim`, `SameText`, `LowerCase`, `UpperCase`, `IntToStr`, `StrToInt` | real compiler pressure | text/number helpers should stay explicit about owner and behavior |
@@ -59,24 +60,28 @@ The pressure clusters into a few narrow capability families:
 
 ### Current S4 stance
 
-- No live `nextpas.core.system.sysutils` unit yet.
+- A minimal live `nextpas.core.system.sysutils` unit exists.
+- The live unit exposes only `Format`, `Exception`, `ExceptClass`,
+  `EConvertError`, and `EAssertionFailed`.
 - Do not create a mirror of FPC `SysUtils`.
-- Do not move filesystem, environment, time, or formatting ownership into
-  `system`.
-- If reopened, the only acceptable `system.sysutils` shape is a tiny,
-  consumer-proven compatibility facade delegating to existing owners.
+- Do not move filesystem, environment, time, or text ownership into `system`.
+- Any further `system.sysutils` shape must stay tiny, consumer-proven, and
+  delegating to existing owners.
 
-### Candidate minimum if this unit is ever reopened
+### Current live minimum
 
-Only after review, a minimal surface could be considered for:
+The live contract is exactly:
 
-- exception-formatting compatibility that complements
-  `nextpas.core.system.Exception` rather than shadowing it;
-- path normalization entry points needed by compiler/runtime integration;
-- bootstrap-stable string helpers whose owner boundary is already explicit.
+- `Format`
+- `Exception`
+- `ExceptClass`
+- `EConvertError`
+- `EAssertionFailed`
 
-It should not start with:
+Anything larger should trigger `Needs Review`, including:
 
+- path normalization entry points;
+- bootstrap-stable string helpers;
 - `Now` / `FormatDateTime`;
 - broad file APIs;
 - process control;
@@ -199,9 +204,11 @@ tradeoffs as long-term public core API.
 
 ### Risk 2: Losing owner boundaries
 
-If `system.sysutils` absorbs file, environment, time, formatting, and process
+If `system.sysutils` absorbs file, environment, time, process, or broad text
 helpers, consumers will stop knowing whether a behavior is owned by `system`,
-`fs`, `platform`, `time`, `io`, or `text`.
+`fs`, `platform`, `time`, `io`, or `text`. The current live `Format` helper is
+kept as a delegating exception-formatting seam, not a transfer of text
+ownership.
 
 ### Risk 3: Freezing RTTI ABI too early
 
@@ -216,8 +223,8 @@ the same compatibility junk drawer this lane is explicitly trying to avoid.
 
 ## Reopen Criteria
 
-S4 should only reopen as `Needs Review` for SysUtils, Classes, or broader
-TypInfo reflection when all of the following are true:
+S4 should only reopen as `Needs Review` for broader SysUtils, Classes, or
+broader TypInfo reflection when all of the following are true:
 
 1. A named consumer cannot move forward without a stable `nextpas.core.system.*`
    namespace path rather than plain bootstrap RTL units.

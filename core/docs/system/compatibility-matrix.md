@@ -1,15 +1,15 @@
 # S4 Compatibility Matrix
 
-This matrix turns current S4 pressure into concrete review inputs. TypInfo now
-has a minimal live unit; SysUtils, Classes, and broader reflection remain
-deferred.
+This matrix turns current S4 pressure into concrete review inputs. TypInfo has
+a minimal live unit, SysUtils has a minimal live exception-formatting facade,
+and Classes plus broader reflection remain deferred.
 
 | Capability | Live evidence | Current provider | Recommended nextPas stance | Current S4 decision | Future unlock gate |
 | --- | --- | --- | --- | --- | --- |
-| `Format`, `Exception.CreateFmt`, `ExceptClass`, `EAssertionFailed` | `compiler/tests/test_sysutils_createfmt_contract.pas` | bootstrap `SysUtils` plus `nextpas.core.exception` re-export | keep exception taxonomy in `nextpas.core.exception`; any compatibility surface must stay narrow | no live `nextpas.core.system.sysutils` unit | compiler contract test plus exception taxonomy gate |
-| path normalization | `compiler/toolchain/np_toolchain_runner.pas`, `compiler/frontend/np_workspace_model.pas` | bootstrap `SysUtils` | delegate to fs/platform/process owners if ever surfaced | no live `nextpas.core.system.sysutils` unit | focused compiler/toolchain compile/test gate |
-| filesystem discovery helpers | `FileExists`, `DirectoryExists`, `ForceDirectories`, `FileSearch` in compiler toolchain/workspace code | bootstrap `SysUtils` | keep implementation outside system | no live `nextpas.core.system.sysutils` unit | toolchain/workspace consumer gate |
-| string convenience | `SameText`, `Trim`, `LowerCase`, `UpperCase`, `IntToStr`, `StrToInt` in compiler semantic code | bootstrap `SysUtils` | stay explicit about text/number ownership | no live `nextpas.core.system.sysutils` unit | semantic-model and analyzer consumer gate |
+| `Format`, `Exception.CreateFmt`, `ExceptClass`, `EAssertionFailed` | `compiler/tests/test_sysutils_createfmt_contract.pas` | minimal live `nextpas.core.system.sysutils` plus bootstrap `SysUtils` | keep exception taxonomy in `nextpas.core.exception`; delegate `Format` to `nextpas.core.text.conv` | minimal live exception-formatting facade | system sysutils minimal gate plus compiler contract test |
+| path normalization | `compiler/toolchain/np_toolchain_runner.pas`, `compiler/frontend/np_workspace_model.pas` | bootstrap `SysUtils` | delegate to fs/platform/process owners if ever surfaced | no live path surface in `nextpas.core.system.sysutils` | focused compiler/toolchain compile/test gate |
+| filesystem discovery helpers | `FileExists`, `DirectoryExists`, `ForceDirectories`, `FileSearch` in compiler toolchain/workspace code | bootstrap `SysUtils` | keep implementation outside system | no live filesystem surface in `nextpas.core.system.sysutils` | toolchain/workspace consumer gate |
+| string convenience | `SameText`, `Trim`, `LowerCase`, `UpperCase`, `IntToStr`, `StrToInt` in compiler semantic code | bootstrap `SysUtils` | stay explicit about text/number ownership | no live broad string-helper surface in `nextpas.core.system.sysutils` | semantic-model and analyzer consumer gate |
 | `PTypeInfo`, `TTypeKind`, `TypeInfo` | `compiler/tests/test_typinfo_contract.pas`, `core/src/nextpas.core.collections.element_manager.pas`, `core/src/nextpas.core.collections.hashmap.swiss.pas` | minimal live `nextpas.core.system.typinfo` plus compiler/System compile-truth | keep as identity and kind truth only; no property layout promise | minimal live unit | focused RTTI/collections + compiler contract gate |
 | `InitializeArray`, `CopyArray`, `FinalizeArray` | `compiler/tests/test_typinfo_contract.pas`, `core/src/nextpas.core.collections.element_manager.pas` | minimal live `nextpas.core.system.typinfo` wrappers over `System` helpers | treat as runtime-managed lifetime ABI, not reflection sugar | minimal live unit | leak-sensitive managed-array gate |
 | `GetTypeKind` | `core/src/nextpas.core.collections.hashmap.swiss.pas`, `core/src/nextpas.core.collections.btree.pas`, `core/src/nextpas.core.collections.concurrent.hashmap.pas` | compiler/System compile-truth imported with the minimal facade | keep tied to compiler/runtime type truth; do not fake a wrapper | minimal live compile-truth contract | collection contract gate proving stable type-kind semantics |
@@ -25,15 +25,17 @@ deferred.
 
 - Real pressure exists today for bootstrap `SysUtils`, `TypInfo`, and a small
   `Classes` subset.
-- The pressure is not yet proof that public `nextpas.core.system.sysutils` or
-  `nextpas.core.system.classes` units should exist.
+- SysUtils pressure is enough for a minimal exception-formatting unit, but not
+  for path, file, environment, time, or broad string-helper compatibility.
+- The pressure is not yet proof that a public `nextpas.core.system.classes`
+  unit should exist.
 - `TypInfo` has the strongest architectural pressure, so it now has a minimal
   live unit, but it also has the highest ABI risk.
 - The TypInfo candidate is narrowed in `typinfo-minimal-pressure.md`; the live
   unit is limited to seven symbols and does not include property reflection or
   metadata layout guarantees.
-- `SysUtils` has the broadest consumer count, but most of that pressure belongs
-  to owner modules or bootstrap RTL rather than `system` ownership.
+- `SysUtils` has the broadest consumer count, but most of that pressure still
+  belongs to owner modules or bootstrap RTL rather than `system` ownership.
 - `Classes` pressure is narrow and concrete, but narrow pressure is exactly why
   the future unit must stay narrow if it is ever approved.
 
@@ -45,4 +47,4 @@ prefer:
 1. broader `system.typinfo` only after a dedicated RTTI metadata review
 2. `system.classes` file/stream subset only if a named consumer needs
    the namespace path
-3. `system.sysutils` last, and only as a tiny delegating compatibility layer
+3. broader `system.sysutils` last, and only as a tiny delegating compatibility layer

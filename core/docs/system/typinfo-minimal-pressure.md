@@ -165,8 +165,8 @@ below to stay true:
    managed-lifetime tests with heaptrc zero-leak evidence.
 6. The implementation route does not freeze host FPC metadata as nextPas target
    ABI.
-7. Source-contract tests continue to prove that SysUtils and Classes facades
-   are not reopened by the TypInfo slice.
+7. Source-contract tests continue to prove that broader SysUtils and Classes
+   facades are not reopened by the TypInfo slice.
 
 ## Minimum Verification Gate
 
@@ -177,8 +177,8 @@ The first live TypInfo slice includes at least:
   `nextpas.core.collections.element_manager`;
 - collection specialization coverage for `GetTypeKind`-driven hash/tree paths;
 - heaptrc zero-leak evidence for managed string arrays;
-- source-contract proof that no property reflection or Classes/SysUtils surface
-  leaked into the unit.
+- source-contract proof that no property reflection, Classes surface, or
+  broader SysUtils surface leaked into the unit.
 
 ## Deferred Boundary
 

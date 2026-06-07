@@ -26,8 +26,8 @@ The correct current state is:
 
 - `nextpas.core.system.typinfo` exists as a minimal live unit;
 - the seven-symbol surface is the complete live contract for this slice;
-- `nextpas.core.system.sysutils`, `nextpas.core.system.classes`, and broader
-  `TypInfo` reflection remain deferred;
+- broader `nextpas.core.system.sysutils`, `nextpas.core.system.classes`, and
+  broader `TypInfo` reflection remain deferred;
 - any next expansion must still be a focused reviewed facade slice, not a broad
   `TypInfo` compatibility import.
 
@@ -170,13 +170,14 @@ Minimum verification for the first live unlock:
 Gate expectations:
 
 - managed-lifetime tests must end with heaptrc `0 unfreed memory blocks`;
-- source-contract must still prove `SysUtils` and `Classes` stay deferred;
+- source-contract must still prove broader `SysUtils` and `Classes` stay
+  deferred;
 - the compiler-facing gate must prove the seven-symbol contract without
   importing broader FPC `TypInfo` behavior.
 
 ## Explicit non-goals
 
-- do not create `nextpas.core.system.sysutils`
+- do not expand `nextpas.core.system.sysutils` beyond focused live pressure
 - do not create `nextpas.core.system.classes`
 - do not add property reflection
 - do not add method/property table readers

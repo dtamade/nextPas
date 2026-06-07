@@ -93,6 +93,7 @@ require_file "docs/system/compatibility-matrix.md"
 require_file "docs/system/typinfo-minimal-pressure.md"
 require_file "docs/plans/2026-06-07-system-typinfo-minimal-unlock-review.md"
 require_file "src/nextpas.core.system.typinfo.pas"
+require_file "src/nextpas.core.system.sysutils.pas"
 
 require_token "docs/system/README.md" "RTL root"
 require_token "docs/system/README.md" "owner boundary"
@@ -108,8 +109,9 @@ require_token "docs/system/README.md" "compatibility-matrix.md"
 require_token "docs/system/README.md" "typinfo-minimal-pressure.md"
 require_token "docs/system/README.md" "2026-06-07-system-typinfo-minimal-unlock-review.md"
 require_token "docs/system/README.md" "nextpas.core.system.typinfo"
+require_token "docs/system/README.md" "nextpas.core.system.sysutils"
 require_token "docs/system/README.md" "minimal live unit"
-require_token "docs/system/README.md" "SysUtils and Classes remain deferred"
+require_token "docs/system/README.md" "Classes remain deferred"
 
 for unit_name in System SysUtils TypInfo Classes ObjPas; do
   require_token "docs/system/rtl-mapping.md" "$unit_name"
@@ -133,7 +135,7 @@ for token in \
   "deferred" \
   "not a current phase gate" \
   "TypInfo minimal live unit is unlocked" \
-  'no public units yet should exist for `nextpas.core.system.sysutils` or `nextpas.core.system.classes`' \
+  'no public unit yet should exist for `nextpas.core.system.classes`' \
   "compatibility-facades.md" \
   "compatibility-matrix.md" \
   "typinfo-minimal-pressure.md"; do
@@ -145,6 +147,7 @@ for token in \
   "rtl/core/classes/np_classes.pas" \
   "compiler/tests/test_sysutils_createfmt_contract.pas" \
   "compiler/tests/test_typinfo_contract.pas" \
+  "nextpas.core.system.sysutils" \
   "nextpas.core.system.typinfo" \
   "nextpas.core.system.classes" \
   "minimal live unit" \
@@ -153,7 +156,9 @@ for token in \
   require_token "docs/system/compatibility-facades.md" "$token"
 done
 
-require_token "docs/system/compatibility-facades.md" 'No live `nextpas.core.system.sysutils` unit yet'
+require_token "docs/system/compatibility-facades.md" 'A minimal live `nextpas.core.system.sysutils` unit exists'
+require_token "docs/system/compatibility-facades.md" 'Format'
+require_token "docs/system/compatibility-facades.md" 'Exception.CreateFmt'
 require_token "docs/system/compatibility-facades.md" "typinfo-minimal-pressure.md"
 require_token "docs/system/compatibility-facades.md" "2026-06-07-system-typinfo-minimal-unlock-review.md"
 
@@ -175,6 +180,7 @@ require_token "docs/system/compatibility-matrix.md" "typinfo-minimal-pressure.md
 require_token "docs/system/rtl-mapping.md" "typinfo-minimal-pressure.md"
 require_token "docs/system/compatibility-matrix.md" "minimal live unit"
 require_token "docs/system/compatibility-matrix.md" "minimal live compile-truth contract"
+require_token "docs/system/compatibility-matrix.md" "minimal live exception-formatting facade"
 
 for token in \
   "S4 TypInfo Minimal Pressure Audit" \
@@ -279,7 +285,6 @@ done
 
 [[ ! -e "$CORE_ROOT/src/System.pas" ]] || fail "must not create bare FPC-conflicting System.pas"
 [[ ! -e "$CORE_ROOT/src/system.pas" ]] || fail "must not create bare FPC-conflicting system.pas"
-[[ ! -e "$CORE_ROOT/src/nextpas.core.system.sysutils.pas" ]] || fail "S4 deferred: no live nextpas.core.system.sysutils unit expected yet"
 [[ ! -e "$CORE_ROOT/src/nextpas.core.system.classes.pas" ]] || fail "S4 deferred: no live nextpas.core.system.classes unit expected yet"
 
 require_repo_file() {
@@ -368,6 +373,26 @@ reject_token "src/nextpas.core.system.typinfo.pas" "TPropInfo"
 reject_token "src/nextpas.core.system.typinfo.pas" "TTypeData"
 reject_token "src/nextpas.core.system.typinfo.pas" "function TypeInfo"
 reject_token "src/nextpas.core.system.typinfo.pas" "function GetTypeKind"
+
+require_token "src/nextpas.core.system.sysutils.pas" "unit nextpas.core.system.sysutils;"
+require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.exception"
+require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv"
+require_token "src/nextpas.core.system.sysutils.pas" "Exception = nextpas.core.exception.Exception;"
+require_token "src/nextpas.core.system.sysutils.pas" "ExceptClass = nextpas.core.exception.ExceptClass;"
+require_token "src/nextpas.core.system.sysutils.pas" "EAssertionFailed = nextpas.core.exception.EAssertionFailed;"
+require_token "src/nextpas.core.system.sysutils.pas" "function Format"
+require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv.Format"
+reject_token "src/nextpas.core.system.sysutils.pas" "FileExists"
+reject_token "src/nextpas.core.system.sysutils.pas" "DirectoryExists"
+reject_token "src/nextpas.core.system.sysutils.pas" "ForceDirectories"
+reject_token "src/nextpas.core.system.sysutils.pas" "ExpandFileName"
+reject_token "src/nextpas.core.system.sysutils.pas" "ExtractFileDir"
+reject_token "src/nextpas.core.system.sysutils.pas" "ExtractFileName"
+reject_token "src/nextpas.core.system.sysutils.pas" "GetEnvironmentVariable"
+reject_token "src/nextpas.core.system.sysutils.pas" "Now"
+reject_token "src/nextpas.core.system.sysutils.pas" "FormatDateTime"
+reject_token "src/nextpas.core.system.sysutils.pas" "TFileStream"
+reject_token "src/nextpas.core.system.sysutils.pas" "TStringList"
 
 mapfile -t system_units < <(find "$CORE_ROOT/src" -maxdepth 1 -name 'nextpas.core.system*.pas' | sort)
 (( ${#system_units[@]} > 0 )) || fail "no nextpas.core.system units found"
