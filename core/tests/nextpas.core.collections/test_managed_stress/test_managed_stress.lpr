@@ -5,6 +5,7 @@ program test_managed_stress;
 uses
   SysUtils,
   leak_tracker,
+  nextpas.core.collections.base,
   nextpas.core.collections.vec,
   nextpas.core.collections.vecdeque,
   nextpas.core.collections.hashmap,
@@ -81,6 +82,153 @@ begin
   finally D.Free; end;
   SnapAssert(Snap, 'VecDeque wrap + resize');
   Pass('VecDeque wrap + resize');
+end;
+
+procedure TestVecDequeManagedTryPopPointerOwnsRefsAndSyncsTail;
+type TDequeT = specialize TVecDeque<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, outItem, backItem: ITracked;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    t := MakeTracked(1); D.PushBack(t); t := nil;
+    t := MakeTracked(2); D.PushBack(t); t := nil;
+    t := MakeTracked(3); D.PushBack(t); t := nil;
+
+    if not D.TryPop(@outItem, 1) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPop(pointer) returned false');
+      Halt(1);
+    end;
+
+    if (outItem = nil) or (outItem.GetId <> 3) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPop(pointer) returned wrong item');
+      Halt(1);
+    end;
+
+    t := MakeTracked(4);
+    D.PushBack(t);
+    t := nil;
+
+    backItem := D.Back;
+    if (backItem = nil) or (backItem.GetId <> 4) then
+    begin
+      WriteLn('FAIL: VecDeque PushBack after TryPop(pointer) did not sync tail');
+      Halt(1);
+    end;
+    backItem := nil;
+
+    outItem := nil;
+    D.Clear;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed TryPop(pointer) owns refs and syncs tail');
+  Pass('VecDeque managed TryPop(pointer) owns refs and syncs tail');
+end;
+
+procedure TestVecDequeManagedTryPopArrayOwnsRefsAndSyncsTail;
+type
+  TDequeT = specialize TVecDeque<ITracked>;
+  TTrackedArray = specialize TGenericArray<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, backItem: ITracked;
+  outItems: TTrackedArray;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    t := MakeTracked(10); D.PushBack(t); t := nil;
+    t := MakeTracked(11); D.PushBack(t); t := nil;
+    t := MakeTracked(12); D.PushBack(t); t := nil;
+    t := MakeTracked(13); D.PushBack(t); t := nil;
+
+    if not D.TryPop(outItems, 2) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPop(array) returned false');
+      Halt(1);
+    end;
+
+    if (Length(outItems) <> 2) or
+       (outItems[0] = nil) or (outItems[0].GetId <> 12) or
+       (outItems[1] = nil) or (outItems[1].GetId <> 13) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPop(array) returned wrong items');
+      Halt(1);
+    end;
+
+    t := MakeTracked(14);
+    D.PushBack(t);
+    t := nil;
+
+    backItem := D.Back;
+    if (backItem = nil) or (backItem.GetId <> 14) then
+    begin
+      WriteLn('FAIL: VecDeque PushBack after TryPop(array) did not sync tail');
+      Halt(1);
+    end;
+    backItem := nil;
+
+    outItems := nil;
+    D.Clear;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed TryPop(array) owns refs and syncs tail');
+  Pass('VecDeque managed TryPop(array) owns refs and syncs tail');
+end;
+
+procedure TestVecDequeManagedTryPopElementOwnsRefsAndSyncsTail;
+type TDequeT = specialize TVecDeque<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, outItem, backItem: ITracked;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    t := MakeTracked(20); D.PushBack(t); t := nil;
+    t := MakeTracked(21); D.PushBack(t); t := nil;
+    t := MakeTracked(22); D.PushBack(t); t := nil;
+
+    if not D.TryPop(outItem) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPop(element) returned false');
+      Halt(1);
+    end;
+
+    if (outItem = nil) or (outItem.GetId <> 22) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPop(element) returned wrong item');
+      Halt(1);
+    end;
+
+    t := MakeTracked(23);
+    D.PushBack(t);
+    t := nil;
+
+    backItem := D.Back;
+    if (backItem = nil) or (backItem.GetId <> 23) then
+    begin
+      WriteLn('FAIL: VecDeque PushBack after TryPop(element) did not sync tail');
+      Halt(1);
+    end;
+    backItem := nil;
+
+    outItem := nil;
+    D.Clear;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed TryPop(element) owns refs and syncs tail');
+  Pass('VecDeque managed TryPop(element) owns refs and syncs tail');
 end;
 
 procedure TestHashMapRehash;
@@ -291,6 +439,9 @@ begin
   TestVecPopAll;
   TestVecDequePushPopClear;
   TestVecDequeWrapResize;
+  TestVecDequeManagedTryPopPointerOwnsRefsAndSyncsTail;
+  TestVecDequeManagedTryPopArrayOwnsRefsAndSyncsTail;
+  TestVecDequeManagedTryPopElementOwnsRefsAndSyncsTail;
   TestHashMapRehash;
   TestHashMapOverwrite;
   TestSwissTableManagedKeyValueLifecycle;

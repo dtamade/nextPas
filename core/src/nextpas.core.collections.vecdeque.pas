@@ -6686,7 +6686,7 @@ end;
 function TVecDeque.TryPop(aPtr: Pointer; aCount: SizeUInt): Boolean;
 var
   i: SizeUInt;
-  LPtr: PByte;
+  LPtr: PElement;
   LPhysicalIndex: SizeUInt;
 begin
   { 尝试从后端弹出指定数量的元素到指针 }
@@ -6702,18 +6702,19 @@ begin
     Exit;
   end;
 
-  // 复制元素到指针 - 进一步减少 GetPhysicalIndex 调用：一次起算 + 每次 WrapAdd
-  LPtr := PByte(aPtr);
+  LPtr := PElement(aPtr);
   LPhysicalIndex := GetPhysicalIndex(FCount - aCount);
   for i := 0 to aCount - 1 do
   begin
-    Move(FBuffer.GetPtrUnchecked(LPhysicalIndex)^, LPtr^, SizeOf(T));
-    Inc(LPtr, SizeOf(T));
+    LPtr^ := FBuffer.GetUnchecked(LPhysicalIndex);
+    Inc(LPtr);
     LPhysicalIndex := WrapAdd(LPhysicalIndex, 1);
   end;
 
-  // 移除元素
+  if GetIsManagedType then
+    ZeroUnchecked(FCount - aCount, aCount);
   Dec(FCount, aCount);
+  SyncCountAndTail;
   Result := True;
 end;
 
@@ -6746,8 +6747,10 @@ begin
     LPhysicalIndex := WrapAdd(LPhysicalIndex, 1);
   end;
 
-  // 移除元素
+  if GetIsManagedType then
+    ZeroUnchecked(FCount - aCount, aCount);
   Dec(FCount, aCount);
+  SyncCountAndTail;
   Result := True;
 end;
 
@@ -6761,7 +6764,10 @@ begin
   end;
 
   aElement := FBuffer.GetUnchecked(GetPhysicalIndex(FCount - 1));
+  if GetIsManagedType then
+    ZeroUnchecked(FCount - 1, 1);
   Dec(FCount);
+  SyncCountAndTail;
   Result := True;
 end;
 
