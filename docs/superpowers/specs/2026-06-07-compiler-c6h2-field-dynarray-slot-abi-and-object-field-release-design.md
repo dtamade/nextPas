@@ -268,6 +268,8 @@ Rejected for C6-H2. The slice becomes too broad to verify honestly.
 - exception/unwind cleanup
 - VMT/dynamic-runtime cleanup redesign
 - object property-backed dynarray ownership
+- binary object-layout compatibility with pre-C6-H2 dynarray-field layouts
+- base-typed receiver cleanup for derived-only dynarray fields
 
 ## Frozen C6-H2 ABI
 
@@ -313,7 +315,42 @@ At minimum:
 
 This is required so object cleanup does not free arbitrary pointer fields.
 
-### 3. Length truth
+### 3. Accepted layout ABI shift
+
+C6-H2 explicitly accepts a class-layout ABI change for dynarray fields.
+
+This means:
+
+- a class recompiled under C6-H2 is not layout-compatible with the old
+  pointer-only dynarray-field layout
+- any field declared after a dynarray field shifts by `+1` slot relative to the
+  pre-C6-H2 layout
+- inherited subclasses must reuse the already-widened parent layout instead of
+  recomputing offsets as if the parent dynarray field were still one slot
+
+This is a deliberate source-compatible but layout-changing compiler slice, not
+an attempt to preserve binary object-layout compatibility with older compiler
+outputs.
+
+The following contracts must stay locked together:
+
+- semantic field index truth
+  - `TypeMetaFieldIndex`
+  - inherited field metadata cloning
+  - parent-size-driven `FieldIndex` advancement
+- HIR field-address truth
+  - `shekField(... LiteralInt = field_index ...)`
+  - structured field-array target/value paths that consume that index
+- object-layout consumers
+  - ordinary field loads/stores
+  - field-array element addressing through the ptr slot
+  - string-field special-case reads that already rely on `idx + 1`
+  - new dynarray-field len reads that will rely on `idx + 1`
+
+No implementation step may update only one of these layers and leave the rest
+implicitly drifting.
+
+### 4. Length truth
 
 For dynarray fields under C6-H2:
 
@@ -437,6 +474,35 @@ The hidden cleanup helper:
 - calls `@np_dynarray_release(ptr, len, elem_size)`
 - clears the field back to `{null, 0}`
 
+### Base-typed receiver truth
+
+C6-H2 freezes a **compile-time receiver class** cleanup contract, not a
+polymorphic runtime-type cleanup contract.
+
+That means:
+
+- if the receiver is statically `TDerived`, cleanup must cover dynarray fields
+  declared on `TDerived` plus inherited dynarray fields from its ancestors
+- if the receiver is statically `TBase`, cleanup is only guaranteed for the
+  dynarray fields visible in `TBase`'s compile-time layout
+
+So for:
+
+```pascal
+var BaseRef: TBase;
+begin
+  BaseRef := TDerived.Create;
+  BaseRef.Free;
+end;
+```
+
+if `TDerived` introduces new dynarray fields beyond `TBase`, C6-H2 does **not**
+guarantee cleanup of those derived-only fields.
+
+This case is intentionally deferred with the wider polymorphic-finalization
+problem. C6-H2 must not claim stronger behavior than the current
+compile-time-class lowering can honestly provide.
+
 ### Classes without explicit destructor
 
 C6-H2 cleanup must **not** depend on the class having a user-declared
@@ -521,11 +587,15 @@ This round is spec-only, but the implementation slice that follows should have
 RED coverage for:
 
 - dynarray field metadata changing from pointer-only to explicit `{ptr,len}`
+- class/inheritance field indexes shifting consistently after widened dynarray
+  fields
 - owner-field `SetLength` using field resize, not `__field_setlength__`
 - repeated owner-field `SetLength` releasing old storage
 - `Length(FieldArr)` / `Length(Self.FieldArr)` reading the len slot
 - `Obj.Free` calling hidden dynarray-field cleanup before heap release
 - inherited dynarray fields participating in cleanup
+- `BaseRef.Free` remaining documented as compile-time-class-only, not silently
+  upgraded to polymorphic cleanup
 - string lowering and string field release remaining untouched
 - `@np_object_free_release` staying field-agnostic
 
