@@ -169,7 +169,7 @@ begin
         until LN = 0;
       end;
       LReply := 'echo:' + IntToStr(Int64(LTotal));
-      AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LReply))));
+      AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LReply))));
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(LReply[1], SizeUInt(Length(LReply)));
     end);
@@ -179,7 +179,7 @@ begin
       LBody: string;
     begin
       LBody := 'ok';
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(LBody[1], 2);
     end);
@@ -1434,7 +1434,7 @@ begin
     LI: Int32;
   begin
     Inc(LFirstCalls);
-    AW.GetHeaders.Set_('content-length', IntToStr(LBodyLen));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(LBodyLen));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBodyPrefix[1], SizeUInt(Length(LBodyPrefix)));
     for LI := 1 to BODY_CHUNK_COUNT do
@@ -1579,7 +1579,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LReply := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LReply))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LReply))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], SizeUInt(Length(LReply)));
   end);
@@ -1664,7 +1664,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LReply := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LReply))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LReply))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], SizeUInt(Length(LReply)));
   end);
@@ -1749,7 +1749,7 @@ begin
   begin
     LHandlerCalled := True;
     LReply := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], 2);
   end);
@@ -1885,7 +1885,7 @@ begin
   begin
     LHandlerCalled := True;
     LReply := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], 2);
   end);
@@ -1966,7 +1966,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LReply := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LReply))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LReply))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], SizeUInt(Length(LReply)));
   end);
@@ -2013,7 +2013,7 @@ begin
   begin
     LHandlerCalled := True;
     LBody := 'pong';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -4368,7 +4368,7 @@ begin
     LGotTrailerDecl := AReq.Headers.Get('Trailer');
     LGotTrailerValue := AReq.Headers.Get('X-Test');
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -4379,7 +4379,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);

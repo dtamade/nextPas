@@ -360,7 +360,7 @@ var
 begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
-  LRW.GetHeaders.Set_('Content-Type', 'text/plain');
+  LRW.GetHeaders.SetHeader('Content-Type', 'text/plain');
   LRW.WriteHeader(HTTP_STATUS_OK);
   LOut := LW.GetOutput;
   Check(Pos('content-type: text/plain'#13#10, LOut) > 0, 'header present');
@@ -379,7 +379,7 @@ var
 begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
-  LRW.GetHeaders.Set_('Content-Type', 'text/plain');
+  LRW.GetHeaders.SetHeader('Content-Type', 'text/plain');
   LRW.WriteHeader(HTTP_STATUS_OK);
   LBody := 'hello';
   LRW.Write(LBody[1], SizeUInt(Length(LBody)));
@@ -452,8 +452,8 @@ var
 begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
-  LRW.GetHeaders.Set_('Content-Type', 'text/html');
-  LRW.GetHeaders.Set_('X-Custom', 'value1');
+  LRW.GetHeaders.SetHeader('Content-Type', 'text/html');
+  LRW.GetHeaders.SetHeader('X-Custom', 'value1');
   LRW.GetHeaders.Add('X-Multi', 'a');
   LRW.GetHeaders.Add('X-Multi', 'b');
   LRW.WriteHeader(HTTP_STATUS_OK);
@@ -504,8 +504,8 @@ var
 begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
-  LRW.GetHeaders.Set_('Content-Type', 'text/plain');
-  LRW.GetHeaders.Set_('Content-Length', '5');
+  LRW.GetHeaders.SetHeader('Content-Type', 'text/plain');
+  LRW.GetHeaders.SetHeader('Content-Length', '5');
   LRW.WriteHeader(HTTP_STATUS_OK);
   LBody := 'hello';
   LRW.Write(LBody[1], SizeUInt(Length(LBody)));
@@ -686,7 +686,7 @@ var
 begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
-  LRW.GetHeaders.Set_('Transfer-Encoding', 'gzip');
+  LRW.GetHeaders.SetHeader('Transfer-Encoding', 'gzip');
   LRW.WriteHeader(HTTP_STATUS_OK);
   LBody := 'hello';
   LRW.Write(LBody[1], SizeUInt(Length(LBody)));
@@ -707,7 +707,7 @@ var
 begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
-  LRW.GetHeaders.Set_('Content-Length', '5');
+  LRW.GetHeaders.SetHeader('Content-Length', '5');
   LRW.WriteHeader(HTTP_STATUS_OK);
   LBody := 'hello';
   LRW.Write(LBody[1], SizeUInt(Length(LBody)));
@@ -793,7 +793,7 @@ var
 begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
-  LRW.GetHeaders.Set_('Link', '</style.css>; rel=preload');
+  LRW.GetHeaders.SetHeader('Link', '</style.css>; rel=preload');
   LRW.WriteHeader(HTTP_STATUS_EARLY_HINTS);
   LRW.WriteHeader(HTTP_STATUS_OK);
   LBody := 'ok';
@@ -917,7 +917,7 @@ var
 begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter, nil, True);
-  LRW.GetHeaders.Set_('content-length', '5');
+  LRW.GetHeaders.SetHeader('content-length', '5');
   LRW.WriteHeader(HTTP_STATUS_OK);
   LBody := 'hello';
   LRW.Write(LBody[1], SizeUInt(Length(LBody)));
@@ -1023,8 +1023,8 @@ var
 begin
   LW := TShortWriter.Create(1);
   LRW := TH1ResponseWriter.Create(LW as IWriter);
-  LRW.GetHeaders.Set_('Content-Length', '0');
-  LRW.GetHeaders.Set_('X-Test', 'ok');
+  LRW.GetHeaders.SetHeader('Content-Length', '0');
+  LRW.GetHeaders.SetHeader('X-Test', 'ok');
   LRW.WriteHeader(HTTP_STATUS_OK);
   LOut := LW.GetOutput;
   CheckEqual('HTTP/1.1 200 OK'#13#10 +
@@ -1044,8 +1044,8 @@ begin
   LW := TCountingWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
   try
-    LRW.GetHeaders.Set_('Content-Length', '0');
-    LRW.GetHeaders.Set_('X-Test', 'ok');
+    LRW.GetHeaders.SetHeader('Content-Length', '0');
+    LRW.GetHeaders.SetHeader('X-Test', 'ok');
     LRW.WriteHeader(HTTP_STATUS_OK);
     LOut := LW.GetOutput;
     CheckEqual('HTTP/1.1 200 OK'#13#10 +
@@ -1072,7 +1072,7 @@ procedure TestCommonStatusLinesUseSingleWriterCall;
     LRW := TH1ResponseWriter.Create(LW as IWriter);
     try
       if AWithContentLength then
-        LRW.GetHeaders.Set_('Content-Length', '0');
+        LRW.GetHeaders.SetHeader('Content-Length', '0');
       LRW.WriteHeader(AStatus);
       if AWithContentLength then
         CheckEqual(AExpected + 'content-length: 0'#13#10#13#10,
@@ -1116,7 +1116,7 @@ begin
   LW := TCountingWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
   try
-    LRW.GetHeaders.Set_('Content-Length', '0');
+    LRW.GetHeaders.SetHeader('Content-Length', '0');
     LRW.WriteHeader(THttpStatus(599));
     CheckEqual('HTTP/1.1 599 Unknown'#13#10 +
       'content-length: 0'#13#10 +
@@ -1137,7 +1137,7 @@ begin
   LW := TShortWriter.Create(1);
   LRW := TH1ResponseWriter.Create(LW as IWriter);
   try
-    LRW.GetHeaders.Set_('Content-Length', '0');
+    LRW.GetHeaders.SetHeader('Content-Length', '0');
     LRW.WriteHeader(HTTP_STATUS_HEADER_TOO_LARGE);
     CheckEqual('HTTP/1.1 431 Request Header Fields Too Large'#13#10 +
       'content-length: 0'#13#10 +
@@ -1161,8 +1161,8 @@ begin
   LW := TCountingWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
   try
-    LRW.GetHeaders.Set_('Content-Length', '0');
-    LRW.GetHeaders.Set_('X-Large', LValue);
+    LRW.GetHeaders.SetHeader('Content-Length', '0');
+    LRW.GetHeaders.SetHeader('X-Large', LValue);
     LRW.WriteHeader(HTTP_STATUS_OK);
     LOut := LW.GetOutput;
     CheckEqual('HTTP/1.1 200 OK'#13#10 +
@@ -1187,7 +1187,7 @@ var
 begin
   LW := TShortWriter.Create(1);
   LRW := TH1ResponseWriter.Create(LW as IWriter);
-  LRW.GetHeaders.Set_('Content-Length', '5');
+  LRW.GetHeaders.SetHeader('Content-Length', '5');
   LRW.WriteHeader(HTTP_STATUS_OK);
   LBody := 'hello';
   LWritten := LRW.Write(LBody[1], SizeUInt(Length(LBody)));

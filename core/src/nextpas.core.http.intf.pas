@@ -24,7 +24,7 @@ type
 
   IHttpHeaders = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000001}']
-    procedure Set_(const AName, AValue: string);
+    procedure SetHeader(const AName, AValue: string);
     procedure Add(const AName, AValue: string);
     function Get(const AName: string): string;
     function GetAll(const AName: string): TStringArray;
@@ -34,7 +34,6 @@ type
     function Count: Int32;
     procedure ForEach(const ACallback: THeaderIterator);
     function Clone: IHttpHeaders;
-    procedure SetHeader(const AName, AValue: string);
   end;
 
   IHttpRequest = interface

@@ -56,7 +56,7 @@ var
 begin
   LUrl := TUrl.Parse('http://example.com/api/users');
   LHeaders := NewHttpHeaders;
-  LHeaders.Set_('x-custom', 'client');
+  LHeaders.SetHeader('x-custom', 'client');
   LData := nil;
   SetLength(LData, 11);
   Move('hello-world'[1], LData[0], 11);
@@ -86,7 +86,7 @@ var
   LData: TBytes;
 begin
   LHeaders := NewHttpHeaders;
-  LHeaders.Set_('x-custom', 'client');
+  LHeaders.SetHeader('x-custom', 'client');
   LData := nil;
   SetLength(LData, 5);
   Move('hello'[1], LData[0], 5);
@@ -115,7 +115,7 @@ var
 begin
   LUrl := TUrl.Parse('http://example.com/api/users');
   LHeaders := NewHttpHeaders;
-  LHeaders.Set_('x-client', 'header-only');
+  LHeaders.SetHeader('x-client', 'header-only');
 
   LReq := NewRequest(hmGet, LUrl, LHeaders);
 
@@ -137,7 +137,7 @@ var
   LReq: IHttpRequest;
 begin
   LHeaders := NewHttpHeaders;
-  LHeaders.Set_('x-client', 'header-only-url');
+  LHeaders.SetHeader('x-client', 'header-only-url');
 
   LReq := NewRequest(hmHead, 'http://example.com/ping?x=1', LHeaders);
 
@@ -197,7 +197,7 @@ var
 begin
   LUrl := TUrl.Parse('http://example.com/api/users');
   LHeaders := NewHttpHeaders;
-  LHeaders.Set_('x-client', 'string-body');
+  LHeaders.SetHeader('x-client', 'string-body');
 
   LReq := NewRequest(hmPost, LUrl, LHeaders, 'hello');
 
@@ -226,7 +226,7 @@ var
 begin
   LUrl := TUrl.Parse('http://example.com/upload');
   LHeaders := NewHttpHeaders;
-  LHeaders.Set_('x-client', 'bytes-body');
+  LHeaders.SetHeader('x-client', 'bytes-body');
   SetLength(LBody, 5);
   LBody[0] := Ord('b');
   LBody[1] := Ord('i');
@@ -258,7 +258,7 @@ var
   LBody: TBytes;
 begin
   LHeaders := NewHttpHeaders;
-  LHeaders.Set_('x-client', 'bytes-url');
+  LHeaders.SetHeader('x-client', 'bytes-url');
   SetLength(LBody, 2);
   LBody[0] := Ord('o');
   LBody[1] := Ord('k');
@@ -796,7 +796,7 @@ var
   LH: IHttpHeaders;
 begin
   LH := NewHttpHeaders;
-  LH.Set_('X-Custom', 'hello');
+  LH.SetHeader('X-Custom', 'hello');
   LResp := NewResponse(HTTP_STATUS_OK, LH, nil);
   CheckEqual('hello', LResp.Headers.Get('X-Custom'), 'response header');
 end;

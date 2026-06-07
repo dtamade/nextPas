@@ -3,6 +3,8 @@ program test_http_headers;
 {$I nextpas.core.settings.inc}
 
 uses
+  Classes,
+  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.testing,
@@ -12,6 +14,44 @@ uses
 
 var
   T: TTestRunner;
+
+function LoadTextFile(const APath: string): string;
+var
+  LText: TStringList;
+begin
+  LText := TStringList.Create;
+  try
+    LText.LoadFromFile(APath);
+    Result := LText.Text;
+  finally
+    LText.Free;
+  end;
+end;
+
+procedure CheckSourceNotContains(const ASource, AFragment, ALabel: string);
+begin
+  Check(Pos(AFragment, ASource) = 0,
+    ALabel + ' unexpectedly contains: ' + AFragment);
+end;
+
+procedure TestHeadersPublicApiDoesNotExposeSetUnderscore;
+var
+  LLegacyName: string;
+begin
+  LLegacyName := 'Set' + '_';
+  CheckSourceNotContains(LoadTextFile('../../../src/nextpas.core.http.intf.pas'),
+    LLegacyName, 'IHttpHeaders public interface');
+  CheckSourceNotContains(LoadTextFile('../../../src/nextpas.core.http.headers.pas'),
+    LLegacyName, 'THttpHeaders public API');
+  CheckSourceNotContains(LoadTextFile('../../../src/nextpas.core.http.impl.h1.fast.pas'),
+    LLegacyName, 'TFastLazyHeaders public API');
+  CheckSourceNotContains(LoadTextFile('../../../docs/http/README.md'),
+    LLegacyName, 'HTTP README');
+  CheckSourceNotContains(LoadTextFile('../../../docs/http/API_COVERAGE.md'),
+    LLegacyName, 'HTTP API coverage');
+  CheckSourceNotContains(LoadTextFile('../../../docs/http/ARCHITECTURE.md'),
+    LLegacyName, 'HTTP architecture');
+end;
 
 procedure TestSetAndGetBasic;
 var
@@ -27,7 +67,7 @@ var
   LH: IHttpHeaders;
 begin
   LH := NewHttpHeaders;
-  LH.Set_('Content-Type', 'application/json');
+  LH.SetHeader('Content-Type', 'application/json');
   CheckEqual('application/json', LH.Get('content-type'), 'lowercase lookup');
   CheckEqual('application/json', LH.Get('CONTENT-TYPE'), 'uppercase lookup');
   CheckEqual('application/json', LH.Get('Content-type'), 'mixed lookup');
@@ -68,7 +108,7 @@ begin
   LH.Add('X-Custom', 'old1');
   LH.Add('X-Custom', 'old2');
   CheckEqual(Int64(2), Int64(LH.Count), 'before set');
-  LH.Set_('X-Custom', 'new');
+  LH.SetHeader('X-Custom', 'new');
   CheckEqual(Int64(1), Int64(LH.Count), 'after set replaces all');
   CheckEqual('new', LH.Get('X-Custom'), 'new value');
 end;
@@ -94,7 +134,7 @@ var
 begin
   LH := NewHttpHeaders;
   Check(not LH.Has('X-Missing'), 'missing returns false');
-  LH.Set_('X-Present', 'yes');
+  LH.SetHeader('X-Present', 'yes');
   Check(LH.Has('X-Present'), 'present returns true');
   Check(LH.Has('x-present'), 'case insensitive has');
   Check(LH.Has('X-PRESENT'), 'uppercase has');
@@ -117,7 +157,7 @@ var
   LH, LClone: IHttpHeaders;
 begin
   LH := NewHttpHeaders;
-  LH.Set_('Host', 'example.com');
+  LH.SetHeader('Host', 'example.com');
   LH.Add('Accept', 'text/html');
   LClone := LH.Clone;
   // Verify clone has same data
@@ -152,7 +192,7 @@ var
   LH: IHttpHeaders;
 begin
   LH := NewHttpHeaders;
-  LH.Set_('X-Keep', 'val');
+  LH.SetHeader('X-Keep', 'val');
   LH.Del('X-Gone');
   CheckEqual(Int64(1), Int64(LH.Count), 'del non-existent no-op');
   CheckEqual('val', LH.Get('X-Keep'), 'existing preserved');
@@ -171,7 +211,7 @@ begin
   LH.Add('X-C', 'c1');
 
   LH.Del('X-B');
-  LH.Set_('X-A', 'a3');
+  LH.SetHeader('X-A', 'a3');
   LH.Add('X-D', 'd1');
 
   CheckEqual(Int64(3), Int64(LH.Count), 'count after del/set/add');
@@ -204,7 +244,7 @@ begin
   LH := NewHttpHeaders;
   LH.Add('X-A', 'a1');
   LH.Add('X-A', 'a2');
-  LH.Set_('X-B', 'b1');
+  LH.SetHeader('X-B', 'b1');
 
   LH.Clear;
 
@@ -226,7 +266,7 @@ begin
 
   LH.Add('X-C', 'c1');
   LH.Add('X-C', 'c2');
-  LH.Set_('X-D', 'd1');
+  LH.SetHeader('X-D', 'd1');
 
   CheckEqual(Int64(3), Int64(LH.Count), 'reused count');
   LAll := LH.GetAll('X-C');
@@ -325,7 +365,7 @@ begin
   LRaised := False;
   try
     if AUseSet then
-      LH.Set_(AName, AValue)
+      LH.SetHeader(AName, AValue)
     else
       LH.Add(AName, AValue);
   except
@@ -348,7 +388,7 @@ var
   LH: IHttpHeaders;
 begin
   LH := NewHttpHeaders;
-  LH.Set_('authorization', 'Bearer old');
+  LH.SetHeader('authorization', 'Bearer old');
 
   SetBasicAuth(LH, 'Aladdin', 'open sesame');
 
@@ -396,6 +436,8 @@ end;
 
 begin
   T := TTestRunner.Create('nextpas.core.http.headers');
+  T.Run('Headers public API does not expose Set underscore',
+    @TestHeadersPublicApiDoesNotExposeSetUnderscore);
   T.Run('Set and Get basic', @TestSetAndGetBasic);
   T.Run('Case-insensitive lookup', @TestCaseInsensitiveLookup);
   T.Run('Add multiple values', @TestAddMultipleValues);

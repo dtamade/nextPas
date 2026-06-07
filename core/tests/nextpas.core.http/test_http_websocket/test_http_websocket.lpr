@@ -347,7 +347,7 @@ begin
     except
       on E: EHttpError do
       begin
-        AW.GetHeaders.Set_('content-length', '0');
+        AW.GetHeaders.SetHeader('content-length', '0');
         AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
       end;
     end;
@@ -389,7 +389,7 @@ begin
     except
       on E: EHttpError do
       begin
-        AW.GetHeaders.Set_('content-length', '0');
+        AW.GetHeaders.SetHeader('content-length', '0');
         AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
       end;
     end;
@@ -425,7 +425,7 @@ begin
     except
       on E: EHttpError do
       begin
-        AW.GetHeaders.Set_('content-length', '0');
+        AW.GetHeaders.SetHeader('content-length', '0');
         AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
       end;
     end;

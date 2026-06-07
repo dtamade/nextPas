@@ -1361,7 +1361,7 @@ begin
     'TFastLazyHeaders.GetAllRawValues body');
   LCountRawBody := ExtractSourceBlock(LSource,
     'function TFastLazyHeaders.CountRawHeaders',
-    'procedure TFastLazyHeaders.Set_',
+    'procedure TFastLazyHeaders.SetHeader',
     'TFastLazyHeaders.CountRawHeaders body');
   LGetBody := ExtractSourceBlock(LSource,
     'function TFastLazyHeaders.Get(const AName: string): string;',

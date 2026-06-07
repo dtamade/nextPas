@@ -124,7 +124,7 @@ end;
 
 procedure TAddHeaderHandler.ServeHTTP(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
 begin
-  AW.GetHeaders.Set_(FName, FValue);
+  AW.GetHeaders.SetHeader(FName, FValue);
   FNext.ServeHTTP(AReq, AW);
 end;
 
@@ -154,7 +154,7 @@ end;
 procedure TBlockMiddlewareHandler.ServeHTTP(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
 begin
   GLog := GLog + 'blocked;';
-  AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(FBody))));
+  AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(FBody))));
   AW.WriteHeader(FStatus);
   if FBody <> '' then
     AW.Write(FBody[1], SizeUInt(Length(FBody)));
@@ -226,7 +226,7 @@ begin
     begin
       GHandlerCalled := True;
       LBody := 'world';
-      AW.GetHeaders.Set_('content-length', '5');
+      AW.GetHeaders.SetHeader('content-length', '5');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(LBody[1], SizeUInt(Length(LBody)));
     end);
@@ -258,7 +258,7 @@ begin
     LRouter.Get('/users/:id', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
       LGotId := AReq.PathParam('id');
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(PAnsiChar('ok')^, 2);
     end);
@@ -291,7 +291,7 @@ begin
     begin
       LGotUid := AReq.PathParam('uid');
       LGotPid := AReq.PathParam('pid');
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(PAnsiChar('ok')^, 2);
     end);
@@ -322,7 +322,7 @@ begin
     LRouter.Get('/static/*filepath', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
       LGotPath := AReq.PathParam('filepath');
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(PAnsiChar('ok')^, 2);
     end);
@@ -411,7 +411,7 @@ begin
     LRouter.Use(TAddHeaderMiddleware.Create('x-custom', 'injected'));
     LRouter.Get('/test', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(PAnsiChar('ok')^, 2);
     end);
@@ -443,7 +443,7 @@ begin
     LRouter.Get('/test', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
       GLog := GLog + 'handler;';
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(PAnsiChar('ok')^, 2);
     end);
@@ -505,7 +505,7 @@ begin
     LRouter.Get('/items/:id', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
       LGotId := AReq.PathParam('id');
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(PAnsiChar('ok')^, 2);
     end);
@@ -532,7 +532,7 @@ begin
   LHeaders := NewHttpHeaders;
   LCaught := False;
   try
-    LHeaders.Set_('x-bad', 'value'#13#10'injected: yes');
+    LHeaders.SetHeader('x-bad', 'value'#13#10'injected: yes');
   except
     on E: EHttpError do
       LCaught := True;
@@ -548,7 +548,7 @@ begin
   LHeaders := NewHttpHeaders;
   LCaught := False;
   try
-    LHeaders.Set_('', 'value');
+    LHeaders.SetHeader('', 'value');
   except
     on E: EHttpError do
       LCaught := True;
@@ -564,7 +564,7 @@ begin
   LHeaders := NewHttpHeaders;
   LCaught := False;
   try
-    LHeaders.Set_('bad:name', 'value');
+    LHeaders.SetHeader('bad:name', 'value');
   except
     on E: EHttpError do
       LCaught := True;
@@ -640,7 +640,7 @@ begin
   { When Content-Length is set, Connection: close should NOT be added }
   LBuf := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LBuf as IWriter);
-  LRW.GetHeaders.Set_('content-length', '5');
+  LRW.GetHeaders.SetHeader('content-length', '5');
   LRW.WriteHeader(HTTP_STATUS_OK);
   LBody := 'hello';
   LRW.Write(LBody[1], SizeUInt(Length(LBody)));

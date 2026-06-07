@@ -522,8 +522,8 @@ begin
     LLocation := FRedirectLocation;
     if LLocation = '' then
       LLocation := '/new?from=redirect';
-    LHeaders.Set_('location', LLocation);
-    LHeaders.Set_('content-length', '0');
+    LHeaders.SetHeader('location', LLocation);
+    LHeaders.SetHeader('content-length', '0');
     LStatus := FRedirectStatus;
     if LStatus = 0 then
       LStatus := HTTP_STATUS_FOUND;
@@ -545,7 +545,7 @@ begin
   FSeenWwwAuthenticateHeader := AReq.Headers.Get('www-authenticate');
   FSeenCookieHeader := AReq.Headers.Get('cookie');
   FSeenCookie2Header := AReq.Headers.Get('cookie2');
-  LHeaders.Set_('content-length', '7');
+  LHeaders.SetHeader('content-length', '7');
   Result := NewResponse(HTTP_STATUS_OK, LHeaders, StringBodyReader('arrived'));
 end;
 
@@ -660,7 +660,7 @@ begin
     raise EHttpError.Create('request body transport failed');
 
   LHeaders := NewHttpHeaders;
-  LHeaders.Set_('content-length', '0');
+  LHeaders.SetHeader('content-length', '0');
   Result := NewResponse(HTTP_STATUS_OK, LHeaders, nil);
 end;
 
@@ -687,13 +687,13 @@ begin
   if FCalls = 1 then
   begin
     if not FOmitLocation then
-      LHeaders.Set_('location', FRedirectLocation);
-    LHeaders.Set_('content-length', '13');
+      LHeaders.SetHeader('location', FRedirectLocation);
+    LHeaders.SetHeader('content-length', '13');
     Exit(NewResponse(HTTP_STATUS_FOUND, LHeaders, FBodyRef as IReader));
   end;
 
   FBodyClosedBeforeFollowup := FBody.Closed;
-  LHeaders.Set_('content-length', '7');
+  LHeaders.SetHeader('content-length', '7');
   if FBodyClosedBeforeFollowup then
     Result := NewResponse(HTTP_STATUS_OK, LHeaders, StringBodyReader('arrived'))
   else
@@ -741,13 +741,13 @@ begin
   LHeaders := NewHttpHeaders;
   if FCalls = 1 then
   begin
-    LHeaders.Set_('location', '/final');
-    LHeaders.Set_('content-length', '13');
+    LHeaders.SetHeader('location', '/final');
+    LHeaders.SetHeader('content-length', '13');
     Exit(NewResponse(HTTP_STATUS_FOUND, LHeaders, FBodyRef));
   end;
 
   FBodyDrainedBeforeFollowup := FBody.Drained;
-  LHeaders.Set_('content-length', '7');
+  LHeaders.SetHeader('content-length', '7');
   if FBodyDrainedBeforeFollowup then
     Result := NewResponse(HTTP_STATUS_OK, LHeaders, StringBodyReader('arrived'))
   else
@@ -862,7 +862,7 @@ begin
   var LB: string;
   begin
     LB := 'world';
-    AW.GetHeaders.Set_('content-length', '5');
+    AW.GetHeaders.SetHeader('content-length', '5');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], 5);
   end);
@@ -940,8 +940,8 @@ begin
   begin
     LGotHeader := AReq.Headers.Get('x-custom');
     LB := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
-    AW.GetHeaders.Set_('x-echo', LGotHeader);
+    AW.GetHeaders.SetHeader('content-length', '2');
+    AW.GetHeaders.SetHeader('x-echo', LGotHeader);
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], 2);
   end);
@@ -950,7 +950,7 @@ begin
     LClient := NewHttpClient;
     LUrl := TUrl.Parse('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/echo-header');
     LReq := THttpRequest.Create(hmGet, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
-    LReq.Headers.Set_('x-custom', 'hello-from-client');
+    LReq.Headers.SetHeader('x-custom', 'hello-from-client');
     LResp := LClient.Do_(LReq);
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     CheckEqual('hello-from-client', LResp.Headers.Get('x-echo'), 'custom header echoed');
@@ -979,7 +979,7 @@ begin
   begin
     LGotAuth := AReq.Headers.Get('authorization');
     LB := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], 2);
   end);
@@ -1020,7 +1020,7 @@ begin
   var LB: string;
   begin
     LB := 'accepted';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
     AW.WriteHeader(HTTP_STATUS_CREATED);
     AW.Write(LB[1], SizeUInt(Length(LB)));
   end);
@@ -1070,7 +1070,7 @@ begin
     LGotContentLength := AReq.ContentLength;
     LGotBody := ReadReaderStr(AReq.Body);
     LB := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], 2);
   end);
@@ -1078,7 +1078,7 @@ begin
   try
     LClient := NewHttpClient;
     LHeaders := NewHeaders;
-    LHeaders.Set_('x-client', 'request-helper');
+    LHeaders.SetHeader('x-client', 'request-helper');
     LReq := nextpas.core.http.NewRequest(hmPost,
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/builder',
       LHeaders, 'payload');
@@ -1131,7 +1131,7 @@ begin
     LGotPath := AReq.Path;
     LGotQuery := AReq.RawQuery;
     LB := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], 2);
   end);
@@ -1139,7 +1139,7 @@ begin
   try
     LClient := NewHttpClient;
     LHeaders := NewHeaders;
-    LHeaders.Set_('x-client', 'headers-only');
+    LHeaders.SetHeader('x-client', 'headers-only');
     LReq := nextpas.core.http.NewRequest(hmGet,
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/headers-only?x=1',
       LHeaders);
@@ -1187,7 +1187,7 @@ begin
     LGotContentLength := AReq.ContentLength;
     LGotBody := ReadReaderStr(AReq.Body);
     LB := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], 2);
   end);
@@ -1195,7 +1195,7 @@ begin
   try
     LClient := NewHttpClient;
     LHeaders := NewHeaders;
-    LHeaders.Set_('x-client', 'bytes-helper');
+    LHeaders.SetHeader('x-client', 'bytes-helper');
     SetLength(LBody, 5);
     LBody[0] := Ord('b');
     LBody[1] := Ord('i');
@@ -1243,7 +1243,7 @@ begin
     LGotHeaderCount := AReq.Headers.Count;
     LGotBody := ReadReaderStr(AReq.Body);
     LB := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], 2);
   end);
@@ -1294,7 +1294,7 @@ begin
     LGotHeaderCount := AReq.Headers.Count;
     LGotBody := ReadReaderStr(AReq.Body);
     LB := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], 2);
   end);
@@ -1351,7 +1351,7 @@ begin
     LGotHeaderCount := AReq.Headers.Count;
     LGotBody := ReadReaderStr(AReq.Body);
     LB := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], 2);
   end);
@@ -1407,7 +1407,7 @@ begin
     LGotHeaderCount := AReq.Headers.Count;
     LGotBody := ReadReaderStr(AReq.Body);
     LB := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], 2);
   end);
@@ -1475,7 +1475,7 @@ begin
     LGotContentLength := AReq.ContentLength;
     LGotBody := ReadReaderStr(AReq.Body);
     LB := 'accepted';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
     AW.WriteHeader(HTTP_STATUS_CREATED);
     AW.Write(LB[1], SizeUInt(Length(LB)));
   end);
@@ -1523,7 +1523,7 @@ begin
     LGotContentLength := AReq.ContentLength;
     LGotBody := ReadReaderStr(AReq.Body);
     LB := 'patched';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], SizeUInt(Length(LB)));
   end);
@@ -1578,7 +1578,7 @@ begin
     LGotContentLength := AReq.ContentLength;
     LGotBody := ReadReaderStr(AReq.Body);
     LB := 'put-ok';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], SizeUInt(Length(LB)));
   end);
@@ -1623,7 +1623,7 @@ begin
     LGotContentLength := AReq.ContentLength;
     LGotBody := ReadReaderStr(AReq.Body);
     LB := 'deleted';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], SizeUInt(Length(LB)));
   end);
@@ -1667,7 +1667,7 @@ begin
     LGotContentLength := AReq.ContentLength;
     LGotBody := ReadReaderStr(AReq.Body);
     LB := 'patch-ok';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], SizeUInt(Length(LB)));
   end);
@@ -1708,8 +1708,8 @@ begin
   begin
     LGotMethod := AReq.Method;
     LReply := 'hello';
-    AW.GetHeaders.Set_('content-length', '5');
-    AW.GetHeaders.Set_('x-head-ok', 'yes');
+    AW.GetHeaders.SetHeader('content-length', '5');
+    AW.GetHeaders.SetHeader('x-head-ok', 'yes');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], SizeUInt(Length(LReply)));
   end);
@@ -1848,7 +1848,7 @@ begin
     LBody: string;
   begin
     LBody := 'toolchain';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -1878,7 +1878,7 @@ var
   LCount: Int64;
 begin
   LHeaders := NewHttpHeaders;
-  LHeaders.Set_('content-length', '9');
+  LHeaders.SetHeader('content-length', '9');
   LBody := TRedirectTrackedBody.Create('toolchain');
   LBodyRef := LBody as IReadCloser;
   LClient := TDownloadClient.Create(NewResponse(HTTP_STATUS_OK, LHeaders,
@@ -1901,7 +1901,7 @@ var
   LRaised: Boolean;
 begin
   LHeaders := NewHttpHeaders;
-  LHeaders.Set_('content-length', '9');
+  LHeaders.SetHeader('content-length', '9');
   LBody := TRedirectTrackedBody.Create('toolchain');
   LBodyRef := LBody as IReadCloser;
   LClient := TDownloadClient.Create(NewResponse(HTTP_STATUS_OK, LHeaders,
@@ -1929,7 +1929,7 @@ var
   LRaised: Boolean;
 begin
   LHeaders := NewHttpHeaders;
-  LHeaders.Set_('content-length', '9');
+  LHeaders.SetHeader('content-length', '9');
   LBody := TRedirectTrackedBody.Create('not-found');
   LBodyRef := LBody as IReadCloser;
   LClient := TDownloadClient.Create(NewResponse(HTTP_STATUS_NOT_FOUND, LHeaders,
@@ -1964,7 +1964,7 @@ begin
     LResponseBody: string;
   begin
     LResponseBody := 'response text';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LResponseBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LResponseBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LResponseBody[1], SizeUInt(Length(LResponseBody)));
   end);
@@ -2021,7 +2021,7 @@ begin
     LResponseBody: string;
   begin
     LResponseBody := 'bin' + #0 + #255 + 'ary';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LResponseBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LResponseBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LResponseBody[1], SizeUInt(Length(LResponseBody)));
   end);
@@ -2073,7 +2073,7 @@ var
   LResp: IHttpResponse;
 begin
   LHeaders := NewHttpHeaders;
-  LHeaders.Set_('content-length', '7');
+  LHeaders.SetHeader('content-length', '7');
   LBody := TRedirectTrackedBody.Create('discard');
   LBodyRef := LBody as IReadCloser;
   LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LBodyRef as IReader);
@@ -2092,7 +2092,7 @@ var
   LResp: IHttpResponse;
 begin
   LHeaders := NewHttpHeaders;
-  LHeaders.Set_('content-length', '7');
+  LHeaders.SetHeader('content-length', '7');
   LBody := TRedirectDrainingBody.Create('discard');
   LBodyRef := LBody as IReader;
   LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LBodyRef);
@@ -2300,7 +2300,7 @@ begin
     LBody: string;
   begin
     LBody := 'bootstrap-bits';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -2338,7 +2338,7 @@ begin
     LBody: string;
   begin
     LBody := 'not-found';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -2428,15 +2428,15 @@ begin
   LRouter := THttpRouter.Create;
   LRouter.Get('/old', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    AW.GetHeaders.Set_('location', '/new');
-    AW.GetHeaders.Set_('content-length', '0');
+    AW.GetHeaders.SetHeader('location', '/new');
+    AW.GetHeaders.SetHeader('content-length', '0');
     AW.WriteHeader(THttpStatus(301));
   end);
   LRouter.Get('/new', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   var LB: string;
   begin
     LB := 'arrived';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], SizeUInt(Length(LB)));
   end);
@@ -2468,8 +2468,8 @@ begin
   LRouter := THttpRouter.Create;
   LRouter.Post('/submit', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    AW.GetHeaders.Set_('location', '/complete');
-    AW.GetHeaders.Set_('content-length', '0');
+    AW.GetHeaders.SetHeader('location', '/complete');
+    AW.GetHeaders.SetHeader('content-length', '0');
     AW.WriteHeader(HTTP_STATUS_SEE_OTHER);
   end);
   LRouter.Get('/complete', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
@@ -2479,7 +2479,7 @@ begin
     LGotFinalMethod := AReq.Method;
     LGotFinalBody := ReadReaderStr(AReq.Body);
     LB := 'done';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], SizeUInt(Length(LB)));
   end);
@@ -2516,8 +2516,8 @@ begin
   LRouter := THttpRouter.Create;
   LRouter.Get('/old', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    AW.GetHeaders.Set_('location', '/new?from=redirect');
-    AW.GetHeaders.Set_('content-length', '0');
+    AW.GetHeaders.SetHeader('location', '/new?from=redirect');
+    AW.GetHeaders.SetHeader('content-length', '0');
     AW.WriteHeader(HTTP_STATUS_FOUND);
   end);
   LRouter.Get('/new', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
@@ -2528,7 +2528,7 @@ begin
     LGotRawQuery := AReq.RawQuery;
     LGotQueryParam := AReq.QueryParam('from');
     LB := 'arrived';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], SizeUInt(Length(LB)));
   end);
@@ -2802,11 +2802,11 @@ begin
   LTransport := LTransportObj;
   LClient := NewHttpClient(LTransport);
   LHeaders := NewHeaders;
-  LHeaders.Set_('x-trace', 'trace-1');
-  LHeaders.Set_('authorization', 'Bearer same-host');
-  LHeaders.Set_('www-authenticate', 'Basic realm="api"');
-  LHeaders.Set_('cookie', 'session=abc');
-  LHeaders.Set_('cookie2', 'legacy=1');
+  LHeaders.SetHeader('x-trace', 'trace-1');
+  LHeaders.SetHeader('authorization', 'Bearer same-host');
+  LHeaders.SetHeader('www-authenticate', 'Basic realm="api"');
+  LHeaders.SetHeader('cookie', 'session=abc');
+  LHeaders.SetHeader('cookie2', 'legacy=1');
   LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
   LResp := LClient.Do_(LReq);
   CheckEqual(Int64(2), Int64(LTransportObj.Calls),
@@ -2840,11 +2840,11 @@ begin
   LTransport := LTransportObj;
   LClient := NewHttpClient(LTransport);
   LHeaders := NewHeaders;
-  LHeaders.Set_('x-trace', 'trace-2');
-  LHeaders.Set_('authorization', 'Bearer cross-host');
-  LHeaders.Set_('www-authenticate', 'Basic realm="api"');
-  LHeaders.Set_('cookie', 'session=def');
-  LHeaders.Set_('cookie2', 'legacy=2');
+  LHeaders.SetHeader('x-trace', 'trace-2');
+  LHeaders.SetHeader('authorization', 'Bearer cross-host');
+  LHeaders.SetHeader('www-authenticate', 'Basic realm="api"');
+  LHeaders.SetHeader('cookie', 'session=def');
+  LHeaders.SetHeader('cookie2', 'legacy=2');
   LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
   LResp := LClient.Do_(LReq);
   CheckEqual(Int64(2), Int64(LTransportObj.Calls),
@@ -2880,7 +2880,7 @@ begin
   LTransport := LTransportObj;
   LClient := NewHttpClient(LTransport);
   LHeaders := NewHeaders;
-  LHeaders.Set_('host', 'override.test');
+  LHeaders.SetHeader('host', 'override.test');
   LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
   LResp := LClient.Do_(LReq);
   CheckEqual(Int64(2), Int64(LTransportObj.Calls),
@@ -2909,7 +2909,7 @@ begin
   LTransport := LTransportObj;
   LClient := NewHttpClient(LTransport);
   LHeaders := NewHeaders;
-  LHeaders.Set_('host', 'override.test');
+  LHeaders.SetHeader('host', 'override.test');
   LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
   LResp := LClient.Do_(LReq);
   CheckEqual(Int64(2), Int64(LTransportObj.Calls),
@@ -3159,8 +3159,8 @@ begin
   LRouter := THttpRouter.Create;
   LRouter.Get('/loop', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    AW.GetHeaders.Set_('location', '/loop');
-    AW.GetHeaders.Set_('content-length', '0');
+    AW.GetHeaders.SetHeader('location', '/loop');
+    AW.GetHeaders.SetHeader('content-length', '0');
     AW.WriteHeader(THttpStatus(302));
   end);
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
@@ -3242,7 +3242,7 @@ begin
     CheckEqual(Int64(1), Int64(GRetryAcceptCount), 'priming request opened first connection');
 
     LHeaders := NewHeaders;
-    LHeaders.Set_('idempotency-key', 'retry-safe');
+    LHeaders.SetHeader('idempotency-key', 'retry-safe');
     LReq := NewRequest(hmPost,
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
       LHeaders, StringBodyReader('payload'), Int64(7));
@@ -3347,7 +3347,7 @@ begin
     CheckEqual(Int64(1), Int64(GRetryAcceptCount), 'priming request opened first connection');
 
     LHeaders := NewHeaders;
-    LHeaders.Set_('idempotency-key', 'retry-safe');
+    LHeaders.SetHeader('idempotency-key', 'retry-safe');
     LReq := NewRequest(hmPost,
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
       LHeaders, TOneShotReader.Create('payload') as IReader, Int64(7));
@@ -3393,7 +3393,7 @@ begin
   begin
     { Sleep 2 seconds — longer than client timeout }
     platform_thread_sleep_ns(2000000000);
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(PAnsiChar('ok')^, 2);
   end);
@@ -3429,7 +3429,7 @@ begin
   LRouter := THttpRouter.Create;
   LRouter.Get('/exists', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(PAnsiChar('ok')^, 2);
   end);
@@ -3461,7 +3461,7 @@ begin
   begin
     LGotHost := AReq.Headers.Get('host');
     LB := LGotHost;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
     AW.WriteHeader(HTTP_STATUS_OK);
     if Length(LB) > 0 then
       AW.Write(LB[1], SizeUInt(Length(LB)));

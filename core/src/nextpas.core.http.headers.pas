@@ -32,7 +32,6 @@ type
     class procedure ValidateValue(const AValue: string); static;
   public
     procedure SetHeader(const AName, AValue: string);
-    procedure Set_(const AName, AValue: string);
     procedure Add(const AName, AValue: string);
     // Trusted parser path: name/value syntax has already been validated.
     procedure AddParsed(const AName, AValue: string);
@@ -249,11 +248,6 @@ begin
     FEntries[FCount].Value := AValue;
     Inc(FCount);
   end;
-end;
-
-procedure THttpHeaders.Set_(const AName, AValue: string);
-begin
-  SetHeader(AName, AValue);
 end;
 
 procedure THttpHeaders.Add(const AName, AValue: string);

@@ -66,7 +66,6 @@ type
   public
     constructor Create(const ABuf: PAnsiChar; const ALen: SizeUInt);
     procedure SetHeader(const AName, AValue: string);
-    procedure Set_(const AName, AValue: string);
     procedure Add(const AName, AValue: string);
     function Get(const AName: string): string;
     function GetAll(const AName: string): TStringArray;
@@ -285,11 +284,6 @@ procedure TFastLazyHeaders.SetHeader(const AName, AValue: string);
 begin
   EnsureMaterialized;
   FHeaders.SetHeader(AName, AValue);
-end;
-
-procedure TFastLazyHeaders.Set_(const AName, AValue: string);
-begin
-  SetHeader(AName, AValue);
 end;
 
 procedure TFastLazyHeaders.Add(const AName, AValue: string);
