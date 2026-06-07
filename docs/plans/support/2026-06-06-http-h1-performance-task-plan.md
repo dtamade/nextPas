@@ -308,7 +308,7 @@ nil headers 传播到 client/H1 code path。
 
 对齐 request/response message helper ergonomics：`NewResponse(Status, nil, Body)`
 应创建空 `IHttpHeaders`，调用方可以安全读取或追加 response headers，而不是拿到
-nil headers 并在 `.Get` / `.Set_` 时触发 access violation。
+nil headers 并在 `.Get` / `.SetHeader` 时触发 access violation。
 
 ### Checklist
 
