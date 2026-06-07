@@ -201,6 +201,63 @@ begin
     'async loop stop must publish stopped state');
 end;
 
+procedure TestAsyncLoopWakeSeamContract;
+var
+  LAsyncLoop: string;
+  LWakeBody: string;
+  LWaitBody: string;
+  LPostBody: string;
+  LScheduleBody: string;
+  LScheduleAtBody: string;
+  LCancelBody: string;
+  LSleepBody: string;
+  LTimeoutCreateBody: string;
+begin
+  LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
+  LWakeBody := ExtractBetween(LAsyncLoop, 'procedure tasyncloop.wake',
+    'procedure tasyncloop.post');
+  LPostBody := ExtractBetween(LAsyncLoop, 'procedure tasyncloop.post',
+    'procedure tasyncloop.drainwake');
+  LWaitBody := ExtractBetween(LAsyncLoop, 'procedure tasyncloop.waitforwake',
+    'procedure tasyncloop.drainpending');
+  LScheduleBody := ExtractBetween(LAsyncLoop, 'function tasyncloop.schedule',
+    'function tasyncloop.scheduleat');
+  LScheduleAtBody := ExtractBetween(LAsyncLoop, 'function tasyncloop.scheduleat',
+    'function tasyncloop.canceltimer');
+  LCancelBody := ExtractBetween(LAsyncLoop, 'function tasyncloop.canceltimer',
+    'function tasyncloop.asyncread');
+  LSleepBody := ExtractBetween(LAsyncLoop, 'function tasyncloop.asyncsleep',
+    'function tasyncloop.asyncreadtimeout');
+  LTimeoutCreateBody := ExtractBetween(LAsyncLoop, 'function timeoutctxcreate',
+    '{ tasyncloop }');
+
+  CheckContains(LWakeBody, 'platform_poller_wake(fwakepoller);',
+    'async loop Wake must target the platform poller wake seam');
+  CheckContains(LWaitBody,
+    'platform_poller_wait(fwakepoller, @lentry, 1, atimeoutms, lcount);',
+    'async loop WaitForWake must block only through the platform poller wait seam');
+  CheckContains(LPostBody, 'wake;',
+    'async loop Post must wake waiters after enqueuing pending callbacks');
+
+  CheckBefore(LScheduleBody, 'result := ftimers.scheduleafter',
+    'wake;',
+    'async loop Schedule must wake waiters after adding a timer');
+  CheckBefore(LScheduleAtBody, 'result := ftimers.schedule',
+    'wake;',
+    'async loop ScheduleAt must wake waiters after adding a timer');
+  CheckBefore(LCancelBody, 'result := ftimers.cancel(ahandle);',
+    'wake;',
+    'async loop CancelTimer must wake waiters after changing timer state');
+  CheckContains(LCancelBody, 'if result then',
+    'async loop CancelTimer must wake only when a timer was actually cancelled');
+  CheckBefore(LSleepBody, 'result := ftimers.scheduleafter',
+    'wake;',
+    'async sleep must wake waiters after adding a sleep timer');
+  CheckBefore(LTimeoutCreateBody, 'result^.timerhandle := aloop^.ftimers.schedule',
+    'aloop^.wake;',
+    'timeout context creation must wake waiters after adding its deadline timer');
+end;
+
 procedure TestIocpCloseAbortOwnershipContract;
 var
   LIocp: string;
@@ -1017,6 +1074,8 @@ begin
     @TestIocpRunStopFlushLifecycleContract);
   T.Run('async loop run lifecycle contract',
     @TestAsyncLoopRunLifecycleContract);
+  T.Run('async loop wake seam contract',
+    @TestAsyncLoopWakeSeamContract);
   T.Run('IOCP close abort ownership contract',
     @TestIocpCloseAbortOwnershipContract);
   T.Run('IOCP close/run wake handoff contract',

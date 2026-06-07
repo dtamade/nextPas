@@ -188,6 +188,7 @@ begin
   Result^.RefCount := 2;
   Result^.TimerHandle := ALoop^.FTimers.Schedule(ADeadline,
     @TimeoutTimerCallback, Result);
+  ALoop^.Wake;
 end;
 
 { TAsyncLoop }
@@ -308,6 +309,7 @@ begin
   if not FWakeReady then
     Exit(TAsyncTimerHandle.None);
   Result := FTimers.ScheduleAfter(ADelay, ACallback, AContext);
+  Wake;
 end;
 
 function TAsyncLoop.ScheduleAt(const ADeadline: TDeadline; ACallback: TAsyncCallback;
@@ -316,6 +318,7 @@ begin
   if not FWakeReady then
     Exit(TAsyncTimerHandle.None);
   Result := FTimers.Schedule(ADeadline, ACallback, AContext);
+  Wake;
 end;
 
 function TAsyncLoop.CancelTimer(const AHandle: TAsyncTimerHandle): Boolean;
@@ -323,6 +326,8 @@ begin
   if not FWakeReady then
     Exit(False);
   Result := FTimers.Cancel(AHandle);
+  if Result then
+    Wake;
 end;
 
 function TAsyncLoop.AsyncRead(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
@@ -479,6 +484,7 @@ begin
   if not FWakeReady then
     Exit(TAsyncTimerHandle.None);
   Result := FTimers.ScheduleAfter(ADelay, ACallback, AContext);
+  Wake;
 end;
 
 function TAsyncLoop.AsyncReadTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
