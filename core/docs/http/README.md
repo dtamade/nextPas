@@ -180,9 +180,10 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - Relative, path-relative, and network-path redirect `Location` values are
   resolved before the follow-up request is passed to the transport. Absolute
   `http` / `https` redirect schemes are matched case-insensitively and
-  normalized to lowercase for the follow-up request; unsupported absolute
-  schemes raise `EHttpError` before a second round trip. Path-relative redirects
-  merge against the original request directory and normalize dot segments, while
+  normalized to lowercase for the follow-up request; any absolute `Location`
+  with another scheme, including non-hierarchical `scheme:` forms, raises
+  `EHttpError` before a second round trip. Path-relative redirects merge
+  against the original request directory and normalize dot segments, while
   network-path URLs inherit the original scheme and replace
   authority/path/query/fragment. Fragment-only redirects preserve the original
   path/query and update only the request URL fragment; H1 request writing still

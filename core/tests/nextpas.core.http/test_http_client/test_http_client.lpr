@@ -2574,6 +2574,54 @@ begin
     'unsupported redirect scheme does not perform second round trip');
 end;
 
+procedure TestClientRedirectRejectsUnsupportedNonHierarchicalScheme;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := 'mailto:ops@example.test';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LRaised := False;
+  try
+    LClient.Get('http://example.test/old');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised,
+    'absolute redirect with non-hierarchical unsupported scheme raises EHttpError');
+  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
+    'unsupported non-hierarchical redirect scheme does not perform second round trip');
+end;
+
+procedure TestClientRedirectRejectsUnsupportedSingleSlashScheme;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := 'ftp:/redirect.test/new';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LRaised := False;
+  try
+    LClient.Get('http://example.test/old');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised,
+    'absolute redirect with single-slash unsupported scheme raises EHttpError');
+  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
+    'unsupported single-slash redirect scheme does not perform second round trip');
+end;
+
 procedure TestClientRedirectTransportResolvesPathRelativeLocation;
 var
   LTransportObj: TRedirectCaptureTransport;
@@ -3520,6 +3568,10 @@ begin
     @TestClientRedirectTransportResolvesUppercaseAbsoluteLocation);
   T.Run('Client redirect rejects unsupported absolute scheme',
     @TestClientRedirectRejectsUnsupportedAbsoluteScheme);
+  T.Run('Client redirect rejects unsupported non-hierarchical scheme',
+    @TestClientRedirectRejectsUnsupportedNonHierarchicalScheme);
+  T.Run('Client redirect rejects unsupported single-slash scheme',
+    @TestClientRedirectRejectsUnsupportedSingleSlashScheme);
   T.Run('Client redirect transport resolves path-relative Location',
     @TestClientRedirectTransportResolvesPathRelativeLocation);
   T.Run('Client redirect transport normalizes dot-segment Location',

@@ -172,8 +172,21 @@ end;
 function RedirectAbsoluteScheme(const ALocation: string): string;
 var
   LSchemeEnd: SizeInt;
+  LI: SizeInt;
 begin
-  LSchemeEnd := Pos('://', ALocation);
+  LSchemeEnd := 0;
+  for LI := 1 to Length(ALocation) do
+  begin
+    case ALocation[LI] of
+      ':':
+      begin
+        LSchemeEnd := LI;
+        Break;
+      end;
+      '/', '?', '#':
+        Break;
+    end;
+  end;
   if LSchemeEnd <= 1 then
     Exit('');
   Result := LowerCase(System.Copy(ALocation, 1, LSchemeEnd - 1));

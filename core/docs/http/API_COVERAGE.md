@@ -252,9 +252,11 @@
     可见性，避免 future H2/H3 transport 继续收到 base host 或未解析 path。
   - 继续收紧：absolute redirect scheme 现在按 case-insensitive `http` /
     `https` 匹配，并在 follow-up request 中规范成小写；unsupported
-    `://` absolute scheme 会在第二次 round trip 前抛 `EHttpError`。显式注入
+    absolute scheme 会在第二次 round trip 前抛 `EHttpError`，包括
+    `ftp://...`、`ftp:/...` 与 `mailto:...` 这类带 scheme 但不应被当作
+    relative target 的 `Location`。显式注入
     `IHttpTransport` 的 proof 锁住 `HTTP://redirect.test/...` 不再被误当成
-    relative target，也锁住 `ftp://...` 不会静默落到 base authority。
+    relative target，也锁住 unsupported scheme 不会静默落到 base authority。
   - 继续收紧：path-relative redirect `Location`（例如 `next?from=...`）
     现在会按 base URL 目录合并 path，而不是把 follow-up path 变成裸 `next`。
     显式注入 `IHttpTransport` 的 proof 锁住 `/dir/old` -> `/dir/next`
