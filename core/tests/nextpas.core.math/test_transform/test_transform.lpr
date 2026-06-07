@@ -160,6 +160,16 @@ begin
   Perspective(Double(HALF_PI), Double(1.0), Double(5.0), Double(5.0));
 end;
 
+procedure RaisePerspectiveFarLessThanNearSingle;
+begin
+  Perspective(Single(HALF_PI), Single(1.0), Single(5.0), Single(4.0));
+end;
+
+procedure RaisePerspectiveFarLessThanNearDouble;
+begin
+  Perspective(Double(HALF_PI), Double(1.0), Double(5.0), Double(4.0));
+end;
+
 procedure RaiseLookAtCoincidentEyeSingle;
 begin
   LookAt(TVec3f.Create(1.0, 2.0, 3.0), TVec3f.Create(1.0, 2.0, 3.0),
@@ -785,6 +795,10 @@ begin
     'Perspective single far not greater', @RaisePerspectiveFarNotGreaterSingle);
   ExpectArgumentErrorMessage('Perspective: far plane must be greater than near plane',
     'Perspective double far not greater', @RaisePerspectiveFarNotGreaterDouble);
+  ExpectArgumentErrorMessage('Perspective: far plane must be greater than near plane',
+    'Perspective single far less than near', @RaisePerspectiveFarLessThanNearSingle);
+  ExpectArgumentErrorMessage('Perspective: far plane must be greater than near plane',
+    'Perspective double far less than near', @RaisePerspectiveFarLessThanNearDouble);
   ExpectArgumentErrorMessage('Perspective: vertical FOV is invalid',
     'Perspective single invalid FOV', @RaisePerspectiveInvalidFovSingle);
   ExpectArgumentErrorMessage('Perspective: vertical FOV is invalid',
