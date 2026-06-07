@@ -140,6 +140,16 @@ begin
   Camera2D(Double(0.0), Double(0.0), Double(0.0), 100, 100);
 end;
 
+procedure RaiseCamera2DNegativeZoomSingle;
+begin
+  Camera2D(Single(0.0), Single(0.0), Single(-1.0), 100, 100);
+end;
+
+procedure RaiseCamera2DNegativeZoomDouble;
+begin
+  Camera2D(Double(0.0), Double(0.0), Double(-1.0), 100, 100);
+end;
+
 procedure RaiseOrthoZeroDepthDouble;
 begin
   Ortho(Double(-1.0), Double(1.0), Double(-1.0), Double(1.0), Double(5.0), Double(5.0));
@@ -812,7 +822,13 @@ begin
   ExpectArgumentErrorMessage('LookAt: up vector must not be parallel to forward',
     'LookAt double parallel up', @RaiseLookAtParallelUpDouble);
   ExpectArgumentErrorMessage('Camera2D: zoom must be positive',
+    'Camera2D single zero zoom', @RaiseCamera2DZeroZoom);
+  ExpectArgumentErrorMessage('Camera2D: zoom must be positive',
     'Camera2D double zero zoom', @RaiseCamera2DZeroZoomDouble);
+  ExpectArgumentErrorMessage('Camera2D: zoom must be positive',
+    'Camera2D single negative zoom', @RaiseCamera2DNegativeZoomSingle);
+  ExpectArgumentErrorMessage('Camera2D: zoom must be positive',
+    'Camera2D double negative zoom', @RaiseCamera2DNegativeZoomDouble);
   ExpectArgumentErrorMessage('Camera2D: viewport width must be positive',
     'Camera2D single zero width', @RaiseCamera2DZeroWidthSingle);
   ExpectArgumentErrorMessage('Camera2D: viewport width must be positive',

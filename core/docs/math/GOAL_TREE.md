@@ -61,7 +61,7 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   owner-level `Ortho`, `Perspective`, `LookAt`, `Translate`, `Scale`, `Rotate*`, and `Camera2D`
   guard messages, direct `Double`-path parity for projection/view/model/camera builders, and
   direct `Single` / `Double` parity coverage across the public guard-message families, including
-  `Scale(Double)` Y-axis finite guard parity.
+  `Scale(Double)` Y-axis finite guard parity and `Camera2D` zero/negative zoom parity.
 - `nextpas.core.math.easing` now provides `TEasingFunction` and the final `Ease*` function family.
 - Easing tests cover every public easing function with endpoints, representative midpoint/branch
   points, finite out-of-range extrapolation, NaN/Inf rejection, and exact owner-level
@@ -275,10 +275,10 @@ Status:
   `Perspective: vertical FOV is invalid` contract and direct far-plane ordering parity for
   `far = near` and `far < near`, exact owner-level finite guard messages for `LookAt`
   eye/target/up inputs plus `Translate` / `Scale` axis inputs, `RotateX/Y/Z` radian inputs, and
-  `Camera2D` center/zoom finite inputs plus positive-zoom validation, with direct `Single` /
-  `Double` parity coverage across those public guard-message families, including `Scale(Double)`
-  Y-axis finite guard parity, invalid projection inputs, and `Translate * Rotate * Scale` local
-  composition.
+  `Camera2D` center/zoom finite inputs plus positive-zoom validation for zero and negative zoom,
+  with direct `Single` / `Double` parity coverage across those public guard-message families,
+  including `Scale(Double)` Y-axis finite guard parity, invalid projection inputs, and
+  `Translate * Rotate * Scale` local composition.
 
 ## M5: Easing
 
