@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CORE_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 REQUESTS=20000
 THREADS=4
+REQUESTED_THREADS=4
+EFFECTIVE_THREADS=4
 WORKLOAD="no_url"
 WORKLOAD_EXPLICIT=0
 RUNS=1
@@ -85,8 +87,11 @@ if [[ "${REQUESTS}" -lt 1 || "${THREADS}" -lt 1 || "${RUNS}" -lt 1 ]]; then
   exit 2
 fi
 
+REQUESTED_THREADS="${THREADS}"
 if [[ "${THREADS}" -gt "${REQUESTS}" ]]; then
-  THREADS="${REQUESTS}"
+  EFFECTIVE_THREADS="${REQUESTS}"
+else
+  EFFECTIVE_THREADS="${THREADS}"
 fi
 
 case "${WORKLOAD}" in
@@ -159,6 +164,8 @@ cargo_version=${cargo_version}
 hyper_cargo_lock_sha256=${hyper_cargo_lock_sha256}
 requests=${REQUESTS}
 threads=${THREADS}
+requested_threads=${REQUESTED_THREADS}
+effective_threads=${EFFECTIVE_THREADS}
 workload=${WORKLOAD}
 runs=${RUNS}
 include_hyper=${INCLUDE_HYPER}

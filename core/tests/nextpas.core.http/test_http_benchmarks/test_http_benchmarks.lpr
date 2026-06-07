@@ -2055,6 +2055,47 @@ begin
     'snapshot runs rust std summary marker');
 end;
 
+procedure TestServerComparisonSnapshotPreservesRequestedThreads;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LSnapshotPath: string;
+  LSnapshot: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath),
+    'server comparison snapshot thread clamp runner exists');
+  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_snapshot_thread_clamp_smoke.md');
+  DeleteFile(LSnapshotPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '3', '--threads', '5',
+    '--output', LSnapshotPath], LRootDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison snapshot thread clamp exit code: ' + LOutput);
+
+  Check(FileExists(LSnapshotPath),
+    'server comparison snapshot thread clamp exists');
+  LSnapshot := LoadTextFile(LSnapshotPath);
+  CheckContains(LSnapshot, 'requests=3',
+    'snapshot thread clamp requests marker');
+  CheckContains(LSnapshot, 'threads=5',
+    'snapshot thread clamp requested threads marker');
+  CheckContains(LSnapshot, 'requested_threads=5',
+    'snapshot thread clamp explicit requested threads marker');
+  CheckContains(LSnapshot, 'effective_threads=3',
+    'snapshot thread clamp effective threads marker');
+  CheckContains(LSnapshot,
+    'run_server_comparison.sh --requests 3 --threads 5 --runs 1',
+    'snapshot thread clamp command marker');
+  CheckServerBenchmarkOutput(LSnapshot, 'nextpas', '3', '3');
+  CheckRequestedAndEffectiveThreads(LSnapshot, '5', '3',
+    'snapshot thread clamp raw row');
+end;
+
 procedure TestServerComparisonSnapshotIncludeHyperSmoke;
 var
   LRootDir: string;
@@ -2669,6 +2710,8 @@ begin
     @TestServerComparisonSnapshotUrlPathSmoke);
   T.Run('server comparison snapshot runs smoke',
     @TestServerComparisonSnapshotRunsSmoke);
+  T.Run('server comparison snapshot preserves requested threads',
+    @TestServerComparisonSnapshotPreservesRequestedThreads);
   T.Run('server comparison snapshot include hyper smoke',
     @TestServerComparisonSnapshotIncludeHyperSmoke);
   T.Run('C llhttp comparator requires LLHTTP_ROOT',

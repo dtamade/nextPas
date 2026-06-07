@@ -84,6 +84,9 @@ benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
 The snapshot helper embeds the raw runner output into the Markdown file and
 then removes the intermediate `${output}.raw` file. Treat the `.md` snapshot as
 the durable artifact; the adjacent `.raw` file is only a temporary capture path.
+Its environment block now also records `requested_threads=...` and
+`effective_threads=...`, so a later thread clamp does not silently erase the
+original command argument from the long-lived snapshot.
 
 This comparator is a benchmark-truth seam, not a final Rust ecosystem ranking:
 it covers a minimal Hyper HTTP/1.1 server on Tokio with the same raw keep-alive
@@ -2346,6 +2349,9 @@ Another focused clamp smoke now runs each direct comparator with
 `--requests 3 --threads 5` and locks
 `requested_threads=5` plus `effective_threads=3`, so saved raw rows cannot
 silently discard the original caller intent.
+The snapshot helper now preserves the same distinction in its own environment
+block and keeps the command block at `--threads 5`, instead of rewriting the
+captured snapshot down to `--threads 3`.
 
 Fresh local `no_url` 50k/4 3-run summary:
 
