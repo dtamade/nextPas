@@ -1142,6 +1142,39 @@ begin
   CheckFullchainBenchmarkOutput(LOutput);
 end;
 
+procedure TestBenchFullchainRejectsNoMatchFilter;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchFullchainRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain no-match build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchFullchainBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_fullchain no-match binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + FullchainSmokeIterations,
+     BenchFilterEnvName + '=not_a_fullchain_scenario'],
+    LExitCode, LOutput);
+  Check(LExitCode <> 0,
+    'bench_fullchain no-match filter should fail: ' + LOutput);
+  CheckContains(LOutput, 'bench_filter=not_a_fullchain_scenario',
+    'fullchain no-match filter marker');
+  CheckContains(LOutput, 'No matching full-chain scenarios.',
+    'fullchain no-match diagnostic');
+  CheckNotContains(LOutput, 'workload=plaintext',
+    'fullchain no-match must not emit benchmark row');
+end;
+
 procedure TestHttpTopLevelPascalBenchmarkProjectsHaveMakefiles;
 var
   LRootDir: string;
@@ -2300,6 +2333,8 @@ begin
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',
     @TestBenchFullchainPlaintextSmoke);
+  T.Run('bench_fullchain rejects no-match filter',
+    @TestBenchFullchainRejectsNoMatchFilter);
   T.Run('HTTP top-level Pascal benchmark projects have Makefiles',
     @TestHttpTopLevelPascalBenchmarkProjectsHaveMakefiles);
   T.Run('go server comparator small smoke', @TestGoServerComparatorSmallSmoke);

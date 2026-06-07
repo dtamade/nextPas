@@ -116,6 +116,12 @@ non-zero with an `invalid --requests` / `invalid --threads` diagnostic instead
 of silently clamping or falling back to a default run size. This keeps typoed
 manual comparator runs from emitting misleading benchmark rows.
 
+`bench_fullchain` now follows the same fail-fast benchmark-truth rule for its
+filter path: when `NEXTPAS_BENCH_FILTER` matches no scenario, the benchmark
+prints `No matching full-chain scenarios.` and exits non-zero instead of
+silently succeeding with zero measured rows. This keeps typoed full-chain smoke
+runs from looking like valid benchmark evidence.
+
 ## Local Median Snapshot: 2026-06-05
 
 These rows were captured on the same host with:

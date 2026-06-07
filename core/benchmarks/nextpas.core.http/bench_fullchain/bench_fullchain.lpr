@@ -351,7 +351,12 @@ begin
     Inc(LScenariosRun);
 
   if LScenariosRun = 0 then
+  begin
     WriteLn('  No matching full-chain scenarios.');
+    GServer.Shutdown;
+    GServer.Free;
+    Halt(2);
+  end;
 
   WriteLn;
   GServer.Shutdown;
