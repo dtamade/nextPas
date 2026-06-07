@@ -128,6 +128,40 @@ begin
     TVec4f.Create(5.0, 6.0, 7.0, 1.0));
 end;
 
+function PivotSwapMat3f: TMat3f;
+begin
+  Result := TMat3f.Create(
+    TVec3f.Create(0.0, 1.0, 0.0),
+    TVec3f.Create(1.0, 0.0, 0.0),
+    TVec3f.Create(0.0, 0.0, 1.0));
+end;
+
+function PivotSwapMat4f: TMat4f;
+begin
+  Result := TMat4f.Create(
+    TVec4f.Create(0.0, 1.0, 0.0, 0.0),
+    TVec4f.Create(1.0, 0.0, 0.0, 0.0),
+    TVec4f.Create(0.0, 0.0, 1.0, 0.0),
+    TVec4f.Create(0.0, 0.0, 0.0, 1.0));
+end;
+
+function PivotSwapMat3d: TMat3d;
+begin
+  Result := TMat3d.Create(
+    TVec3d.Create(0.0, 1.0, 0.0),
+    TVec3d.Create(1.0, 0.0, 0.0),
+    TVec3d.Create(0.0, 0.0, 1.0));
+end;
+
+function PivotSwapMat4d: TMat4d;
+begin
+  Result := TMat4d.Create(
+    TVec4d.Create(0.0, 1.0, 0.0, 0.0),
+    TVec4d.Create(1.0, 0.0, 0.0, 0.0),
+    TVec4d.Create(0.0, 0.0, 1.0, 0.0),
+    TVec4d.Create(0.0, 0.0, 0.0, 1.0));
+end;
+
 procedure RaiseTMat3fSingularInverse;
 var
   M: TMat3f;
@@ -218,6 +252,7 @@ var
   Scale: TMat3f;
   Singular: TMat3f;
   NearSingular: TMat3f;
+  PivotSwap: TMat3f;
   Inverse: TMat3f;
 begin
   M := SampleMat3f;
@@ -233,6 +268,7 @@ begin
     TVec3f.Create(0.0000001, 0.0, 0.0),
     TVec3f.Create(0.0, 1.0, 0.0),
     TVec3f.Create(0.0, 0.0, 1.0));
+  PivotSwap := PivotSwapMat3f;
 
   CheckEqual(Int64(SizeOf(Single) * 9), Int64(SizeOf(TMat3f)), 'TMat3f is compact value type');
   CheckNear(5.0, M.Data[2, 0], 0.0, 'TMat3f Data[column,row]');
@@ -258,6 +294,11 @@ begin
   CheckNear(1.0, M.Determinant, 0.000001, 'TMat3f determinant');
   Check(M.TryInverse(Inverse), 'TMat3f TryInverse succeeds');
   CheckMat3fIdentity(M * Inverse, 'TMat3f inverse product');
+  CheckNear(-1.0, PivotSwap.Determinant, 0.0, 'TMat3f pivot-swap determinant');
+  Check(PivotSwap.TryInverse(Inverse), 'TMat3f TryInverse succeeds through pivot row swap');
+  Check(TMat3f.Equals(PivotSwap, Inverse, Single(0.000001)),
+    'TMat3f pivot-swap inverse stays on the same permutation matrix');
+  CheckMat3fIdentity(PivotSwap * Inverse, 'TMat3f pivot-swap inverse product');
   Check(not Singular.TryInverse(Inverse), 'TMat3f TryInverse rejects singular matrix');
   CheckMat3fZero(Inverse, 'TMat3f TryInverse zeroes out result for singular matrix');
   ExpectArgumentErrorMessage('TMat3f.Inverse: matrix is singular', 'TMat3f singular inverse',
@@ -279,6 +320,7 @@ var
   M: TMat4f;
   Scale: TMat4f;
   NearSingular: TMat4f;
+  PivotSwap: TMat4f;
   Inverse: TMat4f;
 begin
   M := SampleMat4f;
@@ -292,6 +334,7 @@ begin
     TVec4f.Create(0.0, 1.0, 0.0, 0.0),
     TVec4f.Create(0.0, 0.0, 1.0, 0.0),
     TVec4f.Create(0.0, 0.0, 0.0, 1.0));
+  PivotSwap := PivotSwapMat4f;
 
   CheckEqual(Int64(SizeOf(Single) * 16), Int64(SizeOf(TMat4f)), 'TMat4f is compact value type');
   CheckNear(5.0, M.Data[3, 0], 0.0, 'TMat4f translation column X');
@@ -318,6 +361,11 @@ begin
     'TMat4f determinant preserves small nonzero pivot');
   Check(M.TryInverse(Inverse), 'TMat4f TryInverse succeeds');
   CheckMat4fIdentity(M * Inverse, 'TMat4f inverse product');
+  CheckNear(-1.0, PivotSwap.Determinant, 0.0, 'TMat4f pivot-swap determinant flips sign');
+  Check(PivotSwap.TryInverse(Inverse), 'TMat4f TryInverse succeeds through pivot row swap');
+  Check(TMat4f.Equals(PivotSwap, Inverse, Single(0.000001)),
+    'TMat4f pivot-swap inverse stays on the same permutation matrix');
+  CheckMat4fIdentity(PivotSwap * Inverse, 'TMat4f pivot-swap inverse product');
   Check(not TMat4f.Zero.TryInverse(Inverse), 'TMat4f TryInverse rejects singular matrix');
   CheckMat4fZero(Inverse, 'TMat4f TryInverse zeroes out result for singular matrix');
   ExpectArgumentErrorMessage('TMat4f.Inverse: matrix is singular', 'TMat4f singular inverse',
@@ -338,6 +386,8 @@ var
   M4: TMat4d;
   NearSingular3: TMat3d;
   NearSingular4: TMat4d;
+  PivotSwap3: TMat3d;
+  PivotSwap4: TMat4d;
   Inverse3: TMat3d;
   Inverse4: TMat4d;
 begin
@@ -349,6 +399,7 @@ begin
     TVec3d.Create(0.0000000000001, 0.0, 0.0),
     TVec3d.Create(0.0, 1.0, 0.0),
     TVec3d.Create(0.0, 0.0, 1.0));
+  PivotSwap3 := PivotSwapMat3d;
   CheckEqual(Int64(SizeOf(Double) * 9), Int64(SizeOf(TMat3d)), 'TMat3d is compact value type');
   CheckNear(5.0, M3[2, 0], 0.0, 'TMat3d default Items[column,row]');
   M3 := TMat3d.Zero;
@@ -366,6 +417,11 @@ begin
   CheckNear(1.0, M3.Determinant, 0.000000000001, 'TMat3d determinant');
   Check(M3.TryInverse(Inverse3), 'TMat3d TryInverse succeeds');
   CheckMat3dIdentity(M3 * Inverse3, 'TMat3d inverse product');
+  CheckNear(-1.0, PivotSwap3.Determinant, 0.0, 'TMat3d pivot-swap determinant');
+  Check(PivotSwap3.TryInverse(Inverse3), 'TMat3d TryInverse succeeds through pivot row swap');
+  Check(TMat3d.Equals(PivotSwap3, Inverse3, 0.000000000001),
+    'TMat3d pivot-swap inverse stays on the same permutation matrix');
+  CheckMat3dIdentity(PivotSwap3 * Inverse3, 'TMat3d pivot-swap inverse product');
   Check(not TMat3d.Zero.TryInverse(Inverse3), 'TMat3d TryInverse rejects singular matrix');
   CheckMat3dZero(Inverse3, 'TMat3d TryInverse zeroes out result for singular matrix');
   ExpectArgumentErrorMessage('TMat3d.Inverse: matrix is singular', 'TMat3d singular inverse',
@@ -387,6 +443,7 @@ begin
     TVec4d.Create(0.0, 1.0, 0.0, 0.0),
     TVec4d.Create(0.0, 0.0, 1.0, 0.0),
     TVec4d.Create(0.0, 0.0, 0.0, 1.0));
+  PivotSwap4 := PivotSwapMat4d;
   CheckEqual(Int64(SizeOf(Double) * 16), Int64(SizeOf(TMat4d)), 'TMat4d is compact value type');
   M4 := TMat4d.Zero;
   M4.Rows[3] := TVec4d.Create(7.5, 8.5, 9.5, 10.5);
@@ -407,6 +464,11 @@ begin
     'TMat4d determinant preserves small nonzero pivot');
   Check(M4.TryInverse(Inverse4), 'TMat4d TryInverse succeeds');
   CheckMat4dIdentity(M4 * Inverse4, 'TMat4d inverse product');
+  CheckNear(-1.0, PivotSwap4.Determinant, 0.0, 'TMat4d pivot-swap determinant flips sign');
+  Check(PivotSwap4.TryInverse(Inverse4), 'TMat4d TryInverse succeeds through pivot row swap');
+  Check(TMat4d.Equals(PivotSwap4, Inverse4, 0.000000000001),
+    'TMat4d pivot-swap inverse stays on the same permutation matrix');
+  CheckMat4dIdentity(PivotSwap4 * Inverse4, 'TMat4d pivot-swap inverse product');
   Check(not TMat4d.Zero.TryInverse(Inverse4), 'TMat4d TryInverse rejects singular matrix');
   CheckMat4dZero(Inverse4, 'TMat4d TryInverse zeroes out result for singular matrix');
   ExpectArgumentErrorMessage('TMat4d.Inverse: matrix is singular', 'TMat4d singular inverse',
