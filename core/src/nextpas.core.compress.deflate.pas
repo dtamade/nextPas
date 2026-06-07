@@ -18,6 +18,10 @@ function CreateDeflateReader(const ASrc: IReader): IDecompressReader;
 function DeflateCompress(const AData: TBytes;
   const ALevel: TCompressionLevel = clDefault): TBytes;
 function DeflateDecompress(const AData: TBytes): TBytes;
+{$IFDEF NEXTPAS_COMPRESS_TESTING}
+function DeflateDecompressWithMaxOutputSizeForTest(const AData: TBytes;
+  const AMaxOutputSize: SizeUInt): TBytes;
+{$ENDIF}
 
 implementation
 
@@ -206,6 +210,9 @@ end;
 
 { One-shot }
 
+function DeflateDecompressWithMaxOutputSize(const AData: TBytes;
+  const AMaxOutputSize: SizeUInt): TBytes; forward;
+
 function DeflateCompress(const AData: TBytes;
   const ALevel: TCompressionLevel): TBytes;
 var
@@ -223,31 +230,48 @@ end;
 function DeflateDecompress(const AData: TBytes): TBytes;
 const
   MAX_DECOMPRESS_SIZE = 256 * 1024 * 1024; // 256 MB limit
+begin
+  Result := DeflateDecompressWithMaxOutputSize(AData, MAX_DECOMPRESS_SIZE);
+end;
+
+function DeflateDecompressWithMaxOutputSize(const AData: TBytes;
+  const AMaxOutputSize: SizeUInt): TBytes;
 var
-  LDstLen: ULong;
+  LCapacity, LOutLen: ULong;
   LRet: Int32;
 begin
   if Length(AData) = 0 then
     Exit(nil);
-  LDstLen := SizeUInt(Length(AData)) * 4;
-  if LDstLen < SizeUInt(Length(AData)) then
-    LDstLen := MAX_DECOMPRESS_SIZE;
+  if AMaxOutputSize = 0 then
+    raise EIOError.Create('deflate: decompressed size exceeds limit');
+  LCapacity := SizeUInt(Length(AData)) * 4;
+  if (LCapacity < SizeUInt(Length(AData))) or (LCapacity > AMaxOutputSize) then
+    LCapacity := AMaxOutputSize;
   repeat
-    if LDstLen > MAX_DECOMPRESS_SIZE then
-      raise EIOError.Create('deflate: decompressed size exceeds limit');
-    SetLength(Result, LDstLen);
-    LRet := uncompress(@Result[0], @LDstLen, @AData[0], Length(AData));
+    SetLength(Result, LCapacity);
+    LOutLen := LCapacity;
+    LRet := uncompress(@Result[0], @LOutLen, @AData[0], Length(AData));
     if LRet = Z_BUF_ERROR then
     begin
-      if LDstLen > MAX_DECOMPRESS_SIZE div 2 then
-        LDstLen := MAX_DECOMPRESS_SIZE
+      if LCapacity >= AMaxOutputSize then
+        raise EIOError.Create('deflate: decompressed size exceeds limit');
+      if LCapacity > AMaxOutputSize div 2 then
+        LCapacity := AMaxOutputSize
       else
-        LDstLen := LDstLen * 2;
+        LCapacity := LCapacity * 2;
     end
     else if LRet <> Z_OK then
       raise EIOError.Create('deflate decompress failed (' + IntToStr(LRet) + ')');
   until LRet = Z_OK;
-  SetLength(Result, LDstLen);
+  SetLength(Result, LOutLen);
 end;
+
+{$IFDEF NEXTPAS_COMPRESS_TESTING}
+function DeflateDecompressWithMaxOutputSizeForTest(const AData: TBytes;
+  const AMaxOutputSize: SizeUInt): TBytes;
+begin
+  Result := DeflateDecompressWithMaxOutputSize(AData, AMaxOutputSize);
+end;
+{$ENDIF}
 
 end.

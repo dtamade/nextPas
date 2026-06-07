@@ -5,12 +5,13 @@ PROGRAM := test_compress_audit
 SOURCE := test_compress_audit.lpr
 FPC_FLAGS ?= -MObjFPC -Sh -gh -gl
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src -Fu$(CORE_ROOT)/build/lib
+TEST_FLAGS ?= -dNEXTPAS_COMPRESS_TESTING
 
 .PHONY: build run test clean
 
 build:
 	@mkdir -p $(BUILD_DIR)
-	$(FPC) $(FPC_FLAGS) $(SOURCE)
+	$(FPC) $(FPC_FLAGS) $(TEST_FLAGS) $(SOURCE)
 
 run: build
 	$(BUILD_DIR)/$(PROGRAM)

@@ -11,7 +11,8 @@ uses
   nextpas.core.io.util,
   nextpas.core.compress.base,
   nextpas.core.compress.intf,
-  nextpas.core.compress;
+  nextpas.core.compress,
+  nextpas.core.compress.deflate;
 
 var
   T: TTestRunner;
@@ -419,6 +420,24 @@ begin
   Check(LGot, 'deflate truncated stream raises');
 end;
 
+procedure TestDeflateDecompressOutputLimitRaises;
+var
+  LSrc, LC: TBytes;
+  LGot: Boolean;
+begin
+  SetLength(LSrc, 512);
+  FillChar(LSrc[0], Length(LSrc), $A5);
+  LC := DeflateCompress(LSrc);
+
+  LGot := False;
+  try
+    nextpas.core.compress.deflate.DeflateDecompressWithMaxOutputSizeForTest(LC, 64);
+  except
+    LGot := True;
+  end;
+  Check(LGot, 'deflate one-shot output limit raises');
+end;
+
 { === D. Stress/Lifecycle Tests === }
 
 procedure TestCompressDecompressCycle1000;
@@ -509,6 +528,7 @@ begin
   T.Run('Gzip one-byte reader lifecycle', @TestGzipStreamOneByteReaderLifecycle);
   T.Run('Deflate empty stream', @TestDeflateEmptyStream);
   T.Run('Deflate truncated stream', @TestDeflateTruncatedStreamRaises);
+  T.Run('Deflate one-shot output limit', @TestDeflateDecompressOutputLimitRaises);
   T.Run('Deflate 1000 cycles', @TestCompressDecompressCycle1000);
   T.Run('LZ4 1000 cycles', @TestLz4Cycle1000);
   T.Run('Gzip nil round-trip', @TestGzipNilRoundTrip);
