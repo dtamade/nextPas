@@ -1,8 +1,7 @@
 # System Runtime Contracts
 
 This document records S2-level runtime contract names for `nextpas.core.system`. These names are
-compiler/runtime handshake contracts, not public ABI, not final exported symbol names, and not callable
-Pascal facade functions in the S0/S1 module.
+compiler/runtime handshake contracts, not public ABI, not final exported symbol names. They are contract vocabulary only, not public Pascal facade.
 
 The purpose is to keep managed lifetime work explicit before implementation starts:
 

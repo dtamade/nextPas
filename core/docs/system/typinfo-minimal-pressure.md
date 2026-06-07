@@ -99,7 +99,7 @@ These consumers need stable type identity, not property reflection.
 
 | Symbol | Current role | Boundary |
 | --- | --- | --- |
-| `PTypeInfo` | pointer to compiler/runtime type metadata | compiler emits identity/layout truth; runtime consumes it; system may later name the facade |
+| `PTypeInfo` | pointer to compiler/runtime type metadata | compiler emits identity/layout truth; runtime consumes it; system names only the minimal facade bridge |
 | `TTypeKind` | minimal type family classification | compiler/runtime-owned enum truth; public facade must not invent extra values |
 | `TypeInfo` | type identity lookup for static type `T` | compiler intrinsic today; future facade must remain a thin contract over emitted metadata |
 | `GetTypeKind` | type family lookup used by generic collections | runtime/helper convenience over compiler metadata; must stay deterministic for generic specialization |

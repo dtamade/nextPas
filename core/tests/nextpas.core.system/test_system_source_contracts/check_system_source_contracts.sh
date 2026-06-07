@@ -78,20 +78,37 @@ list_pascal_uses_units() {
 require_repo_not_uses_unit() {
   local path="$1"
   local forbidden_unit="$2"
-  if list_pascal_uses_units "$REPO_ROOT/$path" | grep -Fx --quiet "$forbidden_unit"; then
+  if list_pascal_uses_units "$REPO_ROOT/$path" | grep -Fxi --quiet "$forbidden_unit"; then
     fail "$path must not directly use unit: $forbidden_unit"
   fi
 }
 
-list_root_facade_surface() {
+list_unit_facade_surface() {
+  local unit_path="$1"
   awk '
     function trim(s) {
       gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", s)
       return s
     }
+    function strip_pascal_line(s) {
+      gsub(/\{[^}]*\}/, "", s)
+      sub(/\/\/.*/, "", s)
+      return trim(s)
+    }
+    function note_unknown(s) {
+      print "[FAIL] unrecognized public interface declaration in " FILENAME ": " s > "/dev/stderr"
+      unknown = 1
+    }
     BEGIN {
       in_interface = 0
       section = ""
+      type_depth = 0
+      unknown = 0
+    }
+    END {
+      if (unknown) {
+        exit 2
+      }
     }
     /^[ \t]*interface[ \t]*$/ {
       in_interface = 1
@@ -104,21 +121,30 @@ list_root_facade_surface() {
       next
     }
     {
-      line = $0
-      gsub(/\{[^}]*\}/, "", line)
-      sub(/\/\/.*/, "", line)
-      line = trim(line)
+      line = strip_pascal_line($0)
       if (line == "") {
         next
       }
       lower_line = tolower(line)
-      if (lower_line == "uses") {
+      if (lower_line ~ /^uses([ \t]|$)/) {
         section = "uses"
+        if (line ~ /;/) {
+          section = ""
+        }
         next
       }
       if (section == "uses") {
         if (line ~ /;/) {
           section = ""
+        }
+        next
+      }
+      if (type_depth > 0) {
+        if (lower_line ~ /^end[.;]?$/) {
+          type_depth--
+          if (type_depth < 0) {
+            type_depth = 0
+          }
         }
         next
       }
@@ -128,6 +154,28 @@ list_root_facade_surface() {
       }
       if (lower_line == "type") {
         section = "type"
+        next
+      }
+      if (lower_line == "var") {
+        section = "var"
+        next
+      }
+      if (lower_line == "threadvar") {
+        section = "threadvar"
+        next
+      }
+      if (lower_line == "resourcestring") {
+        section = "resourcestring"
+        next
+      }
+      if (match(line, /^generic[ \t]+procedure[ \t]+([A-Za-z_][A-Za-z0-9_]*)/, parts)) {
+        section = ""
+        print "procedure " parts[1]
+        next
+      }
+      if (match(line, /^generic[ \t]+function[ \t]+([A-Za-z_][A-Za-z0-9_]*)/, parts)) {
+        section = ""
+        print "function " parts[1]
         next
       }
       if (match(line, /^procedure[ \t]+([A-Za-z_][A-Za-z0-9_]*)/, parts)) {
@@ -140,16 +188,62 @@ list_root_facade_surface() {
         print "function " parts[1]
         next
       }
+      if (match(line, /^operator[ \t]*([^ \t(]+)/, parts)) {
+        section = ""
+        print "operator " parts[1]
+        next
+      }
       if (section == "const" && match(line, /^([A-Za-z_][A-Za-z0-9_]*)[ \t=]/, parts)) {
         print "const " parts[1]
         next
       }
-      if (section == "type" && match(line, /^([A-Za-z_][A-Za-z0-9_]*)[ \t=]/, parts)) {
+      if (section == "type" && match(line, /^generic[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t<]/, parts)) {
         print "type " parts[1]
+        if (lower_line ~ /=[ \t]*(packed[ \t]+)?(class|record|object|interface)([ \t(;]|$)/) {
+          type_depth = 1
+        }
         next
       }
+      if (section == "type" && match(line, /^([A-Za-z_][A-Za-z0-9_]*)[ \t=]/, parts)) {
+        print "type " parts[1]
+        if (lower_line ~ /=[ \t]*(packed[ \t]+)?(class|record|object|interface)([ \t(;]|$)/) {
+          type_depth = 1
+        }
+        next
+      }
+      if (section == "var" && match(line, /^([A-Za-z_][A-Za-z0-9_]*)[ \t,:]/, parts)) {
+        print "var " parts[1]
+        next
+      }
+      if (section == "threadvar" && match(line, /^([A-Za-z_][A-Za-z0-9_]*)[ \t,:]/, parts)) {
+        print "threadvar " parts[1]
+        next
+      }
+      if (section == "resourcestring" && match(line, /^([A-Za-z_][A-Za-z0-9_]*)[ \t=]/, parts)) {
+        print "resourcestring " parts[1]
+        next
+      }
+      note_unknown(line)
     }
-  ' "$CORE_ROOT/src/nextpas.core.system.pas"
+  ' "$unit_path"
+}
+
+list_root_facade_surface() {
+  list_unit_facade_surface "$CORE_ROOT/src/nextpas.core.system.pas"
+}
+
+require_facade_surface_allowlist() {
+  local label="$1"
+  local actual="$2"
+  local expected="$3"
+  if [[ "$actual" != "$expected" ]]; then
+    printf '[FAIL] %s public surface drifted\n' "$label" >&2
+    printf '%s\n' '--- expected' >&2
+    printf '%s\n' "$expected" >&2
+    printf '%s\n' '--- actual' >&2
+    printf '%s\n' "$actual" >&2
+    exit 1
+  fi
 }
 
 require_root_facade_surface_allowlist() {
@@ -237,14 +331,97 @@ function Supports
 function Supports
 EOF
 )"
-  if [[ "$actual" != "$expected" ]]; then
-    printf '[FAIL] root facade public surface drifted\n' >&2
-    printf '%s\n' '--- expected' >&2
-    printf '%s\n' "$expected" >&2
-    printf '%s\n' '--- actual' >&2
-    printf '%s\n' "$actual" >&2
-    exit 1
-  fi
+  require_facade_surface_allowlist "root facade" "$actual" "$expected"
+}
+
+require_sysutils_facade_surface_allowlist() {
+  local actual expected
+  actual="$(list_unit_facade_surface "$CORE_ROOT/src/nextpas.core.system.sysutils.pas")"
+  expected="$(cat <<'EOF'
+type Exception
+type ExceptClass
+type EConvertError
+type EAssertionFailed
+function Format
+EOF
+)"
+  require_facade_surface_allowlist "sysutils facade" "$actual" "$expected"
+}
+
+require_typinfo_facade_surface_allowlist() {
+  local actual expected
+  actual="$(list_unit_facade_surface "$CORE_ROOT/src/nextpas.core.system.typinfo.pas")"
+  expected="$(cat <<'EOF'
+type PTypeInfo
+type TTypeKind
+const tkInteger
+const tkChar
+const tkWChar
+const tkBool
+const tkEnumeration
+const tkInt64
+const tkQWord
+const tkFloat
+const tkSString
+const tkAString
+const tkLString
+const tkUString
+const tkWString
+const tkVariant
+const tkMethod
+const tkPointer
+const tkDynArray
+procedure InitializeArray
+procedure FinalizeArray
+procedure CopyArray
+EOF
+)"
+  require_facade_surface_allowlist "typinfo facade" "$actual" "$expected"
+}
+
+require_facade_surface_parser_regression() {
+  local fixture actual expected
+  fixture="$(mktemp)"
+  cat > "$fixture" <<'EOF'
+unit parser_fixture;
+
+interface
+
+type
+  TLeaked = class
+  public
+    procedure PublicMethod;
+  end;
+  generic TBox<T> = record
+  end;
+
+var
+  LeakedVar: LongInt;
+threadvar
+  LeakedThreadVar: Pointer;
+resourcestring
+  LeakedResource = 'x';
+
+operator +(const A, B: LongInt): LongInt;
+generic function LeakedGeneric<T>(const AValue: T): T;
+
+implementation
+
+end.
+EOF
+  actual="$(list_unit_facade_surface "$fixture")"
+  rm -f "$fixture"
+  expected="$(cat <<'EOF'
+type TLeaked
+type TBox
+var LeakedVar
+threadvar LeakedThreadVar
+resourcestring LeakedResource
+operator +
+function LeakedGeneric
+EOF
+)"
+  require_facade_surface_allowlist "facade parser regression fixture" "$actual" "$expected"
 }
 
 reject_repo_uses_unit_under() {
@@ -342,6 +519,8 @@ require_token "docs/system/compatibility-facades.md" 'Format'
 require_token "docs/system/compatibility-facades.md" 'Exception.CreateFmt'
 require_token "docs/system/compatibility-facades.md" "typinfo-minimal-pressure.md"
 require_token "docs/system/compatibility-facades.md" "2026-06-07-system-typinfo-minimal-unlock-review.md"
+require_token "docs/system/compatibility-facades.md" "premature broad facade or host TypInfo mirror"
+reject_token "docs/system/compatibility-facades.md" "a premature facade would freeze semantics"
 
 for token in \
   "compiler/toolchain/np_toolchain_runner.pas" \
@@ -384,6 +563,8 @@ done
 require_token "docs/system/typinfo-minimal-pressure.md" '`nextpas.core.system.typinfo` is live'
 require_token "docs/system/typinfo-minimal-pressure.md" "2026-06-07-system-typinfo-minimal-unlock-review.md"
 require_token "docs/system/typinfo-minimal-pressure.md" "compile-truth"
+require_token "docs/system/typinfo-minimal-pressure.md" "system names only the minimal facade bridge"
+reject_token "docs/system/typinfo-minimal-pressure.md" "system may later name the facade"
 
 for token in \
   "PTypeInfo" \
@@ -458,6 +639,11 @@ for token in \
   require_token "docs/system/lifecycle-contracts.md" "$token"
 done
 
+reject_token "docs/system/lifecycle-contracts.md" 'No `nextpas.core.system.typinfo` unit is created in this slice.'
+require_token "docs/system/lifecycle-contracts.md" "minimal TypInfo facade is live, but S3 still does not freeze RTTI metadata layout"
+require_token "docs/system/lifecycle-contracts.md" "contract vocabulary only, not public Pascal facade"
+require_token "docs/system/runtime-contracts.md" "contract vocabulary only, not public Pascal facade"
+
 for helper in \
   "np.system.unit_init" \
   "np.system.unit_fini" \
@@ -468,9 +654,71 @@ done
 [[ ! -e "$CORE_ROOT/src/System.pas" ]] || fail "must not create bare FPC-conflicting System.pas"
 [[ ! -e "$CORE_ROOT/src/system.pas" ]] || fail "must not create bare FPC-conflicting system.pas"
 [[ ! -e "$CORE_ROOT/src/nextpas.core.system.classes.pas" ]] || fail "S4 deferred: no live nextpas.core.system.classes unit expected yet"
-reject_repo_uses_unit_under "$REPO_ROOT/compiler" "nextpas.core.system.classes"
-reject_repo_uses_unit_under "$CORE_ROOT/src" "nextpas.core.system.classes"
-reject_repo_uses_unit_under "$CORE_ROOT/tests" "nextpas.core.system.classes"
+reject_repo_uses_unit_prefix_under() {
+  local root="$1"
+  local forbidden_prefix match
+  local -a pascal_files
+  forbidden_prefix="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
+  mapfile -d '' pascal_files < <(find "$root" -type f \( -name '*.pas' -o -name '*.lpr' \) -print0)
+  (( ${#pascal_files[@]} == 0 )) && return 0
+  match="$(
+    awk -v prefix="$forbidden_prefix" -v repo="$REPO_ROOT/" '
+      function trim(s) {
+        gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", s)
+        return s
+      }
+      function lower(s) {
+        return tolower(s)
+      }
+      function emit_units(line, parts, i, unit, lower_unit, display_file) {
+        gsub(/\{[^}]*\}/, "", line)
+        sub(/\/\/.*/, "", line)
+        gsub(/^[ \t]*uses[ \t]*/, "", line)
+        split(line, parts, /[,;]/)
+        for (i in parts) {
+          unit = trim(parts[i])
+          lower_unit = lower(unit)
+          if (unit != "" && unit !~ /^\$/ && (lower_unit == prefix || index(lower_unit, prefix ".") == 1)) {
+            display_file = FILENAME
+            sub(repo, "", display_file)
+            print display_file
+            exit 0
+          }
+        }
+      }
+      /^[ \t]*uses[ \t]*/ {
+        in_uses = 1
+        emit_units($0)
+        if ($0 ~ /;/) in_uses = 0
+        next
+      }
+      in_uses {
+        emit_units($0)
+        if ($0 ~ /;/) in_uses = 0
+      }
+    ' "${pascal_files[@]}"
+  )"
+  [[ -z "$match" ]] || fail "$match must not directly use deferred unit prefix: $2"
+}
+
+require_system_unit_filename_allowlist() {
+  local file_path filename
+  while IFS= read -r file_path; do
+    filename="$(basename "$file_path")"
+    case "$filename" in
+      nextpas.core.system.pas|nextpas.core.system.sysutils.pas|nextpas.core.system.typinfo.pas)
+        ;;
+      nextpas.core.system*.pas)
+        fail "unreviewed system unit filename: src/$filename"
+        ;;
+    esac
+  done < <(find "$CORE_ROOT/src" -maxdepth 1 -name 'nextpas.core.system*.pas' | sort)
+}
+
+require_system_unit_filename_allowlist
+reject_repo_uses_unit_prefix_under "$REPO_ROOT/compiler" "nextpas.core.system.classes"
+reject_repo_uses_unit_prefix_under "$CORE_ROOT/src" "nextpas.core.system.classes"
+reject_repo_uses_unit_prefix_under "$CORE_ROOT/tests" "nextpas.core.system.classes"
 
 require_repo_file() {
   local path="$1"
@@ -560,6 +808,7 @@ require_token "src/nextpas.core.system.typinfo.pas" "CopyArray"
 require_token "src/nextpas.core.system.typinfo.pas" "System.InitializeArray"
 require_token "src/nextpas.core.system.typinfo.pas" "System.FinalizeArray"
 require_token "src/nextpas.core.system.typinfo.pas" "System.CopyArray"
+require_typinfo_facade_surface_allowlist
 reject_token "src/nextpas.core.system.typinfo.pas" "GetEnumName"
 reject_token "src/nextpas.core.system.typinfo.pas" "GetEnumValue"
 reject_token "src/nextpas.core.system.typinfo.pas" "GetPropInfo"
@@ -672,6 +921,7 @@ require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.l
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system FillMem delegates to base utils"
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system base error aliases mirror base compile-truth"
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system error taxonomy aliases mirror canonical owners"
+require_facade_surface_parser_regression
 require_root_facade_surface_allowlist
 reject_token "src/nextpas.core.system.pas" "SysUtils"
 reject_token "src/nextpas.core.system.pas" "TypInfo"
@@ -686,6 +936,7 @@ require_token "src/nextpas.core.system.sysutils.pas" "EConvertError = nextpas.co
 require_token "src/nextpas.core.system.sysutils.pas" "EAssertionFailed = nextpas.core.exception.EAssertionFailed;"
 require_token "src/nextpas.core.system.sysutils.pas" "function Format"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv.Format"
+require_sysutils_facade_surface_allowlist
 reject_token "src/nextpas.core.system.sysutils.pas" "FileExists"
 reject_token "src/nextpas.core.system.sysutils.pas" "DirectoryExists"
 reject_token "src/nextpas.core.system.sysutils.pas" "ForceDirectories"

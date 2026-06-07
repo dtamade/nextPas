@@ -123,8 +123,8 @@ This is the strongest real S4 pressure, but it is also the highest-risk area:
   helper ABI truth meet.
 - `core/src/nextpas.core.collections.element_manager.pas` already uses
   `system.TypeInfo(T)`, `InitializeArray`, `FinalizeArray`, and `CopyArray`;
-  a premature facade would freeze semantics before compiler/runtime metadata is
-  fully specified.
+  a premature broad facade or host TypInfo mirror would freeze semantics before
+  compiler/runtime metadata is fully specified.
 - `core/src/nextpas.core.collections.hashmap.swiss.pas` depends on
   `GetTypeKind(K)` for specialization decisions; that is runtime truth, not
   cosmetic reflection.

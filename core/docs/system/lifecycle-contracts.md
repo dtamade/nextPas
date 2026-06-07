@@ -25,21 +25,26 @@ Current S3 stance:
 
 ## RTTI And TypeInfo Boundary
 
-RTTI and TypeInfo need compiler-owned truth before runtime can expose stable data. S3 records the boundary
-only; it does not freeze record layouts, binary metadata, or a TypInfo facade.
+RTTI and TypeInfo need compiler-owned truth before runtime can expose stable data. This boundary states:
+minimal TypInfo facade is live, but S3 still does not freeze RTTI metadata layout, binary metadata, or
+broader reflection APIs.
 
 Rules:
 
 - Symbol/type identity, layout and generic/specialization facts are compiler-owned.
 - Runtime may consume emitted metadata, but it must not re-infer language semantics.
 - `TypeInfo` availability must be explicit in compiler output; missing RTTI must fail deterministically.
-- Future TypInfo compatibility facade work belongs to S4+ and requires separate API tests.
+- Broader TypInfo reflection compatibility work belongs to S4+ and requires separate API tests.
+- The `np.system.*` names in this document are contract vocabulary only, not public Pascal facade.
 
 Current S3 stance:
 
-- No `nextpas.core.system.typinfo` unit is created in this slice.
-- No RTTI helper symbol name is frozen beyond this boundary document.
-- `RTTI` / `TypeInfo` remain mapped as future compiler/runtime work until source-backed metadata exists.
+- `nextpas.core.system.typinfo` is live as a minimal facade for `PTypeInfo`, `TTypeKind`, kind aliases
+  and `InitializeArray` / `FinalizeArray` / `CopyArray`.
+- No RTTI helper symbol name is frozen beyond the minimal live TypInfo surface and this boundary document.
+- Broader RTTI metadata and property reflection remain future compiler/runtime work; `TypeInfo` /
+  `GetTypeKind` stay compiler/System compile-truth, with the minimal facade only naming identity/kind and
+  managed-array helper surface.
 
 ## Unit Lifecycle
 
