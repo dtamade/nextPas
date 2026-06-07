@@ -2061,6 +2061,43 @@ begin
   CheckServerBenchmarkOutput(LOutput, 'rust_hyper', '32', '2');
 end;
 
+procedure TestHyperTokioServerComparatorUrlPathSmallSmoke;
+var
+  LRootDir: string;
+  LCompareDir: string;
+  LBuildDir: string;
+  LTargetDir: string;
+  LBinaryPath: string;
+  LManifestPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(CompareHyperRelativeDir);
+  LCompareDir := PathJoin(LRootDir, CompareHyperRelativeDir);
+  LBuildDir := ResolveBenchmarkTestBuildDir(LRootDir);
+  LTargetDir := PathJoin(LBuildDir, 'cargo-target');
+  ForceDirectories(LBuildDir);
+  LBinaryPath := ResolveHyperComparatorBinaryPath(LRootDir);
+  LManifestPath := PathJoin(LCompareDir, 'Cargo.toml');
+
+  RunProcessAndCapture('cargo',
+    ['build', '--release', '--manifest-path', LManifestPath,
+     '--target-dir', LTargetDir],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'hyper comparator url_path build exit code: ' + LOutput);
+  Check(FileExists(LBinaryPath), 'hyper comparator url_path binary exists');
+
+  RunProcessAndCapture(LBinaryPath,
+    ['--requests', '32', '--threads', '2', '--workload', 'url_path'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'hyper comparator url_path smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'workload=url_path',
+    'hyper comparator url_path workload marker');
+  CheckServerBenchmarkOutput(LOutput, 'rust_hyper', '32', '2', 'url_path');
+end;
+
 procedure TestHyperTokioServerComparatorRejectsInvalidWorkload;
 var
   LRootDir: string;
@@ -3324,6 +3361,8 @@ begin
     @TestRustServerComparatorRejectsInvalidScale);
   T.Run('hyper/tokio server comparator small smoke',
     @TestHyperTokioServerComparatorSmallSmoke);
+  T.Run('hyper/tokio server comparator url_path small smoke',
+    @TestHyperTokioServerComparatorUrlPathSmallSmoke);
   T.Run('hyper/tokio server comparator rejects invalid workload',
     @TestHyperTokioServerComparatorRejectsInvalidWorkload);
   T.Run('hyper/tokio server comparator rejects invalid scale',

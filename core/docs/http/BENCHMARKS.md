@@ -2550,6 +2550,10 @@ captured snapshot down to `--threads 3`.
 The focused gate now also locks the `--include-hyper + --workload response_1k`
 snapshot combination, so Hyper/Tokio snapshot evidence is no longer covered
 only on the default no-body workload.
+A direct `bench_http_server_hyper --requests 32 --threads 2 --workload url_path`
+smoke now sits in the focused gate as well, so the Cargo-based comparator has a
+durable non-default request-target proof alongside the shared runner and
+snapshot paths.
 
 Fresh local `no_url` 50k/4 3-run summary:
 

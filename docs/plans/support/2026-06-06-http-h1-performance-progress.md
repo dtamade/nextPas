@@ -12176,3 +12176,38 @@ Hello from nextPas!
     instead of relying only on the default no-body snapshot smoke
   - this is coverage tightening only; it does not claim a new comparator,
     a new row schema, or a new performance result
+
+## Session: 2026-06-07 hyper url_path direct comparator focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the direct Hyper/Tokio `url_path` workload into the focused
+    benchmark gate
+  - keep the slice limited to comparator parity evidence, not runner/schema or
+    comparator implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch comparator source, comparison runner behavior, snapshot
+    helper behavior, public HTTP API, lower-layer modules, or generated
+    artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `75 total, 75 passed, 0 failed`
+    - new focused row:
+      `hyper/tokio server comparator url_path small smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `bench_http_server_hyper --requests 32 --threads 2 --workload url_path`
+  - the focused smoke locks:
+    - `workload=url_path`
+    - `impl=rust_hyper`
+    - `rust_profile=hyper_tokio`
+    - `completed=32`
+- Outcome:
+  - the direct Cargo-based Hyper/Tokio comparator now has a durable non-default
+    request-target proof instead of relying only on the default no-URL smoke or
+    the shared runner/snapshot path
+  - this is coverage tightening only; it does not claim a new workload,
+    a new comparator behavior, or a new performance result

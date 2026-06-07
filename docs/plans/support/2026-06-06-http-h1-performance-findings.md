@@ -5362,3 +5362,22 @@
 - 这轮的价值仍是 benchmark truth：
   Hyper/Tokio snapshot evidence 现在不再只靠默认 workload，saved artifact 对
   body-bearing response workload 也有 durable regression proof。
+
+## 2026-06-07 hyper url_path direct comparator focused smoke findings
+
+- 之前的 focused gate 里，Hyper/Tokio direct comparator 只有默认 `no_url`
+  smoke；虽然 shared runner / snapshot 已覆盖 `url_path`，但 Cargo-based
+  comparator 自己还没有一个独立、非默认 request-target workload contract。
+- 这一轮不需要扩 runner/schema，也不需要改 comparator 实现：
+  `compare_hyper` 源码本来就支持 `--workload url_path`，真实缺口只是 focused gate
+  没有把这个 seam 锁住。
+- 本轮继续保持窄刀：
+  - 只把 `bench_http_server_hyper --requests 32 --threads 2 --workload url_path`
+    提升进 focused gate
+  - 锁住 `workload=url_path`
+  - 锁住 `impl=rust_hyper`、`rust_profile=hyper_tokio`、`completed=32`
+- 这轮的价值仍是 benchmark truth：
+  Hyper/Tokio direct comparator 现在也有 durable non-default request-target
+  proof，Go / Rust std-only / Hyper direct comparator 三条 direct smoke 的
+  `url_path` parity 更完整，但没有借机扩到 `adapter_no_url` 或新的 runner
+  组合。
