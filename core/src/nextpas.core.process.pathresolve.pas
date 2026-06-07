@@ -21,6 +21,7 @@ uses
  * @note 如果 AName 包含 '/'，直接返回不搜索
  * @note 如果 AEnv 为 nil，使用默认 PATH
  *}
+function CommandPathHasDirectoryPart(const AName: string): Boolean;
 function ResolveExecutablePath(const AName: string;
   const AEnv: TStringArray): string;
 
@@ -34,6 +35,22 @@ uses
   {$ENDIF}
   ;
 
+const
+{$IFDEF NEXTPAS_WINDOWS}
+  PROCESS_PATH_LIST_SEP = ';';
+{$ELSE}
+  PROCESS_PATH_LIST_SEP = ':';
+{$ENDIF}
+
+function CommandPathHasDirectoryPart(const AName: string): Boolean;
+begin
+  Result := Pos('/', AName) > 0;
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := Result or (Pos('\', AName) > 0) or
+    ((Length(AName) >= 2) and (AName[2] = ':'));
+{$ENDIF}
+end;
+
 function IsExecutableCandidate(const APath: string): Boolean;
 begin
   if APath = '' then
@@ -45,6 +62,15 @@ begin
 {$ENDIF}
 end;
 
+function IsPathEnvPair(const AValue: string): Boolean;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := TextStartsWithI(AValue, 'PATH=');
+{$ELSE}
+  Result := TextStartsWith(AValue, 'PATH=');
+{$ENDIF}
+end;
+
 function ExtractPathFromEnv(const AEnv: TStringArray): string;
 var
   I: Integer;
@@ -52,7 +78,7 @@ begin
   Result := '/usr/local/bin:/usr/bin:/bin';
   if AEnv = nil then Exit;
   for I := 0 to High(AEnv) do
-    if TextStartsWith(AEnv[I], 'PATH=') then
+    if IsPathEnvPair(AEnv[I]) then
       Result := Copy(AEnv[I], 6, Length(AEnv[I]) - 5);
 end;
 
@@ -62,7 +88,7 @@ var
   LPath, LDir, LCandidate: string;
   LStart, LColon: Integer;
 begin
-  if Pos('/', AName) > 0 then
+  if CommandPathHasDirectoryPart(AName) then
     Exit(AName);
 
   LPath := ExtractPathFromEnv(AEnv);
@@ -70,7 +96,8 @@ begin
   while LStart <= Length(LPath) do
   begin
     LColon := LStart;
-    while (LColon <= Length(LPath)) and (LPath[LColon] <> ':') do
+    while (LColon <= Length(LPath)) and
+      (LPath[LColon] <> PROCESS_PATH_LIST_SEP) do
       Inc(LColon);
     LDir := Copy(LPath, LStart, LColon - LStart);
     if LDir = '' then LDir := '.';

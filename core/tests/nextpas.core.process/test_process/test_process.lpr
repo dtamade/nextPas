@@ -54,6 +54,11 @@ begin
   Check(AName, Pos(AToken, ASource) > 0);
 end;
 
+procedure CheckAbsent(const AName, ASource, AToken: string);
+begin
+  Check(AName, Pos(AToken, ASource) = 0);
+end;
+
 procedure CheckTokenBefore(const AName, ASource, AFirstToken,
   ASecondToken: string);
 var
@@ -268,6 +273,42 @@ begin
     'function TChild.FinishWaitResult');
   CheckTokenBefore('Detached guard — WaitWithOutput checks before platform wait',
     LMethod, 'EnsureAttached;', 'platform_process_try_wait');
+end;
+
+procedure TestPathResolverSourceContract;
+var
+  LResolver, LCommand, LSpawnMethod: string;
+begin
+  LResolver := LoadSourceText('src/nextpas.core.process.pathresolve.pas');
+  LCommand := LoadSourceText('src/nextpas.core.process.command.pas');
+
+  CheckContains('Path resolver — directory helper exists', LResolver,
+    'function CommandPathHasDirectoryPart');
+  CheckContains('Path resolver — Windows separator handled', LResolver,
+    'Pos(''\'', AName)');
+  CheckContains('Path resolver — Windows drive path handled', LResolver,
+    '(Length(AName) >= 2) and (AName[2] = '':'')');
+  CheckContains('Path resolver — PATH name helper exists', LResolver,
+    'function IsPathEnvPair');
+  CheckContains('Path resolver — Windows PATH key case-insensitive', LResolver,
+    'TextStartsWithI(AValue, ''PATH='')');
+  CheckContains('Path resolver — Unix PATH key exact', LResolver,
+    'TextStartsWith(AValue, ''PATH='')');
+  CheckContains('Path resolver — Windows path list separator', LResolver,
+    'PROCESS_PATH_LIST_SEP = '';''');
+  CheckContains('Path resolver — Unix path list separator', LResolver,
+    'PROCESS_PATH_LIST_SEP = '':''');
+  CheckAbsent('Path resolver — no bare slash-only directory check', LResolver,
+    'if Pos(''/'', AName) > 0 then');
+  CheckContains('Path resolver — ResolveExecutablePath uses helper', LResolver,
+    'if CommandPathHasDirectoryPart(AName) then');
+
+  LSpawnMethod := ExtractMethodBody(LCommand, 'function TCommand.Spawn: IChild;',
+    'function TCommand.Output');
+  CheckContains('Command spawn — uses shared path helper', LSpawnMethod,
+    'CommandPathHasDirectoryPart(FPath)');
+  CheckAbsent('Command spawn — no slash-only path check', LSpawnMethod,
+    'Pos(''/'', FPath)');
 end;
 
 procedure TestSpawnStdinPipe;
@@ -742,6 +783,7 @@ begin
   TestSpawnKill;
   TestSpawnDetach;
   TestDetachedLifecycleGuards;
+  TestPathResolverSourceContract;
   TestSpawnStdinPipe;
   TestSpawnStdoutReader;
   TestCommandEnv;

@@ -319,8 +319,8 @@ var
   LFailStage: TPlatformProcessSpawnStage;
   LResolvedPath: string;
 begin
-  { Resolve path: search PATH if using custom env and name has no '/' }
-  if (FEnvMode <> pemInherit) and (Pos('/', FPath) = 0) then
+  { Resolve path: search PATH if using custom env and name has no directory part }
+  if (FEnvMode <> pemInherit) and (not CommandPathHasDirectoryPart(FPath)) then
   begin
     LFinalEnv := BuildFinalEnv(FEnvMode, FEnvPairs);
     LResolvedPath := ResolveExecutablePath(FPath, LFinalEnv);
