@@ -11725,3 +11725,59 @@ Hello from nextPas!
     level as other runner metadata
   - callers can request a nextPas-only epoll characterization run without
     patching the harness or losing artifact provenance
+
+## Session: 2026-06-07 server comparison concurrent build lock slice
+
+- **Status:** completed.
+- Objective:
+  - stop concurrent comparison runner/snapshot invocations from corrupting the
+    shared server-comparison build root
+  - keep the fix inside the benchmark harness rather than changing comparator
+    row schemas or public HTTP/runtime behavior
+  - prove the new concurrency seam at least at source-contract level, then
+    recheck with a real concurrent smoke
+- Scope and safety:
+  - touched only the comparison runner, benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 runtime behavior, lower-layer modules,
+    comparator workload math, or saved benchmark row format
+- RED:
+  - fresh focused gate after adding the new source-contract:
+    `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `67 total, 66 passed, 1 failed`
+    - failed at `server comparison runner concurrency lock source contract`
+    - missing runner markers:
+      `COMPARISON_LOCK_DIR=`,
+      `COMPARISON_LOCK_HELD=0`,
+      `acquire_comparison_lock()`,
+      `release_comparison_lock()`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `run_server_comparison.sh` now owns a shared
+    `build/projects/nextpas.core.http/server_comparison/.comparison-lock`
+    directory lock
+  - the lock is acquired before any comparator build or run work starts and is
+    released from the script cleanup path
+  - the `--output` path no longer uses `run_comparison | tee ...`; it now uses
+    process substitution so the runner stays in the current shell and reliably
+    releases the lock
+  - `test_http_benchmarks` now locks the explicit comparison-lock seam in the
+    runner source
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `67 total, 67 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Concurrent smoke evidence:
+  - launched these two commands in parallel on the same worktree:
+    - `core/benchmarks/nextpas.core.http/run_server_comparison.sh --requests 8 --threads 1 --workload url_path --output /tmp/core-http-concurrent-runner-report.txt`
+    - `core/benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh --requests 8 --threads 1 --nextpas-backend epoll --output /tmp/core-http-concurrent-snapshot.md`
+  - observed:
+    - `runner_exit=0`
+    - `snapshot_exit=0`
+    - runner report preserved `nextpas_backend=threaded`
+    - snapshot preserved `nextpas_backend=epoll`
+- Outcome:
+  - comparison report and snapshot capture can now overlap without tripping the
+    shared Go/Rust comparator build outputs
+  - benchmark truth is stricter because concurrent artifact capture no longer
+    depends on toolchain race luck

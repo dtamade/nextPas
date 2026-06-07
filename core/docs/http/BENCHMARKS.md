@@ -97,6 +97,13 @@ median summary at the end of the raw output. This is the preferred mode for
 fresh local comparison rows because single-shot server results are visibly
 affected by scheduler noise.
 
+The comparison runner also serializes concurrent invocations through a shared
+build-root lock under
+`build/projects/nextpas.core.http/server_comparison/.comparison-lock`. This is
+not a benchmark row feature; it is a harness-truth guard so a saved report and
+an overlapping snapshot do not race while rebuilding the shared Go/Rust
+comparator binaries into the same output directory.
+
 The runner treats incomplete workload execution as a harness failure: every raw
 row must report `iterations=<requests>` and `completed=<requests>`. The median
 summary repeats this guard as `median_completed=<requests>`, nextPas rows print

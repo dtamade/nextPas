@@ -2165,6 +2165,30 @@ begin
     'include-hyper report rust_hyper summary marker');
 end;
 
+procedure TestServerComparisonRunnerConcurrencyLockSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LSource := LoadTextFile(ResolveServerComparisonRunnerPath(LRootDir));
+
+  CheckContains(LSource, 'COMPARISON_LOCK_DIR=',
+    'server comparison lock dir marker');
+  CheckContains(LSource, 'COMPARISON_LOCK_HELD=0',
+    'server comparison lock held marker');
+  CheckContains(LSource, 'acquire_comparison_lock()',
+    'server comparison acquire lock helper');
+  CheckContains(LSource, 'release_comparison_lock()',
+    'server comparison release lock helper');
+  CheckContains(LSource, 'while ! mkdir "${COMPARISON_LOCK_DIR}" 2>/dev/null; do',
+    'server comparison mkdir lock loop');
+  CheckContains(LSource, 'acquire_comparison_lock',
+    'server comparison acquire lock usage');
+  CheckContains(LSource, 'release_comparison_lock',
+    'server comparison release lock usage');
+end;
+
 procedure TestServerComparisonRunnerRejectsInvalidNextpasBackend;
 var
   LRootDir: string;
@@ -3064,6 +3088,8 @@ begin
     @TestServerComparisonRunnerRunsSummarySmoke);
   T.Run('server comparison runner include hyper smoke',
     @TestServerComparisonRunnerIncludeHyperSmoke);
+  T.Run('server comparison runner concurrency lock source contract',
+    @TestServerComparisonRunnerConcurrencyLockSourceContract);
   T.Run('server comparison runner rejects invalid nextpas backend',
     @TestServerComparisonRunnerRejectsInvalidNextpasBackend);
   T.Run('server comparison runner epoll smoke',

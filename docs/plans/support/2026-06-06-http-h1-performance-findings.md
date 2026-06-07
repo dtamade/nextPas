@@ -5156,3 +5156,35 @@
 - 一个额外观察是：runner 和 snapshot 共用同一 build output root，若并行触发可能在
   Rust comparator build 阶段互相踩到目标文件。这是 benchmark harness 并发安全问题，
   不属于本轮 contract 最小收口，但值得作为下一轮 benchmark-truth 候选切片。
+
+## 2026-06-07 server comparison concurrent build lock findings
+
+- 在给 runner/snapshot 补完 `nextpas_backend` truth 后，手工并行触发两者时直接撞出了
+  另一类 benchmark truth 污染：
+  - 两个进程都会往同一个
+    `build/projects/nextpas.core.http/server_comparison/` output root 重建 Go/Rust
+    comparator 二进制；
+  - 实际失败表现是 Rust link 阶段找不到刚被另一个进程覆盖/清理的目标文件。
+- 这不是 “parallel shell misuse 才会出现的假问题”：
+  - comparison runner 与 snapshot helper 本来就共用 build root；
+  - 只要 CI/脚本/人工并行抓 report + snapshot，就可能命中同一类竞争；
+  - 失败时得到的不是明确 “busy/locked” 诊断，而是一条看似 toolchain 自身损坏的
+    linker error，会污染 benchmark evidence。
+- 本轮选择的最小收口不是给每个 comparator 发明独立 cache key，也不是改 row/summary
+  contract，而是：
+  - 只在 `run_server_comparison.sh` 增一个 shared comparison lock；
+  - snapshot 继续复用 runner，因此自动吃到同一条并发保护；
+  - 锁住的是整个 comparison invocation，而不只是 build step，避免
+    “A 刚 build 完、B 立刻原地重写二进制、A 再去执行半写入产物” 这类更隐蔽的竞争。
+- 实现边界里还暴露出一个 shell 细节：
+  - 旧的 `run_comparison | tee ...` 会把 `run_comparison` 推进 pipeline subshell；
+  - 锁如果在 subshell 里拿到，就可能因为 parent trap 看不到持锁状态而残留 stale lock。
+  - 因此输出路径分支也必须改成 process substitution，让 runner 继续在当前 shell 持锁并释放锁。
+- focused gate 现在锁住 `run_server_comparison.sh` 拥有显式 comparison lock seam。
+- 手工并发 smoke 也已转绿：
+  - `run_server_comparison.sh --requests 8 --threads 1 --workload url_path --output ...`
+    与
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --nextpas-backend epoll --output ...`
+    并发启动后均返回 `exit=0`
+  - runner report 仍保留 `nextpas_backend=threaded`
+  - snapshot environment block 仍保留 `nextpas_backend=epoll`
