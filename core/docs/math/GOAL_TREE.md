@@ -38,7 +38,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   arithmetic operators, scalar multiply, matrix-vector multiply, matrix-matrix multiply,
   `Transpose`, `Determinant`, `TryInverse`, `Inverse`, exact/epsilon `Equals`, and singular inverse
   behavior, including zeroing the failed `TryInverse` out matrix and directly locking the exact
-  owner-level `Inverse` singular-matrix messages for `TMat3f`, `TMat4f`, `TMat3d`, and `TMat4d`.
+  owner-level `Inverse` singular-matrix messages plus exact inverse-epsilon pivot fail-close
+  behavior for `TMat3f`, `TMat4f`, `TMat3d`, and `TMat4d`.
 - `nextpas.core.math.quat` now provides the final quaternion types: `TQuatf` and `TQuatd`.
 - Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
   identity, zero-quaternion `ToRotationMatrix` / `Rotate` identity behavior, `Conjugate`,
@@ -231,10 +232,10 @@ Status:
   write-through semantics, arithmetic operators, scalar multiply, matrix-vector multiply,
   matrix-matrix multiply, transpose, determinant, inverse, near-singular and singular `TryInverse`
   zeroing the out matrix, direct pivot-row-swap inversion parity for permutation matrices, 4x4
-  determinant sign parity across the same row-swap path, exact/epsilon `Equals` including
-  negative-epsilon fail-close behavior, `Inverse` raising `EArgumentError` with exact owner-level
-  `'<TMat*>.Inverse: matrix is singular'` messages for the same failure cases, and double-precision
-  variants.
+  determinant sign parity across the same row-swap path, exact inverse-epsilon pivot fail-close
+  behavior, exact/epsilon `Equals` including negative-epsilon fail-close behavior, `Inverse`
+  raising `EArgumentError` with exact owner-level `'<TMat*>.Inverse: matrix is singular'`
+  messages for the same failure cases, and double-precision variants.
 - `nextpas.core.math.mat` is a cohesive matrix value-type unit and currently exceeds the 800-line soft
   split guideline; shared inversion/determinant helpers are extracted, and a forced split is deferred
   until a later architecture slice has evidence that it improves maintainability without widening the
