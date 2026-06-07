@@ -240,6 +240,8 @@ procedure TAsyncLoop.Post(ACallback: TAsyncCallback; AContext: Pointer);
 var
   LNewCap: UInt32;
 begin
+  if not FWakeReady then
+    Exit;
   platform_mutex_lock(FPendingLock);
   if FPendingCount >= FPendingCap then
   begin

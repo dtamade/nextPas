@@ -308,6 +308,25 @@ begin
     'async loop close must wake waiters before closing wake resources');
 end;
 
+procedure TestAsyncLoopPostClosedOwnerBoundaryContract;
+var
+  LAsyncLoop: string;
+  LPostBody: string;
+begin
+  LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
+  LPostBody := ExtractBetween(LAsyncLoop, 'procedure tasyncloop.post',
+    'procedure tasyncloop.drainwake');
+
+  CheckContains(LPostBody, 'if not fwakeready then',
+    'async loop post must reject closed stale-owner submissions');
+  CheckBefore(LPostBody, 'if not fwakeready then', 'platform_mutex_lock(fpendinglock);',
+    'async loop post must not touch the pending mutex after close');
+  CheckBefore(LPostBody, 'if not fwakeready then', 'setlength(fpendingqueue',
+    'async loop post must not grow the pending queue after close');
+  CheckBefore(LPostBody, 'if not fwakeready then', 'wake;',
+    'async loop post must not signal closed wake resources');
+end;
+
 procedure TestAsyncLoopTimeoutSingleFireCleanupContract;
 var
   LAsyncLoop: string;
@@ -704,6 +723,8 @@ begin
     @TestAsyncLoopTimeoutCloseLifecycleContract);
   T.Run('async loop close stop/wake ownership contract',
     @TestAsyncLoopCloseStopWakeOwnershipContract);
+  T.Run('async loop post closed owner-boundary contract',
+    @TestAsyncLoopPostClosedOwnerBoundaryContract);
   T.Run('async loop timeout single-fire cleanup contract',
     @TestAsyncLoopTimeoutSingleFireCleanupContract);
   T.Run('IOCP synchronous failure ownership contract',
