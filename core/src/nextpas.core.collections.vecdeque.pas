@@ -1990,35 +1990,19 @@ end;
 
 procedure TVecDeque.ReadUnchecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
 var
-  LStartPhysical, LEndPhysical: SizeUInt;
-  LFirstPartSize, LSecondPartSize: SizeUInt;
-  LDstPtr: PByte;
-  LElementSize: SizeUInt;
+  LDstPtr: PElement;
+  LPtr1, LPtr2: PElement;
+  LLen1, LLen2: SizeUInt;
 begin
   if (aDst = nil) or (aCount = 0) then
     Exit;
 
-  LElementSize := GetElementSize;
-  LDstPtr := PByte(aDst);
-  // 利用 GetTwoSlices 拆分区间，简化拷贝分支
-
-
-  // 手动两段计算以避免引入本地临时 PElement 变量类型声明改动过大
-  LStartPhysical := GetPhysicalIndex(aIndex);
-  LEndPhysical := GetPhysicalIndex(aIndex + aCount - 1);
-  if LStartPhysical <= LEndPhysical then
-  begin
-    Move(FBuffer.GetPtrUnchecked(LStartPhysical)^, LDstPtr^, aCount * LElementSize);
-  end
-  else
-  begin
-    LFirstPartSize := FBuffer.GetCount - LStartPhysical;
-    LSecondPartSize := aCount - LFirstPartSize;
-    Move(FBuffer.GetPtrUnchecked(LStartPhysical)^, LDstPtr^, LFirstPartSize * LElementSize);
-    Inc(LDstPtr, LFirstPartSize * LElementSize);
-    if LSecondPartSize > 0 then
-      Move(FBuffer.GetPtrUnchecked(0)^, LDstPtr^, LSecondPartSize * LElementSize);
-  end;
+  LDstPtr := PElement(aDst);
+  GetTwoSlices(aIndex, aCount, LPtr1, LLen1, LPtr2, LLen2);
+  if LLen1 > 0 then
+    FElementManager.CopyElementsUnchecked(LPtr1, LDstPtr, LLen1);
+  if LLen2 > 0 then
+    FElementManager.CopyElementsUnchecked(LPtr2, LDstPtr + LLen1, LLen2);
 end;
 
 procedure TVecDeque.Read(aIndex: SizeUInt; var aDst: TCollection; aCount: SizeUInt);
@@ -6773,10 +6757,6 @@ end;
 
 // TryPeek 系列方法实现
 function TVecDeque.TryPeekCopy(aPtr: Pointer; aCount: SizeUInt): Boolean;
-var
-  i: SizeUInt;
-  LPtr: PByte;
-  LPhysicalIndex: SizeUInt;
 begin
   { 尝试查看后端指定数量的元素并复制到指针 }
   if (aPtr = nil) or (aCount = 0) then
@@ -6791,16 +6771,7 @@ begin
     Exit;
   end;
 
-  // 复制元素到指针 - 进一步减少 GetPhysicalIndex 调用：一次起算 + 每次 WrapAdd
-  LPtr := PByte(aPtr);
-  LPhysicalIndex := GetPhysicalIndex(FCount - aCount);
-  for i := 0 to aCount - 1 do
-  begin
-    Move(FBuffer.GetPtrUnchecked(LPhysicalIndex)^, LPtr^, SizeOf(T));
-    Inc(LPtr, SizeOf(T));
-    LPhysicalIndex := WrapAdd(LPhysicalIndex, 1);
-  end;
-
+  ReadUnchecked(FCount - aCount, aPtr, aCount);
   Result := True;
 end;
 

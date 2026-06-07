@@ -231,6 +231,84 @@ begin
   Pass('VecDeque managed TryPop(element) owns refs and syncs tail');
 end;
 
+procedure TestVecDequeManagedPointerReadOwnsRefsAfterClear;
+type TDequeT = specialize TVecDeque<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, outItem: ITracked;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    t := MakeTracked(30); D.PushBack(t); t := nil;
+    t := MakeTracked(31); D.PushBack(t); t := nil;
+
+    D.Read(1, @outItem, 1);
+
+    if (outItem = nil) or (outItem.GetId <> 31) then
+    begin
+      WriteLn('FAIL: VecDeque managed Read(pointer) returned wrong item');
+      Halt(1);
+    end;
+
+    D.Clear;
+
+    if (outItem = nil) or (outItem.GetId <> 31) then
+    begin
+      WriteLn('FAIL: VecDeque managed Read(pointer) output did not own ref after clear');
+      Halt(1);
+    end;
+
+    outItem := nil;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed Read(pointer) owns refs after clear');
+  Pass('VecDeque managed Read(pointer) owns refs after clear');
+end;
+
+procedure TestVecDequeManagedTryPeekCopyOwnsRefsAfterClear;
+type TDequeT = specialize TVecDeque<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, outItem: ITracked;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    t := MakeTracked(40); D.PushBack(t); t := nil;
+    t := MakeTracked(41); D.PushBack(t); t := nil;
+
+    if not D.TryPeekCopy(@outItem, 1) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPeekCopy(pointer) returned false');
+      Halt(1);
+    end;
+
+    if (outItem = nil) or (outItem.GetId <> 41) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPeekCopy(pointer) returned wrong item');
+      Halt(1);
+    end;
+
+    D.Clear;
+
+    if (outItem = nil) or (outItem.GetId <> 41) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPeekCopy(pointer) output did not own ref after clear');
+      Halt(1);
+    end;
+
+    outItem := nil;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed TryPeekCopy(pointer) owns refs after clear');
+  Pass('VecDeque managed TryPeekCopy(pointer) owns refs after clear');
+end;
+
 procedure TestHashMapRehash;
 type TMapT = specialize THashMap<Int32, ITracked>;
 var M: TMapT; i: Integer; Snap: TLeakSnapshot; t: ITracked;
@@ -442,6 +520,8 @@ begin
   TestVecDequeManagedTryPopPointerOwnsRefsAndSyncsTail;
   TestVecDequeManagedTryPopArrayOwnsRefsAndSyncsTail;
   TestVecDequeManagedTryPopElementOwnsRefsAndSyncsTail;
+  TestVecDequeManagedPointerReadOwnsRefsAfterClear;
+  TestVecDequeManagedTryPeekCopyOwnsRefsAfterClear;
   TestHashMapRehash;
   TestHashMapOverwrite;
   TestSwissTableManagedKeyValueLifecycle;
