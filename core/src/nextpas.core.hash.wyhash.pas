@@ -11,6 +11,9 @@ function WyHashStr32(const S: AnsiString; ASeed: UInt64 = 0): UInt32; inline;
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 const
   WY_P0 = UInt64($a0761d6478bd642f);
   WY_P1 = UInt64($e7037ed1a0b428db);
@@ -53,6 +56,9 @@ var
   i: SizeUInt;
 begin
   {$PUSH}{$Q-}{$R-}
+  if (ALen > 0) and (AData = nil) then
+    raise EArgumentError.Create('WyHash: AData is nil with ALen > 0');
+
   p := PByte(AData);
   seed := ASeed xor WY_P0;
 
@@ -111,7 +117,7 @@ end;
 function WyHashStr(const S: AnsiString; ASeed: UInt64): UInt64;
 begin
   if Length(S) = 0 then
-    Result := WyMix(ASeed xor WY_P0, WY_P1)
+    Result := WyHash(nil, 0, ASeed)
   else
     Result := WyHash(@S[1], SizeUInt(Length(S)), ASeed);
 end;

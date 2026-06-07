@@ -4,6 +4,7 @@ program test_wyhash;
 
 uses
   SysUtils,
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.hash.wyhash;
 
@@ -60,6 +61,40 @@ begin
   Check(H1 = H2, 'WyHashStr matches WyHash');
 end;
 
+procedure TestStrEmptyMatchesRaw;
+var
+  H1, H2: UInt64;
+  H32A, H32B: UInt32;
+begin
+  H1 := WyHashStr('', 0);
+  H2 := WyHash(nil, 0, 0);
+  CheckEqual(Int64(H2), Int64(H1), 'empty WyHashStr seed=0 matches raw empty');
+
+  H1 := WyHashStr('', 42);
+  H2 := WyHash(nil, 0, 42);
+  CheckEqual(Int64(H2), Int64(H1), 'empty WyHashStr seed=42 matches raw empty');
+
+  H32A := WyHashStr32('', 42);
+  H32B := WyHash32(nil, 0, 42);
+  CheckEqual(Int64(H32B), Int64(H32A), 'empty WyHashStr32 matches raw empty');
+end;
+
+procedure TestNilPositiveLengthRejected;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    WyHash(nil, 1, 0);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+    on E: Exception do
+      Fail('expected EArgumentError, got ' + E.ClassName + ': ' + E.Message);
+  end;
+  Check(LRaised, 'WyHash(nil, positive length) must reject malformed input');
+end;
+
 procedure Test32;
 var H64: UInt64; H32: UInt32;
 begin
@@ -94,6 +129,8 @@ begin
   T.Run('long string (50 bytes)', @TestLong);
   T.Run('seed variation', @TestSeed);
   T.Run('WyHashStr consistency', @TestStr);
+  T.Run('empty WyHashStr consistency', @TestStrEmptyMatchesRaw);
+  T.Run('nil positive length rejected', @TestNilPositiveLengthRejected);
   T.Run('WyHash32 fold', @Test32);
   T.Run('distribution uniformity', @TestDistribution);
   T.Summary;

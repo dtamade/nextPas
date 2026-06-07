@@ -1,4 +1,6 @@
 FPC ?= fpc
+SHELL := /bin/bash
+.SHELLFLAGS := -o pipefail -c
 CORE_ROOT := ../../..
 BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.hash/test_wyhash
 PROGRAM := test_wyhash
@@ -13,7 +15,8 @@ build:
 	$(FPC) $(FPC_FLAGS) $(SOURCE)
 
 run: build
-	$(BUILD_DIR)/$(PROGRAM)
+	$(BUILD_DIR)/$(PROGRAM) 2>&1 | tee /tmp/test_wyhash_output.txt
+	@grep -q "0 unfreed memory blocks" /tmp/test_wyhash_output.txt || (echo "LEAK DETECTED"; exit 1)
 
 test: run
 
