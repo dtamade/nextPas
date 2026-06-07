@@ -11,6 +11,11 @@ uses
 {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.ffi,
 {$ENDIF}
+{$IFDEF NEXTPAS_LINUX}
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.linux.base,
+  nextpas.core.platform.linux.ffi,
+{$ENDIF}
   nextpas.core.fs.base,
   nextpas.core.fs.intf,
   nextpas.core.fs.stream,
@@ -159,6 +164,107 @@ begin
   LRead := FsReadFile(GTmpDir + '/dst.bin');
   CheckEqual(Int64(8), Int64(Length(LRead)), 'dst len');
 end;
+
+{$IFDEF NEXTPAS_LINUX}
+type
+  TLibcSigSet = record
+    Bits: array[0..15] of QWord;
+  end;
+  TLibcSigAction = record
+    sa_handler: Pointer;
+    sa_mask: TLibcSigSet;
+    sa_flags: Int32;
+    sa_restorer: Pointer;
+  end;
+
+function BeginShortWriteRegression(out AOldLimit: TRLimit;
+  out AOldAct: TLibcSigAction): Boolean;
+var
+  LIgnoreAct: TLibcSigAction;
+  LNewLimit: TRLimit;
+begin
+  Result := False;
+  if getrlimit(RLIMIT_FSIZE, @AOldLimit) <> 0 then
+    Exit;
+  if AOldLimit.rlim_max < 4 then
+    Exit;
+
+  FillChar(LIgnoreAct, SizeOf(LIgnoreAct), 0);
+  LIgnoreAct.sa_handler := Pointer(SIG_IGN);
+  Check(sigaction(SIGXFSZ, @LIgnoreAct, @AOldAct) = 0,
+    'ignore SIGXFSZ during short-write regression');
+  LNewLimit := AOldLimit;
+  LNewLimit.rlim_cur := 4;
+  Check(setrlimit(RLIMIT_FSIZE, @LNewLimit) = 0,
+    'lower file-size limit for short-write regression');
+  Result := True;
+end;
+
+procedure EndShortWriteRegression(const AOldLimit: TRLimit;
+  const AOldAct: TLibcSigAction);
+begin
+  Check(setrlimit(RLIMIT_FSIZE, @AOldLimit) = 0,
+    'restore file-size limit');
+  Check(sigaction(SIGXFSZ, @AOldAct, nil) = 0,
+    'restore SIGXFSZ handler');
+end;
+
+procedure TestWriteFileRaisesOnShortWrite;
+var
+  LOldLimit: TRLimit;
+  LOldAct: TLibcSigAction;
+  LData: TBytes;
+  LGot: Boolean;
+begin
+  if not BeginShortWriteRegression(LOldLimit, LOldAct) then
+  begin
+    Check(True, 'RLIMIT_FSIZE unavailable, skip');
+    Exit;
+  end;
+  try
+    LData := TBytes.Create(1, 2, 3, 4, 5, 6, 7, 8,
+      9, 10, 11, 12, 13, 14, 15, 16);
+    LGot := False;
+    try
+      FsWriteFile(GTmpDir + '/short-write.bin', LData);
+    except
+      on E: EIOError do
+        LGot := True;
+    end;
+    Check(LGot, 'FsWriteFile raises EIOError on positive short write');
+  finally
+    EndShortWriteRegression(LOldLimit, LOldAct);
+  end;
+end;
+
+procedure TestAppendFileRaisesOnShortWrite;
+var
+  LOldLimit: TRLimit;
+  LOldAct: TLibcSigAction;
+  LData: TBytes;
+  LGot: Boolean;
+begin
+  if not BeginShortWriteRegression(LOldLimit, LOldAct) then
+  begin
+    Check(True, 'RLIMIT_FSIZE unavailable, skip');
+    Exit;
+  end;
+  try
+    LData := TBytes.Create(1, 2, 3, 4, 5, 6, 7, 8,
+      9, 10, 11, 12, 13, 14, 15, 16);
+    LGot := False;
+    try
+      nextpas.core.fs.AppendFile(GTmpDir + '/short-append.bin', LData);
+    except
+      on E: EIOError do
+        LGot := True;
+    end;
+    Check(LGot, 'AppendFile raises EIOError on positive short write');
+  finally
+    EndShortWriteRegression(LOldLimit, LOldAct);
+  end;
+end;
+{$ENDIF}
 
 procedure TestExists;
 begin
@@ -481,6 +587,10 @@ begin
     T.Run('ReadFile/WriteFile', @TestReadWriteFile);
     T.Run('WriteAtomic', @TestWriteAtomic);
     T.Run('CopyFile', @TestCopyFile);
+{$IFDEF NEXTPAS_LINUX}
+    T.Run('WriteFile raises on short write', @TestWriteFileRaisesOnShortWrite);
+    T.Run('AppendFile raises on short write', @TestAppendFileRaisesOnShortWrite);
+{$ENDIF}
     T.Run('Exists', @TestExists);
     T.Run('IsFile/IsDir', @TestIsFileIsDir);
     T.Run('FileSize', @TestFileSize);

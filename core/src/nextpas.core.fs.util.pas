@@ -15,6 +15,7 @@ function FsReadFileText(const APath: string): string;
 function FsReadFileLines(const APath: string): TStringArray;
 procedure FsWriteFile(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault);
+procedure FsAppendFile(const APath: string; const AData: TBytes);
 procedure FsWriteAtomic(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault);
 function FsCopyFile(const ASrc, ADst: string): Int64;
@@ -46,6 +47,21 @@ uses
   nextpas.core.platform.random,
   nextpas.core.fs.stream;
 
+procedure WriteAllOrRaise(const AFile: IFile; const ABuf; const ACount: SizeUInt;
+  const AOp: string);
+var
+  LTotal, LWritten: SizeUInt;
+begin
+  LTotal := 0;
+  while LTotal < ACount do
+  begin
+    LWritten := AFile.Write(PByte(@ABuf)[LTotal], ACount - LTotal);
+    if LWritten = 0 then
+      raise EIOError.Create(AOp + ': write returned 0');
+    Inc(LTotal, LWritten);
+  end;
+end;
+
 function FsReadFile(const APath: string): TBytes;
 var
   LData: Pointer;
@@ -71,7 +87,17 @@ var
 begin
   LFile := FsOpenFile(APath, [fmWrite, fmCreate, fmTruncate], APerm);
   if Length(AData) > 0 then
-    LFile.Write(AData[0], SizeUInt(Length(AData)));
+    WriteAllOrRaise(LFile, AData[0], SizeUInt(Length(AData)), 'write file');
+  LFile.Close;
+end;
+
+procedure FsAppendFile(const APath: string; const AData: TBytes);
+var
+  LFile: IFile;
+begin
+  LFile := FsOpenFile(APath, [fmWrite, fmAppend, fmCreate], PermDefault);
+  if Length(AData) > 0 then
+    WriteAllOrRaise(LFile, AData[0], SizeUInt(Length(AData)), 'append file');
   LFile.Close;
 end;
 
@@ -101,7 +127,7 @@ function FsCopyFile(const ASrc, ADst: string): Int64;
 var
   LSrcFile, LDstFile: IFile;
   LBuf: array[0..32767] of Byte;
-  LRead, LWritten, LTotal: SizeUInt;
+  LRead: SizeUInt;
   LStat: TFileInfo;
 begin
   LSrcFile := FsOpen(ASrc, [fmRead]);
@@ -112,14 +138,7 @@ begin
     LRead := LSrcFile.Read(LBuf[0], SizeOf(LBuf));
     if LRead = 0 then
       Break;
-    LTotal := 0;
-    while LTotal < LRead do
-    begin
-      LWritten := LDstFile.Write(LBuf[LTotal], LRead - LTotal);
-      if LWritten = 0 then
-        raise EIOError.Create('copy: write returned 0');
-      Inc(LTotal, LWritten);
-    end;
+    WriteAllOrRaise(LDstFile, LBuf[0], LRead, 'copy');
     Inc(Result, Int64(LRead));
   until False;
   LDstFile.Sync;

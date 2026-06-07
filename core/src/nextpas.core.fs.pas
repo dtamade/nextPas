@@ -176,12 +176,8 @@ begin
 end;
 
 procedure AppendFile(const APath: string; const AData: TBytes);
-var
-  LFile: IFile;
 begin
-  LFile := FsOpenFile(APath, [fmWrite, fmAppend, fmCreate], PermDefault);
-  if Length(AData) > 0 then
-    LFile.Write(AData[0], Length(AData));
+  nextpas.core.fs.util.FsAppendFile(APath, AData);
 end;
 
 procedure AppendFileText(const APath: string; const AText: string);

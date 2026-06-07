@@ -131,7 +131,11 @@ function FsFromHandle(const AHandle: Int32; const AName: string): IFile;
 var
   LH: TPlatformFileHandle;
 begin
+{$IFDEF NEXTPAS_WINDOWS}
+  LH.Value := Pointer(PtrInt(AHandle));
+{$ELSE}
   LH.Value := AHandle;
+{$ENDIF}
   Result := TFile.Create(LH, AName);
 end;
 

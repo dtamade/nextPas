@@ -3,6 +3,8 @@ program test_platform_fs;
 {$I nextpas.core.settings.inc}
 
 uses
+  Classes,
+  SysUtils,
   nextpas.core.platform.fs,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
@@ -10,6 +12,39 @@ uses
 
 var
   T: TTestRunner;
+
+procedure AssignPlatformHandle(var AHandle: TPlatformFileHandle; const AFd: Int32);
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  AHandle.Value := Pointer(PtrUInt(AFd));
+{$ELSE}
+  AHandle.Value := AFd;
+{$ENDIF}
+end;
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LLines: TStringList;
+begin
+  Check(FileExists(ARelativePath), 'source file exists: ' + ARelativePath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(ARelativePath);
+    Result := LLines.Text;
+  finally
+    LLines.Free;
+  end;
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) > 0, AMessage + ': ' + AToken);
+end;
+
+procedure CheckAbsent(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) = 0, AMessage + ': ' + AToken);
+end;
 
 procedure TestExistsFile;
 var
@@ -84,7 +119,7 @@ begin
   Check(R = 0, 'mktemp succeeds');
   Check(Fd >= 0, 'fd is valid');
   Check(platform_fs_exists(@Path[0]), 'temp file exists');
-  H.Value := Fd;
+  AssignPlatformHandle(H, Fd);
   platform_file_close(H);
   platform_file_unlink(@Path[0]);
 end;
@@ -109,8 +144,8 @@ begin
   end;
   if Path1[I] <> Path2[I] then Same := False;
   Check(not Same, 'paths are unique');
-  H.Value := Fd1; platform_file_close(H);
-  H.Value := Fd2; platform_file_close(H);
+  AssignPlatformHandle(H, Fd1); platform_file_close(H);
+  AssignPlatformHandle(H, Fd2); platform_file_close(H);
   platform_file_unlink(@Path1[0]);
   platform_file_unlink(@Path2[0]);
 end;
@@ -174,6 +209,29 @@ begin
   platform_file_unlink(PATH);
 end;
 
+procedure TestShortWriteContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.fs.pas');
+  CheckContains(LSource, 'function platform_fs_write_all',
+    'platform.fs must centralize full-write retry');
+  CheckContains(LSource, 'PLATFORM_FS_SHORT_WRITE_ERROR',
+    'short writes must map to a non-zero platform error');
+  CheckContains(LSource, 'if LWritten = 0 then',
+    'full-write helper must reject zero-progress writes');
+  CheckContains(LSource, 'Inc(LTotal, LWritten)',
+    'full-write helper must advance after positive short writes');
+  CheckContains(LSource, 'LR := platform_fs_write_all(LDstH, @LBuf[0], LRead)',
+    'copy_file must write each read chunk fully');
+  CheckContains(LSource, 'LR := platform_fs_write_all(LH, AData, ALen)',
+    'write_atomic must write the full payload');
+  CheckAbsent(LSource, 'until (LR <> 0) or (LWritten < LRead)',
+    'copy_file must not report success after a short write exit');
+  CheckAbsent(LSource, 'if (LR <> 0) or (LWritten <> ALen) then',
+    'write_atomic must not depend on one write call for full payload');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.fs');
   T.Run('exists file', @TestExistsFile);
@@ -187,5 +245,6 @@ begin
   T.Run('mkdir_p', @TestMkdirP);
   T.Run('copy_file', @TestCopyFile);
   T.Run('write_atomic', @TestWriteAtomic);
+  T.Run('short-write contract', @TestShortWriteContract);
   T.Summary;
 end.

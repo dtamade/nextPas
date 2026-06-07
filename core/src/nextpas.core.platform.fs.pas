@@ -58,6 +58,28 @@ uses
   nextpas.core.platform.env,
   nextpas.core.platform.random;
 
+const
+  PLATFORM_FS_SHORT_WRITE_ERROR = -5;
+
+function platform_fs_write_all(const AHandle: TPlatformFileHandle;
+  AData: Pointer; ALen: PtrUInt): Int32;
+var
+  LTotal, LWritten: PtrUInt;
+begin
+  LTotal := 0;
+  while LTotal < ALen do
+  begin
+    Result := platform_file_write(AHandle,
+      Pointer(PtrUInt(AData) + LTotal), ALen - LTotal, LWritten);
+    if Result <> 0 then
+      Exit;
+    if LWritten = 0 then
+      Exit(PLATFORM_FS_SHORT_WRITE_ERROR);
+    Inc(LTotal, LWritten);
+  end;
+  Result := 0;
+end;
+
 function platform_fs_exists(const APath: PAnsiChar): Boolean;
 var
   LStat: TPlatformFileStat;
@@ -187,7 +209,7 @@ function platform_fs_copy_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): In
 var
   LSrcH, LDstH: TPlatformFileHandle;
   LBuf: array[0..8191] of Byte;
-  LRead, LWritten: PtrUInt;
+  LRead: PtrUInt;
   LR: Int32;
 begin
   LR := platform_file_open(ASrc, fomReadOnly, fcmOpenExisting, LSrcH);
@@ -201,8 +223,8 @@ begin
   repeat
     LR := platform_file_read(LSrcH, @LBuf[0], SizeOf(LBuf), LRead);
     if (LR <> 0) or (LRead = 0) then Break;
-    LR := platform_file_write(LDstH, @LBuf[0], LRead, LWritten);
-  until (LR <> 0) or (LWritten < LRead);
+    LR := platform_fs_write_all(LDstH, @LBuf[0], LRead);
+  until LR <> 0;
   platform_file_close(LDstH);
   platform_file_close(LSrcH);
   Result := LR;
@@ -216,7 +238,6 @@ var
   LTmpPath: array[0..1023] of AnsiChar;
   LPathLen, I: Int32;
   LH: TPlatformFileHandle;
-  LWritten: PtrUInt;
   LR: Int32;
   LRand: array[0..5] of Byte;
 begin
@@ -242,8 +263,8 @@ begin
 
   if ALen > 0 then
   begin
-    LR := platform_file_write(LH, AData, ALen, LWritten);
-    if (LR <> 0) or (LWritten <> ALen) then
+    LR := platform_fs_write_all(LH, AData, ALen);
+    if LR <> 0 then
     begin
       platform_file_close(LH);
       platform_file_unlink(@LTmpPath[0]);
