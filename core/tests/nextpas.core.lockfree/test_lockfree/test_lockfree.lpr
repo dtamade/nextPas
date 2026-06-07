@@ -9,6 +9,7 @@ uses
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree,
+  nextpas.core.lockfree.wait,
   nextpas.core.platform.thread;
 
 type
@@ -20,6 +21,8 @@ type
 
 const
   CloseWakePendingProbeNs = 50000000;
+  WaitHelperStaleEpochTimeoutNs = Int64(5000000000);
+  WaitHelperImmediateReturnBudgetMs = 100;
 
 var
   T: TTestRunner;
@@ -1283,6 +1286,34 @@ begin
   LQ.Free;
 end;
 
+procedure CheckWaitHelperSkipsStaleEpoch(const AUseSpaceWait: Boolean; const ALabel: string);
+var
+  LEpoch: Int32;
+  LWaiters: Int32;
+  LElapsedMs: QWord;
+begin
+  LEpoch := 1;
+  LWaiters := 0;
+  LElapsedMs := GetTickCount64;
+  if AUseSpaceWait then
+    LockFreeWaitSpace(@LEpoch, @LWaiters, 0, WaitHelperStaleEpochTimeoutNs)
+  else
+    LockFreeWaitData(@LEpoch, @LWaiters, 0, WaitHelperStaleEpochTimeoutNs);
+  LElapsedMs := GetTickCount64 - LElapsedMs;
+  Check(LElapsedMs < WaitHelperImmediateReturnBudgetMs,
+    ALabel + ' stale epoch must return before timeout');
+  CheckEqual(Int64(0), Int64(LWaiters),
+    ALabel + ' stale epoch must not leave a waiter registered');
+  CheckEqual(Int64(1), Int64(LEpoch),
+    ALabel + ' stale epoch fast path must not mutate the caller epoch');
+end;
+
+procedure TestLockFreeWaitHelperStaleEpochGuard;
+begin
+  CheckWaitHelperSkipsStaleEpoch(False, 'data wait helper');
+  CheckWaitHelperSkipsStaleEpoch(True, 'space wait helper');
+end;
+
 var
   GMpscWaitQ: TIntMpsc;
 
@@ -2400,6 +2431,7 @@ begin
   T.Run('MPMC batch partial progress', @TestMpmcBatchPartialProgress);
   T.Run('MPMC batch dequeue AMaxCount cap', @TestMpmcBatchDequeueRespectsMaxCount);
   T.Run('MPMC capacity/empty/full', @TestMpmcCapacity);
+  T.Run('LockFree wait stale epoch guard', @TestLockFreeWaitHelperStaleEpochGuard);
   T.Run('MPSC dequeue wait', @TestMpscDequeueWait);
   T.Run('MPSC dequeue timeout', @TestMpscDequeueTimeout);
   T.Run('Deque capacity', @TestDequeCapacity);
