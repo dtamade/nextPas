@@ -30,6 +30,14 @@ implementation
 const
   PATH_BUF_SIZE = 1024;
 
+function IsPathSep(const AChar: Char): Boolean; inline;
+begin
+  Result := AChar = PLATFORM_PATH_SEP;
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := Result or (AChar = PLATFORM_PATH_ALT_SEP);
+{$ENDIF}
+end;
+
 function FsPathJoin(const AParts: array of string): string;
 var
   LI, LNeed: Integer;
@@ -173,18 +181,30 @@ begin
 end;
 
 function FsPathEnsureSep(const APath: string): string;
+var
+  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LNeed: Int32;
+  LHeap: array of AnsiChar;
 begin
-  if (Length(APath) > 0) and (APath[Length(APath)] = PLATFORM_PATH_SEP) then
-    Result := APath
-  else
-    Result := APath + PLATFORM_PATH_SEP;
+  LNeed := platform_path_ensure_sep(PAnsiChar(APath), @LStack[0], PATH_BUF_SIZE);
+  if LNeed < 0 then
+    Exit(APath);
+  if LNeed < PATH_BUF_SIZE then
+  begin
+    SetString(Result, PAnsiChar(@LStack[0]), LNeed);
+    Exit;
+  end;
+  SetLength(LHeap, LNeed + 1);
+  platform_path_ensure_sep(PAnsiChar(APath), @LHeap[0], Length(LHeap));
+  SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
 end;
 
 function FsPathTrimSep(const APath: string): string;
 var L: SizeInt;
 begin
   L := Length(APath);
-  while (L > 1) and (APath[L] = PLATFORM_PATH_SEP) do
+  while (L > 1) and IsPathSep(APath[L]) and
+    not ((L = 3) and (APath[2] = ':')) do
     Dec(L);
   Result := Copy(APath, 1, L);
 end;

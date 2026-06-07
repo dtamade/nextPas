@@ -3,7 +3,7 @@ program test_fs;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  SysUtils, Classes,
   nextpas.core.testing,
   nextpas.core.errors,
   nextpas.core.io.base,
@@ -27,6 +27,47 @@ uses
 var
   T: TTestRunner;
   GTmpDir: string;
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LSourcePath: string;
+  LLines: TStringList;
+begin
+  LSourcePath := ExpandFileName('../../../' + ARelativePath);
+  Check(FileExists(LSourcePath), 'source exists: ' + ARelativePath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(LSourcePath);
+    Result := LLines.Text;
+  finally
+    LLines.Free;
+  end;
+end;
+
+function ExtractFunctionBody(const ASource, AStartToken, ANextToken: string): string;
+var
+  LStart, LNext: Integer;
+begin
+  Result := '';
+  LStart := Pos(AStartToken, ASource);
+  if LStart = 0 then
+    Exit;
+  LNext := Pos(ANextToken, Copy(ASource, LStart + Length(AStartToken),
+    Length(ASource)));
+  if LNext = 0 then
+    Exit(Copy(ASource, LStart, Length(ASource)));
+  Result := Copy(ASource, LStart, Length(AStartToken) + LNext - 1);
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) > 0, AMessage);
+end;
+
+procedure CheckAbsent(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) = 0, AMessage);
+end;
 
 procedure SetupTmpDir;
 begin
@@ -413,6 +454,41 @@ begin
   CheckEqual('.', FsPathClean(''), 'Clean("") = "."');
 end;
 
+procedure TestPathSeparatorSourceContract;
+var
+  LSource, LImpl, LEnsure, LTrim: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.path.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'path separator contract has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+
+  LEnsure := ExtractFunctionBody(LImpl,
+    'function FsPathEnsureSep(const APath: string): string;',
+    'function FsPathTrimSep');
+  LTrim := ExtractFunctionBody(LImpl,
+    'function FsPathTrimSep(const APath: string): string;',
+    'function FsPathChangeExt');
+
+  CheckContains(LSource, 'function IsPathSep',
+    'path separator contract has shared helper');
+  CheckContains(LEnsure, 'platform_path_ensure_sep',
+    'ensure separator uses platform path contract');
+  CheckContains(LTrim, 'IsPathSep(APath[L])',
+    'trim separator accepts platform separators');
+  CheckAbsent(LTrim, 'APath[L] = PLATFORM_PATH_SEP',
+    'trim separator does not hard-code only primary separator');
+end;
+
+procedure TestPathEnsureTrimSep;
+begin
+  CheckEqual('/tmp/', FsPathEnsureSep('/tmp'), 'ensure sep appends separator');
+  CheckEqual('/tmp/', FsPathEnsureSep('/tmp/'), 'ensure sep preserves existing separator');
+  CheckEqual('/tmp', FsPathTrimSep('/tmp///'), 'trim sep removes trailing separators');
+  CheckEqual('/', FsPathTrimSep('/'), 'trim sep preserves root');
+end;
+
 procedure TestPathLong;
 var
   LLong, LJoined: string;
@@ -669,6 +745,8 @@ begin
     T.Run('PathWithoutExt dotfiles', @TestPathWithoutExtDotfiles);
     T.Run('PathIsAbs', @TestPathIsAbs);
     T.Run('PathClean empty', @TestPathCleanEmpty);
+    T.Run('Path separator source contract', @TestPathSeparatorSourceContract);
+    T.Run('PathEnsureSep/PathTrimSep', @TestPathEnsureTrimSep);
     T.Run('PathJoin long', @TestPathLong);
 
     T.Run('Open not found', @TestOpenNotFound);
