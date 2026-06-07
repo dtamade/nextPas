@@ -19,12 +19,11 @@
 - `compiler/sema/np_semantic_analyzer.pas`
   - Add explicit owned/borrowed standalone string HIR nodes and ordinary-exit cleanup nodes.
   - Keep string fields, return ownership, and call-result ownership deferred.
-- `compiler/sema/np_semantic_model.pas`
-  - Add node-kind parsing for new C6-H3 HIR node names.
+- `compiler/ir/np_hir_types.pas`
+  - Add `THirNodeKind` enum entries and `ParseHirNodeKind` mappings for new
+    C6-H3 typed HIR node names.
 - `compiler/ir/np_hir_builder.pas`
   - Allocate owned sidecars, lower ownership-aware assignments, and emit cleanup intrinsics.
-- `compiler/ir/np_hir_model.pas`
-  - Add any needed node-kind enum entries if parser/model requires explicit enum support.
 - `compiler/ir/np_hir_llvm_emitter.pas`
   - Emit `@np_string_release`, `@np_string_fault`, owned concat, and owned `IntToStr` helper contracts.
 - `tests/hir/test_hir_node_kind.pas`
@@ -196,13 +195,13 @@ if not FindFirstNodeByKind(Model, 'copy-str-runtime', Node) then
 ```
 
 Assert the emitted LLVM clears ownership sidecars and never calls
-`@np_free(ptr, len)`:
+`@np_free` on the visible concat/alias pointer:
 
 ```pascal
 if Pos('store ptr null, ptr ', LlvmText) = 0 then
   Fail('missing-alias-owner-clear');
-if Pos('call void @np_free(ptr %', LlvmText) <> 0 then
-  Fail('string-path-must-not-free-visible-ptr');
+if Pos('call void @np_free(ptr %concat.', LlvmText) <> 0 then
+  Fail('string-path-must-not-free-visible-concat-ptr');
 ```
 
 - [ ] **Step 6: Freeze `IntToStr` ownership sidecar behavior**
@@ -408,8 +407,7 @@ Expected: one test/verify-hook commit.
 
 **Files:**
 - Modify: `compiler/sema/np_semantic_analyzer.pas`
-- Modify: `compiler/sema/np_semantic_model.pas`
-- Modify: `compiler/ir/np_hir_model.pas` if enum support requires it
+- Modify: `compiler/ir/np_hir_types.pas`
 
 - [ ] **Step 1: Add runtime string ownership registries**
 
@@ -690,8 +688,8 @@ Do not remove:
 
 - `@np_str_concat`
 - `@np_int_to_str`
-- string field store/load lowering
-- string return `{ptr,i64}` lowering
+- standalone string concat assigned to an owned slot
+- standalone `IntToStr` assigned to an owned slot
 
 - [ ] **Step 7: Run source and runtime smoke**
 
@@ -703,7 +701,7 @@ task unless sema/builder gaps remain.
 Run:
 
 ```sh
-git add compiler/sema/np_semantic_analyzer.pas compiler/sema/np_semantic_model.pas compiler/ir/np_hir_model.pas compiler/ir/np_hir_builder.pas compiler/ir/np_hir_llvm_emitter.pas
+git add compiler/sema/np_semantic_analyzer.pas compiler/ir/np_hir_types.pas compiler/ir/np_hir_builder.pas compiler/ir/np_hir_llvm_emitter.pas
 git commit -m "feat(compiler): implement C6-H3 string ownership release"
 ```
 
@@ -832,8 +830,7 @@ Expected retained paths are limited to C6-H3:
 - `docs/superpowers/specs/2026-06-08-compiler-c6h3-string-ownership-release-design.md`
 - `docs/superpowers/plans/2026-06-08-compiler-c6h3-string-ownership-release-implementation.md`
 - `compiler/sema/np_semantic_analyzer.pas`
-- `compiler/sema/np_semantic_model.pas`
-- `compiler/ir/np_hir_model.pas` only if needed for node-kind enum support
+- `compiler/ir/np_hir_types.pas`
 - `compiler/ir/np_hir_builder.pas`
 - `compiler/ir/np_hir_llvm_emitter.pas`
 - `tests/hir/test_hir_node_kind.pas`
@@ -864,4 +861,3 @@ Report only after all gates above pass. Include:
 - `make hygiene`
 - `./build/verify_local.sh`
 - landing recommendation: clean landing worktree replay/cherry-pick of C6-H3 commits only, no raw merge of long-running lanes
-
