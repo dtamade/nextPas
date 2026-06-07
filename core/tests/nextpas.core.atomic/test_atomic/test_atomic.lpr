@@ -742,6 +742,9 @@ begin
     '`TAtomicInt32` and `TAtomicUInt32` follow `atomic_is_lock_free_32`; `Increment`/`Decrement` return the new value after adding or subtracting one, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
     'atomic README must document the 32-bit typed-record lock-free and convenience contract');
   CheckContains(LAtomicDocsReadme,
+    '`TAtomicInt64` and `TAtomicUInt64` follow `atomic_is_lock_free_64`; `Increment`/`Decrement` return the new value after adding or subtracting one, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
+    'atomic README must document the 64-bit typed-record lock-free and convenience contract');
+  CheckContains(LAtomicDocsReadme,
     '`TAtomicISize` and `TAtomicUSize` follow `atomic_is_lock_free_ptr`; `Increment`/`Decrement` return the new value after adding or subtracting one, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
     'atomic README must document the pointer-sized typed-record lock-free and convenience contract');
   CheckContains(LAtomicDocsReadme,
@@ -985,8 +988,12 @@ begin
     'typed UInt32 lock-free query must not hardcode a guaranteed-true result');
   CheckContains(LTypesInt64LockFreeSection, 'atomic_is_lock_free_64',
     'typed Int64 lock-free query must delegate to runtime truth');
+  CheckNotContains(LTypesInt64LockFreeSection, 'Result := True',
+    'typed Int64 lock-free query must not hardcode a guaranteed-true result');
   CheckContains(LTypesUInt64LockFreeSection, 'atomic_is_lock_free_64',
     'typed UInt64 lock-free query must delegate to runtime truth');
+  CheckNotContains(LTypesUInt64LockFreeSection, 'Result := True',
+    'typed UInt64 lock-free query must not hardcode a guaranteed-true result');
   CheckContains(LTypesISizeLockFreeSection, 'atomic_is_lock_free_ptr',
     'typed ISize lock-free query must delegate to pointer-sized runtime truth');
   CheckContains(LTypesUSizeLockFreeSection, 'atomic_is_lock_free_ptr',
@@ -1476,6 +1483,61 @@ begin
   LMutUInt32^ := 11;
   CheckEqual(Int64(11), Int64(LAtomicUInt32.Load(mo_relaxed)),
     'TAtomicUInt32.GetMut should expose the exclusive-access storage');
+end;
+
+procedure TestAtomicInt64UInt64Contract;
+var
+  LAtomicInt64: TAtomicInt64;
+  LAtomicUInt64: TAtomicUInt64;
+  LExpectedInt64: Int64;
+  LExpectedUInt64: UInt64;
+  LMutInt64: PInt64;
+  LMutUInt64: PUInt64;
+begin
+  Check(TAtomicInt64.is_lock_free = atomic_is_lock_free_64,
+    'TAtomicInt64 lock-free surface must match Int64 runtime truth');
+  Check(TAtomicUInt64.is_lock_free = atomic_is_lock_free_64,
+    'TAtomicUInt64 lock-free surface must match Int64 runtime truth');
+
+  LAtomicInt64 := TAtomicInt64.Create(-(Int64(1) shl 40));
+  CheckEqual(-(Int64(1) shl 40), LAtomicInt64.Load(mo_relaxed),
+    'TAtomicInt64.Create should publish the initial value');
+  CheckEqual(-(Int64(1) shl 40) + 1, LAtomicInt64.Increment(mo_acq_rel),
+    'TAtomicInt64.Increment should return the new value');
+  CheckEqual(-(Int64(1) shl 40) + 1, LAtomicInt64.Load(mo_acquire),
+    'TAtomicInt64.Increment should publish the incremented value');
+  CheckEqual(-(Int64(1) shl 40), LAtomicInt64.Decrement(mo_acq_rel),
+    'TAtomicInt64.Decrement should return the new value');
+
+  LExpectedInt64 := -(Int64(1) shl 40);
+  Check(LAtomicInt64.CompareExchangeStrong(LExpectedInt64, Int64(1) shl 41, mo_seq_cst),
+    'TAtomicInt64 strong CAS should update when expected matches');
+  CheckEqual(Int64(1) shl 41, LAtomicInt64.Load,
+    'TAtomicInt64 default Load should observe the CAS result');
+
+  LMutInt64 := LAtomicInt64.GetMut;
+  LMutInt64^ := -(Int64(1) shl 39);
+  CheckEqual(-(Int64(1) shl 39), LAtomicInt64.IntoInner,
+    'TAtomicInt64.GetMut/IntoInner should expose the exclusive-access value');
+
+  LAtomicUInt64 := TAtomicUInt64.Create((UInt64(1) shl 40) + 3);
+  CheckEqual(Int64((UInt64(1) shl 40) + 3), Int64(LAtomicUInt64.IntoInner),
+    'TAtomicUInt64.IntoInner should expose the initial value');
+  CheckEqual(Int64((UInt64(1) shl 40) + 4), Int64(LAtomicUInt64.Increment(mo_acq_rel)),
+    'TAtomicUInt64.Increment should return the new value');
+  CheckEqual(Int64((UInt64(1) shl 40) + 3), Int64(LAtomicUInt64.Decrement(mo_acq_rel)),
+    'TAtomicUInt64.Decrement should return the new value');
+
+  LExpectedUInt64 := (UInt64(1) shl 40) + 3;
+  Check(LAtomicUInt64.CompareExchangeStrong(LExpectedUInt64, (UInt64(1) shl 41) + 7, mo_seq_cst),
+    'TAtomicUInt64 strong CAS should update when expected matches');
+  CheckEqual(Int64((UInt64(1) shl 41) + 7), Int64(LAtomicUInt64.Load(mo_acquire)),
+    'TAtomicUInt64 strong CAS should publish the replacement value');
+
+  LMutUInt64 := LAtomicUInt64.GetMut;
+  LMutUInt64^ := (UInt64(1) shl 39) + 11;
+  CheckEqual(Int64((UInt64(1) shl 39) + 11), Int64(LAtomicUInt64.Load(mo_relaxed)),
+    'TAtomicUInt64.GetMut should expose the exclusive-access storage');
 end;
 
 procedure TestAtomicBoolContract;
@@ -2238,6 +2300,7 @@ begin
   T.Run('fafafa-style atomic API', @TestFafafaStyleAtomicApi);
   T.Run('typed atomic record API', @TestAtomicRecordTypes);
   T.Run('typed atomic int32/uint32 contract', @TestAtomicInt32UInt32Contract);
+  T.Run('typed atomic int64/uint64 contract', @TestAtomicInt64UInt64Contract);
   T.Run('typed atomic bool contract', @TestAtomicBoolContract);
   T.Run('typed atomic isize/usize contract', @TestAtomicISizeUSizeContract);
   T.Run('atomic flag API', @TestAtomicFlagApi);
