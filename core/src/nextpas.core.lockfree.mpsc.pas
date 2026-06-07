@@ -20,6 +20,7 @@ type
     FHead: PNode;
     FTail: PNode;
     FStub: TNode;
+    FConstructed: Boolean;
     FClosed: Int32;
     FDataEpoch: Int32;
     FDataWaiters: Int32;
@@ -66,21 +67,27 @@ end;
 
 constructor TMpscQueueImpl.Create;
 begin
-  inherited Create;
   if IsManagedType(T) then
     raise EArgumentError.Create('TMpscQueue: T must be unmanaged');
+  inherited Create;
   FStub.Next := nil;
   FHead := @FStub;
   FTail := @FStub;
   FClosed := 0;
   FDataEpoch := 0;
   FDataWaiters := 0;
+  FConstructed := True;
 end;
 
 destructor TMpscQueueImpl.Destroy;
 var
   LV: T;
 begin
+  if not FConstructed then
+  begin
+    inherited;
+    Exit;
+  end;
   {$IFDEF DEBUG}
   Assert(FClosed <> 0, 'TMpscQueue.Destroy: Close must be called before Destroy to ensure all producers have stopped');
   Assert(IsEmpty, 'TMpscQueue.Destroy: queue must be drained before Destroy after Close');

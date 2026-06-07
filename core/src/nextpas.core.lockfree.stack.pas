@@ -59,13 +59,13 @@ constructor TLockFreeStackImpl.Create(const ACapacity: PtrUInt);
 var
   LI: Int32;
 begin
-  inherited Create;
   if IsManagedType(T) then
     raise EArgumentError.Create('TLockFreeStack: T must be unmanaged');
   if ACapacity = 0 then
     raise EArgumentError.Create('TLockFreeStack: capacity must be > 0');
   if ACapacity > PtrUInt(High(Int32)) then
     raise EArgumentError.Create('TLockFreeStack: capacity exceeds 32-bit slot index limit');
+  inherited Create;
   FCapacity := Int32(ACapacity);
   SetLength(FSlots, FCapacity);
   for LI := 0 to FCapacity - 2 do

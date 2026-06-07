@@ -3,6 +3,7 @@
 `nextpas.core.lockfree` 提供 nextpas.core 内部可复用的无锁数据结构。当前模块优先服务
 runtime/framework 内部热路径，而不是公开宣称完整替代 Rust std、Go std 或 C++ std 的并发容器。
 所有结构只接受 unmanaged element type；`string`、interface、dynamic array 等 managed 类型会被拒绝。
+`TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`, `TLockFreeStack<T>`, and `TWorkStealingDeque<T>` reject managed element types at construction time with `EArgumentError`.
 
 ## 模块分层
 

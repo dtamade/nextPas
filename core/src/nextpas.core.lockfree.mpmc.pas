@@ -73,11 +73,11 @@ var
   LCap: PtrUInt;
   LI: PtrUInt;
 begin
-  inherited Create;
   if IsManagedType(T) then
     raise EArgumentError.Create('TMpmcQueue: T must be unmanaged');
   if ACapacity = 0 then
     raise EArgumentError.Create('TMpmcQueue: capacity must be > 0');
+  inherited Create;
   LCap := LockFreeNextPow2(ACapacity);
   FCapacity := LCap;
   FMask := LCap - 1;

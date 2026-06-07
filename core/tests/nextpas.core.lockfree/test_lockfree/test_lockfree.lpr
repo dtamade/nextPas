@@ -864,6 +864,10 @@ end;
 procedure TestManagedTypeReject;
 type
   TStrSpsc = specialize TSpscQueue<AnsiString>;
+  TStrMpmc = specialize TMpmcQueue<AnsiString>;
+  TStrMpsc = specialize TMpscQueue<AnsiString>;
+  TStrStack = specialize TLockFreeStack<AnsiString>;
+  TStrDeque = specialize TWorkStealingDeque<AnsiString>;
 var
   LGot: Boolean;
 begin
@@ -874,7 +878,43 @@ begin
     on E: EArgumentError do
       LGot := True;
   end;
-  Check(LGot, 'managed type rejected');
+  Check(LGot, 'SPSC managed type rejected');
+
+  LGot := False;
+  try
+    TStrMpmc.Create(4);
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'MPMC managed type rejected');
+
+  LGot := False;
+  try
+    TStrMpsc.Create;
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'MPSC managed type rejected');
+
+  LGot := False;
+  try
+    TStrStack.Create(4);
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'stack managed type rejected');
+
+  LGot := False;
+  try
+    TStrDeque.Create(4);
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'deque managed type rejected');
 end;
 
 procedure TestLockFreeSourceContracts;
@@ -1101,6 +1141,9 @@ begin
   CheckContains(LDocsReadme,
     '`TMpscQueue<T>` permits multiple producers and exactly one consumer; `Enqueue` does not observe `Close`, so callers must stop and join producers before destroy.',
     'lockfree README must document the MPSC caller-role and destroy contract');
+  CheckContains(LDocsReadme,
+    '`TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`, `TLockFreeStack<T>`, and `TWorkStealingDeque<T>` reject managed element types at construction time with `EArgumentError`.',
+    'lockfree README must document constructor-time managed-type rejection for every public structure');
   CheckContains(LDocsReadme,
     'debug build 中 `TMpscQueue.Destroy` 保留 close-before-destroy 和 drained-before-destroy assert，用来冻结这条纪律。',
     'lockfree README must document the DEBUG close-and-drain destroy asserts');
