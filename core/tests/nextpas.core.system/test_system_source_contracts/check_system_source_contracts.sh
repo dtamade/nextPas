@@ -746,6 +746,9 @@ require_repo_token "compiler/tests/test_typinfo_contract.pas" "nextpas.core.syst
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "InitializeArray"
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "CopyArray"
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "FinalizeArray"
+require_repo_token "compiler/tests/test_typinfo_contract.pas" "compiler TypInfo interface reference lifecycle contract"
+require_repo_token "compiler/tests/test_typinfo_contract.pas" "CopyArray(InterfaceDestValues, InterfaceSourceValues, TypeInfo(ISystemTypInfoContractProbe)"
+require_repo_token "compiler/tests/test_typinfo_contract.pas" "FinalizeArray(InterfaceSourceValues, TypeInfo(ISystemTypInfoContractProbe)"
 require_repo_reject_regex "compiler/tests/test_typinfo_contract.pas" '^[[:space:]]*TypInfo[,;]'
 require_repo_not_uses_unit "compiler/tests/test_typinfo_contract.pas" "TypInfo"
 require_repo_token "compiler/toolchain/np_toolchain_runner.pas" "TFileStream"
