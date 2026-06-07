@@ -921,6 +921,9 @@ require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.l
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system FillMem delegates to base utils"
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system base error aliases mirror base compile-truth"
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system error taxonomy aliases mirror canonical owners"
+require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "CompareMem(nil, nil, 1)"
+require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "CompareMem(nil, @LA[0], 1)"
+require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "CompareMem(@LA[0], nil, 1)"
 require_facade_surface_parser_regression
 require_root_facade_surface_allowlist
 reject_token "src/nextpas.core.system.pas" "SysUtils"

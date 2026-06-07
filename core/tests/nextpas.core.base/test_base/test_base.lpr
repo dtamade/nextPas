@@ -210,6 +210,9 @@ begin
   LB[1] := 2;
 
   Check(CompareMem(nil, nil, 0), 'CompareMem(nil, nil, 0) should stay true');
+  Check(CompareMem(nil, nil, 1), 'CompareMem(nil, nil, >0) should stay true');
+  Check(not CompareMem(nil, @LA[0], 1), 'CompareMem(nil, buffer, >0) should stay false');
+  Check(not CompareMem(@LA[0], nil, 1), 'CompareMem(buffer, nil, >0) should stay false');
   Check(CompareMem(@LA[0], @LB[0], 2), 'CompareMem should stay true for equal buffers');
   LB[1] := 3;
   Check(not CompareMem(@LA[0], @LB[0], 2), 'CompareMem should stay false for different buffers');
