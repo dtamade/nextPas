@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.time.base, nextpas.core.time.deadline,
+  nextpas.core.platform.io.base,
   nextpas.core.platform.sync.base,
   nextpas.core.io.poller,
   nextpas.core.async.base, nextpas.core.async.timer,
@@ -20,15 +21,17 @@ type
   TAsyncLoop = record
   private
     FPoller: TPoller;
+    FWakePoller: TPlatformPoller;
+    FWakeReady: Boolean;
     FTimers: TTimerHeap;
     FRunning: Int32;
-    FWakeFd: Int32;
     FPendingQueue: array of TAsyncPendingItem;
     FPendingCount: UInt32;
     FPendingCap: UInt32;
     FPendingLock: TPlatformMutex;
     procedure DrainPending;
-    procedure DrainWakeFd;
+    procedure DrainWake;
+    procedure WaitForWake(ATimeoutMs: Int32);
   public
     class function Create(AQueueDepth: UInt32 = 64): TAsyncLoop; static;
     procedure Close;
@@ -46,25 +49,25 @@ type
     function CancelTimer(const AHandle: TAsyncTimerHandle): Boolean;
 
     { I/O delegates }
-    function AsyncRead(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+    function AsyncRead(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
-    function AsyncWrite(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+    function AsyncWrite(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
-    function AsyncAccept(AFd: Int32; AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32;
+    function AsyncAccept(AFd: PtrInt; AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
-    function AsyncRecv(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+    function AsyncRecv(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
-    function AsyncSend(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+    function AsyncSend(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
 
     { I/O with deadline }
-    function AsyncReadTimeout(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+    function AsyncReadTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
       const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
-    function AsyncWriteTimeout(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+    function AsyncWriteTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
       const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
-    function AsyncRecvTimeout(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+    function AsyncRecvTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
-    function AsyncSendTimeout(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+    function AsyncSendTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
 
     { Async sleep }
@@ -82,10 +85,7 @@ implementation
 
 uses
   nextpas.core.atomic,
-  nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi,
-  nextpas.core.platform.linux.base,
-  nextpas.core.platform.linux.ffi,
+  nextpas.core.platform.io,
   nextpas.core.platform.sync;
 
 const
@@ -145,9 +145,16 @@ class function TAsyncLoop.Create(AQueueDepth: UInt32): TAsyncLoop;
 begin
   Result := Default(TAsyncLoop);
   Result.FPoller := TPoller.Create(AQueueDepth);
+  Result.FWakeReady := False;
+  if platform_poller_create(Result.FWakePoller) = 0 then
+  begin
+    if platform_poller_enable_wake(Result.FWakePoller, nil) = 0 then
+      Result.FWakeReady := True
+    else
+      platform_poller_close(Result.FWakePoller);
+  end;
   Result.FTimers := TTimerHeap.Create;
   Result.FRunning := 0;
-  Result.FWakeFd := eventfd(0, EFD_NONBLOCK or EFD_CLOEXEC);
   Result.FPendingCount := 0;
   Result.FPendingCap := PENDING_INITIAL_CAP;
   SetLength(Result.FPendingQueue, PENDING_INITIAL_CAP);
@@ -158,30 +165,26 @@ procedure TAsyncLoop.Close;
 begin
   FTimers.Clear;
   platform_mutex_destroy(FPendingLock);
-  if FWakeFd >= 0 then
+  if FWakeReady then
   begin
-    nextpas.core.platform.posix.ffi.close(FWakeFd);
-    FWakeFd := -1;
+    platform_poller_close(FWakePoller);
+    FWakeReady := False;
   end;
   FPoller.Close;
 end;
 
 function TAsyncLoop.IsValid: Boolean;
 begin
-  if not FPoller.IsValid then
-    Exit(False);
-  Result := FWakeFd >= 0;
+  Result := FPoller.IsValid and FWakeReady;
 end;
 
 { Cross-thread wake }
 
 procedure TAsyncLoop.Wake;
-var
-  LVal: UInt64;
 begin
-  if FWakeFd < 0 then Exit;
-  LVal := 1;
-  nextpas.core.platform.posix.ffi.write(FWakeFd, @LVal, 8);
+  if not FWakeReady then
+    Exit;
+  platform_poller_wake(FWakePoller);
 end;
 
 procedure TAsyncLoop.Post(ACallback: TAsyncCallback; AContext: Pointer);
@@ -202,12 +205,22 @@ begin
   Wake;
 end;
 
-procedure TAsyncLoop.DrainWakeFd;
-var
-  LVal: UInt64;
+procedure TAsyncLoop.DrainWake;
 begin
-  { Read 8 bytes to drain the eventfd counter }
-  nextpas.core.platform.posix.ffi.read(FWakeFd, @LVal, 8);
+  if FWakeReady then
+    platform_poller_drain_wake(FWakePoller);
+end;
+
+procedure TAsyncLoop.WaitForWake(ATimeoutMs: Int32);
+var
+  LEntry: TPlatformPollEntry;
+  LCount: Int32;
+begin
+  if not FWakeReady then
+    Exit;
+  FillChar(LEntry, SizeOf(LEntry), 0);
+  LCount := 0;
+  platform_poller_wait(FWakePoller, @LEntry, 1, ATimeoutMs, LCount);
 end;
 
 procedure TAsyncLoop.DrainPending;
@@ -237,7 +250,7 @@ end;
 function TAsyncLoop.Schedule(const ADelay: TDuration; ACallback: TAsyncCallback;
   AContext: Pointer): TAsyncTimerHandle;
 begin
-  if FWakeFd < 0 then
+  if not FWakeReady then
     Exit(TAsyncTimerHandle.None);
   Result := FTimers.ScheduleAfter(ADelay, ACallback, AContext);
 end;
@@ -245,43 +258,43 @@ end;
 function TAsyncLoop.ScheduleAt(const ADeadline: TDeadline; ACallback: TAsyncCallback;
   AContext: Pointer): TAsyncTimerHandle;
 begin
-  if FWakeFd < 0 then
+  if not FWakeReady then
     Exit(TAsyncTimerHandle.None);
   Result := FTimers.Schedule(ADeadline, ACallback, AContext);
 end;
 
 function TAsyncLoop.CancelTimer(const AHandle: TAsyncTimerHandle): Boolean;
 begin
-  if FWakeFd < 0 then
+  if not FWakeReady then
     Exit(False);
   Result := FTimers.Cancel(AHandle);
 end;
 
-function TAsyncLoop.AsyncRead(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+function TAsyncLoop.AsyncRead(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   Result := FPoller.AsyncRead(AFd, ABuf, ALen, AOffset, ACallback, AContext);
 end;
 
-function TAsyncLoop.AsyncWrite(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+function TAsyncLoop.AsyncWrite(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   Result := FPoller.AsyncWrite(AFd, ABuf, ALen, AOffset, ACallback, AContext);
 end;
 
-function TAsyncLoop.AsyncAccept(AFd: Int32; AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32;
+function TAsyncLoop.AsyncAccept(AFd: PtrInt; AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   Result := FPoller.AsyncAccept(AFd, AAddr, AAddrLen, AFlags, ACallback, AContext);
 end;
 
-function TAsyncLoop.AsyncRecv(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+function TAsyncLoop.AsyncRecv(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   Result := FPoller.AsyncRecv(AFd, ABuf, ALen, AFlags, ACallback, AContext);
 end;
 
-function TAsyncLoop.AsyncSend(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+function TAsyncLoop.AsyncSend(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   Result := FPoller.AsyncSend(AFd, ABuf, ALen, AFlags, ACallback, AContext);
@@ -297,8 +310,8 @@ begin
   { Then I/O }
   FPoller.Flush;
   LIo := FPoller.Poll;
-  { Drain wake fd and pending queue }
-  DrainWakeFd;
+  { Drain wake signal and pending queue }
+  DrainWake;
   DrainPending;
   Result := LIo + Int32(LFired);
 end;
@@ -310,13 +323,12 @@ var
   LNext: TDeadline;
   LRemaining: TDuration;
   LTimeoutMs: Int32;
-  LPfd: pollfd;
 begin
   AtomicStore32(FRunning, 1, moRelease);
   while AtomicLoad32(FRunning, moAcquire) <> 0 do
   begin
-    { Drain wake fd and process pending callbacks }
-    DrainWakeFd;
+    { Drain wake signal and process pending callbacks }
+    DrainWake;
     DrainPending;
     { Check if stopped from pending callback }
     if AtomicLoad32(FRunning, moAcquire) = 0 then
@@ -332,7 +344,7 @@ begin
     { If we did work, loop immediately }
     if (LFired > 0) or (LIo > 0) then
       Continue;
-    { Nothing happened — sleep on eventfd until woken or next timer }
+    { Nothing happened: sleep on the platform wake seam until woken or next timer. }
     LNext := FTimers.NextDeadline;
     LRemaining := LNext.Remaining;
     if LRemaining.AsNanoseconds <= 0 then
@@ -343,11 +355,7 @@ begin
       LTimeoutMs := 10;
     if LTimeoutMs <= 0 then
       LTimeoutMs := 1;
-    { Use poll() on eventfd so Wake/Post can interrupt the sleep }
-    LPfd.fd := FWakeFd;
-    LPfd.events := cshort(POLLIN);
-    LPfd.revents := 0;
-    nextpas.core.platform.posix.ffi.poll(@LPfd, 1, cint(LTimeoutMs));
+    WaitForWake(LTimeoutMs);
   end;
 end;
 
@@ -358,10 +366,9 @@ var
   LNext: TDeadline;
   LRemaining: TDuration;
   LTimeoutMs: Int32;
-  LPfd: pollfd;
 begin
   { Drain pending first }
-  DrainWakeFd;
+  DrainWake;
   DrainPending;
   { Timers first (consistent with Run) }
   LFired := FTimers.FireExpired;
@@ -380,13 +387,10 @@ begin
       LTimeoutMs := 10;
     if LTimeoutMs <= 0 then
       LTimeoutMs := 1;
-    LPfd.fd := FWakeFd;
-    LPfd.events := cshort(POLLIN);
-    LPfd.revents := 0;
-    nextpas.core.platform.posix.ffi.poll(@LPfd, 1, cint(LTimeoutMs));
+    WaitForWake(LTimeoutMs);
   end;
   { Drain and fire after sleep }
-  DrainWakeFd;
+  DrainWake;
   DrainPending;
   FPoller.Flush;
   FPoller.Poll;
@@ -401,12 +405,12 @@ end;
 function TAsyncLoop.AsyncSleep(const ADelay: TDuration; ACallback: TAsyncCallback;
   AContext: Pointer): TAsyncTimerHandle;
 begin
-  if FWakeFd < 0 then
+  if not FWakeReady then
     Exit(TAsyncTimerHandle.None);
   Result := FTimers.ScheduleAfter(ADelay, ACallback, AContext);
 end;
 
-function TAsyncLoop.AsyncReadTimeout(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+function TAsyncLoop.AsyncReadTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
   const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var LCtx: PTimeoutCtx;
 begin
@@ -427,7 +431,7 @@ begin
   end;
 end;
 
-function TAsyncLoop.AsyncWriteTimeout(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+function TAsyncLoop.AsyncWriteTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
   const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var LCtx: PTimeoutCtx;
 begin
@@ -448,7 +452,7 @@ begin
   end;
 end;
 
-function TAsyncLoop.AsyncRecvTimeout(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+function TAsyncLoop.AsyncRecvTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
   const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var LCtx: PTimeoutCtx;
 begin
@@ -469,7 +473,7 @@ begin
   end;
 end;
 
-function TAsyncLoop.AsyncSendTimeout(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+function TAsyncLoop.AsyncSendTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
   const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var LCtx: PTimeoutCtx;
 begin

@@ -5,41 +5,50 @@ unit nextpas.core.io.poller;
 interface
 
 uses
-  nextpas.core.platform.posix.base,
-  nextpas.core.platform.linux.modern,
-  nextpas.core.platform.linux.ffi,
-  nextpas.core.io.reactor,
-  nextpas.core.io.reactor.epoll;
+  nextpas.core.base
+  {$IFDEF NEXTPAS_WINDOWS}
+  , nextpas.core.io.reactor.iocp
+  {$ENDIF}
+  {$IFDEF NEXTPAS_LINUX}
+  , nextpas.core.io.reactor
+  , nextpas.core.io.reactor.epoll
+  {$ENDIF}
+  ;
 
 type
-  TIoCompletion = nextpas.core.io.reactor.TIoCompletion;
+  TIoCompletion = procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);
 
-  TPollerBackend = (pbIoUring, pbEpoll);
+  TPollerBackend = (pbIoUring, pbEpoll, pbIocp, pbUnsupported);
 
   TPoller = record
   private
     FBackend: TPollerBackend;
+    {$IFDEF NEXTPAS_LINUX}
     FUring: TIoReactor;
     FEpoll: TEpollReactor;
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    FIocp: TIocpReactor;
+    {$ENDIF}
   public
     class function Create(AQueueDepth: UInt32 = 64): TPoller; static;
     procedure Close;
     function IsValid: Boolean; inline;
     function Backend: TPollerBackend; inline;
 
-    function AsyncRead(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+    function AsyncRead(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
-    function AsyncWrite(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+    function AsyncWrite(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
-    function AsyncAccept(AFd: Int32; AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32;
+    function AsyncAccept(AFd: PtrInt; AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
-    function AsyncConnect(AFd: Int32; AAddr: Pointer; AAddrLen: UInt32;
+    function AsyncConnect(AFd: PtrInt; AAddr: Pointer; AAddrLen: UInt32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
-    function AsyncSend(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+    function AsyncSend(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
-    function AsyncRecv(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+    function AsyncRecv(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
-    function AsyncClose(AFd: Int32;
+    function AsyncClose(AFd: PtrInt;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
 
     function Poll: Int32;
@@ -53,8 +62,12 @@ function PollerDetectBackend: TPollerBackend;
 
 implementation
 
+{$IFDEF NEXTPAS_LINUX}
 uses
-  nextpas.core.platform.posix.ffi;
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.linux.modern,
+  nextpas.core.platform.linux.ffi;
 
 const
   ENOSYS = 38;
@@ -80,39 +93,63 @@ begin
       Result := True; { io_uring exists but params were invalid }
   end;
 end;
+{$ENDIF}
 
 function PollerDetectBackend: TPollerBackend;
 begin
+  {$IFDEF NEXTPAS_WINDOWS}
+  Result := pbIocp;
+  {$ELSEIF defined(NEXTPAS_LINUX)}
   Result := pbEpoll;
-  {$IFDEF NEXTPAS_LINUX}
   if TryIoUringProbe then
     Result := pbIoUring;
+  {$ELSE}
+  Result := pbUnsupported;
   {$ENDIF}
 end;
 
 class function TPoller.Create(AQueueDepth: UInt32): TPoller;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  Result := Default(TPoller);
   Result.FBackend := PollerDetectBackend;
   case Result.FBackend of
+    {$IFDEF NEXTPAS_LINUX}
     pbIoUring: Result.FUring := TIoReactor.Create(AQueueDepth);
     pbEpoll:   Result.FEpoll := TEpollReactor.Create(AQueueDepth);
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp: Result.FIocp := TIocpReactor.Create(AQueueDepth);
+    {$ENDIF}
+  else
+    ;
   end;
 end;
 
 procedure TPoller.Close;
 begin
   case FBackend of
+    {$IFDEF NEXTPAS_LINUX}
     pbIoUring: FUring.Close;
     pbEpoll:   FEpoll.Close;
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp: FIocp.Close;
+    {$ENDIF}
+  else
+    ;
   end;
 end;
 
 function TPoller.IsValid: Boolean;
 begin
   case FBackend of
+    {$IFDEF NEXTPAS_LINUX}
     pbIoUring: Result := FUring.IsValid;
     pbEpoll:   Result := FEpoll.IsValid;
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp: Result := FIocp.IsValid;
+    {$ENDIF}
   else
     Result := False;
   end;
@@ -123,85 +160,134 @@ begin
   Result := FBackend;
 end;
 
-function TPoller.AsyncRead(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+function TPoller.AsyncRead(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   case FBackend of
-    pbIoUring: Result := FUring.AsyncRead(AFd, ABuf, ALen, AOffset, ACallback, AContext);
-    pbEpoll:   Result := FEpoll.AsyncRead(AFd, ABuf, ALen, AOffset,
+    {$IFDEF NEXTPAS_LINUX}
+    pbIoUring: Result := FUring.AsyncRead(Int32(AFd), ABuf, ALen, AOffset,
+                 nextpas.core.io.reactor.TIoCompletion(ACallback), AContext);
+    pbEpoll:   Result := FEpoll.AsyncRead(Int32(AFd), ABuf, ALen, AOffset,
                  nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp:    Result := FIocp.AsyncRead(AFd, ABuf, ALen, AOffset,
+                 nextpas.core.io.reactor.iocp.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
   else
     Result := False;
   end;
 end;
 
-function TPoller.AsyncWrite(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+function TPoller.AsyncWrite(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   case FBackend of
-    pbIoUring: Result := FUring.AsyncWrite(AFd, ABuf, ALen, AOffset, ACallback, AContext);
-    pbEpoll:   Result := FEpoll.AsyncWrite(AFd, ABuf, ALen, AOffset,
+    {$IFDEF NEXTPAS_LINUX}
+    pbIoUring: Result := FUring.AsyncWrite(Int32(AFd), ABuf, ALen, AOffset,
+                 nextpas.core.io.reactor.TIoCompletion(ACallback), AContext);
+    pbEpoll:   Result := FEpoll.AsyncWrite(Int32(AFd), ABuf, ALen, AOffset,
                  nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp:    Result := FIocp.AsyncWrite(AFd, ABuf, ALen, AOffset,
+                 nextpas.core.io.reactor.iocp.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
   else
     Result := False;
   end;
 end;
 
-function TPoller.AsyncAccept(AFd: Int32; AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32;
+function TPoller.AsyncAccept(AFd: PtrInt; AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   case FBackend of
-    pbIoUring: Result := FUring.AsyncAccept(AFd, AAddr, AAddrLen, AFlags, ACallback, AContext);
-    pbEpoll:   Result := FEpoll.AsyncAccept(AFd, AAddr, AAddrLen, AFlags,
+    {$IFDEF NEXTPAS_LINUX}
+    pbIoUring: Result := FUring.AsyncAccept(Int32(AFd), AAddr, AAddrLen, AFlags,
+                 nextpas.core.io.reactor.TIoCompletion(ACallback), AContext);
+    pbEpoll:   Result := FEpoll.AsyncAccept(Int32(AFd), AAddr, AAddrLen, AFlags,
                  nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp:    Result := FIocp.AsyncAccept(AFd, AAddr, AAddrLen, AFlags,
+                 nextpas.core.io.reactor.iocp.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
   else
     Result := False;
   end;
 end;
 
-function TPoller.AsyncConnect(AFd: Int32; AAddr: Pointer; AAddrLen: UInt32;
+function TPoller.AsyncConnect(AFd: PtrInt; AAddr: Pointer; AAddrLen: UInt32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   case FBackend of
-    pbIoUring: Result := FUring.AsyncConnect(AFd, AAddr, AAddrLen, ACallback, AContext);
-    pbEpoll:   Result := FEpoll.AsyncConnect(AFd, AAddr, AAddrLen,
+    {$IFDEF NEXTPAS_LINUX}
+    pbIoUring: Result := FUring.AsyncConnect(Int32(AFd), AAddr, AAddrLen,
+                 nextpas.core.io.reactor.TIoCompletion(ACallback), AContext);
+    pbEpoll:   Result := FEpoll.AsyncConnect(Int32(AFd), AAddr, AAddrLen,
                  nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp:    Result := FIocp.AsyncConnect(AFd, AAddr, AAddrLen,
+                 nextpas.core.io.reactor.iocp.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
   else
     Result := False;
   end;
 end;
 
-function TPoller.AsyncSend(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+function TPoller.AsyncSend(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   case FBackend of
-    pbIoUring: Result := FUring.AsyncSend(AFd, ABuf, ALen, AFlags, ACallback, AContext);
-    pbEpoll:   Result := FEpoll.AsyncSend(AFd, ABuf, ALen, AFlags,
+    {$IFDEF NEXTPAS_LINUX}
+    pbIoUring: Result := FUring.AsyncSend(Int32(AFd), ABuf, ALen, AFlags,
+                 nextpas.core.io.reactor.TIoCompletion(ACallback), AContext);
+    pbEpoll:   Result := FEpoll.AsyncSend(Int32(AFd), ABuf, ALen, AFlags,
                  nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp:    Result := FIocp.AsyncSend(AFd, ABuf, ALen, AFlags,
+                 nextpas.core.io.reactor.iocp.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
   else
     Result := False;
   end;
 end;
 
-function TPoller.AsyncRecv(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+function TPoller.AsyncRecv(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   case FBackend of
-    pbIoUring: Result := FUring.AsyncRecv(AFd, ABuf, ALen, AFlags, ACallback, AContext);
-    pbEpoll:   Result := FEpoll.AsyncRecv(AFd, ABuf, ALen, AFlags,
+    {$IFDEF NEXTPAS_LINUX}
+    pbIoUring: Result := FUring.AsyncRecv(Int32(AFd), ABuf, ALen, AFlags,
+                 nextpas.core.io.reactor.TIoCompletion(ACallback), AContext);
+    pbEpoll:   Result := FEpoll.AsyncRecv(Int32(AFd), ABuf, ALen, AFlags,
                  nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp:    Result := FIocp.AsyncRecv(AFd, ABuf, ALen, AFlags,
+                 nextpas.core.io.reactor.iocp.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
   else
     Result := False;
   end;
 end;
 
-function TPoller.AsyncClose(AFd: Int32;
+function TPoller.AsyncClose(AFd: PtrInt;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   case FBackend of
-    pbIoUring: Result := FUring.AsyncClose(AFd, ACallback, AContext);
-    pbEpoll:   Result := FEpoll.AsyncClose(AFd,
+    {$IFDEF NEXTPAS_LINUX}
+    pbIoUring: Result := FUring.AsyncClose(Int32(AFd),
+                 nextpas.core.io.reactor.TIoCompletion(ACallback), AContext);
+    pbEpoll:   Result := FEpoll.AsyncClose(Int32(AFd),
                  nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp:    Result := FIocp.AsyncClose(AFd,
+                 nextpas.core.io.reactor.iocp.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
   else
     Result := False;
   end;
@@ -210,8 +296,13 @@ end;
 function TPoller.Poll: Int32;
 begin
   case FBackend of
+    {$IFDEF NEXTPAS_LINUX}
     pbIoUring: Result := FUring.Poll;
     pbEpoll:   Result := FEpoll.Poll;
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp: Result := FIocp.Poll;
+    {$ENDIF}
   else
     Result := 0;
   end;
@@ -220,8 +311,13 @@ end;
 function TPoller.PollOne: Boolean;
 begin
   case FBackend of
+    {$IFDEF NEXTPAS_LINUX}
     pbIoUring: Result := FUring.PollOne;
     pbEpoll:   Result := FEpoll.PollOne;
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp: Result := FIocp.PollOne;
+    {$ENDIF}
   else
     Result := False;
   end;
@@ -230,24 +326,43 @@ end;
 procedure TPoller.Run;
 begin
   case FBackend of
+    {$IFDEF NEXTPAS_LINUX}
     pbIoUring: FUring.Run;
     pbEpoll:   FEpoll.Run;
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp: FIocp.Run;
+    {$ENDIF}
+  else
+    ;
   end;
 end;
 
 procedure TPoller.Stop;
 begin
   case FBackend of
+    {$IFDEF NEXTPAS_LINUX}
     pbIoUring: FUring.Stop;
     pbEpoll:   FEpoll.Stop;
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp: FIocp.Stop;
+    {$ENDIF}
+  else
+    ;
   end;
 end;
 
 function TPoller.Flush: Int32;
 begin
   case FBackend of
+    {$IFDEF NEXTPAS_LINUX}
     pbIoUring: Result := FUring.Flush;
     pbEpoll:   Result := FEpoll.Flush;
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp: Result := FIocp.Flush;
+    {$ENDIF}
   else
     Result := 0;
   end;

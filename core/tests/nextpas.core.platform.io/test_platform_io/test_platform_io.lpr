@@ -501,6 +501,32 @@ begin
     'poll session target socket handle must not truncate native handles');
 end;
 
+procedure TestAsyncLoopWakeSourceContract;
+var
+  LAsyncLoopSource: string;
+begin
+  LAsyncLoopSource := LoadSourceText('src/nextpas.core.async.loop.pas');
+
+  CheckAbsent(LAsyncLoopSource, 'nextpas.core.platform.linux.base',
+    'async loop must not directly depend on Linux wake constants');
+  CheckAbsent(LAsyncLoopSource, 'nextpas.core.platform.linux.ffi',
+    'async loop must not directly depend on Linux wake ffi');
+  CheckAbsent(LAsyncLoopSource, 'eventfd(',
+    'async loop wake creation must live behind platform.io');
+  CheckAbsent(LAsyncLoopSource, 'poll(@lpfd',
+    'async loop sleep must use platform poller wake wait');
+  CheckAbsent(LAsyncLoopSource, 'fwakefd',
+    'async loop must not own a raw Linux wake fd');
+  CheckContains(LAsyncLoopSource, 'nextpas.core.platform.io',
+    'async loop should consume the unified platform.io wake seam');
+  CheckContains(LAsyncLoopSource, 'platform_poller_enable_wake',
+    'async loop should enable wake through platform.io');
+  CheckContains(LAsyncLoopSource, 'platform_poller_wake',
+    'async loop should wake through platform.io');
+  CheckContains(LAsyncLoopSource, 'platform_poller_wait',
+    'async loop should sleep through platform.io');
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestWakeDrain;
 var
@@ -543,6 +569,7 @@ begin
   T.Run('poller wait capacity source contract', @TestPollerWaitCapacitySourceContract);
   T.Run('windows poller source contract', @TestWindowsPollerSourceContract);
   T.Run('readiness server poller source contract', @TestReadinessServerPollerSourceContract);
+  T.Run('async loop wake source contract', @TestAsyncLoopWakeSourceContract);
   {$IFDEF NEXTPAS_LINUX}
   T.Run('wake drain', @TestWakeDrain);
   {$ENDIF}

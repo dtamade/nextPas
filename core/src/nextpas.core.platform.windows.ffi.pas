@@ -20,6 +20,7 @@ function GetTimeZoneInformation(var lpTimeZoneInformation): DWORD; stdcall; exte
 function SwitchToThread: BOOL; stdcall; external 'kernel32' name 'SwitchToThread';
 procedure Sleep(dwMilliseconds: DWORD); stdcall; external 'kernel32' name 'Sleep';
 function GetLastError: DWORD; stdcall; external 'kernel32' name 'GetLastError';
+procedure SetLastError(dwErrCode: DWORD); stdcall; external 'kernel32' name 'SetLastError';
 procedure GetSystemInfo(var lpSystemInfo: SYSTEM_INFO); stdcall; external 'kernel32' name 'GetSystemInfo';
 
 function TlsAlloc: DWORD; stdcall; external 'kernel32' name 'TlsAlloc';
