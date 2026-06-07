@@ -174,7 +174,7 @@ begin
       end;
       hi := Ord(Next(P));
       if lo > hi then
-        raise Exception.Create('invalid character range in regex');
+        raise ERegexCompileError.Create('invalid character range', P.Pos);
       CharBitmapSetRange(Result^.ClassBitmap, lo, hi);
     end
     else

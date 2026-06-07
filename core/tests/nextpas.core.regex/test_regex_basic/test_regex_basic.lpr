@@ -655,6 +655,9 @@ begin
   Check(not TRegex.TryCompile('[abc', R, err), 'unclosed char class');
   Check(Pos('unclosed character class', err) > 0, 'unclosed char class msg');
 
+  Check(not TRegex.TryCompile('[z-a]', R, err), 'invalid char class range');
+  Check(Pos('invalid character range', err) > 0, 'invalid char class range msg');
+
   // Unclosed quantifier
   Check(not TRegex.TryCompile('a{', R, err), 'unclosed quantifier');
   Check(Pos('unclosed quantifier', err) > 0, 'unclosed quantifier msg');
