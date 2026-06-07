@@ -1023,7 +1023,10 @@ begin
           Exit(RejectWithUserError(UNSUPPORTED_REQUEST_TRANSFER_CODING_REASON,
             pekUnsupportedTransferCoding, AParser));
         end;
-      end;
+      end
+      else
+        Exit(RejectWithUserError(UNSUPPORTED_REQUEST_TRANSFER_CODING_REASON,
+          pekUnsupportedTransferCoding, AParser));
     end;
   end;
   FRequestMetadata := FPendingRequestMetadata;
