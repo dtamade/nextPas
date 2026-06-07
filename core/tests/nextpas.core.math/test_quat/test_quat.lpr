@@ -535,6 +535,48 @@ begin
     'TQuatd Nlerp follows shortest path for opposite-sign end');
 end;
 
+procedure TestInterpolationStaysStableForEquivalentEndpoints;
+var
+  Qf: TQuatf;
+  ScaledQf: TQuatf;
+  NegatedQf: TQuatf;
+  Qd: TQuatd;
+  ScaledQd: TQuatd;
+  NegatedQd: TQuatd;
+begin
+  Qf := QuarterTurnZf;
+  ScaledQf := TQuatf.Create(Qf.X * 3.0, Qf.Y * 3.0, Qf.Z * 3.0, Qf.W * 3.0);
+  NegatedQf := TQuatf.Create(-Qf.X, -Qf.Y, -Qf.Z, -Qf.W);
+  Check(TQuatf.Equals(TQuatf.Slerp(Qf, Qf, Single(0.25)), Qf, Single(0.000001)),
+    'TQuatf Slerp keeps identical endpoints stable');
+  Check(TQuatf.Equals(TQuatf.Nlerp(Qf, Qf, Single(0.25)), Qf, Single(0.000001)),
+    'TQuatf Nlerp keeps identical endpoints stable');
+  Check(TQuatf.Equals(TQuatf.Slerp(Qf, ScaledQf, Single(0.25)), Qf, Single(0.000001)),
+    'TQuatf Slerp keeps scaled-equivalent endpoints stable');
+  Check(TQuatf.Equals(TQuatf.Nlerp(Qf, ScaledQf, Single(0.25)), Qf, Single(0.000001)),
+    'TQuatf Nlerp keeps scaled-equivalent endpoints stable');
+  Check(TQuatf.Equals(TQuatf.Slerp(Qf, NegatedQf, Single(0.25)), Qf, Single(0.000001)),
+    'TQuatf Slerp keeps opposite-sign endpoints stable');
+  Check(TQuatf.Equals(TQuatf.Nlerp(Qf, NegatedQf, Single(0.25)), Qf, Single(0.000001)),
+    'TQuatf Nlerp keeps opposite-sign endpoints stable');
+
+  Qd := QuarterTurnZd;
+  ScaledQd := TQuatd.Create(Qd.X * 3.0, Qd.Y * 3.0, Qd.Z * 3.0, Qd.W * 3.0);
+  NegatedQd := TQuatd.Create(-Qd.X, -Qd.Y, -Qd.Z, -Qd.W);
+  Check(TQuatd.Equals(TQuatd.Slerp(Qd, Qd, 0.25), Qd, 0.000000000001),
+    'TQuatd Slerp keeps identical endpoints stable');
+  Check(TQuatd.Equals(TQuatd.Nlerp(Qd, Qd, 0.25), Qd, 0.000000000001),
+    'TQuatd Nlerp keeps identical endpoints stable');
+  Check(TQuatd.Equals(TQuatd.Slerp(Qd, ScaledQd, 0.25), Qd, 0.000000000001),
+    'TQuatd Slerp keeps scaled-equivalent endpoints stable');
+  Check(TQuatd.Equals(TQuatd.Nlerp(Qd, ScaledQd, 0.25), Qd, 0.000000000001),
+    'TQuatd Nlerp keeps scaled-equivalent endpoints stable');
+  Check(TQuatd.Equals(TQuatd.Slerp(Qd, NegatedQd, 0.25), Qd, 0.000000000001),
+    'TQuatd Slerp keeps opposite-sign endpoints stable');
+  Check(TQuatd.Equals(TQuatd.Nlerp(Qd, NegatedQd, 0.25), Qd, 0.000000000001),
+    'TQuatd Nlerp keeps opposite-sign endpoints stable');
+end;
+
 procedure TestToAxisAngleCanonicalizesOppositeSignRotations;
 var
   Axisf: TVec3f;
@@ -621,6 +663,8 @@ begin
     @TestInterpolationFollowsShortestPathForOppositeSignStart);
   T.Run('Interpolation follows shortest path for opposite-sign end',
     @TestInterpolationFollowsShortestPathForOppositeSignEnd);
+  T.Run('Interpolation stays stable for equivalent endpoints',
+    @TestInterpolationStaysStableForEquivalentEndpoints);
   T.Run('ToAxisAngle canonicalizes opposite-sign rotations',
     @TestToAxisAngleCanonicalizesOppositeSignRotations);
   T.Run('ToAxisAngle canonicalizes multi-turn inputs',

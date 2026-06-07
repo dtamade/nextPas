@@ -237,11 +237,13 @@ Status:
   rotation, quaternion multiply composition,
   `Slerp`, `Nlerp`, shortest-path handling for opposite-sign equivalent interpolation endpoints
   including direct start/end midpoint parity plus endpoint canonicalization, finite out-of-range
-  extrapolation, finite-guard parameter-position parity across `FromAxisAngle(AAxis, AAngleRad)`
-  and `Slerp`/`Nlerp(AT)`, interpolation endpoint normalization/canonicalization, component-wise
-  `Equals` semantics including non-canonical opposite-sign behavior and negative epsilon rejection,
-  and direct `TQuatd` parity coverage for `Create`, `Data`, `Conjugate`, `ToRotationMatrix`,
-  quaternion multiply composition, and `Nlerp` midpoint.
+  extrapolation, stable degenerate interpolation for identical, scaled-equivalent, and
+  opposite-sign equivalent endpoints, finite-guard parameter-position parity across
+  `FromAxisAngle(AAxis, AAngleRad)` and `Slerp`/`Nlerp(AT)`, interpolation endpoint
+  normalization/canonicalization, component-wise `Equals` semantics including non-canonical
+  opposite-sign behavior and negative epsilon rejection, and direct `TQuatd` parity coverage for
+  `Create`, `Data`, `Conjugate`, `ToRotationMatrix`, quaternion multiply composition, and `Nlerp`
+  midpoint.
 - M3 is complete for current final Vec/Mat/Quat value-type scope.
 
 ## M4: Transform Builders
