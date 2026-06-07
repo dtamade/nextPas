@@ -74,9 +74,10 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - `nextpas.core.math.random` now provides explicit-state `TRandomGen`, `TRandomState`, and
   `TNoiseGen`.
 - Random tests cover deterministic seed vectors, state restore, full signed `NextInt` domain
-  parity, range boundaries, invalid ranges, exact state-forced `[0,1)` / `[AMin, AMax)` boundary
-  behavior plus exact `NextInt` signed lower/upper bounds, owner-level reversed-range and
-  non-finite-range messages, weighted-choice tail reachability under extreme prefix weights,
+  parity, unbiased non-power-of-two integer range sampling, range boundaries, invalid ranges,
+  exact state-forced `[0,1)` / `[AMin, AMax)` boundary behavior plus exact `NextInt` signed
+  lower/upper bounds, owner-level reversed-range and non-finite-range messages,
+  weighted-choice tail reachability under extreme prefix weights,
   probability clamp, dice rules,
   `RollMultiple` integer-overflow owner boundary, weighted choice including empty/negative and
   non-finite owner-level messages, shuffle, Gaussian, and unit-circle vector helpers.

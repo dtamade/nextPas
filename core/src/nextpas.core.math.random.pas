@@ -243,6 +243,9 @@ end;
 function TRandomGen.NextIntRange(const AMin, AMax: Integer): Integer;
 var
   LRange: UInt64;
+  LRemainder: UInt64;
+  LLimit: UInt64;
+  LSample: UInt64;
   LOffset: Int64;
 begin
   if AMin > AMax then
@@ -251,7 +254,13 @@ begin
     Exit(AMin);
 
   LRange := UInt64(Int64(AMax) - Int64(AMin)) + UInt64(1);
-  LOffset := Int64(NextUInt64 mod LRange);
+  // Reject the uneven high tail so every output bucket receives the same sample count.
+  LRemainder := ((High(UInt64) mod LRange) + UInt64(1)) mod LRange;
+  LLimit := High(UInt64) - LRemainder;
+  repeat
+    LSample := NextUInt64;
+  until LSample <= LLimit;
+  LOffset := Int64(LSample mod LRange);
   Result := Integer(Int64(AMin) + LOffset);
 end;
 

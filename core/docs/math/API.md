@@ -262,6 +262,8 @@ Random state is explicit:
 `NextInt` samples the full signed `Integer` domain. It is equivalent in public contract to
 `NextIntRange(Low(Integer), High(Integer))`, so forced zero/max states hit the exact
 `Low(Integer)` / `High(Integer)` boundaries.
+`NextIntRange` uses rejection sampling for non-power-of-two span widths, so inclusive integer
+ranges stay unbiased instead of inheriting modulo bias from raw `UInt64` samples.
 
 `TRandomGen` methods:
 

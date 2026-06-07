@@ -209,6 +209,32 @@ begin
   end;
 end;
 
+procedure TestIntegerRangesRejectModuloBiasTailStates;
+var
+  Rng: TRandomGen;
+  MaxState: TRandomState;
+begin
+  MaxState.S0 := High(UInt64);
+  MaxState.S1 := 0;
+
+  Rng := TRandomGen.Create(42);
+  try
+    Rng.State := MaxState;
+    CheckEqual(Int64(9), Int64(Rng.NextIntRange(0, 9)),
+      'NextIntRange rejects modulo-bias tail sample for 10-value span');
+
+    Rng.State := MaxState;
+    CheckEqual(Int64(3), Int64(Rng.NextIntRange(-3, 3)),
+      'NextIntRange rejects modulo-bias tail sample for signed 7-value span');
+
+    Rng.State := MaxState;
+    CheckEqual(Int64(6), Int64(Rng.Roll(6)),
+      'Roll rejects modulo-bias tail sample through NextIntRange');
+  finally
+    Rng.Free;
+  end;
+end;
+
 procedure TestLargeFiniteFloatRangeStaysFiniteAndBounded;
 const
   LARGE_MIN: Single = -3.0e38;
@@ -676,6 +702,7 @@ begin
   T.Run('zero seed uses deterministic default', @TestZeroSeedUsesDeterministicDefault);
   T.Run('range boundaries', @TestRangeBoundaries);
   T.Run('state-forced half-open boundaries', @TestStateForcedHalfOpenBoundaries);
+  T.Run('integer ranges reject modulo-bias tail states', @TestIntegerRangesRejectModuloBiasTailStates);
   T.Run('large finite float range stays finite and bounded',
     @TestLargeFiniteFloatRangeStaysFiniteAndBounded);
   T.Run('WeightedChoice large finite weights stay scale-invariant',
