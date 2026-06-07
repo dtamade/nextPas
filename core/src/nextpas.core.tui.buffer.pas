@@ -75,7 +75,7 @@ type
     { 按坐标读写。(AX,AY) 在 Area 外返回 nil。 }
     function CellAt(AX, AY: Integer): PCell;
 
-    { 从 (AX,AY) 起写 UTF-8 / ASCII 串，受右边界与可选 AMaxWidth（列）约束。
+    { 从 (AX,AY) 起写 UTF-8 / ASCII 串，受左右边界与可选 AMaxWidth（列）约束。
       样式经 CellApplyStyle 应用到每个写入 cell。返回实际写入列数。 }
     function SetString(AX, AY: Integer; const AStr: AnsiString;
       const AStyle: TStyle): Integer;
@@ -328,7 +328,7 @@ begin
 
   if (AY < FArea.Y) or (AY >= FArea.Y + FArea.Height) then Exit;
   if AX >= LRight then Exit;
-  if (ALen <= 0) or (AMaxWidth <= 0) then Exit;
+  if (AStr = nil) or (ALen <= 0) or (AMaxWidth <= 0) then Exit;
 
   LCursor := AX;
   LHidden := 0;
@@ -361,7 +361,7 @@ begin
       if LRemaining = 0 then Break;
       PrepareWriteSpan(LCursor, AY, 1);
       LCP := @FContent[IndexOfPos(LCursor, AY)];
-      CellSetSymbolAscii(LCP^, AStr[LI]);
+      CellSetSymbolAscii(LCP^, AnsiChar(LByte));
       CellApplyStyle(LCP^, AStyle);
       Inc(LCursor);
       Inc(Result);

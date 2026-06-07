@@ -73,6 +73,36 @@ begin
   end;
 end;
 
+procedure TestSetStringLeftClipConsumesHiddenColumns;
+var
+  LBuf: TBuffer;
+  LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(2, 0, 4, 1));
+  try
+    LWritten := LBuf.SetString(0, 0, 'ABCDE', StyleDefault);
+    CheckEqual(Int64(3), Int64(LWritten), 'left clipped visible columns');
+    AssertRows(LBuf, ['CDE '], 'left clipped string');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestSetStringLeftClipConsumesHiddenWideGlyph;
+var
+  LBuf: TBuffer;
+  LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(2, 0, 4, 1));
+  try
+    LWritten := LBuf.SetString(0, 0, #$E4#$B8#$AD + 'ABC', StyleDefault);
+    CheckEqual(Int64(3), Int64(LWritten), 'left clipped wide glyph leaves visible suffix columns');
+    AssertRows(LBuf, ['ABC '], 'left clipped wide glyph');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 procedure TestSetStringOffset;
 var
   LBuf: TBuffer;
@@ -216,6 +246,25 @@ begin
     CheckEqual(Int64(2), Int64(LWritten),
       'set stringP partial clipped wide glyph tail consumes one visible column');
     AssertRows(LBuf, [' A##'], 'set stringP left clip clears partial wide tail');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestSetStringPLeftClipConsumesHiddenColumns;
+var
+  LBuf: TBuffer;
+  LStr: AnsiString;
+  LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(2, 0, 4, 1));
+  try
+    LStr := 'ABCDE';
+    LWritten := LBuf.SetStringP(0, 0, PAnsiChar(LStr), Length(LStr),
+      MaxInt, StyleDefault);
+    CheckEqual(Int64(3), Int64(LWritten),
+      'set stringP left clipped visible columns');
+    AssertRows(LBuf, ['CDE '], 'set stringP left clipped string');
   finally
     LBuf.Free;
   end;
@@ -693,6 +742,8 @@ begin
   T.Run('create empty', @TestCreateEmpty);
   T.Run('set string', @TestSetString);
   T.Run('set string clip', @TestSetStringClip);
+  T.Run('set string left clip consumes hidden columns', @TestSetStringLeftClipConsumesHiddenColumns);
+  T.Run('set string left clip consumes hidden wide glyph', @TestSetStringLeftClipConsumesHiddenWideGlyph);
   T.Run('set string offset', @TestSetStringOffset);
   T.Run('set stringN wide clip', @TestSetStringNWideClip);
   T.Run('set stringP', @TestSetStringP);
@@ -708,6 +759,8 @@ begin
     @TestSetStringPLeftClipClearsPartialWideTail);
   T.Run('set stringN left clip partial wide tail consumes max width',
     @TestSetStringNLeftClipPartialWideTailConsumesMaxWidth);
+  T.Run('set stringP left clip consumes hidden columns',
+    @TestSetStringPLeftClipConsumesHiddenColumns);
   T.Run('cell at bounds', @TestCellAt);
   T.Run('cjk width', @TestCJKWidth);
   T.Run('fill rect', @TestFillRect);
