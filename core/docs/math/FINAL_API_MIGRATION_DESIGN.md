@@ -146,6 +146,8 @@ easing/random submodules; the facade uses aliases and inline forwarding.
 - `IsNaN`, `IsInfinite`, `FloatEquals`, `FloatIsZero`
 - overflow helpers originally held by `nextpas.core.math`
 
+`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.
+
 `nextpas.core.math.trig` owns:
 
 - `Sin`, `Cos`, `Tan`

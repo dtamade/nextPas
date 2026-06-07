@@ -81,6 +81,8 @@ boundary, so the common-symbol namespace contract no longer depends on a direct 
 - `nextpas.core.math.easing`: `TEasingFunction` plus the `Ease*` function family.
 - `nextpas.core.math.random`: `TRandomState`, `TRandomGen`, and `TNoiseGen`.
 
+`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.
+
 ## Vector, Matrix, And Quaternion Conventions
 
 Math value types are packed records with value semantics. Vectors expose named components and `Data`

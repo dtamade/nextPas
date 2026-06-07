@@ -3,7 +3,9 @@ program test_facade;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.testing,
+  nextpas.core.errors,
   nextpas.core.math;
 
 var
@@ -19,10 +21,30 @@ begin
   Check(LDelta <= 0.000001, AMessage);
 end;
 
+procedure RaiseFacadeClampReversedBounds; forward;
+
+procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string; const AProc: TTestProc);
+begin
+  try
+    AProc;
+  except
+    on E: EArgumentError do
+    begin
+      CheckEqual(AExpectedMessage, E.Message, AName + ' message');
+      Exit;
+    end;
+    on E: Exception do
+      Fail(AName + ': expected EArgumentError, got ' + E.ClassName);
+  end;
+  Fail(AName + ': expected EArgumentError');
+end;
+
 procedure TestFacadeScalarAndTrig;
 begin
   CheckNear(5.0, Clamp(10.0, 0.0, 5.0), 'facade re-exports scalar Clamp');
   CheckNear(5.0, Clamp(Single(10.0), Single(0.0), Single(5.0)), 'facade re-exports Single Clamp');
+  ExpectArgumentErrorMessage('Clamp: minimum must not exceed maximum',
+    'facade Clamp reversed bounds', @RaiseFacadeClampReversedBounds);
   CheckNear(PI_VALUE, DegToRad(180.0), 'facade re-exports DegToRad');
   CheckNear(1.0, Sin(HALF_PI), 'facade re-exports trig Sin');
   CheckNear(1.0, Sin(Single(HALF_PI)), 'facade re-exports Single trig Sin');
@@ -83,6 +105,11 @@ begin
     Noise.Free;
     Rng.Free;
   end;
+end;
+
+procedure RaiseFacadeClampReversedBounds;
+begin
+  Clamp(1.0, 2.0, 1.0);
 end;
 
 begin

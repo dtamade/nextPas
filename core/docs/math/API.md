@@ -102,6 +102,8 @@ Scalar helpers:
 - Angle conversion: `DegToRad`, `RadToDeg`
 - Number theory and geometry helpers: `GCD`, `LCM`, `Hypot`, `Fmod`
 
+`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.
+
 Trig helpers:
 
 - Trig: `Sin`, `Cos`, `Tan`, `ArcSin`, `ArcCos`, `ArcTan`, `ArcTan2`

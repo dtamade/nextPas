@@ -95,7 +95,17 @@ begin
   CheckNear(57.2957795130823208768, RAD_TO_DEG, 0.000000000000001, 'RAD_TO_DEG');
 end;
 
+procedure RaiseClampSingleReversedBounds; forward;
+procedure RaiseClampDoubleReversedBounds; forward;
+procedure RaiseClampInt32ReversedBounds; forward;
+procedure RaiseClampSingleNaNMin; forward;
+procedure RaiseClampDoubleNaNMax; forward;
+procedure RaiseClampSingleInfiniteMax; forward;
+
 procedure TestMinMaxClamp;
+var
+  LNaN: Double;
+  LSingleNaN: Single;
 begin
   CheckNear(1.5, nextpas.core.math.scalar.Min(Single(1.5), Single(2.5)), 0.0, 'Min Single');
   CheckNear(2.5, nextpas.core.math.scalar.Max(Single(1.5), Single(2.5)), 0.0, 'Max Single');
@@ -107,6 +117,22 @@ begin
   CheckNear(5.0, Clamp(10.0, 0.0, 5.0), 0.0, 'Clamp high');
   CheckNear(0.0, Clamp(-1.0, 0.0, 5.0), 0.0, 'Clamp low');
   CheckNear(3.0, Clamp(3.0, 0.0, 5.0), 0.0, 'Clamp inside');
+  LSingleNaN := Clamp(MakeSingleNaN, Single(0.0), Single(5.0));
+  Check(IsNaN(LSingleNaN), 'Clamp Single NaN value propagates NaN');
+  LNaN := Clamp(MakeNaN, 0.0, 5.0);
+  Check(IsNaN(LNaN), 'Clamp Double NaN value propagates NaN');
+  ExpectArgumentErrorMessage('Clamp: minimum must not exceed maximum',
+    'Clamp Single reversed bounds', @RaiseClampSingleReversedBounds);
+  ExpectArgumentErrorMessage('Clamp: minimum must not exceed maximum',
+    'Clamp Double reversed bounds', @RaiseClampDoubleReversedBounds);
+  ExpectArgumentErrorMessage('Clamp: minimum must not exceed maximum',
+    'Clamp Int32 reversed bounds', @RaiseClampInt32ReversedBounds);
+  ExpectArgumentErrorMessage('Clamp: minimum and maximum must be finite',
+    'Clamp Single NaN minimum', @RaiseClampSingleNaNMin);
+  ExpectArgumentErrorMessage('Clamp: minimum and maximum must be finite',
+    'Clamp Double NaN maximum', @RaiseClampDoubleNaNMax);
+  ExpectArgumentErrorMessage('Clamp: minimum and maximum must be finite',
+    'Clamp Single infinite maximum', @RaiseClampSingleInfiniteMax);
 end;
 
 procedure TestInterpolation;
@@ -311,6 +337,36 @@ end;
 procedure RaiseAbsLowInt64;
 begin
   nextpas.core.math.scalar.Abs(Low(Int64));
+end;
+
+procedure RaiseClampSingleReversedBounds;
+begin
+  Clamp(Single(1.0), Single(2.0), Single(1.0));
+end;
+
+procedure RaiseClampDoubleReversedBounds;
+begin
+  Clamp(1.0, 2.0, 1.0);
+end;
+
+procedure RaiseClampInt32ReversedBounds;
+begin
+  Clamp(1, 2, 1);
+end;
+
+procedure RaiseClampSingleNaNMin;
+begin
+  Clamp(Single(1.0), MakeSingleNaN, Single(2.0));
+end;
+
+procedure RaiseClampDoubleNaNMax;
+begin
+  Clamp(1.0, 0.0, MakeNaN);
+end;
+
+procedure RaiseClampSingleInfiniteMax;
+begin
+  Clamp(Single(1.0), Single(0.0), MakeSinglePositiveInfinity);
 end;
 
 procedure RaiseFracNaN;

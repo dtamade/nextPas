@@ -345,6 +345,24 @@ REQUIRED_NOISE_DOC_TRUTH = (
         "Negative fractional noise coordinates wrap canonically across the 256-period seam, so values like `-0.25` and `255.75` stay equivalent for the same seeded generator.",
     ),
 )
+REQUIRED_SCALAR_CLAMP_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.",
+    ),
+    (
+        "docs/math/API.md",
+        "`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.",
+    ),
+)
 REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
     RequiredCoreMakeTarget(
         target="core-math-api-surface-smoke",
@@ -705,6 +723,9 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("facade-random", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade random surface'"),
     RequiredBehaviorTestMarker("scalar-constants", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('constants'"),
     RequiredBehaviorTestMarker("scalar-min-max-clamp", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('min max clamp'"),
+    RequiredBehaviorTestMarker("scalar-clamp-nan-value", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Clamp Double NaN value propagates NaN"),
+    RequiredBehaviorTestMarker("scalar-clamp-reversed-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Clamp: minimum must not exceed maximum"),
+    RequiredBehaviorTestMarker("scalar-clamp-finite-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Clamp: minimum and maximum must be finite"),
     RequiredBehaviorTestMarker("scalar-interpolation", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('interpolation'"),
     RequiredBehaviorTestMarker("scalar-rounding-sign", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('rounding and sign'"),
     RequiredBehaviorTestMarker("scalar-float-predicates", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('float predicates'"),
@@ -2023,6 +2044,15 @@ def scan_required_noise_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_scalar_clamp_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_SCALAR_CLAMP_DOC_TRUTH,
+        "missing-required-scalar-clamp-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def build_report(root: Path) -> Report:
     root = root.resolve()
     findings: list[Finding] = []
@@ -2043,6 +2073,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_random_doc_truth(root))
     findings.extend(scan_required_easing_doc_truth(root))
     findings.extend(scan_required_noise_doc_truth(root))
+    findings.extend(scan_required_scalar_clamp_doc_truth(root))
 
     source_files = discover_files(root, MATH_SOURCE_GLOBS)
     math_ffi = root / "src/nextpas.core.math.ffi.pas"

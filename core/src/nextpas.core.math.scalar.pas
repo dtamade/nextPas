@@ -170,8 +170,35 @@ begin
   if AA > AB then Result := AA else Result := AB;
 end;
 
+procedure RequireClampBounds(const AMin, AMax: Single); inline;
+begin
+  if SingleIsNaN(AMin) or SingleIsNaN(AMax) or
+    SingleIsInfinite(AMin) or SingleIsInfinite(AMax) then
+    raise EArgumentError.Create('Clamp: minimum and maximum must be finite');
+  if AMin > AMax then
+    raise EArgumentError.Create('Clamp: minimum must not exceed maximum');
+end;
+
+procedure RequireClampBounds(const AMin, AMax: Double); inline;
+begin
+  if DoubleIsNaN(AMin) or DoubleIsNaN(AMax) or
+    DoubleIsInfinite(AMin) or DoubleIsInfinite(AMax) then
+    raise EArgumentError.Create('Clamp: minimum and maximum must be finite');
+  if AMin > AMax then
+    raise EArgumentError.Create('Clamp: minimum must not exceed maximum');
+end;
+
+procedure RequireClampBounds(const AMin, AMax: Int32); inline;
+begin
+  if AMin > AMax then
+    raise EArgumentError.Create('Clamp: minimum must not exceed maximum');
+end;
+
 function Clamp(const AValue, AMin, AMax: Single): Single;
 begin
+  RequireClampBounds(AMin, AMax);
+  if SingleIsNaN(AValue) then
+    Exit(AValue);
   if AValue < AMin then
     Result := AMin
   else if AValue > AMax then
@@ -182,6 +209,9 @@ end;
 
 function Clamp(const AValue, AMin, AMax: Double): Double;
 begin
+  RequireClampBounds(AMin, AMax);
+  if DoubleIsNaN(AValue) then
+    Exit(AValue);
   if AValue < AMin then
     Result := AMin
   else if AValue > AMax then
@@ -192,6 +222,7 @@ end;
 
 function Clamp(const AValue, AMin, AMax: Int32): Int32;
 begin
+  RequireClampBounds(AMin, AMax);
   if AValue < AMin then
     Result := AMin
   else if AValue > AMax then
