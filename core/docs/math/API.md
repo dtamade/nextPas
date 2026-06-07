@@ -364,11 +364,20 @@ Run the local trig link smoke on the current host with:
 make -C core core-math-trig-local-smoke
 ```
 
+Run the Win64 compile-only trig gate when the local FPC install provides the Win64 target RTL:
+
+```sh
+make -C core core-math-trig-win64-compile-smoke
+```
+
 It bundles `test_trig` plus the facade-consumer proof as the current-host local link proof. macOS
 and Windows trig link smokes remain host-gated and must be reported separately until those hosts
 run equivalent checks. The owner-level target first reruns `core-math-api-surface-smoke`, then
 reuses `core-math-facade-local-smoke`, so the current-host proof keeps the source-surface
 `external 'm'` and consumer-boundary checks coupled to the link smoke without losing an
 independently callable facade-consumer gate.
+`core-math-trig-win64-compile-smoke` is compile-only and uses `-Cn -Twin64 -Px86_64`; it proves the
+current facade/trig route compiles for Win64 with this toolchain, but it is not a Windows host
+link/run proof and it does not cover macOS.
 Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.
 M8 is not complete until broader M7 SIMD acceleration decisions and host trig link evidence are resolved.

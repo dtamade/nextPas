@@ -438,9 +438,25 @@ REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
             ),
         ),
     ),
+    RequiredCoreMakeTarget(
+        target="core-math-trig-win64-compile-smoke",
+        command="make -C core core-math-trig-win64-compile-smoke",
+        recipe_steps=(
+            (
+                "test-trig-host-compile-gate",
+                "$(MAKE) -C tests/nextpas.core.math/test_trig_host_compile_gate clean test",
+            ),
+        ),
+    ),
 )
 BENCH_SIMD_SEAM_PATH = "benchmarks/nextpas.core.math/bench_simd_seam/bench_simd_seam.lpr"
 SIMD_MATHUTIL_PATH = "src/nextpas.core.simd.mathutil.pas"
+TRIG_HOST_COMPILE_GATE_MAKEFILE_PATH = (
+    "tests/nextpas.core.math/test_trig_host_compile_gate/Makefile"
+)
+TRIG_HOST_COMPILE_GATE_SOURCE_PATH = (
+    "tests/nextpas.core.math/test_trig_host_compile_gate/test_trig_host_compile_gate.lpr"
+)
 INTERNAL_IMPL_TEST_PREFIXES = (
     "tests/nextpas.core.math/test_impl_",
 )
@@ -1185,9 +1201,15 @@ def scan_forbidden_simd_mathutil_bare_names(root: Path, path: Path, text: str) -
     return findings
 
 
-def scan_forbidden_fpc_math_unit_in_easing(root: Path, path: Path, text: str) -> list[Finding]:
+def scan_forbidden_fpc_math_unit(
+    root: Path,
+    path: Path,
+    text: str,
+    expected_rel: str,
+    rule: str,
+) -> list[Finding]:
     findings: list[Finding] = []
-    if relative(path, root) != "src/nextpas.core.math.easing.pas":
+    if relative(path, root) != expected_rel:
         return findings
 
     code = strip_pascal_comments_and_strings(text)
@@ -1198,13 +1220,33 @@ def scan_forbidden_fpc_math_unit_in_easing(root: Path, path: Path, text: str) ->
             line = line_no_at(code, match.start("body") + match.group("body").find(unit))
             add_finding(
                 findings,
-                "no-fpc-math-unit-in-easing",
+                rule,
                 root,
                 path,
                 line,
                 original_line(text, line),
             )
     return findings
+
+
+def scan_forbidden_fpc_math_unit_in_easing(root: Path, path: Path, text: str) -> list[Finding]:
+    return scan_forbidden_fpc_math_unit(
+        root,
+        path,
+        text,
+        "src/nextpas.core.math.easing.pas",
+        "no-fpc-math-unit-in-easing",
+    )
+
+
+def scan_forbidden_fpc_math_unit_in_trig(root: Path, path: Path, text: str) -> list[Finding]:
+    return scan_forbidden_fpc_math_unit(
+        root,
+        path,
+        text,
+        "src/nextpas.core.math.trig.pas",
+        "no-fpc-math-unit-in-trig",
+    )
 
 
 def scan_public_global_random_singletons(root: Path, path: Path, text: str) -> list[Finding]:
@@ -1508,6 +1550,147 @@ def run_public_math_source_simd_wiring_self_tests() -> None:
                 )
 
 
+def run_trig_host_safe_route_self_tests() -> None:
+    cases = (
+        (
+            "active-trig-uses-fpc-math",
+            "src/nextpas.core.math.trig.pas",
+            "unit nextpas.core.math.trig;\n"
+            "interface\n"
+            "implementation\n"
+            "uses Math;\n"
+            "end.\n",
+            True,
+        ),
+        (
+            "line-comment",
+            "src/nextpas.core.math.trig.pas",
+            "unit nextpas.core.math.trig;\n"
+            "interface\n"
+            "implementation\n"
+            "// uses Math;\n"
+            "end.\n",
+            False,
+        ),
+        (
+            "brace-comment",
+            "src/nextpas.core.math.trig.pas",
+            "unit nextpas.core.math.trig;\n"
+            "interface\n"
+            "implementation\n"
+            "{ uses Math; }\n"
+            "end.\n",
+            False,
+        ),
+        (
+            "paren-star-comment",
+            "src/nextpas.core.math.trig.pas",
+            "unit nextpas.core.math.trig;\n"
+            "interface\n"
+            "implementation\n"
+            "(* uses Math; *)\n"
+            "end.\n",
+            False,
+        ),
+        (
+            "string-literal",
+            "src/nextpas.core.math.trig.pas",
+            "unit nextpas.core.math.trig;\n"
+            "interface\n"
+            "const Msg = 'Math';\n"
+            "implementation\n"
+            "end.\n",
+            False,
+        ),
+        (
+            "easing-uses-fpc-math",
+            "src/nextpas.core.math.easing.pas",
+            "unit nextpas.core.math.easing;\n"
+            "interface\n"
+            "implementation\n"
+            "uses Math;\n"
+            "end.\n",
+            False,
+        ),
+    )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        expected_rule = "no-fpc-math-unit-in-trig"
+
+        for case_name, rel, text, expected_finding in cases:
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+            findings = scan_forbidden_fpc_math_unit_in_trig(root, path, text)
+            rules = {finding.rule for finding in findings}
+            if expected_finding and expected_rule not in rules:
+                raise AssertionError(
+                    "trig-host-safe-route self-test "
+                    + case_name
+                    + " expected "
+                    + expected_rule
+                )
+            if (not expected_finding) and findings:
+                raise AssertionError(
+                    "trig-host-safe-route self-test "
+                    + case_name
+                    + " expected no findings"
+                )
+
+
+def run_required_trig_host_compile_gate_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        makefile = root / TRIG_HOST_COMPILE_GATE_MAKEFILE_PATH
+        source = root / TRIG_HOST_COMPILE_GATE_SOURCE_PATH
+        makefile.parent.mkdir(parents=True, exist_ok=True)
+        source.parent.mkdir(parents=True, exist_ok=True)
+        makefile.write_text(
+            "FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -Cn -Twin64 -Px86_64\n",
+            encoding="utf-8",
+        )
+        source.write_text(
+            "program test_trig_host_compile_gate;\n"
+            "uses\n"
+            "  nextpas.core.math.trig;\n"
+            "begin\n"
+            "  if Sin(0.0) + Cos(0.0) + Tan(0.0) + ArcTan2(1.0, 1.0) +\n"
+            "    Exp(0.0) + Ln(1.0) + Power(2.0, 3.0) + Sqrt(4.0) = 0.0 then\n"
+            "    Halt(1);\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+
+        findings = scan_required_trig_host_compile_gate(root)
+        rules = {finding.rule for finding in findings}
+        expected_rule = (
+            "missing-required-trig-host-compile-gate-marker:facade-import"
+        )
+        if expected_rule not in rules:
+            raise AssertionError(
+                "trig-host-compile-gate self-test expected " + expected_rule
+            )
+
+        source.write_text(
+            "program test_trig_host_compile_gate;\n"
+            "uses\n"
+            "  nextpas.core.math,\n"
+            "  nextpas.core.math.trig;\n"
+            "begin\n"
+            "  if Sin(0.0) + Cos(0.0) + Tan(0.0) + ArcTan2(1.0, 1.0) +\n"
+            "    Exp(0.0) + Ln(1.0) + Power(2.0, 3.0) + Sqrt(4.0) = 0.0 then\n"
+            "    Halt(1);\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        findings = scan_required_trig_host_compile_gate(root)
+        if findings:
+            raise AssertionError(
+                "trig-host-compile-gate self-test expected no findings"
+            )
+
+
 def run_required_doc_truth_self_tests() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         root = Path(temp_dir)
@@ -1625,6 +1808,102 @@ def scan_required_core_make_target_doc_coverage(root: Path) -> list[Finding]:
                 path,
                 1,
                 "missing documented command " + required_target.command,
+            )
+    return findings
+
+
+def active_uses_units(text: str) -> set[str]:
+    code = strip_pascal_comments_and_strings(text)
+    units: set[str] = set()
+    for match in USES_MATH_FFI_RE.finditer(code):
+        for unit in re.split(r"[,;\s]+", match.group("body")):
+            unit = unit.strip().lower()
+            if unit:
+                units.add(unit)
+    return units
+
+
+def scan_required_trig_host_compile_gate(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    makefile = root / TRIG_HOST_COMPILE_GATE_MAKEFILE_PATH
+    source = root / TRIG_HOST_COMPILE_GATE_SOURCE_PATH
+
+    if not makefile.is_file():
+        add_finding(
+            findings,
+            "missing-required-trig-host-compile-gate-makefile",
+            root,
+            makefile,
+            1,
+            TRIG_HOST_COMPILE_GATE_MAKEFILE_PATH,
+        )
+    else:
+        makefile_text = makefile.read_text(encoding="utf-8", errors="replace")
+        for rule, marker in (
+            ("compile-only", "-Cn"),
+            ("win64-target", "-Twin64"),
+            ("x86_64-cpu", "-Px86_64"),
+        ):
+            if marker in makefile_text:
+                continue
+            add_finding(
+                findings,
+                "missing-required-trig-host-compile-gate-step:" + rule,
+                root,
+                makefile,
+                1,
+                marker,
+            )
+
+    if not source.is_file():
+        add_finding(
+            findings,
+            "missing-required-trig-host-compile-gate-source",
+            root,
+            source,
+            1,
+            TRIG_HOST_COMPILE_GATE_SOURCE_PATH,
+        )
+    else:
+        source_text = strip_pascal_comments_and_strings(
+            source.read_text(encoding="utf-8", errors="replace")
+        )
+        source_units = active_uses_units(source_text)
+        for rule, unit in (
+            ("facade-import", "nextpas.core.math"),
+            ("trig-import", "nextpas.core.math.trig"),
+        ):
+            if unit in source_units:
+                continue
+            add_finding(
+                findings,
+                "missing-required-trig-host-compile-gate-marker:" + rule,
+                root,
+                source,
+                1,
+                unit,
+            )
+
+        required_markers = (
+            ("sin-touch", "Sin("),
+            ("cos-touch", "Cos("),
+            ("tan-touch", "Tan("),
+            ("arctan2-touch", "ArcTan2("),
+            ("exp-touch", "Exp("),
+            ("ln-touch", "Ln("),
+            ("power-touch", "Power("),
+            ("sqrt-touch", "Sqrt("),
+        )
+        for rule, marker in required_markers:
+            if marker in source_text:
+                continue
+            add_finding(
+                findings,
+                "missing-required-trig-host-compile-gate-marker:" + rule,
+                root,
+                source,
+                1,
+                marker,
             )
     return findings
 
@@ -1754,6 +2033,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_root_facade_api_doc_coverage(root))
     findings.extend(scan_required_core_make_targets(root))
     findings.extend(scan_required_core_make_target_doc_coverage(root))
+    findings.extend(scan_required_trig_host_compile_gate(root))
     findings.extend(scan_required_host_gate_residual_truth(root))
     findings.extend(scan_required_m8_residual_truth(root))
     findings.extend(scan_required_simd_seam_doc_truth(root))
@@ -1801,6 +2081,7 @@ def build_report(root: Path) -> Report:
         findings.extend(scan_forbidden_trig_scalar_names(root, path, text))
         findings.extend(scan_forbidden_simd_mathutil_bare_names(root, path, text))
         findings.extend(scan_forbidden_fpc_math_unit_in_easing(root, path, text))
+        findings.extend(scan_forbidden_fpc_math_unit_in_trig(root, path, text))
         findings.extend(scan_public_global_random_singletons(root, path, text))
         findings.extend(scan_required_public_declarations(root, path, text))
 
@@ -1845,6 +2126,8 @@ def main() -> int:
     if args.self_test:
         run_behavior_marker_self_tests()
         run_public_math_source_simd_wiring_self_tests()
+        run_trig_host_safe_route_self_tests()
+        run_required_trig_host_compile_gate_self_tests()
         run_required_doc_truth_self_tests()
     report = build_report(args.root)
 

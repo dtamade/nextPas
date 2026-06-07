@@ -16,7 +16,7 @@ BENCHMARKS_DIR := benchmarks
 # FPC unit/output paths
 FPC_FLAGS += -FU$(LIB_DIR) -FE$(BIN_DIR) -Fu$(SRC_DIR) -Fi$(SRC_DIR)
 
-.PHONY: build test examples benchmarks core-math-api-surface-smoke core-math-overview-local-smoke core-math-facade-local-smoke core-math-symbol-scope-local-smoke core-math-smoke core-math-full-local-smoke core-math-impl-simd-local-smoke core-math-trig-local-smoke clean dirs
+.PHONY: build test examples benchmarks core-math-api-surface-smoke core-math-overview-local-smoke core-math-facade-local-smoke core-math-symbol-scope-local-smoke core-math-smoke core-math-full-local-smoke core-math-impl-simd-local-smoke core-math-trig-local-smoke core-math-trig-win64-compile-smoke clean dirs
 
 # Default target
 build: dirs
@@ -71,6 +71,9 @@ core-math-trig-local-smoke: dirs
 	$(MAKE) core-math-api-surface-smoke
 	$(MAKE) core-math-facade-local-smoke
 	$(MAKE) -C tests/nextpas.core.math/test_trig clean test
+
+core-math-trig-win64-compile-smoke: dirs
+	$(MAKE) -C tests/nextpas.core.math/test_trig_host_compile_gate clean test
 
 # Compile all examples
 examples: dirs

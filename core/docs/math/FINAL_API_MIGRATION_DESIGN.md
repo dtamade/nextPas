@@ -305,6 +305,10 @@ Cross-platform link proof has two layers:
   `test_trig` as the current-host local link proof. macOS/Windows host gates must still rerun
   equivalent checks before trig is marked complete. If macOS/Windows gates are unavailable in a
   round, the round must report that final cross-platform completion is blocked, not complete.
+- Win64 compile-only proof: `make -C core core-math-trig-win64-compile-smoke` runs a
+  `-Cn -Twin64 -Px86_64` probe that imports both `nextpas.core.math` and
+  `nextpas.core.math.trig`. This is useful forced compile evidence for the current toolchain, but
+  it is not a Windows host link/run proof and it does not cover macOS.
   Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.
   M8 is not complete until broader M7 SIMD acceleration decisions and host trig link evidence are resolved.
 
