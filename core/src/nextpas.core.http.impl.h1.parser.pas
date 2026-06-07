@@ -119,6 +119,8 @@ type
       const AValueLen: SizeUInt);
     procedure EnsureBodyCapacity(const ARequired: SizeUInt);
     function SnapshotBody: TBytes;
+    function ConsumedUntilErrorPosition(const ABuf: PAnsiChar;
+      const ALen: SizeUInt): SizeUInt;
     procedure MaterializeCurrentHeaderSpans;
     procedure ClearCurrentHeaderSpans;
     procedure ClearRequestMetadataCache;
@@ -714,7 +716,6 @@ end;
 function TH1Parser.Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
 var
   LErrno: TLlhttpErrnoT;
-  LErrorPos: PAnsiChar;
 begin
   LErrno := llhttp_execute(@FParser, ABuf, ALen);
   MaterializeCurrentHeaderSpans;
@@ -722,13 +723,7 @@ begin
   begin
     FError := False;
     FErrorMsg := '';
-    LErrorPos := llhttp_get_error_pos(@FParser);
-    if (LErrorPos <> nil) and
-       (PtrUInt(LErrorPos) >= PtrUInt(ABuf)) and
-       (PtrUInt(LErrorPos) <= PtrUInt(ABuf) + ALen) then
-      Result := SizeUInt(PtrUInt(LErrorPos) - PtrUInt(ABuf))
-    else
-      Result := ALen;
+    Result := ConsumedUntilErrorPosition(ABuf, ALen);
     Exit;
   end;
   if (LErrno = HPE_PAUSED_UPGRADE) and (llhttp_get_upgrade(@FParser) <> 0) then
@@ -736,13 +731,7 @@ begin
     FComplete := True;
     FError := False;
     FErrorMsg := '';
-    LErrorPos := llhttp_get_error_pos(@FParser);
-    if (LErrorPos <> nil) and
-       (PtrUInt(LErrorPos) >= PtrUInt(ABuf)) and
-       (PtrUInt(LErrorPos) <= PtrUInt(ABuf) + ALen) then
-      Result := SizeUInt(PtrUInt(LErrorPos) - PtrUInt(ABuf))
-    else
-      Result := ALen;
+    Result := ConsumedUntilErrorPosition(ABuf, ALen);
     Exit;
   end;
   if LErrno <> HPE_OK then
@@ -752,10 +741,30 @@ begin
     if FErrorKind = pekNone then
       FErrorKind := pekMalformed;
     FErrorMsg := string(AnsiString(llhttp_get_error_reason(@FParser)));
-    Result := 0;
+    Result := ConsumedUntilErrorPosition(ABuf, ALen);
   end
   else
     Result := ALen;
+end;
+
+function TH1Parser.ConsumedUntilErrorPosition(const ABuf: PAnsiChar;
+  const ALen: SizeUInt): SizeUInt;
+var
+  LErrorPos: PAnsiChar;
+  LBase: PtrUInt;
+  LPos: PtrUInt;
+begin
+  Result := ALen;
+  if ABuf = nil then
+    Exit;
+  LErrorPos := llhttp_get_error_pos(@FParser);
+  if LErrorPos = nil then
+    Exit;
+
+  LBase := PtrUInt(ABuf);
+  LPos := PtrUInt(LErrorPos);
+  if (LPos >= LBase) and (LPos <= LBase + ALen) then
+    Result := SizeUInt(LPos - LBase);
 end;
 
 procedure TH1Parser.Finish;

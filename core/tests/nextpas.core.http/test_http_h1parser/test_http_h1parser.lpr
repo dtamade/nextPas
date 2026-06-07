@@ -549,6 +549,7 @@ procedure TestChunkedRequestInvalidChunkSize;
 var
   LP: IH1Parser;
   LReq: string;
+  LConsumed: SizeUInt;
 begin
   LP := NewH1RequestParser;
   LReq := 'POST /upload HTTP/1.1'#13#10 +
@@ -556,9 +557,11 @@ begin
           'Transfer-Encoding: chunked'#13#10#13#10 +
           'Z'#13#10'hello'#13#10 +
           '0'#13#10#13#10;
-  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
   Check(LP.HasError, 'invalid chunk size raises parser error');
   Check(not LP.IsComplete, 'invalid chunk size is not complete');
+  CheckEqual(SizeUInt(Pos('Z', LReq) - 1), LConsumed,
+    'invalid chunk size returns bytes consumed before error');
 end;
 
 procedure TestChunkedRequestMalformedChunkExtension;
