@@ -226,6 +226,36 @@ begin
     'windows exists clears last-error before GetEnvironmentVariableW');
 end;
 
+procedure TestWindowsGetClearsLastErrorSourceContract;
+var
+  LSource, LWindowsBranch, LBody: string;
+  LWindowsPos, LBodyPos: Integer;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.env.pas');
+  LWindowsPos := Pos('{$IFDEF NEXTPAS_WINDOWS}' + LineEnding +
+    'function platform_env_get(const AName: PAnsiChar;',
+    LSource);
+  Check(LWindowsPos > 0, 'windows env implementation exists');
+  LWindowsBranch := Copy(LSource, LWindowsPos, Length(LSource));
+  LBodyPos := Pos('function platform_env_get(const AName: PAnsiChar;',
+    LWindowsBranch);
+  Check(LBodyPos > 0, 'windows get implementation exists');
+  LWindowsBranch := Copy(LWindowsBranch, LBodyPos, Length(LWindowsBranch));
+  LBody := ExtractFunctionBody(LWindowsBranch,
+    'function platform_env_get(const AName: PAnsiChar;',
+    'function platform_env_set');
+
+  CheckTokenBefore(LBody, 'SetLastError(ERROR_SUCCESS)',
+    'GetEnvironmentVariableW(PWideChar(LName), nil, 0)',
+    'windows get clears last-error before length probe');
+  CheckContains(LBody, 'if (LResult = 0) and (GetLastError <> ERROR_SUCCESS) then',
+    'windows get treats zero-length value as success');
+  CheckContains(LBody, 'LLastError := GetLastError',
+    'windows get stores last-error after second read');
+  CheckContains(LBody, 'if (LResult = 0) and (LLastError <> ERROR_SUCCESS) then',
+    'windows get treats zero-length second read as success');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.env');
   T.Run('get PATH', @TestGetPath);
@@ -242,5 +272,7 @@ begin
   T.Run('invalid names', @TestInvalidNames);
   T.Run('windows exists clears last-error source contract',
     @TestWindowsExistsClearsLastErrorSourceContract);
+  T.Run('windows get clears last-error source contract',
+    @TestWindowsGetClearsLastErrorSourceContract);
   T.Summary;
 end.

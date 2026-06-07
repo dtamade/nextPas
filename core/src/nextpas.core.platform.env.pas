@@ -105,6 +105,7 @@ var
   LName: UnicodeString;
   LValue: array of WideChar;
   LResult: DWORD;
+  LLastError: DWORD;
   LUtf8: AnsiString;
 begin
   ALen := 0;
@@ -115,8 +116,9 @@ begin
   if not platform_windows_utf8_to_wide_checked(AName, LName) then
     Exit(Int32(ERROR_INVALID_NAME));
 
+  SetLastError(ERROR_SUCCESS);
   LResult := GetEnvironmentVariableW(PWideChar(LName), nil, 0);
-  if LResult = 0 then
+  if (LResult = 0) and (GetLastError <> ERROR_SUCCESS) then
   begin
     if GetLastError = ERROR_ENVVAR_NOT_FOUND then
       Exit(Int32(ERROR_ENVVAR_NOT_FOUND));
@@ -124,10 +126,12 @@ begin
   end;
 
   SetLength(LValue, LResult + 1);
+  SetLastError(ERROR_SUCCESS);
   LResult := GetEnvironmentVariableW(PWideChar(LName), @LValue[0],
     DWORD(Length(LValue)));
-  if LResult = 0 then
-    Exit(Int32(GetLastError));
+  LLastError := GetLastError;
+  if (LResult = 0) and (LLastError <> ERROR_SUCCESS) then
+    Exit(Int32(LLastError));
   LValue[LResult] := #0;
   if not platform_windows_wide_to_utf8_checked(@LValue[0], LUtf8) then
     Exit(Int32(ERROR_INVALID_NAME));
