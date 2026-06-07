@@ -924,6 +924,14 @@ require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.l
 require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "CompareMem(nil, nil, 1)"
 require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "CompareMem(nil, @LA[0], 1)"
 require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "CompareMem(@LA[0], nil, 1)"
+require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "base FreeAndNil should nil before destructor execution"
+require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "base SafeFree should accept nil references"
+require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "base Supports(TObject) should query supported interfaces"
+require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "base Supports(IInterface) should query supported interfaces"
+require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "base Supports(TObject) should return false for nil object references"
+require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "base Supports(IInterface) should return false for nil interface references"
+require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "base Supports(TObject) should clear stale interfaces on unsupported queries"
+require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "base Supports(IInterface) should clear stale interfaces on unsupported queries"
 require_facade_surface_parser_regression
 require_root_facade_surface_allowlist
 reject_token "src/nextpas.core.system.pas" "SysUtils"

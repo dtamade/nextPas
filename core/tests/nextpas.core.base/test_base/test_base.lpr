@@ -8,12 +8,63 @@ uses
   nextpas.core.testing;
 
 type
+  PObjectRef = ^TObject;
+  PIntegerRef = ^Integer;
+  PBooleanRef = ^Boolean;
+
   TIntNullable = specialize TNullable<Integer>;
   TIntOption = specialize TOption<Integer>;
   TIntResult = specialize TResult<Integer, string>;
 
+  IBaseUtilsProbe = interface
+    ['{64EA3D42-C730-4895-A82E-03EA1E0ED457}']
+    function Value: Integer;
+  end;
+
+  IBaseUtilsOtherProbe = interface
+    ['{68450AD5-4018-4D0E-B909-BDA617EA7B19}']
+  end;
+
+  TBaseUtilsProbe = class(TInterfacedObject, IBaseUtilsProbe)
+  public
+    function Value: Integer;
+  end;
+
+  TBaseUtilsOtherProbe = class(TInterfacedObject, IBaseUtilsOtherProbe)
+  end;
+
+  TDestructorProbe = class
+  private
+    FTarget: PObjectRef;
+    FDestroyCount: PIntegerRef;
+    FReferenceWasNil: PBooleanRef;
+  public
+    constructor Create(ATarget: PObjectRef; ADestroyCount: PIntegerRef; AReferenceWasNil: PBooleanRef);
+    destructor Destroy; override;
+  end;
+
 var
   T: TTestRunner;
+
+function TBaseUtilsProbe.Value: Integer;
+begin
+  Result := 42;
+end;
+
+constructor TDestructorProbe.Create(ATarget: PObjectRef; ADestroyCount: PIntegerRef; AReferenceWasNil: PBooleanRef);
+begin
+  inherited Create;
+  FTarget := ATarget;
+  FDestroyCount := ADestroyCount;
+  FReferenceWasNil := AReferenceWasNil;
+end;
+
+destructor TDestructorProbe.Destroy;
+begin
+  Inc(FDestroyCount^);
+  FReferenceWasNil^ := FTarget^ = nil;
+  inherited Destroy;
+end;
 
 procedure ExpectInvalidArgumentNil(const AProc: TProc; const AMessage: string);
 begin
@@ -218,6 +269,80 @@ begin
   Check(not CompareMem(@LA[0], @LB[0], 2), 'CompareMem should stay false for different buffers');
 end;
 
+procedure TestObjectLifecycleHelpersStayStable;
+var
+  LObject: TObject;
+  LDestroyCount: Integer;
+  LReferenceWasNil: Boolean;
+begin
+  LDestroyCount := 0;
+  LReferenceWasNil := False;
+  LObject := TDestructorProbe.Create(@LObject, @LDestroyCount, @LReferenceWasNil);
+  FreeAndNil(LObject);
+  Check(LObject = nil, 'base FreeAndNil should nil the object reference');
+  CheckEqual(Int64(1), Int64(LDestroyCount), 'base FreeAndNil should destroy the object once');
+  Check(LReferenceWasNil, 'base FreeAndNil should nil before destructor execution');
+
+  LObject := TObject.Create;
+  SafeFree(LObject);
+  Check(LObject = nil, 'base SafeFree should nil the object reference');
+
+  LObject := nil;
+  FreeAndNil(LObject);
+  Check(LObject = nil, 'base FreeAndNil should accept nil references');
+  SafeFree(LObject);
+  Check(LObject = nil, 'base SafeFree should accept nil references');
+end;
+
+procedure TestSupportsHelpersStayStable;
+var
+  LObject: TBaseUtilsProbe;
+  LOwner: IInterface;
+  LProbe: IBaseUtilsProbe;
+  LOther: IBaseUtilsOtherProbe;
+  LInterface: IInterface;
+begin
+  LObject := TBaseUtilsProbe.Create;
+  LOwner := LObject as IInterface;
+  try
+    Check(LOwner <> nil, 'probe owner should hold the object alive during base Supports query');
+    Check(Supports(LObject, IBaseUtilsProbe, LProbe),
+      'base Supports(TObject) should query supported interfaces');
+    CheckEqual(Int64(42), Int64(LProbe.Value),
+      'base Supports(TObject) should return the queried interface');
+
+    LOther := TBaseUtilsOtherProbe.Create as IBaseUtilsOtherProbe;
+    Check(not Supports(LObject, IBaseUtilsOtherProbe, LOther),
+      'base Supports(TObject) should return false for unsupported interfaces');
+    Check(LOther = nil,
+      'base Supports(TObject) should clear stale interfaces on unsupported queries');
+  finally
+    LProbe := nil;
+    LOther := nil;
+    LOwner := nil;
+  end;
+
+  LInterface := TBaseUtilsProbe.Create as IInterface;
+  Check(Supports(LInterface, IBaseUtilsProbe, LProbe),
+    'base Supports(IInterface) should query supported interfaces');
+  CheckEqual(Int64(42), Int64(LProbe.Value),
+    'base Supports(IInterface) should return the queried interface');
+
+  LOther := TBaseUtilsOtherProbe.Create as IBaseUtilsOtherProbe;
+  Check(not Supports(LInterface, IBaseUtilsOtherProbe, LOther),
+    'base Supports(IInterface) should return false for unsupported interfaces');
+  Check(LOther = nil,
+    'base Supports(IInterface) should clear stale interfaces on unsupported queries');
+
+  LProbe := nil;
+  LOther := nil;
+  LInterface := nil;
+  Check(not Supports(TObject(nil), IBaseUtilsProbe, LProbe),
+    'base Supports(TObject) should return false for nil object references');
+  Check(not Supports(IInterface(nil), IBaseUtilsProbe, LProbe),
+    'base Supports(IInterface) should return false for nil interface references');
+end;
+
 procedure TestNullableSurface;
 var
   LSome: TIntNullable;
@@ -303,6 +428,8 @@ begin
   T.Run('fillmem handles value zero-size and nil', @TestFillMemHandlesValueZeroSizeAndNil);
   T.Run('copymem handles zero-size and nil', @TestCopyMemHandlesZeroSizeAndNil);
   T.Run('comparemem semantics stay stable', @TestCompareMemSemanticsStayStable);
+  T.Run('object lifecycle helpers stay stable', @TestObjectLifecycleHelpersStayStable);
+  T.Run('supports helpers stay stable', @TestSupportsHelpersStayStable);
   T.Run('nullable surface', @TestNullableSurface);
   T.Run('option surface', @TestOptionSurface);
   T.Run('result surface', @TestResultSurface);
