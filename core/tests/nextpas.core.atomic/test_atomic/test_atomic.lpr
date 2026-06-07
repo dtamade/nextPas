@@ -749,6 +749,9 @@ begin
     '`With at least one live owner and no overflow, `TryInc` is the concurrent borrow path: it succeeds from non-zero state, and balanced `Dec` calls do not publish zero before the last owner releases its reference.',
     'atomic README must document TAtomicRefCount concurrent borrow contract');
   CheckContains(LAtomicDocsReadme,
+    '`TryInc` racing the last owner release is linearized by the CAS result: success means the borrow observed and extended a non-zero count before zero, failure means the zero-state release won first and clears `ANewValue` to `0`, and across the owner release plus every successful borrowed release exactly one `Dec` performs the final drop to zero.',
+    'atomic README must document TAtomicRefCount terminal-race contract');
+  CheckContains(LAtomicDocsReadme,
     '`Dec` publishes the release-side decrement, and a final drop to zero issues an acquire fence before destruction-side cleanup proceeds.',
     'atomic README must document TAtomicRefCount final-drop ordering');
   CheckContains(LAtomicDocsReadme,
@@ -2553,6 +2556,168 @@ begin
     'owner release should perform the only final drop after the borrow phase');
 end;
 
+procedure TestAtomicRefCountTerminalRaceContract;
+const
+  BorrowerCount = 4;
+  RoundCount = 64;
+var
+  LRound: Integer;
+
+  procedure RunRound;
+  var
+    LRef: TAtomicRefCount;
+    LOwnerThread: TThread;
+    LBorrowerThreads: array[0..BorrowerCount - 1] of TThread;
+    LStarted: Int32;
+    LGo: Int32;
+    LBorrowSuccessCount: Int32;
+    LBorrowFailureCount: Int32;
+    LBorrowFailureNonZeroOutCount: Int32;
+    LBorrowBadSuccessValueCount: Int32;
+    LBorrowZeroDropCount: Int32;
+    LThreadErrorCount: Int32;
+    LOwnerDecValue: PtrUInt;
+    LAllStarted: Boolean;
+    LFinalDropCount: Int32;
+    LI: Integer;
+    LSpin: Integer;
+  begin
+    LRef := TAtomicRefCount.Create(1);
+    LStarted := 0;
+    LGo := 0;
+    LBorrowSuccessCount := 0;
+    LBorrowFailureCount := 0;
+    LBorrowFailureNonZeroOutCount := 0;
+    LBorrowBadSuccessValueCount := 0;
+    LBorrowZeroDropCount := 0;
+    LThreadErrorCount := 0;
+    LOwnerDecValue := High(PtrUInt);
+
+    LOwnerThread := TThread.CreateAnonymousThread(procedure
+      begin
+        atomic_fetch_add(LStarted, 1, mo_seq_cst);
+        while atomic_load(LGo, mo_seq_cst) = 0 do
+          cpu_pause;
+
+        try
+          LOwnerDecValue := LRef.Dec;
+        except
+          atomic_fetch_add(LThreadErrorCount, 1, mo_seq_cst);
+        end;
+      end);
+    LOwnerThread.FreeOnTerminate := False;
+    LOwnerThread.Start;
+
+    for LI := 0 to High(LBorrowerThreads) do
+    begin
+      LBorrowerThreads[LI] := TThread.CreateAnonymousThread(procedure
+        var
+          LNewValue: PtrUInt;
+          LAfterDec: PtrUInt;
+        begin
+          atomic_fetch_add(LStarted, 1, mo_seq_cst);
+          while atomic_load(LGo, mo_seq_cst) = 0 do
+            cpu_pause;
+
+          try
+            LNewValue := High(PtrUInt);
+            if LRef.TryInc(LNewValue) then
+            begin
+              atomic_fetch_add(LBorrowSuccessCount, 1, mo_seq_cst);
+              if LNewValue < 2 then
+                atomic_fetch_add(LBorrowBadSuccessValueCount, 1, mo_seq_cst);
+
+              LAfterDec := LRef.Dec;
+              if LAfterDec = 0 then
+                atomic_fetch_add(LBorrowZeroDropCount, 1, mo_seq_cst);
+            end
+            else
+            begin
+              atomic_fetch_add(LBorrowFailureCount, 1, mo_seq_cst);
+              if LNewValue <> 0 then
+                atomic_fetch_add(LBorrowFailureNonZeroOutCount, 1, mo_seq_cst);
+            end;
+          except
+            atomic_fetch_add(LThreadErrorCount, 1, mo_seq_cst);
+          end;
+        end);
+      LBorrowerThreads[LI].FreeOnTerminate := False;
+      LBorrowerThreads[LI].Start;
+    end;
+
+    LAllStarted := False;
+    for LSpin := 1 to 1000 do
+    begin
+      if atomic_load(LStarted, mo_seq_cst) = BorrowerCount + 1 then
+      begin
+        LAllStarted := True;
+        Break;
+      end;
+      Sleep(1);
+    end;
+
+    atomic_store(LGo, 1, mo_seq_cst);
+
+    LOwnerThread.WaitFor;
+    LOwnerThread.Free;
+    for LI := 0 to High(LBorrowerThreads) do
+    begin
+      LBorrowerThreads[LI].WaitFor;
+      LBorrowerThreads[LI].Free;
+    end;
+
+    Check(LAllStarted,
+      'terminal-race workers must start before the release race is opened');
+    Check(LOwnerDecValue <> High(PtrUInt),
+      'owner release must publish a terminal-race result');
+    CheckEqual(Int64(0), Int64(atomic_load(LThreadErrorCount, mo_seq_cst)),
+      'terminal-race workers must not raise unexpected exceptions');
+    CheckEqual(Int64(BorrowerCount),
+      Int64(atomic_load(LBorrowSuccessCount, mo_seq_cst) + atomic_load(LBorrowFailureCount, mo_seq_cst)),
+      'every terminal-race borrower must complete exactly one TryInc attempt');
+    CheckEqual(Int64(0), Int64(atomic_load(LBorrowFailureNonZeroOutCount, mo_seq_cst)),
+      'terminal-race TryInc failure must clear the out value to 0');
+    CheckEqual(Int64(0), Int64(atomic_load(LBorrowBadSuccessValueCount, mo_seq_cst)),
+      'terminal-race TryInc success must publish a borrowed refcount of at least 2');
+
+    LFinalDropCount := atomic_load(LBorrowZeroDropCount, mo_seq_cst);
+    if LOwnerDecValue = 0 then
+      Inc(LFinalDropCount);
+    CheckEqual(Int64(1), Int64(LFinalDropCount),
+      'terminal race must have exactly one final drop to zero');
+
+    if atomic_load(LBorrowSuccessCount, mo_seq_cst) = 0 then
+    begin
+      CheckEqual(Int64(0), Int64(LOwnerDecValue),
+        'if no borrower extends the refcount, the owner release must perform the final drop');
+      CheckEqual(Int64(BorrowerCount), Int64(atomic_load(LBorrowFailureCount, mo_seq_cst)),
+        'if no borrower extends the refcount, every competing TryInc must observe zero-state failure');
+    end;
+
+    if LOwnerDecValue = 0 then
+      CheckEqual(Int64(0), Int64(atomic_load(LBorrowZeroDropCount, mo_seq_cst)),
+        'if the owner performs the final drop, no borrower release may also report zero')
+    else
+    begin
+      Check(LOwnerDecValue > 0,
+        'owner not performing the final drop must still leave a positive borrowed refcount');
+      Check(atomic_load(LBorrowSuccessCount, mo_seq_cst) > 0,
+        'a nonzero owner release result must mean at least one borrower won the race');
+      CheckEqual(Int64(1), Int64(atomic_load(LBorrowZeroDropCount, mo_seq_cst)),
+        'if the owner does not perform the final drop, exactly one borrower release must do so');
+    end;
+
+    CheckEqual(Int64(0), Int64(LRef.Load()),
+      'terminal-race round must end at zero after all matched releases');
+    CheckEqual(Int64(0), Int64(LRef.IntoInner),
+      'IntoInner must expose zero after the terminal-race round');
+  end;
+
+begin
+  for LRound := 1 to RoundCount do
+    RunRound;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.atomic');
   T.Run('Load32/Store32 all orders', @TestLoad32Store32);
@@ -2585,5 +2750,6 @@ begin
   T.Run('atomic wait/notify API', @TestAtomicWaitNotifySurfaceAndBehavior);
   T.Run('atomic refcount contract', @TestAtomicRefCountContract);
   T.Run('atomic refcount concurrent borrow contract', @TestAtomicRefCountConcurrentBorrowContract);
+  T.Run('atomic refcount terminal race contract', @TestAtomicRefCountTerminalRaceContract);
   T.Summary;
 end.

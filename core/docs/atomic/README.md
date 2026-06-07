@@ -36,6 +36,7 @@ Compatibility boundary: pointer arithmetic/bitwise overloads stay in `nextpas.co
 `Load` defaults to `mo_relaxed`; `Inc` must not resurrect a zero refcount, and `TryInc` returns `False` instead of resurrecting when the count is already zero.
 `TryInc` writes `0` to `ANewValue` when the refcount is already zero, so failure leaves a stable non-resurrected out value for destruction-side callers.
 `With at least one live owner and no overflow, `TryInc` is the concurrent borrow path: it succeeds from non-zero state, and balanced `Dec` calls do not publish zero before the last owner releases its reference.
+`TryInc` racing the last owner release is linearized by the CAS result: success means the borrow observed and extended a non-zero count before zero, failure means the zero-state release won first and clears `ANewValue` to `0`, and across the owner release plus every successful borrowed release exactly one `Dec` performs the final drop to zero.
 `Dec` publishes the release-side decrement, and a final drop to zero issues an acquire fence before destruction-side cleanup proceeds.
 `Inc` and `TryInc` raise `EResourceExhaustedError` on `High(PtrUInt)` overflow, and `Dec` raises `EInvalidOperationError` if the refcount is already zero.
 

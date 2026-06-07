@@ -18,7 +18,7 @@ nextPas Core 是 FreePascal 领域最优秀的框架之一。分三层：
 | `errors` | 异常层级 (ENextPasError 体系) | ✅ 完成 |
 | `platform` | OS API 封装 (posix/linux/darwin/windows) | ✅ 完成 (Tier 1 全绿) |
 | `mem` | 内存管理 (IAllocator/Pool/Arena/StackPool) | ✅ 完成 |
-| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | ✅ 完成/强化中 (public contract hardening, typed records + refcount zero-state/concurrent-borrow contracts 30 tests) |
+| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | ✅ 完成/强化中 (public contract hardening, typed records + refcount zero-state/concurrent-borrow/terminal-race contracts 31 tests) |
 | `math` | 数学函数 (Min/Max/Clamp/Abs/Pow/Trig) | ✅ 完成 |
 | `simd` | SIMD 抽象 (SSE2/AVX2/NEON, 统一宽度 API) | ✅ 完成 |
 
