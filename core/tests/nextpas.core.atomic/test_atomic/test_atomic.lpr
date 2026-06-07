@@ -401,6 +401,9 @@ var
   LCasStrong32DualSection: string;
   LCasStrongPtrIntDualSection: string;
   LCasStrong64DualSection: string;
+  LCasWeak32DualSection: string;
+  LCasWeakPtrIntDualSection: string;
+  LCasWeak64DualSection: string;
   LTaggedPtrLoadSection: string;
   LTaggedPtrStoreSection: string;
   LTaggedPtrStrongCasSection: string;
@@ -660,6 +663,18 @@ begin
     'function atomic_compare_exchange_strong_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64;' + LineEnding +
     '  aSuccessOrder, aFailureOrder: memory_order_t): Boolean;',
     'function atomic_compare_exchange_strong_64(var aObj: UInt64; var aExpected: UInt64; aDesired: UInt64;');
+  LCasWeak32DualSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_compare_exchange_weak(var aObj: Int32; var aExpected: Int32; aDesired: Int32;' + LineEnding +
+    '  aSuccessOrder, aFailureOrder: memory_order_t): Boolean;',
+    'function atomic_compare_exchange_weak(var aObj: UInt32; var aExpected: UInt32; aDesired: UInt32;');
+  LCasWeakPtrIntDualSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_compare_exchange_weak(var aObj: PtrInt; var aExpected: PtrInt; aDesired: PtrInt;' + LineEnding +
+    '  aSuccessOrder, aFailureOrder: memory_order_t): Boolean;',
+    'function atomic_compare_exchange_weak(var aObj: PtrUInt; var aExpected: PtrUInt; aDesired: PtrUInt;');
+  LCasWeak64DualSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_compare_exchange_weak_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64;' + LineEnding +
+    '  aSuccessOrder, aFailureOrder: memory_order_t): Boolean;',
+    'function atomic_compare_exchange_weak_64(var aObj: UInt64; var aExpected: UInt64; aDesired: UInt64;');
   LTaggedPtrLoadSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_tagged_ptr_load(var aObj: atomic_tagged_ptr_t; aOrder: memory_order_t): atomic_tagged_ptr_t;',
     'function atomic_tagged_ptr_load(var aObj: atomic_tagged_ptr_t): atomic_tagged_ptr_t;');
@@ -1204,6 +1219,8 @@ begin
     'invalid memory-order matrix must cover 64-bit store rejection');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak_64(LInt64, LExpectedInt64, 17, mo_release, mo_acq_rel)',
     'invalid memory-order matrix must cover 64-bit weak CAS failure-order rejection');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak(LInt32, LExpectedInt32, 17, mo_release, mo_acq_rel)',
+    'invalid memory-order matrix must cover 32-bit weak CAS failure-order rejection');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, mo_release, mo_acq_rel)',
     'invalid memory-order matrix must cover pointer weak CAS failure-order rejection');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_tagged_ptr_compare_exchange_strong(LTaggedStorage, LTaggedExpected, LTaggedDesired, mo_release, mo_acq_rel)',
@@ -1821,6 +1838,18 @@ begin
   CheckContains(LCasStrong64DualSection,
     'AtomicValidateCompareExchangeOrders(aSuccessOrder, aFailureOrder);',
     '64-bit dual-order strong CAS must validate success/failure orders');
+  CheckContains(LCasWeak32DualSection,
+    'atomic_compare_exchange_strong(aObj, aExpected, aDesired, aSuccessOrder, aFailureOrder);',
+    '32-bit dual-order weak CAS must delegate through validated strong CAS');
+  CheckContains(LCasWeakPtrIntDualSection,
+    'atomic_compare_exchange_strong(aObj, aExpected, aDesired, aSuccessOrder, aFailureOrder);',
+    'pointer-sized dual-order weak CAS must delegate through validated strong CAS');
+  CheckContains(LCasWeak64DualSection,
+    'atomic_compare_exchange_strong_64(aObj, aExpected, aDesired, aSuccessOrder, aFailureOrder);',
+    '64-bit dual-order weak CAS must delegate through validated strong CAS');
+  CheckContains(LAtomicDocsReadme,
+    'Dual-order weak CAS delegates through the same validated strong CAS path, so invalid failure orders raise `EArgumentError` on weak and strong APIs alike.',
+    'atomic README must document weak dual-order CAS validation path');
   CheckContains(LTaggedPtrLoadSection, 'atomic_load(PInt32(@aObj)^, aOrder);',
     'tagged pointer explicit load must delegate through 32-bit atomic_load validation');
   CheckContains(LTaggedPtrLoadSection, 'atomic_load_64(PInt64(@aObj)^, aOrder);',
@@ -3663,6 +3692,17 @@ var
   LExpectedUInt64: UInt64;
   {$ENDIF}
 begin
+  LInt32 := 11;
+  LExpectedInt32 := 11;
+  LRaised := False;
+  try
+    atomic_compare_exchange_weak(LInt32, LExpectedInt32, 17, mo_release, mo_acq_rel);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '32-bit weak CAS failure acq_rel must raise EArgumentError');
+
   {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
   LInt64 := 11;
   LUInt64 := 11;
