@@ -176,6 +176,49 @@ make hygiene
 
 worktree 位置正确不代表分支可以合并。
 
+## Focused Gate Matrix
+
+模块负责人报告 `Ready` 时，先用最窄的 focused gate 证明改动表面，再按改动性质补充
+source/compile/runtime/CI evidence。不要用单个绿色命令替代所有 truth 分类。
+
+常用 truth 分类：
+
+- `source-contract`：读取源码、文档或配置，冻结 owner boundary、导出符号、路径规则、
+  CI workflow 或文档约定；它证明文本契约，没有证明可执行 runtime 行为。
+- `forced-compile`：面向 Windows、POSIX、Darwin、Android 或 no-FPC-units 的编译门。
+  它证明目标表面可编译或 API/ABI 声明一致，不等于目标机器 runtime 已跑过。
+- `runtime`：在当前 host 上执行测试、示例或 benchmark。涉及 public API、资源所有权、
+  内存、句柄、socket、进程或线程生命周期时，报告里要列出 heaptrc / no-leak 或等价证据。
+- `CI truth`：证明 CI 调的是同一套 Makefile gate 和命名，不绕过本地验证面。CI truth
+  不能替代模块 focused gate；它只证明自动化入口没有漂移。
+
+默认 focused gate matrix：
+
+| lane | first focused evidence | extra evidence to name in `Ready` |
+| --- | --- | --- |
+| platform | `make focused FOCUS=core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix` | affected host/source-contract gates, forced-compile gates, and any runtime gate that actually ran |
+| compiler | not the default focused gate; use `bash build/verify_local.sh` only as a verify exception after the narrow compiler fixture or smoke command is named | targeted compiler fixture, toolchain failure truth, or smoke command that proves the changed compiler surface |
+| mem | `make focused FOCUS=core/tests/nextpas.core.mem/test_memory_map_compile_gate` | allocator/runtime gate plus heaptrc/no-leak proof when ownership, allocation, or mapping behavior changes |
+| system | `make focused FOCUS=core/tests/nextpas.core.system/test_system_source_contracts` | source-contract result plus any runtime or forced-compile gate for changed `system.*` units |
+| config | `make focused FOCUS=core/tests/nextpas.core.config/test_config` | format-specific export/import gate when INI, TOML, YAML, examples, or mutation semantics change |
+| http | `make focused FOCUS=core/tests/nextpas.core.http/test_http_client` | parser/writer/router/server/runtime gate matching the touched HTTP surface |
+
+如果某个模块的最佳 gate 不是根目录 `make focused FOCUS=...`，例如 compiler 目前没有
+默认 focused gate、或模块 Makefile 暴露专用目标，报告里必须把例外写清楚，并列出实际命令。
+缺少可用 focused gate 时，不要把 slice 说成可落地；先补 gate，或用 `Needs Review`
+让总控决定是否拆出 tooling slice。
+
+当前有少数 `core/tests` Makefile 的 `test` 目标只打印 `SKIP`，这些不能作为 runtime evidence：
+
+- `core/tests/nextpas.core.hash/test_hash`：`SKIP`，等待迁移到 `nextpas.core.crypto.hash` API。
+- `core/tests/nextpas.core.hash/test_hash_audit`：`SKIP`，等待迁移到 `nextpas.core.crypto.hash` API。
+- `core/tests/nextpas.core.tls/unit`：`SKIP`，复杂多文件套件仍需手工拆 gate。
+- `core/tests/nextpas.core.simd.cpuinfo`：`SKIP`，真实 focused gate 是
+  `make -C core/tests/nextpas.core.simd cpuinfo-focused`。
+
+如果 `Ready` 报告触及这些路径，必须把它们列为占位例外，并补充真实可执行 gate、
+source-contract、forced-compile 或 `Needs Review` 说明。
+
 任何分支进入主线前必须满足：
 
 1. worktree 是干净的。
