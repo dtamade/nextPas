@@ -12211,3 +12211,37 @@ Hello from nextPas!
     the shared runner/snapshot path
   - this is coverage tightening only; it does not claim a new workload,
     a new comparator behavior, or a new performance result
+
+## Session: 2026-06-07 runner include-hyper url_path focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the raw runner `--include-hyper + --workload url_path` combination
+    into the focused benchmark gate
+  - keep the slice limited to benchmark-truth parity evidence, not comparator,
+    runner, or snapshot implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch comparator source, runner behavior, snapshot helper behavior,
+    public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `76 total, 76 passed, 0 failed`
+    - new focused row:
+      `server comparison runner include hyper url_path smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `run_server_comparison.sh --requests 8 --threads 1 --workload url_path --include-hyper`
+  - the focused smoke locks:
+    - `include_hyper=1`
+    - `workload=url_path`
+    - `rust_hyper` row with `rust_profile=hyper_tokio`
+    - `summary_impl=rust_hyper`
+- Outcome:
+  - the raw comparison report now has a durable Hyper/Tokio request-target
+    workload proof instead of covering Hyper only on the default no-URL runner
+    smoke
+  - this is coverage tightening only; it does not claim a new runner schema,
+    a new comparator behavior, or a new performance result

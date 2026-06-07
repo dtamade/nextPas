@@ -5381,3 +5381,23 @@
   proof，Go / Rust std-only / Hyper direct comparator 三条 direct smoke 的
   `url_path` parity 更完整，但没有借机扩到 `adapter_no_url` 或新的 runner
   组合。
+
+## 2026-06-07 runner include-hyper url_path focused smoke findings
+
+- 当前 matrix 里，runner 对 `url_path` 的证明原先只覆盖 nextPas / Go /
+  Rust std-only 三行；Hyper/Tokio 只在默认 `no_url` include-hyper smoke 和
+  `response_1k` snapshot 组合里出现。
+- 这意味着一个真实而独特的 parity gap 仍存在：
+  `run_server_comparison.sh --workload url_path --include-hyper` 虽然逻辑上应当
+  可用，但 focused gate 还没有锁住 raw report 里 Hyper row 的非默认
+  request-target seam。
+- 本轮继续保持窄刀，没有扩到 snapshot 或 comparator 实现：
+  - 只把 `run_server_comparison.sh --requests 8 --threads 1 --workload url_path --include-hyper`
+    提升进 focused gate
+  - 锁住 `include_hyper=1`
+  - 锁住 `workload=url_path`
+  - 锁住 `rust_hyper` row、`rust_profile=hyper_tokio`、`summary_impl=rust_hyper`
+- 这轮的价值仍是 benchmark truth：
+  Hyper/Tokio 现在不仅有 direct `url_path` smoke，也有 raw runner 级别的
+  `url_path` durable proof；但没有借机扩大到新的 snapshot 组合或内部
+  `adapter_no_url` 变体。
