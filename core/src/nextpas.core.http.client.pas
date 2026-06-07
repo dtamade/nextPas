@@ -94,6 +94,28 @@ begin
     raise EArgumentError.Create('HTTP client max redirects must not be negative');
 end;
 
+procedure CloseRequestBody(const ABody: IReader);
+var
+  LReadCloser: IReadCloser;
+  LCloser: ICloser;
+  LStream: IStream;
+begin
+  if ABody = nil then
+    Exit;
+  if Supports(ABody, IReadCloser, LReadCloser) then
+  begin
+    LReadCloser.Close;
+    Exit;
+  end;
+  if Supports(ABody, ICloser, LCloser) then
+  begin
+    LCloser.Close;
+    Exit;
+  end;
+  if Supports(ABody, IStream, LStream) then
+    LStream.Close;
+end;
+
 function MergeRedirectPath(const ABasePath, ATargetPath: string): string;
 var
   LI: SizeInt;
@@ -213,7 +235,13 @@ begin
   LHeaders.Set_('content-type', AContentType);
 
   if ABody <> nil then
-    LBody := nextpas.core.io.ReadAll(ABody)
+  begin
+    try
+      LBody := nextpas.core.io.ReadAll(ABody)
+    finally
+      CloseRequestBody(ABody);
+    end;
+  end
   else
     LBody := nil;
 
@@ -518,7 +546,11 @@ function THttpClient.Do_(const AReq: IHttpRequest): IHttpResponse;
 begin
   if AReq = nil then
     raise EArgumentError.Create('HTTP request is nil');
-  Result := DoRequest(AReq, FOptions.MaxRedirects);
+  try
+    Result := DoRequest(AReq, FOptions.MaxRedirects);
+  finally
+    CloseRequestBody(AReq.Body);
+  end;
 end;
 
 procedure THttpClient.CloseIdleConnections;

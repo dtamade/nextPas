@@ -117,6 +117,35 @@ type
     property Closed: Boolean read FClosed;
   end;
 
+  TTrackedRequestBody = class(TInterfacedObject, IReader, IReadCloser)
+  private
+    FData: string;
+    FPos: SizeInt;
+    FClosed: Boolean;
+  public
+    constructor Create(const AData: string);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Close;
+    property Closed: Boolean read FClosed;
+  end;
+
+  TRequestBodyCaptureTransport = class(TInterfacedObject, IHttpTransport)
+  private
+    FTrackedBody: TTrackedRequestBody;
+    FRaiseAfterRead: Boolean;
+    FSeenBody: string;
+    FTrackedBodyClosedAtEntry: Boolean;
+    FTrackedBodyClosedBeforeReturn: Boolean;
+  public
+    constructor Create(const ATrackedBody: TTrackedRequestBody;
+      const ARaiseAfterRead: Boolean = False);
+    function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+    property SeenBody: string read FSeenBody;
+    property TrackedBodyClosedAtEntry: Boolean read FTrackedBodyClosedAtEntry;
+    property TrackedBodyClosedBeforeReturn: Boolean
+      read FTrackedBodyClosedBeforeReturn;
+  end;
+
   TRedirectBodyReleaseTransport = class(TInterfacedObject, IHttpTransport)
   private
     FCalls: Int32;
@@ -565,6 +594,58 @@ end;
 procedure TRedirectTrackedBody.Close;
 begin
   FClosed := True;
+end;
+
+constructor TTrackedRequestBody.Create(const AData: string);
+begin
+  inherited Create;
+  FData := AData;
+  FPos := 1;
+  FClosed := False;
+end;
+
+function TTrackedRequestBody.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LRemaining: SizeInt;
+begin
+  if FClosed or (ACount = 0) or (FPos > Length(FData)) then
+    Exit(0);
+  LRemaining := Length(FData) - FPos + 1;
+  if SizeUInt(LRemaining) > ACount then
+    Result := ACount
+  else
+    Result := SizeUInt(LRemaining);
+  Move(FData[FPos], ABuf, Result);
+  Inc(FPos, SizeInt(Result));
+end;
+
+procedure TTrackedRequestBody.Close;
+begin
+  FClosed := True;
+end;
+
+constructor TRequestBodyCaptureTransport.Create(
+  const ATrackedBody: TTrackedRequestBody; const ARaiseAfterRead: Boolean);
+begin
+  inherited Create;
+  FTrackedBody := ATrackedBody;
+  FRaiseAfterRead := ARaiseAfterRead;
+end;
+
+function TRequestBodyCaptureTransport.RoundTrip(
+  const AReq: IHttpRequest): IHttpResponse;
+var
+  LHeaders: IHttpHeaders;
+begin
+  FTrackedBodyClosedAtEntry := (FTrackedBody <> nil) and FTrackedBody.Closed;
+  FSeenBody := ReadReaderStr(AReq.Body);
+  FTrackedBodyClosedBeforeReturn := (FTrackedBody <> nil) and FTrackedBody.Closed;
+  if FRaiseAfterRead then
+    raise EHttpError.Create('request body transport failed');
+
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('content-length', '0');
+  Result := NewResponse(HTTP_STATUS_OK, LHeaders, nil);
 end;
 
 constructor TRedirectBodyReleaseTransport.Create;
@@ -1964,6 +2045,99 @@ begin
   Check(LRaised, 'release helper rejects nil response');
 end;
 
+procedure TestClientClosesCloseCapableRequestBodyAfterDo;
+var
+  LBody: TTrackedRequestBody;
+  LTransportObj: TRequestBodyCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+begin
+  LBody := TTrackedRequestBody.Create('payload');
+  LTransportObj := TRequestBodyCaptureTransport.Create(LBody);
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
+    LBody as IReader, Int64(7));
+
+  LResp := LClient.Do_(LReq);
+
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'request body close success path returns transport response');
+  Check(not LTransportObj.TrackedBodyClosedAtEntry,
+    'Do_ keeps request body open at transport entry');
+  Check(not LTransportObj.TrackedBodyClosedBeforeReturn,
+    'Do_ keeps request body open while transport runs');
+  CheckEqual('payload', LTransportObj.SeenBody,
+    'Do_ still streams the request body to the transport');
+  Check(LBody.Closed,
+    'Do_ closes close-capable request body after round trip');
+end;
+
+procedure TestClientClosesCloseCapableRequestBodyOnTransportError;
+var
+  LBody: TTrackedRequestBody;
+  LTransportObj: TRequestBodyCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LRaised: Boolean;
+begin
+  LBody := TTrackedRequestBody.Create('payload');
+  LTransportObj := TRequestBodyCaptureTransport.Create(LBody, True);
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
+    LBody as IReader, Int64(7));
+
+  LRaised := False;
+  try
+    LClient.Do_(LReq);
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'transport error still surfaces to caller');
+  Check(not LTransportObj.TrackedBodyClosedAtEntry,
+    'transport error path keeps request body open at transport entry');
+  Check(not LTransportObj.TrackedBodyClosedBeforeReturn,
+    'transport error path keeps request body open while transport runs');
+  CheckEqual('payload', LTransportObj.SeenBody,
+    'transport error path still exposes the request body to the transport');
+  Check(LBody.Closed,
+    'Do_ closes close-capable request body when transport raises');
+end;
+
+procedure TestClientPostReaderClosesSourceBodyAfterBuffering;
+var
+  LBody: TTrackedRequestBody;
+  LTransportObj: TRequestBodyCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LBody := TTrackedRequestBody.Create('payload');
+  LTransportObj := TRequestBodyCaptureTransport.Create(LBody);
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+
+  LResp := LClient.Post('http://example.test/upload', 'text/plain',
+    LBody as IReader);
+
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'reader shortcut close path returns transport response');
+  Check(LTransportObj.TrackedBodyClosedAtEntry,
+    'reader shortcut closes source body before RoundTrip');
+  Check(LTransportObj.TrackedBodyClosedBeforeReturn,
+    'reader shortcut keeps source body closed while transport runs');
+  CheckEqual('payload', LTransportObj.SeenBody,
+    'reader shortcut still sends copied payload bytes');
+  Check(LBody.Closed,
+    'reader shortcut closes close-capable source body after buffering');
+end;
+
 procedure TestHttpGetToFileWritesFinalPathAtomically;
 var
   LRouter: THttpRouter;
@@ -3257,6 +3431,12 @@ begin
     @TestHttpReleaseResponseBodyNilBodyNoop);
   T.Run('HttpReleaseResponseBody rejects nil response',
     @TestHttpReleaseResponseBodyRejectsNilResponse);
+  T.Run('Client Do closes close-capable request body after round trip',
+    @TestClientClosesCloseCapableRequestBodyAfterDo);
+  T.Run('Client Do closes close-capable request body on transport error',
+    @TestClientClosesCloseCapableRequestBodyOnTransportError);
+  T.Run('Client reader shortcut closes source body after buffering',
+    @TestClientPostReaderClosesSourceBodyAfterBuffering);
   T.Run('HttpGetToFile writes final path atomically', @TestHttpGetToFileWritesFinalPathAtomically);
   T.Run('HttpGetToFile rejects 404 responses', @TestHttpGetToFileRejects404Responses);
   T.Run('HttpGetToFile cleans temp files on truncated body', @TestHttpGetToFileCleansTempFilesOnTruncatedBody);

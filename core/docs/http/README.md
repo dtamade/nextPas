@@ -141,6 +141,12 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   routing payload through a Pascal string, while the `string` / `TBytes` forms
   reuse the public `NewRequest(..., BodyText)` / `NewRequest(..., BodyBytes)`
   helpers.
+- `IHttpClient.Do_` owns any close-capable request body for the duration of the
+  request. After the final round trip or failure, `IReadCloser` / `ICloser` /
+  `IStream` request bodies are closed. The `Post` / `Put` / `Patch`
+  `IReader` shortcut closes the source reader after buffering it to bytes for
+  `Content-Length`, so callers do not have to close a file/stream body
+  separately once the helper returns.
 - `CloseIdleConnections` is a lifecycle seam for explicitly releasing idle
   keep-alive state. The public client does not leak H1 pool details; transports
   that own idle pooled connections may implement the optional capability and
