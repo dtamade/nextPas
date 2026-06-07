@@ -168,6 +168,7 @@ begin
   begin
     LNext := LOp^.Next;
     CancelIoEx(LOp^.Handle, @LOp^.Overlapped);
+    SetLastError(AError);
     if Assigned(LOp^.Callback) then
       LOp^.Callback(LOp^.UserData, -Int32(AError), LOp^.Context);
     LOp^.Callback := nil;

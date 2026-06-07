@@ -227,6 +227,11 @@ begin
     'IOCP pending release must clear the pending count before callbacks');
   CheckContains(LReleaseBody, 'cancelioex(lop^.handle, @lop^.overlapped);',
     'IOCP pending release must cancel each overlapped operation');
+  CheckContains(LReleaseBody, 'setlasterror(aerror);',
+    'IOCP pending release must publish host abort error truth');
+  CheckBefore(LReleaseBody, 'setlasterror(aerror);',
+    'lop^.callback(lop^.userdata, -int32(aerror), lop^.context);',
+    'IOCP pending release must publish abort error before callback dispatch');
   CheckContains(LReleaseBody,
     'lop^.callback(lop^.userdata, -int32(aerror), lop^.context);',
     'IOCP pending release must deliver the abort result to the owned callback');
