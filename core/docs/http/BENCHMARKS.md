@@ -1723,6 +1723,10 @@ hand-editing the generated llhttp state machine.
 runner. It writes `results.tsv`, `summary.tsv`, `env.txt`, logs, and optional
 `perf/*.txt` only under
 `build/projects/nextpas.core.http/bench_h1parser/flag_matrix/...`.
+If you override `NEXTPAS_FLAG_MATRIX_OUTPUT_DIR`, it must still stay under
+that `flag_matrix` root. Unsafe overrides now fail fast with `unsafe output
+dir` and a non-zero exit instead of letting the runner become a broader tree
+cleanup tool.
 
 ```sh
 LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
@@ -2423,6 +2427,32 @@ earlier single-shot evidence: Pascal-translated llhttp remains about `1.40x`
 slower than C llhttp on this machine for the narrowed 10-header row. The tool
 improvement matters because future raw-gap work can now compare repeated runs
 before deciding whether generator/codegen changes are warranted.
+
+On 2026-06-07 local time, the same runner also gained an output-root guard for
+`NEXTPAS_FLAG_MATRIX_OUTPUT_DIR`. The script now rejects custom output
+directories outside
+`build/projects/nextpas.core.http/bench_h1parser/flag_matrix/...` before any
+cleanup step runs.
+
+Focused RED/GREEN:
+
+```text
+RED:
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+53 total, 52 passed, 1 failed
+H1 parser flag matrix rejects unsafe output dir failed:
+H1 parser flag matrix unsafe output dir should fail
+heaptrc: 0 unfreed memory blocks
+
+GREEN:
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+53 total, 53 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
 
 Code inspection points to a generator/codegen track rather than a one-line
 runtime fix:

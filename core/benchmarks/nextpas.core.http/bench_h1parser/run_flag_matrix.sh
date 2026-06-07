@@ -72,6 +72,25 @@ else
   OUTPUT_DIR="${NEXTPAS_FLAG_MATRIX_OUTPUT_DIR:-$BUILD_ROOT/flag_matrix/$RUN_ID}"
 fi
 
+if [ "${NEXTPAS_FLAG_MATRIX_OUTPUT_DIR:-}" != "" ]; then
+  case "$OUTPUT_DIR" in
+    "$BUILD_ROOT/flag_matrix"|"$BUILD_ROOT/flag_matrix/"*)
+      ;;
+    *)
+      echo "unsafe output dir: $OUTPUT_DIR" >&2
+      echo "allowed root: $BUILD_ROOT/flag_matrix" >&2
+      exit 2
+      ;;
+  esac
+  case "$OUTPUT_DIR" in
+    ../*|*/..|*/../*|*//*)
+      echo "unsafe output dir: $OUTPUT_DIR" >&2
+      echo "relative parent segments are not allowed" >&2
+      exit 2
+      ;;
+  esac
+fi
+
 LOG_DIR="$OUTPUT_DIR/logs"
 PERF_DIR="$OUTPUT_DIR/perf"
 RESULTS_PATH="$OUTPUT_DIR/results.tsv"

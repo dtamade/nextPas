@@ -2292,6 +2292,52 @@ begin
     'H1 parser flag matrix runs marker');
 end;
 
+procedure TestH1ParserFlagMatrixRejectsUnsafeOutputDir;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LRunnerPath: string;
+  LUnsafeOutputDir: string;
+  LLhttpRoot: string;
+  LExitCode: Integer;
+  LOutput: string;
+  LEnvVars: array of string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
+  LRunnerPath := ResolveH1FlagMatrixRunnerPath(LRootDir);
+  LUnsafeOutputDir := PathJoin(LRootDir,
+    'build/projects/nextpas.core.http/flag_matrix_unsafe_smoke');
+  LLhttpRoot := Trim(GetEnvironmentVariable(LlhttpRootEnvName));
+
+  if LLhttpRoot <> '' then
+  begin
+    SetLength(LEnvVars, 6);
+    LEnvVars[0] := BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue;
+    LEnvVars[1] := BenchFilterEnvName + '=raw llhttp: 10 headers';
+    LEnvVars[2] := 'LLHTTP_ROOT=' + LLhttpRoot;
+    LEnvVars[3] := 'NEXTPAS_FLAG_MATRIX_OUTPUT_DIR=' + LUnsafeOutputDir;
+    LEnvVars[4] := 'PATH=' + GetEnvironmentVariable('PATH');
+    LEnvVars[5] := 'HOME=' + GetEnvironmentVariable('HOME');
+  end
+  else
+  begin
+    SetLength(LEnvVars, 5);
+    LEnvVars[0] := BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue;
+    LEnvVars[1] := BenchFilterEnvName + '=raw llhttp: 10 headers';
+    LEnvVars[2] := 'NEXTPAS_FLAG_MATRIX_OUTPUT_DIR=' + LUnsafeOutputDir;
+    LEnvVars[3] := 'PATH=' + GetEnvironmentVariable('PATH');
+    LEnvVars[4] := 'HOME=' + GetEnvironmentVariable('HOME');
+  end;
+
+  RunProcessAndCaptureWithEnv(LRunnerPath, ['--smoke', '--no-perf'],
+    LBenchDir, LEnvVars, LExitCode, LOutput);
+  Check(LExitCode <> 0,
+    'H1 parser flag matrix unsafe output dir should fail: ' + LOutput);
+  CheckContains(LOutput, 'unsafe output dir',
+    'H1 parser flag matrix unsafe output dir diagnostic');
+end;
+
 begin
   T := TTestRunner.Create('http benchmarks');
   T.Run('bench_server small smoke', @TestBenchServerSmallSmoke);
@@ -2395,6 +2441,8 @@ begin
     @TestH1ParserFlagMatrixPerfGracefulSmoke);
   T.Run('H1 parser flag matrix runs summary smoke',
     @TestH1ParserFlagMatrixRunsSummarySmoke);
+  T.Run('H1 parser flag matrix rejects unsafe output dir',
+    @TestH1ParserFlagMatrixRejectsUnsafeOutputDir);
   T.Summary;
   if not T.AllPassed then
     Halt(1);
