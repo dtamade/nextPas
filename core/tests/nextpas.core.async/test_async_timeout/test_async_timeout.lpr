@@ -488,6 +488,29 @@ begin
   Check(not GTaskCallbackFired, 'callback not fired on redundant complete');
 end;
 
+{ === Test 11: ClosedTimeoutRejects === }
+
+procedure TestClosedTimeoutRejects;
+var
+  LLoop: TAsyncLoop;
+  LBuf: array[0..3] of Byte;
+  LDeadline: TDeadline;
+begin
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LLoop := TAsyncLoop.Create(32);
+  LLoop.Close;
+  LDeadline := TDeadline.After(TDuration.FromMilliseconds(1));
+
+  Check(not LLoop.AsyncReadTimeout(0, @LBuf[0], 4, -1, LDeadline,
+    @IoCallback, nil), 'closed read timeout rejects without owner transfer');
+  Check(not LLoop.AsyncWriteTimeout(0, @LBuf[0], 4, -1, LDeadline,
+    @IoCallback, nil), 'closed write timeout rejects without owner transfer');
+  Check(not LLoop.AsyncRecvTimeout(0, @LBuf[0], 4, 0, LDeadline,
+    @IoCallback, nil), 'closed recv timeout rejects without owner transfer');
+  Check(not LLoop.AsyncSendTimeout(0, @LBuf[0], 4, 0, LDeadline,
+    @IoCallback, nil), 'closed send timeout rejects without owner transfer');
+end;
+
 { === Main === }
 
 begin
@@ -503,6 +526,7 @@ begin
   T.Run('ZeroTimeout', @TestZeroTimeout);
   T.Run('TaskStatus', @TestTaskStatus);
   T.Run('TaskCallback', @TestTaskCallback);
+  T.Run('ClosedTimeoutRejects', @TestClosedTimeoutRejects);
 
   T.Summary;
 end.

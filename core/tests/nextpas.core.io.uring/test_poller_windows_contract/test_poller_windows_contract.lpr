@@ -545,6 +545,64 @@ begin
     'async loop post must not signal closed wake resources');
 end;
 
+procedure TestAsyncLoopClosedTimeoutOwnerBoundaryContract;
+var
+  LAsyncLoop: string;
+  LReadTimeoutBody: string;
+  LWriteTimeoutBody: string;
+  LRecvTimeoutBody: string;
+  LSendTimeoutBody: string;
+begin
+  LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
+  LReadTimeoutBody := ExtractBetween(LAsyncLoop,
+    'function tasyncloop.asyncreadtimeout',
+    'function tasyncloop.asyncwritetimeout');
+  LWriteTimeoutBody := ExtractBetween(LAsyncLoop,
+    'function tasyncloop.asyncwritetimeout',
+    'function tasyncloop.asyncrecvtimeout');
+  LRecvTimeoutBody := ExtractBetween(LAsyncLoop,
+    'function tasyncloop.asyncrecvtimeout',
+    'function tasyncloop.asyncsendtimeout');
+  LSendTimeoutBody := ExtractBetween(LAsyncLoop,
+    'function tasyncloop.asyncsendtimeout',
+    'end.');
+
+  CheckContains(LReadTimeoutBody, 'if not fwakeready then',
+    'closed async read timeout must reject before creating timeout owners');
+  CheckContains(LWriteTimeoutBody, 'if not fwakeready then',
+    'closed async write timeout must reject before creating timeout owners');
+  CheckContains(LRecvTimeoutBody, 'if not fwakeready then',
+    'closed async recv timeout must reject before creating timeout owners');
+  CheckContains(LSendTimeoutBody, 'if not fwakeready then',
+    'closed async send timeout must reject before creating timeout owners');
+
+  CheckBefore(LReadTimeoutBody, 'if not fwakeready then',
+    'if adeadline.isinfinite then',
+    'closed async read timeout must reject before delegating infinite deadlines');
+  CheckBefore(LWriteTimeoutBody, 'if not fwakeready then',
+    'if adeadline.isinfinite then',
+    'closed async write timeout must reject before delegating infinite deadlines');
+  CheckBefore(LRecvTimeoutBody, 'if not fwakeready then',
+    'if adeadline.isinfinite then',
+    'closed async recv timeout must reject before delegating infinite deadlines');
+  CheckBefore(LSendTimeoutBody, 'if not fwakeready then',
+    'if adeadline.isinfinite then',
+    'closed async send timeout must reject before delegating infinite deadlines');
+
+  CheckBefore(LReadTimeoutBody, 'if not fwakeready then',
+    'lctx := timeoutctxcreate',
+    'closed async read timeout must not allocate timeout context owners');
+  CheckBefore(LWriteTimeoutBody, 'if not fwakeready then',
+    'lctx := timeoutctxcreate',
+    'closed async write timeout must not allocate timeout context owners');
+  CheckBefore(LRecvTimeoutBody, 'if not fwakeready then',
+    'lctx := timeoutctxcreate',
+    'closed async recv timeout must not allocate timeout context owners');
+  CheckBefore(LSendTimeoutBody, 'if not fwakeready then',
+    'lctx := timeoutctxcreate',
+    'closed async send timeout must not allocate timeout context owners');
+end;
+
 procedure TestAsyncLoopTimeoutSingleFireCleanupContract;
 var
   LAsyncLoop: string;
@@ -1092,6 +1150,8 @@ begin
     @TestAsyncLoopCloseStopWakeOwnershipContract);
   T.Run('async loop post closed owner-boundary contract',
     @TestAsyncLoopPostClosedOwnerBoundaryContract);
+  T.Run('async loop closed timeout owner-boundary contract',
+    @TestAsyncLoopClosedTimeoutOwnerBoundaryContract);
   T.Run('async loop timeout single-fire cleanup contract',
     @TestAsyncLoopTimeoutSingleFireCleanupContract);
   T.Run('IOCP synchronous failure ownership contract',

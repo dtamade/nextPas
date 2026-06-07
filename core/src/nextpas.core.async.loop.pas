@@ -492,6 +492,8 @@ function TAsyncLoop.AsyncReadTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; A
   const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var LCtx: PTimeoutCtx;
 begin
+  if not FWakeReady then
+    Exit(False);
   if ADeadline.IsInfinite then
     Exit(AsyncRead(AFd, ABuf, ALen, AOffset, ACallback, AContext));
   LCtx := TimeoutCtxCreate(@Self, ADeadline, ACallback, AContext);
@@ -507,6 +509,8 @@ function TAsyncLoop.AsyncWriteTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; 
   const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var LCtx: PTimeoutCtx;
 begin
+  if not FWakeReady then
+    Exit(False);
   if ADeadline.IsInfinite then
     Exit(AsyncWrite(AFd, ABuf, ALen, AOffset, ACallback, AContext));
   LCtx := TimeoutCtxCreate(@Self, ADeadline, ACallback, AContext);
@@ -522,6 +526,8 @@ function TAsyncLoop.AsyncRecvTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; A
   const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var LCtx: PTimeoutCtx;
 begin
+  if not FWakeReady then
+    Exit(False);
   if ADeadline.IsInfinite then
     Exit(AsyncRecv(AFd, ABuf, ALen, AFlags, ACallback, AContext));
   LCtx := TimeoutCtxCreate(@Self, ADeadline, ACallback, AContext);
@@ -537,6 +543,8 @@ function TAsyncLoop.AsyncSendTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; A
   const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var LCtx: PTimeoutCtx;
 begin
+  if not FWakeReady then
+    Exit(False);
   if ADeadline.IsInfinite then
     Exit(AsyncSend(AFd, ABuf, ALen, AFlags, ACallback, AContext));
   LCtx := TimeoutCtxCreate(@Self, ADeadline, ACallback, AContext);
