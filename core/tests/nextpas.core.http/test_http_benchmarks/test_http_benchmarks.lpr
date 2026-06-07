@@ -3565,8 +3565,11 @@ begin
     'H1 parser benchmark adapter no-url filter smoke exit code: ' + LOutput);
   CheckContains(LOutput, 'bench_filter=adapter no-url',
     'H1 parser benchmark adapter no-url filter marker');
-  CheckContains(LOutput, 'adapter no-url: fast reject + llhttp',
-    'H1 parser benchmark adapter no-url double-parse row');
+  CheckContains(LOutput,
+    'adapter no-url: legacy double parse explicit keep-alive',
+    'H1 parser benchmark adapter no-url legacy double-parse row');
+  CheckNotContains(LOutput, 'adapter no-url: fast reject + llhttp',
+    'H1 parser benchmark adapter no-url should not use stale reject label');
   CheckContains(LOutput, 'adapter no-url: llhttp direct only',
     'H1 parser benchmark adapter no-url direct llhttp row');
   CheckContains(LOutput, 'adapter no-url: fast parse only',

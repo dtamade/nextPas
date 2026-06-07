@@ -240,6 +240,12 @@ Narrowed breakdown after adding the rows and the fast-gate change:
 | adapter no-url: llhttp direct only   |       2000 | 1494.0 |  669348 |
 | adapter no-url: fast parse only      |       2000 |  629.3 | 1589120 |
 
+Current `bench_h1parser` output names the old `fast reject + llhttp` row as
+`adapter no-url: legacy double parse explicit keep-alive`. The older label is
+kept in historical snapshots only; it measured the legacy double-parse path used
+for explicit HTTP/1.1 keep-alive before that request became fast-path
+compatible.
+
 Focused verification:
 
 ```text
@@ -2119,6 +2125,10 @@ adapter no-url: fast reject + llhttp ns/op=1813.5
 adapter no-url: llhttp direct only ns/op=1172.1
 adapter no-url: fast parse only ns/op=646.2
 ```
+
+Current benchmark output has renamed the old `fast reject + llhttp` row to
+`adapter no-url: legacy double parse explicit keep-alive`; this historical smoke
+output keeps the old label for traceability.
 
 The immediate conclusion is that request metadata caching and the follow-up span
 fast path remove measurable per-request policy/dispatch cost without changing

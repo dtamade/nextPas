@@ -918,7 +918,7 @@ begin
   GSink := GSink + LScore;
 end;
 
-procedure BenchAdapterNoUrlFastRejectThenLlhttp(aIters: Int64);
+procedure BenchAdapterNoUrlLegacyDoubleParseExplicitKeepAlive(aIters: Int64);
 var
   LIt: Int64;
   LP: IH1Parser;
@@ -1042,8 +1042,8 @@ begin
     @BenchFastHeadersForEachAll);
   B.Run('adapter no-url: metadata 3 headers',
     @BenchAdapterNoUrlMetadata3Headers);
-  B.Run('adapter no-url: fast reject + llhttp',
-    @BenchAdapterNoUrlFastRejectThenLlhttp);
+  B.Run('adapter no-url: legacy double parse explicit keep-alive',
+    @BenchAdapterNoUrlLegacyDoubleParseExplicitKeepAlive);
   B.Run('adapter no-url: llhttp direct only',
     @BenchParseAdapterNoUrl);
   B.Run('adapter no-url: fast parse only',
