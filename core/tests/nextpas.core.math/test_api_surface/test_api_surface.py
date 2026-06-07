@@ -370,6 +370,56 @@ REQUIRED_QUAT_DOC_TRUTH = (
         "Quaternion multiplication is ordered composition: `A * B` applies the right operand `B` first, then applies the left operand `A`, and non-collinear rotations are non-commutative.",
     ),
 )
+REQUIRED_VEC_QUAT_STABLE_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`, `TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without overflowing the intermediate squared length.",
+    ),
+    (
+        "docs/math/API.md",
+        "Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`, `TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without overflowing the intermediate squared length.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`, `TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without overflowing the intermediate squared length.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`, `TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without overflowing the intermediate squared length.",
+    ),
+    (
+        "docs/math/README.md",
+        "Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd` inputs preserve direction instead of collapsing through an overflowing squared length.",
+    ),
+    (
+        "docs/math/API.md",
+        "Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd` inputs preserve direction instead of collapsing through an overflowing squared length.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd` inputs preserve direction instead of collapsing through an overflowing squared length.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd` inputs preserve direction instead of collapsing through an overflowing squared length.",
+    ),
+    (
+        "docs/math/README.md",
+        "`FromAxisAngle` uses vector normalization, so huge finite axes normalize without changing the intended rotation.",
+    ),
+    (
+        "docs/math/API.md",
+        "`FromAxisAngle` uses vector normalization, so huge finite axes normalize without changing the intended rotation.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`FromAxisAngle` uses vector normalization, so huge finite axes normalize without changing the intended rotation.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`FromAxisAngle` uses vector normalization, so huge finite axes normalize without changing the intended rotation.",
+    ),
+)
 REQUIRED_RANDOM_DOC_TRUTH = (
     (
         "docs/math/README.md",
@@ -923,9 +973,15 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("trig-power", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('power edge contracts'"),
     RequiredBehaviorTestMarker("trig-angle-conversions", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('angle conversions'"),
     RequiredBehaviorTestMarker("vec-2f", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec2f contracts'"),
+    RequiredBehaviorTestMarker("vec-2f-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec2f huge finite length + normalize'"),
     RequiredBehaviorTestMarker("vec-3f", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec3f contracts'"),
+    RequiredBehaviorTestMarker("vec-3f-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec3f huge finite length + normalize'"),
     RequiredBehaviorTestMarker("vec-4f", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec4f contracts'"),
+    RequiredBehaviorTestMarker("vec-4f-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec4f huge finite length + normalize'"),
     RequiredBehaviorTestMarker("vec-double", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('double precision vector contracts'"),
+    RequiredBehaviorTestMarker("vec-2d-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec2d huge finite length + normalize'"),
+    RequiredBehaviorTestMarker("vec-3d-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec3d huge finite length + normalize'"),
+    RequiredBehaviorTestMarker("vec-4d-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec4d huge finite length + normalize'"),
     RequiredBehaviorTestMarker("mat-3f", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('TMat3f contracts'"),
     RequiredBehaviorTestMarker("mat-4f", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('TMat4f contracts'"),
     RequiredBehaviorTestMarker("mat-double", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('double precision matrix contracts'"),
@@ -936,6 +992,8 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("quat-f", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('TQuatf contracts'"),
     RequiredBehaviorTestMarker("quat-d", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('TQuatd contracts'"),
     RequiredBehaviorTestMarker("quat-axis-finite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('FromAxisAngle rejects non-finite inputs'"),
+    RequiredBehaviorTestMarker("quat-axis-huge-finite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('FromAxisAngle normalizes huge finite axis'"),
+    RequiredBehaviorTestMarker("quat-huge-finite-normalize", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('huge finite normalize'"),
     RequiredBehaviorTestMarker("quat-interpolation-finite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation rejects non-finite t'"),
     RequiredBehaviorTestMarker("quat-interpolation-extrapolation", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation allows finite extrapolation'"),
     RequiredBehaviorTestMarker("quat-interpolation-endpoints", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation endpoint contracts'"),
@@ -2885,6 +2943,15 @@ def scan_required_quat_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_vec_quat_stable_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_VEC_QUAT_STABLE_DOC_TRUTH,
+        "missing-required-vec-quat-stable-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def scan_required_random_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
@@ -2967,6 +3034,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_mat_doc_truth(root))
     findings.extend(scan_required_transform_doc_truth(root))
     findings.extend(scan_required_quat_doc_truth(root))
+    findings.extend(scan_required_vec_quat_stable_doc_truth(root))
     findings.extend(scan_required_random_doc_truth(root))
     findings.extend(scan_required_easing_doc_truth(root))
     findings.extend(scan_required_noise_doc_truth(root))

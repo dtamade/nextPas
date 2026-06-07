@@ -139,6 +139,9 @@ Common vector operations:
 - Normalization: `Normalize`
 
 `TVec3f` and `TVec3d` also provide `Cross`. Zero vector normalization returns zero.
+Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`,
+`TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without
+overflowing the intermediate squared length.
 
 ## Matrices
 
@@ -213,6 +216,10 @@ and interpolate the small remaining angle instead of collapsing or taking a long
 `Slerp` and `Nlerp` reject NaN and infinite interpolation factors with `EArgumentError`.
 `FromAxisAngle` normalizes its axis, returns identity for a zero axis, and rejects NaN and infinite
 axis components or angles with `EArgumentError`.
+`FromAxisAngle` uses vector normalization, so huge finite axes normalize without changing the
+intended rotation.
+Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd`
+inputs preserve direction instead of collapsing through an overflowing squared length.
 `ToAxisAngle` normalizes its quaternion first and returns a canonical shortest-angle axis-angle
 pair. Opposite-sign equivalent quaternions map to the same output; zero rotation returns axis `+Z`
 with angle `0`, and exact half-turn outputs, including `FromAxisAngle(..., PI)` paths, use a

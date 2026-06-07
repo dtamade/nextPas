@@ -417,6 +417,36 @@ begin
     'TQuatd FromAxisAngle huge finite axis normalizes');
 end;
 
+procedure TestHugeFiniteNormalize;
+var
+  BaseQf: TQuatf;
+  BaseQd: TQuatd;
+  Qf: TQuatf;
+  Qd: TQuatd;
+begin
+  Qf := TQuatf.Create(0.0, 0.0, Single(3.0e20), Single(4.0e20)).Normalize;
+  CheckQuatf(0.0, 0.0, 0.6, 0.8, Qf, 'TQuatf huge finite normalize preserves direction');
+
+  Qd := TQuatd.Create(0.0, 0.0, 3.0e200, 4.0e200).Normalize;
+  CheckQuatd(0.0, 0.0, 0.6, 0.8, Qd, 'TQuatd huge finite normalize preserves direction');
+
+  BaseQf := QuarterTurnZf;
+  Qf := TQuatf.Create(BaseQf.X * Single(3.0e20), BaseQf.Y * Single(3.0e20),
+    BaseQf.Z * Single(3.0e20), BaseQf.W * Single(3.0e20)).Normalize;
+  Check(TQuatf.Equals(BaseQf, Qf, Single(0.000001)),
+    'TQuatf huge finite normalized rotation matches base');
+  CheckVec3f(0.0, 1.0, 0.0, Qf.Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf huge finite normalized rotation remains usable');
+
+  BaseQd := QuarterTurnZd;
+  Qd := TQuatd.Create(BaseQd.X * 3.0e200, BaseQd.Y * 3.0e200,
+    BaseQd.Z * 3.0e200, BaseQd.W * 3.0e200).Normalize;
+  Check(TQuatd.Equals(BaseQd, Qd, 0.000000000001),
+    'TQuatd huge finite normalized rotation matches base');
+  CheckVec3d(0.0, 1.0, 0.0, Qd.Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd huge finite normalized rotation remains usable');
+end;
+
 procedure TestInterpolationRejectsNonFiniteT;
 begin
   ExpectArgumentErrorMessage('TQuatf.Slerp: AT must be finite',
@@ -857,6 +887,7 @@ begin
   T.Run('TQuatd contracts', @TestQuatdContracts);
   T.Run('FromAxisAngle rejects non-finite inputs', @TestFromAxisAngleRejectsNonFiniteInputs);
   T.Run('FromAxisAngle normalizes huge finite axis', @TestFromAxisAngleNormalizesHugeFiniteAxis);
+  T.Run('huge finite normalize', @TestHugeFiniteNormalize);
   T.Run('Interpolation rejects non-finite t', @TestInterpolationRejectsNonFiniteT);
   T.Run('Interpolation allows finite extrapolation', @TestInterpolationAllowsFiniteExtrapolation);
   T.Run('Interpolation endpoint contracts', @TestInterpolationEndpointContracts);

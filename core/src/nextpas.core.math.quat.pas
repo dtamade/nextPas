@@ -118,14 +118,74 @@ begin
     raise EArgumentError.Create(AFunctionName + ': AT must be finite');
 end;
 
-function QuatLengthSqr(const AX, AY, AZ, AW: Single): Single; inline;
+function StableQuatLength(const AX, AY, AZ, AW: Single): Single; inline;
+var
+  LX: Single;
+  LY: Single;
+  LZ: Single;
+  LW: Single;
+  LMax: Single;
+  LScaledX: Single;
+  LScaledY: Single;
+  LScaledZ: Single;
+  LScaledW: Single;
 begin
-  Result := AX * AX + AY * AY + AZ * AZ + AW * AW;
+  if nextpas.core.math.scalar.IsNaN(AX) or nextpas.core.math.scalar.IsNaN(AY) or
+    nextpas.core.math.scalar.IsNaN(AZ) or nextpas.core.math.scalar.IsNaN(AW) then
+    Exit(((AX + AY) + AZ) + AW);
+  LX := nextpas.core.math.scalar.Abs(AX);
+  LY := nextpas.core.math.scalar.Abs(AY);
+  LZ := nextpas.core.math.scalar.Abs(AZ);
+  LW := nextpas.core.math.scalar.Abs(AW);
+  if nextpas.core.math.scalar.IsInfinite(LX) or nextpas.core.math.scalar.IsInfinite(LY) or
+    nextpas.core.math.scalar.IsInfinite(LZ) or nextpas.core.math.scalar.IsInfinite(LW) then
+    Exit(((LX + LY) + LZ) + LW);
+  LMax := nextpas.core.math.scalar.Max(LX,
+    nextpas.core.math.scalar.Max(LY, nextpas.core.math.scalar.Max(LZ, LW)));
+  if LMax = 0.0 then
+    Exit(0.0);
+  LScaledX := LX / LMax;
+  LScaledY := LY / LMax;
+  LScaledZ := LZ / LMax;
+  LScaledW := LW / LMax;
+  Result := LMax * Single(System.Sqrt(
+    LScaledX * LScaledX + LScaledY * LScaledY +
+    LScaledZ * LScaledZ + LScaledW * LScaledW));
 end;
 
-function QuatLengthSqr(const AX, AY, AZ, AW: Double): Double; inline;
+function StableQuatLength(const AX, AY, AZ, AW: Double): Double; inline;
+var
+  LX: Double;
+  LY: Double;
+  LZ: Double;
+  LW: Double;
+  LMax: Double;
+  LScaledX: Double;
+  LScaledY: Double;
+  LScaledZ: Double;
+  LScaledW: Double;
 begin
-  Result := AX * AX + AY * AY + AZ * AZ + AW * AW;
+  if nextpas.core.math.scalar.IsNaN(AX) or nextpas.core.math.scalar.IsNaN(AY) or
+    nextpas.core.math.scalar.IsNaN(AZ) or nextpas.core.math.scalar.IsNaN(AW) then
+    Exit(((AX + AY) + AZ) + AW);
+  LX := nextpas.core.math.scalar.Abs(AX);
+  LY := nextpas.core.math.scalar.Abs(AY);
+  LZ := nextpas.core.math.scalar.Abs(AZ);
+  LW := nextpas.core.math.scalar.Abs(AW);
+  if nextpas.core.math.scalar.IsInfinite(LX) or nextpas.core.math.scalar.IsInfinite(LY) or
+    nextpas.core.math.scalar.IsInfinite(LZ) or nextpas.core.math.scalar.IsInfinite(LW) then
+    Exit(((LX + LY) + LZ) + LW);
+  LMax := nextpas.core.math.scalar.Max(LX,
+    nextpas.core.math.scalar.Max(LY, nextpas.core.math.scalar.Max(LZ, LW)));
+  if LMax = 0.0 then
+    Exit(0.0);
+  LScaledX := LX / LMax;
+  LScaledY := LY / LMax;
+  LScaledZ := LZ / LMax;
+  LScaledW := LW / LMax;
+  Result := LMax * System.Sqrt(
+    LScaledX * LScaledX + LScaledY * LScaledY +
+    LScaledZ * LScaledZ + LScaledW * LScaledW);
 end;
 
 function QuatDot(const AA, AB: TQuatf): Single; inline;
@@ -377,14 +437,12 @@ end;
 
 function TQuatf.Normalize: TQuatf;
 var
-  LengthSqr: Single;
-  InvLength: Single;
+  LLength: Single;
 begin
-  LengthSqr := QuatLengthSqr(X, Y, Z, W);
-  if LengthSqr = 0.0 then
+  LLength := StableQuatLength(X, Y, Z, W);
+  if LLength = 0.0 then
     Exit(Identity);
-  InvLength := 1.0 / nextpas.core.math.trig.Sqrt(LengthSqr);
-  Result := TQuatf.Create(X * InvLength, Y * InvLength, Z * InvLength, W * InvLength);
+  Result := TQuatf.Create(X / LLength, Y / LLength, Z / LLength, W / LLength);
 end;
 
 { TQuatd }
@@ -544,14 +602,12 @@ end;
 
 function TQuatd.Normalize: TQuatd;
 var
-  LengthSqr: Double;
-  InvLength: Double;
+  LLength: Double;
 begin
-  LengthSqr := QuatLengthSqr(X, Y, Z, W);
-  if LengthSqr = 0.0 then
+  LLength := StableQuatLength(X, Y, Z, W);
+  if LLength = 0.0 then
     Exit(Identity);
-  InvLength := 1.0 / nextpas.core.math.trig.Sqrt(LengthSqr);
-  Result := TQuatd.Create(X * InvLength, Y * InvLength, Z * InvLength, W * InvLength);
+  Result := TQuatd.Create(X / LLength, Y / LLength, Z / LLength, W / LLength);
 end;
 
 end.

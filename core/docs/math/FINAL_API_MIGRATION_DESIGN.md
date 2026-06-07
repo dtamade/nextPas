@@ -242,6 +242,13 @@ Quaternions expose:
 rotation-equivalence helper.
 Interpolation follows the shortest rotational path: opposite-sign equivalent quaternion endpoints
 must be treated as the same rotation instead of forcing the long arc through quaternion space.
+Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`, `TVec3*`,
+and `TVec4*` inputs preserve finite length, direction, and unit length without overflowing the
+intermediate squared length.
+Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd`
+inputs preserve direction instead of collapsing through an overflowing squared length.
+`FromAxisAngle` uses vector normalization, so huge finite axes normalize without changing the
+intended rotation.
 
 The facade may include convenience constructors such as `Vec2f`, `Vec3f`, `Vec4f`, `Mat4fIdentity`, or `QuatfIdentity` only if tests lock the exact public names. Constructors must not reintroduce legacy `Vector2`, `TVector3`, `TMatrix4`, or `TQuaternion` as official names.
 
@@ -467,8 +474,15 @@ Resolved by tests and implementation:
 - Matrix inverse success overwrites the `out` parameter completely: `TryInverse` does not depend on
   the previous contents of the destination matrix and fully rewrites it before returning `True`.
 - Zero vector normalization returns zero; zero quaternion normalization returns identity.
+- Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`,
+  `TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without
+  overflowing the intermediate squared length.
+- Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd`
+  inputs preserve direction instead of collapsing through an overflowing squared length.
 - `FromAxisAngle` normalizes its axis and returns identity for a zero axis instead of inventing a
   partial rotation.
+- `FromAxisAngle` uses vector normalization, so huge finite axes normalize without changing the
+  intended rotation.
 - `ToAxisAngle` normalizes its quaternion first and returns a canonical shortest-angle axis-angle
   pair: zero rotation uses `+Z` as the fallback axis, and exact half-turns, including
   `FromAxisAngle(..., PI)` paths, use a stable axis hemisphere so opposite-sign equivalent

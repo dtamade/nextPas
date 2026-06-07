@@ -124,12 +124,19 @@ flipping `up` to the opposite direction changes roll.
 Easing functions reject `NaN` and infinite input, and finite inputs outside `[0, 1]` extrapolate
 through the same formulas rather than clamping to the unit interval.
 
+Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`,
+`TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without
+overflowing the intermediate squared length.
 Quaternions store vector part `X`, `Y`, `Z` and real part `W`. Zero quaternion normalization returns
 identity; zero vector normalization returns zero. `FromAxisAngle` normalizes its axis, and a zero
 axis returns identity instead of a partial rotation. `ToAxisAngle` normalizes first and returns a
 canonical shortest-angle axis-angle pair: zero rotation uses axis `+Z`, and exact half-turns,
 including `FromAxisAngle(..., PI)` paths, use a stable axis hemisphere so opposite-sign equivalent
 quaternions still map to the same output.
+Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd`
+inputs preserve direction instead of collapsing through an overflowing squared length.
+`FromAxisAngle` uses vector normalization, so huge finite axes normalize without changing the
+intended rotation.
 `ToAxisAngle` overwrites both `out` parameters completely: each call rewrites `AAxis` and
 `AAngleRad` for zero-rotation fallback and ordinary rotations, independent of their previous
 contents.

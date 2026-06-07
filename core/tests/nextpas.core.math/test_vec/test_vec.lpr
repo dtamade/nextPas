@@ -143,6 +143,18 @@ begin
   CheckNear(1.0, N.Length, 0.000001, 'TVec3f huge finite normalize preserves unit length');
 end;
 
+procedure TestVec2fHugeFiniteLengthAndNormalize;
+var
+  V: TVec2f;
+  N: TVec2f;
+begin
+  V := TVec2f.Create(Single(3.0e20), Single(4.0e20));
+  CheckNear(5.0e20, V.Length, 5.0e14, 'TVec2f huge finite length stays finite');
+  N := V.Normalize;
+  CheckVec2f(0.6, 0.8, N, 'TVec2f huge finite normalize preserves direction');
+  CheckNear(1.0, N.Length, 0.000001, 'TVec2f huge finite normalize preserves unit length');
+end;
+
 procedure TestVec4fContracts;
 var
   A: TVec4f;
@@ -171,6 +183,19 @@ begin
   Check(TVec4f.Equals(A, TVec4f.Create(1.0000001, 2.0000001, 3.0000001, 4.0000001),
     Single(0.000001)), 'TVec4f equals epsilon');
   Check(not TVec4f.Equals(A, A, Single(-0.000001)), 'TVec4f Equals rejects negative epsilon');
+end;
+
+procedure TestVec4fHugeFiniteLengthAndNormalize;
+var
+  V: TVec4f;
+  N: TVec4f;
+begin
+  V := TVec4f.Create(Single(3.0e20), Single(4.0e20), 0.0, 0.0);
+  CheckNear(5.0e20, V.Length, 5.0e14, 'TVec4f huge finite length stays finite');
+  N := V.Normalize;
+  CheckVec4f(0.6, 0.8, 0.0, 0.0, N,
+    'TVec4f huge finite normalize preserves direction');
+  CheckNear(1.0, N.Length, 0.000001, 'TVec4f huge finite normalize preserves unit length');
 end;
 
 procedure TestDoublePrecisionContracts;
@@ -276,13 +301,42 @@ begin
   CheckNear(1.0, N.Length, 0.000000000001, 'TVec3d huge finite normalize preserves unit length');
 end;
 
+procedure TestVec2dHugeFiniteLengthAndNormalize;
+var
+  V: TVec2d;
+  N: TVec2d;
+begin
+  V := TVec2d.Create(3.0e200, 4.0e200);
+  CheckNear(5.0e200, V.Length, 5.0e188, 'TVec2d huge finite length stays finite');
+  N := V.Normalize;
+  CheckVec2d(0.6, 0.8, N, 'TVec2d huge finite normalize preserves direction');
+  CheckNear(1.0, N.Length, 0.000000000001, 'TVec2d huge finite normalize preserves unit length');
+end;
+
+procedure TestVec4dHugeFiniteLengthAndNormalize;
+var
+  V: TVec4d;
+  N: TVec4d;
+begin
+  V := TVec4d.Create(3.0e200, 4.0e200, 0.0, 0.0);
+  CheckNear(5.0e200, V.Length, 5.0e188, 'TVec4d huge finite length stays finite');
+  N := V.Normalize;
+  CheckVec4d(0.6, 0.8, 0.0, 0.0, N,
+    'TVec4d huge finite normalize preserves direction');
+  CheckNear(1.0, N.Length, 0.000000000001, 'TVec4d huge finite normalize preserves unit length');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.vec');
   T.Run('TVec2f contracts', @TestVec2fContracts);
+  T.Run('TVec2f huge finite length + normalize', @TestVec2fHugeFiniteLengthAndNormalize);
   T.Run('TVec3f contracts', @TestVec3fContracts);
   T.Run('TVec3f huge finite length + normalize', @TestVec3fHugeFiniteLengthAndNormalize);
   T.Run('TVec4f contracts', @TestVec4fContracts);
+  T.Run('TVec4f huge finite length + normalize', @TestVec4fHugeFiniteLengthAndNormalize);
   T.Run('double precision vector contracts', @TestDoublePrecisionContracts);
+  T.Run('TVec2d huge finite length + normalize', @TestVec2dHugeFiniteLengthAndNormalize);
   T.Run('TVec3d huge finite length + normalize', @TestVec3dHugeFiniteLengthAndNormalize);
+  T.Run('TVec4d huge finite length + normalize', @TestVec4dHugeFiniteLengthAndNormalize);
   T.Summary;
 end.

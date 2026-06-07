@@ -36,6 +36,9 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - `Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.
 - `FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.
 - `Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.
+- Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`, `TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without overflowing the intermediate squared length.
+- Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd` inputs preserve direction instead of collapsing through an overflowing squared length.
+- `FromAxisAngle` uses vector normalization, so huge finite axes normalize without changing the intended rotation.
 - `nextpas.core.math.mat` now provides the final matrix types: `TMat3f`, `TMat4f`, `TMat3d`, and `TMat4d`.
 - Matrix tests cover compact layout, column-major `Data[column,row]`, `Items`, `Rows`, `Columns`,
   row/column setter write-through semantics over the same backing storage, `Zero`, `Identity`,
@@ -242,9 +245,10 @@ Status:
 - Vector tests cover compact layout, `Create`, `Zero`, arithmetic operators, explicit
   component multiply/divide, `Dot`, `Cross` for 3D vectors, `Length`, `LengthSqr`,
   `Normalize`, `Lerp`, `Equals` including negative-epsilon fail-close behavior, zero-vector
-  normalize returning zero, and direct `Double`-path parity coverage for `Data` aliases, `Zero`,
-  add/subtract/unary minus, scalar multiply left, and representative length/component-multiply
-  contracts.
+  normalize returning zero, huge finite `TVec2*` / `TVec3*` / `TVec4*` scaled length and
+  normalization preserving direction and unit length, and direct `Double`-path parity coverage for
+  `Data` aliases, `Zero`, add/subtract/unary minus, scalar multiply left, and representative
+  length/component-multiply contracts.
 - Facade tests prove consumers can `uses nextpas.core.math` and call the final vector types.
 - Matrix tests cover compact layout, column-major storage, row/column accessors, row/column setter
   write-through semantics, arithmetic operators, scalar multiply, matrix-vector multiply,
@@ -261,12 +265,12 @@ Status:
 - `nextpas.core.math.quat` now provides `TQuatf` and `TQuatd`.
 - Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
   identity, zero-quaternion `ToRotationMatrix` / `Rotate` identity behavior, `Conjugate`,
-  axis-angle roundtrip, axis normalization, zero-axis identity behavior,
+  axis-angle roundtrip, axis normalization, huge finite axis normalization, zero-axis identity behavior,
   `ToAxisAngle` canonical shortest-angle output including zero-rotation `+Z` fallback, direct
   `±3π/2` multi-turn canonicalization, exact half-turn stable-axis canonicalization across
   `x/y/z` axes plus mixed-axis `+X/+Y` hemisphere precedence and `FromAxisAngle(..., PI)`
   half-turn paths, out-parameter overwrite semantics, scaled-input normalization for axis-angle
-  output, scaled-input normalization for rotation matrix conversion and vector rotation,
+  output, huge finite quaternion normalization, scaled-input normalization for rotation matrix conversion and vector rotation,
   quaternion multiply composition,
   `Slerp`, `Nlerp`, shortest-path handling for opposite-sign equivalent interpolation endpoints
   including direct start/end midpoint parity plus endpoint canonicalization, finite out-of-range

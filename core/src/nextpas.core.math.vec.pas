@@ -166,8 +166,7 @@ type
 implementation
 
 uses
-  nextpas.core.math.scalar,
-  nextpas.core.math.trig;
+  nextpas.core.math.scalar;
 
 function SingleEquals(const AA, AB, AEpsilon: Single): Boolean; inline;
 begin
@@ -179,64 +178,94 @@ begin
   Result := (AEpsilon >= 0.0) and nextpas.core.math.scalar.FloatEquals(AA, AB, AEpsilon);
 end;
 
-function StableVec3Length(const AX, AY, AZ: Single): Single; inline;
+function StableVec4Length(const AX, AY, AZ, AW: Single): Single; inline;
 var
   LX: Single;
   LY: Single;
   LZ: Single;
+  LW: Single;
   LMax: Single;
   LScaledX: Single;
   LScaledY: Single;
   LScaledZ: Single;
+  LScaledW: Single;
 begin
   if nextpas.core.math.scalar.IsNaN(AX) or nextpas.core.math.scalar.IsNaN(AY) or
-    nextpas.core.math.scalar.IsNaN(AZ) then
-    Exit(AX + AY + AZ);
+    nextpas.core.math.scalar.IsNaN(AZ) or nextpas.core.math.scalar.IsNaN(AW) then
+    Exit(((AX + AY) + AZ) + AW);
   LX := nextpas.core.math.scalar.Abs(AX);
   LY := nextpas.core.math.scalar.Abs(AY);
   LZ := nextpas.core.math.scalar.Abs(AZ);
+  LW := nextpas.core.math.scalar.Abs(AW);
   if nextpas.core.math.scalar.IsInfinite(LX) or nextpas.core.math.scalar.IsInfinite(LY) or
-    nextpas.core.math.scalar.IsInfinite(LZ) then
-    Exit((LX + LY) + LZ);
+    nextpas.core.math.scalar.IsInfinite(LZ) or nextpas.core.math.scalar.IsInfinite(LW) then
+    Exit(((LX + LY) + LZ) + LW);
   LMax := nextpas.core.math.scalar.Max(LX,
-    nextpas.core.math.scalar.Max(LY, LZ));
+    nextpas.core.math.scalar.Max(LY, nextpas.core.math.scalar.Max(LZ, LW)));
   if LMax = 0.0 then
     Exit(0.0);
   LScaledX := LX / LMax;
   LScaledY := LY / LMax;
   LScaledZ := LZ / LMax;
+  LScaledW := LW / LMax;
   Result := LMax * Single(System.Sqrt(
-    LScaledX * LScaledX + LScaledY * LScaledY + LScaledZ * LScaledZ));
+    LScaledX * LScaledX + LScaledY * LScaledY +
+    LScaledZ * LScaledZ + LScaledW * LScaledW));
 end;
 
-function StableVec3Length(const AX, AY, AZ: Double): Double; inline;
+function StableVec4Length(const AX, AY, AZ, AW: Double): Double; inline;
 var
   LX: Double;
   LY: Double;
   LZ: Double;
+  LW: Double;
   LMax: Double;
   LScaledX: Double;
   LScaledY: Double;
   LScaledZ: Double;
+  LScaledW: Double;
 begin
   if nextpas.core.math.scalar.IsNaN(AX) or nextpas.core.math.scalar.IsNaN(AY) or
-    nextpas.core.math.scalar.IsNaN(AZ) then
-    Exit(AX + AY + AZ);
+    nextpas.core.math.scalar.IsNaN(AZ) or nextpas.core.math.scalar.IsNaN(AW) then
+    Exit(((AX + AY) + AZ) + AW);
   LX := nextpas.core.math.scalar.Abs(AX);
   LY := nextpas.core.math.scalar.Abs(AY);
   LZ := nextpas.core.math.scalar.Abs(AZ);
+  LW := nextpas.core.math.scalar.Abs(AW);
   if nextpas.core.math.scalar.IsInfinite(LX) or nextpas.core.math.scalar.IsInfinite(LY) or
-    nextpas.core.math.scalar.IsInfinite(LZ) then
-    Exit((LX + LY) + LZ);
+    nextpas.core.math.scalar.IsInfinite(LZ) or nextpas.core.math.scalar.IsInfinite(LW) then
+    Exit(((LX + LY) + LZ) + LW);
   LMax := nextpas.core.math.scalar.Max(LX,
-    nextpas.core.math.scalar.Max(LY, LZ));
+    nextpas.core.math.scalar.Max(LY, nextpas.core.math.scalar.Max(LZ, LW)));
   if LMax = 0.0 then
     Exit(0.0);
   LScaledX := LX / LMax;
   LScaledY := LY / LMax;
   LScaledZ := LZ / LMax;
+  LScaledW := LW / LMax;
   Result := LMax * System.Sqrt(
-    LScaledX * LScaledX + LScaledY * LScaledY + LScaledZ * LScaledZ);
+    LScaledX * LScaledX + LScaledY * LScaledY +
+    LScaledZ * LScaledZ + LScaledW * LScaledW);
+end;
+
+function StableVec2Length(const AX, AY: Single): Single; inline;
+begin
+  Result := StableVec4Length(AX, AY, Single(0.0), Single(0.0));
+end;
+
+function StableVec2Length(const AX, AY: Double): Double; inline;
+begin
+  Result := StableVec4Length(AX, AY, 0.0, 0.0);
+end;
+
+function StableVec3Length(const AX, AY, AZ: Single): Single; inline;
+begin
+  Result := StableVec4Length(AX, AY, AZ, Single(0.0));
+end;
+
+function StableVec3Length(const AX, AY, AZ: Double): Double; inline;
+begin
+  Result := StableVec4Length(AX, AY, AZ, 0.0);
 end;
 
 class function TVec2f.Create(const AX, AY: Single): TVec2f;
@@ -314,7 +343,7 @@ end;
 
 function TVec2f.Length: Single;
 begin
-  Result := nextpas.core.math.trig.Sqrt(LengthSqr);
+  Result := StableVec2Length(X, Y);
 end;
 
 function TVec2f.Normalize: TVec2f;
@@ -511,7 +540,7 @@ end;
 
 function TVec4f.Length: Single;
 begin
-  Result := nextpas.core.math.trig.Sqrt(LengthSqr);
+  Result := StableVec4Length(X, Y, Z, W);
 end;
 
 function TVec4f.Normalize: TVec4f;
@@ -599,7 +628,7 @@ end;
 
 function TVec2d.Length: Double;
 begin
-  Result := nextpas.core.math.trig.Sqrt(LengthSqr);
+  Result := StableVec2Length(X, Y);
 end;
 
 function TVec2d.Normalize: TVec2d;
@@ -796,7 +825,7 @@ end;
 
 function TVec4d.Length: Double;
 begin
-  Result := nextpas.core.math.trig.Sqrt(LengthSqr);
+  Result := StableVec4Length(X, Y, Z, W);
 end;
 
 function TVec4d.Normalize: TVec4d;
