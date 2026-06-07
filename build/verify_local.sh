@@ -4996,6 +4996,7 @@ require_output_pattern '^simulated-host-compile-target=darwin status=pass$' "$CO
 require_output_pattern '^simulated-host-compile-target=android status=pass$' "$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_OUTPUT" 'missing-core-platform-simulated-host-compile-android-pass'
 require_output_pattern '^simulated-host-compile-target=freebsd status=pass$' "$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_OUTPUT" 'missing-core-platform-simulated-host-compile-freebsd-pass'
 require_output_pattern '^simulated-host-compile-target=unix status=pass$' "$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_OUTPUT" 'missing-core-platform-simulated-host-compile-unix-pass'
+require_output_pattern '^simulated-host-compile-truth=forced-compile$' "$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_OUTPUT" 'missing-core-platform-simulated-host-compile-truth'
 require_output_pattern '^simulated-host-compile-matrix-status=pass$' "$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_OUTPUT" 'missing-core-platform-simulated-host-compile-matrix-pass'
 printf 'core-platform-simulated-host-compile-matrix-check=pass\n'
 
