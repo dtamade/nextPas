@@ -46,6 +46,7 @@ git -C "$FIXTURE_REPO" commit -m "fixture sources" >/dev/null
 create_extensionless_artifacts() {
   printf 'binary\n' >"$FIXTURE_REPO/tools/stage0/nextpas"
   printf 'binary\n' >"$FIXTURE_REPO/core/tests/nextpas.core.fake/test_fake/test_fake"
+  printf 'python bytecode\n' >"$FIXTURE_REPO/scripts/helper.pyc"
 }
 
 create_extensionless_artifacts
@@ -66,6 +67,7 @@ require_hygiene_line() {
 }
 
 require_hygiene_line '^source build artifacts:$'
+require_hygiene_line '^scripts/helper\.pyc$'
 require_hygiene_line '^tools/stage0/nextpas$'
 require_hygiene_line '^core/tests/nextpas\.core\.fake/test_fake/test_fake$'
 require_hygiene_line '^tracked generated artifacts:$'
@@ -91,7 +93,9 @@ require_clean_line '^tracked generated artifacts:$'
 require_clean_line '^docs/tracked_generated\.so$'
 require_clean_line '^build-artifact-clean=failed$'
 
-if [ -e "$FIXTURE_REPO/tools/stage0/nextpas" ] || [ -e "$FIXTURE_REPO/core/tests/nextpas.core.fake/test_fake/test_fake" ]; then
+if [ -e "$FIXTURE_REPO/scripts/helper.pyc" ] || \
+  [ -e "$FIXTURE_REPO/tools/stage0/nextpas" ] || \
+  [ -e "$FIXTURE_REPO/core/tests/nextpas.core.fake/test_fake/test_fake" ]; then
   printf 'expected clean-artifacts to remove extensionless artifacts\n' >&2
   find "$FIXTURE_REPO" -type f | sed "s#^$FIXTURE_REPO/##" | sort >&2
   exit 1

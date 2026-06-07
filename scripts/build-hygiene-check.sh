@@ -91,7 +91,7 @@ scan_root() {
 
 collect_source_artifacts() {
   : >"$WORKTREE_FILE"
-  for ROOT_PATH in compiler core benchmarks tests examples rtl tools units; do
+  for ROOT_PATH in compiler core benchmarks tests examples rtl scripts tools units; do
     scan_root "$ROOT_PATH" >>"$WORKTREE_FILE"
   done
 }
