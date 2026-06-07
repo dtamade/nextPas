@@ -30,6 +30,11 @@ git -C "$FIXTURE_REPO" commit -m "initial" >/dev/null
 git -C "$FIXTURE_REPO" branch feature
 git -C "$FIXTURE_REPO" worktree add .worktrees/feature feature >/dev/null
 
+for INDEX in 1 2 3 4 5 6 7 8 9 10; do
+  git -C "$FIXTURE_REPO" branch "extra-$INDEX"
+  git -C "$FIXTURE_REPO" worktree add ".worktrees/extra-$INDEX" "extra-$INDEX" >/dev/null
+done
+
 printf 'feature\n' >"$FIXTURE_REPO/.worktrees/feature/feature.txt"
 git -C "$FIXTURE_REPO/.worktrees/feature" add feature.txt
 git -C "$FIXTURE_REPO/.worktrees/feature" commit -m "feature commit" >/dev/null

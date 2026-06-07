@@ -36,6 +36,7 @@ cat >"$FOCUS_DIR/Makefile" <<'EOF'
 .PHONY: clean test
 
 clean:
+	sleep 1
 	printf 'clean\n' >> focused.log
 
 test:
@@ -89,6 +90,8 @@ expect_failure "FOCUS without clean target" make -C "$FIXTURE_REPO" focused FOCU
 grep -q 'FOCUS Makefile must expose a clean target' "$TMP_ROOT/failure.err"
 
 make -C "$FIXTURE_REPO" focused FOCUS=core/tests/nextpas.core.fake/test_fake >/dev/null
+rm -f "$FOCUS_DIR/focused.log"
+make -j2 -C "$FIXTURE_REPO" focused FOCUS=core/tests/nextpas.core.fake/test_fake >/dev/null
 
 if ! cmp -s "$FOCUS_DIR/focused.log" - <<'EOF'
 clean
