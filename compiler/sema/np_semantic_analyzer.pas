@@ -9868,6 +9868,54 @@ var
     AttachFieldStoreTargetExpr(LocalNodeId, ATargetNode);
   end;
 
+  function EmitStringFieldStoreRhsTemp(const AExprNode: TGreenNode;
+    out ATempName: string): Boolean;
+  var
+    FieldIdx: Int64;
+    LeftName, RightName: string;
+  begin
+    ATempName := '';
+    if AExprNode = nil then
+      Exit(False);
+    if (AExprNode.NodeKind = gnkIdentifier) and
+      (FCurrentMethodClass <> '') and
+      TypeMetaFieldIsStr(FCurrentMethodClass, AExprNode.Text) then
+    begin
+      FieldIdx := TypeMetaFieldIndex(FCurrentMethodClass, AExprNode.Text);
+      Inc(FBlockLabelCounter);
+      ATempName := '$str_field_store_' + IntToStr(FBlockLabelCounter);
+      RegisterRuntimeVar(ATempName);
+      RegisterRuntimeStrVar(ATempName);
+      FModel.AddTypedHirNode(
+        'var-decl-str-runtime', ATempName, 0, 0, ATempName);
+      FModel.AddTypedHirNode(
+        'assign-str-field-load-runtime', ATempName, 0, 0,
+        ATempName + #9 + IntToStr(FieldIdx));
+      Exit(True);
+    end;
+    if (AExprNode.NodeKind = gnkBinaryExpression) and
+      (AExprNode.Text = '+') and (AExprNode.ChildCount >= 2) and
+      (AExprNode.ChildAt(0) <> nil) and
+      (AExprNode.ChildAt(1) <> nil) then
+    begin
+      LeftName := EmitStrConcatOperand(AExprNode.ChildAt(0), '');
+      RightName := EmitStrConcatOperand(AExprNode.ChildAt(1), '');
+      if (LeftName = '') or (RightName = '') then
+        Exit(False);
+      Inc(FBlockLabelCounter);
+      ATempName := '$str_field_store_' + IntToStr(FBlockLabelCounter);
+      RegisterRuntimeVar(ATempName);
+      RegisterRuntimeStrVar(ATempName);
+      FModel.AddTypedHirNode(
+        'var-decl-str-runtime', ATempName, 0, 0, ATempName);
+      FModel.AddTypedHirNode(
+        'assign-str-concat-runtime',
+        LeftName + #9 + RightName, 0, 0, ATempName);
+      Exit(True);
+    end;
+    Result := False;
+  end;
+
   procedure AddRecordFieldStoreRuntimeNode(const ADisplayName,
     AOperand: string; const ATargetNode, AExprNode: TGreenNode);
   var
@@ -10754,6 +10802,11 @@ begin
             FModel.AddTypedHirNode(
               'field-store-str-runtime', Decoded, 0, 0,
               'self' + #9 + IntToStr(Value) + #9 + 'var ' + Arg.Text
+            )
+          else if EmitStringFieldStoreRhsTemp(Arg, FuncName) then
+            FModel.AddTypedHirNode(
+              'field-store-str-runtime', Decoded, 0, 0,
+              'self' + #9 + IntToStr(Value) + #9 + 'var ' + FuncName
             )
           else
             FModel.AddTypedHirNode(
