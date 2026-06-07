@@ -403,6 +403,9 @@ Surface checks:
 - No `math.impl.simd` may depend on backend-private SIMD units.
 - Public docs, public tests, examples, and downstream consumers must not `uses nextpas.core.math.impl.*`.
 - `test_api_surface` maintains a public allowlist. New public symbols must be added to the allowlist and to a matching behavior test in the same commit.
+- `test_api_surface` also locks required behavior-test runner markers for the current public API
+  groups, so removing a focused behavior group fails the surface gate instead of silently weakening
+  public API coverage.
 - Test Makefiles must not reference `compiler/` paths or compiler build entrypoints.
 
 Completion bar:

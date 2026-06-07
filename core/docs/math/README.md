@@ -34,6 +34,8 @@ make -C core core-math-smoke
 
 The named `core-math-api-surface-smoke` gate in `core/Makefile` wraps
 `make -C core/tests/nextpas.core.math/test_api_surface clean test`.
+That surface checker also requires the current behavior-test runner markers for each public API
+group, so deleting a required focused behavior test now fails before landing.
 Use the named overview-only gate when you only want the facade-consumer proof:
 
 ```sh

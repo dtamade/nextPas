@@ -6,7 +6,7 @@ PYTHON ?= python3
 
 test:
 	@mkdir -p $(REPORT_DIR)
-	$(PYTHON) test_api_surface.py --root $(CORE_ROOT) --json-file $(REPORT_DIR)/api_surface.json --summary-line
+	$(PYTHON) -B test_api_surface.py --self-test --root $(CORE_ROOT) --json-file $(REPORT_DIR)/api_surface.json --summary-line
 
 clean:
-	rm -rf $(REPORT_DIR)
+	rm -rf $(REPORT_DIR) __pycache__

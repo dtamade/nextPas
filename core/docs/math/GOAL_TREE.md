@@ -154,7 +154,9 @@ Completion gate:
 
 - Tests compile or fail only because the new final API does not exist yet.
 - Each public function/type required by the target design has at least one contract test.
-- `test_api_surface` rejects `nextpas.core.math.ffi`, naked `external 'm'`, public `Vectors` bridge names, and public symbols that lack matching behavior tests.
+- `test_api_surface` rejects `nextpas.core.math.ffi`, naked `external 'm'`, public `Vectors`
+  bridge names, public symbols that lack matching behavior tests, and missing required behavior-test
+  runner markers for the current public API groups.
 - `test_facade` proves a consumer can `uses nextpas.core.math` and call the canonical final API without importing implementation or legacy bridge units.
 
 Status:
@@ -433,6 +435,10 @@ core/tests/nextpas.core.math clean test` exits 0, `test_api_surface` reports
   names, then fails if any name is missing from `docs/math/API.md`. The rule was mutation-tested by
   removing `Fmod` from a temporary API doc copy and observing
   `api-doc-missing-root-facade-name:Fmod`; the real docs pass with `scanned=43 findings=0`.
+- `test_api_surface` also locks required behavior-test runner markers across the current facade,
+  scalar, trig, vector, matrix, quaternion, transform, easing, random/noise, and internal SIMD seam
+  tests. This gate was mutation-tested by removing the scalar `T.Run('constants')` marker from a
+  temporary tree and observing `missing-required-behavior-test-marker:scalar-constants`.
 - `core/Makefile` now exposes `core-math-smoke`, reachable as `make -C core core-math-smoke`. It
   first calls `core-math-api-surface-smoke` and then reruns `core-math-overview-local-smoke`, so
   the facade-only public consumer example is both directly reachable through its own named gate and

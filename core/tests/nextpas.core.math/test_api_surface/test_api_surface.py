@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import sys
+import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -16,6 +17,13 @@ class RequiredCoreMakeTarget:
     target: str
     command: str
     recipe_steps: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
+class RequiredBehaviorTestMarker:
+    rule: str
+    path: str
+    marker: str
 
 
 SUMMARY_PREFIX = "MATH_API_SURFACE"
@@ -420,6 +428,85 @@ REQUIRED_BENCHMARK_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
         ("bench-quatf-rotate-simd-seam", "TQuatf simd seam rotate"),
     ),
 }
+REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
+    RequiredBehaviorTestMarker("facade-scalar-trig", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('scalar and trig re-export'"),
+    RequiredBehaviorTestMarker("facade-rounding", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade scalar rounding surface'"),
+    RequiredBehaviorTestMarker("facade-new-scalar", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade new scalar surface'"),
+    RequiredBehaviorTestMarker("facade-vector", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade vector surface'"),
+    RequiredBehaviorTestMarker("facade-random", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade random surface'"),
+    RequiredBehaviorTestMarker("scalar-constants", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('constants'"),
+    RequiredBehaviorTestMarker("scalar-min-max-clamp", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('min max clamp'"),
+    RequiredBehaviorTestMarker("scalar-interpolation", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('interpolation'"),
+    RequiredBehaviorTestMarker("scalar-rounding-sign", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('rounding and sign'"),
+    RequiredBehaviorTestMarker("scalar-float-predicates", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('float predicates'"),
+    RequiredBehaviorTestMarker("scalar-extras", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('number theory and scalar extras'"),
+    RequiredBehaviorTestMarker("scalar-boundaries", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('integer rounding boundaries'"),
+    RequiredBehaviorTestMarker("scalar-owner-messages", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('owner-level boundary messages'"),
+    RequiredBehaviorTestMarker("scalar-single-boundary-messages", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('single-precision boundary messages'"),
+    RequiredBehaviorTestMarker("scalar-overflow", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('overflow helpers'"),
+    RequiredBehaviorTestMarker("trig-basic", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('basic trig values'"),
+    RequiredBehaviorTestMarker("trig-inverse-domain", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('inverse trig domain contracts'"),
+    RequiredBehaviorTestMarker("trig-atan2-special", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('ArcTan2 special cases'"),
+    RequiredBehaviorTestMarker("trig-exp-log-sqrt", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('exp/log/sqrt contracts'"),
+    RequiredBehaviorTestMarker("trig-power", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('power edge contracts'"),
+    RequiredBehaviorTestMarker("trig-angle-conversions", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('angle conversions'"),
+    RequiredBehaviorTestMarker("vec-2f", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec2f contracts'"),
+    RequiredBehaviorTestMarker("vec-3f", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec3f contracts'"),
+    RequiredBehaviorTestMarker("vec-4f", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec4f contracts'"),
+    RequiredBehaviorTestMarker("vec-double", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('double precision vector contracts'"),
+    RequiredBehaviorTestMarker("mat-3f", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('TMat3f contracts'"),
+    RequiredBehaviorTestMarker("mat-4f", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('TMat4f contracts'"),
+    RequiredBehaviorTestMarker("mat-double", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('double precision matrix contracts'"),
+    RequiredBehaviorTestMarker("quat-f", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('TQuatf contracts'"),
+    RequiredBehaviorTestMarker("quat-d", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('TQuatd contracts'"),
+    RequiredBehaviorTestMarker("quat-axis-finite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('FromAxisAngle rejects non-finite inputs'"),
+    RequiredBehaviorTestMarker("quat-interpolation-finite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation rejects non-finite t'"),
+    RequiredBehaviorTestMarker("quat-interpolation-extrapolation", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation allows finite extrapolation'"),
+    RequiredBehaviorTestMarker("quat-interpolation-endpoints", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation endpoint contracts'"),
+    RequiredBehaviorTestMarker("quat-interpolation-shortest-start", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation follows shortest path for opposite-sign start'"),
+    RequiredBehaviorTestMarker("quat-interpolation-shortest-end", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation follows shortest path for opposite-sign end'"),
+    RequiredBehaviorTestMarker("quat-interpolation-equivalent", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation stays stable for equivalent endpoints'"),
+    RequiredBehaviorTestMarker("quat-axis-angle-opposite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('ToAxisAngle canonicalizes opposite-sign rotations'"),
+    RequiredBehaviorTestMarker("quat-axis-angle-multiturn", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('ToAxisAngle canonicalizes multi-turn inputs'"),
+    RequiredBehaviorTestMarker("transform-projection", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('projection builders'"),
+    RequiredBehaviorTestMarker("transform-ortho-reversed", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('Ortho allows reversed bounds'"),
+    RequiredBehaviorTestMarker("transform-model-view", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('model and view builders'"),
+    RequiredBehaviorTestMarker("transform-lookat-up", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('LookAt ignores up magnitude'"),
+    RequiredBehaviorTestMarker("transform-camera-double", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('camera2d and double builders'"),
+    RequiredBehaviorTestMarker("transform-double-parity", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('direct double builder parity'"),
+    RequiredBehaviorTestMarker("transform-finite-guards", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('non-finite inputs fail fast'"),
+    RequiredBehaviorTestMarker("transform-geometry-guards", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('geometry guards report public contract messages'"),
+    RequiredBehaviorTestMarker("easing-polynomial-expo", "tests/nextpas.core.math/test_easing/test_easing.lpr", "T.Run('polynomial and expo easing'"),
+    RequiredBehaviorTestMarker("easing-elastic-back-bounce", "tests/nextpas.core.math/test_easing/test_easing.lpr", "T.Run('elastic back and bounce easing'"),
+    RequiredBehaviorTestMarker("easing-out-of-range", "tests/nextpas.core.math/test_easing/test_easing.lpr", "T.Run('finite out-of-range inputs extrapolate'"),
+    RequiredBehaviorTestMarker("easing-non-finite", "tests/nextpas.core.math/test_easing/test_easing.lpr", "T.Run('non-finite inputs fail fast'"),
+    RequiredBehaviorTestMarker("random-seed", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('seed determinism'"),
+    RequiredBehaviorTestMarker("random-zero-seed", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('zero seed uses deterministic default'"),
+    RequiredBehaviorTestMarker("random-range", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('range boundaries'"),
+    RequiredBehaviorTestMarker("random-large-float", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('large finite float range stays finite and bounded'"),
+    RequiredBehaviorTestMarker("random-weight-scale", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('WeightedChoice large finite weights stay scale-invariant'"),
+    RequiredBehaviorTestMarker("random-weight-zero", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('WeightedChoice rejects all-zero weights'"),
+    RequiredBehaviorTestMarker("random-invalid-ranges", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('invalid ranges fail fast'"),
+    RequiredBehaviorTestMarker("random-roll-overflow", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('RollMultiple rejects overflowing total'"),
+    RequiredBehaviorTestMarker("random-probability-dice", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('probability dice weighted choice and shuffle'"),
+    RequiredBehaviorTestMarker("random-gaussian-circle", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('gaussian and circle vectors'"),
+    RequiredBehaviorTestMarker("random-non-finite", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('non-finite parameter validation'"),
+    RequiredBehaviorTestMarker("random-bool-non-finite", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('NextBool rejects non-finite probability'"),
+    RequiredBehaviorTestMarker("noise-repeatability", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('noise repeatability'"),
+    RequiredBehaviorTestMarker("noise-zero-seed", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('zero seed uses deterministic default'"),
+    RequiredBehaviorTestMarker("noise-reference", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('noise reference vectors'"),
+    RequiredBehaviorTestMarker("noise-invalid", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('noise invalid inputs'"),
+    RequiredBehaviorTestMarker("noise-large-periodic", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('large periodic coordinates stay stable'"),
+    RequiredBehaviorTestMarker("noise-huge-lattice", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('huge finite lattice coordinates stay stable'"),
+    RequiredBehaviorTestMarker("noise-fbm-coordinate", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('FBM rejects non-finite octave coordinates'"),
+    RequiredBehaviorTestMarker("noise-fbm-amplitude", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('FBM rejects non-finite octave amplitude'"),
+    RequiredBehaviorTestMarker("noise-fbm-accumulated", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('FBM rejects non-finite accumulated result'"),
+    RequiredBehaviorTestMarker("noise-precision-ceiling", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('precision ceiling follows stored Double value'"),
+    RequiredBehaviorTestMarker("impl-simd-vec4f", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "T.Run('vec4f simd helpers'"),
+    RequiredBehaviorTestMarker("impl-simd-vec3f", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "T.Run('vec3f simd helpers'"),
+    RequiredBehaviorTestMarker("impl-simd-mat4f", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "T.Run('mat4f simd helpers'"),
+    RequiredBehaviorTestMarker("impl-simd-quatf", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "T.Run('quatf simd helpers'"),
+)
 
 
 @dataclass(frozen=True)
@@ -465,6 +552,11 @@ def parse_args() -> argparse.Namespace:
         "--verbose",
         action="store_true",
         help="Print detailed findings even with --summary-line.",
+    )
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="Run internal regression checks before scanning the workspace.",
     )
     return parser.parse_args()
 
@@ -907,6 +999,116 @@ def scan_missing_required_benchmark_markers(root: Path) -> list[Finding]:
     return findings
 
 
+def scan_required_behavior_test_markers(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    cache: dict[str, str | None] = {}
+
+    for required_marker in REQUIRED_BEHAVIOR_TEST_MARKERS:
+        code = cache.get(required_marker.path)
+        path = root / required_marker.path
+        if code is None and required_marker.path not in cache:
+            if not path.is_file():
+                cache[required_marker.path] = None
+                add_finding(
+                    findings,
+                    "missing-required-behavior-test-file:" + required_marker.rule,
+                    root,
+                    path,
+                    1,
+                    required_marker.path,
+                )
+                continue
+            code = strip_pascal_comments(
+                path.read_text(encoding="utf-8", errors="replace")
+            )
+            cache[required_marker.path] = code
+
+        if code is None:
+            continue
+        if required_marker.marker in code:
+            continue
+        add_finding(
+            findings,
+            "missing-required-behavior-test-marker:" + required_marker.rule,
+            root,
+            path,
+            1,
+            "missing behavior test marker " + required_marker.marker,
+        )
+    return findings
+
+
+def run_behavior_marker_self_tests() -> None:
+    original_markers = REQUIRED_BEHAVIOR_TEST_MARKERS
+    required_marker = RequiredBehaviorTestMarker(
+        "selftest-scalar-constants",
+        "tests/nextpas.core.math/test_scalar/test_scalar.lpr",
+        "T.Run('constants'",
+    )
+    cases = (
+        (
+            "active-runner",
+            "procedure RegisterTests;\n"
+            "begin\n"
+            "  T.Run('constants', procedure begin end);\n"
+            "end;\n",
+            True,
+        ),
+        (
+            "line-comment",
+            "procedure RegisterTests;\n"
+            "begin\n"
+            "  // T.Run('constants', procedure begin end);\n"
+            "end;\n",
+            False,
+        ),
+        (
+            "brace-comment",
+            "procedure RegisterTests;\n"
+            "begin\n"
+            "  { T.Run('constants', procedure begin end); }\n"
+            "end;\n",
+            False,
+        ),
+        (
+            "paren-star-comment",
+            "procedure RegisterTests;\n"
+            "begin\n"
+            "  (* T.Run('constants', procedure begin end); *)\n"
+            "end;\n",
+            False,
+        ),
+    )
+
+    try:
+        globals()["REQUIRED_BEHAVIOR_TEST_MARKERS"] = (required_marker,)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            path = root / required_marker.path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            expected_rule = (
+                "missing-required-behavior-test-marker:" + required_marker.rule
+            )
+
+            for case_name, text, expected_ok in cases:
+                path.write_text(text, encoding="utf-8")
+                findings = scan_required_behavior_test_markers(root)
+                rules = {finding.rule for finding in findings}
+                if expected_ok and findings:
+                    raise AssertionError(
+                        f"behavior-marker self-test {case_name} expected no findings"
+                    )
+                if (not expected_ok) and (expected_rule not in rules):
+                    raise AssertionError(
+                        "behavior-marker self-test "
+                        + case_name
+                        + " expected "
+                        + expected_rule
+                    )
+    finally:
+        globals()["REQUIRED_BEHAVIOR_TEST_MARKERS"] = original_markers
+
+
 def root_facade_public_names(text: str) -> list[str]:
     code = interface_text(text)
     names: set[str] = set()
@@ -1059,6 +1261,7 @@ def build_report(root: Path) -> Report:
     scanned: set[Path] = set()
     findings.extend(scan_missing_required_public_files(root))
     findings.extend(scan_missing_required_benchmark_markers(root))
+    findings.extend(scan_required_behavior_test_markers(root))
     findings.extend(scan_root_facade_api_doc_coverage(root))
     findings.extend(scan_required_core_make_targets(root))
     findings.extend(scan_required_core_make_target_doc_coverage(root))
@@ -1142,6 +1345,8 @@ def print_report(report: Report, summary_line: bool, verbose: bool) -> None:
 
 def main() -> int:
     args = parse_args()
+    if args.self_test:
+        run_behavior_marker_self_tests()
     report = build_report(args.root)
 
     if args.json_file:
