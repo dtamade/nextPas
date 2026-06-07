@@ -661,6 +661,7 @@ procedure atomic_tagged_ptr_update_tag(var aObj: atomic_tagged_ptr_t; aTag: {$IF
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.platform.sync;
 
 {$WARN 5024 off} // keep implementation hint-clean on platforms where order params are intentionally ignored
@@ -699,6 +700,86 @@ procedure _consume_memory_orders(const aSuccessOrder, aFailureOrder: memory_orde
 begin
   _consume_memory_order(aSuccessOrder);
   _consume_memory_order(aFailureOrder);
+end;
+
+procedure AtomicValidateLoadOrder(const AOrder: memory_order_t);
+begin
+  case Ord(AOrder) of
+    Ord(mo_relaxed), Ord(mo_consume), Ord(mo_acquire), Ord(mo_seq_cst):
+      ;
+    Ord(mo_release), Ord(mo_acq_rel):
+      raise EArgumentError.Create(
+        'atomic_load: order must be relaxed, consume, acquire, or seq_cst'
+      );
+  else
+    raise EArgumentError.Create('atomic_load: invalid memory order');
+  end;
+end;
+
+procedure AtomicValidateStoreOrder(const AOrder: memory_order_t);
+begin
+  case Ord(AOrder) of
+    Ord(mo_relaxed), Ord(mo_release), Ord(mo_seq_cst):
+      ;
+    Ord(mo_consume), Ord(mo_acquire), Ord(mo_acq_rel):
+      raise EArgumentError.Create(
+        'atomic_store: order must be relaxed, release, or seq_cst'
+      );
+  else
+    raise EArgumentError.Create('atomic_store: invalid memory order');
+  end;
+end;
+
+function AtomicCompareExchangeMaxFailureOrder(const ASuccessOrder: memory_order_t): memory_order_t;
+begin
+  case Ord(ASuccessOrder) of
+    Ord(mo_relaxed):
+      Result := mo_relaxed;
+    Ord(mo_consume):
+      Result := mo_consume;
+    Ord(mo_acquire):
+      Result := mo_acquire;
+    Ord(mo_release):
+      Result := mo_relaxed;
+    Ord(mo_acq_rel):
+      Result := mo_acquire;
+    Ord(mo_seq_cst):
+      Result := mo_seq_cst;
+  else
+    raise EArgumentError.Create('atomic_compare_exchange: invalid success memory order');
+  end;
+end;
+
+function AtomicCompareExchangeFailureRank(const AOrder: memory_order_t): Integer;
+begin
+  case Ord(AOrder) of
+    Ord(mo_relaxed):
+      Result := 0;
+    Ord(mo_consume):
+      Result := 1;
+    Ord(mo_acquire):
+      Result := 2;
+    Ord(mo_seq_cst):
+      Result := 3;
+    Ord(mo_release), Ord(mo_acq_rel):
+      raise EArgumentError.Create(
+        'atomic_compare_exchange: failure order must not be release or acq_rel'
+      );
+  else
+    raise EArgumentError.Create('atomic_compare_exchange: invalid failure memory order');
+  end;
+end;
+
+procedure AtomicValidateCompareExchangeOrders(const ASuccessOrder, AFailureOrder: memory_order_t);
+var
+  LMaxFailureOrder: memory_order_t;
+begin
+  LMaxFailureOrder := AtomicCompareExchangeMaxFailureOrder(ASuccessOrder);
+  if AtomicCompareExchangeFailureRank(AFailureOrder) >
+     AtomicCompareExchangeFailureRank(LMaxFailureOrder) then
+    raise EArgumentError.Create(
+      'atomic_compare_exchange: failure order must not be stronger than success order'
+    );
 end;
 
 {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
@@ -1110,6 +1191,7 @@ end;
 
 function atomic_load(var aObj: Int32; aOrder: memory_order_t): Int32;
 begin
+  AtomicValidateLoadOrder(aOrder);
   case aOrder of
     mo_relaxed:
       Result := aObj;
@@ -1169,6 +1251,7 @@ end;
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function atomic_load_64(var aObj: Int64; aOrder: memory_order_t): Int64;
 begin
+  AtomicValidateLoadOrder(aOrder);
   {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
   // 32-bit x86: use CMPXCHG8B-based atomic load
   Result := _atomic_load_64_x86(aObj);
@@ -1288,6 +1371,7 @@ end;
 
 procedure atomic_store(var aObj: Int32; aDesired: Int32; aOrder: memory_order_t);
 begin
+  AtomicValidateStoreOrder(aOrder);
   case aOrder of
     mo_relaxed, mo_consume, mo_acquire:
       aObj := aDesired;  // store 不需要 acquire/consume
@@ -1342,6 +1426,7 @@ end;
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 procedure atomic_store_64(var aObj: Int64; aDesired: Int64; aOrder: memory_order_t);
 begin
+  AtomicValidateStoreOrder(aOrder);
   {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
   // 32-bit x86: use CMPXCHG8B-based atomic store (LOCK CMPXCHG8B is already a full fence)
   case aOrder of
@@ -1782,6 +1867,7 @@ function atomic_compare_exchange_strong(var aObj: Int32; var aExpected: Int32; a
 var
   LOld: Int32;
 begin
+  AtomicValidateCompareExchangeOrders(aSuccessOrder, aFailureOrder);
   {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
   _consume_memory_orders(aSuccessOrder, aFailureOrder);
   {$ENDIF}
@@ -1849,6 +1935,7 @@ function atomic_compare_exchange_strong(var aObj: PtrInt; var aExpected: PtrInt;
 var
   LOld: Int64;
 begin
+  AtomicValidateCompareExchangeOrders(aSuccessOrder, aFailureOrder);
   {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
   _consume_memory_orders(aSuccessOrder, aFailureOrder);
   {$ENDIF}
@@ -1916,6 +2003,7 @@ var
   LOld: Int64;
 {$ENDIF}
 begin
+  AtomicValidateCompareExchangeOrders(aSuccessOrder, aFailureOrder);
   {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
   _consume_memory_orders(aSuccessOrder, aFailureOrder);
   {$ENDIF}

@@ -309,6 +309,9 @@ var
   LDefaultStorePtrSection: string;
   LDefaultStorePtrIntSection: string;
   LDefaultStorePtrUIntSection: string;
+  LCasStrong32DualSection: string;
+  LCasStrongPtrIntDualSection: string;
+  LCasStrong64DualSection: string;
   LPascalCaseCas32Section: string;
   LPascalCaseCas64Section: string;
   LPascalCaseCasPtrSection: string;
@@ -458,6 +461,18 @@ begin
   LDefaultStorePtrUIntSection := ExtractImplementationSection(LAtomicSource,
     'procedure atomic_store(var aObj: PtrUInt; aDesired: PtrUInt);',
     '{$ENDIF}');
+  LCasStrong32DualSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_compare_exchange_strong(var aObj: Int32; var aExpected: Int32; aDesired: Int32;' + LineEnding +
+    '  aSuccessOrder, aFailureOrder: memory_order_t): Boolean;',
+    'function atomic_compare_exchange_strong(var aObj: UInt32; var aExpected: UInt32; aDesired: UInt32;');
+  LCasStrongPtrIntDualSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_compare_exchange_strong(var aObj: PtrInt; var aExpected: PtrInt; aDesired: PtrInt;' + LineEnding +
+    '  aSuccessOrder, aFailureOrder: memory_order_t): Boolean;',
+    'function atomic_compare_exchange_strong(var aObj: PtrUInt; var aExpected: PtrUInt; aDesired: PtrUInt;');
+  LCasStrong64DualSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_compare_exchange_strong_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64;' + LineEnding +
+    '  aSuccessOrder, aFailureOrder: memory_order_t): Boolean;',
+    'function atomic_compare_exchange_strong_64(var aObj: UInt64; var aExpected: UInt64; aDesired: UInt64;');
   LPascalCaseCas32Section := ExtractImplementationSection(LAtomicSource,
     'function AtomicCompareExchange32(var ATarget: Int32; const AExpected, ADesired: Int32; const AOrder: TMemoryOrder): Int32;',
     'function AtomicFetchAdd32(var ATarget: Int32; const AValue: Int32; const AOrder: TMemoryOrder): Int32;');
@@ -648,6 +663,9 @@ begin
     'atomic README must describe memory-order semantics');
   CheckContains(LAtomicDocsReadme, 'mo_seq_cst',
     'atomic README must document the default strongest order');
+  CheckContains(LAtomicDocsReadme,
+    'Invalid explicit orders raise `EArgumentError`: load rejects `mo_release`/`mo_acq_rel`, store rejects `mo_consume`/`mo_acquire`/`mo_acq_rel`, and dual-order CAS rejects release/acq_rel failure orders or failure orders stronger than success.',
+    'atomic README must document invalid explicit memory-order contract');
   CheckContains(LAtomicDocsReadme, 'AtomicWait/Notify',
     'atomic README must document the wait/notify surface');
   CheckContains(LAtomicDocsReadme, 'platform_wait_address32',
@@ -945,6 +963,30 @@ begin
     'default PtrUInt atomic_store must not use relaxed directly');
   CheckNotContains(LDefaultStorePtrUIntSection, 'mo_release',
     'default PtrUInt atomic_store must not use release directly');
+  CheckContains(LAtomicSource, 'procedure AtomicValidateLoadOrder(const AOrder: memory_order_t);',
+    'atomic unit must define a shared load-order validator');
+  CheckContains(LAtomicSource, 'procedure AtomicValidateStoreOrder(const AOrder: memory_order_t);',
+    'atomic unit must define a shared store-order validator');
+  CheckContains(LAtomicSource,
+    'procedure AtomicValidateCompareExchangeOrders(const ASuccessOrder, AFailureOrder: memory_order_t);',
+    'atomic unit must define a shared compare-exchange order validator');
+  CheckContains(LLoad32Section, 'AtomicValidateLoadOrder(aOrder);',
+    '32-bit atomic_load must validate explicit memory orders');
+  CheckContains(LLoad64Section, 'AtomicValidateLoadOrder(aOrder);',
+    '64-bit atomic_load must validate explicit memory orders');
+  CheckContains(LStore32Section, 'AtomicValidateStoreOrder(aOrder);',
+    '32-bit atomic_store must validate explicit memory orders');
+  CheckContains(LStore64Section, 'AtomicValidateStoreOrder(aOrder);',
+    '64-bit atomic_store must validate explicit memory orders');
+  CheckContains(LCasStrong32DualSection,
+    'AtomicValidateCompareExchangeOrders(aSuccessOrder, aFailureOrder);',
+    '32-bit dual-order strong CAS must validate success/failure orders');
+  CheckContains(LCasStrongPtrIntDualSection,
+    'AtomicValidateCompareExchangeOrders(aSuccessOrder, aFailureOrder);',
+    'pointer-sized dual-order strong CAS must validate success/failure orders');
+  CheckContains(LCasStrong64DualSection,
+    'AtomicValidateCompareExchangeOrders(aSuccessOrder, aFailureOrder);',
+    '64-bit dual-order strong CAS must validate success/failure orders');
   CheckContains(LAtomicWaitSection, 'platform_wait_address32',
     'atomic_wait must delegate to platform wait-address primitive');
   CheckContains(LAtomicNotifyOneSection, 'platform_wake_address_one',
@@ -1244,6 +1286,169 @@ begin
     'TAtomicFlag.Create(True) should create a set flag');
 end;
 
+procedure TestAtomicInvalidMemoryOrderContract;
+var
+  LVal: Int32;
+  LExpected: Int32;
+  LTypedAtomic: TAtomicUInt32;
+  LInvalidOrderValue: Integer;
+  LInvalidOrder: memory_order_t;
+  LRaised: Boolean;
+begin
+  LVal := 11;
+
+  LRaised := False;
+  try
+    atomic_load(LVal, mo_release);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'atomic_load release must raise EArgumentError');
+
+  LRaised := False;
+  try
+    atomic_load(LVal, mo_acq_rel);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'atomic_load acq_rel must raise EArgumentError');
+
+  LRaised := False;
+  try
+    atomic_store(LVal, 12, mo_consume);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'atomic_store consume must raise EArgumentError');
+
+  LRaised := False;
+  try
+    atomic_store(LVal, 12, mo_acquire);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'atomic_store acquire must raise EArgumentError');
+
+  LRaised := False;
+  try
+    atomic_store(LVal, 12, mo_acq_rel);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'atomic_store acq_rel must raise EArgumentError');
+
+  LExpected := 11;
+  LRaised := False;
+  try
+    atomic_compare_exchange_strong(LVal, LExpected, 13, mo_acquire, mo_release);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'dual-order CAS failure release must raise EArgumentError');
+
+  LExpected := 11;
+  LRaised := False;
+  try
+    atomic_compare_exchange_strong(LVal, LExpected, 13, mo_seq_cst, mo_acq_rel);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'dual-order CAS failure acq_rel must raise EArgumentError');
+
+  LExpected := 11;
+  LRaised := False;
+  try
+    atomic_compare_exchange_strong(LVal, LExpected, 13, mo_relaxed, mo_consume);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'dual-order CAS failure stronger than relaxed success must raise EArgumentError');
+
+  LExpected := 11;
+  LRaised := False;
+  try
+    atomic_compare_exchange_strong(LVal, LExpected, 13, mo_consume, mo_acquire);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'dual-order CAS failure stronger than consume success must raise EArgumentError');
+
+  CheckEqual(Int64(11), Int64(atomic_load(LVal, mo_acquire)),
+    'valid acquire load must remain accepted');
+  atomic_store(LVal, 17, mo_release);
+  CheckEqual(Int64(17), Int64(atomic_load(LVal, mo_acquire)),
+    'valid release store must remain accepted');
+
+  LTypedAtomic := TAtomicUInt32.Create(17);
+  LRaised := False;
+  try
+    LTypedAtomic.Load(mo_release);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'typed atomic Load release must raise EArgumentError');
+
+  LRaised := False;
+  try
+    LTypedAtomic.Store(19, mo_acquire);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'typed atomic Store acquire must raise EArgumentError');
+
+  LInvalidOrderValue := Ord(mo_seq_cst) + 1;
+  LInvalidOrder := memory_order_t(LInvalidOrderValue);
+
+  LRaised := False;
+  try
+    atomic_load(LVal, LInvalidOrder);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'atomic_load invalid ordinal order must raise EArgumentError');
+
+  LRaised := False;
+  try
+    atomic_store(LVal, 21, LInvalidOrder);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'atomic_store invalid ordinal order must raise EArgumentError');
+
+  LExpected := 17;
+  LRaised := False;
+  try
+    atomic_compare_exchange_strong(LVal, LExpected, 23, LInvalidOrder, mo_relaxed);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'dual-order CAS invalid success ordinal must raise EArgumentError');
+
+  LExpected := 17;
+  LRaised := False;
+  try
+    atomic_compare_exchange_strong(LVal, LExpected, 23, mo_seq_cst, LInvalidOrder);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'dual-order CAS invalid failure ordinal must raise EArgumentError');
+end;
+
 procedure TestAtomicCompatFacade;
 var
   LVal: Int32;
@@ -1494,6 +1699,7 @@ begin
   T.Run('fafafa-style atomic API', @TestFafafaStyleAtomicApi);
   T.Run('typed atomic record API', @TestAtomicRecordTypes);
   T.Run('atomic flag API', @TestAtomicFlagApi);
+  T.Run('invalid memory-order contract', @TestAtomicInvalidMemoryOrderContract);
   T.Run('compat PascalCase facade', @TestAtomicCompatFacade);
   T.Run('tagged pointer atomic API', @TestAtomicTaggedPointer);
   T.Run('tagged pointer rejects out-of-range x86_64 pointer', @TestAtomicTaggedPointerRejectsOutOfRangeX8664Pointer);

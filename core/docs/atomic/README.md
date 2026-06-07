@@ -55,6 +55,7 @@ consumers should not need to import `nextpas.core.atomic.types` just to use the 
 - 非 x86 的 `mo_seq_cst` load/store 通过 source-contract 约束 fence contract；没有目标机 runtime 证据时，不应写成实机验证结论。
 - CAS single-order wrapper 会把成功序中的 `mo_consume` 规范化为 acquire，并派生合法 failure order；failure order 不包含 release/acq_rel。
 - `TAtomicPtr<T>` single-order CAS normalizes `mo_consume` success to acquire and derives a legal failure order; failure order never includes release or acq_rel.
+- Invalid explicit orders raise `EArgumentError`: load rejects `mo_release`/`mo_acq_rel`, store rejects `mo_consume`/`mo_acquire`/`mo_acq_rel`, and dual-order CAS rejects release/acq_rel failure orders or failure orders stronger than success.
 
 ## AtomicWait/Notify
 
