@@ -120,9 +120,15 @@ procedure TestCodePointCount;
 const
   ASCII: array[0..4] of Byte = ($48, $65, $6C, $6C, $6F);
   MIXED: array[0..7] of Byte = ($48, $C3, $A9, $6C, $6C, $C3, $B6, $21);
+  ISOLATED_CONT: array[0..1] of Byte = ($80, $41);
+  TRUNCATED_THREE: array[0..2] of Byte = ($E2, $82, $5A);
 begin
   CheckEqual(Int64(5), Int64(UTF8CodePointCount(@ASCII[0], 5)), 'ASCII 5 cp');
   CheckEqual(Int64(6), Int64(UTF8CodePointCount(@MIXED[0], 8)), 'mixed 6 cp');
+  CheckEqual(Int64(2), Int64(UTF8CodePointCount(@ISOLATED_CONT[0], 2)),
+    'isolated continuation counts as replacement plus ASCII');
+  CheckEqual(Int64(3), Int64(UTF8CodePointCount(@TRUNCATED_THREE[0], 3)),
+    'truncated sequence consumes one replacement byte at a time');
 end;
 
 procedure TestIterator;

@@ -168,21 +168,20 @@ end;
 function UTF8CodePointCount(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 var
   LPos: SizeUInt;
+  LDec: TUTF8DecodeResult;
 begin
   Result := 0;
   if ALen = 0 then
     Exit;
   LPos := 0;
-  while LPos + 16 <= ALen do
-  begin
-    Inc(Result, 16 - Vec16Popcnt(Vec16CmpRange(@AData[LPos], $80, $BF)));
-    Inc(LPos, 16);
-  end;
   while LPos < ALen do
   begin
-    if (AData[LPos] and $C0) <> $80 then
-      Inc(Result);
-    Inc(LPos);
+    LDec := UTF8Decode(@AData[LPos], ALen - LPos);
+    Inc(Result);
+    if LDec.ByteLen = 0 then
+      Inc(LPos)
+    else
+      Inc(LPos, LDec.ByteLen);
   end;
 end;
 
