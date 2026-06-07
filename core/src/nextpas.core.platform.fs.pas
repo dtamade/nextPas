@@ -403,7 +403,7 @@ var
   LH: TPlatformFileHandle;
   LSize: Int64;
   LRead: PtrUInt;
-  LR: Int32;
+  LR, LCloseR: Int32;
 begin
   AData := nil;
   ALen := 0;
@@ -420,7 +420,9 @@ begin
   if LR <> 0 then Exit(LR);
   GetMem(AData, PtrUInt(LSize) + 1);
   LR := platform_fs_read_all(LH, AData, PtrUInt(LSize), LRead);
-  platform_file_close(LH);
+  LCloseR := platform_file_close(LH);
+  if (LR = 0) and (LCloseR <> 0) then
+    LR := LCloseR;
   if LR <> 0 then
   begin
     FreeMem(AData);

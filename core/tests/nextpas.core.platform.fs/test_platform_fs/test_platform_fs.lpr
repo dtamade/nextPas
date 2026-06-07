@@ -240,6 +240,10 @@ begin
     'platform.fs must centralize full-read retry');
   CheckContains(LSource, 'LR := platform_fs_read_all(LH, AData, PtrUInt(LSize), LRead)',
     'read_file must read the full stat-sized payload');
+  CheckContains(LSource, 'LCloseR := platform_file_close(LH)',
+    'read_file must check close failure');
+  CheckContains(LSource, 'if (LR = 0) and (LCloseR <> 0) then',
+    'read_file must report close failure when read succeeds');
   CheckAbsent(LSource, 'until (LR <> 0) or (LWritten < LRead)',
     'copy_file must not report success after a short write exit');
   CheckAbsent(LSource, 'platform_file_close(LDstH);' + LineEnding +
@@ -251,6 +255,9 @@ begin
   CheckAbsent(LSource, 'platform_file_sync(LH);' + LineEnding +
     '  platform_file_close(LH);',
     'write_atomic must not ignore sync or close failures');
+  CheckAbsent(LSource, 'LR := platform_fs_read_all(LH, AData, PtrUInt(LSize), LRead);' + LineEnding +
+    '  platform_file_close(LH);',
+    'read_file must not ignore close failure after full read');
 end;
 
 begin
