@@ -51,11 +51,14 @@ make -C "$REPO_ROOT" hygiene
 - Use each focused project `Makefile`. Examples:
 
 ```bash
-make -C tests/nextpas.core.http/test_http_client clean test
-make -C tests/nextpas.core.math clean test
-make -C tests/nextpas.core.simd cpuinfo-focused
+make focused FOCUS=core/tests/nextpas.core.http/test_http_client
+make focused FOCUS=core/tests/nextpas.core.math
+make -C core/tests/nextpas.core.simd cpuinfo-focused
 ```
 
+- Prefer the root `make focused FOCUS=...` entrypoint when the target exposes `clean` and `test`.
+  Use a module-specific target only when the focused gate intentionally has a different target name
+  such as `cpuinfo-focused`, and report that exception explicitly.
 - For exposed API or ownership changes, focused tests must cover the changed surface and leak-sensitive paths.
 - Run `git diff --check` and `make -C "$(git rev-parse --show-toplevel)" hygiene`
   before reporting `Ready` or `Landed`.

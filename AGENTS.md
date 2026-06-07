@@ -64,7 +64,7 @@
 ## Build And Artifact Hygiene
 
 - 构建、测试、清理优先使用根目录 `Makefile`。
-- 常用入口：`make hygiene`、`make clean`、`make rebuild-compiler`、`make test TEST_FILTER=<group>`、`make test-smoke`、`make verify`。
+- 常用入口：`make hygiene`、`make clean`、`make rebuild-compiler`、`make test TEST_FILTER=<group>`、`make test-smoke`、`make focused FOCUS=core/tests/<module>/<gate>`、`make verify`。
 - 不要让 `.o`、`.ppu`、`.a`、`.exe`、`.dll`、`.so`、`.dylib`、`link*.res`、`*.test.res` 等产物散落到源码目录。
 - 不要强制添加生成物到 Git。`scripts/build-hygiene-check.sh` 会拦截源码树产物和已追踪产物。
 - 临时产物应落在 `build/`、`.nextpas/`、`.sisyphus/` 等 ignored 目录。
@@ -72,6 +72,8 @@
 ## Testing
 
 - 改动必须有 focused verification，不要只说“应该能过”。
+- core test gate 优先从仓库根目录运行 `make focused FOCUS=core/tests/<module>/<gate>`；
+  该入口会先后跑 `make hygiene`，并要求目标 Makefile 暴露 `clean` 和 `test`。
 - 修 bug 要补回归测试或 source-contract 测试。
 - 公共 API、模块门面、错误语义、内存/句柄生命周期变化必须覆盖边界输入和失败路径。
 - 默认先跑本模块 focused gate；不要动不动跑全量 `make verify`。
