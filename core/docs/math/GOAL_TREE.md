@@ -218,6 +218,9 @@ Completion gate:
 - Vec/Mat/Quat tests cover every public constructor, operator, and method.
 - Singular matrix inversion uses a documented `TryInverse` path, zeroes the failed out matrix, and
   does not return silent garbage.
+- Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular
+  matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises
+  `EArgumentError` on the same inputs.
 - Normalize of zero vectors/quaternions is explicitly defined and tested.
 
 Status:

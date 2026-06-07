@@ -444,6 +444,9 @@ Resolved by tests and implementation:
 - Constructors use static `Create`; no short free constructors are part of the current public API.
 - `Inverse` raises `EArgumentError` for singular and numerically singular matrices; `TryInverse`
   returns `False` and zeroes the failed `out` matrix.
+- Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular
+  matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises
+  `EArgumentError` on the same inputs.
 - Zero vector normalization returns zero; zero quaternion normalization returns identity.
 - `FromAxisAngle` normalizes its axis and returns identity for a zero axis instead of inventing a
   partial rotation.

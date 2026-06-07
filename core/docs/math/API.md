@@ -160,6 +160,9 @@ Matrix operations:
 and sets `AInverse` to `Zero`. `Inverse` raises `EArgumentError` for the same inputs. A non-zero
 determinant alone does not guarantee that inverse APIs will succeed if the pivot falls within the
 precision threshold.
+Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular
+matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises
+`EArgumentError` on the same inputs.
 
 ## Quaternions
 

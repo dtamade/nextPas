@@ -292,11 +292,125 @@ begin
   M.Inverse;
 end;
 
+procedure TestSinglePrecisionInverseFailCloseContracts;
+var
+  Singular3: TMat3f;
+  NearSingular3: TMat3f;
+  ThresholdPivot3: TMat3f;
+  Inverse3: TMat3f;
+  NearSingular4: TMat4f;
+  ThresholdPivot4: TMat4f;
+  Inverse4: TMat4f;
+begin
+  Singular3 := TMat3f.Create(
+    TVec3f.Create(1.0, 2.0, 3.0),
+    TVec3f.Create(2.0, 4.0, 6.0),
+    TVec3f.Create(3.0, 6.0, 9.0));
+  NearSingular3 := TMat3f.Create(
+    TVec3f.Create(0.0000001, 0.0, 0.0),
+    TVec3f.Create(0.0, 1.0, 0.0),
+    TVec3f.Create(0.0, 0.0, 1.0));
+  ThresholdPivot3 := TMat3f.Create(
+    TVec3f.Create(0.000001, 0.0, 0.0),
+    TVec3f.Create(0.0, 1.0, 0.0),
+    TVec3f.Create(0.0, 0.0, 1.0));
+  NearSingular4 := TMat4f.Create(
+    TVec4f.Create(0.0000001, 0.0, 0.0, 0.0),
+    TVec4f.Create(0.0, 1.0, 0.0, 0.0),
+    TVec4f.Create(0.0, 0.0, 1.0, 0.0),
+    TVec4f.Create(0.0, 0.0, 0.0, 1.0));
+  ThresholdPivot4 := TMat4f.Create(
+    TVec4f.Create(0.000001, 0.0, 0.0, 0.0),
+    TVec4f.Create(0.0, 1.0, 0.0, 0.0),
+    TVec4f.Create(0.0, 0.0, 1.0, 0.0),
+    TVec4f.Create(0.0, 0.0, 0.0, 1.0));
+
+  Check(not Singular3.TryInverse(Inverse3), 'TMat3f TryInverse rejects singular matrix');
+  CheckMat3fZero(Inverse3, 'TMat3f TryInverse zeroes out result for singular matrix');
+  ExpectArgumentErrorMessage('TMat3f.Inverse: matrix is singular', 'TMat3f singular inverse',
+    @RaiseTMat3fSingularInverse);
+  Check(not NearSingular3.TryInverse(Inverse3), 'TMat3f TryInverse rejects near-singular matrix');
+  CheckMat3fZero(Inverse3, 'TMat3f TryInverse zeroes near-singular result');
+  ExpectArgumentErrorMessage('TMat3f.Inverse: matrix is singular',
+    'TMat3f near-singular inverse', @RaiseTMat3fNearSingularInverse);
+  Check(not ThresholdPivot3.TryInverse(Inverse3), 'TMat3f TryInverse rejects exact epsilon pivot');
+  CheckMat3fZero(Inverse3, 'TMat3f TryInverse zeroes exact epsilon pivot result');
+  ExpectArgumentErrorMessage('TMat3f.Inverse: matrix is singular',
+    'TMat3f exact epsilon pivot inverse', @RaiseTMat3fThresholdInverse);
+
+  Check(not TMat4f.Zero.TryInverse(Inverse4), 'TMat4f TryInverse rejects singular matrix');
+  CheckMat4fZero(Inverse4, 'TMat4f TryInverse zeroes out result for singular matrix');
+  ExpectArgumentErrorMessage('TMat4f.Inverse: matrix is singular', 'TMat4f singular inverse',
+    @RaiseTMat4fSingularInverse);
+  Check(not NearSingular4.TryInverse(Inverse4), 'TMat4f TryInverse rejects near-singular matrix');
+  CheckMat4fZero(Inverse4, 'TMat4f TryInverse zeroes near-singular result');
+  ExpectArgumentErrorMessage('TMat4f.Inverse: matrix is singular',
+    'TMat4f near-singular inverse', @RaiseTMat4fNearSingularInverse);
+  Check(not ThresholdPivot4.TryInverse(Inverse4), 'TMat4f TryInverse rejects exact epsilon pivot');
+  CheckMat4fZero(Inverse4, 'TMat4f TryInverse zeroes exact epsilon pivot result');
+  ExpectArgumentErrorMessage('TMat4f.Inverse: matrix is singular',
+    'TMat4f exact epsilon pivot inverse', @RaiseTMat4fThresholdInverse);
+end;
+
+procedure TestDoublePrecisionInverseFailCloseContracts;
+var
+  Inverse3: TMat3d;
+  Inverse4: TMat4d;
+  NearSingular3: TMat3d;
+  ThresholdPivot3: TMat3d;
+  NearSingular4: TMat4d;
+  ThresholdPivot4: TMat4d;
+begin
+  NearSingular3 := TMat3d.Create(
+    TVec3d.Create(0.0000000000001, 0.0, 0.0),
+    TVec3d.Create(0.0, 1.0, 0.0),
+    TVec3d.Create(0.0, 0.0, 1.0));
+  ThresholdPivot3 := TMat3d.Create(
+    TVec3d.Create(0.000000000001, 0.0, 0.0),
+    TVec3d.Create(0.0, 1.0, 0.0),
+    TVec3d.Create(0.0, 0.0, 1.0));
+  NearSingular4 := TMat4d.Create(
+    TVec4d.Create(0.0000000000001, 0.0, 0.0, 0.0),
+    TVec4d.Create(0.0, 1.0, 0.0, 0.0),
+    TVec4d.Create(0.0, 0.0, 1.0, 0.0),
+    TVec4d.Create(0.0, 0.0, 0.0, 1.0));
+  ThresholdPivot4 := TMat4d.Create(
+    TVec4d.Create(0.000000000001, 0.0, 0.0, 0.0),
+    TVec4d.Create(0.0, 1.0, 0.0, 0.0),
+    TVec4d.Create(0.0, 0.0, 1.0, 0.0),
+    TVec4d.Create(0.0, 0.0, 0.0, 1.0));
+
+  Check(not TMat3d.Zero.TryInverse(Inverse3), 'TMat3d TryInverse rejects singular matrix');
+  CheckMat3dZero(Inverse3, 'TMat3d TryInverse zeroes out result for singular matrix');
+  ExpectArgumentErrorMessage('TMat3d.Inverse: matrix is singular', 'TMat3d singular inverse',
+    @RaiseTMat3dSingularInverse);
+  Check(not NearSingular3.TryInverse(Inverse3), 'TMat3d TryInverse rejects near-singular matrix');
+  CheckMat3dZero(Inverse3, 'TMat3d TryInverse zeroes near-singular result');
+  ExpectArgumentErrorMessage('TMat3d.Inverse: matrix is singular',
+    'TMat3d near-singular inverse', @RaiseTMat3dNearSingularInverse);
+  Check(not ThresholdPivot3.TryInverse(Inverse3), 'TMat3d TryInverse rejects exact epsilon pivot');
+  CheckMat3dZero(Inverse3, 'TMat3d TryInverse zeroes exact epsilon pivot result');
+  ExpectArgumentErrorMessage('TMat3d.Inverse: matrix is singular',
+    'TMat3d exact epsilon pivot inverse', @RaiseTMat3dThresholdInverse);
+
+  Check(not TMat4d.Zero.TryInverse(Inverse4), 'TMat4d TryInverse rejects singular matrix');
+  CheckMat4dZero(Inverse4, 'TMat4d TryInverse zeroes out result for singular matrix');
+  ExpectArgumentErrorMessage('TMat4d.Inverse: matrix is singular', 'TMat4d singular inverse',
+    @RaiseTMat4dSingularInverse);
+  Check(not NearSingular4.TryInverse(Inverse4), 'TMat4d TryInverse rejects near-singular matrix');
+  CheckMat4dZero(Inverse4, 'TMat4d TryInverse zeroes near-singular result');
+  ExpectArgumentErrorMessage('TMat4d.Inverse: matrix is singular',
+    'TMat4d near-singular inverse', @RaiseTMat4dNearSingularInverse);
+  Check(not ThresholdPivot4.TryInverse(Inverse4), 'TMat4d TryInverse rejects exact epsilon pivot');
+  CheckMat4dZero(Inverse4, 'TMat4d TryInverse zeroes exact epsilon pivot result');
+  ExpectArgumentErrorMessage('TMat4d.Inverse: matrix is singular',
+    'TMat4d exact epsilon pivot inverse', @RaiseTMat4dThresholdInverse);
+end;
+
 procedure TestMat3fContracts;
 var
   M: TMat3f;
   Scale: TMat3f;
-  Singular: TMat3f;
   NearSingular: TMat3f;
   ThresholdPivot: TMat3f;
   PivotSwap: TMat3f;
@@ -307,10 +421,6 @@ begin
     TVec3f.Create(2.0, 0.0, 0.0),
     TVec3f.Create(0.0, 3.0, 0.0),
     TVec3f.Create(0.0, 0.0, 4.0));
-  Singular := TMat3f.Create(
-    TVec3f.Create(1.0, 2.0, 3.0),
-    TVec3f.Create(2.0, 4.0, 6.0),
-    TVec3f.Create(3.0, 6.0, 9.0));
   NearSingular := TMat3f.Create(
     TVec3f.Create(0.0000001, 0.0, 0.0),
     TVec3f.Create(0.0, 1.0, 0.0),
@@ -350,22 +460,10 @@ begin
   Check(TMat3f.Equals(PivotSwap, Inverse, Single(0.000001)),
     'TMat3f pivot-swap inverse stays on the same permutation matrix');
   CheckMat3fIdentity(PivotSwap * Inverse, 'TMat3f pivot-swap inverse product');
-  Check(not Singular.TryInverse(Inverse), 'TMat3f TryInverse rejects singular matrix');
-  CheckMat3fZero(Inverse, 'TMat3f TryInverse zeroes out result for singular matrix');
-  ExpectArgumentErrorMessage('TMat3f.Inverse: matrix is singular', 'TMat3f singular inverse',
-    @RaiseTMat3fSingularInverse);
   CheckNear(0.0000001, NearSingular.Determinant, 0.000000000001,
     'TMat3f determinant preserves small nonzero pivot');
-  Check(not NearSingular.TryInverse(Inverse), 'TMat3f TryInverse rejects near-singular matrix');
-  CheckMat3fZero(Inverse, 'TMat3f TryInverse zeroes near-singular result');
-  ExpectArgumentErrorMessage('TMat3f.Inverse: matrix is singular',
-    'TMat3f near-singular inverse', @RaiseTMat3fNearSingularInverse);
   CheckNear(0.000001, ThresholdPivot.Determinant, 0.000000000001,
     'TMat3f determinant preserves exact inverse epsilon pivot');
-  Check(not ThresholdPivot.TryInverse(Inverse), 'TMat3f TryInverse rejects exact epsilon pivot');
-  CheckMat3fZero(Inverse, 'TMat3f TryInverse zeroes exact epsilon pivot result');
-  ExpectArgumentErrorMessage('TMat3f.Inverse: matrix is singular',
-    'TMat3f exact epsilon pivot inverse', @RaiseTMat3fThresholdInverse);
   Check(TMat3f.Equals(M, M + TMat3f.Zero, Single(0.0)), 'TMat3f equals exact');
   Check(not TMat3f.Equals(M, M, Single(-0.000001)), 'TMat3f equals rejects negative epsilon');
   Check(TMat3f.Equals(M, M * Single(1.0), Single(0.000001)), 'TMat3f equals epsilon');
@@ -430,20 +528,8 @@ begin
   Check(TMat4f.Equals(PivotSwap, Inverse, Single(0.000001)),
     'TMat4f pivot-swap inverse stays on the same permutation matrix');
   CheckMat4fIdentity(PivotSwap * Inverse, 'TMat4f pivot-swap inverse product');
-  Check(not TMat4f.Zero.TryInverse(Inverse), 'TMat4f TryInverse rejects singular matrix');
-  CheckMat4fZero(Inverse, 'TMat4f TryInverse zeroes out result for singular matrix');
-  ExpectArgumentErrorMessage('TMat4f.Inverse: matrix is singular', 'TMat4f singular inverse',
-    @RaiseTMat4fSingularInverse);
-  Check(not NearSingular.TryInverse(Inverse), 'TMat4f TryInverse rejects near-singular matrix');
-  CheckMat4fZero(Inverse, 'TMat4f TryInverse zeroes near-singular result');
-  ExpectArgumentErrorMessage('TMat4f.Inverse: matrix is singular',
-    'TMat4f near-singular inverse', @RaiseTMat4fNearSingularInverse);
   CheckNear(0.000001, ThresholdPivot.Determinant, 0.000000000001,
     'TMat4f determinant preserves exact inverse epsilon pivot');
-  Check(not ThresholdPivot.TryInverse(Inverse), 'TMat4f TryInverse rejects exact epsilon pivot');
-  CheckMat4fZero(Inverse, 'TMat4f TryInverse zeroes exact epsilon pivot result');
-  ExpectArgumentErrorMessage('TMat4f.Inverse: matrix is singular',
-    'TMat4f exact epsilon pivot inverse', @RaiseTMat4fThresholdInverse);
   Check(TMat4f.Equals(M, M + TMat4f.Zero, Single(0.0)), 'TMat4f equals exact');
   Check(not TMat4f.Equals(M, M, Single(-0.000001)), 'TMat4f equals rejects negative epsilon');
   Check(TMat4f.Equals(M, M * Single(1.0), Single(0.000001)), 'TMat4f scalar multiply right');
@@ -499,22 +585,10 @@ begin
   Check(TMat3d.Equals(PivotSwap3, Inverse3, 0.000000000001),
     'TMat3d pivot-swap inverse stays on the same permutation matrix');
   CheckMat3dIdentity(PivotSwap3 * Inverse3, 'TMat3d pivot-swap inverse product');
-  Check(not TMat3d.Zero.TryInverse(Inverse3), 'TMat3d TryInverse rejects singular matrix');
-  CheckMat3dZero(Inverse3, 'TMat3d TryInverse zeroes out result for singular matrix');
-  ExpectArgumentErrorMessage('TMat3d.Inverse: matrix is singular', 'TMat3d singular inverse',
-    @RaiseTMat3dSingularInverse);
   CheckNear(0.0000000000001, NearSingular3.Determinant, 0.000000000000000001,
     'TMat3d determinant preserves small nonzero pivot');
-  Check(not NearSingular3.TryInverse(Inverse3), 'TMat3d TryInverse rejects near-singular matrix');
-  CheckMat3dZero(Inverse3, 'TMat3d TryInverse zeroes near-singular result');
-  ExpectArgumentErrorMessage('TMat3d.Inverse: matrix is singular',
-    'TMat3d near-singular inverse', @RaiseTMat3dNearSingularInverse);
   CheckNear(0.000000000001, ThresholdPivot3.Determinant, 0.000000000000000001,
     'TMat3d determinant preserves exact inverse epsilon pivot');
-  Check(not ThresholdPivot3.TryInverse(Inverse3), 'TMat3d TryInverse rejects exact epsilon pivot');
-  CheckMat3dZero(Inverse3, 'TMat3d TryInverse zeroes exact epsilon pivot result');
-  ExpectArgumentErrorMessage('TMat3d.Inverse: matrix is singular',
-    'TMat3d exact epsilon pivot inverse', @RaiseTMat3dThresholdInverse);
   Check(not TMat3d.Equals(M3, M3, -0.000000000001), 'TMat3d equals rejects negative epsilon');
 
   M4 := TMat4d.Create(
@@ -558,20 +632,8 @@ begin
   Check(TMat4d.Equals(PivotSwap4, Inverse4, 0.000000000001),
     'TMat4d pivot-swap inverse stays on the same permutation matrix');
   CheckMat4dIdentity(PivotSwap4 * Inverse4, 'TMat4d pivot-swap inverse product');
-  Check(not TMat4d.Zero.TryInverse(Inverse4), 'TMat4d TryInverse rejects singular matrix');
-  CheckMat4dZero(Inverse4, 'TMat4d TryInverse zeroes out result for singular matrix');
-  ExpectArgumentErrorMessage('TMat4d.Inverse: matrix is singular', 'TMat4d singular inverse',
-    @RaiseTMat4dSingularInverse);
-  Check(not NearSingular4.TryInverse(Inverse4), 'TMat4d TryInverse rejects near-singular matrix');
-  CheckMat4dZero(Inverse4, 'TMat4d TryInverse zeroes near-singular result');
-  ExpectArgumentErrorMessage('TMat4d.Inverse: matrix is singular',
-    'TMat4d near-singular inverse', @RaiseTMat4dNearSingularInverse);
   CheckNear(0.000000000001, ThresholdPivot4.Determinant, 0.000000000000000001,
     'TMat4d determinant preserves exact inverse epsilon pivot');
-  Check(not ThresholdPivot4.TryInverse(Inverse4), 'TMat4d TryInverse rejects exact epsilon pivot');
-  CheckMat4dZero(Inverse4, 'TMat4d TryInverse zeroes exact epsilon pivot result');
-  ExpectArgumentErrorMessage('TMat4d.Inverse: matrix is singular',
-    'TMat4d exact epsilon pivot inverse', @RaiseTMat4dThresholdInverse);
   Check(not TMat4d.Equals(M4, M4, -0.000000000001), 'TMat4d equals rejects negative epsilon');
 end;
 
@@ -580,5 +642,9 @@ begin
   T.Run('TMat3f contracts', @TestMat3fContracts);
   T.Run('TMat4f contracts', @TestMat4fContracts);
   T.Run('double precision matrix contracts', @TestDoublePrecisionContracts);
+  T.Run('single precision inverse fail-close contracts',
+    @TestSinglePrecisionInverseFailCloseContracts);
+  T.Run('double precision inverse fail-close contracts',
+    @TestDoublePrecisionInverseFailCloseContracts);
   T.Summary;
 end.

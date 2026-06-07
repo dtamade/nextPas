@@ -96,6 +96,24 @@ REQUIRED_M8_RESIDUAL_TRUTH = (
         "M8 is not complete until broader M7 SIMD acceleration decisions and host trig link evidence are resolved.",
     ),
 )
+REQUIRED_MAT_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises `EArgumentError` on the same inputs.",
+    ),
+    (
+        "docs/math/API.md",
+        "Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises `EArgumentError` on the same inputs.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises `EArgumentError` on the same inputs.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises `EArgumentError` on the same inputs.",
+    ),
+)
 REQUIRED_TRANSFORM_DOC_TRUTH = (
     (
         "docs/math/README.md",
@@ -595,6 +613,8 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("mat-3f", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('TMat3f contracts'"),
     RequiredBehaviorTestMarker("mat-4f", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('TMat4f contracts'"),
     RequiredBehaviorTestMarker("mat-double", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('double precision matrix contracts'"),
+    RequiredBehaviorTestMarker("mat-inverse-fail-close-single", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('single precision inverse fail-close contracts'"),
+    RequiredBehaviorTestMarker("mat-inverse-fail-close-double", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('double precision inverse fail-close contracts'"),
     RequiredBehaviorTestMarker("quat-f", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('TQuatf contracts'"),
     RequiredBehaviorTestMarker("quat-d", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('TQuatd contracts'"),
     RequiredBehaviorTestMarker("quat-axis-finite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('FromAxisAngle rejects non-finite inputs'"),
@@ -1417,6 +1437,15 @@ def scan_required_transform_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_mat_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_MAT_DOC_TRUTH,
+        "missing-required-mat-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def scan_required_quat_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
@@ -1465,6 +1494,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_core_make_target_doc_coverage(root))
     findings.extend(scan_required_host_gate_residual_truth(root))
     findings.extend(scan_required_m8_residual_truth(root))
+    findings.extend(scan_required_mat_doc_truth(root))
     findings.extend(scan_required_transform_doc_truth(root))
     findings.extend(scan_required_quat_doc_truth(root))
     findings.extend(scan_required_random_doc_truth(root))

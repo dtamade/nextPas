@@ -137,6 +137,9 @@ and interpolate the small remaining angle instead of collapsing or taking a long
 representative points in each non-endpoint segment.
 `TryInverse` is epsilon-based: it returns `False` and zeroes the `out` matrix for singular and
 numerically singular matrices, and `Inverse` raises `EArgumentError` on the same inputs.
+Matrix inverse failure is fail-close: `TryInverse` treats singular and numerically singular
+matrices the same, returns `False`, zeroes the failed `out` matrix, and `Inverse` raises
+`EArgumentError` on the same inputs.
 
 ## Random And Noise Ownership
 
