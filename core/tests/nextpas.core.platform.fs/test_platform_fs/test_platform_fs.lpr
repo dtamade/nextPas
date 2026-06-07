@@ -238,6 +238,12 @@ begin
     'write_atomic must check close failure');
   CheckContains(LSource, 'function platform_fs_read_all',
     'platform.fs must centralize full-read retry');
+  CheckContains(LSource, 'PLATFORM_FS_SHORT_READ_ERROR',
+    'short reads must map to a non-zero platform error');
+  CheckContains(LSource, 'if LChunk = 0 then',
+    'full-read helper must reject zero-progress reads');
+  CheckContains(LSource, 'Inc(ABytesRead, LChunk)',
+    'full-read helper must advance after positive short reads');
   CheckContains(LSource, 'LR := platform_fs_read_all(LH, AData, PtrUInt(LSize), LRead)',
     'read_file must read the full stat-sized payload');
   CheckContains(LSource, 'LCloseR := platform_file_close(LH)',
