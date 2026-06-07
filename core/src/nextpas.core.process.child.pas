@@ -54,6 +54,9 @@ type
     FWaited: Boolean;
     FDetached: Boolean;
     FTimeout: TDuration;
+    FLastOutput: TProcessOutput;
+    function FinishWaitResult(const AResult: TPlatformProcessResult;
+      const AStdOut, AStdErr: string): TProcessOutput;
   public
     constructor Create(const AProc: TPlatformProcess;
       const AStdin: IWriter; const AStdout: IReader; const AStderr: IReader;
@@ -115,6 +118,7 @@ begin
   FWaited := False;
   FDetached := False;
   FTimeout := ATimeout;
+  FillChar(FLastOutput, SizeOf(FLastOutput), 0);
 end;
 
 destructor TChild.Destroy;
@@ -140,6 +144,9 @@ var
   LDeadline: TInstant;
   LTs: TTimeSpec;
 begin
+  if FWaited then
+    Exit(FLastOutput);
+
   Result.ExitCode := 0;
   Result.Status := nextpas.core.process.base.psUnknown;
   Result.StdOut := '';
@@ -167,33 +174,27 @@ begin
       nanosleep(@LTs, nil);
     until False;
   end;
-  FWaited := True;
-  Result.ExitCode := LResult.ExitCode;
-  case LResult.Status of
-    psExited: Result.Status := nextpas.core.process.base.psExited;
-    psSignaled: Result.Status := nextpas.core.process.base.psSignaled;
-    psRunning: Result.Status := nextpas.core.process.base.psRunning;
-  else
-    Result.Status := nextpas.core.process.base.psUnknown;
-  end;
+  Result := FinishWaitResult(LResult, '', '');
 end;
 
 function TChild.TryWait(out AOutput: TProcessOutput): Boolean;
 var
   LResult: TPlatformProcessResult;
 begin
-  FillChar(AOutput, SizeOf(AOutput), 0);
+  if FWaited then
+  begin
+    AOutput := FLastOutput;
+    Exit(True);
+  end;
+
+  AOutput.ExitCode := 0;
+  AOutput.Status := nextpas.core.process.base.psUnknown;
+  AOutput.StdOut := '';
+  AOutput.StdErr := '';
   platform_process_try_wait(FProc, LResult);
   if LResult.Status = nextpas.core.platform.process.base.psRunning then
     Exit(False);
-  FWaited := True;
-  AOutput.ExitCode := LResult.ExitCode;
-  case LResult.Status of
-    psExited: AOutput.Status := nextpas.core.process.base.psExited;
-    psSignaled: AOutput.Status := nextpas.core.process.base.psSignaled;
-  else
-    AOutput.Status := nextpas.core.process.base.psUnknown;
-  end;
+  AOutput := FinishWaitResult(LResult, '', '');
   Result := True;
 end;
 
@@ -253,6 +254,9 @@ var
   LPollResult: Integer;
   LPollTimeout: Integer;
 begin
+  if FWaited then
+    Exit(FLastOutput);
+
   if FStdinWriter <> nil then
     (FStdinWriter as TPipeWriter).Close;
   FStdinWriter := nil;
@@ -283,14 +287,12 @@ begin
         if LProcessResult.Status <> nextpas.core.platform.process.base.psRunning then
         begin
           LHaveProcessResult := True;
-          FWaited := True;
         end
         else if TInstant.Now.DurationSince(LDeadline).IsPositive then
         begin
           platform_process_kill(FProc);
           platform_process_wait(FProc, LProcessResult);
           LHaveProcessResult := True;
-          FWaited := True;
         end;
       end;
 
@@ -389,22 +391,33 @@ begin
   FStdoutReader := nil;
   FStderrReader := nil;
   if LHaveProcessResult then
-  begin
-    Result.ExitCode := LProcessResult.ExitCode;
-    case LProcessResult.Status of
-      psExited: Result.Status := nextpas.core.process.base.psExited;
-      psSignaled: Result.Status := nextpas.core.process.base.psSignaled;
-      psRunning: Result.Status := nextpas.core.process.base.psRunning;
-    else
-      Result.Status := nextpas.core.process.base.psUnknown;
-    end;
-  end
+    Result := FinishWaitResult(LProcessResult, Result.StdOut, Result.StdErr)
   else
   begin
     LWait := Wait;
     Result.ExitCode := LWait.ExitCode;
     Result.Status := LWait.Status;
+    FLastOutput.StdOut := Result.StdOut;
+    FLastOutput.StdErr := Result.StdErr;
+    Result := FLastOutput;
   end;
+end;
+
+function TChild.FinishWaitResult(const AResult: TPlatformProcessResult;
+  const AStdOut, AStdErr: string): TProcessOutput;
+begin
+  Result.ExitCode := AResult.ExitCode;
+  Result.StdOut := AStdOut;
+  Result.StdErr := AStdErr;
+  case AResult.Status of
+    psExited: Result.Status := nextpas.core.process.base.psExited;
+    psSignaled: Result.Status := nextpas.core.process.base.psSignaled;
+    psRunning: Result.Status := nextpas.core.process.base.psRunning;
+  else
+    Result.Status := nextpas.core.process.base.psUnknown;
+  end;
+  FLastOutput := Result;
+  FWaited := True;
 end;
 
 end.

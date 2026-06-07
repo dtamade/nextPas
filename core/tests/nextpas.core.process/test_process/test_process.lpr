@@ -109,6 +109,25 @@ begin
   Check('Spawn wait — exit 0', LOut.ExitCode = 0);
 end;
 
+procedure TestSpawnWaitIsRepeatable;
+var
+  LChild: IChild;
+  LFirst, LSecond: TProcessOutput;
+  LDone: Boolean;
+begin
+  LChild := Command('/bin/true').Spawn;
+  LFirst := LChild.Wait;
+  LSecond := LChild.Wait;
+  Check('Wait repeat — first exited', LFirst.Status = psExited);
+  Check('Wait repeat — second preserves status', LSecond.Status = LFirst.Status);
+  Check('Wait repeat — second preserves exit code', LSecond.ExitCode = LFirst.ExitCode);
+
+  LDone := LChild.TryWait(LSecond);
+  Check('TryWait after Wait — done', LDone);
+  Check('TryWait after Wait — preserves status', LSecond.Status = LFirst.Status);
+  Check('TryWait after Wait — preserves exit code', LSecond.ExitCode = LFirst.ExitCode);
+end;
+
 procedure TestSpawnTryWait;
 var
   LChild: IChild;
@@ -635,6 +654,7 @@ begin
   TestCommandDir;
   TestCommandStatus;
   TestSpawnAndWait;
+  TestSpawnWaitIsRepeatable;
   TestSpawnTryWait;
   TestSpawnKill;
   TestSpawnDetach;
