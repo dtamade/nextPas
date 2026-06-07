@@ -309,6 +309,82 @@ begin
   Pass('VecDeque managed TryPeekCopy(pointer) owns refs after clear');
 end;
 
+procedure TestVecDequeManagedRemoveCopyAtOwnsRefsAfterClear;
+type TDequeT = specialize TVecDeque<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, outItem: ITracked;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    t := MakeTracked(50); D.PushBack(t); t := nil;
+    t := MakeTracked(51); D.PushBack(t); t := nil;
+    t := MakeTracked(52); D.PushBack(t); t := nil;
+
+    D.RemoveCopyAt(1, @outItem);
+
+    if (outItem = nil) or (outItem.GetId <> 51) then
+    begin
+      WriteLn('FAIL: VecDeque managed RemoveCopyAt(pointer) returned wrong item');
+      Halt(1);
+    end;
+
+    D.Clear;
+
+    if (outItem = nil) or (outItem.GetId <> 51) then
+    begin
+      WriteLn('FAIL: VecDeque managed RemoveCopyAt(pointer) output did not own ref after clear');
+      Halt(1);
+    end;
+
+    outItem := nil;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed RemoveCopyAt(pointer) owns refs after clear');
+  Pass('VecDeque managed RemoveCopyAt(pointer) owns refs after clear');
+end;
+
+procedure TestVecDequeManagedSwapRemoveCopyAtOwnsRefsAfterClear;
+type TDequeT = specialize TVecDeque<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, outItem: ITracked;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    t := MakeTracked(60); D.PushBack(t); t := nil;
+    t := MakeTracked(61); D.PushBack(t); t := nil;
+    t := MakeTracked(62); D.PushBack(t); t := nil;
+
+    D.SwapRemoveCopyAt(1, @outItem);
+
+    if (outItem = nil) or (outItem.GetId <> 61) then
+    begin
+      WriteLn('FAIL: VecDeque managed SwapRemoveCopyAt(pointer) returned wrong item');
+      Halt(1);
+    end;
+
+    D.Clear;
+
+    if (outItem = nil) or (outItem.GetId <> 61) then
+    begin
+      WriteLn('FAIL: VecDeque managed SwapRemoveCopyAt(pointer) output did not own ref after clear');
+      Halt(1);
+    end;
+
+    outItem := nil;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed SwapRemoveCopyAt(pointer) owns refs after clear');
+  Pass('VecDeque managed SwapRemoveCopyAt(pointer) owns refs after clear');
+end;
+
 procedure TestHashMapRehash;
 type TMapT = specialize THashMap<Int32, ITracked>;
 var M: TMapT; i: Integer; Snap: TLeakSnapshot; t: ITracked;
@@ -522,6 +598,8 @@ begin
   TestVecDequeManagedTryPopElementOwnsRefsAndSyncsTail;
   TestVecDequeManagedPointerReadOwnsRefsAfterClear;
   TestVecDequeManagedTryPeekCopyOwnsRefsAfterClear;
+  TestVecDequeManagedRemoveCopyAtOwnsRefsAfterClear;
+  TestVecDequeManagedSwapRemoveCopyAtOwnsRefsAfterClear;
   TestHashMapRehash;
   TestHashMapOverwrite;
   TestSwissTableManagedKeyValueLifecycle;

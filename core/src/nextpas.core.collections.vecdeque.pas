@@ -6984,8 +6984,7 @@ procedure TVecDeque.RemoveCopyAt(aIndex: SizeUInt; aPtr: Pointer; aCount: SizeUI
 var
   LPtr1, LPtr2: PElement;
   LLen1, LLen2: SizeUInt;
-  LDstPtr: PByte;
-  LElementSize: SizeUInt;
+  LDstPtr: PElement;
 begin
   if aPtr = nil then
     raise EArgumentNil.Create('TVecDeque.RemoveCopyAt: aPtr is nil');
@@ -6997,17 +6996,15 @@ begin
 
   // ✅ 优化：使用双切片批量复制，避免逐个元素操作
   GetTwoSlices(aIndex, aCount, LPtr1, LLen1, LPtr2, LLen2);
-  LElementSize := GetElementSize;
-  LDstPtr := PByte(aPtr);
+  LDstPtr := PElement(aPtr);
 
-  // 批量内存复制 - O(1) 或 O(log n)
   if LLen1 > 0 then
   begin
-    Move(LPtr1^, LDstPtr^, LLen1 * LElementSize);
-    Inc(LDstPtr, LLen1 * LElementSize);
+    FElementManager.CopyElementsUnchecked(LPtr1, LDstPtr, LLen1);
+    Inc(LDstPtr, LLen1);
   end;
   if LLen2 > 0 then
-    Move(LPtr2^, LDstPtr^, LLen2 * LElementSize);
+    FElementManager.CopyElementsUnchecked(LPtr2, LDstPtr, LLen2);
 
   // 删除该范围（保持顺序）
   Delete(aIndex, aCount);
@@ -7106,7 +7103,7 @@ end;
 procedure TVecDeque.SwapRemoveCopyAt(aIndex: SizeUInt; aPtr: Pointer; aCount: SizeUInt);
 var
   i: SizeUInt;
-  LPtr: PByte;
+  LPtr: PElement;
   LPhysicalIndex: SizeUInt;
 begin
   if aPtr = nil then
@@ -7117,12 +7114,12 @@ begin
       [aIndex, aIndex + aCount - 1, FCount - 1]);
 
   // 先拷贝
-  LPtr := PByte(aPtr);
+  LPtr := PElement(aPtr);
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    Move(FBuffer.GetPtrUnchecked(LPhysicalIndex)^, LPtr^, SizeOf(T));
-    Inc(LPtr, SizeOf(T));
+    FElementManager.CopyElementsUnchecked(FBuffer.GetPtrUnchecked(LPhysicalIndex), LPtr, 1);
+    Inc(LPtr);
   end;
 
   // 再用尾部填补（不保持顺序）
