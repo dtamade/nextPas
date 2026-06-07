@@ -156,6 +156,38 @@ begin
     'IOCP Flush must not be reported as an unsupported operation');
 end;
 
+procedure TestAsyncLoopRunLifecycleContract;
+var
+  LAsyncLoop: string;
+  LRunBody: string;
+  LStopBody: string;
+begin
+  LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
+  LRunBody := ExtractBetween(LAsyncLoop, 'procedure tasyncloop.run',
+    'procedure tasyncloop.runonce');
+  LStopBody := ExtractBetween(LAsyncLoop, 'procedure tasyncloop.stop',
+    'function tasyncloop.asyncsleep');
+
+  CheckContains(LRunBody, 'atomicstore32(frunning, 1, morelease);',
+    'async loop run must publish running state before entering the event loop');
+  CheckContains(LRunBody, 'drainwake;',
+    'async loop run must continue to drain the platform wake seam');
+  CheckContains(LRunBody, 'drainpending;',
+    'async loop run must continue to drain pending callbacks');
+  CheckContains(LRunBody, 'fpoller.flush;',
+    'async loop run must flush the poller before nonblocking completion polling');
+  CheckContains(LRunBody, 'lio := fpoller.poll;',
+    'async loop run must poll completion work through the poller facade');
+  CheckContains(LRunBody, 'waitforwake(ltimeoutms);',
+    'async loop run must block only through the platform wake seam');
+  CheckContains(LRunBody, 'finally',
+    'async loop run must clear running state when it returns');
+  CheckContains(LRunBody, 'atomicstore32(frunning, 0, morelease);',
+    'async loop run must leave running state cleared on every exit path');
+  CheckContains(LStopBody, 'atomicstore32(frunning, 0, morelease);',
+    'async loop stop must publish stopped state');
+end;
+
 procedure TestIocpSynchronousFailureOwnershipContract;
 var
   LIocp: string;
@@ -303,6 +335,8 @@ begin
   T.Run('IOCP lifecycle contract', @TestIocpLifecycleContract);
   T.Run('IOCP run/stop/flush lifecycle contract',
     @TestIocpRunStopFlushLifecycleContract);
+  T.Run('async loop run lifecycle contract',
+    @TestAsyncLoopRunLifecycleContract);
   T.Run('IOCP synchronous failure ownership contract',
     @TestIocpSynchronousFailureOwnershipContract);
   T.Run('IOCP unsupported async ownership contract',

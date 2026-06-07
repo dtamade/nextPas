@@ -325,37 +325,41 @@ var
   LTimeoutMs: Int32;
 begin
   AtomicStore32(FRunning, 1, moRelease);
-  while AtomicLoad32(FRunning, moAcquire) <> 0 do
-  begin
-    { Drain wake signal and process pending callbacks }
-    DrainWake;
-    DrainPending;
-    { Check if stopped from pending callback }
-    if AtomicLoad32(FRunning, moAcquire) = 0 then
-      Break;
-    { Fire expired timers }
-    LFired := FTimers.FireExpired;
-    { Check if stopped from callback }
-    if AtomicLoad32(FRunning, moAcquire) = 0 then
-      Break;
-    { Poll I/O non-blocking }
-    FPoller.Flush;
-    LIo := FPoller.Poll;
-    { If we did work, loop immediately }
-    if (LFired > 0) or (LIo > 0) then
-      Continue;
-    { Nothing happened: sleep on the platform wake seam until woken or next timer. }
-    LNext := FTimers.NextDeadline;
-    LRemaining := LNext.Remaining;
-    if LRemaining.AsNanoseconds <= 0 then
-      Continue;
-    { Cap sleep at 10ms to stay responsive }
-    LTimeoutMs := Int32(UInt64(LRemaining.AsNanoseconds) div 1000000);
-    if LTimeoutMs > 10 then
-      LTimeoutMs := 10;
-    if LTimeoutMs <= 0 then
-      LTimeoutMs := 1;
-    WaitForWake(LTimeoutMs);
+  try
+    while AtomicLoad32(FRunning, moAcquire) <> 0 do
+    begin
+      { Drain wake signal and process pending callbacks }
+      DrainWake;
+      DrainPending;
+      { Check if stopped from pending callback }
+      if AtomicLoad32(FRunning, moAcquire) = 0 then
+        Break;
+      { Fire expired timers }
+      LFired := FTimers.FireExpired;
+      { Check if stopped from callback }
+      if AtomicLoad32(FRunning, moAcquire) = 0 then
+        Break;
+      { Poll I/O non-blocking }
+      FPoller.Flush;
+      LIo := FPoller.Poll;
+      { If we did work, loop immediately }
+      if (LFired > 0) or (LIo > 0) then
+        Continue;
+      { Nothing happened: sleep on the platform wake seam until woken or next timer. }
+      LNext := FTimers.NextDeadline;
+      LRemaining := LNext.Remaining;
+      if LRemaining.AsNanoseconds <= 0 then
+        Continue;
+      { Cap sleep at 10ms to stay responsive }
+      LTimeoutMs := Int32(UInt64(LRemaining.AsNanoseconds) div 1000000);
+      if LTimeoutMs > 10 then
+        LTimeoutMs := 10;
+      if LTimeoutMs <= 0 then
+        LTimeoutMs := 1;
+      WaitForWake(LTimeoutMs);
+    end;
+  finally
+    AtomicStore32(FRunning, 0, moRelease);
   end;
 end;
 
