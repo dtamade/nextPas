@@ -53,6 +53,22 @@ begin
     LLegacyName, 'HTTP architecture');
 end;
 
+procedure TestHeadersPublicApiDoesNotExposeDel;
+begin
+  CheckSourceNotContains(LoadTextFile('../../../src/nextpas.core.http.intf.pas'),
+    'procedure Del(', 'IHttpHeaders public interface');
+  CheckSourceNotContains(LoadTextFile('../../../src/nextpas.core.http.headers.pas'),
+    'procedure Del(', 'THttpHeaders public API');
+  CheckSourceNotContains(LoadTextFile('../../../src/nextpas.core.http.impl.h1.fast.pas'),
+    'procedure Del(', 'TFastLazyHeaders public API');
+  CheckSourceNotContains(LoadTextFile('../../../docs/http/README.md'),
+    'Has/Del/', 'HTTP README headers API list');
+  CheckSourceNotContains(LoadTextFile('../../../docs/http/API_COVERAGE.md'),
+    'has/del/', 'HTTP API coverage headers API list');
+  CheckSourceNotContains(LoadTextFile('../../../docs/http/ARCHITECTURE.md'),
+    'procedure Del(', 'HTTP architecture headers API');
+end;
+
 procedure TestSetAndGetBasic;
 var
   LH: IHttpHeaders;
@@ -113,7 +129,7 @@ begin
   CheckEqual('new', LH.Get('X-Custom'), 'new value');
 end;
 
-procedure TestDelRemovesAllValues;
+procedure TestRemoveRemovesAllValues;
 var
   LH: IHttpHeaders;
 begin
@@ -121,9 +137,9 @@ begin
   LH.Add('X-A', 'v1');
   LH.Add('X-A', 'v2');
   LH.Add('X-B', 'v3');
-  CheckEqual(Int64(3), Int64(LH.Count), 'before del');
-  LH.Del('X-A');
-  CheckEqual(Int64(1), Int64(LH.Count), 'after del');
+  CheckEqual(Int64(3), Int64(LH.Count), 'before remove');
+  LH.Remove('X-A');
+  CheckEqual(Int64(1), Int64(LH.Count), 'after remove');
   Check(not LH.Has('X-A'), 'X-A removed');
   Check(LH.Has('X-B'), 'X-B remains');
 end;
@@ -164,7 +180,7 @@ begin
   CheckEqual('example.com', LClone.Get('Host'), 'clone has host');
   CheckEqual(Int64(2), Int64(LClone.Count), 'clone count');
   // Modify original, clone unaffected
-  LH.Del('Host');
+  LH.Remove('Host');
   CheckEqual('example.com', LClone.Get('Host'), 'clone independent');
   CheckEqual(Int64(2), Int64(LClone.Count), 'clone count unchanged');
 end;
@@ -187,14 +203,14 @@ begin
   CheckEqual(Int64(0), Int64(Length(LAll)), 'missing getall returns empty');
 end;
 
-procedure TestDelNonExistentIsNoOp;
+procedure TestRemoveNonExistentIsNoOp;
 var
   LH: IHttpHeaders;
 begin
   LH := NewHttpHeaders;
   LH.SetHeader('X-Keep', 'val');
-  LH.Del('X-Gone');
-  CheckEqual(Int64(1), Int64(LH.Count), 'del non-existent no-op');
+  LH.Remove('X-Gone');
+  CheckEqual(Int64(1), Int64(LH.Count), 'remove non-existent no-op');
   CheckEqual('val', LH.Get('X-Keep'), 'existing preserved');
 end;
 
@@ -210,11 +226,11 @@ begin
   LH.Add('X-A', 'a2');
   LH.Add('X-C', 'c1');
 
-  LH.Del('X-B');
+  LH.Remove('X-B');
   LH.SetHeader('X-A', 'a3');
   LH.Add('X-D', 'd1');
 
-  CheckEqual(Int64(3), Int64(LH.Count), 'count after del/set/add');
+  CheckEqual(Int64(3), Int64(LH.Count), 'count after remove/set/add');
   LAll := LH.GetAll('X-A');
   CheckEqual(Int64(1), Int64(Length(LAll)), 'x-a duplicates collapsed');
   CheckEqual('a3', LAll[0], 'x-a replacement value');
@@ -438,18 +454,20 @@ begin
   T := TTestRunner.Create('nextpas.core.http.headers');
   T.Run('Headers public API does not expose Set underscore',
     @TestHeadersPublicApiDoesNotExposeSetUnderscore);
+  T.Run('Headers public API does not expose Del',
+    @TestHeadersPublicApiDoesNotExposeDel);
   T.Run('Set and Get basic', @TestSetAndGetBasic);
   T.Run('Case-insensitive lookup', @TestCaseInsensitiveLookup);
   T.Run('Add multiple values', @TestAddMultipleValues);
   T.Run('GetAll returns all values', @TestGetAllReturnsAllValues);
   T.Run('Set replaces existing', @TestSetReplacesExisting);
-  T.Run('Del removes all values', @TestDelRemovesAllValues);
+  T.Run('Remove removes all values', @TestRemoveRemovesAllValues);
   T.Run('Has returns true/false', @TestHasReturnsTrueFalse);
   T.Run('Count reflects total entries', @TestCountReflectsTotalEntries);
   T.Run('Clone creates independent copy', @TestCloneCreatesIndependentCopy);
   T.Run('Get returns empty for missing', @TestGetReturnEmptyForMissing);
   T.Run('GetAll returns empty for missing', @TestGetAllReturnEmptyForMissing);
-  T.Run('Del non-existent is no-op', @TestDelNonExistentIsNoOp);
+  T.Run('Remove non-existent is no-op', @TestRemoveNonExistentIsNoOp);
   T.Run('Compaction preserves visible order', @TestCompactionPreservesVisibleOrder);
   T.Run('Clear resets and allows reuse', @TestClearResetsAndAllowsReuse);
   T.Run('Parsed add canonicalizes parser validated headers',

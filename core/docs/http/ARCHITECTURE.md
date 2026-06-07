@@ -207,7 +207,7 @@ type
     procedure SetHeader(const AName, AValue: string);
     function Get(const AName: string): string;
     function Has(const AName: string): Boolean;
-    procedure Del(const AName: string);
+    procedure Remove(const AName: string);
     function Count: Int32;
   end;
 

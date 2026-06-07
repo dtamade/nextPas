@@ -349,7 +349,7 @@ begin
     FSeenPath := AReq.Url.Path;
 end;
 
-{ Test 1: NewHeaders — Set/Get/Has/Del/Count/Clone }
+{ Test 1: NewHeaders — Set/Get/Has/Remove/Count/Clone }
 procedure TestNewHeaders;
 var
   LH, LClone: IHttpHeaders;
@@ -365,11 +365,11 @@ begin
   CheckEqual(Int64(2), Int64(LH.Count), 'Count = 2');
   LClone := LH.Clone;
   CheckEqual('bar', LClone.Get('x-foo'), 'Clone preserves values');
-  LH.Del('x-foo');
-  Check(not LH.Has('x-foo'), 'Del removes header');
-  CheckEqual(Int64(1), Int64(LH.Count), 'Count after Del');
+  LH.Remove('x-foo');
+  Check(not LH.Has('x-foo'), 'Remove removes header');
+  CheckEqual(Int64(1), Int64(LH.Count), 'Count after Remove');
   { Clone is independent }
-  CheckEqual('bar', LClone.Get('x-foo'), 'Clone independent after Del');
+  CheckEqual('bar', LClone.Get('x-foo'), 'Clone independent after Remove');
 end;
 
 procedure TestAuthHelpersAvailableThroughFacade;
@@ -1766,7 +1766,7 @@ end;
 
 begin
   T := TTestRunner.Create('nextpas.core.http.contract');
-  T.Run('NewHeaders: Set/Get/Has/Del/Count/Clone', @TestNewHeaders);
+  T.Run('NewHeaders: Set/Get/Has/Remove/Count/Clone', @TestNewHeaders);
   T.Run('Auth helpers are available through facade',
     @TestAuthHelpersAvailableThroughFacade);
   T.Run('NewRouter: Get route + FindRoute', @TestNewRouter);

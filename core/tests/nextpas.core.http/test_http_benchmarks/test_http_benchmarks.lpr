@@ -1379,7 +1379,7 @@ begin
     'TFastLazyHeaders.GetAll body');
   LHasBody := ExtractSourceBlock(LSource,
     'function TFastLazyHeaders.Has(const AName: string): Boolean;',
-    'procedure TFastLazyHeaders.Del',
+    'procedure TFastLazyHeaders.Remove',
     'TFastLazyHeaders.Has body');
   LCountBody := ExtractSourceBlock(LSource,
     'function TFastLazyHeaders.Count: Int32;',

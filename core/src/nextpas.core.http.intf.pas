@@ -29,7 +29,7 @@ type
     function Get(const AName: string): string;
     function GetAll(const AName: string): TStringArray;
     function Has(const AName: string): Boolean;
-    procedure Del(const AName: string);
+    procedure Remove(const AName: string);
     procedure Clear;
     function Count: Int32;
     procedure ForEach(const ACallback: THeaderIterator);

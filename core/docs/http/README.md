@@ -73,7 +73,7 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 ### Headers
 
 - `NewHeaders` — create IHttpHeaders (case-insensitive, multi-value)
-- `SetHeader/Add/Get/GetAll/Has/Del/Count/ForEach/Clone`
+- `SetHeader/Add/Get/GetAll/Has/Remove/Count/ForEach/Clone`
 - `SetBasicAuth(Headers, Username, Password)` / `SetBearerAuth(Headers, Token)`
   — set the `Authorization` header for common client request auth cases; nil
   headers raise `EArgumentError`, and existing authorization values are replaced.

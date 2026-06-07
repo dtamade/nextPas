@@ -293,19 +293,19 @@ begin
     Result := NewHttpHeaders;
 
   if not IsRedirectSameAuthority(AInitialUrl, ARedirectUrl) then
-    Result.Del('host');
+    Result.Remove('host');
   if not AIncludeBody then
   begin
-    Result.Del('content-length');
-    Result.Del('transfer-encoding');
+    Result.Remove('content-length');
+    Result.Remove('transfer-encoding');
   end;
 
   if not IsRedirectTrustedHost(AInitialUrl, ARedirectUrl) then
   begin
-    Result.Del('authorization');
-    Result.Del('www-authenticate');
-    Result.Del('cookie');
-    Result.Del('cookie2');
+    Result.Remove('authorization');
+    Result.Remove('www-authenticate');
+    Result.Remove('cookie');
+    Result.Remove('cookie2');
   end;
 end;
 
