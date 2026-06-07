@@ -287,6 +287,27 @@ begin
     'async write timeout must reclaim context only on rejected submission');
 end;
 
+procedure TestAsyncLoopCloseStopWakeOwnershipContract;
+var
+  LAsyncLoop: string;
+  LCloseBody: string;
+begin
+  LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
+  LCloseBody := ExtractBetween(LAsyncLoop, 'procedure tasyncloop.close',
+    'function tasyncloop.isvalid');
+
+  CheckContains(LCloseBody, 'stop;',
+    'async loop close must publish stopped state before releasing owner resources');
+  CheckContains(LCloseBody, 'wake;',
+    'async loop close must wake a blocked run loop before releasing wake resources');
+  CheckBefore(LCloseBody, 'stop;', 'wake;',
+    'async loop close must publish stop before waking waiters');
+  CheckBefore(LCloseBody, 'wake;', 'fpoller.close;',
+    'async loop close must wake waiters before closing completion resources');
+  CheckBefore(LCloseBody, 'wake;', 'platform_poller_close(fwakepoller);',
+    'async loop close must wake waiters before closing wake resources');
+end;
+
 procedure TestAsyncLoopTimeoutSingleFireCleanupContract;
 var
   LAsyncLoop: string;
@@ -681,6 +702,8 @@ begin
     @TestIocpCloseAbortOwnershipContract);
   T.Run('async loop timeout close lifecycle contract',
     @TestAsyncLoopTimeoutCloseLifecycleContract);
+  T.Run('async loop close stop/wake ownership contract',
+    @TestAsyncLoopCloseStopWakeOwnershipContract);
   T.Run('async loop timeout single-fire cleanup contract',
     @TestAsyncLoopTimeoutSingleFireCleanupContract);
   T.Run('IOCP synchronous failure ownership contract',

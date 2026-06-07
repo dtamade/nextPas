@@ -210,6 +210,8 @@ end;
 
 procedure TAsyncLoop.Close;
 begin
+  Stop;
+  Wake;
   FPoller.Close;
   FTimers.Clear;
   platform_mutex_destroy(FPendingLock);
