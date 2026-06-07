@@ -5422,3 +5422,25 @@
 - 这轮的价值仍是 benchmark truth：
   `direct_1k` 的 backend split 现在两侧都有 durable regression proof，更适合后续
   继续拆 runtime/socket overhead；但没有借机包装成 threaded-vs-epoll 排名。
+
+## 2026-06-07 snapshot include-hyper url_path focused smoke findings
+
+- 经过前两轮收口后，Hyper/Tokio 的 `url_path` 证据链已经有：
+  - direct comparator smoke；
+  - raw runner `--include-hyper + --workload url_path`；
+  - 但 durable snapshot artifact 还没有锁住同一个组合。
+- 这会留下一个很具体的 artifact gap：
+  saved Markdown 里虽然已有默认 `include-hyper` 和 `response_1k` 组合 proof，
+  但 request-target workload 的 Hyper row 仍只能从 raw runner 或 direct smoke
+  间接推断。
+- 本轮继续保持窄刀，没有扩 runner/schema，也没有碰 comparator 实现：
+  - 只把
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload url_path --include-hyper`
+    提升进 focused gate
+  - 锁住 `workload=url_path`
+  - 锁住命令块同时包含 `--workload url_path --include-hyper`
+  - 锁住 `cargo_version=`、`hyper_cargo_lock_sha256=`
+  - 锁住 `rust_hyper` row、`rust_profile=hyper_tokio`、`summary_impl=rust_hyper`
+- 这轮的价值仍是 benchmark truth：
+  Hyper/Tokio 的 `url_path` 现在在 direct comparator、raw runner 和 durable snapshot
+  三层都有回归证据，但没有借机扩到 `adapter_no_url` 或新的 API/runtime 改动。

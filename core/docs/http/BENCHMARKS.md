@@ -2560,6 +2560,10 @@ The raw comparison runner also locks `--include-hyper + --workload url_path`,
 so the saved text report now has a durable Hyper/Tokio row proof for the
 request-target workload instead of covering Hyper only on the default no-URL
 runner path.
+The snapshot helper now locks the same `--include-hyper + --workload url_path`
+combination too, so the durable Markdown artifact covers Hyper/Tokio on the
+request-target workload instead of only the default no-URL case or the
+body-bearing `response_1k` path.
 
 Fresh local `no_url` 50k/4 3-run summary:
 

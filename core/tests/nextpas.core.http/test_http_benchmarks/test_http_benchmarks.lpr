@@ -2766,6 +2766,48 @@ begin
     'snapshot include-hyper summary marker');
 end;
 
+procedure TestServerComparisonSnapshotIncludeHyperUrlPathSmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LSnapshotPath: string;
+  LSnapshot: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath),
+    'server comparison snapshot include-hyper url_path runner exists');
+  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_snapshot_include_hyper_url_path_smoke.md');
+  DeleteFile(LSnapshotPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--workload', 'url_path', '--include-hyper', '--output', LSnapshotPath],
+    LRootDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison snapshot include-hyper url_path exit code: ' + LOutput);
+
+  Check(FileExists(LSnapshotPath),
+    'server comparison snapshot include-hyper url_path exists');
+  LSnapshot := LoadTextFile(LSnapshotPath);
+  CheckContains(LSnapshot, 'workload=url_path',
+    'snapshot include-hyper url_path workload marker');
+  CheckContains(LSnapshot,
+    'run_server_comparison.sh --requests 8 --threads 1 --workload url_path --runs 1 --include-hyper',
+    'snapshot include-hyper url_path command marker');
+  CheckContains(LSnapshot, 'cargo_version=',
+    'snapshot include-hyper url_path cargo version marker');
+  CheckContains(LSnapshot, 'hyper_cargo_lock_sha256=',
+    'snapshot include-hyper url_path Cargo.lock marker');
+  CheckServerBenchmarkOutput(LSnapshot, 'rust_hyper', '8', '1', 'url_path');
+  CheckContains(LSnapshot, 'rust_profile=hyper_tokio',
+    'snapshot include-hyper url_path hyper profile marker');
+  CheckContains(LSnapshot, 'summary_impl=rust_hyper',
+    'snapshot include-hyper url_path summary marker');
+end;
+
 procedure TestServerComparisonSnapshotIncludeHyperResponse1KSmoke;
 var
   LRootDir: string;
@@ -3486,6 +3528,8 @@ begin
     @TestServerComparisonSnapshotPreservesRequestedThreads);
   T.Run('server comparison snapshot include hyper smoke',
     @TestServerComparisonSnapshotIncludeHyperSmoke);
+  T.Run('server comparison snapshot include hyper url_path smoke',
+    @TestServerComparisonSnapshotIncludeHyperUrlPathSmoke);
   T.Run('server comparison snapshot include hyper response_1k smoke',
     @TestServerComparisonSnapshotIncludeHyperResponse1KSmoke);
   T.Run('server comparison snapshot rejects invalid nextpas backend',

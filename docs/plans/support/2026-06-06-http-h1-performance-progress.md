@@ -12280,3 +12280,38 @@ Hello from nextPas!
     instead of relying only on the local doc row
   - this is coverage tightening only; it does not claim a backend ranking or a
     new runtime optimization
+
+## Session: 2026-06-07 snapshot include-hyper url_path focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the snapshot helper `--include-hyper + --workload url_path`
+    combination into the focused benchmark gate
+  - keep the slice limited to saved-artifact benchmark truth, not runner,
+    snapshot, or comparator implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch comparator source, runner behavior, snapshot helper
+    behavior, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `78 total, 78 passed, 0 failed`
+    - new focused row:
+      `server comparison snapshot include hyper url_path smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload url_path --include-hyper`
+  - the focused smoke locks:
+    - `workload=url_path`
+    - command block contains `--workload url_path --include-hyper`
+    - `cargo_version=`
+    - `hyper_cargo_lock_sha256=`
+    - `rust_hyper` row with `rust_profile=hyper_tokio`
+    - `summary_impl=rust_hyper`
+- Outcome:
+  - Hyper/Tokio now has a durable saved snapshot proof for the request-target
+    workload, closing the direct/runner/snapshot `url_path` chain
+  - this is coverage tightening only; it does not claim a new snapshot schema,
+    a new comparator behavior, or a new performance result
