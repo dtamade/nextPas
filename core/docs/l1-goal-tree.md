@@ -1,6 +1,6 @@
 # nextPas Core Framework — 目标树
 
-> 最后更新: 2026-06-07 | 本轮证据: atomic 26/26 + adjacent lockfree 30/30, heaptrc 0
+> 最后更新: 2026-06-07 | 本轮证据: atomic 27/27 + adjacent lockfree 30/30, heaptrc 0
 
 ## 定位
 
@@ -18,7 +18,7 @@ nextPas Core 是 FreePascal 领域最优秀的框架之一。分三层：
 | `errors` | 异常层级 (ENextPasError 体系) | ✅ 完成 |
 | `platform` | OS API 封装 (posix/linux/darwin/windows) | ✅ 完成 (Tier 1 全绿) |
 | `mem` | 内存管理 (IAllocator/Pool/Arena/StackPool) | ✅ 完成 |
-| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | ✅ 完成/强化中 (public contract hardening, typed-bool + 32-bit typed-record contract 26 tests) |
+| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | ✅ 完成/强化中 (public contract hardening, typed-bool + 32-bit/pointer-sized typed-record contract 27 tests) |
 | `math` | 数学函数 (Min/Max/Clamp/Abs/Pow/Trig) | ✅ 完成 |
 | `simd` | SIMD 抽象 (SSE2/AVX2/NEON, 统一宽度 API) | ✅ 完成 |
 

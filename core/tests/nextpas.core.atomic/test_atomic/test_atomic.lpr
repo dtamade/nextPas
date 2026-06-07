@@ -742,6 +742,9 @@ begin
     '`TAtomicInt32` and `TAtomicUInt32` follow `atomic_is_lock_free_32`; `Increment`/`Decrement` return the new value after adding or subtracting one, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
     'atomic README must document the 32-bit typed-record lock-free and convenience contract');
   CheckContains(LAtomicDocsReadme,
+    '`TAtomicISize` and `TAtomicUSize` follow `atomic_is_lock_free_ptr`; `Increment`/`Decrement` return the new value after adding or subtracting one, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
+    'atomic README must document the pointer-sized typed-record lock-free and convenience contract');
+  CheckContains(LAtomicDocsReadme,
     '`TAtomicBool` stores a normalized `0/1` Int32 payload, `Load`/`Store`/`Exchange` map that payload to Boolean, `FetchAnd/Or/Xor/Nand` return the previous Boolean value while keeping the stored domain within `False/True`, and `is_lock_free` follows `atomic_is_lock_free_32`.',
     'atomic README must document the TAtomicBool normalized bool-domain contract');
   CheckContains(LAtomicDocsReadme,
@@ -1541,6 +1544,61 @@ begin
     'TAtomicBool.FetchNand(False) should clamp the stored value back to True');
 end;
 
+procedure TestAtomicISizeUSizeContract;
+var
+  LAtomicISize: TAtomicISize;
+  LAtomicUSize: TAtomicUSize;
+  LExpectedISize: PtrInt;
+  LExpectedUSize: PtrUInt;
+  LMutISize: PPtrInt;
+  LMutUSize: PPtrUInt;
+begin
+  Check(TAtomicISize.is_lock_free = atomic_is_lock_free_ptr,
+    'TAtomicISize lock-free surface must match pointer-sized runtime truth');
+  Check(TAtomicUSize.is_lock_free = atomic_is_lock_free_ptr,
+    'TAtomicUSize lock-free surface must match pointer-sized runtime truth');
+
+  LAtomicISize := TAtomicISize.Create(-2);
+  CheckEqual(Int64(-2), Int64(LAtomicISize.Load(mo_relaxed)),
+    'TAtomicISize.Create should publish the initial value');
+  CheckEqual(Int64(-1), Int64(LAtomicISize.Increment(mo_acq_rel)),
+    'TAtomicISize.Increment should return the new value');
+  CheckEqual(Int64(-1), Int64(LAtomicISize.Load(mo_acquire)),
+    'TAtomicISize.Increment should publish the incremented value');
+  CheckEqual(Int64(-2), Int64(LAtomicISize.Decrement(mo_acq_rel)),
+    'TAtomicISize.Decrement should return the new value');
+
+  LExpectedISize := -2;
+  Check(LAtomicISize.CompareExchangeStrong(LExpectedISize, 4, mo_seq_cst),
+    'TAtomicISize strong CAS should update when expected matches');
+  CheckEqual(Int64(4), Int64(LAtomicISize.Load),
+    'TAtomicISize default Load should observe the CAS result');
+
+  LMutISize := LAtomicISize.GetMut;
+  LMutISize^ := 9;
+  CheckEqual(Int64(9), Int64(LAtomicISize.IntoInner),
+    'TAtomicISize.GetMut/IntoInner should expose the exclusive-access value');
+
+  LAtomicUSize := TAtomicUSize.Create(3);
+  CheckEqual(Int64(3), Int64(LAtomicUSize.IntoInner),
+    'TAtomicUSize.IntoInner should expose the initial value');
+  CheckEqual(Int64(4), Int64(LAtomicUSize.Increment(mo_acq_rel)),
+    'TAtomicUSize.Increment should return the new value');
+  CheckEqual(Int64(3), Int64(LAtomicUSize.Decrement(mo_acq_rel)),
+    'TAtomicUSize.Decrement should return the new value');
+
+  LExpectedUSize := 3;
+  Check(LAtomicUSize.CompareExchangeWeak(LExpectedUSize, 7, mo_acq_rel),
+    'TAtomicUSize weak CAS should update when expected matches');
+  CheckEqual(Int64(7), Int64(LAtomicUSize.Load(mo_acquire)),
+    'TAtomicUSize weak CAS should publish the replacement value');
+
+  LMutUSize := LAtomicUSize.GetMut;
+  LMutUSize^ := 11;
+  CheckEqual(Int64(11), Int64(LAtomicUSize.Load(mo_relaxed)),
+    'TAtomicUSize.GetMut should expose the exclusive-access storage');
+end;
+
 procedure TestAtomicFlagApi;
 var
   LFlag: atomic_flag_t;
@@ -2181,6 +2239,7 @@ begin
   T.Run('typed atomic record API', @TestAtomicRecordTypes);
   T.Run('typed atomic int32/uint32 contract', @TestAtomicInt32UInt32Contract);
   T.Run('typed atomic bool contract', @TestAtomicBoolContract);
+  T.Run('typed atomic isize/usize contract', @TestAtomicISizeUSizeContract);
   T.Run('atomic flag API', @TestAtomicFlagApi);
   T.Run('fetch max/min/nand contract', @TestAtomicFetchMaxMinNandContract);
   T.Run('pointer offset fetch contract', @TestAtomicPointerOffsetFetchContract);
