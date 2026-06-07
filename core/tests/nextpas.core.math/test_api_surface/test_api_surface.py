@@ -133,6 +133,22 @@ REQUIRED_TRANSFORM_DOC_TRUTH = (
 REQUIRED_QUAT_DOC_TRUTH = (
     (
         "docs/math/README.md",
+        "`ToAxisAngle` normalizes first and returns a canonical shortest-angle axis-angle pair: zero rotation uses axis `+Z`, and exact half-turns, including `FromAxisAngle(..., PI)` paths, use a stable axis hemisphere so opposite-sign equivalent quaternions still map to the same output.",
+    ),
+    (
+        "docs/math/API.md",
+        "`ToAxisAngle` normalizes its quaternion first and returns a canonical shortest-angle axis-angle pair. Opposite-sign equivalent quaternions map to the same output; zero rotation returns axis `+Z` with angle `0`, and exact half-turn outputs, including `FromAxisAngle(..., PI)` paths, use a stable axis hemisphere so `angle = PI` remains canonical too.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`ToAxisAngle` canonical shortest-angle output including zero-rotation `+Z` fallback, direct `±3π/2` multi-turn canonicalization, exact half-turn stable-axis canonicalization across `x/y/z` axes plus mixed-axis `+X/+Y` hemisphere precedence and `FromAxisAngle(..., PI)` half-turn paths",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`ToAxisAngle` normalizes its quaternion first and returns a canonical shortest-angle axis-angle pair: zero rotation uses `+Z` as the fallback axis, and exact half-turns, including `FromAxisAngle(..., PI)` paths, use a stable axis hemisphere so opposite-sign equivalent quaternions map to the same output.",
+    ),
+    (
+        "docs/math/README.md",
         "`Slerp` and `Nlerp` stay stable for near-identical finite endpoints: they preserve the shared axis and interpolate the small remaining angle instead of collapsing or taking a long arc.",
     ),
     (
