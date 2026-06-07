@@ -43,7 +43,15 @@ landing-check: hygiene
 	@test -n "$(ALLOW_PATHS)" || { echo "ALLOW_PATHS is required, e.g. make landing-check ALLOW_PATHS='scripts tests/tooling docs/worktrees.md'" >&2; exit 1; }
 	./scripts/landing-candidate-check.sh --base "$(BASE_REF)" $(foreach path,$(ALLOW_PATHS),--allow-path "$(path)")
 	git diff --check "$(BASE_REF)...HEAD"
-	@if [ -n "$(FOCUS)" ]; then $(MAKE) focused FOCUS="$(FOCUS)"; fi
+	@if [ -n "$(FOCUS)" ]; then \
+		$(MAKE) focused FOCUS="$(FOCUS)"; \
+	elif [ -n "$(LANE)" ]; then \
+		lane_output=$$(./scripts/lane-focused.sh --lane "$(LANE)" --print-command); \
+		printf '%s\n' "$$lane_output"; \
+		lane_focus=$$(printf '%s\n' "$$lane_output" | awk -F= '$$1 == "focus" { print $$2; exit }'); \
+		test -n "$$lane_focus" || { echo "lane-focused did not report a focus path for LANE=$(LANE)" >&2; exit 1; }; \
+		$(MAKE) focused FOCUS="$$lane_focus"; \
+	fi
 	$(MAKE) hygiene
 
 self-compile-module: rebuild-compiler

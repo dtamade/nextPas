@@ -24,5 +24,10 @@ require_doc_pattern() {
 require_doc_pattern 'make test-tooling' 'tooling replacement gate'
 require_doc_pattern '(\.github|CI).*make test-tooling|make test-tooling.*(\.github|CI)' 'CI changes use tooling gate'
 require_doc_pattern '(scripts|tests/tooling|docs/worktrees[.]md).*make test-tooling|make test-tooling.*(scripts|tests/tooling|docs/worktrees[.]md)' 'tooling/docs changes use tooling gate'
+require_doc_pattern 'make landing-check' 'landing check command'
+require_doc_pattern 'LANE=system' 'landing check lane example'
+require_doc_pattern 'FOCUS.*优先|优先.*FOCUS' 'explicit focus wins over lane'
+require_doc_pattern 'LANE.*local/reporting helper|local/reporting helper.*LANE' 'landing check lane helper boundary'
+require_doc_pattern 'CI matrix' 'lane helper is not CI matrix'
 
 printf 'worktrees-doc-contract=pass\n'

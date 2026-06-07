@@ -243,6 +243,19 @@ make landing-check \
   FOCUS=core/tests/<module>/<gate>
 ```
 
+也可以用 `LANE` 从 focused gate matrix 推导 `FOCUS`：
+
+```bash
+make landing-check \
+  BASE_REF=main \
+  ALLOW_PATHS="docs/worktrees.md tests/tooling" \
+  LANE=system
+```
+
+如果同时设置 `FOCUS` 和 `LANE`，`FOCUS` 优先。`LANE` 只是 local/reporting helper，
+用于减少常见模块 lane 的 evidence 命令分叉；它不改变 `ALLOW_PATHS`、不批准 landing、
+不替代 diff review，也不会变成 CI matrix。
+
 `ALLOW_PATHS` 是允许带入候选分支的路径前缀清单；多个前缀用空格分隔。
 如果当前 slice 没有对应的 core focused gate，可以省略 `FOCUS`，但 `Ready` 或
 landing 报告必须说明用了哪些替代 verification。
@@ -254,7 +267,8 @@ landing 报告必须说明用了哪些替代 verification。
 1. `make hygiene`。
 2. `scripts/landing-candidate-check.sh --base <BASE_REF> --allow-path <prefix>...`。
 3. `git diff --check <BASE_REF>...HEAD`。
-4. 如果设置了 `FOCUS`，再运行根目录 `make focused FOCUS=<gate>`。
+4. 如果设置了 `FOCUS`，再运行根目录 `make focused FOCUS=<gate>`；如果没有 `FOCUS`
+   但设置了 `LANE`，先解析 lane matrix，再运行解析出的 focused gate。
 5. 最后再运行一次 `make hygiene`。
 
 `scripts/landing-candidate-check.sh` 只读取当前 worktree 状态并打印证据：branch、

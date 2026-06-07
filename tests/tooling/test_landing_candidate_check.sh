@@ -35,8 +35,9 @@ create_repo() {
   mkdir -p "$repo_path/scripts" "$repo_path/docs" "$repo_path/compiler"
   cp "$REPO_ROOT/Makefile" "$repo_path/Makefile"
   cp "$REPO_ROOT/scripts/build-hygiene-check.sh" "$repo_path/scripts/build-hygiene-check.sh"
+  cp "$REPO_ROOT/scripts/lane-focused.sh" "$repo_path/scripts/lane-focused.sh"
   cp "$SCRIPT_UNDER_TEST" "$repo_path/scripts/landing-candidate-check.sh"
-  chmod +x "$repo_path/scripts/build-hygiene-check.sh" "$repo_path/scripts/landing-candidate-check.sh"
+  chmod +x "$repo_path/scripts/build-hygiene-check.sh" "$repo_path/scripts/lane-focused.sh" "$repo_path/scripts/landing-candidate-check.sh"
   git -C "$repo_path" init -b main >/dev/null
   git -C "$repo_path" config user.email "tooling@example.invalid"
   git -C "$repo_path" config user.name "tooling test"
@@ -82,6 +83,102 @@ printf '%s\n' "$PASS_OUTPUT" | grep -q '^behind=0$'
 printf '%s\n' "$PASS_OUTPUT" | grep -q '^scripts/helper\.sh$'
 
 make -C "$PASS_REPO/.worktrees/landing" landing-check ALLOW_PATHS=scripts >/dev/null
+
+LANE_REPO="$TMP_ROOT/lane"
+create_repo "$LANE_REPO"
+mkdir -p "$LANE_REPO/core/tests/nextpas.core.system/test_system_source_contracts"
+cat >"$LANE_REPO/core/tests/nextpas.core.system/test_system_source_contracts/Makefile" <<'EOF'
+.PHONY: clean test
+
+clean:
+	printf 'clean\n' >> focused.log
+
+test:
+	printf 'test\n' >> focused.log
+EOF
+git -C "$LANE_REPO" add core/tests
+git -C "$LANE_REPO" commit -m "system focused fixture" >/dev/null
+create_landing_worktree "$LANE_REPO" landing
+mkdir -p "$LANE_REPO/.worktrees/landing/docs"
+printf 'docs\n' >"$LANE_REPO/.worktrees/landing/docs/worktrees.md"
+git -C "$LANE_REPO/.worktrees/landing" add docs/worktrees.md
+git -C "$LANE_REPO/.worktrees/landing" commit -m "docs change" >/dev/null
+LANE_OUTPUT=$(make -C "$LANE_REPO/.worktrees/landing" landing-check ALLOW_PATHS=docs/worktrees.md LANE=system)
+printf '%s\n' "$LANE_OUTPUT" | grep -q 'lane=system'
+printf '%s\n' "$LANE_OUTPUT" | grep -q 'truth=source-contract'
+if ! cmp -s "$LANE_REPO/.worktrees/landing/core/tests/nextpas.core.system/test_system_source_contracts/focused.log" - <<'EOF'
+clean
+test
+EOF
+then
+  printf 'landing-check LANE=system did not run resolved focused gate\n' >&2
+  cat "$LANE_REPO/.worktrees/landing/core/tests/nextpas.core.system/test_system_source_contracts/focused.log" >&2
+  exit 1
+fi
+
+OVERRIDE_REPO="$TMP_ROOT/lane-focus-override"
+create_repo "$OVERRIDE_REPO"
+mkdir -p "$OVERRIDE_REPO/core/tests/nextpas.core.system/test_system_source_contracts" "$OVERRIDE_REPO/core/tests/nextpas.core.config/test_config"
+cat >"$OVERRIDE_REPO/core/tests/nextpas.core.system/test_system_source_contracts/Makefile" <<'EOF'
+.PHONY: clean test
+
+clean:
+	printf 'system-clean\n' >> focused.log
+
+test:
+	printf 'system-test\n' >> focused.log
+EOF
+cat >"$OVERRIDE_REPO/core/tests/nextpas.core.config/test_config/Makefile" <<'EOF'
+.PHONY: clean test
+
+clean:
+	printf 'config-clean\n' >> focused.log
+
+test:
+	printf 'config-test\n' >> focused.log
+EOF
+git -C "$OVERRIDE_REPO" add core/tests
+git -C "$OVERRIDE_REPO" commit -m "focused fixtures" >/dev/null
+create_landing_worktree "$OVERRIDE_REPO" landing
+mkdir -p "$OVERRIDE_REPO/.worktrees/landing/docs"
+printf 'docs\n' >"$OVERRIDE_REPO/.worktrees/landing/docs/worktrees.md"
+git -C "$OVERRIDE_REPO/.worktrees/landing" add docs/worktrees.md
+git -C "$OVERRIDE_REPO/.worktrees/landing" commit -m "docs change" >/dev/null
+make -C "$OVERRIDE_REPO/.worktrees/landing" landing-check ALLOW_PATHS=docs/worktrees.md LANE=system FOCUS=core/tests/nextpas.core.config/test_config >/dev/null
+if [ -e "$OVERRIDE_REPO/.worktrees/landing/core/tests/nextpas.core.system/test_system_source_contracts/focused.log" ]; then
+  printf 'landing-check should prefer explicit FOCUS over LANE-derived focus\n' >&2
+  cat "$OVERRIDE_REPO/.worktrees/landing/core/tests/nextpas.core.system/test_system_source_contracts/focused.log" >&2
+  exit 1
+fi
+if ! cmp -s "$OVERRIDE_REPO/.worktrees/landing/core/tests/nextpas.core.config/test_config/focused.log" - <<'EOF'
+config-clean
+config-test
+EOF
+then
+  printf 'landing-check explicit FOCUS did not run expected focused gate\n' >&2
+  cat "$OVERRIDE_REPO/.worktrees/landing/core/tests/nextpas.core.config/test_config/focused.log" >&2
+  exit 1
+fi
+
+COMPILER_LANE_REPO="$TMP_ROOT/compiler-lane"
+create_repo "$COMPILER_LANE_REPO"
+create_landing_worktree "$COMPILER_LANE_REPO" landing
+mkdir -p "$COMPILER_LANE_REPO/.worktrees/landing/docs"
+printf 'docs\n' >"$COMPILER_LANE_REPO/.worktrees/landing/docs/worktrees.md"
+git -C "$COMPILER_LANE_REPO/.worktrees/landing" add docs/worktrees.md
+git -C "$COMPILER_LANE_REPO/.worktrees/landing" commit -m "docs change" >/dev/null
+expect_failure "compiler lane has no default focused gate" make -C "$COMPILER_LANE_REPO/.worktrees/landing" landing-check ALLOW_PATHS=docs/worktrees.md LANE=compiler
+grep -q 'compiler has no default lane-focused gate' "$TMP_ROOT/failure.err"
+
+UNKNOWN_LANE_REPO="$TMP_ROOT/unknown-lane"
+create_repo "$UNKNOWN_LANE_REPO"
+create_landing_worktree "$UNKNOWN_LANE_REPO" landing
+mkdir -p "$UNKNOWN_LANE_REPO/.worktrees/landing/docs"
+printf 'docs\n' >"$UNKNOWN_LANE_REPO/.worktrees/landing/docs/worktrees.md"
+git -C "$UNKNOWN_LANE_REPO/.worktrees/landing" add docs/worktrees.md
+git -C "$UNKNOWN_LANE_REPO/.worktrees/landing" commit -m "docs change" >/dev/null
+expect_failure "unknown lane" make -C "$UNKNOWN_LANE_REPO/.worktrees/landing" landing-check ALLOW_PATHS=docs/worktrees.md LANE=unknown
+grep -q 'unknown lane: unknown' "$TMP_ROOT/failure.err"
 
 WHITESPACE_REPO="$TMP_ROOT/whitespace"
 create_repo "$WHITESPACE_REPO"
