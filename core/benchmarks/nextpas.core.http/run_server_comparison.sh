@@ -10,13 +10,15 @@ WORKLOAD="no_url"
 OUTPUT_PATH=""
 RUNS=1
 INCLUDE_HYPER=0
+NEXTPAS_BACKEND="threaded"
 
 usage() {
   cat <<'EOF'
-usage: run_server_comparison.sh [--requests N] [--threads N] [--workload no_url|url_path|adapter_no_url|response_1k] [--runs N] [--include-hyper] [--output PATH]
+usage: run_server_comparison.sh [--requests N] [--threads N] [--workload no_url|url_path|adapter_no_url|response_1k] [--runs N] [--include-hyper] [--nextpas-backend threaded|epoll] [--output PATH]
 
 Build and run nextPas, Go, and Rust std-only HTTP/1.1 keep-alive server benchmarks.
 Pass --include-hyper to also build and run the Cargo-based Hyper/Tokio comparator.
+Pass --nextpas-backend to select the nextPas-only server backend for the nextPas row.
 EOF
 }
 
@@ -41,6 +43,10 @@ while [[ $# -gt 0 ]]; do
     --include-hyper)
       INCLUDE_HYPER=1
       shift
+      ;;
+    --nextpas-backend)
+      NEXTPAS_BACKEND="${2:?missing value for --nextpas-backend}"
+      shift 2
       ;;
     --output)
       OUTPUT_PATH="${2:?missing value for --output}"
@@ -93,6 +99,15 @@ case "${WORKLOAD}" in
     ;;
   *)
     echo "--workload must be no_url, url_path, adapter_no_url, or response_1k" >&2
+    exit 2
+    ;;
+esac
+
+case "${NEXTPAS_BACKEND}" in
+  threaded|epoll)
+    ;;
+  *)
+    echo "invalid --nextpas-backend: ${NEXTPAS_BACKEND} (expected threaded or epoll)" >&2
     exit 2
     ;;
 esac
@@ -230,6 +245,7 @@ run_comparison() {
   echo "workload=${WORKLOAD}"
   echo "runs=${RUNS}"
   echo "include_hyper=${INCLUDE_HYPER}"
+  echo "nextpas_backend=${NEXTPAS_BACKEND}"
   echo
 
   for run_index in $(seq 1 "${RUNS}"); do
@@ -238,7 +254,8 @@ run_comparison() {
     echo "section=nextpas"
     run_one_impl "${run_index}" "nextpas" \
       "${CORE_ROOT}/build/projects/nextpas.core.http/bench_server/bench_http_server" \
-      --requests "${REQUESTS}" --threads "${THREADS}" --workload "${WORKLOAD}"
+      --requests "${REQUESTS}" --threads "${THREADS}" --workload "${WORKLOAD}" \
+      --backend "${NEXTPAS_BACKEND}"
 
     echo "section=go"
     run_one_impl "${run_index}" "go" \

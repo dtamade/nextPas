@@ -11660,3 +11660,68 @@ Hello from nextPas!
   - nextPas-only full-chain rows now make backend selection explicit
   - the harness can now characterize single-connection direct-handler runtime
     behavior on threaded vs epoll without changing the cross-language runner
+
+## Session: 2026-06-07 server comparison nextPas backend truth slice
+
+- **Status:** completed.
+- Objective:
+  - preserve nextPas backend selection explicitly in saved comparison reports
+    and Markdown snapshots
+  - keep the cross-language runner default shape unchanged unless the caller
+    explicitly requests a nextPas-only backend characterization run
+  - reject invalid `--nextpas-backend` input before any fake benchmark header
+    or snapshot artifact is emitted
+- Scope and safety:
+  - touched only the comparison runner, snapshot helper, benchmark focused
+    test, HTTP benchmark docs, and this support evidence
+  - did not touch public HTTP API, H1 runtime behavior, lower-layer modules,
+    Go/Rust comparator implementations, benchmark workload math, or generated
+    artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `66 total, 60 passed, 6 failed`
+    - representative failures:
+      - `server comparison runner small smoke` missing
+        `nextpas_backend=threaded`
+      - `server comparison runner rejects invalid nextpas backend` still
+        reported `unknown argument: --nextpas-backend`
+      - `server comparison snapshot small smoke` missing
+        `nextpas_backend=threaded`
+      - Linux epoll runner/snapshot smokes could not pass
+        `--nextpas-backend epoll`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `run_server_comparison.sh` now accepts
+    `--nextpas-backend threaded|epoll`
+  - runner raw header now prints `nextpas_backend=<...>`
+  - the backend selector is forwarded only to the nextPas `bench_server` row
+  - `capture_server_comparison_snapshot.sh` accepts the same flag
+  - snapshot environment block now records `nextpas_backend=<...>`
+  - snapshot command rendering keeps the old default-threaded shape and only
+    prints `--nextpas-backend ...` when the caller explicitly selects a
+    non-default backend
+  - `test_http_benchmarks` now locks:
+    - default runner/report/snapshot truth as `nextpas_backend=threaded`
+    - invalid `--nextpas-backend` fail-fast diagnostics
+    - Linux epoll runner/report/snapshot truth as `nextpas_backend=epoll`
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `66 total, 66 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `core/benchmarks/nextpas.core.http/run_server_comparison.sh --requests 8 --threads 1 --nextpas-backend epoll`
+    - header: `nextpas_backend=epoll`
+    - nextPas row: `backend=epoll`
+    - nextPas row: `completed=8`
+    - nextPas row: `ns/op=275431`
+    - nextPas row: `req/s=3630`
+  - `core/benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh --requests 8 --threads 1 --nextpas-backend epoll --output /tmp/core-http-server-comparison-epoll-snapshot.md`
+    - environment block: `nextpas_backend=epoll`
+    - command block:
+      `run_server_comparison.sh --requests 8 --threads 1 --runs 1 --nextpas-backend epoll`
+    - raw nextPas row: `backend=epoll`
+- Outcome:
+  - saved comparison artifacts now preserve nextPas backend truth at the same
+    level as other runner metadata
+  - callers can request a nextPas-only epoll characterization run without
+    patching the harness or losing artifact provenance

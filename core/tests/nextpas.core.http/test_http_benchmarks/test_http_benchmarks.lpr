@@ -457,6 +457,12 @@ begin
     ALabel + ' effective threads marker');
 end;
 
+procedure CheckNextpasBackendHeader(const AOutput, ABackend, ALabel: string);
+begin
+  CheckLineContains(AOutput, 'nextpas_backend=' + ABackend,
+    ALabel + ' nextpas backend header marker');
+end;
+
 function ExpectedClientReadMode(const AImplementation: string): string;
 begin
   if AImplementation = 'go' then
@@ -1918,6 +1924,7 @@ begin
     'server comparison runner exit code: ' + LOutput);
   CheckContains(LOutput, 'comparison=http.server.keepalive',
     'comparison marker');
+  CheckNextpasBackendHeader(LOutput, 'threaded', 'comparison');
   CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1');
   CheckServerBenchmarkOutput(LOutput, 'go', '8', '1');
   CheckServerBenchmarkOutput(LOutput, 'rust_std', '8', '1');
@@ -1926,6 +1933,7 @@ begin
   LReport := LoadTextFile(LReportPath);
   CheckContains(LReport, 'comparison=http.server.keepalive',
     'report comparison marker');
+  CheckNextpasBackendHeader(LReport, 'threaded', 'report');
   CheckServerBenchmarkOutput(LReport, 'nextpas', '8', '1');
   CheckServerBenchmarkOutput(LReport, 'go', '8', '1');
   CheckServerBenchmarkOutput(LReport, 'rust_std', '8', '1');
@@ -2157,6 +2165,65 @@ begin
     'include-hyper report rust_hyper summary marker');
 end;
 
+procedure TestServerComparisonRunnerRejectsInvalidNextpasBackend;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath),
+    'server comparison invalid nextpas backend runner exists');
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--nextpas-backend', 'reactor'], LRootDir, LExitCode, LOutput);
+  Check(LExitCode <> 0,
+    'server comparison runner should reject invalid nextpas backend: ' +
+    LOutput);
+  CheckContains(LOutput, 'invalid --nextpas-backend',
+    'server comparison invalid nextpas backend diagnostic');
+  CheckNotContains(LOutput, 'comparison=http.server.keepalive',
+    'server comparison invalid nextpas backend should not emit header');
+end;
+
+procedure TestServerComparisonRunnerEpollSmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LReportPath: string;
+  LReport: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  {$IFNDEF LINUX}
+  Exit;
+  {$ENDIF}
+
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath), 'server comparison epoll runner exists');
+  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_epoll_smoke.txt');
+  DeleteFile(LReportPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--nextpas-backend', 'epoll', '--output', LReportPath], LRootDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison epoll runner exit code: ' + LOutput);
+  CheckNextpasBackendHeader(LOutput, 'epoll', 'comparison epoll');
+  CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1', 'no_url', 'epoll');
+  CheckServerBenchmarkOutput(LOutput, 'go', '8', '1');
+  CheckServerBenchmarkOutput(LOutput, 'rust_std', '8', '1');
+
+  Check(FileExists(LReportPath), 'server comparison epoll report exists');
+  LReport := LoadTextFile(LReportPath);
+  CheckNextpasBackendHeader(LReport, 'epoll', 'report epoll');
+  CheckServerBenchmarkOutput(LReport, 'nextpas', '8', '1', 'no_url', 'epoll');
+end;
+
 procedure TestServerComparisonSnapshotSmallSmoke;
 var
   LRootDir: string;
@@ -2196,6 +2263,8 @@ begin
     'raw comparison heading');
   CheckContains(LSnapshot, 'comparison=http.server.keepalive',
     'snapshot comparison marker');
+  CheckContains(LSnapshot, 'nextpas_backend=threaded',
+    'snapshot nextpas backend marker');
   CheckNotContains(LSnapshot, ' Warning:', 'snapshot compiler warning');
   CheckNotContains(LSnapshot, ' Note:', 'snapshot compiler note');
   CheckServerBenchmarkOutput(LSnapshot, 'nextpas', '8', '1');
@@ -2351,6 +2420,65 @@ begin
   CheckServerBenchmarkOutput(LSnapshot, 'rust_hyper', '8', '1');
   CheckContains(LSnapshot, 'summary_impl=rust_hyper',
     'snapshot include-hyper summary marker');
+end;
+
+procedure TestServerComparisonSnapshotRejectsInvalidNextpasBackend;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath),
+    'server comparison snapshot invalid nextpas backend runner exists');
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--nextpas-backend', 'reactor'], LRootDir, LExitCode, LOutput);
+  Check(LExitCode <> 0,
+    'server comparison snapshot should reject invalid nextpas backend: ' +
+    LOutput);
+  CheckContains(LOutput, 'invalid --nextpas-backend',
+    'server comparison snapshot invalid nextpas backend diagnostic');
+end;
+
+procedure TestServerComparisonSnapshotEpollSmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LSnapshotPath: string;
+  LSnapshot: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  {$IFNDEF LINUX}
+  Exit;
+  {$ENDIF}
+
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath),
+    'server comparison snapshot epoll runner exists');
+  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_snapshot_epoll_smoke.md');
+  DeleteFile(LSnapshotPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--nextpas-backend', 'epoll', '--output', LSnapshotPath], LRootDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison snapshot epoll exit code: ' + LOutput);
+
+  Check(FileExists(LSnapshotPath), 'server comparison snapshot epoll exists');
+  LSnapshot := LoadTextFile(LSnapshotPath);
+  CheckContains(LSnapshot, 'nextpas_backend=epoll',
+    'snapshot epoll backend marker');
+  CheckContains(LSnapshot,
+    'run_server_comparison.sh --requests 8 --threads 1 --runs 1 --nextpas-backend epoll',
+    'snapshot epoll command marker');
+  CheckServerBenchmarkOutput(LSnapshot, 'nextpas', '8', '1', 'no_url',
+    'epoll');
 end;
 
 procedure TestCllhttpComparatorRequiresRoot;
@@ -2936,6 +3064,10 @@ begin
     @TestServerComparisonRunnerRunsSummarySmoke);
   T.Run('server comparison runner include hyper smoke',
     @TestServerComparisonRunnerIncludeHyperSmoke);
+  T.Run('server comparison runner rejects invalid nextpas backend',
+    @TestServerComparisonRunnerRejectsInvalidNextpasBackend);
+  T.Run('server comparison runner epoll smoke',
+    @TestServerComparisonRunnerEpollSmoke);
   T.Run('server comparison snapshot small smoke',
     @TestServerComparisonSnapshotSmallSmoke);
   T.Run('server comparison snapshot url_path smoke',
@@ -2946,6 +3078,10 @@ begin
     @TestServerComparisonSnapshotPreservesRequestedThreads);
   T.Run('server comparison snapshot include hyper smoke',
     @TestServerComparisonSnapshotIncludeHyperSmoke);
+  T.Run('server comparison snapshot rejects invalid nextpas backend',
+    @TestServerComparisonSnapshotRejectsInvalidNextpasBackend);
+  T.Run('server comparison snapshot epoll smoke',
+    @TestServerComparisonSnapshotEpollSmoke);
   T.Run('C llhttp comparator requires LLHTTP_ROOT',
     @TestCllhttpComparatorRequiresRoot);
   T.Run('H1 parser benchmark max iterations env',

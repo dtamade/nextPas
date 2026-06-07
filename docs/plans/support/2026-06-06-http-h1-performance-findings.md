@@ -5124,3 +5124,35 @@
   runtime characterization 从“默认 threaded 的隐含状态”推进到了“backend truth
   明示且可切换”的状态。下一轮如果继续追 runtime/socket overhead，就可以把
   `bench_server` 与 `bench_fullchain direct_root` 两条 backend-aware row 结合起来看。
+
+## 2026-06-07 server comparison nextPas backend truth findings
+
+- 只给 `bench_server` / `bench_fullchain` 增 `backend=` 还不够：
+  人真正保存和转发的常常是 comparison runner report 或 snapshot，而不是单体 row。
+  如果 report/snapshot 自己不写明 nextPas backend，那么 `backend=epoll` 只会埋在
+  nextPas section 里，调用方很容易把整份 artifact 误读成默认 threaded。
+- 这轮选择的是最小 truth 收口，而不是把 cross-language runner 扩成“所有实现都能切 backend”：
+  - runner 增 `--nextpas-backend threaded|epoll`
+  - raw comparison header 直接写 `nextpas_backend=<...>`
+  - snapshot environment block 与 embedded command 同步保留这条 truth
+  - 只有 nextPas row 吃这个参数，Go / Rust comparator row 完全不变
+- 默认值仍保持 `threaded`，这点很关键：
+  - 旧的 cross-language smoke / saved command 形状仍然成立
+  - 调用方只有在明确做 nextPas-only runtime characterization 时，才需要显式传
+    `--nextpas-backend epoll`
+  - 这样不会把“nextPas epoll vs Go/Rust default implementation”伪装成新的
+    apples-to-apples 公平比较
+- focused gate 现在锁住：
+  - runner 默认 header 带 `nextpas_backend=threaded`
+  - invalid `--nextpas-backend` fail-fast，不会再打印伪 benchmark header
+  - Linux `epoll` runner/snapshot smoke 都能把 `nextpas_backend=epoll` 透传到
+    raw report / Markdown snapshot
+- 本地手工 smoke 也确认 artifact truth 已贯通：
+  - `run_server_comparison.sh --requests 8 --threads 1 --nextpas-backend epoll`
+    输出 `nextpas_backend=epoll`，且 nextPas row 带 `backend=epoll`
+  - `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --nextpas-backend epoll`
+    snapshot environment block 带 `nextpas_backend=epoll`，command block 保留
+    `--nextpas-backend epoll`
+- 一个额外观察是：runner 和 snapshot 共用同一 build output root，若并行触发可能在
+  Rust comparator build 阶段互相踩到目标文件。这是 benchmark harness 并发安全问题，
+  不属于本轮 contract 最小收口，但值得作为下一轮 benchmark-truth 候选切片。

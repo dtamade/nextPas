@@ -11,14 +11,16 @@ WORKLOAD="no_url"
 WORKLOAD_EXPLICIT=0
 RUNS=1
 INCLUDE_HYPER=0
+NEXTPAS_BACKEND="threaded"
 OUTPUT_PATH="${CORE_ROOT}/build/projects/nextpas.core.http/server_comparison/snapshot.md"
 
 usage() {
   cat <<'EOF'
-usage: capture_server_comparison_snapshot.sh [--requests N] [--threads N] [--workload no_url|url_path|adapter_no_url|response_1k] [--runs N] [--include-hyper] [--output PATH]
+usage: capture_server_comparison_snapshot.sh [--requests N] [--threads N] [--workload no_url|url_path|adapter_no_url|response_1k] [--runs N] [--include-hyper] [--nextpas-backend threaded|epoll] [--output PATH]
 
 Capture a Markdown snapshot for the nextPas/Go/Rust std-only HTTP server comparison.
 Pass --include-hyper to include the optional Hyper/Tokio comparator.
+Pass --nextpas-backend to record and select the nextPas-only backend in the embedded run.
 EOF
 }
 
@@ -44,6 +46,10 @@ while [[ $# -gt 0 ]]; do
     --include-hyper)
       INCLUDE_HYPER=1
       shift
+      ;;
+    --nextpas-backend)
+      NEXTPAS_BACKEND="${2:?missing value for --nextpas-backend}"
+      shift 2
       ;;
     --output)
       OUTPUT_PATH="${2:?missing value for --output}"
@@ -103,6 +109,15 @@ case "${WORKLOAD}" in
     ;;
 esac
 
+case "${NEXTPAS_BACKEND}" in
+  threaded|epoll)
+    ;;
+  *)
+    echo "invalid --nextpas-backend: ${NEXTPAS_BACKEND} (expected threaded or epoll)" >&2
+    exit 2
+    ;;
+esac
+
 OUTPUT_DIR="$(dirname "${OUTPUT_PATH}")"
 RAW_OUTPUT="${OUTPUT_PATH}.raw"
 
@@ -124,6 +139,10 @@ RUNNER_COMMAND="${RUNNER_COMMAND} --runs ${RUNS}"
 if [[ "${INCLUDE_HYPER}" -eq 1 ]]; then
   RUNNER_ARGS+=(--include-hyper)
   RUNNER_COMMAND="${RUNNER_COMMAND} --include-hyper"
+fi
+if [[ "${NEXTPAS_BACKEND}" != "threaded" ]]; then
+  RUNNER_ARGS+=(--nextpas-backend "${NEXTPAS_BACKEND}")
+  RUNNER_COMMAND="${RUNNER_COMMAND} --nextpas-backend ${NEXTPAS_BACKEND}"
 fi
 
 "${SCRIPT_DIR}/run_server_comparison.sh" \
@@ -169,6 +188,7 @@ effective_threads=${EFFECTIVE_THREADS}
 workload=${WORKLOAD}
 runs=${RUNS}
 include_hyper=${INCLUDE_HYPER}
+nextpas_backend=${NEXTPAS_BACKEND}
 \`\`\`
 
 ## Command

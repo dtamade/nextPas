@@ -131,9 +131,25 @@ build/projects/nextpas.core.http/bench_server/bench_http_server \
 ```
 
 This is a nextPas-only runtime characterization seam, not a cross-language
-comparison flag. The server comparison runner still uses the default threaded
-backend so saved Go/Rust/nextPas comparison rows stay apples-to-apples on the
-existing workload set.
+comparison flag. The server comparison runner and snapshot helper now accept
+`--nextpas-backend threaded|epoll`, record `nextpas_backend=<...>` in the raw
+header / snapshot environment block, and pass the selected backend only to the
+nextPas row:
+
+```sh
+benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url --runs 3 \
+  --nextpas-backend threaded
+
+benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
+  --requests 20000 --threads 4 --workload no_url --runs 3 \
+  --nextpas-backend epoll \
+  --output build/projects/nextpas.core.http/server_comparison/snapshot-epoll.md
+```
+
+The default remains `threaded`, so existing Go/Rust/nextPas comparison commands
+keep the earlier apples-to-apples shape unless a caller explicitly asks for a
+nextPas-only backend characterization run.
 
 Fresh local backend smoke rows from 2026-06-07:
 
@@ -145,7 +161,8 @@ Fresh local backend smoke rows from 2026-06-07:
 Treat these as local backend smoke, not a stable threaded-vs-epoll ranking.
 The durable conclusion is that benchmark artifacts can now distinguish backend
 selection explicitly and can run a nextPas-only epoll row without patching the
-comparison runner.
+comparison runner. The raw comparison report and Markdown snapshot now preserve
+the same truth as `nextpas_backend=<threaded|epoll>`.
 
 `bench_fullchain` now follows the same fail-fast benchmark-truth rule for its
 filter path: when `NEXTPAS_BENCH_FILTER` matches no scenario, the benchmark
