@@ -327,6 +327,8 @@ Final strategy:
   - `WeightedChoice([])` or non-positive weights
   - `FBM*` with `Octaves <= 0`, bad `Lacunarity`, bad `Gain`, or finite parameter
     combinations that would make octave coordinates, amplitudes, or accumulated results non-finite
+- `NextFloatRange` returns finite values in the half-open range `[AMin, AMax)` for finite `Single`
+  bounds with `AMin < AMax`, including forced maximum samples over very large finite spans.
 - `WeightedChoice` treats `pick = 0` as the first positive-weight slot instead of getting stuck on zero-weight prefixes.
 - `NextGaussian` clamps a zero-state first uniform draw to a finite deterministic fallback instead of producing NaN or infinity.
 - Negative fractional noise coordinates wrap canonically across the 256-period seam, so values like `-0.25` and `255.75` stay equivalent for the same seeded generator.

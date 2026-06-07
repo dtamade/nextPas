@@ -183,6 +183,8 @@ zero-weight prefixes.
 its public contract matches `NextIntRange(Low(Integer), High(Integer))`.
 `NextIntRange` uses rejection sampling for non-power-of-two widths, so integer spans such as
 `0..9` and `-3..3` stay unbiased instead of inheriting modulo bias from the raw `UInt64` stream.
+`NextFloatRange` returns finite values in the half-open range `[AMin, AMax)` for finite `Single`
+bounds with `AMin < AMax`, including forced maximum samples over very large finite spans.
 `NextGaussian` clamps a zero-state first uniform draw to a finite deterministic fallback instead of
 producing NaN or infinity.
 Negative fractional noise coordinates wrap canonically across the 256-period seam, so values like

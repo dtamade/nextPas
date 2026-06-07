@@ -286,6 +286,9 @@ ranges stay unbiased instead of inheriting modulo bias from raw `UInt64` samples
 - Distributions and helpers: `NextBool`, `NextGaussian`, `NextVec2InCircle`, `NextVec2OnCircle`
 - Dice and collections: `Roll`, `RollMultiple`, `WeightedChoice`, `Shuffle`
 
+`NextFloatRange` returns finite values in the half-open range `[AMin, AMax)` for finite `Single`
+bounds with `AMin < AMax`, including forced maximum samples over very large finite spans.
+
 `TNoiseGen` methods:
 
 - Seeding: `Create`, `SetSeed`

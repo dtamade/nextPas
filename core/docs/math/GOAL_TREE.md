@@ -359,12 +359,15 @@ Status:
   `WeightedChoice` treats `pick = 0` as the first positive-weight slot instead of getting stuck on
   zero-weight prefixes. `NextGaussian` clamps a zero-state first uniform draw to a finite
   deterministic fallback instead of producing NaN or infinity.
+  `NextFloatRange` returns finite values in the half-open range `[AMin, AMax)` for finite `Single`
+  bounds with `AMin < AMax`, including forced maximum samples over very large finite spans.
   `test_random` now directly locks owner-level messages for reversed and non-finite integer/float
   range validation, exact zero/max-state `[0,1)` boundaries for `NextFloat` / `NextDouble`,
-  exact zero/max-state `[AMin, AMax)` boundary behavior for `NextFloatRange`, direct
-  zero/negative dice parity, and for empty/negative/non-finite weighted-choice inputs plus the
-  `pick = 0` zero-weight-prefix boundary and max-pick tail reachability under extreme prefix
-  weights; weighted choice rejects empty, negative, non-finite, and all-zero weights.
+  exact zero/max-state `[AMin, AMax)` boundary behavior for `NextFloatRange`, large finite
+  forced-maximum `NextFloatRange` behavior, direct zero/negative dice parity, and for
+  empty/negative/non-finite weighted-choice inputs plus the `pick = 0` zero-weight-prefix boundary
+  and max-pick tail reachability under extreme prefix weights; weighted choice rejects empty,
+  negative, non-finite, and all-zero weights.
 - `TNoiseGen` owns its permutation table explicitly and exposes `Noise1D`, `Noise2D`, `Noise3D`,
   `FBM1D`, `FBM2D`, and `FBM3D`. Invalid FBM octave, lacunarity, and gain inputs fail fast with
   `EArgumentError`; `test_noise` now directly locks the exact owner-level message variants across

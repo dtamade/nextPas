@@ -235,7 +235,7 @@ begin
   end;
 end;
 
-procedure TestLargeFiniteFloatRangeStaysFiniteAndBounded;
+procedure TestLargeFiniteFloatRangeStaysFiniteAndHalfOpen;
 const
   LARGE_MIN: Single = -3.0e38;
   LARGE_MAX: Single = 3.0e38;
@@ -249,9 +249,42 @@ begin
     for I := 1 to 8 do
     begin
       FloatValue := Rng.NextFloatRange(LARGE_MIN, LARGE_MAX);
-      Check((FloatValue >= LARGE_MIN) and (FloatValue <= LARGE_MAX),
-        'large finite float range stays finite and bounded');
+      Check(not nextpas.core.math.scalar.IsNaN(FloatValue),
+        'large finite float range does not produce NaN');
+      Check(not nextpas.core.math.scalar.IsInfinite(FloatValue),
+        'large finite float range does not produce infinity');
+      Check((FloatValue >= LARGE_MIN) and (FloatValue < LARGE_MAX),
+        'large finite float range stays half-open');
     end;
+  finally
+    Rng.Free;
+  end;
+end;
+
+procedure TestLargeFiniteForcedMaxFloatRangeStaysFiniteAndHalfOpen;
+const
+  LARGE_MIN: Single = -3.0e38;
+  LARGE_MAX: Single = 3.0e38;
+var
+  Rng: TRandomGen;
+  MaxState: TRandomState;
+  FloatValue: Single;
+begin
+  MaxState.S0 := High(UInt64);
+  MaxState.S1 := 0;
+
+  Rng := TRandomGen.Create(42);
+  try
+    Rng.State := MaxState;
+    FloatValue := Rng.NextFloatRange(LARGE_MIN, LARGE_MAX);
+    Check(not nextpas.core.math.scalar.IsNaN(FloatValue),
+      'large finite forced max float range does not produce NaN');
+    Check(not nextpas.core.math.scalar.IsInfinite(FloatValue),
+      'large finite forced max float range does not produce infinity');
+    Check(FloatValue >= LARGE_MIN,
+      'large finite forced max float range stays above lower bound');
+    Check(FloatValue < LARGE_MAX,
+      'large finite forced max float range stays below upper bound');
   finally
     Rng.Free;
   end;
@@ -703,8 +736,10 @@ begin
   T.Run('range boundaries', @TestRangeBoundaries);
   T.Run('state-forced half-open boundaries', @TestStateForcedHalfOpenBoundaries);
   T.Run('integer ranges reject modulo-bias tail states', @TestIntegerRangesRejectModuloBiasTailStates);
-  T.Run('large finite float range stays finite and bounded',
-    @TestLargeFiniteFloatRangeStaysFiniteAndBounded);
+  T.Run('large finite float range stays finite and half-open',
+    @TestLargeFiniteFloatRangeStaysFiniteAndHalfOpen);
+  T.Run('large finite forced max float range stays finite and half-open',
+    @TestLargeFiniteForcedMaxFloatRangeStaysFiniteAndHalfOpen);
   T.Run('WeightedChoice large finite weights stay scale-invariant',
     @TestWeightedChoiceLargeFiniteWeightsStayScaleInvariant);
   T.Run('WeightedChoice rejects all-zero weights', @TestWeightedChoiceRejectsAllZeroWeights);

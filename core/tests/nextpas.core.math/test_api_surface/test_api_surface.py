@@ -263,6 +263,22 @@ REQUIRED_RANDOM_DOC_TRUTH = (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
         "`NextGaussian` clamps a zero-state first uniform draw to a finite deterministic fallback instead of producing NaN or infinity.",
     ),
+    (
+        "docs/math/README.md",
+        "`NextFloatRange` returns finite values in the half-open range `[AMin, AMax)` for finite `Single` bounds with `AMin < AMax`, including forced maximum samples over very large finite spans.",
+    ),
+    (
+        "docs/math/API.md",
+        "`NextFloatRange` returns finite values in the half-open range `[AMin, AMax)` for finite `Single` bounds with `AMin < AMax`, including forced maximum samples over very large finite spans.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`NextFloatRange` returns finite values in the half-open range `[AMin, AMax)` for finite `Single` bounds with `AMin < AMax`, including forced maximum samples over very large finite spans.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`NextFloatRange` returns finite values in the half-open range `[AMin, AMax)` for finite `Single` bounds with `AMin < AMax`, including forced maximum samples over very large finite spans.",
+    ),
 )
 REQUIRED_EASING_DOC_TRUTH = (
     (
@@ -700,7 +716,8 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("random-range", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('range boundaries'"),
     RequiredBehaviorTestMarker("random-state-forced-boundaries", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('state-forced half-open boundaries'"),
     RequiredBehaviorTestMarker("random-unbiased-integer-range", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('integer ranges reject modulo-bias tail states'"),
-    RequiredBehaviorTestMarker("random-large-float", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('large finite float range stays finite and bounded'"),
+    RequiredBehaviorTestMarker("random-large-float", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('large finite float range stays finite and half-open'"),
+    RequiredBehaviorTestMarker("random-large-finite-forced-max-float-range", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('large finite forced max float range stays finite and half-open'"),
     RequiredBehaviorTestMarker("random-weight-scale", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('WeightedChoice large finite weights stay scale-invariant'"),
     RequiredBehaviorTestMarker("random-weight-zero", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('WeightedChoice rejects all-zero weights'"),
     RequiredBehaviorTestMarker("random-weight-zero-pick", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('WeightedChoice zero-pick skips zero-weight prefixes'"),
