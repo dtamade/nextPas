@@ -33,16 +33,22 @@ S3 lifecycle contract names and evidence categories live in `lifecycle-contracts
 exception raise/unwind ownership, RTTI / TypeInfo boundary rules, unit initialization/finalization
 ordering and runtime-fault classification.
 
-S4 compatibility facades are currently deferred. `nextpas.core.system.sysutils`,
-`nextpas.core.system.typinfo`, and `nextpas.core.system.classes` are not live public units in the
-current phase. Their eventual public surface is not a current phase gate and must be reopened only
-when real compiler/runtime or higher-level consumer pressure produces focused evidence.
+S4 compatibility facades are now split by evidence. `nextpas.core.system.typinfo`
+has a minimal live unit for the seven-symbol TypInfo pressure set, while
+`nextpas.core.system.sysutils` and `nextpas.core.system.classes` remain deferred.
+SysUtils and Classes remain deferred.
+The live TypInfo unit is a compile-truth/runtime-helper bridge; it is not a
+complete FPC `TypInfo` reflection facade and does not freeze metadata layout ABI
+beyond minimum identity, kind, and managed-array helper contracts.
 
 Detailed S4 design-only material lives in `compatibility-facades.md` and
 `compatibility-matrix.md`. Those docs distinguish bootstrap RTL pressure from a
 future public `nextpas.core.system.*` compatibility surface.
 The TypInfo-only minimal pressure audit lives in `typinfo-minimal-pressure.md`;
 it records the seven-symbol candidate set without reopening SysUtils or Classes.
+The current TypInfo review stop lives in
+`../plans/2026-06-07-system-typinfo-minimal-unlock-review.md`; it records how
+the earlier `Needs Review` packet moved into this minimal live unlock.
 
 ## Boundaries
 
@@ -59,11 +65,13 @@ it records the seven-symbol candidate set without reopening SysUtils or Classes.
 | `nextpas.core.io` | stream and IO owner; no system IO facade in S0/S1. |
 | atomic/sync/thread modules | concurrency owners; system does not own locks, atomics or scheduler policy. |
 
-Deferred S4 note:
+S4 boundary note:
 
-- no public units yet for `system.sysutils`, `system.typinfo`, or `system.classes`
+- no public units yet for `system.sysutils` or `system.classes`
+- `system.typinfo` is live only for `PTypeInfo`, `TTypeKind`, `TypeInfo`,
+  `GetTypeKind`, `InitializeArray`, `FinalizeArray`, and `CopyArray`
 - deferred means “documented and guarded by source-contract”, not “silently available”
-- any future compatibility facade must arrive with real consumer pressure and focused API tests
+- any broader compatibility facade must arrive with real consumer pressure and focused API tests
 
 ## Contract Names
 

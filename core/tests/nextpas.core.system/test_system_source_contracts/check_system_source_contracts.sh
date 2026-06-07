@@ -20,6 +20,69 @@ require_token() {
   rg -F --quiet -- "$token" "$CORE_ROOT/$path" || fail "core/$path missing token: $token"
 }
 
+reject_token() {
+  local path="$1"
+  local token="$2"
+  if rg -F --quiet -- "$token" "$CORE_ROOT/$path"; then
+    fail "core/$path must not contain token: $token"
+  fi
+}
+
+require_repo_reject_token() {
+  local path="$1"
+  local token="$2"
+  if rg -F --quiet -- "$token" "$REPO_ROOT/$path"; then
+    fail "$path must not contain token: $token"
+  fi
+}
+
+require_repo_reject_regex() {
+  local path="$1"
+  local regex="$2"
+  if rg --quiet -- "$regex" "$REPO_ROOT/$path"; then
+    fail "$path must not match regex: $regex"
+  fi
+}
+
+list_pascal_uses_units() {
+  awk '
+    function trim(s) {
+      gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", s)
+      return s
+    }
+    function emit_units(line, parts, i, unit) {
+      gsub(/\{[^}]*\}/, "", line)
+      sub(/\/\/.*/, "", line)
+      gsub(/^[ \t]*uses[ \t]*/, "", line)
+      split(line, parts, /[,;]/)
+      for (i in parts) {
+        unit = trim(parts[i])
+        if (unit != "" && unit !~ /^\$/) {
+          print unit
+        }
+      }
+    }
+    /^[ \t]*uses[ \t]*/ {
+      in_uses = 1
+      emit_units($0)
+      if ($0 ~ /;/) in_uses = 0
+      next
+    }
+    in_uses {
+      emit_units($0)
+      if ($0 ~ /;/) in_uses = 0
+    }
+  ' "$1"
+}
+
+require_repo_not_uses_unit() {
+  local path="$1"
+  local forbidden_unit="$2"
+  if list_pascal_uses_units "$REPO_ROOT/$path" | grep -Fx --quiet "$forbidden_unit"; then
+    fail "$path must not directly use unit: $forbidden_unit"
+  fi
+}
+
 require_file "docs/system/README.md"
 require_file "docs/system/rtl-mapping.md"
 require_file "docs/system/goal-tree.md"
@@ -28,6 +91,8 @@ require_file "docs/system/lifecycle-contracts.md"
 require_file "docs/system/compatibility-facades.md"
 require_file "docs/system/compatibility-matrix.md"
 require_file "docs/system/typinfo-minimal-pressure.md"
+require_file "docs/plans/2026-06-07-system-typinfo-minimal-unlock-review.md"
+require_file "src/nextpas.core.system.typinfo.pas"
 
 require_token "docs/system/README.md" "RTL root"
 require_token "docs/system/README.md" "owner boundary"
@@ -41,6 +106,10 @@ require_token "docs/system/README.md" "deferred"
 require_token "docs/system/README.md" "compatibility-facades.md"
 require_token "docs/system/README.md" "compatibility-matrix.md"
 require_token "docs/system/README.md" "typinfo-minimal-pressure.md"
+require_token "docs/system/README.md" "2026-06-07-system-typinfo-minimal-unlock-review.md"
+require_token "docs/system/README.md" "nextpas.core.system.typinfo"
+require_token "docs/system/README.md" "minimal live unit"
+require_token "docs/system/README.md" "SysUtils and Classes remain deferred"
 
 for unit_name in System SysUtils TypInfo Classes ObjPas; do
   require_token "docs/system/rtl-mapping.md" "$unit_name"
@@ -63,7 +132,8 @@ for token in \
   "S4" \
   "deferred" \
   "not a current phase gate" \
-  "no public units yet" \
+  "TypInfo minimal live unit is unlocked" \
+  'no public units yet should exist for `nextpas.core.system.sysutils` or `nextpas.core.system.classes`' \
   "compatibility-facades.md" \
   "compatibility-matrix.md" \
   "typinfo-minimal-pressure.md"; do
@@ -71,20 +141,21 @@ for token in \
 done
 
 for token in \
-  "design-only" \
   "rtl/core/sysutils/np_sysutils.pas" \
   "rtl/core/classes/np_classes.pas" \
   "compiler/tests/test_sysutils_createfmt_contract.pas" \
   "compiler/tests/test_typinfo_contract.pas" \
   "nextpas.core.system.typinfo" \
   "nextpas.core.system.classes" \
-  "Needs Review" \
+  "minimal live unit" \
+  "compile-truth" \
   "migration"; do
   require_token "docs/system/compatibility-facades.md" "$token"
 done
 
 require_token "docs/system/compatibility-facades.md" 'No live `nextpas.core.system.sysutils` unit yet'
 require_token "docs/system/compatibility-facades.md" "typinfo-minimal-pressure.md"
+require_token "docs/system/compatibility-facades.md" "2026-06-07-system-typinfo-minimal-unlock-review.md"
 
 for token in \
   "compiler/toolchain/np_toolchain_runner.pas" \
@@ -102,14 +173,18 @@ done
 
 require_token "docs/system/compatibility-matrix.md" "typinfo-minimal-pressure.md"
 require_token "docs/system/rtl-mapping.md" "typinfo-minimal-pressure.md"
+require_token "docs/system/compatibility-matrix.md" "minimal live unit"
+require_token "docs/system/compatibility-matrix.md" "minimal live compile-truth contract"
 
 for token in \
   "S4 TypInfo Minimal Pressure Audit" \
+  "Review Judgment" \
   "Real Consumer Pressure" \
   "Owner Boundary" \
   "ABI Risks" \
   "Minimal Unlock Conditions" \
-  "Deferred Reason" \
+  "Deferred Boundary" \
+  "minimal live unlock" \
   "compiler/tests/test_typinfo_contract.pas" \
   "core/src/nextpas.core.collections.element_manager.pas" \
   "core/src/nextpas.core.collections.hashmap.swiss.pas" \
@@ -118,7 +193,9 @@ for token in \
   require_token "docs/system/typinfo-minimal-pressure.md" "$token"
 done
 
-require_token "docs/system/typinfo-minimal-pressure.md" '`nextpas.core.system.typinfo` remains deferred'
+require_token "docs/system/typinfo-minimal-pressure.md" '`nextpas.core.system.typinfo` is live'
+require_token "docs/system/typinfo-minimal-pressure.md" "2026-06-07-system-typinfo-minimal-unlock-review.md"
+require_token "docs/system/typinfo-minimal-pressure.md" "compile-truth"
 
 for token in \
   "PTypeInfo" \
@@ -129,6 +206,23 @@ for token in \
   "FinalizeArray" \
   "CopyArray"; do
   require_token "docs/system/typinfo-minimal-pressure.md" "$token"
+done
+
+for token in \
+  "Implemented minimal live unlock" \
+  "Exact public symbol list" \
+  "Exact owner boundary" \
+  "Remaining blockers before expansion" \
+  "Exact minimal file set for this unlock slice" \
+  "Focused verification plan" \
+  "Explicit non-goals" \
+  "compiler/tests/test_typinfo_contract.pas" \
+  "core/src/nextpas.core.collections.element_manager.pas" \
+  "core/src/nextpas.core.collections.hashmap.swiss.pas" \
+  "core/src/nextpas.core.collections.btree.pas" \
+  "core/src/nextpas.core.collections.concurrent.hashmap.pas" \
+  "core/src/nextpas.core.system.typinfo.pas"; do
+  require_token "docs/plans/2026-06-07-system-typinfo-minimal-unlock-review.md" "$token"
 done
 
 for token in \
@@ -186,7 +280,6 @@ done
 [[ ! -e "$CORE_ROOT/src/System.pas" ]] || fail "must not create bare FPC-conflicting System.pas"
 [[ ! -e "$CORE_ROOT/src/system.pas" ]] || fail "must not create bare FPC-conflicting system.pas"
 [[ ! -e "$CORE_ROOT/src/nextpas.core.system.sysutils.pas" ]] || fail "S4 deferred: no live nextpas.core.system.sysutils unit expected yet"
-[[ ! -e "$CORE_ROOT/src/nextpas.core.system.typinfo.pas" ]] || fail "S4 deferred: no live nextpas.core.system.typinfo unit expected yet"
 [[ ! -e "$CORE_ROOT/src/nextpas.core.system.classes.pas" ]] || fail "S4 deferred: no live nextpas.core.system.classes unit expected yet"
 
 require_repo_file() {
@@ -211,9 +304,12 @@ require_repo_file "core/src/nextpas.core.collections.hashmap.swiss.pas"
 
 require_repo_token "compiler/tests/test_sysutils_createfmt_contract.pas" "CreateFmt"
 require_repo_token "compiler/tests/test_sysutils_createfmt_contract.pas" "Format("
+require_repo_token "compiler/tests/test_typinfo_contract.pas" "nextpas.core.system.typinfo"
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "InitializeArray"
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "CopyArray"
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "FinalizeArray"
+require_repo_reject_regex "compiler/tests/test_typinfo_contract.pas" '^[[:space:]]*TypInfo[,;]'
+require_repo_not_uses_unit "compiler/tests/test_typinfo_contract.pas" "TypInfo"
 require_repo_token "compiler/toolchain/np_toolchain_runner.pas" "TFileStream"
 require_repo_token "compiler/toolchain/np_toolchain_runner.pas" "ExpandFileName"
 require_repo_token "compiler/frontend/np_workspace_model.pas" "ExpandFileName"
@@ -222,6 +318,56 @@ require_repo_token "rtl/core/classes/np_classes.pas" "unit Classes;"
 require_repo_token "core/src/nextpas.core.collections.element_manager.pas" "InitializeArray"
 require_repo_token "core/src/nextpas.core.collections.element_manager.pas" "CopyArray"
 require_repo_token "core/src/nextpas.core.collections.hashmap.swiss.pas" "GetTypeKind"
+
+for path in \
+  "core/src/nextpas.core.collections.arr.pas" \
+  "core/src/nextpas.core.collections.base.pas" \
+  "core/src/nextpas.core.collections.btree.pas" \
+  "core/src/nextpas.core.collections.concurrent.hashmap.pas" \
+  "core/src/nextpas.core.collections.element_manager.intf.pas" \
+  "core/src/nextpas.core.collections.element_manager.pas" \
+  "core/src/nextpas.core.collections.forward_list.pas" \
+  "core/src/nextpas.core.collections.hashmap.pas" \
+  "core/src/nextpas.core.collections.hashmap.swiss.adapter.pas" \
+  "core/src/nextpas.core.collections.hashmap.swiss.pas" \
+  "core/src/nextpas.core.collections.intf.pas" \
+  "core/src/nextpas.core.collections.list.pas" \
+  "core/src/nextpas.core.collections.node.pas" \
+  "core/src/nextpas.core.collections.priorityqueue.pas"; do
+  require_repo_token "$path" "nextpas.core.system.typinfo"
+  require_repo_reject_regex "$path" '^[[:space:]]*TypInfo[,;]'
+  require_repo_reject_regex "$path" '^[[:space:]]*typinfo[,;]'
+  require_repo_not_uses_unit "$path" "TypInfo"
+  require_repo_not_uses_unit "$path" "typinfo"
+done
+
+require_token "src/nextpas.core.system.typinfo.pas" "unit nextpas.core.system.typinfo;"
+require_token "src/nextpas.core.system.typinfo.pas" "PTypeInfo = TypInfo.PTypeInfo;"
+require_token "src/nextpas.core.system.typinfo.pas" "TTypeKind = TypInfo.TTypeKind;"
+require_token "src/nextpas.core.system.typinfo.pas" "tkInteger"
+require_token "src/nextpas.core.system.typinfo.pas" "tkChar"
+require_token "src/nextpas.core.system.typinfo.pas" "tkWChar"
+require_token "src/nextpas.core.system.typinfo.pas" "tkBool"
+require_token "src/nextpas.core.system.typinfo.pas" "tkEnumeration"
+require_token "src/nextpas.core.system.typinfo.pas" "tkInt64"
+require_token "src/nextpas.core.system.typinfo.pas" "tkQWord"
+require_token "src/nextpas.core.system.typinfo.pas" "tkAString"
+require_token "src/nextpas.core.system.typinfo.pas" "tkLString"
+require_token "src/nextpas.core.system.typinfo.pas" "tkUString"
+require_token "src/nextpas.core.system.typinfo.pas" "tkWString"
+require_token "src/nextpas.core.system.typinfo.pas" "InitializeArray"
+require_token "src/nextpas.core.system.typinfo.pas" "FinalizeArray"
+require_token "src/nextpas.core.system.typinfo.pas" "CopyArray"
+require_token "src/nextpas.core.system.typinfo.pas" "System.InitializeArray"
+require_token "src/nextpas.core.system.typinfo.pas" "System.FinalizeArray"
+require_token "src/nextpas.core.system.typinfo.pas" "System.CopyArray"
+reject_token "src/nextpas.core.system.typinfo.pas" "GetEnumName"
+reject_token "src/nextpas.core.system.typinfo.pas" "GetPropInfo"
+reject_token "src/nextpas.core.system.typinfo.pas" "GetTypeData"
+reject_token "src/nextpas.core.system.typinfo.pas" "TPropInfo"
+reject_token "src/nextpas.core.system.typinfo.pas" "TTypeData"
+reject_token "src/nextpas.core.system.typinfo.pas" "function TypeInfo"
+reject_token "src/nextpas.core.system.typinfo.pas" "function GetTypeKind"
 
 mapfile -t system_units < <(find "$CORE_ROOT/src" -maxdepth 1 -name 'nextpas.core.system*.pas' | sort)
 (( ${#system_units[@]} > 0 )) || fail "no nextpas.core.system units found"

@@ -6,7 +6,7 @@ interface
 
 uses
   sysutils,
-  typinfo,
+  nextpas.core.system.typinfo,
   nextpas.core.base,
   nextpas.core.mem.allocator,
   nextpas.core.collections.element_manager.base;

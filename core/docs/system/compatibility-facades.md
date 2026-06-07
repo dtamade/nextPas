@@ -1,20 +1,20 @@
 # S4 Compatibility Facade Design
 
-This document is the S4 design-only decision packet for `nextpas.core.system`.
-It does not create live public units. It records where compatibility pressure
-exists, where it does not, and which boundaries must hold before any public
-`nextpas.core.system.sysutils`, `nextpas.core.system.typinfo`, or
-`nextpas.core.system.classes` unit can exist.
+This document records the S4 compatibility boundary for `nextpas.core.system`.
+It now distinguishes one minimal live TypInfo facade from the still-deferred
+SysUtils and Classes facades. The live TypInfo unit is intentionally narrow; it
+does not convert bootstrap RTL pressure into a broad public compatibility API.
 
 ## Current Decision Boundary
 
-- S4 remains deferred for the current phase.
+- `nextpas.core.system.typinfo` has a minimal live unit for the seven-symbol
+  pressure set.
+- `nextpas.core.system.sysutils` and `nextpas.core.system.classes` remain
+  deferred.
 - Deferred does not mean "undefined"; it means the public unit surface is not
   live yet and is guarded by docs plus source-contract.
-- The current lane may document S4, map real consumers, and define unlock
-  criteria.
-- The current lane must not introduce a broad public compatibility facade
-  without controller review.
+- Any future broad compatibility facade still requires named consumer pressure,
+  focused tests, and controller review.
 
 ## Bootstrap RTL Is Not The Same Thing As Core Facade
 
@@ -110,7 +110,7 @@ The actual symbols in use are much narrower than historical `TypInfo`:
 - `FinalizeArray`
 - `CopyArray`
 
-### Why this is high-pressure but still not a live public unit
+### Why the live unit stays minimal
 
 This is the strongest real S4 pressure, but it is also the highest-risk area:
 
@@ -126,17 +126,22 @@ This is the strongest real S4 pressure, but it is also the highest-risk area:
 
 ### Current S4 stance
 
-- No live `nextpas.core.system.typinfo` unit yet.
-- The design target is a narrow runtime-truth facade, not string-based
+- A minimal live `nextpas.core.system.typinfo` unit exists.
+- The live surface is a narrow runtime-truth facade, not string-based
   reflection sugar.
-- The minimal pressure audit is recorded, but the unit remains deferred until a
-  controller-approved unlock slice exists.
+- The unit exposes `PTypeInfo`, `TTypeKind`, the kind constants used by live
+  consumers, and the managed-array helper wrappers.
+- `TypeInfo` and `GetTypeKind` remain compiler/System compile-truth symbols;
+  consumers use them unqualified after importing the facade, not as ordinary
+  `nextpas.core.system.typinfo.TypeInfo(...)` wrapper functions.
+- The minimal pressure audit and implementation record live in
+  `../plans/2026-06-07-system-typinfo-minimal-unlock-review.md`.
 - Property reflection, dynamic method lookup, and metadata mutation stay out of
   scope until a compiler-backed RTTI model exists.
 
-### Candidate minimum if this unit is ever reopened
+### Current live minimum
 
-The only credible first slice is:
+The live contract is exactly:
 
 - `PTypeInfo`
 - `TTypeKind`
@@ -200,9 +205,9 @@ helpers, consumers will stop knowing whether a behavior is owned by `system`,
 
 ### Risk 3: Freezing RTTI ABI too early
 
-If `system.typinfo` goes live before compiler-emitted metadata contracts are
-settled, the project will likely lock in the wrong `PTypeInfo` / `TTypeKind` /
-managed-array semantics.
+If `system.typinfo` expands beyond the seven-symbol bridge before
+compiler-emitted metadata contracts are settled, the project will likely lock in
+the wrong `PTypeInfo` / `TTypeKind` / managed-array semantics.
 
 ### Risk 4: Recreating historical `Classes` sprawl
 
@@ -211,7 +216,8 @@ the same compatibility junk drawer this lane is explicitly trying to avoid.
 
 ## Reopen Criteria
 
-S4 should only reopen as `Needs Review` when all of the following are true:
+S4 should only reopen as `Needs Review` for SysUtils, Classes, or broader
+TypInfo reflection when all of the following are true:
 
 1. A named consumer cannot move forward without a stable `nextpas.core.system.*`
    namespace path rather than plain bootstrap RTL units.

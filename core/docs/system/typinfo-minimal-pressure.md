@@ -1,7 +1,7 @@
 # S4 TypInfo Minimal Pressure Audit
 
-This is a design/source-contract slice for the narrow S4 TypInfo question. It
-does not approve or create a live `nextpas.core.system.typinfo` unit.
+This is the audit and implementation record for the narrow S4 TypInfo minimal
+live unlock.
 
 The audit is intentionally limited to these symbols:
 
@@ -17,18 +17,30 @@ Anything outside that list is out of scope for this slice.
 
 ## Current Decision
 
-`nextpas.core.system.typinfo` remains deferred.
+`nextpas.core.system.typinfo` is live for the seven-symbol minimal pressure set.
 
-Deferred is still the correct state because the pressure is real but the
-compiler/runtime ABI is not yet settled enough to freeze a public facade. The
-current repository still consumes FPC `TypInfo` and compiler built-ins for
-runtime type identity, type-kind classification, and managed-array lifecycle
-operations. A nextPas-native facade would become public API and would therefore
-freeze semantics that currently still depend on compiler-emitted metadata and
-runtime helper design.
+The live unit is deliberately narrow. It names `PTypeInfo`, `TTypeKind`, the
+kind constants used by consumers, and the managed-array lifecycle helpers.
+`TypeInfo` and `GetTypeKind` remain compiler/System compile-truth symbols rather
+than ordinary functions declared by the facade.
 
-This is not a blocker. It is a design checkpoint for the smallest credible S4
-unlock candidate.
+Broader `TypInfo` reflection remains deferred because compiler/runtime metadata
+layout is not settled enough to freeze property tables, method tables, or
+string-based reflection APIs.
+
+## Review Judgment
+
+The seven-symbol subset had enough focused pressure to move from review packet
+to minimal live unlock.
+
+That packet lives in
+`../plans/2026-06-07-system-typinfo-minimal-unlock-review.md`.
+
+The distinction matters:
+
+- live describes the seven-symbol bridge;
+- deferred still describes broader FPC `TypInfo` reflection;
+- source-contract tests must preserve that boundary.
 
 ## Real Consumer Pressure
 
@@ -139,8 +151,8 @@ be wrong for cross-target compilation and future self-hosting.
 
 ## Minimal Unlock Conditions
 
-Opening a live `nextpas.core.system.typinfo` unit requires `Needs Review` unless
-all conditions below are already satisfied by a controller-approved slice:
+Keeping the live `nextpas.core.system.typinfo` unit requires the conditions
+below to stay true:
 
 1. The consumer is named and cannot move forward using current bootstrap/FPC
    TypInfo or compiler intrinsic paths.
@@ -156,9 +168,9 @@ all conditions below are already satisfied by a controller-approved slice:
 7. Source-contract tests continue to prove that SysUtils and Classes facades
    are not reopened by the TypInfo slice.
 
-## Minimum Verification Gate For A Future Unlock
+## Minimum Verification Gate
 
-The first live TypInfo slice, if approved, should include at least:
+The first live TypInfo slice includes at least:
 
 - a compiler contract gate based on `compiler/tests/test_typinfo_contract.pas`;
 - a collections managed-lifetime gate around
@@ -168,16 +180,15 @@ The first live TypInfo slice, if approved, should include at least:
 - source-contract proof that no property reflection or Classes/SysUtils surface
   leaked into the unit.
 
-## Deferred Reason
+## Deferred Boundary
 
-The correct current state is still `deferred` because the pressure is precise
-but not yet an unlock command:
+The correct current state is live for the seven-symbol bridge and deferred for
+broader reflection because:
 
 - consumers prove the seven-symbol minimal set matters;
-- consumers do not prove a public `nextpas.core.system.typinfo` namespace must
-  exist today;
-- ABI and metadata ownership are not yet settled enough to expose a stable
+- consumers do not prove property reflection, method metadata, RTTI mutation, or
+  string-based reflection helpers are needed today;
+- ABI and metadata ownership are not yet settled enough to expose a broader
   facade;
-- the safe next action is preserving the audit and contract guard, not creating
-  a public unit.
-
+- the safe next action is preserving the live minimum and contract guard, not
+  expanding the public unit.

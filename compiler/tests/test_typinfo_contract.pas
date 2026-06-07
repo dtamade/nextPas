@@ -3,12 +3,18 @@ program test_typinfo_contract;
 {$mode objfpc}{$H+}
 
 uses
-  TypInfo;
+  nextpas.core.system.typinfo;
+
+type
+  TStringSlots = array[0..1] of AnsiString;
 
 var
   TypeInfoPtr: PTypeInfo;
-  SourceValues: array[0..1] of AnsiString;
-  DestValues: array[0..1] of AnsiString;
+  SourceValues: ^TStringSlots;
+  DestValues: ^TStringSlots;
+  SourceInitialized: Boolean;
+  DestInitialized: Boolean;
+
 begin
   TypeInfoPtr := Pointer(TypeInfo(AnsiString));
   if TypeInfoPtr = nil then
@@ -16,18 +22,29 @@ begin
   if TypeInfoPtr^.Kind <> tkAString then
     Halt(2);
 
-  InitializeArray(@SourceValues[0], TypeInfoPtr, Length(SourceValues));
-  InitializeArray(@DestValues[0], TypeInfoPtr, Length(DestValues));
+  GetMem(SourceValues, SizeOf(TStringSlots));
+  GetMem(DestValues, SizeOf(TStringSlots));
+  SourceInitialized := False;
+  DestInitialized := False;
   try
-    SourceValues[0] := 'left';
-    SourceValues[1] := 'right';
-    CopyArray(@DestValues[0], @SourceValues[0], TypeInfoPtr, Length(SourceValues));
-    if DestValues[0] <> 'left' then
+    InitializeArray(SourceValues, TypeInfoPtr, Length(SourceValues^));
+    SourceInitialized := True;
+    InitializeArray(DestValues, TypeInfoPtr, Length(DestValues^));
+    DestInitialized := True;
+
+    SourceValues^[0] := 'left';
+    SourceValues^[1] := 'right';
+    CopyArray(DestValues, SourceValues, TypeInfoPtr, Length(SourceValues^));
+    if DestValues^[0] <> 'left' then
       Halt(3);
-    if DestValues[1] <> 'right' then
+    if DestValues^[1] <> 'right' then
       Halt(4);
   finally
-    FinalizeArray(@SourceValues[0], TypeInfoPtr, Length(SourceValues));
-    FinalizeArray(@DestValues[0], TypeInfoPtr, Length(DestValues));
+    if DestInitialized then
+      FinalizeArray(DestValues, TypeInfoPtr, Length(DestValues^));
+    if SourceInitialized then
+      FinalizeArray(SourceValues, TypeInfoPtr, Length(SourceValues^));
+    FreeMem(DestValues);
+    FreeMem(SourceValues);
   end;
 end.

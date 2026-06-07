@@ -1,6 +1,6 @@
-.PHONY: test test-source-contracts test-facade clean
+.PHONY: test test-source-contracts test-facade test-typinfo-minimal clean
 
-test: test-source-contracts test-facade
+test: test-source-contracts test-facade test-typinfo-minimal
 
 test-source-contracts:
 	$(MAKE) -C test_system_source_contracts test
@@ -8,5 +8,9 @@ test-source-contracts:
 test-facade:
 	$(MAKE) -C test_system_facade clean test
 
+test-typinfo-minimal:
+	$(MAKE) -C test_system_typinfo_minimal clean test
+
 clean:
 	$(MAKE) -C test_system_facade clean
+	$(MAKE) -C test_system_typinfo_minimal clean

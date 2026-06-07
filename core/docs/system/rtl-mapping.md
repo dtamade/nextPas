@@ -31,7 +31,7 @@ ownership status so future slices can expand the module without turning it into 
 | Interfaces | `future compiler/runtime only` | Managed lifetime and reference-count contract; no public ABI in S0/S1. |
 | Managed records | `future compiler/runtime only` | Compiler/runtime lifetime contract; no public ABI in S0/S1. |
 | Exception raise/unwind root | `system facade delegating to owner` | Canonical owner is `nextpas.core.exception`; `system` aliases only. |
-| RTTI / `TypeInfo` primitive contract | `future compiler/runtime only` | Mapping recorded here; implementation deferred to RTTI/typinfo stages. |
+| RTTI / `TypeInfo` primitive contract | `system facade delegating to owner` | Minimal `nextpas.core.system.typinfo` names the seven-symbol contract; compiler/System still own `TypeInfo` and `GetTypeKind` compile-truth. |
 | File I/O helpers | `owned by another module, no system facade yet` | `nextpas.core.fs` / `nextpas.core.io`. |
 | Time/date helpers | `owned by another module, no system facade yet` | `nextpas.core.time` and platform time modules. |
 | Math helpers | `owned by another module, no system facade yet` | `nextpas.core.math`; compatibility aliasing is S4+ only. |
@@ -54,17 +54,18 @@ evidence.
 
 ## FPC TypInfo
 
-Current phase note: compatibility facade work for TypInfo is deferred; there are no public units yet
-under `nextpas.core.system.typinfo`. See `compatibility-facades.md` and
-`compatibility-matrix.md` for the design-only boundary and live consumer
-evidence. The minimal pressure audit lives in `typinfo-minimal-pressure.md`.
+Current phase note: `nextpas.core.system.typinfo` now has a minimal live facade
+for the seven-symbol pressure set. This does not reopen full FPC `TypInfo`
+reflection, property metadata, or metadata layout ABI. See
+`compatibility-facades.md`, `compatibility-matrix.md`, and
+`typinfo-minimal-pressure.md` for the boundary and live consumer evidence.
 
 | FPC capability | nextPas status | nextPas owner / notes |
 | --- | --- | --- |
-| `PTypeInfo` / `TTypeKind` minimum metadata | `future compiler/runtime only` | Needs compiler-backed metadata identity and kind truth before a public facade can freeze. |
-| `TypeInfo` identity | `future compiler/runtime only` | Compiler intrinsic and emitted metadata truth; `typinfo-minimal-pressure.md` records the narrow pressure. |
-| `GetTypeKind` | `future compiler/runtime only` | Used by collections specialization; must stay tied to compiler/runtime type truth. |
-| `InitializeArray` / `FinalizeArray` / `CopyArray` | `future compiler/runtime only` | Managed-array lifecycle helpers; future work needs leak-sensitive proof and mem-owner boundary. |
+| `PTypeInfo` / `TTypeKind` minimum metadata | `system facade delegating to owner` | Live aliases name compiler/runtime identity and kind truth without promising property-table layout. |
+| `TypeInfo` identity | `future compiler/runtime only` | Compiler/System intrinsic and emitted metadata truth; the facade does not declare a fake ordinary wrapper. |
+| `GetTypeKind` | `future compiler/runtime only` | System internal compile-truth used by collections specialization; the facade documents and tests the behavior but does not own lowering. |
+| `InitializeArray` / `FinalizeArray` / `CopyArray` | `system facade delegating to owner` | Live wrappers delegate to System managed-array helpers; leak-sensitive proof is required for changes. |
 | Property metadata | `future compiler/runtime only` | Requires RTTI model and reflection policy. |
 | String-based property access | `explicitly out of scope` | Not part of S0/S1; future compatibility requires separate design. |
 

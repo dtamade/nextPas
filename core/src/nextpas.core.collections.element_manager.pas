@@ -34,7 +34,7 @@ interface
 
   uses
     sysutils,
-    typinfo,
+    nextpas.core.system.typinfo,
     nextpas.core.base,
     nextpas.core.math,
     nextpas.core.mem.utils,

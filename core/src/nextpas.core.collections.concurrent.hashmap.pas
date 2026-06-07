@@ -5,7 +5,7 @@ unit nextpas.core.collections.concurrent.hashmap;
 interface
 
 uses
-  TypInfo,
+  nextpas.core.system.typinfo,
   nextpas.core.base,
   nextpas.core.sync.rwlock,
   nextpas.core.sync.intf,

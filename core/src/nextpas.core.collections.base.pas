@@ -5,7 +5,7 @@ unit nextpas.core.collections.base;
 interface
 
 uses
-  typinfo,variants,
+  nextpas.core.system.typinfo, variants,
   nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.math,

@@ -596,7 +596,7 @@ type
 implementation
 
 uses
-  TypInfo,
+  nextpas.core.system.typinfo,
   nextpas.core.collections.arr.sort;
 
 procedure MemCopyUnchecked(aSrc, aDst: Pointer; aSize: SizeUInt); inline;
