@@ -495,6 +495,140 @@ begin
     'async loop write facade must preserve pointer-sized Windows handles');
 end;
 
+procedure TestWindowsForcedCompileAsyncFileSurfaceContract;
+var
+  LCompileGate: string;
+  LIocpFileBody: string;
+  LPollerFileBody: string;
+  LPollerUnsupportedBody: string;
+  LLoopFileBody: string;
+  LLoopUnsupportedBody: string;
+  LLoopFileTimeoutBody: string;
+  LLoopUnsupportedTimeoutBody: string;
+begin
+  LCompileGate := LoadSourceText(
+    'tests/nextpas.core.io.uring/test_poller_windows_compile_gate/test_poller_windows_compile_gate.lpr');
+  LIocpFileBody := ExtractBetween(LCompileGate,
+    'procedure touchiocpreactorfilesurface', 'procedure touchpollerfilesurface');
+  LPollerFileBody := ExtractBetween(LCompileGate,
+    'procedure touchpollerfilesurface', 'procedure touchpollerunsupportedsurface');
+  LPollerUnsupportedBody := ExtractBetween(LCompileGate,
+    'procedure touchpollerunsupportedsurface', 'procedure touchasyncloopfilesurface');
+  LLoopFileBody := ExtractBetween(LCompileGate,
+    'procedure touchasyncloopfilesurface', 'procedure touchasyncloopunsupportedsurface');
+  LLoopUnsupportedBody := ExtractBetween(LCompileGate,
+    'procedure touchasyncloopunsupportedsurface', 'procedure touchasyncloopfiletimeouts');
+  LLoopFileTimeoutBody := ExtractBetween(LCompileGate,
+    'procedure touchasyncloopfiletimeouts', 'procedure touchasyncloopunsupportedtimeouts');
+  LLoopUnsupportedTimeoutBody := ExtractBetween(LCompileGate,
+    'procedure touchasyncloopunsupportedtimeouts', 'procedure touchcompilegate');
+
+  CheckContains(LCompileGate,
+    'source-contract and forced-compile only; not windows runtime evidence',
+    'Windows compile gate must declare its non-runtime truth layer');
+  CheckContains(LCompileGate, 'procedure noopiocompletion',
+    'Windows compile gate must force a real completion callback type');
+
+  CheckContains(LIocpFileBody, 'liocp := tiocpreactor.create(8);',
+    'Windows compile gate must directly touch IOCP reactor creation');
+  CheckContains(LIocpFileBody, 'liocp.asyncread(0, nil, 0, 0, @noopiocompletion, nil);',
+    'Windows compile gate must directly touch IOCP file AsyncRead');
+  CheckContains(LIocpFileBody, 'liocp.asyncwrite(0, nil, 0, 0, @noopiocompletion, nil);',
+    'Windows compile gate must directly touch IOCP file AsyncWrite');
+  CheckContains(LIocpFileBody, 'liocp.flush;',
+    'Windows compile gate must directly touch IOCP Flush');
+  CheckContains(LIocpFileBody, 'liocp.poll;',
+    'Windows compile gate must directly touch IOCP Poll');
+  CheckContains(LIocpFileBody, 'liocp.pollone;',
+    'Windows compile gate must directly touch IOCP PollOne');
+  CheckContains(LIocpFileBody, 'liocp.stop;',
+    'Windows compile gate must directly touch IOCP Stop');
+  CheckContains(LIocpFileBody, 'liocp.close;',
+    'Windows compile gate must directly touch IOCP Close');
+  CheckAbsent(LIocpFileBody, 'asyncaccept',
+    'Windows IOCP file surface gate must not mix accept unsupported truth');
+  CheckAbsent(LIocpFileBody, 'asyncconnect',
+    'Windows IOCP file surface gate must not mix connect unsupported truth');
+  CheckAbsent(LIocpFileBody, 'asyncsend',
+    'Windows IOCP file surface gate must not mix send unsupported truth');
+  CheckAbsent(LIocpFileBody, 'asyncrecv',
+    'Windows IOCP file surface gate must not mix recv unsupported truth');
+  CheckAbsent(LIocpFileBody, 'asyncclose',
+    'Windows IOCP file surface gate must not mix close unsupported truth');
+
+  CheckContains(LPollerFileBody, 'lpoller.asyncread(0, nil, 0, 0, @noopiocompletion, nil);',
+    'Windows compile gate must touch poller file AsyncRead');
+  CheckContains(LPollerFileBody, 'lpoller.asyncwrite(0, nil, 0, 0, @noopiocompletion, nil);',
+    'Windows compile gate must touch poller file AsyncWrite');
+  CheckAbsent(LPollerFileBody, 'asyncaccept',
+    'Windows file surface gate must not mix accept unsupported truth');
+  CheckAbsent(LPollerFileBody, 'asyncconnect',
+    'Windows file surface gate must not mix connect unsupported truth');
+  CheckAbsent(LPollerFileBody, 'asyncsend',
+    'Windows file surface gate must not mix send unsupported truth');
+  CheckAbsent(LPollerFileBody, 'asyncrecv',
+    'Windows file surface gate must not mix recv unsupported truth');
+  CheckAbsent(LPollerFileBody, 'asyncclose',
+    'Windows file surface gate must not mix close unsupported truth');
+
+  CheckContains(LPollerUnsupportedBody, 'lpoller.asyncaccept',
+    'Windows compile gate must separately touch poller unsupported accept boundary');
+  CheckContains(LPollerUnsupportedBody, 'lpoller.asyncconnect',
+    'Windows compile gate must separately touch poller unsupported connect boundary');
+  CheckContains(LPollerUnsupportedBody, 'lpoller.asyncsend',
+    'Windows compile gate must separately touch poller unsupported send boundary');
+  CheckContains(LPollerUnsupportedBody, 'lpoller.asyncrecv',
+    'Windows compile gate must separately touch poller unsupported recv boundary');
+  CheckContains(LPollerUnsupportedBody, 'lpoller.asyncclose',
+    'Windows compile gate must separately touch poller unsupported close boundary');
+
+  CheckContains(LLoopFileBody, 'lloop.asyncread(0, nil, 0, 0, @noopiocompletion, nil);',
+    'Windows compile gate must touch async loop direct file AsyncRead');
+  CheckContains(LLoopFileBody, 'lloop.asyncwrite(0, nil, 0, 0, @noopiocompletion, nil);',
+    'Windows compile gate must touch async loop direct file AsyncWrite');
+  CheckContains(LLoopFileBody, 'lloop.poll;',
+    'Windows compile gate must touch async loop completion polling facade');
+  CheckContains(LLoopFileBody, 'lloop.runonce;',
+    'Windows compile gate must touch async loop single-iteration runner');
+  CheckContains(LLoopFileBody, 'lloop.close;',
+    'Windows compile gate must touch async loop close after file surface calls');
+  CheckAbsent(LLoopFileBody, 'asyncaccept',
+    'Windows async loop file surface gate must not mix accept unsupported truth');
+  CheckAbsent(LLoopFileBody, 'asyncsend',
+    'Windows async loop file surface gate must not mix send unsupported truth');
+  CheckAbsent(LLoopFileBody, 'asyncrecv',
+    'Windows async loop file surface gate must not mix recv unsupported truth');
+
+  CheckContains(LLoopUnsupportedBody, 'lloop.asyncaccept',
+    'Windows compile gate must separately touch async loop accept unsupported boundary');
+  CheckContains(LLoopUnsupportedBody, 'lloop.asyncrecv',
+    'Windows compile gate must separately touch async loop recv unsupported boundary');
+  CheckContains(LLoopUnsupportedBody, 'lloop.asyncsend',
+    'Windows compile gate must separately touch async loop send unsupported boundary');
+
+  CheckContains(LLoopFileTimeoutBody, 'lloop.asyncreadtimeout',
+    'Windows compile gate must touch async loop file read timeout');
+  CheckContains(LLoopFileTimeoutBody, 'lloop.asyncwritetimeout',
+    'Windows compile gate must touch async loop file write timeout');
+  CheckContains(LLoopFileTimeoutBody, 'tdeadline.after(',
+    'Windows file timeout gate must compile finite deadlines');
+  CheckAbsent(LLoopFileTimeoutBody, 'tdeadline.infinite',
+    'Windows file timeout gate must not bypass timeout wrappers');
+  CheckAbsent(LLoopFileTimeoutBody, 'asyncrecvtimeout',
+    'Windows file timeout gate must not mix recv unsupported truth');
+  CheckAbsent(LLoopFileTimeoutBody, 'asyncsendtimeout',
+    'Windows file timeout gate must not mix send unsupported truth');
+
+  CheckContains(LLoopUnsupportedTimeoutBody, 'lloop.asyncrecvtimeout',
+    'Windows compile gate must separately touch async loop recv timeout unsupported boundary');
+  CheckContains(LLoopUnsupportedTimeoutBody, 'lloop.asyncsendtimeout',
+    'Windows compile gate must separately touch async loop send timeout unsupported boundary');
+  CheckContains(LLoopUnsupportedTimeoutBody, 'tdeadline.after(',
+    'Windows unsupported timeout gate must compile finite deadlines');
+  CheckAbsent(LLoopUnsupportedTimeoutBody, 'tdeadline.infinite',
+    'Windows unsupported timeout gate must not bypass timeout wrappers');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.io.poller.windows_contract');
   T.Run('poller Windows backend contract', @TestPollerWindowsBackendContract);
@@ -516,5 +650,7 @@ begin
   T.Run('IOCP pending operation ownership contract',
     @TestIocpPendingOperationOwnershipContract);
   T.Run('Windows handle width contract', @TestPollerWindowsHandleWidthContract);
+  T.Run('Windows forced compile async file surface contract',
+    @TestWindowsForcedCompileAsyncFileSurfaceContract);
   T.Summary;
 end.
