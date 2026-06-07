@@ -403,7 +403,7 @@ begin
   Scale(Single(1.0), SingleNaN, Single(1.0));
 end;
 
-procedure RaiseScaleInfinityDouble;
+procedure RaiseScaleInfinityYDouble;
 begin
   Scale(Double(1.0), DoubleInfinity, Double(1.0));
 end;
@@ -731,6 +731,8 @@ begin
     @RaiseScaleInfinityXDouble);
   ExpectArgumentErrorMessage('Scale: Y must be finite', 'Scale single NaN Y',
     @RaiseScaleNaNSingle);
+  ExpectArgumentErrorMessage('Scale: Y must be finite', 'Scale double infinite Y',
+    @RaiseScaleInfinityYDouble);
   ExpectArgumentErrorMessage('Scale: Z must be finite', 'Scale single NaN Z',
     @RaiseScaleNaNZSingle);
   ExpectArgumentErrorMessage('Scale: Z must be finite', 'Scale double infinite Z',
