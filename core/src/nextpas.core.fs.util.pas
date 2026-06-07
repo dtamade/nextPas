@@ -294,25 +294,38 @@ end;
 function FsReadlink(const APath: string): string;
 const
   BUF_SIZE = 1024;
+  MAX_READLINK_BUF_SIZE = 65536;
 var
   LStack: array[0..BUF_SIZE - 1] of AnsiChar;
   LLen: Int32;
   LResult: Int32;
   LHeap: array of AnsiChar;
+  LBufLen: Int32;
 begin
   LResult := platform_file_readlink(PAnsiChar(APath), @LStack[0], BUF_SIZE, LLen);
   if LResult <> 0 then
     RaiseFsError(LResult, 'readlink', APath);
-  if LLen < BUF_SIZE then
+  if LLen < BUF_SIZE - 1 then
   begin
     SetString(Result, PAnsiChar(@LStack[0]), LLen);
     Exit;
   end;
-  SetLength(LHeap, LLen + 1);
-  LResult := platform_file_readlink(PAnsiChar(APath), @LHeap[0], Length(LHeap), LLen);
-  if LResult <> 0 then
-    RaiseFsError(LResult, 'readlink', APath);
-  SetString(Result, PAnsiChar(@LHeap[0]), LLen);
+
+  LBufLen := BUF_SIZE * 2;
+  repeat
+    if LBufLen > MAX_READLINK_BUF_SIZE then
+      raise EIOError.Create('readlink target too long: ' + APath);
+    SetLength(LHeap, LBufLen);
+    LResult := platform_file_readlink(PAnsiChar(APath), @LHeap[0], LBufLen, LLen);
+    if LResult <> 0 then
+      RaiseFsError(LResult, 'readlink', APath);
+    if LLen < LBufLen - 1 then
+    begin
+      SetString(Result, PAnsiChar(@LHeap[0]), LLen);
+      Exit;
+    end;
+    LBufLen := LBufLen * 2;
+  until False;
 end;
 
 function FsReadFileText(const APath: string): string;

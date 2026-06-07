@@ -601,6 +601,19 @@ begin
   Check(not FsStat(LLink).IsSymlink, 'stat follows link');
 end;
 
+procedure TestSymlinkReadlinkLongTarget;
+var
+  LTarget, LLink, LRead: string;
+begin
+  LTarget := StringOfChar('t', 1500);
+  LLink := GTmpDir + '/symlink-long-target.txt';
+  FsSymlink(LTarget, LLink);
+  LRead := FsReadlink(LLink);
+  CheckEqual(Int64(Length(LTarget)), Int64(Length(LRead)),
+    'readlink long target length');
+  CheckEqual(LTarget, LRead, 'readlink long target content');
+end;
+
 procedure TestReadlinkRegularFileRaisesInvalidOperation;
 var
   LGot: Boolean;
@@ -672,6 +685,7 @@ begin
     T.Run('RemoveAll symlink root', @TestRemoveAllSymlinkRoot);
     T.Run('Remove symlink-to-dir unlinks link', @TestRemoveSymlinkToDirUnlinksLink);
     T.Run('Symlink + Readlink', @TestSymlinkReadlink);
+    T.Run('Symlink + Readlink long target', @TestSymlinkReadlinkLongTarget);
     T.Run('Readlink regular file raises invalid operation', @TestReadlinkRegularFileRaisesInvalidOperation);
 {$ENDIF}
 
