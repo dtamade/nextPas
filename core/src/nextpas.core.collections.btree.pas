@@ -61,6 +61,7 @@ type
     procedure FreeNodeRecursive(ANode: PNode);
     function SearchNode(ANode: PNode; const AKey: K; out AIndex: Int32): Boolean;
     function CompareKeys(const A, B: K): SizeInt;
+    procedure ClearEntryRange(ANode: PNode; AFirstIndex, ACount: Int32);
     procedure SplitChild(AParent: PNode; AChildIndex: Int32);
     procedure InsertNonFull(ANode: PNode; const AKey: K; const AValue: V);
     function FindPredecessor(ANode: PNode): PNode;
@@ -221,6 +222,22 @@ begin
   Result := False;
 end;
 
+procedure TBTreeMap.ClearEntryRange(ANode: PNode; AFirstIndex, ACount: Int32);
+var
+  i: Int32;
+begin
+  if (ANode = nil) or (ACount <= 0) then
+    Exit;
+
+  if System.IsManagedType(K) then
+    for i := AFirstIndex to AFirstIndex + ACount - 1 do
+      ANode^.Keys[i] := Default(K);
+
+  if System.IsManagedType(V) then
+    for i := AFirstIndex to AFirstIndex + ACount - 1 do
+      ANode^.Values[i] := Default(V);
+end;
+
 { Public API }
 
 function TBTreeMap.GetCount: SizeUInt;
@@ -334,6 +351,7 @@ begin
   Inc(AParent^.Count);
 
   // Update LFull.Size (lost the right half + mid key)
+  ClearEntryRange(LFull, LMidIdx, LFull^.Count - LMidIdx);
   LFull^.Count := LMidIdx;
   LFull^.Size := LFull^.Size - LNew^.Size - 1;
 end;
