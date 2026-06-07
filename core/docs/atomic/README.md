@@ -77,7 +77,8 @@ consumers should not need to import `nextpas.core.atomic.types` just to use the 
 - x86_64 使用 high-tag packing，并在 release path 拒绝不能安全打包的非 canonical pointer。
 - 非 x86 使用 low-bit tag packing，要求 pointer 对齐并检查 tag 是否能放入 `TAG_BITS`。
 - `atomic_tagged_ptr_load/store/exchange` and single-order tagged pointer CAS defaults use `mo_seq_cst` unless the caller passes an explicit memory order.
-- `atomic_tagged_ptr_update` 和 `atomic_tagged_ptr_update_tag` 基于 CAS 循环更新。
+- `atomic_tagged_ptr_next` wraps to `0` after the maximum representable tag, and `atomic_tagged_ptr_update` uses that modulo increment when it swaps in a new pointer.
+- `atomic_tagged_ptr_update_tag` preserves the current pointer and only replaces the tag.
 
 ## 跨平台边界
 

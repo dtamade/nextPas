@@ -278,6 +278,9 @@ var
   LSignalFenceHelperSection: string;
   LSeqCstFenceHelperSection: string;
   LTaggedPtrSection: string;
+  LTaggedPtrNextSection: string;
+  LTaggedPtrUpdateSection: string;
+  LTaggedPtrUpdateTagSection: string;
   LThreadFenceSection: string;
   LSingleStrongCasSection: string;
   LSingleWeakCasSection: string;
@@ -371,6 +374,9 @@ begin
   LTaggedPtrSection := ExtractImplementationSection(LAtomicCoreSource,
     'function atomic_tagged_ptr(aPtr: Pointer; aTag:',
     'function atomic_tagged_ptr_get_ptr');
+  LTaggedPtrNextSection := ExtractImplementationSection(LAtomicCoreSource,
+    'function atomic_tagged_ptr_next(const aTaggedPtr: atomic_tagged_ptr_t):',
+    'end.');
   LSingleStrongCasSection := ExtractImplementationSection(LAtomicSource,
     '// ✅ P1-002: CAS 单内存序版本实现 - 简化常见用法（成功和失败使用相同内存序）',
     'function atomic_compare_exchange_weak(var aObj: Int32; var aExpected: Int32; aDesired: Int32;');
@@ -494,6 +500,12 @@ begin
   LDefaultTaggedPtrStoreSection := ExtractImplementationSection(LAtomicSource,
     'procedure atomic_tagged_ptr_store(var aObj: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t);',
     'function atomic_tagged_ptr_exchange(var aObj: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t; aOrder: memory_order_t): atomic_tagged_ptr_t;');
+  LTaggedPtrUpdateSection := ExtractImplementationSection(LAtomicSource,
+    'procedure atomic_tagged_ptr_update(var aObj: atomic_tagged_ptr_t; aPtr: Pointer);',
+    'procedure atomic_tagged_ptr_update_tag(var aObj: atomic_tagged_ptr_t; aTag:');
+  LTaggedPtrUpdateTagSection := ExtractImplementationSection(LAtomicSource,
+    'procedure atomic_tagged_ptr_update_tag(var aObj: atomic_tagged_ptr_t; aTag:',
+    'procedure CpuPause;');
   LAtomicWaitSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_wait(var aObj: Int32; aExpected: Int32; const aTimeoutNs: Int64): Int32;',
     'function atomic_wait(var aObj: UInt32; aExpected: UInt32; const aTimeoutNs: Int64): Int32;');
@@ -568,6 +580,10 @@ begin
   CheckContains(LTaggedPtrSection,
     'raise EArgumentError.Create(''atomic_tagged_ptr: tag does not fit TAG_BITS'')',
     'non-x86 tagged pointer packing must reject oversized tags in release builds');
+  CheckContains(LTaggedPtrNextSection,
+    'if LTag = MAX_TAG then' + LineEnding +
+    '    Result := 0',
+    'tagged pointer next must wrap back to zero after MAX_TAG');
   CheckContains(LThreadFenceSection, 'mo_seq_cst: atomic_seq_cst_fence;',
     'atomic_thread_fence seq_cst must route through the dedicated seq_cst fence helper');
   CheckContains(LAtomicCompatSource, 'Legacy PascalCase compatibility facade mirrored for older call sites.',
@@ -920,6 +936,25 @@ begin
   CheckContains(LAtomicDocsReadme,
     '`atomic_tagged_ptr_load/store/exchange` and single-order tagged pointer CAS defaults use `mo_seq_cst` unless the caller passes an explicit memory order.',
     'atomic README must document tagged pointer default-order truth');
+  CheckContains(LTaggedPtrUpdateSection,
+    'LNewV := atomic_tagged_ptr(aPtr, atomic_tagged_ptr_next(LOld));',
+    'tagged pointer update must replace the pointer and advance the tag');
+  CheckContains(LTaggedPtrUpdateSection, 'atomic_tagged_ptr_compare_exchange_weak',
+    'tagged pointer update must retry with weak CAS');
+  CheckContains(LTaggedPtrUpdateTagSection,
+    'LOldPtr    := atomic_tagged_ptr_get_ptr(LOldTagged);',
+    'tagged pointer update_tag must preserve the current pointer');
+  CheckContains(LTaggedPtrUpdateTagSection,
+    'LNewTagged := atomic_tagged_ptr(LOldPtr, aTag);',
+    'tagged pointer update_tag must only replace the tag');
+  CheckContains(LTaggedPtrUpdateTagSection, 'atomic_tagged_ptr_compare_exchange_strong',
+    'tagged pointer update_tag must retry with strong CAS');
+  CheckContains(LAtomicDocsReadme,
+    '`atomic_tagged_ptr_next` wraps to `0` after the maximum representable tag, and `atomic_tagged_ptr_update` uses that modulo increment when it swaps in a new pointer.',
+    'atomic README must document tagged pointer modulo increment truth');
+  CheckContains(LAtomicDocsReadme,
+    '`atomic_tagged_ptr_update_tag` preserves the current pointer and only replaces the tag.',
+    'atomic README must document tagged pointer update_tag truth');
   CheckContains(LDefaultStore32Section, 'atomic_store(aObj, aDesired, mo_seq_cst);',
     'default Int32 atomic_store must use seq_cst');
   CheckNotContains(LDefaultStore32Section, 'mo_relaxed',
@@ -1494,6 +1529,47 @@ begin
   CheckEqual(Int64(2), Int64(atomic_tagged_ptr_get_tag(LTagged)));
 end;
 
+procedure TestAtomicTaggedPointerUpdateContracts;
+var
+  LFirst: Int32;
+  LSecond: Int32;
+  LTagged: atomic_tagged_ptr_t;
+  LWrapped: atomic_tagged_ptr_t;
+  LMaxTag: {$IFDEF CPU64}UInt16{$ELSE}UInt32{$ENDIF};
+  LCycleGuard: Integer;
+begin
+  LFirst := 11;
+  LSecond := 22;
+
+  LTagged := atomic_tagged_ptr(@LFirst, 0);
+  atomic_tagged_ptr_update(LTagged, @LSecond);
+  Check(atomic_tagged_ptr_get_ptr(LTagged) = @LSecond,
+    'tagged pointer update must replace pointer');
+  CheckEqual(Int64(1), Int64(atomic_tagged_ptr_get_tag(LTagged)),
+    'tagged pointer update must increment tag');
+
+  atomic_tagged_ptr_update_tag(LTagged, 0);
+  Check(atomic_tagged_ptr_get_ptr(LTagged) = @LSecond,
+    'tagged pointer update_tag must preserve pointer');
+  CheckEqual(Int64(0), Int64(atomic_tagged_ptr_get_tag(LTagged)),
+    'tagged pointer update_tag must replace tag exactly');
+
+  LMaxTag := 0;
+  LCycleGuard := 0;
+  while atomic_tagged_ptr_next(atomic_tagged_ptr(@LFirst, LMaxTag)) <> 0 do
+  begin
+    LMaxTag := atomic_tagged_ptr_next(atomic_tagged_ptr(@LFirst, LMaxTag));
+    Inc(LCycleGuard);
+    Check(LCycleGuard <= 1 shl 20,
+      'tagged pointer next must wrap within a bounded public tag domain');
+  end;
+
+  LWrapped := atomic_tagged_ptr(@LFirst, LMaxTag);
+  atomic_tagged_ptr_update(LWrapped, @LFirst);
+  CheckEqual(Int64(0), Int64(atomic_tagged_ptr_get_tag(LWrapped)),
+    'tagged pointer update must wrap MAX_TAG back to zero');
+end;
+
 procedure TestAtomicTaggedPointerRejectsOutOfRangeX8664Pointer;
 {$IFDEF CPUX86_64}
 var
@@ -1702,6 +1778,7 @@ begin
   T.Run('invalid memory-order contract', @TestAtomicInvalidMemoryOrderContract);
   T.Run('compat PascalCase facade', @TestAtomicCompatFacade);
   T.Run('tagged pointer atomic API', @TestAtomicTaggedPointer);
+  T.Run('tagged pointer update contracts', @TestAtomicTaggedPointerUpdateContracts);
   T.Run('tagged pointer rejects out-of-range x86_64 pointer', @TestAtomicTaggedPointerRejectsOutOfRangeX8664Pointer);
   T.Run('atomic wait/notify API', @TestAtomicWaitNotifySurfaceAndBehavior);
   T.Run('atomic refcount contract', @TestAtomicRefCountContract);

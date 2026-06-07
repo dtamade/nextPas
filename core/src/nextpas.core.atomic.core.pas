@@ -234,7 +234,7 @@ var
 begin
   LTag := atomic_tagged_ptr_get_tag(aTaggedPtr);
   if LTag = MAX_TAG then
-    Result := 1
+    Result := 0
   else
     Result := LTag + 1;
 end;
