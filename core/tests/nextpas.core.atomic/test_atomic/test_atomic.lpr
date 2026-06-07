@@ -91,6 +91,30 @@ begin
   until False;
 end;
 
+procedure CheckNaturalAlignment(const AAddress: PtrUInt; const AAlignment: PtrUInt;
+  const AMessage: string);
+begin
+  Check(AAlignment > 0, AMessage + ' alignment must be non-zero');
+  if AAlignment = 0 then
+    Exit;
+  Check((AAlignment and (AAlignment - 1)) = 0,
+    AMessage + ' alignment must be power-of-two');
+  if (AAlignment and (AAlignment - 1)) <> 0 then
+    Exit;
+  Check((AAddress mod AAlignment) = 0, AMessage);
+end;
+
+procedure CheckFieldNaturalAlignment(const ARecordAddress, AFieldAddress: PtrUInt;
+  const AAlignment: PtrUInt; const AMessage: string);
+begin
+  Check(AFieldAddress >= ARecordAddress,
+    AMessage + ' field address must be inside record');
+  if AFieldAddress < ARecordAddress then
+    Exit;
+  CheckNaturalAlignment(AFieldAddress, AAlignment, AMessage + ' address');
+  CheckNaturalAlignment(AFieldAddress - ARecordAddress, AAlignment, AMessage + ' offset');
+end;
+
 procedure TestLoad32Store32;
 var
   LVal: Int32;
@@ -354,6 +378,8 @@ var
   LCompatAliasTestSection: string;
   LTypedInt64ContractSection: string;
   LTypedInt64FetchContractSection: string;
+  LTypedNaturalAlignmentSection: string;
+  LDirectTypesPtrContractSection: string;
   LRunnerSection: string;
   LAtomicFlagTestAndSetSection: string;
   LAtomicFlagTestSection: string;
@@ -642,6 +668,12 @@ begin
     '{$ENDIF}' + LineEnding +
     LineEnding +
     'procedure TestAtomicUnsignedWrapContract;');
+  LTypedNaturalAlignmentSection := ExtractSection(LAtomicTestSource,
+    'procedure ' + 'TestAtomicTypedNaturalAlignmentContract;',
+    'procedure ' + 'TestAtomicInt32UInt32Contract;');
+  LDirectTypesPtrContractSection := ExtractSection(LAtomicDirectTypesPtrTestSource,
+    'procedure TestAtomicTypesPtrContract;',
+    'end.');
   LRunnerSection := ExtractSection(LAtomicTestSource,
     'begin' + LineEnding +
     '  T := TTestRunner.Create(''nextpas.core.atomic'');',
@@ -919,6 +951,24 @@ begin
   CheckContains(LAtomicDocsReadme, 'facade exposes scalar typed records, `TAtomicRefCount`, and generic `TAtomicPtr<T>`',
     'atomic README must document the typed-record facade boundary');
   CheckContains(LAtomicDocsReadme,
+    'Except for `TAtomicFlag`, whose `is_lock_free` method reports the guaranteed atomic-flag truth, their `is_lock_free` methods report the current backend capability for the represented scalar width (`atomic_is_lock_free_32`, `atomic_is_lock_free_64`, or `atomic_is_lock_free_ptr`) when the atomic object is stored with its natural alignment.',
+    'atomic README must document typed atomic natural-alignment lock-free truth');
+  CheckContains(LAtomicDocsReadme,
+    'This is not an arbitrary-address guarantee: callers must not reinterpret packed fields, byte buffers, or manually offset pointers as `TAtomic*` records unless they can prove the resulting object and backing field keep the natural alignment required by that scalar width.',
+    'atomic README must reject arbitrary-address typed atomic usage');
+  CheckContains(LAtomicDocsReadme,
+    'Packed records, `{$PACKRECORDS 1}` / `{$PACKRECORDS C}`, `absolute` overlays, variant-record overlays, byte-buffer reinterpretation, and manual pointer arithmetic are outside the typed atomic contract unless natural alignment is proven before any atomic operation.',
+    'atomic README must name packed/overlay storage hazards');
+  CheckContains(LAtomicDocsReadme,
+    '`GetMut` and `IntoInner` are exclusive-access escape hatches. Use them only when no other thread can concurrently access the same atomic object.',
+    'atomic README must document typed atomic exclusive escape hatch scope');
+  CheckContains(LAtomicDocsReadme,
+    '`GetMut` exposes the backing storage for initialization, teardown, or controlled single-owner mutation; it does not turn non-atomic or unaligned storage into a valid atomic object.',
+    'atomic README must document GetMut cannot validate unaligned storage');
+  CheckContains(LAtomicDocsReadme,
+    '`IntoInner` reads the backing value under the same exclusive-access assumption and must not be treated as a concurrent load.',
+    'atomic README must document IntoInner is not a concurrent load');
+  CheckContains(LAtomicDocsReadme,
     '`TAtomicInt32` and `TAtomicUInt32` follow `atomic_is_lock_free_32`; `Increment`/`Decrement` return the new value after adding or subtracting one, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
     'atomic README must document the 32-bit typed-record lock-free and convenience contract');
   CheckContains(LAtomicDocsReadme,
@@ -956,6 +1006,26 @@ begin
   CheckContains(LAtomicTestSource,
     'T.Run(''typed atomic CAS consume contract'', @TestAtomicTypedCasConsumeContract);',
     'atomic runner must register typed CAS consume runtime coverage');
+  CheckContains(LTypedNaturalAlignmentSection, 'CheckNaturalAlignment(PtrUInt(@LInt32), SizeOf(Int32),',
+    'atomic tests must keep local storage runtime coverage for typed atomic natural alignment');
+  CheckContains(LTypedNaturalAlignmentSection, 'TAtomicInt64 local storage must be naturally aligned',
+    'atomic tests must keep gated 64-bit local storage runtime coverage');
+  CheckContains(LTypedNaturalAlignmentSection, 'embedded field must preserve natural alignment',
+    'atomic tests must keep embedded-field runtime coverage for typed atomic natural alignment');
+  CheckContains(LTypedNaturalAlignmentSection, 'GetMut must expose the first backing storage slot',
+    'atomic tests must keep GetMut first-slot storage runtime coverage');
+  CheckContains(LDirectTypesPtrContractSection, 'direct atomic.types TAtomicPtr local storage must be naturally aligned',
+    'direct atomic.types TAtomicPtr coverage must keep local natural-alignment coverage');
+  CheckContains(LDirectTypesPtrContractSection, 'direct atomic.types TAtomicPtr embedded field must preserve natural alignment',
+    'direct atomic.types TAtomicPtr coverage must keep embedded natural-alignment coverage');
+  CheckContains(LDirectTypesPtrContractSection, 'direct atomic.types TAtomicPtr GetMut must expose the first backing storage slot',
+    'direct atomic.types TAtomicPtr coverage must keep first-slot storage coverage');
+  CheckContains(LRunnerSection,
+    'T.Run(''typed atomic natural alignment contract'', @TestAtomicTypedNaturalAlignmentContract);',
+    'atomic runner must register typed atomic natural alignment coverage');
+  CheckEqual(Int64(1), Int64(CountOccurrences(LRunnerSection,
+    'typed atomic natural alignment contract')),
+    'atomic runner must register typed atomic natural alignment coverage exactly once');
   CheckContains(LAtomicDocsReadme,
     '`TAtomicBool` stores a normalized `0/1` Int32 payload, `Load`/`Store`/`Exchange` map that payload to Boolean, `FetchAnd/Or/Xor/Nand` return the previous Boolean value while keeping the stored domain within `False/True`, and `is_lock_free` follows `atomic_is_lock_free_32`.',
     'atomic README must document the TAtomicBool normalized bool-domain contract');
@@ -1888,6 +1958,178 @@ begin
     'facade TAtomicPtr strong CAS should update when expected matches');
   Check(LPtr.Load = @LValueB,
     'facade TAtomicPtr default Load should observe the CAS result');
+end;
+
+procedure TestAtomicTypedNaturalAlignmentContract;
+type
+  TIntAtomicPtr = specialize TAtomicPtr<Integer>;
+  TInt32Holder = record
+    Prefix: Byte;
+    Value: TAtomicInt32;
+  end;
+  TUInt32Holder = record
+    Prefix: Byte;
+    Value: TAtomicUInt32;
+  end;
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  TInt64Holder = record
+    Prefix: Byte;
+    Value: TAtomicInt64;
+  end;
+  TUInt64Holder = record
+    Prefix: Byte;
+    Value: TAtomicUInt64;
+  end;
+  {$ENDIF}
+  TBoolHolder = record
+    Prefix: Byte;
+    Value: TAtomicBool;
+  end;
+  TFlagHolder = record
+    Prefix: Byte;
+    Value: TAtomicFlag;
+  end;
+  TISizeHolder = record
+    Prefix: Byte;
+    Value: TAtomicISize;
+  end;
+  TUSizeHolder = record
+    Prefix: Byte;
+    Value: TAtomicUSize;
+  end;
+  TRefCountHolder = record
+    Prefix: Byte;
+    Value: TAtomicRefCount;
+  end;
+  TPtrHolder = record
+    Prefix: Byte;
+    Value: TIntAtomicPtr;
+  end;
+var
+  LInt32: TAtomicInt32;
+  LUInt32: TAtomicUInt32;
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  LInt64: TAtomicInt64;
+  LUInt64: TAtomicUInt64;
+  {$ENDIF}
+  LBool: TAtomicBool;
+  LFlag: TAtomicFlag;
+  LISize: TAtomicISize;
+  LUSize: TAtomicUSize;
+  LRefCount: TAtomicRefCount;
+  LPtr: TIntAtomicPtr;
+  LValue: Integer;
+  LInt32Holder: TInt32Holder;
+  LUInt32Holder: TUInt32Holder;
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  LInt64Holder: TInt64Holder;
+  LUInt64Holder: TUInt64Holder;
+  {$ENDIF}
+  LBoolHolder: TBoolHolder;
+  LFlagHolder: TFlagHolder;
+  LISizeHolder: TISizeHolder;
+  LUSizeHolder: TUSizeHolder;
+  LRefCountHolder: TRefCountHolder;
+  LPtrHolder: TPtrHolder;
+begin
+  CheckEqual(Int64(SizeOf(Int32)), Int64(SizeOf(TAtomicInt32)),
+    'TAtomicInt32 storage must be exactly one Int32');
+  CheckEqual(Int64(SizeOf(UInt32)), Int64(SizeOf(TAtomicUInt32)),
+    'TAtomicUInt32 storage must be exactly one UInt32');
+  CheckEqual(Int64(SizeOf(Int32)), Int64(SizeOf(TAtomicBool)),
+    'TAtomicBool storage must be exactly one Int32');
+  CheckEqual(Int64(SizeOf(Int32)), Int64(SizeOf(TAtomicFlag)),
+    'TAtomicFlag storage must be exactly one Int32');
+  CheckEqual(Int64(SizeOf(PtrInt)), Int64(SizeOf(TAtomicISize)),
+    'TAtomicISize storage must be exactly one PtrInt');
+  CheckEqual(Int64(SizeOf(PtrUInt)), Int64(SizeOf(TAtomicUSize)),
+    'TAtomicUSize storage must be exactly one PtrUInt');
+  CheckEqual(Int64(SizeOf(PtrUInt)), Int64(SizeOf(TAtomicRefCount)),
+    'TAtomicRefCount storage must be exactly one PtrUInt');
+  CheckEqual(Int64(SizeOf(Pointer)), Int64(SizeOf(TIntAtomicPtr)),
+    'TAtomicPtr storage must be exactly one pointer');
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  CheckEqual(Int64(SizeOf(Int64)), Int64(SizeOf(TAtomicInt64)),
+    'TAtomicInt64 storage must be exactly one Int64');
+  CheckEqual(Int64(SizeOf(UInt64)), Int64(SizeOf(TAtomicUInt64)),
+    'TAtomicUInt64 storage must be exactly one UInt64');
+  {$ENDIF}
+
+  LInt32 := TAtomicInt32.Create(0);
+  LUInt32 := TAtomicUInt32.Create(0);
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  LInt64 := TAtomicInt64.Create(0);
+  LUInt64 := TAtomicUInt64.Create(0);
+  {$ENDIF}
+  LBool := TAtomicBool.Create(False);
+  LFlag := TAtomicFlag.Create(False);
+  LISize := TAtomicISize.Create(0);
+  LUSize := TAtomicUSize.Create(0);
+  LRefCount := TAtomicRefCount.Create(1);
+  LValue := 0;
+  LPtr := TIntAtomicPtr.Create(@LValue);
+
+  CheckNaturalAlignment(PtrUInt(@LInt32), SizeOf(Int32),
+    'TAtomicInt32 local storage must be naturally aligned');
+  Check(PtrUInt(LInt32.GetMut) = PtrUInt(@LInt32),
+    'TAtomicInt32 GetMut must expose the first backing storage slot');
+  CheckNaturalAlignment(PtrUInt(@LUInt32), SizeOf(UInt32),
+    'TAtomicUInt32 local storage must be naturally aligned');
+  Check(PtrUInt(LUInt32.GetMut) = PtrUInt(@LUInt32),
+    'TAtomicUInt32 GetMut must expose the first backing storage slot');
+  CheckNaturalAlignment(PtrUInt(@LBool), SizeOf(Int32),
+    'TAtomicBool local storage must be naturally aligned');
+  Check(PtrUInt(LBool.GetMut) = PtrUInt(@LBool),
+    'TAtomicBool GetMut must expose the first backing storage slot');
+  CheckNaturalAlignment(PtrUInt(@LFlag), SizeOf(Int32),
+    'TAtomicFlag local storage must be naturally aligned');
+  CheckNaturalAlignment(PtrUInt(@LISize), SizeOf(PtrInt),
+    'TAtomicISize local storage must be naturally aligned');
+  Check(PtrUInt(LISize.GetMut) = PtrUInt(@LISize),
+    'TAtomicISize GetMut must expose the first backing storage slot');
+  CheckNaturalAlignment(PtrUInt(@LUSize), SizeOf(PtrUInt),
+    'TAtomicUSize local storage must be naturally aligned');
+  Check(PtrUInt(LUSize.GetMut) = PtrUInt(@LUSize),
+    'TAtomicUSize GetMut must expose the first backing storage slot');
+  CheckNaturalAlignment(PtrUInt(@LRefCount), SizeOf(PtrUInt),
+    'TAtomicRefCount local storage must be naturally aligned');
+  CheckNaturalAlignment(PtrUInt(@LPtr), SizeOf(Pointer),
+    'TAtomicPtr local storage must be naturally aligned');
+  Check(PtrUInt(LPtr.GetMut) = PtrUInt(@LPtr),
+    'TAtomicPtr GetMut must expose the first backing storage slot');
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  CheckNaturalAlignment(PtrUInt(@LInt64), SizeOf(Int64),
+    'TAtomicInt64 local storage must be naturally aligned');
+  Check(PtrUInt(LInt64.GetMut) = PtrUInt(@LInt64),
+    'TAtomicInt64 GetMut must expose the first backing storage slot');
+  CheckNaturalAlignment(PtrUInt(@LUInt64), SizeOf(UInt64),
+    'TAtomicUInt64 local storage must be naturally aligned');
+  Check(PtrUInt(LUInt64.GetMut) = PtrUInt(@LUInt64),
+    'TAtomicUInt64 GetMut must expose the first backing storage slot');
+  {$ENDIF}
+
+  CheckFieldNaturalAlignment(PtrUInt(@LInt32Holder), PtrUInt(@LInt32Holder.Value),
+    SizeOf(Int32), 'TAtomicInt32 embedded field must preserve natural alignment');
+  CheckFieldNaturalAlignment(PtrUInt(@LUInt32Holder), PtrUInt(@LUInt32Holder.Value),
+    SizeOf(UInt32), 'TAtomicUInt32 embedded field must preserve natural alignment');
+  CheckFieldNaturalAlignment(PtrUInt(@LBoolHolder), PtrUInt(@LBoolHolder.Value),
+    SizeOf(Int32), 'TAtomicBool embedded field must preserve natural alignment');
+  CheckFieldNaturalAlignment(PtrUInt(@LFlagHolder), PtrUInt(@LFlagHolder.Value),
+    SizeOf(Int32), 'TAtomicFlag embedded field must preserve natural alignment');
+  CheckFieldNaturalAlignment(PtrUInt(@LISizeHolder), PtrUInt(@LISizeHolder.Value),
+    SizeOf(PtrInt), 'TAtomicISize embedded field must preserve natural alignment');
+  CheckFieldNaturalAlignment(PtrUInt(@LUSizeHolder), PtrUInt(@LUSizeHolder.Value),
+    SizeOf(PtrUInt), 'TAtomicUSize embedded field must preserve natural alignment');
+  CheckFieldNaturalAlignment(PtrUInt(@LRefCountHolder), PtrUInt(@LRefCountHolder.Value),
+    SizeOf(PtrUInt), 'TAtomicRefCount embedded field must preserve natural alignment');
+  CheckFieldNaturalAlignment(PtrUInt(@LPtrHolder), PtrUInt(@LPtrHolder.Value),
+    SizeOf(Pointer), 'TAtomicPtr embedded field must preserve natural alignment');
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  CheckFieldNaturalAlignment(PtrUInt(@LInt64Holder), PtrUInt(@LInt64Holder.Value),
+    SizeOf(Int64), 'TAtomicInt64 embedded field must preserve natural alignment');
+  CheckFieldNaturalAlignment(PtrUInt(@LUInt64Holder), PtrUInt(@LUInt64Holder.Value),
+    SizeOf(UInt64), 'TAtomicUInt64 embedded field must preserve natural alignment');
+  {$ENDIF}
 end;
 
 procedure TestAtomicInt32UInt32Contract;
@@ -4083,6 +4325,7 @@ begin
   T.Run('Concurrent FetchAdd (4 threads x 10000)', @TestConcurrentFetchAdd);
   T.Run('fafafa-style atomic API', @TestFafafaStyleAtomicApi);
   T.Run('typed atomic record API', @TestAtomicRecordTypes);
+  T.Run('typed atomic natural alignment contract', @TestAtomicTypedNaturalAlignmentContract);
   T.Run('typed atomic int32/uint32 contract', @TestAtomicInt32UInt32Contract);
   T.Run('typed atomic int32/uint32 fetch contract', @TestAtomicInt32UInt32FetchContract);
   {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}

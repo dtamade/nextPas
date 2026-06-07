@@ -16,6 +16,10 @@ uses
 procedure TestAtomicTypesPtrContract;
 type
   TDirectAtomicPtr = specialize TAtomicPtr<Integer>;
+  TDirectPtrHolder = record
+    Prefix: Byte;
+    Value: TDirectAtomicPtr;
+  end;
   PPInteger = ^PInteger;
 var
   LAtomicPtr: TDirectAtomicPtr;
@@ -24,7 +28,17 @@ var
   LValueA: Integer;
   LValueB: Integer;
   LValueC: Integer;
+  LHolder: TDirectPtrHolder;
 begin
+  Check(SizeOf(TDirectAtomicPtr) = SizeOf(Pointer),
+    'direct atomic.types TAtomicPtr storage must be exactly one pointer');
+  Check((PtrUInt(@LAtomicPtr) mod SizeOf(Pointer)) = 0,
+    'direct atomic.types TAtomicPtr local storage must be naturally aligned');
+  Check((PtrUInt(@LHolder.Value) mod SizeOf(Pointer)) = 0,
+    'direct atomic.types TAtomicPtr embedded field must preserve natural alignment');
+  Check(((PtrUInt(@LHolder.Value) - PtrUInt(@LHolder)) mod SizeOf(Pointer)) = 0,
+    'direct atomic.types TAtomicPtr embedded field offset must preserve natural alignment');
+
   Check(TDirectAtomicPtr.is_lock_free = nextpas.core.atomic.atomic_is_lock_free_ptr,
     'direct atomic.types TAtomicPtr lock-free surface must match pointer-sized runtime truth');
 
@@ -68,6 +82,8 @@ begin
     'direct atomic.types TAtomicPtr weak CAS mismatch should write the observed pointer');
 
   LMutPtr := PPInteger(LAtomicPtr.GetMut);
+  Check(PtrUInt(LMutPtr) = PtrUInt(@LAtomicPtr),
+    'direct atomic.types TAtomicPtr GetMut must expose the first backing storage slot');
   LMutPtr^ := @LValueC;
   Check(LAtomicPtr.IntoInner = @LValueC,
     'direct atomic.types TAtomicPtr.GetMut/IntoInner should expose the exclusive-access pointer');
