@@ -331,6 +331,8 @@ begin
     LNeed := 8;
     if LAvail >= LNeed then
     begin
+      if LAvail > LNeed then
+        raise EIOError.Create('gzip: trailing bytes after trailer');
       Move(LNextIn^, LTrailer[0], 8);
     end
     else
