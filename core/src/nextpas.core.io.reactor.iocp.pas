@@ -89,6 +89,7 @@ end;
 function IocpFail(ACallback: TIoCompletion; AContext: Pointer;
   AUserData: UInt64; AError: DWORD): Boolean;
 begin
+  SetLastError(AError);
   if Assigned(ACallback) then
   begin
     ACallback(AUserData, -Int32(AError), AContext);

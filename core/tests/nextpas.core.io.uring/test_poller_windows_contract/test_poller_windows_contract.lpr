@@ -399,6 +399,11 @@ begin
   LFailBody := ExtractBetween(LIocp, 'function iocpfail',
     'function iocpunsupportedasync');
 
+  CheckContains(LFailBody, 'setlasterror(aerror);',
+    'IOCP synchronous failure helper must publish host error truth');
+  CheckBefore(LFailBody, 'setlasterror(aerror);',
+    'acallback(auserdata, -int32(aerror), acontext);',
+    'IOCP synchronous failure helper must publish host error before callback dispatch');
   CheckContains(LFailBody, 'acallback(auserdata, -int32(aerror), acontext);',
     'IOCP synchronous failure helper must deliver the callback inline');
   CheckContains(LFailBody, 'result := true;',
