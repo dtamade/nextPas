@@ -337,6 +337,7 @@ type
     function BindingCount: LongInt;
     function BindingAt(const AIndex: LongInt): TSemanticBinding;
     function RuntimeContractCount: LongInt;
+    function RuntimeContractAt(const AIndex: LongInt): TRuntimeContract;
     function ForeignProcedureBindingCount: LongInt;
     function ForeignProcedureBindingAt(
       const AIndex: LongInt
@@ -1104,6 +1105,20 @@ end;
 function TSemanticModel.RuntimeContractCount: LongInt;
 begin
   Result := Length(FRuntimeContracts);
+end;
+
+function TSemanticModel.RuntimeContractAt(
+  const AIndex: LongInt
+): TRuntimeContract;
+begin
+  if (AIndex < 0) or (AIndex >= Length(FRuntimeContracts)) then
+  begin
+    Result.ContractId := 0;
+    Result.Name := '';
+    Exit;
+  end;
+
+  Result := FRuntimeContracts[AIndex];
 end;
 
 function TSemanticModel.ForeignProcedureBindingCount: LongInt;

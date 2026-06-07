@@ -85,7 +85,11 @@ Current phase note:
 
 - [x] Add S5 compiler integration contract for compiler consumer pressure, root-kernel ownership and bypass bans.
 - [x] Align facade docs with compiler runtime contract names and source-backed `System` truth.
-- [ ] Prove runtime helper references are explicit, stable and not backend-private magic strings.
+- [x] Align managed dynamic-array compiler contract projection with system runtime contract names.
+- [x] Prove managed dynamic-array contract vocabulary is explicit without freezing backend-private helper symbols.
+- [x] Align process-level startup/shutdown semantic seed with `np.system.process_init` / `np.system.process_fini`.
+- [x] Prove process lifecycle semantic seed exact-name order without upgrading runtime execution or unit lifecycle.
+- [ ] Prove remaining runtime helper references are explicit, stable and not backend-private magic strings.
 - [ ] Add integration smoke once compiler/runtime can consume the core-system contract directly.
 - [ ] Prepare a landing candidate only after focused gates and cross-module risks are clean.
 

@@ -410,6 +410,11 @@ require_token "docs/system/README.md" "S5 compiler integration contract"
 require_token "docs/system/README.md" "source-backed System truth"
 require_token "docs/system/README.md" "backend-private magic strings"
 require_token "docs/system/README.md" "compiler/HIR contract live; no callable public facade"
+require_token "docs/system/README.md" '| `np.system.process_init` | process-level runtime startup | compiler semantic contract live; runtime execution deferred |'
+require_token "docs/system/README.md" '| `np.system.process_fini` | process-level runtime shutdown | compiler semantic contract live; runtime execution deferred |'
+require_token "docs/system/README.md" '| `np.system.unit_init` | run a unit initialization entry | future compiler/runtime only |'
+require_token "docs/system/README.md" '| `np.system.unit_fini` | run a unit finalization entry | future compiler/runtime only |'
+require_token "docs/system/README.md" 'program, library and package roots project exact `runtime-contract` entries'
 
 require_token "docs/system/fpc-rtl-route-boundary.md" "root kernel boundary"
 require_token "docs/system/fpc-rtl-route-boundary.md" "FPC-routed stage0"
@@ -487,6 +492,7 @@ require_token "docs/system/lifecycle-contracts.md" "compiler/runtime metadata"
 require_token "docs/system/lifecycle-contracts.md" "seven-symbol bridge"
 require_token "docs/system/lifecycle-contracts.md" "does not freeze metadata ABI"
 require_token "docs/system/rtl-mapping.md" "compiler/HIR contract live; no public facade"
+require_token "docs/system/rtl-mapping.md" 'Program startup and shutdown | `compiler semantic contract live; runtime execution deferred`'
 require_token "docs/system/rtl-mapping.md" "np.system.object_free"
 
 for unit_name in System SysUtils TypInfo Classes ObjPas; do
@@ -496,6 +502,7 @@ done
 for status in \
   "system-owned" \
   "system facade delegating to owner" \
+  "compiler semantic contract live; runtime execution deferred" \
   "owned by another module, no system facade yet" \
   "future compiler/runtime only" \
   "explicitly out of scope"; do
@@ -510,6 +517,8 @@ require_token "docs/system/goal-tree.md" "not unit-owned wrapper functions"
 require_token "docs/system/goal-tree.md" "S5 compiler integration contract"
 require_token "docs/system/goal-tree.md" "readiness-only"
 require_token "docs/system/goal-tree.md" "compiler must not depend on a parallel System implementation"
+require_token "docs/system/goal-tree.md" "process-level startup/shutdown semantic seed"
+require_token "docs/system/goal-tree.md" "without upgrading runtime execution or unit lifecycle"
 
 for token in \
   "S4" \
@@ -693,6 +702,25 @@ for token in \
   require_token "docs/system/lifecycle-contracts.md" "$token"
 done
 
+for token in \
+  "Process Lifecycle" \
+  "compiler" \
+  "semantic seed truth" \
+  "runtime-contract" \
+  "np.system.process_init" \
+  "np.system.process_fini" \
+  "program, library or package" \
+  "Runtime execution of process startup/shutdown remains deferred" \
+  'No callable `nextpas.core.system` facade' \
+  "Unit initialization and finalization are not upgraded"; do
+  require_token "docs/system/lifecycle-contracts.md" "$token"
+done
+
+reject_token "docs/system/lifecycle-contracts.md" 'No `nextpas.core.system.typinfo` unit is created in this slice.'
+require_token "docs/system/lifecycle-contracts.md" "minimal TypInfo facade is live, but S3 still does not freeze RTTI metadata layout"
+require_token "docs/system/lifecycle-contracts.md" "contract vocabulary only, not public Pascal facade"
+require_token "docs/system/runtime-contracts.md" "contract vocabulary only, not public Pascal facade"
+
 for helper in \
   "np.system.unit_init" \
   "np.system.unit_fini" \
@@ -736,6 +764,18 @@ require_repo_reject_token "compiler/ir/np_hir_llvm_emitter.pas" "'np.system.obje
 require_repo_reject_token "compiler/ir/np_hir_llvm_emitter.pas" "'np.system.object_free.destroy'"
 require_repo_reject_token "compiler/ir/np_hir_llvm_emitter.pas" "'np.system.object_free.cleanup'"
 require_repo_reject_token "compiler/ir/np_hir_llvm_emitter.pas" "'np.system.object_free.release'"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "SeedRuntimeContracts"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "AddRuntimeContract(NPSYSTEM_PROCESS_INIT)"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "AddRuntimeContract(NPSYSTEM_PROCESS_FINI)"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "FModel.AddRuntimeContract(AContractName)"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "FModel.AddTypedHirNode('runtime-contract', AContractName, 0, 0, '')"
+require_repo_token "compiler/sema/np_semantic_model.pas" "function RuntimeContractAt(const AIndex: LongInt): TRuntimeContract;"
+require_repo_file "tests/semantic/test_semantic_runtime_contract_seed.pas"
+require_repo_token "tests/semantic/test_semantic_runtime_contract_seed.pas" "semantic-runtime-contract-seed-status=pass"
+require_repo_token "tests/semantic/test_semantic_runtime_contract_seed.pas" "AssertRuntimeContractAt(Model, 0, 'np.system.process_init')"
+require_repo_token "tests/semantic/test_semantic_runtime_contract_seed.pas" "AssertRuntimeContractAt(Model, 1, 'np.system.process_fini')"
+require_repo_token "tests/semantic/test_semantic_runtime_contract_seed.pas" "program-must-not-seed-unit-init"
+require_repo_token "tests/semantic/test_semantic_runtime_contract_seed.pas" "unit-must-not-seed-process-init"
 [[ ! -e "$CORE_ROOT/src/System.pas" ]] || fail "must not create bare FPC-conflicting System.pas"
 [[ ! -e "$CORE_ROOT/src/system.pas" ]] || fail "must not create bare FPC-conflicting system.pas"
 [[ ! -e "$CORE_ROOT/src/nextpas.core.system.classes.pas" ]] || fail "S4 deferred: no live nextpas.core.system.classes unit expected yet"
