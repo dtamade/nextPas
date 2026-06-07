@@ -110,6 +110,44 @@ begin
   Result := Int64(AValue);
 end;
 
+function SingleHasSignBit(const AValue: Single): Boolean; inline;
+var
+  LBits: UInt32;
+begin
+  Move(AValue, LBits, SizeOf(LBits));
+  Result := (LBits and UInt32($80000000)) <> 0;
+end;
+
+function DoubleHasSignBit(const AValue: Double): Boolean; inline;
+var
+  LBits: UInt64;
+begin
+  Move(AValue, LBits, SizeOf(LBits));
+  Result := (LBits and UInt64($8000000000000000)) <> 0;
+end;
+
+function SingleSignedZero(const ANegative: Boolean): Single; inline;
+var
+  LBits: UInt32;
+begin
+  if ANegative then
+    LBits := UInt32($80000000)
+  else
+    LBits := UInt32(0);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
+function DoubleSignedZero(const ANegative: Boolean): Double; inline;
+var
+  LBits: UInt64;
+begin
+  if ANegative then
+    LBits := UInt64($8000000000000000)
+  else
+    LBits := UInt64(0);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
 function IsAddOverflow(AA, AB: SizeUInt): Boolean;
 begin
   Result := AA > High(SizeUInt) - AB;
@@ -152,21 +190,37 @@ end;
 
 function Min(AA, AB: Single): Single;
 begin
+  if SingleIsNaN(AA) or SingleIsNaN(AB) then
+    Exit(SingleQuietNaN);
+  if (AA = 0.0) and (AB = 0.0) then
+    Exit(SingleSignedZero(SingleHasSignBit(AA) or SingleHasSignBit(AB)));
   if AA < AB then Result := AA else Result := AB;
 end;
 
 function Max(AA, AB: Single): Single;
 begin
+  if SingleIsNaN(AA) or SingleIsNaN(AB) then
+    Exit(SingleQuietNaN);
+  if (AA = 0.0) and (AB = 0.0) then
+    Exit(SingleSignedZero(SingleHasSignBit(AA) and SingleHasSignBit(AB)));
   if AA > AB then Result := AA else Result := AB;
 end;
 
 function Min(AA, AB: Double): Double;
 begin
+  if DoubleIsNaN(AA) or DoubleIsNaN(AB) then
+    Exit(DoubleQuietNaN);
+  if (AA = 0.0) and (AB = 0.0) then
+    Exit(DoubleSignedZero(DoubleHasSignBit(AA) or DoubleHasSignBit(AB)));
   if AA < AB then Result := AA else Result := AB;
 end;
 
 function Max(AA, AB: Double): Double;
 begin
+  if DoubleIsNaN(AA) or DoubleIsNaN(AB) then
+    Exit(DoubleQuietNaN);
+  if (AA = 0.0) and (AB = 0.0) then
+    Exit(DoubleSignedZero(DoubleHasSignBit(AA) and DoubleHasSignBit(AB)));
   if AA > AB then Result := AA else Result := AB;
 end;
 
