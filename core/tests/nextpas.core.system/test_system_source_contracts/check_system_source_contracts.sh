@@ -506,6 +506,9 @@ require_repo_token "rtl/core/classes/np_classes.pas" "unit Classes;"
 require_repo_token "core/src/nextpas.core.collections.element_manager.pas" "InitializeArray"
 require_repo_token "core/src/nextpas.core.collections.element_manager.pas" "CopyArray"
 require_repo_token "core/src/nextpas.core.collections.hashmap.swiss.pas" "GetTypeKind"
+require_repo_token "core/tests/nextpas.core.collections/test_managed_types/test_managed_types.lpr" "TArray string managed TypeInfo consumer contract"
+require_repo_token "core/tests/nextpas.core.collections/test_managed_types/test_managed_types.lpr" "LA.Copy(0, 1, 4)"
+require_repo_token "core/tests/nextpas.core.collections/test_managed_types/test_managed_types.lpr" "LA.Read(0, LReadBack, 6)"
 
 for path in \
   "core/src/nextpas.core.collections.arr.pas" \
