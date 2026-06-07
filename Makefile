@@ -52,6 +52,8 @@ landing-check: hygiene
 		lane_focus=$$(printf '%s\n' "$$lane_output" | awk -F= '$$1 == "focus" { print $$2; exit }'); \
 		test -n "$$lane_focus" || { echo "lane-focused did not report a focus path for LANE=$(LANE)" >&2; exit 1; }; \
 		$(MAKE) focused FOCUS="$$lane_focus"; \
+	else \
+		$(MAKE) test-tooling; \
 	fi
 	$(MAKE) hygiene
 

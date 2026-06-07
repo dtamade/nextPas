@@ -32,7 +32,7 @@ expect_failure() {
 
 create_repo() {
   repo_path="$1"
-  mkdir -p "$repo_path/scripts" "$repo_path/docs" "$repo_path/compiler"
+  mkdir -p "$repo_path/scripts" "$repo_path/docs" "$repo_path/compiler" "$repo_path/tests/tooling"
   cp "$REPO_ROOT/Makefile" "$repo_path/Makefile"
   cp "$REPO_ROOT/scripts/build-hygiene-check.sh" "$repo_path/scripts/build-hygiene-check.sh"
   cp "$REPO_ROOT/scripts/lane-focused.sh" "$repo_path/scripts/lane-focused.sh"
@@ -42,7 +42,13 @@ create_repo() {
   git -C "$repo_path" config user.email "tooling@example.invalid"
   git -C "$repo_path" config user.name "tooling test"
   printf 'initial\n' >"$repo_path/README.md"
-  git -C "$repo_path" add Makefile README.md scripts
+  cat >"$repo_path/tests/tooling/Makefile" <<'EOF'
+.PHONY: test
+
+test:
+	printf 'test-tooling\n' >> tooling.log
+EOF
+  git -C "$repo_path" add Makefile README.md scripts tests/tooling/Makefile
   git -C "$repo_path" commit -m "initial" >/dev/null
 }
 
@@ -83,6 +89,7 @@ printf '%s\n' "$PASS_OUTPUT" | grep -q '^behind=0$'
 printf '%s\n' "$PASS_OUTPUT" | grep -q '^scripts/helper\.sh$'
 
 make -C "$PASS_REPO/.worktrees/landing" landing-check ALLOW_PATHS=scripts >/dev/null
+grep -q '^test-tooling$' "$PASS_REPO/.worktrees/landing/tests/tooling/tooling.log"
 
 LANE_REPO="$TMP_ROOT/lane"
 create_repo "$LANE_REPO"
