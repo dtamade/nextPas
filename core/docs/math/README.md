@@ -205,6 +205,9 @@ is covered by an implementation-specific test. The candidate quaternion helper n
 it matches public `TQuatf.Rotate` semantics, but local x86_64/Linux benchmark evidence still keeps
 both candidate seams out of the public path because the scalar implementations remain faster. Public
 docs, examples, facade tests, and downstream consumers must not import `math.impl.*` units.
+Current `TVec*`, `TMat*`, and `TQuat*` public value-type methods remain scalar: local SIMD seam
+benchmarks are negative wiring evidence, and public math source units must not import
+`math.impl.simd` until a later profiled cutover adds tested public SIMD primitives.
 
 Run the internal seam correctness smoke on the current host with:
 

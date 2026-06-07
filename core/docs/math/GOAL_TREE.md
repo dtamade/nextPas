@@ -430,6 +430,9 @@ Status:
   current vector-helper seam and the candidate `TMat4f * TVec4f` and `TQuatf.Rotate` seams are all
   negative wiring evidence on this local x86_64/Linux run, so public value-type operators and
   methods remain intentionally scalar.
+  Current `TVec*`, `TMat*`, and `TQuat*` public value-type methods remain scalar: local SIMD seam
+  benchmarks are negative wiring evidence, and public math source units must not import
+  `math.impl.simd` until a later profiled cutover adds tested public SIMD primitives.
 
 ## M8: API Surface, Docs, Leak Proof, And Module Gates
 

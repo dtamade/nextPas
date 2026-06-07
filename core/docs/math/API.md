@@ -27,6 +27,9 @@ Use a narrower submodule only when a file intentionally depends on one math fami
 
 Implementation-only units are not public API. Do not import `math.impl.*` units from application
 code, examples, public docs, or public tests.
+Current `TVec*`, `TMat*`, and `TQuat*` public value-type methods remain scalar: local SIMD seam
+benchmarks are negative wiring evidence, and public math source units must not import
+`math.impl.simd` until a later profiled cutover adds tested public SIMD primitives.
 
 ## Public Surface And Example
 

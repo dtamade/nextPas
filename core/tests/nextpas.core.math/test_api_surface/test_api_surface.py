@@ -57,6 +57,17 @@ REQUIRED_CORE_TARGET_DOC_PATHS = (
     "docs/math/GOAL_TREE.md",
     "docs/math/FINAL_API_MIGRATION_DESIGN.md",
 )
+PUBLIC_MATH_SOURCE_PATHS = {
+    "src/nextpas.core.math.pas",
+    "src/nextpas.core.math.scalar.pas",
+    "src/nextpas.core.math.trig.pas",
+    "src/nextpas.core.math.vec.pas",
+    "src/nextpas.core.math.mat.pas",
+    "src/nextpas.core.math.quat.pas",
+    "src/nextpas.core.math.transform.pas",
+    "src/nextpas.core.math.easing.pas",
+    "src/nextpas.core.math.random.pas",
+}
 ROOT_MAKEFILE_PATH = "Makefile"
 ROOT_FACADE_PATH = "src/nextpas.core.math.pas"
 API_DOC_PATH = "docs/math/API.md"
@@ -94,6 +105,24 @@ REQUIRED_M8_RESIDUAL_TRUTH = (
     (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
         "M8 is not complete until broader M7 SIMD acceleration decisions and host trig link evidence are resolved.",
+    ),
+)
+REQUIRED_SIMD_SEAM_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "Current `TVec*`, `TMat*`, and `TQuat*` public value-type methods remain scalar: local SIMD seam benchmarks are negative wiring evidence, and public math source units must not import `math.impl.simd` until a later profiled cutover adds tested public SIMD primitives.",
+    ),
+    (
+        "docs/math/API.md",
+        "Current `TVec*`, `TMat*`, and `TQuat*` public value-type methods remain scalar: local SIMD seam benchmarks are negative wiring evidence, and public math source units must not import `math.impl.simd` until a later profiled cutover adds tested public SIMD primitives.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "Current `TVec*`, `TMat*`, and `TQuat*` public value-type methods remain scalar: local SIMD seam benchmarks are negative wiring evidence, and public math source units must not import `math.impl.simd` until a later profiled cutover adds tested public SIMD primitives.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "Current `TVec*`, `TMat*`, and `TQuat*` public value-type methods remain scalar: local SIMD seam benchmarks are negative wiring evidence, and public math source units must not import `math.impl.simd` until a later profiled cutover adds tested public SIMD primitives.",
     ),
 )
 REQUIRED_MAT_DOC_TRUTH = (
@@ -465,6 +494,10 @@ PRIVATE_SIMD_RE = re.compile(
 )
 PUBLIC_IMPL_RE = re.compile(
     r"\bnextpas\.core\.math\.impl\.[A-Za-z0-9_.]+\b",
+    re.IGNORECASE,
+)
+MATH_IMPL_SIMD_RE = re.compile(
+    r"\bnextpas\.core\.math\.impl\.simd\b",
     re.IGNORECASE,
 )
 PUBLIC_GLOBAL_RANDOM_RE = re.compile(
@@ -1078,6 +1111,27 @@ def scan_public_impl_consumers(root: Path, path: Path, text: str) -> list[Findin
     return findings
 
 
+def scan_public_math_source_simd_wiring(root: Path, path: Path, text: str) -> list[Finding]:
+    findings: list[Finding] = []
+    if relative(path, root) not in PUBLIC_MATH_SOURCE_PATHS:
+        return findings
+
+    code = strip_pascal_comments_and_strings(text)
+    for uses_match in USES_MATH_FFI_RE.finditer(code):
+        body = uses_match.group("body")
+        for match in MATH_IMPL_SIMD_RE.finditer(body):
+            line = line_no_at(code, uses_match.start("body") + match.start())
+            add_finding(
+                findings,
+                "no-public-math-unit-impl-simd-wiring",
+                root,
+                path,
+                line,
+                original_line(text, line),
+            )
+    return findings
+
+
 def scan_compiler_refs(root: Path, path: Path, text: str) -> list[Finding]:
     findings: list[Finding] = []
     for index, line in enumerate(text.splitlines(), start=1):
@@ -1347,6 +1401,128 @@ def run_behavior_marker_self_tests() -> None:
         globals()["REQUIRED_BEHAVIOR_TEST_MARKERS"] = original_markers
 
 
+def run_public_math_source_simd_wiring_self_tests() -> None:
+    cases = (
+        (
+            "active-public-uses",
+            "src/nextpas.core.math.vec.pas",
+            "unit nextpas.core.math.vec;\n"
+            "interface\n"
+            "uses nextpas.core.math.impl.simd;\n"
+            "implementation\n"
+            "end.\n",
+            True,
+        ),
+        (
+            "line-comment",
+            "src/nextpas.core.math.vec.pas",
+            "unit nextpas.core.math.vec;\n"
+            "interface\n"
+            "// uses nextpas.core.math.impl.simd;\n"
+            "implementation\n"
+            "end.\n",
+            False,
+        ),
+        (
+            "brace-comment",
+            "src/nextpas.core.math.vec.pas",
+            "unit nextpas.core.math.vec;\n"
+            "interface\n"
+            "{ uses nextpas.core.math.impl.simd; }\n"
+            "implementation\n"
+            "end.\n",
+            False,
+        ),
+        (
+            "paren-star-comment",
+            "src/nextpas.core.math.vec.pas",
+            "unit nextpas.core.math.vec;\n"
+            "interface\n"
+            "(* uses nextpas.core.math.impl.simd; *)\n"
+            "implementation\n"
+            "end.\n",
+            False,
+        ),
+        (
+            "string-literal",
+            "src/nextpas.core.math.vec.pas",
+            "unit nextpas.core.math.vec;\n"
+            "interface\n"
+            "const Msg = 'nextpas.core.math.impl.simd';\n"
+            "implementation\n"
+            "end.\n",
+            False,
+        ),
+        (
+            "impl-test",
+            "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr",
+            "program test_impl_simd;\n"
+            "uses nextpas.core.math.impl.simd;\n"
+            "begin\n"
+            "end.\n",
+            False,
+        ),
+        (
+            "impl-benchmark",
+            "benchmarks/nextpas.core.math/bench_simd_seam/bench_simd_seam.lpr",
+            "program bench_simd_seam;\n"
+            "uses nextpas.core.math.impl.simd;\n"
+            "begin\n"
+            "end.\n",
+            False,
+        ),
+        (
+            "internal-unit",
+            "src/nextpas.core.math.impl.simd.pas",
+            "unit nextpas.core.math.impl.simd;\n"
+            "interface\n"
+            "uses nextpas.core.math.impl.simd;\n"
+            "implementation\n"
+            "end.\n",
+            False,
+        ),
+    )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        expected_rule = "no-public-math-unit-impl-simd-wiring"
+
+        for case_name, rel, text, expected_finding in cases:
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+            findings = scan_public_math_source_simd_wiring(root, path, text)
+            rules = {finding.rule for finding in findings}
+            if expected_finding and expected_rule not in rules:
+                raise AssertionError(
+                    "public-math-source-simd-wiring self-test "
+                    + case_name
+                    + " expected "
+                    + expected_rule
+                )
+            if (not expected_finding) and findings:
+                raise AssertionError(
+                    "public-math-source-simd-wiring self-test "
+                    + case_name
+                    + " expected no findings"
+                )
+
+
+def run_required_doc_truth_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        requirement = (("docs/math/README.md", "Current scalar truth."),)
+        expected_rule = "missing-required-selftest-doc-truth"
+
+        findings = scan_required_doc_truth(root, requirement, expected_rule)
+        rules = {finding.rule for finding in findings}
+        if expected_rule not in rules:
+            raise AssertionError(
+                "required-doc-truth self-test missing-file expected "
+                + expected_rule
+            )
+
+
 def root_facade_public_names(text: str) -> list[str]:
     code = interface_text(text)
     names: set[str] = set()
@@ -1463,6 +1639,14 @@ def scan_required_doc_truth(
     for rel, snippet in requirements:
         path = root / rel
         if not path.is_file():
+            add_finding(
+                findings,
+                finding_code,
+                root,
+                path,
+                1,
+                "missing required doc " + rel,
+            )
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         if normalize_whitespace:
@@ -1494,6 +1678,15 @@ def scan_required_m8_residual_truth(root: Path) -> list[Finding]:
         root,
         REQUIRED_M8_RESIDUAL_TRUTH,
         "missing-required-m8-truth",
+    )
+
+
+def scan_required_simd_seam_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_SIMD_SEAM_DOC_TRUTH,
+        "missing-required-simd-seam-doc-truth",
+        normalize_whitespace=True,
     )
 
 
@@ -1563,6 +1756,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_core_make_target_doc_coverage(root))
     findings.extend(scan_required_host_gate_residual_truth(root))
     findings.extend(scan_required_m8_residual_truth(root))
+    findings.extend(scan_required_simd_seam_doc_truth(root))
     findings.extend(scan_required_mat_doc_truth(root))
     findings.extend(scan_required_transform_doc_truth(root))
     findings.extend(scan_required_quat_doc_truth(root))
@@ -1603,6 +1797,7 @@ def build_report(root: Path) -> Report:
         findings.extend(scan_external_m(root, path, text))
         findings.extend(scan_legacy_public_names(root, path, text))
         findings.extend(scan_private_simd(root, path, text))
+        findings.extend(scan_public_math_source_simd_wiring(root, path, text))
         findings.extend(scan_forbidden_trig_scalar_names(root, path, text))
         findings.extend(scan_forbidden_simd_mathutil_bare_names(root, path, text))
         findings.extend(scan_forbidden_fpc_math_unit_in_easing(root, path, text))
@@ -1649,6 +1844,8 @@ def main() -> int:
     args = parse_args()
     if args.self_test:
         run_behavior_marker_self_tests()
+        run_public_math_source_simd_wiring_self_tests()
+        run_required_doc_truth_self_tests()
     report = build_report(args.root)
 
     if args.json_file:

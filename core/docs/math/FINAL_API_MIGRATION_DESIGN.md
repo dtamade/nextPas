@@ -369,6 +369,9 @@ ns/op versus 372.0 ns/op for the current quaternion seam shape. This is negative
 so the public `TMat4f * TVec4f` operator and `TQuatf.Rotate` method remain scalar. `test_api_surface`
 requires the scalar and seam benchmark labels so future M7 work cannot silently drop the evidence
 while experimenting with new primitives.
+Current `TVec*`, `TMat*`, and `TQuat*` public value-type methods remain scalar: local SIMD seam
+benchmarks are negative wiring evidence, and public math source units must not import
+`math.impl.simd` until a later profiled cutover adds tested public SIMD primitives.
 
 These should not block the first API implementation. They belong after scalar correctness and full tests.
 
