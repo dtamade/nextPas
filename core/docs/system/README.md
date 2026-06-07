@@ -41,6 +41,8 @@ when real compiler/runtime or higher-level consumer pressure produces focused ev
 Detailed S4 design-only material lives in `compatibility-facades.md` and
 `compatibility-matrix.md`. Those docs distinguish bootstrap RTL pressure from a
 future public `nextpas.core.system.*` compatibility surface.
+The TypInfo-only minimal pressure audit lives in `typinfo-minimal-pressure.md`;
+it records the seven-symbol candidate set without reopening SysUtils or Classes.
 
 ## Boundaries
 

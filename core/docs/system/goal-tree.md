@@ -51,6 +51,7 @@ Exit evidence:
 - [x] Record that no public units yet should exist for `system.sysutils`, `system.typinfo`, or `system.classes`.
 - [x] Record design-only S4 facade boundaries in `compatibility-facades.md`.
 - [x] Record live consumer pressure and migration risk in `compatibility-matrix.md`.
+- [x] Record TypInfo minimal pressure audit in `typinfo-minimal-pressure.md`.
 - [ ] Decide which compatibility surfaces deserve `system.*` facade units.
 - [ ] Add only tested aliases or forwarding functions; no broad historical copy.
 - [ ] Keep filesystem, time, IO, math, text and collection implementation ownership in their existing modules.

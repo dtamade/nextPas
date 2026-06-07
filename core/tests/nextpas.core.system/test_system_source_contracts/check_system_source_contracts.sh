@@ -27,6 +27,7 @@ require_file "docs/system/runtime-contracts.md"
 require_file "docs/system/lifecycle-contracts.md"
 require_file "docs/system/compatibility-facades.md"
 require_file "docs/system/compatibility-matrix.md"
+require_file "docs/system/typinfo-minimal-pressure.md"
 
 require_token "docs/system/README.md" "RTL root"
 require_token "docs/system/README.md" "owner boundary"
@@ -39,6 +40,7 @@ require_token "docs/system/README.md" "non-goals"
 require_token "docs/system/README.md" "deferred"
 require_token "docs/system/README.md" "compatibility-facades.md"
 require_token "docs/system/README.md" "compatibility-matrix.md"
+require_token "docs/system/README.md" "typinfo-minimal-pressure.md"
 
 for unit_name in System SysUtils TypInfo Classes ObjPas; do
   require_token "docs/system/rtl-mapping.md" "$unit_name"
@@ -63,7 +65,8 @@ for token in \
   "not a current phase gate" \
   "no public units yet" \
   "compatibility-facades.md" \
-  "compatibility-matrix.md"; do
+  "compatibility-matrix.md" \
+  "typinfo-minimal-pressure.md"; do
   require_token "docs/system/goal-tree.md" "$token"
 done
 
@@ -81,6 +84,7 @@ for token in \
 done
 
 require_token "docs/system/compatibility-facades.md" 'No live `nextpas.core.system.sysutils` unit yet'
+require_token "docs/system/compatibility-facades.md" "typinfo-minimal-pressure.md"
 
 for token in \
   "compiler/toolchain/np_toolchain_runner.pas" \
@@ -94,6 +98,37 @@ for token in \
   "CopyArray" \
   "FinalizeArray"; do
   require_token "docs/system/compatibility-matrix.md" "$token"
+done
+
+require_token "docs/system/compatibility-matrix.md" "typinfo-minimal-pressure.md"
+require_token "docs/system/rtl-mapping.md" "typinfo-minimal-pressure.md"
+
+for token in \
+  "S4 TypInfo Minimal Pressure Audit" \
+  "Real Consumer Pressure" \
+  "Owner Boundary" \
+  "ABI Risks" \
+  "Minimal Unlock Conditions" \
+  "Deferred Reason" \
+  "compiler/tests/test_typinfo_contract.pas" \
+  "core/src/nextpas.core.collections.element_manager.pas" \
+  "core/src/nextpas.core.collections.hashmap.swiss.pas" \
+  "core/src/nextpas.core.collections.btree.pas" \
+  "core/src/nextpas.core.collections.concurrent.hashmap.pas"; do
+  require_token "docs/system/typinfo-minimal-pressure.md" "$token"
+done
+
+require_token "docs/system/typinfo-minimal-pressure.md" '`nextpas.core.system.typinfo` remains deferred'
+
+for token in \
+  "PTypeInfo" \
+  "TTypeKind" \
+  "TypeInfo" \
+  "GetTypeKind" \
+  "InitializeArray" \
+  "FinalizeArray" \
+  "CopyArray"; do
+  require_token "docs/system/typinfo-minimal-pressure.md" "$token"
 done
 
 for token in \

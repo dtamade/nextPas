@@ -57,11 +57,14 @@ evidence.
 Current phase note: compatibility facade work for TypInfo is deferred; there are no public units yet
 under `nextpas.core.system.typinfo`. See `compatibility-facades.md` and
 `compatibility-matrix.md` for the design-only boundary and live consumer
-evidence.
+evidence. The minimal pressure audit lives in `typinfo-minimal-pressure.md`.
 
 | FPC capability | nextPas status | nextPas owner / notes |
 | --- | --- | --- |
-| `TypeInfo` identity | `future compiler/runtime only` | Needs compiler-backed RTTI truth first. |
+| `PTypeInfo` / `TTypeKind` minimum metadata | `future compiler/runtime only` | Needs compiler-backed metadata identity and kind truth before a public facade can freeze. |
+| `TypeInfo` identity | `future compiler/runtime only` | Compiler intrinsic and emitted metadata truth; `typinfo-minimal-pressure.md` records the narrow pressure. |
+| `GetTypeKind` | `future compiler/runtime only` | Used by collections specialization; must stay tied to compiler/runtime type truth. |
+| `InitializeArray` / `FinalizeArray` / `CopyArray` | `future compiler/runtime only` | Managed-array lifecycle helpers; future work needs leak-sensitive proof and mem-owner boundary. |
 | Property metadata | `future compiler/runtime only` | Requires RTTI model and reflection policy. |
 | String-based property access | `explicitly out of scope` | Not part of S0/S1; future compatibility requires separate design. |
 

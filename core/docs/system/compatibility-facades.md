@@ -85,6 +85,11 @@ It should not start with:
 
 ## `nextpas.core.system.typinfo`
 
+The detailed minimal pressure audit for this unit lives in
+`typinfo-minimal-pressure.md`. That document narrows the candidate set to
+`PTypeInfo`, `TTypeKind`, `TypeInfo`, `GetTypeKind`, `InitializeArray`,
+`FinalizeArray`, and `CopyArray`.
+
 ### What current consumers really want
 
 Live pressure is concentrated around compiler/runtime-managed type truth:
@@ -124,6 +129,8 @@ This is the strongest real S4 pressure, but it is also the highest-risk area:
 - No live `nextpas.core.system.typinfo` unit yet.
 - The design target is a narrow runtime-truth facade, not string-based
   reflection sugar.
+- The minimal pressure audit is recorded, but the unit remains deferred until a
+  controller-approved unlock slice exists.
 - Property reflection, dynamic method lookup, and metadata mutation stay out of
   scope until a compiler-backed RTTI model exists.
 
@@ -223,4 +230,3 @@ If real pressure forces early unlock, the review packet must list:
 - owner boundary for each symbol
 - migration risk if the wrong surface is exposed
 - focused verification gate to prove the minimal surface
-

@@ -13,6 +13,7 @@ unit.
 | `PTypeInfo`, `TTypeKind`, `TypeInfo` | `compiler/tests/test_typinfo_contract.pas`, `core/src/nextpas.core.collections.element_manager.pas`, `core/src/nextpas.core.collections.hashmap.swiss.pas` | FPC `TypInfo` today | this is the most credible future `system.typinfo` slice | design pressure recorded, but no live unit | focused RTTI/collections + compiler contract gate |
 | `InitializeArray`, `CopyArray`, `FinalizeArray` | `compiler/tests/test_typinfo_contract.pas`, `core/src/nextpas.core.collections.element_manager.pas` | FPC `TypInfo` today | treat as runtime-managed lifetime ABI, not reflection sugar | no live `nextpas.core.system.typinfo` unit | leak-sensitive managed-array gate |
 | `GetTypeKind` | `core/src/nextpas.core.collections.hashmap.swiss.pas`, `core/src/nextpas.core.collections.btree.pas`, `core/src/nextpas.core.collections.concurrent.hashmap.pas` | FPC `TypInfo` today | keep tied to compiler/runtime type truth | no live `nextpas.core.system.typinfo` unit | collection contract gate proving stable type-kind semantics |
+| TypInfo minimal pressure audit | `core/docs/system/typinfo-minimal-pressure.md` | design/source-contract only | seven-symbol candidate set only; no property reflection | deferred until controller-approved unlock | compiler TypInfo contract + collections managed-lifetime + heaptrc gate |
 | `TFileStream` | `compiler/toolchain/np_toolchain_runner.pas`, multiple TLS/context units | bootstrap `Classes` | if ever surfaced, treat as IO-facing compatibility seam only | no live `nextpas.core.system.classes` unit | toolchain + file IO consumer gate with leak proof |
 | `TStringList` | `rtl/core/classes/np_classes.pas`, compiler/tooling and TLS helpers | bootstrap `Classes` | consider only as a narrow compatibility subset, not container ownership | no live `nextpas.core.system.classes` unit | focused consumer gate proving exact subset |
 | file mode constants | `fmCreate`, `fmOpenRead`, `fmShareDenyNone` in stream users | bootstrap `Classes` | keep coupled to any future `TFileStream` review, not standalone expansion | no live `nextpas.core.system.classes` unit | same gate as `TFileStream` |
@@ -29,6 +30,9 @@ unit.
   exist.
 - `TypInfo` has the strongest architectural pressure, but also the highest ABI
   risk.
+- The TypInfo candidate is narrowed in `typinfo-minimal-pressure.md`; it is
+  still deferred because compiler/runtime ABI truth is not ready to freeze as a
+  public facade.
 - `SysUtils` has the broadest consumer count, but most of that pressure belongs
   to owner modules or bootstrap RTL rather than `system` ownership.
 - `Classes` pressure is narrow and concrete, but narrow pressure is exactly why
@@ -43,4 +47,3 @@ unlock slice. If that happens, prefer:
 2. `system.classes` file/stream subset second, only if a named consumer needs
    the namespace path
 3. `system.sysutils` last, and only as a tiny delegating compatibility layer
-
