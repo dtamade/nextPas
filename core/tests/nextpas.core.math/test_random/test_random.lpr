@@ -213,6 +213,28 @@ begin
   end;
 end;
 
+procedure TestWeightedChoiceZeroPickSkipsZeroWeightPrefixes;
+var
+  Rng: TRandomGen;
+  Weights: TWeight3;
+  ZeroPickState: TRandomState;
+begin
+  ZeroPickState.S0 := 0;
+  ZeroPickState.S1 := 0;
+
+  Rng := TRandomGen.Create(1);
+  try
+    Rng.State := ZeroPickState;
+    Weights[0] := 0.0;
+    Weights[1] := 0.0;
+    Weights[2] := 1.0;
+    CheckEqual(Int64(2), Int64(Rng.WeightedChoice(Weights)),
+      'WeightedChoice pick=0 skips zero-weight prefixes');
+  finally
+    Rng.Free;
+  end;
+end;
+
 procedure TestInvalidRangesFailFast;
 var
   Rng: TRandomGen;
@@ -566,6 +588,8 @@ begin
   T.Run('WeightedChoice large finite weights stay scale-invariant',
     @TestWeightedChoiceLargeFiniteWeightsStayScaleInvariant);
   T.Run('WeightedChoice rejects all-zero weights', @TestWeightedChoiceRejectsAllZeroWeights);
+  T.Run('WeightedChoice zero-pick skips zero-weight prefixes',
+    @TestWeightedChoiceZeroPickSkipsZeroWeightPrefixes);
   T.Run('invalid ranges fail fast', @TestInvalidRangesFailFast);
   T.Run('RollMultiple rejects overflowing total', @TestRollMultipleRejectsOverflowingTotal);
   T.Run('probability dice weighted choice and shuffle', @TestProbabilityDiceWeightedAndShuffle);
