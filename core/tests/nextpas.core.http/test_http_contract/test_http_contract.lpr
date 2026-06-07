@@ -1085,6 +1085,23 @@ begin
     HTTP_STATUS_INTERNAL_SERVER_ERROR), 'facade success false for 500');
 end;
 
+procedure TestHttpWriteResponseStringThroughFacade;
+var
+  LW: IHttpResponseWriter;
+  LRaised: Boolean;
+begin
+  LW := nil;
+  LRaised := False;
+  try
+    nextpas.core.http.HttpWriteResponseString(LW, HTTP_STATUS_OK,
+      'text/plain', 'hello');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'facade response string helper is visible');
+end;
+
 { Test 19: IHttpTransport public contract shape }
 procedure TestHttpTransportRoundTripContract;
 var
@@ -1509,6 +1526,8 @@ begin
   T.Run('HttpStatusText known codes', @TestHttpStatusText);
   T.Run('HttpStatus class helpers are available through facade',
     @TestHttpStatusClassHelpersThroughFacade);
+  T.Run('HttpWriteResponseString is available through facade',
+    @TestHttpWriteResponseStringThroughFacade);
   T.Run('IHttpTransport RoundTrip contract shape', @TestHttpTransportRoundTripContract);
   T.Run('IHttpServerTransport ServeConn contract shape', @TestHttpServerTransportServeConnContract);
   T.Run('IHttpHijacker facade alias', @TestHttpHijackerFacadeAlias);

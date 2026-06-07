@@ -188,6 +188,8 @@ function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload; inline;
 function NewGetRequest(const APath: string): IHttpRequest; inline;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders; const ABody: IReader): IHttpResponse; inline;
+function HttpWriteResponseString(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AContentType, ABody: string): SizeUInt; inline;
 
 { Static helpers }
 function ServeFile(const APath: string): THttpHandlerFunc; inline;
@@ -468,6 +470,13 @@ end;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders; const ABody: IReader): IHttpResponse;
 begin
   Result := nextpas.core.http.message.NewResponse(AStatus, AHeaders, ABody);
+end;
+
+function HttpWriteResponseString(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AContentType, ABody: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteResponseString(AW, AStatus,
+    AContentType, ABody);
 end;
 
 function ServeFile(const APath: string): THttpHandlerFunc;

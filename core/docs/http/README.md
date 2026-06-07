@@ -120,6 +120,13 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   `Content-Type`.
 - `NewResponse(Status, Headers, Body)` — build responses; nil headers create
   an empty header set so callers can safely read or mutate `Resp.Headers`.
+- `HttpWriteResponseString(Writer, Status, ContentType, Body)` — write a
+  fixed Pascal string response through an `IHttpResponseWriter` and return the
+  body bytes accepted by the writer. Nil writers raise `EArgumentError`;
+  informational statuses raise `EHttpError` because the helper writes final
+  responses; non-empty bodies for `204` / `304` raise before committing bytes;
+  empty `204` / `304` responses skip entity headers; body-permitted final
+  statuses publish a non-empty `Content-Type` and always set `Content-Length`.
 
 ### Server / Client (interfaces)
 

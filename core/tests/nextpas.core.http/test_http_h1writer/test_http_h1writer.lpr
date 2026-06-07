@@ -14,6 +14,7 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
+  nextpas.core.http.message,
   nextpas.core.http.impl.h1.outbound,
   nextpas.core.http.impl.h1.writer;
 
@@ -43,6 +44,24 @@ type
   public
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     function GetOutput: string;
+    function WriteCalls: Int32;
+  end;
+
+  TPartialResponseWriter = class(TInterfacedObject, IHttpResponseWriter)
+  private
+    FHeaders: IHttpHeaders;
+    FStatus: THttpStatus;
+    FBody: string;
+    FMaxPerWrite: SizeUInt;
+    FWriteCalls: Int32;
+  public
+    constructor Create(const AMaxPerWrite: SizeUInt);
+    procedure WriteHeader(const AStatus: THttpStatus);
+    function GetStatus: THttpStatus;
+    function GetHeaders: IHttpHeaders;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Flush;
+    function Body: string;
     function WriteCalls: Int32;
   end;
 
@@ -143,6 +162,58 @@ begin
 end;
 
 function TCountingWriter.WriteCalls: Int32;
+begin
+  Result := FWriteCalls;
+end;
+
+constructor TPartialResponseWriter.Create(const AMaxPerWrite: SizeUInt);
+begin
+  inherited Create;
+  FHeaders := NewHttpHeaders;
+  FStatus := 0;
+  FMaxPerWrite := AMaxPerWrite;
+end;
+
+procedure TPartialResponseWriter.WriteHeader(const AStatus: THttpStatus);
+begin
+  FStatus := AStatus;
+end;
+
+function TPartialResponseWriter.GetStatus: THttpStatus;
+begin
+  Result := FStatus;
+end;
+
+function TPartialResponseWriter.GetHeaders: IHttpHeaders;
+begin
+  Result := FHeaders;
+end;
+
+function TPartialResponseWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LOld: SizeUInt;
+begin
+  Inc(FWriteCalls);
+  if (ACount = 0) or (FMaxPerWrite = 0) then
+    Exit(0);
+  Result := ACount;
+  if Result > FMaxPerWrite then
+    Result := FMaxPerWrite;
+  LOld := SizeUInt(Length(FBody));
+  SetLength(FBody, LOld + Result);
+  Move(ABuf, FBody[LOld + 1], Result);
+end;
+
+procedure TPartialResponseWriter.Flush;
+begin
+end;
+
+function TPartialResponseWriter.Body: string;
+begin
+  Result := FBody;
+end;
+
+function TPartialResponseWriter.WriteCalls: Int32;
 begin
   Result := FWriteCalls;
 end;
@@ -446,6 +517,164 @@ begin
     'hello';
   CheckEqual(LExpected, LOut, 'full response');
   LRW.Free;
+end;
+
+procedure TestHttpWriteResponseStringHelper;
+var
+  LW: TBytesWriter;
+  LRW: IHttpResponseWriter;
+  LWritten: SizeUInt;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter) as IHttpResponseWriter;
+  LWritten := HttpWriteResponseString(LRW,
+    HTTP_STATUS_CREATED, 'text/plain; charset=utf-8', 'hello');
+
+  CheckEqual(Int64(5), Int64(LWritten), 'string response helper byte count');
+  CheckEqual(
+    'HTTP/1.1 201 Created'#13#10 +
+    'content-type: text/plain; charset=utf-8'#13#10 +
+    'content-length: 5'#13#10 +
+    #13#10 +
+    'hello',
+    LW.GetOutput, 'string response helper exact wire');
+end;
+
+procedure TestHttpWriteResponseStringHelperEmptyBody;
+var
+  LW: TBytesWriter;
+  LRW: IHttpResponseWriter;
+  LWritten: SizeUInt;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter) as IHttpResponseWriter;
+  LWritten := HttpWriteResponseString(LRW,
+    HTTP_STATUS_OK, '', '');
+
+  CheckEqual(Int64(0), Int64(LWritten), 'empty string response byte count');
+  CheckEqual(
+    'HTTP/1.1 200 OK'#13#10 +
+    'content-length: 0'#13#10 +
+    #13#10,
+    LW.GetOutput, 'empty string response helper exact wire');
+end;
+
+procedure TestHttpWriteResponseStringHelperRejectsNilWriter;
+var
+  LW: IHttpResponseWriter;
+  LRaised: Boolean;
+begin
+  LW := nil;
+  LRaised := False;
+  try
+    HttpWriteResponseString(LW, HTTP_STATUS_OK, 'text/plain', 'hello');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'string response helper rejects nil writer');
+end;
+
+procedure TestHttpWriteResponseStringHelperRejectsNoBodyStatus;
+var
+  LW: TBytesWriter;
+  LRW: IHttpResponseWriter;
+  LRaised: Boolean;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter) as IHttpResponseWriter;
+  LRaised := False;
+  try
+    HttpWriteResponseString(LRW, HTTP_STATUS_NO_CONTENT, 'text/plain',
+      'hello');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'string response helper rejects body-forbidden status');
+  CheckEqual('', LW.GetOutput,
+    'body-forbidden status rejection happens before commit');
+end;
+
+procedure TestHttpWriteResponseStringHelperNoBodyStatusSkipsEntityHeaders;
+var
+  LW: TBytesWriter;
+  LRW: IHttpResponseWriter;
+  LWritten: SizeUInt;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter) as IHttpResponseWriter;
+  LWritten := HttpWriteResponseString(LRW,
+    HTTP_STATUS_NO_CONTENT, 'text/plain', '');
+
+  CheckEqual(Int64(0), Int64(LWritten), '204 empty helper byte count');
+  CheckEqual(
+    'HTTP/1.1 204 No Content'#13#10 +
+    #13#10,
+    LW.GetOutput, '204 empty helper skips entity headers');
+end;
+
+procedure TestHttpWriteResponseStringHelperRejectsInformationalStatus;
+var
+  LW: TBytesWriter;
+  LRW: IHttpResponseWriter;
+  LRaised: Boolean;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter) as IHttpResponseWriter;
+  LRaised := False;
+  try
+    HttpWriteResponseString(LRW, HTTP_STATUS_EARLY_HINTS, 'text/plain', '');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'string response helper rejects informational status');
+  CheckEqual('', LW.GetOutput,
+    'informational status rejection happens before commit');
+end;
+
+procedure TestHttpWriteResponseStringHelperWritesThroughShortProgressWriter;
+var
+  LRW: TPartialResponseWriter;
+  LWritten: SizeUInt;
+begin
+  LRW := TPartialResponseWriter.Create(2);
+  LWritten := HttpWriteResponseString(LRW as IHttpResponseWriter,
+    HTTP_STATUS_OK, 'text/plain', 'hello');
+
+  CheckEqual(Int64(HTTP_STATUS_OK), Int64(LRW.GetStatus),
+    'partial writer status');
+  CheckEqual('text/plain', LRW.GetHeaders.Get('content-type'),
+    'partial writer content-type');
+  CheckEqual('5', LRW.GetHeaders.Get('content-length'),
+    'partial writer content-length');
+  CheckEqual(Int64(5), Int64(LWritten), 'partial writer byte count');
+  CheckEqual('hello', LRW.Body, 'partial writer body');
+  CheckEqual(Int64(3), Int64(LRW.WriteCalls), 'partial writer retries');
+end;
+
+procedure TestHttpWriteResponseStringHelperRejectsZeroProgressWriter;
+var
+  LRW: TPartialResponseWriter;
+  LRaised: Boolean;
+begin
+  LRW := TPartialResponseWriter.Create(0);
+  LRaised := False;
+  try
+    HttpWriteResponseString(LRW as IHttpResponseWriter,
+      HTTP_STATUS_OK, 'text/plain', 'hello');
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'string response helper rejects zero-progress writer');
+  CheckEqual(Int64(HTTP_STATUS_OK), Int64(LRW.GetStatus),
+    'zero-progress writer status was committed before body failure');
+  CheckEqual('', LRW.Body, 'zero-progress writer does not append body');
 end;
 
 procedure TestPresetTransferEncodingPreserved;
@@ -1084,6 +1313,22 @@ begin
   T.Run('Multiple headers written correctly', @TestMultipleHeadersWritten);
   T.Run('WriteHeader only called once', @TestWriteHeaderOnlyOnce);
   T.Run('Full response format', @TestFullResponse);
+  T.Run('HttpWriteResponseString helper writes fixed body',
+    @TestHttpWriteResponseStringHelper);
+  T.Run('HttpWriteResponseString helper writes empty body',
+    @TestHttpWriteResponseStringHelperEmptyBody);
+  T.Run('HttpWriteResponseString helper rejects nil writer',
+    @TestHttpWriteResponseStringHelperRejectsNilWriter);
+  T.Run('HttpWriteResponseString helper rejects body-forbidden status',
+    @TestHttpWriteResponseStringHelperRejectsNoBodyStatus);
+  T.Run('HttpWriteResponseString helper skips entity headers on empty no-body status',
+    @TestHttpWriteResponseStringHelperNoBodyStatusSkipsEntityHeaders);
+  T.Run('HttpWriteResponseString helper rejects informational status',
+    @TestHttpWriteResponseStringHelperRejectsInformationalStatus);
+  T.Run('HttpWriteResponseString helper writes through short-progress writer',
+    @TestHttpWriteResponseStringHelperWritesThroughShortProgressWriter);
+  T.Run('HttpWriteResponseString helper rejects zero-progress writer',
+    @TestHttpWriteResponseStringHelperRejectsZeroProgressWriter);
   T.Run('Preset Transfer-Encoding is preserved', @TestPresetTransferEncodingPreserved);
   T.Run('Flush with Content-Length does not write final chunk',
     @TestFlushWithContentLengthDoesNotWriteFinalChunk);

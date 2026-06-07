@@ -121,6 +121,8 @@ function NewRequest(const AMethod: THttpMethod; const AUrl: string;
 function NewGetRequest(const APath: string): IHttpRequest;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABody: IReader): IHttpResponse;
+function HttpWriteResponseString(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AContentType, ABody: string): SizeUInt;
 
 implementation
 
@@ -162,6 +164,38 @@ begin
     Exit(nil);
   Result := NewHttpHeaders;
   Result.Set_('content-type', AContentType);
+end;
+
+function ResponseStatusMustNotHaveBody(const AStatus: THttpStatus): Boolean;
+begin
+  Result := HttpStatusIsInformational(AStatus) or
+    (AStatus = HTTP_STATUS_NO_CONTENT) or
+    (AStatus = HTTP_STATUS_NOT_MODIFIED);
+end;
+
+procedure RequireResponseWriter(const AW: IHttpResponseWriter);
+begin
+  if AW = nil then
+    raise EArgumentError.Create('HTTP response writer is nil');
+end;
+
+function WriteAllResponseBodyString(const AW: IHttpResponseWriter;
+  const ABody: string): SizeUInt;
+var
+  LTotal: SizeUInt;
+  LWritten: SizeUInt;
+  LLen: SizeUInt;
+begin
+  LLen := SizeUInt(Length(ABody));
+  LTotal := 0;
+  while LTotal < LLen do
+  begin
+    LWritten := AW.Write(ABody[LTotal + 1], LLen - LTotal);
+    if LWritten = 0 then
+      raise EIOError.Create('HTTP response writer made zero progress');
+    Inc(LTotal, LWritten);
+  end;
+  Result := LTotal;
 end;
 
 { THttpRequest }
@@ -526,6 +560,28 @@ function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABody: IReader): IHttpResponse;
 begin
   Result := THttpResponse.Create(AStatus, AHeaders, ABody);
+end;
+
+function HttpWriteResponseString(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AContentType, ABody: string): SizeUInt;
+begin
+  RequireResponseWriter(AW);
+  if HttpStatusIsInformational(AStatus) then
+    raise EHttpError.Create(
+      'HTTP response string helper requires a final response status');
+  if ResponseStatusMustNotHaveBody(AStatus) then
+  begin
+    if ABody <> '' then
+      raise EHttpError.Create('HTTP response status must not include a body');
+    AW.WriteHeader(AStatus);
+    Exit(0);
+  end;
+
+  if AContentType <> '' then
+    AW.GetHeaders.Set_('content-type', AContentType);
+  AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(ABody))));
+  AW.WriteHeader(AStatus);
+  Result := WriteAllResponseBodyString(AW, ABody);
 end;
 
 end.
