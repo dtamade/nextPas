@@ -30,6 +30,40 @@ const
 var
   T: TTestRunner;
 
+function StartThread(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer; const AMessage: string): Int32;
+begin
+  Result := platform_thread_create(AHandle, AProc, AArg);
+  CheckEqual(Int64(0), Int64(Result), AMessage + ': platform_thread_create must succeed');
+end;
+
+procedure JoinThread(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer; const AMessage: string);
+var
+  LResult: Int32;
+begin
+  LResult := platform_thread_join(AHandle, ARetVal);
+  CheckEqual(Int64(0), Int64(LResult), AMessage + ': platform_thread_join must succeed');
+end;
+
+procedure JoinStartedThread(const AHandle: TPlatformThreadHandle; var AStarted: Boolean; const AMessage: string);
+var
+  LRetVal: Pointer;
+begin
+  if not AStarted then
+    Exit;
+  JoinThread(AHandle, LRetVal, AMessage);
+  AStarted := False;
+end;
+
+procedure JoinStartedThreads(const AHandles: array of TPlatformThreadHandle; var AStartedCount: Integer; const AMessage: string);
+var
+  LI: Integer;
+  LRetVal: Pointer;
+begin
+  for LI := 0 to AStartedCount - 1 do
+    JoinThread(AHandles[LI], LRetVal, AMessage);
+  AStartedCount := 0;
+end;
+
 function ReadUtf8TextFile(const APath: string): string;
 var
   LStream: TFileStream;
@@ -52,6 +86,37 @@ end;
 procedure CheckNotContains(const AText, AUnexpected, AMessage: string);
 begin
   Check(Pos(AUnexpected, AText) = 0, AMessage + ': unexpected "' + AUnexpected + '"');
+end;
+
+procedure CheckBefore(const AText, AEarlier, ALater, AMessage: string);
+var
+  LEarlierPos: SizeInt;
+  LLaterPos: SizeInt;
+begin
+  LEarlierPos := Pos(AEarlier, AText);
+  LLaterPos := Pos(ALater, AText);
+  Check(LEarlierPos > 0, AMessage + ': missing earlier marker "' + AEarlier + '"');
+  Check(LLaterPos > 0, AMessage + ': missing later marker "' + ALater + '"');
+  Check(LEarlierPos < LLaterPos, AMessage);
+end;
+
+function CountOccurrences(const AText, ANeedle: string): SizeInt;
+var
+  LOffset: SizeInt;
+  LPos: SizeInt;
+begin
+  Result := 0;
+  if ANeedle = '' then
+    Exit;
+  LOffset := 1;
+  while LOffset <= Length(AText) do
+  begin
+    LPos := Pos(ANeedle, Copy(AText, LOffset, Length(AText) - LOffset + 1));
+    if LPos = 0 then
+      Break;
+    Inc(Result);
+    Inc(LOffset, LPos + Length(ANeedle) - 1);
+  end;
 end;
 
 function ExtractSection(const AText, AStartMarker, AEndMarker, AMessage: string): string;
@@ -168,64 +233,85 @@ var
   LV: Integer;
   LBlockedProducer: TPlatformThreadHandle;
   LBlockedConsumer: TPlatformThreadHandle;
-  LRetVal: Pointer;
   LElapsedMs: QWord;
   LSpin: Integer;
+  LProducerStarted: Boolean;
+  LConsumerStarted: Boolean;
 begin
   LQ := TIntSpsc.Create(1);
-  Check(LQ.TryEnqueue(1), 'fill queue before blocked producer close');
-  GSpscCloseWakeQ := LQ;
-  AtomicStore32(GSpscCloseProducerStarted, 0, moRelease);
-  AtomicStore32(GSpscCloseProducerResult, -1, moRelease);
-  platform_thread_create(LBlockedProducer, @SpscCloseWakeProducer, nil);
-  for LSpin := 1 to 1000 do
-  begin
-    if AtomicLoad32(GSpscCloseProducerStarted, moAcquire) <> 0 then
-      Break;
-    platform_thread_sleep_ns(1000000);
+  LProducerStarted := False;
+  try
+    Check(LQ.TryEnqueue(1), 'fill queue before blocked producer close');
+    GSpscCloseWakeQ := LQ;
+    AtomicStore32(GSpscCloseProducerStarted, 0, moRelease);
+    AtomicStore32(GSpscCloseProducerResult, -1, moRelease);
+    StartThread(LBlockedProducer, @SpscCloseWakeProducer, nil, 'SPSC close timeout producer thread');
+    LProducerStarted := True;
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GSpscCloseProducerStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GSpscCloseProducerStarted, moAcquire)),
+      'blocked EnqueueTimeout producer thread must start before close');
+    platform_thread_sleep_ns(CloseWakePendingProbeNs);
+    CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscCloseProducerResult, moAcquire)),
+      'blocked EnqueueTimeout should still be pending before close');
+    LElapsedMs := GetTickCount64;
+    LQ.Close;
+    JoinStartedThread(LBlockedProducer, LProducerStarted, 'SPSC close timeout producer thread');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+    CheckEqual(Int64(0), Int64(AtomicLoad32(GSpscCloseProducerResult, moAcquire)),
+      'blocked EnqueueTimeout woken by close');
+    Check(LElapsedMs < 1000, 'blocked EnqueueTimeout should return promptly after close');
+    Check(LQ.TryDequeue(LV), 'drain queued item after blocked producer close');
+    CheckEqual(Int64(1), Int64(LV));
+    Check(not LQ.TryDequeue(LV), 'blocked producer wake must not publish a new item after close');
+  finally
+    if LProducerStarted then
+    begin
+      LQ.Close;
+      JoinStartedThread(LBlockedProducer, LProducerStarted, 'SPSC close timeout producer thread');
+    end;
+    LQ.Free;
   end;
-  CheckEqual(Int64(1), Int64(AtomicLoad32(GSpscCloseProducerStarted, moAcquire)),
-    'blocked EnqueueTimeout producer thread must start before close');
-  platform_thread_sleep_ns(CloseWakePendingProbeNs);
-  CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscCloseProducerResult, moAcquire)),
-    'blocked EnqueueTimeout should still be pending before close');
-  LElapsedMs := GetTickCount64;
-  LQ.Close;
-  platform_thread_join(LBlockedProducer, LRetVal);
-  LElapsedMs := GetTickCount64 - LElapsedMs;
-  CheckEqual(Int64(0), Int64(AtomicLoad32(GSpscCloseProducerResult, moAcquire)),
-    'blocked EnqueueTimeout woken by close');
-  Check(LElapsedMs < 1000, 'blocked EnqueueTimeout should return promptly after close');
-  Check(LQ.TryDequeue(LV), 'drain queued item after blocked producer close');
-  CheckEqual(Int64(1), Int64(LV));
-  Check(not LQ.TryDequeue(LV), 'blocked producer wake must not publish a new item after close');
-  LQ.Free;
 
   LQ := TIntSpsc.Create(1);
-  GSpscCloseWakeQ := LQ;
-  AtomicStore32(GSpscCloseConsumerStarted, 0, moRelease);
-  AtomicStore32(GSpscCloseConsumerResult, -1, moRelease);
-  platform_thread_create(LBlockedConsumer, @SpscCloseWakeConsumer, nil);
-  for LSpin := 1 to 1000 do
-  begin
-    if AtomicLoad32(GSpscCloseConsumerStarted, moAcquire) <> 0 then
-      Break;
-    platform_thread_sleep_ns(1000000);
+  LConsumerStarted := False;
+  try
+    GSpscCloseWakeQ := LQ;
+    AtomicStore32(GSpscCloseConsumerStarted, 0, moRelease);
+    AtomicStore32(GSpscCloseConsumerResult, -1, moRelease);
+    StartThread(LBlockedConsumer, @SpscCloseWakeConsumer, nil, 'SPSC close timeout consumer thread');
+    LConsumerStarted := True;
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GSpscCloseConsumerStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GSpscCloseConsumerStarted, moAcquire)),
+      'blocked DequeueTimeout consumer thread must start before close');
+    platform_thread_sleep_ns(CloseWakePendingProbeNs);
+    CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscCloseConsumerResult, moAcquire)),
+      'blocked DequeueTimeout should still be pending before close');
+    LElapsedMs := GetTickCount64;
+    LQ.Close;
+    JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'SPSC close timeout consumer thread');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+    CheckEqual(Int64(0), Int64(AtomicLoad32(GSpscCloseConsumerResult, moAcquire)),
+      'blocked DequeueTimeout woken by close');
+    Check(LElapsedMs < 1000, 'blocked DequeueTimeout should return promptly after close');
+    Check(not LQ.TryDequeue(LV), 'blocked consumer wake must leave the closed empty queue empty');
+  finally
+    if LConsumerStarted then
+    begin
+      LQ.Close;
+      JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'SPSC close timeout consumer thread');
+    end;
+    LQ.Free;
   end;
-  CheckEqual(Int64(1), Int64(AtomicLoad32(GSpscCloseConsumerStarted, moAcquire)),
-    'blocked DequeueTimeout consumer thread must start before close');
-  platform_thread_sleep_ns(CloseWakePendingProbeNs);
-  CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscCloseConsumerResult, moAcquire)),
-    'blocked DequeueTimeout should still be pending before close');
-  LElapsedMs := GetTickCount64;
-  LQ.Close;
-  platform_thread_join(LBlockedConsumer, LRetVal);
-  LElapsedMs := GetTickCount64 - LElapsedMs;
-  CheckEqual(Int64(0), Int64(AtomicLoad32(GSpscCloseConsumerResult, moAcquire)),
-    'blocked DequeueTimeout woken by close');
-  Check(LElapsedMs < 1000, 'blocked DequeueTimeout should return promptly after close');
-  Check(not LQ.TryDequeue(LV), 'blocked consumer wake must leave the closed empty queue empty');
-  LQ.Free;
 end;
 
 procedure TestSpscCloseWakeWaits;
@@ -234,64 +320,85 @@ var
   LV: Integer;
   LBlockedProducer: TPlatformThreadHandle;
   LBlockedConsumer: TPlatformThreadHandle;
-  LRetVal: Pointer;
   LElapsedMs: QWord;
   LSpin: Integer;
+  LProducerStarted: Boolean;
+  LConsumerStarted: Boolean;
 begin
   LQ := TIntSpsc.Create(1);
-  Check(LQ.TryEnqueue(1), 'fill queue before blocked EnqueueWait close');
-  GSpscCloseWakeQ := LQ;
-  AtomicStore32(GSpscCloseProducerStarted, 0, moRelease);
-  AtomicStore32(GSpscCloseProducerResult, -1, moRelease);
-  platform_thread_create(LBlockedProducer, @SpscCloseWaitProducer, nil);
-  for LSpin := 1 to 1000 do
-  begin
-    if AtomicLoad32(GSpscCloseProducerStarted, moAcquire) <> 0 then
-      Break;
-    platform_thread_sleep_ns(1000000);
+  LProducerStarted := False;
+  try
+    Check(LQ.TryEnqueue(1), 'fill queue before blocked EnqueueWait close');
+    GSpscCloseWakeQ := LQ;
+    AtomicStore32(GSpscCloseProducerStarted, 0, moRelease);
+    AtomicStore32(GSpscCloseProducerResult, -1, moRelease);
+    StartThread(LBlockedProducer, @SpscCloseWaitProducer, nil, 'SPSC close wait producer thread');
+    LProducerStarted := True;
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GSpscCloseProducerStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GSpscCloseProducerStarted, moAcquire)),
+      'blocked EnqueueWait producer thread must start before close');
+    platform_thread_sleep_ns(CloseWakePendingProbeNs);
+    CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscCloseProducerResult, moAcquire)),
+      'blocked EnqueueWait should still be pending before close');
+    LElapsedMs := GetTickCount64;
+    LQ.Close;
+    JoinStartedThread(LBlockedProducer, LProducerStarted, 'SPSC close wait producer thread');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+    CheckEqual(Int64(0), Int64(AtomicLoad32(GSpscCloseProducerResult, moAcquire)),
+      'blocked EnqueueWait woken by close');
+    Check(LElapsedMs < 1000, 'blocked EnqueueWait should return promptly after close');
+    Check(LQ.TryDequeue(LV), 'drain queued item after blocked EnqueueWait close');
+    CheckEqual(Int64(1), Int64(LV));
+    Check(not LQ.TryDequeue(LV), 'blocked EnqueueWait wake must not publish a new item after close');
+  finally
+    if LProducerStarted then
+    begin
+      LQ.Close;
+      JoinStartedThread(LBlockedProducer, LProducerStarted, 'SPSC close wait producer thread');
+    end;
+    LQ.Free;
   end;
-  CheckEqual(Int64(1), Int64(AtomicLoad32(GSpscCloseProducerStarted, moAcquire)),
-    'blocked EnqueueWait producer thread must start before close');
-  platform_thread_sleep_ns(CloseWakePendingProbeNs);
-  CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscCloseProducerResult, moAcquire)),
-    'blocked EnqueueWait should still be pending before close');
-  LElapsedMs := GetTickCount64;
-  LQ.Close;
-  platform_thread_join(LBlockedProducer, LRetVal);
-  LElapsedMs := GetTickCount64 - LElapsedMs;
-  CheckEqual(Int64(0), Int64(AtomicLoad32(GSpscCloseProducerResult, moAcquire)),
-    'blocked EnqueueWait woken by close');
-  Check(LElapsedMs < 1000, 'blocked EnqueueWait should return promptly after close');
-  Check(LQ.TryDequeue(LV), 'drain queued item after blocked EnqueueWait close');
-  CheckEqual(Int64(1), Int64(LV));
-  Check(not LQ.TryDequeue(LV), 'blocked EnqueueWait wake must not publish a new item after close');
-  LQ.Free;
 
   LQ := TIntSpsc.Create(1);
-  GSpscCloseWakeQ := LQ;
-  AtomicStore32(GSpscCloseConsumerStarted, 0, moRelease);
-  AtomicStore32(GSpscCloseConsumerResult, -1, moRelease);
-  platform_thread_create(LBlockedConsumer, @SpscCloseWaitConsumer, nil);
-  for LSpin := 1 to 1000 do
-  begin
-    if AtomicLoad32(GSpscCloseConsumerStarted, moAcquire) <> 0 then
-      Break;
-    platform_thread_sleep_ns(1000000);
+  LConsumerStarted := False;
+  try
+    GSpscCloseWakeQ := LQ;
+    AtomicStore32(GSpscCloseConsumerStarted, 0, moRelease);
+    AtomicStore32(GSpscCloseConsumerResult, -1, moRelease);
+    StartThread(LBlockedConsumer, @SpscCloseWaitConsumer, nil, 'SPSC close wait consumer thread');
+    LConsumerStarted := True;
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GSpscCloseConsumerStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GSpscCloseConsumerStarted, moAcquire)),
+      'blocked DequeueWait consumer thread must start before close');
+    platform_thread_sleep_ns(CloseWakePendingProbeNs);
+    CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscCloseConsumerResult, moAcquire)),
+      'blocked DequeueWait should still be pending before close');
+    LElapsedMs := GetTickCount64;
+    LQ.Close;
+    JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'SPSC close wait consumer thread');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+    CheckEqual(Int64(0), Int64(AtomicLoad32(GSpscCloseConsumerResult, moAcquire)),
+      'blocked DequeueWait woken by close');
+    Check(LElapsedMs < 1000, 'blocked DequeueWait should return promptly after close');
+    Check(not LQ.TryDequeue(LV), 'blocked DequeueWait wake must leave the closed empty queue empty');
+  finally
+    if LConsumerStarted then
+    begin
+      LQ.Close;
+      JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'SPSC close wait consumer thread');
+    end;
+    LQ.Free;
   end;
-  CheckEqual(Int64(1), Int64(AtomicLoad32(GSpscCloseConsumerStarted, moAcquire)),
-    'blocked DequeueWait consumer thread must start before close');
-  platform_thread_sleep_ns(CloseWakePendingProbeNs);
-  CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscCloseConsumerResult, moAcquire)),
-    'blocked DequeueWait should still be pending before close');
-  LElapsedMs := GetTickCount64;
-  LQ.Close;
-  platform_thread_join(LBlockedConsumer, LRetVal);
-  LElapsedMs := GetTickCount64 - LElapsedMs;
-  CheckEqual(Int64(0), Int64(AtomicLoad32(GSpscCloseConsumerResult, moAcquire)),
-    'blocked DequeueWait woken by close');
-  Check(LElapsedMs < 1000, 'blocked DequeueWait should return promptly after close');
-  Check(not LQ.TryDequeue(LV), 'blocked DequeueWait wake must leave the closed empty queue empty');
-  LQ.Free;
 end;
 
 procedure TestSpscApproxCount;
@@ -330,7 +437,7 @@ var
 begin
   GSpscQ := TIntSpsc.Create(16);
   LSum := 0;
-  platform_thread_create(LHandle, @SpscProducer, nil);
+  StartThread(LHandle, @SpscProducer, nil, 'SPSC producer thread');
   while True do
   begin
     if not GSpscQ.DequeueWait(LV) then
@@ -339,7 +446,7 @@ begin
     if LSum >= 500500 then
       Break;
   end;
-  platform_thread_join(LHandle, LRetVal);
+  JoinThread(LHandle, LRetVal, 'SPSC producer thread');
   CheckEqual(Int64(500500), Int64(LSum), '1+2+...+1000');
   GSpscQ.Free;
 end;
@@ -415,8 +522,7 @@ begin
     AtomicStore32(GSpscPublishWakeConsumerStarted, 0, moRelease);
     AtomicStore32(GSpscPublishWakeConsumerResult, -1, moRelease);
     GSpscPublishWakeConsumerValue := 0;
-    CheckEqual(Int64(0), Int64(platform_thread_create(LConsumer, @SpscPublishWakeConsumer, nil)),
-      'SPSC publish wake consumer thread must start');
+    StartThread(LConsumer, @SpscPublishWakeConsumer, nil, 'SPSC publish wake consumer thread');
     LThreadCreated := True;
 
     for LSpin := 1 to 1000 do
@@ -433,7 +539,7 @@ begin
 
     LElapsedMs := GetTickCount64;
     Check(LQ.TryEnqueue(42), 'SPSC producer must publish the wake item');
-    platform_thread_join(LConsumer, LRetVal);
+    JoinThread(LConsumer, LRetVal, 'publish wake consumer thread');
     LJoined := True;
     LElapsedMs := GetTickCount64 - LElapsedMs;
 
@@ -444,7 +550,7 @@ begin
       'SPSC DequeueTimeout consumer must wake on data publish before the full timeout');
   finally
     if LThreadCreated and (not LJoined) then
-      platform_thread_join(LConsumer, LRetVal);
+      JoinThread(LConsumer, LRetVal, 'publish wake consumer thread');
     GSpscPublishWakeQ := nil;
     LQ.Free;
   end;
@@ -470,8 +576,7 @@ begin
     AtomicStore32(GSpscSpaceWakeProducerStarted, 0, moRelease);
     AtomicStore32(GSpscSpaceWakeProducerObservedFull, 0, moRelease);
     AtomicStore32(GSpscSpaceWakeProducerResult, -1, moRelease);
-    CheckEqual(Int64(0), Int64(platform_thread_create(LProducer, @SpscSpaceWakeProducer, nil)),
-      'SPSC space wake producer thread must start');
+    StartThread(LProducer, @SpscSpaceWakeProducer, nil, 'SPSC space wake producer thread');
     LThreadCreated := True;
 
     for LSpin := 1 to 1000 do
@@ -497,7 +602,7 @@ begin
     LElapsedMs := GetTickCount64;
     Check(LQ.TryDequeue(LV), 'SPSC consumer must release queue space');
     CheckEqual(Int64(1), Int64(LV));
-    platform_thread_join(LProducer, LRetVal);
+    JoinThread(LProducer, LRetVal, 'space wake producer thread');
     LJoined := True;
     LElapsedMs := GetTickCount64 - LElapsedMs;
 
@@ -510,7 +615,7 @@ begin
     Check(not LQ.TryDequeue(LV), 'SPSC queue must be empty after draining the space-woken item');
   finally
     if LThreadCreated and (not LJoined) then
-      platform_thread_join(LProducer, LRetVal);
+      JoinThread(LProducer, LRetVal, 'space wake producer thread');
     GSpscPublishWakeQ := nil;
     LQ.Free;
   end;
@@ -645,9 +750,10 @@ var
   LV: Integer;
   LBlockedProducer: TPlatformThreadHandle;
   LBlockedConsumer: TPlatformThreadHandle;
-  LRetVal: Pointer;
   LElapsedMs: QWord;
   LSpin: Integer;
+  LProducerStarted: Boolean;
+  LConsumerStarted: Boolean;
 begin
   LQ := TIntMpmc.Create(4);
   LQ.TryEnqueue(1);
@@ -662,59 +768,79 @@ begin
   LQ.Free;
 
   LQ := TIntMpmc.Create(1);
-  Check(LQ.TryEnqueue(1), 'fill queue before blocked producer close');
-  GMpmcCloseWakeQ := LQ;
-  AtomicStore32(GMpmcCloseWakeStarted, 0, moRelease);
-  AtomicStore32(GMpmcCloseWakeResult, -1, moRelease);
-  platform_thread_create(LBlockedProducer, @MpmcCloseWakeProducer, nil);
-  for LSpin := 1 to 1000 do
-  begin
-    if AtomicLoad32(GMpmcCloseWakeStarted, moAcquire) <> 0 then
-      Break;
-    platform_thread_sleep_ns(1000000);
+  LProducerStarted := False;
+  try
+    Check(LQ.TryEnqueue(1), 'fill queue before blocked producer close');
+    GMpmcCloseWakeQ := LQ;
+    AtomicStore32(GMpmcCloseWakeStarted, 0, moRelease);
+    AtomicStore32(GMpmcCloseWakeResult, -1, moRelease);
+    StartThread(LBlockedProducer, @MpmcCloseWakeProducer, nil, 'MPMC close timeout producer thread');
+    LProducerStarted := True;
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GMpmcCloseWakeStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GMpmcCloseWakeStarted, moAcquire)),
+      'blocked producer thread must start before close');
+    platform_thread_sleep_ns(CloseWakePendingProbeNs);
+    CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
+      'blocked EnqueueTimeout should still be pending before close');
+    LElapsedMs := GetTickCount64;
+    LQ.Close;
+    JoinStartedThread(LBlockedProducer, LProducerStarted, 'MPMC close timeout producer thread');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+    CheckEqual(Int64(0), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
+      'blocked EnqueueTimeout woken by close');
+    Check(LElapsedMs < 1000, 'blocked EnqueueTimeout should return promptly after close');
+    Check(LQ.TryDequeue(LV), 'drain queued item after blocked producer close');
+    CheckEqual(Int64(1), Int64(LV));
+    Check(not LQ.TryDequeue(LV), 'blocked producer wake must not publish extra item after close');
+  finally
+    if LProducerStarted then
+    begin
+      LQ.Close;
+      JoinStartedThread(LBlockedProducer, LProducerStarted, 'MPMC close timeout producer thread');
+    end;
+    LQ.Free;
   end;
-  CheckEqual(Int64(1), Int64(AtomicLoad32(GMpmcCloseWakeStarted, moAcquire)),
-    'blocked producer thread must start before close');
-  platform_thread_sleep_ns(CloseWakePendingProbeNs);
-  CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
-    'blocked EnqueueTimeout should still be pending before close');
-  LElapsedMs := GetTickCount64;
-  LQ.Close;
-  platform_thread_join(LBlockedProducer, LRetVal);
-  LElapsedMs := GetTickCount64 - LElapsedMs;
-  CheckEqual(Int64(0), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
-    'blocked EnqueueTimeout woken by close');
-  Check(LElapsedMs < 1000, 'blocked EnqueueTimeout should return promptly after close');
-  Check(LQ.TryDequeue(LV), 'drain queued item after blocked producer close');
-  CheckEqual(Int64(1), Int64(LV));
-  Check(not LQ.TryDequeue(LV), 'blocked producer wake must not publish extra item after close');
-  LQ.Free;
 
   LQ := TIntMpmc.Create(4);
-  GMpmcCloseWakeQ := LQ;
-  AtomicStore32(GMpmcCloseWakeStarted, 0, moRelease);
-  AtomicStore32(GMpmcCloseWakeResult, -1, moRelease);
-  platform_thread_create(LBlockedConsumer, @MpmcCloseWakeConsumer, nil);
-  for LSpin := 1 to 1000 do
-  begin
-    if AtomicLoad32(GMpmcCloseWakeStarted, moAcquire) <> 0 then
-      Break;
-    platform_thread_sleep_ns(1000000);
+  LConsumerStarted := False;
+  try
+    GMpmcCloseWakeQ := LQ;
+    AtomicStore32(GMpmcCloseWakeStarted, 0, moRelease);
+    AtomicStore32(GMpmcCloseWakeResult, -1, moRelease);
+    StartThread(LBlockedConsumer, @MpmcCloseWakeConsumer, nil, 'MPMC close timeout consumer thread');
+    LConsumerStarted := True;
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GMpmcCloseWakeStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GMpmcCloseWakeStarted, moAcquire)),
+      'blocked consumer thread must start before close');
+    platform_thread_sleep_ns(CloseWakePendingProbeNs);
+    CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
+      'blocked DequeueTimeout should still be pending before close');
+    LElapsedMs := GetTickCount64;
+    LQ.Close;
+    JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'MPMC close timeout consumer thread');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+    CheckEqual(Int64(0), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
+      'blocked DequeueTimeout woken by close');
+    Check(LElapsedMs < 1000, 'blocked DequeueTimeout should return promptly after close');
+    Check(not LQ.TryDequeue(LV), 'blocked consumer wake must leave the closed empty queue empty');
+  finally
+    if LConsumerStarted then
+    begin
+      LQ.Close;
+      JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'MPMC close timeout consumer thread');
+    end;
+    LQ.Free;
   end;
-  CheckEqual(Int64(1), Int64(AtomicLoad32(GMpmcCloseWakeStarted, moAcquire)),
-    'blocked consumer thread must start before close');
-  platform_thread_sleep_ns(CloseWakePendingProbeNs);
-  CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
-    'blocked DequeueTimeout should still be pending before close');
-  LElapsedMs := GetTickCount64;
-  LQ.Close;
-  platform_thread_join(LBlockedConsumer, LRetVal);
-  LElapsedMs := GetTickCount64 - LElapsedMs;
-  CheckEqual(Int64(0), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
-    'blocked DequeueTimeout woken by close');
-  Check(LElapsedMs < 1000, 'blocked DequeueTimeout should return promptly after close');
-  Check(not LQ.TryDequeue(LV), 'blocked consumer wake must leave the closed empty queue empty');
-  LQ.Free;
 end;
 
 procedure TestMpmcCloseWakeWaits;
@@ -723,64 +849,85 @@ var
   LV: Integer;
   LBlockedProducer: TPlatformThreadHandle;
   LBlockedConsumer: TPlatformThreadHandle;
-  LRetVal: Pointer;
   LElapsedMs: QWord;
   LSpin: Integer;
+  LProducerStarted: Boolean;
+  LConsumerStarted: Boolean;
 begin
   LQ := TIntMpmc.Create(1);
-  Check(LQ.TryEnqueue(1), 'fill queue before blocked MPMC EnqueueWait close');
-  GMpmcCloseWakeQ := LQ;
-  AtomicStore32(GMpmcCloseWakeStarted, 0, moRelease);
-  AtomicStore32(GMpmcCloseWakeResult, -1, moRelease);
-  platform_thread_create(LBlockedProducer, @MpmcCloseWaitProducer, nil);
-  for LSpin := 1 to 1000 do
-  begin
-    if AtomicLoad32(GMpmcCloseWakeStarted, moAcquire) <> 0 then
-      Break;
-    platform_thread_sleep_ns(1000000);
+  LProducerStarted := False;
+  try
+    Check(LQ.TryEnqueue(1), 'fill queue before blocked MPMC EnqueueWait close');
+    GMpmcCloseWakeQ := LQ;
+    AtomicStore32(GMpmcCloseWakeStarted, 0, moRelease);
+    AtomicStore32(GMpmcCloseWakeResult, -1, moRelease);
+    StartThread(LBlockedProducer, @MpmcCloseWaitProducer, nil, 'MPMC close wait producer thread');
+    LProducerStarted := True;
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GMpmcCloseWakeStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GMpmcCloseWakeStarted, moAcquire)),
+      'blocked MPMC EnqueueWait producer thread must start before close');
+    platform_thread_sleep_ns(CloseWakePendingProbeNs);
+    CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
+      'blocked MPMC EnqueueWait should still be pending before close');
+    LElapsedMs := GetTickCount64;
+    LQ.Close;
+    JoinStartedThread(LBlockedProducer, LProducerStarted, 'MPMC close wait producer thread');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+    CheckEqual(Int64(0), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
+      'blocked MPMC EnqueueWait woken by close');
+    Check(LElapsedMs < 1000, 'blocked MPMC EnqueueWait should return promptly after close');
+    Check(LQ.TryDequeue(LV), 'drain queued item after blocked MPMC EnqueueWait close');
+    CheckEqual(Int64(1), Int64(LV));
+    Check(not LQ.TryDequeue(LV), 'blocked MPMC EnqueueWait wake must not publish extra item after close');
+  finally
+    if LProducerStarted then
+    begin
+      LQ.Close;
+      JoinStartedThread(LBlockedProducer, LProducerStarted, 'MPMC close wait producer thread');
+    end;
+    LQ.Free;
   end;
-  CheckEqual(Int64(1), Int64(AtomicLoad32(GMpmcCloseWakeStarted, moAcquire)),
-    'blocked MPMC EnqueueWait producer thread must start before close');
-  platform_thread_sleep_ns(CloseWakePendingProbeNs);
-  CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
-    'blocked MPMC EnqueueWait should still be pending before close');
-  LElapsedMs := GetTickCount64;
-  LQ.Close;
-  platform_thread_join(LBlockedProducer, LRetVal);
-  LElapsedMs := GetTickCount64 - LElapsedMs;
-  CheckEqual(Int64(0), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
-    'blocked MPMC EnqueueWait woken by close');
-  Check(LElapsedMs < 1000, 'blocked MPMC EnqueueWait should return promptly after close');
-  Check(LQ.TryDequeue(LV), 'drain queued item after blocked MPMC EnqueueWait close');
-  CheckEqual(Int64(1), Int64(LV));
-  Check(not LQ.TryDequeue(LV), 'blocked MPMC EnqueueWait wake must not publish extra item after close');
-  LQ.Free;
 
   LQ := TIntMpmc.Create(4);
-  GMpmcCloseWakeQ := LQ;
-  AtomicStore32(GMpmcCloseWakeStarted, 0, moRelease);
-  AtomicStore32(GMpmcCloseWakeResult, -1, moRelease);
-  platform_thread_create(LBlockedConsumer, @MpmcCloseWaitConsumer, nil);
-  for LSpin := 1 to 1000 do
-  begin
-    if AtomicLoad32(GMpmcCloseWakeStarted, moAcquire) <> 0 then
-      Break;
-    platform_thread_sleep_ns(1000000);
+  LConsumerStarted := False;
+  try
+    GMpmcCloseWakeQ := LQ;
+    AtomicStore32(GMpmcCloseWakeStarted, 0, moRelease);
+    AtomicStore32(GMpmcCloseWakeResult, -1, moRelease);
+    StartThread(LBlockedConsumer, @MpmcCloseWaitConsumer, nil, 'MPMC close wait consumer thread');
+    LConsumerStarted := True;
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GMpmcCloseWakeStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GMpmcCloseWakeStarted, moAcquire)),
+      'blocked MPMC DequeueWait consumer thread must start before close');
+    platform_thread_sleep_ns(CloseWakePendingProbeNs);
+    CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
+      'blocked MPMC DequeueWait should still be pending before close');
+    LElapsedMs := GetTickCount64;
+    LQ.Close;
+    JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'MPMC close wait consumer thread');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+    CheckEqual(Int64(0), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
+      'blocked MPMC DequeueWait woken by close');
+    Check(LElapsedMs < 1000, 'blocked MPMC DequeueWait should return promptly after close');
+    Check(not LQ.TryDequeue(LV), 'blocked MPMC DequeueWait wake must leave the closed empty queue empty');
+  finally
+    if LConsumerStarted then
+    begin
+      LQ.Close;
+      JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'MPMC close wait consumer thread');
+    end;
+    LQ.Free;
   end;
-  CheckEqual(Int64(1), Int64(AtomicLoad32(GMpmcCloseWakeStarted, moAcquire)),
-    'blocked MPMC DequeueWait consumer thread must start before close');
-  platform_thread_sleep_ns(CloseWakePendingProbeNs);
-  CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
-    'blocked MPMC DequeueWait should still be pending before close');
-  LElapsedMs := GetTickCount64;
-  LQ.Close;
-  platform_thread_join(LBlockedConsumer, LRetVal);
-  LElapsedMs := GetTickCount64 - LElapsedMs;
-  CheckEqual(Int64(0), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
-    'blocked MPMC DequeueWait woken by close');
-  Check(LElapsedMs < 1000, 'blocked MPMC DequeueWait should return promptly after close');
-  Check(not LQ.TryDequeue(LV), 'blocked MPMC DequeueWait wake must leave the closed empty queue empty');
-  LQ.Free;
 end;
 
 procedure TestMpmcDequeueTimeoutWakesOnPublish;
@@ -803,8 +950,7 @@ begin
     AtomicStore32(GMpmcPublishWakeConsumerObservedEmpty, 0, moRelease);
     AtomicStore32(GMpmcPublishWakeConsumerResult, -1, moRelease);
     GMpmcPublishWakeConsumerValue := 0;
-    CheckEqual(Int64(0), Int64(platform_thread_create(LConsumer, @MpmcPublishWakeConsumer, nil)),
-      'MPMC publish wake consumer thread must start');
+    StartThread(LConsumer, @MpmcPublishWakeConsumer, nil, 'MPMC publish wake consumer thread');
     LThreadCreated := True;
 
     for LSpin := 1 to 1000 do
@@ -829,7 +975,7 @@ begin
 
     LElapsedMs := GetTickCount64;
     Check(LQ.TryEnqueue(42), 'MPMC producer must publish the wake item');
-    platform_thread_join(LConsumer, LRetVal);
+    JoinThread(LConsumer, LRetVal, 'publish wake consumer thread');
     LJoined := True;
     LElapsedMs := GetTickCount64 - LElapsedMs;
 
@@ -842,7 +988,7 @@ begin
       'MPMC queue must be empty after the publish-woken consumer drains the item');
   finally
     if LThreadCreated and (not LJoined) then
-      platform_thread_join(LConsumer, LRetVal);
+      JoinThread(LConsumer, LRetVal, 'publish wake consumer thread');
     GMpmcPublishWakeQ := nil;
     LQ.Free;
   end;
@@ -868,8 +1014,7 @@ begin
     AtomicStore32(GMpmcSpaceWakeProducerStarted, 0, moRelease);
     AtomicStore32(GMpmcSpaceWakeProducerObservedFull, 0, moRelease);
     AtomicStore32(GMpmcSpaceWakeProducerResult, -1, moRelease);
-    CheckEqual(Int64(0), Int64(platform_thread_create(LProducer, @MpmcSpaceWakeProducer, nil)),
-      'MPMC space wake producer thread must start');
+    StartThread(LProducer, @MpmcSpaceWakeProducer, nil, 'MPMC space wake producer thread');
     LThreadCreated := True;
 
     for LSpin := 1 to 1000 do
@@ -895,7 +1040,7 @@ begin
     LElapsedMs := GetTickCount64;
     Check(LQ.TryDequeue(LV), 'MPMC consumer must release queue space');
     CheckEqual(Int64(1), Int64(LV));
-    platform_thread_join(LProducer, LRetVal);
+    JoinThread(LProducer, LRetVal, 'space wake producer thread');
     LJoined := True;
     LElapsedMs := GetTickCount64 - LElapsedMs;
 
@@ -908,7 +1053,7 @@ begin
     Check(not LQ.TryDequeue(LV), 'MPMC queue must be empty after draining the space-woken item');
   finally
     if LThreadCreated and (not LJoined) then
-      platform_thread_join(LProducer, LRetVal);
+      JoinThread(LProducer, LRetVal, 'space wake producer thread');
     GMpmcSpaceWakeQ := nil;
     LQ.Free;
   end;
@@ -943,25 +1088,38 @@ procedure TestMpmcContention;
 var
   LProducers: array[0..3] of TPlatformThreadHandle;
   LConsumers: array[0..3] of TPlatformThreadHandle;
-  LRetVal: Pointer;
   LI: Integer;
   LExpected: Int64;
+  LProducerCount: Integer;
+  LConsumerCount: Integer;
 begin
   GMpmcQ := TIntMpmc.Create(64);
   GMpmcSum := 0;
-  for LI := 0 to 3 do
-    platform_thread_create(LConsumers[LI], @MpmcConsumer, nil);
-  for LI := 0 to 3 do
-    platform_thread_create(LProducers[LI], @MpmcProducer, Pointer(PtrInt(LI * 250 + 1)));
-  for LI := 0 to 3 do
-    platform_thread_join(LProducers[LI], LRetVal);
-  platform_thread_sleep_ns(10000000);
-  GMpmcQ.Close;
-  for LI := 0 to 3 do
-    platform_thread_join(LConsumers[LI], LRetVal);
-  LExpected := Int64(1000) * 1001 div 2;
-  CheckEqual(LExpected, GMpmcSum, '4P+4C sum');
-  GMpmcQ.Free;
+  LProducerCount := 0;
+  LConsumerCount := 0;
+  try
+    for LI := 0 to 3 do
+    begin
+      StartThread(LConsumers[LI], @MpmcConsumer, nil, 'MPMC contention consumer thread');
+      Inc(LConsumerCount);
+    end;
+    for LI := 0 to 3 do
+    begin
+      StartThread(LProducers[LI], @MpmcProducer, Pointer(PtrInt(LI * 250 + 1)), 'MPMC contention producer thread');
+      Inc(LProducerCount);
+    end;
+    JoinStartedThreads(LProducers, LProducerCount, 'producer thread');
+    platform_thread_sleep_ns(10000000);
+    GMpmcQ.Close;
+    JoinStartedThreads(LConsumers, LConsumerCount, 'consumer thread');
+    LExpected := Int64(1000) * 1001 div 2;
+    CheckEqual(LExpected, GMpmcSum, '4P+4C sum');
+  finally
+    GMpmcQ.Close;
+    JoinStartedThreads(LProducers, LProducerCount, 'producer thread');
+    JoinStartedThreads(LConsumers, LConsumerCount, 'consumer thread');
+    GMpmcQ.Free;
+  end;
 end;
 
 procedure TestCapacityZero;
@@ -1360,35 +1518,45 @@ var
   LQ: TIntMpsc;
   LV: Integer;
   LBlockedConsumer: TPlatformThreadHandle;
-  LRetVal: Pointer;
   LElapsedMs: QWord;
   LSpin: Integer;
+  LConsumerStarted: Boolean;
 begin
   LQ := TIntMpsc.Create;
-  GMpscCloseWakeQ := LQ;
-  AtomicStore32(GMpscCloseWakeStarted, 0, moRelease);
-  AtomicStore32(GMpscCloseWakeResult, -1, moRelease);
-  platform_thread_create(LBlockedConsumer, @MpscCloseWakeConsumer, nil);
-  for LSpin := 1 to 1000 do
-  begin
-    if AtomicLoad32(GMpscCloseWakeStarted, moAcquire) <> 0 then
-      Break;
-    platform_thread_sleep_ns(1000000);
+  LConsumerStarted := False;
+  try
+    GMpscCloseWakeQ := LQ;
+    AtomicStore32(GMpscCloseWakeStarted, 0, moRelease);
+    AtomicStore32(GMpscCloseWakeResult, -1, moRelease);
+    StartThread(LBlockedConsumer, @MpscCloseWakeConsumer, nil, 'MPSC close timeout consumer thread');
+    LConsumerStarted := True;
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GMpscCloseWakeStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GMpscCloseWakeStarted, moAcquire)),
+      'blocked DequeueTimeout consumer thread must start before MPSC close');
+    platform_thread_sleep_ns(CloseWakePendingProbeNs);
+    CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpscCloseWakeResult, moAcquire)),
+      'blocked MPSC DequeueTimeout should still be pending before close');
+    LElapsedMs := GetTickCount64;
+    LQ.Close;
+    JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'MPSC close timeout consumer thread');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+    CheckEqual(Int64(0), Int64(AtomicLoad32(GMpscCloseWakeResult, moAcquire)),
+      'blocked MPSC DequeueTimeout woken by close');
+    Check(LElapsedMs < 1000, 'blocked MPSC DequeueTimeout should return promptly after close');
+    Check(not LQ.TryDequeue(LV), 'blocked MPSC consumer wake must leave the closed empty queue empty');
+  finally
+    if LConsumerStarted then
+    begin
+      LQ.Close;
+      JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'MPSC close timeout consumer thread');
+    end;
+    LQ.Free;
   end;
-  CheckEqual(Int64(1), Int64(AtomicLoad32(GMpscCloseWakeStarted, moAcquire)),
-    'blocked DequeueTimeout consumer thread must start before MPSC close');
-  platform_thread_sleep_ns(CloseWakePendingProbeNs);
-  CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpscCloseWakeResult, moAcquire)),
-    'blocked MPSC DequeueTimeout should still be pending before close');
-  LElapsedMs := GetTickCount64;
-  LQ.Close;
-  platform_thread_join(LBlockedConsumer, LRetVal);
-  LElapsedMs := GetTickCount64 - LElapsedMs;
-  CheckEqual(Int64(0), Int64(AtomicLoad32(GMpscCloseWakeResult, moAcquire)),
-    'blocked MPSC DequeueTimeout woken by close');
-  Check(LElapsedMs < 1000, 'blocked MPSC DequeueTimeout should return promptly after close');
-  Check(not LQ.TryDequeue(LV), 'blocked MPSC consumer wake must leave the closed empty queue empty');
-  LQ.Free;
 end;
 
 procedure TestMpscCloseWakeWait;
@@ -1396,35 +1564,45 @@ var
   LQ: TIntMpsc;
   LV: Integer;
   LBlockedConsumer: TPlatformThreadHandle;
-  LRetVal: Pointer;
   LElapsedMs: QWord;
   LSpin: Integer;
+  LConsumerStarted: Boolean;
 begin
   LQ := TIntMpsc.Create;
-  GMpscCloseWakeQ := LQ;
-  AtomicStore32(GMpscCloseWakeStarted, 0, moRelease);
-  AtomicStore32(GMpscCloseWakeResult, -1, moRelease);
-  platform_thread_create(LBlockedConsumer, @MpscCloseWaitConsumer, nil);
-  for LSpin := 1 to 1000 do
-  begin
-    if AtomicLoad32(GMpscCloseWakeStarted, moAcquire) <> 0 then
-      Break;
-    platform_thread_sleep_ns(1000000);
+  LConsumerStarted := False;
+  try
+    GMpscCloseWakeQ := LQ;
+    AtomicStore32(GMpscCloseWakeStarted, 0, moRelease);
+    AtomicStore32(GMpscCloseWakeResult, -1, moRelease);
+    StartThread(LBlockedConsumer, @MpscCloseWaitConsumer, nil, 'MPSC close wait consumer thread');
+    LConsumerStarted := True;
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GMpscCloseWakeStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GMpscCloseWakeStarted, moAcquire)),
+      'blocked MPSC DequeueWait consumer thread must start before close');
+    platform_thread_sleep_ns(CloseWakePendingProbeNs);
+    CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpscCloseWakeResult, moAcquire)),
+      'blocked MPSC DequeueWait should still be pending before close');
+    LElapsedMs := GetTickCount64;
+    LQ.Close;
+    JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'MPSC close wait consumer thread');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+    CheckEqual(Int64(0), Int64(AtomicLoad32(GMpscCloseWakeResult, moAcquire)),
+      'blocked MPSC DequeueWait woken by close');
+    Check(LElapsedMs < 1000, 'blocked MPSC DequeueWait should return promptly after close');
+    Check(not LQ.TryDequeue(LV), 'blocked MPSC DequeueWait wake must leave the closed empty queue empty');
+  finally
+    if LConsumerStarted then
+    begin
+      LQ.Close;
+      JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'MPSC close wait consumer thread');
+    end;
+    LQ.Free;
   end;
-  CheckEqual(Int64(1), Int64(AtomicLoad32(GMpscCloseWakeStarted, moAcquire)),
-    'blocked MPSC DequeueWait consumer thread must start before close');
-  platform_thread_sleep_ns(CloseWakePendingProbeNs);
-  CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpscCloseWakeResult, moAcquire)),
-    'blocked MPSC DequeueWait should still be pending before close');
-  LElapsedMs := GetTickCount64;
-  LQ.Close;
-  platform_thread_join(LBlockedConsumer, LRetVal);
-  LElapsedMs := GetTickCount64 - LElapsedMs;
-  CheckEqual(Int64(0), Int64(AtomicLoad32(GMpscCloseWakeResult, moAcquire)),
-    'blocked MPSC DequeueWait woken by close');
-  Check(LElapsedMs < 1000, 'blocked MPSC DequeueWait should return promptly after close');
-  Check(not LQ.TryDequeue(LV), 'blocked MPSC DequeueWait wake must leave the closed empty queue empty');
-  LQ.Free;
 end;
 
 procedure TestMpscDestroyRequiresDrainInDebug;
@@ -1466,21 +1644,28 @@ end;
 procedure TestMpscMultiProducer;
 var
   LHandles: array[0..3] of TPlatformThreadHandle;
-  LRetVal: Pointer;
   LI, LV: Integer;
   LSum: Int64;
+  LHandleCount: Integer;
 begin
   GMpscQ := TIntMpsc.Create;
-  for LI := 0 to 3 do
-    platform_thread_create(LHandles[LI], @MpscProducer, Pointer(PtrInt(LI * 100 + 1)));
-  for LI := 0 to 3 do
-    platform_thread_join(LHandles[LI], LRetVal);
-  LSum := 0;
-  while GMpscQ.TryDequeue(LV) do
-    Inc(LSum, Int64(LV));
-  CheckEqual(Int64(80200), LSum, '4 producers sum');
-  GMpscQ.Close;
-  GMpscQ.Free;
+  LHandleCount := 0;
+  try
+    for LI := 0 to 3 do
+    begin
+      StartThread(LHandles[LI], @MpscProducer, Pointer(PtrInt(LI * 100 + 1)), 'MPSC producer thread');
+      Inc(LHandleCount);
+    end;
+    JoinStartedThreads(LHandles, LHandleCount, 'worker thread');
+    LSum := 0;
+    while GMpscQ.TryDequeue(LV) do
+      Inc(LSum, Int64(LV));
+    CheckEqual(Int64(80200), LSum, '4 producers sum');
+  finally
+    JoinStartedThreads(LHandles, LHandleCount, 'worker thread');
+    GMpscQ.Close;
+    GMpscQ.Free;
+  end;
 end;
 
 { Work-stealing Deque }
@@ -1711,10 +1896,10 @@ var
 begin
   GMpscWaitQ := TIntMpsc.Create;
   LSum := 0;
-  platform_thread_create(LHandle, @MpscWaitProducer, nil);
+  StartThread(LHandle, @MpscWaitProducer, nil, 'MPSC wait producer thread');
   while GMpscWaitQ.DequeueWait(LV) do
     Inc(LSum, LV);
-  platform_thread_join(LHandle, LRetVal);
+  JoinThread(LHandle, LRetVal, 'MPSC wait producer thread');
   CheckEqual(Int64(15), Int64(LSum), '1+2+3+4+5');
   GMpscWaitQ.Free;
 end;
@@ -1739,8 +1924,7 @@ begin
     AtomicStore32(GMpscPublishWakeConsumerObservedEmpty, 0, moRelease);
     AtomicStore32(GMpscPublishWakeConsumerResult, -1, moRelease);
     GMpscPublishWakeConsumerValue := 0;
-    CheckEqual(Int64(0), Int64(platform_thread_create(LConsumer, @MpscPublishWakeConsumer, nil)),
-      'MPSC publish wake consumer thread must start');
+    StartThread(LConsumer, @MpscPublishWakeConsumer, nil, 'MPSC publish wake consumer thread');
     LThreadCreated := True;
 
     for LSpin := 1 to 1000 do
@@ -1765,7 +1949,7 @@ begin
 
     LElapsedMs := GetTickCount64;
     LQ.Enqueue(42);
-    platform_thread_join(LConsumer, LRetVal);
+    JoinThread(LConsumer, LRetVal, 'publish wake consumer thread');
     LJoined := True;
     LElapsedMs := GetTickCount64 - LElapsedMs;
 
@@ -1780,7 +1964,7 @@ begin
     if LThreadCreated and (not LJoined) then
     begin
       LQ.Close;
-      platform_thread_join(LConsumer, LRetVal);
+      JoinThread(LConsumer, LRetVal, 'publish wake consumer thread');
     end;
     GMpscPublishWakeQ := nil;
     LQ.Close;
@@ -1821,6 +2005,7 @@ var
   GStressStack: specialize TLockFreeStack<Integer>;
   GStackPushCount: Int64;
   GStackPopCount: Int64;
+  GStackStressStop: Int32;
 
 function StackStressPusher(AArg: Pointer): Pointer; cdecl;
 var
@@ -1828,8 +2013,16 @@ var
 begin
   Result := nil;
   for LI := 1 to STRESS_OPS do
+  begin
+    if AtomicLoad32(GStackStressStop, moAcquire) <> 0 then
+      Exit;
     while not GStressStack.TryPush(LI) do
+    begin
+      if AtomicLoad32(GStackStressStop, moAcquire) <> 0 then
+        Exit;
       CpuPause;
+    end;
+  end;
   InterlockedExchangeAdd64(GStackPushCount, STRESS_OPS);
 end;
 
@@ -1844,6 +2037,8 @@ begin
   begin
     if GStressStack.TryPop(LV) then
       Inc(LCount)
+    else if AtomicLoad32(GStackStressStop, moAcquire) <> 0 then
+      Break
     else if InterlockedCompareExchange64(GStackPushCount, 0, 0) >= STRESS_OPS * 4 then
     begin
       while GStressStack.TryPop(LV) do
@@ -1860,22 +2055,36 @@ procedure TestStackStress;
 var
   LPushers: array[0..3] of TPlatformThreadHandle;
   LPoppers: array[0..3] of TPlatformThreadHandle;
-  LRetVal: Pointer;
   LI: Integer;
+  LPusherCount: Integer;
+  LPopperCount: Integer;
 begin
   GStressStack := specialize TLockFreeStack<Integer>.Create(4096);
   GStackPushCount := 0;
   GStackPopCount := 0;
-  for LI := 0 to 3 do
-    platform_thread_create(LPushers[LI], @StackStressPusher, nil);
-  for LI := 0 to 3 do
-    platform_thread_create(LPoppers[LI], @StackStressPopper, nil);
-  for LI := 0 to 3 do
-    platform_thread_join(LPushers[LI], LRetVal);
-  for LI := 0 to 3 do
-    platform_thread_join(LPoppers[LI], LRetVal);
-  CheckEqual(Int64(STRESS_OPS * 4), GStackPopCount, 'stack 4P+4C all popped');
-  GStressStack.Free;
+  AtomicStore32(GStackStressStop, 0, moRelease);
+  LPusherCount := 0;
+  LPopperCount := 0;
+  try
+    for LI := 0 to 3 do
+    begin
+      StartThread(LPushers[LI], @StackStressPusher, nil, 'stack stress pusher thread');
+      Inc(LPusherCount);
+    end;
+    for LI := 0 to 3 do
+    begin
+      StartThread(LPoppers[LI], @StackStressPopper, nil, 'stack stress popper thread');
+      Inc(LPopperCount);
+    end;
+    JoinStartedThreads(LPushers, LPusherCount, 'stack stress pusher thread');
+    JoinStartedThreads(LPoppers, LPopperCount, 'stack stress popper thread');
+    CheckEqual(Int64(STRESS_OPS * 4), GStackPopCount, 'stack 4P+4C all popped');
+  finally
+    AtomicStore32(GStackStressStop, 1, moRelease);
+    JoinStartedThreads(LPushers, LPusherCount, 'stack stress pusher thread');
+    JoinStartedThreads(LPoppers, LPopperCount, 'stack stress popper thread');
+    GStressStack.Free;
+  end;
 end;
 
 var
@@ -1900,30 +2109,42 @@ end;
 procedure TestDequeOwnerThief;
 var
   LThieves: array[0..2] of TPlatformThreadHandle;
-  LRetVal: Pointer;
   LI, LV: Integer;
   LOwnerPop: Int64;
+  LThiefCount: Integer;
+  LStopSignaled: Boolean;
 begin
   GStressDeque := specialize TWorkStealingDeque<Integer>.Create(1024);
   GDequeStealCount := 0;
   LOwnerPop := 0;
-  for LI := 0 to 2 do
-    platform_thread_create(LThieves[LI], @DequeThief, nil);
-  for LI := 1 to STRESS_OPS do
-  begin
-    while not GStressDeque.TryPush(LI) do
+  LThiefCount := 0;
+  LStopSignaled := False;
+  try
+    for LI := 0 to 2 do
     begin
-      if GStressDeque.TryPop(LV) then
-        Inc(LOwnerPop);
+      StartThread(LThieves[LI], @DequeThief, nil, 'deque thief thread');
+      Inc(LThiefCount);
     end;
+    for LI := 1 to STRESS_OPS do
+    begin
+      while not GStressDeque.TryPush(LI) do
+      begin
+        if GStressDeque.TryPop(LV) then
+          Inc(LOwnerPop);
+      end;
+    end;
+    while GStressDeque.TryPop(LV) do
+      Inc(LOwnerPop);
+    InterlockedExchangeAdd64(GDequeStealCount, STRESS_OPS);
+    LStopSignaled := True;
+    JoinStartedThreads(LThieves, LThiefCount, 'deque thief thread');
+    Check(LOwnerPop + GDequeStealCount - STRESS_OPS > 0, 'deque owner+thieves processed items');
+  finally
+    if not LStopSignaled then
+      InterlockedExchangeAdd64(GDequeStealCount, STRESS_OPS);
+    JoinStartedThreads(LThieves, LThiefCount, 'deque thief thread');
+    GStressDeque.Free;
   end;
-  while GStressDeque.TryPop(LV) do
-    Inc(LOwnerPop);
-  InterlockedExchangeAdd64(GDequeStealCount, STRESS_OPS);
-  for LI := 0 to 2 do
-    platform_thread_join(LThieves[LI], LRetVal);
-  Check(LOwnerPop + GDequeStealCount - STRESS_OPS > 0, 'deque owner+thieves processed items');
-  GStressDeque.Free;
 end;
 
 procedure TestManagedTypeReject;
@@ -2005,6 +2226,8 @@ var
   LDocsReadme: string;
   LTestSource: string;
   LStressTestSource: string;
+  LTestRuntimeHarnessSourceSection: string;
+  LStressRuntimeHarnessSourceSection: string;
   LTestMakefile: string;
   LSpscSource: string;
   LMpmcSource: string;
@@ -2067,6 +2290,14 @@ begin
   LDocsReadme := ReadUtf8TextFile(LockFreeDocsReadmePath);
   LTestSource := ReadUtf8TextFile(LockFreeTestSourcePath);
   LStressTestSource := ReadUtf8TextFile(LockFreeStressTestSourcePath);
+  LTestRuntimeHarnessSourceSection := ExtractSection(LTestSource,
+    'function StartThread(',
+    'procedure TestLockFreeSourceContracts;',
+    'lockfree behavior runtime harness source section');
+  LStressRuntimeHarnessSourceSection := ExtractSection(LStressTestSource,
+    'function StartThread(',
+    '{ Main',
+    'lockfree stress runtime harness source section');
   LTestMakefile := ReadUtf8TextFile(LockFreeTestMakefilePath);
   LSpscSource := ReadUtf8TextFile(SpscSourcePath);
   LMpmcSource := ReadUtf8TextFile(MpmcSourcePath);
@@ -2536,6 +2767,10 @@ begin
     'MPMC queue must centralize active producer decrement and wake handling');
   CheckContains(LMpmcTryEnqueueSourceSection, 'AtomicFetchAdd32(FActiveEnqueues, 1, moAcqRel);',
     'MPMC TryEnqueue must admit active producers before any slot reservation can happen');
+  CheckBefore(LMpmcTryEnqueueSourceSection,
+    'AtomicFetchAdd32(FActiveEnqueues, 1, moAcqRel);',
+    'if AtomicLoad32(FClosed, moAcquire) <> 0 then',
+    'MPMC TryEnqueue must admit active producers before the first Close observation');
   CheckContains(LMpmcTryEnqueueSourceSection, 'LeaveActiveEnqueue;',
     'MPMC TryEnqueue must decrement active producer tracking on every exit path');
   CheckContains(LMpmcTryEnqueueSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then' + LineEnding + '      Exit(False);',
@@ -2579,6 +2814,28 @@ begin
   CheckContains(LStressTestSource,
     'T.Run(''MPMC single-slot 2P+2C exactly-once'', @TestMpmcSingleSlotContention);',
     'MPMC stress suite must run the single-slot contention test');
+  CheckContains(LTestSource, 'function StartThread(',
+    'lockfree behavior tests must wrap platform_thread_create with return-value checks');
+  CheckContains(LTestSource, 'procedure JoinThread(',
+    'lockfree behavior tests must wrap platform_thread_join with return-value checks');
+  CheckContains(LStressTestSource, 'function StartThread(',
+    'lockfree stress tests must wrap platform_thread_create with return-value checks');
+  CheckContains(LStressTestSource, 'procedure JoinThread(',
+    'lockfree stress tests must wrap platform_thread_join with return-value checks');
+  CheckContains(LTestSource, 'procedure JoinStartedThread(',
+    'lockfree behavior tests must join started threads from failure cleanup paths');
+  CheckContains(LTestSource, 'procedure JoinStartedThreads(',
+    'lockfree behavior tests must join started thread arrays from failure cleanup paths');
+  CheckContains(LStressTestSource, 'procedure JoinStartedThreads(',
+    'lockfree stress tests must join started thread arrays from failure cleanup paths');
+  CheckEqual(Int64(1), Int64(CountOccurrences(LTestRuntimeHarnessSourceSection, 'platform_thread_create(')),
+    'lockfree behavior tests must call platform_thread_create only through StartThread');
+  CheckEqual(Int64(1), Int64(CountOccurrences(LTestRuntimeHarnessSourceSection, 'platform_thread_join(')),
+    'lockfree behavior tests must call platform_thread_join only through JoinThread');
+  CheckEqual(Int64(1), Int64(CountOccurrences(LStressRuntimeHarnessSourceSection, 'platform_thread_create(')),
+    'lockfree stress tests must call platform_thread_create only through StartThread');
+  CheckEqual(Int64(1), Int64(CountOccurrences(LStressRuntimeHarnessSourceSection, 'platform_thread_join(')),
+    'lockfree stress tests must call platform_thread_join only through JoinThread');
   CheckContains(LMpmcSingleSlotStressSection, 'TIntMpmc.Create(1);',
     'MPMC stress test must construct a single-slot queue');
   CheckContains(LMpmcSingleSlotStressSection, 'GMpmcSingleSlotOutOfRangeCount',
@@ -2681,10 +2938,19 @@ begin
   CheckContains(LStressTestSource,
     'T.Run(''MPMC close races active producers'', @TestMpmcCloseRacesActiveProducers);',
     'MPMC stress suite must run active-producer close race coverage');
+  CheckContains(LStressTestSource,
+    'T.Run(''MPMC close races active producers timeout'', @TestMpmcCloseRacesActiveProducersTimeout);',
+    'MPMC stress suite must run active-producer close race timeout coverage');
   CheckContains(LMpmcActiveCloseStressSection, 'GMpmcCloseRaceQ.Close;',
     'MPMC active-producer close stress must close while producers are still live');
+  CheckContains(LStressTestSource, 'function MpmcCloseRaceTimeoutConsumer',
+    'MPMC active-producer close stress must include a DequeueTimeout consumer variant');
+  CheckContains(LStressTestSource, 'GMpmcCloseRaceQ.DequeueTimeout',
+    'MPMC active-producer close timeout stress must exercise DequeueTimeout terminal checks');
   CheckContains(LMpmcActiveCloseStressSection, 'close race leaves no drainable items after consumers exit',
     'MPMC active-producer close stress must prove consumers do not exit before admitted items are drained');
+  CheckContains(LMpmcActiveCloseStressSection, 'close race timeout leaves no drainable items after consumers exit',
+    'MPMC active-producer close timeout stress must prove consumers do not exit before admitted items are drained');
   CheckContains(LStackSource, 'FFreeHead: Int64',
     'stack must keep a tagged free-list head');
   CheckContains(LStackSource, 'function PackTagIdx',
@@ -2747,7 +3013,10 @@ begin
   CheckContains(LMpscDestroyDrainTestSection,
     'Check(LQ.TryDequeue(LV), ''drain queued MPSC item before destroy'');',
     'MPSC destroy drain contract test must drain queued items before the final free');
-  CheckContains(LMpscMultiProducerTestSection, 'GMpscQ.Close;' + LineEnding + '  GMpscQ.Free;',
+  CheckContains(LMpscMultiProducerTestSection, 'JoinStartedThreads(LHandles, LHandleCount, ''worker thread'');',
+    'MPSC multi-producer test must join every started producer in cleanup paths');
+  CheckContains(LMpscMultiProducerTestSection,
+    'finally' + LineEnding + '    JoinStartedThreads(LHandles, LHandleCount, ''worker thread'');' + LineEnding + '    GMpscQ.Close;' + LineEnding + '    GMpscQ.Free;',
     'MPSC multi-producer test must close after producers stop and before freeing the queue');
   CheckContains(LMpscPublishWakeTestSection,
     'MPSC DequeueTimeout consumer must observe the empty queue before publish',

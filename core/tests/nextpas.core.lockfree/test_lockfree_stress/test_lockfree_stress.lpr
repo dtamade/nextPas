@@ -25,6 +25,40 @@ type
 var
   T: TTestRunner;
 
+function StartThread(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer; const AMessage: string): Int32;
+begin
+  Result := platform_thread_create(AHandle, AProc, AArg);
+  CheckEqual(Int64(0), Int64(Result), AMessage + ': platform_thread_create must succeed');
+end;
+
+procedure JoinThread(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer; const AMessage: string);
+var
+  LResult: Int32;
+begin
+  LResult := platform_thread_join(AHandle, ARetVal);
+  CheckEqual(Int64(0), Int64(LResult), AMessage + ': platform_thread_join must succeed');
+end;
+
+procedure JoinStartedThread(const AHandle: TPlatformThreadHandle; var AStarted: Boolean; const AMessage: string);
+var
+  LRetVal: Pointer;
+begin
+  if not AStarted then
+    Exit;
+  JoinThread(AHandle, LRetVal, AMessage);
+  AStarted := False;
+end;
+
+procedure JoinStartedThreads(const AHandles: array of TPlatformThreadHandle; var AStartedCount: Integer; const AMessage: string);
+var
+  LI: Integer;
+  LRetVal: Pointer;
+begin
+  for LI := 0 to AStartedCount - 1 do
+    JoinThread(AHandles[LI], LRetVal, AMessage);
+  AStartedCount := 0;
+end;
+
 { ============================================================ }
 { TEST 1: MPMC Saturation Contention                           }
 { 8P + 8C, capacity=16, 80K messages, exactly-once delivery    }
@@ -68,44 +102,56 @@ procedure TestMpmcSaturation;
 var
   LProducers: array[0..MPMC_SAT_PRODUCERS - 1] of TPlatformThreadHandle;
   LConsumers: array[0..MPMC_SAT_CONSUMERS - 1] of TPlatformThreadHandle;
-  LRetVal: Pointer;
   LI: Integer;
   LDups, LMissing: Integer;
+  LProducerCount: Integer;
+  LConsumerCount: Integer;
 begin
   GMpmcSatQ := TIntMpmc.Create(MPMC_SAT_CAPACITY);
   GMpmcSatConsumeCount := 0;
+  LProducerCount := 0;
+  LConsumerCount := 0;
   for LI := 0 to MPMC_SAT_TOTAL - 1 do
     GMpmcSatConsumed[LI] := 0;
+  try
+    for LI := 0 to MPMC_SAT_CONSUMERS - 1 do
+    begin
+      StartThread(LConsumers[LI], @MpmcSatConsumer, nil, 'MPMC saturation consumer thread');
+      Inc(LConsumerCount);
+    end;
+    for LI := 0 to MPMC_SAT_PRODUCERS - 1 do
+    begin
+      StartThread(LProducers[LI], @MpmcSatProducer, Pointer(PtrInt(LI)), 'MPMC saturation producer thread');
+      Inc(LProducerCount);
+    end;
 
-  for LI := 0 to MPMC_SAT_CONSUMERS - 1 do
-    platform_thread_create(LConsumers[LI], @MpmcSatConsumer, nil);
-  for LI := 0 to MPMC_SAT_PRODUCERS - 1 do
-    platform_thread_create(LProducers[LI], @MpmcSatProducer, Pointer(PtrInt(LI)));
+    JoinStartedThreads(LProducers, LProducerCount, 'producer thread');
 
-  for LI := 0 to MPMC_SAT_PRODUCERS - 1 do
-    platform_thread_join(LProducers[LI], LRetVal);
+    { All producers done; wait briefly then close to signal consumers }
+    platform_thread_sleep_ns(5000000);
+    GMpmcSatQ.Close;
 
-  { All producers done; wait briefly then close to signal consumers }
-  platform_thread_sleep_ns(5000000);
-  GMpmcSatQ.Close;
+    JoinStartedThreads(LConsumers, LConsumerCount, 'consumer thread');
 
-  for LI := 0 to MPMC_SAT_CONSUMERS - 1 do
-    platform_thread_join(LConsumers[LI], LRetVal);
-
-  { Verify exactly-once delivery }
-  CheckEqual(Int64(MPMC_SAT_TOTAL), GMpmcSatConsumeCount, 'total consumed = 80000');
-  LDups := 0;
-  LMissing := 0;
-  for LI := 0 to MPMC_SAT_TOTAL - 1 do
-  begin
-    if AtomicLoad32(GMpmcSatConsumed[LI], moRelaxed) = 0 then
-      Inc(LMissing)
-    else if AtomicLoad32(GMpmcSatConsumed[LI], moRelaxed) > 1 then
-      Inc(LDups);
+    { Verify exactly-once delivery }
+    CheckEqual(Int64(MPMC_SAT_TOTAL), GMpmcSatConsumeCount, 'total consumed = 80000');
+    LDups := 0;
+    LMissing := 0;
+    for LI := 0 to MPMC_SAT_TOTAL - 1 do
+    begin
+      if AtomicLoad32(GMpmcSatConsumed[LI], moRelaxed) = 0 then
+        Inc(LMissing)
+      else if AtomicLoad32(GMpmcSatConsumed[LI], moRelaxed) > 1 then
+        Inc(LDups);
+    end;
+    CheckEqual(Int64(0), Int64(LMissing), 'no missing messages');
+    CheckEqual(Int64(0), Int64(LDups), 'no duplicate messages');
+  finally
+    GMpmcSatQ.Close;
+    JoinStartedThreads(LProducers, LProducerCount, 'producer thread');
+    JoinStartedThreads(LConsumers, LConsumerCount, 'consumer thread');
+    GMpmcSatQ.Free;
   end;
-  CheckEqual(Int64(0), Int64(LMissing), 'no missing messages');
-  CheckEqual(Int64(0), Int64(LDups), 'no duplicate messages');
-  GMpmcSatQ.Free;
 end;
 
 { ============================================================ }
@@ -154,43 +200,55 @@ procedure TestMpmcSingleSlotContention;
 var
   LProducers: array[0..MPMC_SINGLE_SLOT_PRODUCERS - 1] of TPlatformThreadHandle;
   LConsumers: array[0..MPMC_SINGLE_SLOT_CONSUMERS - 1] of TPlatformThreadHandle;
-  LRetVal: Pointer;
   LI: Integer;
   LDups, LMissing: Integer;
+  LProducerCount: Integer;
+  LConsumerCount: Integer;
 begin
   GMpmcSingleSlotQ := TIntMpmc.Create(1);
   GMpmcSingleSlotConsumeCount := 0;
   GMpmcSingleSlotOutOfRangeCount := 0;
+  LProducerCount := 0;
+  LConsumerCount := 0;
   for LI := 0 to MPMC_SINGLE_SLOT_TOTAL - 1 do
     GMpmcSingleSlotConsumed[LI] := 0;
+  try
+    for LI := 0 to MPMC_SINGLE_SLOT_CONSUMERS - 1 do
+    begin
+      StartThread(LConsumers[LI], @MpmcSingleSlotConsumer, nil, 'MPMC single-slot consumer thread');
+      Inc(LConsumerCount);
+    end;
+    for LI := 0 to MPMC_SINGLE_SLOT_PRODUCERS - 1 do
+    begin
+      StartThread(LProducers[LI], @MpmcSingleSlotProducer, Pointer(PtrInt(LI)), 'MPMC single-slot producer thread');
+      Inc(LProducerCount);
+    end;
 
-  for LI := 0 to MPMC_SINGLE_SLOT_CONSUMERS - 1 do
-    platform_thread_create(LConsumers[LI], @MpmcSingleSlotConsumer, nil);
-  for LI := 0 to MPMC_SINGLE_SLOT_PRODUCERS - 1 do
-    platform_thread_create(LProducers[LI], @MpmcSingleSlotProducer, Pointer(PtrInt(LI)));
+    JoinStartedThreads(LProducers, LProducerCount, 'producer thread');
+    GMpmcSingleSlotQ.Close;
+    JoinStartedThreads(LConsumers, LConsumerCount, 'consumer thread');
 
-  for LI := 0 to MPMC_SINGLE_SLOT_PRODUCERS - 1 do
-    platform_thread_join(LProducers[LI], LRetVal);
-  GMpmcSingleSlotQ.Close;
-  for LI := 0 to MPMC_SINGLE_SLOT_CONSUMERS - 1 do
-    platform_thread_join(LConsumers[LI], LRetVal);
-
-  CheckEqual(Int64(MPMC_SINGLE_SLOT_TOTAL), GMpmcSingleSlotConsumeCount,
-    'single-slot contention total consumed');
-  CheckEqual(Int64(0), GMpmcSingleSlotOutOfRangeCount,
-    'single-slot contention no out-of-range messages');
-  LDups := 0;
-  LMissing := 0;
-  for LI := 0 to MPMC_SINGLE_SLOT_TOTAL - 1 do
-  begin
-    if AtomicLoad32(GMpmcSingleSlotConsumed[LI], moRelaxed) = 0 then
-      Inc(LMissing)
-    else if AtomicLoad32(GMpmcSingleSlotConsumed[LI], moRelaxed) > 1 then
-      Inc(LDups);
+    CheckEqual(Int64(MPMC_SINGLE_SLOT_TOTAL), GMpmcSingleSlotConsumeCount,
+      'single-slot contention total consumed');
+    CheckEqual(Int64(0), GMpmcSingleSlotOutOfRangeCount,
+      'single-slot contention no out-of-range messages');
+    LDups := 0;
+    LMissing := 0;
+    for LI := 0 to MPMC_SINGLE_SLOT_TOTAL - 1 do
+    begin
+      if AtomicLoad32(GMpmcSingleSlotConsumed[LI], moRelaxed) = 0 then
+        Inc(LMissing)
+      else if AtomicLoad32(GMpmcSingleSlotConsumed[LI], moRelaxed) > 1 then
+        Inc(LDups);
+    end;
+    CheckEqual(Int64(0), Int64(LMissing), 'single-slot contention no missing messages');
+    CheckEqual(Int64(0), Int64(LDups), 'single-slot contention no duplicate messages');
+  finally
+    GMpmcSingleSlotQ.Close;
+    JoinStartedThreads(LProducers, LProducerCount, 'producer thread');
+    JoinStartedThreads(LConsumers, LConsumerCount, 'consumer thread');
+    GMpmcSingleSlotQ.Free;
   end;
-  CheckEqual(Int64(0), Int64(LMissing), 'single-slot contention no missing messages');
-  CheckEqual(Int64(0), Int64(LDups), 'single-slot contention no duplicate messages');
-  GMpmcSingleSlotQ.Free;
 end;
 
 { ============================================================ }
@@ -234,22 +292,28 @@ end;
 procedure TestStackABA;
 var
   LHandles: array[0..STACK_ABA_THREADS - 1] of TPlatformThreadHandle;
-  LRetVal: Pointer;
   LI: Integer;
+  LHandleCount: Integer;
 begin
   GStackABA := TIntStack.Create(4);
   GStackABAPushOk := 0;
   GStackABAPopOk := 0;
+  LHandleCount := 0;
+  try
+    for LI := 0 to STACK_ABA_THREADS - 1 do
+    begin
+      StartThread(LHandles[LI], @StackABAWorker, Pointer(PtrInt(LI)), 'stack ABA worker thread');
+      Inc(LHandleCount);
+    end;
+    JoinStartedThreads(LHandles, LHandleCount, 'worker thread');
 
-  for LI := 0 to STACK_ABA_THREADS - 1 do
-    platform_thread_create(LHandles[LI], @StackABAWorker, Pointer(PtrInt(LI)));
-  for LI := 0 to STACK_ABA_THREADS - 1 do
-    platform_thread_join(LHandles[LI], LRetVal);
-
-  CheckEqual(Int64(STACK_ABA_THREADS) * STACK_ABA_OPS, GStackABAPushOk, 'all pushes succeeded');
-  CheckEqual(Int64(STACK_ABA_THREADS) * STACK_ABA_OPS, GStackABAPopOk, 'all pops succeeded');
-  Check(GStackABA.IsEmpty, 'stack empty after ABA stress');
-  GStackABA.Free;
+    CheckEqual(Int64(STACK_ABA_THREADS) * STACK_ABA_OPS, GStackABAPushOk, 'all pushes succeeded');
+    CheckEqual(Int64(STACK_ABA_THREADS) * STACK_ABA_OPS, GStackABAPopOk, 'all pops succeeded');
+    Check(GStackABA.IsEmpty, 'stack empty after ABA stress');
+  finally
+    JoinStartedThreads(LHandles, LHandleCount, 'worker thread');
+    GStackABA.Free;
+  end;
 end;
 
 { ============================================================ }
@@ -287,38 +351,46 @@ end;
 procedure TestMpscCloseRace;
 var
   LHandles: array[0..MPSC_CLOSE_PRODUCERS - 1] of TPlatformThreadHandle;
-  LRetVal: Pointer;
   LI, LV: Integer;
   LTotalSent, LTotalRecv: Int64;
+  LHandleCount: Integer;
 begin
   GMpscCloseQ := TIntMpsc.Create;
   GMpscCloseReceived := 0;
+  LHandleCount := 0;
   for LI := 0 to MPSC_CLOSE_PRODUCERS - 1 do
     GMpscCloseSent[LI] := 0;
+  try
+    for LI := 0 to MPSC_CLOSE_PRODUCERS - 1 do
+    begin
+      StartThread(LHandles[LI], @MpscCloseProducer, Pointer(PtrInt(LI)), 'MPSC close producer thread');
+      Inc(LHandleCount);
+    end;
 
-  for LI := 0 to MPSC_CLOSE_PRODUCERS - 1 do
-    platform_thread_create(LHandles[LI], @MpscCloseProducer, Pointer(PtrInt(LI)));
+    { Let producers run ~10ms then close }
+    platform_thread_sleep_ns(10000000);
+    GMpscCloseQ.Close;
 
-  { Let producers run ~10ms then close }
-  platform_thread_sleep_ns(10000000);
-  GMpscCloseQ.Close;
+    JoinStartedThreads(LHandles, LHandleCount, 'worker thread');
 
-  for LI := 0 to MPSC_CLOSE_PRODUCERS - 1 do
-    platform_thread_join(LHandles[LI], LRetVal);
+    { Drain remaining }
+    LTotalRecv := 0;
+    while GMpscCloseQ.TryDequeue(LV) do
+      Inc(LTotalRecv);
 
-  { Drain remaining }
-  LTotalRecv := 0;
-  while GMpscCloseQ.TryDequeue(LV) do
-    Inc(LTotalRecv);
+    LTotalSent := 0;
+    for LI := 0 to MPSC_CLOSE_PRODUCERS - 1 do
+      Inc(LTotalSent, AtomicLoad64(GMpscCloseSent[LI], moAcquire));
 
-  LTotalSent := 0;
-  for LI := 0 to MPSC_CLOSE_PRODUCERS - 1 do
-    Inc(LTotalSent, AtomicLoad64(GMpscCloseSent[LI], moAcquire));
-
-  Check(LTotalSent > 0, 'producers sent messages before close');
-  Check(LTotalRecv <= LTotalSent, 'received <= sent');
-  Check(GMpscCloseQ.IsEmpty, 'queue drained after close');
-  GMpscCloseQ.Free;
+    Check(LTotalSent > 0, 'producers sent messages before close');
+    Check(LTotalRecv <= LTotalSent, 'received <= sent');
+    Check(GMpscCloseQ.IsEmpty, 'queue drained after close');
+  finally
+    GMpscCloseQ.Close;
+    JoinStartedThreads(LHandles, LHandleCount, 'worker thread');
+    while GMpscCloseQ.TryDequeue(LV) do;
+    GMpscCloseQ.Free;
+  end;
 end;
 
 { ============================================================ }
@@ -367,61 +439,67 @@ end;
 procedure TestDequeExtremeSteal;
 var
   LThieves: array[0..DEQUE_STEAL_THIEVES - 1] of TPlatformThreadHandle;
-  LRetVal: Pointer;
   LI, LV: Integer;
   LOwnerPop: Int64;
   LDups, LMissing: Integer;
+  LThiefCount: Integer;
 begin
   GDequeStealD := TIntDeque.Create(DEQUE_STEAL_CAPACITY);
   GDequeStealDone := 0;
   GDequeStealThiefCount := 0;
   LOwnerPop := 0;
+  LThiefCount := 0;
   for LI := 0 to DEQUE_STEAL_TOTAL - 1 do
     GDequeStealBitmap[LI] := 0;
-
-  for LI := 0 to DEQUE_STEAL_THIEVES - 1 do
-    platform_thread_create(LThieves[LI], @DequeStealThief, Pointer(PtrInt(LI)));
-
-  { Owner: push all items, pop when full to make room }
-  for LI := 0 to DEQUE_STEAL_TOTAL - 1 do
-  begin
-    while not GDequeStealD.TryPush(LI) do
+  try
+    for LI := 0 to DEQUE_STEAL_THIEVES - 1 do
     begin
-      if GDequeStealD.TryPop(LV) then
+      StartThread(LThieves[LI], @DequeStealThief, Pointer(PtrInt(LI)), 'deque steal thief thread');
+      Inc(LThiefCount);
+    end;
+
+    { Owner: push all items, pop when full to make room }
+    for LI := 0 to DEQUE_STEAL_TOTAL - 1 do
+    begin
+      while not GDequeStealD.TryPush(LI) do
       begin
-        AtomicFetchAdd32(GDequeStealBitmap[LV], 1, moRelaxed);
-        Inc(LOwnerPop);
+        if GDequeStealD.TryPop(LV) then
+        begin
+          AtomicFetchAdd32(GDequeStealBitmap[LV], 1, moRelaxed);
+          Inc(LOwnerPop);
+        end;
       end;
     end;
+
+    { Owner drains remaining }
+    while GDequeStealD.TryPop(LV) do
+    begin
+      AtomicFetchAdd32(GDequeStealBitmap[LV], 1, moRelaxed);
+      Inc(LOwnerPop);
+    end;
+
+    { Signal thieves to stop }
+    AtomicStore32(GDequeStealDone, 1, moRelease);
+    JoinStartedThreads(LThieves, LThiefCount, 'deque steal thief thread');
+
+    { Verify exactly-once }
+    LDups := 0;
+    LMissing := 0;
+    for LI := 0 to DEQUE_STEAL_TOTAL - 1 do
+    begin
+      if AtomicLoad32(GDequeStealBitmap[LI], moRelaxed) = 0 then
+        Inc(LMissing)
+      else if AtomicLoad32(GDequeStealBitmap[LI], moRelaxed) > 1 then
+        Inc(LDups);
+    end;
+    CheckEqual(Int64(0), Int64(LMissing), 'deque no missing');
+    CheckEqual(Int64(0), Int64(LDups), 'deque no duplicates');
+    CheckEqual(Int64(DEQUE_STEAL_TOTAL), LOwnerPop + GDequeStealThiefCount, 'total = pushed');
+  finally
+    AtomicStore32(GDequeStealDone, 1, moRelease);
+    JoinStartedThreads(LThieves, LThiefCount, 'deque steal thief thread');
+    GDequeStealD.Free;
   end;
-
-  { Owner drains remaining }
-  while GDequeStealD.TryPop(LV) do
-  begin
-    AtomicFetchAdd32(GDequeStealBitmap[LV], 1, moRelaxed);
-    Inc(LOwnerPop);
-  end;
-
-  { Signal thieves to stop }
-  AtomicStore32(GDequeStealDone, 1, moRelease);
-
-  for LI := 0 to DEQUE_STEAL_THIEVES - 1 do
-    platform_thread_join(LThieves[LI], LRetVal);
-
-  { Verify exactly-once }
-  LDups := 0;
-  LMissing := 0;
-  for LI := 0 to DEQUE_STEAL_TOTAL - 1 do
-  begin
-    if AtomicLoad32(GDequeStealBitmap[LI], moRelaxed) = 0 then
-      Inc(LMissing)
-    else if AtomicLoad32(GDequeStealBitmap[LI], moRelaxed) > 1 then
-      Inc(LDups);
-  end;
-  CheckEqual(Int64(0), Int64(LMissing), 'deque no missing');
-  CheckEqual(Int64(0), Int64(LDups), 'deque no duplicates');
-  CheckEqual(Int64(DEQUE_STEAL_TOTAL), LOwnerPop + GDequeStealThiefCount, 'total = pushed');
-  GDequeStealD.Free;
 end;
 
 { ============================================================ }
@@ -477,7 +555,9 @@ begin
   while LCount < 1000 do
   begin
     if GSpscCloseQ.DequeueTimeout(LV, 1000000) then
-      Inc(LCount);
+      Inc(LCount)
+    else if GSpscCloseQ.IsClosed then
+      Break;
   end;
   { Close while producer is likely blocked on full queue }
   GSpscCloseQ.Close;
@@ -490,23 +570,33 @@ end;
 procedure TestSpscFullClose;
 var
   LProd, LCons: TPlatformThreadHandle;
-  LRetVal: Pointer;
+  LProducerStarted: Boolean;
+  LConsumerStarted: Boolean;
 begin
   GSpscCloseQ := TIntSpsc.Create(SPSC_CLOSE_CAPACITY);
   GSpscCloseSent := 0;
   GSpscCloseRecv := 0;
+  LProducerStarted := False;
+  LConsumerStarted := False;
+  try
+    StartThread(LCons, @SpscCloseConsumer, nil, 'SPSC close consumer thread');
+    LConsumerStarted := True;
+    StartThread(LProd, @SpscCloseProducer, nil, 'SPSC close producer thread');
+    LProducerStarted := True;
 
-  platform_thread_create(LCons, @SpscCloseConsumer, nil);
-  platform_thread_create(LProd, @SpscCloseProducer, nil);
+    JoinStartedThread(LProd, LProducerStarted, 'SPSC close producer thread');
+    JoinStartedThread(LCons, LConsumerStarted, 'SPSC close consumer thread');
 
-  platform_thread_join(LProd, LRetVal);
-  platform_thread_join(LCons, LRetVal);
-
-  { Key invariant: no deadlock (we reached here), received <= sent }
-  Check(GSpscCloseRecv > 0, 'consumer received items');
-  Check(GSpscCloseRecv <= GSpscCloseSent, 'recv <= sent');
-  Check(GSpscCloseQ.IsClosed, 'queue is closed');
-  GSpscCloseQ.Free;
+    { Key invariant: no deadlock (we reached here), received <= sent }
+    Check(GSpscCloseRecv > 0, 'consumer received items');
+    Check(GSpscCloseRecv <= GSpscCloseSent, 'recv <= sent');
+    Check(GSpscCloseQ.IsClosed, 'queue is closed');
+  finally
+    GSpscCloseQ.Close;
+    JoinStartedThread(LProd, LProducerStarted, 'SPSC close producer thread');
+    JoinStartedThread(LCons, LConsumerStarted, 'SPSC close consumer thread');
+    GSpscCloseQ.Free;
+  end;
 end;
 
 { ============================================================ }
@@ -550,32 +640,44 @@ procedure TestMpmcRapidCycles;
 var
   LProducers: array[0..MPMC_CYCLE_PRODUCERS - 1] of TPlatformThreadHandle;
   LConsumers: array[0..1] of TPlatformThreadHandle;
-  LRetVal: Pointer;
   LRound, LI: Integer;
   LExpected: Int64;
   LTotal: Integer;
+  LProducerCount: Integer;
+  LConsumerCount: Integer;
 begin
   for LRound := 0 to MPMC_CYCLE_ROUNDS - 1 do
   begin
     GMpmcCycleQ := TIntMpmc.Create(MPMC_CYCLE_CAPACITY);
     GMpmcCycleSum := 0;
+    LProducerCount := 0;
+    LConsumerCount := 0;
+    try
+      for LI := 0 to 1 do
+      begin
+        StartThread(LConsumers[LI], @MpmcCycleConsumer, nil, 'MPMC cycle consumer thread');
+        Inc(LConsumerCount);
+      end;
+      for LI := 0 to MPMC_CYCLE_PRODUCERS - 1 do
+      begin
+        StartThread(LProducers[LI], @MpmcCycleProducer, Pointer(PtrInt(LI)), 'MPMC cycle producer thread');
+        Inc(LProducerCount);
+      end;
 
-    for LI := 0 to 1 do
-      platform_thread_create(LConsumers[LI], @MpmcCycleConsumer, nil);
-    for LI := 0 to MPMC_CYCLE_PRODUCERS - 1 do
-      platform_thread_create(LProducers[LI], @MpmcCycleProducer, Pointer(PtrInt(LI)));
+      JoinStartedThreads(LProducers, LProducerCount, 'producer thread');
+      platform_thread_sleep_ns(1000000);
+      GMpmcCycleQ.Close;
+      JoinStartedThreads(LConsumers, LConsumerCount, 'consumer thread');
 
-    for LI := 0 to MPMC_CYCLE_PRODUCERS - 1 do
-      platform_thread_join(LProducers[LI], LRetVal);
-    platform_thread_sleep_ns(1000000);
-    GMpmcCycleQ.Close;
-    for LI := 0 to 1 do
-      platform_thread_join(LConsumers[LI], LRetVal);
-
-    LTotal := MPMC_CYCLE_PRODUCERS * MPMC_CYCLE_PER_PRODUCER;
-    LExpected := Int64(LTotal) * (LTotal + 1) div 2;
-    CheckEqual(LExpected, GMpmcCycleSum, 'cycle ' + IntToStr(LRound));
-    GMpmcCycleQ.Free;
+      LTotal := MPMC_CYCLE_PRODUCERS * MPMC_CYCLE_PER_PRODUCER;
+      LExpected := Int64(LTotal) * (LTotal + 1) div 2;
+      CheckEqual(LExpected, GMpmcCycleSum, 'cycle ' + IntToStr(LRound));
+    finally
+      GMpmcCycleQ.Close;
+      JoinStartedThreads(LProducers, LProducerCount, 'producer thread');
+      JoinStartedThreads(LConsumers, LConsumerCount, 'consumer thread');
+      GMpmcCycleQ.Free;
+    end;
   end;
 end;
 
@@ -640,16 +742,34 @@ begin
   end;
 end;
 
+function MpmcCloseRaceTimeoutConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+begin
+  Result := nil;
+  while GMpmcCloseRaceQ.DequeueTimeout(LV, 1000000000) do
+  begin
+    if (LV >= 0) and (LV < MPMC_CLOSE_RACE_MAX_VALUES) then
+      AtomicFetchAdd32(GMpmcCloseRaceConsumedMap[LV], 1, moRelaxed)
+    else
+      AtomicFetchAdd64(GMpmcCloseRaceOutOfRange, 1, moRelaxed);
+    AtomicFetchAdd64(GMpmcCloseRaceConsumed, 1, moRelease);
+  end;
+end;
+
 procedure TestMpmcCloseRacesActiveProducers;
 var
   LProducers: array[0..MPMC_CLOSE_RACE_PRODUCERS - 1] of TPlatformThreadHandle;
   LConsumers: array[0..MPMC_CLOSE_RACE_CONSUMERS - 1] of TPlatformThreadHandle;
-  LRetVal: Pointer;
   LI, LDuplicates: Integer;
   LV: Integer;
   LLeftover: Int64;
+  LProducerCount: Integer;
+  LConsumerCount: Integer;
 begin
   GMpmcCloseRaceQ := TIntMpmc.Create(MPMC_CLOSE_RACE_CAPACITY);
+  LProducerCount := 0;
+  LConsumerCount := 0;
   try
     AtomicStore32(GMpmcCloseRaceStart, 0, moRelease);
     AtomicStore32(GMpmcCloseRaceStarted, 0, moRelease);
@@ -662,11 +782,15 @@ begin
       AtomicStore32(GMpmcCloseRaceConsumedMap[LI], 0, moRelaxed);
 
     for LI := 0 to MPMC_CLOSE_RACE_CONSUMERS - 1 do
-      CheckEqual(Int64(0), Int64(platform_thread_create(LConsumers[LI], @MpmcCloseRaceConsumer, nil)),
-        'MPMC close-race consumer thread must start');
+    begin
+      StartThread(LConsumers[LI], @MpmcCloseRaceConsumer, nil, 'MPMC close-race consumer thread');
+      Inc(LConsumerCount);
+    end;
     for LI := 0 to MPMC_CLOSE_RACE_PRODUCERS - 1 do
-      CheckEqual(Int64(0), Int64(platform_thread_create(LProducers[LI], @MpmcCloseRaceProducer, Pointer(PtrInt(LI)))),
-        'MPMC close-race producer thread must start');
+    begin
+      StartThread(LProducers[LI], @MpmcCloseRaceProducer, Pointer(PtrInt(LI)), 'MPMC close-race producer thread');
+      Inc(LProducerCount);
+    end;
 
     for LI := 1 to 1000 do
     begin
@@ -692,10 +816,8 @@ begin
 
     GMpmcCloseRaceQ.Close;
 
-    for LI := 0 to MPMC_CLOSE_RACE_PRODUCERS - 1 do
-      platform_thread_join(LProducers[LI], LRetVal);
-    for LI := 0 to MPMC_CLOSE_RACE_CONSUMERS - 1 do
-      platform_thread_join(LConsumers[LI], LRetVal);
+    JoinStartedThreads(LProducers, LProducerCount, 'producer thread');
+    JoinStartedThreads(LConsumers, LConsumerCount, 'consumer thread');
 
     LLeftover := 0;
     while GMpmcCloseRaceQ.TryDequeue(LV) do
@@ -717,6 +839,100 @@ begin
     CheckEqual(Int64(0), LLeftover,
       'close race leaves no drainable items after consumers exit');
   finally
+    AtomicStore32(GMpmcCloseRaceStart, 1, moRelease);
+    GMpmcCloseRaceQ.Close;
+    JoinStartedThreads(LProducers, LProducerCount, 'producer thread');
+    JoinStartedThreads(LConsumers, LConsumerCount, 'consumer thread');
+    GMpmcCloseRaceQ.Free;
+  end;
+end;
+
+procedure TestMpmcCloseRacesActiveProducersTimeout;
+var
+  LProducers: array[0..MPMC_CLOSE_RACE_PRODUCERS - 1] of TPlatformThreadHandle;
+  LConsumers: array[0..MPMC_CLOSE_RACE_CONSUMERS - 1] of TPlatformThreadHandle;
+  LI, LDuplicates: Integer;
+  LV: Integer;
+  LLeftover: Int64;
+  LProducerCount: Integer;
+  LConsumerCount: Integer;
+begin
+  GMpmcCloseRaceQ := TIntMpmc.Create(MPMC_CLOSE_RACE_CAPACITY);
+  LProducerCount := 0;
+  LConsumerCount := 0;
+  try
+    AtomicStore32(GMpmcCloseRaceStart, 0, moRelease);
+    AtomicStore32(GMpmcCloseRaceStarted, 0, moRelease);
+    AtomicStore32(GMpmcCloseRaceDone, 0, moRelease);
+    AtomicStore64(GMpmcCloseRaceNextValue, 0, moRelease);
+    AtomicStore64(GMpmcCloseRacePublished, 0, moRelease);
+    AtomicStore64(GMpmcCloseRaceConsumed, 0, moRelease);
+    AtomicStore64(GMpmcCloseRaceOutOfRange, 0, moRelease);
+    for LI := 0 to MPMC_CLOSE_RACE_MAX_VALUES - 1 do
+      AtomicStore32(GMpmcCloseRaceConsumedMap[LI], 0, moRelaxed);
+
+    for LI := 0 to MPMC_CLOSE_RACE_CONSUMERS - 1 do
+    begin
+      StartThread(LConsumers[LI], @MpmcCloseRaceTimeoutConsumer, nil, 'MPMC close-race timeout consumer thread');
+      Inc(LConsumerCount);
+    end;
+    for LI := 0 to MPMC_CLOSE_RACE_PRODUCERS - 1 do
+    begin
+      StartThread(LProducers[LI], @MpmcCloseRaceProducer, Pointer(PtrInt(LI)), 'MPMC close-race timeout producer thread');
+      Inc(LProducerCount);
+    end;
+
+    for LI := 1 to 1000 do
+    begin
+      if AtomicLoad32(GMpmcCloseRaceStarted, moAcquire) = MPMC_CLOSE_RACE_PRODUCERS then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(MPMC_CLOSE_RACE_PRODUCERS),
+      Int64(AtomicLoad32(GMpmcCloseRaceStarted, moAcquire)),
+      'MPMC close race timeout producers must all start before release');
+
+    AtomicStore32(GMpmcCloseRaceStart, 1, moRelease);
+    for LI := 1 to 1000 do
+    begin
+      if AtomicLoad64(GMpmcCloseRacePublished, moAcquire) >= MPMC_CLOSE_RACE_CAPACITY then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    Check(AtomicLoad64(GMpmcCloseRacePublished, moAcquire) > 0,
+      'MPMC close race timeout must publish at least one item before close');
+    Check(AtomicLoad32(GMpmcCloseRaceDone, moAcquire) < MPMC_CLOSE_RACE_PRODUCERS,
+      'MPMC close race timeout must close while producers are still live');
+
+    GMpmcCloseRaceQ.Close;
+
+    JoinStartedThreads(LProducers, LProducerCount, 'timeout producer thread');
+    JoinStartedThreads(LConsumers, LConsumerCount, 'timeout consumer thread');
+
+    LLeftover := 0;
+    while GMpmcCloseRaceQ.TryDequeue(LV) do
+      Inc(LLeftover);
+
+    LDuplicates := 0;
+    for LI := 0 to MPMC_CLOSE_RACE_MAX_VALUES - 1 do
+    begin
+      if AtomicLoad32(GMpmcCloseRaceConsumedMap[LI], moRelaxed) > 1 then
+        Inc(LDuplicates);
+    end;
+
+    CheckEqual(Int64(0), GMpmcCloseRaceOutOfRange,
+      'close race timeout no out-of-range messages');
+    CheckEqual(Int64(0), Int64(LDuplicates),
+      'close race timeout no duplicate messages');
+    CheckEqual(GMpmcCloseRacePublished, GMpmcCloseRaceConsumed,
+      'close race timeout consumed all accepted enqueue operations');
+    CheckEqual(Int64(0), LLeftover,
+      'close race timeout leaves no drainable items after consumers exit');
+  finally
+    AtomicStore32(GMpmcCloseRaceStart, 1, moRelease);
+    GMpmcCloseRaceQ.Close;
+    JoinStartedThreads(LProducers, LProducerCount, 'timeout producer thread');
+    JoinStartedThreads(LConsumers, LConsumerCount, 'timeout consumer thread');
     GMpmcCloseRaceQ.Free;
   end;
 end;
@@ -759,28 +975,34 @@ end;
 procedure TestStackExhaustion;
 var
   LHandles: array[0..STACK_EXHAUST_THREADS - 1] of TPlatformThreadHandle;
-  LRetVal: Pointer;
   LI, LV: Integer;
   LRemaining: Int64;
+  LHandleCount: Integer;
 begin
   GStackExhaust := TIntStack.Create(STACK_EXHAUST_CAP);
   GStackExhaustPushOk := 0;
   GStackExhaustPopOk := 0;
+  LHandleCount := 0;
+  try
+    for LI := 0 to STACK_EXHAUST_THREADS - 1 do
+    begin
+      StartThread(LHandles[LI], @StackExhaustWorker, Pointer(PtrInt(LI)), 'stack exhaustion worker thread');
+      Inc(LHandleCount);
+    end;
+    JoinStartedThreads(LHandles, LHandleCount, 'worker thread');
 
-  for LI := 0 to STACK_EXHAUST_THREADS - 1 do
-    platform_thread_create(LHandles[LI], @StackExhaustWorker, Pointer(PtrInt(LI)));
-  for LI := 0 to STACK_EXHAUST_THREADS - 1 do
-    platform_thread_join(LHandles[LI], LRetVal);
+    { Drain any remaining }
+    LRemaining := 0;
+    while GStackExhaust.TryPop(LV) do
+      Inc(LRemaining);
 
-  { Drain any remaining }
-  LRemaining := 0;
-  while GStackExhaust.TryPop(LV) do
-    Inc(LRemaining);
-
-  { pushes = pops + remaining }
-  CheckEqual(GStackExhaustPushOk, GStackExhaustPopOk + LRemaining, 'push = pop + remaining');
-  Check(GStackExhaust.IsEmpty, 'stack empty after drain');
-  GStackExhaust.Free;
+    { pushes = pops + remaining }
+    CheckEqual(GStackExhaustPushOk, GStackExhaustPopOk + LRemaining, 'push = pop + remaining');
+    Check(GStackExhaust.IsEmpty, 'stack empty after drain');
+  finally
+    JoinStartedThreads(LHandles, LHandleCount, 'worker thread');
+    GStackExhaust.Free;
+  end;
 end;
 
 { ============================================================ }
@@ -797,6 +1019,7 @@ begin
   T.Run('SPSC full + close race', @TestSpscFullClose);
   T.Run('MPMC rapid create/close cycles (50 rounds)', @TestMpmcRapidCycles);
   T.Run('MPMC close races active producers', @TestMpmcCloseRacesActiveProducers);
+  T.Run('MPMC close races active producers timeout', @TestMpmcCloseRacesActiveProducersTimeout);
   T.Run('Stack exhaustion + recovery (4T, cap=8)', @TestStackExhaustion);
   T.Summary;
 end.

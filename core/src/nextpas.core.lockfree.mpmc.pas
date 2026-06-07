@@ -118,8 +118,6 @@ var
   LIdx: PtrUInt;
   LSeq, LExpected, LDiff: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
-    Exit(False);
   AtomicFetchAdd32(FActiveEnqueues, 1, moAcqRel);
   try
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
