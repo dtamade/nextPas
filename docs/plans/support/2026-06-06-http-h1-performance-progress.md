@@ -11781,3 +11781,53 @@ Hello from nextPas!
     shared Go/Rust comparator build outputs
   - benchmark truth is stricter because concurrent artifact capture no longer
     depends on toolchain race luck
+
+## Session: 2026-06-07 full-chain direct-1k isolation slice
+
+- **Status:** completed.
+- Objective:
+  - add a no-router 1 KiB fixed-response row to `bench_fullchain`
+  - fill the evidence gap between in-memory 1 KiB writer/outbound benches and
+    the broader multi-connection `bench_server response_1k` workload
+  - keep substring filter semantics unambiguous while adding the new row
+- Scope and safety:
+  - touched only `bench_fullchain`, the benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 parser/runtime behavior, lower-layer
+    modules, comparison runner behavior, comparator binaries, or generated
+    artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `68 total, 67 passed, 1 failed`
+    - failed at `bench_fullchain direct 1k smoke`
+    - benchmark printed `No matching full-chain scenarios.`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_fullchain` now recognizes `Host: direct` + `GET /1k` and returns a
+    fixed 1 KiB body before router dispatch
+  - the new workload is named `direct_1k` to stay distinct from both
+    `direct_root` and `plaintext`
+  - `test_http_benchmarks` now locks:
+    - the new `direct_1k` smoke row
+    - `NEXTPAS_BENCH_FILTER=direct_root` must not accidentally emit
+      `workload=direct_1k`
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `68 total, 68 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `env NEXTPAS_BENCH_MAX_ITERS=128 NEXTPAS_BENCH_FILTER=direct_1k ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `backend=threaded`
+    - `completed=128`
+    - `ns/op=36978.2`
+    - `req/s=27043`
+  - `env NEXTPAS_BENCH_MAX_ITERS=128 NEXTPAS_BENCH_FILTER=direct_1k NEXTPAS_BENCH_BACKEND=epoll ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `backend=epoll`
+    - `completed=128`
+    - `ns/op=75342.2`
+    - `req/s=13273`
+- Outcome:
+  - the harness now has a real-socket, single-connection, no-router 1 KiB row
+    alongside the earlier tiny-body `direct_root` row
+  - this slice sharpens runtime/socket attribution for larger responses; it
+    does not claim a new cross-language result or a stable backend ranking

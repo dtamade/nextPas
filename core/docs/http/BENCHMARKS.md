@@ -685,7 +685,7 @@ connection, sends requests, reads complete responses, and reports stable
 markers:
 
 - `operation=http.fullchain.keepalive`
-- `workload=<direct_root|plaintext|json|echo_1k|sink_16k|param_route>`
+- `workload=<direct_root|direct_1k|plaintext|json|echo_1k|sink_16k|param_route>`
 - `backend=<threaded|epoll>`
 - `iterations`
 - `completed`
@@ -694,11 +694,14 @@ markers:
 - `req/s`
 - `client_read_mode=buffered`
 
-The two smallest full-chain workloads now split router dispatch from the rest
-of the keep-alive server path:
+The narrowest full-chain workloads now split router dispatch and response size
+from the rest of the keep-alive server path:
 
 - `direct_root` keeps the same `GET /` fixed-response shape but intercepts it
   in an outer handler before router dispatch.
+- `direct_1k` keeps the same direct outer-handler path but switches to
+  `GET /1k` and a fixed 1 KiB body, so it can isolate large-response
+  runtime/socket cost without reintroducing router dispatch.
 - `plaintext` still sends `GET /` through the router path.
 
 The filter is still substring-based, so the direct workload is intentionally
@@ -743,6 +746,19 @@ Treat these as local backend smoke, not a stable threaded-vs-epoll ranking.
 The durable conclusion is that `bench_fullchain` now records backend selection
 explicitly and can characterize single-connection direct-handler runtime cost
 on either backend without patching the server comparison runner.
+
+Fresh local backend smoke rows from 2026-06-07 for `direct_1k`:
+
+| backend | workload | iterations | completed | elapsed_ns | ns/op | req/s |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| threaded | direct_1k | 128 | 128 | 4733204 | 36978.2 | 27043 |
+| epoll | direct_1k | 128 | 128 | 9643804 | 75342.2 | 13273 |
+
+Treat these as local backend smoke, not a stable threaded-vs-epoll ranking.
+The durable conclusion is narrower: `bench_fullchain` now has a real-socket,
+single-connection, no-router 1 KiB response row that sits between the
+in-memory writer/outbound benches and the broader `bench_server response_1k`
+throughput workload.
 
 ## Optimization Evidence: Full-Chain Benchmark Buffered Client Read
 
@@ -2377,6 +2393,8 @@ response-read metadata: `response_body_bytes=1024` for this workload, plus
 Hyper and `client_read_mode=http_client_body_drain` for the Go `net/http`
 comparator. This keeps response-writer/drain discussions honest about how each
 client decides a response is complete.
+For a nextPas-only single-connection no-router counterpart, see the
+`bench_fullchain direct_1k` rows in the full-chain section above.
 
 Focused RED/GREEN:
 

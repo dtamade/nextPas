@@ -5188,3 +5188,29 @@
     并发启动后均返回 `exit=0`
   - runner report 仍保留 `nextpas_backend=threaded`
   - snapshot environment block 仍保留 `nextpas_backend=epoll`
+
+## 2026-06-07 full-chain direct-1k isolation findings
+
+- 现有 1 KiB 证据链仍有一个空档：
+  - `bench_h1writer` / `bench_h1outbound` 只证明内存内 writer/drain 成本；
+  - `bench_server response_1k` 证明的是多连接 server throughput；
+  - 但还没有一条 “real socket + single keep-alive connection + no router +
+    fixed 1 KiB response” 的 nextPas-only row。
+- 本轮选择的最小补充不是扩 comparison runner，也不是改 `bench_server` workload，
+  而是在 `bench_fullchain` 现有 outer-handler seam 上补 `direct_1k`：
+  - 复用 `Host: direct` 的 no-router path；
+  - 只新增 `GET /1k` + fixed 1 KiB body；
+  - 继续沿用同一个 real socket / keep-alive client read contract。
+- focused gate 锁住两件关键 truth：
+  - `direct_1k` row 确实存在；
+  - `NEXTPAS_BENCH_FILTER=direct_root` 不会误发 `workload=direct_1k`。
+- 本地方向性 smoke：
+  - `threaded direct_1k 128` 约 `36978.2 ns/op`
+  - `epoll direct_1k 128` 约 `75342.2 ns/op`
+- 这组数字不是新的 cross-language 排名；它们的意义更窄但更重要：
+  - full-chain 现在终于有了 1 KiB fixed response 的 single-connection
+    no-router seam；
+  - 后续如果继续追 runtime/socket overhead，可以把
+    `direct_root`、`direct_1k`、`bench_server response_1k` 和
+    writer/outbound 1 KiB rows 串起来看，而不是继续把这些成本混成一条笼统
+    的 “response_1k 很快/很慢” 结论。

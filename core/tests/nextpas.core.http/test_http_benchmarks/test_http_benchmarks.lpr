@@ -1541,6 +1541,36 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_fullchain direct plaintext smoke exit code: ' + LOutput);
   CheckFullchainBenchmarkOutput(LOutput, 'direct_root', 'direct_root');
+  CheckNotContains(LOutput, 'workload=direct_1k',
+    'bench_fullchain direct_root filter must not match direct_1k');
+end;
+
+procedure TestBenchFullchainDirect1KSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchFullchainRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain direct 1k build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchFullchainBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_fullchain direct 1k binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + FullchainSmokeIterations,
+     BenchFilterEnvName + '=direct_1k'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain direct 1k smoke exit code: ' + LOutput);
+  CheckFullchainBenchmarkOutput(LOutput, 'direct_1k', 'direct_1k');
 end;
 
 procedure TestBenchFullchainRejectsInvalidBackend;
@@ -3048,6 +3078,8 @@ begin
     @TestBenchFullchainPlaintextSmoke);
   T.Run('bench_fullchain direct plaintext smoke',
     @TestBenchFullchainDirectPlaintextSmoke);
+  T.Run('bench_fullchain direct 1k smoke',
+    @TestBenchFullchainDirect1KSmoke);
   T.Run('bench_fullchain rejects invalid backend',
     @TestBenchFullchainRejectsInvalidBackend);
   T.Run('bench_fullchain epoll direct plaintext smoke',

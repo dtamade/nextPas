@@ -58,6 +58,14 @@ begin
   AW.Write(PAnsiChar('Hello, World!')^, 13);
 end;
 
+procedure WriteBody1KResponse(const AW: IHttpResponseWriter; const ABody1K: string);
+begin
+  AW.GetHeaders.Set_('content-type', 'application/octet-stream');
+  AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(ABody1K))));
+  AW.WriteHeader(HTTP_STATUS_OK);
+  AW.Write(ABody1K[1], SizeUInt(Length(ABody1K)));
+end;
+
 function ConfiguredIterations: Int64;
 var
   LValue: string;
@@ -209,6 +217,11 @@ begin
     begin
       if AReq.Headers.Get('host') = DIRECT_HOST then
       begin
+        if AReq.Path = '/1k' then
+        begin
+          WriteBody1KResponse(AW, LBody1K);
+          Exit;
+        end;
         WritePlaintextResponse(AW);
         Exit;
       end;
@@ -348,6 +361,7 @@ end;
 
 var
   LDirectPlaintextReq: string;
+  LDirect1KReq: string;
   LBody1K: string;
   LEchoReq: string;
   LBody16K: string;
@@ -380,6 +394,14 @@ begin
     'GET / HTTP/1.1'#13#10'Host: ' + DIRECT_HOST + #13#10'Content-Length: 0'#13#10#13#10;
   LResult := RunScenario('direct_root',
     'Direct root (GET /, no router)', LDirectPlaintextReq, 50);
+  if LResult.ElapsedNs > 0 then
+    Inc(LScenariosRun);
+
+  { Scenario 1b: 1 KiB fixed response without router dispatch }
+  LDirect1KReq :=
+    'GET /1k HTTP/1.1'#13#10'Host: ' + DIRECT_HOST + #13#10'Content-Length: 0'#13#10#13#10;
+  LResult := RunScenario('direct_1k',
+    'Direct 1KB (GET /1k, no router)', LDirect1KReq, 1000);
   if LResult.ElapsedNs > 0 then
     Inc(LScenariosRun);
 
