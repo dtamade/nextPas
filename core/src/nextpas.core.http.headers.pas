@@ -48,8 +48,30 @@ type
   end;
 
 function NewHttpHeaders: IHttpHeaders;
+procedure SetBasicAuth(const AHeaders: IHttpHeaders;
+  const AUsername, APassword: string);
+procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string);
 
 implementation
+
+uses
+  nextpas.core.base,
+  nextpas.core.errors,
+  nextpas.core.encoding;
+
+function HeaderBytes(const AValue: string): TBytes;
+begin
+  Result := nil;
+  SetLength(Result, Length(AValue));
+  if AValue <> '' then
+    Move(AValue[1], Result[0], Length(AValue));
+end;
+
+procedure RequireHeaders(const AHeaders: IHttpHeaders);
+begin
+  if AHeaders = nil then
+    raise EArgumentError.Create('HTTP headers are nil');
+end;
 
 { THttpHeaders }
 
@@ -379,6 +401,20 @@ end;
 function NewHttpHeaders: IHttpHeaders;
 begin
   Result := THttpHeaders.Create;
+end;
+
+procedure SetBasicAuth(const AHeaders: IHttpHeaders;
+  const AUsername, APassword: string);
+begin
+  RequireHeaders(AHeaders);
+  AHeaders.Set_('authorization', 'Basic ' +
+    Base64Encode(HeaderBytes(AUsername + ':' + APassword)));
+end;
+
+procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string);
+begin
+  RequireHeaders(AHeaders);
+  AHeaders.Set_('authorization', 'Bearer ' + AToken);
 end;
 
 end.

@@ -119,6 +119,9 @@ function HttpVersionToStr(const AVersion: THttpVersion): string; inline;
 
 { Headers factory }
 function NewHeaders: IHttpHeaders; inline;
+procedure SetBasicAuth(const AHeaders: IHttpHeaders;
+  const AUsername, APassword: string); inline;
+procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string); inline;
 
 { URL utilities }
 function UrlEncode(const AStr: string): string; inline;
@@ -233,6 +236,17 @@ end;
 function NewHeaders: IHttpHeaders;
 begin
   Result := nextpas.core.http.headers.NewHttpHeaders;
+end;
+
+procedure SetBasicAuth(const AHeaders: IHttpHeaders;
+  const AUsername, APassword: string);
+begin
+  nextpas.core.http.headers.SetBasicAuth(AHeaders, AUsername, APassword);
+end;
+
+procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string);
+begin
+  nextpas.core.http.headers.SetBearerAuth(AHeaders, AToken);
 end;
 
 function UrlEncode(const AStr: string): string;

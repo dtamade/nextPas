@@ -862,6 +862,49 @@ begin
   end;
 end;
 
+procedure TestClientDoWithBasicAuthHelper;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReq: IHttpRequest;
+  LHeaders: IHttpHeaders;
+  LGotAuth: string;
+begin
+  LGotAuth := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/auth', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LB: string;
+  begin
+    LGotAuth := AReq.Headers.Get('authorization');
+    LB := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], 2);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LHeaders := NewHeaders;
+    SetBasicAuth(LHeaders, 'Aladdin', 'open sesame');
+    LReq := NewRequest(hmGet,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/auth',
+      LHeaders, nil, 0);
+
+    LResp := LClient.Do_(LReq);
+
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    CheckEqual('Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==', LGotAuth,
+      'basic auth helper header forwarded');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 3: Client POST with body }
 procedure TestClientPostBody;
 var
@@ -3159,6 +3202,8 @@ begin
   T.Run('Client Do rejects nil transport response',
     @TestClientDoRejectsNilTransportResponse);
   T.Run('Client GET with custom headers', @TestClientGetCustomHeaders);
+  T.Run('Client Do forwards Basic auth helper header',
+    @TestClientDoWithBasicAuthHelper);
   T.Run('Client POST with body', @TestClientPostBody);
   T.Run('Client Do uses NewRequest headers/body helper',
     @TestClientDoWithRequestHelperHeadersBody);

@@ -302,6 +302,21 @@ begin
   CheckEqual('bar', LClone.Get('x-foo'), 'Clone independent after Del');
 end;
 
+procedure TestAuthHelpersAvailableThroughFacade;
+var
+  LH: IHttpHeaders;
+begin
+  LH := NewHeaders;
+
+  nextpas.core.http.SetBasicAuth(LH, 'Aladdin', 'open sesame');
+  CheckEqual('Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==',
+    LH.Get('authorization'), 'facade SetBasicAuth sets authorization');
+
+  nextpas.core.http.SetBearerAuth(LH, 'token-123');
+  CheckEqual('Bearer token-123', LH.Get('authorization'),
+    'facade SetBearerAuth replaces authorization');
+end;
+
 { Test 2: NewRouter — Get route + FindRoute }
 procedure TestNewRouter;
 var
@@ -1434,6 +1449,8 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.http.contract');
   T.Run('NewHeaders: Set/Get/Has/Del/Count/Clone', @TestNewHeaders);
+  T.Run('Auth helpers are available through facade',
+    @TestAuthHelpersAvailableThroughFacade);
   T.Run('NewRouter: Get route + FindRoute', @TestNewRouter);
   T.Run('IHttpRouter convenience methods are callable through interface', @TestRouterConvenienceMethodsOnInterface);
   T.Run('NewRequest: Method/Url/Version', @TestNewRequest);

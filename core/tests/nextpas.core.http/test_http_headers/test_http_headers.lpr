@@ -4,6 +4,7 @@ program test_http_headers;
 
 uses
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.http.base,
   nextpas.core.http.intf,
@@ -342,6 +343,57 @@ begin
   ExpectHeaderError('set rejects NUL in value', True, 'x-good', 'bad'#0'value');
 end;
 
+procedure TestSetBasicAuth;
+var
+  LH: IHttpHeaders;
+begin
+  LH := NewHttpHeaders;
+  LH.Set_('authorization', 'Bearer old');
+
+  SetBasicAuth(LH, 'Aladdin', 'open sesame');
+
+  CheckEqual('Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==',
+    LH.Get('Authorization'), 'basic auth header value');
+  CheckEqual(Int64(1), Int64(LH.Count), 'basic auth replaces existing auth');
+end;
+
+procedure TestSetBearerAuth;
+var
+  LH: IHttpHeaders;
+begin
+  LH := NewHttpHeaders;
+
+  SetBearerAuth(LH, 'token-123');
+
+  CheckEqual('Bearer token-123', LH.Get('Authorization'),
+    'bearer auth header value');
+end;
+
+procedure TestAuthHelpersRejectNilHeaders;
+var
+  LH: IHttpHeaders;
+  LRaised: Boolean;
+begin
+  LH := nil;
+  LRaised := False;
+  try
+    SetBearerAuth(LH, 'token');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'bearer helper rejects nil headers');
+
+  LRaised := False;
+  try
+    SetBasicAuth(LH, 'user', 'pass');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'basic helper rejects nil headers');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.headers');
   T.Run('Set and Get basic', @TestSetAndGetBasic);
@@ -363,5 +415,8 @@ begin
   T.Run('Parsed span add canonicalizes parser validated headers',
     @TestParsedSpanAddCanonicalizesParserValidatedHeaders);
   T.Run('Validation rejects invalid names and values', @TestValidationRejectsInvalidNamesAndValues);
+  T.Run('SetBasicAuth sets Authorization', @TestSetBasicAuth);
+  T.Run('SetBearerAuth sets Authorization', @TestSetBearerAuth);
+  T.Run('Auth helpers reject nil headers', @TestAuthHelpersRejectNilHeaders);
   T.Summary;
 end.
