@@ -58,6 +58,11 @@ Rules:
   `np.system.interface_release` for `array of interface`. Backend-private
   helpers such as `@np_dynarray_resize` and `@np_dynarray_release` remain
   implementation details, not public ABI.
+- Managed dynamic-array contract tests prove semantic contract projection only.
+  They must not use backend-private LLVM helper calls as evidence that element
+  finalization semantics are implemented.
+- Borrowed dynamic-array parameters, even with managed element types, must not
+  project owned `set_length` or `fini` contracts.
 
 ## Interface Reference
 

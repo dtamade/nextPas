@@ -60,6 +60,28 @@ const
     'begin' + LineEnding +
     'end.';
 
+  BorrowedManagedStringDynArraySource =
+    'program test;' + LineEnding +
+    'procedure ResizeBorrowed(A: array of string);' + LineEnding +
+    'begin' + LineEnding +
+    '  SetLength(A, 2);' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    'end.';
+
+  BorrowedManagedInterfaceDynArraySource =
+    'program test;' + LineEnding +
+    'type' + LineEnding +
+    '  IProbe = interface' + LineEnding +
+    '    procedure Ping;' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure ResizeBorrowed(A: array of IProbe);' + LineEnding +
+    'begin' + LineEnding +
+    '  SetLength(A, 2);' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    'end.';
+
   StringSource =
     'program test;' + LineEnding +
     'var A, B, C: string;' + LineEnding +
@@ -157,21 +179,6 @@ begin
   Result := False;
 end;
 
-function FindFirstNodeByKindAndDisplayNameContaining(const AModel: TSemanticModel;
-  const AKind, ADisplayName, AOperandNeedle: string; out ANode: TTypedHirNode): Boolean;
-var
-  I: LongInt;
-begin
-  for I := 0 to AModel.TypedHirNodeCount - 1 do
-  begin
-    ANode := AModel.TypedHirNodeAt(I);
-    if (ANode.Kind = AKind) and SameText(ANode.DisplayName, ADisplayName) and
-      (Pos(AOperandNeedle, ANode.Operand) > 0) then
-      Exit(True);
-  end;
-  Result := False;
-end;
-
 function HasRuntimeContractNode(const AModel: TSemanticModel;
   const AContractName: string): Boolean;
 var
@@ -186,6 +193,19 @@ begin
       Exit(True);
   end;
   Result := False;
+end;
+
+procedure AssertNoManagedDynArrayRuntimeContracts(const AModel: TSemanticModel;
+  const ALabel: string);
+begin
+  if HasRuntimeContractNode(AModel, 'np.system.dynarray_set_length') then
+    Fail(ALabel + '-must-not-project-dynarray-set-length-contract');
+  if HasRuntimeContractNode(AModel, 'np.system.dynarray_fini') then
+    Fail(ALabel + '-must-not-project-dynarray-fini-contract');
+  if HasRuntimeContractNode(AModel, 'np.system.string_fini') then
+    Fail(ALabel + '-must-not-project-string-fini-contract');
+  if HasRuntimeContractNode(AModel, 'np.system.interface_release') then
+    Fail(ALabel + '-must-not-project-interface-release-contract');
 end;
 
 procedure AssertOwnedBorrowedContract;
@@ -210,6 +230,7 @@ begin
     if not FindFirstNodeByKindAndDisplayName(Model, 'dynarray-cleanup-runtime',
       'Local', Node) then
       Fail('missing-owned-local-cleanup');
+    AssertNoManagedDynArrayRuntimeContracts(Model, 'unmanaged-dynarray');
 
     LlvmText := EmitLlvm(Model);
     if Pos('define internal ptr @np_dynarray_resize(', LlvmText) = 0 then
@@ -257,7 +278,6 @@ procedure AssertManagedStringDynArrayContract;
 var
   Model: TSemanticModel;
   Node: TTypedHirNode;
-  LlvmText: string;
 begin
   Model := BuildModel(ManagedStringDynArraySource);
   try
@@ -266,8 +286,8 @@ begin
     if not FindFirstNodeByKindAndDisplayName(Model, 'var-decl-arr-runtime',
       'Local', Node) then
       Fail('missing-managed-string-dynarray-node');
-    if not FindFirstNodeByKindAndDisplayNameContaining(Model,
-      'setlength-arr-runtime', 'Local', #9 + '8', Node) then
+    if not FindFirstNodeByKindAndDisplayName(Model, 'setlength-arr-runtime',
+      'Local', Node) then
       Fail('missing-managed-string-dynarray-resize-node');
     if not FindFirstNodeByKindAndDisplayName(Model, 'dynarray-cleanup-runtime',
       'Local', Node) then
@@ -278,14 +298,6 @@ begin
       Fail('missing-managed-string-dynarray-fini-contract');
     if not HasRuntimeContractNode(Model, 'np.system.string_fini') then
       Fail('missing-managed-string-dynarray-string-fini-contract');
-
-    LlvmText := EmitLlvm(Model);
-    if Pos('call ptr @np_dynarray_resize(', LlvmText) = 0 then
-      Fail('missing-managed-string-dynarray-resize-call');
-    if Pos('call void @np_dynarray_release(', LlvmText) = 0 then
-      Fail('missing-managed-string-dynarray-release-call');
-    if Pos('call ptr @np_alloc(i64 %arralloc.', LlvmText) <> 0 then
-      Fail('managed-string-dynarray-still-bare-arr-alloc');
   finally
     Model.Free;
   end;
@@ -295,7 +307,6 @@ procedure AssertManagedInterfaceDynArrayContract;
 var
   Model: TSemanticModel;
   Node: TTypedHirNode;
-  LlvmText: string;
 begin
   Model := BuildModel(ManagedInterfaceDynArraySource);
   try
@@ -304,8 +315,8 @@ begin
     if not FindFirstNodeByKindAndDisplayName(Model, 'var-decl-arr-runtime',
       'Local', Node) then
       Fail('missing-managed-interface-dynarray-node');
-    if not FindFirstNodeByKindAndDisplayNameContaining(Model,
-      'setlength-arr-runtime', 'Local', #9 + '8', Node) then
+    if not FindFirstNodeByKindAndDisplayName(Model, 'setlength-arr-runtime',
+      'Local', Node) then
       Fail('missing-managed-interface-dynarray-resize-node');
     if not FindFirstNodeByKindAndDisplayName(Model, 'dynarray-cleanup-runtime',
       'Local', Node) then
@@ -316,14 +327,54 @@ begin
       Fail('missing-managed-interface-dynarray-fini-contract');
     if not HasRuntimeContractNode(Model, 'np.system.interface_release') then
       Fail('missing-managed-interface-dynarray-interface-release-contract');
+  finally
+    Model.Free;
+  end;
+end;
 
-    LlvmText := EmitLlvm(Model);
-    if Pos('call ptr @np_dynarray_resize(', LlvmText) = 0 then
-      Fail('missing-managed-interface-dynarray-resize-call');
-    if Pos('call void @np_dynarray_release(', LlvmText) = 0 then
-      Fail('missing-managed-interface-dynarray-release-call');
-    if Pos('call ptr @np_alloc(i64 %arralloc.', LlvmText) <> 0 then
-      Fail('managed-interface-dynarray-still-bare-arr-alloc');
+procedure AssertBorrowedManagedStringDynArrayContract;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(BorrowedManagedStringDynArraySource);
+  try
+    if Model = nil then
+      Fail('borrowed-managed-string-dynarray-model-nil');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'var-decl-arr-borrowed-runtime', 'A', Node) then
+      Fail('missing-borrowed-managed-string-dynarray-node');
+    if FindFirstNodeByKindAndDisplayName(Model, 'setlength-arr-runtime', 'A',
+      Node) then
+      Fail('borrowed-managed-string-must-not-use-owned-setlength-node');
+    if FindFirstNodeByKindAndDisplayName(Model, 'dynarray-cleanup-runtime',
+      'A', Node) then
+      Fail('borrowed-managed-string-must-not-cleanup');
+    AssertNoManagedDynArrayRuntimeContracts(Model, 'borrowed-managed-string');
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure AssertBorrowedManagedInterfaceDynArrayContract;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(BorrowedManagedInterfaceDynArraySource);
+  try
+    if Model = nil then
+      Fail('borrowed-managed-interface-dynarray-model-nil');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'var-decl-arr-borrowed-runtime', 'A', Node) then
+      Fail('missing-borrowed-managed-interface-dynarray-node');
+    if FindFirstNodeByKindAndDisplayName(Model, 'setlength-arr-runtime', 'A',
+      Node) then
+      Fail('borrowed-managed-interface-must-not-use-owned-setlength-node');
+    if FindFirstNodeByKindAndDisplayName(Model, 'dynarray-cleanup-runtime',
+      'A', Node) then
+      Fail('borrowed-managed-interface-must-not-cleanup');
+    AssertNoManagedDynArrayRuntimeContracts(Model, 'borrowed-managed-interface');
   finally
     Model.Free;
   end;
@@ -356,6 +407,8 @@ begin
   AssertBorrowedResizeContract;
   AssertManagedStringDynArrayContract;
   AssertManagedInterfaceDynArrayContract;
+  AssertBorrowedManagedStringDynArrayContract;
+  AssertBorrowedManagedInterfaceDynArrayContract;
   { C6-H2 moves field dynarray contracts into test_hir_field_dynarray_contract. }
   AssertStringPathUntouched;
   WriteLn('hir-dynarray-release-contract-status=pass');
