@@ -113,6 +113,13 @@ begin
   R := GraphemeNext(PByte(PAnsiChar(S)), Length(S));
   CheckEqual(Int64(6), Int64(R.ByteLen), 'heart+VS16 = 6 bytes');
   CheckEqual(Int64(2), Int64(R.CodePoints), 'heart+VS16 = 2 cps');
+  CheckEqual(Int64(2), Int64(R.Width), 'heart+VS16 = 2 cols');
+
+  S := #$E2#$98#$86 + #$EF#$B8#$8F;
+  R := GraphemeNext(PByte(PAnsiChar(S)), Length(S));
+  CheckEqual(Int64(6), Int64(R.ByteLen), 'white star+VS16 = 6 bytes');
+  CheckEqual(Int64(2), Int64(R.CodePoints), 'white star+VS16 = 2 cps');
+  CheckEqual(Int64(1), Int64(R.Width), 'white star+VS16 remains 1 col');
 end;
 
 procedure TestEmpty;

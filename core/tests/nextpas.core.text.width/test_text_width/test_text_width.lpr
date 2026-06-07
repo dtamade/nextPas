@@ -96,6 +96,8 @@ begin
   CheckEqual(Int64(2), Int64(StringDisplayWidth(#$F0#$9F#$98#$80)), 'emoji');
   { a😀 = 1 + 2 = 3 }
   CheckEqual(Int64(3), Int64(StringDisplayWidth('a' + #$F0#$9F#$98#$80)), 'a emoji');
+  CheckEqual(Int64(2), Int64(StringDisplayWidth(#$E2#$9D#$A4 + #$EF#$B8#$8F)), 'heart VS16 emoji');
+  CheckEqual(Int64(1), Int64(StringDisplayWidth(#$E2#$98#$86 + #$EF#$B8#$8F)), 'white star VS16 remains narrow');
 end;
 
 procedure TestEmojiClusterString;

@@ -99,6 +99,11 @@ begin
             (ACp = Ord('#')) or (ACp = Ord('*'));
 end;
 
+function IsEmojiVariationBase(ACp: UInt32): Boolean; inline;
+begin
+  Result := ACp = $2764;
+end;
+
 function GraphemeNext(const AData: PByte; ALen: SizeUInt): TGraphemeResult;
 var
   LPos: SizeUInt;
@@ -144,7 +149,9 @@ begin
     begin
       Inc(LPos, LDec.ByteLen);
       Inc(Result.CodePoints);
-      if (LDec.CodePoint = $20E3) and IsKeycapBase(LFirstCp) then
+      if (LDec.CodePoint = $FE0F) and IsEmojiVariationBase(LFirstCp) then
+        Result.Width := 2
+      else if (LDec.CodePoint = $20E3) and IsKeycapBase(LFirstCp) then
         Result.Width := 2;
       LAfterZWJ := False;
       Continue;
