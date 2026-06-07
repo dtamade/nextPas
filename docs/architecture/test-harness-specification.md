@@ -183,10 +183,13 @@ Linux x86_64 baseline 的 stage0 target artifact 运行路径还必须和本地�
 
 - `compiler-pass` 与 `compiler-fail` 当前已经通过 `stage0 build` 进入真实 nextPas 控制面
 - `build/verify_local.sh` 当前必须复用 `./tests/run_all_tests.sh --filter smoke`
-- Linux CI 当前直接复用 `./build/verify_local.sh`
+- Linux CI 当前先运行 `make test-tooling`，再通过 `make verify` 进入本地验证
 
 也就是说，本地验证和 CI 现在都应该建立在同一条 `harness` 结果语义之上，而不是各自维护一套
 只在自己环境里碰巧成立的判断规则。
+
+`make verify` 会在根目录 hygiene gate 后调用 `./build/verify_local.sh`，再做一次 hygiene
+检查。CI 不应直接绕过根目录 Makefile gate 调用 `build/verify_local.sh`。
 
 ## 这里必须诚实保留 host-backed 边界
 

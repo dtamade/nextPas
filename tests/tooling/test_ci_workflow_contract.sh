@@ -12,6 +12,7 @@ REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 CI_WORKFLOW="$REPO_ROOT/.github/workflows/ci.yml"
 CORE_CI_WORKFLOW="$REPO_ROOT/.github/workflows/core-ci.yml"
 ROOT_MAKEFILE="$REPO_ROOT/Makefile"
+TEST_HARNESS_SPEC="$REPO_ROOT/docs/architecture/test-harness-specification.md"
 
 require_pattern() {
   file="$1"
@@ -80,6 +81,8 @@ root_ci_line_number() {
 require_pattern "$CI_WORKFLOW" '^[[:space:]]+run: make test-tooling$' 'root tooling gate'
 require_pattern "$CI_WORKFLOW" '^[[:space:]]+run: make verify$' 'root verify gate'
 reject_pattern "$CI_WORKFLOW" '^[[:space:]]+run: ./build/verify_local[.]sh$' 'direct verify_local bypasses Makefile hygiene'
+reject_pattern "$TEST_HARNESS_SPEC" 'Linux CI 当前直接复用 `./build/verify_local[.]sh`' 'test harness spec must not document direct verify_local CI wiring'
+require_pattern "$TEST_HARNESS_SPEC" 'Linux CI 当前.*`make verify`' 'test harness spec documents Makefile-backed verify CI wiring'
 reject_pattern "$CI_WORKFLOW" '^[[:space:]]+run: make lane-focused' 'lane-focused is local/reporting tooling, not CI matrix'
 reject_pattern "$CORE_CI_WORKFLOW" '^[[:space:]]+run: make lane-focused' 'core CI must not consume local/reporting lane-focused helper'
 reject_pattern "$CI_WORKFLOW" '^[[:space:]]+run: make landing-check .*LANE=' 'landing-check LANE is local/reporting tooling, not CI matrix'
