@@ -41,6 +41,7 @@ type
     FWriteDeadline: TDeadline;
     FLastReadTimeoutMs: UInt32;
     FLastWriteTimeoutMs: UInt32;
+    procedure EnsureOpen(const AOperation: string);
     procedure ApplyReadTimeout;
     procedure ApplyWriteTimeout;
   public
@@ -144,12 +145,19 @@ begin
   inherited;
 end;
 
+procedure TTcpStream.EnsureOpen(const AOperation: string);
+begin
+  if FClosed then
+    raise ENetworkError.Create('tcp stream ' + AOperation + ' after close');
+end;
+
 function TTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LRecvd: Int32;
   LResult: Int32;
 begin
   if ACount = 0 then Exit(0);
+  EnsureOpen('read');
   ApplyReadTimeout;
   LResult := platform_socket_recv(FSocket, @ABuf, Int32(ACount), 0, LRecvd);
   if LResult <> 0 then
@@ -165,6 +173,7 @@ var
   LRemaining: SizeUInt;
 begin
   if ACount = 0 then Exit(0);
+  EnsureOpen('write');
   ApplyWriteTimeout;
   LPtr := @ABuf;
   LRemaining := ACount;
@@ -196,6 +205,7 @@ begin
   begin
     FClosed := True;
     platform_socket_close(FSocket);
+    FSocket := PLATFORM_INVALID_SOCKET;
   end;
 end;
 
@@ -226,6 +236,7 @@ end;
 
 procedure TTcpStream.Shutdown;
 begin
+  EnsureOpen('shutdown');
   platform_socket_shutdown(FSocket, PLATFORM_SHUT_WR);
 end;
 
@@ -233,6 +244,7 @@ procedure TTcpStream.SetNoDelay(const AValue: Boolean);
 var
   LVal: Int32;
 begin
+  EnsureOpen('set nodelay');
   if AValue then LVal := 1 else LVal := 0;
   platform_socket_setsockopt(FSocket, PLATFORM_IPPROTO_TCP, PLATFORM_TCP_NODELAY, @LVal, SizeOf(LVal));
 end;
@@ -241,6 +253,7 @@ procedure TTcpStream.SetKeepAlive(const AValue: Boolean);
 var
   LVal: Int32;
 begin
+  EnsureOpen('set keepalive');
   if AValue then LVal := 1 else LVal := 0;
   platform_socket_setsockopt(FSocket, PLATFORM_SOL_SOCKET, PLATFORM_SO_KEEPALIVE, @LVal, SizeOf(LVal));
 end;
@@ -257,11 +270,13 @@ end;
 
 function TTcpStream.NativeSocketHandle: PtrUInt;
 begin
+  EnsureOpen('native handle');
   Result := PtrUInt(FSocket.Value);
 end;
 
 procedure TTcpStream.SetBlocking(const ABlocking: Boolean);
 begin
+  EnsureOpen('set blocking');
   if platform_socket_set_nonblocking(FSocket, not ABlocking) <> 0 then
     raise ENetworkError.Create('tcp set blocking failed');
 end;
@@ -275,6 +290,8 @@ begin
   ARead := 0;
   if ACount = 0 then
     Exit(tsiorOk);
+  if FClosed then
+    Exit(tsiorClosed);
   if FReadDeadline.IsExpired then
     raise ENetworkError.Create('read deadline exceeded');
 
@@ -300,6 +317,8 @@ begin
   AWritten := 0;
   if ACount = 0 then
     Exit(tsiorOk);
+  if FClosed then
+    Exit(tsiorClosed);
   if FWriteDeadline.IsExpired then
     raise ENetworkError.Create('write deadline exceeded');
 

@@ -506,6 +506,78 @@ begin
   end;
 end;
 
+procedure TestTcpStreamPostCloseRuntimeGuards;
+var
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LAccepted: ITcpStream;
+  LRuntime: nextpas.core.net.ITcpStreamRuntime;
+  LBuf: array[0..7] of Byte;
+  LRead: SizeUInt;
+  LWritten: SizeUInt;
+  LResult: nextpas.core.net.TTcpStreamIOResult;
+  LRaised: Boolean;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  try
+    LClient := TcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+    LAccepted := LListener.Accept;
+    try
+      Check(Supports(LClient, ITcpStreamRuntime, LRuntime),
+        'client stream exposes runtime I/O before close');
+      LClient.Close;
+
+      LRead := 123;
+      LResult := LRuntime.TryRead(LBuf[0], SizeOf(LBuf), LRead);
+      CheckEqual(Int64(Ord(tsiorClosed)), Int64(Ord(LResult)),
+        'runtime try-read reports closed after stream close');
+      CheckEqual(Int64(0), Int64(LRead),
+        'runtime try-read reports zero bytes after stream close');
+
+      LWritten := 123;
+      LResult := LRuntime.TryWrite(PAnsiChar('x')^, 1, LWritten);
+      CheckEqual(Int64(Ord(tsiorClosed)), Int64(Ord(LResult)),
+        'runtime try-write reports closed after stream close');
+      CheckEqual(Int64(0), Int64(LWritten),
+        'runtime try-write reports zero bytes after stream close');
+
+      LRaised := False;
+      try
+        LClient.Shutdown;
+      except
+        on ENetworkError do
+          LRaised := True;
+      end;
+      Check(LRaised, 'shutdown after stream close raises ENetworkError');
+
+      LRaised := False;
+      try
+        LClient.SetNoDelay(True);
+      except
+        on ENetworkError do
+          LRaised := True;
+      end;
+      Check(LRaised, 'SetNoDelay after stream close raises ENetworkError');
+
+      LRaised := False;
+      try
+        LClient.SetKeepAlive(True);
+      except
+        on ENetworkError do
+          LRaised := True;
+      end;
+      Check(LRaised, 'SetKeepAlive after stream close raises ENetworkError');
+
+      LClient.Close;
+    finally
+      LAccepted.Close;
+      LClient.Close;
+    end;
+  finally
+    LListener.Close;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.net');
   T.Run('TCP echo', @TestTcpEcho);
@@ -529,5 +601,7 @@ begin
     @TestTcpListenerRuntimeTryAccept);
   T.Run('TCP stream try-read and try-write support nonblocking runtime I/O',
     @TestTcpStreamRuntimeTryReadAndTryWrite);
+  T.Run('TCP stream post-close runtime guards',
+    @TestTcpStreamPostCloseRuntimeGuards);
   T.Summary;
 end.
