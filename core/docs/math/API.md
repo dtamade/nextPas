@@ -192,6 +192,8 @@ through the same formulas instead of snapping to either endpoint.
 The interpolation endpoints follow the same normalization and shortest-path rules: `AT = 0`
 returns the normalized start rotation, and `AT = 1` returns the normalized end rotation after any
 opposite-sign canonicalization.
+`Slerp` and `Nlerp` stay stable for near-identical finite endpoints: they preserve the shared axis
+and interpolate the small remaining angle instead of collapsing or taking a long arc.
 `Slerp` and `Nlerp` reject NaN and infinite interpolation factors with `EArgumentError`.
 `FromAxisAngle` normalizes its axis, returns identity for a zero axis, and rejects NaN and infinite
 axis components or angles with `EArgumentError`.

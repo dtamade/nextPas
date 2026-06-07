@@ -260,7 +260,9 @@ Status:
   opposite-sign equivalent endpoints, finite-guard parameter-position parity across
   `FromAxisAngle(AAxis, AAngleRad)` and `Slerp`/`Nlerp(AT)`, interpolation endpoint
   normalization/canonicalization including zero endpoints plus near-identical small-angle
-  stability, component-wise `Equals` semantics including non-canonical opposite-sign behavior and
+  stability. `Slerp` and `Nlerp` stay stable for near-identical finite endpoints: they preserve
+  the shared axis and interpolate the small remaining angle instead of collapsing or taking a long
+  arc. Component-wise `Equals` semantics including non-canonical opposite-sign behavior and
   negative epsilon rejection, and direct `TQuatd` parity coverage for `Create`, `Data`,
   `Conjugate`, `ToRotationMatrix`, quaternion multiply composition, and `Nlerp` midpoint.
 - M3 is complete for current final Vec/Mat/Quat value-type scope.

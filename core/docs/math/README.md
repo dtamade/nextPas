@@ -131,6 +131,8 @@ treated as the same rotation instead of taking the long arc. Finite interpolatio
 `[0, 1]` are not clamped, so callers can deliberately extrapolate through the same formulas. Those
 same rules also define the interpolation endpoints: `AT = 0` returns the normalized start
 rotation, and `AT = 1` returns the normalized end rotation after any opposite-sign canonicalization.
+`Slerp` and `Nlerp` stay stable for near-identical finite endpoints: they preserve the shared axis
+and interpolate the small remaining angle instead of collapsing or taking a long arc.
 `TryInverse` is epsilon-based: it returns `False` and zeroes the `out` matrix for singular and
 numerically singular matrices, and `Inverse` raises `EArgumentError` on the same inputs.
 

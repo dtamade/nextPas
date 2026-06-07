@@ -456,6 +456,8 @@ Resolved by tests and implementation:
 - The interpolation endpoints follow the same normalization and shortest-path contract: `AT = 0`
   returns the normalized start rotation, and `AT = 1` returns the normalized end rotation after
   any opposite-sign canonicalization.
+- `Slerp` and `Nlerp` stay stable for near-identical finite endpoints: they preserve the shared
+  axis and interpolate the small remaining angle instead of collapsing or taking a long arc.
 - Random invalid integer/float ranges and invalid weighted choices fail fast with `EArgumentError`.
 - Convenience dice helpers return `0` for non-positive dice or sides, and `RollMultiple` rejects
   positive dice/side combinations whose maximum total would overflow `Integer`.
