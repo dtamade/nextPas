@@ -243,8 +243,8 @@ Status:
   axis-angle roundtrip, axis normalization, zero-axis identity behavior,
   `ToAxisAngle` canonical shortest-angle output including zero-rotation `+Z` fallback, direct
   `±3π/2` multi-turn canonicalization, exact half-turn stable-axis canonicalization across
-  `x/y/z` axes plus mixed-axis `+X` hemisphere precedence and `FromAxisAngle(..., PI)` half-turn
-  paths, and
+  `x/y/z` axes plus mixed-axis `+X/+Y` hemisphere precedence and `FromAxisAngle(..., PI)`
+  half-turn paths, and
   scaled-input normalization, scaled-input normalization for rotation matrix conversion and vector
   rotation, quaternion multiply composition,
   `Slerp`, `Nlerp`, shortest-path handling for opposite-sign equivalent interpolation endpoints

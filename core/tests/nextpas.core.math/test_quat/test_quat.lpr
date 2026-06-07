@@ -717,6 +717,12 @@ begin
   CheckNear(PI_VALUE, Anglef, 0.000001,
     'TQuatf ToAxisAngle canonicalizes mixed-axis half-turn angle');
 
+  TQuatf.FromAxisAngle(TVec3f.Create(0.0, 1.0, -1.0), Single(PI_VALUE)).ToAxisAngle(Axisf, Anglef);
+  CheckVec3f(0.0, 0.70710678, -0.70710678, Axisf,
+    'TQuatf ToAxisAngle canonicalizes mixed-axis half-turn with positive Y precedence');
+  CheckNear(PI_VALUE, Anglef, 0.000001,
+    'TQuatf ToAxisAngle canonicalizes mixed-axis positive Y half-turn angle');
+
   TQuatd.FromAxisAngle(TVec3d.Create(0.0, -1.0, 0.0), PI_VALUE).ToAxisAngle(Axisd, Angled);
   CheckVec3d(0.0, 1.0, 0.0, Axisd,
     'TQuatd ToAxisAngle canonicalizes FromAxisAngle negative y half-turn axis');
@@ -728,6 +734,12 @@ begin
     'TQuatd ToAxisAngle canonicalizes mixed-axis half-turn with positive X precedence');
   CheckNear(PI_VALUE, Angled, 0.000000000001,
     'TQuatd ToAxisAngle canonicalizes mixed-axis half-turn angle');
+
+  TQuatd.FromAxisAngle(TVec3d.Create(0.0, 1.0, -1.0), PI_VALUE).ToAxisAngle(Axisd, Angled);
+  CheckVec3d(0.0, 0.7071067811865475, -0.7071067811865475, Axisd,
+    'TQuatd ToAxisAngle canonicalizes mixed-axis half-turn with positive Y precedence');
+  CheckNear(PI_VALUE, Angled, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes mixed-axis positive Y half-turn angle');
 end;
 
 begin
