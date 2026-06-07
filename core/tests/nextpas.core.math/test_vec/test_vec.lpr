@@ -144,6 +144,11 @@ begin
   TVec4f.Create(1.0, 0.0, SingleNaN, 0.0).Normalize;
 end;
 
+procedure RaiseVec4fNormalizeInfinityW;
+begin
+  TVec4f.Create(1.0, 0.0, 0.0, SingleInfinity).Normalize;
+end;
+
 procedure RaiseVec2dNormalizeInfinity;
 begin
   TVec2d.Create(DoubleInfinity, 1.0).Normalize;
@@ -157,6 +162,11 @@ end;
 procedure RaiseVec4dNormalizeInfinity;
 begin
   TVec4d.Create(1.0, 0.0, DoubleInfinity, 0.0).Normalize;
+end;
+
+procedure RaiseVec4dNormalizeNaNW;
+begin
+  TVec4d.Create(1.0, 0.0, 0.0, DoubleNaN).Normalize;
 end;
 
 procedure TestVec2fContracts;
@@ -426,12 +436,16 @@ begin
     'TVec3f Normalize infinite vector', @RaiseVec3fNormalizeInfinity);
   ExpectArgumentErrorMessage('TVec4f.Normalize: vector must be finite',
     'TVec4f Normalize NaN vector', @RaiseVec4fNormalizeNaN);
+  ExpectArgumentErrorMessage('TVec4f.Normalize: vector must be finite',
+    'TVec4f Normalize infinite W component', @RaiseVec4fNormalizeInfinityW);
   ExpectArgumentErrorMessage('TVec2d.Normalize: vector must be finite',
     'TVec2d Normalize infinite vector', @RaiseVec2dNormalizeInfinity);
   ExpectArgumentErrorMessage('TVec3d.Normalize: vector must be finite',
     'TVec3d Normalize NaN vector', @RaiseVec3dNormalizeNaN);
   ExpectArgumentErrorMessage('TVec4d.Normalize: vector must be finite',
     'TVec4d Normalize infinite vector', @RaiseVec4dNormalizeInfinity);
+  ExpectArgumentErrorMessage('TVec4d.Normalize: vector must be finite',
+    'TVec4d Normalize NaN W component', @RaiseVec4dNormalizeNaNW);
 end;
 
 begin
