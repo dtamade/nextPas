@@ -454,6 +454,84 @@ begin
     'Facade NewRequest(headers/body) preserves headers');
 end;
 
+procedure TestNewRequestHeadersOnlyFacadeOverload;
+var
+  LReq: IHttpRequest;
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+begin
+  LUrl := TUrl.Parse('http://example.com/api');
+  LHeaders := NewHeaders;
+  LHeaders.Set_('x-api', 'headers-only');
+
+  LReq := nextpas.core.http.NewRequest(hmGet, LUrl, LHeaders);
+
+  Check(LReq <> nil, 'Facade NewRequest(headers-only) returns non-nil');
+  Check(LReq.Method = hmGet,
+    'Facade NewRequest(headers-only) preserves method');
+  CheckEqual('headers-only', LReq.Headers.Get('x-api'),
+    'Facade NewRequest(headers-only) preserves headers');
+  Check(LReq.Body = nil, 'Facade NewRequest(headers-only) keeps body nil');
+  CheckEqual(Int64(0), LReq.ContentLength,
+    'Facade NewRequest(headers-only) stores zero content-length');
+
+  LReq := nextpas.core.http.NewRequest(hmHead,
+    'http://example.com/ping?x=1', LHeaders);
+
+  Check(LReq <> nil,
+    'Facade NewRequest(string URL, headers-only) returns non-nil');
+  Check(LReq.Method = hmHead,
+    'Facade NewRequest(string URL, headers-only) preserves method');
+  CheckEqual('/ping', LReq.Path,
+    'Facade NewRequest(string URL, headers-only) parses path');
+  CheckEqual('x=1', LReq.RawQuery,
+    'Facade NewRequest(string URL, headers-only) parses query');
+  CheckEqual('headers-only', LReq.Headers.Get('x-api'),
+    'Facade NewRequest(string URL, headers-only) preserves headers');
+  Check(LReq.Body = nil,
+    'Facade NewRequest(string URL, headers-only) keeps body nil');
+  CheckEqual(Int64(0), LReq.ContentLength,
+    'Facade NewRequest(string URL, headers-only) stores zero content-length');
+end;
+
+procedure TestNewRequestNilThirdArgumentFacadeCompatibility;
+var
+  LReq: IHttpRequest;
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.Parse('http://example.com/api');
+
+  LReq := nextpas.core.http.NewRequest(hmPost, LUrl, nil);
+
+  Check(LReq <> nil, 'Facade NewRequest(nil third argument) returns non-nil');
+  Check(LReq.Method = hmPost,
+    'Facade NewRequest(nil third argument) preserves method');
+  Check(LReq.Body <> nil,
+    'Facade NewRequest(nil third argument) preserves bytes helper body');
+  CheckEqual('0', LReq.Headers.Get('content-length'),
+    'Facade NewRequest(nil third argument) preserves bytes helper content-length');
+  CheckEqual(Int64(0), LReq.ContentLength,
+    'Facade NewRequest(nil third argument) stores zero content-length');
+
+  LReq := nextpas.core.http.NewRequest(hmPut,
+    'http://example.com/upload?x=1', nil);
+
+  Check(LReq <> nil,
+    'Facade NewRequest(string URL, nil third argument) returns non-nil');
+  Check(LReq.Method = hmPut,
+    'Facade NewRequest(string URL, nil third argument) preserves method');
+  CheckEqual('/upload', LReq.Path,
+    'Facade NewRequest(string URL, nil third argument) parses path');
+  CheckEqual('x=1', LReq.RawQuery,
+    'Facade NewRequest(string URL, nil third argument) parses query');
+  Check(LReq.Body <> nil,
+    'Facade NewRequest(string URL, nil third argument) preserves bytes helper body');
+  CheckEqual('0', LReq.Headers.Get('content-length'),
+    'Facade NewRequest(string URL, nil third argument) preserves bytes helper content-length');
+  CheckEqual(Int64(0), LReq.ContentLength,
+    'Facade NewRequest(string URL, nil third argument) stores zero content-length');
+end;
+
 procedure TestNewRequestStringUrlFacadeOverloads;
 var
   LReq: IHttpRequest;
@@ -1489,6 +1567,10 @@ begin
   T.Run('NewRequest: Method/Url/Version', @TestNewRequest);
   T.Run('NewRequest headers/body overload is available through facade',
     @TestNewRequestWithHeadersFacadeOverload);
+  T.Run('NewRequest headers-only overload is available through facade',
+    @TestNewRequestHeadersOnlyFacadeOverload);
+  T.Run('NewRequest nil third argument stays source-compatible through facade',
+    @TestNewRequestNilThirdArgumentFacadeCompatibility);
   T.Run('NewRequest string URL overloads are available through facade',
     @TestNewRequestStringUrlFacadeOverloads);
   T.Run('NewRequest no-headers body overloads are available through facade',

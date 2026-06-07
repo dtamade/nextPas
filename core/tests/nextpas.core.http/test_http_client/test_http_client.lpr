@@ -1079,6 +1079,66 @@ begin
   end;
 end;
 
+procedure TestClientDoWithRequestHelperHeadersOnly;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReq: IHttpRequest;
+  LHeaders: IHttpHeaders;
+  LGotHeader: string;
+  LGotContentLength: Int64;
+  LGotBodyWasNil: Boolean;
+  LGotPath: string;
+  LGotQuery: string;
+begin
+  LGotHeader := '';
+  LGotContentLength := -1;
+  LGotBodyWasNil := False;
+  LGotPath := '';
+  LGotQuery := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/headers-only', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LB: string;
+  begin
+    LGotHeader := AReq.Headers.Get('x-client');
+    LGotContentLength := AReq.ContentLength;
+    LGotBodyWasNil := AReq.Body = nil;
+    LGotPath := AReq.Path;
+    LGotQuery := AReq.RawQuery;
+    LB := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], 2);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LHeaders := NewHeaders;
+    LHeaders.Set_('x-client', 'headers-only');
+    LReq := nextpas.core.http.NewRequest(hmGet,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/headers-only?x=1',
+      LHeaders);
+
+    LResp := LClient.Do_(LReq);
+
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    CheckEqual('headers-only', LGotHeader, 'custom header forwarded');
+    CheckEqual(Int64(0), LGotContentLength, 'headers-only helper keeps zero content-length');
+    Check(LGotBodyWasNil, 'headers-only helper keeps request body nil');
+    CheckEqual('/headers-only', LGotPath, 'headers-only helper preserves path');
+    CheckEqual('x=1', LGotQuery, 'headers-only helper preserves query');
+    CheckEqual('ok', ReadBodyStr(LResp), 'response body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 procedure TestClientDoWithRequestHelperBytesBody;
 var
   LRouter: THttpRouter;
@@ -3381,6 +3441,8 @@ begin
   T.Run('Client POST with body', @TestClientPostBody);
   T.Run('Client Do uses NewRequest headers/body helper',
     @TestClientDoWithRequestHelperHeadersBody);
+  T.Run('Client Do uses NewRequest headers-only helper',
+    @TestClientDoWithRequestHelperHeadersOnly);
   T.Run('Client Do uses NewRequest bytes body helper',
     @TestClientDoWithRequestHelperBytesBody);
   T.Run('Client Do uses NewRequest string body helper without headers',

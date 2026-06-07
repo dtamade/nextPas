@@ -107,6 +107,86 @@ begin
     'string URL request helper stores content-length');
 end;
 
+procedure TestNewRequestWithHeadersWithoutBody;
+var
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+  LReq: IHttpRequest;
+begin
+  LUrl := TUrl.Parse('http://example.com/api/users');
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('x-client', 'header-only');
+
+  LReq := NewRequest(hmGet, LUrl, LHeaders);
+
+  CheckEqual(Int64(Ord(hmGet)), Int64(Ord(LReq.Method)),
+    'headers-only request helper method');
+  CheckEqual('/api/users', LReq.Path, 'headers-only request helper path');
+  CheckEqual('header-only', LReq.Headers.Get('x-client'),
+    'headers-only request helper preserves custom headers');
+  CheckEqual('', LReq.Headers.Get('content-length'),
+    'headers-only request helper does not add content-length');
+  CheckEqual(Int64(0), LReq.ContentLength,
+    'headers-only request helper stores zero content-length');
+  Check(LReq.Body = nil, 'headers-only request helper keeps body nil');
+end;
+
+procedure TestNewRequestStringUrlWithHeadersWithoutBody;
+var
+  LHeaders: IHttpHeaders;
+  LReq: IHttpRequest;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('x-client', 'header-only-url');
+
+  LReq := NewRequest(hmHead, 'http://example.com/ping?x=1', LHeaders);
+
+  CheckEqual(Int64(Ord(hmHead)), Int64(Ord(LReq.Method)),
+    'string URL headers-only helper method');
+  CheckEqual('/ping', LReq.Path, 'string URL headers-only helper path');
+  CheckEqual('x=1', LReq.RawQuery, 'string URL headers-only helper query');
+  CheckEqual('header-only-url', LReq.Headers.Get('x-client'),
+    'string URL headers-only helper preserves custom headers');
+  CheckEqual('', LReq.Headers.Get('content-length'),
+    'string URL headers-only helper does not add content-length');
+  CheckEqual(Int64(0), LReq.ContentLength,
+    'string URL headers-only helper stores zero content-length');
+  Check(LReq.Body = nil, 'string URL headers-only helper keeps body nil');
+end;
+
+procedure TestNewRequestNilThirdArgumentKeepsBytesHelper;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+begin
+  LUrl := TUrl.Parse('http://example.com/api/users');
+
+  LReq := NewRequest(hmPost, LUrl, nil);
+
+  CheckEqual(Int64(Ord(hmPost)), Int64(Ord(LReq.Method)),
+    'nil third argument helper method');
+  Check(LReq.Headers <> nil, 'nil third argument helper creates headers');
+  CheckEqual('0', LReq.Headers.Get('content-length'),
+    'nil third argument helper preserves bytes helper content-length');
+  CheckEqual(Int64(0), LReq.ContentLength,
+    'nil third argument helper stores zero content-length');
+  Check(LReq.Body <> nil, 'nil third argument helper preserves bytes helper body');
+
+  LReq := NewRequest(hmPut, 'http://example.com/upload?x=1', nil);
+
+  CheckEqual(Int64(Ord(hmPut)), Int64(Ord(LReq.Method)),
+    'string URL nil third argument helper method');
+  CheckEqual('/upload', LReq.Path, 'string URL nil third argument helper path');
+  CheckEqual('x=1', LReq.RawQuery,
+    'string URL nil third argument helper query');
+  CheckEqual('0', LReq.Headers.Get('content-length'),
+    'string URL nil third argument helper preserves bytes helper content-length');
+  CheckEqual(Int64(0), LReq.ContentLength,
+    'string URL nil third argument helper stores zero content-length');
+  Check(LReq.Body <> nil,
+    'string URL nil third argument helper preserves bytes helper body');
+end;
+
 procedure TestNewRequestWithStringBody;
 var
   LUrl: TUrl;
@@ -712,6 +792,12 @@ begin
     @TestNewRequestWithHeadersBodyAndContentLength);
   T.Run('NewRequest accepts string URL with headers, body, and content length',
     @TestNewRequestStringUrlWithHeadersBodyAndContentLength);
+  T.Run('NewRequest accepts headers without body',
+    @TestNewRequestWithHeadersWithoutBody);
+  T.Run('NewRequest accepts string URL with headers without body',
+    @TestNewRequestStringUrlWithHeadersWithoutBody);
+  T.Run('NewRequest nil third argument keeps bytes helper semantics',
+    @TestNewRequestNilThirdArgumentKeepsBytesHelper);
   T.Run('NewRequest accepts string body helper',
     @TestNewRequestWithStringBody);
   T.Run('NewRequest accepts bytes body helper',

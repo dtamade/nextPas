@@ -147,6 +147,14 @@ function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpM
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest; overload; inline;
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders): IHttpRequest; overload; inline;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders): IHttpRequest; overload; inline;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const ANilBody: Pointer): IHttpRequest; overload; inline;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const ANilBody: Pointer): IHttpRequest; overload; inline;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
   const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload; inline;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload; inline;
@@ -334,6 +342,30 @@ end;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest;
 begin
   Result := nextpas.core.http.message.NewRequest(AMethod, AUrl);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders): IHttpRequest;
+begin
+  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders): IHttpRequest;
+begin
+  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const ANilBody: Pointer): IHttpRequest;
+begin
+  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ANilBody);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const ANilBody: Pointer): IHttpRequest;
+begin
+  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ANilBody);
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;

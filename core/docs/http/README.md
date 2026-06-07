@@ -94,6 +94,12 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 
 - `NewRequest(Method, Url)` / `NewGetRequest(Path)` — build simple requests;
   `Url` can be either a `TUrl` or a URL string.
+- `NewRequest(Method, Url, Headers)` — build a headers-only request with nil
+  body and zero `Content-Length`; this covers the common `GET` / `HEAD` /
+  custom-header case without forcing callers to spell `Headers, nil, 0`.
+  `nil` as the third argument is not the headers-only form: it stays source
+  compatible with the older empty-`TBytes` helper and therefore still produces
+  a zero-length body with `Content-Length: 0`.
 - `NewRequest(Method, Url, Headers, Body, ContentLength)` — build custom
   requests for `IHttpClient.Do_`; `Url` can be either a `TUrl` or a URL string,
   nil headers create an empty header set, body requests publish

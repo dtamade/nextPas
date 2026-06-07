@@ -79,6 +79,14 @@ type
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest; overload;
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const ANilBody: Pointer): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const ANilBody: Pointer): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
   const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload;
@@ -415,6 +423,36 @@ end;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest;
 begin
   Result := NewRequest(AMethod, TUrl.Parse(AUrl));
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, AUrl, AHeaders, nil, 0);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AHeaders, nil, 0);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const ANilBody: Pointer): IHttpRequest;
+begin
+  if ANilBody <> nil then
+    raise EArgumentError.Create(
+      'HTTP nil-body compatibility overload only accepts nil');
+  Result := NewRequest(AMethod, AUrl, TBytes(nil));
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const ANilBody: Pointer): IHttpRequest;
+begin
+  if ANilBody <> nil then
+    raise EArgumentError.Create(
+      'HTTP nil-body compatibility overload only accepts nil');
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), TBytes(nil));
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
