@@ -526,6 +526,29 @@ begin
   end;
 end;
 
+procedure TestScreenStackOwnsScreenStackReference;
+var
+  LStack: TScreenStack;
+  LScreen: TRecordingScreen;
+  LPopped: TScreen;
+begin
+  LStack := TScreenStack.Create;
+  try
+    LScreen := TRecordingScreen.Create;
+    Check(LScreen.Stack = nil, 'new screen starts without stack owner');
+
+    LStack.Push(LScreen);
+    Check(LScreen.Stack = LStack, 'push assigns stack owner');
+
+    LPopped := LStack.Pop;
+    Check(LPopped = LScreen, 'pop returns pushed screen');
+    Check(LScreen.Stack = nil, 'pop clears stack owner');
+    LPopped.Free;
+  finally
+    LStack.Free;
+  end;
+end;
+
 procedure TestScreenStackReplaceFreesOldTop;
 var
   LStack: TScreenStack;
@@ -1457,6 +1480,7 @@ begin
   T.Run('app stops when screen requests quit', @TestAppStopsWhenScreenRequestsQuit);
   T.Run('screen stack push leaves old top and enters new top', @TestScreenStackPushLeavesOldTopAndEntersNewTop);
   T.Run('screen stack pop resumes previous top', @TestScreenStackPopResumesPreviousTop);
+  T.Run('screen stack owns screen stack reference', @TestScreenStackOwnsScreenStackReference);
   T.Run('screen stack replace frees old top', @TestScreenStackReplaceFreesOldTop);
   T.Run('screen stack push rollback restores previous top', @TestScreenStackPushRollbackRestoresPreviousTop);
   T.Run('screen stack rejects nil and owned screens', @TestScreenStackRejectsNilAndOwnedScreens);

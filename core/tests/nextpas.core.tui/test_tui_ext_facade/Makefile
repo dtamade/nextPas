@@ -9,6 +9,7 @@ NEGATIVE_CLIPBOARD_SOURCE := test_tui_ext_facade_rejects_clipboard.lpr
 NEGATIVE_GAUGE_SOURCE := test_tui_ext_facade_rejects_gauge.lpr
 NEGATIVE_SPARKLINE_SOURCE := test_tui_ext_facade_rejects_sparkline.lpr
 NEGATIVE_CANVAS_SOURCE := test_tui_ext_facade_rejects_canvas.lpr
+NEGATIVE_SCREEN_STACK_ASSIGNMENT_SOURCE := test_tui_ext_facade_rejects_screen_stack_assignment.lpr
 FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -gh
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
@@ -76,6 +77,17 @@ negative:
 	  $(NEGATIVE_BUILD_DIR)/reject_canvas.log; then \
 	  echo "unexpected compiler failure while checking ext facade TCanvas leakage"; \
 	  cat $(NEGATIVE_BUILD_DIR)/reject_canvas.log; \
+	  exit 1; \
+	fi
+	@if $(FPC) $(FPC_FLAGS) -FU$(NEGATIVE_BUILD_DIR) -FE$(NEGATIVE_BUILD_DIR) \
+	  $(NEGATIVE_SCREEN_STACK_ASSIGNMENT_SOURCE) >$(NEGATIVE_BUILD_DIR)/reject_screen_stack_assignment.log 2>&1; then \
+	  echo "expected ext facade to reject external TScreen.Stack assignment"; \
+	  cat $(NEGATIVE_BUILD_DIR)/reject_screen_stack_assignment.log; \
+	  exit 1; \
+	elif ! grep -Eq 'No member is provided to access property|Argument cannot be assigned to' \
+	  $(NEGATIVE_BUILD_DIR)/reject_screen_stack_assignment.log; then \
+	  echo "unexpected compiler failure while checking ext facade screen stack ownership"; \
+	  cat $(NEGATIVE_BUILD_DIR)/reject_screen_stack_assignment.log; \
 	  exit 1; \
 	fi
 

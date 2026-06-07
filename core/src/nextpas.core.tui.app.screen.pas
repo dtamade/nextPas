@@ -21,7 +21,7 @@ type
     FStack: TScreenStack;
     function GetSharedStateObject: TObject;
   public
-    property Stack: TScreenStack read FStack write FStack;
+    property Stack: TScreenStack read FStack;
     property SharedStateObject: TObject read GetSharedStateObject;
     procedure Render(const Area: TRect; Buf: TBuffer); virtual; abstract;
     procedure HandleEvent(const Ev: TEvent); virtual;
