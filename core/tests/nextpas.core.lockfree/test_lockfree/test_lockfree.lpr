@@ -492,7 +492,7 @@ begin
       'SPSC EnqueueTimeout producer must observe the full queue before space release');
     platform_thread_sleep_ns(QueuePublishWakeDelayNs);
     CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscSpaceWakeProducerResult, moAcquire)),
-      'SPSC EnqueueTimeout producer should still be pending before space release');
+      'SPSC EnqueueTimeout producer must not complete before space release');
 
     LElapsedMs := GetTickCount64;
     Check(LQ.TryDequeue(LV), 'SPSC consumer must release queue space');
@@ -504,7 +504,7 @@ begin
     CheckEqual(Int64(1), Int64(AtomicLoad32(GSpscSpaceWakeProducerResult, moAcquire)),
       'SPSC EnqueueTimeout must publish after space release');
     Check(LElapsedMs < QueuePublishWakeBudgetMs,
-      'SPSC EnqueueTimeout producer must wake on space release before the full timeout');
+      'SPSC EnqueueTimeout producer must progress after space release before the full timeout');
     Check(LQ.TryDequeue(LV), 'SPSC space-woken producer item must be drainable');
     CheckEqual(Int64(42), Int64(LV));
     Check(not LQ.TryDequeue(LV), 'SPSC queue must be empty after draining the space-woken item');
@@ -2108,14 +2108,14 @@ begin
     'SPSC EnqueueTimeout producer must observe the full queue before space release',
     'SPSC space wake runtime test must prove the producer observed the full queue before release');
   CheckContains(LSpscSpaceWakeTestSection,
-    'SPSC EnqueueTimeout producer should still be pending before space release',
-    'SPSC space wake runtime test must prove the producer is pending before space release');
+    'SPSC EnqueueTimeout producer must not complete before space release',
+    'SPSC space wake runtime test must prove the producer does not complete before space release');
   CheckContains(LSpscSpaceWakeTestSection,
     'SPSC consumer must release queue space',
     'SPSC space wake runtime test must release space through TryDequeue');
   CheckContains(LSpscSpaceWakeTestSection,
-    'SPSC EnqueueTimeout producer must wake on space release before the full timeout',
-    'SPSC space wake runtime test must bound space-wake latency');
+    'SPSC EnqueueTimeout producer must progress after space release before the full timeout',
+    'SPSC space release runtime test must bound producer progress latency');
   CheckContains(LSpscSpaceWakeTestSection,
     'SPSC space-woken producer item must be drainable',
     'SPSC space wake runtime test must prove the woken producer published an item');
