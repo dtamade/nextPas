@@ -292,6 +292,30 @@ begin
 
   LReq := 'GET / HTTP/1.1'#13#10 +
            'Host: localhost'#13#10 +
+           'Connection: upgrade, close'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LR.Success, 'connection close token-list request should parse');
+  Check(LR.HasConnection, 'connection close token-list has connection flag');
+  Check(not LR.ConnectionKeepAlive,
+    'connection close token-list keep-alive flag absent');
+  Check(LR.ConnectionClose, 'connection close token-list flag');
+  Check(LR.ConnectionUnsupported,
+    'connection close token-list keeps unsupported token flag');
+
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Connection: upgrade, keep-alive'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LR.Success, 'connection keep-alive token-list request should parse');
+  Check(LR.HasConnection, 'connection keep-alive token-list has connection flag');
+  Check(LR.ConnectionKeepAlive, 'connection keep-alive token-list flag');
+  Check(not LR.ConnectionClose,
+    'connection keep-alive token-list close flag absent');
+  Check(LR.ConnectionUnsupported,
+    'connection keep-alive token-list keeps unsupported token flag');
+
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
            'Connection: upgrade'#13#10#13#10;
   LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
   Check(LR.Success, 'connection upgrade request should parse');

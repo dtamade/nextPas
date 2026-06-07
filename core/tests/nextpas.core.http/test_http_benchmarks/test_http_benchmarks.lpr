@@ -1322,16 +1322,16 @@ begin
 
   CheckContains(LSource, 'function CapturedHeaderValueIsNonEmpty',
     'H1 parser metadata host span helper');
-  CheckContains(LSource, 'function CapturedHeaderValueEquals',
-    'H1 parser metadata connection span helper');
+  CheckContains(LSource, 'procedure UpdateConnectionMetadataFromCapturedValue',
+    'H1 parser metadata connection token-list span helper');
   CheckContains(LSource, 'function CapturedHeaderValueTrimmedToInt64',
     'H1 parser metadata content-length span helper');
   CheckContains(LSource, 'procedure UpdateExpectMetadataFromCapturedValue',
     'H1 parser metadata expect span helper');
   CheckContains(LUpdateBody, 'CapturedHeaderValueIsNonEmpty(',
     'H1 parser Host metadata should avoid value string materialization');
-  CheckContains(LUpdateBody, 'CapturedHeaderValueEquals(',
-    'H1 parser Connection metadata should compare spans directly');
+  CheckContains(LUpdateBody, 'UpdateConnectionMetadataFromCapturedValue(',
+    'H1 parser Connection metadata should scan spans directly');
   CheckContains(LUpdateBody, 'CapturedHeaderValueTrimmedToInt64(',
     'H1 parser Content-Length metadata should parse spans directly');
   CheckContains(LUpdateBody, 'UpdateExpectMetadataFromCapturedValue(',

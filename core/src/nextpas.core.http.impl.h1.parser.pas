@@ -211,24 +211,6 @@ begin
   Result := (AValuePtr <> nil) and (AValueLen > 0);
 end;
 
-function CapturedHeaderValueEquals(const AValue: string;
-  const AValuePtr: PAnsiChar; const AValueLen: SizeUInt;
-  const AExpected: string): Boolean; inline;
-var
-  I: SizeUInt;
-begin
-  if AValue <> '' then
-    Exit(AValue = AExpected);
-  if AValuePtr = nil then
-    Exit(AExpected = '');
-  if AValueLen <> SizeUInt(Length(AExpected)) then
-    Exit(False);
-  for I := 0 to AValueLen - 1 do
-    if AValuePtr[I] <> AnsiChar(AExpected[SizeInt(I) + 1]) then
-      Exit(False);
-  Result := True;
-end;
-
 function SpanTrimBounds(const AValuePtr: PAnsiChar; const AValueLen: SizeUInt;
   out AStart, AStop: SizeUInt): Boolean; inline;
 begin
@@ -343,6 +325,77 @@ begin
        AnsiChar(AExpected[SizeInt(I) + 1]) then
       Exit(False);
   Result := True;
+end;
+
+procedure UpdateConnectionMetadata(var AMetadata: TH1RequestMetadata;
+  const AValue: string);
+var
+  LStart: SizeInt;
+  LPos: SizeInt;
+  LToken: string;
+begin
+  if AValue = '' then
+    Exit;
+
+  LStart := 1;
+  while LStart <= Length(AValue) do
+  begin
+    LPos := LStart;
+    while (LPos <= Length(AValue)) and (AValue[LPos] <> ',') do
+      Inc(LPos);
+    LToken := LowerTrim(Copy(AValue, LStart, LPos - LStart));
+    if LToken = 'close' then
+      AMetadata.ConnectionClose := True
+    else if LToken = 'keep-alive' then
+      AMetadata.ConnectionKeepAlive := True;
+    LStart := LPos + 1;
+  end;
+end;
+
+procedure UpdateConnectionMetadataFromCapturedValue(
+  var AMetadata: TH1RequestMetadata; const AValue: string;
+  const AValuePtr: PAnsiChar; const AValueLen: SizeUInt);
+var
+  LStart: SizeUInt;
+  LPos: SizeUInt;
+  LTokenStart: SizeUInt;
+  LTokenStop: SizeUInt;
+begin
+  if AValue <> '' then
+  begin
+    UpdateConnectionMetadata(AMetadata, TextTrim(AValue));
+    Exit;
+  end;
+  if (AValuePtr = nil) or (AValueLen = 0) then
+    Exit;
+
+  LStart := 0;
+  while LStart < AValueLen do
+  begin
+    LPos := LStart;
+    while (LPos < AValueLen) and (AValuePtr[LPos] <> ',') do
+      Inc(LPos);
+
+    LTokenStart := LStart;
+    LTokenStop := LPos;
+    while (LTokenStart < LTokenStop) and
+          (AValuePtr[LTokenStart] <= ' ') do
+      Inc(LTokenStart);
+    while (LTokenStop > LTokenStart) and
+          (AValuePtr[LTokenStop - 1] <= ' ') do
+      Dec(LTokenStop);
+
+    if LTokenStart < LTokenStop then
+    begin
+      if TrimmedSpanEqualsLowerAscii(AValuePtr, LTokenStart, LTokenStop,
+        'close') then
+        AMetadata.ConnectionClose := True
+      else if TrimmedSpanEqualsLowerAscii(AValuePtr, LTokenStart, LTokenStop,
+        'keep-alive') then
+        AMetadata.ConnectionKeepAlive := True;
+    end;
+    LStart := LPos + 1;
+  end;
 end;
 
 procedure UpdateExpectMetadataFromCapturedValue(var AMetadata: TH1RequestMetadata;
@@ -931,10 +984,8 @@ begin
     if FRequestMetadataSawConnection then
       Exit;
     FRequestMetadataSawConnection := True;
-    FPendingRequestMetadata.ConnectionClose := CapturedHeaderValueEquals(AValue,
-      AValuePtr, AValueLen, 'close');
-    FPendingRequestMetadata.ConnectionKeepAlive :=
-      CapturedHeaderValueEquals(AValue, AValuePtr, AValueLen, 'keep-alive');
+    UpdateConnectionMetadataFromCapturedValue(FPendingRequestMetadata, AValue,
+      AValuePtr, AValueLen);
     Exit;
   end;
 

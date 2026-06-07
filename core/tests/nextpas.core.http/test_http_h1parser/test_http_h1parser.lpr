@@ -334,6 +334,37 @@ begin
     'metadata span-fast keeps unsupported expect token');
 end;
 
+procedure TestRequestMetadataConnectionTokenListSemantics;
+var
+  LP: IH1Parser;
+  LReq: string;
+  LMetadata: TH1RequestMetadata;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET / HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Connection: x-local, CLOSE'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'connection close token-list request complete');
+  LMetadata := LP.GetRequestMetadata;
+  Check(LMetadata.ConnectionClose,
+    'metadata sees close inside Connection token list');
+  Check(not LMetadata.ConnectionKeepAlive,
+    'metadata does not infer keep-alive from unrelated Connection tokens');
+
+  LP := NewH1RequestParser;
+  LReq := 'GET / HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Connection: upgrade, keep-alive'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'connection keep-alive token-list request complete');
+  LMetadata := LP.GetRequestMetadata;
+  Check(LMetadata.ConnectionKeepAlive,
+    'metadata sees keep-alive inside Connection token list');
+  Check(not LMetadata.ConnectionClose,
+    'metadata does not infer close from unrelated Connection tokens');
+end;
+
 procedure TestRequestMetadataChunkedTransferEncoding;
 var
   LP: IH1Parser;
@@ -2109,6 +2140,8 @@ begin
     @TestRequestMetadataFixedLengthExpectConnection);
   T.Run('Request metadata span fast path keeps trim and token semantics',
     @TestRequestMetadataSpanFastPathKeepsTrimAndTokenSemantics);
+  T.Run('Request metadata connection token-list semantics',
+    @TestRequestMetadataConnectionTokenListSemantics);
   T.Run('Request metadata chunked transfer-encoding',
     @TestRequestMetadataChunkedTransferEncoding);
   T.Run('Request metadata split duplicate watched headers',

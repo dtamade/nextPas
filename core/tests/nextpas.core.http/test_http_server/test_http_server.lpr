@@ -6577,6 +6577,54 @@ begin
   end;
 end;
 
+procedure TestConnectionTokenListCloseStopsKeepAlive;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LClosed: Boolean;
+  LTimedOut: Boolean;
+const
+  REQ = 'GET /ping HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Connection: x-local, close'#13#10#13#10;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ping', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBody: string;
+  begin
+    LBody := 'pong';
+    AW.GetHeaders.SetHeader('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 4);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp := ReadUntilClosedOrDeadline(LConn, 5000, LClosed, LTimedOut);
+      Check(Pos('200 OK', LResp) > 0,
+        'conn-token-close: got 200');
+      Check(Pos('pong', LResp) > 0,
+        'conn-token-close: got body');
+      Check(Pos('connection: close', LResp) > 0,
+        'conn-token-close: header present');
+      Check(LClosed,
+        'conn-token-close: server closed connection after response');
+      Check(not LTimedOut,
+        'conn-token-close: read did not time out waiting for close');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 9: HTTP/1.0 without keep-alive closes connection }
 procedure TestHttp10NoKeepAlive;
 var
@@ -12419,6 +12467,8 @@ begin
     @TestRepeatedExpectHeaderUnsupportedMemberRejectsEarly);
   T.Run('Pipelined requests in single write', @TestPipelinedRequestsInSingleWrite);
   T.Run('Connection: close stops keep-alive', @TestConnectionClose);
+  T.Run('Connection token-list close stops keep-alive',
+    @TestConnectionTokenListCloseStopsKeepAlive);
   T.Run('HTTP/1.0 no keep-alive', @TestHttp10NoKeepAlive);
   T.Run('POST body readable via IReader', @TestPostBodyReadable);
   T.Run('Large body 131072 bytes', @TestLargeBody);

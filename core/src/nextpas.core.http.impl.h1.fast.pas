@@ -448,23 +448,46 @@ begin
   Result := True;
 end;
 
-function AsciiValueEqualsCITrimmed(const ABuf: PAnsiChar; const ALen: SizeUInt;
-  const AText: AnsiString): Boolean; inline;
+procedure ApplyConnectionTokenFast(const ABuf: PAnsiChar;
+  const AStart, AEnd: SizeUInt; var AResult: TFastParseResult); inline;
+begin
+  if AStart >= AEnd then
+    Exit;
+  if AsciiEqualsCI(ABuf + AStart, AEnd - AStart, 'keep-alive') then
+    AResult.ConnectionKeepAlive := True
+  else if AsciiEqualsCI(ABuf + AStart, AEnd - AStart, 'close') then
+    AResult.ConnectionClose := True
+  else
+    AResult.ConnectionUnsupported := True;
+end;
+
+procedure UpdateConnectionFlagsFast(const ABuf: PAnsiChar;
+  const ALen: SizeUInt; var AResult: TFastParseResult);
 var
   LStart: SizeUInt;
-  LEnd: SizeUInt;
+  LPos: SizeUInt;
+  LTokenStart: SizeUInt;
+  LTokenEnd: SizeUInt;
 begin
   LStart := 0;
-  while (LStart < ALen) and
-        ((ABuf[LStart] = ' ') or (ABuf[LStart] = #9)) do
-    Inc(LStart);
+  while LStart < ALen do
+  begin
+    LPos := LStart;
+    while (LPos < ALen) and (ABuf[LPos] <> ',') do
+      Inc(LPos);
 
-  LEnd := ALen;
-  while (LEnd > LStart) and
-        ((ABuf[LEnd - 1] = ' ') or (ABuf[LEnd - 1] = #9)) do
-    Dec(LEnd);
+    LTokenStart := LStart;
+    LTokenEnd := LPos;
+    while (LTokenStart < LTokenEnd) and
+          ((ABuf[LTokenStart] = ' ') or (ABuf[LTokenStart] = #9)) do
+      Inc(LTokenStart);
+    while (LTokenEnd > LTokenStart) and
+          ((ABuf[LTokenEnd - 1] = ' ') or (ABuf[LTokenEnd - 1] = #9)) do
+      Dec(LTokenEnd);
 
-  Result := AsciiEqualsCI(ABuf + LStart, LEnd - LStart, AText);
+    ApplyConnectionTokenFast(ABuf, LTokenStart, LTokenEnd, AResult);
+    LStart := LPos + 1;
+  end;
 end;
 
 function FastParseRequest(const ABuf: PAnsiChar; const ALen: SizeUInt): TFastParseResult;
@@ -594,12 +617,7 @@ begin
     else if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'connection') then
     begin
       Result.HasConnection := True;
-      if AsciiValueEqualsCITrimmed(ABuf + LValStart, LValLen, 'keep-alive') then
-        Result.ConnectionKeepAlive := True
-      else if AsciiValueEqualsCITrimmed(ABuf + LValStart, LValLen, 'close') then
-        Result.ConnectionClose := True
-      else
-        Result.ConnectionUnsupported := True;
+      UpdateConnectionFlagsFast(ABuf + LValStart, LValLen, Result);
     end
     else if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'expect') then
       Result.HasExpect := True
