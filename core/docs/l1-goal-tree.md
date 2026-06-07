@@ -1,6 +1,6 @@
 # nextPas Core Framework — 目标树
 
-> 最后更新: 2026-06-08 | 本轮证据: 本地 Linux x86_64 focused gate: atomic 36/36, heaptrc 0
+> 最后更新: 2026-06-08 | 本轮证据: 本地 Linux x86_64 focused gate: atomic 37/37, heaptrc 0
 > 证据边界: 未有目标机 runtime gate 的平台只声明 source-contract 覆盖，不声明跨平台实机全绿。
 
 ## 定位
@@ -19,7 +19,7 @@ nextPas Core 是 FreePascal 领域最优秀的框架之一。分三层：
 | `errors` | 异常层级 (ENextPasError 体系) | ✅ 完成 |
 | `platform` | OS API 封装 (posix/linux/darwin/windows) | ✅ 完成 (Tier 1 全绿) |
 | `mem` | 内存管理 (IAllocator/Pool/Arena/StackPool) | ✅ 完成 |
-| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | ✅ 完成/强化中 (public contract hardening, typed records + 32/64-bit compile-surface gate parity + unsigned wrap contracts + pointer-sized RMW + compat legacy alias runtime coverage + refcount zero-state/concurrent-borrow/terminal-race contracts 36 tests on local x86_64) |
+| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | ✅ 完成/强化中 (public contract hardening, typed records + 32/64-bit compile-surface gate parity + unsigned wrap contracts + typed CAS consume/failure-order contract + pointer-sized RMW + compat legacy alias runtime coverage + refcount zero-state/concurrent-borrow/terminal-race contracts 37 tests on local x86_64) |
 | `math` | 数学函数 (Min/Max/Clamp/Abs/Pow/Trig) | ✅ 完成 |
 | `simd` | SIMD 抽象 (SSE2/AVX2/NEON, 统一宽度 API) | ✅ 完成 |
 

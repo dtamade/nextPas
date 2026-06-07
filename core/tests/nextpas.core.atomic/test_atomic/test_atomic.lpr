@@ -917,6 +917,14 @@ begin
     '`TAtomicInt32`/`TAtomicUInt32`, `TAtomicInt64`/`TAtomicUInt64`, and `TAtomicISize`/`TAtomicUSize` share the same convenience CAS contract: `CompareExchangeStrong` / `CompareExchangeWeak` write the observed value back to `AExpected` on mismatch, and a matching weak CAS publishes the replacement value through the typed record facade.',
     'atomic README must freeze scalar typed-record CAS failure write-back and weak-CAS convenience truth');
   CheckContains(LAtomicDocsReadme,
+    'Single-order typed CAS treats `mo_consume` as `mo_acquire` for the success order and derives a legal acquire failure order instead of exposing release/acq_rel on failure.',
+    'atomic README must document typed CAS consume normalization and failure-order derivation');
+  CheckContains(LAtomicTestSource, 'procedure TestAtomicTypedCasConsumeContract;',
+    'atomic tests must keep runtime coverage for typed CAS consume normalization');
+  CheckContains(LAtomicTestSource,
+    'T.Run(''typed atomic CAS consume contract'', @TestAtomicTypedCasConsumeContract);',
+    'atomic runner must register typed CAS consume runtime coverage');
+  CheckContains(LAtomicDocsReadme,
     '`TAtomicBool` stores a normalized `0/1` Int32 payload, `Load`/`Store`/`Exchange` map that payload to Boolean, `FetchAnd/Or/Xor/Nand` return the previous Boolean value while keeping the stored domain within `False/True`, and `is_lock_free` follows `atomic_is_lock_free_32`.',
     'atomic README must document the TAtomicBool normalized bool-domain contract');
   CheckContains(LAtomicDocsReadme,
@@ -2797,6 +2805,126 @@ begin
   Check(LRaised, 'tagged pointer weak CAS invalid failure ordinal must raise EArgumentError');
 end;
 
+procedure TestAtomicTypedCasConsumeContract;
+type
+  TIntAtomicPtr = specialize TAtomicPtr<Integer>;
+var
+  LInt32: TAtomicInt32;
+  LExpectedInt32: Int32;
+  LUInt32: TAtomicUInt32;
+  LExpectedUInt32: UInt32;
+  LBool: TAtomicBool;
+  LExpectedBool: Boolean;
+  LISize: TAtomicISize;
+  LExpectedISize: PtrInt;
+  LUSize: TAtomicUSize;
+  LExpectedUSize: PtrUInt;
+  LPtr: TIntAtomicPtr;
+  LExpectedPtr: PInteger;
+  LValueA: Integer;
+  LValueB: Integer;
+  LValueC: Integer;
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  LInt64: TAtomicInt64;
+  LExpectedInt64: Int64;
+  LUInt64: TAtomicUInt64;
+  LExpectedUInt64: UInt64;
+  {$ENDIF}
+begin
+  LInt32 := TAtomicInt32.Create(10);
+  LExpectedInt32 := 9;
+  Check(not LInt32.CompareExchangeStrong(LExpectedInt32, 11, mo_consume),
+    'TAtomicInt32 consume CAS should remain legal on mismatch');
+  CheckEqual(Int64(10), Int64(LExpectedInt32),
+    'TAtomicInt32 consume CAS mismatch should write back the observed value');
+  Check(LInt32.CompareExchangeStrong(LExpectedInt32, 11, mo_consume),
+    'TAtomicInt32 consume CAS should update when expected matches');
+  CheckEqual(Int64(11), Int64(LInt32.Load(mo_acquire)),
+    'TAtomicInt32 consume CAS should publish the desired value');
+
+  LUInt32 := TAtomicUInt32.Create(20);
+  LExpectedUInt32 := 19;
+  Check(not LUInt32.CompareExchangeStrong(LExpectedUInt32, 21, mo_consume),
+    'TAtomicUInt32 consume CAS should remain legal on mismatch');
+  CheckEqual(Int64(20), Int64(LExpectedUInt32),
+    'TAtomicUInt32 consume CAS mismatch should write back the observed value');
+  Check(LUInt32.CompareExchangeStrong(LExpectedUInt32, 21, mo_consume),
+    'TAtomicUInt32 consume CAS should update when expected matches');
+  CheckEqual(Int64(21), Int64(LUInt32.Load(mo_acquire)),
+    'TAtomicUInt32 consume CAS should publish the desired value');
+
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  LInt64 := TAtomicInt64.Create(Int64(1) shl 40);
+  LExpectedInt64 := 17;
+  Check(not LInt64.CompareExchangeStrong(LExpectedInt64, Int64(1) shl 41, mo_consume),
+    'TAtomicInt64 consume CAS should remain legal on mismatch');
+  CheckEqual(Int64(1) shl 40, LExpectedInt64,
+    'TAtomicInt64 consume CAS mismatch should write back the observed value');
+  Check(LInt64.CompareExchangeStrong(LExpectedInt64, Int64(1) shl 41, mo_consume),
+    'TAtomicInt64 consume CAS should update when expected matches');
+  CheckEqual(Int64(1) shl 41, LInt64.Load(mo_acquire),
+    'TAtomicInt64 consume CAS should publish the desired value');
+
+  LUInt64 := TAtomicUInt64.Create(UInt64(1) shl 40);
+  LExpectedUInt64 := UInt64(17);
+  Check(not LUInt64.CompareExchangeStrong(LExpectedUInt64, UInt64(1) shl 41, mo_consume),
+    'TAtomicUInt64 consume CAS should remain legal on mismatch');
+  CheckEqual(Int64(UInt64(1) shl 40), Int64(LExpectedUInt64),
+    'TAtomicUInt64 consume CAS mismatch should write back the observed value');
+  Check(LUInt64.CompareExchangeStrong(LExpectedUInt64, UInt64(1) shl 41, mo_consume),
+    'TAtomicUInt64 consume CAS should update when expected matches');
+  CheckEqual(Int64(UInt64(1) shl 41), Int64(LUInt64.Load(mo_acquire)),
+    'TAtomicUInt64 consume CAS should publish the desired value');
+  {$ENDIF}
+
+  LBool := TAtomicBool.Create(False);
+  LExpectedBool := True;
+  Check(not LBool.CompareExchangeStrong(LExpectedBool, True, mo_consume),
+    'TAtomicBool consume CAS should remain legal on mismatch');
+  Check(not LExpectedBool,
+    'TAtomicBool consume CAS mismatch should write back the observed value');
+  Check(LBool.CompareExchangeStrong(LExpectedBool, True, mo_consume),
+    'TAtomicBool consume CAS should update when expected matches');
+  Check(LBool.Load(mo_acquire),
+    'TAtomicBool consume CAS should publish the desired value');
+
+  LISize := TAtomicISize.Create(30);
+  LExpectedISize := 29;
+  Check(not LISize.CompareExchangeStrong(LExpectedISize, 31, mo_consume),
+    'TAtomicISize consume CAS should remain legal on mismatch');
+  CheckEqual(Int64(30), Int64(LExpectedISize),
+    'TAtomicISize consume CAS mismatch should write back the observed value');
+  Check(LISize.CompareExchangeStrong(LExpectedISize, 31, mo_consume),
+    'TAtomicISize consume CAS should update when expected matches');
+  CheckEqual(Int64(31), Int64(LISize.Load(mo_acquire)),
+    'TAtomicISize consume CAS should publish the desired value');
+
+  LUSize := TAtomicUSize.Create(40);
+  LExpectedUSize := 39;
+  Check(not LUSize.CompareExchangeStrong(LExpectedUSize, 41, mo_consume),
+    'TAtomicUSize consume CAS should remain legal on mismatch');
+  CheckEqual(Int64(40), Int64(LExpectedUSize),
+    'TAtomicUSize consume CAS mismatch should write back the observed value');
+  Check(LUSize.CompareExchangeStrong(LExpectedUSize, 41, mo_consume),
+    'TAtomicUSize consume CAS should update when expected matches');
+  CheckEqual(Int64(41), Int64(LUSize.Load(mo_acquire)),
+    'TAtomicUSize consume CAS should publish the desired value');
+
+  LValueA := 100;
+  LValueB := 200;
+  LValueC := 300;
+  LPtr := TIntAtomicPtr.Create(@LValueA);
+  LExpectedPtr := @LValueC;
+  Check(not LPtr.CompareExchangeStrong(LExpectedPtr, @LValueB, mo_consume),
+    'TAtomicPtr consume CAS should remain legal on mismatch');
+  Check(LExpectedPtr = @LValueA,
+    'TAtomicPtr consume CAS mismatch should write back the observed pointer');
+  Check(LPtr.CompareExchangeStrong(LExpectedPtr, @LValueB, mo_consume),
+    'TAtomicPtr consume CAS should update when expected matches');
+  Check(LPtr.Load(mo_acquire) = @LValueB,
+    'TAtomicPtr consume CAS should publish the desired pointer');
+end;
+
 procedure TestAtomicCompatFacade;
 var
   LVal: Int32;
@@ -3506,6 +3634,7 @@ begin
   T.Run('fetch max/min/nand contract', @TestAtomicFetchMaxMinNandContract);
   T.Run('pointer offset fetch contract', @TestAtomicPointerOffsetFetchContract);
   T.Run('invalid memory-order contract', @TestAtomicInvalidMemoryOrderContract);
+  T.Run('typed atomic CAS consume contract', @TestAtomicTypedCasConsumeContract);
   T.Run('compat PascalCase facade', @TestAtomicCompatFacade);
   T.Run('compat public alias behavior', @TestAtomicCompatAliasBehavior);
   T.Run('tagged pointer atomic API', @TestAtomicTaggedPointer);
