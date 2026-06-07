@@ -1207,6 +1207,42 @@ begin
   LQ.Free;
 end;
 
+procedure TestMpmcBatchPartialProgress;
+var
+  LQ: TIntMpmc;
+  LIn: array[0..4] of Integer;
+  LRefill: array[0..2] of Integer;
+  LOutSmall: array[0..1] of Integer;
+  LOutWide: array[0..4] of Integer;
+  LN: PtrUInt;
+begin
+  LQ := TIntMpmc.Create(4);
+  try
+    LIn[0] := 10; LIn[1] := 20; LIn[2] := 30; LIn[3] := 40; LIn[4] := 50;
+    LN := LQ.EnqueueBatch(LIn);
+    CheckEqual(Int64(4), Int64(LN), 'mpmc partial batch enqueue publishes only currently available slots');
+
+    LN := LQ.DequeueBatch(LOutSmall, 5);
+    CheckEqual(Int64(2), Int64(LN), 'mpmc partial batch dequeue is capped by output buffer length');
+    CheckEqual(Int64(10), Int64(LOutSmall[0]));
+    CheckEqual(Int64(20), Int64(LOutSmall[1]));
+
+    LRefill[0] := 60; LRefill[1] := 70; LRefill[2] := 80;
+    LN := LQ.EnqueueBatch(LRefill);
+    CheckEqual(Int64(2), Int64(LN), 'mpmc partial batch refill uses all currently available slots');
+
+    LN := LQ.DequeueBatch(LOutWide, 5);
+    CheckEqual(Int64(4), Int64(LN), 'mpmc partial batch dequeue drains all currently available items');
+    CheckEqual(Int64(30), Int64(LOutWide[0]));
+    CheckEqual(Int64(40), Int64(LOutWide[1]));
+    CheckEqual(Int64(60), Int64(LOutWide[2]));
+    CheckEqual(Int64(70), Int64(LOutWide[3]));
+    Check(LQ.IsEmpty, 'mpmc partial batch dequeue leaves queue empty');
+  finally
+    LQ.Free;
+  end;
+end;
+
 procedure TestMpmcCapacity;
 var
   LQ: TIntMpmc;
@@ -1688,6 +1724,9 @@ begin
     '`TMpmcQueue<T>.EnqueueBatch` returns 0 after `Close` and must not publish new items.',
     'lockfree README must document MPMC batch close semantics');
   CheckContains(LDocsReadme,
+    '`TMpmcQueue<T>.EnqueueBatch` / `DequeueBatch` are convenience loops over consecutive `TryEnqueue` / `TryDequeue` calls: they return the successful prefix so far when the next single-item operation would fail, instead of waiting for the remainder or promising a shared batch linearization point.',
+    'lockfree README must document the MPMC batch partial-progress contract');
+  CheckContains(LDocsReadme,
     '`TMpmcQueue<T>` accepts requested capacity 1; its per-slot sequence token uses separate empty/full states so a single-slot queue still distinguishes full from empty.',
     'lockfree README must document single-slot MPMC support');
   CheckContains(LDocsReadme,
@@ -1982,6 +2021,14 @@ begin
     'MPMC batch enqueue must reject new items after close');
   CheckContains(LMpmcBatchTestSection, 'mpmc batch enqueue after close rejected',
     'MPMC batch behavior test must cover close rejection');
+  CheckContains(LMpmcBatchTestSection, 'mpmc partial batch enqueue publishes only currently available slots',
+    'MPMC batch behavior test must cover partial enqueue under limited space');
+  CheckContains(LMpmcBatchTestSection, 'mpmc partial batch dequeue is capped by output buffer length',
+    'MPMC batch behavior test must cover output-buffer-limited dequeue progress');
+  CheckContains(LMpmcBatchTestSection, 'mpmc partial batch refill uses all currently available slots',
+    'MPMC batch behavior test must cover refill progress against the live free-space bound');
+  CheckContains(LMpmcBatchTestSection, 'mpmc partial batch dequeue drains all currently available items',
+    'MPMC batch behavior test must cover available-data-limited dequeue progress');
   CheckContains(LStackSource, 'FFreeHead: Int64',
     'stack must keep a tagged free-list head');
   CheckContains(LStackSource, 'function PackTagIdx',
@@ -2321,6 +2368,7 @@ begin
   T.Run('Deque query contract', @TestDequeQueryContract);
   T.Run('SPSC capacity/empty/full', @TestSpscCapacity);
   T.Run('MPMC batch', @TestMpmcBatch);
+  T.Run('MPMC batch partial progress', @TestMpmcBatchPartialProgress);
   T.Run('MPMC capacity/empty/full', @TestMpmcCapacity);
   T.Run('MPSC dequeue wait', @TestMpscDequeueWait);
   T.Run('MPSC dequeue timeout', @TestMpscDequeueTimeout);
