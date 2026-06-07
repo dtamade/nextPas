@@ -226,10 +226,17 @@ begin
     'copy_file must write each read chunk fully');
   CheckContains(LSource, 'LR := platform_fs_write_all(LH, AData, ALen)',
     'write_atomic must write the full payload');
+  CheckContains(LSource, 'LR := platform_file_sync(LH)',
+    'write_atomic must check sync failure');
+  CheckContains(LSource, 'LR := platform_file_close(LH)',
+    'write_atomic must check close failure');
   CheckAbsent(LSource, 'until (LR <> 0) or (LWritten < LRead)',
     'copy_file must not report success after a short write exit');
   CheckAbsent(LSource, 'if (LR <> 0) or (LWritten <> ALen) then',
     'write_atomic must not depend on one write call for full payload');
+  CheckAbsent(LSource, 'platform_file_sync(LH);' + LineEnding +
+    '  platform_file_close(LH);',
+    'write_atomic must not ignore sync or close failures');
 end;
 
 begin

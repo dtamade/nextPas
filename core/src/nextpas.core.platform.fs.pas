@@ -272,8 +272,20 @@ begin
     end;
   end;
 
-  platform_file_sync(LH);
-  platform_file_close(LH);
+  LR := platform_file_sync(LH);
+  if LR <> 0 then
+  begin
+    platform_file_close(LH);
+    platform_file_unlink(@LTmpPath[0]);
+    Exit(LR);
+  end;
+
+  LR := platform_file_close(LH);
+  if LR <> 0 then
+  begin
+    platform_file_unlink(@LTmpPath[0]);
+    Exit(LR);
+  end;
 
   LR := platform_file_rename(@LTmpPath[0], APath);
   if LR <> 0 then
