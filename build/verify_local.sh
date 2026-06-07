@@ -23,6 +23,8 @@ mkdir -p "$VERIFY_TMP_ROOT"
 VERIFY_RUN_TMP_DIR=$(mktemp -d "$VERIFY_TMP_ROOT/verify-local.XXXXXX")
 TARGET_ID="linux-x86_64"
 VERIFY_SELECTOR="verify-local"
+CORE_PLATFORM_THREAD_WIN64_CHECK_STATUS=skip
+CORE_PLATFORM_SYNC_WIN64_CHECK_STATUS=skip
 STAGE0_FPC_FLAGS="-Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/targets -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Fucompiler/backend -Fucompiler/toolchain -Futools/stage0 -Furtl/core/base -Furtl/core/text"
 LEX_SNAPSHOT_FPC_FLAGS="-Fucompiler/syntax -Fucompiler/diagnostics -Furtl/core/base -Furtl/core/text"
 LEX_BENCH_FPC_FLAGS="-Futools/bench -Fucompiler/syntax -Fucompiler/diagnostics -Furtl/core/base -Furtl/core/text -O2"
@@ -381,6 +383,10 @@ ASSEMBLER_FAILURE_OUTPUT=$(mktemp)
 ASSEMBLER_FAILURE_BIN_DIR=$(mktemp -d)
 LINKER_FAILURE_OUTPUT=$(mktemp)
 LINKER_FAILURE_BIN_DIR=$(mktemp -d)
+LLVM_OPT_FAILURE_OUTPUT=$(mktemp)
+LLVM_OPT_FAILURE_BIN_DIR=$(mktemp -d)
+LLVM_LLC_FAILURE_OUTPUT=$(mktemp)
+LLVM_LLC_FAILURE_BIN_DIR=$(mktemp -d)
 HARNESS_BOOTSTRAP_FAILURE_OUTPUT=$(mktemp)
 HARNESS_BOOTSTRAP_FAKE_FPC_DIR=$(mktemp -d)
 SYNTAX_FAILURE_OUTPUT=$(mktemp)
@@ -697,6 +703,8 @@ cleanup() {
   rm -f "$TOOLCHAIN_FAILURE_OUTPUT"
   rm -f "$ASSEMBLER_FAILURE_OUTPUT"
   rm -f "$LINKER_FAILURE_OUTPUT"
+  rm -f "$LLVM_OPT_FAILURE_OUTPUT"
+  rm -f "$LLVM_LLC_FAILURE_OUTPUT"
   rm -f "$HARNESS_BOOTSTRAP_FAILURE_OUTPUT"
   rm -rf "$HARNESS_BOOTSTRAP_FAKE_FPC_DIR"
   rm -f "$SYNTAX_FAILURE_OUTPUT"
@@ -736,6 +744,8 @@ cleanup() {
   rm -rf "$TOOLCHAIN_FAILURE_BIN_DIR"
   rm -rf "$ASSEMBLER_FAILURE_BIN_DIR"
   rm -rf "$LINKER_FAILURE_BIN_DIR"
+  rm -rf "$LLVM_OPT_FAILURE_BIN_DIR"
+  rm -rf "$LLVM_LLC_FAILURE_BIN_DIR"
   rm -rf "$SOURCE_DIRECTORY_FALLBACK_WORKSPACE"
   rm -rf "$OUT_DIR_OVERRIDE_DIR"
   rm -rf "$ROOT_SOURCE_PRECEDENCE_DIR"
@@ -4291,6 +4301,149 @@ require_output_pattern '"primaryToolRunStatus":"success"' "$LINKER_FAILURE_OUTPU
 require_output_pattern '"humanSummary":"toolchain.linker-exec-failed: compiler exit code 29"' "$LINKER_FAILURE_OUTPUT" 'missing-linker-envelope-human-summary'
 printf 'linker-failure-attribution-check=pass\n'
 
+printf 'llvm-opt-failure-attribution-check=running\n'
+printf 'llvm-opt-failure-attribution-command=PATH=<fake-opt> %s build examples/smoke/hello.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT"
+cat >"$LLVM_OPT_FAILURE_BIN_DIR/opt" <<'EOF'
+#!/bin/sh
+exit 41
+EOF
+chmod +x "$LLVM_OPT_FAILURE_BIN_DIR/opt"
+cat >"$LLVM_OPT_FAILURE_BIN_DIR/llc" <<'EOF'
+#!/bin/sh
+out=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-o" ]; then
+    out="$2"
+    shift 2
+    continue
+  fi
+  shift
+done
+printf "fake-object\n" > "$out"
+EOF
+chmod +x "$LLVM_OPT_FAILURE_BIN_DIR/llc"
+cat >"$LLVM_OPT_FAILURE_BIN_DIR/ld" <<'EOF'
+#!/bin/sh
+out=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-o" ]; then
+    out="$2"
+    shift 2
+    continue
+  fi
+  shift
+done
+printf "fake-linked\n" > "$out"
+EOF
+chmod +x "$LLVM_OPT_FAILURE_BIN_DIR/ld"
+if PATH="$LLVM_OPT_FAILURE_BIN_DIR" NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" build examples/smoke/hello.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" >"$LLVM_OPT_FAILURE_OUTPUT" 2>&1; then
+  cat "$LLVM_OPT_FAILURE_OUTPUT"
+  fail 'expected-llvm-opt-failure-did-not-fail'
+fi
+cat "$LLVM_OPT_FAILURE_OUTPUT"
+require_output_pattern '^failure-kind=toolchain\.llvm-opt-exec-failed$' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-failure-kind'
+require_output_pattern '^diagnostic-code=toolchain\.llvm-opt-exec-failed$' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-diagnostic-code'
+require_output_pattern '^diagnostic-profile-id=llvm-stable$' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-diagnostic-profile-id'
+require_output_pattern '^diagnostic-step-id=llvm-opt-bitcode$' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-diagnostic-step-id'
+require_output_pattern '^diagnostic-logical-executable=opt$' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-diagnostic-logical-executable'
+require_output_pattern '^diagnostic-resolved-path=.*/opt$' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-diagnostic-resolved-path'
+require_output_pattern '^diagnostic-exit-code=41$' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-diagnostic-exit-code'
+require_output_pattern '^human-summary=toolchain\.llvm-opt-exec-failed: compiler exit code 41$' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-human-summary'
+require_output_pattern '^tool-run-status=failure$' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-tool-run-status'
+require_output_pattern '^tool-run-step-count=1$' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-tool-run-step-count'
+require_output_pattern '^primary-tool-run-status=failed$' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-primary-tool-run-status'
+require_output_pattern '^primary-tool-step-id=llvm-opt-bitcode$' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-primary-step-id'
+require_output_pattern '^primary-tool-logical-executable=opt$' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-primary-logical-executable'
+require_output_pattern '^primary-tool-failure-mapping=toolchain\.llvm-opt-exec-failed$' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-primary-failure-mapping'
+require_output_pattern '^tool-status-event-count=4$' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-tool-status-event-count'
+require_output_pattern '^tool-status-events=.*"eventKind":"toolchain\.tool-selected".*"stepId":"llvm-opt-bitcode".*"logicalExecutable":"opt"' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-tool-selected-event'
+require_output_pattern '^tool-status-events=.*"eventKind":"toolchain\.step-finished".*"stepId":"llvm-opt-bitcode".*"logicalExecutable":"opt".*"status":"failed"' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-step-finished-failed-event'
+require_output_pattern '^build-trace-ref=trace-build-linux-x86_64-.*-toolchain-plan$' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-build-trace-ref'
+require_output_pattern '^build-trace=.*"stepId":"llvm-opt-bitcode".*"profileId":"llvm-stable".*"toolRole":"llvm-opt".*"status":"failed".*"logicalExecutable":"opt".*"primaryOutputs":\[\{"kind":"llvm-bitcode","path":".*/\.nextpas/cache/backend/linux-x86_64/hello\.bc"\}\].*"diagnosticRefs":\["diag-0001"\].*"exitCode":41' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-build-trace-transcript'
+require_output_pattern '"failureKind":"toolchain.llvm-opt-exec-failed"' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-envelope-failure-kind'
+require_output_pattern '"profileId":"llvm-stable"' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-envelope-profile-id'
+require_output_pattern '"stepId":"llvm-opt-bitcode"' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-envelope-step-id'
+require_output_pattern '"logicalExecutable":"opt"' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-envelope-logical-executable'
+require_output_pattern '"resolvedPath":"[^"]+/opt"' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-envelope-resolved-path'
+require_output_pattern '"exitCode":41' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-envelope-exit-code'
+require_output_pattern '"toolRunStatus":"failure"' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-envelope-tool-run-status'
+require_output_pattern '"toolRunStepCount":1' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-envelope-tool-run-step-count'
+require_output_pattern '"primaryToolRunStatus":"failed"' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-envelope-primary-tool-run-status'
+require_output_pattern '"humanSummary":"toolchain.llvm-opt-exec-failed: compiler exit code 41"' "$LLVM_OPT_FAILURE_OUTPUT" 'missing-llvm-opt-envelope-human-summary'
+printf 'llvm-opt-failure-attribution-check=pass\n'
+
+printf 'llvm-llc-failure-attribution-check=running\n'
+printf 'llvm-llc-failure-attribution-command=PATH=<fake-llc> %s build examples/smoke/hello.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT"
+cat >"$LLVM_LLC_FAILURE_BIN_DIR/opt" <<'EOF'
+#!/bin/sh
+out=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-o" ]; then
+    out="$2"
+    shift 2
+    continue
+  fi
+  shift
+done
+printf "fake-bitcode\n" > "$out"
+EOF
+chmod +x "$LLVM_LLC_FAILURE_BIN_DIR/opt"
+cat >"$LLVM_LLC_FAILURE_BIN_DIR/llc" <<'EOF'
+#!/bin/sh
+exit 43
+EOF
+chmod +x "$LLVM_LLC_FAILURE_BIN_DIR/llc"
+cat >"$LLVM_LLC_FAILURE_BIN_DIR/ld" <<'EOF'
+#!/bin/sh
+out=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-o" ]; then
+    out="$2"
+    shift 2
+    continue
+  fi
+  shift
+done
+printf "fake-linked\n" > "$out"
+EOF
+chmod +x "$LLVM_LLC_FAILURE_BIN_DIR/ld"
+if PATH="$LLVM_LLC_FAILURE_BIN_DIR" NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" build examples/smoke/hello.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" >"$LLVM_LLC_FAILURE_OUTPUT" 2>&1; then
+  cat "$LLVM_LLC_FAILURE_OUTPUT"
+  fail 'expected-llvm-llc-failure-did-not-fail'
+fi
+cat "$LLVM_LLC_FAILURE_OUTPUT"
+require_output_pattern '^failure-kind=toolchain\.llvm-llc-exec-failed$' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-failure-kind'
+require_output_pattern '^diagnostic-code=toolchain\.llvm-llc-exec-failed$' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-diagnostic-code'
+require_output_pattern '^diagnostic-profile-id=llvm-stable$' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-diagnostic-profile-id'
+require_output_pattern '^diagnostic-step-id=llvm-llc-object$' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-diagnostic-step-id'
+require_output_pattern '^diagnostic-logical-executable=llc$' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-diagnostic-logical-executable'
+require_output_pattern '^diagnostic-resolved-path=.*/llc$' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-diagnostic-resolved-path'
+require_output_pattern '^diagnostic-exit-code=43$' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-diagnostic-exit-code'
+require_output_pattern '^human-summary=toolchain\.llvm-llc-exec-failed: compiler exit code 43$' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-human-summary'
+require_output_pattern '^tool-run-status=failure$' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-tool-run-status'
+require_output_pattern '^tool-run-step-count=2$' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-tool-run-step-count'
+require_output_pattern '^primary-tool-run-status=success$' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-primary-tool-run-status'
+require_output_pattern '^primary-tool-step-id=llvm-opt-bitcode$' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-primary-step-id'
+require_output_pattern '^primary-tool-logical-executable=opt$' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-primary-logical-executable'
+require_output_pattern '^primary-tool-failure-mapping=toolchain\.llvm-opt-exec-failed$' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-primary-failure-mapping'
+require_output_pattern '^tool-status-event-count=7$' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-tool-status-event-count'
+require_output_pattern '^tool-status-events=.*"eventKind":"toolchain\.step-finished".*"stepId":"llvm-opt-bitcode".*"status":"success"' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-opt-step-finished-event'
+require_output_pattern '^tool-status-events=.*"eventKind":"toolchain\.tool-selected".*"stepId":"llvm-llc-object".*"logicalExecutable":"llc"' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-tool-selected-event'
+require_output_pattern '^tool-status-events=.*"eventKind":"toolchain\.step-finished".*"stepId":"llvm-llc-object".*"logicalExecutable":"llc".*"status":"failed"' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-step-finished-failed-event'
+require_output_pattern '^build-trace-ref=trace-build-linux-x86_64-.*-toolchain-plan$' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-build-trace-ref'
+require_output_pattern '^build-trace=.*"stepId":"llvm-opt-bitcode".*"status":"success".*"primaryOutputs":\[\{"kind":"llvm-bitcode","path":".*/\.nextpas/cache/backend/linux-x86_64/hello\.bc"\}\].*"stepId":"llvm-llc-object".*"profileId":"llvm-stable".*"toolRole":"llvm-codegen".*"status":"failed".*"logicalExecutable":"llc".*"primaryOutputs":\[\{"kind":"object-file","path":".*/\.nextpas/cache/backend/linux-x86_64/hello\.o"\}\].*"diagnosticRefs":\["diag-0001"\].*"exitCode":43' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-build-trace-transcript'
+require_output_pattern '"failureKind":"toolchain.llvm-llc-exec-failed"' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-envelope-failure-kind'
+require_output_pattern '"profileId":"llvm-stable"' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-envelope-profile-id'
+require_output_pattern '"stepId":"llvm-llc-object"' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-envelope-step-id'
+require_output_pattern '"logicalExecutable":"llc"' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-envelope-logical-executable'
+require_output_pattern '"resolvedPath":"[^"]+/llc"' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-envelope-resolved-path'
+require_output_pattern '"exitCode":43' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-envelope-exit-code'
+require_output_pattern '"toolRunStatus":"failure"' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-envelope-tool-run-status'
+require_output_pattern '"toolRunStepCount":2' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-envelope-tool-run-step-count'
+require_output_pattern '"primaryToolRunStatus":"success"' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-envelope-primary-tool-run-status'
+require_output_pattern '"humanSummary":"toolchain.llvm-llc-exec-failed: compiler exit code 43"' "$LLVM_LLC_FAILURE_OUTPUT" 'missing-llvm-llc-envelope-human-summary'
+printf 'llvm-llc-failure-attribution-check=pass\n'
+
 printf 'core-text-smoke-check=running\n'
 printf 'core-text-smoke-command=fpc -Fu%s/rtl/core/base -Fu%s/rtl/core/text tests/rtl/core_text_smoke.pas\n' "$REPO_ROOT" "$REPO_ROOT"
 mkdir -p "$CORE_TEXT_SMOKE_BUILD_DIR"
@@ -4566,8 +4719,10 @@ if fpc -Twin64 -iTO -iTP >/dev/null 2>&1; then
     fail 'core-platform-thread-win64-build-failed'
   fi
   cat "$CORE_PLATFORM_THREAD_WIN64_OUTPUT"
+  CORE_PLATFORM_THREAD_WIN64_CHECK_STATUS=pass
   printf 'core-platform-thread-win64-check=pass\n'
 else
+  CORE_PLATFORM_THREAD_WIN64_CHECK_STATUS=skip
   printf 'core-platform-thread-win64-check=skip\n'
 fi
 
@@ -4887,8 +5042,10 @@ if fpc -Twin64 -iTO -iTP >/dev/null 2>&1; then
     fail 'core-platform-sync-win64-build-failed'
   fi
   cat "$CORE_PLATFORM_SYNC_WIN64_OUTPUT"
+  CORE_PLATFORM_SYNC_WIN64_CHECK_STATUS=pass
   printf 'core-platform-sync-win64-check=pass\n'
 else
+  CORE_PLATFORM_SYNC_WIN64_CHECK_STATUS=skip
   printf 'core-platform-sync-win64-check=skip\n'
 fi
 
@@ -7354,6 +7511,6 @@ printf 'smoke-check=pass\n'
 printf 'status=ready\n'
 printf 'result=pass\n'
 printf 'command-outcome=success\n'
-printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","lexerConformance":"pass","lexerBench":"pass","stage0Smoke":"pass","compilerModuleSelfCompileCheck":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","llvmCaseProgram":"pass","llvmClassProgram":"pass","llvmClassInheritProgram":"pass","llvmLinkedListProgram":"pass","llvmStackProgram":"pass","llvmIterProgram":"pass","semanticCallBindingsCheck":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","coreTimeCheck":"pass","corePlatformTimeHelpersCheck":"pass","corePlatformTimeHostFfiSurfaceCheck":"pass","corePlatformTimeL0BoundaryCheck":"pass","corePlatformTimeNoFpcCheck":"pass","corePlatformTimeWin64Check":"pass","corePlatformTimeExampleCheck":"pass","corePlatformTimeBenchCheck":"pass","corePlatformThreadCheck":"pass","corePlatformThreadNoFpcCheck":"pass","corePlatformThreadL0BoundaryCheck":"pass","corePlatformThreadHostFfiSurfaceCheck":"pass","corePlatformThreadWin64Check":"pass","corePlatformThreadExampleCheck":"pass","corePlatformThreadBenchCheck":"pass","corePlatformPosixFfiSurfaceCheck":"pass","corePlatformFfiPartitionSurfaceCheck":"pass","corePlatformFfiOwnerBoundaryCheck":"pass","corePlatformHostGapMatrixCheck":"pass","corePlatformFfiSourceEvidenceIndexCheck":"pass","corePlatformFfiImportWorkflowCheck":"pass","corePlatformHostAbiWave1Check":"pass","corePlatformHostAbiWave2FilesCheck":"pass","corePlatformHostAbiWave3StatCheck":"pass","corePlatformHostAbiWave4PathsCheck":"pass","corePlatformHostAbiWave5EnvCheck":"pass","corePlatformHostAbiWave6ProcessCheck":"pass","corePlatformHostAbiWave7ProcessStatusCheck":"pass","corePlatformHostAbiWave8FileIoCheck":"pass","corePlatformHostAbiWave9LinuxStatCheck":"pass","corePlatformHostAbiWave10PosixStatHostsCheck":"pass","corePlatformHostAbiWave11SignalControlCheck":"pass","corePlatformFacadeSurfaceCheck":"pass","corePlatformSimulatedHostCompileMatrixCheck":"pass","corePlatformSyncCheck":"pass","corePlatformSyncNoFpcCheck":"pass","corePlatformSyncL0BoundaryCheck":"pass","corePlatformSyncPosixSurfaceCheck":"pass","corePlatformSyncHostFfiSurfaceCheck":"pass","corePlatformSyncSizeCheck":"pass","corePlatformSyncWin64Check":"pass","corePlatformSyncExampleCheck":"pass","corePlatformSyncBenchCheck":"pass","corePlatformSyncPosixFallbackCheck":"pass","coreSyncPosixFallbackCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","ambiguousOverloadCheck":"pass","ambiguousMemberOverloadCheck":"pass","wrongArgumentCountCheck":"pass","memberWrongArgumentCountCheck":"pass","typeMismatchCallCheck":"pass","memberTypeMismatchCallCheck":"pass","typeMismatchVariableCallCheck":"pass","memberTypeMismatchVariableCallCheck":"pass","typeMismatchParameterCallCheck":"pass","memberTypeMismatchParameterCallCheck":"pass","typeMismatchFunctionResultCallCheck":"pass","unknownCallableCheck":"pass","unknownMemberCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0EnvUseCheck":"pass","stage0EnvSyncCheck":"pass","stage0EnvCleanCheck":"pass","stage0EnvCleanRepeatCheck":"pass","stage0EnvCleanInvalidArgumentsCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorPackageWorkspaceCheck":"pass","stage0DoctorWorkspaceMemberCheck":"pass","stage0DoctorDeclaredDependenciesCheck":"pass","stage0DoctorMalformedDependenciesCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryBindingsCheck":"pass","stage0QueryDefinitionsCheck":"pass","stage0QueryCallBindingsCheck":"pass","stage0QueryMemberCallBindingsCheck":"pass","stage0QuerySystemObjectFreeCheck":"pass","stage0QuerySystemObjectFreeImplicitCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgLockDetailCheck":"pass","stage0PkgLockSnapshotCheck":"pass","stage0PkgPlanCheck":"pass","stage0PkgPlanBlockedCheck":"pass","stage0PkgPlanMissingCheck":"pass","stage0PkgPlanDependencyBlockedCheck":"pass","stage0PkgPlanSourceRootsBlockedCheck":"pass","stage0PkgPlanLockInvalidCheck":"pass","stage0PkgPlanLockSnapshotInvalidCheck":"pass","stage0PkgPlanLockTargetSnapshotMissingCheck":"pass","stage0PkgPlanLockOutOfSyncCheck":"pass","stage0PkgPlanInvalidArgumentsCheck":"pass","stage0PkgWorkspaceMemberCheck":"pass","stage0PkgDeclaredDependenciesCheck":"pass","stage0PkgGraphCheck":"pass","stage0PkgGraphInvalidArgumentsCheck":"pass","stage0PkgMalformedDependenciesCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
+printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","lexerConformance":"pass","lexerBench":"pass","stage0Smoke":"pass","compilerModuleSelfCompileCheck":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","llvmCaseProgram":"pass","llvmClassProgram":"pass","llvmClassInheritProgram":"pass","llvmLinkedListProgram":"pass","llvmStackProgram":"pass","llvmIterProgram":"pass","semanticCallBindingsCheck":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","llvmOptFailureAttributionCheck":"pass","llvmLlcFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","coreTimeCheck":"pass","corePlatformTimeHelpersCheck":"pass","corePlatformTimeHostFfiSurfaceCheck":"pass","corePlatformTimeL0BoundaryCheck":"pass","corePlatformTimeNoFpcCheck":"pass","corePlatformTimeWin64Check":"pass","corePlatformTimeExampleCheck":"pass","corePlatformTimeBenchCheck":"pass","corePlatformThreadCheck":"pass","corePlatformThreadNoFpcCheck":"pass","corePlatformThreadL0BoundaryCheck":"pass","corePlatformThreadHostFfiSurfaceCheck":"pass","corePlatformThreadWin64Check":"%s","corePlatformThreadExampleCheck":"pass","corePlatformThreadBenchCheck":"pass","corePlatformPosixFfiSurfaceCheck":"pass","corePlatformFfiPartitionSurfaceCheck":"pass","corePlatformFfiOwnerBoundaryCheck":"pass","corePlatformHostGapMatrixCheck":"pass","corePlatformFfiSourceEvidenceIndexCheck":"pass","corePlatformFfiImportWorkflowCheck":"pass","corePlatformHostAbiWave1Check":"pass","corePlatformHostAbiWave2FilesCheck":"pass","corePlatformHostAbiWave3StatCheck":"pass","corePlatformHostAbiWave4PathsCheck":"pass","corePlatformHostAbiWave5EnvCheck":"pass","corePlatformHostAbiWave6ProcessCheck":"pass","corePlatformHostAbiWave7ProcessStatusCheck":"pass","corePlatformHostAbiWave8FileIoCheck":"pass","corePlatformHostAbiWave9LinuxStatCheck":"pass","corePlatformHostAbiWave10PosixStatHostsCheck":"pass","corePlatformHostAbiWave11SignalControlCheck":"pass","corePlatformFacadeSurfaceCheck":"pass","corePlatformSimulatedHostCompileMatrixCheck":"pass","corePlatformSyncCheck":"pass","corePlatformSyncNoFpcCheck":"pass","corePlatformSyncL0BoundaryCheck":"pass","corePlatformSyncPosixSurfaceCheck":"pass","corePlatformSyncHostFfiSurfaceCheck":"pass","corePlatformSyncSizeCheck":"pass","corePlatformSyncWin64Check":"%s","corePlatformSyncExampleCheck":"pass","corePlatformSyncBenchCheck":"pass","corePlatformSyncPosixFallbackCheck":"pass","coreSyncPosixFallbackCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","ambiguousOverloadCheck":"pass","ambiguousMemberOverloadCheck":"pass","wrongArgumentCountCheck":"pass","memberWrongArgumentCountCheck":"pass","typeMismatchCallCheck":"pass","memberTypeMismatchCallCheck":"pass","typeMismatchVariableCallCheck":"pass","memberTypeMismatchVariableCallCheck":"pass","typeMismatchParameterCallCheck":"pass","memberTypeMismatchParameterCallCheck":"pass","typeMismatchFunctionResultCallCheck":"pass","unknownCallableCheck":"pass","unknownMemberCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0EnvUseCheck":"pass","stage0EnvSyncCheck":"pass","stage0EnvCleanCheck":"pass","stage0EnvCleanRepeatCheck":"pass","stage0EnvCleanInvalidArgumentsCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorPackageWorkspaceCheck":"pass","stage0DoctorWorkspaceMemberCheck":"pass","stage0DoctorDeclaredDependenciesCheck":"pass","stage0DoctorMalformedDependenciesCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryBindingsCheck":"pass","stage0QueryDefinitionsCheck":"pass","stage0QueryCallBindingsCheck":"pass","stage0QueryMemberCallBindingsCheck":"pass","stage0QuerySystemObjectFreeCheck":"pass","stage0QuerySystemObjectFreeImplicitCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgLockDetailCheck":"pass","stage0PkgLockSnapshotCheck":"pass","stage0PkgPlanCheck":"pass","stage0PkgPlanBlockedCheck":"pass","stage0PkgPlanMissingCheck":"pass","stage0PkgPlanDependencyBlockedCheck":"pass","stage0PkgPlanSourceRootsBlockedCheck":"pass","stage0PkgPlanLockInvalidCheck":"pass","stage0PkgPlanLockSnapshotInvalidCheck":"pass","stage0PkgPlanLockTargetSnapshotMissingCheck":"pass","stage0PkgPlanLockOutOfSyncCheck":"pass","stage0PkgPlanInvalidArgumentsCheck":"pass","stage0PkgWorkspaceMemberCheck":"pass","stage0PkgDeclaredDependenciesCheck":"pass","stage0PkgGraphCheck":"pass","stage0PkgGraphInvalidArgumentsCheck":"pass","stage0PkgMalformedDependenciesCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID" "$CORE_PLATFORM_THREAD_WIN64_CHECK_STATUS" "$CORE_PLATFORM_SYNC_WIN64_CHECK_STATUS"
 printf 'verify-local=pass\n'
 printf 'human-summary=local verification passed\n'
