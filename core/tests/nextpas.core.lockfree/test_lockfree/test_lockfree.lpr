@@ -21,6 +21,9 @@ type
 
 const
   CloseWakePendingProbeNs = 50000000;
+  QueuePublishWakeDelayNs = 20000000;
+  QueuePublishWakeTimeoutNs = Int64(1000000000);
+  QueuePublishWakeBudgetMs = 500;
   WaitHelperStaleEpochTimeoutNs = Int64(5000000000);
   WaitHelperImmediateReturnBudgetMs = 100;
 
@@ -352,6 +355,80 @@ begin
   Check(LQ.DequeueTimeout(LV, 1000000), 'dequeue immediate');
   CheckEqual(Int64(42), Int64(LV));
   LQ.Free;
+end;
+
+var
+  GSpscPublishWakeQ: TIntSpsc;
+  GSpscPublishWakeConsumerStarted: Int32;
+  GSpscPublishWakeConsumerResult: Int32;
+  GSpscPublishWakeConsumerValue: Integer;
+
+function SpscPublishWakeConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+begin
+  Result := nil;
+  AtomicStore32(GSpscPublishWakeConsumerStarted, 1, moRelease);
+  if GSpscPublishWakeQ.DequeueTimeout(LV, QueuePublishWakeTimeoutNs) then
+  begin
+    GSpscPublishWakeConsumerValue := LV;
+    AtomicStore32(GSpscPublishWakeConsumerResult, 1, moRelease);
+  end
+  else
+    AtomicStore32(GSpscPublishWakeConsumerResult, 0, moRelease);
+end;
+
+procedure TestSpscDequeueTimeoutWakesOnPublish;
+var
+  LQ: TIntSpsc;
+  LConsumer: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LElapsedMs: QWord;
+  LSpin: Integer;
+  LThreadCreated: Boolean;
+  LJoined: Boolean;
+begin
+  LQ := TIntSpsc.Create(4);
+  LThreadCreated := False;
+  LJoined := False;
+  try
+    GSpscPublishWakeQ := LQ;
+    AtomicStore32(GSpscPublishWakeConsumerStarted, 0, moRelease);
+    AtomicStore32(GSpscPublishWakeConsumerResult, -1, moRelease);
+    GSpscPublishWakeConsumerValue := 0;
+    CheckEqual(Int64(0), Int64(platform_thread_create(LConsumer, @SpscPublishWakeConsumer, nil)),
+      'SPSC publish wake consumer thread must start');
+    LThreadCreated := True;
+
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GSpscPublishWakeConsumerStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GSpscPublishWakeConsumerStarted, moAcquire)),
+      'SPSC DequeueTimeout consumer thread must start before publish');
+    platform_thread_sleep_ns(QueuePublishWakeDelayNs);
+    CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscPublishWakeConsumerResult, moAcquire)),
+      'SPSC DequeueTimeout consumer should still be pending before publish');
+
+    LElapsedMs := GetTickCount64;
+    Check(LQ.TryEnqueue(42), 'SPSC producer must publish the wake item');
+    platform_thread_join(LConsumer, LRetVal);
+    LJoined := True;
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GSpscPublishWakeConsumerResult, moAcquire)),
+      'SPSC DequeueTimeout must receive the producer-published item');
+    CheckEqual(Int64(42), Int64(GSpscPublishWakeConsumerValue));
+    Check(LElapsedMs < QueuePublishWakeBudgetMs,
+      'SPSC DequeueTimeout consumer must wake on data publish before the full timeout');
+  finally
+    if LThreadCreated and (not LJoined) then
+      platform_thread_join(LConsumer, LRetVal);
+    GSpscPublishWakeQ := nil;
+    LQ.Free;
+  end;
 end;
 
 { MPMC tests }
@@ -2405,6 +2482,7 @@ begin
   T.Run('SPSC approx count', @TestSpscApproxCount);
   T.Run('SPSC blocking', @TestSpscBlocking);
   T.Run('SPSC timeout', @TestSpscTimeout);
+  T.Run('SPSC timeout wakes on publish', @TestSpscDequeueTimeoutWakesOnPublish);
   T.Run('MPMC basic', @TestMpmcBasic);
   T.Run('MPMC close', @TestMpmcClose);
   T.Run('MPMC close wake waits', @TestMpmcCloseWakeWaits);
