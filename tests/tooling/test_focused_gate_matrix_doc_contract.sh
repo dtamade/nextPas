@@ -10,6 +10,14 @@ esac
 SCRIPT_DIR=$(CDPATH= cd -- "${SCRIPT_PATH%/*}" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 WORKTREES_DOC="$REPO_ROOT/docs/worktrees.md"
+SCRIPT_UNDER_TEST="$REPO_ROOT/scripts/lane-focused.sh"
+TMP_ROOT=$(mktemp -d)
+
+cleanup() {
+  rm -rf "$TMP_ROOT"
+}
+
+trap cleanup EXIT INT TERM HUP
 
 require_doc_pattern() {
   pattern="$1"
@@ -89,6 +97,62 @@ require_exact_matrix_lanes() {
   fi
 }
 
+write_doc_matrix_focuses() {
+  awk '
+    function trim(value) {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      return value
+    }
+
+    /^默认 focused gate matrix：/ { in_matrix = 1; next }
+    in_matrix && /^如果某个模块/ { in_matrix = 0 }
+    in_matrix && /^\| [^|]+ \|/ {
+      split($0, columns, "|")
+      lane = trim(columns[2])
+      evidence = trim(columns[3])
+      if (lane == "lane" || lane == "---" || lane == "compiler") {
+        next
+      }
+      marker = "make focused FOCUS="
+      marker_start = index(evidence, marker)
+      if (marker_start == 0) {
+        next
+      }
+      focus = substr(evidence, marker_start + length(marker))
+      sub(/`.*/, "", focus)
+      print lane "\t" focus
+    }
+  ' "$WORKTREES_DOC" | sort
+}
+
+write_lane_focused_list_focuses() {
+  "$SCRIPT_UNDER_TEST" --list >"$TMP_ROOT/lane-focused-list.out"
+  awk -F '\t' '
+    NF != 3 {
+      printf "lane-focused --list must print tab-separated lane/truth/focus rows\n" > "/dev/stderr"
+      exit 1
+    }
+    $1 == "compiler" {
+      printf "lane-focused --list must not include compiler default gate\n" > "/dev/stderr"
+      exit 1
+    }
+    {
+      print $1 "\t" $3
+    }
+  ' "$TMP_ROOT/lane-focused-list.out" | sort
+}
+
+require_lane_focused_list_matches_doc_matrix() {
+  write_doc_matrix_focuses >"$TMP_ROOT/doc-matrix.tsv"
+  write_lane_focused_list_focuses >"$TMP_ROOT/lane-focused-list.tsv"
+
+  if ! diff -u "$TMP_ROOT/doc-matrix.tsv" "$TMP_ROOT/lane-focused-list.tsv" >/dev/null; then
+    printf 'lane-focused --list differs from focused gate matrix docs\n' >&2
+    diff -u "$TMP_ROOT/doc-matrix.tsv" "$TMP_ROOT/lane-focused-list.tsv" >&2 || true
+    exit 1
+  fi
+}
+
 require_skip_exception_contract() {
   focus_path="$1"
   description="$2"
@@ -110,6 +174,7 @@ require_skip_exception_contract() {
 require_doc_pattern 'Focused Gate Matrix' 'focused gate matrix section'
 require_exact_matrix_lanes
 require_doc_pattern 'make lane-focused LANE=<platform[|]mem[|]system[|]config[|]http>' 'lane-focused helper command'
+require_doc_pattern 'lane-focused[.]sh --list|--list' 'lane-focused matrix list command'
 require_doc_pattern '`lane`' 'lane-focused lane field'
 require_doc_pattern '`truth`' 'lane-focused truth field'
 require_doc_pattern '`focus`' 'lane-focused focus field'
@@ -126,6 +191,7 @@ require_focused_path_contract 'core/tests/nextpas.core.mem/test_memory_map_compi
 require_focused_path_contract 'core/tests/nextpas.core.system/test_system_source_contracts' 'system lane source contract gate'
 require_focused_path_contract 'core/tests/nextpas.core.config/test_config' 'config lane focused gate'
 require_focused_path_contract 'core/tests/nextpas.core.http/test_http_client' 'http lane focused gate'
+require_lane_focused_list_matches_doc_matrix
 require_doc_pattern 'compiler.*not.*default focused gate|compiler.*不是.*默认 focused gate' 'compiler is not default focused gate'
 require_doc_pattern 'compiler.*build/verify_local[.]sh|build/verify_local[.]sh.*compiler' 'compiler verify local exception'
 require_skip_exception_contract 'core/tests/nextpas.core.hash/test_hash' 'hash placeholder'

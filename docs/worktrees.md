@@ -207,6 +207,8 @@ source/compile/runtime/CI evidence。不要用单个绿色命令替代所有 tru
 对应的根目录 `make focused FOCUS=...`。这个入口会打印 `lane`、`truth`、`focus` 和
 `command` 字段，适合模块负责人放进 `Ready` evidence。它是 local/reporting helper；
 CI 目前仍跑 `make test-tooling` 和 `make verify`，不要把 `lane-focused` 当成 CI matrix。
+需要审计矩阵漂移时，用 `scripts/lane-focused.sh --list` 打印 tab-separated
+`lane` / `truth` / `focus` 清单，再和本节矩阵比对。
 
 如果某个模块的最佳 gate 不是根目录 `make focused FOCUS=...`，例如 compiler 目前没有
 默认 focused gate、或模块 Makefile 暴露专用目标，报告里必须把例外写清楚，并列出实际命令。

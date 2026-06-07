@@ -11,11 +11,13 @@ SCRIPT_DIR=$(CDPATH= cd -- "${SCRIPT_PATH%/*}" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 LANE_NAME="${LANE:-}"
 PRINT_COMMAND=0
+LIST_LANES=0
 
 usage() {
   cat >&2 <<'EOF'
 Usage:
   scripts/lane-focused.sh --lane <platform|mem|system|config|http> [--print-command]
+  scripts/lane-focused.sh --list
 
 Compiler has no default lane-focused gate. Name the narrow compiler fixture or smoke command,
 then use bash build/verify_local.sh only as a verify exception.
@@ -41,6 +43,50 @@ require_makefile_target() {
   ' "$makefile_path"
 }
 
+set_lane_defaults() {
+  lane_name="$1"
+
+  case "$lane_name" in
+    platform)
+      TRUTH_KIND="forced-compile"
+      FOCUS_PATH="core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix"
+      ;;
+    mem)
+      TRUTH_KIND="forced-compile"
+      FOCUS_PATH="core/tests/nextpas.core.mem/test_memory_map_compile_gate"
+      ;;
+    system)
+      TRUTH_KIND="source-contract"
+      FOCUS_PATH="core/tests/nextpas.core.system/test_system_source_contracts"
+      ;;
+    config)
+      TRUTH_KIND="runtime"
+      FOCUS_PATH="core/tests/nextpas.core.config/test_config"
+      ;;
+    http)
+      TRUTH_KIND="runtime"
+      FOCUS_PATH="core/tests/nextpas.core.http/test_http_client"
+      ;;
+    compiler)
+      printf 'compiler has no default lane-focused gate\n' >&2
+      printf 'name the narrow compiler fixture or smoke command, then use bash build/verify_local.sh only as a verify exception\n' >&2
+      exit 1
+      ;;
+    *)
+      printf 'unknown lane: %s\n' "$lane_name" >&2
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+print_lane_list() {
+  for lane_name in platform mem system config http; do
+    set_lane_defaults "$lane_name"
+    printf '%s\t%s\t%s\n' "$lane_name" "$TRUTH_KIND" "$FOCUS_PATH"
+  done
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --lane)
@@ -55,6 +101,9 @@ while [ "$#" -gt 0 ]; do
     --print-command)
       PRINT_COMMAND=1
       ;;
+    --list)
+      LIST_LANES=1
+      ;;
     -h|--help)
       usage
       exit 0
@@ -68,44 +117,23 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
+if [ "$LIST_LANES" -eq 1 ]; then
+  if [ -n "$LANE_NAME" ]; then
+    printf '%s\n' '--list cannot be combined with --lane' >&2
+    usage
+    exit 1
+  fi
+  print_lane_list
+  exit 0
+fi
+
 if [ -z "$LANE_NAME" ]; then
   printf 'LANE is required\n' >&2
   usage
   exit 1
 fi
 
-case "$LANE_NAME" in
-  platform)
-    TRUTH_KIND="forced-compile"
-    FOCUS_PATH="core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix"
-    ;;
-  mem)
-    TRUTH_KIND="forced-compile"
-    FOCUS_PATH="core/tests/nextpas.core.mem/test_memory_map_compile_gate"
-    ;;
-  system)
-    TRUTH_KIND="source-contract"
-    FOCUS_PATH="core/tests/nextpas.core.system/test_system_source_contracts"
-    ;;
-  config)
-    TRUTH_KIND="runtime"
-    FOCUS_PATH="core/tests/nextpas.core.config/test_config"
-    ;;
-  http)
-    TRUTH_KIND="runtime"
-    FOCUS_PATH="core/tests/nextpas.core.http/test_http_client"
-    ;;
-  compiler)
-    printf 'compiler has no default lane-focused gate\n' >&2
-    printf 'name the narrow compiler fixture or smoke command, then use bash build/verify_local.sh only as a verify exception\n' >&2
-    exit 1
-    ;;
-  *)
-    printf 'unknown lane: %s\n' "$LANE_NAME" >&2
-    usage
-    exit 1
-    ;;
-esac
+set_lane_defaults "$LANE_NAME"
 
 FOCUS_DIR="$REPO_ROOT/$FOCUS_PATH"
 FOCUS_MAKEFILE="$FOCUS_DIR/Makefile"
