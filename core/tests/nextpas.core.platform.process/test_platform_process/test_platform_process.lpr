@@ -251,6 +251,25 @@ begin
   Check((LBuf[0] = '/') and (LBuf[1] = 't') and (LBuf[2] = 'm') and (LBuf[3] = 'p'), 'cwd is /tmp');
 end;
 
+procedure TestRunDiscardsStderrWithoutChangingExit;
+var
+  LArgv: array[0..3] of PAnsiChar;
+  LBuf: array[0..63] of AnsiChar;
+  LOutLen, LExitCode: Int32;
+begin
+  LArgv[0] := '/bin/sh';
+  LArgv[1] := '-c';
+  LArgv[2] := 'i=0; while [ $i -lt 20000 ]; do echo noisy-line >&2; i=$((i+1)); done; printf stdout-ok';
+  LArgv[3] := nil;
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  Check(platform_process_run('/bin/sh', @LArgv[0], nil, @LBuf[0], SizeOf(LBuf),
+    LOutLen, LExitCode) = 0, 'run stderr discard ok');
+  Check(LExitCode = 0, 'run stderr discard preserves exit 0');
+  Check(LOutLen = 9, 'run stderr discard captures stdout length');
+  Check((LBuf[0] = 's') and (LBuf[8] = 'k'),
+    'run stderr discard captures stdout content');
+end;
+
 procedure TestCommandEnvAddDuplicatePathUsesFinalResolvedView;
 var
   LOut: nextpas.core.process.TProcessOutput;
@@ -358,6 +377,7 @@ begin
   T.Run('piped: write stdin', @TestSpawnPipedStdin);
   T.Run('run: capture output', @TestRun);
   T.Run('run: working directory', @TestRunCwd);
+  T.Run('run: discard stderr without changing exit', @TestRunDiscardsStderrWithoutChangingExit);
   T.Run('command: EnvAdd duplicate PATH final view', @TestCommandEnvAddDuplicatePathUsesFinalResolvedView);
   T.Run('spawn_fds source: no hardcoded 1024', @TestSpawnFdsNoHardcoded1024SourceContract);
   T.Run('spawn_fds closes high inherited fd', @TestSpawnFdsClosesHighInheritedFd);

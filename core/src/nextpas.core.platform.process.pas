@@ -455,28 +455,65 @@ function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar;
   out AOutLen: Int32; out AExitCode: Int32): Int32;
 var
   LProc: TPlatformProcess;
-  LPipes: TPlatformProcessPipes;
   LResult: TPlatformProcessResult;
+  LStdoutPipe: array[0..1] of Int32;
+  LDevNullRead, LDevNullWrite: Int32;
+  LFailStage: TPlatformProcessSpawnStage;
   LN: PtrInt;
   LTotal: Int32;
 begin
   AOutLen := 0;
   AExitCode := -1;
-  Result := platform_process_spawn_piped_cwd(APath, AArgv, nil, ACwd, LProc, LPipes);
-  if Result <> 0 then
+  LStdoutPipe[0] := -1;
+  LStdoutPipe[1] := -1;
+  LDevNullRead := -1;
+  LDevNullWrite := -1;
+
+  if pipe(@LStdoutPipe[0]) <> 0 then
+    Exit(platform_get_errno);
+  LDevNullRead := open('/dev/null', 0, 0);
+  if LDevNullRead < 0 then
+  begin
+    Result := platform_get_errno;
+    close(LStdoutPipe[0]);
+    close(LStdoutPipe[1]);
     Exit;
-  close(LPipes.StdinWrite);
-  close(LPipes.StderrRead);
-  LTotal := 0;
-  repeat
-    LN := read(LPipes.StdoutRead, @AOutBuf[LTotal], AOutBufLen - LTotal);
-    if LN > 0 then
-      Inc(LTotal, Int32(LN));
-  until (LN <= 0) or (LTotal >= AOutBufLen);
-  close(LPipes.StdoutRead);
-  if LTotal < AOutBufLen then
-    AOutBuf[LTotal] := #0;
-  AOutLen := LTotal;
+  end;
+  LDevNullWrite := open('/dev/null', 1, 0);
+  if LDevNullWrite < 0 then
+  begin
+    Result := platform_get_errno;
+    close(LDevNullRead);
+    close(LStdoutPipe[0]);
+    close(LStdoutPipe[1]);
+    Exit;
+  end;
+
+  Result := platform_process_spawn_fds(APath, AArgv, nil, ACwd, LDevNullRead,
+    LStdoutPipe[1], LDevNullWrite, LProc, LFailStage);
+  close(LDevNullRead);
+  close(LDevNullWrite);
+  close(LStdoutPipe[1]);
+  if Result <> 0 then
+  begin
+    close(LStdoutPipe[0]);
+    Exit;
+  end;
+
+  try
+    LTotal := 0;
+    repeat
+      LN := read(LStdoutPipe[0], @AOutBuf[LTotal], AOutBufLen - LTotal);
+      if LN > 0 then
+        Inc(LTotal, Int32(LN));
+    until (LN <= 0) or (LTotal >= AOutBufLen);
+    if LTotal < AOutBufLen then
+      AOutBuf[LTotal] := #0;
+    AOutLen := LTotal;
+  finally
+    close(LStdoutPipe[0]);
+  end;
+
   Result := platform_process_wait(LProc, LResult);
   if Result = 0 then
     AExitCode := LResult.ExitCode;
@@ -756,31 +793,87 @@ function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar;
   out AOutLen: Int32; out AExitCode: Int32): Int32;
 var
   LProc: TPlatformProcess;
-  LPipes: TPlatformProcessPipes;
   LResult: TPlatformProcessResult;
+  LStdoutRd, LStdoutWr: HANDLE;
+  LDevNullRead, LDevNullWrite: HANDLE;
+  LSA: SECURITY_ATTRIBUTES;
+  LFailStage: TPlatformProcessSpawnStage;
+  LNulPath: UnicodeString;
   LRead: DWORD;
   LTotal: Int32;
 begin
   AOutLen := 0;
   AExitCode := -1;
-  Result := platform_process_spawn_piped_cwd(APath, AArgv, nil, ACwd, LProc, LPipes);
-  if Result <> 0 then
+  LStdoutRd := HANDLE(PtrInt(-1));
+  LStdoutWr := HANDLE(PtrInt(-1));
+  LDevNullRead := HANDLE(PtrInt(-1));
+  LDevNullWrite := HANDLE(PtrInt(-1));
+
+  FillChar(LSA, SizeOf(LSA), 0);
+  LSA.nLength := SizeOf(LSA);
+  LSA.bInheritHandle := True;
+  if not CreatePipe(@LStdoutRd, @LStdoutWr, @LSA, 0) then
+    Exit(Int32(GetLastError));
+  if not SetHandleInformation(LStdoutRd, HANDLE_FLAG_INHERIT, 0) then
+  begin
+    Result := Int32(GetLastError);
+    CloseHandle(LStdoutRd);
+    CloseHandle(LStdoutWr);
     Exit;
-  CloseHandle(HANDLE(PtrUInt(LPipes.StdinWrite)));
-  CloseHandle(HANDLE(PtrUInt(LPipes.StderrRead)));
-  LTotal := 0;
-  repeat
-    LRead := 0;
-    if not ReadFile(HANDLE(PtrUInt(LPipes.StdoutRead)), @AOutBuf[LTotal],
-      DWORD(AOutBufLen - LTotal), @LRead, nil) then
-      Break;
-    if LRead = 0 then Break;
-    Inc(LTotal, Int32(LRead));
-  until LTotal >= AOutBufLen;
-  CloseHandle(HANDLE(PtrUInt(LPipes.StdoutRead)));
-  if LTotal < AOutBufLen then
-    AOutBuf[LTotal] := #0;
-  AOutLen := LTotal;
+  end;
+
+  LNulPath := 'NUL';
+  LDevNullRead := CreateFileW(PWideChar(LNulPath), GENERIC_READ,
+    FILE_SHARE_READ or FILE_SHARE_WRITE, @LSA, OPEN_EXISTING,
+    FILE_ATTRIBUTE_NORMAL, nil);
+  if LDevNullRead = HANDLE(PtrInt(-1)) then
+  begin
+    Result := Int32(GetLastError);
+    CloseHandle(LStdoutRd);
+    CloseHandle(LStdoutWr);
+    Exit;
+  end;
+  LDevNullWrite := CreateFileW(PWideChar(LNulPath), GENERIC_WRITE,
+    FILE_SHARE_READ or FILE_SHARE_WRITE, @LSA, OPEN_EXISTING,
+    FILE_ATTRIBUTE_NORMAL, nil);
+  if LDevNullWrite = HANDLE(PtrInt(-1)) then
+  begin
+    Result := Int32(GetLastError);
+    CloseHandle(LDevNullRead);
+    CloseHandle(LStdoutRd);
+    CloseHandle(LStdoutWr);
+    Exit;
+  end;
+
+  Result := platform_process_spawn_fds(APath, AArgv, nil, ACwd,
+    PtrInt(PtrUInt(LDevNullRead)), PtrInt(PtrUInt(LStdoutWr)),
+    PtrInt(PtrUInt(LDevNullWrite)), LProc, LFailStage);
+  CloseHandle(LDevNullRead);
+  CloseHandle(LDevNullWrite);
+  CloseHandle(LStdoutWr);
+  if Result <> 0 then
+  begin
+    CloseHandle(LStdoutRd);
+    Exit;
+  end;
+
+  try
+    LTotal := 0;
+    repeat
+      LRead := 0;
+      if not ReadFile(LStdoutRd, @AOutBuf[LTotal],
+        DWORD(AOutBufLen - LTotal), @LRead, nil) then
+        Break;
+      if LRead = 0 then Break;
+      Inc(LTotal, Int32(LRead));
+    until LTotal >= AOutBufLen;
+    if LTotal < AOutBufLen then
+      AOutBuf[LTotal] := #0;
+    AOutLen := LTotal;
+  finally
+    CloseHandle(LStdoutRd);
+  end;
+
   Result := platform_process_wait(LProc, LResult);
   if Result = 0 then
     AExitCode := LResult.ExitCode;
