@@ -36,8 +36,9 @@
     method/url/custom headers，保持 nil body、`ContentLength = 0` 且不自动写入
     `content-length`；调用方不必再为常见 headers-only request 手写
     `Headers, nil, 0`。`test_http_message`、`test_http_contract` 和
-    `test_http_client` 分别锁住 helper contract、facade 可见性和 live
-    round-trip header/path/query 语义。
+    `test_http_client` 分别锁住 helper contract、facade 可见性，以及 live
+    round-trip header/path/query 语义与“不自动发布 `content-length` header”这一条
+    client/server contract。
   - 同步收紧：为避免新增 `Headers` overload 破坏旧的 `NewRequest(Method, Url, nil)`
     源兼容性，public surface 保留了 nil-literal compatibility shim。`nil` 第三参
     仍解析成历史 empty-`TBytes` helper 语义，也就是 zero-length body +
