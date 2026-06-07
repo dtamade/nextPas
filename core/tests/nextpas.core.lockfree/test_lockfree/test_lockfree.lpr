@@ -831,6 +831,39 @@ begin
   LSt.Free;
 end;
 
+procedure TestStackQueryContract;
+var
+  LSt: TIntStack;
+  LV: Integer;
+begin
+  LSt := TIntStack.Create(3);
+  Check(LSt.IsEmpty, 'stack query initial empty');
+  CheckEqual(Int64(0), Int64(LSt.ApproxCount), 'stack query initial count');
+
+  Check(LSt.TryPush(10), 'stack query push 1');
+  CheckEqual(Int64(1), Int64(LSt.ApproxCount), 'stack query count after first push');
+  Check(not LSt.IsEmpty, 'stack query not empty after first push');
+  Check(LSt.TryPush(20), 'stack query push 2');
+  CheckEqual(Int64(2), Int64(LSt.ApproxCount), 'stack query count after second push');
+  Check(LSt.TryPush(30), 'stack query push 3');
+  CheckEqual(Int64(3), Int64(LSt.ApproxCount), 'stack query full count');
+  Check(not LSt.TryPush(40), 'stack query full push rejected');
+  CheckEqual(Int64(3), Int64(LSt.ApproxCount), 'stack query failed full push preserves count');
+
+  Check(LSt.TryPop(LV), 'stack query pop 1');
+  CheckEqual(Int64(30), Int64(LV), 'stack query LIFO after full push set');
+  CheckEqual(Int64(2), Int64(LSt.ApproxCount), 'stack query count after first pop');
+  Check(LSt.TryPop(LV), 'stack query pop 2');
+  CheckEqual(Int64(20), Int64(LV), 'stack query second pop');
+  CheckEqual(Int64(1), Int64(LSt.ApproxCount), 'stack query count after second pop');
+  Check(LSt.TryPop(LV), 'stack query pop 3');
+  CheckEqual(Int64(10), Int64(LV), 'stack query third pop');
+  CheckEqual(Int64(0), Int64(LSt.ApproxCount), 'stack query count after drain');
+  Check(LSt.IsEmpty, 'stack query empty after drain');
+  Check(not LSt.TryPop(LV), 'stack query pop rejected when empty');
+  LSt.Free;
+end;
+
 { MPSC }
 
 var
@@ -1057,6 +1090,42 @@ begin
   Check(LD.TryPop(LV), 'pop last');
   CheckEqual(Int64(20), Int64(LV));
   Check(LD.IsEmpty, 'empty after all');
+  LD.Free;
+end;
+
+procedure TestDequeQueryContract;
+var
+  LD: TIntDeque;
+  LV: Integer;
+begin
+  LD := TIntDeque.Create(3);
+  CheckEqual(Int64(4), Int64(LD.Capacity), 'deque query capacity rounds to next power-of-two');
+  Check(LD.IsEmpty, 'deque query initial empty');
+  CheckEqual(Int64(0), Int64(LD.ApproxCount), 'deque query initial count');
+
+  Check(LD.TryPush(10), 'deque query push 1');
+  Check(LD.TryPush(20), 'deque query push 2');
+  Check(LD.TryPush(30), 'deque query push 3');
+  Check(LD.TryPush(40), 'deque query push 4');
+  CheckEqual(Int64(4), Int64(LD.ApproxCount), 'deque query full count');
+  Check(not LD.IsEmpty, 'deque query not empty when full');
+  Check(not LD.TryPush(50), 'deque query full push rejected');
+  CheckEqual(Int64(4), Int64(LD.ApproxCount), 'deque query failed full push preserves count');
+
+  Check(LD.TrySteal(LV), 'deque query steal');
+  CheckEqual(Int64(10), Int64(LV), 'deque query steal must observe oldest value');
+  CheckEqual(Int64(3), Int64(LD.ApproxCount), 'deque query count after steal');
+  Check(LD.TryPop(LV), 'deque query pop 1');
+  CheckEqual(Int64(40), Int64(LV), 'deque query owner pop must observe newest value');
+  CheckEqual(Int64(2), Int64(LD.ApproxCount), 'deque query count after first pop');
+  Check(LD.TryPop(LV), 'deque query pop 2');
+  CheckEqual(Int64(30), Int64(LV), 'deque query second pop');
+  CheckEqual(Int64(1), Int64(LD.ApproxCount), 'deque query count after second pop');
+  Check(LD.TryPop(LV), 'deque query pop 3');
+  CheckEqual(Int64(20), Int64(LV), 'deque query third pop');
+  CheckEqual(Int64(0), Int64(LD.ApproxCount), 'deque query count after drain');
+  Check(LD.IsEmpty, 'deque query empty after drain');
+  Check(not LD.TrySteal(LV), 'deque query steal rejected when empty');
   LD.Free;
 end;
 
@@ -1616,6 +1685,12 @@ begin
   CheckContains(LDocsReadme,
     '`TLockFreeStack<T>` capacity is limited to `High(Int32)` because tagged heads pack a 32-bit slot index',
     'lockfree README must document stack 32-bit slot index capacity limit');
+  CheckContains(LDocsReadme,
+    '`TLockFreeStack<T>` is a fixed-capacity stack: `TryPush` returns `False` when no free slot remains, and `IsEmpty` / `ApproxCount` are snapshot helpers over the current top-linked list rather than linearization guarantees under contention.',
+    'lockfree README must document the stack query surface contract');
+  CheckContains(LDocsReadme,
+    '`TWorkStealingDeque<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound, `TryPush` returns `False` when the deque is full, and `ApproxCount` / `IsEmpty` are snapshot helpers over current top/bottom counters rather than multi-thread linearization guarantees.',
+    'lockfree README must document the deque query surface contract');
   CheckContains(LDocsReadme, 'Atomic dependency',
     'lockfree README must document dependency on atomic wait/notify');
   CheckContains(LDocsReadme,
@@ -1848,6 +1923,12 @@ begin
     'stack constructor must reject capacity beyond its 32-bit slot index');
   CheckContains(LStackSource, 'TLockFreeStack: capacity exceeds 32-bit slot index limit',
     'stack constructor must expose a stable argument error for capacity overflow');
+  CheckContains(LStackSource, 'if LCount > FCapacity then Break;',
+    'stack ApproxCount must keep traversal best-effort instead of trusting an unbounded chain');
+  CheckContains(LDequeSource, 'LCap := LockFreeNextPow2(ACapacity);',
+    'deque constructor must round requested capacity to power-of-two storage');
+  CheckContains(LDequeSource, 'if LSize >= Int64(FCapacity) then',
+    'deque owner push must reject writes once the bounded ring is full');
   CheckContains(LMpscSource, 'Assert(FClosed <> 0',
     'MPSC destroy must keep the close-before-destroy debug guard');
   CheckContains(LMpscSource, 'Close must be called before Destroy',
@@ -2159,6 +2240,7 @@ begin
   T.Run('SPSC batch', @TestSpscBatch);
   T.Run('MPMC timeout', @TestMpmcTimeout);
   T.Run('Stack basic', @TestStackBasic);
+  T.Run('Stack query contract', @TestStackQueryContract);
   T.Run('MPSC basic', @TestMpscBasic);
   T.Run('MPSC close producer contract', @TestMpscCloseProducerContract);
   T.Run('MPSC close wake timeout', @TestMpscCloseWakeTimeout);
@@ -2166,6 +2248,7 @@ begin
   T.Run('MPSC destroy requires drain in DEBUG', @TestMpscDestroyRequiresDrainInDebug);
   T.Run('MPSC multi-producer', @TestMpscMultiProducer);
   T.Run('Deque basic', @TestDequeBasic);
+  T.Run('Deque query contract', @TestDequeQueryContract);
   T.Run('SPSC capacity/empty/full', @TestSpscCapacity);
   T.Run('MPMC batch', @TestMpmcBatch);
   T.Run('MPMC capacity/empty/full', @TestMpmcCapacity);
