@@ -5344,3 +5344,21 @@
 - 这轮的价值仍是 benchmark truth：
   epoll backend 的 durable full-chain proof 现在同时覆盖
   fast-path row、对称 body-bearing llhttp row，以及 request-heavy llhttp row。
+
+## 2026-06-07 snapshot include-hyper response-1k focused smoke findings
+
+- support 文档里之前已经明确提过一个更窄的后续缺口：
+  snapshot helper 虽然支持 `--include-hyper` 和 `--workload`，但 focused gate
+  还没有锁住这两个参数同时出现的组合。
+- 在所有 workload 里，`response_1k` 比默认 no-body workload 更有信息量：
+  - 它要求 raw output 继续保留 `response_body_bytes=1024`；
+  - 同时它还能证明 Hyper/Tokio snapshot 不只是在默认 hello-world shape 上可用。
+- 本轮保持窄刀，没有去扩 runner/schema/runtime：
+  - 只把 `capture_server_comparison_snapshot.sh --include-hyper --workload response_1k`
+    提升进 focused gate
+  - 锁住 `workload=response_1k`
+  - 锁住命令块同时包含 `--workload response_1k --include-hyper`
+  - 锁住 `rust_hyper` row、`rust_profile=hyper_tokio`、`response_body_bytes=1024`
+- 这轮的价值仍是 benchmark truth：
+  Hyper/Tokio snapshot evidence 现在不再只靠默认 workload，saved artifact 对
+  body-bearing response workload 也有 durable regression proof。

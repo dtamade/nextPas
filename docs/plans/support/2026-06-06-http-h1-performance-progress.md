@@ -12141,3 +12141,38 @@ Hello from nextPas!
     seam instead of stopping at the fast-path row or the symmetric echo row
   - this is coverage tightening only; it does not claim a new optimization,
     a backend ranking, or a runtime fix
+
+## Session: 2026-06-07 snapshot include-hyper response-1k focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the `--include-hyper + --workload response_1k` snapshot combination
+    into the focused benchmark gate
+  - give Hyper/Tokio snapshot evidence a durable non-default workload proof
+  - keep the slice limited to benchmark-truth coverage, not runner/runtime behavior
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch snapshot helper behavior, comparison runner behavior,
+    comparator binaries, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `74 total, 74 passed, 0 failed`
+    - new focused row:
+      `server comparison snapshot include hyper response_1k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload response_1k --include-hyper`
+  - the focused smoke locks:
+    - `workload=response_1k`
+    - command block contains `--workload response_1k --include-hyper`
+    - `cargo_version=`
+    - `hyper_cargo_lock_sha256=`
+    - `rust_hyper` row with `rust_profile=hyper_tokio`
+    - `response_body_bytes=1024`
+- Outcome:
+  - Hyper/Tokio snapshot evidence now has a durable body-bearing workload proof
+    instead of relying only on the default no-body snapshot smoke
+  - this is coverage tightening only; it does not claim a new comparator,
+    a new row schema, or a new performance result

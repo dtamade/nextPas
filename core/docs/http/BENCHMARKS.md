@@ -2547,6 +2547,9 @@ silently discard the original caller intent.
 The snapshot helper now preserves the same distinction in its own environment
 block and keeps the command block at `--threads 5`, instead of rewriting the
 captured snapshot down to `--threads 3`.
+The focused gate now also locks the `--include-hyper + --workload response_1k`
+snapshot combination, so Hyper/Tokio snapshot evidence is no longer covered
+only on the default no-body workload.
 
 Fresh local `no_url` 50k/4 3-run summary:
 
