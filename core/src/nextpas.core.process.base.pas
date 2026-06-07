@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.text.base,
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.platform.error;
 
 type
   {**
@@ -55,7 +56,7 @@ type
    *
    * @note ExitCode 为平台错误码（errno 或 GetLastError）
    *}
-  EProcessError = class(Exception)
+  EProcessError = class(ENextPasError)
   private
     FExitCode: Integer;
   public
@@ -66,8 +67,14 @@ type
 implementation
 
 constructor EProcessError.Create(const AMessage: string; const AExitCode: Integer);
+var
+  LCategory: TErrorCategory;
 begin
-  inherited Create(AMessage);
+  if AExitCode = -1 then
+    LCategory := ecInternal
+  else
+    LCategory := platform_error_category(AExitCode);
+  inherited Create(AMessage, LCategory);
   FExitCode := AExitCode;
 end;
 

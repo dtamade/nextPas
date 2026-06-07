@@ -155,6 +155,41 @@ begin
   Check(LGot, 'nonexistent binary raises EProcessError');
 end;
 
+procedure TestProcessErrorUsesFrameworkRootAndCategory;
+var
+  LGotRoot: Boolean;
+  LGotSpecific: Boolean;
+begin
+  LGotRoot := False;
+  LGotSpecific := False;
+  try
+    Command('/nonexistent_binary_xyz_deep_test').Output;
+  except
+    on E: EProcessError do
+    begin
+      LGotSpecific := True;
+      Check(E.Category = ecNotFound, 'exec failure keeps not-found category');
+      Check(E.ExitCode <> -1, 'exec failure keeps platform error code');
+    end;
+    on E: ENextPasError do
+      LGotRoot := True;
+  end;
+  Check(LGotSpecific and not LGotRoot,
+    'process error is a framework-root exception with specific catch priority');
+
+  LGotRoot := False;
+  try
+    raise EProcessError.Create('unknown process failure');
+  except
+    on E: ENextPasError do
+    begin
+      LGotRoot := True;
+      Check(E.Category = ecInternal, 'unknown process error uses internal category');
+    end;
+  end;
+  Check(LGotRoot, 'default process error catches as ENextPasError');
+end;
+
 { --- Test 9: Large output (100KB) --- }
 
 procedure TestLargeOutput;
@@ -346,6 +381,7 @@ begin
   T.Run('Working directory', @TestWorkingDirectory);
   T.Run('Process timeout', @TestProcessTimeout);
   T.Run('Non-existent command', @TestNonExistentCommand);
+  T.Run('Process error framework root and category', @TestProcessErrorUsesFrameworkRootAndCategory);
   T.Run('Large output 100KB', @TestLargeOutput);
   T.Run('Multiple processes', @TestMultipleProcesses);
   T.Run('Spawn + Kill', @TestSpawnKill);
