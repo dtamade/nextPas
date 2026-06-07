@@ -52,6 +52,17 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 
 ## API Reference
 
+### Status And Method Helpers
+
+- `HttpMethodToStr` / `HttpStrToMethod` — convert between `THttpMethod` and
+  wire method names.
+- `HttpStatusText` — return the reason phrase for known status codes, or
+  `Unknown` for unrecognized codes.
+- `HttpStatusIsInformational` / `HttpStatusIsSuccess` /
+  `HttpStatusIsRedirect` / `HttpStatusIsClientError` /
+  `HttpStatusIsServerError` — classify status-code ranges without forcing
+  callers to repeat magic `1xx` / `2xx` / `3xx` / `4xx` / `5xx` checks.
+
 ### Router
 
 - `NewRouter` — create radix-tree router (implements IHttpRouter + IHttpHandler)

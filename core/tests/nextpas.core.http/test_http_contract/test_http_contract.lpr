@@ -1069,6 +1069,22 @@ begin
   CheckEqual('Bad Request', HttpStatusText(HTTP_STATUS_BAD_REQUEST), '400');
 end;
 
+procedure TestHttpStatusClassHelpersThroughFacade;
+begin
+  Check(nextpas.core.http.HttpStatusIsInformational(HTTP_STATUS_CONTINUE),
+    'facade informational');
+  Check(nextpas.core.http.HttpStatusIsSuccess(HTTP_STATUS_OK),
+    'facade success');
+  Check(nextpas.core.http.HttpStatusIsRedirect(HTTP_STATUS_FOUND),
+    'facade redirect');
+  Check(nextpas.core.http.HttpStatusIsClientError(HTTP_STATUS_NOT_FOUND),
+    'facade client error');
+  Check(nextpas.core.http.HttpStatusIsServerError(
+    HTTP_STATUS_INTERNAL_SERVER_ERROR), 'facade server error');
+  Check(not nextpas.core.http.HttpStatusIsSuccess(
+    HTTP_STATUS_INTERNAL_SERVER_ERROR), 'facade success false for 500');
+end;
+
 { Test 19: IHttpTransport public contract shape }
 procedure TestHttpTransportRoundTripContract;
 var
@@ -1491,6 +1507,8 @@ begin
   T.Run('HttpMethodToStr all methods', @TestHttpMethodToStr);
   T.Run('HttpStrToMethod all methods', @TestHttpStrToMethod);
   T.Run('HttpStatusText known codes', @TestHttpStatusText);
+  T.Run('HttpStatus class helpers are available through facade',
+    @TestHttpStatusClassHelpersThroughFacade);
   T.Run('IHttpTransport RoundTrip contract shape', @TestHttpTransportRoundTripContract);
   T.Run('IHttpServerTransport ServeConn contract shape', @TestHttpServerTransportServeConnContract);
   T.Run('IHttpHijacker facade alias', @TestHttpHijackerFacadeAlias);

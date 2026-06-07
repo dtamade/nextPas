@@ -98,6 +98,34 @@ begin
   CheckEqual('Unknown', HttpStatusText(999), '999 unknown');
 end;
 
+procedure TestHttpStatusClassHelpers;
+begin
+  Check(not HttpStatusIsInformational(99), '99 is not informational');
+  Check(HttpStatusIsInformational(100), '100 is informational');
+  Check(HttpStatusIsInformational(199), '199 is informational');
+  Check(not HttpStatusIsInformational(200), '200 is not informational');
+
+  Check(not HttpStatusIsSuccess(199), '199 is not success');
+  Check(HttpStatusIsSuccess(200), '200 is success');
+  Check(HttpStatusIsSuccess(299), '299 is success');
+  Check(not HttpStatusIsSuccess(300), '300 is not success');
+
+  Check(not HttpStatusIsRedirect(299), '299 is not redirect');
+  Check(HttpStatusIsRedirect(300), '300 is redirect');
+  Check(HttpStatusIsRedirect(399), '399 is redirect');
+  Check(not HttpStatusIsRedirect(400), '400 is not redirect');
+
+  Check(not HttpStatusIsClientError(399), '399 is not client error');
+  Check(HttpStatusIsClientError(400), '400 is client error');
+  Check(HttpStatusIsClientError(499), '499 is client error');
+  Check(not HttpStatusIsClientError(500), '500 is not client error');
+
+  Check(not HttpStatusIsServerError(499), '499 is not server error');
+  Check(HttpStatusIsServerError(500), '500 is server error');
+  Check(HttpStatusIsServerError(599), '599 is server error');
+  Check(not HttpStatusIsServerError(600), '600 is not server error');
+end;
+
 procedure TestHttpVersionToStr;
 begin
   CheckEqual('HTTP/1.0', HttpVersionToStr(hvHttp10), '1.0');
@@ -323,6 +351,7 @@ begin
   T.Run('HttpStrToMethod', @TestHttpStrToMethod);
   T.Run('EHttpError category', @TestHttpErrorCategory);
   T.Run('HttpStatusText', @TestHttpStatusText);
+  T.Run('HttpStatus class helpers', @TestHttpStatusClassHelpers);
   T.Run('HttpVersionToStr', @TestHttpVersionToStr);
   T.Run('TUrl.Parse full URL', @TestUrlParseFullUrl);
   T.Run('TUrl.Parse with userinfo', @TestUrlParseWithUserInfo);

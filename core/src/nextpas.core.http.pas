@@ -115,6 +115,11 @@ const
 function HttpMethodToStr(const AMethod: THttpMethod): string; inline;
 function HttpStrToMethod(const AStr: string): THttpMethod; inline;
 function HttpStatusText(const ACode: THttpStatus): string; inline;
+function HttpStatusIsInformational(const ACode: THttpStatus): Boolean; inline;
+function HttpStatusIsSuccess(const ACode: THttpStatus): Boolean; inline;
+function HttpStatusIsRedirect(const ACode: THttpStatus): Boolean; inline;
+function HttpStatusIsClientError(const ACode: THttpStatus): Boolean; inline;
+function HttpStatusIsServerError(const ACode: THttpStatus): Boolean; inline;
 function HttpVersionToStr(const AVersion: THttpVersion): string; inline;
 
 { Headers factory }
@@ -226,6 +231,31 @@ end;
 function HttpStatusText(const ACode: THttpStatus): string;
 begin
   Result := nextpas.core.http.base.HttpStatusText(ACode);
+end;
+
+function HttpStatusIsInformational(const ACode: THttpStatus): Boolean;
+begin
+  Result := nextpas.core.http.base.HttpStatusIsInformational(ACode);
+end;
+
+function HttpStatusIsSuccess(const ACode: THttpStatus): Boolean;
+begin
+  Result := nextpas.core.http.base.HttpStatusIsSuccess(ACode);
+end;
+
+function HttpStatusIsRedirect(const ACode: THttpStatus): Boolean;
+begin
+  Result := nextpas.core.http.base.HttpStatusIsRedirect(ACode);
+end;
+
+function HttpStatusIsClientError(const ACode: THttpStatus): Boolean;
+begin
+  Result := nextpas.core.http.base.HttpStatusIsClientError(ACode);
+end;
+
+function HttpStatusIsServerError(const ACode: THttpStatus): Boolean;
+begin
+  Result := nextpas.core.http.base.HttpStatusIsServerError(ACode);
 end;
 
 function HttpVersionToStr(const AVersion: THttpVersion): string;

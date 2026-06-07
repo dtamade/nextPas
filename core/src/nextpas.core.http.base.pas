@@ -86,6 +86,11 @@ const
 function HttpMethodToStr(const AMethod: THttpMethod): string;
 function HttpStrToMethod(const AStr: string): THttpMethod;
 function HttpStatusText(const ACode: THttpStatus): string;
+function HttpStatusIsInformational(const ACode: THttpStatus): Boolean;
+function HttpStatusIsSuccess(const ACode: THttpStatus): Boolean;
+function HttpStatusIsRedirect(const ACode: THttpStatus): Boolean;
+function HttpStatusIsClientError(const ACode: THttpStatus): Boolean;
+function HttpStatusIsServerError(const ACode: THttpStatus): Boolean;
 function HttpVersionToStr(const AVersion: THttpVersion): string;
 
 implementation
@@ -160,6 +165,36 @@ begin
   else
     Result := 'Unknown';
   end;
+end;
+
+function HttpStatusInRange(const ACode, AMin, AMax: THttpStatus): Boolean;
+begin
+  Result := (ACode >= AMin) and (ACode <= AMax);
+end;
+
+function HttpStatusIsInformational(const ACode: THttpStatus): Boolean;
+begin
+  Result := HttpStatusInRange(ACode, 100, 199);
+end;
+
+function HttpStatusIsSuccess(const ACode: THttpStatus): Boolean;
+begin
+  Result := HttpStatusInRange(ACode, 200, 299);
+end;
+
+function HttpStatusIsRedirect(const ACode: THttpStatus): Boolean;
+begin
+  Result := HttpStatusInRange(ACode, 300, 399);
+end;
+
+function HttpStatusIsClientError(const ACode: THttpStatus): Boolean;
+begin
+  Result := HttpStatusInRange(ACode, 400, 499);
+end;
+
+function HttpStatusIsServerError(const ACode: THttpStatus): Boolean;
+begin
+  Result := HttpStatusInRange(ACode, 500, 599);
 end;
 
 function HttpVersionToStr(const AVersion: THttpVersion): string;
