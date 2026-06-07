@@ -103,7 +103,7 @@ The transform convention is:
 - perspective is right-handed and looks down `-Z`;
 - NDC is `[-1, +1]`;
 - `Camera2D` uses screen-space positive Y down.
-- Larger `Camera2D` zoom values magnify the view, so the same world-space offset maps farther in NDC.
+- `Camera2D` larger zoom values magnify the view, so the same world-space offset maps farther in NDC on both axes.
 
 Builder guard rules are explicit: `Ortho` requires non-zero width, height, and depth;
 `Perspective` requires positive FOV, aspect, and near plane plus `far > near`; `LookAt` requires
@@ -111,8 +111,8 @@ Builder guard rules are explicit: `Ortho` requires non-zero width, height, and d
 zoom and positive viewport dimensions.
 Reversed non-zero `Ortho` bounds are valid and flip the corresponding axis; `Camera2D` relies on a
 reversed Y range to keep screen-space `+Y down`.
-`LookAt` uses the direction of `up`, not its magnitude, so positive rescaling of the same valid
-`up` vector does not change the resulting view matrix.
+`LookAt` treats `up` direction as semantic: positive rescaling preserves the view matrix, while
+flipping `up` to the opposite direction changes roll.
 Easing functions reject `NaN` and infinite input, and finite inputs outside `[0, 1]` extrapolate
 through the same formulas rather than clamping to the unit interval.
 

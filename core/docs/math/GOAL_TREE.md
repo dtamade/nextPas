@@ -282,9 +282,10 @@ Status:
 - Tests lock column-major translation in column 3, right-handed `LookAt`, right-handed perspective
   with NDC `[-1,+1]`, direct `Ortho` reversed-bounds axis flips, direct `Double` parity coverage
   for `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`, `RotateY`, `RotateZ`, and
-  `Camera2D`, `LookAt` up-vector magnitude invariance for the same direction plus direct
-  `AUp` sign-flip roll semantics, screen-space `Camera2D` positive Y down plus zoom-scaled view
-  semantics across both axes, geometry guard messages for degenerate `Ortho` / `Perspective` /
+  `Camera2D`. `LookAt` treats `up` direction as semantic: positive rescaling preserves the view
+  matrix, while flipping `up` to the opposite direction changes roll. `Camera2D` larger zoom values
+  magnify the view, so the same world-space offset maps farther in NDC on both axes. Geometry guard
+  messages for degenerate `Ortho` / `Perspective` /
   `LookAt` / `Camera2D` inputs, exact
   owner-level `Ortho` finite and zero-extent guard messages, exact owner-level
   `Perspective` finite/positive parameter guard messages including direct negative

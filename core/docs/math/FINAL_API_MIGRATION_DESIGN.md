@@ -249,11 +249,12 @@ The design keeps the useful `fafafa.game` conventions because they are internall
 - `Ortho` follows OpenGL-style orthographic projection.
 - Reversed non-zero `Ortho` bounds are valid and flip the corresponding axis.
 - Translation lives in column 3: `Data[3, 0..2]`.
-- `Camera2D` uses orthographic bounds centered on `(CenterX, CenterY)`, supports a screen-space `+Y down` convention by swapping top/bottom bounds, and treats larger zoom values as view magnification.
+- `Camera2D` uses orthographic bounds centered on `(CenterX, CenterY)` and supports a screen-space `+Y down` convention by swapping top/bottom bounds.
+- `Camera2D` larger zoom values magnify the view, so the same world-space offset maps farther in NDC on both axes.
 - Local transform composition, if exposed, uses `Translate * Rotate * Scale`.
 - Parent/world transform composition, if exposed, uses `ParentWorld * Local`.
 - `LookAt` is a right-handed view-matrix builder. Object-transform `LookAt` semantics are a separate concern and must not share an ambiguous name.
-- `LookAt` treats the magnitude of a valid `up` vector as non-semantic: only its direction matters, so positive rescaling does not change the resulting view matrix.
+- `LookAt` treats `up` direction as semantic: positive rescaling preserves the view matrix, while flipping `up` to the opposite direction changes roll.
 - Guard contracts are part of the public behavior: `Ortho` rejects zero width/height/depth,
   `Perspective` requires positive FOV/aspect/near, vertical FOV `< PI`, plus `far > near`,
   `LookAt` requires `eye <> target` and non-parallel `up`, and `Camera2D` requires positive zoom

@@ -96,6 +96,40 @@ REQUIRED_M8_RESIDUAL_TRUTH = (
         "M8 is not complete until broader M7 SIMD acceleration decisions and host trig link evidence are resolved.",
     ),
 )
+REQUIRED_TRANSFORM_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "`LookAt` treats `up` direction as semantic: positive rescaling preserves the view matrix, while flipping `up` to the opposite direction changes roll.",
+    ),
+    (
+        "docs/math/API.md",
+        "`LookAt` treats `up` direction as semantic: positive rescaling preserves the view matrix, while flipping `up` to the opposite direction changes roll.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`LookAt` treats `up` direction as semantic: positive rescaling preserves the view matrix, while flipping `up` to the opposite direction changes roll.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`LookAt` treats `up` direction as semantic: positive rescaling preserves the view matrix, while flipping `up` to the opposite direction changes roll.",
+    ),
+    (
+        "docs/math/README.md",
+        "`Camera2D` larger zoom values magnify the view, so the same world-space offset maps farther in NDC on both axes.",
+    ),
+    (
+        "docs/math/API.md",
+        "`Camera2D` larger zoom values magnify the view, so the same world-space offset maps farther in NDC on both axes.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`Camera2D` larger zoom values magnify the view, so the same world-space offset maps farther in NDC on both axes.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`Camera2D` larger zoom values magnify the view, so the same world-space offset maps farther in NDC on both axes.",
+    ),
+)
 REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
     RequiredCoreMakeTarget(
         target="core-math-api-surface-smoke",
@@ -472,7 +506,9 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("transform-ortho-reversed", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('Ortho allows reversed bounds'"),
     RequiredBehaviorTestMarker("transform-model-view", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('model and view builders'"),
     RequiredBehaviorTestMarker("transform-lookat-up", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('LookAt ignores up magnitude'"),
+    RequiredBehaviorTestMarker("transform-lookat-roll", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('LookAt up direction controls roll'"),
     RequiredBehaviorTestMarker("transform-camera-double", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('camera2d and double builders'"),
+    RequiredBehaviorTestMarker("transform-camera-zoom", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('Camera2D zoom scales view'"),
     RequiredBehaviorTestMarker("transform-double-parity", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('direct double builder parity'"),
     RequiredBehaviorTestMarker("transform-finite-guards", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('non-finite inputs fail fast'"),
     RequiredBehaviorTestMarker("transform-geometry-guards", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('geometry guards report public contract messages'"),
@@ -1218,44 +1254,57 @@ def scan_required_core_make_target_doc_coverage(root: Path) -> list[Finding]:
     return findings
 
 
-def scan_required_host_gate_residual_truth(root: Path) -> list[Finding]:
+def scan_required_doc_truth(
+    root: Path,
+    requirements: tuple[tuple[str, str], ...],
+    finding_code: str,
+    normalize_whitespace: bool = False,
+) -> list[Finding]:
     findings: list[Finding] = []
-    for rel, snippet in REQUIRED_HOST_GATE_RESIDUAL_TRUTH:
+    for rel, snippet in requirements:
         path = root / rel
         if not path.is_file():
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
+        if normalize_whitespace:
+            text = " ".join(text.split())
+            snippet = " ".join(snippet.split())
         if snippet in text:
             continue
         add_finding(
             findings,
-            "missing-required-host-gate-truth",
+            finding_code,
             root,
             path,
             1,
             snippet,
         )
     return findings
+
+
+def scan_required_host_gate_residual_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_HOST_GATE_RESIDUAL_TRUTH,
+        "missing-required-host-gate-truth",
+    )
 
 
 def scan_required_m8_residual_truth(root: Path) -> list[Finding]:
-    findings: list[Finding] = []
-    for rel, snippet in REQUIRED_M8_RESIDUAL_TRUTH:
-        path = root / rel
-        if not path.is_file():
-            continue
-        text = path.read_text(encoding="utf-8", errors="replace")
-        if snippet in text:
-            continue
-        add_finding(
-            findings,
-            "missing-required-m8-truth",
-            root,
-            path,
-            1,
-            snippet,
-        )
-    return findings
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_M8_RESIDUAL_TRUTH,
+        "missing-required-m8-truth",
+    )
+
+
+def scan_required_transform_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_TRANSFORM_DOC_TRUTH,
+        "missing-required-transform-doc-truth",
+        normalize_whitespace=True,
+    )
 
 
 def build_report(root: Path) -> Report:
@@ -1270,6 +1319,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_core_make_target_doc_coverage(root))
     findings.extend(scan_required_host_gate_residual_truth(root))
     findings.extend(scan_required_m8_residual_truth(root))
+    findings.extend(scan_required_transform_doc_truth(root))
 
     source_files = discover_files(root, MATH_SOURCE_GLOBS)
     math_ffi = root / "src/nextpas.core.math.ffi.pas"

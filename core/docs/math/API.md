@@ -216,15 +216,15 @@ composition uses `Translate * Rotate * Scale`, and projection/view/model composi
 `Projection * View * Model`.
 
 `Perspective` is right-handed, looks down `-Z`, and uses NDC `[-1, +1]`. `Camera2D` uses screen-space
-positive Y down, and larger zoom values magnify the view so the same world-space offset maps farther
-in NDC.
+positive Y down. `Camera2D` larger zoom values magnify the view, so the same world-space offset maps
+farther in NDC on both axes.
 `Ortho` requires non-zero width, height, and depth. `Perspective` requires positive FOV, aspect,
 and near plane, plus `far > near`. `LookAt` requires `eye <> target` and an `up` vector that is not
 parallel to forward. `Camera2D` requires positive zoom and positive viewport dimensions.
 Reversed non-zero `Ortho` bounds are valid and flip the corresponding axis; `Camera2D` uses that
 reversed Y range intentionally to keep screen-space `+Y down`.
-`LookAt` normalizes its derived basis, so the magnitude of a valid `up` vector is non-semantic:
-positive rescaling of the same `up` direction does not change the resulting view matrix.
+`LookAt` treats `up` direction as semantic: positive rescaling preserves the view matrix, while
+flipping `up` to the opposite direction changes roll.
 All transform builders reject NaN and infinite inputs with `EArgumentError`, and geometry guard
 failures also raise `EArgumentError`.
 
