@@ -323,6 +323,7 @@ Status:
 - Invalid integer/float ranges fail fast with `EArgumentError`; `NextBool` clamps probability into
   false/true behavior; dice helpers return `0` for non-positive dice/sides; `RollMultiple`
   rejects positive dice/side combinations whose maximum total would overflow `Integer`;
+  `NextGaussian` clamps a zero-state first uniform draw back to a finite deterministic fallback;
   `test_random` now directly locks owner-level messages for reversed and non-finite integer/float
   range validation and for empty/negative/non-finite weighted-choice inputs; weighted choice
   rejects empty, negative, non-finite, and all-zero weights.

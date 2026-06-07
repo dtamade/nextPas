@@ -5,6 +5,7 @@ program test_random;
 uses
   nextpas.core.testing,
   nextpas.core.errors,
+  nextpas.core.math.scalar,
   nextpas.core.math.vec,
   nextpas.core.math.random;
 
@@ -393,6 +394,30 @@ begin
   end;
 end;
 
+procedure TestGaussianClampKeepsZeroStateFinite;
+var
+  Rng: TRandomGen;
+  ZeroState: TRandomState;
+  GaussianValue: Single;
+begin
+  ZeroState.S0 := 0;
+  ZeroState.S1 := 0;
+
+  Rng := TRandomGen.Create(1);
+  try
+    Rng.State := ZeroState;
+    GaussianValue := Rng.NextGaussian;
+    Check(not nextpas.core.math.scalar.IsNaN(GaussianValue),
+      'NextGaussian zero-state clamp avoids NaN');
+    Check(not nextpas.core.math.scalar.IsInfinite(GaussianValue),
+      'NextGaussian zero-state clamp avoids infinity');
+    CheckNear(6.7861404, GaussianValue, 0.000001,
+      'NextGaussian zero-state clamp keeps deterministic finite fallback');
+  finally
+    Rng.Free;
+  end;
+end;
+
 procedure TestNonFiniteParameterValidation;
 var
   Rng: TRandomGen;
@@ -543,6 +568,7 @@ begin
   T.Run('RollMultiple rejects overflowing total', @TestRollMultipleRejectsOverflowingTotal);
   T.Run('probability dice weighted choice and shuffle', @TestProbabilityDiceWeightedAndShuffle);
   T.Run('gaussian and circle vectors', @TestGaussianAndCircleVectors);
+  T.Run('Gaussian zero-state clamp stays finite', @TestGaussianClampKeepsZeroStateFinite);
   T.Run('non-finite parameter validation', @TestNonFiniteParameterValidation);
   T.Run('NextBool rejects non-finite probability', @TestNextBoolRejectsNonFiniteProbability);
   T.Summary;
