@@ -112,6 +112,7 @@ begin
   begin
     LVal := CrockfordVal(AStr[LI]);
     if LVal < 0 then Exit(0);
+    if (LI = 1) and (LVal > 7) then Exit(0);
     Result := (Result shl 5) or UInt64(LVal);
   end;
 end;

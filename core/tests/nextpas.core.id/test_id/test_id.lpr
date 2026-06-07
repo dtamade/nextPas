@@ -663,6 +663,16 @@ begin
   CheckEqual(Int64($FFFFFFFFFFFF), Int64(LMs));
 end;
 
+procedure TestUlidTimestampRejectsOverflowEncoding;
+var
+  LS: string;
+begin
+  LS := '80000000000000000000000000';
+  Check(not UlidIsValid(LS), 'overflow timestamp encoding is not valid');
+  CheckEqual(Int64(0), Int64(UlidTimestampMs(LS)),
+    'overflow timestamp encoding has no timestamp');
+end;
+
 procedure TestUlidLowercaseRoundTrip;
 var LS, LLower: string; LI: Integer; LMs1, LMs2: UInt64;
 begin
@@ -794,6 +804,7 @@ begin
   T.Run('KSUID boundary all-zero', @TestKsuidBoundaryAllZero);
   T.Run('KSUID boundary all-FF', @TestKsuidBoundaryAllFF);
   T.Run('ULID max timestamp', @TestUlidMaxTimestamp);
+  T.Run('ULID timestamp rejects overflow encoding', @TestUlidTimestampRejectsOverflowEncoding);
   T.Run('ULID lowercase roundtrip', @TestUlidLowercaseRoundTrip);
   T.Run('XID high-char parse', @TestXidHighCharParse);
   T.Run('Snowflake extract roundtrip', @TestSnowflakeExtractRoundTrip);
