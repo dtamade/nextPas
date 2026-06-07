@@ -64,7 +64,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   `Scale(Double)` Y-axis finite guard parity and `Camera2D` zero/negative zoom parity.
 - `nextpas.core.math.easing` now provides `TEasingFunction` and the final `Ease*` function family.
 - Easing tests cover every public easing function with endpoints, representative midpoint/branch
-  points, finite out-of-range extrapolation, NaN/Inf rejection, and exact owner-level
+  points, direct `EaseOutBounce` piecewise-branch coverage, finite out-of-range extrapolation,
+  NaN/Inf rejection, and exact owner-level
   `Ease*: T must be finite` messages, and the surface checker rejects direct FPC `Math` usage in
   the easing unit.
 - `nextpas.core.math.random` now provides explicit-state `TRandomGen`, `TRandomState`, and
@@ -300,8 +301,9 @@ Status:
 - Complete for the current final public easing scope.
 - `nextpas.core.math.easing` provides `TEasingFunction`, `EaseLinear`, Quad/Cubic/Quart,
   Expo, Elastic, Back, and Bounce variants.
-- `test_easing` locks endpoints, midpoints, representative `InOut*` branch points, finite
-  out-of-range extrapolation, NaN/Inf rejection, and exact owner-level
+- `test_easing` locks endpoints, midpoints, representative `InOut*` branch points, direct
+  `EaseOutBounce` piecewise-branch coverage, finite out-of-range extrapolation, NaN/Inf
+  rejection, and exact owner-level
   `Ease*: T must be finite` messages; `test_facade` proves root facade exposure.
 - `test_api_surface` rejects a direct `uses Math` dependency in `nextpas.core.math.easing.pas`.
 

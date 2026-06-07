@@ -139,6 +139,14 @@ begin
   CheckNear(0.8828125, EaseInOutBounce(0.75), 'EaseInOutBounce second half');
 end;
 
+procedure TestEaseOutBouncePiecewiseBranches;
+begin
+  CheckNear(0.1181640625, EaseOutBounce(0.125), 'EaseOutBounce first branch');
+  CheckNear(0.765625, EaseOutBounce(0.5), 'EaseOutBounce second branch');
+  CheckNear(0.937744140625, EaseOutBounce(0.8125), 'EaseOutBounce third branch');
+  CheckNear(0.986572265625, EaseOutBounce(0.9375), 'EaseOutBounce fourth branch');
+end;
+
 procedure TestFiniteOutOfRangeInputsExtrapolate;
 const
   Cases: array[0..21] of TOutOfRangeCase = (
@@ -242,6 +250,7 @@ begin
   T := TTestRunner.Create('nextpas.core.math.easing');
   T.Run('polynomial and expo easing', @TestPolynomialAndExpoEasing);
   T.Run('elastic back and bounce easing', @TestElasticBackAndBounceEasing);
+  T.Run('EaseOutBounce piecewise branches', @TestEaseOutBouncePiecewiseBranches);
   T.Run('finite out-of-range inputs extrapolate', @TestFiniteOutOfRangeInputsExtrapolate);
   T.Run('non-finite inputs fail fast', @TestNonFiniteInputsFailFast);
   T.Summary;
