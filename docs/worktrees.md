@@ -203,6 +203,11 @@ source/compile/runtime/CI evidence。不要用单个绿色命令替代所有 tru
 | config | `make focused FOCUS=core/tests/nextpas.core.config/test_config` | format-specific export/import gate when INI, TOML, YAML, examples, or mutation semantics change |
 | http | `make focused FOCUS=core/tests/nextpas.core.http/test_http_client` | parser/writer/router/server/runtime gate matching the touched HTTP surface |
 
+也可以用 `make lane-focused LANE=<platform|mem|system|config|http>` 读取当前默认矩阵并执行
+对应的根目录 `make focused FOCUS=...`。这个入口会打印 `lane`、`truth`、`focus` 和
+`command` 字段，适合模块负责人放进 `Ready` evidence。它是 local/reporting helper；
+CI 目前仍跑 `make test-tooling` 和 `make verify`，不要把 `lane-focused` 当成 CI matrix。
+
 如果某个模块的最佳 gate 不是根目录 `make focused FOCUS=...`，例如 compiler 目前没有
 默认 focused gate、或模块 Makefile 暴露专用目标，报告里必须把例外写清楚，并列出实际命令。
 缺少可用 focused gate 时，不要把 slice 说成可落地；先补 gate，或用 `Needs Review`

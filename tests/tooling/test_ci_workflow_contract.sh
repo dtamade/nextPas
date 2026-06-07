@@ -57,6 +57,8 @@ root_ci_line_number() {
 require_pattern "$CI_WORKFLOW" '^[[:space:]]+run: make test-tooling$' 'root tooling gate'
 require_pattern "$CI_WORKFLOW" '^[[:space:]]+run: make verify$' 'root verify gate'
 reject_pattern "$CI_WORKFLOW" '^[[:space:]]+run: ./build/verify_local[.]sh$' 'direct verify_local bypasses Makefile hygiene'
+reject_pattern "$CI_WORKFLOW" '^[[:space:]]+run: make lane-focused' 'lane-focused is local/reporting tooling, not CI matrix'
+reject_pattern "$CORE_CI_WORKFLOW" '^[[:space:]]+run: make lane-focused' 'core CI must not consume local/reporting lane-focused helper'
 require_workflow_self_path "$CORE_CI_WORKFLOW" '.github/workflows/core-ci.yml' 'core CI self-trigger path'
 
 tooling_line=$(root_ci_line_number '^[[:space:]]+run: make test-tooling$')

@@ -109,6 +109,13 @@ require_skip_exception_contract() {
 
 require_doc_pattern 'Focused Gate Matrix' 'focused gate matrix section'
 require_exact_matrix_lanes
+require_doc_pattern 'make lane-focused LANE=<platform[|]mem[|]system[|]config[|]http>' 'lane-focused helper command'
+require_doc_pattern '`lane`' 'lane-focused lane field'
+require_doc_pattern '`truth`' 'lane-focused truth field'
+require_doc_pattern '`focus`' 'lane-focused focus field'
+require_doc_pattern '`command`' 'lane-focused command field'
+require_doc_pattern 'local/reporting helper' 'lane-focused is local reporting helper'
+require_doc_pattern 'CI.*make test-tooling.*make verify|make test-tooling.*make verify.*CI' 'CI does not consume lane-focused matrix'
 require_doc_pattern 'source-contract' 'source-contract truth category'
 require_doc_pattern 'forced-compile' 'forced compile truth category'
 require_doc_pattern 'runtime' 'runtime truth category'
