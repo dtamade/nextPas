@@ -298,6 +298,27 @@ begin
   end;
 end;
 
+procedure TestWeightedChoiceMaxPickKeepsTailWeightReachable;
+var
+  Rng: TRandomGen;
+  Weights: TWeight2;
+  MaxPickState: TRandomState;
+begin
+  MaxPickState.S0 := High(UInt64);
+  MaxPickState.S1 := 0;
+
+  Rng := TRandomGen.Create(1);
+  try
+    Rng.State := MaxPickState;
+    Weights[0] := 16777216.0;
+    Weights[1] := 1.0;
+    CheckEqual(Int64(1), Int64(Rng.WeightedChoice(Weights)),
+      'WeightedChoice max pick keeps a tiny positive tail weight reachable');
+  finally
+    Rng.Free;
+  end;
+end;
+
 procedure TestInvalidRangesFailFast;
 var
   Rng: TRandomGen;
@@ -654,6 +675,8 @@ begin
   T.Run('WeightedChoice rejects all-zero weights', @TestWeightedChoiceRejectsAllZeroWeights);
   T.Run('WeightedChoice zero-pick skips zero-weight prefixes',
     @TestWeightedChoiceZeroPickSkipsZeroWeightPrefixes);
+  T.Run('WeightedChoice max pick keeps tail weight reachable',
+    @TestWeightedChoiceMaxPickKeepsTailWeightReachable);
   T.Run('invalid ranges fail fast', @TestInvalidRangesFailFast);
   T.Run('RollMultiple rejects overflowing total', @TestRollMultipleRejectsOverflowingTotal);
   T.Run('probability dice weighted choice and shuffle', @TestProbabilityDiceWeightedAndShuffle);

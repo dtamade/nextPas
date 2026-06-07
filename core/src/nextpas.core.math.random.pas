@@ -375,7 +375,7 @@ begin
   if LTotal <= 0.0 then
     raise EArgumentError.Create('TRandomGen.WeightedChoice: at least one weight must be positive');
 
-  LPick := NextFloat * LTotal;
+  LPick := NextDouble * LTotal;
   LAccumulated := 0.0;
   for I := 0 to High(AWeights) do
   begin

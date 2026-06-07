@@ -75,7 +75,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   `TNoiseGen`.
 - Random tests cover deterministic seed vectors, state restore, range boundaries, invalid ranges,
   exact state-forced `[0,1)` / `[AMin, AMax)` boundary behavior, owner-level reversed-range and
-  non-finite-range messages, probability clamp, dice rules,
+  non-finite-range messages, weighted-choice tail reachability under extreme prefix weights,
+  probability clamp, dice rules,
   `RollMultiple` integer-overflow owner boundary, weighted choice including empty/negative and
   non-finite owner-level messages, shuffle, Gaussian, and unit-circle vector helpers.
 - Noise tests cover deterministic permutation repeatability, 1D/2D/3D reference vectors, FBM
