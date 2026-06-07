@@ -288,6 +288,8 @@ var
   LTypesFailureSection: string;
   LTypesInt32LockFreeSection: string;
   LTypesUInt32LockFreeSection: string;
+  LTypesInt32FetchSection: string;
+  LTypesUInt32FetchSection: string;
   LTypesInt64LockFreeSection: string;
   LTypesUInt64LockFreeSection: string;
   LTypesISizeLockFreeSection: string;
@@ -414,6 +416,12 @@ begin
   LTypesUInt32LockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
     'class function TAtomicUInt32.is_lock_free: Boolean;',
     'function TAtomicUInt32.Load(AOrder: memory_order_t): UInt32;');
+  LTypesInt32FetchSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicInt32.FetchAdd(ADelta: Int32; AOrder: memory_order_t): Int32;',
+    'function TAtomicInt32.Increment(AOrder: memory_order_t): Int32;');
+  LTypesUInt32FetchSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicUInt32.FetchAdd(ADelta: UInt32; AOrder: memory_order_t): UInt32;',
+    'function TAtomicUInt32.Increment(AOrder: memory_order_t): UInt32;');
   LTypesInt64LockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
     'class function TAtomicInt64.is_lock_free: Boolean;',
     'function TAtomicInt64.Load(AOrder: memory_order_t): Int64;');
@@ -763,6 +771,9 @@ begin
     '`TAtomicInt32` and `TAtomicUInt32` follow `atomic_is_lock_free_32`; `Increment`/`Decrement` return the new value after adding or subtracting one, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
     'atomic README must document the 32-bit typed-record lock-free and convenience contract');
   CheckContains(LAtomicDocsReadme,
+    '`TAtomicInt32` and `TAtomicUInt32` keep the scalar RMW return-old semantics in typed form: `FetchAdd` / `FetchSub` / `FetchAnd` / `FetchOr` / `FetchXor` return the previous value and publish the updated Int32/UInt32 payload through the wrapper storage.',
+    'atomic README must document the 32-bit typed-record RMW contract');
+  CheckContains(LAtomicDocsReadme,
     '`TAtomicInt64` and `TAtomicUInt64` follow `atomic_is_lock_free_64`; `Increment`/`Decrement` return the new value after adding or subtracting one, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
     'atomic README must document the 64-bit typed-record lock-free and convenience contract');
   CheckContains(LAtomicDocsReadme,
@@ -1013,6 +1024,26 @@ begin
     'typed UInt32 lock-free query must delegate to Int32 runtime truth');
   CheckNotContains(LTypesUInt32LockFreeSection, 'Result := True',
     'typed UInt32 lock-free query must not hardcode a guaranteed-true result');
+  CheckContains(LTypesInt32FetchSection, 'atomic_fetch_add(FValue, ADelta, AOrder);',
+    'typed Int32 FetchAdd must delegate to the Int32 atomic root');
+  CheckContains(LTypesInt32FetchSection, 'atomic_fetch_sub(FValue, ADelta, AOrder);',
+    'typed Int32 FetchSub must delegate to the Int32 atomic root');
+  CheckContains(LTypesInt32FetchSection, 'atomic_fetch_and(FValue, AMask, AOrder);',
+    'typed Int32 FetchAnd must delegate to the Int32 atomic root');
+  CheckContains(LTypesInt32FetchSection, 'atomic_fetch_or(FValue, AMask, AOrder);',
+    'typed Int32 FetchOr must delegate to the Int32 atomic root');
+  CheckContains(LTypesInt32FetchSection, 'atomic_fetch_xor(FValue, AMask, AOrder);',
+    'typed Int32 FetchXor must delegate to the Int32 atomic root');
+  CheckContains(LTypesUInt32FetchSection, 'atomic_fetch_add(FValue, ADelta, AOrder);',
+    'typed UInt32 FetchAdd must delegate to the UInt32 atomic root');
+  CheckContains(LTypesUInt32FetchSection, 'atomic_fetch_sub(FValue, ADelta, AOrder);',
+    'typed UInt32 FetchSub must delegate to the UInt32 atomic root');
+  CheckContains(LTypesUInt32FetchSection, 'atomic_fetch_and(FValue, AMask, AOrder);',
+    'typed UInt32 FetchAnd must delegate to the UInt32 atomic root');
+  CheckContains(LTypesUInt32FetchSection, 'atomic_fetch_or(FValue, AMask, AOrder);',
+    'typed UInt32 FetchOr must delegate to the UInt32 atomic root');
+  CheckContains(LTypesUInt32FetchSection, 'atomic_fetch_xor(FValue, AMask, AOrder);',
+    'typed UInt32 FetchXor must delegate to the UInt32 atomic root');
   CheckContains(LTypesInt64LockFreeSection, 'atomic_is_lock_free_64',
     'typed Int64 lock-free query must delegate to runtime truth');
   CheckNotContains(LTypesInt64LockFreeSection, 'Result := True',
@@ -1558,6 +1589,58 @@ begin
   LMutUInt32^ := 11;
   CheckEqual(Int64(11), Int64(LAtomicUInt32.Load(mo_relaxed)),
     'TAtomicUInt32.GetMut should expose the exclusive-access storage');
+end;
+
+procedure TestAtomicInt32UInt32FetchContract;
+var
+  LAtomicInt32: TAtomicInt32;
+  LAtomicUInt32: TAtomicUInt32;
+begin
+  LAtomicInt32 := TAtomicInt32.Create(10);
+  CheckEqual(Int64(10), Int64(LAtomicInt32.FetchAdd(5, mo_acq_rel)),
+    'TAtomicInt32.FetchAdd should return the previous value');
+  CheckEqual(Int64(15), Int64(LAtomicInt32.Load(mo_acquire)),
+    'TAtomicInt32.FetchAdd should publish the incremented value');
+  CheckEqual(Int64(15), Int64(LAtomicInt32.FetchSub(3, mo_acq_rel)),
+    'TAtomicInt32.FetchSub should return the previous value');
+  CheckEqual(Int64(12), Int64(LAtomicInt32.Load(mo_acquire)),
+    'TAtomicInt32.FetchSub should publish the decremented value');
+  LAtomicInt32.Store($00FF, mo_release);
+  CheckEqual(Int64($00FF), Int64(LAtomicInt32.FetchAnd($000F, mo_acq_rel)),
+    'TAtomicInt32.FetchAnd should return the previous value');
+  CheckEqual(Int64($000F), Int64(LAtomicInt32.Load(mo_acquire)),
+    'TAtomicInt32.FetchAnd should publish the AND result');
+  CheckEqual(Int64($000F), Int64(LAtomicInt32.FetchOr($00F0, mo_acq_rel)),
+    'TAtomicInt32.FetchOr should return the previous value');
+  CheckEqual(Int64($00FF), Int64(LAtomicInt32.Load(mo_acquire)),
+    'TAtomicInt32.FetchOr should publish the OR result');
+  CheckEqual(Int64($00FF), Int64(LAtomicInt32.FetchXor($0F0F, mo_acq_rel)),
+    'TAtomicInt32.FetchXor should return the previous value');
+  CheckEqual(Int64($0FF0), Int64(LAtomicInt32.Load(mo_acquire)),
+    'TAtomicInt32.FetchXor should publish the XOR result');
+
+  LAtomicUInt32 := TAtomicUInt32.Create(20);
+  CheckEqual(Int64(20), Int64(LAtomicUInt32.FetchAdd(6, mo_acq_rel)),
+    'TAtomicUInt32.FetchAdd should return the previous value');
+  CheckEqual(Int64(26), Int64(LAtomicUInt32.Load(mo_acquire)),
+    'TAtomicUInt32.FetchAdd should publish the incremented value');
+  CheckEqual(Int64(26), Int64(LAtomicUInt32.FetchSub(5, mo_acq_rel)),
+    'TAtomicUInt32.FetchSub should return the previous value');
+  CheckEqual(Int64(21), Int64(LAtomicUInt32.Load(mo_acquire)),
+    'TAtomicUInt32.FetchSub should publish the decremented value');
+  LAtomicUInt32.Store($0F0F0F0F, mo_release);
+  CheckEqual(Int64($0F0F0F0F), Int64(LAtomicUInt32.FetchAnd($00FF00FF, mo_acq_rel)),
+    'TAtomicUInt32.FetchAnd should return the previous value');
+  CheckEqual(Int64($000F000F), Int64(LAtomicUInt32.Load(mo_acquire)),
+    'TAtomicUInt32.FetchAnd should publish the AND result');
+  CheckEqual(Int64($000F000F), Int64(LAtomicUInt32.FetchOr($0F0000F0, mo_acq_rel)),
+    'TAtomicUInt32.FetchOr should return the previous value');
+  CheckEqual(Int64($0F0F00FF), Int64(LAtomicUInt32.Load(mo_acquire)),
+    'TAtomicUInt32.FetchOr should publish the OR result');
+  CheckEqual(Int64($0F0F00FF), Int64(LAtomicUInt32.FetchXor($00FF00FF, mo_acq_rel)),
+    'TAtomicUInt32.FetchXor should return the previous value');
+  CheckEqual(Int64($0FF00000), Int64(LAtomicUInt32.Load(mo_acquire)),
+    'TAtomicUInt32.FetchXor should publish the XOR result');
 end;
 
 procedure TestAtomicInt64UInt64Contract;
@@ -2735,6 +2818,7 @@ begin
   T.Run('fafafa-style atomic API', @TestFafafaStyleAtomicApi);
   T.Run('typed atomic record API', @TestAtomicRecordTypes);
   T.Run('typed atomic int32/uint32 contract', @TestAtomicInt32UInt32Contract);
+  T.Run('typed atomic int32/uint32 fetch contract', @TestAtomicInt32UInt32FetchContract);
   T.Run('typed atomic int64/uint64 contract', @TestAtomicInt64UInt64Contract);
   T.Run('typed atomic bool contract', @TestAtomicBoolContract);
   T.Run('typed atomic isize/usize contract', @TestAtomicISizeUSizeContract);
