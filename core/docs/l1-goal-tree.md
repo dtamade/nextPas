@@ -1,6 +1,6 @@
 # nextPas Core Framework — 目标树
 
-> 最后更新: 2026-06-07 | 本轮证据: atomic 29/29 + adjacent lockfree 30/30, heaptrc 0
+> 最后更新: 2026-06-07 | 本轮证据: atomic 29/29 + adjacent lockfree 32/32, heaptrc 0
 
 ## 定位
 
@@ -32,7 +32,7 @@ nextPas Core 是 FreePascal 领域最优秀的框架之一。分三层：
 | `collections` | 20+ 容器 (Vec/HashMap/Deque/BTree/SwissTable/SkipList/LRU/Trie) | ✅ 完成 (422+ tests, SwissTable Get 超越 Rust 7%) |
 | `sync` | 同步原语 (Mutex/RWLock/CondVar/WaitGroup/Once/Semaphore/Barrier/SpinLock) | ✅ 完成 (28 tests, Codex审查) |
 | `thread` | 线程池/WorkStealing/Channel/Future/Cancel | ✅ 完成 (18 tests, Codex审查) |
-| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | ✅ 完成/强化中 (30 default + 30 debug + 8 stress, MPMC single-slot sequence states, managed-type rejection cleanup, tagged-ptr ABA) |
+| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | ✅ 完成/强化中 (32 default + 32 debug + 8 stress, Close waiter wake contract, MPMC single-slot sequence states, managed-type rejection cleanup, tagged-ptr ABA) |
 | `async` | 事件循环 (io_uring+epoll双后端, timer heap, timeout) | ✅ 完成 (31 tests, Codex审查5项修复) |
 | `io` | 流抽象 (IReader/IWriter/IStream/Buffer/Scanner/Pipe) | ✅ 完成 (46 tests, Go parity) |
 | `time` | DateTime/Duration/Deadline/Sleep/Timer/Ticker/Period | ✅ 完成 (Wave 1-5, 49 tests, ISO 8601) |

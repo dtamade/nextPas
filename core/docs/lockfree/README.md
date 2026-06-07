@@ -107,9 +107,11 @@ count reclamation；安全边界依赖 single-consumer contract，以及销毁�
 
 `TSpscQueue<T>` 和 `TMpmcQueue<T>` 的 `Close` 会设置 closed flag 并唤醒 data/space waiters。close 后
 producer 侧等待操作应返回失败，consumer 侧可继续 drain 已发布元素。
+`TSpscQueue<T>.Close` wakes already-blocked `EnqueueTimeout` / `DequeueTimeout` calls so a closed queue stops waiting promptly instead of sleeping until the full timeout.
 
 `TMpscQueue<T>` 的 `Close` 不会让 `Enqueue` 自动失败。它只唤醒等待中的 consumer，并让
 `DequeueWait` / `DequeueTimeout` 在当前无元素时返回失败。销毁前必须满足：
+`TMpscQueue<T>.Close` wakes already-blocked `DequeueTimeout` consumers so a closed-empty queue stops waiting promptly.
 
 1. 已调用 `Close`。
 2. producer 已停止并 join。
