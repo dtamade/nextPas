@@ -41,8 +41,23 @@ require_output_line() {
   fi
 }
 
+require_list_focus_matches_lane() {
+  lane_name="$1"
+  focus_path="$2"
+
+  "$SCRIPT_UNDER_TEST" --lane "$lane_name" --print-command >"$TMP_ROOT/$lane_name.out"
+  if ! grep -qx "focus=$focus_path" "$TMP_ROOT/$lane_name.out"; then
+    printf 'lane-focused --list focus differs from --lane output for %s\n' "$lane_name" >&2
+    cat "$TMP_ROOT/$lane_name.out" >&2
+    exit 1
+  fi
+}
+
 expect_failure "missing lane" "$SCRIPT_UNDER_TEST" --print-command
 grep -q 'LANE is required' "$TMP_ROOT/failure.err"
+
+expect_failure "list with lane" "$SCRIPT_UNDER_TEST" --list --lane system
+grep -q -- '--list cannot be combined with --lane' "$TMP_ROOT/failure.err"
 
 expect_failure "unknown lane" "$SCRIPT_UNDER_TEST" --lane unknown --print-command
 grep -q 'unknown lane: unknown' "$TMP_ROOT/failure.err"
@@ -79,5 +94,49 @@ if "$SCRIPT_UNDER_TEST" --lane hash --print-command >"$TMP_ROOT/hash.out" 2>"$TM
   exit 1
 fi
 grep -q 'unknown lane: hash' "$TMP_ROOT/hash.err"
+
+"$SCRIPT_UNDER_TEST" --list >"$TMP_ROOT/list.out"
+if [ "$(wc -l <"$TMP_ROOT/list.out" | tr -d ' ')" != "5" ]; then
+  printf 'lane-focused --list should print exactly five default lane rows\n' >&2
+  cat "$TMP_ROOT/list.out" >&2
+  exit 1
+fi
+
+awk -F '\t' '
+  BEGIN {
+    expected["platform"] = 1
+    expected["mem"] = 1
+    expected["system"] = 1
+    expected["config"] = 1
+    expected["http"] = 1
+  }
+  NF != 3 {
+    printf "lane-focused --list row is not lane/truth/focus: %s\n", $0 > "/dev/stderr"
+    exit 1
+  }
+  $1 == "compiler" {
+    printf "lane-focused --list must not include compiler\n" > "/dev/stderr"
+    exit 1
+  }
+  !($1 in expected) {
+    printf "unexpected lane-focused --list lane: %s\n", $1 > "/dev/stderr"
+    exit 1
+  }
+  {
+    seen[$1] = 1
+  }
+  END {
+    for (lane in expected) {
+      if (!(lane in seen)) {
+        printf "missing lane-focused --list lane: %s\n", lane > "/dev/stderr"
+        exit 1
+      }
+    }
+  }
+' "$TMP_ROOT/list.out"
+
+while IFS="$(printf '\t')" read -r lane_name truth_kind focus_path; do
+  require_list_focus_matches_lane "$lane_name" "$focus_path"
+done <"$TMP_ROOT/list.out"
 
 printf 'lane-focused-gate=pass\n'
