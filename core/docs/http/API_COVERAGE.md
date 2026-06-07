@@ -29,10 +29,16 @@
     `nextpas.core.http.NewHttpClient(Options)` / `NewHttpServer(Handler, Options)`
     这两条 facade consumer path 也会吃到同一套 future default 解析。以上都只证明
     registry readiness，不声明任何内建 H2/H3 protocol implementation 已存在。
-  - 真实缺口：client 侧需要比 `Get/Post/...` shortcut 更自然的自定义 request
-    construction。Go `net/http` 和 Rust reqwest/hyper 生态都让调用方清晰表达
-    method、headers、body 和 body length / ownership；旧 surface 要么只能用
-    shortcut，要么需要直接构造 concrete `THttpRequest`。
+  - 已补齐：client 侧核心 custom request construction gap 已实质收口。当前
+    `NewRequest` public surface 已覆盖 `TUrl` / URL string、headers-only、
+    nil-literal compatibility shim、`IReader + ContentLength`、Pascal `string`
+    body、`TBytes` body、显式 `Content-Type` body helper、以及“不先手造 headers”
+    的 convenience overload；调用方不必再直接构造 concrete `THttpRequest`，
+    就能清晰表达 method、headers、body 与 body length / ownership 形状。
+  - 暂不做：完整 fluent `IHttpRequestBuilder`、per-request timeout / redirect
+    override、form/json helper family、streaming/chunked request body ownership、
+    response charset decoding / sniffing 等扩展仍属于刻意未认领范围；这些能力
+    只有在 contract 足够清晰、能稳定公开时才继续扩面。
   - 本轮补齐：新增 `NewRequest(Method, Url, Headers, Body, ContentLength)` public
     helper，经 `nextpas.core.http` facade 转发。nil headers 会创建空 header set；
     body/positive length 会写入 `content-length`；negative content length 会抛
@@ -506,8 +512,14 @@
 | H1 outbound buffer                             | in-memory response buffering, full drain through `IWriter`, resumable nonblocking `TryDrainTo`, benchmark smoke for 1 KiB write + in-memory drain                                | focused               | `test_http_h1writer`, `test_http_server`, `test_http_benchmarks`                  | Add real-socket drain benchmark only when it can avoid scheduler-noise-heavy conclusions.                                  |
 | H1 chunked writer                              | chunk framing, hex length, zero-length write, terminal chunk, write-after-final, short-write retry to complete framing/body, zero-progress write failure                           | focused               | `test_http_h1chunked`, `test_http_h1writer`, `test_http_server`                   | Add malformed chunk parser coverage in parser/security suites rather than expanding writer helper scope.                  |
 
-## Highest-Priority Gaps
+## Highest-Priority Remaining Work
 
-1. single / multiple `Trailer` declaration contract is now locked; only revisit this seam if runtime later intends to expose parsed trailer fields or introduce a dedicated trailer API.
-2. decide later whether facade should stop at interface/helper surface, or also re-export selected concrete implementation types; static / websocket helper boundary itself is now covered.
-3. after-interim trailer EOF 邻接链、keep-alive request-tail contract、以及 non-`101` informational response contract 均已闭合；后续继续 tightening 时只补仍缺 direct proof 的真实边角，不再机械复制同型 parity case。
+1. runtime/socket overhead 仍需继续做 isolate-first characterization。parser、
+   lazy-header、writer、outbound 与 full-chain benchmark 面已存在，下一批更值得做
+   的是真实 remaining runtime cost，而不是过早追加最终排名表。
+2. client ergonomics 只在出现真实缺口时继续扩面。当前 request construction、
+   response read/release、redirect / timeout fail-fast 语义已足够强；后续若要引入
+   builder、per-request policy 或更高层 body helper，必须先把稳定 contract 写清楚。
+3. static / WebSocket / H2-H3 继续维持清晰边界：static 与 WebSocket 仍停在
+   helper-level public surface，H2/H3 仍只推进 registry / transport seam。后续
+   不再靠机械 negative-case 复制制造“进展”，而只补真实行为缺口或 future seam 风险。
