@@ -12914,3 +12914,40 @@ Hello from nextPas!
     `request ` filter group
   - this is benchmark-truth tightening only; it does not claim a new parser or
     request optimization
+
+## Session: 2026-06-07 h1 url-parse request-target filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` request-target-specialized URL parse row
+    into the focused benchmark gate
+  - keep the slice limited to URL parse benchmark truth, not URL/request
+    implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch URL production code, request/runtime behavior, comparator
+    binaries, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `95 total, 95 passed, 0 failed`
+    - new focused row:
+      `H1 parser benchmark url-parse request-target filter env`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=url parse request-target origin-form`
+  - the focused smoke locks:
+    - `bench_filter=url parse request-target origin-form`
+    - `adapter cost: url parse request-target origin-form`
+    - filtered output does not include
+      `adapter cost: url parse generic origin-form`
+    - filtered output does not include
+      `adapter cost: request direct Path access`
+    - filtered output does not include unrelated metadata-cache rows
+- Outcome:
+  - the request-target-specialized URL parse row is now a durable standalone
+    microbenchmark instead of only riding along inside the broader
+    `url parse` filter group
+  - this is benchmark-truth tightening only; it does not claim a new URL or
+    parser optimization

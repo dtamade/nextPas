@@ -5794,3 +5794,26 @@
   combined direct request path/query projection 现在有了更窄、更适合后续
   URL/request-target 成本隔离的 standalone microbenchmark proof，而不是只附着在
   更宽的 `request ` filter 组合里。
+
+## 2026-06-07 h1 url-parse request-target filter focused smoke findings
+
+- `url parse request-target origin-form` 之前虽然已有独立 row，但 focused gate 仍只证明
+  宽 `url parse` filter 会一起输出 `generic origin-form` 与
+  `request-target origin-form`。
+- 这会留下 parse-only 成本中心的 truth gap：
+  后续如果只想盯住 request-target-specialized parse path，本来的 focused gate
+  还不能证明 `url parse request-target origin-form` 这条 row 能单独稳定存在，也不能
+  证明过滤器不会顺手带出 `url parse generic origin-form`、request projection row
+  或无关的 metadata-cache row。
+- 本轮继续保持窄刀，没有碰 URL/request 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=url parse request-target origin-form` 提升进 focused gate
+  - 锁住 `bench_filter=url parse request-target origin-form`
+  - 锁住 `adapter cost: url parse request-target origin-form`
+  - 锁住 filtered output 不包含
+    `adapter cost: url parse generic origin-form`
+  - 也不包含 `adapter cost: request direct Path access`
+  - 也不包含无关的 `request metadata cached expect+cl`
+- 这轮的价值仍是 benchmark truth：
+  request-target-specialized URL parse path 现在有了更窄、更适合后续 parse-only
+  成本隔离的 standalone microbenchmark proof，而不是只附着在更宽的 `url parse`
+  filter 组合里。
