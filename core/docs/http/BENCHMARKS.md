@@ -2574,6 +2574,9 @@ the default no-URL nextPas row.
 The snapshot helper now locks the same `--nextpas-backend epoll + --workload url_path`
 combination, so the durable Markdown artifact preserves the epoll request-target
 comparison instead of only the default no-URL backend row.
+The raw comparison runner now also locks `--nextpas-backend epoll + --workload response_1k`,
+so epoll backend evidence reaches the public body-bearing comparison seam instead
+of stopping at no-URL or request-target-only rows.
 
 Fresh local `no_url` 50k/4 3-run summary:
 

@@ -12420,3 +12420,38 @@ Hello from nextPas!
     backend row
   - this is coverage tightening only; it does not claim a backend ranking or a
     new snapshot schema
+
+## Session: 2026-06-07 runner epoll response-1k focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the raw runner `--nextpas-backend epoll + --workload response_1k`
+    combination into the focused benchmark gate
+  - keep the slice limited to durable backend evidence on the public
+    body-bearing comparison seam, not runner or server implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch runner behavior, server/runtime behavior, comparator
+    binaries, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `82 total, 82 passed, 0 failed`
+    - new focused row:
+      `server comparison runner epoll response_1k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `run_server_comparison.sh --requests 8 --threads 1 --workload response_1k --nextpas-backend epoll`
+  - the focused smoke locks:
+    - `nextpas_backend=epoll`
+    - `workload=response_1k`
+    - nextPas row reports `backend=epoll`
+    - `client_read_mode=header_plus_content_length`
+    - `response_body_bytes=1024`
+    - Go row still reports `client_read_mode=http_client_body_drain`
+- Outcome:
+  - epoll backend evidence now reaches the public body-bearing raw comparison
+    seam instead of stopping at no-URL or request-target-only rows
+  - this is coverage tightening only; it does not claim a backend ranking or a
+    new comparison schema

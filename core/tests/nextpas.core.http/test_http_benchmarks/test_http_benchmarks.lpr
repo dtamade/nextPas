@@ -2668,6 +2668,64 @@ begin
   CheckServerBenchmarkOutput(LReport, 'rust_std', '8', '1', 'url_path');
 end;
 
+procedure TestServerComparisonRunnerEpollResponse1KSmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LReportPath: string;
+  LReport: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  {$IFNDEF LINUX}
+  Exit;
+  {$ENDIF}
+
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath),
+    'server comparison epoll response_1k runner exists');
+  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_epoll_response_1k_smoke.txt');
+  DeleteFile(LReportPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--workload', 'response_1k', '--nextpas-backend', 'epoll',
+    '--output', LReportPath], LRootDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison epoll response_1k runner exit code: ' + LOutput);
+  CheckNextpasBackendHeader(LOutput, 'epoll', 'comparison epoll response_1k');
+  CheckContains(LOutput, 'workload=response_1k',
+    'comparison epoll response_1k workload marker');
+  CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1', 'response_1k',
+    'epoll');
+  CheckServerBenchmarkOutput(LOutput, 'go', '8', '1', 'response_1k');
+  CheckServerBenchmarkOutput(LOutput, 'rust_std', '8', '1', 'response_1k');
+  CheckContains(LOutput, 'client_read_mode=header_plus_content_length',
+    'comparison epoll response_1k direct-read marker');
+  CheckContains(LOutput, 'client_read_mode=http_client_body_drain',
+    'comparison epoll response_1k Go read marker');
+  CheckContains(LOutput, 'response_body_bytes=1024',
+    'comparison epoll response_1k body-bytes marker');
+
+  Check(FileExists(LReportPath),
+    'server comparison epoll response_1k report exists');
+  LReport := LoadTextFile(LReportPath);
+  CheckNextpasBackendHeader(LReport, 'epoll', 'report epoll response_1k');
+  CheckContains(LReport, 'workload=response_1k',
+    'report epoll response_1k workload marker');
+  CheckServerBenchmarkOutput(LReport, 'nextpas', '8', '1', 'response_1k',
+    'epoll');
+  CheckServerBenchmarkOutput(LReport, 'go', '8', '1', 'response_1k');
+  CheckServerBenchmarkOutput(LReport, 'rust_std', '8', '1', 'response_1k');
+  CheckContains(LReport, 'client_read_mode=header_plus_content_length',
+    'report epoll response_1k direct-read marker');
+  CheckContains(LReport, 'client_read_mode=http_client_body_drain',
+    'report epoll response_1k Go read marker');
+  CheckContains(LReport, 'response_body_bytes=1024',
+    'report epoll response_1k body-bytes marker');
+end;
+
 procedure TestServerComparisonSnapshotSmallSmoke;
 var
   LRootDir: string;
@@ -3664,6 +3722,8 @@ begin
     @TestServerComparisonRunnerEpollSmoke);
   T.Run('server comparison runner epoll url_path smoke',
     @TestServerComparisonRunnerEpollUrlPathSmoke);
+  T.Run('server comparison runner epoll response_1k smoke',
+    @TestServerComparisonRunnerEpollResponse1KSmoke);
   T.Run('server comparison snapshot small smoke',
     @TestServerComparisonSnapshotSmallSmoke);
   T.Run('server comparison snapshot url_path smoke',
