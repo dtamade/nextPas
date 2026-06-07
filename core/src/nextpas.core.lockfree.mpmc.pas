@@ -10,6 +10,9 @@ uses
 type
   generic TMpmcQueueImpl<T> = class
   private
+    class function EmptySequence(const APos: Int64): Int64; static; inline;
+    class function FullSequence(const APos: Int64): Int64; static; inline;
+  private
     type
       TSlot = record
         Sequence: Int64;
@@ -55,6 +58,16 @@ uses
   nextpas.core.lockfree.wait,
   nextpas.core.time.base;
 
+class function TMpmcQueueImpl.EmptySequence(const APos: Int64): Int64;
+begin
+  Result := APos * 2;
+end;
+
+class function TMpmcQueueImpl.FullSequence(const APos: Int64): Int64;
+begin
+  Result := (APos * 2) + 1;
+end;
+
 constructor TMpmcQueueImpl.Create(const ACapacity: PtrUInt);
 var
   LCap: PtrUInt;
@@ -70,7 +83,7 @@ begin
   FMask := LCap - 1;
   SetLength(FSlots, LCap);
   for LI := 0 to LCap - 1 do
-    FSlots[LI].Sequence := Int64(LI);
+    FSlots[LI].Sequence := EmptySequence(Int64(LI));
   FEnqueuePos := 0;
   FDequeuePos := 0;
   FClosed := 0;
@@ -84,7 +97,7 @@ function TMpmcQueueImpl.TryEnqueue(const AValue: T): Boolean;
 var
   LPos: Int64;
   LIdx: PtrUInt;
-  LSeq, LDiff: Int64;
+  LSeq, LExpected, LDiff: Int64;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
@@ -93,13 +106,14 @@ begin
     LPos := AtomicLoad64(FEnqueuePos, moRelaxed);
     LIdx := PtrUInt(LPos) and FMask;
     LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
-    LDiff := LSeq - LPos;
+    LExpected := EmptySequence(LPos);
+    LDiff := LSeq - LExpected;
     if LDiff = 0 then
     begin
       if AtomicCompareExchange64(FEnqueuePos, LPos, LPos + 1, moRelaxed) = LPos then
       begin
         FSlots[LIdx].Value := AValue;
-        AtomicStore64(FSlots[LIdx].Sequence, LPos + 1, moRelease);
+        AtomicStore64(FSlots[LIdx].Sequence, FullSequence(LPos), moRelease);
         LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
         Result := True;
         Exit;
@@ -116,21 +130,22 @@ function TMpmcQueueImpl.TryDequeue(out AValue: T): Boolean;
 var
   LPos: Int64;
   LIdx: PtrUInt;
-  LSeq, LDiff: Int64;
+  LSeq, LExpected, LDiff: Int64;
 begin
   while True do
   begin
     LPos := AtomicLoad64(FDequeuePos, moRelaxed);
     LIdx := PtrUInt(LPos) and FMask;
     LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
-    LDiff := LSeq - (LPos + 1);
+    LExpected := FullSequence(LPos);
+    LDiff := LSeq - LExpected;
     if LDiff = 0 then
     begin
       if AtomicCompareExchange64(FDequeuePos, LPos, LPos + 1, moRelaxed) = LPos then
       begin
         AValue := FSlots[LIdx].Value;
         FSlots[LIdx].Value := Default(T);
-        AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease);
+        AtomicStore64(FSlots[LIdx].Sequence, EmptySequence(LPos + Int64(FCapacity)), moRelease);
         LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
         Result := True;
         Exit;

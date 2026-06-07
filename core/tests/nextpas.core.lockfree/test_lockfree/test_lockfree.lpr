@@ -190,10 +190,29 @@ begin
   LQ.Free;
 end;
 
+var
+  GMpmcCloseWakeQ: TIntMpmc;
+  GMpmcCloseWakeStarted: Int32;
+  GMpmcCloseWakeResult: Int32;
+
+function MpmcCloseWakeProducer(AArg: Pointer): Pointer; cdecl;
+begin
+  Result := nil;
+  AtomicStore32(GMpmcCloseWakeStarted, 1, moRelease);
+  if GMpmcCloseWakeQ.EnqueueTimeout(2, 5000000000) then
+    AtomicStore32(GMpmcCloseWakeResult, 1, moRelease)
+  else
+    AtomicStore32(GMpmcCloseWakeResult, 0, moRelease);
+end;
+
 procedure TestMpmcClose;
 var
   LQ: TIntMpmc;
   LV: Integer;
+  LBlockedProducer: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LElapsedMs: QWord;
+  LSpin: Integer;
 begin
   LQ := TIntMpmc.Create(4);
   LQ.TryEnqueue(1);
@@ -205,6 +224,35 @@ begin
   Check(LQ.TryDequeue(LV), 'drain after close');
   CheckEqual(Int64(1), Int64(LV));
   Check(not LQ.DequeueWait(LV), 'dequeue wait false on closed');
+  LQ.Free;
+
+  LQ := TIntMpmc.Create(1);
+  Check(LQ.TryEnqueue(1), 'fill queue before blocked producer close');
+  GMpmcCloseWakeQ := LQ;
+  AtomicStore32(GMpmcCloseWakeStarted, 0, moRelease);
+  AtomicStore32(GMpmcCloseWakeResult, -1, moRelease);
+  platform_thread_create(LBlockedProducer, @MpmcCloseWakeProducer, nil);
+  for LSpin := 1 to 1000 do
+  begin
+    if AtomicLoad32(GMpmcCloseWakeStarted, moAcquire) <> 0 then
+      Break;
+    platform_thread_sleep_ns(1000000);
+  end;
+  CheckEqual(Int64(1), Int64(AtomicLoad32(GMpmcCloseWakeStarted, moAcquire)),
+    'blocked producer thread must start before close');
+  platform_thread_sleep_ns(5000000);
+  CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
+    'blocked EnqueueTimeout should still be pending before close');
+  LElapsedMs := GetTickCount64;
+  LQ.Close;
+  platform_thread_join(LBlockedProducer, LRetVal);
+  LElapsedMs := GetTickCount64 - LElapsedMs;
+  CheckEqual(Int64(0), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
+    'blocked EnqueueTimeout woken by close');
+  Check(LElapsedMs < 1000, 'blocked EnqueueTimeout should return promptly after close');
+  Check(LQ.TryDequeue(LV), 'drain queued item after blocked producer close');
+  CheckEqual(Int64(1), Int64(LV));
+  Check(not LQ.TryDequeue(LV), 'blocked producer wake must not publish extra item after close');
   LQ.Free;
 end;
 
@@ -335,6 +383,51 @@ begin
   end;
   LDeque.Free;
   Check(LGot, 'deque rejects capacity above maximum power-of-two');
+end;
+
+procedure TestMpmcSingleSlot;
+var
+  LQ: TIntMpmc;
+  LV: Integer;
+  LIn: array[0..1] of Integer;
+  LOut: array[0..1] of Integer;
+  LN: PtrUInt;
+begin
+  LQ := TIntMpmc.Create(1);
+  CheckEqual(Int64(1), Int64(LQ.Capacity), 'single-slot capacity');
+  CheckEqual(Int64(0), Int64(LQ.ApproxCount), 'single-slot initial count');
+  Check(LQ.IsEmpty, 'single-slot initially empty');
+  Check(not LQ.IsFull, 'single-slot initially not full');
+  Check(LQ.TryEnqueue(7), 'single-slot enqueue');
+  CheckEqual(Int64(1), Int64(LQ.ApproxCount), 'single-slot count after enqueue');
+  Check(not LQ.IsEmpty, 'single-slot not empty after enqueue');
+  Check(LQ.IsFull, 'single-slot full after enqueue');
+  Check(not LQ.TryEnqueue(8), 'single-slot full rejects second enqueue');
+  CheckEqual(Int64(1), Int64(LQ.ApproxCount), 'single-slot failed enqueue preserves count');
+  Check(LQ.TryDequeue(LV), 'single-slot dequeue');
+  CheckEqual(Int64(7), Int64(LV));
+  CheckEqual(Int64(0), Int64(LQ.ApproxCount), 'single-slot count after dequeue');
+  Check(LQ.IsEmpty, 'single-slot empty after dequeue');
+  Check(not LQ.IsFull, 'single-slot not full after dequeue');
+  Check(not LQ.TryDequeue(LV), 'single-slot empty after drain');
+  Check(LQ.TryEnqueue(9), 'single-slot enqueue after recycle');
+  Check(LQ.TryDequeue(LV), 'single-slot dequeue after recycle');
+  CheckEqual(Int64(9), Int64(LV));
+  Check(LQ.EnqueueTimeout(11, 1000000), 'single-slot enqueue timeout immediate');
+  Check(not LQ.EnqueueTimeout(12, 1000000), 'single-slot enqueue timeout on full');
+  Check(LQ.DequeueTimeout(LV, 1000000), 'single-slot dequeue timeout immediate');
+  CheckEqual(Int64(11), Int64(LV));
+  Check(not LQ.DequeueTimeout(LV, 1000000), 'single-slot dequeue timeout on empty');
+  LIn[0] := 21;
+  LIn[1] := 22;
+  LN := LQ.EnqueueBatch(LIn);
+  CheckEqual(Int64(1), Int64(LN), 'single-slot batch enqueue only published one item');
+  Check(LQ.IsFull, 'single-slot full after batch enqueue');
+  LN := LQ.DequeueBatch(LOut, 2);
+  CheckEqual(Int64(1), Int64(LN), 'single-slot batch dequeue only returned one item');
+  CheckEqual(Int64(21), Int64(LOut[0]));
+  Check(LQ.IsEmpty, 'single-slot empty after batch dequeue');
+  LQ.Free;
 end;
 
 procedure TestStackCapacityIndexLimitReject;
@@ -789,6 +882,7 @@ const
   LockFreeSourcePath = '../../../src/nextpas.core.lockfree.pas';
   LockFreeDocsReadmePath = '../../../docs/lockfree/README.md';
   LockFreeTestSourcePath = 'test_lockfree.lpr';
+  LockFreeStressTestSourcePath = '../test_lockfree_stress/test_lockfree_stress.lpr';
   LockFreeTestMakefilePath = 'Makefile';
   SpscSourcePath = '../../../src/nextpas.core.lockfree.spsc.pas';
   MpmcSourcePath = '../../../src/nextpas.core.lockfree.mpmc.pas';
@@ -805,6 +899,7 @@ var
   LLockFreeSource: string;
   LDocsReadme: string;
   LTestSource: string;
+  LStressTestSource: string;
   LTestMakefile: string;
   LSpscSource: string;
   LMpmcSource: string;
@@ -823,6 +918,8 @@ var
   LSpscBatchTestSection: string;
   LMpmcBatchSourceSection: string;
   LMpmcBatchTestSection: string;
+  LMpmcSingleSlotTestSection: string;
+  LMpmcSingleSlotStressSection: string;
   LMpscBasicTestSection: string;
   LMpscCloseProducerTestSection: string;
   LMpscDestroyDrainTestSection: string;
@@ -833,6 +930,8 @@ begin
     'lockfree README must exist as the module documentation entrypoint');
   Check(FileExists(LockFreeTestMakefilePath),
     'lockfree test Makefile must exist as the focused verification entrypoint');
+  Check(FileExists(LockFreeStressTestSourcePath),
+    'lockfree stress test source must exist as the stress verification entrypoint');
   Check(FileExists(BenchMakefilePath),
     'lockfree benchmark Makefile must exist as the benchmark verification entrypoint');
   Check(FileExists(BenchSourcePath),
@@ -847,6 +946,7 @@ begin
   LLockFreeSource := ReadUtf8TextFile(LockFreeSourcePath);
   LDocsReadme := ReadUtf8TextFile(LockFreeDocsReadmePath);
   LTestSource := ReadUtf8TextFile(LockFreeTestSourcePath);
+  LStressTestSource := ReadUtf8TextFile(LockFreeStressTestSourcePath);
   LTestMakefile := ReadUtf8TextFile(LockFreeTestMakefilePath);
   LSpscSource := ReadUtf8TextFile(SpscSourcePath);
   LMpmcSource := ReadUtf8TextFile(MpmcSourcePath);
@@ -883,6 +983,14 @@ begin
     'procedure TestMpmcBatch;',
     'procedure TestMpmcCapacity;',
     'MPMC batch test source section');
+  LMpmcSingleSlotTestSection := ExtractSection(LTestSource,
+    'procedure TestMpmcSingleSlot;',
+    'procedure TestStackCapacityIndexLimitReject;',
+    'MPMC single-slot test source section');
+  LMpmcSingleSlotStressSection := ExtractSection(LStressTestSource,
+    'procedure TestMpmcSingleSlotContention;',
+    '{ TEST 2: Stack ABA Stress',
+    'MPMC single-slot stress test source section');
   LMpscBasicTestSection := ExtractSection(LTestSource,
     'procedure TestMpscBasic;',
     'procedure TestMpscCloseProducerContract;',
@@ -987,6 +1095,9 @@ begin
   CheckContains(LDocsReadme,
     '`TMpmcQueue<T>.EnqueueBatch` returns 0 after `Close` and must not publish new items.',
     'lockfree README must document MPMC batch close semantics');
+  CheckContains(LDocsReadme,
+    '`TMpmcQueue<T>` accepts requested capacity 1; its per-slot sequence token uses separate empty/full states so a single-slot queue still distinguishes full from empty.',
+    'lockfree README must document single-slot MPMC support');
   CheckContains(LDocsReadme,
     '`TMpscQueue<T>` permits multiple producers and exactly one consumer; `Enqueue` does not observe `Close`, so callers must stop and join producers before destroy.',
     'lockfree README must document the MPSC caller-role and destroy contract');
@@ -1107,18 +1218,71 @@ begin
     'SPSC batch enqueue must reject new items after close');
   CheckContains(LSpscBatchTestSection, 'batch enqueue after close rejected',
     'SPSC batch behavior test must cover close rejection');
-  CheckContains(LMpmcSource, 'FSlots[LI].Sequence := Int64(LI)',
-    'MPMC queue must initialize per-slot sequence numbers');
-  CheckContains(LMpmcSource, 'AtomicStore64(FSlots[LIdx].Sequence, LPos + 1, moRelease)',
+  CheckContains(LMpmcSource, 'class function EmptySequence(const APos: Int64): Int64; static; inline;',
+    'MPMC queue must define the empty-state slot sequence helper');
+  CheckContains(LMpmcSource, 'class function FullSequence(const APos: Int64): Int64; static; inline;',
+    'MPMC queue must define the full-state slot sequence helper');
+  CheckNotContains(LMpmcSource, 'function MpmcEmptySequence',
+    'MPMC sequence helpers must stay private to the generic implementation class');
+  CheckContains(LMpmcSource, 'FSlots[LI].Sequence := EmptySequence(Int64(LI));',
+    'MPMC queue must initialize slot sequence tokens with empty-state encoding');
+  CheckContains(LMpmcSource, 'LExpected := EmptySequence(LPos);',
+    'MPMC enqueue must compare against the empty-state token for the target position');
+  CheckContains(LMpmcSource, 'AtomicStore64(FSlots[LIdx].Sequence, FullSequence(LPos), moRelease)',
     'MPMC enqueue linearization must publish slot sequence with release ordering');
-  CheckContains(LMpmcSource, 'AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease)',
+  CheckContains(LMpmcSource, 'LExpected := FullSequence(LPos);',
+    'MPMC dequeue must compare against the full-state token for the target position');
+  CheckContains(LMpmcSource, 'AtomicStore64(FSlots[LIdx].Sequence, EmptySequence(LPos + Int64(FCapacity)), moRelease)',
     'MPMC dequeue must recycle slot sequence with release ordering');
+  CheckContains(LMpmcSingleSlotTestSection, 'TIntMpmc.Create(1);',
+    'MPMC single-slot test must construct a single-slot queue');
+  CheckContains(LMpmcSingleSlotTestSection, 'single-slot capacity',
+    'MPMC single-slot test must cover the public capacity surface');
+  CheckContains(LMpmcSingleSlotTestSection, 'single-slot count after enqueue',
+    'MPMC single-slot test must cover ApproxCount after publishing one item');
+  CheckContains(LMpmcSingleSlotTestSection, 'single-slot full after enqueue',
+    'MPMC single-slot test must cover IsFull after publishing one item');
+  CheckContains(LMpmcSingleSlotTestSection, 'single-slot enqueue after recycle',
+    'MPMC single-slot test must prove the slot recycles after a dequeue');
+  CheckContains(LMpmcSingleSlotTestSection, 'single-slot enqueue timeout on full',
+    'MPMC single-slot test must cover EnqueueTimeout on a full single-slot queue');
+  CheckContains(LMpmcSingleSlotTestSection, 'single-slot dequeue timeout on empty',
+    'MPMC single-slot test must cover DequeueTimeout on an empty single-slot queue');
+  CheckContains(LMpmcSingleSlotTestSection, 'single-slot batch enqueue only published one item',
+    'MPMC single-slot test must cover EnqueueBatch on a single-slot queue');
+  CheckContains(LMpmcSingleSlotTestSection, 'single-slot batch dequeue only returned one item',
+    'MPMC single-slot test must cover DequeueBatch on a single-slot queue');
+  CheckContains(LStressTestSource,
+    'T.Run(''MPMC single-slot 2P+2C exactly-once'', @TestMpmcSingleSlotContention);',
+    'MPMC stress suite must run the single-slot contention test');
+  CheckContains(LMpmcSingleSlotStressSection, 'TIntMpmc.Create(1);',
+    'MPMC stress test must construct a single-slot queue');
+  CheckContains(LMpmcSingleSlotStressSection, 'GMpmcSingleSlotOutOfRangeCount',
+    'MPMC stress test must count out-of-range single-slot messages defensively');
+  CheckContains(LMpmcSingleSlotStressSection, 'single-slot contention no out-of-range messages',
+    'MPMC stress test must prove single-slot contention has no out-of-range messages');
+  CheckContains(LMpmcSingleSlotStressSection, 'single-slot contention no missing messages',
+    'MPMC stress test must prove single-slot contention has no missing messages');
+  CheckContains(LMpmcSingleSlotStressSection, 'single-slot contention no duplicate messages',
+    'MPMC stress test must prove single-slot contention has no duplicate messages');
+  CheckNotContains(LMpmcSource, 'TMpmcQueue: capacity must be >= 2',
+    'MPMC queue must not reject requested capacity 1 once single-slot support is implemented');
   CheckContains(LMpmcCloseTestSection, 'TryEnqueue after close rejected',
     'MPMC close behavior test must cover TryEnqueue rejection');
   CheckContains(LMpmcCloseTestSection, 'EnqueueWait after close rejected',
     'MPMC close behavior test must cover EnqueueWait rejection');
   CheckContains(LMpmcCloseTestSection, 'EnqueueTimeout after close rejected',
     'MPMC close behavior test must cover EnqueueTimeout rejection');
+  CheckContains(LMpmcCloseTestSection, 'blocked EnqueueTimeout should still be pending before close',
+    'MPMC close behavior test must prove the producer-side timeout wait is actually blocked before close');
+  CheckContains(LMpmcCloseTestSection, 'blocked EnqueueTimeout woken by close',
+    'MPMC close behavior test must prove Close wakes a blocked producer-side timeout wait');
+  CheckContains(LMpmcCloseTestSection, 'blocked EnqueueTimeout should return promptly after close',
+    'MPMC close behavior test must bound the blocked producer wake latency');
+  CheckContains(LMpmcCloseTestSection, 'blocked producer wake must not publish extra item after close',
+    'MPMC close behavior test must prove the blocked producer wake does not publish a new item');
+  CheckContains(LMpmcCloseTestSection, 'TIntMpmc.Create(1);',
+    'MPMC close behavior test must cover the single-slot blocked producer wake path');
   CheckContains(LMpmcBatchSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then',
     'MPMC batch enqueue must reject new items after close');
   CheckContains(LMpmcBatchTestSection, 'mpmc batch enqueue after close rejected',
@@ -1420,6 +1584,7 @@ begin
   T.Run('MPMC 4P+4C contention', @TestMpmcContention);
   T.Run('Capacity zero reject', @TestCapacityZero);
   T.Run('Capacity overflow reject', @TestCapacityOverflowReject);
+  T.Run('MPMC single-slot', @TestMpmcSingleSlot);
   T.Run('Stack capacity index limit reject', @TestStackCapacityIndexLimitReject);
   T.Run('SPSC batch', @TestSpscBatch);
   T.Run('MPMC timeout', @TestMpmcTimeout);

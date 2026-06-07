@@ -109,6 +109,91 @@ begin
 end;
 
 { ============================================================ }
+{ TEST 1B: MPMC Single-Slot Contention                         }
+{ 2P + 2C, capacity=1, exactly-once delivery                   }
+{ ============================================================ }
+
+const
+  MPMC_SINGLE_SLOT_PRODUCERS = 2;
+  MPMC_SINGLE_SLOT_CONSUMERS = 2;
+  MPMC_SINGLE_SLOT_PER_PRODUCER = 2000;
+  MPMC_SINGLE_SLOT_TOTAL = MPMC_SINGLE_SLOT_PRODUCERS * MPMC_SINGLE_SLOT_PER_PRODUCER;
+
+var
+  GMpmcSingleSlotQ: TIntMpmc;
+  GMpmcSingleSlotConsumed: array[0..MPMC_SINGLE_SLOT_TOTAL - 1] of Int32;
+  GMpmcSingleSlotConsumeCount: Int64;
+  GMpmcSingleSlotOutOfRangeCount: Int64;
+
+function MpmcSingleSlotProducer(AArg: Pointer): Pointer; cdecl;
+var
+  LBase, LI: Integer;
+begin
+  Result := nil;
+  LBase := Integer(PtrUInt(AArg)) * MPMC_SINGLE_SLOT_PER_PRODUCER;
+  for LI := 0 to MPMC_SINGLE_SLOT_PER_PRODUCER - 1 do
+    GMpmcSingleSlotQ.EnqueueWait(LBase + LI);
+end;
+
+function MpmcSingleSlotConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+begin
+  Result := nil;
+  while GMpmcSingleSlotQ.DequeueWait(LV) do
+  begin
+    if (LV >= 0) and (LV < MPMC_SINGLE_SLOT_TOTAL) then
+      AtomicFetchAdd32(GMpmcSingleSlotConsumed[LV], 1, moRelaxed)
+    else
+      AtomicFetchAdd64(GMpmcSingleSlotOutOfRangeCount, 1, moRelaxed);
+    AtomicFetchAdd64(GMpmcSingleSlotConsumeCount, 1, moRelaxed);
+  end;
+end;
+
+procedure TestMpmcSingleSlotContention;
+var
+  LProducers: array[0..MPMC_SINGLE_SLOT_PRODUCERS - 1] of TPlatformThreadHandle;
+  LConsumers: array[0..MPMC_SINGLE_SLOT_CONSUMERS - 1] of TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LI: Integer;
+  LDups, LMissing: Integer;
+begin
+  GMpmcSingleSlotQ := TIntMpmc.Create(1);
+  GMpmcSingleSlotConsumeCount := 0;
+  GMpmcSingleSlotOutOfRangeCount := 0;
+  for LI := 0 to MPMC_SINGLE_SLOT_TOTAL - 1 do
+    GMpmcSingleSlotConsumed[LI] := 0;
+
+  for LI := 0 to MPMC_SINGLE_SLOT_CONSUMERS - 1 do
+    platform_thread_create(LConsumers[LI], @MpmcSingleSlotConsumer, nil);
+  for LI := 0 to MPMC_SINGLE_SLOT_PRODUCERS - 1 do
+    platform_thread_create(LProducers[LI], @MpmcSingleSlotProducer, Pointer(PtrInt(LI)));
+
+  for LI := 0 to MPMC_SINGLE_SLOT_PRODUCERS - 1 do
+    platform_thread_join(LProducers[LI], LRetVal);
+  GMpmcSingleSlotQ.Close;
+  for LI := 0 to MPMC_SINGLE_SLOT_CONSUMERS - 1 do
+    platform_thread_join(LConsumers[LI], LRetVal);
+
+  CheckEqual(Int64(MPMC_SINGLE_SLOT_TOTAL), GMpmcSingleSlotConsumeCount,
+    'single-slot contention total consumed');
+  CheckEqual(Int64(0), GMpmcSingleSlotOutOfRangeCount,
+    'single-slot contention no out-of-range messages');
+  LDups := 0;
+  LMissing := 0;
+  for LI := 0 to MPMC_SINGLE_SLOT_TOTAL - 1 do
+  begin
+    if AtomicLoad32(GMpmcSingleSlotConsumed[LI], moRelaxed) = 0 then
+      Inc(LMissing)
+    else if AtomicLoad32(GMpmcSingleSlotConsumed[LI], moRelaxed) > 1 then
+      Inc(LDups);
+  end;
+  CheckEqual(Int64(0), Int64(LMissing), 'single-slot contention no missing messages');
+  CheckEqual(Int64(0), Int64(LDups), 'single-slot contention no duplicate messages');
+  GMpmcSingleSlotQ.Free;
+end;
+
+{ ============================================================ }
 { TEST 2: Stack ABA Stress                                     }
 { 4 threads, capacity=4, 100K push+pop cycles each             }
 { Verify: stack empty, no leak, tagged pointer prevents ABA     }
@@ -563,6 +648,7 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.lockfree.stress');
   T.Run('MPMC 8P+8C saturation (cap=16, 80K msgs)', @TestMpmcSaturation);
+  T.Run('MPMC single-slot 2P+2C exactly-once', @TestMpmcSingleSlotContention);
   T.Run('Stack ABA stress (4T, cap=4, 100K cycles)', @TestStackABA);
   T.Run('MPSC close race (4P + random close)', @TestMpscCloseRace);
   T.Run('Deque extreme steal (1 owner + 7 thieves, 200K)', @TestDequeExtremeSteal);

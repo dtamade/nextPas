@@ -37,6 +37,7 @@ batch API 是连续单元素操作的批量便利方法，不表示整个 batch 
 `TMpmcQueue<T>` 支持多个 producer 和多个 consumer。队列是固定容量 ring，构造时把容量提升到
 power-of-two。`Close` 会阻止新的 `TryEnqueue` 成功并唤醒等待者；consumer 仍可 drain 已发布元素。
 `TMpmcQueue<T>.EnqueueBatch` returns 0 after `Close` and must not publish new items.
+`TMpmcQueue<T>` accepts requested capacity 1; its per-slot sequence token uses separate empty/full states so a single-slot queue still distinguishes full from empty.
 
 `TMpscQueue<T>` 是多 producer、单 consumer 队列。`Enqueue` 是过程，不返回 close 结果；`Close`
 只作为 consumer 等待唤醒和终止信号。调用方必须让 producer 协作停止、join producer，并 drain
@@ -86,8 +87,8 @@ power-of-two；超过最大可表示 power-of-two 的容量会被拒绝，而不
 `TLockFreeStack<T>` 把 32-bit index 和 32-bit tag 打包到 64-bit head 中。`FTop` 和 `FFreeHead`
 都使用 tagged index，降低固定 slot 被快速 pop/push 后复用导致的 ABA 风险。
 
-`TMpmcQueue<T>` 使用 per-slot sequence number 区分 ring slot 的生命周期；sequence 是 ring queue
-的发布/回收 token。
+`TMpmcQueue<T>` 使用 per-slot sequence token 区分 ring slot 的生命周期；token 同时编码 position
+和 empty/full state，是 ring queue 的发布/回收 token。
 
 `TWorkStealingDeque<T>` 使用 monotonic `FTop` / `FBottom` counter 和最后元素 CAS 仲裁。当前没有
 hazard pointer 或 epoch reclamation，因为 deque 存储是固定数组。
