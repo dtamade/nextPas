@@ -751,6 +751,9 @@ begin
     '`TAtomicBool` stores a normalized `0/1` Int32 payload, `Load`/`Store`/`Exchange` map that payload to Boolean, `FetchAnd/Or/Xor/Nand` return the previous Boolean value while keeping the stored domain within `False/True`, and `is_lock_free` follows `atomic_is_lock_free_32`.',
     'atomic README must document the TAtomicBool normalized bool-domain contract');
   CheckContains(LAtomicDocsReadme,
+    '`TAtomicPtr<T>` follows `atomic_is_lock_free_ptr`; `Load`/`Store`/`Exchange` publish the pointed-to address, strong/weak CAS update both the stored pointer and the observed expected pointer, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
+    'atomic README must document the TAtomicPtr lock-free and convenience contract');
+  CheckContains(LAtomicDocsReadme,
     '`TAtomicPtr<T>` single-order CAS normalizes `mo_consume` success to acquire and derives a legal failure order; failure order never includes release or acq_rel.',
     'atomic README must document facade TAtomicPtr CAS failure-order derivation');
   CheckContains(LAtomicDocsReadme, 'memory_order_t',
@@ -1008,6 +1011,8 @@ begin
     'typed bool FetchNand must clamp the stored domain back to 0/1');
   CheckContains(LTypesPtrLockFreeSection, 'atomic_is_lock_free_ptr',
     'typed pointer lock-free query must delegate to pointer-sized runtime truth');
+  CheckNotContains(LTypesPtrLockFreeSection, 'Result := True',
+    'typed pointer lock-free query must not hardcode a guaranteed-true result');
   CheckContains(LFetchAddFallbackSection, 'try',
     'i386 64-bit fallback add must guard lock release with try/finally');
   CheckContains(LFetchAddFallbackSection, 'finally',
@@ -1661,6 +1666,60 @@ begin
     'TAtomicUSize.GetMut should expose the exclusive-access storage');
 end;
 
+procedure TestAtomicPtrContract;
+type
+  TIntAtomicPtr = specialize TAtomicPtr<Integer>;
+  PPInteger = ^PInteger;
+var
+  LAtomicPtr: TIntAtomicPtr;
+  LExpected: PInteger;
+  LMutPtr: PPInteger;
+  LValueA: Integer;
+  LValueB: Integer;
+  LValueC: Integer;
+begin
+  Check(TIntAtomicPtr.is_lock_free = atomic_is_lock_free_ptr,
+    'TAtomicPtr lock-free surface must match pointer-sized runtime truth');
+
+  LValueA := 10;
+  LValueB := 20;
+  LValueC := 30;
+  LAtomicPtr := TIntAtomicPtr.Create(@LValueA);
+  Check(LAtomicPtr.Load(mo_relaxed) = @LValueA,
+    'TAtomicPtr.Create should publish the initial pointer');
+
+  LAtomicPtr.Store(@LValueB, mo_release);
+  Check(LAtomicPtr.Load(mo_acquire) = @LValueB,
+    'TAtomicPtr.Store should publish the replacement pointer');
+
+  Check(LAtomicPtr.Exchange(@LValueC, mo_acq_rel) = @LValueB,
+    'TAtomicPtr.Exchange should return the previous pointer');
+  Check(LAtomicPtr.Load = @LValueC,
+    'TAtomicPtr default Load should observe the exchanged pointer');
+
+  LExpected := @LValueA;
+  Check(not LAtomicPtr.CompareExchangeStrong(LExpected, @LValueB, mo_release),
+    'TAtomicPtr strong CAS should fail when expected mismatches');
+  Check(LExpected = @LValueC,
+    'TAtomicPtr strong CAS failure should write the observed pointer');
+
+  Check(LAtomicPtr.CompareExchangeStrong(LExpected, @LValueB, mo_seq_cst),
+    'TAtomicPtr strong CAS should update when expected matches');
+  Check(LAtomicPtr.Load(mo_acquire) = @LValueB,
+    'TAtomicPtr strong CAS should publish the replacement pointer');
+
+  LExpected := @LValueB;
+  Check(LAtomicPtr.CompareExchangeWeak(LExpected, @LValueA, mo_acq_rel),
+    'TAtomicPtr weak CAS should update when expected matches');
+  Check(LAtomicPtr.Load(mo_acquire) = @LValueA,
+    'TAtomicPtr weak CAS should publish the replacement pointer');
+
+  LMutPtr := PPInteger(LAtomicPtr.GetMut);
+  LMutPtr^ := @LValueC;
+  Check(LAtomicPtr.IntoInner = @LValueC,
+    'TAtomicPtr.GetMut/IntoInner should expose the exclusive-access pointer');
+end;
+
 procedure TestAtomicFlagApi;
 var
   LFlag: atomic_flag_t;
@@ -2303,6 +2362,7 @@ begin
   T.Run('typed atomic int64/uint64 contract', @TestAtomicInt64UInt64Contract);
   T.Run('typed atomic bool contract', @TestAtomicBoolContract);
   T.Run('typed atomic isize/usize contract', @TestAtomicISizeUSizeContract);
+  T.Run('typed atomic ptr contract', @TestAtomicPtrContract);
   T.Run('atomic flag API', @TestAtomicFlagApi);
   T.Run('fetch max/min/nand contract', @TestAtomicFetchMaxMinNandContract);
   T.Run('pointer offset fetch contract', @TestAtomicPointerOffsetFetchContract);
