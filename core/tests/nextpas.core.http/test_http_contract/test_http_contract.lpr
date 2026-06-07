@@ -21,6 +21,7 @@ uses
   nextpas.core.http.middleware,
   nextpas.core.http.server,
   nextpas.core.http.client,
+  nextpas.core.http.impl.registry,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.platform.thread;
@@ -29,11 +30,22 @@ var
   T: TTestRunner;
   GProcHandlerCalled: Boolean;
   GProcHandlerPath: string;
+  GRegistryClientTransport: IHttpTransport;
+  GRegistryServerTransport: IHttpServerTransport;
+  GRegistrySeenClientTimeout: Int64;
+  GRegistrySeenServerHeaderLimit: Int32;
 
 type
   PServerCtx = ^TServerCtx;
   TServerCtx = record
     Server: THttpServer;
+    Addr: string;
+    Port: UInt16;
+  end;
+
+  PInterfaceServerCtx = ^TInterfaceServerCtx;
+  TInterfaceServerCtx = record
+    Server: IHttpServer;
     Addr: string;
     Port: UInt16;
   end;
@@ -129,6 +141,19 @@ begin
   Dispose(LCtx);
 end;
 
+function InterfaceServerThreadFunc(AArg: Pointer): Pointer; cdecl;
+var
+  LCtx: PInterfaceServerCtx;
+begin
+  Result := nil;
+  LCtx := PInterfaceServerCtx(AArg);
+  try
+    LCtx^.Server.ListenAndServe(LCtx^.Addr, LCtx^.Port);
+  except
+  end;
+  Dispose(LCtx);
+end;
+
 function StartServerWithTransport(const AHandler: IHttpHandler;
   const ATransport: IHttpServerTransport; out AServer: THttpServer;
   out APort: UInt16): TPlatformThreadHandle;
@@ -153,6 +178,28 @@ begin
   Result := LHandle;
 end;
 
+function StartFacadeServer(const AServer: IHttpServer;
+  out APort: UInt16): TPlatformThreadHandle;
+var
+  LCtx: PInterfaceServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+begin
+  New(LCtx);
+  LCtx^.Server := AServer;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @InterfaceServerThreadFunc, LCtx);
+  LWait := 0;
+  while (not AServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+  APort := AServer.LocalAddr.Port;
+  Result := LHandle;
+end;
+
 procedure StopServer(var AServer: THttpServer; const AHandle: TPlatformThreadHandle);
 var
   LRet: Pointer;
@@ -160,6 +207,15 @@ begin
   AServer.Shutdown;
   platform_thread_join(AHandle, LRet);
   AServer.Free;
+  AServer := nil;
+end;
+
+procedure StopFacadeServer(var AServer: IHttpServer; const AHandle: TPlatformThreadHandle);
+var
+  LRet: Pointer;
+begin
+  AServer.Shutdown;
+  platform_thread_join(AHandle, LRet);
   AServer := nil;
 end;
 
@@ -199,6 +255,20 @@ begin
   GProcHandlerCalled := True;
   if AReq <> nil then
     GProcHandlerPath := AReq.Url.Path;
+end;
+
+function CreateRegistryClientTransport(
+  const AOptions: THttpClientOptions): IHttpTransport;
+begin
+  GRegistrySeenClientTimeout := AOptions.Timeout;
+  Result := GRegistryClientTransport;
+end;
+
+function CreateRegistryServerTransport(
+  const AOptions: THttpServerOptions): IHttpServerTransport;
+begin
+  GRegistrySeenServerHeaderLimit := AOptions.MaxHeaderSize;
+  Result := GRegistryServerTransport;
 end;
 
 { TMockHttpTransport }
@@ -896,6 +966,52 @@ begin
   Check(LClient <> nil, 'Facade NewHttpClient(transport, options) returns non-nil');
 end;
 
+procedure TestHttpClientFacadeUsesRegisteredHttp2RegistryDefault;
+var
+  LOldFactory: THttpClientTransportFactory;
+  LHadFactory: Boolean;
+  LOldVersion: THttpVersion;
+  LClient: IHttpClient;
+  LOptions: THttpClientOptions;
+  LTransportObj: TMockHttpTransport;
+  LResp: IHttpResponse;
+begin
+  LOldFactory := nil;
+  LHadFactory := TryGetClientTransportFactory(hvHttp2, LOldFactory);
+  LOldVersion := GetDefaultClientVersion;
+  LTransportObj := TMockHttpTransport.Create;
+  GRegistryClientTransport := LTransportObj as IHttpTransport;
+  GRegistrySeenClientTimeout := 0;
+  RegisterClientTransport(hvHttp2, @CreateRegistryClientTransport);
+  SetDefaultClientVersion(hvHttp2);
+  try
+    LOptions := THttpClientOptions.Default;
+    LOptions.Timeout := 3456;
+    LClient := nextpas.core.http.NewHttpClient(LOptions);
+    LResp := LClient.Get('http://example.com/facade-h2');
+    Check(LResp <> nil, 'Facade HTTP/2 registry client returns response');
+    CheckEqual(Int64(201), Int64(LResp.StatusCode),
+      'Facade HTTP/2 registry client returns transport response');
+    Check(LTransportObj.RoundTripCalled,
+      'Facade NewHttpClient(options) consumes registered HTTP/2 default transport');
+    Check(LTransportObj.SeenMethod = hmGet,
+      'Facade HTTP/2 registry client sees GET');
+    CheckEqual('/facade-h2', LTransportObj.SeenPath,
+      'Facade HTTP/2 registry client sees parsed path');
+    CheckEqual(Int64(3456), GRegistrySeenClientTimeout,
+      'Facade HTTP/2 registry client factory sees options');
+  finally
+    LResp := nil;
+    LClient := nil;
+    if LHadFactory then
+      RegisterClientTransport(hvHttp2, LOldFactory)
+    else
+      UnregisterClientTransport(hvHttp2);
+    SetDefaultClientVersion(LOldVersion);
+    GRegistryClientTransport := nil;
+  end;
+end;
+
 { Test 11: Facade client injection delegates round-trip to transport }
 procedure TestHttpClientTransportInjection;
 var
@@ -953,6 +1069,74 @@ begin
     Check(LHandlerCalled, 'Injected server transport can dispatch handler');
   finally
     StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestHttpServerFacadeUsesRegisteredHttp3RegistryDefault;
+var
+  LOldFactory: THttpServerTransportFactory;
+  LHadFactory: Boolean;
+  LOldVersion: THttpVersion;
+  LServer: IHttpServer;
+  LOptions: THttpServerOptions;
+  LTransportObj: TMockServerTransport;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LHandlerCalled: Boolean;
+  LSeenHandlerPath: string;
+  LWait: Int32;
+begin
+  LOldFactory := nil;
+  LHadFactory := TryGetServerTransportFactory(hvHttp3, LOldFactory);
+  LOldVersion := GetDefaultServerVersion;
+  LTransportObj := TMockServerTransport.Create;
+  GRegistryServerTransport := LTransportObj as IHttpServerTransport;
+  GRegistrySeenServerHeaderLimit := 0;
+  RegisterServerTransport(hvHttp3, @CreateRegistryServerTransport);
+  SetDefaultServerVersion(hvHttp3);
+  LHandlerCalled := False;
+  LSeenHandlerPath := '';
+  try
+    LOptions := THttpServerOptions.Default;
+    LOptions.MaxHeaderSize := 12288;
+    LServer := nextpas.core.http.NewHttpServer(
+      nextpas.core.http.HandlerFunc(procedure(const AReq: IHttpRequest;
+        const AW: IHttpResponseWriter)
+      begin
+        LHandlerCalled := True;
+        if AReq <> nil then
+          LSeenHandlerPath := AReq.Url.Path;
+      end), LOptions);
+    LHandle := StartFacadeServer(LServer, LPort);
+    try
+      LConn := TcpConnect('127.0.0.1', LPort);
+      LConn.Close;
+
+      LWait := 0;
+      while (not LTransportObj.ServeConnCalled) and (LWait < 200) do
+      begin
+        platform_thread_sleep_ns(5000000);
+        Inc(LWait);
+      end;
+
+      Check(LTransportObj.ServeConnCalled,
+        'Facade NewHttpServer(handler, options) consumes registered HTTP/3 default transport');
+      Check(LHandlerCalled, 'Facade HTTP/3 registry server transport can dispatch handler');
+      CheckEqual('/transport', LSeenHandlerPath,
+        'Facade HTTP/3 registry server handler sees transport request');
+      CheckEqual(Int64(12288), Int64(GRegistrySeenServerHeaderLimit),
+        'Facade HTTP/3 registry server factory sees options');
+    finally
+      StopFacadeServer(LServer, LHandle);
+    end;
+  finally
+    if LHadFactory then
+      RegisterServerTransport(hvHttp3, LOldFactory)
+    else
+      UnregisterServerTransport(hvHttp3);
+    SetDefaultServerVersion(LOldVersion);
+    GRegistryServerTransport := nil;
   end;
 end;
 
@@ -1594,8 +1778,12 @@ begin
   T.Run('Chain applies middleware', @TestChainMiddleware);
   T.Run('NewHttpServer overloads are available through facade', @TestHttpServerFacadeOverloads);
   T.Run('NewHttpClient overloads are available through facade', @TestHttpClientFacadeOverloads);
+  T.Run('Facade NewHttpClient consumes registered HTTP/2 registry default',
+    @TestHttpClientFacadeUsesRegisteredHttp2RegistryDefault);
   T.Run('Injected client transport is used through facade client', @TestHttpClientTransportInjection);
   T.Run('Injected server transport is used through facade server', @TestHttpServerTransportInjection);
+  T.Run('Facade NewHttpServer consumes registered HTTP/3 registry default',
+    @TestHttpServerFacadeUsesRegisteredHttp3RegistryDefault);
   T.Run('Injected server transport session factory is preferred',
     @TestHttpServerTransportInjectionPrefersSessionFactory);
   T.Run('Injected server transport context session factory is preferred',
