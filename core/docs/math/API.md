@@ -252,6 +252,8 @@ Public easing functions:
 All easing functions reject NaN and infinite inputs with `EArgumentError`. Finite inputs outside
 `[0, 1]` are not clamped; they extrapolate according to the same closed-form or piecewise formulas
 used in-range.
+`EaseOutBounce` follows the documented four-piece bounce ladder, and the direct branch tests lock
+representative points in each non-endpoint segment.
 
 ## Random And Noise
 

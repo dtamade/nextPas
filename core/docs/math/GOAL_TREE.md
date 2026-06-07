@@ -320,7 +320,9 @@ Status:
 - `test_easing` locks endpoints, midpoints, representative `InOut*` branch points, direct
   `EaseOutBounce` piecewise-branch coverage, finite out-of-range extrapolation, NaN/Inf
   rejection, and exact owner-level
-  `Ease*: T must be finite` messages; `test_facade` proves root facade exposure.
+  `Ease*: T must be finite` messages. `EaseOutBounce` follows the documented four-piece bounce
+  ladder, and the direct branch tests lock representative points in each non-endpoint segment.
+  `test_facade` proves root facade exposure.
 - `test_api_surface` rejects a direct `uses Math` dependency in `nextpas.core.math.easing.pas`.
 
 ## M6: Random + Noise

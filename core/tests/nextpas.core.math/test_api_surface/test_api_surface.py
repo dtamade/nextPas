@@ -182,6 +182,24 @@ REQUIRED_RANDOM_DOC_TRUTH = (
         "`NextGaussian` clamps a zero-state first uniform draw to a finite deterministic fallback instead of producing NaN or infinity.",
     ),
 )
+REQUIRED_EASING_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "`EaseOutBounce` follows the documented four-piece bounce ladder, and the direct branch tests lock representative points in each non-endpoint segment.",
+    ),
+    (
+        "docs/math/API.md",
+        "`EaseOutBounce` follows the documented four-piece bounce ladder, and the direct branch tests lock representative points in each non-endpoint segment.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`EaseOutBounce` follows the documented four-piece bounce ladder, and the direct branch tests lock representative points in each non-endpoint segment.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`EaseOutBounce` follows the documented four-piece bounce ladder, and the direct branch tests lock representative points in each non-endpoint segment.",
+    ),
+)
 REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
     RequiredCoreMakeTarget(
         target="core-math-api-surface-smoke",
@@ -568,6 +586,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("transform-geometry-guards", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('geometry guards report public contract messages'"),
     RequiredBehaviorTestMarker("easing-polynomial-expo", "tests/nextpas.core.math/test_easing/test_easing.lpr", "T.Run('polynomial and expo easing'"),
     RequiredBehaviorTestMarker("easing-elastic-back-bounce", "tests/nextpas.core.math/test_easing/test_easing.lpr", "T.Run('elastic back and bounce easing'"),
+    RequiredBehaviorTestMarker("easing-out-bounce-piecewise", "tests/nextpas.core.math/test_easing/test_easing.lpr", "T.Run('EaseOutBounce piecewise branches'"),
     RequiredBehaviorTestMarker("easing-out-of-range", "tests/nextpas.core.math/test_easing/test_easing.lpr", "T.Run('finite out-of-range inputs extrapolate'"),
     RequiredBehaviorTestMarker("easing-non-finite", "tests/nextpas.core.math/test_easing/test_easing.lpr", "T.Run('non-finite inputs fail fast'"),
     RequiredBehaviorTestMarker("random-seed", "tests/nextpas.core.math/test_random/test_random.lpr", "T.Run('seed determinism'"),
@@ -1381,6 +1400,15 @@ def scan_required_random_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_easing_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_EASING_DOC_TRUTH,
+        "missing-required-easing-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def build_report(root: Path) -> Report:
     root = root.resolve()
     findings: list[Finding] = []
@@ -1396,6 +1424,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_transform_doc_truth(root))
     findings.extend(scan_required_quat_doc_truth(root))
     findings.extend(scan_required_random_doc_truth(root))
+    findings.extend(scan_required_easing_doc_truth(root))
 
     source_files = discover_files(root, MATH_SOURCE_GLOBS)
     math_ffi = root / "src/nextpas.core.math.ffi.pas"

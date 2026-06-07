@@ -394,7 +394,8 @@ Coverage requirements:
 - Quat: `Identity`, `Normalize`, `Conjugate`, `FromAxisAngle`, `ToRotationMatrix`, `Rotate`, `Slerp`, `Nlerp`.
 - Transform: `Ortho`, `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`, `RotateY`, `RotateZ`, `Camera2D`.
 - Easing: every public easing function, including finite out-of-range behavior and NaN/Inf
-  rejection.
+  rejection. `EaseOutBounce` follows the documented four-piece bounce ladder, and the direct
+  branch tests lock representative points in each non-endpoint segment.
 - Random/Noise: deterministic seed, range boundaries, invalid input behavior.
 - Trig: Linux/macOS/Windows link safety and no `external 'm'` surface dependency.
 
