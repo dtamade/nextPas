@@ -14,8 +14,8 @@ unit nextpas.core.tui.cell;
  * CELL_EMPTY 对齐 ratatui Cell::EMPTY：空格、默认色（ckReset）、无修饰、
  * 宽度 1、skip=false。buffer reset/resize 用它填充。
  *
- * @note CellEquals 把 40 字节当 5 个 QWord 比较，绕开字段分派。调用方构造
- *       cell 前必须先经 CellReset，否则尾字节残留会破坏 QWord 比较。
+ * @note CellEquals 把 40 字节当 5 个 QWord 比较，绕开字段分派。Glyph setter
+ *       会清理未使用尾字节，保证覆盖较短 grapheme 后仍保持 canonical。
  *}
 
 {$I nextpas.core.settings.inc}

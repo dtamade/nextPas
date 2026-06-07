@@ -716,21 +716,22 @@ var
   LFreshCell, LReusedCell: PCell;
   LPatches: TDiffEntries;
 begin
-  LFresh := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 1));
-  LReused := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 1));
+  LFresh := TBuffer.CreateEmpty(TRect.Make(0, 0, 3, 1));
+  LReused := TBuffer.CreateEmpty(TRect.Make(0, 0, 3, 1));
   try
     LFresh.SetString(0, 0, 'A', StyleDefault);
     LReused.SetString(0, 0, 'e' + #$CC#$81, StyleDefault);
     LReused.SetString(0, 0, 'A', StyleDefault);
 
+    AssertRows(LFresh, ['A  '], 'fresh ascii row');
+    AssertRows(LReused, ['A  '], 'reused grapheme overwritten with ascii row');
     LFreshCell := LFresh.CellAt(0, 0);
     LReusedCell := LReused.CellAt(0, 0);
     Check(CellEquals(LFreshCell^, LReusedCell^),
-      'short overwrite canonicalizes glyph tail for QWord cell compare');
-
+      'reused width-1 grapheme cell canonicalizes to fresh ascii cell');
     LFresh.Diff(LReused, LPatches);
     CheckEqual(Int64(0), Int64(System.Length(LPatches)),
-      'canonicalized equal cells do not emit diff patches');
+      'canonical glyph tail produces no diff patch');
   finally
     LFresh.Free;
     LReused.Free;
