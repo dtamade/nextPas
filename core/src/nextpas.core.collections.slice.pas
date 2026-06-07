@@ -76,6 +76,8 @@ implementation
 
 class function TReadOnlySpan.FromPointer(aPtr: Pointer; aCount, aElemSize: SizeUInt): TReadOnlySpan;
 begin
+  if (aCount > 0) and (aPtr = nil) then
+    raise nextpas.core.base.EArgumentNil.Create('Span.FromPointer: pointer is nil');
   Result.FPtr := aPtr;
   Result.FCount := aCount;
   Result.FElemSize := aElemSize;

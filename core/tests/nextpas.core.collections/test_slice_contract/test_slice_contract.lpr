@@ -29,6 +29,25 @@ begin
   Check(LCaught, AName + ' should raise EOutOfRange');
 end;
 
+procedure CheckRaisesArgumentNil(const AProc: TExceptionProc; const AName: string);
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    AProc;
+  except
+    on E: EArgumentNil do
+      LCaught := True;
+  end;
+  Check(LCaught, AName + ' should raise EArgumentNil');
+end;
+
+procedure RaiseSpanFromPointerNilNonEmpty;
+begin
+  TByteReadOnlySpan.FromPointer(nil, 1, SizeOf(Byte));
+end;
+
 procedure RaiseSpanSubSpanOffsetLengthOverflow;
 var
   LData: Byte;
@@ -97,8 +116,15 @@ begin
   Check(LSpan.Count = LMax, 'TReadOnlySpan2.Count should saturate on overflow');
 end;
 
+procedure TestSpanFromPointerRejectsNilNonEmpty;
+begin
+  CheckRaisesArgumentNil(@RaiseSpanFromPointerNilNonEmpty,
+    'TReadOnlySpan.FromPointer nil non-empty');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.slice contract');
+  T.Run('span from pointer rejects nil non-empty', @TestSpanFromPointerRejectsNilNonEmpty);
   T.Run('span subspan rejects overflow', @TestSpanSubSpanRejectsOverflow);
   T.Run('span2 subspan rejects overflow', @TestSpan2SubSpanRejectsOverflow);
   T.Run('span2 count saturates on overflow', @TestSpan2CountSaturatesOnOverflow);
