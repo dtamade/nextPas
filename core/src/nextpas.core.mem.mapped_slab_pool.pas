@@ -260,7 +260,6 @@ implementation
 
 uses
   nextpas.core.fs.util,
-  nextpas.core.text.conv,
   nextpas.core.mem.error,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files;
@@ -287,6 +286,14 @@ const
     2048*1024*1024, // 2GB
     4096*1024*1024  // 4GB
   );
+
+function MappedSlabPoolIndexedName(const aPrefix: string; aIndex: Integer; const aSuffix: string): string;
+var
+  LIndexText: string;
+begin
+  Str(aIndex, LIndexText);
+  Result := aPrefix + LIndexText + aSuffix;
+end;
 
 type
   // 映射 Slab 池头部结构
@@ -953,12 +960,12 @@ begin
     case aMode of
       mspFile:
       begin
-        LFileName := FBasePath + Format('slab_pool_%d.dat', [LIndex]);
+        LFileName := FBasePath + MappedSlabPoolIndexedName('slab_pool_', LIndex, '.dat');
         FPools[LIndex].CreateFile(LFileName, FPoolSizes[LIndex]);
       end;
       mspShared:
       begin
-        LSharedName := FSharedPrefix + Format('SlabPool_%d', [LIndex]);
+        LSharedName := FSharedPrefix + MappedSlabPoolIndexedName('SlabPool_', LIndex, '');
         FPools[LIndex].CreateShared(LSharedName, FPoolSizes[LIndex]);
       end;
       mspAnonymous:

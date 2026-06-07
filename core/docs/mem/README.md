@@ -91,6 +91,10 @@ What is already aligned with the L0 direction:
 - `nextpas.core.mem.pool.fixed` no longer depends on `nextpas.core.text.conv`
   for its debug-only leak message; the fixed pool keeps L0 ownership and uses
   local `Str` formatting instead.
+- `nextpas.core.mem.mapped_slab_pool` no longer depends on
+  `nextpas.core.text.conv` for manager-generated pool names; it uses local
+  `Str` formatting and leaves file existence policy unchanged for a later
+  focused slice.
 - `TSlabPool` no longer samples `platform.time` directly; the core keeps call
   counters but does not depend on L1 timing APIs.
 - `mem.blockpool.concurrent`, `mem.pool.fixed.concurrent`, and
@@ -119,7 +123,7 @@ What is already aligned with the L0 direction:
 
 The boundary is not fully clean yet. The main remaining debt is:
 
-- The current source-boundary contract still carries 7 allowlisted debt
+- The current source-boundary contract still carries 6 allowlisted debt
   entries; this is a guardrail against regression, not proof that mem is
   already layer-clean.
 - `mem.secure.pas` still depends on raw host units (`BaseUnix`, `Windows`) for
