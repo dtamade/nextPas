@@ -221,9 +221,10 @@ Status:
   `TVec3d`, and `TVec4d`.
 - Vector tests cover compact layout, `Create`, `Zero`, arithmetic operators, explicit
   component multiply/divide, `Dot`, `Cross` for 3D vectors, `Length`, `LengthSqr`,
-  `Normalize`, `Lerp`, `Equals`, zero-vector normalize returning zero, and direct `Double`-path
-  parity coverage for `Data` aliases, `Zero`, add/subtract/unary minus, scalar multiply left, and
-  representative length/component-multiply contracts.
+  `Normalize`, `Lerp`, `Equals` including negative-epsilon fail-close behavior, zero-vector
+  normalize returning zero, and direct `Double`-path parity coverage for `Data` aliases, `Zero`,
+  add/subtract/unary minus, scalar multiply left, and representative length/component-multiply
+  contracts.
 - Facade tests prove consumers can `uses nextpas.core.math` and call the final vector types.
 - Matrix tests cover compact layout, column-major storage, row/column accessors, row/column setter
   write-through semantics, arithmetic operators, scalar multiply, matrix-vector multiply,

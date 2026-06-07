@@ -96,6 +96,7 @@ begin
   Check(TVec2f.Equals(A, TVec2f.Create(3.0000001, 4.0000001), Single(0.000001)),
     'TVec2f equals epsilon');
   Check(not TVec2f.Equals(A, B, Single(0.000001)), 'TVec2f not equals');
+  Check(not TVec2f.Equals(A, A, Single(-0.000001)), 'TVec2f Equals rejects negative epsilon');
 end;
 
 procedure TestVec3fContracts;
@@ -127,6 +128,7 @@ begin
   CheckVec3f(2.5, 3.5, 4.5, TVec3f.Lerp(A, B, Single(0.5)), 'TVec3f lerp');
   Check(TVec3f.Equals(A, TVec3f.Create(1.0000001, 2.0000001, 3.0000001), Single(0.000001)),
     'TVec3f equals epsilon');
+  Check(not TVec3f.Equals(A, A, Single(-0.000001)), 'TVec3f Equals rejects negative epsilon');
 end;
 
 procedure TestVec4fContracts;
@@ -156,6 +158,7 @@ begin
   CheckVec4f(3.0, 4.0, 5.0, 6.0, TVec4f.Lerp(A, B, Single(0.5)), 'TVec4f lerp');
   Check(TVec4f.Equals(A, TVec4f.Create(1.0000001, 2.0000001, 3.0000001, 4.0000001),
     Single(0.000001)), 'TVec4f equals epsilon');
+  Check(not TVec4f.Equals(A, A, Single(-0.000001)), 'TVec4f Equals rejects negative epsilon');
 end;
 
 procedure TestDoublePrecisionContracts;
@@ -188,6 +191,7 @@ begin
   CheckVec2d(2.0, 3.0, TVec2d.Lerp(TVec2d.Create(1.0, 2.0), V2, 0.5), 'TVec2d lerp');
   Check(TVec2d.Equals(V2, TVec2d.Create(3.0000000000001, 4.0000000000001), 0.000000000001),
     'TVec2d equals epsilon');
+  Check(not TVec2d.Equals(V2, V2, -0.000000000001), 'TVec2d Equals rejects negative epsilon');
 
   V3 := TVec3d.Create(1.0, 2.0, 3.0);
   CheckEqual(Int64(SizeOf(Double) * 3), Int64(SizeOf(TVec3d)), 'TVec3d is compact value type');
@@ -217,6 +221,7 @@ begin
     'TVec3d lerp');
   Check(TVec3d.Equals(V3, TVec3d.Create(1.0000000000001, 2.0000000000001, 3.0000000000001),
     0.000000000001), 'TVec3d equals epsilon');
+  Check(not TVec3d.Equals(V3, V3, -0.000000000001), 'TVec3d Equals rejects negative epsilon');
 
   V4 := TVec4d.Create(1.0, 2.0, 3.0, 4.0);
   CheckEqual(Int64(SizeOf(Double) * 4), Int64(SizeOf(TVec4d)), 'TVec4d is compact value type');
@@ -244,6 +249,7 @@ begin
     'TVec4d lerp');
   Check(TVec4d.Equals(V4, TVec4d.Create(1.0000000000001, 2.0000000000001, 3.0000000000001,
     4.0000000000001), 0.000000000001), 'TVec4d equals epsilon');
+  Check(not TVec4d.Equals(V4, V4, -0.000000000001), 'TVec4d Equals rejects negative epsilon');
 end;
 
 begin
