@@ -128,6 +128,38 @@ begin
   );
 end;
 
+procedure TestFillMemHandlesValueZeroSizeAndNil;
+var
+  LBytes: array[0..3] of Byte;
+begin
+  LBytes[0] := 1;
+  LBytes[1] := 2;
+  LBytes[2] := 3;
+  LBytes[3] := 4;
+
+  FillMem(nil, 0, $AA);
+  FillMem(@LBytes[0], 0, $AA);
+  CheckEqual(Int64(1), Int64(LBytes[0]), 'FillMem with size 0 should not mutate');
+
+  FillMem(@LBytes[0], SizeOf(LBytes), $AA);
+  CheckEqual(Int64($AA), Int64(LBytes[0]), 'FillMem should fill first byte');
+  CheckEqual(Int64($AA), Int64(LBytes[3]), 'FillMem should fill last byte');
+
+  FillMem(@LBytes[1], 2, $11);
+  CheckEqual(Int64($AA), Int64(LBytes[0]), 'FillMem range should preserve byte before range');
+  CheckEqual(Int64($11), Int64(LBytes[1]), 'FillMem range should fill first ranged byte');
+  CheckEqual(Int64($11), Int64(LBytes[2]), 'FillMem range should fill last ranged byte');
+  CheckEqual(Int64($AA), Int64(LBytes[3]), 'FillMem range should preserve byte after range');
+
+  ExpectInvalidArgumentNil(
+    procedure
+    begin
+      FillMem(nil, 1, $AA);
+    end,
+    'FillMem(nil, >0) should raise EArgumentNil'
+  );
+end;
+
 procedure TestCopyMemHandlesZeroSizeAndNil;
 var
   LSrc: array[0..3] of Byte;
@@ -265,6 +297,7 @@ begin
   T.Run('invariant compatibility alias', @TestInvariantCompatibilityAlias);
   T.Run('contract helpers use framework exceptions', @TestContractHelpersUseFrameworkExceptions);
   T.Run('zeromem handles zero-size and nil', @TestZeroMemHandlesZeroSizeAndNil);
+  T.Run('fillmem handles value zero-size and nil', @TestFillMemHandlesValueZeroSizeAndNil);
   T.Run('copymem handles zero-size and nil', @TestCopyMemHandlesZeroSizeAndNil);
   T.Run('comparemem semantics stay stable', @TestCompareMemSemanticsStayStable);
   T.Run('nullable surface', @TestNullableSurface);

@@ -230,6 +230,7 @@ const ecInternal
 procedure FreeAndNil
 procedure SafeFree
 procedure ZeroMem
+procedure FillMem
 procedure CopyMem
 function CompareMem
 function Supports
@@ -289,6 +290,7 @@ require_token "docs/system/README.md" "Root facade live surface"
 require_token "docs/system/README.md" "delegating to owner"
 require_token "docs/system/README.md" "compiler/System compile-truth"
 require_token "docs/system/README.md" "not unit-owned wrapper functions"
+require_token "docs/system/README.md" "FillMem"
 
 for unit_name in System SysUtils TypInfo Classes ObjPas; do
   require_token "docs/system/rtl-mapping.md" "$unit_name"
@@ -600,12 +602,14 @@ require_token "src/nextpas.core.system.pas" "THashCode = nextpas.core.base.THash
 require_token "src/nextpas.core.system.pas" "procedure FreeAndNil"
 require_token "src/nextpas.core.system.pas" "procedure SafeFree"
 require_token "src/nextpas.core.system.pas" "procedure ZeroMem"
+require_token "src/nextpas.core.system.pas" "procedure FillMem"
 require_token "src/nextpas.core.system.pas" "procedure CopyMem"
 require_token "src/nextpas.core.system.pas" "function CompareMem"
 require_token "src/nextpas.core.system.pas" "function Supports"
 require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.FreeAndNil"
 require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.SafeFree"
 require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.ZeroMem"
+require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.FillMem"
 require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.CopyMem"
 require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.CompareMem"
 require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.Supports"
@@ -665,6 +669,7 @@ require_token "src/nextpas.core.system.pas" "ecInternal = nextpas.core.errors.ec
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system constants mirror base compile-truth"
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system base carrier aliases mirror base compile-truth"
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system memory facade delegates full base utils contract"
+require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system FillMem delegates to base utils"
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system base error aliases mirror base compile-truth"
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system error taxonomy aliases mirror canonical owners"
 require_root_facade_surface_allowlist

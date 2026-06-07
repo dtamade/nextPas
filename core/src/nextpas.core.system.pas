@@ -97,6 +97,7 @@ const
 procedure FreeAndNil(var AObj); inline;
 procedure SafeFree(var AObj); inline;
 procedure ZeroMem(ADst: Pointer; ASize: SizeUInt); inline;
+procedure FillMem(ADst: Pointer; ASize: SizeUInt; AValue: Byte); inline;
 procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt); inline;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean; inline;
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean; inline;
@@ -117,6 +118,11 @@ end;
 procedure ZeroMem(ADst: Pointer; ASize: SizeUInt);
 begin
   nextpas.core.base.utils.ZeroMem(ADst, ASize);
+end;
+
+procedure FillMem(ADst: Pointer; ASize: SizeUInt; AValue: Byte);
+begin
+  nextpas.core.base.utils.FillMem(ADst, ASize, AValue);
 end;
 
 procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt);

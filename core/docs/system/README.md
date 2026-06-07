@@ -23,7 +23,7 @@ managed type lifetime、memory primitive、exception/unwinding、RTTI/TypeInfo �
 
 - `TBytes` 等低层基础载体类型来自 `nextpas.core.base`。
 - `ENextPasError`、`TErrorCategory` 和错误分类来自 `nextpas.core.exception` / `nextpas.core.errors`。
-- `ZeroMem`、`CopyMem`、`CompareMem`、`FreeAndNil`、`SafeFree` 和 `Supports` 只委派给
+- `ZeroMem`、`FillMem`、`CopyMem`、`CompareMem`、`FreeAndNil`、`SafeFree` 和 `Supports` 只委派给
   `nextpas.core.base.utils`，保持现有 guard 和异常语义。
 
 Root facade live surface:
@@ -36,7 +36,7 @@ Root facade live surface:
 | `TBytes`, `TByteSpan`, `THashCode` | `nextpas.core.base` | carrier aliases for RTL-root consumers; base remains owner. |
 | `Exception`, `ExceptClass`, `EConvertError`, `EAssertionFailed`, `ENextPasError`, `TErrorCategory` | `nextpas.core.exception` | canonical exception aliases; no shadow taxonomy. |
 | `EArgumentError`, `ETimeoutError`, `EIOError`, `EOutOfMemoryError` and the other `nextpas.core.errors` classes / `ec*` constants | `nextpas.core.errors` public facade; canonical definitions remain in `nextpas.core.exception` | public taxonomy aliases; categories stay canonical. |
-| `ZeroMem`, `CopyMem`, `CompareMem`, `FreeAndNil`, `SafeFree`, `Supports` | `nextpas.core.base.utils` | inline forwarding helpers; guard and nil behavior stay with base utils. |
+| `ZeroMem`, `FillMem`, `CopyMem`, `CompareMem`, `FreeAndNil`, `SafeFree`, `Supports` | `nextpas.core.base.utils` | inline forwarding helpers; guard and nil behavior stay with base utils. |
 
 S2 runtime/managed lifetime contract names live in `runtime-contracts.md`. They are documented
 compiler/runtime handshake names, not public ABI and not current facade functions.

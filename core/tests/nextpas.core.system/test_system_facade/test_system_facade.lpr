@@ -270,6 +270,35 @@ begin
   Check(LCaught, 'system CopyMem should preserve base nil destination exception root');
 end;
 
+procedure TestSystemFillMemDelegatesToBaseUtils;
+var
+  LBytes: array[0..3] of Byte = (1, 2, 3, 4);
+  LCaught: Boolean;
+begin
+  nextpas.core.system.FillMem(nil, 0, $AA);
+  nextpas.core.system.FillMem(@LBytes[0], 0, $AA);
+  CheckEqual(Int64(1), Int64(LBytes[0]), 'system FillMem size 0 should not mutate');
+
+  nextpas.core.system.FillMem(@LBytes[0], SizeOf(LBytes), $AA);
+  CheckEqual(Int64($AA), Int64(LBytes[0]), 'system FillMem should fill first byte');
+  CheckEqual(Int64($AA), Int64(LBytes[3]), 'system FillMem should fill last byte');
+
+  nextpas.core.system.FillMem(@LBytes[1], 2, $11);
+  CheckEqual(Int64($AA), Int64(LBytes[0]), 'system FillMem should preserve byte before range');
+  CheckEqual(Int64($11), Int64(LBytes[1]), 'system FillMem should fill range start');
+  CheckEqual(Int64($11), Int64(LBytes[2]), 'system FillMem should fill range end');
+  CheckEqual(Int64($AA), Int64(LBytes[3]), 'system FillMem should preserve byte after range');
+
+  LCaught := False;
+  try
+    nextpas.core.system.FillMem(nil, 1, $AA);
+  except
+    on E: nextpas.core.base.EArgumentNil do
+      LCaught := E is nextpas.core.exception.ENextPasError;
+  end;
+  Check(LCaught, 'system FillMem should preserve base nil destination exception root');
+end;
+
 procedure TestObjectLifecycleHelpersDelegateToBaseUtils;
 var
   LObject: TObject;
@@ -627,6 +656,7 @@ begin
   T.Run('system memory guards delegate to base contract', @TestSystemMemoryGuardsDelegateToBaseContract);
   T.Run('copy and compare facade delegates to base utils', @TestCopyAndCompareFacadeDelegatesToBaseUtils);
   T.Run('system memory facade delegates full base utils contract', @TestSystemMemoryFacadeDelegatesFullBaseUtilsContract);
+  T.Run('system FillMem delegates to base utils', @TestSystemFillMemDelegatesToBaseUtils);
   T.Run('object lifecycle helpers delegate to base utils', @TestObjectLifecycleHelpersDelegateToBaseUtils);
   T.Run('supports facade delegates object and interface queries', @TestSupportsFacadeDelegatesObjectAndInterfaceQueries);
   T.Run('system exception root is canonical', @TestSystemExceptionRootIsCanonical);
