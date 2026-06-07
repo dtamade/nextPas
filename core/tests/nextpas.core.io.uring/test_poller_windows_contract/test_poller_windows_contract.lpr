@@ -75,6 +75,14 @@ begin
     'poller validity must delegate to the IOCP backend');
   CheckContains(LPoller, 'pbiocp: result := fiocp.poll',
     'poller poll must delegate to the IOCP backend');
+  CheckContains(LPoller, 'pbiocp: result := fiocp.pollone',
+    'poller poll-one must delegate to the IOCP backend');
+  CheckContains(LPoller, 'pbiocp: fiocp.run',
+    'poller run must delegate to the IOCP backend');
+  CheckContains(LPoller, 'pbiocp: fiocp.stop',
+    'poller stop must delegate to the IOCP backend');
+  CheckContains(LPoller, 'pbiocp: result := fiocp.flush',
+    'poller flush must delegate to the IOCP backend');
   CheckContains(LPoller, 'pbunsupported',
     'poller must report explicit unsupported semantics for unpromoted hosts');
 end;
@@ -97,6 +105,55 @@ begin
     'unimplemented async operations must return explicit unsupported truth');
   CheckAbsent(LIocp, '{ stub }',
     'IOCP reactor run must not remain a stub body');
+end;
+
+procedure TestIocpRunStopFlushLifecycleContract;
+var
+  LIocp: string;
+  LPollBody: string;
+  LPollOneBody: string;
+  LRunBody: string;
+  LStopBody: string;
+  LFlushBody: string;
+begin
+  LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
+  LPollBody := ExtractBetween(LIocp, 'function tiocpreactor.poll',
+    'function tiocpreactor.pollone');
+  LPollOneBody := ExtractBetween(LIocp, 'function tiocpreactor.pollone',
+    'procedure tiocpreactor.run');
+  LRunBody := ExtractBetween(LIocp, 'procedure tiocpreactor.run',
+    'procedure tiocpreactor.stop');
+  LStopBody := ExtractBetween(LIocp, 'procedure tiocpreactor.stop',
+    'function tiocpreactor.flush');
+  LFlushBody := ExtractBetween(LIocp, 'function tiocpreactor.flush',
+    'end.');
+
+  CheckContains(LPollBody, 'while pollone do',
+    'IOCP Poll must drain immediately available completion packets');
+  CheckContains(LPollOneBody, 'getqueuedcompletionstatus(handle(fport), @lbytes, @lkey',
+    'IOCP PollOne must consume at most one completion packet');
+  CheckContains(LPollOneBody, '@loverlapped, 0)',
+    'IOCP PollOne must use nonblocking zero-timeout completion polling');
+  CheckContains(LPollOneBody, 'iocpdispatchcompletion(self, lbytes, lok, loverlapped)',
+    'IOCP PollOne must dispatch real overlapped completions');
+  CheckContains(LRunBody, 'atomicstore32(frunning, 1, morelease);',
+    'IOCP Run must publish running state before blocking');
+  CheckContains(LRunBody, 'getqueuedcompletionstatus(handle(fport), @lbytes, @lkey',
+    'IOCP Run must block on the completion port');
+  CheckContains(LRunBody, '@loverlapped, infinite)',
+    'IOCP Run must use the blocking completion wait');
+  CheckContains(LRunBody, 'finally',
+    'IOCP Run must clear running state when it returns');
+  CheckContains(LRunBody, 'atomicstore32(frunning, 0, morelease);',
+    'IOCP Run must leave running state cleared on every exit path');
+  CheckContains(LStopBody, 'atomicstore32(frunning, 0, morelease);',
+    'IOCP Stop must publish stopped state');
+  CheckContains(LStopBody, 'postqueuedcompletionstatus(handle(fport), 0, 0, nil)',
+    'IOCP Stop must wake the blocking completion wait with a control packet');
+  CheckContains(LFlushBody, 'result := 0;',
+    'IOCP Flush must be explicit no-batch truth because file ops submit immediately');
+  CheckAbsent(LFlushBody, 'iocpunsupportedasync',
+    'IOCP Flush must not be reported as an unsupported operation');
 end;
 
 procedure TestIocpSynchronousFailureOwnershipContract;
@@ -244,6 +301,8 @@ begin
   T := TTestRunner.Create('nextpas.core.io.poller.windows_contract');
   T.Run('poller Windows backend contract', @TestPollerWindowsBackendContract);
   T.Run('IOCP lifecycle contract', @TestIocpLifecycleContract);
+  T.Run('IOCP run/stop/flush lifecycle contract',
+    @TestIocpRunStopFlushLifecycleContract);
   T.Run('IOCP synchronous failure ownership contract',
     @TestIocpSynchronousFailureOwnershipContract);
   T.Run('IOCP unsupported async ownership contract',

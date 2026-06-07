@@ -431,18 +431,22 @@ begin
     Exit;
 
   AtomicStore32(FRunning, 1, moRelease);
-  while AtomicLoad32(FRunning, moAcquire) <> 0 do
-  begin
-    LBytes := 0;
-    LKey := 0;
-    LOverlapped := nil;
-    LOk := GetQueuedCompletionStatus(HANDLE(FPort), @LBytes, @LKey,
-      @LOverlapped, INFINITE);
-    if (not LOk) and (LOverlapped = nil) then
+  try
+    while AtomicLoad32(FRunning, moAcquire) <> 0 do
     begin
-      Break;
+      LBytes := 0;
+      LKey := 0;
+      LOverlapped := nil;
+      LOk := GetQueuedCompletionStatus(HANDLE(FPort), @LBytes, @LKey,
+        @LOverlapped, INFINITE);
+      if (not LOk) and (LOverlapped = nil) then
+      begin
+        Break;
+      end;
+      IocpDispatchCompletion(Self, LBytes, LOk, LOverlapped);
     end;
-    IocpDispatchCompletion(Self, LBytes, LOk, LOverlapped);
+  finally
+    AtomicStore32(FRunning, 0, moRelease);
   end;
 end;
 
