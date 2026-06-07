@@ -91,6 +91,9 @@ uses
 const
   ETIMEDOUT_LINUX = 110;
   PENDING_INITIAL_CAP = 32;
+  TIMEOUT_COMPLETION_PENDING = 0;
+  TIMEOUT_COMPLETION_IO = 1;
+  TIMEOUT_COMPLETION_TIMER = 2;
 
 type
   PAsyncLoop = ^TAsyncLoop;
@@ -100,27 +103,58 @@ type
     UserCallback: TIoCompletion;
     UserContext: Pointer;
     TimerHandle: TAsyncTimerHandle;
-    IoCompleted: Boolean;
-    TimerFired: Boolean;
+    CompletionState: Int32;
+    RefCount: Int32;
   end;
+
+function TimeoutCtxClaimCompletion(ACtx: PTimeoutCtx; AState: Int32): Boolean;
+begin
+  Result := AtomicCompareExchange32(ACtx^.CompletionState,
+    TIMEOUT_COMPLETION_PENDING, AState, moAcqRel) = TIMEOUT_COMPLETION_PENDING;
+end;
+
+procedure TimeoutCtxRelease(ACtx: PTimeoutCtx);
+begin
+  if ACtx = nil then
+    Exit;
+  if AtomicFetchSub32(ACtx^.RefCount, 1, moAcqRel) = 1 then
+  begin
+    ACtx^.Loop := nil;
+    ACtx^.UserCallback := nil;
+    ACtx^.UserContext := nil;
+    Dispose(ACtx);
+  end;
+end;
+
+procedure TimeoutCtxCancelTimerOwner(ACtx: PTimeoutCtx);
+var
+  LTimerHandle: TAsyncTimerHandle;
+begin
+  if (ACtx = nil) or (ACtx^.Loop = nil) then
+    Exit;
+  LTimerHandle := ACtx^.TimerHandle;
+  if not LTimerHandle.IsValid then
+    Exit;
+  ACtx^.TimerHandle := TAsyncTimerHandle.None;
+  if ACtx^.Loop^.FTimers.Cancel(LTimerHandle) then
+    TimeoutCtxRelease(ACtx);
+end;
 
 procedure TimeoutIoCallback(AUserData: UInt64; AResult: Int32; AContext: Pointer);
 var
   LCtx: PTimeoutCtx;
 begin
   LCtx := PTimeoutCtx(AContext);
-  if LCtx^.TimerFired then
-  begin
-    Dispose(LCtx);
-    Exit;
+  try
+    if TimeoutCtxClaimCompletion(LCtx, TIMEOUT_COMPLETION_IO) then
+    begin
+      TimeoutCtxCancelTimerOwner(LCtx);
+      if Assigned(LCtx^.UserCallback) then
+        LCtx^.UserCallback(AUserData, AResult, LCtx^.UserContext);
+    end;
+  finally
+    TimeoutCtxRelease(LCtx);
   end;
-  LCtx^.IoCompleted := True;
-  // Cancel timer (best effort, may already be fired)
-  if LCtx^.TimerHandle.IsValid then
-    LCtx^.Loop^.FTimers.Cancel(LCtx^.TimerHandle);
-  if Assigned(LCtx^.UserCallback) then
-    LCtx^.UserCallback(AUserData, AResult, LCtx^.UserContext);
-  Dispose(LCtx);
 end;
 
 procedure TimeoutTimerCallback(AContext: Pointer);
@@ -128,15 +162,28 @@ var
   LCtx: PTimeoutCtx;
 begin
   LCtx := PTimeoutCtx(AContext);
-  if LCtx^.IoCompleted then
-  begin
-    Dispose(LCtx);
-    Exit;
+  try
+    if TimeoutCtxClaimCompletion(LCtx, TIMEOUT_COMPLETION_TIMER) then
+    begin
+      if Assigned(LCtx^.UserCallback) then
+        LCtx^.UserCallback(0, -ETIMEDOUT_LINUX, LCtx^.UserContext);
+    end;
+  finally
+    TimeoutCtxRelease(LCtx);
   end;
-  LCtx^.TimerFired := True;
-  if Assigned(LCtx^.UserCallback) then
-    LCtx^.UserCallback(0, -ETIMEDOUT_LINUX, LCtx^.UserContext);
-  { Note: LCtx will be freed when the I/O eventually completes }
+end;
+
+function TimeoutCtxCreate(ALoop: PAsyncLoop; const ADeadline: TDeadline;
+  ACallback: TIoCompletion; AContext: Pointer): PTimeoutCtx;
+begin
+  New(Result);
+  Result^.Loop := ALoop;
+  Result^.UserCallback := ACallback;
+  Result^.UserContext := AContext;
+  Result^.CompletionState := TIMEOUT_COMPLETION_PENDING;
+  Result^.RefCount := 2;
+  Result^.TimerHandle := ALoop^.FTimers.Schedule(ADeadline,
+    @TimeoutTimerCallback, Result);
 end;
 
 { TAsyncLoop }
@@ -420,18 +467,12 @@ var LCtx: PTimeoutCtx;
 begin
   if ADeadline.IsInfinite then
     Exit(AsyncRead(AFd, ABuf, ALen, AOffset, ACallback, AContext));
-  New(LCtx);
-  LCtx^.Loop := @Self;
-  LCtx^.UserCallback := ACallback;
-  LCtx^.UserContext := AContext;
-  LCtx^.IoCompleted := False;
-  LCtx^.TimerFired := False;
-  LCtx^.TimerHandle := FTimers.Schedule(ADeadline, @TimeoutTimerCallback, LCtx);
+  LCtx := TimeoutCtxCreate(@Self, ADeadline, ACallback, AContext);
   Result := FPoller.AsyncRead(AFd, ABuf, ALen, AOffset, @TimeoutIoCallback, LCtx);
   if not Result then
   begin
-    FTimers.Cancel(LCtx^.TimerHandle);
-    Dispose(LCtx);
+    TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxRelease(LCtx);
   end;
 end;
 
@@ -441,18 +482,12 @@ var LCtx: PTimeoutCtx;
 begin
   if ADeadline.IsInfinite then
     Exit(AsyncWrite(AFd, ABuf, ALen, AOffset, ACallback, AContext));
-  New(LCtx);
-  LCtx^.Loop := @Self;
-  LCtx^.UserCallback := ACallback;
-  LCtx^.UserContext := AContext;
-  LCtx^.IoCompleted := False;
-  LCtx^.TimerFired := False;
-  LCtx^.TimerHandle := FTimers.Schedule(ADeadline, @TimeoutTimerCallback, LCtx);
+  LCtx := TimeoutCtxCreate(@Self, ADeadline, ACallback, AContext);
   Result := FPoller.AsyncWrite(AFd, ABuf, ALen, AOffset, @TimeoutIoCallback, LCtx);
   if not Result then
   begin
-    FTimers.Cancel(LCtx^.TimerHandle);
-    Dispose(LCtx);
+    TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxRelease(LCtx);
   end;
 end;
 
@@ -462,18 +497,12 @@ var LCtx: PTimeoutCtx;
 begin
   if ADeadline.IsInfinite then
     Exit(AsyncRecv(AFd, ABuf, ALen, AFlags, ACallback, AContext));
-  New(LCtx);
-  LCtx^.Loop := @Self;
-  LCtx^.UserCallback := ACallback;
-  LCtx^.UserContext := AContext;
-  LCtx^.IoCompleted := False;
-  LCtx^.TimerFired := False;
-  LCtx^.TimerHandle := FTimers.Schedule(ADeadline, @TimeoutTimerCallback, LCtx);
+  LCtx := TimeoutCtxCreate(@Self, ADeadline, ACallback, AContext);
   Result := FPoller.AsyncRecv(AFd, ABuf, ALen, AFlags, @TimeoutIoCallback, LCtx);
   if not Result then
   begin
-    FTimers.Cancel(LCtx^.TimerHandle);
-    Dispose(LCtx);
+    TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxRelease(LCtx);
   end;
 end;
 
@@ -483,18 +512,12 @@ var LCtx: PTimeoutCtx;
 begin
   if ADeadline.IsInfinite then
     Exit(AsyncSend(AFd, ABuf, ALen, AFlags, ACallback, AContext));
-  New(LCtx);
-  LCtx^.Loop := @Self;
-  LCtx^.UserCallback := ACallback;
-  LCtx^.UserContext := AContext;
-  LCtx^.IoCompleted := False;
-  LCtx^.TimerFired := False;
-  LCtx^.TimerHandle := FTimers.Schedule(ADeadline, @TimeoutTimerCallback, LCtx);
+  LCtx := TimeoutCtxCreate(@Self, ADeadline, ACallback, AContext);
   Result := FPoller.AsyncSend(AFd, ABuf, ALen, AFlags, @TimeoutIoCallback, LCtx);
   if not Result then
   begin
-    FTimers.Cancel(LCtx^.TimerHandle);
-    Dispose(LCtx);
+    TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxRelease(LCtx);
   end;
 end;
 

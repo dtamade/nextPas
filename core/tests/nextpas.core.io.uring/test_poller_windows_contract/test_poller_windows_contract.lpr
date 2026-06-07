@@ -239,10 +239,7 @@ var
   LAsyncLoop: string;
   LCloseBody: string;
   LTimeoutIoBody: string;
-  LTimeoutIoAfterTimerBody: string;
-  LTimerFiredIoBody: string;
   LTimeoutTimerBody: string;
-  LIoCompletedTimerBody: string;
   LReadTimeoutBody: string;
   LWriteTimeoutBody: string;
 begin
@@ -251,14 +248,8 @@ begin
     'function tasyncloop.isvalid');
   LTimeoutIoBody := ExtractBetween(LAsyncLoop, 'procedure timeoutiocallback',
     'procedure timeouttimercallback');
-  LTimeoutIoAfterTimerBody := ExtractBetween(LTimeoutIoBody,
-    'lctx^.iocompleted := true;', 'end;');
-  LTimerFiredIoBody := ExtractBetween(LTimeoutIoBody,
-    'if lctx^.timerfired then', 'lctx^.iocompleted := true;');
   LTimeoutTimerBody := ExtractBetween(LAsyncLoop, 'procedure timeouttimercallback',
     '{ tasyncloop }');
-  LIoCompletedTimerBody := ExtractBetween(LTimeoutTimerBody,
-    'if lctx^.iocompleted then', 'lctx^.timerfired := true;');
   LReadTimeoutBody := ExtractBetween(LAsyncLoop,
     'function tasyncloop.asyncreadtimeout',
     'function tasyncloop.asyncwritetimeout');
@@ -273,29 +264,18 @@ begin
   CheckBefore(LCloseBody, 'fpoller.close;', 'platform_poller_close(fwakepoller);',
     'async loop close must keep wake resources alive while abort callbacks can re-enter');
 
-  CheckContains(LTimerFiredIoBody, 'dispose(lctx);',
-    'timeout IO callback must free context when timer already fired');
-  CheckContains(LTimerFiredIoBody, 'exit;',
-    'timeout IO callback must stop after timer-fired cleanup');
-  CheckAbsent(LTimerFiredIoBody, 'usercallback',
-    'timeout IO callback must not notify user twice after timer fired');
-  CheckBefore(LTimeoutIoAfterTimerBody, 'ftimers.cancel(lctx^.timerhandle);',
-    'lctx^.usercallback(auserdata, aresult, lctx^.usercontext);',
-    'timeout IO callback must cancel timer before forwarding user callback');
-  CheckBefore(LTimeoutIoAfterTimerBody,
-    'lctx^.usercallback(auserdata, aresult, lctx^.usercontext);',
-    'dispose(lctx);',
-    'timeout IO callback must release context after forwarding user callback');
-
-  CheckContains(LIoCompletedTimerBody, 'dispose(lctx);',
-    'timeout timer callback must free context when I/O already completed');
-  CheckContains(LIoCompletedTimerBody, 'exit;',
-    'timeout timer callback must stop after I/O-completed cleanup');
-  CheckAbsent(LIoCompletedTimerBody, 'usercallback',
-    'timeout timer callback must not notify user twice after I/O completed');
-  CheckContains(LTimeoutTimerBody,
-    'lctx^.usercallback(0, -etimedout_linux, lctx^.usercontext);',
-    'timeout timer callback must deliver exactly one timeout result');
+  CheckContains(LTimeoutIoBody, 'try',
+    'timeout IO callback must protect cleanup on callback exceptions');
+  CheckContains(LTimeoutIoBody, 'finally',
+    'timeout IO callback must release ownership on every exit path');
+  CheckContains(LTimeoutIoBody, 'timeoutctxrelease(lctx);',
+    'timeout IO callback must release the I/O owner reference');
+  CheckContains(LTimeoutTimerBody, 'try',
+    'timeout timer callback must protect cleanup on callback exceptions');
+  CheckContains(LTimeoutTimerBody, 'finally',
+    'timeout timer callback must release ownership on every exit path');
+  CheckContains(LTimeoutTimerBody, 'timeoutctxrelease(lctx);',
+    'timeout timer callback must release the timer owner reference');
 
   CheckContains(LReadTimeoutBody, '@timeoutiocallback',
     'async read timeout must submit the owned timeout callback to poller');
@@ -305,6 +285,69 @@ begin
     'async write timeout must submit the owned timeout callback to poller');
   CheckContains(LWriteTimeoutBody, 'if not result then',
     'async write timeout must reclaim context only on rejected submission');
+end;
+
+procedure TestAsyncLoopTimeoutSingleFireCleanupContract;
+var
+  LAsyncLoop: string;
+  LTimeoutCtxBody: string;
+  LClaimBody: string;
+  LReleaseBody: string;
+  LTimeoutIoBody: string;
+  LTimeoutTimerBody: string;
+begin
+  LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
+  LTimeoutCtxBody := ExtractBetween(LAsyncLoop, 'ttimeoutctx = record',
+    'end;');
+  LClaimBody := ExtractBetween(LAsyncLoop, 'function timeoutctxclaimcompletion',
+    'procedure timeoutctxrelease');
+  LReleaseBody := ExtractBetween(LAsyncLoop, 'procedure timeoutctxrelease',
+    'procedure timeoutiocallback');
+  LTimeoutIoBody := ExtractBetween(LAsyncLoop, 'procedure timeoutiocallback',
+    'procedure timeouttimercallback');
+  LTimeoutTimerBody := ExtractBetween(LAsyncLoop, 'procedure timeouttimercallback',
+    '{ tasyncloop }');
+
+  CheckContains(LAsyncLoop, 'timeout_completion_pending',
+    'timeout wrapper must name the pending single-fire state');
+  CheckContains(LAsyncLoop, 'timeout_completion_io',
+    'timeout wrapper must name the I/O completion winner state');
+  CheckContains(LAsyncLoop, 'timeout_completion_timer',
+    'timeout wrapper must name the timeout winner state');
+  CheckContains(LTimeoutCtxBody, 'completionstate: int32',
+    'timeout context must track one single-fire completion winner');
+  CheckContains(LTimeoutCtxBody, 'refcount: int32',
+    'timeout context must retain timer and I/O owner references separately');
+  CheckAbsent(LTimeoutCtxBody, 'iocompleted',
+    'timeout context must not rely on non-atomic I/O-completed booleans');
+  CheckAbsent(LTimeoutCtxBody, 'timerfired',
+    'timeout context must not rely on non-atomic timer-fired booleans');
+
+  CheckContains(LClaimBody, 'atomiccompareexchange32',
+    'timeout completion claim must be atomic');
+  CheckContains(LClaimBody, 'timeout_completion_pending',
+    'timeout completion claim must only win from pending state');
+  CheckContains(LReleaseBody, 'atomicfetchsub32',
+    'timeout cleanup release must be atomic');
+  CheckContains(LReleaseBody, 'dispose(actx);',
+    'timeout cleanup release must free the context only from the last owner');
+
+  CheckContains(LTimeoutIoBody,
+    'timeoutctxclaimcompletion(lctx, timeout_completion_io)',
+    'timeout IO callback must atomically claim the real I/O result');
+  CheckBefore(LTimeoutIoBody, 'timeoutctxcanceltimerowner(lctx);',
+    'lctx^.usercallback(auserdata, aresult, lctx^.usercontext);',
+    'timeout IO callback must cancel the timer before forwarding I/O result');
+  CheckContains(LTimeoutIoBody, 'timeoutctxrelease(lctx);',
+    'timeout IO callback must release its owner reference on every exit path');
+  CheckContains(LTimeoutTimerBody,
+    'timeoutctxclaimcompletion(lctx, timeout_completion_timer)',
+    'timeout timer callback must atomically claim the timeout result');
+  CheckContains(LTimeoutTimerBody,
+    'lctx^.usercallback(0, -etimedout_linux, lctx^.usercontext);',
+    'timeout timer callback must still deliver exactly one timeout result');
+  CheckContains(LTimeoutTimerBody, 'timeoutctxrelease(lctx);',
+    'timeout timer callback must release its owner reference on every exit path');
 end;
 
 procedure TestIocpSynchronousFailureOwnershipContract;
@@ -376,12 +419,16 @@ begin
     'AsyncClose must reject unsupported IOCP ownership through the helper');
   CheckContains(LRecvTimeoutBody, 'if not result then',
     'async recv timeout wrapper must reclaim timeout context only on rejected submission');
-  CheckContains(LRecvTimeoutBody, 'dispose(lctx);',
-    'async recv timeout wrapper must still reclaim context when submission is rejected');
+  CheckContains(LRecvTimeoutBody, 'timeoutctxcanceltimerowner(lctx);',
+    'async recv timeout wrapper must release the timer owner when submission is rejected');
+  CheckContains(LRecvTimeoutBody, 'timeoutctxrelease(lctx);',
+    'async recv timeout wrapper must release the I/O owner when submission is rejected');
   CheckContains(LSendTimeoutBody, 'if not result then',
     'async send timeout wrapper must reclaim timeout context only on rejected submission');
-  CheckContains(LSendTimeoutBody, 'dispose(lctx);',
-    'async send timeout wrapper must still reclaim context when submission is rejected');
+  CheckContains(LSendTimeoutBody, 'timeoutctxcanceltimerowner(lctx);',
+    'async send timeout wrapper must release the timer owner when submission is rejected');
+  CheckContains(LSendTimeoutBody, 'timeoutctxrelease(lctx);',
+    'async send timeout wrapper must release the I/O owner when submission is rejected');
 end;
 
 procedure TestIocpPendingOperationOwnershipContract;
@@ -460,6 +507,8 @@ begin
     @TestIocpCloseAbortOwnershipContract);
   T.Run('async loop timeout close lifecycle contract',
     @TestAsyncLoopTimeoutCloseLifecycleContract);
+  T.Run('async loop timeout single-fire cleanup contract',
+    @TestAsyncLoopTimeoutSingleFireCleanupContract);
   T.Run('IOCP synchronous failure ownership contract',
     @TestIocpSynchronousFailureOwnershipContract);
   T.Run('IOCP unsupported async ownership contract',
