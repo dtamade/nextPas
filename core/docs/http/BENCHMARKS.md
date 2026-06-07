@@ -801,6 +801,9 @@ The same gate now also locks `epoll + echo_1k`, so epoll backend evidence no
 longer depends only on the earlier `direct_root` fast-path row.
 The focused gate also locks `param_route`, which keeps the full-chain URL path
 plus route-parameter extraction seam under regression coverage.
+It now also locks `epoll + sink_16k`, so epoll evidence covers a request-heavy
+llhttp row instead of stopping at either the fast-path row or the symmetric
+`echo_1k` body-bearing case.
 
 ## Optimization Evidence: Full-Chain Benchmark Buffered Client Read
 

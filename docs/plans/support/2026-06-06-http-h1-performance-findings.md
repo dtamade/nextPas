@@ -5328,3 +5328,19 @@
 - 价值在于：
   full-chain saved artifacts 现在不只锁 “router/no-router/body/no-body”，还把
   path-params 这一条独立路由成本面纳入了持续回归证据。
+
+## 2026-06-07 full-chain epoll-sink focused smoke findings
+
+- 在 `epoll + echo_1k` slice 之后，epoll backend 已经覆盖到一条 body-bearing
+  llhttp row，但它仍然没有覆盖 request-heavy / empty-response 这一格。
+- `sink_16k` 在这里不是重复 `echo_1k`：
+  - `echo_1k` 是对称的 request/response body row；
+  - `sink_16k` 代表的是“重 ingress、空 egress”的 full-chain seam。
+- 这轮继续保持窄刀，不扩 runtime、不加新 marker：
+  - 只把 `epoll + sink_16k` 提升进 focused gate
+  - 锁住 `backend=epoll`
+  - 同时锁住 `request_body_bytes=16384`、`response_body_bytes=0`、
+    `nextpas_h1_path=llhttp`
+- 这轮的价值仍是 benchmark truth：
+  epoll backend 的 durable full-chain proof 现在同时覆盖
+  fast-path row、对称 body-bearing llhttp row，以及 request-heavy llhttp row。

@@ -12095,3 +12095,49 @@ Hello from nextPas!
     instead of remaining an unlocked workload in the harness inventory
   - this is coverage tightening only; it does not claim a new optimization,
     new marker schema, or epoll parity for the same workload
+
+## Session: 2026-06-07 full-chain epoll-sink focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the request-heavy `sink_16k` row onto the epoll backend focused
+    matrix
+  - extend durable epoll proof beyond `direct_root` and the symmetric
+    `echo_1k` llhttp row
+  - keep the slice limited to benchmark-truth coverage, not runtime behavior
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch `bench_fullchain` runtime behavior, public HTTP API,
+    lower-layer modules, comparison runner behavior, comparator binaries, or
+    generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `73 total, 73 passed, 0 failed`
+    - new focused row:
+      `bench_fullchain epoll sink 16k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `env NEXTPAS_BENCH_MAX_ITERS=64 NEXTPAS_BENCH_FILTER=sink_16k NEXTPAS_BENCH_BACKEND=epoll ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `workload=sink_16k`
+    - `backend=epoll`
+    - `request_body_bytes=16384`
+    - `response_body_bytes=0`
+    - `nextpas_h1_path=llhttp`
+    - `completed=64`
+    - `ns/op=131315.0`
+    - `req/s=7615`
+- Landed change:
+  - `test_http_benchmarks` now runs `NEXTPAS_BENCH_FILTER=sink_16k` with
+    `NEXTPAS_BENCH_BACKEND=epoll`
+  - the focused smoke locks:
+    - `workload=sink_16k`
+    - `backend=epoll`
+    - `request_body_bytes=16384`
+    - `response_body_bytes=0`
+    - `nextpas_h1_path=llhttp`
+- Outcome:
+  - the durable epoll full-chain proof now reaches the request-heavy llhttp
+    seam instead of stopping at the fast-path row or the symmetric echo row
+  - this is coverage tightening only; it does not claim a new optimization,
+    a backend ranking, or a runtime fix
