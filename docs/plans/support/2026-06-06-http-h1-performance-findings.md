@@ -5600,3 +5600,22 @@
 - 这轮的价值仍是 benchmark truth：
   dual opt-in body-bearing public comparison 现在在 raw runner 和 durable snapshot
   两层都能稳定取证。
+
+## 2026-06-07 h1 metadata-cache filter focused smoke findings
+
+- `request metadata` 这组 bench_h1parser row 之前只在较宽的过滤器下一起出现：
+  legacy row 与 cached row 会同时输出。
+- 这会留下一个微基准 truth gap：
+  后续如果只想盯住 parse-time metadata cache 本身，focused gate 还不能证明
+  `request metadata cached` 这条 row 能单独稳定存在，也不能证明过滤器不会顺手带出
+  legacy row 或无关 fast-headers row。
+- 本轮继续保持窄刀，没有碰 parser 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=request metadata cached` 提升进 focused gate
+  - 锁住 `bench_filter=request metadata cached`
+  - 锁住 `adapter cost: request metadata cached expect+cl`
+  - 锁住 filtered output 不包含
+    `adapter cost: request metadata legacy expect+cl`
+  - 也不包含无关的 `fast headers get host only`
+- 这轮的价值仍是 benchmark truth：
+  request metadata cache 现在有了更窄、更适合后续性能 isolation 的 standalone
+  microbenchmark proof，而不是只附着在更宽的 filter 组合里。

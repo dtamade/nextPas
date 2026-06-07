@@ -12578,3 +12578,38 @@ Hello from nextPas!
     body-bearing comparison seam
   - this is coverage tightening only; it does not claim a new ranking or a new
     snapshot schema
+
+## Session: 2026-06-07 h1 metadata-cache filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` metadata-cache filter row into the
+    focused benchmark gate
+  - keep the slice limited to parser microbenchmark truth, not parser
+    implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch parser production code, server/runtime behavior, comparison
+    runner behavior, comparator binaries, public HTTP API, lower-layer modules,
+    or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `86 total, 86 passed, 0 failed`
+    - new focused row:
+      `H1 parser benchmark metadata cache filter env`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=request metadata cached`
+  - the focused smoke locks:
+    - `bench_filter=request metadata cached`
+    - `adapter cost: request metadata cached expect+cl`
+    - filtered output does not include
+      `adapter cost: request metadata legacy expect+cl`
+    - filtered output does not include unrelated fast-header rows
+- Outcome:
+  - the parse-time metadata cache row is now a durable standalone microbenchmark
+    instead of only riding along inside the broader `request metadata` filter
+  - this is benchmark-truth tightening only; it does not claim a new parser
+    optimization

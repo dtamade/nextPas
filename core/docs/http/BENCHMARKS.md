@@ -2016,6 +2016,11 @@ adapter cost: request metadata legacy expect+cl ns/op=1321.3
 adapter cost: request metadata cached expect+cl ns/op=6.1
 ```
 
+The focused gate now also locks the narrower
+`bench_filter=request metadata cached` path, so the cached row remains a
+durable standalone microbenchmark instead of only appearing as part of the
+broader legacy-vs-cached pair.
+
 Focused validation:
 
 ```text

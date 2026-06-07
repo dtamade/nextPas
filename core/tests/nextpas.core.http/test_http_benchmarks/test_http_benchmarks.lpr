@@ -3421,6 +3421,42 @@ begin
     'H1 parser benchmark adapter no-url metadata row');
 end;
 
+procedure TestH1ParserBenchmarkMetadataCacheFilterEnv;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser metadata cache filter build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveH1ParserBenchBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath),
+    'H1 parser metadata cache filter binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=request metadata cached'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser metadata cache filter smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'bench_filter=request metadata cached',
+    'H1 parser metadata cache filter marker');
+  CheckContains(LOutput, 'adapter cost: request metadata cached expect+cl',
+    'H1 parser metadata cache filtered row');
+  CheckNotContains(LOutput, 'adapter cost: request metadata legacy expect+cl',
+    'H1 parser metadata cache filter skips legacy row');
+  CheckNotContains(LOutput, 'adapter cost: fast headers get host only',
+    'H1 parser metadata cache filter skips unrelated fast-headers row');
+end;
+
 procedure TestCllhttpComparatorSmallSmokeWhenConfigured;
 var
   LRootDir: string;
@@ -3929,6 +3965,8 @@ begin
     @TestH1ParserBenchmarkMaxItersEnv);
   T.Run('H1 parser benchmark filter env',
     @TestH1ParserBenchmarkFilterEnv);
+  T.Run('H1 parser benchmark metadata cache filter env',
+    @TestH1ParserBenchmarkMetadataCacheFilterEnv);
   T.Run('C llhttp comparator small smoke when configured',
     @TestCllhttpComparatorSmallSmokeWhenConfigured);
   T.Run('C llhttp comparator max iterations env when configured',
