@@ -6326,6 +6326,20 @@ begin
     'HTTP/1.1 501 Not Implemented');
 end;
 
+procedure TestExpectContinueNonChunkedTransferCodingRejectsEarly;
+const
+  REQ =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: gzip'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunExpectContinueMalformedTransferCodingRejectsEarly(False,
+    'expect non-chunked transfer-coding threaded', REQ,
+    'HTTP/1.1 501 Not Implemented');
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestExpectContinueUnsupportedTransferCodingRejectsEarlyEpollBackend;
 const
@@ -12409,6 +12423,8 @@ begin
     @TestHeadExpectWithoutDeclaredBodyDoesNotEmitInterim);
   T.Run('Expect: unsupported transfer-coding rejects before interim response',
     @TestExpectContinueUnsupportedTransferCodingRejectsEarly);
+  T.Run('Expect: non-chunked transfer-coding rejects before interim response',
+    @TestExpectContinueNonChunkedTransferCodingRejectsEarly);
   T.Run('Expect: chunked-not-final transfer-coding rejects before interim response',
     @TestExpectContinueChunkedMustBeFinalTransferCodingRejectsEarly);
   T.Run('Expect: declared oversize content-length rejects early',
