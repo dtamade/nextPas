@@ -604,6 +604,20 @@ begin
   Check('Timeout — elapsed < 2s', LStart.Elapsed.AsMilliseconds < 2000);
 end;
 
+procedure TestTimeoutOutputDrainsBeforeWait;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/sh')
+    .Args(['-c', 'yes process-timeout-drain | head -n 20000; printf done-marker'])
+    .Timeout(TDuration.FromSeconds(5))
+    .Output;
+  Check('Timeout output drain — process exits normally', LOut.Status = psExited);
+  Check('Timeout output drain — exit 0', LOut.ExitCode = 0);
+  Check('Timeout output drain — captures tail marker',
+    Pos('done-marker', LOut.StdOut) > 0);
+end;
+
 
 begin
   LPassed := 0;
@@ -636,6 +650,7 @@ begin
   TestEnvReplaceSkipsNonExecutablePathShadow;
   TestEnvAddDuplicatePathUsesFinalResolvedView;
   TestTimeout;
+  TestTimeoutOutputDrainsBeforeWait;
   TestEnvAdd;
   TestStdinNull;
   TestStdoutNull;

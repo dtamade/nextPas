@@ -240,6 +240,9 @@ end;
 function TChild.WaitWithOutput: TProcessOutput;
 var
   LWait: TProcessOutput;
+  LProcessResult: TPlatformProcessResult;
+  LHaveProcessResult: Boolean;
+  LDeadline: TInstant;
   LFds: array[0..1] of TPollFd;
   LNFds: Integer;
   LBuf: array[0..65535] of Byte;
@@ -248,6 +251,7 @@ var
   LOutCap, LErrCap: Integer;
   LStdoutFd, LStderrFd: PtrInt;
   LPollResult: Integer;
+  LPollTimeout: Integer;
 begin
   if FStdinWriter <> nil then
     (FStdinWriter as TPipeWriter).Close;
@@ -258,6 +262,10 @@ begin
   LErrTotal := 0;
   LOutCap := 0;
   LErrCap := 0;
+  LHaveProcessResult := False;
+  FillChar(LProcessResult, SizeOf(LProcessResult), 0);
+  if not FTimeout.IsZero then
+    LDeadline := TInstant.Now.Add(FTimeout);
 
   LStdoutFd := -1;
   LStderrFd := -1;
@@ -266,9 +274,26 @@ begin
   if (FStderrReader <> nil) and (FStderrReader is TPipeReader) then
     LStderrFd := TPipeReader(FStderrReader as TObject).Fd;
 
-  if (LStdoutFd >= 0) and (LStderrFd >= 0) then
+  if (LStdoutFd >= 0) or (LStderrFd >= 0) then
   begin
     repeat
+      if (not FTimeout.IsZero) and (not LHaveProcessResult) then
+      begin
+        platform_process_try_wait(FProc, LProcessResult);
+        if LProcessResult.Status <> nextpas.core.platform.process.base.psRunning then
+        begin
+          LHaveProcessResult := True;
+          FWaited := True;
+        end
+        else if TInstant.Now.DurationSince(LDeadline).IsPositive then
+        begin
+          platform_process_kill(FProc);
+          platform_process_wait(FProc, LProcessResult);
+          LHaveProcessResult := True;
+          FWaited := True;
+        end;
+      end;
+
       LNFds := 0;
       if LStdoutFd >= 0 then
       begin
@@ -286,8 +311,18 @@ begin
       end;
       if LNFds = 0 then Break;
 
-      LPollResult := poll(@LFds[0], LNFds, -1);
-      if LPollResult <= 0 then Break;
+      if FTimeout.IsZero then
+        LPollTimeout := -1
+      else
+        LPollTimeout := 10;
+      LPollResult := poll(@LFds[0], LNFds, LPollTimeout);
+      if LPollResult < 0 then Break;
+      if LPollResult = 0 then
+      begin
+        if LHaveProcessResult then
+          Break;
+        Continue;
+      end;
 
       if (LStdoutFd >= 0) and ((LFds[0].revents and (POLLIN or POLLHUP)) <> 0) then
       begin
@@ -353,9 +388,23 @@ begin
 
   FStdoutReader := nil;
   FStderrReader := nil;
-  LWait := Wait;
-  Result.ExitCode := LWait.ExitCode;
-  Result.Status := LWait.Status;
+  if LHaveProcessResult then
+  begin
+    Result.ExitCode := LProcessResult.ExitCode;
+    case LProcessResult.Status of
+      psExited: Result.Status := nextpas.core.process.base.psExited;
+      psSignaled: Result.Status := nextpas.core.process.base.psSignaled;
+      psRunning: Result.Status := nextpas.core.process.base.psRunning;
+    else
+      Result.Status := nextpas.core.process.base.psUnknown;
+    end;
+  end
+  else
+  begin
+    LWait := Wait;
+    Result.ExitCode := LWait.ExitCode;
+    Result.Status := LWait.Status;
+  end;
 end;
 
 end.

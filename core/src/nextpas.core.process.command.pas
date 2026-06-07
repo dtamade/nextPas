@@ -464,26 +464,6 @@ begin
   Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR, FTimeout);
 end;
 
-function ReadAllFromReader(const AReader: IReader): string;
-var
-  LBuf: array[0..65535] of Byte;
-  LRead: SizeUInt;
-  LTotal: Integer;
-begin
-  Result := '';
-  if AReader = nil then Exit;
-  LTotal := 0;
-  repeat
-    LRead := AReader.Read(LBuf[0], 65536);
-    if LRead > 0 then
-    begin
-      SetLength(Result, LTotal + Integer(LRead));
-      Move(LBuf[0], Result[LTotal + 1], LRead);
-      Inc(LTotal, Integer(LRead));
-    end;
-  until LRead = 0;
-end;
-
 function TCommand.Timeout(const ADuration: TDuration): ICommand;
 begin
   FTimeout := ADuration;
@@ -494,7 +474,6 @@ function TCommand.Output: TProcessOutput;
 var
   LChild: IChild;
   LSavedStdout, LSavedStderr: TStdio;
-  LWait: TProcessOutput;
 begin
   LSavedStdout := FStdoutMode;
   LSavedStderr := FStderrMode;
@@ -502,17 +481,7 @@ begin
   FStderrMode := stPiped;
   try
     LChild := Spawn;
-    if FTimeout.IsZero then
-      Result := LChild.WaitWithOutput
-    else
-    begin
-      { With timeout: Wait first (may kill), then drain pipes }
-      LWait := LChild.Wait;
-      Result.StdOut := ReadAllFromReader(LChild.TakeStdout);
-      Result.StdErr := ReadAllFromReader(LChild.TakeStderr);
-      Result.ExitCode := LWait.ExitCode;
-      Result.Status := LWait.Status;
-    end;
+    Result := LChild.WaitWithOutput;
   finally
     FStdoutMode := LSavedStdout;
     FStderrMode := LSavedStderr;
