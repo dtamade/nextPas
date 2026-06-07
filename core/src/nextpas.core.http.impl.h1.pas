@@ -127,7 +127,8 @@ type
     procedure PoolClear;
     function WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest): Boolean;
     function ReadResponse(const AReader: IReader;
-      const ARequestMethod: THttpMethod; out AKeepAlive: Boolean): IHttpResponse;
+      const ARequestMethod: THttpMethod; out AKeepAlive: Boolean;
+      out AResponseStarted: Boolean): IHttpResponse;
   public
     constructor Create(const AOptions: TH1ClientTransportOptions);
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
@@ -1928,18 +1929,21 @@ begin
 end;
 
 function TH1ClientTransport.ReadResponse(const AReader: IReader;
-  const ARequestMethod: THttpMethod; out AKeepAlive: Boolean): IHttpResponse;
+  const ARequestMethod: THttpMethod; out AKeepAlive: Boolean;
+  out AResponseStarted: Boolean): IHttpResponse;
 var
   LParser: IH1Parser;
   LBuf: array[0..4095] of Byte;
   LN: SizeUInt;
   LBodyReader: IReader;
 begin
+  AResponseStarted := False;
   LParser := NewH1ResponseParser(ARequestMethod = hmHead);
   repeat
     LN := AReader.Read(LBuf[0], 4096);
     if LN = 0 then
       Break;
+    AResponseStarted := True;
     LParser.Execute(@LBuf[0], LN);
   until LParser.IsComplete or LParser.HasError;
 
@@ -1972,6 +1976,7 @@ var
   LResp: IHttpResponse;
   LPooled: Boolean;
   LKeepAlive: Boolean;
+  LResponseStarted: Boolean;
   LBodyStream: IStream;
   LBodyStartPosition: Int64;
 begin
@@ -2001,13 +2006,17 @@ begin
   if not AReq.Headers.Has('host') then
     AReq.Headers.SetHeader('host', LUrl.HostPort);
 
+  LResponseStarted := False;
   try
     WriteRequest(LConn as IWriter, AReq);
-    LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive);
+    LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
+      LResponseStarted);
   except
     if LPooled then
     begin
       LConn.Close;
+      if LResponseStarted then
+        raise;
       if not IsRetrySafeRequest(AReq) then
         raise;
       RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
@@ -2018,7 +2027,8 @@ begin
         LConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
       end;
       WriteRequest(LConn as IWriter, AReq);
-      LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive);
+      LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
+        LResponseStarted);
     end
     else
     begin

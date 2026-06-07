@@ -41,6 +41,7 @@ var
   GRetryAcceptCount: Int32;
   GRetrySecondMethod: string;
   GRetrySecondBody: string;
+  GRetryBodyTimeoutSecondAttemptSeen: Boolean;
   GBodyLimitListener: ITcpListener;
   GBodyLimitDeclaredBody: string;
   GBodyLimitExtraBody: string;
@@ -446,6 +447,64 @@ begin
     end;
     LConn.Close;
   end;
+end;
+
+function PooledBodyTimeoutThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LReply: string;
+  LMethod: string;
+  LBody: string;
+begin
+  Result := nil;
+  try
+    LConn := GRetryListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  InterlockedIncrement(GRetryAcceptCount);
+  try
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    LReply := 'HTTP/1.1 200 OK'#13#10 +
+              'Content-Length: 2'#13#10 +
+              #13#10 +
+              'ok';
+    LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    LReply := 'HTTP/1.1 200 OK'#13#10 +
+              'Content-Length: 10'#13#10 +
+              #13#10 +
+              'hello';
+    LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+    platform_thread_sleep_ns(250000000);
+  except
+  end;
+  LConn.Close;
+
+  try
+    LConn := GRetryListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  InterlockedIncrement(GRetryAcceptCount);
+  GRetryBodyTimeoutSecondAttemptSeen := True;
+  try
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    LReply := 'HTTP/1.1 200 OK'#13#10 +
+              'Content-Length: 23'#13#10 +
+              #13#10 +
+              'retry-should-not-happen';
+    LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+  except
+  end;
+  LConn.Close;
 end;
 
 function BodyLimitCaptureThread(AArg: Pointer): Pointer; cdecl;
@@ -3790,6 +3849,57 @@ begin
   end;
 end;
 
+procedure TestClientDoesNotRetryAfterResponseBodyTimeout;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LOptions: THttpClientOptions;
+  LRaised: Boolean;
+  LRet: Pointer;
+begin
+  GRetryAcceptCount := 0;
+  GRetryBodyTimeoutSecondAttemptSeen := False;
+  GRetryListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRetryListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @PooledBodyTimeoutThread, nil);
+
+  try
+    LOptions := THttpClientOptions.Default;
+    LOptions.Timeout := 200;
+    LClient := NewHttpClient(LOptions);
+
+    CheckEqual(Int64(200), Int64(LClient.Get(
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/prime').StatusCode),
+      'priming request status 200');
+    CheckEqual(Int64(1), Int64(GRetryAcceptCount),
+      'priming request opened first connection');
+
+    LRaised := False;
+    try
+      LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/partial');
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+
+    Check(LRaised, 'partial response body timeout raises');
+    CheckEqual(Int64(1), Int64(GRetryAcceptCount),
+      'client does not retry after response body has started');
+    Check(not GRetryBodyTimeoutSecondAttemptSeen,
+      'server did not observe retry after partial response body');
+
+    LClient := nil;
+  finally
+    if GRetryAcceptCount < 2 then
+      WakeRetryAcceptThread(LPort);
+    GRetryListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRetryListener := nil;
+    GRetryBodyTimeoutSecondAttemptSeen := False;
+  end;
+end;
+
 { Test 6: Client timeout on slow server }
 procedure TestClientTimeout;
 var
@@ -4117,6 +4227,8 @@ begin
     @TestClientRejectsNonIdempotentReplayableBodyAfterStalePooledConnection);
   T.Run('Client rejects non-replayable idempotent body after stale pooled connection',
     @TestClientRejectsNonReplayableIdempotentBodyAfterStalePooledConnection);
+  T.Run('Client does not retry after response body timeout',
+    @TestClientDoesNotRetryAfterResponseBodyTimeout);
   T.Run('Client timeout on slow server', @TestClientTimeout);
   T.Run('Client handles 404 response', @TestClientHandles404);
   T.Run('Client sets Host header automatically', @TestClientSetsHostHeader);
