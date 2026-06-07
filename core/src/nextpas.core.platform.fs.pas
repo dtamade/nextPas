@@ -444,14 +444,17 @@ function WalkResolveType(APathBuf: PAnsiChar; ADirType: TPlatformFileType;
   AFollowSymlinks: Boolean; out AErrCode: Int32): TPlatformFileType;
 var
   LStat: TPlatformFileStat;
+  LResult: Int32;
 begin
   AErrCode := 0;
   if ADirType <> ftUnknown then
   begin
     if AFollowSymlinks and (ADirType = ftSymlink) then
     begin
-      if platform_file_stat(APathBuf, LStat) = 0 then
+      LResult := platform_file_stat(APathBuf, LStat);
+      if LResult = 0 then
         Exit(LStat.FileType);
+      AErrCode := LResult;
       Exit(ftSymlink);
     end;
     Exit(ADirType);

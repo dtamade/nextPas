@@ -294,6 +294,7 @@ end;
 
 var
   GDanglingErrSeen: Boolean;
+  GDanglingFollowErrSeen: Boolean;
 
 function DanglingCb(const AEntry: TPlatformWalkEntry;
   AUserData: Pointer): TPlatformWalkAction;
@@ -322,6 +323,43 @@ begin
   Check(platform_fs_walk(DIR, @DanglingCb, nil, False) = PLATFORM_WALK_COMPLETED,
     'walk dangling completed');
   Check(GDanglingErrSeen, 'dangling symlink reported as ftSymlink');
+  Check(GCount = 2, 'count=2 (root + broken_link)');
+
+  platform_file_unlink(DIR + '/broken_link');
+  platform_file_rmdir(DIR);
+end;
+
+function DanglingFollowCb(const AEntry: TPlatformWalkEntry;
+  AUserData: Pointer): TPlatformWalkAction;
+var
+  LName: string;
+begin
+  Inc(GCount);
+  SetString(LName, AEntry.Name, AEntry.NameLen);
+  if LName = 'broken_link' then
+  begin
+    Check(AEntry.FileType = ftSymlink, 'dangling follow reports symlink entry');
+    Check(AEntry.ErrorCode <> 0, 'dangling follow preserves stat error');
+    GDanglingFollowErrSeen := AEntry.ErrorCode <> 0;
+  end;
+  Result := pwaContinue;
+end;
+
+procedure TestWalkDanglingSymlinkFollowReportsError;
+const
+  DIR = '/tmp/nextpas_walk_dangling_follow';
+begin
+  platform_file_unlink(DIR + '/broken_link');
+  platform_file_rmdir(DIR);
+
+  platform_file_mkdir(DIR, 493);
+  platform_file_symlink('/tmp/nextpas_nonexistent_target_xyz', DIR + '/broken_link');
+
+  GCount := 0;
+  GDanglingFollowErrSeen := False;
+  Check(platform_fs_walk(DIR, @DanglingFollowCb, nil, True) = PLATFORM_WALK_COMPLETED,
+    'walk dangling follow completed');
+  Check(GDanglingFollowErrSeen, 'dangling symlink follow emitted callback error');
   Check(GCount = 2, 'count=2 (root + broken_link)');
 
   platform_file_unlink(DIR + '/broken_link');
@@ -362,6 +400,7 @@ begin
   T.Run('walk symlink no-follow', @TestWalkSymlinkNoFollow);
   T.Run('walk symlink follow', @TestWalkSymlinkFollow);
   T.Run('walk dangling symlink', @TestWalkDanglingSymlink);
+  T.Run('walk dangling symlink follow reports error', @TestWalkDanglingSymlinkFollowReportsError);
   T.Run('walk cycle protection', @TestWalkCycleProtection);
   T.Summary;
 end.
