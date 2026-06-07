@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(git worktree list --porcelain | awk '
-  /^worktree / { print substr($0, 10); exit }
+  /^worktree / && !found { print substr($0, 10); found = 1 }
 ')"
 
 if [[ -z "$repo_root" ]]; then
