@@ -11554,3 +11554,57 @@ Hello from nextPas!
   - this slice sharpens cost attribution: on this machine, the short-GET
     full-chain budget is still dominated by work outside the narrow direct
     handler invocation itself
+
+## Session: 2026-06-07 bench_server backend marker and epoll smoke slice
+
+- **Status:** completed.
+- Objective:
+  - expose backend selection explicitly on nextPas `bench_server` rows
+  - allow nextPas-only threaded vs epoll runtime characterization without
+    patching the cross-language comparison runner
+  - keep invalid backend input from silently falling back to the default server
+- Scope and safety:
+  - touched only `bench_server`, the benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 parser/runtime implementation, lower
+    layers, Go/Rust comparators, or comparison-runner workload math
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - multiple nextPas benchmark/report smokes failed on the new backend
+      contract
+    - representative failures:
+      - `bench_server small smoke` missing `backend=threaded`
+      - `bench_server rejects invalid backend` still emitted a successful
+        benchmark row
+      - `bench_server epoll small smoke` missing `backend=epoll`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_server` now accepts `--backend threaded|epoll`
+  - nextPas server rows now emit `backend=<threaded|epoll>`
+  - the benchmark actually threads the parsed backend into
+    `THttpServerOptions.Backend`
+  - `test_http_benchmarks` now locks:
+    - default nextPas benchmark rows expose `backend=threaded`
+    - invalid backend input fails fast with `invalid --backend`
+    - Linux nextPas epoll smoke emits `backend=epoll`
+    - runner/snapshot coverage sees the same nextPas backend marker because
+      those artifacts embed the raw nextPas row
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `60 total, 60 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `core/build/projects/nextpas.core.http/bench_server/bench_http_server --requests 128 --threads 1 --workload no_url --backend threaded`
+    - `backend=threaded`
+    - `completed=128`
+    - `ns/op=41890`
+    - `req/s=23871`
+  - `core/build/projects/nextpas.core.http/bench_server/bench_http_server --requests 128 --threads 1 --workload no_url --backend epoll`
+    - `backend=epoll`
+    - `completed=128`
+    - `ns/op=91425`
+    - `req/s=10937`
+- Outcome:
+  - nextPas-only server benchmark rows now make backend selection explicit
+  - the benchmark harness can now characterize threaded vs epoll runtime
+    behavior without muddying the existing cross-language comparison runner

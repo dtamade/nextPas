@@ -119,6 +119,34 @@ non-zero with an `invalid --requests` / `invalid --threads` diagnostic instead
 of silently clamping or falling back to a default run size. This keeps typoed
 manual comparator runs from emitting misleading benchmark rows.
 
+The nextPas `bench_server` binary now also emits `backend=<threaded|epoll>` on
+its raw benchmark rows and accepts an explicit `--backend` selector:
+
+```sh
+build/projects/nextpas.core.http/bench_server/bench_http_server \
+  --requests 128 --threads 1 --workload no_url --backend threaded
+
+build/projects/nextpas.core.http/bench_server/bench_http_server \
+  --requests 128 --threads 1 --workload no_url --backend epoll
+```
+
+This is a nextPas-only runtime characterization seam, not a cross-language
+comparison flag. The server comparison runner still uses the default threaded
+backend so saved Go/Rust/nextPas comparison rows stay apples-to-apples on the
+existing workload set.
+
+Fresh local backend smoke rows from 2026-06-07:
+
+| impl | backend | workload | iterations | completed | ns/op | req/s |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| nextPas | threaded | no_url | 128 | 128 | 41890 | 23871 |
+| nextPas | epoll | no_url | 128 | 128 | 91425 | 10937 |
+
+Treat these as local backend smoke, not a stable threaded-vs-epoll ranking.
+The durable conclusion is that benchmark artifacts can now distinguish backend
+selection explicitly and can run a nextPas-only epoll row without patching the
+comparison runner.
+
 `bench_fullchain` now follows the same fail-fast benchmark-truth rule for its
 filter path: when `NEXTPAS_BENCH_FILTER` matches no scenario, the benchmark
 prints `No matching full-chain scenarios.` and exits non-zero instead of

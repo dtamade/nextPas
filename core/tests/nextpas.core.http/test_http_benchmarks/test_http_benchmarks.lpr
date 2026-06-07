@@ -344,7 +344,8 @@ begin
 end;
 
 procedure CheckServerBenchmarkOutput(const AOutput, AImplementation: string;
-  const AIterations, AThreads: string; const AWorkload: string = 'no_url');
+  const AIterations, AThreads: string; const AWorkload: string = 'no_url';
+  const ANextpasBackend: string = 'threaded');
 begin
   CheckLineContains(AOutput, 'operation=http.server.keepalive',
     'operation marker');
@@ -359,7 +360,11 @@ begin
   CheckContains(AOutput, 'ns/op=', 'ns/op marker');
   CheckContains(AOutput, 'req/s=', 'req/s marker');
   if AImplementation = 'nextpas' then
+  begin
+    CheckLineContains(AOutput, 'backend=' + ANextpasBackend,
+      'nextPas backend marker');
     CheckContains(AOutput, 'nextpas_h1_path=', 'nextPas H1 path marker');
+  end;
   if AImplementation = 'rust_std' then
     CheckContains(AOutput, 'rust_profile=std_only',
       'Rust std-only profile marker');
@@ -399,6 +404,24 @@ begin
     LOutput);
   CheckContains(LOutput, 'invalid ' + AOptionName,
     ALabel + ' invalid scale diagnostic');
+  CheckNotContains(LOutput, 'operation=http.server.keepalive',
+    ALabel + ' should not emit a benchmark row');
+end;
+
+procedure CheckInvalidBackendRejected(const AExecutable: string;
+  const AArguments: array of string; const AWorkingDir, ALabel: string);
+var
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  RunProcessAndCapture(AExecutable, AArguments, AWorkingDir, LExitCode,
+    LOutput);
+  Check(LExitCode <> 0, ALabel + ' should reject invalid backend: ' +
+    LOutput);
+  CheckContains(LOutput, 'invalid --backend',
+    ALabel + ' invalid backend diagnostic');
+  CheckContains(LOutput, 'threaded',
+    ALabel + ' valid backend list diagnostic');
   CheckNotContains(LOutput, 'operation=http.server.keepalive',
     ALabel + ' should not emit a benchmark row');
 end;
@@ -685,6 +708,47 @@ begin
   CheckInvalidScaleRejected(LBinaryPath,
     ['--requests', '1', '--threads', '0'], LBenchDir, '--threads',
     'bench_server');
+end;
+
+procedure TestBenchServerRejectsInvalidBackend;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchServerRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchServerRelativeDir);
+  LBinaryPath := ResolveBenchServerBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_server invalid backend binary exists');
+
+  CheckInvalidBackendRejected(LBinaryPath,
+    ['--requests', '1', '--threads', '1', '--backend', 'reactor'],
+    LBenchDir, 'bench_server');
+end;
+
+procedure TestBenchServerEpollSmallSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  {$IFNDEF LINUX}
+  Exit;
+  {$ENDIF}
+
+  LRootDir := ResolveCoreRoot(BenchServerRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchServerRelativeDir);
+  LBinaryPath := ResolveBenchServerBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_server epoll binary exists');
+
+  RunProcessAndCapture(LBinaryPath,
+    ['--requests', '4', '--threads', '1', '--backend', 'epoll'],
+    LBenchDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_server epoll smoke exit code: ' + LOutput);
+  CheckServerBenchmarkOutput(LOutput, 'nextpas', '4', '1', 'no_url', 'epoll');
 end;
 
 procedure TestServerComparatorsReportRequestedAndEffectiveThreads;
@@ -2707,6 +2771,10 @@ begin
     @TestBenchServerRejectsInvalidWorkload);
   T.Run('bench_server rejects invalid scale',
     @TestBenchServerRejectsInvalidScale);
+  T.Run('bench_server rejects invalid backend',
+    @TestBenchServerRejectsInvalidBackend);
+  T.Run('bench_server epoll small smoke',
+    @TestBenchServerEpollSmallSmoke);
   T.Run('server comparators report requested/effective threads',
     @TestServerComparatorsReportRequestedAndEffectiveThreads);
   T.Run('server comparators report response read contract',

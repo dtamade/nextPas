@@ -5070,3 +5070,31 @@
   - short-GET full-chain 的主要剩余成本仍应继续在 runtime/socket、
     response writer/drain、以及其他 server-path 成本上找，而不是回头扩大
     router parity 清单。
+
+## 2026-06-07 bench_server backend marker and epoll smoke findings
+
+- 目前 cross-language server comparison runner 明确写着“不覆盖 epoll”，但
+  nextPas 自己的 `bench_server` raw row 之前也没有任何 `backend=` metadata。
+  这会导致保存下来的 nextPas benchmark row 无法直接说明它到底测的是哪条
+  runtime path。
+- 本轮优先收紧的是 benchmark truth，不是立刻把 runner 扩成 threaded/epoll
+  双模式比较：
+  - 先给 nextPas `bench_server` 自己补 `--backend threaded|epoll`；
+  - 再把 `backend=<...>` 写进 raw row / runner / snapshot 会继承到的 nextPas
+    输出里；
+  - 并让 invalid backend fail-fast，而不是静默回到默认 threaded。
+- 这样做的好处是：
+  - nextPas-only runtime characterization 可以立即开始；
+  - 现有 Go/Rust comparison runner 不需要同步长出“只对 nextPas 有意义”的参数面；
+  - 保存下来的报告不会再把 threaded 默认值隐含在背景知识里。
+- focused gate 现在锁住三件事：
+  - nextPas `bench_server` row 默认带 `backend=threaded`
+  - invalid `--backend` 不会再产出伪成功 benchmark row
+  - Linux epoll smoke row 确实能跑并带 `backend=epoll`
+- 本地方向性 smoke：
+  - `threaded no_url 128x1` 约 `41890 ns/op`
+  - `epoll no_url 128x1` 约 `91425 ns/op`
+- 这组数字不是 threaded-vs-epoll 的最终结论；它只是说明：
+  - backend seam 现在已经进入 benchmark artifact truth；
+  - 下一轮若继续追 runtime/socket overhead，可以在 nextPas-only bench 上直接
+    对 threaded/epoll 做更窄、更受控的重复测量，而不是先改比较 runner。
