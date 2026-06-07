@@ -5044,3 +5044,29 @@
 - 这轮最重要的产出不是单次 `ns/op` 高低，而是：
   - full-chain benchmark 首次具备 router-free 对照 row；
   - filter 语义没有因为新增 workload 退化成模糊匹配假证据。
+
+## 2026-06-07 router direct-call isolation findings
+
+- 仅靠 `bench_fullchain direct_root/plaintext` 还不足以精确描述 router 成本：
+  那两条 row 仍混有 real socket、server runtime、response serialization 和
+  outer-handler gating。
+- `bench_router` 原先只有 `handler dispatch (match + no-op handler)`，没有一个
+  “同一 request、同一 handler、完全不经过 router”的纯基线，所以即使知道 routed
+  row 的数字，也不能把纯 router dispatch 和 handler 调用本身拆开。
+- 本轮选择的最小补充不是再加一个 full-chain workload，而是在现有 router
+  microbenchmark 里补 `direct call (same request, no router)`：
+  - 它复用同一个 `NewGetRequest('/health')` 和同一个 no-op handler 形状；
+  - 唯一去掉的是 `THttpRouter.ServeHTTP` / route lookup / dispatch。
+- focused gate 现在锁住三件事：
+  - direct baseline row 确实存在；
+  - `NEXTPAS_BENCH_FILTER=handler dispatch` 不会误命中 direct row；
+  - `NEXTPAS_BENCH_FILTER=direct call` 不会误命中 routed row。
+- 本地方向性数字：
+  - `direct call (same request, no router)` 约 `3.8 ns/op`
+  - `handler dispatch (match + no-op handler)` 约 `264.5 ns/op`
+- 这说明：
+  - router dispatch 现在已经有一条足够窄的纯进程基线；
+  - 纯 handler 调用本身几乎可以忽略；
+  - short-GET full-chain 的主要剩余成本仍应继续在 runtime/socket、
+    response writer/drain、以及其他 server-path 成本上找，而不是回头扩大
+    router parity 清单。

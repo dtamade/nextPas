@@ -11505,3 +11505,52 @@ Hello from nextPas!
     plaintext row
   - the meaningful product of this slice is cost-center separation and filter
     hygiene, not a single-run performance ranking
+
+## Session: 2026-06-07 router direct-call isolation slice
+
+- **Status:** completed.
+- Objective:
+  - add a same-request/same-handler direct baseline to `bench_router`
+  - isolate pure router dispatch cost from handler invocation cost
+  - keep substring-filter behavior unambiguous while adding the new row
+- Scope and safety:
+  - touched only `bench_router`, the benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 parser/runtime behavior, full-chain
+    workloads, lower-layer modules, comparator binaries, or generated artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `58 total, 57 passed, 1 failed`
+    - failed at `bench_router direct call smoke`
+    - filtered benchmark output contained only the benchmark header and summary;
+      the expected `direct call (same request, no router)` row was missing
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_router` now exposes `direct call (same request, no router)`
+  - the new row reuses the same `NewGetRequest('/health')` shape and the same
+    no-op handler body as the existing `handler dispatch` row, but calls the
+    handler directly without `THttpRouter.ServeHTTP`
+  - `test_http_benchmarks` now locks the new direct-row smoke and both
+    directions of filter disambiguation: routed filter must not emit the direct
+    row, and direct filter must not emit the routed row
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `58 total, 58 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='direct call' make -C core/benchmarks/nextpas.core.http/bench_router clean run`
+    - `direct call (same request, no router)`
+    - `100000 iters`
+    - `3.8 ns/op`
+    - `261107514 ops/s`
+  - `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='handler dispatch' make -C core/benchmarks/nextpas.core.http/bench_router clean run`
+    - `handler dispatch (match + no-op handler)`
+    - `100000 iters`
+    - `264.5 ns/op`
+    - `3781347 ops/s`
+- Outcome:
+  - router dispatch now has a same-request direct baseline rather than only a
+    routed row
+  - this slice sharpens cost attribution: on this machine, the short-GET
+    full-chain budget is still dominated by work outside the narrow direct
+    handler invocation itself

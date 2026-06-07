@@ -349,16 +349,41 @@ NEXTPAS_BENCH_FILTER='handler dispatch' \
 make -C benchmarks/nextpas.core.http/bench_router clean run
 ```
 
-This row reports `operation=http.router.dispatch` and measures
-`THttpRouter.ServeHTTP` for a static route plus a no-op handler. It reuses one
-request object and does not include socket I/O, H1 parsing, response
-serialization, middleware, or URL/query materialization.
+Run the direct no-router baseline row:
 
-Local focused row from 2026-06-05:
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='direct call' \
+make -C benchmarks/nextpas.core.http/bench_router clean run
+```
+
+These rows report `operation=http.router.dispatch`:
+
+- `handler dispatch (match + no-op handler)` measures
+  `THttpRouter.ServeHTTP` for a static route plus a no-op handler. It reuses
+  one request object and does not include socket I/O, H1 parsing, response
+  serialization, middleware, or URL/query materialization.
+- `direct call (same request, no router)` measures the same reused request
+  object and the same no-op handler shape without router lookup or dispatch.
+  The gap between the two rows is the narrowest current benchmark for router
+  dispatch on this hot path.
+
+The filter is still substring-based, so the row names intentionally stay
+disjoint: `NEXTPAS_BENCH_FILTER='handler dispatch'` must not accidentally run
+the direct baseline, and `NEXTPAS_BENCH_FILTER='direct call'` must not
+accidentally run the routed row.
+
+Local focused rows from 2026-06-07:
 
 | workload | iterations | ns/op | ops/s |
 | --- | ---: | ---: | ---: |
-| handler dispatch (match + no-op handler) | 100000 | 508.1 | 1968021 |
+| direct call (same request, no router) | 100000 | 3.8 | 261107514 |
+| handler dispatch (match + no-op handler) | 100000 | 264.5 | 3781347 |
+
+Treat these as local directional rows, not a permanent microbenchmark ranking.
+The durable conclusion is that router dispatch can now be isolated against a
+same-request/same-handler direct baseline, and that the remaining short-GET
+full-chain cost still lives primarily outside this narrow dispatch slice.
 
 ## Run the Header Container Benchmark
 

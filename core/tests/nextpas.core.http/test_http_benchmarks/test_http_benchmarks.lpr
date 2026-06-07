@@ -441,6 +441,18 @@ begin
   CheckContains(AOutput, 'ops/s', 'router dispatch ops/s marker');
 end;
 
+procedure CheckRouterDirectCallBenchmarkOutput(const AOutput: string);
+begin
+  CheckContains(AOutput, 'operation=http.router.dispatch',
+    'router direct-call operation marker');
+  CheckContains(AOutput, 'direct call (same request, no router)',
+    'router direct-call benchmark row');
+  CheckContains(AOutput, 'bench_filter=direct call',
+    'router direct-call filter marker');
+  CheckContains(AOutput, 'ns/op', 'router direct-call ns/op marker');
+  CheckContains(AOutput, 'ops/s', 'router direct-call ops/s marker');
+end;
+
 procedure CheckHeadersLookupBenchmarkOutput(const AOutput: string);
 begin
   CheckContains(AOutput, 'operation=http.headers',
@@ -886,6 +898,38 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_router handler dispatch smoke exit code: ' + LOutput);
   CheckRouterDispatchBenchmarkOutput(LOutput);
+  CheckNotContains(LOutput, 'direct call (same request, no router)',
+    'bench_router handler dispatch filter must not match direct baseline');
+end;
+
+procedure TestBenchRouterDirectCallSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchRouterRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchRouterRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_router direct call build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchRouterBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_router direct call binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=direct call'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_router direct call smoke exit code: ' + LOutput);
+  CheckRouterDirectCallBenchmarkOutput(LOutput);
+  CheckNotContains(LOutput, 'handler dispatch (match + no-op handler)',
+    'bench_router direct call filter must not match routed row');
 end;
 
 procedure TestBenchHeadersLookupSmoke;
@@ -2669,6 +2713,8 @@ begin
     @TestServerComparatorsReportResponseReadContract);
   T.Run('bench_router handler dispatch smoke',
     @TestBenchRouterHandlerDispatchSmoke);
+  T.Run('bench_router direct call smoke',
+    @TestBenchRouterDirectCallSmoke);
   T.Run('bench_headers lookup smoke',
     @TestBenchHeadersLookupSmoke);
   T.Run('bench_h1writer response serialization smoke',
