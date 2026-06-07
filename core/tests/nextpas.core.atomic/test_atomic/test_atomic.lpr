@@ -343,6 +343,9 @@ var
   LAtomicNotifyAllSection: string;
   LCompatFacadeTestSection: string;
   LCompatAliasTestSection: string;
+  LTypedInt64ContractSection: string;
+  LTypedInt64FetchContractSection: string;
+  LRunnerSection: string;
   LAtomicFlagTestAndSetSection: string;
   LAtomicFlagTestSection: string;
   LAtomicFlagClearSection: string;
@@ -597,6 +600,23 @@ begin
     'procedure TestAtomicCompatAliasBehavior;' + LineEnding +
     'var',
     'procedure TestAtomicTaggedPointer;');
+  LTypedInt64ContractSection := ExtractSection(LAtomicTestSource,
+    '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}' + LineEnding +
+    'procedure TestAtomicInt64UInt64Contract;',
+    '{$ENDIF}' + LineEnding +
+    LineEnding +
+    '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}' + LineEnding +
+    'procedure TestAtomicInt64UInt64FetchContract;');
+  LTypedInt64FetchContractSection := ExtractSection(LAtomicTestSource,
+    '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}' + LineEnding +
+    'procedure TestAtomicInt64UInt64FetchContract;',
+    '{$ENDIF}' + LineEnding +
+    LineEnding +
+    'procedure TestAtomicBoolContract;');
+  LRunnerSection := ExtractSection(LAtomicTestSource,
+    'begin' + LineEnding +
+    '  T := TTestRunner.Create(''nextpas.core.atomic'');',
+    '  T.Summary;');
   LAtomicFlagTestAndSetSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_flag_test_and_set(var aFlag: atomic_flag_t): Boolean;',
     'function atomic_flag_test(var aFlag: atomic_flag_t): Boolean;');
@@ -875,6 +895,12 @@ begin
   CheckContains(LAtomicDocsReadme,
     '`TAtomicInt64` and `TAtomicUInt64` follow `atomic_is_lock_free_64`; `Increment`/`Decrement` return the new value after adding or subtracting one, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
     'atomic README must document the 64-bit typed-record lock-free and convenience contract');
+  CheckContains(LAtomicDocsReadme,
+    '`TAtomicInt64` and `TAtomicUInt64` are compiled only under `CPU64 OR CPUX86`; tests for their runtime contracts use the same gate, and targets outside that gate must not be reported as having this public typed 64-bit surface.',
+    'atomic README must document the typed 64-bit public-surface compile gate');
+  CheckContains(LAtomicDocsReadme,
+    'On i386, `atomic_is_lock_free_64` is runtime-detected from CMPXCHG8B support; when CMPXCHG8B is unavailable, the typed 64-bit API is still present but 64-bit operations use the fallback lock path.',
+    'atomic README must not equate the i386 typed 64-bit API surface with guaranteed lock-free runtime behavior');
   CheckContains(LAtomicDocsReadme,
     '`TAtomicInt64` and `TAtomicUInt64` keep the scalar 64-bit RMW return-old semantics in typed form: `FetchAdd` / `FetchSub` / `FetchAnd` / `FetchOr` / `FetchXor` return the previous value and publish the updated Int64/UInt64 payload through the wrapper storage.',
     'atomic README must document the 64-bit typed-record RMW contract');
@@ -1177,6 +1203,20 @@ begin
     'typed UInt64 FetchOr must delegate to the UInt64 atomic root');
   CheckContains(LTypesUInt64FetchSection, 'atomic_fetch_xor_64(FValue, AMask, AOrder);',
     'typed UInt64 FetchXor must delegate to the UInt64 atomic root');
+  CheckContains(LTypedInt64ContractSection, '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}',
+    'typed Int64/UInt64 runtime contract section must start with the production 64-bit API gate');
+  CheckContains(LTypedInt64ContractSection, 'TAtomicInt64.is_lock_free',
+    'typed Int64/UInt64 runtime contract must remain inside the production 64-bit API gate');
+  CheckContains(LTypedInt64FetchContractSection, '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}',
+    'typed Int64/UInt64 fetch runtime contract section must start with the production 64-bit API gate');
+  CheckContains(LTypedInt64FetchContractSection, 'TAtomicUInt64.FetchAdd',
+    'typed Int64/UInt64 fetch runtime contract must remain inside the production 64-bit API gate');
+  CheckContains(LRunnerSection,
+    '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}' + LineEnding +
+    '  T.Run(''typed atomic int64/uint64 contract'', @TestAtomicInt64UInt64Contract);' + LineEnding +
+    '  T.Run(''typed atomic int64/uint64 fetch contract'', @TestAtomicInt64UInt64FetchContract);' + LineEnding +
+    '  {$ENDIF}',
+    'typed Int64/UInt64 runner registration must match the production 64-bit API gate');
   CheckContains(LTypesISizeLockFreeSection, 'atomic_is_lock_free_ptr',
     'typed ISize lock-free query must delegate to pointer-sized runtime truth');
   CheckNotContains(LTypesISizeLockFreeSection, 'Result := True',
@@ -1808,6 +1848,7 @@ begin
     'TAtomicUInt32.FetchXor should publish the XOR result');
 end;
 
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 procedure TestAtomicInt64UInt64Contract;
 var
   LAtomicInt64: TAtomicInt64;
@@ -1884,7 +1925,9 @@ begin
   CheckEqual(Int64((UInt64(1) shl 39) + 11), Int64(LAtomicUInt64.Load(mo_relaxed)),
     'TAtomicUInt64.GetMut should expose the exclusive-access storage');
 end;
+{$ENDIF}
 
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 procedure TestAtomicInt64UInt64FetchContract;
 var
   LAtomicInt64: TAtomicInt64;
@@ -1936,6 +1979,7 @@ begin
   CheckEqual(Int64($0FF000F00FF000F0), Int64(LAtomicUInt64.Load(mo_acquire)),
     'TAtomicUInt64.FetchXor should publish the XOR result');
 end;
+{$ENDIF}
 
 procedure TestAtomicBoolContract;
 var
@@ -3225,8 +3269,10 @@ begin
   T.Run('typed atomic record API', @TestAtomicRecordTypes);
   T.Run('typed atomic int32/uint32 contract', @TestAtomicInt32UInt32Contract);
   T.Run('typed atomic int32/uint32 fetch contract', @TestAtomicInt32UInt32FetchContract);
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
   T.Run('typed atomic int64/uint64 contract', @TestAtomicInt64UInt64Contract);
   T.Run('typed atomic int64/uint64 fetch contract', @TestAtomicInt64UInt64FetchContract);
+  {$ENDIF}
   T.Run('typed atomic bool contract', @TestAtomicBoolContract);
   T.Run('typed atomic isize/usize contract', @TestAtomicISizeUSizeContract);
   T.Run('typed atomic isize/usize fetch contract', @TestAtomicISizeUSizeFetchContract);
