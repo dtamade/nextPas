@@ -31,6 +31,7 @@ const
   EEXIST_ = 17;
   ENOTDIR_ = 20;
   EISDIR_ = 21;
+  EINVAL_ = 22;
 {$ENDIF}
 
 procedure RaiseFsError(const ACode: Int32; const AOp, APath: string);
@@ -59,7 +60,7 @@ begin
       raise EPermissionError.Create(LMsg);
     EEXIST_:
       raise EAlreadyExistsError.Create(LMsg);
-    EISDIR_, ENOTDIR_:
+    EINVAL_, EISDIR_, ENOTDIR_:
       raise EInvalidOperationError.Create(LMsg);
   else
     raise EIOError.Create(LMsg);

@@ -600,6 +600,21 @@ begin
   Check(FsLstat(LLink).IsSymlink, 'lstat sees symlink');
   Check(not FsStat(LLink).IsSymlink, 'stat follows link');
 end;
+
+procedure TestReadlinkRegularFileRaisesInvalidOperation;
+var
+  LGot: Boolean;
+begin
+  FsWriteFile(GTmpDir + '/readlink-regular.txt', TBytes.Create(1));
+  LGot := False;
+  try
+    FsReadlink(GTmpDir + '/readlink-regular.txt');
+  except
+    on E: EInvalidOperationError do
+      LGot := True;
+  end;
+  Check(LGot, 'readlink regular file raises invalid operation');
+end;
 {$ENDIF}
 
 begin
@@ -657,6 +672,7 @@ begin
     T.Run('RemoveAll symlink root', @TestRemoveAllSymlinkRoot);
     T.Run('Remove symlink-to-dir unlinks link', @TestRemoveSymlinkToDirUnlinksLink);
     T.Run('Symlink + Readlink', @TestSymlinkReadlink);
+    T.Run('Readlink regular file raises invalid operation', @TestReadlinkRegularFileRaisesInvalidOperation);
 {$ENDIF}
 
     T.Summary;
