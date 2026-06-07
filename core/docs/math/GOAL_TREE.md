@@ -226,9 +226,10 @@ Status:
   write-through semantics, arithmetic operators, scalar multiply, matrix-vector multiply,
   matrix-matrix multiply, transpose, determinant, inverse, near-singular and singular `TryInverse`
   zeroing the out matrix, direct pivot-row-swap inversion parity for permutation matrices, 4x4
-  determinant sign parity across the same row-swap path, `Inverse` raising `EArgumentError` with
-  exact owner-level `'<TMat*>.Inverse: matrix is singular'` messages for the same failure cases, and
-  double-precision variants.
+  determinant sign parity across the same row-swap path, exact/epsilon `Equals` including
+  negative-epsilon fail-close behavior, `Inverse` raising `EArgumentError` with exact owner-level
+  `'<TMat*>.Inverse: matrix is singular'` messages for the same failure cases, and double-precision
+  variants.
 - `nextpas.core.math.mat` is a cohesive matrix value-type unit and currently exceeds the 800-line soft
   split guideline; shared inversion/determinant helpers are extracted, and a forced split is deferred
   until a later architecture slice has evidence that it improves maintainability without widening the

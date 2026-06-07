@@ -310,6 +310,7 @@ begin
   ExpectArgumentErrorMessage('TMat3f.Inverse: matrix is singular',
     'TMat3f near-singular inverse', @RaiseTMat3fNearSingularInverse);
   Check(TMat3f.Equals(M, M + TMat3f.Zero, Single(0.0)), 'TMat3f equals exact');
+  Check(not TMat3f.Equals(M, M, Single(-0.000001)), 'TMat3f equals rejects negative epsilon');
   Check(TMat3f.Equals(M, M * Single(1.0), Single(0.000001)), 'TMat3f equals epsilon');
   Check(TMat3f.Equals(M, Single(1.0) * M, Single(0.000001)), 'TMat3f scalar multiply left');
   Check(TMat3f.Equals(TMat3f.Zero - M, -M, Single(0.000001)), 'TMat3f unary minus and subtract');
@@ -375,6 +376,7 @@ begin
   ExpectArgumentErrorMessage('TMat4f.Inverse: matrix is singular',
     'TMat4f near-singular inverse', @RaiseTMat4fNearSingularInverse);
   Check(TMat4f.Equals(M, M + TMat4f.Zero, Single(0.0)), 'TMat4f equals exact');
+  Check(not TMat4f.Equals(M, M, Single(-0.000001)), 'TMat4f equals rejects negative epsilon');
   Check(TMat4f.Equals(M, M * Single(1.0), Single(0.000001)), 'TMat4f scalar multiply right');
   Check(TMat4f.Equals(M, Single(1.0) * M, Single(0.000001)), 'TMat4f scalar multiply left');
   Check(TMat4f.Equals(TMat4f.Zero - M, -M, Single(0.000001)), 'TMat4f unary minus and subtract');
@@ -432,6 +434,7 @@ begin
   CheckMat3dZero(Inverse3, 'TMat3d TryInverse zeroes near-singular result');
   ExpectArgumentErrorMessage('TMat3d.Inverse: matrix is singular',
     'TMat3d near-singular inverse', @RaiseTMat3dNearSingularInverse);
+  Check(not TMat3d.Equals(M3, M3, -0.000000000001), 'TMat3d equals rejects negative epsilon');
 
   M4 := TMat4d.Create(
     TVec4d.Create(2.0, 0.0, 0.0, 0.0),
@@ -477,6 +480,7 @@ begin
   CheckMat4dZero(Inverse4, 'TMat4d TryInverse zeroes near-singular result');
   ExpectArgumentErrorMessage('TMat4d.Inverse: matrix is singular',
     'TMat4d near-singular inverse', @RaiseTMat4dNearSingularInverse);
+  Check(not TMat4d.Equals(M4, M4, -0.000000000001), 'TMat4d equals rejects negative epsilon');
 end;
 
 begin
