@@ -1744,7 +1744,6 @@
     parsed-header insertion/materialization cost; keep formal cross-language
     benchmark sweep deferred
 
-
 ## Session: 2026-06-06 http h1 parser request metadata cache slice
 
 - **Status:** completed.
@@ -1798,7 +1797,6 @@
   - current sub-slice: llhttp adapter request metadata parse-time cache
   - next best batch: fast-path header block finer lazy access; keep benchmark-final
     cross-language sweep deferred
-
 
 ## Session: 2026-06-06 http request path-only projection slice
 
@@ -1972,7 +1970,6 @@
   - current sub-slice: request path direct accessor
   - next best batch: isolate remaining full-chain server/runtime cost outside URL projection, likely H1 response writer/request dispatch allocation or poll/thread handoff overhead
 
-
 ## Session: 2026-06-06 http header lookup hot-helper inline slice
 
 - **Status:** completed.
@@ -2010,7 +2007,6 @@
   - HTTP roadmap `6/6 Benchmark 与优化`
   - current sub-slice: `THttpHeaders` lookup helper inline
   - next best batch: H1 fast parser source-order contract or targeted request construction/header materialization benchmark row
-
 
 ## Session: 2026-06-05 http h1 server policy-helper inline slice
 
@@ -11923,3 +11919,55 @@ Hello from nextPas!
     ingress or the llhttp adapter path
   - this remains benchmark-truth tightening, not a runtime change or a new
     cross-language result
+
+## Session: 2026-06-07 full-chain request-body-bytes marker slice
+
+- **Status:** completed.
+- Objective:
+  - make `bench_fullchain` report request size as explicit row metadata
+  - complement the earlier `response_body_bytes` and `nextpas_h1_path` markers
+    on saved full-chain rows
+  - keep the change limited to benchmark evidence, not runtime or runner behavior
+- Scope and safety:
+  - touched only `bench_fullchain`, the benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 runtime behavior, lower-layer modules,
+    benchmark math, comparison runner behavior, comparator binaries, or
+    generated artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `69 total, 64 passed, 5 failed`
+    - failed at:
+      - `bench_fullchain plaintext smoke`
+      - `bench_fullchain direct plaintext smoke`
+      - `bench_fullchain direct 1k smoke`
+      - `bench_fullchain echo 1k smoke`
+      - `bench_fullchain epoll direct plaintext smoke`
+    - common failure: missing `request_body_bytes=` marker
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_fullchain` now emits `request_body_bytes=<...>` on each benchmark row
+  - current focused smokes lock:
+    - `plaintext` -> `request_body_bytes=0`
+    - `direct_root` -> `request_body_bytes=0`
+    - `direct_1k` -> `request_body_bytes=0`
+    - `echo_1k` -> `request_body_bytes=1024`
+    - `epoll direct_root` -> `request_body_bytes=0`
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `69 total, 69 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `env NEXTPAS_BENCH_MAX_ITERS=128 NEXTPAS_BENCH_FILTER=sink_16k ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `workload=sink_16k`
+    - `request_body_bytes=16384`
+    - `response_body_bytes=0`
+    - `nextpas_h1_path=llhttp`
+    - `completed=128`
+    - `ns/op=51255.0`
+    - `req/s=19510`
+- Outcome:
+  - full-chain saved artifacts now carry explicit request-size truth alongside
+    response-size and parser-path metadata
+  - this is metadata-contract tightening only; it does not claim a new
+    optimization or a new throughput result

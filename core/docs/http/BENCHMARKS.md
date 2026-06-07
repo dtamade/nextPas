@@ -160,10 +160,10 @@ nextPas-only backend characterization run.
 
 Fresh local backend smoke rows from 2026-06-07:
 
-| impl | backend | workload | iterations | completed | ns/op | req/s |
-| --- | --- | --- | ---: | ---: | ---: | ---: |
-| nextPas | threaded | no_url | 128 | 128 | 41890 | 23871 |
-| nextPas | epoll | no_url | 128 | 128 | 91425 | 10937 |
+| impl    | backend  | workload | iterations | completed | ns/op | req/s |
+| ------- | -------- | -------- | ---------: | --------: | ----: | ----: |
+| nextPas | threaded | no_url   |        128 |       128 | 41890 | 23871 |
+| nextPas | epoll    | no_url   |        128 |       128 | 91425 | 10937 |
 
 Treat these as local backend smoke, not a stable threaded-vs-epoll ranking.
 The durable conclusion is that benchmark artifacts can now distinguish backend
@@ -188,12 +188,12 @@ benchmarks/nextpas.core.http/run_server_comparison.sh \
 
 Each cell is the script's median summary across three runs.
 
-| workload | nextPas ns/op | nextPas req/s | Rust std-only ns/op | Rust std-only req/s | Go `net/http` ns/op | Go `net/http` req/s |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| no_url | 10405 | 96098 | 9051 | 110479 | 47688 | 20969 |
-| adapter_no_url | 12280 | 81433 | 8140 | 122845 | 48857 | 20467 |
-| url_path | 10133 | 98685 | 7391 | 135291 | 47782 | 20928 |
-| response_1k | 9896 | 101044 | 9408 | 106285 | 50560 | 19778 |
+| workload       | nextPas ns/op | nextPas req/s | Rust std-only ns/op | Rust std-only req/s | Go `net/http` ns/op | Go `net/http` req/s |
+| -------------- | ------------: | ------------: | ------------------: | ------------------: | ------------------: | ------------------: |
+| no_url         |         10405 |         96098 |                9051 |              110479 |               47688 |               20969 |
+| adapter_no_url |         12280 |         81433 |                8140 |              122845 |               48857 |               20467 |
+| url_path       |         10133 |         98685 |                7391 |              135291 |               47782 |               20928 |
+| response_1k    |          9896 |        101044 |                9408 |              106285 |               50560 |               19778 |
 
 Interpretation for this host:
 
@@ -233,12 +233,12 @@ summary contained no matching adapter no-url rows
 
 Narrowed breakdown after adding the rows and the fast-gate change:
 
-| row | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| adapter no-url: metadata 3 headers | 2000 | 372.2 | 2686504 |
-| adapter no-url: fast reject + llhttp | 2000 | 2084.3 | 479786 |
-| adapter no-url: llhttp direct only | 2000 | 1494.0 | 669348 |
-| adapter no-url: fast parse only | 2000 | 629.3 | 1589120 |
+| row                                  | iterations |  ns/op |   ops/s |
+| ------------------------------------ | ---------: | -----: | ------: |
+| adapter no-url: metadata 3 headers   |       2000 |  372.2 | 2686504 |
+| adapter no-url: fast reject + llhttp |       2000 | 2084.3 |  479786 |
+| adapter no-url: llhttp direct only   |       2000 | 1494.0 |  669348 |
+| adapter no-url: fast parse only      |       2000 |  629.3 | 1589120 |
 
 Focused verification:
 
@@ -259,10 +259,10 @@ heaptrc: 0 unfreed memory blocks
 
 Fresh same-host comparison rows after the change:
 
-| workload | nextPas median ns/op | nextPas median req/s | Rust std-only median ns/op | Go `net/http` median ns/op |
-| --- | ---: | ---: | ---: | ---: |
-| adapter_no_url | 11022 | 90720 | 8843 | 53076 |
-| no_url | 10948 | 91335 | 8935 | 49245 |
+| workload       | nextPas median ns/op | nextPas median req/s | Rust std-only median ns/op | Go `net/http` median ns/op |
+| -------------- | -------------------: | -------------------: | -------------------------: | -------------------------: |
+| adapter_no_url |                11022 |                90720 |                       8843 |                      53076 |
+| no_url         |                10948 |                91335 |                       8935 |                      49245 |
 
 The `adapter_no_url` row improved from the earlier same-day `12280 ns/op` to
 `11022 ns/op`, but the `no_url` row also showed scheduler noise. Do not treat
@@ -351,13 +351,13 @@ NEXTPAS_BENCH_FILTER='fast headers' \
 make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-| row | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| adapter cost: fast headers get host only | 100000 | 1565.5 | 638773 |
-| adapter cost: fast headers count all | 100000 | 1783.0 | 560854 |
-| adapter cost: fast headers has accept | 100000 | 1541.3 | 648818 |
-| adapter cost: fast headers get all accept | 100000 | 2392.2 | 418020 |
-| adapter cost: fast headers foreach all | 100000 | 4033.6 | 247915 |
+| row                                       | iterations |  ns/op |  ops/s |
+| ----------------------------------------- | ---------: | -----: | -----: |
+| adapter cost: fast headers get host only  |     100000 | 1565.5 | 638773 |
+| adapter cost: fast headers count all      |     100000 | 1783.0 | 560854 |
+| adapter cost: fast headers has accept     |     100000 | 1541.3 | 648818 |
+| adapter cost: fast headers get all accept |     100000 | 2392.2 | 418020 |
+| adapter cost: fast headers foreach all    |     100000 | 4033.6 | 247915 |
 
 This is a nextPas internal materialization-cost split, not a cross-language
 server ranking. It shows the single-header lookup, count-only path, and
@@ -427,10 +427,10 @@ accidentally run the routed row.
 
 Local focused rows from 2026-06-07:
 
-| workload | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| direct call (same request, no router) | 100000 | 3.8 | 261107514 |
-| handler dispatch (match + no-op handler) | 100000 | 264.5 | 3781347 |
+| workload                                 | iterations | ns/op |     ops/s |
+| ---------------------------------------- | ---------: | ----: | --------: |
+| direct call (same request, no router)    |     100000 |   3.8 | 261107514 |
+| handler dispatch (match + no-op handler) |     100000 | 264.5 |   3781347 |
 
 Treat these as local directional rows, not a permanent microbenchmark ranking.
 The durable conclusion is that router dispatch can now be isolated against a
@@ -517,29 +517,29 @@ drain, or backpressure.
 
 Local focused row from 2026-06-05:
 
-| workload | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| headers only 200 | 100000 | 1247.1 | 801852 |
-| fixed 200 13B | 100000 | 1250.5 | 799680 |
+| workload         | iterations |  ns/op |  ops/s |
+| ---------------- | ---------: | -----: | -----: |
+| headers only 200 |     100000 | 1247.1 | 801852 |
+| fixed 200 13B    |     100000 | 1250.5 | 799680 |
 
 Local focused rows from 2026-06-06 after compact header-block writes:
 
-| workload | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| headers only 200 | 100000 | 1280.4 | 781028 |
-| headers block 200 6 headers | 100000 | 1890.9 | 528835 |
+| workload                    | iterations |  ns/op |  ops/s |
+| --------------------------- | ---------: | -----: | -----: |
+| headers only 200            |     100000 | 1280.4 | 781028 |
+| headers block 200 6 headers |     100000 | 1890.9 | 528835 |
 
 Local focused row from 2026-06-06 after known status-line fast paths:
 
-| workload | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| status lines common errors | 100000 | 1204.8 | 830013 |
+| workload                   | iterations |  ns/op |  ops/s |
+| -------------------------- | ---------: | -----: | -----: |
+| status lines common errors |     100000 | 1204.8 | 830013 |
 
 Local focused row from 2026-06-07 for writer plus outbound drain:
 
-| workload | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| outbound fixed 200 1KB | 100000 | 1892.3 | 528470 |
+| workload               | iterations |  ns/op |  ops/s |
+| ---------------------- | ---------: | -----: | -----: |
+| outbound fixed 200 1KB |     100000 | 1892.3 | 528470 |
 
 ## Run the H1 Outbound Drain Benchmark
 
@@ -558,9 +558,9 @@ socket I/O, readiness wakeups, write deadlines, or backpressure.
 
 Local focused row from 2026-06-05:
 
-| workload | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| buffer write+drain 1KB | 100000 | 303.0 | 3300665 |
+| workload               | iterations | ns/op |   ops/s |
+| ---------------------- | ---------: | ----: | ------: |
+| buffer write+drain 1KB |     100000 | 303.0 | 3300665 |
 
 Later on 2026-06-05, `TH1OutboundBuffer.PendingBytes`, `IsEmpty`, and
 `Advance` were marked as hot helper `inline` methods, with the implementations
@@ -570,9 +570,9 @@ smoke that locks this shape.
 
 Fresh single-run local row after that slice:
 
-| workload | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| buffer write+drain 1KB | 100000 | 283.1 | 3532176 |
+| workload               | iterations | ns/op |   ops/s |
+| ---------------------- | ---------: | ----: | ------: |
+| buffer write+drain 1KB |     100000 | 283.1 | 3532176 |
 
 On 2026-06-07 local time, the same focused benchmark gained a narrower
 runtime-facing drain row:
@@ -591,9 +591,9 @@ socket/backend/scheduler noise.
 
 Small focused row from the same host:
 
-| workload | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| buffer trydrain runtime 1KB chunk128 | 100 | 393.5 | 2541231 |
+| workload                             | iterations | ns/op |   ops/s |
+| ------------------------------------ | ---------: | ----: | ------: |
+| buffer trydrain runtime 1KB chunk128 |        100 | 393.5 | 2541231 |
 
 Treat the pair as an internal split:
 
@@ -686,6 +686,7 @@ markers:
 
 - `operation=http.fullchain.keepalive`
 - `workload=<direct_root|direct_1k|plaintext|json|echo_1k|sink_16k|param_route>`
+- `request_body_bytes=<0|1024|16384|...>`
 - `response_body_bytes=<13|1024|...>`
 - `backend=<threaded|epoll>`
 - `nextpas_h1_path=<fast|llhttp>`
@@ -711,6 +712,12 @@ single-connection artifacts do not need to infer whether a row was the tiny
 hello-world shape, the direct 1 KiB shape, or another fixed-body workload from
 the workload name alone.
 
+Each full-chain row now also reports `request_body_bytes=...`, so saved
+artifacts do not need to infer whether a row was a no-body GET, a 1 KiB echo,
+or a request-heavy sink workload from the workload name alone. Current no-body
+GET rows report `request_body_bytes=0`, `echo_1k` reports
+`request_body_bytes=1024`, and `sink_16k` reports `request_body_bytes=16384`.
+
 Full-chain rows now also report `nextpas_h1_path=...` for the current nextPas
 ingress choice:
 
@@ -730,9 +737,9 @@ cross-language comparison flag.
 
 Local focused row from 2026-06-05:
 
-| workload | iterations | completed | elapsed_ns | ns/op | req/s |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| plaintext | 1000 | 1000 | 42132376 | 42132.4 | 23735 |
+| workload  | iterations | completed | elapsed_ns |   ns/op | req/s |
+| --------- | ---------: | --------: | ---------: | ------: | ----: |
+| plaintext |       1000 |      1000 |   42132376 | 42132.4 | 23735 |
 
 The clean build for this row emitted two existing FPC `Note:` lines from
 `nextpas.core.text.format` and the translated llhttp inline call. It emitted no
@@ -740,10 +747,10 @@ FPC `Warning:` lines.
 
 Fresh local smoke rows from 2026-06-07:
 
-| workload | iterations | completed | elapsed_ns | ns/op | req/s |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| direct_root | 1000 | 1000 | 37200928 | 37200.9 | 26881 |
-| plaintext | 1000 | 1000 | 33733646 | 33733.6 | 29644 |
+| workload    | iterations | completed | elapsed_ns |   ns/op | req/s |
+| ----------- | ---------: | --------: | ---------: | ------: | ----: |
+| direct_root |       1000 |      1000 |   37200928 | 37200.9 | 26881 |
+| plaintext   |       1000 |      1000 |   33733646 | 33733.6 | 29644 |
 
 Treat these as single-run harness proof, not stable ranking evidence. The
 durable conclusion is that `bench_fullchain` can now isolate a no-router
@@ -752,10 +759,10 @@ ambiguity.
 
 Fresh local backend smoke rows from 2026-06-07 for `direct_root`:
 
-| backend | workload | iterations | completed | elapsed_ns | ns/op | req/s |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| threaded | direct_root | 128 | 128 | 4103527 | 32058.8 | 31193 |
-| epoll | direct_root | 128 | 128 | 11884206 | 92845.4 | 10771 |
+| backend  | workload    | iterations | completed | elapsed_ns |   ns/op | req/s |
+| -------- | ----------- | ---------: | --------: | ---------: | ------: | ----: |
+| threaded | direct_root |        128 |       128 |    4103527 | 32058.8 | 31193 |
+| epoll    | direct_root |        128 |       128 |   11884206 | 92845.4 | 10771 |
 
 Treat these as local backend smoke, not a stable threaded-vs-epoll ranking.
 The durable conclusion is that `bench_fullchain` now records backend selection
@@ -764,10 +771,10 @@ on either backend without patching the server comparison runner.
 
 Fresh local backend smoke rows from 2026-06-07 for `direct_1k`:
 
-| backend | workload | iterations | completed | elapsed_ns | ns/op | req/s |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| threaded | direct_1k | 128 | 128 | 4733204 | 36978.2 | 27043 |
-| epoll | direct_1k | 128 | 128 | 9643804 | 75342.2 | 13273 |
+| backend  | workload  | iterations | completed | elapsed_ns |   ns/op | req/s |
+| -------- | --------- | ---------: | --------: | ---------: | ------: | ----: |
+| threaded | direct_1k |        128 |       128 |    4733204 | 36978.2 | 27043 |
+| epoll    | direct_1k |        128 |       128 |    9643804 | 75342.2 | 13273 |
 
 Treat these as local backend smoke, not a stable threaded-vs-epoll ranking.
 The durable conclusion is narrower: `bench_fullchain` now has a real-socket,
@@ -778,14 +785,15 @@ throughput workload.
 Fresh local threaded smoke row from 2026-06-07 for the body-bearing llhttp
 path:
 
-| workload | nextpas_h1_path | iterations | completed | elapsed_ns | ns/op | req/s |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| echo_1k | llhttp | 128 | 128 | 5060196 | 39532.8 | 25295 |
+| workload | request_body_bytes | response_body_bytes | nextpas_h1_path | iterations | completed | elapsed_ns |   ns/op | req/s |
+| -------- | -----------------: | ------------------: | --------------- | ---------: | --------: | ---------: | ------: | ----: |
+| echo_1k  |               1024 |                1024 | llhttp          |        128 |       128 |    5060196 | 39532.8 | 25295 |
+| sink_16k |              16384 |                   0 | llhttp          |        128 |       128 |    6560641 | 51255.0 | 19510 |
 
 Treat this as local harness proof, not a stable performance ranking. The
-durable conclusion is that `bench_fullchain` now exposes the fast-vs-llhttp
-ingress split directly on saved nextPas rows instead of leaving it implicit in
-request shape.
+durable conclusion is that `bench_fullchain` now exposes both the fast-vs-llhttp
+ingress split and the request/response body sizes directly on saved nextPas
+rows instead of leaving either dimension implicit in workload names.
 
 ## Optimization Evidence: Full-Chain Benchmark Buffered Client Read
 
@@ -816,9 +824,9 @@ heaptrc: 0 unfreed memory blocks
 
 Fresh same-host filtered row:
 
-| workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| plaintext | 112063.8 | 42132.4 |
+| workload  | before ns/op | after ns/op |
+| --------- | -----------: | ----------: |
+| plaintext |     112063.8 |     42132.4 |
 
 This is a benchmark harness correction, not a production server code change.
 The row still measures single-connection synchronous ping-pong and should not
@@ -842,11 +850,11 @@ threads=4
 
 Results:
 
-| impl | completed | elapsed_ns | ns/op | req/s |
-| --- | ---: | ---: | ---: | ---: |
-| nextPas | 20000 | 247938762 | 12396 | 80665 |
-| Go `net/http` | 20000 | 981937616 | 49096 | 20367 |
-| Rust std-only | 20000 | 197099848 | 9854 | 101471 |
+| impl          | completed | elapsed_ns | ns/op |  req/s |
+| ------------- | --------: | ---------: | ----: | -----: |
+| nextPas       |     20000 |  247938762 | 12396 |  80665 |
+| Go `net/http` |     20000 |  981937616 | 49096 |  20367 |
+| Rust std-only |     20000 |  197099848 |  9854 | 101471 |
 
 The snapshot build had no FPC `Warning:` or `Note:` lines in the captured raw
 output. Re-run the command above after runtime, compiler, or OS changes before
@@ -874,10 +882,10 @@ heaptrc: 0 unfreed memory blocks
 
 Fresh same-host filtered rows:
 
-| workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| headers only 200 | 1414.6 | 1284.0 |
-| fixed 200 13B | 1389.1 | 1261.1 |
+| workload         | before ns/op | after ns/op |
+| ---------------- | -----------: | ----------: |
+| headers only 200 |       1414.6 |      1284.0 |
+| fixed 200 13B    |       1389.1 |      1261.1 |
 
 The clean `bench_h1writer` build for the `headers only 200` row emitted no FPC
 `Warning:` or `Note:` lines. This optimization deliberately does not change
@@ -918,10 +926,10 @@ heaptrc: 0 unfreed memory blocks
 Fresh same-host filtered rows compared with the previous committed
 `HTTP_STATUS_OK` status-line fast path:
 
-| workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| headers only 200 | 1284.0 | 1247.1 |
-| fixed 200 13B | 1261.1 | 1250.5 |
+| workload         | before ns/op | after ns/op |
+| ---------------- | -----------: | ----------: |
+| headers only 200 |       1284.0 |      1247.1 |
+| fixed 200 13B    |       1261.1 |      1250.5 |
 
 A simpler string-concatenation implementation was measured and rejected because
 it reduced write calls but regressed these rows. The kept implementation
@@ -972,9 +980,9 @@ heaptrc: 0 unfreed memory blocks
 
 Fresh same-host filtered rows:
 
-| workload | ns/op | ops/s |
-| --- | ---: | ---: |
-| headers only 200 | 1280.4 | 781028 |
+| workload                    |  ns/op |  ops/s |
+| --------------------------- | -----: | -----: |
+| headers only 200            | 1280.4 | 781028 |
 | headers block 200 6 headers | 1890.9 | 528835 |
 
 This slice keeps the status line separate, preserves exact wire bytes for
@@ -1023,8 +1031,8 @@ heaptrc: 0 unfreed memory blocks
 
 Fresh same-host filtered row:
 
-| workload | ns/op | ops/s |
-| --- | ---: | ---: |
+| workload                   |  ns/op |  ops/s |
+| -------------------------- | -----: | -----: |
 | status lines common errors | 1204.8 | 830013 |
 
 The focused writer tests also lock the unknown-status fallback (`599 Unknown`)
@@ -1053,11 +1061,11 @@ Server comparison after the fast path:
 command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4
 ```
 
-| impl | completed | elapsed_ns | ns/op | req/s |
-| --- | ---: | ---: | ---: | ---: |
-| nextPas | 50000 | 619882610 | 12397 | 80660 |
-| Go `net/http` | 50000 | 2685471938 | 53709 | 18618 |
-| Rust std-only | 50000 | 503399527 | 10067 | 99324 |
+| impl          | completed | elapsed_ns | ns/op | req/s |
+| ------------- | --------: | ---------: | ----: | ----: |
+| nextPas       |     50000 |  619882610 | 12397 | 80660 |
+| Go `net/http` |     50000 | 2685471938 | 53709 | 18618 |
+| Rust std-only |     50000 |  503399527 | 10067 | 99324 |
 
 The same local 50k/4 comparison before the fast path measured nextPas at
 `14736 ns/op` / `67857 req/s`, so this slice narrows the gap to the Rust
@@ -1083,12 +1091,12 @@ Parser microbenchmark:
 command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-| fast workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| simple GET | 856.4 | 754.9 |
-| 10 headers | 3679.0 | 3429.8 |
-| POST 1KB body | 1500.2 | 1374.2 |
-| pipeline 10 reqs | 8685.5 | 7581.2 |
+| fast workload    | before ns/op | after ns/op |
+| ---------------- | -----------: | ----------: |
+| simple GET       |        856.4 |       754.9 |
+| 10 headers       |       3679.0 |      3429.8 |
+| POST 1KB body    |       1500.2 |      1374.2 |
+| pipeline 10 reqs |       8685.5 |      7581.2 |
 
 The same batch also tested a server-side disable-fast-path experiment and
 rejected it: disabling the server fast path reduced the local `bench_server`
@@ -1180,12 +1188,12 @@ Parser microbenchmark:
 command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-| fast workload | previous ns/op | after ns/op |
-| --- | ---: | ---: |
-| simple GET | 757.2 | 349.9 |
-| 10 headers | 3554.1 | 1351.5 |
-| POST 1KB body | 1394.2 | 628.9 |
-| pipeline 10 reqs | 7821.6 | 3526.5 |
+| fast workload    | previous ns/op | after ns/op |
+| ---------------- | -------------: | ----------: |
+| simple GET       |          757.2 |       349.9 |
+| 10 headers       |         3554.1 |      1351.5 |
+| POST 1KB body    |         1394.2 |       628.9 |
+| pipeline 10 reqs |         7821.6 |      3526.5 |
 
 The parser rows show the intended materialization win. A same-batch
 `bench_server` sanity row measured `87356 req/s`, which is within the already
@@ -1204,15 +1212,15 @@ Header microbenchmark:
 command=make -C benchmarks/nextpas.core.http/bench_headers clean run
 ```
 
-| workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| Set+Get 5 headers | 1235.6 | 924.2 |
-| Set+Get 15 headers | 3233.0 | 2712.2 |
-| Add 15 headers | 2424.4 | 1832.8 |
-| Get miss (3 headers) | 58.1 | 53.9 |
-| Get hit (5 headers, last) | 64.7 | 61.6 |
-| Has (3 headers) | 49.7 | 46.0 |
-| Clone 10 headers | 725.9 | 732.4 |
+| workload                  | before ns/op | after ns/op |
+| ------------------------- | -----------: | ----------: |
+| Set+Get 5 headers         |       1235.6 |       924.2 |
+| Set+Get 15 headers        |       3233.0 |      2712.2 |
+| Add 15 headers            |       2424.4 |      1832.8 |
+| Get miss (3 headers)      |         58.1 |        53.9 |
+| Get hit (5 headers, last) |         64.7 |        61.6 |
+| Has (3 headers)           |         49.7 |        46.0 |
+| Clone 10 headers          |        725.9 |       732.4 |
 
 `Add 15 headers` is the most relevant row for the current H1 parser adapter,
 because parsed header callbacks append entries as they arrive. The change keeps
@@ -1232,12 +1240,12 @@ Parser microbenchmark:
 command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-| llhttp workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| simple GET | 1298.0 | 1208.7 |
-| 10 headers | 4704.7 | 3952.9 |
-| POST 1KB body | 2136.6 | 1926.7 |
-| pipeline 10 reqs | 11400.4 | 10668.5 |
+| llhttp workload  | before ns/op | after ns/op |
+| ---------------- | -----------: | ----------: |
+| simple GET       |       1298.0 |      1208.7 |
+| 10 headers       |       4704.7 |      3952.9 |
+| POST 1KB body    |       2136.6 |      1926.7 |
+| pipeline 10 reqs |      11400.4 |     10668.5 |
 
 The benchmark has normal local noise, so these numbers should be treated as a
 directional microbenchmark. The split-callback contract is covered by
@@ -1258,16 +1266,16 @@ Header microbenchmark:
 command=make -C benchmarks/nextpas.core.http/bench_headers clean run
 ```
 
-| workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| Set+Get 5 headers | 1404.5 | 928.0 |
-| Set+Get 15 headers | 3420.0 | 2665.6 |
-| Add 15 headers | 2064.0 | 1775.8 |
-| Get miss (3 headers) | 58.8 | 55.6 |
-| Get hit (5 headers, last) | 68.6 | 46.6 |
-| Get hit uppercase (5 headers, last) | 122.8 | 149.7 |
-| Has (3 headers) | 53.3 | 25.1 |
-| Clone 10 headers | 752.3 | 723.9 |
+| workload                            | before ns/op | after ns/op |
+| ----------------------------------- | -----------: | ----------: |
+| Set+Get 5 headers                   |       1404.5 |       928.0 |
+| Set+Get 15 headers                  |       3420.0 |      2665.6 |
+| Add 15 headers                      |       2064.0 |      1775.8 |
+| Get miss (3 headers)                |         58.8 |        55.6 |
+| Get hit (5 headers, last)           |         68.6 |        46.6 |
+| Get hit uppercase (5 headers, last) |        122.8 |       149.7 |
+| Has (3 headers)                     |         53.3 |        25.1 |
+| Clone 10 headers                    |        752.3 |       723.9 |
 
 The uppercase lookup row is intentionally tracked because public header APIs
 remain case-insensitive. This slice trades a slower uppercase fallback for a
@@ -1327,9 +1335,9 @@ Header microbenchmark:
 command=make -C benchmarks/nextpas.core.http/bench_headers clean run
 ```
 
-| workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| GetAll miss (5 headers) | 136.9 | 60.6 |
+| workload                | before ns/op | after ns/op |
+| ----------------------- | -----------: | ----------: |
+| GetAll miss (5 headers) |        136.9 |        60.6 |
 
 Parser projection:
 
@@ -1337,12 +1345,12 @@ Parser projection:
 command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-| llhttp workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| simple GET | 1203.7 | 1094.1 |
-| 10 headers | 4061.6 | 3905.8 |
-| POST 1KB body | 1922.5 | 1867.3 |
-| pipeline 10 reqs | 10602.0 | 10096.6 |
+| llhttp workload  | before ns/op | after ns/op |
+| ---------------- | -----------: | ----------: |
+| simple GET       |       1203.7 |      1094.1 |
+| 10 headers       |       4061.6 |      3905.8 |
+| POST 1KB body    |       1922.5 |      1867.3 |
+| pipeline 10 reqs |      10602.0 |     10096.6 |
 
 `test_http_headers`, `test_http_h1parser`, and `test_http_h1fast` all passed
 with heaptrc reporting `0 unfreed memory blocks`.
@@ -1358,11 +1366,11 @@ buffers.
 command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-| workload | raw llhttp ns/op | adapter ns/op | adapter/raw |
-| --- | ---: | ---: | ---: |
-| simple GET | 425.3 | 1138.6 | 2.68x |
-| 10 headers | 822.1 | 3813.1 | 4.64x |
-| POST 1KB body | 456.2 | 1853.6 | 4.06x |
+| workload      | raw llhttp ns/op | adapter ns/op | adapter/raw |
+| ------------- | ---------------: | ------------: | ----------: |
+| simple GET    |            425.3 |        1138.6 |       2.68x |
+| 10 headers    |            822.1 |        3813.1 |       4.64x |
+| POST 1KB body |            456.2 |        1853.6 |       4.06x |
 
 The same run showed the current conservative fast path at `843.0 ns/op` for
 simple GET, `3467.6 ns/op` for 10 headers, `1474.5 ns/op` for POST 1KB, and
@@ -1416,12 +1424,12 @@ Local comparator input sizes match `bench_h1parser`: simple GET is 35 bytes,
 Local snapshot with
 `LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp`:
 
-| workload | Pascal raw ns/op | C raw ns/op | Pascal no-op ns/op | C no-op ns/op | nextPas adapter ns/op |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| simple GET | 222.0 | 279.4 | 221.5 | 138.2 | 623.0 |
-| 10 headers | 779.5 | 561.5 | 785.7 | 544.7 | 3341.4 |
-| POST 1KB body | 437.1 | 299.1 | 454.5 | 283.4 | 1429.1 |
-| pipeline 10 reqs | 2203.0 | 1408.2 | 2159.2 | 1401.7 | 6273.4 |
+| workload         | Pascal raw ns/op | C raw ns/op | Pascal no-op ns/op | C no-op ns/op | nextPas adapter ns/op |
+| ---------------- | ---------------: | ----------: | -----------------: | ------------: | --------------------: |
+| simple GET       |            222.0 |       279.4 |              221.5 |         138.2 |                 623.0 |
+| 10 headers       |            779.5 |       561.5 |              785.7 |         544.7 |                3341.4 |
+| POST 1KB body    |            437.1 |       299.1 |              454.5 |         283.4 |                1429.1 |
+| pipeline 10 reqs |           2203.0 |      1408.2 |             2159.2 |        1401.7 |                6273.4 |
 
 The raw simple-GET row is too short and noisy to use as a standalone parity
 claim. The more representative 10-header, POST, pipeline, and no-op callback
@@ -1609,11 +1617,11 @@ command=make -C benchmarks/nextpas.core.http/bench_h1parser run
 ```
 
 | llhttp adapter workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| simple GET | 1101.7 | 641.8 |
-| 10 headers | 3808.5 | 3284.4 |
-| POST 1KB body | 1848.6 | 1457.6 |
-| pipeline 10 reqs | 11253.6 | 6201.2 |
+| ----------------------- | -----------: | ----------: |
+| simple GET              |       1101.7 |       641.8 |
+| 10 headers              |       3808.5 |      3284.4 |
+| POST 1KB body           |       1848.6 |      1457.6 |
+| pipeline 10 reqs        |      11253.6 |      6201.2 |
 
 `test_http_headers`, `test_http_h1parser`, and `test_http_h1fast` all passed
 with heaptrc reporting `0 unfreed memory blocks`. The H1 parser heaptrc
@@ -1640,11 +1648,11 @@ command=make -C benchmarks/nextpas.core.http/bench_h1parser run
 ```
 
 | llhttp adapter workload | previous ns/op | after ns/op |
-| --- | ---: | ---: |
-| simple GET | 641.8 | 644.2 |
-| 10 headers | 3284.4 | 3333.1 |
-| POST 1KB body | 1457.6 | 1404.6 |
-| pipeline 10 reqs | 6201.2 | 6206.8 |
+| ----------------------- | -------------: | ----------: |
+| simple GET              |          641.8 |       644.2 |
+| 10 headers              |         3284.4 |      3333.1 |
+| POST 1KB body           |         1457.6 |      1404.6 |
+| pipeline 10 reqs        |         6201.2 |      6206.8 |
 
 This is a narrow optimization: the body workload improved, while no-body rows
 remain effectively unchanged within local microbenchmark noise. It does not
@@ -1673,20 +1681,20 @@ Confirmation run:
 command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-| workload | ns/op |
-| --- | ---: |
-| raw llhttp simple GET | 232.1 |
-| noop cb simple GET | 221.3 |
-| llhttp adapter simple GET | 617.7 |
-| raw llhttp 10 headers | 823.7 |
-| noop cb 10 headers | 806.1 |
-| llhttp adapter 10 headers | 3380.4 |
-| raw llhttp POST 1KB | 489.4 |
-| noop cb POST 1KB | 454.1 |
-| llhttp adapter POST 1KB | 1401.3 |
+| workload                       |  ns/op |
+| ------------------------------ | -----: |
+| raw llhttp simple GET          |  232.1 |
+| noop cb simple GET             |  221.3 |
+| llhttp adapter simple GET      |  617.7 |
+| raw llhttp 10 headers          |  823.7 |
+| noop cb 10 headers             |  806.1 |
+| llhttp adapter 10 headers      | 3380.4 |
+| raw llhttp POST 1KB            |  489.4 |
+| noop cb POST 1KB               |  454.1 |
+| llhttp adapter POST 1KB        | 1401.3 |
 | raw llhttp pipeline pause-only | 2170.1 |
-| noop cb pipeline | 2163.7 |
-| llhttp adapter pipeline | 6205.7 |
+| noop cb pipeline               | 2163.7 |
+| llhttp adapter pipeline        | 6205.7 |
 
 The simple-GET raw/no-op rows are very short and remain sensitive to local
 microbenchmark noise. The 10-header, POST, and pipeline rows are the useful
@@ -1713,11 +1721,11 @@ baseline=make -C benchmarks/nextpas.core.http/bench_headers clean run
 confirmation=make -C benchmarks/nextpas.core.http/bench_headers run
 ```
 
-| workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| Set+Get 5 headers | 828.2 | 784.3 |
-| Set+Get 15 headers | 2665.1 | 2516.8 |
-| Add 15 headers | 1783.5 | 1635.8 |
+| workload           | before ns/op | after ns/op |
+| ------------------ | -----------: | ----------: |
+| Set+Get 5 headers  |        828.2 |       784.3 |
+| Set+Get 15 headers |       2665.1 |      2516.8 |
+| Add 15 headers     |       1783.5 |      1635.8 |
 
 Parser projection:
 
@@ -1758,9 +1766,9 @@ baseline=make -C benchmarks/nextpas.core.http/bench_fullchain clean run
 confirmation=make -C benchmarks/nextpas.core.http/bench_fullchain clean run
 ```
 
-| workload | before req/s | after req/s |
-| --- | ---: | ---: |
-| Sink 16KB POST | 5005 | 5488 |
+| workload       | before req/s | after req/s |
+| -------------- | -----------: | ----------: |
+| Sink 16KB POST |         5005 |        5488 |
 
 The full-chain benchmark is intentionally directional and local. Short GET rows
 showed normal scheduler/socket noise in the same runs, so the 16KB sink row is
@@ -2310,11 +2318,11 @@ Fresh local correlation after lazy request-target projection:
 command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4
 ```
 
-| impl | workload | completed | elapsed_ns | ns/op | req/s |
-| --- | --- | ---: | ---: | ---: | ---: |
-| nextPas | no_url | 50000 | 641366179 | 12827 | 77958 |
-| Go `net/http` | no_url | 50000 | 2649511337 | 52990 | 18871 |
-| Rust std-only | no_url | 50000 | 508013046 | 10160 | 98422 |
+| impl          | workload | completed | elapsed_ns | ns/op | req/s |
+| ------------- | -------- | --------: | ---------: | ----: | ----: |
+| nextPas       | no_url   |     50000 |  641366179 | 12827 | 77958 |
+| Go `net/http` | no_url   |     50000 | 2649511337 | 52990 | 18871 |
+| Rust std-only | no_url   |     50000 |  508013046 | 10160 | 98422 |
 
 The result is directionally useful but not a stable throughput claim. Compared
 with earlier local rows, nextPas remains in the same noise band and still trails
@@ -2352,11 +2360,11 @@ Fresh local correlation:
 command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload url_path
 ```
 
-| impl | workload | completed | elapsed_ns | ns/op | req/s |
-| --- | --- | ---: | ---: | ---: | ---: |
-| nextPas | url_path | 50000 | 628713623 | 12574 | 79527 |
-| Go `net/http` | url_path | 50000 | 2628825324 | 52576 | 19019 |
-| Rust std-only | url_path | 50000 | 441859972 | 8837 | 113158 |
+| impl          | workload | completed | elapsed_ns | ns/op |  req/s |
+| ------------- | -------- | --------: | ---------: | ----: | -----: |
+| nextPas       | url_path |     50000 |  628713623 | 12574 |  79527 |
+| Go `net/http` | url_path |     50000 | 2628825324 | 52576 |  19019 |
+| Rust std-only | url_path |     50000 |  441859972 |  8837 | 113158 |
 
 The `url_path` row keeps nextPas ahead of the Go comparator and still behind the
 Rust std-only comparator. It does not prove that Pascal-translated llhttp is the
@@ -2394,11 +2402,11 @@ Fresh local correlation:
 command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload adapter_no_url
 ```
 
-| impl | workload | completed | elapsed_ns | ns/op | req/s |
-| --- | --- | ---: | ---: | ---: | ---: |
-| nextPas | adapter_no_url | 50000 | 634287816 | 12685 | 78828 |
-| Go `net/http` | adapter_no_url | 50000 | 2891101718 | 57822 | 17294 |
-| Rust std-only | adapter_no_url | 50000 | 521882998 | 10437 | 95806 |
+| impl          | workload       | completed | elapsed_ns | ns/op | req/s |
+| ------------- | -------------- | --------: | ---------: | ----: | ----: |
+| nextPas       | adapter_no_url |     50000 |  634287816 | 12685 | 78828 |
+| Go `net/http` | adapter_no_url |     50000 | 2891101718 | 57822 | 17294 |
+| Rust std-only | adapter_no_url |     50000 |  521882998 | 10437 | 95806 |
 
 The forced-adapter row keeps nextPas in the same local band as the no-URL and
 URL-path rows, still ahead of Go and behind the Rust std-only comparator. That
@@ -2444,11 +2452,11 @@ Fresh local correlation:
 command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload response_1k
 ```
 
-| impl | workload | completed | elapsed_ns | ns/op | req/s |
-| --- | --- | ---: | ---: | ---: | ---: |
-| nextPas | response_1k | 50000 | 623561283 | 12471 | 80184 |
-| Go `net/http` | response_1k | 50000 | 2718470762 | 54369 | 18392 |
-| Rust std-only | response_1k | 50000 | 554412389 | 11088 | 90185 |
+| impl          | workload    | completed | elapsed_ns | ns/op | req/s |
+| ------------- | ----------- | --------: | ---------: | ----: | ----: |
+| nextPas       | response_1k |     50000 |  623561283 | 12471 | 80184 |
+| Go `net/http` | response_1k |     50000 | 2718470762 | 54369 | 18392 |
+| Rust std-only | response_1k |     50000 |  554412389 | 11088 | 90185 |
 
 Calibration no-URL row with the same complete-response reader:
 
@@ -2456,11 +2464,11 @@ Calibration no-URL row with the same complete-response reader:
 command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload no_url
 ```
 
-| impl | workload | completed | elapsed_ns | ns/op | req/s |
-| --- | --- | ---: | ---: | ---: | ---: |
-| nextPas | no_url | 50000 | 569950075 | 11399 | 87726 |
-| Go `net/http` | no_url | 50000 | 2740141668 | 54802 | 18247 |
-| Rust std-only | no_url | 50000 | 527895368 | 10557 | 94715 |
+| impl          | workload | completed | elapsed_ns | ns/op | req/s |
+| ------------- | -------- | --------: | ---------: | ----: | ----: |
+| nextPas       | no_url   |     50000 |  569950075 | 11399 | 87726 |
+| Go `net/http` | no_url   |     50000 | 2740141668 | 54802 | 18247 |
+| Rust std-only | no_url   |     50000 |  527895368 | 10557 | 94715 |
 
 This suggests the current 1 KiB response writer/drain path is not the dominant
 gap versus Rust std-only on this machine. nextPas remains close to the Rust

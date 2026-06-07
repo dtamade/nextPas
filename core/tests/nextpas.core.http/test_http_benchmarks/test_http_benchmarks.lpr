@@ -603,7 +603,8 @@ begin
 end;
 
 procedure CheckFullchainBenchmarkOutput(const AOutput, AWorkload,
-  AFilter, AResponseBodyBytes: string; const ABackend: string = 'threaded';
+  AFilter, ARequestBodyBytes, AResponseBodyBytes: string;
+  const ABackend: string = 'threaded';
   const AH1Path: string = 'fast');
 begin
   CheckContains(AOutput, 'operation=http.fullchain.keepalive',
@@ -616,6 +617,8 @@ begin
     'fullchain H1 path marker');
   CheckContains(AOutput, 'workload=' + AWorkload,
     'fullchain workload marker');
+  CheckContains(AOutput, 'request_body_bytes=' + ARequestBodyBytes,
+    'fullchain request-body-bytes marker');
   CheckContains(AOutput, 'response_body_bytes=' + AResponseBodyBytes,
     'fullchain response-body-bytes marker');
   CheckContains(AOutput, 'iterations=' + FullchainSmokeIterations,
@@ -1515,7 +1518,7 @@ begin
     LExitCode, LOutput);
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_fullchain plaintext smoke exit code: ' + LOutput);
-  CheckFullchainBenchmarkOutput(LOutput, 'plaintext', 'plaintext', '13');
+  CheckFullchainBenchmarkOutput(LOutput, 'plaintext', 'plaintext', '0', '13');
   CheckNotContains(LOutput, 'workload=direct_root',
     'bench_fullchain plaintext filter must not match direct_root');
 end;
@@ -1545,7 +1548,8 @@ begin
     LExitCode, LOutput);
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_fullchain direct plaintext smoke exit code: ' + LOutput);
-  CheckFullchainBenchmarkOutput(LOutput, 'direct_root', 'direct_root', '13');
+  CheckFullchainBenchmarkOutput(LOutput, 'direct_root', 'direct_root', '0',
+    '13');
   CheckNotContains(LOutput, 'workload=direct_1k',
     'bench_fullchain direct_root filter must not match direct_1k');
 end;
@@ -1575,7 +1579,8 @@ begin
     LExitCode, LOutput);
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_fullchain direct 1k smoke exit code: ' + LOutput);
-  CheckFullchainBenchmarkOutput(LOutput, 'direct_1k', 'direct_1k', '1024');
+  CheckFullchainBenchmarkOutput(LOutput, 'direct_1k', 'direct_1k', '0',
+    '1024');
 end;
 
 procedure TestBenchFullchainEcho1KSmoke;
@@ -1603,7 +1608,7 @@ begin
     LExitCode, LOutput);
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_fullchain echo 1k smoke exit code: ' + LOutput);
-  CheckFullchainBenchmarkOutput(LOutput, 'echo_1k', 'echo_1k', '1024',
+  CheckFullchainBenchmarkOutput(LOutput, 'echo_1k', 'echo_1k', '1024', '1024',
     'threaded', 'llhttp');
 end;
 
@@ -1660,7 +1665,8 @@ begin
     LExitCode, LOutput);
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_fullchain epoll smoke exit code: ' + LOutput);
-  CheckFullchainBenchmarkOutput(LOutput, 'direct_root', 'direct_root', '13',
+  CheckFullchainBenchmarkOutput(LOutput, 'direct_root', 'direct_root', '0',
+    '13',
     'epoll');
 end;
 

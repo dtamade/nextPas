@@ -1456,7 +1456,6 @@
   下一步应继续处理 H1 writer/header serialization 或 llhttp adapter parsed-header
   insertion 成本；跨语言正式 benchmark 仍后置。
 
-
 ## 2026-06-06 http h1 parser request metadata cache slice
 
 - 本轮把 H1 request metadata 从 headers-complete 后回扫 `IHttpHeaders`
@@ -1497,7 +1496,6 @@
   方向没有走偏：本轮是 adapter 热路径固定成本削减，不是碎片化 inline。实现标准达到
   当前切片目标：source-contract 锁住不回扫，行为测试锁住高风险语义，server gate 锁住
   对外 wire contract。下一步应进入 fast lazy headers 按需命中，而不是继续扩大本 slice。
-
 
 ## 2026-06-06 http request path-only projection slice
 
@@ -1622,7 +1620,6 @@
   公共 API，并用 focused tests + microbenchmark 证明。下一步应继续找能影响 full-chain
   server row 的剩余 adapter/runtime 成本，而不是扩大同类 accessor。
 
-
 ## 2026-06-06 http header lookup hot-helper inline slice
 
 - 本轮只处理 `THttpHeaders` lookup/normalize 热路径中的三个短 helper：
@@ -1652,7 +1649,6 @@
 - 复盘结论：
   方向仍在 HttpServer 性能主线上；这轮比继续堆大 server benchmark 更有效，
   因为它用一个小 source-contract 固定了 server 内部高频 header lookup 形状。
-
 
 ## 2026-06-05 http h1 server policy-helper inline slice
 
@@ -2194,7 +2190,7 @@
   - `feat/platform-pty`：干净的基础功能线；
   - `codex/platform-pty-main-merge`：对 `feat/platform-pty` patch-equivalent 的重复线；
   - `codex/platform-pty-integration`：在基础 PTY 之上继续叠加 main refresh 和额外改动的 dirty 线。
-  因此后续清理时不应同时保留前两条 clean 线。
+    因此后续清理时不应同时保留前两条 clean 线。
 - TLS 组并不是简单的“final 完全覆盖 base/refresh”。反向 `git cherry` 证明 base/refresh 还各自带着 5 个 final 没有的 TLS/time/helper 命名相关提交，所以不能只因为有 `final` 就把另外两条直接删掉。
 - `docs/cross-module-workflow` 虽然只是文档，但它引导了危险的临时回退方式（`git reset --hard`），不适合未经修订直接进主线。
 - `crypto-polish` 的工作树脏状态不是新源码，而是 planning files 和测试产物；这类 worktree 清理优先级高，因为继续保留只会污染根 checkout 观察结果。
@@ -2205,7 +2201,7 @@
   - current `main` 已同时提供 `DateTimeNow` 和 `DateTimeUtcNow`
   - `x509verify` 当前使用 `nextpas.core.time.DateTimeUtcNow`
   - dirty worktree 中那句 “DateTimeNow - UTC-shaped wall clock time” 注释与 current main 语义不符，因为 current `DateTimeNow` 已带本地 UTC offset
-  因此这条线只能摘测试，不能再回收它的实现/注释口径。
+    因此这条线只能摘测试，不能再回收它的实现/注释口径。
 - `codex/datetime-now` 的 dirty worktree 里确实藏着值得保留的未提交代码：`x509verify` 的
   expired / not-yet-valid behavior tests。它们已经在 integration branch 上改写为基于
   `TCertificateUtils.GenerateSelfSigned` 的版本，避免把 openssl 固定窗口参数细节带回主线。
@@ -2231,7 +2227,7 @@
 - 对 `final` 这条线做的两条 focused verification 在本轮为绿：
   - `make -C core/tests/nextpas.core.tls/test_certificate_validity_utc_contract clean test`
   - `make -C core/tests/nextpas.core.tls/test_mbedtls_certificate_text_conv_contract clean test`
-  两条都通过，且 heaptrc 为 `0 unfreed memory blocks`。
+    两条都通过，且 heaptrc 为 `0 unfreed memory blocks`。
 - 后续按 commit-by-commit 吸收后，`final` 已不再缺那 5 个 follow-up：
   - `86afb4a9` / `959b1bee` / `98a475d0` / `162d920d` / `493a9b43`
     分别以当前 `final` 代码为准解冲突，保留更强实现并补齐缺失测试覆盖。
@@ -5256,3 +5252,26 @@
   - full-chain row 终于能直接说明自己测的是 fast ingress 还是 llhttp ingress
   - 后续把 `direct_root/direct_1k` 和 `echo_1k/sink_16k` 放在一起看时，不必再从
     request shape 间接推断 parser path
+
+## 2026-06-07 full-chain request-body-bytes marker findings
+
+- `bench_fullchain` 现在已经有 `response_body_bytes=...` 和
+  `nextpas_h1_path=...`，但请求侧 body 大小之前仍只能靠 workload 名称猜。
+- 这在 body-bearing full-chain rows 上会留下真实 artifact gap：
+  - `echo_1k` 看名字还能勉强推断 request size；
+  - `sink_16k` 这种 “大请求、空响应” row 如果没有 request-size marker，保存后的
+    raw output 很难直接说明自己到底测了多少 ingress body。
+- 本轮选择的最小收口仍然只落在 `bench_fullchain` metadata contract：
+  - 每条 row 追加 `request_body_bytes=...`
+  - focused rows 锁住 no-body GET workloads -> `0`
+  - `echo_1k` 锁住 `request_body_bytes=1024`
+- focused gate RED 直接说明这是 contract 缺口，不是性能数字问题：
+  `bench_fullchain plaintext` / `direct_root` / `direct_1k` / `echo_1k` /
+  `epoll direct_root` 全都因为缺失 `request_body_bytes=` marker 而失败。
+- 本地手工 smoke 进一步把最容易误读的 request-heavy row 公开出来：
+  - `sink_16k` threaded 128 次输出 `request_body_bytes=16384`
+  - 同一 row 也保留 `response_body_bytes=0` 与 `nextpas_h1_path=llhttp`
+- 这轮的价值仍是 benchmark truth，而不是新排名：
+  full-chain saved artifacts 现在终于能同时自描述请求大小、响应大小和 ingress
+  parser path，后续拆 request-body parse cost / response drain cost 时不必再从
+  workload 名称做二次推断。
