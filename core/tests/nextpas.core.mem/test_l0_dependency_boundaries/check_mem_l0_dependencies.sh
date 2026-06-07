@@ -23,7 +23,6 @@ KNOWN_DEBT=(
   "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|nextpas.core.text.conv"
   "src/nextpas.core.mem.mapped_slab_pool.pas|nextpas.core.fs.util"
   "src/nextpas.core.mem.mapped_slab_pool.pas|nextpas.core.text.conv"
-  "src/nextpas.core.mem.pool.fixed.pas|nextpas.core.text.conv"
   "src/nextpas.core.mem.secure.pas|BaseUnix"
   "src/nextpas.core.mem.secure.pas|Windows"
 )

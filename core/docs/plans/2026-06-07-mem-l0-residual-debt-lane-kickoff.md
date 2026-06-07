@@ -25,7 +25,9 @@ controller says stop.
   correct, but its debt count is stale.
 - Live source-boundary truth is the script:
   `core/tests/nextpas.core.mem/test_l0_dependency_boundaries/check_mem_l0_dependencies.sh`
-- Current live allowlisted debt count is `8`, not `11`.
+- Current live allowlisted debt count is `7`, not the stale `11` in older
+  documents. The first residual-debt slice removed
+  `src/nextpas.core.mem.pool.fixed.pas|nextpas.core.text.conv`.
 - Old lane `codex/core-mem` at `/home/dtamade/projects/nextPas/.worktrees/core-mem`
   is frozen history only. Do not continue there.
 
@@ -44,12 +46,12 @@ Run the lane as narrow verified slices, not as a broad cleanup sweep.
 
 Immediate priority order:
 
-1. Reconfirm the live `8` residual debt entries from the source-boundary gate.
-2. First implementation target:
-   remove the `nextpas.core.text.conv` dependency from
-   `core/src/nextpas.core.mem.pool.fixed.pas` without widening public surface or
-   moving policy into `mem`.
-3. If that slice closes cleanly and still stays narrow:
+1. Reconfirm the live `7` residual debt entries from the source-boundary gate.
+2. Completed first implementation target:
+   `core/src/nextpas.core.mem.pool.fixed.pas` no longer depends on
+   `nextpas.core.text.conv`; it keeps local debug leak formatting rather than
+   pulling L1 text formatting into L0 mem.
+3. For the next slice:
    decide the next smallest residual debt target.
    Prefer source-contract-first work on `mem.secure` or `mapped_*` only if the
    owner boundary is explicit and the touched paths stay small.

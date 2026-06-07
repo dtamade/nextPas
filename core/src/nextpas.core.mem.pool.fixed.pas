@@ -5,7 +5,6 @@ unit nextpas.core.mem.pool.fixed;
 interface
 
 uses
-  nextpas.core.text.conv,
   nextpas.core.mem.pool.base,    // IPool (decoupled from facade)
   nextpas.core.mem.allocator,    // IAllocator + GetRtlAllocator
   nextpas.core.mem.error;        // EAllocError, TAllocError
@@ -195,6 +194,14 @@ begin
   FAllocatedCount := 0;
 end;
 
+function FixedPoolLeakMessage(aAllocatedCount: Integer): string;
+var
+  LCount: string;
+begin
+  Str(aAllocatedCount, LCount);
+  Result := 'Memory leak: ' + LCount + ' blocks not freed';
+end;
+
 constructor TFixedPool.Create(aBlockSize: SizeUInt; aCapacity: Integer; aAllocator: IAllocator);
 begin
   Create(aBlockSize, aCapacity, 0{use default}, aAllocator);
@@ -287,7 +294,7 @@ destructor TFixedPool.Destroy;
 begin
   {$IFDEF FAF_MEM_DEBUG}
   if FAllocatedCount <> 0 then
-    raise EMemFixedPoolError.Create(aeInternalError, Format('Memory leak: %d blocks not freed', [FAllocatedCount]));
+    raise EMemFixedPoolError.Create(aeInternalError, FixedPoolLeakMessage(FAllocatedCount));
   {$ENDIF}
   // ✅ C-3: 移除死代码分支，FRawBuffer 总是被赋值
   if FRawBuffer <> nil then

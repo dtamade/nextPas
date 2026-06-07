@@ -88,6 +88,9 @@ What is already aligned with the L0 direction:
 - `nextpas.core.mem.allocator.mimalloc` no longer depends on `text.conv` for
   platform-library path selection; the remaining helper is explicit RTL
   `SysUtils.LowerCase`.
+- `nextpas.core.mem.pool.fixed` no longer depends on `nextpas.core.text.conv`
+  for its debug-only leak message; the fixed pool keeps L0 ownership and uses
+  local `Str` formatting instead.
 - `TSlabPool` no longer samples `platform.time` directly; the core keeps call
   counters but does not depend on L1 timing APIs.
 - `mem.blockpool.concurrent`, `mem.pool.fixed.concurrent`, and
@@ -107,17 +110,18 @@ What is already aligned with the L0 direction:
   cannot silently rot.
 - NUMA remains an explicit optional capability, with a no-op default provider
   instead of silent best-effort behavior.
+- Raw mapping and shared-memory host ownership have moved behind the
+  platform-owned mmap facade; `mem.memory_map` remains a compatibility wrapper
+  and `TMemoryMapAllocator` stays on the anonymous mapping-backed allocator
+  path.
 
 ## Known Debt
 
 The boundary is not fully clean yet. The main remaining debt is:
 
-- The current source-boundary contract still carries 11 allowlisted debt
+- The current source-boundary contract still carries 7 allowlisted debt
   entries; this is a guardrail against regression, not proof that mem is
   already layer-clean.
-- `nextpas.core.mem.memory_map` still depends directly on host units and helper
-  units such as `Windows`, `BaseUnix`, and `Unix`.
-- `mem.pool.fixed.pas` still carries a `nextpas.core.text.conv` dependency.
 - `mem.secure.pas` still depends on raw host units (`BaseUnix`, `Windows`) for
   page-protection and secure-memory behavior.
 - `mapped_ring_buffer` and `mapped_slab_pool` still carry non-L0 helper
@@ -129,14 +133,15 @@ Treat these as explicit debt, not as proof that mem is already layer-clean.
 
 Priority follow-up slices:
 
-1. Move raw mapping and shared-memory host calls behind platform-owned facades,
-   or reclassify that surface outside the L0 mem core.
-2. Revisit the mapped ring-buffer and mapped slab-pool helpers so their
+1. Revisit the mapped ring-buffer and mapped slab-pool helpers so their
    remaining higher-layer dependencies either move behind platform-owned seams
    or leave the L0 mem core.
-3. Keep the mem mapping compile surface honest across host branches:
-   helper cleanups may stay in mem, but mapping/shared-memory owner semantics
-   still need a platform-owned design slice before the L0 debt can shrink.
+2. Revisit `mem.secure` page-protection ownership. If it needs a new
+   platform-owned protection seam, stop at `Needs Review` before expanding the
+   slice.
+3. Keep the mem mapping compile surface honest across host branches: helper
+   cleanups may stay in mem, but do not reopen the landed mapping/shared-memory
+   owner slice without a new blocker.
 4. Keep allocator-manager behavior narrow and explicit: `rtl` now has a runtime
    regression test for installation safety, while optional guarded backends such
    as CRT need at least compile truth before wider rollout.
