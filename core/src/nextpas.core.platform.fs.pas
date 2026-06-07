@@ -60,6 +60,7 @@ uses
 
 const
   PLATFORM_FS_SHORT_WRITE_ERROR = -5;
+  PLATFORM_FS_SHORT_READ_ERROR = -6;
 
 function platform_fs_write_all(const AHandle: TPlatformFileHandle;
   AData: Pointer; ALen: PtrUInt): Int32;
@@ -76,6 +77,25 @@ begin
     if LWritten = 0 then
       Exit(PLATFORM_FS_SHORT_WRITE_ERROR);
     Inc(LTotal, LWritten);
+  end;
+  Result := 0;
+end;
+
+function platform_fs_read_all(const AHandle: TPlatformFileHandle;
+  AData: Pointer; ALen: PtrUInt; out ABytesRead: PtrUInt): Int32;
+var
+  LChunk: PtrUInt;
+begin
+  ABytesRead := 0;
+  while ABytesRead < ALen do
+  begin
+    Result := platform_file_read(AHandle,
+      Pointer(PtrUInt(AData) + ABytesRead), ALen - ABytesRead, LChunk);
+    if Result <> 0 then
+      Exit;
+    if LChunk = 0 then
+      Exit(PLATFORM_FS_SHORT_READ_ERROR);
+    Inc(ABytesRead, LChunk);
   end;
   Result := 0;
 end;
@@ -395,7 +415,7 @@ begin
   LR := platform_file_open(APath, fomReadOnly, fcmOpenExisting, LH);
   if LR <> 0 then Exit(LR);
   GetMem(AData, PtrUInt(LSize) + 1);
-  LR := platform_file_read(LH, AData, PtrUInt(LSize), LRead);
+  LR := platform_fs_read_all(LH, AData, PtrUInt(LSize), LRead);
   platform_file_close(LH);
   if LR <> 0 then
   begin
