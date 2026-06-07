@@ -3,11 +3,24 @@ program test_template;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.template;
 
 var
   T: TTestRunner;
+
+procedure ExpectParseError(const AProc: TProc; const AMessage: string);
+begin
+  try
+    AProc();
+    Fail(AMessage);
+  except
+    on E: EParseError do
+      ;
+  end;
+end;
 
 procedure Test_SimpleVar;
 var
@@ -546,6 +559,50 @@ begin
     TemplateRender('before-{{template "nonexistent"}}after', LCtx));
 end;
 
+procedure Test_UnclosedIfRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetBool('Show', True);
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{if .Show}}yes', LCtx);
+    end,
+    'unclosed if block should raise parse error'
+  );
+end;
+
+procedure Test_UnexpectedEndRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('before{{end}}after', LCtx);
+    end,
+    'top-level end should raise parse error'
+  );
+end;
+
+procedure Test_UnclosedActionRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Name', 'World');
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('hello {{.Name', LCtx);
+    end,
+    'unclosed template action should raise parse error'
+  );
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.template');
   T.Run('SimpleVar', @Test_SimpleVar);
@@ -605,6 +662,9 @@ begin
   T.Run('DefineAndTemplate', @Test_DefineAndTemplate);
   T.Run('WithScope', @Test_WithScope);
   T.Run('TemplateMissing', @Test_TemplateMissing);
+  T.Run('UnclosedIfRaisesParseError', @Test_UnclosedIfRaisesParseError);
+  T.Run('UnexpectedEndRaisesParseError', @Test_UnexpectedEndRaisesParseError);
+  T.Run('UnclosedActionRaisesParseError', @Test_UnclosedActionRaisesParseError);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

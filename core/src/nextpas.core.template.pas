@@ -81,6 +81,9 @@ function TemplateRender(const ATemplate: string; const ACtx: TTemplateContext): 
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 { ============================================================================ }
 { Internal string helpers                                                       }
 { ============================================================================ }
@@ -380,6 +383,25 @@ end;
 type
   TStopReason = (srNone, srElse, srEnd);
 
+procedure RaiseTemplateParseError(const AMessage: string);
+begin
+  raise EParseError.Create(AMessage);
+end;
+
+procedure RequireBlockClosed(const AStop: TStopReason; const ABlockName: string);
+begin
+  if AStop <> srEnd then
+    RaiseTemplateParseError('unclosed ' + ABlockName + ' block');
+end;
+
+procedure RejectTopLevelStop(const AStop: TStopReason);
+begin
+  if AStop = srElse then
+    RaiseTemplateParseError('unexpected else');
+  if AStop = srEnd then
+    RaiseTemplateParseError('unexpected end');
+end;
+
 function RenderSegment(const ASrc: string; var APos: Integer;
   const ACtx: TTemplateContext;
   var ALocals: TTemplateVarArray; var ALocalCount: Integer;
@@ -413,7 +435,7 @@ begin
         end;
         Inc(LClose);
       end;
-      Exit(False);
+      RaiseTemplateParseError('unclosed template action');
     end;
     Inc(ATagStart);
   end;
@@ -532,16 +554,17 @@ begin
       Exit(LResult);
     end;
 
-    { define "name" — collect body until {{end}} }
+    { define "name": collect body until end }
     if LKeyword = 'define' then
     begin
       LDefName := ExtractQuotedName(LExpr);
       LDefBody := RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+      RequireBlockClosed(LInnerStop, 'define');
       TTemplateContext(ACtx).Define(LDefName, LDefBody);
       Continue;
     end;
 
-    { template "name" — insert defined block }
+    { template "name": insert defined block }
     if LKeyword = 'template' then
     begin
       LDefName := ExtractQuotedName(LExpr);
@@ -549,7 +572,7 @@ begin
       Continue;
     end;
 
-    { with .Var — set prefix for inner block }
+    { with .Var: set prefix for inner block }
     if LKeyword = 'with' then
     begin
       LWithVar := StripDot(TrimInternal(LExpr));
@@ -558,12 +581,16 @@ begin
         TTemplateContext(ACtx).SetPrefix(LSavedPrefix + '.' + LWithVar)
       else
         TTemplateContext(ACtx).SetPrefix(LWithVar);
-      LResult := LResult + RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
-      TTemplateContext(ACtx).SetPrefix(LSavedPrefix);
+      try
+        LResult := LResult + RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+        RequireBlockClosed(LInnerStop, 'with');
+      finally
+        TTemplateContext(ACtx).SetPrefix(LSavedPrefix);
+      end;
       Continue;
     end;
 
-    { Variable assignment: {{$name := expr}} }
+    { Variable assignment: $name := expr }
     if (Length(LKeyword) > 1) and (LKeyword[1] = '$') then
     begin
       { Check for := }
@@ -579,7 +606,7 @@ begin
         end
         else
         begin
-          { Just a variable reference {{$name}} }
+          { Just a local variable reference }
           LVarName := Copy(LKeyword, 2, Length(LKeyword) - 1);
           LResult := LResult + '';
           for LI := ALocalCount - 1 downto 0 do
@@ -593,7 +620,7 @@ begin
       end
       else
       begin
-        { {{$name := expr}} — keyword is $name, expr starts with ":= ..." }
+        { keyword is $name, expression starts with ":= ..." }
         LVarName := Copy(LKeyword, 2, Length(LKeyword) - 1);
         LVarExpr := TrimInternal(Copy(LExpr, 3, Length(LExpr) - 2));
       end;
@@ -614,13 +641,23 @@ begin
       begin
         LResult := LResult + RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
         if LInnerStop = srElse then
+        begin
           RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+          RequireBlockClosed(LInnerStop, 'if');
+        end
+        else
+          RequireBlockClosed(LInnerStop, 'if');
       end
       else
       begin
         RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
         if LInnerStop = srElse then
+        begin
           LResult := LResult + RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+          RequireBlockClosed(LInnerStop, 'if');
+        end
+        else
+          RequireBlockClosed(LInnerStop, 'if');
       end;
     end
     { range }
@@ -629,7 +666,10 @@ begin
       LItems := ACtx.GetList(StripDot(LExpr));
       LSavePos := APos;
       if Length(LItems) = 0 then
-        RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop)
+      begin
+        RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+        RequireBlockClosed(LInnerStop, 'range');
+      end
       else
       begin
         for LI := 0 to High(LItems) do
@@ -637,6 +677,7 @@ begin
           APos := LSavePos;
           TTemplateContext(ACtx).SetVar('.', LItems[LI]);
           LResult := LResult + RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+          RequireBlockClosed(LInnerStop, 'range');
         end;
         TTemplateContext(ACtx).SetVar('.', '');
       end;
@@ -822,6 +863,7 @@ begin
   LLocalCount := 0;
   SetLength(LLocals, 0);
   Result := RenderSegment(FSource, LPos, ACtx, LLocals, LLocalCount, LStop);
+  RejectTopLevelStop(LStop);
 end;
 
 function TTemplate.RenderWith(const AVars: array of TTemplateVar): string;
