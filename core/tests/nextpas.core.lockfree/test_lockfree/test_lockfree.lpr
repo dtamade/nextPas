@@ -303,11 +303,24 @@ begin
     AtomicStore32(GMpmcCloseWakeResult, 0, moRelease);
 end;
 
+function MpmcCloseWakeConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+begin
+  Result := nil;
+  AtomicStore32(GMpmcCloseWakeStarted, 1, moRelease);
+  if GMpmcCloseWakeQ.DequeueTimeout(LV, 5000000000) then
+    AtomicStore32(GMpmcCloseWakeResult, 1, moRelease)
+  else
+    AtomicStore32(GMpmcCloseWakeResult, 0, moRelease);
+end;
+
 procedure TestMpmcClose;
 var
   LQ: TIntMpmc;
   LV: Integer;
   LBlockedProducer: TPlatformThreadHandle;
+  LBlockedConsumer: TPlatformThreadHandle;
   LRetVal: Pointer;
   LElapsedMs: QWord;
   LSpin: Integer;
@@ -351,6 +364,32 @@ begin
   Check(LQ.TryDequeue(LV), 'drain queued item after blocked producer close');
   CheckEqual(Int64(1), Int64(LV));
   Check(not LQ.TryDequeue(LV), 'blocked producer wake must not publish extra item after close');
+  LQ.Free;
+
+  LQ := TIntMpmc.Create(4);
+  GMpmcCloseWakeQ := LQ;
+  AtomicStore32(GMpmcCloseWakeStarted, 0, moRelease);
+  AtomicStore32(GMpmcCloseWakeResult, -1, moRelease);
+  platform_thread_create(LBlockedConsumer, @MpmcCloseWakeConsumer, nil);
+  for LSpin := 1 to 1000 do
+  begin
+    if AtomicLoad32(GMpmcCloseWakeStarted, moAcquire) <> 0 then
+      Break;
+    platform_thread_sleep_ns(1000000);
+  end;
+  CheckEqual(Int64(1), Int64(AtomicLoad32(GMpmcCloseWakeStarted, moAcquire)),
+    'blocked consumer thread must start before close');
+  platform_thread_sleep_ns(CloseWakePendingProbeNs);
+  CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
+    'blocked DequeueTimeout should still be pending before close');
+  LElapsedMs := GetTickCount64;
+  LQ.Close;
+  platform_thread_join(LBlockedConsumer, LRetVal);
+  LElapsedMs := GetTickCount64 - LElapsedMs;
+  CheckEqual(Int64(0), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
+    'blocked DequeueTimeout woken by close');
+  Check(LElapsedMs < 1000, 'blocked DequeueTimeout should return promptly after close');
+  Check(not LQ.TryDequeue(LV), 'blocked consumer wake must leave the closed empty queue empty');
   LQ.Free;
 end;
 
@@ -1306,6 +1345,9 @@ begin
     '`TSpscQueue<T>.Close` wakes already-blocked `EnqueueTimeout` / `DequeueTimeout` calls so a closed queue stops waiting promptly instead of sleeping until the full timeout.',
     'lockfree README must document the SPSC close wake contract for blocked timeout waits');
   CheckContains(LDocsReadme,
+    '`TMpmcQueue<T>.Close` wakes already-blocked `EnqueueTimeout` / `DequeueTimeout` calls so blocked producers and consumers stop waiting promptly instead of sleeping until the full timeout.',
+    'lockfree README must document the MPMC close wake contract for blocked timeout waits');
+  CheckContains(LDocsReadme,
     '`TMpscQueue<T>.Close` wakes already-blocked `DequeueTimeout` consumers so a closed-empty queue stops waiting promptly.',
     'lockfree README must document the MPSC close wake contract for blocked timeout waits');
   CheckContains(LDocsReadme,
@@ -1507,6 +1549,14 @@ begin
     'MPMC close behavior test must bound the blocked producer wake latency');
   CheckContains(LMpmcCloseTestSection, 'blocked producer wake must not publish extra item after close',
     'MPMC close behavior test must prove the blocked producer wake does not publish a new item');
+  CheckContains(LMpmcCloseTestSection, 'blocked DequeueTimeout should still be pending before close',
+    'MPMC close behavior test must prove the consumer-side timeout wait is actually blocked before close');
+  CheckContains(LMpmcCloseTestSection, 'blocked DequeueTimeout woken by close',
+    'MPMC close behavior test must prove Close wakes a blocked consumer-side timeout wait');
+  CheckContains(LMpmcCloseTestSection, 'blocked DequeueTimeout should return promptly after close',
+    'MPMC close behavior test must bound the blocked consumer wake latency');
+  CheckContains(LMpmcCloseTestSection, 'blocked consumer wake must leave the closed empty queue empty',
+    'MPMC close behavior test must prove the blocked consumer wake leaves the closed empty queue empty');
   CheckContains(LMpmcCloseTestSection, 'TIntMpmc.Create(1);',
     'MPMC close behavior test must cover the single-slot blocked producer wake path');
   CheckContains(LMpmcBatchSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then',
