@@ -135,6 +135,8 @@ including `FromAxisAngle(..., PI)` paths, use a stable axis hemisphere so opposi
 quaternions still map to the same output.
 Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd`
 inputs preserve direction instead of collapsing through an overflowing squared length.
+Raw quaternion inputs containing NaN or infinity fail fast with `EArgumentError` when used by
+`Normalize`, `ToAxisAngle`, `ToRotationMatrix`, `Rotate`, or as `Slerp`/`Nlerp` endpoints.
 `FromAxisAngle` uses vector normalization, so huge finite axes normalize without changing the
 intended rotation.
 `ToAxisAngle` overwrites both `out` parameters completely: each call rewrites `AAxis` and

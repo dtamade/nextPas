@@ -216,6 +216,92 @@ begin
     DoubleNaN);
 end;
 
+procedure RaiseQuatfNormalizeNaN;
+begin
+  TQuatf.Create(SingleNaN, 0.0, 0.0, 1.0).Normalize;
+end;
+
+procedure RaiseQuatfToAxisAngleNaN;
+var
+  Axis: TVec3f;
+  Angle: Single;
+begin
+  TQuatf.Create(0.0, SingleNaN, 0.0, 1.0).ToAxisAngle(Axis, Angle);
+end;
+
+procedure RaiseQuatfToRotationMatrixInfinite;
+begin
+  TQuatf.Create(0.0, 0.0, SingleInfinity, 1.0).ToRotationMatrix;
+end;
+
+procedure RaiseQuatfRotateInfinite;
+begin
+  TQuatf.Create(0.0, 0.0, 0.0, SingleInfinity).Rotate(TVec3f.Create(1.0, 0.0, 0.0));
+end;
+
+procedure RaiseQuatfSlerpNaNStart;
+begin
+  TQuatf.Slerp(TQuatf.Create(SingleNaN, 0.0, 0.0, 1.0), TQuatf.Identity, Single(0.5));
+end;
+
+procedure RaiseQuatfSlerpInfiniteEnd;
+begin
+  TQuatf.Slerp(TQuatf.Identity, TQuatf.Create(0.0, SingleInfinity, 0.0, 1.0), Single(0.5));
+end;
+
+procedure RaiseQuatfNlerpInfiniteStart;
+begin
+  TQuatf.Nlerp(TQuatf.Create(0.0, 0.0, SingleInfinity, 1.0), TQuatf.Identity, Single(0.5));
+end;
+
+procedure RaiseQuatfNlerpNaNEnd;
+begin
+  TQuatf.Nlerp(TQuatf.Identity, TQuatf.Create(0.0, 0.0, 0.0, SingleNaN), Single(0.5));
+end;
+
+procedure RaiseQuatdNormalizeNaN;
+begin
+  TQuatd.Create(DoubleNaN, 0.0, 0.0, 1.0).Normalize;
+end;
+
+procedure RaiseQuatdToAxisAngleNaN;
+var
+  Axis: TVec3d;
+  Angle: Double;
+begin
+  TQuatd.Create(0.0, DoubleNaN, 0.0, 1.0).ToAxisAngle(Axis, Angle);
+end;
+
+procedure RaiseQuatdToRotationMatrixInfinite;
+begin
+  TQuatd.Create(0.0, 0.0, DoubleInfinity, 1.0).ToRotationMatrix;
+end;
+
+procedure RaiseQuatdRotateInfinite;
+begin
+  TQuatd.Create(0.0, 0.0, 0.0, DoubleInfinity).Rotate(TVec3d.Create(1.0, 0.0, 0.0));
+end;
+
+procedure RaiseQuatdSlerpNaNStart;
+begin
+  TQuatd.Slerp(TQuatd.Create(DoubleNaN, 0.0, 0.0, 1.0), TQuatd.Identity, 0.5);
+end;
+
+procedure RaiseQuatdSlerpInfiniteEnd;
+begin
+  TQuatd.Slerp(TQuatd.Identity, TQuatd.Create(0.0, DoubleInfinity, 0.0, 1.0), 0.5);
+end;
+
+procedure RaiseQuatdNlerpInfiniteStart;
+begin
+  TQuatd.Nlerp(TQuatd.Create(0.0, 0.0, DoubleInfinity, 1.0), TQuatd.Identity, 0.5);
+end;
+
+procedure RaiseQuatdNlerpNaNEnd;
+begin
+  TQuatd.Nlerp(TQuatd.Identity, TQuatd.Create(0.0, 0.0, 0.0, DoubleNaN), 0.5);
+end;
+
 function QuarterTurnZf: TQuatf;
 begin
   Result := TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI));
@@ -465,6 +551,43 @@ begin
     'TQuatd Nlerp NaN t', @RaiseQuatdNlerpNaNT);
   ExpectArgumentErrorMessage('TQuatd.Nlerp: AT must be finite',
     'TQuatd Nlerp infinite t', @RaiseQuatdNlerpInfiniteT);
+end;
+
+procedure TestRawQuaternionNonFiniteInputsFailFast;
+begin
+  ExpectArgumentErrorMessage('TQuatf.Normalize: quaternion must be finite',
+    'TQuatf Normalize NaN quaternion', @RaiseQuatfNormalizeNaN);
+  ExpectArgumentErrorMessage('TQuatf.ToAxisAngle: quaternion must be finite',
+    'TQuatf ToAxisAngle NaN quaternion', @RaiseQuatfToAxisAngleNaN);
+  ExpectArgumentErrorMessage('TQuatf.ToRotationMatrix: quaternion must be finite',
+    'TQuatf ToRotationMatrix infinite quaternion', @RaiseQuatfToRotationMatrixInfinite);
+  ExpectArgumentErrorMessage('TQuatf.Rotate: quaternion must be finite',
+    'TQuatf Rotate infinite quaternion', @RaiseQuatfRotateInfinite);
+  ExpectArgumentErrorMessage('TQuatf.Slerp: AA must be finite',
+    'TQuatf Slerp NaN start quaternion', @RaiseQuatfSlerpNaNStart);
+  ExpectArgumentErrorMessage('TQuatf.Slerp: AB must be finite',
+    'TQuatf Slerp infinite end quaternion', @RaiseQuatfSlerpInfiniteEnd);
+  ExpectArgumentErrorMessage('TQuatf.Nlerp: AA must be finite',
+    'TQuatf Nlerp infinite start quaternion', @RaiseQuatfNlerpInfiniteStart);
+  ExpectArgumentErrorMessage('TQuatf.Nlerp: AB must be finite',
+    'TQuatf Nlerp NaN end quaternion', @RaiseQuatfNlerpNaNEnd);
+
+  ExpectArgumentErrorMessage('TQuatd.Normalize: quaternion must be finite',
+    'TQuatd Normalize NaN quaternion', @RaiseQuatdNormalizeNaN);
+  ExpectArgumentErrorMessage('TQuatd.ToAxisAngle: quaternion must be finite',
+    'TQuatd ToAxisAngle NaN quaternion', @RaiseQuatdToAxisAngleNaN);
+  ExpectArgumentErrorMessage('TQuatd.ToRotationMatrix: quaternion must be finite',
+    'TQuatd ToRotationMatrix infinite quaternion', @RaiseQuatdToRotationMatrixInfinite);
+  ExpectArgumentErrorMessage('TQuatd.Rotate: quaternion must be finite',
+    'TQuatd Rotate infinite quaternion', @RaiseQuatdRotateInfinite);
+  ExpectArgumentErrorMessage('TQuatd.Slerp: AA must be finite',
+    'TQuatd Slerp NaN start quaternion', @RaiseQuatdSlerpNaNStart);
+  ExpectArgumentErrorMessage('TQuatd.Slerp: AB must be finite',
+    'TQuatd Slerp infinite end quaternion', @RaiseQuatdSlerpInfiniteEnd);
+  ExpectArgumentErrorMessage('TQuatd.Nlerp: AA must be finite',
+    'TQuatd Nlerp infinite start quaternion', @RaiseQuatdNlerpInfiniteStart);
+  ExpectArgumentErrorMessage('TQuatd.Nlerp: AB must be finite',
+    'TQuatd Nlerp NaN end quaternion', @RaiseQuatdNlerpNaNEnd);
 end;
 
 procedure TestInterpolationAllowsFiniteExtrapolation;
@@ -889,6 +1012,7 @@ begin
   T.Run('FromAxisAngle normalizes huge finite axis', @TestFromAxisAngleNormalizesHugeFiniteAxis);
   T.Run('huge finite normalize', @TestHugeFiniteNormalize);
   T.Run('Interpolation rejects non-finite t', @TestInterpolationRejectsNonFiniteT);
+  T.Run('raw quaternion non-finite inputs fail fast', @TestRawQuaternionNonFiniteInputsFailFast);
   T.Run('Interpolation allows finite extrapolation', @TestInterpolationAllowsFiniteExtrapolation);
   T.Run('Interpolation endpoint contracts', @TestInterpolationEndpointContracts);
   T.Run('Interpolation follows shortest path for opposite-sign start',

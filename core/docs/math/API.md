@@ -225,6 +225,8 @@ axis components or angles with `EArgumentError`.
 intended rotation.
 Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd`
 inputs preserve direction instead of collapsing through an overflowing squared length.
+Raw quaternion inputs containing NaN or infinity fail fast with `EArgumentError` when used by
+`Normalize`, `ToAxisAngle`, `ToRotationMatrix`, `Rotate`, or as `Slerp`/`Nlerp` endpoints.
 `ToAxisAngle` normalizes its quaternion first and returns a canonical shortest-angle axis-angle
 pair. Opposite-sign equivalent quaternions map to the same output; zero rotation returns axis `+Z`
 with angle `0`, and exact half-turn outputs, including `FromAxisAngle(..., PI)` paths, use a

@@ -86,6 +86,18 @@ begin
   Result := IsFinite(AValue.X) and IsFinite(AValue.Y) and IsFinite(AValue.Z);
 end;
 
+function IsFinite(const AValue: TQuatf): Boolean; overload; inline;
+begin
+  Result := IsFinite(AValue.X) and IsFinite(AValue.Y) and
+    IsFinite(AValue.Z) and IsFinite(AValue.W);
+end;
+
+function IsFinite(const AValue: TQuatd): Boolean; overload; inline;
+begin
+  Result := IsFinite(AValue.X) and IsFinite(AValue.Y) and
+    IsFinite(AValue.Z) and IsFinite(AValue.W);
+end;
+
 procedure ValidateAxisAngleInputs(const AFunctionName: string; const AAxis: TVec3f;
   const AAngleRad: Single); overload; inline;
 begin
@@ -116,6 +128,20 @@ procedure ValidateInterpolationFactorInputs(const AFunctionName: string;
 begin
   if not IsFinite(AT) then
     raise EArgumentError.Create(AFunctionName + ': AT must be finite');
+end;
+
+procedure ValidateQuaternionInput(const AFunctionName, AParamName: string;
+  const AValue: TQuatf); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': ' + AParamName + ' must be finite');
+end;
+
+procedure ValidateQuaternionInput(const AFunctionName, AParamName: string;
+  const AValue: TQuatd); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': ' + AParamName + ' must be finite');
 end;
 
 function StableQuatLength(const AX, AY, AZ, AW: Single): Single; inline;
@@ -280,6 +306,82 @@ begin
     nextpas.core.math.scalar.Lerp(AA.W, AB.W, AT));
 end;
 
+function NormalizeFiniteQuat(const AValue: TQuatf): TQuatf; overload; inline;
+var
+  LLength: Single;
+begin
+  LLength := StableQuatLength(AValue.X, AValue.Y, AValue.Z, AValue.W);
+  if LLength = 0.0 then
+    Exit(TQuatf.Identity);
+  Result := TQuatf.Create(
+    AValue.X / LLength,
+    AValue.Y / LLength,
+    AValue.Z / LLength,
+    AValue.W / LLength);
+end;
+
+function NormalizeFiniteQuat(const AValue: TQuatd): TQuatd; overload; inline;
+var
+  LLength: Double;
+begin
+  LLength := StableQuatLength(AValue.X, AValue.Y, AValue.Z, AValue.W);
+  if LLength = 0.0 then
+    Exit(TQuatd.Identity);
+  Result := TQuatd.Create(
+    AValue.X / LLength,
+    AValue.Y / LLength,
+    AValue.Z / LLength,
+    AValue.W / LLength);
+end;
+
+function RotationMatrixFromFiniteQuat(const AValue: TQuatf): TMat3f; overload; inline;
+var
+  Q: TQuatf;
+  XX: Single;
+  YY: Single;
+  ZZ: Single;
+begin
+  Q := NormalizeFiniteQuat(AValue);
+  XX := Q.X * Q.X;
+  YY := Q.Y * Q.Y;
+  ZZ := Q.Z * Q.Z;
+
+  Result := TMat3f.Identity;
+  Result[0, 0] := 1.0 - 2.0 * (YY + ZZ);
+  Result[1, 0] := 2.0 * (Q.X * Q.Y - Q.W * Q.Z);
+  Result[2, 0] := 2.0 * (Q.X * Q.Z + Q.W * Q.Y);
+  Result[0, 1] := 2.0 * (Q.X * Q.Y + Q.W * Q.Z);
+  Result[1, 1] := 1.0 - 2.0 * (XX + ZZ);
+  Result[2, 1] := 2.0 * (Q.Y * Q.Z - Q.W * Q.X);
+  Result[0, 2] := 2.0 * (Q.X * Q.Z - Q.W * Q.Y);
+  Result[1, 2] := 2.0 * (Q.Y * Q.Z + Q.W * Q.X);
+  Result[2, 2] := 1.0 - 2.0 * (XX + YY);
+end;
+
+function RotationMatrixFromFiniteQuat(const AValue: TQuatd): TMat3d; overload; inline;
+var
+  Q: TQuatd;
+  XX: Double;
+  YY: Double;
+  ZZ: Double;
+begin
+  Q := NormalizeFiniteQuat(AValue);
+  XX := Q.X * Q.X;
+  YY := Q.Y * Q.Y;
+  ZZ := Q.Z * Q.Z;
+
+  Result := TMat3d.Identity;
+  Result[0, 0] := 1.0 - 2.0 * (YY + ZZ);
+  Result[1, 0] := 2.0 * (Q.X * Q.Y - Q.W * Q.Z);
+  Result[2, 0] := 2.0 * (Q.X * Q.Z + Q.W * Q.Y);
+  Result[0, 1] := 2.0 * (Q.X * Q.Y + Q.W * Q.Z);
+  Result[1, 1] := 1.0 - 2.0 * (XX + ZZ);
+  Result[2, 1] := 2.0 * (Q.Y * Q.Z - Q.W * Q.X);
+  Result[0, 2] := 2.0 * (Q.X * Q.Z - Q.W * Q.Y);
+  Result[1, 2] := 2.0 * (Q.Y * Q.Z + Q.W * Q.X);
+  Result[2, 2] := 1.0 - 2.0 * (XX + YY);
+end;
+
 { TQuatf }
 
 class function TQuatf.Create(const AX, AY, AZ, AW: Single): TQuatf;
@@ -335,8 +437,10 @@ var
   WeightB: Single;
 begin
   ValidateInterpolationFactorInputs('TQuatf.Slerp', AT);
-  StartQuat := AA.Normalize;
-  EndQuat := AB.Normalize;
+  ValidateQuaternionInput('TQuatf.Slerp', 'AA', AA);
+  ValidateQuaternionInput('TQuatf.Slerp', 'AB', AB);
+  StartQuat := NormalizeFiniteQuat(AA);
+  EndQuat := NormalizeFiniteQuat(AB);
   CosTheta := QuatDot(StartQuat, EndQuat);
   if CosTheta < 0.0 then
   begin
@@ -367,8 +471,10 @@ var
   EndQuat: TQuatf;
 begin
   ValidateInterpolationFactorInputs('TQuatf.Nlerp', AT);
-  StartQuat := AA.Normalize;
-  EndQuat := AB.Normalize;
+  ValidateQuaternionInput('TQuatf.Nlerp', 'AA', AA);
+  ValidateQuaternionInput('TQuatf.Nlerp', 'AB', AB);
+  StartQuat := NormalizeFiniteQuat(AA);
+  EndQuat := NormalizeFiniteQuat(AB);
   if QuatDot(StartQuat, EndQuat) < 0.0 then
     EndQuat := NegateQuat(EndQuat);
   Result := LerpQuat(StartQuat, EndQuat, AT).Normalize;
@@ -389,7 +495,8 @@ var
   HalfAngle: Single;
   SinHalfAngle: Single;
 begin
-  Q := CanonicalizeAxisAngleQuat(Normalize);
+  ValidateQuaternionInput('TQuatf.ToAxisAngle', 'quaternion', Self);
+  Q := CanonicalizeAxisAngleQuat(NormalizeFiniteQuat(Self));
   HalfAngle := nextpas.core.math.trig.ArcCos(
     nextpas.core.math.scalar.Clamp(Q.W, Single(-1.0), Single(1.0)));
   SinHalfAngle := nextpas.core.math.trig.Sin(HalfAngle);
@@ -402,32 +509,15 @@ begin
 end;
 
 function TQuatf.ToRotationMatrix: TMat3f;
-var
-  Q: TQuatf;
-  XX: Single;
-  YY: Single;
-  ZZ: Single;
 begin
-  Q := Normalize;
-  XX := Q.X * Q.X;
-  YY := Q.Y * Q.Y;
-  ZZ := Q.Z * Q.Z;
-
-  Result := TMat3f.Identity;
-  Result[0, 0] := 1.0 - 2.0 * (YY + ZZ);
-  Result[1, 0] := 2.0 * (Q.X * Q.Y - Q.W * Q.Z);
-  Result[2, 0] := 2.0 * (Q.X * Q.Z + Q.W * Q.Y);
-  Result[0, 1] := 2.0 * (Q.X * Q.Y + Q.W * Q.Z);
-  Result[1, 1] := 1.0 - 2.0 * (XX + ZZ);
-  Result[2, 1] := 2.0 * (Q.Y * Q.Z - Q.W * Q.X);
-  Result[0, 2] := 2.0 * (Q.X * Q.Z - Q.W * Q.Y);
-  Result[1, 2] := 2.0 * (Q.Y * Q.Z + Q.W * Q.X);
-  Result[2, 2] := 1.0 - 2.0 * (XX + YY);
+  ValidateQuaternionInput('TQuatf.ToRotationMatrix', 'quaternion', Self);
+  Result := RotationMatrixFromFiniteQuat(Self);
 end;
 
 function TQuatf.Rotate(const AVector: TVec3f): TVec3f;
 begin
-  Result := ToRotationMatrix * AVector;
+  ValidateQuaternionInput('TQuatf.Rotate', 'quaternion', Self);
+  Result := RotationMatrixFromFiniteQuat(Self) * AVector;
 end;
 
 function TQuatf.Conjugate: TQuatf;
@@ -436,13 +526,9 @@ begin
 end;
 
 function TQuatf.Normalize: TQuatf;
-var
-  LLength: Single;
 begin
-  LLength := StableQuatLength(X, Y, Z, W);
-  if LLength = 0.0 then
-    Exit(Identity);
-  Result := TQuatf.Create(X / LLength, Y / LLength, Z / LLength, W / LLength);
+  ValidateQuaternionInput('TQuatf.Normalize', 'quaternion', Self);
+  Result := NormalizeFiniteQuat(Self);
 end;
 
 { TQuatd }
@@ -500,8 +586,10 @@ var
   WeightB: Double;
 begin
   ValidateInterpolationFactorInputs('TQuatd.Slerp', AT);
-  StartQuat := AA.Normalize;
-  EndQuat := AB.Normalize;
+  ValidateQuaternionInput('TQuatd.Slerp', 'AA', AA);
+  ValidateQuaternionInput('TQuatd.Slerp', 'AB', AB);
+  StartQuat := NormalizeFiniteQuat(AA);
+  EndQuat := NormalizeFiniteQuat(AB);
   CosTheta := QuatDot(StartQuat, EndQuat);
   if CosTheta < 0.0 then
   begin
@@ -532,8 +620,10 @@ var
   EndQuat: TQuatd;
 begin
   ValidateInterpolationFactorInputs('TQuatd.Nlerp', AT);
-  StartQuat := AA.Normalize;
-  EndQuat := AB.Normalize;
+  ValidateQuaternionInput('TQuatd.Nlerp', 'AA', AA);
+  ValidateQuaternionInput('TQuatd.Nlerp', 'AB', AB);
+  StartQuat := NormalizeFiniteQuat(AA);
+  EndQuat := NormalizeFiniteQuat(AB);
   if QuatDot(StartQuat, EndQuat) < 0.0 then
     EndQuat := NegateQuat(EndQuat);
   Result := LerpQuat(StartQuat, EndQuat, AT).Normalize;
@@ -554,7 +644,8 @@ var
   HalfAngle: Double;
   SinHalfAngle: Double;
 begin
-  Q := CanonicalizeAxisAngleQuat(Normalize);
+  ValidateQuaternionInput('TQuatd.ToAxisAngle', 'quaternion', Self);
+  Q := CanonicalizeAxisAngleQuat(NormalizeFiniteQuat(Self));
   HalfAngle := nextpas.core.math.trig.ArcCos(
     nextpas.core.math.scalar.Clamp(Q.W, Double(-1.0), Double(1.0)));
   SinHalfAngle := nextpas.core.math.trig.Sin(HalfAngle);
@@ -567,32 +658,15 @@ begin
 end;
 
 function TQuatd.ToRotationMatrix: TMat3d;
-var
-  Q: TQuatd;
-  XX: Double;
-  YY: Double;
-  ZZ: Double;
 begin
-  Q := Normalize;
-  XX := Q.X * Q.X;
-  YY := Q.Y * Q.Y;
-  ZZ := Q.Z * Q.Z;
-
-  Result := TMat3d.Identity;
-  Result[0, 0] := 1.0 - 2.0 * (YY + ZZ);
-  Result[1, 0] := 2.0 * (Q.X * Q.Y - Q.W * Q.Z);
-  Result[2, 0] := 2.0 * (Q.X * Q.Z + Q.W * Q.Y);
-  Result[0, 1] := 2.0 * (Q.X * Q.Y + Q.W * Q.Z);
-  Result[1, 1] := 1.0 - 2.0 * (XX + ZZ);
-  Result[2, 1] := 2.0 * (Q.Y * Q.Z - Q.W * Q.X);
-  Result[0, 2] := 2.0 * (Q.X * Q.Z - Q.W * Q.Y);
-  Result[1, 2] := 2.0 * (Q.Y * Q.Z + Q.W * Q.X);
-  Result[2, 2] := 1.0 - 2.0 * (XX + YY);
+  ValidateQuaternionInput('TQuatd.ToRotationMatrix', 'quaternion', Self);
+  Result := RotationMatrixFromFiniteQuat(Self);
 end;
 
 function TQuatd.Rotate(const AVector: TVec3d): TVec3d;
 begin
-  Result := ToRotationMatrix * AVector;
+  ValidateQuaternionInput('TQuatd.Rotate', 'quaternion', Self);
+  Result := RotationMatrixFromFiniteQuat(Self) * AVector;
 end;
 
 function TQuatd.Conjugate: TQuatd;
@@ -601,13 +675,9 @@ begin
 end;
 
 function TQuatd.Normalize: TQuatd;
-var
-  LLength: Double;
 begin
-  LLength := StableQuatLength(X, Y, Z, W);
-  if LLength = 0.0 then
-    Exit(Identity);
-  Result := TQuatd.Create(X / LLength, Y / LLength, Z / LLength, W / LLength);
+  ValidateQuaternionInput('TQuatd.Normalize', 'quaternion', Self);
+  Result := NormalizeFiniteQuat(Self);
 end;
 
 end.

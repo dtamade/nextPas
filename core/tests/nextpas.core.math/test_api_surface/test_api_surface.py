@@ -373,6 +373,22 @@ REQUIRED_QUAT_DOC_TRUTH = (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
         "Quaternion multiplication is ordered composition: `A * B` applies the right operand `B` first, then applies the left operand `A`, and non-collinear rotations are non-commutative.",
     ),
+    (
+        "docs/math/README.md",
+        "Raw quaternion inputs containing NaN or infinity fail fast with `EArgumentError` when used by `Normalize`, `ToAxisAngle`, `ToRotationMatrix`, `Rotate`, or as `Slerp`/`Nlerp` endpoints.",
+    ),
+    (
+        "docs/math/API.md",
+        "Raw quaternion inputs containing NaN or infinity fail fast with `EArgumentError` when used by `Normalize`, `ToAxisAngle`, `ToRotationMatrix`, `Rotate`, or as `Slerp`/`Nlerp` endpoints.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "Raw quaternion inputs containing NaN or infinity fail fast with `EArgumentError` when used by `Normalize`, `ToAxisAngle`, `ToRotationMatrix`, `Rotate`, or as `Slerp`/`Nlerp` endpoints.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "Raw quaternion inputs containing NaN or infinity fail fast with `EArgumentError` when used by `Normalize`, `ToAxisAngle`, `ToRotationMatrix`, `Rotate`, or as `Slerp`/`Nlerp` endpoints.",
+    ),
 )
 REQUIRED_VEC_QUAT_STABLE_DOC_TRUTH = (
     (
@@ -1013,6 +1029,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("quat-axis-huge-finite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('FromAxisAngle normalizes huge finite axis'"),
     RequiredBehaviorTestMarker("quat-huge-finite-normalize", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('huge finite normalize'"),
     RequiredBehaviorTestMarker("quat-interpolation-finite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation rejects non-finite t'"),
+    RequiredBehaviorTestMarker("quat-raw-non-finite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('raw quaternion non-finite inputs fail fast'"),
     RequiredBehaviorTestMarker("quat-interpolation-extrapolation", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation allows finite extrapolation'"),
     RequiredBehaviorTestMarker("quat-interpolation-endpoints", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation endpoint contracts'"),
     RequiredBehaviorTestMarker("quat-interpolation-shortest-start", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation follows shortest path for opposite-sign start'"),

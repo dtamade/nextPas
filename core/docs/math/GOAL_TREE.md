@@ -39,6 +39,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - `Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.
 - Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`, `TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without overflowing the intermediate squared length.
 - Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd` inputs preserve direction instead of collapsing through an overflowing squared length.
+- Raw quaternion inputs containing NaN or infinity fail fast with `EArgumentError` when used by
+  `Normalize`, `ToAxisAngle`, `ToRotationMatrix`, `Rotate`, or as `Slerp`/`Nlerp` endpoints.
 - `FromAxisAngle` uses vector normalization, so huge finite axes normalize without changing the intended rotation.
 - `nextpas.core.math.mat` now provides the final matrix types: `TMat3f`, `TMat4f`, `TMat3d`, and `TMat4d`.
 - Matrix tests cover compact layout, column-major `Data[column,row]`, `Items`, `Rows`, `Columns`,
@@ -271,7 +273,8 @@ Status:
   `±3π/2` multi-turn canonicalization, exact half-turn stable-axis canonicalization across
   `x/y/z` axes plus mixed-axis `+X/+Y` hemisphere precedence and `FromAxisAngle(..., PI)`
   half-turn paths, out-parameter overwrite semantics, scaled-input normalization for axis-angle
-  output, huge finite quaternion normalization, scaled-input normalization for rotation matrix conversion and vector rotation,
+  output, huge finite quaternion normalization, raw quaternion non-finite fail-fast guards,
+  scaled-input normalization for rotation matrix conversion and vector rotation,
   quaternion multiply composition,
   `Slerp`, `Nlerp`, shortest-path handling for opposite-sign equivalent interpolation endpoints
   including direct start/end midpoint parity plus endpoint canonicalization, finite out-of-range
