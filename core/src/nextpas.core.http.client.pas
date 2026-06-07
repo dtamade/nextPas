@@ -213,6 +213,14 @@ begin
     (EffectiveAuthorityPort(AInitialUrl) = EffectiveAuthorityPort(ARedirectUrl));
 end;
 
+function MethodForGetStyleRedirect(const AMethod: THttpMethod): THttpMethod;
+begin
+  if AMethod = hmHead then
+    Result := hmHead
+  else
+    Result := hmGet;
+end;
+
 function BufferedBodyRequest(const AMethod: THttpMethod; const AUrl: TUrl;
   const AContentType: string; const ABody: IReader): IHttpRequest;
 var
@@ -510,14 +518,14 @@ begin
     ReleaseResponseBody(LResp);
     LNewUrl := ResolveRedirectUrl(LUrl, LLocation);
 
-    // Go-style 301/302/303 redirects replay as GET and drop the body.
+    // Go-style 301/302/303 redirects keep HEAD, otherwise replay as GET.
     if (LResp.StatusCode = HTTP_STATUS_MOVED_PERMANENTLY) or
        (LResp.StatusCode = HTTP_STATUS_FOUND) or
        (LResp.StatusCode = HTTP_STATUS_SEE_OTHER) then
     begin
       LNewHeaders := RedirectHeadersFor(AReq, LUrl, LNewUrl, False);
-      LNewReq := THttpRequest.Create(hmGet, LNewUrl, hvHttp11, LNewHeaders,
-        nil, 0);
+      LNewReq := THttpRequest.Create(MethodForGetStyleRedirect(AReq.Method),
+        LNewUrl, hvHttp11, LNewHeaders, nil, 0);
     end
     else
     begin

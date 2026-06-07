@@ -2855,6 +2855,40 @@ begin
   CheckEqual('arrived', ReadBodyStr(LResp), 'redirect transport final body');
 end;
 
+procedure TestClientPreservesHeadOnGetStyleRedirects;
+var
+  LStatuses: array[0..2] of THttpStatus;
+  LI: SizeInt;
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReq: IHttpRequest;
+begin
+  LStatuses[0] := HTTP_STATUS_MOVED_PERMANENTLY;
+  LStatuses[1] := HTTP_STATUS_FOUND;
+  LStatuses[2] := HTTP_STATUS_SEE_OTHER;
+
+  for LI := Low(LStatuses) to High(LStatuses) do
+  begin
+    LTransportObj := TRedirectCaptureTransport.Create;
+    LTransportObj.RedirectStatus := LStatuses[LI];
+    LTransport := LTransportObj;
+    LClient := NewHttpClient(LTransport);
+    LReq := NewRequest(hmHead, 'http://example.test/old', NewHeaders, nil, 0);
+    LResp := LClient.Send(LReq);
+    CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+      'HEAD redirect performs second round trip');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'HEAD redirect reaches final response');
+    Check(LTransportObj.SeenMethod = hmHead,
+      '301/302/303 redirect preserves HEAD method');
+    CheckEqual('', LTransportObj.SecondBody,
+      'HEAD redirect follow-up has no request body');
+    CheckEqual('arrived', ReadBodyStr(LResp), 'HEAD redirect final body');
+  end;
+end;
+
 procedure TestClientRedirectTransportResolvesNetworkPathLocation;
 var
   LTransportObj: TRedirectCaptureTransport;
@@ -3975,6 +4009,8 @@ begin
   T.Run('Client preserves relative redirect query', @TestClientPreservesRelativeRedirectQuery);
   T.Run('Client redirect transport sees parsed relative query',
     @TestClientRedirectTransportSeesParsedRelativeQuery);
+  T.Run('Client preserves HEAD on 301/302/303 redirects',
+    @TestClientPreservesHeadOnGetStyleRedirects);
   T.Run('Client redirect transport resolves network-path Location',
     @TestClientRedirectTransportResolvesNetworkPathLocation);
   T.Run('Client redirect transport resolves uppercase absolute Location',
