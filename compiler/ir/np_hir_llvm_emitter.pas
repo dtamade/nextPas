@@ -354,6 +354,7 @@ var
 begin
   if FPendingObjectFreeActive and not ((AInstr.Kind = hikIntrinsic) and
     (SameText(AInstr.IntrinsicName, 'np.system.object_free.destroy') or
+    SameText(AInstr.IntrinsicName, 'np.system.object_free.cleanup') or
     SameText(AInstr.IntrinsicName, 'np.system.object_free.release'))) then
     ClosePendingObjectFreeGuard;
 
@@ -473,6 +474,12 @@ begin
         EmitObjectFreeGuardStart(AInstr)
       else if SameText(AInstr.IntrinsicName, 'np.system.object_free.destroy') then
         EmitObjectFreeOwnedDestroy(AInstr)
+      else if SameText(AInstr.IntrinsicName, 'np.system.object_free.cleanup') then
+      begin
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end
       else if SameText(AInstr.IntrinsicName, 'np.system.object_free.release') then
         EmitObjectFreeRelease(AInstr)
       else if AInstr.IntrinsicName = 'write_int' then
@@ -968,8 +975,12 @@ begin
   FCurrentReturnTypeId := AFunc.ReturnTypeId;
 
   Emit('');
-  Emit('define ' + RetStr + ' @' + AFunc.Name +
-    '(' + ParamStr + ') {');
+  if Pos('np_object_dynarray_cleanup_', AFunc.Name) = 1 then
+    Emit('define internal ' + RetStr + ' @' + AFunc.Name +
+      '(' + ParamStr + ') {')
+  else
+    Emit('define ' + RetStr + ' @' + AFunc.Name +
+      '(' + ParamStr + ') {');
 
   for I := 0 to High(AFunc.Blocks) do
   begin

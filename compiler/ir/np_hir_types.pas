@@ -65,6 +65,7 @@ type
     hnkWriteStrVarRuntime,
     hnkWriteCall,
     hnkSetLengthArrRuntime,
+    hnkSetLengthFieldArrRuntime,
     hnkDynArrayCleanupRuntime,
     hnkAssignArrElemRuntime,
     hnkMethodBodyBegin,
@@ -193,6 +194,7 @@ begin
     'write-str-var-runtime': Result := hnkWriteStrVarRuntime;
     'write-call': Result := hnkWriteCall;
     'setlength-arr-runtime': Result := hnkSetLengthArrRuntime;
+    'setlength-field-arr-runtime': Result := hnkSetLengthFieldArrRuntime;
     'dynarray-cleanup-runtime': Result := hnkDynArrayCleanupRuntime;
     'assign-arr-elem-runtime': Result := hnkAssignArrElemRuntime;
     'method-body-begin': Result := hnkMethodBodyBegin;

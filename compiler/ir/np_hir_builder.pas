@@ -56,6 +56,7 @@ type
     FPendingObjectFreeDestroyName: string;
     FPendingObjectFreeReceiverName: string;
     FPendingObjectFreeReceiverValue: THIRValueId;
+    FPendingObjectFreeCleanupClass: string;
     FPendingObjectFreeHeapRelease: Boolean;
     FSretValueId: THIRValueId;
 
@@ -241,6 +242,7 @@ type
     procedure ProcessAssignStrConcat(const ANode: TTypedHirNode);
     procedure ProcessRetStrRuntime(const ANode: TTypedHirNode);
     procedure ProcessSetLengthArr(const ANode: TTypedHirNode);
+    procedure ProcessSetLengthFieldArr(const ANode: TTypedHirNode);
     procedure ProcessDynArrayCleanup(const ANode: TTypedHirNode);
     procedure ProcessAssignArrElem(const ANode: TTypedHirNode);
     procedure ProcessMethodBegin(const ANode: TTypedHirNode);
@@ -251,6 +253,11 @@ type
     procedure ProcessRecordCopy(const ANode: TTypedHirNode);
     procedure ProcessAssignStrFieldLoad(const ANode: TTypedHirNode);
     procedure ProcessVmtStore(const ANode: TTypedHirNode);
+    function FieldSlotPtr(AObjectPtr: THIRValueId;
+      const ASlotIndex: LongInt): THIRValueId;
+    procedure EmitObjectDynArrayCleanupCall(const AClassName: string;
+      const AReceiverPtr: THIRValueId);
+    procedure EnsureObjectDynArrayCleanupHelper(const AClassName: string);
     procedure EmitInterfaceSlotStore(AObjPtr: THIRValueId;
       const AClassName: string; const ASlot: TInterfaceSlotMeta);
     procedure ProcessExceptionNode(const ANode: TTypedHirNode);
@@ -368,6 +375,7 @@ begin
   FPendingObjectFreeDestroyName := '';
   FPendingObjectFreeReceiverName := '';
   FPendingObjectFreeReceiverValue := 0;
+  FPendingObjectFreeCleanupClass := '';
   FPendingObjectFreeHeapRelease := False;
   FLegacyIntType := 0;
   FBoolType := 0;
@@ -3778,6 +3786,7 @@ var
   ArgOps: array of THIROperand;
   ArgCount: LongInt;
   OwnsObjectFreeDestroy, OwnsObjectFreeHeapRelease: Boolean;
+  ObjectFreeCleanupClass: string;
   ExprResult: THIRExprResult;
 begin
   TabPos := Pos(#9, ANode.Operand);
@@ -3807,6 +3816,7 @@ begin
     SameText(FuncName, FPendingObjectFreeDestroyName) and
     SameText(FirstArgName, FPendingObjectFreeReceiverName);
   ObjectFreeReceiverValue := FPendingObjectFreeReceiverValue;
+  ObjectFreeCleanupClass := FPendingObjectFreeCleanupClass;
   OwnsObjectFreeHeapRelease := OwnsObjectFreeDestroy and
     FPendingObjectFreeHeapRelease;
   if FPendingObjectFreeDestroyName <> '' then
@@ -3814,6 +3824,7 @@ begin
     FPendingObjectFreeDestroyName := '';
     FPendingObjectFreeReceiverName := '';
     FPendingObjectFreeReceiverValue := 0;
+    FPendingObjectFreeCleanupClass := '';
     FPendingObjectFreeHeapRelease := False;
   end;
 
@@ -3929,6 +3940,9 @@ begin
 
   if OwnsObjectFreeHeapRelease then
   begin
+    if ObjectFreeCleanupClass <> '' then
+      EmitObjectDynArrayCleanupCall(
+        ObjectFreeCleanupClass, ObjectFreeReceiverValue);
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikIntrinsic;
@@ -3942,18 +3956,20 @@ end;
 
 procedure THIRBuilder.ProcessObjectFreeRuntime(const ANode: TTypedHirNode);
 var
-  DestroyName, Line, Rest, ReceiverName: string;
+  CleanupClassName, DestroyName, Line, Rest, ReceiverName: string;
   Instr: THIRInstr;
   LineEnd: LongInt;
   ReceiverPtr, ReceiverSlot: THIRValueId;
   HeapRelease: Boolean;
 begin
   DestroyName := '';
+  CleanupClassName := '';
   ReceiverName := '';
   HeapRelease := False;
   FPendingObjectFreeDestroyName := '';
   FPendingObjectFreeReceiverName := '';
   FPendingObjectFreeReceiverValue := 0;
+  FPendingObjectFreeCleanupClass := '';
   FPendingObjectFreeHeapRelease := False;
   Rest := ANode.Operand;
   while Rest <> '' do
@@ -3974,6 +3990,9 @@ begin
       ReceiverName := Trim(Copy(Line, 5, Length(Line)))
     else if (Length(Line) > 8) and SameText(Copy(Line, 1, 8), 'destroy ') then
       DestroyName := Trim(Copy(Line, 9, Length(Line)))
+    else if (Length(Line) > 14) and
+      SameText(Copy(Line, 1, 14), 'cleanup-class ') then
+      CleanupClassName := Trim(Copy(Line, 15, Length(Line)))
     else if SameText(Line, 'heap-release true') then
       HeapRelease := True;
   end;
@@ -4009,6 +4028,7 @@ begin
     FPendingObjectFreeDestroyName := DestroyName;
     FPendingObjectFreeReceiverName := ReceiverName;
     FPendingObjectFreeReceiverValue := ReceiverPtr;
+    FPendingObjectFreeCleanupClass := CleanupClassName;
     FPendingObjectFreeHeapRelease := HeapRelease;
   end;
 end;
@@ -4610,6 +4630,105 @@ begin
   EmitStore(GetIntType, SizeVal, LenAlloca);
 end;
 
+function THIRBuilder.FieldSlotPtr(AObjectPtr: THIRValueId;
+  const ASlotIndex: LongInt): THIRValueId;
+var
+  Instr: THIRInstr;
+  SlotVal: THIRValueId;
+begin
+  Result := 0;
+  if (AObjectPtr = 0) or (ASlotIndex < 0) then
+    Exit;
+  SlotVal := EmitConstIntOfType(ASlotIndex, GetIntType);
+  if SlotVal = 0 then
+    Exit;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeTypedOperand(AObjectPtr, GetPtrType);
+  Instr.Operands[1] := MakeTypedOperand(SlotVal, GetIntType);
+  EmitInstr(Instr);
+  Result := Instr.ResultId;
+end;
+
+procedure THIRBuilder.ProcessSetLengthFieldArr(const ANode: TTypedHirNode);
+var
+  TabPos: LongInt;
+  ReceiverName, Rest, FieldIdxStr, LenBlob, ElemSizeStr: string;
+  ReceiverSlot, ReceiverPtr, PtrSlot, LenSlot: THIRValueId;
+  FieldIdx: LongInt;
+  NewLenVal, ElemSizeVal, OldPtrVal, OldLenVal, NewPtrVal: THIRValueId;
+  Instr: THIRInstr;
+begin
+  TabPos := Pos(#9, ANode.Operand);
+  if TabPos = 0 then Exit;
+  ReceiverName := Copy(ANode.Operand, 1, TabPos - 1);
+  Rest := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
+
+  TabPos := Pos(#9, Rest);
+  if TabPos = 0 then Exit;
+  FieldIdxStr := Copy(Rest, 1, TabPos - 1);
+  Rest := Copy(Rest, TabPos + 1, Length(Rest));
+
+  TabPos := Pos(#9, Rest);
+  if TabPos > 0 then
+  begin
+    LenBlob := Copy(Rest, 1, TabPos - 1);
+    ElemSizeStr := Copy(Rest, TabPos + 1, Length(Rest));
+  end
+  else
+  begin
+    LenBlob := Rest;
+    ElemSizeStr := '';
+  end;
+
+  FieldIdx := StrToIntDef(FieldIdxStr, -1);
+  if FieldIdx < 0 then Exit;
+
+  ReceiverSlot := FindAlloca(ReceiverName);
+  if ReceiverSlot = 0 then Exit;
+  if IsVarParamAlloca(ReceiverName) then
+    ReceiverPtr := EmitLoad(GetPtrType, EmitLoad(GetPtrType, ReceiverSlot))
+  else
+    ReceiverPtr := EmitLoad(GetPtrType, ReceiverSlot);
+  if ReceiverPtr = 0 then Exit;
+
+  NewLenVal := ParseIntBlob(LenBlob);
+  if NewLenVal = 0 then Exit;
+  if ElemSizeStr <> '' then
+    ElemSizeVal := ParseIntBlob('int ' + ElemSizeStr + #10)
+  else
+    ElemSizeVal := EmitConstIntOfType(8, GetIntType);
+  if ElemSizeVal = 0 then Exit;
+
+  PtrSlot := FieldSlotPtr(ReceiverPtr, FieldIdx);
+  LenSlot := FieldSlotPtr(ReceiverPtr, FieldIdx + 1);
+  if (PtrSlot = 0) or (LenSlot = 0) then Exit;
+
+  OldPtrVal := EmitLoad(GetPtrType, PtrSlot);
+  OldLenVal := EmitLoad(GetIntType, LenSlot);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'dynarray_resize';
+  SetLength(Instr.Operands, 4);
+  Instr.Operands[0] := MakeTypedOperand(OldPtrVal, GetPtrType);
+  Instr.Operands[1] := MakeTypedOperand(OldLenVal, GetIntType);
+  Instr.Operands[2] := MakeTypedOperand(NewLenVal, GetIntType);
+  Instr.Operands[3] := MakeTypedOperand(ElemSizeVal, GetIntType);
+  EmitInstr(Instr);
+  NewPtrVal := Instr.ResultId;
+
+  EmitStore(GetPtrType, NewPtrVal, PtrSlot);
+  EmitStore(GetIntType, NewLenVal, LenSlot);
+end;
+
 procedure THIRBuilder.ProcessDynArrayCleanup(const ANode: TTypedHirNode);
 var
   TabPos: LongInt;
@@ -4655,6 +4774,161 @@ begin
   Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntType);
   Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntType);
   EmitInstr(Instr);
+end;
+
+procedure THIRBuilder.EmitObjectDynArrayCleanupCall(const AClassName: string;
+  const AReceiverPtr: THIRValueId);
+var
+  Instr: THIRInstr;
+begin
+  if (AClassName = '') or (AReceiverPtr = 0) then
+    Exit;
+  EnsureObjectDynArrayCleanupHelper(AClassName);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  Instr.IntrinsicName := 'np.system.object_free.cleanup';
+  Instr.CallTarget := 'np_object_dynarray_cleanup_' + AClassName;
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeTypedOperand(AReceiverPtr, GetPtrType);
+  EmitInstr(Instr);
+end;
+
+procedure THIRBuilder.EnsureObjectDynArrayCleanupHelper(const AClassName: string);
+var
+  I: LongInt;
+  Meta: TTypeMetadata;
+  FuncId: THIRFuncId;
+  EntryBlock: THIRBlockId;
+  ParamValueId, ObjSlot, PtrSlot, LenSlot: THIRValueId;
+  PtrVal, LenVal, ElemSizeVal, NullVal, ZeroVal: THIRValueId;
+  Instr: THIRInstr;
+  Term: THIRTerminator;
+  SavedFuncId: THIRFuncId;
+  SavedBlockId: THIRBlockId;
+  SavedEntryBlockId: THIRBlockId;
+  SavedBlockTerminated: Boolean;
+  ElemSize: Int64;
+  SavedAllocaCount, SavedBlockCount: LongInt;
+  SavedAllocas: array of TAllocaEntry;
+  SavedBlockNames: array of string;
+  SavedBlockIds: array of THIRBlockId;
+begin
+  if AClassName = '' then
+    Exit;
+  if FModule.FindFunctionReturnType(
+    'np_object_dynarray_cleanup_' + AClassName) <> 0 then
+    Exit;
+  if not FSemaModel.GetTypeMetaByName(AClassName, Meta) then
+    Exit;
+
+  SavedFuncId := FCurrentFuncId;
+  SavedBlockId := FCurrentBlockId;
+  SavedEntryBlockId := FEntryBlockId;
+  SavedBlockTerminated := FBlockTerminated;
+  SavedAllocaCount := FAllocaCount;
+  SetLength(SavedAllocas, FAllocaCount);
+  for I := 0 to FAllocaCount - 1 do
+    SavedAllocas[I] := FAllocas[I];
+  SavedBlockCount := FBlockCount;
+  SetLength(SavedBlockNames, FBlockCount);
+  SetLength(SavedBlockIds, FBlockCount);
+  for I := 0 to FBlockCount - 1 do
+  begin
+    SavedBlockNames[I] := FBlockNames[I];
+    SavedBlockIds[I] := FBlockIds[I];
+  end;
+
+  FuncId := FModule.AddFunction(
+    'np_object_dynarray_cleanup_' + AClassName,
+    FModule.Types.AddType(htkVoid, 'void'));
+  FModule.AddFunctionParam(FuncId, 'obj', GetPtrType, False, False);
+  EntryBlock := FModule.AddBlock(FuncId, 'entry');
+  FModule.SetEntryBlock(FuncId, EntryBlock);
+
+  FCurrentFuncId := FuncId;
+  FCurrentBlockId := EntryBlock;
+  FEntryBlockId := EntryBlock;
+  FBlockTerminated := False;
+  FAllocaCount := 0;
+  FBlockCount := 0;
+
+  ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[0].ValueId;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikAlloca;
+  Instr.TypeId := GetPtrType;
+  EmitInstr(Instr);
+  ObjSlot := Instr.ResultId;
+  RegisterAllocaEntry('obj', ObjSlot, GetPtrType, False);
+  EmitStore(GetPtrType, ParamValueId, ObjSlot);
+
+  for I := High(Meta.Fields) downto 0 do
+  begin
+    if not Meta.Fields[I].IsDynArray then
+      Continue;
+
+    PtrSlot := FieldSlotPtr(ParamValueId, Meta.Fields[I].Index);
+    LenSlot := FieldSlotPtr(ParamValueId, Meta.Fields[I].Index + 1);
+    if (PtrSlot = 0) or (LenSlot = 0) then
+      Continue;
+
+    PtrVal := EmitLoad(GetPtrType, PtrSlot);
+    LenVal := EmitLoad(GetIntType, LenSlot);
+    if not FSemaModel.LookupConstValue(
+      AClassName + '.' + Meta.Fields[I].Name + '$arr_elem_size',
+      ElemSize) then
+      ElemSizeVal := EmitConstIntOfType(8, GetIntType)
+    else
+      ElemSizeVal := EmitConstIntOfType(ElemSize, GetIntType);
+    if ElemSizeVal = 0 then
+      Continue;
+
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+    Instr.IntrinsicName := 'dynarray_release';
+    SetLength(Instr.Operands, 3);
+    Instr.Operands[0] := MakeTypedOperand(PtrVal, GetPtrType);
+    Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntType);
+    Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntType);
+    EmitInstr(Instr);
+
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikLoad;
+    Instr.TypeId := GetPtrType;
+    Instr.IntrinsicName := 'null';
+    EmitInstr(Instr);
+    NullVal := Instr.ResultId;
+    ZeroVal := EmitConstIntOfType(0, GetIntType);
+    EmitStore(GetPtrType, NullVal, PtrSlot);
+    EmitStore(GetIntType, ZeroVal, LenSlot);
+  end;
+
+  FillChar(Term, SizeOf(Term), 0);
+  Term.Kind := htkReturn;
+  Term.ReturnValue := 0;
+  FModule.SetTerminator(FuncId, EntryBlock, Term);
+
+  FCurrentFuncId := SavedFuncId;
+  FCurrentBlockId := SavedBlockId;
+  FEntryBlockId := SavedEntryBlockId;
+  FBlockTerminated := SavedBlockTerminated;
+  FAllocaCount := SavedAllocaCount;
+  SetLength(FAllocas, Length(SavedAllocas));
+  for I := 0 to High(SavedAllocas) do
+    FAllocas[I] := SavedAllocas[I];
+  FBlockCount := SavedBlockCount;
+  SetLength(FBlockNames, Length(SavedBlockNames));
+  SetLength(FBlockIds, Length(SavedBlockIds));
+  for I := 0 to High(SavedBlockNames) do
+  begin
+    FBlockNames[I] := SavedBlockNames[I];
+    FBlockIds[I] := SavedBlockIds[I];
+  end;
 end;
 
 procedure THIRBuilder.ProcessAssignArrElem(const ANode: TTypedHirNode);
@@ -5776,6 +6050,7 @@ begin
     FPendingObjectFreeDestroyName := '';
     FPendingObjectFreeReceiverName := '';
     FPendingObjectFreeReceiverValue := 0;
+    FPendingObjectFreeCleanupClass := '';
     FPendingObjectFreeHeapRelease := False;
   end;
 
@@ -5834,6 +6109,8 @@ begin
       ProcessWriteStrVar(ANode);
     hnkSetLengthArrRuntime:
       ProcessSetLengthArr(ANode);
+    hnkSetLengthFieldArrRuntime:
+      ProcessSetLengthFieldArr(ANode);
     hnkDynArrayCleanupRuntime:
       ProcessDynArrayCleanup(ANode);
     hnkAssignArrElemRuntime:

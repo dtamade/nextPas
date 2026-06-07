@@ -145,6 +145,7 @@ type
     Index: LongInt;
     IsString: Boolean;
     IsPointer: Boolean;
+    IsDynArray: Boolean;
     TypeId: LongInt;
   end;
 

@@ -86,9 +86,10 @@ const
     '  procedure Touch;' + LineEnding +
     'end;' + LineEnding +
     'procedure TStringBox.Touch;' + LineEnding +
+    'var Combined: string;' + LineEnding +
     'begin' + LineEnding +
-    '  Other := Text;' + LineEnding +
-    '  Text := Text + Other;' + LineEnding +
+    '  Combined := Text + Text;' + LineEnding +
+    '  Text := Combined;' + LineEnding +
     'end;' + LineEnding +
     'begin' + LineEnding +
     'end.';

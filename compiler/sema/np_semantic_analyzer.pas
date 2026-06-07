@@ -196,6 +196,9 @@ type
     function TypeMetaFieldIndex(const ATypeName, AFieldName: string): Int64;
     function TypeMetaFieldIsStr(const ATypeName, AFieldName: string): Boolean;
     function TypeMetaFieldIsPtr(const ATypeName, AFieldName: string): Boolean;
+    function TypeMetaFieldIsDynArray(const ATypeName, AFieldName: string): Boolean;
+    function TypeMetaFieldDynArrayElemSize(
+      const ATypeName, AFieldName: string): Int64;
     function TypeMetaVmtSlot(const ATypeName, AMethodName: string): Int64;
     function TypeMetaRetPtr(const ATypeName, AMethodName: string): Boolean;
     function TypeMetaParentClass(const ATypeName: string): string;
@@ -2268,6 +2271,25 @@ begin
       if SameText(Meta.Fields[I].Name, AFieldName) then
         Exit(Meta.Fields[I].IsPointer);
   Result := FModel.LookupConstValue(ATypeName + '.' + AFieldName + '$ptr', V);
+end;
+
+function TSemanticAnalyzer.TypeMetaFieldIsDynArray(
+  const ATypeName, AFieldName: string): Boolean;
+var Meta: TTypeMetadata; I: LongInt; V: Int64;
+begin
+  if FModel.GetTypeMetaByName(ATypeName, Meta) then
+    for I := 0 to High(Meta.Fields) do
+      if SameText(Meta.Fields[I].Name, AFieldName) then
+        Exit(Meta.Fields[I].IsDynArray);
+  Result := FModel.LookupConstValue(ATypeName + '.' + AFieldName + '$arr', V);
+end;
+
+function TSemanticAnalyzer.TypeMetaFieldDynArrayElemSize(
+  const ATypeName, AFieldName: string): Int64;
+begin
+  if not FModel.LookupConstValue(
+    ATypeName + '.' + AFieldName + '$arr_elem_size', Result) then
+    Result := 8;
 end;
 
 function TSemanticAnalyzer.TypeMetaVmtSlot(
@@ -4818,6 +4840,7 @@ begin
     Meta.Fields[High(Meta.Fields)].Index := FieldIndex;
     Meta.Fields[High(Meta.Fields)].IsString := False;
     Meta.Fields[High(Meta.Fields)].IsPointer := False;
+    Meta.Fields[High(Meta.Fields)].IsDynArray := False;
     Meta.Fields[High(Meta.Fields)].TypeId := FieldTypeId;
     Inc(FieldIndex);
   end;
@@ -5269,6 +5292,8 @@ var
   Meta, ParentMeta: TTypeMetadata;
   VmtCount: LongInt;
   HasParentMeta: Boolean;
+  IsArrayField, IsDynArrayField: Boolean;
+  LowBound, HighBound, ArrayLength: Int64;
 begin
   if ANode = nil then
     Exit;
@@ -5309,6 +5334,8 @@ begin
             FModel.AddConstValue(ClsName + '.' + ParentMeta.Fields[J].Name + '$str', 1);
           if ParentMeta.Fields[J].IsPointer then
             FModel.AddConstValue(ClsName + '.' + ParentMeta.Fields[J].Name + '$ptr', 1);
+          if ParentMeta.Fields[J].IsDynArray then
+            FModel.AddConstValue(ClsName + '.' + ParentMeta.Fields[J].Name + '$arr', 1);
           if FModel.LookupStringConstValue(
             ParentName + '.' + ParentMeta.Fields[J].Name + '$arr_elem_type',
             ParentStringVal) then
@@ -5355,6 +5382,15 @@ begin
             IdxPos := Pos('$ptr', ConstName);
             FieldName := Copy(ConstName, DotPos + 1, IdxPos - DotPos - 1);
             FModel.AddConstValue(ClsName + '.' + FieldName + '$ptr',
+              FModel.ConstValueAt(J));
+          end
+          else if (Pos(ParentName + '.', ConstName) = 1) and
+            (Pos('$arr', ConstName) = Length(ConstName) - 3) then
+          begin
+            DotPos := Pos('.', ConstName);
+            IdxPos := Pos('$arr', ConstName);
+            FieldName := Copy(ConstName, DotPos + 1, IdxPos - DotPos - 1);
+            FModel.AddConstValue(ClsName + '.' + FieldName + '$arr',
               FModel.ConstValueAt(J));
           end;
         end;
@@ -5423,6 +5459,11 @@ begin
     if Child.NodeKind = gnkClassField then
     begin
       FieldTypeId := 0;
+      IsArrayField := (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
+        (Child.ChildAt(0).NodeKind = gnkArrayType);
+      IsDynArrayField := IsArrayField and
+        (not TryGetArrayTypeBounds(
+          Child.ChildAt(0), LowBound, HighBound, ArrayLength));
       if Child.ChildCount > 0 then
       begin
         NameNode := Child.ChildAt(0);
@@ -5442,9 +5483,10 @@ begin
       FModel.AddConstValue(
         ClsName + '.' + Child.Text + '$idx',
         FieldIndex);
-      if (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
-        (Child.ChildAt(0).NodeKind = gnkArrayType) then
+      if IsArrayField then
       begin
+        if IsDynArrayField then
+          FModel.AddConstValue(ClsName + '.' + Child.Text + '$arr', 1);
         NameNode := ArrayElementTypeNode(Child.ChildAt(0));
         if NameNode <> nil then
         begin
@@ -5454,7 +5496,11 @@ begin
           if TypeMetaIsRecord(NameNode.Text) then
             FModel.AddConstValue(
               ClsName + '.' + Child.Text + '$arr_elem_size',
-              TypeMetaSize(NameNode.Text));
+              TypeMetaSize(NameNode.Text))
+          else
+            FModel.AddConstValue(
+              ClsName + '.' + Child.Text + '$arr_elem_size',
+              8);
         end;
       end;
       if (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
@@ -5469,6 +5515,8 @@ begin
         FModel.AddConstValue(ClsName + '.' + Child.Text + '$str', 1);
         Inc(FieldIndex, 2);
       end
+      else if IsDynArrayField then
+        Inc(FieldIndex, 2)
       else if (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
         TypeMetaIsRecord(Child.ChildAt(0).Text) and
         (TypeMetaSize(Child.ChildAt(0).Text) > 0) then
@@ -5504,6 +5552,7 @@ begin
         (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
         ((TypeMetaSize(Child.ChildAt(0).Text) > 0) or
          SameText(Child.ChildAt(0).Text, ClsName));
+      Meta.Fields[High(Meta.Fields)].IsDynArray := IsDynArrayField;
       Meta.Fields[High(Meta.Fields)].TypeId := FieldTypeId;
     end
     else if Child.NodeKind = gnkClassMethod then
@@ -6925,6 +6974,38 @@ begin
     TypeMetaFieldIsStr(FCurrentMethodClass, ANode.ChildAt(1).Text) then
   begin
     Folded := TypeMetaFieldIndex(FCurrentMethodClass, ANode.ChildAt(1).Text);
+    ABlob := 'field self ' + IntToStr(Folded + 1) + #10;
+    Exit(True);
+  end;
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and
+    SameText(ANode.ChildAt(0).Text, 'Length') and
+    (ANode.ChildAt(1) <> nil) and
+    (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
+    (FCurrentMethodClass <> '') and
+    TypeMetaFieldIsDynArray(FCurrentMethodClass, ANode.ChildAt(1).Text) then
+  begin
+    Folded := TypeMetaFieldIndex(FCurrentMethodClass, ANode.ChildAt(1).Text);
+    ABlob := 'field self ' + IntToStr(Folded + 1) + #10;
+    Exit(True);
+  end;
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and
+    SameText(ANode.ChildAt(0).Text, 'Length') and
+    (ANode.ChildAt(1) <> nil) and
+    (ANode.ChildAt(1).NodeKind = gnkDotAccess) and
+    (ANode.ChildAt(1).ChildCount >= 2) and
+    (ANode.ChildAt(1).ChildAt(0) <> nil) and
+    (ANode.ChildAt(1).ChildAt(1) <> nil) and
+    (ANode.ChildAt(1).ChildAt(0).NodeKind = gnkIdentifier) and
+    (ANode.ChildAt(1).ChildAt(1).NodeKind = gnkIdentifier) and
+    SameText(ANode.ChildAt(1).ChildAt(0).Text, 'Self') and
+    (FCurrentMethodClass <> '') and
+    TypeMetaFieldIsDynArray(FCurrentMethodClass,
+      ANode.ChildAt(1).ChildAt(1).Text) then
+  begin
+    Folded := TypeMetaFieldIndex(FCurrentMethodClass,
+      ANode.ChildAt(1).ChildAt(1).Text);
     ABlob := 'field self ' + IntToStr(Folded + 1) + #10;
     Exit(True);
   end;
@@ -11088,14 +11169,41 @@ begin
           end
           else if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) and
             (FCurrentMethodClass <> '') and
-            (TypeMetaFieldIndex(FCurrentMethodClass, RhsNode.Text) >= 0) then
+            TypeMetaFieldIsDynArray(FCurrentMethodClass, RhsNode.Text) then
           begin
             if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), Operand) then
             begin
               Value := TypeMetaFieldIndex(FCurrentMethodClass, RhsNode.Text);
               FModel.AddTypedHirNode(
-                'assign-arr-elem-runtime', '__field_setlength__', 0, 0,
-                'self' + #9 + IntToStr(Value) + #9 + Operand
+                'setlength-field-arr-runtime', RhsNode.Text, 0, 0,
+                'self' + #9 + IntToStr(Value) + #9 + Operand + #9 +
+                IntToStr(TypeMetaFieldDynArrayElemSize(
+                  FCurrentMethodClass, RhsNode.Text))
+              );
+            end;
+          end
+          else if (RhsNode <> nil) and
+            (RhsNode.NodeKind = gnkDotAccess) and
+            (RhsNode.ChildCount >= 2) and
+            (RhsNode.ChildAt(0) <> nil) and
+            (RhsNode.ChildAt(1) <> nil) and
+            (RhsNode.ChildAt(0).NodeKind = gnkIdentifier) and
+            (RhsNode.ChildAt(1).NodeKind = gnkIdentifier) and
+            SameText(RhsNode.ChildAt(0).Text, 'Self') and
+            (FCurrentMethodClass <> '') and
+            TypeMetaFieldIsDynArray(
+              FCurrentMethodClass, RhsNode.ChildAt(1).Text) then
+          begin
+            if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), Operand) then
+            begin
+              Value := TypeMetaFieldIndex(
+                FCurrentMethodClass, RhsNode.ChildAt(1).Text);
+              FModel.AddTypedHirNode(
+                'setlength-field-arr-runtime',
+                'Self.' + RhsNode.ChildAt(1).Text, 0, 0,
+                'self' + #9 + IntToStr(Value) + #9 + Operand + #9 +
+                IntToStr(TypeMetaFieldDynArrayElemSize(
+                  FCurrentMethodClass, RhsNode.ChildAt(1).Text))
               );
             end;
           end;
@@ -11287,30 +11395,28 @@ begin
         if StringValue <> '' then
         begin
           Value := TypeMetaVmtSlot(StringValue, 'Destroy');
-          if Value >= 0 then
-          begin
-            ReceiverName := Child.ChildAt(0).ChildAt(0).Text;
-            DestroyFuncName := StringValue + '.Destroy';
-            if FModel.LookupStringConstValue(
-              StringValue + '$vmt_func_' + IntToStr(Value),
-              FuncName
-            ) then
-              DestroyFuncName := FuncName;
-            FModel.AddTypedHirNode(
-              'object-free-runtime',
-              'np.system.object_free',
-              0,
-              0,
-              'var ' + ReceiverName + #10 +
-              'destroy ' + DestroyFuncName + #10 +
-              'nil-guard true' + #10 +
-              'heap-release true' + #10
-            );
-            Operand := DestroyFuncName + #9 +
-              'var ' + ReceiverName + #10;
-            FModel.AddTypedHirNode('call-runtime',
-              DestroyFuncName, 0, 0, Operand);
-          end;
+          ReceiverName := Child.ChildAt(0).ChildAt(0).Text;
+          DestroyFuncName := StringValue + '.Destroy';
+          if (Value >= 0) and FModel.LookupStringConstValue(
+            StringValue + '$vmt_func_' + IntToStr(Value),
+            FuncName
+          ) then
+            DestroyFuncName := FuncName;
+          FModel.AddTypedHirNode(
+            'object-free-runtime',
+            'np.system.object_free',
+            0,
+            0,
+            'var ' + ReceiverName + #10 +
+            'destroy ' + DestroyFuncName + #10 +
+            'cleanup-class ' + StringValue + #10 +
+            'nil-guard true' + #10 +
+            'heap-release true' + #10
+          );
+          Operand := DestroyFuncName + #9 +
+            'var ' + ReceiverName + #10;
+          FModel.AddTypedHirNode('call-runtime',
+            DestroyFuncName, 0, 0, Operand);
           Continue;
         end;
       end;
