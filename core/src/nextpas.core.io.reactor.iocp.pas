@@ -169,12 +169,15 @@ begin
     LNext := LOp^.Next;
     CancelIoEx(LOp^.Handle, @LOp^.Overlapped);
     SetLastError(AError);
-    if Assigned(LOp^.Callback) then
-      LOp^.Callback(LOp^.UserData, -Int32(AError), LOp^.Context);
-    LOp^.Callback := nil;
-    LOp^.Context := nil;
-    LOp^.Next := nil;
-    Dispose(LOp);
+    try
+      if Assigned(LOp^.Callback) then
+        LOp^.Callback(LOp^.UserData, -Int32(AError), LOp^.Context);
+    finally
+      LOp^.Callback := nil;
+      LOp^.Context := nil;
+      LOp^.Next := nil;
+      Dispose(LOp);
+    end;
     LOp := LNext;
   end;
 end;

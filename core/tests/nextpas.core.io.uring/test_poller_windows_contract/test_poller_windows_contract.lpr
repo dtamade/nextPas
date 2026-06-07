@@ -235,8 +235,18 @@ begin
   CheckContains(LReleaseBody,
     'lop^.callback(lop^.userdata, -int32(aerror), lop^.context);',
     'IOCP pending release must deliver the abort result to the owned callback');
+  CheckContains(LReleaseBody, 'try',
+    'IOCP pending release must guard callback dispatch cleanup');
+  CheckContains(LReleaseBody, 'finally',
+    'IOCP pending release must free the pending op if callback raises');
+  CheckBefore(LReleaseBody,
+    'lop^.callback(lop^.userdata, -int32(aerror), lop^.context);',
+    'finally',
+    'IOCP pending release must run cleanup after callback dispatch');
   CheckContains(LReleaseBody, 'dispose(lop);',
     'IOCP pending release must free every owned operation');
+  CheckBefore(LReleaseBody, 'finally', 'dispose(lop);',
+    'IOCP pending release must dispose the pending op from the cleanup block');
 end;
 
 procedure TestAsyncLoopTimeoutCloseLifecycleContract;
@@ -478,6 +488,38 @@ begin
   CheckBefore(LSubmitBody, 'if areactor.fport = 0 then',
     'iocpfail(acallback, acontext, 0, lerror)',
     'closed IOCP reactor must not reuse synchronous completion ownership transfer');
+end;
+
+procedure TestIocpSubmitFailureOwnershipContract;
+var
+  LIocp: string;
+  LSubmitBody: string;
+begin
+  LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
+  LSubmitBody := ExtractBetween(LIocp, 'function iocpsubmitfileop',
+    'function iocpdispatchcompletion');
+
+  CheckContains(LSubmitBody, 'luserdata := lop^.userdata;',
+    'IOCP submit failure must preserve userdata before releasing the pending op');
+  CheckContains(LSubmitBody, 'iocpfreeop(areactor, lop);',
+    'IOCP submit failure must release the pending operation owner');
+  CheckContains(LSubmitBody,
+    'result := iocpfail(acallback, acontext, luserdata, lerror);',
+    'IOCP submit failure must dispatch failure with preserved userdata');
+  CheckBefore(LSubmitBody, 'lerror := getlasterror;',
+    'if lerror = error_io_pending then',
+    'IOCP submit failure must classify ERROR_IO_PENDING before cleanup');
+  CheckBefore(LSubmitBody, 'if lerror = error_io_pending then',
+    'luserdata := lop^.userdata;',
+    'IOCP submit failure must not free queued ERROR_IO_PENDING operations');
+  CheckBefore(LSubmitBody, 'luserdata := lop^.userdata;',
+    'iocpfreeop(areactor, lop);',
+    'IOCP submit failure must copy userdata before freeing the pending op');
+  CheckBefore(LSubmitBody, 'iocpfreeop(areactor, lop);',
+    'result := iocpfail(acallback, acontext, luserdata, lerror);',
+    'IOCP submit failure must free the pending op before callback dispatch');
+  CheckAbsent(LSubmitBody, 'iocpfail(acallback, acontext, lop^.userdata',
+    'IOCP submit failure must not read userdata from a freed pending op');
 end;
 
 procedure TestIocpUnsupportedAsyncOwnershipContract;
@@ -790,6 +832,8 @@ begin
     @TestWindowsCompletionFfiAbiContract);
   T.Run('IOCP closed submit ownership contract',
     @TestIocpClosedSubmitOwnershipContract);
+  T.Run('IOCP submit failure ownership contract',
+    @TestIocpSubmitFailureOwnershipContract);
   T.Run('IOCP unsupported async ownership contract',
     @TestIocpUnsupportedAsyncOwnershipContract);
   T.Run('IOCP pending operation ownership contract',
