@@ -5727,3 +5727,25 @@
   fast lazy headers 的 full materialization path 现在有了更窄、更适合后续性能
   isolation 的 standalone microbenchmark proof，而不是只附着在更宽的
   `fast headers` filter 组合里。
+
+## 2026-06-07 h1 request-path filter focused smoke findings
+
+- `request direct Path access` 之前虽然已有独立 row，但 focused gate 仍只证明宽
+  `request ` filter 会一起输出 `lazy Url.Path`、`direct Path`、`direct RawQuery`、
+  `direct Path+RawQuery`。
+- 这会留下 request-target projection 的 truth gap：
+  后续如果只想盯住 `Req.Path` 这条 direct path projection，本来的 focused gate
+  还不能证明 `request direct Path access` 这条 row 能单独稳定存在，也不能证明
+  过滤器不会顺手带出 `lazy Url.Path`、`direct RawQuery` 或无关的 metadata-cache row。
+- 本轮继续保持窄刀，没有碰 request/URL 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=request direct Path access` 提升进 focused gate
+  - 锁住 `bench_filter=request direct Path access`
+  - 锁住 `adapter cost: request direct Path access`
+  - 锁住 filtered output 不包含
+    `adapter cost: request lazy Url.Path access`
+  - 也不包含 `adapter cost: request direct RawQuery access`
+  - 也不包含无关的 `request metadata cached expect+cl`
+- 这轮的价值仍是 benchmark truth：
+  direct request-path projection 现在有了更窄、更适合后续 URL/request-target
+  成本隔离的 standalone microbenchmark proof，而不是只附着在更宽的
+  `request ` filter 组合里。

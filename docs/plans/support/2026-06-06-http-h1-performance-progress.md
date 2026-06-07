@@ -12803,3 +12803,40 @@ Hello from nextPas!
     `fast headers` filter group
   - this is benchmark-truth tightening only; it does not claim a new parser
     optimization
+
+## Session: 2026-06-07 h1 request-path filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` direct request-path projection row into
+    the focused benchmark gate
+  - keep the slice limited to request-target projection benchmark truth, not
+    request/runtime implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch request production code, parser/runtime behavior, comparator
+    binaries, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `92 total, 92 passed, 0 failed`
+    - new focused row:
+      `H1 parser benchmark request-path filter env`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=request direct Path access`
+  - the focused smoke locks:
+    - `bench_filter=request direct Path access`
+    - `adapter cost: request direct Path access`
+    - filtered output does not include
+      `adapter cost: request lazy Url.Path access`
+    - filtered output does not include
+      `adapter cost: request direct RawQuery access`
+    - filtered output does not include unrelated metadata-cache rows
+- Outcome:
+  - the direct request-path projection row is now a durable standalone
+    microbenchmark instead of only riding along inside the broader
+    `request ` filter group
+  - this is benchmark-truth tightening only; it does not claim a new parser or
+    request optimization

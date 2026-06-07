@@ -2330,6 +2330,11 @@ ns/op=43622
 req/s=22923
 ```
 
+The focused benchmark gate now also locks the narrower
+`bench_filter=request direct Path access` path, so the direct path-projection
+row remains durable standalone microbenchmark evidence instead of only
+appearing inside the broader `request ` filter group.
+
 This closes the direct path accessor slow-path gap. The next high-value
 performance slice should move to llhttp adapter metadata caching during parse,
 then fast-path header block lazy materialization, rather than hand-editing the
