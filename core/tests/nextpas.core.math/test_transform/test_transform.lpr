@@ -667,6 +667,36 @@ begin
     'Camera2D zero zoom', @RaiseCamera2DZeroZoom);
 end;
 
+procedure TestCamera2DZoomScalesView;
+var
+  SingleZoom1: TMat4f;
+  SingleZoom2: TMat4f;
+  DoubleZoom1: TMat4d;
+  DoubleZoom2: TMat4d;
+begin
+  SingleZoom1 := Camera2D(Single(10.0), Single(20.0), Single(1.0), 100, 50);
+  SingleZoom2 := Camera2D(Single(10.0), Single(20.0), Single(2.0), 100, 50);
+  CheckVec4f(0.5, 0.0, 0.0, 1.0, SingleZoom1 * TVec4f.Create(35.0, 20.0, 0.0, 1.0),
+    'Camera2D single zoom1 maps horizontal offset to half NDC');
+  CheckVec4f(1.0, 0.0, 0.0, 1.0, SingleZoom2 * TVec4f.Create(35.0, 20.0, 0.0, 1.0),
+    'Camera2D single zoom2 doubles horizontal NDC offset');
+  CheckVec4f(0.0, -0.5, 0.0, 1.0, SingleZoom1 * TVec4f.Create(10.0, 32.5, 0.0, 1.0),
+    'Camera2D single zoom1 maps vertical offset to half NDC');
+  CheckVec4f(0.0, -1.0, 0.0, 1.0, SingleZoom2 * TVec4f.Create(10.0, 32.5, 0.0, 1.0),
+    'Camera2D single zoom2 doubles vertical NDC offset');
+
+  DoubleZoom1 := Camera2D(Double(10.0), Double(20.0), Double(1.0), 100, 50);
+  DoubleZoom2 := Camera2D(Double(10.0), Double(20.0), Double(2.0), 100, 50);
+  CheckVec4d(0.5, 0.0, 0.0, 1.0, DoubleZoom1 * TVec4d.Create(35.0, 20.0, 0.0, 1.0),
+    'Camera2D double zoom1 maps horizontal offset to half NDC');
+  CheckVec4d(1.0, 0.0, 0.0, 1.0, DoubleZoom2 * TVec4d.Create(35.0, 20.0, 0.0, 1.0),
+    'Camera2D double zoom2 doubles horizontal NDC offset');
+  CheckVec4d(0.0, -0.5, 0.0, 1.0, DoubleZoom1 * TVec4d.Create(10.0, 32.5, 0.0, 1.0),
+    'Camera2D double zoom1 maps vertical offset to half NDC');
+  CheckVec4d(0.0, -1.0, 0.0, 1.0, DoubleZoom2 * TVec4d.Create(10.0, 32.5, 0.0, 1.0),
+    'Camera2D double zoom2 doubles vertical NDC offset');
+end;
+
 procedure TestDirectDoubleBuilderParity;
 var
   M: TMat4d;
@@ -885,6 +915,7 @@ begin
   T.Run('LookAt ignores up magnitude', @TestLookAtIgnoresUpMagnitude);
   T.Run('LookAt up direction controls roll', @TestLookAtUpDirectionControlsRoll);
   T.Run('camera2d and double builders', @TestCamera2DAndDoubleBuilders);
+  T.Run('Camera2D zoom scales view', @TestCamera2DZoomScalesView);
   T.Run('direct double builder parity', @TestDirectDoubleBuilderParity);
   T.Run('non-finite inputs fail fast', @TestNonFiniteInputsFailFast);
   T.Run('geometry guards report public contract messages', @TestGeometryGuardMessages);

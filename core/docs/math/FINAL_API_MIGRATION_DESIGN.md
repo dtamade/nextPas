@@ -249,7 +249,7 @@ The design keeps the useful `fafafa.game` conventions because they are internall
 - `Ortho` follows OpenGL-style orthographic projection.
 - Reversed non-zero `Ortho` bounds are valid and flip the corresponding axis.
 - Translation lives in column 3: `Data[3, 0..2]`.
-- `Camera2D` uses orthographic bounds centered on `(CenterX, CenterY)` and supports a screen-space `+Y down` convention by swapping top/bottom bounds.
+- `Camera2D` uses orthographic bounds centered on `(CenterX, CenterY)`, supports a screen-space `+Y down` convention by swapping top/bottom bounds, and treats larger zoom values as view magnification.
 - Local transform composition, if exposed, uses `Translate * Rotate * Scale`.
 - Parent/world transform composition, if exposed, uses `ParentWorld * Local`.
 - `LookAt` is a right-handed view-matrix builder. Object-transform `LookAt` semantics are a separate concern and must not share an ambiguous name.

@@ -103,6 +103,7 @@ The transform convention is:
 - perspective is right-handed and looks down `-Z`;
 - NDC is `[-1, +1]`;
 - `Camera2D` uses screen-space positive Y down.
+- Larger `Camera2D` zoom values magnify the view, so the same world-space offset maps farther in NDC.
 
 Builder guard rules are explicit: `Ortho` requires non-zero width, height, and depth;
 `Perspective` requires positive FOV, aspect, and near plane plus `far > near`; `LookAt` requires
