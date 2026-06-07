@@ -30,6 +30,7 @@ const WORKLOAD_URL_PATH: &str = "url_path";
 const WORKLOAD_ADAPTER_NO_URL: &str = "adapter_no_url";
 const WORKLOAD_RESPONSE_1K: &str = "response_1k";
 const VALID_WORKLOADS_TEXT: &str = "no_url, url_path, adapter_no_url, or response_1k";
+const CLIENT_READ_MODE: &str = "header_plus_content_length";
 
 type ResponseBody = Full<Bytes>;
 
@@ -246,6 +247,11 @@ fn print_results(
     println!("workload={}", workload);
     println!("impl=rust_hyper");
     println!("rust_profile=hyper_tokio");
+    println!("client_read_mode={}", CLIENT_READ_MODE);
+    println!(
+        "response_body_bytes={}",
+        response_body_len_for_workload(workload)
+    );
     println!("iterations={}", requests);
     println!("requested_threads={}", requested_threads);
     println!("effective_threads={}", effective_threads);

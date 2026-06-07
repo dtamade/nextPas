@@ -22,6 +22,7 @@ const workloadResponse1K = "response_1k"
 const responseBodyLen = "13"
 const responseBody1KLen = "1024"
 const validWorkloadsText = "no_url, url_path, adapter_no_url, or response_1k"
+const clientReadMode = "http_client_body_drain"
 
 func isValidWorkload(value string) bool {
 	return value == workloadNoUrl ||
@@ -114,6 +115,11 @@ func printResults(requests, requestedThreads, effectiveThreads int, workload str
 	elapsedNs := elapsed.Nanoseconds()
 	nsPerOp := int64(0)
 	reqPerSec := int64(0)
+	responseBodyBytes := responseBodyLen
+
+	if workload == workloadResponse1K {
+		responseBodyBytes = responseBody1KLen
+	}
 
 	if completed > 0 {
 		nsPerOp = elapsedNs / completed
@@ -125,6 +131,8 @@ func printResults(requests, requestedThreads, effectiveThreads int, workload str
 	fmt.Println("operation=http.server.keepalive")
 	fmt.Println("workload=" + workload)
 	fmt.Println("impl=go")
+	fmt.Println("client_read_mode=" + clientReadMode)
+	fmt.Println("response_body_bytes=" + responseBodyBytes)
 	fmt.Printf("iterations=%d\n", requests)
 	fmt.Printf("requested_threads=%d\n", requestedThreads)
 	fmt.Printf("effective_threads=%d\n", effectiveThreads)

@@ -2236,6 +2236,12 @@ writer/drain and socket throughput beyond the tiny hello-world body. This batch
 also fixed the nextPas raw benchmark client to wait for `header_end + body_len`
 before counting a response as complete. That makes the large-response row
 meaningful and also makes new no-URL rows stricter than older prefix-read rows.
+On 2026-06-07 local time, the direct comparator rows also gained explicit
+response-read metadata: `response_body_bytes=1024` for this workload, plus
+`client_read_mode=header_plus_content_length` for nextPas / Rust std-only /
+Hyper and `client_read_mode=http_client_body_drain` for the Go `net/http`
+comparator. This keeps response-writer/drain discussions honest about how each
+client decides a response is complete.
 
 Focused RED/GREEN:
 

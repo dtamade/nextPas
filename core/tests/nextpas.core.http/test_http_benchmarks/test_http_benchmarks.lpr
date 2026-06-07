@@ -412,6 +412,23 @@ begin
     ALabel + ' effective threads marker');
 end;
 
+function ExpectedClientReadMode(const AImplementation: string): string;
+begin
+  if AImplementation = 'go' then
+    Exit('http_client_body_drain');
+  Result := 'header_plus_content_length';
+end;
+
+procedure CheckResponseReadContract(const AOutput, AImplementation,
+  AResponseBodyBytes, ALabel: string);
+begin
+  CheckLineContains(AOutput,
+    'client_read_mode=' + ExpectedClientReadMode(AImplementation),
+    ALabel + ' client read mode marker');
+  CheckLineContains(AOutput, 'response_body_bytes=' + AResponseBodyBytes,
+    ALabel + ' response body bytes marker');
+end;
+
 procedure CheckRouterDispatchBenchmarkOutput(const AOutput: string);
 begin
   CheckContains(AOutput, 'operation=http.router.dispatch',
@@ -745,6 +762,101 @@ begin
     'hyper comparator thread-clamp smoke exit code: ' + LOutput);
   CheckServerBenchmarkOutput(LOutput, 'rust_hyper', '3', '3');
   CheckRequestedAndEffectiveThreads(LOutput, '5', '3', 'hyper comparator');
+end;
+
+procedure TestServerComparatorsReportResponseReadContract;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LCompareDir: string;
+  LBuildDir: string;
+  LTargetDir: string;
+  LManifestPath: string;
+  LBenchServerPath: string;
+  LGoBinaryPath: string;
+  LRustBinaryPath: string;
+  LHyperBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LBuildDir := ResolveBenchmarkTestBuildDir(LRootDir);
+  ForceDirectories(LBuildDir);
+
+  LBenchDir := PathJoin(LRootDir, BenchServerRelativeDir);
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_server response-read build exit code: ' + LOutput);
+  LBenchServerPath := ResolveBenchServerBinaryPath(LRootDir);
+  Check(FileExists(LBenchServerPath),
+    'bench_server response-read binary exists');
+
+  LCompareDir := PathJoin(LRootDir, CompareGoRelativeDir);
+  LGoBinaryPath := ResolveGoComparatorBinaryPath(LRootDir);
+  RunProcessAndCapture('go', ['build', '-o', LGoBinaryPath, 'main.go'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'go comparator response-read build exit code: ' + LOutput);
+  Check(FileExists(LGoBinaryPath),
+    'go comparator response-read binary exists');
+
+  LCompareDir := PathJoin(LRootDir, CompareRustRelativeDir);
+  LRustBinaryPath := ResolveRustComparatorBinaryPath(LRootDir);
+  RunProcessAndCapture('rustc', ['-O', '-o', LRustBinaryPath, 'main.rs'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'rust comparator response-read build exit code: ' + LOutput);
+  Check(FileExists(LRustBinaryPath),
+    'rust comparator response-read binary exists');
+
+  LCompareDir := PathJoin(LRootDir, CompareHyperRelativeDir);
+  LTargetDir := PathJoin(LBuildDir, 'cargo-target');
+  LManifestPath := PathJoin(LCompareDir, 'Cargo.toml');
+  LHyperBinaryPath := ResolveHyperComparatorBinaryPath(LRootDir);
+  RunProcessAndCapture('cargo',
+    ['build', '--release', '--manifest-path', LManifestPath,
+     '--target-dir', LTargetDir],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'hyper comparator response-read build exit code: ' + LOutput);
+  Check(FileExists(LHyperBinaryPath),
+    'hyper comparator response-read binary exists');
+
+  RunProcessAndCapture(LBenchServerPath,
+    ['--requests', '4', '--threads', '1', '--workload', 'response_1k'],
+    LBenchDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_server response-read smoke exit code: ' + LOutput);
+  CheckServerBenchmarkOutput(LOutput, 'nextpas', '4', '1', 'response_1k');
+  CheckResponseReadContract(LOutput, 'nextpas', '1024', 'bench_server');
+
+  LCompareDir := PathJoin(LRootDir, CompareGoRelativeDir);
+  RunProcessAndCapture(LGoBinaryPath,
+    ['--requests', '4', '--threads', '1', '--workload', 'response_1k'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'go comparator response-read smoke exit code: ' + LOutput);
+  CheckServerBenchmarkOutput(LOutput, 'go', '4', '1', 'response_1k');
+  CheckResponseReadContract(LOutput, 'go', '1024', 'go comparator');
+
+  LCompareDir := PathJoin(LRootDir, CompareRustRelativeDir);
+  RunProcessAndCapture(LRustBinaryPath,
+    ['--requests', '4', '--threads', '1', '--workload', 'response_1k'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'rust comparator response-read smoke exit code: ' + LOutput);
+  CheckServerBenchmarkOutput(LOutput, 'rust_std', '4', '1', 'response_1k');
+  CheckResponseReadContract(LOutput, 'rust_std', '1024', 'rust comparator');
+
+  LCompareDir := PathJoin(LRootDir, CompareHyperRelativeDir);
+  RunProcessAndCapture(LHyperBinaryPath,
+    ['--requests', '4', '--threads', '1', '--workload', 'response_1k'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'hyper comparator response-read smoke exit code: ' + LOutput);
+  CheckServerBenchmarkOutput(LOutput, 'rust_hyper', '4', '1', 'response_1k');
+  CheckResponseReadContract(LOutput, 'rust_hyper', '1024', 'hyper comparator');
 end;
 
 procedure TestBenchRouterHandlerDispatchSmoke;
@@ -1707,6 +1819,12 @@ begin
   CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1', 'response_1k');
   CheckServerBenchmarkOutput(LOutput, 'go', '8', '1', 'response_1k');
   CheckServerBenchmarkOutput(LOutput, 'rust_std', '8', '1', 'response_1k');
+  CheckContains(LOutput, 'client_read_mode=header_plus_content_length',
+    'response_1k comparison direct-read marker');
+  CheckContains(LOutput, 'client_read_mode=http_client_body_drain',
+    'response_1k comparison Go read marker');
+  CheckContains(LOutput, 'response_body_bytes=1024',
+    'response_1k comparison body-bytes marker');
 
   Check(FileExists(LReportPath), 'server comparison response_1k report exists');
   LReport := LoadTextFile(LReportPath);
@@ -1717,6 +1835,12 @@ begin
   CheckServerBenchmarkOutput(LReport, 'nextpas', '8', '1', 'response_1k');
   CheckServerBenchmarkOutput(LReport, 'go', '8', '1', 'response_1k');
   CheckServerBenchmarkOutput(LReport, 'rust_std', '8', '1', 'response_1k');
+  CheckContains(LReport, 'client_read_mode=header_plus_content_length',
+    'response_1k report direct-read marker');
+  CheckContains(LReport, 'client_read_mode=http_client_body_drain',
+    'response_1k report Go read marker');
+  CheckContains(LReport, 'response_body_bytes=1024',
+    'response_1k report body-bytes marker');
 end;
 
 procedure TestServerComparisonRunnerRunsSummarySmoke;
@@ -2469,6 +2593,8 @@ begin
     @TestBenchServerRejectsInvalidScale);
   T.Run('server comparators report requested/effective threads',
     @TestServerComparatorsReportRequestedAndEffectiveThreads);
+  T.Run('server comparators report response read contract',
+    @TestServerComparatorsReportResponseReadContract);
   T.Run('bench_router handler dispatch smoke',
     @TestBenchRouterHandlerDispatchSmoke);
   T.Run('bench_headers lookup smoke',

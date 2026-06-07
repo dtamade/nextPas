@@ -187,6 +187,13 @@ begin
   Result := 'fast';
 end;
 
+function ResponseBodyBytesForWorkload: SizeUInt;
+begin
+  if GWorkload = WORKLOAD_RESPONSE_1K then
+    Exit(RESPONSE_1K_LEN);
+  Result := SMALL_RESPONSE_LEN;
+end;
+
 var
   LHandle: TPlatformThreadHandle;
   LHandles: array of TPlatformThreadHandle;
@@ -275,6 +282,8 @@ begin
   WriteLn('workload=', GWorkload);
   WriteLn('impl=nextpas');
   WriteLn('nextpas_h1_path=', ExpectedH1PathForWorkload);
+  WriteLn('client_read_mode=header_plus_content_length');
+  WriteLn('response_body_bytes=', ResponseBodyBytesForWorkload);
   WriteLn('iterations=', GRequests);
   WriteLn('requested_threads=', GRequestedThreads);
   WriteLn('effective_threads=', GThreads);
