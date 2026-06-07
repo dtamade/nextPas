@@ -44,7 +44,7 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   identity, zero-quaternion `ToRotationMatrix` / `Rotate` identity behavior, `Conjugate`,
   `FromAxisAngle` axis normalization and zero-axis identity behavior,
   `ToAxisAngle` canonical shortest-angle output including zero-rotation `+Z` fallback, exact
-  half-turn stable-axis canonicalization, and scaled-input normalization, scaled-input
+  half-turn stable-axis canonicalization including `FromAxisAngle(..., PI)` paths, and scaled-input normalization, scaled-input
   normalization for `ToRotationMatrix` and `Rotate`, quaternion multiply, `Slerp`, `Nlerp`,
   shortest-path handling for opposite-sign equivalent interpolation endpoints including direct
   start/end midpoint parity plus endpoint canonicalization, finite-guard parameter-position parity
@@ -243,7 +243,7 @@ Status:
   axis-angle roundtrip, axis normalization, zero-axis identity behavior,
   `ToAxisAngle` canonical shortest-angle output including zero-rotation `+Z` fallback, direct
   `±3π/2` multi-turn canonicalization, exact half-turn stable-axis canonicalization across
-  `x/y/z` axes, and
+  `x/y/z` axes plus `FromAxisAngle(..., PI)` half-turn paths, and
   scaled-input normalization, scaled-input normalization for rotation matrix conversion and vector
   rotation, quaternion multiply composition,
   `Slerp`, `Nlerp`, shortest-path handling for opposite-sign equivalent interpolation endpoints

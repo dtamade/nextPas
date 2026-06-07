@@ -178,18 +178,28 @@ function CanonicalizeAxisAngleQuat(const AValue: TQuatf): TQuatf; overload; inli
 begin
   Result := AValue;
   if Result.W < 0.0 then
-    Result := NegateQuat(Result)
-  else if (Result.W = 0.0) and ShouldNegateHalfTurnAxis(Result.X, Result.Y, Result.Z) then
     Result := NegateQuat(Result);
+  if nextpas.core.math.scalar.Abs(Result.W) <= SINGLE_QUAT_EPSILON then
+  begin
+    Result.W := 0.0;
+    if ShouldNegateHalfTurnAxis(Result.X, Result.Y, Result.Z) then
+      Result := NegateQuat(Result);
+    Result.W := 0.0;
+  end;
 end;
 
 function CanonicalizeAxisAngleQuat(const AValue: TQuatd): TQuatd; overload; inline;
 begin
   Result := AValue;
   if Result.W < 0.0 then
-    Result := NegateQuat(Result)
-  else if (Result.W = 0.0) and ShouldNegateHalfTurnAxis(Result.X, Result.Y, Result.Z) then
     Result := NegateQuat(Result);
+  if nextpas.core.math.scalar.Abs(Result.W) <= DOUBLE_QUAT_EPSILON then
+  begin
+    Result.W := 0.0;
+    if ShouldNegateHalfTurnAxis(Result.X, Result.Y, Result.Z) then
+      Result := NegateQuat(Result);
+    Result.W := 0.0;
+  end;
 end;
 
 function LerpQuat(const AA, AB: TQuatf; const AT: Single): TQuatf; inline;

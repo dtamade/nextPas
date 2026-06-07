@@ -119,8 +119,9 @@ through the same formulas rather than clamping to the unit interval.
 Quaternions store vector part `X`, `Y`, `Z` and real part `W`. Zero quaternion normalization returns
 identity; zero vector normalization returns zero. `FromAxisAngle` normalizes its axis, and a zero
 axis returns identity instead of a partial rotation. `ToAxisAngle` normalizes first and returns a
-canonical shortest-angle axis-angle pair: zero rotation uses axis `+Z`, and exact half-turns use a
-stable axis hemisphere so opposite-sign equivalent quaternions still map to the same output.
+canonical shortest-angle axis-angle pair: zero rotation uses axis `+Z`, and exact half-turns,
+including `FromAxisAngle(..., PI)` paths, use a stable axis hemisphere so opposite-sign equivalent
+quaternions still map to the same output.
 `ToRotationMatrix` and `Rotate` also normalize first, so positive scaling of the same input
 rotation does not change the result.
 `Equals` is a component-wise epsilon comparison; it does not canonicalize opposite-sign equivalent

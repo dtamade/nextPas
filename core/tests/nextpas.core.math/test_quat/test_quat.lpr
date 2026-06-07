@@ -698,6 +698,26 @@ begin
     'TQuatd ToAxisAngle canonicalizes negative multi-turn angle');
 end;
 
+procedure TestToAxisAngleCanonicalizesFromAxisAngleHalfTurns;
+var
+  Axisf: TVec3f;
+  Anglef: Single;
+  Axisd: TVec3d;
+  Angled: Double;
+begin
+  TQuatf.FromAxisAngle(TVec3f.Create(0.0, -1.0, 0.0), Single(PI_VALUE)).ToAxisAngle(Axisf, Anglef);
+  CheckVec3f(0.0, 1.0, 0.0, Axisf,
+    'TQuatf ToAxisAngle canonicalizes FromAxisAngle negative y half-turn axis');
+  CheckNear(PI_VALUE, Anglef, 0.000001,
+    'TQuatf ToAxisAngle canonicalizes FromAxisAngle negative y half-turn angle');
+
+  TQuatd.FromAxisAngle(TVec3d.Create(0.0, -1.0, 0.0), PI_VALUE).ToAxisAngle(Axisd, Angled);
+  CheckVec3d(0.0, 1.0, 0.0, Axisd,
+    'TQuatd ToAxisAngle canonicalizes FromAxisAngle negative y half-turn axis');
+  CheckNear(PI_VALUE, Angled, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes FromAxisAngle negative y half-turn angle');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.quat');
   T.Run('TQuatf contracts', @TestQuatfContracts);
@@ -716,5 +736,7 @@ begin
     @TestToAxisAngleCanonicalizesOppositeSignRotations);
   T.Run('ToAxisAngle canonicalizes multi-turn inputs',
     @TestToAxisAngleCanonicalizesMultiTurnInputs);
+  T.Run('ToAxisAngle canonicalizes FromAxisAngle half-turns',
+    @TestToAxisAngleCanonicalizesFromAxisAngleHalfTurns);
   T.Summary;
 end.
