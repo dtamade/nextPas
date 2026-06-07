@@ -70,6 +70,16 @@ begin
   CheckNear(AExpectedW, AActual.W, 0.000000000001, AMessage + '.W');
 end;
 
+procedure CheckMat3fIdentity(const AActual: TMat3f; const AMessage: string);
+begin
+  Check(TMat3f.Equals(TMat3f.Identity, AActual, Single(0.000001)), AMessage);
+end;
+
+procedure CheckMat3dIdentity(const AActual: TMat3d; const AMessage: string);
+begin
+  Check(TMat3d.Equals(TMat3d.Identity, AActual, 0.000000000001), AMessage);
+end;
+
 procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string; const AProc: TTestProc);
 begin
   try
@@ -243,6 +253,10 @@ begin
   TQuatf.Create(0.0, 0.0, 0.0, 0.0).ToAxisAngle(Axis, Angle);
   CheckVec3f(0.0, 0.0, 1.0, Axis, 'TQuatf ToAxisAngle zero rotation axis');
   CheckNear(0.0, Angle, 0.0, 'TQuatf ToAxisAngle zero rotation angle');
+  CheckVec3f(1.0, 2.0, 3.0, TQuatf.Create(0.0, 0.0, 0.0, 0.0).Rotate(TVec3f.Create(1.0, 2.0, 3.0)),
+    'TQuatf zero quaternion Rotate behaves like identity');
+  CheckMat3fIdentity(TQuatf.Create(0.0, 0.0, 0.0, 0.0).ToRotationMatrix,
+    'TQuatf zero quaternion ToRotationMatrix returns identity');
 
   CheckVec3f(0.0, 1.0, 0.0, Q.Rotate(TVec3f.Create(1.0, 0.0, 0.0)), 'TQuatf Rotate');
   Matrix := Q.ToRotationMatrix;
@@ -319,6 +333,10 @@ begin
   TQuatd.Create(0.0, 0.0, 0.0, 0.0).ToAxisAngle(Axis, Angle);
   CheckVec3d(0.0, 0.0, 1.0, Axis, 'TQuatd ToAxisAngle zero rotation axis');
   CheckNear(0.0, Angle, 0.0, 'TQuatd ToAxisAngle zero rotation angle');
+  CheckVec3d(1.0, 2.0, 3.0, TQuatd.Create(0.0, 0.0, 0.0, 0.0).Rotate(TVec3d.Create(1.0, 2.0, 3.0)),
+    'TQuatd zero quaternion Rotate behaves like identity');
+  CheckMat3dIdentity(TQuatd.Create(0.0, 0.0, 0.0, 0.0).ToRotationMatrix,
+    'TQuatd zero quaternion ToRotationMatrix returns identity');
   CheckVec3d(0.0, 1.0, 0.0, Q.Rotate(TVec3d.Create(1.0, 0.0, 0.0)), 'TQuatd Rotate');
   CheckVec3d(0.0, 1.0, 0.0,
     Q.ToRotationMatrix * TVec3d.Create(1.0, 0.0, 0.0),

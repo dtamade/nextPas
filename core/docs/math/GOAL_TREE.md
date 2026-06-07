@@ -41,7 +41,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   owner-level `Inverse` singular-matrix messages for `TMat3f`, `TMat4f`, `TMat3d`, and `TMat4d`.
 - `nextpas.core.math.quat` now provides the final quaternion types: `TQuatf` and `TQuatd`.
 - Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
-  identity, `Conjugate`, `FromAxisAngle` axis normalization and zero-axis identity behavior,
+  identity, zero-quaternion `ToRotationMatrix` / `Rotate` identity behavior, `Conjugate`,
+  `FromAxisAngle` axis normalization and zero-axis identity behavior,
   `ToAxisAngle` canonical shortest-angle output including zero-rotation `+Z` fallback, exact
   half-turn stable-axis canonicalization, and scaled-input normalization, scaled-input
   normalization for `ToRotationMatrix` and `Rotate`, quaternion multiply, `Slerp`, `Nlerp`,
@@ -230,7 +231,8 @@ Status:
   public API boundary.
 - `nextpas.core.math.quat` now provides `TQuatf` and `TQuatd`.
 - Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
-  identity, `Conjugate`, axis-angle roundtrip, axis normalization, zero-axis identity behavior,
+  identity, zero-quaternion `ToRotationMatrix` / `Rotate` identity behavior, `Conjugate`,
+  axis-angle roundtrip, axis normalization, zero-axis identity behavior,
   `ToAxisAngle` canonical shortest-angle output including zero-rotation `+Z` fallback, direct
   `±3π/2` multi-turn canonicalization, exact half-turn stable-axis canonicalization, and
   scaled-input normalization, scaled-input normalization for rotation matrix conversion and vector
