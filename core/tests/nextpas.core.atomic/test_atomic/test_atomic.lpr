@@ -291,6 +291,8 @@ var
   LTypesISizeLockFreeSection: string;
   LTypesUSizeLockFreeSection: string;
   LTypesRefCountLockFreeSection: string;
+  LTypesBoolLockFreeSection: string;
+  LTypesBoolFetchNandSection: string;
   LTypesPtrLockFreeSection: string;
   LFetchAddFallbackSection: string;
   LLoad32Section: string;
@@ -416,6 +418,12 @@ begin
   LTypesRefCountLockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
     'class function TAtomicRefCount.is_lock_free: Boolean;',
     'function TAtomicRefCount.Load(AOrder: memory_order_t): PtrUInt;');
+  LTypesBoolLockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
+    'class function TAtomicBool.is_lock_free: Boolean;',
+    'function TAtomicBool.Load(AOrder: memory_order_t): Boolean;');
+  LTypesBoolFetchNandSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicBool.FetchNand(AValue: Boolean; AOrder: memory_order_t): Boolean;',
+    'function TAtomicBool.GetMut: PInt32;');
   LTypesPtrLockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
     'class function TAtomicPtr.is_lock_free: Boolean;',
     'function TAtomicPtr.Load(AOrder: memory_order_t): PT;');
@@ -723,6 +731,9 @@ begin
   CheckContains(LAtomicDocsReadme, 'facade exposes scalar typed records, `TAtomicRefCount`, and generic `TAtomicPtr<T>`',
     'atomic README must document the typed-record facade boundary');
   CheckContains(LAtomicDocsReadme,
+    '`TAtomicBool` stores a normalized `0/1` Int32 payload, `Load`/`Store`/`Exchange` map that payload to Boolean, `FetchAnd/Or/Xor/Nand` return the previous Boolean value while keeping the stored domain within `False/True`, and `is_lock_free` follows `atomic_is_lock_free_32`.',
+    'atomic README must document the TAtomicBool normalized bool-domain contract');
+  CheckContains(LAtomicDocsReadme,
     '`TAtomicPtr<T>` single-order CAS normalizes `mo_consume` success to acquire and derives a legal failure order; failure order never includes release or acq_rel.',
     'atomic README must document facade TAtomicPtr CAS failure-order derivation');
   CheckContains(LAtomicDocsReadme, 'memory_order_t',
@@ -960,6 +971,12 @@ begin
     'typed USize lock-free query must delegate to pointer-sized runtime truth');
   CheckContains(LTypesRefCountLockFreeSection, 'atomic_is_lock_free_ptr',
     'typed refcount lock-free query must delegate to pointer-sized runtime truth');
+  CheckContains(LTypesBoolLockFreeSection, 'atomic_is_lock_free_32',
+    'typed bool lock-free query must delegate to Int32 runtime truth');
+  CheckNotContains(LTypesBoolLockFreeSection, 'Result := True',
+    'typed bool lock-free query must not hardcode a guaranteed-true result');
+  CheckContains(LTypesBoolFetchNandSection, 'and 1',
+    'typed bool FetchNand must clamp the stored domain back to 0/1');
   CheckContains(LTypesPtrLockFreeSection, 'atomic_is_lock_free_ptr',
     'typed pointer lock-free query must delegate to pointer-sized runtime truth');
   CheckContains(LFetchAddFallbackSection, 'try',
@@ -1389,6 +1406,72 @@ begin
     'facade TAtomicPtr strong CAS should update when expected matches');
   Check(LPtr.Load = @LValueB,
     'facade TAtomicPtr default Load should observe the CAS result');
+end;
+
+procedure TestAtomicBoolContract;
+var
+  LBool: TAtomicBool;
+  LExpected: Boolean;
+begin
+  Check(TAtomicBool.is_lock_free = atomic_is_lock_free_32,
+    'TAtomicBool lock-free surface must match Int32 runtime truth');
+
+  LBool := TAtomicBool.Create(False);
+  Check(not LBool.Load(mo_relaxed),
+    'TAtomicBool.Create(False) should publish False');
+  Check(not LBool.IntoInner,
+    'TAtomicBool.IntoInner should expose the current false state');
+
+  LBool.Store(True, mo_release);
+  Check(LBool.Load(mo_acquire),
+    'TAtomicBool.Store should publish True');
+
+  Check(LBool.Exchange(False, mo_acq_rel),
+    'TAtomicBool.Exchange should return the previous true state');
+  Check(not LBool.Load(mo_acquire),
+    'TAtomicBool.Exchange should publish the replacement state');
+
+  LExpected := True;
+  Check(not LBool.CompareExchangeStrong(LExpected, True, mo_release),
+    'TAtomicBool strong CAS should fail when expected mismatches');
+  Check(not LExpected,
+    'TAtomicBool strong CAS failure should write the observed false state');
+
+  Check(LBool.CompareExchangeStrong(LExpected, True, mo_seq_cst),
+    'TAtomicBool strong CAS should succeed when expected matches');
+  Check(LBool.Load,
+    'TAtomicBool default Load should observe the strong-CAS result');
+
+  LExpected := True;
+  Check(LBool.CompareExchangeWeak(LExpected, False, mo_acq_rel),
+    'TAtomicBool weak CAS should update when expected matches');
+  Check(not LBool.Load(mo_acquire),
+    'TAtomicBool weak CAS should publish the replacement state');
+
+  Check(not LBool.FetchOr(True, mo_acq_rel),
+    'TAtomicBool.FetchOr should return the previous false state');
+  Check(LBool.Load(mo_acquire),
+    'TAtomicBool.FetchOr(True) should publish True');
+
+  Check(LBool.FetchAnd(False, mo_acq_rel),
+    'TAtomicBool.FetchAnd should return the previous true state');
+  Check(not LBool.Load(mo_acquire),
+    'TAtomicBool.FetchAnd(False) should publish False');
+
+  Check(not LBool.FetchXor(True, mo_acq_rel),
+    'TAtomicBool.FetchXor should return the previous false state');
+  Check(LBool.Load(mo_acquire),
+    'TAtomicBool.FetchXor(True) should publish the toggled true state');
+
+  Check(LBool.FetchNand(True, mo_acq_rel),
+    'TAtomicBool.FetchNand should return the previous true state');
+  Check(not LBool.Load(mo_acquire),
+    'TAtomicBool.FetchNand(True) should clamp the stored value back to False');
+
+  Check(not LBool.FetchNand(False, mo_acq_rel),
+    'TAtomicBool.FetchNand(False) should return the previous false state');
+  Check(LBool.Load(mo_acquire),
+    'TAtomicBool.FetchNand(False) should clamp the stored value back to True');
 end;
 
 procedure TestAtomicFlagApi;
@@ -2029,6 +2112,7 @@ begin
   T.Run('Concurrent FetchAdd (4 threads x 10000)', @TestConcurrentFetchAdd);
   T.Run('fafafa-style atomic API', @TestFafafaStyleAtomicApi);
   T.Run('typed atomic record API', @TestAtomicRecordTypes);
+  T.Run('typed atomic bool contract', @TestAtomicBoolContract);
   T.Run('atomic flag API', @TestAtomicFlagApi);
   T.Run('fetch max/min/nand contract', @TestAtomicFetchMaxMinNandContract);
   T.Run('pointer offset fetch contract', @TestAtomicPointerOffsetFetchContract);

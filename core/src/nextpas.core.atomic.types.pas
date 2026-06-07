@@ -870,8 +870,7 @@ end;
 
 class function TAtomicBool.is_lock_free: Boolean;
 begin
-  // Boolean is stored as Int32, which is always lock-free
-  Result := True;
+  Result := atomic_is_lock_free_32;
 end;
 
 function TAtomicBool.Load(AOrder: memory_order_t): Boolean;
