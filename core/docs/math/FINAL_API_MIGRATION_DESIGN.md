@@ -479,6 +479,8 @@ Resolved by tests and implementation:
 - Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`,
   `TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without
   overflowing the intermediate squared length.
+- Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by
+  `Normalize`.
 - Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd`
   inputs preserve direction instead of collapsing through an overflowing squared length.
 - Raw quaternion inputs containing NaN or infinity fail fast with `EArgumentError` when used by

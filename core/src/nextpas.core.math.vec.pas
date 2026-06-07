@@ -166,6 +166,7 @@ type
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.math.scalar;
 
 function SingleEquals(const AA, AB, AEpsilon: Single): Boolean; inline;
@@ -176,6 +177,86 @@ end;
 function DoubleEquals(const AA, AB, AEpsilon: Double): Boolean; inline;
 begin
   Result := (AEpsilon >= 0.0) and nextpas.core.math.scalar.FloatEquals(AA, AB, AEpsilon);
+end;
+
+function IsFinite(const AValue: Single): Boolean; overload; inline;
+begin
+  Result := (not nextpas.core.math.scalar.IsNaN(AValue)) and
+    (not nextpas.core.math.scalar.IsInfinite(AValue));
+end;
+
+function IsFinite(const AValue: Double): Boolean; overload; inline;
+begin
+  Result := (not nextpas.core.math.scalar.IsNaN(AValue)) and
+    (not nextpas.core.math.scalar.IsInfinite(AValue));
+end;
+
+function IsFinite(const AValue: TVec2f): Boolean; overload; inline;
+begin
+  Result := IsFinite(AValue.X) and IsFinite(AValue.Y);
+end;
+
+function IsFinite(const AValue: TVec3f): Boolean; overload; inline;
+begin
+  Result := IsFinite(AValue.X) and IsFinite(AValue.Y) and IsFinite(AValue.Z);
+end;
+
+function IsFinite(const AValue: TVec4f): Boolean; overload; inline;
+begin
+  Result := IsFinite(AValue.X) and IsFinite(AValue.Y) and
+    IsFinite(AValue.Z) and IsFinite(AValue.W);
+end;
+
+function IsFinite(const AValue: TVec2d): Boolean; overload; inline;
+begin
+  Result := IsFinite(AValue.X) and IsFinite(AValue.Y);
+end;
+
+function IsFinite(const AValue: TVec3d): Boolean; overload; inline;
+begin
+  Result := IsFinite(AValue.X) and IsFinite(AValue.Y) and IsFinite(AValue.Z);
+end;
+
+function IsFinite(const AValue: TVec4d): Boolean; overload; inline;
+begin
+  Result := IsFinite(AValue.X) and IsFinite(AValue.Y) and
+    IsFinite(AValue.Z) and IsFinite(AValue.W);
+end;
+
+procedure ValidateVectorInput(const AFunctionName: string; const AValue: TVec2f); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': vector must be finite');
+end;
+
+procedure ValidateVectorInput(const AFunctionName: string; const AValue: TVec3f); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': vector must be finite');
+end;
+
+procedure ValidateVectorInput(const AFunctionName: string; const AValue: TVec4f); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': vector must be finite');
+end;
+
+procedure ValidateVectorInput(const AFunctionName: string; const AValue: TVec2d); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': vector must be finite');
+end;
+
+procedure ValidateVectorInput(const AFunctionName: string; const AValue: TVec3d); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': vector must be finite');
+end;
+
+procedure ValidateVectorInput(const AFunctionName: string; const AValue: TVec4d); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': vector must be finite');
 end;
 
 function StableVec4Length(const AX, AY, AZ, AW: Single): Single; inline;
@@ -350,6 +431,7 @@ function TVec2f.Normalize: TVec2f;
 var
   LLength: Single;
 begin
+  ValidateVectorInput('TVec2f.Normalize', Self);
   LLength := Length;
   if LLength = 0.0 then
     Exit(Zero);
@@ -450,6 +532,7 @@ function TVec3f.Normalize: TVec3f;
 var
   LLength: Single;
 begin
+  ValidateVectorInput('TVec3f.Normalize', Self);
   LLength := Length;
   if LLength = 0.0 then
     Exit(Zero);
@@ -547,6 +630,7 @@ function TVec4f.Normalize: TVec4f;
 var
   LLength: Single;
 begin
+  ValidateVectorInput('TVec4f.Normalize', Self);
   LLength := Length;
   if LLength = 0.0 then
     Exit(Zero);
@@ -635,6 +719,7 @@ function TVec2d.Normalize: TVec2d;
 var
   LLength: Double;
 begin
+  ValidateVectorInput('TVec2d.Normalize', Self);
   LLength := Length;
   if LLength = 0.0 then
     Exit(Zero);
@@ -735,6 +820,7 @@ function TVec3d.Normalize: TVec3d;
 var
   LLength: Double;
 begin
+  ValidateVectorInput('TVec3d.Normalize', Self);
   LLength := Length;
   if LLength = 0.0 then
     Exit(Zero);
@@ -832,6 +918,7 @@ function TVec4d.Normalize: TVec4d;
 var
   LLength: Double;
 begin
+  ValidateVectorInput('TVec4d.Normalize', Self);
   LLength := Length;
   if LLength = 0.0 then
     Exit(Zero);

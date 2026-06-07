@@ -3,11 +3,25 @@ program test_vec;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.math.vec;
 
 var
   T: TTestRunner;
+
+type
+  TSingleBitCast = packed record
+    case Integer of
+      0: (Value: Single);
+      1: (Bits: LongWord);
+  end;
+
+  TDoubleBitCast = packed record
+    case Integer of
+      0: (Value: Double);
+      1: (Bits: QWord);
+  end;
 
 procedure CheckNear(const AExpected, AActual, AEpsilon: Double; const AMessage: string);
 var
@@ -65,6 +79,84 @@ begin
   CheckNear(AExpectedY, AActual.Y, 0.000000000001, AMessage + '.Y');
   CheckNear(AExpectedZ, AActual.Z, 0.000000000001, AMessage + '.Z');
   CheckNear(AExpectedW, AActual.W, 0.000000000001, AMessage + '.W');
+end;
+
+procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string; const AProc: TTestProc);
+begin
+  try
+    AProc;
+  except
+    on E: EArgumentError do
+    begin
+      CheckEqual(AExpectedMessage, E.Message, AName + ' message');
+      Exit;
+    end;
+    on E: Exception do
+      Fail(AName + ': expected EArgumentError, got ' + E.ClassName);
+  end;
+  Fail(AName + ': expected EArgumentError');
+end;
+
+function SingleNaN: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7FC00000;
+  Result := LValue.Value;
+end;
+
+function SingleInfinity: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7F800000;
+  Result := LValue.Value;
+end;
+
+function DoubleNaN: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FF8000000000000;
+  Result := LValue.Value;
+end;
+
+function DoubleInfinity: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FF0000000000000;
+  Result := LValue.Value;
+end;
+
+procedure RaiseVec2fNormalizeNaN;
+begin
+  TVec2f.Create(SingleNaN, 1.0).Normalize;
+end;
+
+procedure RaiseVec3fNormalizeInfinity;
+begin
+  TVec3f.Create(1.0, SingleInfinity, 0.0).Normalize;
+end;
+
+procedure RaiseVec4fNormalizeNaN;
+begin
+  TVec4f.Create(1.0, 0.0, SingleNaN, 0.0).Normalize;
+end;
+
+procedure RaiseVec2dNormalizeInfinity;
+begin
+  TVec2d.Create(DoubleInfinity, 1.0).Normalize;
+end;
+
+procedure RaiseVec3dNormalizeNaN;
+begin
+  TVec3d.Create(1.0, DoubleNaN, 0.0).Normalize;
+end;
+
+procedure RaiseVec4dNormalizeInfinity;
+begin
+  TVec4d.Create(1.0, 0.0, DoubleInfinity, 0.0).Normalize;
 end;
 
 procedure TestVec2fContracts;
@@ -326,6 +418,22 @@ begin
   CheckNear(1.0, N.Length, 0.000000000001, 'TVec4d huge finite normalize preserves unit length');
 end;
 
+procedure TestRawVectorNormalizeNonFiniteInputsFailFast;
+begin
+  ExpectArgumentErrorMessage('TVec2f.Normalize: vector must be finite',
+    'TVec2f Normalize NaN vector', @RaiseVec2fNormalizeNaN);
+  ExpectArgumentErrorMessage('TVec3f.Normalize: vector must be finite',
+    'TVec3f Normalize infinite vector', @RaiseVec3fNormalizeInfinity);
+  ExpectArgumentErrorMessage('TVec4f.Normalize: vector must be finite',
+    'TVec4f Normalize NaN vector', @RaiseVec4fNormalizeNaN);
+  ExpectArgumentErrorMessage('TVec2d.Normalize: vector must be finite',
+    'TVec2d Normalize infinite vector', @RaiseVec2dNormalizeInfinity);
+  ExpectArgumentErrorMessage('TVec3d.Normalize: vector must be finite',
+    'TVec3d Normalize NaN vector', @RaiseVec3dNormalizeNaN);
+  ExpectArgumentErrorMessage('TVec4d.Normalize: vector must be finite',
+    'TVec4d Normalize infinite vector', @RaiseVec4dNormalizeInfinity);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.vec');
   T.Run('TVec2f contracts', @TestVec2fContracts);
@@ -338,5 +446,7 @@ begin
   T.Run('TVec2d huge finite length + normalize', @TestVec2dHugeFiniteLengthAndNormalize);
   T.Run('TVec3d huge finite length + normalize', @TestVec3dHugeFiniteLengthAndNormalize);
   T.Run('TVec4d huge finite length + normalize', @TestVec4dHugeFiniteLengthAndNormalize);
+  T.Run('raw vector normalize non-finite inputs fail fast',
+    @TestRawVectorNormalizeNonFiniteInputsFailFast);
   T.Summary;
 end.

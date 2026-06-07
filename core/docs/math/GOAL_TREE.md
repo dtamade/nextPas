@@ -38,6 +38,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - `FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.
 - `Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.
 - Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`, `TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without overflowing the intermediate squared length.
+- Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by
+  `Normalize`.
 - Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd` inputs preserve direction instead of collapsing through an overflowing squared length.
 - Raw quaternion inputs containing NaN or infinity fail fast with `EArgumentError` when used by
   `Normalize`, `ToAxisAngle`, `ToRotationMatrix`, `Rotate`, or as `Slerp`/`Nlerp` endpoints.
@@ -249,7 +251,8 @@ Status:
   component multiply/divide, `Dot`, `Cross` for 3D vectors, `Length`, `LengthSqr`,
   `Normalize`, `Lerp`, `Equals` including negative-epsilon fail-close behavior, zero-vector
   normalize returning zero, huge finite `TVec2*` / `TVec3*` / `TVec4*` scaled length and
-  normalization preserving direction and unit length, and direct `Double`-path parity coverage for
+  normalization preserving direction and unit length, raw vector non-finite fail-fast guards,
+  and direct `Double`-path parity coverage for
   `Data` aliases, `Zero`, add/subtract/unary minus, scalar multiply left, and representative
   length/component-multiply contracts.
 - Facade tests prove consumers can `uses nextpas.core.math` and call the final vector types.
