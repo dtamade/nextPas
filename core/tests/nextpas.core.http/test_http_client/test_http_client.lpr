@@ -40,6 +40,10 @@ var
   GRetryAcceptCount: Int32;
   GRetrySecondMethod: string;
   GRetrySecondBody: string;
+  GBodyLimitListener: ITcpListener;
+  GBodyLimitDeclaredBody: string;
+  GBodyLimitExtraBody: string;
+  GBodyLimitReplyAfterRead: Boolean;
 
 type
   PServerCtx = ^TServerCtx;
@@ -428,6 +432,91 @@ begin
     end;
     LConn.Close;
   end;
+end;
+
+function BodyLimitCaptureThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LAccum: string;
+  LHeadersEnd: SizeInt;
+  LExpectedBodyLen: Int64;
+  LBodyStart: SizeInt;
+  LReply: string;
+begin
+  Result := nil;
+  try
+    LConn := GBodyLimitListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  try
+    LAccum := '';
+    LHeadersEnd := 0;
+    repeat
+      LN := LConn.Read(LBuf[0], SizeUInt(Length(LBuf)));
+      if LN = 0 then
+        Break;
+      SetLength(LAccum, Length(LAccum) + Int32(LN));
+      Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+      LHeadersEnd := Pos(#13#10#13#10, LAccum);
+    until LHeadersEnd > 0;
+
+    if LHeadersEnd > 0 then
+    begin
+      LExpectedBodyLen := RetryRequestContentLength(
+        System.Copy(LAccum, 1, LHeadersEnd + 3));
+      LBodyStart := LHeadersEnd + 4;
+      while Int64(Length(LAccum) - LBodyStart + 1) < LExpectedBodyLen do
+      begin
+        LN := LConn.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN = 0 then
+          Break;
+        SetLength(LAccum, Length(LAccum) + Int32(LN));
+        Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+      end;
+
+      GBodyLimitDeclaredBody := System.Copy(LAccum, LBodyStart,
+        LExpectedBodyLen);
+      GBodyLimitExtraBody := System.Copy(LAccum,
+        LBodyStart + SizeInt(LExpectedBodyLen), MaxInt);
+
+      if GBodyLimitExtraBody = '' then
+      begin
+        LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(150)));
+        try
+          repeat
+            LN := LConn.Read(LBuf[0], SizeUInt(Length(LBuf)));
+            if LN = 0 then
+              Break;
+            SetLength(GBodyLimitExtraBody,
+              Length(GBodyLimitExtraBody) + Int32(LN));
+            Move(LBuf[0],
+              GBodyLimitExtraBody[
+                Length(GBodyLimitExtraBody) - Int32(LN) + 1],
+              LN);
+          until False;
+        except
+        end;
+      end;
+    end;
+
+    if GBodyLimitReplyAfterRead then
+    begin
+      LReply := 'HTTP/1.1 200 OK'#13#10 +
+                'Content-Length: 2'#13#10 +
+                'Connection: close'#13#10 +
+                #13#10 +
+                'ok';
+      LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+    end;
+  except
+  end;
+  LConn.Close;
 end;
 
 function StartServer(const AHandler: IHttpHandler; out AServer: THttpServer; out APort: UInt16): TPlatformThreadHandle;
@@ -1829,6 +1918,131 @@ begin
     GRawResponse1 := '';
     GRawResponse2 := '';
     GRawAcceptLimit := 0;
+  end;
+end;
+
+procedure TestClientRequestBodyDoesNotExceedContentLength;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+begin
+  GBodyLimitDeclaredBody := '';
+  GBodyLimitExtraBody := '';
+  GBodyLimitReplyAfterRead := True;
+  GBodyLimitListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GBodyLimitListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @BodyLimitCaptureThread, nil);
+
+  try
+    LClient := NewHttpClient;
+    LReq := NewRequest(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
+      NewHeaders, StringBodyReader('abcdef'), Int64(3));
+    LResp := LClient.Send(LReq);
+
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'declared-short body request returns response');
+    CheckEqual('ok', ReadBodyStr(LResp),
+      'declared-short body response body');
+    CheckEqual('abc', GBodyLimitDeclaredBody,
+      'client writes exactly declared request body bytes');
+    CheckEqual('', GBodyLimitExtraBody,
+      'client does not write bytes beyond declared content-length');
+  finally
+    GBodyLimitListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GBodyLimitListener := nil;
+    GBodyLimitReplyAfterRead := False;
+  end;
+end;
+
+procedure TestClientRequestBodySkipsNonNilBodyWhenContentLengthZero;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+begin
+  GBodyLimitDeclaredBody := '';
+  GBodyLimitExtraBody := '';
+  GBodyLimitReplyAfterRead := True;
+  GBodyLimitListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GBodyLimitListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @BodyLimitCaptureThread, nil);
+
+  try
+    LClient := NewHttpClient;
+    LReq := NewRequest(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
+      NewHeaders, StringBodyReader('abcdef'), Int64(0));
+    LResp := LClient.Send(LReq);
+
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'zero-length non-nil body request returns response');
+    CheckEqual('', GBodyLimitDeclaredBody,
+      'zero content-length has no declared body bytes');
+    CheckEqual('', GBodyLimitExtraBody,
+      'zero content-length skips non-nil body bytes');
+  finally
+    GBodyLimitListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GBodyLimitListener := nil;
+    GBodyLimitReplyAfterRead := False;
+  end;
+end;
+
+procedure TestClientRejectsRequestBodyShorterThanContentLength;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LRaised: Boolean;
+  LJoined: Boolean;
+begin
+  GBodyLimitDeclaredBody := '';
+  GBodyLimitExtraBody := '';
+  GBodyLimitReplyAfterRead := False;
+  GBodyLimitListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GBodyLimitListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @BodyLimitCaptureThread, nil);
+  LJoined := False;
+
+  try
+    LClient := NewHttpClient;
+    LReq := NewRequest(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
+      NewHeaders, StringBodyReader('abc'), Int64(6));
+    LRaised := False;
+    try
+      LClient.Send(LReq);
+    except
+      on E: EHttpError do
+        LRaised := True;
+    end;
+
+    Check(LRaised,
+      'client rejects request body shorter than declared content-length');
+    GBodyLimitListener.Close;
+    platform_thread_join(LHandle, LRet);
+    LJoined := True;
+    CheckEqual('abc', GBodyLimitDeclaredBody,
+      'short request still writes available body bytes before rejecting');
+  finally
+    if not LJoined then
+    begin
+      GBodyLimitListener.Close;
+      platform_thread_join(LHandle, LRet);
+    end;
+    GBodyLimitListener := nil;
+    GBodyLimitReplyAfterRead := False;
   end;
 end;
 
@@ -3598,6 +3812,12 @@ begin
   T.Run('Client reads chunked response body', @TestClientReadsChunkedResponse);
   T.Run('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
   T.Run('Client rejects truncated content-length response', @TestClientRejectsTruncatedContentLengthResponse);
+  T.Run('Client request body does not exceed ContentLength',
+    @TestClientRequestBodyDoesNotExceedContentLength);
+  T.Run('Client request body skips non-nil body when ContentLength is zero',
+    @TestClientRequestBodySkipsNonNilBodyWhenContentLengthZero);
+  T.Run('Client rejects request body shorter than ContentLength',
+    @TestClientRejectsRequestBodyShorterThanContentLength);
   T.Run('HttpGetToWriter copies response body', @TestHttpGetToWriterCopiesResponseBody);
   T.Run('HttpGetToWriter closes body after successful copy',
     @TestHttpGetToWriterClosesBodyAfterSuccessfulCopy);

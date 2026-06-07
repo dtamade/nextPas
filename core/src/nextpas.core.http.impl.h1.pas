@@ -1864,6 +1864,8 @@ var
   LBuf: IWriter;
   LFlusher: IFlusher;
   LN: SizeUInt;
+  LRemaining: Int64;
+  LReadSize: SizeUInt;
   LTmp: array[0..4095] of Byte;
   LStr: string;
 begin
@@ -1899,13 +1901,26 @@ begin
 
   LBuf.Write(CRLF[1], 2);
 
-  if AReq.Body <> nil then
+  if (AReq.Body <> nil) and (AReq.ContentLength > 0) then
   begin
-    repeat
-      LN := AReq.Body.Read(LTmp[0], 4096);
+    LRemaining := AReq.ContentLength;
+    while LRemaining > 0 do
+    begin
+      LReadSize := SizeUInt(SizeOf(LTmp));
+      if LRemaining < Int64(LReadSize) then
+        LReadSize := SizeUInt(LRemaining);
+      LN := AReq.Body.Read(LTmp[0], LReadSize);
       if LN > 0 then
+      begin
+        if Int64(LN) > LRemaining then
+          LN := SizeUInt(LRemaining);
         LBuf.Write(LTmp[0], LN);
-    until LN = 0;
+        Dec(LRemaining, Int64(LN));
+      end;
+      if LN = 0 then
+        raise EHttpError.Create(
+          'HTTP request body shorter than declared content-length');
+    end;
   end;
 
   if Supports(LBuf, IFlusher, LFlusher) then
