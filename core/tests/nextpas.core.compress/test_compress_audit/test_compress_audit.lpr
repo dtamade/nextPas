@@ -431,7 +431,7 @@ begin
 
   LGot := False;
   try
-    nextpas.core.compress.deflate.DeflateDecompressWithMaxOutputSizeForTest(LC, 64);
+    nextpas.core.compress.deflate.DeflateDecompressWithMaxOutputSize(LC, 64);
   except
     LGot := True;
   end;

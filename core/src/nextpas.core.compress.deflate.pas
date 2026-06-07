@@ -18,10 +18,8 @@ function CreateDeflateReader(const ASrc: IReader): IDecompressReader;
 function DeflateCompress(const AData: TBytes;
   const ALevel: TCompressionLevel = clDefault): TBytes;
 function DeflateDecompress(const AData: TBytes): TBytes;
-{$IFDEF NEXTPAS_COMPRESS_TESTING}
-function DeflateDecompressWithMaxOutputSizeForTest(const AData: TBytes;
+function DeflateDecompressWithMaxOutputSize(const AData: TBytes;
   const AMaxOutputSize: SizeUInt): TBytes;
-{$ENDIF}
 
 implementation
 
@@ -210,9 +208,6 @@ end;
 
 { One-shot }
 
-function DeflateDecompressWithMaxOutputSize(const AData: TBytes;
-  const AMaxOutputSize: SizeUInt): TBytes; forward;
-
 function DeflateCompress(const AData: TBytes;
   const ALevel: TCompressionLevel): TBytes;
 var
@@ -265,13 +260,5 @@ begin
   until LRet = Z_OK;
   SetLength(Result, LOutLen);
 end;
-
-{$IFDEF NEXTPAS_COMPRESS_TESTING}
-function DeflateDecompressWithMaxOutputSizeForTest(const AData: TBytes;
-  const AMaxOutputSize: SizeUInt): TBytes;
-begin
-  Result := DeflateDecompressWithMaxOutputSize(AData, AMaxOutputSize);
-end;
-{$ENDIF}
 
 end.
