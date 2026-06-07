@@ -746,6 +746,9 @@ begin
     '`TryInc` writes `0` to `ANewValue` when the refcount is already zero, so failure leaves a stable non-resurrected out value for destruction-side callers.',
     'atomic README must document TAtomicRefCount zero-state TryInc out-value contract');
   CheckContains(LAtomicDocsReadme,
+    '`With at least one live owner and no overflow, `TryInc` is the concurrent borrow path: it succeeds from non-zero state, and balanced `Dec` calls do not publish zero before the last owner releases its reference.',
+    'atomic README must document TAtomicRefCount concurrent borrow contract');
+  CheckContains(LAtomicDocsReadme,
     '`Dec` publishes the release-side decrement, and a final drop to zero issues an acquire fence before destruction-side cleanup proceeds.',
     'atomic README must document TAtomicRefCount final-drop ordering');
   CheckContains(LAtomicDocsReadme,
@@ -2452,6 +2455,104 @@ begin
   Check(LRaised, 'TryInc at High(PtrUInt) must raise EResourceExhaustedError');
 end;
 
+procedure TestAtomicRefCountConcurrentBorrowContract;
+const
+  ThreadCount = 4;
+  IterationsPerThread = 5000;
+var
+  LRef: TAtomicRefCount;
+  LThreads: array[0..ThreadCount - 1] of TThread;
+  LStarted: Int32;
+  LGo: Int32;
+  LSuccessCount: Int32;
+  LTryIncFailureCount: Int32;
+  LBadNewValueCount: Int32;
+  LZeroDropCount: Int32;
+  LThreadErrorCount: Int32;
+  LI: Integer;
+  LSpin: Integer;
+begin
+  LRef := TAtomicRefCount.Create(1);
+  LStarted := 0;
+  LGo := 0;
+  LSuccessCount := 0;
+  LTryIncFailureCount := 0;
+  LBadNewValueCount := 0;
+  LZeroDropCount := 0;
+  LThreadErrorCount := 0;
+
+  for LI := 0 to High(LThreads) do
+  begin
+    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+      var
+        LJ: Integer;
+        LNewValue: PtrUInt;
+        LAfterDec: PtrUInt;
+      begin
+        atomic_fetch_add(LStarted, 1, mo_seq_cst);
+        while atomic_load(LGo, mo_seq_cst) = 0 do
+          cpu_pause;
+
+        try
+          for LJ := 1 to IterationsPerThread do
+          begin
+            if not LRef.TryInc(LNewValue) then
+            begin
+              atomic_fetch_add(LTryIncFailureCount, 1, mo_seq_cst);
+              Continue;
+            end;
+
+            atomic_fetch_add(LSuccessCount, 1, mo_seq_cst);
+            if LNewValue < 2 then
+              atomic_fetch_add(LBadNewValueCount, 1, mo_seq_cst);
+
+            LAfterDec := LRef.Dec;
+            if LAfterDec = 0 then
+              atomic_fetch_add(LZeroDropCount, 1, mo_seq_cst);
+          end;
+        except
+          atomic_fetch_add(LThreadErrorCount, 1, mo_seq_cst);
+        end;
+      end);
+    LThreads[LI].FreeOnTerminate := False;
+    LThreads[LI].Start;
+  end;
+
+  for LSpin := 1 to 1000 do
+  begin
+    if atomic_load(LStarted, mo_seq_cst) = ThreadCount then
+      Break;
+    Sleep(1);
+  end;
+  CheckEqual(Int64(ThreadCount), Int64(atomic_load(LStarted, mo_seq_cst)),
+    'refcount workers must start before the borrow phase is released');
+
+  atomic_store(LGo, 1, mo_seq_cst);
+
+  for LI := 0 to High(LThreads) do
+  begin
+    LThreads[LI].WaitFor;
+    LThreads[LI].Free;
+  end;
+
+  CheckEqual(Int64(ThreadCount * IterationsPerThread), Int64(atomic_load(LSuccessCount, mo_seq_cst)),
+    'every concurrent borrow attempt should succeed while one owner keeps the refcount alive');
+  CheckEqual(Int64(0), Int64(atomic_load(LTryIncFailureCount, mo_seq_cst)),
+    'TryInc must not report a zero-state failure while one owner stays live');
+  CheckEqual(Int64(0), Int64(atomic_load(LBadNewValueCount, mo_seq_cst)),
+    'successful TryInc must publish a refcount of at least 2 while one owner stays live');
+  CheckEqual(Int64(0), Int64(atomic_load(LZeroDropCount, mo_seq_cst)),
+    'balanced concurrent Dec calls must not drop the refcount to zero before the owner release');
+  CheckEqual(Int64(0), Int64(atomic_load(LThreadErrorCount, mo_seq_cst)),
+    'concurrent borrow workers must not raise unexpected exceptions');
+  CheckEqual(Int64(1), Int64(LRef.Load()),
+    'balanced concurrent borrows must restore the single owner count');
+  CheckEqual(Int64(1), Int64(LRef.IntoInner),
+    'IntoInner must expose the surviving owner count after concurrent borrows');
+  CheckEqual(Int64(0), Int64(LRef.Dec()),
+    'owner release should perform the only final drop after the borrow phase');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.atomic');
   T.Run('Load32/Store32 all orders', @TestLoad32Store32);
@@ -2483,5 +2584,6 @@ begin
   T.Run('tagged pointer rejects out-of-range x86_64 pointer', @TestAtomicTaggedPointerRejectsOutOfRangeX8664Pointer);
   T.Run('atomic wait/notify API', @TestAtomicWaitNotifySurfaceAndBehavior);
   T.Run('atomic refcount contract', @TestAtomicRefCountContract);
+  T.Run('atomic refcount concurrent borrow contract', @TestAtomicRefCountConcurrentBorrowContract);
   T.Summary;
 end.
