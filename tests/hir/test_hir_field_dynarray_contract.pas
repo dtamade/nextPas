@@ -208,6 +208,22 @@ begin
   Result := Copy(AText, StartPos, EndPos - StartPos + Length(LineEnding + '}'));
 end;
 
+procedure RequireSequence(const AText: string; const ANeedles: array of string;
+  const ALabel: string);
+var
+  I: LongInt;
+  PosAt: LongInt;
+begin
+  PosAt := 1;
+  for I := Low(ANeedles) to High(ANeedles) do
+  begin
+    PosAt := FindAfter(ANeedles[I], AText, PosAt);
+    if PosAt = 0 then
+      Fail(ALabel + ':' + ANeedles[I]);
+    Inc(PosAt, Length(ANeedles[I]));
+  end;
+end;
+
 procedure RequireConst(const AModel: TSemanticModel; const AName: string;
   AExpected: Int64);
 var
@@ -246,6 +262,7 @@ var
   Model: TSemanticModel;
   Node: TTypedHirNode;
   LlvmText: string;
+  ScoreLlvm: string;
 begin
   Model := BuildModel(FieldResizeSource);
   try
@@ -262,12 +279,31 @@ begin
       Fail('legacy-field-setlength-path-must-disappear');
 
     LlvmText := EmitLlvm(Model);
-    if Pos('call ptr @np_dynarray_resize(', LlvmText) = 0 then
-      Fail('missing-field-dynarray-resize-call');
-    if Pos('i64 1', LlvmText) = 0 then
-      Fail('missing-field-ptr-slot-index');
-    if Pos('i64 2', LlvmText) = 0 then
-      Fail('missing-field-len-slot-index');
+    ScoreLlvm := ExtractDefinitionSlice(LlvmText, '@TWorker.Score(');
+    if ScoreLlvm = '' then
+      Fail('missing-score-function');
+    RequireSequence(ScoreLlvm, [
+      'add i64 1, 0',
+      'getelementptr i64, ptr ',
+      'add i64 2, 0',
+      'getelementptr i64, ptr ',
+      'load ptr, ptr ',
+      'load i64, ptr ',
+      'call ptr @np_dynarray_resize(',
+      'store ptr ',
+      'store i64 '
+    ], 'missing-fieldarr-ptr-len-resize-sequence');
+    RequireSequence(ScoreLlvm, [
+      'add i64 3, 0',
+      'getelementptr i64, ptr ',
+      'add i64 4, 0',
+      'getelementptr i64, ptr ',
+      'load ptr, ptr ',
+      'load i64, ptr ',
+      'call ptr @np_dynarray_resize(',
+      'store ptr ',
+      'store i64 '
+    ], 'missing-more-ptr-len-resize-sequence');
   finally
     Model.Free;
   end;
@@ -277,16 +313,22 @@ procedure AssertFieldArrayPtrSlotContract;
 var
   Model: TSemanticModel;
   LlvmText: string;
+  FirstLlvm: string;
 begin
   Model := BuildModel(FieldElemSource);
   try
     if Model = nil then
       Fail('field-elem-model-nil');
     LlvmText := EmitLlvm(Model);
-    if Pos('getelementptr i64, ptr ', LlvmText) = 0 then
-      Fail('missing-field-array-slot-gep');
-    if Pos('load ptr, ptr ', LlvmText) = 0 then
-      Fail('missing-field-array-ptr-slot-load');
+    FirstLlvm := ExtractDefinitionSlice(LlvmText, '@TReader.First(');
+    if FirstLlvm = '' then
+      Fail('missing-reader-first-function');
+    RequireSequence(FirstLlvm, [
+      'add i64 1, 0',
+      'getelementptr i64, ptr ',
+      'load ptr, ptr ',
+      'getelementptr i64, ptr '
+    ], 'missing-field-array-ptr-slot-load-sequence');
   finally
     Model.Free;
   end;

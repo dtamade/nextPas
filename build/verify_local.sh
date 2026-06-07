@@ -350,6 +350,21 @@ HIR_CLASS_ALLOC_OUTPUT=$(mktemp)
 HIR_OBJECT_FREE_BUILD_DIR=$(mktemp -d)
 HIR_OBJECT_FREE_BINARY="$HIR_OBJECT_FREE_BUILD_DIR/test_hir_object_free_contract"
 HIR_OBJECT_FREE_OUTPUT=$(mktemp)
+HIR_DYNARRAY_RELEASE_BUILD_DIR=$(mktemp -d)
+HIR_DYNARRAY_RELEASE_BINARY="$HIR_DYNARRAY_RELEASE_BUILD_DIR/test_hir_dynarray_release_contract"
+HIR_DYNARRAY_RELEASE_OUTPUT=$(mktemp)
+HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR=$(mktemp -d)
+HIR_DYNARRAY_RELEASE_RUNTIME_BINARY="$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR/test_hir_dynarray_release_runtime_smoke"
+HIR_DYNARRAY_RELEASE_RUNTIME_OUTPUT=$(mktemp)
+HIR_FIELD_DYNARRAY_BUILD_DIR=$(mktemp -d)
+HIR_FIELD_DYNARRAY_BINARY="$HIR_FIELD_DYNARRAY_BUILD_DIR/test_hir_field_dynarray_contract"
+HIR_FIELD_DYNARRAY_OUTPUT=$(mktemp)
+HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR=$(mktemp -d)
+HIR_FIELD_DYNARRAY_RUNTIME_BINARY="$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR/test_hir_field_dynarray_release_runtime_smoke"
+HIR_FIELD_DYNARRAY_RUNTIME_OUTPUT=$(mktemp)
+HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR=$(mktemp -d)
+HIR_LARGE_ALLOC_RUNTIME_BINARY="$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR/test_hir_large_alloc_runtime_smoke"
+HIR_LARGE_ALLOC_RUNTIME_OUTPUT=$(mktemp)
 SEMANTIC_CALL_BINDINGS_BUILD_DIR=$(mktemp -d)
 SEMANTIC_CALL_BINDINGS_BINARY="$SEMANTIC_CALL_BINDINGS_BUILD_DIR/test_semantic_call_bindings"
 SEMANTIC_CALL_BINDINGS_OUTPUT=$(mktemp)
@@ -662,6 +677,16 @@ cleanup() {
   rm -f "$HIR_CLASS_ALLOC_OUTPUT"
   rm -rf "$HIR_OBJECT_FREE_BUILD_DIR"
   rm -f "$HIR_OBJECT_FREE_OUTPUT"
+  rm -rf "$HIR_DYNARRAY_RELEASE_BUILD_DIR"
+  rm -f "$HIR_DYNARRAY_RELEASE_OUTPUT"
+  rm -rf "$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR"
+  rm -f "$HIR_DYNARRAY_RELEASE_RUNTIME_OUTPUT"
+  rm -rf "$HIR_FIELD_DYNARRAY_BUILD_DIR"
+  rm -f "$HIR_FIELD_DYNARRAY_OUTPUT"
+  rm -rf "$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR"
+  rm -f "$HIR_FIELD_DYNARRAY_RUNTIME_OUTPUT"
+  rm -rf "$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR"
+  rm -f "$HIR_LARGE_ALLOC_RUNTIME_OUTPUT"
   rm -rf "$SEMANTIC_CALL_BINDINGS_BUILD_DIR"
   rm -f "$SEMANTIC_CALL_BINDINGS_OUTPUT"
   rm -f "$TOOLCHAIN_CONTRACT_OUTPUT"
@@ -891,6 +916,11 @@ require_path tests/toolchain/toolchain_contract_smoke.pas
 require_path tests/hir/test_hir_late_alloca_hoist.pas
 require_path tests/hir/test_hir_class_alloc_contract.pas
 require_path tests/hir/test_hir_object_free_contract.pas
+require_path tests/hir/test_hir_dynarray_release_contract.pas
+require_path tests/hir/test_hir_dynarray_release_runtime_smoke.pas
+require_path tests/hir/test_hir_field_dynarray_contract.pas
+require_path tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas
+require_path tests/hir/test_hir_large_alloc_runtime_smoke.pas
 require_path rtl/core/base/np_base_types.pas
 require_path rtl/core/mem/np_allocator.pas
 require_path rtl/core/text/np_text_primitives.pas
@@ -1111,6 +1141,104 @@ fi
 cat "$HIR_OBJECT_FREE_OUTPUT"
 require_output_pattern '^hir-object-free-contract-status=pass$' "$HIR_OBJECT_FREE_OUTPUT" 'missing-hir-object-free-contract-pass'
 printf 'hir-object-free-contract=pass\n'
+
+printf 'hir-dynarray-release-contract=running\n'
+printf 'hir-dynarray-release-contract-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_dynarray_release_contract.pas\n' "$HIR_DYNARRAY_RELEASE_BUILD_DIR" "$HIR_DYNARRAY_RELEASE_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_DYNARRAY_RELEASE_BUILD_DIR" -FU"$HIR_DYNARRAY_RELEASE_BUILD_DIR" tests/hir/test_hir_dynarray_release_contract.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_DYNARRAY_RELEASE_BUILD_DIR" -FU"$HIR_DYNARRAY_RELEASE_BUILD_DIR" tests/hir/test_hir_dynarray_release_contract.pas
+  fail 'hir-dynarray-release-contract-build-failed'
+fi
+if [ ! -x "$HIR_DYNARRAY_RELEASE_BINARY" ]; then
+  fail 'missing-hir-dynarray-release-contract-binary'
+fi
+printf 'hir-dynarray-release-contract-run-command=%s\n' "$HIR_DYNARRAY_RELEASE_BINARY"
+if ! "$HIR_DYNARRAY_RELEASE_BINARY" >"$HIR_DYNARRAY_RELEASE_OUTPUT" 2>&1; then
+  cat "$HIR_DYNARRAY_RELEASE_OUTPUT"
+  fail 'hir-dynarray-release-contract-run-failed'
+fi
+cat "$HIR_DYNARRAY_RELEASE_OUTPUT"
+require_output_pattern '^hir-dynarray-release-contract-status=pass$' "$HIR_DYNARRAY_RELEASE_OUTPUT" 'missing-hir-dynarray-release-contract-pass'
+printf 'hir-dynarray-release-contract=pass\n'
+
+printf 'hir-dynarray-release-runtime-smoke=running\n'
+printf 'hir-dynarray-release-runtime-smoke-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_dynarray_release_runtime_smoke.pas\n' "$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR" "$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR" -FU"$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR" tests/hir/test_hir_dynarray_release_runtime_smoke.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR" -FU"$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR" tests/hir/test_hir_dynarray_release_runtime_smoke.pas
+  fail 'hir-dynarray-release-runtime-smoke-build-failed'
+fi
+if [ ! -x "$HIR_DYNARRAY_RELEASE_RUNTIME_BINARY" ]; then
+  fail 'missing-hir-dynarray-release-runtime-smoke-binary'
+fi
+printf 'hir-dynarray-release-runtime-smoke-run-command=%s\n' "$HIR_DYNARRAY_RELEASE_RUNTIME_BINARY"
+if ! "$HIR_DYNARRAY_RELEASE_RUNTIME_BINARY" >"$HIR_DYNARRAY_RELEASE_RUNTIME_OUTPUT" 2>&1; then
+  cat "$HIR_DYNARRAY_RELEASE_RUNTIME_OUTPUT"
+  fail 'hir-dynarray-release-runtime-smoke-run-failed'
+fi
+cat "$HIR_DYNARRAY_RELEASE_RUNTIME_OUTPUT"
+require_output_pattern '^hir-dynarray-release-runtime-smoke-direct-exit=42$' "$HIR_DYNARRAY_RELEASE_RUNTIME_OUTPUT" 'missing-hir-dynarray-release-runtime-direct-exit'
+require_output_pattern '^hir-dynarray-release-runtime-smoke-resize-exit=42$' "$HIR_DYNARRAY_RELEASE_RUNTIME_OUTPUT" 'missing-hir-dynarray-release-runtime-resize-exit'
+require_output_pattern '^hir-dynarray-release-runtime-smoke-exit-cleanup=42$' "$HIR_DYNARRAY_RELEASE_RUNTIME_OUTPUT" 'missing-hir-dynarray-release-runtime-exit-cleanup'
+require_output_pattern '^hir-dynarray-release-runtime-smoke-status=pass$' "$HIR_DYNARRAY_RELEASE_RUNTIME_OUTPUT" 'missing-hir-dynarray-release-runtime-pass'
+printf 'hir-dynarray-release-runtime-smoke=pass\n'
+
+printf 'hir-field-dynarray-contract=running\n'
+printf 'hir-field-dynarray-contract-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_field_dynarray_contract.pas\n' "$HIR_FIELD_DYNARRAY_BUILD_DIR" "$HIR_FIELD_DYNARRAY_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_FIELD_DYNARRAY_BUILD_DIR" -FU"$HIR_FIELD_DYNARRAY_BUILD_DIR" tests/hir/test_hir_field_dynarray_contract.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_FIELD_DYNARRAY_BUILD_DIR" -FU"$HIR_FIELD_DYNARRAY_BUILD_DIR" tests/hir/test_hir_field_dynarray_contract.pas
+  fail 'hir-field-dynarray-contract-build-failed'
+fi
+if [ ! -x "$HIR_FIELD_DYNARRAY_BINARY" ]; then
+  fail 'missing-hir-field-dynarray-contract-binary'
+fi
+printf 'hir-field-dynarray-contract-run-command=%s\n' "$HIR_FIELD_DYNARRAY_BINARY"
+if ! "$HIR_FIELD_DYNARRAY_BINARY" >"$HIR_FIELD_DYNARRAY_OUTPUT" 2>&1; then
+  cat "$HIR_FIELD_DYNARRAY_OUTPUT"
+  fail 'hir-field-dynarray-contract-run-failed'
+fi
+cat "$HIR_FIELD_DYNARRAY_OUTPUT"
+require_output_pattern '^hir-field-dynarray-contract-status=pass$' "$HIR_FIELD_DYNARRAY_OUTPUT" 'missing-hir-field-dynarray-contract-pass'
+printf 'hir-field-dynarray-contract=pass\n'
+
+printf 'hir-field-dynarray-release-runtime-smoke=running\n'
+printf 'hir-field-dynarray-release-runtime-smoke-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas\n' "$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR" "$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR" -FU"$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR" tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR" -FU"$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR" tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas
+  fail 'hir-field-dynarray-release-runtime-smoke-build-failed'
+fi
+if [ ! -x "$HIR_FIELD_DYNARRAY_RUNTIME_BINARY" ]; then
+  fail 'missing-hir-field-dynarray-release-runtime-smoke-binary'
+fi
+printf 'hir-field-dynarray-release-runtime-smoke-run-command=%s\n' "$HIR_FIELD_DYNARRAY_RUNTIME_BINARY"
+if ! "$HIR_FIELD_DYNARRAY_RUNTIME_BINARY" >"$HIR_FIELD_DYNARRAY_RUNTIME_OUTPUT" 2>&1; then
+  cat "$HIR_FIELD_DYNARRAY_RUNTIME_OUTPUT"
+  fail 'hir-field-dynarray-release-runtime-smoke-run-failed'
+fi
+cat "$HIR_FIELD_DYNARRAY_RUNTIME_OUTPUT"
+require_output_pattern '^hir-field-dynarray-release-runtime-smoke-pascal-e2e-exit=42$' "$HIR_FIELD_DYNARRAY_RUNTIME_OUTPUT" 'missing-hir-field-dynarray-release-runtime-pascal-e2e-exit'
+require_output_pattern '^hir-field-dynarray-release-runtime-smoke-resize-free-exit=42$' "$HIR_FIELD_DYNARRAY_RUNTIME_OUTPUT" 'missing-hir-field-dynarray-release-runtime-resize-free-exit'
+require_output_pattern '^hir-field-dynarray-release-runtime-smoke-zero-free-exit=42$' "$HIR_FIELD_DYNARRAY_RUNTIME_OUTPUT" 'missing-hir-field-dynarray-release-runtime-zero-free-exit'
+require_output_pattern '^hir-field-dynarray-release-runtime-smoke-status=pass$' "$HIR_FIELD_DYNARRAY_RUNTIME_OUTPUT" 'missing-hir-field-dynarray-release-runtime-pass'
+printf 'hir-field-dynarray-release-runtime-smoke=pass\n'
+
+printf 'hir-large-alloc-runtime-smoke=running\n'
+printf 'hir-large-alloc-runtime-smoke-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_large_alloc_runtime_smoke.pas\n' "$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR" "$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR" -FU"$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR" tests/hir/test_hir_large_alloc_runtime_smoke.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR" -FU"$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR" tests/hir/test_hir_large_alloc_runtime_smoke.pas
+  fail 'hir-large-alloc-runtime-smoke-build-failed'
+fi
+if [ ! -x "$HIR_LARGE_ALLOC_RUNTIME_BINARY" ]; then
+  fail 'missing-hir-large-alloc-runtime-smoke-binary'
+fi
+printf 'hir-large-alloc-runtime-smoke-run-command=%s\n' "$HIR_LARGE_ALLOC_RUNTIME_BINARY"
+if ! "$HIR_LARGE_ALLOC_RUNTIME_BINARY" >"$HIR_LARGE_ALLOC_RUNTIME_OUTPUT" 2>&1; then
+  cat "$HIR_LARGE_ALLOC_RUNTIME_OUTPUT"
+  fail 'hir-large-alloc-runtime-smoke-run-failed'
+fi
+cat "$HIR_LARGE_ALLOC_RUNTIME_OUTPUT"
+require_output_pattern '^hir-large-alloc-runtime-smoke-direct-exit=42$' "$HIR_LARGE_ALLOC_RUNTIME_OUTPUT" 'missing-hir-large-alloc-runtime-direct-exit'
+require_output_pattern '^hir-large-alloc-runtime-smoke-object-exit=42$' "$HIR_LARGE_ALLOC_RUNTIME_OUTPUT" 'missing-hir-large-alloc-runtime-object-exit'
+require_output_pattern '^hir-large-alloc-runtime-smoke-status=pass$' "$HIR_LARGE_ALLOC_RUNTIME_OUTPUT" 'missing-hir-large-alloc-runtime-pass'
+printf 'hir-large-alloc-runtime-smoke=pass\n'
 
 printf 'lexer-conformance=running\n'
 mkdir -p "$LEX_SNAPSHOT_BUILD_DIR"

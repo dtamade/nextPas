@@ -43,6 +43,36 @@ const
     '  Worker.Free;' + LineEnding +
     'end.';
 
+  FieldEndToEndSource =
+    'program test;' + LineEnding +
+    'type TWorker = class' + LineEnding +
+    '  Items: array of Integer;' + LineEnding +
+    '  More: array of Integer;' + LineEnding +
+    '  procedure Touch;' + LineEnding +
+    'end;' + LineEnding +
+    'var Worker: TWorker;' + LineEnding +
+    'procedure TWorker.Touch;' + LineEnding +
+    'begin' + LineEnding +
+    '  SetLength(Items, 4);' + LineEnding +
+    '  Items[0] := 11;' + LineEnding +
+    '  Items[3] := 17;' + LineEnding +
+    '  SetLength(Self.Items, 8);' + LineEnding +
+    '  if Items[0] <> 11 then Halt(21);' + LineEnding +
+    '  if Items[3] <> 17 then Halt(22);' + LineEnding +
+    '  Items[7] := 19;' + LineEnding +
+    '  SetLength(More, 2);' + LineEnding +
+    '  More[0] := 23;' + LineEnding +
+    '  More[1] := 29;' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker := TWorker.Create;' + LineEnding +
+    '  Worker.Touch;' + LineEnding +
+    '  if Worker.Items[7] <> 19 then Halt(23);' + LineEnding +
+    '  if Worker.More[1] <> 29 then Halt(24);' + LineEnding +
+    '  Worker.Free;' + LineEnding +
+    '  Halt(42);' + LineEnding +
+    'end.';
+
 procedure Fail(const AMessage: string);
 begin
   WriteLn('hir-field-dynarray-release-runtime-smoke-failure=', AMessage);
@@ -324,6 +354,19 @@ begin
     AHelpers;
 end;
 
+function RuntimeMethodStubs: string;
+begin
+  Result :=
+    'define i64 @TObject.Create(ptr %self) {' + LineEnding +
+    'entry:' + LineEnding +
+    '  ret i64 0' + LineEnding +
+    '}' + LineEnding + LineEnding +
+    'define i64 @TWorker.Destroy(ptr %self) {' + LineEnding +
+    'entry:' + LineEnding +
+    '  ret i64 0' + LineEnding +
+    '}' + LineEnding + LineEnding;
+end;
+
 procedure AssertGeneratedContracts(const ASourceLlvm, AResizeIr,
   AZeroIr: string);
 var
@@ -382,6 +425,26 @@ begin
     Fail('missing-zero-runtime-cleanup-call');
 end;
 
+procedure AssertGeneratedPascalEndToEndContracts(const ALlvmText: string);
+var
+  TouchLlvm: string;
+  ObjectFreePos: LongInt;
+begin
+  TouchLlvm := ExtractDefinitionSlice(ALlvmText, 'define i64 @TWorker.Touch(');
+  if TouchLlvm = '' then
+    Fail('missing-generated-e2e-touch-function');
+  if Pos('call ptr @np_dynarray_resize(', TouchLlvm) = 0 then
+    Fail('missing-generated-e2e-resize-call');
+  if FindAfter('call ptr @np_dynarray_resize(', TouchLlvm,
+    FindAfter('call ptr @np_dynarray_resize(', TouchLlvm, 1) + 1) = 0 then
+    Fail('missing-generated-e2e-repeated-resize-call');
+  if Pos('call void @np_object_dynarray_cleanup_TWorker(ptr ', ALlvmText) = 0 then
+    Fail('missing-generated-e2e-cleanup-call');
+  ObjectFreePos := Pos('call void @np_object_free_release(ptr ', ALlvmText);
+  if ObjectFreePos = 0 then
+    Fail('missing-generated-e2e-object-release-call');
+end;
+
 procedure RunRuntimeSmoke(const AOutputDir, AStem: string);
 var
   LlPath: string;
@@ -404,6 +467,7 @@ end;
 var
   OutputDir: string;
   SourceLlvm: string;
+  EndToEndLlvm: string;
   Helpers: string;
   ResizeIr: string;
   ZeroIr: string;
@@ -416,19 +480,27 @@ begin
     Fail('create-output-dir:' + OutputDir);
 
   SourceLlvm := EmitLlvmFromSource(FieldFreeSource);
+  EndToEndLlvm := EmitLlvmFromSource(FieldEndToEndSource) +
+    RuntimeMethodStubs;
   Helpers := ExtractRuntimeHelpers(SourceLlvm);
   ResizeIr := BuildResizeFreeIr(Helpers);
   ZeroIr := BuildZeroFreeIr(Helpers);
-  AssertGeneratedContracts(SourceLlvm, ResizeIr, ZeroIr);
 
   WriteTextFile(IncludeTrailingPathDelimiter(OutputDir) +
     'llvm_field_dynarray_source.ll', SourceLlvm);
+  WriteTextFile(IncludeTrailingPathDelimiter(OutputDir) +
+    'llvm_field_dynarray_pascal_e2e.ll', EndToEndLlvm);
   WriteTextFile(IncludeTrailingPathDelimiter(OutputDir) +
     'llvm_field_dynarray_resize_free.ll', ResizeIr);
   WriteTextFile(IncludeTrailingPathDelimiter(OutputDir) +
     'llvm_field_dynarray_zero_free.ll', ZeroIr);
 
+  AssertGeneratedContracts(SourceLlvm, ResizeIr, ZeroIr);
+  AssertGeneratedPascalEndToEndContracts(EndToEndLlvm);
+
   WriteLn('hir-field-dynarray-release-runtime-smoke-output-dir=', OutputDir);
+  RunRuntimeSmoke(OutputDir, 'llvm_field_dynarray_pascal_e2e');
+  WriteLn('hir-field-dynarray-release-runtime-smoke-pascal-e2e-exit=42');
   RunRuntimeSmoke(OutputDir, 'llvm_field_dynarray_resize_free');
   WriteLn('hir-field-dynarray-release-runtime-smoke-resize-free-exit=42');
   RunRuntimeSmoke(OutputDir, 'llvm_field_dynarray_zero_free');
