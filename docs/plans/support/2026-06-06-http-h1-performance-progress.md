@@ -11971,3 +11971,38 @@ Hello from nextPas!
     response-size and parser-path metadata
   - this is metadata-contract tightening only; it does not claim a new
     optimization or a new throughput result
+
+## Session: 2026-06-07 full-chain sink-16k focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the existing `sink_16k` full-chain row from manual smoke evidence
+    into the focused benchmark gate
+  - lock the request-heavy llhttp path separately from the earlier symmetric
+    `echo_1k` body-bearing row
+  - keep the slice limited to benchmark-truth coverage, not runtime behavior
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch `bench_fullchain` runtime behavior, public HTTP API,
+    lower-layer modules, comparison runner behavior, comparator binaries, or
+    generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `70 total, 70 passed, 0 failed`
+    - new focused row:
+      `bench_fullchain sink 16k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `NEXTPAS_BENCH_FILTER=sink_16k`
+  - the focused smoke locks:
+    - `workload=sink_16k`
+    - `request_body_bytes=16384`
+    - `response_body_bytes=0`
+    - `backend=threaded`
+    - `nextpas_h1_path=llhttp`
+- Outcome:
+  - the request-heavy full-chain llhttp row is now part of the durable focused
+    benchmark contract instead of living only in docs/manual smoke evidence
+  - this is coverage tightening only; it does not claim a new optimization,
+    new row schema, or a backend ranking

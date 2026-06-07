@@ -5275,3 +5275,19 @@
   full-chain saved artifacts 现在终于能同时自描述请求大小、响应大小和 ingress
   parser path，后续拆 request-body parse cost / response drain cost 时不必再从
   workload 名称做二次推断。
+
+## 2026-06-07 full-chain sink-16k focused smoke findings
+
+- `request_body_bytes` slice 之后，`sink_16k` 已经作为 docs/manual smoke 证据存在，
+  但 focused gate 仍只锁住了 `echo_1k` 这一条 body-bearing llhttp row。
+- 这会留下一个真实 coverage 空洞：
+  - `echo_1k` 证明的是 “有请求体 + 有响应体”；
+  - 但 `sink_16k` 代表的是 “大请求体 + 空响应体”，它更接近 ingress-heavy seam，
+    也正是 request-size marker 文档里最容易误读的一条 row。
+- 本轮选择的最小收口不是再加新 workload，也不是扩 epoll/backend matrix：
+  - 只把既有 `sink_16k` row 提升进 `test_http_benchmarks` focused gate
+  - 锁住 `request_body_bytes=16384`
+  - 同时锁住 `response_body_bytes=0` 与 `nextpas_h1_path=llhttp`
+- 这轮没有改 benchmark runtime，也没有新增 benchmark 输出字段；价值在于：
+  request-heavy llhttp row 不再只是文档里的手工 smoke，而是进入了可回归的
+  focused benchmark truth。

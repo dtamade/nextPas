@@ -794,6 +794,9 @@ Treat this as local harness proof, not a stable performance ranking. The
 durable conclusion is that `bench_fullchain` now exposes both the fast-vs-llhttp
 ingress split and the request/response body sizes directly on saved nextPas
 rows instead of leaving either dimension implicit in workload names.
+The focused benchmark gate now locks both body-bearing llhttp shapes:
+`echo_1k` for symmetric request/response bodies, and `sink_16k` for the
+request-heavy / empty-response path.
 
 ## Optimization Evidence: Full-Chain Benchmark Buffered Client Read
 
