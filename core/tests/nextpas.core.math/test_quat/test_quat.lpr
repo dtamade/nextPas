@@ -405,6 +405,18 @@ begin
     'TQuatd FromAxisAngle infinite axis', @RaiseQuatdFromAxisAngleInfiniteAxis);
 end;
 
+procedure TestFromAxisAngleNormalizesHugeFiniteAxis;
+begin
+  CheckVec3f(0.0, 1.0, 0.0,
+    TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, Single(3.0e20)), Single(HALF_PI))
+      .Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf FromAxisAngle huge finite axis normalizes');
+  CheckVec3d(0.0, 1.0, 0.0,
+    TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 3.0e200), HALF_PI)
+      .Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd FromAxisAngle huge finite axis normalizes');
+end;
+
 procedure TestInterpolationRejectsNonFiniteT;
 begin
   ExpectArgumentErrorMessage('TQuatf.Slerp: AT must be finite',
@@ -844,6 +856,7 @@ begin
   T.Run('TQuatf contracts', @TestQuatfContracts);
   T.Run('TQuatd contracts', @TestQuatdContracts);
   T.Run('FromAxisAngle rejects non-finite inputs', @TestFromAxisAngleRejectsNonFiniteInputs);
+  T.Run('FromAxisAngle normalizes huge finite axis', @TestFromAxisAngleNormalizesHugeFiniteAxis);
   T.Run('Interpolation rejects non-finite t', @TestInterpolationRejectsNonFiniteT);
   T.Run('Interpolation allows finite extrapolation', @TestInterpolationAllowsFiniteExtrapolation);
   T.Run('Interpolation endpoint contracts', @TestInterpolationEndpointContracts);
