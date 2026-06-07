@@ -813,6 +813,32 @@ begin
   CheckNear(HALF_PI, Angled, 0.000000000001, 'TQuatd ToAxisAngle overwrites ordinary angle');
 end;
 
+procedure TestQuaternionMultiplicationIsNonCommutativeAndRightFirst;
+var
+  Qxf: TQuatf;
+  Qyf: TQuatf;
+  Qxd: TQuatd;
+  Qyd: TQuatd;
+begin
+  Qxf := TQuatf.FromAxisAngle(TVec3f.Create(1.0, 0.0, 0.0), Single(HALF_PI));
+  Qyf := TQuatf.FromAxisAngle(TVec3f.Create(0.0, 1.0, 0.0), Single(HALF_PI));
+  CheckVec3f(1.0, 0.0, 0.0,
+    (Qxf * Qyf).Rotate(TVec3f.Create(0.0, 0.0, 1.0)),
+    'TQuatf multiplication applies right operand first');
+  CheckVec3f(0.0, -1.0, 0.0,
+    (Qyf * Qxf).Rotate(TVec3f.Create(0.0, 0.0, 1.0)),
+    'TQuatf multiplication is non-commutative');
+
+  Qxd := TQuatd.FromAxisAngle(TVec3d.Create(1.0, 0.0, 0.0), HALF_PI);
+  Qyd := TQuatd.FromAxisAngle(TVec3d.Create(0.0, 1.0, 0.0), HALF_PI);
+  CheckVec3d(1.0, 0.0, 0.0,
+    (Qxd * Qyd).Rotate(TVec3d.Create(0.0, 0.0, 1.0)),
+    'TQuatd multiplication applies right operand first');
+  CheckVec3d(0.0, -1.0, 0.0,
+    (Qyd * Qxd).Rotate(TVec3d.Create(0.0, 0.0, 1.0)),
+    'TQuatd multiplication is non-commutative');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.quat');
   T.Run('TQuatf contracts', @TestQuatfContracts);
@@ -837,5 +863,7 @@ begin
     @TestToAxisAngleCanonicalizesFromAxisAngleHalfTurns);
   T.Run('ToAxisAngle overwrites out parameters',
     @TestToAxisAngleOverwritesOutParameters);
+  T.Run('Quaternion multiplication is non-commutative and right-first',
+    @TestQuaternionMultiplicationIsNonCommutativeAndRightFirst);
   T.Summary;
 end.

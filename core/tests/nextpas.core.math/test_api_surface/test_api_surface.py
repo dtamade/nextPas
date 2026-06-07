@@ -213,6 +213,22 @@ REQUIRED_QUAT_DOC_TRUTH = (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
         "`ToAxisAngle` overwrites both `out` parameters completely: each call rewrites `AAxis` and `AAngleRad` for zero-rotation fallback and ordinary rotations, independent of their previous contents.",
     ),
+    (
+        "docs/math/README.md",
+        "Quaternion multiplication is ordered composition: `A * B` applies the right operand `B` first, then applies the left operand `A`, and non-collinear rotations are non-commutative.",
+    ),
+    (
+        "docs/math/API.md",
+        "Quaternion multiplication is ordered composition: `A * B` applies the right operand `B` first, then applies the left operand `A`, and non-collinear rotations are non-commutative.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "Quaternion multiplication is ordered composition: `A * B` applies the right operand `B` first, then applies the left operand `A`, and non-collinear rotations are non-commutative.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "Quaternion multiplication is ordered composition: `A * B` applies the right operand `B` first, then applies the left operand `A`, and non-collinear rotations are non-commutative.",
+    ),
 )
 REQUIRED_RANDOM_DOC_TRUTH = (
     (
@@ -663,6 +679,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("quat-axis-angle-multiturn", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('ToAxisAngle canonicalizes multi-turn inputs'"),
     RequiredBehaviorTestMarker("quat-axis-angle-half-turns", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('ToAxisAngle canonicalizes FromAxisAngle half-turns'"),
     RequiredBehaviorTestMarker("quat-axis-angle-overwrite-out", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('ToAxisAngle overwrites out parameters'"),
+    RequiredBehaviorTestMarker("quat-multiply-order", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Quaternion multiplication is non-commutative and right-first'"),
     RequiredBehaviorTestMarker("transform-projection", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('projection builders'"),
     RequiredBehaviorTestMarker("transform-ortho-reversed", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('Ortho allows reversed bounds'"),
     RequiredBehaviorTestMarker("transform-model-view", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('model and view builders'"),

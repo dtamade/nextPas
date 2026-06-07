@@ -273,6 +273,8 @@ Status:
   `ToAxisAngle` overwrites both `out` parameters completely: each call rewrites `AAxis` and
   `AAngleRad` for zero-rotation fallback and ordinary rotations, independent of their previous
   contents.
+  Quaternion multiplication is ordered composition: `A * B` applies the right operand `B` first,
+  then applies the left operand `A`, and non-collinear rotations are non-commutative.
 - M3 is complete for current final Vec/Mat/Quat value-type scope.
 
 ## M4: Transform Builders

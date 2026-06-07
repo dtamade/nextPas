@@ -125,6 +125,8 @@ quaternions still map to the same output.
 `ToAxisAngle` overwrites both `out` parameters completely: each call rewrites `AAxis` and
 `AAngleRad` for zero-rotation fallback and ordinary rotations, independent of their previous
 contents.
+Quaternion multiplication is ordered composition: `A * B` applies the right operand `B` first, then
+applies the left operand `A`, and non-collinear rotations are non-commutative.
 `ToRotationMatrix` and `Rotate` also normalize first, so positive scaling of the same input
 rotation does not change the result.
 `Equals` is a component-wise epsilon comparison; it does not canonicalize opposite-sign equivalent

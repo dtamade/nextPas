@@ -209,6 +209,8 @@ stable axis hemisphere so `angle = PI` remains canonical too.
 `ToAxisAngle` overwrites both `out` parameters completely: each call rewrites `AAxis` and
 `AAngleRad` for zero-rotation fallback and ordinary rotations, independent of their previous
 contents.
+Quaternion multiplication is ordered composition: `A * B` applies the right operand `B` first, then
+applies the left operand `A`, and non-collinear rotations are non-commutative.
 `ToRotationMatrix` and `Rotate` normalize their quaternion first, so positive scaling of an
 equivalent input rotation does not change the result.
 
