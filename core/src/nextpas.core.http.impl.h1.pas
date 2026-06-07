@@ -637,8 +637,8 @@ begin
         TDuration.FromMilliseconds(AWriteTimeoutMs)));
     LW := TH1ResponseWriter.Create(AConn as IWriter);
     LBody := HttpStatusText(AStatus);
-    LW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
-    LW.GetHeaders.Set_('connection', 'close');
+    LW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
+    LW.GetHeaders.SetHeader('connection', 'close');
     LW.WriteHeader(AStatus);
     if Length(LBody) > 0 then
       LW.Write(LBody[1], SizeUInt(Length(LBody)));
@@ -655,8 +655,8 @@ var
 begin
   LW := TH1ResponseWriter.Create(AWriter);
   LBody := HttpStatusText(AStatus);
-  LW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
-  LW.GetHeaders.Set_('connection', 'close');
+  LW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
+  LW.GetHeaders.SetHeader('connection', 'close');
   LW.WriteHeader(AStatus);
   if Length(LBody) > 0 then
     LW.Write(LBody[1], SizeUInt(Length(LBody)));
@@ -1071,9 +1071,9 @@ begin
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead);
     if FKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
-      LW.GetHeaders.Set_('connection', 'keep-alive');
+      LW.GetHeaders.SetHeader('connection', 'keep-alive');
     if not FKeepAlive then
-      LW.GetHeaders.Set_('connection', 'close');
+      LW.GetHeaders.SetHeader('connection', 'close');
 
     FHandler.ServeHTTP(LReq, LW);
 
@@ -1177,9 +1177,9 @@ begin
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead);
     if LKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
-      LW.GetHeaders.Set_('connection', 'keep-alive');
+      LW.GetHeaders.SetHeader('connection', 'keep-alive');
     if not LKeepAlive then
-      LW.GetHeaders.Set_('connection', 'close');
+      LW.GetHeaders.SetHeader('connection', 'close');
 
     FHandler.ServeHTTP(LReq, LW);
 
@@ -1984,7 +1984,7 @@ begin
   end;
 
   if not AReq.Headers.Has('host') then
-    AReq.Headers.Set_('host', LUrl.HostPort);
+    AReq.Headers.SetHeader('host', LUrl.HostPort);
 
   try
     WriteRequest(LConn as IWriter, AReq);

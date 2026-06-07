@@ -31,6 +31,7 @@ type
     class function ValidateNameAndNeedsNormalize(const AName: string): Boolean; static;
     class procedure ValidateValue(const AValue: string); static;
   public
+    procedure SetHeader(const AName, AValue: string);
     procedure Set_(const AName, AValue: string);
     procedure Add(const AName, AValue: string);
     // Trusted parser path: name/value syntax has already been validated.
@@ -203,7 +204,7 @@ begin
   Result := -1;
 end;
 
-procedure THttpHeaders.Set_(const AName, AValue: string);
+procedure THttpHeaders.SetHeader(const AName, AValue: string);
 var
   LNorm: string;
   LI, LDst: Int32;
@@ -248,6 +249,11 @@ begin
     FEntries[FCount].Value := AValue;
     Inc(FCount);
   end;
+end;
+
+procedure THttpHeaders.Set_(const AName, AValue: string);
+begin
+  SetHeader(AName, AValue);
 end;
 
 procedure THttpHeaders.Add(const AName, AValue: string);
@@ -407,14 +413,14 @@ procedure SetBasicAuth(const AHeaders: IHttpHeaders;
   const AUsername, APassword: string);
 begin
   RequireHeaders(AHeaders);
-  AHeaders.Set_('authorization', 'Basic ' +
+  AHeaders.SetHeader('authorization', 'Basic ' +
     Base64Encode(HeaderBytes(AUsername + ':' + APassword)));
 end;
 
 procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string);
 begin
   RequireHeaders(AHeaders);
-  AHeaders.Set_('authorization', 'Bearer ' + AToken);
+  AHeaders.SetHeader('authorization', 'Bearer ' + AToken);
 end;
 
 end.

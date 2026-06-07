@@ -34,6 +34,7 @@ type
     function Count: Int32;
     procedure ForEach(const ACallback: THeaderIterator);
     function Clone: IHttpHeaders;
+    procedure SetHeader(const AName, AValue: string);
   end;
 
   IHttpRequest = interface

@@ -265,11 +265,11 @@ begin
         AW.WriteHeader(404);
         Exit;
       end;
-      AW.Headers.Set_('content-type', 'text/plain');
+      AW.Headers.SetHeader('content-type', 'text/plain');
       if GWorkload = WORKLOAD_RESPONSE_1K then
-        AW.Headers.Set_('content-length', RESPONSE_1K_LEN_TEXT)
+        AW.Headers.SetHeader('content-length', RESPONSE_1K_LEN_TEXT)
       else
-        AW.Headers.Set_('content-length', SMALL_RESPONSE_LEN_TEXT);
+        AW.Headers.SetHeader('content-length', SMALL_RESPONSE_LEN_TEXT);
       AW.WriteHeader(200);
       if GWorkload = WORKLOAD_RESPONSE_1K then
         AW.Write(PAnsiChar(GResponseBody1K)^, Length(GResponseBody1K))

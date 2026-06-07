@@ -18,7 +18,7 @@ var
   LH: IHttpHeaders;
 begin
   LH := NewHttpHeaders;
-  LH.Set_('Content-Type', 'text/html');
+  LH.SetHeader('Content-Type', 'text/html');
   CheckEqual('text/html', LH.Get('Content-Type'), 'set then get');
 end;
 

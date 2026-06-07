@@ -246,7 +246,7 @@ var
 begin
   LHeaders := NewHttpHeaders;
   if AContentType <> '' then
-    LHeaders.Set_('content-type', AContentType);
+    LHeaders.SetHeader('content-type', AContentType);
 
   if ABody <> nil then
   begin
@@ -269,7 +269,7 @@ var
 begin
   LHeaders := NewHttpHeaders;
   if AContentType <> '' then
-    LHeaders.Set_('content-type', AContentType);
+    LHeaders.SetHeader('content-type', AContentType);
   Result := NewRequest(AMethod, AUrl, LHeaders, ABody);
 end;
 
@@ -280,7 +280,7 @@ var
 begin
   LHeaders := NewHttpHeaders;
   if AContentType <> '' then
-    LHeaders.Set_('content-type', AContentType);
+    LHeaders.SetHeader('content-type', AContentType);
   Result := NewRequest(AMethod, AUrl, LHeaders, ABody);
 end;
 

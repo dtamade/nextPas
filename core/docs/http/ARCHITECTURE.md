@@ -204,7 +204,7 @@ type
 type
   { 跨版本共享 }
   IHttpHeaders = interface
-    procedure Set_(const AName, AValue: string);
+    procedure SetHeader(const AName, AValue: string);
     function Get(const AName: string): string;
     function Has(const AName: string): Boolean;
     procedure Del(const AName: string);

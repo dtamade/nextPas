@@ -1756,8 +1756,8 @@ translation itself.
 
 ## Optimization Evidence: Header Name Normalization Fast Path
 
-On 2026-06-05 local time, `THttpHeaders.Add` and `Set_` stopped normalizing
-already-lowercase header names after validating them. A new combined scan
+On 2026-06-05 local time, `THttpHeaders.Add` and `SetHeader` stopped
+normalizing already-lowercase header names after validating them. A new combined scan
 validates the name and detects whether uppercase normalization is actually
 needed. Public mixed/uppercase input still canonicalizes to lowercase, and
 invalid name/value rejection remains covered by focused tests.

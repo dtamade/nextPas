@@ -513,6 +513,188 @@ begin
   Check(LRaised, 'request helper rejects negative content-length');
 end;
 
+procedure TestNewRequestRejectsConflictingContentLengthHeader;
+var
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+  LRaised: Boolean;
+begin
+  LUrl := TUrl.Parse('http://example.com/upload');
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '999');
+
+  LRaised := False;
+  try
+    NewRequest(hmPost, LUrl, LHeaders, 'hello');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised,
+    'request helper rejects content-length header that conflicts with body length');
+end;
+
+procedure TestNewRequestAcceptsMatchingContentLengthHeader;
+var
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+  LReq: IHttpRequest;
+begin
+  LUrl := TUrl.Parse('http://example.com/upload');
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '5');
+
+  LReq := NewRequest(hmPost, LUrl, LHeaders, 'hello');
+
+  CheckEqual('5', LReq.Headers.Get('content-length'),
+    'request helper preserves matching content-length');
+  CheckEqual(Int64(5), LReq.ContentLength,
+    'request helper stores matching content-length');
+end;
+
+procedure TestNewRequestRejectsDuplicateContentLengthHeader;
+var
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+  LRaised: Boolean;
+begin
+  LUrl := TUrl.Parse('http://example.com/upload');
+  LHeaders := NewHttpHeaders;
+  LHeaders.Add('content-length', '5');
+  LHeaders.Add('content-length', '5');
+
+  LRaised := False;
+  try
+    NewRequest(hmPost, LUrl, LHeaders, 'hello');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'request helper rejects duplicate content-length headers');
+end;
+
+procedure TestNewRequestRejectsInvalidContentLengthHeader;
+var
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+  LRaised: Boolean;
+begin
+  LUrl := TUrl.Parse('http://example.com/upload');
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', 'five');
+
+  LRaised := False;
+  try
+    NewRequest(hmPost, LUrl, LHeaders, 'hello');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'request helper rejects invalid content-length header');
+end;
+
+procedure TestNewRequestRejectsHeadersOnlyPositiveContentLength;
+var
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+  LRaised: Boolean;
+begin
+  LUrl := TUrl.Parse('http://example.com/upload');
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '5');
+
+  LRaised := False;
+  try
+    NewRequest(hmPost, LUrl, LHeaders);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised,
+    'headers-only request helper rejects positive content-length');
+end;
+
+procedure TestNewRequestAcceptsHeadersOnlyZeroContentLength;
+var
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+  LReq: IHttpRequest;
+begin
+  LUrl := TUrl.Parse('http://example.com/upload');
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '0');
+
+  LReq := NewRequest(hmPost, LUrl, LHeaders);
+
+  CheckEqual('0', LReq.Headers.Get('content-length'),
+    'headers-only request helper preserves zero content-length');
+  CheckEqual(Int64(0), LReq.ContentLength,
+    'headers-only request helper stores zero content-length');
+  Check(LReq.Body = nil, 'headers-only request helper keeps body nil');
+end;
+
+procedure TestNewRequestRejectsNilBodyWithPositiveContentLength;
+var
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+  LRaised: Boolean;
+begin
+  LUrl := TUrl.Parse('http://example.com/upload');
+  LHeaders := NewHttpHeaders;
+
+  LRaised := False;
+  try
+    NewRequest(hmPost, LUrl, LHeaders, nil, 5);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised,
+    'request helper rejects nil body with positive content-length');
+end;
+
+procedure TestNewRequestRejectsTransferEncodingWithContentLength;
+var
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+  LRaised: Boolean;
+begin
+  LUrl := TUrl.Parse('http://example.com/upload');
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('transfer-encoding', 'chunked');
+
+  LRaised := False;
+  try
+    NewRequest(hmPost, LUrl, LHeaders, 'hello');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised,
+    'request helper rejects transfer-encoding with declared content-length');
+end;
+
+procedure TestNewRequestRejectsTransferEncodingWithoutContentLength;
+var
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+  LRaised: Boolean;
+begin
+  LUrl := TUrl.Parse('http://example.com/upload');
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('transfer-encoding', 'chunked');
+
+  LRaised := False;
+  try
+    NewRequest(hmPost, LUrl, LHeaders);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised,
+    'request helper rejects transfer-encoding without a request body framing implementation');
+end;
+
 procedure TestRequestHeadersAccessible;
 var
   LReq: IHttpRequest;
@@ -521,7 +703,7 @@ begin
   LUrl := Default(TUrl);
   LUrl.Path := '/test';
   LReq := NewRequest(hmGet, LUrl);
-  LReq.Headers.Set_('Content-Type', 'application/json');
+  LReq.Headers.SetHeader('Content-Type', 'application/json');
   CheckEqual('application/json', LReq.Headers.Get('Content-Type'), 'header set/get');
 end;
 
@@ -822,6 +1004,24 @@ begin
     @TestRequestConstructorsWithNilHeadersCreateHeaders);
   T.Run('NewRequest rejects negative content length',
     @TestNewRequestRejectsNegativeContentLength);
+  T.Run('NewRequest rejects conflicting content-length header',
+    @TestNewRequestRejectsConflictingContentLengthHeader);
+  T.Run('NewRequest accepts matching content-length header',
+    @TestNewRequestAcceptsMatchingContentLengthHeader);
+  T.Run('NewRequest rejects duplicate content-length header',
+    @TestNewRequestRejectsDuplicateContentLengthHeader);
+  T.Run('NewRequest rejects invalid content-length header',
+    @TestNewRequestRejectsInvalidContentLengthHeader);
+  T.Run('NewRequest rejects headers-only positive content-length',
+    @TestNewRequestRejectsHeadersOnlyPositiveContentLength);
+  T.Run('NewRequest accepts headers-only zero content-length',
+    @TestNewRequestAcceptsHeadersOnlyZeroContentLength);
+  T.Run('NewRequest rejects nil body with positive content-length',
+    @TestNewRequestRejectsNilBodyWithPositiveContentLength);
+  T.Run('NewRequest rejects transfer-encoding with content-length',
+    @TestNewRequestRejectsTransferEncodingWithContentLength);
+  T.Run('NewRequest rejects transfer-encoding without content-length',
+    @TestNewRequestRejectsTransferEncodingWithoutContentLength);
   T.Run('Request headers accessible', @TestRequestHeadersAccessible);
   T.Run('Request body nil is ok', @TestRequestBodyNilIsOk);
   T.Run('PathParam set and get', @TestPathParamSetAndGet);

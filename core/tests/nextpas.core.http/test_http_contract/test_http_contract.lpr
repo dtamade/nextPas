@@ -524,6 +524,27 @@ begin
     'Facade NewRequest(headers/body) preserves headers');
 end;
 
+procedure TestNewRequestRejectsConflictingContentLengthThroughFacade;
+var
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+  LRaised: Boolean;
+begin
+  LUrl := TUrl.Parse('http://example.com/api');
+  LHeaders := NewHeaders;
+  LHeaders.SetHeader('content-length', '999');
+
+  LRaised := False;
+  try
+    nextpas.core.http.NewRequest(hmPost, LUrl, LHeaders, 'hello');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised,
+    'Facade NewRequest rejects conflicting content-length header');
+end;
+
 procedure TestNewRequestHeadersOnlyFacadeOverload;
 var
   LReq: IHttpRequest;
@@ -619,7 +640,7 @@ begin
     'Facade NewRequest(string URL) parses query');
 
   LHeaders := NewHeaders;
-  LHeaders.Set_('x-api', 'next');
+  LHeaders.SetHeader('x-api', 'next');
   LReq := nextpas.core.http.NewRequest(hmPost,
     'http://example.com/upload', LHeaders, nil, 0);
 
@@ -630,6 +651,7 @@ begin
   CheckEqual('next', LReq.Headers.Get('x-api'),
     'Facade NewRequest(string URL, headers/body) preserves headers');
 
+  LHeaders := NewHeaders;
   LReq := nextpas.core.http.NewRequest(hmPut,
     'http://example.com/string-body', LHeaders, 'hello');
 
@@ -644,6 +666,7 @@ begin
   LBody[0] := Ord('b');
   LBody[1] := 0;
   LBody[2] := 255;
+  LHeaders := NewHeaders;
   LReq := nextpas.core.http.NewRequest(hmPatch,
     'http://example.com/bytes-body', LHeaders, LBody);
 
@@ -1751,6 +1774,8 @@ begin
   T.Run('NewRequest: Method/Url/Version', @TestNewRequest);
   T.Run('NewRequest headers/body overload is available through facade',
     @TestNewRequestWithHeadersFacadeOverload);
+  T.Run('NewRequest rejects conflicting content-length through facade',
+    @TestNewRequestRejectsConflictingContentLengthThroughFacade);
   T.Run('NewRequest headers-only overload is available through facade',
     @TestNewRequestHeadersOnlyFacadeOverload);
   T.Run('NewRequest nil third argument stays source-compatible through facade',

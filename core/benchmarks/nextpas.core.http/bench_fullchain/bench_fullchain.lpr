@@ -54,16 +54,16 @@ var
 
 procedure WritePlaintextResponse(const AW: IHttpResponseWriter);
 begin
-  AW.GetHeaders.Set_('content-type', 'text/plain');
-  AW.GetHeaders.Set_('content-length', '13');
+  AW.GetHeaders.SetHeader('content-type', 'text/plain');
+  AW.GetHeaders.SetHeader('content-length', '13');
   AW.WriteHeader(HTTP_STATUS_OK);
   AW.Write(PAnsiChar('Hello, World!')^, 13);
 end;
 
 procedure WriteBody1KResponse(const AW: IHttpResponseWriter; const ABody1K: string);
 begin
-  AW.GetHeaders.Set_('content-type', 'application/octet-stream');
-  AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(ABody1K))));
+  AW.GetHeaders.SetHeader('content-type', 'application/octet-stream');
+  AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(ABody1K))));
   AW.WriteHeader(HTTP_STATUS_OK);
   AW.Write(ABody1K[1], SizeUInt(Length(ABody1K)));
 end;
@@ -195,8 +195,8 @@ begin
   LRouter.Get('/json', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   const BODY = '{"message":"Hello, World!"}';
   begin
-    AW.GetHeaders.Set_('content-type', 'application/json');
-    AW.GetHeaders.Set_('content-length', '27');
+    AW.GetHeaders.SetHeader('content-type', 'application/json');
+    AW.GetHeaders.SetHeader('content-length', '27');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(PAnsiChar(BODY)^, 27);
   end);
@@ -213,8 +213,8 @@ begin
         LTotal := LTotal + LN;
       until LN = 0;
     end;
-    AW.GetHeaders.Set_('content-type', 'application/octet-stream');
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(LTotal)));
+    AW.GetHeaders.SetHeader('content-type', 'application/octet-stream');
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(LTotal)));
     AW.WriteHeader(HTTP_STATUS_OK);
     { Echo back same size — just write the buffer contents }
     if LTotal > 0 then
@@ -231,7 +231,7 @@ begin
         LN := AReq.Body.Read(LBuf[0], SizeOf(LBuf));
       until LN = 0;
     end;
-    AW.GetHeaders.Set_('content-length', '0');
+    AW.GetHeaders.SetHeader('content-length', '0');
     AW.WriteHeader(HTTP_STATUS_OK);
   end);
 
@@ -240,8 +240,8 @@ begin
   var LBody: string;
   begin
     LBody := 'user:' + AReq.PathParam('id');
-    AW.GetHeaders.Set_('content-type', 'text/plain');
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-type', 'text/plain');
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);

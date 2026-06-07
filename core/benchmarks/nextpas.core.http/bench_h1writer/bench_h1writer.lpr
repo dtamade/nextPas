@@ -72,8 +72,8 @@ begin
       LSink.Reset;
       LWriter := TH1ResponseWriter.Create(LSinkWriter);
       try
-        LWriter.Headers.Set_('content-type', 'text/plain');
-        LWriter.Headers.Set_('content-length', '0');
+        LWriter.Headers.SetHeader('content-type', 'text/plain');
+        LWriter.Headers.SetHeader('content-length', '0');
         LWriter.WriteHeader(HTTP_STATUS_OK);
         LWriter.Flush;
         Inc(GBytesWritten, LSink.Size);
@@ -101,12 +101,12 @@ begin
       LSink.Reset;
       LWriter := TH1ResponseWriter.Create(LSinkWriter);
       try
-        LWriter.Headers.Set_('date', 'Sat, 06 Jun 2026 00:00:00 GMT');
-        LWriter.Headers.Set_('server', 'nextpas');
-        LWriter.Headers.Set_('content-type', 'text/plain');
-        LWriter.Headers.Set_('content-length', '0');
-        LWriter.Headers.Set_('cache-control', 'no-store');
-        LWriter.Headers.Set_('x-request-id', '0123456789abcdef');
+        LWriter.Headers.SetHeader('date', 'Sat, 06 Jun 2026 00:00:00 GMT');
+        LWriter.Headers.SetHeader('server', 'nextpas');
+        LWriter.Headers.SetHeader('content-type', 'text/plain');
+        LWriter.Headers.SetHeader('content-length', '0');
+        LWriter.Headers.SetHeader('cache-control', 'no-store');
+        LWriter.Headers.SetHeader('x-request-id', '0123456789abcdef');
         LWriter.WriteHeader(HTTP_STATUS_OK);
         LWriter.Flush;
         Inc(GBytesWritten, LSink.Size);
@@ -146,7 +146,7 @@ begin
       LSink.Reset;
       LWriter := TH1ResponseWriter.Create(LSinkWriter);
       try
-        LWriter.Headers.Set_('content-length', '0');
+        LWriter.Headers.SetHeader('content-length', '0');
         LWriter.WriteHeader(LStatus);
         LWriter.Flush;
         Inc(GBytesWritten, LSink.Size);
@@ -176,8 +176,8 @@ begin
       LSink.Reset;
       LWriter := TH1ResponseWriter.Create(LSinkWriter);
       try
-        LWriter.Headers.Set_('content-type', 'text/plain');
-        LWriter.Headers.Set_('content-length', '13');
+        LWriter.Headers.SetHeader('content-type', 'text/plain');
+        LWriter.Headers.SetHeader('content-length', '13');
         LWriter.WriteHeader(HTTP_STATUS_OK);
         LWriter.Write(RESPONSE_BODY[1], SizeUInt(Length(RESPONSE_BODY)));
         LWriter.Flush;
@@ -208,8 +208,8 @@ begin
       LOutbound := NewH1OutboundBuffer;
       LWriter := TH1ResponseWriter.Create(LOutbound as IWriter);
       try
-        LWriter.Headers.Set_('content-type', 'application/octet-stream');
-        LWriter.Headers.Set_('content-length', '1024');
+        LWriter.Headers.SetHeader('content-type', 'application/octet-stream');
+        LWriter.Headers.SetHeader('content-length', '1024');
         LWriter.WriteHeader(HTTP_STATUS_OK);
         LWriter.Write(GBody1K[1], SizeUInt(Length(GBody1K)));
         LWriter.Flush;

@@ -344,7 +344,7 @@ begin
      (not FSuppressBody) and
      (not FHeaders.Has('content-length')) and
      (not FHeaders.Has('transfer-encoding')) then
-    FHeaders.Set_('transfer-encoding', 'chunked');
+    FHeaders.SetHeader('transfer-encoding', 'chunked');
   WriteStatusLine;
   WriteHeaderBlock;
   FHeadersSent := True;

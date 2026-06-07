@@ -93,7 +93,7 @@ var
 begin
   if not nextpas.core.fs.Exists(AFilePath) then
   begin
-    AW.GetHeaders.Set_('content-length', '9');
+    AW.GetHeaders.SetHeader('content-length', '9');
     AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
     AW.Write(PAnsiChar('Not Found')^, 9);
     Exit;
@@ -101,8 +101,8 @@ begin
   LContent := nextpas.core.fs.ReadFileText(AFilePath);
   LExt := ExtractExt(AFilePath);
   LMime := MimeTypeFromExt(LExt);
-  AW.GetHeaders.Set_('content-type', LMime);
-  AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LContent))));
+  AW.GetHeaders.SetHeader('content-type', LMime);
+  AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LContent))));
   AW.WriteHeader(HTTP_STATUS_OK);
   if Length(LContent) > 0 then
     AW.Write(LContent[1], SizeUInt(Length(LContent)));
@@ -137,7 +137,7 @@ begin
     { Security: reject traversal attempts }
     if not IsSafePath(LRelative) then
     begin
-      AW.GetHeaders.Set_('content-length', '11');
+      AW.GetHeaders.SetHeader('content-length', '11');
       AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
       AW.Write(PAnsiChar('Bad Request')^, 11);
       Exit;

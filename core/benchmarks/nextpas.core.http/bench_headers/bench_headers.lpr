@@ -19,11 +19,11 @@ begin
   for LIt := 1 to aIters do
   begin
     LH := NewHttpHeaders;
-    LH.Set_('content-type', 'text/html');
-    LH.Set_('content-length', '1024');
-    LH.Set_('server', 'nextpas');
-    LH.Set_('date', 'Sat, 31 May 2026 12:00:00 GMT');
-    LH.Set_('connection', 'keep-alive');
+    LH.SetHeader('content-type', 'text/html');
+    LH.SetHeader('content-length', '1024');
+    LH.SetHeader('server', 'nextpas');
+    LH.SetHeader('date', 'Sat, 31 May 2026 12:00:00 GMT');
+    LH.SetHeader('connection', 'keep-alive');
     GSink := LH.Get('content-type');
   end;
 end;
@@ -44,7 +44,7 @@ begin
   begin
     LH := NewHttpHeaders;
     for LI := 0 to 14 do
-      LH.Set_(NAMES[LI], 'value');
+      LH.SetHeader(NAMES[LI], 'value');
     GSink := LH.Get('x-request-id');
   end;
 end;
@@ -76,9 +76,9 @@ var
   LH: IHttpHeaders;
 begin
   LH := NewHttpHeaders;
-  LH.Set_('content-type', 'text/html');
-  LH.Set_('content-length', '1024');
-  LH.Set_('server', 'nextpas');
+  LH.SetHeader('content-type', 'text/html');
+  LH.SetHeader('content-length', '1024');
+  LH.SetHeader('server', 'nextpas');
   for LIt := 1 to aIters do
     GSink := LH.Get('x-nonexistent');
 end;
@@ -90,11 +90,11 @@ var
   LAll: TStringArray;
 begin
   LH := NewHttpHeaders;
-  LH.Set_('content-type', 'text/html');
-  LH.Set_('content-length', '1024');
-  LH.Set_('server', 'nextpas');
-  LH.Set_('date', 'Sat, 31 May 2026');
-  LH.Set_('connection', 'keep-alive');
+  LH.SetHeader('content-type', 'text/html');
+  LH.SetHeader('content-length', '1024');
+  LH.SetHeader('server', 'nextpas');
+  LH.SetHeader('date', 'Sat, 31 May 2026');
+  LH.SetHeader('connection', 'keep-alive');
   for LIt := 1 to aIters do
     LAll := LH.GetAll('expect');
   if Length(LAll) > 0 then
@@ -107,11 +107,11 @@ var
   LH: IHttpHeaders;
 begin
   LH := NewHttpHeaders;
-  LH.Set_('content-type', 'text/html');
-  LH.Set_('content-length', '1024');
-  LH.Set_('server', 'nextpas');
-  LH.Set_('date', 'Sat, 31 May 2026');
-  LH.Set_('connection', 'keep-alive');
+  LH.SetHeader('content-type', 'text/html');
+  LH.SetHeader('content-length', '1024');
+  LH.SetHeader('server', 'nextpas');
+  LH.SetHeader('date', 'Sat, 31 May 2026');
+  LH.SetHeader('connection', 'keep-alive');
   for LIt := 1 to aIters do
     GSink := LH.Get('connection');
 end;
@@ -122,11 +122,11 @@ var
   LH: IHttpHeaders;
 begin
   LH := NewHttpHeaders;
-  LH.Set_('content-type', 'text/html');
-  LH.Set_('content-length', '1024');
-  LH.Set_('server', 'nextpas');
-  LH.Set_('date', 'Sat, 31 May 2026');
-  LH.Set_('connection', 'keep-alive');
+  LH.SetHeader('content-type', 'text/html');
+  LH.SetHeader('content-length', '1024');
+  LH.SetHeader('server', 'nextpas');
+  LH.SetHeader('date', 'Sat, 31 May 2026');
+  LH.SetHeader('connection', 'keep-alive');
   for LIt := 1 to aIters do
     GSink := LH.Get('CONNECTION');
 end;
@@ -138,9 +138,9 @@ var
   LB: Boolean;
 begin
   LH := NewHttpHeaders;
-  LH.Set_('content-type', 'text/html');
-  LH.Set_('content-length', '1024');
-  LH.Set_('server', 'nextpas');
+  LH.SetHeader('content-type', 'text/html');
+  LH.SetHeader('content-length', '1024');
+  LH.SetHeader('server', 'nextpas');
   for LIt := 1 to aIters do
     LB := LH.Has('content-length');
   if LB then ;
@@ -154,7 +154,7 @@ var
 begin
   LH := NewHttpHeaders;
   for LI := 1 to 10 do
-    LH.Set_('header-' + Chr(Ord('a') + LI), 'value');
+    LH.SetHeader('header-' + Chr(Ord('a') + LI), 'value');
   for LIt := 1 to aIters do
     LClone := LH.Clone;
   GSink := LClone.Get('header-a');

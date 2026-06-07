@@ -51,13 +51,13 @@ begin
       end;
 
       { Set CORS response headers }
-      AW.Headers.Set_('Access-Control-Allow-Origin', AOptions.AllowOrigins);
-      AW.Headers.Set_('Access-Control-Allow-Methods', AOptions.AllowMethods);
-      AW.Headers.Set_('Access-Control-Allow-Headers', AOptions.AllowHeaders);
+      AW.Headers.SetHeader('Access-Control-Allow-Origin', AOptions.AllowOrigins);
+      AW.Headers.SetHeader('Access-Control-Allow-Methods', AOptions.AllowMethods);
+      AW.Headers.SetHeader('Access-Control-Allow-Headers', AOptions.AllowHeaders);
       if AOptions.MaxAge > 0 then
-        AW.Headers.Set_('Access-Control-Max-Age', IntToStr(Int64(AOptions.MaxAge)));
+        AW.Headers.SetHeader('Access-Control-Max-Age', IntToStr(Int64(AOptions.MaxAge)));
       if AOptions.AllowCredentials then
-        AW.Headers.Set_('Access-Control-Allow-Credentials', 'true');
+        AW.Headers.SetHeader('Access-Control-Allow-Credentials', 'true');
 
       { Preflight: OPTIONS with Origin → 204, don't call next }
       if AReq.Method = hmOptions then

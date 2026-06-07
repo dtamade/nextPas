@@ -171,7 +171,48 @@ begin
   if AContentType = '' then
     Exit(nil);
   Result := NewHttpHeaders;
-  Result.Set_('content-type', AContentType);
+  Result.SetHeader('content-type', AContentType);
+end;
+
+function ParseDeclaredContentLength(const AValue: string): Int64;
+var
+  LI: SizeInt;
+  LDigit: Int64;
+begin
+  if AValue = '' then
+    raise EArgumentError.Create('HTTP request content-length is invalid');
+  Result := 0;
+  for LI := 1 to Length(AValue) do
+  begin
+    if (AValue[LI] < '0') or (AValue[LI] > '9') then
+      raise EArgumentError.Create('HTTP request content-length is invalid');
+    LDigit := Ord(AValue[LI]) - Ord('0');
+    if Result > ((High(Int64) - LDigit) div 10) then
+      raise EArgumentError.Create('HTTP request content-length is too large');
+    Result := (Result * 10) + LDigit;
+  end;
+end;
+
+procedure ValidateRequestBodyHeaders(const AHeaders: IHttpHeaders;
+  const ADeclaredContentLength: Int64);
+var
+  LValues: TStringArray;
+  LHeaderLength: Int64;
+begin
+  if AHeaders = nil then
+    Exit;
+
+  LValues := AHeaders.GetAll('content-length');
+  if AHeaders.Has('transfer-encoding') then
+    raise EArgumentError.Create('HTTP request transfer-encoding is unsupported');
+
+  if Length(LValues) = 0 then
+    Exit;
+  if Length(LValues) <> 1 then
+    raise EArgumentError.Create('HTTP request content-length is duplicated');
+  LHeaderLength := ParseDeclaredContentLength(LValues[0]);
+  if LHeaderLength <> ADeclaredContentLength then
+    raise EArgumentError.Create('HTTP request content-length conflicts with body length');
 end;
 
 function ResponseStatusMustNotHaveBody(const AStatus: THttpStatus): Boolean;
@@ -428,7 +469,9 @@ end;
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
   const AHeaders: IHttpHeaders): IHttpRequest;
 begin
-  Result := NewRequest(AMethod, AUrl, AHeaders, nil, 0);
+  ValidateRequestBodyHeaders(AHeaders, 0);
+  Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, HeadersOrNew(AHeaders),
+    nil, 0);
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: string;
@@ -491,12 +534,16 @@ var
 begin
   if AContentLength < 0 then
     raise EArgumentError.Create('HTTP request content-length is negative');
+  if (ABody = nil) and (AContentLength > 0) then
+    raise EArgumentError.Create(
+      'HTTP request body is nil but content-length is positive');
 
   LHeaders := AHeaders;
   if LHeaders = nil then
     LHeaders := NewHttpHeaders;
+  ValidateRequestBodyHeaders(LHeaders, AContentLength);
   if (ABody <> nil) or (AContentLength > 0) then
-    LHeaders.Set_('content-length', IntToStr(AContentLength));
+    LHeaders.SetHeader('content-length', IntToStr(AContentLength));
   Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, LHeaders, ABody,
     AContentLength);
 end;
@@ -616,8 +663,8 @@ begin
   end;
 
   if AContentType <> '' then
-    AW.GetHeaders.Set_('content-type', AContentType);
-  AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(ABody))));
+    AW.GetHeaders.SetHeader('content-type', AContentType);
+  AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(ABody))));
   AW.WriteHeader(AStatus);
   Result := WriteAllResponseBodyString(AW, ABody);
 end;

@@ -31,7 +31,7 @@ begin
       ANext.ServeHTTP(AReq, AW);
       LElapsed := LStart.Elapsed;
       LMs := LElapsed.AsMilliseconds;
-      AW.Headers.Set_('X-Response-Time', IntToStr(LMs) + 'ms');
+      AW.Headers.SetHeader('X-Response-Time', IntToStr(LMs) + 'ms');
       if LElapsed > ATimeout then
         WriteLn('[WARN] Handler exceeded timeout: ', LElapsed.ToString,
                 ' > ', ATimeout.ToString, ' for ', AReq.Path);

@@ -676,16 +676,16 @@ end;
 
 procedure InitBenchMetadataHeaders(const AHeaders: IHttpHeaders);
 begin
-  AHeaders.Set_('host', 'example.com');
-  AHeaders.Set_('connection', 'keep-alive');
-  AHeaders.Set_('expect', '100-continue, fancy');
-  AHeaders.Set_('content-length', '1024');
-  AHeaders.Set_('content-type', 'application/octet-stream');
-  AHeaders.Set_('user-agent', 'nextpas/1.0');
-  AHeaders.Set_('accept', 'application/json');
-  AHeaders.Set_('cache-control', 'no-cache');
-  AHeaders.Set_('x-request-id', 'abc123');
-  AHeaders.Set_('authorization', 'Bearer token123');
+  AHeaders.SetHeader('host', 'example.com');
+  AHeaders.SetHeader('connection', 'keep-alive');
+  AHeaders.SetHeader('expect', '100-continue, fancy');
+  AHeaders.SetHeader('content-length', '1024');
+  AHeaders.SetHeader('content-type', 'application/octet-stream');
+  AHeaders.SetHeader('user-agent', 'nextpas/1.0');
+  AHeaders.SetHeader('accept', 'application/json');
+  AHeaders.SetHeader('cache-control', 'no-cache');
+  AHeaders.SetHeader('x-request-id', 'abc123');
+  AHeaders.SetHeader('authorization', 'Bearer token123');
 end;
 
 procedure BenchAdapterRequestMetadataLegacyExpectCl(aIters: Int64);
@@ -750,9 +750,9 @@ end;
 
 procedure InitBenchAdapterNoUrlHeaders(const AHeaders: IHttpHeaders);
 begin
-  AHeaders.Set_('host', 'localhost');
-  AHeaders.Set_('connection', 'keep-alive');
-  AHeaders.Set_('content-length', '0');
+  AHeaders.SetHeader('host', 'localhost');
+  AHeaders.SetHeader('connection', 'keep-alive');
+  AHeaders.SetHeader('content-length', '0');
 end;
 
 procedure BenchAdapterNoUrlMetadata3Headers(aIters: Int64);

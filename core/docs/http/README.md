@@ -73,7 +73,8 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 ### Headers
 
 - `NewHeaders` — create IHttpHeaders (case-insensitive, multi-value)
-- `Set_/Add/Get/GetAll/Has/Del/Count/ForEach/Clone`
+- `SetHeader/Add/Get/GetAll/Has/Del/Count/ForEach/Clone`; `Set_` remains a
+  source-compatible alias, but new code should use `SetHeader`.
 - `SetBasicAuth(Headers, Username, Password)` / `SetBearerAuth(Headers, Token)`
   — set the `Authorization` header for common client request auth cases; nil
   headers raise `EArgumentError`, and existing authorization values are replaced.
@@ -97,6 +98,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - `NewRequest(Method, Url, Headers)` — build a headers-only request with nil
   body and zero `Content-Length`; this covers the common `GET` / `HEAD` /
   custom-header case without forcing callers to spell `Headers, nil, 0`.
+  An explicit single numeric `Content-Length: 0` is accepted; positive,
+  invalid, duplicate, or oversized `Content-Length` is rejected because no body
+  is supplied.
   `nil` as the third argument is not the headers-only form: it stays source
   compatible with the older empty-`TBytes` helper and therefore still produces
   a zero-length body with `Content-Length: 0`.
@@ -104,6 +108,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   requests for `IHttpClient.Do_`; `Url` can be either a `TUrl` or a URL string,
   nil headers create an empty header set, body requests publish
   `Content-Length`, and negative content length raises `EArgumentError`.
+  Caller-supplied `Content-Length` is valid only when it is a single numeric
+  value matching the helper body length; duplicate, invalid, oversized, or
+  conflicting values raise `EArgumentError`.
 - `NewRequest(Method, Url, Headers, BodyText)` — build a custom request with
   a copied Pascal string body and generated `Content-Length`; callers still set
   `Content-Type` explicitly on the supplied headers when needed.
@@ -124,6 +131,12 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   ContentLength)` — the same binary / reader body helpers without an explicit
   headers object; they still publish `Content-Length` and still do not guess
   `Content-Type`.
+- Request helpers do not implement caller-supplied `Transfer-Encoding`; any
+  `Transfer-Encoding` header raises `EArgumentError`. Streaming/chunked request
+  body ownership remains a future API seam rather than a silent header escape
+  hatch. When a headers object is supplied, the helper treats it as
+  request-owned and may write `Content-Length`; do not reuse the same headers
+  object for a different request shape.
 - `NewResponse(Status, Headers, Body)` — build responses; nil headers create
   an empty header set so callers can safely read or mutate `Resp.Headers`.
 - `HttpWriteResponseString(Writer, Status, ContentType, Body)` — write a

@@ -467,7 +467,7 @@ begin
 
   if LFound then
   begin
-    AW.Headers.Set_('allow', LAllow);
+    AW.Headers.SetHeader('allow', LAllow);
     AW.WriteHeader(HTTP_STATUS_METHOD_NOT_ALLOWED);
   end
   else
