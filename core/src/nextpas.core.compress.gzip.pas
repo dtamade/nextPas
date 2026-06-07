@@ -267,10 +267,7 @@ begin
     begin
       LRead := FSrc.Read(FInBuf[0], COMPRESS_BUF_SIZE);
       if LRead = 0 then
-      begin
-        FDone := True;
-        Break;
-      end;
+        raise EIOError.Create('gzip: truncated stream');
       FStream.next_in := @FInBuf[0];
       FStream.avail_in := LRead;
     end;

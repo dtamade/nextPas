@@ -279,6 +279,29 @@ begin
   Check(LGot, 'gzip truncated trailer raises');
 end;
 
+procedure TestGzipTruncatedPayloadRaisesOnRead;
+var
+  LSrc, LC: TBytes;
+  LReader: IDecompressReader;
+  LGot: Boolean;
+  LI: Integer;
+begin
+  SetLength(LSrc, 1024);
+  for LI := 0 to High(LSrc) do
+    LSrc[LI] := Byte((LI * 13 + 7) mod 251);
+  LC := GzipCompress(LSrc);
+  SetLength(LC, 16);
+
+  LGot := False;
+  try
+    LReader := GzipReader(CreateBytesStreamFrom(LC) as IReader);
+    IoReadAll(LReader as IReader);
+  except
+    LGot := True;
+  end;
+  Check(LGot, 'gzip truncated payload raises during read');
+end;
+
 { === C. Streaming Boundary Tests === }
 
 procedure TestDeflateStreamByteByByte;
@@ -523,6 +546,7 @@ begin
   T.Run('Gzip wrong size', @TestGzipWrongSize);
   T.Run('Gzip truncated header', @TestGzipTruncatedHeader);
   T.Run('Gzip truncated trailer', @TestGzipTruncatedTrailer);
+  T.Run('Gzip truncated payload read', @TestGzipTruncatedPayloadRaisesOnRead);
   T.Run('Deflate stream byte-by-byte', @TestDeflateStreamByteByByte);
   T.Run('Gzip stream byte-by-byte', @TestGzipStreamByteByByte);
   T.Run('Gzip one-byte reader lifecycle', @TestGzipStreamOneByteReaderLifecycle);
