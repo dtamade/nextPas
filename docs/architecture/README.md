@@ -66,6 +66,7 @@
 - `crt-specification.md`：nextPas CRT 规范
 - `distribution-layout-specification.md`：nextPas 发行布局规范
 - `test-harness-specification.md`：nextPas 测试 `harness` 规范
+- `ci-evidence-matrix.md`：nextPas CI evidence matrix
 - `stage0-driver-specification.md`：nextPas `stage0` 驱动规范
 - `target-platform-specification.md`：nextPas 目标平台规范
 
@@ -121,4 +122,5 @@
 - 再读 `backend-specification.md`，确认 `MIR`、codegen adapter、assembler/linker 与产物路径如何冻结
 - 再读 `llvm-backend-specification.md`，确认 LLVM backend 为什么只是 backend contract 的一个实现
 - 再读 `c-interop-specification.md`，确认 C ABI、external symbol 与 target-aware linking 如何冻结
+- 再读 `test-harness-specification.md` 和 `ci-evidence-matrix.md`，确认本地 harness、Makefile gates 和 CI truth 怎样对齐
 - 最后按需进入其余各份 `*-specification.md`，查看运行时、测试、目标与发行约束
