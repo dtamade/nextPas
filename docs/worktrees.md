@@ -198,6 +198,8 @@ make landing-check \
 `ALLOW_PATHS` 是允许带入候选分支的路径前缀清单；多个前缀用空格分隔。
 如果当前 slice 没有对应的 core focused gate，可以省略 `FOCUS`，但 `Ready` 或
 landing 报告必须说明用了哪些替代 verification。
+对于 `.github/` CI slice，省略 `FOCUS` 时必须跑 `make test-tooling`。
+对于 `scripts/`、`tests/tooling/` 或 `docs/worktrees.md` 这类 tooling / landing 文档 slice，省略 `FOCUS` 时也必须跑 `make test-tooling`，并在 `Ready` 报告中列出该证据。
 
 `make landing-check` 会运行：
 
