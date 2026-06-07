@@ -61,7 +61,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   owner-level `Ortho`, `Perspective`, `LookAt`, `Translate`, `Scale`, `Rotate*`, and `Camera2D`
   guard messages, direct `Double`-path parity for projection/view/model/camera builders, and
   direct `Single` / `Double` parity coverage across the public guard-message families, including
-  `Scale(Double)` Y-axis finite guard parity and `Camera2D` zero/negative zoom parity.
+  `Scale(Double)` Y-axis finite guard parity, `LookAt` up-direction roll parity, and
+  `Camera2D` zero/negative zoom parity.
 - `nextpas.core.math.easing` now provides `TEasingFunction` and the final `Ease*` function family.
 - Easing tests cover every public easing function with endpoints, representative midpoint/branch
   points, direct `EaseOutBounce` piecewise-branch coverage, finite out-of-range extrapolation,
@@ -273,10 +274,11 @@ Status:
 - Tests lock column-major translation in column 3, right-handed `LookAt`, right-handed perspective
   with NDC `[-1,+1]`, direct `Ortho` reversed-bounds axis flips, direct `Double` parity coverage
   for `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`, `RotateY`, `RotateZ`, and
-  `Camera2D`, `LookAt` up-vector magnitude invariance for the same direction, screen-space
-  `Camera2D` positive Y down, geometry guard messages for degenerate `Ortho` / `Perspective` /
-  `LookAt` / `Camera2D` inputs, exact owner-level `Ortho` finite and zero-extent guard messages,
-  exact owner-level `Perspective` finite/positive parameter guard messages plus the
+  `Camera2D`, `LookAt` up-vector magnitude invariance for the same direction plus direct
+  `AUp` sign-flip roll semantics, screen-space `Camera2D` positive Y down, geometry guard
+  messages for degenerate `Ortho` / `Perspective` / `LookAt` / `Camera2D` inputs, exact
+  owner-level `Ortho` finite and zero-extent guard messages, exact owner-level
+  `Perspective` finite/positive parameter guard messages plus the
   `Perspective: vertical FOV is invalid` contract and direct far-plane ordering parity for
   `far = near` and `far < near`, exact owner-level finite guard messages for `LookAt`
   eye/target/up inputs plus `Translate` / `Scale` axis inputs, `RotateX/Y/Z` radian inputs, and

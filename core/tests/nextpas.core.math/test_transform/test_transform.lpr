@@ -609,6 +609,44 @@ begin
     'LookAt double ignores positive up scaling');
 end;
 
+procedure TestLookAtUpDirectionControlsRoll;
+var
+  SingleUp: TMat4f;
+  SingleDown: TMat4f;
+  DoubleUp: TMat4d;
+  DoubleDown: TMat4d;
+begin
+  SingleUp := LookAt(TVec3f.Create(0.0, 0.0, 5.0), TVec3f.Zero, TVec3f.Create(0.0, 1.0, 0.0));
+  SingleDown := LookAt(TVec3f.Create(0.0, 0.0, 5.0), TVec3f.Zero, TVec3f.Create(0.0, -1.0, 0.0));
+  CheckVec4f(0.0, 0.0, 0.0, 1.0, SingleUp * TVec4f.Create(0.0, 0.0, 5.0, 1.0),
+    'LookAt single positive up maps eye to origin');
+  CheckVec4f(0.0, 0.0, 0.0, 1.0, SingleDown * TVec4f.Create(0.0, 0.0, 5.0, 1.0),
+    'LookAt single negative up maps eye to origin');
+  CheckVec4f(0.0, 0.0, -5.0, 1.0, SingleUp * TVec4f.Create(0.0, 0.0, 0.0, 1.0),
+    'LookAt single positive up keeps target on negative Z');
+  CheckVec4f(0.0, 0.0, -5.0, 1.0, SingleDown * TVec4f.Create(0.0, 0.0, 0.0, 1.0),
+    'LookAt single negative up keeps target on negative Z');
+  CheckVec4f(0.0, 1.0, 0.0, 1.0, SingleUp * TVec4f.Create(0.0, 1.0, 5.0, 1.0),
+    'LookAt single positive up keeps eye-above point on positive Y');
+  CheckVec4f(0.0, -1.0, 0.0, 1.0, SingleDown * TVec4f.Create(0.0, 1.0, 5.0, 1.0),
+    'LookAt single negative up flips eye-above point to negative Y');
+
+  DoubleUp := LookAt(TVec3d.Create(0.0, 0.0, 5.0), TVec3d.Zero, TVec3d.Create(0.0, 1.0, 0.0));
+  DoubleDown := LookAt(TVec3d.Create(0.0, 0.0, 5.0), TVec3d.Zero, TVec3d.Create(0.0, -1.0, 0.0));
+  CheckVec4d(0.0, 0.0, 0.0, 1.0, DoubleUp * TVec4d.Create(0.0, 0.0, 5.0, 1.0),
+    'LookAt double positive up maps eye to origin');
+  CheckVec4d(0.0, 0.0, 0.0, 1.0, DoubleDown * TVec4d.Create(0.0, 0.0, 5.0, 1.0),
+    'LookAt double negative up maps eye to origin');
+  CheckVec4d(0.0, 0.0, -5.0, 1.0, DoubleUp * TVec4d.Create(0.0, 0.0, 0.0, 1.0),
+    'LookAt double positive up keeps target on negative Z');
+  CheckVec4d(0.0, 0.0, -5.0, 1.0, DoubleDown * TVec4d.Create(0.0, 0.0, 0.0, 1.0),
+    'LookAt double negative up keeps target on negative Z');
+  CheckVec4d(0.0, 1.0, 0.0, 1.0, DoubleUp * TVec4d.Create(0.0, 1.0, 5.0, 1.0),
+    'LookAt double positive up keeps eye-above point on positive Y');
+  CheckVec4d(0.0, -1.0, 0.0, 1.0, DoubleDown * TVec4d.Create(0.0, 1.0, 5.0, 1.0),
+    'LookAt double negative up flips eye-above point to negative Y');
+end;
+
 procedure TestCamera2DAndDoubleBuilders;
 var
   M: TMat4f;
@@ -845,6 +883,7 @@ begin
   T.Run('Ortho allows reversed bounds', @TestOrthoAllowsReversedBounds);
   T.Run('model and view builders', @TestModelAndViewBuilders);
   T.Run('LookAt ignores up magnitude', @TestLookAtIgnoresUpMagnitude);
+  T.Run('LookAt up direction controls roll', @TestLookAtUpDirectionControlsRoll);
   T.Run('camera2d and double builders', @TestCamera2DAndDoubleBuilders);
   T.Run('direct double builder parity', @TestDirectDoubleBuilderParity);
   T.Run('non-finite inputs fail fast', @TestNonFiniteInputsFailFast);
