@@ -8,6 +8,7 @@ uses
   nextpas.core.collections.vec,
   nextpas.core.collections.vecdeque,
   nextpas.core.collections.hashmap,
+  nextpas.core.collections.hashmap.swiss,
   nextpas.core.collections.btree,
   nextpas.core.collections.lrucache,
   nextpas.core.collections.skiplist,
@@ -111,6 +112,101 @@ begin
   Pass('HashMap overwrite stress');
 end;
 
+function TrackedHash(const AKey: ITracked): UInt32;
+var Id: UInt32;
+begin
+  if AKey = nil then
+    Exit(0);
+  Id := UInt32(AKey.GetId);
+  Id := (Id xor (Id shr 16)) * UInt32($7feb352d);
+  Id := (Id xor (Id shr 15)) * UInt32($846ca68b);
+  Result := Id xor (Id shr 16);
+end;
+
+function TrackedEquals(const L, R: ITracked): Boolean;
+begin
+  if L = nil then
+    Exit(R = nil);
+  if R = nil then
+    Exit(False);
+  Result := L.GetId = R.GetId;
+end;
+
+function KeepTrackedOddKeys(const AKey: ITracked; const AValue: ITracked): Boolean;
+begin
+  Result := (AKey.GetId mod 2) = 1;
+end;
+
+var
+  GSwissDrainVisits: Int32;
+
+procedure CountSwissDrainVisit(const AKey: ITracked; const AValue: ITracked);
+begin
+  Inc(GSwissDrainVisits);
+end;
+
+procedure TestSwissTableManagedKeyValueLifecycle;
+type TSwissT = specialize TSwissTable<ITracked, ITracked>;
+var
+  M: TSwissT;
+  Snap: TLeakSnapshot;
+  i: Integer;
+  k, v: ITracked;
+begin
+  Snap := SnapTake;
+  M := TSwissT.Create(0, @TrackedHash, @TrackedEquals);
+  try
+    for i := 1 to 512 do
+    begin
+      k := MakeTracked(i);
+      v := MakeTracked(i + 10000);
+      M.Put(k, v);
+      k := nil;
+      v := nil;
+    end;
+
+    for i := 1 to 512 do
+    begin
+      k := MakeTracked(i);
+      v := MakeTracked(i + 20000);
+      M.AddOrAssign(k, v);
+      k := nil;
+      v := nil;
+    end;
+
+    for i := 1 to 128 do
+    begin
+      k := MakeTracked(i * 2);
+      M.Remove(k);
+      k := nil;
+    end;
+
+    M.Retain(@KeepTrackedOddKeys);
+    M.ShrinkToFit;
+    GSwissDrainVisits := 0;
+    M.Drain(@CountSwissDrainVisit);
+    if GSwissDrainVisits <> 256 then
+    begin
+      WriteLn('FAIL: SwissTable drain visit count expected=256 actual=', GSwissDrainVisits);
+      Halt(1);
+    end;
+
+    for i := 1 to 64 do
+    begin
+      k := MakeTracked(i);
+      v := MakeTracked(i + 30000);
+      M.Put(k, v);
+      k := nil;
+      v := nil;
+    end;
+    M.Clear;
+  finally
+    M.Free;
+  end;
+  SnapAssert(Snap, 'SwissTable managed key/value lifecycle');
+  Pass('SwissTable managed key/value lifecycle');
+end;
+
 function BTreeCmpInt(const A, B: Int32; aData: Pointer): SizeInt;
 begin
   if A < B then Result := -1 else if A > B then Result := 1 else Result := 0;
@@ -197,6 +293,7 @@ begin
   TestVecDequeWrapResize;
   TestHashMapRehash;
   TestHashMapOverwrite;
+  TestSwissTableManagedKeyValueLifecycle;
   TestBTreeRemoveMerge;
   TestLruCacheEvict;
   TestSkipListRemove;

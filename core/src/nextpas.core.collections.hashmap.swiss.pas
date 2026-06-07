@@ -183,8 +183,10 @@ function TSwissTable.KeyHash(const AKey: K): UInt32;
 var
   p: Pointer;
 begin
+  if Assigned(FHash) then Exit(FHash(AKey));
+
   p := @AKey;
-  // 编译期特化：ordinal/基本类型直接计算，绕过 FHash 指针检查
+  // 默认路径：内置 key 类型直接计算，避免额外回调开销。
   if (GetTypeKind(K) = tkInteger) or (GetTypeKind(K) = tkChar) or
      (GetTypeKind(K) = tkWChar) or (GetTypeKind(K) = tkBool) or
      (GetTypeKind(K) = tkEnumeration) then
@@ -204,7 +206,6 @@ begin
   if (GetTypeKind(K) = tkUString) or (GetTypeKind(K) = tkWString) then
     Exit(HashOfUnicodeString(PUnicodeString(p)^));
 
-  if Assigned(FHash) then Exit(FHash(AKey));
   case SizeOf(K) of
     1: Result := InlineHashMix32(PByte(p)^);
     2: Result := InlineHashMix32(PWord(p)^);
@@ -217,7 +218,9 @@ end;
 
 function TSwissTable.KeysEqual(const L, R: K): Boolean;
 begin
-  // 编译期特化：ordinal 类型直接整数比较，绕过 FEquals 指针检查
+  if Assigned(FEquals) then Exit(FEquals(L, R));
+
+  // 默认路径：ordinal 类型直接整数比较，避免额外回调开销。
   if (GetTypeKind(K) = tkInteger) or (GetTypeKind(K) = tkChar) or
      (GetTypeKind(K) = tkWChar) or (GetTypeKind(K) = tkBool) or
      (GetTypeKind(K) = tkEnumeration) then
@@ -232,7 +235,6 @@ begin
   if (GetTypeKind(K) = tkInt64) or (GetTypeKind(K) = tkQWord) then
     Exit(PQWord(@L)^ = PQWord(@R)^);
 
-  if Assigned(FEquals) then Exit(FEquals(L, R));
   Result := L = R;
 end;
 
@@ -485,7 +487,7 @@ var
   LBit: Integer;
 begin
   if FCapacity = 0 then Exit(False);
-  if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+  if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
     Lh := InlineHashMix32(PUInt32(@AKey)^)
   else
     Lh := KeyHash(AKey);
@@ -524,7 +526,7 @@ var
   LBit: Integer;
 begin
   if FCapacity = 0 then Exit(False);
-  if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+  if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
     Lh := InlineHashMix32(PUInt32(@AKey)^)
   else
     Lh := KeyHash(AKey);
@@ -562,7 +564,7 @@ begin
   if FGrowthLeft = 0 then
     GrowAndRehash;
 
-  if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+  if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
     Lh := InlineHashMix32(PUInt32(@AKey)^)
   else
     Lh := KeyHash(AKey);
@@ -626,7 +628,7 @@ var
   LIdx, LGroupBase: SizeUInt;
 begin
   if FCapacity = 0 then Exit(False);
-  if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+  if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
     Lh := InlineHashMix32(PUInt32(@AKey)^)
   else
     Lh := KeyHash(AKey);
@@ -661,7 +663,7 @@ var
 begin
   if FGrowthLeft = 0 then
     GrowAndRehash;
-  if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+  if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
     Lh := InlineHashMix32(PUInt32(@AKey)^)
   else
     Lh := KeyHash(AKey);
