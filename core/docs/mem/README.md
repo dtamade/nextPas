@@ -13,6 +13,10 @@ The current stable public surface is centered on `IAllocator`:
   compatibility aliases to that same contract.
 - `nextpas.core.mem.DefaultAllocator` returns the process-wide default
   allocator facade.
+- `TAllocResult.ExpectPtr` raises canonical `EOutOfMemory` for
+  `aeOutOfMemory`. Capacity exhaustion remains an `EAllocError` with
+  `Error = aeCapacityExhausted` and reports `ecResourceExhausted`; it is not an
+  invalid-pointer leaf.
 
 The facade unit `nextpas.core.mem` also re-exports the current local record
 types:

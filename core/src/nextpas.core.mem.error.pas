@@ -310,8 +310,10 @@ function TAllocResult.ExpectPtr(const aMsg: string): Pointer;
         raise EOutOfMemory.Create(aError, aMessage);
       aeInvalidLayout, aeAlignmentNotSupported, aeSizeMismatch:
         raise EInvalidLayout.Create(aError, aMessage);
-      aeInvalidPointer, aeCapacityExhausted, aePoolClosed, aeReallocNotSupported:
+      aeInvalidPointer, aePoolClosed, aeReallocNotSupported:
         raise EInvalidPointer.Create(aError, aMessage);
+      aeCapacityExhausted:
+        raise EAllocError.Create(aError, aMessage);
       aeDoubleFree:
         raise EDoubleFree.Create(aError, aMessage);
       aeInternalError:

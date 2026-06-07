@@ -280,6 +280,33 @@ begin
   Check(LCaughtAlloc, 'non-OOM allocation errors remain EAllocError');
 end;
 
+procedure TestCapacityExhaustedUsesResourceExhaustedAllocLeaf;
+var
+  LCaughtCapacity: Boolean;
+  LCaughtInvalidPointer: Boolean;
+begin
+  LCaughtCapacity := False;
+  LCaughtInvalidPointer := False;
+
+  try
+    TAllocResult.Err(aeCapacityExhausted).ExpectPtr('fixed pool');
+  except
+    on E: EInvalidPointer do
+      LCaughtInvalidPointer := True;
+    on E: EAllocError do
+    begin
+      LCaughtCapacity := E.Error = aeCapacityExhausted;
+      Check(E.Category = ecResourceExhausted,
+        'capacity exhaustion should keep resource-exhausted category');
+    end;
+  end;
+
+  Check(LCaughtCapacity,
+    'capacity exhaustion should remain catchable as EAllocError with aeCapacityExhausted');
+  Check(not LCaughtInvalidPointer,
+    'capacity exhaustion should not be reported as invalid pointer');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.oom');
   T.Run('alloc result OOM uses canonical root', @TestAllocResultOomUsesCanonicalRoot);
@@ -287,5 +314,6 @@ begin
   T.Run('growable mem OOM uses canonical root', @TestGrowableMemOomUsesCanonicalRoot);
   T.Run('allocator-backed mem OOM uses canonical root', @TestAllocatorBackedMemOomUsesCanonicalRoot);
   T.Run('non-OOM allocation error remains EAllocError', @TestNonOomAllocErrorRemainsEAllocError);
+  T.Run('capacity exhaustion uses resource-exhausted alloc leaf', @TestCapacityExhaustedUsesResourceExhaustedAllocLeaf);
   T.Summary;
 end.
