@@ -150,7 +150,7 @@ var
 begin
   LDir := PathDir(AFileName);
   if (Length(LDir) > 0) and (LDir[Length(LDir)] <> '/') and (LDir[Length(LDir)] <> '\') then
-    Result := LDir + '/'
+    Result := LDir + PLATFORM_PATH_SEP
   else
     Result := LDir;
 end;

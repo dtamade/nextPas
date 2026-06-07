@@ -3,11 +3,54 @@ program test_path;
 {$I nextpas.core.settings.inc}
 
 uses
+  Classes,
+  SysUtils,
   nextpas.core.testing,
   nextpas.core.path;
 
 var
   T: TTestRunner;
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LSourcePath: string;
+  LLines: TStringList;
+begin
+  LSourcePath := ExpandFileName('../../../' + ARelativePath);
+  Check(FileExists(LSourcePath), 'source exists: ' + ARelativePath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(LSourcePath);
+    Result := LLines.Text;
+  finally
+    LLines.Free;
+  end;
+end;
+
+function ExtractFunctionBody(const ASource, AStartToken, ANextToken: string): string;
+var
+  LStart, LNext: Integer;
+begin
+  Result := '';
+  LStart := Pos(AStartToken, ASource);
+  if LStart = 0 then
+    Exit;
+  LNext := Pos(ANextToken, Copy(ASource, LStart + Length(AStartToken),
+    Length(ASource)));
+  if LNext = 0 then
+    Exit(Copy(ASource, LStart, Length(ASource)));
+  Result := Copy(ASource, LStart, Length(AStartToken) + LNext - 1);
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) > 0, AMessage);
+end;
+
+procedure CheckAbsent(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) = 0, AMessage);
+end;
 
 procedure TestPathJoin;
 begin
@@ -90,6 +133,25 @@ begin
   Check(ExtractFilePath('file.txt') = '', 'ExtractFilePath no dir');
 end;
 
+procedure TestExtractFilePathSourceContract;
+var
+  LSource, LImpl, LBody: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.path.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'path unit has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+  LBody := ExtractFunctionBody(LImpl,
+    'function ExtractFilePath(const AFileName: string): string;',
+    'function ExtractFileName');
+
+  CheckContains(LBody, 'PLATFORM_PATH_SEP',
+    'ExtractFilePath appends platform separator');
+  CheckAbsent(LBody, 'Result := LDir + ''/''',
+    'ExtractFilePath does not hard-code Unix separator');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.path');
   T.Run('PathJoin', @TestPathJoin);
@@ -103,5 +165,6 @@ begin
   T.Run('PathHasExt', @TestPathHasExt);
   T.Run('PathWithoutExt', @TestPathWithoutExt);
   T.Run('SysUtils compat', @TestSysUtilsCompat);
+  T.Run('ExtractFilePath source contract', @TestExtractFilePathSourceContract);
   T.Summary;
 end.
