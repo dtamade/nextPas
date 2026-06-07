@@ -98,16 +98,22 @@ function UuidV7Monotonic: string;
 begin
   while AtomicCompareExchange32(GV7Lock, 0, 1) <> 0 do
     CpuPause;
-  Result := GlobalV7Gen.NextString;
-  AtomicStore32(GV7Lock, 0, moRelease);
+  try
+    Result := GlobalV7Gen.NextString;
+  finally
+    AtomicStore32(GV7Lock, 0, moRelease);
+  end;
 end;
 
 function UuidV7MonotonicRaw: TUuid;
 begin
   while AtomicCompareExchange32(GV7Lock, 0, 1) <> 0 do
     CpuPause;
-  Result := GlobalV7Gen.Next;
-  AtomicStore32(GV7Lock, 0, moRelease);
+  try
+    Result := GlobalV7Gen.Next;
+  finally
+    AtomicStore32(GV7Lock, 0, moRelease);
+  end;
 end;
 
 initialization
