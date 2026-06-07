@@ -131,6 +131,29 @@ begin
   platform_env_unset('NEXTPAS_TEST_OW');
 end;
 
+procedure TestInvalidNames;
+var
+  Len: Int32;
+begin
+  Check(platform_env_get(nil, nil, 0, Len) <> 0, 'nil get name rejected');
+  Check(platform_env_get('', nil, 0, Len) <> 0, 'empty get name rejected');
+  Check(platform_env_get('NEXTPAS_BAD=NAME', nil, 0, Len) <> 0, 'equals get name rejected');
+
+  Check(platform_env_set(nil, 'value') <> 0, 'nil set name rejected');
+  Check(platform_env_set('', 'value') <> 0, 'empty set name rejected');
+  Check(platform_env_set('NEXTPAS_BAD=NAME', 'value') <> 0, 'equals set name rejected');
+  Check(platform_env_set('NEXTPAS_TEST_NIL_VALUE', nil) <> 0,
+    'nil set value rejected');
+
+  Check(platform_env_unset(nil) <> 0, 'nil unset name rejected');
+  Check(platform_env_unset('') <> 0, 'empty unset name rejected');
+  Check(platform_env_unset('NEXTPAS_BAD=NAME') <> 0, 'equals unset name rejected');
+
+  Check(not platform_env_exists(nil), 'nil exists name rejected');
+  Check(not platform_env_exists(''), 'empty exists name rejected');
+  Check(not platform_env_exists('NEXTPAS_BAD=NAME'), 'equals exists name rejected');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.env');
   T.Run('get PATH', @TestGetPath);
@@ -144,5 +167,6 @@ begin
   T.Run('long value (1000 chars)', @TestLongValue);
   T.Run('special characters', @TestSpecialChars);
   T.Run('overwrite existing', @TestOverwrite);
+  T.Run('invalid names', @TestInvalidNames);
   T.Summary;
 end.
