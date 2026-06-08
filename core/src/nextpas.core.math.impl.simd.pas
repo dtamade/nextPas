@@ -103,7 +103,7 @@ end;
 
 function SimdVec3fCross(const AA, AB: TVec3f): TVec3f;
 begin
-  Result := SimdToVec3f(VecF32x3Cross(Vec3fToSimd(AA), Vec3fToSimd(AB)));
+  Result := TVec3f.Cross(AA, AB);
 end;
 
 function SimdMat4fMulVec4f(const AMatrix: TMat4f; const AVector: TVec4f): TVec4f;

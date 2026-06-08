@@ -187,6 +187,10 @@ var
   HugeDot4B: TVec4f;
   HugeDot3A: TVec3f;
   HugeDot3B: TVec3f;
+  HugeCrossA: TVec3f;
+  HugeCrossB: TVec3f;
+  ExpectedCross: TVec3f;
+  ActualCross: TVec3f;
 begin
   HugeLength4 := TVec4f.Create(Single(3.0e20), Single(4.0e20), 0.0, 0.0);
   CheckNear(HugeLength4.Length, SimdVec4fLength(HugeLength4), 1.0e14,
@@ -201,6 +205,15 @@ begin
   HugeDot3B := TVec3f.Create(Single(3.0e20), Single(-3.0e20), 0.0);
   CheckNear(TVec3f.Dot(HugeDot3A, HugeDot3B), SimdVec3fDot(HugeDot3A, HugeDot3B),
     0.0, 'SimdVec3fDot cancelling huge finite stable public parity');
+
+  HugeCrossA := TVec3f.Create(Single(2.0e19), Single(2.0e19), 0.0);
+  HugeCrossB := TVec3f.Create(HugeCrossA.X, Single(2.00002e19), 0.0);
+  ExpectedCross := TVec3f.Cross(HugeCrossA, HugeCrossB);
+  ActualCross := SimdVec3fCross(HugeCrossA, HugeCrossB);
+  Check((not IsNaN(ActualCross.Z)) and (not IsInfinite(ActualCross.Z)),
+    'SimdVec3fCross cancelling huge finite stable public parity stays finite');
+  CheckNear(ExpectedCross.Z, ActualCross.Z, Abs(ExpectedCross.Z) * 0.00001,
+    'SimdVec3fCross cancelling huge finite stable public parity');
 end;
 
 begin
