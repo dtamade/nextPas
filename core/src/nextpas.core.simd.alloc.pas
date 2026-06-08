@@ -28,6 +28,13 @@ uses
   - POSIX behavior is not native posix_memalign/aligned_alloc.
   - Wine or cross-compile evidence is forced-compile truth only until real
     Windows runtime evidence is captured.
+
+  SimdAlloc native allocator behavior truth:
+  - Windows native allocator state: not wired to public SimdAlloc.
+  - POSIX native allocator state: not wired to public SimdAlloc.
+  - Fallback allocator state: active header-backed implementation.
+  - Native allocator promotion requires platform-owned allocation seam.
+  - Wine or cross-compile evidence is not real Windows runtime readiness.
 }
 
 type
