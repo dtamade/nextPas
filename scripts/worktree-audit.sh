@@ -72,6 +72,66 @@ print_divergence() {
   printf '%s %s' "$ahead" "$behind"
 }
 
+print_queue_state() {
+  local dirty="$1"
+  local branch="$2"
+  local head="$3"
+  local base_ref="$4"
+  local ahead="$5"
+  local behind="$6"
+  local compare_ref
+  local cherry_line
+
+  if [[ "$dirty" = "dirty" ]]; then
+    printf '%s %s' "dirty" "inspect-or-stash-uncommitted-work"
+    return
+  fi
+
+  if [[ "$base_ref" = "-" || "$ahead" = "?" || "$behind" = "?" ]]; then
+    printf '%s %s' "unknown" "inspect-manually"
+    return
+  fi
+
+  if [[ "$behind" != "0" ]]; then
+    if [[ "$ahead" = "0" ]]; then
+      printf '%s %s' "behind-main" "drop-empty-or-refresh-from-main"
+      return
+    fi
+
+    compare_ref="$(branch_ref "$branch" "$head")"
+    while IFS= read -r cherry_line || [[ -n "$cherry_line" ]]; do
+      case "$cherry_line" in
+        +*)
+          printf '%s %s' "stale" "replay-on-latest-base"
+          return
+          ;;
+      esac
+    done < <(git -C "$repo_root" cherry "$base_ref" "$compare_ref")
+
+    if [[ "$ahead" != "0" ]]; then
+      printf '%s %s' "absorbed" "drop-from-queue"
+      return
+    fi
+  fi
+
+  if [[ "$ahead" = "0" ]]; then
+    printf '%s %s' "current" "no-action"
+    return
+  fi
+
+  if [[ "$branch" == codex/* ]]; then
+    printf '%s %s' "needs-landing" "prepare-clean-landing"
+    return
+  fi
+
+  if [[ "$branch" != landing/* ]]; then
+    printf '%s %s' "review" "inspect-branch-policy"
+    return
+  fi
+
+  printf '%s %s' "ready" "run-landing-check"
+}
+
 print_record() {
   local path="$1"
   local head="$2"
@@ -82,6 +142,9 @@ print_record() {
   local divergence
   local ahead
   local behind
+  local queue_state
+  local queue
+  local action
 
   if [[ -z "$path" ]]; then
     return
@@ -99,15 +162,18 @@ print_record() {
   divergence="$(print_divergence "$branch" "$head" "$base_ref")"
   ahead="${divergence%% *}"
   behind="${divergence##* }"
+  queue_state="$(print_queue_state "$dirty" "$branch" "$head" "$base_ref" "$ahead" "$behind")"
+  queue="${queue_state%% *}"
+  action="${queue_state##* }"
 
-  printf '%-8s %-21s %-12s %-40s %-12s %-6s %-6s %s\n' \
-    "$dirty" "$location" "${head:0:8}" "$branch" "$base_ref" "$ahead" "$behind" "$path"
+  printf '%-8s %-12s %-36s %-21s %-12s %-40s %-12s %-6s %-6s %s\n' \
+    "$dirty" "$queue" "$action" "$location" "${head:0:8}" "$branch" "$base_ref" "$ahead" "$behind" "$path"
 }
 
 base_ref="$(default_base_ref)"
 
-printf '%-8s %-21s %-12s %-40s %-12s %-6s %-6s %s\n' "status" "location" "head" "branch" "base" "ahead" "behind" "path"
-printf '%-8s %-21s %-12s %-40s %-12s %-6s %-6s %s\n' "------" "--------" "----" "------" "----" "-----" "------" "----"
+printf '%-8s %-12s %-36s %-21s %-12s %-40s %-12s %-6s %-6s %s\n' "status" "queue" "action" "location" "head" "branch" "base" "ahead" "behind" "path"
+printf '%-8s %-12s %-36s %-21s %-12s %-40s %-12s %-6s %-6s %s\n' "------" "-----" "------" "--------" "----" "------" "----" "-----" "------" "----"
 
 path=""
 head=""
