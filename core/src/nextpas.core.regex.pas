@@ -406,6 +406,40 @@ var
   i: SizeInt;
   LPos: SizeUInt;
 
+  procedure ValidateTemplate;
+  var
+    j: SizeInt;
+    LTplLen: SizeInt;
+  begin
+    LTplLen := Length(ATemplate);
+    j := 1;
+    while j <= LTplLen do
+    begin
+      if ATemplate[j] <> '$' then
+      begin
+        Inc(j);
+        Continue;
+      end;
+
+      if j >= LTplLen then
+        raise ERegexError.Create('malformed replacement template');
+      Inc(j);
+
+      if ATemplate[j] = '{' then
+      begin
+        Inc(j);
+        if (j > LTplLen) or (ATemplate[j] = '}') then
+          raise ERegexError.Create('malformed replacement template');
+        while (j <= LTplLen) and (ATemplate[j] <> '}') do
+          Inc(j);
+        if (j > LTplLen) or (ATemplate[j] <> '}') then
+          raise ERegexError.Create('malformed replacement template');
+      end;
+
+      Inc(j);
+    end;
+  end;
+
   function ExpandTemplate(const AMatch: TMatch): string;
   var
     j: SizeInt;
@@ -473,6 +507,7 @@ var
   end;
 
 begin
+  ValidateTemplate;
   LMatches := FindAll(AInput);
   if Length(LMatches) = 0 then Exit(AInput);
 

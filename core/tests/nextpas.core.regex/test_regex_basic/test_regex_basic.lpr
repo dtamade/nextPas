@@ -566,18 +566,22 @@ begin
 end;
 
 procedure TestMalformedTemplate;
-var R: TRegex; s: string;
+var R, RNoMatch: TRegex; s: string;
 begin
   R := TRegex.Compile('(\w+)');
+  RNoMatch := TRegex.Compile('nomatch');
 
   // $ at end of template
   ExpectTemplateError(R, 'x$', '$ at end rejected');
+  ExpectTemplateError(RNoMatch, 'x$', 'no-match $ at end rejected');
 
   // ${ without }
   ExpectTemplateError(R, '${broken', '${ without } rejected');
+  ExpectTemplateError(RNoMatch, '${broken', 'no-match ${ without } rejected');
 
   // ${} empty name
   ExpectTemplateError(R, '${}', '${} empty name rejected');
+  ExpectTemplateError(RNoMatch, '${}', 'no-match ${} empty name rejected');
 
   // unknown group name
   s := R.ReplaceAllExpand('hello', '${nonexist}');
