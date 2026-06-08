@@ -2859,6 +2859,19 @@ def scan_vector_public_record_contract(root: Path, path: Path, text: str) -> lis
                 record_line,
                 record_name + ".Cross must stay 3D-only",
             )
+
+        vector_multiply_pattern = (
+            rf"\bclass\s+operator\s+\*\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;"
+        )
+        if re.search(vector_multiply_pattern, body, re.IGNORECASE | re.DOTALL) is not None:
+            add_finding(
+                findings,
+                "forbidden-vector-vector-operator-multiply:" + rule,
+                root,
+                path,
+                record_line,
+                record_name + " must use Dot or MulComponents instead of vector-vector operator *",
+            )
     return findings
 
 
@@ -3110,6 +3123,7 @@ def run_vector_public_record_contract_self_tests() -> None:
             "    class operator - (const AValue: TVec2f): TVec2f; inline;\n"
             "    class operator * (const AValue: TVec2f; const AScalar: Single): TVec2f; inline;\n"
             "    class operator * (const AScalar: Single; const AValue: TVec2f): TVec2f; inline;\n"
+            "    class operator * (const AA, AB: TVec2f): TVec2f; inline;\n"
             "    class operator / (const AValue: TVec2f; const AScalar: Single): TVec2f; inline;\n"
             "    class function MulComponents(const AA, AB: TVec2f): TVec2f; static; inline;\n"
             "    class function DivComponents(const AA, AB: TVec2f): TVec2f; static; inline;\n"
@@ -3135,6 +3149,7 @@ def run_vector_public_record_contract_self_tests() -> None:
         )
         rules = {finding.rule for finding in findings}
         expected_rules = {
+            "forbidden-vector-vector-operator-multiply:vec-2f",
             "missing-vector-public-contract:vec-2f:data-alias",
             "unexpected-vector-public-contract:vec-2f:cross",
         }
