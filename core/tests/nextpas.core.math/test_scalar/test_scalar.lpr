@@ -380,6 +380,14 @@ begin
     'FloatEquals Single rejects opposite infinities');
   Check(not FloatEquals(MakePositiveInfinity, MakeNegativeInfinity, 1000.0),
     'FloatEquals Double rejects opposite infinities');
+  Check(not FloatEquals(MakeNaN, 1.0, 0.0),
+    'FloatEquals Double rejects NaN first');
+  Check(not FloatEquals(1.0, MakeNaN, 0.0),
+    'FloatEquals Double rejects NaN second');
+  Check(not FloatEquals(MakeSingleNaN, Single(1.0), Single(0.0)),
+    'FloatEquals Single rejects NaN first');
+  Check(not FloatEquals(Single(1.0), MakeSingleNaN, Single(0.0)),
+    'FloatEquals Single rejects NaN second');
   Check(not FloatEquals(1.0, MakePositiveInfinity, MakePositiveInfinity),
     'FloatEquals rejects infinite epsilon');
   Check(not FloatEquals(Single(1.0), MakeSinglePositiveInfinity, MakeSinglePositiveInfinity),
@@ -398,6 +406,14 @@ begin
     'FloatIsZero Single rejects NaN value');
   Check(not FloatIsZero(MakeNaN, 0.000001),
     'FloatIsZero Double rejects NaN value');
+  Check(not FloatIsZero(MakePositiveInfinity, 0.000001),
+    'FloatIsZero Double rejects +Inf value');
+  Check(not FloatIsZero(MakeNegativeInfinity, 0.000001),
+    'FloatIsZero Double rejects -Inf value');
+  Check(not FloatIsZero(MakeSinglePositiveInfinity, Single(0.000001)),
+    'FloatIsZero Single rejects +Inf value');
+  Check(not FloatIsZero(MakeSingleNegativeInfinity, Single(0.000001)),
+    'FloatIsZero Single rejects -Inf value');
   Check(not FloatIsZero(0.0, MakePositiveInfinity),
     'FloatIsZero rejects infinite epsilon');
   Check(not FloatIsZero(Single(0.0), MakeSinglePositiveInfinity),
