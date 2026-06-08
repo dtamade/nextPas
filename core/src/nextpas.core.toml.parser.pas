@@ -374,7 +374,7 @@ type
     procedure Advance; inline;
     procedure AdvanceN(ACount: SizeUInt); inline;
     procedure SkipWhitespaceInline;
-    procedure SkipWhitespaceAndNewlines;
+    function SkipWhitespaceAndNewlines: Boolean;
     function SkipComment: Boolean;
     procedure SkipToNextLine;
     function SetError(const AMsg: PAnsiChar; ALen: SizeUInt): Boolean;
@@ -447,38 +447,56 @@ begin
   Col := Col + UInt32(Pos - LStart);
 end;
 
-procedure TTomlParser.SkipWhitespaceAndNewlines;
+function TTomlParser.SkipWhitespaceAndNewlines: Boolean;
 begin
   while Pos < SrcLen do
   begin
     case Src[Pos] of
       ' ', #9, #13: begin Inc(Pos); Inc(Col); end;
       #10: begin Inc(Pos); Inc(Line); Col := 1; end;
-      '#': SkipComment;
+      '#':
+        if not SkipComment then
+          Exit(False);
     else
-      Exit;
+      Exit(True);
     end;
   end;
+  Result := True;
 end;
 
 function TTomlParser.SkipComment: Boolean;
 var
+  LCh: Byte;
+  LCtrl: PtrInt;
   LRemaining: SizeUInt;
-  LFound: PtrInt;
 begin
   if (Pos < SrcLen) and (Src[Pos] = '#') then
   begin
-    LRemaining := SrcLen - Pos;
-    LFound := ScanFindByte(Src + Pos, LRemaining, Ord(#10));
-    if LFound >= 0 then
+    Advance;
+    while Pos < SrcLen do
     begin
-      Col := Col + UInt32(LFound);
-      Inc(Pos, SizeUInt(LFound));
-    end
-    else
-    begin
-      Col := Col + UInt32(LRemaining);
-      Pos := SrcLen;
+      LRemaining := SrcLen - Pos;
+      LCtrl := ScanFindInRange(Src + Pos, LRemaining, 0, 31);
+      if LCtrl < 0 then
+      begin
+        Col := Col + UInt32(LRemaining);
+        Pos := SrcLen;
+        Break;
+      end;
+      Col := Col + UInt32(LCtrl);
+      Pos := Pos + SizeUInt(LCtrl);
+      LCh := Byte(Src[Pos]);
+      if LCh = Ord(#10) then
+        Break;
+      if LCh = Ord(#13) then
+      begin
+        if (Pos + 1 < SrcLen) and (Src[Pos + 1] = #10) then
+          Break;
+        Exit(SetError('control char in comment', 23));
+      end;
+      if (LCh < 32) and (LCh <> Ord(#9)) then
+        Exit(SetError('control char in comment', 23));
+      Advance;
     end;
   end;
   Result := True;
@@ -1310,7 +1328,7 @@ begin
   LCount := 0;
   LPrevIdx := TOML_NODE_NONE;
 
-  SkipWhitespaceAndNewlines;
+  if not SkipWhitespaceAndNewlines then Exit(False);
   if (Pos < SrcLen) and (Src[Pos] = ']') then
   begin
     Advance;
@@ -1320,7 +1338,7 @@ begin
 
   while True do
   begin
-    SkipWhitespaceAndNewlines;
+    if not SkipWhitespaceAndNewlines then Exit(False);
     if not ParseValue(LChildIdx) then Exit(False);
     if LCount = 0 then
       Doc^.FNodes[LArrayIdx].Container.FirstChild := LChildIdx
@@ -1328,11 +1346,11 @@ begin
       Doc^.FNodes[LPrevIdx].Next := LChildIdx;
     LPrevIdx := LChildIdx;
     Inc(LCount);
-    SkipWhitespaceAndNewlines;
+    if not SkipWhitespaceAndNewlines then Exit(False);
     if (Pos < SrcLen) and (Src[Pos] = ',') then
     begin
       Advance;
-      SkipWhitespaceAndNewlines;
+      if not SkipWhitespaceAndNewlines then Exit(False);
       if (Pos < SrcLen) and (Src[Pos] = ']') then
       begin
         Advance;
@@ -1743,7 +1761,8 @@ begin
   FNodes[LRootIdx].Container.Count := 0;
   LCurrentTable := LRootIdx;
 
-  LP.SkipWhitespaceAndNewlines;
+  if not LP.SkipWhitespaceAndNewlines then
+    Exit(False);
   while not LP.IsEOF do
   begin
     if LP.Peek = Ord('[') then
@@ -1764,13 +1783,17 @@ begin
     end;
     LP.SkipWhitespaceInline;
     if (not LP.IsEOF) and (LP.Peek = Ord('#')) then
-      LP.SkipComment;
+    begin
+      if not LP.SkipComment then
+        Exit(False);
+    end;
     if (not LP.IsEOF) and (LP.Peek <> Ord(#10)) and (LP.Peek <> Ord(#13)) then
     begin
       LP.SetError('expected newline', 16);
       Exit(False);
     end;
-    LP.SkipWhitespaceAndNewlines;
+    if not LP.SkipWhitespaceAndNewlines then
+      Exit(False);
   end;
   Result := True;
 end;

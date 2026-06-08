@@ -53,6 +53,21 @@ begin
   LDoc.Done;
 end;
 
+procedure TestCommentControlCharacters;
+var
+  LDoc: TTomlDocument;
+begin
+  CheckRejectsAt('key = 1 # bad ' + #1 + #10,
+    'control char in comment', 'inline comment raw C0', 14, 1, 15);
+  CheckRejectsAt('# bad ' + #27 + #10,
+    'control char in comment', 'standalone comment raw C0', 6, 1, 7);
+
+  LDoc := MustParse('# tab' + #9 + 'comment' + #13#10 + 'key = 1 # ok');
+  CheckEqual(Int64(1), Int64(LDoc.Node(LDoc.Root)^.Container.Count),
+    'tab and CRLF comments accepted');
+  LDoc.Done;
+end;
+
 procedure TestSimpleString;
 var
   LDoc: TTomlDocument;
@@ -430,6 +445,7 @@ begin
   T := TTestRunner.Create('nextpas.core.toml.parser');
   T.Run('empty input', @TestEmptyInput);
   T.Run('comments only', @TestCommentsOnly);
+  T.Run('comment control characters', @TestCommentControlCharacters);
   T.Run('simple string', @TestSimpleString);
   T.Run('simple integer', @TestSimpleInteger);
   T.Run('negative integer', @TestNegativeInteger);
