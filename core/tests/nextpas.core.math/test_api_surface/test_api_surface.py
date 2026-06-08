@@ -40,12 +40,15 @@ MATH_TEST_GLOBS = (
 MATH_EXAMPLE_GLOBS = (
     "examples/nextpas.core.math/**/*.lpr",
     "examples/nextpas.core.math/**/*.pas",
+    "examples/nextpas.core.math/**/Makefile",
     "examples/nextpas.core.math*/**/*.lpr",
     "examples/nextpas.core.math*/**/*.pas",
+    "examples/nextpas.core.math*/**/Makefile",
 )
 MATH_BENCHMARK_GLOBS = (
     "benchmarks/nextpas.core.math/**/*.lpr",
     "benchmarks/nextpas.core.math/**/*.pas",
+    "benchmarks/nextpas.core.math/**/Makefile",
 )
 PUBLIC_DOC_PATHS = (
     "docs/math/README.md",
@@ -986,6 +989,18 @@ EXTERNAL_M_RE = re.compile(
     r"\bexternal\s+(['\"])\s*m\s*\1",
     re.IGNORECASE,
 )
+LINKLIB_M_RE = re.compile(
+    r"(?:\{\$\s*linklib\s+m\s*\}|\(\*\$\s*linklib\s+m\s*\*\))",
+    re.IGNORECASE,
+)
+NATIVE_MATH_LINK_FLAG_RE = re.compile(
+    r"(?<![A-Za-z0-9_./-])(?:-k-lm|-lm)(?![A-Za-z0-9_./-])"
+)
+NATIVE_MATH_LINKING_RULES = {
+    "no-naked-external-m",
+    "no-native-math-linklib",
+    "no-native-math-link-flag",
+}
 PRIVATE_SIMD_RE = re.compile(
     r"\b("
     r"nextpas\.core\.simd\.(?:"
@@ -1061,15 +1076,6 @@ TRIG_FORBIDDEN_SCALAR_RE = re.compile(
     r"|^\s*(DEG_TO_RAD|RAD_TO_DEG)\s*:"
     r")",
     re.IGNORECASE | re.MULTILINE,
-)
-SIMD_MATHUTIL_FORBIDDEN_BARE_RE = re.compile(
-    r"\bfunction\s+("
-    r"Min|Max|Floor|Ceil|Round|Trunc|Frac|Abs|Clamp|Sign|Lerp|"
-    r"InverseLerp|Wrap|DegToRad|RadToDeg|"
-    r"Sin|Cos|Tan|ArcSin|ArcCos|ArcTan|ArcTan2|Exp|Ln|Log2|Log10|"
-    r"Power|Sqrt|Hypot|Fmod|SmoothStep|GCD|LCM|IsNaN|IsNan|IsInfinite"
-    r")\s*\(",
-    re.IGNORECASE,
 )
 PUBLIC_CONSTANT_RE = re.compile(
     r"^\s*([A-Z][A-Z0-9_]+)\s*:",
@@ -1633,6 +1639,86 @@ def strip_pascal_comments_and_strings(text: str) -> str:
     return "".join(out)
 
 
+def pascal_compiler_directive_text(text: str) -> str:
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    in_string = False
+    in_line_comment = False
+    in_brace_comment = False
+    in_paren_star_comment = False
+
+    while i < n:
+        ch = text[i]
+        nxt = text[i + 1] if i + 1 < n else ""
+
+        if in_string:
+            out.append(mask_char(ch))
+            if ch == "'" and nxt == "'":
+                out.append(" ")
+                i += 2
+                continue
+            if ch == "'":
+                in_string = False
+            i += 1
+            continue
+
+        if in_line_comment:
+            if ch == "\n":
+                in_line_comment = False
+                out.append("\n")
+            else:
+                out.append(" ")
+            i += 1
+            continue
+
+        if in_brace_comment:
+            if ch == "}":
+                in_brace_comment = False
+            out.append(mask_char(ch))
+            i += 1
+            continue
+
+        if in_paren_star_comment:
+            if ch == "*" and nxt == ")":
+                in_paren_star_comment = False
+                out.extend("  ")
+                i += 2
+                continue
+            out.append(mask_char(ch))
+            i += 1
+            continue
+
+        if ch == "'":
+            in_string = True
+            out.append(" ")
+            i += 1
+            continue
+
+        if ch == "/" and nxt == "/":
+            in_line_comment = True
+            out.extend("  ")
+            i += 2
+            continue
+
+        if ch == "{" and nxt != "$":
+            in_brace_comment = True
+            out.append(" ")
+            i += 1
+            continue
+
+        if ch == "(" and nxt == "*" and i + 2 < n and text[i + 2] != "$":
+            in_paren_star_comment = True
+            out.extend("  ")
+            i += 2
+            continue
+
+        out.append(ch)
+        i += 1
+
+    return "".join(out)
+
+
 def original_line(text: str, line_no: int) -> str:
     lines = text.splitlines()
     if 1 <= line_no <= len(lines):
@@ -1710,6 +1796,38 @@ def scan_external_m(root: Path, path: Path, text: str) -> list[Finding]:
             line,
             original_line(text, line),
         )
+    return findings
+
+
+def scan_native_math_linking(root: Path, path: Path, text: str) -> list[Finding]:
+    findings: list[Finding] = []
+    directive_text = (
+        pascal_compiler_directive_text(text)
+        if path.suffix.lower() in {".inc", ".lpr", ".pas"}
+        else text
+    )
+    for match in LINKLIB_M_RE.finditer(directive_text):
+        line = line_no_at(directive_text, match.start())
+        add_finding(
+            findings,
+            "no-native-math-linklib",
+            root,
+            path,
+            line,
+            original_line(text, line),
+        )
+
+    for index, line in enumerate(text.splitlines(), start=1):
+        code_line = line.split("#", 1)[0] if path.name == "Makefile" else line
+        if NATIVE_MATH_LINK_FLAG_RE.search(code_line):
+            add_finding(
+                findings,
+                "no-native-math-link-flag",
+                root,
+                path,
+                index,
+                line,
+            )
     return findings
 
 
@@ -1918,7 +2036,10 @@ def scan_forbidden_simd_mathutil_bare_names(root: Path, path: Path, text: str) -
         return findings
 
     code = interface_text(text)
-    for match in SIMD_MATHUTIL_FORBIDDEN_BARE_RE.finditer(code):
+    for match in PUBLIC_FUNCTION_RE.finditer(code):
+        name = match.group(1)
+        if name.lower().startswith("simd"):
+            continue
         line = line_no_at(code, match.start())
         add_finding(
             findings,
@@ -2342,6 +2463,7 @@ def run_forbidden_simd_mathutil_bare_name_self_tests() -> None:
             "function Wrap(const AValue, AMin, AMax: Single): Single;\n"
             "function DegToRad(const ADegrees: Single): Single;\n"
             "function RadToDeg(const ARadians: Single): Single;\n"
+            "function RoundToEvenF32(AX: Single): Single;\n"
             "function SimdInverseLerpF32(const AMin, AMax, AValue: Single): Single;\n"
             "function SimdWrapF32(const AValue, AMin, AMax: Single): Single;\n"
             "function SimdDegToRadF32(const ADegrees: Single): Single;\n"
@@ -2357,10 +2479,150 @@ def run_forbidden_simd_mathutil_bare_name_self_tests() -> None:
             path.read_text(encoding="utf-8"),
         )
         rules = [finding.rule for finding in findings]
-        if rules != ["no-bare-public-math-name-in-simd-mathutil"] * 4:
+        if rules != ["no-bare-public-math-name-in-simd-mathutil"] * 5:
             raise AssertionError(
-                "forbidden-simd-mathutil-bare-name self-test expected four bare-name findings"
+                "forbidden-simd-mathutil-bare-name self-test expected five bare-name findings"
             )
+
+
+def run_forbidden_native_math_linking_scope_self_tests() -> None:
+    cases = (
+        (
+            "test-external-m",
+            "tests/nextpas.core.math/test_native/test_native.lpr",
+            "program test_native;\n"
+            "function HostSin(AX: Double): Double; cdecl; external 'm' name 'sin';\n"
+            "begin\n"
+            "end.\n",
+            "no-naked-external-m",
+        ),
+        (
+            "example-external-m",
+            "examples/nextpas.core.math/example_native/example_native.lpr",
+            "program example_native;\n"
+            "function HostCos(AX: Double): Double; cdecl; external 'm' name 'cos';\n"
+            "begin\n"
+            "end.\n",
+            "no-naked-external-m",
+        ),
+        (
+            "benchmark-external-m",
+            "benchmarks/nextpas.core.math/bench_native/bench_native.lpr",
+            "program bench_native;\n"
+            "function HostTan(AX: Double): Double; cdecl; external 'm' name 'tan';\n"
+            "begin\n"
+            "end.\n",
+            "no-naked-external-m",
+        ),
+        (
+            "source-brace-linklib-m",
+            "src/nextpas.core.math.native_link.pas",
+            "unit nextpas.core.math.native_link;\n"
+            "interface\n"
+            "{$linklib m}\n"
+            "implementation\n"
+            "end.\n",
+            "no-native-math-linklib",
+        ),
+        (
+            "source-paren-star-linklib-m",
+            "src/nextpas.core.math.native_link_paren_star.pas",
+            "unit nextpas.core.math.native_link_paren_star;\n"
+            "interface\n"
+            "(*$linklib m*)\n"
+            "implementation\n"
+            "end.\n",
+            "no-native-math-linklib",
+        ),
+        (
+            "test-makefile-lm",
+            "tests/nextpas.core.math/test_native/Makefile",
+            "FPCFLAGS += -lm\n",
+            "no-native-math-link-flag",
+        ),
+        (
+            "example-makefile-lm",
+            "examples/nextpas.core.math/example_native/Makefile",
+            "FPCFLAGS += -lm\n",
+            "no-native-math-link-flag",
+        ),
+        (
+            "benchmark-makefile-lm",
+            "benchmarks/nextpas.core.math/bench_native/Makefile",
+            "FPCFLAGS += -lm\n",
+            "no-native-math-link-flag",
+        ),
+        (
+            "root-makefile-klm",
+            "Makefile",
+            "core-math-native:\n"
+            "\tfpc -k-lm test_native.lpr\n",
+            "no-native-math-link-flag",
+        ),
+    )
+    negative_cases = (
+        (
+            "commented-source-linklib-m",
+            "src/nextpas.core.math.native_link_comment.inc",
+            "// {$linklib m}\n"
+        ),
+        (
+            "string-source-linklib-m",
+            "src/nextpas.core.math.native_link_string.pas",
+            "unit nextpas.core.math.native_link_string;\n"
+            "interface\n"
+            "const LinkText = '{$linklib m}';\n"
+            "implementation\n"
+            "end.\n",
+        ),
+        (
+            "commented-test-makefile-lm",
+            "tests/nextpas.core.math/test_native_comment/Makefile",
+            "# FPCFLAGS += -lm\n",
+        ),
+        (
+            "inline-commented-test-makefile-lm",
+            "tests/nextpas.core.math/test_native_inline_comment/Makefile",
+            "FPCFLAGS += -O2 # -lm is forbidden when active\n",
+        ),
+    )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        for _case_name, rel, text, _expected_rule in cases:
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        for _case_name, rel, text in negative_cases:
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+
+        report = build_report(root)
+        for case_name, rel, _text, expected_rule in cases:
+            if not any(
+                finding.path == rel and finding.rule == expected_rule
+                for finding in report.findings
+            ):
+                raise AssertionError(
+                    "forbidden-native-math-linking self-test "
+                    + case_name
+                    + " expected "
+                    + expected_rule
+                )
+        for case_name, rel, _text in negative_cases:
+            rules = [
+                finding.rule
+                for finding in report.findings
+                if finding.path == rel and finding.rule in NATIVE_MATH_LINKING_RULES
+            ]
+            if rules:
+                raise AssertionError(
+                    "forbidden-native-math-linking self-test "
+                    + case_name
+                    + " expected no findings, got "
+                    + ", ".join(rules)
+                )
 
 
 def run_legacy_production_name_self_tests() -> None:
@@ -3942,6 +4204,8 @@ def build_report(root: Path) -> Report:
     root_makefile = root / ROOT_MAKEFILE_PATH
     if root_makefile.is_file():
         scanned.add(root_makefile)
+        text = root_makefile.read_text(encoding="utf-8", errors="replace")
+        findings.extend(scan_native_math_linking(root, root_makefile, text))
     benchmark_files = discover_files(root, MATH_BENCHMARK_GLOBS)
 
     for path in source_files:
@@ -3950,6 +4214,7 @@ def build_report(root: Path) -> Report:
         findings.extend(scan_allowed_math_units(root, path, text))
         findings.extend(scan_math_ffi_uses(root, path, text))
         findings.extend(scan_external_m(root, path, text))
+        findings.extend(scan_native_math_linking(root, path, text))
         findings.extend(scan_legacy_public_names(root, path, text))
         findings.extend(scan_legacy_production_names(root, path, text))
         if relative(path, root) != SIMD_MATHUTIL_PATH:
@@ -3966,6 +4231,9 @@ def build_report(root: Path) -> Report:
         scanned.add(path)
         text = path.read_text(encoding="utf-8", errors="replace")
         findings.extend(scan_math_ffi_uses(root, path, text))
+        if path.suffix.lower() in {".lpr", ".pas"} or path.name == "Makefile":
+            findings.extend(scan_external_m(root, path, text))
+            findings.extend(scan_native_math_linking(root, path, text))
         if relative(path, root).startswith(INTERNAL_IMPL_TEST_PREFIXES) and path.suffix.lower() in {
             ".lpr",
             ".pas",
@@ -3978,6 +4246,10 @@ def build_report(root: Path) -> Report:
         scanned.add(path)
         text = path.read_text(encoding="utf-8", errors="replace")
         findings.extend(scan_math_ffi_uses(root, path, text))
+        if path.suffix.lower() in {".lpr", ".pas"}:
+            findings.extend(scan_external_m(root, path, text))
+        if path.suffix.lower() in {".lpr", ".pas"} or path.name == "Makefile":
+            findings.extend(scan_native_math_linking(root, path, text))
         findings.extend(scan_compiler_refs(root, path, text))
 
     findings.sort(key=lambda item: (item.path, item.line, item.rule, item.text))
@@ -4010,6 +4282,7 @@ def main() -> int:
         run_public_math_source_simd_wiring_self_tests()
         run_math_impl_simd_facade_only_uses_self_tests()
         run_forbidden_simd_mathutil_bare_name_self_tests()
+        run_forbidden_native_math_linking_scope_self_tests()
         run_legacy_production_name_self_tests()
         run_forbidden_trig_scalar_name_self_tests()
         run_trig_host_safe_route_self_tests()
