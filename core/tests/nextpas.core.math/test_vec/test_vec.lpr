@@ -9,6 +9,12 @@ uses
 
 var
   T: TTestRunner;
+  Vec2fSink: TVec2f;
+  Vec3fSink: TVec3f;
+  Vec4fSink: TVec4f;
+  Vec2dSink: TVec2d;
+  Vec3dSink: TVec3d;
+  Vec4dSink: TVec4d;
 
 type
   TSingleBitCast = packed record
@@ -129,6 +135,22 @@ begin
   Result := LValue.Value;
 end;
 
+function SingleNegativeZero: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $80000000;
+  Result := LValue.Value;
+end;
+
+function SingleNegativeInfinity: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $FF800000;
+  Result := LValue.Value;
+end;
+
 function DoubleNaN: Double;
 var
   LValue: TDoubleBitCast;
@@ -143,6 +165,35 @@ var
 begin
   LValue.Bits := $7FF0000000000000;
   Result := LValue.Value;
+end;
+
+function DoubleNegativeZero: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := QWord(1) shl 63;
+  Result := LValue.Value;
+end;
+
+function DoubleNegativeInfinity: Double;
+var
+  LValue: TDoubleBitCast;
+  LSignBit: QWord;
+  LExponentBits: QWord;
+begin
+  LSignBit := 1;
+  LSignBit := LSignBit shl 63;
+  LExponentBits := $7FF;
+  LExponentBits := LExponentBits shl 52;
+  LValue.Bits := LSignBit or LExponentBits;
+  Result := LValue.Value;
+end;
+
+procedure TouchVectorSinks;
+begin
+  if (Vec2fSink.X + Vec3fSink.X + Vec4fSink.X +
+    Vec2dSink.X + Vec3dSink.X + Vec4dSink.X) = -1.0 then
+    Fail('vector sink sentinel');
 end;
 
 procedure RaiseVec2fNormalizeNaN;
@@ -183,6 +234,92 @@ end;
 procedure RaiseVec4dNormalizeNaNW;
 begin
   TVec4d.Create(1.0, 0.0, 0.0, DoubleNaN).Normalize;
+end;
+
+procedure RaiseVec2fScalarDivideZero;
+begin
+  Vec2fSink := TVec2f.Create(1.0, 2.0) / Single(0.0);
+end;
+
+procedure RaiseVec2fScalarDivideNegativeZero;
+begin
+  Vec2fSink := TVec2f.Create(1.0, 2.0) / SingleNegativeZero;
+end;
+
+procedure RaiseVec3fScalarDivideNaN;
+begin
+  Vec3fSink := TVec3f.Create(1.0, 2.0, 3.0) / SingleNaN;
+end;
+
+procedure RaiseVec4fScalarDivideInfinity;
+begin
+  Vec4fSink := TVec4f.Create(1.0, 2.0, 3.0, 4.0) / SingleInfinity;
+end;
+
+procedure RaiseVec2dScalarDivideZero;
+begin
+  Vec2dSink := TVec2d.Create(1.0, 2.0) / 0.0;
+end;
+
+procedure RaiseVec3dScalarDivideNaN;
+begin
+  Vec3dSink := TVec3d.Create(1.0, 2.0, 3.0) / DoubleNaN;
+end;
+
+procedure RaiseVec4dScalarDivideInfinity;
+begin
+  Vec4dSink := TVec4d.Create(1.0, 2.0, 3.0, 4.0) / DoubleInfinity;
+end;
+
+procedure RaiseVec4dScalarDivideNegativeInfinity;
+begin
+  Vec4dSink := TVec4d.Create(1.0, 2.0, 3.0, 4.0) / DoubleNegativeInfinity;
+end;
+
+procedure RaiseVec2fDivComponentsZero;
+begin
+  Vec2fSink := TVec2f.DivComponents(TVec2f.Create(1.0, 2.0), TVec2f.Create(1.0, 0.0));
+end;
+
+procedure RaiseVec3fDivComponentsNaN;
+begin
+  Vec3fSink := TVec3f.DivComponents(TVec3f.Create(1.0, 2.0, 3.0),
+    TVec3f.Create(1.0, SingleNaN, 1.0));
+end;
+
+procedure RaiseVec4fDivComponentsInfinity;
+begin
+  Vec4fSink := TVec4f.DivComponents(TVec4f.Create(1.0, 2.0, 3.0, 4.0),
+    TVec4f.Create(1.0, 1.0, SingleInfinity, 1.0));
+end;
+
+procedure RaiseVec4fDivComponentsNegativeInfinity;
+begin
+  Vec4fSink := TVec4f.DivComponents(TVec4f.Create(1.0, 2.0, 3.0, 4.0),
+    TVec4f.Create(1.0, 1.0, 1.0, SingleNegativeInfinity));
+end;
+
+procedure RaiseVec2dDivComponentsZero;
+begin
+  Vec2dSink := TVec2d.DivComponents(TVec2d.Create(1.0, 2.0), TVec2d.Create(0.0, 1.0));
+end;
+
+procedure RaiseVec2dDivComponentsNegativeZero;
+begin
+  Vec2dSink := TVec2d.DivComponents(TVec2d.Create(1.0, 2.0),
+    TVec2d.Create(1.0, DoubleNegativeZero));
+end;
+
+procedure RaiseVec3dDivComponentsNaN;
+begin
+  Vec3dSink := TVec3d.DivComponents(TVec3d.Create(1.0, 2.0, 3.0),
+    TVec3d.Create(1.0, 1.0, DoubleNaN));
+end;
+
+procedure RaiseVec4dDivComponentsInfinity;
+begin
+  Vec4dSink := TVec4d.DivComponents(TVec4d.Create(1.0, 2.0, 3.0, 4.0),
+    TVec4d.Create(DoubleInfinity, 1.0, 1.0, 1.0));
 end;
 
 procedure TestVec2fContracts;
@@ -526,6 +663,43 @@ begin
     'TVec4d Normalize NaN W component', @RaiseVec4dNormalizeNaNW);
 end;
 
+procedure TestVectorDivisionInvalidDivisorsFailFast;
+begin
+  ExpectArgumentErrorMessage('TVec2f./: scalar divisor must be finite and non-zero',
+    'TVec2f scalar divide zero', @RaiseVec2fScalarDivideZero);
+  ExpectArgumentErrorMessage('TVec2f./: scalar divisor must be finite and non-zero',
+    'TVec2f scalar divide negative zero', @RaiseVec2fScalarDivideNegativeZero);
+  ExpectArgumentErrorMessage('TVec3f./: scalar divisor must be finite and non-zero',
+    'TVec3f scalar divide NaN', @RaiseVec3fScalarDivideNaN);
+  ExpectArgumentErrorMessage('TVec4f./: scalar divisor must be finite and non-zero',
+    'TVec4f scalar divide infinity', @RaiseVec4fScalarDivideInfinity);
+  ExpectArgumentErrorMessage('TVec2d./: scalar divisor must be finite and non-zero',
+    'TVec2d scalar divide zero', @RaiseVec2dScalarDivideZero);
+  ExpectArgumentErrorMessage('TVec3d./: scalar divisor must be finite and non-zero',
+    'TVec3d scalar divide NaN', @RaiseVec3dScalarDivideNaN);
+  ExpectArgumentErrorMessage('TVec4d./: scalar divisor must be finite and non-zero',
+    'TVec4d scalar divide infinity', @RaiseVec4dScalarDivideInfinity);
+  ExpectArgumentErrorMessage('TVec4d./: scalar divisor must be finite and non-zero',
+    'TVec4d scalar divide negative infinity', @RaiseVec4dScalarDivideNegativeInfinity);
+
+  ExpectArgumentErrorMessage('TVec2f.DivComponents: divisor vector must be finite and non-zero',
+    'TVec2f component divide zero', @RaiseVec2fDivComponentsZero);
+  ExpectArgumentErrorMessage('TVec3f.DivComponents: divisor vector must be finite and non-zero',
+    'TVec3f component divide NaN', @RaiseVec3fDivComponentsNaN);
+  ExpectArgumentErrorMessage('TVec4f.DivComponents: divisor vector must be finite and non-zero',
+    'TVec4f component divide infinity', @RaiseVec4fDivComponentsInfinity);
+  ExpectArgumentErrorMessage('TVec4f.DivComponents: divisor vector must be finite and non-zero',
+    'TVec4f component divide negative infinity', @RaiseVec4fDivComponentsNegativeInfinity);
+  ExpectArgumentErrorMessage('TVec2d.DivComponents: divisor vector must be finite and non-zero',
+    'TVec2d component divide zero', @RaiseVec2dDivComponentsZero);
+  ExpectArgumentErrorMessage('TVec2d.DivComponents: divisor vector must be finite and non-zero',
+    'TVec2d component divide negative zero', @RaiseVec2dDivComponentsNegativeZero);
+  ExpectArgumentErrorMessage('TVec3d.DivComponents: divisor vector must be finite and non-zero',
+    'TVec3d component divide NaN', @RaiseVec3dDivComponentsNaN);
+  ExpectArgumentErrorMessage('TVec4d.DivComponents: divisor vector must be finite and non-zero',
+    'TVec4d component divide infinity', @RaiseVec4dDivComponentsInfinity);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.vec');
   T.Run('TVec2f contracts', @TestVec2fContracts);
@@ -543,5 +717,8 @@ begin
   T.Run('vector Data aliases write through', @TestVectorDataAliasesWriteThrough);
   T.Run('raw vector normalize non-finite inputs fail fast',
     @TestRawVectorNormalizeNonFiniteInputsFailFast);
+  T.Run('vector division invalid divisors fail fast',
+    @TestVectorDivisionInvalidDivisorsFailFast);
+  TouchVectorSinks;
   T.Summary;
 end.

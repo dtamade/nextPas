@@ -46,6 +46,7 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - Vector `LengthSqr` avoids FPU overflow exceptions for huge finite inputs and returns `+Inf` when the true squared length is outside the target float range; vector `Data` aliases write through to named fields.
 - Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by
   `Normalize`.
+- Vector scalar division and `DivComponents` reject zero, NaN, and infinite divisors with `EArgumentError`.
 - Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd` inputs preserve direction instead of collapsing through an overflowing squared length.
 - Raw quaternion inputs containing NaN or infinity fail fast with `EArgumentError` when used by
   `Normalize`, `ToAxisAngle`, `ToRotationMatrix`, `Rotate`, or as `Slerp`/`Nlerp` endpoints.

@@ -162,6 +162,7 @@ is outside the target float range, it returns `+Inf` instead of raising an FPU o
 `Data` aliases are read/write views over `X/Y/Z/W`, so indexed writes update the named fields.
 Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by
 `Normalize`.
+Vector scalar division and `DivComponents` reject zero, NaN, and infinite divisors with `EArgumentError`.
 
 ## Matrices
 

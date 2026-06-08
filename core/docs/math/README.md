@@ -140,6 +140,7 @@ overflowing the intermediate squared length.
 squared length is outside the target float range. Vector `Data` aliases write through to `X/Y/Z/W`.
 Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by
 `Normalize`.
+Vector scalar division and `DivComponents` reject zero, NaN, and infinite divisors with `EArgumentError`.
 Quaternions store vector part `X`, `Y`, `Z` and real part `W`. Zero quaternion normalization returns
 identity; zero vector normalization returns zero. `FromAxisAngle` normalizes its axis, and a zero
 axis returns identity instead of a partial rotation. `ToAxisAngle` normalizes first and returns a

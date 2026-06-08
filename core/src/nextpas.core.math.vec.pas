@@ -292,6 +292,70 @@ begin
     raise EArgumentError.Create(AFunctionName + ': vector must be finite');
 end;
 
+procedure ValidateScalarDivisor(const AFunctionName: string; const AValue: Single); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': scalar divisor must be finite and non-zero');
+  if AValue = 0.0 then
+    raise EArgumentError.Create(AFunctionName + ': scalar divisor must be finite and non-zero');
+end;
+
+procedure ValidateScalarDivisor(const AFunctionName: string; const AValue: Double); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': scalar divisor must be finite and non-zero');
+  if AValue = 0.0 then
+    raise EArgumentError.Create(AFunctionName + ': scalar divisor must be finite and non-zero');
+end;
+
+procedure ValidateComponentDivisor(const AFunctionName: string; const AValue: TVec2f); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': divisor vector must be finite and non-zero');
+  if (AValue.X = 0.0) or (AValue.Y = 0.0) then
+    raise EArgumentError.Create(AFunctionName + ': divisor vector must be finite and non-zero');
+end;
+
+procedure ValidateComponentDivisor(const AFunctionName: string; const AValue: TVec3f); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': divisor vector must be finite and non-zero');
+  if (AValue.X = 0.0) or (AValue.Y = 0.0) or (AValue.Z = 0.0) then
+    raise EArgumentError.Create(AFunctionName + ': divisor vector must be finite and non-zero');
+end;
+
+procedure ValidateComponentDivisor(const AFunctionName: string; const AValue: TVec4f); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': divisor vector must be finite and non-zero');
+  if (AValue.X = 0.0) or (AValue.Y = 0.0) or (AValue.Z = 0.0) or (AValue.W = 0.0) then
+    raise EArgumentError.Create(AFunctionName + ': divisor vector must be finite and non-zero');
+end;
+
+procedure ValidateComponentDivisor(const AFunctionName: string; const AValue: TVec2d); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': divisor vector must be finite and non-zero');
+  if (AValue.X = 0.0) or (AValue.Y = 0.0) then
+    raise EArgumentError.Create(AFunctionName + ': divisor vector must be finite and non-zero');
+end;
+
+procedure ValidateComponentDivisor(const AFunctionName: string; const AValue: TVec3d); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': divisor vector must be finite and non-zero');
+  if (AValue.X = 0.0) or (AValue.Y = 0.0) or (AValue.Z = 0.0) then
+    raise EArgumentError.Create(AFunctionName + ': divisor vector must be finite and non-zero');
+end;
+
+procedure ValidateComponentDivisor(const AFunctionName: string; const AValue: TVec4d); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': divisor vector must be finite and non-zero');
+  if (AValue.X = 0.0) or (AValue.Y = 0.0) or (AValue.Z = 0.0) or (AValue.W = 0.0) then
+    raise EArgumentError.Create(AFunctionName + ': divisor vector must be finite and non-zero');
+end;
+
 function StableVec4Length(const AX, AY, AZ, AW: Single): Single; inline;
 var
   LX: Single;
@@ -526,6 +590,7 @@ end;
 
 class operator TVec2f./ (const AValue: TVec2f; const AScalar: Single): TVec2f;
 begin
+  ValidateScalarDivisor('TVec2f./', AScalar);
   Result := TVec2f.Create(AValue.X / AScalar, AValue.Y / AScalar);
 end;
 
@@ -536,6 +601,7 @@ end;
 
 class function TVec2f.DivComponents(const AA, AB: TVec2f): TVec2f;
 begin
+  ValidateComponentDivisor('TVec2f.DivComponents', AB);
   Result := TVec2f.Create(AA.X / AB.X, AA.Y / AB.Y);
 end;
 
@@ -616,6 +682,7 @@ end;
 
 class operator TVec3f./ (const AValue: TVec3f; const AScalar: Single): TVec3f;
 begin
+  ValidateScalarDivisor('TVec3f./', AScalar);
   Result := TVec3f.Create(AValue.X / AScalar, AValue.Y / AScalar, AValue.Z / AScalar);
 end;
 
@@ -626,6 +693,7 @@ end;
 
 class function TVec3f.DivComponents(const AA, AB: TVec3f): TVec3f;
 begin
+  ValidateComponentDivisor('TVec3f.DivComponents', AB);
   Result := TVec3f.Create(AA.X / AB.X, AA.Y / AB.Y, AA.Z / AB.Z);
 end;
 
@@ -719,6 +787,7 @@ end;
 
 class operator TVec4f./ (const AValue: TVec4f; const AScalar: Single): TVec4f;
 begin
+  ValidateScalarDivisor('TVec4f./', AScalar);
   Result := TVec4f.Create(AValue.X / AScalar, AValue.Y / AScalar,
     AValue.Z / AScalar, AValue.W / AScalar);
 end;
@@ -730,6 +799,7 @@ end;
 
 class function TVec4f.DivComponents(const AA, AB: TVec4f): TVec4f;
 begin
+  ValidateComponentDivisor('TVec4f.DivComponents', AB);
   Result := TVec4f.Create(AA.X / AB.X, AA.Y / AB.Y, AA.Z / AB.Z, AA.W / AB.W);
 end;
 
@@ -814,6 +884,7 @@ end;
 
 class operator TVec2d./ (const AValue: TVec2d; const AScalar: Double): TVec2d;
 begin
+  ValidateScalarDivisor('TVec2d./', AScalar);
   Result := TVec2d.Create(AValue.X / AScalar, AValue.Y / AScalar);
 end;
 
@@ -824,6 +895,7 @@ end;
 
 class function TVec2d.DivComponents(const AA, AB: TVec2d): TVec2d;
 begin
+  ValidateComponentDivisor('TVec2d.DivComponents', AB);
   Result := TVec2d.Create(AA.X / AB.X, AA.Y / AB.Y);
 end;
 
@@ -904,6 +976,7 @@ end;
 
 class operator TVec3d./ (const AValue: TVec3d; const AScalar: Double): TVec3d;
 begin
+  ValidateScalarDivisor('TVec3d./', AScalar);
   Result := TVec3d.Create(AValue.X / AScalar, AValue.Y / AScalar, AValue.Z / AScalar);
 end;
 
@@ -914,6 +987,7 @@ end;
 
 class function TVec3d.DivComponents(const AA, AB: TVec3d): TVec3d;
 begin
+  ValidateComponentDivisor('TVec3d.DivComponents', AB);
   Result := TVec3d.Create(AA.X / AB.X, AA.Y / AB.Y, AA.Z / AB.Z);
 end;
 
@@ -1007,6 +1081,7 @@ end;
 
 class operator TVec4d./ (const AValue: TVec4d; const AScalar: Double): TVec4d;
 begin
+  ValidateScalarDivisor('TVec4d./', AScalar);
   Result := TVec4d.Create(AValue.X / AScalar, AValue.Y / AScalar,
     AValue.Z / AScalar, AValue.W / AScalar);
 end;
@@ -1018,6 +1093,7 @@ end;
 
 class function TVec4d.DivComponents(const AA, AB: TVec4d): TVec4d;
 begin
+  ValidateComponentDivisor('TVec4d.DivComponents', AB);
   Result := TVec4d.Create(AA.X / AB.X, AA.Y / AB.Y, AA.Z / AB.Z, AA.W / AB.W);
 end;
 
