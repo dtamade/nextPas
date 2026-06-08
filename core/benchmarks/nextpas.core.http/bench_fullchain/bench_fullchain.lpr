@@ -60,6 +60,8 @@ var
   GIterations: Int64;
   GFilter: string;
   GBackend: TTcpServerBackend;
+  GDirectHandlerHits: Int64;
+  GRouterHandlerHits: Int64;
 
 procedure WritePlaintextResponse(const AW: IHttpResponseWriter);
 begin
@@ -276,6 +278,7 @@ begin
     begin
       if AReq.Headers.Get('host') = DIRECT_HOST then
       begin
+        Inc(GDirectHandlerHits);
         if AReq.Path = '/1k' then
         begin
           WriteBody1KResponse(AW, LBody1K);
@@ -284,6 +287,7 @@ begin
         WritePlaintextResponse(AW);
         Exit;
       end;
+      Inc(GRouterHandlerHits);
       LRouterHandler.ServeHTTP(AReq, AW);
     end), LServerOptions);
   GServerThreadStarted := platform_thread_create(GServerThreadHandle, @ServerThread, nil) = 0;
@@ -456,6 +460,8 @@ begin
     ReadResponse(LConn);
   end;
 
+  GDirectHandlerHits := 0;
+  GRouterHandlerHits := 0;
   LStart := platform_monotonic_ns;
   for LI := 1 to GIterations do
   begin
@@ -487,6 +493,8 @@ begin
   WriteLn('backend=', BackendName);
   WriteLn('nextpas_h1_path=', ExpectedH1PathForWorkload(AWorkload));
   WriteLn('nextpas_dispatch_path=', ExpectedDispatchPathForWorkload(AWorkload));
+  WriteLn('observed_direct_handler_hits=', GDirectHandlerHits);
+  WriteLn('observed_router_handler_hits=', GRouterHandlerHits);
   WriteLn('iterations=', GIterations);
   WriteLn('completed=', Result.Completed);
   WriteLn('elapsed_ns=', Result.ElapsedNs);

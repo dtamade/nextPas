@@ -726,6 +726,8 @@ markers:
 - `backend=<threaded|epoll>`
 - `nextpas_h1_path=<fast|llhttp>`
 - `nextpas_dispatch_path=<direct_handler|router>`
+- `observed_direct_handler_hits=<count>`
+- `observed_router_handler_hits=<count>`
 - `iterations`
 - `completed`
 - `elapsed_ns`
@@ -769,6 +771,11 @@ nextPas dispatch shape:
   benchmark handler answers them before router dispatch.
 - `plaintext`, `json`, `echo_1k`, `sink_16k`, and `param_route` report
   `router` because they go through `THttpRouter`.
+
+The dispatch marker is paired with observed handler hit counters from the timed
+measurement window. Direct rows should report direct hits equal to `iterations`
+and router hits `0`; router rows should report the inverse. Warmup requests are
+not included in these counters.
 
 The filter is still substring-based, so the direct workload is intentionally
 named `direct_root` rather than `direct_plaintext`; this keeps

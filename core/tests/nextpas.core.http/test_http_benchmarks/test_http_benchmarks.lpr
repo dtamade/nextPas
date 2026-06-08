@@ -614,7 +614,9 @@ procedure CheckFullchainBenchmarkOutput(const AOutput, AWorkload,
   AFilter, ARequestBodyBytes, AResponseBodyBytes: string;
   const ABackend: string = 'threaded';
   const AH1Path: string = 'fast';
-  const ADispatchPath: string = 'router');
+  const ADispatchPath: string = 'router';
+  const ADirectHandlerHits: string = '0';
+  const ARouterHandlerHits: string = '128');
 begin
   CheckContains(AOutput, 'operation=http.fullchain.keepalive',
     'fullchain operation marker');
@@ -626,6 +628,10 @@ begin
     'fullchain H1 path marker');
   CheckContains(AOutput, 'nextpas_dispatch_path=' + ADispatchPath,
     'fullchain dispatch path marker');
+  CheckContains(AOutput, 'observed_direct_handler_hits=' + ADirectHandlerHits,
+    'fullchain observed direct-handler hits marker');
+  CheckContains(AOutput, 'observed_router_handler_hits=' + ARouterHandlerHits,
+    'fullchain observed router-handler hits marker');
   CheckContains(AOutput, 'workload=' + AWorkload,
     'fullchain workload marker');
   CheckContains(AOutput,
@@ -1536,6 +1542,22 @@ begin
     '{ Scenario 1: Plaintext }',
     'bench_fullchain direct scenario block');
 
+  CheckContains(LSource, 'GDirectHandlerHits: Int64;',
+    'bench_fullchain should track observed direct-handler hits');
+  CheckContains(LSource, 'GRouterHandlerHits: Int64;',
+    'bench_fullchain should track observed router-handler hits');
+  CheckContains(LSource, 'Inc(GDirectHandlerHits);',
+    'bench_fullchain direct host branch should increment observed hits');
+  CheckContains(LSource, 'Inc(GRouterHandlerHits);',
+    'bench_fullchain router branch should increment observed hits');
+  CheckContains(LSource, 'GDirectHandlerHits := 0;',
+    'bench_fullchain should reset observed direct hits after warmup');
+  CheckContains(LSource, 'GRouterHandlerHits := 0;',
+    'bench_fullchain should reset observed router hits after warmup');
+  CheckContains(LSource, 'observed_direct_handler_hits=',
+    'bench_fullchain output should expose observed direct-handler hits');
+  CheckContains(LSource, 'observed_router_handler_hits=',
+    'bench_fullchain output should expose observed router-handler hits');
   CheckContains(LDispatchBody, 'AWorkload = ''direct_root''',
     'bench_fullchain dispatch mapper should mark direct_root');
   CheckContains(LDispatchBody, 'AWorkload = ''direct_1k''',
@@ -1762,7 +1784,7 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_fullchain direct plaintext smoke exit code: ' + LOutput);
   CheckFullchainBenchmarkOutput(LOutput, 'direct_root', 'direct_root', '0',
-    '13', 'threaded', 'fast', 'direct_handler');
+    '13', 'threaded', 'fast', 'direct_handler', '128', '0');
   CheckNotContains(LOutput, 'workload=direct_1k',
     'bench_fullchain direct_root filter must not match direct_1k');
 end;
@@ -1793,7 +1815,7 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_fullchain direct 1k smoke exit code: ' + LOutput);
   CheckFullchainBenchmarkOutput(LOutput, 'direct_1k', 'direct_1k', '0',
-    '1024', 'threaded', 'fast', 'direct_handler');
+    '1024', 'threaded', 'fast', 'direct_handler', '128', '0');
 end;
 
 procedure TestBenchFullchainEcho1KSmoke;
@@ -1938,7 +1960,7 @@ begin
     'bench_fullchain epoll smoke exit code: ' + LOutput);
   CheckFullchainBenchmarkOutput(LOutput, 'direct_root', 'direct_root', '0',
     '13',
-    'epoll', 'fast', 'direct_handler');
+    'epoll', 'fast', 'direct_handler', '128', '0');
 end;
 
 procedure TestBenchFullchainEpollDirect1KSmoke;
@@ -1972,7 +1994,7 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_fullchain epoll direct 1k smoke exit code: ' + LOutput);
   CheckFullchainBenchmarkOutput(LOutput, 'direct_1k', 'direct_1k', '0',
-    '1024', 'epoll', 'fast', 'direct_handler');
+    '1024', 'epoll', 'fast', 'direct_handler', '128', '0');
 end;
 
 procedure TestBenchFullchainEpollEcho1KSmoke;
