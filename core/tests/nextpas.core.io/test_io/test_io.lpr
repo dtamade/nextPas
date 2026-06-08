@@ -196,6 +196,109 @@ begin
   CheckEqual(Int64(0), LS.Size, 'closed size=0');
 end;
 
+procedure TestStreamPostCloseOperationGuards;
+var
+  LS: IStream;
+  LByteReader: IByteReader;
+  LByteWriter: IByteWriter;
+  LBuf: Byte;
+  LReaderAt: IReaderAt;
+  LRaised: Boolean;
+  LStringWriter: IStringWriter;
+  LWriterAt: IWriterAt;
+begin
+  LS := BytesStream(16);
+  LBuf := $2A;
+  LS.Write(LBuf, 1);
+  LReaderAt := LS as IReaderAt;
+  LWriterAt := LS as IWriterAt;
+  LByteReader := LS as IByteReader;
+  LByteWriter := LS as IByteWriter;
+  LStringWriter := LS as IStringWriter;
+  LS.Close;
+
+  LRaised := False;
+  try
+    LS.Read(LBuf, 1);
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'read after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LS.Write(LBuf, 1);
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'write after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LS.Seek(0, soBeginning);
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'seek after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LS.Position := 0;
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'position set after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LReaderAt.ReadAt(LBuf, 1, 0);
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'ReadAt after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LWriterAt.WriteAt(LBuf, 1, 0);
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'WriteAt after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LByteReader.ReadByte;
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'ReadByte after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LByteWriter.WriteByte($7B);
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'WriteByte after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LStringWriter.WriteString('x');
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'WriteString after BytesStream close raises EIOError');
+end;
+
 { BufferedReader tests }
 
 procedure TestBufReaderSmall;
@@ -1271,6 +1374,8 @@ begin
   T.Run('Stream grow', @TestStreamGrow);
   T.Run('Stream from data', @TestStreamFromData);
   T.Run('Stream close', @TestStreamClose);
+  T.Run('Stream post-close operation guards',
+    @TestStreamPostCloseOperationGuards);
 
   T.Run('BufReader small', @TestBufReaderSmall);
   T.Run('BufReader large', @TestBufReaderLarge);
