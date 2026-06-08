@@ -7043,6 +7043,84 @@ begin
   end;
 end;
 
+procedure RunRequestConnectionCloseOverridesHandlerKeepAliveHeader(
+  const AUseEpoll: Boolean; const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LClosed: Boolean;
+  LTimedOut: Boolean;
+const
+  REQ = 'GET /ping HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Connection: close'#13#10#13#10;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ping', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBody: string;
+  begin
+    LBody := 'pong';
+    AW.GetHeaders.SetHeader('connection', 'keep-alive');
+    AW.GetHeaders.SetHeader('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 4);
+  end);
+
+  if AUseEpoll then
+  begin
+    {$IFDEF NEXTPAS_LINUX}
+    LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort);
+    {$ELSE}
+    Fail(ALabel + ': epoll backend is only available on Linux');
+    Exit;
+    {$ENDIF}
+  end
+  else
+    LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp := ReadUntilClosedOrDeadline(LConn, 5000, LClosed, LTimedOut);
+      Check(Pos('200 OK', LResp) > 0,
+        ALabel + ': got 200');
+      Check(Pos('pong', LResp) > 0,
+        ALabel + ': got body');
+      Check(Pos('connection: close', LResp) > 0,
+        ALabel + ': request close is reflected on wire');
+      Check(Pos('connection: keep-alive', LResp) = 0,
+        ALabel + ': handler keep-alive header is not emitted');
+      Check(LClosed,
+        ALabel + ': server closed connection after response');
+      Check(not LTimedOut,
+        ALabel + ': read did not time out waiting for close');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestRequestConnectionCloseOverridesHandlerKeepAliveHeader;
+begin
+  RunRequestConnectionCloseOverridesHandlerKeepAliveHeader(False,
+    'request-conn-close-overrides-handler-keepalive');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestEpollRequestConnectionCloseOverridesHandlerKeepAliveHeader;
+begin
+  RunRequestConnectionCloseOverridesHandlerKeepAliveHeader(True,
+    'epoll-request-conn-close-overrides-handler-keepalive');
+end;
+{$ENDIF}
+
 procedure TestResponseConnectionMixedCaseCloseStopsKeepAlive;
 var
   LRouter: THttpRouter;
@@ -13194,11 +13272,15 @@ begin
   T.Run('Connection: close stops keep-alive', @TestConnectionClose);
   T.Run('Connection token-list close stops keep-alive',
     @TestConnectionTokenListCloseStopsKeepAlive);
+  T.Run('Request Connection close overrides handler keep-alive header',
+    @TestRequestConnectionCloseOverridesHandlerKeepAliveHeader);
   T.Run('Response Connection mixed-case close stops keep-alive',
     @TestResponseConnectionMixedCaseCloseStopsKeepAlive);
   T.Run('Response duplicate Connection close stops keep-alive',
     @TestResponseConnectionDuplicateCloseStopsKeepAlive);
 {$IFDEF NEXTPAS_LINUX}
+  T.Run('Epoll request Connection close overrides handler keep-alive header',
+    @TestEpollRequestConnectionCloseOverridesHandlerKeepAliveHeader);
   T.Run('Epoll response Connection mixed-case close stops keep-alive',
     @TestEpollResponseConnectionMixedCaseCloseStopsKeepAlive);
   T.Run('Epoll response duplicate Connection close stops keep-alive',

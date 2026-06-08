@@ -1188,7 +1188,7 @@ begin
     LOutbound := NewH1OutboundBuffer;
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
-      LReq.Method = hmHead);
+      LReq.Method = hmHead, not FKeepAlive);
     if FKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
       LW.GetHeaders.SetHeader('connection', 'keep-alive');
     if not FKeepAlive then
@@ -1294,7 +1294,7 @@ begin
     LOutbound := NewH1OutboundBuffer;
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
-      LReq.Method = hmHead);
+      LReq.Method = hmHead, not LKeepAlive);
     if LKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
       LW.GetHeaders.SetHeader('connection', 'keep-alive');
     if not LKeepAlive then

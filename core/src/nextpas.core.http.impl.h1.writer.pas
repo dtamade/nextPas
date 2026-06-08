@@ -26,6 +26,7 @@ type
     FHasDeclaredContentLength: Boolean;
     FDeclaredContentLength: Int64;
     FContentLengthWritten: Int64;
+    FForceConnectionClose: Boolean;
     procedure WriteStatusLine;
     procedure WriteInformationalHeader(const AStatus: THttpStatus);
     procedure WriteHeaderBlock;
@@ -43,6 +44,8 @@ type
     constructor Create(const AWriter: IWriter; const AConn: ITcpStream); overload;
     constructor Create(const AWriter: IWriter; const AConn: ITcpStream;
       const ASuppressBody: Boolean); overload;
+    constructor Create(const AWriter: IWriter; const AConn: ITcpStream;
+      const ASuppressBody: Boolean; const AForceConnectionClose: Boolean); overload;
     procedure WriteHeader(const AStatus: THttpStatus);
     function GetStatus: THttpStatus;
     function GetHeaders: IHttpHeaders;
@@ -120,6 +123,12 @@ end;
 constructor TH1ResponseWriter.Create(const AWriter: IWriter; const AConn: ITcpStream;
   const ASuppressBody: Boolean);
 begin
+  Create(AWriter, AConn, ASuppressBody, False);
+end;
+
+constructor TH1ResponseWriter.Create(const AWriter: IWriter; const AConn: ITcpStream;
+  const ASuppressBody: Boolean; const AForceConnectionClose: Boolean);
+begin
   inherited Create;
   FWriter := AWriter;
   FHeaders := NewHttpHeaders;
@@ -133,6 +142,7 @@ begin
   FHasDeclaredContentLength := False;
   FDeclaredContentLength := 0;
   FContentLengthWritten := 0;
+  FForceConnectionClose := AForceConnectionClose;
 end;
 
 procedure TH1ResponseWriter.WriteStr(const AStr: string);
@@ -410,6 +420,8 @@ begin
   end;
   FStatus := AStatus;
   FNoBodyAllowed := ResponseMustNotHaveBody;
+  if FForceConnectionClose then
+    FHeaders.SetHeader('connection', 'close');
   ValidateResponseFramingHeaders;
   if (not FNoBodyAllowed) and
      (not FSuppressBody) and
