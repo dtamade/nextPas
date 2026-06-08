@@ -338,6 +338,47 @@ begin
   Check(True, 'facade root forwarder compile surface');
 end;
 
+procedure TestFacadeRootTrigDeclarationParityCompileSurface;
+var
+  D: Double;
+  F: Single;
+begin
+  if ParamCount < 0 then
+  begin
+    D := nextpas.core.math.Sin(Double(0.0));
+    D := D + nextpas.core.math.Cos(Double(0.0));
+    D := D + nextpas.core.math.Tan(Double(0.0));
+    D := D + nextpas.core.math.ArcSin(Double(0.5));
+    D := D + nextpas.core.math.ArcCos(Double(0.5));
+    D := D + nextpas.core.math.ArcTan(Double(1.0));
+    D := D + nextpas.core.math.ArcTan2(Double(1.0), Double(1.0));
+    D := D + nextpas.core.math.Exp(Double(0.0));
+    D := D + nextpas.core.math.Ln(Double(1.0));
+    D := D + nextpas.core.math.Log2(Double(8.0));
+    D := D + nextpas.core.math.Log10(Double(100.0));
+    D := D + nextpas.core.math.Power(Double(2.0), Double(3.0));
+    D := D + nextpas.core.math.Sqrt(Double(4.0));
+
+    F := nextpas.core.math.Sin(Single(0.0));
+    F := F + nextpas.core.math.Cos(Single(0.0));
+    F := F + nextpas.core.math.Tan(Single(0.0));
+    F := F + nextpas.core.math.ArcSin(Single(0.5));
+    F := F + nextpas.core.math.ArcCos(Single(0.5));
+    F := F + nextpas.core.math.ArcTan(Single(1.0));
+    F := F + nextpas.core.math.ArcTan2(Single(1.0), Single(1.0));
+    F := F + nextpas.core.math.Exp(Single(0.0));
+    F := F + nextpas.core.math.Ln(Single(1.0));
+    F := F + nextpas.core.math.Log2(Single(8.0));
+    F := F + nextpas.core.math.Log10(Single(100.0));
+    F := F + nextpas.core.math.Power(Single(2.0), Single(3.0));
+    F := F + nextpas.core.math.Sqrt(Single(4.0));
+
+    if (D < -1.0e300) or (F < -1.0e30) then
+      Halt(1);
+  end;
+  Check(True, 'facade root trig declaration parity compile surface');
+end;
+
 procedure RaiseFacadeClampReversedBounds;
 begin
   Clamp(1.0, 2.0, 1.0);
@@ -373,5 +414,7 @@ begin
   T.Run('facade random surface', @TestFacadeRandomSurface);
   T.Run('facade type alias compile surface', @TestFacadeTypeAliasCompileSurface);
   T.Run('facade root forwarder compile surface', @TestFacadeRootForwarderCompileSurface);
+  T.Run('facade root trig declaration parity compile surface',
+    @TestFacadeRootTrigDeclarationParityCompileSurface);
   T.Summary;
 end.
