@@ -82,8 +82,8 @@ function TBytesStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LAvailable: SizeUInt;
 begin
-  if ACount = 0 then Exit(0);
   EnsureOpen('Read');
+  if ACount = 0 then Exit(0);
   if FPosition >= FSize then Exit(0);
   LAvailable := FSize - FPosition;
   if ACount < LAvailable then
@@ -101,12 +101,12 @@ function TBytesStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LNewSize: SizeUInt;
 begin
+  EnsureOpen('Write');
   if ACount = 0 then
   begin
     Result := 0;
     Exit;
   end;
-  EnsureOpen('Write');
   LNewSize := FPosition + ACount;
   if LNewSize > SizeUInt(Length(FData)) then
   begin

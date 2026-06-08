@@ -228,12 +228,30 @@ begin
 
   LRaised := False;
   try
+    LS.Read(LBuf, 0);
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'zero-length read after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
     LS.Write(LBuf, 1);
   except
     on E: EIOError do
       LRaised := Pos('closed', E.Message) > 0;
   end;
   Check(LRaised, 'write after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LS.Write(LBuf, 0);
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'zero-length write after BytesStream close raises EIOError');
 
   LRaised := False;
   try
