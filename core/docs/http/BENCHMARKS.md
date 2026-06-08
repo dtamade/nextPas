@@ -54,10 +54,12 @@ The comparison currently covers four HTTP/1.1 keep-alive hello-world workloads:
   1 KiB fixed-length response body. The raw nextPas/Rust clients wait for the
   complete response body, not just a status/header prefix.
 
-It does not cover TLS, request bodies, WebSocket, router/middleware full-chain
-cost, or `epoll`. The default Rust comparator is a std-only microbaseline
-labeled `impl=rust_std` with `rust_profile=std_only`; it is still not a Rust
-ecosystem benchmark by itself.
+It does not cover TLS, request bodies, WebSocket, or router/middleware
+full-chain cost. `epoll` is available only as a nextPas backend
+characterization via `--nextpas-backend epoll`; Go/Rust comparator rows stay on
+their own runtimes and should not be read as an epoll comparison. The default
+Rust comparator is a std-only microbaseline labeled `impl=rust_std` with
+`rust_profile=std_only`; it is still not a Rust ecosystem benchmark by itself.
 
 To include the optional Cargo-based Hyper/Tokio HTTP/1.1 comparator, pass
 `--include-hyper`:
