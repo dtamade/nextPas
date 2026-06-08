@@ -44,6 +44,8 @@ function UuidParse(const AStr: string): TUuid; inline;
 function UuidIsValid(const AStr: string): Boolean; inline;
 function Ulid: TUlidString; inline;
 function UlidFromTimestamp(const ATimestampMs: UInt64): TUlidString; inline;
+function UlidIsValid(const AStr: string): Boolean; inline;
+function UlidTimestampMs(const AStr: string): UInt64; inline;
 function NanoId: TNanoIdString; inline;
 function NanoIdCustom(const AAlphabet: string; const ASize: Integer): TNanoIdString; inline;
 function KsuidNew: string; inline;
@@ -89,6 +91,16 @@ end;
 function UlidFromTimestamp(const ATimestampMs: UInt64): TUlidString;
 begin
   Result := nextpas.core.id.ulid.UlidFromTimestamp(ATimestampMs);
+end;
+
+function UlidIsValid(const AStr: string): Boolean;
+begin
+  Result := nextpas.core.id.ulid.UlidIsValid(AStr);
+end;
+
+function UlidTimestampMs(const AStr: string): UInt64;
+begin
+  Result := nextpas.core.id.ulid.UlidTimestampMs(AStr);
 end;
 
 function NanoId: TNanoIdString;
