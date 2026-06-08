@@ -556,16 +556,37 @@ end;
 function THttpClient.Send(const AReq: IHttpRequest): IHttpResponse;
 var
   LRequestBodyCloseAttempted: Boolean;
+  LResp: IHttpResponse;
 begin
   if AReq = nil then
     raise EArgumentError.Create('HTTP request is nil');
   LRequestBodyCloseAttempted := False;
+  LResp := nil;
   try
-    Result := DoRequest(AReq, FOptions.MaxRedirects, LRequestBodyCloseAttempted);
-  finally
+    LResp := DoRequest(AReq, FOptions.MaxRedirects, LRequestBodyCloseAttempted);
+  except
     if not LRequestBodyCloseAttempted then
-      CloseRequestBody(AReq.Body);
+      try
+        CloseRequestBody(AReq.Body);
+      except
+        // Preserve the transport or redirect error that made cleanup necessary.
+      end;
+    raise;
   end;
+
+  if not LRequestBodyCloseAttempted then
+    try
+      CloseRequestBody(AReq.Body);
+    except
+      if LResp <> nil then
+        try
+          ReleaseResponseBody(LResp);
+        except
+          // Preserve the request-body close failure that made the response unreachable.
+        end;
+      raise;
+    end;
+  Result := LResp;
 end;
 
 procedure THttpClient.CloseIdleConnections;

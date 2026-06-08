@@ -148,6 +148,17 @@ type
     property Closed: Boolean read FClosed;
   end;
 
+  TCloseFailingResponseBody = class(TInterfacedObject, IReader, IReadCloser)
+  private
+    FClosed: Boolean;
+    FCloseCount: Int32;
+  public
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Close;
+    property Closed: Boolean read FClosed;
+    property CloseCount: Int32 read FCloseCount;
+  end;
+
   TTrackedRequestBody = class(TInterfacedObject, IReader, IReadCloser)
   private
     FData: string;
@@ -174,9 +185,10 @@ type
     FSeenContentLength: Int64;
     FTrackedBodyClosedAtEntry: Boolean;
     FTrackedBodyClosedBeforeReturn: Boolean;
+    FResponseBody: IReader;
   public
     constructor Create(const ATrackedBody: TTrackedRequestBody;
-      const ARaiseAfterRead: Boolean = False);
+      const ARaiseAfterRead: Boolean = False; const AResponseBody: IReader = nil);
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
     property SeenBody: string read FSeenBody;
     property SeenMethod: THttpMethod read FSeenMethod;
@@ -982,6 +994,18 @@ begin
   FClosed := True;
 end;
 
+function TCloseFailingResponseBody.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := 0;
+end;
+
+procedure TCloseFailingResponseBody.Close;
+begin
+  FClosed := True;
+  Inc(FCloseCount);
+  raise EHttpError.Create('response body close failed');
+end;
+
 constructor TTrackedRequestBody.Create(const AData: string;
   const ARaiseOnClose: Boolean);
 begin
@@ -1017,11 +1041,13 @@ begin
 end;
 
 constructor TRequestBodyCaptureTransport.Create(
-  const ATrackedBody: TTrackedRequestBody; const ARaiseAfterRead: Boolean);
+  const ATrackedBody: TTrackedRequestBody; const ARaiseAfterRead: Boolean;
+  const AResponseBody: IReader);
 begin
   inherited Create;
   FTrackedBody := ATrackedBody;
   FRaiseAfterRead := ARaiseAfterRead;
+  FResponseBody := AResponseBody;
 end;
 
 function TRequestBodyCaptureTransport.RoundTrip(
@@ -1045,7 +1071,7 @@ begin
 
   LHeaders := NewHttpHeaders;
   LHeaders.SetHeader('content-length', '0');
-  Result := NewResponse(HTTP_STATUS_OK, LHeaders, nil);
+  Result := NewResponse(HTTP_STATUS_OK, LHeaders, FResponseBody);
 end;
 
 constructor TRedirectBodyReleaseTransport.Create;
@@ -2950,6 +2976,120 @@ begin
     'transport error path still exposes the request body to the transport');
   Check(LBody.Closed,
     'Send closes close-capable request body when transport raises');
+end;
+
+procedure TestClientReleasesResponseBodyWhenRequestBodyCloseFails;
+var
+  LReqBody: TTrackedRequestBody;
+  LRespBody: TRedirectTrackedBody;
+  LTransportObj: TRequestBodyCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LRaised: Boolean;
+begin
+  LReqBody := TTrackedRequestBody.Create('payload', True);
+  LRespBody := TRedirectTrackedBody.Create('discard');
+  LTransportObj := TRequestBodyCaptureTransport.Create(LReqBody, False,
+    LRespBody as IReader);
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
+    LReqBody as IReader, Int64(7));
+
+  LRaised := False;
+  try
+    LClient.Send(LReq);
+  except
+    on E: EHttpError do
+      LRaised := E.Message = 'request body close failed';
+  end;
+
+  Check(LRaised, 'request body close error surfaces to caller');
+  CheckEqual(Int64(1), Int64(LReqBody.CloseCount),
+    'Send tries to close request body once');
+  CheckEqual('payload', LTransportObj.SeenBody,
+    'transport still receives request body before close failure');
+  Check(LRespBody.Closed,
+    'Send releases returned response body before surfacing request close error');
+end;
+
+procedure TestClientKeepsRequestBodyCloseErrorWhenResponseReleaseFails;
+var
+  LReqBody: TTrackedRequestBody;
+  LRespBody: TCloseFailingResponseBody;
+  LTransportObj: TRequestBodyCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LRaisedRequestCloseError: Boolean;
+  LRaisedResponseCloseError: Boolean;
+begin
+  LReqBody := TTrackedRequestBody.Create('payload', True);
+  LRespBody := TCloseFailingResponseBody.Create;
+  LTransportObj := TRequestBodyCaptureTransport.Create(LReqBody, False,
+    LRespBody as IReader);
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
+    LReqBody as IReader, Int64(7));
+
+  LRaisedRequestCloseError := False;
+  LRaisedResponseCloseError := False;
+  try
+    LClient.Send(LReq);
+  except
+    on E: EHttpError do
+    begin
+      LRaisedRequestCloseError := E.Message = 'request body close failed';
+      LRaisedResponseCloseError := E.Message = 'response body close failed';
+    end;
+  end;
+
+  Check(LRaisedRequestCloseError,
+    'request body close error remains the surfaced error');
+  Check(not LRaisedResponseCloseError,
+    'response release failure does not replace request close error');
+  CheckEqual(Int64(1), Int64(LRespBody.CloseCount),
+    'response body release was still attempted once');
+  Check(LRespBody.Closed, 'response body close was attempted');
+end;
+
+procedure TestClientKeepsTransportErrorWhenRequestBodyCloseFails;
+var
+  LReqBody: TTrackedRequestBody;
+  LTransportObj: TRequestBodyCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LRaisedTransportError: Boolean;
+  LRaisedRequestCloseError: Boolean;
+begin
+  LReqBody := TTrackedRequestBody.Create('payload', True);
+  LTransportObj := TRequestBodyCaptureTransport.Create(LReqBody, True);
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
+    LReqBody as IReader, Int64(7));
+
+  LRaisedTransportError := False;
+  LRaisedRequestCloseError := False;
+  try
+    LClient.Send(LReq);
+  except
+    on E: EHttpError do
+    begin
+      LRaisedTransportError := E.Message = 'request body transport failed';
+      LRaisedRequestCloseError := E.Message = 'request body close failed';
+    end;
+  end;
+
+  Check(LRaisedTransportError,
+    'transport error remains the surfaced error');
+  Check(not LRaisedRequestCloseError,
+    'request body cleanup failure does not replace transport error');
+  CheckEqual(Int64(1), Int64(LReqBody.CloseCount),
+    'request body cleanup was still attempted once');
 end;
 
 procedure TestClientPostReaderClosesSourceBodyAfterBuffering;
@@ -4877,6 +5017,12 @@ begin
     @TestClientClosesCloseCapableRequestBodyAfterSend);
   T.Run('Client Send closes close-capable request body on transport error',
     @TestClientClosesCloseCapableRequestBodyOnTransportError);
+  T.Run('Client Send releases response body when request body close fails',
+    @TestClientReleasesResponseBodyWhenRequestBodyCloseFails);
+  T.Run('Client Send keeps request close error when response release fails',
+    @TestClientKeepsRequestBodyCloseErrorWhenResponseReleaseFails);
+  T.Run('Client Send keeps transport error when request body close fails',
+    @TestClientKeepsTransportErrorWhenRequestBodyCloseFails);
   T.Run('Client reader shortcut closes source body after buffering',
     @TestClientPostReaderClosesSourceBodyAfterBuffering);
   T.Run('Client shortcut body overloads omit empty content-type',
