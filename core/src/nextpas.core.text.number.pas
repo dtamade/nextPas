@@ -320,6 +320,7 @@ var
   LExp: Int32;
   LExpNeg: Boolean;
   LExpVal: Int32;
+  LHasExpDigit: Boolean;
   LHasDot: Boolean;
   LFracDigits: Int32;
 begin
@@ -340,13 +341,13 @@ begin
   if LPos >= ALen then
     Exit(False);
 
-  if (ALen - LPos >= 3) and (AData[LPos] = 'N') and
+  if (ALen - LPos = 3) and (AData[LPos] = 'N') and
      (AData[LPos+1] = 'a') and (AData[LPos+2] = 'N') then
   begin
     AValue := 0.0 / 0.0;
     Exit(True);
   end;
-  if (ALen - LPos >= 8) and (AData[LPos] = 'I') and (AData[LPos+1] = 'n') and
+  if (ALen - LPos = 8) and (AData[LPos] = 'I') and (AData[LPos+1] = 'n') and
      (AData[LPos+2] = 'f') and (AData[LPos+3] = 'i') and (AData[LPos+4] = 'n') and
      (AData[LPos+5] = 'i') and (AData[LPos+6] = 't') and (AData[LPos+7] = 'y') then
   begin
@@ -398,13 +399,17 @@ begin
       if AData[LPos] = '-' then begin LExpNeg := True; Inc(LPos); end
       else if AData[LPos] = '+' then Inc(LPos);
     end;
+    LHasExpDigit := False;
     while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
     begin
+      LHasExpDigit := True;
       LExpVal := LExpVal * 10 + (Byte(AData[LPos]) - Ord('0'));
       if LExpVal > 999 then
         Exit(False);
       Inc(LPos);
     end;
+    if not LHasExpDigit then
+      Exit(False);
     if LExpNeg then
       LExpVal := -LExpVal;
   end;

@@ -206,6 +206,10 @@ begin
 
   Check(not ParseDouble(PAnsiChar(''), 0, V), 'empty');
   Check(not ParseDouble(PAnsiChar('abc'), 3, V), 'non-number');
+  Check(not ParseDouble(PAnsiChar('1e'), 2, V), 'missing exponent digits');
+  Check(not ParseDouble(PAnsiChar('1e+'), 3, V), 'missing signed exponent digits');
+  Check(not ParseDouble(PAnsiChar('NaNx'), 4, V), 'NaN trailing input');
+  Check(not ParseDouble(PAnsiChar('Infinityx'), 9, V), 'Infinity trailing input');
 end;
 
 procedure TestFloatRoundTrip;
