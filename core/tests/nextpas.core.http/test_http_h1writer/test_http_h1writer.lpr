@@ -1170,6 +1170,74 @@ begin
   LRW.Free;
 end;
 
+procedure TestContentLengthBodyRejectsWritePastDeclaredLength;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LBody: string;
+  LExtra: string;
+  LBefore: string;
+  LRaised: Boolean;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.SetHeader('Content-Length', '5');
+    LBody := 'hello';
+    CheckEqual(Int64(5), Int64(LRW.Write(LBody[1], SizeUInt(Length(LBody)))),
+      'declared content-length body write succeeds');
+    LBefore := LW.GetOutput;
+
+    LExtra := '!';
+    LRaised := False;
+    try
+      LRW.Write(LExtra[1], SizeUInt(Length(LExtra)));
+    except
+      on E: EHttpError do
+        LRaised := True;
+    end;
+
+    Check(LRaised, 'content-length writer rejects body beyond declared length');
+    CheckEqual(LBefore, LW.GetOutput,
+      'content-length overrun does not append extra wire bytes');
+  finally
+    LRW.Free;
+  end;
+end;
+
+procedure TestContentLengthFlushRejectsShortDeclaredBody;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LBody: string;
+  LBefore: string;
+  LRaised: Boolean;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.SetHeader('Content-Length', '5');
+    LBody := 'hell';
+    CheckEqual(Int64(4), Int64(LRW.Write(LBody[1], SizeUInt(Length(LBody)))),
+      'short content-length body prefix writes');
+    LBefore := LW.GetOutput;
+
+    LRaised := False;
+    try
+      LRW.Flush;
+    except
+      on E: EHttpError do
+        LRaised := True;
+    end;
+
+    Check(LRaised, 'content-length writer rejects flush before declared body is complete');
+    CheckEqual(LBefore, LW.GetOutput,
+      'short content-length flush does not append framing bytes');
+  finally
+    LRW.Free;
+  end;
+end;
+
 procedure TestChunkedBodyWithShortWriterWritesCompleteChunk;
 var
   LW: TShortWriter;
@@ -1372,6 +1440,10 @@ begin
     @TestLargeHeaderBlockFallsBackAndPreservesWireBytes);
   T.Run('Content-Length body with short writer writes all bytes',
     @TestContentLengthBodyWithShortWriterWritesAllBytes);
+  T.Run('Content-Length body rejects writes past declared length',
+    @TestContentLengthBodyRejectsWritePastDeclaredLength);
+  T.Run('Content-Length flush rejects short declared body',
+    @TestContentLengthFlushRejectsShortDeclaredBody);
   T.Run('Chunked body with short writer writes complete chunk',
     @TestChunkedBodyWithShortWriterWritesCompleteChunk);
   T.Run('Outbound buffer drains all bytes through short writer',
