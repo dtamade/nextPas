@@ -259,6 +259,57 @@ begin
   Check(IsSingleNaN(Sqrt(Single(-1.0))), 'Sqrt(Single -1)=NaN');
 end;
 
+procedure CheckLogDomainDouble(const AName: string; const ALogPositiveZero,
+  ALogNegativeZero, ALogNegative, ALogNegativeInfinity, ALogNaN,
+  ALogPositiveInfinity: Double);
+begin
+  Check(IsDoubleNegativeInfinity(ALogPositiveZero), AName + '(+0)=-Inf');
+  Check(IsDoubleNegativeInfinity(ALogNegativeZero), AName + '(-0)=-Inf');
+  Check(IsDoubleNaN(ALogNegative), AName + '(negative finite)=NaN');
+  Check(IsDoubleNaN(ALogNegativeInfinity), AName + '(-Inf)=NaN');
+  Check(IsDoubleNaN(ALogNaN), AName + '(NaN)=NaN');
+  Check(IsDoublePositiveInfinity(ALogPositiveInfinity), AName + '(+Inf)=+Inf');
+end;
+
+procedure CheckLogDomainSingle(const AName: string; const ALogPositiveZero,
+  ALogNegativeZero, ALogNegative, ALogNegativeInfinity, ALogNaN,
+  ALogPositiveInfinity: Single);
+begin
+  Check(IsSingleNegativeInfinity(ALogPositiveZero), AName + '(+0)=-Inf');
+  Check(IsSingleNegativeInfinity(ALogNegativeZero), AName + '(-0)=-Inf');
+  Check(IsSingleNaN(ALogNegative), AName + '(negative finite)=NaN');
+  Check(IsSingleNaN(ALogNegativeInfinity), AName + '(-Inf)=NaN');
+  Check(IsSingleNaN(ALogNaN), AName + '(NaN)=NaN');
+  Check(IsSinglePositiveInfinity(ALogPositiveInfinity), AName + '(+Inf)=+Inf');
+end;
+
+procedure TestLogDomainSignedZeroContracts;
+begin
+  Check(IsDoubleNegativeInfinity(Ln(0.0)), 'Ln(+0)=-Inf');
+  Check(IsDoubleNegativeInfinity(Ln(DoubleNegativeZero)), 'Ln(-0)=-Inf');
+  Check(IsDoubleNaN(Ln(-1.0)), 'Ln(negative finite)=NaN');
+  Check(IsDoubleNaN(Ln(-DoubleInfinity)), 'Ln(-Inf)=NaN');
+  Check(IsDoubleNaN(Ln(DoubleNaN)), 'Ln(NaN)=NaN');
+  Check(IsDoublePositiveInfinity(Ln(DoubleInfinity)), 'Ln(+Inf)=+Inf');
+
+  Check(IsSingleNegativeInfinity(Ln(Single(0.0))), 'Ln(Single +0)=-Inf');
+  Check(IsSingleNegativeInfinity(Ln(SingleNegativeZero)), 'Ln(Single -0)=-Inf');
+  Check(IsSingleNaN(Ln(Single(-1.0))), 'Ln(Single negative finite)=NaN');
+  Check(IsSingleNaN(Ln(-SingleInfinity)), 'Ln(Single -Inf)=NaN');
+  Check(IsSingleNaN(Ln(SingleNaN)), 'Ln(Single NaN)=NaN');
+  Check(IsSinglePositiveInfinity(Ln(SingleInfinity)), 'Ln(Single +Inf)=+Inf');
+
+  CheckLogDomainDouble('Log2', Log2(0.0), Log2(DoubleNegativeZero),
+    Log2(-1.0), Log2(-DoubleInfinity), Log2(DoubleNaN), Log2(DoubleInfinity));
+  CheckLogDomainSingle('Log2 Single', Log2(Single(0.0)), Log2(SingleNegativeZero),
+    Log2(Single(-1.0)), Log2(-SingleInfinity), Log2(SingleNaN), Log2(SingleInfinity));
+
+  CheckLogDomainDouble('Log10', Log10(0.0), Log10(DoubleNegativeZero),
+    Log10(-1.0), Log10(-DoubleInfinity), Log10(DoubleNaN), Log10(DoubleInfinity));
+  CheckLogDomainSingle('Log10 Single', Log10(Single(0.0)), Log10(SingleNegativeZero),
+    Log10(Single(-1.0)), Log10(-SingleInfinity), Log10(SingleNaN), Log10(SingleInfinity));
+end;
+
 procedure TestPowerEdgeContracts;
 begin
   CheckNear(1024.0, Power(2.0, 10.0), 0.001, 'Power(2,10)=1024');
@@ -308,6 +359,7 @@ begin
   T.Run('ArcTan2 special cases', @TestArcTan2SpecialCases);
   T.Run('ArcTan2 signed zero contracts', @TestArcTan2SignedZeroContracts);
   T.Run('exp/log/sqrt contracts', @TestExpLogAndSqrtContracts);
+  T.Run('log domain signed zero contracts', @TestLogDomainSignedZeroContracts);
   T.Run('power edge contracts', @TestPowerEdgeContracts);
   T.Summary;
 end.

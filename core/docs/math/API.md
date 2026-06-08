@@ -120,6 +120,8 @@ Trig helpers:
 `-0`, and negative odd exponents return negative infinity. Non-odd zero-base exponents follow the
 positive-zero / positive-infinity zero-base behavior. Except for exponent `0`, a NaN exponent takes
 priority over zero-base handling, so `0^NaN` and `-0^NaN` return NaN.
+`Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite
+values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`.
 
 Most scalar and trig helpers have both `Single` and `Double` overloads. Integer helper overloads are
 limited to the signed and unsigned sizes declared in the source interface.

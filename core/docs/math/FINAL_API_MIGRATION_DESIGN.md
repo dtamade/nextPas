@@ -160,6 +160,9 @@ easing/random submodules; the facade uses aliases and inline forwarding.
 - `ArcSin`, `ArcCos`, `ArcTan`, `ArcTan2`
 - `Exp`, `Ln`, `Log2`, `Log10`, `Power`, `Sqrt`
 
+`Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite
+values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`.
+
 Degree/radian conversion belongs to `nextpas.core.math.scalar`; the root facade re-exports that
 scalar owner.
 

@@ -89,6 +89,8 @@ boundary, so the common-symbol namespace contract no longer depends on a direct 
 
 `Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.
 
+`Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`.
+
 ## Vector, Matrix, And Quaternion Conventions
 
 Math value types are packed records with value semantics. Vectors expose named components and `Data`

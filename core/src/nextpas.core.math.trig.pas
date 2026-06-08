@@ -204,11 +204,19 @@ end;
 
 function Ln(const AX: Single): Single;
 begin
-  Result := Single(System.Ln(Double(AX)));
+  Result := Single(Ln(Double(AX)));
 end;
 
 function Ln(const AX: Double): Double;
 begin
+  if DoubleIsNaN(AX) then
+    Exit(DoubleQuietNaN);
+  if AX < 0.0 then
+    Exit(DoubleQuietNaN);
+  if AX = 0.0 then
+    Exit(DoubleSignedInfinity(True));
+  if DoubleIsInfinite(AX) then
+    Exit(AX);
   Result := System.Ln(AX);
 end;
 
@@ -219,6 +227,14 @@ end;
 
 function Log2(const AX: Double): Double;
 begin
+  if DoubleIsNaN(AX) then
+    Exit(DoubleQuietNaN);
+  if AX < 0.0 then
+    Exit(DoubleQuietNaN);
+  if AX = 0.0 then
+    Exit(DoubleSignedInfinity(True));
+  if DoubleIsInfinite(AX) then
+    Exit(AX);
   Result := Ln(AX) / 0.69314718055994530942;
 end;
 
@@ -229,6 +245,14 @@ end;
 
 function Log10(const AX: Double): Double;
 begin
+  if DoubleIsNaN(AX) then
+    Exit(DoubleQuietNaN);
+  if AX < 0.0 then
+    Exit(DoubleQuietNaN);
+  if AX = 0.0 then
+    Exit(DoubleSignedInfinity(True));
+  if DoubleIsInfinite(AX) then
+    Exit(AX);
   Result := Ln(AX) / 2.30258509299404568402;
 end;
 
