@@ -985,6 +985,7 @@ REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
 )
 BENCH_SIMD_SEAM_PATH = "benchmarks/nextpas.core.math/bench_simd_seam/bench_simd_seam.lpr"
 SIMD_MATHUTIL_PATH = "src/nextpas.core.simd.mathutil.pas"
+MATH_IMPL_SIMD_PATH = "src/nextpas.core.math.impl.simd.pas"
 TRIG_HOST_COMPILE_GATE_MAKEFILE_PATH = (
     "tests/nextpas.core.math/test_trig_host_compile_gate/Makefile"
 )
@@ -1100,6 +1101,78 @@ PRIVATE_SIMD_RE = re.compile(
     r"RebindSimdDataPlane|"
     r"TryGetRegisteredBackendDispatchTable"
     r")\b",
+    re.IGNORECASE,
+)
+MATH_IMPL_SIMD_ALLOWED_INTERFACE_USES = {
+    "nextpas.core.math.mat",
+    "nextpas.core.math.quat",
+    "nextpas.core.math.vec",
+}
+MATH_IMPL_SIMD_ALLOWED_PUBLIC_ROUTINES = {
+    (
+        "simdvec4fadd",
+        "function",
+        (("const", "tvec4f"), ("const", "tvec4f")),
+        "tvec4f",
+    ),
+    (
+        "simdvec4fsub",
+        "function",
+        (("const", "tvec4f"), ("const", "tvec4f")),
+        "tvec4f",
+    ),
+    (
+        "simdvec4fmulcomponents",
+        "function",
+        (("const", "tvec4f"), ("const", "tvec4f")),
+        "tvec4f",
+    ),
+    (
+        "simdvec4fscale",
+        "function",
+        (("const", "tvec4f"), ("const", "single")),
+        "tvec4f",
+    ),
+    (
+        "simdvec4fdot",
+        "function",
+        (("const", "tvec4f"), ("const", "tvec4f")),
+        "single",
+    ),
+    (
+        "simdvec4flength",
+        "function",
+        (("const", "tvec4f"),),
+        "single",
+    ),
+    (
+        "simdvec3fdot",
+        "function",
+        (("const", "tvec3f"), ("const", "tvec3f")),
+        "single",
+    ),
+    (
+        "simdvec3fcross",
+        "function",
+        (("const", "tvec3f"), ("const", "tvec3f")),
+        "tvec3f",
+    ),
+    (
+        "simdmat4fmulvec4f",
+        "function",
+        (("const", "tmat4f"), ("const", "tvec4f")),
+        "tvec4f",
+    ),
+    (
+        "simdquatfrotate",
+        "function",
+        (("const", "tquatf"), ("const", "tvec3f")),
+        "tvec3f",
+    ),
+}
+MATH_IMPL_SIMD_PUBLIC_BACKEND_TYPE_RE = re.compile(
+    r"\b(?:[PT]?Vec(?:F|I|U)[0-9]+x[0-9]+|[PT]?Mask[A-Za-z0-9_]*|"
+    r"P?TSimd[A-Za-z0-9_]*)\b",
     re.IGNORECASE,
 )
 PUBLIC_IMPL_RE = re.compile(
@@ -2079,6 +2152,68 @@ def scan_math_impl_simd_facade_only_uses(root: Path) -> list[Finding]:
     return findings
 
 
+def scan_math_impl_simd_public_seam(root: Path, path: Path, text: str) -> list[Finding]:
+    findings: list[Finding] = []
+    if relative(path, root) != MATH_IMPL_SIMD_PATH:
+        return findings
+
+    interface_body, line_offset = interface_body_text_with_line_offset(text)
+    for unit, line in active_uses_units_with_lines(interface_body, line_offset):
+        if unit.startswith("nextpas.core.simd"):
+            add_finding(
+                findings,
+                "math-impl-simd-public-simd-interface-use:" + unit,
+                root,
+                path,
+                line,
+                original_line(text, line),
+            )
+            continue
+        if unit not in MATH_IMPL_SIMD_ALLOWED_INTERFACE_USES:
+            add_finding(
+                findings,
+                "math-impl-simd-unplanned-public-interface-use:" + unit,
+                root,
+                path,
+                line,
+                original_line(text, line),
+            )
+
+    for match in MATH_IMPL_SIMD_PUBLIC_BACKEND_TYPE_RE.finditer(interface_body):
+        line = line_offset + line_no_at(interface_body, match.start())
+        add_finding(
+            findings,
+            "math-impl-simd-public-simd-type-leak",
+            root,
+            path,
+            line,
+            original_line(text, line),
+        )
+
+    for routine in extract_public_routines(text):
+        if routine.key not in MATH_IMPL_SIMD_ALLOWED_PUBLIC_ROUTINES:
+            add_finding(
+                findings,
+                "math-impl-simd-unplanned-public-routine:" + routine.name,
+                root,
+                path,
+                routine.line,
+                original_line(text, routine.line),
+            )
+
+    for alias in extract_public_type_aliases(text):
+        add_finding(
+            findings,
+            "math-impl-simd-unplanned-public-type:" + alias.name,
+            root,
+            path,
+            alias.line,
+            original_line(text, alias.line),
+        )
+
+    return findings
+
+
 def scan_public_impl_consumers(root: Path, path: Path, text: str) -> list[Finding]:
     findings: list[Finding] = []
     rel = relative(path, root)
@@ -2763,6 +2898,76 @@ def run_math_impl_simd_facade_only_uses_self_tests() -> None:
                     + " got "
                     + ", ".join(sorted(rules))
                 )
+
+
+def run_math_impl_simd_public_seam_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        path = root / MATH_IMPL_SIMD_PATH
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "unit nextpas.core.math.impl.simd;\n"
+            "interface\n"
+            "uses\n"
+            "  nextpas.core.simd,\n"
+            "  nextpas.core.math.vec;\n"
+            "function SimdVec4fNormalize(const AValue: TVec4f): TVec4f;\n"
+            "function SimdRawAdd(const AA, AB: TVecF32x4): TVecF32x4;\n"
+            "implementation\n"
+            "uses nextpas.core.simd;\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+
+        findings = scan_math_impl_simd_public_seam(
+            root,
+            path,
+            path.read_text(encoding="utf-8"),
+        )
+        rules = {finding.rule for finding in findings}
+        expected_rules = {
+            "math-impl-simd-public-simd-interface-use:nextpas.core.simd",
+            "math-impl-simd-unplanned-public-routine:SimdVec4fNormalize",
+            "math-impl-simd-public-simd-type-leak",
+        }
+        if not expected_rules.issubset(rules):
+            raise AssertionError(
+                "math-impl-simd-public-seam self-test expected "
+                + ", ".join(sorted(expected_rules))
+                + " got "
+                + ", ".join(sorted(rules))
+            )
+
+        path.write_text(
+            "unit nextpas.core.math.impl.simd;\n"
+            "interface\n"
+            "uses\n"
+            "  nextpas.core.math.mat,\n"
+            "  nextpas.core.math.quat,\n"
+            "  nextpas.core.math.vec;\n"
+            "function SimdVec4fAdd(const AA, AB: TVec4f): TVec4f;\n"
+            "function SimdVec4fSub(const AA, AB: TVec4f): TVec4f;\n"
+            "function SimdVec4fMulComponents(const AA, AB: TVec4f): TVec4f;\n"
+            "function SimdVec4fScale(const AValue: TVec4f; const AScalar: Single): TVec4f;\n"
+            "function SimdVec4fDot(const AA, AB: TVec4f): Single;\n"
+            "function SimdVec4fLength(const AValue: TVec4f): Single;\n"
+            "function SimdVec3fDot(const AA, AB: TVec3f): Single;\n"
+            "function SimdVec3fCross(const AA, AB: TVec3f): TVec3f;\n"
+            "function SimdMat4fMulVec4f(const AMatrix: TMat4f; const AVector: TVec4f): TVec4f;\n"
+            "function SimdQuatfRotate(const AQuat: TQuatf; const AVector: TVec3f): TVec3f;\n"
+            "implementation\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        findings = scan_math_impl_simd_public_seam(
+            root,
+            path,
+            path.read_text(encoding="utf-8"),
+        )
+        if findings:
+            raise AssertionError(
+                "math-impl-simd-public-seam self-test expected no findings"
+            )
 
 
 def run_forbidden_simd_mathutil_bare_name_self_tests() -> None:
@@ -4583,6 +4788,7 @@ def build_report(root: Path) -> Report:
         findings.extend(scan_legacy_production_names(root, path, text))
         if relative(path, root) != SIMD_MATHUTIL_PATH:
             findings.extend(scan_private_simd(root, path, text))
+        findings.extend(scan_math_impl_simd_public_seam(root, path, text))
         findings.extend(scan_public_math_source_simd_wiring(root, path, text))
         findings.extend(scan_forbidden_trig_scalar_names(root, path, text))
         findings.extend(scan_forbidden_simd_mathutil_bare_names(root, path, text))
@@ -4649,6 +4855,7 @@ def main() -> int:
         run_facade_type_alias_compile_surface_self_tests()
         run_public_math_source_simd_wiring_self_tests()
         run_math_impl_simd_facade_only_uses_self_tests()
+        run_math_impl_simd_public_seam_self_tests()
         run_forbidden_simd_mathutil_bare_name_self_tests()
         run_forbidden_native_math_linking_scope_self_tests()
         run_legacy_production_name_self_tests()
