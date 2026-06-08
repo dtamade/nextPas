@@ -124,6 +124,16 @@ begin
   CheckEqual(Int64(50), Int64(ScanFindByte2(@Buf[0], 64, Ord(':'), Ord(';'))), 'colon at 50');
 end;
 
+procedure TestFindSubstringCIFoldsNeedleCase;
+begin
+  CheckEqual(Int64(1),
+    Int64(ScanFindSubstringCI(PAnsiChar('abcDEF'), 6, PAnsiChar('BCD'), 3)),
+    'uppercase needle should match lowercase haystack');
+  CheckEqual(Int64(1),
+    Int64(ScanFindSubstringCI(PAnsiChar('ABCDEF'), 6, PAnsiChar('bCd'), 3)),
+    'mixed-case needle should match uppercase haystack');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.text.scan');
   T.Run('FindByte', @TestFindByte);
@@ -139,5 +149,6 @@ begin
   T.Run('ViewSkipWhitespace', @TestViewSkipWhitespace);
   T.Run('ViewMatchLiteral', @TestViewMatchLiteral);
   T.Run('FindByte2 long', @TestFindByte2Long);
+  T.Run('FindSubstringCI folds needle case', @TestFindSubstringCIFoldsNeedleCase);
   T.Summary;
 end.

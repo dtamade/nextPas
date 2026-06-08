@@ -364,14 +364,27 @@ begin
   Result := -1;
 end;
 
+function ASCIIToLower(const ACh: Byte): Byte; inline;
+begin
+  Result := ACh;
+  if (Result >= Ord('A')) and (Result <= Ord('Z')) then
+    Inc(Result, 32);
+end;
+
+function ASCIIToUpper(const ACh: Byte): Byte; inline;
+begin
+  Result := ACh;
+  if (Result >= Ord('a')) and (Result <= Ord('z')) then
+    Dec(Result, 32);
+end;
+
 function CIMatch(const AData, ANeedle: PAnsiChar; ALen: SizeUInt): Boolean; inline;
-var K: SizeUInt; LCh: Byte;
+var K: SizeUInt;
 begin
   for K := 0 to ALen - 1 do
   begin
-    LCh := Byte(AData[K]);
-    if (LCh >= Ord('A')) and (LCh <= Ord('Z')) then LCh := LCh + 32;
-    if LCh <> Byte(ANeedle[K]) then Exit(False);
+    if ASCIIToLower(Byte(AData[K])) <> ASCIIToLower(Byte(ANeedle[K])) then
+      Exit(False);
   end;
   Result := True;
 end;
@@ -389,12 +402,10 @@ begin
   if ANeedleLen = 0 then Exit(0);
   if ANeedleLen > ADataLen then Exit(-1);
 
-  LFirstLo := Byte(ANeedle[0]);
-  LFirstHi := LFirstLo;
-  if (LFirstLo >= Ord('a')) and (LFirstLo <= Ord('z')) then LFirstHi := LFirstLo - 32;
-  LLastLo := Byte(ANeedle[ANeedleLen - 1]);
-  LLastHi := LLastLo;
-  if (LLastLo >= Ord('a')) and (LLastLo <= Ord('z')) then LLastHi := LLastLo - 32;
+  LFirstLo := ASCIIToLower(Byte(ANeedle[0]));
+  LFirstHi := ASCIIToUpper(Byte(ANeedle[0]));
+  LLastLo := ASCIIToLower(Byte(ANeedle[ANeedleLen - 1]));
+  LLastHi := ASCIIToUpper(Byte(ANeedle[ANeedleLen - 1]));
   LSearchLen := ADataLen - ANeedleLen + 1;
 
   LPos := 0;
