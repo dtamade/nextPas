@@ -35,6 +35,7 @@ const
   H1WriterUnitPath = 'src/nextpas.core.http.impl.h1.writer.pas';
   ReadmeDocPath = 'docs/http/README.md';
   BenchmarksDocPath = 'docs/http/BENCHMARKS.md';
+  ApiCoverageDocPath = 'docs/http/API_COVERAGE.md';
   BenchFullchainUnitPath =
     'benchmarks/nextpas.core.http/bench_fullchain/bench_fullchain.lpr';
   H1ParserBenchMakefilePath =
@@ -1784,6 +1785,41 @@ begin
     'README fullchain quickstart should document no-match filter behavior');
   CheckContains(LFullchainBlock, 'exits non-zero',
     'README fullchain quickstart should document no-match exit status');
+end;
+
+procedure TestApiCoverageBenchmarkEvidenceSummarySourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+  LBlock: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, ApiCoverageDocPath));
+  LBlock := ExtractSourceBlock(LSource,
+    '- `bench_http_server` benchmark evidence summary:',
+    '- `test_http_benchmarks` 现在还用 source-contract smoke 锁住 H1 server policy',
+    'API_COVERAGE benchmark evidence summary block');
+
+  CheckContains(LBlock, '`BENCHMARKS.md`',
+    'API coverage benchmark summary should point to BENCHMARKS.md');
+  CheckContains(LBlock, '`impl=rust_std`',
+    'API coverage benchmark summary should preserve rust std marker');
+  CheckContains(LBlock, '`rust_profile=std_only`',
+    'API coverage benchmark summary should preserve rust std profile marker');
+  CheckContains(LBlock, '`impl=rust_hyper`',
+    'API coverage benchmark summary should preserve hyper marker');
+  CheckContains(LBlock, '`rust_profile=hyper_tokio`',
+    'API coverage benchmark summary should preserve hyper profile marker');
+  CheckContains(LBlock, 'not a permanent ranking',
+    'API coverage benchmark summary should avoid ranking claims');
+  CheckNotContains(LBlock, '`--requests 8 --threads 1 --output ...`',
+    'API coverage benchmark summary should not duplicate runner command matrix');
+  CheckNotContains(LBlock, '`--workload url_path`、`--workload adapter_no_url`、`--workload response_1k`',
+    'API coverage benchmark summary should not enumerate workload smoke matrix');
+  CheckNotContains(LBlock, '逐次 `run=...`',
+    'API coverage benchmark summary should not duplicate multi-run details');
+  CheckNotContains(LBlock, '自定义 `NEXTPAS_FLAG_MATRIX_OUTPUT_DIR`',
+    'API coverage benchmark summary should not duplicate H1 flag matrix details');
 end;
 
 procedure TestH1ParserLlhttpRootAliasSourceContract;
@@ -4787,6 +4823,8 @@ begin
     @TestBenchmarkDocsAdapterNoUrlFastPathSourceContract);
   T.Run('README fullchain benchmark truth source contract',
     @TestReadmeFullchainBenchmarkTruthSourceContract);
+  T.Run('API coverage benchmark evidence summary source contract',
+    @TestApiCoverageBenchmarkEvidenceSummarySourceContract);
   T.Run('H1 parser llhttp root alias source contract',
     @TestH1ParserLlhttpRootAliasSourceContract);
   T.Run('benchmark docs H1 parser runner truth source contract',
