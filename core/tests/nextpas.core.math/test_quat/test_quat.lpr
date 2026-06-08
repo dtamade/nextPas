@@ -112,6 +112,14 @@ begin
   Result := LValue.Value;
 end;
 
+function SingleNegativeInfinity: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $FF800000;
+  Result := LValue.Value;
+end;
+
 function SingleMaxFinite: Single;
 var
   LValue: TSingleBitCast;
@@ -133,6 +141,14 @@ var
   LValue: TDoubleBitCast;
 begin
   LValue.Bits := $7FF0000000000000;
+  Result := LValue.Value;
+end;
+
+function DoubleNegativeInfinity: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := QWord($FFF0000000000000);
   Result := LValue.Value;
 end;
 
@@ -1141,6 +1157,32 @@ begin
     'TQuatd multiplication is non-commutative');
 end;
 
+procedure TestQuaternionEqualsNonFiniteComparisonContracts;
+var
+  Qf: TQuatf;
+  Qd: TQuatd;
+begin
+  Qf := TQuatf.Identity;
+  Qf.X := SingleNaN;
+  Check(not TQuatf.Equals(Qf, Qf, Single(0.0)), 'TQuatf Equals rejects NaN components');
+  Qf.X := SingleInfinity;
+  Check(TQuatf.Equals(Qf, Qf, Single(0.0)), 'TQuatf Equals accepts matching infinity');
+  Check(not TQuatf.Equals(Qf, TQuatf.Identity, Single(0.0)), 'TQuatf Equals rejects finite vs infinity');
+  Check(not TQuatf.Equals(TQuatf.Identity, TQuatf.Identity, SingleNaN), 'TQuatf Equals rejects NaN epsilon');
+  Check(not TQuatf.Equals(TQuatf.Identity, TQuatf.Identity, SingleNegativeInfinity),
+    'TQuatf Equals rejects negative infinite epsilon');
+
+  Qd := TQuatd.Identity;
+  Qd.X := DoubleNaN;
+  Check(not TQuatd.Equals(Qd, Qd, 0.0), 'TQuatd Equals rejects NaN components');
+  Qd.X := DoubleNegativeInfinity;
+  Check(TQuatd.Equals(Qd, Qd, 0.0), 'TQuatd Equals accepts matching infinity');
+  Check(not TQuatd.Equals(Qd, TQuatd.Identity, 0.0), 'TQuatd Equals rejects finite vs infinity');
+  Check(not TQuatd.Equals(TQuatd.Identity, TQuatd.Identity, DoubleNaN), 'TQuatd Equals rejects NaN epsilon');
+  Check(not TQuatd.Equals(TQuatd.Identity, TQuatd.Identity, DoubleNegativeInfinity),
+    'TQuatd Equals rejects negative infinite epsilon');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.quat');
   T.Run('TQuatf contracts', @TestQuatfContracts);
@@ -1173,5 +1215,7 @@ begin
     @TestToAxisAngleOverwritesOutParameters);
   T.Run('Quaternion multiplication is non-commutative and right-first',
     @TestQuaternionMultiplicationIsNonCommutativeAndRightFirst);
+  T.Run('quaternion Equals non-finite comparison contracts',
+    @TestQuaternionEqualsNonFiniteComparisonContracts);
   T.Summary;
 end.

@@ -238,6 +238,7 @@ Quaternion operations:
 Zero quaternion normalization returns identity.
 `Equals` is a component-wise epsilon comparison on quaternion storage. It does not canonicalize
 opposite-sign equivalent rotations, and negative epsilon returns `False`.
+Quaternion `Equals` applies scalar `FloatEquals` component-wise: NaN components and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.
 `Slerp` and `Nlerp` normalize their source quaternions before interpolation, so positive scaling of
 equivalent input rotations does not change the result.
 `Slerp` and `Nlerp` also follow the shortest rotational path: opposite-sign equivalent endpoints are

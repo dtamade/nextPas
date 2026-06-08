@@ -468,8 +468,7 @@ end;
 
 class function TQuatf.Equals(const AA, AB: TQuatf; const AEpsilon: Single): Boolean;
 begin
-  Result := (AEpsilon >= 0.0) and
-    nextpas.core.math.scalar.FloatEquals(AA.X, AB.X, AEpsilon) and
+  Result := nextpas.core.math.scalar.FloatEquals(AA.X, AB.X, AEpsilon) and
     nextpas.core.math.scalar.FloatEquals(AA.Y, AB.Y, AEpsilon) and
     nextpas.core.math.scalar.FloatEquals(AA.Z, AB.Z, AEpsilon) and
     nextpas.core.math.scalar.FloatEquals(AA.W, AB.W, AEpsilon);
@@ -618,8 +617,7 @@ end;
 
 class function TQuatd.Equals(const AA, AB: TQuatd; const AEpsilon: Double): Boolean;
 begin
-  Result := (AEpsilon >= 0.0) and
-    nextpas.core.math.scalar.FloatEquals(AA.X, AB.X, AEpsilon) and
+  Result := nextpas.core.math.scalar.FloatEquals(AA.X, AB.X, AEpsilon) and
     nextpas.core.math.scalar.FloatEquals(AA.Y, AB.Y, AEpsilon) and
     nextpas.core.math.scalar.FloatEquals(AA.Z, AB.Z, AEpsilon) and
     nextpas.core.math.scalar.FloatEquals(AA.W, AB.W, AEpsilon);

@@ -71,6 +71,7 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   matrix fail-close behavior for `TMat3f`, `TMat4f`, `TMat3d`, and `TMat4d`.
 - Matrix `Equals` applies scalar `FloatEquals` element-wise: NaN elements and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.
 - `nextpas.core.math.quat` now provides the final quaternion types: `TQuatf` and `TQuatd`.
+- Quaternion `Equals` applies scalar `FloatEquals` component-wise: NaN components and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.
 - Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
   identity, zero-quaternion `ToRotationMatrix` / `Rotate` identity behavior, `Conjugate`,
   `FromAxisAngle` axis normalization and zero-axis identity behavior,

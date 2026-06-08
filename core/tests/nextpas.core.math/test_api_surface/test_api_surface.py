@@ -443,6 +443,18 @@ REQUIRED_QUAT_DOC_TRUTH = (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
         "Raw quaternion inputs containing NaN or infinity fail fast with `EArgumentError` when used by `Normalize`, `ToAxisAngle`, `ToRotationMatrix`, `Rotate`, or as `Slerp`/`Nlerp` endpoints.",
     ),
+    (
+        "docs/math/README.md",
+        "Quaternion `Equals` applies scalar `FloatEquals` component-wise: NaN components and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.",
+    ),
+    (
+        "docs/math/API.md",
+        "Quaternion `Equals` applies scalar `FloatEquals` component-wise: NaN components and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "Quaternion `Equals` applies scalar `FloatEquals` component-wise: NaN components and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.",
+    ),
 )
 REQUIRED_VEC_QUAT_STABLE_DOC_TRUTH = (
     (
@@ -1760,6 +1772,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("quat-f", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('TQuatf contracts'"),
     RequiredBehaviorTestMarker("quat-d", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('TQuatd contracts'"),
     RequiredBehaviorTestMarker("quat-data-alias-write-through", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('quaternion Data aliases write through'"),
+    RequiredBehaviorTestMarker("quat-equals-non-finite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('quaternion Equals non-finite comparison contracts'"),
     RequiredBehaviorTestMarker("quat-axis-finite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('FromAxisAngle rejects non-finite inputs'"),
     RequiredBehaviorTestMarker("quat-axis-huge-finite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('FromAxisAngle normalizes huge finite axis'"),
     RequiredBehaviorTestMarker("quat-huge-finite-normalize", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('huge finite normalize'"),

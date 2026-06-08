@@ -172,6 +172,7 @@ applies the left operand `A`, and non-collinear rotations are non-commutative.
 rotation does not change the result.
 `Equals` is a component-wise epsilon comparison; it does not canonicalize opposite-sign equivalent
 rotations, and negative epsilon returns `False`.
+Quaternion `Equals` applies scalar `FloatEquals` component-wise: NaN components and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.
 `Slerp` and `Nlerp` follow the shortest rotational path, so opposite-sign equivalent endpoints are
 treated as the same rotation instead of taking the long arc. Finite interpolation factors outside
 `[0, 1]` are not clamped, so callers can deliberately extrapolate through the same formulas. Those
