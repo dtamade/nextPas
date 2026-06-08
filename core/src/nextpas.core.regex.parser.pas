@@ -287,6 +287,8 @@ begin
       Next(P);
       s := '';
       while (Peek(P) >= '0') and (Peek(P) <= '9') do begin s := s + Next(P); end;
+      if (s = '') and (Peek(P) = ',') then
+        raise ERegexCompileError.Create('missing quantifier minimum', P.Pos);
       minV := StrToIntDef(s, 0);
       maxV := minV;
       if Peek(P) = ',' then

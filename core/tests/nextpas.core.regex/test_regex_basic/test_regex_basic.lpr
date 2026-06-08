@@ -665,6 +665,12 @@ begin
   Check(not TRegex.TryCompile('a{3', R, err), 'unclosed quantifier no }');
   Check(Pos('unclosed quantifier', err) > 0, 'unclosed quantifier no } msg');
 
+  Check(not TRegex.TryCompile('a{,2}', R, err), 'missing quantifier min');
+  Check(Pos('quantifier', err) > 0, 'missing quantifier min msg');
+
+  Check(not TRegex.TryCompile('a{,}', R, err), 'missing quantifier min open max');
+  Check(Pos('quantifier', err) > 0, 'missing quantifier min open max msg');
+
   // min > max in quantifier
   Check(not TRegex.TryCompile('a{3,2}', R, err), 'min > max');
   Check(Pos('min exceeds max', err) > 0, 'min > max msg');
