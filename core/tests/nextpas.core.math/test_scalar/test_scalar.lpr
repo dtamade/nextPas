@@ -307,6 +307,14 @@ begin
     'Min Single same negative zero returns negative zero');
   Check(IsSingleNegativeZero(nextpas.core.math.scalar.Max(MakeSingleNegativeZero, MakeSingleNegativeZero)),
     'Max Single same negative zero returns negative zero');
+  Check(IsDoublePositiveZero(nextpas.core.math.scalar.Min(0.0, 0.0)),
+    'Min Double same positive zero returns positive zero');
+  Check(IsDoublePositiveZero(nextpas.core.math.scalar.Max(0.0, 0.0)),
+    'Max Double same positive zero returns positive zero');
+  Check(IsSinglePositiveZero(nextpas.core.math.scalar.Min(Single(0.0), Single(0.0))),
+    'Min Single same positive zero returns positive zero');
+  Check(IsSinglePositiveZero(nextpas.core.math.scalar.Max(Single(0.0), Single(0.0))),
+    'Max Single same positive zero returns positive zero');
 
   CheckNear(0.0, InverseLerp(5.0, 5.0, 99.0), 0.0,
     'InverseLerp Double equal bounds returns 0');
