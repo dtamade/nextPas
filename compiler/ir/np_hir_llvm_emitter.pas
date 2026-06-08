@@ -555,6 +555,22 @@ begin
             '.l, ptr ' + ValueRef(AInstr.Operands[1].ValueId));
         end;
       end
+      else if AInstr.IntrinsicName = 'call_str_owned_func' then
+      begin
+        Op := '  ' + ValueRef(AInstr.ResultId) +
+          ' = call {ptr, i64, ptr, i64} @' + AInstr.CallTarget + '(';
+        for I := 0 to High(AInstr.Operands) do
+        begin
+          if I > 0 then Op := Op + ', ';
+          if AInstr.Operands[I].TypeId <> 0 then
+            Op := Op + TypeToLlvm(AInstr.Operands[I].TypeId) + ' ' +
+              ValueRef(AInstr.Operands[I].ValueId)
+          else
+            Op := Op + 'i64 ' + ValueRef(AInstr.Operands[I].ValueId);
+        end;
+        Op := Op + ')';
+        Emit(Op);
+      end
       else if AInstr.IntrinsicName = 'str_concat' then
       begin
         FNeedsAlloc := True;
@@ -648,6 +664,29 @@ begin
             '.2 = insertvalue {ptr, i64} %retstr.' +
             IntToStr(AInstr.ResultId) + '.1, i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ', 1');
           Emit('  ret {ptr, i64} %retstr.' + IntToStr(AInstr.ResultId) + '.2');
+        end;
+      end
+      else if AInstr.IntrinsicName = 'ret_str_owned' then
+      begin
+        if Length(AInstr.Operands) >= 4 then
+        begin
+          Emit('  %retstrowned.' + IntToStr(AInstr.ResultId) +
+            '.1 = insertvalue {ptr, i64, ptr, i64} undef, ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', 0');
+          Emit('  %retstrowned.' + IntToStr(AInstr.ResultId) +
+            '.2 = insertvalue {ptr, i64, ptr, i64} %retstrowned.' +
+            IntToStr(AInstr.ResultId) + '.1, i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', 1');
+          Emit('  %retstrowned.' + IntToStr(AInstr.ResultId) +
+            '.3 = insertvalue {ptr, i64, ptr, i64} %retstrowned.' +
+            IntToStr(AInstr.ResultId) + '.2, ptr ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ', 2');
+          Emit('  %retstrowned.' + IntToStr(AInstr.ResultId) +
+            '.4 = insertvalue {ptr, i64, ptr, i64} %retstrowned.' +
+            IntToStr(AInstr.ResultId) + '.3, i64 ' +
+            ValueRef(AInstr.Operands[3].ValueId) + ', 3');
+          Emit('  ret {ptr, i64, ptr, i64} %retstrowned.' +
+            IntToStr(AInstr.ResultId) + '.4');
         end;
       end
       else if AInstr.IntrinsicName = 'global_ref' then
@@ -1055,6 +1094,8 @@ begin
   T := FModule.Types.GetType(AFunc.ReturnTypeId);
   if (Length(AFunc.Params) > 0) and (AFunc.Params[0].Name = 'sret_ptr') then
     RetStr := 'void'
+  else if AFunc.UsesOwnedStringReturnAbi then
+    RetStr := '{ptr, i64, ptr, i64}'
   else if T.Kind = htkString then
     RetStr := '{ptr, i64}'
   else

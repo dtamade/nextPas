@@ -10530,6 +10530,73 @@ begin
             Continue;
           end;
         end;
+        if FNoFold and
+          (Child.ChildAt(0).ChildAt(0) <> nil) and
+          (Child.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
+          (Child.ChildAt(0).ChildAt(1) <> nil) and
+          (Child.ChildAt(0).ChildAt(1).NodeKind = gnkIdentifier) and
+          (LookupClassVar(Child.ChildAt(0).ChildAt(0).Text) <> '') and
+          TypeMetaFieldIsStr(
+            LookupClassVar(Child.ChildAt(0).ChildAt(0).Text),
+            Child.ChildAt(0).ChildAt(1).Text) then
+        begin
+          Value := TypeMetaFieldIndex(
+            LookupClassVar(Child.ChildAt(0).ChildAt(0).Text),
+            Child.ChildAt(0).ChildAt(1).Text);
+          Arg := nil;
+          if Child.ChildCount >= 2 then
+            Arg := Child.ChildAt(1);
+          if Arg <> nil then
+          begin
+            if Arg.NodeKind = gnkStringLiteral then
+              FModel.AddTypedHirNode(
+                'field-store-str-runtime', Decoded, 0, 0,
+                Child.ChildAt(0).ChildAt(0).Text + #9 +
+                IntToStr(Value) + #9 + 'lit ' +
+                DecodePascalStringLiteral(Arg.Text)
+              )
+            else if EvaluateStringConstant(Arg, StringValue) then
+              FModel.AddTypedHirNode(
+                'field-store-str-runtime', Decoded, 0, 0,
+                Child.ChildAt(0).ChildAt(0).Text + #9 +
+                IntToStr(Value) + #9 + 'lit ' + StringValue
+              )
+            else if (Arg.NodeKind = gnkIdentifier) and
+              IsRuntimeStrVar(Arg.Text) then
+              FModel.AddTypedHirNode(
+                'field-store-str-runtime', Decoded, 0, 0,
+                Child.ChildAt(0).ChildAt(0).Text + #9 +
+                IntToStr(Value) + #9 + 'var ' + Arg.Text
+              )
+            else if (Arg.NodeKind = gnkDotAccess) and
+              (Arg.ChildCount >= 2) and (Arg.ChildAt(0) <> nil) and
+              (Arg.ChildAt(1) <> nil) and
+              (Arg.ChildAt(0).NodeKind = gnkIdentifier) and
+              (Arg.ChildAt(1).NodeKind = gnkIdentifier) and
+              (LookupClassVar(Arg.ChildAt(0).Text) <> '') and
+              TypeMetaFieldIsStr(LookupClassVar(Arg.ChildAt(0).Text),
+                Arg.ChildAt(1).Text) then
+            begin
+              Inc(FBlockLabelCounter);
+              FuncName := '$str_field_tmp_' + IntToStr(FBlockLabelCounter);
+              RegisterRuntimeVar(FuncName);
+              RegisterRuntimeStrVar(FuncName);
+              FModel.AddTypedHirNode('var-decl-str-runtime', FuncName,
+                0, 0, FuncName);
+              FModel.AddTypedHirNode('assign-str-field-load-runtime',
+                FuncName, 0, 0,
+                FuncName + #9 + Arg.ChildAt(0).Text + #9 +
+                IntToStr(TypeMetaFieldIndex(
+                  LookupClassVar(Arg.ChildAt(0).Text), Arg.ChildAt(1).Text)));
+              FModel.AddTypedHirNode(
+                'field-store-str-runtime', Decoded, 0, 0,
+                Child.ChildAt(0).ChildAt(0).Text + #9 +
+                IntToStr(Value) + #9 + 'var ' + FuncName
+              );
+            end;
+          end;
+          Continue;
+        end;
       end;
       if FNoFold and (Child.ChildCount >= 1) and
         (Child.ChildAt(0).NodeKind = gnkArrayAccess) and
@@ -10871,34 +10938,41 @@ begin
           end
           else if (Arg.NodeKind = gnkIdentifier) and
             LookupProcedureBody(Arg.Text, BranchNode, DeclNode) and
+            IsOwnedStringReturnFunc(Arg.Text) then
+          begin
+            FModel.AddTypedHirNode(
+              'assign-str-owned-call-runtime', Decoded, 0, 0,
+              Decoded + #9 + 'callee ' + Arg.Text
+            );
+          end
+          else if (Arg.NodeKind = gnkIdentifier) and
+            LookupProcedureBody(Arg.Text, BranchNode, DeclNode) and
             IsRuntimeStrVar(Arg.Text) then
           begin
-            if IsOwnedStringReturnFunc(Arg.Text) then
-              FModel.AddTypedHirNode(
-                'assign-str-owned-call-runtime', Decoded, 0, 0,
-                Decoded + #9 + 'callee ' + Arg.Text
-              )
-            else
-              FModel.AddTypedHirNode(
-                'assign-str-call-runtime', Decoded, 0, 0,
-                Decoded + #9 + 'callee ' + Arg.Text
-              );
+            FModel.AddTypedHirNode(
+              'assign-str-call-runtime', Decoded, 0, 0,
+              Decoded + #9 + 'callee ' + Arg.Text
+            );
+          end
+          else if (Arg.NodeKind = gnkFunctionCall) and
+            LookupProcedureBody(Arg.Text, BranchNode, DeclNode) and
+            IsOwnedStringReturnFunc(Arg.Text) then
+          begin
+            Operand := EncodeStrCallArgs(Arg, Decoded);
+            FModel.AddTypedHirNode(
+              'assign-str-owned-call-runtime', Decoded, 0, 0,
+              Decoded + #9 + 'callee ' + Arg.Text + #9 + Operand
+            );
           end
           else if (Arg.NodeKind = gnkFunctionCall) and
             LookupProcedureBody(Arg.Text, BranchNode, DeclNode) and
             IsRuntimeStrVar(Arg.Text) then
           begin
             Operand := EncodeStrCallArgs(Arg, Decoded);
-            if IsOwnedStringReturnFunc(Arg.Text) then
-              FModel.AddTypedHirNode(
-                'assign-str-owned-call-runtime', Decoded, 0, 0,
-                Decoded + #9 + 'callee ' + Arg.Text + #9 + Operand
-              )
-            else
-              FModel.AddTypedHirNode(
-                'assign-str-call-runtime', Decoded, 0, 0,
-                Decoded + #9 + 'callee ' + Arg.Text + #9 + Operand
-              );
+            FModel.AddTypedHirNode(
+              'assign-str-call-runtime', Decoded, 0, 0,
+              Decoded + #9 + 'callee ' + Arg.Text + #9 + Operand
+            );
           end
           else if (Arg.NodeKind = gnkDotAccess) and
             (Arg.ChildCount >= 2) and
