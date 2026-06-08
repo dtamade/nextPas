@@ -2243,6 +2243,11 @@ var
   LBodyStartPosition: Int64;
   LRequestDeadline: TDeadline;
 begin
+  if AReq = nil then
+    raise EArgumentError.Create('h1 client transport requires request');
+  if AReq.Headers = nil then
+    raise EArgumentError.Create('h1 client transport requires request headers');
+
   LUrl := AReq.Url;
   ValidatePlainHttpClientUrlScheme(LUrl);
   LHost := LUrl.Host;

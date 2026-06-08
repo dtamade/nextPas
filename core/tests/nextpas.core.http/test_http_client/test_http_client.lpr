@@ -22,6 +22,7 @@ uses
   nextpas.core.http.message,
   nextpas.core.http.router,
   nextpas.core.http.server,
+  nextpas.core.http.impl.h1,
   nextpas.core.http.client,
   nextpas.core.http,
   nextpas.core.time.base,
@@ -123,6 +124,24 @@ type
   TNilHeadersRedirectTransport = class(TInterfacedObject, IHttpTransport)
   public
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+  end;
+
+  TNilHeadersRequest = class(TInterfacedObject, IHttpRequest)
+  private
+    FUrl: TUrl;
+  public
+    constructor Create(const AUrl: string);
+    function GetMethod: THttpMethod;
+    function GetUrl: TUrl;
+    function GetPath: string;
+    function GetRawQuery: string;
+    function GetVersion: THttpVersion;
+    function GetHeaders: IHttpHeaders;
+    function GetBody: IReader;
+    function GetContentLength: Int64;
+    function GetRemoteAddr: string;
+    function PathParam(const AName: string): string;
+    function QueryParam(const AName: string): string;
   end;
 
   TUrlCaptureTransport = class(TInterfacedObject, IHttpTransport)
@@ -1183,6 +1202,67 @@ begin
   Result := TNilHeadersRedirectResponse.Create as IHttpResponse;
 end;
 
+constructor TNilHeadersRequest.Create(const AUrl: string);
+begin
+  inherited Create;
+  FUrl := TUrl.Parse(AUrl);
+end;
+
+function TNilHeadersRequest.GetMethod: THttpMethod;
+begin
+  Result := hmGet;
+end;
+
+function TNilHeadersRequest.GetUrl: TUrl;
+begin
+  Result := FUrl;
+end;
+
+function TNilHeadersRequest.GetPath: string;
+begin
+  Result := FUrl.Path;
+end;
+
+function TNilHeadersRequest.GetRawQuery: string;
+begin
+  Result := FUrl.RawQuery;
+end;
+
+function TNilHeadersRequest.GetVersion: THttpVersion;
+begin
+  Result := hvHttp11;
+end;
+
+function TNilHeadersRequest.GetHeaders: IHttpHeaders;
+begin
+  Result := nil;
+end;
+
+function TNilHeadersRequest.GetBody: IReader;
+begin
+  Result := nil;
+end;
+
+function TNilHeadersRequest.GetContentLength: Int64;
+begin
+  Result := 0;
+end;
+
+function TNilHeadersRequest.GetRemoteAddr: string;
+begin
+  Result := '';
+end;
+
+function TNilHeadersRequest.PathParam(const AName: string): string;
+begin
+  Result := '';
+end;
+
+function TNilHeadersRequest.QueryParam(const AName: string): string;
+begin
+  Result := '';
+end;
+
 function TUrlCaptureTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
 var
   LHeaders: IHttpHeaders;
@@ -1724,6 +1804,36 @@ begin
       LRaised := True;
   end;
   Check(LRaised, 'Client.Send rejects nil request');
+end;
+
+procedure TestH1ClientTransportRejectsNilRequestInputs;
+var
+  LTransport: IHttpTransport;
+  LOptions: TH1ClientTransportOptions;
+  LReq: IHttpRequest;
+  LRaised: Boolean;
+begin
+  LOptions := Default(TH1ClientTransportOptions);
+  LTransport := NewH1ClientTransport(LOptions);
+
+  LRaised := False;
+  try
+    LTransport.RoundTrip(nil);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'H1 transport RoundTrip rejects nil request');
+
+  LReq := TNilHeadersRequest.Create('http://127.0.0.1:1/no-connect') as IHttpRequest;
+  LRaised := False;
+  try
+    LTransport.RoundTrip(LReq);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'H1 transport RoundTrip rejects nil request headers');
 end;
 
 procedure TestClientSendRejectsNilTransportResponse;
@@ -6420,6 +6530,8 @@ begin
   T := TTestRunner.Create('nextpas.core.http.client');
   T.Run('Client GET returns 200 + body', @TestClientGet200);
   T.Run('Client Send rejects nil request', @TestClientSendRejectsNilRequest);
+  T.Run('H1 client transport rejects nil request inputs',
+    @TestH1ClientTransportRejectsNilRequestInputs);
   T.Run('Client Send rejects nil transport response',
     @TestClientSendRejectsNilTransportResponse);
   T.Run('Client Send rejects redirect with nil headers',
