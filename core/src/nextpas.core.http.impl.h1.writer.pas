@@ -78,6 +78,27 @@ begin
   end;
 end;
 
+procedure ValidateContentLengthValue(const AValue: string);
+var
+  LI: SizeInt;
+  LDigit: Int64;
+  LValue: Int64;
+begin
+  if AValue = '' then
+    raise EHttpError.Create('response content-length is invalid');
+
+  LValue := 0;
+  for LI := 1 to Length(AValue) do
+  begin
+    if (AValue[LI] < '0') or (AValue[LI] > '9') then
+      raise EHttpError.Create('response content-length is invalid');
+    LDigit := Ord(AValue[LI]) - Ord('0');
+    if LValue > ((High(Int64) - LDigit) div 10) then
+      raise EHttpError.Create('response content-length is too large');
+    LValue := (LValue * 10) + LDigit;
+  end;
+end;
+
 { TH1ResponseWriter }
 
 constructor TH1ResponseWriter.Create(const AWriter: IWriter);
@@ -337,6 +358,8 @@ begin
   LContentLengths := FHeaders.GetAll('content-length');
   if Length(LContentLengths) > 1 then
     raise EHttpError.Create('response content-length is duplicated');
+  if Length(LContentLengths) = 1 then
+    ValidateContentLengthValue(LContentLengths[0]);
   if (Length(LContentLengths) > 0) and FHeaders.Has('transfer-encoding') then
     raise EHttpError.Create(
       'response cannot include both content-length and transfer-encoding');

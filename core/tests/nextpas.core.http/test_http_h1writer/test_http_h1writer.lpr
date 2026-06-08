@@ -621,6 +621,47 @@ begin
   end;
 end;
 
+procedure CheckWriteHeaderRejectsContentLengthValue(const AValue,
+  ALabel: string);
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LRaised: Boolean;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.SetHeader('Content-Length', AValue);
+    LRaised := False;
+    try
+      LRW.WriteHeader(HTTP_STATUS_OK);
+    except
+      on E: EHttpError do
+        LRaised := True;
+    end;
+
+    Check(LRaised, ALabel);
+    Check(not LRW.HasCommitted, ALabel + ' fails before commit');
+    CheckEqual('', LW.GetOutput, ALabel + ' emits no wire bytes');
+  finally
+    LRW.Free;
+  end;
+end;
+
+procedure TestWriteHeaderRejectsInvalidContentLength;
+begin
+  CheckWriteHeaderRejectsContentLengthValue('',
+    'empty response content-length is rejected');
+  CheckWriteHeaderRejectsContentLengthValue('5x',
+    'non-numeric response content-length is rejected');
+end;
+
+procedure TestWriteHeaderRejectsOversizedContentLength;
+begin
+  CheckWriteHeaderRejectsContentLengthValue('9223372036854775808',
+    'oversized response content-length is rejected');
+end;
+
 procedure TestNoContentResponseDoesNotInjectChunkedEncoding;
 var
   LW: TBytesWriter;
@@ -1289,6 +1330,10 @@ begin
     @TestWriteHeaderRejectsContentLengthTransferEncodingConflict);
   T.Run('WriteHeader rejects duplicate content-length',
     @TestWriteHeaderRejectsDuplicateContentLength);
+  T.Run('WriteHeader rejects invalid content-length',
+    @TestWriteHeaderRejectsInvalidContentLength);
+  T.Run('WriteHeader rejects oversized content-length',
+    @TestWriteHeaderRejectsOversizedContentLength);
   T.Run('204 response does not inject chunked encoding',
     @TestNoContentResponseDoesNotInjectChunkedEncoding);
   T.Run('304 response does not inject chunked encoding',
