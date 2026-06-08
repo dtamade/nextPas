@@ -975,6 +975,45 @@ begin
     'chunked then content-length mentions conflicting framing');
 end;
 
+procedure CheckMalformedFramingConsumesThroughHeaders(const AName,
+  AHeaders, ATail: string; const AExpectedKind: TH1ParserErrorKind);
+var
+  LP: IH1Parser;
+  LReqHead: string;
+  LReq: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReqHead := 'POST /upload HTTP/1.1'#13#10 +
+              'Host: localhost'#13#10 +
+              AHeaders +
+              #13#10;
+  LReq := LReqHead + ATail;
+
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+
+  Check(LP.HasError, AName + ': parser reports error');
+  Check(not LP.IsComplete, AName + ': parser is not complete');
+  Check(LP.ErrorKind = AExpectedKind, AName + ': error kind');
+  CheckEqual(SizeUInt(Length(LReqHead)), LConsumed,
+    AName + ': consumes only through offending headers');
+end;
+
+procedure TestAdapterFramingErrorConsumedOffsets;
+begin
+  CheckMalformedFramingConsumesThroughHeaders(
+    'unsupported transfer coding before chunked',
+    'Transfer-Encoding: gzip, chunked'#13#10,
+    '5'#13#10'hello'#13#10'0'#13#10#13#10 +
+    'GET /next HTTP/1.1'#13#10'Host: localhost'#13#10#13#10,
+    pekUnsupportedTransferCoding);
+  CheckMalformedFramingConsumesThroughHeaders(
+    'unsupported non-chunked transfer coding',
+    'Transfer-Encoding: gzip'#13#10,
+    'GET /next HTTP/1.1'#13#10'Host: localhost'#13#10#13#10,
+    pekUnsupportedTransferCoding);
+end;
+
 procedure TestChunkedRequestUnsupportedTransferCodingBeforeChunked;
 var
   LP: IH1Parser;
@@ -2330,6 +2369,8 @@ begin
   T.Run('Chunked request missing chunk-data CRLF', @TestChunkedRequestMissingChunkDataCrLf);
   T.Run('Chunked request content-length conflict', @TestChunkedRequestContentLengthConflict);
   T.Run('Chunked request content-length conflict reverse order', @TestChunkedRequestContentLengthConflictReverseOrder);
+  T.Run('Adapter framing errors consume through headers',
+    @TestAdapterFramingErrorConsumedOffsets);
   T.Run('Chunked request unsupported transfer coding before chunked',
     @TestChunkedRequestUnsupportedTransferCodingBeforeChunked);
   T.Run('Request unsupported non-chunked transfer coding',

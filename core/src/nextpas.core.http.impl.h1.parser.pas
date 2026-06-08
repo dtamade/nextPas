@@ -96,6 +96,7 @@ type
     FError: Boolean;
     FErrorMsg: string;
     FErrorKind: TH1ParserErrorKind;
+    FHeaderCompleteUserError: Boolean;
     FTrailerBytes: Int64;
     FRequestMetadata: TH1RequestMetadata;
     FPendingRequestMetadata: TH1RequestMetadata;
@@ -123,6 +124,8 @@ type
     function SnapshotBody: TBytes;
     function ConsumedUntilErrorPosition(const ABuf: PAnsiChar;
       const ALen: SizeUInt): SizeUInt;
+    function ConsumedThroughHeaderBoundaryAfterErrorPosition(
+      const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
     procedure MaterializeCurrentHeaderSpans;
     procedure ClearCurrentHeaderSpans;
     procedure ClearRequestMetadataCache;
@@ -717,6 +720,7 @@ begin
       LSelf.FMethod := hmGet;
     end;
     Result := LSelf.BuildRequestMetadata(p0);
+    LSelf.FHeaderCompleteUserError := Result = HPE_USER;
     if Result <> 0 then
       Exit;
   end
@@ -829,7 +833,10 @@ begin
     if FErrorKind = pekNone then
       FErrorKind := pekMalformed;
     FErrorMsg := string(AnsiString(llhttp_get_error_reason(@FParser)));
-    Result := ConsumedUntilErrorPosition(ABuf, ALen);
+    if (LErrno = HPE_USER) and FHeaderCompleteUserError then
+      Result := ConsumedThroughHeaderBoundaryAfterErrorPosition(ABuf, ALen)
+    else
+      Result := ConsumedUntilErrorPosition(ABuf, ALen);
   end
   else
     Result := ALen;
@@ -853,6 +860,27 @@ begin
   LPos := PtrUInt(LErrorPos);
   if (LPos >= LBase) and (LPos <= LBase + ALen) then
     Result := SizeUInt(LPos - LBase);
+end;
+
+function TH1Parser.ConsumedThroughHeaderBoundaryAfterErrorPosition(
+  const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
+var
+  LI: SizeUInt;
+begin
+  Result := ConsumedUntilErrorPosition(ABuf, ALen);
+  if ABuf = nil then
+    Exit;
+  if Result >= ALen then
+    Exit;
+
+  LI := Result;
+  while LI + 3 < ALen do
+  begin
+    if (ABuf[LI] = #13) and (ABuf[LI + 1] = #10) and
+       (ABuf[LI + 2] = #13) and (ABuf[LI + 3] = #10) then
+      Exit(LI + 4);
+    Inc(LI);
+  end;
 end;
 
 procedure TH1Parser.Finish;
@@ -1210,6 +1238,7 @@ begin
   FError := False;
   FErrorMsg := '';
   FErrorKind := pekNone;
+  FHeaderCompleteUserError := False;
   FTrailerBytes := 0;
   ClearRequestMetadataCache;
   ClearCurrentHeaderSpans;
