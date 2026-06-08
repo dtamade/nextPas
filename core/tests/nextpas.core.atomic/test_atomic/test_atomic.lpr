@@ -318,6 +318,8 @@ const
   AtomicCoreSourcePath = '../../../src/nextpas.core.atomic.core.pas';
   AtomicTypesSourcePath = '../../../src/nextpas.core.atomic.types.pas';
   AtomicCompatSourcePath = '../../../src/nextpas.core.atomic.compat.pas';
+  AtomicTestMakefilePath = 'Makefile';
+  AtomicForcedCompileSourcePath = 'test_atomic_forced_compile.lpr';
   AtomicTestSourcePath = 'test_atomic.lpr';
   AtomicDocsReadmePath = '../../../docs/atomic/README.md';
   AtomicBenchMakefilePath = '../../../benchmarks/nextpas.core.atomic/bench_atomic/Makefile';
@@ -333,6 +335,8 @@ var
   LAtomicCoreSource: string;
   LAtomicTypesSource: string;
   LAtomicCompatSource: string;
+  LAtomicTestMakefile: string;
+  LAtomicForcedCompileSource: string;
   LAtomicTestSource: string;
   LAtomicDirectTypesPtrTestSource: string;
   LAtomicDocsReadme: string;
@@ -464,6 +468,8 @@ begin
   LAtomicCoreSource := ReadUtf8TextFile(AtomicCoreSourcePath);
   LAtomicTypesSource := ReadUtf8TextFile(AtomicTypesSourcePath);
   LAtomicCompatSource := ReadUtf8TextFile(AtomicCompatSourcePath);
+  LAtomicTestMakefile := ReadUtf8TextFile(AtomicTestMakefilePath);
+  LAtomicForcedCompileSource := ReadUtf8TextFile(AtomicForcedCompileSourcePath);
   LAtomicTestSource := ReadUtf8TextFile(AtomicTestSourcePath);
   LAtomicDirectTypesPtrTestSource := ReadUtf8TextFile(AtomicDirectTypesPtrTestPath);
   LAtomicDocsReadme := ReadUtf8TextFile(AtomicDocsReadmePath);
@@ -1320,6 +1326,50 @@ begin
     'atomic backend truth matrix must forbid runtime-ready claims without runtime evidence');
   CheckNotContains(LAtomicDocsReadme, 'Windows runtime ready',
     'atomic README must not claim Windows runtime readiness without runtime evidence');
+  CheckContains(LAtomicTestMakefile, 'test-forced-compile',
+    'atomic Makefile must expose an architecture forced compile gate');
+  CheckContains(LAtomicTestMakefile, 'test_atomic_forced_compile.lpr',
+    'atomic forced compile gate must use a small public-surface fixture');
+  CheckContains(LAtomicTestMakefile, '-Cn',
+    'atomic forced compile gate must compile only and avoid linking target runtime artifacts');
+  CheckContains(LAtomicTestMakefile, '-B',
+    'atomic forced compile gate must rebuild target PPUs and avoid cross-target cache reuse');
+  CheckContains(LAtomicTestMakefile, '-dNEXTPAS_FORCE_HOST_WINDOWS',
+    'atomic forced compile gate must include Windows host semantic compile truth');
+  CheckContains(LAtomicTestMakefile, 'cross-win64',
+    'atomic forced compile gate must name the available Win64 cross compile target explicitly');
+  CheckContains(LAtomicTestMakefile, 'atomic-forced-compile-target=host status=pass',
+    'atomic forced compile gate must print host target pass evidence');
+  CheckContains(LAtomicTestMakefile, 'atomic-forced-compile-target=win64 status=pass',
+    'atomic forced compile gate must print Win64 target pass evidence');
+  CheckContains(LAtomicForcedCompileSource, 'uses' + LineEnding + '  nextpas.core.atomic;',
+    'atomic forced compile fixture must exercise the main facade without extra imports');
+  CheckNotContains(LAtomicForcedCompileSource, 'nextpas.core.atomic.compat',
+    'atomic forced compile fixture must not mix compat-only surface into main facade truth');
+  CheckNotContains(LAtomicForcedCompileSource, 'nextpas.core.atomic.types',
+    'atomic forced compile fixture must not bypass the public facade typed-record surface');
+  CheckContains(LAtomicForcedCompileSource, '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}',
+    'atomic forced compile fixture must gate public 64-bit typed/root surface by target CPU truth');
+  CheckContains(LAtomicForcedCompileSource, 'TAtomicInt32.is_lock_free',
+    'atomic forced compile fixture must cover typed Int32 lock-free API');
+  CheckContains(LAtomicForcedCompileSource, 'TAtomicUInt32.is_lock_free',
+    'atomic forced compile fixture must cover typed UInt32 lock-free API');
+  CheckContains(LAtomicForcedCompileSource, 'TAtomicBool.is_lock_free',
+    'atomic forced compile fixture must cover typed Bool lock-free API');
+  CheckContains(LAtomicForcedCompileSource, 'TAtomicFlag.is_lock_free',
+    'atomic forced compile fixture must cover typed Flag lock-free API');
+  CheckContains(LAtomicForcedCompileSource, 'TAtomicISize.is_lock_free',
+    'atomic forced compile fixture must cover typed ISize lock-free API');
+  CheckContains(LAtomicForcedCompileSource, 'TAtomicUSize.is_lock_free',
+    'atomic forced compile fixture must cover typed USize lock-free API');
+  CheckContains(LAtomicForcedCompileSource, 'TAtomicRefCount.is_lock_free',
+    'atomic forced compile fixture must cover refcount lock-free API');
+  CheckContains(LAtomicForcedCompileSource, 'TAtomicSamplePtr.is_lock_free',
+    'atomic forced compile fixture must cover facade generic pointer lock-free API');
+  CheckContains(LAtomicForcedCompileSource, '.GetMut',
+    'atomic forced compile fixture must cover exclusive-access GetMut escape hatches');
+  CheckContains(LAtomicForcedCompileSource, '.IntoInner',
+    'atomic forced compile fixture must cover exclusive-access IntoInner escape hatches');
   CheckContains(LAtomicDocsReadme, 'make hygiene',
     'atomic README must list hygiene verification');
   CheckContains(LAtomicDocsReadme, 'make -C core/tests/nextpas.core.atomic/test_atomic clean test',
