@@ -1201,6 +1201,31 @@ begin
     'non-Windows execution must be an explicit skip truth, not runtime-ready evidence');
 end;
 
+procedure TestWindowsRuntimeCiMatrixTruthContract;
+var
+  LWorkflow: string;
+  LWindowsJob: string;
+begin
+  LWorkflow := LoadSourceText('../.github/workflows/core-ci.yml');
+
+  CheckContains(LWorkflow, 'test-windows-runtime:',
+    'Core CI must carry a separate real Windows runtime job');
+  LWindowsJob := ExtractBetween(LWorkflow, 'test-windows-runtime:',
+    'test-freebsd:');
+
+  CheckContains(LWindowsJob, 'runs-on: windows-',
+    'real Windows runtime truth must run on a Windows GitHub runner');
+  CheckContains(LWindowsJob, 'truth=real-windows-runtime-ci',
+    'real Windows runtime job must print its truth layer explicitly');
+  CheckContains(LWindowsJob,
+    'make -c tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke clean test',
+    'real Windows runtime job must run the runtime smoke default test target');
+  CheckAbsent(LWindowsJob, 'wine-runtime-smoke',
+    'real Windows runtime CI must not consume the Wine runtime-smoke target');
+  CheckAbsent(LWindowsJob, 'wine ',
+    'real Windows runtime CI must not invoke Wine');
+end;
+
 procedure TestAsyncLoopCompletionFacadeParityContract;
 var
   LAsyncLoop, LConnectBody, LCloseBody: string;
@@ -1272,6 +1297,8 @@ begin
     @TestWindowsForcedCompileAsyncFileSurfaceContract);
   T.Run('Windows file completion runtime smoke preflight contract',
     @TestWindowsFileCompletionRuntimeSmokePreflightContract);
+  T.Run('Windows runtime CI matrix truth contract',
+    @TestWindowsRuntimeCiMatrixTruthContract);
   T.Run('async loop completion facade parity contract',
     @TestAsyncLoopCompletionFacadeParityContract);
   T.Summary;
