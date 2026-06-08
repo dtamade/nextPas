@@ -240,6 +240,45 @@ begin
   Check(not LR.Success, 'should fail — invalid header value fallback');
 end;
 
+procedure CheckInvalidHeaderValueFallsBack(const AValue, ALabel: AnsiString);
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+begin
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'X-Test: ' + AValue + #13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(not LR.Success, string(ALabel));
+end;
+
+procedure TestHeaderValueCtlAndDelFallbacks;
+begin
+  CheckInvalidHeaderValueFallsBack('bad' + #10 + 'value',
+    'header value bare LF falls back');
+  CheckInvalidHeaderValueFallsBack('bad' + #13 + 'value',
+    'header value bare CR falls back');
+  CheckInvalidHeaderValueFallsBack('bad' + #127 + 'value',
+    'header value DEL falls back');
+end;
+
+procedure TestHeaderValueHtabAndObsTextRemainAccepted;
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+begin
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'X-Tab: left'#9'right'#13#10 +
+           'X-Obs: high' + #128 + 'byte'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LR.Success, 'HTAB and obs-text header values remain fast-parseable');
+  CheckEqual('left'#9'right', LR.Headers.Get('X-Tab'),
+    'HTAB value is preserved');
+  CheckEqual('high' + #128 + 'byte', LR.Headers.Get('X-Obs'),
+    'obs-text value is preserved');
+end;
+
 procedure CheckInvalidRequestTargetFallsBackLikeLlhttp(const ATarget,
   ALabel: AnsiString);
 var
@@ -636,6 +675,10 @@ begin
   T.Run('Header name tchar separator fallbacks',
     @TestHeaderNameTCharSeparatorFallbacks);
   T.Run('Invalid header value fallback', @TestInvalidHeaderValueFallback);
+  T.Run('Header value CTL/DEL fallbacks',
+    @TestHeaderValueCtlAndDelFallbacks);
+  T.Run('Header value HTAB/obs-text acceptance',
+    @TestHeaderValueHtabAndObsTextRemainAccepted);
   T.Run('Request-target CTL/DEL fallbacks',
     @TestRequestTargetCtlAndDelFallbacks);
   T.Run('Incomplete body fallback', @TestIncompleteBodyFallback);

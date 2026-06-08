@@ -118,12 +118,16 @@ function IsValidHeaderValueFast(const ABuf: PAnsiChar;
   const ALen: SizeUInt): Boolean; inline;
 var
   LI: SizeUInt;
+  LByte: Byte;
 begin
   if ALen = 0 then
     Exit(True);
   for LI := 0 to ALen - 1 do
-    if ABuf[LI] = #0 then
+  begin
+    LByte := Byte(ABuf[LI]);
+    if ((LByte < 32) and (LByte <> Ord(#9))) or (LByte = 127) then
       Exit(False);
+  end;
   Result := True;
 end;
 
