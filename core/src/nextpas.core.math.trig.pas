@@ -138,11 +138,25 @@ end;
 
 function ArcTan(const AX: Single): Single;
 begin
-  Result := Single(System.ArcTan(Double(AX)));
+  Result := Single(ArcTan(Double(AX)));
 end;
 
 function ArcTan(const AX: Double): Double;
 begin
+  if DoubleIsNaN(AX) then
+    Exit(DoubleQuietNaN);
+  if DoubleIsInfinite(AX) then
+  begin
+    if AX > 0.0 then
+      Exit(HALF_PI);
+    Exit(-HALF_PI);
+  end;
+  if AX = 0.0 then
+    Exit(DoubleSignedZero(DoubleHasSignBit(AX)));
+  if AX = 1.0 then
+    Exit(PI_VALUE / 4.0);
+  if AX = -1.0 then
+    Exit(-PI_VALUE / 4.0);
   Result := System.ArcTan(AX);
 end;
 

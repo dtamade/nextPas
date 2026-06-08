@@ -120,7 +120,7 @@ Trig helpers:
 - Power helpers: `Power`, `Sqrt`
 
 `Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity.
-`ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.
+`ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan` preserves signed zero, maps infinities to `+/-PI/2`, and returns `NaN` for `NaN`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.
 `Power` preserves negative-zero sign only for odd integer exponents: positive odd exponents return
 `-0`, and negative odd exponents return negative infinity. Non-odd zero-base exponents follow the
 positive-zero / positive-infinity zero-base behavior. Except for exponent `0`, a NaN exponent takes
