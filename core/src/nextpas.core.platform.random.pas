@@ -60,6 +60,8 @@ begin
     LRet := PtrInt(getrandom(Pointer(PtrUInt(ABuf) + LDone), ALen - LDone, 0));
     if LRet < 0 then
       Exit(platform_get_errno);
+    if LRet = 0 then
+      Exit(-1);
     Inc(LDone, PtrUInt(LRet));
   end;
   Result := 0;
@@ -94,13 +96,23 @@ end;
 function platform_random_bytes(ABuf: Pointer; ALen: PtrUInt): Int32;
 var
   LCheck: Int32;
+  LDone: PtrUInt;
+  LChunk: DWORD;
 begin
   if platform_random_check_request(ABuf, ALen, LCheck) then
     Exit(LCheck);
-  if RtlGenRandom(ABuf, DWORD(ALen)) then
-    Result := 0
-  else
-    Result := Int32(GetLastError);
+  LDone := 0;
+  while LDone < ALen do
+  begin
+    if ALen - LDone > PtrUInt(High(DWORD)) then
+      LChunk := High(DWORD)
+    else
+      LChunk := DWORD(ALen - LDone);
+    if not RtlGenRandom(Pointer(PtrUInt(ABuf) + LDone), LChunk) then
+      Exit(Int32(GetLastError));
+    Inc(LDone, PtrUInt(LChunk));
+  end;
+  Result := 0;
 end;
 {$ENDIF}
 
