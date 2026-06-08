@@ -161,6 +161,7 @@ begin
 
   Check(platform_poller_wait(P, @LEntries[0], 4, 1000, LCount) = 0, 'wait');
   Check(LCount = 1, 'got 1 event');
+  Check(LEntries[0].Fd = PtrUInt(LPipeFd[0]), 'event fd preserved');
   Check(peReadable in LEntries[0].REvents, 'event is readable');
 
   close(LPipeFd[0]);
@@ -230,6 +231,7 @@ begin
 
   Check(platform_poller_wait(P, @LEntries[0], 4, 1000, LCount) = 0, 'wait');
   Check(LCount = 1, 'got event');
+  Check(LEntries[0].Fd = PtrUInt(LPipeFd[0]), 'userdata event fd preserved');
   Check(PtrUInt(LEntries[0].UserData) = LTag, 'userdata preserved');
 
   close(LPipeFd[0]);
@@ -543,6 +545,7 @@ begin
 
   Check(platform_poller_wait(P, @LEntries[0], 4, 1000, LCount) = 0, 'wait');
   Check(LCount = 1, 'got 1 wake event');
+  Check(LEntries[0].Fd = PtrUInt(P.WakeFd), 'wake fd preserved');
   Check(peReadable in LEntries[0].REvents, 'wake event is readable');
   Check(PtrUInt(LEntries[0].UserData) = LWakeTag, 'wake userdata preserved');
 
