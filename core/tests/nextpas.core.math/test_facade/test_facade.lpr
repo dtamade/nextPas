@@ -11,6 +11,34 @@ uses
 var
   T: TTestRunner;
 
+function MakeNaN: Double;
+type
+  TDoubleBits = packed record
+    case Integer of
+      0: (Value: Double);
+      1: (Bits: UInt64);
+  end;
+var
+  LCast: TDoubleBits;
+begin
+  LCast.Bits := UInt64($7FF8000000000000);
+  Result := LCast.Value;
+end;
+
+function MakeSingleNaN: Single;
+type
+  TSingleBits = packed record
+    case Integer of
+      0: (Value: Single);
+      1: (Bits: UInt32);
+  end;
+var
+  LCast: TSingleBits;
+begin
+  LCast.Bits := UInt32($7FC00000);
+  Result := LCast.Value;
+end;
+
 procedure CheckNear(const AExpected, AActual: Double; const AMessage: string);
 var
   LDelta: Double;
@@ -22,6 +50,10 @@ begin
 end;
 
 procedure RaiseFacadeClampReversedBounds; forward;
+procedure RaiseFacadeWrapDoubleReversedBounds; forward;
+procedure RaiseFacadeWrapSingleReversedBounds; forward;
+procedure RaiseFacadeWrapDoubleNaNValue; forward;
+procedure RaiseFacadeWrapSingleNaNValue; forward;
 
 procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string; const AProc: TTestProc);
 begin
@@ -37,6 +69,23 @@ begin
       Fail(AName + ': expected EArgumentError, got ' + E.ClassName);
   end;
   Fail(AName + ': expected EArgumentError');
+end;
+
+procedure TestFacadeWrapErrorSemantics;
+begin
+  CheckNear(10.0, Wrap(370.0, 0.0, 360.0), 'facade Wrap Double high');
+  CheckNear(10.0, Wrap(Single(370.0), Single(0.0), Single(360.0)), 'facade Wrap Single high');
+  CheckNear(5.0, Wrap(10.0, 5.0, 5.0), 'facade Wrap Double equal bounds returns minimum');
+  CheckNear(5.0, Wrap(Single(10.0), Single(5.0), Single(5.0)),
+    'facade Wrap Single equal bounds returns minimum');
+  ExpectArgumentErrorMessage('Wrap: minimum must not exceed maximum',
+    'facade Wrap Double reversed bounds', @RaiseFacadeWrapDoubleReversedBounds);
+  ExpectArgumentErrorMessage('Wrap: minimum must not exceed maximum',
+    'facade Wrap Single reversed bounds', @RaiseFacadeWrapSingleReversedBounds);
+  ExpectArgumentErrorMessage('Wrap: value, minimum, and maximum must be finite',
+    'facade Wrap Double NaN value', @RaiseFacadeWrapDoubleNaNValue);
+  ExpectArgumentErrorMessage('Wrap: value, minimum, and maximum must be finite',
+    'facade Wrap Single NaN value', @RaiseFacadeWrapSingleNaNValue);
 end;
 
 procedure TestFacadeScalarAndTrig;
@@ -247,9 +296,30 @@ begin
   Clamp(1.0, 2.0, 1.0);
 end;
 
+procedure RaiseFacadeWrapDoubleReversedBounds;
+begin
+  Wrap(1.0, 2.0, 1.0);
+end;
+
+procedure RaiseFacadeWrapSingleReversedBounds;
+begin
+  Wrap(Single(1.0), Single(2.0), Single(1.0));
+end;
+
+procedure RaiseFacadeWrapDoubleNaNValue;
+begin
+  Wrap(MakeNaN, 0.0, 1.0);
+end;
+
+procedure RaiseFacadeWrapSingleNaNValue;
+begin
+  Wrap(MakeSingleNaN, Single(0.0), Single(1.0));
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math facade');
   T.Run('scalar and trig re-export', @TestFacadeScalarAndTrig);
+  T.Run('facade Wrap error semantics', @TestFacadeWrapErrorSemantics);
   T.Run('facade scalar rounding surface', @TestFacadeRoundingSurface);
   T.Run('facade new scalar surface', @TestFacadeNewScalarSurface);
   T.Run('facade vector surface', @TestFacadeVectorSurface);
