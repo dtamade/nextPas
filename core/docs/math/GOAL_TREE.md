@@ -47,7 +47,7 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - `Exp` propagates `NaN`, returns `+Inf` for `+Inf`, and returns `+0` for `-Inf`. `Sqrt` preserves signed zero, returns `+Inf` for `+Inf`, and returns `NaN` for `NaN`, negative finite values, or `-Inf`.
 - `Power` returns `1` for exponent `0` before NaN-base handling. Nonzero NaN bases return `NaN`; infinite exponents follow `|base|` relative to `1`, with `+1` and `-1` returning `1`; infinite bases follow exponent sign and odd/even sign rules. `Power` returns `NaN` for negative finite bases with non-integer exponents instead of entering host logarithm domain errors.
 - Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`, `TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without overflowing the intermediate squared length.
-- Vector `LengthSqr` avoids FPU overflow exceptions for huge finite inputs and returns `+Inf` when the true squared length is outside the target float range; vector `Data` aliases write through to named fields.
+- Vector `LengthSqr` avoids FPU overflow exceptions for huge finite inputs, keeps below-overflow results finite, and returns `+Inf` when the true squared length is outside the target float range; vector `Data` aliases write through to named fields.
 - Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by
   `Normalize`.
 - Vector scalar division and `DivComponents` reject zero, NaN, and infinite divisors with `EArgumentError`.

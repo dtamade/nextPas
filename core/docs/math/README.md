@@ -141,8 +141,7 @@ through the same formulas rather than clamping to the unit interval.
 Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`,
 `TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without
 overflowing the intermediate squared length.
-`LengthSqr` avoids FPU overflow exceptions for huge finite inputs and returns `+Inf` when the true
-squared length is outside the target float range. Vector `Data` aliases write through to `X/Y/Z/W`.
+`LengthSqr` avoids FPU overflow exceptions for huge finite inputs, keeps below-overflow results finite, and returns `+Inf` when the true squared length is outside the target float range. Vector `Data` aliases write through to `X/Y/Z/W`.
 Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by
 `Normalize`.
 Vector scalar division and `DivComponents` reject zero, NaN, and infinite divisors with `EArgumentError`.

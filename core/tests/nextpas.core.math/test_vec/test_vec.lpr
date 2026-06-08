@@ -39,6 +39,11 @@ begin
   Check(LDelta <= AEpsilon, AMessage);
 end;
 
+procedure CheckScaledNear(const AExpected, AActual, AScale, AEpsilon: Double; const AMessage: string);
+begin
+  CheckNear(AExpected / AScale, AActual / AScale, AEpsilon, AMessage);
+end;
+
 procedure CheckVec2f(const AExpectedX, AExpectedY: Single; const AActual: TVec2f;
   const AMessage: string);
 begin
@@ -579,6 +584,7 @@ begin
   CheckVec3d(-1.0, -2.0, -3.0, -V3, 'TVec3d unary minus');
   CheckVec3d(2.0, 4.0, 6.0, V3 * 2.0, 'TVec3d scalar multiply');
   CheckVec3d(2.0, 4.0, 6.0, 2.0 * V3, 'TVec3d scalar multiply left');
+  CheckVec3d(0.5, 1.0, 1.5, V3 / 2.0, 'TVec3d scalar divide');
   CheckVec3d(1.0, 0.5, Double(1.0) / Double(3.0),
     TVec3d.DivComponents(TVec3d.Create(1.0, 1.0, 1.0), V3),
     'TVec3d component divide');
@@ -609,6 +615,7 @@ begin
   CheckVec4d(-1.0, -2.0, -3.0, -4.0, -V4, 'TVec4d unary minus');
   CheckVec4d(2.0, 4.0, 6.0, 8.0, V4 * 2.0, 'TVec4d scalar multiply');
   CheckVec4d(2.0, 4.0, 6.0, 8.0, 2.0 * V4, 'TVec4d scalar multiply left');
+  CheckVec4d(0.5, 1.0, 1.5, 2.0, V4 / 2.0, 'TVec4d scalar divide');
   CheckVec4d(1.0, 0.5, Double(1.0) / Double(3.0), 0.25,
     TVec4d.DivComponents(TVec4d.Create(1.0, 1.0, 1.0, 1.0), V4),
     'TVec4d component divide');
@@ -667,6 +674,18 @@ end;
 
 procedure TestVectorLengthSqrHugeFiniteOverflowContract;
 begin
+  CheckScaledNear(2.0e38, TVec2f.Create(Single(1.0e19), Single(1.0e19)).LengthSqr,
+    1.0e38, 0.000001, 'TVec2f below overflow LengthSqr remains finite');
+  CheckScaledNear(2.0e38, TVec3f.Create(Single(1.0e19), Single(1.0e19), 0.0).LengthSqr,
+    1.0e38, 0.000001, 'TVec3f below overflow LengthSqr remains finite');
+  CheckScaledNear(2.0e38, TVec4f.Create(Single(1.0e19), Single(1.0e19), 0.0, 0.0).LengthSqr,
+    1.0e38, 0.000001, 'TVec4f below overflow LengthSqr remains finite');
+  CheckScaledNear(1.62e308, TVec2d.Create(9.0e153, 9.0e153).LengthSqr,
+    1.0e308, 0.000000000001, 'TVec2d below overflow LengthSqr remains finite');
+  CheckScaledNear(1.62e308, TVec3d.Create(9.0e153, 9.0e153, 0.0).LengthSqr,
+    1.0e308, 0.000000000001, 'TVec3d below overflow LengthSqr remains finite');
+  CheckScaledNear(1.62e308, TVec4d.Create(9.0e153, 9.0e153, 0.0, 0.0).LengthSqr,
+    1.0e308, 0.000000000001, 'TVec4d below overflow LengthSqr remains finite');
   CheckSinglePositiveInfinity(TVec2f.Create(Single(3.0e20), Single(4.0e20)).LengthSqr,
     'TVec2f huge finite LengthSqr saturates to +Inf');
   CheckSinglePositiveInfinity(TVec3f.Create(Single(3.0e20), Single(4.0e20), 0.0).LengthSqr,

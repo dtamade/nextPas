@@ -430,15 +430,15 @@ REQUIRED_VEC_QUAT_STABLE_DOC_TRUTH = (
     ),
     (
         "docs/math/README.md",
-        "`LengthSqr` avoids FPU overflow exceptions for huge finite inputs and returns `+Inf` when the true squared length is outside the target float range.",
+        "`LengthSqr` avoids FPU overflow exceptions for huge finite inputs, keeps below-overflow results finite, and returns `+Inf` when the true squared length is outside the target float range.",
     ),
     (
         "docs/math/API.md",
-        "`LengthSqr` also uses a non-throwing scaled path for huge finite inputs; if the true squared length is outside the target float range, it returns `+Inf` instead of raising an FPU overflow exception.",
+        "`LengthSqr` also uses a non-throwing scaled path for huge finite inputs; below-overflow results stay finite, and if the true squared length is outside the target float range, it returns `+Inf` instead of raising an FPU overflow exception.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "Vector `LengthSqr` avoids FPU overflow exceptions for huge finite inputs and returns `+Inf` when the true squared length is outside the target float range; vector `Data` aliases write through to named fields.",
+        "Vector `LengthSqr` avoids FPU overflow exceptions for huge finite inputs, keeps below-overflow results finite, and returns `+Inf` when the true squared length is outside the target float range; vector `Data` aliases write through to named fields.",
     ),
     (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
@@ -454,7 +454,7 @@ REQUIRED_VEC_QUAT_STABLE_DOC_TRUTH = (
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "Vector `LengthSqr` avoids FPU overflow exceptions for huge finite inputs and returns `+Inf` when the true squared length is outside the target float range; vector `Data` aliases write through to named fields.",
+        "Vector `LengthSqr` avoids FPU overflow exceptions for huge finite inputs, keeps below-overflow results finite, and returns `+Inf` when the true squared length is outside the target float range; vector `Data` aliases write through to named fields.",
     ),
     (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
@@ -1352,10 +1352,13 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("vec-4f", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec4f contracts'"),
     RequiredBehaviorTestMarker("vec-4f-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec4f huge finite length + normalize'"),
     RequiredBehaviorTestMarker("vec-double", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('double precision vector contracts'"),
+    RequiredBehaviorTestMarker("vec-3d-scalar-divide", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec3d scalar divide"),
+    RequiredBehaviorTestMarker("vec-4d-scalar-divide", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec4d scalar divide"),
     RequiredBehaviorTestMarker("vec-2d-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec2d huge finite length + normalize'"),
     RequiredBehaviorTestMarker("vec-3d-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec3d huge finite length + normalize'"),
     RequiredBehaviorTestMarker("vec-4d-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec4d huge finite length + normalize'"),
     RequiredBehaviorTestMarker("vec-lengthsqr-huge-finite-overflow", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector huge finite LengthSqr overflow contract'"),
+    RequiredBehaviorTestMarker("vec-lengthsqr-below-overflow", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec4d below overflow LengthSqr remains finite"),
     RequiredBehaviorTestMarker("vec-dot-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector huge finite Dot contract'"),
     RequiredBehaviorTestMarker("vec-data-write-through", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector Data aliases write through'"),
     RequiredBehaviorTestMarker("vec-normalize-max-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector max finite normalize contract'"),
