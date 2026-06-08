@@ -811,6 +811,18 @@ REQUIRED_TRIG_POWER_DOC_TRUTH = (
     ),
     (
         "docs/math/README.md",
+        "`Sqrt` of positive finite maximum, minimum-normal, and minimum-subnormal inputs returns a positive finite result, and squaring that result stays close to the original input instead of flushing to zero; negative minimum-subnormal inputs return `NaN`.",
+    ),
+    (
+        "docs/math/API.md",
+        "`Sqrt` of positive finite maximum, minimum-normal, and minimum-subnormal inputs returns a positive finite result, and squaring that result stays close to the original input instead of flushing to zero; negative minimum-subnormal inputs return `NaN`.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`Sqrt` of positive finite maximum, minimum-normal, and minimum-subnormal inputs returns a positive finite result, and squaring that result stays close to the original input instead of flushing to zero; negative minimum-subnormal inputs return `NaN`.",
+    ),
+    (
+        "docs/math/README.md",
         "`Power` returns `1` for base `+1` before NaN-exponent handling and for exponent `0` before NaN-base handling, while exponent `1` preserves the input value exactly after NaN-exponent/base checks. Nonzero NaN bases return `NaN`; infinite exponents follow `|base|` relative to `1`, with `+1` and `-1` returning `1`; infinite bases follow exponent sign and odd/even sign rules.",
     ),
     (
