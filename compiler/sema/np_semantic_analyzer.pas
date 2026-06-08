@@ -99,6 +99,19 @@ type
     function IsOwnedStringReturnFunc(const AName: string): Boolean;
     function IsRootOwnedStringReturnCandidate(const AEntry: TProcedureBodyEntry;
       const AIsStrReturn: Boolean): Boolean;
+    function DeclReturnsString(const ADecl: TGreenNode): Boolean;
+    function DeclaresStringLocal(const ADecl: TGreenNode;
+      const AName: string): Boolean;
+    function StringReturnFunctionNameFromNode(const ANode: TGreenNode;
+      out AName: string): Boolean;
+    function AssignmentOwnsStringReturn(const ANode: TGreenNode;
+      const AEntry: TProcedureBodyEntry): Boolean;
+    function AssignmentOwnsTopLevelStringReturn(const ANode: TGreenNode): Boolean;
+    procedure ScanOwnedStringReturnConsumers(const ANode: TGreenNode;
+      const AEntry: TProcedureBodyEntry; var AChanged: Boolean);
+    procedure ScanTopLevelOwnedStringReturnConsumers(const ANode: TGreenNode;
+      var AChanged: Boolean);
+    procedure PreRegisterOwnedStringReturnConsumers;
     function IsRuntimeArrVar(const AName: string): Boolean;
     function IsBorrowedRuntimeArrVar(const AName: string): Boolean;
     function IsStaticRuntimeArrVar(const AName: string): Boolean;
@@ -692,6 +705,198 @@ begin
     (AEntry.Decl <> nil) and (AEntry.Decl.NodeKind = gnkFunctionDecl) and
     (Pos('.', AEntry.Name) = 0) and
     SameText(AEntry.OwnerUnitId, NormalizeUnitIdentity(FUnitGraph.RootName));
+end;
+
+function TSemanticAnalyzer.DeclReturnsString(const ADecl: TGreenNode): Boolean;
+var
+  I: LongInt;
+  Child: TGreenNode;
+begin
+  Result := False;
+  if ADecl = nil then
+    Exit;
+  for I := 0 to ADecl.ChildCount - 1 do
+  begin
+    Child := ADecl.ChildAt(I);
+    if (Child <> nil) and (Child.NodeKind = gnkIdentifier) and
+      (SameText(Child.Text, 'String') or SameText(Child.Text, 'AnsiString')) then
+      Exit(True);
+  end;
+end;
+
+function TSemanticAnalyzer.DeclaresStringLocal(const ADecl: TGreenNode;
+  const AName: string): Boolean;
+var
+  I, J: LongInt;
+  Child, Decl, TypeChild: TGreenNode;
+begin
+  Result := False;
+  if (ADecl = nil) or (AName = '') then
+    Exit;
+  for I := 0 to ADecl.ChildCount - 1 do
+  begin
+    Child := ADecl.ChildAt(I);
+    if (Child = nil) or (Child.NodeKind <> gnkVarSection) then
+      Continue;
+    for J := 0 to Child.ChildCount - 1 do
+    begin
+      Decl := Child.ChildAt(J);
+      if (Decl = nil) or (Decl.NodeKind <> gnkVarDecl) or
+        (not SameText(Decl.Text, AName)) or (Decl.ChildCount = 0) then
+        Continue;
+      TypeChild := Decl.ChildAt(0);
+      if (TypeChild <> nil) and
+        (SameText(TypeChild.Text, 'String') or
+         SameText(TypeChild.Text, 'AnsiString')) then
+        Exit(True);
+    end;
+  end;
+end;
+
+function TSemanticAnalyzer.StringReturnFunctionNameFromNode(
+  const ANode: TGreenNode; out AName: string): Boolean;
+var
+  BodyNode, DeclNode: TGreenNode;
+begin
+  AName := '';
+  Result := False;
+  if ANode = nil then
+    Exit;
+  if ANode.NodeKind = gnkIdentifier then
+    AName := ANode.Text
+  else if (ANode.NodeKind = gnkFunctionCall) then
+    AName := ANode.Text;
+  if AName = '' then
+    Exit;
+  if (not LookupProcedureBody(AName, BodyNode, DeclNode)) or
+    (not DeclReturnsString(DeclNode)) then
+    Exit;
+  Result := True;
+end;
+
+function TSemanticAnalyzer.AssignmentOwnsStringReturn(const ANode: TGreenNode;
+  const AEntry: TProcedureBodyEntry): Boolean;
+var
+  DestNode, SourceNode: TGreenNode;
+  DestName, FuncName, RetName: string;
+begin
+  Result := False;
+  if (ANode = nil) or (ANode.NodeKind <> gnkAssignmentStatement) or
+    (ANode.ChildCount < 2) then
+    Exit;
+  DestNode := ANode.ChildAt(0);
+  SourceNode := ANode.ChildAt(1);
+  if (DestNode = nil) or (DestNode.NodeKind <> gnkIdentifier) or
+    (not StringReturnFunctionNameFromNode(SourceNode, FuncName)) then
+    Exit;
+  if not IsRootOwnedStringReturnCandidate(AEntry, DeclReturnsString(AEntry.Decl)) then
+    Exit;
+  DestName := DestNode.Text;
+  if SameText(DestName, 'Result') then
+    DestName := AEntry.Name;
+  RetName := AEntry.Name;
+  if Pos('.', RetName) > 0 then
+    RetName := Copy(RetName, Pos('.', RetName) + 1, Length(RetName));
+  Result := SameText(DestName, RetName) or DeclaresStringLocal(AEntry.Decl, DestName);
+end;
+
+function TSemanticAnalyzer.AssignmentOwnsTopLevelStringReturn(
+  const ANode: TGreenNode): Boolean;
+var
+  DestNode, SourceNode: TGreenNode;
+  DestName, FuncName: string;
+begin
+  Result := False;
+  if (ANode = nil) or (ANode.NodeKind <> gnkAssignmentStatement) or
+    (ANode.ChildCount < 2) then
+    Exit;
+  DestNode := ANode.ChildAt(0);
+  SourceNode := ANode.ChildAt(1);
+  if (DestNode = nil) or (DestNode.NodeKind <> gnkIdentifier) or
+    (not StringReturnFunctionNameFromNode(SourceNode, FuncName)) then
+    Exit;
+  DestName := DestNode.Text;
+  Result := IsRuntimeStrVar(DestName);
+end;
+
+procedure TSemanticAnalyzer.ScanOwnedStringReturnConsumers(
+  const ANode: TGreenNode; const AEntry: TProcedureBodyEntry;
+  var AChanged: Boolean);
+var
+  I: LongInt;
+  Child: TGreenNode;
+  FuncName: string;
+begin
+  if ANode = nil then
+    Exit;
+  if AssignmentOwnsStringReturn(ANode, AEntry) and
+    StringReturnFunctionNameFromNode(ANode.ChildAt(1), FuncName) and
+    (not IsOwnedStringReturnFunc(FuncName)) then
+  begin
+    RegisterOwnedStringReturnFunc(FuncName);
+    AChanged := True;
+  end;
+  for I := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(I);
+    if (Child <> nil) and
+      ((Child.NodeKind = gnkProcedureDecl) or
+       (Child.NodeKind = gnkFunctionDecl)) then
+      Continue;
+    ScanOwnedStringReturnConsumers(Child, AEntry, AChanged);
+  end;
+end;
+
+procedure TSemanticAnalyzer.ScanTopLevelOwnedStringReturnConsumers(
+  const ANode: TGreenNode; var AChanged: Boolean);
+var
+  I: LongInt;
+  Child: TGreenNode;
+  FuncName: string;
+begin
+  if ANode = nil then
+    Exit;
+  if AssignmentOwnsTopLevelStringReturn(ANode) and
+    StringReturnFunctionNameFromNode(ANode.ChildAt(1), FuncName) and
+    (not IsOwnedStringReturnFunc(FuncName)) then
+  begin
+    RegisterOwnedStringReturnFunc(FuncName);
+    AChanged := True;
+  end;
+  for I := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(I);
+    if (Child <> nil) and
+      ((Child.NodeKind = gnkProcedureDecl) or
+       (Child.NodeKind = gnkFunctionDecl)) then
+      Continue;
+    ScanTopLevelOwnedStringReturnConsumers(Child, AChanged);
+  end;
+end;
+
+procedure TSemanticAnalyzer.PreRegisterOwnedStringReturnConsumers;
+var
+  I: LongInt;
+  Changed: Boolean;
+  Entry: TProcedureBodyEntry;
+  RootNode: TGreenNode;
+begin
+  repeat
+    Changed := False;
+    if (FRootAst <> nil) and FRootAst.IsValid then
+    begin
+      RootNode := FRootAst.RootNode;
+      if RootNode <> nil then
+        ScanTopLevelOwnedStringReturnConsumers(RootNode, Changed);
+    end;
+    for I := 0 to Length(FProcedureBodies) - 1 do
+    begin
+      Entry := FProcedureBodies[I];
+      if (Entry.Body = nil) or (Entry.Decl = nil) or (Pos('<', Entry.Name) > 0) then
+        Continue;
+      ScanOwnedStringReturnConsumers(Entry.Body, Entry, Changed);
+    end;
+  until not Changed;
 end;
 
 procedure TSemanticAnalyzer.RegisterRuntimeArrVar(const AName: string);
@@ -4493,6 +4698,8 @@ begin
     Exit;
   SeedRuntimeContracts;
   SeedRuntimeVarDecls;
+  if FNoFold then
+    PreRegisterOwnedStringReturnConsumers;
   if FNoFold then
     PreRegisterFunctionReturnTypes;
   FGenericWorkCount := 0;
@@ -12522,8 +12729,6 @@ begin
       begin
         RegisterRuntimeVar(Entry.Name);
         RegisterRuntimeStrVar(Entry.Name);
-        if IsRootOwnedStringReturnCandidate(Entry, True) then
-          RegisterOwnedStringReturnFunc(Entry.Name);
         Break;
       end;
       if (Child.NodeKind = gnkIdentifier) and
@@ -12719,9 +12924,8 @@ begin
     end;
     if IsPtrReturn and (Pos('.', Entry.Name) = 0) then
       RegisterPtrReturnFunc(Entry.Name, PtrReturnClass);
-    OwnedStringReturn := IsRootOwnedStringReturnCandidate(Entry, IsStrReturn);
-    if OwnedStringReturn then
-      RegisterOwnedStringReturnFunc(EffName);
+    OwnedStringReturn := IsRootOwnedStringReturnCandidate(Entry, IsStrReturn) and
+      IsOwnedStringReturnFunc(EffName);
     if Pos('.', Entry.Name) > 0 then
     begin
       FCurrentMethodClass := Copy(Entry.Name, 1, Pos('.', Entry.Name) - 1);

@@ -107,6 +107,17 @@ const
     'begin' + LineEnding +
     'end.';
 
+  LegacyOnlyReturnConsumerSource =
+    'program test;' + LineEnding +
+    'function Greeting: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  Greeting := ''Hello World'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  WriteLn(Greeting);' + LineEnding +
+    '  Halt(Length(Greeting) + 31);' + LineEnding +
+    'end.';
+
 procedure Fail(const AMessage: string);
 begin
   WriteLn('hir-string-return-ownership-contract-failure=', AMessage);
@@ -458,6 +469,23 @@ begin
       'object-string-cleanup-must-remain-deferred');
     RejectContains(LlvmText, '@np_object_free_release',
       'object-free-release-must-remain-field-agnostic-for-strings');
+  finally
+    Model.Free;
+  end;
+
+  Model := BuildModel(LegacyOnlyReturnConsumerSource);
+  try
+    if Model = nil then
+      Fail('legacy-only-return-consumer-model-nil');
+    LlvmText := EmitLlvm(Model);
+    RequireContains(LlvmText, 'define {ptr, i64} @Greeting(',
+      'legacy-only-consumer-must-keep-visible-string-return');
+    RequireContains(LlvmText, 'call {ptr, i64} @Greeting(',
+      'legacy-only-consumer-must-call-visible-string-return');
+    RejectContains(LlvmText, 'define {ptr, i64, ptr, i64} @Greeting(',
+      'legacy-only-consumer-must-not-use-owned-string-return');
+    RejectContains(LlvmText, 'call {ptr, i64, ptr, i64} @Greeting(',
+      'legacy-only-consumer-must-not-call-owned-string-return');
   finally
     Model.Free;
   end;
