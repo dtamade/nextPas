@@ -323,9 +323,18 @@ begin
 end;
 
 function ResponseRequestsClose(const AHeaders: IHttpHeaders): Boolean;
+var
+  LValues: TStringArray;
+  LI: SizeInt;
 begin
-  Result := (AHeaders <> nil) and
-    HeaderValueHasToken(AHeaders.Get('connection'), 'close');
+  Result := False;
+  if AHeaders = nil then
+    Exit;
+
+  LValues := AHeaders.GetAll('connection');
+  for LI := Low(LValues) to High(LValues) do
+    if HeaderValueHasToken(LValues[LI], 'close') then
+      Exit(True);
 end;
 
 function ParserErrorStatus(const AParser: IH1Parser): THttpStatus; inline;

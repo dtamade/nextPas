@@ -7091,6 +7091,55 @@ begin
   end;
 end;
 
+procedure TestResponseConnectionDuplicateCloseStopsKeepAlive;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LClosed: Boolean;
+  LTimedOut: Boolean;
+const
+  REQ = 'GET /ping HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10#13#10;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ping', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBody: string;
+  begin
+    LBody := 'pong';
+    AW.GetHeaders.Add('connection', 'keep-alive');
+    AW.GetHeaders.Add('connection', 'close');
+    AW.GetHeaders.SetHeader('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 4);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp := ReadUntilClosedOrDeadline(LConn, 5000, LClosed, LTimedOut);
+      Check(Pos('200 OK', LResp) > 0,
+        'response-conn-dup-close: got 200');
+      Check(Pos('pong', LResp) > 0,
+        'response-conn-dup-close: got body');
+      Check(Pos('connection: close', LResp) > 0,
+        'response-conn-dup-close: handler close header preserved');
+      Check(LClosed,
+        'response-conn-dup-close: server closed connection after response');
+      Check(not LTimedOut,
+        'response-conn-dup-close: read did not time out waiting for close');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestEpollResponseConnectionMixedCaseCloseStopsKeepAlive;
 var
@@ -7132,6 +7181,55 @@ begin
         'epoll-response-conn-close-case: server closed connection after response');
       Check(not LTimedOut,
         'epoll-response-conn-close-case: read did not time out waiting for close');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestEpollResponseConnectionDuplicateCloseStopsKeepAlive;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LClosed: Boolean;
+  LTimedOut: Boolean;
+const
+  REQ = 'GET /ping HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10#13#10;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ping', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBody: string;
+  begin
+    LBody := 'pong';
+    AW.GetHeaders.Add('connection', 'keep-alive');
+    AW.GetHeaders.Add('connection', 'close');
+    AW.GetHeaders.SetHeader('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 4);
+  end);
+  LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp := ReadUntilClosedOrDeadline(LConn, 5000, LClosed, LTimedOut);
+      Check(Pos('200 OK', LResp) > 0,
+        'epoll-response-conn-dup-close: got 200');
+      Check(Pos('pong', LResp) > 0,
+        'epoll-response-conn-dup-close: got body');
+      Check(Pos('connection: close', LResp) > 0,
+        'epoll-response-conn-dup-close: handler close header preserved');
+      Check(LClosed,
+        'epoll-response-conn-dup-close: server closed connection after response');
+      Check(not LTimedOut,
+        'epoll-response-conn-dup-close: read did not time out waiting for close');
     finally
       LConn.Close;
     end;
@@ -13033,9 +13131,13 @@ begin
     @TestConnectionTokenListCloseStopsKeepAlive);
   T.Run('Response Connection mixed-case close stops keep-alive',
     @TestResponseConnectionMixedCaseCloseStopsKeepAlive);
+  T.Run('Response duplicate Connection close stops keep-alive',
+    @TestResponseConnectionDuplicateCloseStopsKeepAlive);
 {$IFDEF NEXTPAS_LINUX}
   T.Run('Epoll response Connection mixed-case close stops keep-alive',
     @TestEpollResponseConnectionMixedCaseCloseStopsKeepAlive);
+  T.Run('Epoll response duplicate Connection close stops keep-alive',
+    @TestEpollResponseConnectionDuplicateCloseStopsKeepAlive);
 {$ENDIF}
   T.Run('HTTP/1.0 no keep-alive', @TestHttp10NoKeepAlive);
   T.Run('POST body readable via IReader', @TestPostBodyReadable);
