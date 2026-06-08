@@ -149,6 +149,8 @@ begin
   try
     while LRemaining > 0 do
     begin
+      if FWriterClosed then
+        raise EIOError.Create('write to closed pipe writer');
       while (FCount = FCap) and (not FReaderClosed) do
         FNotFull.Wait(FMutex);
       if FReaderClosed then

@@ -839,6 +839,30 @@ begin
   LR.Close;
 end;
 
+procedure TestPipeWriteAfterWriterCloseRaises;
+var
+  LR: IPipeReader;
+  LW: IPipeWriter;
+  LBuf: Byte;
+  LRaised: Boolean;
+begin
+  CreatePipe(LR, LW);
+  LBuf := $2A;
+  LW.Close;
+
+  LRaised := False;
+  try
+    LW.Write(LBuf, 1);
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'write after writer close raises EIOError');
+  CheckEqual(SizeUInt(0), LR.Read(LBuf, 1), 'closed writer did not enqueue data');
+  LR.Close;
+end;
+
 { New interface tests }
 
 procedure TestReaderAt;
@@ -1217,6 +1241,8 @@ begin
 
   T.Run('Pipe basic', @TestPipeBasic);
   T.Run('Pipe close writer EOF', @TestPipeCloseWriterEOF);
+  T.Run('Pipe write after writer close raises',
+    @TestPipeWriteAfterWriterCloseRaises);
   T.Run('Pipe large data', @TestPipeLargeData);
 
   T.Run('ReaderAt', @TestReaderAt);
