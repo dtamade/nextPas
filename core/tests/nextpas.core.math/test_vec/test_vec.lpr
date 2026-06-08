@@ -3,6 +3,7 @@ program test_vec;
 {$I nextpas.core.settings.inc}
 
 uses
+  Math,
   nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.math.scalar,
@@ -175,6 +176,44 @@ var
 begin
   LValue.Value := AActual;
   Check(LValue.Bits = AExpectedBits, AMessage);
+end;
+
+procedure CheckSingleNaNValue(const AActual: Single; const AMessage: string);
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AActual;
+  Check(((LValue.Bits and $7F800000) = $7F800000) and
+    ((LValue.Bits and $007FFFFF) <> 0), AMessage);
+end;
+
+procedure CheckDoubleNaNValue(const AActual: Double; const AMessage: string);
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Value := AActual;
+  Check(((LValue.Bits and $7FF0000000000000) = $7FF0000000000000) and
+    ((LValue.Bits and $000FFFFFFFFFFFFF) <> 0), AMessage);
+end;
+
+procedure CheckSinglePositiveZero(const AActual: Single; const AMessage: string);
+begin
+  CheckSingleBits(AActual, 0, AMessage);
+end;
+
+procedure CheckDoublePositiveZero(const AActual: Double; const AMessage: string);
+begin
+  CheckDoubleBits(AActual, 0, AMessage);
+end;
+
+procedure CheckSingleNegativeZero(const AActual: Single; const AMessage: string);
+begin
+  CheckSingleBits(AActual, $80000000, AMessage);
+end;
+
+procedure CheckDoubleNegativeZero(const AActual: Double; const AMessage: string);
+begin
+  CheckDoubleBits(AActual, QWord(1) shl 63, AMessage);
 end;
 
 procedure CheckSinglePositiveInfinity(const AActual: Single; const AMessage: string);
@@ -972,6 +1011,94 @@ begin
   CheckVec4d(1.25, -2.5, 3.75, -4.5, V4d, 'TVec4d Data write-through');
 end;
 
+procedure TestVectorDataAliasesPreserveSignedZeroBits;
+var
+  V2f: TVec2f;
+  V3f: TVec3f;
+  V2d: TVec2d;
+  V4d: TVec4d;
+begin
+  V2f := TVec2f.Zero;
+  V2f.Data[0] := SingleNegativeZero;
+  CheckSingleNegativeZero(V2f.X, 'TVec2f Data[0] preserves negative-zero bits');
+
+  V3f := TVec3f.Zero;
+  V3f.Y := SingleNegativeZero;
+  CheckSingleNegativeZero(V3f.Data[1],
+    'TVec3f named field preserves negative-zero bits in Data[1]');
+
+  V2d := TVec2d.Zero;
+  V2d.X := DoubleNegativeZero;
+  CheckDoubleNegativeZero(V2d.Data[0],
+    'TVec2d named field preserves negative-zero bits in Data[0]');
+
+  V4d := TVec4d.Zero;
+  V4d.Data[3] := DoubleNegativeZero;
+  CheckDoubleNegativeZero(V4d.W, 'TVec4d Data[3] preserves negative-zero bits');
+end;
+
+procedure TestVectorMeasureNonFiniteContracts;
+var
+  C3d: TVec3d;
+  SavedMask: TFPUExceptionMask;
+begin
+  SavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow,
+    exUnderflow, exPrecision]);
+  try
+    CheckSingleNaNValue(TVec2f.Create(SingleNaN, 1.0).Length,
+      'TVec2f Length NaN component returns NaN');
+    CheckSinglePositiveInfinity(TVec3f.Create(1.0, SingleInfinity, 2.0).Length,
+      'TVec3f Length infinite component returns +Inf');
+    CheckDoublePositiveInfinity(TVec4d.Create(1.0, DoubleInfinity, 2.0, 3.0).LengthSqr,
+      'TVec4d LengthSqr infinite component returns +Inf');
+
+    CheckSingleNaNValue(TVec2f.Dot(TVec2f.Create(0.0, 1.0),
+      TVec2f.Create(SingleInfinity, 2.0)),
+      'TVec2f Dot zero times infinity returns NaN');
+    CheckDoublePositiveInfinity(TVec3d.Dot(TVec3d.Create(DoubleInfinity, 2.0, 0.0),
+      TVec3d.Create(1.0, 3.0, 0.0)),
+      'TVec3d Dot infinite component returns +Inf');
+
+    C3d := TVec3d.Cross(TVec3d.Create(0.0, 1.0, 0.0),
+      TVec3d.Create(0.0, 0.0, DoubleInfinity));
+    CheckDoublePositiveInfinity(C3d.X,
+      'TVec3d Cross raw non-finite fallback returns +Inf component');
+    CheckDoubleNaNValue(C3d.Y,
+      'TVec3d Cross raw non-finite fallback returns NaN component');
+  finally
+    SetExceptionMask(SavedMask);
+  end;
+end;
+
+procedure TestVectorSignedZeroContracts;
+var
+  N2f: TVec2f;
+  C3f: TVec3f;
+begin
+  N2f := TVec2f.Create(SingleNegativeZero, SingleNegativeZero).Normalize;
+  CheckSinglePositiveZero(N2f.X, 'TVec2f negative-zero Normalize returns positive zero');
+  CheckSinglePositiveZero(N2f.Y, 'TVec2f negative-zero Normalize returns positive zero Y');
+
+  CheckDoublePositiveZero(TVec4d.Create(DoubleNegativeZero, 0.0, 0.0, 0.0).Length,
+    'TVec4d zero Length returns +0');
+  CheckSinglePositiveZero(TVec3f.Create(SingleNegativeZero, 0.0, 0.0).LengthSqr,
+    'TVec3f zero LengthSqr returns +0');
+  CheckDoublePositiveZero(TVec4d.Dot(TVec4d.Create(1.0, -1.0, 0.0, 0.0),
+    TVec4d.Create(1.0, 1.0, 0.0, 0.0)),
+    'TVec4d exact zero Dot returns +0');
+
+  C3f := TVec3f.Cross(TVec3f.Create(1.0, 0.0, 0.0),
+    TVec3f.Create(2.0, 0.0, 0.0));
+  CheckSinglePositiveZero(C3f.X, 'TVec3f collinear Cross returns +0 components X');
+  CheckSinglePositiveZero(C3f.Y, 'TVec3f collinear Cross returns +0 components Y');
+  CheckSinglePositiveZero(C3f.Z, 'TVec3f collinear Cross returns +0 components Z');
+
+  Check(TVec2f.Equals(TVec2f.Create(SingleNegativeZero, 0.0),
+    TVec2f.Create(0.0, SingleNegativeZero), Single(0.0)),
+    'TVec2f Equals treats signed zero as equal');
+end;
+
 procedure TestVectorLerpScalarParityContracts;
 var
   A2f: TVec2f;
@@ -1146,6 +1273,12 @@ begin
   T.Run('vector huge finite Cross out-of-range signed infinity contract',
     @TestVectorHugeFiniteCrossOutOfRangeSignedInfinityContract);
   T.Run('vector Data aliases write through', @TestVectorDataAliasesWriteThrough);
+  T.Run('vector Data aliases preserve signed-zero bits',
+    @TestVectorDataAliasesPreserveSignedZeroBits);
+  T.Run('vector measure non-finite contracts',
+    @TestVectorMeasureNonFiniteContracts);
+  T.Run('vector signed-zero contracts',
+    @TestVectorSignedZeroContracts);
   T.Run('vector Lerp scalar parity contracts',
     @TestVectorLerpScalarParityContracts);
   T.Run('raw vector normalize non-finite inputs fail fast',

@@ -173,6 +173,12 @@ overflow, exact finite cancellation stays finite, and true out-of-range results 
 finite true components stay finite instead of becoming `NaN` through intermediate overflow,
 and true out-of-range components return signed infinity.
 `Data` aliases are read/write views over `X/Y/Z/W`, so indexed writes update the named fields.
+Vector measure methods are non-throwing for non-finite inputs: NaN operands produce NaN,
+infinite operands produce `+Inf` where no NaN is present, and `Dot`/`Cross` use raw IEEE
+fallback for non-finite operands, so indeterminate products such as `0 * Inf` produce NaN.
+Signed-zero behavior is canonicalized only at measure/normalization boundaries: zero-vector
+`Normalize` returns positive-zero components, exact-zero `Dot` returns `+0`, and `Data` aliases
+preserve stored signed-zero bit patterns.
 Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by
 `Normalize`.
 Vector scalar division and `DivComponents` reject zero, NaN, and infinite divisors with `EArgumentError`.
