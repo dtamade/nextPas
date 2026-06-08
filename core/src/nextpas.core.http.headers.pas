@@ -300,6 +300,7 @@ function THttpHeaders.Get(const AName: string): string;
 var
   LIdx: Int32;
 begin
+  ValidateNameAndNeedsNormalize(AName);
   LIdx := FindFirst(AName);
   if LIdx >= 0 then
     Result := FEntries[LIdx].Value
@@ -316,6 +317,7 @@ begin
   Result := nil;
   LCount := 0;
   LUseNormalized := False;
+  ValidateNameAndNeedsNormalize(AName);
 
   for LI := 0 to FCount - 1 do
     if FEntries[LI].Name = AName then
@@ -352,6 +354,7 @@ end;
 
 function THttpHeaders.Has(const AName: string): Boolean;
 begin
+  ValidateNameAndNeedsNormalize(AName);
   Result := FindFirst(AName) >= 0;
 end;
 
@@ -360,7 +363,10 @@ var
   LNorm: string;
   LI, LDst: Int32;
 begin
-  LNorm := NormalizeIfNeeded(AName);
+  if ValidateNameAndNeedsNormalize(AName) then
+    LNorm := Normalize(AName)
+  else
+    LNorm := AName;
   LDst := 0;
   for LI := 0 to FCount - 1 do
   begin

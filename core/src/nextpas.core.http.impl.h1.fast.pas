@@ -42,6 +42,7 @@ function FastParseRequest(const ABuf: PAnsiChar; const ALen: SizeUInt): TFastPar
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.http.headers,
   nextpas.core.http.impl.h1.scan;
 
@@ -89,6 +90,28 @@ begin
     if not IsHttpHeaderNameChar(ABuf[LI]) then
       Exit(False);
   Result := True;
+end;
+
+function ValidateLookupHeaderNameFast(const AName: string): string;
+var
+  LI: SizeInt;
+  LNeedsNormalize: Boolean;
+begin
+  if AName = '' then
+    raise EHttpError.Create('empty header name');
+  Result := AName;
+  LNeedsNormalize := False;
+  for LI := 1 to Length(AName) do
+  begin
+    if not IsHttpHeaderNameChar(AnsiChar(AName[LI])) then
+      raise EHttpError.Create('invalid header name character');
+    if (AName[LI] >= 'A') and (AName[LI] <= 'Z') then
+      LNeedsNormalize := True;
+  end;
+  if LNeedsNormalize then
+    for LI := 1 to Length(Result) do
+      if (Result[LI] >= 'A') and (Result[LI] <= 'Z') then
+        Result[LI] := Chr(Ord(Result[LI]) + 32);
 end;
 
 function IsValidHeaderValueFast(const ABuf: PAnsiChar;
@@ -290,25 +313,34 @@ begin
 end;
 
 function TFastLazyHeaders.Get(const AName: string): string;
+var
+  LName: string;
 begin
   if FHeaders <> nil then
     Exit(FHeaders.Get(AName));
-  if not FindRawFirstValue(AName, Result) then
+  LName := ValidateLookupHeaderNameFast(AName);
+  if not FindRawFirstValue(LName, Result) then
     Result := '';
 end;
 
 function TFastLazyHeaders.GetAll(const AName: string): TStringArray;
+var
+  LName: string;
 begin
   if FHeaders <> nil then
     Exit(FHeaders.GetAll(AName));
-  Result := GetAllRawValues(AName);
+  LName := ValidateLookupHeaderNameFast(AName);
+  Result := GetAllRawValues(LName);
 end;
 
 function TFastLazyHeaders.Has(const AName: string): Boolean;
+var
+  LName: string;
 begin
   if FHeaders <> nil then
     Exit(FHeaders.Has(AName));
-  Result := HasRawHeader(AName);
+  LName := ValidateLookupHeaderNameFast(AName);
+  Result := HasRawHeader(LName);
 end;
 
 procedure TFastLazyHeaders.Remove(const AName: string);

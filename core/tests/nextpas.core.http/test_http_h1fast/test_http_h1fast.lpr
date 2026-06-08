@@ -291,6 +291,50 @@ begin
     'GetAll preserves second duplicate value');
 end;
 
+procedure TestLazyHeadersRejectInvalidLookupNames;
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+  LAll: TStringArray;
+  LRaised: Boolean;
+begin
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'X-Keep: value'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LR.Success, 'lazy header invalid lookup request should parse');
+
+  LRaised := False;
+  try
+    LR.Headers.Get('');
+  except
+    on E: EHttpError do
+      LRaised := E.Message = 'empty header name';
+  end;
+  Check(LRaised, 'lazy headers get rejects empty name');
+
+  LRaised := False;
+  try
+    LR.Headers.Has('Bad Name');
+  except
+    on E: EHttpError do
+      LRaised := E.Message = 'invalid header name character';
+  end;
+  Check(LRaised, 'lazy headers has rejects separator space in name');
+
+  LRaised := False;
+  try
+    LAll := LR.Headers.GetAll('Bad:Name');
+  except
+    on E: EHttpError do
+      LRaised := E.Message = 'invalid header name character';
+  end;
+  Check(LRaised, 'lazy headers getall rejects colon in name');
+
+  CheckEqual('value', LR.Headers.Get('X-Keep'),
+    'invalid lazy lookup attempts preserve valid raw lookup state');
+end;
+
 procedure TestLazyHeadersForEachRejectsNilCallback;
 var
   LReq: AnsiString;
@@ -535,6 +579,8 @@ begin
   T.Run('Header value leading spaces', @TestHeaderValueLeadingSpaces);
   T.Run('Lazy headers raw lookup preserves semantics',
     @TestLazyHeadersRawLookupPreservesSemantics);
+  T.Run('Lazy headers reject invalid lookup names',
+    @TestLazyHeadersRejectInvalidLookupNames);
   T.Run('Lazy headers ForEach rejects nil callback',
     @TestLazyHeadersForEachRejectsNilCallback);
   T.Run('Policy header flags', @TestPolicyHeaderFlags);

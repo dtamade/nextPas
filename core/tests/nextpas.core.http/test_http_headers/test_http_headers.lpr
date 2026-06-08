@@ -461,6 +461,58 @@ begin
   ExpectHeaderError('set rejects NUL in value', True, 'x-good', 'bad'#0'value');
 end;
 
+procedure TestLookupAndRemoveRejectInvalidNames;
+var
+  LH: IHttpHeaders;
+  LAll: TStringArray;
+  LRaised: Boolean;
+begin
+  LH := NewHttpHeaders;
+  LH.SetHeader('X-Keep', 'value');
+
+  LRaised := False;
+  try
+    LH.Get('');
+  except
+    on E: EHttpError do
+      LRaised := E.Message = 'empty header name';
+  end;
+  Check(LRaised, 'get rejects empty name');
+
+  LRaised := False;
+  try
+    LH.Has('Bad Name');
+  except
+    on E: EHttpError do
+      LRaised := E.Message = 'invalid header name character';
+  end;
+  Check(LRaised, 'has rejects separator space in name');
+
+  LRaised := False;
+  try
+    LAll := LH.GetAll('Bad:Name');
+  except
+    on E: EHttpError do
+      LRaised := E.Message = 'invalid header name character';
+  end;
+  Check(LRaised, 'getall rejects colon in name');
+
+  LRaised := False;
+  try
+    LH.Remove('Bad/Name');
+  except
+    on E: EHttpError do
+      LRaised := E.Message = 'invalid header name character';
+  end;
+  Check(LRaised, 'remove rejects separator slash in name');
+
+  CheckEqual('value', LH.Get('X-Keep'),
+    'invalid lookup/remove attempts preserve existing entries');
+  LH.Remove('X-Missing');
+  CheckEqual(Int64(1), Int64(LH.Count),
+    'valid missing remove remains no-op');
+end;
+
 procedure TestValidationAcceptsTCharNames;
 var
   LH: IHttpHeaders;
@@ -572,6 +624,8 @@ begin
   T.Run('Parsed span add canonicalizes parser validated headers',
     @TestParsedSpanAddCanonicalizesParserValidatedHeaders);
   T.Run('Validation rejects invalid names and values', @TestValidationRejectsInvalidNamesAndValues);
+  T.Run('Lookup and remove reject invalid names',
+    @TestLookupAndRemoveRejectInvalidNames);
   T.Run('Validation accepts tchar names', @TestValidationAcceptsTCharNames);
   T.Run('SetBasicAuth sets Authorization', @TestSetBasicAuth);
   T.Run('SetBearerAuth sets Authorization', @TestSetBearerAuth);
