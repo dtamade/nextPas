@@ -88,6 +88,14 @@ begin
   Result := LValue.Value;
 end;
 
+function SingleMinPositiveSubnormal: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $00000001;
+  Result := LValue.Value;
+end;
+
 function DoubleMaxFinite: Double;
 var
   LValue: TDoubleBitCast;
@@ -101,6 +109,14 @@ var
   LValue: TDoubleBitCast;
 begin
   LValue.Bits := $0010000000000000;
+  Result := LValue.Value;
+end;
+
+function DoubleMinPositiveSubnormal: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $0000000000000001;
   Result := LValue.Value;
 end;
 
@@ -677,6 +693,18 @@ begin
     0.000000000001, 'ArcTan2 tiny positive ratio with negative x stays +PI');
   CheckNear(-PI_VALUE, ArcTan2(-DoubleMinPositiveNormal, -DoubleMaxFinite),
     0.000000000001, 'ArcTan2 tiny negative ratio with negative x stays -PI');
+  CheckNear(HALF_PI, ArcTan2(DoubleMaxFinite, DoubleMinPositiveSubnormal),
+    0.000000000001, 'ArcTan2 subnormal x huge positive finite ratio stays +PI/2');
+  CheckNear(-HALF_PI, ArcTan2(-DoubleMaxFinite, DoubleMinPositiveSubnormal),
+    0.000000000001, 'ArcTan2 subnormal x huge negative finite ratio stays -PI/2');
+  Check(IsDoublePositiveZero(ArcTan2(DoubleMinPositiveSubnormal, DoubleMaxFinite)),
+    'ArcTan2 subnormal y tiny positive finite ratio returns +0');
+  Check(IsDoubleNegativeZero(ArcTan2(-DoubleMinPositiveSubnormal, DoubleMaxFinite)),
+    'ArcTan2 subnormal y tiny negative finite ratio returns -0');
+  CheckNear(PI_VALUE, ArcTan2(DoubleMinPositiveSubnormal, -DoubleMaxFinite),
+    0.000000000001, 'ArcTan2 subnormal y tiny positive ratio with negative x stays +PI');
+  CheckNear(-PI_VALUE, ArcTan2(-DoubleMinPositiveSubnormal, -DoubleMaxFinite),
+    0.000000000001, 'ArcTan2 subnormal y tiny negative ratio with negative x stays -PI');
 
   CheckNear(HALF_PI, ArcTan2(SingleMaxFinite, SingleMinPositiveNormal),
     0.000001, 'ArcTan2 Single huge positive finite ratio stays +PI/2');
@@ -690,6 +718,18 @@ begin
     0.000001, 'ArcTan2 Single tiny positive ratio with negative x stays +PI');
   CheckNear(-PI_VALUE, ArcTan2(-SingleMinPositiveNormal, -SingleMaxFinite),
     0.000001, 'ArcTan2 Single tiny negative ratio with negative x stays -PI');
+  CheckNear(HALF_PI, ArcTan2(SingleMaxFinite, SingleMinPositiveSubnormal),
+    0.000001, 'ArcTan2 Single subnormal x huge positive finite ratio stays +PI/2');
+  CheckNear(-HALF_PI, ArcTan2(-SingleMaxFinite, SingleMinPositiveSubnormal),
+    0.000001, 'ArcTan2 Single subnormal x huge negative finite ratio stays -PI/2');
+  Check(IsSinglePositiveZero(ArcTan2(SingleMinPositiveSubnormal, SingleMaxFinite)),
+    'ArcTan2 Single subnormal y tiny positive finite ratio returns +0');
+  Check(IsSingleNegativeZero(ArcTan2(-SingleMinPositiveSubnormal, SingleMaxFinite)),
+    'ArcTan2 Single subnormal y tiny negative finite ratio returns -0');
+  CheckNear(PI_VALUE, ArcTan2(SingleMinPositiveSubnormal, -SingleMaxFinite),
+    0.000001, 'ArcTan2 Single subnormal y tiny positive ratio with negative x stays +PI');
+  CheckNear(-PI_VALUE, ArcTan2(-SingleMinPositiveSubnormal, -SingleMaxFinite),
+    0.000001, 'ArcTan2 Single subnormal y tiny negative ratio with negative x stays -PI');
 end;
 
 begin

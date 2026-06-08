@@ -862,19 +862,19 @@ REQUIRED_TRIG_CIRCULAR_DOC_TRUTH = (
     ),
     (
         "docs/math/README.md",
-        "`ArcTan2` finite extreme ratios stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.",
+        "`ArcTan2` finite extreme ratios, including min-subnormal/max-finite pairs, stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.",
     ),
     (
         "docs/math/API.md",
-        "`ArcTan2` finite extreme ratios stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.",
+        "`ArcTan2` finite extreme ratios, including min-subnormal/max-finite pairs, stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "`ArcTan2` finite extreme ratios stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.",
+        "`ArcTan2` finite extreme ratios, including min-subnormal/max-finite pairs, stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.",
     ),
     (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
-        "`ArcTan2` finite extreme ratios stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.",
+        "`ArcTan2` finite extreme ratios, including min-subnormal/max-finite pairs, stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.",
     ),
 )
 REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
@@ -1524,6 +1524,12 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("trig-atan2-single-positive-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcTan2(Single +0,+0)=+0"),
     RequiredBehaviorTestMarker("trig-atan2-single-negative-zero-negative-infinity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcTan2(Single -0,-Inf)=-PI"),
     RequiredBehaviorTestMarker("trig-atan2-finite-extreme-ratio", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('ArcTan2 finite extreme ratio contracts'"),
+    RequiredBehaviorTestMarker("trig-atan2-double-subnormal-x", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcTan2 subnormal x huge positive finite ratio stays +PI/2"),
+    RequiredBehaviorTestMarker("trig-atan2-double-subnormal-y-positive-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcTan2 subnormal y tiny positive finite ratio returns +0"),
+    RequiredBehaviorTestMarker("trig-atan2-double-subnormal-y-negative-pi", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcTan2 subnormal y tiny negative ratio with negative x stays -PI"),
+    RequiredBehaviorTestMarker("trig-atan2-single-subnormal-x", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcTan2 Single subnormal x huge positive finite ratio stays +PI/2"),
+    RequiredBehaviorTestMarker("trig-atan2-single-subnormal-y-negative-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcTan2 Single subnormal y tiny negative finite ratio returns -0"),
+    RequiredBehaviorTestMarker("trig-atan2-single-subnormal-y-positive-pi", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcTan2 Single subnormal y tiny positive ratio with negative x stays +PI"),
     RequiredBehaviorTestMarker("trig-exp-log-sqrt", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('exp/log/sqrt contracts'"),
     RequiredBehaviorTestMarker("trig-exp-sqrt-ieee", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('exp sqrt IEEE contracts'"),
     RequiredBehaviorTestMarker("trig-exp-negative-infinity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Exp(-Inf)=+0"),

@@ -169,7 +169,7 @@ Finite `Exp` overflow returns `+Inf`, and finite `Exp` underflow returns `+0`. F
 `Power` returns `1` for base `+1` before NaN-exponent handling and for exponent `0` before NaN-base handling. Nonzero NaN bases return `NaN`;
 infinite exponents follow `|base|` relative to `1`, with `+1` and `-1` returning `1`; infinite bases
 follow exponent sign and odd/even sign rules.
-`ArcTan2` finite extreme ratios stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.
+`ArcTan2` finite extreme ratios, including min-subnormal/max-finite pairs, stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.
 
 Degree/radian conversion belongs to `nextpas.core.math.scalar`; the root facade re-exports that
 scalar owner.
