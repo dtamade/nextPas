@@ -31,6 +31,23 @@ begin
   until LN = 0;
 end;
 
+function ReadTextFile(const APath: string): string;
+var
+  F: file;
+  LSize: Int64;
+begin
+  Assign(F, APath);
+  Reset(F, 1);
+  try
+    LSize := FileSize(F);
+    SetLength(Result, Int32(LSize));
+    if LSize > 0 then
+      BlockRead(F, Result[1], Int32(LSize));
+  finally
+    Close(F);
+  end;
+end;
+
 procedure TestSimpleGet;
 var
   LP: IH1Parser;
@@ -2053,6 +2070,66 @@ begin
     'nil positive-length input reports a non-empty error message');
 end;
 
+procedure TestParserErrorStateIsTerminalAcrossExecuteAndFinish;
+var
+  LP: IH1Parser;
+  LReq: string;
+  LConsumed: SizeUInt;
+  LKind: TH1ParserErrorKind;
+  LMessage: string;
+  LBodySize: Int64;
+begin
+  LP := NewH1RequestParser;
+  LP.Execute(nil, 1);
+  Check(LP.HasError, 'terminal-error: parser reports initial error');
+  Check(not LP.IsComplete, 'terminal-error: parser is initially incomplete');
+
+  LKind := LP.ErrorKind;
+  LMessage := LP.ErrorMessage;
+  LBodySize := LP.GetBodySize;
+  Check(LMessage <> '', 'terminal-error: parser reports initial error message');
+
+  LReq := 'GET /after-error HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10#13#10;
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+
+  CheckEqual(Int64(0), Int64(LConsumed),
+    'terminal-error: follow-up execute consumes nothing');
+  Check(LP.HasError, 'terminal-error: follow-up execute keeps error');
+  Check(not LP.IsComplete, 'terminal-error: follow-up execute stays incomplete');
+  Check(LP.ErrorKind = LKind, 'terminal-error: execute keeps error kind');
+  CheckEqual(LMessage, LP.ErrorMessage,
+    'terminal-error: execute keeps error message');
+  CheckEqual(LBodySize, LP.GetBodySize,
+    'terminal-error: execute keeps body size');
+
+  LP.Finish;
+
+  Check(LP.HasError, 'terminal-error: finish keeps error');
+  Check(not LP.IsComplete, 'terminal-error: finish stays incomplete');
+  Check(LP.ErrorKind = LKind, 'terminal-error: finish keeps error kind');
+  CheckEqual(LMessage, LP.ErrorMessage,
+    'terminal-error: finish keeps error message');
+  CheckEqual(LBodySize, LP.GetBodySize,
+    'terminal-error: finish keeps body size');
+end;
+
+procedure TestParserFinishShortCircuitsExistingErrorSourceContract;
+var
+  LSource: string;
+  LFinishBlock: string;
+  LCallPos: SizeInt;
+begin
+  LSource := ReadTextFile('../../../src/nextpas.core.http.impl.h1.parser.pas');
+  LCallPos := Pos('procedure TH1Parser.Finish;', LSource);
+  Check(LCallPos > 0, 'finish source contract finds TH1Parser.Finish');
+  LFinishBlock := Copy(LSource, LCallPos, 512);
+  LCallPos := Pos('llhttp_finish(@FParser)', LFinishBlock);
+  Check(LCallPos > 0, 'finish source contract finds llhttp_finish call');
+  Check(Pos('FError', Copy(LFinishBlock, 1, LCallPos - 1)) > 0,
+    'finish source contract checks FError before llhttp_finish');
+end;
+
 procedure TestResetAndReparse;
 var
   LP: IH1Parser;
@@ -2268,6 +2345,10 @@ begin
   T.Run('Nil zero-length input is noop', @TestNilZeroLengthInputIsNoop);
   T.Run('Nil positive-length input reports malformed',
     @TestNilPositiveLengthInputReportsMalformed);
+  T.Run('Parser error state is terminal across execute and finish',
+    @TestParserErrorStateIsTerminalAcrossExecuteAndFinish);
+  T.Run('Parser finish short-circuits existing error source contract',
+    @TestParserFinishShortCircuitsExistingErrorSourceContract);
   T.Run('Reset and reparse', @TestResetAndReparse);
   T.Run('Request with query', @TestRequestWithQuery);
   T.Run('Multiple headers same name', @TestMultipleHeadersSameName);

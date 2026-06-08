@@ -664,6 +664,9 @@ function TH1Parser.Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUIn
 var
   LErrno: TLlhttpErrnoT;
 begin
+  if FError then
+    Exit(0);
+
   if (ABuf = nil) and (ALen > 0) then
   begin
     FError := True;
@@ -727,7 +730,7 @@ procedure TH1Parser.Finish;
 var
   LErrno: TLlhttpErrnoT;
 begin
-  if FComplete then Exit;
+  if FComplete or FError then Exit;
   LErrno := llhttp_finish(@FParser);
   if (LErrno = HPE_OK) or (FComplete) then
     { on_message_complete was called by llhttp_finish }
