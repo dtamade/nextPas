@@ -42,6 +42,34 @@ implementation
 uses
   nextpas.core.math.impl.scalar;
 
+const
+  DOUBLE_EXP_OVERFLOW_LIMIT: Double = 709.7827128933839731;
+  DOUBLE_EXP_UNDERFLOW_ZERO_LIMIT: Double = -745.1332191019411084;
+  SINGLE_EXP_OVERFLOW_LIMIT: Double = 88.722839052068353;
+  SINGLE_EXP_UNDERFLOW_ZERO_LIMIT: Double = -103.9720840454101563;
+
+function SingleSignedZero(const ANegative: Boolean): Single; inline;
+var
+  LBits: UInt32;
+begin
+  if ANegative then
+    LBits := UInt32($80000000)
+  else
+    LBits := UInt32(0);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
+function SingleSignedInfinity(const ANegative: Boolean): Single; inline;
+var
+  LBits: UInt32;
+begin
+  if ANegative then
+    LBits := UInt32($FF800000)
+  else
+    LBits := UInt32($7F800000);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
 function DoubleHasSignBit(const AValue: Double): Boolean; inline;
 var
   LBits: UInt64;
@@ -66,6 +94,34 @@ begin
   else
     LBits := UInt64($7FF0000000000000);
   Move(LBits, Result, SizeOf(Result));
+end;
+
+function AbsDouble(const AValue: Double): Double; inline;
+begin
+  if AValue < 0.0 then
+    Result := -AValue
+  else
+    Result := AValue;
+end;
+
+function ProductGreaterThan(const ALeft, ARight, ALimit: Double): Boolean; inline;
+begin
+  if ARight > 0.0 then
+    Result := ALeft > ALimit / ARight
+  else if ARight < 0.0 then
+    Result := ALeft < ALimit / ARight
+  else
+    Result := 0.0 > ALimit;
+end;
+
+function ProductLessThan(const ALeft, ARight, ALimit: Double): Boolean; inline;
+begin
+  if ARight > 0.0 then
+    Result := ALeft < ALimit / ARight
+  else if ARight < 0.0 then
+    Result := ALeft > ALimit / ARight
+  else
+    Result := 0.0 < ALimit;
 end;
 
 function Sin(const AX: Single): Single;
@@ -212,13 +268,33 @@ begin
   end;
 
   if AX > 0.0 then
-    Result := ArcTan(AY / AX)
+  begin
+    if AbsDouble(AY) > AX then
+    begin
+      if AY > 0.0 then
+        Result := HALF_PI - ArcTan(AX / AY)
+      else
+        Result := -HALF_PI + ArcTan(AX / -AY);
+    end
+    else
+      Result := ArcTan(AY / AX);
+  end
   else if AX < 0.0 then
   begin
-    if AY > 0.0 then
-      Result := ArcTan(AY / AX) + PI_VALUE
+    if AbsDouble(AY) > -AX then
+    begin
+      if AY > 0.0 then
+        Result := HALF_PI + ArcTan((-AX) / AY)
+      else
+        Result := -HALF_PI - ArcTan((-AX) / -AY);
+    end
     else
-      Result := ArcTan(AY / AX) - PI_VALUE;
+    begin
+      if AY > 0.0 then
+        Result := ArcTan(AY / AX) + PI_VALUE
+      else
+        Result := ArcTan(AY / AX) - PI_VALUE;
+    end;
   end
   else if AY > 0.0 then
     Result := HALF_PI
@@ -230,7 +306,19 @@ end;
 
 function Exp(const AX: Single): Single;
 begin
-  Result := Single(Exp(Double(AX)));
+  if SingleIsNaN(AX) then
+    Exit(SingleQuietNaN);
+  if SingleIsInfinite(AX) then
+  begin
+    if AX > 0.0 then
+      Exit(AX);
+    Exit(SingleSignedZero(False));
+  end;
+  if Double(AX) > SINGLE_EXP_OVERFLOW_LIMIT then
+    Exit(SingleSignedInfinity(False));
+  if Double(AX) < SINGLE_EXP_UNDERFLOW_ZERO_LIMIT then
+    Exit(SingleSignedZero(False));
+  Result := Single(System.Exp(Double(AX)));
 end;
 
 function Exp(const AX: Double): Double;
@@ -243,6 +331,10 @@ begin
       Exit(AX);
     Exit(DoubleSignedZero(False));
   end;
+  if AX > DOUBLE_EXP_OVERFLOW_LIMIT then
+    Exit(DoubleSignedInfinity(False));
+  if AX < DOUBLE_EXP_UNDERFLOW_ZERO_LIMIT then
+    Exit(DoubleSignedZero(False));
   Result := System.Exp(AX);
 end;
 
@@ -317,10 +409,14 @@ begin
   Result := (LExponent and 1) <> 0;
 end;
 
-function Power(const ABase, AExponent: Double): Double;
+function PowerWithExpLimits(const ABase, AExponent, AOverflowLimit,
+  AUnderflowZeroLimit: Double): Double;
 var
   LAbsBase: Double;
+  LLogAbsBase: Double;
   LResult: Double;
+  LScaledExponent: Double;
+  LNegativeResult: Boolean;
 begin
   if DoubleIsNaN(AExponent) then
     Exit(DoubleQuietNaN);
@@ -374,20 +470,36 @@ begin
     if not IsIntegerValue(AExponent) then
       Exit(DoubleQuietNaN);
     LAbsBase := -ABase;
-    LResult := System.Exp(AExponent * System.Ln(LAbsBase));
-    if IsOddIntegerValue(AExponent) then
-      Result := -LResult
-    else
-      Result := LResult;
-    Exit;
   end;
 
-  Result := System.Exp(AExponent * System.Ln(ABase));
+  if ABase > 0.0 then
+    LAbsBase := ABase;
+
+  LLogAbsBase := System.Ln(LAbsBase);
+  LNegativeResult := (ABase < 0.0) and IsOddIntegerValue(AExponent);
+  if ProductGreaterThan(AExponent, LLogAbsBase, AOverflowLimit) then
+    Exit(DoubleSignedInfinity(LNegativeResult));
+  if ProductLessThan(AExponent, LLogAbsBase, AUnderflowZeroLimit) then
+    Exit(DoubleSignedZero(LNegativeResult));
+
+  LScaledExponent := AExponent * LLogAbsBase;
+  LResult := System.Exp(LScaledExponent);
+  if LNegativeResult then
+    Result := -LResult
+  else
+    Result := LResult;
+end;
+
+function Power(const ABase, AExponent: Double): Double;
+begin
+  Result := PowerWithExpLimits(ABase, AExponent, DOUBLE_EXP_OVERFLOW_LIMIT,
+    DOUBLE_EXP_UNDERFLOW_ZERO_LIMIT);
 end;
 
 function Power(const ABase, AExponent: Single): Single;
 begin
-  Result := Single(Power(Double(ABase), Double(AExponent)));
+  Result := Single(PowerWithExpLimits(Double(ABase), Double(AExponent),
+    SINGLE_EXP_OVERFLOW_LIMIT, SINGLE_EXP_UNDERFLOW_ZERO_LIMIT));
 end;
 
 function Sqrt(const AX: Double): Double;

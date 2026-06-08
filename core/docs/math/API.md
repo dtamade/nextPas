@@ -122,6 +122,7 @@ Trig helpers:
 
 `Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity.
 `ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan` preserves signed zero, maps infinities to `+/-PI/2`, and returns `NaN` for `NaN`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.
+`ArcTan2` finite extreme ratios stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.
 `Power` preserves negative-zero sign only for odd integer exponents: positive odd exponents return
 `-0`, and negative odd exponents return negative infinity. Non-odd zero-base exponents follow the
 positive-zero / positive-infinity zero-base behavior. Except for exponent `0`, a NaN exponent takes
@@ -130,6 +131,7 @@ priority over zero-base handling, so `0^NaN` and `-0^NaN` return NaN.
 values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`.
 `Exp` propagates `NaN`, returns `+Inf` for `+Inf`, and returns `+0` for `-Inf`. `Sqrt` preserves
 signed zero, returns `+Inf` for `+Inf`, and returns `NaN` for `NaN`, negative finite values, or `-Inf`.
+Finite `Exp` overflow returns `+Inf`, and finite `Exp` underflow returns `+0`. Finite `Power` overflow and underflow preserve the mathematically required sign for odd integer exponents with negative finite bases.
 `Power` returns `1` for exponent `0` before NaN-base handling. Nonzero NaN bases return `NaN`;
 infinite exponents follow `|base|` relative to `1`, with `+1` and `-1` returning `1`; infinite bases
 follow exponent sign and odd/even sign rules. `Power` returns `NaN` for negative finite bases with

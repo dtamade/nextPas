@@ -790,6 +790,22 @@ REQUIRED_TRIG_POWER_DOC_TRUTH = (
         "docs/math/GOAL_TREE.md",
         "`Power` returns `NaN` for negative finite bases with non-integer exponents instead of entering host logarithm domain errors.",
     ),
+    (
+        "docs/math/README.md",
+        "Finite `Exp` overflow returns `+Inf`, and finite `Exp` underflow returns `+0`. Finite `Power` overflow and underflow preserve the mathematically required sign for odd integer exponents with negative finite bases.",
+    ),
+    (
+        "docs/math/API.md",
+        "Finite `Exp` overflow returns `+Inf`, and finite `Exp` underflow returns `+0`. Finite `Power` overflow and underflow preserve the mathematically required sign for odd integer exponents with negative finite bases.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "Finite `Exp` overflow returns `+Inf`, and finite `Exp` underflow returns `+0`. Finite `Power` overflow and underflow preserve the mathematically required sign for odd integer exponents with negative finite bases.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "Finite `Exp` overflow returns `+Inf`, and finite `Exp` underflow returns `+0`. Finite `Power` overflow and underflow preserve the mathematically required sign for odd integer exponents with negative finite bases.",
+    ),
 )
 REQUIRED_TRIG_CIRCULAR_DOC_TRUTH = (
     (
@@ -815,6 +831,22 @@ REQUIRED_TRIG_CIRCULAR_DOC_TRUTH = (
     (
         "docs/math/GOAL_TREE.md",
         "`ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan` preserves signed zero, maps infinities to `+/-PI/2`, and returns `NaN` for `NaN`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.",
+    ),
+    (
+        "docs/math/README.md",
+        "`ArcTan2` finite extreme ratios stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.",
+    ),
+    (
+        "docs/math/API.md",
+        "`ArcTan2` finite extreme ratios stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`ArcTan2` finite extreme ratios stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`ArcTan2` finite extreme ratios stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.",
     ),
 )
 REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
@@ -1342,9 +1374,11 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("trig-atan2-double-zero-negative-infinity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcTan2(+0,-Inf)=+PI"),
     RequiredBehaviorTestMarker("trig-atan2-single-positive-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcTan2(Single +0,+0)=+0"),
     RequiredBehaviorTestMarker("trig-atan2-single-negative-zero-negative-infinity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcTan2(Single -0,-Inf)=-PI"),
+    RequiredBehaviorTestMarker("trig-atan2-finite-extreme-ratio", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('ArcTan2 finite extreme ratio contracts'"),
     RequiredBehaviorTestMarker("trig-exp-log-sqrt", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('exp/log/sqrt contracts'"),
     RequiredBehaviorTestMarker("trig-exp-sqrt-ieee", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('exp sqrt IEEE contracts'"),
     RequiredBehaviorTestMarker("trig-exp-negative-infinity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Exp(-Inf)=+0"),
+    RequiredBehaviorTestMarker("trig-exp-finite-overflow-underflow", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('Exp finite overflow underflow contracts'"),
     RequiredBehaviorTestMarker("trig-sqrt-negative-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Sqrt(-0)=-0"),
     RequiredBehaviorTestMarker("trig-log-domain-signed-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('log domain signed zero contracts'"),
     RequiredBehaviorTestMarker("trig-log-domain-ln-negative-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Ln(-0)=-Inf"),
@@ -1356,6 +1390,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("trig-power-nan-base", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Power NaN base nonzero exponent returns NaN"),
     RequiredBehaviorTestMarker("trig-power-unit-infinite-exponent", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Power -1 +Inf exponent returns 1"),
     RequiredBehaviorTestMarker("trig-power-infinite-base-odd-negative", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Power -Inf odd negative exponent returns -0"),
+    RequiredBehaviorTestMarker("trig-power-finite-overflow-underflow-sign", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('Power finite overflow underflow sign contracts'"),
     RequiredBehaviorTestMarker("facade-angle-conversions", "tests/nextpas.core.math/test_facade/test_facade.lpr", "facade re-exports RadToDeg"),
     RequiredBehaviorTestMarker("vec-2f", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec2f contracts'"),
     RequiredBehaviorTestMarker("vec-2f-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec2f huge finite length + normalize'"),

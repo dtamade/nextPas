@@ -72,6 +72,38 @@ begin
   Result := LValue.Value;
 end;
 
+function SingleMaxFinite: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7F7FFFFF;
+  Result := LValue.Value;
+end;
+
+function SingleMinPositiveNormal: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $00800000;
+  Result := LValue.Value;
+end;
+
+function DoubleMaxFinite: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FEFFFFFFFFFFFFF;
+  Result := LValue.Value;
+end;
+
+function DoubleMinPositiveNormal: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $0010000000000000;
+  Result := LValue.Value;
+end;
+
 function SingleNegativeZero: Single;
 var
   LValue: TSingleBitCast;
@@ -410,6 +442,16 @@ begin
   Check(IsSingleNaN(Sqrt(-SingleInfinity)), 'Sqrt(Single -Inf)=NaN');
 end;
 
+procedure TestExpFiniteOverflowUnderflowContracts;
+begin
+  Check(IsDoublePositiveInfinity(Exp(710.0)), 'Exp finite overflow returns +Inf');
+  Check(IsDoublePositiveZero(Exp(-746.0)), 'Exp finite underflow returns +0');
+  Check(IsSinglePositiveInfinity(Exp(Single(89.0))),
+    'Exp Single finite overflow returns +Inf');
+  Check(IsSinglePositiveZero(Exp(Single(-104.0))),
+    'Exp Single finite underflow returns +0');
+end;
+
 procedure CheckLogDomainDouble(const AName: string; const ALogPositiveZero,
   ALogNegativeZero, ALogNegative, ALogNegativeInfinity, ALogNaN,
   ALogPositiveInfinity: Double);
@@ -592,6 +634,56 @@ begin
     'Power Single negative abs(base)>1 -Inf exponent returns +0');
 end;
 
+procedure TestPowerFiniteOverflowUnderflowSignContracts;
+begin
+  Check(IsDoublePositiveInfinity(Power(2.0, 1024.0)),
+    'Power finite overflow returns +Inf');
+  Check(IsDoubleNegativeInfinity(Power(-2.0, 1025.0)),
+    'Power negative finite odd overflow returns -Inf');
+  Check(IsDoublePositiveZero(Power(2.0, -1075.0)),
+    'Power finite underflow returns +0');
+  Check(IsDoubleNegativeZero(Power(-2.0, -1075.0)),
+    'Power negative finite odd underflow returns -0');
+
+  Check(IsSinglePositiveInfinity(Power(Single(2.0), Single(128.0))),
+    'Power Single finite overflow returns +Inf');
+  Check(IsSingleNegativeInfinity(Power(Single(-2.0), Single(129.0))),
+    'Power Single negative finite odd overflow returns -Inf');
+  Check(IsSinglePositiveZero(Power(Single(2.0), Single(-151.0))),
+    'Power Single finite underflow returns +0');
+  Check(IsSingleNegativeZero(Power(Single(-2.0), Single(-151.0))),
+    'Power Single negative finite odd underflow returns -0');
+end;
+
+procedure TestArcTan2FiniteExtremeRatioContracts;
+begin
+  CheckNear(HALF_PI, ArcTan2(DoubleMaxFinite, DoubleMinPositiveNormal),
+    0.000000000001, 'ArcTan2 huge positive finite ratio stays +PI/2');
+  CheckNear(-HALF_PI, ArcTan2(-DoubleMaxFinite, DoubleMinPositiveNormal),
+    0.000000000001, 'ArcTan2 huge negative finite ratio stays -PI/2');
+  Check(IsDoublePositiveZero(ArcTan2(DoubleMinPositiveNormal, DoubleMaxFinite)),
+    'ArcTan2 tiny positive finite ratio returns +0');
+  Check(IsDoubleNegativeZero(ArcTan2(-DoubleMinPositiveNormal, DoubleMaxFinite)),
+    'ArcTan2 tiny negative finite ratio returns -0');
+  CheckNear(PI_VALUE, ArcTan2(DoubleMinPositiveNormal, -DoubleMaxFinite),
+    0.000000000001, 'ArcTan2 tiny positive ratio with negative x stays +PI');
+  CheckNear(-PI_VALUE, ArcTan2(-DoubleMinPositiveNormal, -DoubleMaxFinite),
+    0.000000000001, 'ArcTan2 tiny negative ratio with negative x stays -PI');
+
+  CheckNear(HALF_PI, ArcTan2(SingleMaxFinite, SingleMinPositiveNormal),
+    0.000001, 'ArcTan2 Single huge positive finite ratio stays +PI/2');
+  CheckNear(-HALF_PI, ArcTan2(-SingleMaxFinite, SingleMinPositiveNormal),
+    0.000001, 'ArcTan2 Single huge negative finite ratio stays -PI/2');
+  Check(IsSinglePositiveZero(ArcTan2(SingleMinPositiveNormal, SingleMaxFinite)),
+    'ArcTan2 Single tiny positive finite ratio returns +0');
+  Check(IsSingleNegativeZero(ArcTan2(-SingleMinPositiveNormal, SingleMaxFinite)),
+    'ArcTan2 Single tiny negative finite ratio returns -0');
+  CheckNear(PI_VALUE, ArcTan2(SingleMinPositiveNormal, -SingleMaxFinite),
+    0.000001, 'ArcTan2 Single tiny positive ratio with negative x stays +PI');
+  CheckNear(-PI_VALUE, ArcTan2(-SingleMinPositiveNormal, -SingleMaxFinite),
+    0.000001, 'ArcTan2 Single tiny negative ratio with negative x stays -PI');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.trig');
   T.Run('basic trig values', @TestBasicTrigValues);
@@ -604,10 +696,14 @@ begin
   T.Run('ArcTan2 signed zero contracts', @TestArcTan2SignedZeroContracts);
   T.Run('exp/log/sqrt contracts', @TestExpLogAndSqrtContracts);
   T.Run('exp sqrt IEEE contracts', @TestExpSqrtIEEEContracts);
+  T.Run('Exp finite overflow underflow contracts', @TestExpFiniteOverflowUnderflowContracts);
   T.Run('log domain signed zero contracts', @TestLogDomainSignedZeroContracts);
   T.Run('power edge contracts', @TestPowerEdgeContracts);
   T.Run('power negative finite base non-integer contracts',
     @TestPowerNegativeFiniteBaseNonIntegerContracts);
   T.Run('power non-finite contracts', @TestPowerNonFiniteContracts);
+  T.Run('Power finite overflow underflow sign contracts',
+    @TestPowerFiniteOverflowUnderflowSignContracts);
+  T.Run('ArcTan2 finite extreme ratio contracts', @TestArcTan2FiniteExtremeRatioContracts);
   T.Summary;
 end.
