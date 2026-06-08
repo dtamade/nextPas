@@ -194,11 +194,19 @@ end;
 
 function Exp(const AX: Single): Single;
 begin
-  Result := Single(System.Exp(Double(AX)));
+  Result := Single(Exp(Double(AX)));
 end;
 
 function Exp(const AX: Double): Double;
 begin
+  if DoubleIsNaN(AX) then
+    Exit(DoubleQuietNaN);
+  if DoubleIsInfinite(AX) then
+  begin
+    if AX > 0.0 then
+      Exit(AX);
+    Exit(DoubleSignedZero(False));
+  end;
   Result := System.Exp(AX);
 end;
 
@@ -283,6 +291,8 @@ begin
     Exit(DoubleQuietNaN);
   if AExponent = 0.0 then
     Exit(1.0);
+  if DoubleIsNaN(ABase) then
+    Exit(DoubleQuietNaN);
   if ABase = 0.0 then
   begin
     if AExponent > 0.0 then
@@ -290,6 +300,38 @@ begin
     if DoubleHasSignBit(ABase) and IsOddIntegerValue(AExponent) then
       Exit(DoubleSignedInfinity(True));
     Exit(DoubleSignedInfinity(False));
+  end;
+  if ((ABase = 1.0) or (ABase = -1.0)) and DoubleIsInfinite(AExponent) then
+    Exit(1.0);
+  if DoubleIsInfinite(AExponent) then
+  begin
+    LAbsBase := ABase;
+    if LAbsBase < 0.0 then
+      LAbsBase := -LAbsBase;
+    if LAbsBase > 1.0 then
+    begin
+      if AExponent > 0.0 then
+        Exit(DoubleSignedInfinity(False));
+      Exit(DoubleSignedZero(False));
+    end;
+    if LAbsBase < 1.0 then
+    begin
+      if AExponent > 0.0 then
+        Exit(DoubleSignedZero(False));
+      Exit(DoubleSignedInfinity(False));
+    end;
+  end;
+  if DoubleIsInfinite(ABase) then
+  begin
+    if AExponent > 0.0 then
+    begin
+      if (ABase < 0.0) and IsOddIntegerValue(AExponent) then
+        Exit(DoubleSignedInfinity(True));
+      Exit(DoubleSignedInfinity(False));
+    end;
+    if (ABase < 0.0) and IsOddIntegerValue(AExponent) then
+      Exit(DoubleSignedZero(True));
+    Exit(DoubleSignedZero(False));
   end;
 
   if (ABase < 0.0) and IsIntegerValue(AExponent) and
@@ -318,6 +360,14 @@ function Sqrt(const AX: Double): Double;
 begin
   if DoubleIsNaN(AX) then
     Exit(DoubleQuietNaN);
+  if AX = 0.0 then
+    Exit(DoubleSignedZero(DoubleHasSignBit(AX)));
+  if DoubleIsInfinite(AX) then
+  begin
+    if AX > 0.0 then
+      Exit(AX);
+    Exit(DoubleQuietNaN);
+  end;
   if AX < 0.0 then
     Exit(DoubleQuietNaN);
   Result := System.Sqrt(AX);

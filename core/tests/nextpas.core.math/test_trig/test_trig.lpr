@@ -259,6 +259,27 @@ begin
   Check(IsSingleNaN(Sqrt(Single(-1.0))), 'Sqrt(Single -1)=NaN');
 end;
 
+procedure TestExpSqrtIEEEContracts;
+begin
+  Check(IsDoubleNaN(Exp(DoubleNaN)), 'Exp(NaN)=NaN');
+  Check(IsSingleNaN(Exp(SingleNaN)), 'Exp(Single NaN)=NaN');
+  Check(IsDoublePositiveInfinity(Exp(DoubleInfinity)), 'Exp(+Inf)=+Inf');
+  Check(IsSinglePositiveInfinity(Exp(SingleInfinity)), 'Exp(Single +Inf)=+Inf');
+  Check(IsDoublePositiveZero(Exp(-DoubleInfinity)), 'Exp(-Inf)=+0');
+  Check(IsSinglePositiveZero(Exp(-SingleInfinity)), 'Exp(Single -Inf)=+0');
+
+  Check(IsDoubleNaN(Sqrt(DoubleNaN)), 'Sqrt(NaN)=NaN');
+  Check(IsSingleNaN(Sqrt(SingleNaN)), 'Sqrt(Single NaN)=NaN');
+  Check(IsDoublePositiveZero(Sqrt(0.0)), 'Sqrt(+0)=+0');
+  Check(IsSinglePositiveZero(Sqrt(Single(0.0))), 'Sqrt(Single +0)=+0');
+  Check(IsDoubleNegativeZero(Sqrt(DoubleNegativeZero)), 'Sqrt(-0)=-0');
+  Check(IsSingleNegativeZero(Sqrt(SingleNegativeZero)), 'Sqrt(Single -0)=-0');
+  Check(IsDoublePositiveInfinity(Sqrt(DoubleInfinity)), 'Sqrt(+Inf)=+Inf');
+  Check(IsSinglePositiveInfinity(Sqrt(SingleInfinity)), 'Sqrt(Single +Inf)=+Inf');
+  Check(IsDoubleNaN(Sqrt(-DoubleInfinity)), 'Sqrt(-Inf)=NaN');
+  Check(IsSingleNaN(Sqrt(-SingleInfinity)), 'Sqrt(Single -Inf)=NaN');
+end;
+
 procedure CheckLogDomainDouble(const AName: string; const ALogPositiveZero,
   ALogNegativeZero, ALogNegative, ALogNegativeInfinity, ALogNaN,
   ALogPositiveInfinity: Double);
@@ -352,6 +373,73 @@ begin
     'Power Single negative zero even negative exponent returns +Inf');
 end;
 
+procedure TestPowerNonFiniteContracts;
+begin
+  Check(IsDoubleNaN(Power(DoubleNaN, 2.0)), 'Power NaN base nonzero exponent returns NaN');
+  CheckNear(1.0, Power(DoubleNaN, 0.0), 0.0, 'Power NaN base zero exponent returns 1');
+
+  CheckNear(1.0, Power(1.0, DoubleInfinity), 0.0,
+    'Power +1 +Inf exponent returns 1');
+  CheckNear(1.0, Power(1.0, -DoubleInfinity), 0.0,
+    'Power +1 -Inf exponent returns 1');
+  CheckNear(1.0, Power(-1.0, DoubleInfinity), 0.0,
+    'Power -1 +Inf exponent returns 1');
+  CheckNear(1.0, Power(-1.0, -DoubleInfinity), 0.0,
+    'Power -1 -Inf exponent returns 1');
+  CheckNear(1.0, Power(Single(1.0), SingleInfinity), 0.0,
+    'Power Single +1 +Inf exponent returns 1');
+  CheckNear(1.0, Power(Single(1.0), -SingleInfinity), 0.0,
+    'Power Single +1 -Inf exponent returns 1');
+  CheckNear(1.0, Power(Single(-1.0), SingleInfinity), 0.0,
+    'Power Single -1 +Inf exponent returns 1');
+  CheckNear(1.0, Power(Single(-1.0), -SingleInfinity), 0.0,
+    'Power Single -1 -Inf exponent returns 1');
+
+  Check(IsDoublePositiveZero(Power(0.0, DoubleInfinity)),
+    'Power +0 +Inf exponent returns +0');
+  Check(IsDoublePositiveInfinity(Power(0.0, -DoubleInfinity)),
+    'Power +0 -Inf exponent returns +Inf');
+  Check(IsDoublePositiveZero(Power(DoubleNegativeZero, DoubleInfinity)),
+    'Power -0 +Inf exponent returns +0');
+  Check(IsDoublePositiveInfinity(Power(DoubleNegativeZero, -DoubleInfinity)),
+    'Power -0 -Inf exponent returns +Inf');
+
+  Check(IsDoublePositiveInfinity(Power(2.0, DoubleInfinity)),
+    'Power abs(base)>1 +Inf exponent returns +Inf');
+  Check(IsDoublePositiveZero(Power(2.0, -DoubleInfinity)),
+    'Power abs(base)>1 -Inf exponent returns +0');
+  Check(IsDoublePositiveZero(Power(0.5, DoubleInfinity)),
+    'Power abs(base)<1 +Inf exponent returns +0');
+  Check(IsDoublePositiveInfinity(Power(0.5, -DoubleInfinity)),
+    'Power abs(base)<1 -Inf exponent returns +Inf');
+  Check(IsDoublePositiveInfinity(Power(-2.0, DoubleInfinity)),
+    'Power negative abs(base)>1 +Inf exponent returns +Inf');
+  Check(IsDoublePositiveZero(Power(-2.0, -DoubleInfinity)),
+    'Power negative abs(base)>1 -Inf exponent returns +0');
+
+  Check(IsDoublePositiveInfinity(Power(DoubleInfinity, 2.0)),
+    'Power +Inf positive exponent returns +Inf');
+  Check(IsDoublePositiveZero(Power(DoubleInfinity, -1.0)),
+    'Power +Inf negative exponent returns +0');
+  Check(IsDoubleNegativeInfinity(Power(-DoubleInfinity, 3.0)),
+    'Power -Inf odd positive exponent returns -Inf');
+  Check(IsDoubleNegativeZero(Power(-DoubleInfinity, -3.0)),
+    'Power -Inf odd negative exponent returns -0');
+  Check(IsDoublePositiveInfinity(Power(-DoubleInfinity, 2.0)),
+    'Power -Inf even positive exponent returns +Inf');
+  Check(IsDoublePositiveZero(Power(-DoubleInfinity, -2.0)),
+    'Power -Inf even negative exponent returns +0');
+
+  CheckNear(1.0, Power(SingleNaN, Single(0.0)), 0.0,
+    'Power Single NaN base zero exponent returns 1');
+  Check(IsSingleNaN(Power(SingleNaN, Single(2.0))),
+    'Power Single NaN base nonzero exponent returns NaN');
+  Check(IsSinglePositiveInfinity(Power(Single(-2.0), SingleInfinity)),
+    'Power Single negative abs(base)>1 +Inf exponent returns +Inf');
+  Check(IsSinglePositiveZero(Power(Single(-2.0), -SingleInfinity)),
+    'Power Single negative abs(base)>1 -Inf exponent returns +0');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.trig');
   T.Run('basic trig values', @TestBasicTrigValues);
@@ -359,7 +447,9 @@ begin
   T.Run('ArcTan2 special cases', @TestArcTan2SpecialCases);
   T.Run('ArcTan2 signed zero contracts', @TestArcTan2SignedZeroContracts);
   T.Run('exp/log/sqrt contracts', @TestExpLogAndSqrtContracts);
+  T.Run('exp sqrt IEEE contracts', @TestExpSqrtIEEEContracts);
   T.Run('log domain signed zero contracts', @TestLogDomainSignedZeroContracts);
   T.Run('power edge contracts', @TestPowerEdgeContracts);
+  T.Run('power non-finite contracts', @TestPowerNonFiniteContracts);
   T.Summary;
 end.
