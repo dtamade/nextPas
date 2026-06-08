@@ -165,6 +165,7 @@ type
 
 const
   UNSUPPORTED_REQUEST_VERSION_REASON = 'Unsupported HTTP request version';
+  UNSUPPORTED_RESPONSE_VERSION_REASON = 'Unsupported HTTP response version';
   UNSUPPORTED_REQUEST_METHOD_REASON = 'Unsupported HTTP request method';
   INVALID_TRANSFER_ENCODING_REASON = 'Invalid `Transfer-Encoding` header value';
   UNSUPPORTED_REQUEST_TRANSFER_CODING_REASON =
@@ -601,7 +602,7 @@ begin
   Result := TH1Parser(p0^.data);
 end;
 
-function IsSupportedRequestVersion(const AParser: PTLlhttpInternalT): Boolean; inline;
+function IsSupportedHttpVersion(const AParser: PTLlhttpInternalT): Boolean; inline;
 begin
   Result := (AParser^.http_major = 1) and
             ((AParser^.http_minor = 0) or (AParser^.http_minor = 1));
@@ -732,9 +733,12 @@ var
   LSelf: TH1Parser;
 begin
   LSelf := GetSelf(p0);
-  if (LSelf.FParserType = ptRequest) and (not IsSupportedRequestVersion(p0)) then
+  if not IsSupportedHttpVersion(p0) then
   begin
-    llhttp_set_error_reason(p0, PAnsiChar(UNSUPPORTED_REQUEST_VERSION_REASON));
+    if LSelf.FParserType = ptRequest then
+      llhttp_set_error_reason(p0, PAnsiChar(UNSUPPORTED_REQUEST_VERSION_REASON))
+    else
+      llhttp_set_error_reason(p0, PAnsiChar(UNSUPPORTED_RESPONSE_VERSION_REASON));
     Exit(HPE_INVALID_VERSION);
   end;
   // Extract version
@@ -798,9 +802,12 @@ var
   LSelf: TH1Parser;
 begin
   LSelf := GetSelf(p0);
-  if (LSelf.FParserType = ptRequest) and (not IsSupportedRequestVersion(p0)) then
+  if not IsSupportedHttpVersion(p0) then
   begin
-    llhttp_set_error_reason(p0, PAnsiChar(UNSUPPORTED_REQUEST_VERSION_REASON));
+    if LSelf.FParserType = ptRequest then
+      llhttp_set_error_reason(p0, PAnsiChar(UNSUPPORTED_REQUEST_VERSION_REASON))
+    else
+      llhttp_set_error_reason(p0, PAnsiChar(UNSUPPORTED_RESPONSE_VERSION_REASON));
     Exit(HPE_INVALID_VERSION);
   end;
   LSelf.FComplete := True;

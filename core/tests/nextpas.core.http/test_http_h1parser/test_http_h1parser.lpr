@@ -632,6 +632,34 @@ begin
   Check(not LP.ShouldKeepAlive, 'http/1.0 response without keep-alive is not reusable');
 end;
 
+procedure CheckUnsupportedResponseVersionRejected(const AStatusLine: string);
+var
+  LP: IH1Parser;
+  LResp: string;
+begin
+  LP := NewH1ResponseParser;
+  LResp := AStatusLine + #13#10 +
+           'Content-Length: 2'#13#10#13#10 +
+           'ok';
+
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+
+  Check(LP.HasError, AStatusLine + ' reports parser error');
+  Check(not LP.IsComplete, AStatusLine + ' is not complete');
+  Check(not LP.ShouldKeepAlive,
+    AStatusLine + ' must not be reusable');
+  Check(LP.ErrorMessage <> '',
+    AStatusLine + ' has an error message');
+  CheckEqual('', LP.GetBody,
+    AStatusLine + ' does not publish body bytes');
+end;
+
+procedure TestResponseUnsupportedHttpVersionRejected;
+begin
+  CheckUnsupportedResponseVersionRejected('HTTP/1.2 200 OK');
+  CheckUnsupportedResponseVersionRejected('HTTP/2.0 200 OK');
+end;
+
 procedure TestContentLengthBody;
 var
   LP: IH1Parser;
@@ -2858,6 +2886,8 @@ begin
   T.Run('Response chunked truncated at EOF',
     @TestResponseChunkedTruncatedAtEof);
   T.Run('Response HTTP/1.0 without keep-alive does not reuse', @TestResponseHttp10WithoutKeepAliveDoesNotReuse);
+  T.Run('Response unsupported HTTP version rejected',
+    @TestResponseUnsupportedHttpVersionRejected);
   T.Run('Content-Length body', @TestContentLengthBody);
   T.Run('Content-Length request truncated at EOF', @TestContentLengthRequestTruncatedAtEof);
   T.Run('Chunked request body', @TestChunkedRequestBody);
