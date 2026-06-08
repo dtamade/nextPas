@@ -79,6 +79,8 @@ begin
     LWritten := AWriter.Write(LPtr[LTotal], ACount - LTotal);
     if LWritten = 0 then
       raise EIOError.Create('h1 response writer: write failed (zero progress)');
+    if LWritten > ACount - LTotal then
+      raise EIOError.Create('h1 response writer: write over-reported progress');
     Inc(LTotal, LWritten);
   end;
 end;

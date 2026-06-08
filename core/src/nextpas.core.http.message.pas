@@ -271,6 +271,8 @@ begin
     LWritten := AW.Write(ABody[LTotal + 1], LLen - LTotal);
     if LWritten = 0 then
       raise EIOError.Create('HTTP response writer made zero progress');
+    if LWritten > LLen - LTotal then
+      raise EIOError.Create('HTTP response writer over-reported progress');
     Inc(LTotal, LWritten);
   end;
   Result := LTotal;

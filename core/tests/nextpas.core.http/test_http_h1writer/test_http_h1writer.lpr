@@ -47,6 +47,14 @@ type
     function WriteCalls: Int32;
   end;
 
+  TOverreportingWriter = class(TInterfacedObject, IWriter)
+  private
+    FWriteCalls: Int32;
+  public
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function WriteCalls: Int32;
+  end;
+
   TPartialResponseWriter = class(TInterfacedObject, IHttpResponseWriter)
   private
     FHeaders: IHttpHeaders;
@@ -63,6 +71,19 @@ type
     procedure Flush;
     function Body: string;
     function WriteCalls: Int32;
+  end;
+
+  TOverreportingResponseWriter = class(TInterfacedObject, IHttpResponseWriter)
+  private
+    FHeaders: IHttpHeaders;
+    FStatus: THttpStatus;
+  public
+    constructor Create;
+    procedure WriteHeader(const AStatus: THttpStatus);
+    function GetStatus: THttpStatus;
+    function GetHeaders: IHttpHeaders;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Flush;
   end;
 
   TMockTcpStream = class(TInterfacedObject, ITcpStream)
@@ -173,6 +194,17 @@ begin
   Result := FWriteCalls;
 end;
 
+function TOverreportingWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Inc(FWriteCalls);
+  Result := ACount + 1;
+end;
+
+function TOverreportingWriter.WriteCalls: Int32;
+begin
+  Result := FWriteCalls;
+end;
+
 constructor TPartialResponseWriter.Create(const AMaxPerWrite: SizeUInt);
 begin
   inherited Create;
@@ -223,6 +255,38 @@ end;
 function TPartialResponseWriter.WriteCalls: Int32;
 begin
   Result := FWriteCalls;
+end;
+
+constructor TOverreportingResponseWriter.Create;
+begin
+  inherited Create;
+  FHeaders := NewHttpHeaders;
+  FStatus := 0;
+end;
+
+procedure TOverreportingResponseWriter.WriteHeader(const AStatus: THttpStatus);
+begin
+  FStatus := AStatus;
+end;
+
+function TOverreportingResponseWriter.GetStatus: THttpStatus;
+begin
+  Result := FStatus;
+end;
+
+function TOverreportingResponseWriter.GetHeaders: IHttpHeaders;
+begin
+  Result := FHeaders;
+end;
+
+function TOverreportingResponseWriter.Write(const ABuf;
+  const ACount: SizeUInt): SizeUInt;
+begin
+  Result := ACount + 1;
+end;
+
+procedure TOverreportingResponseWriter.Flush;
+begin
 end;
 
 function TMockTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -747,6 +811,26 @@ begin
   CheckEqual(Int64(HTTP_STATUS_OK), Int64(LRW.GetStatus),
     'zero-progress writer status was committed before body failure');
   CheckEqual('', LRW.Body, 'zero-progress writer does not append body');
+end;
+
+procedure TestHttpWriteResponseStringHelperRejectsOverreportingWriter;
+var
+  LRW: TOverreportingResponseWriter;
+  LRaised: Boolean;
+begin
+  LRW := TOverreportingResponseWriter.Create;
+  LRaised := False;
+  try
+    HttpWriteResponseString(LRW as IHttpResponseWriter,
+      HTTP_STATUS_OK, 'text/plain', 'hello');
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'string response helper rejects over-reporting writer');
+  CheckEqual(Int64(HTTP_STATUS_OK), Int64(LRW.GetStatus),
+    'over-reporting writer status was committed before body failure');
 end;
 
 procedure TestPresetTransferEncodingPreserved;
@@ -1346,6 +1430,31 @@ begin
   end;
 end;
 
+procedure TestWriteHeaderRejectsOverreportingWriter;
+var
+  LW: TOverreportingWriter;
+  LRW: TH1ResponseWriter;
+  LRaised: Boolean;
+begin
+  LW := TOverreportingWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.SetHeader('Content-Length', '0');
+    LRaised := False;
+    try
+      LRW.WriteHeader(HTTP_STATUS_OK);
+    except
+      on E: EIOError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'h1 response writer rejects over-reporting writer');
+    Check(LW.WriteCalls > 0,
+      'h1 response writer attempted output before detecting over-report');
+  finally
+    LRW.Free;
+  end;
+end;
+
 procedure TestLargeHeaderBlockFallsBackAndPreservesWireBytes;
 var
   LW: TCountingWriter;
@@ -1636,6 +1745,8 @@ begin
     @TestHttpWriteResponseStringHelperWritesThroughShortProgressWriter);
   T.Run('HttpWriteResponseString helper rejects zero-progress writer',
     @TestHttpWriteResponseStringHelperRejectsZeroProgressWriter);
+  T.Run('HttpWriteResponseString helper rejects over-reporting writer',
+    @TestHttpWriteResponseStringHelperRejectsOverreportingWriter);
   T.Run('Preset Transfer-Encoding is preserved', @TestPresetTransferEncodingPreserved);
   T.Run('Flush with Content-Length does not write final chunk',
     @TestFlushWithContentLengthDoesNotWriteFinalChunk);
@@ -1681,6 +1792,8 @@ begin
     @TestUnknownStatusLineKeepsFallbackReason);
   T.Run('Known status line with short writer still writes full headers',
     @TestKnownStatusLineWithShortWriterStillWritesFullHeaders);
+  T.Run('WriteHeader rejects over-reporting writer',
+    @TestWriteHeaderRejectsOverreportingWriter);
   T.Run('Large header block falls back and preserves wire bytes',
     @TestLargeHeaderBlockFallsBackAndPreservesWireBytes);
   T.Run('Content-Length body with short writer writes all bytes',
