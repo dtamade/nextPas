@@ -104,6 +104,27 @@ begin
   Check(not LCaughtAlloc, aName + ' is not caught by non-OOM EAllocError');
 end;
 
+procedure CheckRaisesAllocError(aProc: TExceptionProc; aExpected: TAllocError; const aName: string);
+var
+  LCaughtExpected: Boolean;
+  LCaughtOom: Boolean;
+begin
+  LCaughtExpected := False;
+  LCaughtOom := False;
+
+  try
+    aProc;
+  except
+    on E: EOutOfMemoryError do
+      LCaughtOom := True;
+    on E: EAllocError do
+      LCaughtExpected := E.Error = aExpected;
+  end;
+
+  Check(LCaughtExpected, aName + ' raises expected allocation error');
+  Check(not LCaughtOom, aName + ' is not canonical OOM');
+end;
+
 procedure RaiseAllocResultOom;
 begin
   TAllocResult.Err(aeOutOfMemory).ExpectPtr('alloc result');
@@ -224,10 +245,10 @@ begin
   CheckRaisesCanonicalOutOfMemory(@RaiseAllocResultOom, 'TAllocResult.ExpectPtr');
 end;
 
-procedure TestBlockPoolOomUsesCanonicalRoot;
+procedure TestBlockPoolOverflowContracts;
 begin
-  CheckRaisesCanonicalOutOfMemory(@RaiseBlockPoolTotalSizeOverflow, 'TBlockPool.Create overflow');
-  CheckRaisesCanonicalOutOfMemory(@RaiseBlockPoolArenaAllocationOverflow, 'TArena.Create overflow');
+  CheckRaisesAllocError(@RaiseBlockPoolTotalSizeOverflow, aeInvalidLayout, 'TBlockPool.Create layout overflow');
+  CheckRaisesCanonicalOutOfMemory(@RaiseBlockPoolArenaAllocationOverflow, 'TArena.Create allocation overflow');
 end;
 
 procedure TestGrowableMemOomUsesCanonicalRoot;
@@ -262,7 +283,7 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.mem.oom');
   T.Run('alloc result OOM uses canonical root', @TestAllocResultOomUsesCanonicalRoot);
-  T.Run('blockpool OOM uses canonical root', @TestBlockPoolOomUsesCanonicalRoot);
+  T.Run('blockpool overflow contracts', @TestBlockPoolOverflowContracts);
   T.Run('growable mem OOM uses canonical root', @TestGrowableMemOomUsesCanonicalRoot);
   T.Run('allocator-backed mem OOM uses canonical root', @TestAllocatorBackedMemOomUsesCanonicalRoot);
   T.Run('non-OOM allocation error remains EAllocError', @TestNonOomAllocErrorRemainsEAllocError);
