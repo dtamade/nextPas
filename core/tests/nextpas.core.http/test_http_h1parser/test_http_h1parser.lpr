@@ -2115,6 +2115,8 @@ begin
   Check(not LMetadata.HasHost, 'invalid Host value does not publish metadata');
   Check(not LMetadata.HostRepeated,
     'invalid Host value does not publish duplicate-host metadata');
+  CheckEqual('', LP.GetUrl,
+    'invalid Host value does not publish request target');
   CheckEqual('', LP.GetHeaders.Get('Host'),
     'invalid Host value does not publish regular header store');
   CheckEqual(Int64(0), Int64(LP.GetHeaders.Count),

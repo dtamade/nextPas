@@ -1344,6 +1344,7 @@ end;
 
 procedure TH1Parser.ClearUncommittedMessageState;
 begin
+  FUrl := '';
   FHeaderStore.Clear;
   FBodySize := 0;
   ClearRequestMetadataCache;
