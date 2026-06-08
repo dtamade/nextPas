@@ -666,6 +666,61 @@ begin
     'timeout timer callback must release its owner reference on every exit path');
 end;
 
+procedure TestAsyncLoopFileTimeoutRejectedSubmitOwnerBoundaryContract;
+var
+  LAsyncLoop: string;
+  LRejectedSubmitBody: string;
+  LReadTimeoutBody: string;
+  LWriteTimeoutBody: string;
+begin
+  LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
+  LRejectedSubmitBody := ExtractBetween(LAsyncLoop,
+    'procedure timeoutctxreleaserejectedsubmit',
+    'procedure timeoutiocallback');
+  LReadTimeoutBody := ExtractBetween(LAsyncLoop,
+    'function tasyncloop.asyncreadtimeout',
+    'function tasyncloop.asyncwritetimeout');
+  LWriteTimeoutBody := ExtractBetween(LAsyncLoop,
+    'function tasyncloop.asyncwritetimeout',
+    'function tasyncloop.asyncrecvtimeout');
+
+  CheckContains(LRejectedSubmitBody, 'timeoutctxcanceltimerowner(actx);',
+    'rejected submit cleanup must release the timer owner');
+  CheckContains(LRejectedSubmitBody, 'timeoutctxrelease(actx);',
+    'rejected submit cleanup must release the I/O owner');
+  CheckBefore(LRejectedSubmitBody, 'timeoutctxcanceltimerowner(actx);',
+    'timeoutctxrelease(actx);',
+    'rejected submit cleanup must cancel timer owner before releasing I/O owner');
+
+  CheckContains(LReadTimeoutBody, 'result := fpoller.asyncread',
+    'async read timeout must delegate finite deadlines through the poller');
+  CheckContains(LReadTimeoutBody, 'if not result then',
+    'async read timeout must reclaim timeout context only on rejected submission');
+  CheckContains(LReadTimeoutBody, 'timeoutctxreleaserejectedsubmit(lctx);',
+    'async read timeout must centralize rejected-submit owner cleanup');
+  CheckBefore(LReadTimeoutBody, 'result := fpoller.asyncread',
+    'if not result then',
+    'async read timeout must classify pending/inline-complete before rejected cleanup');
+  CheckAbsent(LReadTimeoutBody, 'timeoutctxcanceltimerowner(lctx);',
+    'async read timeout must not open-code rejected-submit timer cleanup');
+  CheckAbsent(LReadTimeoutBody, 'timeoutctxrelease(lctx);',
+    'async read timeout must not open-code rejected-submit I/O cleanup');
+
+  CheckContains(LWriteTimeoutBody, 'result := fpoller.asyncwrite',
+    'async write timeout must delegate finite deadlines through the poller');
+  CheckContains(LWriteTimeoutBody, 'if not result then',
+    'async write timeout must reclaim timeout context only on rejected submission');
+  CheckContains(LWriteTimeoutBody, 'timeoutctxreleaserejectedsubmit(lctx);',
+    'async write timeout must centralize rejected-submit owner cleanup');
+  CheckBefore(LWriteTimeoutBody, 'result := fpoller.asyncwrite',
+    'if not result then',
+    'async write timeout must classify pending/inline-complete before rejected cleanup');
+  CheckAbsent(LWriteTimeoutBody, 'timeoutctxcanceltimerowner(lctx);',
+    'async write timeout must not open-code rejected-submit timer cleanup');
+  CheckAbsent(LWriteTimeoutBody, 'timeoutctxrelease(lctx);',
+    'async write timeout must not open-code rejected-submit I/O cleanup');
+end;
+
 procedure TestIocpSynchronousFailureOwnershipContract;
 var
   LIocp: string;
@@ -1154,6 +1209,8 @@ begin
     @TestAsyncLoopClosedTimeoutOwnerBoundaryContract);
   T.Run('async loop timeout single-fire cleanup contract',
     @TestAsyncLoopTimeoutSingleFireCleanupContract);
+  T.Run('async loop file timeout rejected-submit owner-boundary contract',
+    @TestAsyncLoopFileTimeoutRejectedSubmitOwnerBoundaryContract);
   T.Run('IOCP synchronous failure ownership contract',
     @TestIocpSynchronousFailureOwnershipContract);
   T.Run('Windows completion FFI ABI contract',

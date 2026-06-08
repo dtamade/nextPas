@@ -144,6 +144,12 @@ begin
     TimeoutCtxRelease(ACtx);
 end;
 
+procedure TimeoutCtxReleaseRejectedSubmit(ACtx: PTimeoutCtx);
+begin
+  TimeoutCtxCancelTimerOwner(ACtx);
+  TimeoutCtxRelease(ACtx);
+end;
+
 procedure TimeoutIoCallback(AUserData: UInt64; AResult: Int32; AContext: Pointer);
 var
   LCtx: PTimeoutCtx;
@@ -499,10 +505,7 @@ begin
   LCtx := TimeoutCtxCreate(@Self, ADeadline, ACallback, AContext);
   Result := FPoller.AsyncRead(AFd, ABuf, ALen, AOffset, @TimeoutIoCallback, LCtx);
   if not Result then
-  begin
-    TimeoutCtxCancelTimerOwner(LCtx);
-    TimeoutCtxRelease(LCtx);
-  end;
+    TimeoutCtxReleaseRejectedSubmit(LCtx);
 end;
 
 function TAsyncLoop.AsyncWriteTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
@@ -516,10 +519,7 @@ begin
   LCtx := TimeoutCtxCreate(@Self, ADeadline, ACallback, AContext);
   Result := FPoller.AsyncWrite(AFd, ABuf, ALen, AOffset, @TimeoutIoCallback, LCtx);
   if not Result then
-  begin
-    TimeoutCtxCancelTimerOwner(LCtx);
-    TimeoutCtxRelease(LCtx);
-  end;
+    TimeoutCtxReleaseRejectedSubmit(LCtx);
 end;
 
 function TAsyncLoop.AsyncRecvTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
