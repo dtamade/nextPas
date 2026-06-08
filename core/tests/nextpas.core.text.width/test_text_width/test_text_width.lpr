@@ -78,6 +78,14 @@ begin
   CheckEqual(Int64(11), Int64(StringDisplayWidth('hello world')), 'hello world');
 end;
 
+procedure TestAsciiControlStringWidth;
+begin
+  CheckEqual(Int64(0), Int64(StringDisplayWidth(#0)), 'NUL string width');
+  CheckEqual(Int64(0), Int64(StringDisplayWidth(#9)), 'TAB string width');
+  CheckEqual(Int64(2), Int64(StringDisplayWidth('A' + #0 + 'B')), 'NUL does not add a column');
+  CheckEqual(Int64(2), Int64(StringDisplayWidth('A' + #9 + 'B')), 'TAB follows CodepointWidth');
+end;
+
 { StringDisplayWidth - CJK 混合 }
 procedure TestMixedString;
 begin
@@ -213,6 +221,7 @@ begin
   T.Run('added wide ranges', @TestAddedWideRanges);
   T.Run('added zero-width ranges', @TestAddedZeroWidth);
   T.Run('ascii string fast path', @TestAsciiString);
+  T.Run('ascii control string width', @TestAsciiControlStringWidth);
   T.Run('mixed cjk string', @TestMixedString);
   T.Run('emoji string', @TestEmojiString);
   T.Run('emoji cluster string', @TestEmojiClusterString);
