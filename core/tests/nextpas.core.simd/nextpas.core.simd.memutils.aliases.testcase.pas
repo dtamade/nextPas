@@ -30,6 +30,7 @@ type
     procedure Test_SimdRealloc_Sa64_PreservesAlignmentAndPrefix;
     procedure Test_SimdRealloc_InvalidAlignment_FailsClosedAndPreservesOldAllocation;
     procedure Test_SimdRealloc_Overflow_FailsClosedAndPreservesOldAllocation;
+    procedure Test_SimdAlloc_PlatformMemoryBackendTruth_IsPublicConsumer;
     procedure Test_AlignedRealloc_Grow_PreservesPrefix;
     procedure Test_AlignedRealloc_Shrink_PreservesPrefix;
     procedure Test_AlignedRealloc_NilAndZero_Semantics;
@@ -66,6 +67,9 @@ type
   end;
 
 implementation
+
+uses
+  nextpas.core.platform.memory;
 
 { TTestCase_Memutils }
 
@@ -279,6 +283,48 @@ begin
     if LReallocPtr <> nil then
       SimdFree(LReallocPtr);
     SimdFree(LPtr);
+  end;
+end;
+
+procedure TTestCase_Memutils.Test_SimdAlloc_PlatformMemoryBackendTruth_IsPublicConsumer;
+var
+  LBackend: TPlatformAlignedAllocBackend;
+  LIsNative: Boolean;
+  LPtr, LReallocPtr: PByte;
+  LIndex: Integer;
+begin
+  LBackend := platform_aligned_alloc_backend;
+  LIsNative := platform_aligned_alloc_is_native;
+  AssertTrue('platform.memory backend truth must be a known public enum value',
+    LBackend in [paabFallback, paabWindowsCRT, paabPosix]);
+  if LBackend = paabFallback then
+    AssertTrue('fallback backend must not report native readiness', not LIsNative)
+  else
+    AssertTrue('native backend must report native readiness through platform.memory', LIsNative);
+
+  LPtr := PByte(SimdAlloc(128, sa64));
+  LReallocPtr := nil;
+  try
+    AssertTrue('SimdAlloc must consume platform.memory public seam and return storage', LPtr <> nil);
+    AssertTrue('SimdAlloc public result must preserve requested sa64 alignment',
+      IsAligned(LPtr, SIMD_ALIGN_64));
+    for LIndex := 0 to 127 do
+      LPtr[LIndex] := Byte((LIndex * 9 + 1) and $FF);
+
+    LReallocPtr := PByte(SimdRealloc(LPtr, 192, sa64));
+    LPtr := nil;
+    AssertTrue('SimdRealloc must consume platform.memory public seam and return storage',
+      LReallocPtr <> nil);
+    AssertTrue('SimdRealloc public result must preserve requested sa64 alignment',
+      IsAligned(LReallocPtr, SIMD_ALIGN_64));
+    for LIndex := 0 to 127 do
+      AssertEquals('SimdRealloc platform.memory consumer prefix byte[' + IntToStr(LIndex) + ']',
+        Byte((LIndex * 9 + 1) and $FF), LReallocPtr[LIndex]);
+  finally
+    if LReallocPtr <> nil then
+      SimdFree(LReallocPtr);
+    if LPtr <> nil then
+      SimdFree(LPtr);
   end;
 end;
 

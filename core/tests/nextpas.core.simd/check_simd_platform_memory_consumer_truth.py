@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ALLOC_PATH = ROOT / "src/nextpas.core.simd.alloc.pas"
 MEMUTILS_PATH = ROOT / "src/nextpas.core.simd.memutils.pas"
+MEMUTILS_TEST_PATH = ROOT / "tests/nextpas.core.simd/nextpas.core.simd.memutils.aliases.testcase.pas"
 MAKEFILE_PATH = ROOT / "tests/nextpas.core.simd/Makefile"
 
 REQUIRED_TRUTH_TOKENS = (
@@ -26,6 +27,15 @@ REQUIRED_PUBLIC_SEAM_TOKENS = (
     "platform_aligned_alloc",
     "platform_aligned_realloc",
     "platform_aligned_free",
+)
+
+REQUIRED_RUNTIME_EVIDENCE_TOKENS = (
+    "Test_SimdAlloc_PlatformMemoryBackendTruth_IsPublicConsumer",
+    "nextpas.core.platform.memory",
+    "platform_aligned_alloc_backend",
+    "platform_aligned_alloc_is_native",
+    "SimdAlloc(128, sa64)",
+    "SimdRealloc(LPtr, 192, sa64)",
 )
 
 FORBIDDEN_FALLBACK_INTERNAL_TOKENS = (
@@ -86,10 +96,19 @@ def check_no_fallback_header_dependency(a_issues: list[str]) -> None:
                 add_issue(a_issues, l_path, f"depends on platform.memory fallback internal token `{l_token}`")
 
 
+def check_runtime_consumer_evidence(a_issues: list[str]) -> None:
+    l_code = strip_pascal_comments(read_text(MEMUTILS_TEST_PATH))
+    for l_token in REQUIRED_RUNTIME_EVIDENCE_TOKENS:
+        if l_token not in l_code:
+            add_issue(a_issues, MEMUTILS_TEST_PATH, f"missing platform.memory public consumer runtime evidence token `{l_token}`")
+
+
 def check_makefile_hook(a_issues: list[str]) -> None:
     l_text = read_text(MAKEFILE_PATH)
     if "check_simd_platform_memory_consumer_truth.py" not in l_text:
         add_issue(a_issues, MAKEFILE_PATH, "audit target must run platform.memory consumer truth contract")
+    if "alignment-allocator-contract" not in l_text or "--suite=TTestCase_Memutils" not in l_text:
+        add_issue(a_issues, MAKEFILE_PATH, "alignment allocator gate must run TTestCase_Memutils runtime evidence")
 
 
 def render_summary(a_issues: list[str]) -> str:
@@ -105,6 +124,7 @@ def main() -> int:
     check_required_truth(l_issues)
     check_public_seam_consumption(l_issues)
     check_no_fallback_header_dependency(l_issues)
+    check_runtime_consumer_evidence(l_issues)
     check_makefile_hook(l_issues)
 
     if l_args.summary_line:
