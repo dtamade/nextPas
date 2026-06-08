@@ -994,6 +994,7 @@ TRIG_FORBIDDEN_SCALAR_RE = re.compile(
 SIMD_MATHUTIL_FORBIDDEN_BARE_RE = re.compile(
     r"\bfunction\s+("
     r"Min|Max|Floor|Ceil|Round|Trunc|Frac|Abs|Clamp|Sign|Lerp|"
+    r"InverseLerp|Wrap|DegToRad|RadToDeg|"
     r"Sin|Cos|Tan|ArcSin|ArcCos|ArcTan|ArcTan2|Exp|Ln|Log2|Log10|"
     r"Power|Sqrt|Hypot|Fmod|SmoothStep|GCD|LCM|IsNaN|IsNan|IsInfinite"
     r")\s*\(",
@@ -2197,6 +2198,39 @@ def run_math_impl_simd_facade_only_uses_self_tests() -> None:
                     + " got "
                     + ", ".join(sorted(rules))
                 )
+
+
+def run_forbidden_simd_mathutil_bare_name_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        path = root / SIMD_MATHUTIL_PATH
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "unit nextpas.core.simd.mathutil;\n"
+            "interface\n"
+            "function InverseLerp(const AMin, AMax, AValue: Single): Single;\n"
+            "function Wrap(const AValue, AMin, AMax: Single): Single;\n"
+            "function DegToRad(const ADegrees: Single): Single;\n"
+            "function RadToDeg(const ARadians: Single): Single;\n"
+            "function SimdInverseLerpF32(const AMin, AMax, AValue: Single): Single;\n"
+            "function SimdWrapF32(const AValue, AMin, AMax: Single): Single;\n"
+            "function SimdDegToRadF32(const ADegrees: Single): Single;\n"
+            "function SimdRadToDegF32(const ARadians: Single): Single;\n"
+            "implementation\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+
+        findings = scan_forbidden_simd_mathutil_bare_names(
+            root,
+            path,
+            path.read_text(encoding="utf-8"),
+        )
+        rules = [finding.rule for finding in findings]
+        if rules != ["no-bare-public-math-name-in-simd-mathutil"] * 4:
+            raise AssertionError(
+                "forbidden-simd-mathutil-bare-name self-test expected four bare-name findings"
+            )
 
 
 def run_legacy_production_name_self_tests() -> None:
@@ -3766,6 +3800,7 @@ def main() -> int:
         run_behavior_marker_self_tests()
         run_public_math_source_simd_wiring_self_tests()
         run_math_impl_simd_facade_only_uses_self_tests()
+        run_forbidden_simd_mathutil_bare_name_self_tests()
         run_legacy_production_name_self_tests()
         run_forbidden_trig_scalar_name_self_tests()
         run_trig_host_safe_route_self_tests()
