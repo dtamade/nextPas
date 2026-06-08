@@ -4121,6 +4121,45 @@ begin
     'C llhttp comparator filter skips unrelated noop row');
 end;
 
+procedure TestCllhttpComparatorRejectsNoMatchFilterWhenConfigured;
+var
+  LRootDir: string;
+  LCompareDir: string;
+  LLhttpRoot: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LLhttpRoot := Trim(GetEnvironmentVariable(LlhttpRootEnvName));
+  if LLhttpRoot = '' then
+    Exit;
+
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LCompareDir := PathJoin(LRootDir, H1ParserBenchRelativeDir + '/compare_c');
+
+  RunProcessAndCapture(ResolveMakeExecutable,
+    ['build', 'LLHTTP_ROOT=' + LLhttpRoot], LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'C llhttp comparator no-match build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveCllhttpComparatorBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath),
+    'C llhttp comparator no-match filter binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LCompareDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=not_a_c_llhttp_row'],
+    LExitCode, LOutput);
+  Check(LExitCode <> 0,
+    'C llhttp comparator no-match filter should fail: ' + LOutput);
+  CheckContains(LOutput, 'bench_filter=not_a_c_llhttp_row',
+    'C llhttp comparator no-match filter marker');
+  CheckContains(LOutput, 'No matching C llhttp benchmark rows.',
+    'C llhttp comparator no-match diagnostic');
+  CheckNotContains(LOutput, ' iters',
+    'C llhttp comparator no-match must not emit benchmark row');
+end;
+
 procedure TestH1ParserFlagMatrixSmoke;
 var
   LRootDir: string;
@@ -4565,6 +4604,8 @@ begin
     @TestCllhttpComparatorMaxItersEnvWhenConfigured);
   T.Run('C llhttp comparator filter env when configured',
     @TestCllhttpComparatorFilterEnvWhenConfigured);
+  T.Run('C llhttp comparator rejects no-match filter when configured',
+    @TestCllhttpComparatorRejectsNoMatchFilterWhenConfigured);
   T.Run('H1 parser flag matrix smoke',
     @TestH1ParserFlagMatrixSmoke);
   T.Run('H1 parser flag matrix perf graceful smoke',

@@ -408,6 +408,10 @@ int main(void) {
   run_benchmark("C noop cb: POST 1KB body", bench_noop_post_1k);
   run_benchmark("C noop cb: pipeline (10 reqs)", bench_noop_pipeline);
   print_summary();
+  if (configured_filter()[0] != '\0' && result_count == 0) {
+    printf("No matching C llhttp benchmark rows.\n");
+    return 1;
+  }
 
   if (sink_value == 0xFFFFFFFFFFFFFFFFull) {
     fprintf(stderr, "unreachable sink: %llu\n",
