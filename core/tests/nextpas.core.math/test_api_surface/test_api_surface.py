@@ -1716,6 +1716,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-round-double-int64-max-plus-one-boundary-message", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Round(Double 2^63)"),
     RequiredBehaviorTestMarker("scalar-trunc-double-int64-max-plus-one-boundary-message", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Trunc(Double 2^63)"),
     RequiredBehaviorTestMarker("scalar-frac-double-int64-max-plus-one-boundary-message", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Frac(Double 2^63)"),
+    RequiredBehaviorTestMarker("scalar-round-double-near-int64-max-no-spurious-overflow", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Round Double near Int64 max does not spuriously overflow"),
     RequiredBehaviorTestMarker("scalar-frac-double-near-int64-max-positive-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Frac Double near 2^63 returns positive zero"),
     RequiredBehaviorTestMarker("scalar-frac-double-int64-min-negative-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Frac Double -2^63 keeps negative zero"),
     RequiredBehaviorTestMarker("scalar-frac-double-near-int64-min-negative-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Frac Double near -2^63 keeps negative zero"),

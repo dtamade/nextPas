@@ -1200,7 +1200,8 @@ begin
 
   CheckEqual(Int64(9223372036854774784), Floor(CNearMaxInt64), 'Floor near 2^63');
   CheckEqual(Int64(9223372036854774784), Ceil(CNearMaxInt64), 'Ceil near 2^63');
-  CheckEqual(Int64(9223372036854774784), Round(CNearMaxInt64), 'Round near 2^63');
+  CheckEqual(Int64(9223372036854774784), Round(CNearMaxInt64),
+    'Round Double near Int64 max does not spuriously overflow');
   CheckEqual(Int64(9223372036854774784), Trunc(CNearMaxInt64), 'Trunc near 2^63');
   Check(IsDoublePositiveZero(Frac(CNearMaxInt64)),
     'Frac Double near 2^63 returns positive zero');
