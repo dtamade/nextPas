@@ -1161,6 +1161,46 @@ begin
     'Windows unsupported timeout gate must not bypass timeout wrappers');
 end;
 
+procedure TestWindowsFileCompletionRuntimeSmokePreflightContract;
+var
+  LSmoke: string;
+begin
+  LSmoke := LoadSourceText(
+    'tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke/test_poller_windows_runtime_smoke.lpr');
+
+  CheckContains(LSmoke,
+    'real windows runtime evidence only when compiled and run on a windows host',
+    'Windows runtime smoke must declare its runtime truth boundary');
+  CheckContains(LSmoke, '{$ifdef nextpas_windows}',
+    'Windows runtime smoke must isolate real runtime assertions to Windows hosts');
+  CheckContains(LSmoke, 'tiocpreactor.create(8)',
+    'Windows runtime smoke must exercise the IOCP reactor directly');
+  CheckContains(LSmoke, 'nextpas.core.io.poller',
+    'Windows runtime smoke must import the consumer-facing poller facade');
+  CheckContains(LSmoke, 'tpoller.create(8)',
+    'Windows runtime smoke must exercise the poller file completion facade');
+  CheckContains(LSmoke, 'createfilew(',
+    'Windows runtime smoke must open an overlapped-capable host file handle');
+  CheckContains(LSmoke, 'file_flag_overlapped',
+    'Windows runtime smoke must use an overlapped file handle');
+  CheckContains(LSmoke, 'asyncread(',
+    'Windows runtime smoke must submit file AsyncRead');
+  CheckContains(LSmoke, 'asyncwrite(',
+    'Windows runtime smoke must submit file AsyncWrite');
+  CheckContains(LSmoke, 'lpoller.asyncread',
+    'Windows runtime smoke must submit file AsyncRead through TPoller');
+  CheckContains(LSmoke, 'lpoller.asyncwrite',
+    'Windows runtime smoke must submit file AsyncWrite through TPoller');
+  CheckContains(LSmoke, 'apoller.pollone',
+    'Windows runtime smoke must drive poller completion dispatch');
+  CheckContains(LSmoke, 'pollone',
+    'Windows runtime smoke must drive IOCP completion dispatch');
+  CheckContains(LSmoke, 'gcallbackcount',
+    'Windows runtime smoke must prove callback delivery count');
+  CheckContains(LSmoke, 'not windows runtime evidence on this host',
+    'non-Windows execution must be an explicit skip truth, not runtime-ready evidence');
+end;
+
 procedure TestAsyncLoopCompletionFacadeParityContract;
 var
   LAsyncLoop, LConnectBody, LCloseBody: string;
@@ -1230,6 +1270,8 @@ begin
   T.Run('Windows handle width contract', @TestPollerWindowsHandleWidthContract);
   T.Run('Windows forced compile async file surface contract',
     @TestWindowsForcedCompileAsyncFileSurfaceContract);
+  T.Run('Windows file completion runtime smoke preflight contract',
+    @TestWindowsFileCompletionRuntimeSmokePreflightContract);
   T.Run('async loop completion facade parity contract',
     @TestAsyncLoopCompletionFacadeParityContract);
   T.Summary;
