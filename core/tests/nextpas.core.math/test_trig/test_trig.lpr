@@ -218,6 +218,18 @@ begin
   Result := LValue.Bits = (QWord($80000000) shl 32);
 end;
 
+function IsSingleFinite(const AValue: Single): Boolean;
+begin
+  Result := (not IsSingleNaN(AValue)) and (not IsSinglePositiveInfinity(AValue)) and
+    (not IsSingleNegativeInfinity(AValue));
+end;
+
+function IsDoubleFinite(const AValue: Double): Boolean;
+begin
+  Result := (not IsDoubleNaN(AValue)) and (not IsDoublePositiveInfinity(AValue)) and
+    (not IsDoubleNegativeInfinity(AValue));
+end;
+
 function SameSingleBits(const ALeft, ARight: Single): Boolean;
 var
   LLeft: TSingleBitCast;
@@ -332,6 +344,59 @@ begin
   Check(IsDoubleNegativeZero(ArcSin(DoubleNegativeZero)), 'ArcSin(-0)=-0');
   Check(IsSinglePositiveZero(ArcSin(Single(0.0))), 'ArcSin(Single +0)=+0');
   Check(IsSingleNegativeZero(ArcSin(SingleNegativeZero)), 'ArcSin(Single -0)=-0');
+end;
+
+procedure TestCircularTrigFinitePrecisionContracts;
+var
+  LNearTan: Double;
+  LNearTanSingle: Single;
+begin
+  CheckNear(0.5, Sin(PI_VALUE / 6.0), 0.000000000001,
+    'Sin finite PI/6 precision contract');
+  CheckNear(-0.70710678118654752440, Sin(5.0 * PI_VALUE / 4.0), 0.000000000001,
+    'Sin finite third-quadrant sign precision contract');
+  CheckNear(0.5, Sin((PI_VALUE / 6.0) + TWO_PI), 0.000000000001,
+    'Sin finite period-shift precision contract');
+  CheckNear(0.5, Sin(Single(PI_VALUE / 6.0)), 0.000001,
+    'Sin Single finite PI/6 precision contract');
+
+  CheckNear(0.5, Cos(PI_VALUE / 3.0), 0.000000000001,
+    'Cos finite PI/3 precision contract');
+  CheckNear(-0.5, Cos(2.0 * PI_VALUE / 3.0), 0.000000000001,
+    'Cos finite second-quadrant sign precision contract');
+  CheckNear(0.5, Cos((PI_VALUE / 3.0) + TWO_PI), 0.000000000001,
+    'Cos finite period-shift precision contract');
+  CheckNear(0.5, Cos(Single(PI_VALUE / 3.0)), 0.000001,
+    'Cos Single finite PI/3 precision contract');
+
+  CheckNear(0.57735026918962576451, Tan(PI_VALUE / 6.0), 0.000000000001,
+    'Tan finite PI/6 precision contract');
+  CheckNear(-1.0, Tan(3.0 * PI_VALUE / 4.0), 0.000000000001,
+    'Tan finite second-quadrant sign precision contract');
+  CheckNear(0.57735026918962576451, Tan((PI_VALUE / 6.0) + PI_VALUE),
+    0.000000000001, 'Tan finite PI period-shift precision contract');
+  CheckNear(0.57735026918962576451, Tan(Single(PI_VALUE / 6.0)), 0.000001,
+    'Tan Single finite PI/6 precision contract');
+
+  LNearTan := Tan(HALF_PI - 0.000001);
+  Check(IsDoubleFinite(LNearTan), 'Tan near +PI/2 finite-side result stays finite');
+  Check((LNearTan > 999999.0) and (LNearTan < 1000001.0),
+    'Tan near +PI/2 finite-side magnitude contract');
+
+  LNearTan := Tan(HALF_PI + 0.000001);
+  Check(IsDoubleFinite(LNearTan), 'Tan past +PI/2 finite-side result stays finite');
+  Check((LNearTan < -999999.0) and (LNearTan > -1000001.0),
+    'Tan past +PI/2 finite-side magnitude contract');
+
+  LNearTanSingle := Tan(Single(HALF_PI - 0.001));
+  Check(IsSingleFinite(LNearTanSingle), 'Tan Single near +PI/2 finite-side result stays finite');
+  Check((LNearTanSingle > 999.0) and (LNearTanSingle < 1001.0),
+    'Tan Single near +PI/2 finite-side magnitude contract');
+
+  LNearTanSingle := Tan(Single(HALF_PI + 0.001));
+  Check(IsSingleFinite(LNearTanSingle), 'Tan Single past +PI/2 finite-side result stays finite');
+  Check((LNearTanSingle < -999.0) and (LNearTanSingle > -1001.0),
+    'Tan Single past +PI/2 finite-side magnitude contract');
 end;
 
 procedure TestArcTanSpecialContracts;
@@ -823,6 +888,7 @@ begin
   T.Run('inverse trig non-finite contracts', @TestInverseTrigNonFiniteContracts);
   T.Run('circular trig non-finite contracts', @TestCircularTrigNonFiniteContracts);
   T.Run('circular trig signed zero contracts', @TestCircularTrigSignedZeroContracts);
+  T.Run('circular trig finite precision contracts', @TestCircularTrigFinitePrecisionContracts);
   T.Run('ArcTan special contracts', @TestArcTanSpecialContracts);
   T.Run('ArcTan2 special cases', @TestArcTan2SpecialCases);
   T.Run('ArcTan2 one-infinite contracts', @TestArcTan2OneInfiniteContracts);
