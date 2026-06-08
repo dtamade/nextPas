@@ -873,26 +873,121 @@ begin
   Result := Single(LValue);
 end;
 
-function TryCrossCandidateDouble(const AFactor, ADiff: Double;
+function CanSubtractAsDouble(const ALeft, ARight: Double): Boolean; inline;
+begin
+  if (ALeft > 0.0) and (ARight < 0.0) then
+    Exit(-ARight <= MAX_DOUBLE_VALUE - ALeft);
+  if (ALeft < 0.0) and (ARight > 0.0) then
+    Exit(ARight <= MAX_DOUBLE_VALUE + ALeft);
+  Result := True;
+end;
+
+function CanAddAsDouble(const ALeft, ARight: Double): Boolean; inline;
+begin
+  if (ALeft > 0.0) and (ARight > 0.0) then
+    Exit(ARight <= MAX_DOUBLE_VALUE - ALeft);
+  if (ALeft < 0.0) and (ARight < 0.0) then
+    Exit(-ARight <= MAX_DOUBLE_VALUE + ALeft);
+  Result := True;
+end;
+
+function TryCrossDifferenceCandidateDouble(const AFactor, ALeft, ARight: Double;
   var AValue: Double): Boolean; inline;
 var
-  LAbsFactor: Double;
-  LAbsDiff: Double;
+  LDiff: Extended;
+  LAbsFactor: Extended;
+  LAbsDiff: Extended;
+  LCandidate: Extended;
+  LAbsCandidate: Extended;
 begin
-  if not IsFinite(ADiff) then
+  if not CanSubtractAsDouble(ALeft, ARight) then
     Exit(False);
-  if ADiff = 0.0 then
+
+  LDiff := Extended(ALeft) - Extended(ARight);
+  if LDiff <> LDiff then
+    Exit(False);
+  if LDiff = 0.0 then
   begin
     AValue := 0.0;
     Exit(True);
   end;
 
-  LAbsFactor := nextpas.core.math.scalar.Abs(AFactor);
-  LAbsDiff := nextpas.core.math.scalar.Abs(ADiff);
-  if (LAbsFactor <> 0.0) and (LAbsDiff > MAX_DOUBLE_VALUE / LAbsFactor) then
+  LAbsFactor := Extended(AFactor);
+  if LAbsFactor < 0.0 then
+    LAbsFactor := -LAbsFactor;
+  if LAbsFactor = 0.0 then
+  begin
+    AValue := 0.0;
+    Exit(True);
+  end;
+
+  LAbsDiff := LDiff;
+  if LAbsDiff < 0.0 then
+    LAbsDiff := -LAbsDiff;
+  if (LAbsFactor > 1.0) and (LAbsDiff > MAX_DOUBLE_VALUE / LAbsFactor) then
     Exit(False);
 
-  AValue := AFactor * ADiff;
+  LCandidate := Extended(AFactor) * LDiff;
+  if LCandidate <> LCandidate then
+    Exit(False);
+
+  LAbsCandidate := LCandidate;
+  if LAbsCandidate < 0.0 then
+    LAbsCandidate := -LAbsCandidate;
+  if LAbsCandidate > MAX_DOUBLE_VALUE then
+    Exit(False);
+
+  AValue := Double(LCandidate);
+  Result := IsFinite(AValue);
+end;
+
+function TryCrossSumCandidateDouble(const AFactor, ALeft, ARight: Double;
+  var AValue: Double): Boolean; inline;
+var
+  LSum: Extended;
+  LAbsFactor: Extended;
+  LAbsSum: Extended;
+  LCandidate: Extended;
+  LAbsCandidate: Extended;
+begin
+  if not CanAddAsDouble(ALeft, ARight) then
+    Exit(False);
+
+  LSum := Extended(ALeft) + Extended(ARight);
+  if LSum <> LSum then
+    Exit(False);
+  if LSum = 0.0 then
+  begin
+    AValue := 0.0;
+    Exit(True);
+  end;
+
+  LAbsFactor := Extended(AFactor);
+  if LAbsFactor < 0.0 then
+    LAbsFactor := -LAbsFactor;
+  if LAbsFactor = 0.0 then
+  begin
+    AValue := 0.0;
+    Exit(True);
+  end;
+
+  LAbsSum := LSum;
+  if LAbsSum < 0.0 then
+    LAbsSum := -LAbsSum;
+  if (LAbsFactor > 1.0) and (LAbsSum > MAX_DOUBLE_VALUE / LAbsFactor) then
+    Exit(False);
+
+  LCandidate := Extended(AFactor) * LSum;
+  if LCandidate <> LCandidate then
+    Exit(False);
+
+  LAbsCandidate := LCandidate;
+  if LAbsCandidate < 0.0 then
+    LAbsCandidate := -LAbsCandidate;
+  if LAbsCandidate > MAX_DOUBLE_VALUE then
+    Exit(False);
+
+  AValue := Double(LCandidate);
   Result := IsFinite(AValue);
 end;
 
@@ -901,20 +996,30 @@ procedure KeepCrossCandidateDouble(const ACandidate: Double; var ABest: Double;
 begin
   if not IsFinite(ACandidate) then
     Exit;
-  if (not AHasBest) or
-    ((ABest = 0.0) and (ACandidate <> 0.0)) or
-    ((ACandidate <> 0.0) and (ABest <> 0.0) and
-    (nextpas.core.math.scalar.Abs(ACandidate) < nextpas.core.math.scalar.Abs(ABest))) then
+  if not AHasBest then
   begin
     ABest := ACandidate;
     AHasBest := True;
+    Exit;
   end;
+
+  if (ABest = 0.0) and (ACandidate <> 0.0) then
+  begin
+    ABest := ACandidate;
+    Exit;
+  end;
+
+  if (ACandidate <> 0.0) and (ABest <> 0.0) and
+    (nextpas.core.math.scalar.Abs(ACandidate) < nextpas.core.math.scalar.Abs(ABest)) then
+    ABest := ACandidate;
 end;
 
 function StableCrossComponentDouble(const AU, AV, BU, BV: Double): Double; inline;
 var
   LCandidate: Extended;
   LAbsCandidate: Extended;
+  LLeftProduct: Extended;
+  LRightProduct: Extended;
   LBestCandidate: Double;
   LDoubleCandidate: Double;
   LHasCandidate: Boolean;
@@ -926,9 +1031,30 @@ var
   LLogMagnitude: Double;
 begin
   LHasCandidate := False;
-  LCandidate := Extended(AU) * Extended(BV) - Extended(AV) * Extended(BU);
+
+  if AU = BU then
+    if TryCrossDifferenceCandidateDouble(AU, BV, AV, LDoubleCandidate) then
+      KeepCrossCandidateDouble(LDoubleCandidate, LBestCandidate, LHasCandidate);
+  if AV = BV then
+    if TryCrossDifferenceCandidateDouble(BV, AU, BU, LDoubleCandidate) then
+      KeepCrossCandidateDouble(LDoubleCandidate, LBestCandidate, LHasCandidate);
+  if AU = -BU then
+    if TryCrossSumCandidateDouble(AU, BV, AV, LDoubleCandidate) then
+      KeepCrossCandidateDouble(LDoubleCandidate, LBestCandidate, LHasCandidate);
+  if AV = -BV then
+    if TryCrossSumCandidateDouble(BV, AU, BU, LDoubleCandidate) then
+      KeepCrossCandidateDouble(LDoubleCandidate, LBestCandidate, LHasCandidate);
+
+  if LHasCandidate then
+    Exit(LBestCandidate);
+
+  LLeftProduct := Extended(AU);
+  LLeftProduct := LLeftProduct * Extended(BV);
+  LRightProduct := Extended(AV);
+  LRightProduct := LRightProduct * Extended(BU);
+  LCandidate := LLeftProduct - LRightProduct;
   if LCandidate = 0.0 then
-    KeepCrossCandidateDouble(0.0, LBestCandidate, LHasCandidate)
+    Exit(0.0)
   else
   if LCandidate = LCandidate then
   begin
@@ -936,24 +1062,8 @@ begin
     if LAbsCandidate < 0.0 then
       LAbsCandidate := -LAbsCandidate;
     if LAbsCandidate <= MAX_DOUBLE_VALUE then
-      KeepCrossCandidateDouble(Double(LCandidate), LBestCandidate, LHasCandidate);
+      Exit(Double(LCandidate));
   end;
-
-  if AU <> 0.0 then
-    if TryCrossCandidateDouble(AU, BV - (AV / AU) * BU, LDoubleCandidate) then
-      KeepCrossCandidateDouble(LDoubleCandidate, LBestCandidate, LHasCandidate);
-  if BV <> 0.0 then
-    if TryCrossCandidateDouble(BV, AU - (BU / BV) * AV, LDoubleCandidate) then
-      KeepCrossCandidateDouble(LDoubleCandidate, LBestCandidate, LHasCandidate);
-  if AV <> 0.0 then
-    if TryCrossCandidateDouble(-AV, BU - (AU / AV) * BV, LDoubleCandidate) then
-      KeepCrossCandidateDouble(LDoubleCandidate, LBestCandidate, LHasCandidate);
-  if BU <> 0.0 then
-    if TryCrossCandidateDouble(-BU, AV - (BV / BU) * AU, LDoubleCandidate) then
-      KeepCrossCandidateDouble(LDoubleCandidate, LBestCandidate, LHasCandidate);
-
-  if LHasCandidate and (LBestCandidate <> 0.0) then
-    Exit(LBestCandidate);
 
   LScaleA := nextpas.core.math.scalar.Max(nextpas.core.math.scalar.Abs(AU),
     nextpas.core.math.scalar.Abs(AV));
@@ -965,11 +1075,7 @@ begin
   LScaledDiff := (AU / LScaleA) * (BV / LScaleB) -
     (AV / LScaleA) * (BU / LScaleB);
   if LScaledDiff = 0.0 then
-  begin
-    if LHasCandidate then
-      Exit(LBestCandidate);
     Exit(0.0);
-  end;
 
   LAbsScaledDiff := nextpas.core.math.scalar.Abs(LScaledDiff);
   if LScaleA <= MAX_DOUBLE_VALUE / LScaleB then
