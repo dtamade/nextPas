@@ -172,6 +172,7 @@ uses
 const
   MAX_SINGLE_VALUE: Double = 3.40282346638528859812e38;
   MAX_DOUBLE_VALUE: Double = 1.79769313486231570815e308;
+  LN_MAX_DOUBLE_VALUE: Double = 709.78271289338397310;
 
 type
   TSingleBitCast = packed record
@@ -186,20 +187,36 @@ type
       1: (Bits: UInt64);
   end;
 
-function SinglePositiveInfinity: Single; inline;
+function SingleSignedInfinity(const ANegative: Boolean): Single; inline;
 var
   LValue: TSingleBitCast;
 begin
-  LValue.Bits := UInt32($7F800000);
+  if ANegative then
+    LValue.Bits := UInt32($FF800000)
+  else
+    LValue.Bits := UInt32($7F800000);
+  Result := LValue.Value;
+end;
+
+function SinglePositiveInfinity: Single; inline;
+begin
+  Result := SingleSignedInfinity(False);
+end;
+
+function DoubleSignedInfinity(const ANegative: Boolean): Double; inline;
+var
+  LValue: TDoubleBitCast;
+begin
+  if ANegative then
+    LValue.Bits := UInt64($FFF0000000000000)
+  else
+    LValue.Bits := UInt64($7FF0000000000000);
   Result := LValue.Value;
 end;
 
 function DoublePositiveInfinity: Double; inline;
-var
-  LValue: TDoubleBitCast;
 begin
-  LValue.Bits := UInt64($7FF0000000000000);
-  Result := LValue.Value;
+  Result := DoubleSignedInfinity(False);
 end;
 
 function SingleEquals(const AA, AB, AEpsilon: Single): Boolean; inline;
@@ -552,6 +569,128 @@ begin
   Result := StableVec4Length(AX, AY, AZ, 0.0);
 end;
 
+function StableVec4Dot(const AX, AY, AZ, AW, BX, BY, BZ, BW: Single): Single; inline;
+var
+  LScaleA: Double;
+  LScaleB: Double;
+  LScaledSum: Double;
+  LMagnitude: Double;
+begin
+  if nextpas.core.math.scalar.IsNaN(AX) or nextpas.core.math.scalar.IsNaN(AY) or
+    nextpas.core.math.scalar.IsNaN(AZ) or nextpas.core.math.scalar.IsNaN(AW) or
+    nextpas.core.math.scalar.IsNaN(BX) or nextpas.core.math.scalar.IsNaN(BY) or
+    nextpas.core.math.scalar.IsNaN(BZ) or nextpas.core.math.scalar.IsNaN(BW) or
+    nextpas.core.math.scalar.IsInfinite(AX) or nextpas.core.math.scalar.IsInfinite(AY) or
+    nextpas.core.math.scalar.IsInfinite(AZ) or nextpas.core.math.scalar.IsInfinite(AW) or
+    nextpas.core.math.scalar.IsInfinite(BX) or nextpas.core.math.scalar.IsInfinite(BY) or
+    nextpas.core.math.scalar.IsInfinite(BZ) or nextpas.core.math.scalar.IsInfinite(BW) then
+    Exit(((AX * BX + AY * BY) + AZ * BZ) + AW * BW);
+
+  LScaleA := nextpas.core.math.scalar.Max(nextpas.core.math.scalar.Abs(AX),
+    nextpas.core.math.scalar.Max(nextpas.core.math.scalar.Abs(AY),
+    nextpas.core.math.scalar.Max(nextpas.core.math.scalar.Abs(AZ),
+    nextpas.core.math.scalar.Abs(AW))));
+  LScaleB := nextpas.core.math.scalar.Max(nextpas.core.math.scalar.Abs(BX),
+    nextpas.core.math.scalar.Max(nextpas.core.math.scalar.Abs(BY),
+    nextpas.core.math.scalar.Max(nextpas.core.math.scalar.Abs(BZ),
+    nextpas.core.math.scalar.Abs(BW))));
+  if (LScaleA = 0.0) or (LScaleB = 0.0) then
+    Exit(0.0);
+
+  LScaledSum :=
+    (Double(AX) / LScaleA) * (Double(BX) / LScaleB) +
+    (Double(AY) / LScaleA) * (Double(BY) / LScaleB) +
+    (Double(AZ) / LScaleA) * (Double(BZ) / LScaleB) +
+    (Double(AW) / LScaleA) * (Double(BW) / LScaleB);
+  if LScaledSum = 0.0 then
+    Exit(0.0);
+
+  LMagnitude := (LScaleA * LScaleB) * nextpas.core.math.scalar.Abs(LScaledSum);
+  if LMagnitude > MAX_SINGLE_VALUE then
+    Exit(SingleSignedInfinity(LScaledSum < 0.0));
+  Result := Single(LMagnitude);
+  if LScaledSum < 0.0 then
+    Result := -Result;
+end;
+
+function StableVec4Dot(const AX, AY, AZ, AW, BX, BY, BZ, BW: Double): Double; inline;
+var
+  LScaleA: Double;
+  LScaleB: Double;
+  LScaledSum: Double;
+  LAbsScaledSum: Double;
+  LProduct: Double;
+  LLogMagnitude: Double;
+begin
+  if nextpas.core.math.scalar.IsNaN(AX) or nextpas.core.math.scalar.IsNaN(AY) or
+    nextpas.core.math.scalar.IsNaN(AZ) or nextpas.core.math.scalar.IsNaN(AW) or
+    nextpas.core.math.scalar.IsNaN(BX) or nextpas.core.math.scalar.IsNaN(BY) or
+    nextpas.core.math.scalar.IsNaN(BZ) or nextpas.core.math.scalar.IsNaN(BW) or
+    nextpas.core.math.scalar.IsInfinite(AX) or nextpas.core.math.scalar.IsInfinite(AY) or
+    nextpas.core.math.scalar.IsInfinite(AZ) or nextpas.core.math.scalar.IsInfinite(AW) or
+    nextpas.core.math.scalar.IsInfinite(BX) or nextpas.core.math.scalar.IsInfinite(BY) or
+    nextpas.core.math.scalar.IsInfinite(BZ) or nextpas.core.math.scalar.IsInfinite(BW) then
+    Exit(((AX * BX + AY * BY) + AZ * BZ) + AW * BW);
+
+  LScaleA := nextpas.core.math.scalar.Max(nextpas.core.math.scalar.Abs(AX),
+    nextpas.core.math.scalar.Max(nextpas.core.math.scalar.Abs(AY),
+    nextpas.core.math.scalar.Max(nextpas.core.math.scalar.Abs(AZ),
+    nextpas.core.math.scalar.Abs(AW))));
+  LScaleB := nextpas.core.math.scalar.Max(nextpas.core.math.scalar.Abs(BX),
+    nextpas.core.math.scalar.Max(nextpas.core.math.scalar.Abs(BY),
+    nextpas.core.math.scalar.Max(nextpas.core.math.scalar.Abs(BZ),
+    nextpas.core.math.scalar.Abs(BW))));
+  if (LScaleA = 0.0) or (LScaleB = 0.0) then
+    Exit(0.0);
+
+  LScaledSum :=
+    (AX / LScaleA) * (BX / LScaleB) +
+    (AY / LScaleA) * (BY / LScaleB) +
+    (AZ / LScaleA) * (BZ / LScaleB) +
+    (AW / LScaleA) * (BW / LScaleB);
+  if LScaledSum = 0.0 then
+    Exit(0.0);
+
+  LAbsScaledSum := nextpas.core.math.scalar.Abs(LScaledSum);
+  if LScaleA <= MAX_DOUBLE_VALUE / LScaleB then
+  begin
+    LProduct := LScaleA * LScaleB;
+    if LProduct = 0.0 then
+      Exit(0.0);
+    if LAbsScaledSum > MAX_DOUBLE_VALUE / LProduct then
+      Exit(DoubleSignedInfinity(LScaledSum < 0.0));
+    Result := LProduct * LScaledSum;
+    Exit;
+  end;
+
+  LLogMagnitude := System.Ln(LScaleA) + System.Ln(LScaleB) + System.Ln(LAbsScaledSum);
+  if LLogMagnitude >= LN_MAX_DOUBLE_VALUE then
+    Exit(DoubleSignedInfinity(LScaledSum < 0.0));
+  Result := System.Exp(LLogMagnitude);
+  if LScaledSum < 0.0 then
+    Result := -Result;
+end;
+
+function StableVec2Dot(const AX, AY, BX, BY: Single): Single; inline;
+begin
+  Result := StableVec4Dot(AX, AY, Single(0.0), Single(0.0), BX, BY, Single(0.0), Single(0.0));
+end;
+
+function StableVec2Dot(const AX, AY, BX, BY: Double): Double; inline;
+begin
+  Result := StableVec4Dot(AX, AY, 0.0, 0.0, BX, BY, 0.0, 0.0);
+end;
+
+function StableVec3Dot(const AX, AY, AZ, BX, BY, BZ: Single): Single; inline;
+begin
+  Result := StableVec4Dot(AX, AY, AZ, Single(0.0), BX, BY, BZ, Single(0.0));
+end;
+
+function StableVec3Dot(const AX, AY, AZ, BX, BY, BZ: Double): Double; inline;
+begin
+  Result := StableVec4Dot(AX, AY, AZ, 0.0, BX, BY, BZ, 0.0);
+end;
+
 class function TVec2f.Create(const AX, AY: Single): TVec2f;
 begin
   Result.X := AX;
@@ -607,7 +746,7 @@ end;
 
 class function TVec2f.Dot(const AA, AB: TVec2f): Single;
 begin
-  Result := AA.X * AB.X + AA.Y * AB.Y;
+  Result := StableVec2Dot(AA.X, AA.Y, AB.X, AB.Y);
 end;
 
 class function TVec2f.Lerp(const AA, AB: TVec2f; const AT: Single): TVec2f;
@@ -699,7 +838,7 @@ end;
 
 class function TVec3f.Dot(const AA, AB: TVec3f): Single;
 begin
-  Result := AA.X * AB.X + AA.Y * AB.Y + AA.Z * AB.Z;
+  Result := StableVec3Dot(AA.X, AA.Y, AA.Z, AB.X, AB.Y, AB.Z);
 end;
 
 class function TVec3f.Cross(const AA, AB: TVec3f): TVec3f;
@@ -805,7 +944,7 @@ end;
 
 class function TVec4f.Dot(const AA, AB: TVec4f): Single;
 begin
-  Result := AA.X * AB.X + AA.Y * AB.Y + AA.Z * AB.Z + AA.W * AB.W;
+  Result := StableVec4Dot(AA.X, AA.Y, AA.Z, AA.W, AB.X, AB.Y, AB.Z, AB.W);
 end;
 
 class function TVec4f.Lerp(const AA, AB: TVec4f; const AT: Single): TVec4f;
@@ -901,7 +1040,7 @@ end;
 
 class function TVec2d.Dot(const AA, AB: TVec2d): Double;
 begin
-  Result := AA.X * AB.X + AA.Y * AB.Y;
+  Result := StableVec2Dot(AA.X, AA.Y, AB.X, AB.Y);
 end;
 
 class function TVec2d.Lerp(const AA, AB: TVec2d; const AT: Double): TVec2d;
@@ -993,7 +1132,7 @@ end;
 
 class function TVec3d.Dot(const AA, AB: TVec3d): Double;
 begin
-  Result := AA.X * AB.X + AA.Y * AB.Y + AA.Z * AB.Z;
+  Result := StableVec3Dot(AA.X, AA.Y, AA.Z, AB.X, AB.Y, AB.Z);
 end;
 
 class function TVec3d.Cross(const AA, AB: TVec3d): TVec3d;
@@ -1099,7 +1238,7 @@ end;
 
 class function TVec4d.Dot(const AA, AB: TVec4d): Double;
 begin
-  Result := AA.X * AB.X + AA.Y * AB.Y + AA.Z * AB.Z + AA.W * AB.W;
+  Result := StableVec4Dot(AA.X, AA.Y, AA.Z, AA.W, AB.X, AB.Y, AB.Z, AB.W);
 end;
 
 class function TVec4d.Lerp(const AA, AB: TVec4d; const AT: Double): TVec4d;

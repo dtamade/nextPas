@@ -103,6 +103,26 @@ begin
   CheckEqual(Int64($7FF0000000000000), Int64(LValue.Bits), AMessage);
 end;
 
+procedure CheckSingleNegativeInfinity(const AActual: Single; const AMessage: string);
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AActual;
+  CheckEqual(Int64($FF800000), Int64(LValue.Bits), AMessage);
+end;
+
+procedure CheckDoubleNegativeInfinity(const AActual: Double; const AMessage: string);
+var
+  LValue: TDoubleBitCast;
+  LExpected: QWord;
+begin
+  LValue.Value := AActual;
+  LExpected := QWord($80000000);
+  LExpected := LExpected shl 32;
+  LExpected := LExpected or (QWord($7FF) shl 52);
+  Check(LValue.Bits = LExpected, AMessage);
+end;
+
 procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string; const AProc: TTestProc);
 begin
   try
@@ -597,6 +617,39 @@ begin
     'TVec4d huge finite LengthSqr saturates to +Inf');
 end;
 
+procedure TestVectorHugeFiniteDotContract;
+begin
+  CheckSinglePositiveInfinity(TVec2f.Dot(
+    TVec2f.Create(Single(3.0e20), Single(4.0e20)),
+    TVec2f.Create(Single(3.0e20), Single(4.0e20))),
+    'TVec2f huge finite Dot positive overflow returns +Inf');
+  CheckSingleNegativeInfinity(TVec3f.Dot(
+    TVec3f.Create(Single(3.0e20), Single(4.0e20), 0.0),
+    TVec3f.Create(Single(-3.0e20), Single(-4.0e20), 0.0)),
+    'TVec3f huge finite Dot negative overflow returns -Inf');
+  CheckNear(0.0, TVec4f.Dot(
+    TVec4f.Create(Single(3.0e20), Single(4.0e20), Single(-3.0e20), Single(-4.0e20)),
+    TVec4f.Create(Single(3.0e20), Single(4.0e20), Single(3.0e20), Single(4.0e20))),
+    0.0, 'TVec4f huge finite Dot cancellation stays finite zero');
+
+  CheckDoublePositiveInfinity(TVec2d.Dot(
+    TVec2d.Create(3.0e200, 4.0e200),
+    TVec2d.Create(3.0e200, 4.0e200)),
+    'TVec2d huge finite Dot positive overflow returns +Inf');
+  CheckDoubleNegativeInfinity(TVec3d.Dot(
+    TVec3d.Create(3.0e200, 4.0e200, 0.0),
+    TVec3d.Create(-3.0e200, -4.0e200, 0.0)),
+    'TVec3d huge finite Dot negative overflow returns -Inf');
+  CheckNear(0.0, TVec4d.Dot(
+    TVec4d.Create(3.0e200, 4.0e200, -3.0e200, -4.0e200),
+    TVec4d.Create(3.0e200, 4.0e200, 3.0e200, 4.0e200)),
+    0.0, 'TVec4d huge finite Dot cancellation stays finite zero');
+  CheckNear(0.0, TVec2d.Dot(
+    TVec2d.Create(1.0e-300, -1.0e-300),
+    TVec2d.Create(1.0e-300, 1.0e-300)),
+    0.0, 'TVec2d tiny finite Dot underflow stays finite zero');
+end;
+
 procedure TestVectorDataAliasesWriteThrough;
 var
   V2f: TVec2f;
@@ -714,6 +767,7 @@ begin
   T.Run('TVec4d huge finite length + normalize', @TestVec4dHugeFiniteLengthAndNormalize);
   T.Run('vector huge finite LengthSqr overflow contract',
     @TestVectorLengthSqrHugeFiniteOverflowContract);
+  T.Run('vector huge finite Dot contract', @TestVectorHugeFiniteDotContract);
   T.Run('vector Data aliases write through', @TestVectorDataAliasesWriteThrough);
   T.Run('raw vector normalize non-finite inputs fail fast',
     @TestRawVectorNormalizeNonFiniteInputsFailFast);

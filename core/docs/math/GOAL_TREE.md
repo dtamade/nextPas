@@ -265,7 +265,8 @@ Status:
   `Normalize`, `Lerp`, `Equals` including negative-epsilon fail-close behavior, zero-vector
   normalize returning zero, huge finite `TVec2*` / `TVec3*` / `TVec4*` scaled length and
   normalization preserving direction and unit length, `LengthSqr` huge finite overflow-to-`+Inf`
-  behavior without FPU overflow exceptions, `Data` alias write-through semantics, raw vector non-finite fail-fast guards,
+  behavior, and `Dot` huge finite overflow/cancellation behavior without intermediate FPU overflow exceptions,
+  `Data` alias write-through semantics, raw vector non-finite fail-fast guards,
   and direct `Double`-path parity coverage for
   `Data` aliases, `Zero`, add/subtract/unary minus, scalar multiply left, and representative
   length/component-multiply contracts.
