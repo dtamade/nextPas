@@ -89,6 +89,11 @@ const
 
 implementation
 
+function IsValidAlignment(alignment: NativeUInt): Boolean; inline;
+begin
+  Result := (alignment >= SizeOf(Pointer)) and ((alignment and (alignment - 1)) = 0);
+end;
+
 {$IFDEF WINDOWS}
 // Windows CRT aligned memory functions
 function _aligned_malloc(size: NativeUInt; alignment: NativeUInt): Pointer; cdecl; external 'msvcrt.dll' name '_aligned_malloc';
@@ -102,6 +107,9 @@ function _aligned_realloc(ptr: Pointer; size: NativeUInt; alignment: NativeUInt)
 
 function AlignedAlloc(size: NativeUInt; alignment: NativeUInt): Pointer;
 begin
+  if (size = 0) or (not IsValidAlignment(alignment)) then
+    Exit(nil);
+
   Result := _aligned_malloc(size, alignment);
   if Result = nil then
     raise EOutOfMemory.CreateFmt('Failed to allocate %d bytes with %d alignment', [size, alignment]);
@@ -115,6 +123,15 @@ end;
 
 function AlignedRealloc(ptr: Pointer; newSize: NativeUInt; alignment: NativeUInt): Pointer;
 begin
+  if newSize = 0 then
+  begin
+    AlignedFree(ptr);
+    Exit(nil);
+  end;
+
+  if not IsValidAlignment(alignment) then
+    Exit(nil);
+
   Result := _aligned_realloc(ptr, newSize, alignment);
   if (Result = nil) and (newSize > 0) then
     raise EOutOfMemory.CreateFmt('Failed to reallocate %d bytes with %d alignment', [newSize, alignment]);
@@ -136,6 +153,9 @@ var
   headerOffset: NativeUInt;
   headerBase: NativeUInt;
 begin
+  if (size = 0) or (not IsValidAlignment(alignment)) then
+    Exit(nil);
+
   // Reserve extra space for alignment plus our header (pointer + size)
   headerOffset := SizeOf(Pointer) + SizeOf(NativeUInt);
 
@@ -182,6 +202,9 @@ var
   oldSize, copySize: NativeUInt;
   headerBase: NativeUInt;
 begin
+  if not IsValidAlignment(alignment) then
+    Exit(nil);
+
   // Behave like malloc when ptr = nil
   if ptr = nil then
   begin
@@ -228,6 +251,9 @@ end;
 
 function IsAligned(ptr: Pointer; alignment: NativeUInt): Boolean;
 begin
+  if not IsValidAlignment(alignment) then
+    Exit(False);
+
   {$PUSH}{$WARN 4055 OFF}
   Result := (NativeUInt(ptr) and (alignment - 1)) = 0;
   {$POP}
@@ -237,6 +263,9 @@ function AlignUp(ptr: Pointer; alignment: NativeUInt): Pointer;
 var
   addr: NativeUInt;
 begin
+  if not IsValidAlignment(alignment) then
+    Exit(nil);
+
   {$PUSH}{$WARN 4055 OFF}
   addr := NativeUInt(ptr);
   addr := (addr + alignment - 1) and not (alignment - 1);
@@ -246,6 +275,11 @@ end;
 
 function AlignUpSize(size: NativeUInt; alignment: NativeUInt): NativeUInt;
 begin
+  if not IsValidAlignment(alignment) then
+    Exit(0);
+  if size > High(NativeUInt) - (alignment - 1) then
+    Exit(0);
+
   Result := (size + alignment - 1) and not (alignment - 1);
 end;
 
@@ -404,5 +438,4 @@ begin
 end;
 
 end.
-
 

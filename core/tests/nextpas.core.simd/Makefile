@@ -16,8 +16,10 @@ ALG_TEST := test_algorithms
 STATIC_AVX2_MISALIGNMENT_TEST := test_static_avx2_misalignment
 STATIC_AVX2_USABLE_PROBE := probe_static_avx2_usable
 STATIC_AVX2_MISALIGNMENT_BUILD_DIR := $(CORE_ROOT)/build/lib/static-avx2-misalignment
+ALIGNMENT_ALLOCATOR_TEST := nextpas.core.simd.alignment_allocator.heaptrc.test
+ALIGNMENT_ALLOCATOR_BUILD_DIR := $(CORE_ROOT)/build/lib/simd-alignment-allocator
 
-.PHONY: test test-vec test-algorithms static-avx2-misalignment test-all bench audit cpuinfo-focused cpuinfo-heaptrc cpuinfo-nonx86-compile clean
+.PHONY: test test-vec test-algorithms static-avx2-misalignment alignment-allocator-contract test-all bench audit cpuinfo-focused cpuinfo-heaptrc cpuinfo-nonx86-compile clean
 
 test:
 	@mkdir -p $(BUILD_DIR)
@@ -46,6 +48,11 @@ static-avx2-misalignment:
 	fi
 	$(FPC) $(FPC_FLAGS) -B -gh -FU$(STATIC_AVX2_MISALIGNMENT_BUILD_DIR) -o$(STATIC_AVX2_MISALIGNMENT_TEST) $(STATIC_AVX2_MISALIGNMENT_TEST).pas
 	$(BUILD_DIR)/$(STATIC_AVX2_MISALIGNMENT_TEST)
+
+alignment-allocator-contract:
+	@mkdir -p $(BUILD_DIR) $(ALIGNMENT_ALLOCATOR_BUILD_DIR)
+	$(FPC) $(FPC_FLAGS) -B -gh -FU$(ALIGNMENT_ALLOCATOR_BUILD_DIR) -o$(ALIGNMENT_ALLOCATOR_TEST) $(RUNNER).lpr
+	$(BUILD_DIR)/$(ALIGNMENT_ALLOCATOR_TEST) --no-bench --suite=TTestCase_Memutils
 
 test-all: test test-vec audit cpuinfo-focused
 
@@ -77,5 +84,5 @@ bench:
 	$(BUILD_DIR)/$(RUNNER) --bench-only --vector-asm
 
 clean:
-	rm -f $(BUILD_DIR)/$(RUNNER) $(BUILD_DIR)/$(VEC_TEST) $(BUILD_DIR)/$(ALG_TEST) $(BUILD_DIR)/$(STATIC_AVX2_MISALIGNMENT_TEST) $(BUILD_DIR)/$(STATIC_AVX2_USABLE_PROBE)
-	rm -rf $(STATIC_AVX2_MISALIGNMENT_BUILD_DIR)
+	rm -f $(BUILD_DIR)/$(RUNNER) $(BUILD_DIR)/$(VEC_TEST) $(BUILD_DIR)/$(ALG_TEST) $(BUILD_DIR)/$(STATIC_AVX2_MISALIGNMENT_TEST) $(BUILD_DIR)/$(STATIC_AVX2_USABLE_PROBE) $(BUILD_DIR)/$(ALIGNMENT_ALLOCATOR_TEST)
+	rm -rf $(STATIC_AVX2_MISALIGNMENT_BUILD_DIR) $(ALIGNMENT_ALLOCATOR_BUILD_DIR)

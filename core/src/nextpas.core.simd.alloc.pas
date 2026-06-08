@@ -29,6 +29,42 @@ type
     Alignment: NativeUInt;
   end;
 
+function GetDefaultAlignment: NativeUInt; forward;
+
+function TryResolveAlignment(aAlignment: TSimdAlignment; out aResolved: NativeUInt): Boolean;
+begin
+  case NativeUInt(aAlignment) of
+    NativeUInt(saAuto): aResolved := GetDefaultAlignment;
+    NativeUInt(sa16):   aResolved := 16;
+    NativeUInt(sa32):   aResolved := 32;
+    NativeUInt(sa64):   aResolved := 64;
+    else
+    begin
+      aResolved := 0;
+      Exit(False);
+    end;
+  end;
+  Result := True;
+end;
+
+function CanAddSizeUInt(aLeft, aRight: SizeUInt; out aSum: SizeUInt): Boolean; inline;
+begin
+  if aLeft > High(SizeUInt) - aRight then
+  begin
+    aSum := 0;
+    Exit(False);
+  end;
+  aSum := aLeft + aRight;
+  Result := True;
+end;
+
+function CanBuildRawAllocationSize(aSize, aAlignment: SizeUInt; out aRawSize: SizeUInt): Boolean;
+begin
+  if not CanAddSizeUInt(aSize, aAlignment, aRawSize) then
+    Exit(False);
+  Result := CanAddSizeUInt(aRawSize, SizeOf(TAllocHeader), aRawSize);
+end;
+
 function GetDefaultAlignment: NativeUInt;
 begin
   case GetActiveBackend of
@@ -52,12 +88,11 @@ var
 begin
   if aSize = 0 then Exit(nil);
 
-  if aAlignment = saAuto then
-    LAlign := GetDefaultAlignment
-  else
-    LAlign := NativeUInt(aAlignment);
+  if not TryResolveAlignment(aAlignment, LAlign) then
+    Exit(nil);
 
-  LRawSize := aSize + LAlign + SizeOf(TAllocHeader);
+  if not CanBuildRawAllocationSize(aSize, LAlign, LRawSize) then
+    Exit(nil);
   GetMem(LRaw, LRawSize);
 
   LAligned := Pointer((PtrUInt(LRaw) + SizeOf(TAllocHeader) + LAlign - 1) and not (PtrUInt(LAlign) - 1));
@@ -91,6 +126,9 @@ begin
   LOldSize := LHeader^.Size;
 
   Result := SimdAlloc(aNewSize, aAlignment);
+  if Result = nil then
+    Exit;
+
   if LOldSize < aNewSize then
     Move(aPtr^, Result^, LOldSize)
   else

@@ -22,6 +22,10 @@ type
     procedure Test_AlignedAlloc_64ByteAlignedAndWritable;
     procedure Test_TAlignedArray_64ByteAligned;
     procedure Test_SimdAlloc_Sa64_64ByteAlignedAndWritable;
+    procedure Test_SimdAlloc_SizeOverflow_FailsClosed;
+    procedure Test_SimdAlloc_InvalidAlignment_FailsClosed;
+    procedure Test_AlignedAlloc_InvalidAlignment_FailsClosed;
+    procedure Test_SimdRealloc_Sa64_PreservesAlignmentAndPrefix;
     procedure Test_AlignedRealloc_Grow_PreservesPrefix;
     procedure Test_AlignedRealloc_Shrink_PreservesPrefix;
     procedure Test_AlignedRealloc_NilAndZero_Semantics;
@@ -141,6 +145,69 @@ begin
         Byte((255 - LIndex) and $FF), LPtr[LIndex]);
   finally
     SimdFree(LPtr);
+  end;
+end;
+
+procedure TTestCase_Memutils.Test_SimdAlloc_SizeOverflow_FailsClosed;
+var
+  LPtr: Pointer;
+begin
+  LPtr := SimdAlloc(SizeUInt(High(SizeUInt)), sa64);
+  AssertTrue('SimdAlloc overflow must fail closed with nil', LPtr = nil);
+end;
+
+procedure TTestCase_Memutils.Test_SimdAlloc_InvalidAlignment_FailsClosed;
+type
+  TInvalidSimdAlignment = TSimdAlignment;
+var
+  LPtr: Pointer;
+begin
+  LPtr := SimdAlloc(64, TInvalidSimdAlignment(24));
+  AssertTrue('SimdAlloc invalid alignment enum value must fail closed with nil', LPtr = nil);
+end;
+
+procedure TTestCase_Memutils.Test_AlignedAlloc_InvalidAlignment_FailsClosed;
+const
+  INVALID_ALIGNMENTS: array[0..3] of NativeUInt = (0, 3, 7, SizeOf(Pointer) div 2);
+var
+  LIndex: Integer;
+  LPtr: Pointer;
+begin
+  for LIndex := 0 to High(INVALID_ALIGNMENTS) do
+  begin
+    LPtr := AlignedAlloc(64, INVALID_ALIGNMENTS[LIndex]);
+    AssertTrue('AlignedAlloc invalid alignment must fail closed with nil: ' +
+      IntToStr(INVALID_ALIGNMENTS[LIndex]), LPtr = nil);
+  end;
+end;
+
+procedure TTestCase_Memutils.Test_SimdRealloc_Sa64_PreservesAlignmentAndPrefix;
+var
+  LPtr, LReallocPtr: PByte;
+  LIndex: Integer;
+begin
+  LPtr := nil;
+  LReallocPtr := nil;
+  LPtr := PByte(SimdAlloc(32, sa64));
+  try
+    AssertTrue('initial SimdAlloc(sa64) should be 64-byte aligned',
+      IsAligned(LPtr, SIMD_ALIGN_64));
+    for LIndex := 0 to 31 do
+      LPtr[LIndex] := Byte((LIndex * 5 + 11) and $FF);
+
+    LReallocPtr := PByte(SimdRealloc(LPtr, 96, sa64));
+    LPtr := nil;
+    AssertTrue('SimdRealloc(sa64) should return non-nil', LReallocPtr <> nil);
+    AssertTrue('SimdRealloc(sa64) must preserve 64-byte alignment',
+      IsAligned(LReallocPtr, SIMD_ALIGN_64));
+    for LIndex := 0 to 31 do
+      AssertEquals('SimdRealloc(sa64) must preserve prefix byte[' + IntToStr(LIndex) + ']',
+        Byte((LIndex * 5 + 11) and $FF), LReallocPtr[LIndex]);
+  finally
+    if LReallocPtr <> nil then
+      SimdFree(LReallocPtr);
+    if LPtr <> nil then
+      SimdFree(LPtr);
   end;
 end;
 
