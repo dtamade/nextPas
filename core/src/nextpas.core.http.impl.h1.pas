@@ -122,6 +122,7 @@ type
     FOptions: TH1ClientTransportOptions;
     FPool: array of TPoolEntry;
     FPoolCount: Int32;
+    function PooledConnectionIsReusable(const AConn: ITcpStream): Boolean;
     function PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
     procedure PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
     procedure PoolClear;
@@ -1831,6 +1832,31 @@ begin
   FPoolCount := 0;
 end;
 
+function TH1ClientTransport.PooledConnectionIsReusable(
+  const AConn: ITcpStream): Boolean;
+var
+  LRuntime: ITcpStreamRuntime;
+  LByte: Byte;
+  LRead: SizeUInt;
+begin
+  Result := False;
+  if AConn = nil then
+    Exit;
+  if not Supports(AConn, ITcpStreamRuntime, LRuntime) then
+    Exit;
+
+  try
+    LRuntime.SetBlocking(False);
+    try
+      Result := LRuntime.TryRead(LByte, 1, LRead) = tsiorWouldBlock;
+    finally
+      LRuntime.SetBlocking(True);
+    end;
+  except
+    Result := False;
+  end;
+end;
+
 function TH1ClientTransport.PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
 var
   LI: Int32;
@@ -1842,6 +1868,10 @@ begin
       Result := FPool[LI].Conn;
       FPool[LI] := FPool[FPoolCount - 1];
       Dec(FPoolCount);
+      if PooledConnectionIsReusable(Result) then
+        Exit;
+      Result.Close;
+      Result := nil;
       Exit;
     end;
 end;
