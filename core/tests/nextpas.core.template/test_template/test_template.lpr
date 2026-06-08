@@ -338,6 +338,19 @@ begin
   CheckEqual(Int64(0), Int64(Length(LList)), 'missing list empty');
 end;
 
+procedure Test_GetList_ReturnsSnapshot;
+var
+  LCtx: TTemplateContext;
+  LList: TStringArray;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetList('Items', ['a', 'b']);
+  LList := LCtx.GetList('Items');
+  LList[0] := 'z';
+  CheckEqual('ab', TemplateRender('{{range .Items}}{{.}}{{end}}', LCtx),
+    'GetList must not expose mutable context storage');
+end;
+
 procedure Test_SetInt_GetVar;
 var
   LCtx: TTemplateContext;
@@ -570,6 +583,7 @@ begin
   T.Run('GetBool_Missing', @Test_GetBool_Missing);
   T.Run('GetList_Existing', @Test_GetList_Existing);
   T.Run('GetList_Missing', @Test_GetList_Missing);
+  T.Run('GetList_ReturnsSnapshot', @Test_GetList_ReturnsSnapshot);
   T.Run('SetInt_GetVar', @Test_SetInt_GetVar);
   { New feature tests }
   T.Run('NestedField', @Test_NestedField);

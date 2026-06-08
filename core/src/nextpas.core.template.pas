@@ -789,12 +789,17 @@ end;
 
 function TTemplateContext.GetList(const AName: string): TStringArray;
 var
-  LI: Integer;
+  LI, LJ: Integer;
 begin
+  Result := nil;
   for LI := 0 to FListCount - 1 do
     if FLists[LI].Name = AName then
-      Exit(FLists[LI].Items);
-  Result := nil;
+    begin
+      SetLength(Result, Length(FLists[LI].Items));
+      for LJ := 0 to High(FLists[LI].Items) do
+        Result[LJ] := FLists[LI].Items[LJ];
+      Exit;
+    end;
 end;
 
 { ============================================================================ }
