@@ -332,6 +332,16 @@ begin
       raise EHttpError.Create('invalid header value: contains CR/LF/NUL');
 end;
 
+procedure ValidatePlainHttpClientUrlScheme(const AUrl: TUrl);
+var
+  LScheme: string;
+begin
+  LScheme := LowerCase(AUrl.Scheme);
+  if (LScheme <> '') and (LScheme <> 'http') then
+    raise EHttpError.Create('unsupported HTTP client URL scheme: ' +
+      AUrl.Scheme);
+end;
+
 function ResponseRequestsClose(const AHeaders: IHttpHeaders): Boolean;
 var
   LValues: TStringArray;
@@ -2182,6 +2192,7 @@ var
   LBodyStartPosition: Int64;
 begin
   LUrl := AReq.Url;
+  ValidatePlainHttpClientUrlScheme(LUrl);
   LHost := LUrl.Host;
   LAutoHost := '';
   if not AReq.Headers.Has('host') then
@@ -2191,12 +2202,7 @@ begin
   end;
   LPort := LUrl.Port;
   if LPort = 0 then
-  begin
-    if LUrl.Scheme = 'https' then
-      LPort := 443
-    else
-      LPort := 80;
-  end;
+    LPort := 80;
 
   CaptureRetryBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LConn := PoolGet(LHost, LPort);

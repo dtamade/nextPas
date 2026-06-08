@@ -120,6 +120,20 @@ type
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
   end;
 
+  TUrlCaptureTransport = class(TInterfacedObject, IHttpTransport)
+  private
+    FCalls: Int32;
+    FSeenScheme: string;
+    FSeenHost: string;
+    FSeenPath: string;
+  public
+    function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+    property Calls: Int32 read FCalls;
+    property SeenScheme: string read FSeenScheme;
+    property SeenHost: string read FSeenHost;
+    property SeenPath: string read FSeenPath;
+  end;
+
   TNilHeadersRedirectResponse = class(TInterfacedObject, IHttpResponse)
   public
     function GetStatusCode: THttpStatus;
@@ -929,6 +943,22 @@ function TNilHeadersRedirectTransport.RoundTrip(
   const AReq: IHttpRequest): IHttpResponse;
 begin
   Result := TNilHeadersRedirectResponse.Create as IHttpResponse;
+end;
+
+function TUrlCaptureTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+var
+  LHeaders: IHttpHeaders;
+  LUrl: TUrl;
+begin
+  Inc(FCalls);
+  LUrl := AReq.Url;
+  FSeenScheme := LUrl.Scheme;
+  FSeenHost := LUrl.Host;
+  FSeenPath := AReq.Path;
+
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '0');
+  Result := NewResponse(HTTP_STATUS_OK, LHeaders, nil);
 end;
 
 function TNilHeadersRedirectResponse.GetStatusCode: THttpStatus;
@@ -4831,6 +4861,63 @@ begin
   end;
 end;
 
+procedure CheckClientRejectsUnsupportedDirectScheme(const AScheme: string);
+var
+  LClient: IHttpClient;
+  LRaised: Boolean;
+  LUnsupportedScheme: Boolean;
+begin
+  LClient := NewHttpClient;
+  LRaised := False;
+  LUnsupportedScheme := False;
+  try
+    LClient.Get(AScheme + '://127.0.0.1:1/not-http');
+  except
+    on E: EHttpError do
+    begin
+      LRaised := True;
+      LUnsupportedScheme := Pos('unsupported', LowerCase(E.Message)) > 0;
+    end;
+    on E: Exception do
+      LRaised := True;
+  end;
+
+  Check(LRaised, AScheme + ' direct URL scheme raises');
+  Check(LUnsupportedScheme,
+    AScheme + ' direct URL scheme reports unsupported scheme');
+end;
+
+procedure TestClientCustomTransportAcceptsNonHttpScheme;
+var
+  LTransportObj: TUrlCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransportObj := TUrlCaptureTransport.Create;
+  LTransport := LTransportObj as IHttpTransport;
+  LClient := NewHttpClient(LTransport);
+
+  LResp := LClient.Get('https://example.test/custom');
+
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'custom transport returns response for non-http scheme');
+  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
+    'custom transport receives non-http request');
+  CheckEqual('https', LTransportObj.SeenScheme,
+    'custom transport sees original scheme');
+  CheckEqual('example.test', LTransportObj.SeenHost,
+    'custom transport sees original host');
+  CheckEqual('/custom', LTransportObj.SeenPath,
+    'custom transport sees original path');
+end;
+
+procedure TestClientRejectsUnsupportedDirectSchemes;
+begin
+  CheckClientRejectsUnsupportedDirectScheme('https');
+  CheckClientRejectsUnsupportedDirectScheme('ftp');
+end;
+
 procedure TestClientAutoHostRejectsInvalidHeaderValue;
 var
   LClient: IHttpClient;
@@ -5232,6 +5319,10 @@ begin
   T.Run('Client sets Host header automatically', @TestClientSetsHostHeader);
   T.Run('Client auto Host does not mutate request headers',
     @TestClientAutoHostDoesNotMutateRequestHeaders);
+  T.Run('Client rejects unsupported direct schemes',
+    @TestClientRejectsUnsupportedDirectSchemes);
+  T.Run('Client custom transport accepts non-http scheme',
+    @TestClientCustomTransportAcceptsNonHttpScheme);
   T.Run('Client auto Host rejects invalid header value',
     @TestClientAutoHostRejectsInvalidHeaderValue);
   T.Run('Connection reuse', @TestConnectionReuse);
