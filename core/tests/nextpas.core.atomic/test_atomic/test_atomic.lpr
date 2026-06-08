@@ -975,6 +975,27 @@ begin
   CheckContains(LAtomicCompatSource,
     'function atomic_decrement(var aObj: Pointer): Pointer;',
     'compat unit must own the legacy pointer decrement overload');
+  CheckContains(LAtomicCompatSource,
+    'function make_atomic_tagged_ptr_t(',
+    'compat unit must own the legacy tagged pointer constructor helper alias');
+  CheckContains(LAtomicCompatSource,
+    'function atomic_load_atomic_tagged_ptr_t(',
+    'compat unit must own the legacy tagged pointer load helper alias');
+  CheckContains(LAtomicCompatSource,
+    'procedure atomic_store_atomic_tagged_ptr_t(',
+    'compat unit must own the legacy tagged pointer store helper alias');
+  CheckContains(LAtomicCompatSource,
+    'function atomic_compare_exchange_strong_atomic_tagged_ptr_t(',
+    'compat unit must own the legacy tagged pointer CAS helper alias');
+  CheckContains(LAtomicCompatSource,
+    'function atomic_load_ptr(var aObj: Pointer;',
+    'compat unit must own the legacy pointer load helper alias');
+  CheckContains(LAtomicCompatSource,
+    'procedure atomic_store_ptr(var aObj: Pointer;',
+    'compat unit must own the legacy pointer store helper alias');
+  CheckContains(LAtomicCompatSource,
+    'function atomic_compare_exchange_strong_ptr(var aObj: Pointer;',
+    'compat unit must own the legacy pointer CAS helper alias');
   CheckContains(LAtomicSource,
     'function atomic_fetch_add(var aObj: Pointer; aOffset: PtrInt): Pointer;',
     'main atomic facade must keep canonical pointer offset fetch-add');
@@ -1002,6 +1023,27 @@ begin
   CheckNotContains(LAtomicSource,
     'function atomic_decrement(var aObj: Pointer)',
     'legacy pointer decrement overload must stay out of the main atomic facade');
+  CheckNotContains(LAtomicSource,
+    'function make_atomic_tagged_ptr_t(',
+    'legacy tagged pointer constructor helper alias must stay out of the main atomic facade');
+  CheckNotContains(LAtomicSource,
+    'function atomic_load_atomic_tagged_ptr_t(',
+    'legacy tagged pointer load helper alias must stay out of the main atomic facade');
+  CheckNotContains(LAtomicSource,
+    'procedure atomic_store_atomic_tagged_ptr_t(',
+    'legacy tagged pointer store helper alias must stay out of the main atomic facade');
+  CheckNotContains(LAtomicSource,
+    'function atomic_compare_exchange_strong_atomic_tagged_ptr_t(',
+    'legacy tagged pointer CAS helper alias must stay out of the main atomic facade');
+  CheckNotContains(LAtomicSource,
+    'function atomic_load_ptr(var aObj: Pointer;',
+    'legacy pointer load helper alias must stay out of the main atomic facade');
+  CheckNotContains(LAtomicSource,
+    'procedure atomic_store_ptr(var aObj: Pointer;',
+    'legacy pointer store helper alias must stay out of the main atomic facade');
+  CheckNotContains(LAtomicSource,
+    'function atomic_compare_exchange_strong_ptr(var aObj: Pointer;',
+    'legacy pointer CAS helper alias must stay out of the main atomic facade');
   CheckContains(LX8664SnapshotSource, 'Archived historical x86_64 atomic implementation snapshot.',
     'archived x86_64 snapshot must be marked historical');
   CheckContains(LX8664SnapshotSource, 'Documentation archive only.',
