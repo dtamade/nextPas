@@ -1,6 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+summary_only=0
+
+usage() {
+  cat >&2 <<'EOF'
+usage: scripts/worktree-audit.sh [--summary]
+
+Audits linked worktrees. Default output is a table; --summary prints
+machine-readable queue counts for controller triage.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --summary)
+      summary_only=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "error: unknown argument: $1" >&2
+      usage
+      exit 2
+      ;;
+  esac
+done
+
 repo_root="$(git worktree list --porcelain | awk '
   /^worktree / && root == "" { root = substr($0, 10) }
   END { print root }
@@ -13,6 +42,17 @@ fi
 
 allowed_prefix="$repo_root/.worktrees/"
 violations=0
+total_count=0
+current_count=0
+dirty_count=0
+stale_count=0
+absorbed_count=0
+behind_main_count=0
+needs_landing_count=0
+ready_count=0
+unknown_count=0
+review_count=0
+outside_worktrees_count=0
 
 default_base_ref() {
   if git -C "$repo_root" show-ref --verify --quiet refs/heads/main; then
@@ -152,6 +192,7 @@ print_record() {
 
   if [[ "$path" != "$repo_root" && "$path" != "$allowed_prefix"* ]]; then
     location="outside-.worktrees"
+    outside_worktrees_count=$((outside_worktrees_count + 1))
     violations=$((violations + 1))
   fi
 
@@ -166,14 +207,31 @@ print_record() {
   queue="${queue_state%% *}"
   action="${queue_state##* }"
 
-  printf '%-8s %-12s %-36s %-21s %-12s %-40s %-12s %-6s %-6s %s\n' \
-    "$dirty" "$queue" "$action" "$location" "${head:0:8}" "$branch" "$base_ref" "$ahead" "$behind" "$path"
+  total_count=$((total_count + 1))
+  case "$queue" in
+    current) current_count=$((current_count + 1)) ;;
+    dirty) dirty_count=$((dirty_count + 1)) ;;
+    stale) stale_count=$((stale_count + 1)) ;;
+    absorbed) absorbed_count=$((absorbed_count + 1)) ;;
+    behind-main) behind_main_count=$((behind_main_count + 1)) ;;
+    needs-landing) needs_landing_count=$((needs_landing_count + 1)) ;;
+    ready) ready_count=$((ready_count + 1)) ;;
+    unknown) unknown_count=$((unknown_count + 1)) ;;
+    review) review_count=$((review_count + 1)) ;;
+  esac
+
+  if (( summary_only == 0 )); then
+    printf '%-8s %-12s %-36s %-21s %-12s %-40s %-12s %-6s %-6s %s\n' \
+      "$dirty" "$queue" "$action" "$location" "${head:0:8}" "$branch" "$base_ref" "$ahead" "$behind" "$path"
+  fi
 }
 
 base_ref="$(default_base_ref)"
 
-printf '%-8s %-12s %-36s %-21s %-12s %-40s %-12s %-6s %-6s %s\n' "status" "queue" "action" "location" "head" "branch" "base" "ahead" "behind" "path"
-printf '%-8s %-12s %-36s %-21s %-12s %-40s %-12s %-6s %-6s %s\n' "------" "-----" "------" "--------" "----" "------" "----" "-----" "------" "----"
+if (( summary_only == 0 )); then
+  printf '%-8s %-12s %-36s %-21s %-12s %-40s %-12s %-6s %-6s %s\n' "status" "queue" "action" "location" "head" "branch" "base" "ahead" "behind" "path"
+  printf '%-8s %-12s %-36s %-21s %-12s %-40s %-12s %-6s %-6s %s\n' "------" "-----" "------" "--------" "----" "------" "----" "-----" "------" "----"
+fi
 
 path=""
 head=""
@@ -200,6 +258,21 @@ while IFS= read -r line || [[ -n "$line" ]]; do
 done < <(git -C "$repo_root" worktree list --porcelain)
 
 print_record "$path" "$head" "$branch" "$base_ref"
+
+if (( summary_only == 1 )); then
+  printf 'worktree-audit-summary=pass\n'
+  printf 'total=%s\n' "$total_count"
+  printf 'current=%s\n' "$current_count"
+  printf 'dirty=%s\n' "$dirty_count"
+  printf 'stale=%s\n' "$stale_count"
+  printf 'absorbed=%s\n' "$absorbed_count"
+  printf 'behind-main=%s\n' "$behind_main_count"
+  printf 'needs-landing=%s\n' "$needs_landing_count"
+  printf 'ready=%s\n' "$ready_count"
+  printf 'unknown=%s\n' "$unknown_count"
+  printf 'review=%s\n' "$review_count"
+  printf 'outside-worktrees=%s\n' "$outside_worktrees_count"
+fi
 
 if (( violations > 0 )); then
   echo

@@ -69,6 +69,7 @@ git -C "$FIXTURE_REPO/.worktrees/landing-ready" add landing.txt
 git -C "$FIXTURE_REPO/.worktrees/landing-ready" commit -m "landing ready" >/dev/null
 
 AUDIT_OUTPUT=$(cd "$FIXTURE_REPO" && "$REPO_ROOT/scripts/worktree-audit.sh")
+SUMMARY_OUTPUT=$(cd "$FIXTURE_REPO" && "$REPO_ROOT/scripts/worktree-audit.sh" --summary)
 
 require_audit_line() {
   pattern="$1"
@@ -86,5 +87,27 @@ require_audit_line 'dirty[[:space:]]+dirty[[:space:]]+inspect-or-stash-uncommitt
 require_audit_line 'clean[[:space:]]+needs-landing[[:space:]]+prepare-clean-landing[[:space:]]+ok[[:space:]]+[0-9a-f]+[[:space:]]+codex/module-ready[[:space:]]+main[[:space:]]+1[[:space:]]+0[[:space:]]+.*/\.worktrees/module-ready$'
 require_audit_line 'clean[[:space:]]+ready[[:space:]]+run-landing-check[[:space:]]+ok[[:space:]]+[0-9a-f]+[[:space:]]+landing/module-ready[[:space:]]+main[[:space:]]+1[[:space:]]+0[[:space:]]+.*/\.worktrees/landing-ready$'
 require_audit_line 'clean[[:space:]]+current[[:space:]]+no-action[[:space:]]+ok[[:space:]]+[0-9a-f]+[[:space:]]+main[[:space:]]+main[[:space:]]+0[[:space:]]+0[[:space:]]+.*/repo$'
+
+require_summary_line() {
+  pattern="$1"
+  if ! printf '%s\n' "$SUMMARY_OUTPUT" | grep -E "$pattern" >/dev/null; then
+    printf 'missing expected worktree audit summary line: %s\n' "$pattern" >&2
+    printf '%s\n' "$SUMMARY_OUTPUT" >&2
+    exit 1
+  fi
+}
+
+require_summary_line '^worktree-audit-summary=pass$'
+require_summary_line '^total=16$'
+require_summary_line '^current=1$'
+require_summary_line '^dirty=1$'
+require_summary_line '^stale=1$'
+require_summary_line '^absorbed=1$'
+require_summary_line '^behind-main=10$'
+require_summary_line '^needs-landing=1$'
+require_summary_line '^ready=1$'
+require_summary_line '^unknown=0$'
+require_summary_line '^review=0$'
+require_summary_line '^outside-worktrees=0$'
 
 printf 'worktree-audit-divergence=pass\n'
