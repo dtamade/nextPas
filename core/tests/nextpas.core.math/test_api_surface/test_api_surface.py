@@ -2826,6 +2826,11 @@ def scan_vector_public_record_contract(root: Path, path: Path, text: str) -> lis
             body,
             re.IGNORECASE | re.DOTALL,
         ) is not None
+        has_cross_declaration = re.search(
+            r"\bclass\s+function\s+Cross\s*\(",
+            body,
+            re.IGNORECASE | re.DOTALL,
+        ) is not None
         if has_cross and not has_cross_signature:
             add_finding(
                 findings,
@@ -2835,7 +2840,7 @@ def scan_vector_public_record_contract(root: Path, path: Path, text: str) -> lis
                 record_line,
                 "missing " + record_name + ".Cross",
             )
-        if (not has_cross) and has_cross_signature:
+        if (not has_cross) and has_cross_declaration:
             add_finding(
                 findings,
                 "unexpected-vector-public-contract:" + rule + ":cross",
@@ -2968,6 +2973,7 @@ def run_vector_public_record_contract_self_tests() -> None:
             "    class function MulComponents(const AA, AB: TVec2f): TVec2f; static; inline;\n"
             "    class function DivComponents(const AA, AB: TVec2f): TVec2f; static; inline;\n"
             "    class function Dot(const AA, AB: TVec2f): Single; static; inline;\n"
+            "    class function Cross(const AA, AB: TVec2f): Single; static; inline;\n"
             "    class function Lerp(const AA, AB: TVec2f; const AT: Single): TVec2f; static; inline;\n"
             "    class function Equals(const AA, AB: TVec2f; const AEpsilon: Single): Boolean; static; inline;\n"
             "    function LengthSqr: Single; inline;\n"
@@ -2987,7 +2993,10 @@ def run_vector_public_record_contract_self_tests() -> None:
             path.read_text(encoding="utf-8"),
         )
         rules = {finding.rule for finding in findings}
-        expected_rules = {"missing-vector-public-contract:vec-2f:data-alias"}
+        expected_rules = {
+            "missing-vector-public-contract:vec-2f:data-alias",
+            "unexpected-vector-public-contract:vec-2f:cross",
+        }
         if not expected_rules <= rules:
             raise AssertionError(
                 "vector-public-record-contract self-test missing "
