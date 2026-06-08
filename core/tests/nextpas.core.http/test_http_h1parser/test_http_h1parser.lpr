@@ -1718,6 +1718,44 @@ begin
     'null byte header error consumes only through offending byte position');
 end;
 
+procedure TestInvalidHostHeaderDoesNotPublishMetadata;
+var
+  LP: IH1Parser;
+  LReq: array of Byte;
+  LConsumed: SizeUInt;
+  LMetadata: TH1RequestMetadata;
+const
+  PREFIX = 'GET / HTTP/1.1'#13#10 +
+           'Host: local';
+  SUFFIX = 'host'#13#10#13#10;
+begin
+  LP := NewH1RequestParser;
+  SetLength(LReq, Length(PREFIX) + 1 + Length(SUFFIX));
+  Move(PREFIX[1], LReq[0], Length(PREFIX));
+  LReq[Length(PREFIX)] := 0;
+  Move(SUFFIX[1], LReq[Length(PREFIX) + 1], Length(SUFFIX));
+
+  LConsumed := LP.Execute(PAnsiChar(@LReq[0]), SizeUInt(Length(LReq)));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+
+  Check(LP.HasError, 'invalid Host value reports parser error');
+  Check(not LP.IsComplete, 'invalid Host value is not complete');
+  Check(not LP.HeadersComplete,
+    'invalid Host value does not publish headers-complete');
+  CheckEqual(SizeUInt(Length(PREFIX)), LConsumed,
+    'invalid Host value consumes only through offending byte position');
+
+  LMetadata := LP.GetRequestMetadata;
+  Check(not LMetadata.HasHost, 'invalid Host value does not publish metadata');
+  Check(not LMetadata.HostRepeated,
+    'invalid Host value does not publish duplicate-host metadata');
+  CheckEqual('', LP.GetHeaders.Get('Host'),
+    'invalid Host value does not publish regular header store');
+  CheckEqual(Int64(0), Int64(LP.GetHeaders.Count),
+    'invalid Host value leaves regular header store empty');
+end;
+
 procedure TestHttp09RequestRejected;
 var
   LP: IH1Parser;
@@ -2656,6 +2694,8 @@ begin
   T.Run('Generic malformed request', @TestInvalidRequest);
   T.Run('Duplicate Content-Length', @TestDuplicateContentLength);
   T.Run('Header with null byte', @TestHeaderNullByte);
+  T.Run('Invalid Host header does not publish metadata',
+    @TestInvalidHostHeaderDoesNotPublishMetadata);
   T.Run('HTTP/0.9 request rejected', @TestHttp09RequestRejected);
   T.Run('Request-line splitting rejected', @TestRequestLineSplittingRejected);
   T.Run('Negative Content-Length rejected', @TestNegativeContentLengthRejected);
