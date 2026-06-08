@@ -1544,6 +1544,16 @@ REQUIRED_VECTOR_PUBLIC_RECORD_CONTRACTS = (
     ("vec-3d", "TVec3d", "Double", ("X", "Y", "Z"), "0..2", True),
     ("vec-4d", "TVec4d", "Double", ("X", "Y", "Z", "W"), "0..3", False),
 )
+REQUIRED_MATRIX_PUBLIC_RECORD_CONTRACTS = (
+    ("mat-3f", "TMat3f", "Single", "TVec3f", "0..2", True),
+    ("mat-4f", "TMat4f", "Single", "TVec4f", "0..3", False),
+    ("mat-3d", "TMat3d", "Double", "TVec3d", "0..2", True),
+    ("mat-4d", "TMat4d", "Double", "TVec4d", "0..3", False),
+)
+REQUIRED_QUATERNION_PUBLIC_RECORD_CONTRACTS = (
+    ("quat-f", "TQuatf", "Single", "TVec3f", "TMat3f"),
+    ("quat-d", "TQuatd", "Double", "TVec3d", "TMat3d"),
+)
 REQUIRED_BENCHMARK_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
     BENCH_SIMD_SEAM_PATH: (
         ("bench-mat4f-vector-scalar-baseline", "TMat4f scalar mat-vec"),
@@ -2852,6 +2862,137 @@ def scan_vector_public_record_contract(root: Path, path: Path, text: str) -> lis
     return findings
 
 
+def scan_matrix_public_record_contract(root: Path, path: Path, text: str) -> list[Finding]:
+    findings: list[Finding] = []
+    if relative(path, root) != "src/nextpas.core.math.mat.pas":
+        return findings
+
+    code = interface_text(text)
+    for rule, record_name, scalar_type, vector_type, index_range, is_mat3 in REQUIRED_MATRIX_PUBLIC_RECORD_CONTRACTS:
+        record_match = re.search(
+            rf"\b{record_name}\s*=\s*packed\s+record\b(?P<body>.*?)\bend\s*;",
+            code,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if record_match is None:
+            add_finding(
+                findings,
+                "missing-matrix-public-contract:" + rule + ":record",
+                root,
+                path,
+                1,
+                "missing " + record_name + " record",
+            )
+            continue
+
+        body = record_match.group("body")
+        record_line = line_no_at(code, record_match.start())
+        column_args = ("AColumn0", "AColumn1", "AColumn2") if is_mat3 else (
+            "AColumn0",
+            "AColumn1",
+            "AColumn2",
+            "AColumn3",
+        )
+        create_args = r"\s*,\s*".join(column_args)
+        determinant_suffix = r"\s*;\s*inline\s*;" if is_mat3 else r"\s*;"
+        required_patterns = (
+            ("tindex", rf"\bTIndex\s*=\s*{re.escape(index_range)}\s*;"),
+            ("tcolumn", rf"\bTColumn\s*=\s*array\s*\[\s*TIndex\s*\]\s*of\s*{scalar_type}\s*;"),
+            ("get-items", rf"\bfunction\s+GetItems\s*\(\s*const\s+AColumn\s*,\s*ARow\s*:\s*TIndex\s*\)\s*:\s*{scalar_type}\s*;\s*inline\s*;"),
+            ("set-items", rf"\bprocedure\s+SetItems\s*\(\s*const\s+AColumn\s*,\s*ARow\s*:\s*TIndex\s*;\s*const\s+AValue\s*:\s*{scalar_type}\s*\)\s*;\s*inline\s*;"),
+            ("get-rows", rf"\bfunction\s+GetRows\s*\(\s*const\s+ARow\s*:\s*TIndex\s*\)\s*:\s*{vector_type}\s*;\s*inline\s*;"),
+            ("set-rows", rf"\bprocedure\s+SetRows\s*\(\s*const\s+ARow\s*:\s*TIndex\s*;\s*const\s+AValue\s*:\s*{vector_type}\s*\)\s*;\s*inline\s*;"),
+            ("get-columns", rf"\bfunction\s+GetColumns\s*\(\s*const\s+AColumn\s*:\s*TIndex\s*\)\s*:\s*{vector_type}\s*;\s*inline\s*;"),
+            ("set-columns", rf"\bprocedure\s+SetColumns\s*\(\s*const\s+AColumn\s*:\s*TIndex\s*;\s*const\s+AValue\s*:\s*{vector_type}\s*\)\s*;\s*inline\s*;"),
+            ("data", r"\bData\s*:\s*array\s*\[\s*TIndex\s*\]\s*of\s*TColumn\s*;"),
+            ("create", rf"\bclass\s+function\s+Create\s*\(\s*const\s+{create_args}\s*:\s*{vector_type}\s*\)\s*:\s*{record_name}\s*;\s*static\s*;\s*inline\s*;"),
+            ("zero", rf"\bclass\s+function\s+Zero\s*:\s*{record_name}\s*;\s*static\s*;\s*inline\s*;"),
+            ("identity", rf"\bclass\s+function\s+Identity\s*:\s*{record_name}\s*;\s*static\s*;\s*inline\s*;"),
+            ("operator-add", rf"\bclass\s+operator\s+\+\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;"),
+            ("operator-subtract", rf"\bclass\s+operator\s+-\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;"),
+            ("operator-negate", rf"\bclass\s+operator\s+-\s*\(\s*const\s+AValue\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;"),
+            ("operator-scale-right", rf"\bclass\s+operator\s+\*\s*\(\s*const\s+AValue\s*:\s*{record_name}\s*;\s*const\s+AScalar\s*:\s*{scalar_type}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;"),
+            ("operator-scale-left", rf"\bclass\s+operator\s+\*\s*\(\s*const\s+AScalar\s*:\s*{scalar_type}\s*;\s*const\s+AValue\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;"),
+            ("operator-mul-vector", rf"\bclass\s+operator\s+\*\s*\(\s*const\s+AMatrix\s*:\s*{record_name}\s*;\s*const\s+AVector\s*:\s*{vector_type}\s*\)\s*:\s*{vector_type}\s*;\s*inline\s*;"),
+            ("operator-mul-matrix", rf"\bclass\s+operator\s+\*\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;"),
+            ("equals", rf"\bclass\s+function\s+Equals\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*;\s*const\s+AEpsilon\s*:\s*{scalar_type}\s*\)\s*:\s*Boolean\s*;\s*static\s*;\s*inline\s*;"),
+            ("transpose", rf"\bfunction\s+Transpose\s*:\s*{record_name}\s*;\s*inline\s*;"),
+            ("determinant", rf"\bfunction\s+Determinant\s*:\s*{scalar_type}{determinant_suffix}"),
+            ("try-inverse", rf"\bfunction\s+TryInverse\s*\(\s*out\s+AInverse\s*:\s*{record_name}\s*\)\s*:\s*Boolean\s*;"),
+            ("inverse", rf"\bfunction\s+Inverse\s*:\s*{record_name}\s*;"),
+            ("property-items", rf"\bproperty\s+Items\s*\[\s*const\s+AColumn\s*,\s*ARow\s*:\s*TIndex\s*\]\s*:\s*{scalar_type}\s+read\s+GetItems\s+write\s+SetItems\s*;\s*default\s*;"),
+            ("property-rows", rf"\bproperty\s+Rows\s*\[\s*const\s+ARow\s*:\s*TIndex\s*\]\s*:\s*{vector_type}\s+read\s+GetRows\s+write\s+SetRows\s*;"),
+            ("property-columns", rf"\bproperty\s+Columns\s*\[\s*const\s+AColumn\s*:\s*TIndex\s*\]\s*:\s*{vector_type}\s+read\s+GetColumns\s+write\s+SetColumns\s*;"),
+        )
+        for contract_name, pattern in required_patterns:
+            if re.search(pattern, body, re.IGNORECASE | re.DOTALL) is not None:
+                continue
+            add_finding(
+                findings,
+                "missing-matrix-public-contract:" + rule + ":" + contract_name,
+                root,
+                path,
+                record_line,
+                "missing " + record_name + "." + contract_name,
+            )
+    return findings
+
+
+def scan_quaternion_public_record_contract(root: Path, path: Path, text: str) -> list[Finding]:
+    findings: list[Finding] = []
+    if relative(path, root) != "src/nextpas.core.math.quat.pas":
+        return findings
+
+    code = interface_text(text)
+    for rule, record_name, scalar_type, vector_type, matrix_type in REQUIRED_QUATERNION_PUBLIC_RECORD_CONTRACTS:
+        record_match = re.search(
+            rf"\b{record_name}\s*=\s*packed\s+record\b(?P<body>.*?)\bend\s*;",
+            code,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if record_match is None:
+            add_finding(
+                findings,
+                "missing-quaternion-public-contract:" + rule + ":record",
+                root,
+                path,
+                1,
+                "missing " + record_name + " record",
+            )
+            continue
+
+        body = record_match.group("body")
+        record_line = line_no_at(code, record_match.start())
+        required_patterns = (
+            ("tindex", r"\bTIndex\s*=\s*0\.\.3\s*;"),
+            ("create", rf"\bclass\s+function\s+Create\s*\(\s*const\s+AX\s*,\s*AY\s*,\s*AZ\s*,\s*AW\s*:\s*{scalar_type}\s*\)\s*:\s*{record_name}\s*;\s*static\s*;\s*inline\s*;"),
+            ("identity", rf"\bclass\s+function\s+Identity\s*:\s*{record_name}\s*;\s*static\s*;\s*inline\s*;"),
+            ("operator-mul", rf"\bclass\s+operator\s+\*\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;"),
+            ("from-axis-angle", rf"\bclass\s+function\s+FromAxisAngle\s*\(\s*const\s+AAxis\s*:\s*{vector_type}\s*;\s*const\s+AAngleRad\s*:\s*{scalar_type}\s*\)\s*:\s*{record_name}\s*;\s*static\s*;"),
+            ("slerp", rf"\bclass\s+function\s+Slerp\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*;\s*const\s+AT\s*:\s*{scalar_type}\s*\)\s*:\s*{record_name}\s*;\s*static\s*;"),
+            ("nlerp", rf"\bclass\s+function\s+Nlerp\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*;\s*const\s+AT\s*:\s*{scalar_type}\s*\)\s*:\s*{record_name}\s*;\s*static\s*;"),
+            ("equals", rf"\bclass\s+function\s+Equals\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*;\s*const\s+AEpsilon\s*:\s*{scalar_type}\s*\)\s*:\s*Boolean\s*;\s*static\s*;\s*inline\s*;"),
+            ("to-axis-angle", rf"\bprocedure\s+ToAxisAngle\s*\(\s*out\s+AAxis\s*:\s*{vector_type}\s*;\s*out\s+AAngleRad\s*:\s*{scalar_type}\s*\)\s*;"),
+            ("to-rotation-matrix", rf"\bfunction\s+ToRotationMatrix\s*:\s*{matrix_type}\s*;"),
+            ("rotate", rf"\bfunction\s+Rotate\s*\(\s*const\s+AVector\s*:\s*{vector_type}\s*\)\s*:\s*{vector_type}\s*;"),
+            ("conjugate", rf"\bfunction\s+Conjugate\s*:\s*{record_name}\s*;\s*inline\s*;"),
+            ("normalize", rf"\bfunction\s+Normalize\s*:\s*{record_name}\s*;"),
+            ("data-alias", rf"\b0\s*:\s*\(\s*X\s*,\s*Y\s*,\s*Z\s*,\s*W\s*:\s*{scalar_type}\s*\)\s*;\s*1\s*:\s*\(\s*Data\s*:\s*array\s*\[\s*TIndex\s*\]\s*of\s*{scalar_type}\s*\)\s*;"),
+        )
+        for contract_name, pattern in required_patterns:
+            if re.search(pattern, body, re.IGNORECASE | re.DOTALL) is not None:
+                continue
+            add_finding(
+                findings,
+                "missing-quaternion-public-contract:" + rule + ":" + contract_name,
+                root,
+                path,
+                record_line,
+                "missing " + record_name + "." + contract_name,
+            )
+    return findings
+
+
 def scan_missing_required_public_files(root: Path) -> list[Finding]:
     findings: list[Finding] = []
     for rel in sorted(REQUIRED_PUBLIC_DECLARATIONS):
@@ -3079,6 +3220,112 @@ def run_vector_public_record_contract_self_tests() -> None:
                 "vector-public-record-contract self-test expected only missing "
                 + "unfixture records, got "
                 + ", ".join(sorted(rules))
+            )
+
+
+def run_matrix_public_record_contract_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        path = root / "src/nextpas.core.math.mat.pas"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "unit nextpas.core.math.mat;\n"
+            "interface\n"
+            "type\n"
+            "  TMat3f = packed record\n"
+            "  public\n"
+            "    type\n"
+            "      TIndex = 0..2;\n"
+            "      TColumn = array[TIndex] of Single;\n"
+            "  strict private\n"
+            "    function GetItems(const AColumn, ARow: TIndex): Single; inline;\n"
+            "    procedure SetItems(const AColumn, ARow: TIndex; const AValue: Single); inline;\n"
+            "    function GetRows(const ARow: TIndex): TVec3f; inline;\n"
+            "    procedure SetRows(const ARow: TIndex; const AValue: TVec3f); inline;\n"
+            "    function GetColumns(const AColumn: TIndex): TVec3f; inline;\n"
+            "    procedure SetColumns(const AColumn: TIndex; const AValue: TVec3f); inline;\n"
+            "  public\n"
+            "    class function Create(const AColumn0, AColumn1, AColumn2: TVec3f): TMat3f; static; inline;\n"
+            "    class function Zero: TMat3f; static; inline;\n"
+            "    class function Identity: TMat3f; static; inline;\n"
+            "    class operator + (const AA, AB: TMat3f): TMat3f; inline;\n"
+            "    class operator - (const AA, AB: TMat3f): TMat3f; inline;\n"
+            "    class operator - (const AValue: TMat3f): TMat3f; inline;\n"
+            "    class operator * (const AValue: TMat3f; const AScalar: Single): TMat3f; inline;\n"
+            "    class operator * (const AScalar: Single; const AValue: TMat3f): TMat3f; inline;\n"
+            "    class operator * (const AMatrix: TMat3f; const AVector: TVec3f): TVec3f; inline;\n"
+            "    class operator * (const AA, AB: TMat3f): TMat3f;\n"
+            "    class function Equals(const AA, AB: TMat3f; const AEpsilon: Single): Boolean; static; inline;\n"
+            "    function Transpose: TMat3f; inline;\n"
+            "    function Determinant: Single; inline;\n"
+            "    function TryInverse(out AInverse: TMat3f): Boolean;\n"
+            "    function Inverse: TMat3f;\n"
+            "    property Items[const AColumn, ARow: TIndex]: Single read GetItems write SetItems; default;\n"
+            "    property Rows[const ARow: TIndex]: TVec3f read GetRows write SetRows;\n"
+            "    property Columns[const AColumn: TIndex]: TVec3f read GetColumns write SetColumns;\n"
+            "  end;\n"
+            "implementation\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        findings = scan_matrix_public_record_contract(
+            root,
+            path,
+            path.read_text(encoding="utf-8"),
+        )
+        rules = {finding.rule for finding in findings}
+        expected_rules = {"missing-matrix-public-contract:mat-3f:data"}
+        if not expected_rules <= rules:
+            raise AssertionError(
+                "matrix-public-record-contract self-test missing "
+                + ", ".join(sorted(expected_rules - rules))
+            )
+
+
+def run_quaternion_public_record_contract_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        path = root / "src/nextpas.core.math.quat.pas"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "unit nextpas.core.math.quat;\n"
+            "interface\n"
+            "type\n"
+            "  TQuatf = packed record\n"
+            "  public\n"
+            "    type\n"
+            "      TIndex = 0..3;\n"
+            "    class function Create(const AX, AY, AZ, AW: Single): TQuatf; static; inline;\n"
+            "    class function Identity: TQuatf; static; inline;\n"
+            "    class operator * (const AA, AB: TQuatf): TQuatf; inline;\n"
+            "    class function FromAxisAngle(const AAxis: TVec3f; const AAngleRad: Single): TQuatf; static;\n"
+            "    class function Slerp(const AA, AB: TQuatf; const AT: Single): TQuatf; static;\n"
+            "    class function Nlerp(const AA, AB: TQuatf; const AT: Single): TQuatf; static;\n"
+            "    class function Equals(const AA, AB: TQuatf; const AEpsilon: Single): Boolean; static; inline;\n"
+            "    function ToRotationMatrix: TMat3f;\n"
+            "    function Rotate(const AVector: TVec3f): TVec3f;\n"
+            "    function Conjugate: TQuatf; inline;\n"
+            "    function Normalize: TQuatf;\n"
+            "    var\n"
+            "      case Integer of\n"
+            "        0: (X, Y, Z, W: Single);\n"
+            "        1: (Data: array[TIndex] of Single);\n"
+            "  end;\n"
+            "implementation\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        findings = scan_quaternion_public_record_contract(
+            root,
+            path,
+            path.read_text(encoding="utf-8"),
+        )
+        rules = {finding.rule for finding in findings}
+        expected_rules = {"missing-quaternion-public-contract:quat-f:to-axis-angle"}
+        if not expected_rules <= rules:
+            raise AssertionError(
+                "quaternion-public-record-contract self-test missing "
+                + ", ".join(sorted(expected_rules - rules))
             )
 
 
@@ -5585,6 +5832,8 @@ def build_report(root: Path) -> Report:
         findings.extend(scan_required_public_declarations(root, path, text))
         findings.extend(scan_vector_length_sqr_record_contract(root, path, text))
         findings.extend(scan_vector_public_record_contract(root, path, text))
+        findings.extend(scan_matrix_public_record_contract(root, path, text))
+        findings.extend(scan_quaternion_public_record_contract(root, path, text))
 
     for path in consumer_files:
         scanned.add(path)
@@ -5654,6 +5903,8 @@ def main() -> int:
         run_required_impl_simd_win64_compile_gate_self_tests()
         run_required_public_declarations_self_tests()
         run_vector_public_record_contract_self_tests()
+        run_matrix_public_record_contract_self_tests()
+        run_quaternion_public_record_contract_self_tests()
         run_required_doc_truth_self_tests()
         run_root_facade_contract_self_tests()
         run_root_facade_reexport_parity_self_tests()
