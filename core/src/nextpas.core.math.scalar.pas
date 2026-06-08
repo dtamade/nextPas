@@ -27,14 +27,14 @@ function Max(AA, AB: Single): Single; overload; inline;
 function Clamp(const AValue, AMin, AMax: Double): Double; overload; inline;
 function Clamp(const AValue, AMin, AMax: Single): Single; overload; inline;
 function Clamp(const AValue, AMin, AMax: Int32): Int32; overload; inline;
-function Lerp(const AA, AB, AT: Double): Double; overload; inline;
-function Lerp(const AA, AB, AT: Single): Single; overload; inline;
-function InverseLerp(const AA, AB, AValue: Double): Double; overload; inline;
-function InverseLerp(const AA, AB, AValue: Single): Single; overload; inline;
+function Lerp(const AA, AB, AT: Double): Double; overload;
+function Lerp(const AA, AB, AT: Single): Single; overload;
+function InverseLerp(const AA, AB, AValue: Double): Double; overload;
+function InverseLerp(const AA, AB, AValue: Single): Single; overload;
 function Wrap(const AValue, AMin, AMax: Double): Double; overload;
 function Wrap(const AValue, AMin, AMax: Single): Single; overload; inline;
-function SmoothStep(const AEdge0, AEdge1, AValue: Double): Double; overload; inline;
-function SmoothStep(const AEdge0, AEdge1, AValue: Single): Single; overload; inline;
+function SmoothStep(const AEdge0, AEdge1, AValue: Double): Double; overload;
+function SmoothStep(const AEdge0, AEdge1, AValue: Single): Single; overload;
 
 function Floor(const AValue: Double): Int64; overload; inline;
 function Floor(const AValue: Single): Int64; overload; inline;
@@ -84,6 +84,7 @@ uses
 
 const
   MAX_DOUBLE_VALUE: Double = 1.79769313486231570815e308;
+  MAX_SINGLE_VALUE: Single = 3.40282346638528859812e38;
 
 function UInt64AbsInt64(const AValue: Int64): UInt64; inline;
 begin
@@ -222,9 +223,18 @@ end;
 function DifferenceWouldOverflow(const ALeft, ARight: Double): Boolean;
 begin
   if (ALeft > 0.0) and (ARight < 0.0) then
-    Exit(ALeft > MAX_DOUBLE_VALUE + ARight);
+    Exit((ALeft * 0.5) > ((MAX_DOUBLE_VALUE * 0.5) + (ARight * 0.5)));
   if (ALeft < 0.0) and (ARight > 0.0) then
-    Exit(ALeft < -MAX_DOUBLE_VALUE + ARight);
+    Exit((ALeft * 0.5) < ((-MAX_DOUBLE_VALUE * 0.5) + (ARight * 0.5)));
+  Result := False;
+end;
+
+function SingleDifferenceWouldOverflow(const ALeft, ARight: Single): Boolean;
+begin
+  if (ALeft > 0.0) and (ARight < 0.0) then
+    Exit((ALeft * Single(0.5)) > ((MAX_SINGLE_VALUE * Single(0.5)) + (ARight * Single(0.5))));
+  if (ALeft < 0.0) and (ARight > 0.0) then
+    Exit((ALeft * Single(0.5)) < ((-MAX_SINGLE_VALUE * Single(0.5)) + (ARight * Single(0.5))));
   Result := False;
 end;
 
@@ -261,6 +271,74 @@ end;
 function WrapRangeWouldOverflow(const AMin, AMax: Double): Boolean;
 begin
   Result := (AMin < 0.0) and (AMax > 0.0) and ((MAX_DOUBLE_VALUE - AMax) < -AMin);
+end;
+
+function StableLerpFinite(const AA, AB, AT: Double): Double;
+var
+  LA: Double;
+  LB: Double;
+  LLeft: Double;
+  LRight: Double;
+  LScale: Double;
+begin
+  LScale := DoubleAbsBits(AA);
+  if DoubleAbsBits(AB) > LScale then
+    LScale := DoubleAbsBits(AB);
+  if LScale = 0.0 then
+    Exit(0.0);
+  LA := AA / LScale;
+  LB := AB / LScale;
+  LLeft := LA * (1.0 - AT);
+  LRight := LB * AT;
+  Result := (LLeft + LRight) * LScale;
+end;
+
+function StableInverseLerpFinite(const AA, AB, AValue: Double): Double;
+var
+  LScale: Double;
+  LAbs: Double;
+begin
+  LScale := DoubleAbsBits(AA);
+  LAbs := DoubleAbsBits(AB);
+  if LAbs > LScale then
+    LScale := LAbs;
+  LAbs := DoubleAbsBits(AValue);
+  if LAbs > LScale then
+    LScale := LAbs;
+  if LScale = 0.0 then
+    Exit(0.0);
+  Result := ((AValue / LScale) - (AA / LScale)) /
+    ((AB / LScale) - (AA / LScale));
+end;
+
+function ShouldUseStableLerp(const AA, AB: Double): Boolean;
+begin
+  Result := (not DoubleIsNaN(AA)) and (not DoubleIsNaN(AB)) and
+    (not DoubleIsInfinite(AA)) and (not DoubleIsInfinite(AB)) and
+    DifferenceWouldOverflow(AB, AA);
+end;
+
+function ShouldUseStableLerp(const AA, AB: Single): Boolean;
+begin
+  Result := (not SingleIsNaN(AA)) and (not SingleIsNaN(AB)) and
+    (not SingleIsInfinite(AA)) and (not SingleIsInfinite(AB)) and
+    SingleDifferenceWouldOverflow(AB, AA);
+end;
+
+function ShouldUseStableInverseLerp(const AA, AB, AValue: Double): Boolean;
+begin
+  Result := (not DoubleIsNaN(AA)) and (not DoubleIsNaN(AB)) and
+    (not DoubleIsNaN(AValue)) and (not DoubleIsInfinite(AA)) and
+    (not DoubleIsInfinite(AB)) and (not DoubleIsInfinite(AValue)) and
+    (DifferenceWouldOverflow(AB, AA) or DifferenceWouldOverflow(AValue, AA));
+end;
+
+function ShouldUseStableInverseLerp(const AA, AB, AValue: Single): Boolean;
+begin
+  Result := (not SingleIsNaN(AA)) and (not SingleIsNaN(AB)) and
+    (not SingleIsNaN(AValue)) and (not SingleIsInfinite(AA)) and
+    (not SingleIsInfinite(AB)) and (not SingleIsInfinite(AValue)) and
+    (SingleDifferenceWouldOverflow(AB, AA) or SingleDifferenceWouldOverflow(AValue, AA));
 end;
 
 function ValidComparisonEpsilon(const AEpsilon: Single): Boolean; inline;
@@ -431,11 +509,15 @@ end;
 
 function Lerp(const AA, AB, AT: Single): Single;
 begin
+  if ShouldUseStableLerp(AA, AB) then
+    Exit(Single(StableLerpFinite(Double(AA), Double(AB), Double(AT))));
   Result := AA + (AB - AA) * AT;
 end;
 
 function Lerp(const AA, AB, AT: Double): Double;
 begin
+  if ShouldUseStableLerp(AA, AB) then
+    Exit(StableLerpFinite(AA, AB, AT));
   Result := AA + (AB - AA) * AT;
 end;
 
@@ -443,6 +525,8 @@ function InverseLerp(const AA, AB, AValue: Single): Single;
 begin
   if AA = AB then
     Exit(0.0);
+  if ShouldUseStableInverseLerp(AA, AB, AValue) then
+    Exit(Single(StableInverseLerpFinite(Double(AA), Double(AB), Double(AValue))));
   Result := (AValue - AA) / (AB - AA);
 end;
 
@@ -450,6 +534,8 @@ function InverseLerp(const AA, AB, AValue: Double): Double;
 begin
   if AA = AB then
     Exit(0.0);
+  if ShouldUseStableInverseLerp(AA, AB, AValue) then
+    Exit(StableInverseLerpFinite(AA, AB, AValue));
   Result := (AValue - AA) / (AB - AA);
 end;
 
@@ -500,7 +586,7 @@ begin
       Exit(0.0);
     Exit(1.0);
   end;
-  LT := Clamp((AValue - AEdge0) / (AEdge1 - AEdge0), Single(0.0), Single(1.0));
+  LT := Clamp(InverseLerp(AEdge0, AEdge1, AValue), Single(0.0), Single(1.0));
   Result := LT * LT * (Single(3.0) - Single(2.0) * LT);
 end;
 
@@ -514,7 +600,7 @@ begin
       Exit(0.0);
     Exit(1.0);
   end;
-  LT := Clamp((AValue - AEdge0) / (AEdge1 - AEdge0), 0.0, 1.0);
+  LT := Clamp(InverseLerp(AEdge0, AEdge1, AValue), 0.0, 1.0);
   Result := LT * LT * (3.0 - 2.0 * LT);
 end;
 

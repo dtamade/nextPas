@@ -228,13 +228,37 @@ end;
 
 procedure TestInterpolation;
 var
+  LDoubleResult: Double;
+  LSingleResult: Single;
   LWrapped: Double;
 begin
   CheckNear(5.0, Lerp(Single(0.0), Single(10.0), Single(0.5)), 0.0, 'Lerp Single midpoint');
   CheckNear(5.0, Lerp(0.0, 10.0, 0.5), 0.0, 'Lerp midpoint');
   CheckNear(-5.0, Lerp(-10.0, 0.0, 0.5), 0.0, 'Lerp negative midpoint');
+  LDoubleResult := Lerp(Double(-1.0e308), Double(1.0e308), Double(0.5));
+  Check((not IsNaN(LDoubleResult)) and (not IsInfinite(LDoubleResult)),
+    'Lerp Double huge opposite finite midpoint stays finite');
+  CheckNear(0.0, LDoubleResult, 0.0,
+    'Lerp Double huge opposite finite midpoint returns center');
+  CheckScaledNear(Double(-5.0e307), Lerp(Double(-1.0e308), Double(1.0e308), Double(0.25)),
+    Double(1.0e307), 0.000000000000001, 'Lerp Double huge opposite finite off-center');
+  CheckScaledNear(Double(5.0e307), Lerp(Double(1.0e308), Double(-1.0e308), Double(0.25)),
+    Double(1.0e307), 0.000000000000001, 'Lerp Double huge reversed finite off-center');
+  LSingleResult := Lerp(Single(-3.0e38), Single(3.0e38), Single(0.5));
+  Check((not IsNaN(LSingleResult)) and (not IsInfinite(LSingleResult)),
+    'Lerp Single huge opposite finite midpoint stays finite');
+  CheckNear(0.0, LSingleResult, 0.0,
+    'Lerp Single huge opposite finite midpoint returns center');
   CheckNear(0.5, InverseLerp(Single(10.0), Single(20.0), Single(15.0)), 0.0, 'InverseLerp Single midpoint');
   CheckNear(0.5, InverseLerp(10.0, 20.0, 15.0), 0.0, 'InverseLerp midpoint');
+  CheckNear(0.5, InverseLerp(Double(-1.0e308), Double(1.0e308), Double(0.0)), 0.000000000000001,
+    'InverseLerp Double huge opposite finite midpoint returns half');
+  CheckNear(0.25, InverseLerp(Double(-1.0e308), Double(1.0e308), Double(-5.0e307)), 0.000000000000001,
+    'InverseLerp Double huge opposite finite off-center returns quarter');
+  CheckNear(0.25, InverseLerp(Double(1.0e308), Double(-1.0e308), Double(5.0e307)), 0.000000000000001,
+    'InverseLerp Double huge reversed finite off-center returns quarter');
+  CheckNear(0.5, InverseLerp(Single(-3.0e38), Single(3.0e38), Single(0.0)), 0.000001,
+    'InverseLerp Single huge opposite finite midpoint returns half');
   CheckNear(0.0, InverseLerp(5.0, 5.0, 5.0), 0.0, 'InverseLerp equal endpoints');
   CheckNear(10.0, Wrap(Single(370.0), Single(0.0), Single(360.0)), 0.0, 'Wrap Single high');
   CheckNear(10.0, Wrap(370.0, 0.0, 360.0), 0.0, 'Wrap high');
@@ -275,6 +299,10 @@ begin
   ExpectArgumentErrorMessage('Wrap: value, minimum, and maximum must be finite',
     'Wrap Double infinite maximum', @RaiseWrapDoubleInfiniteMax);
   CheckNear(0.5, SmoothStep(Single(0.0), Single(1.0), Single(0.5)), 0.000001, 'SmoothStep Single midpoint');
+  CheckNear(0.5, SmoothStep(Double(-1.0e308), Double(1.0e308), Double(0.0)), 0.000000000000001,
+    'SmoothStep Double huge opposite finite midpoint returns half');
+  CheckNear(0.5, SmoothStep(Single(-3.0e38), Single(3.0e38), Single(0.0)), 0.000001,
+    'SmoothStep Single huge opposite finite midpoint returns half');
   CheckNear(0.0, SmoothStep(0.0, 1.0, -1.0), 0.0, 'SmoothStep clamps low');
   CheckNear(1.0, SmoothStep(0.0, 1.0, 2.0), 0.0, 'SmoothStep clamps high');
 end;
