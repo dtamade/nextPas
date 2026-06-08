@@ -12,8 +12,11 @@ CPUINFO_FPC_FLAGS += -Fi$(CORE_ROOT)/src -Fu$(CORE_ROOT)/src -Fu$(CORE_ROOT)/src
 RUNNER := nextpas.core.simd.test
 VEC_TEST := test_vec_all
 ALG_TEST := test_algorithms
+STATIC_AVX2_MISALIGNMENT_TEST := test_static_avx2_misalignment
+STATIC_AVX2_USABLE_PROBE := probe_static_avx2_usable
+STATIC_AVX2_MISALIGNMENT_BUILD_DIR := $(CORE_ROOT)/build/lib/static-avx2-misalignment
 
-.PHONY: test test-vec test-algorithms test-all bench audit cpuinfo-focused cpuinfo-heaptrc cpuinfo-nonx86-compile clean
+.PHONY: test test-vec test-algorithms static-avx2-misalignment test-all bench audit cpuinfo-focused cpuinfo-heaptrc cpuinfo-nonx86-compile clean
 
 test:
 	@mkdir -p $(BUILD_DIR)
@@ -30,6 +33,19 @@ test-algorithms:
 	$(FPC) $(FPC_FLAGS) -B $(ALG_TEST).lpr
 	$(BUILD_DIR)/$(ALG_TEST) --all --format=plainnotiming
 
+static-avx2-misalignment:
+	@mkdir -p $(BUILD_DIR) $(STATIC_AVX2_MISALIGNMENT_BUILD_DIR)
+	$(FPC) $(FPC_FLAGS) -B -gh -FU$(STATIC_AVX2_MISALIGNMENT_BUILD_DIR) -o$(STATIC_AVX2_USABLE_PROBE) $(STATIC_AVX2_USABLE_PROBE).pas
+	@$(BUILD_DIR)/$(STATIC_AVX2_USABLE_PROBE); \
+	l_status=$$?; \
+	if [ $$l_status -eq 77 ]; then \
+		exit 0; \
+	elif [ $$l_status -ne 0 ]; then \
+		exit $$l_status; \
+	fi
+	$(FPC) $(FPC_FLAGS) -B -gh -FU$(STATIC_AVX2_MISALIGNMENT_BUILD_DIR) -o$(STATIC_AVX2_MISALIGNMENT_TEST) $(STATIC_AVX2_MISALIGNMENT_TEST).pas
+	$(BUILD_DIR)/$(STATIC_AVX2_MISALIGNMENT_TEST)
+
 test-all: test test-vec audit cpuinfo-focused
 
 audit:
@@ -37,6 +53,7 @@ audit:
 	python3 $(CORE_ROOT)/tools/simdgen/simdgen_verify_slots.py
 	python3 check_avx512_alignment_contract.py
 	python3 check_simd_contract_roadmap.py
+	python3 check_static_avx2_misalignment_contract.py
 	python3 check_cpuinfo_boundary_contract.py
 
 cpuinfo-focused: cpuinfo-heaptrc cpuinfo-nonx86-compile
@@ -58,4 +75,5 @@ bench:
 	$(BUILD_DIR)/$(RUNNER) --bench-only --vector-asm
 
 clean:
-	rm -f $(BUILD_DIR)/$(RUNNER) $(BUILD_DIR)/$(VEC_TEST) $(BUILD_DIR)/$(ALG_TEST)
+	rm -f $(BUILD_DIR)/$(RUNNER) $(BUILD_DIR)/$(VEC_TEST) $(BUILD_DIR)/$(ALG_TEST) $(BUILD_DIR)/$(STATIC_AVX2_MISALIGNMENT_TEST) $(BUILD_DIR)/$(STATIC_AVX2_USABLE_PROBE)
+	rm -rf $(STATIC_AVX2_MISALIGNMENT_BUILD_DIR)
