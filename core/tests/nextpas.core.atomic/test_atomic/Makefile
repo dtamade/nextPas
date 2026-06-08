@@ -37,6 +37,7 @@ cross-win64:
 
 print-architecture-truth:
 	@printf 'atomic-architecture-truth-target=x86_64-linux status=focused-runtime-via-host-test\n'
+	@printf 'atomic-architecture-truth-target=win64 status=forced-compile-only runtime=false\n'
 	@printf 'atomic-architecture-truth-target=i386 status=source-contract-only\n'
 	@printf 'atomic-architecture-truth-target=aarch64 status=source-contract-only\n'
 	@printf 'atomic-architecture-truth-target=arm status=source-contract-only\n'

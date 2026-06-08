@@ -1499,6 +1499,8 @@ begin
     'atomic forced compile gate must print host target pass evidence');
   CheckContains(LAtomicTestMakefile, 'atomic-forced-compile-target=win64 status=pass',
     'atomic forced compile gate must print Win64 target pass evidence');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=win64 status=forced-compile-only runtime=false',
+    'atomic forced compile gate must label Win64 as forced-compile-only without runtime evidence');
   CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=x86_64-linux status=focused-runtime-via-host-test',
     'atomic forced compile gate must print x86_64 Linux truth as host focused runtime evidence');
   CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=i386 status=source-contract-only',
