@@ -5722,9 +5722,10 @@ begin
     try
       LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/slow');
     except
-      LCaught := True;
+      on E: ETimeoutError do
+        LCaught := True;
     end;
-    Check(LCaught, 'timeout raises exception');
+    Check(LCaught, 'timeout raises ETimeoutError');
   finally
     StopServer(LServer, LHandle);
     { Wait for the slow handler thread to finish (it sleeps 2s) }

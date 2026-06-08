@@ -253,9 +253,9 @@ begin
   try
     LClient.Read(LBuf[0], 32);
   except
-    on ENetworkError do LGot := True;
+    on ETimeoutError do LGot := True;
   end;
-  Check(LGot, 'read deadline triggers timeout');
+  Check(LGot, 'read deadline raises ETimeoutError');
   LClient.Close;
   LListener.Close;
 end;
@@ -274,9 +274,9 @@ begin
   try
     LClient.Read(LBuf[0], 32);
   except
-    on ENetworkError do LGot := True;
+    on ETimeoutError do LGot := True;
   end;
-  Check(LGot, 'expired deadline raises immediately');
+  Check(LGot, 'expired deadline raises ETimeoutError immediately');
   LClient.Close;
   LListener.Close;
 end;
@@ -506,6 +506,47 @@ begin
   end;
 end;
 
+procedure TestNonblockingStreamReadDoesNotMasqueradeAsDeadlineTimeout;
+var
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LAccepted: ITcpStream;
+  LRuntime: ITcpSocketRuntime;
+  LBuf: array[0..31] of Byte;
+  LGotNetworkError: Boolean;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  try
+    LClient := TcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+    try
+      LAccepted := LListener.Accept;
+      try
+        Check(Supports(LAccepted, ITcpSocketRuntime, LRuntime),
+          'accepted stream exposes runtime socket control');
+        LAccepted.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(1)));
+        LRuntime.SetBlocking(False);
+        LGotNetworkError := False;
+        try
+          LAccepted.Read(LBuf[0], SizeOf(LBuf));
+        except
+          on E: ETimeoutError do
+            Fail('nonblocking would-block must not be reported as timeout');
+          on E: ENetworkError do
+            LGotNetworkError := True;
+        end;
+        Check(LGotNetworkError,
+          'nonblocking stream read keeps would-block as network error');
+      finally
+        LAccepted.Close;
+      end;
+    finally
+      LClient.Close;
+    end;
+  finally
+    LListener.Close;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.net');
   T.Run('TCP echo', @TestTcpEcho);
@@ -529,5 +570,7 @@ begin
     @TestTcpListenerRuntimeTryAccept);
   T.Run('TCP stream try-read and try-write support nonblocking runtime I/O',
     @TestTcpStreamRuntimeTryReadAndTryWrite);
+  T.Run('TCP stream nonblocking read does not masquerade as deadline timeout',
+    @TestNonblockingStreamReadDoesNotMasqueradeAsDeadlineTimeout);
   T.Summary;
 end.

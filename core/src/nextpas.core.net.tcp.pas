@@ -41,6 +41,7 @@ type
     FWriteDeadline: TDeadline;
     FLastReadTimeoutMs: UInt32;
     FLastWriteTimeoutMs: UInt32;
+    FBlocking: Boolean;
     procedure ApplyReadTimeout;
     procedure ApplyWriteTimeout;
   public
@@ -135,6 +136,7 @@ begin
   FWriteDeadline := TDeadline.Infinite;
   FLastReadTimeoutMs := 0;
   FLastWriteTimeoutMs := 0;
+  FBlocking := True;
 end;
 
 destructor TTcpStream.Destroy;
@@ -153,7 +155,13 @@ begin
   ApplyReadTimeout;
   LResult := platform_socket_recv(FSocket, @ABuf, Int32(ACount), 0, LRecvd);
   if LResult <> 0 then
+  begin
+    if FBlocking and (not FReadDeadline.IsInfinite) and
+      (platform_socket_error_would_block(LResult) or
+       platform_socket_error_timed_out(LResult)) then
+      raise ETimeoutError.Create('read deadline exceeded');
     raise ENetworkError.Create('tcp read failed (' + IntToStr(LResult) + ')');
+  end;
   Result := SizeUInt(LRecvd);
 end;
 
@@ -173,7 +181,13 @@ begin
   begin
     LResult := platform_socket_send(FSocket, LPtr, Int32(LRemaining), 0, LSent);
     if LResult <> 0 then
+    begin
+      if FBlocking and (not FWriteDeadline.IsInfinite) and
+        (platform_socket_error_would_block(LResult) or
+         platform_socket_error_timed_out(LResult)) then
+        raise ETimeoutError.Create('write deadline exceeded');
       raise ENetworkError.Create('tcp write failed (' + IntToStr(LResult) + ')');
+    end;
     if LSent = 0 then
       Break;
     Inc(LPtr, LSent);
@@ -264,6 +278,7 @@ procedure TTcpStream.SetBlocking(const ABlocking: Boolean);
 begin
   if platform_socket_set_nonblocking(FSocket, not ABlocking) <> 0 then
     raise ENetworkError.Create('tcp set blocking failed');
+  FBlocking := ABlocking;
 end;
 
 function TTcpStream.TryRead(var ABuf; const ACount: SizeUInt;
@@ -276,7 +291,7 @@ begin
   if ACount = 0 then
     Exit(tsiorOk);
   if FReadDeadline.IsExpired then
-    raise ENetworkError.Create('read deadline exceeded');
+    raise ETimeoutError.Create('read deadline exceeded');
 
   LResult := platform_socket_recv(FSocket, @ABuf, Int32(ACount), 0, LRecvd);
   if LResult = 0 then
@@ -301,7 +316,7 @@ begin
   if ACount = 0 then
     Exit(tsiorOk);
   if FWriteDeadline.IsExpired then
-    raise ENetworkError.Create('write deadline exceeded');
+    raise ETimeoutError.Create('write deadline exceeded');
 
   LResult := platform_socket_send(FSocket, @ABuf, Int32(ACount), 0, LSent);
   if LResult = 0 then
@@ -331,7 +346,7 @@ begin
     Exit;
   end;
   if FReadDeadline.IsExpired then
-    raise ENetworkError.Create('read deadline exceeded');
+    raise ETimeoutError.Create('read deadline exceeded');
   LRemaining := FReadDeadline.Remaining;
   LMs := UInt32(LRemaining.AsMilliseconds);
   if LMs = 0 then LMs := 1;
@@ -357,7 +372,7 @@ begin
     Exit;
   end;
   if FWriteDeadline.IsExpired then
-    raise ENetworkError.Create('write deadline exceeded');
+    raise ETimeoutError.Create('write deadline exceeded');
   LRemaining := FWriteDeadline.Remaining;
   LMs := UInt32(LRemaining.AsMilliseconds);
   if LMs = 0 then LMs := 1;
