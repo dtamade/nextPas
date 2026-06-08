@@ -1678,6 +1678,9 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("impl-simd-vec4f-dot-cancelling-huge", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "SimdVec4fDot cancelling huge finite stable public parity"),
     RequiredBehaviorTestMarker("impl-simd-vec3f-dot-cancelling-huge", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "SimdVec3fDot cancelling huge finite stable public parity"),
     RequiredBehaviorTestMarker("impl-simd-vec3f-cross-cancelling-huge", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "SimdVec3fCross cancelling huge finite stable public parity"),
+    RequiredBehaviorTestMarker("impl-simd-quatf-rotate-nan-vector", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "SimdQuatfRotate NaN vector public error parity"),
+    RequiredBehaviorTestMarker("impl-simd-quatf-rotate-invalid-vector", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "SimdQuatfRotate infinite vector public error parity"),
+    RequiredBehaviorTestMarker("impl-simd-quatf-rotate-invalid-priority", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "SimdQuatfRotate invalid quaternion priority public error parity"),
 )
 
 

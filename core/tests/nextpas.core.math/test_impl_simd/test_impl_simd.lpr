@@ -3,6 +3,7 @@ program test_impl_simd;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.math,
   nextpas.core.math.mat,
@@ -12,6 +13,29 @@ uses
 
 var
   T: TTestRunner;
+
+type
+  TSingleBitCast = packed record
+    case Integer of
+      0: (Value: Single);
+      1: (Bits: LongWord);
+  end;
+
+function SingleNaN: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7FC00000;
+  Result := LValue.Value;
+end;
+
+function SingleInfinity: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7F800000;
+  Result := LValue.Value;
+end;
 
 procedure CheckNear(const AExpected, AActual, AEpsilon: Double; const AMessage: string);
 var
@@ -48,6 +72,38 @@ end;
 procedure CheckVec4fValue(const AExpected, AActual: TVec4f; const AMessage: string);
 begin
   CheckVec4f(AExpected.X, AExpected.Y, AExpected.Z, AExpected.W, AActual, AMessage);
+end;
+
+procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string; const AProc: TTestProc);
+begin
+  try
+    AProc;
+  except
+    on E: EArgumentError do
+    begin
+      CheckEqual(AExpectedMessage, E.Message, AName + ' message');
+      Exit;
+    end;
+    on E: Exception do
+      Fail(AName + ': expected EArgumentError, got ' + E.ClassName);
+  end;
+  Fail(AName + ': expected EArgumentError');
+end;
+
+procedure RaiseSimdQuatfRotateNaNVector;
+begin
+  SimdQuatfRotate(TQuatf.Identity, TVec3f.Create(SingleNaN, 0.0, 0.0));
+end;
+
+procedure RaiseSimdQuatfRotateInfiniteVector;
+begin
+  SimdQuatfRotate(TQuatf.Identity, TVec3f.Create(0.0, SingleInfinity, 0.0));
+end;
+
+procedure RaiseSimdQuatfRotateInvalidQuaternionAndVector;
+begin
+  SimdQuatfRotate(TQuatf.Create(SingleNaN, 0.0, 0.0, 1.0),
+    TVec3f.Create(SingleNaN, 0.0, 0.0));
 end;
 
 procedure TestVec4fSimdHelpers;
@@ -216,6 +272,18 @@ begin
     'SimdVec3fCross cancelling huge finite stable public parity');
 end;
 
+procedure TestSimdQuatfRotateInvalidVectorPublicParity;
+begin
+  ExpectArgumentErrorMessage('TQuatf.Rotate: AVector must be finite',
+    'SimdQuatfRotate NaN vector public error parity', @RaiseSimdQuatfRotateNaNVector);
+  ExpectArgumentErrorMessage('TQuatf.Rotate: AVector must be finite',
+    'SimdQuatfRotate infinite vector public error parity',
+    @RaiseSimdQuatfRotateInfiniteVector);
+  ExpectArgumentErrorMessage('TQuatf.Rotate: quaternion must be finite',
+    'SimdQuatfRotate invalid quaternion priority public error parity',
+    @RaiseSimdQuatfRotateInvalidQuaternionAndVector);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.impl.simd');
   T.Run('vec4f simd helpers', @TestVec4fSimdHelpers);
@@ -224,5 +292,7 @@ begin
   T.Run('quatf simd helpers', @TestQuatfSimdHelpers);
   T.Run('simd helpers match public math semantics', @TestSimdHelpersMatchPublicMathSemantics);
   T.Run('simd dot length stable edge parity', @TestSimdDotLengthStableEdgeParity);
+  T.Run('simd quat rotate invalid vector public error parity',
+    @TestSimdQuatfRotateInvalidVectorPublicParity);
   T.Summary;
 end.

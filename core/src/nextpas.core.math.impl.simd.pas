@@ -23,6 +23,8 @@ function SimdQuatfRotate(const AQuat: TQuatf; const AVector: TVec3f): TVec3f; in
 implementation
 
 uses
+  nextpas.core.errors,
+  nextpas.core.math.scalar,
   nextpas.core.simd;
 
 function Vec4fToSimd(const AValue: TVec4f): TVecF32x4; inline;
@@ -64,6 +66,24 @@ begin
     VecF32x4Extract(AValue, 0),
     VecF32x4Extract(AValue, 1),
     VecF32x4Extract(AValue, 2));
+end;
+
+function SingleIsFinite(const AValue: Single): Boolean; inline;
+begin
+  Result := (not nextpas.core.math.scalar.IsNaN(AValue)) and
+    (not nextpas.core.math.scalar.IsInfinite(AValue));
+end;
+
+function QuatfIsFinite(const AValue: TQuatf): Boolean; inline;
+begin
+  Result := SingleIsFinite(AValue.X) and SingleIsFinite(AValue.Y) and
+    SingleIsFinite(AValue.Z) and SingleIsFinite(AValue.W);
+end;
+
+function Vec3fIsFinite(const AValue: TVec3f): Boolean; inline;
+begin
+  Result := SingleIsFinite(AValue.X) and SingleIsFinite(AValue.Y) and
+    SingleIsFinite(AValue.Z);
 end;
 
 function SimdVec4fAdd(const AA, AB: TVec4f): TVec4f;
@@ -128,6 +148,11 @@ var
   LT: TVecF32x4;
   LResult: TVecF32x4;
 begin
+  if not QuatfIsFinite(AQuat) then
+    raise EArgumentError.Create('TQuatf.Rotate: quaternion must be finite');
+  if not Vec3fIsFinite(AVector) then
+    raise EArgumentError.Create('TQuatf.Rotate: AVector must be finite');
+
   LQuat := AQuat.Normalize;
   LQuatVec := QuatfVectorToSimd(LQuat);
   LVector := Vec3fToSimd(AVector);
