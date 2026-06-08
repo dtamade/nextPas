@@ -1138,6 +1138,7 @@ begin
     begin
       Result := tscoHandler;
       FKeepAlive := False;
+      FConn.SetReadDeadline(TDeadline.Infinite);
       Exit;
     end;
 

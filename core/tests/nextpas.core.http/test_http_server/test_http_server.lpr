@@ -2528,6 +2528,46 @@ begin
     'direct keep-alive idle timeout writes response body');
 end;
 
+procedure TestH1DirectHijackClearsReadTimeoutDeadline;
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LStreamObj: TInlineRuntimeTcpStream;
+  LStream: ITcpStream;
+  LOwnership: TTcpServerConnOwnership;
+  LHijacked: ITcpStream;
+  LHijacker: IHttpHijacker;
+const
+  REQ =
+    'GET /hijack HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.ReadTimeout := 25;
+  LHttpOpts.IdleTimeout := 5000;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  LStreamObj := TInlineRuntimeTcpStream.Create(REQ);
+  LStream := LStreamObj as ITcpStream;
+  LHijacked := nil;
+  LOwnership := LTransport.ServeConn(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      if not Supports(AW, IHttpHijacker, LHijacker) then
+        Fail('direct hijack deadline response writer supports IHttpHijacker');
+      LHijacked := LHijacker.Hijack;
+    end));
+
+  Check(LOwnership = TCP_SERVER_CONN_OWNERSHIP_HANDLER,
+    'direct hijack deadline transfers connection ownership to handler');
+  Check(LHijacked <> nil,
+    'direct hijack deadline handler receives the hijacked connection');
+  Check(LStreamObj.LastReadDeadline.IsInfinite,
+    'direct hijack clears server request read deadline before handler ownership');
+end;
+
 procedure RunPollDrivenMidRequestReadTimeout(
   const ALabel, AInput: string);
 var
@@ -12696,6 +12736,8 @@ begin
     @TestH1DirectSessionUsesReadTimeoutBeforeFirstRequest);
   T.Run('H1 direct session uses IdleTimeout after keep-alive response',
     @TestH1DirectSessionUsesIdleTimeoutAfterKeepAliveResponse);
+  T.Run('H1 direct hijack clears ReadTimeout deadline',
+    @TestH1DirectHijackClearsReadTimeoutDeadline);
   T.Run('H1 poll-driven session times out partial fixed-length body read wait',
     @TestH1PollDrivenSessionTimesOutPartialFixedLengthBodyReadWait);
   T.Run('H1 poll-driven session times out partial chunk-size line read wait',
