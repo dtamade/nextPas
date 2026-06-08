@@ -152,12 +152,13 @@ end;
 class function TUuid.TryParse(const AStr: string; out AUuid: TUuid): Boolean;
 var
   LI, LJ, LHi, LLo: Int32;
+  LDecoded: TUuid;
 begin
   Result := False;
   if Length(AStr) <> UUID_LENGTH then Exit;
   if (AStr[9] <> '-') or (AStr[14] <> '-') or
      (AStr[19] <> '-') or (AStr[24] <> '-') then Exit;
-  FillChar(AUuid.FBytes, 16, 0);
+  FillChar(LDecoded.FBytes, 16, 0);
   LJ := 0;
   LI := 1;
   while LI <= UUID_LENGTH do
@@ -168,11 +169,13 @@ begin
     LLo := HexVal(AStr[LI + 1]);
     if (LHi < 0) or (LLo < 0) then Exit;
     if LJ > 15 then Exit;
-    AUuid.FBytes[LJ] := Byte((LHi shl 4) or LLo);
+    LDecoded.FBytes[LJ] := Byte((LHi shl 4) or LLo);
     Inc(LJ);
     Inc(LI, 2);
   end;
-  Result := (LJ = 16);
+  if LJ <> 16 then Exit;
+  AUuid := LDecoded;
+  Result := True;
 end;
 
 class function TUuid.Parse(const AStr: string): TUuid;

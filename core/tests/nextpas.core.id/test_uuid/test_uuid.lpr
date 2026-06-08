@@ -166,6 +166,18 @@ begin
   Check(not LOk, 'invalid hex chars fail');
 end;
 
+procedure TestTryParseLeavesOutUntouchedOnFailure;
+var
+  LBefore, LU: TUuid;
+  LOk: Boolean;
+begin
+  LBefore := TUuid.Max;
+  LU := LBefore;
+  LOk := TUuid.TryParse('550e8400-e29b-41d4-a716-44665544ZZZZ', LU);
+  Check(not LOk, 'invalid hex chars fail');
+  Check(LU = LBefore, 'failed TryParse must not expose partial UUID bytes');
+end;
+
 procedure TestTryParseInvalidNoDashes;
 var LU: TUuid; LOk: Boolean;
 begin
@@ -505,6 +517,7 @@ begin
   T.Run('TryParse invalid empty', @TestTryParseInvalidEmpty);
   T.Run('TryParse invalid short', @TestTryParseInvalidShort);
   T.Run('TryParse invalid chars', @TestTryParseInvalidChars);
+  T.Run('TryParse failed out stable', @TestTryParseLeavesOutUntouchedOnFailure);
   T.Run('TryParse invalid no dashes', @TestTryParseInvalidNoDashes);
   T.Run('TryParse misplaced dash', @TestTryParseMisplacedDash);
 
