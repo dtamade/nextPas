@@ -1453,6 +1453,31 @@ begin
   CheckEqual('a*b2c3', s, 'func first only');
 end;
 
+procedure ExpectReplaceFuncNilCallbackError(const ACase: string; AUseAll: Boolean);
+var
+  R: TRegex;
+  LRaised: Boolean;
+begin
+  R := TRegex.Compile('\d+');
+  LRaised := False;
+  try
+    if AUseAll then
+      R.ReplaceAllFunc('a1b2', nil)
+    else
+      R.ReplaceFirstFunc('a1b2', nil);
+  except
+    on E: ERegexError do
+      LRaised := True;
+  end;
+  Check(LRaised, ACase);
+end;
+
+procedure TestReplaceFuncNilCallback;
+begin
+  ExpectReplaceFuncNilCallbackError('ReplaceFirstFunc nil callback rejected', False);
+  ExpectReplaceFuncNilCallbackError('ReplaceAllFunc nil callback rejected', True);
+end;
+
 { === NEW TEST PROCEDURES === }
 
 { --- 1. TestMultipleCaptures --- }
@@ -4257,6 +4282,7 @@ begin
   T.Run('Performance regression', @TestPerformanceRegression);
   T.Run('QuoteMeta thorough', @TestQuoteMetaThorough);
   T.Run('ReplaceFunc edge cases', @TestReplaceFuncEdgeCases);
+  T.Run('ReplaceFunc nil callback', @TestReplaceFuncNilCallback);
   { --- 13 new test areas --- }
   T.Run('Multiple captures', @TestMultipleCaptures);
   T.Run('Overlapping patterns', @TestOverlappingPatterns);

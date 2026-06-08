@@ -370,6 +370,8 @@ end;
 function TRegex.ReplaceFirstFunc(const AInput: string; AFunc: TReplaceFunc): string;
 var LMatch: TMatch;
 begin
+  if not Assigned(AFunc) then
+    raise ERegexError.Create('nil replacement callback');
   LMatch := Find(AInput);
   if not LMatch.Found then Exit(AInput);
   Result := Copy(AInput, 1, LMatch.Start) + AFunc(AInput, LMatch) +
@@ -382,6 +384,8 @@ var
   i: SizeInt;
   LPos: SizeUInt;
 begin
+  if not Assigned(AFunc) then
+    raise ERegexError.Create('nil replacement callback');
   LMatches := FindAll(AInput);
   if Length(LMatches) = 0 then Exit(AInput);
 
