@@ -666,11 +666,29 @@ begin
 end;
 
 procedure TestExpFiniteOverflowUnderflowContracts;
+var
+  LDouble: Double;
+  LSingle: Single;
 begin
-  Check(IsDoublePositiveInfinity(Exp(710.0)), 'Exp finite overflow returns +Inf');
-  Check(IsDoublePositiveZero(Exp(-746.0)), 'Exp finite underflow returns +0');
+  LDouble := Exp(Double(709.0));
+  Check(IsDoubleFinite(LDouble) and (LDouble > 0.0),
+    'Exp Double below overflow threshold stays finite');
+  Check(IsDoublePositiveInfinity(Exp(Double(710.0))), 'Exp finite overflow returns +Inf');
+
+  LDouble := Exp(Double(-745.0));
+  Check(IsDoubleFinite(LDouble) and (LDouble > 0.0),
+    'Exp Double above underflow threshold stays positive finite');
+  Check(IsDoublePositiveZero(Exp(Double(-746.0))), 'Exp finite underflow returns +0');
+
+  LSingle := Exp(Single(88.0));
+  Check(IsSingleFinite(LSingle) and (LSingle > 0.0),
+    'Exp Single below overflow threshold stays finite');
   Check(IsSinglePositiveInfinity(Exp(Single(89.0))),
     'Exp Single finite overflow returns +Inf');
+
+  LSingle := Exp(Single(-103.0));
+  Check(IsSingleFinite(LSingle) and (LSingle > 0.0),
+    'Exp Single above underflow threshold stays positive finite');
   Check(IsSinglePositiveZero(Exp(Single(-104.0))),
     'Exp Single finite underflow returns +0');
 end;
