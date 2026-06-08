@@ -315,6 +315,39 @@ begin
   CheckEqual(#$E4#$BD#$A0#$E5#$A5#$BD, UrlDecode('%E4%BD%A0%E5%A5%BD'));
 end;
 
+procedure TestUrlDecodeRejectsMalformedUTF8PercentBytes;
+begin
+  CheckEqual(#$E4#$BD#$A0#$E5#$A5#$BD, UrlDecode('%E4%BD%A0%E5%A5%BD'));
+  ExpectConvertError(
+    procedure
+    begin
+      UrlDecode('%C0%80');
+    end,
+    'overlong UTF-8 percent bytes should raise'
+  );
+  ExpectConvertError(
+    procedure
+    begin
+      UrlDecode('%80');
+    end,
+    'lone continuation percent byte should raise'
+  );
+  ExpectConvertError(
+    procedure
+    begin
+      UrlDecode('%E2%82');
+    end,
+    'truncated UTF-8 percent sequence should raise'
+  );
+  ExpectConvertError(
+    procedure
+    begin
+      UrlDecode('%ED%A0%80');
+    end,
+    'surrogate UTF-8 percent bytes should raise'
+  );
+end;
+
 procedure TestUrlAlreadyEncoded;
 begin
   { Encoding an already-encoded string should double-encode }
@@ -529,6 +562,7 @@ begin
   T.Run('URL special chars', @TestUrlSpecialChars);
   T.Run('URL round-trip', @TestUrlRoundTrip);
   T.Run('URL UTF-8 bytes', @TestUrlUTF8Bytes);
+  T.Run('URL malformed UTF-8 percent bytes', @TestUrlDecodeRejectsMalformedUTF8PercentBytes);
   T.Run('URL already encoded', @TestUrlAlreadyEncoded);
   T.Run('URL truncated percent', @TestUrlTruncatedPercent);
   T.Run('URL invalid percent hex', @TestUrlInvalidPercentHex);
