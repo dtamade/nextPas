@@ -58,6 +58,14 @@ begin
   Result := LValue.Value;
 end;
 
+function SingleNegativeZero: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $80000000;
+  Result := LValue.Value;
+end;
+
 function DoubleNaN: Double;
 var
   LValue: TDoubleBitCast;
@@ -80,6 +88,30 @@ var
 begin
   LValue.Bits := QWord($FFF0000000000000);
   Result := LValue.Value;
+end;
+
+function DoubleNegativeZero: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := QWord(1) shl 63;
+  Result := LValue.Value;
+end;
+
+procedure CheckSingleNegativeZero(const AActual: Single; const AMessage: string);
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AActual;
+  CheckEqual(Int64($80000000), Int64(LValue.Bits), AMessage);
+end;
+
+procedure CheckDoubleNegativeZero(const AActual: Double; const AMessage: string);
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Value := AActual;
+  Check(LValue.Bits = (QWord(1) shl 63), AMessage);
 end;
 
 procedure CheckVec3f(const AExpectedX, AExpectedY, AExpectedZ: Single; const AActual: TVec3f;
@@ -958,6 +990,34 @@ begin
   CheckVec4d(0.0, -2000.75, 0.0, 0.0, M4d.Columns[2], 'TMat4d Data write updates column view');
 end;
 
+procedure TestMatrixIndexedAliasesPreserveSignedZeroBits;
+var
+  M3f: TMat3f;
+  M4f: TMat4f;
+  M3d: TMat3d;
+  M4d: TMat4d;
+begin
+  M3f := TMat3f.Zero;
+  M3f.Rows[1] := TVec3f.Create(0.0, SingleNegativeZero, 0.0);
+  CheckSingleNegativeZero(M3f.Columns[1].Y,
+    'TMat3f row setter preserves negative-zero bits through Columns');
+
+  M4f := TMat4f.Zero;
+  M4f.Columns[2] := TVec4f.Create(0.0, 0.0, SingleNegativeZero, 0.0);
+  CheckSingleNegativeZero(M4f.Rows[2].Z,
+    'TMat4f column setter preserves negative-zero bits through Rows');
+
+  M3d := TMat3d.Zero;
+  M3d[0, 2] := DoubleNegativeZero;
+  CheckDoubleNegativeZero(M3d.Data[0, 2],
+    'TMat3d Items setter preserves negative-zero bits through Data');
+
+  M4d := TMat4d.Zero;
+  M4d.Data[3, 1] := DoubleNegativeZero;
+  CheckDoubleNegativeZero(M4d[3, 1],
+    'TMat4d Data[3,1] preserves negative-zero bits through Items');
+end;
+
 procedure TestMatrixEqualsNonFiniteComparisonContracts;
 var
   M3f: TMat3f;
@@ -1004,6 +1064,8 @@ begin
   T.Run('TMat4f contracts', @TestMat4fContracts);
   T.Run('double precision matrix contracts', @TestDoublePrecisionContracts);
   T.Run('matrix indexed aliases write through', @TestMatrixIndexedAliasesWriteThrough);
+  T.Run('matrix indexed aliases preserve signed-zero bits',
+    @TestMatrixIndexedAliasesPreserveSignedZeroBits);
   T.Run('single precision inverse fail-close contracts',
     @TestSinglePrecisionInverseFailCloseContracts);
   T.Run('double precision inverse fail-close contracts',

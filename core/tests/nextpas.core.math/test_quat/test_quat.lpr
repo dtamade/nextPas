@@ -70,6 +70,22 @@ begin
   CheckNear(AExpectedW, AActual.W, 0.000000000001, AMessage + '.W');
 end;
 
+procedure CheckSingleNegativeZero(const AActual: Single; const AMessage: string);
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AActual;
+  CheckEqual(Int64($80000000), Int64(LValue.Bits), AMessage);
+end;
+
+procedure CheckDoubleNegativeZero(const AActual: Double; const AMessage: string);
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Value := AActual;
+  Check(LValue.Bits = (QWord(1) shl 63), AMessage);
+end;
+
 procedure CheckMat3fIdentity(const AActual: TMat3f; const AMessage: string);
 begin
   Check(TMat3f.Equals(TMat3f.Identity, AActual, Single(0.000001)), AMessage);
@@ -120,6 +136,14 @@ begin
   Result := LValue.Value;
 end;
 
+function SingleNegativeZero: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $80000000;
+  Result := LValue.Value;
+end;
+
 function SingleMaxFinite: Single;
 var
   LValue: TSingleBitCast;
@@ -149,6 +173,14 @@ var
   LValue: TDoubleBitCast;
 begin
   LValue.Bits := QWord($FFF0000000000000);
+  Result := LValue.Value;
+end;
+
+function DoubleNegativeZero: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := QWord(1) shl 63;
   Result := LValue.Value;
 end;
 
@@ -569,6 +601,26 @@ begin
   CheckNear(222.0, Qd.Data[1], 0.0, 'TQuatd Y writes Data[1]');
   CheckNear(333.0, Qd.Data[2], 0.0, 'TQuatd Z writes Data[2]');
   CheckNear(444.0, Qd.Data[3], 0.0, 'TQuatd W writes Data[3]');
+end;
+
+procedure TestQuaternionDataAliasesPreserveSignedZeroBits;
+var
+  Qf: TQuatf;
+  Qd: TQuatd;
+begin
+  Qf := TQuatf.Identity;
+  Qf.Data[0] := SingleNegativeZero;
+  CheckSingleNegativeZero(Qf.X, 'TQuatf Data[0] preserves negative-zero bits');
+
+  Qf.W := SingleNegativeZero;
+  CheckSingleNegativeZero(Qf.Data[3], 'TQuatf W preserves negative-zero bits in Data[3]');
+
+  Qd := TQuatd.Identity;
+  Qd.Data[1] := DoubleNegativeZero;
+  CheckDoubleNegativeZero(Qd.Y, 'TQuatd Data[1] preserves negative-zero bits');
+
+  Qd.W := DoubleNegativeZero;
+  CheckDoubleNegativeZero(Qd.Data[3], 'TQuatd W preserves negative-zero bits in Data[3]');
 end;
 
 procedure TestFromAxisAngleRejectsNonFiniteInputs;
@@ -1188,6 +1240,8 @@ begin
   T.Run('TQuatf contracts', @TestQuatfContracts);
   T.Run('TQuatd contracts', @TestQuatdContracts);
   T.Run('quaternion Data aliases write through', @TestQuaternionDataAliasesWriteThrough);
+  T.Run('quaternion Data aliases preserve signed-zero bits',
+    @TestQuaternionDataAliasesPreserveSignedZeroBits);
   T.Run('FromAxisAngle rejects non-finite inputs', @TestFromAxisAngleRejectsNonFiniteInputs);
   T.Run('FromAxisAngle normalizes huge finite axis', @TestFromAxisAngleNormalizesHugeFiniteAxis);
   T.Run('huge finite normalize', @TestHugeFiniteNormalize);
