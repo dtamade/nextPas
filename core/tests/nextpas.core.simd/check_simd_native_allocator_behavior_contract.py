@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guard the native allocator behavior truth for public SimdAlloc."""
+"""Guard SIMD's aligned allocator owner boundary."""
 
 from __future__ import annotations
 
@@ -11,29 +11,25 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ALLOC_PATH = ROOT / "src/nextpas.core.simd.alloc.pas"
+MEMUTILS_PATH = ROOT / "src/nextpas.core.simd.memutils.pas"
 MAKEFILE_PATH = ROOT / "tests/nextpas.core.simd/Makefile"
 
 REQUIRED_NATIVE_TRUTH_TOKENS = (
     "SimdAlloc native allocator behavior truth:",
-    "Windows native allocator state: not wired to public SimdAlloc",
-    "POSIX native allocator state: not wired to public SimdAlloc",
-    "Fallback allocator state: active header-backed implementation",
-    "Native allocator promotion requires platform-owned allocation seam",
+    "Aligned allocation owner: nextpas.core.platform.memory",
+    "SIMD allocator state: consumes platform-owned aligned allocation seam",
+    "SIMD raw host allocator state: no Windows/POSIX allocator FFI declarations",
     "Wine or cross-compile evidence is not real Windows runtime readiness",
 )
 
-REQUIRED_FALLBACK_SHAPE_TOKENS = (
-    "TAllocHeader",
-    "OrigPtr",
-    "Size",
-    "Alignment",
-    "TryResolveAlignment",
-    "CanBuildRawAllocationSize",
-    "GetMem(LRaw, LRawSize)",
-    "FreeMem(LHeader^.OrigPtr)",
+REQUIRED_PLATFORM_SEAM_TOKENS = (
+    "nextpas.core.platform.memory",
+    "platform_aligned_alloc",
+    "platform_aligned_realloc",
+    "platform_aligned_free",
 )
 
-FORBIDDEN_PUBLIC_ALLOC_CODE_TOKENS = (
+FORBIDDEN_SIMD_ALLOCATOR_CODE_TOKENS = (
     "Windows",
     "BaseUnix",
     "Unix",
@@ -44,9 +40,10 @@ FORBIDDEN_PUBLIC_ALLOC_CODE_TOKENS = (
     "_aligned_free",
     "posix_memalign",
     "aligned_alloc",
-    "AlignedAlloc",
-    "AlignedRealloc",
-    "AlignedFree",
+    "TAllocHeader",
+    "OrigPtr",
+    "GetMem",
+    "FreeMem",
 )
 
 
@@ -76,19 +73,23 @@ def check_required_truth_tokens(a_issues: list[str]) -> None:
             add_issue(a_issues, ALLOC_PATH, f"missing native allocator truth token `{l_token}`")
 
 
-def check_fallback_shape(a_issues: list[str]) -> None:
+def check_platform_seam_shape(a_issues: list[str]) -> None:
     l_text = read_text(ALLOC_PATH)
-    for l_token in REQUIRED_FALLBACK_SHAPE_TOKENS:
+    l_memutils_text = read_text(MEMUTILS_PATH)
+    for l_token in REQUIRED_PLATFORM_SEAM_TOKENS:
         if l_token not in l_text:
-            add_issue(a_issues, ALLOC_PATH, f"missing fallback shape token `{l_token}`")
+            add_issue(a_issues, ALLOC_PATH, f"missing platform seam token `{l_token}`")
+        if l_token not in l_memutils_text:
+            add_issue(a_issues, MEMUTILS_PATH, f"missing platform seam token `{l_token}`")
 
 
-def check_no_native_allocator_in_public_code(a_issues: list[str]) -> None:
-    l_code = strip_pascal_comments(read_text(ALLOC_PATH))
-    for l_token in FORBIDDEN_PUBLIC_ALLOC_CODE_TOKENS:
-        l_pattern = rf"(?<![A-Za-z0-9_]){re.escape(l_token)}(?![A-Za-z0-9_])"
-        if re.search(l_pattern, l_code, flags=re.IGNORECASE):
-            add_issue(a_issues, ALLOC_PATH, f"native allocator token `{l_token}` is present in executable code")
+def check_no_raw_allocator_in_simd_code(a_issues: list[str]) -> None:
+    for l_path in (ALLOC_PATH, MEMUTILS_PATH):
+        l_code = strip_pascal_comments(read_text(l_path))
+        for l_token in FORBIDDEN_SIMD_ALLOCATOR_CODE_TOKENS:
+            l_pattern = rf"(?<![A-Za-z0-9_]){re.escape(l_token)}(?![A-Za-z0-9_])"
+            if re.search(l_pattern, l_code, flags=re.IGNORECASE):
+                add_issue(a_issues, l_path, f"raw allocator owner token `{l_token}` is present in executable code")
 
 
 def check_makefile_hook(a_issues: list[str]) -> None:
@@ -102,14 +103,14 @@ def render_summary(a_issues: list[str]) -> str:
 
 
 def main() -> int:
-    l_parser = argparse.ArgumentParser(description="Check SimdAlloc native allocator behavior truth")
+    l_parser = argparse.ArgumentParser(description="Check SIMD aligned allocator owner boundary")
     l_parser.add_argument("--summary-line", action="store_true", help="print one-line summary")
     l_args = l_parser.parse_args()
 
     l_issues: list[str] = []
     check_required_truth_tokens(l_issues)
-    check_fallback_shape(l_issues)
-    check_no_native_allocator_in_public_code(l_issues)
+    check_platform_seam_shape(l_issues)
+    check_no_raw_allocator_in_simd_code(l_issues)
     check_makefile_hook(l_issues)
 
     if l_args.summary_line:

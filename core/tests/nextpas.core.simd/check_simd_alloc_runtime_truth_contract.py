@@ -15,9 +15,9 @@ MAKEFILE_PATH = ROOT / "tests/nextpas.core.simd/Makefile"
 
 REQUIRED_ALLOC_TRUTH_TOKENS = (
     "SimdAlloc runtime truth:",
-    "header-backed fallback allocator on every host",
-    "Windows behavior is not native _aligned_malloc/_aligned_realloc",
-    "POSIX behavior is not native posix_memalign/aligned_alloc",
+    "Delegates storage ownership to nextpas.core.platform.memory",
+    "SIMD does not declare raw Windows/POSIX allocator FFI",
+    "Native/fallback backend truth is reported by platform_aligned_alloc_backend",
     "Wine or cross-compile evidence is forced-compile truth only",
 )
 
@@ -32,15 +32,17 @@ FORBIDDEN_ALLOC_HOST_TOKENS = (
     "_aligned_free",
     "posix_memalign",
     "aligned_alloc",
+    "TAllocHeader",
+    "OrigPtr",
+    "FreeMem",
+    "GetMem",
 )
 
 REQUIRED_FALLBACK_TOKENS = (
-    "TAllocHeader",
-    "OrigPtr",
-    "Size",
-    "Alignment",
-    "GetMem(",
-    "FreeMem(",
+    "nextpas.core.platform.memory",
+    "platform_aligned_alloc",
+    "platform_aligned_free",
+    "platform_aligned_realloc",
     "SimdAlloc(",
     "SimdFree(",
     "SimdRealloc(",

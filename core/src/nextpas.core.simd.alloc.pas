@@ -18,32 +18,24 @@ function SimdAllocAlignment: NativeUInt;
 implementation
 
 uses
+  nextpas.core.platform.memory,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch;
 
 {
   SimdAlloc runtime truth:
-  - Uses one header-backed fallback allocator on every host.
-  - Windows behavior is not native _aligned_malloc/_aligned_realloc.
-  - POSIX behavior is not native posix_memalign/aligned_alloc.
+  - Delegates storage ownership to nextpas.core.platform.memory.
+  - SIMD does not declare raw Windows/POSIX allocator FFI.
+  - Native/fallback backend truth is reported by platform_aligned_alloc_backend.
   - Wine or cross-compile evidence is forced-compile truth only until real
     Windows runtime evidence is captured.
 
   SimdAlloc native allocator behavior truth:
-  - Windows native allocator state: not wired to public SimdAlloc.
-  - POSIX native allocator state: not wired to public SimdAlloc.
-  - Fallback allocator state: active header-backed implementation.
-  - Native allocator promotion requires platform-owned allocation seam.
+  - Aligned allocation owner: nextpas.core.platform.memory.
+  - SIMD allocator state: consumes platform-owned aligned allocation seam.
+  - SIMD raw host allocator state: no Windows/POSIX allocator FFI declarations.
   - Wine or cross-compile evidence is not real Windows runtime readiness.
 }
-
-type
-  PAllocHeader = ^TAllocHeader;
-  TAllocHeader = record
-    OrigPtr: Pointer;
-    Size: SizeUInt;
-    Alignment: NativeUInt;
-  end;
 
 function GetDefaultAlignment: NativeUInt; forward;
 
@@ -63,24 +55,6 @@ begin
   Result := True;
 end;
 
-function CanAddSizeUInt(aLeft, aRight: SizeUInt; out aSum: SizeUInt): Boolean; inline;
-begin
-  if aLeft > High(SizeUInt) - aRight then
-  begin
-    aSum := 0;
-    Exit(False);
-  end;
-  aSum := aLeft + aRight;
-  Result := True;
-end;
-
-function CanBuildRawAllocationSize(aSize, aAlignment: SizeUInt; out aRawSize: SizeUInt): Boolean;
-begin
-  if not CanAddSizeUInt(aSize, aAlignment, aRawSize) then
-    Exit(False);
-  Result := CanAddSizeUInt(aRawSize, SizeOf(TAllocHeader), aRawSize);
-end;
-
 function GetDefaultAlignment: NativeUInt;
 begin
   case GetActiveBackend of
@@ -98,58 +72,27 @@ end;
 function SimdAlloc(aSize: SizeUInt; aAlignment: TSimdAlignment = saAuto): Pointer;
 var
   LAlign: NativeUInt;
-  LRawSize: SizeUInt;
-  LRaw, LAligned: Pointer;
-  LHeader: PAllocHeader;
 begin
   if aSize = 0 then Exit(nil);
 
   if not TryResolveAlignment(aAlignment, LAlign) then
     Exit(nil);
 
-  if not CanBuildRawAllocationSize(aSize, LAlign, LRawSize) then
-    Exit(nil);
-  GetMem(LRaw, LRawSize);
-
-  LAligned := Pointer((PtrUInt(LRaw) + SizeOf(TAllocHeader) + LAlign - 1) and not (PtrUInt(LAlign) - 1));
-
-  LHeader := PAllocHeader(PtrUInt(LAligned) - SizeOf(TAllocHeader));
-  LHeader^.OrigPtr := LRaw;
-  LHeader^.Size := aSize;
-  LHeader^.Alignment := LAlign;
-
-  Result := LAligned;
+  Result := platform_aligned_alloc(aSize, LAlign);
 end;
 
 procedure SimdFree(aPtr: Pointer);
-var
-  LHeader: PAllocHeader;
 begin
-  if aPtr = nil then Exit;
-  LHeader := PAllocHeader(PtrUInt(aPtr) - SizeOf(TAllocHeader));
-  FreeMem(LHeader^.OrigPtr);
+  platform_aligned_free(aPtr);
 end;
 
 function SimdRealloc(aPtr: Pointer; aNewSize: SizeUInt; aAlignment: TSimdAlignment = saAuto): Pointer;
 var
-  LHeader: PAllocHeader;
-  LOldSize: SizeUInt;
+  LAlign: NativeUInt;
 begin
-  if aPtr = nil then Exit(SimdAlloc(aNewSize, aAlignment));
-  if aNewSize = 0 then begin SimdFree(aPtr); Exit(nil); end;
-
-  LHeader := PAllocHeader(PtrUInt(aPtr) - SizeOf(TAllocHeader));
-  LOldSize := LHeader^.Size;
-
-  Result := SimdAlloc(aNewSize, aAlignment);
-  if Result = nil then
-    Exit;
-
-  if LOldSize < aNewSize then
-    Move(aPtr^, Result^, LOldSize)
-  else
-    Move(aPtr^, Result^, aNewSize);
-  SimdFree(aPtr);
+  if not TryResolveAlignment(aAlignment, LAlign) then
+    Exit(nil);
+  Result := platform_aligned_realloc(aPtr, aNewSize, LAlign);
 end;
 
 end.
