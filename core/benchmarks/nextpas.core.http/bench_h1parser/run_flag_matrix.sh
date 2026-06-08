@@ -252,7 +252,7 @@ run_c_variant() {
   local output_file
 
   if [ "$LLHTTP_ROOT_VALUE" = "" ]; then
-    echo "skip $variant: LLHTTP_ROOT is not set" > "$LOG_DIR/$variant.skip.txt"
+    echo "skip $variant: LLHTTP_ROOT/NEXTPAS_LLHTTP_ROOT is not set" > "$LOG_DIR/$variant.skip.txt"
     return
   fi
 

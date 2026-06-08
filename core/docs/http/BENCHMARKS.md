@@ -1984,6 +1984,13 @@ that `flag_matrix` root. Unsafe overrides now fail fast with `unsafe output
 dir` and a non-zero exit instead of letting the runner become a broader tree
 cleanup tool.
 
+`NEXTPAS_BENCH_FILTER` and `NEXTPAS_C_BENCH_FILTER` use case-insensitive
+substring matching over benchmark row names. For H1 parser, full-chain, and C
+llhttp comparator rows, a no-match exits non-zero. `LLHTTP_ROOT` takes
+precedence; `NEXTPAS_LLHTTP_ROOT` is accepted as a fallback for shared
+test/benchmark environments. Do not commit generated objects, binaries, `.raw`
+captures, flag-matrix outputs, perf logs, or vendored llhttp sources.
+
 ```sh
 LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
 benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh --smoke --no-perf

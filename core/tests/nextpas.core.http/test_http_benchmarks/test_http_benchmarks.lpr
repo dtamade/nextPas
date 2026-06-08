@@ -37,6 +37,12 @@ const
   BenchmarksDocPath = 'docs/http/BENCHMARKS.md';
   BenchFullchainUnitPath =
     'benchmarks/nextpas.core.http/bench_fullchain/bench_fullchain.lpr';
+  H1ParserBenchMakefilePath =
+    'benchmarks/nextpas.core.http/bench_h1parser/Makefile';
+  CllhttpMakefilePath =
+    'benchmarks/nextpas.core.http/bench_h1parser/compare_c/Makefile';
+  CllhttpReadmePath =
+    'benchmarks/nextpas.core.http/bench_h1parser/compare_c/README.md';
   CompareGoRelativeDir = 'benchmarks/nextpas.core.http/compare_go';
   CompareRustRelativeDir = 'benchmarks/nextpas.core.http/compare_rust';
   CompareHyperRelativeDir = 'benchmarks/nextpas.core.http/compare_hyper';
@@ -1766,6 +1772,106 @@ begin
     'README fullchain quickstart should document no-match filter behavior');
   CheckContains(LFullchainBlock, 'exits non-zero',
     'README fullchain quickstart should document no-match exit status');
+end;
+
+procedure TestH1ParserLlhttpRootAliasSourceContract;
+var
+  LRootDir: string;
+  LParentMakefile: string;
+  LCompareMakefile: string;
+  LRunnerScript: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LParentMakefile := LoadTextFile(PathJoin(LRootDir,
+    H1ParserBenchMakefilePath));
+  LCompareMakefile := LoadTextFile(PathJoin(LRootDir,
+    CllhttpMakefilePath));
+  LRunnerScript := LoadTextFile(ResolveH1FlagMatrixRunnerPath(LRootDir));
+
+  CheckContains(LRunnerScript,
+    'LLHTTP_ROOT_VALUE="${LLHTTP_ROOT:-${NEXTPAS_LLHTTP_ROOT:-}}"',
+    'flag matrix should prefer LLHTTP_ROOT and fall back to NEXTPAS_LLHTTP_ROOT');
+  CheckContains(LRunnerScript, 'llhttp_root=$LLHTTP_ROOT_VALUE',
+    'flag matrix should record the effective llhttp root in env.txt');
+  CheckContains(LRunnerScript, 'LLHTTP_ROOT="$LLHTTP_ROOT_VALUE"',
+    'flag matrix should pass the effective root to the C comparator build');
+
+  CheckContains(LParentMakefile,
+    'EFFECTIVE_LLHTTP_ROOT := $(if $(LLHTTP_ROOT),$(LLHTTP_ROOT),$(NEXTPAS_LLHTTP_ROOT))',
+    'parent H1 parser Makefile should compute an effective llhttp root');
+  CheckContains(LParentMakefile,
+    'LLHTTP_ROOT="$(EFFECTIVE_LLHTTP_ROOT)"',
+    'parent H1 parser run-c should pass the effective llhttp root');
+
+  CheckContains(LCompareMakefile,
+    'EFFECTIVE_LLHTTP_ROOT := $(if $(LLHTTP_ROOT),$(LLHTTP_ROOT),$(NEXTPAS_LLHTTP_ROOT))',
+    'C llhttp Makefile should compute an effective llhttp root');
+  CheckContains(LCompareMakefile, 'NEXTPAS_LLHTTP_ROOT',
+    'C llhttp Makefile diagnostic should mention the fallback env alias');
+  CheckContains(LCompareMakefile, '$(EFFECTIVE_LLHTTP_ROOT)/include/llhttp.h',
+    'C llhttp Makefile should use the effective root for modern layout');
+  CheckContains(LCompareMakefile, '$(EFFECTIVE_LLHTTP_ROOT)/build',
+    'C llhttp Makefile should use the effective root for generated layout');
+end;
+
+procedure TestBenchmarkDocsH1ParserRunnerTruthSourceContract;
+var
+  LRootDir: string;
+  LReadme: string;
+  LBenchmarks: string;
+  LCReadme: string;
+  LReadmeBlock: string;
+  LFlagMatrixBlock: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LReadme := LoadTextFile(PathJoin(LRootDir, ReadmeDocPath));
+  LBenchmarks := LoadTextFile(PathJoin(LRootDir, BenchmarksDocPath));
+  LCReadme := LoadTextFile(PathJoin(LRootDir, CllhttpReadmePath));
+
+  LReadmeBlock := ExtractSourceBlock(LReadme,
+    'For narrowed `Pascal raw llhttp vs C llhttp` work, use the H1 parser flag',
+    'See [BENCHMARKS.md](BENCHMARKS.md)',
+    'README H1 parser flag matrix block');
+  LFlagMatrixBlock := ExtractSourceBlock(LBenchmarks,
+    '`bench_h1parser/run_flag_matrix.sh` now provides a repeatable smoke/full matrix',
+    'Do not run multiple `clean run` jobs against the same `bench_h1parser` build',
+    'BENCHMARKS H1 parser flag matrix block');
+
+  CheckContains(LReadmeBlock, 'case-insensitive substring',
+    'README should define benchmark filter matching semantics');
+  CheckContains(LReadmeBlock, '`LLHTTP_ROOT` takes' + LineEnding +
+    'precedence',
+    'README should document LLHTTP_ROOT priority');
+  CheckContains(LReadmeBlock, 'NEXTPAS_LLHTTP_ROOT',
+    'README should document the llhttp root fallback alias');
+  CheckContains(LReadmeBlock,
+    'build/projects/nextpas.core.http/bench_h1parser/flag_matrix',
+    'README should document flag-matrix output root');
+  CheckContains(LReadmeBlock, 'Do not commit',
+    'README should document benchmark artifact hygiene');
+
+  CheckContains(LFlagMatrixBlock, 'case-insensitive',
+    'BENCHMARKS should define case-insensitive benchmark filters');
+  CheckContains(LFlagMatrixBlock, 'substring matching',
+    'BENCHMARKS should define substring benchmark filters');
+  CheckContains(LFlagMatrixBlock, 'no-match exits non-zero',
+    'BENCHMARKS should document no-match filter exit semantics');
+  CheckContains(LFlagMatrixBlock, '`LLHTTP_ROOT` takes' + LineEnding +
+    'precedence',
+    'BENCHMARKS should document LLHTTP_ROOT priority');
+  CheckContains(LFlagMatrixBlock, 'NEXTPAS_LLHTTP_ROOT',
+    'BENCHMARKS should document the llhttp root fallback alias');
+  CheckContains(LFlagMatrixBlock, '.raw',
+    'BENCHMARKS should document transient raw artifact hygiene');
+
+  CheckContains(LCReadme, 'case-insensitive substring',
+    'C comparator README should document shared filter semantics');
+  CheckContains(LCReadme, '`LLHTTP_ROOT` takes precedence',
+    'C comparator README should document LLHTTP_ROOT priority');
+  CheckContains(LCReadme, 'NEXTPAS_LLHTTP_ROOT',
+    'C comparator README should document the llhttp root fallback alias');
+  CheckContains(LCReadme, '.raw',
+    'C comparator README should document transient raw artifact hygiene');
 end;
 
 procedure TestBenchFullchainPlaintextSmoke;
@@ -4584,6 +4690,10 @@ begin
     @TestBenchmarkDocsAdapterNoUrlFastPathSourceContract);
   T.Run('README fullchain benchmark truth source contract',
     @TestReadmeFullchainBenchmarkTruthSourceContract);
+  T.Run('H1 parser llhttp root alias source contract',
+    @TestH1ParserLlhttpRootAliasSourceContract);
+  T.Run('benchmark docs H1 parser runner truth source contract',
+    @TestBenchmarkDocsH1ParserRunnerTruthSourceContract);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',

@@ -400,8 +400,17 @@ benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh \
   --smoke --no-perf --runs 3
 ```
 
+`NEXTPAS_BENCH_FILTER` is a case-insensitive substring over benchmark row
+names. H1 parser, full-chain, and C llhttp comparator filters exit non-zero on
+no-match instead of emitting an empty evidence row. `LLHTTP_ROOT` takes
+precedence; `NEXTPAS_LLHTTP_ROOT` is accepted as a fallback for shared
+test/benchmark environments.
+
 This writes per-run `results.tsv`, aggregated `summary.tsv`, `env.txt`, and
 logs under `build/projects/nextpas.core.http/bench_h1parser/flag_matrix/...`.
+`NEXTPAS_FLAG_MATRIX_OUTPUT_DIR` must stay under that root. Do not commit
+generated objects, binaries, `.raw` captures, flag-matrix outputs, perf logs,
+or vendored llhttp sources.
 
 See [BENCHMARKS.md](BENCHMARKS.md) for the current harness details and the
 latest committed local snapshot.
