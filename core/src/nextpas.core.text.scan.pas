@@ -222,7 +222,11 @@ begin
 
   LCh := Byte(AData[LPos]);
   if LCh = Ord('0') then
-    Inc(LPos)
+  begin
+    Inc(LPos);
+    if (LPos < ALen) and IsDigit(Byte(AData[LPos])) then
+      Exit(0);
+  end
   else if (LCh >= Ord('1')) and (LCh <= Ord('9')) then
     LPos := ScanDigitsFrom(LPos)
   else
@@ -230,16 +234,14 @@ begin
 
   if (LPos < ALen) and (AData[LPos] = '.') then
   begin
-    if ((LPos + 1) < ALen) and IsDigit(Byte(AData[LPos + 1])) then
-    begin
-      Inc(LPos);
-      LPos := ScanDigitsFrom(LPos);
-    end;
+    if ((LPos + 1) >= ALen) or not IsDigit(Byte(AData[LPos + 1])) then
+      Exit(0);
+    Inc(LPos);
+    LPos := ScanDigitsFrom(LPos);
   end;
 
   if LPos < ALen then
   begin
-    Result := LPos;
     LCh := Byte(AData[LPos]);
     if (LCh = Ord('e')) or (LCh = Ord('E')) then
     begin
@@ -251,7 +253,7 @@ begin
           Inc(LPos);
       end;
       if (LPos >= ALen) or not IsDigit(Byte(AData[LPos])) then
-        Exit(Result);
+        Exit(0);
       LPos := ScanDigitsFrom(LPos);
     end;
   end;

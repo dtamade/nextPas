@@ -93,10 +93,10 @@ procedure TestJsonNumberInvalidBoundaries;
 begin
   CheckEqual(Int64(0), Int64(ScanJsonNumber(PAnsiChar('-'), 1)), 'bare minus is not a number');
   CheckEqual(Int64(0), Int64(ScanJsonNumber(PAnsiChar('-x'), 2)), 'minus without digit is not a number');
-  CheckEqual(Int64(1), Int64(ScanJsonNumber(PAnsiChar('1.'), 2)), 'fraction requires digit');
-  CheckEqual(Int64(1), Int64(ScanJsonNumber(PAnsiChar('1.e2'), 4)), 'fraction stops before missing digit');
-  CheckEqual(Int64(1), Int64(ScanJsonNumber(PAnsiChar('1e+'), 3)), 'exponent requires digit');
-  CheckEqual(Int64(1), Int64(ScanJsonNumber(PAnsiChar('01'), 2)), 'leading zero stops before next digit');
+  CheckEqual(Int64(0), Int64(ScanJsonNumber(PAnsiChar('1.'), 2)), 'fraction requires digit');
+  CheckEqual(Int64(0), Int64(ScanJsonNumber(PAnsiChar('1.e2'), 4)), 'fraction rejects missing digit');
+  CheckEqual(Int64(0), Int64(ScanJsonNumber(PAnsiChar('1e+'), 3)), 'exponent requires digit');
+  CheckEqual(Int64(0), Int64(ScanJsonNumber(PAnsiChar('01'), 2)), 'leading zero rejects next digit');
 end;
 
 procedure TestMatchLiteral;
