@@ -550,6 +550,74 @@ begin
   Check(not LP.IsComplete, 'truncated content-length response stays incomplete');
 end;
 
+procedure TestResponseChunkedInvalidChunkSize;
+var
+  LP: IH1Parser;
+  LResp: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+           'Transfer-Encoding: chunked'#13#10#13#10 +
+           'Z'#13#10'hello'#13#10 +
+           '0'#13#10#13#10;
+
+  LConsumed := LP.Execute(PAnsiChar(LResp), Length(LResp));
+
+  Check(LP.HasError, 'response invalid chunk size reports parser error');
+  Check(not LP.IsComplete, 'response invalid chunk size is not complete');
+  Check(not LP.ShouldKeepAlive,
+    'response invalid chunk size must not be reusable');
+  CheckEqual(SizeUInt(Pos('Z', LResp) - 1), LConsumed,
+    'response invalid chunk size returns bytes consumed before error');
+  CheckEqual('', LP.GetBody,
+    'response invalid chunk size does not publish body bytes');
+end;
+
+procedure TestResponseChunkedMalformedChunkExtension;
+var
+  LP: IH1Parser;
+  LResp: string;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+           'Transfer-Encoding: chunked'#13#10#13#10 +
+           '5;'#13#10'hello'#13#10 +
+           '0'#13#10#13#10;
+
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+
+  Check(LP.HasError, 'response malformed chunk extension reports parser error');
+  Check(not LP.IsComplete, 'response malformed chunk extension is not complete');
+  Check(not LP.ShouldKeepAlive,
+    'response malformed chunk extension must not be reusable');
+  CheckEqual('', LP.GetBody,
+    'response malformed chunk extension does not publish body bytes');
+end;
+
+procedure TestResponseChunkedTruncatedAtEof;
+var
+  LP: IH1Parser;
+  LResp: string;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+           'Transfer-Encoding: chunked'#13#10#13#10 +
+           '5'#13#10'hello';
+
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+  Check(not LP.IsComplete, 'response truncated chunked body is not complete');
+
+  LP.Finish;
+
+  Check(LP.HasError, 'response truncated chunked body reports error on finish');
+  Check(not LP.IsComplete, 'response truncated chunked body stays incomplete');
+  Check(not LP.ShouldKeepAlive,
+    'response truncated chunked body must not be reusable');
+end;
+
 procedure TestResponseHttp10WithoutKeepAliveDoesNotReuse;
 var
   LP: IH1Parser;
@@ -2783,6 +2851,12 @@ begin
   T.Run('Response lexically different duplicate Content-Length rejected',
     @TestResponseDuplicateContentLengthDifferentLexicalFormRejected);
   T.Run('Response content-length truncated at EOF', @TestResponseContentLengthTruncatedAtEof);
+  T.Run('Response chunked invalid chunk size',
+    @TestResponseChunkedInvalidChunkSize);
+  T.Run('Response chunked malformed chunk extension',
+    @TestResponseChunkedMalformedChunkExtension);
+  T.Run('Response chunked truncated at EOF',
+    @TestResponseChunkedTruncatedAtEof);
   T.Run('Response HTTP/1.0 without keep-alive does not reuse', @TestResponseHttp10WithoutKeepAliveDoesNotReuse);
   T.Run('Content-Length body', @TestContentLengthBody);
   T.Run('Content-Length request truncated at EOF', @TestContentLengthRequestTruncatedAtEof);
