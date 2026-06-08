@@ -317,6 +317,12 @@ begin
   Result := IsRetryableMethod(AReq.Method) or HasRetryIdempotencyKey(AReq);
 end;
 
+function IsSkippableInformationalResponse(const AStatus: THttpStatus): Boolean; inline;
+begin
+  Result := HttpStatusIsInformational(AStatus) and
+    (AStatus <> HTTP_STATUS_SWITCHING_PROTOCOLS);
+end;
+
 function CaptureRetryBodyPosition(const AReq: IHttpRequest;
   out ABodyStream: IStream; out AStartPosition: Int64): Boolean;
 begin
@@ -1978,31 +1984,62 @@ var
   LBuf: array[0..4095] of Byte;
   LN: SizeUInt;
   LConsumed: SizeUInt;
+  LPending: string;
   LHasResponseTail: Boolean;
   LBodyReader: IReader;
 begin
   AResponseStarted := False;
   LHasResponseTail := False;
+  LPending := '';
   LParser := NewH1ResponseParser(ARequestMethod = hmHead);
   repeat
-    LN := AReader.Read(LBuf[0], 4096);
-    if LN = 0 then
-      Break;
-    AResponseStarted := True;
-    LConsumed := LParser.Execute(@LBuf[0], LN);
-    if LConsumed < LN then
-      LHasResponseTail := True;
+    if LPending <> '' then
+    begin
+      LN := SizeUInt(Length(LPending));
+      LConsumed := LParser.Execute(PAnsiChar(LPending), LN);
+      if LConsumed < LN then
+        LPending := System.Copy(LPending, SizeInt(LConsumed) + 1,
+          SizeInt(LN - LConsumed))
+      else
+        LPending := '';
+    end
+    else
+    begin
+      LN := AReader.Read(LBuf[0], 4096);
+      if LN = 0 then
+        Break;
+      AResponseStarted := True;
+      LConsumed := LParser.Execute(@LBuf[0], LN);
+      if LConsumed < LN then
+      begin
+        SetLength(LPending, Int32(LN - LConsumed));
+        Move(LBuf[Int32(LConsumed)], LPending[1], LN - LConsumed);
+      end;
+    end;
+
+    if LParser.IsComplete and
+      IsSkippableInformationalResponse(LParser.GetStatusCode) then
+    begin
+      LParser := NewH1ResponseParser(ARequestMethod = hmHead);
+      Continue;
+    end;
   until LParser.IsComplete or LParser.HasError;
 
   if (not LParser.IsComplete) and (not LParser.HasError) then
     LParser.Finish;
+
+  if LParser.IsComplete and
+    IsSkippableInformationalResponse(LParser.GetStatusCode) then
+    raise EHttpError.Create('HTTP response incomplete: missing final response');
 
   if LParser.HasError then
     raise EHttpError.Create('HTTP parse error: ' + LParser.ErrorMessage);
   if not LParser.IsComplete then
     raise EHttpError.Create('HTTP response incomplete: connection closed');
 
-  AKeepAlive := LParser.ShouldKeepAlive and (not LHasResponseTail);
+  LHasResponseTail := LPending <> '';
+  AKeepAlive := LParser.ShouldKeepAlive and (not LHasResponseTail) and
+    (LParser.GetStatusCode <> HTTP_STATUS_SWITCHING_PROTOCOLS);
 
   LBodyReader := LParser.NewBodyReader;
   if LBodyReader <> nil then

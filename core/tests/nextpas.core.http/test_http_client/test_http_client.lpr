@@ -620,6 +620,69 @@ begin
   end;
 end;
 
+function SwitchingProtocolsPoolThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LReply: string;
+  LMethod: string;
+  LBody: string;
+begin
+  Result := nil;
+  try
+    LConn := GPoisonListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  InterlockedIncrement(GPoisonAcceptCount);
+  try
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    LReply := 'HTTP/1.1 101 Switching Protocols'#13#10 +
+              'Upgrade: websocket'#13#10 +
+              'Connection: Upgrade'#13#10 +
+              #13#10;
+    LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+
+    LMethod := '';
+    LBody := '';
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    if LMethod <> '' then
+    begin
+      LReply := 'HTTP/1.1 599 Poisoned'#13#10 +
+                'Content-Length: 6'#13#10 +
+                'Connection: close'#13#10 +
+                #13#10 +
+                'poison';
+      LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+    end;
+  except
+  end;
+  LConn.Close;
+
+  try
+    LConn := GPoisonListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  InterlockedIncrement(GPoisonAcceptCount);
+  try
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    LReply := 'HTTP/1.1 200 OK'#13#10 +
+              'Content-Length: 8'#13#10 +
+              'Connection: close'#13#10 +
+              #13#10 +
+              'fresh-ok';
+    LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+  except
+  end;
+  LConn.Close;
+end;
+
 function BodyLimitCaptureThread(AArg: Pointer): Pointer; cdecl;
 var
   LConn: ITcpStream;
@@ -2234,6 +2297,127 @@ begin
     GRawResponse1 := '';
     GRawResponse2 := '';
     GRawAcceptLimit := 0;
+  end;
+end;
+
+procedure TestClientSkips100ContinueBeforeFinalResponse;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  GRawResponse1 := 'HTTP/1.1 100 Continue'#13#10 +
+                   #13#10 +
+                   'HTTP/1.1 200 OK'#13#10 +
+                   'Content-Length: 8'#13#10 +
+                   'Connection: close'#13#10 +
+                   #13#10 +
+                   'final-ok';
+  GRawResponse2 := '';
+  GRawAcceptLimit := 1;
+  GRawListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRawListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @RawResponseThread, nil);
+
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Get('http://127.0.0.1:' +
+      IntToStr(Int64(LPort)) + '/continue');
+
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'client returns final response after 100 Continue');
+    CheckEqual('final-ok', ReadBodyStr(LResp),
+      'client reads final response body after 100 Continue');
+  finally
+    GRawListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRawListener := nil;
+    GRawResponse1 := '';
+    GRawResponse2 := '';
+    GRawAcceptLimit := 0;
+  end;
+end;
+
+procedure TestClientSkips103EarlyHintsBeforeFinalResponse;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  GRawResponse1 := 'HTTP/1.1 103 Early Hints'#13#10 +
+                   'Link: </style.css>; rel=preload'#13#10 +
+                   #13#10 +
+                   'HTTP/1.1 200 OK'#13#10 +
+                   'Content-Length: 8'#13#10 +
+                   'Connection: close'#13#10 +
+                   #13#10 +
+                   'final-ok';
+  GRawResponse2 := '';
+  GRawAcceptLimit := 1;
+  GRawListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRawListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @RawResponseThread, nil);
+
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Get('http://127.0.0.1:' +
+      IntToStr(Int64(LPort)) + '/early-hints');
+
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'client returns final response after 103 Early Hints');
+    CheckEqual('final-ok', ReadBodyStr(LResp),
+      'client reads final response body after 103 Early Hints');
+  finally
+    GRawListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRawListener := nil;
+    GRawResponse1 := '';
+    GRawResponse2 := '';
+    GRawAcceptLimit := 0;
+  end;
+end;
+
+procedure TestClientDoesNotPool101SwitchingProtocolsConnection;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  GPoisonAcceptCount := 0;
+  GPoisonListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GPoisonListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @SwitchingProtocolsPoolThread, nil);
+
+  try
+    LClient := NewHttpClient;
+
+    LResp := LClient.Get('http://127.0.0.1:' +
+      IntToStr(Int64(LPort)) + '/upgrade');
+    CheckEqual(Int64(101), Int64(LResp.StatusCode),
+      'client returns 101 Switching Protocols as the final response');
+
+    LResp := LClient.Get('http://127.0.0.1:' +
+      IntToStr(Int64(LPort)) + '/fresh');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'request after 101 uses a fresh HTTP connection');
+    CheckEqual('fresh-ok', ReadBodyStr(LResp),
+      'fresh request after 101 receives normal HTTP response body');
+    CheckEqual(Int64(2), Int64(GPoisonAcceptCount),
+      '101 Switching Protocols connection is not returned to the HTTP pool');
+
+    LClient := nil;
+  finally
+    if GPoisonAcceptCount < 2 then
+      WakeRetryAcceptThread(LPort);
+    GPoisonListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GPoisonListener := nil;
   end;
 end;
 
@@ -4437,6 +4621,12 @@ begin
   T.Run('Client does not pool response Connection close token-list',
     @TestClientDoesNotPoolResponseWithConnectionCloseTokenList);
   T.Run('Client rejects truncated content-length response', @TestClientRejectsTruncatedContentLengthResponse);
+  T.Run('Client skips 100 Continue before final response',
+    @TestClientSkips100ContinueBeforeFinalResponse);
+  T.Run('Client skips 103 Early Hints before final response',
+    @TestClientSkips103EarlyHintsBeforeFinalResponse);
+  T.Run('Client does not pool 101 Switching Protocols connection',
+    @TestClientDoesNotPool101SwitchingProtocolsConnection);
   T.Run('Client request body does not exceed ContentLength',
     @TestClientRequestBodyDoesNotExceedContentLength);
   T.Run('Client request body skips non-nil body when ContentLength is zero',
