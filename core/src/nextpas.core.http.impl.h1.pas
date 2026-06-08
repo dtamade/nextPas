@@ -296,6 +296,38 @@ begin
     Result := not LMetadata.ConnectionClose;
 end;
 
+function LowerTrim(const AValue: string): string; inline;
+begin
+  Result := LowerCase(Trim(AValue));
+end;
+
+function HeaderValueHasToken(const AValue, AToken: string): Boolean;
+var
+  LStart: SizeInt;
+  LPos: SizeInt;
+begin
+  Result := False;
+  if AValue = '' then
+    Exit;
+
+  LStart := 1;
+  while LStart <= Length(AValue) do
+  begin
+    LPos := LStart;
+    while (LPos <= Length(AValue)) and (AValue[LPos] <> ',') do
+      Inc(LPos);
+    if LowerTrim(Copy(AValue, LStart, LPos - LStart)) = AToken then
+      Exit(True);
+    LStart := LPos + 1;
+  end;
+end;
+
+function ResponseRequestsClose(const AHeaders: IHttpHeaders): Boolean;
+begin
+  Result := (AHeaders <> nil) and
+    HeaderValueHasToken(AHeaders.Get('connection'), 'close');
+end;
+
 function ParserErrorStatus(const AParser: IH1Parser): THttpStatus; inline;
 begin
   case AParser.ErrorKind of
@@ -1147,7 +1179,7 @@ begin
     ArmDirectWriteDeadline;
     LOutbound.DrainAllTo(FConn as IWriter);
 
-    if LW.GetHeaders.Get('connection') = 'close' then
+    if ResponseRequestsClose(LW.GetHeaders) then
       FKeepAlive := False;
   except
     on E: Exception do
@@ -1249,7 +1281,7 @@ begin
 
     LW.Flush;
 
-    if LW.GetHeaders.Get('connection') = 'close' then
+    if ResponseRequestsClose(LW.GetHeaders) then
       LKeepAlive := False;
     AOutbound := LOutbound;
     ACloseAfterDrain := not LKeepAlive;
