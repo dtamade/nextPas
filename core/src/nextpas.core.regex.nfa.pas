@@ -26,6 +26,27 @@ implementation
 
 uses nextpas.core.errors, nextpas.core.text.scan;
 
+function RegexDotMatches(const AProgram: TRegexProgram; ACh: AnsiChar): Boolean; inline;
+begin
+  Result := (ACh <> #10) or (rfDotAll in AProgram.Flags);
+end;
+
+function RegexAtLineStart(const AProgram: TRegexProgram;
+  const AInput: PAnsiChar; APos: SizeUInt): Boolean; inline;
+begin
+  Result := (APos = 0) or
+            ((rfMultiLine in AProgram.Flags) and
+             (APos > 0) and (AInput[APos - 1] = #10));
+end;
+
+function RegexAtLineEnd(const AProgram: TRegexProgram;
+  const AInput: PAnsiChar; ALen, APos: SizeUInt): Boolean; inline;
+begin
+  Result := (APos = ALen) or
+            ((rfMultiLine in AProgram.Flags) and
+             (APos < ALen) and (AInput[APos] = #10));
+end;
+
 { --- Sparse Set: O(1) add, contains, clear --- }
 
 type
@@ -123,9 +144,17 @@ var
         begin
           case LInst.Assert of
             akStart:
-              if pos = 0 then begin Stack[StackTop] := pc + 1; Inc(StackTop); end;
+              if RegexAtLineStart(AProgram, AInput, pos) then
+              begin
+                Stack[StackTop] := pc + 1;
+                Inc(StackTop);
+              end;
             akEnd:
-              if pos = ALen then begin Stack[StackTop] := pc + 1; Inc(StackTop); end;
+              if RegexAtLineEnd(AProgram, AInput, ALen, pos) then
+              begin
+                Stack[StackTop] := pc + 1;
+                Inc(StackTop);
+              end;
             akWordBoundary:
               if ((pos = 0) or not IsWordChar(Ord(AInput[pos - 1]))) <>
                  ((pos >= ALen) or not IsWordChar(Ord(AInput[pos]))) then
@@ -223,7 +252,7 @@ begin
           if Ord(AInput[pos]) = inst.Ch then
           begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
         opAnyChar:
-          if AInput[pos] <> #10 then
+          if RegexDotMatches(AProgram, AInput[pos]) then
           begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
         opCharClass:
         begin
@@ -319,9 +348,17 @@ var
         begin
           case LInst.Assert of
             akStart:
-              if pos = 0 then begin Stack[StackTop] := pc + 1; Inc(StackTop); end;
+              if RegexAtLineStart(AProgram, AInput, pos) then
+              begin
+                Stack[StackTop] := pc + 1;
+                Inc(StackTop);
+              end;
             akEnd:
-              if pos = ALen then begin Stack[StackTop] := pc + 1; Inc(StackTop); end;
+              if RegexAtLineEnd(AProgram, AInput, ALen, pos) then
+              begin
+                Stack[StackTop] := pc + 1;
+                Inc(StackTop);
+              end;
             akWordBoundary:
               if ((pos = 0) or not IsWordChar(Ord(AInput[pos - 1]))) <>
                  ((pos >= ALen) or not IsWordChar(Ord(AInput[pos]))) then
@@ -387,7 +424,7 @@ begin
           if Ord(AInput[pos]) = inst.Ch then
           begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
         opAnyChar:
-          if AInput[pos] <> #10 then
+          if RegexDotMatches(AProgram, AInput[pos]) then
           begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
         opCharClass:
         begin
@@ -541,11 +578,11 @@ var
         begin
           case LInst.Assert of
             akStart:
-              if pos = 0 then begin
+              if RegexAtLineStart(AProgram, AInput, pos) then begin
                 Stack[StackTop] := LPC + 1; StackSlot[StackTop] := LSIdx; Inc(StackTop);
               end;
             akEnd:
-              if pos = ALen then begin
+              if RegexAtLineEnd(AProgram, AInput, ALen, pos) then begin
                 Stack[StackTop] := LPC + 1; StackSlot[StackTop] := LSIdx; Inc(StackTop);
               end;
             akWordBoundary:
@@ -644,7 +681,7 @@ begin
             end;
           end;
         opAnyChar:
-          if (pos < ALen) and (AInput[pos] <> #10) then
+          if (pos < ALen) and RegexDotMatches(AProgram, AInput[pos]) then
           begin
             if NList.Count < NList.MaxCount then
             begin
@@ -811,11 +848,11 @@ var
         begin
           case LInst.Assert of
             akStart:
-              if pos = 0 then begin
+              if RegexAtLineStart(AProgram, AInput, pos) then begin
                 Stack[StackTop] := LPC + 1; StackSlot[StackTop] := LSIdx; Inc(StackTop);
               end;
             akEnd:
-              if pos = ALen then begin
+              if RegexAtLineEnd(AProgram, AInput, ALen, pos) then begin
                 Stack[StackTop] := LPC + 1; StackSlot[StackTop] := LSIdx; Inc(StackTop);
               end;
             akWordBoundary:
@@ -925,7 +962,7 @@ var
               end;
             end;
           opAnyChar:
-            if (pos < ALen) and (AInput[pos] <> #10) then
+            if (pos < ALen) and RegexDotMatches(AProgram, AInput[pos]) then
             begin
               if NList.Count < NList.MaxCount then
               begin

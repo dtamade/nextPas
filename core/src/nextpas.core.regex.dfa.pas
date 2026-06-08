@@ -234,7 +234,7 @@ begin
           Inc(C.NextCount);
         end;
       opAnyChar:
-        if AByte <> 10 then  // not newline
+        if (AByte <> 10) or (rfDotAll in AProgram.Flags) then
         begin
           C.NextPCs[C.NextCount] := pc + 1;
           Inc(C.NextCount);
@@ -514,6 +514,8 @@ begin
   Result := False;
   LCodeLen := Length(AProgram.Code);
   if LCodeLen = 0 then Exit;
+  if rfMultiLine in AProgram.Flags then
+    Exit(NfaIsMatch(AProgram, AInput, ALen));
 
   DfaCacheInit(Cache, LCodeLen);
 
@@ -682,6 +684,8 @@ begin
   Result := False;
   LCodeLen := Length(AProgram.Code);
   if LCodeLen = 0 then Exit;
+  if rfMultiLine in AProgram.Flags then
+    Exit(NfaIsFullMatch(AProgram, AInput, ALen));
 
   DfaCacheInit(Cache, LCodeLen);
 
@@ -786,6 +790,8 @@ begin
   Result := nil;
   LCodeLen := Length(AProgram.Code);
   if LCodeLen = 0 then Exit;
+  if rfMultiLine in AProgram.Flags then
+    Exit(NfaFindAll(AProgram, AInput, ALen, AMaxMatches));
 
   DfaCacheInit(Cache, LCodeLen);
   LCount := 0;

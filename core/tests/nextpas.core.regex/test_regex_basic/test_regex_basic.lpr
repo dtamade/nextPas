@@ -763,6 +763,40 @@ begin
   Check(not R.IsMatch('HELLO!'), 'ci anchored miss');
 end;
 
+procedure TestRegexFlagsPublicContract;
+var
+  R: TRegex;
+  M: TMatch;
+  MA: TMatchArray;
+  LInput: string;
+begin
+  LInput := 'alpha' + #10 + 'beta';
+
+  R := TRegex.Compile('a.b');
+  Check(not R.IsMatch('a' + #10 + 'b'), 'default dot excludes LF');
+  R := TRegex.Compile('a.b', [rfDotAll]);
+  Check(R.IsMatch('a' + #10 + 'b'), 'rfDotAll lets dot match LF');
+
+  R := TRegex.Compile('^beta');
+  Check(not R.IsMatch(LInput), 'default ^ matches only input start');
+  R := TRegex.Compile('^beta', [rfMultiLine]);
+  M := R.Find(LInput);
+  Check(M.Found, 'rfMultiLine ^ finds second line');
+  CheckEqual(Int64(6), Int64(M.Start), 'rfMultiLine ^ match start');
+  CheckEqual('beta', M.Value(LInput), 'rfMultiLine ^ match value');
+
+  R := TRegex.Compile('alpha$');
+  Check(not R.IsMatch(LInput), 'default $ matches only input end');
+  R := TRegex.Compile('alpha$', [rfMultiLine]);
+  Check(R.IsMatch(LInput), 'rfMultiLine $ matches before LF');
+
+  R := TRegex.Compile('^.', [rfMultiLine]);
+  MA := R.FindAll(LInput);
+  CheckEqual(Int64(2), Int64(Length(MA)), 'rfMultiLine FindAll line starts');
+  CheckEqual('a', MA[0].Value(LInput), 'rfMultiLine first line start');
+  CheckEqual('b', MA[1].Value(LInput), 'rfMultiLine second line start');
+end;
+
 { --- Greedy vs Non-Greedy --- }
 { POSIX leftmost-longest: non-greedy affects thread priority but the engine
   still reports the longest match at the leftmost position. }
@@ -4278,6 +4312,7 @@ begin
   T.Run('Compile limits', @TestCompileLimits);
   T.Run('Malformed patterns', @TestMalformedPatterns);
   T.Run('Case insensitive', @TestCaseInsensitive);
+  T.Run('Regex flags public contract', @TestRegexFlagsPublicContract);
   { --- New comprehensive tests --- }
   T.Run('Greedy vs Non-Greedy', @TestGreedyVsNonGreedy);
   T.Run('Capture edge cases', @TestCaptureEdgeCases);
