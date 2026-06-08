@@ -166,6 +166,20 @@ type
 
   TCloseFailingResponseBody = class(TInterfacedObject, IReader, IReadCloser)
   private
+    FData: string;
+    FPos: SizeInt;
+    FClosed: Boolean;
+    FCloseCount: Int32;
+  public
+    constructor Create(const AData: string = '');
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Close;
+    property Closed: Boolean read FClosed;
+    property CloseCount: Int32 read FCloseCount;
+  end;
+
+  TReadAndCloseFailingResponseBody = class(TInterfacedObject, IReader, IReadCloser)
+  private
     FClosed: Boolean;
     FCloseCount: Int32;
   public
@@ -1086,12 +1100,43 @@ begin
   FClosed := True;
 end;
 
-function TCloseFailingResponseBody.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+constructor TCloseFailingResponseBody.Create(const AData: string);
 begin
-  Result := 0;
+  inherited Create;
+  FData := AData;
+  FPos := 1;
+end;
+
+function TCloseFailingResponseBody.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LRemaining: SizeInt;
+begin
+  if (ACount = 0) or (FPos > Length(FData)) then
+    Exit(0);
+  LRemaining := Length(FData) - FPos + 1;
+  if SizeUInt(LRemaining) > ACount then
+    Result := ACount
+  else
+    Result := SizeUInt(LRemaining);
+  Move(FData[FPos], ABuf, Result);
+  Inc(FPos, SizeInt(Result));
 end;
 
 procedure TCloseFailingResponseBody.Close;
+begin
+  FClosed := True;
+  Inc(FCloseCount);
+  raise EHttpError.Create('response body close failed');
+end;
+
+function TReadAndCloseFailingResponseBody.Read(var ABuf;
+  const ACount: SizeUInt): SizeUInt;
+begin
+  Result := 0;
+  raise EIOError.Create('response body read failed');
+end;
+
+procedure TReadAndCloseFailingResponseBody.Close;
 begin
   FClosed := True;
   Inc(FCloseCount);
@@ -2766,6 +2811,45 @@ begin
   Check(LBody.Closed, 'download helper closes response body when copy fails');
 end;
 
+procedure TestHttpGetToWriterKeepsWriteErrorWhenCloseFails;
+var
+  LHeaders: IHttpHeaders;
+  LBody: TCloseFailingResponseBody;
+  LBodyRef: IReadCloser;
+  LClient: IHttpClient;
+  LRaisedWriteError: Boolean;
+  LRaisedCloseError: Boolean;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '1');
+  LBody := TCloseFailingResponseBody.Create('x');
+  LBodyRef := LBody as IReadCloser;
+  LClient := TDownloadClient.Create(NewResponse(HTTP_STATUS_OK, LHeaders,
+    LBodyRef as IReader)) as IHttpClient;
+
+  LRaisedWriteError := False;
+  LRaisedCloseError := False;
+  try
+    HttpGetToWriter(LClient, 'http://example.test/tool',
+      TZeroProgressWriter.Create as IWriter);
+  except
+    on E: Exception do
+    begin
+      LRaisedWriteError := E.Message = 'IoCopy: write returned 0';
+      LRaisedCloseError := E.Message = 'response body close failed';
+    end;
+  end;
+
+  Check(LRaisedWriteError,
+    'download helper preserves primary copy error');
+  Check(not LRaisedCloseError,
+    'download helper does not replace copy error with close error');
+  CheckEqual(Int64(1), Int64(LBody.CloseCount),
+    'download helper still attempts close after copy error');
+  Check(LBody.Closed,
+    'download helper marks close attempted after copy error');
+end;
+
 procedure TestHttpGetToWriterClosesNon2xxBodyBeforeRaising;
 var
   LHeaders: IHttpHeaders;
@@ -2932,6 +3016,43 @@ begin
     'response body bytes helper reads close-capable body');
   Check(LBody.Closed,
     'response body bytes helper closes close-capable body after read');
+end;
+
+procedure TestHttpReadResponseBodyBytesKeepsReadErrorWhenCloseFails;
+var
+  LHeaders: IHttpHeaders;
+  LBody: TReadAndCloseFailingResponseBody;
+  LBodyRef: IReadCloser;
+  LResp: IHttpResponse;
+  LRaisedReadError: Boolean;
+  LRaisedCloseError: Boolean;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '1');
+  LBody := TReadAndCloseFailingResponseBody.Create;
+  LBodyRef := LBody as IReadCloser;
+  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LBodyRef as IReader);
+
+  LRaisedReadError := False;
+  LRaisedCloseError := False;
+  try
+    nextpas.core.http.client.HttpReadResponseBodyBytes(LResp);
+  except
+    on E: Exception do
+    begin
+      LRaisedReadError := E.Message = 'response body read failed';
+      LRaisedCloseError := E.Message = 'response body close failed';
+    end;
+  end;
+
+  Check(LRaisedReadError,
+    'response body bytes helper preserves primary read error');
+  Check(not LRaisedCloseError,
+    'response body bytes helper does not replace read error with close error');
+  CheckEqual(Int64(1), Int64(LBody.CloseCount),
+    'response body bytes helper still attempts close after read error');
+  Check(LBody.Closed,
+    'response body bytes helper marks close attempted after read error');
 end;
 
 procedure TestHttpReadResponseBodyBytesRejectsNilResponse;
@@ -3409,6 +3530,53 @@ begin
     GRawResponse1 := '';
     GRawResponse2 := '';
     GRawAcceptLimit := 0;
+    RemoveAll(DownloadTempRoot);
+  end;
+end;
+
+procedure TestHttpGetToFileKeepsReadErrorWhenCloseFails;
+var
+  LHeaders: IHttpHeaders;
+  LBody: TReadAndCloseFailingResponseBody;
+  LBodyRef: IReadCloser;
+  LClient: IHttpClient;
+  LDestPath: string;
+  LRaisedReadError: Boolean;
+  LRaisedCloseError: Boolean;
+begin
+  ResetDownloadTempRoot;
+  LDestPath := PathJoin([DownloadTempRoot, 'read-fail', 'tool.bin']);
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '1');
+  LBody := TReadAndCloseFailingResponseBody.Create;
+  LBodyRef := LBody as IReadCloser;
+  LClient := TDownloadClient.Create(NewResponse(HTTP_STATUS_OK, LHeaders,
+    LBodyRef as IReader)) as IHttpClient;
+
+  LRaisedReadError := False;
+  LRaisedCloseError := False;
+  try
+    try
+      HttpGetToFile(LClient, 'http://example.test/tool', LDestPath);
+    except
+      on E: Exception do
+      begin
+        LRaisedReadError := E.Message = 'response body read failed';
+        LRaisedCloseError := E.Message = 'response body close failed';
+      end;
+    end;
+
+    Check(LRaisedReadError,
+      'file download helper preserves primary read error');
+    Check(not LRaisedCloseError,
+      'file download helper does not replace read error with close error');
+    CheckEqual(Int64(1), Int64(LBody.CloseCount),
+      'file download helper still attempts close after read error');
+    Check(LBody.Closed,
+      'file download helper marks close attempted after read error');
+    Check(not Exists(LDestPath),
+      'file download helper does not leave final file after read error');
+  finally
     RemoveAll(DownloadTempRoot);
   end;
 end;
@@ -5319,6 +5487,8 @@ begin
     @TestHttpGetToWriterClosesBodyAfterSuccessfulCopy);
   T.Run('HttpGetToWriter closes body when copy fails',
     @TestHttpGetToWriterClosesBodyWhenCopyFails);
+  T.Run('HttpGetToWriter keeps copy error when close fails',
+    @TestHttpGetToWriterKeepsWriteErrorWhenCloseFails);
   T.Run('HttpGetToWriter closes non-2xx body before raising',
     @TestHttpGetToWriterClosesNon2xxBodyBeforeRaising);
   T.Run('HttpReadResponseBodyString reads live response body',
@@ -5335,6 +5505,8 @@ begin
     @TestHttpReadResponseBodyBytesNilBodyReturnsEmpty);
   T.Run('HttpReadResponseBodyBytes closes body after read',
     @TestHttpReadResponseBodyBytesClosesBodyAfterRead);
+  T.Run('HttpReadResponseBodyBytes keeps read error when close fails',
+    @TestHttpReadResponseBodyBytesKeepsReadErrorWhenCloseFails);
   T.Run('HttpReadResponseBodyBytes rejects nil response',
     @TestHttpReadResponseBodyBytesRejectsNilResponse);
   T.Run('HttpReleaseResponseBody closes close-capable body',
@@ -5362,6 +5534,8 @@ begin
   T.Run('HttpGetToFile writes final path atomically', @TestHttpGetToFileWritesFinalPathAtomically);
   T.Run('HttpGetToFile rejects 404 responses', @TestHttpGetToFileRejects404Responses);
   T.Run('HttpGetToFile cleans temp files on truncated body', @TestHttpGetToFileCleansTempFilesOnTruncatedBody);
+  T.Run('HttpGetToFile keeps read error when close fails',
+    @TestHttpGetToFileKeepsReadErrorWhenCloseFails);
   T.Run('Client follows redirect (301 -> 200)', @TestClientFollowsRedirect);
   T.Run('Client closes original body before GET-style redirect follow-up',
     @TestClientClosesOriginalBodyBeforeGetStyleRedirectFollowup);

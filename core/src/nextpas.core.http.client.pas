@@ -347,6 +347,15 @@ begin
     ;
 end;
 
+procedure ReleaseResponseBodyIgnoringErrors(const AResp: IHttpResponse);
+begin
+  try
+    ReleaseResponseBody(AResp);
+  except
+    on E: Exception do ;
+  end;
+end;
+
 procedure RemoveLastPathSegment(var AOutput: string);
 var
   LI: SizeInt;
@@ -734,11 +743,14 @@ begin
   try
     CheckDownloadResponse(LResp, AUrl);
     if LResp.Body = nil then
-      Exit(0);
-    Result := nextpas.core.io.Copy(ADest, LResp.Body);
-  finally
-    ReleaseResponseBody(LResp);
+      Result := 0
+    else
+      Result := nextpas.core.io.Copy(ADest, LResp.Body);
+  except
+    ReleaseResponseBodyIgnoringErrors(LResp);
+    raise;
   end;
+  ReleaseResponseBody(LResp);
 end;
 
 function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string): Int64;
@@ -789,9 +801,11 @@ begin
       if (not LCommitted) and (LTempPath <> '') then
         nextpas.core.fs.Remove(LTempPath);
     end;
-  finally
-    ReleaseResponseBody(LResp);
+  except
+    ReleaseResponseBodyIgnoringErrors(LResp);
+    raise;
   end;
+  ReleaseResponseBody(LResp);
 end;
 
 procedure HttpReleaseResponseBody(const AResp: IHttpResponse);
@@ -814,9 +828,11 @@ begin
 
   try
     Result := nextpas.core.io.ReadAll(LBody);
-  finally
-    ReleaseResponseBody(AResp);
+  except
+    ReleaseResponseBodyIgnoringErrors(AResp);
+    raise;
   end;
+  ReleaseResponseBody(AResp);
 end;
 
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string;
