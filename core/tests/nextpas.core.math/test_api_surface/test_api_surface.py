@@ -740,6 +740,20 @@ REQUIRED_TRIG_POWER_DOC_TRUTH = (
         "zero-base NaN-exponent propagation",
     ),
 )
+REQUIRED_TRIG_CIRCULAR_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "`Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity.",
+    ),
+    (
+        "docs/math/API.md",
+        "`Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity.",
+    ),
+)
 REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
     RequiredCoreMakeTarget(
         target="core-math-api-surface-smoke",
@@ -1174,6 +1188,10 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-overflow", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('overflow helpers'"),
     RequiredBehaviorTestMarker("trig-basic", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('basic trig values'"),
     RequiredBehaviorTestMarker("trig-inverse-domain", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('inverse trig domain contracts'"),
+    RequiredBehaviorTestMarker("trig-circular-non-finite", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('circular trig non-finite contracts'"),
+    RequiredBehaviorTestMarker("trig-circular-sin-infinity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Sin(+Inf)=NaN"),
+    RequiredBehaviorTestMarker("trig-circular-cos-single-infinity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Cos(Single -Inf)=NaN"),
+    RequiredBehaviorTestMarker("trig-circular-tan-nan", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Tan(NaN)=NaN"),
     RequiredBehaviorTestMarker("trig-atan2-special", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('ArcTan2 special cases'"),
     RequiredBehaviorTestMarker("trig-exp-log-sqrt", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('exp/log/sqrt contracts'"),
     RequiredBehaviorTestMarker("trig-exp-sqrt-ieee", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('exp sqrt IEEE contracts'"),
@@ -3606,6 +3624,15 @@ def scan_required_trig_power_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_trig_circular_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_TRIG_CIRCULAR_DOC_TRUTH,
+        "missing-required-trig-circular-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def scan_required_impl_simd_win64_compile_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
@@ -3647,6 +3674,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_scalar_min_max_doc_truth(root))
     findings.extend(scan_required_scalar_float_compare_doc_truth(root))
     findings.extend(scan_required_trig_power_doc_truth(root))
+    findings.extend(scan_required_trig_circular_doc_truth(root))
 
     source_files = discover_files(root, MATH_SOURCE_GLOBS)
     math_ffi = root / "src/nextpas.core.math.ffi.pas"

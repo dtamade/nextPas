@@ -193,6 +193,30 @@ begin
   Check(IsSingleNaN(ArcCos(Single(-1.0001))), 'ArcCos(Single out of domain)=NaN');
 end;
 
+procedure TestCircularTrigNonFiniteContracts;
+begin
+  Check(IsDoubleNaN(Sin(DoubleNaN)), 'Sin(NaN)=NaN');
+  Check(IsSingleNaN(Sin(SingleNaN)), 'Sin(Single NaN)=NaN');
+  Check(IsDoubleNaN(Sin(DoubleInfinity)), 'Sin(+Inf)=NaN');
+  Check(IsDoubleNaN(Sin(-DoubleInfinity)), 'Sin(-Inf)=NaN');
+  Check(IsSingleNaN(Sin(SingleInfinity)), 'Sin(Single +Inf)=NaN');
+  Check(IsSingleNaN(Sin(-SingleInfinity)), 'Sin(Single -Inf)=NaN');
+
+  Check(IsDoubleNaN(Cos(DoubleNaN)), 'Cos(NaN)=NaN');
+  Check(IsSingleNaN(Cos(SingleNaN)), 'Cos(Single NaN)=NaN');
+  Check(IsDoubleNaN(Cos(DoubleInfinity)), 'Cos(+Inf)=NaN');
+  Check(IsDoubleNaN(Cos(-DoubleInfinity)), 'Cos(-Inf)=NaN');
+  Check(IsSingleNaN(Cos(SingleInfinity)), 'Cos(Single +Inf)=NaN');
+  Check(IsSingleNaN(Cos(-SingleInfinity)), 'Cos(Single -Inf)=NaN');
+
+  Check(IsDoubleNaN(Tan(DoubleNaN)), 'Tan(NaN)=NaN');
+  Check(IsSingleNaN(Tan(SingleNaN)), 'Tan(Single NaN)=NaN');
+  Check(IsDoubleNaN(Tan(DoubleInfinity)), 'Tan(+Inf)=NaN');
+  Check(IsDoubleNaN(Tan(-DoubleInfinity)), 'Tan(-Inf)=NaN');
+  Check(IsSingleNaN(Tan(SingleInfinity)), 'Tan(Single +Inf)=NaN');
+  Check(IsSingleNaN(Tan(-SingleInfinity)), 'Tan(Single -Inf)=NaN');
+end;
+
 procedure TestArcTan2SpecialCases;
 begin
   Check(IsDoubleNaN(ArcTan2(DoubleNaN, 1.0)), 'ArcTan2(NaN,1)=NaN');
@@ -444,6 +468,7 @@ begin
   T := TTestRunner.Create('nextpas.core.math.trig');
   T.Run('basic trig values', @TestBasicTrigValues);
   T.Run('inverse trig domain contracts', @TestInverseTrigDomainContracts);
+  T.Run('circular trig non-finite contracts', @TestCircularTrigNonFiniteContracts);
   T.Run('ArcTan2 special cases', @TestArcTan2SpecialCases);
   T.Run('ArcTan2 signed zero contracts', @TestArcTan2SignedZeroContracts);
   T.Run('exp/log/sqrt contracts', @TestExpLogAndSqrtContracts);

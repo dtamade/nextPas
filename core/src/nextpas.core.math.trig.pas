@@ -70,21 +70,25 @@ end;
 
 function Sin(const AX: Single): Single;
 begin
-  Result := Single(System.Sin(Double(AX)));
+  Result := Single(Sin(Double(AX)));
 end;
 
 function Sin(const AX: Double): Double;
 begin
+  if DoubleIsNaN(AX) or DoubleIsInfinite(AX) then
+    Exit(DoubleQuietNaN);
   Result := System.Sin(AX);
 end;
 
 function Cos(const AX: Single): Single;
 begin
-  Result := Single(System.Cos(Double(AX)));
+  Result := Single(Cos(Double(AX)));
 end;
 
 function Cos(const AX: Double): Double;
 begin
+  if DoubleIsNaN(AX) or DoubleIsInfinite(AX) then
+    Exit(DoubleQuietNaN);
   Result := System.Cos(AX);
 end;
 
@@ -95,6 +99,8 @@ end;
 
 function Tan(const AX: Double): Double;
 begin
+  if DoubleIsNaN(AX) or DoubleIsInfinite(AX) then
+    Exit(DoubleQuietNaN);
   Result := Sin(AX) / Cos(AX);
 end;
 

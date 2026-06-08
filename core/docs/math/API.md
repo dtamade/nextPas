@@ -118,6 +118,7 @@ Trig helpers:
 - Exponential and logarithmic: `Exp`, `Ln`, `Log2`, `Log10`
 - Power helpers: `Power`, `Sqrt`
 
+`Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity.
 `Power` preserves negative-zero sign only for odd integer exponents: positive odd exponents return
 `-0`, and negative odd exponents return negative infinity. Non-odd zero-base exponents follow the
 positive-zero / positive-infinity zero-base behavior. Except for exponent `0`, a NaN exponent takes
