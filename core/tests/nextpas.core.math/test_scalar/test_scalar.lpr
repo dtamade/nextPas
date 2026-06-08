@@ -555,6 +555,10 @@ begin
     'FloatEquals Single rejects opposite infinities');
   Check(not FloatEquals(MakePositiveInfinity, MakeNegativeInfinity, 1000.0),
     'FloatEquals Double rejects opposite infinities');
+  Check(not FloatEquals(1.0, MakePositiveInfinity, 0.0),
+    'FloatEquals Double rejects finite versus +Inf with valid epsilon');
+  Check(not FloatEquals(Single(1.0), MakeSinglePositiveInfinity, Single(0.0)),
+    'FloatEquals Single rejects finite versus +Inf with valid epsilon');
   Check(not FloatEquals(MakeNaN, 1.0, 0.0),
     'FloatEquals Double rejects NaN first');
   Check(not FloatEquals(1.0, MakeNaN, 0.0),
@@ -567,6 +571,10 @@ begin
     'FloatEquals rejects infinite epsilon');
   Check(not FloatEquals(Single(1.0), MakeSinglePositiveInfinity, MakeSinglePositiveInfinity),
     'FloatEquals Single rejects infinite epsilon');
+  Check(not FloatEquals(1.0, 1.0, MakePositiveInfinity),
+    'FloatEquals Double rejects infinite epsilon for equal finite values');
+  Check(not FloatEquals(Single(1.0), Single(1.0), MakeSinglePositiveInfinity),
+    'FloatEquals Single rejects infinite epsilon for equal finite values');
   Check(not FloatEquals(1.0, 1.0, MakeNaN),
     'FloatEquals rejects NaN epsilon');
   Check(not FloatEquals(Single(1.0), Single(1.0), MakeSingleNaN),
@@ -678,6 +686,11 @@ begin
   CheckNear(-1.5, Fmod(-5.5, -2.0), 0.0, 'Fmod Double negative divisor negative dividend');
   CheckNear(1.0, Fmod(1.0, MakePositiveInfinity), 0.0, 'Fmod Double finite over infinity');
   CheckNear(-1.0, Fmod(-1.0, MakeNegativeInfinity), 0.0, 'Fmod Double negative finite over infinity returns dividend');
+  CheckNear(-1.0, Fmod(-1.0, MakePositiveInfinity), 0.0,
+    'Fmod Double negative finite over positive infinity returns dividend');
+  CheckNear(1.0, Fmod(1.0, MakeNegativeInfinity), 0.0,
+    'Fmod Double positive finite over negative infinity returns dividend');
+  Check(IsNaN(Fmod(1.0, MakeDoubleNegativeZero)), 'Fmod Double negative zero divisor returns NaN');
   Check(IsNaN(Fmod(MakeNaN, 1.0)), 'Fmod Double NaN dividend returns NaN');
   Check(IsNaN(Fmod(1.0, MakeNaN)), 'Fmod Double NaN divisor returns NaN');
   Check(IsNaN(Fmod(1.0, 0.0)), 'Fmod Double zero divisor returns NaN');
@@ -687,6 +700,11 @@ begin
     'Fmod Single finite over infinity returns dividend');
   CheckNear(Single(-1.0), Fmod(Single(-1.0), MakeSingleNegativeInfinity), 0.0,
     'Fmod Single negative finite over infinity returns dividend');
+  CheckNear(Single(-1.0), Fmod(Single(-1.0), MakeSinglePositiveInfinity), 0.0,
+    'Fmod Single negative finite over positive infinity returns dividend');
+  CheckNear(Single(1.0), Fmod(Single(1.0), MakeSingleNegativeInfinity), 0.0,
+    'Fmod Single positive finite over negative infinity returns dividend');
+  Check(IsNaN(Fmod(Single(1.0), MakeSingleNegativeZero)), 'Fmod Single negative zero divisor returns NaN');
   Check(IsNaN(Fmod(MakeSingleNaN, Single(1.0))), 'Fmod Single NaN dividend returns NaN');
   Check(IsNaN(Fmod(Single(1.0), MakeSingleNaN)), 'Fmod Single NaN divisor returns NaN');
   Check(IsNaN(Fmod(Single(1.0), Single(0.0))), 'Fmod Single zero divisor returns NaN');
