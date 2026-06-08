@@ -138,7 +138,7 @@ const
 
 { 零宽表 - 组合标记 Mn/Me 与零宽控制字符的代表性区间（Unicode 15.1）。
   按 Lo 升序排列。覆盖常见组合附标、变体选择符、ZWJ/ZWNJ 等。 }
-  ZERO_WIDTH_RANGES: array[0..44] of TCodepointRange = (
+  ZERO_WIDTH_RANGES: array[0..46] of TCodepointRange = (
     (Lo: $0300; Hi: $036F),    { Combining Diacritical Marks }
     (Lo: $0483; Hi: $0489),    { Cyrillic combining }
     (Lo: $0591; Hi: $05BD),    { Hebrew points }
@@ -156,6 +156,8 @@ const
     (Lo: $0711; Hi: $0711),    { Syriac }
     (Lo: $0730; Hi: $074A),
     (Lo: $07A6; Hi: $07B0),    { Thaana }
+    (Lo: $07EB; Hi: $07F3),    { NKo combining marks }
+    (Lo: $07FD; Hi: $07FD),    { NKo dantayalan }
     (Lo: $0900; Hi: $0902),    { Devanagari Mn (excl. 0903 Mc) }
     (Lo: $093A; Hi: $093A),
     (Lo: $093C; Hi: $093C),

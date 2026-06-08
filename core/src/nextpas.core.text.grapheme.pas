@@ -55,6 +55,8 @@ begin
   if (ACp = $0711) then Exit(gbExtend);
   if (ACp >= $0730) and (ACp <= $074A) then Exit(gbExtend);
   if (ACp >= $07A6) and (ACp <= $07B0) then Exit(gbExtend);
+  if (ACp >= $07EB) and (ACp <= $07F3) then Exit(gbExtend);
+  if (ACp = $07FD) then Exit(gbExtend);
   if (ACp >= $0900) and (ACp <= $0902) then Exit(gbExtend);
   if (ACp = $093A) or (ACp = $093C) then Exit(gbExtend);
   if (ACp >= $0941) and (ACp <= $0948) then Exit(gbExtend);

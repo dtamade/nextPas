@@ -34,6 +34,16 @@ begin
   CheckEqual(Int64(2), Int64(R.CodePoints), 'e+combining = 2 cps');
 end;
 
+procedure TestNKoCombiningMark;
+var S: AnsiString; R: TGraphemeResult;
+begin
+  S := 'A' + #$DF#$AB;
+  R := GraphemeNext(PByte(PAnsiChar(S)), Length(S));
+  CheckEqual(Int64(3), Int64(R.ByteLen), 'A+NKo combining = 3 bytes');
+  CheckEqual(Int64(1), Int64(R.Width), 'A+NKo combining = 1 col');
+  CheckEqual(Int64(2), Int64(R.CodePoints), 'A+NKo combining = 2 cps');
+end;
+
 procedure TestZWJEmoji;
 var S: AnsiString; R: TGraphemeResult;
 begin
@@ -143,6 +153,7 @@ begin
   T.Run('ascii', @TestAscii);
   T.Run('cjk', @TestCJK);
   T.Run('combining mark', @TestCombiningMark);
+  T.Run('nko combining mark', @TestNKoCombiningMark);
   T.Run('zwj emoji', @TestZWJEmoji);
   T.Run('family emoji', @TestFamilyEmoji);
   T.Run('skin tone emoji', @TestSkinToneEmoji);

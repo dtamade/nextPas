@@ -143,6 +143,12 @@ begin
   CheckEqual(Int64(1), Int64(StringDisplayWidth('e' + #$CC#$81)), 'e + combining');
 end;
 
+procedure TestNKoCombiningString;
+begin
+  CheckEqual(Int64(0), Int64(CodepointWidth($07EB)), 'NKo combining short high tone');
+  CheckEqual(Int64(1), Int64(StringDisplayWidth('A' + #$DF#$AB)), 'A + NKo combining mark');
+end;
+
 { CodepointWidth - 补充的 wide 区间（Codex 审查后新增） }
 procedure TestAddedWideRanges;
 begin
@@ -227,6 +233,7 @@ begin
   T.Run('emoji cluster string', @TestEmojiClusterString);
   T.Run('keycap emoji string', @TestKeycapEmojiString);
   T.Run('combining string', @TestCombiningString);
+  T.Run('nko combining string', @TestNKoCombiningString);
   T.Run('empty string', @TestEmptyString);
   T.Run('simd boundary 16B', @TestSimdBoundary16);
   T.Run('simd boundary 32B', @TestSimdBoundary32);
