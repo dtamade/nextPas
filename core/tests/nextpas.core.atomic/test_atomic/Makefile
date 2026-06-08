@@ -36,13 +36,15 @@ cross-win64:
 	@printf 'atomic-forced-compile-target=win64 status=pass\n'
 
 print-architecture-truth:
-	@printf 'atomic-architecture-truth-target=x86_64-linux status=focused-runtime-via-host-test\n'
+	@printf 'atomic-architecture-truth-target=x86_64-linux status=focused-runtime-via-host-test runtime=true\n'
 	@printf 'atomic-architecture-truth-target=win64 status=forced-compile-only runtime=false\n'
-	@printf 'atomic-architecture-truth-target=i386 status=source-contract-only\n'
-	@printf 'atomic-architecture-truth-target=aarch64 status=source-contract-only\n'
-	@printf 'atomic-architecture-truth-target=arm status=source-contract-only\n'
-	@printf 'atomic-architecture-truth-target=riscv64 status=source-contract-only\n'
-	@printf 'atomic-architecture-truth-target=loongarch64 status=source-contract-only\n'
+	@printf 'atomic-architecture-truth-target=i386 status=source-contract-only runtime=false\n'
+	@printf 'atomic-architecture-truth-target=aarch64 status=source-contract-only runtime=false\n'
+	@printf 'atomic-architecture-truth-target=arm status=source-contract-only runtime=false\n'
+	@printf 'atomic-architecture-truth-target=riscv64 status=source-contract-only runtime=false\n'
+	@printf 'atomic-architecture-truth-target=ppc status=source-contract-only runtime=false\n'
+	@printf 'atomic-architecture-truth-target=ppc64 status=source-contract-only runtime=false\n'
+	@printf 'atomic-architecture-truth-target=loongarch64 status=source-contract-only runtime=false\n'
 	@printf 'atomic-forced-compile-matrix-compiled-targets=host,win64\n'
 
 test-forced-compile: compile-host cross-win64 print-architecture-truth

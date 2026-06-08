@@ -1625,16 +1625,36 @@ begin
     'atomic forced compile gate must label Win64 as forced-compile-only without runtime evidence');
   CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=x86_64-linux status=focused-runtime-via-host-test',
     'atomic forced compile gate must print x86_64 Linux truth as host focused runtime evidence');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=x86_64-linux status=focused-runtime-via-host-test runtime=true',
+    'atomic forced compile gate must explicitly mark host truth as runtime evidence');
   CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=i386 status=source-contract-only',
     'atomic forced compile gate must print i386 source-contract truth when no cross compiler is configured');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=i386 status=source-contract-only runtime=false',
+    'atomic forced compile gate must explicitly mark i386 source-contract truth as non-runtime evidence');
   CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=aarch64 status=source-contract-only',
     'atomic forced compile gate must print AArch64 source-contract truth when no cross compiler is configured');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=aarch64 status=source-contract-only runtime=false',
+    'atomic forced compile gate must explicitly mark AArch64 source-contract truth as non-runtime evidence');
   CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=arm status=source-contract-only',
     'atomic forced compile gate must print ARM source-contract truth when no cross compiler is configured');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=arm status=source-contract-only runtime=false',
+    'atomic forced compile gate must explicitly mark ARM source-contract truth as non-runtime evidence');
   CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=riscv64 status=source-contract-only',
     'atomic forced compile gate must print RISC-V source-contract truth when no cross compiler is configured');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=riscv64 status=source-contract-only runtime=false',
+    'atomic forced compile gate must explicitly mark RISC-V source-contract truth as non-runtime evidence');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=ppc status=source-contract-only',
+    'atomic forced compile gate must print PPC source-contract truth when no cross compiler is configured');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=ppc status=source-contract-only runtime=false',
+    'atomic forced compile gate must explicitly mark PPC source-contract truth as non-runtime evidence');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=ppc64 status=source-contract-only',
+    'atomic forced compile gate must print PPC64 source-contract truth when no cross compiler is configured');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=ppc64 status=source-contract-only runtime=false',
+    'atomic forced compile gate must explicitly mark PPC64 source-contract truth as non-runtime evidence');
   CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=loongarch64 status=source-contract-only',
     'atomic forced compile gate must print LoongArch source-contract truth when no cross compiler is configured');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=loongarch64 status=source-contract-only runtime=false',
+    'atomic forced compile gate must explicitly mark LoongArch source-contract truth as non-runtime evidence');
   CheckContains(LAtomicTestMakefile, 'atomic-forced-compile-matrix-compiled-targets=host,win64',
     'atomic forced compile gate must distinguish compiled targets from source-contract-only rows');
   CheckContains(LAtomicForcedCompileSource, 'uses' + LineEnding + '  nextpas.core.atomic;',
