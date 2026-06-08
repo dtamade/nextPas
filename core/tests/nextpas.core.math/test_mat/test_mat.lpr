@@ -902,11 +902,52 @@ begin
   Check(not TMat4d.Equals(M4, M4, -0.000000000001), 'TMat4d equals rejects negative epsilon');
 end;
 
+procedure TestMatrixIndexedAliasesWriteThrough;
+var
+  M3f: TMat3f;
+  M4f: TMat4f;
+  M3d: TMat3d;
+  M4d: TMat4d;
+begin
+  M3f := TMat3f.Zero;
+  M3f[2, 1] := 12.5;
+  CheckNear(12.5, M3f.Data[2, 1], 0.0, 'TMat3f Items setter writes Data alias');
+  M3f.Data[0, 2] := -3.25;
+  CheckNear(-3.25, M3f[0, 2], 0.0, 'TMat3f Data write visible through Items');
+  CheckVec3f(0.0, 0.0, 12.5, M3f.Rows[1], 'TMat3f indexed write updates row view');
+  CheckVec3f(0.0, 0.0, -3.25, M3f.Columns[0], 'TMat3f Data write updates column view');
+
+  M4f := TMat4f.Zero;
+  M4f[3, 2] := 44.25;
+  CheckNear(44.25, M4f.Data[3, 2], 0.0, 'TMat4f Items setter writes Data alias');
+  M4f.Data[1, 3] := -18.5;
+  CheckNear(-18.5, M4f[1, 3], 0.0, 'TMat4f Data write visible through Items');
+  CheckVec4f(0.0, 0.0, 0.0, 44.25, M4f.Rows[2], 'TMat4f indexed write updates row view');
+  CheckVec4f(0.0, 0.0, 0.0, -18.5, M4f.Columns[1], 'TMat4f Data write updates column view');
+
+  M3d := TMat3d.Zero;
+  M3d[1, 2] := 123.125;
+  CheckNear(123.125, M3d.Data[1, 2], 0.0, 'TMat3d Items setter writes Data alias');
+  M3d.Data[2, 0] := -456.25;
+  CheckNear(-456.25, M3d[2, 0], 0.0, 'TMat3d Data write visible through Items');
+  CheckVec3d(0.0, 0.0, -456.25, M3d.Rows[0], 'TMat3d Data write updates row view');
+  CheckVec3d(0.0, 0.0, 123.125, M3d.Columns[1], 'TMat3d indexed write updates column view');
+
+  M4d := TMat4d.Zero;
+  M4d[0, 3] := 1000.5;
+  CheckNear(1000.5, M4d.Data[0, 3], 0.0, 'TMat4d Items setter writes Data alias');
+  M4d.Data[2, 1] := -2000.75;
+  CheckNear(-2000.75, M4d[2, 1], 0.0, 'TMat4d Data write visible through Items');
+  CheckVec4d(1000.5, 0.0, 0.0, 0.0, M4d.Rows[3], 'TMat4d indexed write updates row view');
+  CheckVec4d(0.0, -2000.75, 0.0, 0.0, M4d.Columns[2], 'TMat4d Data write updates column view');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.mat');
   T.Run('TMat3f contracts', @TestMat3fContracts);
   T.Run('TMat4f contracts', @TestMat4fContracts);
   T.Run('double precision matrix contracts', @TestDoublePrecisionContracts);
+  T.Run('matrix indexed aliases write through', @TestMatrixIndexedAliasesWriteThrough);
   T.Run('single precision inverse fail-close contracts',
     @TestSinglePrecisionInverseFailCloseContracts);
   T.Run('double precision inverse fail-close contracts',

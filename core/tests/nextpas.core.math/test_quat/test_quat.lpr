@@ -517,6 +517,44 @@ begin
   Check(not TQuatd.Equals(Q, Q, -0.000000000001), 'TQuatd Equals rejects negative epsilon');
 end;
 
+procedure TestQuaternionDataAliasesWriteThrough;
+var
+  Qf: TQuatf;
+  Qd: TQuatd;
+begin
+  Qf := TQuatf.Create(1.0, 2.0, 3.0, 4.0);
+  Qf.Data[0] := -10.0;
+  Qf.Data[1] := -20.0;
+  Qf.Data[2] := -30.0;
+  Qf.Data[3] := -40.0;
+  CheckQuatf(-10.0, -20.0, -30.0, -40.0, Qf,
+    'TQuatf Data indexed writes update named fields');
+  Qf.X := 11.0;
+  Qf.Y := 22.0;
+  Qf.Z := 33.0;
+  Qf.W := 44.0;
+  CheckNear(11.0, Qf.Data[0], 0.0, 'TQuatf X writes Data[0]');
+  CheckNear(22.0, Qf.Data[1], 0.0, 'TQuatf Y writes Data[1]');
+  CheckNear(33.0, Qf.Data[2], 0.0, 'TQuatf Z writes Data[2]');
+  CheckNear(44.0, Qf.Data[3], 0.0, 'TQuatf W writes Data[3]');
+
+  Qd := TQuatd.Create(1.0, 2.0, 3.0, 4.0);
+  Qd.Data[0] := -100.0;
+  Qd.Data[1] := -200.0;
+  Qd.Data[2] := -300.0;
+  Qd.Data[3] := -400.0;
+  CheckQuatd(-100.0, -200.0, -300.0, -400.0, Qd,
+    'TQuatd Data indexed writes update named fields');
+  Qd.X := 111.0;
+  Qd.Y := 222.0;
+  Qd.Z := 333.0;
+  Qd.W := 444.0;
+  CheckNear(111.0, Qd.Data[0], 0.0, 'TQuatd X writes Data[0]');
+  CheckNear(222.0, Qd.Data[1], 0.0, 'TQuatd Y writes Data[1]');
+  CheckNear(333.0, Qd.Data[2], 0.0, 'TQuatd Z writes Data[2]');
+  CheckNear(444.0, Qd.Data[3], 0.0, 'TQuatd W writes Data[3]');
+end;
+
 procedure TestFromAxisAngleRejectsNonFiniteInputs;
 begin
   ExpectArgumentErrorMessage('TQuatf.FromAxisAngle: AAngleRad must be finite',
@@ -1107,6 +1145,7 @@ begin
   T := TTestRunner.Create('nextpas.core.math.quat');
   T.Run('TQuatf contracts', @TestQuatfContracts);
   T.Run('TQuatd contracts', @TestQuatdContracts);
+  T.Run('quaternion Data aliases write through', @TestQuaternionDataAliasesWriteThrough);
   T.Run('FromAxisAngle rejects non-finite inputs', @TestFromAxisAngleRejectsNonFiniteInputs);
   T.Run('FromAxisAngle normalizes huge finite axis', @TestFromAxisAngleNormalizesHugeFiniteAxis);
   T.Run('huge finite normalize', @TestHugeFiniteNormalize);
