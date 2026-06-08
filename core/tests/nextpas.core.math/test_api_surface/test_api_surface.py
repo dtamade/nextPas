@@ -72,6 +72,7 @@ PUBLIC_MATH_SOURCE_PATHS = {
     "src/nextpas.core.math.random.pas",
 }
 ROOT_MAKEFILE_PATH = "Makefile"
+MATH_SUITE_MAKEFILE_PATH = "tests/nextpas.core.math/Makefile"
 ROOT_FACADE_PATH = "src/nextpas.core.math.pas"
 API_DOC_PATH = "docs/math/API.md"
 ROOT_FACADE_ALLOWED_USES = {
@@ -991,6 +992,25 @@ REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
         ),
     ),
 )
+COMPILE_ONLY_GATE_AGGREGATE_EXCLUSIONS = (
+    (
+        ROOT_MAKEFILE_PATH,
+        "test-aggregate",
+        (
+            "tests/nextpas.core.math/test_trig_host_compile_gate",
+            "tests/nextpas.core.math/test_impl_simd_win64_compile_gate",
+        ),
+    ),
+    (
+        MATH_SUITE_MAKEFILE_PATH,
+        "math-full-local",
+        (
+            "test_trig_host_compile_gate",
+            "test_impl_simd_win64_compile_gate",
+        ),
+    ),
+)
+COMPILE_ONLY_GATE_EXCLUSION_MARKER_PREFIX = "# compile-only opt-in gate:"
 BENCH_SIMD_SEAM_PATH = "benchmarks/nextpas.core.math/bench_simd_seam/bench_simd_seam.lpr"
 SIMD_MATHUTIL_PATH = "src/nextpas.core.simd.mathutil.pas"
 MATH_IMPL_SIMD_PATH = "src/nextpas.core.math.impl.simd.pas"
@@ -1773,6 +1793,26 @@ def parse_args() -> argparse.Namespace:
 
 def mask_char(ch: str) -> str:
     return "\n" if ch in {"\n", "\r"} else " "
+
+
+def strip_hash_makefile_comments(text: str) -> str:
+    lines: list[str] = []
+    for line in text.splitlines(keepends=True):
+        hash_index = line.find("#")
+        if hash_index < 0:
+            lines.append(line)
+            continue
+
+        suffix = line[hash_index:]
+        newline = ""
+        if suffix.endswith("\n"):
+            newline = "\n"
+            suffix = suffix[:-1]
+        if suffix.endswith("\r"):
+            newline = "\r" + newline
+            suffix = suffix[:-1]
+        lines.append(line[:hash_index] + (" " * len(suffix)) + newline)
+    return "".join(lines)
 
 
 def strip_pascal_comments(text: str) -> str:
@@ -3965,6 +4005,193 @@ def scan_required_core_make_target_doc_coverage(root: Path) -> list[Finding]:
     return findings
 
 
+def scan_compile_only_gate_aggregate_exclusions(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    for rel, scope, gates in COMPILE_ONLY_GATE_AGGREGATE_EXCLUSIONS:
+        path = root / rel
+        if not path.is_file():
+            add_finding(
+                findings,
+                "missing-required-compile-only-gate-exclusion-file:" + scope,
+                root,
+                path,
+                1,
+                rel,
+            )
+            continue
+
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for gate in gates:
+            marker = COMPILE_ONLY_GATE_EXCLUSION_MARKER_PREFIX + gate
+            marker_index = text.find(marker)
+            if marker_index < 0:
+                add_finding(
+                    findings,
+                    "missing-required-compile-only-gate-aggregate-exclusion:"
+                    + scope
+                    + ":"
+                    + gate,
+                    root,
+                    path,
+                    1,
+                    marker,
+                )
+                continue
+
+        active_text = strip_hash_makefile_comments(text)
+        if rel == ROOT_MAKEFILE_PATH:
+            opt_in_line = re.search(
+                r"(?m)^COMPILE_ONLY_TEST_DIRS\s*:=\s*(?P<body>[^\n]*)$",
+                active_text,
+            )
+            if opt_in_line is None:
+                add_finding(
+                    findings,
+                    "missing-required-compile-only-gate-opt-in-list:" + scope,
+                    root,
+                    path,
+                    1,
+                    "COMPILE_ONLY_TEST_DIRS :=",
+                )
+                continue
+            opt_in_body = opt_in_line.group("body")
+            for gate in gates:
+                if gate in opt_in_body:
+                    continue
+                add_finding(
+                    findings,
+                    "missing-required-compile-only-gate-opt-in-list-entry:"
+                    + scope
+                    + ":"
+                    + gate,
+                    root,
+                    path,
+                    line_no_at(text, opt_in_line.start()),
+                    gate,
+                )
+
+            target_re = re.compile(
+                r"(?ms)^test\s*:(?P<head>[^\n]*)\n(?P<body>(?:\t.*\n)+)"
+            )
+            target_match = target_re.search(active_text)
+            if target_match is None:
+                add_finding(
+                    findings,
+                    "missing-required-compile-only-gate-aggregate-test-target:"
+                    + scope,
+                    root,
+                    path,
+                    1,
+                    "test:",
+                )
+                continue
+            target_body = target_match.group("body")
+            if "COMPILE_ONLY_TEST_DIRS" not in target_body or "continue" not in target_body:
+                add_finding(
+                    findings,
+                    "missing-required-compile-only-gate-aggregate-skip:" + scope,
+                    root,
+                    path,
+                    line_no_at(text, target_match.start("body")),
+                    "test target must skip COMPILE_ONLY_TEST_DIRS",
+                )
+        else:
+            project_line_match = re.search(
+                r"(?m)^PROJECTS\s*:?=\s*(?P<body>[^\n]*)$",
+                active_text,
+            )
+            project_body = (
+                project_line_match.group("body") if project_line_match is not None else ""
+            )
+            for gate in gates:
+                if gate not in project_body:
+                    continue
+                add_finding(
+                    findings,
+                    "compile-only-gate-leaks-into-aggregate:" + scope + ":" + gate,
+                    root,
+                    path,
+                    line_no_at(text, project_line_match.start()),
+                    gate,
+                )
+    return findings
+
+
+def run_compile_only_gate_aggregate_exclusion_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        core_makefile = root / ROOT_MAKEFILE_PATH
+        math_makefile = root / MATH_SUITE_MAKEFILE_PATH
+        math_makefile.parent.mkdir(parents=True, exist_ok=True)
+
+        core_makefile.write_text(
+            "test:\n"
+            "\tfind tests -mindepth 2 -name Makefile\n",
+            encoding="utf-8",
+        )
+        math_makefile.write_text(
+            "PROJECTS := test_api_surface test_trig_host_compile_gate\n",
+            encoding="utf-8",
+        )
+        findings = scan_compile_only_gate_aggregate_exclusions(root)
+        rules = {finding.rule for finding in findings}
+        expected_rules = {
+            "missing-required-compile-only-gate-aggregate-exclusion:"
+            "test-aggregate:tests/nextpas.core.math/test_trig_host_compile_gate",
+            "missing-required-compile-only-gate-aggregate-exclusion:"
+            "math-full-local:test_trig_host_compile_gate",
+            "missing-required-compile-only-gate-opt-in-list:test-aggregate",
+            "compile-only-gate-leaks-into-aggregate:"
+            "math-full-local:test_trig_host_compile_gate",
+        }
+        if not expected_rules <= rules:
+            raise AssertionError(
+                "compile-only-gate-aggregate-exclusion self-test missing "
+                + ", ".join(sorted(expected_rules - rules))
+            )
+
+        core_makefile.write_text(
+            "# compile-only opt-in gate:tests/nextpas.core.math/test_trig_host_compile_gate\n"
+            "# compile-only opt-in gate:tests/nextpas.core.math/test_impl_simd_win64_compile_gate\n"
+            "test:\n"
+            "\tfind tests -mindepth 2 -name Makefile | grep -v test_trig_host_compile_gate\n",
+            encoding="utf-8",
+        )
+        findings = scan_compile_only_gate_aggregate_exclusions(root)
+        rules = {finding.rule for finding in findings}
+        expected_leak = (
+            "missing-required-compile-only-gate-opt-in-list:test-aggregate"
+        )
+        if expected_leak not in rules:
+            raise AssertionError(
+                "compile-only-gate-aggregate-exclusion self-test expected "
+                + expected_leak
+            )
+
+        core_makefile.write_text(
+            "# compile-only opt-in gate:tests/nextpas.core.math/test_trig_host_compile_gate\n"
+            "# compile-only opt-in gate:tests/nextpas.core.math/test_impl_simd_win64_compile_gate\n"
+            "COMPILE_ONLY_TEST_DIRS := tests/nextpas.core.math/test_trig_host_compile_gate tests/nextpas.core.math/test_impl_simd_win64_compile_gate\n"
+            "test:\n"
+            "\tfind tests -mindepth 2 -name Makefile | while read mk; do \\\n"
+            "\t\tdir=$$(dirname \"$$mk\"); \\\n"
+            "\t\tcase \" $(COMPILE_ONLY_TEST_DIRS) \" in *\" $$dir \"*) continue ;; esac; \\\n"
+            "\tdone\n",
+            encoding="utf-8",
+        )
+        math_makefile.write_text(
+            "# compile-only opt-in gate:test_trig_host_compile_gate\n"
+            "# compile-only opt-in gate:test_impl_simd_win64_compile_gate\n"
+            "PROJECTS := test_api_surface test_impl_simd\n",
+            encoding="utf-8",
+        )
+        findings = scan_compile_only_gate_aggregate_exclusions(root)
+        if findings:
+            raise AssertionError(
+                "compile-only-gate-aggregate-exclusion self-test expected no findings"
+            )
+
+
 def active_uses_units(text: str) -> set[str]:
     code = strip_pascal_comments_and_strings(text)
     units: set[str] = set()
@@ -4779,6 +5006,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_root_facade_reexport_parity(root))
     findings.extend(scan_required_core_make_targets(root))
     findings.extend(scan_required_core_make_target_doc_coverage(root))
+    findings.extend(scan_compile_only_gate_aggregate_exclusions(root))
     findings.extend(scan_required_trig_host_compile_gate(root))
     findings.extend(scan_required_impl_simd_win64_compile_gate(root))
     findings.extend(scan_math_impl_simd_facade_only_uses(root))
@@ -4920,6 +5148,7 @@ def main() -> int:
         run_required_doc_truth_self_tests()
         run_root_facade_contract_self_tests()
         run_root_facade_reexport_parity_self_tests()
+        run_compile_only_gate_aggregate_exclusion_self_tests()
     report = build_report(args.root)
 
     if args.json_file:

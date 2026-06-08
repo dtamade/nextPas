@@ -12,6 +12,10 @@ BIN_DIR := $(BUILD_DIR)/bin
 TESTS_DIR := tests
 EXAMPLES_DIR := examples
 BENCHMARKS_DIR := benchmarks
+COMPILE_ONLY_TEST_DIRS := tests/nextpas.core.math/test_trig_host_compile_gate tests/nextpas.core.math/test_impl_simd_win64_compile_gate
+
+# compile-only opt-in gate:tests/nextpas.core.math/test_trig_host_compile_gate
+# compile-only opt-in gate:tests/nextpas.core.math/test_impl_simd_win64_compile_gate
 
 # FPC unit/output paths
 FPC_FLAGS += -FU$(LIB_DIR) -FE$(BIN_DIR) -Fu$(SRC_DIR) -Fi$(SRC_DIR)
@@ -39,6 +43,7 @@ test: dirs
 	fi
 	@find $(TESTS_DIR) -mindepth 2 -name Makefile | sort | while read mk; do \
 		dir=$$(dirname "$$mk"); \
+		case " $(COMPILE_ONLY_TEST_DIRS) " in *" $$dir "*) continue ;; esac; \
 		echo "Running test project: $$dir"; \
 		$(MAKE) -C "$$dir" test || exit 1; \
 		echo ""; \
