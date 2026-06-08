@@ -128,6 +128,7 @@ type
     Blocks: array of THIRBlock;
     EntryBlockId: THIRBlockId;
     IsExternal: Boolean;
+    UsesOwnedStringReturnAbi: Boolean;
   end;
 
   THIRVmtGlobal = record
@@ -175,6 +176,8 @@ type
 
     function AddFunction(const AName: string;
       ARetType: THIRTypeId): THIRFuncId;
+    procedure SetFunctionOwnedStringReturnAbi(AFuncId: THIRFuncId;
+      AValue: Boolean);
     procedure AddFunctionParam(AFuncId: THIRFuncId;
       const AName: string; ATypeId: THIRTypeId;
       AIsVar: Boolean; AIsConst: Boolean);
@@ -278,10 +281,24 @@ begin
   FFunctions[Idx].ReturnTypeId := ARetType;
   FFunctions[Idx].EntryBlockId := 0;
   FFunctions[Idx].IsExternal := False;
+  FFunctions[Idx].UsesOwnedStringReturnAbi := False;
   SetLength(FFunctions[Idx].Params, 0);
   SetLength(FFunctions[Idx].Blocks, 0);
   Result := FNextFuncId;
   Inc(FNextFuncId);
+end;
+
+procedure THIRModule.SetFunctionOwnedStringReturnAbi(AFuncId: THIRFuncId;
+  AValue: Boolean);
+var
+  I: SizeInt;
+begin
+  for I := 0 to High(FFunctions) do
+    if FFunctions[I].Id = AFuncId then
+    begin
+      FFunctions[I].UsesOwnedStringReturnAbi := AValue;
+      Exit;
+    end;
 end;
 
 procedure THIRModule.AddFunctionParam(AFuncId: THIRFuncId;

@@ -43,12 +43,15 @@ type
     hnkVarDeclRecordRuntime,
     hnkAssignRuntime,
     hnkAssignStrRuntime,
+    hnkAssignStrLiteralRuntime,
     hnkAssignStrCopyRuntime,
     hnkAssignStrCallRuntime,
+    hnkAssignStrOwnedCallRuntime,
     hnkAssignStrVcallRuntime,
     hnkAssignStrIvcallRuntime,
     hnkAssignStrConcatRuntime,
     hnkAssignStrOwnedConcatRuntime,
+    hnkAssignStrMoveToResultRuntime,
     hnkHaltCallRuntime,
     hnkHaltCall,
     hnkCondBrRuntime,
@@ -59,6 +62,7 @@ type
     hnkFunctionBodyEnd,
     hnkRetRuntime,
     hnkRetStrRuntime,
+    hnkRetStrOwnedRuntime,
     hnkCallRuntime,
     hnkObjectFreeRuntime,
     hnkIntToStrRuntime,
@@ -177,12 +181,15 @@ begin
     'var-decl-record-runtime': Result := hnkVarDeclRecordRuntime;
     'assign-runtime': Result := hnkAssignRuntime;
     'assign-str-runtime': Result := hnkAssignStrRuntime;
+    'assign-str-literal-runtime': Result := hnkAssignStrLiteralRuntime;
     'assign-str-copy-runtime': Result := hnkAssignStrCopyRuntime;
     'assign-str-call-runtime': Result := hnkAssignStrCallRuntime;
+    'assign-str-owned-call-runtime': Result := hnkAssignStrOwnedCallRuntime;
     'assign-str-vcall-runtime': Result := hnkAssignStrVcallRuntime;
     'assign-str-ivcall-runtime': Result := hnkAssignStrIvcallRuntime;
     'assign-str-concat-runtime': Result := hnkAssignStrConcatRuntime;
     'assign-str-owned-concat-runtime': Result := hnkAssignStrOwnedConcatRuntime;
+    'assign-str-move-to-result-runtime': Result := hnkAssignStrMoveToResultRuntime;
     'halt-call-runtime': Result := hnkHaltCallRuntime;
     'halt-call': Result := hnkHaltCall;
     'cond-br-runtime': Result := hnkCondBrRuntime;
@@ -193,6 +200,7 @@ begin
     'function-body-end': Result := hnkFunctionBodyEnd;
     'ret-runtime': Result := hnkRetRuntime;
     'ret-str-runtime': Result := hnkRetStrRuntime;
+    'ret-str-owned-runtime': Result := hnkRetStrOwnedRuntime;
     'call-runtime': Result := hnkCallRuntime;
     'object-free-runtime': Result := hnkObjectFreeRuntime;
     'int-to-str-runtime': Result := hnkIntToStrRuntime;

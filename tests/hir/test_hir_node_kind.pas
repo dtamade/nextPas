@@ -23,11 +23,14 @@ begin
   if ParseHirNodeKind('var-decl-record-runtime') <> hnkVarDeclRecordRuntime then Fail('var-decl-record-runtime');
   if ParseHirNodeKind('assign-runtime') <> hnkAssignRuntime then Fail('assign-runtime');
   if ParseHirNodeKind('assign-str-runtime') <> hnkAssignStrRuntime then Fail('assign-str-runtime');
+  if ParseHirNodeKind('assign-str-literal-runtime') <> hnkAssignStrLiteralRuntime then Fail('assign-str-literal-runtime');
   if ParseHirNodeKind('assign-str-copy-runtime') <> hnkAssignStrCopyRuntime then Fail('assign-str-copy-runtime');
   if ParseHirNodeKind('assign-str-call-runtime') <> hnkAssignStrCallRuntime then Fail('assign-str-call-runtime');
+  if ParseHirNodeKind('assign-str-owned-call-runtime') <> hnkAssignStrOwnedCallRuntime then Fail('assign-str-owned-call-runtime');
   if ParseHirNodeKind('assign-str-vcall-runtime') <> hnkAssignStrVcallRuntime then Fail('assign-str-vcall-runtime');
   if ParseHirNodeKind('assign-str-concat-runtime') <> hnkAssignStrConcatRuntime then Fail('assign-str-concat-runtime');
   if ParseHirNodeKind('assign-str-owned-concat-runtime') = hnkUnknown then Fail('assign-str-owned-concat-runtime');
+  if ParseHirNodeKind('assign-str-move-to-result-runtime') <> hnkAssignStrMoveToResultRuntime then Fail('assign-str-move-to-result-runtime');
   if ParseHirNodeKind('halt-call-runtime') <> hnkHaltCallRuntime then Fail('halt-call-runtime');
   if ParseHirNodeKind('halt-call') <> hnkHaltCall then Fail('halt-call');
   if ParseHirNodeKind('cond-br-runtime') <> hnkCondBrRuntime then Fail('cond-br-runtime');
@@ -38,6 +41,7 @@ begin
   if ParseHirNodeKind('function-body-end') <> hnkFunctionBodyEnd then Fail('function-body-end');
   if ParseHirNodeKind('ret-runtime') <> hnkRetRuntime then Fail('ret-runtime');
   if ParseHirNodeKind('ret-str-runtime') <> hnkRetStrRuntime then Fail('ret-str-runtime');
+  if ParseHirNodeKind('ret-str-owned-runtime') <> hnkRetStrOwnedRuntime then Fail('ret-str-owned-runtime');
   if ParseHirNodeKind('call-runtime') <> hnkCallRuntime then Fail('call-runtime');
   if ParseHirNodeKind('object-free-runtime') <> hnkObjectFreeRuntime then Fail('object-free-runtime');
   if ParseHirNodeKind('int-to-str-runtime') <> hnkIntToStrRuntime then Fail('int-to-str-runtime');
