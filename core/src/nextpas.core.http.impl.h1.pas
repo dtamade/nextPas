@@ -2020,8 +2020,12 @@ begin
         Dec(LRemaining, Int64(LN));
       end;
       if LN = 0 then
+      begin
+        if Supports(LBuf, IFlusher, LFlusher) then
+          LFlusher.Flush;
         raise EHttpError.Create(
           'HTTP request body shorter than declared content-length');
+      end;
     end;
   end;
 

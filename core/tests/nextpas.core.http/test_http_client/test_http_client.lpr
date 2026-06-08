@@ -48,6 +48,9 @@ var
   GBodyLimitDeclaredBody: string;
   GBodyLimitExtraBody: string;
   GBodyLimitReplyAfterRead: Boolean;
+  GWriteFailureListener: ITcpListener;
+  GWriteFailureAcceptCount: Int32;
+  GWriteFailureFirstBody: string;
 
 type
   TTrackedRequestBody = class;
@@ -769,6 +772,7 @@ begin
 end;
 
 function TimeoutReuseAcceptThread(AArg: Pointer): Pointer; cdecl; forward;
+function RequestWriteFailureThread(AArg: Pointer): Pointer; cdecl; forward;
 
 function StartServer(const AHandler: IHttpHandler; out AServer: THttpServer; out APort: UInt16): TPlatformThreadHandle;
 var
@@ -4151,6 +4155,66 @@ begin
   end;
 end;
 
+procedure TestClientRequestWriteFailureClosesBodyAndDropsConnection;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LBody: TTrackedRequestBody;
+  LRaised: Boolean;
+  LRet: Pointer;
+begin
+  GWriteFailureAcceptCount := 0;
+  GWriteFailureFirstBody := '';
+  GWriteFailureListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GWriteFailureListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @RequestWriteFailureThread, nil);
+
+  try
+    LClient := NewHttpClient;
+    LBody := TTrackedRequestBody.Create('payload');
+    LReq := NewRequest(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
+      NewHeaders, LBody as IReader, Int64(7));
+
+    LRaised := False;
+    try
+      LClient.Send(LReq);
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+
+    Check(LRaised,
+      'request write failure before response surfaces to caller');
+    Check(LBody.Closed,
+      'request write failure closes close-capable request body');
+    CheckEqual(Int64(1), Int64(LBody.CloseCount),
+      'request write failure closes request body exactly once');
+    CheckEqual('payload', GWriteFailureFirstBody,
+      'server observed first request body before closing connection');
+
+    LResp := LClient.Get(
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/after-failure');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'client remains usable after request write failure');
+    CheckEqual('ok', ReadBodyStr(LResp),
+      'follow-up request reads fresh response body');
+    CheckEqual(Int64(2), Int64(GWriteFailureAcceptCount),
+      'failed request connection is not returned to the idle pool');
+
+    LClient := nil;
+  finally
+    if GWriteFailureAcceptCount < 2 then
+      WakeRetryAcceptThread(LPort);
+    GWriteFailureListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GWriteFailureListener := nil;
+  end;
+end;
+
 procedure TestClientSendsIdempotentReplayableBodyAfterClosedPooledConnection;
 var
   LPort: UInt16;
@@ -4650,6 +4714,47 @@ begin
   LConn.Close;
 end;
 
+function RequestWriteFailureThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LMethod: string;
+  LBody: string;
+begin
+  Result := nil;
+  try
+    LConn := GWriteFailureListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  InterlockedIncrement(GWriteFailureAcceptCount);
+  try
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    GWriteFailureFirstBody := LBody;
+  except
+  end;
+  LConn.Close;
+
+  try
+    LConn := GWriteFailureListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  InterlockedIncrement(GWriteFailureAcceptCount);
+  try
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    if LMethod <> '' then
+      WritePoolOkResponse(LConn);
+  except
+  end;
+  LConn.Close;
+end;
+
 procedure TestConnectionReuse;
 var
   LPort: UInt16;
@@ -4837,6 +4942,8 @@ begin
     @TestClientCloseIdleConnectionsDropsPooledConnections);
   T.Run('Client timeout does not poison idle connection reuse',
     @TestClientTimeoutDoesNotPoisonIdleConnectionReuse);
+  T.Run('Client request write failure closes body and drops connection',
+    @TestClientRequestWriteFailureClosesBodyAndDropsConnection);
   T.Run('Client sends idempotent replayable body after closed pooled connection',
     @TestClientSendsIdempotentReplayableBodyAfterClosedPooledConnection);
   T.Run('Client sends non-idempotent body after closed pooled connection',
