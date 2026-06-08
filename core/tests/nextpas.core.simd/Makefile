@@ -65,6 +65,7 @@ audit:
 	$(PYTHON) check_public_facade_scalar_fallback_contract.py
 	$(PYTHON) check_simd_alloc_runtime_truth_contract.py --summary-line
 	$(PYTHON) check_simd_native_allocator_behavior_contract.py --summary-line
+	$(PYTHON) check_simd_allocator_consumer_seam_contract.py --summary-line
 	$(PYTHON) check_cpuinfo_boundary_contract.py
 
 cpuinfo-focused: cpuinfo-heaptrc cpuinfo-nonx86-compile

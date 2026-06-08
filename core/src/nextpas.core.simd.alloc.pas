@@ -35,6 +35,19 @@ uses
   - SIMD allocator state: consumes platform-owned aligned allocation seam.
   - SIMD raw host allocator state: no Windows/POSIX allocator FFI declarations.
   - Wine or cross-compile evidence is not real Windows runtime readiness.
+
+  SimdAlloc platform-owned aligned allocation seam consumer contract:
+  - Alignment values must be powers of two.
+  - Allocation size calculation must be overflow-guarded before calling the lower seam.
+  - Invalid alignment and overflow must fail closed with nil.
+  - SimdFree(nil) must be a no-op.
+  - SimdAlloc(0, *) must return nil.
+  - SimdRealloc(nil, size, alignment) must behave like SimdAlloc.
+  - SimdRealloc(ptr, 0, alignment) must free and return nil.
+  - SimdRealloc must preserve the requested alignment.
+  - SimdRealloc must preserve the overlapping prefix bytes.
+  - Current fallback truth remains header-backed GetMem/FreeMem until the platform seam lands.
+  - Native Windows/POSIX allocator runtime readiness requires platform-owned seam integration plus real runtime evidence.
 }
 
 function GetDefaultAlignment: NativeUInt; forward;
