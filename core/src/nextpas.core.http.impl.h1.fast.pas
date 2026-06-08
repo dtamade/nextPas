@@ -441,19 +441,19 @@ end;
 function ParseInt64Fast(const ABuf: PAnsiChar; const ALen: SizeUInt): Int64; inline;
 var
   LI: SizeUInt;
-  LB: Byte;
+  LDigit: Int64;
 begin
   Result := 0;
   if ALen = 0 then
     Exit(-1);
   for LI := 0 to ALen - 1 do
   begin
-    LB := Byte(ABuf[LI]);
-    if (LB < Byte('0')) or (LB > Byte('9')) then
+    if (ABuf[LI] < '0') or (ABuf[LI] > '9') then
       Exit(-1);
-    Result := Result * 10 + Int64(LB - Byte('0'));
-    if Result < 0 then // overflow
+    LDigit := Ord(ABuf[LI]) - Ord('0');
+    if Result > (High(Int64) - LDigit) div 10 then
       Exit(-1);
+    Result := Result * 10 + LDigit;
   end;
 end;
 

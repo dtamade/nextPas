@@ -157,6 +157,40 @@ begin
   Check(not LR.Success, 'should fail — invalid content-length fallback');
 end;
 
+procedure CheckContentLengthFallbackWithoutRaise(const AValue, ALabel: string);
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+  LRaised: Boolean;
+begin
+  LReq := 'POST /data HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length:' + AValue + #13#10#13#10;
+  LR := Default(TFastParseResult);
+  LRaised := False;
+  try
+    LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  except
+    on E: Exception do
+      LRaised := True;
+  end;
+
+  Check(not LRaised, ALabel + ': fast parser does not raise');
+  Check(not LR.Success, ALabel + ': fast parser falls back');
+end;
+
+procedure TestContentLengthGrammarFallbacksWithoutRaise;
+begin
+  CheckContentLengthFallbackWithoutRaise(' 18446744073709551616',
+    'content-length overflows uint64-wrap boundary');
+  CheckContentLengthFallbackWithoutRaise(' +5',
+    'content-length plus sign');
+  CheckContentLengthFallbackWithoutRaise('',
+    'content-length empty value');
+  CheckContentLengthFallbackWithoutRaise('   ',
+    'content-length whitespace-only value');
+end;
+
 procedure TestInvalidHeaderNameFallback;
 var
   LReq: AnsiString;
@@ -569,6 +603,8 @@ begin
   T.Run('Unsupported transfer-encoding fallback', @TestUnsupportedTransferEncodingFallback);
   T.Run('Duplicate Content-Length fallback', @TestDuplicateContentLengthFallback);
   T.Run('Invalid Content-Length fallback', @TestInvalidContentLengthFallback);
+  T.Run('Content-Length grammar fallbacks without raise',
+    @TestContentLengthGrammarFallbacksWithoutRaise);
   T.Run('Invalid header name fallback', @TestInvalidHeaderNameFallback);
   T.Run('Header name tchar separator fallbacks',
     @TestHeaderNameTCharSeparatorFallbacks);

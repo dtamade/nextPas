@@ -880,6 +880,12 @@ begin
     'metadata treats huge content-length as a declared body');
   Check(LMetadata.ExpectsContinue,
     'metadata keeps expect token for huge content-length');
+  CheckEqual(Int64(0), LP.GetBodySize,
+    'huge content-length request does not publish body bytes');
+  CheckEqual('', LP.GetBody,
+    'huge content-length request body remains hidden');
+  Check(LP.NewBodyReader = nil,
+    'huge content-length request does not publish a body reader');
 end;
 
 procedure TestRequestMetadataConnectionTokenListSemantics;
