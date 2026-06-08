@@ -105,6 +105,22 @@ begin
   Check(R.Error.Message.Len > 0, 'error message');
 end;
 
+procedure TestMalformedNumberRejectedBeforeToken;
+  procedure ExpectMalformed(const AInput: string);
+  var
+    R: TJsonReader;
+  begin
+    R.Init(TStringView.Create(PAnsiChar(AInput), Length(AInput)));
+    Check(not R.Next, 'malformed number rejected: ' + AInput);
+    Check(R.TokenKind = jtkError, 'malformed number produces error token: ' + AInput);
+    Check(R.Error.Message.Len > 0, 'malformed number has error message: ' + AInput);
+  end;
+begin
+  ExpectMalformed('1.');
+  ExpectMalformed('1e+');
+  ExpectMalformed('01');
+end;
+
 procedure TestIntVsFloat;
 var R: TJsonReader;
 begin
@@ -153,6 +169,7 @@ begin
   T.Run('whitespace', @TestWhitespace);
   T.Run('empty', @TestEmpty);
   T.Run('error', @TestError);
+  T.Run('malformed number rejected before token', @TestMalformedNumberRejectedBeforeToken);
   T.Run('int vs float', @TestIntVsFloat);
   T.Run('long string', @TestLongString);
   T.Run('mixed whitespace', @TestMixedWhitespace);
