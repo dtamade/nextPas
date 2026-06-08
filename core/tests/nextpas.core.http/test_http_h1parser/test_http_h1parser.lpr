@@ -1210,6 +1210,20 @@ begin
     'GET /next HTTP/1.1'#13#10'Host: localhost'#13#10#13#10,
     pekMalformed);
   CheckMalformedFramingConsumesThroughHeaders(
+    'repeated unsupported transfer coding before chunked',
+    'Transfer-Encoding: gzip'#13#10 +
+    'Transfer-Encoding: chunked'#13#10,
+    '5'#13#10'hello'#13#10'0'#13#10#13#10 +
+    'GET /next HTTP/1.1'#13#10'Host: localhost'#13#10#13#10,
+    pekUnsupportedTransferCoding);
+  CheckMalformedFramingConsumesThroughHeaders(
+    'repeated chunked must be final transfer coding',
+    'Transfer-Encoding: chunked'#13#10 +
+    'Transfer-Encoding: gzip'#13#10,
+    '5'#13#10'hello'#13#10'0'#13#10#13#10 +
+    'GET /next HTTP/1.1'#13#10'Host: localhost'#13#10#13#10,
+    pekMalformed);
+  CheckMalformedFramingConsumesThroughHeaders(
     'conflicting duplicate content-length',
     'Content-Length: 2'#13#10 +
     'Content-Length: 3'#13#10,
