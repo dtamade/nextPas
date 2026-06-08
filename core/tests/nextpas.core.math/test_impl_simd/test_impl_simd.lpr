@@ -64,6 +64,15 @@ begin
   CheckNear(AExpectedW, AActual.W, 0.000001, AMessage + '.W');
 end;
 
+procedure CheckSingleBits(const AActual: Single; const AExpectedBits: LongWord;
+  const AMessage: string);
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AActual;
+  CheckEqual(Int64(AExpectedBits), Int64(LValue.Bits), AMessage);
+end;
+
 procedure CheckVec3fValue(const AExpected, AActual: TVec3f; const AMessage: string);
 begin
   CheckVec3f(AExpected.X, AExpected.Y, AExpected.Z, AActual, AMessage);
@@ -270,6 +279,39 @@ begin
     'SimdVec3fCross cancelling huge finite stable public parity stays finite');
   CheckNear(ExpectedCross.Z, ActualCross.Z, Abs(ExpectedCross.Z) * 0.00001,
     'SimdVec3fCross cancelling huge finite stable public parity');
+
+  HugeCrossA := TVec3f.Create(0.0, Single(3.0e20), 0.0);
+  HugeCrossB := TVec3f.Create(0.0, 0.0, Single(3.0e20));
+  ActualCross := SimdVec3fCross(HugeCrossA, HugeCrossB);
+  CheckSingleBits(ActualCross.X, $7F800000,
+    'SimdVec3fCross signed infinity public parity positive X');
+
+  HugeCrossB := TVec3f.Create(0.0, 0.0, Single(-3.0e20));
+  ActualCross := SimdVec3fCross(HugeCrossA, HugeCrossB);
+  CheckSingleBits(ActualCross.X, $FF800000,
+    'SimdVec3fCross signed infinity public parity negative X');
+
+  HugeCrossA := TVec3f.Create(0.0, 0.0, Single(3.0e20));
+  HugeCrossB := TVec3f.Create(Single(3.0e20), 0.0, 0.0);
+  ActualCross := SimdVec3fCross(HugeCrossA, HugeCrossB);
+  CheckSingleBits(ActualCross.Y, $7F800000,
+    'SimdVec3fCross signed infinity public parity positive Y');
+
+  HugeCrossB := TVec3f.Create(Single(-3.0e20), 0.0, 0.0);
+  ActualCross := SimdVec3fCross(HugeCrossA, HugeCrossB);
+  CheckSingleBits(ActualCross.Y, $FF800000,
+    'SimdVec3fCross signed infinity public parity negative Y');
+
+  HugeCrossA := TVec3f.Create(Single(3.0e20), 0.0, 0.0);
+  HugeCrossB := TVec3f.Create(0.0, Single(3.0e20), 0.0);
+  ActualCross := SimdVec3fCross(HugeCrossA, HugeCrossB);
+  CheckSingleBits(ActualCross.Z, $7F800000,
+    'SimdVec3fCross signed infinity public parity positive Z');
+
+  HugeCrossB := TVec3f.Create(0.0, Single(-3.0e20), 0.0);
+  ActualCross := SimdVec3fCross(HugeCrossA, HugeCrossB);
+  CheckSingleBits(ActualCross.Z, $FF800000,
+    'SimdVec3fCross signed infinity public parity negative Z');
 end;
 
 procedure TestSimdQuatfRotateInvalidVectorPublicParity;
