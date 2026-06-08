@@ -99,6 +99,13 @@ begin
   Result := FBuf;
 end;
 
+function BytesSlice(const AValue: string; const AStart, ACount: SizeInt): string;
+begin
+  SetLength(Result, ACount);
+  if ACount > 0 then
+    Move(AValue[AStart], Result[1], ACount);
+end;
+
 constructor TShortWriter.Create(const AMaxPerCall: SizeUInt);
 begin
   inherited Create;
@@ -362,6 +369,65 @@ begin
   Check(Pos('hel', LOut) > 0, 'first payload present');
   Check(Pos('lo', LOut) > Pos('hel', LOut), 'second payload follows first');
   Check(Pos('0'#13#10#13#10, LOut) > 0, 'final chunk written');
+  LRW.Free;
+end;
+
+procedure TestContentLengthWritePreservesBinaryBodyBytes;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LBody: string;
+  LOut: string;
+  LBodyStart: SizeInt;
+  LWritten: SizeUInt;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LBody := #0#1#$7F#$80#$FF#13#10#0;
+  LRW.GetHeaders.Set_('Content-Length', '8');
+  LWritten := LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  LRW.Flush;
+  LOut := LW.GetOutput;
+  LBodyStart := Pos(#13#10#13#10, LOut) + 4;
+
+  CheckEqual(Int64(8), Int64(LWritten),
+    'fixed-length binary body reports full byte count');
+  Check(Pos('content-length: 8'#13#10, LOut) > 0,
+    'fixed-length binary response has content-length');
+  CheckEqual(Int64(8), Int64(Length(LOut) - LBodyStart + 1),
+    'fixed-length binary response body length');
+  CheckEqual(LBody, BytesSlice(LOut, LBodyStart, Length(LBody)),
+    'fixed-length writer preserves binary body bytes');
+  LRW.Free;
+end;
+
+procedure TestChunkedWritePreservesBinaryBodyBytes;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LBody: string;
+  LOut: string;
+  LChunkStart: SizeInt;
+  LWritten: SizeUInt;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LBody := #0#1#$7F#$80#$FF#13#10#0;
+  LWritten := LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  LRW.Flush;
+  LOut := LW.GetOutput;
+  LChunkStart := Pos('8'#13#10, LOut) + 3;
+
+  CheckEqual(Int64(8), Int64(LWritten),
+    'chunked binary body reports full byte count');
+  Check(Pos('transfer-encoding: chunked'#13#10, LOut) > 0,
+    'chunked binary response has transfer-encoding');
+  Check(Pos('8'#13#10, LOut) > 0, 'chunked binary response writes chunk size');
+  CheckEqual(LBody, BytesSlice(LOut, LChunkStart, Length(LBody)),
+    'chunked writer preserves binary body bytes');
+  CheckEqual(#13#10'0'#13#10#13#10,
+    BytesSlice(LOut, LChunkStart + Length(LBody), 7),
+    'chunked binary response preserves terminal framing after body');
   LRW.Free;
 end;
 
@@ -1208,6 +1274,10 @@ begin
   T.Run('Write auto-calls WriteHeader(200)', @TestWriteAutoCallsWriteHeader200);
   T.Run('Multiple Write preserves body order under chunked encoding',
     @TestMultipleWritePreservesBodyOrder);
+  T.Run('Content-Length write preserves binary body bytes',
+    @TestContentLengthWritePreservesBinaryBodyBytes);
+  T.Run('Chunked write preserves binary body bytes',
+    @TestChunkedWritePreservesBinaryBodyBytes);
   T.Run('Custom status 404', @TestCustomStatus404);
   T.Run('Multiple headers written correctly', @TestMultipleHeadersWritten);
   T.Run('WriteHeader only called once', @TestWriteHeaderOnlyOnce);
