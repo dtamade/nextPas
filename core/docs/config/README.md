@@ -436,7 +436,9 @@ LCfg.GetSection('');         // root-level children
 ```
 
 `GetStringArray(AKey)` reconstructs scalar arrays from direct numeric children.
-It sorts numeric indexes, skips sparse holes, and ignores object-array
+Array index segments must be canonical decimal indexes: `0`, or a non-zero digit
+followed by digits. Segments such as `01` remain normal section children. The
+reader sorts numeric indexes, skips sparse holes, and ignores object-array
 descendants.
 
 ```pascal

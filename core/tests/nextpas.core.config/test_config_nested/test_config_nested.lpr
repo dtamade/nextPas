@@ -457,6 +457,34 @@ begin
   end;
 end;
 
+procedure TestGetStringArrayIgnoresNonCanonicalNumericSegments;
+var
+  LCfg: TConfig;
+  LItems: TStringArray;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetDefault('tags.0', 'zero');
+    LCfg.SetDefault('tags.01', 'leading-zero');
+    LCfg.SetDefault('tags.2', 'two');
+
+    LItems := LCfg.GetStringArray('tags');
+    CheckEqual(Int64(2), Int64(Length(LItems)),
+      'leading-zero segment is not an array index');
+    CheckEqual('zero', LItems[0], 'index 0 first');
+    CheckEqual('two', LItems[1], 'index 2 second');
+
+    LItems := LCfg.GetSection('tags');
+    CheckEqual(Int64(3), Int64(Length(LItems)),
+      'non-canonical segment remains a section child');
+    CheckEqual('0', LItems[0], 'canonical child 0');
+    CheckEqual('01', LItems[1], 'leading-zero child preserved');
+    CheckEqual('2', LItems[2], 'canonical child 2');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 procedure TestGetStringArrayIgnoresObjectArrayItems;
 var
   LCfg: TConfig;
@@ -603,6 +631,8 @@ begin
   T.Run('GetSection.MissingAndCaseInsensitive', @TestGetSectionMissingAndCaseInsensitive);
   T.Run('GetStringArray.Basic', @TestGetStringArrayBasic);
   T.Run('GetStringArray.SparseNumericOrder', @TestGetStringArraySortsNumericIndexesAndSkipsHoles);
+  T.Run('GetStringArray.IgnoresNonCanonicalNumericSegments',
+    @TestGetStringArrayIgnoresNonCanonicalNumericSegments);
   T.Run('GetStringArray.IgnoresObjectArrayItems', @TestGetStringArrayIgnoresObjectArrayItems);
   T.Run('GetStringArray.TopLevelArrayAndMissing', @TestGetStringArrayTopLevelArrayAndMissing);
   T.Run('Malformed.LoadRaisesConfigError', @TestMalformedLoadRaisesConfigError);

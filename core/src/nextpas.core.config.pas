@@ -534,6 +534,8 @@ begin
   AIndex := 0;
   if AValue = '' then
     Exit(False);
+  if (Length(AValue) > 1) and (AValue[1] = '0') then
+    Exit(False);
   for LI := 1 to Length(AValue) do
     if (AValue[LI] < '0') or (AValue[LI] > '9') then
       Exit(False);
