@@ -44,6 +44,14 @@ type
     ReqPerSec: Double;
   end;
 
+  TFullchainResponseRead = record
+    BytesRead: SizeUInt;
+    StatusCode: Int32;
+    ContentLength: Int64;
+    BodyBytes: SizeUInt;
+    Complete: Boolean;
+  end;
+
 var
   GServer: THttpServer;
   GServerThreadHandle: TPlatformThreadHandle;
@@ -292,16 +300,76 @@ begin
   GPort := GServer.LocalAddr.Port;
 end;
 
+function TryParseStatusCode(const AResp: string; out AStatusCode: Int32): Boolean;
+var
+  LStatusValue: Int64;
+begin
+  AStatusCode := 0;
+  Result := False;
+  if (Length(AResp) < 12) or (Copy(AResp, 1, 9) <> 'HTTP/1.1 ') then
+    Exit;
+  if not TryStrToInt64(Copy(AResp, 10, 3), LStatusValue) then
+    Exit;
+  if (LStatusValue < 100) or (LStatusValue > 999) then
+    Exit;
+  AStatusCode := Int32(LStatusValue);
+  Result := True;
+end;
+
+function TryParseContentLength(const AResp: string; const AHeaderEnd: SizeInt;
+  out AContentLength: Int64): Boolean;
+var
+  LHeaders: string;
+  LLowerHeaders: string;
+  LClPos: SizeInt;
+  LValueStart: SizeInt;
+  LValueEnd: SizeInt;
+begin
+  AContentLength := -1;
+  Result := False;
+  if AHeaderEnd <= 0 then
+    Exit;
+
+  LHeaders := Copy(AResp, 1, AHeaderEnd - 1);
+  LLowerHeaders := LowerCase(LHeaders);
+  LClPos := Pos(#13#10'content-length:', LLowerHeaders);
+  if LClPos = 0 then
+    Exit;
+
+  LValueStart := LClPos + Length(#13#10'content-length:');
+  while (LValueStart <= Length(LHeaders)) and
+    ((LHeaders[LValueStart] = ' ') or (LHeaders[LValueStart] = #9)) do
+    Inc(LValueStart);
+  LValueEnd := LValueStart;
+  while (LValueEnd <= Length(LHeaders)) and (LHeaders[LValueEnd] >= '0') and
+    (LHeaders[LValueEnd] <= '9') do
+    Inc(LValueEnd);
+  if LValueEnd = LValueStart then
+    Exit;
+
+  Result := TryStrToInt64(Copy(LHeaders, LValueStart, LValueEnd - LValueStart),
+    AContentLength);
+end;
+
+function ResponseMatchesScenario(const AResponse: TFullchainResponseRead;
+  const AResponseBodyBytes: SizeUInt): Boolean;
+begin
+  Result := AResponse.Complete and
+    (AResponse.StatusCode = HTTP_STATUS_OK) and
+    (AResponse.ContentLength = Int64(AResponseBodyBytes)) and
+    (AResponse.BodyBytes = AResponseBodyBytes);
+end;
+
 { Read one full HTTP response from a keep-alive connection }
-function ReadResponse(const AConn: ITcpStream): SizeUInt;
+function ReadResponse(const AConn: ITcpStream): TFullchainResponseRead;
 var
   LBuf: array[0..4095] of Byte;
-  LN, LTotal: SizeUInt;
+  LN: SizeUInt;
   LHeaderEnd: SizeInt;
   LResp: string;
-  LClPos, LClEnd: SizeInt;
-  LContentLen, LBodyRead: SizeInt;
-  LNeed: SizeInt;
+  LContentLen: Int64;
+  LBodyRead: Int64;
+  LNeed: Int64;
   LReadSize: SizeUInt;
   procedure AppendBytes(const ABuf; const ACount: SizeUInt);
   var
@@ -314,30 +382,32 @@ var
     Move(ABuf, LResp[LOld + 1], ACount);
   end;
 begin
+  Result.BytesRead := 0;
+  Result.StatusCode := 0;
+  Result.ContentLength := -1;
+  Result.BodyBytes := 0;
+  Result.Complete := False;
+
   LResp := '';
-  LTotal := 0;
   LHeaderEnd := 0;
   { Read until we see CRLFCRLF. Use chunk reads so the benchmark measures the
     server path instead of a byte-at-a-time client parser. }
   repeat
     LN := AConn.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
-    if LN = 0 then begin Result := LTotal; Exit; end;
+    if LN = 0 then
+      Exit;
     AppendBytes(LBuf[0], LN);
-    Inc(LTotal, LN);
+    Inc(Result.BytesRead, LN);
     LHeaderEnd := Pos(#13#10#13#10, LResp);
   until LHeaderEnd > 0;
 
-  { Parse content-length }
-  LContentLen := 0;
-  LClPos := Pos('content-length: ', LResp);
-  if LClPos > 0 then
-  begin
-    LClPos := LClPos + 16;
-    LClEnd := LClPos;
-    while (LClEnd <= Length(LResp)) and (LResp[LClEnd] >= '0') and (LResp[LClEnd] <= '9') do
-      Inc(LClEnd);
-    LContentLen := SizeInt(StrToInt(Copy(LResp, LClPos, LClEnd - LClPos)));
-  end;
+  if not TryParseStatusCode(LResp, Result.StatusCode) then
+    Exit;
+  if not TryParseContentLength(LResp, LHeaderEnd, LContentLen) then
+    Exit;
+  if LContentLen < 0 then
+    Exit;
+  Result.ContentLength := LContentLen;
 
   { Read body }
   LBodyRead := Length(LResp) - (LHeaderEnd + 3);
@@ -350,19 +420,21 @@ begin
       LReadSize := SizeUInt(LNeed);
     LN := AConn.Read(LBuf[0], LReadSize);
     if LN = 0 then Break;
-    Inc(LBodyRead, SizeInt(LN));
-    Inc(LTotal, LN);
+    Inc(LBodyRead, Int64(LN));
+    Inc(Result.BytesRead, LN);
   end;
-  Result := LTotal;
+  if LBodyRead >= 0 then
+    Result.BodyBytes := SizeUInt(LBodyRead);
+  Result.Complete := LBodyRead = LContentLen;
 end;
 
 function RunScenario(const AWorkload, AName, ARequest: string;
-  const AExpectMin, ARequestBodyBytes, AResponseBodyBytes: SizeUInt): TScenarioResult;
+  const ARequestBodyBytes, AResponseBodyBytes: SizeUInt): TScenarioResult;
 var
   LConn: ITcpStream;
   LStart, LEnd, LElapsedNs: UInt64;
   LI: Int64;
-  LBytesRead: SizeUInt;
+  LResponse: TFullchainResponseRead;
   LReqPerSec: Double;
 begin
   Result.Completed := 0;
@@ -388,8 +460,8 @@ begin
   for LI := 1 to GIterations do
   begin
     LConn.Write(ARequest[1], SizeUInt(Length(ARequest)));
-    LBytesRead := ReadResponse(LConn);
-    if LBytesRead >= AExpectMin then
+    LResponse := ReadResponse(LConn);
+    if ResponseMatchesScenario(LResponse, AResponseBodyBytes) then
       Inc(Result.Completed);
   end;
   LEnd := platform_monotonic_ns;
@@ -409,6 +481,7 @@ begin
     Trunc(LReqPerSec):8, ' req/s');
   WriteLn('operation=http.fullchain.keepalive');
   WriteLn('workload=', AWorkload);
+  WriteLn('response_validation=strict_status_content_length_body_bytes');
   WriteLn('request_body_bytes=', ARequestBodyBytes);
   WriteLn('response_body_bytes=', AResponseBodyBytes);
   WriteLn('backend=', BackendName);
@@ -459,7 +532,7 @@ begin
     LDirectPlaintextReq :=
       'GET / HTTP/1.1'#13#10'Host: ' + DIRECT_HOST + #13#10'Content-Length: 0'#13#10#13#10;
     LResult := RunScenario('direct_root',
-      'Direct root (GET /, no router)', LDirectPlaintextReq, 50, 0, 13);
+      'Direct root (GET /, no router)', LDirectPlaintextReq, 0, 13);
     if LResult.ElapsedNs > 0 then
       Inc(LScenariosRun);
 
@@ -467,21 +540,21 @@ begin
     LDirect1KReq :=
       'GET /1k HTTP/1.1'#13#10'Host: ' + DIRECT_HOST + #13#10'Content-Length: 0'#13#10#13#10;
     LResult := RunScenario('direct_1k',
-      'Direct 1KB (GET /1k, no router)', LDirect1KReq, 1000, 0, 1024);
+      'Direct 1KB (GET /1k, no router)', LDirect1KReq, 0, 1024);
     if LResult.ElapsedNs > 0 then
       Inc(LScenariosRun);
 
     { Scenario 1: Plaintext }
     LResult := RunScenario('plaintext', 'Plaintext (GET /)',
       'GET / HTTP/1.1'#13#10'Host: ' + ROUTER_HOST + #13#10'Content-Length: 0'#13#10#13#10,
-      50, 0, 13);
+      0, 13);
     if LResult.ElapsedNs > 0 then
       Inc(LScenariosRun);
 
     { Scenario 2: JSON }
     LResult := RunScenario('json', 'JSON (GET /json)',
       'GET /json HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 0'#13#10#13#10,
-      60, 0, 27);
+      0, 27);
     if LResult.ElapsedNs > 0 then
       Inc(LScenariosRun);
 
@@ -489,7 +562,7 @@ begin
     SetLength(LBody1K, 1024);
     FillChar(LBody1K[1], 1024, Ord('x'));
     LEchoReq := 'POST /echo HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 1024'#13#10#13#10 + LBody1K;
-    LResult := RunScenario('echo_1k', 'Echo 1KB (POST /echo)', LEchoReq, 100,
+    LResult := RunScenario('echo_1k', 'Echo 1KB (POST /echo)', LEchoReq,
       1024, 1024);
     if LResult.ElapsedNs > 0 then
       Inc(LScenariosRun);
@@ -499,7 +572,7 @@ begin
     FillChar(LBody16K[1], Length(LBody16K), Ord('x'));
     LSinkReq := 'POST /sink HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: ' +
       IntToStr(Int64(Length(LBody16K))) + #13#10#13#10 + LBody16K;
-    LResult := RunScenario('sink_16k', 'Sink 16KB (POST /sink)', LSinkReq, 20,
+    LResult := RunScenario('sink_16k', 'Sink 16KB (POST /sink)', LSinkReq,
       SizeUInt(Length(LBody16K)), 0);
     if LResult.ElapsedNs > 0 then
       Inc(LScenariosRun);
@@ -507,7 +580,7 @@ begin
     { Scenario 5: Router with params }
     LResult := RunScenario('param_route', 'Param (GET /users/12345)',
       'GET /users/12345 HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 0'#13#10#13#10,
-      50, 0, SizeUInt(Length('user:12345')));
+      0, SizeUInt(Length('user:12345')));
     if LResult.ElapsedNs > 0 then
       Inc(LScenariosRun);
 

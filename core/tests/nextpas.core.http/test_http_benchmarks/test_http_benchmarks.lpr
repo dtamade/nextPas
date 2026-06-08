@@ -628,6 +628,9 @@ begin
     'fullchain dispatch path marker');
   CheckContains(AOutput, 'workload=' + AWorkload,
     'fullchain workload marker');
+  CheckContains(AOutput,
+    'response_validation=strict_status_content_length_body_bytes',
+    'fullchain strict response validation marker');
   CheckContains(AOutput, 'request_body_bytes=' + ARequestBodyBytes,
     'fullchain request-body-bytes marker');
   CheckContains(AOutput, 'response_body_bytes=' + AResponseBodyBytes,
@@ -1631,6 +1634,45 @@ begin
     'bench_fullchain main should not free server outside StopServer');
   CheckNotContains(LMainBody, 'GServer.Shutdown;',
     'bench_fullchain main should not shutdown server outside StopServer');
+end;
+
+procedure TestBenchFullchainStrictResponseValidationSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+  LRunBody: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, BenchFullchainUnitPath));
+  LRunBody := ExtractSourceBlock(LSource,
+    'function RunScenario',
+    'var' + LineEnding + '  LDirectPlaintextReq',
+    'bench_fullchain RunScenario response validation body');
+
+  CheckContains(LSource, 'TFullchainResponseRead = record',
+    'bench_fullchain should return structured response read truth');
+  CheckContains(LSource, 'StatusCode: Int32;',
+    'bench_fullchain response truth should include status');
+  CheckContains(LSource, 'ContentLength: Int64;',
+    'bench_fullchain response truth should include parsed content length');
+  CheckContains(LSource, 'BodyBytes: SizeUInt;',
+    'bench_fullchain response truth should include measured body bytes');
+  CheckContains(LSource, 'Complete: Boolean;',
+    'bench_fullchain response truth should include completeness');
+  CheckContains(LSource, 'function ResponseMatchesScenario',
+    'bench_fullchain should isolate strict response validation');
+  CheckContains(LRunBody, 'LResponse := ReadResponse(LConn);',
+    'bench_fullchain should read structured response truth per iteration');
+  CheckContains(LRunBody,
+    'if ResponseMatchesScenario(LResponse, AResponseBodyBytes) then',
+    'bench_fullchain completed count should use strict response validation');
+  CheckContains(LRunBody,
+    'WriteLn(''response_validation=strict_status_content_length_body_bytes'');',
+    'bench_fullchain output should disclose strict validation mode');
+  CheckNotContains(LRunBody, 'LBytesRead >= AExpectMin',
+    'bench_fullchain must not count minimum response bytes as completion');
+  CheckNotContains(LSource, 'AExpectMin',
+    'bench_fullchain should not carry minimum-byte completion input');
 end;
 
 procedure TestBenchmarkDocsAdapterNoUrlFastPathSourceContract;
@@ -4346,6 +4388,8 @@ begin
     @TestBenchFullchainDirectDispatchSourceContract);
   T.Run('bench_fullchain server thread lifecycle source contract',
     @TestBenchFullchainServerThreadLifecycleSourceContract);
+  T.Run('bench_fullchain strict response validation source contract',
+    @TestBenchFullchainStrictResponseValidationSourceContract);
   T.Run('benchmark docs adapter_no_url fast-path source contract',
     @TestBenchmarkDocsAdapterNoUrlFastPathSourceContract);
   T.Run('bench_h1outbound drain smoke',
