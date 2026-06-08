@@ -1708,6 +1708,23 @@ begin
   Check(LP.ErrorMessage <> '', 'very long method has error message');
 end;
 
+procedure TestRecognizedUnsupportedMethodRejected;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'PROPFIND /secret HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.HasError, 'recognized unsupported method reports parser error');
+  Check(not LP.IsComplete, 'recognized unsupported method is not complete');
+  Check(LP.ErrorKind = pekUnsupportedMethod,
+    'recognized unsupported method has unsupported-method error kind');
+  Check(LP.ErrorMessage <> '',
+    'recognized unsupported method has error message');
+end;
+
 procedure TestContentLengthRequestExtraBytesAfterCloseRejected;
 var
   LP: IH1Parser;
@@ -2560,6 +2577,8 @@ begin
   T.Run('Request-line splitting rejected', @TestRequestLineSplittingRejected);
   T.Run('Negative Content-Length rejected', @TestNegativeContentLengthRejected);
   T.Run('Very long method rejected', @TestVeryLongMethodRejected);
+  T.Run('Recognized unsupported method rejected',
+    @TestRecognizedUnsupportedMethodRejected);
   T.Run('Content-Length request extra bytes after close rejected', @TestContentLengthRequestExtraBytesAfterCloseRejected);
   T.Run('Content-Length keep-alive garbage tail consumes first request only', @TestContentLengthKeepAliveGarbageTailConsumesFirstRequestOnly);
   T.Run('Content-Length keep-alive truncated follow-up request line consumes first request only',

@@ -7734,6 +7734,69 @@ begin
   end;
 end;
 
+procedure RunRecognizedUnsupportedMethodRejected(const AUseEpoll: Boolean;
+  const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/secret', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  const
+    BODY = 'secret-body';
+  begin
+    LHandlerCalled := True;
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(BODY))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(BODY[1], SizeUInt(Length(BODY)));
+  end);
+
+  if AUseEpoll then
+  begin
+{$IFDEF NEXTPAS_LINUX}
+    LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort);
+{$ELSE}
+    LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+{$ENDIF}
+  end
+  else
+    LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'PROPFIND /secret HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 501', LResp) > 0,
+      ALabel + ': status 501');
+    Check(Pos('secret-body', LResp) = 0,
+      ALabel + ': GET handler body not leaked');
+    Check(not LHandlerCalled,
+      ALabel + ': GET handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestRecognizedUnsupportedMethodRejected;
+begin
+  RunRecognizedUnsupportedMethodRejected(False,
+    'recognized unsupported method threaded');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestRecognizedUnsupportedMethodRejectedEpollBackend;
+begin
+  RunRecognizedUnsupportedMethodRejected(True,
+    'recognized unsupported method epoll');
+end;
+{$ENDIF}
+
 procedure TestContentLengthRequestExtraBytesAfterCloseRejected;
 var
   LRouter: THttpRouter;
@@ -12820,6 +12883,8 @@ begin
     @TestUnsupportedExpectRejectsEarlyEpollBackend);
   T.Run('Repeated Expect headers with unsupported member reject early with epoll backend',
     @TestRepeatedExpectHeaderUnsupportedMemberRejectsEarlyEpollBackend);
+  T.Run('Recognized unsupported method -> 501 with epoll backend',
+    @TestRecognizedUnsupportedMethodRejectedEpollBackend);
   T.Run('Request-target over MaxHeaderSize -> 431 with epoll backend',
     @TestRequestTargetOverMaxHeaderSizeRejectedEpollBackend);
   T.Run('Header field over MaxHeaderSize -> explicit 431 with epoll backend',
@@ -13154,6 +13219,8 @@ begin
   T.Run('Request-line splitting -> 400', @TestRequestLineSplittingRejected);
   T.Run('Negative Content-Length -> 400', @TestNegativeContentLengthRejected);
   T.Run('Very long method -> 400', @TestVeryLongMethodRejected);
+  T.Run('Recognized unsupported method -> 501',
+    @TestRecognizedUnsupportedMethodRejected);
   T.Run('Content-Length extra bytes after close -> 400', @TestContentLengthRequestExtraBytesAfterCloseRejected);
   T.Run('Content-Length keep-alive garbage tail -> follow-up 400', @TestContentLengthKeepAliveGarbageTailBecomesFollowUp400);
   T.Run('Content-Length keep-alive truncated follow-up request line -> follow-up 400',

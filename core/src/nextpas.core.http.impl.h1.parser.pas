@@ -15,7 +15,8 @@ uses
 
 type
   TH1ParserType = (ptRequest, ptResponse);
-  TH1ParserErrorKind = (pekNone, pekMalformed, pekUnsupportedTransferCoding);
+  TH1ParserErrorKind = (pekNone, pekMalformed, pekUnsupportedTransferCoding,
+    pekUnsupportedMethod);
   TH1RequestMetadata = record
     HasHost: Boolean;
     HostRepeated: Boolean;
@@ -157,6 +158,7 @@ type
 
 const
   UNSUPPORTED_REQUEST_VERSION_REASON = 'Unsupported HTTP request version';
+  UNSUPPORTED_REQUEST_METHOD_REASON = 'Unsupported HTTP request method';
   INVALID_TRANSFER_ENCODING_REASON = 'Invalid `Transfer-Encoding` header value';
   UNSUPPORTED_REQUEST_TRANSFER_CODING_REASON =
     'Unsupported `Transfer-Encoding` request coding';
@@ -717,7 +719,11 @@ begin
       HTTP_TRACE:  LSelf.FMethod := hmTrace;
       HTTP_PATCH:  LSelf.FMethod := hmPatch;
     else
-      LSelf.FMethod := hmGet;
+    begin
+      LSelf.FHeaderCompleteUserError := True;
+      Exit(LSelf.RejectWithUserError(UNSUPPORTED_REQUEST_METHOD_REASON,
+        pekUnsupportedMethod, p0));
+    end;
     end;
     Result := LSelf.BuildRequestMetadata(p0);
     LSelf.FHeaderCompleteUserError := Result = HPE_USER;
