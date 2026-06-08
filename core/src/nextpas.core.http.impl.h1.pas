@@ -2113,15 +2113,20 @@ var
   LPending: string;
   LHasResponseTail: Boolean;
   LBodyReader: IReader;
+  LSkippedInformational: Boolean;
+  LCurrentResponseStarted: Boolean;
 begin
   AResponseStarted := False;
   LHasResponseTail := False;
+  LSkippedInformational := False;
+  LCurrentResponseStarted := False;
   LPending := '';
   LParser := NewH1ResponseParser(ARequestMethod = hmHead);
   repeat
     if LPending <> '' then
     begin
       LN := SizeUInt(Length(LPending));
+      LCurrentResponseStarted := True;
       LConsumed := LParser.Execute(PAnsiChar(LPending), LN);
       if LConsumed < LN then
         LPending := System.Copy(LPending, SizeInt(LConsumed) + 1,
@@ -2135,6 +2140,7 @@ begin
       if LN = 0 then
         Break;
       AResponseStarted := True;
+      LCurrentResponseStarted := True;
       LConsumed := LParser.Execute(@LBuf[0], LN);
       if LConsumed < LN then
       begin
@@ -2146,6 +2152,8 @@ begin
     if LParser.IsComplete and
       IsSkippableInformationalResponse(LParser.GetStatusCode) then
     begin
+      LSkippedInformational := True;
+      LCurrentResponseStarted := False;
       LParser := NewH1ResponseParser(ARequestMethod = hmHead);
       Continue;
     end;
@@ -2156,6 +2164,9 @@ begin
 
   if LParser.IsComplete and
     IsSkippableInformationalResponse(LParser.GetStatusCode) then
+    raise EHttpError.Create('HTTP response incomplete: missing final response');
+
+  if LSkippedInformational and (not LCurrentResponseStarted) then
     raise EHttpError.Create('HTTP response incomplete: missing final response');
 
   if LParser.HasError then

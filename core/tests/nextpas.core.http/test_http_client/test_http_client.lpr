@@ -2685,6 +2685,52 @@ begin
   end;
 end;
 
+procedure TestClientRejectsInformationalOnlyResponseEof;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+  LMessage: string;
+begin
+  GRawResponse1 := 'HTTP/1.1 103 Early Hints'#13#10 +
+                   'Link: </style.css>; rel=preload'#13#10 +
+                   #13#10;
+  GRawResponse2 := '';
+  GRawAcceptLimit := 1;
+  GRawListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRawListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @RawResponseThread, nil);
+
+  try
+    LClient := NewHttpClient;
+    LRaised := False;
+    LMessage := '';
+    try
+      LClient.Get('http://127.0.0.1:' +
+        IntToStr(Int64(LPort)) + '/early-hints-only');
+    except
+      on E: EHttpError do
+      begin
+        LRaised := True;
+        LMessage := E.Message;
+      end;
+    end;
+
+    Check(LRaised, 'informational-only response EOF raises EHttpError');
+    Check(Pos('missing final response', LMessage) > 0,
+      'informational-only response EOF reports missing final response');
+  finally
+    GRawListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRawListener := nil;
+    GRawResponse1 := '';
+    GRawResponse2 := '';
+    GRawAcceptLimit := 0;
+  end;
+end;
+
 procedure TestClientDoesNotPool101SwitchingProtocolsConnection;
 var
   LPort: UInt16;
@@ -5692,6 +5738,8 @@ begin
     @TestClientSkips100ContinueBeforeFinalResponse);
   T.Run('Client skips 103 Early Hints before final response',
     @TestClientSkips103EarlyHintsBeforeFinalResponse);
+  T.Run('Client rejects informational-only response EOF',
+    @TestClientRejectsInformationalOnlyResponseEof);
   T.Run('Client does not pool 101 Switching Protocols connection',
     @TestClientDoesNotPool101SwitchingProtocolsConnection);
   T.Run('Client request body does not exceed ContentLength',
