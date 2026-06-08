@@ -1323,7 +1323,7 @@ begin
     '`TAtomicInt32` and `TAtomicUInt32` follow `atomic_is_lock_free_32`; `Increment`/`Decrement` return the new value after adding or subtracting one, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
     'atomic README must document the 32-bit typed-record lock-free and convenience contract');
   CheckContains(LAtomicDocsReadme,
-    '`TAtomicInt32` and `TAtomicUInt32` keep the scalar RMW return-old semantics in typed form: `FetchAdd` / `FetchSub` / `FetchAnd` / `FetchOr` / `FetchXor` return the previous value and publish the updated Int32/UInt32 payload through the wrapper storage.',
+    '`TAtomicInt32` and `TAtomicUInt32` keep the scalar RMW return-old semantics in typed form: `FetchAdd` / `FetchSub` / `FetchAnd` / `FetchOr` / `FetchXor` return the previous value and publish the updated Int32/UInt32 payload through the wrapper storage. `TAtomicInt32` also exposes `FetchMax` / `FetchMin` / `FetchNand` with the same return-old RMW contract.',
     'atomic README must document the 32-bit typed-record RMW contract');
   CheckContains(LAtomicDocsReadme,
     '`TAtomicUInt32` uses modulo-2^32 unsigned arithmetic for `Increment`/`Decrement` and `FetchAdd`/`FetchSub`; `TAtomicUInt64` uses modulo-2^64 arithmetic when its public 64-bit surface is compiled; `TAtomicUSize` uses modulo pointer-width unsigned arithmetic.',
@@ -1338,7 +1338,7 @@ begin
     'On i386, `atomic_is_lock_free_64` is runtime-detected from CMPXCHG8B support; when CMPXCHG8B is unavailable, the typed 64-bit API is still present but 64-bit operations use the fallback lock path.',
     'atomic README must not equate the i386 typed 64-bit API surface with guaranteed lock-free runtime behavior');
   CheckContains(LAtomicDocsReadme,
-    '`TAtomicInt64` and `TAtomicUInt64` keep the scalar 64-bit RMW return-old semantics in typed form: `FetchAdd` / `FetchSub` / `FetchAnd` / `FetchOr` / `FetchXor` return the previous value and publish the updated Int64/UInt64 payload through the wrapper storage.',
+    '`TAtomicInt64` and `TAtomicUInt64` keep the scalar 64-bit RMW return-old semantics in typed form: `FetchAdd` / `FetchSub` / `FetchAnd` / `FetchOr` / `FetchXor` return the previous value and publish the updated Int64/UInt64 payload through the wrapper storage. `TAtomicInt64` also exposes `FetchMax` / `FetchMin` / `FetchNand` with the same return-old RMW contract.',
     'atomic README must document the 64-bit typed-record RMW contract');
   CheckContains(LAtomicDocsReadme,
     '`TAtomicISize` and `TAtomicUSize` follow `atomic_is_lock_free_ptr`; `Increment`/`Decrement` return the new value after adding or subtracting one, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
@@ -1473,6 +1473,12 @@ begin
     'invalid memory-order matrix must cover TAtomicInt32 strong single-order CAS invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'LTypedInt32.CompareExchangeWeak(LExpectedInt32, 904, LInvalidOrder)',
     'invalid memory-order matrix must cover TAtomicInt32 weak single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedInt32.FetchMax(7, LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicInt32 FetchMax invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedInt32.FetchMin(7, LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicInt32 FetchMin invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedInt32.FetchNand(7, LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicInt32 FetchNand invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'LTypedUInt32.CompareExchangeWeak(LExpectedUInt32, UInt32(1002), LInvalidOrder)',
     'invalid memory-order matrix must cover TAtomicUInt32 weak single-order CAS invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'LTypedUInt32.CompareExchangeStrong(LExpectedUInt32, UInt32(1004), LInvalidOrder)',
@@ -1511,6 +1517,12 @@ begin
     'invalid memory-order matrix must cover TAtomicUInt64 weak single-order CAS invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'LTypedInt64.CompareExchangeWeak(LExpectedInt64, 1704, LInvalidOrder)',
     'invalid memory-order matrix must cover TAtomicInt64 weak single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedInt64.FetchMax(Int64(7), LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicInt64 FetchMax invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedInt64.FetchMin(Int64(7), LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicInt64 FetchMin invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedInt64.FetchNand(Int64(7), LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicInt64 FetchNand invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'LTypedUInt64.CompareExchangeStrong(LExpectedUInt64, UInt64(1804), LInvalidOrder)',
     'invalid memory-order matrix must cover TAtomicUInt64 strong single-order CAS invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, mo_release, mo_acq_rel)',
@@ -1923,6 +1935,18 @@ begin
     'typed Int32 FetchOr must delegate to the Int32 atomic root');
   CheckContains(LTypesInt32FetchSection, 'atomic_fetch_xor(FValue, AMask, AOrder);',
     'typed Int32 FetchXor must delegate to the Int32 atomic root');
+  CheckContains(LAtomicTypesSource, 'function FetchMax(AValue: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;',
+    'typed Int32 must declare FetchMax in the public record surface');
+  CheckContains(LAtomicTypesSource, 'function FetchMin(AValue: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;',
+    'typed Int32 must declare FetchMin in the public record surface');
+  CheckContains(LAtomicTypesSource, 'function FetchNand(AMask: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;',
+    'typed Int32 must declare FetchNand in the public record surface');
+  CheckContains(LTypesInt32FetchSection, 'atomic_fetch_max(FValue, AValue, AOrder);',
+    'typed Int32 FetchMax must delegate to the signed Int32 atomic root');
+  CheckContains(LTypesInt32FetchSection, 'atomic_fetch_min(FValue, AValue, AOrder);',
+    'typed Int32 FetchMin must delegate to the signed Int32 atomic root');
+  CheckContains(LTypesInt32FetchSection, 'atomic_fetch_nand(FValue, AMask, AOrder);',
+    'typed Int32 FetchNand must delegate to the signed Int32 atomic root');
   CheckContains(LTypesUInt32FetchSection, 'atomic_fetch_add(FValue, ADelta, AOrder);',
     'typed UInt32 FetchAdd must delegate to the UInt32 atomic root');
   CheckContains(LTypesUInt32FetchSection, 'atomic_fetch_sub(FValue, ADelta, AOrder);',
@@ -1933,6 +1957,12 @@ begin
     'typed UInt32 FetchOr must delegate to the UInt32 atomic root');
   CheckContains(LTypesUInt32FetchSection, 'atomic_fetch_xor(FValue, AMask, AOrder);',
     'typed UInt32 FetchXor must delegate to the UInt32 atomic root');
+  CheckNotContains(LTypesUInt32FetchSection, 'FetchMax',
+    'typed UInt32 must not expose signed FetchMax until root unsigned max semantics land');
+  CheckNotContains(LTypesUInt32FetchSection, 'FetchMin',
+    'typed UInt32 must not expose signed FetchMin until root unsigned min semantics land');
+  CheckNotContains(LTypesUInt32FetchSection, 'FetchNand',
+    'typed UInt32 must not expose FetchNand until root unsigned nand surface lands');
   CheckContains(LTypesInt64LockFreeSection, 'atomic_is_lock_free_64',
     'typed Int64 lock-free query must delegate to runtime truth');
   CheckNotContains(LTypesInt64LockFreeSection, 'Result := True',
@@ -1951,6 +1981,18 @@ begin
     'typed Int64 FetchOr must delegate to the Int64 atomic root');
   CheckContains(LTypesInt64FetchSection, 'atomic_fetch_xor_64(FValue, AMask, AOrder);',
     'typed Int64 FetchXor must delegate to the Int64 atomic root');
+  CheckContains(LAtomicTypesSource, 'function FetchMax(AValue: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;',
+    'typed Int64 must declare FetchMax in the public record surface');
+  CheckContains(LAtomicTypesSource, 'function FetchMin(AValue: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;',
+    'typed Int64 must declare FetchMin in the public record surface');
+  CheckContains(LAtomicTypesSource, 'function FetchNand(AMask: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;',
+    'typed Int64 must declare FetchNand in the public record surface');
+  CheckContains(LTypesInt64FetchSection, 'atomic_fetch_max_64(FValue, AValue, AOrder);',
+    'typed Int64 FetchMax must delegate to the signed Int64 atomic root');
+  CheckContains(LTypesInt64FetchSection, 'atomic_fetch_min_64(FValue, AValue, AOrder);',
+    'typed Int64 FetchMin must delegate to the signed Int64 atomic root');
+  CheckContains(LTypesInt64FetchSection, 'atomic_fetch_nand_64(FValue, AMask, AOrder);',
+    'typed Int64 FetchNand must delegate to the signed Int64 atomic root');
   CheckContains(LTypesUInt64FetchSection, 'atomic_fetch_add_64(FValue, ADelta, AOrder);',
     'typed UInt64 FetchAdd must delegate to the UInt64 atomic root');
   CheckContains(LTypesUInt64FetchSection, 'atomic_fetch_sub_64(FValue, ADelta, AOrder);',
@@ -1961,6 +2003,12 @@ begin
     'typed UInt64 FetchOr must delegate to the UInt64 atomic root');
   CheckContains(LTypesUInt64FetchSection, 'atomic_fetch_xor_64(FValue, AMask, AOrder);',
     'typed UInt64 FetchXor must delegate to the UInt64 atomic root');
+  CheckNotContains(LTypesUInt64FetchSection, 'FetchMax',
+    'typed UInt64 must not expose signed FetchMax until root unsigned max semantics land');
+  CheckNotContains(LTypesUInt64FetchSection, 'FetchMin',
+    'typed UInt64 must not expose signed FetchMin until root unsigned min semantics land');
+  CheckNotContains(LTypesUInt64FetchSection, 'FetchNand',
+    'typed UInt64 must not expose FetchNand until root unsigned nand surface lands');
   CheckContains(LTypedInt64ContractSection, '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}',
     'typed Int64/UInt64 runtime contract section must start with the production 64-bit API gate');
   CheckContains(LTypedInt64ContractSection, 'TAtomicInt64.is_lock_free',
@@ -2939,6 +2987,23 @@ begin
     'TAtomicInt32.FetchXor should return the previous value');
   CheckEqual(Int64($0FF0), Int64(LAtomicInt32.Load(mo_acquire)),
     'TAtomicInt32.FetchXor should publish the XOR result');
+  LAtomicInt32.Store(5, mo_release);
+  CheckEqual(Int64(5), Int64(LAtomicInt32.FetchMax(9, mo_acq_rel)),
+    'TAtomicInt32.FetchMax should return the previous value');
+  CheckEqual(Int64(9), Int64(LAtomicInt32.Load(mo_acquire)),
+    'TAtomicInt32.FetchMax should publish the greater signed value');
+  CheckEqual(Int64(9), Int64(LAtomicInt32.FetchMax(4, mo_acq_rel)),
+    'TAtomicInt32.FetchMax should return the previous value when it keeps the target');
+  CheckEqual(Int64(9), Int64(LAtomicInt32.Load(mo_acquire)),
+    'TAtomicInt32.FetchMax should keep the greater signed value');
+  CheckEqual(Int64(9), Int64(LAtomicInt32.FetchMin(3, mo_acq_rel)),
+    'TAtomicInt32.FetchMin should return the previous value');
+  CheckEqual(Int64(3), Int64(LAtomicInt32.Load(mo_acquire)),
+    'TAtomicInt32.FetchMin should publish the smaller signed value');
+  CheckEqual(Int64(3), Int64(LAtomicInt32.FetchNand($000F, mo_acq_rel)),
+    'TAtomicInt32.FetchNand should return the previous value');
+  CheckEqual(Int64(not (3 and $000F)), Int64(LAtomicInt32.Load(mo_acquire)),
+    'TAtomicInt32.FetchNand should publish not(old and arg)');
 
   LAtomicUInt32 := TAtomicUInt32.Create(20);
   CheckEqual(Int64(20), Int64(LAtomicUInt32.FetchAdd(6, mo_acq_rel)),
@@ -3071,6 +3136,23 @@ begin
     'TAtomicInt64.FetchXor should return the previous value');
   CheckEqual(Int64($0FF000F00FF000F0), LAtomicInt64.Load(mo_acquire),
     'TAtomicInt64.FetchXor should publish the XOR result');
+  LAtomicInt64.Store(Int64(1) shl 40, mo_release);
+  CheckEqual(Int64(1) shl 40, LAtomicInt64.FetchMax((Int64(1) shl 40) + 9, mo_acq_rel),
+    'TAtomicInt64.FetchMax should return the previous value');
+  CheckEqual((Int64(1) shl 40) + 9, LAtomicInt64.Load(mo_acquire),
+    'TAtomicInt64.FetchMax should publish the greater signed value');
+  CheckEqual((Int64(1) shl 40) + 9, LAtomicInt64.FetchMax((Int64(1) shl 40) + 4, mo_acq_rel),
+    'TAtomicInt64.FetchMax should return the previous value when it keeps the target');
+  CheckEqual((Int64(1) shl 40) + 9, LAtomicInt64.Load(mo_acquire),
+    'TAtomicInt64.FetchMax should keep the greater signed value');
+  CheckEqual((Int64(1) shl 40) + 9, LAtomicInt64.FetchMin((Int64(1) shl 40) + 3, mo_acq_rel),
+    'TAtomicInt64.FetchMin should return the previous value');
+  CheckEqual((Int64(1) shl 40) + 3, LAtomicInt64.Load(mo_acquire),
+    'TAtomicInt64.FetchMin should publish the smaller signed value');
+  CheckEqual((Int64(1) shl 40) + 3, LAtomicInt64.FetchNand(Int64($000000000000000F), mo_acq_rel),
+    'TAtomicInt64.FetchNand should return the previous value');
+  CheckEqual(not (((Int64(1) shl 40) + 3) and Int64($000000000000000F)), LAtomicInt64.Load(mo_acquire),
+    'TAtomicInt64.FetchNand should publish not(old and arg)');
 
   LAtomicUInt64 := TAtomicUInt64.Create((UInt64(1) shl 40) + 12);
   CheckEqual(Int64((UInt64(1) shl 40) + 12), Int64(LAtomicUInt64.FetchAdd(8, mo_acq_rel)),
@@ -4574,6 +4656,45 @@ var
     LTypedInt32 := TAtomicInt32.Create(101);
     LRaised := False;
     try
+      LTypedInt32.FetchMax(7, LInvalidOrder);
+      ExpectInvalidOrderRaises('TAtomicInt32.FetchMax invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'TAtomicInt32.FetchMax invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), Int64(LTypedInt32.Load(mo_acquire)),
+      'TAtomicInt32.FetchMax invalid ordinal must not mutate the target');
+
+    LTypedInt32 := TAtomicInt32.Create(101);
+    LRaised := False;
+    try
+      LTypedInt32.FetchMin(7, LInvalidOrder);
+      ExpectInvalidOrderRaises('TAtomicInt32.FetchMin invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'TAtomicInt32.FetchMin invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), Int64(LTypedInt32.Load(mo_acquire)),
+      'TAtomicInt32.FetchMin invalid ordinal must not mutate the target');
+
+    LTypedInt32 := TAtomicInt32.Create(101);
+    LRaised := False;
+    try
+      LTypedInt32.FetchNand(7, LInvalidOrder);
+      ExpectInvalidOrderRaises('TAtomicInt32.FetchNand invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'TAtomicInt32.FetchNand invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), Int64(LTypedInt32.Load(mo_acquire)),
+      'TAtomicInt32.FetchNand invalid ordinal must not mutate the target');
+
+    LTypedInt32 := TAtomicInt32.Create(101);
+    LRaised := False;
+    try
       LTypedInt32.Increment(LInvalidOrder);
       ExpectInvalidOrderRaises('TAtomicInt32.Increment invalid ordinal');
     except
@@ -4961,6 +5082,45 @@ var
       'TAtomicInt64 weak single-order CAS invalid ordinal must not mutate the target');
     CheckEqual(Int64(1703), LExpectedInt64,
       'TAtomicInt64 weak single-order CAS invalid ordinal must not mutate expected');
+
+    LTypedInt64 := TAtomicInt64.Create(1705);
+    LRaised := False;
+    try
+      LTypedInt64.FetchMax(Int64(7), LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicInt64 FetchMax invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1705), LTypedInt64.Load(mo_acquire),
+      'TAtomicInt64 FetchMax invalid ordinal must not mutate the target');
+
+    LTypedInt64 := TAtomicInt64.Create(1707);
+    LRaised := False;
+    try
+      LTypedInt64.FetchMin(Int64(7), LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicInt64 FetchMin invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1707), LTypedInt64.Load(mo_acquire),
+      'TAtomicInt64 FetchMin invalid ordinal must not mutate the target');
+
+    LTypedInt64 := TAtomicInt64.Create(1709);
+    LRaised := False;
+    try
+      LTypedInt64.FetchNand(Int64(7), LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicInt64 FetchNand invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1709), LTypedInt64.Load(mo_acquire),
+      'TAtomicInt64 FetchNand invalid ordinal must not mutate the target');
 
     LTypedUInt64 := TAtomicUInt64.Create(UInt64(1801));
     LExpectedUInt64 := UInt64(1801);

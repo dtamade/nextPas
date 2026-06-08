@@ -125,6 +125,9 @@ begin
   GInt64 := GAtomicInt64.FetchAnd(7, mo_acquire);
   GInt64 := GAtomicInt64.FetchOr(8, mo_release);
   GInt64 := GAtomicInt64.FetchXor(3, mo_acq_rel);
+  GInt64 := GAtomicInt64.FetchMax(9, mo_seq_cst);
+  GInt64 := GAtomicInt64.FetchMin(4, mo_seq_cst);
+  GInt64 := GAtomicInt64.FetchNand(1, mo_seq_cst);
   GInt64 := GAtomicInt64.Increment(mo_seq_cst);
   GInt64 := GAtomicInt64.Decrement(mo_seq_cst);
 
@@ -163,6 +166,9 @@ begin
   GInt32 := GAtomicInt32.FetchAnd(7, mo_acquire);
   GInt32 := GAtomicInt32.FetchOr(8, mo_release);
   GInt32 := GAtomicInt32.FetchXor(3, mo_acq_rel);
+  GInt32 := GAtomicInt32.FetchMax(9, mo_seq_cst);
+  GInt32 := GAtomicInt32.FetchMin(4, mo_seq_cst);
+  GInt32 := GAtomicInt32.FetchNand(1, mo_seq_cst);
   GInt32 := GAtomicInt32.Increment(mo_seq_cst);
   GInt32 := GAtomicInt32.Decrement(mo_seq_cst);
   GInt32 := GAtomicInt32.IntoInner;

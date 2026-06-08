@@ -52,6 +52,9 @@ type
     function FetchAnd(AMask: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;
     function FetchOr(AMask: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;
     function FetchXor(AMask: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;
+    function FetchMax(AValue: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;
+    function FetchMin(AValue: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;
+    function FetchNand(AMask: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;
 
     // 便利方法 - 返回新值
     function Increment(AOrder: memory_order_t = mo_seq_cst): Int32; inline;
@@ -133,6 +136,9 @@ type
     function FetchAnd(AMask: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;
     function FetchOr(AMask: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;
     function FetchXor(AMask: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;
+    function FetchMax(AValue: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;
+    function FetchMin(AValue: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;
+    function FetchNand(AMask: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;
 
     function Increment(AOrder: memory_order_t = mo_seq_cst): Int64; inline;
     function Decrement(AOrder: memory_order_t = mo_seq_cst): Int64; inline;
@@ -731,6 +737,21 @@ begin
   Result := atomic_fetch_xor(FValue, AMask, AOrder);
 end;
 
+function TAtomicInt32.FetchMax(AValue: Int32; AOrder: memory_order_t): Int32;
+begin
+  Result := atomic_fetch_max(FValue, AValue, AOrder);
+end;
+
+function TAtomicInt32.FetchMin(AValue: Int32; AOrder: memory_order_t): Int32;
+begin
+  Result := atomic_fetch_min(FValue, AValue, AOrder);
+end;
+
+function TAtomicInt32.FetchNand(AMask: Int32; AOrder: memory_order_t): Int32;
+begin
+  Result := atomic_fetch_nand(FValue, AMask, AOrder);
+end;
+
 function TAtomicInt32.Increment(AOrder: memory_order_t): Int32;
 begin
   Result := _int32_inc_result(FetchAdd(1, AOrder));
@@ -918,6 +939,21 @@ end;
 function TAtomicInt64.FetchXor(AMask: Int64; AOrder: memory_order_t): Int64;
 begin
   Result := atomic_fetch_xor_64(FValue, AMask, AOrder);
+end;
+
+function TAtomicInt64.FetchMax(AValue: Int64; AOrder: memory_order_t): Int64;
+begin
+  Result := atomic_fetch_max_64(FValue, AValue, AOrder);
+end;
+
+function TAtomicInt64.FetchMin(AValue: Int64; AOrder: memory_order_t): Int64;
+begin
+  Result := atomic_fetch_min_64(FValue, AValue, AOrder);
+end;
+
+function TAtomicInt64.FetchNand(AMask: Int64; AOrder: memory_order_t): Int64;
+begin
+  Result := atomic_fetch_nand_64(FValue, AMask, AOrder);
 end;
 
 function TAtomicInt64.Increment(AOrder: memory_order_t): Int64;
