@@ -215,7 +215,8 @@ begin
   LOut := 0;
   while LPos + VecWidth <= ALen do
   begin
-    LMask := VecCmpEq(@ASrc[LPos], Ord('\'));
+    LMask := VecCmpEq(@ASrc[LPos], Ord('\')) or
+             VecCmpLtU(@ASrc[LPos], $20);
     if LMask = TVecMask(0) then
     begin
       Move(ASrc[LPos], ADst[LOut], VecWidth);
@@ -230,6 +231,11 @@ begin
         Move(ASrc[LPos], ADst[LOut], LFirst);
         Inc(LPos, SizeUInt(LFirst));
         Inc(LOut, SizeUInt(LFirst));
+      end;
+      if Byte(ASrc[LPos]) < $20 then
+      begin
+        AError := ueInvalidEscape;
+        Exit(LOut);
       end;
       Inc(LPos);
       if LPos >= ALen then
@@ -308,6 +314,11 @@ begin
     LCh := Byte(ASrc[LPos]);
     if LCh <> Ord('\') then
     begin
+      if LCh < $20 then
+      begin
+        AError := ueInvalidEscape;
+        Exit(LOut);
+      end;
       ADst[LOut] := AnsiChar(LCh);
       Inc(LOut);
       Inc(LPos);

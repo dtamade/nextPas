@@ -6,6 +6,7 @@ uses
   nextpas.core.text.escape,
   nextpas.core.text.view,
   nextpas.core.text.builder,
+  nextpas.core.simd.vec,
   nextpas.core.testing;
 
 var
@@ -162,6 +163,28 @@ begin
   Check(E = ueInvalidUnicode, 'lone surrogate');
 end;
 
+procedure TestUnescapeRejectsBareControlBytes;
+var
+  Src, Dst: array[0..127] of AnsiChar;
+  N: SizeUInt;
+  E: TUnescapeError;
+  I: SizeUInt;
+begin
+  Src[0] := 'a';
+  Src[1] := #10;
+  Src[2] := 'b';
+  N := JsonUnescapeToBuffer(@Src[0], 3, @Dst[0], E);
+  Check(E = ueInvalidEscape, 'scalar bare control rejected');
+  CheckEqual(Int64(1), Int64(N), 'scalar error offset');
+
+  for I := 0 to VecWidth + 2 do
+    Src[I] := 'x';
+  Src[5] := #10;
+  N := JsonUnescapeToBuffer(@Src[0], VecWidth + 3, @Dst[0], E);
+  Check(E = ueInvalidEscape, 'SIMD bare control rejected');
+  CheckEqual(Int64(5), Int64(N), 'SIMD error offset');
+end;
+
 procedure TestFindStringEnd;
 begin
   CheckEqual(Int64(5), Int64(JsonFindStringEnd(PAnsiChar('hello"'), 6)), 'simple');
@@ -198,6 +221,7 @@ begin
   T.Run('unescape unicode', @TestUnescapeUnicode);
   T.Run('unescape surrogate pair', @TestUnescapeSurrogatePair);
   T.Run('unescape errors', @TestUnescapeErrors);
+  T.Run('unescape rejects bare controls', @TestUnescapeRejectsBareControlBytes);
   T.Run('find string end', @TestFindStringEnd);
   T.Run('escape long string', @TestEscapeLongString);
   T.Summary;
