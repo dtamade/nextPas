@@ -1409,17 +1409,23 @@ begin
     'TFastLazyHeaders.GetAllRawValues should use shared raw iterator');
   CheckContains(LCountRawBody, 'NextRawHeader(LLineStart, LSpan)',
     'TFastLazyHeaders.CountRawHeaders should use shared raw iterator');
-  CheckContains(LGetBody, 'FindRawFirstValue(AName, Result)',
+  CheckContains(LGetBody, 'LName := ValidateLookupHeaderNameFast(AName);',
+    'TFastLazyHeaders.Get should validate lookup name before raw lookup');
+  CheckContains(LGetBody, 'FindRawFirstValue(LName, Result)',
     'TFastLazyHeaders.Get should use raw first-value lookup');
   CheckNotContains(LGetBody, 'EnsureMaterialized;',
     'TFastLazyHeaders.Get should not materialize the full header block');
-  CheckContains(LGetAllBody, 'GetAllRawValues(AName)',
+  CheckContains(LGetAllBody, 'LName := ValidateLookupHeaderNameFast(AName);',
+    'TFastLazyHeaders.GetAll should validate lookup name before raw lookup');
+  CheckContains(LGetAllBody, 'GetAllRawValues(LName)',
     'TFastLazyHeaders.GetAll should use raw multi-value lookup');
   CheckNotContains(LGetAllBody, 'EnsureMaterialized;',
     'TFastLazyHeaders.GetAll should not materialize the full header block');
-  CheckContains(LHasBody, 'HasRawHeader(AName)',
+  CheckContains(LHasBody, 'LName := ValidateLookupHeaderNameFast(AName);',
+    'TFastLazyHeaders.Has should validate lookup name before raw lookup');
+  CheckContains(LHasBody, 'HasRawHeader(LName)',
     'TFastLazyHeaders.Has should use raw presence lookup');
-  CheckNotContains(LHasBody, 'FindRawFirstValue(AName, LValue)',
+  CheckNotContains(LHasBody, 'FindRawFirstValue(LName, LValue)',
     'TFastLazyHeaders.Has should not materialize a temporary header value');
   CheckNotContains(LHasBody, 'EnsureMaterialized;',
     'TFastLazyHeaders.Has should not materialize the full header block');
