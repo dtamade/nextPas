@@ -485,6 +485,7 @@ var
   LUrl: TUrl;
   LResp: IHttpResponse;
   LLocation: string;
+  LLocations: TStringArray;
   LNewUrl: TUrl;
   LNewReq: IHttpRequest;
   LRespHeaders: IHttpHeaders;
@@ -518,7 +519,17 @@ begin
       raise EHttpError.Create('redirect with no response headers');
     end;
 
-    LLocation := LRespHeaders.Get('location');
+    LLocations := LRespHeaders.GetAll('location');
+    if Length(LLocations) > 1 then
+    begin
+      ReleaseResponseBody(LResp);
+      raise EHttpError.Create('redirect with duplicate Location headers');
+    end;
+
+    if Length(LLocations) = 1 then
+      LLocation := LLocations[0]
+    else
+      LLocation := '';
     if LLocation = '' then
     begin
       ReleaseResponseBody(LResp);

@@ -204,6 +204,7 @@ type
   private
     FCalls: Int32;
     FRedirectLocation: string;
+    FDuplicateLocation: Boolean;
     FOmitLocation: Boolean;
     FBody: TRedirectTrackedBody;
     FBodyRef: IReadCloser;
@@ -214,6 +215,7 @@ type
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
     property Calls: Int32 read FCalls;
     property RedirectLocation: string read FRedirectLocation write FRedirectLocation;
+    property DuplicateLocation: Boolean read FDuplicateLocation write FDuplicateLocation;
     property OmitLocation: Boolean read FOmitLocation write FOmitLocation;
     property BodyClosed: Boolean read GetBodyClosed;
     property BodyClosedBeforeFollowup: Boolean read FBodyClosedBeforeFollowup;
@@ -1097,7 +1099,15 @@ begin
   if FCalls = 1 then
   begin
     if not FOmitLocation then
-      LHeaders.SetHeader('location', FRedirectLocation);
+    begin
+      if FDuplicateLocation then
+      begin
+        LHeaders.Add('location', FRedirectLocation);
+        LHeaders.Add('location', '/alternate');
+      end
+      else
+        LHeaders.SetHeader('location', FRedirectLocation);
+    end;
     LHeaders.SetHeader('content-length', '13');
     Exit(NewResponse(HTTP_STATUS_FOUND, LHeaders, FBodyRef as IReader));
   end;
@@ -4067,6 +4077,33 @@ begin
     'missing redirect Location closes discarded redirect response body');
 end;
 
+procedure TestClientClosesRedirectResponseBodyOnDuplicateLocation;
+var
+  LTransportObj: TRedirectBodyReleaseTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  LTransportObj := TRedirectBodyReleaseTransport.Create;
+  LTransportObj.DuplicateLocation := True;
+  LTransport := LTransportObj as IHttpTransport;
+  LClient := NewHttpClient(LTransport);
+
+  LRaised := False;
+  try
+    LClient.Get('http://example.test/old');
+  except
+    on E: EHttpError do
+      LRaised := E.Message = 'redirect with duplicate Location headers';
+  end;
+
+  Check(LRaised, 'duplicate redirect Location raises EHttpError');
+  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
+    'duplicate redirect Location stops before follow-up round trip');
+  Check(LTransportObj.BodyClosed,
+    'duplicate redirect Location closes discarded redirect response body');
+end;
+
 procedure TestClientClosesRedirectResponseBodyOnUnsupportedScheme;
 var
   LTransportObj: TRedirectBodyReleaseTransport;
@@ -5075,6 +5112,8 @@ begin
     @TestClientClosesRedirectResponseBodyOnTooManyRedirects);
   T.Run('Client closes redirect response body on missing Location',
     @TestClientClosesRedirectResponseBodyOnMissingLocation);
+  T.Run('Client closes redirect response body on duplicate Location',
+    @TestClientClosesRedirectResponseBodyOnDuplicateLocation);
   T.Run('Client closes redirect response body on unsupported scheme',
     @TestClientClosesRedirectResponseBodyOnUnsupportedScheme);
   T.Run('Client replays seekable body on 307 redirect',
