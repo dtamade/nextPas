@@ -260,6 +260,16 @@ begin
   TQuatf.Create(0.0, 0.0, 0.0, SingleInfinity).Rotate(TVec3f.Create(1.0, 0.0, 0.0));
 end;
 
+procedure RaiseQuatfRotateNaNVector;
+begin
+  TQuatf.Identity.Rotate(TVec3f.Create(SingleNaN, 0.0, 0.0));
+end;
+
+procedure RaiseQuatfRotateInfiniteVector;
+begin
+  TQuatf.Identity.Rotate(TVec3f.Create(0.0, SingleInfinity, 0.0));
+end;
+
 procedure RaiseQuatfSlerpNaNStart;
 begin
   TQuatf.Slerp(TQuatf.Create(SingleNaN, 0.0, 0.0, 1.0), TQuatf.Identity, Single(0.5));
@@ -306,6 +316,16 @@ end;
 procedure RaiseQuatdRotateInfinite;
 begin
   TQuatd.Create(0.0, 0.0, 0.0, DoubleInfinity).Rotate(TVec3d.Create(1.0, 0.0, 0.0));
+end;
+
+procedure RaiseQuatdRotateNaNVector;
+begin
+  TQuatd.Identity.Rotate(TVec3d.Create(DoubleNaN, 0.0, 0.0));
+end;
+
+procedure RaiseQuatdRotateInfiniteVector;
+begin
+  TQuatd.Identity.Rotate(TVec3d.Create(0.0, DoubleInfinity, 0.0));
 end;
 
 procedure RaiseQuatdSlerpNaNStart;
@@ -654,6 +674,19 @@ begin
     'TQuatd Nlerp infinite start quaternion', @RaiseQuatdNlerpInfiniteStart);
   ExpectArgumentErrorMessage('TQuatd.Nlerp: AB must be finite',
     'TQuatd Nlerp NaN end quaternion', @RaiseQuatdNlerpNaNEnd);
+end;
+
+procedure TestRotateRejectsNonFiniteVectorInputs;
+begin
+  ExpectArgumentErrorMessage('TQuatf.Rotate: AVector must be finite',
+    'TQuatf Rotate NaN vector', @RaiseQuatfRotateNaNVector);
+  ExpectArgumentErrorMessage('TQuatf.Rotate: AVector must be finite',
+    'TQuatf Rotate infinite vector', @RaiseQuatfRotateInfiniteVector);
+
+  ExpectArgumentErrorMessage('TQuatd.Rotate: AVector must be finite',
+    'TQuatd Rotate NaN vector', @RaiseQuatdRotateNaNVector);
+  ExpectArgumentErrorMessage('TQuatd.Rotate: AVector must be finite',
+    'TQuatd Rotate infinite vector', @RaiseQuatdRotateInfiniteVector);
 end;
 
 procedure TestInterpolationAllowsFiniteExtrapolation;
@@ -1080,6 +1113,7 @@ begin
   T.Run('max finite normalize', @TestMaxFiniteNormalize);
   T.Run('Interpolation rejects non-finite t', @TestInterpolationRejectsNonFiniteT);
   T.Run('raw quaternion non-finite inputs fail fast', @TestRawQuaternionNonFiniteInputsFailFast);
+  T.Run('Rotate rejects non-finite vector inputs', @TestRotateRejectsNonFiniteVectorInputs);
   T.Run('Interpolation allows finite extrapolation', @TestInterpolationAllowsFiniteExtrapolation);
   T.Run('Interpolation endpoint contracts', @TestInterpolationEndpointContracts);
   T.Run('Interpolation follows shortest path for opposite-sign start',

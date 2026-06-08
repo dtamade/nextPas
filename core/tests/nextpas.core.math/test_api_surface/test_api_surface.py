@@ -1359,6 +1359,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("quat-max-finite-normalize", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('max finite normalize'"),
     RequiredBehaviorTestMarker("quat-interpolation-finite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation rejects non-finite t'"),
     RequiredBehaviorTestMarker("quat-raw-non-finite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('raw quaternion non-finite inputs fail fast'"),
+    RequiredBehaviorTestMarker("quat-rotate-vector-non-finite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Rotate rejects non-finite vector inputs'"),
     RequiredBehaviorTestMarker("quat-interpolation-extrapolation", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation allows finite extrapolation'"),
     RequiredBehaviorTestMarker("quat-interpolation-endpoints", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation endpoint contracts'"),
     RequiredBehaviorTestMarker("quat-interpolation-shortest-start", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('Interpolation follows shortest path for opposite-sign start'"),

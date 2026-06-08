@@ -144,6 +144,20 @@ begin
     raise EArgumentError.Create(AFunctionName + ': ' + AParamName + ' must be finite');
 end;
 
+procedure ValidateVectorInput(const AFunctionName, AParamName: string;
+  const AValue: TVec3f); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': ' + AParamName + ' must be finite');
+end;
+
+procedure ValidateVectorInput(const AFunctionName, AParamName: string;
+  const AValue: TVec3d); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': ' + AParamName + ' must be finite');
+end;
+
 function QuatDot(const AA, AB: TQuatf): Single; inline;
 begin
   Result := AA.X * AB.X + AA.Y * AB.Y + AA.Z * AB.Z + AA.W * AB.W;
@@ -489,6 +503,7 @@ end;
 function TQuatf.Rotate(const AVector: TVec3f): TVec3f;
 begin
   ValidateQuaternionInput('TQuatf.Rotate', 'quaternion', Self);
+  ValidateVectorInput('TQuatf.Rotate', 'AVector', AVector);
   Result := RotationMatrixFromFiniteQuat(Self) * AVector;
 end;
 
@@ -638,6 +653,7 @@ end;
 function TQuatd.Rotate(const AVector: TVec3d): TVec3d;
 begin
   ValidateQuaternionInput('TQuatd.Rotate', 'quaternion', Self);
+  ValidateVectorInput('TQuatd.Rotate', 'AVector', AVector);
   Result := RotationMatrixFromFiniteQuat(Self) * AVector;
 end;
 
