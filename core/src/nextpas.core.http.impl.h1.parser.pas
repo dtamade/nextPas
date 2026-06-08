@@ -21,6 +21,7 @@ type
     HasTransferEncoding: Boolean;
     HasContentLength: Boolean;
     DeclaredContentLength: Int64;
+    ContentLengthTooLarge: Boolean;
     RequestDeclaresBody: Boolean;
     ExpectsContinue: Boolean;
     HasUnsupportedExpect: Boolean;
@@ -346,6 +347,34 @@ begin
   if AValue <> '' then
     Exit(TryStrToInt64(TextTrim(AValue), AResult));
   Result := TryParseTrimmedInt64Span(AValuePtr, AValueLen, AResult);
+end;
+
+function CapturedHeaderValueIsUnsignedDecimal(const AValue: string;
+  const AValuePtr: PAnsiChar; const AValueLen: SizeUInt): Boolean;
+var
+  LValue: string;
+  LStart: SizeUInt;
+  LStop: SizeUInt;
+  LIndex: SizeUInt;
+begin
+  if AValue <> '' then
+  begin
+    LValue := TextTrim(AValue);
+    if LValue = '' then
+      Exit(False);
+    for LIndex := 1 to SizeUInt(Length(LValue)) do
+      if (LValue[SizeInt(LIndex)] < '0') or
+         (LValue[SizeInt(LIndex)] > '9') then
+        Exit(False);
+    Exit(True);
+  end;
+
+  if not SpanTrimBounds(AValuePtr, AValueLen, LStart, LStop) then
+    Exit(False);
+  for LIndex := LStart to LStop - 1 do
+    if (AValuePtr[LIndex] < '0') or (AValuePtr[LIndex] > '9') then
+      Exit(False);
+  Result := True;
 end;
 
 procedure UpdateExpectMetadata(var AMetadata: TH1RequestMetadata;
@@ -1070,6 +1099,13 @@ begin
       FPendingRequestMetadata.HasContentLength := True;
       if FPendingRequestMetadata.DeclaredContentLength > 0 then
         FPendingRequestMetadata.RequestDeclaresBody := True;
+    end;
+    if (not FPendingRequestMetadata.HasContentLength) and
+       CapturedHeaderValueIsUnsignedDecimal(AValue, AValuePtr, AValueLen) then
+    begin
+      FPendingRequestMetadata.HasContentLength := True;
+      FPendingRequestMetadata.ContentLengthTooLarge := True;
+      FPendingRequestMetadata.RequestDeclaresBody := True;
     end;
     Exit;
   end;

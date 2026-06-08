@@ -431,6 +431,31 @@ begin
     'metadata span-fast keeps unsupported expect token');
 end;
 
+procedure TestRequestMetadataHugeContentLengthMarksOverflow;
+var
+  LP: IH1Parser;
+  LReq: string;
+  LMetadata: TH1RequestMetadata;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Expect: 100-continue'#13#10 +
+          'Content-Length: 9223372036854775808'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+
+  Check(LP.HeadersComplete, 'huge content-length request completes headers');
+  LMetadata := LP.GetRequestMetadata;
+  Check(LMetadata.HasContentLength,
+    'metadata keeps huge content-length presence');
+  Check(LMetadata.ContentLengthTooLarge,
+    'metadata marks content-length overflow');
+  Check(LMetadata.RequestDeclaresBody,
+    'metadata treats huge content-length as a declared body');
+  Check(LMetadata.ExpectsContinue,
+    'metadata keeps expect token for huge content-length');
+end;
+
 procedure TestRequestMetadataConnectionTokenListSemantics;
 var
   LP: IH1Parser;
@@ -2269,6 +2294,8 @@ begin
     @TestRequestMetadataFixedLengthExpectConnection);
   T.Run('Request metadata span fast path keeps trim and token semantics',
     @TestRequestMetadataSpanFastPathKeepsTrimAndTokenSemantics);
+  T.Run('Request metadata huge content-length marks overflow',
+    @TestRequestMetadataHugeContentLengthMarksOverflow);
   T.Run('Request metadata connection token-list semantics',
     @TestRequestMetadataConnectionTokenListSemantics);
   T.Run('Request metadata chunked transfer-encoding',

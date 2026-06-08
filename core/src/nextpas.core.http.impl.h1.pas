@@ -386,6 +386,9 @@ begin
   if LMetadata.HasUnsupportedExpect then
     Exit(HTTP_STATUS_EXPECTATION_FAILED);
 
+  if (AOptions.MaxBodySize > 0) and LMetadata.ContentLengthTooLarge then
+    Exit(HTTP_STATUS_PAYLOAD_TOO_LARGE);
+
   if (AOptions.MaxBodySize > 0) and LMetadata.HasContentLength and
      (LMetadata.DeclaredContentLength > AOptions.MaxBodySize) then
     Exit(HTTP_STATUS_PAYLOAD_TOO_LARGE);

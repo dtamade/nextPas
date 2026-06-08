@@ -2482,6 +2482,26 @@ begin
     'Expect declared oversize early reject');
 end;
 
+procedure TestExpectHugeContentLengthRejectsEarly;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 9223372036854775808'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxBodySize := 1024;
+  RunExpectEarlyRejectSecurityCase(
+    LOpts,
+    REQ,
+    'HTTP/1.1 413 Payload Too Large',
+    'Expect huge Content-Length early reject');
+end;
+
 procedure TestRepeatedExpectHeaderUnsupportedMemberRejectsEarly;
 const
   REQ =
@@ -3683,6 +3703,27 @@ begin
     REQ,
     'HTTP/1.1 413 Payload Too Large',
     'epoll Expect declared oversize early reject');
+end;
+
+procedure TestExpectHugeContentLengthRejectsEarlyEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 9223372036854775808'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LOpts.MaxBodySize := 1024;
+  RunExpectEarlyRejectSecurityCase(
+    LOpts,
+    REQ,
+    'HTTP/1.1 413 Payload Too Large',
+    'epoll Expect huge Content-Length early reject');
 end;
 
 procedure TestRepeatedExpectHeaderUnsupportedMemberRejectsEarlyEpollBackend;
@@ -5835,6 +5876,8 @@ begin
     @TestExpectContinueZeroProgressChunkedBodyIdleTimeout);
   T.Run('Expect declared oversize rejects early without interim 100',
     @TestExpectDeclaredOversizeRejectsEarly);
+  T.Run('Expect huge Content-Length rejects early without interim 100',
+    @TestExpectHugeContentLengthRejectsEarly);
   T.Run('Repeated Expect headers with unsupported member reject early without interim 100',
     @TestRepeatedExpectHeaderUnsupportedMemberRejectsEarly);
   T.Run('Expect zero content-length does not emit interim 100',
@@ -6079,6 +6122,8 @@ begin
     @TestExpectContinueZeroProgressChunkedBodyIdleTimeoutEpollBackend);
   T.Run('Expect declared oversize rejects early without interim 100 with epoll backend',
     @TestExpectDeclaredOversizeRejectsEarlyEpollBackend);
+  T.Run('Expect huge Content-Length rejects early without interim 100 with epoll backend',
+    @TestExpectHugeContentLengthRejectsEarlyEpollBackend);
   T.Run('Repeated Expect headers with unsupported member reject early without interim 100 with epoll backend',
     @TestRepeatedExpectHeaderUnsupportedMemberRejectsEarlyEpollBackend);
   T.Run('Expect zero content-length does not emit interim 100 with epoll backend',
