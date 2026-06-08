@@ -772,7 +772,11 @@ begin
   if LBody = nil then
     Exit;
 
-  Result := nextpas.core.io.ReadAll(LBody);
+  try
+    Result := nextpas.core.io.ReadAll(LBody);
+  finally
+    ReleaseResponseBody(AResp);
+  end;
 end;
 
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string;

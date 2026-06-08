@@ -2387,6 +2387,25 @@ begin
     'response body helper treats nil body as empty');
 end;
 
+procedure TestHttpReadResponseBodyStringClosesBodyAfterRead;
+var
+  LHeaders: IHttpHeaders;
+  LBody: TRedirectTrackedBody;
+  LBodyRef: IReadCloser;
+  LResp: IHttpResponse;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '9');
+  LBody := TRedirectTrackedBody.Create('toolchain');
+  LBodyRef := LBody as IReadCloser;
+  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LBodyRef as IReader);
+
+  CheckEqual('toolchain', nextpas.core.http.client.HttpReadResponseBodyString(LResp),
+    'response body string helper reads close-capable body');
+  Check(LBody.Closed,
+    'response body string helper closes close-capable body after read');
+end;
+
 procedure TestHttpReadResponseBodyStringRejectsNilResponse;
 var
   LResp: IHttpResponse;
@@ -2445,6 +2464,26 @@ begin
   LBody := nextpas.core.http.client.HttpReadResponseBodyBytes(LResp);
   CheckEqual(Int64(0), Int64(Length(LBody)),
     'response body bytes helper treats nil body as empty bytes');
+end;
+
+procedure TestHttpReadResponseBodyBytesClosesBodyAfterRead;
+var
+  LHeaders: IHttpHeaders;
+  LBody: TRedirectTrackedBody;
+  LBodyRef: IReadCloser;
+  LResp: IHttpResponse;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '9');
+  LBody := TRedirectTrackedBody.Create('toolchain');
+  LBodyRef := LBody as IReadCloser;
+  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LBodyRef as IReader);
+
+  CheckEqual('toolchain', BytesToTestString(
+    nextpas.core.http.client.HttpReadResponseBodyBytes(LResp)),
+    'response body bytes helper reads close-capable body');
+  Check(LBody.Closed,
+    'response body bytes helper closes close-capable body after read');
 end;
 
 procedure TestHttpReadResponseBodyBytesRejectsNilResponse;
@@ -4142,12 +4181,16 @@ begin
     @TestHttpReadResponseBodyStringReadsLiveResponse);
   T.Run('HttpReadResponseBodyString nil body returns empty',
     @TestHttpReadResponseBodyStringNilBodyReturnsEmpty);
+  T.Run('HttpReadResponseBodyString closes body after read',
+    @TestHttpReadResponseBodyStringClosesBodyAfterRead);
   T.Run('HttpReadResponseBodyString rejects nil response',
     @TestHttpReadResponseBodyStringRejectsNilResponse);
   T.Run('HttpReadResponseBodyBytes reads live response body',
     @TestHttpReadResponseBodyBytesReadsLiveResponse);
   T.Run('HttpReadResponseBodyBytes nil body returns empty',
     @TestHttpReadResponseBodyBytesNilBodyReturnsEmpty);
+  T.Run('HttpReadResponseBodyBytes closes body after read',
+    @TestHttpReadResponseBodyBytesClosesBodyAfterRead);
   T.Run('HttpReadResponseBodyBytes rejects nil response',
     @TestHttpReadResponseBodyBytesRejectsNilResponse);
   T.Run('HttpReleaseResponseBody closes close-capable body',
