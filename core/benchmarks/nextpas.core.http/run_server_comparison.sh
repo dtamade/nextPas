@@ -8,6 +8,8 @@ COMPARISON_LOCK_DIR="${BUILD_DIR}/.comparison-lock"
 COMPARISON_LOCK_TIMEOUT_SECONDS=300
 REQUESTS=20000
 THREADS=4
+REQUESTED_THREADS=4
+EFFECTIVE_THREADS=4
 WORKLOAD="no_url"
 OUTPUT_PATH=""
 RUNS=1
@@ -93,8 +95,11 @@ if [[ "${REQUESTS}" -lt 1 || "${THREADS}" -lt 1 || "${RUNS}" -lt 1 ]]; then
   exit 2
 fi
 
+REQUESTED_THREADS="${THREADS}"
 if [[ "${THREADS}" -gt "${REQUESTS}" ]]; then
-  THREADS="${REQUESTS}"
+  EFFECTIVE_THREADS="${REQUESTS}"
+else
+  EFFECTIVE_THREADS="${THREADS}"
 fi
 
 case "${WORKLOAD}" in
@@ -213,6 +218,8 @@ append_result_row() {
   local client_read_mode
   local response_body_bytes
   local rust_profile
+  local requested_threads
+  local effective_threads
 
   if ! printf '%s\n' "${output}" | grep -q "^impl=${expected_impl}$"; then
     echo "unable to find benchmark impl marker for impl=${expected_impl}" >&2
@@ -227,10 +234,12 @@ append_result_row() {
   client_read_mode="$(printf '%s\n' "${output}" | sed -nE 's/^client_read_mode=([^[:space:]]+)$/\1/p' | tail -n 1)"
   response_body_bytes="$(printf '%s\n' "${output}" | sed -nE 's/^response_body_bytes=([0-9]+)$/\1/p' | tail -n 1)"
   rust_profile="$(printf '%s\n' "${output}" | sed -nE 's/^rust_profile=([^[:space:]]+)$/\1/p' | tail -n 1)"
+  requested_threads="$(printf '%s\n' "${output}" | sed -nE 's/^requested_threads=([0-9]+)$/\1/p' | tail -n 1)"
+  effective_threads="$(printf '%s\n' "${output}" | sed -nE 's/^effective_threads=([0-9]+)$/\1/p' | tail -n 1)"
   if [[ "${rust_profile}" == "" ]]; then
     rust_profile="n/a"
   fi
-  if [[ "${iterations}" == "" || "${completed}" == "" || "${ns_op}" == "" || "${req_s}" == "" || "${client_read_mode}" == "" || "${response_body_bytes}" == "" ]]; then
+  if [[ "${iterations}" == "" || "${completed}" == "" || "${ns_op}" == "" || "${req_s}" == "" || "${client_read_mode}" == "" || "${response_body_bytes}" == "" || "${requested_threads}" == "" || "${effective_threads}" == "" ]]; then
     echo "unable to parse benchmark output for impl=${expected_impl}" >&2
     echo "${output}" >&2
     exit 1
@@ -241,10 +250,16 @@ append_result_row() {
     echo "${output}" >&2
     exit 1
   fi
+  if [[ "${requested_threads}" != "${REQUESTED_THREADS}" || "${effective_threads}" != "${EFFECTIVE_THREADS}" ]]; then
+    echo "thread metadata mismatch for impl=${expected_impl}: requested=${requested_threads} effective=${effective_threads} expected=${REQUESTED_THREADS}/${EFFECTIVE_THREADS}" >&2
+    echo "${output}" >&2
+    exit 1
+  fi
 
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "${run_index}" "${expected_impl}" "${ns_op}" "${req_s}" "${completed}" \
-    "${client_read_mode}" "${response_body_bytes}" "${rust_profile}" >> "${RESULTS_TMP}"
+    "${client_read_mode}" "${response_body_bytes}" "${rust_profile}" \
+    "${requested_threads}" "${effective_threads}" >> "${RESULTS_TMP}"
 }
 
 run_one_impl() {
@@ -293,6 +308,8 @@ write_summary() {
       read_mode_values[impl, count[impl]] = $6;
       body_bytes_values[impl, count[impl]] = $7;
       rust_profile_values[impl, count[impl]] = $8;
+      requested_thread_values[impl, count[impl]] = $9;
+      effective_thread_values[impl, count[impl]] = $10;
     }
 
     END {
@@ -303,6 +320,8 @@ write_summary() {
         delete current_read_mode;
         delete current_body_bytes;
         delete current_rust_profile;
+        delete current_requested_threads;
+        delete current_effective_threads;
         for (i = 1; i <= count[impl]; i++) {
           current_ns[i] = ns_values[impl, i];
           current_req[i] = req_values[impl, i];
@@ -310,11 +329,14 @@ write_summary() {
           current_read_mode[i] = read_mode_values[impl, i];
           current_body_bytes[i] = body_bytes_values[impl, i];
           current_rust_profile[i] = rust_profile_values[impl, i];
+          current_requested_threads[i] = requested_thread_values[impl, i];
+          current_effective_threads[i] = effective_thread_values[impl, i];
         }
-        printf "summary_impl=%s runs=%d median_completed=%.0f median_ns/op=%.1f median_req/s=%.0f summary_client_read_mode=%s summary_response_body_bytes=%s summary_rust_profile=%s\n",
+        printf "summary_impl=%s runs=%d median_completed=%.0f median_ns/op=%.1f median_req/s=%.0f summary_client_read_mode=%s summary_response_body_bytes=%s summary_rust_profile=%s summary_requested_threads=%s summary_effective_threads=%s\n",
           impl, count[impl], median(current_completed, count[impl]),
           median(current_ns, count[impl]), median(current_req, count[impl]),
-          current_read_mode[1], current_body_bytes[1], current_rust_profile[1];
+          current_read_mode[1], current_body_bytes[1], current_rust_profile[1],
+          current_requested_threads[1], current_effective_threads[1];
       }
     }
   ' "${RESULTS_TMP}" | sort
@@ -328,7 +350,9 @@ run_comparison() {
 
   echo "comparison=http.server.keepalive"
   echo "requests=${REQUESTS}"
-  echo "threads=${THREADS}"
+  echo "threads=${EFFECTIVE_THREADS}"
+  echo "requested_threads=${REQUESTED_THREADS}"
+  echo "effective_threads=${EFFECTIVE_THREADS}"
   echo "workload=${WORKLOAD}"
   echo "runs=${RUNS}"
   echo "include_hyper=${INCLUDE_HYPER}"
@@ -341,24 +365,24 @@ run_comparison() {
     echo "section=nextpas"
     run_one_impl "${run_index}" "nextpas" \
       "${CORE_ROOT}/build/projects/nextpas.core.http/bench_server/bench_http_server" \
-      --requests "${REQUESTS}" --threads "${THREADS}" --workload "${WORKLOAD}" \
+      --requests "${REQUESTS}" --threads "${REQUESTED_THREADS}" --workload "${WORKLOAD}" \
       --backend "${NEXTPAS_BACKEND}"
 
     echo "section=go"
     run_one_impl "${run_index}" "go" \
       "${BUILD_DIR}/bench_http_server_go" \
-      --requests "${REQUESTS}" --threads "${THREADS}" --workload "${WORKLOAD}"
+      --requests "${REQUESTS}" --threads "${REQUESTED_THREADS}" --workload "${WORKLOAD}"
 
     echo "section=rust_std"
     run_one_impl "${run_index}" "rust_std" \
       "${BUILD_DIR}/bench_http_server_rust" \
-      --requests "${REQUESTS}" --threads "${THREADS}" --workload "${WORKLOAD}"
+      --requests "${REQUESTS}" --threads "${REQUESTED_THREADS}" --workload "${WORKLOAD}"
 
     if [[ "${INCLUDE_HYPER}" -eq 1 ]]; then
       echo "section=rust_hyper"
       run_one_impl "${run_index}" "rust_hyper" \
         "${BUILD_DIR}/bench_http_server_hyper" \
-        --requests "${REQUESTS}" --threads "${THREADS}" --workload "${WORKLOAD}"
+        --requests "${REQUESTS}" --threads "${REQUESTED_THREADS}" --workload "${WORKLOAD}"
     fi
   done
 

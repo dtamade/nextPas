@@ -3074,6 +3074,85 @@ begin
     'server comparison summary prints response body bytes');
 end;
 
+procedure TestServerComparisonPreservesRequestedThreadsSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LSource := LoadTextFile(ResolveServerComparisonRunnerPath(LRootDir));
+
+  CheckContains(LSource, 'REQUESTED_THREADS=',
+    'server comparison stores caller-requested threads');
+  CheckContains(LSource, 'EFFECTIVE_THREADS=',
+    'server comparison stores effective threads');
+  CheckContains(LSource, 'requested_threads="$(printf',
+    'server comparison parses requested threads from raw row');
+  CheckContains(LSource, 'effective_threads="$(printf',
+    'server comparison parses effective threads from raw row');
+  CheckContains(LSource, 'requested_thread_values[impl, count[impl]] = $9',
+    'server comparison summary stores requested threads column');
+  CheckContains(LSource, 'effective_thread_values[impl, count[impl]] = $10',
+    'server comparison summary stores effective threads column');
+  CheckContains(LSource, 'summary_requested_threads=%s',
+    'server comparison summary prints requested threads');
+  CheckContains(LSource, 'summary_effective_threads=%s',
+    'server comparison summary prints effective threads');
+end;
+
+procedure TestServerComparisonRunnerPreservesRequestedThreads;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LReportPath: string;
+  LReport: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath),
+    'server comparison requested threads runner exists');
+  LReportPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
+    'server_comparison_requested_threads_smoke.txt');
+  DeleteFile(LReportPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '3', '--threads', '5',
+    '--runs', '2', '--output', LReportPath], LRootDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison requested threads runner exit code: ' + LOutput);
+  CheckContains(LOutput, 'requests=3',
+    'requested threads comparison requests marker');
+  CheckLineContains(LOutput, 'threads=3',
+    'requested threads comparison legacy effective threads header');
+  CheckRequestedAndEffectiveThreads(LOutput, '5', '3',
+    'requested threads comparison raw row');
+  CheckContains(LOutput, 'summary_requested_threads=5',
+    'requested threads comparison summary requested marker');
+  CheckContains(LOutput, 'summary_effective_threads=3',
+    'requested threads comparison summary effective marker');
+  CheckServerBenchmarkOutput(LOutput, 'nextpas', '3', '3');
+  CheckServerBenchmarkOutput(LOutput, 'go', '3', '3');
+  CheckServerBenchmarkOutput(LOutput, 'rust_std', '3', '3');
+
+  Check(FileExists(LReportPath),
+    'server comparison requested threads report exists');
+  LReport := LoadTextFile(LReportPath);
+  CheckContains(LReport, 'requests=3',
+    'requested threads report requests marker');
+  CheckLineContains(LReport, 'threads=3',
+    'requested threads report legacy effective threads header');
+  CheckRequestedAndEffectiveThreads(LReport, '5', '3',
+    'requested threads report raw row');
+  CheckContains(LReport, 'summary_requested_threads=5',
+    'requested threads report summary requested marker');
+  CheckContains(LReport, 'summary_effective_threads=3',
+    'requested threads report summary effective marker');
+  CheckServerBenchmarkOutput(LReport, 'nextpas', '3', '3');
+  CheckServerBenchmarkOutput(LReport, 'go', '3', '3');
+  CheckServerBenchmarkOutput(LReport, 'rust_std', '3', '3');
+end;
+
 procedure TestServerComparisonRunnerRejectsInvalidNextpasBackend;
 var
   LRootDir: string;
@@ -4921,6 +5000,10 @@ begin
     @TestServerComparisonRunnerConcurrencyLockSourceContract);
   T.Run('server comparison summary keeps read-mode metadata source contract',
     @TestServerComparisonSummaryKeepsReadModeMetadataSourceContract);
+  T.Run('server comparison preserves requested threads source contract',
+    @TestServerComparisonPreservesRequestedThreadsSourceContract);
+  T.Run('server comparison runner preserves requested threads',
+    @TestServerComparisonRunnerPreservesRequestedThreads);
   T.Run('server comparison runner rejects invalid nextpas backend',
     @TestServerComparisonRunnerRejectsInvalidNextpasBackend);
   T.Run('server comparison runner rejects unsafe output path',
