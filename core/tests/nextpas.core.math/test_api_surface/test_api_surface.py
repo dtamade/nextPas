@@ -1419,6 +1419,10 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("impl-simd-mat4f", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "T.Run('mat4f simd helpers'"),
     RequiredBehaviorTestMarker("impl-simd-quatf", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "T.Run('quatf simd helpers'"),
     RequiredBehaviorTestMarker("impl-simd-runtime-parity", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "T.Run('simd helpers match public math semantics'"),
+    RequiredBehaviorTestMarker("impl-simd-stable-edge-parity", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "T.Run('simd dot length stable edge parity'"),
+    RequiredBehaviorTestMarker("impl-simd-vec4f-length-huge-finite", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "SimdVec4fLength huge finite stable public parity"),
+    RequiredBehaviorTestMarker("impl-simd-vec4f-dot-cancelling-huge", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "SimdVec4fDot cancelling huge finite stable public parity"),
+    RequiredBehaviorTestMarker("impl-simd-vec3f-dot-cancelling-huge", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "SimdVec3fDot cancelling huge finite stable public parity"),
 )
 
 

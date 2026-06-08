@@ -180,6 +180,29 @@ begin
     'SimdQuatfRotate zero quaternion public parity');
 end;
 
+procedure TestSimdDotLengthStableEdgeParity;
+var
+  HugeLength4: TVec4f;
+  HugeDot4A: TVec4f;
+  HugeDot4B: TVec4f;
+  HugeDot3A: TVec3f;
+  HugeDot3B: TVec3f;
+begin
+  HugeLength4 := TVec4f.Create(Single(3.0e20), Single(4.0e20), 0.0, 0.0);
+  CheckNear(HugeLength4.Length, SimdVec4fLength(HugeLength4), 1.0e14,
+    'SimdVec4fLength huge finite stable public parity');
+
+  HugeDot4A := TVec4f.Create(Single(3.0e20), Single(3.0e20), 0.0, 0.0);
+  HugeDot4B := TVec4f.Create(Single(3.0e20), Single(-3.0e20), 0.0, 0.0);
+  CheckNear(TVec4f.Dot(HugeDot4A, HugeDot4B), SimdVec4fDot(HugeDot4A, HugeDot4B),
+    0.0, 'SimdVec4fDot cancelling huge finite stable public parity');
+
+  HugeDot3A := TVec3f.Create(Single(3.0e20), Single(3.0e20), 1.0);
+  HugeDot3B := TVec3f.Create(Single(3.0e20), Single(-3.0e20), 0.0);
+  CheckNear(TVec3f.Dot(HugeDot3A, HugeDot3B), SimdVec3fDot(HugeDot3A, HugeDot3B),
+    0.0, 'SimdVec3fDot cancelling huge finite stable public parity');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.impl.simd');
   T.Run('vec4f simd helpers', @TestVec4fSimdHelpers);
@@ -187,5 +210,6 @@ begin
   T.Run('mat4f simd helpers', @TestMat4fSimdHelpers);
   T.Run('quatf simd helpers', @TestQuatfSimdHelpers);
   T.Run('simd helpers match public math semantics', @TestSimdHelpersMatchPublicMathSemantics);
+  T.Run('simd dot length stable edge parity', @TestSimdDotLengthStableEdgeParity);
   T.Summary;
 end.
