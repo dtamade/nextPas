@@ -185,6 +185,8 @@ end;
 
 procedure THttpServer.ListenAndServe(const AAddr: string; const APort: UInt16);
 begin
+  if IsRunning then
+    raise EInvalidOperationError.Create('http server is already running');
   FTcpServer.ListenAndServe(AAddr, APort, FConnHandler);
 end;
 

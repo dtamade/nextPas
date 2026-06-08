@@ -4854,6 +4854,39 @@ begin
   LServer.Free;
 end;
 
+procedure TestListenAndServeFailsFastWhenAlreadyRunning;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRaised: Boolean;
+  LWrongException: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/x', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LRaised := False;
+    LWrongException := '';
+    try
+      LServer.ListenAndServe('127.0.0.1', LPort);
+    except
+      on E: EInvalidOperationError do
+        LRaised := Pos('already running', LowerCase(E.Message)) > 0;
+      on E: Exception do
+        LWrongException := E.ClassName + ': ' + E.Message;
+    end;
+    Check(LRaised, 'repeated ListenAndServe fails fast as invalid operation, got ' + LWrongException);
+    Check(LServer.IsRunning, 'server remains running after rejected reentry');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 6: POST request with body }
 procedure TestPostWithBody;
 var
@@ -13276,6 +13309,8 @@ begin
   T.Run('Real socket write timeout backpressure does not emit follow-up 501',
     @TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp501);
   T.Run('Shutdown stops accepting', @TestShutdownStopsAccepting);
+  T.Run('ListenAndServe fails fast when already running',
+    @TestListenAndServeFailsFastWhenAlreadyRunning);
   T.Run('POST with body -> 201', @TestPostWithBody);
   T.Run('Keep-alive: two requests one connection', @TestKeepAlive);
   T.Run('Post-commit Connection close header mutation does not stop keep-alive',
