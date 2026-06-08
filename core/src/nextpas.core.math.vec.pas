@@ -569,6 +569,172 @@ begin
   Result := StableVec4Length(AX, AY, AZ, 0.0);
 end;
 
+function NormalizeFiniteVec2(const AValue: TVec2f): TVec2f; overload; inline;
+var
+  LX: Single;
+  LY: Single;
+  LMax: Single;
+  LScaledX: Single;
+  LScaledY: Single;
+  LScaledLength: Single;
+begin
+  LX := nextpas.core.math.scalar.Abs(AValue.X);
+  LY := nextpas.core.math.scalar.Abs(AValue.Y);
+  LMax := nextpas.core.math.scalar.Max(LX, LY);
+  if LMax = 0.0 then
+    Exit(TVec2f.Zero);
+  LScaledX := AValue.X / LMax;
+  LScaledY := AValue.Y / LMax;
+  LScaledLength := Single(System.Sqrt(LScaledX * LScaledX + LScaledY * LScaledY));
+  Result := TVec2f.Create(LScaledX / LScaledLength, LScaledY / LScaledLength);
+end;
+
+function NormalizeFiniteVec3(const AValue: TVec3f): TVec3f; overload; inline;
+var
+  LX: Single;
+  LY: Single;
+  LZ: Single;
+  LMax: Single;
+  LScaledX: Single;
+  LScaledY: Single;
+  LScaledZ: Single;
+  LScaledLength: Single;
+begin
+  LX := nextpas.core.math.scalar.Abs(AValue.X);
+  LY := nextpas.core.math.scalar.Abs(AValue.Y);
+  LZ := nextpas.core.math.scalar.Abs(AValue.Z);
+  LMax := nextpas.core.math.scalar.Max(LX, nextpas.core.math.scalar.Max(LY, LZ));
+  if LMax = 0.0 then
+    Exit(TVec3f.Zero);
+  LScaledX := AValue.X / LMax;
+  LScaledY := AValue.Y / LMax;
+  LScaledZ := AValue.Z / LMax;
+  LScaledLength := Single(System.Sqrt(
+    LScaledX * LScaledX + LScaledY * LScaledY + LScaledZ * LScaledZ));
+  Result := TVec3f.Create(
+    LScaledX / LScaledLength,
+    LScaledY / LScaledLength,
+    LScaledZ / LScaledLength);
+end;
+
+function NormalizeFiniteVec4(const AValue: TVec4f): TVec4f; overload; inline;
+var
+  LX: Single;
+  LY: Single;
+  LZ: Single;
+  LW: Single;
+  LMax: Single;
+  LScaledX: Single;
+  LScaledY: Single;
+  LScaledZ: Single;
+  LScaledW: Single;
+  LScaledLength: Single;
+begin
+  LX := nextpas.core.math.scalar.Abs(AValue.X);
+  LY := nextpas.core.math.scalar.Abs(AValue.Y);
+  LZ := nextpas.core.math.scalar.Abs(AValue.Z);
+  LW := nextpas.core.math.scalar.Abs(AValue.W);
+  LMax := nextpas.core.math.scalar.Max(LX,
+    nextpas.core.math.scalar.Max(LY, nextpas.core.math.scalar.Max(LZ, LW)));
+  if LMax = 0.0 then
+    Exit(TVec4f.Zero);
+  LScaledX := AValue.X / LMax;
+  LScaledY := AValue.Y / LMax;
+  LScaledZ := AValue.Z / LMax;
+  LScaledW := AValue.W / LMax;
+  LScaledLength := Single(System.Sqrt(
+    LScaledX * LScaledX + LScaledY * LScaledY +
+    LScaledZ * LScaledZ + LScaledW * LScaledW));
+  Result := TVec4f.Create(
+    LScaledX / LScaledLength,
+    LScaledY / LScaledLength,
+    LScaledZ / LScaledLength,
+    LScaledW / LScaledLength);
+end;
+
+function NormalizeFiniteVec2(const AValue: TVec2d): TVec2d; overload; inline;
+var
+  LX: Double;
+  LY: Double;
+  LMax: Double;
+  LScaledX: Double;
+  LScaledY: Double;
+  LScaledLength: Double;
+begin
+  LX := nextpas.core.math.scalar.Abs(AValue.X);
+  LY := nextpas.core.math.scalar.Abs(AValue.Y);
+  LMax := nextpas.core.math.scalar.Max(LX, LY);
+  if LMax = 0.0 then
+    Exit(TVec2d.Zero);
+  LScaledX := AValue.X / LMax;
+  LScaledY := AValue.Y / LMax;
+  LScaledLength := System.Sqrt(LScaledX * LScaledX + LScaledY * LScaledY);
+  Result := TVec2d.Create(LScaledX / LScaledLength, LScaledY / LScaledLength);
+end;
+
+function NormalizeFiniteVec3(const AValue: TVec3d): TVec3d; overload; inline;
+var
+  LX: Double;
+  LY: Double;
+  LZ: Double;
+  LMax: Double;
+  LScaledX: Double;
+  LScaledY: Double;
+  LScaledZ: Double;
+  LScaledLength: Double;
+begin
+  LX := nextpas.core.math.scalar.Abs(AValue.X);
+  LY := nextpas.core.math.scalar.Abs(AValue.Y);
+  LZ := nextpas.core.math.scalar.Abs(AValue.Z);
+  LMax := nextpas.core.math.scalar.Max(LX, nextpas.core.math.scalar.Max(LY, LZ));
+  if LMax = 0.0 then
+    Exit(TVec3d.Zero);
+  LScaledX := AValue.X / LMax;
+  LScaledY := AValue.Y / LMax;
+  LScaledZ := AValue.Z / LMax;
+  LScaledLength := System.Sqrt(
+    LScaledX * LScaledX + LScaledY * LScaledY + LScaledZ * LScaledZ);
+  Result := TVec3d.Create(
+    LScaledX / LScaledLength,
+    LScaledY / LScaledLength,
+    LScaledZ / LScaledLength);
+end;
+
+function NormalizeFiniteVec4(const AValue: TVec4d): TVec4d; overload; inline;
+var
+  LX: Double;
+  LY: Double;
+  LZ: Double;
+  LW: Double;
+  LMax: Double;
+  LScaledX: Double;
+  LScaledY: Double;
+  LScaledZ: Double;
+  LScaledW: Double;
+  LScaledLength: Double;
+begin
+  LX := nextpas.core.math.scalar.Abs(AValue.X);
+  LY := nextpas.core.math.scalar.Abs(AValue.Y);
+  LZ := nextpas.core.math.scalar.Abs(AValue.Z);
+  LW := nextpas.core.math.scalar.Abs(AValue.W);
+  LMax := nextpas.core.math.scalar.Max(LX,
+    nextpas.core.math.scalar.Max(LY, nextpas.core.math.scalar.Max(LZ, LW)));
+  if LMax = 0.0 then
+    Exit(TVec4d.Zero);
+  LScaledX := AValue.X / LMax;
+  LScaledY := AValue.Y / LMax;
+  LScaledZ := AValue.Z / LMax;
+  LScaledW := AValue.W / LMax;
+  LScaledLength := System.Sqrt(
+    LScaledX * LScaledX + LScaledY * LScaledY +
+    LScaledZ * LScaledZ + LScaledW * LScaledW);
+  Result := TVec4d.Create(
+    LScaledX / LScaledLength,
+    LScaledY / LScaledLength,
+    LScaledZ / LScaledLength,
+    LScaledW / LScaledLength);
+end;
+
 function StableVec4Dot(const AX, AY, AZ, AW, BX, BY, BZ, BW: Single): Single; inline;
 var
   LScaleA: Double;
@@ -772,14 +938,9 @@ begin
 end;
 
 function TVec2f.Normalize: TVec2f;
-var
-  LLength: Single;
 begin
   ValidateVectorInput('TVec2f.Normalize', Self);
-  LLength := Length;
-  if LLength = 0.0 then
-    Exit(Zero);
-  Result := Self / LLength;
+  Result := NormalizeFiniteVec2(Self);
 end;
 
 class function TVec3f.Create(const AX, AY, AZ: Single): TVec3f;
@@ -875,14 +1036,9 @@ begin
 end;
 
 function TVec3f.Normalize: TVec3f;
-var
-  LLength: Single;
 begin
   ValidateVectorInput('TVec3f.Normalize', Self);
-  LLength := Length;
-  if LLength = 0.0 then
-    Exit(Zero);
-  Result := Self / LLength;
+  Result := NormalizeFiniteVec3(Self);
 end;
 
 class function TVec4f.Create(const AX, AY, AZ, AW: Single): TVec4f;
@@ -975,14 +1131,9 @@ begin
 end;
 
 function TVec4f.Normalize: TVec4f;
-var
-  LLength: Single;
 begin
   ValidateVectorInput('TVec4f.Normalize', Self);
-  LLength := Length;
-  if LLength = 0.0 then
-    Exit(Zero);
-  Result := Self / LLength;
+  Result := NormalizeFiniteVec4(Self);
 end;
 
 class function TVec2d.Create(const AX, AY: Double): TVec2d;
@@ -1066,14 +1217,9 @@ begin
 end;
 
 function TVec2d.Normalize: TVec2d;
-var
-  LLength: Double;
 begin
   ValidateVectorInput('TVec2d.Normalize', Self);
-  LLength := Length;
-  if LLength = 0.0 then
-    Exit(Zero);
-  Result := Self / LLength;
+  Result := NormalizeFiniteVec2(Self);
 end;
 
 class function TVec3d.Create(const AX, AY, AZ: Double): TVec3d;
@@ -1169,14 +1315,9 @@ begin
 end;
 
 function TVec3d.Normalize: TVec3d;
-var
-  LLength: Double;
 begin
   ValidateVectorInput('TVec3d.Normalize', Self);
-  LLength := Length;
-  if LLength = 0.0 then
-    Exit(Zero);
-  Result := Self / LLength;
+  Result := NormalizeFiniteVec3(Self);
 end;
 
 class function TVec4d.Create(const AX, AY, AZ, AW: Double): TVec4d;
@@ -1269,14 +1410,9 @@ begin
 end;
 
 function TVec4d.Normalize: TVec4d;
-var
-  LLength: Double;
 begin
   ValidateVectorInput('TVec4d.Normalize', Self);
-  LLength := Length;
-  if LLength = 0.0 then
-    Exit(Zero);
-  Result := Self / LLength;
+  Result := NormalizeFiniteVec4(Self);
 end;
 
 end.

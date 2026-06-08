@@ -155,6 +155,14 @@ begin
   Result := LValue.Value;
 end;
 
+function SingleMaxFinite: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7F7FFFFF;
+  Result := LValue.Value;
+end;
+
 function SingleNegativeZero: Single;
 var
   LValue: TSingleBitCast;
@@ -184,6 +192,14 @@ var
   LValue: TDoubleBitCast;
 begin
   LValue.Bits := $7FF0000000000000;
+  Result := LValue.Value;
+end;
+
+function DoubleMaxFinite: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FEFFFFFFFFFFFFF;
   Result := LValue.Value;
 end;
 
@@ -416,6 +432,54 @@ begin
   N := V.Normalize;
   CheckVec3f(0.6, 0.8, 0.0, N, 'TVec3f huge finite normalize preserves direction');
   CheckNear(1.0, N.Length, 0.000001, 'TVec3f huge finite normalize preserves unit length');
+end;
+
+procedure TestVectorMaxFiniteNormalize;
+var
+  N2f: TVec2f;
+  N3f: TVec3f;
+  N4f: TVec4f;
+  N2d: TVec2d;
+  N3d: TVec3d;
+  N4d: TVec4d;
+begin
+  N2f := TVec2f.Create(SingleMaxFinite, -SingleMaxFinite).Normalize;
+  CheckVec2f(0.70710677, -0.70710677, N2f,
+    'TVec2f max finite normalize preserves signed direction');
+  CheckNear(1.0, N2f.Length, 0.000001,
+    'TVec2f max finite normalize preserves unit length');
+
+  N3f := TVec3f.Create(SingleMaxFinite, SingleMaxFinite, 0.0).Normalize;
+  CheckVec3f(0.70710677, 0.70710677, 0.0, N3f,
+    'TVec3f max finite normalize preserves direction');
+  CheckNear(1.0, N3f.Length, 0.000001,
+    'TVec3f max finite normalize preserves unit length');
+
+  N4f := TVec4f.Create(SingleMaxFinite, -SingleMaxFinite,
+    SingleMaxFinite, -SingleMaxFinite).Normalize;
+  CheckVec4f(0.5, -0.5, 0.5, -0.5, N4f,
+    'TVec4f max finite normalize preserves signed direction');
+  CheckNear(1.0, N4f.Length, 0.000001,
+    'TVec4f max finite normalize preserves unit length');
+
+  N2d := TVec2d.Create(DoubleMaxFinite, -DoubleMaxFinite).Normalize;
+  CheckVec2d(0.7071067811865475, -0.7071067811865475, N2d,
+    'TVec2d max finite normalize preserves signed direction');
+  CheckNear(1.0, N2d.Length, 0.000000000001,
+    'TVec2d max finite normalize preserves unit length');
+
+  N3d := TVec3d.Create(DoubleMaxFinite, DoubleMaxFinite, 0.0).Normalize;
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0, N3d,
+    'TVec3d max finite normalize preserves direction');
+  CheckNear(1.0, N3d.Length, 0.000000000001,
+    'TVec3d max finite normalize preserves unit length');
+
+  N4d := TVec4d.Create(DoubleMaxFinite, -DoubleMaxFinite,
+    DoubleMaxFinite, -DoubleMaxFinite).Normalize;
+  CheckVec4d(0.5, -0.5, 0.5, -0.5, N4d,
+    'TVec4d max finite normalize preserves signed direction');
+  CheckNear(1.0, N4d.Length, 0.000000000001,
+    'TVec4d max finite normalize preserves unit length');
 end;
 
 procedure TestVec2fHugeFiniteLengthAndNormalize;
@@ -759,6 +823,7 @@ begin
   T.Run('TVec2f huge finite length + normalize', @TestVec2fHugeFiniteLengthAndNormalize);
   T.Run('TVec3f contracts', @TestVec3fContracts);
   T.Run('TVec3f huge finite length + normalize', @TestVec3fHugeFiniteLengthAndNormalize);
+  T.Run('vector max finite normalize contract', @TestVectorMaxFiniteNormalize);
   T.Run('TVec4f contracts', @TestVec4fContracts);
   T.Run('TVec4f huge finite length + normalize', @TestVec4fHugeFiniteLengthAndNormalize);
   T.Run('double precision vector contracts', @TestDoublePrecisionContracts);

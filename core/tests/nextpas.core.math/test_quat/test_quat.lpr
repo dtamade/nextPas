@@ -112,6 +112,14 @@ begin
   Result := LValue.Value;
 end;
 
+function SingleMaxFinite: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7F7FFFFF;
+  Result := LValue.Value;
+end;
+
 function DoubleNaN: Double;
 var
   LValue: TDoubleBitCast;
@@ -125,6 +133,14 @@ var
   LValue: TDoubleBitCast;
 begin
   LValue.Bits := $7FF0000000000000;
+  Result := LValue.Value;
+end;
+
+function DoubleMaxFinite: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FEFFFFFFFFFFFFF;
   Result := LValue.Value;
 end;
 
@@ -221,6 +237,11 @@ begin
   TQuatf.Create(SingleNaN, 0.0, 0.0, 1.0).Normalize;
 end;
 
+procedure RaiseQuatfNormalizeInfinite;
+begin
+  TQuatf.Create(SingleInfinity, 0.0, 0.0, 1.0).Normalize;
+end;
+
 procedure RaiseQuatfToAxisAngleNaN;
 var
   Axis: TVec3f;
@@ -262,6 +283,11 @@ end;
 procedure RaiseQuatdNormalizeNaN;
 begin
   TQuatd.Create(DoubleNaN, 0.0, 0.0, 1.0).Normalize;
+end;
+
+procedure RaiseQuatdNormalizeInfinite;
+begin
+  TQuatd.Create(DoubleInfinity, 0.0, 0.0, 1.0).Normalize;
 end;
 
 procedure RaiseQuatdToAxisAngleNaN;
@@ -533,6 +559,42 @@ begin
     'TQuatd huge finite normalized rotation remains usable');
 end;
 
+procedure TestMaxFiniteNormalize;
+var
+  BaseQf: TQuatf;
+  BaseQd: TQuatd;
+  Qf: TQuatf;
+  Qd: TQuatd;
+begin
+  Qf := TQuatf.Create(0.0, 0.0, SingleMaxFinite, SingleMaxFinite).Normalize;
+  CheckQuatf(0.0, 0.0, 0.70710677, 0.70710677, Qf,
+    'TQuatf max finite normalize preserves direction');
+  CheckNear(1.0, Qf.X * Qf.X + Qf.Y * Qf.Y + Qf.Z * Qf.Z + Qf.W * Qf.W,
+    0.000001, 'TQuatf max finite normalize preserves unit length');
+
+  BaseQf := QuarterTurnZf;
+  Qf := TQuatf.Create(BaseQf.X * SingleMaxFinite, BaseQf.Y * SingleMaxFinite,
+    BaseQf.Z * SingleMaxFinite, BaseQf.W * SingleMaxFinite).Normalize;
+  Check(TQuatf.Equals(BaseQf, Qf, Single(0.000001)),
+    'TQuatf max finite normalized rotation matches base');
+  CheckVec3f(0.0, 1.0, 0.0, Qf.Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf max finite normalized rotation remains usable');
+
+  Qd := TQuatd.Create(0.0, 0.0, DoubleMaxFinite, DoubleMaxFinite).Normalize;
+  CheckQuatd(0.0, 0.0, 0.7071067811865475, 0.7071067811865475, Qd,
+    'TQuatd max finite normalize preserves direction');
+  CheckNear(1.0, Qd.X * Qd.X + Qd.Y * Qd.Y + Qd.Z * Qd.Z + Qd.W * Qd.W,
+    0.000000000001, 'TQuatd max finite normalize preserves unit length');
+
+  BaseQd := QuarterTurnZd;
+  Qd := TQuatd.Create(BaseQd.X * DoubleMaxFinite, BaseQd.Y * DoubleMaxFinite,
+    BaseQd.Z * DoubleMaxFinite, BaseQd.W * DoubleMaxFinite).Normalize;
+  Check(TQuatd.Equals(BaseQd, Qd, 0.000000000001),
+    'TQuatd max finite normalized rotation matches base');
+  CheckVec3d(0.0, 1.0, 0.0, Qd.Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd max finite normalized rotation remains usable');
+end;
+
 procedure TestInterpolationRejectsNonFiniteT;
 begin
   ExpectArgumentErrorMessage('TQuatf.Slerp: AT must be finite',
@@ -557,6 +619,8 @@ procedure TestRawQuaternionNonFiniteInputsFailFast;
 begin
   ExpectArgumentErrorMessage('TQuatf.Normalize: quaternion must be finite',
     'TQuatf Normalize NaN quaternion', @RaiseQuatfNormalizeNaN);
+  ExpectArgumentErrorMessage('TQuatf.Normalize: quaternion must be finite',
+    'TQuatf Normalize infinite quaternion', @RaiseQuatfNormalizeInfinite);
   ExpectArgumentErrorMessage('TQuatf.ToAxisAngle: quaternion must be finite',
     'TQuatf ToAxisAngle NaN quaternion', @RaiseQuatfToAxisAngleNaN);
   ExpectArgumentErrorMessage('TQuatf.ToRotationMatrix: quaternion must be finite',
@@ -574,6 +638,8 @@ begin
 
   ExpectArgumentErrorMessage('TQuatd.Normalize: quaternion must be finite',
     'TQuatd Normalize NaN quaternion', @RaiseQuatdNormalizeNaN);
+  ExpectArgumentErrorMessage('TQuatd.Normalize: quaternion must be finite',
+    'TQuatd Normalize infinite quaternion', @RaiseQuatdNormalizeInfinite);
   ExpectArgumentErrorMessage('TQuatd.ToAxisAngle: quaternion must be finite',
     'TQuatd ToAxisAngle NaN quaternion', @RaiseQuatdToAxisAngleNaN);
   ExpectArgumentErrorMessage('TQuatd.ToRotationMatrix: quaternion must be finite',
@@ -1011,6 +1077,7 @@ begin
   T.Run('FromAxisAngle rejects non-finite inputs', @TestFromAxisAngleRejectsNonFiniteInputs);
   T.Run('FromAxisAngle normalizes huge finite axis', @TestFromAxisAngleNormalizesHugeFiniteAxis);
   T.Run('huge finite normalize', @TestHugeFiniteNormalize);
+  T.Run('max finite normalize', @TestMaxFiniteNormalize);
   T.Run('Interpolation rejects non-finite t', @TestInterpolationRejectsNonFiniteT);
   T.Run('raw quaternion non-finite inputs fail fast', @TestRawQuaternionNonFiniteInputsFailFast);
   T.Run('Interpolation allows finite extrapolation', @TestInterpolationAllowsFiniteExtrapolation);
