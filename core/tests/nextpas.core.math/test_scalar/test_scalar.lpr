@@ -555,6 +555,21 @@ begin
   Ceil(1.0e300);
 end;
 
+procedure RaiseCeilNaN;
+begin
+  Ceil(MakeNaN);
+end;
+
+procedure RaiseCeilPositiveInfinity;
+begin
+  Ceil(MakePositiveInfinity);
+end;
+
+procedure RaiseCeilNegativeInfinity;
+begin
+  Ceil(MakeNegativeInfinity);
+end;
+
 procedure RaiseCeilSingleNaN;
 begin
   Ceil(MakeSingleNaN);
@@ -798,6 +813,12 @@ begin
     'Floor(-Inf)', @RaiseFloorNegativeInfinity);
   ExpectArgumentErrorMessage('Ceil: value is outside Int64 range',
     'Ceil(huge positive)', @RaiseCeilHugePositive);
+  ExpectArgumentErrorMessage('Ceil: NaN cannot be converted to Int64',
+    'Ceil(Double NaN)', @RaiseCeilNaN);
+  ExpectArgumentErrorMessage('Ceil: infinity cannot be converted to Int64',
+    'Ceil(Double +Inf)', @RaiseCeilPositiveInfinity);
+  ExpectArgumentErrorMessage('Ceil: infinity cannot be converted to Int64',
+    'Ceil(Double -Inf)', @RaiseCeilNegativeInfinity);
   ExpectArgumentErrorMessage('Ceil: NaN cannot be converted to Int64',
     'Ceil(Single NaN)', @RaiseCeilSingleNaN);
   ExpectArgumentErrorMessage('Ceil: infinity cannot be converted to Int64',
