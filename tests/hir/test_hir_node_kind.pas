@@ -43,6 +43,9 @@ begin
   if ParseHirNodeKind('ret-str-runtime') <> hnkRetStrRuntime then Fail('ret-str-runtime');
   if ParseHirNodeKind('ret-str-owned-runtime') <> hnkRetStrOwnedRuntime then Fail('ret-str-owned-runtime');
   if ParseHirNodeKind('call-runtime') <> hnkCallRuntime then Fail('call-runtime');
+  if ParseHirNodeKind('string-temp-owned-runtime') <> hnkStringTempOwnedRuntime then Fail('string-temp-owned-runtime');
+  if ParseHirNodeKind('string-temp-borrow-arg-runtime') <> hnkStringTempBorrowArgRuntime then Fail('string-temp-borrow-arg-runtime');
+  if ParseHirNodeKind('string-temp-release-runtime') <> hnkStringTempReleaseRuntime then Fail('string-temp-release-runtime');
   if ParseHirNodeKind('object-free-runtime') <> hnkObjectFreeRuntime then Fail('object-free-runtime');
   if ParseHirNodeKind('int-to-str-runtime') <> hnkIntToStrRuntime then Fail('int-to-str-runtime');
   if ParseHirNodeKind('int-to-str-owned-runtime') = hnkUnknown then Fail('int-to-str-owned-runtime');

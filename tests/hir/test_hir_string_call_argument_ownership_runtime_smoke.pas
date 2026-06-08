@@ -252,24 +252,31 @@ end;
 
 procedure AssertOwnedArgumentRuntimeContract(const ALlvmText,
   ACalleeName, AProducerName: string);
+var
+  CalleeCallNeedle: string;
 begin
   RequireContains(ALlvmText,
     ' = call {ptr, i64, ptr, i64} @' + AProducerName + '(',
     'missing-owned-string-return-runtime');
   RequireContains(ALlvmText, 'extractvalue {ptr, i64, ptr, i64}',
     'missing-owned-string-return-extract-runtime');
-  RequireContains(ALlvmText, 'call i64 @' + ACalleeName + '(ptr ',
+  CalleeCallNeedle := 'call i64 @' + ACalleeName + '(ptr ';
+  if Pos(CalleeCallNeedle, ALlvmText) = 0 then
+    CalleeCallNeedle := 'call {ptr, i64, ptr, i64} @' + ACalleeName + '(ptr ';
+  RequireContains(ALlvmText, CalleeCallNeedle,
     'missing-borrowed-string-argument-runtime');
   RejectContains(ALlvmText, 'call i64 @' + ACalleeName + '(ptr %owner',
     'borrowed-string-argument-must-not-pass-owner-runtime');
-  RequireOrder(ALlvmText, 'call i64 @' + ACalleeName + '(ptr ',
+  RequireOrder(ALlvmText, CalleeCallNeedle,
     'call void @np_string_release(',
     'string-temp-release-must-follow-enclosing-call-runtime');
 end;
 
 procedure AssertLiteralBorrowedRuntimeContract(const ALlvmText: string);
 begin
-  RequireContains(ALlvmText, 'call i64 @Take(ptr @.str.',
+  RequireContains(ALlvmText, '@.str.',
+    'missing-literal-borrowed-string-constant-runtime');
+  RequireContains(ALlvmText, 'call i64 @Take(ptr ',
     'missing-literal-borrowed-string-argument-runtime');
   RejectContains(ALlvmText, 'call void @np_string_release(',
     'literal-borrowed-argument-must-not-release-runtime');

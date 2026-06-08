@@ -64,6 +64,9 @@ type
     hnkRetStrRuntime,
     hnkRetStrOwnedRuntime,
     hnkCallRuntime,
+    hnkStringTempOwnedRuntime,
+    hnkStringTempBorrowArgRuntime,
+    hnkStringTempReleaseRuntime,
     hnkObjectFreeRuntime,
     hnkIntToStrRuntime,
     hnkIntToStrOwnedRuntime,
@@ -202,6 +205,9 @@ begin
     'ret-str-runtime': Result := hnkRetStrRuntime;
     'ret-str-owned-runtime': Result := hnkRetStrOwnedRuntime;
     'call-runtime': Result := hnkCallRuntime;
+    'string-temp-owned-runtime': Result := hnkStringTempOwnedRuntime;
+    'string-temp-borrow-arg-runtime': Result := hnkStringTempBorrowArgRuntime;
+    'string-temp-release-runtime': Result := hnkStringTempReleaseRuntime;
     'object-free-runtime': Result := hnkObjectFreeRuntime;
     'int-to-str-runtime': Result := hnkIntToStrRuntime;
     'int-to-str-owned-runtime': Result := hnkIntToStrOwnedRuntime;

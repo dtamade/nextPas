@@ -234,6 +234,9 @@ type
     procedure ProcessFunctionEnd(const ANode: TTypedHirNode);
     procedure ProcessRetRuntime(const ANode: TTypedHirNode);
     procedure ProcessCallRuntime(const ANode: TTypedHirNode);
+    procedure ProcessStringTempOwnedRuntime(const ANode: TTypedHirNode);
+    procedure ProcessStringTempBorrowArgRuntime(const ANode: TTypedHirNode);
+    procedure ProcessStringTempReleaseRuntime(const ANode: TTypedHirNode);
     procedure ProcessObjectFreeRuntime(const ANode: TTypedHirNode);
     procedure ProcessIntToStr(const ANode: TTypedHirNode);
     procedure ProcessOwnedIntToStr(const ANode: TTypedHirNode);
@@ -4800,6 +4803,150 @@ begin
   EmitStore(GetIntType, AllocSizeVal, AllocSizeSlot);
 end;
 
+procedure THIRBuilder.ProcessStringTempOwnedRuntime(
+  const ANode: TTypedHirNode);
+var
+  Instr: THIRInstr;
+  ArgBlob, FuncName, TempName: string;
+  ArgValues: array of THIRValueId;
+  ArgTypes: array of THIRTypeId;
+  ArgCount, ArgPartCount, I, TabPos: LongInt;
+  ArgParts: array of string;
+  PartBlob: string;
+  V: THIRValueId;
+begin
+  TempName := ANode.Operand;
+  TabPos := Pos(#9, TempName);
+  if TabPos > 0 then
+  begin
+    ArgBlob := Copy(TempName, TabPos + 1, Length(TempName));
+    TempName := Copy(TempName, 1, TabPos - 1);
+  end
+  else
+    ArgBlob := '';
+  FuncName := ANode.DisplayName;
+  if (Length(ArgBlob) > 7) and (Copy(ArgBlob, 1, 7) = 'callee ') then
+  begin
+    TabPos := Pos(#9, ArgBlob);
+    if TabPos > 0 then
+    begin
+      FuncName := Copy(ArgBlob, 8, TabPos - 8);
+      ArgBlob := Copy(ArgBlob, TabPos + 1, Length(ArgBlob));
+    end
+    else
+    begin
+      FuncName := Copy(ArgBlob, 8, Length(ArgBlob) - 7);
+      ArgBlob := '';
+    end;
+  end;
+
+  ArgCount := 0;
+  SetLength(ArgValues, 0);
+  SetLength(ArgTypes, 0);
+  if ArgBlob <> '' then
+  begin
+    SetLength(ArgParts, 0);
+    ArgPartCount := 0;
+    PartBlob := '';
+    for I := 1 to Length(ArgBlob) do
+    begin
+      if ArgBlob[I] = #9 then
+      begin
+        if PartBlob <> '' then
+        begin
+          if ArgPartCount >= Length(ArgParts) then
+            SetLength(ArgParts, ArgPartCount + 8);
+          ArgParts[ArgPartCount] := PartBlob;
+          Inc(ArgPartCount);
+          PartBlob := '';
+        end;
+      end
+      else
+        PartBlob := PartBlob + ArgBlob[I];
+    end;
+    if PartBlob <> '' then
+    begin
+      if ArgPartCount >= Length(ArgParts) then
+        SetLength(ArgParts, ArgPartCount + 8);
+      ArgParts[ArgPartCount] := PartBlob;
+      Inc(ArgPartCount);
+    end;
+
+    for I := 0 to ArgPartCount - 1 do
+    begin
+      if Copy(ArgParts[I], 1, 7) = 'strvar ' then
+      begin
+        PartBlob := Copy(ArgParts[I], 8, Length(ArgParts[I]) - 8);
+        V := FindAlloca(PartBlob + '$ptr');
+        if V <> 0 then
+        begin
+          if ArgCount >= Length(ArgValues) then
+          begin
+            SetLength(ArgValues, ArgCount + 8);
+            SetLength(ArgTypes, ArgCount + 8);
+          end;
+          ArgValues[ArgCount] := EmitLoad(GetPtrType, V);
+          ArgTypes[ArgCount] := GetPtrType;
+          Inc(ArgCount);
+        end;
+        V := FindAlloca(PartBlob + '$len');
+        if V <> 0 then
+        begin
+          if ArgCount >= Length(ArgValues) then
+          begin
+            SetLength(ArgValues, ArgCount + 8);
+            SetLength(ArgTypes, ArgCount + 8);
+          end;
+          ArgValues[ArgCount] := EmitLoad(GetIntType, V);
+          ArgTypes[ArgCount] := GetIntType;
+          Inc(ArgCount);
+        end;
+      end
+      else
+      begin
+        V := ParseIntBlob(ArgParts[I]);
+        if V <> 0 then
+        begin
+          if ArgCount >= Length(ArgValues) then
+          begin
+            SetLength(ArgValues, ArgCount + 8);
+            SetLength(ArgTypes, ArgCount + 8);
+          end;
+          ArgValues[ArgCount] := V;
+          ArgTypes[ArgCount] := GetIntType;
+          Inc(ArgCount);
+        end;
+      end;
+    end;
+  end;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'call_str_owned_func';
+  Instr.CallTarget := FuncName;
+  SetLength(Instr.Operands, ArgCount);
+  for I := 0 to ArgCount - 1 do
+    Instr.Operands[I] := MakeTypedOperand(ArgValues[I], ArgTypes[I]);
+  EmitInstr(Instr);
+
+  StoreOwnedStringResult(TempName, Instr.ResultId);
+end;
+
+procedure THIRBuilder.ProcessStringTempBorrowArgRuntime(
+  const ANode: TTypedHirNode);
+begin
+  { Source-contract marker only; call-runtime lowers the borrowed ptr,len. }
+end;
+
+procedure THIRBuilder.ProcessStringTempReleaseRuntime(
+  const ANode: TTypedHirNode);
+begin
+  ReleaseStringOwner(ANode.Operand);
+  ClearStringOwner(ANode.Operand);
+end;
+
 procedure THIRBuilder.ProcessAssignStrMoveToResult(
   const ANode: TTypedHirNode);
 var
@@ -6683,6 +6830,12 @@ begin
       ProcessRetStrOwnedRuntime(ANode);
     hnkCallRuntime:
       ProcessCallRuntime(ANode);
+    hnkStringTempOwnedRuntime:
+      ProcessStringTempOwnedRuntime(ANode);
+    hnkStringTempBorrowArgRuntime:
+      ProcessStringTempBorrowArgRuntime(ANode);
+    hnkStringTempReleaseRuntime:
+      ProcessStringTempReleaseRuntime(ANode);
     hnkObjectFreeRuntime:
       ProcessObjectFreeRuntime(ANode);
     hnkIntToStrRuntime:

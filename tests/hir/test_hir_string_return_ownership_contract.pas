@@ -638,10 +638,6 @@ begin
     'length-owned-string-return-consumer-must-fail-closed');
   RequireAnalyzeError(CopyOwnedReturnConsumerSource, DeferredCode,
     'copy-owned-string-return-consumer-must-fail-closed');
-  RequireAnalyzeError(ArgumentOwnedReturnConsumerSource, DeferredCode,
-    'argument-owned-string-return-consumer-must-fail-closed');
-  RequireAnalyzeError(NestedArgumentOwnedReturnConsumerSource, DeferredCode,
-    'nested-argument-owned-string-return-consumer-must-fail-closed');
 end;
 
 begin
