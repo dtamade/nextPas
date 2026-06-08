@@ -117,6 +117,26 @@ ROOT_FACADE_CONSTANT_PARITY_EXPECTATIONS = {
         "half_pi": REQUIRED_ROOT_FACADE_CONSTANTS["half_pi"],
     },
 }
+FACADE_TYPE_ALIAS_COMPILE_TEST_PATH = "tests/nextpas.core.math/test_facade/test_facade.lpr"
+FACADE_TYPE_ALIAS_COMPILE_TEST_MARKER = "T.Run('facade type alias compile surface'"
+REQUIRED_FACADE_TYPE_ALIAS_COMPILE_USES = {
+    "tvec2f": "LVec2f: TVec2f",
+    "tvec3f": "LVec3f: TVec3f",
+    "tvec4f": "LVec4f: TVec4f",
+    "tvec2d": "LVec2d: TVec2d",
+    "tvec3d": "LVec3d: TVec3d",
+    "tvec4d": "LVec4d: TVec4d",
+    "tmat3f": "LMat3f: TMat3f",
+    "tmat4f": "LMat4f: TMat4f",
+    "tmat3d": "LMat3d: TMat3d",
+    "tmat4d": "LMat4d: TMat4d",
+    "tquatf": "LQuatf: TQuatf",
+    "tquatd": "LQuatd: TQuatd",
+    "teasingfunction": "LEasing: TEasingFunction",
+    "trandomstate": "LState: TRandomState",
+    "trandomgen": "LRng: TRandomGen",
+    "tnoisegen": "LNoise: TNoiseGen",
+}
 ROOT_FACADE_FORWARD_TARGETS = {
     "isaddoverflow": "scalar",
     "ismuloverflow": "scalar",
@@ -2285,6 +2305,116 @@ def scan_required_behavior_test_markers(root: Path) -> list[Finding]:
     return findings
 
 
+def scan_facade_type_alias_compile_surface(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    path = root / FACADE_TYPE_ALIAS_COMPILE_TEST_PATH
+    alias_rules = set(REQUIRED_ROOT_FACADE_TYPE_ALIASES)
+    compile_rules = set(REQUIRED_FACADE_TYPE_ALIAS_COMPILE_USES)
+    for alias in sorted(alias_rules - compile_rules):
+        add_finding(
+            findings,
+            "missing-facade-type-alias-compile-rule:" + alias,
+            root,
+            root / ROOT_FACADE_PATH,
+            1,
+            "missing facade compile-use rule for " + alias,
+        )
+    for alias in sorted(compile_rules - alias_rules):
+        add_finding(
+            findings,
+            "stale-facade-type-alias-compile-rule:" + alias,
+            root,
+            path,
+            1,
+            "stale facade compile-use rule for " + alias,
+        )
+
+    if not path.is_file():
+        add_finding(
+            findings,
+            "missing-facade-type-alias-compile-test-file",
+            root,
+            path,
+            1,
+            FACADE_TYPE_ALIAS_COMPILE_TEST_PATH,
+        )
+        return findings
+
+    text = strip_pascal_comments(path.read_text(encoding="utf-8", errors="replace"))
+    if FACADE_TYPE_ALIAS_COMPILE_TEST_MARKER not in text:
+        add_finding(
+            findings,
+            "missing-facade-type-alias-compile-marker",
+            root,
+            path,
+            1,
+            "missing " + FACADE_TYPE_ALIAS_COMPILE_TEST_MARKER,
+        )
+
+    normalized_text = re.sub(r"\s+", " ", text).lower()
+    for alias, required_snippet in REQUIRED_FACADE_TYPE_ALIAS_COMPILE_USES.items():
+        normalized_snippet = re.sub(r"\s+", " ", required_snippet).lower()
+        if normalized_snippet in normalized_text:
+            continue
+        add_finding(
+            findings,
+            "missing-facade-type-alias-compile-use:" + alias,
+            root,
+            path,
+            1,
+            "missing facade consumer compile use for " + alias,
+        )
+    return findings
+
+
+def run_facade_type_alias_compile_surface_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        path = root / FACADE_TYPE_ALIAS_COMPILE_TEST_PATH
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "program test_facade;\n"
+            "begin\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        findings = scan_facade_type_alias_compile_surface(root)
+        rules = {finding.rule for finding in findings}
+        expected_rules = {
+            "missing-facade-type-alias-compile-marker",
+            "missing-facade-type-alias-compile-use:tvec2f",
+            "missing-facade-type-alias-compile-use:tnoisegen",
+        }
+        if not expected_rules <= rules:
+            raise AssertionError(
+                "facade-type-alias-compile-surface self-test missing "
+                + ", ".join(sorted(expected_rules - rules))
+            )
+
+        declarations = "\n".join(
+            "  " + required_snippet + ";"
+            for required_snippet in REQUIRED_FACADE_TYPE_ALIAS_COMPILE_USES.values()
+        )
+        path.write_text(
+            "program test_facade;\n"
+            "procedure TestFacadeTypeAliasCompileSurface;\n"
+            "var\n"
+            + declarations
+            + "\n"
+            "begin\n"
+            "end;\n"
+            "begin\n"
+            "  T.Run('facade type alias compile surface', @TestFacadeTypeAliasCompileSurface);\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        findings = scan_facade_type_alias_compile_surface(root)
+        if findings:
+            raise AssertionError(
+                "facade-type-alias-compile-surface self-test expected no findings"
+            )
+
+
 def run_behavior_marker_self_tests() -> None:
     original_markers = REQUIRED_BEHAVIOR_TEST_MARKERS
     required_marker = RequiredBehaviorTestMarker(
@@ -4263,6 +4393,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_missing_required_public_files(root))
     findings.extend(scan_missing_required_benchmark_markers(root))
     findings.extend(scan_required_behavior_test_markers(root))
+    findings.extend(scan_facade_type_alias_compile_surface(root))
     findings.extend(scan_root_facade_api_doc_coverage(root))
     findings.extend(scan_root_facade_contract(root))
     findings.extend(scan_root_facade_reexport_parity(root))
@@ -4393,6 +4524,7 @@ def main() -> int:
     args = parse_args()
     if args.self_test:
         run_behavior_marker_self_tests()
+        run_facade_type_alias_compile_surface_self_tests()
         run_public_math_source_simd_wiring_self_tests()
         run_math_impl_simd_facade_only_uses_self_tests()
         run_forbidden_simd_mathutil_bare_name_self_tests()

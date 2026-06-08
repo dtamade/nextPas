@@ -159,6 +159,53 @@ begin
   end;
 end;
 
+procedure TestFacadeTypeAliasCompileSurface;
+var
+  LVec2f: TVec2f;
+  LVec3f: TVec3f;
+  LVec4f: TVec4f;
+  LVec2d: TVec2d;
+  LVec3d: TVec3d;
+  LVec4d: TVec4d;
+  LMat3f: TMat3f;
+  LMat4f: TMat4f;
+  LMat3d: TMat3d;
+  LMat4d: TMat4d;
+  LQuatf: TQuatf;
+  LQuatd: TQuatd;
+  LEasing: TEasingFunction;
+  LState: TRandomState;
+  LRng: TRandomGen;
+  LNoise: TNoiseGen;
+begin
+  LVec2f := TVec2f.Create(1.0, 2.0);
+  LVec3f := TVec3f.Create(LVec2f.X, LVec2f.Y, 3.0);
+  LVec4f := TVec4f.Create(LVec3f.X, LVec3f.Y, LVec3f.Z, 1.0);
+  LVec2d := TVec2d.Create(Double(1.0), Double(2.0));
+  LVec3d := TVec3d.Create(LVec2d.X, LVec2d.Y, Double(3.0));
+  LVec4d := TVec4d.Create(LVec3d.X, LVec3d.Y, LVec3d.Z, Double(1.0));
+  LMat3f := TMat3f.Identity;
+  LMat4f := TMat4f.Identity;
+  LMat3d := TMat3d.Identity;
+  LMat4d := TMat4d.Identity;
+  LQuatf := TQuatf.Identity;
+  LQuatd := TQuatd.Identity;
+  LEasing := @EaseLinear;
+  LState.S0 := UInt64(1);
+  LState.S1 := UInt64(2);
+  LRng := nil;
+  LNoise := nil;
+  Check((LVec4f.W = 1.0) and (LVec4d.W = 1.0),
+    'facade vector aliases compile');
+  Check((LMat3f.Data[0, 0] = 1.0) and (LMat4f.Data[0, 0] = 1.0) and
+    (LMat3d.Data[0, 0] = 1.0) and (LMat4d.Data[0, 0] = 1.0),
+    'facade matrix aliases compile');
+  Check((LQuatf.W = 1.0) and (LQuatd.W = 1.0), 'facade quaternion aliases compile');
+  Check((LEasing <> nil) and (LEasing(0.5) = 0.5), 'facade easing alias compiles');
+  Check((LState.S0 = UInt64(1)) and (LState.S1 = UInt64(2)) and
+    (LRng = nil) and (LNoise = nil), 'facade random aliases compile');
+end;
+
 procedure TestFacadeRootForwarderCompileSurface;
 var
   B: Boolean;
@@ -324,6 +371,7 @@ begin
   T.Run('facade new scalar surface', @TestFacadeNewScalarSurface);
   T.Run('facade vector surface', @TestFacadeVectorSurface);
   T.Run('facade random surface', @TestFacadeRandomSurface);
+  T.Run('facade type alias compile surface', @TestFacadeTypeAliasCompileSurface);
   T.Run('facade root forwarder compile surface', @TestFacadeRootForwarderCompileSurface);
   T.Summary;
 end.
