@@ -29,6 +29,7 @@ type
     procedure WriteAllHeaders;
     procedure WriteCRLF;
     procedure WriteStr(const AStr: string);
+    procedure ValidateResponseFramingHeaders;
     function TryWriteKnownStatusLine: Boolean;
     function TryWriteSmallHeaderBlock: Boolean;
     function ResponseMustNotHaveBody: Boolean;
@@ -329,6 +330,18 @@ begin
             ((FStatus div 100) = 1);
 end;
 
+procedure TH1ResponseWriter.ValidateResponseFramingHeaders;
+var
+  LContentLengths: TStringArray;
+begin
+  LContentLengths := FHeaders.GetAll('content-length');
+  if Length(LContentLengths) > 1 then
+    raise EHttpError.Create('response content-length is duplicated');
+  if (Length(LContentLengths) > 0) and FHeaders.Has('transfer-encoding') then
+    raise EHttpError.Create(
+      'response cannot include both content-length and transfer-encoding');
+end;
+
 procedure TH1ResponseWriter.WriteHeader(const AStatus: THttpStatus);
 begin
   if FHeadersSent then
@@ -340,6 +353,7 @@ begin
   end;
   FStatus := AStatus;
   FNoBodyAllowed := ResponseMustNotHaveBody;
+  ValidateResponseFramingHeaders;
   if (not FNoBodyAllowed) and
      (not FSuppressBody) and
      (not FHeaders.Has('content-length')) and

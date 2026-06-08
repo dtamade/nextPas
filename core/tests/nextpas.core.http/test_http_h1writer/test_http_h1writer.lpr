@@ -725,6 +725,65 @@ begin
   LRW.Free;
 end;
 
+procedure TestWriteHeaderRejectsContentLengthTransferEncodingConflict;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LRaised: Boolean;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.SetHeader('Content-Length', '5');
+    LRW.GetHeaders.SetHeader('Transfer-Encoding', 'chunked');
+    LRaised := False;
+    try
+      LRW.WriteHeader(HTTP_STATUS_OK);
+    except
+      on E: EHttpError do
+        LRaised := True;
+    end;
+
+    Check(LRaised,
+      'response writer rejects content-length plus transfer-encoding');
+    Check(not LRW.HasCommitted,
+      'conflicting response framing fails before commit');
+    CheckEqual('', LW.GetOutput,
+      'conflicting response framing emits no wire bytes');
+  finally
+    LRW.Free;
+  end;
+end;
+
+procedure TestWriteHeaderRejectsDuplicateContentLength;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LRaised: Boolean;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.Add('Content-Length', '5');
+    LRW.GetHeaders.Add('content-length', '5');
+    LRaised := False;
+    try
+      LRW.WriteHeader(HTTP_STATUS_OK);
+    except
+      on E: EHttpError do
+        LRaised := True;
+    end;
+
+    Check(LRaised, 'response writer rejects duplicate content-length');
+    Check(not LRW.HasCommitted,
+      'duplicate content-length fails before commit');
+    CheckEqual('', LW.GetOutput,
+      'duplicate content-length emits no wire bytes');
+  finally
+    LRW.Free;
+  end;
+end;
+
 procedure TestNoContentResponseDoesNotInjectChunkedEncoding;
 var
   LW: TBytesWriter;
@@ -1375,6 +1434,10 @@ begin
   T.Run('Preset Transfer-Encoding is preserved', @TestPresetTransferEncodingPreserved);
   T.Run('Flush with Content-Length does not write final chunk',
     @TestFlushWithContentLengthDoesNotWriteFinalChunk);
+  T.Run('WriteHeader rejects content-length transfer-encoding conflict',
+    @TestWriteHeaderRejectsContentLengthTransferEncodingConflict);
+  T.Run('WriteHeader rejects duplicate content-length',
+    @TestWriteHeaderRejectsDuplicateContentLength);
   T.Run('204 response does not inject chunked encoding',
     @TestNoContentResponseDoesNotInjectChunkedEncoding);
   T.Run('304 response does not inject chunked encoding',
