@@ -495,6 +495,49 @@ begin
   end;
 end;
 
+{ Test 3c: Handshake requires an exact Connection upgrade token }
+procedure TestHandshakeConnectionUpgradeTokenRequired;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LWs: IWebSocket;
+  begin
+    try
+      LWs := UpgradeWebSocket(AReq, AW);
+      LWs.Close(1000, 'invalid connection token accepted');
+    except
+      on E: EHttpError do
+      begin
+        AW.GetHeaders.SetHeader('content-length', '0');
+        AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
+      end;
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawAndRead(LPort,
+      'GET /ws HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Upgrade: websocket'#13#10 +
+      'Connection: keep-alive, notupgrade'#13#10 +
+      'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='#13#10 +
+      'Sec-WebSocket-Version: 13'#13#10 +
+      #13#10, 256);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'should get 400 without exact Connection upgrade token');
+    Check(Pos('HTTP/1.1 101', LResp) = 0,
+      'should not upgrade substring Connection token');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 4: Text frame echo }
 procedure TestTextFrameEcho;
 var
@@ -2673,6 +2716,8 @@ begin
   T.Run('HandshakeNoUpgrade', @TestHandshakeNoUpgrade);
   T.Run('HandshakeNoKey', @TestHandshakeNoKey);
   T.Run('HandshakeInvalidKeyRejected', @TestHandshakeInvalidKeyRejected);
+  T.Run('HandshakeConnectionUpgradeTokenRequired',
+    @TestHandshakeConnectionUpgradeTokenRequired);
   T.Run('TextFrameEcho', @TestTextFrameEcho);
   T.Run('TextFrameEchoCoalescedFirstFrame', @TestTextFrameEchoWithCoalescedFirstFrame);
   T.Run('UpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket',

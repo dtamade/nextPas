@@ -122,6 +122,46 @@ begin
       Result[I] := S[I];
 end;
 
+function IsOWS(const ACh: Char): Boolean;
+begin
+  Result := (ACh = ' ') or (ACh = #9);
+end;
+
+function LowerTrim(const S: string): string;
+var
+  LFirst, LLast: Integer;
+begin
+  LFirst := 1;
+  LLast := Length(S);
+  while (LFirst <= LLast) and IsOWS(S[LFirst]) do
+    Inc(LFirst);
+  while (LLast >= LFirst) and IsOWS(S[LLast]) do
+    Dec(LLast);
+  if LFirst > LLast then
+  begin
+    Result := '';
+    Exit;
+  end;
+  Result := LowerCase(Copy(S, LFirst, LLast - LFirst + 1));
+end;
+
+function HeaderHasToken(const AValue, AToken: string): Boolean;
+var
+  LStart, LPos: Integer;
+begin
+  Result := False;
+  LStart := 1;
+  while LStart <= Length(AValue) + 1 do
+  begin
+    LPos := LStart;
+    while (LPos <= Length(AValue)) and (AValue[LPos] <> ',') do
+      Inc(LPos);
+    if LowerTrim(Copy(AValue, LStart, LPos - LStart)) = AToken then
+      Exit(True);
+    LStart := LPos + 1;
+  end;
+end;
+
 function ComputeAcceptKey(const AKey: string): string;
 var
   LConcat: string;
@@ -237,13 +277,13 @@ var
   LConn: ITcpStream;
 begin
   LUpgrade := LowerCase(AReq.Headers.Get('upgrade'));
-  LConnection := LowerCase(AReq.Headers.Get('connection'));
+  LConnection := AReq.Headers.Get('connection');
   LKey := AReq.Headers.Get('sec-websocket-key');
   LVersion := AReq.Headers.Get('sec-websocket-version');
 
   if LUpgrade <> 'websocket' then
     raise EHttpError.Create('Missing or invalid Upgrade header');
-  if Pos('upgrade', LConnection) = 0 then
+  if not HeaderHasToken(LConnection, 'upgrade') then
     raise EHttpError.Create('Missing or invalid Connection header');
   if LKey = '' then
     raise EHttpError.Create('Missing Sec-WebSocket-Key header');
