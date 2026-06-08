@@ -48,6 +48,8 @@ var
   GBodyLimitReplyAfterRead: Boolean;
 
 type
+  TTrackedRequestBody = class;
+
   PServerCtx = ^TServerCtx;
   TServerCtx = record
     Server: THttpServer;
@@ -58,10 +60,12 @@ type
   TRedirectCaptureTransport = class(TInterfacedObject, IHttpTransport)
   private
     FCalls: Int32;
+    FTrackedBody: TTrackedRequestBody;
     FRedirectLocation: string;
     FRedirectStatus: THttpStatus;
     FFirstBody: string;
     FSecondBody: string;
+    FOriginalBodyClosedBeforeFollowup: Boolean;
     FSeenMethod: THttpMethod;
     FSeenScheme: string;
     FSeenHost: string;
@@ -76,12 +80,16 @@ type
     FSeenCookieHeader: string;
     FSeenCookie2Header: string;
   public
+    constructor Create; overload;
+    constructor Create(const ATrackedBody: TTrackedRequestBody); overload;
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
     property Calls: Int32 read FCalls;
     property RedirectLocation: string read FRedirectLocation write FRedirectLocation;
     property RedirectStatus: THttpStatus read FRedirectStatus write FRedirectStatus;
     property FirstBody: string read FFirstBody;
     property SecondBody: string read FSecondBody;
+    property OriginalBodyClosedBeforeFollowup: Boolean
+      read FOriginalBodyClosedBeforeFollowup;
     property SeenMethod: THttpMethod read FSeenMethod;
     property SeenScheme: string read FSeenScheme;
     property SeenHost: string read FSeenHost;
@@ -140,11 +148,14 @@ type
     FData: string;
     FPos: SizeInt;
     FClosed: Boolean;
+    FCloseCount: Int32;
+    FRaiseOnClose: Boolean;
   public
-    constructor Create(const AData: string);
+    constructor Create(const AData: string; const ARaiseOnClose: Boolean = False);
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Close;
     property Closed: Boolean read FClosed;
+    property CloseCount: Int32 read FCloseCount;
   end;
 
   TRequestBodyCaptureTransport = class(TInterfacedObject, IHttpTransport)
@@ -667,6 +678,17 @@ begin
   Result := CreateBytesStreamFrom(LData) as IReader;
 end;
 
+constructor TRedirectCaptureTransport.Create;
+begin
+  inherited Create;
+end;
+
+constructor TRedirectCaptureTransport.Create(const ATrackedBody: TTrackedRequestBody);
+begin
+  Create;
+  FTrackedBody := ATrackedBody;
+end;
+
 function TRedirectCaptureTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
 var
   LHeaders: IHttpHeaders;
@@ -692,6 +714,8 @@ begin
     Exit(NewResponse(LStatus, LHeaders, nil));
   end;
 
+  FOriginalBodyClosedBeforeFollowup := (FTrackedBody <> nil) and
+    FTrackedBody.Closed;
   FSecondBody := LBody;
   LUrl := AReq.Url;
   FSeenMethod := AReq.Method;
@@ -787,12 +811,15 @@ begin
   FClosed := True;
 end;
 
-constructor TTrackedRequestBody.Create(const AData: string);
+constructor TTrackedRequestBody.Create(const AData: string;
+  const ARaiseOnClose: Boolean);
 begin
   inherited Create;
   FData := AData;
   FPos := 1;
   FClosed := False;
+  FCloseCount := 0;
+  FRaiseOnClose := ARaiseOnClose;
 end;
 
 function TTrackedRequestBody.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -813,6 +840,9 @@ end;
 procedure TTrackedRequestBody.Close;
 begin
   FClosed := True;
+  Inc(FCloseCount);
+  if FRaiseOnClose then
+    raise EHttpError.Create('request body close failed');
 end;
 
 constructor TRequestBodyCaptureTransport.Create(
@@ -2889,6 +2919,72 @@ begin
   end;
 end;
 
+procedure TestClientClosesOriginalBodyBeforeGetStyleRedirectFollowup;
+var
+  LBody: TTrackedRequestBody;
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+begin
+  LBody := TTrackedRequestBody.Create('payload');
+  LTransportObj := TRedirectCaptureTransport.Create(LBody);
+  LTransportObj.RedirectStatus := HTTP_STATUS_SEE_OTHER;
+  LTransportObj.RedirectLocation := '/done';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
+    LBody as IReader, Int64(7));
+
+  LResp := LClient.Send(LReq);
+
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+    'get-style redirect performs follow-up round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'get-style redirect final status');
+  Check(LTransportObj.OriginalBodyClosedBeforeFollowup,
+    'get-style redirect closes original request body before follow-up');
+  Check(LBody.Closed,
+    'get-style redirect leaves original request body closed after Send');
+  CheckEqual(Int64(1), Int64(LBody.CloseCount),
+    'get-style redirect closes original request body exactly once');
+end;
+
+procedure TestClientDoesNotRetryCloseWhenGetStyleRedirectBodyCloseFails;
+var
+  LBody: TTrackedRequestBody;
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LRaised: Boolean;
+begin
+  LBody := TTrackedRequestBody.Create('payload', True);
+  LTransportObj := TRedirectCaptureTransport.Create(LBody);
+  LTransportObj.RedirectStatus := HTTP_STATUS_SEE_OTHER;
+  LTransportObj.RedirectLocation := '/done';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
+    LBody as IReader, Int64(7));
+
+  LRaised := False;
+  try
+    LClient.Send(LReq);
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+
+  Check(LRaised,
+    'get-style redirect propagates original request body close failure');
+  CheckEqual(Int64(1), Int64(LBody.CloseCount),
+    'get-style redirect failed close is not retried by Send finally');
+  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
+    'get-style redirect does not issue follow-up after body close failure');
+end;
+
 procedure TestClientFollowsSeeOtherAsGet;
 var
   LRouter: THttpRouter;
@@ -4213,6 +4309,10 @@ begin
   T.Run('HttpGetToFile rejects 404 responses', @TestHttpGetToFileRejects404Responses);
   T.Run('HttpGetToFile cleans temp files on truncated body', @TestHttpGetToFileCleansTempFilesOnTruncatedBody);
   T.Run('Client follows redirect (301 -> 200)', @TestClientFollowsRedirect);
+  T.Run('Client closes original body before GET-style redirect follow-up',
+    @TestClientClosesOriginalBodyBeforeGetStyleRedirectFollowup);
+  T.Run('Client does not retry close when GET-style redirect body close fails',
+    @TestClientDoesNotRetryCloseWhenGetStyleRedirectBodyCloseFails);
   T.Run('Client follows 303 redirect as GET', @TestClientFollowsSeeOtherAsGet);
   T.Run('Client preserves relative redirect query', @TestClientPreservesRelativeRedirectQuery);
   T.Run('Client redirect transport sees parsed relative query',

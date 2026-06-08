@@ -183,6 +183,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   `307` / `308` preserve the original method and replay body readers that support
   `IStream` rewind. Non-empty non-replayable bodies raise `EHttpError` instead
   of silently sending an empty follow-up request.
+- When a `301` / `302` / `303` follow-up drops the original request body, the
+  client closes the original close-capable body before issuing the follow-up and
+  does not close it a second time after `Send` returns.
 - Redirect follow-up requests inherit caller headers. Cross-authority redirects
   strip `Authorization`, `WWW-Authenticate`, `Cookie`, and `Cookie2`; bodyless
   `301` / `302` / `303` follow-ups also drop `Content-Length` /

@@ -23,7 +23,8 @@ type
   private
     FOptions: THttpClientOptions;
     FTransport: IHttpTransport;
-    function DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32): IHttpResponse;
+    function DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32;
+      var ARequestBodyCloseAttempted: Boolean): IHttpResponse;
   public
     constructor Create(const AOptions: THttpClientOptions); overload;
     constructor Create(const ATransport: IHttpTransport;
@@ -478,7 +479,8 @@ begin
     FTransport := ResolveDefaultClientTransport(AOptions);
 end;
 
-function THttpClient.DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32): IHttpResponse;
+function THttpClient.DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32;
+  var ARequestBodyCloseAttempted: Boolean): IHttpResponse;
 var
   LUrl: TUrl;
   LResp: IHttpResponse;
@@ -532,6 +534,8 @@ begin
        (LResp.StatusCode = HTTP_STATUS_SEE_OTHER) then
     begin
       LNewHeaders := RedirectHeadersFor(AReq, LUrl, LNewUrl, False);
+      ARequestBodyCloseAttempted := True;
+      CloseRequestBody(AReq.Body);
       LNewReq := THttpRequest.Create(MethodForGetStyleRedirect(AReq.Method),
         LNewUrl, hvHttp11, LNewHeaders, nil, 0);
     end
@@ -543,20 +547,24 @@ begin
         LNewHeaders, AReq.Body, AReq.ContentLength);
     end;
 
-    Result := DoRequest(LNewReq, ARedirectsLeft - 1);
+    Result := DoRequest(LNewReq, ARedirectsLeft - 1, ARequestBodyCloseAttempted);
   end
   else
     Result := LResp;
 end;
 
 function THttpClient.Send(const AReq: IHttpRequest): IHttpResponse;
+var
+  LRequestBodyCloseAttempted: Boolean;
 begin
   if AReq = nil then
     raise EArgumentError.Create('HTTP request is nil');
+  LRequestBodyCloseAttempted := False;
   try
-    Result := DoRequest(AReq, FOptions.MaxRedirects);
+    Result := DoRequest(AReq, FOptions.MaxRedirects, LRequestBodyCloseAttempted);
   finally
-    CloseRequestBody(AReq.Body);
+    if not LRequestBodyCloseAttempted then
+      CloseRequestBody(AReq.Body);
   end;
 end;
 
