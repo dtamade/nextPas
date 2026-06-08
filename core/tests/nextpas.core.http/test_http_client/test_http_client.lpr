@@ -2150,6 +2150,26 @@ begin
     'client shortcut body path does not convert string buffer back to bytes');
 end;
 
+procedure TestH1ClientTransportDestroyClosesIdlePoolSourceContract;
+var
+  LSource: string;
+  LDestroyPos: SizeInt;
+  LDestroyBlock: string;
+begin
+  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  Check(Pos('destructor Destroy; override;', LSource) > 0,
+    'h1 client transport declares destructor for idle-pool ownership');
+  LDestroyPos := Pos('destructor TH1ClientTransport.Destroy;', LSource);
+  Check(LDestroyPos > 0,
+    'h1 client transport implements destructor for idle-pool ownership');
+  if LDestroyPos > 0 then
+  begin
+    LDestroyBlock := Copy(LSource, LDestroyPos, 256);
+    Check(Pos('PoolClear;', LDestroyBlock) > 0,
+      'h1 client transport destructor closes pooled idle connections');
+  end;
+end;
+
 procedure TestClientPostStringBodyOverload;
 var
   LRouter: THttpRouter;
@@ -5960,6 +5980,8 @@ begin
     @TestClientSendWithRequestHelperBytesBodyAndContentTypeWithoutHeaders);
   T.Run('Client shortcut bodies use bytes buffer',
     @TestClientShortcutBodyImplementationUsesBytesBuffer);
+  T.Run('H1 client transport destroy closes idle pool source contract',
+    @TestH1ClientTransportDestroyClosesIdlePoolSourceContract);
   T.Run('Client POST string body overload',
     @TestClientPostStringBodyOverload);
   T.Run('Client PUT sends body and content type', @TestClientPutBodyAndContentType);

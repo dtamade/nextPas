@@ -133,6 +133,7 @@ type
       out AResponseStarted: Boolean): IHttpResponse;
   public
     constructor Create(const AOptions: TH1ClientTransportOptions);
+    destructor Destroy; override;
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
     procedure CloseIdleConnections;
   end;
@@ -1949,6 +1950,12 @@ begin
   inherited Create;
   FOptions := AOptions;
   FPoolCount := 0;
+end;
+
+destructor TH1ClientTransport.Destroy;
+begin
+  PoolClear;
+  inherited Destroy;
 end;
 
 function TH1ClientTransport.PooledConnectionIsReusable(
