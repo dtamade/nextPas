@@ -734,10 +734,12 @@ begin
   Check(IsSinglePositiveZero(Log2(Single(1.0))), 'Log2(Single 1)=+0');
   Check(IsDoublePositiveZero(Log10(1.0)), 'Log10(1)=+0');
   Check(IsSinglePositiveZero(Log10(Single(1.0))), 'Log10(Single 1)=+0');
-  CheckNear(1.0, Log2(2.0), 0.0, 'Log2(2)=1');
-  CheckNear(1.0, Log2(Single(2.0)), 0.0, 'Log2(Single 2)=1');
-  CheckNear(1.0, Log10(10.0), 0.0, 'Log10(10)=1');
-  CheckNear(1.0, Log10(Single(10.0)), 0.0, 'Log10(Single 10)=1');
+  Check(SameDoubleBits(1.0, Log2(2.0)), 'Log2(2)=1 exact bits');
+  Check(SameSingleBits(Single(1.0), Log2(Single(2.0))),
+    'Log2(Single 2)=1 exact bits');
+  Check(SameDoubleBits(1.0, Log10(10.0)), 'Log10(10)=1 exact bits');
+  Check(SameSingleBits(Single(1.0), Log10(Single(10.0))),
+    'Log10(Single 10)=1 exact bits');
 end;
 
 procedure TestPowerEdgeContracts;

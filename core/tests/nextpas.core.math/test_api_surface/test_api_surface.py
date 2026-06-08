@@ -1119,6 +1119,7 @@ COMPILE_ONLY_GATE_EXCLUSION_MARKER_PREFIX = "# compile-only opt-in gate:"
 BENCH_SIMD_SEAM_PATH = "benchmarks/nextpas.core.math/bench_simd_seam/bench_simd_seam.lpr"
 SIMD_MATHUTIL_PATH = "src/nextpas.core.simd.mathutil.pas"
 MATH_IMPL_SIMD_PATH = "src/nextpas.core.math.impl.simd.pas"
+MATH_TRIG_PATH = "src/nextpas.core.math.trig.pas"
 TRIG_HOST_COMPILE_GATE_MAKEFILE_PATH = (
     "tests/nextpas.core.math/test_trig_host_compile_gate/Makefile"
 )
@@ -1615,6 +1616,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("facade-root-forwarders", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade root forwarder compile surface'"),
     RequiredBehaviorTestMarker("facade-root-trig-declaration-parity", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade root trig declaration parity compile surface'"),
     RequiredBehaviorTestMarker("facade-trig-power-finite-identity-precision", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade Power finite identity precision contracts'"),
+    RequiredBehaviorTestMarker("facade-log-exact-identity", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade Log exact identity contracts'"),
     RequiredBehaviorTestMarker("facade-wrap-error-semantics", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade Wrap error semantics'"),
     RequiredBehaviorTestMarker("scalar-constants", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('constants'"),
     RequiredBehaviorTestMarker("scalar-min-max-clamp", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('min max clamp'"),
@@ -1780,8 +1782,8 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("trig-log-identity-ln-one", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Ln(1)=+0"),
     RequiredBehaviorTestMarker("trig-log-identity-log2-one", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log2(1)=+0"),
     RequiredBehaviorTestMarker("trig-log-identity-log10-one", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log10(1)=+0"),
-    RequiredBehaviorTestMarker("trig-log-identity-log2-base", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log2(2)=1"),
-    RequiredBehaviorTestMarker("trig-log-identity-log10-base", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log10(10)=1"),
+    RequiredBehaviorTestMarker("trig-log-identity-log2-base", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log2(2)=1 exact bits"),
+    RequiredBehaviorTestMarker("trig-log-identity-log10-base", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log10(10)=1 exact bits"),
     RequiredBehaviorTestMarker("trig-log-domain-log2-negative-finite", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log2(-1.0)"),
     RequiredBehaviorTestMarker("trig-log-domain-log10-single-negative-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log10(SingleNegativeZero)"),
     RequiredBehaviorTestMarker("trig-power", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('power edge contracts'"),
@@ -2698,6 +2700,101 @@ def scan_forbidden_fpc_math_unit_in_trig(root: Path, path: Path, text: str) -> l
         "src/nextpas.core.math.trig.pas",
         "no-fpc-math-unit-in-trig",
     )
+
+
+def extract_pascal_function_body(text: str, function_name: str) -> tuple[int, str] | None:
+    pattern = re.compile(
+        r"function\s+"
+        + re.escape(function_name)
+        + r"\s*\([^;]*?\)\s*:\s*Double\s*;"
+        + r"(?:\s*(?:overload|inline)\s*;)*\s*begin\b",
+        re.IGNORECASE | re.DOTALL,
+    )
+    match = pattern.search(text)
+    if match is None:
+        return None
+
+    next_function = re.search(r"\nfunction\s+", text[match.end() :], re.IGNORECASE)
+    end = len(text) if next_function is None else match.end() + next_function.start()
+    return line_no_at(text, match.start()), text[match.end() : end]
+
+
+def scan_trig_log_exact_identity_source_contract(
+    root: Path, path: Path, text: str
+) -> list[Finding]:
+    findings: list[Finding] = []
+    if relative(path, root) != MATH_TRIG_PATH:
+        return findings
+
+    code = strip_pascal_comments_and_strings(text)
+    for function_name, base_value in (("Log2", "2.0"), ("Log10", "10.0")):
+        body_info = extract_pascal_function_body(code, function_name)
+        if body_info is None:
+            add_finding(
+                findings,
+                "missing-required-trig-log-exact-identity-source-contract:"
+                + function_name.lower(),
+                root,
+                path,
+                1,
+                function_name + "(Double) body not found",
+            )
+            continue
+
+        body_line, body = body_info
+        fallback_index = body.lower().find("ln(ax) /")
+        if fallback_index < 0:
+            add_finding(
+                findings,
+                "missing-required-trig-log-exact-identity-source-contract:"
+                + function_name.lower()
+                + "-fallback",
+                root,
+                path,
+                body_line,
+                function_name + "(Double) finite fallback Ln(AX) / ... not found",
+            )
+            continue
+
+        prefix = body[:fallback_index]
+        required_markers = (
+            (
+                "one",
+                re.compile(
+                    r"AX\s*=\s*1\.0\s+then\s+Exit\s*\(\s*0\.0\s*\)",
+                    re.IGNORECASE,
+                ),
+                function_name + "(Double) must return exact +0 for AX = 1.0 before Ln fallback",
+            ),
+            (
+                "base",
+                re.compile(
+                    r"AX\s*=\s*"
+                    + re.escape(base_value)
+                    + r"\s+then\s+Exit\s*\(\s*1\.0\s*\)",
+                    re.IGNORECASE,
+                ),
+                function_name
+                + "(Double) must return exact 1.0 for AX = "
+                + base_value
+                + " before Ln fallback",
+            ),
+        )
+        for rule_suffix, marker, message in required_markers:
+            if marker.search(prefix):
+                continue
+            add_finding(
+                findings,
+                "missing-required-trig-log-exact-identity-source-contract:"
+                + function_name.lower()
+                + "-"
+                + rule_suffix,
+                root,
+                path,
+                body_line + line_no_at(body, fallback_index) - 1,
+                message,
+            )
+    return findings
 
 
 def scan_public_global_random_singletons(root: Path, path: Path, text: str) -> list[Finding]:
@@ -4336,6 +4433,68 @@ def run_trig_host_safe_route_self_tests() -> None:
                     + case_name
                     + " expected no findings"
                 )
+
+
+def run_trig_log_exact_identity_source_contract_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        path = root / MATH_TRIG_PATH
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "unit nextpas.core.math.trig;\n"
+            "implementation\n"
+            "function Log2(const AX: Double): Double;\n"
+            "begin\n"
+            "  Result := Ln(AX) / 0.69314718055994530942;\n"
+            "end;\n"
+            "function Log10(const AX: Double): Double;\n"
+            "begin\n"
+            "  Result := Ln(AX) / 2.30258509299404568402;\n"
+            "end;\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        findings = scan_trig_log_exact_identity_source_contract(
+            root, path, path.read_text(encoding="utf-8")
+        )
+        rules = {finding.rule for finding in findings}
+        expected_rules = {
+            "missing-required-trig-log-exact-identity-source-contract:log2-one",
+            "missing-required-trig-log-exact-identity-source-contract:log2-base",
+            "missing-required-trig-log-exact-identity-source-contract:log10-one",
+            "missing-required-trig-log-exact-identity-source-contract:log10-base",
+        }
+        if not expected_rules <= rules:
+            raise AssertionError(
+                "trig-log-exact-identity-source-contract self-test missing "
+                + ", ".join(sorted(expected_rules - rules))
+            )
+
+        path.write_text(
+            "unit nextpas.core.math.trig;\n"
+            "implementation\n"
+            "function Log2(const AX: Double): Double;\n"
+            "begin\n"
+            "  if AX = 1.0 then Exit(0.0);\n"
+            "  if AX = 2.0 then Exit(1.0);\n"
+            "  Result := Ln(AX) / 0.69314718055994530942;\n"
+            "end;\n"
+            "function Log10(const AX: Double): Double;\n"
+            "begin\n"
+            "  if AX = 1.0 then Exit(0.0);\n"
+            "  if AX = 10.0 then Exit(1.0);\n"
+            "  Result := Ln(AX) / 2.30258509299404568402;\n"
+            "end;\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        findings = scan_trig_log_exact_identity_source_contract(
+            root, path, path.read_text(encoding="utf-8")
+        )
+        if findings:
+            raise AssertionError(
+                "trig-log-exact-identity-source-contract self-test expected no findings"
+            )
 
 
 def run_required_trig_host_compile_gate_self_tests() -> None:
@@ -6056,6 +6215,7 @@ def build_report(root: Path) -> Report:
         findings.extend(scan_forbidden_simd_mathutil_bare_names(root, path, text))
         findings.extend(scan_forbidden_fpc_math_unit_in_easing(root, path, text))
         findings.extend(scan_forbidden_fpc_math_unit_in_trig(root, path, text))
+        findings.extend(scan_trig_log_exact_identity_source_contract(root, path, text))
         findings.extend(scan_public_global_random_singletons(root, path, text))
         findings.extend(scan_required_public_declarations(root, path, text))
         findings.extend(scan_vector_length_sqr_record_contract(root, path, text))
@@ -6130,6 +6290,7 @@ def main() -> int:
         run_legacy_public_doc_symbol_self_tests()
         run_forbidden_trig_scalar_name_self_tests()
         run_trig_host_safe_route_self_tests()
+        run_trig_log_exact_identity_source_contract_self_tests()
         run_required_trig_host_compile_gate_self_tests()
         run_required_impl_simd_win64_compile_gate_self_tests()
         run_required_public_declarations_self_tests()

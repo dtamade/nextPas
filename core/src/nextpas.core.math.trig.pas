@@ -385,6 +385,10 @@ begin
     Exit(DoubleSignedInfinity(True));
   if DoubleIsInfinite(AX) then
     Exit(AX);
+  if AX = 1.0 then
+    Exit(0.0);
+  if AX = 2.0 then
+    Exit(1.0);
   Result := Ln(AX) / 0.69314718055994530942;
 end;
 
@@ -403,6 +407,10 @@ begin
     Exit(DoubleSignedInfinity(True));
   if DoubleIsInfinite(AX) then
     Exit(AX);
+  if AX = 1.0 then
+    Exit(0.0);
+  if AX = 10.0 then
+    Exit(1.0);
   Result := Ln(AX) / 2.30258509299404568402;
 end;
 

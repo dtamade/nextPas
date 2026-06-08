@@ -49,6 +49,66 @@ begin
   Check(LDelta <= 0.000001, AMessage);
 end;
 
+function IsDoublePositiveZero(const AValue: Double): Boolean;
+type
+  TDoubleBits = packed record
+    case Integer of
+      0: (Value: Double);
+      1: (Bits: UInt64);
+  end;
+var
+  LCast: TDoubleBits;
+begin
+  LCast.Value := AValue;
+  Result := LCast.Bits = UInt64(0);
+end;
+
+function IsSinglePositiveZero(const AValue: Single): Boolean;
+type
+  TSingleBits = packed record
+    case Integer of
+      0: (Value: Single);
+      1: (Bits: UInt32);
+  end;
+var
+  LCast: TSingleBits;
+begin
+  LCast.Value := AValue;
+  Result := LCast.Bits = UInt32(0);
+end;
+
+function SameDoubleBits(const ALeft, ARight: Double): Boolean;
+type
+  TDoubleBits = packed record
+    case Integer of
+      0: (Value: Double);
+      1: (Bits: UInt64);
+  end;
+var
+  LLeft: TDoubleBits;
+  LRight: TDoubleBits;
+begin
+  LLeft.Value := ALeft;
+  LRight.Value := ARight;
+  Result := LLeft.Bits = LRight.Bits;
+end;
+
+function SameSingleBits(const ALeft, ARight: Single): Boolean;
+type
+  TSingleBits = packed record
+    case Integer of
+      0: (Value: Single);
+      1: (Bits: UInt32);
+  end;
+var
+  LLeft: TSingleBits;
+  LRight: TSingleBits;
+begin
+  LLeft.Value := ALeft;
+  LRight.Value := ARight;
+  Result := LLeft.Bits = LRight.Bits;
+end;
+
 procedure RaiseFacadeClampReversedBounds; forward;
 procedure RaiseFacadeWrapDoubleReversedBounds; forward;
 procedure RaiseFacadeWrapSingleReversedBounds; forward;
@@ -395,6 +455,26 @@ begin
     'facade Power Single negative odd finite precision');
 end;
 
+procedure TestFacadeLogExactIdentityContracts;
+begin
+  Check(IsDoublePositiveZero(nextpas.core.math.Log2(1.0)),
+    'facade Log2(1)=+0 exact bits');
+  Check(IsSinglePositiveZero(nextpas.core.math.Log2(Single(1.0))),
+    'facade Log2(Single 1)=+0 exact bits');
+  Check(IsDoublePositiveZero(nextpas.core.math.Log10(1.0)),
+    'facade Log10(1)=+0 exact bits');
+  Check(IsSinglePositiveZero(nextpas.core.math.Log10(Single(1.0))),
+    'facade Log10(Single 1)=+0 exact bits');
+  Check(SameDoubleBits(1.0, nextpas.core.math.Log2(2.0)),
+    'facade Log2(2)=1 exact bits');
+  Check(SameSingleBits(Single(1.0), nextpas.core.math.Log2(Single(2.0))),
+    'facade Log2(Single 2)=1 exact bits');
+  Check(SameDoubleBits(1.0, nextpas.core.math.Log10(10.0)),
+    'facade Log10(10)=1 exact bits');
+  Check(SameSingleBits(Single(1.0), nextpas.core.math.Log10(Single(10.0))),
+    'facade Log10(Single 10)=1 exact bits');
+end;
+
 procedure RaiseFacadeClampReversedBounds;
 begin
   Clamp(1.0, 2.0, 1.0);
@@ -434,5 +514,6 @@ begin
     @TestFacadeRootTrigDeclarationParityCompileSurface);
   T.Run('facade Power finite identity precision contracts',
     @TestFacadePowerFiniteIdentityPrecisionContracts);
+  T.Run('facade Log exact identity contracts', @TestFacadeLogExactIdentityContracts);
   T.Summary;
 end.
