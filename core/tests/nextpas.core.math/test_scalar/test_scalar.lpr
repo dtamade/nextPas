@@ -545,6 +545,11 @@ begin
   Floor(MakeSinglePositiveInfinity);
 end;
 
+procedure RaiseFloorSingleNegativeInfinity;
+begin
+  Floor(MakeSingleNegativeInfinity);
+end;
+
 procedure RaiseFloorNegativeInfinity;
 begin
   Floor(MakeNegativeInfinity);
@@ -578,6 +583,11 @@ end;
 procedure RaiseCeilSinglePositiveInfinity;
 begin
   Ceil(MakeSinglePositiveInfinity);
+end;
+
+procedure RaiseCeilSingleNegativeInfinity;
+begin
+  Ceil(MakeSingleNegativeInfinity);
 end;
 
 procedure RaiseCeilHugeNegative;
@@ -635,9 +645,19 @@ begin
   Round(MakePositiveInfinity);
 end;
 
+procedure RaiseRoundNegativeInfinity;
+begin
+  Round(MakeNegativeInfinity);
+end;
+
 procedure RaiseRoundSinglePositiveInfinity;
 begin
   Round(MakeSinglePositiveInfinity);
+end;
+
+procedure RaiseRoundSingleNegativeInfinity;
+begin
+  Round(MakeSingleNegativeInfinity);
 end;
 
 procedure RaiseTruncBelowInt64Min;
@@ -663,6 +683,16 @@ end;
 procedure RaiseTruncPositiveInfinity;
 begin
   Trunc(MakePositiveInfinity);
+end;
+
+procedure RaiseTruncNegativeInfinity;
+begin
+  Trunc(MakeNegativeInfinity);
+end;
+
+procedure RaiseTruncSingleNegativeInfinity;
+begin
+  Trunc(MakeSingleNegativeInfinity);
 end;
 
 procedure RaiseAbsLowInt32;
@@ -750,9 +780,19 @@ begin
   Frac(MakePositiveInfinity);
 end;
 
+procedure RaiseFracNegativeInfinity;
+begin
+  Frac(MakeNegativeInfinity);
+end;
+
 procedure RaiseFracSinglePositiveInfinity;
 begin
   Frac(MakeSinglePositiveInfinity);
+end;
+
+procedure RaiseFracSingleNegativeInfinity;
+begin
+  Frac(MakeSingleNegativeInfinity);
 end;
 
 procedure RaiseFracPositive2Pow63;
@@ -833,12 +873,16 @@ begin
     'Round(NaN)', @RaiseRoundNaN);
   ExpectArgumentErrorMessage('Round: infinity cannot be converted to Int64',
     'Round(+Inf)', @RaiseRoundPositiveInfinity);
+  ExpectArgumentErrorMessage('Round: infinity cannot be converted to Int64',
+    'Round(Double -Inf)', @RaiseRoundNegativeInfinity);
   ExpectArgumentErrorMessage('Round: value is outside Int64 range',
     'Round(2^63)', @RaiseRoundPositive2Pow63);
   ExpectArgumentErrorMessage('Trunc: NaN cannot be converted to Int64',
     'Trunc(NaN)', @RaiseTruncNaN);
   ExpectArgumentErrorMessage('Trunc: infinity cannot be converted to Int64',
     'Trunc(+Inf)', @RaiseTruncPositiveInfinity);
+  ExpectArgumentErrorMessage('Trunc: infinity cannot be converted to Int64',
+    'Trunc(Double -Inf)', @RaiseTruncNegativeInfinity);
   ExpectArgumentErrorMessage('Trunc: value is outside Int64 range',
     'Trunc(below -2^63)', @RaiseTruncBelowInt64Min);
   ExpectArgumentErrorMessage('Abs: absolute value is outside Int32 range',
@@ -853,6 +897,8 @@ begin
     'Frac(NaN)', @RaiseFracNaN);
   ExpectArgumentErrorMessage('Frac: infinity cannot be converted to Int64',
     'Frac(+Inf)', @RaiseFracPositiveInfinity);
+  ExpectArgumentErrorMessage('Frac: infinity cannot be converted to Int64',
+    'Frac(Double -Inf)', @RaiseFracNegativeInfinity);
   ExpectArgumentErrorMessage('Frac: value is outside Int64 range',
     'Frac(2^63)', @RaiseFracPositive2Pow63);
   ExpectArgumentErrorMessage('GCD: result is outside Int64 range',
@@ -867,9 +913,13 @@ begin
     'Floor(Single NaN)', @RaiseFloorSingleNaN);
   ExpectArgumentErrorMessage('Floor: infinity cannot be converted to Int64',
     'Floor(Single +Inf)', @RaiseFloorSinglePositiveInfinity);
+  ExpectArgumentErrorMessage('Floor: infinity cannot be converted to Int64',
+    'Floor(Single -Inf)', @RaiseFloorSingleNegativeInfinity);
   ExpectArgumentErrorMessage('Floor: value is outside Int64 range',
     'Floor(Single 2^63)', @RaiseFloorSinglePositive2Pow63);
 
+  ExpectArgumentErrorMessage('Ceil: infinity cannot be converted to Int64',
+    'Ceil(Single -Inf)', @RaiseCeilSingleNegativeInfinity);
   ExpectArgumentErrorMessage('Ceil: value is outside Int64 range',
     'Ceil(Single 2^63)', @RaiseCeilSinglePositive2Pow63);
 
@@ -877,6 +927,8 @@ begin
     'Round(Single NaN)', @RaiseRoundSingleNaN);
   ExpectArgumentErrorMessage('Round: infinity cannot be converted to Int64',
     'Round(Single +Inf)', @RaiseRoundSinglePositiveInfinity);
+  ExpectArgumentErrorMessage('Round: infinity cannot be converted to Int64',
+    'Round(Single -Inf)', @RaiseRoundSingleNegativeInfinity);
   ExpectArgumentErrorMessage('Round: value is outside Int64 range',
     'Round(Single 2^63)', @RaiseRoundSinglePositive2Pow63);
 
@@ -884,6 +936,8 @@ begin
     'Trunc(Single NaN)', @RaiseTruncSingleNaN);
   ExpectArgumentErrorMessage('Trunc: infinity cannot be converted to Int64',
     'Trunc(Single +Inf)', @RaiseTruncSinglePositiveInfinity);
+  ExpectArgumentErrorMessage('Trunc: infinity cannot be converted to Int64',
+    'Trunc(Single -Inf)', @RaiseTruncSingleNegativeInfinity);
   ExpectArgumentErrorMessage('Trunc: value is outside Int64 range',
     'Trunc(Single 2^63)', @RaiseTruncSinglePositive2Pow63);
 
@@ -891,6 +945,8 @@ begin
     'Frac(Single NaN)', @RaiseFracSingleNaN);
   ExpectArgumentErrorMessage('Frac: infinity cannot be converted to Int64',
     'Frac(Single +Inf)', @RaiseFracSinglePositiveInfinity);
+  ExpectArgumentErrorMessage('Frac: infinity cannot be converted to Int64',
+    'Frac(Single -Inf)', @RaiseFracSingleNegativeInfinity);
   ExpectArgumentErrorMessage('Frac: value is outside Int64 range',
     'Frac(Single 2^63)', @RaiseFracSinglePositive2Pow63);
 end;
