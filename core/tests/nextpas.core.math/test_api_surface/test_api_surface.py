@@ -240,6 +240,24 @@ REQUIRED_SIMD_SEAM_DOC_TRUTH = (
         "Current `TVec*`, `TMat*`, and `TQuat*` public value-type methods remain scalar: local SIMD seam benchmarks are negative wiring evidence, and public math source units must not import `math.impl.simd` until a later profiled cutover adds tested public SIMD primitives.",
     ),
 )
+REQUIRED_IMPL_SIMD_WIN64_COMPILE_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "`core-math-impl-simd-win64-compile-smoke` is compile-only forced coverage for `math.impl.simd` on the Win64 target; it is not Windows host runtime, heaptrc, benchmark, or public SIMD wiring proof.",
+    ),
+    (
+        "docs/math/API.md",
+        "`core-math-impl-simd-win64-compile-smoke` is compile-only forced coverage for `math.impl.simd` on the Win64 target; it is not Windows host runtime, heaptrc, benchmark, or public SIMD wiring proof.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`core-math-impl-simd-win64-compile-smoke` is compile-only forced coverage for `math.impl.simd` on the Win64 target; it is not Windows host runtime, heaptrc, benchmark, or public SIMD wiring proof.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`core-math-impl-simd-win64-compile-smoke` is compile-only forced coverage for `math.impl.simd` on the Win64 target; it is not Windows host runtime, heaptrc, benchmark, or public SIMD wiring proof.",
+    ),
+)
 REQUIRED_MAT_DOC_TRUTH = (
     (
         "docs/math/README.md",
@@ -780,6 +798,16 @@ REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
         ),
     ),
     RequiredCoreMakeTarget(
+        target="core-math-impl-simd-win64-compile-smoke",
+        command="make -C core core-math-impl-simd-win64-compile-smoke",
+        recipe_steps=(
+            (
+                "test-impl-simd-win64-compile-gate",
+                "$(MAKE) -C tests/nextpas.core.math/test_impl_simd_win64_compile_gate clean test",
+            ),
+        ),
+    ),
+    RequiredCoreMakeTarget(
         target="core-math-trig-local-smoke",
         command="make -C core core-math-trig-local-smoke",
         recipe_steps=(
@@ -816,6 +844,12 @@ TRIG_HOST_COMPILE_GATE_MAKEFILE_PATH = (
 TRIG_HOST_COMPILE_GATE_SOURCE_PATH = (
     "tests/nextpas.core.math/test_trig_host_compile_gate/test_trig_host_compile_gate.lpr"
 )
+IMPL_SIMD_WIN64_COMPILE_GATE_MAKEFILE_PATH = (
+    "tests/nextpas.core.math/test_impl_simd_win64_compile_gate/Makefile"
+)
+IMPL_SIMD_WIN64_COMPILE_GATE_SOURCE_PATH = (
+    "tests/nextpas.core.math/test_impl_simd_win64_compile_gate/test_impl_simd_win64_compile_gate.lpr"
+)
 INTERNAL_IMPL_TEST_PREFIXES = (
     "tests/nextpas.core.math/test_impl_",
 )
@@ -851,17 +885,37 @@ EXTERNAL_M_RE = re.compile(
 )
 PRIVATE_SIMD_RE = re.compile(
     r"\b("
-    r"nextpas\.core\.simd\.direct|"
-    r"nextpas\.core\.simd\.dispatch|"
-    r"nextpas\.core\.simd\.dataplane|"
-    r"nextpas\.core\.simd\.avx2(?:\.[A-Za-z0-9_]+)?|"
-    r"nextpas\.core\.simd\.avx512(?:\.[A-Za-z0-9_]+)?|"
-    r"nextpas\.core\.simd\.sse(?:\.[A-Za-z0-9_]+)?|"
-    r"nextpas\.core\.simd\.sse2(?:\.[A-Za-z0-9_]+)?|"
-    r"nextpas\.core\.simd\.neon(?:\.[A-Za-z0-9_]+)?|"
-    r"nextpas\.core\.simd\.riscvv(?:\.[A-Za-z0-9_]+)?|"
+    r"nextpas\.core\.simd\.(?:"
+    r"backend(?:\.[A-Za-z0-9_]+)?|"
+    r"dispatch|"
+    r"dataplane|"
+    r"direct|"
+    r"intrinsics(?:\.[A-Za-z0-9_]+)?|"
+    r"static(?:\.[A-Za-z0-9_]+)?|"
+    r"runtime|"
+    r"cpuinfo(?:\.[A-Za-z0-9_]+)?|"
+    r"avx[0-9]*(?:\.[A-Za-z0-9_]+)?|"
+    r"sse[0-9]*(?:\.[A-Za-z0-9_]+)?|"
+    r"ssse3(?:\.[A-Za-z0-9_]+)?|"
+    r"neon(?:\.[A-Za-z0-9_]+)?|"
+    r"riscvv(?:\.[A-Za-z0-9_]+)?|"
+    r"scalar|"
+    r"vec[A-Za-z0-9_]*|"
+    r"mask[A-Za-z0-9_]*|"
+    r"ops|"
+    r"utils|"
+    r"memutils|"
+    r"mathutil|"
+    r"alloc|"
+    r"arrays[A-Za-z0-9_]*"
+    r")|"
+    r"P?TSimd(?:DispatchTable|Backend[A-Za-z0-9_]*|DataPlane)|"
+    r"PSimdDispatchTable|"
+    r"GetDispatchTable|"
+    r"GetSimdFacadeDispatchFastPath|"
     r"GetDirectDispatchTable|"
     r"GetCurrentSimdDataPlane(?:Dispatch)?|"
+    r"GetCurrentSimdDataPlane[A-Za-z0-9_]*|"
     r"RebindSimdDataPlane|"
     r"TryGetRegisteredBackendDispatchTable"
     r")\b",
@@ -1199,6 +1253,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("impl-simd-vec3f", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "T.Run('vec3f simd helpers'"),
     RequiredBehaviorTestMarker("impl-simd-mat4f", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "T.Run('mat4f simd helpers'"),
     RequiredBehaviorTestMarker("impl-simd-quatf", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "T.Run('quatf simd helpers'"),
+    RequiredBehaviorTestMarker("impl-simd-runtime-parity", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "T.Run('simd helpers match public math semantics'"),
 )
 
 
@@ -1568,6 +1623,45 @@ def scan_private_simd(root: Path, path: Path, text: str) -> list[Finding]:
             path,
             line,
             original_line(text, line),
+        )
+    return findings
+
+
+def scan_math_impl_simd_facade_only_uses(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    path = root / "src/nextpas.core.math.impl.simd.pas"
+    if not path.is_file():
+        return findings
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    impl_text, line_offset = implementation_text_with_line_offset(text)
+    uses_units = active_uses_units_with_lines(impl_text, line_offset)
+    simd_uses = [(unit, line) for unit, line in uses_units if unit.startswith("nextpas.core.simd")]
+
+    simd_unit_names = {unit for unit, _line in simd_uses}
+    if simd_unit_names == {"nextpas.core.simd"}:
+        return findings
+
+    if "nextpas.core.simd" not in simd_unit_names:
+        add_finding(
+            findings,
+            "math-impl-simd-missing-public-simd-facade-use",
+            root,
+            path,
+            line_offset + 1,
+            "implementation uses must import nextpas.core.simd",
+        )
+
+    for unit, line in simd_uses:
+        if unit == "nextpas.core.simd":
+            continue
+        add_finding(
+            findings,
+            "math-impl-simd-non-facade-simd-use:" + unit,
+            root,
+            path,
+            line,
+            unit,
         )
     return findings
 
@@ -2015,6 +2109,56 @@ def run_public_math_source_simd_wiring_self_tests() -> None:
                 )
 
 
+def run_math_impl_simd_facade_only_uses_self_tests() -> None:
+    cases = (
+        (
+            "facade-only",
+            "unit nextpas.core.math.impl.simd;\n"
+            "interface\n"
+            "implementation\n"
+            "uses nextpas.core.simd;\n"
+            "end.\n",
+            set(),
+        ),
+        (
+            "missing-facade",
+            "unit nextpas.core.math.impl.simd;\n"
+            "interface\n"
+            "implementation\n"
+            "end.\n",
+            {"math-impl-simd-missing-public-simd-facade-use"},
+        ),
+        (
+            "private-plus-facade",
+            "unit nextpas.core.math.impl.simd;\n"
+            "interface\n"
+            "implementation\n"
+            "uses nextpas.core.simd, nextpas.core.simd.dispatch;\n"
+            "end.\n",
+            {"math-impl-simd-non-facade-simd-use:nextpas.core.simd.dispatch"},
+        ),
+    )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        path = root / "src/nextpas.core.math.impl.simd.pas"
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        for case_name, text, expected_rules in cases:
+            path.write_text(text, encoding="utf-8")
+            findings = scan_math_impl_simd_facade_only_uses(root)
+            rules = {finding.rule for finding in findings}
+            if rules != expected_rules:
+                raise AssertionError(
+                    "math-impl-simd-facade-only-uses self-test "
+                    + case_name
+                    + " expected "
+                    + ", ".join(sorted(expected_rules))
+                    + " got "
+                    + ", ".join(sorted(rules))
+                )
+
+
 def run_legacy_production_name_self_tests() -> None:
     cases = (
         (
@@ -2241,6 +2385,74 @@ def run_required_trig_host_compile_gate_self_tests() -> None:
         if findings:
             raise AssertionError(
                 "trig-host-compile-gate self-test expected no findings"
+            )
+
+
+def run_required_impl_simd_win64_compile_gate_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        makefile = root / IMPL_SIMD_WIN64_COMPILE_GATE_MAKEFILE_PATH
+        source = root / IMPL_SIMD_WIN64_COMPILE_GATE_SOURCE_PATH
+        makefile.parent.mkdir(parents=True, exist_ok=True)
+        source.parent.mkdir(parents=True, exist_ok=True)
+        makefile.write_text(
+            "FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -Cn -Twin64 -Px86_64\n",
+            encoding="utf-8",
+        )
+        source.write_text(
+            "program test_impl_simd_win64_compile_gate;\n"
+            "uses\n"
+            "  nextpas.core.math,\n"
+            "  nextpas.core.math.mat,\n"
+            "  nextpas.core.math.quat,\n"
+            "  nextpas.core.math.vec;\n"
+            "begin\n"
+            "  Halt(Ord(SimdVec4fDot(TVec4f.Zero, TVec4f.Zero) <> 0.0));\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+
+        findings = scan_required_impl_simd_win64_compile_gate(root)
+        rules = {finding.rule for finding in findings}
+        expected_rule = (
+            "missing-required-impl-simd-win64-compile-gate-marker:impl-simd-import"
+        )
+        if expected_rule not in rules:
+            raise AssertionError(
+                "impl-simd-win64-compile-gate self-test expected " + expected_rule
+            )
+
+        source.write_text(
+            "program test_impl_simd_win64_compile_gate;\n"
+            "uses\n"
+            "  nextpas.core.math,\n"
+            "  nextpas.core.math.mat,\n"
+            "  nextpas.core.math.quat,\n"
+            "  nextpas.core.math.vec,\n"
+            "  nextpas.core.math.impl.simd;\n"
+            "var\n"
+            "  V3: TVec3f;\n"
+            "  V4: TVec4f;\n"
+            "  M: TMat4f;\n"
+            "  Q: TQuatf;\n"
+            "begin\n"
+            "  V3 := TVec3f.Create(1.0, 2.0, 3.0);\n"
+            "  V4 := TVec4f.Create(1.0, 2.0, 3.0, 4.0);\n"
+            "  M := TMat4f.Identity;\n"
+            "  Q := TQuatf.Identity;\n"
+            "  V4 := SimdVec4fAdd(V4, SimdVec4fSub(V4, V4));\n"
+            "  V4 := SimdVec4fMulComponents(V4, SimdVec4fScale(V4, 1.0));\n"
+            "  V4 := SimdMat4fMulVec4f(M, V4);\n"
+            "  V3 := SimdVec3fCross(V3, SimdQuatfRotate(Q, V3));\n"
+            "  if SimdVec4fDot(V4, V4) + SimdVec4fLength(V4) + SimdVec3fDot(V3, V3) < 0.0 then\n"
+            "    Halt(1);\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        findings = scan_required_impl_simd_win64_compile_gate(root)
+        if findings:
+            raise AssertionError(
+                "impl-simd-win64-compile-gate self-test expected no findings"
             )
 
 
@@ -2721,6 +2933,96 @@ def scan_required_trig_host_compile_gate(root: Path) -> list[Finding]:
             add_finding(
                 findings,
                 "missing-required-trig-host-compile-gate-marker:" + rule,
+                root,
+                source,
+                1,
+                marker,
+            )
+    return findings
+
+
+def scan_required_impl_simd_win64_compile_gate(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    makefile = root / IMPL_SIMD_WIN64_COMPILE_GATE_MAKEFILE_PATH
+    source = root / IMPL_SIMD_WIN64_COMPILE_GATE_SOURCE_PATH
+
+    if not makefile.is_file():
+        add_finding(
+            findings,
+            "missing-required-impl-simd-win64-compile-gate-makefile",
+            root,
+            makefile,
+            1,
+            IMPL_SIMD_WIN64_COMPILE_GATE_MAKEFILE_PATH,
+        )
+    else:
+        makefile_text = makefile.read_text(encoding="utf-8", errors="replace")
+        for rule, marker in (
+            ("compile-only", "-Cn"),
+            ("win64-target", "-Twin64"),
+            ("x86_64-cpu", "-Px86_64"),
+        ):
+            if marker in makefile_text:
+                continue
+            add_finding(
+                findings,
+                "missing-required-impl-simd-win64-compile-gate-step:" + rule,
+                root,
+                makefile,
+                1,
+                marker,
+            )
+
+    if not source.is_file():
+        add_finding(
+            findings,
+            "missing-required-impl-simd-win64-compile-gate-source",
+            root,
+            source,
+            1,
+            IMPL_SIMD_WIN64_COMPILE_GATE_SOURCE_PATH,
+        )
+    else:
+        source_text = strip_pascal_comments_and_strings(
+            source.read_text(encoding="utf-8", errors="replace")
+        )
+        source_units = active_uses_units(source_text)
+        for rule, unit in (
+            ("facade-import", "nextpas.core.math"),
+            ("mat-import", "nextpas.core.math.mat"),
+            ("quat-import", "nextpas.core.math.quat"),
+            ("vec-import", "nextpas.core.math.vec"),
+            ("impl-simd-import", "nextpas.core.math.impl.simd"),
+        ):
+            if unit in source_units:
+                continue
+            add_finding(
+                findings,
+                "missing-required-impl-simd-win64-compile-gate-marker:" + rule,
+                root,
+                source,
+                1,
+                unit,
+            )
+
+        required_markers = (
+            ("vec4f-add-touch", "SimdVec4fAdd("),
+            ("vec4f-sub-touch", "SimdVec4fSub("),
+            ("vec4f-mul-components-touch", "SimdVec4fMulComponents("),
+            ("vec4f-scale-touch", "SimdVec4fScale("),
+            ("vec4f-dot-touch", "SimdVec4fDot("),
+            ("vec4f-length-touch", "SimdVec4fLength("),
+            ("vec3f-dot-touch", "SimdVec3fDot("),
+            ("vec3f-cross-touch", "SimdVec3fCross("),
+            ("mat4f-mul-vec4f-touch", "SimdMat4fMulVec4f("),
+            ("quatf-rotate-touch", "SimdQuatfRotate("),
+        )
+        for rule, marker in required_markers:
+            if marker in source_text:
+                continue
+            add_finding(
+                findings,
+                "missing-required-impl-simd-win64-compile-gate-marker:" + rule,
                 root,
                 source,
                 1,
@@ -3273,6 +3575,15 @@ def scan_required_trig_power_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_impl_simd_win64_compile_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_IMPL_SIMD_WIN64_COMPILE_DOC_TRUTH,
+        "missing-required-impl-simd-win64-compile-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def build_report(root: Path) -> Report:
     root = root.resolve()
     findings: list[Finding] = []
@@ -3286,9 +3597,12 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_core_make_targets(root))
     findings.extend(scan_required_core_make_target_doc_coverage(root))
     findings.extend(scan_required_trig_host_compile_gate(root))
+    findings.extend(scan_required_impl_simd_win64_compile_gate(root))
+    findings.extend(scan_math_impl_simd_facade_only_uses(root))
     findings.extend(scan_required_host_gate_residual_truth(root))
     findings.extend(scan_required_m8_residual_truth(root))
     findings.extend(scan_required_simd_seam_doc_truth(root))
+    findings.extend(scan_required_impl_simd_win64_compile_doc_truth(root))
     findings.extend(scan_required_mat_doc_truth(root))
     findings.extend(scan_required_transform_doc_truth(root))
     findings.extend(scan_required_quat_doc_truth(root))
@@ -3335,7 +3649,8 @@ def build_report(root: Path) -> Report:
         findings.extend(scan_external_m(root, path, text))
         findings.extend(scan_legacy_public_names(root, path, text))
         findings.extend(scan_legacy_production_names(root, path, text))
-        findings.extend(scan_private_simd(root, path, text))
+        if relative(path, root) != SIMD_MATHUTIL_PATH:
+            findings.extend(scan_private_simd(root, path, text))
         findings.extend(scan_public_math_source_simd_wiring(root, path, text))
         findings.extend(scan_forbidden_trig_scalar_names(root, path, text))
         findings.extend(scan_forbidden_simd_mathutil_bare_names(root, path, text))
@@ -3348,6 +3663,11 @@ def build_report(root: Path) -> Report:
         scanned.add(path)
         text = path.read_text(encoding="utf-8", errors="replace")
         findings.extend(scan_math_ffi_uses(root, path, text))
+        if relative(path, root).startswith(INTERNAL_IMPL_TEST_PREFIXES) and path.suffix.lower() in {
+            ".lpr",
+            ".pas",
+        }:
+            findings.extend(scan_private_simd(root, path, text))
         findings.extend(scan_public_impl_consumers(root, path, text))
         findings.extend(scan_compiler_refs(root, path, text))
 
@@ -3385,10 +3705,12 @@ def main() -> int:
     if args.self_test:
         run_behavior_marker_self_tests()
         run_public_math_source_simd_wiring_self_tests()
+        run_math_impl_simd_facade_only_uses_self_tests()
         run_legacy_production_name_self_tests()
         run_forbidden_trig_scalar_name_self_tests()
         run_trig_host_safe_route_self_tests()
         run_required_trig_host_compile_gate_self_tests()
+        run_required_impl_simd_win64_compile_gate_self_tests()
         run_required_doc_truth_self_tests()
         run_root_facade_contract_self_tests()
         run_root_facade_reexport_parity_self_tests()

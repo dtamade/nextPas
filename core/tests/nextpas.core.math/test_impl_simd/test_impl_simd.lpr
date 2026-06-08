@@ -40,6 +40,16 @@ begin
   CheckNear(AExpectedW, AActual.W, 0.000001, AMessage + '.W');
 end;
 
+procedure CheckVec3fValue(const AExpected, AActual: TVec3f; const AMessage: string);
+begin
+  CheckVec3f(AExpected.X, AExpected.Y, AExpected.Z, AActual, AMessage);
+end;
+
+procedure CheckVec4fValue(const AExpected, AActual: TVec4f; const AMessage: string);
+begin
+  CheckVec4f(AExpected.X, AExpected.Y, AExpected.Z, AExpected.W, AActual, AMessage);
+end;
+
 procedure TestVec4fSimdHelpers;
 var
   A: TVec4f;
@@ -103,11 +113,79 @@ begin
     'SimdQuatfRotate matches public Rotate semantics for non-unit quaternions');
 end;
 
+procedure TestSimdHelpersMatchPublicMathSemantics;
+var
+  A4: TVec4f;
+  B4: TVec4f;
+  V4: TVec4f;
+  A3: TVec3f;
+  B3: TVec3f;
+  V3: TVec3f;
+  M: TMat4f;
+  Q: TQuatf;
+  ScaledQ: TQuatf;
+  NegativeQ: TQuatf;
+  ZeroQ: TQuatf;
+begin
+  A4 := TVec4f.Create(-3.5, 0.0, 2.25, 8.0);
+  B4 := TVec4f.Create(1.25, -4.0, 0.5, -2.0);
+  CheckVec4fValue(A4 + B4, SimdVec4fAdd(A4, B4), 'SimdVec4fAdd public parity');
+  CheckVec4fValue(A4 - B4, SimdVec4fSub(A4, B4), 'SimdVec4fSub public parity');
+  CheckVec4fValue(TVec4f.MulComponents(A4, B4), SimdVec4fMulComponents(A4, B4),
+    'SimdVec4fMulComponents public parity');
+  CheckVec4fValue(A4 * Single(-1.75), SimdVec4fScale(A4, -1.75),
+    'SimdVec4fScale public parity');
+  CheckNear(TVec4f.Dot(A4, B4), SimdVec4fDot(A4, B4), 0.000001,
+    'SimdVec4fDot public parity');
+  CheckNear(A4.Length, SimdVec4fLength(A4), 0.000001, 'SimdVec4fLength public parity');
+  V4 := TVec4f.Create(10000000000000000000.0, -10000000000000000000.0, 0.0, 0.0);
+  CheckNear(V4.Length, SimdVec4fLength(V4), 10000000000000.0,
+    'SimdVec4fLength large finite public parity');
+
+  A3 := TVec3f.Create(-2.0, 5.0, 0.25);
+  B3 := TVec3f.Create(4.5, -1.5, 3.0);
+  CheckNear(TVec3f.Dot(A3, B3), SimdVec3fDot(A3, B3), 0.000001,
+    'SimdVec3fDot public parity');
+  CheckVec3fValue(TVec3f.Cross(A3, B3), SimdVec3fCross(A3, B3),
+    'SimdVec3fCross public parity');
+  CheckVec3fValue(TVec3f.Cross(A3, A3), SimdVec3fCross(A3, A3),
+    'SimdVec3fCross parallel public parity');
+  CheckVec3fValue(TVec3f.Cross(TVec3f.Create(0.0, 0.0, 0.0), B3),
+    SimdVec3fCross(TVec3f.Create(0.0, 0.0, 0.0), B3),
+    'SimdVec3fCross zero public parity');
+
+  V4 := TVec4f.Create(0.5, -1.0, 2.0, 1.5);
+  CheckVec4fValue(TMat4f.Identity * V4, SimdMat4fMulVec4f(TMat4f.Identity, V4),
+    'SimdMat4fMulVec4f identity public parity');
+  M := TMat4f.Create(
+    TVec4f.Create(1.0, 2.0, 3.0, 4.0),
+    TVec4f.Create(-5.0, 6.5, -7.0, 8.0),
+    TVec4f.Create(9.25, -10.0, 11.0, -12.0),
+    TVec4f.Create(13.0, 14.0, -15.0, 16.0));
+  CheckVec4fValue(M * V4, SimdMat4fMulVec4f(M, V4),
+    'SimdMat4fMulVec4f column-major public parity');
+
+  V3 := TVec3f.Create(1.25, -0.5, 2.0);
+  Q := TQuatf.FromAxisAngle(TVec3f.Create(1.0, 2.0, -3.0), 0.75);
+  ScaledQ := TQuatf.Create(Q.X * 3.0, Q.Y * 3.0, Q.Z * 3.0, Q.W * 3.0);
+  NegativeQ := TQuatf.Create(-Q.X, -Q.Y, -Q.Z, -Q.W);
+  ZeroQ := TQuatf.Create(0.0, 0.0, 0.0, 0.0);
+  CheckVec3fValue(Q.Rotate(V3), SimdQuatfRotate(Q, V3),
+    'SimdQuatfRotate arbitrary axis public parity');
+  CheckVec3fValue(ScaledQ.Rotate(V3), SimdQuatfRotate(ScaledQ, V3),
+    'SimdQuatfRotate scaled quaternion public parity');
+  CheckVec3fValue(NegativeQ.Rotate(V3), SimdQuatfRotate(NegativeQ, V3),
+    'SimdQuatfRotate negative equivalent public parity');
+  CheckVec3fValue(ZeroQ.Rotate(V3), SimdQuatfRotate(ZeroQ, V3),
+    'SimdQuatfRotate zero quaternion public parity');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.impl.simd');
   T.Run('vec4f simd helpers', @TestVec4fSimdHelpers);
   T.Run('vec3f simd helpers', @TestVec3fSimdHelpers);
   T.Run('mat4f simd helpers', @TestMat4fSimdHelpers);
   T.Run('quatf simd helpers', @TestQuatfSimdHelpers);
+  T.Run('simd helpers match public math semantics', @TestSimdHelpersMatchPublicMathSemantics);
   T.Summary;
 end.

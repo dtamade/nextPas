@@ -384,6 +384,15 @@ It wraps the targeted implementation-only correctness gate:
 make -C core/tests/nextpas.core.math/test_impl_simd clean test
 ```
 
+Run the Win64 compile-only internal SIMD seam gate when the local FPC install provides the Win64
+target RTL:
+
+```sh
+make -C core core-math-impl-simd-win64-compile-smoke
+```
+
+`core-math-impl-simd-win64-compile-smoke` is compile-only forced coverage for `math.impl.simd` on the Win64 target; it is not Windows host runtime, heaptrc, benchmark, or public SIMD wiring proof.
+
 For landing review, also run:
 
 ```sh

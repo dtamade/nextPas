@@ -429,6 +429,9 @@ Status:
   `make -C core core-math-impl-simd-local-smoke`. It reruns
   `make -C tests/nextpas.core.math/test_impl_simd clean test` through a stable owner-level
   targeted proof entrypoint for the internal seam correctness contract.
+- `core/Makefile` now exposes `core-math-impl-simd-win64-compile-smoke`, reachable as
+  `make -C core core-math-impl-simd-win64-compile-smoke`.
+  `core-math-impl-simd-win64-compile-smoke` is compile-only forced coverage for `math.impl.simd` on the Win64 target; it is not Windows host runtime, heaptrc, benchmark, or public SIMD wiring proof.
 - `test_api_surface` now requires the internal seam file and declarations, rejects backend-private
   SIMD dependencies, and allows only implementation-specific tests to import `math.impl.*`.
 - `bench_simd_seam` now provides a repeatable local Linux benchmark harness for the internal seam:

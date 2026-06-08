@@ -246,6 +246,15 @@ make -C core core-math-impl-simd-local-smoke
 It wraps `make -C core/tests/nextpas.core.math/test_impl_simd clean test` through a stable
 owner-level `core/Makefile` entrypoint.
 
+Run the Win64 compile-only internal SIMD seam gate when the local FPC install provides the Win64
+target RTL:
+
+```sh
+make -C core core-math-impl-simd-win64-compile-smoke
+```
+
+`core-math-impl-simd-win64-compile-smoke` is compile-only forced coverage for `math.impl.simd` on the Win64 target; it is not Windows host runtime, heaptrc, benchmark, or public SIMD wiring proof.
+
 Run the local trig link smoke on the current host with:
 
 ```sh

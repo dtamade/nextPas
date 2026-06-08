@@ -14,8 +14,9 @@ x86_64/Linux gate. M8 documentation and named local module gates are now in plac
 `make -C core core-math-api-surface-smoke`, `make -C core core-math-overview-local-smoke`,
 `make -C core core-math-facade-local-smoke`, `make -C core core-math-symbol-scope-local-smoke`,
 `make -C core core-math-smoke`,
-`make -C core core-math-full-local-smoke`, `make -C core core-math-impl-simd-local-smoke`, and
-`make -C core core-math-trig-local-smoke`. The branch also has a facade-only public example under
+`make -C core core-math-full-local-smoke`, `make -C core core-math-impl-simd-local-smoke`,
+`make -C core core-math-impl-simd-win64-compile-smoke`, and `make -C core
+core-math-trig-local-smoke`. The branch also has a facade-only public example under
 `core/examples/nextpas.core.math/math_overview` for common consumer usage. Final cross-platform
 completion still requires macOS/Windows trig host link smokes, final API/docs review,
 profiling-backed SIMD wiring decisions, and the later `fafafa.game` cutover.
@@ -336,6 +337,9 @@ Cross-platform link proof has two layers:
   `-Cn -Twin64 -Px86_64` probe that imports both `nextpas.core.math` and
   `nextpas.core.math.trig`. This is useful forced compile evidence for the current toolchain, but
   it is not a Windows host link/run proof and it does not cover macOS.
+- Win64 internal SIMD compile-only proof: `make -C core core-math-impl-simd-win64-compile-smoke`
+  runs the forced compile gate for the internal seam.
+  `core-math-impl-simd-win64-compile-smoke` is compile-only forced coverage for `math.impl.simd` on the Win64 target; it is not Windows host runtime, heaptrc, benchmark, or public SIMD wiring proof.
   Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.
   M8 is not complete until broader M7 SIMD acceleration decisions and host trig link evidence are resolved.
 
