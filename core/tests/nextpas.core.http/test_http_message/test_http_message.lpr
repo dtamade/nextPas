@@ -12,10 +12,29 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
+  nextpas.core.http,
   nextpas.core.http.message;
 
 var
   T: TTestRunner;
+
+function ReadBodyStr(const AReader: IReader): string;
+var
+  LBuf: array[0..255] of Byte;
+  LN: SizeUInt;
+begin
+  Result := '';
+  if AReader = nil then
+    Exit;
+  repeat
+    LN := AReader.Read(LBuf[0], SizeUInt(Length(LBuf)));
+    if LN > 0 then
+    begin
+      SetLength(Result, Length(Result) + Int32(LN));
+      Move(LBuf[0], Result[Length(Result) - Int32(LN) + 1], LN);
+    end;
+  until LN = 0;
+end;
 
 procedure TestNewRequestMethodAndUrl;
 var
@@ -826,6 +845,137 @@ begin
   Check(LBuf[0] = Ord('h'), 'first byte is h');
 end;
 
+procedure TestNewResponseStringBodyHelper;
+var
+  LHeaders: IHttpHeaders;
+  LResp: IHttpResponse;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-type', 'text/plain');
+
+  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, 'hello');
+
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'response string helper status');
+  CheckEqual('text/plain', LResp.Headers.Get('content-type'),
+    'response string helper preserves caller headers');
+  CheckEqual('5', LResp.Headers.Get('content-length'),
+    'response string helper publishes content-length');
+  CheckEqual('hello', ReadBodyStr(LResp.Body),
+    'response string helper body reader');
+end;
+
+procedure TestFacadeNewResponseStringBodyHelper;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := nextpas.core.http.NewResponse(HTTP_STATUS_CREATED, nil, 'created');
+
+  CheckEqual(Int64(201), Int64(LResp.StatusCode),
+    'facade response string helper status');
+  Check(LResp.Headers <> nil,
+    'facade response string helper creates headers');
+  CheckEqual('7', LResp.Headers.Get('content-length'),
+    'facade response string helper publishes content-length');
+  CheckEqual('created', ReadBodyStr(LResp.Body),
+    'facade response string helper body reader');
+end;
+
+procedure TestNewResponseBytesBodyHelper;
+var
+  LResp: IHttpResponse;
+  LBody: TBytes;
+  LBuf: array[0..7] of Byte;
+  LN: SizeUInt;
+begin
+  SetLength(LBody, 4);
+  LBody[0] := Ord('b');
+  LBody[1] := 0;
+  LBody[2] := 255;
+  LBody[3] := Ord('z');
+
+  LResp := NewResponse(HTTP_STATUS_OK, nil, LBody);
+
+  CheckEqual('4', LResp.Headers.Get('content-length'),
+    'response bytes helper publishes content-length');
+  Check(LResp.Body <> nil, 'response bytes helper body reader');
+  LN := LResp.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+  CheckEqual(Int64(4), Int64(LN),
+    'response bytes helper body length');
+  CheckEqual(Byte(0), LBuf[1],
+    'response bytes helper preserves zero byte');
+  CheckEqual(Byte(255), LBuf[2],
+    'response bytes helper preserves high byte');
+end;
+
+procedure TestNewResponseNilThirdArgumentKeepsNilBody;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := NewResponse(HTTP_STATUS_OK, nil, nil);
+
+  Check(LResp.Headers <> nil,
+    'response nil-body compatibility helper creates headers');
+  CheckEqual('', LResp.Headers.Get('content-length'),
+    'response nil-body compatibility helper does not publish content-length');
+  Check(LResp.Body = nil,
+    'response nil-body compatibility helper keeps body nil');
+end;
+
+procedure TestNewResponseExplicitNilReaderKeepsNilBody;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := NewResponse(HTTP_STATUS_OK, nil, IReader(nil));
+
+  Check(LResp.Headers <> nil,
+    'response explicit nil reader creates headers');
+  CheckEqual('', LResp.Headers.Get('content-length'),
+    'response explicit nil reader does not publish content-length');
+  Check(LResp.Body = nil,
+    'response explicit nil reader keeps body nil');
+end;
+
+procedure TestNewResponseRejectsConflictingContentLengthHeader;
+var
+  LHeaders: IHttpHeaders;
+  LRaised: Boolean;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '4');
+
+  LRaised := False;
+  try
+    NewResponse(HTTP_STATUS_OK, LHeaders, 'hello');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+
+  Check(LRaised,
+    'response string helper rejects conflicting content-length');
+end;
+
+procedure TestNewResponseRejectsTransferEncodingWithFixedBody;
+var
+  LHeaders: IHttpHeaders;
+  LRaised: Boolean;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('transfer-encoding', 'chunked');
+
+  LRaised := False;
+  try
+    NewResponse(HTTP_STATUS_OK, LHeaders, 'hello');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+
+  Check(LRaised,
+    'response fixed-body helper rejects transfer-encoding');
+end;
+
 procedure TestRequestVersionDefaultsHttp11;
 var
   LReq: IHttpRequest;
@@ -1034,6 +1184,20 @@ begin
     @TestNewResponseWithNilHeadersCreatesHeaders);
   T.Run('Response headers accessible', @TestResponseHeadersAccessible);
   T.Run('Response body accessible', @TestResponseBodyAccessible);
+  T.Run('NewResponse accepts string body helper',
+    @TestNewResponseStringBodyHelper);
+  T.Run('Facade NewResponse accepts string body helper',
+    @TestFacadeNewResponseStringBodyHelper);
+  T.Run('NewResponse accepts bytes body helper',
+    @TestNewResponseBytesBodyHelper);
+  T.Run('NewResponse nil third argument keeps nil body',
+    @TestNewResponseNilThirdArgumentKeepsNilBody);
+  T.Run('NewResponse explicit nil reader keeps nil body',
+    @TestNewResponseExplicitNilReaderKeepsNilBody);
+  T.Run('NewResponse rejects conflicting content-length header',
+    @TestNewResponseRejectsConflictingContentLengthHeader);
+  T.Run('NewResponse rejects transfer-encoding with fixed body',
+    @TestNewResponseRejectsTransferEncodingWithFixedBody);
   T.Run('Request version defaults to HTTP/1.1', @TestRequestVersionDefaultsHttp11);
   T.Run('Multiple path params', @TestMultiplePathParams);
   T.Run('Request content-length stored', @TestRequestContentLengthStored);

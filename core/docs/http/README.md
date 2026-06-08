@@ -138,6 +138,13 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   object for a different request shape.
 - `NewResponse(Status, Headers, Body)` — build responses; nil headers create
   an empty header set so callers can safely read or mutate `Resp.Headers`.
+- `NewResponse(Status, Headers, BodyText)` /
+  `NewResponse(Status, Headers, BodyBytes)` — build fixed-body responses with
+  a copied Pascal string or `TBytes` body and generated `Content-Length`.
+  Caller-supplied headers are treated as response-owned; a matching
+  `Content-Length` is accepted, conflicting values and `Transfer-Encoding` are
+  rejected. `NewResponse(Status, Headers, nil)` stays source compatible with
+  the nil-body form and does not publish `Content-Length`.
 - `HttpWriteResponseString(Writer, Status, ContentType, Body)` — write a
   fixed Pascal string response through an `IHttpResponseWriter` and return the
   body bytes accepted by the writer. Nil writers raise `EArgumentError`;

@@ -195,7 +195,14 @@ function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload; inline;
 function NewGetRequest(const APath: string): IHttpRequest; inline;
-function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders; const ABody: IReader): IHttpResponse; inline;
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ABody: IReader): IHttpResponse; overload; inline;
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ANilBody: Pointer): IHttpResponse; overload; inline;
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ABodyText: string): IHttpResponse; overload; inline;
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ABodyBytes: TBytes): IHttpResponse; overload; inline;
 function HttpWriteResponseString(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AContentType, ABody: string): SizeUInt; inline;
 
@@ -502,6 +509,24 @@ end;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders; const ABody: IReader): IHttpResponse;
 begin
   Result := nextpas.core.http.message.NewResponse(AStatus, AHeaders, ABody);
+end;
+
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ANilBody: Pointer): IHttpResponse;
+begin
+  Result := nextpas.core.http.message.NewResponse(AStatus, AHeaders, ANilBody);
+end;
+
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ABodyText: string): IHttpResponse;
+begin
+  Result := nextpas.core.http.message.NewResponse(AStatus, AHeaders, ABodyText);
+end;
+
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ABodyBytes: TBytes): IHttpResponse;
+begin
+  Result := nextpas.core.http.message.NewResponse(AStatus, AHeaders, ABodyBytes);
 end;
 
 function HttpWriteResponseString(const AW: IHttpResponseWriter;

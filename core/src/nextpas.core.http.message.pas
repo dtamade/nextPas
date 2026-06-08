@@ -128,7 +128,13 @@ function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload;
 function NewGetRequest(const APath: string): IHttpRequest;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
-  const ABody: IReader): IHttpResponse;
+  const ABody: IReader): IHttpResponse; overload;
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ANilBody: Pointer): IHttpResponse; overload;
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ABodyText: string): IHttpResponse; overload;
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ABodyBytes: TBytes): IHttpResponse; overload;
 function HttpWriteResponseString(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AContentType, ABody: string): SizeUInt;
 
@@ -213,6 +219,29 @@ begin
   LHeaderLength := ParseDeclaredContentLength(LValues[0]);
   if LHeaderLength <> ADeclaredContentLength then
     raise EArgumentError.Create('HTTP request content-length conflicts with body length');
+end;
+
+procedure ValidateFixedBodyResponseHeaders(const AHeaders: IHttpHeaders;
+  const ABodyLength: Int64);
+var
+  LValues: TStringArray;
+  LHeaderLength: Int64;
+begin
+  if AHeaders = nil then
+    Exit;
+
+  if AHeaders.Has('transfer-encoding') then
+    raise EArgumentError.Create('HTTP response transfer-encoding is unsupported');
+
+  LValues := AHeaders.GetAll('content-length');
+  if Length(LValues) = 0 then
+    Exit;
+  if Length(LValues) <> 1 then
+    raise EArgumentError.Create('HTTP response content-length is duplicated');
+  LHeaderLength := ParseDeclaredContentLength(LValues[0]);
+  if LHeaderLength <> ABodyLength then
+    raise EArgumentError.Create(
+      'HTTP response content-length conflicts with body length');
 end;
 
 function ResponseStatusMustNotHaveBody(const AStatus: THttpStatus): Boolean;
@@ -645,6 +674,37 @@ function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABody: IReader): IHttpResponse;
 begin
   Result := THttpResponse.Create(AStatus, AHeaders, ABody);
+end;
+
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ANilBody: Pointer): IHttpResponse;
+begin
+  if ANilBody <> nil then
+    raise EArgumentError.Create(
+      'HTTP nil-body response compatibility overload only accepts nil');
+  Result := THttpResponse.Create(AStatus, AHeaders, nil);
+end;
+
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ABodyText: string): IHttpResponse;
+var
+  LHeaders: IHttpHeaders;
+begin
+  LHeaders := HeadersOrNew(AHeaders);
+  ValidateFixedBodyResponseHeaders(LHeaders, Int64(Length(ABodyText)));
+  LHeaders.SetHeader('content-length', IntToStr(Int64(Length(ABodyText))));
+  Result := THttpResponse.Create(AStatus, LHeaders, StringBodyReader(ABodyText));
+end;
+
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ABodyBytes: TBytes): IHttpResponse;
+var
+  LHeaders: IHttpHeaders;
+begin
+  LHeaders := HeadersOrNew(AHeaders);
+  ValidateFixedBodyResponseHeaders(LHeaders, Int64(Length(ABodyBytes)));
+  LHeaders.SetHeader('content-length', IntToStr(Int64(Length(ABodyBytes))));
+  Result := THttpResponse.Create(AStatus, LHeaders, BytesBodyReader(ABodyBytes));
 end;
 
 function HttpWriteResponseString(const AW: IHttpResponseWriter;

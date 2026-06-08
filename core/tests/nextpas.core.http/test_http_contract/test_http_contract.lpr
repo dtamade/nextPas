@@ -35,6 +35,24 @@ var
   GRegistrySeenClientTimeout: Int64;
   GRegistrySeenServerHeaderLimit: Int32;
 
+function ReadBodyStr(const AReader: IReader): string;
+var
+  LBuf: array[0..255] of Byte;
+  LN: SizeUInt;
+begin
+  Result := '';
+  if AReader = nil then
+    Exit;
+  repeat
+    LN := AReader.Read(LBuf[0], SizeUInt(Length(LBuf)));
+    if LN > 0 then
+    begin
+      SetLength(Result, Length(Result) + Int32(LN));
+      Move(LBuf[0], Result[Length(Result) - Int32(LN) + 1], LN);
+    end;
+  until LN = 0;
+end;
+
 type
   PServerCtx = ^TServerCtx;
   TServerCtx = record
@@ -851,6 +869,34 @@ begin
     'Facade NewResponse creates headers when headers argument is nil');
   CheckEqual(Int64(0), Int64(LResp.Headers.Count),
     'Facade NewResponse nil headers start empty');
+end;
+
+procedure TestNewResponseBodyFacadeOverloads;
+var
+  LResp: IHttpResponse;
+  LBody: TBytes;
+begin
+  LResp := nextpas.core.http.NewResponse(HTTP_STATUS_CREATED, nil, 'created');
+  CheckEqual('7', LResp.Headers.Get('content-length'),
+    'Facade NewResponse string body sets content-length');
+  CheckEqual('created', ReadBodyStr(LResp.Body),
+    'Facade NewResponse string body is readable');
+
+  SetLength(LBody, 3);
+  LBody[0] := Ord('b');
+  LBody[1] := 0;
+  LBody[2] := 255;
+  LResp := nextpas.core.http.NewResponse(HTTP_STATUS_OK, nil, LBody);
+  CheckEqual('3', LResp.Headers.Get('content-length'),
+    'Facade NewResponse bytes body sets content-length');
+  Check(LResp.Body <> nil,
+    'Facade NewResponse bytes body creates a body reader');
+
+  LResp := nextpas.core.http.NewResponse(HTTP_STATUS_OK, nil, nil);
+  CheckEqual('', LResp.Headers.Get('content-length'),
+    'Facade NewResponse nil body does not set content-length');
+  Check(LResp.Body = nil,
+    'Facade NewResponse nil body remains nil');
 end;
 
 procedure TestHttpReadResponseBodyStringFacadeHelper;
@@ -1849,6 +1895,8 @@ begin
   T.Run('HttpClient CloseIdleConnections is available through facade',
     @TestHttpClientCloseIdleConnectionsFacadeMethod);
   T.Run('NewResponse: StatusCode/Headers', @TestNewResponse);
+  T.Run('NewResponse body overloads are available through facade',
+    @TestNewResponseBodyFacadeOverloads);
   T.Run('HttpReadResponseBodyString is available through facade',
     @TestHttpReadResponseBodyStringFacadeHelper);
   T.Run('HttpReadResponseBodyBytes is available through facade',
