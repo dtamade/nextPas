@@ -675,9 +675,9 @@ begin
   Check(LMetadata.HostRepeated,
     'metadata records duplicate Host headers');
   Check(LMetadata.ConnectionClose,
-    'metadata preserves first Connection value');
-  Check(not LMetadata.ConnectionKeepAlive,
-    'metadata ignores duplicate Connection for first-value semantics');
+    'metadata merges duplicate Connection close token');
+  Check(LMetadata.ConnectionKeepAlive,
+    'metadata merges duplicate Connection keep-alive token');
   Check(LMetadata.ExpectsContinue,
     'metadata merges duplicate Expect values');
   Check(LMetadata.HasUnsupportedExpect,

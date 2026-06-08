@@ -1116,8 +1116,6 @@ begin
 
   if HeaderFieldEquals(AField, AFieldPtr, AFieldLen, 'connection') then
   begin
-    if FRequestMetadataSawConnection then
-      Exit;
     FRequestMetadataSawConnection := True;
     UpdateConnectionMetadataFromCapturedValue(FPendingRequestMetadata, AValue,
       AValuePtr, AValueLen);
