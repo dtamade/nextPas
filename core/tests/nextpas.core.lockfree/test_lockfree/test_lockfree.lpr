@@ -2258,6 +2258,7 @@ var
   LMpmcBatchTestSection: string;
   LMpmcSingleSlotTestSection: string;
   LMpmcSingleSlotStressSection: string;
+  LStackABAStressSection: string;
   LMpscBasicTestSection: string;
   LMpscCloseProducerTestSection: string;
   LMpscCloseWakeTestSection: string;
@@ -2390,6 +2391,10 @@ begin
     'procedure TestMpmcSingleSlotContention;',
     '{ TEST 2: Stack ABA Stress',
     'MPMC single-slot stress test source section');
+  LStackABAStressSection := ExtractSection(LStressTestSource,
+    '{ TEST 2: Stack ABA Stress',
+    '{ TEST 3: MPSC High-Frequency Close Race',
+    'Stack ABA stress test source section');
   LMpscBasicTestSection := ExtractSection(LTestSource,
     'procedure TestMpscBasic;',
     'procedure TestMpscCloseProducerContract;',
@@ -2846,6 +2851,16 @@ begin
     'MPMC stress test must prove single-slot contention has no missing messages');
   CheckContains(LMpmcSingleSlotStressSection, 'single-slot contention no duplicate messages',
     'MPMC stress test must prove single-slot contention has no duplicate messages');
+  CheckContains(LStackABAStressSection, 'GStackABASeen',
+    'Stack ABA stress must track every pushed token for exactly-once ownership');
+  CheckContains(LStackABAStressSection, 'GStackABAOutOfRange',
+    'Stack ABA stress must count out-of-range popped tokens defensively');
+  CheckContains(LStackABAStressSection, 'stack ABA no missing tokens',
+    'Stack ABA stress must prove no pushed token is lost');
+  CheckContains(LStackABAStressSection, 'stack ABA no duplicate tokens',
+    'Stack ABA stress must prove no pushed token is popped more than once');
+  CheckContains(LStackABAStressSection, 'stack ABA no out-of-range tokens',
+    'Stack ABA stress must prove popped tokens are within the pushed-token domain');
   CheckNotContains(LMpmcSource, 'TMpmcQueue: capacity must be >= 2',
     'MPMC queue must not reject requested capacity 1 once single-slot support is implemented');
   CheckContains(LMpmcCloseTestSection, 'TryEnqueue after close rejected',

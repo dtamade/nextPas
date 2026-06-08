@@ -253,36 +253,44 @@ end;
 
 { ============================================================ }
 { TEST 2: Stack ABA Stress                                     }
-{ 4 threads, capacity=4, 100K push+pop cycles each             }
-{ Verify: stack empty, no leak, tagged pointer prevents ABA     }
+{ 4 threads, capacity=4, 100K unique push+pop cycles each      }
+{ Verify: exactly-once ownership, empty stack, no leak          }
 { ============================================================ }
 
 const
   STACK_ABA_THREADS = 4;
   STACK_ABA_OPS = 100000;
+  STACK_ABA_TOTAL = STACK_ABA_THREADS * STACK_ABA_OPS;
 
 var
   GStackABA: TIntStack;
+  GStackABASeen: array[0..STACK_ABA_TOTAL - 1] of Int32;
+  GStackABAOutOfRange: Int64;
   GStackABAPushOk: Int64;
   GStackABAPopOk: Int64;
 
 function StackABAWorker(AArg: Pointer): Pointer; cdecl;
 var
-  LI, LV: Integer;
+  LBase, LI, LV: Integer;
   LPushed, LPopped: Int64;
 begin
   Result := nil;
+  LBase := Integer(PtrUInt(AArg)) * STACK_ABA_OPS;
   LPushed := 0;
   LPopped := 0;
-  for LI := 1 to STACK_ABA_OPS do
+  for LI := 0 to STACK_ABA_OPS - 1 do
   begin
     { Push - spin if full (only 4 slots!) }
-    while not GStackABA.TryPush(LI) do
+    while not GStackABA.TryPush(LBase + LI) do
       CpuPause;
     Inc(LPushed);
     { Pop - spin if empty }
     while not GStackABA.TryPop(LV) do
       CpuPause;
+    if (LV >= 0) and (LV < STACK_ABA_TOTAL) then
+      AtomicFetchAdd32(GStackABASeen[LV], 1, moRelaxed)
+    else
+      AtomicFetchAdd64(GStackABAOutOfRange, 1, moRelaxed);
     Inc(LPopped);
   end;
   AtomicFetchAdd64(GStackABAPushOk, LPushed, moRelaxed);
@@ -294,11 +302,16 @@ var
   LHandles: array[0..STACK_ABA_THREADS - 1] of TPlatformThreadHandle;
   LI: Integer;
   LHandleCount: Integer;
+  LDups: Integer;
+  LMissing: Integer;
 begin
   GStackABA := TIntStack.Create(4);
+  GStackABAOutOfRange := 0;
   GStackABAPushOk := 0;
   GStackABAPopOk := 0;
   LHandleCount := 0;
+  for LI := 0 to STACK_ABA_TOTAL - 1 do
+    GStackABASeen[LI] := 0;
   try
     for LI := 0 to STACK_ABA_THREADS - 1 do
     begin
@@ -309,6 +322,18 @@ begin
 
     CheckEqual(Int64(STACK_ABA_THREADS) * STACK_ABA_OPS, GStackABAPushOk, 'all pushes succeeded');
     CheckEqual(Int64(STACK_ABA_THREADS) * STACK_ABA_OPS, GStackABAPopOk, 'all pops succeeded');
+    CheckEqual(Int64(0), GStackABAOutOfRange, 'stack ABA no out-of-range tokens');
+    LDups := 0;
+    LMissing := 0;
+    for LI := 0 to STACK_ABA_TOTAL - 1 do
+    begin
+      if AtomicLoad32(GStackABASeen[LI], moRelaxed) = 0 then
+        Inc(LMissing)
+      else if AtomicLoad32(GStackABASeen[LI], moRelaxed) > 1 then
+        Inc(LDups);
+    end;
+    CheckEqual(Int64(0), Int64(LMissing), 'stack ABA no missing tokens');
+    CheckEqual(Int64(0), Int64(LDups), 'stack ABA no duplicate tokens');
     Check(GStackABA.IsEmpty, 'stack empty after ABA stress');
   finally
     JoinStartedThreads(LHandles, LHandleCount, 'worker thread');
