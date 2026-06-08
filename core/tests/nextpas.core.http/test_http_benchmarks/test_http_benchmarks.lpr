@@ -33,6 +33,7 @@ const
   H1FastUnitPath = 'src/nextpas.core.http.impl.h1.fast.pas';
   H1OutboundUnitPath = 'src/nextpas.core.http.impl.h1.outbound.pas';
   H1WriterUnitPath = 'src/nextpas.core.http.impl.h1.writer.pas';
+  ReadmeDocPath = 'docs/http/README.md';
   BenchmarksDocPath = 'docs/http/BENCHMARKS.md';
   BenchFullchainUnitPath =
     'benchmarks/nextpas.core.http/bench_fullchain/bench_fullchain.lpr';
@@ -1726,6 +1727,45 @@ begin
     'adapter_no_url docs should not claim keep-alive rejects the fast path');
   CheckNotContains(LAdapterBlock, '`HasConnection`',
     'adapter_no_url docs should not cite old HasConnection rejection');
+end;
+
+procedure TestReadmeFullchainBenchmarkTruthSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+  LFullchainBlock: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, ReadmeDocPath));
+  LFullchainBlock := ExtractSourceBlock(LSource,
+    'Run the filtered full-chain keep-alive benchmark:',
+    'Run the focused comparator smoke from the test harness:',
+    'README fullchain benchmark quickstart');
+
+  CheckContains(LFullchainBlock, 'operation=http.fullchain.keepalive',
+    'README fullchain quickstart should name the fullchain operation');
+  CheckContains(LFullchainBlock, '`workload=plaintext`',
+    'README fullchain quickstart should name the filtered workload marker');
+  CheckContains(LFullchainBlock, '`request_body_bytes`',
+    'README fullchain quickstart should document request body marker');
+  CheckContains(LFullchainBlock, '`response_body_bytes`',
+    'README fullchain quickstart should document response body marker');
+  CheckContains(LFullchainBlock, '`backend`',
+    'README fullchain quickstart should document backend marker');
+  CheckContains(LFullchainBlock, '`nextpas_h1_path`',
+    'README fullchain quickstart should document H1 parser path marker');
+  CheckContains(LFullchainBlock, '`nextpas_dispatch_path`',
+    'README fullchain quickstart should document dispatch path marker');
+  CheckContains(LFullchainBlock, '`observed_direct_handler_hits`',
+    'README fullchain quickstart should document direct handler hit marker');
+  CheckContains(LFullchainBlock, '`observed_router_handler_hits`',
+    'README fullchain quickstart should document router handler hit marker');
+  CheckContains(LFullchainBlock, '`client_read_mode=buffered`',
+    'README fullchain quickstart should document buffered client read mode');
+  CheckContains(LFullchainBlock, '`NEXTPAS_BENCH_FILTER` matches no scenario',
+    'README fullchain quickstart should document no-match filter behavior');
+  CheckContains(LFullchainBlock, 'exits non-zero',
+    'README fullchain quickstart should document no-match exit status');
 end;
 
 procedure TestBenchFullchainPlaintextSmoke;
@@ -4542,6 +4582,8 @@ begin
     @TestBenchFullchainStrictResponseValidationSourceContract);
   T.Run('benchmark docs adapter_no_url fast-path source contract',
     @TestBenchmarkDocsAdapterNoUrlFastPathSourceContract);
+  T.Run('README fullchain benchmark truth source contract',
+    @TestReadmeFullchainBenchmarkTruthSourceContract);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',
