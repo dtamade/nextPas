@@ -36,12 +36,24 @@ end;
 
 function WyR8(p: PByte): UInt64; inline;
 begin
-  Result := PUInt64(p)^;
+  Result :=
+    UInt64(p[0]) or
+    (UInt64(p[1]) shl 8) or
+    (UInt64(p[2]) shl 16) or
+    (UInt64(p[3]) shl 24) or
+    (UInt64(p[4]) shl 32) or
+    (UInt64(p[5]) shl 40) or
+    (UInt64(p[6]) shl 48) or
+    (UInt64(p[7]) shl 56);
 end;
 
 function WyR4(p: PByte): UInt64; inline;
 begin
-  Result := PUInt32(p)^;
+  Result :=
+    UInt64(p[0]) or
+    (UInt64(p[1]) shl 8) or
+    (UInt64(p[2]) shl 16) or
+    (UInt64(p[3]) shl 24);
 end;
 
 function WyR3(p: PByte; k: SizeUInt): UInt64; inline;
