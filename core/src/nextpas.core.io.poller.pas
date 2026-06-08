@@ -108,7 +108,12 @@ begin
     pbEpoll:   Result.FEpoll := TEpollReactor.Create(AQueueDepth);
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
-    pbIocp: Result.FIocp := TIocpReactor.Create(AQueueDepth);
+    pbIocp:
+      begin
+        Result.FIocp := TIocpReactor.Create(AQueueDepth);
+        if not Result.FIocp.IsValid then
+          Result.FBackend := pbUnsupported;
+      end;
     {$ENDIF}
   else
     ;

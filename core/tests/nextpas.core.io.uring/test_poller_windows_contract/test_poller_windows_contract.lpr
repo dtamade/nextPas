@@ -69,8 +69,13 @@ end;
 procedure TestPollerWindowsBackendContract;
 var
   LPoller: string;
+  LCreateBody: string;
+  LIocpBranch: string;
 begin
   LPoller := LoadSourceText('src/nextpas.core.io.poller.pas');
+  LCreateBody := ExtractBetween(LPoller, 'class function tpoller.create',
+    'procedure tpoller.close');
+  LIocpBranch := ExtractBetween(LCreateBody, 'pbiocp:', '{$endif}');
 
   CheckContains(LPoller, 'nextpas.core.io.reactor.iocp',
     'poller must consume the Windows IOCP reactor on Windows');
@@ -80,8 +85,12 @@ begin
     'poller state must carry an IOCP reactor only for Windows');
   CheckContains(LPoller, '{$ifdef nextpas_windows}',
     'poller must select Windows dependencies behind a host branch');
-  CheckContains(LPoller, 'pbiocp: result.fiocp := tiocpreactor.create',
+  CheckContains(LIocpBranch, 'result.fiocp := tiocpreactor.create',
     'poller create must instantiate the IOCP backend on Windows');
+  CheckContains(LIocpBranch, 'if not result.fiocp.isvalid then',
+    'poller create must validate direct IOCP backend creation');
+  CheckContains(LIocpBranch, 'result.fbackend := pbunsupported;',
+    'poller create must stop reporting direct IOCP when IOCP create fails');
   CheckContains(LPoller, 'pbiocp: fiocp.close',
     'poller close must release the IOCP backend');
   CheckContains(LPoller, 'pbiocp: result := fiocp.isvalid',
