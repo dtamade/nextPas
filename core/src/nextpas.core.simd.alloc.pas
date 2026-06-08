@@ -48,6 +48,11 @@ uses
   - SimdRealloc must preserve the overlapping prefix bytes.
   - Current fallback/native backend truth lives in nextpas.core.platform.memory.
   - Native Windows/POSIX allocator runtime readiness requires platform-owned seam integration plus real runtime evidence.
+
+  SimdAlloc platform.memory consumer integration truth:
+  - SIMD consumes only the platform.memory public aligned allocation seam.
+  - SIMD must not depend on platform.memory fallback header layout or magic values.
+  - SIMD native-ready claims must come from platform_aligned_alloc_is_native/platform_aligned_alloc_backend.
 }
 
 function GetDefaultAlignment: NativeUInt; forward;
