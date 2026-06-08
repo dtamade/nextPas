@@ -99,7 +99,7 @@ begin
       LToRead := SizeUInt(LRemaining);
     LRead := ASrc.Read(LBuf[0], LToRead);
     if LRead = 0 then
-      Break;
+      raise EIOError.Create('IoCopyN: unexpected EOF');
     LTotal := 0;
     while LTotal < LRead do
     begin

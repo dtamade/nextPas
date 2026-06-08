@@ -367,6 +367,32 @@ begin
   CheckEqual(Int64(50), LDst.Size);
 end;
 
+procedure TestCopyNShortSourceRaises;
+var
+  LSrc, LDst: IStream;
+  LData: array[0..2] of Byte;
+  LRaised: Boolean;
+begin
+  LSrc := BytesStream(8);
+  LData[0] := 1;
+  LData[1] := 2;
+  LData[2] := 3;
+  LSrc.Write(LData[0], 3);
+  LSrc.Seek(0, soBeginning);
+  LDst := BytesStream(8);
+
+  LRaised := False;
+  try
+    nextpas.core.io.CopyN(LDst as IWriter, LSrc, 5);
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'CopyN short source raises EIOError');
+  CheckEqual(Int64(3), LDst.Size, 'CopyN preserves bytes copied before EOF');
+end;
+
 { Util: ReadAll }
 
 procedure TestReadAll;
@@ -1255,6 +1281,7 @@ begin
 
   T.Run('Copy', @TestCopy);
   T.Run('CopyN', @TestCopyN);
+  T.Run('CopyN short source raises', @TestCopyNShortSourceRaises);
   T.Run('ReadAll', @TestReadAll);
   T.Run('ReadFull', @TestReadFull);
   T.Run('ReadFull short', @TestReadFullShort);
