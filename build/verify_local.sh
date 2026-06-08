@@ -362,6 +362,12 @@ HIR_STRING_OWNERSHIP_OUTPUT=$(mktemp)
 HIR_STRING_OWNERSHIP_RUNTIME_BUILD_DIR=$(mktemp -d)
 HIR_STRING_OWNERSHIP_RUNTIME_BINARY="$HIR_STRING_OWNERSHIP_RUNTIME_BUILD_DIR/test_hir_string_ownership_runtime_smoke"
 HIR_STRING_OWNERSHIP_RUNTIME_OUTPUT=$(mktemp)
+HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR=$(mktemp -d)
+HIR_STRING_RETURN_OWNERSHIP_BINARY="$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR/test_hir_string_return_ownership_contract"
+HIR_STRING_RETURN_OWNERSHIP_OUTPUT=$(mktemp)
+HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR=$(mktemp -d)
+HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BINARY="$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR/test_hir_string_return_ownership_runtime_smoke"
+HIR_STRING_RETURN_OWNERSHIP_RUNTIME_OUTPUT=$(mktemp)
 HIR_DYNARRAY_RELEASE_BUILD_DIR=$(mktemp -d)
 HIR_DYNARRAY_RELEASE_BINARY="$HIR_DYNARRAY_RELEASE_BUILD_DIR/test_hir_dynarray_release_contract"
 HIR_DYNARRAY_RELEASE_OUTPUT=$(mktemp)
@@ -697,6 +703,10 @@ cleanup() {
   rm -f "$HIR_STRING_OWNERSHIP_OUTPUT"
   rm -rf "$HIR_STRING_OWNERSHIP_RUNTIME_BUILD_DIR"
   rm -f "$HIR_STRING_OWNERSHIP_RUNTIME_OUTPUT"
+  rm -rf "$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR"
+  rm -f "$HIR_STRING_RETURN_OWNERSHIP_OUTPUT"
+  rm -rf "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR"
+  rm -f "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_OUTPUT"
   rm -rf "$HIR_DYNARRAY_RELEASE_BUILD_DIR"
   rm -f "$HIR_DYNARRAY_RELEASE_OUTPUT"
   rm -rf "$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR"
@@ -943,6 +953,8 @@ require_path tests/hir/test_hir_object_free_contract.pas
 require_path tests/hir/test_hir_node_kind.pas
 require_path tests/hir/test_hir_string_ownership_contract.pas
 require_path tests/hir/test_hir_string_ownership_runtime_smoke.pas
+require_path tests/hir/test_hir_string_return_ownership_contract.pas
+require_path tests/hir/test_hir_string_return_ownership_runtime_smoke.pas
 require_path tests/hir/test_hir_dynarray_release_contract.pas
 require_path tests/hir/test_hir_dynarray_release_runtime_smoke.pas
 require_path tests/hir/test_hir_field_dynarray_contract.pas
@@ -1225,6 +1237,43 @@ require_output_pattern '^hir-string-ownership-runtime-smoke-int-to-str-exit=42$'
 require_output_pattern '^hir-string-ownership-runtime-smoke-direct-owned-helpers-exit=42$' "$HIR_STRING_OWNERSHIP_RUNTIME_OUTPUT" 'missing-hir-string-ownership-runtime-direct-owned-helpers-exit'
 require_output_pattern '^hir-string-ownership-runtime-smoke-status=pass$' "$HIR_STRING_OWNERSHIP_RUNTIME_OUTPUT" 'missing-hir-string-ownership-runtime-pass'
 printf 'hir-string-ownership-runtime-smoke=pass\n'
+
+printf 'hir-string-return-ownership-contract=running\n'
+printf 'hir-string-return-ownership-contract-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_string_return_ownership_contract.pas\n' "$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR" "$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR" -FU"$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR" tests/hir/test_hir_string_return_ownership_contract.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR" -FU"$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR" tests/hir/test_hir_string_return_ownership_contract.pas
+  fail 'hir-string-return-ownership-contract-build-failed'
+fi
+if [ ! -x "$HIR_STRING_RETURN_OWNERSHIP_BINARY" ]; then
+  fail 'missing-hir-string-return-ownership-contract-binary'
+fi
+printf 'hir-string-return-ownership-contract-run-command=%s\n' "$HIR_STRING_RETURN_OWNERSHIP_BINARY"
+if ! "$HIR_STRING_RETURN_OWNERSHIP_BINARY" >"$HIR_STRING_RETURN_OWNERSHIP_OUTPUT" 2>&1; then
+  cat "$HIR_STRING_RETURN_OWNERSHIP_OUTPUT"
+  fail 'hir-string-return-ownership-contract-run-failed'
+fi
+cat "$HIR_STRING_RETURN_OWNERSHIP_OUTPUT"
+require_output_pattern '^hir-string-return-ownership-contract-status=pass$' "$HIR_STRING_RETURN_OWNERSHIP_OUTPUT" 'missing-hir-string-return-ownership-contract-pass'
+printf 'hir-string-return-ownership-contract=pass\n'
+
+printf 'hir-string-return-ownership-runtime-smoke=running\n'
+printf 'hir-string-return-ownership-runtime-smoke-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_string_return_ownership_runtime_smoke.pas\n' "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR" "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR" -FU"$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR" tests/hir/test_hir_string_return_ownership_runtime_smoke.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR" -FU"$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR" tests/hir/test_hir_string_return_ownership_runtime_smoke.pas
+  fail 'hir-string-return-ownership-runtime-smoke-build-failed'
+fi
+if [ ! -x "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BINARY" ]; then
+  fail 'missing-hir-string-return-ownership-runtime-smoke-binary'
+fi
+printf 'hir-string-return-ownership-runtime-smoke-run-command=%s\n' "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BINARY"
+if ! "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BINARY" "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR/out" >"$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_OUTPUT" 2>&1; then
+  cat "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_OUTPUT"
+  fail 'hir-string-return-ownership-runtime-smoke-run-failed'
+fi
+cat "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_OUTPUT"
+require_output_pattern '^hir-string-return-ownership-runtime-smoke-direct-exit=42$' "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_OUTPUT" 'missing-hir-string-return-ownership-runtime-direct-exit'
+require_output_pattern '^hir-string-return-ownership-runtime-smoke-status=pass$' "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_OUTPUT" 'missing-hir-string-return-ownership-runtime-pass'
+printf 'hir-string-return-ownership-runtime-smoke=pass\n'
 
 printf 'hir-dynarray-release-contract=running\n'
 printf 'hir-dynarray-release-contract-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_dynarray_release_contract.pas\n' "$HIR_DYNARRAY_RELEASE_BUILD_DIR" "$HIR_DYNARRAY_RELEASE_BUILD_DIR"
