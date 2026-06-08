@@ -17,6 +17,7 @@ function ServeDir(const ARoot: string): THttpHandlerFunc;
 implementation
 
 uses
+  nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.fs,
   nextpas.core.http.base;
@@ -87,7 +88,7 @@ end;
 
 procedure ServeFileContent(const AFilePath: string; const AW: IHttpResponseWriter);
 var
-  LContent: string;
+  LContent: TBytes;
   LExt: string;
   LMime: string;
 begin
@@ -98,14 +99,14 @@ begin
     AW.Write(PAnsiChar('Not Found')^, 9);
     Exit;
   end;
-  LContent := nextpas.core.fs.ReadFileText(AFilePath);
+  LContent := nextpas.core.fs.ReadFile(AFilePath);
   LExt := ExtractExt(AFilePath);
   LMime := MimeTypeFromExt(LExt);
   AW.GetHeaders.SetHeader('content-type', LMime);
   AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LContent))));
   AW.WriteHeader(HTTP_STATUS_OK);
   if Length(LContent) > 0 then
-    AW.Write(LContent[1], SizeUInt(Length(LContent)));
+    AW.Write(LContent[0], SizeUInt(Length(LContent)));
 end;
 
 { ===== Public API ===== }

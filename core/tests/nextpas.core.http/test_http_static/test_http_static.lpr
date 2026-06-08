@@ -110,7 +110,51 @@ begin
   end;
 end;
 
+function BinaryFixtureBytes: TBytes;
+begin
+  SetLength(Result, 8);
+  Result[0] := $00;
+  Result[1] := $01;
+  Result[2] := $7F;
+  Result[3] := $80;
+  Result[4] := $FF;
+  Result[5] := $0D;
+  Result[6] := $0A;
+  Result[7] := $00;
+end;
+
+function ResponseBodyBytes(const AResponse: string): TBytes;
+var
+  LHeaderEnd: SizeInt;
+  LBodyStart: SizeInt;
+  LBodyLen: SizeInt;
+begin
+  LHeaderEnd := Pos(#13#10#13#10, AResponse);
+  if LHeaderEnd = 0 then
+    Exit(nil);
+  LBodyStart := LHeaderEnd + 4;
+  LBodyLen := Length(AResponse) - LBodyStart + 1;
+  if LBodyLen <= 0 then
+    Exit(nil);
+  SetLength(Result, LBodyLen);
+  Move(AResponse[LBodyStart], Result[0], LBodyLen);
+end;
+
+function BytesEqual(const ALeft, ARight: TBytes): Boolean;
+var
+  LI: SizeInt;
+begin
+  if Length(ALeft) <> Length(ARight) then
+    Exit(False);
+  for LI := 0 to Length(ALeft) - 1 do
+    if ALeft[LI] <> ARight[LI] then
+      Exit(False);
+  Result := True;
+end;
+
 procedure SetupTmpDir;
+var
+  LBinary: TBytes;
 begin
   { Create test directory structure }
   nextpas.core.fs.MkdirAll(CTmpDir);
@@ -120,6 +164,8 @@ begin
   nextpas.core.fs.WriteFileText(CTmpDir + '/css/main.css', '.a{color:red}');
   nextpas.core.fs.WriteFileText(CTmpDir + '/data.JSON', '{"ok":true}');
   nextpas.core.fs.WriteFileText(CTmpDir + '/asset.unknownext', 'opaque');
+  LBinary := BinaryFixtureBytes;
+  nextpas.core.fs.WriteFile(CTmpDir + '/binary.bin', LBinary);
 end;
 
 procedure CleanupTmpDir;
@@ -341,6 +387,76 @@ begin
   end;
 end;
 
+{ ===== Test 11: Static file bodies use binary file reads ===== }
+procedure TestStaticFileBodiesUseBinaryFileReads;
+var
+  LSource: string;
+begin
+  LSource := nextpas.core.fs.ReadFileText('../../../src/nextpas.core.http.static.pas');
+  Check(Pos('ReadFileText(AFilePath)', LSource) = 0,
+    'static file body path must not depend on text file reads');
+  Check(Pos('ReadFile(AFilePath)', LSource) > 0,
+    'static file body path uses binary file reads');
+end;
+
+{ ===== Test 12: ServeFile preserves binary body bytes ===== }
+procedure TestServeFilePreservesBinaryBodyBytes;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LBody: TBytes;
+  LExpected: TBytes;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', ServeFile(CTmpDir + '/binary.bin'));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    LExpected := BinaryFixtureBytes;
+    LBody := ResponseBodyBytes(LResp);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'binary ServeFile status 200');
+    Check(Pos('content-type: application/octet-stream', LResp) > 0,
+      'binary ServeFile content-type fallback');
+    Check(Pos('content-length: 8', LResp) > 0, 'binary ServeFile content-length');
+    CheckEqual(Int64(Length(LExpected)), Int64(Length(LBody)), 'binary ServeFile body length');
+    Check(BytesEqual(LExpected, LBody), 'binary ServeFile body bytes preserved');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+{ ===== Test 13: ServeDir preserves binary body bytes ===== }
+procedure TestServeDirPreservesBinaryBodyBytes;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LBody: TBytes;
+  LExpected: TBytes;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/static/*filepath', ServeDir(CTmpDir));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, 'GET /static/binary.bin HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    LExpected := BinaryFixtureBytes;
+    LBody := ResponseBodyBytes(LResp);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'binary ServeDir status 200');
+    Check(Pos('content-type: application/octet-stream', LResp) > 0,
+      'binary ServeDir content-type fallback');
+    Check(Pos('content-length: 8', LResp) > 0, 'binary ServeDir content-length');
+    CheckEqual(Int64(Length(LExpected)), Int64(Length(LBody)), 'binary ServeDir body length');
+    Check(BytesEqual(LExpected, LBody), 'binary ServeDir body bytes preserved');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
 { ===== Main ===== }
 begin
   SetupTmpDir;
@@ -356,6 +472,9 @@ begin
     T.Run('ServeDir missing file returns 404', @TestServeDirMissing);
     T.Run('ServeDir absolute path rejected', @TestServeDirAbsolutePathRejected);
     T.Run('ServeDir MIME case-insensitive and fallback', @TestServeDirMimeTypeCaseInsensitiveAndFallback);
+    T.Run('Static file bodies use binary file reads', @TestStaticFileBodiesUseBinaryFileReads);
+    T.Run('ServeFile preserves binary body bytes', @TestServeFilePreservesBinaryBodyBytes);
+    T.Run('ServeDir preserves binary body bytes', @TestServeDirPreservesBinaryBodyBytes);
     T.Summary;
   finally
     CleanupTmpDir;
