@@ -2261,6 +2261,7 @@ var
   LMpmcSingleSlotTestSection: string;
   LMpmcSingleSlotStressSection: string;
   LStackABAStressSection: string;
+  LMpscCloseRaceStressSection: string;
   LMpscBasicTestSection: string;
   LMpscCloseProducerTestSection: string;
   LMpscCloseWakeTestSection: string;
@@ -2398,6 +2399,10 @@ begin
     '{ TEST 2: Stack ABA Stress',
     '{ TEST 3: MPSC High-Frequency Close Race',
     'Stack ABA stress test source section');
+  LMpscCloseRaceStressSection := ExtractSection(LStressTestSource,
+    '{ TEST 3: MPSC High-Frequency Close Race',
+    '{ TEST 4: Chase-Lev Extreme Steal Contention',
+    'MPSC close-race stress test source section');
   LMpscBasicTestSection := ExtractSection(LTestSource,
     'procedure TestMpscBasic;',
     'procedure TestMpscCloseProducerContract;',
@@ -2864,6 +2869,20 @@ begin
     'Stack ABA stress must prove no pushed token is popped more than once');
   CheckContains(LStackABAStressSection, 'stack ABA no out-of-range tokens',
     'Stack ABA stress must prove popped tokens are within the pushed-token domain');
+  CheckContains(LMpscCloseRaceStressSection, 'GMpscCloseSeen',
+    'MPSC close-race stress must track every dequeued token for exactly-once ownership');
+  CheckContains(LMpscCloseRaceStressSection, 'GMpscCloseOutOfRange',
+    'MPSC close-race stress must count out-of-range dequeued tokens defensively');
+  CheckContains(LMpscCloseRaceStressSection, 'MPSC close race no out-of-range messages',
+    'MPSC close-race stress must prove dequeued tokens stay inside the sent-token domain');
+  CheckContains(LMpscCloseRaceStressSection, 'MPSC close race no duplicate messages',
+    'MPSC close-race stress must prove no producer token is dequeued more than once');
+  CheckContains(LMpscCloseRaceStressSection, 'MPSC close race no missing messages',
+    'MPSC close-race stress must prove every sent producer token is drained after close');
+  CheckContains(LMpscCloseRaceStressSection, 'GMpscCloseFinished',
+    'MPSC close-race stress must track whether close interrupts active producers');
+  CheckContains(LMpscCloseRaceStressSection, 'MPSC close race closed while producers were still live',
+    'MPSC close-race stress must not degenerate into a completed-producers drain test');
   CheckNotContains(LMpmcSource, 'TMpmcQueue: capacity must be >= 2',
     'MPMC queue must not reject requested capacity 1 once single-slot support is implemented');
   CheckContains(LMpmcCloseTestSection, 'TryEnqueue after close rejected',

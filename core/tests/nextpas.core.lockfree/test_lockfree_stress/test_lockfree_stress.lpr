@@ -345,16 +345,36 @@ end;
 { TEST 3: MPSC High-Frequency Close Race                       }
 { 4 producers enqueue continuously                             }
 { 1 consumer closes at random moment                           }
-{ Verify: clean shutdown, no hang, no leak                     }
+{ Verify: exact ownership after stop/join/drain                 }
 { ============================================================ }
 
 const
   MPSC_CLOSE_PRODUCERS = 4;
+  MPSC_CLOSE_MAX_PER_PRODUCER = 65536;
 
 var
   GMpscCloseQ: TIntMpsc;
   GMpscCloseSent: array[0..MPSC_CLOSE_PRODUCERS - 1] of Int64;
-  GMpscCloseReceived: Int64;
+  GMpscCloseSeen: array[0..MPSC_CLOSE_PRODUCERS - 1, 0..MPSC_CLOSE_MAX_PER_PRODUCER - 1] of Int32;
+  GMpscCloseOutOfRange: Int64;
+  GMpscCloseStarted: Int32;
+  GMpscCloseFinished: Int32;
+  GMpscClosePublished: Int64;
+
+function MpscCloseToken(AProducer, ASeq: Integer): Integer; inline;
+begin
+  Result := AProducer * MPSC_CLOSE_MAX_PER_PRODUCER + ASeq;
+end;
+
+function MpscCloseTokenProducer(AValue: Integer): Integer; inline;
+begin
+  Result := AValue div MPSC_CLOSE_MAX_PER_PRODUCER;
+end;
+
+function MpscCloseTokenSeq(AValue: Integer): Integer; inline;
+begin
+  Result := AValue mod MPSC_CLOSE_MAX_PER_PRODUCER;
+end;
 
 function MpscCloseProducer(AArg: Pointer): Pointer; cdecl;
 var
@@ -363,28 +383,42 @@ begin
   Result := nil;
   LIdx := Integer(PtrUInt(AArg));
   LCount := 0;
-  while not GMpscCloseQ.IsClosed do
+  AtomicFetchAdd32(GMpscCloseStarted, 1, moRelease);
+  while (LCount < MPSC_CLOSE_MAX_PER_PRODUCER) and (not GMpscCloseQ.IsClosed) do
   begin
-    GMpscCloseQ.Enqueue(LIdx * 1000000 + LCount);
+    GMpscCloseQ.Enqueue(MpscCloseToken(LIdx, LCount));
+    AtomicFetchAdd64(GMpscClosePublished, 1, moRelaxed);
     Inc(LCount);
     if LCount and $FF = 0 then
       CpuPause;
   end;
   AtomicStore64(GMpscCloseSent[LIdx], Int64(LCount), moRelease);
+  AtomicFetchAdd32(GMpscCloseFinished, 1, moRelease);
 end;
 
 procedure TestMpscCloseRace;
 var
   LHandles: array[0..MPSC_CLOSE_PRODUCERS - 1] of TPlatformThreadHandle;
-  LI, LV: Integer;
+  LI, LJ, LV: Integer;
+  LProducer, LSeq: Integer;
   LTotalSent, LTotalRecv: Int64;
+  LOutOfRange, LDups, LMissing: Int64;
+  LSent: Int64;
+  LSeen: Int32;
   LHandleCount: Integer;
 begin
   GMpscCloseQ := TIntMpsc.Create;
-  GMpscCloseReceived := 0;
+  GMpscCloseOutOfRange := 0;
+  GMpscCloseStarted := 0;
+  GMpscCloseFinished := 0;
+  GMpscClosePublished := 0;
   LHandleCount := 0;
   for LI := 0 to MPSC_CLOSE_PRODUCERS - 1 do
+  begin
     GMpscCloseSent[LI] := 0;
+    for LJ := 0 to MPSC_CLOSE_MAX_PER_PRODUCER - 1 do
+      GMpscCloseSeen[LI, LJ] := 0;
+  end;
   try
     for LI := 0 to MPSC_CLOSE_PRODUCERS - 1 do
     begin
@@ -392,8 +426,27 @@ begin
       Inc(LHandleCount);
     end;
 
-    { Let producers run ~10ms then close }
-    platform_thread_sleep_ns(10000000);
+    for LI := 1 to 1000 do
+    begin
+      if AtomicLoad32(GMpscCloseStarted, moAcquire) = MPSC_CLOSE_PRODUCERS then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(MPSC_CLOSE_PRODUCERS),
+      Int64(AtomicLoad32(GMpscCloseStarted, moAcquire)),
+      'MPSC close race producers must all start before close');
+
+    for LI := 1 to 1000 do
+    begin
+      if AtomicLoad64(GMpscClosePublished, moAcquire) > 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    Check(AtomicLoad64(GMpscClosePublished, moAcquire) > 0,
+      'MPSC close race producers published before close');
+    Check(AtomicLoad32(GMpscCloseFinished, moAcquire) < MPSC_CLOSE_PRODUCERS,
+      'MPSC close race closed while producers were still live');
+
     GMpscCloseQ.Close;
 
     JoinStartedThreads(LHandles, LHandleCount, 'worker thread');
@@ -401,14 +454,48 @@ begin
     { Drain remaining }
     LTotalRecv := 0;
     while GMpscCloseQ.TryDequeue(LV) do
+    begin
       Inc(LTotalRecv);
+      LProducer := MpscCloseTokenProducer(LV);
+      LSeq := MpscCloseTokenSeq(LV);
+      if (LV < 0) or
+         (LProducer < 0) or (LProducer >= MPSC_CLOSE_PRODUCERS) or
+         (LSeq < 0) or (LSeq >= MPSC_CLOSE_MAX_PER_PRODUCER) then
+        AtomicFetchAdd64(GMpscCloseOutOfRange, 1, moRelaxed)
+      else
+        AtomicFetchAdd32(GMpscCloseSeen[LProducer, LSeq], 1, moRelaxed);
+    end;
 
     LTotalSent := 0;
+    LOutOfRange := AtomicLoad64(GMpscCloseOutOfRange, moAcquire);
+    LDups := 0;
+    LMissing := 0;
     for LI := 0 to MPSC_CLOSE_PRODUCERS - 1 do
-      Inc(LTotalSent, AtomicLoad64(GMpscCloseSent[LI], moAcquire));
+    begin
+      LSent := AtomicLoad64(GMpscCloseSent[LI], moAcquire);
+      Inc(LTotalSent, LSent);
+      Check(LSent <= MPSC_CLOSE_MAX_PER_PRODUCER,
+        'MPSC close race producer stayed inside bounded token domain');
+      for LJ := 0 to MPSC_CLOSE_MAX_PER_PRODUCER - 1 do
+      begin
+        LSeen := AtomicLoad32(GMpscCloseSeen[LI, LJ], moRelaxed);
+        if LJ < LSent then
+        begin
+          if LSeen = 0 then
+            Inc(LMissing)
+          else if LSeen > 1 then
+            Inc(LDups);
+        end
+        else if LSeen > 0 then
+          Inc(LOutOfRange, LSeen);
+      end;
+    end;
 
     Check(LTotalSent > 0, 'producers sent messages before close');
-    Check(LTotalRecv <= LTotalSent, 'received <= sent');
+    CheckEqual(LTotalSent, LTotalRecv, 'MPSC close race received all sent messages');
+    CheckEqual(Int64(0), LOutOfRange, 'MPSC close race no out-of-range messages');
+    CheckEqual(Int64(0), LDups, 'MPSC close race no duplicate messages');
+    CheckEqual(Int64(0), LMissing, 'MPSC close race no missing messages');
     Check(GMpscCloseQ.IsEmpty, 'queue drained after close');
   finally
     GMpscCloseQ.Close;
