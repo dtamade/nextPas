@@ -59,6 +59,14 @@ begin
   Move(LBits, Result, SizeOf(Result));
 end;
 
+function MakeSingleBelowInt64Min: Single;
+var
+  LBits: UInt32;
+begin
+  LBits := UInt32($DF000001);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
 function MakeSingleNegativeZero: Single;
 var
   LBits: UInt32;
@@ -704,6 +712,11 @@ begin
   Ceil(Single(Pow2_63));
 end;
 
+procedure RaiseCeilSingleBelowInt64Min;
+begin
+  Ceil(MakeSingleBelowInt64Min);
+end;
+
 procedure RaiseTruncPositive2Pow63;
 begin
   Trunc(Pow2_63);
@@ -712,6 +725,11 @@ end;
 procedure RaiseTruncSinglePositive2Pow63;
 begin
   Trunc(Single(Pow2_63));
+end;
+
+procedure RaiseTruncSingleBelowInt64Min;
+begin
+  Trunc(MakeSingleBelowInt64Min);
 end;
 
 procedure RaiseFloorPositive2Pow63;
@@ -724,6 +742,11 @@ begin
   Floor(Single(Pow2_63));
 end;
 
+procedure RaiseFloorSingleBelowInt64Min;
+begin
+  Floor(MakeSingleBelowInt64Min);
+end;
+
 procedure RaiseRoundPositive2Pow63;
 begin
   Round(Pow2_63);
@@ -732,6 +755,11 @@ end;
 procedure RaiseRoundSinglePositive2Pow63;
 begin
   Round(Single(Pow2_63));
+end;
+
+procedure RaiseRoundSingleBelowInt64Min;
+begin
+  Round(MakeSingleBelowInt64Min);
 end;
 
 procedure RaiseRoundNaN;
@@ -934,6 +962,11 @@ begin
   Frac(Single(Pow2_63));
 end;
 
+procedure RaiseFracSingleBelowInt64Min;
+begin
+  Frac(MakeSingleBelowInt64Min);
+end;
+
 procedure RaiseFracBelowInt64Min;
 begin
   Frac(-Pow2_63 - 4096.0);
@@ -1067,11 +1100,15 @@ begin
     'Floor(Single -Inf)', @RaiseFloorSingleNegativeInfinity);
   ExpectArgumentErrorMessage('Floor: value is outside Int64 range',
     'Floor(Single 2^63)', @RaiseFloorSinglePositive2Pow63);
+  ExpectArgumentErrorMessage('Floor: value is outside Int64 range',
+    'Floor(Single below -2^63)', @RaiseFloorSingleBelowInt64Min);
 
   ExpectArgumentErrorMessage('Ceil: infinity cannot be converted to Int64',
     'Ceil(Single -Inf)', @RaiseCeilSingleNegativeInfinity);
   ExpectArgumentErrorMessage('Ceil: value is outside Int64 range',
     'Ceil(Single 2^63)', @RaiseCeilSinglePositive2Pow63);
+  ExpectArgumentErrorMessage('Ceil: value is outside Int64 range',
+    'Ceil(Single below -2^63)', @RaiseCeilSingleBelowInt64Min);
 
   ExpectArgumentErrorMessage('Round: NaN cannot be converted to Int64',
     'Round(Single NaN)', @RaiseRoundSingleNaN);
@@ -1081,6 +1118,8 @@ begin
     'Round(Single -Inf)', @RaiseRoundSingleNegativeInfinity);
   ExpectArgumentErrorMessage('Round: value is outside Int64 range',
     'Round(Single 2^63)', @RaiseRoundSinglePositive2Pow63);
+  ExpectArgumentErrorMessage('Round: value is outside Int64 range',
+    'Round(Single below -2^63)', @RaiseRoundSingleBelowInt64Min);
 
   ExpectArgumentErrorMessage('Trunc: NaN cannot be converted to Int64',
     'Trunc(Single NaN)', @RaiseTruncSingleNaN);
@@ -1090,6 +1129,8 @@ begin
     'Trunc(Single -Inf)', @RaiseTruncSingleNegativeInfinity);
   ExpectArgumentErrorMessage('Trunc: value is outside Int64 range',
     'Trunc(Single 2^63)', @RaiseTruncSinglePositive2Pow63);
+  ExpectArgumentErrorMessage('Trunc: value is outside Int64 range',
+    'Trunc(Single below -2^63)', @RaiseTruncSingleBelowInt64Min);
 
   ExpectArgumentErrorMessage('Frac: NaN cannot be converted to Int64',
     'Frac(Single NaN)', @RaiseFracSingleNaN);
@@ -1099,6 +1140,8 @@ begin
     'Frac(Single -Inf)', @RaiseFracSingleNegativeInfinity);
   ExpectArgumentErrorMessage('Frac: value is outside Int64 range',
     'Frac(Single 2^63)', @RaiseFracSinglePositive2Pow63);
+  ExpectArgumentErrorMessage('Frac: value is outside Int64 range',
+    'Frac(Single below -2^63)', @RaiseFracSingleBelowInt64Min);
 end;
 
 procedure TestOverflowHelpers;
