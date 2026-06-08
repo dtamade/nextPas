@@ -191,8 +191,9 @@ var
   LI: SizeInt;
 begin
   for LI := 1 to Length(AValue) do
-    if (AValue[LI] = #13) or (AValue[LI] = #10) or (AValue[LI] = #0) then
-      raise EHttpError.Create('invalid header value: contains CR/LF/NUL');
+    if (((AValue[LI] < #32) and (AValue[LI] <> #9)) or
+        (AValue[LI] = #127)) then
+      raise EHttpError.Create('invalid header value character');
 end;
 
 function THttpHeaders.FindFirst(const AName: string): Int32; inline;

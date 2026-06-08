@@ -523,6 +523,20 @@ begin
     'Bad(Name', 'value');
   ExpectHeaderError('add rejects CR in value', False, 'x-good', 'bad'#13'value');
   ExpectHeaderError('set rejects NUL in value', True, 'x-good', 'bad'#0'value');
+  ExpectHeaderError('set rejects CTL in value', True, 'x-good', 'bad'#1'value');
+  ExpectHeaderError('add rejects DEL in value', False, 'x-good', 'bad'#127'value');
+end;
+
+procedure TestValidationAllowsHorizontalTabInValue;
+var
+  LH: IHttpHeaders;
+begin
+  LH := NewHttpHeaders;
+  LH.SetHeader('X-Tab', 'a'#9'b');
+  LH.Add('X-Tab-Add', 'c'#9'd');
+
+  CheckEqual('a'#9'b', LH.Get('x-tab'), 'set keeps HTAB in header value');
+  CheckEqual('c'#9'd', LH.Get('x-tab-add'), 'add keeps HTAB in header value');
 end;
 
 procedure TestLookupAndRemoveRejectInvalidNames;
@@ -690,6 +704,8 @@ begin
   T.Run('Parsed span add canonicalizes parser validated headers',
     @TestParsedSpanAddCanonicalizesParserValidatedHeaders);
   T.Run('Validation rejects invalid names and values', @TestValidationRejectsInvalidNamesAndValues);
+  T.Run('Validation allows horizontal tab in value',
+    @TestValidationAllowsHorizontalTabInValue);
   T.Run('Lookup and remove reject invalid names',
     @TestLookupAndRemoveRejectInvalidNames);
   T.Run('Validation accepts tchar names', @TestValidationAcceptsTCharNames);
