@@ -288,27 +288,26 @@ begin
   end;
 end;
 
-procedure AssertReturnOwnershipDeferred;
+procedure AssertReturnOwnershipCoveredByC6H4;
 var
   Model: TSemanticModel;
   Node: TTypedHirNode;
-  LlvmText: string;
 begin
   Model := BuildModel(ReturnSource);
   try
     if Model = nil then
       Fail('return-model-nil');
-    if not FindFirstNodeByKind(Model, 'ret-str-runtime', Node) then
+    if (not FindFirstNodeByKind(Model, 'ret-str-runtime', Node)) and
+      (not FindFirstNodeByKind(Model, 'ret-str-owned-runtime', Node)) then
       Fail('missing-string-return-node');
-    if not FindFirstNodeByKindAndDisplayName(Model,
-      'assign-str-call-runtime', 'S', Node) then
+    if (not FindFirstNodeByKindAndDisplayName(Model,
+      'assign-str-call-runtime', 'S', Node)) and
+      (not FindFirstNodeByKindAndDisplayName(Model,
+      'assign-str-owned-call-runtime', 'S', Node)) then
       Fail('missing-return-call-assignment-node');
     if FindFirstNodeByKindAndDisplayName(Model,
       'assign-str-owned-concat-runtime', 'S', Node) then
       Fail('return-assignment-must-not-be-owned-concat');
-    LlvmText := EmitLlvm(Model);
-    if Pos('@np_str_return_owned', LlvmText) <> 0 then
-      Fail('return-ownership-must-remain-deferred');
   finally
     Model.Free;
   end;
@@ -359,7 +358,7 @@ begin
   AssertOwnedBorrowedContract;
   AssertAliasNoOwnerContract;
   AssertIntToStrOwnershipContract;
-  AssertReturnOwnershipDeferred;
+  AssertReturnOwnershipCoveredByC6H4;
   AssertFieldAndObjectFreeBoundaries;
   WriteLn('hir-string-ownership-contract-status=pass');
 end.
