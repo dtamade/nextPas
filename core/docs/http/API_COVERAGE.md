@@ -134,9 +134,10 @@
     close-capable body 会被关闭，plain `IReader` body 会被 drain 到 EOF，nil body
     是 no-op，nil response 抛 `EArgumentError`。`test_http_client` 锁住 close /
     drain / nil body / nil response 语义，`test_http_contract` 锁住 facade
-    可见性。这对齐 Go/Rust 常见“未消费响应体也要显式释放/丢弃”的使用面，但不改变
-    `HttpReadResponseBodyString` / `HttpReadResponseBodyBytes` 的只消费不自动 close
-    语义，也不新增 streaming response API。
+    可见性。这对齐 Go/Rust 常见“未消费响应体也要显式释放/丢弃”的使用面。
+    `HttpReadResponseBodyString` / `HttpReadResponseBodyBytes` 会消费并释放 body；
+    `HttpReleaseResponseBody` 只用于调用方决定不读取 body 时显式释放。
+    当前仍不新增 streaming response API。
   - 继续收紧：`NewResponse(Status, nil, Body)` 现在与 request helper 的 nil
     headers 语义对齐，会创建空 `IHttpHeaders`，调用方可以安全读取或追加
     response headers。`test_http_message` 锁住 helper contract，`test_http_contract`

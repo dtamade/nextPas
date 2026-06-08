@@ -1694,6 +1694,55 @@ begin
     'HTTP IsRunning delegates runtime truth to TCP server');
 end;
 
+procedure TestHttpArchitectureDocsCurrentPublicApiContract;
+var
+  LSource: string;
+begin
+  LSource := ReadTextFile('../../../docs/http/ARCHITECTURE.md');
+
+  Check(not SourceHas(LSource,
+    '支持 HTTP/1.1、HTTP/2、HTTP/3 三个版本'),
+    'architecture docs must not imply built-in H2/H3 implementation');
+  Check(SourceHas(LSource, '当前内建实现为 HTTP/1.1'),
+    'architecture docs must state built-in H1 truth');
+  Check(SourceHas(LSource, 'H2/H3 仅保留版本枚举、registry / transport seam 与规划'),
+    'architecture docs must state H2/H3 seam-only truth');
+
+  Check(not SourceHas(LSource, 'procedure Group('),
+    'architecture docs must not document nonexistent router Group API');
+  Check(SourceHas(LSource, 'procedure Get(const APattern: string;'),
+    'architecture docs must include router verb helper truth');
+  Check(SourceHas(LSource, 'procedure Trace(const APattern: string;'),
+    'architecture docs must include full router verb helper truth');
+
+  Check(not SourceHas(LSource, '    Query: string;'),
+    'architecture docs must not use obsolete TUrl.Query field');
+  Check(SourceHas(LSource, 'UserInfo: string;'),
+    'architecture docs must include current TUrl.UserInfo field');
+  Check(SourceHas(LSource, 'RawQuery: string;'),
+    'architecture docs must include current TUrl.RawQuery field');
+  Check(SourceHas(LSource, 'ParseRequestTarget'),
+    'architecture docs must include request-target parse seam');
+  Check(SourceHas(LSource, 'HostPort'),
+    'architecture docs must include current TUrl.HostPort helper');
+end;
+
+procedure TestHttpApiCoverageResponseBodyHelperTruthContract;
+var
+  LSource: string;
+begin
+  LSource := ReadTextFile('../../../docs/http/API_COVERAGE.md');
+
+  Check(not SourceHas(LSource, '只消费不自动 close'),
+    'API coverage must not claim read helpers leave body open');
+  Check(SourceHas(LSource,
+    'HttpReadResponseBodyString` / `HttpReadResponseBodyBytes` 会消费并释放 body'),
+    'API coverage must state response read helpers release body');
+  Check(SourceHas(LSource,
+    'HttpReleaseResponseBody` 只用于调用方决定不读取 body 时显式释放'),
+    'API coverage must state release helper ownership boundary');
+end;
+
 procedure TestChunkedRequestTrailerContract;
 var
   LRouter: IHttpRouter;
@@ -1940,6 +1989,10 @@ begin
     @TestHttpServerHonorsExplicitBackendSelection);
   T.Run('HttpServer facade owner-boundary source contract',
     @TestHttpServerFacadeOwnerBoundarySourceContract);
+  T.Run('HTTP architecture docs current public API contract',
+    @TestHttpArchitectureDocsCurrentPublicApiContract);
+  T.Run('HTTP API coverage response body helper truth contract',
+    @TestHttpApiCoverageResponseBodyHelperTruthContract);
   T.Run('Chunked request trailer contract',
     @TestChunkedRequestTrailerContract);
   T.Run('Chunked request multiple trailer declaration contract',
