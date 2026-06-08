@@ -9,6 +9,7 @@ uses
   nextpas.core.text.view,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
+  nextpas.core.io.buffer,
   nextpas.core.io.scanner,
   nextpas.core.io.linewriter,
   nextpas.core.io.collect,
@@ -154,6 +155,24 @@ begin
 
   Check(LRaised, 'LineWriter zero-progress write raises EIOError');
   CheckEqual(Int64(1), Int64(LZeroObj.Calls), 'LineWriter attempted one write');
+end;
+
+procedure TestLineWriterFlushForwardsInnerFlusher;
+var
+  LBuf: IStream;
+  LBuffered: IWriter;
+  LW: ILineWriter;
+begin
+  LBuf := CreateBytesStream;
+  LBuffered := CreateBufferedWriter(LBuf as IWriter, 32);
+  LW := CreateLineWriter(LBuffered);
+
+  LW.WriteLine('hello');
+  CheckEqual(Int64(0), LBuf.Size, 'buffered inner writer holds data before flush');
+
+  LW.Flush;
+
+  CheckEqual(Int64(6), LBuf.Size, 'LineWriter.Flush forwards to inner flusher');
 end;
 
 procedure TestIoWriteLines;
@@ -378,6 +397,8 @@ begin
     @TestLineWriterRetriesPartialWriter);
   T.Run('LineWriter zero-progress raises',
     @TestLineWriterZeroProgressRaises);
+  T.Run('LineWriter flush forwards inner flusher',
+    @TestLineWriterFlushForwardsInnerFlusher);
   T.Run('IoWriteLines', @TestIoWriteLines);
   T.Run('IoWriteLine retries partial writer',
     @TestIoWriteLineRetriesPartialWriter);

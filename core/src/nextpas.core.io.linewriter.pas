@@ -24,6 +24,7 @@ procedure IoWriteLines(const AWriter: IWriter; const ALines: TStringArray);
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.io.util;
 
 type
@@ -57,9 +58,11 @@ begin
 end;
 
 procedure TLineWriter.Flush;
+var
+  LFlusher: IFlusher;
 begin
-  // If inner supports flush (IFlusher), call it
-  // For now, no-op — buffered writer handles this
+  if Supports(FInner, IFlusher, LFlusher) then
+    LFlusher.Flush;
 end;
 
 function CreateLineWriter(const AWriter: IWriter;
