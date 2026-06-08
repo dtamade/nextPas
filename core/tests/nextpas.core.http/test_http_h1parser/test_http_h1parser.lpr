@@ -1185,6 +1185,9 @@ begin
   Check(LP.ErrorKind = AExpectedKind, AName + ': error kind');
   CheckEqual(SizeUInt(Length(LReqHead)), LConsumed,
     AName + ': consumes only through offending headers');
+  CheckEqual(Int64(0), LP.GetBodySize,
+    AName + ': does not publish ambiguous body size');
+  CheckEqual('', LP.GetBody, AName + ': does not consume ambiguous body bytes');
 end;
 
 procedure TestAdapterFramingErrorConsumedOffsets;
@@ -1204,6 +1207,13 @@ begin
     'chunked must be final transfer coding',
     'Transfer-Encoding: chunked, gzip'#13#10,
     '5'#13#10'hello'#13#10'0'#13#10#13#10 +
+    'GET /next HTTP/1.1'#13#10'Host: localhost'#13#10#13#10,
+    pekMalformed);
+  CheckMalformedFramingConsumesThroughHeaders(
+    'conflicting duplicate content-length',
+    'Content-Length: 2'#13#10 +
+    'Content-Length: 3'#13#10,
+    'abc' +
     'GET /next HTTP/1.1'#13#10'Host: localhost'#13#10#13#10,
     pekMalformed);
 end;

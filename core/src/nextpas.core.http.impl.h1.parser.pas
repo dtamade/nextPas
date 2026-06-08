@@ -164,7 +164,7 @@ const
     'Unsupported `Transfer-Encoding` request coding';
   BODY_TOO_LARGE_REASON = 'HTTP body buffer too large';
 
-function IsResponseContentLengthFramingError(
+function IsContentLengthFramingError(
   const AErrno: TLlhttpErrnoT): Boolean; inline;
 begin
   Result := (AErrno = HPE_UNEXPECTED_CONTENT_LENGTH) or
@@ -849,8 +849,7 @@ begin
     else if (FParserType = ptRequest) and
       (LErrno = HPE_INVALID_TRANSFER_ENCODING) then
       Result := ConsumedThroughHeaderBoundaryAfterErrorPosition(ABuf, ALen)
-    else if (FParserType = ptResponse) and
-      IsResponseContentLengthFramingError(LErrno) then
+    else if IsContentLengthFramingError(LErrno) then
       Result := ConsumedThroughHeaderBoundaryAfterErrorPosition(ABuf, ALen)
     else
       Result := ConsumedUntilErrorPosition(ABuf, ALen);
