@@ -268,12 +268,30 @@ end;
 procedure TestFence;
 begin
   atomic_thread_fence;
+  atomic_thread_fence(mo_relaxed);
+  atomic_thread_fence(mo_consume);
+  atomic_thread_fence(mo_acquire);
+  atomic_thread_fence(mo_release);
+  atomic_thread_fence(mo_acq_rel);
+  atomic_thread_fence(mo_seq_cst);
   atomic_signal_fence;
+  atomic_signal_fence(mo_relaxed);
+  atomic_signal_fence(mo_consume);
+  atomic_signal_fence(mo_acquire);
+  atomic_signal_fence(mo_release);
+  atomic_signal_fence(mo_acq_rel);
+  atomic_signal_fence(mo_seq_cst);
   AtomicThreadFence(moRelaxed);
+  AtomicThreadFence(moConsume);
   AtomicThreadFence(moAcquire);
   AtomicThreadFence(moRelease);
   AtomicThreadFence(moAcqRel);
   AtomicThreadFence(moSeqCst);
+  AtomicSignalFence(moRelaxed);
+  AtomicSignalFence(moConsume);
+  AtomicSignalFence(moAcquire);
+  AtomicSignalFence(moRelease);
+  AtomicSignalFence(moAcqRel);
   AtomicSignalFence(moSeqCst);
   CpuPause;
 end;
@@ -357,6 +375,8 @@ var
   LTaggedPtrUpdateSection: string;
   LTaggedPtrUpdateTagSection: string;
   LThreadFenceSection: string;
+  LRuntimeFenceSmokeSection: string;
+  LForcedFenceSmokeSection: string;
   LSingleStrongCasSection: string;
   LSingleWeakCasSection: string;
   LCompatFailureSection: string;
@@ -514,6 +534,12 @@ begin
   LSeqCstFencePpcSection := ExtractImplementationSection(LAtomicCoreSource,
     '{$IF DEFINED(CPUPPC) OR DEFINED(CPUPPC64)}',
     '{$ELSE}');
+  LRuntimeFenceSmokeSection := ExtractSection(LAtomicTestSource,
+    'procedure TestFence;',
+    'procedure TestAtomicDefaultLoadSurface;');
+  LForcedFenceSmokeSection := ExtractSection(LAtomicForcedCompileSource,
+    'procedure TouchTaggedAndWaitSurface;',
+    '  GTagged := atomic_tagged_ptr');
   LTaggedPtrSection := ExtractImplementationSection(LAtomicCoreSource,
     'function atomic_tagged_ptr(aPtr: Pointer; aTag:',
     'function atomic_tagged_ptr_get_ptr');
@@ -948,6 +974,102 @@ begin
     'atomic_thread_fence acq_rel order must use a read-write barrier');
   CheckContains(LSignalFenceSection, 'mo_relaxed:;',
     'atomic_signal_fence relaxed order must be a legal no-op');
+  CheckContains(LRuntimeFenceSmokeSection, 'atomic_thread_fence(mo_relaxed);',
+    'runtime fence smoke must exercise canonical thread fence relaxed order');
+  CheckContains(LRuntimeFenceSmokeSection, 'atomic_thread_fence(mo_consume);',
+    'runtime fence smoke must exercise canonical thread fence consume order');
+  CheckContains(LRuntimeFenceSmokeSection, 'atomic_thread_fence(mo_acquire);',
+    'runtime fence smoke must exercise canonical thread fence acquire order');
+  CheckContains(LRuntimeFenceSmokeSection, 'atomic_thread_fence(mo_release);',
+    'runtime fence smoke must exercise canonical thread fence release order');
+  CheckContains(LRuntimeFenceSmokeSection, 'atomic_thread_fence(mo_acq_rel);',
+    'runtime fence smoke must exercise canonical thread fence acq_rel order');
+  CheckContains(LRuntimeFenceSmokeSection, 'atomic_thread_fence(mo_seq_cst);',
+    'runtime fence smoke must exercise canonical thread fence seq_cst order');
+  CheckContains(LRuntimeFenceSmokeSection, 'atomic_signal_fence(mo_relaxed);',
+    'runtime fence smoke must exercise canonical signal fence relaxed order');
+  CheckContains(LRuntimeFenceSmokeSection, 'atomic_signal_fence(mo_consume);',
+    'runtime fence smoke must exercise canonical signal fence consume order');
+  CheckContains(LRuntimeFenceSmokeSection, 'atomic_signal_fence(mo_acquire);',
+    'runtime fence smoke must exercise canonical signal fence acquire order');
+  CheckContains(LRuntimeFenceSmokeSection, 'atomic_signal_fence(mo_release);',
+    'runtime fence smoke must exercise canonical signal fence release order');
+  CheckContains(LRuntimeFenceSmokeSection, 'atomic_signal_fence(mo_acq_rel);',
+    'runtime fence smoke must exercise canonical signal fence acq_rel order');
+  CheckContains(LRuntimeFenceSmokeSection, 'atomic_signal_fence(mo_seq_cst);',
+    'runtime fence smoke must exercise canonical signal fence seq_cst order');
+  CheckContains(LRuntimeFenceSmokeSection, 'AtomicThreadFence(moRelaxed);',
+    'runtime fence smoke must exercise PascalCase thread fence relaxed order');
+  CheckContains(LRuntimeFenceSmokeSection, 'AtomicThreadFence(moConsume);',
+    'runtime fence smoke must exercise PascalCase thread fence consume order');
+  CheckContains(LRuntimeFenceSmokeSection, 'AtomicThreadFence(moAcquire);',
+    'runtime fence smoke must exercise PascalCase thread fence acquire order');
+  CheckContains(LRuntimeFenceSmokeSection, 'AtomicThreadFence(moRelease);',
+    'runtime fence smoke must exercise PascalCase thread fence release order');
+  CheckContains(LRuntimeFenceSmokeSection, 'AtomicThreadFence(moAcqRel);',
+    'runtime fence smoke must exercise PascalCase thread fence acq_rel order');
+  CheckContains(LRuntimeFenceSmokeSection, 'AtomicThreadFence(moSeqCst);',
+    'runtime fence smoke must exercise PascalCase thread fence seq_cst order');
+  CheckContains(LRuntimeFenceSmokeSection, 'AtomicSignalFence(moRelaxed);',
+    'runtime fence smoke must exercise PascalCase signal fence relaxed order');
+  CheckContains(LRuntimeFenceSmokeSection, 'AtomicSignalFence(moConsume);',
+    'runtime fence smoke must exercise PascalCase signal fence consume order');
+  CheckContains(LRuntimeFenceSmokeSection, 'AtomicSignalFence(moAcquire);',
+    'runtime fence smoke must exercise PascalCase signal fence acquire order');
+  CheckContains(LRuntimeFenceSmokeSection, 'AtomicSignalFence(moRelease);',
+    'runtime fence smoke must exercise PascalCase signal fence release order');
+  CheckContains(LRuntimeFenceSmokeSection, 'AtomicSignalFence(moAcqRel);',
+    'runtime fence smoke must exercise PascalCase signal fence acq_rel order');
+  CheckContains(LRuntimeFenceSmokeSection, 'AtomicSignalFence(moSeqCst);',
+    'runtime fence smoke must exercise PascalCase signal fence seq_cst order');
+  CheckContains(LForcedFenceSmokeSection, 'atomic_thread_fence(mo_relaxed);',
+    'forced compile fence smoke must exercise canonical thread fence relaxed order');
+  CheckContains(LForcedFenceSmokeSection, 'atomic_thread_fence(mo_consume);',
+    'forced compile fence smoke must exercise canonical thread fence consume order');
+  CheckContains(LForcedFenceSmokeSection, 'atomic_thread_fence(mo_acquire);',
+    'forced compile fence smoke must exercise canonical thread fence acquire order');
+  CheckContains(LForcedFenceSmokeSection, 'atomic_thread_fence(mo_release);',
+    'forced compile fence smoke must exercise canonical thread fence release order');
+  CheckContains(LForcedFenceSmokeSection, 'atomic_thread_fence(mo_acq_rel);',
+    'forced compile fence smoke must exercise canonical thread fence acq_rel order');
+  CheckContains(LForcedFenceSmokeSection, 'atomic_thread_fence(mo_seq_cst);',
+    'forced compile fence smoke must exercise canonical thread fence seq_cst order');
+  CheckContains(LForcedFenceSmokeSection, 'atomic_signal_fence(mo_relaxed);',
+    'forced compile fence smoke must exercise canonical signal fence relaxed order');
+  CheckContains(LForcedFenceSmokeSection, 'atomic_signal_fence(mo_consume);',
+    'forced compile fence smoke must exercise canonical signal fence consume order');
+  CheckContains(LForcedFenceSmokeSection, 'atomic_signal_fence(mo_acquire);',
+    'forced compile fence smoke must exercise canonical signal fence acquire order');
+  CheckContains(LForcedFenceSmokeSection, 'atomic_signal_fence(mo_release);',
+    'forced compile fence smoke must exercise canonical signal fence release order');
+  CheckContains(LForcedFenceSmokeSection, 'atomic_signal_fence(mo_acq_rel);',
+    'forced compile fence smoke must exercise canonical signal fence acq_rel order');
+  CheckContains(LForcedFenceSmokeSection, 'atomic_signal_fence(mo_seq_cst);',
+    'forced compile fence smoke must exercise canonical signal fence seq_cst order');
+  CheckContains(LForcedFenceSmokeSection, 'AtomicThreadFence(moRelaxed);',
+    'forced compile fence smoke must exercise PascalCase thread fence relaxed order');
+  CheckContains(LForcedFenceSmokeSection, 'AtomicThreadFence(moConsume);',
+    'forced compile fence smoke must exercise PascalCase thread fence consume order');
+  CheckContains(LForcedFenceSmokeSection, 'AtomicThreadFence(moAcquire);',
+    'forced compile fence smoke must exercise PascalCase thread fence acquire order');
+  CheckContains(LForcedFenceSmokeSection, 'AtomicThreadFence(moRelease);',
+    'forced compile fence smoke must exercise PascalCase thread fence release order');
+  CheckContains(LForcedFenceSmokeSection, 'AtomicThreadFence(moAcqRel);',
+    'forced compile fence smoke must exercise PascalCase thread fence acq_rel order');
+  CheckContains(LForcedFenceSmokeSection, 'AtomicThreadFence(moSeqCst);',
+    'forced compile fence smoke must exercise PascalCase thread fence seq_cst order');
+  CheckContains(LForcedFenceSmokeSection, 'AtomicSignalFence(moRelaxed);',
+    'forced compile fence smoke must exercise PascalCase signal fence relaxed order');
+  CheckContains(LForcedFenceSmokeSection, 'AtomicSignalFence(moConsume);',
+    'forced compile fence smoke must exercise PascalCase signal fence consume order');
+  CheckContains(LForcedFenceSmokeSection, 'AtomicSignalFence(moAcquire);',
+    'forced compile fence smoke must exercise PascalCase signal fence acquire order');
+  CheckContains(LForcedFenceSmokeSection, 'AtomicSignalFence(moRelease);',
+    'forced compile fence smoke must exercise PascalCase signal fence release order');
+  CheckContains(LForcedFenceSmokeSection, 'AtomicSignalFence(moAcqRel);',
+    'forced compile fence smoke must exercise PascalCase signal fence acq_rel order');
+  CheckContains(LForcedFenceSmokeSection, 'AtomicSignalFence(moSeqCst);',
+    'forced compile fence smoke must exercise PascalCase signal fence seq_cst order');
   CheckContains(LAtomicSource, 'procedure atomic_thread_fence(aOrder: memory_order_t = mo_seq_cst);',
     'canonical atomic_thread_fence must expose seq_cst as the no-argument default');
   CheckContains(LAtomicSource, 'procedure atomic_signal_fence(aOrder: memory_order_t = mo_seq_cst);',
