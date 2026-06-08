@@ -99,6 +99,12 @@ begin
   CheckEqual(Int64(0), Int64(N), 'out of range rejected');
 end;
 
+procedure TestEncodeNilDestinationFailsClosed;
+begin
+  CheckEqual(Int64(0), Int64(UTF8Encode($41, nil)), 'nil destination rejects ASCII');
+  CheckEqual(Int64(0), Int64(UTF8Encode($1F600, nil)), 'nil destination rejects emoji');
+end;
+
 procedure TestIsValid;
 const
   VALID: array[0..5] of Byte = ($48, $65, $6C, $6C, $6F, $21);
@@ -166,6 +172,7 @@ begin
   T.Run('decode 4-byte', @TestDecode4Byte);
   T.Run('decode invalid', @TestDecodeInvalid);
   T.Run('encode', @TestEncode);
+  T.Run('encode nil destination fails closed', @TestEncodeNilDestinationFailsClosed);
   T.Run('isValid', @TestIsValid);
   T.Run('codepoint count', @TestCodePointCount);
   T.Run('iterator', @TestIterator);

@@ -118,6 +118,8 @@ end;
 
 function UTF8Encode(const ACodePoint: UInt32; const ADst: PByte): Byte;
 begin
+  if ADst = nil then
+    Exit(0);
   if ACodePoint < $80 then
   begin
     ADst[0] := Byte(ACodePoint);
