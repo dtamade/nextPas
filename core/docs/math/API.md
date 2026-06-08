@@ -13,7 +13,8 @@ Use a narrower submodule only when a file intentionally depends on one math fami
 ## Public Modules
 
 - `nextpas.core.math` is the facade. It re-exports the public scalar, trig, vector, matrix,
-  quaternion, transform, easing, random, and noise API.
+  quaternion, transform, easing, and random API. Noise is exposed through
+  `nextpas.core.math.random.TNoiseGen`; there is no public `nextpas.core.math.noise` unit.
 - `nextpas.core.math.scalar` owns scalar constants, numeric helpers, float predicates, interpolation,
   angle conversion, and integer overflow helpers.
 - `nextpas.core.math.trig` owns trigonometric, exponential, logarithmic, power, square-root, and
