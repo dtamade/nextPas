@@ -863,6 +863,53 @@ begin
   LR.Close;
 end;
 
+procedure TestPipeReadAfterReaderCloseRaises;
+var
+  LR: IPipeReader;
+  LW: IPipeWriter;
+  LBuf: Byte;
+  LRaised: Boolean;
+begin
+  CreatePipe(LR, LW);
+  LBuf := $41;
+  CheckEqual(SizeUInt(1), LW.Write(LBuf, 1), 'pipe write before reader close');
+  LR.Close;
+
+  LRaised := False;
+  try
+    LR.Read(LBuf, 1);
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'read after reader close raises EIOError');
+  LW.Close;
+end;
+
+procedure TestPipeReaderReleaseClosesEndpoint;
+var
+  LR: IPipeReader;
+  LW: IPipeWriter;
+  LBuf: Byte;
+  LRaised: Boolean;
+begin
+  CreatePipe(LR, LW);
+  LR := nil;
+  LBuf := $42;
+
+  LRaised := False;
+  try
+    LW.Write(LBuf, 1);
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'releasing reader closes pipe endpoint');
+  LW.Close;
+end;
+
 { New interface tests }
 
 procedure TestReaderAt;
@@ -1243,6 +1290,10 @@ begin
   T.Run('Pipe close writer EOF', @TestPipeCloseWriterEOF);
   T.Run('Pipe write after writer close raises',
     @TestPipeWriteAfterWriterCloseRaises);
+  T.Run('Pipe read after reader close raises',
+    @TestPipeReadAfterReaderCloseRaises);
+  T.Run('Pipe reader release closes endpoint',
+    @TestPipeReaderReleaseClosesEndpoint);
   T.Run('Pipe large data', @TestPipeLargeData);
 
   T.Run('ReaderAt', @TestReaderAt);
