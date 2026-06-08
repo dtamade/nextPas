@@ -874,6 +874,12 @@ begin
     'Transfer-Encoding: gzip'#13#10,
     'GET /next HTTP/1.1'#13#10'Host: localhost'#13#10#13#10,
     pekUnsupportedTransferCoding);
+  CheckMalformedFramingConsumesThroughHeaders(
+    'chunked must be final transfer coding',
+    'Transfer-Encoding: chunked, gzip'#13#10,
+    '5'#13#10'hello'#13#10'0'#13#10#13#10 +
+    'GET /next HTTP/1.1'#13#10'Host: localhost'#13#10#13#10,
+    pekMalformed);
 end;
 
 procedure TestChunkedRequestUnsupportedTransferCodingBeforeChunked;

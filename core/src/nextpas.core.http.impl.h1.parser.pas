@@ -706,6 +706,9 @@ begin
     FErrorMsg := string(AnsiString(llhttp_get_error_reason(@FParser)));
     if (LErrno = HPE_USER) and FHeaderCompleteUserError then
       Result := ConsumedThroughHeaderBoundaryAfterErrorPosition(ABuf, ALen)
+    else if (FParserType = ptRequest) and
+      (LErrno = HPE_INVALID_TRANSFER_ENCODING) then
+      Result := ConsumedThroughHeaderBoundaryAfterErrorPosition(ABuf, ALen)
     else
       Result := ConsumedUntilErrorPosition(ABuf, ALen);
   end
