@@ -434,6 +434,8 @@ begin
     Exit(1.0);
   if DoubleIsNaN(ABase) then
     Exit(DoubleQuietNaN);
+  if AExponent = 1.0 then
+    Exit(ABase);
   if ABase = 0.0 then
   begin
     if AExponent > 0.0 then

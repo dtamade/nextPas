@@ -218,6 +218,26 @@ begin
   Result := LValue.Bits = (QWord($80000000) shl 32);
 end;
 
+function SameSingleBits(const ALeft, ARight: Single): Boolean;
+var
+  LLeft: TSingleBitCast;
+  LRight: TSingleBitCast;
+begin
+  LLeft.Value := ALeft;
+  LRight.Value := ARight;
+  Result := LLeft.Bits = LRight.Bits;
+end;
+
+function SameDoubleBits(const ALeft, ARight: Double): Boolean;
+var
+  LLeft: TDoubleBitCast;
+  LRight: TDoubleBitCast;
+begin
+  LLeft.Value := ALeft;
+  LRight.Value := ARight;
+  Result := LLeft.Bits = LRight.Bits;
+end;
+
 procedure TestBasicTrigValues;
 begin
   CheckNear(0.0, Sin(0.0), 0.0001, 'Sin(0)=0');
@@ -544,6 +564,38 @@ begin
     'Power negative base negative even exponent');
   CheckNear(-8.0, Power(Single(-2.0), Single(3.0)), 0.0001,
     'Power Single negative base odd integer exponent');
+  Check(SameDoubleBits(DoubleMaxFinite, Power(DoubleMaxFinite, 1.0)),
+    'Power Double max finite exponent one preserves input');
+  Check(SameDoubleBits(DoubleMinPositiveSubnormal, Power(DoubleMinPositiveSubnormal, 1.0)),
+    'Power Double min subnormal exponent one preserves input');
+  Check(SameDoubleBits(-DoubleMinPositiveSubnormal, Power(-DoubleMinPositiveSubnormal, 1.0)),
+    'Power Double negative min subnormal exponent one preserves input');
+  Check(SameDoubleBits(0.0, Power(0.0, 1.0)),
+    'Power Double positive zero exponent one preserves input');
+  Check(SameDoubleBits(DoubleNegativeZero, Power(DoubleNegativeZero, 1.0)),
+    'Power Double negative zero exponent one preserves negative zero');
+  Check(IsDoubleNaN(Power(DoubleNaN, 1.0)),
+    'Power Double NaN base exponent one returns NaN');
+  Check(IsDoublePositiveInfinity(Power(DoubleInfinity, 1.0)),
+    'Power Double positive infinity exponent one preserves infinity');
+  Check(IsDoubleNegativeInfinity(Power(-DoubleInfinity, 1.0)),
+    'Power Double negative infinity exponent one preserves infinity');
+  Check(SameSingleBits(SingleMaxFinite, Power(SingleMaxFinite, Single(1.0))),
+    'Power Single max finite exponent one preserves input');
+  Check(SameSingleBits(SingleMinPositiveSubnormal, Power(SingleMinPositiveSubnormal, Single(1.0))),
+    'Power Single min subnormal exponent one preserves input');
+  Check(SameSingleBits(-SingleMinPositiveSubnormal, Power(-SingleMinPositiveSubnormal, Single(1.0))),
+    'Power Single negative min subnormal exponent one preserves input');
+  Check(SameSingleBits(Single(0.0), Power(Single(0.0), Single(1.0))),
+    'Power Single positive zero exponent one preserves input');
+  Check(SameSingleBits(SingleNegativeZero, Power(SingleNegativeZero, Single(1.0))),
+    'Power Single negative zero exponent one preserves negative zero');
+  Check(IsSingleNaN(Power(SingleNaN, Single(1.0))),
+    'Power Single NaN base exponent one returns NaN');
+  Check(IsSinglePositiveInfinity(Power(SingleInfinity, Single(1.0))),
+    'Power Single positive infinity exponent one preserves infinity');
+  Check(IsSingleNegativeInfinity(Power(-SingleInfinity, Single(1.0))),
+    'Power Single negative infinity exponent one preserves infinity');
   Check(IsDoubleNaN(Power(-2.0, 0.5)), 'Power negative base fractional exponent returns NaN');
   Check(IsSingleNaN(Power(Single(-2.0), Single(0.5))),
     'Power Single negative base fractional exponent returns NaN');
