@@ -2278,10 +2278,15 @@ begin
         raise;
       RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
       LConn := TcpConnect(LHost, LPort);
-      ApplyClientDeadline(LConn, LRequestDeadline);
-      WriteRequest(LConn as IWriter, AReq, LAutoHost);
-      LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
-        LResponseStarted);
+      try
+        ApplyClientDeadline(LConn, LRequestDeadline);
+        WriteRequest(LConn as IWriter, AReq, LAutoHost);
+        LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
+          LResponseStarted);
+      except
+        LConn.Close;
+        raise;
+      end;
     end
     else
     begin

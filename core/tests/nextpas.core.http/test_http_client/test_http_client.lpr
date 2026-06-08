@@ -2320,6 +2320,33 @@ begin
   end;
 end;
 
+procedure TestH1ClientPooledRetryFreshFailureClosesConnectionSourceContract;
+var
+  LSource: string;
+  LReconnectPos: SizeInt;
+  LReconnectBlock: string;
+begin
+  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  LReconnectPos := Pos(
+    'RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);', LSource);
+  Check(LReconnectPos > 0,
+    'h1 client pooled retry reconnect path is present');
+  if LReconnectPos > 0 then
+  begin
+    LReconnectBlock := Copy(LSource, LReconnectPos, 520);
+    Check(Pos('LConn := TcpConnect(LHost, LPort);', LReconnectBlock) > 0,
+      'h1 client pooled retry opens a fresh connection after body rewind');
+    Check(Pos('try', LReconnectBlock) > 0,
+      'h1 client pooled retry wraps fresh connection operations');
+    Check(Pos('except', LReconnectBlock) > 0,
+      'h1 client pooled retry handles fresh connection failure');
+    Check(Pos('LConn.Close;', LReconnectBlock) > 0,
+      'h1 client pooled retry closes fresh connection on failure');
+    Check(Pos('raise;', LReconnectBlock) > 0,
+      'h1 client pooled retry preserves the original fresh failure');
+  end;
+end;
+
 procedure TestClientPostStringBodyOverload;
 var
   LRouter: THttpRouter;
@@ -6330,6 +6357,8 @@ begin
     @TestClientShortcutBodyImplementationUsesBytesBuffer);
   T.Run('H1 client transport destroy closes idle pool source contract',
     @TestH1ClientTransportDestroyClosesIdlePoolSourceContract);
+  T.Run('H1 client pooled retry fresh failure closes connection source contract',
+    @TestH1ClientPooledRetryFreshFailureClosesConnectionSourceContract);
   T.Run('Client POST string body overload',
     @TestClientPostStringBodyOverload);
   T.Run('Client PUT sends body and content type', @TestClientPutBodyAndContentType);
