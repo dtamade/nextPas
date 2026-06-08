@@ -20,6 +20,7 @@ type
 
 function Format(const AFmt: string; const AArgs: array of const): string;
 function SameText(const ALeft, ARight: string): Boolean;
+function IntToStr(const AValue: Int64): string;
 
 implementation
 
@@ -31,6 +32,11 @@ end;
 function SameText(const ALeft, ARight: string): Boolean;
 begin
   Result := nextpas.core.text.compare.TextEqualI(ALeft, ARight);
+end;
+
+function IntToStr(const AValue: Int64): string;
+begin
+  Result := nextpas.core.text.conv.IntToStr(AValue);
 end;
 
 end.

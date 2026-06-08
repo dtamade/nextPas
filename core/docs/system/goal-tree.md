@@ -56,6 +56,7 @@ Exit evidence:
 - [x] Add the minimal live `nextpas.core.system.typinfo` unit for the seven-symbol pressure set.
 - [x] Add the minimal live `nextpas.core.system.sysutils` exception-formatting unit for `Format` and canonical exception aliases.
 - [x] Add the minimal live `SameText` string-comparison slice, delegating to the text owner.
+- [x] Add the minimal live `IntToStr` numeric conversion slice, delegating to the text owner.
 - [ ] Decide whether broader SysUtils or Classes deserve `system.*` facade units.
 - [ ] Add only tested aliases or forwarding functions for future compatibility slices; no broad historical copy.
 - [ ] Keep filesystem, time, IO, math, text and collection implementation ownership in their existing modules.
@@ -64,7 +65,8 @@ Exit evidence:
 Current phase note:
 
 - S4 is split: TypInfo minimal live unit is unlocked; SysUtils has a minimal
-  exception-formatting plus `SameText` live unit; Classes remains deferred.
+  exception-formatting plus `SameText` and `IntToStr` live unit; Classes
+  remains deferred.
 - SysUtils path, file, environment, time, and broad string-helper compatibility
   remain deferred.
 - TypInfo minimal unlock was preceded by a dedicated `Needs Review` packet and is limited to

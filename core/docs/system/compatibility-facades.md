@@ -9,8 +9,9 @@ not convert bootstrap RTL pressure into a broad public compatibility API.
 
 - `nextpas.core.system.typinfo` has a minimal live unit for the seven-symbol
   pressure set.
-- `nextpas.core.system.sysutils` has a minimal live exception-formatting and
-  `SameText` unit for `Format`, `SameText`, and canonical exception aliases.
+- `nextpas.core.system.sysutils` has a minimal live exception-formatting,
+  `SameText`, and `IntToStr` unit for `Format`, `SameText`, `IntToStr`, and
+  canonical exception aliases.
 - `nextpas.core.system.classes` remains deferred.
 - Deferred does not mean "undefined"; it means the broad public unit surface is
   not live yet and is guarded by docs plus source-contract.
@@ -27,6 +28,7 @@ The repository already contains bootstrap-oriented RTL source-of-truth files:
 | `rtl/core/classes/np_classes.pas` | minimal `Classes` subset with `TFileStream` and `TStringList` | current shape is pragmatic bootstrap RTL, not a reviewed owner-boundary facade |
 | `compiler/tests/test_sysutils_createfmt_contract.pas` | proof that compiler bootstrap currently needs `Format`, `Exception.CreateFmt`, and `ExceptClass` behavior | pressure is enough for a minimal exception-formatting facade, but not for path, file, environment, time, or broad string-helper compatibility |
 | compiler semantic and toolchain `SameText` uses | proof that case-insensitive identifier/config comparison is real pressure | pressure is enough for one tiny delegating `SameText` facade, but not for `CompareText`, `Trim`, case conversion, path, file, environment, or time helpers |
+| compiler/runtime diagnostic `IntToStr` uses | proof that numeric label, counter, and diagnostic conversion is real pressure | pressure is enough for one tiny delegating `IntToStr` facade, but not for parsing, trimming, case conversion, path, file, environment, or time helpers |
 | `compiler/tests/test_typinfo_contract.pas` | proof that compiler/runtime contracts already need `PTypeInfo`, `TypeInfo`, `InitializeArray`, `CopyArray`, and `FinalizeArray` | this proves RTTI lifecycle pressure, but also proves ABI/layout truth must stay compiler/runtime-led |
 
 S4 therefore must distinguish two concerns:
@@ -57,15 +59,16 @@ The pressure clusters into a few narrow capability families:
 | path normalization | `ExpandFileName`, `ExtractFileDir`, `ExtractFileName`, `IncludeTrailingPathDelimiter`, `ExcludeTrailingPathDelimiter` | real toolchain/workspace pressure | path and filesystem semantics belong to `fs` / platform / process owners |
 | file and environment discovery | `FileExists`, `DirectoryExists`, `ForceDirectories`, `FileSearch`, `GetEnvironmentVariable` | real toolchain pressure | keep implementation ownership outside system |
 | string comparison | `SameText` | real compiler semantic/toolchain pressure | minimal live facade delegates to `nextpas.core.text.compare`; broad string helpers stay deferred |
-| string convenience | `Trim`, `LowerCase`, `UpperCase`, `IntToStr`, `StrToInt` | real compiler pressure | text/number helpers should stay explicit about owner and behavior |
+| string conversion | `IntToStr` | real compiler/runtime diagnostic pressure | minimal live facade delegates to `nextpas.core.text.conv`; parsing and broad text helpers stay deferred |
+| string convenience | `Trim`, `LowerCase`, `UpperCase`, `StrToInt` | real compiler pressure | text/number helpers should stay explicit about owner and behavior |
 | `CompareText` | no focused consumer pressure in this lane | keep deferred | do not unlock just because `SameText` is live |
 | date/time convenience | `Now`, `FormatDateTime` | only incidental pressure today | belongs to time owner, not system |
 
 ### Current S4 stance
 
 - A minimal live `nextpas.core.system.sysutils` unit exists.
-- The live unit exposes only `Format`, `SameText`, `Exception`, `ExceptClass`,
-  `EConvertError`, and `EAssertionFailed`.
+- The live unit exposes only `Format`, `SameText`, `IntToStr`, `Exception`,
+  `ExceptClass`, `EConvertError`, and `EAssertionFailed`.
 - Do not create a mirror of FPC `SysUtils`.
 - Do not move filesystem, environment, time, or text ownership into `system`.
 - Any further `system.sysutils` shape must stay tiny, consumer-proven, and
@@ -77,6 +80,7 @@ The live contract is exactly:
 
 - `Format`
 - `SameText`
+- `IntToStr`
 - `Exception`
 - `ExceptClass`
 - `EConvertError`
@@ -85,7 +89,8 @@ The live contract is exactly:
 Anything larger should trigger `Needs Review`, including:
 
 - path normalization entry points;
-- bootstrap-stable string helpers other than the current `SameText` slice;
+- bootstrap-stable string helpers other than the current `SameText` and
+  `IntToStr` slices;
 - `Now` / `FormatDateTime`;
 - broad file APIs;
 - process control;

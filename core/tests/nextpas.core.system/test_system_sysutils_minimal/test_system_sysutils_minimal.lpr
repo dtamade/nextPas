@@ -59,11 +59,22 @@ begin
     'SameText should reject different text');
 end;
 
+procedure TestIntToStrDelegatesToTextConvOwner;
+begin
+  CheckEqual('0', nextpas.core.system.sysutils.IntToStr(0),
+    'IntToStr should cover zero labels and counters');
+  CheckEqual('42', nextpas.core.system.sysutils.IntToStr(42),
+    'IntToStr should cover compiler/runtime positive counter pressure');
+  CheckEqual('-17', nextpas.core.system.sysutils.IntToStr(-17),
+    'IntToStr should cover diagnostic negative values');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.system.sysutils minimal');
   T.Run('Format delegates to text contract', @TestFormatDelegatesToTextContract);
   T.Run('exception formatting aliases canonical root', @TestExceptionFormattingAliasesCanonicalRoot);
   T.Run('convert error alias canonical root', @TestConvertErrorAliasCanonicalRoot);
   T.Run('SameText delegates to text compare owner', @TestSameTextDelegatesToTextCompareOwner);
+  T.Run('IntToStr delegates to text conversion owner', @TestIntToStrDelegatesToTextConvOwner);
   T.Summary;
 end.
