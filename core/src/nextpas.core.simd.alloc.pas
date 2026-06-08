@@ -46,7 +46,7 @@ uses
   - SimdRealloc(ptr, 0, alignment) must free and return nil.
   - SimdRealloc must preserve the requested alignment.
   - SimdRealloc must preserve the overlapping prefix bytes.
-  - Current fallback truth remains header-backed GetMem/FreeMem until the platform seam lands.
+  - Current fallback/native backend truth lives in nextpas.core.platform.memory.
   - Native Windows/POSIX allocator runtime readiness requires platform-owned seam integration plus real runtime evidence.
 }
 

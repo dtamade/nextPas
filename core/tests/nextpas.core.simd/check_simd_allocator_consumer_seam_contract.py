@@ -24,19 +24,16 @@ REQUIRED_CONSUMER_TOKENS = (
     "SimdRealloc(ptr, 0, alignment) must free and return nil",
     "SimdRealloc must preserve the requested alignment",
     "SimdRealloc must preserve the overlapping prefix bytes",
-    "Current fallback truth remains header-backed GetMem/FreeMem until the platform seam lands",
+    "Current fallback/native backend truth lives in nextpas.core.platform.memory",
     "Native Windows/POSIX allocator runtime readiness requires platform-owned seam integration plus real runtime evidence",
 )
 
-REQUIRED_CURRENT_FALLBACK_TOKENS = (
-    "TAllocHeader",
+REQUIRED_PLATFORM_CONSUMER_TOKENS = (
+    "nextpas.core.platform.memory",
     "TryResolveAlignment",
-    "CanAddSizeUInt",
-    "CanBuildRawAllocationSize",
-    "GetMem(LRaw, LRawSize)",
-    "FreeMem(LHeader^.OrigPtr)",
-    "Move(aPtr^, Result^, LOldSize)",
-    "Move(aPtr^, Result^, aNewSize)",
+    "platform_aligned_alloc(aSize, LAlign)",
+    "platform_aligned_free(aPtr)",
+    "platform_aligned_realloc(aPtr, aNewSize, LAlign)",
 )
 
 FORBIDDEN_PUBLIC_ALLOC_CODE_TOKENS = (
@@ -83,11 +80,11 @@ def check_required_consumer_tokens(a_issues: list[str]) -> None:
             add_issue(a_issues, ALLOC_PATH, f"missing consumer seam contract token `{l_token}`")
 
 
-def check_current_fallback_shape(a_issues: list[str]) -> None:
+def check_platform_consumer_shape(a_issues: list[str]) -> None:
     l_text = read_text(ALLOC_PATH)
-    for l_token in REQUIRED_CURRENT_FALLBACK_TOKENS:
+    for l_token in REQUIRED_PLATFORM_CONSUMER_TOKENS:
         if l_token not in l_text:
-            add_issue(a_issues, ALLOC_PATH, f"missing current fallback token `{l_token}`")
+            add_issue(a_issues, ALLOC_PATH, f"missing platform consumer token `{l_token}`")
 
 
 def check_no_owner_boundary_bypass(a_issues: list[str]) -> None:
@@ -115,7 +112,7 @@ def main() -> int:
 
     l_issues: list[str] = []
     check_required_consumer_tokens(l_issues)
-    check_current_fallback_shape(l_issues)
+    check_platform_consumer_shape(l_issues)
     check_no_owner_boundary_bypass(l_issues)
     check_makefile_hook(l_issues)
 
