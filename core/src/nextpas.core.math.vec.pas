@@ -857,6 +857,170 @@ begin
   Result := StableVec4Dot(AX, AY, AZ, 0.0, BX, BY, BZ, 0.0);
 end;
 
+function StableCrossComponentSingle(const AU, AV, BU, BV: Single): Single; inline;
+var
+  LValue: Double;
+  LAbsValue: Double;
+begin
+  LValue := Double(AU) * Double(BV) - Double(AV) * Double(BU);
+  if LValue = 0.0 then
+    Exit(0.0);
+
+  LAbsValue := nextpas.core.math.scalar.Abs(LValue);
+  if LAbsValue > MAX_SINGLE_VALUE then
+    Exit(SingleSignedInfinity(LValue < 0.0));
+
+  Result := Single(LValue);
+end;
+
+function TryCrossCandidateDouble(const AFactor, ADiff: Double;
+  var AValue: Double): Boolean; inline;
+var
+  LAbsFactor: Double;
+  LAbsDiff: Double;
+begin
+  if not IsFinite(ADiff) then
+    Exit(False);
+  if ADiff = 0.0 then
+  begin
+    AValue := 0.0;
+    Exit(True);
+  end;
+
+  LAbsFactor := nextpas.core.math.scalar.Abs(AFactor);
+  LAbsDiff := nextpas.core.math.scalar.Abs(ADiff);
+  if (LAbsFactor <> 0.0) and (LAbsDiff > MAX_DOUBLE_VALUE / LAbsFactor) then
+    Exit(False);
+
+  AValue := AFactor * ADiff;
+  Result := IsFinite(AValue);
+end;
+
+procedure KeepCrossCandidateDouble(const ACandidate: Double; var ABest: Double;
+  var AHasBest: Boolean); inline;
+begin
+  if not IsFinite(ACandidate) then
+    Exit;
+  if (not AHasBest) or
+    ((ABest = 0.0) and (ACandidate <> 0.0)) or
+    ((ACandidate <> 0.0) and (ABest <> 0.0) and
+    (nextpas.core.math.scalar.Abs(ACandidate) < nextpas.core.math.scalar.Abs(ABest))) then
+  begin
+    ABest := ACandidate;
+    AHasBest := True;
+  end;
+end;
+
+function StableCrossComponentDouble(const AU, AV, BU, BV: Double): Double; inline;
+var
+  LCandidate: Extended;
+  LAbsCandidate: Extended;
+  LBestCandidate: Double;
+  LDoubleCandidate: Double;
+  LHasCandidate: Boolean;
+  LScaleA: Double;
+  LScaleB: Double;
+  LScaledDiff: Double;
+  LAbsScaledDiff: Double;
+  LProduct: Double;
+  LLogMagnitude: Double;
+begin
+  LHasCandidate := False;
+  LCandidate := Extended(AU) * Extended(BV) - Extended(AV) * Extended(BU);
+  if LCandidate = 0.0 then
+    KeepCrossCandidateDouble(0.0, LBestCandidate, LHasCandidate)
+  else
+  if LCandidate = LCandidate then
+  begin
+    LAbsCandidate := LCandidate;
+    if LAbsCandidate < 0.0 then
+      LAbsCandidate := -LAbsCandidate;
+    if LAbsCandidate <= MAX_DOUBLE_VALUE then
+      KeepCrossCandidateDouble(Double(LCandidate), LBestCandidate, LHasCandidate);
+  end;
+
+  if AU <> 0.0 then
+    if TryCrossCandidateDouble(AU, BV - (AV / AU) * BU, LDoubleCandidate) then
+      KeepCrossCandidateDouble(LDoubleCandidate, LBestCandidate, LHasCandidate);
+  if BV <> 0.0 then
+    if TryCrossCandidateDouble(BV, AU - (BU / BV) * AV, LDoubleCandidate) then
+      KeepCrossCandidateDouble(LDoubleCandidate, LBestCandidate, LHasCandidate);
+  if AV <> 0.0 then
+    if TryCrossCandidateDouble(-AV, BU - (AU / AV) * BV, LDoubleCandidate) then
+      KeepCrossCandidateDouble(LDoubleCandidate, LBestCandidate, LHasCandidate);
+  if BU <> 0.0 then
+    if TryCrossCandidateDouble(-BU, AV - (BV / BU) * AU, LDoubleCandidate) then
+      KeepCrossCandidateDouble(LDoubleCandidate, LBestCandidate, LHasCandidate);
+
+  if LHasCandidate and (LBestCandidate <> 0.0) then
+    Exit(LBestCandidate);
+
+  LScaleA := nextpas.core.math.scalar.Max(nextpas.core.math.scalar.Abs(AU),
+    nextpas.core.math.scalar.Abs(AV));
+  LScaleB := nextpas.core.math.scalar.Max(nextpas.core.math.scalar.Abs(BU),
+    nextpas.core.math.scalar.Abs(BV));
+  if (LScaleA = 0.0) or (LScaleB = 0.0) then
+    Exit(0.0);
+
+  LScaledDiff := (AU / LScaleA) * (BV / LScaleB) -
+    (AV / LScaleA) * (BU / LScaleB);
+  if LScaledDiff = 0.0 then
+  begin
+    if LHasCandidate then
+      Exit(LBestCandidate);
+    Exit(0.0);
+  end;
+
+  LAbsScaledDiff := nextpas.core.math.scalar.Abs(LScaledDiff);
+  if LScaleA <= MAX_DOUBLE_VALUE / LScaleB then
+  begin
+    LProduct := LScaleA * LScaleB;
+    if LProduct = 0.0 then
+      Exit(0.0);
+    if LAbsScaledDiff > MAX_DOUBLE_VALUE / LProduct then
+      Exit(DoubleSignedInfinity(LScaledDiff < 0.0));
+    Exit(LProduct * LScaledDiff);
+  end;
+
+  LLogMagnitude := System.Ln(LScaleA) + System.Ln(LScaleB) + System.Ln(LAbsScaledDiff);
+  if LLogMagnitude >= LN_MAX_DOUBLE_VALUE then
+    Exit(DoubleSignedInfinity(LScaledDiff < 0.0));
+
+  Result := System.Exp(LLogMagnitude);
+  if LScaledDiff < 0.0 then
+    Result := -Result;
+end;
+
+function StableVec3Cross(const AX, AY, AZ, BX, BY, BZ: Single): TVec3f; inline;
+begin
+  if (not IsFinite(AX)) or (not IsFinite(AY)) or (not IsFinite(AZ)) or
+    (not IsFinite(BX)) or (not IsFinite(BY)) or (not IsFinite(BZ)) then
+    Exit(TVec3f.Create(
+      AY * BZ - AZ * BY,
+      AZ * BX - AX * BZ,
+      AX * BY - AY * BX));
+
+  Result := TVec3f.Create(
+    StableCrossComponentSingle(AY, AZ, BY, BZ),
+    StableCrossComponentSingle(AZ, AX, BZ, BX),
+    StableCrossComponentSingle(AX, AY, BX, BY));
+end;
+
+function StableVec3Cross(const AX, AY, AZ, BX, BY, BZ: Double): TVec3d; inline;
+begin
+  if (not IsFinite(AX)) or (not IsFinite(AY)) or (not IsFinite(AZ)) or
+    (not IsFinite(BX)) or (not IsFinite(BY)) or (not IsFinite(BZ)) then
+    Exit(TVec3d.Create(
+      AY * BZ - AZ * BY,
+      AZ * BX - AX * BZ,
+      AX * BY - AY * BX));
+
+  Result := TVec3d.Create(
+    StableCrossComponentDouble(AY, AZ, BY, BZ),
+    StableCrossComponentDouble(AZ, AX, BZ, BX),
+    StableCrossComponentDouble(AX, AY, BX, BY));
+end;
+
 class function TVec2f.Create(const AX, AY: Single): TVec2f;
 begin
   Result.X := AX;
@@ -1004,10 +1168,7 @@ end;
 
 class function TVec3f.Cross(const AA, AB: TVec3f): TVec3f;
 begin
-  Result := TVec3f.Create(
-    AA.Y * AB.Z - AA.Z * AB.Y,
-    AA.Z * AB.X - AA.X * AB.Z,
-    AA.X * AB.Y - AA.Y * AB.X);
+  Result := StableVec3Cross(AA.X, AA.Y, AA.Z, AB.X, AB.Y, AB.Z);
 end;
 
 class function TVec3f.Lerp(const AA, AB: TVec3f; const AT: Single): TVec3f;
@@ -1283,10 +1444,7 @@ end;
 
 class function TVec3d.Cross(const AA, AB: TVec3d): TVec3d;
 begin
-  Result := TVec3d.Create(
-    AA.Y * AB.Z - AA.Z * AB.Y,
-    AA.Z * AB.X - AA.X * AB.Z,
-    AA.X * AB.Y - AA.Y * AB.X);
+  Result := StableVec3Cross(AA.X, AA.Y, AA.Z, AB.X, AB.Y, AB.Z);
 end;
 
 class function TVec3d.Lerp(const AA, AB: TVec3d; const AT: Double): TVec3d;

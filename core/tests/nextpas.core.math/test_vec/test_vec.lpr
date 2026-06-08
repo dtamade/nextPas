@@ -116,6 +116,14 @@ begin
   CheckEqual(Int64($FF800000), Int64(LValue.Bits), AMessage);
 end;
 
+procedure CheckSingleFinite(const AActual: Single; const AMessage: string);
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AActual;
+  Check((LValue.Bits and $7F800000) <> $7F800000, AMessage);
+end;
+
 procedure CheckDoubleNegativeInfinity(const AActual: Double; const AMessage: string);
 var
   LValue: TDoubleBitCast;
@@ -126,6 +134,14 @@ begin
   LExpected := LExpected shl 32;
   LExpected := LExpected or (QWord($7FF) shl 52);
   Check(LValue.Bits = LExpected, AMessage);
+end;
+
+procedure CheckDoubleFinite(const AActual: Double; const AMessage: string);
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Value := AActual;
+  Check((LValue.Bits and $7FF0000000000000) <> $7FF0000000000000, AMessage);
 end;
 
 procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string; const AProc: TTestProc);
@@ -733,6 +749,38 @@ begin
     0.0, 'TVec2d tiny finite Dot underflow stays finite zero');
 end;
 
+procedure TestVectorHugeFiniteCrossCancellationContract;
+var
+  A3f: TVec3f;
+  B3f: TVec3f;
+  C3f: TVec3f;
+  Expected3fZ: Double;
+  A3d: TVec3d;
+  B3d: TVec3d;
+  C3d: TVec3d;
+  Expected3dZ: Double;
+begin
+  A3f := TVec3f.Create(Single(2.0e19), Single(2.0e19), 0.0);
+  B3f := TVec3f.Create(A3f.X, Single(2.00002e19), 0.0);
+  C3f := TVec3f.Cross(A3f, B3f);
+  Expected3fZ := Double(A3f.X) * (Double(B3f.Y) - Double(A3f.Y));
+  CheckNear(0.0, C3f.X, 0.0, 'TVec3f huge finite Cross cancellation X');
+  CheckNear(0.0, C3f.Y, 0.0, 'TVec3f huge finite Cross cancellation Y');
+  CheckSingleFinite(C3f.Z, 'TVec3f huge finite Cross cancellation Z stays finite');
+  CheckScaledNear(Expected3fZ, C3f.Z, Expected3fZ, 0.00001,
+    'TVec3f huge finite Cross cancellation preserves finite Z');
+
+  A3d := TVec3d.Create(1.5e154, 1.25e154, 0.0);
+  B3d := TVec3d.Create(A3d.X, A3d.Y * (1.0 + 1.0e-15), 0.0);
+  C3d := TVec3d.Cross(A3d, B3d);
+  Expected3dZ := A3d.X * (B3d.Y - A3d.Y);
+  CheckNear(0.0, C3d.X, 0.0, 'TVec3d huge finite Cross cancellation X');
+  CheckNear(0.0, C3d.Y, 0.0, 'TVec3d huge finite Cross cancellation Y');
+  CheckDoubleFinite(C3d.Z, 'TVec3d huge finite Cross cancellation Z stays finite');
+  CheckScaledNear(Expected3dZ, C3d.Z, Expected3dZ, 0.000000000001,
+    'TVec3d huge finite Cross cancellation preserves finite Z');
+end;
+
 procedure TestVectorDataAliasesWriteThrough;
 var
   V2f: TVec2f;
@@ -852,6 +900,8 @@ begin
   T.Run('vector huge finite LengthSqr overflow contract',
     @TestVectorLengthSqrHugeFiniteOverflowContract);
   T.Run('vector huge finite Dot contract', @TestVectorHugeFiniteDotContract);
+  T.Run('vector huge finite Cross cancellation contract',
+    @TestVectorHugeFiniteCrossCancellationContract);
   T.Run('vector Data aliases write through', @TestVectorDataAliasesWriteThrough);
   T.Run('raw vector normalize non-finite inputs fail fast',
     @TestRawVectorNormalizeNonFiniteInputsFailFast);
