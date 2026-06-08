@@ -1053,6 +1053,93 @@ begin
   end;
 end;
 
+procedure TestMalformedTomlDiagnosticsAndFailClosed;
+var
+  LCfg: TConfig;
+  LError: string;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := '/tmp/test_nextpas_config_bad_toml_diagnostics.toml';
+  Remove(LPath);
+  WriteFileText(LPath, 'from_file = "yes"' + #10 +
+    'bad = ' + #10 +
+    'after = "no"' + #10);
+
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromToml('keep = "value"' + #10);
+
+    LRaised := False;
+    try
+      LCfg.LoadFromToml('before = "yes"' + #10 +
+        'bad = ' + #10 +
+        'after = "no"' + #10);
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('config toml parse error', E.Message) > 0,
+          'LoadFromToml error category');
+        Check(Pos('line 2', E.Message) > 0, 'LoadFromToml error line');
+        Check(Pos('column', E.Message) > 0, 'LoadFromToml error column');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'LoadFromToml malformed toml raises');
+    CheckEqual('value', LCfg.GetString('keep'), 'LoadFromToml preserves old value');
+    CheckEqual(False, LCfg.Has('before'), 'LoadFromToml does not partially apply');
+    CheckEqual(False, LCfg.Has('after'), 'LoadFromToml ignores bad body');
+
+    LError := '';
+    CheckEqual(False,
+      LCfg.TryLoadFromToml('try_before = "yes"' + #10 +
+        'bad = ' + #10 +
+        'try_after = "no"' + #10,
+        LError),
+      'TryLoadFromToml malformed toml returns false');
+    Check(Pos('config toml parse error', LError) > 0,
+      'TryLoadFromToml error category');
+    Check(Pos('line 2', LError) > 0, 'TryLoadFromToml error line');
+    Check(Pos('column', LError) > 0, 'TryLoadFromToml error column');
+    CheckEqual('value', LCfg.GetString('keep'), 'TryLoadFromToml preserves old value');
+    CheckEqual(False, LCfg.Has('try_before'),
+      'TryLoadFromToml does not partially apply');
+
+    LRaised := False;
+    try
+      LCfg.LoadFromFile(LPath, cfToml);
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos(LPath, E.Message) > 0, 'LoadFromFile error includes path');
+        Check(Pos('config toml parse error', E.Message) > 0,
+          'LoadFromFile error category');
+        Check(Pos('line 2', E.Message) > 0, 'LoadFromFile error line');
+        Check(Pos('column', E.Message) > 0, 'LoadFromFile error column');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'LoadFromFile malformed toml raises');
+    CheckEqual('value', LCfg.GetString('keep'), 'LoadFromFile preserves old value');
+    CheckEqual(False, LCfg.Has('from_file'), 'LoadFromFile does not partially apply');
+
+    LError := '';
+    CheckEqual(False, LCfg.TryLoadFromFile(LPath, cfToml, LError),
+      'TryLoadFromFile malformed toml returns false');
+    Check(Pos(LPath, LError) > 0, 'TryLoadFromFile error includes path');
+    Check(Pos('config toml parse error', LError) > 0,
+      'TryLoadFromFile error category');
+    Check(Pos('line 2', LError) > 0, 'TryLoadFromFile error line');
+    Check(Pos('column', LError) > 0, 'TryLoadFromFile error column');
+    CheckEqual('value', LCfg.GetString('keep'), 'TryLoadFromFile preserves old value');
+    CheckEqual(False, LCfg.Has('from_file'),
+      'TryLoadFromFile does not partially apply');
+  finally
+    LCfg.Free;
+    Remove(LPath);
+  end;
+end;
+
 procedure TestTryLoadFromJsonValid;
 var
   LCfg: TConfig;
@@ -1765,6 +1852,8 @@ begin
   T.Run('TryLoadFromIni.Valid', @TestTryLoadFromIniValid);
   T.Run('MalformedIni.DiagnosticsAndFailClosed',
     @TestMalformedIniDiagnosticsAndFailClosed);
+  T.Run('MalformedToml.DiagnosticsAndFailClosed',
+    @TestMalformedTomlDiagnosticsAndFailClosed);
   T.Run('TryLoadFromJson.Valid', @TestTryLoadFromJsonValid);
   T.Run('TryLoadFromJson.Invalid', @TestTryLoadFromJsonInvalid);
   T.Run('TryLoad.ShortVariantsInvalid', @TestTryLoadShortVariantsInvalid);

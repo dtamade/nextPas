@@ -566,7 +566,9 @@ begin
       on E: EConfigError do
       begin
         LRaised := True;
-        Check(Pos('TOML parse error', E.Message) > 0, 'toml error message');
+        Check(Pos('config toml parse error', E.Message) > 0, 'toml error category');
+        Check(Pos('line 1', E.Message) > 0, 'toml error line');
+        Check(Pos('column', E.Message) > 0, 'toml error column');
       end;
     end;
     CheckEqual(True, LRaised, 'bad toml raises');

@@ -1800,7 +1800,7 @@ begin
   Result := AError.Message.ToString;
   if Result = '' then
     Result := 'parse error';
-  Result := 'TOML parse error at line ' + UIntToStr(AError.Line) +
+  Result := 'config toml parse error at line ' + UIntToStr(AError.Line) +
     ', column ' + UIntToStr(AError.Col) + ': ' + Result;
 end;
 
