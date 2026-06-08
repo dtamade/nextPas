@@ -565,6 +565,11 @@ begin
   Ceil(1.0e300);
 end;
 
+procedure RaiseCeilPositive2Pow63;
+begin
+  Ceil(Pow2_63);
+end;
+
 procedure RaiseCeilNaN;
 begin
   Ceil(MakeNaN);
@@ -875,6 +880,8 @@ begin
     'Floor(Double below -2^63)', @RaiseFloorBelowInt64Min);
   ExpectArgumentErrorMessage('Ceil: value is outside Int64 range',
     'Ceil(huge positive)', @RaiseCeilHugePositive);
+  ExpectArgumentErrorMessage('Ceil: value is outside Int64 range',
+    'Ceil(Double 2^63)', @RaiseCeilPositive2Pow63);
   ExpectArgumentErrorMessage('Ceil: NaN cannot be converted to Int64',
     'Ceil(Double NaN)', @RaiseCeilNaN);
   ExpectArgumentErrorMessage('Ceil: infinity cannot be converted to Int64',
@@ -890,9 +897,9 @@ begin
   ExpectArgumentErrorMessage('Ceil: value is outside Int64 range',
     'Ceil(Double below -2^63)', @RaiseCeilBelowInt64Min);
   ExpectArgumentErrorMessage('Trunc: value is outside Int64 range',
-    'Trunc(2^63)', @RaiseTruncPositive2Pow63);
+    'Trunc(Double 2^63)', @RaiseTruncPositive2Pow63);
   ExpectArgumentErrorMessage('Floor: value is outside Int64 range',
-    'Floor(2^63)', @RaiseFloorPositive2Pow63);
+    'Floor(Double 2^63)', @RaiseFloorPositive2Pow63);
   ExpectArgumentErrorMessage('Round: NaN cannot be converted to Int64',
     'Round(NaN)', @RaiseRoundNaN);
   ExpectArgumentErrorMessage('Round: infinity cannot be converted to Int64',
@@ -900,7 +907,7 @@ begin
   ExpectArgumentErrorMessage('Round: infinity cannot be converted to Int64',
     'Round(Double -Inf)', @RaiseRoundNegativeInfinity);
   ExpectArgumentErrorMessage('Round: value is outside Int64 range',
-    'Round(2^63)', @RaiseRoundPositive2Pow63);
+    'Round(Double 2^63)', @RaiseRoundPositive2Pow63);
   ExpectArgumentErrorMessage('Round: value is outside Int64 range',
     'Round(Double below -2^63)', @RaiseRoundBelowInt64Min);
   ExpectArgumentErrorMessage('Trunc: NaN cannot be converted to Int64',
@@ -926,7 +933,7 @@ begin
   ExpectArgumentErrorMessage('Frac: infinity cannot be converted to Int64',
     'Frac(Double -Inf)', @RaiseFracNegativeInfinity);
   ExpectArgumentErrorMessage('Frac: value is outside Int64 range',
-    'Frac(2^63)', @RaiseFracPositive2Pow63);
+    'Frac(Double 2^63)', @RaiseFracPositive2Pow63);
   ExpectArgumentErrorMessage('Frac: value is outside Int64 range',
     'Frac(Double below -2^63)', @RaiseFracBelowInt64Min);
   ExpectArgumentErrorMessage('GCD: result is outside Int64 range',
