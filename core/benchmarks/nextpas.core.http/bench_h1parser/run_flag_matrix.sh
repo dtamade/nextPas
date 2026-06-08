@@ -130,12 +130,18 @@ append_rows() {
   local flags="$3"
   local output_file="$4"
   local run_index="$5"
+  local parsed_rows=0
 
-  sed -nE 's/^[[:space:]]*(.*[^[:space:]])[[:space:]]+([0-9]+)[[:space:]]+iters[[:space:]]+([0-9]+(\.[0-9]+)?)[[:space:]]+ns\/op[[:space:]]+([0-9]+(\.[0-9]+)?)[[:space:]]+ops\/s[[:space:]]*$/\1\t\2\t\3\t\5/p' "$output_file" |
   while IFS=$'\t' read -r benchmark iterations ns_per_op ops_per_sec; do
+    parsed_rows=$((parsed_rows + 1))
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
       "$variant" "$impl" "$benchmark" "$run_index" "$iterations" "$ns_per_op" "$ops_per_sec" "$flags" >> "$RESULTS_PATH"
-  done
+  done < <(sed -nE 's/^[[:space:]]*(.*[^[:space:]])[[:space:]]+([0-9]+)[[:space:]]+iters[[:space:]]+([0-9]+(\.[0-9]+)?)[[:space:]]+ns\/op[[:space:]]+([0-9]+(\.[0-9]+)?)[[:space:]]+ops\/s[[:space:]]*$/\1\t\2\t\3\t\5/p' "$output_file")
+
+  if [ "$parsed_rows" -eq 0 ]; then
+    echo "no benchmark rows parsed for $variant run $run_index: $output_file" >&2
+    return 1
+  fi
 }
 
 write_summary() {

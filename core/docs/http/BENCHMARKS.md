@@ -2781,6 +2781,12 @@ directories outside
 `build/projects/nextpas.core.http/bench_h1parser/flag_matrix/...` before any
 cleanup step runs.
 
+On 2026-06-08 local time, the runner was also hardened against header-only
+evidence artifacts. Each actual Pascal/C variant run must now parse at least
+one benchmark row before `results.tsv` is accepted. The C variant remains an
+explicit skip when `LLHTTP_ROOT` is not configured; otherwise parse failures are
+reported with the variant, run index, and log path.
+
 Focused RED/GREEN:
 
 ```text

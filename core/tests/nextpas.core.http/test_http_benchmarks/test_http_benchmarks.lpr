@@ -4415,6 +4415,26 @@ begin
     'H1 parser flag matrix unsafe output dir diagnostic');
 end;
 
+procedure TestH1ParserFlagMatrixRequiresParsedRowsSourceContract;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LScript: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LRunnerPath := ResolveH1FlagMatrixRunnerPath(LRootDir);
+  LScript := LoadTextFile(LRunnerPath);
+
+  CheckContains(LScript, 'local parsed_rows=0',
+    'H1 parser flag matrix should count parsed rows per run');
+  CheckContains(LScript, 'parsed_rows=$((parsed_rows + 1))',
+    'H1 parser flag matrix should increment parsed-row count');
+  CheckContains(LScript, 'if [ "$parsed_rows" -eq 0 ]; then',
+    'H1 parser flag matrix should reject header-only artifacts');
+  CheckContains(LScript, 'no benchmark rows parsed for $variant run $run_index',
+    'H1 parser flag matrix should name variant/run on parse failure');
+end;
+
 begin
   T := TTestRunner.Create('http benchmarks');
   T.Run('bench_server small smoke', @TestBenchServerSmallSmoke);
@@ -4620,6 +4640,8 @@ begin
     @TestH1ParserFlagMatrixRunsSummarySmoke);
   T.Run('H1 parser flag matrix rejects unsafe output dir',
     @TestH1ParserFlagMatrixRejectsUnsafeOutputDir);
+  T.Run('H1 parser flag matrix requires parsed rows source contract',
+    @TestH1ParserFlagMatrixRequiresParsedRowsSourceContract);
   T.Summary;
   if not T.AllPassed then
     Halt(1);
