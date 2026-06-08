@@ -19,6 +19,11 @@ managed type lifetime、memory primitive、exception/unwinding、RTTI/TypeInfo �
 - 对框架消费者：提供少量稳定、低层、可测试的 RTL root facade。
 - 对 owner 模块：不绕过已有实现所有权，不复制平台、内存、文本、文件、时间、IO 等模块。
 
+Bootstrap compatibility rule: keep System-facing code as FPC-compatible source where that
+helps genesis builds, but preserve nextPas-owned semantic authority through `np.system.*`
+contracts. FPC can be the stage0 host compiler and adapter target; it must not define the
+final object lifetime, managed lifetime, RTTI metadata, unit lifecycle, or runtime helper ABI.
+
 首批代码只实现 S1 级 facade skeleton，并继续保持 delegating to owner：
 
 - `TBytes` 等低层基础载体类型来自 `nextpas.core.base`。

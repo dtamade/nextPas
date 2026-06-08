@@ -189,6 +189,20 @@ unit 初始化与清理不能继续作为 backend 特例或历史习惯存在。
 - 把 contract name 退化成散落在 lowering 分支里的字符串常量。
 - 没有文档就直接把某段运行时语义塞进 codegen 特例。
 
+## 用双 surface adapter 支撑创世期
+
+runtime bootstrap 允许同一批 System-facing source 在两个构建语境下工作，但只能有一套语义权威：
+
+- stage0 host adapter：FPC 编译路径可以委派给 FPC-compatible helper，目标是构建 nextPas
+  compiler/toolchain 并保留可回退基线。
+- nextPas contract path：nextPas 编译路径必须把同一语义显式降到 `np.system.*`，目标是让
+  compiler/runtime/backend 对同一份 contract 负责。
+
+这个 dual-surface model 的实施细节是把差异收敛在 adapter 和 contract registry 上，而不是让
+backend、facade、runtime helper 各自发明名字。`TypeInfo`、managed array helper、`TObject.Free`
+这类能力可以先有 FPC-compatible fallback，但 metadata layout、lifetime ABI 和 object release
+语义不能因此默认继承 FPC RTL。
+
 ## `Typed HIR` 与 runtime 的职责分界必须稳定
 
 为了避免语义和运行期边界重新混写，nextPas 先冻结以下分工：
