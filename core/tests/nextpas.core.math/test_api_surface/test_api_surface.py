@@ -466,11 +466,19 @@ REQUIRED_VEC_QUAT_STABLE_DOC_TRUTH = (
         "`LengthSqr` avoids FPU overflow exceptions for huge finite inputs and returns `+Inf` when the true squared length is outside the target float range.",
     ),
     (
+        "docs/math/README.md",
+        "`Cross` uses stable finite intermediate paths for huge finite `TVec3f` and `TVec3d` inputs: finite true components stay finite instead of becoming `NaN` through intermediate overflow, and true out-of-range components return signed infinity.",
+    ),
+    (
         "docs/math/API.md",
         "`Cross` uses stable finite intermediate paths for huge finite `TVec3f` and `TVec3d` inputs: finite true components stay finite instead of becoming `NaN` through intermediate overflow, and true out-of-range components return signed infinity.",
     ),
     (
         "docs/math/GOAL_TREE.md",
+        "`Cross` uses stable finite intermediate paths for huge finite `TVec3f` and `TVec3d` inputs: finite true components stay finite instead of becoming `NaN` through intermediate overflow, and true out-of-range components return signed infinity.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
         "`Cross` uses stable finite intermediate paths for huge finite `TVec3f` and `TVec3d` inputs: finite true components stay finite instead of becoming `NaN` through intermediate overflow, and true out-of-range components return signed infinity.",
     ),
     (
@@ -675,19 +683,19 @@ REQUIRED_SCALAR_WRAP_DOC_TRUTH = (
 REQUIRED_SCALAR_IEEE_DOC_TRUTH = (
     (
         "docs/math/README.md",
-        "`Abs` normalizes negative zero to positive zero; `Fmod` preserves the dividend sign for zero results, returns NaN for NaN inputs, zero divisors, and infinite dividends, returns the finite dividend for infinite divisors, and finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
+        "`Abs` normalizes negative zero to positive zero; `Fmod` preserves the dividend sign for zero results, returns NaN for NaN inputs, zero divisors, and infinite dividends, returns the finite dividend for infinite divisors, and finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN, returns NaN for NaN-only inputs, and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
     ),
     (
         "docs/math/API.md",
-        "`Abs` normalizes negative zero to positive zero; `Fmod` preserves the dividend sign for zero results, returns NaN for NaN inputs, zero divisors, and infinite dividends, returns the finite dividend for infinite divisors, and finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
+        "`Abs` normalizes negative zero to positive zero; `Fmod` preserves the dividend sign for zero results, returns NaN for NaN inputs, zero divisors, and infinite dividends, returns the finite dividend for infinite divisors, and finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN, returns NaN for NaN-only inputs, and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Fmod` returns NaN for NaN inputs, zero divisors, and infinite dividends, returns the finite dividend for infinite divisors, and finite inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
+        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Fmod` returns NaN for NaN inputs, zero divisors, and infinite dividends, returns the finite dividend for infinite divisors, and finite inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN, returns NaN for NaN-only inputs, and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
     ),
     (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
-        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Fmod` returns NaN for NaN inputs, zero divisors, and infinite dividends, returns the finite dividend for infinite divisors, and finite inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
+        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Fmod` returns NaN for NaN inputs, zero divisors, and infinite dividends, returns the finite dividend for infinite divisors, and finite inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN, returns NaN for NaN-only inputs, and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
     ),
 )
 REQUIRED_SCALAR_INTEGER_CONVERSION_DOC_TRUTH = (
@@ -839,27 +847,27 @@ REQUIRED_TRIG_POWER_DOC_TRUTH = (
 REQUIRED_TRIG_CIRCULAR_DOC_TRUTH = (
     (
         "docs/math/README.md",
-        "`Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity.",
+        "`Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity; `Sin` and `Tan` preserve signed zero.",
     ),
     (
         "docs/math/API.md",
-        "`Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity.",
+        "`Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity; `Sin` and `Tan` preserve signed zero.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "`Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity.",
+        "`Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity; `Sin` and `Tan` preserve signed zero.",
     ),
     (
         "docs/math/README.md",
-        "`ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan` preserves signed zero, maps infinities to `+/-PI/2`, and returns `NaN` for `NaN`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.",
+        "`ArcSin` preserves signed zero; `ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan` preserves signed zero, maps infinities to `+/-PI/2`, and returns `NaN` for `NaN`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.",
     ),
     (
         "docs/math/API.md",
-        "`ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan` preserves signed zero, maps infinities to `+/-PI/2`, and returns `NaN` for `NaN`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.",
+        "`ArcSin` preserves signed zero; `ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan` preserves signed zero, maps infinities to `+/-PI/2`, and returns `NaN` for `NaN`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "`ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan` preserves signed zero, maps infinities to `+/-PI/2`, and returns `NaN` for `NaN`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.",
+        "`ArcSin` preserves signed zero; `ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan` preserves signed zero, maps infinities to `+/-PI/2`, and returns `NaN` for `NaN`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.",
     ),
     (
         "docs/math/README.md",
@@ -1447,6 +1455,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-ieee-abs-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Abs Double negative zero returns positive zero"),
     RequiredBehaviorTestMarker("scalar-ieee-frac-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Frac Double exact negative integer keeps input sign"),
     RequiredBehaviorTestMarker("scalar-ieee-hypot-inf-nan", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Hypot Double positive infinity dominates NaN"),
+    RequiredBehaviorTestMarker("scalar-ieee-hypot-nan-only", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Hypot Double NaN-only returns NaN"),
     RequiredBehaviorTestMarker("scalar-ieee-fmod-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Double exact negative dividend keeps negative zero remainder"),
     RequiredBehaviorTestMarker("scalar-ieee-fmod-non-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Double NaN divisor returns NaN"),
     RequiredBehaviorTestMarker("scalar-ieee-fmod-single-non-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Single finite over infinity returns dividend"),
@@ -1540,6 +1549,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("trig-circular-sin-infinity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Sin(+Inf)=NaN"),
     RequiredBehaviorTestMarker("trig-circular-cos-single-infinity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Cos(Single -Inf)=NaN"),
     RequiredBehaviorTestMarker("trig-circular-tan-nan", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Tan(NaN)=NaN"),
+    RequiredBehaviorTestMarker("trig-circular-signed-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('circular trig signed zero contracts'"),
     RequiredBehaviorTestMarker("trig-atan-special", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('ArcTan special contracts'"),
     RequiredBehaviorTestMarker("trig-atan2-special", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('ArcTan2 special cases'"),
     RequiredBehaviorTestMarker("trig-atan2-one-infinite", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('ArcTan2 one-infinite contracts'"),
@@ -1611,6 +1621,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("vec-lengthsqr-below-overflow", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec4d below overflow LengthSqr remains finite"),
     RequiredBehaviorTestMarker("vec-dot-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector huge finite Dot contract'"),
     RequiredBehaviorTestMarker("vec-cross-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector huge finite Cross cancellation contract'"),
+    RequiredBehaviorTestMarker("vec-cross-out-of-range-signed-inf", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector huge finite Cross out-of-range signed infinity contract'"),
     RequiredBehaviorTestMarker("vec-data-write-through", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector Data aliases write through'"),
     RequiredBehaviorTestMarker("vec-normalize-max-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector max finite normalize contract'"),
     RequiredBehaviorTestMarker("vec-normalize-raw-non-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('raw vector normalize non-finite inputs fail fast'"),

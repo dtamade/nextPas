@@ -93,10 +93,10 @@ Vector `Dot` uses a scaled finite path for huge finite inputs: finite cancellati
 and true out-of-range results return signed infinity without raising intermediate FPU overflow.
 
 `Floor`, `Ceil`, `Round`, `Trunc`, and `Frac` reject `NaN`, positive or negative infinity, and finite values outside the Int64 conversion range with `EArgumentError`; `Round` uses ties away from zero, while `Frac` uses truncation semantics and preserves signed-zero zero results.
-`Abs` normalizes negative zero to positive zero; `Fmod` preserves the dividend sign for zero results, returns NaN for NaN inputs, zero divisors, and infinite dividends, returns the finite dividend for infinite divisors, and finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.
+`Abs` normalizes negative zero to positive zero; `Fmod` preserves the dividend sign for zero results, returns NaN for NaN inputs, zero divisors, and infinite dividends, returns the finite dividend for infinite divisors, and finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN, returns NaN for NaN-only inputs, and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.
 
-`Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity.
-`ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan` preserves signed zero, maps infinities to `+/-PI/2`, and returns `NaN` for `NaN`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.
+`Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity; `Sin` and `Tan` preserve signed zero.
+`ArcSin` preserves signed zero; `ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan` preserves signed zero, maps infinities to `+/-PI/2`, and returns `NaN` for `NaN`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.
 `ArcTan2` finite extreme ratios, including min-subnormal/max-finite pairs, stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.
 
 `Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`; log identities preserve exact `+0` for input `1` and exact `1` for `Log2(2)` and `Log10(10)`.
@@ -144,7 +144,7 @@ through the same formulas rather than clamping to the unit interval.
 Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`,
 `TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without
 overflowing the intermediate squared length.
-`LengthSqr` avoids FPU overflow exceptions for huge finite inputs, keeps below-overflow results finite, and returns `+Inf` when the true squared length is outside the target float range. Vector `Data` aliases write through to `X/Y/Z/W`.
+`LengthSqr` avoids FPU overflow exceptions for huge finite inputs, keeps below-overflow results finite, and returns `+Inf` when the true squared length is outside the target float range. `Cross` uses stable finite intermediate paths for huge finite `TVec3f` and `TVec3d` inputs: finite true components stay finite instead of becoming `NaN` through intermediate overflow, and true out-of-range components return signed infinity. Vector `Data` aliases write through to `X/Y/Z/W`.
 Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by
 `Normalize`.
 Vector scalar division and `DivComponents` reject zero, NaN, and infinite divisors with `EArgumentError`.

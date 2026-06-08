@@ -141,6 +141,8 @@ function Sin(const AX: Double): Double;
 begin
   if DoubleIsNaN(AX) or DoubleIsInfinite(AX) then
     Exit(DoubleQuietNaN);
+  if AX = 0.0 then
+    Exit(DoubleSignedZero(DoubleHasSignBit(AX)));
   Result := System.Sin(AX);
 end;
 
@@ -165,6 +167,8 @@ function Tan(const AX: Double): Double;
 begin
   if DoubleIsNaN(AX) or DoubleIsInfinite(AX) then
     Exit(DoubleQuietNaN);
+  if AX = 0.0 then
+    Exit(DoubleSignedZero(DoubleHasSignBit(AX)));
   Result := Sin(AX) / Cos(AX);
 end;
 
@@ -177,6 +181,8 @@ function ArcSin(const AX: Double): Double;
 begin
   if DoubleIsNaN(AX) or (AX < -1.0) or (AX > 1.0) then
     Exit(DoubleQuietNaN);
+  if AX = 0.0 then
+    Exit(DoubleSignedZero(DoubleHasSignBit(AX)));
   if AX = 1.0 then
     Exit(HALF_PI);
   if AX = -1.0 then

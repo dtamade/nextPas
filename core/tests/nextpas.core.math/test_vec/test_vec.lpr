@@ -781,6 +781,38 @@ begin
     'TVec3d huge finite Cross cancellation preserves finite Z');
 end;
 
+procedure TestVectorHugeFiniteCrossOutOfRangeSignedInfinityContract;
+var
+  A3f: TVec3f;
+  B3f: TVec3f;
+  C3f: TVec3f;
+  A3d: TVec3d;
+  B3d: TVec3d;
+  C3d: TVec3d;
+begin
+  A3f := TVec3f.Create(0.0, Single(3.0e20), 0.0);
+  B3f := TVec3f.Create(0.0, 0.0, Single(3.0e20));
+  C3f := TVec3f.Cross(A3f, B3f);
+  CheckSinglePositiveInfinity(C3f.X,
+    'TVec3f huge finite Cross true positive out-of-range returns +Inf');
+
+  B3f := TVec3f.Create(0.0, 0.0, Single(-3.0e20));
+  C3f := TVec3f.Cross(A3f, B3f);
+  CheckSingleNegativeInfinity(C3f.X,
+    'TVec3f huge finite Cross true negative out-of-range returns -Inf');
+
+  A3d := TVec3d.Create(0.0, 3.0e200, 0.0);
+  B3d := TVec3d.Create(0.0, 0.0, 3.0e200);
+  C3d := TVec3d.Cross(A3d, B3d);
+  CheckDoublePositiveInfinity(C3d.X,
+    'TVec3d huge finite Cross true positive out-of-range returns +Inf');
+
+  B3d := TVec3d.Create(0.0, 0.0, -3.0e200);
+  C3d := TVec3d.Cross(A3d, B3d);
+  CheckDoubleNegativeInfinity(C3d.X,
+    'TVec3d huge finite Cross true negative out-of-range returns -Inf');
+end;
+
 procedure TestVectorDataAliasesWriteThrough;
 var
   V2f: TVec2f;
@@ -902,6 +934,8 @@ begin
   T.Run('vector huge finite Dot contract', @TestVectorHugeFiniteDotContract);
   T.Run('vector huge finite Cross cancellation contract',
     @TestVectorHugeFiniteCrossCancellationContract);
+  T.Run('vector huge finite Cross out-of-range signed infinity contract',
+    @TestVectorHugeFiniteCrossOutOfRangeSignedInfinityContract);
   T.Run('vector Data aliases write through', @TestVectorDataAliasesWriteThrough);
   T.Run('raw vector normalize non-finite inputs fail fast',
     @TestRawVectorNormalizeNonFiniteInputsFailFast);

@@ -316,6 +316,24 @@ begin
   Check(IsSingleNaN(Tan(-SingleInfinity)), 'Tan(Single -Inf)=NaN');
 end;
 
+procedure TestCircularTrigSignedZeroContracts;
+begin
+  Check(IsDoublePositiveZero(Sin(0.0)), 'Sin(+0)=+0');
+  Check(IsDoubleNegativeZero(Sin(DoubleNegativeZero)), 'Sin(-0)=-0');
+  Check(IsSinglePositiveZero(Sin(Single(0.0))), 'Sin(Single +0)=+0');
+  Check(IsSingleNegativeZero(Sin(SingleNegativeZero)), 'Sin(Single -0)=-0');
+
+  Check(IsDoublePositiveZero(Tan(0.0)), 'Tan(+0)=+0');
+  Check(IsDoubleNegativeZero(Tan(DoubleNegativeZero)), 'Tan(-0)=-0');
+  Check(IsSinglePositiveZero(Tan(Single(0.0))), 'Tan(Single +0)=+0');
+  Check(IsSingleNegativeZero(Tan(SingleNegativeZero)), 'Tan(Single -0)=-0');
+
+  Check(IsDoublePositiveZero(ArcSin(0.0)), 'ArcSin(+0)=+0');
+  Check(IsDoubleNegativeZero(ArcSin(DoubleNegativeZero)), 'ArcSin(-0)=-0');
+  Check(IsSinglePositiveZero(ArcSin(Single(0.0))), 'ArcSin(Single +0)=+0');
+  Check(IsSingleNegativeZero(ArcSin(SingleNegativeZero)), 'ArcSin(Single -0)=-0');
+end;
+
 procedure TestArcTanSpecialContracts;
 begin
   Check(IsDoubleNaN(ArcTan(DoubleNaN)), 'ArcTan(NaN)=NaN');
@@ -804,6 +822,7 @@ begin
   T.Run('inverse trig domain contracts', @TestInverseTrigDomainContracts);
   T.Run('inverse trig non-finite contracts', @TestInverseTrigNonFiniteContracts);
   T.Run('circular trig non-finite contracts', @TestCircularTrigNonFiniteContracts);
+  T.Run('circular trig signed zero contracts', @TestCircularTrigSignedZeroContracts);
   T.Run('ArcTan special contracts', @TestArcTanSpecialContracts);
   T.Run('ArcTan2 special cases', @TestArcTan2SpecialCases);
   T.Run('ArcTan2 one-infinite contracts', @TestArcTan2OneInfiniteContracts);

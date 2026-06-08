@@ -543,6 +543,14 @@ begin
   Check(IsInfinite(Hypot(MakeSinglePositiveInfinity, MakeSingleNaN)) and
     (Hypot(MakeSinglePositiveInfinity, MakeSingleNaN) > 0.0),
     'Hypot Single positive infinity dominates NaN');
+  Check(IsNaN(Hypot(MakeNaN, 1.0)),
+    'Hypot Double NaN-only returns NaN');
+  Check(IsNaN(Hypot(1.0, MakeNaN)),
+    'Hypot Double finite plus NaN-only returns NaN');
+  Check(IsNaN(Hypot(MakeSingleNaN, Single(1.0))),
+    'Hypot Single NaN-only returns NaN');
+  Check(IsNaN(Hypot(Single(1.0), MakeSingleNaN)),
+    'Hypot Single finite plus NaN-only returns NaN');
   Check(Hypot(1.0e308, 1.0e308) < MakePositiveInfinity,
     'Hypot Double huge finite inputs stay finite');
   Check(Hypot(Single(3.0e30), Single(4.0e30)) < MakeSinglePositiveInfinity,
