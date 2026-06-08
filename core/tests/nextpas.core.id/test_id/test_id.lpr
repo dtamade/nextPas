@@ -497,6 +497,12 @@ begin
   CheckEqual(Int64(0), Int64(Length(LS)));
   LS := NanoIdCustom(StringOfChar('x', 300), 5);
   CheckEqual(Int64(0), Int64(Length(LS)));
+  LS := NanoIdCustom('a', 21);
+  CheckEqual(Int64(0), Int64(Length(LS)), 'single-character alphabet');
+  LS := NanoIdCustom('aa', 21);
+  CheckEqual(Int64(0), Int64(Length(LS)), 'duplicate alphabet');
+  LS := NanoIdCustom('abca', 21);
+  CheckEqual(Int64(0), Int64(Length(LS)), 'repeated alphabet character');
 end;
 
 procedure TestUuidNoDash;

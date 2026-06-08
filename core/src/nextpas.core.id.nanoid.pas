@@ -15,6 +15,24 @@ implementation
 uses
   nextpas.core.id.rng;
 
+function NanoIdAlphabetIsValid(const AAlphabet: string): Boolean;
+var
+  LSeen: array[Byte] of Boolean;
+  LI: Integer;
+  LCode: Byte;
+begin
+  if Length(AAlphabet) < 2 then Exit(False);
+  if Length(AAlphabet) > 256 then Exit(False);
+  FillChar(LSeen, SizeOf(LSeen), 0);
+  for LI := 1 to Length(AAlphabet) do
+  begin
+    LCode := Byte(AAlphabet[LI]);
+    if LSeen[LCode] then Exit(False);
+    LSeen[LCode] := True;
+  end;
+  Result := True;
+end;
+
 function NanoId: TNanoIdString;
 begin
   Result := NanoIdCustom(NANOID_DEFAULT_ALPHABET, NANOID_DEFAULT_LENGTH);
@@ -29,9 +47,8 @@ var
   LByte: Integer;
 begin
   LAlphaLen := Length(AAlphabet);
-  if LAlphaLen = 0 then Exit('');
-  if LAlphaLen > 256 then Exit('');
   if ASize <= 0 then Exit('');
+  if not NanoIdAlphabetIsValid(AAlphabet) then Exit('');
 
   LMask := 1;
   while LMask < LAlphaLen do
