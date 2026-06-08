@@ -740,6 +740,67 @@ begin
   Check(IsNaN(Fmod(1.0, 0.0)), 'Fmod divide by zero returns NaN');
 end;
 
+procedure RaiseGCDLowInt64LowInt64;
+begin
+  GCD(Low(Int64), Low(Int64));
+end;
+
+procedure RaiseGCDZeroLowInt64;
+begin
+  GCD(Int64(0), Low(Int64));
+end;
+
+procedure RaiseLCMLowInt64One;
+begin
+  LCM(Low(Int64), Int64(1));
+end;
+
+procedure RaiseLCMHighInt64TimesTwo;
+begin
+  LCM(High(Int64), Int64(2));
+end;
+
+procedure RaiseLCMHighInt64HighMinusOne;
+begin
+  LCM(High(Int64), High(Int64) - Int64(1));
+end;
+
+procedure TestGCDLCMInt64BoundaryContracts;
+begin
+  CheckEqual(Int64(2), GCD(Low(Int64), Int64(-2)),
+    'GCD Low(Int64) with negative two returns representable divisor');
+  CheckEqual(Int64(1), GCD(Low(Int64), High(Int64)),
+    'GCD Low(Int64) with High(Int64) stays representable');
+  CheckEqual(High(Int64), GCD(Int64(0), -High(Int64)),
+    'GCD zero with negative High(Int64) normalizes sign');
+
+  CheckEqual(Int64(0), LCM(Low(Int64), Int64(0)),
+    'LCM Low(Int64) with zero returns zero before overflow');
+  CheckEqual(Int64(0), LCM(Int64(0), Low(Int64)),
+    'LCM zero with Low(Int64) returns zero before overflow');
+  CheckEqual(High(Int64), LCM(High(Int64), Int64(1)),
+    'LCM High(Int64) with one stays representable');
+  CheckEqual(High(Int64), LCM(High(Int64), High(Int64)),
+    'LCM High(Int64) with itself stays representable');
+  CheckEqual(High(Int64), LCM(High(Int64), Int64(-1)),
+    'LCM High(Int64) with negative one normalizes sign');
+  CheckEqual(High(Int64), LCM(-High(Int64), High(Int64)),
+    'LCM negative High(Int64) with High(Int64) normalizes sign');
+  CheckEqual(Int64(42), LCM(Int64(-21), Int64(-6)),
+    'LCM negative inputs normalize to positive result');
+
+  ExpectArgumentErrorMessage('GCD: result is outside Int64 range',
+    'GCD(Low(Int64), Low(Int64))', @RaiseGCDLowInt64LowInt64);
+  ExpectArgumentErrorMessage('GCD: result is outside Int64 range',
+    'GCD(0, Low(Int64))', @RaiseGCDZeroLowInt64);
+  ExpectArgumentErrorMessage('LCM: result is outside Int64 range',
+    'LCM(Low(Int64), 1)', @RaiseLCMLowInt64One);
+  ExpectArgumentErrorMessage('LCM: result is outside Int64 range',
+    'LCM(High(Int64), 2)', @RaiseLCMHighInt64TimesTwo);
+  ExpectArgumentErrorMessage('LCM: result is outside Int64 range',
+    'LCM(High(Int64), High(Int64) - 1)', @RaiseLCMHighInt64HighMinusOne);
+end;
+
 procedure RaiseFloorNaN;
 begin
   Floor(MakeNaN);
@@ -1290,6 +1351,7 @@ begin
   T.Run('scalar IEEE edge contracts', @TestScalarIEEEEdgeContracts);
   T.Run('scalar range boundary edge contracts', @TestScalarRangeBoundaryEdgeContracts);
   T.Run('number theory and scalar extras', @TestNumberTheoryAndScalarExtras);
+  T.Run('GCD LCM Int64 boundary contracts', @TestGCDLCMInt64BoundaryContracts);
   T.Run('angle conversions', @TestAngleConversions);
   T.Run('scalar sign and angle edge contracts', @TestSignAndAngleEdgeContracts);
   T.Run('integer rounding boundaries', @TestIntegerRoundingBoundaries);

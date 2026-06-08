@@ -1584,6 +1584,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-radtodeg-negative-finite-overflow", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "RadToDeg Double negative max finite overflows to negative infinity"),
     RequiredBehaviorTestMarker("scalar-float-predicates", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('float predicates'"),
     RequiredBehaviorTestMarker("scalar-extras", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('number theory and scalar extras'"),
+    RequiredBehaviorTestMarker("scalar-gcd-lcm-int64-boundary", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('GCD LCM Int64 boundary contracts'"),
     RequiredBehaviorTestMarker("scalar-angle-conversions", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('angle conversions'"),
     RequiredBehaviorTestMarker("scalar-boundaries", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('integer rounding boundaries'"),
     RequiredBehaviorTestMarker("scalar-floor-double-int64-max-plus-one-boundary-message", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Floor(Double 2^63)"),
