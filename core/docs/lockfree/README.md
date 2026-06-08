@@ -18,7 +18,7 @@ Go std 或 C++ std 的并发容器；lock-free progress claim 只适用于目标
 | `nextpas.core.lockfree.spsc` | `TSpscQueue<T>`，有界 single-producer/single-consumer ring queue。 |
 | `nextpas.core.lockfree.mpmc` | `TMpmcQueue<T>`，有界 multi-producer/multi-consumer ring queue。 |
 | `nextpas.core.lockfree.mpsc` | `TMpscQueue<T>`，无界 multi-producer/single-consumer linked queue。 |
-| `nextpas.core.lockfree.stack` | `TLockFreeStack<T>`，有界 stack，内部使用 tagged index 处理 ABA-sensitive top/free-list。 |
+| `nextpas.core.lockfree.stack` | `TLockFreeStack<T>`，有界 stack，内部使用 tagged index 约束 ABA-sensitive top/free-list 复用风险。 |
 | `nextpas.core.lockfree.deque` | `TWorkStealingDeque<T>`，有界 single-owner push/pop + multi-thief steal deque。 |
 | `nextpas.core.lockfree` | 聚合 facade。 |
 
@@ -158,6 +158,7 @@ the helper returns instead of sleeping on the new epoch.
 
 ```bash
 make hygiene
+make -C core/tests/nextpas.core.lockfree/test_lockfree clean test-forced-compile
 make -C core/tests/nextpas.core.lockfree/test_lockfree clean test
 make -C core/tests/nextpas.core.lockfree/test_lockfree clean test-debug
 make -C core/tests/nextpas.core.lockfree/test_lockfree_stress clean test
@@ -166,6 +167,7 @@ git status --short --branch
 ```
 
 `test_lockfree` 包含 API 行为、close/timeout、managed type guard 和 source-contract 覆盖。
+`test-forced-compile` 是 public facade-only host compile gate，不是 runtime 或 stress 证明。
 `test_lockfree` also covers local Linux x86_64 timeout runtime checks for
 SPSC producer-published data (`DequeueTimeout`), SPSC consumer-released space (`EnqueueTimeout`),
 MPMC producer-published data (`DequeueTimeout`), MPMC consumer-released space (`EnqueueTimeout`),
@@ -174,6 +176,7 @@ and MPSC producer-published data (`DequeueTimeout`).
 close-before-destroy assert，防止测试代码绕过 MPSC producer-stop / drain 纪律。
 `test_lockfree_stress` 覆盖本地 Linux x86_64 上的多线程压力场景。没有目标机 runtime gate 时，只能声称
 source-contract 或本机 Linux x86_64 runtime 证据，不能宣称其他平台已实机验证。
+这些 stress 输出是 focused evidence，不是 production soak、fairness 或跨平台 runtime proof。
 
 ## Benchmark
 

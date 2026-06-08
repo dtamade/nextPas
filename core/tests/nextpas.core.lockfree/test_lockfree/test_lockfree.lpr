@@ -119,6 +119,22 @@ begin
   end;
 end;
 
+function RemoveWhitespace(const AText: string): string;
+var
+  LIndex: SizeInt;
+  LWriteIndex: SizeInt;
+begin
+  SetLength(Result, Length(AText));
+  LWriteIndex := 0;
+  for LIndex := 1 to Length(AText) do
+    if not (AText[LIndex] in [#9, #10, #13, ' ']) then
+    begin
+      Inc(LWriteIndex);
+      Result[LWriteIndex] := AText[LIndex];
+    end;
+  SetLength(Result, LWriteIndex);
+end;
+
 function ExtractSection(const AText, AStartMarker, AEndMarker, AMessage: string): string;
 var
   LStart: SizeInt;
@@ -2211,6 +2227,7 @@ const
   LockFreeTestSourcePath = 'test_lockfree.lpr';
   LockFreeStressTestSourcePath = '../test_lockfree_stress/test_lockfree_stress.lpr';
   LockFreeTestMakefilePath = 'Makefile';
+  LockFreeFacadeForcedCompilePath = 'test_lockfree_facade_forced_compile.lpr';
   SpscSourcePath = '../../../src/nextpas.core.lockfree.spsc.pas';
   MpmcSourcePath = '../../../src/nextpas.core.lockfree.mpmc.pas';
   StackSourcePath = '../../../src/nextpas.core.lockfree.stack.pas';
@@ -2228,6 +2245,8 @@ var
   LCoreGoalTree: string;
   LTestSource: string;
   LStressTestSource: string;
+  LFacadeForcedCompileSource: string;
+  LFacadeForcedCompileCompactSource: string;
   LTestRuntimeHarnessSourceSection: string;
   LStressRuntimeHarnessSourceSection: string;
   LTestMakefile: string;
@@ -2282,6 +2301,8 @@ begin
     'lockfree README must exist as the module documentation entrypoint');
   Check(FileExists(LockFreeTestMakefilePath),
     'lockfree test Makefile must exist as the focused verification entrypoint');
+  Check(FileExists(LockFreeFacadeForcedCompilePath),
+    'lockfree facade-only forced compile fixture must exist');
   Check(FileExists(LockFreeStressTestSourcePath),
     'lockfree stress test source must exist as the stress verification entrypoint');
   Check(FileExists(BenchMakefilePath),
@@ -2300,6 +2321,8 @@ begin
   LCoreGoalTree := ReadUtf8TextFile(CoreGoalTreePath);
   LTestSource := ReadUtf8TextFile(LockFreeTestSourcePath);
   LStressTestSource := ReadUtf8TextFile(LockFreeStressTestSourcePath);
+  LFacadeForcedCompileSource := ReadUtf8TextFile(LockFreeFacadeForcedCompilePath);
+  LFacadeForcedCompileCompactSource := RemoveWhitespace(LFacadeForcedCompileSource);
   LTestRuntimeHarnessSourceSection := ExtractSection(LTestSource,
     'function StartThread(',
     'procedure TestLockFreeSourceContracts;',
@@ -2463,6 +2486,68 @@ begin
 
   CheckContains(LDocsReadme, '# nextpas.core.lockfree',
     'lockfree README must use the module title');
+  CheckContains(LTestMakefile, 'FACADE_FORCED_COMPILE_SOURCE := test_lockfree_facade_forced_compile.lpr',
+    'lockfree Makefile must name the facade-only forced compile fixture');
+  CheckContains(LTestMakefile, 'compile-facade-host:',
+    'lockfree Makefile must provide a host facade-only forced compile target');
+  CheckContains(LTestMakefile, 'lockfree-facade-forced-compile-target=host status=pass',
+    'lockfree facade forced compile target must print a pass evidence line');
+  CheckContains(LTestMakefile, 'test-forced-compile: compile-facade-host',
+    'lockfree Makefile must expose the facade forced compile gate');
+  CheckContains(LTestMakefile, 'lockfree-forced-compile-status=pass',
+    'lockfree forced compile target must print a pass evidence line');
+  CheckContains(LDocsReadme,
+    'make -C core/tests/nextpas.core.lockfree/test_lockfree clean test-forced-compile',
+    'lockfree README must list the facade-only forced compile gate');
+  CheckContains(LFacadeForcedCompileCompactSource,
+    'usesnextpas.core.lockfree;',
+    'lockfree facade forced compile fixture must import only the public facade unit');
+  CheckContains(LFacadeForcedCompileSource, 'specialize TSpscQueue<Integer>',
+    'lockfree facade forced compile fixture must touch the SPSC public wrapper');
+  CheckContains(LFacadeForcedCompileSource, 'specialize TMpmcQueue<Integer>',
+    'lockfree facade forced compile fixture must touch the MPMC public wrapper');
+  CheckContains(LFacadeForcedCompileSource, 'specialize TMpscQueue<Integer>',
+    'lockfree facade forced compile fixture must touch the MPSC public wrapper');
+  CheckContains(LFacadeForcedCompileSource, 'specialize TLockFreeStack<Integer>',
+    'lockfree facade forced compile fixture must touch the stack public wrapper');
+  CheckContains(LFacadeForcedCompileSource, 'specialize TWorkStealingDeque<Integer>',
+    'lockfree facade forced compile fixture must touch the deque public wrapper');
+  CheckContains(LFacadeForcedCompileSource, 'EnqueueBatch(',
+    'lockfree facade forced compile fixture must touch queue batch enqueue signatures');
+  CheckContains(LFacadeForcedCompileSource, 'DequeueBatch(',
+    'lockfree facade forced compile fixture must touch queue batch dequeue signatures');
+  CheckContains(LFacadeForcedCompileSource, 'DequeueWait(',
+    'lockfree facade forced compile fixture must touch blocking dequeue signatures');
+  CheckContains(LFacadeForcedCompileSource, 'DequeueTimeout(',
+    'lockfree facade forced compile fixture must touch timeout dequeue signatures');
+  CheckContains(LFacadeForcedCompileSource, 'TryPush(',
+    'lockfree facade forced compile fixture must touch stack/deque push signatures');
+  CheckContains(LFacadeForcedCompileSource, 'TrySteal(',
+    'lockfree facade forced compile fixture must touch deque steal signatures');
+  CheckNotContains(LFacadeForcedCompileSource, 'TSpscQueueImpl',
+    'lockfree facade forced compile fixture must not rely on the SPSC implementation type');
+  CheckNotContains(LFacadeForcedCompileSource, 'TMpmcQueueImpl',
+    'lockfree facade forced compile fixture must not rely on the MPMC implementation type');
+  CheckNotContains(LFacadeForcedCompileSource, 'TMpscQueueImpl',
+    'lockfree facade forced compile fixture must not rely on the MPSC implementation type');
+  CheckNotContains(LFacadeForcedCompileSource, 'TLockFreeStackImpl',
+    'lockfree facade forced compile fixture must not rely on the stack implementation type');
+  CheckNotContains(LFacadeForcedCompileSource, 'TWorkStealingDequeImpl',
+    'lockfree facade forced compile fixture must not rely on the deque implementation type');
+  CheckNotContains(LFacadeForcedCompileSource, 'nextpas.core.lockfree.base',
+    'lockfree facade forced compile fixture must not import lockfree base helpers directly');
+  CheckNotContains(LFacadeForcedCompileSource, 'nextpas.core.lockfree.wait',
+    'lockfree facade forced compile fixture must not import lockfree wait helpers directly');
+  CheckNotContains(LFacadeForcedCompileSource, 'nextpas.core.lockfree.spsc',
+    'lockfree facade forced compile fixture must not import the SPSC implementation unit');
+  CheckNotContains(LFacadeForcedCompileSource, 'nextpas.core.lockfree.mpmc',
+    'lockfree facade forced compile fixture must not import the MPMC implementation unit');
+  CheckNotContains(LFacadeForcedCompileSource, 'nextpas.core.lockfree.mpsc',
+    'lockfree facade forced compile fixture must not import the MPSC implementation unit');
+  CheckNotContains(LFacadeForcedCompileSource, 'nextpas.core.lockfree.stack',
+    'lockfree facade forced compile fixture must not import the stack implementation unit');
+  CheckNotContains(LFacadeForcedCompileSource, 'nextpas.core.lockfree.deque',
+    'lockfree facade forced compile fixture must not import the deque implementation unit');
   CheckContains(LDocsReadme,
     '`nextpas.core.lockfree` facade exposes `TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`',
     'lockfree README must document the facade re-export surface');
@@ -3159,8 +3244,8 @@ begin
     'lockfree test runner must register the MPSC publish wake runtime test');
   CheckContains(LMpscTimeoutTestSection, 'LQ.Close;' + LineEnding + '  LQ.Free;',
     'MPSC timeout test must close before freeing the queue');
-  CheckContains(LTestMakefile, '.PHONY: build run test test-debug clean',
-    'lockfree test Makefile must expose the DEBUG verification target');
+  CheckContains(LTestMakefile, '.PHONY: build run test compile-facade-host test-forced-compile test-debug clean',
+    'lockfree test Makefile must expose focused, forced compile, and DEBUG verification targets');
   CheckContains(LTestMakefile, '-dDEBUG',
     'lockfree test DEBUG target must compile with DEBUG defined');
   CheckContains(LTestMakefile, 'test-debug: run-debug',
