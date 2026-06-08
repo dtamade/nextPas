@@ -757,7 +757,8 @@ begin
     '  T := TTestRunner.Create(''nextpas.core.atomic'');',
     '  T.Summary;');
   LInvalidOrderMatrixSection := ExtractSection(LAtomicTestSource,
-    'procedure ' + 'TestAtomicInvalidMemoryOrderSurfaceMatrix;',
+    'procedure ' + 'TestAtomicInvalidMemoryOrderSurfaceMatrix;' + LineEnding +
+    'var',
     'procedure ' + 'TestAtomicTypedCasConsumeContract;');
   LSignedWrapContractSection := ExtractSection(LAtomicTestSource,
     'procedure ' + 'TestAtomicSignedWrapContract;',
@@ -1221,8 +1222,20 @@ begin
     'invalid memory-order matrix must cover 64-bit weak CAS failure-order rejection');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak(LInt32, LExpectedInt32, 17, mo_release, mo_acq_rel)',
     'invalid memory-order matrix must cover 32-bit weak CAS failure-order rejection');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak(LInt32, LExpectedInt32, 17, LInvalidOrder, mo_relaxed)',
+    'invalid memory-order matrix must cover 32-bit weak CAS invalid success ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak(LInt32, LExpectedInt32, 17, mo_seq_cst, LInvalidOrder)',
+    'invalid memory-order matrix must cover 32-bit weak CAS invalid failure ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak_64(LInt64, LExpectedInt64, 17, LInvalidOrder, mo_relaxed)',
+    'invalid memory-order matrix must cover 64-bit weak CAS invalid success ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak_64(LInt64, LExpectedInt64, 17, mo_seq_cst, LInvalidOrder)',
+    'invalid memory-order matrix must cover 64-bit weak CAS invalid failure ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, mo_release, mo_acq_rel)',
     'invalid memory-order matrix must cover pointer weak CAS failure-order rejection');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, LInvalidOrder, mo_relaxed)',
+    'invalid memory-order matrix must cover pointer weak CAS invalid success ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, mo_seq_cst, LInvalidOrder)',
+    'invalid memory-order matrix must cover pointer weak CAS invalid failure ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_tagged_ptr_compare_exchange_strong(LTaggedStorage, LTaggedExpected, LTaggedDesired, mo_release, mo_acq_rel)',
     'invalid memory-order matrix must cover tagged pointer strong CAS failure-order rejection');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_tagged_ptr_compare_exchange_weak(LTaggedStorage, LTaggedExpected, LTaggedDesired, mo_release, mo_acq_rel)',
@@ -3684,6 +3697,8 @@ var
   LTaggedStorage: atomic_tagged_ptr_t;
   LTaggedExpected: atomic_tagged_ptr_t;
   LTaggedDesired: atomic_tagged_ptr_t;
+  LInvalidOrderValue: Integer;
+  LInvalidOrder: memory_order_t;
   LRaised: Boolean;
   {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
   LInt64: Int64;
@@ -3692,6 +3707,9 @@ var
   LExpectedUInt64: UInt64;
   {$ENDIF}
 begin
+  LInvalidOrderValue := Ord(mo_seq_cst) + 1;
+  LInvalidOrder := memory_order_t(LInvalidOrderValue);
+
   LInt32 := 11;
   LExpectedInt32 := 11;
   LRaised := False;
@@ -3702,6 +3720,26 @@ begin
       LRaised := True;
   end;
   Check(LRaised, '32-bit weak CAS failure acq_rel must raise EArgumentError');
+
+  LExpectedInt32 := 11;
+  LRaised := False;
+  try
+    atomic_compare_exchange_weak(LInt32, LExpectedInt32, 17, LInvalidOrder, mo_relaxed);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '32-bit weak CAS invalid success ordinal must raise EArgumentError');
+
+  LExpectedInt32 := 11;
+  LRaised := False;
+  try
+    atomic_compare_exchange_weak(LInt32, LExpectedInt32, 17, mo_seq_cst, LInvalidOrder);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '32-bit weak CAS invalid failure ordinal must raise EArgumentError');
 
   {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
   LInt64 := 11;
@@ -3836,6 +3874,26 @@ begin
       LRaised := True;
   end;
   Check(LRaised, '64-bit unsigned weak CAS failure stronger than relaxed success must raise EArgumentError');
+
+  LExpectedInt64 := 12;
+  LRaised := False;
+  try
+    atomic_compare_exchange_weak_64(LInt64, LExpectedInt64, 17, LInvalidOrder, mo_relaxed);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '64-bit weak CAS invalid success ordinal must raise EArgumentError');
+
+  LExpectedInt64 := 12;
+  LRaised := False;
+  try
+    atomic_compare_exchange_weak_64(LInt64, LExpectedInt64, 17, mo_seq_cst, LInvalidOrder);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, '64-bit weak CAS invalid failure ordinal must raise EArgumentError');
   {$ENDIF}
 
   LValueA := 31;
@@ -3861,6 +3919,26 @@ begin
       LRaised := True;
   end;
   Check(LRaised, 'pointer weak CAS failure stronger than relaxed success must raise EArgumentError');
+
+  LExpectedPtr := @LValueA;
+  LRaised := False;
+  try
+    atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, LInvalidOrder, mo_relaxed);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'pointer weak CAS invalid success ordinal must raise EArgumentError');
+
+  LExpectedPtr := @LValueA;
+  LRaised := False;
+  try
+    atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, mo_seq_cst, LInvalidOrder);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'pointer weak CAS invalid failure ordinal must raise EArgumentError');
 
   LTaggedStorage := atomic_tagged_ptr(@LValueA, 1);
   LTaggedExpected := LTaggedStorage;
