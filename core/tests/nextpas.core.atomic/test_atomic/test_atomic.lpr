@@ -1301,6 +1301,25 @@ begin
     'atomic README must document atomic_flag operation semantics');
   CheckContains(LAtomicDocsReadme, 'core/docs/archive/atomic/nextpas.core.atomic.x86_64.snapshot.txt',
     'atomic README must point to the historical x86_64 archive');
+  CheckContains(LAtomicDocsReadme, '## Backend Truth Matrix',
+    'atomic README must publish a compact backend truth matrix');
+  CheckContains(LAtomicDocsReadme, '| Backend / target | Truth level | Evidence boundary |',
+    'atomic backend truth matrix must name backend, truth level, and evidence boundary');
+  CheckContains(LAtomicDocsReadme, '| Linux x86_64 | focused runtime |',
+    'atomic backend truth matrix must distinguish local Linux x86_64 runtime evidence');
+  CheckContains(LAtomicDocsReadme, '| Windows | forced compile / source-contract |',
+    'atomic backend truth matrix must keep Windows below runtime-ready without runtime evidence');
+  CheckContains(LAtomicDocsReadme, '| i386 | source-contract + runtime-detected fallback |',
+    'atomic backend truth matrix must document i386 CMPXCHG8B/fallback truth');
+  CheckContains(LAtomicDocsReadme, '| PPC/PPC64 | source-contract |',
+    'atomic backend truth matrix must document PPC/PPC64 seq_cst fence truth');
+  CheckContains(LAtomicDocsReadme, '| ARM/AArch64/RISC-V/LoongArch | source-contract |',
+    'atomic backend truth matrix must keep non-local RISC/ARM targets source-contract only');
+  CheckContains(LAtomicDocsReadme,
+    'Do not report a backend as runtime ready without a matching focused runtime gate.',
+    'atomic backend truth matrix must forbid runtime-ready claims without runtime evidence');
+  CheckNotContains(LAtomicDocsReadme, 'Windows runtime ready',
+    'atomic README must not claim Windows runtime readiness without runtime evidence');
   CheckContains(LAtomicDocsReadme, 'make hygiene',
     'atomic README must list hygiene verification');
   CheckContains(LAtomicDocsReadme, 'make -C core/tests/nextpas.core.atomic/test_atomic clean test',

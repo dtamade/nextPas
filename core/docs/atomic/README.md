@@ -115,6 +115,18 @@ Direct `nextpas.core.atomic.types.TAtomicPtr<T>` follows the same load/store/exc
 - `atomic_tagged_ptr_next` wraps to `0` after the maximum representable tag, and `atomic_tagged_ptr_update` uses that modulo increment when it swaps in a new pointer.
 - `atomic_tagged_ptr_update_tag` preserves the current pointer and only replaces the tag.
 
+## Backend Truth Matrix
+
+| Backend / target | Truth level | Evidence boundary |
+| --- | --- | --- |
+| Linux x86_64 | focused runtime | Local atomic focused gate and heaptrc evidence only. |
+| Windows | forced compile / source-contract | Forced compile and textual contract only until a Windows runtime gate runs. |
+| i386 | source-contract + runtime-detected fallback | 64-bit API exists under `CPUX86`; CMPXCHG8B decides lock-free truth and fallback lock path. |
+| PPC/PPC64 | source-contract | `atomic_seq_cst_fence` uses heavyweight `sync`; no local runtime gate. |
+| ARM/AArch64/RISC-V/LoongArch | source-contract | Non-local fence/load/store text is constrained by source-contract only. |
+
+Do not report a backend as runtime ready without a matching focused runtime gate.
+
 ## 跨平台边界
 
 当前 focused gate 在本地 Linux x86_64 上运行，source-contract 额外约束了一些 arch-specific
