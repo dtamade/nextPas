@@ -338,6 +338,7 @@ const
   AtomicCompatSourcePath = '../../../src/nextpas.core.atomic.compat.pas';
   AtomicTestMakefilePath = 'Makefile';
   AtomicForcedCompileSourcePath = 'test_atomic_forced_compile.lpr';
+  AtomicCompatForcedCompileSourcePath = 'test_atomic_compat_forced_compile.lpr';
   AtomicTestSourcePath = 'test_atomic.lpr';
   AtomicDocsReadmePath = '../../../docs/atomic/README.md';
   CoreGoalTreePath = '../../../docs/l1-goal-tree.md';
@@ -356,6 +357,7 @@ var
   LAtomicCompatSource: string;
   LAtomicTestMakefile: string;
   LAtomicForcedCompileSource: string;
+  LAtomicCompatForcedCompileSource: string;
   LAtomicTestSource: string;
   LAtomicDirectTypesPtrTestSource: string;
   LAtomicDocsReadme: string;
@@ -496,7 +498,12 @@ begin
   LAtomicTypesSource := ReadUtf8TextFile(AtomicTypesSourcePath);
   LAtomicCompatSource := ReadUtf8TextFile(AtomicCompatSourcePath);
   LAtomicTestMakefile := ReadUtf8TextFile(AtomicTestMakefilePath);
+  Check(FileExists(AtomicForcedCompileSourcePath),
+    'atomic forced compile fixture must exist beside the focused test Makefile');
+  Check(FileExists(AtomicCompatForcedCompileSourcePath),
+    'atomic compat forced compile fixture must exist beside the focused test Makefile');
   LAtomicForcedCompileSource := ReadUtf8TextFile(AtomicForcedCompileSourcePath);
+  LAtomicCompatForcedCompileSource := ReadUtf8TextFile(AtomicCompatForcedCompileSourcePath);
   LAtomicTestSource := ReadUtf8TextFile(AtomicTestSourcePath);
   LAtomicDirectTypesPtrTestSource := ReadUtf8TextFile(AtomicDirectTypesPtrTestPath);
   LAtomicDocsReadme := ReadUtf8TextFile(AtomicDocsReadmePath);
@@ -1096,6 +1103,36 @@ begin
     'atomic README must document atomic_signal_fence compiler-only mapping');
   CheckContains(LAtomicCompatSource, 'Legacy PascalCase compatibility facade mirrored for older call sites.',
     'compat unit must document PascalCase compatibility ownership');
+  CheckContains(LAtomicCompatSource, 'memory_order_t = nextpas.core.atomic.memory_order_t;',
+    'compat unit must re-export memory_order_t for self-contained legacy consumers');
+  CheckContains(LAtomicCompatSource, 'TMemoryOrder = nextpas.core.atomic.TMemoryOrder;',
+    'compat unit must re-export TMemoryOrder for self-contained PascalCase consumers');
+  CheckContains(LAtomicCompatSource, 'atomic_tagged_ptr_t = nextpas.core.atomic.atomic_tagged_ptr_t;',
+    'compat unit must re-export tagged pointer carrier type for legacy helper aliases');
+  CheckContains(LAtomicCompatSource, 'mo_seq_cst = nextpas.core.atomic.mo_seq_cst;',
+    'compat unit must re-export canonical memory-order constants');
+  CheckContains(LAtomicCompatSource, 'moSeqCst = mo_seq_cst;',
+    'compat unit must re-export PascalCase memory-order constants');
+  CheckNotContains(LAtomicCompatSource, 'TAtomicInt32 =',
+    'compat unit must not re-export typed atomic records');
+  CheckNotContains(LAtomicCompatSource, 'TAtomicUInt32 =',
+    'compat unit must not re-export typed atomic records');
+  CheckNotContains(LAtomicCompatSource, 'TAtomicInt64 =',
+    'compat unit must not re-export typed atomic records');
+  CheckNotContains(LAtomicCompatSource, 'TAtomicUInt64 =',
+    'compat unit must not re-export typed atomic records');
+  CheckNotContains(LAtomicCompatSource, 'TAtomicBool =',
+    'compat unit must not re-export typed atomic records');
+  CheckNotContains(LAtomicCompatSource, 'TAtomicFlag =',
+    'compat unit must not re-export typed atomic records');
+  CheckNotContains(LAtomicCompatSource, 'TAtomicISize =',
+    'compat unit must not re-export typed atomic records');
+  CheckNotContains(LAtomicCompatSource, 'TAtomicUSize =',
+    'compat unit must not re-export typed atomic records');
+  CheckNotContains(LAtomicCompatSource, 'TAtomicRefCount =',
+    'compat unit must not re-export typed atomic records');
+  CheckNotContains(LAtomicCompatSource, 'generic TAtomicPtr',
+    'compat unit must not re-export generic typed atomic pointer records');
   CheckContains(LAtomicCompatSource, 'function AtomicLoad32',
     'compat unit must mirror PascalCase load/store facade');
   CheckContains(LAtomicCompatSource, 'procedure AtomicThreadFence',
@@ -1621,6 +1658,13 @@ begin
     'atomic Makefile must expose an architecture forced compile gate');
   CheckContains(LAtomicTestMakefile, 'test_atomic_forced_compile.lpr',
     'atomic forced compile gate must use a small public-surface fixture');
+  CheckContains(LAtomicTestMakefile, 'test_atomic_compat_forced_compile.lpr',
+    'atomic forced compile gate must include a focused compat-only fixture');
+  CheckContains(LAtomicTestMakefile,
+    'COMPAT_FORCED_COMPILE_SOURCE := test_atomic_compat_forced_compile.lpr',
+    'atomic forced compile gate must name the compat fixture through a stable Makefile variable');
+  CheckContains(LAtomicTestMakefile, '$(COMPAT_FORCED_COMPILE_SOURCE)',
+    'atomic forced compile gate must compile the compat fixture through its Makefile variable');
   CheckContains(LAtomicTestMakefile, '-Cn',
     'atomic forced compile gate must compile only and avoid linking target runtime artifacts');
   CheckContains(LAtomicTestMakefile, '-B',
@@ -1629,10 +1673,20 @@ begin
     'atomic forced compile gate must include Windows host semantic compile truth');
   CheckContains(LAtomicTestMakefile, 'cross-win64',
     'atomic forced compile gate must name the available Win64 cross compile target explicitly');
+  CheckContains(LAtomicTestMakefile, 'compile-compat-host',
+    'atomic forced compile gate must expose a separate host target for compat facade compile truth');
+  CheckContains(LAtomicTestMakefile, 'cross-compat-win64',
+    'atomic forced compile gate must expose a separate Win64 target for compat facade compile truth');
+  CheckContains(LAtomicTestMakefile, 'compile-compat-host cross-win64 cross-compat-win64',
+    'atomic forced compile aggregate target must include main and compat host/win64 fixtures');
   CheckContains(LAtomicTestMakefile, 'atomic-forced-compile-target=host status=pass',
     'atomic forced compile gate must print host target pass evidence');
+  CheckContains(LAtomicTestMakefile, 'atomic-compat-forced-compile-target=host status=pass',
+    'atomic forced compile gate must print compat host target pass evidence');
   CheckContains(LAtomicTestMakefile, 'atomic-forced-compile-target=win64 status=pass',
     'atomic forced compile gate must print Win64 target pass evidence');
+  CheckContains(LAtomicTestMakefile, 'atomic-compat-forced-compile-target=win64 status=pass',
+    'atomic forced compile gate must print compat Win64 target pass evidence');
   CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=win64 status=forced-compile-only runtime=false',
     'atomic forced compile gate must label Win64 as forced-compile-only without runtime evidence');
   CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=x86_64-linux status=focused-runtime-via-host-test',
@@ -1697,6 +1751,105 @@ begin
     'atomic forced compile fixture must cover exclusive-access GetMut escape hatches');
   CheckContains(LAtomicForcedCompileSource, '.IntoInner',
     'atomic forced compile fixture must cover exclusive-access IntoInner escape hatches');
+  CheckContains(LAtomicCompatForcedCompileSource,
+    'uses' + LineEnding + '  nextpas.core.atomic.compat;',
+    'atomic compat forced compile fixture must prove the compat facade is self-contained');
+  CheckNotContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic,',
+    'atomic compat forced compile fixture must not import the main facade to obtain carrier types');
+  CheckNotContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.types',
+    'atomic compat forced compile fixture must not bypass the public facade typed-record surface');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.atomic_fetch_add',
+    'atomic compat forced compile fixture must touch the legacy pointer fetch-add overload');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.atomic_fetch_sub',
+    'atomic compat forced compile fixture must touch the legacy pointer fetch-sub overload');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.atomic_fetch_and',
+    'atomic compat forced compile fixture must touch the legacy pointer fetch-and overload');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.atomic_fetch_or',
+    'atomic compat forced compile fixture must touch the legacy pointer fetch-or overload');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.atomic_fetch_xor',
+    'atomic compat forced compile fixture must touch the legacy pointer fetch-xor overload');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.atomic_increment',
+    'atomic compat forced compile fixture must touch the legacy pointer increment overload');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.atomic_decrement',
+    'atomic compat forced compile fixture must touch the legacy pointer decrement overload');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.atomic_load_ptr',
+    'atomic compat forced compile fixture must touch the legacy pointer load helper alias');
+  CheckContains(LAtomicCompatForcedCompileSource, 'atomic_load_ptr(GPtr, mo_acquire)',
+    'atomic compat forced compile fixture must touch pointer load explicit-order overload');
+  CheckContains(LAtomicCompatForcedCompileSource, 'atomic_load_ptr(GPtr)',
+    'atomic compat forced compile fixture must touch pointer load default-order overload');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.atomic_store_ptr',
+    'atomic compat forced compile fixture must touch the legacy pointer store helper alias');
+  CheckContains(LAtomicCompatForcedCompileSource, 'atomic_store_ptr(GPtr, @GSample, mo_release)',
+    'atomic compat forced compile fixture must touch pointer store explicit-order overload');
+  CheckContains(LAtomicCompatForcedCompileSource, 'atomic_store_ptr(GPtr, nil)',
+    'atomic compat forced compile fixture must touch pointer store default-order overload');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.atomic_compare_exchange_strong_ptr',
+    'atomic compat forced compile fixture must touch the legacy pointer CAS helper alias');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.make_atomic_tagged_ptr_t',
+    'atomic compat forced compile fixture must touch the tagged pointer constructor alias');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.atomic_load_atomic_tagged_ptr_t',
+    'atomic compat forced compile fixture must touch the tagged pointer load alias');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.atomic_store_atomic_tagged_ptr_t',
+    'atomic compat forced compile fixture must touch the tagged pointer store alias');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.atomic_compare_exchange_strong_atomic_tagged_ptr_t',
+    'atomic compat forced compile fixture must touch the tagged pointer CAS alias');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicCompareExchange32',
+    'atomic compat forced compile fixture must touch PascalCase Int32 CAS facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicStore32',
+    'atomic compat forced compile fixture must touch PascalCase Int32 store facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicLoad32',
+    'atomic compat forced compile fixture must touch PascalCase Int32 load facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicExchange32',
+    'atomic compat forced compile fixture must touch PascalCase Int32 exchange facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicFetchAdd32',
+    'atomic compat forced compile fixture must touch PascalCase Int32 fetch-add facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicFetchSub32',
+    'atomic compat forced compile fixture must touch PascalCase Int32 fetch-sub facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicFetchAnd32',
+    'atomic compat forced compile fixture must touch PascalCase Int32 fetch-and facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicFetchOr32',
+    'atomic compat forced compile fixture must touch PascalCase Int32 fetch-or facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicFetchXor32',
+    'atomic compat forced compile fixture must touch PascalCase Int32 fetch-xor facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicCompareExchangePtr',
+    'atomic compat forced compile fixture must touch PascalCase pointer CAS facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicStorePtr',
+    'atomic compat forced compile fixture must touch PascalCase pointer store facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicLoadPtr',
+    'atomic compat forced compile fixture must touch PascalCase pointer load facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicExchangePtr',
+    'atomic compat forced compile fixture must touch PascalCase pointer exchange facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicWait32',
+    'atomic compat forced compile fixture must touch PascalCase wait facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicNotifyOne32',
+    'atomic compat forced compile fixture must touch PascalCase notify-one facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicNotifyAll32',
+    'atomic compat forced compile fixture must touch PascalCase notify-all facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicThreadFence',
+    'atomic compat forced compile fixture must touch PascalCase thread fence facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicThreadFence;',
+    'atomic compat forced compile fixture must touch PascalCase thread fence default-order call');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicSignalFence',
+    'atomic compat forced compile fixture must touch PascalCase signal fence facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicSignalFence;',
+    'atomic compat forced compile fixture must touch PascalCase signal fence default-order call');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.CpuPause',
+    'atomic compat forced compile fixture must touch CpuPause facade');
+  CheckContains(LAtomicCompatForcedCompileSource, '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}',
+    'atomic compat forced compile fixture must gate 64-bit PascalCase facade by target CPU truth');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicStore64',
+    'atomic compat forced compile fixture must touch PascalCase Int64 store facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicLoad64',
+    'atomic compat forced compile fixture must touch PascalCase Int64 load facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicExchange64',
+    'atomic compat forced compile fixture must touch PascalCase Int64 exchange facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicCompareExchange64',
+    'atomic compat forced compile fixture must touch PascalCase Int64 CAS facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicFetchAdd64',
+    'atomic compat forced compile fixture must touch PascalCase Int64 fetch-add facade');
+  CheckContains(LAtomicCompatForcedCompileSource, 'nextpas.core.atomic.compat.AtomicFetchSub64',
+    'atomic compat forced compile fixture must touch PascalCase Int64 fetch-sub facade');
   CheckContains(LAtomicDocsReadme, 'make hygiene',
     'atomic README must list hygiene verification');
   CheckContains(LAtomicDocsReadme, 'make -C core/tests/nextpas.core.atomic/test_atomic clean test',

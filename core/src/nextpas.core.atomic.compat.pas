@@ -7,6 +7,25 @@ interface
 uses
   nextpas.core.atomic;
 
+type
+  memory_order_t = nextpas.core.atomic.memory_order_t;
+  TMemoryOrder = nextpas.core.atomic.TMemoryOrder;
+  atomic_tagged_ptr_t = nextpas.core.atomic.atomic_tagged_ptr_t;
+
+const
+  mo_relaxed = nextpas.core.atomic.mo_relaxed;
+  mo_consume = nextpas.core.atomic.mo_consume;
+  mo_acquire = nextpas.core.atomic.mo_acquire;
+  mo_release = nextpas.core.atomic.mo_release;
+  mo_acq_rel = nextpas.core.atomic.mo_acq_rel;
+  mo_seq_cst = nextpas.core.atomic.mo_seq_cst;
+  moRelaxed = mo_relaxed;
+  moConsume = mo_consume;
+  moAcquire = mo_acquire;
+  moRelease = mo_release;
+  moAcqRel = mo_acq_rel;
+  moSeqCst = mo_seq_cst;
+
 // NOTE: This unit intentionally exposes legacy / potentially-misleading overloads.
 // In v3, these APIs should not live in the main nextpas.core.atomic surface.
 // Legacy PascalCase compatibility facade mirrored for older call sites.
