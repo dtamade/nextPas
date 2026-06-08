@@ -250,6 +250,28 @@ begin
   end;
 end;
 
+function ReadTextFile(const APath: string): string;
+var
+  F: file;
+  LSize: Int64;
+begin
+  Assign(F, APath);
+  Reset(F, 1);
+  try
+    LSize := FileSize(F);
+    SetLength(Result, Int32(LSize));
+    if LSize > 0 then
+      BlockRead(F, Result[1], Int32(LSize));
+  finally
+    Close(F);
+  end;
+end;
+
+function SourceHas(const ASource, AText: string): Boolean;
+begin
+  Result := Pos(AText, ASource) > 0;
+end;
+
 procedure PlainHandlerProc(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
 begin
   GProcHandlerCalled := True;
@@ -1590,6 +1612,42 @@ begin
   Check(LRaised, 'NewHttpServer(handler, options) forwards explicit backend selection');
 end;
 
+procedure TestHttpServerFacadeOwnerBoundarySourceContract;
+var
+  LSource: string;
+begin
+  LSource := ReadTextFile('../../../src/nextpas.core.http.server.pas');
+
+  Check(SourceHas(LSource,
+    'THttpConnHandler = class(TInterfacedObject, ITcpServerHandler,'#10 +
+    '    ITcpServerSessionFactory, ITcpServerSessionFactoryWithContext)'),
+    'HTTP connection handler stays a TCP server handler/session bridge');
+  Check(SourceHas(LSource,
+    'if Supports(Transport, IHttpServerSessionFactoryWithContext, LContextFactory) then'),
+    'HTTP server prefers context-aware transport session factory');
+  Check(SourceHas(LSource,
+    'Result := THttpConnSession.Create(Transport, Handler, AConn);'),
+    'HTTP server keeps legacy ServeConn fallback behind a session object');
+
+  Check(SourceHas(LSource, 'LTcpOptions := TTcpServerOptions.Default;'),
+    'HTTP server starts from TCP server default options');
+  Check(SourceHas(LSource, 'LTcpOptions.Backend := AOptions.Backend;'),
+    'HTTP server forwards backend selection to TCP server options');
+  Check(SourceHas(LSource, 'FTcpServer := NewTcpServer(LTcpOptions);'),
+    'HTTP server creates runtime through the TCP server facade');
+
+  Check(SourceHas(LSource,
+    'FTcpServer.ListenAndServe(AAddr, APort, FConnHandler);'),
+    'HTTP ListenAndServe delegates listener ownership to TCP server');
+  Check(SourceHas(LSource, 'FTcpServer.Shutdown;'),
+    'HTTP Shutdown delegates lifecycle ownership to TCP server');
+  Check(SourceHas(LSource, 'Result := FTcpServer.LocalAddr'),
+    'HTTP LocalAddr delegates address truth to TCP server');
+  Check(SourceHas(LSource,
+    'Result := (FTcpServer <> nil) and FTcpServer.IsRunning;'),
+    'HTTP IsRunning delegates runtime truth to TCP server');
+end;
+
 procedure TestChunkedRequestTrailerContract;
 var
   LRouter: IHttpRouter;
@@ -1832,6 +1890,8 @@ begin
   T.Run('IHttpServer lifecycle contract shape', @TestHttpServerLifecycleContractOnInterface);
   T.Run('HttpServer honors explicit backend selection',
     @TestHttpServerHonorsExplicitBackendSelection);
+  T.Run('HttpServer facade owner-boundary source contract',
+    @TestHttpServerFacadeOwnerBoundarySourceContract);
   T.Run('Chunked request trailer contract',
     @TestChunkedRequestTrailerContract);
   T.Run('Chunked request multiple trailer declaration contract',
