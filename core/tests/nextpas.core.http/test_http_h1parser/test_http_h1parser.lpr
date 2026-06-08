@@ -421,6 +421,61 @@ begin
   Check(LP.ShouldKeepAlive, 'chunked response remains reusable');
 end;
 
+procedure TestResponseChunkedContentLengthConflictRejectedBeforeBody;
+var
+  LP: IH1Parser;
+  LResp: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+           'Transfer-Encoding: chunked'#13#10 +
+           'Content-Length: 2'#13#10#13#10 +
+           '2'#13#10'ok'#13#10 +
+           '0'#13#10#13#10 +
+           'HTTP/1.1 204 No Content'#13#10#13#10;
+  LConsumed := LP.Execute(PAnsiChar(LResp), Length(LResp));
+
+  Check(LP.HasError, 'response cl/te conflict reports parser error');
+  Check(not LP.IsComplete, 'response cl/te conflict is not complete');
+  Check(not LP.ShouldKeepAlive,
+    'response cl/te conflict must not be reusable');
+  Check(Pos('Content-Length', LP.ErrorMessage) > 0,
+    'response cl/te conflict names content-length');
+  CheckEqual(SizeUInt(Pos(#13#10#13#10, LResp) + 3), LConsumed,
+    'response cl/te conflict consumes only through headers');
+  CheckEqual('', LP.GetBody,
+    'response cl/te conflict does not consume ambiguous body bytes');
+end;
+
+procedure TestResponseDuplicateConflictingContentLengthRejectedBeforeBody;
+var
+  LP: IH1Parser;
+  LResp: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+           'Content-Length: 2'#13#10 +
+           'Content-Length: 3'#13#10#13#10 +
+           'ok!' +
+           'HTTP/1.1 204 No Content'#13#10#13#10;
+  LConsumed := LP.Execute(PAnsiChar(LResp), Length(LResp));
+
+  Check(LP.HasError,
+    'response conflicting duplicate content-length reports parser error');
+  Check(not LP.IsComplete,
+    'response conflicting duplicate content-length is not complete');
+  Check(not LP.ShouldKeepAlive,
+    'response conflicting duplicate content-length must not be reusable');
+  Check(Pos('Content-Length', LP.ErrorMessage) > 0,
+    'response conflicting duplicate content-length names content-length');
+  CheckEqual(SizeUInt(Pos(#13#10#13#10, LResp) + 3), LConsumed,
+    'response conflicting duplicate content-length consumes only through headers');
+  CheckEqual('', LP.GetBody,
+    'response conflicting duplicate content-length does not consume body bytes');
+end;
+
 procedure TestResponseContentLengthTruncatedAtEof;
 var
   LP: IH1Parser;
@@ -2502,6 +2557,10 @@ begin
     @TestResponseDuplicateTransferEncodingFinalChunkedKeepsAlive);
   T.Run('Response chunked pipeline consumes only first response',
     @TestResponseChunkedPipelineConsumesOnlyFirstResponse);
+  T.Run('Response chunked content-length conflict rejected before body',
+    @TestResponseChunkedContentLengthConflictRejectedBeforeBody);
+  T.Run('Response duplicate conflicting content-length rejected before body',
+    @TestResponseDuplicateConflictingContentLengthRejectedBeforeBody);
   T.Run('Response content-length truncated at EOF', @TestResponseContentLengthTruncatedAtEof);
   T.Run('Response HTTP/1.0 without keep-alive does not reuse', @TestResponseHttp10WithoutKeepAliveDoesNotReuse);
   T.Run('Content-Length body', @TestContentLengthBody);
