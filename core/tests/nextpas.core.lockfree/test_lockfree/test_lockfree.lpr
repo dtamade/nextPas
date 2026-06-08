@@ -2270,6 +2270,11 @@ var
   LMpscMultiProducerTestSection: string;
   LMpscPublishWakeTestSection: string;
   LMpscTimeoutTestSection: string;
+  LSpscTryEnqueueSourceSection: string;
+  LStackTryPushSourceSection: string;
+  LMpscEnqueueSourceSection: string;
+  LDequeTryPushSourceSection: string;
+  LDequeTryStealSourceSection: string;
   LSpscPublishWakeTestSection: string;
   LSpscSpaceWakeTestSection: string;
 begin
@@ -2435,6 +2440,26 @@ begin
     'procedure TestMpscDequeueTimeout;',
     'procedure TestDequeCapacity;',
     'MPSC timeout test source section');
+  LSpscTryEnqueueSourceSection := ExtractSection(LSpscSource,
+    'function TSpscQueueImpl.TryEnqueue',
+    'function TSpscQueueImpl.TryDequeue',
+    'SPSC TryEnqueue source section');
+  LStackTryPushSourceSection := ExtractSection(LStackSource,
+    'function TLockFreeStackImpl.TryPush',
+    'function TLockFreeStackImpl.TryPop',
+    'stack TryPush source section');
+  LMpscEnqueueSourceSection := ExtractSection(LMpscSource,
+    'procedure TMpscQueueImpl.Enqueue',
+    'function TMpscQueueImpl.TryDequeue',
+    'MPSC Enqueue source section');
+  LDequeTryPushSourceSection := ExtractSection(LDequeSource,
+    'function TWorkStealingDequeImpl.TryPush',
+    'function TWorkStealingDequeImpl.TryPop',
+    'deque TryPush source section');
+  LDequeTryStealSourceSection := ExtractSection(LDequeSource,
+    'function TWorkStealingDequeImpl.TrySteal',
+    'function TWorkStealingDequeImpl.IsEmpty',
+    'deque TrySteal source section');
 
   CheckContains(LDocsReadme, '# nextpas.core.lockfree',
     'lockfree README must use the module title');
@@ -2677,6 +2702,13 @@ begin
     'SPSC queue must notify data waiters after publish');
   CheckContains(LSpscSource, 'LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters)',
     'SPSC queue must notify space waiters after consume');
+  CheckBefore(LSpscTryEnqueueSourceSection,
+    'FSlots[LTail and Int64(FMask)] := AValue;',
+    'AtomicStore64(FTailPublished, LTail + 1, moRelease);',
+    'SPSC TryEnqueue must write the slot value before publishing the tail');
+  CheckContains(LSpscTryEnqueueSourceSection,
+    'AtomicStore64(FTailPublished, LTail + 1, moRelease);',
+    'SPSC TryEnqueue tail publish must use release ordering');
   CheckContains(LSpscPublishWakeTestSection,
     'SPSC DequeueTimeout consumer should still be pending before publish',
     'SPSC publish wake runtime test must prove the consumer is pending before publish');
@@ -3000,10 +3032,27 @@ begin
     'stack constructor must expose a stable argument error for capacity overflow');
   CheckContains(LStackSource, 'if LCount > FCapacity then Break;',
     'stack ApproxCount must keep traversal best-effort instead of trusting an unbounded chain');
+  CheckBefore(LStackTryPushSourceSection,
+    'FSlots[LIdx].Value := AValue;',
+    'AtomicCompareExchange64(FTop, LOldTop, LNewTop, moAcqRel) = LOldTop',
+    'stack TryPush must write the slot value before publishing it through the top CAS');
+  CheckBefore(LStackTryPushSourceSection,
+    'FSlots[LIdx].Next := UnpackIdx(LOldTop);',
+    'AtomicCompareExchange64(FTop, LOldTop, LNewTop, moAcqRel) = LOldTop',
+    'stack TryPush must link the previous top before publishing through the top CAS');
+  CheckContains(LStackTryPushSourceSection,
+    'AtomicCompareExchange64(FTop, LOldTop, LNewTop, moAcqRel) = LOldTop',
+    'stack TryPush top CAS must use acquire-release ordering');
   CheckContains(LDequeSource, 'LCap := LockFreeNextPow2(ACapacity);',
     'deque constructor must round requested capacity to power-of-two storage');
   CheckContains(LDequeSource, 'if LSize >= Int64(FCapacity) then',
     'deque owner push must reject writes once the bounded ring is full');
+  CheckBefore(LDequeTryPushSourceSection,
+    'FBuffer[PtrUInt(LBottom) and FMask] := AValue;',
+    'AtomicStore64(FBottom, LBottom + 1, moRelease);',
+    'deque owner TryPush must write the buffer slot before release-publishing bottom');
+  CheckContains(LDequeTryPushSourceSection, 'AtomicStore64(FBottom, LBottom + 1, moRelease);',
+    'deque owner TryPush bottom publish must use release ordering');
   CheckContains(LDequeSource, 'AtomicStore64(FBottom, LBottom, moSeqCst);',
     'deque owner pop must publish the speculative bottom decrement as seq_cst before last-item arbitration');
   CheckContains(LDequeSource, 'LTop := AtomicLoad64(FTop, moSeqCst);',
@@ -3013,6 +3062,13 @@ begin
   CheckContains(LDequeSource, 'LTop := AtomicLoad64(FTop, moSeqCst);' + LineEnding +
     '  LBottom := AtomicLoad64(FBottom, moSeqCst);',
     'deque thief steal must observe top and bottom with seq_cst before stealing');
+  CheckBefore(LDequeTryStealSourceSection,
+    'AValue := FBuffer[PtrUInt(LTop) and FMask];',
+    'AtomicCompareExchange64(FTop, LTop, LTop + 1, moSeqCst) <> LTop',
+    'deque thief TrySteal must read the candidate value before winning it through the top CAS');
+  CheckContains(LDequeTryStealSourceSection,
+    'AtomicCompareExchange64(FTop, LTop, LTop + 1, moSeqCst) <> LTop',
+    'deque thief TrySteal top CAS must use seq_cst ordering');
   CheckContains(LDocsReadme,
     '`TWorkStealingDeque<T>` last-item owner/thief arbitration uses `seq_cst` ordering on `FTop` / `FBottom` loads, bottom store, and top CAS so the single remaining item is won exactly once.',
     'lockfree README must document the deque seq_cst last-item arbitration contract');
@@ -3143,6 +3199,24 @@ begin
     'MPSC queue must not store pointer links through 64-bit pointer casts');
   CheckNotContains(LMpscSource, 'AtomicExchange64(Int64(PtrUInt(',
     'MPSC queue must not exchange pointer links through 64-bit pointer casts');
+  CheckBefore(LMpscEnqueueSourceSection,
+    'LNode^.Value := AValue;',
+    'LPrev := AtomicExchangeNode(FHead, LNode, mo_acq_rel);',
+    'MPSC Enqueue must initialize the node value before exchanging the head');
+  CheckBefore(LMpscEnqueueSourceSection,
+    'LNode^.Next := nil;',
+    'LPrev := AtomicExchangeNode(FHead, LNode, mo_acq_rel);',
+    'MPSC Enqueue must initialize the node link before exchanging the head');
+  CheckContains(LMpscEnqueueSourceSection,
+    'LPrev := AtomicExchangeNode(FHead, LNode, mo_acq_rel);',
+    'MPSC Enqueue head exchange must use acquire-release ordering');
+  CheckBefore(LMpscEnqueueSourceSection,
+    'LPrev := AtomicExchangeNode(FHead, LNode, mo_acq_rel);',
+    'AtomicStoreNode(LPrev^.Next, LNode, mo_release);',
+    'MPSC Enqueue must exchange the head before release-linking the previous node');
+  CheckContains(LMpscEnqueueSourceSection,
+    'AtomicStoreNode(LPrev^.Next, LNode, mo_release);',
+    'MPSC Enqueue previous-node link publish must use release ordering');
   CheckContains(LDequeSource, 'AtomicCompareExchange64(FTop',
     'work-stealing deque must linearize steals through top CAS');
   CheckContains(LWaitSource, 'platform_wait_address32',
