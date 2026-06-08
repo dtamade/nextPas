@@ -2831,6 +2831,8 @@ begin
     'nextpas summary marker');
   CheckContains(LOutput, 'summary_impl=go', 'go summary marker');
   CheckContains(LOutput, 'summary_impl=rust_std', 'rust std summary marker');
+  CheckContains(LOutput, 'summary_rust_profile=std_only',
+    'rust std summary profile marker');
   CheckContains(LOutput, 'median_ns/op=', 'median ns/op marker');
   CheckContains(LOutput, 'median_req/s=', 'median req/s marker');
   CheckContains(LOutput, 'median_completed=8',
@@ -2847,6 +2849,8 @@ begin
     'runs report go summary marker');
   CheckContains(LReport, 'summary_impl=rust_std',
     'runs report rust std summary marker');
+  CheckContains(LReport, 'summary_rust_profile=std_only',
+    'runs report rust std summary profile marker');
   CheckContains(LReport, 'median_completed=8',
     'runs report median completed marker');
 end;
@@ -2881,6 +2885,10 @@ begin
   CheckServerBenchmarkOutput(LOutput, 'rust_hyper', '8', '1');
   CheckContains(LOutput, 'summary_impl=rust_hyper',
     'include-hyper rust_hyper summary marker');
+  CheckContains(LOutput, 'summary_rust_profile=std_only',
+    'include-hyper rust_std summary profile marker');
+  CheckContains(LOutput, 'summary_rust_profile=hyper_tokio',
+    'include-hyper rust_hyper summary profile marker');
 
   Check(FileExists(LReportPath), 'server comparison include-hyper report exists');
   LReport := LoadTextFile(LReportPath);
@@ -2891,6 +2899,10 @@ begin
   CheckServerBenchmarkOutput(LReport, 'rust_hyper', '8', '1');
   CheckContains(LReport, 'summary_impl=rust_hyper',
     'include-hyper report rust_hyper summary marker');
+  CheckContains(LReport, 'summary_rust_profile=std_only',
+    'include-hyper report rust_std summary profile marker');
+  CheckContains(LReport, 'summary_rust_profile=hyper_tokio',
+    'include-hyper report rust_hyper summary profile marker');
 end;
 
 procedure TestServerComparisonRunnerIncludeHyperUrlPathSmoke;
@@ -2984,6 +2996,10 @@ begin
     'include-hyper response_1k hyper profile marker');
   CheckContains(LOutput, 'summary_impl=rust_hyper',
     'include-hyper response_1k rust_hyper summary marker');
+  CheckContains(LOutput, 'summary_rust_profile=std_only',
+    'include-hyper response_1k rust_std summary profile marker');
+  CheckContains(LOutput, 'summary_rust_profile=hyper_tokio',
+    'include-hyper response_1k rust_hyper summary profile marker');
 
   Check(FileExists(LReportPath),
     'server comparison include-hyper response_1k report exists');
@@ -3001,6 +3017,10 @@ begin
     'include-hyper response_1k report hyper profile marker');
   CheckContains(LReport, 'summary_impl=rust_hyper',
     'include-hyper response_1k report rust_hyper summary marker');
+  CheckContains(LReport, 'summary_rust_profile=std_only',
+    'include-hyper response_1k report rust_std summary profile marker');
+  CheckContains(LReport, 'summary_rust_profile=hyper_tokio',
+    'include-hyper response_1k report rust_hyper summary profile marker');
 end;
 
 procedure TestServerComparisonRunnerConcurrencyLockSourceContract;

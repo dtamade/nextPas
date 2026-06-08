@@ -212,6 +212,7 @@ append_result_row() {
   local completed
   local client_read_mode
   local response_body_bytes
+  local rust_profile
 
   if ! printf '%s\n' "${output}" | grep -q "^impl=${expected_impl}$"; then
     echo "unable to find benchmark impl marker for impl=${expected_impl}" >&2
@@ -225,6 +226,10 @@ append_result_row() {
   req_s="$(printf '%s\n' "${output}" | sed -nE 's/^req\/s=([0-9]+)$/\1/p' | tail -n 1)"
   client_read_mode="$(printf '%s\n' "${output}" | sed -nE 's/^client_read_mode=([^[:space:]]+)$/\1/p' | tail -n 1)"
   response_body_bytes="$(printf '%s\n' "${output}" | sed -nE 's/^response_body_bytes=([0-9]+)$/\1/p' | tail -n 1)"
+  rust_profile="$(printf '%s\n' "${output}" | sed -nE 's/^rust_profile=([^[:space:]]+)$/\1/p' | tail -n 1)"
+  if [[ "${rust_profile}" == "" ]]; then
+    rust_profile="n/a"
+  fi
   if [[ "${iterations}" == "" || "${completed}" == "" || "${ns_op}" == "" || "${req_s}" == "" || "${client_read_mode}" == "" || "${response_body_bytes}" == "" ]]; then
     echo "unable to parse benchmark output for impl=${expected_impl}" >&2
     echo "${output}" >&2
@@ -237,9 +242,9 @@ append_result_row() {
     exit 1
   fi
 
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "${run_index}" "${expected_impl}" "${ns_op}" "${req_s}" "${completed}" \
-    "${client_read_mode}" "${response_body_bytes}" >> "${RESULTS_TMP}"
+    "${client_read_mode}" "${response_body_bytes}" "${rust_profile}" >> "${RESULTS_TMP}"
 }
 
 run_one_impl() {
@@ -287,6 +292,7 @@ write_summary() {
       completed_values[impl, count[impl]] = $5 + 0.0;
       read_mode_values[impl, count[impl]] = $6;
       body_bytes_values[impl, count[impl]] = $7;
+      rust_profile_values[impl, count[impl]] = $8;
     }
 
     END {
@@ -296,17 +302,19 @@ write_summary() {
         delete current_completed;
         delete current_read_mode;
         delete current_body_bytes;
+        delete current_rust_profile;
         for (i = 1; i <= count[impl]; i++) {
           current_ns[i] = ns_values[impl, i];
           current_req[i] = req_values[impl, i];
           current_completed[i] = completed_values[impl, i];
           current_read_mode[i] = read_mode_values[impl, i];
           current_body_bytes[i] = body_bytes_values[impl, i];
+          current_rust_profile[i] = rust_profile_values[impl, i];
         }
-        printf "summary_impl=%s runs=%d median_completed=%.0f median_ns/op=%.1f median_req/s=%.0f summary_client_read_mode=%s summary_response_body_bytes=%s\n",
+        printf "summary_impl=%s runs=%d median_completed=%.0f median_ns/op=%.1f median_req/s=%.0f summary_client_read_mode=%s summary_response_body_bytes=%s summary_rust_profile=%s\n",
           impl, count[impl], median(current_completed, count[impl]),
           median(current_ns, count[impl]), median(current_req, count[impl]),
-          current_read_mode[1], current_body_bytes[1];
+          current_read_mode[1], current_body_bytes[1], current_rust_profile[1];
       }
     }
   ' "${RESULTS_TMP}" | sort
