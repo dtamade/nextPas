@@ -419,7 +419,7 @@ begin
   // 计算总大小并检查溢出
   LTotalSize := LActualBlockSize * aCapacity;
   if (LActualBlockSize <> 0) and ((LTotalSize div LActualBlockSize) <> aCapacity) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TBlockPool: total size overflow');
+    raise EAllocError.Create(aeInvalidLayout, 'TBlockPool: total size overflow');
   FTotalSize := LTotalSize;
 
   // 分配内存（over-allocate 用于对齐）
