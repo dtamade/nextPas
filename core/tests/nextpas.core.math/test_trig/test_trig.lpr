@@ -312,7 +312,7 @@ end;
 
 procedure TestArcTan2SignedZeroContracts;
 begin
-  CheckNear(0.0, ArcTan2(0.0, 0.0), 0.0, 'ArcTan2(+0,+0)=+0');
+  Check(IsDoublePositiveZero(ArcTan2(0.0, 0.0)), 'ArcTan2(+0,+0)=+0');
   Check(IsDoubleNegativeZero(ArcTan2(DoubleNegativeZero, 0.0)),
     'ArcTan2(-0,+0)=-0');
   CheckNear(PI_VALUE, ArcTan2(0.0, DoubleNegativeZero), 0.000001,
@@ -324,7 +324,7 @@ begin
   CheckNear(-PI_VALUE, ArcTan2(DoubleNegativeZero, -1.0), 0.000001,
     'ArcTan2(-0,negative)=-PI');
 
-  CheckNear(0.0, ArcTan2(Single(0.0), Single(0.0)), 0.0,
+  Check(IsSinglePositiveZero(ArcTan2(Single(0.0), Single(0.0))),
     'ArcTan2(Single +0,+0)=+0');
   Check(IsSingleNegativeZero(ArcTan2(SingleNegativeZero, Single(0.0))),
     'ArcTan2(Single -0,+0)=-0');
