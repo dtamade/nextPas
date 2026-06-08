@@ -1571,6 +1571,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-ieee-fmod-non-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Double NaN divisor returns NaN"),
     RequiredBehaviorTestMarker("scalar-ieee-fmod-single-non-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Single finite over infinity returns dividend"),
     RequiredBehaviorTestMarker("scalar-ieee-fmod-huge-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Double huge finite quotient stays finite remainder"),
+    RequiredBehaviorTestMarker("scalar-ieee-fmod-single-negative-huge-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Single negative huge finite quotient keeps dividend sign"),
     RequiredBehaviorTestMarker("scalar-ieee-overflow-no-div-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "IsMulOverflow SizeUInt zero times high"),
     RequiredBehaviorTestMarker("scalar-ieee-overflow-no-div-zero-symmetric", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "IsMulOverflow SizeUInt high times zero"),
     RequiredBehaviorTestMarker("scalar-min-max-nan", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Min Double propagates NaN first"),

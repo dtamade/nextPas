@@ -704,6 +704,10 @@ begin
   Check((not IsNaN(LSingleRemainder)) and (not IsInfinite(LSingleRemainder)) and
     (nextpas.core.math.scalar.Abs(LSingleRemainder) < LTinySingle),
     'Fmod Single huge finite quotient stays finite remainder');
+  LSingleRemainder := Fmod(-LHugeSingle, LTinySingle);
+  Check(((LSingleRemainder < Single(0.0)) or IsSingleNegativeZero(LSingleRemainder)) and
+    (nextpas.core.math.scalar.Abs(LSingleRemainder) < LTinySingle),
+    'Fmod Single negative huge finite quotient keeps dividend sign');
 
   CheckNear(5.0, Clamp(MakePositiveInfinity, 0.0, 5.0), 0.0,
     'Clamp Double positive infinity clamps high');
