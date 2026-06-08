@@ -184,7 +184,7 @@ begin
     if LResult <> 0 then
       raise ENetworkError.Create('tcp write failed (' + IntToStr(LResult) + ')');
     if LSent = 0 then
-      Break;
+      raise ENetworkError.Create('tcp write failed (zero progress)');
     Inc(LPtr, LSent);
     Dec(LRemaining, SizeUInt(LSent));
     Inc(Result, SizeUInt(LSent));

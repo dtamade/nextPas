@@ -4,7 +4,9 @@ program test_net;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
+  Classes,
   SysUtils,
+  StrUtils,
   nextpas.core.testing,
   nextpas.core.errors,
   nextpas.core.io.intf,
@@ -24,6 +26,53 @@ var
 const
   NONBLOCKING_WAIT_SPINS = 200;
   NONBLOCKING_WAIT_NS = 1000000;
+
+function ReadTextFile(const APath: string): string;
+var
+  LText: TStringList;
+begin
+  LText := TStringList.Create;
+  try
+    LText.LoadFromFile(APath);
+    Result := LowerCase(LText.Text);
+  finally
+    LText.Free;
+  end;
+end;
+
+function ExtractSourceRange(const ASource, AStartNeedle, AEndNeedle,
+  AMessage: string): string;
+var
+  LStart: SizeInt;
+  LEnd: SizeInt;
+begin
+  LStart := Pos(AStartNeedle, ASource);
+  Check(LStart > 0, AMessage + ' start marker');
+  LEnd := PosEx(AEndNeedle, ASource, LStart + Length(AStartNeedle));
+  Check(LEnd > LStart, AMessage + ' end marker');
+  Result := Copy(ASource, LStart, LEnd - LStart);
+end;
+
+procedure CheckSourceContains(const ASource, ANeedle, AMessage: string);
+begin
+  Check(Pos(ANeedle, ASource) > 0, AMessage);
+end;
+
+procedure TestTcpStreamWriteZeroProgressSourceContract;
+var
+  LSource: string;
+  LBody: string;
+begin
+  LSource := ReadTextFile('../../../src/nextpas.core.net.tcp.pas');
+  LBody := ExtractSourceRange(LSource, 'function ttcpstream.write',
+    'function ttcpstream.seek', 'TTcpStream.Write implementation');
+  Check(Pos('if lsent = 0 then' + LineEnding + '      break;', LBody) = 0,
+    'blocking Write must not silently short-write on zero progress');
+  CheckSourceContains(LBody, 'if lsent = 0 then',
+    'blocking Write keeps an explicit zero-progress guard');
+  CheckSourceContains(LBody, 'tcp write failed (zero progress)',
+    'blocking Write raises a dedicated zero-progress error');
+end;
 
 { TCP echo test — uses port 0 (OS assigns) }
 
@@ -612,6 +661,8 @@ end;
 
 begin
   T := TTestRunner.Create('nextpas.core.net');
+  T.Run('TCP stream write zero-progress source contract',
+    @TestTcpStreamWriteZeroProgressSourceContract);
   T.Run('TCP echo', @TestTcpEcho);
   T.Run('TCP large data', @TestTcpLargeData);
   T.Run('UDP send/recv', @TestUdpSendRecv);
