@@ -122,6 +122,26 @@ begin
   end;
 end;
 
+procedure AddCharClassEscape(var ABitmap: TCharBitmap; const ACh: Char);
+var
+  LBitmap: TCharBitmap;
+begin
+  case ACh of
+    'd', 'D':
+      CharBitmapInitDigit(LBitmap);
+    'w', 'W':
+      CharBitmapInitWord(LBitmap);
+    's', 'S':
+      CharBitmapInitSpace(LBitmap);
+  else
+    Exit;
+  end;
+
+  if ACh in ['D', 'W', 'S'] then
+    CharBitmapNegate(LBitmap);
+  CharBitmapOr(ABitmap, LBitmap);
+end;
+
 function ParseCharClass(var P: TParser): PAstNode;
 var negated: Boolean; lo, hi: Byte; ch: Char;
 begin
@@ -138,21 +158,8 @@ begin
     begin
       ch := Next(P);
       case ch of
-        'd': CharBitmapSetRange(Result^.ClassBitmap, Ord('0'), Ord('9'));
-        'w': begin
-          CharBitmapSetRange(Result^.ClassBitmap, Ord('a'), Ord('z'));
-          CharBitmapSetRange(Result^.ClassBitmap, Ord('A'), Ord('Z'));
-          CharBitmapSetRange(Result^.ClassBitmap, Ord('0'), Ord('9'));
-          CharBitmapSet(Result^.ClassBitmap, Ord('_'));
-        end;
-        's': begin
-          CharBitmapSet(Result^.ClassBitmap, 9);
-          CharBitmapSet(Result^.ClassBitmap, 10);
-          CharBitmapSet(Result^.ClassBitmap, 11);
-          CharBitmapSet(Result^.ClassBitmap, 12);
-          CharBitmapSet(Result^.ClassBitmap, 13);
-          CharBitmapSet(Result^.ClassBitmap, 32);
-        end;
+        'd', 'D', 'w', 'W', 's', 'S':
+          AddCharClassEscape(Result^.ClassBitmap, ch);
         'n': CharBitmapSet(Result^.ClassBitmap, 10);
         'r': CharBitmapSet(Result^.ClassBitmap, 13);
         't': CharBitmapSet(Result^.ClassBitmap, 9);

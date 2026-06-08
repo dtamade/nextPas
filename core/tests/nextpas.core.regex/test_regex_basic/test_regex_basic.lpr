@@ -1142,6 +1142,19 @@ begin
   Check(R.IsFullMatch('123 456'), 'class shorthand');
   Check(not R.IsFullMatch('abc'), 'class shorthand miss');
 
+  // Negated shorthand escapes in class: [\D\W\S]
+  R := TRegex.Compile('^[\D]$');
+  Check(R.IsFullMatch('a'), 'class \D matches non-digit');
+  Check(not R.IsFullMatch('5'), 'class \D rejects digit');
+
+  R := TRegex.Compile('^[\W]$');
+  Check(R.IsFullMatch(' '), 'class \W matches non-word');
+  Check(not R.IsFullMatch('x'), 'class \W rejects word');
+
+  R := TRegex.Compile('^[\S]$');
+  Check(R.IsFullMatch('x'), 'class \S matches non-space');
+  Check(not R.IsFullMatch(' '), 'class \S rejects space');
+
   // Pipe in class: [a|b] — | is literal
   R := TRegex.Compile('[a|b]');
   Check(R.IsMatch('a'), 'pipe class a');
