@@ -600,21 +600,21 @@ begin
   begin
     if ARedirectsLeft <= 0 then
     begin
-      ReleaseResponseBody(LResp);
+      ReleaseResponseBodyIgnoringErrors(LResp);
       raise EHttpError.Create('too many redirects');
     end;
 
     LRespHeaders := LResp.Headers;
     if LRespHeaders = nil then
     begin
-      ReleaseResponseBody(LResp);
+      ReleaseResponseBodyIgnoringErrors(LResp);
       raise EHttpError.Create('redirect with no response headers');
     end;
 
     LLocations := LRespHeaders.GetAll('location');
     if Length(LLocations) > 1 then
     begin
-      ReleaseResponseBody(LResp);
+      ReleaseResponseBodyIgnoringErrors(LResp);
       raise EHttpError.Create('redirect with duplicate Location headers');
     end;
 
@@ -624,12 +624,17 @@ begin
       LLocation := '';
     if LLocation = '' then
     begin
-      ReleaseResponseBody(LResp);
+      ReleaseResponseBodyIgnoringErrors(LResp);
       raise EHttpError.Create('redirect with no Location header');
     end;
 
+    try
+      LNewUrl := ResolveRedirectUrl(LUrl, LLocation);
+    except
+      ReleaseResponseBodyIgnoringErrors(LResp);
+      raise;
+    end;
     ReleaseResponseBody(LResp);
-    LNewUrl := ResolveRedirectUrl(LUrl, LLocation);
 
     // Go-style 301/302/303 redirects keep HEAD, otherwise replay as GET.
     if (LResp.StatusCode = HTTP_STATUS_MOVED_PERMANENTLY) or

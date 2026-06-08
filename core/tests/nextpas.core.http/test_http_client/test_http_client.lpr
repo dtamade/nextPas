@@ -248,10 +248,14 @@ type
     FRedirectLocation: string;
     FDuplicateLocation: Boolean;
     FOmitLocation: Boolean;
-    FBody: TRedirectTrackedBody;
+    FFailBodyClose: Boolean;
+    FBody: IReadCloser;
     FBodyRef: IReadCloser;
+    FTrackedBody: TRedirectTrackedBody;
+    FCloseFailingBody: TCloseFailingResponseBody;
     FBodyClosedBeforeFollowup: Boolean;
     function GetBodyClosed: Boolean;
+    function GetBodyCloseCount: Int32;
   public
     constructor Create;
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
@@ -259,7 +263,9 @@ type
     property RedirectLocation: string read FRedirectLocation write FRedirectLocation;
     property DuplicateLocation: Boolean read FDuplicateLocation write FDuplicateLocation;
     property OmitLocation: Boolean read FOmitLocation write FOmitLocation;
+    property FailBodyClose: Boolean read FFailBodyClose write FFailBodyClose;
     property BodyClosed: Boolean read GetBodyClosed;
+    property BodyCloseCount: Int32 read GetBodyCloseCount;
     property BodyClosedBeforeFollowup: Boolean read FBodyClosedBeforeFollowup;
   end;
 
@@ -1309,13 +1315,34 @@ begin
   inherited Create;
   FRedirectLocation := '/final';
   FOmitLocation := False;
-  FBody := TRedirectTrackedBody.Create('redirect-body');
-  FBodyRef := FBody as IReadCloser;
+  FTrackedBody := TRedirectTrackedBody.Create('redirect-body');
+  FBody := FTrackedBody as IReadCloser;
+  FBodyRef := FBody;
 end;
 
 function TRedirectBodyReleaseTransport.GetBodyClosed: Boolean;
 begin
-  Result := FBody.Closed;
+  if FFailBodyClose then
+    Result := (FCloseFailingBody <> nil) and FCloseFailingBody.Closed
+  else
+    Result := (FTrackedBody <> nil) and FTrackedBody.Closed;
+end;
+
+function TRedirectBodyReleaseTransport.GetBodyCloseCount: Int32;
+begin
+  if FFailBodyClose then
+  begin
+    if FCloseFailingBody <> nil then
+      Exit(FCloseFailingBody.CloseCount);
+    Exit(0);
+  end;
+  if FTrackedBody <> nil then
+  begin
+    if FTrackedBody.Closed then
+      Exit(1);
+    Exit(0);
+  end;
+  Result := 0;
 end;
 
 function TRedirectBodyReleaseTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
@@ -1337,10 +1364,15 @@ begin
         LHeaders.SetHeader('location', FRedirectLocation);
     end;
     LHeaders.SetHeader('content-length', '13');
+    if FFailBodyClose then
+    begin
+      FCloseFailingBody := TCloseFailingResponseBody.Create('redirect-body');
+      FBodyRef := FCloseFailingBody as IReadCloser;
+    end;
     Exit(NewResponse(HTTP_STATUS_FOUND, LHeaders, FBodyRef as IReader));
   end;
 
-  FBodyClosedBeforeFollowup := FBody.Closed;
+  FBodyClosedBeforeFollowup := GetBodyClosed;
   LHeaders.SetHeader('content-length', '7');
   if FBodyClosedBeforeFollowup then
     Result := NewResponse(HTTP_STATUS_OK, LHeaders, StringBodyReader('arrived'))
@@ -4730,6 +4762,43 @@ begin
     'duplicate redirect Location closes discarded redirect response body');
 end;
 
+procedure TestClientRedirectPolicyErrorKeepsPrimaryErrorWhenBodyCloseFails;
+var
+  LTransportObj: TRedirectBodyReleaseTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+  LMessage: string;
+begin
+  LTransportObj := TRedirectBodyReleaseTransport.Create;
+  LTransportObj.DuplicateLocation := True;
+  LTransportObj.FailBodyClose := True;
+  LTransport := LTransportObj as IHttpTransport;
+  LClient := NewHttpClient(LTransport);
+
+  LRaised := False;
+  LMessage := '';
+  try
+    LClient.Get('http://example.test/old');
+  except
+    on E: EHttpError do
+    begin
+      LRaised := True;
+      LMessage := E.Message;
+    end;
+  end;
+
+  Check(LRaised, 'redirect policy error raises EHttpError');
+  CheckEqual('redirect with duplicate Location headers', LMessage,
+    'redirect policy error is not masked by body close failure');
+  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
+    'redirect policy error stops before follow-up round trip');
+  CheckEqual(Int64(1), Int64(LTransportObj.BodyCloseCount),
+    'redirect policy error still attempts discarded body close once');
+  Check(LTransportObj.BodyClosed,
+    'redirect policy error marks close-failing discarded body closed');
+end;
+
 procedure TestClientClosesRedirectResponseBodyOnUnsupportedScheme;
 var
   LTransportObj: TRedirectBodyReleaseTransport;
@@ -6033,6 +6102,8 @@ begin
     @TestClientClosesRedirectResponseBodyOnMissingLocation);
   T.Run('Client closes redirect response body on duplicate Location',
     @TestClientClosesRedirectResponseBodyOnDuplicateLocation);
+  T.Run('Client redirect policy error keeps primary error when body close fails',
+    @TestClientRedirectPolicyErrorKeepsPrimaryErrorWhenBodyCloseFails);
   T.Run('Client closes redirect response body on unsupported scheme',
     @TestClientClosesRedirectResponseBodyOnUnsupportedScheme);
   T.Run('Client replays seekable body on 307 redirect',
