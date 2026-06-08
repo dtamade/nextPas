@@ -78,6 +78,14 @@ begin
   Result := (LBits and UInt64($8000000000000000)) <> 0;
 end;
 
+function DoubleIsPositiveOneBits(const AValue: Double): Boolean; inline;
+var
+  LBits: UInt64;
+begin
+  Move(AValue, LBits, SizeOf(LBits));
+  Result := LBits = UInt64($3FF0000000000000);
+end;
+
 function DoubleSignedZero(const ANegative: Boolean): Double; inline;
 begin
   Result := 0.0;
@@ -418,6 +426,8 @@ var
   LScaledExponent: Double;
   LNegativeResult: Boolean;
 begin
+  if DoubleIsPositiveOneBits(ABase) then
+    Exit(1.0);
   if DoubleIsNaN(AExponent) then
     Exit(DoubleQuietNaN);
   if AExponent = 0.0 then

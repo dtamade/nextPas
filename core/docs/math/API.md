@@ -132,7 +132,7 @@ values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`.
 `Exp` propagates `NaN`, returns `+Inf` for `+Inf`, and returns `+0` for `-Inf`. `Sqrt` preserves
 signed zero, returns `+Inf` for `+Inf`, and returns `NaN` for `NaN`, negative finite values, or `-Inf`.
 Finite `Exp` overflow returns `+Inf`, and finite `Exp` underflow returns `+0`. Finite `Power` overflow and underflow preserve the mathematically required sign for odd integer exponents with negative finite bases.
-`Power` returns `1` for exponent `0` before NaN-base handling. Nonzero NaN bases return `NaN`;
+`Power` returns `1` for base `+1` before NaN-exponent handling and for exponent `0` before NaN-base handling. Nonzero NaN bases return `NaN`;
 infinite exponents follow `|base|` relative to `1`, with `+1` and `-1` returning `1`; infinite bases
 follow exponent sign and odd/even sign rules. `Power` returns `NaN` for negative finite bases with
 non-integer exponents instead of entering host logarithm domain errors.

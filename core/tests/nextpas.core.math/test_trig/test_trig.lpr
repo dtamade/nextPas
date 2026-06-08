@@ -571,6 +571,10 @@ procedure TestPowerNonFiniteContracts;
 begin
   Check(IsDoubleNaN(Power(DoubleNaN, 2.0)), 'Power NaN base nonzero exponent returns NaN');
   CheckNear(1.0, Power(DoubleNaN, 0.0), 0.0, 'Power NaN base zero exponent returns 1');
+  CheckNear(1.0, Power(1.0, DoubleNaN), 0.0,
+    'Power +1 NaN exponent returns 1');
+  Check(IsDoubleNaN(Power(-1.0, DoubleNaN)),
+    'Power -1 NaN exponent returns NaN');
 
   CheckNear(1.0, Power(1.0, DoubleInfinity), 0.0,
     'Power +1 +Inf exponent returns 1');
@@ -628,6 +632,10 @@ begin
     'Power Single NaN base zero exponent returns 1');
   Check(IsSingleNaN(Power(SingleNaN, Single(2.0))),
     'Power Single NaN base nonzero exponent returns NaN');
+  CheckNear(1.0, Power(Single(1.0), SingleNaN), 0.0,
+    'Power Single +1 NaN exponent returns 1');
+  Check(IsSingleNaN(Power(Single(-1.0), SingleNaN)),
+    'Power Single -1 NaN exponent returns NaN');
   Check(IsSinglePositiveInfinity(Power(Single(-2.0), SingleInfinity)),
     'Power Single negative abs(base)>1 +Inf exponent returns +Inf');
   Check(IsSinglePositiveZero(Power(Single(-2.0), -SingleInfinity)),
