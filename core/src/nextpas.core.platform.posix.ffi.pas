@@ -167,6 +167,8 @@ function mlock(addr: Pointer; length: size_t): cint; cdecl; external 'c' name 'm
 function munlock(addr: Pointer; length: size_t): cint; cdecl; external 'c' name 'munlock';
 function getrlimit(resource: cint; rlim: Pointer): cint; cdecl; external 'c' name 'getrlimit';
 function setrlimit(resource: cint; rlim: Pointer): cint; cdecl; external 'c' name 'setrlimit';
+function posix_memalign(memptr: PPointer; alignment: size_t; size: size_t): cint; cdecl; external 'c' name 'posix_memalign';
+procedure free(ptr: Pointer); cdecl; external 'c' name 'free';
 
 {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
 function fpstat(path: PAnsiChar; buf: Pointer): cint; cdecl; external 'c' name 'stat';

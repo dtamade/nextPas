@@ -153,6 +153,9 @@ function GetFinalPathNameByHandleW(hFile: HANDLE; lpszFilePath: LPWSTR; cchFileP
 function FindFirstFileA(lpFileName: LPCSTR; lpFindFileData: LPWIN32_FIND_DATAA): HANDLE; stdcall; external 'kernel32' name 'FindFirstFileA';
 function FindNextFileA(hFindFile: HANDLE; lpFindFileData: LPWIN32_FIND_DATAA): WINBOOL; stdcall; external 'kernel32' name 'FindNextFileA';
 
+function _aligned_malloc(size: SizeUInt; alignment: SizeUInt): Pointer; cdecl; external 'msvcrt.dll' name '_aligned_malloc';
+procedure _aligned_free(memblock: Pointer); cdecl; external 'msvcrt.dll' name '_aligned_free';
+
 { winsock2 FFI }
 {$I nextpas.core.platform.windows.ffi.winsock2.inc}
 

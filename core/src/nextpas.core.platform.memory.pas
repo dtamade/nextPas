@@ -19,6 +19,15 @@ function platform_aligned_alloc_is_native: Boolean;
 
 implementation
 
+{$IFDEF NEXTPAS_WINDOWS}
+uses
+  nextpas.core.platform.windows.ffi;
+{$ELSEIF defined(NEXTPAS_UNIX)}
+uses
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi;
+{$ENDIF}
+
 const
   PLATFORM_ALIGNED_ALLOC_MAGIC = UInt32($4E50414D);
 
@@ -75,6 +84,79 @@ begin
   Result := PPlatformAlignedAllocHeader(PtrUInt(APtr) - SizeOf(TPlatformAlignedAllocHeader));
 end;
 
+function platform_aligned_alloc_backend: TPlatformAlignedAllocBackend;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := paabWindowsCRT;
+{$ELSEIF defined(NEXTPAS_UNIX)}
+  Result := paabPosix;
+{$ELSE}
+  Result := paabFallback;
+{$ENDIF}
+end;
+
+function platform_aligned_alloc_is_native: Boolean;
+begin
+  Result := platform_aligned_alloc_backend <> paabFallback;
+end;
+
+function platform_fallback_aligned_raw_alloc(ARawSize: SizeUInt): Pointer;
+begin
+  Result := SysGetMem(ARawSize);
+end;
+
+procedure platform_fallback_aligned_raw_free(APtr: Pointer);
+begin
+  SysFreeMem(APtr);
+end;
+
+function platform_native_aligned_raw_alloc(ARawSize, AAlignment: SizeUInt): Pointer;
+{$IF defined(NEXTPAS_UNIX)}
+var
+  LRaw: Pointer;
+{$ENDIF}
+begin
+  Result := nil;
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := nextpas.core.platform.windows.ffi._aligned_malloc(ARawSize, AAlignment);
+{$ELSEIF defined(NEXTPAS_UNIX)}
+  LRaw := nil;
+  if nextpas.core.platform.posix.ffi.posix_memalign(@LRaw, size_t(AAlignment), size_t(ARawSize)) = 0 then
+    Result := LRaw;
+{$ELSE}
+  Result := platform_fallback_aligned_raw_alloc(ARawSize);
+{$ENDIF}
+end;
+
+procedure platform_native_aligned_raw_free(APtr: Pointer);
+begin
+  if APtr = nil then
+    Exit;
+{$IFDEF NEXTPAS_WINDOWS}
+  nextpas.core.platform.windows.ffi._aligned_free(APtr);
+{$ELSEIF defined(NEXTPAS_UNIX)}
+  nextpas.core.platform.posix.ffi.free(APtr);
+{$ELSE}
+  platform_fallback_aligned_raw_free(APtr);
+{$ENDIF}
+end;
+
+function platform_aligned_raw_alloc(ARawSize, AAlignment: SizeUInt): Pointer;
+begin
+  if platform_aligned_alloc_is_native then
+    Result := platform_native_aligned_raw_alloc(ARawSize, AAlignment)
+  else
+    Result := platform_fallback_aligned_raw_alloc(ARawSize);
+end;
+
+procedure platform_aligned_raw_free(APtr: Pointer);
+begin
+  if platform_aligned_alloc_is_native then
+    platform_native_aligned_raw_free(APtr)
+  else
+    platform_fallback_aligned_raw_free(APtr);
+end;
+
 function platform_aligned_alloc(ASize, AAlignment: SizeUInt): Pointer;
 var
   LRawSize: SizeUInt;
@@ -90,7 +172,7 @@ begin
   if not TryBuildRawSize(ASize, AAlignment, LRawSize) then
     Exit;
 
-  LRaw := SysGetMem(LRawSize);
+  LRaw := platform_aligned_raw_alloc(LRawSize, AAlignment);
   if LRaw = nil then
     Exit;
 
@@ -113,7 +195,7 @@ begin
   LHeader := HeaderOf(APtr);
   if LHeader^.Magic <> PLATFORM_ALIGNED_ALLOC_MAGIC then
     Exit;
-  SysFreeMem(LHeader^.RawPtr);
+  platform_aligned_raw_free(LHeader^.RawPtr);
 end;
 
 function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt): Pointer;
@@ -145,16 +227,6 @@ begin
   else
     Move(APtr^, Result^, ANewSize);
   platform_aligned_free(APtr);
-end;
-
-function platform_aligned_alloc_backend: TPlatformAlignedAllocBackend;
-begin
-  Result := paabFallback;
-end;
-
-function platform_aligned_alloc_is_native: Boolean;
-begin
-  Result := platform_aligned_alloc_backend <> paabFallback;
 end;
 
 end.
