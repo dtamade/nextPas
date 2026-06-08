@@ -41,6 +41,7 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - `Exp` propagates `NaN`, returns `+Inf` for `+Inf`, and returns `+0` for `-Inf`. `Sqrt` preserves signed zero, returns `+Inf` for `+Inf`, and returns `NaN` for `NaN`, negative finite values, or `-Inf`.
 - `Power` returns `1` for exponent `0` before NaN-base handling. Nonzero NaN bases return `NaN`; infinite exponents follow `|base|` relative to `1`, with `+1` and `-1` returning `1`; infinite bases follow exponent sign and odd/even sign rules.
 - Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`, `TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without overflowing the intermediate squared length.
+- Vector `LengthSqr` avoids FPU overflow exceptions for huge finite inputs and returns `+Inf` when the true squared length is outside the target float range; vector `Data` aliases write through to named fields.
 - Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by
   `Normalize`.
 - Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd` inputs preserve direction instead of collapsing through an overflowing squared length.
@@ -254,7 +255,8 @@ Status:
   component multiply/divide, `Dot`, `Cross` for 3D vectors, `Length`, `LengthSqr`,
   `Normalize`, `Lerp`, `Equals` including negative-epsilon fail-close behavior, zero-vector
   normalize returning zero, huge finite `TVec2*` / `TVec3*` / `TVec4*` scaled length and
-  normalization preserving direction and unit length, raw vector non-finite fail-fast guards,
+  normalization preserving direction and unit length, `LengthSqr` huge finite overflow-to-`+Inf`
+  behavior without FPU overflow exceptions, `Data` alias write-through semantics, raw vector non-finite fail-fast guards,
   and direct `Double`-path parity coverage for
   `Data` aliases, `Zero`, add/subtract/unary minus, scalar multiply left, and representative
   length/component-multiply contracts.

@@ -409,6 +409,38 @@ REQUIRED_VEC_QUAT_STABLE_DOC_TRUTH = (
     ),
     (
         "docs/math/README.md",
+        "`LengthSqr` avoids FPU overflow exceptions for huge finite inputs and returns `+Inf` when the true squared length is outside the target float range.",
+    ),
+    (
+        "docs/math/API.md",
+        "`LengthSqr` also uses a non-throwing scaled path for huge finite inputs; if the true squared length is outside the target float range, it returns `+Inf` instead of raising an FPU overflow exception.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "Vector `LengthSqr` avoids FPU overflow exceptions for huge finite inputs and returns `+Inf` when the true squared length is outside the target float range; vector `Data` aliases write through to named fields.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`LengthSqr` avoids FPU overflow exceptions for huge finite inputs and returns `+Inf` when the true squared length is outside the target float range.",
+    ),
+    (
+        "docs/math/README.md",
+        "Vector `Data` aliases write through to `X/Y/Z/W`.",
+    ),
+    (
+        "docs/math/API.md",
+        "`Data` aliases are read/write views over `X/Y/Z/W`, so indexed writes update the named fields.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "Vector `LengthSqr` avoids FPU overflow exceptions for huge finite inputs and returns `+Inf` when the true squared length is outside the target float range; vector `Data` aliases write through to named fields.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "Vector `Data` aliases write through to named fields.",
+    ),
+    (
+        "docs/math/README.md",
         "Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by `Normalize`.",
     ),
     (
@@ -1091,6 +1123,8 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("vec-2d-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec2d huge finite length + normalize'"),
     RequiredBehaviorTestMarker("vec-3d-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec3d huge finite length + normalize'"),
     RequiredBehaviorTestMarker("vec-4d-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec4d huge finite length + normalize'"),
+    RequiredBehaviorTestMarker("vec-lengthsqr-huge-finite-overflow", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector huge finite LengthSqr overflow contract'"),
+    RequiredBehaviorTestMarker("vec-data-write-through", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector Data aliases write through'"),
     RequiredBehaviorTestMarker("vec-normalize-raw-non-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('raw vector normalize non-finite inputs fail fast'"),
     RequiredBehaviorTestMarker("mat-3f", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('TMat3f contracts'"),
     RequiredBehaviorTestMarker("mat-4f", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('TMat4f contracts'"),

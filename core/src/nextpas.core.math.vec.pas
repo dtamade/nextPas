@@ -169,6 +169,39 @@ uses
   nextpas.core.errors,
   nextpas.core.math.scalar;
 
+const
+  MAX_SINGLE_VALUE: Double = 3.40282346638528859812e38;
+  MAX_DOUBLE_VALUE: Double = 1.79769313486231570815e308;
+
+type
+  TSingleBitCast = packed record
+    case Integer of
+      0: (Value: Single);
+      1: (Bits: UInt32);
+  end;
+
+  TDoubleBitCast = packed record
+    case Integer of
+      0: (Value: Double);
+      1: (Bits: UInt64);
+  end;
+
+function SinglePositiveInfinity: Single; inline;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := UInt32($7F800000);
+  Result := LValue.Value;
+end;
+
+function DoublePositiveInfinity: Double; inline;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := UInt64($7FF0000000000000);
+  Result := LValue.Value;
+end;
+
 function SingleEquals(const AA, AB, AEpsilon: Single): Boolean; inline;
 begin
   Result := (AEpsilon >= 0.0) and nextpas.core.math.scalar.FloatEquals(AA, AB, AEpsilon);
@@ -339,6 +372,112 @@ begin
   Result := StableVec4Length(AX, AY, 0.0, 0.0);
 end;
 
+function StableVec4LengthSqr(const AX, AY, AZ, AW: Single): Single; inline;
+var
+  LX: Double;
+  LY: Double;
+  LZ: Double;
+  LW: Double;
+  LMax: Double;
+  LScaledX: Double;
+  LScaledY: Double;
+  LScaledZ: Double;
+  LScaledW: Double;
+  LScaledSum: Double;
+begin
+  if nextpas.core.math.scalar.IsNaN(AX) or nextpas.core.math.scalar.IsNaN(AY) or
+    nextpas.core.math.scalar.IsNaN(AZ) or nextpas.core.math.scalar.IsNaN(AW) then
+    Exit(((AX + AY) + AZ) + AW);
+  if nextpas.core.math.scalar.IsInfinite(AX) or nextpas.core.math.scalar.IsInfinite(AY) or
+    nextpas.core.math.scalar.IsInfinite(AZ) or nextpas.core.math.scalar.IsInfinite(AW) then
+    Exit(SinglePositiveInfinity);
+  LX := nextpas.core.math.scalar.Abs(AX);
+  LY := nextpas.core.math.scalar.Abs(AY);
+  LZ := nextpas.core.math.scalar.Abs(AZ);
+  LW := nextpas.core.math.scalar.Abs(AW);
+  LMax := LX;
+  if LY > LMax then
+    LMax := LY;
+  if LZ > LMax then
+    LMax := LZ;
+  if LW > LMax then
+    LMax := LW;
+  if LMax = 0.0 then
+    Exit(0.0);
+  LScaledX := LX / LMax;
+  LScaledY := LY / LMax;
+  LScaledZ := LZ / LMax;
+  LScaledW := LW / LMax;
+  LScaledSum := LScaledX * LScaledX + LScaledY * LScaledY +
+    LScaledZ * LScaledZ + LScaledW * LScaledW;
+  if LMax >= System.Sqrt(MAX_SINGLE_VALUE / LScaledSum) then
+    Exit(SinglePositiveInfinity);
+  Result := Single((LMax * LMax) * LScaledSum);
+end;
+
+function StableVec4LengthSqr(const AX, AY, AZ, AW: Double): Double; inline;
+var
+  LX: Double;
+  LY: Double;
+  LZ: Double;
+  LW: Double;
+  LMax: Double;
+  LScaledX: Double;
+  LScaledY: Double;
+  LScaledZ: Double;
+  LScaledW: Double;
+  LScaledSum: Double;
+begin
+  if nextpas.core.math.scalar.IsNaN(AX) or nextpas.core.math.scalar.IsNaN(AY) or
+    nextpas.core.math.scalar.IsNaN(AZ) or nextpas.core.math.scalar.IsNaN(AW) then
+    Exit(((AX + AY) + AZ) + AW);
+  LX := nextpas.core.math.scalar.Abs(AX);
+  LY := nextpas.core.math.scalar.Abs(AY);
+  LZ := nextpas.core.math.scalar.Abs(AZ);
+  LW := nextpas.core.math.scalar.Abs(AW);
+  if nextpas.core.math.scalar.IsInfinite(LX) or nextpas.core.math.scalar.IsInfinite(LY) or
+    nextpas.core.math.scalar.IsInfinite(LZ) or nextpas.core.math.scalar.IsInfinite(LW) then
+    Exit(DoublePositiveInfinity);
+  LMax := LX;
+  if LY > LMax then
+    LMax := LY;
+  if LZ > LMax then
+    LMax := LZ;
+  if LW > LMax then
+    LMax := LW;
+  if LMax = 0.0 then
+    Exit(0.0);
+  LScaledX := LX / LMax;
+  LScaledY := LY / LMax;
+  LScaledZ := LZ / LMax;
+  LScaledW := LW / LMax;
+  LScaledSum := LScaledX * LScaledX + LScaledY * LScaledY +
+    LScaledZ * LScaledZ + LScaledW * LScaledW;
+  if LMax >= System.Sqrt(MAX_DOUBLE_VALUE / LScaledSum) then
+    Exit(DoublePositiveInfinity);
+  Result := (LMax * LMax) * LScaledSum;
+end;
+
+function StableVec2LengthSqr(const AX, AY: Single): Single; inline;
+begin
+  Result := StableVec4LengthSqr(AX, AY, Single(0.0), Single(0.0));
+end;
+
+function StableVec2LengthSqr(const AX, AY: Double): Double; inline;
+begin
+  Result := StableVec4LengthSqr(AX, AY, 0.0, 0.0);
+end;
+
+function StableVec3LengthSqr(const AX, AY, AZ: Single): Single; inline;
+begin
+  Result := StableVec4LengthSqr(AX, AY, AZ, Single(0.0));
+end;
+
+function StableVec3LengthSqr(const AX, AY, AZ: Double): Double; inline;
+begin
+  Result := StableVec4LengthSqr(AX, AY, AZ, 0.0);
+end;
+
 function StableVec3Length(const AX, AY, AZ: Single): Single; inline;
 begin
   Result := StableVec4Length(AX, AY, AZ, Single(0.0));
@@ -419,7 +558,7 @@ end;
 
 function TVec2f.LengthSqr: Single;
 begin
-  Result := Dot(Self, Self);
+  Result := StableVec2LengthSqr(X, Y);
 end;
 
 function TVec2f.Length: Single;
@@ -520,7 +659,7 @@ end;
 
 function TVec3f.LengthSqr: Single;
 begin
-  Result := Dot(Self, Self);
+  Result := StableVec3LengthSqr(X, Y, Z);
 end;
 
 function TVec3f.Length: Single;
@@ -618,7 +757,7 @@ end;
 
 function TVec4f.LengthSqr: Single;
 begin
-  Result := Dot(Self, Self);
+  Result := StableVec4LengthSqr(X, Y, Z, W);
 end;
 
 function TVec4f.Length: Single;
@@ -707,7 +846,7 @@ end;
 
 function TVec2d.LengthSqr: Double;
 begin
-  Result := Dot(Self, Self);
+  Result := StableVec2LengthSqr(X, Y);
 end;
 
 function TVec2d.Length: Double;
@@ -808,7 +947,7 @@ end;
 
 function TVec3d.LengthSqr: Double;
 begin
-  Result := Dot(Self, Self);
+  Result := StableVec3LengthSqr(X, Y, Z);
 end;
 
 function TVec3d.Length: Double;
@@ -906,7 +1045,7 @@ end;
 
 function TVec4d.LengthSqr: Double;
 begin
-  Result := Dot(Self, Self);
+  Result := StableVec4LengthSqr(X, Y, Z, W);
 end;
 
 function TVec4d.Length: Double;

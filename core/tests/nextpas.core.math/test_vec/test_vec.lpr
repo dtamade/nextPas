@@ -81,6 +81,22 @@ begin
   CheckNear(AExpectedW, AActual.W, 0.000000000001, AMessage + '.W');
 end;
 
+procedure CheckSinglePositiveInfinity(const AActual: Single; const AMessage: string);
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AActual;
+  CheckEqual(Int64($7F800000), Int64(LValue.Bits), AMessage);
+end;
+
+procedure CheckDoublePositiveInfinity(const AActual: Double; const AMessage: string);
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Value := AActual;
+  CheckEqual(Int64($7FF0000000000000), Int64(LValue.Bits), AMessage);
+end;
+
 procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string; const AProc: TTestProc);
 begin
   try
@@ -428,6 +444,68 @@ begin
   CheckNear(1.0, N.Length, 0.000000000001, 'TVec4d huge finite normalize preserves unit length');
 end;
 
+procedure TestVectorLengthSqrHugeFiniteOverflowContract;
+begin
+  CheckSinglePositiveInfinity(TVec2f.Create(Single(3.0e20), Single(4.0e20)).LengthSqr,
+    'TVec2f huge finite LengthSqr saturates to +Inf');
+  CheckSinglePositiveInfinity(TVec3f.Create(Single(3.0e20), Single(4.0e20), 0.0).LengthSqr,
+    'TVec3f huge finite LengthSqr saturates to +Inf');
+  CheckSinglePositiveInfinity(TVec4f.Create(Single(3.0e20), Single(4.0e20), 0.0, 0.0).LengthSqr,
+    'TVec4f huge finite LengthSqr saturates to +Inf');
+  CheckDoublePositiveInfinity(TVec2d.Create(3.0e200, 4.0e200).LengthSqr,
+    'TVec2d huge finite LengthSqr saturates to +Inf');
+  CheckDoublePositiveInfinity(TVec3d.Create(3.0e200, 4.0e200, 0.0).LengthSqr,
+    'TVec3d huge finite LengthSqr saturates to +Inf');
+  CheckDoublePositiveInfinity(TVec4d.Create(3.0e200, 4.0e200, 0.0, 0.0).LengthSqr,
+    'TVec4d huge finite LengthSqr saturates to +Inf');
+end;
+
+procedure TestVectorDataAliasesWriteThrough;
+var
+  V2f: TVec2f;
+  V3f: TVec3f;
+  V4f: TVec4f;
+  V2d: TVec2d;
+  V3d: TVec3d;
+  V4d: TVec4d;
+begin
+  V2f := TVec2f.Zero;
+  V2f.Data[0] := 1.25;
+  V2f.Data[1] := -2.5;
+  CheckVec2f(1.25, -2.5, V2f, 'TVec2f Data write-through');
+
+  V3f := TVec3f.Zero;
+  V3f.Data[0] := 1.25;
+  V3f.Data[1] := -2.5;
+  V3f.Data[2] := 3.75;
+  CheckVec3f(1.25, -2.5, 3.75, V3f, 'TVec3f Data write-through');
+
+  V4f := TVec4f.Zero;
+  V4f.Data[0] := 1.25;
+  V4f.Data[1] := -2.5;
+  V4f.Data[2] := 3.75;
+  V4f.Data[3] := -4.5;
+  CheckVec4f(1.25, -2.5, 3.75, -4.5, V4f, 'TVec4f Data write-through');
+
+  V2d := TVec2d.Zero;
+  V2d.Data[0] := 1.25;
+  V2d.Data[1] := -2.5;
+  CheckVec2d(1.25, -2.5, V2d, 'TVec2d Data write-through');
+
+  V3d := TVec3d.Zero;
+  V3d.Data[0] := 1.25;
+  V3d.Data[1] := -2.5;
+  V3d.Data[2] := 3.75;
+  CheckVec3d(1.25, -2.5, 3.75, V3d, 'TVec3d Data write-through');
+
+  V4d := TVec4d.Zero;
+  V4d.Data[0] := 1.25;
+  V4d.Data[1] := -2.5;
+  V4d.Data[2] := 3.75;
+  V4d.Data[3] := -4.5;
+  CheckVec4d(1.25, -2.5, 3.75, -4.5, V4d, 'TVec4d Data write-through');
+end;
+
 procedure TestRawVectorNormalizeNonFiniteInputsFailFast;
 begin
   ExpectArgumentErrorMessage('TVec2f.Normalize: vector must be finite',
@@ -460,6 +538,9 @@ begin
   T.Run('TVec2d huge finite length + normalize', @TestVec2dHugeFiniteLengthAndNormalize);
   T.Run('TVec3d huge finite length + normalize', @TestVec3dHugeFiniteLengthAndNormalize);
   T.Run('TVec4d huge finite length + normalize', @TestVec4dHugeFiniteLengthAndNormalize);
+  T.Run('vector huge finite LengthSqr overflow contract',
+    @TestVectorLengthSqrHugeFiniteOverflowContract);
+  T.Run('vector Data aliases write through', @TestVectorDataAliasesWriteThrough);
   T.Run('raw vector normalize non-finite inputs fail fast',
     @TestRawVectorNormalizeNonFiniteInputsFailFast);
   T.Summary;
