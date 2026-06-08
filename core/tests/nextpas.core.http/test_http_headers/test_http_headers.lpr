@@ -251,6 +251,58 @@ begin
   Check(not LClone.Has('X-B'), 'clone omits deleted entry');
 end;
 
+procedure TestMixedCaseDuplicatesSetRemoveGetAllPreserveOrder;
+var
+  LH: IHttpHeaders;
+  LAll: TStringArray;
+  LSeen: string;
+begin
+  LH := NewHttpHeaders;
+  LH.Add('X-Trace', 'a');
+  LH.Add('x-trace', 'b');
+  LH.Add('X-Keep', 'k1');
+  LH.Add('X-TRACE', 'c');
+  LH.Add('x-tail', 't1');
+
+  LAll := LH.GetAll('x-TrAcE');
+  CheckEqual(Int64(3), Int64(Length(LAll)),
+    'mixed-case duplicates collapse to one lookup set');
+  CheckEqual('a', LAll[0], 'mixed-case first value keeps insertion order');
+  CheckEqual('b', LAll[1], 'mixed-case second value keeps insertion order');
+  CheckEqual('c', LAll[2], 'mixed-case third value keeps insertion order');
+
+  LH.SetHeader('X-TRACE', 'new');
+
+  CheckEqual(Int64(3), Int64(LH.Count),
+    'set replaces all mixed-case duplicates with one entry');
+  LSeen := '';
+  LH.ForEach(
+    procedure(const AName, AValue: string)
+    begin
+      if LSeen <> '' then
+        LSeen := LSeen + '|';
+      LSeen := LSeen + AName + '=' + AValue;
+    end);
+  CheckEqual('x-trace=new|x-keep=k1|x-tail=t1', LSeen,
+    'set preserves first target position and non-target order');
+
+  LH.Remove('x-TrAcE');
+
+  CheckEqual(Int64(2), Int64(LH.Count),
+    'remove deletes all mixed-case duplicate variants');
+  Check(not LH.Has('X-Trace'), 'removed mixed-case header no longer exists');
+  LSeen := '';
+  LH.ForEach(
+    procedure(const AName, AValue: string)
+    begin
+      if LSeen <> '' then
+        LSeen := LSeen + '|';
+      LSeen := LSeen + AName + '=' + AValue;
+    end);
+  CheckEqual('x-keep=k1|x-tail=t1', LSeen,
+    'remove preserves non-target order');
+end;
+
 procedure TestClearResetsAndAllowsReuse;
 var
   LH: IHttpHeaders;
@@ -512,6 +564,8 @@ begin
   T.Run('GetAll returns empty for missing', @TestGetAllReturnEmptyForMissing);
   T.Run('Remove non-existent is no-op', @TestRemoveNonExistentIsNoOp);
   T.Run('Compaction preserves visible order', @TestCompactionPreservesVisibleOrder);
+  T.Run('Mixed-case duplicates preserve Set/Remove/GetAll order',
+    @TestMixedCaseDuplicatesSetRemoveGetAllPreserveOrder);
   T.Run('Clear resets and allows reuse', @TestClearResetsAndAllowsReuse);
   T.Run('Parsed add canonicalizes parser validated headers',
     @TestParsedAddCanonicalizesParserValidatedHeaders);
