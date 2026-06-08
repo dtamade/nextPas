@@ -166,6 +166,9 @@ overflowing the intermediate squared length.
 `LengthSqr` also uses a non-throwing scaled path for huge finite inputs; below-overflow results stay finite, and if the true squared length is outside the target float range, it returns `+Inf` instead of raising an FPU overflow exception.
 `Dot` uses the same finite scaling strategy: huge finite inputs do not raise intermediate FPU
 overflow, exact finite cancellation stays finite, and true out-of-range results return signed infinity.
+`Cross` uses stable finite intermediate paths for huge finite `TVec3f` and `TVec3d` inputs:
+finite true components stay finite instead of becoming `NaN` through intermediate overflow,
+and true out-of-range components return signed infinity.
 `Data` aliases are read/write views over `X/Y/Z/W`, so indexed writes update the named fields.
 Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by
 `Normalize`.

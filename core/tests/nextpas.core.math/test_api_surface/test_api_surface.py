@@ -465,6 +465,14 @@ REQUIRED_VEC_QUAT_STABLE_DOC_TRUTH = (
         "`LengthSqr` avoids FPU overflow exceptions for huge finite inputs and returns `+Inf` when the true squared length is outside the target float range.",
     ),
     (
+        "docs/math/API.md",
+        "`Cross` uses stable finite intermediate paths for huge finite `TVec3f` and `TVec3d` inputs: finite true components stay finite instead of becoming `NaN` through intermediate overflow, and true out-of-range components return signed infinity.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`Cross` uses stable finite intermediate paths for huge finite `TVec3f` and `TVec3d` inputs: finite true components stay finite instead of becoming `NaN` through intermediate overflow, and true out-of-range components return signed infinity.",
+    ),
+    (
         "docs/math/README.md",
         "Vector `Data` aliases write through to `X/Y/Z/W`.",
     ),
@@ -1542,6 +1550,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("vec-lengthsqr-huge-finite-overflow", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector huge finite LengthSqr overflow contract'"),
     RequiredBehaviorTestMarker("vec-lengthsqr-below-overflow", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec4d below overflow LengthSqr remains finite"),
     RequiredBehaviorTestMarker("vec-dot-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector huge finite Dot contract'"),
+    RequiredBehaviorTestMarker("vec-cross-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector huge finite Cross cancellation contract'"),
     RequiredBehaviorTestMarker("vec-data-write-through", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector Data aliases write through'"),
     RequiredBehaviorTestMarker("vec-normalize-max-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector max finite normalize contract'"),
     RequiredBehaviorTestMarker("vec-normalize-raw-non-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('raw vector normalize non-finite inputs fail fast'"),
