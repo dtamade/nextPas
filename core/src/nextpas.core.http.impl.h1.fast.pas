@@ -127,6 +127,23 @@ begin
   Result := True;
 end;
 
+function IsValidRequestTargetFast(const ABuf: PAnsiChar;
+  const ALen: SizeUInt): Boolean; inline;
+var
+  LI: SizeUInt;
+  LByte: Byte;
+begin
+  if ALen = 0 then
+    Exit(False);
+  for LI := 0 to ALen - 1 do
+  begin
+    LByte := Byte(ABuf[LI]);
+    if (LByte <= 31) or (LByte = 127) then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
 function FastLowerAscii(const AChar: AnsiChar): AnsiChar; inline;
 begin
   if (AChar >= 'A') and (AChar <= 'Z') then
@@ -577,6 +594,9 @@ begin
     Exit;
 
   // Extract path
+  if not IsValidRequestTargetFast(ABuf + LSpace1 + 1,
+    LSpace2 - LSpace1 - 1) then
+    Exit;
   SetString(Result.Path, ABuf + LSpace1 + 1, LSpace2 - LSpace1 - 1);
 
   // Parse version

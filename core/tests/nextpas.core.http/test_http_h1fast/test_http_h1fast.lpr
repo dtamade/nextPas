@@ -240,6 +240,33 @@ begin
   Check(not LR.Success, 'should fail — invalid header value fallback');
 end;
 
+procedure CheckInvalidRequestTargetFallsBackLikeLlhttp(const ATarget,
+  ALabel: AnsiString);
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+  LP: IH1Parser;
+begin
+  LReq := 'GET ' + ATarget + ' HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10#13#10;
+
+  LP := NewH1RequestParser;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.HasError, string(ALabel) + ': llhttp rejects request-target');
+
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(not LR.Success,
+    string(ALabel) + ': fast parser falls back on invalid request-target');
+end;
+
+procedure TestRequestTargetCtlAndDelFallbacks;
+begin
+  CheckInvalidRequestTargetFallsBackLikeLlhttp('/bad' + #0 + 'path',
+    'request-target NUL');
+  CheckInvalidRequestTargetFallsBackLikeLlhttp('/bad' + #127 + 'path',
+    'request-target DEL');
+end;
+
 procedure TestIncompleteBodyFallback;
 var
   LReq: AnsiString;
@@ -609,6 +636,8 @@ begin
   T.Run('Header name tchar separator fallbacks',
     @TestHeaderNameTCharSeparatorFallbacks);
   T.Run('Invalid header value fallback', @TestInvalidHeaderValueFallback);
+  T.Run('Request-target CTL/DEL fallbacks',
+    @TestRequestTargetCtlAndDelFallbacks);
   T.Run('Incomplete body fallback', @TestIncompleteBodyFallback);
   T.Run('Large headers (>1KB)', @TestLargeHeaders);
   T.Run('Path with query string', @TestPathWithQuery);
