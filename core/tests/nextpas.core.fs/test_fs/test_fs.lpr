@@ -352,11 +352,40 @@ begin
   Check(FsIsDir(GTmpDir + '/a/b/c'), 'deep dir exists');
 end;
 
+procedure TestMkdirExistingFileRaisesAlreadyExists;
+var
+  LGot: Boolean;
+begin
+  FsWriteFile(GTmpDir + '/mkdir-existing-file.txt', TBytes.Create(1));
+  LGot := False;
+  try
+    FsMkdir(GTmpDir + '/mkdir-existing-file.txt');
+  except
+    on E: EAlreadyExistsError do
+      LGot := True;
+  end;
+  Check(LGot, 'FsMkdir existing regular file raises EAlreadyExistsError');
+end;
+
 procedure TestRemove;
 begin
   FsWriteFile(GTmpDir + '/rm.txt', TBytes.Create(1));
   Check(FsRemove(GTmpDir + '/rm.txt'), 'remove file');
   Check(not FsExists(GTmpDir + '/rm.txt'), 'gone');
+end;
+
+procedure TestRemoveMissingPathRaisesNotFound;
+var
+  LGot: Boolean;
+begin
+  LGot := False;
+  try
+    FsRemove(GTmpDir + '/missing-remove-path');
+  except
+    on E: ENotFoundError do
+      LGot := True;
+  end;
+  Check(LGot, 'FsRemove missing path raises ENotFoundError');
 end;
 
 procedure TestRemoveAll;
@@ -373,6 +402,20 @@ begin
   Check(FsRename(GTmpDir + '/old.txt', GTmpDir + '/new.txt'), 'rename');
   Check(not FsExists(GTmpDir + '/old.txt'), 'old gone');
   Check(FsExists(GTmpDir + '/new.txt'), 'new exists');
+end;
+
+procedure TestRenameMissingSourceRaisesNotFound;
+var
+  LGot: Boolean;
+begin
+  LGot := False;
+  try
+    FsRename(GTmpDir + '/missing-rename-source', GTmpDir + '/rename-dst');
+  except
+    on E: ENotFoundError do
+      LGot := True;
+  end;
+  Check(LGot, 'FsRename missing source raises ENotFoundError');
 end;
 
 procedure TestDirIterator;
@@ -780,9 +823,15 @@ begin
 
     T.Run('Mkdir + ReadDir', @TestMkdirAndReadDir);
     T.Run('MkdirAll', @TestMkdirAll);
+    T.Run('Mkdir existing file raises already exists',
+      @TestMkdirExistingFileRaisesAlreadyExists);
     T.Run('Remove', @TestRemove);
+    T.Run('Remove missing path raises not found',
+      @TestRemoveMissingPathRaisesNotFound);
     T.Run('RemoveAll', @TestRemoveAll);
     T.Run('Rename', @TestRename);
+    T.Run('Rename missing source raises not found',
+      @TestRenameMissingSourceRaisesNotFound);
     T.Run('DirIterator', @TestDirIterator);
 {$IFDEF NEXTPAS_LINUX}
     T.Run('DirIterator close reports platform error',

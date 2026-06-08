@@ -163,8 +163,13 @@ begin
 end;
 
 function FsMkdir(const APath: string; const APerm: TFilePermission): Boolean;
+var
+  LResult: Int32;
 begin
-  Result := platform_file_mkdir(PAnsiChar(APath), UInt32(APerm)) = 0;
+  LResult := platform_file_mkdir(PAnsiChar(APath), UInt32(APerm));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'mkdir', APath);
+  Result := True;
 end;
 
 function FsMkdirAll(const APath: string; const APerm: TFilePermission): Boolean;
@@ -184,11 +189,21 @@ begin
 end;
 
 function FsRemove(const APath: string): Boolean;
+var
+  LStat: TPlatformFileStat;
+  LResult: Int32;
 begin
-  if IsRealDir(APath) then
-    Result := platform_file_rmdir(PAnsiChar(APath)) = 0
+  LResult := platform_file_lstat(PAnsiChar(APath), LStat);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'lstat', APath);
+
+  if LStat.FileType = nextpas.core.platform.files.base.ftDirectory then
+    LResult := platform_file_rmdir(PAnsiChar(APath))
   else
-    Result := platform_file_unlink(PAnsiChar(APath)) = 0;
+    LResult := platform_file_unlink(PAnsiChar(APath));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'remove', APath);
+  Result := True;
 end;
 
 function FsRemoveAll(const APath: string): Boolean;
@@ -226,8 +241,13 @@ begin
 end;
 
 function FsRename(const AOld, ANew: string): Boolean;
+var
+  LResult: Int32;
 begin
-  Result := platform_file_rename(PAnsiChar(AOld), PAnsiChar(ANew)) = 0;
+  LResult := platform_file_rename(PAnsiChar(AOld), PAnsiChar(ANew));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'rename', AOld);
+  Result := True;
 end;
 
 procedure FsWalk(const ARoot: string; const AFunc: TWalkFunc);
