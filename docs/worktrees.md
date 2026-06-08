@@ -316,6 +316,8 @@ cherry-pick 或 path-limited replay。除非明确授权，最终 mainline integ
 
 `Ready` 汇报必须包含分支、worktree 路径、`HEAD`、改动文件清单、不能带入主线的文件、
 focused verification 证据和 merge 建议。
+`scripts/report-envelope-check.sh --status <Ready|Blocked|Landed> <report.md>` 可用于本地检查这些
+汇报 envelope 的必填字段；它只做文本契约检查，不替代验证命令或 landing review。
 
 如果包含受控跨模块修改，`Ready` 还必须包含：
 
