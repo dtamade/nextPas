@@ -1626,6 +1626,12 @@ begin
     LP.Finish;
   Check(LP.HasError, 'invalid trailer field reports parser error');
   Check(not LP.IsComplete, 'invalid trailer field is not complete');
+  CheckEqual(Int64(0), LP.GetBodySize,
+    'invalid trailer field does not publish partial body size');
+  CheckEqual('', LP.GetBody,
+    'invalid trailer field does not publish partial body bytes');
+  Check(LP.NewBodyReader = nil,
+    'invalid trailer field does not publish partial body reader');
 end;
 
 procedure TestChunkedRequestTruncatedTrailerAtEof;

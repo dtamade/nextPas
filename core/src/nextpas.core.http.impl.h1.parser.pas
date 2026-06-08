@@ -1047,16 +1047,22 @@ end;
 
 function TH1Parser.GetBody: string;
 begin
+  if FError then
+    Exit('');
   Result := BytesToString(FBody, FBodySize);
 end;
 
 function TH1Parser.GetBodySize: Int64;
 begin
+  if FError then
+    Exit(0);
   Result := Int64(FBodySize);
 end;
 
 function TH1Parser.NewBodyReader: IReader;
 begin
+  if FError then
+    Exit(nil);
   if FBodySize = 0 then
     Exit(nil);
   Result := TSharedBytesReader.Create(SnapshotBody);
