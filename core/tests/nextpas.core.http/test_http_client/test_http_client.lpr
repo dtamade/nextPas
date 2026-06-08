@@ -33,6 +33,8 @@ var
   GRawListener: ITcpListener;
   GRawResponse1: string;
   GRawResponse2: string;
+  GRawRequest1: string;
+  GRawRequest2: string;
   GRawAcceptLimit: Int32;
   GRawAcceptCount: Int32;
   GAcceptCount: Int32;
@@ -142,6 +144,24 @@ type
     function GetStatusCode: THttpStatus;
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
+  end;
+
+  TCustomWireHeader = class(TInterfacedObject, IHttpHeaders)
+  private
+    FName: string;
+    FValue: string;
+  public
+    constructor Create(const AName, AValue: string);
+    procedure SetHeader(const AName, AValue: string);
+    procedure Add(const AName, AValue: string);
+    function Get(const AName: string): string;
+    function GetAll(const AName: string): TStringArray;
+    function Has(const AName: string): Boolean;
+    procedure Remove(const AName: string);
+    procedure Clear;
+    function Count: Int32;
+    procedure ForEach(const ACallback: THeaderIterator);
+    function Clone: IHttpHeaders;
   end;
 
   TOneShotReader = class(TInterfacedObject, IReader)
@@ -367,6 +387,11 @@ begin
         Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
         LP := Pos(#13#10#13#10, LAccum);
       until LP > 0;
+
+      if LI = 1 then
+        GRawRequest1 := LAccum
+      else
+        GRawRequest2 := LAccum;
 
       if LI = 1 then
         LReply := GRawResponse1
@@ -1187,6 +1212,77 @@ end;
 function TNilHeadersRedirectResponse.GetBody: IReader;
 begin
   Result := nil;
+end;
+
+constructor TCustomWireHeader.Create(const AName, AValue: string);
+begin
+  inherited Create;
+  FName := AName;
+  FValue := AValue;
+end;
+
+procedure TCustomWireHeader.SetHeader(const AName, AValue: string);
+begin
+  FName := AName;
+  FValue := AValue;
+end;
+
+procedure TCustomWireHeader.Add(const AName, AValue: string);
+begin
+  FName := AName;
+  FValue := AValue;
+end;
+
+function TCustomWireHeader.Get(const AName: string): string;
+begin
+  if LowerCase(AName) = LowerCase(FName) then
+    Result := FValue
+  else
+    Result := '';
+end;
+
+function TCustomWireHeader.GetAll(const AName: string): TStringArray;
+begin
+  if LowerCase(AName) <> LowerCase(FName) then
+    Exit(nil);
+  SetLength(Result, 1);
+  Result[0] := FValue;
+end;
+
+function TCustomWireHeader.Has(const AName: string): Boolean;
+begin
+  Result := LowerCase(AName) = LowerCase(FName);
+end;
+
+procedure TCustomWireHeader.Remove(const AName: string);
+begin
+  if LowerCase(AName) = LowerCase(FName) then
+    Clear;
+end;
+
+procedure TCustomWireHeader.Clear;
+begin
+  FName := '';
+  FValue := '';
+end;
+
+function TCustomWireHeader.Count: Int32;
+begin
+  if FName = '' then
+    Result := 0
+  else
+    Result := 1;
+end;
+
+procedure TCustomWireHeader.ForEach(const ACallback: THeaderIterator);
+begin
+  if FName <> '' then
+    ACallback(FName, FValue);
+end;
+
+function TCustomWireHeader.Clone: IHttpHeaders;
+begin
+  Result := TCustomWireHeader.Create(FName, FValue) as IHttpHeaders;
 end;
 
 constructor TOneShotReader.Create(const AData: string);
@@ -5938,6 +6034,85 @@ begin
     'auto host invalid value does not mutate request headers');
 end;
 
+procedure CheckClientRejectsCustomWireHeader(const AHeaderName, AHeaderValue,
+  AInjectedMarker, AContext: string);
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LRaised: Boolean;
+  LRejectedHeader: Boolean;
+begin
+  GRawRequest1 := '';
+  GRawRequest2 := '';
+  GRawResponse1 := 'HTTP/1.1 200 OK'#13#10 +
+                   'Content-Length: 2'#13#10 +
+                   #13#10 +
+                   'ok';
+  GRawResponse2 := '';
+  GRawAcceptLimit := 1;
+  GRawAcceptCount := 0;
+  GRawListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRawListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @RawResponseThread, nil);
+  LResp := nil;
+
+  try
+    LClient := NewHttpClient;
+    LReq := NewRequest(hmGet,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/wire-header',
+      TCustomWireHeader.Create(AHeaderName, AHeaderValue) as IHttpHeaders,
+      nil, 0);
+
+    LRaised := False;
+    LRejectedHeader := False;
+    try
+      LResp := LClient.Send(LReq);
+    except
+      on E: EHttpError do
+      begin
+        LRaised := True;
+        LRejectedHeader := Pos('invalid header', E.Message) > 0;
+      end;
+    end;
+
+    Check(LRaised, AContext + ': invalid custom header raises EHttpError');
+    Check(LRejectedHeader,
+      AContext + ': invalid custom header fails before response parsing');
+    Check(Pos(AInjectedMarker, GRawRequest1) = 0,
+      AContext + ': injected header is not written to the wire');
+    if LResp <> nil then
+      HttpReleaseResponseBody(LResp);
+  finally
+    GRawListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRawListener := nil;
+    GRawRequest1 := '';
+    GRawRequest2 := '';
+    GRawResponse1 := '';
+    GRawResponse2 := '';
+    GRawAcceptLimit := 0;
+    GRawAcceptCount := 0;
+  end;
+end;
+
+procedure TestClientRejectsCustomHeaderValueInjectionBeforeWireWrite;
+begin
+  CheckClientRejectsCustomWireHeader('x-safe',
+    'ok'#13#10'x-injected: yes', 'x-injected: yes',
+    'custom header value CRLF injection');
+end;
+
+procedure TestClientRejectsCustomHeaderNameInjectionBeforeWireWrite;
+begin
+  CheckClientRejectsCustomWireHeader('x-safe'#13#10'x-injected',
+    'yes', 'x-injected: yes',
+    'custom header name CRLF injection');
+end;
+
 function PoolAcceptThread(AArg: Pointer): Pointer; cdecl;
 var
   LConn: ITcpStream;
@@ -6345,6 +6520,10 @@ begin
     @TestClientCustomTransportAcceptsNonHttpScheme);
   T.Run('Client auto Host rejects invalid header value',
     @TestClientAutoHostRejectsInvalidHeaderValue);
+  T.Run('Client rejects custom header value injection before wire write',
+    @TestClientRejectsCustomHeaderValueInjectionBeforeWireWrite);
+  T.Run('Client rejects custom header name injection before wire write',
+    @TestClientRejectsCustomHeaderNameInjectionBeforeWireWrite);
   T.Run('Connection reuse', @TestConnectionReuse);
   T.Summary;
 end.

@@ -329,8 +329,20 @@ var
   LI: SizeInt;
 begin
   for LI := 1 to Length(AValue) do
-    if (AValue[LI] = #13) or (AValue[LI] = #10) or (AValue[LI] = #0) then
-      raise EHttpError.Create('invalid header value: contains CR/LF/NUL');
+    if (((AValue[LI] < #32) and (AValue[LI] <> #9)) or
+        (AValue[LI] = #127)) then
+      raise EHttpError.Create('invalid header value character');
+end;
+
+procedure ValidateWireHeaderName(const AName: string);
+var
+  LI: SizeInt;
+begin
+  if AName = '' then
+    raise EHttpError.Create('empty header name');
+  for LI := 1 to Length(AName) do
+    if not IsHttpHeaderNameChar(AnsiChar(AName[LI])) then
+      raise EHttpError.Create('invalid header name character');
 end;
 
 procedure ValidatePlainHttpClientUrlScheme(const AUrl: TUrl);
@@ -2082,6 +2094,8 @@ begin
   var
     LHeader: string;
   begin
+    ValidateWireHeaderName(AName);
+    ValidateWireHeaderValue(AValue);
     LHeader := AName + ': ' + AValue;
     LBuf.Write(LHeader[1], SizeUInt(Length(LHeader)));
     LBuf.Write(CRLF[1], 2);
