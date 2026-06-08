@@ -9,9 +9,26 @@ uses
   nextpas.core.fs,
   nextpas.core.hash;
 
+type
+  TArgErrorProc = procedure;
+
 var
   T: TTestRunner;
   GTmpDir: string;
+
+procedure CheckRaisesArgumentError(AProc: TArgErrorProc; const AMessage: string);
+begin
+  try
+    AProc;
+  except
+    on E: EArgumentError do
+      Exit;
+    on E: Exception do
+      Fail(AMessage + ': expected EArgumentError, got ' + E.ClassName);
+  end;
+
+  Fail(AMessage + ': expected EArgumentError');
+end;
 
 procedure SetupTmpDir;
 begin
@@ -130,6 +147,24 @@ begin
   Check(LGot, 'SHA256FileHex missing file raises ENotFoundError');
 end;
 
+procedure CallSHA256FileHexEmptyPath;
+begin
+  SHA256FileHex('');
+end;
+
+procedure CallSHA512FileHexEmptyPath;
+begin
+  SHA512FileHex('');
+end;
+
+procedure TestEmptyPathRaisesArgumentError;
+begin
+  CheckRaisesArgumentError(@CallSHA256FileHexEmptyPath,
+    'SHA256FileHex empty path');
+  CheckRaisesArgumentError(@CallSHA512FileHexEmptyPath,
+    'SHA512FileHex empty path');
+end;
+
 begin
   SetupTmpDir;
   try
@@ -140,6 +175,7 @@ begin
     T.Run('SHA256FileHex streaming file', @TestFileHexStreamsPastSingleBuffer);
     T.Run('SHA512FileHex binary bytes', @TestSHA512FileHexPreservesBinaryBytes);
     T.Run('SHA256FileHex missing file error', @TestMissingFileRaisesNotFound);
+    T.Run('file hash empty path error', @TestEmptyPathRaisesArgumentError);
     T.Summary;
   finally
     CleanupTmpDir;

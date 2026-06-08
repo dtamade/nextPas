@@ -16,6 +16,7 @@ function SHA512FileHex(const APath: string): string;
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.base,
   nextpas.core.fs.base,
   nextpas.core.fs.intf,
@@ -32,6 +33,9 @@ var
   LRead: SizeUInt;
   LDigest: TBytes;
 begin
+  if APath = '' then
+    raise EArgumentError.Create('HashFileHex: empty path');
+
   LFile := FsOpen(APath, [fmRead]);
   try
     repeat
