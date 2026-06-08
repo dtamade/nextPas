@@ -926,6 +926,27 @@ TRIG_HOST_COMPILE_GATE_MAKEFILE_PATH = (
 TRIG_HOST_COMPILE_GATE_SOURCE_PATH = (
     "tests/nextpas.core.math/test_trig_host_compile_gate/test_trig_host_compile_gate.lpr"
 )
+TRIG_HOST_COMPILE_GATE_ROUTES = (
+    ("facade", "nextpas.core.math"),
+    ("trig", "nextpas.core.math.trig"),
+)
+TRIG_HOST_COMPILE_GATE_UNARY_FUNCTIONS = (
+    "Sin",
+    "Cos",
+    "Tan",
+    "ArcSin",
+    "ArcCos",
+    "ArcTan",
+    "Exp",
+    "Ln",
+    "Log2",
+    "Log10",
+    "Sqrt",
+)
+TRIG_HOST_COMPILE_GATE_BINARY_FUNCTIONS = (
+    "ArcTan2",
+    "Power",
+)
 IMPL_SIMD_WIN64_COMPILE_GATE_MAKEFILE_PATH = (
     "tests/nextpas.core.math/test_impl_simd_win64_compile_gate/Makefile"
 )
@@ -2489,8 +2510,14 @@ def run_required_trig_host_compile_gate_self_tests() -> None:
             "uses\n"
             "  nextpas.core.math.trig;\n"
             "begin\n"
-            "  if Sin(0.0) + Cos(0.0) + Tan(0.0) + ArcTan2(1.0, 1.0) +\n"
-            "    Exp(0.0) + Ln(1.0) + Power(2.0, 3.0) + Sqrt(4.0) = 0.0 then\n"
+            "  if Sin(0.0) + Cos(0.0) + Tan(0.0) + ArcSin(0.0) + ArcCos(1.0) +\n"
+            "    ArcTan(1.0) + ArcTan2(1.0, 1.0) + Exp(0.0) + Ln(1.0) +\n"
+            "    Log2(2.0) + Log10(10.0) + Power(2.0, 3.0) + Sqrt(4.0) +\n"
+            "    Sin(Single(0.0)) + Cos(Single(0.0)) + Tan(Single(0.0)) +\n"
+            "    ArcSin(Single(0.0)) + ArcCos(Single(1.0)) + ArcTan(Single(1.0)) +\n"
+            "    ArcTan2(Single(1.0), Single(1.0)) + Exp(Single(0.0)) + Ln(Single(1.0)) +\n"
+            "    Log2(Single(2.0)) + Log10(Single(10.0)) + Power(Single(2.0), Single(3.0)) +\n"
+            "    Sqrt(Single(4.0)) = 0.0 then\n"
             "    Halt(1);\n"
             "end.\n",
             encoding="utf-8",
@@ -2505,16 +2532,53 @@ def run_required_trig_host_compile_gate_self_tests() -> None:
             raise AssertionError(
                 "trig-host-compile-gate self-test expected " + expected_rule
             )
+        expected_rule = (
+            "missing-required-trig-host-compile-gate-marker:"
+            "facade-sin-double-binding"
+        )
+        if expected_rule not in rules:
+            raise AssertionError(
+                "trig-host-compile-gate self-test expected " + expected_rule
+            )
 
+        binding_lines = "".join(
+            "  " + marker + ";\n"
+            for _, marker in required_trig_host_compile_gate_binding_markers()
+        )
         source.write_text(
             "program test_trig_host_compile_gate;\n"
             "uses\n"
             "  nextpas.core.math,\n"
             "  nextpas.core.math.trig;\n"
+            "\n"
+            "type\n"
+            "  TUnarySingle = function(const AX: Single): Single;\n"
+            "  TUnaryDouble = function(const AX: Double): Double;\n"
+            "  TBinarySingle = function(const AX, AY: Single): Single;\n"
+            "  TBinaryDouble = function(const AX, AY: Double): Double;\n"
+            "\n"
+            "procedure RequireUnarySingle(const AValue: TUnarySingle);\n"
             "begin\n"
-            "  if Sin(0.0) + Cos(0.0) + Tan(0.0) + ArcTan2(1.0, 1.0) +\n"
-            "    Exp(0.0) + Ln(1.0) + Power(2.0, 3.0) + Sqrt(4.0) = 0.0 then\n"
-            "    Halt(1);\n"
+            "  if not Assigned(AValue) then Halt(1);\n"
+            "end;\n"
+            "\n"
+            "procedure RequireUnaryDouble(const AValue: TUnaryDouble);\n"
+            "begin\n"
+            "  if not Assigned(AValue) then Halt(1);\n"
+            "end;\n"
+            "\n"
+            "procedure RequireBinarySingle(const AValue: TBinarySingle);\n"
+            "begin\n"
+            "  if not Assigned(AValue) then Halt(1);\n"
+            "end;\n"
+            "\n"
+            "procedure RequireBinaryDouble(const AValue: TBinaryDouble);\n"
+            "begin\n"
+            "  if not Assigned(AValue) then Halt(1);\n"
+            "end;\n"
+            "\n"
+            "begin\n"
+            + binding_lines +
             "end.\n",
             encoding="utf-8",
         )
@@ -2993,6 +3057,42 @@ def active_uses_units(text: str) -> set[str]:
     return units
 
 
+def required_trig_host_compile_gate_binding_markers() -> list[tuple[str, str]]:
+    required_markers: list[tuple[str, str]] = []
+    for route_rule, route_unit in TRIG_HOST_COMPILE_GATE_ROUTES:
+        for function_name in TRIG_HOST_COMPILE_GATE_UNARY_FUNCTIONS:
+            rule_base = route_rule + "-" + function_name.lower()
+            marker_base = route_unit + "." + function_name
+            required_markers.append(
+                (
+                    rule_base + "-double-binding",
+                    "RequireUnaryDouble(@" + marker_base + ")",
+                )
+            )
+            required_markers.append(
+                (
+                    rule_base + "-single-binding",
+                    "RequireUnarySingle(@" + marker_base + ")",
+                )
+            )
+        for function_name in TRIG_HOST_COMPILE_GATE_BINARY_FUNCTIONS:
+            rule_base = route_rule + "-" + function_name.lower()
+            marker_base = route_unit + "." + function_name
+            required_markers.append(
+                (
+                    rule_base + "-double-binding",
+                    "RequireBinaryDouble(@" + marker_base + ")",
+                )
+            )
+            required_markers.append(
+                (
+                    rule_base + "-single-binding",
+                    "RequireBinarySingle(@" + marker_base + ")",
+                )
+            )
+    return required_markers
+
+
 def scan_required_trig_host_compile_gate(root: Path) -> list[Finding]:
     findings: list[Finding] = []
     makefile = root / TRIG_HOST_COMPILE_GATE_MAKEFILE_PATH
@@ -3054,17 +3154,7 @@ def scan_required_trig_host_compile_gate(root: Path) -> list[Finding]:
                 unit,
             )
 
-        required_markers = (
-            ("sin-touch", "Sin("),
-            ("cos-touch", "Cos("),
-            ("tan-touch", "Tan("),
-            ("arctan2-touch", "ArcTan2("),
-            ("exp-touch", "Exp("),
-            ("ln-touch", "Ln("),
-            ("power-touch", "Power("),
-            ("sqrt-touch", "Sqrt("),
-        )
-        for rule, marker in required_markers:
+        for rule, marker in required_trig_host_compile_gate_binding_markers():
             if marker in source_text:
                 continue
             add_finding(
