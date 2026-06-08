@@ -16,6 +16,7 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
 procedure platform_aligned_free(APtr: Pointer);
 function platform_aligned_alloc_backend: TPlatformAlignedAllocBackend;
 function platform_aligned_alloc_is_native: Boolean;
+procedure platform_secure_zero_memory(APtr: Pointer; ASize: SizeUInt);
 
 implementation
 
@@ -98,6 +99,20 @@ end;
 function platform_aligned_alloc_is_native: Boolean;
 begin
   Result := platform_aligned_alloc_backend <> paabFallback;
+end;
+
+procedure platform_secure_zero_memory_barrier; noinline;
+begin
+  ReadWriteBarrier;
+end;
+
+procedure platform_secure_zero_memory(APtr: Pointer; ASize: SizeUInt);
+begin
+  if (APtr = nil) or (ASize = 0) then
+    Exit;
+
+  FillChar(APtr^, ASize, 0);
+  platform_secure_zero_memory_barrier;
 end;
 
 function platform_fallback_aligned_raw_alloc(ARawSize: SizeUInt): Pointer;

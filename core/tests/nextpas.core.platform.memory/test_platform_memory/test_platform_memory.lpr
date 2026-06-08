@@ -200,6 +200,31 @@ begin
 {$ENDIF}
 end;
 
+procedure TestSecureZeroMemoryClearsBuffer;
+var
+  LBuffer: array[0..63] of Byte;
+  LIndex: Integer;
+begin
+  for LIndex := Low(LBuffer) to High(LBuffer) do
+    LBuffer[LIndex] := Byte($A0 + (LIndex and $0F));
+
+  platform_secure_zero_memory(@LBuffer[0], SizeOf(LBuffer));
+
+  for LIndex := Low(LBuffer) to High(LBuffer) do
+    Check(LBuffer[LIndex] = 0, 'secure zero clears every byte');
+end;
+
+procedure TestSecureZeroMemoryNilAndZeroSizeNoOp;
+var
+  LByte: Byte;
+begin
+  LByte := $5A;
+  platform_secure_zero_memory(nil, 16);
+  platform_secure_zero_memory(nil, 0);
+  platform_secure_zero_memory(@LByte, 0);
+  Check(LByte = $5A, 'secure zero nil/zero-size inputs are no-op');
+end;
+
 procedure TestNativeBackendSourceContracts;
 var
   LPlatformMemory: string;
@@ -244,6 +269,31 @@ begin
     'platform.memory must not own raw POSIX external declarations directly');
 end;
 
+procedure TestSecureZeroSourceContracts;
+var
+  LPlatformMemory: string;
+begin
+  LPlatformMemory := ReadSourceFile(ResolveSourcePath(
+    PLATFORM_MEMORY_SOURCE_PATH_FROM_TEST,
+    PLATFORM_MEMORY_SOURCE_PATH_FROM_ROOT));
+
+  CheckTokenPresent(LPlatformMemory, 'procedure platform_secure_zero_memory',
+    'platform.memory must publish the secure-zero owner seam');
+  CheckTokenPresent(LPlatformMemory, 'platform_secure_zero_memory_barrier',
+    'platform.memory secure zero must keep an optimization barrier seam');
+  CheckTokenPresent(LPlatformMemory, 'noinline',
+    'platform.memory secure zero barrier must not be inlined away');
+
+  CheckTokenAbsent(LPlatformMemory, 'rtlsecurezeromemory',
+    'platform.memory must not own Windows secure-zero raw API names directly');
+  CheckTokenAbsent(LPlatformMemory, 'ntdll.dll',
+    'platform.memory must not own Windows secure-zero library names directly');
+  CheckTokenAbsent(LPlatformMemory, 'baseunix',
+    'platform.memory must not depend on BaseUnix for secure-zero semantics');
+  CheckTokenAbsent(LPlatformMemory, 'getprocaddress',
+    'platform.memory must not perform raw Windows symbol lookup directly');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.memory');
   T.Run('alloc aligned and writable', @TestAllocAlignedAndWritable);
@@ -255,5 +305,8 @@ begin
   T.Run('backend truth is explicit', @TestBackendTruthIsExplicit);
   T.Run('native backend truth matches forced host', @TestNativeBackendTruthMatchesForcedHost);
   T.Run('native backend source contracts', @TestNativeBackendSourceContracts);
+  T.Run('secure zero clears buffer', @TestSecureZeroMemoryClearsBuffer);
+  T.Run('secure zero nil and zero-size no-op', @TestSecureZeroMemoryNilAndZeroSizeNoOp);
+  T.Run('secure zero source contracts', @TestSecureZeroSourceContracts);
   T.Summary;
 end.
