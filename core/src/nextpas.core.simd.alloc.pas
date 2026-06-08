@@ -21,6 +21,15 @@ uses
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch;
 
+{
+  SimdAlloc runtime truth:
+  - Uses one header-backed fallback allocator on every host.
+  - Windows behavior is not native _aligned_malloc/_aligned_realloc.
+  - POSIX behavior is not native posix_memalign/aligned_alloc.
+  - Wine or cross-compile evidence is forced-compile truth only until real
+    Windows runtime evidence is captured.
+}
+
 type
   PAllocHeader = ^TAllocHeader;
   TAllocHeader = record
