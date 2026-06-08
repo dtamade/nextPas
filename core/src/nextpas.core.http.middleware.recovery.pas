@@ -29,7 +29,7 @@ begin
       except
         on E: Exception do
         begin
-          LMsg := 'Internal Server Error: ' + E.Message;
+          LMsg := 'Internal Server Error';
           AW.WriteHeader(HTTP_STATUS_INTERNAL_SERVER_ERROR);
           AW.Write(LMsg[1], Length(LMsg));
         end;
