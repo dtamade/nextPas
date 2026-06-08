@@ -1096,6 +1096,39 @@ begin
   CheckHeadersLookupBenchmarkOutput(LOutput);
 end;
 
+procedure TestBenchHeadersRejectsNoMatchFilter;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchHeadersRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchHeadersRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_headers no-match build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchHeadersBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_headers no-match binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=not_a_headers_benchmark_row'],
+    LExitCode, LOutput);
+  Check(LExitCode <> 0,
+    'bench_headers no-match filter should fail: ' + LOutput);
+  CheckContains(LOutput, 'bench_filter=not_a_headers_benchmark_row',
+    'bench_headers no-match filter marker');
+  CheckContains(LOutput, 'No matching benchmark rows.',
+    'bench_headers no-match diagnostic');
+  CheckNotContains(LOutput, ' iters',
+    'bench_headers no-match must not emit benchmark row');
+end;
+
 procedure TestBenchH1WriterSerializeSmoke;
 var
   LRootDir: string;
@@ -4096,7 +4129,7 @@ begin
     'H1 parser no-match filter should fail: ' + LOutput);
   CheckContains(LOutput, 'bench_filter=not_a_h1parser_row',
     'H1 parser no-match filter marker');
-  CheckContains(LOutput, 'No matching H1 parser benchmark rows.',
+  CheckContains(LOutput, 'No matching benchmark rows.',
     'H1 parser no-match diagnostic');
   CheckNotContains(LOutput, ' iters',
     'H1 parser no-match must not emit benchmark row');
@@ -4888,6 +4921,8 @@ begin
     @TestBenchRouterDirectCallSmoke);
   T.Run('bench_headers lookup smoke',
     @TestBenchHeadersLookupSmoke);
+  T.Run('bench_headers rejects no-match filter',
+    @TestBenchHeadersRejectsNoMatchFilter);
   T.Run('bench_h1writer response serialization smoke',
     @TestBenchH1WriterSerializeSmoke);
   T.Run('H1 outbound hot helpers inline source contract',

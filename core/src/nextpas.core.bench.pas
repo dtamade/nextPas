@@ -165,6 +165,11 @@ begin
   WriteLn('  ', '':40, '':10, '':14);
   for i := 0 to FCount - 1 do
     WriteLn('  ', FResults[i].Name:40, FResults[i].NsPerOp:10:1, FResults[i].OpsPerSec:14:0);
+  if (FFilter <> '') and (FCount = 0) then
+  begin
+    WriteLn('No matching benchmark rows.');
+    Halt(2);
+  end;
 end;
 
 end.
