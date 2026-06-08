@@ -75,6 +75,7 @@ var
   GMpmcSatQ: TIntMpmc;
   GMpmcSatConsumed: array[0..MPMC_SAT_TOTAL - 1] of Int32;
   GMpmcSatConsumeCount: Int64;
+  GMpmcSatOutOfRangeCount: Int64;
 
 function MpmcSatProducer(AArg: Pointer): Pointer; cdecl;
 var
@@ -93,7 +94,10 @@ begin
   Result := nil;
   while GMpmcSatQ.DequeueWait(LV) do
   begin
-    AtomicFetchAdd32(GMpmcSatConsumed[LV], 1, moRelaxed);
+    if (LV >= 0) and (LV < MPMC_SAT_TOTAL) then
+      AtomicFetchAdd32(GMpmcSatConsumed[LV], 1, moRelaxed)
+    else
+      AtomicFetchAdd64(GMpmcSatOutOfRangeCount, 1, moRelaxed);
     AtomicFetchAdd64(GMpmcSatConsumeCount, 1, moRelaxed);
   end;
 end;
@@ -109,6 +113,7 @@ var
 begin
   GMpmcSatQ := TIntMpmc.Create(MPMC_SAT_CAPACITY);
   GMpmcSatConsumeCount := 0;
+  GMpmcSatOutOfRangeCount := 0;
   LProducerCount := 0;
   LConsumerCount := 0;
   for LI := 0 to MPMC_SAT_TOTAL - 1 do
@@ -135,6 +140,7 @@ begin
 
     { Verify exactly-once delivery }
     CheckEqual(Int64(MPMC_SAT_TOTAL), GMpmcSatConsumeCount, 'total consumed = 80000');
+    CheckEqual(Int64(0), GMpmcSatOutOfRangeCount, 'MPMC saturation no out-of-range messages');
     LDups := 0;
     LMissing := 0;
     for LI := 0 to MPMC_SAT_TOTAL - 1 do
@@ -521,6 +527,16 @@ var
   GDequeStealDone: Int32;
   GDequeStealBitmap: array[0..DEQUE_STEAL_TOTAL - 1] of Int32;
   GDequeStealThiefCount: Int64;
+  GDequeStealOutOfRangeCount: Int64;
+
+procedure RecordDequeStealValue(const AValue: Integer; var ALocalCount: Int64);
+begin
+  if (AValue >= 0) and (AValue < DEQUE_STEAL_TOTAL) then
+    AtomicFetchAdd32(GDequeStealBitmap[AValue], 1, moRelaxed)
+  else
+    AtomicFetchAdd64(GDequeStealOutOfRangeCount, 1, moRelaxed);
+  Inc(ALocalCount);
+end;
 
 function DequeStealThief(AArg: Pointer): Pointer; cdecl;
 var
@@ -533,8 +549,7 @@ begin
   begin
     if GDequeStealD.TrySteal(LV) then
     begin
-      AtomicFetchAdd32(GDequeStealBitmap[LV], 1, moRelaxed);
-      Inc(LCount);
+      RecordDequeStealValue(LV, LCount);
     end
     else
       CpuPause;
@@ -542,8 +557,7 @@ begin
   { Final drain after owner signals done }
   while GDequeStealD.TrySteal(LV) do
   begin
-    AtomicFetchAdd32(GDequeStealBitmap[LV], 1, moRelaxed);
-    Inc(LCount);
+    RecordDequeStealValue(LV, LCount);
   end;
   AtomicFetchAdd64(GDequeStealThiefCount, LCount, moRelaxed);
 end;
@@ -559,6 +573,7 @@ begin
   GDequeStealD := TIntDeque.Create(DEQUE_STEAL_CAPACITY);
   GDequeStealDone := 0;
   GDequeStealThiefCount := 0;
+  GDequeStealOutOfRangeCount := 0;
   LOwnerPop := 0;
   LThiefCount := 0;
   for LI := 0 to DEQUE_STEAL_TOTAL - 1 do
@@ -577,8 +592,7 @@ begin
       begin
         if GDequeStealD.TryPop(LV) then
         begin
-          AtomicFetchAdd32(GDequeStealBitmap[LV], 1, moRelaxed);
-          Inc(LOwnerPop);
+          RecordDequeStealValue(LV, LOwnerPop);
         end;
       end;
     end;
@@ -586,8 +600,7 @@ begin
     { Owner drains remaining }
     while GDequeStealD.TryPop(LV) do
     begin
-      AtomicFetchAdd32(GDequeStealBitmap[LV], 1, moRelaxed);
-      Inc(LOwnerPop);
+      RecordDequeStealValue(LV, LOwnerPop);
     end;
 
     { Signal thieves to stop }
@@ -604,6 +617,7 @@ begin
       else if AtomicLoad32(GDequeStealBitmap[LI], moRelaxed) > 1 then
         Inc(LDups);
     end;
+    CheckEqual(Int64(0), GDequeStealOutOfRangeCount, 'deque no out-of-range values');
     CheckEqual(Int64(0), Int64(LMissing), 'deque no missing');
     CheckEqual(Int64(0), Int64(LDups), 'deque no duplicates');
     CheckEqual(Int64(DEQUE_STEAL_TOTAL), LOwnerPop + GDequeStealThiefCount, 'total = pushed');
@@ -628,6 +642,8 @@ var
   GSpscCloseQ: TIntSpsc;
   GSpscCloseSent: Int64;
   GSpscCloseRecv: Int64;
+  GSpscCloseSeen: array[0..SPSC_CLOSE_SEND_TARGET - 1] of Int32;
+  GSpscCloseOutOfRange: Int64;
 
 function SpscCloseProducer(AArg: Pointer): Pointer; cdecl;
 var
@@ -667,7 +683,13 @@ begin
   while LCount < 1000 do
   begin
     if GSpscCloseQ.DequeueTimeout(LV, 1000000) then
+    begin
+      if (LV >= 0) and (LV < SPSC_CLOSE_SEND_TARGET) then
+        AtomicFetchAdd32(GSpscCloseSeen[LV], 1, moRelaxed)
+      else
+        AtomicFetchAdd64(GSpscCloseOutOfRange, 1, moRelaxed);
       Inc(LCount)
+    end
     else if GSpscCloseQ.IsClosed then
       Break;
   end;
@@ -675,7 +697,13 @@ begin
   GSpscCloseQ.Close;
   { Drain remaining }
   while GSpscCloseQ.TryDequeue(LV) do
+  begin
+    if (LV >= 0) and (LV < SPSC_CLOSE_SEND_TARGET) then
+      AtomicFetchAdd32(GSpscCloseSeen[LV], 1, moRelaxed)
+    else
+      AtomicFetchAdd64(GSpscCloseOutOfRange, 1, moRelaxed);
     Inc(LCount);
+  end;
   AtomicStore64(GSpscCloseRecv, LCount, moRelease);
 end;
 
@@ -684,12 +712,21 @@ var
   LProd, LCons: TPlatformThreadHandle;
   LProducerStarted: Boolean;
   LConsumerStarted: Boolean;
+  LI: Integer;
+  LDups: Int64;
+  LMissing: Int64;
+  LUnexpected: Int64;
+  LSeen: Int32;
+  LSent: Int64;
 begin
   GSpscCloseQ := TIntSpsc.Create(SPSC_CLOSE_CAPACITY);
   GSpscCloseSent := 0;
   GSpscCloseRecv := 0;
+  GSpscCloseOutOfRange := 0;
   LProducerStarted := False;
   LConsumerStarted := False;
+  for LI := 0 to SPSC_CLOSE_SEND_TARGET - 1 do
+    GSpscCloseSeen[LI] := 0;
   try
     StartThread(LCons, @SpscCloseConsumer, nil, 'SPSC close consumer thread');
     LConsumerStarted := True;
@@ -699,9 +736,32 @@ begin
     JoinStartedThread(LProd, LProducerStarted, 'SPSC close producer thread');
     JoinStartedThread(LCons, LConsumerStarted, 'SPSC close consumer thread');
 
-    { Key invariant: no deadlock (we reached here), received <= sent }
+    LSent := AtomicLoad64(GSpscCloseSent, moAcquire);
+    LDups := 0;
+    LMissing := 0;
+    LUnexpected := 0;
+    for LI := 0 to SPSC_CLOSE_SEND_TARGET - 1 do
+    begin
+      LSeen := AtomicLoad32(GSpscCloseSeen[LI], moRelaxed);
+      if LI < LSent then
+      begin
+        if LSeen = 0 then
+          Inc(LMissing)
+        else if LSeen > 1 then
+          Inc(LDups);
+      end
+      else if LSeen > 0 then
+        Inc(LUnexpected, LSeen);
+    end;
+
+    { Key invariant: no deadlock (we reached here), then exact ownership. }
     Check(GSpscCloseRecv > 0, 'consumer received items');
-    Check(GSpscCloseRecv <= GSpscCloseSent, 'recv <= sent');
+    CheckEqual(LSent, GSpscCloseRecv, 'SPSC full close recv = sent');
+    CheckEqual(Int64(0), GSpscCloseOutOfRange, 'SPSC full close no out-of-range messages');
+    CheckEqual(Int64(0), LMissing, 'SPSC full close no missing sent messages');
+    CheckEqual(Int64(0), LDups, 'SPSC full close no duplicate messages');
+    CheckEqual(Int64(0), LUnexpected, 'SPSC full close no unseen-domain messages');
+    Check(GSpscCloseQ.IsEmpty, 'SPSC full close queue empty after join');
     Check(GSpscCloseQ.IsClosed, 'queue is closed');
   finally
     GSpscCloseQ.Close;
@@ -725,6 +785,9 @@ const
 var
   GMpmcCycleQ: TIntMpmc;
   GMpmcCycleSum: Int64;
+  GMpmcCycleConsumed: array[0..MPMC_CYCLE_PRODUCERS * MPMC_CYCLE_PER_PRODUCER - 1] of Int32;
+  GMpmcCycleConsumeCount: Int64;
+  GMpmcCycleOutOfRangeCount: Int64;
 
 function MpmcCycleProducer(AArg: Pointer): Pointer; cdecl;
 var
@@ -744,7 +807,14 @@ begin
   Result := nil;
   LSum := 0;
   while GMpmcCycleQ.DequeueWait(LV) do
+  begin
+    if (LV >= 1) and (LV <= MPMC_CYCLE_PRODUCERS * MPMC_CYCLE_PER_PRODUCER) then
+      AtomicFetchAdd32(GMpmcCycleConsumed[LV - 1], 1, moRelaxed)
+    else
+      AtomicFetchAdd64(GMpmcCycleOutOfRangeCount, 1, moRelaxed);
+    AtomicFetchAdd64(GMpmcCycleConsumeCount, 1, moRelaxed);
     Inc(LSum, Int64(LV));
+  end;
   AtomicFetchAdd64(GMpmcCycleSum, LSum, moRelaxed);
 end;
 
@@ -757,13 +827,21 @@ var
   LTotal: Integer;
   LProducerCount: Integer;
   LConsumerCount: Integer;
+  LDups: Int64;
+  LMissing: Int64;
+  LSeen: Int32;
 begin
+  LTotal := MPMC_CYCLE_PRODUCERS * MPMC_CYCLE_PER_PRODUCER;
   for LRound := 0 to MPMC_CYCLE_ROUNDS - 1 do
   begin
     GMpmcCycleQ := TIntMpmc.Create(MPMC_CYCLE_CAPACITY);
     GMpmcCycleSum := 0;
+    GMpmcCycleConsumeCount := 0;
+    GMpmcCycleOutOfRangeCount := 0;
     LProducerCount := 0;
     LConsumerCount := 0;
+    for LI := 0 to LTotal - 1 do
+      GMpmcCycleConsumed[LI] := 0;
     try
       for LI := 0 to 1 do
       begin
@@ -781,9 +859,27 @@ begin
       GMpmcCycleQ.Close;
       JoinStartedThreads(LConsumers, LConsumerCount, 'consumer thread');
 
-      LTotal := MPMC_CYCLE_PRODUCERS * MPMC_CYCLE_PER_PRODUCER;
+      LDups := 0;
+      LMissing := 0;
+      for LI := 0 to LTotal - 1 do
+      begin
+        LSeen := AtomicLoad32(GMpmcCycleConsumed[LI], moRelaxed);
+        if LSeen = 0 then
+          Inc(LMissing)
+        else if LSeen > 1 then
+          Inc(LDups);
+      end;
+
       LExpected := Int64(LTotal) * (LTotal + 1) div 2;
-      CheckEqual(LExpected, GMpmcCycleSum, 'cycle ' + IntToStr(LRound));
+      CheckEqual(Int64(LTotal), GMpmcCycleConsumeCount,
+        'cycle ' + IntToStr(LRound) + ' consumed count');
+      CheckEqual(Int64(0), GMpmcCycleOutOfRangeCount,
+        'cycle ' + IntToStr(LRound) + ' no out-of-range messages');
+      CheckEqual(Int64(0), LMissing,
+        'cycle ' + IntToStr(LRound) + ' no missing messages');
+      CheckEqual(Int64(0), LDups,
+        'cycle ' + IntToStr(LRound) + ' no duplicate messages');
+      CheckEqual(LExpected, GMpmcCycleSum, 'cycle ' + IntToStr(LRound) + ' sum');
     finally
       GMpmcCycleQ.Close;
       JoinStartedThreads(LProducers, LProducerCount, 'producer thread');
