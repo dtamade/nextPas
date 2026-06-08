@@ -168,6 +168,10 @@ procedure RaiseWrapSingleNaNValue; forward;
 procedure RaiseWrapDoubleInfiniteValue; forward;
 procedure RaiseWrapSingleNaNMin; forward;
 procedure RaiseWrapDoubleInfiniteMax; forward;
+procedure RaiseSmoothStepSingleNaNEdge; forward;
+procedure RaiseSmoothStepDoubleNaNEdge; forward;
+procedure RaiseSmoothStepSingleInfiniteEdge; forward;
+procedure RaiseSmoothStepDoubleInfiniteEdge; forward;
 
 procedure TestMinMaxClamp;
 var
@@ -369,6 +373,18 @@ begin
     'SmoothStep Single equal edges returns step boundary');
   Check(IsNaN(SmoothStep(Single(5.0), Single(5.0), MakeSingleNaN)),
     'SmoothStep Single equal edges propagates NaN value');
+  Check(IsNaN(SmoothStep(Single(0.0), MakeSinglePositiveInfinity, MakeSingleNaN)),
+    'SmoothStep Single NaN value propagates before non-finite edge validation');
+  Check(IsNaN(SmoothStep(0.0, MakePositiveInfinity, MakeNaN)),
+    'SmoothStep Double NaN value propagates before non-finite edge validation');
+  ExpectArgumentErrorMessage('SmoothStep: edges must be finite',
+    'SmoothStep Single NaN edge', @RaiseSmoothStepSingleNaNEdge);
+  ExpectArgumentErrorMessage('SmoothStep: edges must be finite',
+    'SmoothStep Double NaN edge', @RaiseSmoothStepDoubleNaNEdge);
+  ExpectArgumentErrorMessage('SmoothStep: edges must be finite',
+    'SmoothStep Single infinite edge', @RaiseSmoothStepSingleInfiniteEdge);
+  ExpectArgumentErrorMessage('SmoothStep: edges must be finite',
+    'SmoothStep Double infinite edge', @RaiseSmoothStepDoubleInfiniteEdge);
 end;
 
 procedure TestAngleConversions;
@@ -856,6 +872,26 @@ end;
 procedure RaiseWrapDoubleInfiniteMax;
 begin
   Wrap(1.0, 0.0, MakePositiveInfinity);
+end;
+
+procedure RaiseSmoothStepSingleNaNEdge;
+begin
+  SmoothStep(MakeSingleNaN, Single(1.0), Single(0.5));
+end;
+
+procedure RaiseSmoothStepDoubleNaNEdge;
+begin
+  SmoothStep(MakeNaN, 1.0, 0.5);
+end;
+
+procedure RaiseSmoothStepSingleInfiniteEdge;
+begin
+  SmoothStep(Single(0.0), MakeSinglePositiveInfinity, Single(0.5));
+end;
+
+procedure RaiseSmoothStepDoubleInfiniteEdge;
+begin
+  SmoothStep(0.0, MakePositiveInfinity, 0.5);
 end;
 
 procedure RaiseFracNaN;

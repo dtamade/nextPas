@@ -460,6 +460,20 @@ begin
     raise EArgumentError.Create('Wrap: minimum must not exceed maximum');
 end;
 
+procedure RequireSmoothStepEdges(const AEdge0, AEdge1: Single); inline;
+begin
+  if SingleIsNaN(AEdge0) or SingleIsNaN(AEdge1) or
+    SingleIsInfinite(AEdge0) or SingleIsInfinite(AEdge1) then
+    raise EArgumentError.Create('SmoothStep: edges must be finite');
+end;
+
+procedure RequireSmoothStepEdges(const AEdge0, AEdge1: Double); inline;
+begin
+  if DoubleIsNaN(AEdge0) or DoubleIsNaN(AEdge1) or
+    DoubleIsInfinite(AEdge0) or DoubleIsInfinite(AEdge1) then
+    raise EArgumentError.Create('SmoothStep: edges must be finite');
+end;
+
 procedure RequireClampBounds(const AMin, AMax: Int32); inline;
 begin
   if AMin > AMax then
@@ -582,6 +596,7 @@ var
 begin
   if SingleIsNaN(AValue) then
     Exit(AValue);
+  RequireSmoothStepEdges(AEdge0, AEdge1);
   if AEdge0 = AEdge1 then
   begin
     if AValue < AEdge0 then
@@ -598,6 +613,7 @@ var
 begin
   if DoubleIsNaN(AValue) then
     Exit(AValue);
+  RequireSmoothStepEdges(AEdge0, AEdge1);
   if AEdge0 = AEdge1 then
   begin
     if AValue < AEdge0 then
