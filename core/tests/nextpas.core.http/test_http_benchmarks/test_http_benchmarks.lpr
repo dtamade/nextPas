@@ -2977,8 +2977,13 @@ begin
     'server comparison acquire lock helper');
   CheckContains(LSource, 'release_comparison_lock()',
     'server comparison release lock helper');
-  CheckContains(LSource, 'while ! mkdir "${COMPARISON_LOCK_DIR}" 2>/dev/null; do',
-    'server comparison mkdir lock loop');
+  CheckContains(LSource, 'COMPARISON_LOCK_TIMEOUT_SECONDS=',
+    'server comparison lock timeout marker');
+  CheckContains(LSource, 'timed out waiting for comparison lock',
+    'server comparison lock timeout diagnostic');
+  CheckNotContains(LSource,
+    'while ! mkdir "${COMPARISON_LOCK_DIR}" 2>/dev/null; do',
+    'server comparison lock wait must be bounded');
   CheckContains(LSource, 'acquire_comparison_lock',
     'server comparison acquire lock usage');
   CheckContains(LSource, 'release_comparison_lock',

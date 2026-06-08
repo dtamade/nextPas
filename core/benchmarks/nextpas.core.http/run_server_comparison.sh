@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CORE_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 BUILD_DIR="${CORE_ROOT}/build/projects/nextpas.core.http/server_comparison"
 COMPARISON_LOCK_DIR="${BUILD_DIR}/.comparison-lock"
+COMPARISON_LOCK_TIMEOUT_SECONDS=300
 REQUESTS=20000
 THREADS=4
 WORKLOAD="no_url"
@@ -157,12 +158,25 @@ cleanup() {
 trap cleanup EXIT
 
 acquire_comparison_lock() {
+  local attempts_remaining
+
   mkdir -p "${BUILD_DIR}"
-  while ! mkdir "${COMPARISON_LOCK_DIR}" 2>/dev/null; do
+  attempts_remaining=$((COMPARISON_LOCK_TIMEOUT_SECONDS * 10))
+  while true; do
+    if mkdir "${COMPARISON_LOCK_DIR}" 2>/dev/null; then
+      COMPARISON_LOCK_HELD=1
+      printf '%s\n' "$$" > "${COMPARISON_LOCK_DIR}/pid"
+      return
+    fi
+
+    if [[ "${attempts_remaining}" -le 0 ]]; then
+      echo "timed out waiting for comparison lock: ${COMPARISON_LOCK_DIR}" >&2
+      exit 2
+    fi
+
+    attempts_remaining=$((attempts_remaining - 1))
     sleep 0.1
   done
-  COMPARISON_LOCK_HELD=1
-  printf '%s\n' "$$" > "${COMPARISON_LOCK_DIR}/pid"
 }
 
 release_comparison_lock() {
