@@ -1650,6 +1650,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("trig-exp-sqrt-ieee", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('exp sqrt IEEE contracts'"),
     RequiredBehaviorTestMarker("trig-exp-negative-infinity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Exp(-Inf)=+0"),
     RequiredBehaviorTestMarker("trig-exp-finite-overflow-underflow", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('Exp finite overflow underflow contracts'"),
+    RequiredBehaviorTestMarker("trig-sqrt-finite-extremes-subnormal", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('Sqrt finite extremes subnormal contracts'"),
     RequiredBehaviorTestMarker("trig-sqrt-negative-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Sqrt(-0)=-0"),
     RequiredBehaviorTestMarker("trig-log-domain-signed-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('log domain signed zero contracts'"),
     RequiredBehaviorTestMarker("trig-log-base-identities", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('log base identity contracts'"),

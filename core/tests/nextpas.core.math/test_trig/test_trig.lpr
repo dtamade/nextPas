@@ -611,6 +611,60 @@ begin
   Check(IsSingleNaN(Sqrt(-SingleInfinity)), 'Sqrt(Single -Inf)=NaN');
 end;
 
+procedure TestSqrtFiniteExtremesSubnormalContracts;
+var
+  LDoubleInput: Double;
+  LDouble: Double;
+  LSingleInput: Single;
+  LSingle: Single;
+begin
+  LDoubleInput := DoubleMaxFinite;
+  LDouble := Sqrt(LDoubleInput);
+  Check(IsDoubleFinite(LDouble) and (LDouble > 0.0),
+    'Sqrt Double max finite returns positive finite');
+  CheckNear(1.0, (LDouble * LDouble) / LDoubleInput, 0.000000000001,
+    'Sqrt Double max finite square ratio stays near one');
+
+  LDoubleInput := DoubleMinPositiveNormal;
+  LDouble := Sqrt(LDoubleInput);
+  Check(IsDoubleFinite(LDouble) and (LDouble > 0.0),
+    'Sqrt Double min positive normal returns positive finite');
+  CheckNear(1.0, (LDouble * LDouble) / LDoubleInput, 0.000000000001,
+    'Sqrt Double min positive normal square ratio stays near one');
+
+  LDoubleInput := DoubleMinPositiveSubnormal;
+  LDouble := Sqrt(LDoubleInput);
+  Check(IsDoubleFinite(LDouble) and (LDouble > 0.0),
+    'Sqrt Double min positive subnormal returns positive finite');
+  CheckNear(1.0, (LDouble * LDouble) / LDoubleInput, 0.000000000001,
+    'Sqrt Double min positive subnormal square ratio stays near one');
+  Check(IsDoubleNaN(Sqrt(-DoubleMinPositiveSubnormal)),
+    'Sqrt Double negative min subnormal returns NaN');
+
+  LSingleInput := SingleMaxFinite;
+  LSingle := Sqrt(LSingleInput);
+  Check(IsSingleFinite(LSingle) and (LSingle > 0.0),
+    'Sqrt Single max finite returns positive finite');
+  CheckNear(1.0, (Double(LSingle) * Double(LSingle)) / Double(LSingleInput),
+    0.000001, 'Sqrt Single max finite square ratio stays near one');
+
+  LSingleInput := SingleMinPositiveNormal;
+  LSingle := Sqrt(LSingleInput);
+  Check(IsSingleFinite(LSingle) and (LSingle > 0.0),
+    'Sqrt Single min positive normal returns positive finite');
+  CheckNear(1.0, (Double(LSingle) * Double(LSingle)) / Double(LSingleInput),
+    0.000001, 'Sqrt Single min positive normal square ratio stays near one');
+
+  LSingleInput := SingleMinPositiveSubnormal;
+  LSingle := Sqrt(LSingleInput);
+  Check(IsSingleFinite(LSingle) and (LSingle > 0.0),
+    'Sqrt Single min positive subnormal returns positive finite');
+  CheckNear(1.0, (Double(LSingle) * Double(LSingle)) / Double(LSingleInput),
+    0.000001, 'Sqrt Single min positive subnormal square ratio stays near one');
+  Check(IsSingleNaN(Sqrt(-SingleMinPositiveSubnormal)),
+    'Sqrt Single negative min subnormal returns NaN');
+end;
+
 procedure TestExpFiniteOverflowUnderflowContracts;
 begin
   Check(IsDoublePositiveInfinity(Exp(710.0)), 'Exp finite overflow returns +Inf');
@@ -993,6 +1047,8 @@ begin
   T.Run('exp log sqrt finite precision contracts',
     @TestExpLogSqrtFinitePrecisionContracts);
   T.Run('exp sqrt IEEE contracts', @TestExpSqrtIEEEContracts);
+  T.Run('Sqrt finite extremes subnormal contracts',
+    @TestSqrtFiniteExtremesSubnormalContracts);
   T.Run('Exp finite overflow underflow contracts', @TestExpFiniteOverflowUnderflowContracts);
   T.Run('log domain signed zero contracts', @TestLogDomainSignedZeroContracts);
   T.Run('log base identity contracts', @TestLogBaseIdentityContracts);
