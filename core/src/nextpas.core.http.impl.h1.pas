@@ -415,6 +415,23 @@ begin
   ABodyStream.Position := AStartPosition;
 end;
 
+function ClientRequestDeadline(const ATimeoutMs: Int64): TDeadline;
+begin
+  if ATimeoutMs > 0 then
+    Result := TDeadline.After(TDuration.FromMilliseconds(ATimeoutMs))
+  else
+    Result := TDeadline.Infinite;
+end;
+
+procedure ApplyClientDeadline(const AConn: ITcpStream;
+  const ADeadline: TDeadline);
+begin
+  if ADeadline.IsInfinite then
+    Exit;
+  AConn.SetReadDeadline(ADeadline);
+  AConn.SetWriteDeadline(ADeadline);
+end;
+
 function RequestMetadata(const AParser: IH1Parser): TH1RequestMetadata; inline;
 begin
   if AParser = nil then
@@ -2208,6 +2225,7 @@ var
   LResponseStarted: Boolean;
   LBodyStream: IStream;
   LBodyStartPosition: Int64;
+  LRequestDeadline: TDeadline;
 begin
   LUrl := AReq.Url;
   ValidatePlainHttpClientUrlScheme(LUrl);
@@ -2223,16 +2241,13 @@ begin
     LPort := 80;
 
   CaptureRetryBodyPosition(AReq, LBodyStream, LBodyStartPosition);
+  LRequestDeadline := ClientRequestDeadline(FOptions.Timeout);
   LConn := PoolGet(LHost, LPort);
   LPooled := LConn <> nil;
   if not LPooled then
     LConn := TcpConnect(LHost, LPort);
 
-  if FOptions.Timeout > 0 then
-  begin
-    LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
-    LConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
-  end;
+  ApplyClientDeadline(LConn, LRequestDeadline);
 
   LResponseStarted := False;
   try
@@ -2249,11 +2264,7 @@ begin
         raise;
       RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
       LConn := TcpConnect(LHost, LPort);
-      if FOptions.Timeout > 0 then
-      begin
-        LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
-        LConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
-      end;
+      ApplyClientDeadline(LConn, LRequestDeadline);
       WriteRequest(LConn as IWriter, AReq, LAutoHost);
       LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
         LResponseStarted);
