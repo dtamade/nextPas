@@ -394,6 +394,33 @@ begin
     'duplicate transfer-encoding final chunked response body is decoded');
 end;
 
+procedure TestResponseChunkedPipelineConsumesOnlyFirstResponse;
+var
+  LP: IH1Parser;
+  LResp1: string;
+  LResp2: string;
+  LWire: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1ResponseParser;
+  LResp1 := 'HTTP/1.1 200 OK'#13#10 +
+            'Transfer-Encoding: chunked'#13#10#13#10 +
+            '2'#13#10'ok'#13#10 +
+            '0'#13#10#13#10;
+  LResp2 := 'HTTP/1.1 204 No Content'#13#10#13#10;
+  LWire := LResp1 + LResp2;
+
+  LConsumed := LP.Execute(PAnsiChar(LWire), Length(LWire));
+
+  Check(not LP.HasError,
+    'pipelined second chunked response should not corrupt first response');
+  Check(LP.IsComplete, 'first chunked response completes');
+  CheckEqual(SizeUInt(Length(LResp1)), LConsumed,
+    'chunked response parser consumes only the first response');
+  CheckEqual('ok', LP.GetBody, 'first chunked response body is decoded');
+  Check(LP.ShouldKeepAlive, 'chunked response remains reusable');
+end;
+
 procedure TestResponseContentLengthTruncatedAtEof;
 var
   LP: IH1Parser;
@@ -1584,6 +1611,7 @@ procedure TestHeaderNullByte;
 var
   LP: IH1Parser;
   LReq: array of Byte;
+  LConsumed: SizeUInt;
 const
   PREFIX = 'GET / HTTP/1.1'#13#10 +
            'Host: localhost'#13#10 +
@@ -1595,12 +1623,14 @@ begin
   Move(PREFIX[1], LReq[0], Length(PREFIX));
   LReq[Length(PREFIX)] := 0;
   Move(SUFFIX[1], LReq[Length(PREFIX) + 1], Length(SUFFIX));
-  LP.Execute(PAnsiChar(@LReq[0]), SizeUInt(Length(LReq)));
+  LConsumed := LP.Execute(PAnsiChar(@LReq[0]), SizeUInt(Length(LReq)));
   if (not LP.HasError) and (not LP.IsComplete) then
     LP.Finish;
   Check(LP.HasError, 'null byte in header reports parser error');
   Check(not LP.IsComplete, 'null byte in header is not complete');
   Check(LP.ErrorMessage <> '', 'null byte in header has error message');
+  CheckEqual(SizeUInt(Length(PREFIX)), LConsumed,
+    'null byte header error consumes only through offending byte position');
 end;
 
 procedure TestHttp09RequestRejected;
@@ -2238,18 +2268,25 @@ end;
 procedure TestUpgradeRequestCompletesWithoutParserError;
 var
   LP: IH1Parser;
+  LHandshake: string;
+  LProtocolBytes: string;
   LReq: string;
+  LConsumed: SizeUInt;
 begin
   LP := NewH1RequestParser;
-  LReq := 'GET /ws HTTP/1.1'#13#10 +
-          'Host: localhost'#13#10 +
-          'Upgrade: websocket'#13#10 +
-          'Connection: Upgrade'#13#10 +
-          'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='#13#10 +
-          'Sec-WebSocket-Version: 13'#13#10#13#10;
-  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  LHandshake := 'GET /ws HTTP/1.1'#13#10 +
+                'Host: localhost'#13#10 +
+                'Upgrade: websocket'#13#10 +
+                'Connection: Upgrade'#13#10 +
+                'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='#13#10 +
+                'Sec-WebSocket-Version: 13'#13#10#13#10;
+  LProtocolBytes := #$81#$02'hi';
+  LReq := LHandshake + LProtocolBytes;
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
   Check(not LP.HasError, 'upgrade request should not report parser error');
   Check(LP.IsComplete, 'upgrade request should complete');
+  CheckEqual(SizeUInt(Length(LHandshake)), LConsumed,
+    'upgrade request leaves protocol bytes unread by HTTP parser');
   CheckEqual('/ws', LP.GetUrl, 'upgrade request preserves url');
 end;
 
@@ -2440,6 +2477,8 @@ begin
     @TestResponseTransferEncodingTokenBoundaryControlsReuse);
   T.Run('Response duplicate transfer-encoding final chunked keeps alive',
     @TestResponseDuplicateTransferEncodingFinalChunkedKeepsAlive);
+  T.Run('Response chunked pipeline consumes only first response',
+    @TestResponseChunkedPipelineConsumesOnlyFirstResponse);
   T.Run('Response content-length truncated at EOF', @TestResponseContentLengthTruncatedAtEof);
   T.Run('Response HTTP/1.0 without keep-alive does not reuse', @TestResponseHttp10WithoutKeepAliveDoesNotReuse);
   T.Run('Content-Length body', @TestContentLengthBody);
