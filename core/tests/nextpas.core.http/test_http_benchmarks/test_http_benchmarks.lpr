@@ -2990,6 +2990,28 @@ begin
     'server comparison release lock usage');
 end;
 
+procedure TestServerComparisonSummaryKeepsReadModeMetadataSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LSource := LoadTextFile(ResolveServerComparisonRunnerPath(LRootDir));
+
+  CheckContains(LSource, 'client_read_mode="$(printf',
+    'server comparison parses client read mode from raw row');
+  CheckContains(LSource, 'response_body_bytes="$(printf',
+    'server comparison parses response body bytes from raw row');
+  CheckContains(LSource, 'read_mode_values[impl, count[impl]] = $6',
+    'server comparison summary stores client read mode column');
+  CheckContains(LSource, 'body_bytes_values[impl, count[impl]] = $7',
+    'server comparison summary stores response body bytes column');
+  CheckContains(LSource, 'summary_client_read_mode=%s',
+    'server comparison summary prints client read mode');
+  CheckContains(LSource, 'summary_response_body_bytes=%s',
+    'server comparison summary prints response body bytes');
+end;
+
 procedure TestServerComparisonRunnerRejectsInvalidNextpasBackend;
 var
   LRootDir: string;
@@ -3775,8 +3797,9 @@ begin
   LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
   LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
 
-  RunProcessAndCapture(ResolveMakeExecutable, ['run-c'], LBenchDir,
-    LExitCode, LOutput);
+  RunProcessAndCapture(ResolveMakeExecutable,
+    ['run-c', 'LLHTTP_ROOT=', LlhttpRootEnvName + '='], LBenchDir, LExitCode,
+    LOutput);
   Check(LExitCode <> 0, 'C llhttp comparator without root should fail');
   CheckContains(LOutput, 'LLHTTP_ROOT is required',
     'C llhttp comparator missing-root diagnostic');
@@ -4832,6 +4855,8 @@ begin
     @TestServerComparisonRunnerIncludeHyperResponse1KSmoke);
   T.Run('server comparison runner concurrency lock source contract',
     @TestServerComparisonRunnerConcurrencyLockSourceContract);
+  T.Run('server comparison summary keeps read-mode metadata source contract',
+    @TestServerComparisonSummaryKeepsReadModeMetadataSourceContract);
   T.Run('server comparison runner rejects invalid nextpas backend',
     @TestServerComparisonRunnerRejectsInvalidNextpasBackend);
   T.Run('server comparison runner rejects unsafe output path',
