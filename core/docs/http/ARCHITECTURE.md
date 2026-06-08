@@ -76,7 +76,7 @@ HTTP server 现在要分三层理解，不能再笼统地说成“线程驱动 H
   handler 先把响应写入 internal outbound buffer，
   `TH1ServerConnectionState` 再在 handler 返回后统一 drain 到 socket。
 - H1 server ingress 现在也有一条保守 fast path：
-  对完整 HTTP/1.1、Host 存在、无 `Connection` / `Expect` /
+  对完整 HTTP/1.1、恰好一个非空 `Host`、无 `Connection` / `Expect` /
   `Transfer-Encoding`、且无 request body 的普通请求，先用
   `nextpas.core.http.impl.h1.fast.FastParseRequest` 构造请求 snapshot；
   其他请求一律回退 llhttp adapter，继续沿用既有 malformed framing、

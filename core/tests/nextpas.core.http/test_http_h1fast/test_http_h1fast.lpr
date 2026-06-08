@@ -273,6 +273,7 @@ begin
   LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
   Check(LR.Success, 'policy request should parse');
   Check(LR.HasHost, 'host flag');
+  Check(not LR.HostRepeated, 'single host does not set repeated-host flag');
   Check(LR.HasConnection, 'connection flag');
   Check(LR.ConnectionKeepAlive, 'connection keep-alive flag');
   Check(not LR.ConnectionClose, 'connection close flag absent');
@@ -330,6 +331,29 @@ begin
   LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
   Check(not LR.Success, 'transfer-encoding still falls back');
   Check(LR.HasTransferEncoding, 'transfer-encoding flag');
+end;
+
+procedure TestDuplicateHostPolicyFlag;
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+  LHostValues: TStringArray;
+begin
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: first.example'#13#10 +
+           'Host: second.example'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LR.Success, 'duplicate Host remains fast-parseable for policy');
+  Check(LR.HasHost, 'duplicate Host keeps first host presence');
+  Check(LR.HostRepeated, 'duplicate Host sets repeated-host policy flag');
+
+  LHostValues := LR.Headers.GetAll('Host');
+  CheckEqual(Int64(2), Int64(Length(LHostValues)),
+    'duplicate Host values remain available to lazy headers');
+  CheckEqual('first.example', LHostValues[0],
+    'first duplicate Host value preserved');
+  CheckEqual('second.example', LHostValues[1],
+    'second duplicate Host value preserved');
 end;
 
 procedure TestEmptyPath;
@@ -456,6 +480,7 @@ begin
   T.Run('Lazy headers raw lookup preserves semantics',
     @TestLazyHeadersRawLookupPreservesSemantics);
   T.Run('Policy header flags', @TestPolicyHeaderFlags);
+  T.Run('Duplicate Host policy flag', @TestDuplicateHostPolicyFlag);
   T.Run('Empty path', @TestEmptyPath);
   T.Run('All methods', @TestAllMethods);
   T.Run('Differential (vs llhttp)', @TestDifferential);

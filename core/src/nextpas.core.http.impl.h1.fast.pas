@@ -24,6 +24,7 @@ type
     ContentLength: Int64;
     Consumed: SizeUInt;
     HasHost: Boolean;
+    HostRepeated: Boolean;
     HasConnection: Boolean;
     ConnectionKeepAlive: Boolean;
     ConnectionClose: Boolean;
@@ -506,11 +507,13 @@ var
   LBodyStart: SizeUInt;
   LContentLength: Int64;
   LSeenContentLength: Boolean;
+  LSeenHost: Boolean;
 begin
   Result := Default(TFastParseResult);
   Result.ContentLength := -1;
   LContentLength := 0;
   LSeenContentLength := False;
+  LSeenHost := False;
 
   // Step 1: Find header end (\r\n\r\n)
   LHeaderEnd := ScanFindDoubleCRLF(ABuf, ALen);
@@ -613,7 +616,15 @@ begin
       Exit;
 
     if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'host') then
-      Result.HasHost := LValLen > 0
+    begin
+      if LSeenHost then
+        Result.HostRepeated := True
+      else
+      begin
+        LSeenHost := True;
+        Result.HasHost := LValLen > 0;
+      end;
+    end
     else if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'connection') then
     begin
       Result.HasConnection := True;

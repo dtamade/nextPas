@@ -1271,6 +1271,19 @@ begin
   end;
 end;
 
+procedure TestDuplicateHost;
+const
+  REQ = 'GET / HTTP/1.1'#13#10 +
+        'Host: first.example'#13#10 +
+        'Host: second.example'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    THttpServerOptions.Default,
+    REQ,
+    'HTTP/1.1 400',
+    'Duplicate Host: explicit 400');
+end;
+
 { Test 11: Request line truncated at EOF }
 procedure TestRequestLineTruncatedAtEof;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -5196,6 +5209,19 @@ begin
     'epoll missing Host: explicit 400');
 end;
 
+procedure TestDuplicateHostEpollBackend;
+const
+  REQ = 'GET / HTTP/1.1'#13#10 +
+        'Host: first.example'#13#10 +
+        'Host: second.example'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll duplicate Host: explicit 400');
+end;
+
 procedure TestRequestLineTruncatedAtEofEpollBackend;
 const REQ = 'GET / HTTP/1.';
 begin
@@ -5818,6 +5844,7 @@ begin
   T.Run('HTTP/0.9 no version -> 400', @TestHttp09Request);
   T.Run('CRLF injection in path -> 400', @TestCrlfInjection);
   T.Run('Missing Host header -> 400', @TestMissingHost);
+  T.Run('Duplicate Host header -> 400', @TestDuplicateHost);
   T.Run('Request line truncated at EOF -> 400', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
   T.Run('Very long method name -> 400', @TestLongMethodName);
@@ -5992,6 +6019,8 @@ begin
     @TestCrlfInjectionEpollBackend);
   T.Run('Missing Host header -> 400 with epoll backend',
     @TestMissingHostEpollBackend);
+  T.Run('Duplicate Host header -> 400 with epoll backend',
+    @TestDuplicateHostEpollBackend);
   T.Run('Request line truncated at EOF -> 400 with epoll backend',
     @TestRequestLineTruncatedAtEofEpollBackend);
   T.Run('Headers truncated at EOF -> 400 with epoll backend',

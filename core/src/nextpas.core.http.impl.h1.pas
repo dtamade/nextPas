@@ -345,6 +345,17 @@ begin
   Result := AParser.GetRequestMetadata;
 end;
 
+function HasHttp11HostPolicyError(const AParser: IH1Parser): Boolean; inline;
+var
+  LMetadata: TH1RequestMetadata;
+begin
+  Result := False;
+  if (AParser = nil) or (AParser.GetHttpVersion <> hvHttp11) then
+    Exit;
+  LMetadata := RequestMetadata(AParser);
+  Result := (not LMetadata.HasHost) or LMetadata.HostRepeated;
+end;
+
 function ShouldSendContinueResponse(const AParser: IH1Parser;
   const AHeadersDone, AContinueSent: Boolean): Boolean; inline;
 var
@@ -376,12 +387,11 @@ begin
   if AParser.HasError then
     Exit(ParserErrorStatus(AParser));
 
+  if HasHttp11HostPolicyError(AParser) then
+    Exit(HTTP_STATUS_BAD_REQUEST);
+
   if AFastSnapshot then
     Exit(0);
-
-  if (AParser.GetHttpVersion = hvHttp11) and
-     (not LMetadata.HasHost) then
-    Exit(HTTP_STATUS_BAD_REQUEST);
 
   if LMetadata.HasUnsupportedExpect then
     Exit(HTTP_STATUS_EXPECTATION_FAILED);
@@ -517,6 +527,7 @@ begin
   FComplete := True;
   FRequestMetadata := Default(TH1RequestMetadata);
   FRequestMetadata.HasHost := AResult.HasHost;
+  FRequestMetadata.HostRepeated := AResult.HostRepeated;
   FRequestMetadata.HasTransferEncoding := AResult.HasTransferEncoding;
   FRequestMetadata.HasContentLength := AResult.HasContentLength;
   FRequestMetadata.DeclaredContentLength := AResult.ContentLength;
@@ -1040,8 +1051,7 @@ begin
     else
       FKeepAlive := ShouldKeepAlive(FParser);
 
-    if (not FParserIsSnapshot) and (FParser.GetHttpVersion = hvHttp11) and
-       (not RequestMetadata(FParser).HasHost) then
+    if HasHttp11HostPolicyError(FParser) then
     begin
       WriteErrorResponse(FConn, HTTP_STATUS_BAD_REQUEST, FOptions.WriteTimeout);
       FKeepAlive := False;
@@ -1144,8 +1154,7 @@ begin
     else
       LKeepAlive := ShouldKeepAlive(FParser);
 
-    if (not FParserIsSnapshot) and (FParser.GetHttpVersion = hvHttp11) and
-       (not RequestMetadata(FParser).HasHost) then
+    if HasHttp11HostPolicyError(FParser) then
     begin
       LOutbound := NewH1OutboundBuffer;
       WriteErrorResponseToWriter(LOutbound as IWriter, HTTP_STATUS_BAD_REQUEST);

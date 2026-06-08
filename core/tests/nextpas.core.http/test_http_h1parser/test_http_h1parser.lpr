@@ -539,6 +539,8 @@ begin
   LMetadata := LP.GetRequestMetadata;
   Check(not LMetadata.HasHost,
     'metadata preserves first empty Host value semantics');
+  Check(LMetadata.HostRepeated,
+    'metadata records duplicate Host headers');
   Check(LMetadata.ConnectionClose,
     'metadata preserves first Connection value');
   Check(not LMetadata.ConnectionKeepAlive,
