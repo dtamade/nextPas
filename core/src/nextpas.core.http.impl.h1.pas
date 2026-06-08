@@ -2238,6 +2238,7 @@ var
   LPooled: Boolean;
   LKeepAlive: Boolean;
   LResponseStarted: Boolean;
+  LRequestWriteComplete: Boolean;
   LBodyStream: IStream;
   LBodyStartPosition: Int64;
   LRequestDeadline: TDeadline;
@@ -2265,14 +2266,18 @@ begin
   ApplyClientDeadline(LConn, LRequestDeadline);
 
   LResponseStarted := False;
+  LRequestWriteComplete := False;
   try
     WriteRequest(LConn as IWriter, AReq, LAutoHost);
+    LRequestWriteComplete := True;
     LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
       LResponseStarted);
   except
     if LPooled then
     begin
       LConn.Close;
+      if (not LRequestWriteComplete) and (ExceptObject is EHttpError) then
+        raise;
       if LResponseStarted then
         raise;
       if not IsRetrySafeRequest(AReq) then
@@ -2281,7 +2286,9 @@ begin
       LConn := TcpConnect(LHost, LPort);
       try
         ApplyClientDeadline(LConn, LRequestDeadline);
+        LRequestWriteComplete := False;
         WriteRequest(LConn as IWriter, AReq, LAutoHost);
+        LRequestWriteComplete := True;
         LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
           LResponseStarted);
       except

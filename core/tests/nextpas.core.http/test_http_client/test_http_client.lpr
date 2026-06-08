@@ -5440,6 +5440,95 @@ begin
   end;
 end;
 
+procedure TestClientDoesNotRetryLocalRequestBodySerializationError;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LHeaders: IHttpHeaders;
+  LRaised: Boolean;
+  LErrorMessage: string;
+  LRet: Pointer;
+  LJoined: Boolean;
+begin
+  GRetryAcceptCount := 0;
+  GRetryPooledMethod := '';
+  GRetryPooledBody := '';
+  GRetrySecondMethod := '';
+  GRetrySecondBody := '';
+  GRetryListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRetryListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @PostWritePooledRetryThread, nil);
+  LJoined := False;
+
+  try
+    LClient := NewHttpClient;
+
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/prime');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'priming request status 200');
+    CheckEqual('ok', ReadBodyStr(LResp), 'priming response body');
+    CheckEqual(Int64(1), Int64(GRetryAcceptCount),
+      'priming request opened first connection');
+
+    LHeaders := NewHeaders;
+    LHeaders.SetHeader('idempotency-key', 'retry-safe');
+    LReq := NewRequest(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
+      LHeaders, StringBodyReader('abc'), Int64(6));
+
+    LRaised := False;
+    LErrorMessage := '';
+    try
+      LClient.Send(LReq);
+    except
+      on E: EHttpError do
+      begin
+        LRaised := True;
+        LErrorMessage := E.Message;
+      end;
+      on E: Exception do
+        LErrorMessage := E.ClassName + ': ' + E.Message;
+    end;
+
+    LClient := nil;
+    if GRetryAcceptCount < 2 then
+      WakeRetryAcceptThread(LPort);
+    GRetryListener.Close;
+    platform_thread_join(LHandle, LRet);
+    LJoined := True;
+    GRetryListener := nil;
+
+    Check(LRaised,
+      'local request body serialization failure raises EHttpError');
+    CheckEqual('HTTP request body shorter than declared content-length',
+      LErrorMessage, 'local request body serialization error is preserved');
+    CheckEqual('POST', GRetryPooledMethod,
+      'old pooled connection observed retry-safe request method before local error');
+    CheckEqual('abc', GRetryPooledBody,
+      'old pooled connection observed partial request body before local error');
+    CheckEqual('', GRetrySecondMethod,
+      'local request body serialization failure does not open fresh retry request');
+    CheckEqual('', GRetrySecondBody,
+      'local request body serialization failure does not replay body');
+  finally
+    if not LJoined then
+    begin
+      if LClient <> nil then
+        LClient.CloseIdleConnections;
+      if GRetryAcceptCount < 2 then
+        WakeRetryAcceptThread(LPort);
+      if GRetryListener <> nil then
+        GRetryListener.Close;
+      platform_thread_join(LHandle, LRet);
+    end;
+    GRetryListener := nil;
+    GRetryPooledMethod := '';
+    GRetryPooledBody := '';
+  end;
+end;
+
 procedure TestClientPooledRetryUsesSingleTimeoutBudget;
 var
   LPort: UInt16;
@@ -6524,6 +6613,8 @@ begin
     @TestClientSendsIdempotentReplayableBodyAfterClosedPooledConnection);
   T.Run('Client retries replayable body when pooled connection closes after request write',
     @TestClientRetriesReplayableBodyWhenPooledConnectionClosesAfterRequestWrite);
+  T.Run('Client does not retry local request body serialization error',
+    @TestClientDoesNotRetryLocalRequestBodySerializationError);
   T.Run('Client pooled retry uses single timeout budget',
     @TestClientPooledRetryUsesSingleTimeoutBudget);
   T.Run('Client sends non-idempotent body after closed pooled connection',
