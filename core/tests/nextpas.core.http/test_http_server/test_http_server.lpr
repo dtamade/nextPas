@@ -1498,6 +1498,36 @@ begin
   end;
 end;
 
+procedure TestEmptyHandlerCommitsDefaultResponse;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/empty', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'GET /empty HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200 OK'#13#10, LResp) = 1,
+      'empty handler commits default 200 response');
+    Check(Pos('transfer-encoding: chunked'#13#10, LResp) > 0,
+      'empty handler default response is framed');
+    Check(Pos('0'#13#10#13#10, LResp) > 0,
+      'empty handler default response finalizes empty body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestSimpleGet200EpollBackend;
 var
@@ -12144,6 +12174,8 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.http.server');
   T.Run('Simple GET 200', @TestSimpleGet200);
+  T.Run('Empty handler commits default response',
+    @TestEmptyHandlerCommitsDefaultResponse);
   {$IFDEF NEXTPAS_LINUX}
   T.Run('Simple GET 200 with epoll backend', @TestSimpleGet200EpollBackend);
   T.Run('Keep-alive: two requests one connection with epoll backend',
