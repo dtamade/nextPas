@@ -671,6 +671,9 @@ begin
   if FError then
     Exit(0);
 
+  if FComplete then
+    Exit(0);
+
   if (ABuf = nil) and (ALen > 0) then
   begin
     FError := True;

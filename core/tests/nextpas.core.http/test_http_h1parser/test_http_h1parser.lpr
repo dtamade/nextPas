@@ -2044,6 +2044,41 @@ begin
   CheckEqual('hello', LP.GetBody, 'first pipelined request preserves body');
 end;
 
+procedure TestCompletedParserExecuteIsTerminalUntilReset;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LReq2: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length: 5'#13#10#13#10 +
+           'hello';
+  LReq2 := 'GET /after-complete HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10#13#10;
+
+  LConsumed := LP.Execute(PAnsiChar(LReq1), Length(LReq1));
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed,
+    'terminal-complete: initial execute consumes complete request');
+  Check(not LP.HasError, 'terminal-complete: initial request has no parser error');
+  Check(LP.IsComplete, 'terminal-complete: initial request completes');
+
+  LConsumed := LP.Execute(PAnsiChar(LReq2), Length(LReq2));
+
+  CheckEqual(SizeUInt(0), LConsumed,
+    'terminal-complete: follow-up execute consumes nothing until reset');
+  Check(not LP.HasError, 'terminal-complete: follow-up execute keeps no error');
+  Check(LP.IsComplete, 'terminal-complete: follow-up execute stays complete');
+  Check(LP.GetMethod = hmPost,
+    'terminal-complete: follow-up execute preserves first method');
+  CheckEqual('/upload', LP.GetUrl,
+    'terminal-complete: follow-up execute preserves first url');
+  CheckEqual('hello', LP.GetBody,
+    'terminal-complete: follow-up execute preserves first body');
+end;
+
 procedure TestRequestLineTruncatedAtEof;
 var
   LP: IH1Parser;
@@ -2386,6 +2421,8 @@ begin
   T.Run('Chunked pipelined next request does not pollute current request', @TestChunkedPipelinedNextRequestDoesNotPolluteCurrentRequest);
   T.Run('Upgrade request completes without parser error', @TestUpgradeRequestCompletesWithoutParserError);
   T.Run('Pipelined next request does not pollute current request', @TestPipelinedNextRequestDoesNotPolluteCurrentRequest);
+  T.Run('Completed parser execute is terminal until reset',
+    @TestCompletedParserExecuteIsTerminalUntilReset);
   T.Run('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF', @TestHeadersTruncatedAtEof);
   T.Run('Incomplete input', @TestIncompleteInput);
