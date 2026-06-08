@@ -128,7 +128,8 @@ Trig helpers:
 positive-zero / positive-infinity zero-base behavior. Except for exponent `0`, a NaN exponent takes
 priority over zero-base handling, so `0^NaN` and `-0^NaN` return NaN.
 `Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite
-values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`.
+values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`; log identities preserve exact
+`+0` for input `1` and exact `1` for `Log2(2)` and `Log10(10)`.
 `Exp` propagates `NaN`, returns `+Inf` for `+Inf`, and returns `+0` for `-Inf`. `Sqrt` preserves
 signed zero, returns `+Inf` for `+Inf`, and returns `NaN` for `NaN`, negative finite values, or `-Inf`.
 Finite `Exp` overflow returns `+Inf`, and finite `Exp` underflow returns `+0`. Finite `Power` overflow and underflow preserve the mathematically required sign for odd integer exponents with negative finite bases.

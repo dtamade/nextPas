@@ -519,6 +519,20 @@ begin
     Log10(Single(-1.0)), Log10(-SingleInfinity), Log10(SingleNaN), Log10(SingleInfinity));
 end;
 
+procedure TestLogBaseIdentityContracts;
+begin
+  Check(IsDoublePositiveZero(Ln(1.0)), 'Ln(1)=+0');
+  Check(IsSinglePositiveZero(Ln(Single(1.0))), 'Ln(Single 1)=+0');
+  Check(IsDoublePositiveZero(Log2(1.0)), 'Log2(1)=+0');
+  Check(IsSinglePositiveZero(Log2(Single(1.0))), 'Log2(Single 1)=+0');
+  Check(IsDoublePositiveZero(Log10(1.0)), 'Log10(1)=+0');
+  Check(IsSinglePositiveZero(Log10(Single(1.0))), 'Log10(Single 1)=+0');
+  CheckNear(1.0, Log2(2.0), 0.0, 'Log2(2)=1');
+  CheckNear(1.0, Log2(Single(2.0)), 0.0, 'Log2(Single 2)=1');
+  CheckNear(1.0, Log10(10.0), 0.0, 'Log10(10)=1');
+  CheckNear(1.0, Log10(Single(10.0)), 0.0, 'Log10(Single 10)=1');
+end;
+
 procedure TestPowerEdgeContracts;
 begin
   CheckNear(1024.0, Power(2.0, 10.0), 0.001, 'Power(2,10)=1024');
@@ -746,6 +760,7 @@ begin
   T.Run('exp sqrt IEEE contracts', @TestExpSqrtIEEEContracts);
   T.Run('Exp finite overflow underflow contracts', @TestExpFiniteOverflowUnderflowContracts);
   T.Run('log domain signed zero contracts', @TestLogDomainSignedZeroContracts);
+  T.Run('log base identity contracts', @TestLogBaseIdentityContracts);
   T.Run('power edge contracts', @TestPowerEdgeContracts);
   T.Run('power negative finite base non-integer contracts',
     @TestPowerNegativeFiniteBaseNonIntegerContracts);

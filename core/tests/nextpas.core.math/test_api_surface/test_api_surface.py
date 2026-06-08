@@ -752,19 +752,19 @@ REQUIRED_SCALAR_FLOAT_COMPARE_DOC_TRUTH = (
 REQUIRED_TRIG_POWER_DOC_TRUTH = (
     (
         "docs/math/README.md",
-        "`Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`.",
+        "`Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`; log identities preserve exact `+0` for input `1` and exact `1` for `Log2(2)` and `Log10(10)`.",
     ),
     (
         "docs/math/API.md",
-        "`Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`.",
+        "`Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`; log identities preserve exact `+0` for input `1` and exact `1` for `Log2(2)` and `Log10(10)`.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "`Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`.",
+        "`Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`; log identities preserve exact `+0` for input `1` and exact `1` for `Log2(2)` and `Log10(10)`.",
     ),
     (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
-        "`Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`.",
+        "`Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`; log identities preserve exact `+0` for input `1` and exact `1` for `Log2(2)` and `Log10(10)`.",
     ),
     (
         "docs/math/README.md",
@@ -1536,7 +1536,13 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("trig-exp-finite-overflow-underflow", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('Exp finite overflow underflow contracts'"),
     RequiredBehaviorTestMarker("trig-sqrt-negative-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Sqrt(-0)=-0"),
     RequiredBehaviorTestMarker("trig-log-domain-signed-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('log domain signed zero contracts'"),
+    RequiredBehaviorTestMarker("trig-log-base-identities", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('log base identity contracts'"),
     RequiredBehaviorTestMarker("trig-log-domain-ln-negative-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Ln(-0)=-Inf"),
+    RequiredBehaviorTestMarker("trig-log-identity-ln-one", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Ln(1)=+0"),
+    RequiredBehaviorTestMarker("trig-log-identity-log2-one", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log2(1)=+0"),
+    RequiredBehaviorTestMarker("trig-log-identity-log10-one", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log10(1)=+0"),
+    RequiredBehaviorTestMarker("trig-log-identity-log2-base", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log2(2)=1"),
+    RequiredBehaviorTestMarker("trig-log-identity-log10-base", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log10(10)=1"),
     RequiredBehaviorTestMarker("trig-log-domain-log2-negative-finite", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log2(-1.0)"),
     RequiredBehaviorTestMarker("trig-log-domain-log10-single-negative-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log10(SingleNegativeZero)"),
     RequiredBehaviorTestMarker("trig-power", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('power edge contracts'"),
