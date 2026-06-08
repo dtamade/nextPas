@@ -209,6 +209,7 @@ type
     FParser: IH1Parser;
     FPending: string;
     FKeepAlive: Boolean;
+    FReadMs: Int64;
     FIdleMs: Int64;
     FBuf: array[0..4095] of Byte;
     FPollSubmitted: Boolean;
@@ -226,15 +227,21 @@ type
     FPollQueuedResponsePending: Boolean;
     FPollQueuedCloseAfterDrain: Boolean;
     FPollReadDeadline: TDeadline;
+    FPollReadDeadlineIsIdle: Boolean;
     FPollWriteDeadline: TDeadline;
     FParserIsSnapshot: Boolean;
-    procedure ArmPollReadDeadline;
+    procedure ArmPollReadDeadline(const ATimeoutMs: Int64;
+      const AIsIdle: Boolean);
+    procedure ArmPollRequestReadDeadline;
     procedure ClearPollReadDeadline;
     procedure ResetRequestParser;
     function TryUseFastRequestParser(const ABuf: PAnsiChar; const ALen: SizeUInt;
       out AConsumed: SizeUInt): Boolean;
+    procedure ResetPollRequestStateWithDeadline(const ATimeoutMs: Int64;
+      const AIsIdle: Boolean);
     procedure ResetPollRequestState;
     procedure PreparePollRequestParse;
+    procedure PreparePollKeepAliveRequestParse;
     procedure ResetPollResponseState;
     procedure PromoteQueuedPollResponse;
     function EnqueuePollResponse(const AOutbound: IH1OutboundBuffer;
@@ -829,6 +836,10 @@ begin
     FIdleMs := FOptions.IdleTimeout
   else
     FIdleMs := 30000;
+  if FOptions.ReadTimeout > 0 then
+    FReadMs := FOptions.ReadTimeout
+  else
+    FReadMs := FIdleMs;
   FPollSubmitted := False;
   FPollWorkerPending := False;
   FPollCompletionReady := False;
@@ -844,23 +855,32 @@ begin
   FPollQueuedResponsePending := False;
   FPollQueuedCloseAfterDrain := False;
   FPollReadDeadline := TDeadline.Infinite;
+  FPollReadDeadlineIsIdle := False;
   FPollWriteDeadline := TDeadline.Infinite;
   FParserIsSnapshot := False;
   if FStreamRuntime <> nil then
-    ArmPollReadDeadline;
+    ArmPollRequestReadDeadline;
 end;
 
-procedure TH1ServerConnectionState.ArmPollReadDeadline;
+procedure TH1ServerConnectionState.ArmPollReadDeadline(const ATimeoutMs: Int64;
+  const AIsIdle: Boolean);
 begin
   if FStreamRuntime = nil then
     Exit;
-  FPollReadDeadline := TDeadline.After(TDuration.FromMilliseconds(FIdleMs));
+  FPollReadDeadline := TDeadline.After(TDuration.FromMilliseconds(ATimeoutMs));
+  FPollReadDeadlineIsIdle := AIsIdle;
   FConn.SetReadDeadline(FPollReadDeadline);
+end;
+
+procedure TH1ServerConnectionState.ArmPollRequestReadDeadline;
+begin
+  ArmPollReadDeadline(FReadMs, False);
 end;
 
 procedure TH1ServerConnectionState.ClearPollReadDeadline;
 begin
   FPollReadDeadline := TDeadline.Infinite;
+  FPollReadDeadlineIsIdle := False;
   if FStreamRuntime <> nil then
     FConn.SetReadDeadline(TDeadline.Infinite);
 end;
@@ -912,19 +932,35 @@ begin
   Result := True;
 end;
 
-procedure TH1ServerConnectionState.ResetPollRequestState;
+procedure TH1ServerConnectionState.ResetPollRequestStateWithDeadline(
+  const ATimeoutMs: Int64; const AIsIdle: Boolean);
 begin
   ResetRequestParser;
   FParseTotalRead := 0;
   FParseHeadersDone := False;
   FContinueSent := False;
   FPollNeedRequestReset := False;
-  ArmPollReadDeadline;
+  ArmPollReadDeadline(ATimeoutMs, AIsIdle);
+end;
+
+procedure TH1ServerConnectionState.ResetPollRequestState;
+begin
+  ResetPollRequestStateWithDeadline(FReadMs, False);
 end;
 
 procedure TH1ServerConnectionState.PreparePollRequestParse;
 begin
   if FPollNeedRequestReset then
+    ResetPollRequestState;
+end;
+
+procedure TH1ServerConnectionState.PreparePollKeepAliveRequestParse;
+begin
+  if not FPollNeedRequestReset then
+    Exit;
+  if FPending = '' then
+    ResetPollRequestStateWithDeadline(FIdleMs, True)
+  else
     ResetPollRequestState;
 end;
 
@@ -1258,12 +1294,20 @@ var
   LHeadersDone: Boolean;
   LRejected: Boolean;
   LHeaderStatus: THttpStatus;
+  LIdleBeforeNextRequest: Boolean;
+  LUsingIdleDeadline: Boolean;
 begin
   Result := tscoServer;
+  LIdleBeforeNextRequest := False;
   while FKeepAlive do
   begin
     try
-      FConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FIdleMs)));
+      LUsingIdleDeadline := LIdleBeforeNextRequest and (FPending = '');
+      if LUsingIdleDeadline then
+        FConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FIdleMs)))
+      else
+        FConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FReadMs)));
+      LIdleBeforeNextRequest := False;
 
       ResetRequestParser;
       LTotalRead := 0;
@@ -1292,6 +1336,11 @@ begin
                (not FParser.HasError) then
               FParser.Finish;
             Break;
+          end;
+          if LUsingIdleDeadline then
+          begin
+            FConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FReadMs)));
+            LUsingIdleDeadline := False;
           end;
           if not ((LTotalRead = 0) and
              TryUseFastRequestParser(@FBuf[0], LN, LConsumed)) then
@@ -1380,8 +1429,7 @@ begin
       Result := ExecuteCurrentRequest;
       if Result <> tscoServer then
         Continue;
-      if not FKeepAlive then
-        FKeepAlive := False;
+      LIdleBeforeNextRequest := FKeepAlive and (FPending = '');
     except
       on E: Exception do
       begin
@@ -1498,7 +1546,7 @@ begin
       ANextEvents := [];
       Exit(tsprDone);
     end;
-    PreparePollRequestParse;
+    PreparePollKeepAliveRequestParse;
     Exit(AdvancePollRequestParse([], ANextEvents, AOwnership));
   end;
 
@@ -1559,7 +1607,7 @@ begin
     ANextEvents := [];
     Exit(tsprDone);
   end;
-  PreparePollRequestParse;
+  PreparePollKeepAliveRequestParse;
   Result := AdvancePollRequestParse([], ANextEvents, AOwnership);
 end;
 
@@ -1583,7 +1631,7 @@ begin
       ANextEvents := [];
       Exit(tsprDone);
     end;
-    PreparePollRequestParse;
+    PreparePollKeepAliveRequestParse;
     Exit(AdvancePollRequestParse(AEvents, ANextEvents, AOwnership));
   end;
 
@@ -1629,7 +1677,7 @@ begin
             ANextEvents := [];
             Exit(tsprDone);
           end;
-          PreparePollRequestParse;
+          PreparePollKeepAliveRequestParse;
           Exit(AdvancePollRequestParse([], ANextEvents, AOwnership));
         end;
         if LWritten > 0 then
@@ -1731,6 +1779,8 @@ begin
           end;
       else
       begin
+        if FPollReadDeadlineIsIdle then
+          ArmPollRequestReadDeadline;
         if not ((FParseTotalRead = 0) and
            TryUseFastRequestParser(@FBuf[0], LN, LConsumed)) then
           LConsumed := FParser.Execute(@FBuf[0], LN);
