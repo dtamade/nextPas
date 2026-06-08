@@ -605,17 +605,20 @@ var
 begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
-  LRW.WriteHeader(HTTP_STATUS_CONTINUE);
-  LRW.Flush;
-  LOut := LW.GetOutput;
-  Check(Pos('HTTP/1.1 100 Continue'#13#10, LOut) = 1, 'status 100 written');
-  Check(Pos('transfer-encoding: chunked', LOut) = 0,
-    '100 does not inject chunked header');
-  Check(Pos('content-length:', LOut) = 0,
-    '100 does not force content-length');
-  Check(Pos('0'#13#10#13#10, LOut) = 0,
-    '100 does not write final chunk');
-  LRW.Free;
+  try
+    LRW.WriteHeader(HTTP_STATUS_CONTINUE);
+    LOut := LW.GetOutput;
+    Check(Pos('HTTP/1.1 100 Continue'#13#10, LOut) = 1,
+      'status 100 written');
+    Check(Pos('transfer-encoding: chunked', LOut) = 0,
+      '100 does not inject chunked header');
+    Check(Pos('content-length:', LOut) = 0,
+      '100 does not force content-length');
+    Check(Pos('0'#13#10#13#10, LOut) = 0,
+      '100 does not write final chunk');
+  finally
+    LRW.Free;
+  end;
 end;
 
 procedure TestNonSwitchingInformationalAllowsFinalResponse;
@@ -806,6 +809,29 @@ begin
   LRW.Flush; { should not crash }
   Check(True, 'flush no-op ok');
   LRW.Free;
+end;
+
+procedure TestFlushWithoutPriorWriteCommitsDefaultResponse;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.Flush;
+    LOut := LW.GetOutput;
+    Check(LRW.HasCommitted, 'flush commits default response');
+    Check(Pos('HTTP/1.1 200 OK'#13#10, LOut) = 1,
+      'flush writes default status');
+    Check(Pos('transfer-encoding: chunked'#13#10, LOut) > 0,
+      'flush writes default chunked header');
+    Check(Pos('0'#13#10#13#10, LOut) > 0,
+      'flush finalizes empty default chunked body');
+  finally
+    LRW.Free;
+  end;
 end;
 
 procedure TestHijackWithoutConnectionRaises;
@@ -1213,6 +1239,8 @@ begin
     @TestSuppressBodyPreservesExplicitContentLength);
   T.Run('Write after chunked flush raises', @TestWriteAfterChunkedFlushRaises);
   T.Run('Flush no-op without IFlusher', @TestFlushNoOpWithoutFlusher);
+  T.Run('Flush without prior write commits default response',
+    @TestFlushWithoutPriorWriteCommitsDefaultResponse);
   T.Run('Hijack without connection raises', @TestHijackWithoutConnectionRaises);
   T.Run('Hijack returns connection and marks writer', @TestHijackReturnsConnectionAndMarksWriter);
   T.Run('WriteHeader with short writer still writes full headers',
