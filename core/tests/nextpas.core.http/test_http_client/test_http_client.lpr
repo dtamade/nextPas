@@ -4553,6 +4553,49 @@ begin
   CheckEqual('arrived', ReadBodyStr(LResp), 'cross-authority redirect final body');
 end;
 
+procedure TestClientRedirectStripsSensitiveHeadersAcrossScheme;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReq: IHttpRequest;
+  LHeaders: IHttpHeaders;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := 'https://example.test/secure';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LHeaders := NewHeaders;
+  LHeaders.SetHeader('x-trace', 'trace-scheme');
+  LHeaders.SetHeader('authorization', 'Bearer scheme-change');
+  LHeaders.SetHeader('www-authenticate', 'Basic realm="api"');
+  LHeaders.SetHeader('cookie', 'session=scheme');
+  LHeaders.SetHeader('cookie2', 'legacy=scheme');
+  LReq := NewRequest(hmGet, 'http://example.test:443/old', LHeaders, nil, 0);
+  LResp := LClient.Send(LReq);
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+    'scheme-change redirect performs second round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'scheme-change redirect transport final status');
+  CheckEqual('https', LTransportObj.SeenScheme,
+    'scheme-change redirect updates scheme');
+  CheckEqual('example.test', LTransportObj.SeenHost,
+    'scheme-change redirect keeps host');
+  CheckEqual('trace-scheme', LTransportObj.SeenTraceHeader,
+    'scheme-change redirect preserves ordinary header');
+  CheckEqual('', LTransportObj.SeenAuthorizationHeader,
+    'scheme-change redirect strips authorization header');
+  CheckEqual('', LTransportObj.SeenWwwAuthenticateHeader,
+    'scheme-change redirect strips www-authenticate header');
+  CheckEqual('', LTransportObj.SeenCookieHeader,
+    'scheme-change redirect strips cookie header');
+  CheckEqual('', LTransportObj.SeenCookie2Header,
+    'scheme-change redirect strips cookie2 header');
+  CheckEqual('arrived', ReadBodyStr(LResp),
+    'scheme-change redirect final body');
+end;
+
 procedure TestClientRedirectStripsSensitiveHeadersToSubdomainAuthority;
 var
   LTransportObj: TRedirectCaptureTransport;
@@ -6108,6 +6151,8 @@ begin
     @TestClientRedirectPreservesHeadersOnSameAuthority);
   T.Run('Client redirect strips sensitive headers across authority',
     @TestClientRedirectStripsSensitiveHeadersAcrossAuthority);
+  T.Run('Client redirect strips sensitive headers across scheme',
+    @TestClientRedirectStripsSensitiveHeadersAcrossScheme);
   T.Run('Client redirect strips sensitive headers to subdomain authority',
     @TestClientRedirectStripsSensitiveHeadersToSubdomainAuthority);
   T.Run('Client redirect preserves custom host header on relative Location',

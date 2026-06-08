@@ -293,6 +293,12 @@ begin
     (EffectiveAuthorityPort(AInitialUrl) = EffectiveAuthorityPort(ARedirectUrl));
 end;
 
+function IsRedirectSameOrigin(const AInitialUrl, ARedirectUrl: TUrl): Boolean;
+begin
+  Result := IsRedirectSameAuthority(AInitialUrl, ARedirectUrl) and
+    (LowerCase(AInitialUrl.Scheme) = LowerCase(ARedirectUrl.Scheme));
+end;
+
 function MethodForGetStyleRedirect(const AMethod: THttpMethod): THttpMethod;
 begin
   if AMethod = hmHead then
@@ -368,7 +374,7 @@ begin
     Result.Remove('transfer-encoding');
   end;
 
-  if not IsRedirectSameAuthority(AInitialUrl, ARedirectUrl) then
+  if not IsRedirectSameOrigin(AInitialUrl, ARedirectUrl) then
   begin
     Result.Remove('authorization');
     Result.Remove('www-authenticate');
