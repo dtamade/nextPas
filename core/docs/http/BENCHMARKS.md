@@ -40,6 +40,10 @@ benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
   --output build/projects/nextpas.core.http/server_comparison/snapshot.md
 ```
 
+Both server-comparison helpers reject `--output` paths outside
+`build/projects/nextpas.core.http/server_comparison`, so local reports and
+snapshot temp files stay out of source and test trees.
+
 The comparison currently covers four HTTP/1.1 keep-alive hello-world workloads:
 
 - `workload=no_url`: the handler does not read the request URL or query string.

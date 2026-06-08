@@ -272,6 +272,12 @@ begin
     'build/projects/nextpas.core.http/test_http_benchmarks');
 end;
 
+function ResolveServerComparisonOutputDir(const ARootDir: string): string;
+begin
+  Result := PathJoin(ARootDir,
+    'build/projects/nextpas.core.http/server_comparison');
+end;
+
 function ResolveH1ParserBenchBinaryPath(const ARootDir: string): string;
 begin
   Result := PathJoin(ARootDir,
@@ -2592,7 +2598,7 @@ begin
   LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
   LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath), 'server comparison runner exists');
-  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LReportPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_smoke.txt');
   DeleteFile(LReportPath);
 
@@ -2629,7 +2635,7 @@ begin
   LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
   LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath), 'server comparison url_path runner exists');
-  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LReportPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_url_path_smoke.txt');
   DeleteFile(LReportPath);
 
@@ -2669,7 +2675,7 @@ begin
   LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
   LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath), 'server comparison adapter_no_url runner exists');
-  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LReportPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_adapter_no_url_smoke.txt');
   DeleteFile(LReportPath);
 
@@ -2711,7 +2717,7 @@ begin
   LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
   LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath), 'server comparison response_1k runner exists');
-  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LReportPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_response_1k_smoke.txt');
   DeleteFile(LReportPath);
 
@@ -2763,7 +2769,7 @@ begin
   LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
   LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath), 'server comparison runs runner exists');
-  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LReportPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_runs_smoke.txt');
   DeleteFile(LReportPath);
 
@@ -2815,7 +2821,7 @@ begin
   LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
   LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath), 'server comparison include-hyper runner exists');
-  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LReportPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_include_hyper_smoke.txt');
   DeleteFile(LReportPath);
 
@@ -2858,7 +2864,7 @@ begin
   LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath),
     'server comparison include-hyper url_path runner exists');
-  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LReportPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_include_hyper_url_path_smoke.txt');
   DeleteFile(LReportPath);
 
@@ -2911,7 +2917,7 @@ begin
   LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath),
     'server comparison include-hyper response_1k runner exists');
-  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LReportPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_include_hyper_response_1k_smoke.txt');
   DeleteFile(LReportPath);
 
@@ -3002,6 +3008,32 @@ begin
     'server comparison invalid nextpas backend should not emit header');
 end;
 
+procedure TestServerComparisonRunnerRejectsUnsafeOutputPath;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LUnsafePath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath),
+    'server comparison unsafe output runner exists');
+  LUnsafePath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_unsafe.txt');
+  DeleteFile(LUnsafePath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '1', '--threads', '1',
+    '--output', LUnsafePath], LRootDir, LExitCode, LOutput);
+  Check(LExitCode <> 0,
+    'server comparison unsafe output path should fail: ' + LOutput);
+  CheckContains(LOutput, 'unsafe output path',
+    'server comparison unsafe output diagnostic');
+  Check(not FileExists(LUnsafePath),
+    'server comparison unsafe output path should not create a report');
+end;
+
 procedure TestServerComparisonRunnerEpollSmoke;
 var
   LRootDir: string;
@@ -3018,7 +3050,7 @@ begin
   LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
   LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath), 'server comparison epoll runner exists');
-  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LReportPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_epoll_smoke.txt');
   DeleteFile(LReportPath);
 
@@ -3055,7 +3087,7 @@ begin
   LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath),
     'server comparison epoll url_path runner exists');
-  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LReportPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_epoll_url_path_smoke.txt');
   DeleteFile(LReportPath);
 
@@ -3098,7 +3130,7 @@ begin
   LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath),
     'server comparison epoll response_1k runner exists');
-  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LReportPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_epoll_response_1k_smoke.txt');
   DeleteFile(LReportPath);
 
@@ -3156,7 +3188,7 @@ begin
   LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath),
     'server comparison include-hyper epoll response_1k runner exists');
-  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LReportPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_include_hyper_epoll_response_1k_smoke.txt');
   DeleteFile(LReportPath);
 
@@ -3217,7 +3249,7 @@ begin
   LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
   LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath), 'server comparison snapshot runner exists');
-  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LSnapshotPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_snapshot_smoke.md');
   LRawPath := LSnapshotPath + '.raw';
   DeleteFile(LSnapshotPath);
@@ -3265,7 +3297,7 @@ begin
   LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath),
     'server comparison snapshot url_path runner exists');
-  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LSnapshotPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_snapshot_url_path_smoke.md');
   DeleteFile(LSnapshotPath);
 
@@ -3299,7 +3331,7 @@ begin
   LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
   LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath), 'server comparison snapshot runs runner exists');
-  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LSnapshotPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_snapshot_runs_smoke.md');
   DeleteFile(LSnapshotPath);
 
@@ -3337,7 +3369,7 @@ begin
   LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath),
     'server comparison snapshot thread clamp runner exists');
-  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LSnapshotPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_snapshot_thread_clamp_smoke.md');
   DeleteFile(LSnapshotPath);
 
@@ -3377,7 +3409,7 @@ begin
   LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
   LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath), 'server comparison snapshot include-hyper runner exists');
-  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LSnapshotPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_snapshot_include_hyper_smoke.md');
   DeleteFile(LSnapshotPath);
 
@@ -3415,7 +3447,7 @@ begin
   LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath),
     'server comparison snapshot include-hyper url_path runner exists');
-  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LSnapshotPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_snapshot_include_hyper_url_path_smoke.md');
   DeleteFile(LSnapshotPath);
 
@@ -3457,7 +3489,7 @@ begin
   LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath),
     'server comparison snapshot include-hyper response_1k runner exists');
-  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LSnapshotPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_snapshot_include_hyper_response_1k_smoke.md');
   DeleteFile(LSnapshotPath);
 
@@ -3505,7 +3537,7 @@ begin
   LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath),
     'server comparison snapshot epoll url_path runner exists');
-  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LSnapshotPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_snapshot_epoll_url_path_smoke.md');
   DeleteFile(LSnapshotPath);
 
@@ -3547,7 +3579,7 @@ begin
   LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath),
     'server comparison snapshot epoll response_1k runner exists');
-  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LSnapshotPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_snapshot_epoll_response_1k_smoke.md');
   DeleteFile(LSnapshotPath);
 
@@ -3596,7 +3628,7 @@ begin
   LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath),
     'server comparison snapshot include-hyper epoll response_1k runner exists');
-  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LSnapshotPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_snapshot_include_hyper_epoll_response_1k_smoke.md');
   DeleteFile(LSnapshotPath);
 
@@ -3659,6 +3691,37 @@ begin
     'server comparison snapshot invalid nextpas backend diagnostic');
 end;
 
+procedure TestServerComparisonSnapshotRejectsUnsafeOutputPath;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LUnsafePath: string;
+  LRawPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath),
+    'server comparison snapshot unsafe output runner exists');
+  LUnsafePath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_snapshot_unsafe.md');
+  LRawPath := LUnsafePath + '.raw';
+  DeleteFile(LUnsafePath);
+  DeleteFile(LRawPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '1', '--threads', '1',
+    '--output', LUnsafePath], LRootDir, LExitCode, LOutput);
+  Check(LExitCode <> 0,
+    'server comparison snapshot unsafe output path should fail: ' + LOutput);
+  CheckContains(LOutput, 'unsafe output path',
+    'server comparison snapshot unsafe output diagnostic');
+  Check(not FileExists(LUnsafePath),
+    'server comparison snapshot unsafe output path should not create snapshot');
+  Check(not FileExists(LRawPath),
+    'server comparison snapshot unsafe output path should not create raw temp file');
+end;
+
 procedure TestServerComparisonSnapshotEpollSmoke;
 var
   LRootDir: string;
@@ -3676,7 +3739,7 @@ begin
   LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
   Check(FileExists(LRunnerPath),
     'server comparison snapshot epoll runner exists');
-  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+  LSnapshotPath := PathJoin(ResolveServerComparisonOutputDir(LRootDir),
     'server_comparison_snapshot_epoll_smoke.md');
   DeleteFile(LSnapshotPath);
 
@@ -4766,6 +4829,8 @@ begin
     @TestServerComparisonRunnerConcurrencyLockSourceContract);
   T.Run('server comparison runner rejects invalid nextpas backend',
     @TestServerComparisonRunnerRejectsInvalidNextpasBackend);
+  T.Run('server comparison runner rejects unsafe output path',
+    @TestServerComparisonRunnerRejectsUnsafeOutputPath);
   T.Run('server comparison runner epoll smoke',
     @TestServerComparisonRunnerEpollSmoke);
   T.Run('server comparison runner epoll url_path smoke',
@@ -4796,6 +4861,8 @@ begin
     @TestServerComparisonSnapshotIncludeHyperEpollResponse1KSmoke);
   T.Run('server comparison snapshot rejects invalid nextpas backend',
     @TestServerComparisonSnapshotRejectsInvalidNextpasBackend);
+  T.Run('server comparison snapshot rejects unsafe output path',
+    @TestServerComparisonSnapshotRejectsUnsafeOutputPath);
   T.Run('server comparison snapshot epoll smoke',
     @TestServerComparisonSnapshotEpollSmoke);
   T.Run('C llhttp comparator requires LLHTTP_ROOT',

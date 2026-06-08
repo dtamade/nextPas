@@ -364,8 +364,10 @@ benchmarks/nextpas.core.http/run_server_comparison.sh \
 
 The runner builds the default nextPas / Go / Rust std-only implementations,
 streams the combined output to stdout, and optionally writes the same report to
-`--output`. Use `--runs N` to repeat each implementation after one build and
-print median `ns/op` / `req/s` summary rows. Use
+`--output`; that path must stay under
+`build/projects/nextpas.core.http/server_comparison` to keep benchmark reports
+out of source and test trees. Use `--runs N` to repeat each implementation
+after one build and print median `ns/op` / `req/s` summary rows. Use
 `--workload url_path` to make the client request `/api/v1/users` and make each
 server implementation touch the request path before writing the response. Use
 `--workload adapter_no_url` to keep the handler no-URL while adding
@@ -388,6 +390,8 @@ benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
 The snapshot includes `git_head`, OS, FPC, Go, and Rust versions, the benchmark
 parameters including `runs`, and the raw comparison output plus summary rows.
 Treat snapshots as local evidence, not as a permanent ranking across machines.
+It uses the same `server_comparison` output-root guard and removes the adjacent
+`${output}.raw` temp file after embedding the raw comparison output.
 
 For narrowed `Pascal raw llhttp vs C llhttp` work, use the H1 parser flag
 matrix runner instead of repeating separate single-shot commands:

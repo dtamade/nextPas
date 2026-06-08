@@ -118,6 +118,36 @@ case "${NEXTPAS_BACKEND}" in
     ;;
 esac
 
+SERVER_COMPARISON_OUTPUT_ROOT="${CORE_ROOT}/build/projects/nextpas.core.http/server_comparison"
+
+resolve_path() {
+  if command -v realpath >/dev/null 2>&1; then
+    realpath -m -- "$1"
+  else
+    python3 -c 'import os, sys; print(os.path.abspath(sys.argv[1]))' "$1"
+  fi
+}
+
+validate_output_path() {
+  local resolved_output
+  local resolved_root
+
+  resolved_output="$(resolve_path "${OUTPUT_PATH}")"
+  resolved_root="$(resolve_path "${SERVER_COMPARISON_OUTPUT_ROOT}")"
+  case "${resolved_output}" in
+    "${resolved_root}"|"${resolved_root}/"*)
+      OUTPUT_PATH="${resolved_output}"
+      ;;
+    *)
+      echo "unsafe output path: ${OUTPUT_PATH}" >&2
+      echo "allowed root: ${resolved_root}" >&2
+      exit 2
+      ;;
+  esac
+}
+
+validate_output_path
+
 OUTPUT_DIR="$(dirname "${OUTPUT_PATH}")"
 RAW_OUTPUT="${OUTPUT_PATH}.raw"
 
