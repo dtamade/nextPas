@@ -186,6 +186,66 @@ begin
   Result := LowerCase(System.Copy(ALocation, 1, LSchemeEnd - 1));
 end;
 
+function RedirectAuthorityPortIsValid(const ALocation: string): Boolean;
+var
+  LAuthorityStart: SizeInt;
+  LAuthorityEnd: SizeInt;
+  LAuthority: string;
+  LAtPos: SizeInt;
+  LColonPos: SizeInt;
+  LBracketPos: SizeInt;
+  LPortStr: string;
+  LPortValue: Int64;
+  LI: SizeInt;
+begin
+  Result := True;
+  LAuthorityStart := Pos('://', ALocation);
+  if LAuthorityStart = 0 then
+    Exit;
+  Inc(LAuthorityStart, 3);
+
+  LAuthorityEnd := Length(ALocation) + 1;
+  for LI := LAuthorityStart to Length(ALocation) do
+    if (ALocation[LI] = '/') or (ALocation[LI] = '?') or
+      (ALocation[LI] = '#') then
+    begin
+      LAuthorityEnd := LI;
+      Break;
+    end;
+
+  LAuthority := System.Copy(ALocation, LAuthorityStart,
+    LAuthorityEnd - LAuthorityStart);
+  if LAuthority = '' then
+    Exit;
+
+  LAtPos := Pos('@', LAuthority);
+  if LAtPos > 0 then
+    Delete(LAuthority, 1, LAtPos);
+  if LAuthority = '' then
+    Exit;
+
+  if LAuthority[1] = '[' then
+  begin
+    LBracketPos := Pos(']', LAuthority);
+    if (LBracketPos = 0) or (LBracketPos >= Length(LAuthority)) or
+      (LAuthority[LBracketPos + 1] <> ':') then
+      Exit;
+    LPortStr := System.Copy(LAuthority, LBracketPos + 2,
+      Length(LAuthority) - LBracketPos - 1);
+  end
+  else
+  begin
+    LColonPos := Pos(':', LAuthority);
+    if LColonPos = 0 then
+      Exit;
+    LPortStr := System.Copy(LAuthority, LColonPos + 1,
+      Length(LAuthority) - LColonPos);
+  end;
+
+  Result := (LPortStr <> '') and TryStrToInt64(LPortStr, LPortValue) and
+    (LPortValue >= 0) and (LPortValue <= 65535);
+end;
+
 function DefaultPortForScheme(const AScheme: string): UInt16;
 var
   LScheme: string;
@@ -449,6 +509,8 @@ begin
     Result.Scheme := LScheme;
     if Result.Host = '' then
       raise EHttpError.Create('redirect URL host is empty');
+    if not RedirectAuthorityPortIsValid(ALocation) then
+      raise EHttpError.Create('redirect URL port is invalid');
     Exit;
   end;
   if (Length(ALocation) >= 2) and (ALocation[1] = '/') and (ALocation[2] = '/') then

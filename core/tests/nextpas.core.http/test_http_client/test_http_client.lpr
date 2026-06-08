@@ -4114,6 +4114,55 @@ begin
     'absolute redirect with empty host does not perform second round trip');
 end;
 
+procedure TestClientRedirectRejectsAbsoluteLocationWithInvalidPort;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := 'http://redirect.test:bad/new';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LRaised := False;
+  try
+    LClient.Get('http://example.test/old');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'absolute redirect with invalid port raises EHttpError');
+  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
+    'absolute redirect with invalid port does not perform second round trip');
+end;
+
+procedure TestClientRedirectTransportResolvesUserInfoLocationWithPort;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := 'http://user:pass@redirect.test:80/new?from=userinfo';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LResp := LClient.Get('http://example.test/old');
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+    'userinfo absolute redirect with numeric port performs second round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'userinfo absolute redirect transport final status');
+  CheckEqual('redirect.test', LTransportObj.SeenHost,
+    'userinfo absolute redirect keeps host separate from credentials');
+  CheckEqual('/new', LTransportObj.SeenPath,
+    'userinfo absolute redirect updates path');
+  CheckEqual('userinfo', LTransportObj.SeenQueryParam,
+    'userinfo absolute redirect query param is visible');
+  CheckEqual('arrived', ReadBodyStr(LResp),
+    'userinfo absolute redirect final body');
+end;
+
 procedure TestClientRedirectRejectsUnsupportedNonHierarchicalScheme;
 var
   LTransportObj: TRedirectCaptureTransport;
@@ -5821,6 +5870,10 @@ begin
     @TestClientRedirectRejectsUnsupportedAbsoluteScheme);
   T.Run('Client redirect rejects absolute Location with empty host',
     @TestClientRedirectRejectsAbsoluteLocationWithEmptyHost);
+  T.Run('Client redirect rejects absolute Location with invalid port',
+    @TestClientRedirectRejectsAbsoluteLocationWithInvalidPort);
+  T.Run('Client redirect transport resolves userinfo Location with port',
+    @TestClientRedirectTransportResolvesUserInfoLocationWithPort);
   T.Run('Client redirect rejects unsupported non-hierarchical scheme',
     @TestClientRedirectRejectsUnsupportedNonHierarchicalScheme);
   T.Run('Client redirect rejects unsupported single-slash scheme',
