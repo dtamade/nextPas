@@ -118,6 +118,97 @@ const
     '  Halt(Length(Greeting) + 31);' + LineEnding +
     'end.';
 
+  MixedOwnedAndLegacyConsumerSource =
+    'program test;' + LineEnding +
+    'function Greeting: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  Greeting := ''Hello World'';' + LineEnding +
+    'end;' + LineEnding +
+    'var S: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  S := Greeting;' + LineEnding +
+    '  WriteLn(Greeting);' + LineEnding +
+    '  Halt(Length(Greeting) + 31);' + LineEnding +
+    'end.';
+
+  OverloadedStringReturnSource =
+    'program test;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''default'';' + LineEnding +
+    'end;' + LineEnding +
+    'function MakeText(Value: Integer): string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := IntToStr(Value);' + LineEnding +
+    'end;' + LineEnding +
+    'var S: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  S := MakeText(42);' + LineEnding +
+    'end.';
+
+  FieldOwnedReturnConsumerSource =
+    'program test;' + LineEnding +
+    'type TStringBox = class' + LineEnding +
+    '  Text: string;' + LineEnding +
+    'end;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''field'';' + LineEnding +
+    'end;' + LineEnding +
+    'var Box: TStringBox;' + LineEnding +
+    'begin' + LineEnding +
+    '  Box.Text := MakeText();' + LineEnding +
+    'end.';
+
+  LengthOwnedReturnConsumerSource =
+    'program test;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''length'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  Halt(Length(MakeText()));' + LineEnding +
+    'end.';
+
+  CopyOwnedReturnConsumerSource =
+    'program test;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''copy'';' + LineEnding +
+    'end;' + LineEnding +
+    'var S: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  S := Copy(MakeText(), 1, 2);' + LineEnding +
+    'end.';
+
+  ArgumentOwnedReturnConsumerSource =
+    'program test;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''arg'';' + LineEnding +
+    'end;' + LineEnding +
+    'procedure Take(P: string);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  Take(MakeText());' + LineEnding +
+    'end.';
+
+  NestedArgumentOwnedReturnConsumerSource =
+    'program test;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''inner'';' + LineEnding +
+    'end;' + LineEnding +
+    'function Wrap(P: string): string;' + LineEnding +
+    'begin' + LineEnding +
+    '  Wrap := P;' + LineEnding +
+    'end;' + LineEnding +
+    'var S: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  S := Wrap(MakeText());' + LineEnding +
+    'end.';
+
 procedure Fail(const AMessage: string);
 begin
   WriteLn('hir-string-return-ownership-contract-failure=', AMessage);
@@ -150,6 +241,42 @@ begin
     Analyzer := TSemanticAnalyzer.Create(Ast, Graph, Diagnostics, 1, True);
     Analyzer.Analyze;
     Result := Analyzer.DetachModel;
+  finally
+    Analyzer.Free;
+    Graph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+function AnalyzeSourceHasError(const ASource, ACode: string): Boolean;
+var
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Tree: TGreenTree;
+  Ast: TAstFacade;
+  Graph: TUnitGraph;
+  Analyzer: TSemanticAnalyzer;
+begin
+  Result := False;
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := nil;
+  Tree := nil;
+  Ast := nil;
+  Graph := nil;
+  Analyzer := nil;
+  try
+    Lexer := TLexerResult.Create(ASource, Diagnostics, 1);
+    Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+    Ast := TAstFacade.Create(Tree);
+    Graph := TUnitGraph.Create;
+    Graph.SetRootName('test');
+    Graph.MarkReady;
+    Analyzer := TSemanticAnalyzer.Create(Ast, Graph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Result := Diagnostics.HasErrors and SameText(Diagnostics.LastDiagnosticCode, ACode);
   finally
     Analyzer.Free;
     Graph.Free;
@@ -426,6 +553,12 @@ begin
   end;
 end;
 
+procedure RequireAnalyzeError(const ASource, ACode, AMessage: string);
+begin
+  if not AnalyzeSourceHasError(ASource, ACode) then
+    Fail(AMessage);
+end;
+
 procedure AssertDeferredBoundariesPreserved;
 var
   Model: TSemanticModel;
@@ -491,11 +624,32 @@ begin
   end;
 end;
 
+procedure AssertDeferredOwnedReturnConsumersFailClosed;
+const
+  DeferredCode = 'sema.c6h4-owned-string-return-deferred-consumer';
+begin
+  RequireAnalyzeError(MixedOwnedAndLegacyConsumerSource, DeferredCode,
+    'mixed-owned-string-return-consumer-must-fail-closed');
+  RequireAnalyzeError(OverloadedStringReturnSource, DeferredCode,
+    'overloaded-owned-string-return-must-fail-closed');
+  RequireAnalyzeError(FieldOwnedReturnConsumerSource, DeferredCode,
+    'field-owned-string-return-consumer-must-fail-closed');
+  RequireAnalyzeError(LengthOwnedReturnConsumerSource, DeferredCode,
+    'length-owned-string-return-consumer-must-fail-closed');
+  RequireAnalyzeError(CopyOwnedReturnConsumerSource, DeferredCode,
+    'copy-owned-string-return-consumer-must-fail-closed');
+  RequireAnalyzeError(ArgumentOwnedReturnConsumerSource, DeferredCode,
+    'argument-owned-string-return-consumer-must-fail-closed');
+  RequireAnalyzeError(NestedArgumentOwnedReturnConsumerSource, DeferredCode,
+    'nested-argument-owned-string-return-consumer-must-fail-closed');
+end;
+
 begin
   AssertDirectOwnedReturnContract;
   AssertIntToStrAndLiteralAliasReturnContract;
   AssertCallerConsumesOwnedDescriptor;
   AssertMoveAndChainedReturnContract;
   AssertDeferredBoundariesPreserved;
+  AssertDeferredOwnedReturnConsumersFailClosed;
   WriteLn('hir-string-return-ownership-contract-status=pass');
 end.

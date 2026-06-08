@@ -104,13 +104,18 @@ type
       const AName: string): Boolean;
     function StringReturnFunctionNameFromNode(const ANode: TGreenNode;
       out AName: string): Boolean;
+    function FunctionCallReturnsString(const ANode: TGreenNode): Boolean;
     function AssignmentOwnsStringReturn(const ANode: TGreenNode;
       const AEntry: TProcedureBodyEntry): Boolean;
     function AssignmentOwnsTopLevelStringReturn(const ANode: TGreenNode): Boolean;
+    function DirectOwnedStringReturnAssignmentNode(const ANode: TGreenNode): Boolean;
+    function NodeConsumesOwnedStringReturnDeferred(const ANode: TGreenNode;
+      const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
     procedure ScanOwnedStringReturnConsumers(const ANode: TGreenNode;
       const AEntry: TProcedureBodyEntry; var AChanged: Boolean);
     procedure ScanTopLevelOwnedStringReturnConsumers(const ANode: TGreenNode;
       var AChanged: Boolean);
+    procedure CheckDeferredOwnedStringReturnConsumers(const ANode: TGreenNode);
     procedure PreRegisterOwnedStringReturnConsumers;
     function IsRuntimeArrVar(const AName: string): Boolean;
     function IsBorrowedRuntimeArrVar(const AName: string): Boolean;
@@ -774,6 +779,20 @@ begin
   Result := True;
 end;
 
+function TSemanticAnalyzer.FunctionCallReturnsString(
+  const ANode: TGreenNode): Boolean;
+var
+  BodyNode, DeclNode: TGreenNode;
+begin
+  Result := False;
+  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
+    (ANode.Text = '') then
+    Exit;
+  if not LookupProcedureBody(ANode.Text, BodyNode, DeclNode) then
+    Exit;
+  Result := DeclReturnsString(DeclNode);
+end;
+
 function TSemanticAnalyzer.AssignmentOwnsStringReturn(const ANode: TGreenNode;
   const AEntry: TProcedureBodyEntry): Boolean;
 var
@@ -788,6 +807,8 @@ begin
   SourceNode := ANode.ChildAt(1);
   if (DestNode = nil) or (DestNode.NodeKind <> gnkIdentifier) or
     (not StringReturnFunctionNameFromNode(SourceNode, FuncName)) then
+    Exit;
+  if HasOverload(FuncName) then
     Exit;
   if not IsRootOwnedStringReturnCandidate(AEntry, DeclReturnsString(AEntry.Decl)) then
     Exit;
@@ -815,8 +836,85 @@ begin
   if (DestNode = nil) or (DestNode.NodeKind <> gnkIdentifier) or
     (not StringReturnFunctionNameFromNode(SourceNode, FuncName)) then
     Exit;
+  if HasOverload(FuncName) then
+    Exit;
   DestName := DestNode.Text;
   Result := IsRuntimeStrVar(DestName);
+end;
+
+function TSemanticAnalyzer.DirectOwnedStringReturnAssignmentNode(
+  const ANode: TGreenNode): Boolean;
+var
+  SourceName: string;
+begin
+  Result := False;
+  if (ANode = nil) or (ANode.NodeKind <> gnkAssignmentStatement) or
+    (ANode.ChildCount < 2) then
+    Exit;
+  if not StringReturnFunctionNameFromNode(ANode.ChildAt(1), SourceName) then
+    Exit;
+  Result := IsOwnedStringReturnFunc(SourceName);
+end;
+
+function TSemanticAnalyzer.NodeConsumesOwnedStringReturnDeferred(
+  const ANode: TGreenNode;
+  const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
+var
+  I: LongInt;
+  Child: TGreenNode;
+  SourceName: string;
+begin
+  Result := False;
+  if ANode = nil then
+    Exit;
+
+  if (ANode.NodeKind = gnkProcedureDecl) or
+    (ANode.NodeKind = gnkFunctionDecl) then
+    Exit;
+
+  if DirectOwnedStringReturnAssignmentNode(ANode) then
+  begin
+    if ANode.ChildCount >= 2 then
+    begin
+      for I := 0 to ANode.ChildAt(1).ChildCount - 1 do
+      begin
+        if (ANode.ChildAt(1).NodeKind = gnkFunctionCall) and (I = 0) then
+          Continue;
+        if NodeConsumesOwnedStringReturnDeferred(
+          ANode.ChildAt(1).ChildAt(I), False) then
+          Exit(True);
+      end;
+    end;
+    Exit(False);
+  end;
+
+  if ANode.NodeKind = gnkAssignmentStatement then
+  begin
+    if ANode.ChildCount >= 2 then
+      Exit(NodeConsumesOwnedStringReturnDeferred(
+        ANode.ChildAt(1), AInsideDirectOwnedAssignmentRhs));
+    Exit(False);
+  end;
+
+  if StringReturnFunctionNameFromNode(ANode, SourceName) and
+    IsOwnedStringReturnFunc(SourceName) and
+    (not AInsideDirectOwnedAssignmentRhs) then
+    Exit(True);
+  if FunctionCallReturnsString(ANode) and
+    (not AInsideDirectOwnedAssignmentRhs) then
+    Exit(True);
+  if DirectOwnedStringReturnAssignmentNode(ANode) and
+    StringReturnFunctionNameFromNode(ANode.ChildAt(1), SourceName) and
+    HasOverload(SourceName) then
+    Exit(True);
+
+  for I := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(I);
+    if NodeConsumesOwnedStringReturnDeferred(
+      Child, AInsideDirectOwnedAssignmentRhs) then
+      Exit(True);
+  end;
 end;
 
 procedure TSemanticAnalyzer.ScanOwnedStringReturnConsumers(
@@ -874,6 +972,21 @@ begin
   end;
 end;
 
+procedure TSemanticAnalyzer.CheckDeferredOwnedStringReturnConsumers(
+  const ANode: TGreenNode);
+begin
+  if ANode = nil then
+    Exit;
+  if NodeConsumesOwnedStringReturnDeferred(ANode, False) then
+  begin
+    EmitSemaError(
+      'sema.c6h4-owned-string-return-deferred-consumer',
+      'C6-H4 supports direct owned string return assignment only',
+      ANode.ByteOffset);
+    Exit;
+  end;
+end;
+
 procedure TSemanticAnalyzer.PreRegisterOwnedStringReturnConsumers;
 var
   I: LongInt;
@@ -897,6 +1010,24 @@ begin
       ScanOwnedStringReturnConsumers(Entry.Body, Entry, Changed);
     end;
   until not Changed;
+  if (FRootAst <> nil) and FRootAst.IsValid then
+  begin
+    RootNode := FRootAst.RootNode;
+    if RootNode <> nil then
+      CheckDeferredOwnedStringReturnConsumers(RootNode);
+  end;
+  if not FDiagnostics.HasErrors then
+  begin
+    for I := 0 to Length(FProcedureBodies) - 1 do
+    begin
+      Entry := FProcedureBodies[I];
+      if (Entry.Body = nil) or (Entry.Decl = nil) or (Pos('<', Entry.Name) > 0) then
+        Continue;
+      CheckDeferredOwnedStringReturnConsumers(Entry.Body);
+      if FDiagnostics.HasErrors then
+        Exit;
+    end;
+  end;
 end;
 
 procedure TSemanticAnalyzer.RegisterRuntimeArrVar(const AName: string);
