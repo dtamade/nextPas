@@ -34,6 +34,57 @@ begin
     ALabel + ' unexpectedly contains: ' + AFragment);
 end;
 
+function PathHasFragment(const APath, AFragment: string): Boolean;
+begin
+  Result := Pos(AFragment, APath) > 0;
+end;
+
+function IsHttpHandwrittenSource(const APath: string): Boolean;
+begin
+  Result := not PathHasFragment(APath, '.llhttp.pas');
+end;
+
+procedure CheckSourceFileNotContains(const APath, AFragment, ALabel: string);
+begin
+  CheckSourceNotContains(LoadTextFile(APath), AFragment, ALabel + ': ' + APath);
+end;
+
+procedure CheckSourceTreeNotContains(const ADir, AMask, AFragment, ALabel: string);
+var
+  LSearch: TSearchRec;
+  LPath: string;
+begin
+  if FindFirst(IncludeTrailingPathDelimiter(ADir) + AMask, faAnyFile, LSearch) = 0 then
+  begin
+    try
+      repeat
+        if (LSearch.Attr and faDirectory) = 0 then
+        begin
+          LPath := IncludeTrailingPathDelimiter(ADir) + LSearch.Name;
+          if IsHttpHandwrittenSource(LPath) then
+            CheckSourceFileNotContains(LPath, AFragment, ALabel);
+        end;
+      until FindNext(LSearch) <> 0;
+    finally
+      FindClose(LSearch);
+    end;
+  end;
+
+  if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*', faDirectory, LSearch) = 0 then
+  begin
+    try
+      repeat
+        if ((LSearch.Attr and faDirectory) <> 0) and
+           (LSearch.Name <> '.') and (LSearch.Name <> '..') then
+          CheckSourceTreeNotContains(IncludeTrailingPathDelimiter(ADir) + LSearch.Name,
+            AMask, AFragment, ALabel);
+      until FindNext(LSearch) <> 0;
+    finally
+      FindClose(LSearch);
+    end;
+  end;
+end;
+
 procedure TestHeadersPublicApiDoesNotExposeSetUnderscore;
 var
   LLegacyName: string;
@@ -51,6 +102,19 @@ begin
     LLegacyName, 'HTTP API coverage');
   CheckSourceNotContains(LoadTextFile('../../../docs/http/ARCHITECTURE.md'),
     LLegacyName, 'HTTP architecture');
+end;
+
+procedure TestHttpHandwrittenSourcesDoNotExposeSetUnderscore;
+var
+  LLegacyName: string;
+begin
+  LLegacyName := 'Set' + '_';
+  CheckSourceTreeNotContains('../../../src', 'nextpas.core.http*.pas',
+    LLegacyName, 'HTTP handwritten source');
+  CheckSourceTreeNotContains('../../../tests/nextpas.core.http', '*.lpr',
+    LLegacyName, 'HTTP test source');
+  CheckSourceTreeNotContains('../../../tests/nextpas.core.http', '*.pas',
+    LLegacyName, 'HTTP test support source');
 end;
 
 procedure TestHeadersPublicApiDoesNotExposeDel;
@@ -601,6 +665,8 @@ begin
   T := TTestRunner.Create('nextpas.core.http.headers');
   T.Run('Headers public API does not expose Set underscore',
     @TestHeadersPublicApiDoesNotExposeSetUnderscore);
+  T.Run('HTTP handwritten sources do not expose Set underscore',
+    @TestHttpHandwrittenSourcesDoNotExposeSetUnderscore);
   T.Run('Headers public API does not expose Del',
     @TestHeadersPublicApiDoesNotExposeDel);
   T.Run('Set and Get basic', @TestSetAndGetBasic);
