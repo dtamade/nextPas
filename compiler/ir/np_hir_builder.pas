@@ -4653,6 +4653,14 @@ begin
     end;
   end;
 
+  PtrSlot := FindAlloca(DstName + '$ptr');
+  LenSlot := FindAlloca(DstName + '$len');
+  OwnerSlot := FindAlloca(DstName + '$owner');
+  AllocSizeSlot := FindAlloca(DstName + '$alloc_size');
+  if (PtrSlot = 0) or (LenSlot = 0) or (OwnerSlot = 0) or
+    (AllocSizeSlot = 0) then
+    Exit;
+
   ArgCount := 0;
   SetLength(ArgValues, 0);
   SetLength(ArgTypes, 0);
@@ -4744,14 +4752,6 @@ begin
     Instr.Operands[I] := MakeTypedOperand(ArgValues[I], ArgTypes[I]);
   EmitInstr(Instr);
   CallResult := Instr.ResultId;
-
-  PtrSlot := FindAlloca(DstName + '$ptr');
-  LenSlot := FindAlloca(DstName + '$len');
-  OwnerSlot := FindAlloca(DstName + '$owner');
-  AllocSizeSlot := FindAlloca(DstName + '$alloc_size');
-  if (PtrSlot = 0) or (LenSlot = 0) or (OwnerSlot = 0) or
-    (AllocSizeSlot = 0) then
-    Exit;
 
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;

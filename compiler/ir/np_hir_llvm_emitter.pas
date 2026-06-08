@@ -48,6 +48,7 @@ type
     procedure Emit(const S: string);
     function ValueRef(AValueId: THIRValueId): string;
     function TypeToLlvm(ATypeId: THIRTypeId): string;
+    function BlockEndsWithIntrinsicReturn(const ABlock: THIRBlock): Boolean;
     function OperandTypeToLlvm(const AOperand: THIROperand;
       const AFallback: string): string;
     function IsUnsignedIntegerType(const ATypeId: THIRTypeId): Boolean;
@@ -183,6 +184,20 @@ begin
   else
     Result := 'i64';
   end;
+end;
+
+function THIRLlvmEmitter.BlockEndsWithIntrinsicReturn(
+  const ABlock: THIRBlock): Boolean;
+var
+  LastInstr: THIRInstr;
+begin
+  Result := False;
+  if Length(ABlock.Instrs) = 0 then
+    Exit;
+  LastInstr := ABlock.Instrs[High(ABlock.Instrs)];
+  Result := (LastInstr.Kind = hikIntrinsic) and
+    ((LastInstr.IntrinsicName = 'ret_str') or
+     (LastInstr.IntrinsicName = 'ret_str_owned'));
 end;
 
 function THIRLlvmEmitter.OperandTypeToLlvm(const AOperand: THIROperand;
@@ -1116,7 +1131,8 @@ begin
     Emit('bb' + IntToStr(AFunc.Blocks[I].Id) + ':');
     for J := 0 to High(AFunc.Blocks[I].Instrs) do
       EmitInstr(AFunc.Blocks[I].Instrs[J]);
-    EmitTerminator(AFunc.Blocks[I].Terminator);
+    if not BlockEndsWithIntrinsicReturn(AFunc.Blocks[I]) then
+      EmitTerminator(AFunc.Blocks[I].Terminator);
   end;
 
   Emit('}');
