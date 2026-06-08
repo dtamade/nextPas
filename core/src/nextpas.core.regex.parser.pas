@@ -5,7 +5,6 @@ unit nextpas.core.regex.parser;
 interface
 
 uses
-  nextpas.core.text.conv,
   nextpas.core.regex.base,
   nextpas.core.regex.charclass;
 
@@ -205,6 +204,23 @@ function ParseAtom(var P: TParser): PAstNode; forward;
 function ParseConcat(var P: TParser): PAstNode; forward;
 function ParseAlternate(var P: TParser): PAstNode; forward;
 
+function ParseRepeatValue(const AText: string; const APos: SizeUInt): UInt32;
+var
+  LIndex: SizeInt;
+  LValue: UInt64;
+begin
+  LValue := 0;
+  for LIndex := 1 to Length(AText) do
+  begin
+    if LValue > (MAX_REPEAT_COUNT div 10) then
+      raise ERegexCompileError.Create('repeat count exceeds limit', APos);
+    LValue := (LValue * 10) + UInt64(Ord(AText[LIndex]) - Ord('0'));
+    if LValue > MAX_REPEAT_COUNT then
+      raise ERegexCompileError.Create('repeat count exceeds limit', APos);
+  end;
+  Result := UInt32(LValue);
+end;
+
 function ParseAtom(var P: TParser): PAstNode;
 var ch: Char; LName: string;
 begin
@@ -312,9 +328,13 @@ begin
       Next(P);
       s := '';
       while (Peek(P) >= '0') and (Peek(P) <= '9') do begin s := s + Next(P); end;
-      if (s = '') and (Peek(P) = ',') then
+      if s = '' then
+      begin
+        if Peek(P) = #0 then
+          raise ERegexCompileError.Create('unclosed quantifier', P.Pos);
         raise ERegexCompileError.Create('missing quantifier minimum', P.Pos);
-      minV := StrToIntDef(s, 0);
+      end;
+      minV := ParseRepeatValue(s, P.Pos);
       maxV := minV;
       if Peek(P) = ',' then
       begin
@@ -322,17 +342,13 @@ begin
         s := '';
         while (Peek(P) >= '0') and (Peek(P) <= '9') do begin s := s + Next(P); end;
         if s = '' then maxV := $FFFFFFFF
-        else maxV := StrToIntDef(s, minV);
+        else maxV := ParseRepeatValue(s, P.Pos);
       end;
       if Peek(P) <> '}' then
         raise ERegexCompileError.Create('unclosed quantifier', P.Pos);
       Next(P);
       if (maxV <> $FFFFFFFF) and (minV > maxV) then
         raise ERegexCompileError.Create('quantifier min exceeds max', P.Pos);
-      if minV > MAX_REPEAT_COUNT then
-        raise ERegexCompileError.Create('repeat count exceeds limit', P.Pos);
-      if (maxV <> $FFFFFFFF) and (maxV > MAX_REPEAT_COUNT) then
-        raise ERegexCompileError.Create('repeat count exceeds limit', P.Pos);
       rep := NewNode(P, akRepeat);
       rep^.Left := atom;
       rep^.RepeatKind := rkRange;

@@ -679,6 +679,9 @@ begin
   Check(not TRegex.TryCompile('a{3', R, err), 'unclosed quantifier no }');
   Check(Pos('unclosed quantifier', err) > 0, 'unclosed quantifier no } msg');
 
+  Check(not TRegex.TryCompile('a{}', R, err), 'empty quantifier min');
+  Check(Pos('quantifier', err) > 0, 'empty quantifier min msg');
+
   Check(not TRegex.TryCompile('a{,2}', R, err), 'missing quantifier min');
   Check(Pos('quantifier', err) > 0, 'missing quantifier min msg');
 
@@ -688,6 +691,12 @@ begin
   // min > max in quantifier
   Check(not TRegex.TryCompile('a{3,2}', R, err), 'min > max');
   Check(Pos('min exceeds max', err) > 0, 'min > max msg');
+
+  Check(not TRegex.TryCompile('a{999999999999999999999}', R, err), 'overflowed quantifier min');
+  Check((Pos('quantifier', err) > 0) or (Pos('limit', err) > 0), 'overflowed quantifier min msg');
+
+  Check(not TRegex.TryCompile('a{1,999999999999999999999}', R, err), 'overflowed quantifier max');
+  Check((Pos('quantifier', err) > 0) or (Pos('limit', err) > 0), 'overflowed quantifier max msg');
 
   // Unmatched closing paren
   Check(not TRegex.TryCompile(')', R, err), 'unmatched )');
