@@ -309,6 +309,15 @@ begin
     raise EArgumentError.Create('Clamp: minimum must not exceed maximum');
 end;
 
+procedure RequireWrapInputs(const AValue, AMin, AMax: Double); inline;
+begin
+  if DoubleIsNaN(AValue) or DoubleIsNaN(AMin) or DoubleIsNaN(AMax) or
+    DoubleIsInfinite(AValue) or DoubleIsInfinite(AMin) or DoubleIsInfinite(AMax) then
+    raise EArgumentError.Create('Wrap: value, minimum, and maximum must be finite');
+  if AMin > AMax then
+    raise EArgumentError.Create('Wrap: minimum must not exceed maximum');
+end;
+
 procedure RequireClampBounds(const AMin, AMax: Int32); inline;
 begin
   if AMin > AMax then
@@ -385,6 +394,7 @@ function Wrap(const AValue, AMin, AMax: Double): Double;
 var
   LRange: Double;
 begin
+  RequireWrapInputs(AValue, AMin, AMax);
   LRange := AMax - AMin;
   if LRange = 0.0 then
     Exit(AMin);

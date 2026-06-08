@@ -614,6 +614,20 @@ REQUIRED_SCALAR_CLAMP_DOC_TRUTH = (
         "`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.",
     ),
 )
+REQUIRED_SCALAR_WRAP_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "`Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, and requires value, minimum, and maximum to be finite.",
+    ),
+    (
+        "docs/math/API.md",
+        "`Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, and requires value, minimum, and maximum to be finite.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, and requires value, minimum, and maximum to be finite.",
+    ),
+)
 REQUIRED_SCALAR_IEEE_DOC_TRUTH = (
     (
         "docs/math/README.md",
@@ -1147,6 +1161,9 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-float-compare-invalid-epsilon", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "FloatEquals rejects infinite epsilon"),
     RequiredBehaviorTestMarker("scalar-float-is-zero-invalid", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "FloatIsZero Double rejects NaN value"),
     RequiredBehaviorTestMarker("scalar-interpolation", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('interpolation'"),
+    RequiredBehaviorTestMarker("scalar-wrap-equal-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap Double equal bounds returns minimum"),
+    RequiredBehaviorTestMarker("scalar-wrap-reversed-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap: minimum must not exceed maximum"),
+    RequiredBehaviorTestMarker("scalar-wrap-non-finite-inputs", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap: value, minimum, and maximum must be finite"),
     RequiredBehaviorTestMarker("scalar-rounding-sign", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('rounding and sign'"),
     RequiredBehaviorTestMarker("scalar-float-predicates", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('float predicates'"),
     RequiredBehaviorTestMarker("scalar-extras", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('number theory and scalar extras'"),
@@ -3544,6 +3561,15 @@ def scan_required_scalar_clamp_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_scalar_wrap_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_SCALAR_WRAP_DOC_TRUTH,
+        "missing-required-scalar-wrap-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def scan_required_scalar_ieee_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
@@ -3616,6 +3642,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_easing_doc_truth(root))
     findings.extend(scan_required_noise_doc_truth(root))
     findings.extend(scan_required_scalar_clamp_doc_truth(root))
+    findings.extend(scan_required_scalar_wrap_doc_truth(root))
     findings.extend(scan_required_scalar_ieee_doc_truth(root))
     findings.extend(scan_required_scalar_min_max_doc_truth(root))
     findings.extend(scan_required_scalar_float_compare_doc_truth(root))

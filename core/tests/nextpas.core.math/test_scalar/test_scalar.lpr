@@ -157,6 +157,12 @@ procedure RaiseClampInt32ReversedBounds; forward;
 procedure RaiseClampSingleNaNMin; forward;
 procedure RaiseClampDoubleNaNMax; forward;
 procedure RaiseClampSingleInfiniteMax; forward;
+procedure RaiseWrapSingleReversedBounds; forward;
+procedure RaiseWrapDoubleReversedBounds; forward;
+procedure RaiseWrapSingleNaNValue; forward;
+procedure RaiseWrapDoubleInfiniteValue; forward;
+procedure RaiseWrapSingleNaNMin; forward;
+procedure RaiseWrapDoubleInfiniteMax; forward;
 
 procedure TestMinMaxClamp;
 var
@@ -226,6 +232,22 @@ begin
   CheckNear(10.0, Wrap(Single(370.0), Single(0.0), Single(360.0)), 0.0, 'Wrap Single high');
   CheckNear(10.0, Wrap(370.0, 0.0, 360.0), 0.0, 'Wrap high');
   CheckNear(350.0, Wrap(-10.0, 0.0, 360.0), 0.0, 'Wrap low');
+  CheckNear(5.0, Wrap(Single(10.0), Single(5.0), Single(5.0)), 0.0,
+    'Wrap Single equal bounds returns minimum');
+  CheckNear(5.0, Wrap(10.0, 5.0, 5.0), 0.0,
+    'Wrap Double equal bounds returns minimum');
+  ExpectArgumentErrorMessage('Wrap: minimum must not exceed maximum',
+    'Wrap Single reversed bounds', @RaiseWrapSingleReversedBounds);
+  ExpectArgumentErrorMessage('Wrap: minimum must not exceed maximum',
+    'Wrap Double reversed bounds', @RaiseWrapDoubleReversedBounds);
+  ExpectArgumentErrorMessage('Wrap: value, minimum, and maximum must be finite',
+    'Wrap Single NaN value', @RaiseWrapSingleNaNValue);
+  ExpectArgumentErrorMessage('Wrap: value, minimum, and maximum must be finite',
+    'Wrap Double infinite value', @RaiseWrapDoubleInfiniteValue);
+  ExpectArgumentErrorMessage('Wrap: value, minimum, and maximum must be finite',
+    'Wrap Single NaN minimum', @RaiseWrapSingleNaNMin);
+  ExpectArgumentErrorMessage('Wrap: value, minimum, and maximum must be finite',
+    'Wrap Double infinite maximum', @RaiseWrapDoubleInfiniteMax);
   CheckNear(0.5, SmoothStep(Single(0.0), Single(1.0), Single(0.5)), 0.000001, 'SmoothStep Single midpoint');
   CheckNear(0.0, SmoothStep(0.0, 1.0, -1.0), 0.0, 'SmoothStep clamps low');
   CheckNear(1.0, SmoothStep(0.0, 1.0, 2.0), 0.0, 'SmoothStep clamps high');
@@ -589,6 +611,36 @@ end;
 procedure RaiseClampSingleInfiniteMax;
 begin
   Clamp(Single(1.0), Single(0.0), MakeSinglePositiveInfinity);
+end;
+
+procedure RaiseWrapSingleReversedBounds;
+begin
+  Wrap(Single(1.0), Single(2.0), Single(1.0));
+end;
+
+procedure RaiseWrapDoubleReversedBounds;
+begin
+  Wrap(1.0, 2.0, 1.0);
+end;
+
+procedure RaiseWrapSingleNaNValue;
+begin
+  Wrap(MakeSingleNaN, Single(0.0), Single(1.0));
+end;
+
+procedure RaiseWrapDoubleInfiniteValue;
+begin
+  Wrap(MakePositiveInfinity, 0.0, 1.0);
+end;
+
+procedure RaiseWrapSingleNaNMin;
+begin
+  Wrap(Single(1.0), MakeSingleNaN, Single(2.0));
+end;
+
+procedure RaiseWrapDoubleInfiniteMax;
+begin
+  Wrap(1.0, 0.0, MakePositiveInfinity);
 end;
 
 procedure RaiseFracNaN;

@@ -104,6 +104,7 @@ Scalar helpers:
 - Number theory and geometry helpers: `GCD`, `LCM`, `Hypot`, `Fmod`
 
 `Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.
+`Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, and requires value, minimum, and maximum to be finite.
 
 `Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.
 
