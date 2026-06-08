@@ -201,7 +201,7 @@ begin
         raise ERegexCompileError.Create('unmatched closing parenthesis', P.Pos);
       Result := nil;
     end;
-    '*', '+', '?':
+    '*', '+', '?', '{':
       raise ERegexCompileError.Create('quantifier without preceding atom', P.Pos);
     '.': begin Next(P); Result := NewNode(P, akAnyChar); end;
     '^': begin Next(P); Result := NewNode(P, akAssert); Result^.AssertKind := akStart; end;
@@ -226,12 +226,21 @@ begin
         else if (Peek(P) = 'P') or (Peek(P) = '<') then
         begin
           // Named group: (?P<name>...) or (?<name>...)
-          if Peek(P) = 'P' then begin Next(P); Next(P); end  // skip P<
-          else Next(P);  // skip <
+          if Peek(P) = 'P' then
+          begin
+            Next(P);
+            if Peek(P) <> '<' then
+              raise ERegexCompileError.Create('malformed named group', P.Pos);
+          end;
+          Next(P);  // skip <
           LName := '';
           while (Peek(P) <> '>') and (Peek(P) <> #0) do
             LName := LName + Next(P);
-          if Peek(P) = '>' then Next(P);
+          if Peek(P) <> '>' then
+            raise ERegexCompileError.Create('unclosed named group', P.Pos);
+          if LName = '' then
+            raise ERegexCompileError.Create('empty named group', P.Pos);
+          Next(P);
           Result := NewNode(P, akCapture);
           Result^.CaptureIndex := P.NumCaptures;
           Result^.CaptureName := LName;

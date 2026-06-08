@@ -692,6 +692,21 @@ begin
   Check(not TRegex.TryCompile('?a', R, err), '? at start');
   Check(Pos('quantifier without preceding atom', err) > 0, '? at start msg');
 
+  Check(not TRegex.TryCompile('{3}', R, err), 'range quantifier at start');
+  Check(Pos('quantifier', err) > 0, 'range quantifier at start msg');
+
+  Check(not TRegex.TryCompile('a{2}{3}', R, err), 'stacked range quantifier');
+  Check(Pos('quantifier', err) > 0, 'stacked range quantifier msg');
+
+  Check(not TRegex.TryCompile('a*{2}', R, err), 'range quantifier after star');
+  Check(Pos('quantifier', err) > 0, 'range quantifier after star msg');
+
+  Check(not TRegex.TryCompile('(?Pname>a)', R, err), 'named group missing angle');
+  Check(Pos('named group', err) > 0, 'named group missing angle msg');
+
+  Check(not TRegex.TryCompile('(?P<>a)', R, err), 'empty named group');
+  Check(Pos('named group', err) > 0, 'empty named group msg');
+
   // Unicode properties rejected
   Check(not TRegex.TryCompile('\p{L}', R, err), '\p{L}');
   Check(Pos('Unicode properties not supported', err) > 0, '\p{L} msg');
