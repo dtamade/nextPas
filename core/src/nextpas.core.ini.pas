@@ -214,7 +214,8 @@ var
     LTrimmed := TrimLeft(ALine);
     if (LTrimmed <> '') and (LTrimmed[1] = '[') and (Pos(']', LTrimmed) = 0) then
     begin
-      AError := 'Line ' + IntToStr(ALineNo) + ': missing closing ] in section header';
+      AError := 'line ' + IntToStr(ALineNo) +
+        ', column 1: missing closing ] in section header';
       Exit(False);
     end;
     Result := True;

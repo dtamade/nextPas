@@ -1804,6 +1804,14 @@ begin
     ', column ' + UIntToStr(AError.Col) + ': ' + Result;
 end;
 
+function FormatIniLoadError(const AError: string): string;
+begin
+  Result := AError;
+  if Result = '' then
+    Result := 'parse error';
+  Result := 'config ini parse error: ' + Result;
+end;
+
 function FormatConfigFileLoadError(const APath, AMessage: string): string;
 begin
   Result := 'Config file load error: ' + APath;
@@ -2371,10 +2379,12 @@ end;
 procedure TConfig.LoadFromIni(const AContent: string);
 var
   LIni: TIniFile;
+  LError: string;
 begin
   LIni := TIniFile.Create;
   try
-    LIni.LoadFromString(AContent);
+    if not LIni.TryLoadFromString(AContent, LError) then
+      raise EConfigError.Create(FormatIniLoadError(LError));
     LoadConfigFromIniFile(Self, LIni);
   finally
     LIni.Free;
@@ -2425,7 +2435,10 @@ begin
   try
     try
       if not LIni.TryLoadFromString(AContent, AError) then
+      begin
+        AError := FormatIniLoadError(AError);
         Exit(False);
+      end;
       LoadConfigFromIniFile(Self, LIni);
       AError := '';
       Result := True;

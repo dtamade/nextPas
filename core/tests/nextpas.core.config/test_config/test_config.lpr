@@ -986,6 +986,73 @@ begin
   end;
 end;
 
+procedure TestMalformedIniDiagnosticsAndFailClosed;
+var
+  LCfg: TConfig;
+  LError: string;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := '/tmp/test_nextpas_config_bad_ini_diagnostics.ini';
+  Remove(LPath);
+  WriteFileText(LPath, 'from_file=yes' + #10 +
+    '[broken' + #10 +
+    'after=no' + #10);
+
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('keep=value' + #10);
+
+    LRaised := False;
+    try
+      LCfg.LoadFromIni('before=yes' + #10 +
+        '[broken' + #10 +
+        'after=no' + #10);
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('config ini parse error', E.Message) > 0,
+          'LoadFromIni error category');
+        Check(Pos('line 2', E.Message) > 0, 'LoadFromIni error line');
+        Check(Pos('column 1', E.Message) > 0, 'LoadFromIni error column');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'LoadFromIni malformed ini raises');
+    CheckEqual('value', LCfg.GetString('keep'), 'LoadFromIni preserves old value');
+    CheckEqual(False, LCfg.Has('before'), 'LoadFromIni does not partially apply');
+    CheckEqual(False, LCfg.Has('after'), 'LoadFromIni ignores bad body');
+
+    LError := '';
+    CheckEqual(False,
+      LCfg.TryLoadFromIni('try_before=yes' + #10 +
+        '[broken' + #10 +
+        'try_after=no' + #10,
+        LError),
+      'TryLoadFromIni malformed ini returns false');
+    Check(Pos('config ini parse error', LError) > 0,
+      'TryLoadFromIni error category');
+    Check(Pos('line 2', LError) > 0, 'TryLoadFromIni error line');
+    Check(Pos('column 1', LError) > 0, 'TryLoadFromIni error column');
+    CheckEqual('value', LCfg.GetString('keep'), 'TryLoadFromIni preserves old value');
+    CheckEqual(False, LCfg.Has('try_before'), 'TryLoadFromIni does not partially apply');
+
+    LError := '';
+    CheckEqual(False, LCfg.TryLoadFromFile(LPath, cfIni, LError),
+      'TryLoadFromFile malformed ini returns false');
+    Check(Pos(LPath, LError) > 0, 'TryLoadFromFile error includes path');
+    Check(Pos('config ini parse error', LError) > 0,
+      'TryLoadFromFile error category');
+    Check(Pos('line 2', LError) > 0, 'TryLoadFromFile error line');
+    Check(Pos('column 1', LError) > 0, 'TryLoadFromFile error column');
+    CheckEqual('value', LCfg.GetString('keep'), 'TryLoadFromFile preserves old value');
+    CheckEqual(False, LCfg.Has('from_file'), 'TryLoadFromFile does not partially apply');
+  finally
+    LCfg.Free;
+    Remove(LPath);
+  end;
+end;
+
 procedure TestTryLoadFromJsonValid;
 var
   LCfg: TConfig;
@@ -1696,6 +1763,8 @@ begin
   T.Run('LoadFromJson.Basic', @TestLoadFromJsonBasic);
   T.Run('LoadFromJson.Types', @TestLoadFromJsonTypes);
   T.Run('TryLoadFromIni.Valid', @TestTryLoadFromIniValid);
+  T.Run('MalformedIni.DiagnosticsAndFailClosed',
+    @TestMalformedIniDiagnosticsAndFailClosed);
   T.Run('TryLoadFromJson.Valid', @TestTryLoadFromJsonValid);
   T.Run('TryLoadFromJson.Invalid', @TestTryLoadFromJsonInvalid);
   T.Run('TryLoad.ShortVariantsInvalid', @TestTryLoadShortVariantsInvalid);
