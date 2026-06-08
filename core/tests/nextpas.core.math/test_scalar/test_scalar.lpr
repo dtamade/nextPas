@@ -557,6 +557,8 @@ begin
     'IsAddOverflow UInt32 high minus one plus one');
   Check(not IsMulOverflow(LZeroUInt32, LHighUInt32),
     'IsMulOverflow UInt32 zero times high');
+  Check(not IsMulOverflow(LHighUInt32, LZeroUInt32),
+    'IsMulOverflow UInt32 high times zero');
   Check(IsMulOverflow(LHighUInt32, UInt32(2)),
     'IsMulOverflow UInt32 high times two');
 end;
@@ -1057,6 +1059,8 @@ begin
   Check(not IsAddOverflow(SizeUInt(10), SizeUInt(20)), 'IsAddOverflow false');
   Check(not IsMulOverflow(LZeroSizeUInt, LHighSizeUInt),
     'IsMulOverflow SizeUInt zero times high');
+  Check(not IsMulOverflow(LHighSizeUInt, LZeroSizeUInt),
+    'IsMulOverflow SizeUInt high times zero');
   Check(IsMulOverflow(LHighSizeUInt, SizeUInt(2)), 'IsMulOverflow SizeUInt');
   Check(not IsMulOverflow(SizeUInt(10), SizeUInt(20)), 'IsMulOverflow false');
 end;

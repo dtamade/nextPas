@@ -646,11 +646,11 @@ REQUIRED_SCALAR_WRAP_DOC_TRUTH = (
 REQUIRED_SCALAR_IEEE_DOC_TRUTH = (
     (
         "docs/math/README.md",
-        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
+        "`Abs` normalizes negative zero to positive zero; `Fmod` preserves the dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
     ),
     (
         "docs/math/API.md",
-        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
+        "`Abs` normalizes negative zero to positive zero; `Fmod` preserves the dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
     ),
     (
         "docs/math/GOAL_TREE.md",
@@ -659,6 +659,16 @@ REQUIRED_SCALAR_IEEE_DOC_TRUTH = (
     (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
         "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
+    ),
+)
+REQUIRED_SCALAR_INTEGER_CONVERSION_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "`Floor`, `Ceil`, `Round`, `Trunc`, and `Frac` reject `NaN`, positive or negative infinity, and finite values outside the Int64 conversion range with `EArgumentError`; `Round` uses ties away from zero, while `Frac` uses truncation semantics and preserves signed-zero zero results.",
+    ),
+    (
+        "docs/math/API.md",
+        "`Floor`, `Ceil`, `Round`, `Trunc`, and `Frac` reject `NaN`, positive or negative infinity, and finite values outside the Int64 conversion range with `EArgumentError`; `Round` uses ties away from zero, while `Frac` uses truncation semantics and preserves signed-zero zero results.",
     ),
 )
 REQUIRED_SCALAR_RANGE_DOC_TRUTH = (
@@ -1250,6 +1260,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-ieee-fmod-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Double exact negative dividend keeps negative zero remainder"),
     RequiredBehaviorTestMarker("scalar-ieee-fmod-huge-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Double huge finite quotient stays finite remainder"),
     RequiredBehaviorTestMarker("scalar-ieee-overflow-no-div-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "IsMulOverflow SizeUInt zero times high"),
+    RequiredBehaviorTestMarker("scalar-ieee-overflow-no-div-zero-symmetric", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "IsMulOverflow SizeUInt high times zero"),
     RequiredBehaviorTestMarker("scalar-min-max-nan", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Min Double propagates NaN first"),
     RequiredBehaviorTestMarker("scalar-min-max-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Min Single keeps negative zero first"),
     RequiredBehaviorTestMarker("scalar-min-max-same-positive-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Min Double same positive zero returns positive zero"),
@@ -4145,6 +4156,15 @@ def scan_required_scalar_ieee_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_scalar_integer_conversion_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_SCALAR_INTEGER_CONVERSION_DOC_TRUTH,
+        "missing-required-scalar-integer-conversion-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def scan_required_scalar_range_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
@@ -4228,6 +4248,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_scalar_clamp_doc_truth(root))
     findings.extend(scan_required_scalar_wrap_doc_truth(root))
     findings.extend(scan_required_scalar_ieee_doc_truth(root))
+    findings.extend(scan_required_scalar_integer_conversion_doc_truth(root))
     findings.extend(scan_required_scalar_range_doc_truth(root))
     findings.extend(scan_required_scalar_min_max_doc_truth(root))
     findings.extend(scan_required_scalar_float_compare_doc_truth(root))
