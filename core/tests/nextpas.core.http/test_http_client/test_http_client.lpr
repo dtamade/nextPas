@@ -4045,6 +4045,29 @@ begin
     'unsupported redirect scheme does not perform second round trip');
 end;
 
+procedure TestClientRedirectRejectsAbsoluteLocationWithEmptyHost;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := 'http:///final';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LRaised := False;
+  try
+    LClient.Get('http://example.test/old');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'absolute redirect with empty host raises EHttpError');
+  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
+    'absolute redirect with empty host does not perform second round trip');
+end;
+
 procedure TestClientRedirectRejectsUnsupportedNonHierarchicalScheme;
 var
   LTransportObj: TRedirectCaptureTransport;
@@ -5748,6 +5771,8 @@ begin
     @TestClientRedirectTransportResolvesUppercaseAbsoluteLocation);
   T.Run('Client redirect rejects unsupported absolute scheme',
     @TestClientRedirectRejectsUnsupportedAbsoluteScheme);
+  T.Run('Client redirect rejects absolute Location with empty host',
+    @TestClientRedirectRejectsAbsoluteLocationWithEmptyHost);
   T.Run('Client redirect rejects unsupported non-hierarchical scheme',
     @TestClientRedirectRejectsUnsupportedNonHierarchicalScheme);
   T.Run('Client redirect rejects unsupported single-slash scheme',

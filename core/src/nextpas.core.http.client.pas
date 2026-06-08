@@ -447,6 +447,8 @@ begin
       raise EHttpError.Create('unsupported redirect URL scheme: ' + LScheme);
     Result := TUrl.Parse(ALocation);
     Result.Scheme := LScheme;
+    if Result.Host = '' then
+      raise EHttpError.Create('redirect URL host is empty');
     Exit;
   end;
   if (Length(ALocation) >= 2) and (ALocation[1] = '/') and (ALocation[2] = '/') then
