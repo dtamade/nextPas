@@ -979,7 +979,8 @@ ALLOWED_MATH_UNITS = CONSUMER_FACING_UNITS | INTERNAL_UNITS
 
 LEGACY_PUBLIC_RE = re.compile(
     r"\b(TVector[234]?[A-Za-z]*|TMatrix[34]?[A-Za-z]*|TQuaternion[A-Za-z]*|"
-    r"Vector[234]|Matrix[34]|Quaternion|Vectors)\b"
+    r"Vector[234]|Matrix[34]|Quaternion|Vectors)\b",
+    re.IGNORECASE,
 )
 USES_MATH_FFI_RE = re.compile(
     r"\buses\b(?P<body>.*?);",
@@ -2651,6 +2652,16 @@ def run_legacy_production_name_self_tests() -> None:
             {"no-legacy-public-vector-api", "no-legacy-production-math-symbol"},
         ),
         (
+            "interface-public-legacy-name-lowercase",
+            "unit nextpas.core.math.mat;\n"
+            "interface\n"
+            "type\n"
+            "  tmatrix4f = record end;\n"
+            "implementation\n"
+            "end.\n",
+            {"no-legacy-public-vector-api", "no-legacy-production-math-symbol"},
+        ),
+        (
             "implementation-legacy-name",
             "unit nextpas.core.math.mat;\n"
             "interface\n"
@@ -2696,6 +2707,35 @@ def run_legacy_production_name_self_tests() -> None:
                     + " got "
                     + ",".join(sorted(rules))
                 )
+
+        consumer_path = root / "tests/nextpas.core.math/test_legacy_consumer/test_legacy_consumer.lpr"
+        consumer_path.parent.mkdir(parents=True, exist_ok=True)
+        consumer_path.write_text(
+            "program test_legacy_consumer;\n"
+            "{$mode objfpc}{$H+}\n"
+            "type\n"
+            "  TLocal = tmatrix4f;\n"
+            "begin\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        report = build_report(root)
+        consumer_rules = {
+            finding.rule
+            for finding in report.findings
+            if finding.path == relative(consumer_path, root)
+        }
+        expected_consumer_rules = {
+            "no-legacy-public-vector-api",
+            "no-legacy-production-math-symbol",
+        }
+        if consumer_rules != expected_consumer_rules:
+            raise AssertionError(
+                "legacy-production-name self-test consumer-legacy-name expected "
+                + ",".join(sorted(expected_consumer_rules))
+                + " got "
+                + ",".join(sorted(consumer_rules))
+            )
 
 
 def run_forbidden_trig_scalar_name_self_tests() -> None:
@@ -4247,6 +4287,9 @@ def build_report(root: Path) -> Report:
         if path.suffix.lower() in {".lpr", ".pas"} or path.name == "Makefile":
             findings.extend(scan_external_m(root, path, text))
             findings.extend(scan_native_math_linking(root, path, text))
+        if path.suffix.lower() in {".lpr", ".pas"}:
+            findings.extend(scan_legacy_public_names(root, path, text))
+            findings.extend(scan_legacy_production_names(root, path, text))
         if relative(path, root).startswith(INTERNAL_IMPL_TEST_PREFIXES) and path.suffix.lower() in {
             ".lpr",
             ".pas",
