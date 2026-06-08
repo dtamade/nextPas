@@ -1077,6 +1077,17 @@ begin
   if FError then
     Exit(False);
 
+  LConnValues := FHeaders.GetAll('connection');
+  if HeaderValuesHaveToken(LConnValues, 'close') then
+    Exit(False);
+
+  if FParserType = ptRequest then
+  begin
+    if FVersion = hvHttp10 then
+      Exit(HeaderValuesHaveToken(LConnValues, 'keep-alive'));
+    Exit(True);
+  end;
+
   if FStatusCode = HTTP_STATUS_SWITCHING_PROTOCOLS then
     Exit(False);
 
@@ -1094,10 +1105,6 @@ begin
     else if FHeaders.Get('content-length') = '' then
       Exit(False);
   end;
-
-  LConnValues := FHeaders.GetAll('connection');
-  if HeaderValuesHaveToken(LConnValues, 'close') then
-    Exit(False);
 
   if FVersion = hvHttp10 then
     Result := HeaderValuesHaveToken(LConnValues, 'keep-alive')
@@ -1146,6 +1153,10 @@ begin
         Break;
       end;
     end;
+
+    if LLastTokenIndex < 0 then
+      Exit(RejectWithUserError(INVALID_TRANSFER_ENCODING_REASON,
+        pekMalformed, AParser));
 
     if LLastTokenIndex >= 0 then
     begin

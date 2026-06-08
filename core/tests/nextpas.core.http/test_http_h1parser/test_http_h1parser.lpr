@@ -120,6 +120,40 @@ begin
   Check(LP.GetHttpVersion = hvHttp10, 'version is HTTP/1.0');
 end;
 
+procedure CheckRequestShouldKeepAlive(const AName, AReq: string;
+  const AExpected: Boolean);
+var
+  LP: IH1Parser;
+begin
+  LP := NewH1RequestParser;
+  LP.Execute(PAnsiChar(AReq), Length(AReq));
+  Check(LP.IsComplete, AName + ': request complete');
+  Check(not LP.HasError, AName + ': no parser error');
+  CheckEqual(AExpected, LP.ShouldKeepAlive, AName + ': keep-alive decision');
+end;
+
+procedure TestRequestShouldKeepAliveHttpVersionAndConnectionSemantics;
+begin
+  CheckRequestShouldKeepAlive('HTTP/1.1 default',
+    'GET / HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10,
+    True);
+  CheckRequestShouldKeepAlive('HTTP/1.1 close',
+    'GET / HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Connection: close'#13#10#13#10,
+    False);
+  CheckRequestShouldKeepAlive('HTTP/1.0 default',
+    'GET / HTTP/1.0'#13#10 +
+    'Host: localhost'#13#10#13#10,
+    False);
+  CheckRequestShouldKeepAlive('HTTP/1.0 keep-alive',
+    'GET / HTTP/1.0'#13#10 +
+    'Host: localhost'#13#10 +
+    'Connection: keep-alive'#13#10#13#10,
+    True);
+end;
+
 procedure TestResponse200;
 var
   LP: IH1Parser;
@@ -1374,6 +1408,7 @@ var
   LReqHead: string;
   LReq: string;
   LConsumed: SizeUInt;
+  LMetadata: TH1RequestMetadata;
 begin
   LP := NewH1RequestParser;
   LReqHead := 'POST /upload HTTP/1.1'#13#10 +
@@ -1392,10 +1427,27 @@ begin
   CheckEqual(Int64(0), LP.GetBodySize,
     AName + ': does not publish ambiguous body size');
   CheckEqual('', LP.GetBody, AName + ': does not consume ambiguous body bytes');
+  LMetadata := LP.GetRequestMetadata;
+  Check(not LMetadata.HasTransferEncoding,
+    AName + ': does not publish transfer-encoding metadata');
+  Check(not LMetadata.RequestDeclaresBody,
+    AName + ': does not publish request body metadata');
 end;
 
 procedure TestAdapterFramingErrorConsumedOffsets;
 begin
+  CheckMalformedFramingConsumesThroughHeaders(
+    'empty transfer-encoding',
+    'Transfer-Encoding:'#13#10,
+    'hello' +
+    'GET /next HTTP/1.1'#13#10'Host: localhost'#13#10#13#10,
+    pekMalformed);
+  CheckMalformedFramingConsumesThroughHeaders(
+    'comma-only transfer-encoding',
+    'Transfer-Encoding: ,'#13#10,
+    'hello' +
+    'GET /next HTTP/1.1'#13#10'Host: localhost'#13#10#13#10,
+    pekMalformed);
   CheckMalformedFramingConsumesThroughHeaders(
     'unsupported transfer coding before chunked',
     'Transfer-Encoding: gzip, chunked'#13#10,
@@ -3030,6 +3082,8 @@ begin
   T.Run('Response HTTP/1.0 without keep-alive does not reuse', @TestResponseHttp10WithoutKeepAliveDoesNotReuse);
   T.Run('Response unsupported HTTP version rejected',
     @TestResponseUnsupportedHttpVersionRejected);
+  T.Run('Request keep-alive follows HTTP version and Connection semantics',
+    @TestRequestShouldKeepAliveHttpVersionAndConnectionSemantics);
   T.Run('Content-Length body', @TestContentLengthBody);
   T.Run('Content-Length request truncated at EOF', @TestContentLengthRequestTruncatedAtEof);
   T.Run('Chunked request body', @TestChunkedRequestBody);
