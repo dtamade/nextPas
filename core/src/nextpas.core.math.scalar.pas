@@ -152,6 +152,28 @@ begin
   Move(LBits, Result, SizeOf(Result));
 end;
 
+function SingleSignedInfinity(const ANegative: Boolean): Single; inline;
+var
+  LBits: UInt32;
+begin
+  if ANegative then
+    LBits := UInt32($FF800000)
+  else
+    LBits := UInt32($7F800000);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
+function DoubleSignedInfinity(const ANegative: Boolean): Double; inline;
+var
+  LBits: UInt64;
+begin
+  if ANegative then
+    LBits := UInt64($FFF0000000000000)
+  else
+    LBits := UInt64($7FF0000000000000);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
 function SingleAbsBits(const AValue: Single): Single; inline;
 var
   LBits: UInt32;
@@ -730,22 +752,26 @@ end;
 
 function Sign(const AValue: Single): Single;
 begin
-  if AValue > 0.0 then
+  if SingleIsNaN(AValue) then
+    Result := SingleQuietNaN
+  else if AValue = 0.0 then
+    Result := SingleSignedZero(SingleHasSignBit(AValue))
+  else if AValue > 0.0 then
     Result := 1.0
-  else if AValue < 0.0 then
-    Result := -1.0
   else
-    Result := 0.0;
+    Result := -1.0;
 end;
 
 function Sign(const AValue: Double): Double;
 begin
-  if AValue > 0.0 then
+  if DoubleIsNaN(AValue) then
+    Result := DoubleQuietNaN
+  else if AValue = 0.0 then
+    Result := DoubleSignedZero(DoubleHasSignBit(AValue))
+  else if AValue > 0.0 then
     Result := 1.0
-  else if AValue < 0.0 then
-    Result := -1.0
   else
-    Result := 0.0;
+    Result := -1.0;
 end;
 
 function Sign(const AValue: Int32): Int32;
@@ -836,11 +862,19 @@ end;
 
 function RadToDeg(const ARadians: Single): Single;
 begin
+  if SingleIsNaN(ARadians) or SingleIsInfinite(ARadians) then
+    Exit(ARadians);
+  if SingleAbsBits(ARadians) > (MAX_SINGLE_VALUE / Single(RAD_TO_DEG)) then
+    Exit(SingleSignedInfinity(SingleHasSignBit(ARadians)));
   Result := ARadians * Single(RAD_TO_DEG);
 end;
 
 function RadToDeg(const ARadians: Double): Double;
 begin
+  if DoubleIsNaN(ARadians) or DoubleIsInfinite(ARadians) then
+    Exit(ARadians);
+  if DoubleAbsBits(ARadians) > (MAX_DOUBLE_VALUE / RAD_TO_DEG) then
+    Exit(DoubleSignedInfinity(DoubleHasSignBit(ARadians)));
   Result := ARadians * RAD_TO_DEG;
 end;
 

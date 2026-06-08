@@ -59,6 +59,22 @@ begin
   Move(LBits, Result, SizeOf(Result));
 end;
 
+function MakeMaxFiniteSingle: Single;
+var
+  LBits: UInt32;
+begin
+  LBits := UInt32($7F7FFFFF);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
+function MakeMaxFiniteDouble: Double;
+var
+  LBits: UInt64;
+begin
+  LBits := UInt64($7FEFFFFFFFFFFFFF);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
 function MakeSingleBelowInt64Min: Single;
 var
   LBits: UInt32;
@@ -401,6 +417,100 @@ begin
   CheckNear(PI_VALUE, DegToRad(Single(180.0)), 0.0001, 'DegToRad(Single 180)=PI');
   CheckNear(180.0, RadToDeg(PI_VALUE), 0.0001, 'RadToDeg(PI)=180');
   CheckNear(180.0, RadToDeg(Single(PI_VALUE)), 0.0001, 'RadToDeg(Single PI)=180');
+end;
+
+procedure TestSignAndAngleEdgeContracts;
+begin
+  CheckEqual(Int32(-1), Sign(Low(Int32)), 'Sign Int32 minimum returns negative one');
+  CheckEqual(Int64(-1), Sign(Low(Int64)), 'Sign Int64 minimum returns negative one');
+
+  Check(IsNaN(Sign(MakeNaN)), 'Sign Double NaN propagates NaN');
+  Check(IsNaN(Sign(MakeSingleNaN)), 'Sign Single NaN propagates NaN');
+  Check(IsDoubleNegativeZero(Sign(MakeDoubleNegativeZero)),
+    'Sign Double negative zero keeps negative zero');
+  Check(IsSingleNegativeZero(Sign(MakeSingleNegativeZero)),
+    'Sign Single negative zero keeps negative zero');
+  Check(IsDoublePositiveZero(Sign(0.0)), 'Sign Double positive zero keeps positive zero');
+  Check(IsSinglePositiveZero(Sign(Single(0.0))),
+    'Sign Single positive zero keeps positive zero');
+  CheckNear(1.0, Sign(MakePositiveInfinity), 0.0,
+    'Sign Double positive infinity returns one');
+  CheckNear(-1.0, Sign(MakeNegativeInfinity), 0.0,
+    'Sign Double negative infinity returns negative one');
+  CheckNear(1.0, Sign(MakeSinglePositiveInfinity), 0.0,
+    'Sign Single positive infinity returns one');
+  CheckNear(-1.0, Sign(MakeSingleNegativeInfinity), 0.0,
+    'Sign Single negative infinity returns negative one');
+
+  Check(IsNaN(DegToRad(MakeNaN)), 'DegToRad Double NaN propagates NaN');
+  Check(IsNaN(DegToRad(MakeSingleNaN)), 'DegToRad Single NaN propagates NaN');
+  Check(IsInfinite(DegToRad(MakePositiveInfinity)) and
+    (DegToRad(MakePositiveInfinity) > 0.0),
+    'DegToRad Double positive infinity propagates infinity');
+  Check(IsInfinite(DegToRad(MakeNegativeInfinity)) and
+    (DegToRad(MakeNegativeInfinity) < 0.0),
+    'DegToRad Double negative infinity propagates infinity');
+  Check(IsInfinite(DegToRad(MakeSinglePositiveInfinity)) and
+    (DegToRad(MakeSinglePositiveInfinity) > 0.0),
+    'DegToRad Single positive infinity propagates infinity');
+  Check(IsInfinite(DegToRad(MakeSingleNegativeInfinity)) and
+    (DegToRad(MakeSingleNegativeInfinity) < 0.0),
+    'DegToRad Single negative infinity propagates infinity');
+  Check(IsDoublePositiveZero(DegToRad(0.0)),
+    'DegToRad Double positive zero keeps positive zero');
+  Check(IsSinglePositiveZero(DegToRad(Single(0.0))),
+    'DegToRad Single positive zero keeps positive zero');
+  Check(IsDoubleNegativeZero(DegToRad(MakeDoubleNegativeZero)),
+    'DegToRad Double negative zero keeps negative zero');
+  Check(IsSingleNegativeZero(DegToRad(MakeSingleNegativeZero)),
+    'DegToRad Single negative zero keeps negative zero');
+  Check((not IsNaN(DegToRad(MakeMaxFiniteDouble))) and
+    (not IsInfinite(DegToRad(MakeMaxFiniteDouble))),
+    'DegToRad Double max finite stays finite');
+  Check((not IsNaN(DegToRad(MakeMaxFiniteSingle))) and
+    (not IsInfinite(DegToRad(MakeMaxFiniteSingle))),
+    'DegToRad Single max finite stays finite');
+  Check((not IsNaN(DegToRad(-MakeMaxFiniteDouble))) and
+    (not IsInfinite(DegToRad(-MakeMaxFiniteDouble))),
+    'DegToRad Double negative max finite stays finite');
+  Check((not IsNaN(DegToRad(-MakeMaxFiniteSingle))) and
+    (not IsInfinite(DegToRad(-MakeMaxFiniteSingle))),
+    'DegToRad Single negative max finite stays finite');
+
+  Check(IsNaN(RadToDeg(MakeNaN)), 'RadToDeg Double NaN propagates NaN');
+  Check(IsNaN(RadToDeg(MakeSingleNaN)), 'RadToDeg Single NaN propagates NaN');
+  Check(IsInfinite(RadToDeg(MakePositiveInfinity)) and
+    (RadToDeg(MakePositiveInfinity) > 0.0),
+    'RadToDeg Double positive infinity propagates infinity');
+  Check(IsInfinite(RadToDeg(MakeNegativeInfinity)) and
+    (RadToDeg(MakeNegativeInfinity) < 0.0),
+    'RadToDeg Double negative infinity propagates infinity');
+  Check(IsInfinite(RadToDeg(MakeSinglePositiveInfinity)) and
+    (RadToDeg(MakeSinglePositiveInfinity) > 0.0),
+    'RadToDeg Single positive infinity propagates infinity');
+  Check(IsInfinite(RadToDeg(MakeSingleNegativeInfinity)) and
+    (RadToDeg(MakeSingleNegativeInfinity) < 0.0),
+    'RadToDeg Single negative infinity propagates infinity');
+  Check(IsDoublePositiveZero(RadToDeg(0.0)),
+    'RadToDeg Double positive zero keeps positive zero');
+  Check(IsSinglePositiveZero(RadToDeg(Single(0.0))),
+    'RadToDeg Single positive zero keeps positive zero');
+  Check(IsDoubleNegativeZero(RadToDeg(MakeDoubleNegativeZero)),
+    'RadToDeg Double negative zero keeps negative zero');
+  Check(IsSingleNegativeZero(RadToDeg(MakeSingleNegativeZero)),
+    'RadToDeg Single negative zero keeps negative zero');
+  Check(IsInfinite(RadToDeg(MakeMaxFiniteDouble)) and
+    (RadToDeg(MakeMaxFiniteDouble) > 0.0),
+    'RadToDeg Double max finite overflows to positive infinity');
+  Check(IsInfinite(RadToDeg(MakeMaxFiniteSingle)) and
+    (RadToDeg(MakeMaxFiniteSingle) > 0.0),
+    'RadToDeg Single max finite overflows to positive infinity');
+  Check(IsInfinite(RadToDeg(-MakeMaxFiniteDouble)) and
+    (RadToDeg(-MakeMaxFiniteDouble) < 0.0),
+    'RadToDeg Double negative max finite overflows to negative infinity');
+  Check(IsInfinite(RadToDeg(-MakeMaxFiniteSingle)) and
+    (RadToDeg(-MakeMaxFiniteSingle) < 0.0),
+    'RadToDeg Single negative max finite overflows to negative infinity');
 end;
 
 procedure TestRoundingAndSign;
@@ -1181,6 +1291,7 @@ begin
   T.Run('scalar range boundary edge contracts', @TestScalarRangeBoundaryEdgeContracts);
   T.Run('number theory and scalar extras', @TestNumberTheoryAndScalarExtras);
   T.Run('angle conversions', @TestAngleConversions);
+  T.Run('scalar sign and angle edge contracts', @TestSignAndAngleEdgeContracts);
   T.Run('integer rounding boundaries', @TestIntegerRoundingBoundaries);
   T.Run('owner-level boundary messages', @TestOwnerLevelBoundaryMessages);
   T.Run('single-precision boundary messages', @TestSinglePrecisionBoundaryMessages);

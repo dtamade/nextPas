@@ -698,6 +698,24 @@ REQUIRED_SCALAR_IEEE_DOC_TRUTH = (
         "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Fmod` returns NaN for NaN inputs, zero divisors, and infinite dividends, returns the finite dividend for infinite divisors, and finite inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN, returns NaN for NaN-only inputs, and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
     ),
 )
+REQUIRED_SCALAR_SIGN_ANGLE_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "`Sign` propagates NaN, preserves signed zero, and maps infinities to `+/-1`; `DegToRad` and `RadToDeg` propagate NaN and infinities while preserving signed zero, and `RadToDeg` maps finite overflow to signed infinity.",
+    ),
+    (
+        "docs/math/API.md",
+        "`Sign` propagates NaN, preserves signed zero, and maps infinities to `+/-1`; `DegToRad` and `RadToDeg` propagate NaN and infinities while preserving signed zero, and `RadToDeg` maps finite overflow to signed infinity.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`Sign` propagates NaN, preserves signed zero, and maps infinities to `+/-1`; `DegToRad` and `RadToDeg` propagate NaN and infinities while preserving signed zero, and `RadToDeg` maps finite overflow to signed infinity.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`Sign` propagates NaN, preserves signed zero, and maps infinities to `+/-1`; `DegToRad` and `RadToDeg` propagate NaN and infinities while preserving signed zero, and `RadToDeg` maps finite overflow to signed infinity.",
+    ),
+)
 REQUIRED_SCALAR_INTEGER_CONVERSION_DOC_TRUTH = (
     (
         "docs/math/README.md",
@@ -1540,6 +1558,21 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-wrap-reversed-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap: minimum must not exceed maximum"),
     RequiredBehaviorTestMarker("scalar-wrap-non-finite-inputs", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap: value, minimum, and maximum must be finite"),
     RequiredBehaviorTestMarker("scalar-rounding-sign", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('rounding and sign'"),
+    RequiredBehaviorTestMarker("scalar-sign-angle-edge-contracts", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('scalar sign and angle edge contracts'"),
+    RequiredBehaviorTestMarker("scalar-sign-int-min-no-overflow", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Sign Int64 minimum returns negative one"),
+    RequiredBehaviorTestMarker("scalar-sign-nan", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Sign Double NaN propagates NaN"),
+    RequiredBehaviorTestMarker("scalar-sign-negative-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Sign Double negative zero keeps negative zero"),
+    RequiredBehaviorTestMarker("scalar-degtorad-nan", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "DegToRad Double NaN propagates NaN"),
+    RequiredBehaviorTestMarker("scalar-degtorad-single-infinity", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "DegToRad Single positive infinity propagates infinity"),
+    RequiredBehaviorTestMarker("scalar-degtorad-positive-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "DegToRad Double positive zero keeps positive zero"),
+    RequiredBehaviorTestMarker("scalar-degtorad-negative-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "DegToRad Double negative zero keeps negative zero"),
+    RequiredBehaviorTestMarker("scalar-degtorad-max-finite-no-overflow", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "DegToRad Double max finite stays finite"),
+    RequiredBehaviorTestMarker("scalar-radtodeg-nan", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "RadToDeg Double NaN propagates NaN"),
+    RequiredBehaviorTestMarker("scalar-radtodeg-single-infinity", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "RadToDeg Single positive infinity propagates infinity"),
+    RequiredBehaviorTestMarker("scalar-radtodeg-positive-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "RadToDeg Double positive zero keeps positive zero"),
+    RequiredBehaviorTestMarker("scalar-radtodeg-negative-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "RadToDeg Double negative zero keeps negative zero"),
+    RequiredBehaviorTestMarker("scalar-radtodeg-finite-overflow", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "RadToDeg Double max finite overflows to positive infinity"),
+    RequiredBehaviorTestMarker("scalar-radtodeg-negative-finite-overflow", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "RadToDeg Double negative max finite overflows to negative infinity"),
     RequiredBehaviorTestMarker("scalar-float-predicates", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('float predicates'"),
     RequiredBehaviorTestMarker("scalar-extras", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('number theory and scalar extras'"),
     RequiredBehaviorTestMarker("scalar-angle-conversions", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('angle conversions'"),
@@ -4977,6 +5010,15 @@ def scan_required_scalar_ieee_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_scalar_sign_angle_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_SCALAR_SIGN_ANGLE_DOC_TRUTH,
+        "missing-required-scalar-sign-angle-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def scan_required_scalar_integer_conversion_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
@@ -5071,6 +5113,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_scalar_clamp_doc_truth(root))
     findings.extend(scan_required_scalar_wrap_doc_truth(root))
     findings.extend(scan_required_scalar_ieee_doc_truth(root))
+    findings.extend(scan_required_scalar_sign_angle_doc_truth(root))
     findings.extend(scan_required_scalar_integer_conversion_doc_truth(root))
     findings.extend(scan_required_scalar_range_doc_truth(root))
     findings.extend(scan_required_scalar_min_max_doc_truth(root))
