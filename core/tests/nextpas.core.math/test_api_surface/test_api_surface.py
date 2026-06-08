@@ -1161,6 +1161,7 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("root-hypot-double", r"\bfunction\s+Hypot\s*\(\s*const\s+AX\s*,\s*AY\s*:\s*Double\s*\)\s*:\s*Double\b"),
         ("root-hypot-single", r"\bfunction\s+Hypot\s*\(\s*const\s+AX\s*,\s*AY\s*:\s*Single\s*\)\s*:\s*Single\b"),
         ("root-fmod-double", r"\bfunction\s+Fmod\s*\(\s*const\s+AX\s*,\s*AY\s*:\s*Double\s*\)\s*:\s*Double\b"),
+        ("root-fmod-single", r"\bfunction\s+Fmod\s*\(\s*const\s+AX\s*,\s*AY\s*:\s*Single\s*\)\s*:\s*Single\b"),
         ("root-smoothstep-single", r"\bfunction\s+SmoothStep\s*\(\s*const\s+AEdge0\s*,\s*AEdge1\s*,\s*AValue\s*:\s*Single\s*\)\s*:\s*Single\b"),
     ),
     "src/nextpas.core.math.scalar.pas": (
@@ -1170,6 +1171,7 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("scalar-lcm", r"\bfunction\s+LCM\s*\(\s*AA\s*,\s*AB\s*:\s*Int64\s*\)\s*:\s*Int64\b"),
         ("scalar-hypot-single", r"\bfunction\s+Hypot\s*\(\s*const\s+AX\s*,\s*AY\s*:\s*Single\s*\)\s*:\s*Single\b"),
         ("scalar-fmod-double", r"\bfunction\s+Fmod\s*\(\s*const\s+AX\s*,\s*AY\s*:\s*Double\s*\)\s*:\s*Double\b"),
+        ("scalar-fmod-single", r"\bfunction\s+Fmod\s*\(\s*const\s+AX\s*,\s*AY\s*:\s*Single\s*\)\s*:\s*Single\b"),
         ("scalar-smoothstep-double", r"\bfunction\s+SmoothStep\s*\(\s*const\s+AEdge0\s*,\s*AEdge1\s*,\s*AValue\s*:\s*Double\s*\)\s*:\s*Double\b"),
     ),
     "src/nextpas.core.math.trig.pas": (
@@ -2239,6 +2241,51 @@ def scan_missing_required_public_files(root: Path) -> list[Finding]:
             rel,
         )
     return findings
+
+
+def run_required_public_declarations_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        src = root / "src"
+        src.mkdir(parents=True, exist_ok=True)
+        root_facade = src / "nextpas.core.math.pas"
+        scalar = src / "nextpas.core.math.scalar.pas"
+        root_facade.write_text(
+            "unit nextpas.core.math;\n"
+            "interface\n"
+            "function Fmod(const AX, AY: Double): Double; overload; inline;\n"
+            "implementation\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        scalar.write_text(
+            "unit nextpas.core.math.scalar;\n"
+            "interface\n"
+            "function Fmod(const AX, AY: Double): Double; overload; inline;\n"
+            "implementation\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+
+        findings = scan_required_public_declarations(
+            root,
+            root_facade,
+            root_facade.read_text(encoding="utf-8"),
+        ) + scan_required_public_declarations(
+            root,
+            scalar,
+            scalar.read_text(encoding="utf-8"),
+        )
+        rules = {finding.rule for finding in findings}
+        expected_rules = {
+            "missing-required-public-math-api:root-fmod-single",
+            "missing-required-public-math-api:scalar-fmod-single",
+        }
+        if not expected_rules.issubset(rules):
+            raise AssertionError(
+                "required-public-declarations self-test expected "
+                + ", ".join(sorted(expected_rules))
+            )
 
 
 def scan_missing_required_benchmark_markers(root: Path) -> list[Finding]:
@@ -4539,6 +4586,7 @@ def main() -> int:
         run_trig_host_safe_route_self_tests()
         run_required_trig_host_compile_gate_self_tests()
         run_required_impl_simd_win64_compile_gate_self_tests()
+        run_required_public_declarations_self_tests()
         run_required_doc_truth_self_tests()
         run_root_facade_contract_self_tests()
         run_root_facade_reexport_parity_self_tests()
