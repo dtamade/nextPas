@@ -126,7 +126,8 @@ type
     function PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
     procedure PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
     procedure PoolClear;
-    function WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest): Boolean;
+    function WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest;
+      const AAutoHost: string): Boolean;
     function ReadResponse(const AReader: IReader;
       const ARequestMethod: THttpMethod; out AKeepAlive: Boolean;
       out AResponseStarted: Boolean): IHttpResponse;
@@ -320,6 +321,15 @@ begin
       Exit(True);
     LStart := LPos + 1;
   end;
+end;
+
+procedure ValidateWireHeaderValue(const AValue: string);
+var
+  LI: SizeInt;
+begin
+  for LI := 1 to Length(AValue) do
+    if (AValue[LI] = #13) or (AValue[LI] = #10) or (AValue[LI] = #0) then
+      raise EHttpError.Create('invalid header value: contains CR/LF/NUL');
 end;
 
 function ResponseRequestsClose(const AHeaders: IHttpHeaders): Boolean;
@@ -2000,7 +2010,7 @@ begin
 end;
 
 function TH1ClientTransport.WriteRequest(const AWriter: IWriter;
-  const AReq: IHttpRequest): Boolean;
+  const AReq: IHttpRequest; const AAutoHost: string): Boolean;
 const
   CRLF: AnsiString = #13#10;
 var
@@ -2042,6 +2052,13 @@ begin
     LBuf.Write(LHeader[1], SizeUInt(Length(LHeader)));
     LBuf.Write(CRLF[1], 2);
   end);
+
+  if (AAutoHost <> '') and (not AReq.Headers.Has('host')) then
+  begin
+    LStr := 'host: ' + AAutoHost;
+    LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
+    LBuf.Write(CRLF[1], 2);
+  end;
 
   LBuf.Write(CRLF[1], 2);
 
@@ -2154,6 +2171,7 @@ function TH1ClientTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
 var
   LUrl: TUrl;
   LHost: string;
+  LAutoHost: string;
   LPort: UInt16;
   LConn: ITcpStream;
   LResp: IHttpResponse;
@@ -2165,6 +2183,12 @@ var
 begin
   LUrl := AReq.Url;
   LHost := LUrl.Host;
+  LAutoHost := '';
+  if not AReq.Headers.Has('host') then
+  begin
+    LAutoHost := LUrl.HostPort;
+    ValidateWireHeaderValue(LAutoHost);
+  end;
   LPort := LUrl.Port;
   if LPort = 0 then
   begin
@@ -2186,12 +2210,9 @@ begin
     LConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
   end;
 
-  if not AReq.Headers.Has('host') then
-    AReq.Headers.SetHeader('host', LUrl.HostPort);
-
   LResponseStarted := False;
   try
-    WriteRequest(LConn as IWriter, AReq);
+    WriteRequest(LConn as IWriter, AReq, LAutoHost);
     LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
       LResponseStarted);
   except
@@ -2209,7 +2230,7 @@ begin
         LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
         LConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
       end;
-      WriteRequest(LConn as IWriter, AReq);
+      WriteRequest(LConn as IWriter, AReq, LAutoHost);
       LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
         LResponseStarted);
     end

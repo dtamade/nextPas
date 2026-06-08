@@ -4779,6 +4779,92 @@ begin
   end;
 end;
 
+procedure TestClientAutoHostDoesNotMutateRequestHeaders;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LHeaders: IHttpHeaders;
+  LGotHost: string;
+begin
+  LGotHost := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/check-host', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  const
+    BODY = 'ok';
+  begin
+    LGotHost := AReq.Headers.Get('host');
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(BODY))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(BODY[1], SizeUInt(Length(BODY)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LHeaders := NewHeaders;
+    LReq := NewRequest(hmGet,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/check-host',
+      LHeaders, nil, 0);
+    Check(not LHeaders.Has('host'),
+      'auto host wire-only: source headers start without host');
+    Check(not LReq.Headers.Has('host'),
+      'auto host wire-only: request starts without host');
+
+    LClient := NewHttpClient;
+    LResp := LClient.Send(LReq);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'auto host wire-only: status 200');
+    Check(LGotHost <> '',
+      'auto host wire-only: host appears on wire');
+    Check(Pos('127.0.0.1', LGotHost) > 0,
+      'auto host wire-only: wire host contains IP');
+    Check(not LReq.Headers.Has('host'),
+      'auto host wire-only: request headers remain unmodified');
+    Check(not LHeaders.Has('host'),
+      'auto host wire-only: source headers remain unmodified');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientAutoHostRejectsInvalidHeaderValue;
+var
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LUrl: TUrl;
+  LRaised: Boolean;
+  LRejectedHeaderValue: Boolean;
+begin
+  LUrl := Default(TUrl);
+  LUrl.Scheme := 'http';
+  LUrl.Host := '127.0.0.1'#13'evil';
+  LUrl.Port := 9;
+  LUrl.Path := '/';
+
+  LClient := NewHttpClient;
+  LReq := NewRequest(hmGet, LUrl);
+  LRaised := False;
+  LRejectedHeaderValue := False;
+  try
+    LClient.Send(LReq);
+  except
+    on E: EHttpError do
+    begin
+      LRaised := True;
+      LRejectedHeaderValue := Pos('invalid header value', E.Message) > 0;
+    end;
+  end;
+  Check(LRaised, 'auto host invalid value raises EHttpError');
+  Check(LRejectedHeaderValue,
+    'auto host invalid value fails before network write');
+  Check(not LReq.Headers.Has('host'),
+    'auto host invalid value does not mutate request headers');
+end;
+
 function PoolAcceptThread(AArg: Pointer): Pointer; cdecl;
 var
   LConn: ITcpStream;
@@ -5144,6 +5230,10 @@ begin
   T.Run('Client timeout on slow server', @TestClientTimeout);
   T.Run('Client handles 404 response', @TestClientHandles404);
   T.Run('Client sets Host header automatically', @TestClientSetsHostHeader);
+  T.Run('Client auto Host does not mutate request headers',
+    @TestClientAutoHostDoesNotMutateRequestHeaders);
+  T.Run('Client auto Host rejects invalid header value',
+    @TestClientAutoHostRejectsInvalidHeaderValue);
   T.Run('Connection reuse', @TestConnectionReuse);
   T.Summary;
 end.
