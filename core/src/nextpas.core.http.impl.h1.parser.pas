@@ -863,6 +863,15 @@ function TH1Parser.Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUIn
 var
   LErrno: TLlhttpErrnoT;
 begin
+  if (ABuf = nil) and (ALen > 0) then
+  begin
+    FError := True;
+    FComplete := False;
+    FErrorKind := pekMalformed;
+    FErrorMsg := 'HTTP parser input buffer is nil with positive length';
+    Exit(0);
+  end;
+
   LErrno := llhttp_execute(@FParser, ABuf, ALen);
   MaterializeCurrentHeaderSpans;
   if (LErrno = HPE_PAUSED) and FComplete then
