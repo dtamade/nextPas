@@ -234,6 +234,8 @@ begin
   if FEntries[AHandle.FId].Cancelled then
     Exit(False);
   FEntries[AHandle.FId].Cancelled := True;
+  FEntries[AHandle.FId].Callback := nil;
+  FEntries[AHandle.FId].Context := nil;
   Result := True;
 end;
 

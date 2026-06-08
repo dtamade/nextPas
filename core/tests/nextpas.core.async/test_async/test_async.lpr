@@ -143,6 +143,23 @@ begin
   Check(not LHeap.Cancel(LH), 'fired timer handle is stale no-op');
 end;
 
+procedure TestTimerCancelClearsOwnerRefsSourceContract;
+var
+  LSource: string;
+  LBody: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.async.timer.pas');
+  LBody := ExtractSourceRange(LSource, 'function ttimerheap.cancel(',
+    'function ttimerheap.nextdeadline', 'timer heap Cancel implementation');
+
+  CheckSourceOrder(LBody, 'fentries[ahandle.fid].cancelled := true;',
+    'fentries[ahandle.fid].callback := nil;',
+    'successful timer cancel clears callback ownership immediately');
+  CheckSourceOrder(LBody, 'fentries[ahandle.fid].cancelled := true;',
+    'fentries[ahandle.fid].context := nil;',
+    'successful timer cancel clears context ownership immediately');
+end;
+
 procedure TestTimerNextDeadline;
 var
   LHeap: TTimerHeap;
@@ -346,6 +363,8 @@ begin
   T.Run('TimerHeapOrderByDeadline', @TestTimerHeapOrderByDeadline);
   T.Run('TimerCancel', @TestTimerCancel);
   T.Run('TimerCancelAfterFireIsStale', @TestTimerCancelAfterFireIsStale);
+  T.Run('TimerCancelClearsOwnerRefsSourceContract',
+    @TestTimerCancelClearsOwnerRefsSourceContract);
   T.Run('TimerNextDeadline', @TestTimerNextDeadline);
   T.Run('TimerHandleNone', @TestTimerHandleNone);
   T.Run('AsyncLoopCreate', @TestAsyncLoopCreate);
