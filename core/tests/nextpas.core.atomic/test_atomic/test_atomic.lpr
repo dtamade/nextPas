@@ -1283,14 +1283,24 @@ begin
     'invalid memory-order matrix must cover compat AtomicCompareExchange32 invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'LTypedInt32.CompareExchangeStrong(LExpectedInt32, 902, LInvalidOrder)',
     'invalid memory-order matrix must cover TAtomicInt32 strong single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedInt32.CompareExchangeWeak(LExpectedInt32, 904, LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicInt32 weak single-order CAS invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'LTypedUInt32.CompareExchangeWeak(LExpectedUInt32, UInt32(1002), LInvalidOrder)',
     'invalid memory-order matrix must cover TAtomicUInt32 weak single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedUInt32.CompareExchangeStrong(LExpectedUInt32, UInt32(1004), LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicUInt32 strong single-order CAS invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'LTypedBool.CompareExchangeStrong(LExpectedBool, True, LInvalidOrder)',
     'invalid memory-order matrix must cover TAtomicBool strong single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedBool.CompareExchangeWeak(LExpectedBool, True, LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicBool weak single-order CAS invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'LTypedISize.CompareExchangeStrong(LExpectedISizeRaw, PtrInt(1102), LInvalidOrder)',
     'invalid memory-order matrix must cover TAtomicISize strong single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedISize.CompareExchangeWeak(LExpectedISizeRaw, PtrInt(1104), LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicISize weak single-order CAS invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'LTypedUSize.CompareExchangeWeak(LExpectedUSizeRaw, PtrUInt(1202), LInvalidOrder)',
     'invalid memory-order matrix must cover TAtomicUSize weak single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedUSize.CompareExchangeStrong(LExpectedUSizeRaw, PtrUInt(1204), LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicUSize strong single-order CAS invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'LTypedPtr.CompareExchangeWeak(LExpectedFacadePtr, @LValueB, LInvalidOrder)',
     'invalid memory-order matrix must cover facade TAtomicPtr weak single-order CAS invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'LTypedFlag.clear(mo_consume)',
@@ -1311,6 +1321,10 @@ begin
     'invalid memory-order matrix must cover compat AtomicCompareExchange64 invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'LTypedUInt64.CompareExchangeWeak(LExpectedUInt64, UInt64(1802), LInvalidOrder)',
     'invalid memory-order matrix must cover TAtomicUInt64 weak single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedInt64.CompareExchangeWeak(LExpectedInt64, 1704, LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicInt64 weak single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedUInt64.CompareExchangeStrong(LExpectedUInt64, UInt64(1804), LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicUInt64 strong single-order CAS invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, mo_release, mo_acq_rel)',
     'invalid memory-order matrix must cover pointer weak CAS failure-order rejection');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, LInvalidOrder, mo_relaxed)',
@@ -4387,6 +4401,22 @@ var
     CheckEqual(Int64(901), Int64(LExpectedInt32),
       'TAtomicInt32 strong single-order CAS invalid ordinal must not mutate expected');
 
+    LTypedInt32 := TAtomicInt32.Create(903);
+    LExpectedInt32 := 903;
+    LRaised := False;
+    try
+      LTypedInt32.CompareExchangeWeak(LExpectedInt32, 904, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicInt32 weak single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(903), Int64(LTypedInt32.Load(mo_acquire)),
+      'TAtomicInt32 weak single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(903), Int64(LExpectedInt32),
+      'TAtomicInt32 weak single-order CAS invalid ordinal must not mutate expected');
+
     LTypedUInt32 := TAtomicUInt32.Create(UInt32(1001));
     LExpectedUInt32 := UInt32(1001);
     LRaised := False;
@@ -4402,6 +4432,22 @@ var
       'TAtomicUInt32 weak single-order CAS invalid ordinal must not mutate the target');
     CheckEqual(Int64(1001), Int64(LExpectedUInt32),
       'TAtomicUInt32 weak single-order CAS invalid ordinal must not mutate expected');
+
+    LTypedUInt32 := TAtomicUInt32.Create(UInt32(1003));
+    LExpectedUInt32 := UInt32(1003);
+    LRaised := False;
+    try
+      LTypedUInt32.CompareExchangeStrong(LExpectedUInt32, UInt32(1004), LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicUInt32 strong single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1003), Int64(LTypedUInt32.Load(mo_acquire)),
+      'TAtomicUInt32 strong single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(1003), Int64(LExpectedUInt32),
+      'TAtomicUInt32 strong single-order CAS invalid ordinal must not mutate expected');
 
     LTypedBool := TAtomicBool.Create(False);
     LExpectedBool := False;
@@ -4419,6 +4465,22 @@ var
     Check(not LExpectedBool,
       'TAtomicBool strong single-order CAS invalid ordinal must not mutate expected');
 
+    LTypedBool := TAtomicBool.Create(False);
+    LExpectedBool := False;
+    LRaised := False;
+    try
+      LTypedBool.CompareExchangeWeak(LExpectedBool, True, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicBool weak single-order CAS invalid ordinal must raise EArgumentError');
+    Check(not LTypedBool.Load(mo_acquire),
+      'TAtomicBool weak single-order CAS invalid ordinal must not mutate the target');
+    Check(not LExpectedBool,
+      'TAtomicBool weak single-order CAS invalid ordinal must not mutate expected');
+
     LTypedISize := TAtomicISize.Create(1101);
     LExpectedISizeRaw := PtrInt(1101);
     LRaised := False;
@@ -4435,6 +4497,22 @@ var
     CheckEqual(Int64(1101), Int64(LExpectedISizeRaw),
       'TAtomicISize strong single-order CAS invalid ordinal must not mutate expected');
 
+    LTypedISize := TAtomicISize.Create(1103);
+    LExpectedISizeRaw := PtrInt(1103);
+    LRaised := False;
+    try
+      LTypedISize.CompareExchangeWeak(LExpectedISizeRaw, PtrInt(1104), LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicISize weak single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1103), Int64(LTypedISize.Load(mo_acquire)),
+      'TAtomicISize weak single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(1103), Int64(LExpectedISizeRaw),
+      'TAtomicISize weak single-order CAS invalid ordinal must not mutate expected');
+
     LTypedUSize := TAtomicUSize.Create(PtrUInt(1201));
     LExpectedUSizeRaw := PtrUInt(1201);
     LRaised := False;
@@ -4450,6 +4528,22 @@ var
       'TAtomicUSize weak single-order CAS invalid ordinal must not mutate the target');
     CheckEqual(Int64(1201), Int64(LExpectedUSizeRaw),
       'TAtomicUSize weak single-order CAS invalid ordinal must not mutate expected');
+
+    LTypedUSize := TAtomicUSize.Create(PtrUInt(1203));
+    LExpectedUSizeRaw := PtrUInt(1203);
+    LRaised := False;
+    try
+      LTypedUSize.CompareExchangeStrong(LExpectedUSizeRaw, PtrUInt(1204), LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicUSize strong single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1203), Int64(LTypedUSize.Load(mo_acquire)),
+      'TAtomicUSize strong single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(1203), Int64(LExpectedUSizeRaw),
+      'TAtomicUSize strong single-order CAS invalid ordinal must not mutate expected');
 
     LTypedPtr := TFacadeAtomicPtr.Create(@LValueA);
     LExpectedFacadePtr := @LValueA;
@@ -4561,6 +4655,22 @@ var
     CheckEqual(Int64(1701), LExpectedInt64,
       'TAtomicInt64 strong single-order CAS invalid ordinal must not mutate expected');
 
+    LTypedInt64 := TAtomicInt64.Create(1703);
+    LExpectedInt64 := 1703;
+    LRaised := False;
+    try
+      LTypedInt64.CompareExchangeWeak(LExpectedInt64, 1704, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicInt64 weak single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1703), LTypedInt64.Load(mo_acquire),
+      'TAtomicInt64 weak single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(1703), LExpectedInt64,
+      'TAtomicInt64 weak single-order CAS invalid ordinal must not mutate expected');
+
     LTypedUInt64 := TAtomicUInt64.Create(UInt64(1801));
     LExpectedUInt64 := UInt64(1801);
     LRaised := False;
@@ -4576,6 +4686,22 @@ var
       'TAtomicUInt64 weak single-order CAS invalid ordinal must not mutate the target');
     CheckEqual(Int64(1801), Int64(LExpectedUInt64),
       'TAtomicUInt64 weak single-order CAS invalid ordinal must not mutate expected');
+
+    LTypedUInt64 := TAtomicUInt64.Create(UInt64(1803));
+    LExpectedUInt64 := UInt64(1803);
+    LRaised := False;
+    try
+      LTypedUInt64.CompareExchangeStrong(LExpectedUInt64, UInt64(1804), LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicUInt64 strong single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1803), Int64(LTypedUInt64.Load(mo_acquire)),
+      'TAtomicUInt64 strong single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(1803), Int64(LExpectedUInt64),
+      'TAtomicUInt64 strong single-order CAS invalid ordinal must not mutate expected');
   end;
 
   procedure ExpectRmw64RejectsInvalidOrder;
