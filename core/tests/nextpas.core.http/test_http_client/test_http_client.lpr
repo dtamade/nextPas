@@ -2506,6 +2506,65 @@ begin
   end;
 end;
 
+procedure TestClientConnectionCloseSameReadTailReturnsFirstResponse;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  GRawAcceptCount := 0;
+  GRawResponse1 := 'HTTP/1.1 200 OK'#13#10 +
+                   'Content-Length: 2'#13#10 +
+                   'Connection: close'#13#10 +
+                   #13#10 +
+                   'ok' +
+                   'HTTP/1.1 599 Poisoned'#13#10 +
+                   'Content-Length: 6'#13#10 +
+                   #13#10 +
+                   'poison';
+  GRawResponse2 := 'HTTP/1.1 200 OK'#13#10 +
+                   'Content-Length: 8'#13#10 +
+                   'Connection: close'#13#10 +
+                   #13#10 +
+                   'fresh-ok';
+  GRawAcceptLimit := 2;
+  GRawListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRawListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @RawResponseThread, nil);
+
+  try
+    LClient := NewHttpClient;
+
+    LResp := LClient.Get('http://127.0.0.1:' +
+      IntToStr(Int64(LPort)) + '/prime');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'connection-close same-read tail returns first response status');
+    CheckEqual('ok', ReadBodyStr(LResp),
+      'connection-close same-read tail returns first response body');
+
+    LResp := LClient.Get('http://127.0.0.1:' +
+      IntToStr(Int64(LPort)) + '/fresh');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'connection-close same-read tail follow-up opens fresh connection');
+    CheckEqual('fresh-ok', ReadBodyStr(LResp),
+      'connection-close same-read tail follow-up body');
+    CheckEqual(Int64(2), Int64(GRawAcceptCount),
+      'connection-close same-read tail is not pooled for follow-up request');
+  finally
+    if GRawAcceptCount < 2 then
+      WakeRetryAcceptThread(LPort);
+    GRawListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRawListener := nil;
+    GRawAcceptCount := 0;
+    GRawResponse1 := '';
+    GRawResponse2 := '';
+    GRawAcceptLimit := 0;
+  end;
+end;
+
 procedure TestClientRejectsTruncatedContentLengthResponse;
 var
   LPort: UInt16;
@@ -5603,6 +5662,8 @@ begin
   T.Run('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
   T.Run('Client does not pool response Connection close token-list',
     @TestClientDoesNotPoolResponseWithConnectionCloseTokenList);
+  T.Run('Client Connection close same-read tail returns first response',
+    @TestClientConnectionCloseSameReadTailReturnsFirstResponse);
   T.Run('Client rejects truncated content-length response', @TestClientRejectsTruncatedContentLengthResponse);
   T.Run('Client skips 100 Continue before final response',
     @TestClientSkips100ContinueBeforeFinalResponse);

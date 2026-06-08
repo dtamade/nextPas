@@ -226,6 +226,39 @@ begin
     'close duplicate response header is not reusable');
 end;
 
+procedure TestResponseConnectionCloseSameReadTailConsumesOnlyFirstResponse;
+var
+  LP: IH1Parser;
+  LResp1: string;
+  LTail: string;
+  LWire: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1ResponseParser;
+  LResp1 := 'HTTP/1.1 200 OK'#13#10 +
+            'Content-Length: 2'#13#10 +
+            'Connection: close'#13#10#13#10 +
+            'ok';
+  LTail := 'HTTP/1.1 599 Poisoned'#13#10 +
+           'Content-Length: 6'#13#10#13#10 +
+           'poison';
+  LWire := LResp1 + LTail;
+
+  LConsumed := LP.Execute(PAnsiChar(LWire), Length(LWire));
+
+  Check(not LP.HasError,
+    'connection-close response tail should not corrupt first response');
+  Check(LP.IsComplete, 'connection-close response should complete');
+  CheckEqual(SizeUInt(Length(LResp1)), LConsumed,
+    'connection-close response consumes only the first response');
+  CheckEqual(Int64(200), Int64(LP.GetStatusCode),
+    'connection-close response preserves first status');
+  CheckEqual('ok', LP.GetBody,
+    'connection-close response preserves first body');
+  Check(not LP.ShouldKeepAlive,
+    'connection-close response remains non-reusable');
+end;
+
 procedure TestPipelinedNextResponseDoesNotPolluteCurrentResponse;
 var
   LP: IH1Parser;
@@ -2854,6 +2887,8 @@ begin
     @TestResponseConnectionCloseTokenListDoesNotReuse);
   T.Run('Response Connection close duplicate header does not reuse',
     @TestResponseConnectionCloseDuplicateHeaderDoesNotReuse);
+  T.Run('Response Connection close same-read tail consumes only first response',
+    @TestResponseConnectionCloseSameReadTailConsumesOnlyFirstResponse);
   T.Run('Pipelined next response does not pollute current response',
     @TestPipelinedNextResponseDoesNotPolluteCurrentResponse);
   T.Run('Response 100 Continue consumes only interim',
