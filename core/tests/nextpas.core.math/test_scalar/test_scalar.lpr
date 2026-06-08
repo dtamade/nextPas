@@ -296,8 +296,17 @@ begin
     'Clamp Single negative infinity clamps low');
   CheckNear(5.0, Clamp(Single(100.0), Single(5.0), Single(5.0)), 0.0,
     'Clamp Single equal bounds returns bound');
+  Check(IsSingleNegativeZero(Clamp(Single(0.0), MakeSingleNegativeZero, MakeSingleNegativeZero)),
+    'Clamp Single equal negative-zero bounds return bound');
+  Check(IsSinglePositiveZero(Clamp(MakeSingleNegativeZero, Single(0.0), Single(0.0))),
+    'Clamp Single equal positive-zero bounds return bound');
   Check(IsSingleNegativeZero(Clamp(MakeSingleNegativeZero, Single(0.0), Single(1.0))),
     'Clamp Single negative zero inside range keeps sign');
+
+  Check(IsDoubleNegativeZero(Clamp(0.0, MakeDoubleNegativeZero, MakeDoubleNegativeZero)),
+    'Clamp Double equal negative-zero bounds return bound');
+  Check(IsDoublePositiveZero(Clamp(MakeDoubleNegativeZero, 0.0, 0.0)),
+    'Clamp Double equal positive-zero bounds return bound');
 
   Check(IsDoubleNegativeZero(nextpas.core.math.scalar.Min(MakeDoubleNegativeZero, MakeDoubleNegativeZero)),
     'Min Double same negative zero returns negative zero');

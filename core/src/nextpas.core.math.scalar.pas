@@ -393,6 +393,8 @@ begin
   RequireClampBounds(AMin, AMax);
   if SingleIsNaN(AValue) then
     Exit(AValue);
+  if AMin = AMax then
+    Exit(AMin);
   if AValue < AMin then
     Result := AMin
   else if AValue > AMax then
@@ -406,6 +408,8 @@ begin
   RequireClampBounds(AMin, AMax);
   if DoubleIsNaN(AValue) then
     Exit(AValue);
+  if AMin = AMax then
+    Exit(AMin);
   if AValue < AMin then
     Result := AMin
   else if AValue > AMax then

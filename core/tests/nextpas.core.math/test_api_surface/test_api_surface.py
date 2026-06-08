@@ -1234,6 +1234,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-clamp-nan-value", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Clamp Double NaN value propagates NaN"),
     RequiredBehaviorTestMarker("scalar-clamp-reversed-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Clamp: minimum must not exceed maximum"),
     RequiredBehaviorTestMarker("scalar-clamp-finite-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Clamp: minimum and maximum must be finite"),
+    RequiredBehaviorTestMarker("scalar-clamp-equal-bound-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Clamp Double equal negative-zero bounds return bound"),
     RequiredBehaviorTestMarker("scalar-ieee-edge-contracts", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('scalar IEEE edge contracts'"),
     RequiredBehaviorTestMarker("scalar-ieee-round-ties-away", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Round Double ties away from zero positive"),
     RequiredBehaviorTestMarker("scalar-ieee-abs-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Abs Double negative zero returns positive zero"),
