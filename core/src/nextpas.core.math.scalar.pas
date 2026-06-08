@@ -580,6 +580,8 @@ function SmoothStep(const AEdge0, AEdge1, AValue: Single): Single;
 var
   LT: Single;
 begin
+  if SingleIsNaN(AValue) then
+    Exit(AValue);
   if AEdge0 = AEdge1 then
   begin
     if AValue < AEdge0 then
@@ -594,6 +596,8 @@ function SmoothStep(const AEdge0, AEdge1, AValue: Double): Double;
 var
   LT: Double;
 begin
+  if DoubleIsNaN(AValue) then
+    Exit(AValue);
   if AEdge0 = AEdge1 then
   begin
     if AValue < AEdge0 then

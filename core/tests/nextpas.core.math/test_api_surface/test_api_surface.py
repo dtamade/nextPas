@@ -694,15 +694,15 @@ REQUIRED_SCALAR_INTEGER_CONVERSION_DOC_TRUTH = (
 REQUIRED_SCALAR_RANGE_DOC_TRUTH = (
     (
         "docs/math/API.md",
-        "`Lerp`, `InverseLerp`, and `SmoothStep` keep huge finite opposite-sign midpoint interpolation finite; `InverseLerp` returns 0 for equal bounds, and `SmoothStep` handles equal edges without division by zero while preserving the documented step boundary behavior.",
+        "`Lerp`, `InverseLerp`, and `SmoothStep` keep huge finite opposite-sign midpoint interpolation finite; `InverseLerp` returns 0 for equal bounds, and `SmoothStep` propagates NaN values before equal-edge step-boundary handling while preserving the documented step boundary behavior.",
     ),
     (
         "docs/math/README.md",
-        "`Lerp`, `InverseLerp`, and `SmoothStep` keep huge finite opposite-sign midpoint interpolation finite; `InverseLerp` returns 0 for equal bounds, and `SmoothStep` handles equal edges without division by zero while preserving the documented step boundary behavior.",
+        "`Lerp`, `InverseLerp`, and `SmoothStep` keep huge finite opposite-sign midpoint interpolation finite; `InverseLerp` returns 0 for equal bounds, and `SmoothStep` propagates NaN values before equal-edge step-boundary handling while preserving the documented step boundary behavior.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "`Lerp`, `InverseLerp`, and `SmoothStep` keep huge finite opposite-sign midpoint interpolation finite; `InverseLerp` returns 0 for equal bounds, and `SmoothStep` handles equal edges without division by zero while preserving the documented step boundary behavior.",
+        "`Lerp`, `InverseLerp`, and `SmoothStep` keep huge finite opposite-sign midpoint interpolation finite; `InverseLerp` returns 0 for equal bounds, and `SmoothStep` propagates NaN values before equal-edge step-boundary handling while preserving the documented step boundary behavior.",
     ),
 )
 REQUIRED_SCALAR_MIN_MAX_DOC_TRUTH = (
@@ -1343,6 +1343,8 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-range-boundary-edges", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('scalar range boundary edge contracts'"),
     RequiredBehaviorTestMarker("scalar-inverse-lerp-equal-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "InverseLerp Double equal bounds returns 0"),
     RequiredBehaviorTestMarker("scalar-smoothstep-equal-edges", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "SmoothStep Double equal edges returns step boundary"),
+    RequiredBehaviorTestMarker("scalar-smoothstep-equal-edges-nan", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "SmoothStep Double equal edges propagates NaN value"),
+    RequiredBehaviorTestMarker("scalar-smoothstep-single-equal-edges-nan", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "SmoothStep Single equal edges propagates NaN value"),
     RequiredBehaviorTestMarker("scalar-wrap-reversed-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap: minimum must not exceed maximum"),
     RequiredBehaviorTestMarker("scalar-wrap-non-finite-inputs", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap: value, minimum, and maximum must be finite"),
     RequiredBehaviorTestMarker("scalar-rounding-sign", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('rounding and sign'"),

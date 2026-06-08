@@ -361,10 +361,14 @@ begin
     'SmoothStep Double equal edges returns step boundary below');
   CheckNear(1.0, SmoothStep(5.0, 5.0, 5.0), 0.0,
     'SmoothStep Double equal edges returns step boundary');
+  Check(IsNaN(SmoothStep(5.0, 5.0, MakeNaN)),
+    'SmoothStep Double equal edges propagates NaN value');
   CheckNear(0.0, SmoothStep(Single(5.0), Single(5.0), Single(4.0)), 0.0,
     'SmoothStep Single equal edges returns step boundary below');
   CheckNear(1.0, SmoothStep(Single(5.0), Single(5.0), Single(5.0)), 0.0,
     'SmoothStep Single equal edges returns step boundary');
+  Check(IsNaN(SmoothStep(Single(5.0), Single(5.0), MakeSingleNaN)),
+    'SmoothStep Single equal edges propagates NaN value');
 end;
 
 procedure TestAngleConversions;
