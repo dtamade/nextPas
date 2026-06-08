@@ -349,6 +349,16 @@ begin
     LGot := True;
   end;
   Check(LGot, 'gzip stream rejects bytes after trailer');
+
+  LGot := False;
+  try
+    LReader := GzipReader(TOneByteReader.Create(LBad));
+    IoReadAll(LReader as IReader);
+    LReader.Close;
+  except
+    LGot := True;
+  end;
+  Check(LGot, 'gzip stream rejects bytes after trailer after chunk boundary');
 end;
 
 procedure TestGzipReservedFlagsRejected;

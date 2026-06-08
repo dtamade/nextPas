@@ -319,6 +319,7 @@ var
   LExpectedCRC, LExpectedSize: UInt32;
   LAvail, LNeed: SizeUInt;
   LNextIn: PByte;
+  LExtra: Byte;
 begin
   if FInitialized then
   begin
@@ -342,6 +343,8 @@ begin
       LNeed := 8 - LAvail;
       GzipReadExact(FSrc, LTrailer[LAvail], LNeed, 'gzip: truncated trailer');
     end;
+    if FSrc.Read(LExtra, 1) <> 0 then
+      raise EIOError.Create('gzip: trailing bytes after trailer');
 
     LExpectedCRC := UInt32(LTrailer[0]) or (UInt32(LTrailer[1]) shl 8) or
       (UInt32(LTrailer[2]) shl 16) or (UInt32(LTrailer[3]) shl 24);
