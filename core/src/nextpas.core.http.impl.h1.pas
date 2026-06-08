@@ -135,6 +135,7 @@ type
     IHttpServerSessionFactory, IHttpServerSessionFactoryWithContext)
   private
     FOptions: TH1ServerTransportOptions;
+    procedure ValidateInputs(const AConn: ITcpStream; const AHandler: IHttpHandler);
     function HandleConnection(const AConn: ITcpStream; const AHandler: IHttpHandler): Boolean;
   public
     constructor Create(const AOptions: TH1ServerTransportOptions);
@@ -1968,11 +1969,21 @@ begin
   FOptions := AOptions;
 end;
 
+procedure TH1ServerTransport.ValidateInputs(const AConn: ITcpStream;
+  const AHandler: IHttpHandler);
+begin
+  if AConn = nil then
+    raise EArgumentError.Create('h1 server transport requires connection');
+  if AHandler = nil then
+    raise EArgumentError.Create('h1 server transport requires handler');
+end;
+
 function TH1ServerTransport.HandleConnection(const AConn: ITcpStream;
   const AHandler: IHttpHandler): Boolean;
 var
   LState: TH1ServerConnectionState;
 begin
+  ValidateInputs(AConn, AHandler);
   LState := TH1ServerConnectionState.Create(AConn, AHandler, FOptions);
   try
     Result := LState.Run = tscoServer;
@@ -1993,6 +2004,7 @@ end;
 function TH1ServerTransport.NewSession(const AConn: ITcpStream;
   const AHandler: IHttpHandler): ITcpServerSession;
 begin
+  ValidateInputs(AConn, AHandler);
   Result := TH1ServerConnectionState.Create(AConn, AHandler, FOptions);
 end;
 
@@ -2000,6 +2012,7 @@ function TH1ServerTransport.NewSession(const AConn: ITcpStream;
   const AHandler: IHttpHandler;
   const AContext: ITcpServerSessionContext): ITcpServerSession;
 begin
+  ValidateInputs(AConn, AHandler);
   Result := TH1ServerConnectionState.Create(AConn, AHandler, FOptions, AContext);
 end;
 
