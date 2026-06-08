@@ -127,6 +127,22 @@ begin
   Check(not LOk, 'double cancel fails');
 end;
 
+procedure TestTimerCancelAfterFireIsStale;
+var
+  LHeap: TTimerHeap;
+  LH: TAsyncTimerHandle;
+  LFired: UInt32;
+begin
+  ResetCallState;
+  LHeap := TTimerHeap.Create;
+  LH := LHeap.Schedule(TDeadline.Expired, @IncrementCallback, nil);
+  LFired := LHeap.FireExpired;
+
+  CheckEqual(Int64(1), Int64(LFired), 'timer fired');
+  CheckEqual(Int64(1), Int64(GCallCount), 'callback fired once');
+  Check(not LHeap.Cancel(LH), 'fired timer handle is stale no-op');
+end;
+
 procedure TestTimerNextDeadline;
 var
   LHeap: TTimerHeap;
@@ -329,6 +345,7 @@ begin
   T.Run('TimerHeapOrder', @TestTimerHeapOrder);
   T.Run('TimerHeapOrderByDeadline', @TestTimerHeapOrderByDeadline);
   T.Run('TimerCancel', @TestTimerCancel);
+  T.Run('TimerCancelAfterFireIsStale', @TestTimerCancelAfterFireIsStale);
   T.Run('TimerNextDeadline', @TestTimerNextDeadline);
   T.Run('TimerHandleNone', @TestTimerHandleNone);
   T.Run('AsyncLoopCreate', @TestAsyncLoopCreate);
