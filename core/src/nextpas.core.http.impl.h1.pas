@@ -1977,16 +1977,21 @@ var
   LParser: IH1Parser;
   LBuf: array[0..4095] of Byte;
   LN: SizeUInt;
+  LConsumed: SizeUInt;
+  LHasResponseTail: Boolean;
   LBodyReader: IReader;
 begin
   AResponseStarted := False;
+  LHasResponseTail := False;
   LParser := NewH1ResponseParser(ARequestMethod = hmHead);
   repeat
     LN := AReader.Read(LBuf[0], 4096);
     if LN = 0 then
       Break;
     AResponseStarted := True;
-    LParser.Execute(@LBuf[0], LN);
+    LConsumed := LParser.Execute(@LBuf[0], LN);
+    if LConsumed < LN then
+      LHasResponseTail := True;
   until LParser.IsComplete or LParser.HasError;
 
   if (not LParser.IsComplete) and (not LParser.HasError) then
@@ -1997,7 +2002,7 @@ begin
   if not LParser.IsComplete then
     raise EHttpError.Create('HTTP response incomplete: connection closed');
 
-  AKeepAlive := LParser.ShouldKeepAlive;
+  AKeepAlive := LParser.ShouldKeepAlive and (not LHasResponseTail);
 
   LBodyReader := LParser.NewBodyReader;
   if LBodyReader <> nil then

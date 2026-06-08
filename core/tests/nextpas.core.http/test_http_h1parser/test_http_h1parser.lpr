@@ -226,6 +226,34 @@ begin
     'close duplicate response header is not reusable');
 end;
 
+procedure TestPipelinedNextResponseDoesNotPolluteCurrentResponse;
+var
+  LP: IH1Parser;
+  LResp1: string;
+  LResp2: string;
+  LResp: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1ResponseParser;
+  LResp1 := 'HTTP/1.1 200 OK'#13#10 +
+            'Content-Length: 2'#13#10#13#10 +
+            'ok';
+  LResp2 := 'HTTP/1.1 599 Poisoned'#13#10 +
+            'Content-Length: 6'#13#10#13#10 +
+            'poison';
+  LResp := LResp1 + LResp2;
+  LConsumed := LP.Execute(PAnsiChar(LResp), Length(LResp));
+
+  Check(not LP.HasError,
+    'pipelined second response should not corrupt first response');
+  Check(LP.IsComplete, 'first pipelined response should complete');
+  CheckEqual(SizeUInt(Length(LResp1)), LConsumed,
+    'response parser should consume only the first response');
+  CheckEqual(Int64(200), Int64(LP.GetStatusCode),
+    'first pipelined response preserves status');
+  CheckEqual('ok', LP.GetBody, 'first pipelined response preserves body');
+end;
+
 procedure TestResponseNonChunkedTransferEncodingEndsAtEof;
 var
   LP: IH1Parser;
@@ -2320,6 +2348,8 @@ begin
     @TestResponseConnectionCloseTokenListDoesNotReuse);
   T.Run('Response Connection close duplicate header does not reuse',
     @TestResponseConnectionCloseDuplicateHeaderDoesNotReuse);
+  T.Run('Pipelined next response does not pollute current response',
+    @TestPipelinedNextResponseDoesNotPolluteCurrentResponse);
   T.Run('Response non-chunked transfer-encoding ends at EOF',
     @TestResponseNonChunkedTransferEncodingEndsAtEof);
   T.Run('Response transfer-encoding token boundary controls reuse',

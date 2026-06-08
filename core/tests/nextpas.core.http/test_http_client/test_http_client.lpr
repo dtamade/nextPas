@@ -571,6 +571,55 @@ begin
   end;
 end;
 
+function SameReadResponseTailThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LReply: string;
+  LMethod: string;
+  LBody: string;
+  LI: Int32;
+begin
+  Result := nil;
+  for LI := 1 to 2 do
+  begin
+    try
+      LConn := GPoisonListener.Accept;
+    except
+      Break;
+    end;
+    if LConn = nil then
+      Break;
+
+    InterlockedIncrement(GPoisonAcceptCount);
+    try
+      ReadRetryRawRequest(LConn, LMethod, LBody);
+      if LI = 1 then
+      begin
+        LReply := 'HTTP/1.1 200 OK'#13#10 +
+                  'Content-Length: 2'#13#10 +
+                  #13#10 +
+                  'ok' +
+                  'HTTP/1.1 599 Poisoned'#13#10 +
+                  'Content-Length: 6'#13#10 +
+                  #13#10 +
+                  'poison';
+        LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+        platform_thread_sleep_ns(250000000);
+      end
+      else
+      begin
+        LReply := 'HTTP/1.1 200 OK'#13#10 +
+                  'Content-Length: 8'#13#10 +
+                  #13#10 +
+                  'fresh-ok';
+        LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+      end;
+    except
+    end;
+    LConn.Close;
+  end;
+end;
+
 function BodyLimitCaptureThread(AArg: Pointer): Pointer; cdecl;
 var
   LConn: ITcpStream;
@@ -4122,6 +4171,47 @@ begin
   end;
 end;
 
+procedure TestClientDropsPooledConnectionWithSameReadResponseTail;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LRet: Pointer;
+begin
+  GPoisonAcceptCount := 0;
+  GPoisonListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GPoisonListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @SameReadResponseTailThread, nil);
+
+  try
+    LClient := NewHttpClient;
+
+    LResp := LClient.Get('http://127.0.0.1:' +
+      IntToStr(Int64(LPort)) + '/prime');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'priming response status 200');
+    CheckEqual('ok', ReadBodyStr(LResp), 'priming response body');
+
+    LResp := LClient.Get('http://127.0.0.1:' +
+      IntToStr(Int64(LPort)) + '/real');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'same-read poison tail follow-up response uses fresh connection');
+    CheckEqual('fresh-ok', ReadBodyStr(LResp),
+      'same-read poison tail follow-up body');
+    CheckEqual(Int64(2), Int64(GPoisonAcceptCount),
+      'same-read poison tail connection was discarded before reuse');
+
+    LClient := nil;
+  finally
+    if GPoisonAcceptCount < 2 then
+      WakeRetryAcceptThread(LPort);
+    GPoisonListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GPoisonListener := nil;
+  end;
+end;
+
 { Test 6: Client timeout on slow server }
 procedure TestClientTimeout;
 var
@@ -4461,6 +4551,8 @@ begin
     @TestClientDoesNotRetryAfterResponseBodyTimeout);
   T.Run('Client drops pooled connection with unread response tail',
     @TestClientDropsPooledConnectionWithUnreadResponseTail);
+  T.Run('Client drops pooled connection with same-read response tail',
+    @TestClientDropsPooledConnectionWithSameReadResponseTail);
   T.Run('Client timeout on slow server', @TestClientTimeout);
   T.Run('Client handles 404 response', @TestClientHandles404);
   T.Run('Client sets Host header automatically', @TestClientSetsHostHeader);
