@@ -83,6 +83,22 @@ require_repo_not_uses_unit() {
   fi
 }
 
+require_repo_uses_allowlist() {
+  local path="$1"
+  shift
+  local actual expected
+  actual="$(list_pascal_uses_units "$REPO_ROOT/$path" | tr '[:upper:]' '[:lower:]' | sort -u)"
+  expected="$(printf '%s\n' "$@" | tr '[:upper:]' '[:lower:]' | sort -u)"
+  if [[ "$actual" != "$expected" ]]; then
+    printf '[FAIL] %s uses dependency drifted\n' "$path" >&2
+    printf '%s\n' '--- expected' >&2
+    printf '%s\n' "$expected" >&2
+    printf '%s\n' '--- actual' >&2
+    printf '%s\n' "$actual" >&2
+    exit 1
+  fi
+}
+
 list_root_facade_surface() {
   awk '
     function trim(s) {
@@ -671,6 +687,11 @@ require_token "src/nextpas.core.system.sysutils.pas" "function Format"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv.Format"
 require_token "src/nextpas.core.system.sysutils.pas" "function SameText"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.compare.TextEqualI"
+require_repo_uses_allowlist \
+  "core/src/nextpas.core.system.sysutils.pas" \
+  "nextpas.core.exception" \
+  "nextpas.core.text.compare" \
+  "nextpas.core.text.conv"
 reject_token "src/nextpas.core.system.sysutils.pas" "FileExists"
 reject_token "src/nextpas.core.system.sysutils.pas" "DirectoryExists"
 reject_token "src/nextpas.core.system.sysutils.pas" "ForceDirectories"
