@@ -512,6 +512,226 @@ begin
 end;
 
 { ============================================================ }
+{ TEST 3B: MPSC Live Consumer Reclamation Stress               }
+{ 6 producers + 1 live consumer drains while producers run      }
+{ Verify: exact ownership plus per-producer monotonic tokens    }
+{ ============================================================ }
+
+const
+  MPSC_LIVE_RECLAIM_PRODUCERS = 6;
+  MPSC_LIVE_RECLAIM_PER_PRODUCER = 12000;
+  MPSC_LIVE_RECLAIM_TOTAL = MPSC_LIVE_RECLAIM_PRODUCERS * MPSC_LIVE_RECLAIM_PER_PRODUCER;
+
+var
+  GMpscLiveReclaimQ: TIntMpsc;
+  GMpscLiveReclaimStart: Int32;
+  GMpscLiveReclaimContinue: Int32;
+  GMpscLiveReclaimStarted: Int32;
+  GMpscLiveReclaimFinished: Int32;
+  GMpscLiveReclaimPublished: Int64;
+  GMpscLiveReclaimConsumed: Int64;
+  GMpscLiveReclaimOutOfRange: Int64;
+  GMpscLiveReclaimMonotonicBreaks: Int64;
+  GMpscLiveReclaimSeen: array[0..MPSC_LIVE_RECLAIM_TOTAL - 1] of Int32;
+  GMpscLiveReclaimLastSeq: array[0..MPSC_LIVE_RECLAIM_PRODUCERS - 1] of Int32;
+
+function MpscLiveReclaimToken(AProducer, ASeq: Integer): Integer; inline;
+begin
+  Result := AProducer * MPSC_LIVE_RECLAIM_PER_PRODUCER + ASeq;
+end;
+
+function MpscLiveReclaimTokenProducer(AValue: Integer): Integer; inline;
+begin
+  Result := AValue div MPSC_LIVE_RECLAIM_PER_PRODUCER;
+end;
+
+function MpscLiveReclaimTokenSeq(AValue: Integer): Integer; inline;
+begin
+  Result := AValue mod MPSC_LIVE_RECLAIM_PER_PRODUCER;
+end;
+
+procedure RecordMpscLiveReclaimValue(const AValue: Integer);
+var
+  LProducer: Integer;
+  LSeq: Integer;
+  LPrevSeq: Int32;
+begin
+  if (AValue < 0) or (AValue >= MPSC_LIVE_RECLAIM_TOTAL) then
+  begin
+    AtomicFetchAdd64(GMpscLiveReclaimOutOfRange, 1, moRelaxed);
+    Exit;
+  end;
+
+  LProducer := MpscLiveReclaimTokenProducer(AValue);
+  LSeq := MpscLiveReclaimTokenSeq(AValue);
+  if (LProducer < 0) or (LProducer >= MPSC_LIVE_RECLAIM_PRODUCERS) or
+     (LSeq < 0) or (LSeq >= MPSC_LIVE_RECLAIM_PER_PRODUCER) then
+  begin
+    AtomicFetchAdd64(GMpscLiveReclaimOutOfRange, 1, moRelaxed);
+    Exit;
+  end;
+
+  LPrevSeq := AtomicLoad32(GMpscLiveReclaimLastSeq[LProducer], moRelaxed);
+  if LSeq <= LPrevSeq then
+    AtomicFetchAdd64(GMpscLiveReclaimMonotonicBreaks, 1, moRelaxed);
+  AtomicStore32(GMpscLiveReclaimLastSeq[LProducer], LSeq, moRelaxed);
+  AtomicFetchAdd32(GMpscLiveReclaimSeen[AValue], 1, moRelaxed);
+  AtomicFetchAdd64(GMpscLiveReclaimConsumed, 1, moRelease);
+end;
+
+function MpscLiveReclaimProducer(AArg: Pointer): Pointer; cdecl;
+var
+  LProducer: Integer;
+  LSeq: Integer;
+begin
+  Result := nil;
+  LProducer := Integer(PtrUInt(AArg));
+  AtomicFetchAdd32(GMpscLiveReclaimStarted, 1, moAcqRel);
+  while AtomicLoad32(GMpscLiveReclaimStart, moAcquire) = 0 do
+    CpuPause;
+  if AtomicLoad32(GMpscLiveReclaimStart, moAcquire) <> 1 then
+  begin
+    AtomicFetchAdd32(GMpscLiveReclaimFinished, 1, moAcqRel);
+    Exit;
+  end;
+
+  for LSeq := 0 to MPSC_LIVE_RECLAIM_PER_PRODUCER - 1 do
+  begin
+    if AtomicLoad32(GMpscLiveReclaimStart, moAcquire) <> 1 then
+      Break;
+    GMpscLiveReclaimQ.Enqueue(MpscLiveReclaimToken(LProducer, LSeq));
+    AtomicFetchAdd64(GMpscLiveReclaimPublished, 1, moRelease);
+    if LSeq = 0 then
+      while (AtomicLoad32(GMpscLiveReclaimContinue, moAcquire) = 0) and
+            (AtomicLoad32(GMpscLiveReclaimStart, moAcquire) = 1) do
+        CpuPause;
+    if LSeq and $3F = 0 then
+      CpuPause;
+  end;
+  AtomicFetchAdd32(GMpscLiveReclaimFinished, 1, moAcqRel);
+end;
+
+function MpscLiveReclaimConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+begin
+  Result := nil;
+  while (AtomicLoad32(GMpscLiveReclaimFinished, moAcquire) < MPSC_LIVE_RECLAIM_PRODUCERS) or
+        (AtomicLoad64(GMpscLiveReclaimConsumed, moAcquire) <
+          AtomicLoad64(GMpscLiveReclaimPublished, moAcquire)) do
+  begin
+    if GMpscLiveReclaimQ.TryDequeue(LV) then
+      RecordMpscLiveReclaimValue(LV)
+    else
+      CpuPause;
+  end;
+
+  while GMpscLiveReclaimQ.TryDequeue(LV) do
+    RecordMpscLiveReclaimValue(LV);
+end;
+
+procedure TestMpscLiveConsumerReclamation;
+var
+  LProducers: array[0..MPSC_LIVE_RECLAIM_PRODUCERS - 1] of TPlatformThreadHandle;
+  LConsumer: TPlatformThreadHandle;
+  LConsumerStarted: Boolean;
+  LProducerCount: Integer;
+  LI: Integer;
+  LSeen: Int32;
+  LDuplicates: Int64;
+  LMissing: Int64;
+begin
+  GMpscLiveReclaimQ := TIntMpsc.Create;
+  LConsumerStarted := False;
+  LProducerCount := 0;
+  try
+    AtomicStore32(GMpscLiveReclaimStart, 0, moRelease);
+    AtomicStore32(GMpscLiveReclaimContinue, 0, moRelease);
+    AtomicStore32(GMpscLiveReclaimStarted, 0, moRelease);
+    AtomicStore32(GMpscLiveReclaimFinished, 0, moRelease);
+    AtomicStore64(GMpscLiveReclaimPublished, 0, moRelease);
+    AtomicStore64(GMpscLiveReclaimConsumed, 0, moRelease);
+    AtomicStore64(GMpscLiveReclaimOutOfRange, 0, moRelease);
+    AtomicStore64(GMpscLiveReclaimMonotonicBreaks, 0, moRelease);
+    for LI := 0 to MPSC_LIVE_RECLAIM_TOTAL - 1 do
+      AtomicStore32(GMpscLiveReclaimSeen[LI], 0, moRelaxed);
+    for LI := 0 to MPSC_LIVE_RECLAIM_PRODUCERS - 1 do
+      AtomicStore32(GMpscLiveReclaimLastSeq[LI], -1, moRelaxed);
+
+    StartThread(LConsumer, @MpscLiveReclaimConsumer, nil, 'MPSC live-reclaim consumer thread');
+    LConsumerStarted := True;
+    for LI := 0 to MPSC_LIVE_RECLAIM_PRODUCERS - 1 do
+    begin
+      StartThread(LProducers[LI], @MpscLiveReclaimProducer, Pointer(PtrInt(LI)),
+        'MPSC live-reclaim producer thread');
+      Inc(LProducerCount);
+    end;
+
+    for LI := 1 to 1000 do
+    begin
+      if AtomicLoad32(GMpscLiveReclaimStarted, moAcquire) = MPSC_LIVE_RECLAIM_PRODUCERS then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(MPSC_LIVE_RECLAIM_PRODUCERS),
+      Int64(AtomicLoad32(GMpscLiveReclaimStarted, moAcquire)),
+      'MPSC live consumer producers must all start before release');
+
+    AtomicStore32(GMpscLiveReclaimStart, 1, moRelease);
+    for LI := 1 to 1000 do
+    begin
+      if AtomicLoad64(GMpscLiveReclaimConsumed, moAcquire) > 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    if AtomicLoad64(GMpscLiveReclaimConsumed, moAcquire) = 0 then
+    begin
+      AtomicStore32(GMpscLiveReclaimStart, 2, moRelease);
+      AtomicStore32(GMpscLiveReclaimContinue, 1, moRelease);
+    end;
+    Check(AtomicLoad64(GMpscLiveReclaimConsumed, moAcquire) > 0,
+      'MPSC live consumer must dequeue before producers finish');
+    Check(AtomicLoad32(GMpscLiveReclaimFinished, moAcquire) < MPSC_LIVE_RECLAIM_PRODUCERS,
+      'MPSC live consumer must run while producers are active');
+    AtomicStore32(GMpscLiveReclaimContinue, 1, moRelease);
+
+    JoinStartedThreads(LProducers, LProducerCount, 'MPSC live-reclaim producer thread');
+    GMpscLiveReclaimQ.Close;
+    JoinStartedThread(LConsumer, LConsumerStarted, 'MPSC live-reclaim consumer thread');
+
+    LDuplicates := 0;
+    LMissing := 0;
+    for LI := 0 to MPSC_LIVE_RECLAIM_TOTAL - 1 do
+    begin
+      LSeen := AtomicLoad32(GMpscLiveReclaimSeen[LI], moRelaxed);
+      if LSeen = 0 then
+        Inc(LMissing)
+      else if LSeen > 1 then
+        Inc(LDuplicates);
+    end;
+
+    CheckEqual(Int64(MPSC_LIVE_RECLAIM_TOTAL), GMpscLiveReclaimPublished,
+      'MPSC live consumer published all tokens');
+    CheckEqual(GMpscLiveReclaimPublished, GMpscLiveReclaimConsumed,
+      'MPSC live consumer consumed all published tokens');
+    CheckEqual(Int64(0), GMpscLiveReclaimOutOfRange,
+      'MPSC live consumer no out-of-range tokens');
+    CheckEqual(Int64(0), GMpscLiveReclaimMonotonicBreaks,
+      'MPSC live consumer preserves per-producer monotonic order');
+    CheckEqual(Int64(0), LMissing, 'MPSC live consumer no missing tokens');
+    CheckEqual(Int64(0), LDuplicates, 'MPSC live consumer no duplicate tokens');
+    Check(GMpscLiveReclaimQ.IsEmpty, 'MPSC live consumer queue empty after drain');
+  finally
+    AtomicStore32(GMpscLiveReclaimStart, 2, moRelease);
+    AtomicStore32(GMpscLiveReclaimContinue, 1, moRelease);
+    GMpscLiveReclaimQ.Close;
+    JoinStartedThreads(LProducers, LProducerCount, 'MPSC live-reclaim producer thread');
+    JoinStartedThread(LConsumer, LConsumerStarted, 'MPSC live-reclaim consumer thread');
+    GMpscLiveReclaimQ.Free;
+  end;
+end;
+
+{ ============================================================ }
 { TEST 4: Chase-Lev Extreme Steal Contention                   }
 { 1 owner pushes 200K items, 7 thieves steal concurrently      }
 { Verify: all values consumed exactly once                     }
@@ -1223,6 +1443,7 @@ begin
   T.Run('MPMC single-slot 2P+2C exactly-once', @TestMpmcSingleSlotContention);
   T.Run('Stack ABA stress (4T, cap=4, 100K cycles)', @TestStackABA);
   T.Run('MPSC close race (4P + random close)', @TestMpscCloseRace);
+  T.Run('MPSC live consumer reclamation stress', @TestMpscLiveConsumerReclamation);
   T.Run('Deque extreme steal (1 owner + 7 thieves, 200K)', @TestDequeExtremeSteal);
   T.Run('SPSC full + close race', @TestSpscFullClose);
   T.Run('MPMC rapid create/close cycles (50 rounds)', @TestMpmcRapidCycles);
