@@ -54,6 +54,37 @@ PUBLIC_DOC_PATHS = (
     "docs/math/README.md",
     "docs/math/API.md",
 )
+CONTROL_DOC_LINE_LIMITS = {
+    "docs/math/README.md": 180,
+    "docs/math/GOAL_TREE.md": 220,
+    "docs/math/FINAL_API_MIGRATION_DESIGN.md": 220,
+}
+REQUIRED_CONTROL_DOC_MARKERS = (
+    (
+        "docs/math/README.md",
+        "Detailed behavior contracts live in `API.md`; this README stays compact.",
+    ),
+    (
+        "docs/math/README.md",
+        "M8 remains partial until host trig link evidence and SIMD cutover decisions are resolved.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "Current roadmap position: M8 partial, M7 partial, M9 not started.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "M8 cannot be marked complete without source-contract, focused runtime, heaptrc, and CI matrix evidence.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "Detailed behavior contracts live in `API.md`; this design record stays compact.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "The final API rejects a long-term `Vectors` compatibility bridge.",
+    ),
+)
 REQUIRED_CORE_TARGET_DOC_PATHS = (
     "docs/math/README.md",
     "docs/math/API.md",
@@ -4485,6 +4516,46 @@ def run_required_doc_truth_self_tests() -> None:
             )
 
 
+def run_control_doc_compaction_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        for rel, marker in REQUIRED_CONTROL_DOC_MARKERS:
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            existing = path.read_text(encoding="utf-8") if path.exists() else ""
+            path.write_text(existing + marker + "\n", encoding="utf-8")
+        for rel in CONTROL_DOC_LINE_LIMITS:
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if not path.exists():
+                path.write_text("compact\n", encoding="utf-8")
+
+        oversized = root / "docs/math/README.md"
+        marker_text = oversized.read_text(encoding="utf-8")
+        oversized.write_text(
+            marker_text
+            + "\n".join("line" for _ in range(CONTROL_DOC_LINE_LIMITS["docs/math/README.md"] + 1))
+            + "\n",
+            encoding="utf-8",
+        )
+        findings = scan_control_doc_compaction(root)
+        if not any(
+            finding.rule == "control-doc-too-large:docs/math/README.md"
+            for finding in findings
+        ):
+            raise AssertionError(
+                "control-doc-compaction self-test expected README size finding"
+            )
+
+        oversized.write_text(marker_text, encoding="utf-8")
+        findings = scan_control_doc_compaction(root)
+        if findings:
+            raise AssertionError(
+                "control-doc-compaction self-test expected no findings, got "
+                + ", ".join(sorted(finding.rule for finding in findings))
+            )
+
+
 def root_facade_public_names(text: str) -> list[str]:
     code = interface_text(text)
     names: set[str] = set()
@@ -4840,22 +4911,21 @@ def scan_required_core_make_targets(root: Path) -> list[Finding]:
 
 def scan_required_core_make_target_doc_coverage(root: Path) -> list[Finding]:
     findings: list[Finding] = []
-    for rel in REQUIRED_CORE_TARGET_DOC_PATHS:
-        path = root / rel
-        if not path.is_file():
+    path = root / API_DOC_PATH
+    if not path.is_file():
+        return findings
+    text = path.read_text(encoding="utf-8", errors="replace")
+    for required_target in REQUIRED_CORE_MAKE_TARGETS:
+        if required_target.command in text:
             continue
-        text = path.read_text(encoding="utf-8", errors="replace")
-        for required_target in REQUIRED_CORE_MAKE_TARGETS:
-            if required_target.command in text:
-                continue
-            add_finding(
-                findings,
-                "missing-required-core-doc-command:" + required_target.target,
-                root,
-                path,
-                1,
-                "missing documented command " + required_target.command,
-            )
+        add_finding(
+            findings,
+            "missing-required-core-doc-command:" + required_target.target,
+            root,
+            path,
+            1,
+            "missing documented command " + required_target.command,
+        )
     return findings
 
 
@@ -5669,10 +5739,56 @@ def scan_required_doc_truth(
     return findings
 
 
+def api_doc_truth(requirements: tuple[tuple[str, str], ...]) -> tuple[tuple[str, str], ...]:
+    api_requirements = tuple(
+        (rel, snippet) for rel, snippet in requirements if rel == API_DOC_PATH
+    )
+    if not api_requirements:
+        raise AssertionError("doc truth requirement group must include " + API_DOC_PATH)
+    return api_requirements
+
+
+def scan_control_doc_compaction(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    for rel, limit in CONTROL_DOC_LINE_LIMITS.items():
+        path = root / rel
+        if not path.is_file():
+            add_finding(
+                findings,
+                "missing-required-control-doc",
+                root,
+                path,
+                1,
+                rel,
+            )
+            continue
+        line_count = len(path.read_text(encoding="utf-8", errors="replace").splitlines())
+        if line_count <= limit:
+            continue
+        add_finding(
+            findings,
+            "control-doc-too-large:" + rel,
+            root,
+            path,
+            limit + 1,
+            f"{line_count} lines exceeds {limit}",
+        )
+
+    findings.extend(
+        scan_required_doc_truth(
+            root,
+            REQUIRED_CONTROL_DOC_MARKERS,
+            "missing-required-control-doc-marker",
+            normalize_whitespace=True,
+        )
+    )
+    return findings
+
+
 def scan_required_host_gate_residual_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_HOST_GATE_RESIDUAL_TRUTH,
+        api_doc_truth(REQUIRED_HOST_GATE_RESIDUAL_TRUTH),
         "missing-required-host-gate-truth",
     )
 
@@ -5680,7 +5796,7 @@ def scan_required_host_gate_residual_truth(root: Path) -> list[Finding]:
 def scan_required_m8_residual_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_M8_RESIDUAL_TRUTH,
+        api_doc_truth(REQUIRED_M8_RESIDUAL_TRUTH),
         "missing-required-m8-truth",
     )
 
@@ -5688,7 +5804,7 @@ def scan_required_m8_residual_truth(root: Path) -> list[Finding]:
 def scan_required_simd_seam_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_SIMD_SEAM_DOC_TRUTH,
+        api_doc_truth(REQUIRED_SIMD_SEAM_DOC_TRUTH),
         "missing-required-simd-seam-doc-truth",
         normalize_whitespace=True,
     )
@@ -5697,7 +5813,7 @@ def scan_required_simd_seam_doc_truth(root: Path) -> list[Finding]:
 def scan_required_transform_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_TRANSFORM_DOC_TRUTH,
+        api_doc_truth(REQUIRED_TRANSFORM_DOC_TRUTH),
         "missing-required-transform-doc-truth",
         normalize_whitespace=True,
     )
@@ -5706,7 +5822,7 @@ def scan_required_transform_doc_truth(root: Path) -> list[Finding]:
 def scan_required_mat_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_MAT_DOC_TRUTH,
+        api_doc_truth(REQUIRED_MAT_DOC_TRUTH),
         "missing-required-mat-doc-truth",
         normalize_whitespace=True,
     )
@@ -5715,7 +5831,7 @@ def scan_required_mat_doc_truth(root: Path) -> list[Finding]:
 def scan_required_quat_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_QUAT_DOC_TRUTH,
+        api_doc_truth(REQUIRED_QUAT_DOC_TRUTH),
         "missing-required-quat-doc-truth",
         normalize_whitespace=True,
     )
@@ -5724,7 +5840,7 @@ def scan_required_quat_doc_truth(root: Path) -> list[Finding]:
 def scan_required_vec_quat_stable_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_VEC_QUAT_STABLE_DOC_TRUTH,
+        api_doc_truth(REQUIRED_VEC_QUAT_STABLE_DOC_TRUTH),
         "missing-required-vec-quat-stable-doc-truth",
         normalize_whitespace=True,
     )
@@ -5733,7 +5849,7 @@ def scan_required_vec_quat_stable_doc_truth(root: Path) -> list[Finding]:
 def scan_required_random_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_RANDOM_DOC_TRUTH,
+        api_doc_truth(REQUIRED_RANDOM_DOC_TRUTH),
         "missing-required-random-doc-truth",
         normalize_whitespace=True,
     )
@@ -5742,7 +5858,7 @@ def scan_required_random_doc_truth(root: Path) -> list[Finding]:
 def scan_required_easing_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_EASING_DOC_TRUTH,
+        api_doc_truth(REQUIRED_EASING_DOC_TRUTH),
         "missing-required-easing-doc-truth",
         normalize_whitespace=True,
     )
@@ -5751,7 +5867,7 @@ def scan_required_easing_doc_truth(root: Path) -> list[Finding]:
 def scan_required_noise_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_NOISE_DOC_TRUTH,
+        api_doc_truth(REQUIRED_NOISE_DOC_TRUTH),
         "missing-required-noise-doc-truth",
         normalize_whitespace=True,
     )
@@ -5760,7 +5876,7 @@ def scan_required_noise_doc_truth(root: Path) -> list[Finding]:
 def scan_required_scalar_clamp_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_SCALAR_CLAMP_DOC_TRUTH,
+        api_doc_truth(REQUIRED_SCALAR_CLAMP_DOC_TRUTH),
         "missing-required-scalar-clamp-doc-truth",
         normalize_whitespace=True,
     )
@@ -5769,7 +5885,7 @@ def scan_required_scalar_clamp_doc_truth(root: Path) -> list[Finding]:
 def scan_required_scalar_wrap_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_SCALAR_WRAP_DOC_TRUTH,
+        api_doc_truth(REQUIRED_SCALAR_WRAP_DOC_TRUTH),
         "missing-required-scalar-wrap-doc-truth",
         normalize_whitespace=True,
     )
@@ -5778,7 +5894,7 @@ def scan_required_scalar_wrap_doc_truth(root: Path) -> list[Finding]:
 def scan_required_scalar_ieee_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_SCALAR_IEEE_DOC_TRUTH,
+        api_doc_truth(REQUIRED_SCALAR_IEEE_DOC_TRUTH),
         "missing-required-scalar-ieee-doc-truth",
         normalize_whitespace=True,
     )
@@ -5787,7 +5903,7 @@ def scan_required_scalar_ieee_doc_truth(root: Path) -> list[Finding]:
 def scan_required_scalar_sign_angle_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_SCALAR_SIGN_ANGLE_DOC_TRUTH,
+        api_doc_truth(REQUIRED_SCALAR_SIGN_ANGLE_DOC_TRUTH),
         "missing-required-scalar-sign-angle-doc-truth",
         normalize_whitespace=True,
     )
@@ -5796,7 +5912,7 @@ def scan_required_scalar_sign_angle_doc_truth(root: Path) -> list[Finding]:
 def scan_required_scalar_integer_conversion_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_SCALAR_INTEGER_CONVERSION_DOC_TRUTH,
+        api_doc_truth(REQUIRED_SCALAR_INTEGER_CONVERSION_DOC_TRUTH),
         "missing-required-scalar-integer-conversion-doc-truth",
         normalize_whitespace=True,
     )
@@ -5805,7 +5921,7 @@ def scan_required_scalar_integer_conversion_doc_truth(root: Path) -> list[Findin
 def scan_required_scalar_range_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_SCALAR_RANGE_DOC_TRUTH,
+        api_doc_truth(REQUIRED_SCALAR_RANGE_DOC_TRUTH),
         "missing-required-scalar-range-doc-truth",
         normalize_whitespace=True,
     )
@@ -5814,7 +5930,7 @@ def scan_required_scalar_range_doc_truth(root: Path) -> list[Finding]:
 def scan_required_scalar_min_max_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_SCALAR_MIN_MAX_DOC_TRUTH,
+        api_doc_truth(REQUIRED_SCALAR_MIN_MAX_DOC_TRUTH),
         "missing-required-scalar-min-max-doc-truth",
         normalize_whitespace=True,
     )
@@ -5823,7 +5939,7 @@ def scan_required_scalar_min_max_doc_truth(root: Path) -> list[Finding]:
 def scan_required_scalar_float_compare_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_SCALAR_FLOAT_COMPARE_DOC_TRUTH,
+        api_doc_truth(REQUIRED_SCALAR_FLOAT_COMPARE_DOC_TRUTH),
         "missing-required-scalar-float-compare-doc-truth",
         normalize_whitespace=True,
     )
@@ -5832,7 +5948,7 @@ def scan_required_scalar_float_compare_doc_truth(root: Path) -> list[Finding]:
 def scan_required_trig_power_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_TRIG_POWER_DOC_TRUTH,
+        api_doc_truth(REQUIRED_TRIG_POWER_DOC_TRUTH),
         "missing-required-trig-power-doc-truth",
         normalize_whitespace=True,
     )
@@ -5841,7 +5957,7 @@ def scan_required_trig_power_doc_truth(root: Path) -> list[Finding]:
 def scan_required_trig_circular_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_TRIG_CIRCULAR_DOC_TRUTH,
+        api_doc_truth(REQUIRED_TRIG_CIRCULAR_DOC_TRUTH),
         "missing-required-trig-circular-doc-truth",
         normalize_whitespace=True,
     )
@@ -5850,7 +5966,7 @@ def scan_required_trig_circular_doc_truth(root: Path) -> list[Finding]:
 def scan_required_impl_simd_win64_compile_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
-        REQUIRED_IMPL_SIMD_WIN64_COMPILE_DOC_TRUTH,
+        api_doc_truth(REQUIRED_IMPL_SIMD_WIN64_COMPILE_DOC_TRUTH),
         "missing-required-impl-simd-win64-compile-doc-truth",
         normalize_whitespace=True,
     )
@@ -5873,6 +5989,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_trig_host_compile_gate(root))
     findings.extend(scan_required_impl_simd_win64_compile_gate(root))
     findings.extend(scan_math_impl_simd_facade_only_uses(root))
+    findings.extend(scan_control_doc_compaction(root))
     findings.extend(scan_required_host_gate_residual_truth(root))
     findings.extend(scan_required_m8_residual_truth(root))
     findings.extend(scan_required_simd_seam_doc_truth(root))
@@ -6020,6 +6137,7 @@ def main() -> int:
         run_matrix_public_record_contract_self_tests()
         run_quaternion_public_record_contract_self_tests()
         run_required_doc_truth_self_tests()
+        run_control_doc_compaction_self_tests()
         run_root_facade_contract_self_tests()
         run_root_facade_reexport_parity_self_tests()
         run_compile_only_gate_aggregate_exclusion_self_tests()
