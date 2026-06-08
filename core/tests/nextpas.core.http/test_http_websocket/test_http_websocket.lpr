@@ -445,6 +445,56 @@ begin
   end;
 end;
 
+{ Test 3b: Handshake fails when Sec-WebSocket-Key is malformed }
+procedure TestHandshakeInvalidKeyRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+
+  procedure AssertRejected(const ACaseName, AKey: string);
+  begin
+    LResp := SendRawAndRead(LPort,
+      'GET /ws HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Upgrade: websocket'#13#10 +
+      'Connection: Upgrade'#13#10 +
+      'Sec-WebSocket-Key: ' + AKey + #13#10 +
+      'Sec-WebSocket-Version: 13'#13#10 +
+      #13#10, 256);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      ACaseName + ': should get 400 for invalid Key');
+    Check(Pos('HTTP/1.1 101', LResp) = 0,
+      ACaseName + ': should not upgrade invalid Key');
+  end;
+
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LWs: IWebSocket;
+  begin
+    try
+      LWs := UpgradeWebSocket(AReq, AW);
+      LWs.Close(1000, 'invalid key accepted');
+    except
+      on E: EHttpError do
+      begin
+        AW.GetHeaders.SetHeader('content-length', '0');
+        AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
+      end;
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    AssertRejected('invalid-base64', 'not-base64');
+    AssertRejected('short-decoded-nonce', 'aGk=');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 4: Text frame echo }
 procedure TestTextFrameEcho;
 var
@@ -2622,6 +2672,7 @@ begin
   T.Run('HandshakeSuccess', @TestHandshakeSuccess);
   T.Run('HandshakeNoUpgrade', @TestHandshakeNoUpgrade);
   T.Run('HandshakeNoKey', @TestHandshakeNoKey);
+  T.Run('HandshakeInvalidKeyRejected', @TestHandshakeInvalidKeyRejected);
   T.Run('TextFrameEcho', @TestTextFrameEcho);
   T.Run('TextFrameEchoCoalescedFirstFrame', @TestTextFrameEchoWithCoalescedFirstFrame);
   T.Run('UpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket',

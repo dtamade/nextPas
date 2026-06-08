@@ -64,6 +64,7 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.hash,
   nextpas.core.hash.base,
   nextpas.core.encoding,
@@ -132,6 +133,21 @@ begin
   SetLength(LBytes, SHA1_DIGEST_SIZE);
   Move(LDigest[0], LBytes[0], SHA1_DIGEST_SIZE);
   Result := Base64Encode(LBytes);
+end;
+
+procedure ValidateHandshakeKey(const AKey: string);
+var
+  LDecoded: TBytes;
+begin
+  try
+    LDecoded := Base64Decode(AKey);
+  except
+    on E: EConvertError do
+      raise EHttpError.Create('Invalid Sec-WebSocket-Key header');
+  end;
+
+  if Length(LDecoded) <> 16 then
+    raise EHttpError.Create('Invalid Sec-WebSocket-Key header');
 end;
 
 function IsValidOpcode(const AOpcode: Byte): Boolean;
@@ -231,6 +247,7 @@ begin
     raise EHttpError.Create('Missing or invalid Connection header');
   if LKey = '' then
     raise EHttpError.Create('Missing Sec-WebSocket-Key header');
+  ValidateHandshakeKey(LKey);
   if LVersion <> '13' then
     raise EHttpError.Create('Unsupported Sec-WebSocket-Version');
 
