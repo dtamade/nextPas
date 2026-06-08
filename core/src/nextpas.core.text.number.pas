@@ -321,7 +321,7 @@ var
   LExpNeg: Boolean;
   LExpVal: Int32;
   LHasExpDigit: Boolean;
-  LHasDot: Boolean;
+  LHasFracDigit: Boolean;
   LFracDigits: Int32;
 begin
   AValue := 0.0;
@@ -359,7 +359,7 @@ begin
   end;
 
   LMant := 0;
-  LHasDot := False;
+  LHasFracDigit := False;
   LFracDigits := 0;
 
   if not IsDigit(Byte(AData[LPos])) then
@@ -376,10 +376,10 @@ begin
 
   if (LPos < ALen) and (AData[LPos] = '.') then
   begin
-    LHasDot := True;
     Inc(LPos);
     while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
     begin
+      LHasFracDigit := True;
       if LMant < UInt64(1844674407370955161) then
       begin
         LMant := LMant * 10 + UInt64(Byte(AData[LPos]) - Ord('0'));
@@ -387,6 +387,8 @@ begin
       end;
       Inc(LPos);
     end;
+    if not LHasFracDigit then
+      Exit(False);
   end;
 
   LExpVal := 0;

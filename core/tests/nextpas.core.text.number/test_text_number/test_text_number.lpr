@@ -212,6 +212,14 @@ begin
   Check(not ParseDouble(PAnsiChar('Infinityx'), 9, V), 'Infinity trailing input');
 end;
 
+procedure TestParseDoubleRejectsFractionWithoutDigits;
+var
+  V: Double;
+begin
+  Check(not ParseDouble(PAnsiChar('1.'), 2, V), 'fraction requires digit after dot');
+  Check(not ParseDouble(PAnsiChar('1.e2'), 4, V), 'exponent after dot still requires fraction digit');
+end;
+
 procedure TestFloatRoundTrip;
 var
   Buf: array[0..31] of AnsiChar;
@@ -284,6 +292,7 @@ begin
   T.Run('FloatToBuffer', @TestFloatToBuffer);
   T.Run('FloatToJsonBuffer', @TestFloatToJsonBuffer);
   T.Run('ParseDouble', @TestParseDouble);
+  T.Run('ParseDouble rejects empty fraction', @TestParseDoubleRejectsFractionWithoutDigits);
   T.Run('ViewToDouble', @TestViewToDouble);
   T.Run('float round-trip', @TestFloatRoundTrip);
   T.Summary;
