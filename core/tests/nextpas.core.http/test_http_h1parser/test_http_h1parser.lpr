@@ -2153,6 +2153,75 @@ begin
   Check(LP.ErrorMessage <> '', 'request-line splitting has error message');
 end;
 
+procedure TestRequestLineLfOnlyRejected;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET / HTTP/1.1'#10 +
+          'Host: localhost'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+
+  Check(LP.HasError, 'request-line LF-only terminator reports parser error');
+  Check(not LP.IsComplete, 'request-line LF-only terminator is not complete');
+  Check(not LP.HeadersComplete,
+    'request-line LF-only terminator does not complete headers');
+  CheckEqual(Int64(0), Int64(LP.GetHeaders.Count),
+    'request-line LF-only terminator publishes no headers');
+  CheckEqual('', LP.GetBody,
+    'request-line LF-only terminator publishes no body');
+end;
+
+procedure TestHeaderLineLfOnlyRejected;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET / HTTP/1.1'#13#10 +
+          'Host: localhost'#10 +
+          'X-After: hidden'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+
+  Check(LP.HasError, 'header line LF-only terminator reports parser error');
+  Check(not LP.IsComplete, 'header line LF-only terminator is not complete');
+  Check(not LP.HeadersComplete,
+    'header line LF-only terminator does not complete headers');
+  CheckEqual(Int64(0), Int64(LP.GetHeaders.Count),
+    'header line LF-only terminator publishes no headers');
+  CheckEqual('', LP.GetBody,
+    'header line LF-only terminator publishes no body');
+end;
+
+procedure TestObsFoldHeaderRejected;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET / HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'X-Folded: first'#13#10 +
+          ' second'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+
+  Check(LP.HasError, 'obs-fold header continuation reports parser error');
+  Check(not LP.IsComplete, 'obs-fold header continuation is not complete');
+  Check(not LP.HeadersComplete,
+    'obs-fold header continuation does not complete headers');
+  CheckEqual(Int64(0), Int64(LP.GetHeaders.Count),
+    'obs-fold header continuation publishes no headers');
+  CheckEqual('', LP.GetBody,
+    'obs-fold header continuation publishes no body');
+end;
+
 procedure TestNegativeContentLengthRejected;
 var
   LP: IH1Parser;
@@ -3208,6 +3277,9 @@ begin
     @TestInvalidHostHeaderDoesNotPublishMetadata);
   T.Run('HTTP/0.9 request rejected', @TestHttp09RequestRejected);
   T.Run('Request-line splitting rejected', @TestRequestLineSplittingRejected);
+  T.Run('Request-line LF-only rejected', @TestRequestLineLfOnlyRejected);
+  T.Run('Header line LF-only rejected', @TestHeaderLineLfOnlyRejected);
+  T.Run('Obs-fold header rejected', @TestObsFoldHeaderRejected);
   T.Run('Negative Content-Length rejected', @TestNegativeContentLengthRejected);
   T.Run('Very long method rejected', @TestVeryLongMethodRejected);
   T.Run('Recognized unsupported method rejected',

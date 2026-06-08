@@ -137,6 +137,7 @@ type
     procedure MaterializeCurrentHeaderSpans;
     procedure ClearCurrentHeaderSpans;
     procedure ClearRequestMetadataCache;
+    procedure ClearUncommittedMessageState;
   public
     constructor Create(const AType: TH1ParserType;
       const ASkipBody: Boolean = False);
@@ -899,6 +900,8 @@ begin
   begin
     FError := True;
     FComplete := False;
+    if not FHeadersComplete then
+      ClearUncommittedMessageState;
     if FErrorKind = pekNone then
       FErrorKind := pekMalformed;
     if FErrorMsg = '' then
@@ -1337,6 +1340,14 @@ begin
   FContentLengthHeaderSeen := False;
   FContentLengthHeaderValue := '';
   FRequestTransferEncoding := '';
+end;
+
+procedure TH1Parser.ClearUncommittedMessageState;
+begin
+  FHeaderStore.Clear;
+  FBodySize := 0;
+  ClearRequestMetadataCache;
+  ClearCurrentHeaderSpans;
 end;
 
 function TH1Parser.HasError: Boolean;
