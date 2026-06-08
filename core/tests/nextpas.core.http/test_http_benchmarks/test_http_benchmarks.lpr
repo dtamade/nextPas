@@ -1557,6 +1557,8 @@ begin
 
   CheckContains(LSource, 'GDirectHandlerHits: Int64;',
     'bench_fullchain should track observed direct-handler hits');
+  CheckContains(LSource, 'DIRECT_1K_HOST = ''direct-1k'';',
+    'bench_fullchain should define explicit direct 1k host');
   CheckContains(LSource, 'GRouterHandlerHits: Int64;',
     'bench_fullchain should track observed router-handler hits');
   CheckContains(LSource, 'Inc(GDirectHandlerHits);',
@@ -1580,21 +1582,25 @@ begin
   CheckNotContains(LDispatchBody, 'AWorkload = ''plaintext''',
     'bench_fullchain plaintext should not map to direct_handler');
 
+  CheckNotContains(LDirectHostBranch, 'AReq.Path',
+    'bench_fullchain direct root branch should not project request path');
   CheckContains(LDirectHostBranch, 'WritePlaintextResponse(AW);' + LineEnding +
     '        Exit;',
     'bench_fullchain direct root should exit before router dispatch');
-  CheckContains(LDirectHostBranch, 'WriteBody1KResponse(AW, LBody1K);' +
-    LineEnding + '          Exit;',
-    'bench_fullchain direct 1k should exit before router dispatch');
   CheckNotContains(LDirectHostBranch, 'LRouterHandler.ServeHTTP',
     'bench_fullchain direct host branch should not call router');
+  CheckContains(LSource, 'if AReq.Headers.Get(''host'') = DIRECT_1K_HOST then',
+    'bench_fullchain direct 1k should have an explicit host branch');
+  CheckContains(LSource, 'WriteBody1KResponse(AW, LBody1K);' + LineEnding +
+    '        Exit;',
+    'bench_fullchain direct 1k should exit before router dispatch');
 
   CheckContains(LScenarioBlock, 'Host: '' + DIRECT_HOST',
     'bench_fullchain direct scenarios should use direct host');
+  CheckContains(LScenarioBlock, 'Host: '' + DIRECT_1K_HOST',
+    'bench_fullchain direct 1k scenario should use direct 1k host');
   CheckContains(LScenarioBlock, '''GET / HTTP/1.1''',
     'bench_fullchain direct_root should use root request');
-  CheckContains(LScenarioBlock, '''GET /1k HTTP/1.1''',
-    'bench_fullchain direct_1k should use 1k request');
   CheckNotContains(LScenarioBlock, 'Host: '' + ROUTER_HOST',
     'bench_fullchain direct scenarios should not use router host');
 end;

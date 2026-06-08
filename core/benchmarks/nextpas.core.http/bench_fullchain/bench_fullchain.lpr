@@ -35,6 +35,7 @@ const
   BENCH_SERVER_READY_TIMEOUT_MS = 5000;
   ROUTER_HOST = 'router';
   DIRECT_HOST = 'direct';
+  DIRECT_1K_HOST = 'direct-1k';
 
 type
   TScenarioResult = record
@@ -279,12 +280,13 @@ begin
       if AReq.Headers.Get('host') = DIRECT_HOST then
       begin
         Inc(GDirectHandlerHits);
-        if AReq.Path = '/1k' then
-        begin
-          WriteBody1KResponse(AW, LBody1K);
-          Exit;
-        end;
         WritePlaintextResponse(AW);
+        Exit;
+      end;
+      if AReq.Headers.Get('host') = DIRECT_1K_HOST then
+      begin
+        Inc(GDirectHandlerHits);
+        WriteBody1KResponse(AW, LBody1K);
         Exit;
       end;
       Inc(GRouterHandlerHits);
@@ -546,9 +548,9 @@ begin
 
     { Scenario 1b: 1 KiB fixed response without router dispatch }
     LDirect1KReq :=
-      'GET /1k HTTP/1.1'#13#10'Host: ' + DIRECT_HOST + #13#10'Content-Length: 0'#13#10#13#10;
+      'GET / HTTP/1.1'#13#10'Host: ' + DIRECT_1K_HOST + #13#10'Content-Length: 0'#13#10#13#10;
     LResult := RunScenario('direct_1k',
-      'Direct 1KB (GET /1k, no router)', LDirect1KReq, 0, 1024);
+      'Direct 1KB (GET /, no router)', LDirect1KReq, 0, 1024);
     if LResult.ElapsedNs > 0 then
       Inc(LScenariosRun);
 

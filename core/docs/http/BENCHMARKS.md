@@ -744,9 +744,10 @@ from the rest of the keep-alive server path:
 
 - `direct_root` keeps the same `GET /` fixed-response shape but intercepts it
   in an outer handler before router dispatch.
-- `direct_1k` keeps the same direct outer-handler path but switches to
-  `GET /1k` and a fixed 1 KiB body, so it can isolate large-response
-  runtime/socket cost without reintroducing router dispatch.
+- `direct_1k` keeps the same direct outer-handler path and `GET /` request
+  target, but uses a separate direct-only host marker and a fixed 1 KiB body.
+  This isolates large-response runtime/socket cost without reintroducing router
+  dispatch or request-path projection into the `direct_root` baseline.
 - `plaintext` still sends `GET /` through the router path.
 
 Each full-chain row now also reports `response_body_bytes=...`, so saved
