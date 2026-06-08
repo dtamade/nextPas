@@ -3211,7 +3211,7 @@ const
     'Host: localhost'#13#10#13#10 +
     'POST /bad HTTP/1.1'#13#10 +
     'Host: localhost'#13#10 +
-    'Content-Length: 1'#13#10 +
+    'Content-Length: 01'#13#10 +
     'Content-Length: 1'#13#10 +
     'Connection: close'#13#10#13#10;
 begin
@@ -4653,7 +4653,7 @@ const
     'Host: localhost'#13#10#13#10 +
     'POST /bad HTTP/1.1'#13#10 +
     'Host: localhost'#13#10 +
-    'Content-Length: 1'#13#10 +
+    'Content-Length: 01'#13#10 +
     'Content-Length: 1'#13#10 +
     'Connection: close'#13#10#13#10;
 begin

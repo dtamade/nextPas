@@ -468,12 +468,70 @@ begin
     'response conflicting duplicate content-length is not complete');
   Check(not LP.ShouldKeepAlive,
     'response conflicting duplicate content-length must not be reusable');
-  Check(Pos('Content-Length', LP.ErrorMessage) > 0,
-    'response conflicting duplicate content-length names content-length');
+  CheckEqual('Duplicate `Content-Length` header value', LP.ErrorMessage,
+    'response conflicting duplicate content-length uses canonical error message');
   CheckEqual(SizeUInt(Pos(#13#10#13#10, LResp) + 3), LConsumed,
     'response conflicting duplicate content-length consumes only through headers');
   CheckEqual('', LP.GetBody,
     'response conflicting duplicate content-length does not consume body bytes');
+end;
+
+procedure TestResponseDuplicateEqualContentLengthAccepted;
+var
+  LP: IH1Parser;
+  LResp1: string;
+  LResp2: string;
+  LResp: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1ResponseParser;
+  LResp1 := 'HTTP/1.1 200 OK'#13#10 +
+            'Content-Length: 2'#13#10 +
+            'Content-Length: 2'#13#10#13#10 +
+            'ok';
+  LResp2 := 'HTTP/1.1 204 No Content'#13#10#13#10;
+  LResp := LResp1 + LResp2;
+
+  LConsumed := LP.Execute(PAnsiChar(LResp), Length(LResp));
+
+  Check(not LP.HasError,
+    'response same-valued duplicate content-length has no parser error');
+  Check(LP.IsComplete,
+    'response same-valued duplicate content-length completes');
+  Check(LP.ShouldKeepAlive,
+    'response same-valued duplicate content-length remains reusable');
+  CheckEqual(SizeUInt(Length(LResp1)), LConsumed,
+    'response same-valued duplicate content-length consumes only first response');
+  CheckEqual(Int64(2), LP.GetBodySize,
+    'response same-valued duplicate content-length publishes body size');
+  CheckEqual('ok', LP.GetBody,
+    'response same-valued duplicate content-length publishes body');
+end;
+
+procedure TestResponseDuplicateContentLengthDifferentLexicalFormRejected;
+var
+  LP: IH1Parser;
+  LResp: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+           'Content-Length: 02'#13#10 +
+           'Content-Length: 2'#13#10#13#10 +
+           'ok';
+
+  LConsumed := LP.Execute(PAnsiChar(LResp), Length(LResp));
+
+  Check(LP.HasError,
+    'response lexically different duplicate content-length reports parser error');
+  Check(not LP.IsComplete,
+    'response lexically different duplicate content-length is not complete');
+  Check(Pos('Content-Length', LP.ErrorMessage) > 0,
+    'response lexically different duplicate content-length names content-length');
+  CheckEqual(SizeUInt(Pos(#13#10#13#10, LResp) + 3), LConsumed,
+    'response lexically different duplicate content-length consumes through headers');
+  CheckEqual('', LP.GetBody,
+    'response lexically different duplicate content-length does not consume body');
 end;
 
 procedure TestResponseContentLengthTruncatedAtEof;
@@ -1676,6 +1734,9 @@ procedure TestDuplicateContentLength;
 var
   LP: IH1Parser;
   LReq: string;
+  LConsumed: SizeUInt;
+  LBodyOffset: SizeInt;
+  LMetadata: TH1RequestMetadata;
 begin
   LP := NewH1RequestParser;
   LReq := 'POST /upload HTTP/1.1'#13#10 +
@@ -1683,13 +1744,107 @@ begin
           'Content-Length: 5'#13#10 +
           'Content-Length: 10'#13#10#13#10 +
           'hello';
-  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
   if (not LP.HasError) and (not LP.IsComplete) then
     LP.Finish;
   Check(LP.HasError, 'duplicate content-length reports parser error');
   Check(not LP.IsComplete, 'duplicate content-length is not complete');
+  CheckEqual('Duplicate `Content-Length` header value', LP.ErrorMessage,
+    'duplicate content-length uses canonical error message');
+  LBodyOffset := Pos('hello', LReq);
+  Check((LBodyOffset > 0) and (LConsumed < SizeUInt(LBodyOffset)),
+    'duplicate content-length stops before body bytes');
+  CheckEqual(Int64(0), LP.GetBodySize,
+    'duplicate content-length does not publish body size');
+  CheckEqual('', LP.GetBody,
+    'duplicate content-length does not publish body bytes');
+  LMetadata := LP.GetRequestMetadata;
+  Check(not LMetadata.HasContentLength,
+    'duplicate content-length does not publish content-length metadata');
+  Check(not LMetadata.RequestDeclaresBody,
+    'duplicate content-length does not publish request body metadata');
+end;
+
+procedure TestRequestDuplicateEqualContentLengthAccepted;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LReq2: string;
+  LReq: string;
+  LConsumed: SizeUInt;
+  LMetadata: TH1RequestMetadata;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length: 5'#13#10 +
+           'Content-Length: 5'#13#10#13#10 +
+           'hello';
+  LReq2 := 'GET /next HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10#13#10;
+  LReq := LReq1 + LReq2;
+
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+
+  Check(not LP.HasError,
+    'same-valued duplicate content-length has no parser error');
+  Check(LP.IsComplete,
+    'same-valued duplicate content-length request completes');
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed,
+    'same-valued duplicate content-length consumes only first request');
+  CheckEqual(Int64(5), LP.GetBodySize,
+    'same-valued duplicate content-length publishes body size');
+  CheckEqual('hello', LP.GetBody,
+    'same-valued duplicate content-length publishes body');
+
+  LMetadata := LP.GetRequestMetadata;
+  Check(LMetadata.HasContentLength,
+    'same-valued duplicate content-length publishes metadata');
+  CheckEqual(Int64(5), LMetadata.DeclaredContentLength,
+    'same-valued duplicate content-length keeps declared length');
+  Check(LMetadata.RequestDeclaresBody,
+    'same-valued duplicate content-length metadata declares body');
+end;
+
+procedure TestDuplicateContentLengthDifferentLexicalFormRejected;
+var
+  LP: IH1Parser;
+  LReq: string;
+  LConsumed: SizeUInt;
+  LBodyOffset: SizeInt;
+  LMetadata: TH1RequestMetadata;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Content-Length: 005'#13#10 +
+          'Content-Length: 5'#13#10#13#10 +
+          'hello';
+
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+
+  Check(LP.HasError,
+    'lexically different duplicate content-length reports parser error');
+  Check(not LP.IsComplete,
+    'lexically different duplicate content-length is not complete');
   Check(Pos('Content-Length', LP.ErrorMessage) > 0,
-    'duplicate content-length error mentions content-length');
+    'lexically different duplicate content-length error mentions content-length');
+  CheckEqual(SizeUInt(Pos(#13#10#13#10, LReq) + 3), LConsumed,
+    'lexically different duplicate content-length consumes through headers');
+  LBodyOffset := Pos('hello', LReq);
+  Check((LBodyOffset > 0) and (LConsumed < SizeUInt(LBodyOffset)),
+    'lexically different duplicate content-length stops before body bytes');
+  CheckEqual(Int64(0), LP.GetBodySize,
+    'lexically different duplicate content-length does not publish body size');
+  CheckEqual('', LP.GetBody,
+    'lexically different duplicate content-length does not publish body bytes');
+  LMetadata := LP.GetRequestMetadata;
+  Check(not LMetadata.HasContentLength,
+    'lexically different duplicate content-length does not publish metadata');
+  Check(not LMetadata.RequestDeclaresBody,
+    'lexically different duplicate content-length does not publish body metadata');
 end;
 
 procedure TestHeaderNullByte;
@@ -2623,6 +2778,10 @@ begin
     @TestResponseChunkedContentLengthConflictRejectedBeforeBody);
   T.Run('Response duplicate conflicting content-length rejected before body',
     @TestResponseDuplicateConflictingContentLengthRejectedBeforeBody);
+  T.Run('Response same-valued duplicate Content-Length accepted',
+    @TestResponseDuplicateEqualContentLengthAccepted);
+  T.Run('Response lexically different duplicate Content-Length rejected',
+    @TestResponseDuplicateContentLengthDifferentLexicalFormRejected);
   T.Run('Response content-length truncated at EOF', @TestResponseContentLengthTruncatedAtEof);
   T.Run('Response HTTP/1.0 without keep-alive does not reuse', @TestResponseHttp10WithoutKeepAliveDoesNotReuse);
   T.Run('Content-Length body', @TestContentLengthBody);
@@ -2693,6 +2852,10 @@ begin
   T.Run('HEAD request', @TestHeadRequest);
   T.Run('Generic malformed request', @TestInvalidRequest);
   T.Run('Duplicate Content-Length', @TestDuplicateContentLength);
+  T.Run('Same-valued duplicate Content-Length accepted',
+    @TestRequestDuplicateEqualContentLengthAccepted);
+  T.Run('Lexically different duplicate Content-Length rejected',
+    @TestDuplicateContentLengthDifferentLexicalFormRejected);
   T.Run('Header with null byte', @TestHeaderNullByte);
   T.Run('Invalid Host header does not publish metadata',
     @TestInvalidHostHeaderDoesNotPublishMetadata);

@@ -104,6 +104,8 @@ type
     FRequestMetadataSawHost: Boolean;
     FRequestMetadataSawConnection: Boolean;
     FRequestMetadataSawContentLength: Boolean;
+    FContentLengthHeaderSeen: Boolean;
+    FContentLengthHeaderValue: string;
     FRequestTransferEncoding: string;
     FCurrentField: string;
     FCurrentValue: string;
@@ -116,6 +118,11 @@ type
     function RejectWithUserError(const AReason: string;
       const AKind: TH1ParserErrorKind; const AParser: PTLlhttpInternalT): LongInt;
     function BuildRequestMetadata(
+      const AParser: PTLlhttpInternalT): LongInt;
+    function ValidateContentLengthHeaderValue(const AField: string;
+      const AFieldPtr: PAnsiChar; const AFieldLen: SizeUInt;
+      const AValue: string; const AValuePtr: PAnsiChar;
+      const AValueLen: SizeUInt;
       const AParser: PTLlhttpInternalT): LongInt;
     procedure UpdateRequestMetadataFromHeader(const AField: string;
       const AFieldPtr: PAnsiChar; const AFieldLen: SizeUInt;
@@ -162,6 +169,9 @@ const
   INVALID_TRANSFER_ENCODING_REASON = 'Invalid `Transfer-Encoding` header value';
   UNSUPPORTED_REQUEST_TRANSFER_CODING_REASON =
     'Unsupported `Transfer-Encoding` request coding';
+  DUPLICATE_CONTENT_LENGTH_REASON =
+    'Duplicate `Content-Length` header value';
+  LLHTTP_DUPLICATE_CONTENT_LENGTH_REASON = 'Duplicate Content-Length';
   BODY_TOO_LARGE_REASON = 'HTTP body buffer too large';
 
 function IsContentLengthFramingError(
@@ -169,6 +179,16 @@ function IsContentLengthFramingError(
 begin
   Result := (AErrno = HPE_UNEXPECTED_CONTENT_LENGTH) or
             (AErrno = HPE_INVALID_CONTENT_LENGTH);
+end;
+
+function CanonicalLlhttpErrorReason(const AErrno: TLlhttpErrnoT;
+  const AReason: string): string; inline;
+begin
+  if (AErrno = HPE_UNEXPECTED_CONTENT_LENGTH) and
+     (AReason = LLHTTP_DUPLICATE_CONTENT_LENGTH_REASON) then
+    Result := DUPLICATE_CONTENT_LENGTH_REASON
+  else
+    Result := AReason;
 end;
 
 function LowerTrim(const AValue: string): string; inline;
@@ -674,11 +694,22 @@ begin
   begin
     if (p0^.flags and F_TRAILING) = 0 then
     begin
+      Result := LSelf.ValidateContentLengthHeaderValue(LSelf.FCurrentField,
+        LSelf.FCurrentFieldPtr, LSelf.FCurrentFieldLen,
+        LSelf.FCurrentValue, LSelf.FCurrentValuePtr,
+        LSelf.FCurrentValueLen, p0);
+      if Result <> 0 then
+      begin
+        LSelf.FHeaderCompleteUserError := Result = HPE_USER;
+        Exit;
+      end;
       if LSelf.FParserType = ptRequest then
+      begin
         LSelf.UpdateRequestMetadataFromHeader(LSelf.FCurrentField,
           LSelf.FCurrentFieldPtr, LSelf.FCurrentFieldLen,
           LSelf.FCurrentValue, LSelf.FCurrentValuePtr,
           LSelf.FCurrentValueLen);
+      end;
       if (LSelf.FCurrentField = '') and (LSelf.FCurrentValue = '') then
         LSelf.FHeaderStore.AddParsedSpans(LSelf.FCurrentFieldPtr,
           LSelf.FCurrentFieldLen, LSelf.FCurrentValuePtr,
@@ -843,8 +874,11 @@ begin
     FComplete := False;
     if FErrorKind = pekNone then
       FErrorKind := pekMalformed;
-    FErrorMsg := string(AnsiString(llhttp_get_error_reason(@FParser)));
-    if (LErrno = HPE_USER) and FHeaderCompleteUserError then
+    if FErrorMsg = '' then
+      FErrorMsg := CanonicalLlhttpErrorReason(LErrno,
+        string(AnsiString(llhttp_get_error_reason(@FParser))));
+    if FHeaderCompleteUserError and
+       ((LErrno = HPE_USER) or (LErrno = HPE_CB_HEADER_VALUE_COMPLETE)) then
       Result := ConsumedThroughHeaderBoundaryAfterErrorPosition(ABuf, ALen)
     else if (FParserType = ptRequest) and
       (LErrno = HPE_INVALID_TRANSFER_ENCODING) then
@@ -889,7 +923,10 @@ begin
   if Result >= ALen then
     Exit;
 
-  LI := Result;
+  if Result > 3 then
+    LI := Result - 3
+  else
+    LI := 0;
   while LI + 3 < ALen do
   begin
     if (ABuf[LI] = #13) and (ABuf[LI + 1] = #10) and
@@ -1112,6 +1149,32 @@ begin
   FRequestMetadata := FPendingRequestMetadata;
 end;
 
+function TH1Parser.ValidateContentLengthHeaderValue(const AField: string;
+  const AFieldPtr: PAnsiChar; const AFieldLen: SizeUInt;
+  const AValue: string; const AValuePtr: PAnsiChar;
+  const AValueLen: SizeUInt;
+  const AParser: PTLlhttpInternalT): LongInt;
+var
+  LValue: string;
+begin
+  Result := 0;
+  if not HeaderFieldEquals(AField, AFieldPtr, AFieldLen, 'content-length') then
+    Exit;
+
+  LValue := TextTrim(CapturedHeaderValueToString(AValue, AValuePtr,
+    AValueLen));
+  if FContentLengthHeaderSeen then
+  begin
+    if LValue <> FContentLengthHeaderValue then
+      Result := RejectWithUserError(DUPLICATE_CONTENT_LENGTH_REASON,
+        pekMalformed, AParser);
+    Exit;
+  end;
+
+  FContentLengthHeaderSeen := True;
+  FContentLengthHeaderValue := LValue;
+end;
+
 procedure TH1Parser.UpdateRequestMetadataFromHeader(const AField: string;
   const AFieldPtr: PAnsiChar; const AFieldLen: SizeUInt;
   const AValue: string; const AValuePtr: PAnsiChar;
@@ -1227,6 +1290,8 @@ begin
   FRequestMetadataSawHost := False;
   FRequestMetadataSawConnection := False;
   FRequestMetadataSawContentLength := False;
+  FContentLengthHeaderSeen := False;
+  FContentLengthHeaderValue := '';
   FRequestTransferEncoding := '';
 end;
 
