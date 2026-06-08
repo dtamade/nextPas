@@ -28,7 +28,7 @@ type
 
   TRegexIter = record
   private
-    FProgram: PRegexProgram;
+    FProgram: TRegexProgram;
     FInput: string;
     FPos: SizeUInt;
     FDone: Boolean;
@@ -553,7 +553,7 @@ end;
 
 function TRegex.FindIter(const AInput: string): TRegexIter;
 begin
-  Result.FProgram := @FProgram;
+  Result.FProgram := FProgram;
   Result.FInput := AInput;
   Result.FPos := 0;
   Result.FDone := not FValid;
@@ -579,7 +579,7 @@ begin
     Exit(False);
   end;
   LLen := SizeUInt(Length(FInput));
-  if not NfaSearch(FProgram^, PAnsiChar(FInput), LLen, False, FPos, AMatch) then
+  if not NfaSearch(FProgram, PAnsiChar(FInput), LLen, False, FPos, AMatch) then
   begin
     AMatch.Start := -1; AMatch.Len := 0; AMatch.Groups := nil;
     FDone := True;

@@ -4195,6 +4195,18 @@ begin
   CheckEqual(Int64(1), Int64(LCount), 'single char single match');
 end;
 
+procedure TestFindIterKeepsProgramSnapshot;
+var R: TRegex; LIter: TRegexIter; LMatch: TMatch; LInput: string;
+begin
+  LInput := 'a1';
+  R := TRegex.Compile('\d+');
+  LIter := R.FindIter(LInput);
+  R := TRegex.Compile('[a-z]+');
+  Check(LIter.Next(LMatch), 'iterator still finds original digit match');
+  CheckEqual('1', LMatch.Value(LInput), 'iterator keeps original program');
+  Check(not LIter.Next(LMatch), 'iterator has one original match');
+end;
+
 procedure TestSubexpNames;
 var R: TRegex; LNames: TStringArray;
 begin
@@ -4442,6 +4454,7 @@ begin
   T.Run('P4: FindIter empty', @TestFindIterEmpty);
   T.Run('P4: FindIter zero-len', @TestFindIterZeroLen);
   T.Run('P4: FindIter single', @TestFindIterSingle);
+  T.Run('P4: FindIter program snapshot', @TestFindIterKeepsProgramSnapshot);
   T.Run('P4: SubexpNames', @TestSubexpNames);
   T.Run('P4: SubexpNames empty', @TestSubexpNamesEmpty);
   T.Run('P4: Longest match', @TestLongestMatch);
