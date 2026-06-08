@@ -14,8 +14,20 @@ uses
   nextpas.core.http.impl.h1.fast,
   nextpas.core.http.impl.h1.llhttp;
 
+type
+  TH1ParserBenchRunner = class(TBenchRunner)
+  private
+    FFilter: string;
+    FMatchedRows: Integer;
+    function ShouldRunRow(const AName: string): Boolean;
+  public
+    constructor Create;
+    procedure Run(const AName: string; AProc: TBenchProc);
+    function HasNoMatchingFilter: Boolean;
+  end;
+
 var
-  B: TBenchRunner;
+  B: TH1ParserBenchRunner;
   GSink: SizeUInt;
   GCallbackSink: SizeUInt;
 
@@ -54,6 +66,34 @@ var
   GBody1K: AnsiString;
   GReqPost1K: AnsiString;
   GPipeline: AnsiString;
+
+{ TH1ParserBenchRunner }
+
+constructor TH1ParserBenchRunner.Create;
+begin
+  inherited Create;
+  FFilter := Trim(GetEnvironmentVariable('NEXTPAS_BENCH_FILTER'));
+  FMatchedRows := 0;
+end;
+
+function TH1ParserBenchRunner.ShouldRunRow(const AName: string): Boolean;
+begin
+  Result := (FFilter = '') or
+    (Pos(LowerCase(FFilter), LowerCase(AName)) > 0);
+end;
+
+procedure TH1ParserBenchRunner.Run(const AName: string; AProc: TBenchProc);
+begin
+  if not ShouldRunRow(AName) then
+    Exit;
+  Inc(FMatchedRows);
+  inherited Run(AName, AProc);
+end;
+
+function TH1ParserBenchRunner.HasNoMatchingFilter: Boolean;
+begin
+  Result := (FFilter <> '') and (FMatchedRows = 0);
+end;
 
 procedure InitData;
 var
@@ -985,7 +1025,7 @@ end;
 
 begin
   InitData;
-  B := TBenchRunner.Create;
+  B := TH1ParserBenchRunner.Create;
   WriteLn('=== nextpas.core.http H1 parser benchmark ===');
   WriteLn('operation=http.h1parser');
   WriteLn('  Simple GET: ', Length(REQ_SIMPLE), ' bytes');
@@ -1062,5 +1102,11 @@ begin
   B.Run('fast: pipeline (10 reqs)', @BenchFastParsePipeline10);
   WriteLn;
   B.Summary;
+  if B.HasNoMatchingFilter then
+  begin
+    WriteLn('No matching H1 parser benchmark rows.');
+    B.Free;
+    Halt(1);
+  end;
   B.Free;
 end.

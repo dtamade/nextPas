@@ -3633,6 +3633,39 @@ begin
     'H1 parser benchmark adapter no-url metadata row');
 end;
 
+procedure TestH1ParserBenchmarkRejectsNoMatchFilter;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser no-match filter build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveH1ParserBenchBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'H1 parser no-match filter binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=not_a_h1parser_row'],
+    LExitCode, LOutput);
+  Check(LExitCode <> 0,
+    'H1 parser no-match filter should fail: ' + LOutput);
+  CheckContains(LOutput, 'bench_filter=not_a_h1parser_row',
+    'H1 parser no-match filter marker');
+  CheckContains(LOutput, 'No matching H1 parser benchmark rows.',
+    'H1 parser no-match diagnostic');
+  CheckNotContains(LOutput, ' iters',
+    'H1 parser no-match must not emit benchmark row');
+end;
+
 procedure RunH1ParserFilterSmoke(const AFilter, AExpectedRow,
   ALabel: string; const AUnexpectedRows: array of string);
 var
@@ -4500,6 +4533,8 @@ begin
     @TestH1ParserBenchmarkMaxItersEnv);
   T.Run('H1 parser benchmark filter env',
     @TestH1ParserBenchmarkFilterEnv);
+  T.Run('H1 parser benchmark rejects no-match filter',
+    @TestH1ParserBenchmarkRejectsNoMatchFilter);
   T.Run('H1 parser benchmark header-span-add filter env',
     @TestH1ParserBenchmarkHeaderSpanAddFilterEnv);
   T.Run('H1 parser benchmark metadata cache filter env',
