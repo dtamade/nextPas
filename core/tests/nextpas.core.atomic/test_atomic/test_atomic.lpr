@@ -1225,6 +1225,12 @@ begin
   CheckContains(LAtomicDirectTypesPtrTestSource,
     'direct atomic.types TAtomicPtr weak CAS mismatch should write the observed pointer',
     'direct atomic.types TAtomicPtr coverage must prove weak-CAS mismatch write-back');
+  CheckContains(LAtomicDirectTypesPtrTestSource,
+    'LAtomicPtr.CompareExchangeStrong(LExpected, @LValueA, LInvalidOrder)',
+    'direct atomic.types TAtomicPtr coverage must reject invalid strong single-order CAS');
+  CheckContains(LAtomicDirectTypesPtrTestSource,
+    'LAtomicPtr.CompareExchangeWeak(LExpected, @LValueA, LInvalidOrder)',
+    'direct atomic.types TAtomicPtr coverage must reject invalid weak single-order CAS');
   CheckContains(LAtomicTestSource,
     'T.Run(''direct atomic.types ptr contract'', @TestAtomicTypesPtrContract);',
     'atomic runner must register direct atomic.types TAtomicPtr runtime coverage');
@@ -1265,6 +1271,36 @@ begin
     'invalid memory-order matrix must cover 64-bit weak CAS invalid success ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak_64(LInt64, LExpectedInt64, 17, mo_seq_cst, LInvalidOrder)',
     'invalid memory-order matrix must cover 64-bit weak CAS invalid failure ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_strong(LInt32, LExpectedInt32, 302, LInvalidOrder)',
+    'invalid memory-order matrix must cover 32-bit strong single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak(LUInt32, LExpectedUInt32, UInt32(402), LInvalidOrder)',
+    'invalid memory-order matrix must cover unsigned 32-bit weak single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_strong(LPtr, LExpectedPtr, @LValueB, LInvalidOrder)',
+    'invalid memory-order matrix must cover pointer strong single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'nextpas.core.atomic.AtomicCompareExchange32(LInt32, 701, 702, LInvalidOrder)',
+    'invalid memory-order matrix must cover facade AtomicCompareExchange32 invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'nextpas.core.atomic.compat.AtomicCompareExchange32(LInt32, 801, 802, LInvalidOrder)',
+    'invalid memory-order matrix must cover compat AtomicCompareExchange32 invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedInt32.CompareExchangeStrong(LExpectedInt32, 902, LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicInt32 strong single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedUInt32.CompareExchangeWeak(LExpectedUInt32, UInt32(1002), LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicUInt32 weak single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedBool.CompareExchangeStrong(LExpectedBool, True, LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicBool strong single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedISize.CompareExchangeStrong(LExpectedISizeRaw, PtrInt(1102), LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicISize strong single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedUSize.CompareExchangeWeak(LExpectedUSizeRaw, PtrUInt(1202), LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicUSize weak single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedPtr.CompareExchangeWeak(LExpectedFacadePtr, @LValueB, LInvalidOrder)',
+    'invalid memory-order matrix must cover facade TAtomicPtr weak single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_strong_64(LInt64, LExpectedInt64, 1302, LInvalidOrder)',
+    'invalid memory-order matrix must cover 64-bit strong single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'nextpas.core.atomic.AtomicCompareExchange64(LInt64, 1501, 1502, LInvalidOrder)',
+    'invalid memory-order matrix must cover facade AtomicCompareExchange64 invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'nextpas.core.atomic.compat.AtomicCompareExchange64(LInt64, 1601, 1602, LInvalidOrder)',
+    'invalid memory-order matrix must cover compat AtomicCompareExchange64 invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedUInt64.CompareExchangeWeak(LExpectedUInt64, UInt64(1802), LInvalidOrder)',
+    'invalid memory-order matrix must cover TAtomicUInt64 weak single-order CAS invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, mo_release, mo_acq_rel)',
     'invalid memory-order matrix must cover pointer weak CAS failure-order rejection');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, LInvalidOrder, mo_relaxed)',
@@ -3820,13 +3856,25 @@ type
 var
   LInt32: Int32;
   LExpectedInt32: Int32;
+  LUInt32: UInt32;
+  LExpectedUInt32: UInt32;
+  LISizeRaw: PtrInt;
+  LExpectedISizeRaw: PtrInt;
+  LUSizeRaw: PtrUInt;
+  LExpectedUSizeRaw: PtrUInt;
   LValueA: Integer;
   LValueB: Integer;
   LPtr: Pointer;
   LExpectedPtr: Pointer;
   LTypedInt32: TAtomicInt32;
+  LTypedUInt32: TAtomicUInt32;
+  LTypedBool: TAtomicBool;
+  LTypedISize: TAtomicISize;
+  LTypedUSize: TAtomicUSize;
   LTypedFlag: TAtomicFlag;
   LTypedPtr: TFacadeAtomicPtr;
+  LExpectedBool: Boolean;
+  LExpectedFacadePtr: PInteger;
   LTaggedStorage: atomic_tagged_ptr_t;
   LTaggedExpected: atomic_tagged_ptr_t;
   LTaggedDesired: atomic_tagged_ptr_t;
@@ -3838,6 +3886,8 @@ var
   LExpectedInt64: Int64;
   LUInt64: UInt64;
   LExpectedUInt64: UInt64;
+  LTypedInt64: TAtomicInt64;
+  LTypedUInt64: TAtomicUInt64;
   {$ENDIF}
 
   procedure ExpectThreadFenceRejectsInvalidOrder;
@@ -4024,6 +4074,160 @@ var
       'atomic_tagged_ptr_exchange invalid ordinal must not mutate the tag');
   end;
 
+  procedure ExpectCanonicalSingleOrderCasRejectsInvalidOrder;
+  begin
+    LInt32 := 301;
+    LExpectedInt32 := 301;
+    LRaised := False;
+    try
+      atomic_compare_exchange_strong(LInt32, LExpectedInt32, 302, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      '32-bit strong single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(301), Int64(LInt32),
+      '32-bit strong single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(301), Int64(LExpectedInt32),
+      '32-bit strong single-order CAS invalid ordinal must not mutate expected');
+
+    LUInt32 := UInt32(401);
+    LExpectedUInt32 := UInt32(401);
+    LRaised := False;
+    try
+      atomic_compare_exchange_weak(LUInt32, LExpectedUInt32, UInt32(402), LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'unsigned 32-bit weak single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(401), Int64(LUInt32),
+      'unsigned 32-bit weak single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(401), Int64(LExpectedUInt32),
+      'unsigned 32-bit weak single-order CAS invalid ordinal must not mutate expected');
+
+    LISizeRaw := PtrInt(501);
+    LExpectedISizeRaw := PtrInt(501);
+    LRaised := False;
+    try
+      atomic_compare_exchange_strong(LISizeRaw, LExpectedISizeRaw, PtrInt(502), LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'PtrInt strong single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(501), Int64(LISizeRaw),
+      'PtrInt strong single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(501), Int64(LExpectedISizeRaw),
+      'PtrInt strong single-order CAS invalid ordinal must not mutate expected');
+
+    LUSizeRaw := PtrUInt(601);
+    LExpectedUSizeRaw := PtrUInt(601);
+    LRaised := False;
+    try
+      atomic_compare_exchange_weak(LUSizeRaw, LExpectedUSizeRaw, PtrUInt(602), LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'PtrUInt weak single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(601), Int64(LUSizeRaw),
+      'PtrUInt weak single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(601), Int64(LExpectedUSizeRaw),
+      'PtrUInt weak single-order CAS invalid ordinal must not mutate expected');
+
+    LPtr := @LValueA;
+    LExpectedPtr := @LValueA;
+    LRaised := False;
+    try
+      atomic_compare_exchange_strong(LPtr, LExpectedPtr, @LValueB, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'pointer strong single-order CAS invalid ordinal must raise EArgumentError');
+    Check(LPtr = @LValueA,
+      'pointer strong single-order CAS invalid ordinal must not mutate the target');
+    Check(LExpectedPtr = @LValueA,
+      'pointer strong single-order CAS invalid ordinal must not mutate expected');
+
+    LPtr := @LValueA;
+    LExpectedPtr := @LValueA;
+    LRaised := False;
+    try
+      atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'pointer weak single-order CAS invalid ordinal must raise EArgumentError');
+    Check(LPtr = @LValueA,
+      'pointer weak single-order CAS invalid ordinal must not mutate the target');
+    Check(LExpectedPtr = @LValueA,
+      'pointer weak single-order CAS invalid ordinal must not mutate expected');
+  end;
+
+  procedure ExpectPascalCaseCasRejectsInvalidOrder;
+  begin
+    LInt32 := 701;
+    LRaised := False;
+    try
+      nextpas.core.atomic.AtomicCompareExchange32(LInt32, 701, 702, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'facade AtomicCompareExchange32 invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(701), Int64(LInt32),
+      'facade AtomicCompareExchange32 invalid ordinal must not mutate the target');
+
+    LPtr := @LValueA;
+    LRaised := False;
+    try
+      nextpas.core.atomic.AtomicCompareExchangePtr(LPtr, @LValueA, @LValueB, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'facade AtomicCompareExchangePtr invalid ordinal must raise EArgumentError');
+    Check(LPtr = @LValueA,
+      'facade AtomicCompareExchangePtr invalid ordinal must not mutate the target');
+
+    LInt32 := 801;
+    LRaised := False;
+    try
+      nextpas.core.atomic.compat.AtomicCompareExchange32(LInt32, 801, 802, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'compat AtomicCompareExchange32 invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(801), Int64(LInt32),
+      'compat AtomicCompareExchange32 invalid ordinal must not mutate the target');
+
+    LPtr := @LValueA;
+    LRaised := False;
+    try
+      nextpas.core.atomic.compat.AtomicCompareExchangePtr(LPtr, @LValueA, @LValueB, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'compat AtomicCompareExchangePtr invalid ordinal must raise EArgumentError');
+    Check(LPtr = @LValueA,
+      'compat AtomicCompareExchangePtr invalid ordinal must not mutate the target');
+  end;
+
   procedure ExpectTypedWrappersRejectInvalidOrder;
   begin
     LTypedInt32 := TAtomicInt32.Create(101);
@@ -4092,7 +4296,215 @@ var
       'facade TAtomicPtr.Exchange invalid ordinal must not mutate the target');
   end;
 
+  procedure ExpectTypedCasRejectsInvalidOrder;
+  begin
+    LTypedInt32 := TAtomicInt32.Create(901);
+    LExpectedInt32 := 901;
+    LRaised := False;
+    try
+      LTypedInt32.CompareExchangeStrong(LExpectedInt32, 902, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicInt32 strong single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(901), Int64(LTypedInt32.Load(mo_acquire)),
+      'TAtomicInt32 strong single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(901), Int64(LExpectedInt32),
+      'TAtomicInt32 strong single-order CAS invalid ordinal must not mutate expected');
+
+    LTypedUInt32 := TAtomicUInt32.Create(UInt32(1001));
+    LExpectedUInt32 := UInt32(1001);
+    LRaised := False;
+    try
+      LTypedUInt32.CompareExchangeWeak(LExpectedUInt32, UInt32(1002), LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicUInt32 weak single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1001), Int64(LTypedUInt32.Load(mo_acquire)),
+      'TAtomicUInt32 weak single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(1001), Int64(LExpectedUInt32),
+      'TAtomicUInt32 weak single-order CAS invalid ordinal must not mutate expected');
+
+    LTypedBool := TAtomicBool.Create(False);
+    LExpectedBool := False;
+    LRaised := False;
+    try
+      LTypedBool.CompareExchangeStrong(LExpectedBool, True, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicBool strong single-order CAS invalid ordinal must raise EArgumentError');
+    Check(not LTypedBool.Load(mo_acquire),
+      'TAtomicBool strong single-order CAS invalid ordinal must not mutate the target');
+    Check(not LExpectedBool,
+      'TAtomicBool strong single-order CAS invalid ordinal must not mutate expected');
+
+    LTypedISize := TAtomicISize.Create(1101);
+    LExpectedISizeRaw := PtrInt(1101);
+    LRaised := False;
+    try
+      LTypedISize.CompareExchangeStrong(LExpectedISizeRaw, PtrInt(1102), LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicISize strong single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1101), Int64(LTypedISize.Load(mo_acquire)),
+      'TAtomicISize strong single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(1101), Int64(LExpectedISizeRaw),
+      'TAtomicISize strong single-order CAS invalid ordinal must not mutate expected');
+
+    LTypedUSize := TAtomicUSize.Create(PtrUInt(1201));
+    LExpectedUSizeRaw := PtrUInt(1201);
+    LRaised := False;
+    try
+      LTypedUSize.CompareExchangeWeak(LExpectedUSizeRaw, PtrUInt(1202), LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicUSize weak single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1201), Int64(LTypedUSize.Load(mo_acquire)),
+      'TAtomicUSize weak single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(1201), Int64(LExpectedUSizeRaw),
+      'TAtomicUSize weak single-order CAS invalid ordinal must not mutate expected');
+
+    LTypedPtr := TFacadeAtomicPtr.Create(@LValueA);
+    LExpectedFacadePtr := @LValueA;
+    LRaised := False;
+    try
+      LTypedPtr.CompareExchangeStrong(LExpectedFacadePtr, @LValueB, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'facade TAtomicPtr strong single-order CAS invalid ordinal must raise EArgumentError');
+    Check(LTypedPtr.Load(mo_acquire) = @LValueA,
+      'facade TAtomicPtr strong single-order CAS invalid ordinal must not mutate the target');
+    Check(LExpectedFacadePtr = @LValueA,
+      'facade TAtomicPtr strong single-order CAS invalid ordinal must not mutate expected');
+
+    LTypedPtr := TFacadeAtomicPtr.Create(@LValueA);
+    LExpectedFacadePtr := @LValueA;
+    LRaised := False;
+    try
+      LTypedPtr.CompareExchangeWeak(LExpectedFacadePtr, @LValueB, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'facade TAtomicPtr weak single-order CAS invalid ordinal must raise EArgumentError');
+    Check(LTypedPtr.Load(mo_acquire) = @LValueA,
+      'facade TAtomicPtr weak single-order CAS invalid ordinal must not mutate the target');
+    Check(LExpectedFacadePtr = @LValueA,
+      'facade TAtomicPtr weak single-order CAS invalid ordinal must not mutate expected');
+  end;
+
   {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  procedure ExpectCanonicalSingleOrderCas64RejectsInvalidOrder;
+  begin
+    LInt64 := 1301;
+    LExpectedInt64 := 1301;
+    LRaised := False;
+    try
+      atomic_compare_exchange_strong_64(LInt64, LExpectedInt64, 1302, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      '64-bit strong single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1301), LInt64,
+      '64-bit strong single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(1301), LExpectedInt64,
+      '64-bit strong single-order CAS invalid ordinal must not mutate expected');
+
+    LUInt64 := UInt64(1401);
+    LExpectedUInt64 := UInt64(1401);
+    LRaised := False;
+    try
+      atomic_compare_exchange_weak_64(LUInt64, LExpectedUInt64, UInt64(1402), LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'unsigned 64-bit weak single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1401), Int64(LUInt64),
+      'unsigned 64-bit weak single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(1401), Int64(LExpectedUInt64),
+      'unsigned 64-bit weak single-order CAS invalid ordinal must not mutate expected');
+
+    LInt64 := 1501;
+    LRaised := False;
+    try
+      nextpas.core.atomic.AtomicCompareExchange64(LInt64, 1501, 1502, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'facade AtomicCompareExchange64 invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1501), LInt64,
+      'facade AtomicCompareExchange64 invalid ordinal must not mutate the target');
+
+    LInt64 := 1601;
+    LRaised := False;
+    try
+      nextpas.core.atomic.compat.AtomicCompareExchange64(LInt64, 1601, 1602, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'compat AtomicCompareExchange64 invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1601), LInt64,
+      'compat AtomicCompareExchange64 invalid ordinal must not mutate the target');
+
+    LTypedInt64 := TAtomicInt64.Create(1701);
+    LExpectedInt64 := 1701;
+    LRaised := False;
+    try
+      LTypedInt64.CompareExchangeStrong(LExpectedInt64, 1702, LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicInt64 strong single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1701), LTypedInt64.Load(mo_acquire),
+      'TAtomicInt64 strong single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(1701), LExpectedInt64,
+      'TAtomicInt64 strong single-order CAS invalid ordinal must not mutate expected');
+
+    LTypedUInt64 := TAtomicUInt64.Create(UInt64(1801));
+    LExpectedUInt64 := UInt64(1801);
+    LRaised := False;
+    try
+      LTypedUInt64.CompareExchangeWeak(LExpectedUInt64, UInt64(1802), LInvalidOrder);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'TAtomicUInt64 weak single-order CAS invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(1801), Int64(LTypedUInt64.Load(mo_acquire)),
+      'TAtomicUInt64 weak single-order CAS invalid ordinal must not mutate the target');
+    CheckEqual(Int64(1801), Int64(LExpectedUInt64),
+      'TAtomicUInt64 weak single-order CAS invalid ordinal must not mutate expected');
+  end;
+
   procedure ExpectRmw64RejectsInvalidOrder;
   begin
     LInt64 := 101;
@@ -4223,7 +4635,10 @@ begin
   ExpectRmw32RejectsInvalidOrder;
   ExpectPointerExchangeRejectsInvalidOrder;
   ExpectTaggedExchangeRejectsInvalidOrder;
+  ExpectCanonicalSingleOrderCasRejectsInvalidOrder;
+  ExpectPascalCaseCasRejectsInvalidOrder;
   ExpectTypedWrappersRejectInvalidOrder;
+  ExpectTypedCasRejectsInvalidOrder;
 
   LInt32 := 11;
   LExpectedInt32 := 11;
@@ -4411,6 +4826,7 @@ begin
   Check(LRaised, '64-bit weak CAS invalid failure ordinal must raise EArgumentError');
 
   ExpectRmw64RejectsInvalidOrder;
+  ExpectCanonicalSingleOrderCas64RejectsInvalidOrder;
   {$ENDIF}
 
   LValueA := 31;

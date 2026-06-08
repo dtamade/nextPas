@@ -75,6 +75,40 @@ begin
   Check(LAtomicPtr.Load(mo_acquire) = @LValueC,
     'direct atomic.types TAtomicPtr.Exchange invalid ordinal must not mutate storage');
 
+  LExpected := @LValueC;
+  LRaised := False;
+  try
+    LAtomicPtr.CompareExchangeStrong(LExpected, @LValueA, LInvalidOrder);
+    Check(False,
+      'direct atomic.types TAtomicPtr strong CAS invalid ordinal must raise EArgumentError');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised,
+    'direct atomic.types TAtomicPtr strong CAS invalid ordinal should be rejected');
+  Check(LAtomicPtr.Load(mo_acquire) = @LValueC,
+    'direct atomic.types TAtomicPtr strong CAS invalid ordinal must not mutate storage');
+  Check(LExpected = @LValueC,
+    'direct atomic.types TAtomicPtr strong CAS invalid ordinal must not mutate expected');
+
+  LExpected := @LValueC;
+  LRaised := False;
+  try
+    LAtomicPtr.CompareExchangeWeak(LExpected, @LValueA, LInvalidOrder);
+    Check(False,
+      'direct atomic.types TAtomicPtr weak CAS invalid ordinal must raise EArgumentError');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised,
+    'direct atomic.types TAtomicPtr weak CAS invalid ordinal should be rejected');
+  Check(LAtomicPtr.Load(mo_acquire) = @LValueC,
+    'direct atomic.types TAtomicPtr weak CAS invalid ordinal must not mutate storage');
+  Check(LExpected = @LValueC,
+    'direct atomic.types TAtomicPtr weak CAS invalid ordinal must not mutate expected');
+
   LExpected := @LValueA;
   Check(not LAtomicPtr.CompareExchangeStrong(LExpected, @LValueB, mo_consume),
     'direct atomic.types TAtomicPtr consume CAS should remain legal on mismatch');
