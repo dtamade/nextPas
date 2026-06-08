@@ -323,6 +323,10 @@ begin
     'ArcTan2(+0,negative)=+PI');
   CheckNear(-PI_VALUE, ArcTan2(DoubleNegativeZero, -1.0), 0.000001,
     'ArcTan2(-0,negative)=-PI');
+  CheckNear(PI_VALUE, ArcTan2(0.0, -DoubleInfinity), 0.000001,
+    'ArcTan2(+0,-Inf)=+PI');
+  CheckNear(-PI_VALUE, ArcTan2(DoubleNegativeZero, -DoubleInfinity), 0.000001,
+    'ArcTan2(-0,-Inf)=-PI');
 
   Check(IsSinglePositiveZero(ArcTan2(Single(0.0), Single(0.0))),
     'ArcTan2(Single +0,+0)=+0');
@@ -336,6 +340,10 @@ begin
     'ArcTan2(Single +0,negative)=+PI');
   CheckNear(-PI_VALUE, ArcTan2(SingleNegativeZero, Single(-1.0)), 0.000001,
     'ArcTan2(Single -0,negative)=-PI');
+  CheckNear(PI_VALUE, ArcTan2(Single(0.0), -SingleInfinity), 0.000001,
+    'ArcTan2(Single +0,-Inf)=+PI');
+  CheckNear(-PI_VALUE, ArcTan2(SingleNegativeZero, -SingleInfinity), 0.000001,
+    'ArcTan2(Single -0,-Inf)=-PI');
 end;
 
 procedure TestExpLogAndSqrtContracts;
