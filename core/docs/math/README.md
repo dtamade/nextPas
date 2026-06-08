@@ -189,6 +189,7 @@ matrices, plus matrices containing `NaN` or infinity, the same: it returns `Fals
 failed `out` matrix, and `Inverse` raises `EArgumentError` on the same inputs.
 Matrix inverse success overwrites the `out` parameter completely: `TryInverse` does not depend on
 the previous contents of the destination matrix and fully rewrites it before returning `True`.
+Matrix `Equals` applies scalar `FloatEquals` element-wise: NaN elements and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.
 
 ## Random And Noise Ownership
 

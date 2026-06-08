@@ -386,12 +386,12 @@ end;
 
 function FloatEqualsSingle(const AA, AB, AEpsilon: Single): Boolean; inline;
 begin
-  Result := (AEpsilon >= 0.0) and nextpas.core.math.scalar.FloatEquals(AA, AB, AEpsilon);
+  Result := nextpas.core.math.scalar.FloatEquals(AA, AB, AEpsilon);
 end;
 
 function FloatEqualsDouble(const AA, AB, AEpsilon: Double): Boolean; inline;
 begin
-  Result := (AEpsilon >= 0.0) and nextpas.core.math.scalar.FloatEquals(AA, AB, AEpsilon);
+  Result := nextpas.core.math.scalar.FloatEquals(AA, AB, AEpsilon);
 end;
 
 { TMat3f }

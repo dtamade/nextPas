@@ -50,6 +50,14 @@ begin
   Result := LValue.Value;
 end;
 
+function SingleNegativeInfinity: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $FF800000;
+  Result := LValue.Value;
+end;
+
 function DoubleNaN: Double;
 var
   LValue: TDoubleBitCast;
@@ -63,6 +71,14 @@ var
   LValue: TDoubleBitCast;
 begin
   LValue.Bits := $7FF0000000000000;
+  Result := LValue.Value;
+end;
+
+function DoubleNegativeInfinity: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := QWord($FFF0000000000000);
   Result := LValue.Value;
 end;
 
@@ -942,6 +958,46 @@ begin
   CheckVec4d(0.0, -2000.75, 0.0, 0.0, M4d.Columns[2], 'TMat4d Data write updates column view');
 end;
 
+procedure TestMatrixEqualsNonFiniteComparisonContracts;
+var
+  M3f: TMat3f;
+  M4f: TMat4f;
+  M3d: TMat3d;
+  M4d: TMat4d;
+begin
+  M3f := TMat3f.Identity;
+  M3f[0, 0] := SingleNaN;
+  Check(not TMat3f.Equals(M3f, M3f, Single(0.0)), 'TMat3f Equals rejects NaN elements');
+  M3f[0, 0] := SingleInfinity;
+  Check(TMat3f.Equals(M3f, M3f, Single(0.0)), 'TMat3f Equals accepts matching infinity');
+  Check(not TMat3f.Equals(TMat3f.Identity, TMat3f.Identity, SingleNaN),
+    'TMat3f Equals rejects NaN epsilon');
+
+  M4f := TMat4f.Identity;
+  M4f[1, 1] := SingleInfinity;
+  Check(not TMat4f.Equals(M4f, TMat4f.Identity, Single(0.0)),
+    'TMat4f Equals rejects finite vs infinity');
+  M4f[1, 1] := SingleNegativeInfinity;
+  Check(not TMat4f.Equals(TMat4f.Identity, TMat4f.Identity, SingleNegativeInfinity),
+    'TMat4f Equals rejects negative infinite epsilon');
+
+  M3d := TMat3d.Identity;
+  M3d[0, 0] := DoubleNaN;
+  Check(not TMat3d.Equals(M3d, M3d, 0.0), 'TMat3d Equals rejects NaN elements');
+  M3d[0, 0] := DoubleNegativeInfinity;
+  Check(TMat3d.Equals(M3d, M3d, 0.0), 'TMat3d Equals accepts matching infinity');
+  Check(not TMat3d.Equals(TMat3d.Identity, TMat3d.Identity, DoubleNaN),
+    'TMat3d Equals rejects NaN epsilon');
+
+  M4d := TMat4d.Identity;
+  M4d[2, 2] := DoubleInfinity;
+  Check(not TMat4d.Equals(M4d, TMat4d.Identity, 0.0),
+    'TMat4d Equals rejects finite vs infinity');
+  M4d[2, 2] := DoubleNegativeInfinity;
+  Check(not TMat4d.Equals(TMat4d.Identity, TMat4d.Identity, DoubleNegativeInfinity),
+    'TMat4d Equals rejects negative infinite epsilon');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.mat');
   T.Run('TMat3f contracts', @TestMat3fContracts);
@@ -956,5 +1012,7 @@ begin
     @TestSinglePrecisionInverseOverwritesOutParameter);
   T.Run('double precision inverse overwrites out parameter',
     @TestDoublePrecisionInverseOverwritesOutParameter);
+  T.Run('matrix Equals non-finite comparison contracts',
+    @TestMatrixEqualsNonFiniteComparisonContracts);
   T.Summary;
 end.

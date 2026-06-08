@@ -315,6 +315,18 @@ REQUIRED_MAT_DOC_TRUTH = (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
         "Matrix inverse success overwrites the `out` parameter completely: `TryInverse` does not depend on the previous contents of the destination matrix and fully rewrites it before returning `True`.",
     ),
+    (
+        "docs/math/README.md",
+        "Matrix `Equals` applies scalar `FloatEquals` element-wise: NaN elements and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.",
+    ),
+    (
+        "docs/math/API.md",
+        "Matrix `Equals` applies scalar `FloatEquals` element-wise: NaN elements and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "Matrix `Equals` applies scalar `FloatEquals` element-wise: NaN elements and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.",
+    ),
 )
 REQUIRED_TRANSFORM_DOC_TRUTH = (
     (
@@ -1744,6 +1756,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("mat-inverse-overwrite-single", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('single precision inverse overwrites out parameter'"),
     RequiredBehaviorTestMarker("mat-inverse-overwrite-double", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('double precision inverse overwrites out parameter'"),
     RequiredBehaviorTestMarker("mat-indexed-alias-write-through", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('matrix indexed aliases write through'"),
+    RequiredBehaviorTestMarker("mat-equals-non-finite", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('matrix Equals non-finite comparison contracts'"),
     RequiredBehaviorTestMarker("quat-f", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('TQuatf contracts'"),
     RequiredBehaviorTestMarker("quat-d", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('TQuatd contracts'"),
     RequiredBehaviorTestMarker("quat-data-alias-write-through", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('quaternion Data aliases write through'"),
