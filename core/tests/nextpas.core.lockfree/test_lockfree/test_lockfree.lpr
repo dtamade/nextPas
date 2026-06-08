@@ -2207,6 +2207,7 @@ procedure TestLockFreeSourceContracts;
 const
   LockFreeSourcePath = '../../../src/nextpas.core.lockfree.pas';
   LockFreeDocsReadmePath = '../../../docs/lockfree/README.md';
+  CoreGoalTreePath = '../../../docs/l1-goal-tree.md';
   LockFreeTestSourcePath = 'test_lockfree.lpr';
   LockFreeStressTestSourcePath = '../test_lockfree_stress/test_lockfree_stress.lpr';
   LockFreeTestMakefilePath = 'Makefile';
@@ -2224,6 +2225,7 @@ const
 var
   LLockFreeSource: string;
   LDocsReadme: string;
+  LCoreGoalTree: string;
   LTestSource: string;
   LStressTestSource: string;
   LTestRuntimeHarnessSourceSection: string;
@@ -2289,6 +2291,7 @@ begin
 
   LLockFreeSource := ReadUtf8TextFile(LockFreeSourcePath);
   LDocsReadme := ReadUtf8TextFile(LockFreeDocsReadmePath);
+  LCoreGoalTree := ReadUtf8TextFile(CoreGoalTreePath);
   LTestSource := ReadUtf8TextFile(LockFreeTestSourcePath);
   LStressTestSource := ReadUtf8TextFile(LockFreeStressTestSourcePath);
   LTestRuntimeHarnessSourceSection := ExtractSection(LTestSource,
@@ -2994,6 +2997,16 @@ begin
   CheckContains(LDocsReadme,
     '`TWorkStealingDeque<T>` last-item owner/thief arbitration uses `seq_cst` ordering on `FTop` / `FBottom` loads, bottom store, and top CAS so the single remaining item is won exactly once.',
     'lockfree README must document the deque seq_cst last-item arbitration contract');
+  CheckContains(LCoreGoalTree,
+    '| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | source-contract / focused runtime / stress:',
+    'goal tree must report lockfree by evidence level instead of broad completion wording');
+  CheckContains(LCoreGoalTree, 'lockfree stress 10/10',
+    'goal tree evidence header must report the current lockfree stress count');
+  CheckNotContains(LCoreGoalTree, 'lockfree stress 9/9',
+    'goal tree evidence header must not keep stale lockfree stress count');
+  CheckNotContains(LCoreGoalTree,
+    '| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | ✅ 完成/强化中',
+    'goal tree must not report lockfree as broad completion without evidence-level truth');
   CheckContains(LMpscSource, 'Assert(FClosed <> 0',
     'MPSC destroy must keep the close-before-destroy debug guard');
   CheckContains(LMpscSource, 'Close must be called before Destroy',

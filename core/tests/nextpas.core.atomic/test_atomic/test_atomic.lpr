@@ -322,6 +322,7 @@ const
   AtomicForcedCompileSourcePath = 'test_atomic_forced_compile.lpr';
   AtomicTestSourcePath = 'test_atomic.lpr';
   AtomicDocsReadmePath = '../../../docs/atomic/README.md';
+  CoreGoalTreePath = '../../../docs/l1-goal-tree.md';
   AtomicBenchMakefilePath = '../../../benchmarks/nextpas.core.atomic/bench_atomic/Makefile';
   AtomicBenchSourcePath = '../../../benchmarks/nextpas.core.atomic/bench_atomic/bench_atomic.lpr';
   AtomicBenchRustComparePath = '../../../benchmarks/nextpas.core.atomic/bench_atomic/compare_rust/main.rs';
@@ -340,6 +341,7 @@ var
   LAtomicTestSource: string;
   LAtomicDirectTypesPtrTestSource: string;
   LAtomicDocsReadme: string;
+  LCoreGoalTree: string;
   LAtomicBenchMakefile: string;
   LAtomicBenchSource: string;
   LAtomicBenchRustCompareSource: string;
@@ -473,6 +475,7 @@ begin
   LAtomicTestSource := ReadUtf8TextFile(AtomicTestSourcePath);
   LAtomicDirectTypesPtrTestSource := ReadUtf8TextFile(AtomicDirectTypesPtrTestPath);
   LAtomicDocsReadme := ReadUtf8TextFile(AtomicDocsReadmePath);
+  LCoreGoalTree := ReadUtf8TextFile(CoreGoalTreePath);
   Check(FileExists(AtomicBenchMakefilePath),
     'atomic benchmark Makefile must exist as the focused benchmark entrypoint');
   Check(FileExists(AtomicBenchSourcePath),
@@ -1428,6 +1431,16 @@ begin
     'atomic backend truth matrix must forbid runtime-ready claims without runtime evidence');
   CheckNotContains(LAtomicDocsReadme, 'Windows runtime ready',
     'atomic README must not claim Windows runtime readiness without runtime evidence');
+  CheckContains(LCoreGoalTree,
+    '| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | source-contract / forced compile / focused runtime:',
+    'goal tree must report atomic by evidence level instead of broad completion wording');
+  CheckContains(LCoreGoalTree, 'atomic 42/42',
+    'goal tree evidence header must report the current atomic focused runtime count');
+  CheckNotContains(LCoreGoalTree, 'atomic 39/39',
+    'goal tree evidence header must not keep stale atomic focused runtime count');
+  CheckNotContains(LCoreGoalTree,
+    '| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | ✅ 完成/强化中',
+    'goal tree must not report atomic as broad completion without evidence-level truth');
   CheckContains(LAtomicTestMakefile, 'test-forced-compile',
     'atomic Makefile must expose an architecture forced compile gate');
   CheckContains(LAtomicTestMakefile, 'test_atomic_forced_compile.lpr',
@@ -1444,6 +1457,20 @@ begin
     'atomic forced compile gate must print host target pass evidence');
   CheckContains(LAtomicTestMakefile, 'atomic-forced-compile-target=win64 status=pass',
     'atomic forced compile gate must print Win64 target pass evidence');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=x86_64-linux status=focused-runtime-via-host-test',
+    'atomic forced compile gate must print x86_64 Linux truth as host focused runtime evidence');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=i386 status=source-contract-only',
+    'atomic forced compile gate must print i386 source-contract truth when no cross compiler is configured');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=aarch64 status=source-contract-only',
+    'atomic forced compile gate must print AArch64 source-contract truth when no cross compiler is configured');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=arm status=source-contract-only',
+    'atomic forced compile gate must print ARM source-contract truth when no cross compiler is configured');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=riscv64 status=source-contract-only',
+    'atomic forced compile gate must print RISC-V source-contract truth when no cross compiler is configured');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=loongarch64 status=source-contract-only',
+    'atomic forced compile gate must print LoongArch source-contract truth when no cross compiler is configured');
+  CheckContains(LAtomicTestMakefile, 'atomic-forced-compile-matrix-compiled-targets=host,win64',
+    'atomic forced compile gate must distinguish compiled targets from source-contract-only rows');
   CheckContains(LAtomicForcedCompileSource, 'uses' + LineEnding + '  nextpas.core.atomic;',
     'atomic forced compile fixture must exercise the main facade without extra imports');
   CheckNotContains(LAtomicForcedCompileSource, 'nextpas.core.atomic.compat',

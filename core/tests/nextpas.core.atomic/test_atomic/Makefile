@@ -14,7 +14,7 @@ WINDOWS_COMPILE_FLAGS := $(FORCED_COMPILE_FLAGS) -dNEXTPAS_FORCE_HOST_WINDOWS
 WINDOWS_COMPILE_FLAGS += -FU$(BUILD_DIR)/compile-win64 -FE$(BUILD_DIR)/compile-win64
 WIN64_FLAGS ?= -Twin64 -Px86_64
 
-.PHONY: build run test compile-host cross-win64 test-forced-compile clean
+.PHONY: build run test compile-host cross-win64 print-architecture-truth test-forced-compile clean
 
 build:
 	@mkdir -p $(BUILD_DIR)
@@ -35,7 +35,16 @@ cross-win64:
 	$(FPC) $(WINDOWS_COMPILE_FLAGS) $(WIN64_FLAGS) $(FORCED_COMPILE_SOURCE)
 	@printf 'atomic-forced-compile-target=win64 status=pass\n'
 
-test-forced-compile: compile-host cross-win64
+print-architecture-truth:
+	@printf 'atomic-architecture-truth-target=x86_64-linux status=focused-runtime-via-host-test\n'
+	@printf 'atomic-architecture-truth-target=i386 status=source-contract-only\n'
+	@printf 'atomic-architecture-truth-target=aarch64 status=source-contract-only\n'
+	@printf 'atomic-architecture-truth-target=arm status=source-contract-only\n'
+	@printf 'atomic-architecture-truth-target=riscv64 status=source-contract-only\n'
+	@printf 'atomic-architecture-truth-target=loongarch64 status=source-contract-only\n'
+	@printf 'atomic-forced-compile-matrix-compiled-targets=host,win64\n'
+
+test-forced-compile: compile-host cross-win64 print-architecture-truth
 	@printf 'atomic-forced-compile-matrix-status=pass\n'
 
 clean:
