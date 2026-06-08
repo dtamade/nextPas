@@ -35,8 +35,12 @@ begin
   LLoop.AsyncReadTimeout(0, nil, 0, 0, LDeadline, LCompletion, nil);
   LLoop.AsyncWriteTimeout(0, nil, 0, 0, LDeadline, LCompletion, nil);
   LLoop.AsyncAccept(0, nil, nil, 0, LCompletion, nil);
+  LLoop.AsyncConnect(0, nil, 0, LCompletion, nil);
   LLoop.AsyncRecv(0, nil, 0, 0, LCompletion, nil);
   LLoop.AsyncSend(0, nil, 0, 0, LCompletion, nil);
+  LLoop.AsyncClose(0, LCompletion, nil);
+  LLoop.AsyncRecvTimeout(0, nil, 0, 0, LDeadline, LCompletion, nil);
+  LLoop.AsyncSendTimeout(0, nil, 0, 0, LDeadline, LCompletion, nil);
   LLoop.Poll;
   LLoop.RunOnce;
   LLoop.Stop;

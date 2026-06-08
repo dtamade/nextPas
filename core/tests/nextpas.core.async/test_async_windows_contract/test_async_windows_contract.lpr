@@ -95,10 +95,22 @@ begin
     'async Windows compile gate must touch file write timeout wrapper');
   CheckContains(LCompileGate, 'lloop.asyncaccept',
     'async Windows compile gate must touch accept unsupported boundary');
+  CheckContains(LCompileGate, 'lloop.asyncconnect',
+    'async Windows compile gate must touch connect unsupported boundary');
   CheckContains(LCompileGate, 'lloop.asyncrecv',
     'async Windows compile gate must touch recv unsupported boundary');
   CheckContains(LCompileGate, 'lloop.asyncsend',
     'async Windows compile gate must touch send unsupported boundary');
+  CheckContains(LCompileGate, 'lloop.asyncclose',
+    'async Windows compile gate must touch close unsupported boundary');
+  CheckContains(LCompileGate, 'lloop.asyncrecvtimeout',
+    'async Windows compile gate must touch recv timeout unsupported boundary');
+  CheckContains(LCompileGate, 'lloop.asyncsendtimeout',
+    'async Windows compile gate must touch send timeout unsupported boundary');
+  CheckContains(LCompileGate, 'tdeadline.after(',
+    'async Windows compile gate must compile finite deadline timeout wrappers');
+  CheckAbsent(LCompileGate, 'tdeadline.infinite',
+    'async Windows compile gate must not bypass timeout wrappers with infinite deadlines');
   CheckContains(LCompileGate, 'lloop.poll;',
     'async Windows compile gate must touch async loop poll facade');
   CheckContains(LCompileGate, 'lloop.runonce;',
