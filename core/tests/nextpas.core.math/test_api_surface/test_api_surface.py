@@ -1536,6 +1536,14 @@ REQUIRED_VECTOR_LENGTH_SQR_RECORD_CONTRACTS = (
     ("vec-3d-lengthsqr", "TVec3d", "Double"),
     ("vec-4d-lengthsqr", "TVec4d", "Double"),
 )
+REQUIRED_VECTOR_PUBLIC_RECORD_CONTRACTS = (
+    ("vec-2f", "TVec2f", "Single", ("X", "Y"), "0..1", False),
+    ("vec-3f", "TVec3f", "Single", ("X", "Y", "Z"), "0..2", True),
+    ("vec-4f", "TVec4f", "Single", ("X", "Y", "Z", "W"), "0..3", False),
+    ("vec-2d", "TVec2d", "Double", ("X", "Y"), "0..1", False),
+    ("vec-3d", "TVec3d", "Double", ("X", "Y", "Z"), "0..2", True),
+    ("vec-4d", "TVec4d", "Double", ("X", "Y", "Z", "W"), "0..3", False),
+)
 REQUIRED_BENCHMARK_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
     BENCH_SIMD_SEAM_PATH: (
         ("bench-mat4f-vector-scalar-baseline", "TMat4f scalar mat-vec"),
@@ -2695,6 +2703,150 @@ def scan_vector_length_sqr_record_contract(root: Path, path: Path, text: str) ->
     return findings
 
 
+def scan_vector_public_record_contract(root: Path, path: Path, text: str) -> list[Finding]:
+    findings: list[Finding] = []
+    if relative(path, root) != "src/nextpas.core.math.vec.pas":
+        return findings
+
+    code = interface_text(text)
+    for rule, record_name, scalar_type, fields, index_range, has_cross in REQUIRED_VECTOR_PUBLIC_RECORD_CONTRACTS:
+        record_match = re.search(
+            rf"\b{record_name}\s*=\s*packed\s+record\b(?P<body>.*?)\bend\s*;",
+            code,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if record_match is None:
+            add_finding(
+                findings,
+                "missing-vector-public-contract:" + rule + ":record",
+                root,
+                path,
+                1,
+                "missing " + record_name + " record",
+            )
+            continue
+
+        body = record_match.group("body")
+        record_line = line_no_at(code, record_match.start())
+
+        create_args = r"\s*,\s*".join("A" + field for field in fields)
+        field_names = r"\s*,\s*".join(fields)
+        required_patterns = (
+            (
+                "tindex",
+                rf"\bTIndex\s*=\s*{re.escape(index_range)}\s*;",
+            ),
+            (
+                "create",
+                rf"\bclass\s+function\s+Create\s*\(\s*const\s+{create_args}\s*:\s*{scalar_type}\s*\)\s*:\s*{record_name}\s*;\s*static\s*;\s*inline\s*;",
+            ),
+            (
+                "zero",
+                rf"\bclass\s+function\s+Zero\s*:\s*{record_name}\s*;\s*static\s*;\s*inline\s*;",
+            ),
+            (
+                "operator-add",
+                rf"\bclass\s+operator\s+\+\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;",
+            ),
+            (
+                "operator-subtract",
+                rf"\bclass\s+operator\s+-\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;",
+            ),
+            (
+                "operator-negate",
+                rf"\bclass\s+operator\s+-\s*\(\s*const\s+AValue\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;",
+            ),
+            (
+                "operator-scale-right",
+                rf"\bclass\s+operator\s+\*\s*\(\s*const\s+AValue\s*:\s*{record_name}\s*;\s*const\s+AScalar\s*:\s*{scalar_type}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;",
+            ),
+            (
+                "operator-scale-left",
+                rf"\bclass\s+operator\s+\*\s*\(\s*const\s+AScalar\s*:\s*{scalar_type}\s*;\s*const\s+AValue\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;",
+            ),
+            (
+                "operator-divide-scalar",
+                rf"\bclass\s+operator\s+/\s*\(\s*const\s+AValue\s*:\s*{record_name}\s*;\s*const\s+AScalar\s*:\s*{scalar_type}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;",
+            ),
+            (
+                "mul-components",
+                rf"\bclass\s+function\s+MulComponents\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*static\s*;\s*inline\s*;",
+            ),
+            (
+                "div-components",
+                rf"\bclass\s+function\s+DivComponents\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*static\s*;\s*inline\s*;",
+            ),
+            (
+                "dot",
+                rf"\bclass\s+function\s+Dot\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*\)\s*:\s*{scalar_type}\s*;\s*static\s*;\s*inline\s*;",
+            ),
+            (
+                "lerp",
+                rf"\bclass\s+function\s+Lerp\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*;\s*const\s+AT\s*:\s*{scalar_type}\s*\)\s*:\s*{record_name}\s*;\s*static\s*;\s*inline\s*;",
+            ),
+            (
+                "equals",
+                rf"\bclass\s+function\s+Equals\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*;\s*const\s+AEpsilon\s*:\s*{scalar_type}\s*\)\s*:\s*Boolean\s*;\s*static\s*;\s*inline\s*;",
+            ),
+            (
+                "lengthsqr",
+                rf"\bfunction\s+LengthSqr\s*:\s*{scalar_type}\s*;\s*inline\s*;",
+            ),
+            (
+                "length",
+                rf"\bfunction\s+Length\s*:\s*{scalar_type}\s*;\s*inline\s*;",
+            ),
+            (
+                "normalize",
+                rf"\bfunction\s+Normalize\s*:\s*{record_name}\s*;\s*inline\s*;",
+            ),
+            (
+                "data-alias",
+                rf"\b0\s*:\s*\(\s*{field_names}\s*:\s*{scalar_type}\s*\)\s*;\s*1\s*:\s*\(\s*Data\s*:\s*array\s*\[\s*TIndex\s*\]\s*of\s*{scalar_type}\s*\)\s*;",
+            ),
+        )
+
+        for contract_name, pattern in required_patterns:
+            if re.search(pattern, body, re.IGNORECASE | re.DOTALL) is not None:
+                continue
+            add_finding(
+                findings,
+                "missing-vector-public-contract:" + rule + ":" + contract_name,
+                root,
+                path,
+                record_line,
+                "missing " + record_name + "." + contract_name,
+            )
+
+        cross_pattern = (
+            rf"\bclass\s+function\s+Cross\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*static\s*;\s*inline\s*;"
+        )
+        has_cross_signature = re.search(
+            cross_pattern,
+            body,
+            re.IGNORECASE | re.DOTALL,
+        ) is not None
+        if has_cross and not has_cross_signature:
+            add_finding(
+                findings,
+                "missing-vector-public-contract:" + rule + ":cross",
+                root,
+                path,
+                record_line,
+                "missing " + record_name + ".Cross",
+            )
+        if (not has_cross) and has_cross_signature:
+            add_finding(
+                findings,
+                "unexpected-vector-public-contract:" + rule + ":cross",
+                root,
+                path,
+                record_line,
+                record_name + ".Cross must stay 3D-only",
+            )
+    return findings
+
+
 def scan_missing_required_public_files(root: Path) -> list[Finding]:
     findings: list[Finding] = []
     for rel in sorted(REQUIRED_PUBLIC_DECLARATIONS):
@@ -2789,6 +2941,135 @@ def run_required_public_declarations_self_tests() -> None:
             raise AssertionError(
                 "required-public-declarations self-test expected "
                 + ", ".join(sorted(expected_rules))
+            )
+
+
+def run_vector_public_record_contract_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        path = root / "src/nextpas.core.math.vec.pas"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "unit nextpas.core.math.vec;\n"
+            "interface\n"
+            "type\n"
+            "  TVec2f = packed record\n"
+            "  public\n"
+            "    type\n"
+            "      TIndex = 0..1;\n"
+            "    class function Create(const AX, AY: Single): TVec2f; static; inline;\n"
+            "    class function Zero: TVec2f; static; inline;\n"
+            "    class operator + (const AA, AB: TVec2f): TVec2f; inline;\n"
+            "    class operator - (const AA, AB: TVec2f): TVec2f; inline;\n"
+            "    class operator - (const AValue: TVec2f): TVec2f; inline;\n"
+            "    class operator * (const AValue: TVec2f; const AScalar: Single): TVec2f; inline;\n"
+            "    class operator * (const AScalar: Single; const AValue: TVec2f): TVec2f; inline;\n"
+            "    class operator / (const AValue: TVec2f; const AScalar: Single): TVec2f; inline;\n"
+            "    class function MulComponents(const AA, AB: TVec2f): TVec2f; static; inline;\n"
+            "    class function DivComponents(const AA, AB: TVec2f): TVec2f; static; inline;\n"
+            "    class function Dot(const AA, AB: TVec2f): Single; static; inline;\n"
+            "    class function Lerp(const AA, AB: TVec2f; const AT: Single): TVec2f; static; inline;\n"
+            "    class function Equals(const AA, AB: TVec2f; const AEpsilon: Single): Boolean; static; inline;\n"
+            "    function LengthSqr: Single; inline;\n"
+            "    function Length: Single; inline;\n"
+            "    function Normalize: TVec2f; inline;\n"
+            "    var\n"
+            "      case Integer of\n"
+            "        0: (X, Y: Single);\n"
+            "  end;\n"
+            "implementation\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        findings = scan_vector_public_record_contract(
+            root,
+            path,
+            path.read_text(encoding="utf-8"),
+        )
+        rules = {finding.rule for finding in findings}
+        expected_rules = {"missing-vector-public-contract:vec-2f:data-alias"}
+        if not expected_rules <= rules:
+            raise AssertionError(
+                "vector-public-record-contract self-test missing "
+                + ", ".join(sorted(expected_rules - rules))
+            )
+
+        path.write_text(
+            "unit nextpas.core.math.vec;\n"
+            "interface\n"
+            "type\n"
+            "  TVec2f = packed record\n"
+            "  public\n"
+            "    type\n"
+            "      TIndex = 0..1;\n"
+            "    class function Create(const AX, AY: Single): TVec2f; static; inline;\n"
+            "    class function Zero: TVec2f; static; inline;\n"
+            "    class operator + (const AA, AB: TVec2f): TVec2f; inline;\n"
+            "    class operator - (const AA, AB: TVec2f): TVec2f; inline;\n"
+            "    class operator - (const AValue: TVec2f): TVec2f; inline;\n"
+            "    class operator * (const AValue: TVec2f; const AScalar: Single): TVec2f; inline;\n"
+            "    class operator * (const AScalar: Single; const AValue: TVec2f): TVec2f; inline;\n"
+            "    class operator / (const AValue: TVec2f; const AScalar: Single): TVec2f; inline;\n"
+            "    class function MulComponents(const AA, AB: TVec2f): TVec2f; static; inline;\n"
+            "    class function DivComponents(const AA, AB: TVec2f): TVec2f; static; inline;\n"
+            "    class function Dot(const AA, AB: TVec2f): Single; static; inline;\n"
+            "    class function Lerp(const AA, AB: TVec2f; const AT: Single): TVec2f; static; inline;\n"
+            "    class function Equals(const AA, AB: TVec2f; const AEpsilon: Single): Boolean; static; inline;\n"
+            "    function LengthSqr: Single; inline;\n"
+            "    function Length: Single; inline;\n"
+            "    function Normalize: TVec2f; inline;\n"
+            "    var\n"
+            "      case Integer of\n"
+            "        0: (X, Y: Single);\n"
+            "        1: (Data: array[TIndex] of Single);\n"
+            "  end;\n"
+            "  TVec3f = packed record\n"
+            "  public\n"
+            "    type\n"
+            "      TIndex = 0..2;\n"
+            "    class function Create(const AX, AY, AZ: Single): TVec3f; static; inline;\n"
+            "    class function Zero: TVec3f; static; inline;\n"
+            "    class operator + (const AA, AB: TVec3f): TVec3f; inline;\n"
+            "    class operator - (const AA, AB: TVec3f): TVec3f; inline;\n"
+            "    class operator - (const AValue: TVec3f): TVec3f; inline;\n"
+            "    class operator * (const AValue: TVec3f; const AScalar: Single): TVec3f; inline;\n"
+            "    class operator * (const AScalar: Single; const AValue: TVec3f): TVec3f; inline;\n"
+            "    class operator / (const AValue: TVec3f; const AScalar: Single): TVec3f; inline;\n"
+            "    class function MulComponents(const AA, AB: TVec3f): TVec3f; static; inline;\n"
+            "    class function DivComponents(const AA, AB: TVec3f): TVec3f; static; inline;\n"
+            "    class function Dot(const AA, AB: TVec3f): Single; static; inline;\n"
+            "    class function Cross(const AA, AB: TVec3f): TVec3f; static; inline;\n"
+            "    class function Lerp(const AA, AB: TVec3f; const AT: Single): TVec3f; static; inline;\n"
+            "    class function Equals(const AA, AB: TVec3f; const AEpsilon: Single): Boolean; static; inline;\n"
+            "    function LengthSqr: Single; inline;\n"
+            "    function Length: Single; inline;\n"
+            "    function Normalize: TVec3f; inline;\n"
+            "    var\n"
+            "      case Integer of\n"
+            "        0: (X, Y, Z: Single);\n"
+            "        1: (Data: array[TIndex] of Single);\n"
+            "  end;\n"
+            "implementation\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        findings = scan_vector_public_record_contract(
+            root,
+            path,
+            path.read_text(encoding="utf-8"),
+        )
+        rules = {finding.rule for finding in findings}
+        expected_missing_records = {
+            "missing-vector-public-contract:vec-2d:record",
+            "missing-vector-public-contract:vec-3d:record",
+            "missing-vector-public-contract:vec-4d:record",
+            "missing-vector-public-contract:vec-4f:record",
+        }
+        if rules != expected_missing_records:
+            raise AssertionError(
+                "vector-public-record-contract self-test expected only missing "
+                + "unfixture records, got "
+                + ", ".join(sorted(rules))
             )
 
 
@@ -5294,6 +5575,7 @@ def build_report(root: Path) -> Report:
         findings.extend(scan_public_global_random_singletons(root, path, text))
         findings.extend(scan_required_public_declarations(root, path, text))
         findings.extend(scan_vector_length_sqr_record_contract(root, path, text))
+        findings.extend(scan_vector_public_record_contract(root, path, text))
 
     for path in consumer_files:
         scanned.add(path)
@@ -5362,6 +5644,7 @@ def main() -> int:
         run_required_trig_host_compile_gate_self_tests()
         run_required_impl_simd_win64_compile_gate_self_tests()
         run_required_public_declarations_self_tests()
+        run_vector_public_record_contract_self_tests()
         run_required_doc_truth_self_tests()
         run_root_facade_contract_self_tests()
         run_root_facade_reexport_parity_self_tests()
