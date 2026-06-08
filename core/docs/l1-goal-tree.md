@@ -1,6 +1,6 @@
 # nextPas Core Framework — 目标树
 
-> 最后更新: 2026-06-08 | 本轮证据: 本地 Linux x86_64 focused gate: atomic 42/42 + lockfree 46/46 + lockfree stress 10/10, heaptrc 0
+> 最后更新: 2026-06-08 | 本轮证据: 本地 Linux x86_64 focused gate: atomic 43/43 + lockfree 46/46 + lockfree stress 10/10, heaptrc 0
 > 证据边界: 未有目标机 runtime gate 的平台只声明 source-contract 覆盖，不声明跨平台实机全绿。
 
 ## 定位

@@ -465,6 +465,7 @@ var
   LDefaultFetchMin64Section: string;
   LDefaultFetchNand64Section: string;
   LInvalidOrderMatrixSection: string;
+  LSingleOrderCasMatrixSection: string;
 begin
   LAtomicSource := ReadUtf8TextFile(AtomicSourcePath);
   LAtomicCoreSource := ReadUtf8TextFile(AtomicCoreSourcePath);
@@ -787,6 +788,10 @@ begin
     '  T.Summary;');
   LInvalidOrderMatrixSection := ExtractSection(LAtomicTestSource,
     'procedure ' + 'TestAtomicInvalidMemoryOrderSurfaceMatrix;' + LineEnding +
+    'type',
+    'procedure ' + 'TestAtomicTypedCasConsumeContract;');
+  LSingleOrderCasMatrixSection := ExtractSection(LAtomicTestSource,
+    'procedure ' + 'TestAtomicSingleOrderCasDerivedFailureOrderMatrix;' + LineEnding +
     'type',
     'procedure ' + 'TestAtomicTypedCasConsumeContract;');
   LSignedWrapContractSection := ExtractSection(LAtomicTestSource,
@@ -1394,6 +1399,27 @@ begin
     'memory-order matrix must prove 64-bit fetch_min acq_rel-order is legal for RMW operations');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_fetch_nand(LInt32, 2, mo_consume)',
     'memory-order matrix must prove fetch_nand consume-order is legal for RMW operations');
+  CheckContains(LAtomicTestSource, 'procedure TestAtomicSingleOrderCasDerivedFailureOrderMatrix;',
+    'atomic tests must keep runtime coverage for single-order CAS derived failure-order matrix');
+  CheckContains(LRunnerSection,
+    'T.Run(''single-order CAS derived failure-order matrix'', @TestAtomicSingleOrderCasDerivedFailureOrderMatrix);',
+    'atomic runner must register single-order CAS derived failure-order matrix coverage');
+  CheckContains(LSingleOrderCasMatrixSection, 'atomic_compare_exchange_strong(LInt32, LExpectedInt32, 21, mo_release)',
+    'single-order CAS matrix must cover root Int32 release mismatch failure-order derivation');
+  CheckContains(LSingleOrderCasMatrixSection, 'atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, mo_acq_rel)',
+    'single-order CAS matrix must cover root pointer acq_rel success failure-order derivation');
+  CheckContains(LSingleOrderCasMatrixSection, 'nextpas.core.atomic.AtomicCompareExchange32(LInt32, 31, 32, moRelease)',
+    'single-order CAS matrix must cover PascalCase Int32 release mismatch failure-order derivation');
+  CheckContains(LSingleOrderCasMatrixSection, 'nextpas.core.atomic.AtomicCompareExchangePtr(LPtr, @LValueA, @LValueB, moAcqRel)',
+    'single-order CAS matrix must cover PascalCase pointer acq_rel success failure-order derivation');
+  CheckContains(LSingleOrderCasMatrixSection, 'LTypedPtr.CompareExchangeStrong(LExpectedTypedPtr, @LValueB, mo_release)',
+    'single-order CAS matrix must cover facade TAtomicPtr release mismatch failure-order derivation');
+  CheckContains(LSingleOrderCasMatrixSection, 'LTypedPtr.CompareExchangeWeak(LExpectedTypedPtr, @LValueC, mo_acq_rel)',
+    'single-order CAS matrix must cover facade TAtomicPtr acq_rel success failure-order derivation');
+  CheckContains(LAtomicDirectTypesPtrTestSource, 'direct atomic.types TAtomicPtr release CAS should remain legal on mismatch',
+    'single-order CAS matrix must cover direct atomic.types TAtomicPtr release mismatch failure-order derivation');
+  CheckContains(LAtomicDirectTypesPtrTestSource, 'direct atomic.types TAtomicPtr weak acq_rel CAS should publish the replacement pointer',
+    'single-order CAS matrix must cover direct atomic.types TAtomicPtr acq_rel success failure-order derivation');
   CheckContains(LAtomicDocsReadme,
     '`atomic_fetch_add/sub(var Pointer; PtrInt)` are the canonical main-facade pointer arithmetic APIs: they apply byte offsets, return the previous pointer, and publish the adjusted pointer; pointer bitwise overloads remain compat-only.',
     'atomic README must document main-facade pointer arithmetic contract');
@@ -1434,9 +1460,9 @@ begin
   CheckContains(LCoreGoalTree,
     '| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | source-contract / forced compile / focused runtime:',
     'goal tree must report atomic by evidence level instead of broad completion wording');
-  CheckContains(LCoreGoalTree, 'atomic 42/42',
+  CheckContains(LCoreGoalTree, 'atomic 43/43',
     'goal tree evidence header must report the current atomic focused runtime count');
-  CheckNotContains(LCoreGoalTree, 'atomic 39/39',
+  CheckNotContains(LCoreGoalTree, 'atomic 42/42',
     'goal tree evidence header must not keep stale atomic focused runtime count');
   CheckNotContains(LCoreGoalTree,
     '| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | ✅ 完成/强化中',
@@ -5242,6 +5268,78 @@ begin
     'weak CAS mismatch should write the observed value');
 end;
 
+procedure TestAtomicSingleOrderCasDerivedFailureOrderMatrix;
+type
+  TFacadeAtomicPtr = specialize TAtomicPtr<Integer>;
+var
+  LInt32: Int32;
+  LExpectedInt32: Int32;
+  LObservedInt32: Int32;
+  LPtr: Pointer;
+  LExpectedPtr: Pointer;
+  LObservedPtr: Pointer;
+  LValueA: Integer;
+  LValueB: Integer;
+  LValueC: Integer;
+  LTypedPtr: TFacadeAtomicPtr;
+  LExpectedTypedPtr: PInteger;
+begin
+  LInt32 := 11;
+  LExpectedInt32 := 12;
+  Check(not atomic_compare_exchange_strong(LInt32, LExpectedInt32, 21, mo_release),
+    'root Int32 release single-order CAS should remain legal on mismatch');
+  CheckEqual(Int64(11), Int64(LExpectedInt32),
+    'root Int32 release single-order CAS mismatch should write observed value');
+  CheckEqual(Int64(11), Int64(LInt32),
+    'root Int32 release single-order CAS mismatch must not mutate storage');
+
+  LExpectedInt32 := 11;
+  Check(atomic_compare_exchange_weak(LInt32, LExpectedInt32, 22, mo_acq_rel),
+    'root Int32 weak acq_rel single-order CAS should update on match');
+  CheckEqual(Int64(22), Int64(LInt32),
+    'root Int32 weak acq_rel single-order CAS should publish desired value');
+
+  LValueA := 101;
+  LValueB := 202;
+  LValueC := 303;
+
+  LPtr := @LValueA;
+  LExpectedPtr := @LValueA;
+  Check(atomic_compare_exchange_weak(LPtr, LExpectedPtr, @LValueB, mo_acq_rel),
+    'root pointer weak acq_rel single-order CAS should update on match');
+  Check(LPtr = @LValueB,
+    'root pointer weak acq_rel single-order CAS should publish desired pointer');
+
+  LInt32 := 30;
+  LObservedInt32 := nextpas.core.atomic.AtomicCompareExchange32(LInt32, 31, 32, moRelease);
+  CheckEqual(Int64(30), Int64(LObservedInt32),
+    'PascalCase Int32 release single-order CAS mismatch should return observed value');
+  CheckEqual(Int64(30), Int64(LInt32),
+    'PascalCase Int32 release single-order CAS mismatch must not mutate storage');
+
+  LPtr := @LValueA;
+  LObservedPtr := nextpas.core.atomic.AtomicCompareExchangePtr(LPtr, @LValueA, @LValueB, moAcqRel);
+  Check(LObservedPtr = @LValueA,
+    'PascalCase pointer acq_rel single-order CAS should return previous pointer on match');
+  Check(LPtr = @LValueB,
+    'PascalCase pointer acq_rel single-order CAS should publish desired pointer');
+
+  LTypedPtr := TFacadeAtomicPtr.Create(@LValueA);
+  LExpectedTypedPtr := @LValueB;
+  Check(not LTypedPtr.CompareExchangeStrong(LExpectedTypedPtr, @LValueB, mo_release),
+    'facade TAtomicPtr release single-order CAS should remain legal on mismatch');
+  Check(LExpectedTypedPtr = @LValueA,
+    'facade TAtomicPtr release single-order CAS mismatch should write observed pointer');
+  Check(LTypedPtr.Load(mo_acquire) = @LValueA,
+    'facade TAtomicPtr release single-order CAS mismatch must not mutate storage');
+
+  LExpectedTypedPtr := @LValueA;
+  Check(LTypedPtr.CompareExchangeWeak(LExpectedTypedPtr, @LValueC, mo_acq_rel),
+    'facade TAtomicPtr weak acq_rel single-order CAS should update on match');
+  Check(LTypedPtr.Load(mo_acquire) = @LValueC,
+    'facade TAtomicPtr weak acq_rel single-order CAS should publish desired pointer');
+end;
+
 procedure TestAtomicTypedCasConsumeContract;
 type
   TIntAtomicPtr = specialize TAtomicPtr<Integer>;
@@ -6094,6 +6192,7 @@ begin
   T.Run('pointer offset fetch contract', @TestAtomicPointerOffsetFetchContract);
   T.Run('invalid memory-order contract', @TestAtomicInvalidMemoryOrderContract);
   T.Run('invalid memory-order surface matrix', @TestAtomicInvalidMemoryOrderSurfaceMatrix);
+  T.Run('single-order CAS derived failure-order matrix', @TestAtomicSingleOrderCasDerivedFailureOrderMatrix);
   T.Run('typed atomic CAS consume contract', @TestAtomicTypedCasConsumeContract);
   T.Run('compat PascalCase facade', @TestAtomicCompatFacade);
   T.Run('compat public alias behavior', @TestAtomicCompatAliasBehavior);

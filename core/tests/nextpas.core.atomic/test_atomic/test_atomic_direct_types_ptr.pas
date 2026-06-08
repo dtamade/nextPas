@@ -117,14 +117,26 @@ begin
 
   Check(LAtomicPtr.CompareExchangeStrong(LExpected, @LValueB, mo_consume),
     'direct atomic.types TAtomicPtr consume CAS should update when expected matches');
+  Check(LExpected = @LValueC,
+    'direct atomic.types TAtomicPtr strong consume CAS success must leave expected as the matched pointer');
   Check(LAtomicPtr.Load(mo_acquire) = @LValueB,
     'direct atomic.types TAtomicPtr consume CAS should publish the replacement pointer');
+
+  LExpected := @LValueA;
+  Check(not LAtomicPtr.CompareExchangeStrong(LExpected, @LValueB, mo_release),
+    'direct atomic.types TAtomicPtr release CAS should remain legal on mismatch');
+  Check(LExpected = @LValueB,
+    'direct atomic.types TAtomicPtr release CAS mismatch should write the observed pointer');
+  Check(LAtomicPtr.Load(mo_acquire) = @LValueB,
+    'direct atomic.types TAtomicPtr release CAS mismatch must not mutate storage');
 
   LExpected := @LValueB;
   Check(LAtomicPtr.CompareExchangeWeak(LExpected, @LValueA, mo_acq_rel),
     'direct atomic.types TAtomicPtr weak CAS should update when expected matches');
+  Check(LExpected = @LValueB,
+    'direct atomic.types TAtomicPtr weak CAS success must leave expected as the matched pointer');
   Check(LAtomicPtr.Load(mo_acquire) = @LValueA,
-    'direct atomic.types TAtomicPtr weak CAS should publish the replacement pointer');
+    'direct atomic.types TAtomicPtr weak acq_rel CAS should publish the replacement pointer');
 
   LExpected := @LValueB;
   Check(not LAtomicPtr.CompareExchangeWeak(LExpected, @LValueC, mo_acq_rel),
