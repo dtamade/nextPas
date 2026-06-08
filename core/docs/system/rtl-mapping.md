@@ -39,15 +39,16 @@ ownership status so future slices can expand the module without turning it into 
 ## FPC SysUtils
 
 Current phase note: `nextpas.core.system.sysutils` now has a minimal live
-exception-formatting facade. Broader SysUtils compatibility remains deferred:
-there is no path, file, environment, time, or broad string-helper surface under
-this unit. See `compatibility-facades.md` and `compatibility-matrix.md` for the
-boundary and live consumer evidence.
+exception-formatting plus `SameText` facade. Broader SysUtils compatibility
+remains deferred: there is no path, file, environment, time, or broad
+string-helper surface under this unit. See `compatibility-facades.md` and
+`compatibility-matrix.md` for the boundary and live consumer evidence.
 
 | FPC capability | nextPas status | nextPas owner / notes |
 | --- | --- | --- |
 | Exception base aliases | `system facade delegating to owner` | Live in `nextpas.core.system.sysutils`; aliases delegate to `nextpas.core.exception`. |
 | `Format` for exception messages | `system facade delegating to owner` | Live in `nextpas.core.system.sysutils`; implementation delegates to `nextpas.core.text.conv`. |
+| `SameText` for case-insensitive comparison | `system facade delegating to owner` | Live in `nextpas.core.system.sysutils`; implementation delegates to `nextpas.core.text.compare`. |
 | Conversion/parsing helpers | `owned by another module, no system facade yet` | Text/encoding/validation modules decide exact surfaces. |
 | Filesystem path and file helpers | `owned by another module, no system facade yet` | `nextpas.core.fs`; system does not own filesystem behavior. |
 | Date/time formatting | `owned by another module, no system facade yet` | `nextpas.core.time`; no S0/S1 facade. |

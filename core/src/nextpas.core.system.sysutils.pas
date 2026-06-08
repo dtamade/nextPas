@@ -9,6 +9,7 @@ interface
 
 uses
   nextpas.core.exception,
+  nextpas.core.text.compare,
   nextpas.core.text.conv;
 
 type
@@ -18,12 +19,18 @@ type
   EAssertionFailed = nextpas.core.exception.EAssertionFailed;
 
 function Format(const AFmt: string; const AArgs: array of const): string;
+function SameText(const ALeft, ARight: string): Boolean;
 
 implementation
 
 function Format(const AFmt: string; const AArgs: array of const): string;
 begin
   Result := nextpas.core.text.conv.Format(AFmt, AArgs);
+end;
+
+function SameText(const ALeft, ARight: string): Boolean;
+begin
+  Result := nextpas.core.text.compare.TextEqualI(ALeft, ARight);
 end;
 
 end.

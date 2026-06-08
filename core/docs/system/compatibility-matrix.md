@@ -1,15 +1,17 @@
 # S4 Compatibility Matrix
 
 This matrix turns current S4 pressure into concrete review inputs. TypInfo has
-a minimal live unit, SysUtils has a minimal live exception-formatting facade,
-and Classes plus broader reflection remain deferred.
+a minimal live unit, SysUtils has a minimal live exception-formatting plus
+`SameText` facade, and Classes plus broader reflection remain deferred.
 
 | Capability | Live evidence | Current provider | Recommended nextPas stance | Current S4 decision | Future unlock gate |
 | --- | --- | --- | --- | --- | --- |
 | `Format`, `Exception.CreateFmt`, `ExceptClass`, `EAssertionFailed` | `compiler/tests/test_sysutils_createfmt_contract.pas` | minimal live `nextpas.core.system.sysutils` plus bootstrap `SysUtils` | keep exception taxonomy in `nextpas.core.exception`; delegate `Format` to `nextpas.core.text.conv` | minimal live exception-formatting facade | system sysutils minimal gate plus compiler contract test |
+| `SameText` | `compiler/sema/np_semantic_model.pas`, `compiler/sema/np_semantic_analyzer.pas`, `compiler/toolchain/np_toolchain_runner.pas` | minimal live `nextpas.core.system.sysutils` plus bootstrap `SysUtils` | delegate comparison semantics to `nextpas.core.text.compare`; keep broad text ownership outside system | minimal live string-comparison facade | system sysutils minimal gate and source-contract dependency guard |
 | path normalization | `compiler/toolchain/np_toolchain_runner.pas`, `compiler/frontend/np_workspace_model.pas` | bootstrap `SysUtils` | delegate to fs/platform/process owners if ever surfaced | no live path surface in `nextpas.core.system.sysutils` | focused compiler/toolchain compile/test gate |
 | filesystem discovery helpers | `FileExists`, `DirectoryExists`, `ForceDirectories`, `FileSearch` in compiler toolchain/workspace code | bootstrap `SysUtils` | keep implementation outside system | no live filesystem surface in `nextpas.core.system.sysutils` | toolchain/workspace consumer gate |
-| string convenience | `SameText`, `Trim`, `LowerCase`, `UpperCase`, `IntToStr`, `StrToInt` in compiler semantic code | bootstrap `SysUtils` | stay explicit about text/number ownership | no live broad string-helper surface in `nextpas.core.system.sysutils` | semantic-model and analyzer consumer gate |
+| string convenience | `Trim`, `LowerCase`, `UpperCase`, `IntToStr`, `StrToInt` in compiler semantic code | bootstrap `SysUtils` | stay explicit about text/number ownership | no live broad string-helper surface in `nextpas.core.system.sysutils` | semantic-model and analyzer consumer gate |
+| `CompareText` | no focused consumer pressure in this lane | historical `SysUtils` surface only | keep deferred unless a real consumer appears | do not add | focused consumer gate proving exact need |
 | `PTypeInfo`, `TTypeKind`, `TypeInfo` | `compiler/tests/test_typinfo_contract.pas`, `core/src/nextpas.core.collections.element_manager.pas`, `core/src/nextpas.core.collections.hashmap.swiss.pas` | minimal live `nextpas.core.system.typinfo` plus compiler/System compile-truth | keep as identity and kind truth only; no property layout promise | minimal live unit | focused RTTI/collections + compiler contract gate |
 | TTypeKind collections coverage | `core/src/nextpas.core.collections.base.pas` | minimal live `nextpas.core.system.typinfo` kind aliases | expose kind names used by comparer/equality dispatch without exposing metadata layout | live within `TTypeKind` contract | system TypInfo kind alias gate with heaptrc proof |
 | `InitializeArray`, `CopyArray`, `FinalizeArray` | `compiler/tests/test_typinfo_contract.pas`, `core/src/nextpas.core.collections.element_manager.pas` | minimal live `nextpas.core.system.typinfo` wrappers over `System` helpers | treat as runtime-managed lifetime ABI, not reflection sugar | minimal live unit | leak-sensitive managed-array gate |
@@ -26,8 +28,9 @@ and Classes plus broader reflection remain deferred.
 
 - Real pressure exists today for bootstrap `SysUtils`, `TypInfo`, and a small
   `Classes` subset.
-- SysUtils pressure is enough for a minimal exception-formatting unit, but not
-  for path, file, environment, time, or broad string-helper compatibility.
+- SysUtils pressure is enough for a minimal exception-formatting plus
+  `SameText` unit, but not for path, file, environment, time, or broad
+  string-helper compatibility.
 - The pressure is not yet proof that a public `nextpas.core.system.classes`
   unit should exist.
 - `TypInfo` has the strongest architectural pressure, so it now has a minimal

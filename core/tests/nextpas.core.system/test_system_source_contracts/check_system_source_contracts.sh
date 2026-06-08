@@ -332,6 +332,7 @@ done
 require_token "docs/system/compatibility-facades.md" 'A minimal live `nextpas.core.system.sysutils` unit exists'
 require_token "docs/system/compatibility-facades.md" 'Format'
 require_token "docs/system/compatibility-facades.md" 'Exception.CreateFmt'
+require_token "docs/system/compatibility-facades.md" '`CompareText` | no focused consumer pressure in this lane'
 require_token "docs/system/compatibility-facades.md" "typinfo-minimal-pressure.md"
 require_token "docs/system/compatibility-facades.md" "2026-06-07-system-typinfo-minimal-unlock-review.md"
 
@@ -355,6 +356,7 @@ require_token "docs/system/compatibility-matrix.md" "minimal live unit"
 require_token "docs/system/compatibility-matrix.md" "minimal live compile-truth contract"
 require_token "docs/system/compatibility-matrix.md" "minimal live exception-formatting facade"
 require_token "docs/system/compatibility-matrix.md" "TTypeKind collections coverage"
+require_token "docs/system/compatibility-matrix.md" '`CompareText` | no focused consumer pressure in this lane'
 
 for token in \
   "S4 TypInfo Minimal Pressure Audit" \
@@ -659,6 +661,7 @@ reject_token "src/nextpas.core.system.pas" "Classes"
 
 require_token "src/nextpas.core.system.sysutils.pas" "unit nextpas.core.system.sysutils;"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.exception"
+require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.compare"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv"
 require_token "src/nextpas.core.system.sysutils.pas" "Exception = nextpas.core.exception.Exception;"
 require_token "src/nextpas.core.system.sysutils.pas" "ExceptClass = nextpas.core.exception.ExceptClass;"
@@ -666,6 +669,8 @@ require_token "src/nextpas.core.system.sysutils.pas" "EConvertError = nextpas.co
 require_token "src/nextpas.core.system.sysutils.pas" "EAssertionFailed = nextpas.core.exception.EAssertionFailed;"
 require_token "src/nextpas.core.system.sysutils.pas" "function Format"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv.Format"
+require_token "src/nextpas.core.system.sysutils.pas" "function SameText"
+require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.compare.TextEqualI"
 reject_token "src/nextpas.core.system.sysutils.pas" "FileExists"
 reject_token "src/nextpas.core.system.sysutils.pas" "DirectoryExists"
 reject_token "src/nextpas.core.system.sysutils.pas" "ForceDirectories"
@@ -677,7 +682,7 @@ reject_token "src/nextpas.core.system.sysutils.pas" "IncludeTrailingPathDelimite
 reject_token "src/nextpas.core.system.sysutils.pas" "ExcludeTrailingPathDelimiter"
 reject_token "src/nextpas.core.system.sysutils.pas" "GetEnvironmentVariable"
 reject_token "src/nextpas.core.system.sysutils.pas" "Trim"
-reject_token "src/nextpas.core.system.sysutils.pas" "SameText"
+reject_token "src/nextpas.core.system.sysutils.pas" "CompareText"
 reject_token "src/nextpas.core.system.sysutils.pas" "LowerCase"
 reject_token "src/nextpas.core.system.sysutils.pas" "UpperCase"
 reject_token "src/nextpas.core.system.sysutils.pas" "IntToStr"

@@ -49,10 +49,21 @@ begin
   end;
 end;
 
+procedure TestSameTextDelegatesToTextCompareOwner;
+begin
+  Check(nextpas.core.system.sysutils.SameText('CompilerProc', 'compilerproc'),
+    'SameText should satisfy compiler case-insensitive symbol pressure');
+  Check(nextpas.core.system.sysutils.SameText('Runtime-ABI', 'runtime-abi'),
+    'SameText should compare ASCII letters without changing punctuation');
+  Check(not nextpas.core.system.sysutils.SameText('compiler', 'runtime'),
+    'SameText should reject different text');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.system.sysutils minimal');
   T.Run('Format delegates to text contract', @TestFormatDelegatesToTextContract);
   T.Run('exception formatting aliases canonical root', @TestExceptionFormattingAliasesCanonicalRoot);
   T.Run('convert error alias canonical root', @TestConvertErrorAliasCanonicalRoot);
+  T.Run('SameText delegates to text compare owner', @TestSameTextDelegatesToTextCompareOwner);
   T.Summary;
 end.
