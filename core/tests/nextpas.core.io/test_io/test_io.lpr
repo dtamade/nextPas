@@ -1186,6 +1186,61 @@ begin
   CheckEqual(Byte(10), LBS.ReadByte, 'unread byte preserved');
 end;
 
+procedure TestUnreadByteAfterEOFRaises;
+var
+  LS: IStream;
+  LR: IReader;
+  LBS: IByteScanner;
+  LRaised: Boolean;
+begin
+  LS := BytesStreamFrom(TBytes.Create(10));
+  LR := CreateBufferedReader(LS, 16);
+  LBS := LR as IByteScanner;
+  CheckEqual(Byte(10), LBS.ReadByte, 'first byte');
+
+  LRaised := False;
+  try
+    LBS.ReadByte;
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ReadByte at EOF raises');
+
+  LRaised := False;
+  try
+    LBS.UnreadByte;
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'UnreadByte after EOF raises');
+end;
+
+procedure TestUnreadByteAfterBulkReadRaises;
+var
+  LS: IStream;
+  LR: IReader;
+  LBS: IByteScanner;
+  LBuf: array[0..1] of Byte;
+  LRaised: Boolean;
+begin
+  LS := BytesStreamFrom(TBytes.Create(10, 20, 30));
+  LR := CreateBufferedReader(LS, 16);
+  LBS := LR as IByteScanner;
+  CheckEqual(Byte(10), LBS.ReadByte, 'first byte');
+  CheckEqual(SizeUInt(2), LR.Read(LBuf[0], 2), 'bulk read consumes next bytes');
+
+  LRaised := False;
+  try
+    LBS.UnreadByte;
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'UnreadByte after bulk Read raises');
+end;
+
 procedure TestBufReaderZeroSize;
 var
   LS: IStream;
@@ -1414,6 +1469,9 @@ begin
 
   T.Run('UnreadByte then Read', @TestUnreadByteThenRead);
   T.Run('Read zero after UnreadByte', @TestReadZeroAfterUnread);
+  T.Run('UnreadByte after EOF raises', @TestUnreadByteAfterEOFRaises);
+  T.Run('UnreadByte after bulk read raises',
+    @TestUnreadByteAfterBulkReadRaises);
   T.Run('BufReader zero size', @TestBufReaderZeroSize);
   T.Run('BufWriter zero size', @TestBufWriterZeroSize);
   T.Run('ReadAtLeast min>count', @TestReadAtLeastMinGtCount);
