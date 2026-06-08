@@ -46,6 +46,8 @@ begin
     LWritten := AWriter.Write(LPtr[LTotal], ACount - LTotal);
     if LWritten = 0 then
       raise EIOError.Create('chunked writer: write failed (zero progress)');
+    if LWritten > ACount - LTotal then
+      raise EIOError.Create('chunked writer: write over-reported progress');
     Inc(LTotal, LWritten);
   end;
 end;

@@ -6,20 +6,28 @@ uses
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.testing,
+  nextpas.core.io.intf,
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.time.deadline,
   nextpas.core.http.impl.h1.outbound;
 
 type
+  TOverreportingWriter = class(TInterfacedObject, IWriter)
+  public
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
   TFakeRuntime = class(TInterfacedObject, ITcpStreamRuntime)
   private
     FResult: TTcpStreamIOResult;
     FWriteLimit: SizeUInt;
+    FOverreport: Boolean;
     FWrittenData: string;
     FTryWriteCalls: Int32;
   public
     constructor Create(const AResult: TTcpStreamIOResult; const AWriteLimit: SizeUInt);
+    constructor CreateOverreporting;
     function NativeSocketHandle: PtrUInt;
     procedure SetBlocking(const ABlocking: Boolean);
     function TryRead(var ABuf; const ACount: SizeUInt;
@@ -30,12 +38,26 @@ type
     property TryWriteCalls: Int32 read FTryWriteCalls;
   end;
 
+function TOverreportingWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := ACount + 1;
+end;
+
 constructor TFakeRuntime.Create(const AResult: TTcpStreamIOResult;
   const AWriteLimit: SizeUInt);
 begin
   inherited Create;
   FResult := AResult;
   FWriteLimit := AWriteLimit;
+  FOverreport := False;
+end;
+
+constructor TFakeRuntime.CreateOverreporting;
+begin
+  inherited Create;
+  FResult := tsiorOk;
+  FWriteLimit := 0;
+  FOverreport := True;
 end;
 
 function TFakeRuntime.NativeSocketHandle: PtrUInt;
@@ -64,6 +86,11 @@ begin
   Result := FResult;
   if Result <> tsiorOk then
     Exit;
+  if FOverreport then
+  begin
+    AWritten := ACount + 1;
+    Exit;
+  end;
   AWritten := ACount;
   if AWritten > FWriteLimit then
     AWritten := FWriteLimit;
@@ -154,6 +181,57 @@ begin
     'zero progress leaves pending bytes untouched');
 end;
 
+procedure TestDrainAllOverreportingWriterRaises;
+var
+  LBuffer: IH1OutboundBuffer;
+  LWriter: TOverreportingWriter;
+  LCaught: Boolean;
+begin
+  LBuffer := NewH1OutboundBuffer;
+  WriteString(LBuffer, 'abcdef');
+  LWriter := TOverreportingWriter.Create;
+
+  LCaught := False;
+  try
+    LBuffer.DrainAllTo(LWriter as IWriter);
+  except
+    on E: EIOError do
+      LCaught := True;
+  end;
+
+  Check(LCaught, 'over-reporting writer raises EIOError');
+  CheckEqual(Int64(6), Int64(LBuffer.PendingBytes),
+    'over-reporting writer leaves pending bytes untouched');
+end;
+
+procedure TestTryDrainOverreportingRuntimeRaises;
+var
+  LBuffer: IH1OutboundBuffer;
+  LRuntimeObj: TFakeRuntime;
+  LRuntime: ITcpStreamRuntime;
+  LWritten: SizeUInt;
+  LCaught: Boolean;
+begin
+  LBuffer := NewH1OutboundBuffer;
+  WriteString(LBuffer, 'abcdef');
+  LRuntimeObj := TFakeRuntime.CreateOverreporting;
+  LRuntime := LRuntimeObj as ITcpStreamRuntime;
+
+  LCaught := False;
+  try
+    LBuffer.TryDrainTo(LRuntime, LWritten);
+  except
+    on E: EIOError do
+      LCaught := True;
+  end;
+
+  Check(LCaught, 'over-reporting runtime write raises EIOError');
+  CheckEqual(Int64(6), Int64(LBuffer.PendingBytes),
+    'over-reporting runtime leaves pending bytes untouched');
+  CheckEqual('', LRuntimeObj.WrittenData,
+    'over-reporting runtime does not append output bytes');
+end;
+
 var
   T: TTestRunner;
 begin
@@ -164,5 +242,9 @@ begin
     @TestTryDrainPartialWriteConsumesOnlyWrittenBytes);
   T.Run('TryDrainTo zero progress raises',
     @TestTryDrainZeroProgressRaises);
+  T.Run('DrainAllTo over-reporting writer raises',
+    @TestDrainAllOverreportingWriterRaises);
+  T.Run('TryDrainTo over-reporting runtime raises',
+    @TestTryDrainOverreportingRuntimeRaises);
   T.Summary;
 end.

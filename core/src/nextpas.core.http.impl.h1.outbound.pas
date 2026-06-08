@@ -50,6 +50,11 @@ begin
   raise EIOError.Create('h1 outbound buffer: write failed (zero progress)');
 end;
 
+procedure RaiseDrainOverreport;
+begin
+  raise EIOError.Create('h1 outbound buffer: write over-reported progress');
+end;
+
 function TH1OutboundBuffer.PendingBytes: SizeUInt; inline;
 begin
   Result := FWritePos - FReadPos;
@@ -125,6 +130,8 @@ begin
     LWritten := AWriter.Write(FBuf[FReadPos], PendingBytes);
     if LWritten = 0 then
       RaiseDrainFailure;
+    if LWritten > PendingBytes then
+      RaiseDrainOverreport;
     Advance(LWritten);
     Inc(Result, LWritten);
   end;
@@ -141,6 +148,8 @@ begin
   begin
     if AWritten = 0 then
       RaiseDrainFailure;
+    if AWritten > PendingBytes then
+      RaiseDrainOverreport;
     Advance(AWritten);
   end;
 end;
