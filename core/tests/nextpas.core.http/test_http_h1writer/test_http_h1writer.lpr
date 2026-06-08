@@ -854,6 +854,32 @@ begin
   LRW.Free;
 end;
 
+procedure TestPresetTransferEncodingChunkedIsFramedCaseInsensitively;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+  LBody: string;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.SetHeader('Transfer-Encoding', 'Chunked');
+    LRW.WriteHeader(HTTP_STATUS_OK);
+    LBody := 'hello';
+    CheckEqual(Int64(5), Int64(LRW.Write(LBody[1], SizeUInt(Length(LBody)))),
+      'preset mixed-case chunked write reports body bytes');
+    LRW.Flush;
+    LOut := LW.GetOutput;
+    Check(Pos('transfer-encoding: Chunked'#13#10, LOut) > 0,
+      'preset mixed-case chunked header preserved');
+    Check(Pos('5'#13#10'hello'#13#10'0'#13#10#13#10, LOut) > 0,
+      'preset mixed-case chunked body is framed');
+  finally
+    LRW.Free;
+  end;
+end;
+
 procedure TestFlushWithContentLengthDoesNotWriteFinalChunk;
 var
   LW: TBytesWriter;
@@ -1748,6 +1774,8 @@ begin
   T.Run('HttpWriteResponseString helper rejects over-reporting writer',
     @TestHttpWriteResponseStringHelperRejectsOverreportingWriter);
   T.Run('Preset Transfer-Encoding is preserved', @TestPresetTransferEncodingPreserved);
+  T.Run('Preset Transfer-Encoding chunked is framed case-insensitively',
+    @TestPresetTransferEncodingChunkedIsFramedCaseInsensitively);
   T.Run('Flush with Content-Length does not write final chunk',
     @TestFlushWithContentLengthDoesNotWriteFinalChunk);
   T.Run('WriteHeader rejects content-length transfer-encoding conflict',

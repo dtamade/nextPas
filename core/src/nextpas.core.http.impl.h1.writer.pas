@@ -110,6 +110,11 @@ begin
   end;
 end;
 
+function IsChunkedTransferEncodingValue(const AValue: string): Boolean;
+begin
+  Result := LowerCase(Trim(AValue)) = 'chunked';
+end;
+
 { TH1ResponseWriter }
 
 constructor TH1ResponseWriter.Create(const AWriter: IWriter);
@@ -435,7 +440,7 @@ begin
   WriteHeaderBlock;
   FCommittedHeaders := FHeaders.Clone;
   FHeadersSent := True;
-  if FHeaders.Get('transfer-encoding') = 'chunked' then
+  if IsChunkedTransferEncodingValue(FHeaders.Get('transfer-encoding')) then
     FChunkedWriter := TChunkedWriter.Create(FWriter);
 end;
 
