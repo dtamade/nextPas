@@ -36,6 +36,13 @@ begin
   Move(LBuf[0], Result[0], LCount);
 end;
 
+function VarintMinValueForLength(const ALength: Integer): UInt64; inline;
+begin
+  if ALength <= 1 then
+    Exit(0);
+  Result := UInt64(1) shl ((ALength - 1) * 7);
+end;
+
 function VarintDecode(const AData: TBytes; out ABytesRead: Integer): UInt64;
 var
   LShift: Integer;
@@ -60,6 +67,9 @@ begin
     Inc(ABytesRead);
     Inc(LShift, 7);
   until (LByte and $80) = 0;
+
+  if Result < VarintMinValueForLength(ABytesRead) then
+    raise EConvertError.Create('Non-canonical varint encoding');
 end;
 
 function ZigZagEncode(const AValue: Int64): UInt64; inline;

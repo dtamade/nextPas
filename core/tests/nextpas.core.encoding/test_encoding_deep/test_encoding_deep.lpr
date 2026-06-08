@@ -512,6 +512,33 @@ begin
   Check(LGotException, 'empty varint should raise');
 end;
 
+procedure TestVarintNonCanonicalEncoding;
+var LData: TBytes;
+begin
+  SetLength(LData, 2);
+  LData[0] := $80;
+  LData[1] := $00;
+  ExpectConvertError(
+    procedure
+    var LRead: Integer;
+    begin
+      VarintDecode(LData, LRead);
+    end,
+    'overlong zero varint should raise'
+  );
+
+  LData[0] := $81;
+  LData[1] := $00;
+  ExpectConvertError(
+    procedure
+    var LRead: Integer;
+    begin
+      SignedVarintDecode(LData, LRead);
+    end,
+    'overlong signed varint should raise'
+  );
+end;
+
 procedure TestSignedVarintZigZag;
 var LData: TBytes;
     LRead: Integer;
@@ -590,6 +617,7 @@ begin
   T.Run('Varint protobuf 300', @TestVarintProtobufVector300);
   T.Run('Varint overflow', @TestVarintOverflow);
   T.Run('Varint empty input', @TestVarintEmptyInput);
+  T.Run('Varint non-canonical encoding', @TestVarintNonCanonicalEncoding);
   T.Run('Signed varint zigzag', @TestSignedVarintZigZag);
 
   T.Summary;
