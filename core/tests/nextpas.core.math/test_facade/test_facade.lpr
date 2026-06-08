@@ -203,6 +203,38 @@ begin
   CheckNear(0.25, EaseInQuad(0.5), 'facade exposes easing functions');
 end;
 
+procedure TestFacadeVectorLerpScalarParityContracts;
+var
+  A3f: TVec3f;
+  B3f: TVec3f;
+  L3f: TVec3f;
+  A4d: TVec4d;
+  B4d: TVec4d;
+  L4d: TVec4d;
+begin
+  A3f := TVec3f.Create(Single(-2.0), Single(4.0), Single(8.0));
+  B3f := TVec3f.Create(Single(6.0), Single(-4.0), Single(0.0));
+  L3f := TVec3f.Lerp(A3f, B3f, Single(0.25));
+  CheckNear(nextpas.core.math.Lerp(A3f.X, B3f.X, Single(0.25)), L3f.X,
+    'facade TVec3f Lerp scalar parity X');
+  CheckNear(nextpas.core.math.Lerp(A3f.Y, B3f.Y, Single(0.25)), L3f.Y,
+    'facade TVec3f Lerp scalar parity Y');
+  CheckNear(nextpas.core.math.Lerp(A3f.Z, B3f.Z, Single(0.25)), L3f.Z,
+    'facade TVec3f Lerp scalar parity Z');
+
+  A4d := TVec4d.Create(-4.0, 2.0, 8.0, -10.0);
+  B4d := TVec4d.Create(12.0, -6.0, 0.0, 14.0);
+  L4d := TVec4d.Lerp(A4d, B4d, 1.0);
+  CheckNear(nextpas.core.math.Lerp(A4d.X, B4d.X, 1.0), L4d.X,
+    'facade TVec4d Lerp scalar parity t=1 X');
+  CheckNear(nextpas.core.math.Lerp(A4d.Y, B4d.Y, 1.0), L4d.Y,
+    'facade TVec4d Lerp scalar parity t=1 Y');
+  CheckNear(nextpas.core.math.Lerp(A4d.Z, B4d.Z, 1.0), L4d.Z,
+    'facade TVec4d Lerp scalar parity t=1 Z');
+  CheckNear(nextpas.core.math.Lerp(A4d.W, B4d.W, 1.0), L4d.W,
+    'facade TVec4d Lerp scalar parity t=1 W');
+end;
+
 procedure TestFacadeRandomSurface;
 var
   Rng: TRandomGen;
@@ -507,6 +539,8 @@ begin
   T.Run('facade scalar rounding surface', @TestFacadeRoundingSurface);
   T.Run('facade new scalar surface', @TestFacadeNewScalarSurface);
   T.Run('facade vector surface', @TestFacadeVectorSurface);
+  T.Run('facade vector Lerp scalar parity contracts',
+    @TestFacadeVectorLerpScalarParityContracts);
   T.Run('facade random surface', @TestFacadeRandomSurface);
   T.Run('facade type alias compile surface', @TestFacadeTypeAliasCompileSurface);
   T.Run('facade root forwarder compile surface', @TestFacadeRootForwarderCompileSurface);

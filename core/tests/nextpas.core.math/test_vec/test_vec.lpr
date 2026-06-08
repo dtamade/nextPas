@@ -5,6 +5,7 @@ program test_vec;
 uses
   nextpas.core.errors,
   nextpas.core.testing,
+  nextpas.core.math.scalar,
   nextpas.core.math.vec;
 
 var
@@ -90,6 +91,72 @@ begin
   CheckNear(AExpectedY, AActual.Y, 0.000000000001, AMessage + '.Y');
   CheckNear(AExpectedZ, AActual.Z, 0.000000000001, AMessage + '.Z');
   CheckNear(AExpectedW, AActual.W, 0.000000000001, AMessage + '.W');
+end;
+
+procedure CheckVec2fScalarLerpParity(const AA, AB: TVec2f; const AT: Single;
+  const AMessage: string);
+var
+  LActual: TVec2f;
+begin
+  LActual := TVec2f.Lerp(AA, AB, AT);
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.X, AB.X, AT), LActual.X, 0.0, AMessage + '.X');
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.Y, AB.Y, AT), LActual.Y, 0.0, AMessage + '.Y');
+end;
+
+procedure CheckVec3fScalarLerpParity(const AA, AB: TVec3f; const AT: Single;
+  const AMessage: string);
+var
+  LActual: TVec3f;
+begin
+  LActual := TVec3f.Lerp(AA, AB, AT);
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.X, AB.X, AT), LActual.X, 0.0, AMessage + '.X');
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.Y, AB.Y, AT), LActual.Y, 0.0, AMessage + '.Y');
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.Z, AB.Z, AT), LActual.Z, 0.0, AMessage + '.Z');
+end;
+
+procedure CheckVec4fScalarLerpParity(const AA, AB: TVec4f; const AT: Single;
+  const AMessage: string);
+var
+  LActual: TVec4f;
+begin
+  LActual := TVec4f.Lerp(AA, AB, AT);
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.X, AB.X, AT), LActual.X, 0.0, AMessage + '.X');
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.Y, AB.Y, AT), LActual.Y, 0.0, AMessage + '.Y');
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.Z, AB.Z, AT), LActual.Z, 0.0, AMessage + '.Z');
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.W, AB.W, AT), LActual.W, 0.0, AMessage + '.W');
+end;
+
+procedure CheckVec2dScalarLerpParity(const AA, AB: TVec2d; const AT: Double;
+  const AMessage: string);
+var
+  LActual: TVec2d;
+begin
+  LActual := TVec2d.Lerp(AA, AB, AT);
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.X, AB.X, AT), LActual.X, 0.0, AMessage + '.X');
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.Y, AB.Y, AT), LActual.Y, 0.0, AMessage + '.Y');
+end;
+
+procedure CheckVec3dScalarLerpParity(const AA, AB: TVec3d; const AT: Double;
+  const AMessage: string);
+var
+  LActual: TVec3d;
+begin
+  LActual := TVec3d.Lerp(AA, AB, AT);
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.X, AB.X, AT), LActual.X, 0.0, AMessage + '.X');
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.Y, AB.Y, AT), LActual.Y, 0.0, AMessage + '.Y');
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.Z, AB.Z, AT), LActual.Z, 0.0, AMessage + '.Z');
+end;
+
+procedure CheckVec4dScalarLerpParity(const AA, AB: TVec4d; const AT: Double;
+  const AMessage: string);
+var
+  LActual: TVec4d;
+begin
+  LActual := TVec4d.Lerp(AA, AB, AT);
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.X, AB.X, AT), LActual.X, 0.0, AMessage + '.X');
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.Y, AB.Y, AT), LActual.Y, 0.0, AMessage + '.Y');
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.Z, AB.Z, AT), LActual.Z, 0.0, AMessage + '.Z');
+  CheckNear(nextpas.core.math.scalar.Lerp(AA.W, AB.W, AT), LActual.W, 0.0, AMessage + '.W');
 end;
 
 procedure CheckSingleBits(const AActual: Single; const AExpectedBits: LongWord;
@@ -905,6 +972,58 @@ begin
   CheckVec4d(1.25, -2.5, 3.75, -4.5, V4d, 'TVec4d Data write-through');
 end;
 
+procedure TestVectorLerpScalarParityContracts;
+var
+  A2f: TVec2f;
+  B2f: TVec2f;
+  A3f: TVec3f;
+  B3f: TVec3f;
+  A4f: TVec4f;
+  B4f: TVec4f;
+  A2d: TVec2d;
+  B2d: TVec2d;
+  A3d: TVec3d;
+  B3d: TVec3d;
+  A4d: TVec4d;
+  B4d: TVec4d;
+begin
+  A2f := TVec2f.Create(Single(-2.0), Single(4.0));
+  B2f := TVec2f.Create(Single(6.0), Single(-8.0));
+  CheckVec2fScalarLerpParity(A2f, B2f, Single(0.0), 'TVec2f Lerp scalar parity t=0');
+  CheckVec2fScalarLerpParity(A2f, B2f, Single(0.25), 'TVec2f Lerp scalar parity t=0.25');
+  CheckVec2fScalarLerpParity(A2f, B2f, Single(1.0), 'TVec2f Lerp scalar parity t=1');
+
+  A3f := TVec3f.Create(Single(1.0), Single(-3.0), Single(5.0));
+  B3f := TVec3f.Create(Single(9.0), Single(7.0), Single(-1.0));
+  CheckVec3fScalarLerpParity(A3f, B3f, Single(0.0), 'TVec3f Lerp scalar parity t=0');
+  CheckVec3fScalarLerpParity(A3f, B3f, Single(0.5), 'TVec3f Lerp scalar parity t=0.5');
+  CheckVec3fScalarLerpParity(A3f, B3f, Single(1.0), 'TVec3f Lerp scalar parity t=1');
+
+  A4f := TVec4f.Create(Single(-4.0), Single(2.0), Single(8.0), Single(-10.0));
+  B4f := TVec4f.Create(Single(12.0), Single(-6.0), Single(0.0), Single(14.0));
+  CheckVec4fScalarLerpParity(A4f, B4f, Single(0.0), 'TVec4f Lerp scalar parity t=0');
+  CheckVec4fScalarLerpParity(A4f, B4f, Single(0.75), 'TVec4f Lerp scalar parity t=0.75');
+  CheckVec4fScalarLerpParity(A4f, B4f, Single(1.0), 'TVec4f Lerp scalar parity t=1');
+
+  A2d := TVec2d.Create(-2.0, 4.0);
+  B2d := TVec2d.Create(6.0, -8.0);
+  CheckVec2dScalarLerpParity(A2d, B2d, 0.0, 'TVec2d Lerp scalar parity t=0');
+  CheckVec2dScalarLerpParity(A2d, B2d, 0.25, 'TVec2d Lerp scalar parity t=0.25');
+  CheckVec2dScalarLerpParity(A2d, B2d, 1.0, 'TVec2d Lerp scalar parity t=1');
+
+  A3d := TVec3d.Create(1.0, -3.0, 5.0);
+  B3d := TVec3d.Create(9.0, 7.0, -1.0);
+  CheckVec3dScalarLerpParity(A3d, B3d, 0.0, 'TVec3d Lerp scalar parity t=0');
+  CheckVec3dScalarLerpParity(A3d, B3d, 0.5, 'TVec3d Lerp scalar parity t=0.5');
+  CheckVec3dScalarLerpParity(A3d, B3d, 1.0, 'TVec3d Lerp scalar parity t=1');
+
+  A4d := TVec4d.Create(-4.0, 2.0, 8.0, -10.0);
+  B4d := TVec4d.Create(12.0, -6.0, 0.0, 14.0);
+  CheckVec4dScalarLerpParity(A4d, B4d, 0.0, 'TVec4d Lerp scalar parity t=0');
+  CheckVec4dScalarLerpParity(A4d, B4d, 0.75, 'TVec4d Lerp scalar parity t=0.75');
+  CheckVec4dScalarLerpParity(A4d, B4d, 1.0, 'TVec4d Lerp scalar parity t=1');
+end;
+
 procedure TestRawVectorNormalizeNonFiniteInputsFailFast;
 begin
   ExpectArgumentErrorMessage('TVec2f.Normalize: vector must be finite',
@@ -1027,6 +1146,8 @@ begin
   T.Run('vector huge finite Cross out-of-range signed infinity contract',
     @TestVectorHugeFiniteCrossOutOfRangeSignedInfinityContract);
   T.Run('vector Data aliases write through', @TestVectorDataAliasesWriteThrough);
+  T.Run('vector Lerp scalar parity contracts',
+    @TestVectorLerpScalarParityContracts);
   T.Run('raw vector normalize non-finite inputs fail fast',
     @TestRawVectorNormalizeNonFiniteInputsFailFast);
   T.Run('vector division invalid divisors fail fast',
