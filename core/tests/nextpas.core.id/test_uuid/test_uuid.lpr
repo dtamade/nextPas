@@ -422,6 +422,44 @@ begin
   CheckEqual('550e8400-e29b-41d4-a716-446655440000', LU.ToString, 'FromBytes ToString');
 end;
 
+procedure ExpectFromBytesOutOfRange(const ABytes: array of Byte; const AMessage: string);
+var
+  LRaised: Boolean;
+  LU: TUuid;
+begin
+  LRaised := False;
+  try
+    LU := TUuid.FromBytes(ABytes);
+    Check(not LU.IsNil, AMessage + ' should not silently convert input');
+  except
+    on E: EOutOfRange do
+      LRaised := True;
+    on E: Exception do
+      Fail(AMessage + ': expected EOutOfRange, got ' + E.ClassName + ': ' + E.Message);
+  end;
+  Check(LRaised, AMessage);
+end;
+
+procedure TestFromBytesRejectsShortInput;
+var
+  LBytes: array[0..14] of Byte;
+  LI: Integer;
+begin
+  for LI := 0 to 14 do
+    LBytes[LI] := Byte(LI);
+  ExpectFromBytesOutOfRange(LBytes, 'FromBytes short input');
+end;
+
+procedure TestFromBytesRejectsLongInput;
+var
+  LBytes: array[0..16] of Byte;
+  LI: Integer;
+begin
+  for LI := 0 to 16 do
+    LBytes[LI] := Byte(LI);
+  ExpectFromBytesOutOfRange(LBytes, 'FromBytes long input');
+end;
+
 { --- New: Max UUID --- }
 
 procedure TestMaxUuid;
@@ -556,6 +594,8 @@ begin
   { New: FromBytes }
   T.Run('FromBytes', @TestFromBytes);
   T.Run('FromBytes ToString', @TestFromBytesToString);
+  T.Run('FromBytes rejects short input', @TestFromBytesRejectsShortInput);
+  T.Run('FromBytes rejects long input', @TestFromBytesRejectsLongInput);
 
   { New: Max UUID }
   T.Run('Max UUID', @TestMaxUuid);

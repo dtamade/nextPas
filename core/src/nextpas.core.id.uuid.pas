@@ -140,12 +140,12 @@ end;
 
 class function TUuid.FromBytes(const ABytes: array of Byte): TUuid;
 var
-  LI, LLen: Integer;
+  LI: Integer;
 begin
+  if Length(ABytes) <> 16 then
+    raise EOutOfRange.Create('TUuid.FromBytes: length must be 16 bytes');
   FillChar(Result.FBytes, 16, 0);
-  LLen := Length(ABytes);
-  if LLen > 16 then LLen := 16;
-  for LI := 0 to LLen - 1 do
+  for LI := 0 to 15 do
     Result.FBytes[LI] := ABytes[LI];
 end;
 
