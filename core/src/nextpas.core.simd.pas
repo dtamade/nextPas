@@ -31,7 +31,7 @@ uses
   , nextpas.core.simd.neon
 {$ENDIF}
 {$IF DEFINED(SIMD_RISCV_AVAILABLE) AND DEFINED(SIMD_EXPERIMENTAL_RISCVV)}
-  nextpas.core.simd.riscvv  // ⚠️ Experimental backend: opt-in only; not wired into the default stable public façade.
+  , nextpas.core.simd.riscvv  // ⚠️ Experimental backend: opt-in only; not wired into the default stable public façade.
 {$ENDIF}
   ;
 
