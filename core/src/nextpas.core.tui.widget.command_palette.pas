@@ -271,8 +271,10 @@ begin
 
   PalW := FWidth;
   if PalW > AArea.Width - 4 then PalW := AArea.Width - 4;
+  if PalW <= 0 then Exit;
   PalH := VisCount + 3; // border top + input + items + border bottom
   if PalH > AArea.Height - 2 then PalH := AArea.Height - 2;
+  if PalH <= 0 then Exit;
 
   PalX := AArea.X + (AArea.Width - PalW) div 2;
   PalY := AArea.Y + 2;
@@ -284,6 +286,8 @@ begin
     .WithTitle(' Command Palette ')
     .WithBorderStyle(FStyle)
     .Render(PalArea, ABuffer);
+
+  if (PalW <= 2) or (PalH <= 2) then Exit;
 
   // Input area (first row inside block)
   InputArea := TRect.Make(PalX + 1, PalY + 1, PalW - 2, 1);
