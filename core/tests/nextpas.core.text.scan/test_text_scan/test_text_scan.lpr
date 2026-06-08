@@ -125,6 +125,8 @@ begin
 end;
 
 procedure TestFindSubstringCIFoldsNeedleCase;
+var
+  LHighBytes, LHighNeedle: array[0..1] of AnsiChar;
 begin
   CheckEqual(Int64(1),
     Int64(ScanFindSubstringCI(PAnsiChar('abcDEF'), 6, PAnsiChar('BCD'), 3)),
@@ -132,6 +134,20 @@ begin
   CheckEqual(Int64(1),
     Int64(ScanFindSubstringCI(PAnsiChar('ABCDEF'), 6, PAnsiChar('bCd'), 3)),
     'mixed-case needle should match uppercase haystack');
+  CheckEqual(Int64(0),
+    Int64(ScanFindSubstringCI(PAnsiChar('A'), 1, PAnsiChar('a'), 1)),
+    'one-character ASCII needle should fold');
+  CheckEqual(Int64(-1),
+    Int64(ScanFindSubstringCI(PAnsiChar('['), 1, PAnsiChar('{'), 1)),
+    'punctuation bytes should not fold');
+
+  LHighBytes[0] := AnsiChar(Chr($C0));
+  LHighBytes[1] := AnsiChar(Chr($00));
+  LHighNeedle[0] := AnsiChar(Chr($E0));
+  LHighNeedle[1] := AnsiChar(Chr($00));
+  CheckEqual(Int64(-1),
+    Int64(ScanFindSubstringCI(@LHighBytes[0], 1, @LHighNeedle[0], 1)),
+    'high bytes should not fold');
 end;
 
 begin
