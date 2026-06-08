@@ -857,6 +857,52 @@ begin
     'Power Single negative abs(base)>1 -Inf exponent returns +0');
 end;
 
+procedure TestPowerFiniteIdentityPrecisionContracts;
+var
+  LDouble: Double;
+  LSingle: Single;
+begin
+  LDouble := Power(Double(1.5), Double(2.0));
+  Check(IsDoubleFinite(LDouble), 'Power 1.5 squared finite precision result stays finite');
+  CheckNear(2.25, LDouble, 0.000000000001,
+    'Power 1.5 squared finite precision contract');
+
+  LDouble := Power(Double(4.0), Double(-0.5));
+  Check(IsDoubleFinite(LDouble), 'Power 4 reciprocal square root result stays finite');
+  CheckNear(0.5, LDouble, 0.000000000001,
+    'Power 4 reciprocal square root finite precision contract');
+
+  LDouble := Power(Double(-1.5), Double(3.0));
+  Check(IsDoubleFinite(LDouble), 'Power negative 1.5 cubed result stays finite');
+  CheckNear(-3.375, LDouble, 0.000000000001,
+    'Power negative 1.5 cubed finite precision contract');
+
+  LDouble := Power(Sqrt(Double(2.0)), Double(2.0));
+  Check(IsDoubleFinite(LDouble), 'Power Sqrt(2) squared result stays finite');
+  CheckNear(2.0, LDouble, 0.0000000001,
+    'Power Sqrt(2) squared finite precision contract');
+
+  LSingle := Power(Single(1.5), Single(2.0));
+  Check(IsSingleFinite(LSingle), 'Power Single 1.5 squared result stays finite');
+  CheckNear(2.25, LSingle, 0.00001,
+    'Power Single 1.5 squared finite precision contract');
+
+  LSingle := Power(Single(4.0), Single(-0.5));
+  Check(IsSingleFinite(LSingle), 'Power Single 4 reciprocal square root result stays finite');
+  CheckNear(0.5, LSingle, 0.00001,
+    'Power Single 4 reciprocal square root finite precision contract');
+
+  LSingle := Power(Single(-1.5), Single(3.0));
+  Check(IsSingleFinite(LSingle), 'Power Single negative 1.5 cubed result stays finite');
+  CheckNear(-3.375, LSingle, 0.00001,
+    'Power Single negative 1.5 cubed finite precision contract');
+
+  LSingle := Power(Sqrt(Single(2.0)), Single(2.0));
+  Check(IsSingleFinite(LSingle), 'Power Single Sqrt(2) squared result stays finite');
+  CheckNear(2.0, LSingle, 0.00001,
+    'Power Single Sqrt(2) squared finite precision contract');
+end;
+
 procedure TestPowerFiniteOverflowUnderflowSignContracts;
 begin
   Check(IsDoublePositiveInfinity(Power(2.0, 1024.0)),
@@ -954,6 +1000,8 @@ begin
   T.Run('power negative finite base non-integer contracts',
     @TestPowerNegativeFiniteBaseNonIntegerContracts);
   T.Run('power non-finite contracts', @TestPowerNonFiniteContracts);
+  T.Run('Power finite identity precision contracts',
+    @TestPowerFiniteIdentityPrecisionContracts);
   T.Run('Power finite overflow underflow sign contracts',
     @TestPowerFiniteOverflowUnderflowSignContracts);
   T.Run('ArcTan2 finite extreme ratio contracts', @TestArcTan2FiniteExtremeRatioContracts);

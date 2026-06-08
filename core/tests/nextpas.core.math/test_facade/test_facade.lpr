@@ -379,6 +379,22 @@ begin
   Check(True, 'facade root trig declaration parity compile surface');
 end;
 
+procedure TestFacadePowerFiniteIdentityPrecisionContracts;
+begin
+  CheckNear(2.25, nextpas.core.math.Power(Double(1.5), Double(2.0)),
+    'facade Power Double finite identity precision');
+  CheckNear(0.5, nextpas.core.math.Power(Double(4.0), Double(-0.5)),
+    'facade Power Double reciprocal square root precision');
+  CheckNear(-3.375, nextpas.core.math.Power(Double(-1.5), Double(3.0)),
+    'facade Power Double negative odd finite precision');
+  CheckNear(2.25, nextpas.core.math.Power(Single(1.5), Single(2.0)),
+    'facade Power Single finite identity precision');
+  CheckNear(0.5, nextpas.core.math.Power(Single(4.0), Single(-0.5)),
+    'facade Power Single reciprocal square root precision');
+  CheckNear(-3.375, nextpas.core.math.Power(Single(-1.5), Single(3.0)),
+    'facade Power Single negative odd finite precision');
+end;
+
 procedure RaiseFacadeClampReversedBounds;
 begin
   Clamp(1.0, 2.0, 1.0);
@@ -416,5 +432,7 @@ begin
   T.Run('facade root forwarder compile surface', @TestFacadeRootForwarderCompileSurface);
   T.Run('facade root trig declaration parity compile surface',
     @TestFacadeRootTrigDeclarationParityCompileSurface);
+  T.Run('facade Power finite identity precision contracts',
+    @TestFacadePowerFiniteIdentityPrecisionContracts);
   T.Summary;
 end.
