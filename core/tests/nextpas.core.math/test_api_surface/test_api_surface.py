@@ -1147,6 +1147,18 @@ LEGACY_PUBLIC_RE = re.compile(
     r"Vector[234]|Matrix[34]|Quaternion|Vectors)\b",
     re.IGNORECASE,
 )
+LEGACY_PUBLIC_DOC_SYMBOL_RE = re.compile(
+    r"\b(TVector[A-Za-z0-9]*|TMatrix[A-Za-z0-9]*|TQuaternion[A-Za-z0-9]*)\b",
+    re.IGNORECASE,
+)
+LEGACY_PUBLIC_DOC_USES_VECTORS_RE = re.compile(
+    r"\buses\b(?P<body>[^;]*\bVectors\b[^;]*);",
+    re.IGNORECASE | re.DOTALL,
+)
+LEGACY_PUBLIC_DOC_VECTORS_PATH_RE = re.compile(
+    r"\bsrc/math/Vectors\.pas\b",
+    re.IGNORECASE,
+)
 USES_MATH_FFI_RE = re.compile(
     r"\buses\b(?P<body>.*?);",
     re.IGNORECASE | re.DOTALL,
@@ -2351,6 +2363,26 @@ def scan_legacy_production_names(root: Path, path: Path, text: str) -> list[Find
             line,
             original_line(text, line),
         )
+    return findings
+
+
+def scan_legacy_public_doc_symbols(root: Path, path: Path, text: str) -> list[Finding]:
+    findings: list[Finding] = []
+    for pattern in (
+        LEGACY_PUBLIC_DOC_SYMBOL_RE,
+        LEGACY_PUBLIC_DOC_USES_VECTORS_RE,
+        LEGACY_PUBLIC_DOC_VECTORS_PATH_RE,
+    ):
+        for match in pattern.finditer(text):
+            line = line_no_at(text, match.start())
+            add_finding(
+                findings,
+                "no-legacy-public-doc-vector-api",
+                root,
+                path,
+                line,
+                original_line(text, line),
+            )
     return findings
 
 
@@ -4092,6 +4124,70 @@ def run_legacy_production_name_self_tests() -> None:
                 + " got "
                 + ",".join(sorted(consumer_rules))
             )
+
+
+def run_legacy_public_doc_symbol_self_tests() -> None:
+    cases = (
+        (
+            "legacy-record-name",
+            "docs/math/README.md",
+            "Use TVector3f and TMatrix2f in public docs.\n",
+        ),
+        (
+            "legacy-uses-vectors",
+            "docs/math/API.md",
+            "```pascal\nuses SysUtils, Vectors;\n```\n",
+        ),
+        (
+            "legacy-source-path",
+            "docs/math/API.md",
+            "Legacy source path: src/math/Vectors.pas\n",
+        ),
+    )
+    negative_cases = (
+        (
+            "plain-english-section",
+            "docs/math/API.md",
+            "## Vectors, matrices, and quaternions\n"
+            "The Vector and Quaternion sections document the final API.\n",
+        ),
+    )
+    expected_rule = "no-legacy-public-doc-vector-api"
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        for case_name, rel, text in cases:
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+            report = build_report(root)
+            if not any(
+                finding.path == rel and finding.rule == expected_rule
+                for finding in report.findings
+            ):
+                raise AssertionError(
+                    "legacy-public-doc-symbol self-test "
+                    + case_name
+                    + " expected "
+                    + expected_rule
+                )
+        for case_name, rel, text in negative_cases:
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+            report = build_report(root)
+            rules = {
+                finding.rule
+                for finding in report.findings
+                if finding.path == rel
+            }
+            if expected_rule in rules:
+                raise AssertionError(
+                    "legacy-public-doc-symbol self-test "
+                    + case_name
+                    + " expected no "
+                    + expected_rule
+                )
 
 
 def run_forbidden_trig_scalar_name_self_tests() -> None:
@@ -5860,6 +5956,8 @@ def build_report(root: Path) -> Report:
         if path.suffix.lower() in {".lpr", ".pas"}:
             findings.extend(scan_legacy_public_names(root, path, text))
             findings.extend(scan_legacy_production_names(root, path, text))
+        elif path.suffix.lower() == ".md":
+            findings.extend(scan_legacy_public_doc_symbols(root, path, text))
         if relative(path, root).startswith(INTERNAL_IMPL_TEST_PREFIXES) and path.suffix.lower() in {
             ".lpr",
             ".pas",
@@ -5912,6 +6010,7 @@ def main() -> int:
         run_forbidden_simd_mathutil_bare_name_self_tests()
         run_forbidden_native_math_linking_scope_self_tests()
         run_legacy_production_name_self_tests()
+        run_legacy_public_doc_symbol_self_tests()
         run_forbidden_trig_scalar_name_self_tests()
         run_trig_host_safe_route_self_tests()
         run_required_trig_host_compile_gate_self_tests()
