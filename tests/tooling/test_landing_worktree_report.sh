@@ -61,10 +61,10 @@ reject_line() {
 REPORT_REPO="$TMP_ROOT/report"
 create_repo "$REPORT_REPO"
 
-create_worktree "$REPORT_REPO" landing/absorbed landing-absorbed
-printf 'absorbed\n' >"$REPORT_REPO/.worktrees/landing-absorbed/README.md"
-git -C "$REPORT_REPO/.worktrees/landing-absorbed" add README.md
-git -C "$REPORT_REPO/.worktrees/landing-absorbed" commit -m "absorbed candidate" >/dev/null
+create_worktree "$REPORT_REPO" landing/absorbed-by-cherry landing-absorbed-by-cherry
+printf 'absorbed\n' >"$REPORT_REPO/.worktrees/landing-absorbed-by-cherry/README.md"
+git -C "$REPORT_REPO/.worktrees/landing-absorbed-by-cherry" add README.md
+git -C "$REPORT_REPO/.worktrees/landing-absorbed-by-cherry" commit -m "absorbed candidate" >/dev/null
 
 create_worktree "$REPORT_REPO" landing/stale landing-stale
 mkdir -p "$REPORT_REPO/.worktrees/landing-stale/scripts"
@@ -76,6 +76,15 @@ create_worktree "$REPORT_REPO" landing/dirty landing-dirty
 mkdir -p "$REPORT_REPO/.worktrees/landing-dirty/tests/tooling"
 printf 'generated log\n' >"$REPORT_REPO/.worktrees/landing-dirty/tests/tooling/tooling.log"
 
+create_worktree "$REPORT_REPO" landing/dirty-packaging landing-dirty-packaging
+mkdir -p "$REPORT_REPO/.worktrees/landing-dirty-packaging/build"
+printf 'tracked packaging\n' >"$REPORT_REPO/.worktrees/landing-dirty-packaging/build/package.txt"
+git -C "$REPORT_REPO/.worktrees/landing-dirty-packaging" add build/package.txt
+git -C "$REPORT_REPO/.worktrees/landing-dirty-packaging" commit -m "tracked packaging file" >/dev/null
+rm "$REPORT_REPO/.worktrees/landing-dirty-packaging/build/package.txt"
+
+create_worktree "$REPORT_REPO" landing/needs-replay landing-needs-replay
+
 create_worktree "$REPORT_REPO" codex/active-lane active-lane
 mkdir -p "$REPORT_REPO/.worktrees/active-lane/scripts"
 printf 'active\n' >"$REPORT_REPO/.worktrees/active-lane/scripts/active.sh"
@@ -85,7 +94,9 @@ git -C "$REPORT_REPO/.worktrees/active-lane" commit -m "active lane change" >/de
 printf 'main advance\n' >"$REPORT_REPO/main.txt"
 git -C "$REPORT_REPO" add main.txt
 git -C "$REPORT_REPO" commit -m "main advance" >/dev/null
-git -C "$REPORT_REPO" cherry-pick landing/absorbed >/dev/null
+git -C "$REPORT_REPO" cherry-pick landing/absorbed-by-cherry >/dev/null
+
+create_worktree "$REPORT_REPO" landing/absorbed-by-contains landing-absorbed-by-contains
 
 create_worktree "$REPORT_REPO" landing/path-unsafe landing-path-unsafe
 mkdir -p "$REPORT_REPO/.worktrees/landing-path-unsafe/compiler"
@@ -101,20 +112,28 @@ REPORT_OUTPUT=$(
 require_line "$REPORT_OUTPUT" '^landing-worktree-report=pass$'
 require_line "$REPORT_OUTPUT" '^base=main$'
 require_line "$REPORT_OUTPUT" '^readonly=true$'
-require_line "$REPORT_OUTPUT" '^summary\.absorbed=1$'
+require_line "$REPORT_OUTPUT" '^summary\.absorbed=2$'
 require_line "$REPORT_OUTPUT" '^summary\.stale=1$'
-require_line "$REPORT_OUTPUT" '^summary\.dirty=1$'
+require_line "$REPORT_OUTPUT" '^summary\.dirty=2$'
+require_line "$REPORT_OUTPUT" '^summary\.dirty-packaging=1$'
 require_line "$REPORT_OUTPUT" '^summary\.path-unsafe=1$'
-require_line "$REPORT_OUTPUT" '^summary\.total=4$'
-require_line "$REPORT_OUTPUT" '^candidate[[:space:]]+landing/absorbed[[:space:]]+absorbed[[:space:]]+drop-from-queue[[:space:]]+1[[:space:]]+2[[:space:]]+.*\.worktrees/landing-absorbed$'
+require_line "$REPORT_OUTPUT" '^summary\.needs-replay=1$'
+require_line "$REPORT_OUTPUT" '^summary\.total=7$'
+require_line "$REPORT_OUTPUT" '^candidate[[:space:]]+landing/absorbed-by-cherry[[:space:]]+absorbed[[:space:]]+drop-from-queue[[:space:]]+1[[:space:]]+2[[:space:]]+.*\.worktrees/landing-absorbed-by-cherry$'
+require_line "$REPORT_OUTPUT" '^candidate[[:space:]]+landing/absorbed-by-contains[[:space:]]+absorbed[[:space:]]+drop-from-queue[[:space:]]+0[[:space:]]+0[[:space:]]+.*\.worktrees/landing-absorbed-by-contains$'
 require_line "$REPORT_OUTPUT" '^candidate[[:space:]]+landing/stale[[:space:]]+stale[[:space:]]+replay-on-latest-base[[:space:]]+1[[:space:]]+2[[:space:]]+.*\.worktrees/landing-stale$'
 require_line "$REPORT_OUTPUT" '^candidate[[:space:]]+landing/dirty[[:space:]]+dirty-generated-artifacts[[:space:]]+run-clean-artifacts-or-remove-generated-files[[:space:]]+0[[:space:]]+2[[:space:]]+.*\.worktrees/landing-dirty$'
+require_line "$REPORT_OUTPUT" '^candidate[[:space:]]+landing/dirty-packaging[[:space:]]+dirty-packaging[[:space:]]+inspect-packaging-deletions[[:space:]]+1[[:space:]]+2[[:space:]]+.*\.worktrees/landing-dirty-packaging$'
+require_line "$REPORT_OUTPUT" '^candidate[[:space:]]+landing/needs-replay[[:space:]]+needs-replay[[:space:]]+replay-or-drop-empty-candidate[[:space:]]+0[[:space:]]+2[[:space:]]+.*\.worktrees/landing-needs-replay$'
 require_line "$REPORT_OUTPUT" '^candidate[[:space:]]+landing/path-unsafe[[:space:]]+path-unsafe[[:space:]]+split-or-replay-allowed-paths-only[[:space:]]+1[[:space:]]+0[[:space:]]+.*\.worktrees/landing-path-unsafe$'
 reject_line "$REPORT_OUTPUT" 'codex/active-lane'
 
-test -d "$REPORT_REPO/.worktrees/landing-absorbed"
+test -d "$REPORT_REPO/.worktrees/landing-absorbed-by-cherry"
+test -d "$REPORT_REPO/.worktrees/landing-absorbed-by-contains"
 test -d "$REPORT_REPO/.worktrees/landing-stale"
 test -d "$REPORT_REPO/.worktrees/landing-dirty"
+test -d "$REPORT_REPO/.worktrees/landing-dirty-packaging"
+test -d "$REPORT_REPO/.worktrees/landing-needs-replay"
 test -d "$REPORT_REPO/.worktrees/landing-path-unsafe"
 test -d "$REPORT_REPO/.worktrees/active-lane"
 

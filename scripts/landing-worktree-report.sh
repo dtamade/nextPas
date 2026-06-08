@@ -108,10 +108,12 @@ classify_candidate() {
   local ahead
   local dirty_files
   local dirty_generated_files
+  local dirty_packaging_files
   local changed_files
   local historical_changed_files
   local path_unsafe=0
   local changed_path
+  local candidate_head
   local state
   local action
 
@@ -120,6 +122,13 @@ classify_candidate() {
   ahead="${counts##*[[:space:]]}"
 
   dirty_files="$(git -C "$worktree_path" status --porcelain --untracked-files=all | awk '{ print $2 }')"
+  dirty_packaging_files="$(git -C "$worktree_path" status --porcelain --untracked-files=all | awk '$1 ~ /^D/ && $2 ~ /^build\// { print $2 }')"
+  if [[ -n "$dirty_packaging_files" ]]; then
+    printf 'candidate\t%s\tdirty-packaging\tinspect-packaging-deletions\t%s\t%s\t%s\n' \
+      "$branch" "$ahead" "$behind" "$worktree_path"
+    return
+  fi
+
   dirty_generated_files="$(printf '%s\n' "$dirty_files" | grep -E '(^tests/tooling/.*\.log$|^core/tests/.*/test_.*/.*\.log$)' || true)"
   if [[ -n "$dirty_generated_files" ]]; then
     printf 'candidate\t%s\tdirty-generated-artifacts\trun-clean-artifacts-or-remove-generated-files\t%s\t%s\t%s\n' \
@@ -135,7 +144,7 @@ classify_candidate() {
 
   if [[ "$behind" != "0" ]]; then
     if [[ "$ahead" = "0" ]]; then
-      printf 'candidate\t%s\tbehind-main\tdrop-empty-or-refresh-from-main\t%s\t%s\t%s\n' \
+      printf 'candidate\t%s\tneeds-replay\treplay-or-drop-empty-candidate\t%s\t%s\t%s\n' \
         "$branch" "$ahead" "$behind" "$worktree_path"
       return
     fi
@@ -149,6 +158,13 @@ classify_candidate() {
     fi
     printf 'candidate\t%s\t%s\t%s\t%s\t%s\t%s\n' \
       "$branch" "$state" "$action" "$ahead" "$behind" "$worktree_path"
+    return
+  fi
+
+  candidate_head="$(git -C "$worktree_path" rev-parse HEAD)"
+  if git -C "$repo_root" merge-base --is-ancestor "$candidate_head" "$base_ref"; then
+    printf 'candidate\t%s\tabsorbed\tdrop-from-queue\t%s\t%s\t%s\n' \
+      "$branch" "$ahead" "$behind" "$worktree_path"
     return
   fi
 
@@ -211,7 +227,7 @@ count_dirty() {
     printf '0'
     return
   fi
-  awk -F '\t' '$1 == "candidate" && ($3 == "dirty" || $3 == "dirty-generated-artifacts") { count++ } END { print count + 0 }' <<< "$report_rows"
+  awk -F '\t' '$1 == "candidate" && ($3 == "dirty" || $3 == "dirty-generated-artifacts" || $3 == "dirty-packaging") { count++ } END { print count + 0 }' <<< "$report_rows"
 }
 
 total_count() {
@@ -233,7 +249,8 @@ printf 'summary.absorbed=%s\n' "$(count_state absorbed)"
 printf 'summary.stale=%s\n' "$(count_state stale)"
 printf 'summary.dirty=%s\n' "$(count_dirty)"
 printf 'summary.dirty-generated-artifacts=%s\n' "$(count_state dirty-generated-artifacts)"
+printf 'summary.dirty-packaging=%s\n' "$(count_state dirty-packaging)"
 printf 'summary.path-unsafe=%s\n' "$(count_state path-unsafe)"
-printf 'summary.behind-main=%s\n' "$(count_state behind-main)"
+printf 'summary.needs-replay=%s\n' "$(count_state needs-replay)"
 printf 'summary.ready=%s\n' "$(count_state ready)"
 printf 'summary.total=%s\n' "$(total_count)"
