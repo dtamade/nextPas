@@ -538,6 +538,17 @@ begin
   Check(TXid.Parse('ZZZZZZZZZZZZZZZZZZZZ').IsNil, 'invalid chars');
 end;
 
+procedure TestXidTryParseLeavesOutUntouchedOnFailure;
+var
+  LBefore, LX: TXid;
+begin
+  LBefore := TXid.New;
+  LX := LBefore;
+  Check(not TXid.TryParse(StringOfChar('0', XID_STRING_LENGTH - 1) + 'v', LX),
+    'non-canonical final XID digit must fail');
+  Check(LX = LBefore, 'failed TryParse must not expose partial XID bytes');
+end;
+
 procedure TestKsuidParseInvalidChars;
 var LK: TKsuid;
 begin
@@ -807,6 +818,7 @@ begin
   T.Run('UUID Hash', @TestUuidHash);
   T.Run('XID Nil', @TestXidNil);
   T.Run('XID parse invalid', @TestXidParseInvalid);
+  T.Run('XID TryParse failed out stable', @TestXidTryParseLeavesOutUntouchedOnFailure);
   T.Run('KSUID parse invalid chars', @TestKsuidParseInvalidChars);
   T.Run('KSUID rejects overflow base62', @TestKsuidRejectsOverflowBase62);
 

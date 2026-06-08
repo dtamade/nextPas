@@ -87,6 +87,7 @@ var
   LI: Integer;
   LVal: Int32;
   LBuf: array[0..19] of Byte;
+  LDecoded: TXid;
 begin
   Result := False;
   if Length(AStr) <> XID_STRING_LENGTH then Exit;
@@ -97,20 +98,21 @@ begin
     if LVal < 0 then Exit;
     LBuf[LI] := Byte(LVal);
   end;
-  FillChar(AXid.FBytes, 12, 0);
-  AXid.FBytes[0]  := Byte((LBuf[0] shl 3) or (LBuf[1] shr 2));
-  AXid.FBytes[1]  := Byte((LBuf[1] shl 6) or (LBuf[2] shl 1) or (LBuf[3] shr 4));
-  AXid.FBytes[2]  := Byte((LBuf[3] shl 4) or (LBuf[4] shr 1));
-  AXid.FBytes[3]  := Byte((LBuf[4] shl 7) or (LBuf[5] shl 2) or (LBuf[6] shr 3));
-  AXid.FBytes[4]  := Byte((LBuf[6] shl 5) or LBuf[7]);
-  AXid.FBytes[5]  := Byte((LBuf[8] shl 3) or (LBuf[9] shr 2));
-  AXid.FBytes[6]  := Byte((LBuf[9] shl 6) or (LBuf[10] shl 1) or (LBuf[11] shr 4));
-  AXid.FBytes[7]  := Byte((LBuf[11] shl 4) or (LBuf[12] shr 1));
-  AXid.FBytes[8]  := Byte((LBuf[12] shl 7) or (LBuf[13] shl 2) or (LBuf[14] shr 3));
-  AXid.FBytes[9]  := Byte((LBuf[14] shl 5) or LBuf[15]);
-  AXid.FBytes[10] := Byte((LBuf[16] shl 3) or (LBuf[17] shr 2));
-  AXid.FBytes[11] := Byte((LBuf[17] shl 6) or (LBuf[18] shl 1) or (LBuf[19] shr 4));
   if (LBuf[19] and $0F) <> 0 then Exit(False);
+  FillChar(LDecoded.FBytes, 12, 0);
+  LDecoded.FBytes[0]  := Byte((LBuf[0] shl 3) or (LBuf[1] shr 2));
+  LDecoded.FBytes[1]  := Byte((LBuf[1] shl 6) or (LBuf[2] shl 1) or (LBuf[3] shr 4));
+  LDecoded.FBytes[2]  := Byte((LBuf[3] shl 4) or (LBuf[4] shr 1));
+  LDecoded.FBytes[3]  := Byte((LBuf[4] shl 7) or (LBuf[5] shl 2) or (LBuf[6] shr 3));
+  LDecoded.FBytes[4]  := Byte((LBuf[6] shl 5) or LBuf[7]);
+  LDecoded.FBytes[5]  := Byte((LBuf[8] shl 3) or (LBuf[9] shr 2));
+  LDecoded.FBytes[6]  := Byte((LBuf[9] shl 6) or (LBuf[10] shl 1) or (LBuf[11] shr 4));
+  LDecoded.FBytes[7]  := Byte((LBuf[11] shl 4) or (LBuf[12] shr 1));
+  LDecoded.FBytes[8]  := Byte((LBuf[12] shl 7) or (LBuf[13] shl 2) or (LBuf[14] shr 3));
+  LDecoded.FBytes[9]  := Byte((LBuf[14] shl 5) or LBuf[15]);
+  LDecoded.FBytes[10] := Byte((LBuf[16] shl 3) or (LBuf[17] shr 2));
+  LDecoded.FBytes[11] := Byte((LBuf[17] shl 6) or (LBuf[18] shl 1) or (LBuf[19] shr 4));
+  AXid := LDecoded;
   Result := True;
 end;
 
