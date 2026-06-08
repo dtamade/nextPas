@@ -264,6 +264,10 @@ landing 报告必须说明用了哪些替代 verification。
 对于 `.github/` CI slice，省略 `FOCUS` 时必须跑 `make test-tooling`。
 对于 `scripts/`、`tests/tooling/` 或 `docs/worktrees.md` 这类 tooling / landing 文档 slice，省略 `FOCUS` 时也必须跑 `make test-tooling`，并在 `Ready` 报告中列出该证据。
 
+需要先清 landing 队列时，可用 `scripts/landing-queue-classifier.sh --base <BASE_REF> --allow-path <prefix>...`
+快速区分 `absorbed`、`stale`、`behind-main`、`path-unsafe` 和 `dirty-generated-artifacts`。
+它只做 triage，不替代 `make landing-check`。
+
 `make landing-check` 会运行：
 
 1. `make hygiene`。
