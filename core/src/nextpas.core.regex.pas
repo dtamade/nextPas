@@ -418,8 +418,10 @@ var
     j := 1;
     while j <= LTplLen do
     begin
-      if (ATemplate[j] = '$') and (j < LTplLen) then
+      if ATemplate[j] = '$' then
       begin
+        if j >= LTplLen then
+          raise ERegexError.Create('malformed replacement template');
         Inc(j);
         if ATemplate[j] = '$' then
         begin
@@ -447,15 +449,14 @@ var
             LName := LName + ATemplate[j];
             Inc(j);
           end;
-          if (j <= LTplLen) and (ATemplate[j] = '}') then
-          begin
-            Inc(j);
-            LIdx := GroupIndexByName(LName);
-            if (LIdx >= 0) and (LIdx < Length(AMatch.Groups)) and AMatch.Groups[LIdx].Found then
-              Result := Result + AMatch.Groups[LIdx].Value(AInput);
-          end
-          else
-            Result := Result + '${' + LName;
+          if (j > LTplLen) or (ATemplate[j] <> '}') then
+            raise ERegexError.Create('malformed replacement template');
+          if LName = '' then
+            raise ERegexError.Create('malformed replacement template');
+          Inc(j);
+          LIdx := GroupIndexByName(LName);
+          if (LIdx >= 0) and (LIdx < Length(AMatch.Groups)) and AMatch.Groups[LIdx].Found then
+            Result := Result + AMatch.Groups[LIdx].Value(AInput);
         end
         else
         begin

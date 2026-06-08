@@ -551,22 +551,33 @@ begin
   CheckEqual('a,b,c', parts[0], 'split 0 value');
 end;
 
+procedure ExpectTemplateError(const ARegex: TRegex; const ATemplate, ACase: string);
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    ARegex.ReplaceAllExpand('hello', ATemplate);
+  except
+    on E: ERegexError do
+      LRaised := True;
+  end;
+  Check(LRaised, ACase);
+end;
+
 procedure TestMalformedTemplate;
 var R: TRegex; s: string;
 begin
   R := TRegex.Compile('(\w+)');
 
   // $ at end of template
-  s := R.ReplaceAllExpand('hello', 'x$');
-  CheckEqual('x$', s, '$ at end preserved');
+  ExpectTemplateError(R, 'x$', '$ at end rejected');
 
   // ${ without }
-  s := R.ReplaceAllExpand('hello', '${broken');
-  CheckEqual('${broken', s, '${ without } preserved');
+  ExpectTemplateError(R, '${broken', '${ without } rejected');
 
   // ${} empty name
-  s := R.ReplaceAllExpand('hello', '${}');
-  CheckEqual('', s, '${} empty name');
+  ExpectTemplateError(R, '${}', '${} empty name rejected');
 
   // unknown group name
   s := R.ReplaceAllExpand('hello', '${nonexist}');
