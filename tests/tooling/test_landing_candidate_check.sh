@@ -93,6 +93,46 @@ printf '%s\n' "$PASS_OUTPUT" | grep -q '^scripts/helper\.sh$'
 make -C "$PASS_REPO/.worktrees/landing" landing-check BASE_REF=origin/main ALLOW_PATHS=scripts >/dev/null
 grep -q '^test-tooling$' "$PASS_REPO/.worktrees/landing/tests/tooling/tooling.log"
 
+ABSORBED_REPO="$TMP_ROOT/absorbed"
+create_repo "$ABSORBED_REPO"
+create_landing_worktree "$ABSORBED_REPO" landing
+printf 'candidate change\n' >"$ABSORBED_REPO/.worktrees/landing/README.md"
+git -C "$ABSORBED_REPO/.worktrees/landing" add README.md
+git -C "$ABSORBED_REPO/.worktrees/landing" commit -m "candidate change" >/dev/null
+printf 'main advance\n' >"$ABSORBED_REPO/main.txt"
+git -C "$ABSORBED_REPO" add main.txt
+git -C "$ABSORBED_REPO" commit -m "main advance" >/dev/null
+git -C "$ABSORBED_REPO" cherry-pick landing >/dev/null
+ABSORBED_OUTPUT=$(run_landing_check "$ABSORBED_REPO/.worktrees/landing" --allow-path README.md)
+printf '%s\n' "$ABSORBED_OUTPUT" | grep -q '^landing-candidate=absorbed$'
+printf '%s\n' "$ABSORBED_OUTPUT" | grep -q '^candidate-action=drop-from-queue$'
+printf '%s\n' "$ABSORBED_OUTPUT" | grep -q '^branch=landing$'
+printf '%s\n' "$ABSORBED_OUTPUT" | grep -q '^ahead=1$'
+printf '%s\n' "$ABSORBED_OUTPUT" | grep -q '^behind=2$'
+make -C "$ABSORBED_REPO/.worktrees/landing" landing-check ALLOW_PATHS=README.md >"$TMP_ROOT/absorbed-make.out"
+grep -q '^landing-candidate=absorbed$' "$TMP_ROOT/absorbed-make.out"
+if [ -e "$ABSORBED_REPO/.worktrees/landing/tests/tooling/tooling.log" ]; then
+  printf 'absorbed landing-check should not run follow-up tooling gate\n' >&2
+  cat "$ABSORBED_REPO/.worktrees/landing/tests/tooling/tooling.log" >&2
+  exit 1
+fi
+
+STALE_REPO="$TMP_ROOT/stale"
+create_repo "$STALE_REPO"
+create_landing_worktree "$STALE_REPO" landing
+mkdir -p "$STALE_REPO/.worktrees/landing/scripts"
+printf 'helper\n' >"$STALE_REPO/.worktrees/landing/scripts/helper.sh"
+git -C "$STALE_REPO/.worktrees/landing" add scripts/helper.sh
+git -C "$STALE_REPO/.worktrees/landing" commit -m "candidate helper" >/dev/null
+printf 'main advance\n' >"$STALE_REPO/main.txt"
+git -C "$STALE_REPO" add main.txt
+git -C "$STALE_REPO" commit -m "main advance" >/dev/null
+expect_failure "stale landing candidate" run_landing_check "$STALE_REPO/.worktrees/landing" --allow-path scripts
+grep -q '^landing-candidate=stale$' "$TMP_ROOT/failure.out"
+grep -q '^candidate-action=replay-on-latest-base$' "$TMP_ROOT/failure.out"
+grep -q '^ahead=1$' "$TMP_ROOT/failure.out"
+grep -q '^behind=1$' "$TMP_ROOT/failure.out"
+
 LONG_LIVED_LANE_REPO="$TMP_ROOT/long-lived-lane"
 create_repo "$LONG_LIVED_LANE_REPO"
 git -C "$LONG_LIVED_LANE_REPO" branch codex/core-http

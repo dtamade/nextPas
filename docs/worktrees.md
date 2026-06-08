@@ -279,6 +279,9 @@ historical changed files。它会在 dirty、detached、`behind != 0`、worktree
 `.worktrees/`、最终 diff 改动路径超出 `ALLOW_PATHS`，或 `base..HEAD` 的候选提交历史曾经触碰
 `ALLOW_PATHS` 外路径时失败。即使禁止路径后来被 revert，也不能作为 ff-only landing history
 进入主线。该 helper 不会 rebase、merge、cherry-pick、replay 或修改分支。
+如果候选分支落后但所有 ahead commit 已被 `base` 等价吸收，会打印
+`landing-candidate=absorbed` 和 `candidate-action=drop-from-queue`；否则落后候选会打印
+`landing-candidate=stale` 和 `candidate-action=replay-on-latest-base` 后失败。
 
 这个 gate 只是 landing evidence，不是合并批准。它不能替代 diff review、模块 focused
 verification、heaptrc/no-leak 证据、source/compile/runtime truth 分类，也不能授权 raw merge

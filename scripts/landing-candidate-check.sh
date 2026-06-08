@@ -118,7 +118,29 @@ counts="$(git -C "$worktree_path" rev-list --left-right --count "$base_ref...HEA
 behind="${counts%%[[:space:]]*}"
 ahead="${counts##*[[:space:]]}"
 
+head_sha="$(git -C "$worktree_path" rev-parse --short HEAD)"
+
+print_candidate_state() {
+  local state="$1"
+  local action="$2"
+
+  printf 'landing-candidate=%s\n' "$state"
+  printf 'candidate-action=%s\n' "$action"
+  printf 'branch=%s\n' "$branch"
+  printf 'worktree=%s\n' "$worktree_path"
+  printf 'head=%s\n' "$head_sha"
+  printf 'base=%s\n' "$base_ref"
+  printf 'ahead=%s\n' "$ahead"
+  printf 'behind=%s\n' "$behind"
+}
+
 if [[ "$behind" != "0" ]]; then
+  if [[ "$ahead" != "0" ]] && ! git -C "$worktree_path" cherry "$base_ref" HEAD | grep -q '^+'; then
+    print_candidate_state "absorbed" "drop-from-queue"
+    exit 0
+  fi
+
+  print_candidate_state "stale" "replay-on-latest-base"
   echo "error: landing candidate is behind $base_ref by $behind commit(s)" >&2
   exit 1
 fi
@@ -169,8 +191,6 @@ if [[ ${#historical_disallowed_paths[@]} -gt 0 ]]; then
   printf '  %s\n' "${allow_paths[@]}" >&2
   exit 1
 fi
-
-head_sha="$(git -C "$worktree_path" rev-parse --short HEAD)"
 
 printf 'landing-candidate=pass\n'
 printf 'branch=%s\n' "$branch"

@@ -42,9 +42,14 @@ lane-focused: hygiene
 
 landing-check: hygiene
 	@test -n "$(ALLOW_PATHS)" || { echo "ALLOW_PATHS is required, e.g. make landing-check ALLOW_PATHS='scripts tests/tooling docs/worktrees.md'" >&2; exit 1; }
-	./scripts/landing-candidate-check.sh --base "$(BASE_REF)" $(foreach path,$(ALLOW_PATHS),--allow-path "$(path)")
-	git diff --check "$(BASE_REF)...HEAD"
-	@if [ -n "$(FOCUS)" ]; then \
+	@set -e; \
+	candidate_log=$$(mktemp); \
+	trap 'rm -f "$$candidate_log"' EXIT HUP INT TERM; \
+	./scripts/landing-candidate-check.sh --base "$(BASE_REF)" $(foreach path,$(ALLOW_PATHS),--allow-path "$(path)") >"$$candidate_log"; \
+	cat "$$candidate_log"; \
+	if grep -q '^landing-candidate=absorbed$$' "$$candidate_log"; then exit 0; fi; \
+	git diff --check "$(BASE_REF)...HEAD"; \
+	if [ -n "$(FOCUS)" ]; then \
 		$(MAKE) focused FOCUS="$(FOCUS)"; \
 	elif [ -n "$(LANE)" ]; then \
 		lane_output=$$(./scripts/lane-focused.sh --lane "$(LANE)" --print-command); \
@@ -54,7 +59,7 @@ landing-check: hygiene
 		$(MAKE) focused FOCUS="$$lane_focus"; \
 	else \
 		$(MAKE) test-tooling BASE_REF=main; \
-	fi
+	fi; \
 	$(MAKE) hygiene
 
 core-ci-test:
