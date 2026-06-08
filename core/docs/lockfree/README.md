@@ -89,6 +89,8 @@ power-of-two；超过最大可表示 power-of-two 的容量会被拒绝，而不
 - `TWorkStealingDeque<T>.TryPop`：owner 递减 `FBottom`；最后一个元素需要 top CAS 与 thief 仲裁。
 - `TWorkStealingDeque<T>.TrySteal`：成功 CAS `FTop` 取得元素。
 
+`TWorkStealingDeque<T>` last-item owner/thief arbitration uses `seq_cst` ordering on `FTop` / `FBottom` loads, bottom store, and top CAS so the single remaining item is won exactly once.
+
 这些点是 source-contract 和当前实现说明，不是跨平台 runtime proof。
 
 ## ABA

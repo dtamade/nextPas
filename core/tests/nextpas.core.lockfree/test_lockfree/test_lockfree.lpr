@@ -2982,6 +2982,18 @@ begin
     'deque constructor must round requested capacity to power-of-two storage');
   CheckContains(LDequeSource, 'if LSize >= Int64(FCapacity) then',
     'deque owner push must reject writes once the bounded ring is full');
+  CheckContains(LDequeSource, 'AtomicStore64(FBottom, LBottom, moSeqCst);',
+    'deque owner pop must publish the speculative bottom decrement as seq_cst before last-item arbitration');
+  CheckContains(LDequeSource, 'LTop := AtomicLoad64(FTop, moSeqCst);',
+    'deque owner pop must observe top with seq_cst before last-item arbitration');
+  CheckContains(LDequeSource, 'AtomicCompareExchange64(FTop, LTop, LTop + 1, moSeqCst)',
+    'deque owner pop must arbitrate the last item with a seq_cst top CAS');
+  CheckContains(LDequeSource, 'LTop := AtomicLoad64(FTop, moSeqCst);' + LineEnding +
+    '  LBottom := AtomicLoad64(FBottom, moSeqCst);',
+    'deque thief steal must observe top and bottom with seq_cst before stealing');
+  CheckContains(LDocsReadme,
+    '`TWorkStealingDeque<T>` last-item owner/thief arbitration uses `seq_cst` ordering on `FTop` / `FBottom` loads, bottom store, and top CAS so the single remaining item is won exactly once.',
+    'lockfree README must document the deque seq_cst last-item arbitration contract');
   CheckContains(LMpscSource, 'Assert(FClosed <> 0',
     'MPSC destroy must keep the close-before-destroy debug guard');
   CheckContains(LMpscSource, 'Close must be called before Destroy',
