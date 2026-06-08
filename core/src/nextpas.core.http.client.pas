@@ -255,6 +255,16 @@ begin
     (LPortValue >= 0) and (LPortValue <= 65535);
 end;
 
+function ParseRedirectAuthorityUrl(const AUrl, AScheme: string): TUrl;
+begin
+  Result := TUrl.Parse(AUrl);
+  Result.Scheme := AScheme;
+  if Result.Host = '' then
+    raise EHttpError.Create('redirect URL host is empty');
+  if not RedirectAuthorityPortIsValid(AUrl) then
+    raise EHttpError.Create('redirect URL port is invalid');
+end;
+
 function DefaultPortForScheme(const AScheme: string): UInt16;
 var
   LScheme: string;
@@ -519,19 +529,14 @@ begin
   begin
     if (LScheme <> 'http') and (LScheme <> 'https') then
       raise EHttpError.Create('unsupported redirect URL scheme: ' + LScheme);
-    Result := TUrl.Parse(ALocation);
-    Result.Scheme := LScheme;
-    if Result.Host = '' then
-      raise EHttpError.Create('redirect URL host is empty');
-    if not RedirectAuthorityPortIsValid(ALocation) then
-      raise EHttpError.Create('redirect URL port is invalid');
-    Exit;
+    Exit(ParseRedirectAuthorityUrl(ALocation, LScheme));
   end;
   if (Length(ALocation) >= 2) and (ALocation[1] = '/') and (ALocation[2] = '/') then
   begin
     if ABaseUrl.Scheme = '' then
       raise EHttpError.Create('network-path redirect requires base URL scheme');
-    Exit(TUrl.Parse(ABaseUrl.Scheme + ':' + ALocation));
+    Exit(ParseRedirectAuthorityUrl(ABaseUrl.Scheme + ':' + ALocation,
+      ABaseUrl.Scheme));
   end;
 
   Result := ABaseUrl;

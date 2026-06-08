@@ -4214,6 +4214,52 @@ begin
     'absolute redirect with invalid port does not perform second round trip');
 end;
 
+procedure TestClientRedirectRejectsNetworkPathLocationWithEmptyHost;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := '///final';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LRaised := False;
+  try
+    LClient.Get('http://example.test/old');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'network-path redirect with empty host raises EHttpError');
+  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
+    'network-path redirect with empty host does not perform second round trip');
+end;
+
+procedure TestClientRedirectRejectsNetworkPathLocationWithInvalidPort;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := '//redirect.test:bad/new';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LRaised := False;
+  try
+    LClient.Get('http://example.test/old');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'network-path redirect with invalid port raises EHttpError');
+  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
+    'network-path redirect with invalid port does not perform second round trip');
+end;
+
 procedure TestClientRedirectTransportResolvesUserInfoLocationWithPort;
 var
   LTransportObj: TRedirectCaptureTransport;
@@ -5951,6 +5997,10 @@ begin
     @TestClientRedirectRejectsAbsoluteLocationWithEmptyHost);
   T.Run('Client redirect rejects absolute Location with invalid port',
     @TestClientRedirectRejectsAbsoluteLocationWithInvalidPort);
+  T.Run('Client redirect rejects network-path Location with empty host',
+    @TestClientRedirectRejectsNetworkPathLocationWithEmptyHost);
+  T.Run('Client redirect rejects network-path Location with invalid port',
+    @TestClientRedirectRejectsNetworkPathLocationWithInvalidPort);
   T.Run('Client redirect transport resolves userinfo Location with port',
     @TestClientRedirectTransportResolvesUserInfoLocationWithPort);
   T.Run('Client redirect rejects unsupported non-hierarchical scheme',
