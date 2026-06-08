@@ -176,6 +176,7 @@ and true out-of-range components return signed infinity.
 Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by
 `Normalize`.
 Vector scalar division and `DivComponents` reject zero, NaN, and infinite divisors with `EArgumentError`.
+Vector `Equals` applies scalar `FloatEquals` component-wise: NaN components and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.
 
 ## Matrices
 

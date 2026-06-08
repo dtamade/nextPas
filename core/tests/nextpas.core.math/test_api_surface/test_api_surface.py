@@ -527,6 +527,18 @@ REQUIRED_VEC_QUAT_STABLE_DOC_TRUTH = (
     ),
     (
         "docs/math/README.md",
+        "Vector `Equals` applies scalar `FloatEquals` component-wise: NaN components and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.",
+    ),
+    (
+        "docs/math/API.md",
+        "Vector `Equals` applies scalar `FloatEquals` component-wise: NaN components and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "Vector `Equals` applies scalar `FloatEquals` component-wise: NaN components and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.",
+    ),
+    (
+        "docs/math/README.md",
         "Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd` inputs preserve direction instead of collapsing through an overflowing squared length.",
     ),
     (
@@ -1723,6 +1735,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("vec-normalize-max-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector max finite normalize contract'"),
     RequiredBehaviorTestMarker("vec-normalize-raw-non-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('raw vector normalize non-finite inputs fail fast'"),
     RequiredBehaviorTestMarker("vec-division-invalid-divisors", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector division invalid divisors fail fast'"),
+    RequiredBehaviorTestMarker("vec-equals-non-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector Equals non-finite comparison contracts'"),
     RequiredBehaviorTestMarker("mat-3f", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('TMat3f contracts'"),
     RequiredBehaviorTestMarker("mat-4f", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('TMat4f contracts'"),
     RequiredBehaviorTestMarker("mat-double", "tests/nextpas.core.math/test_mat/test_mat.lpr", "T.Run('double precision matrix contracts'"),

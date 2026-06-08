@@ -962,6 +962,50 @@ begin
     'TVec4d component divide infinity', @RaiseVec4dDivComponentsInfinity);
 end;
 
+procedure TestVectorEqualsNonFiniteComparisonContracts;
+begin
+  Check(not TVec2f.Equals(TVec2f.Create(SingleNaN, 1.0), TVec2f.Create(SingleNaN, 1.0),
+    Single(0.0)), 'TVec2f Equals rejects NaN components');
+  Check(TVec2f.Equals(TVec2f.Create(SingleInfinity, 1.0), TVec2f.Create(SingleInfinity, 1.0),
+    Single(0.0)), 'TVec2f Equals accepts matching positive infinity');
+  Check(not TVec2f.Equals(TVec2f.Create(SingleInfinity, 1.0),
+    TVec2f.Create(SingleNegativeInfinity, 1.0), Single(0.0)),
+    'TVec2f Equals rejects opposite infinities');
+  Check(not TVec2f.Equals(TVec2f.Create(1.0, 2.0), TVec2f.Create(1.0, 2.0),
+    SingleNaN), 'TVec2f Equals rejects NaN epsilon');
+
+  Check(not TVec3f.Equals(TVec3f.Create(1.0, SingleInfinity, 3.0),
+    TVec3f.Create(1.0, 2.0, 3.0), Single(0.0)),
+    'TVec3f Equals rejects finite vs infinity');
+  Check(not TVec3f.Equals(TVec3f.Create(1.0, 2.0, 3.0),
+    TVec3f.Create(1.0, 2.0, 3.0), SingleInfinity),
+    'TVec3f Equals rejects infinite epsilon');
+  Check(not TVec4f.Equals(TVec4f.Create(1.0, 2.0, 3.0, 4.0),
+    TVec4f.Create(1.0, 2.0, 3.0, 4.0), SingleNegativeInfinity),
+    'TVec4f Equals rejects negative infinite epsilon');
+
+  Check(not TVec2d.Equals(TVec2d.Create(DoubleNaN, 1.0), TVec2d.Create(DoubleNaN, 1.0),
+    0.0), 'TVec2d Equals rejects NaN components');
+  Check(TVec2d.Equals(TVec2d.Create(DoubleNegativeInfinity, 1.0),
+    TVec2d.Create(DoubleNegativeInfinity, 1.0), 0.0),
+    'TVec2d Equals accepts matching negative infinity');
+  Check(not TVec2d.Equals(TVec2d.Create(DoubleInfinity, 1.0),
+    TVec2d.Create(DoubleNegativeInfinity, 1.0), 0.0),
+    'TVec2d Equals rejects opposite infinities');
+  Check(not TVec2d.Equals(TVec2d.Create(1.0, 2.0), TVec2d.Create(1.0, 2.0),
+    DoubleNaN), 'TVec2d Equals rejects NaN epsilon');
+
+  Check(not TVec3d.Equals(TVec3d.Create(1.0, DoubleInfinity, 3.0),
+    TVec3d.Create(1.0, 2.0, 3.0), 0.0),
+    'TVec3d Equals rejects finite vs infinity');
+  Check(not TVec3d.Equals(TVec3d.Create(1.0, 2.0, 3.0),
+    TVec3d.Create(1.0, 2.0, 3.0), DoubleInfinity),
+    'TVec3d Equals rejects infinite epsilon');
+  Check(not TVec4d.Equals(TVec4d.Create(1.0, 2.0, 3.0, 4.0),
+    TVec4d.Create(1.0, 2.0, 3.0, 4.0), DoubleNegativeInfinity),
+    'TVec4d Equals rejects negative infinite epsilon');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.vec');
   T.Run('TVec2f contracts', @TestVec2fContracts);
@@ -987,6 +1031,8 @@ begin
     @TestRawVectorNormalizeNonFiniteInputsFailFast);
   T.Run('vector division invalid divisors fail fast',
     @TestVectorDivisionInvalidDivisorsFailFast);
+  T.Run('vector Equals non-finite comparison contracts',
+    @TestVectorEqualsNonFiniteComparisonContracts);
   TouchVectorSinks;
   T.Summary;
 end.

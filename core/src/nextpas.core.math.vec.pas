@@ -221,12 +221,12 @@ end;
 
 function SingleEquals(const AA, AB, AEpsilon: Single): Boolean; inline;
 begin
-  Result := (AEpsilon >= 0.0) and nextpas.core.math.scalar.FloatEquals(AA, AB, AEpsilon);
+  Result := nextpas.core.math.scalar.FloatEquals(AA, AB, AEpsilon);
 end;
 
 function DoubleEquals(const AA, AB, AEpsilon: Double): Boolean; inline;
 begin
-  Result := (AEpsilon >= 0.0) and nextpas.core.math.scalar.FloatEquals(AA, AB, AEpsilon);
+  Result := nextpas.core.math.scalar.FloatEquals(AA, AB, AEpsilon);
 end;
 
 function IsFinite(const AValue: Single): Boolean; overload; inline;

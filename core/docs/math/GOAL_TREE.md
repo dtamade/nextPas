@@ -56,6 +56,7 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by
   `Normalize`.
 - Vector scalar division and `DivComponents` reject zero, NaN, and infinite divisors with `EArgumentError`.
+- Vector `Equals` applies scalar `FloatEquals` component-wise: NaN components and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.
 - Quaternion `Normalize` uses a scaled finite length path, so huge finite `TQuatf` and `TQuatd` inputs preserve direction instead of collapsing through an overflowing squared length.
 - Raw quaternion inputs containing NaN or infinity fail fast with `EArgumentError` when used by
   `Normalize`, `ToAxisAngle`, `ToRotationMatrix`, `Rotate`, or as `Slerp`/`Nlerp` endpoints.
