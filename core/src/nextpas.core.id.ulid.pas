@@ -108,6 +108,7 @@ var LI: Integer; LVal: Int32;
 begin
   Result := 0;
   if Length(AStr) <> ULID_LENGTH then Exit;
+  if not UlidIsValid(AStr) then Exit;
   for LI := 1 to 10 do
   begin
     LVal := CrockfordVal(AStr[LI]);

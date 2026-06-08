@@ -679,6 +679,17 @@ begin
     'overflow timestamp encoding has no timestamp');
 end;
 
+procedure TestUlidTimestampRejectsMalformedTail;
+var
+  LS: string;
+begin
+  LS := UlidFromTimestamp(12345678);
+  LS[ULID_LENGTH] := 'I';
+  Check(not UlidIsValid(LS), 'invalid random tail is not valid');
+  CheckEqual(Int64(0), Int64(UlidTimestampMs(LS)),
+    'invalid random tail has no timestamp');
+end;
+
 procedure TestUlidLowercaseRoundTrip;
 var LS, LLower: string; LI: Integer; LMs1, LMs2: UInt64;
 begin
@@ -811,6 +822,7 @@ begin
   T.Run('KSUID boundary all-FF', @TestKsuidBoundaryAllFF);
   T.Run('ULID max timestamp', @TestUlidMaxTimestamp);
   T.Run('ULID timestamp rejects overflow encoding', @TestUlidTimestampRejectsOverflowEncoding);
+  T.Run('ULID timestamp rejects malformed tail', @TestUlidTimestampRejectsMalformedTail);
   T.Run('ULID lowercase roundtrip', @TestUlidLowercaseRoundTrip);
   T.Run('XID high-char parse', @TestXidHighCharParse);
   T.Run('Snowflake extract roundtrip', @TestSnowflakeExtractRoundTrip);
