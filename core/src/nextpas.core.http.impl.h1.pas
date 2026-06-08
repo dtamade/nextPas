@@ -1936,6 +1936,8 @@ end;
 procedure TH1ClientTransport.PoolPut(const AHost: string; const APort: UInt16;
   const AConn: ITcpStream);
 begin
+  AConn.SetReadDeadline(TDeadline.Infinite);
+  AConn.SetWriteDeadline(TDeadline.Infinite);
   if FPoolCount >= Length(FPool) then
     SetLength(FPool, FPoolCount + 4);
   FPool[FPoolCount].Host := AHost;

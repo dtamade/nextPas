@@ -768,6 +768,8 @@ begin
   LConn.Close;
 end;
 
+function TimeoutReuseAcceptThread(AArg: Pointer): Pointer; cdecl; forward;
+
 function StartServer(const AHandler: IHttpHandler; out AServer: THttpServer; out APort: UInt16): TPlatformThreadHandle;
 var
   LCtx: PServerCtx;
@@ -4110,6 +4112,45 @@ begin
   end;
 end;
 
+procedure TestClientTimeoutDoesNotPoisonIdleConnectionReuse;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LOptions: THttpClientOptions;
+  LResp: IHttpResponse;
+  LRet: Pointer;
+begin
+  GAcceptCount := 0;
+  GPoolListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GPoolListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @TimeoutReuseAcceptThread, nil);
+
+  try
+    LOptions := THttpClientOptions.Default;
+    LOptions.Timeout := 100;
+    LClient := NewHttpClient(LOptions);
+
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/ping');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'first request status 200');
+    CheckEqual(Int64(1), Int64(GAcceptCount),
+      'first request opens first connection');
+
+    platform_thread_sleep_ns(250000000);
+
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/ping');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'second request status 200');
+    CheckEqual(Int64(1), Int64(GAcceptCount),
+      'expired per-request timeout does not poison idle reuse');
+
+    LClient := nil;
+  finally
+    GPoolListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GPoolListener := nil;
+  end;
+end;
+
 procedure TestClientSendsIdempotentReplayableBodyAfterClosedPooledConnection;
 var
   LPort: UInt16;
@@ -4546,6 +4587,69 @@ begin
   end;
 end;
 
+procedure WritePoolOkResponse(const AConn: ITcpStream);
+var
+  LReply: string;
+begin
+  LReply := 'HTTP/1.1 200 OK'#13#10 +
+            'Content-Length: 2'#13#10 +
+            #13#10 +
+            'ok';
+  AConn.Write(LReply[1], SizeUInt(Length(LReply)));
+end;
+
+function TimeoutReuseAcceptThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LMethod: string;
+  LBody: string;
+begin
+  Result := nil;
+  try
+    LConn := GPoolListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  InterlockedIncrement(GAcceptCount);
+  try
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    if LMethod <> '' then
+      WritePoolOkResponse(LConn);
+
+    LMethod := '';
+    LBody := '';
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    if LMethod <> '' then
+    begin
+      WritePoolOkResponse(LConn);
+      LConn.Close;
+      Exit;
+    end;
+  except
+  end;
+  LConn.Close;
+
+  try
+    LConn := GPoolListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  InterlockedIncrement(GAcceptCount);
+  try
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    if LMethod <> '' then
+      WritePoolOkResponse(LConn);
+  except
+  end;
+  LConn.Close;
+end;
+
 procedure TestConnectionReuse;
 var
   LPort: UInt16;
@@ -4731,6 +4835,8 @@ begin
   T.Run('Client respects max redirects', @TestClientMaxRedirects);
   T.Run('Client CloseIdleConnections drops pooled connections',
     @TestClientCloseIdleConnectionsDropsPooledConnections);
+  T.Run('Client timeout does not poison idle connection reuse',
+    @TestClientTimeoutDoesNotPoisonIdleConnectionReuse);
   T.Run('Client sends idempotent replayable body after closed pooled connection',
     @TestClientSendsIdempotentReplayableBodyAfterClosedPooledConnection);
   T.Run('Client sends non-idempotent body after closed pooled connection',
