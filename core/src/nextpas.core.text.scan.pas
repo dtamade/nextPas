@@ -167,11 +167,14 @@ begin
   LPos := 0;
   while LPos + VecWidth <= ALen do
   begin
-    LWsMask := VecCmpGtU(@AData[LPos], $20);
-    if LWsMask = TVecMask(0) then
+    LWsMask := VecCmpEq(@AData[LPos], Ord(' ')) or
+               VecCmpEq(@AData[LPos], 9) or
+               VecCmpEq(@AData[LPos], 10) or
+               VecCmpEq(@AData[LPos], 13);
+    if LWsMask = TVecMask(not TVecMask(0)) then
       Inc(LPos, VecWidth)
     else
-      Exit(LPos + SizeUInt(VecCtz(LWsMask)));
+      Exit(LPos + SizeUInt(VecCtz(not LWsMask and TVecMask(not TVecMask(0)))));
   end;
   while LPos < ALen do
   begin

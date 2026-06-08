@@ -58,6 +58,26 @@ begin
   CheckEqual(Int64(64), Int64(ScanSkipWhitespace(@Buf[0], 64)), 'all 64 spaces');
 end;
 
+procedure TestSkipWhitespaceRejectsControlBytes;
+var
+  Buf: array[0..63] of AnsiChar;
+begin
+  FillChar(Buf, 64, Ord(' '));
+  Buf[20] := #0;
+  Buf[21] := 'x';
+  CheckEqual(Int64(20), Int64(ScanSkipWhitespace(@Buf[0], 64)), 'NUL is not whitespace');
+
+  FillChar(Buf, 64, Ord(' '));
+  Buf[24] := #1;
+  Buf[25] := 'x';
+  CheckEqual(Int64(24), Int64(ScanSkipWhitespace(@Buf[0], 64)), 'SOH is not whitespace');
+
+  FillChar(Buf, 64, Ord(' '));
+  Buf[28] := #11;
+  Buf[29] := 'x';
+  CheckEqual(Int64(28), Int64(ScanSkipWhitespace(@Buf[0], 64)), 'VT is not whitespace');
+end;
+
 procedure TestJsonNumber;
 begin
   CheckEqual(Int64(3), Int64(ScanJsonNumber(PAnsiChar('123abc'), 6)), 'integer');
@@ -159,6 +179,7 @@ begin
   T.Run('FindNotInRange', @TestFindNotInRange);
   T.Run('SkipWhitespace', @TestSkipWhitespace);
   T.Run('SkipWhitespace long', @TestSkipWhitespaceLong);
+  T.Run('SkipWhitespace rejects control bytes', @TestSkipWhitespaceRejectsControlBytes);
   T.Run('JsonNumber', @TestJsonNumber);
   T.Run('JsonNumber invalid boundaries', @TestJsonNumberInvalidBoundaries);
   T.Run('MatchLiteral', @TestMatchLiteral);
