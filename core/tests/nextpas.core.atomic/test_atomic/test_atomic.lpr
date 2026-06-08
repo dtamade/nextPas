@@ -1240,6 +1240,14 @@ begin
     'invalid memory-order matrix must cover tagged pointer strong CAS failure-order rejection');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_tagged_ptr_compare_exchange_weak(LTaggedStorage, LTaggedExpected, LTaggedDesired, mo_release, mo_acq_rel)',
     'invalid memory-order matrix must cover tagged pointer weak CAS failure-order rejection');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_tagged_ptr_compare_exchange_strong(LTaggedStorage, LTaggedExpected, LTaggedDesired, LInvalidOrder, mo_relaxed)',
+    'invalid memory-order matrix must cover tagged pointer strong CAS invalid success ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_tagged_ptr_compare_exchange_strong(LTaggedStorage, LTaggedExpected, LTaggedDesired, mo_seq_cst, LInvalidOrder)',
+    'invalid memory-order matrix must cover tagged pointer strong CAS invalid failure ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_tagged_ptr_compare_exchange_weak(LTaggedStorage, LTaggedExpected, LTaggedDesired, LInvalidOrder, mo_relaxed)',
+    'invalid memory-order matrix must cover tagged pointer weak CAS invalid success ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'atomic_tagged_ptr_compare_exchange_weak(LTaggedStorage, LTaggedExpected, LTaggedDesired, mo_seq_cst, LInvalidOrder)',
+    'invalid memory-order matrix must cover tagged pointer weak CAS invalid failure ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_fetch_max(LInt32, 2, mo_release)',
     'memory-order matrix must prove fetch_max release-order is legal for RMW operations');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_fetch_min_64(LInt64, 2, mo_acq_rel)',
@@ -3971,6 +3979,46 @@ begin
       LRaised := True;
   end;
   Check(LRaised, 'tagged pointer weak CAS failure stronger than relaxed success must raise EArgumentError');
+
+  LTaggedExpected := LTaggedStorage;
+  LRaised := False;
+  try
+    atomic_tagged_ptr_compare_exchange_strong(LTaggedStorage, LTaggedExpected, LTaggedDesired, LInvalidOrder, mo_relaxed);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'tagged pointer strong CAS invalid success ordinal must raise EArgumentError');
+
+  LTaggedExpected := LTaggedStorage;
+  LRaised := False;
+  try
+    atomic_tagged_ptr_compare_exchange_strong(LTaggedStorage, LTaggedExpected, LTaggedDesired, mo_seq_cst, LInvalidOrder);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'tagged pointer strong CAS invalid failure ordinal must raise EArgumentError');
+
+  LTaggedExpected := LTaggedStorage;
+  LRaised := False;
+  try
+    atomic_tagged_ptr_compare_exchange_weak(LTaggedStorage, LTaggedExpected, LTaggedDesired, LInvalidOrder, mo_relaxed);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'tagged pointer weak CAS invalid success ordinal must raise EArgumentError');
+
+  LTaggedExpected := LTaggedStorage;
+  LRaised := False;
+  try
+    atomic_tagged_ptr_compare_exchange_weak(LTaggedStorage, LTaggedExpected, LTaggedDesired, mo_seq_cst, LInvalidOrder);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'tagged pointer weak CAS invalid failure ordinal must raise EArgumentError');
 
   LInt32 := 5;
   CheckEqual(Int64(5), Int64(atomic_fetch_max(LInt32, 2, mo_release)),
