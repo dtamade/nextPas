@@ -9,6 +9,7 @@ procedure TestAtomicTypesPtrContract;
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.atomic,
   nextpas.core.atomic.types;
@@ -29,6 +30,8 @@ var
   LValueB: Integer;
   LValueC: Integer;
   LHolder: TDirectPtrHolder;
+  LInvalidOrder: memory_order_t;
+  LRaised: Boolean;
 begin
   Check(SizeOf(TDirectAtomicPtr) = SizeOf(Pointer),
     'direct atomic.types TAtomicPtr storage must be exactly one pointer');
@@ -57,6 +60,20 @@ begin
     'direct atomic.types TAtomicPtr.Exchange should return the previous pointer');
   Check(LAtomicPtr.Load = @LValueC,
     'direct atomic.types TAtomicPtr default Load should observe the exchanged pointer');
+
+  LInvalidOrder := memory_order_t(Ord(mo_seq_cst) + 1);
+  LRaised := False;
+  try
+    LAtomicPtr.Exchange(@LValueA, LInvalidOrder);
+    Check(False, 'direct atomic.types TAtomicPtr.Exchange invalid ordinal must raise EArgumentError');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised,
+    'direct atomic.types TAtomicPtr.Exchange invalid ordinal should be rejected');
+  Check(LAtomicPtr.Load(mo_acquire) = @LValueC,
+    'direct atomic.types TAtomicPtr.Exchange invalid ordinal must not mutate storage');
 
   LExpected := @LValueA;
   Check(not LAtomicPtr.CompareExchangeStrong(LExpected, @LValueB, mo_consume),

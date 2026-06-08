@@ -39,6 +39,11 @@ begin
   Check(Pos(AUnexpected, AText) = 0, AMessage + ': unexpected "' + AUnexpected + '"');
 end;
 
+procedure ExpectInvalidOrderRaises(const AMessage: string);
+begin
+  Check(False, AMessage + ' must raise EArgumentError');
+end;
+
 function ExtractSection(const AText, AStartMarker, AEndMarker: string): string;
 var
   LStartPos: SizeInt;
@@ -389,6 +394,9 @@ var
   LDefaultLoadPtrIntSection: string;
   LStore32Section: string;
   LStore64Section: string;
+  LExchange32Section: string;
+  LExchange64Section: string;
+  LFetchAdd32ExplicitSection: string;
   LStore32SeqCstSection: string;
   LStore64SeqCstSection: string;
   LDefaultStore32Section: string;
@@ -435,8 +443,11 @@ var
   LFetchAnd64Section: string;
   LFetchOr64Section: string;
   LFetchXor64Section: string;
+  LFetchMax32Section: string;
   LFetchMax64Section: string;
+  LFetchMin32Section: string;
   LFetchMin64Section: string;
+  LFetchNand32Section: string;
   LFetchNand64Section: string;
   LPointerFetchAddSection: string;
   LPointerFetchSubSection: string;
@@ -624,6 +635,15 @@ begin
   LStore64Section := ExtractImplementationSection(LAtomicSource,
     'procedure atomic_store_64(var aObj: Int64; aDesired: Int64; aOrder: memory_order_t);',
     'procedure atomic_store_64(var aObj: Int64; aDesired: Int64);');
+  LExchange32Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_exchange(var aObj: Int32; aDesired: Int32; aOrder: memory_order_t): Int32;',
+    'function atomic_exchange(var aObj: Int32; aDesired: Int32): Int32;');
+  LExchange64Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_exchange_64(var aObj: Int64; aDesired: Int64; aOrder: memory_order_t): Int64;',
+    'function atomic_exchange_64(var aObj: Int64; aDesired: Int64): Int64;');
+  LFetchAdd32ExplicitSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_add(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32;',
+    'function atomic_fetch_add(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32;');
   LStore32SeqCstSection := ExtractSection(LStore32Section,
     '    mo_seq_cst:',
     '  end;');
@@ -758,7 +778,7 @@ begin
     '  T.Summary;');
   LInvalidOrderMatrixSection := ExtractSection(LAtomicTestSource,
     'procedure ' + 'TestAtomicInvalidMemoryOrderSurfaceMatrix;' + LineEnding +
-    'var',
+    'type',
     'procedure ' + 'TestAtomicTypedCasConsumeContract;');
   LSignedWrapContractSection := ExtractSection(LAtomicTestSource,
     'procedure ' + 'TestAtomicSignedWrapContract;',
@@ -793,12 +813,21 @@ begin
   LFetchXor64Section := ExtractImplementationSection(LAtomicSource,
     'function atomic_fetch_xor_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;',
     'function atomic_fetch_xor_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64;');
+  LFetchMax32Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_max(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32;',
+    'function atomic_fetch_max(var aObj: Int32; aArg: Int32): Int32;');
   LFetchMax64Section := ExtractImplementationSection(LAtomicSource,
     'function atomic_fetch_max_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;',
     'function atomic_fetch_max_64(var aObj: Int64; aArg: Int64): Int64;');
+  LFetchMin32Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_min(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32;',
+    'function atomic_fetch_min(var aObj: Int32; aArg: Int32): Int32;');
   LFetchMin64Section := ExtractImplementationSection(LAtomicSource,
     'function atomic_fetch_min_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;',
     'function atomic_fetch_min_64(var aObj: Int64; aArg: Int64): Int64;');
+  LFetchNand32Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_nand(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32;',
+    'function atomic_fetch_nand(var aObj: Int32; aArg: Int32): Int32;');
   LFetchNand64Section := ExtractImplementationSection(LAtomicSource,
     'function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;',
     'function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64): Int64;');
@@ -1839,6 +1868,10 @@ begin
     'atomic unit must define a shared load-order validator');
   CheckContains(LAtomicSource, 'procedure AtomicValidateStoreOrder(const AOrder: memory_order_t);',
     'atomic unit must define a shared store-order validator');
+  CheckContains(LAtomicSource, 'procedure AtomicValidateRmwOrder(const AOrder: memory_order_t);',
+    'atomic unit must define a shared RMW-order validator');
+  CheckContains(LAtomicCoreSource, 'procedure AtomicValidateFenceOrder(const AOrder: memory_order_t);',
+    'atomic core unit must define a shared fence-order validator');
   CheckContains(LAtomicSource,
     'procedure AtomicValidateCompareExchangeOrders(const ASuccessOrder, AFailureOrder: memory_order_t);',
     'atomic unit must define a shared compare-exchange order validator');
@@ -1850,6 +1883,24 @@ begin
     '32-bit atomic_store must validate explicit memory orders');
   CheckContains(LStore64Section, 'AtomicValidateStoreOrder(aOrder);',
     '64-bit atomic_store must validate explicit memory orders');
+  CheckContains(LThreadFenceSection, 'AtomicValidateFenceOrder(aOrder);',
+    'atomic_thread_fence must validate invalid explicit memory-order ordinals');
+  CheckContains(LSignalFenceSection, 'AtomicValidateFenceOrder(aOrder);',
+    'atomic_signal_fence must validate invalid explicit memory-order ordinals');
+  CheckContains(LExchange32Section, 'AtomicValidateRmwOrder(aOrder);',
+    '32-bit atomic_exchange must validate invalid explicit memory-order ordinals before mutation');
+  CheckContains(LExchange64Section, 'AtomicValidateRmwOrder(aOrder);',
+    '64-bit atomic_exchange must validate invalid explicit memory-order ordinals before mutation');
+  CheckContains(LFetchAdd32ExplicitSection, 'AtomicValidateRmwOrder(aOrder);',
+    '32-bit atomic_fetch_add must validate invalid explicit memory-order ordinals before mutation');
+  CheckContains(LFetchAnd64Section, 'AtomicValidateRmwOrder(aOrder);',
+    '64-bit atomic_fetch_and must validate invalid explicit memory-order ordinals before mutation');
+  CheckContains(LFetchMax32Section, 'AtomicValidateRmwOrder(aOrder);',
+    '32-bit atomic_fetch_max must validate invalid explicit memory-order ordinals before mutation');
+  CheckContains(LFetchMin32Section, 'AtomicValidateRmwOrder(aOrder);',
+    '32-bit atomic_fetch_min must validate invalid explicit memory-order ordinals before mutation');
+  CheckContains(LFetchNand32Section, 'AtomicValidateRmwOrder(aOrder);',
+    '32-bit atomic_fetch_nand must validate invalid explicit memory-order ordinals before mutation');
   CheckContains(LCasStrong32DualSection,
     'AtomicValidateCompareExchangeOrders(aSuccessOrder, aFailureOrder);',
     '32-bit dual-order strong CAS must validate success/failure orders');
@@ -3695,6 +3746,8 @@ begin
 end;
 
 procedure TestAtomicInvalidMemoryOrderSurfaceMatrix;
+type
+  TFacadeAtomicPtr = specialize TAtomicPtr<Integer>;
 var
   LInt32: Int32;
   LExpectedInt32: Int32;
@@ -3702,6 +3755,9 @@ var
   LValueB: Integer;
   LPtr: Pointer;
   LExpectedPtr: Pointer;
+  LTypedInt32: TAtomicInt32;
+  LTypedFlag: TAtomicFlag;
+  LTypedPtr: TFacadeAtomicPtr;
   LTaggedStorage: atomic_tagged_ptr_t;
   LTaggedExpected: atomic_tagged_ptr_t;
   LTaggedDesired: atomic_tagged_ptr_t;
@@ -3714,9 +3770,391 @@ var
   LUInt64: UInt64;
   LExpectedUInt64: UInt64;
   {$ENDIF}
+
+  procedure ExpectThreadFenceRejectsInvalidOrder;
+  begin
+    LRaised := False;
+    try
+      atomic_thread_fence(LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_thread_fence invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_thread_fence invalid ordinal must raise EArgumentError');
+  end;
+
+  procedure ExpectSignalFenceRejectsInvalidOrder;
+  begin
+    LRaised := False;
+    try
+      atomic_signal_fence(LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_signal_fence invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_signal_fence invalid ordinal must raise EArgumentError');
+  end;
+
+  procedure ExpectExchange32RejectsInvalidOrder;
+  begin
+    LInt32 := 101;
+    LRaised := False;
+    try
+      atomic_exchange(LInt32, 202, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_exchange 32-bit invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_exchange 32-bit invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), Int64(LInt32),
+      'atomic_exchange 32-bit invalid ordinal must not mutate the target');
+  end;
+
+  procedure ExpectRmw32RejectsInvalidOrder;
+  begin
+    LInt32 := 101;
+    LRaised := False;
+    try
+      atomic_fetch_add(LInt32, 7, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_fetch_add 32-bit invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_fetch_add 32-bit invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), Int64(LInt32),
+      'atomic_fetch_add 32-bit invalid ordinal must not mutate the target');
+
+    LInt32 := 101;
+    LRaised := False;
+    try
+      atomic_fetch_sub(LInt32, 7, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_fetch_sub 32-bit invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_fetch_sub 32-bit invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), Int64(LInt32),
+      'atomic_fetch_sub 32-bit invalid ordinal must not mutate the target');
+
+    LInt32 := 101;
+    LRaised := False;
+    try
+      atomic_fetch_and(LInt32, 7, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_fetch_and 32-bit invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_fetch_and 32-bit invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), Int64(LInt32),
+      'atomic_fetch_and 32-bit invalid ordinal must not mutate the target');
+
+    LInt32 := 101;
+    LRaised := False;
+    try
+      atomic_fetch_or(LInt32, 7, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_fetch_or 32-bit invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_fetch_or 32-bit invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), Int64(LInt32),
+      'atomic_fetch_or 32-bit invalid ordinal must not mutate the target');
+
+    LInt32 := 101;
+    LRaised := False;
+    try
+      atomic_fetch_xor(LInt32, 7, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_fetch_xor 32-bit invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_fetch_xor 32-bit invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), Int64(LInt32),
+      'atomic_fetch_xor 32-bit invalid ordinal must not mutate the target');
+
+    LInt32 := 101;
+    LRaised := False;
+    try
+      atomic_fetch_max(LInt32, 107, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_fetch_max 32-bit invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_fetch_max 32-bit invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), Int64(LInt32),
+      'atomic_fetch_max 32-bit invalid ordinal must not mutate the target');
+
+    LInt32 := 101;
+    LRaised := False;
+    try
+      atomic_fetch_min(LInt32, 97, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_fetch_min 32-bit invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_fetch_min 32-bit invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), Int64(LInt32),
+      'atomic_fetch_min 32-bit invalid ordinal must not mutate the target');
+
+    LInt32 := 101;
+    LRaised := False;
+    try
+      atomic_fetch_nand(LInt32, 7, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_fetch_nand 32-bit invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_fetch_nand 32-bit invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), Int64(LInt32),
+      'atomic_fetch_nand 32-bit invalid ordinal must not mutate the target');
+  end;
+
+  procedure ExpectPointerExchangeRejectsInvalidOrder;
+  begin
+    LPtr := @LValueA;
+    LRaised := False;
+    try
+      atomic_exchange(LPtr, @LValueB, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_exchange pointer invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_exchange pointer invalid ordinal must raise EArgumentError');
+    Check(LPtr = @LValueA,
+      'atomic_exchange pointer invalid ordinal must not mutate the target');
+  end;
+
+  procedure ExpectTaggedExchangeRejectsInvalidOrder;
+  begin
+    LTaggedStorage := atomic_tagged_ptr(@LValueA, 1);
+    LTaggedDesired := atomic_tagged_ptr(@LValueB, 2);
+    LRaised := False;
+    try
+      atomic_tagged_ptr_exchange(LTaggedStorage, LTaggedDesired, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_tagged_ptr_exchange invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_tagged_ptr_exchange invalid ordinal must raise EArgumentError');
+    Check(atomic_tagged_ptr_get_ptr(LTaggedStorage) = @LValueA,
+      'atomic_tagged_ptr_exchange invalid ordinal must not mutate the pointer');
+    CheckEqual(Int64(1), Int64(atomic_tagged_ptr_get_tag(LTaggedStorage)),
+      'atomic_tagged_ptr_exchange invalid ordinal must not mutate the tag');
+  end;
+
+  procedure ExpectTypedWrappersRejectInvalidOrder;
+  begin
+    LTypedInt32 := TAtomicInt32.Create(101);
+    LRaised := False;
+    try
+      LTypedInt32.Exchange(202, LInvalidOrder);
+      ExpectInvalidOrderRaises('TAtomicInt32.Exchange invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'TAtomicInt32.Exchange invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), Int64(LTypedInt32.Load(mo_acquire)),
+      'TAtomicInt32.Exchange invalid ordinal must not mutate the target');
+
+    LTypedInt32 := TAtomicInt32.Create(101);
+    LRaised := False;
+    try
+      LTypedInt32.FetchAdd(7, LInvalidOrder);
+      ExpectInvalidOrderRaises('TAtomicInt32.FetchAdd invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'TAtomicInt32.FetchAdd invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), Int64(LTypedInt32.Load(mo_acquire)),
+      'TAtomicInt32.FetchAdd invalid ordinal must not mutate the target');
+
+    LTypedInt32 := TAtomicInt32.Create(101);
+    LRaised := False;
+    try
+      LTypedInt32.Increment(LInvalidOrder);
+      ExpectInvalidOrderRaises('TAtomicInt32.Increment invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'TAtomicInt32.Increment invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), Int64(LTypedInt32.Load(mo_acquire)),
+      'TAtomicInt32.Increment invalid ordinal must not mutate the target');
+
+    LTypedFlag := TAtomicFlag.Create(False);
+    LRaised := False;
+    try
+      LTypedFlag.test_and_set(LInvalidOrder);
+      ExpectInvalidOrderRaises('TAtomicFlag.test_and_set invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'TAtomicFlag.test_and_set invalid ordinal must raise EArgumentError');
+    Check(not LTypedFlag.test(mo_acquire),
+      'TAtomicFlag.test_and_set invalid ordinal must not set the flag');
+
+    LTypedPtr := TFacadeAtomicPtr.Create(@LValueA);
+    LRaised := False;
+    try
+      LTypedPtr.Exchange(@LValueB, LInvalidOrder);
+      ExpectInvalidOrderRaises('facade TAtomicPtr.Exchange invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'facade TAtomicPtr.Exchange invalid ordinal must raise EArgumentError');
+    Check(LTypedPtr.Load(mo_acquire) = @LValueA,
+      'facade TAtomicPtr.Exchange invalid ordinal must not mutate the target');
+  end;
+
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  procedure ExpectRmw64RejectsInvalidOrder;
+  begin
+    LInt64 := 101;
+    LRaised := False;
+    try
+      atomic_exchange_64(LInt64, 202, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_exchange_64 invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_exchange_64 invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), LInt64,
+      'atomic_exchange_64 invalid ordinal must not mutate the target');
+
+    LInt64 := 101;
+    LRaised := False;
+    try
+      atomic_fetch_add_64(LInt64, 7, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_fetch_add_64 invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_fetch_add_64 invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), LInt64,
+      'atomic_fetch_add_64 invalid ordinal must not mutate the target');
+
+    LInt64 := 101;
+    LRaised := False;
+    try
+      atomic_fetch_sub_64(LInt64, 7, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_fetch_sub_64 invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_fetch_sub_64 invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), LInt64,
+      'atomic_fetch_sub_64 invalid ordinal must not mutate the target');
+
+    LInt64 := 101;
+    LRaised := False;
+    try
+      atomic_fetch_and_64(LInt64, 7, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_fetch_and_64 invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_fetch_and_64 invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), LInt64,
+      'atomic_fetch_and_64 invalid ordinal must not mutate the target');
+
+    LInt64 := 101;
+    LRaised := False;
+    try
+      atomic_fetch_or_64(LInt64, 7, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_fetch_or_64 invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_fetch_or_64 invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), LInt64,
+      'atomic_fetch_or_64 invalid ordinal must not mutate the target');
+
+    LInt64 := 101;
+    LRaised := False;
+    try
+      atomic_fetch_xor_64(LInt64, 7, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_fetch_xor_64 invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_fetch_xor_64 invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), LInt64,
+      'atomic_fetch_xor_64 invalid ordinal must not mutate the target');
+
+    LInt64 := 101;
+    LRaised := False;
+    try
+      atomic_fetch_max_64(LInt64, 107, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_fetch_max_64 invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_fetch_max_64 invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), LInt64,
+      'atomic_fetch_max_64 invalid ordinal must not mutate the target');
+
+    LInt64 := 101;
+    LRaised := False;
+    try
+      atomic_fetch_min_64(LInt64, 97, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_fetch_min_64 invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_fetch_min_64 invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), LInt64,
+      'atomic_fetch_min_64 invalid ordinal must not mutate the target');
+
+    LInt64 := 101;
+    LRaised := False;
+    try
+      atomic_fetch_nand_64(LInt64, 7, LInvalidOrder);
+      ExpectInvalidOrderRaises('atomic_fetch_nand_64 invalid ordinal');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'atomic_fetch_nand_64 invalid ordinal must raise EArgumentError');
+    CheckEqual(Int64(101), LInt64,
+      'atomic_fetch_nand_64 invalid ordinal must not mutate the target');
+  end;
+  {$ENDIF}
 begin
   LInvalidOrderValue := Ord(mo_seq_cst) + 1;
   LInvalidOrder := memory_order_t(LInvalidOrderValue);
+
+  ExpectThreadFenceRejectsInvalidOrder;
+  ExpectSignalFenceRejectsInvalidOrder;
+  ExpectExchange32RejectsInvalidOrder;
+  ExpectRmw32RejectsInvalidOrder;
+  ExpectPointerExchangeRejectsInvalidOrder;
+  ExpectTaggedExchangeRejectsInvalidOrder;
+  ExpectTypedWrappersRejectInvalidOrder;
 
   LInt32 := 11;
   LExpectedInt32 := 11;
@@ -3902,6 +4340,8 @@ begin
       LRaised := True;
   end;
   Check(LRaised, '64-bit weak CAS invalid failure ordinal must raise EArgumentError');
+
+  ExpectRmw64RejectsInvalidOrder;
   {$ENDIF}
 
   LValueA := 31;

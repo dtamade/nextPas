@@ -88,6 +88,7 @@ Direct `nextpas.core.atomic.types.TAtomicPtr<T>` follows the same load/store/exc
 - Dual-order weak CAS delegates through the same validated strong CAS path, so invalid failure orders raise `EArgumentError` on weak and strong APIs alike.
 - `TAtomicPtr<T>` single-order CAS normalizes `mo_consume` success to acquire and derives a legal failure order; failure order never includes release or acq_rel.
 - Invalid explicit orders raise `EArgumentError`: load rejects `mo_release`/`mo_acq_rel`, store rejects `mo_consume`/`mo_acquire`/`mo_acq_rel`, and dual-order CAS rejects release/acq_rel failure orders or failure orders stronger than success.
+- Invalid explicit enum ordinals also fail fast for exchange, RMW, fence, tagged exchange, and typed wrapper surfaces before mutating the target.
 - `atomic_fetch_max/min/nand` return the previous value, publish `max(old, arg)` / `min(old, arg)` / `not (old and arg)`, and their no-argument overloads default to `mo_seq_cst`.
 
 ## AtomicWait/Notify

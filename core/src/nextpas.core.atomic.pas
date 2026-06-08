@@ -915,6 +915,17 @@ begin
   end;
 end;
 
+procedure AtomicValidateRmwOrder(const AOrder: memory_order_t);
+begin
+  case Ord(AOrder) of
+    Ord(mo_relaxed), Ord(mo_consume), Ord(mo_acquire),
+    Ord(mo_release), Ord(mo_acq_rel), Ord(mo_seq_cst):
+      ;
+  else
+    raise EArgumentError.Create('atomic_rmw: invalid memory order');
+  end;
+end;
+
 function AtomicCompareExchangeMaxFailureOrder(const ASuccessOrder: memory_order_t): memory_order_t;
 begin
   case Ord(ASuccessOrder) of
@@ -1724,9 +1735,7 @@ end;
 // ✅ Phase 3: atomic_exchange 带 memory_order 参数实现
 function atomic_exchange(var aObj: Int32; aDesired: Int32; aOrder: memory_order_t): Int32;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-  _consume_memory_order(aOrder);
-  {$ENDIF}
+  AtomicValidateRmwOrder(aOrder);
 
   // Exchange is a RMW.
   // On x86/x86_64, InterlockedExchange is implemented via XCHG/LOCK and already provides a full fence.
@@ -1810,9 +1819,7 @@ end;
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function atomic_exchange_64(var aObj: Int64; aDesired: Int64; aOrder: memory_order_t): Int64;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-  _consume_memory_order(aOrder);
-  {$ENDIF}
+  AtomicValidateRmwOrder(aOrder);
 
   // Exchange is a RMW.
   // On x86/x86_64, the underlying locked RMW already provides a full fence.
@@ -2756,9 +2763,7 @@ end;
 // ✅ Phase 3: atomic_fetch_add 带 memory_order 参数
 function atomic_fetch_add(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-  _consume_memory_order(aOrder);
-  {$ENDIF}
+  AtomicValidateRmwOrder(aOrder);
 
   // x86/x86_64: InterlockedExchangeAdd uses LOCK XADD and already provides a full fence.
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
@@ -2816,9 +2821,7 @@ end;
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function atomic_fetch_add_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-  _consume_memory_order(aOrder);
-  {$ENDIF}
+  AtomicValidateRmwOrder(aOrder);
 
   // x86/x86_64: locked RMW already provides a full fence.
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
@@ -2918,9 +2921,7 @@ function atomic_fetch_and(var aObj: Int32; aArg: Int32; aOrder: memory_order_t):
 var
   LOld, LNew: Int32;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-  _consume_memory_order(aOrder);
-  {$ENDIF}
+  AtomicValidateRmwOrder(aOrder);
 
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
@@ -2982,9 +2983,7 @@ function atomic_fetch_and_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_
 var
   LOld, LNew: Int64;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-  _consume_memory_order(aOrder);
-  {$ENDIF}
+  AtomicValidateRmwOrder(aOrder);
 
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
@@ -3033,9 +3032,7 @@ function atomic_fetch_or(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): 
 var
   LOld, LNew: Int32;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-  _consume_memory_order(aOrder);
-  {$ENDIF}
+  AtomicValidateRmwOrder(aOrder);
 
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
@@ -3097,9 +3094,7 @@ function atomic_fetch_or_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t
 var
   LOld, LNew: Int64;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-  _consume_memory_order(aOrder);
-  {$ENDIF}
+  AtomicValidateRmwOrder(aOrder);
 
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
@@ -3148,9 +3143,7 @@ function atomic_fetch_xor(var aObj: Int32; aArg: Int32; aOrder: memory_order_t):
 var
   LOld, LNew: Int32;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-  _consume_memory_order(aOrder);
-  {$ENDIF}
+  AtomicValidateRmwOrder(aOrder);
 
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
@@ -3212,9 +3205,7 @@ function atomic_fetch_xor_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_
 var
   LOld, LNew: Int64;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-  _consume_memory_order(aOrder);
-  {$ENDIF}
+  AtomicValidateRmwOrder(aOrder);
 
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
@@ -3267,9 +3258,7 @@ function atomic_fetch_max(var aObj: Int32; aArg: Int32; aOrder: memory_order_t):
 var
   LOld, LNew: Int32;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-  _consume_memory_order(aOrder);
-  {$ENDIF}
+  AtomicValidateRmwOrder(aOrder);
 
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
@@ -3315,9 +3304,7 @@ function atomic_fetch_max_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_
 var
   LOld, LNew: Int64;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-  _consume_memory_order(aOrder);
-  {$ENDIF}
+  AtomicValidateRmwOrder(aOrder);
 
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
@@ -3369,9 +3356,7 @@ function atomic_fetch_min(var aObj: Int32; aArg: Int32; aOrder: memory_order_t):
 var
   LOld, LNew: Int32;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-  _consume_memory_order(aOrder);
-  {$ENDIF}
+  AtomicValidateRmwOrder(aOrder);
 
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
@@ -3417,9 +3402,7 @@ function atomic_fetch_min_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_
 var
   LOld, LNew: Int64;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-  _consume_memory_order(aOrder);
-  {$ENDIF}
+  AtomicValidateRmwOrder(aOrder);
 
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
@@ -3471,9 +3454,7 @@ function atomic_fetch_nand(var aObj: Int32; aArg: Int32; aOrder: memory_order_t)
 var
   LOld, LNew: Int32;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-  _consume_memory_order(aOrder);
-  {$ENDIF}
+  AtomicValidateRmwOrder(aOrder);
 
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
@@ -3516,9 +3497,7 @@ function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64; aOrder: memory_order
 var
   LOld, LNew: Int64;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-  _consume_memory_order(aOrder);
-  {$ENDIF}
+  AtomicValidateRmwOrder(aOrder);
 
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of

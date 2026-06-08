@@ -153,8 +153,20 @@ procedure _compiler_signal_fence; assembler; nostackframe;
 asm
 end;
 
+procedure AtomicValidateFenceOrder(const AOrder: memory_order_t);
+begin
+  case Ord(AOrder) of
+    Ord(mo_relaxed), Ord(mo_consume), Ord(mo_acquire),
+    Ord(mo_release), Ord(mo_acq_rel), Ord(mo_seq_cst):
+      ;
+  else
+    raise EArgumentError.Create('atomic_fence: invalid memory order');
+  end;
+end;
+
 procedure atomic_thread_fence(aOrder: memory_order_t);
 begin
+  AtomicValidateFenceOrder(aOrder);
   case aOrder of
     mo_relaxed:;
     mo_consume: ReadBarrier;
@@ -167,6 +179,7 @@ end;
 
 procedure atomic_signal_fence(aOrder: memory_order_t);
 begin
+  AtomicValidateFenceOrder(aOrder);
   case aOrder of
     mo_relaxed:;
     mo_consume,
