@@ -170,6 +170,13 @@ begin
     Exit(-3.0 * PI_VALUE / 4.0);
   end;
 
+  if DoubleIsInfinite(AY) then
+  begin
+    if AY > 0.0 then
+      Exit(HALF_PI);
+    Exit(-HALF_PI);
+  end;
+
   if AY = 0.0 then
   begin
     if (AX < 0.0) or ((AX = 0.0) and DoubleHasSignBit(AX)) then
@@ -179,6 +186,15 @@ begin
       Exit(PI_VALUE);
     end;
     Exit(DoubleSignedZero(DoubleHasSignBit(AY)));
+  end;
+
+  if DoubleIsInfinite(AX) then
+  begin
+    if AX > 0.0 then
+      Exit(DoubleSignedZero(DoubleHasSignBit(AY)));
+    if AY > 0.0 then
+      Exit(PI_VALUE);
+    Exit(-PI_VALUE);
   end;
 
   if AX > 0.0 then
@@ -290,7 +306,6 @@ end;
 function Power(const ABase, AExponent: Double): Double;
 var
   LAbsBase: Double;
-  LExponent: Int64;
   LResult: Double;
 begin
   if DoubleIsNaN(AExponent) then
@@ -340,14 +355,13 @@ begin
     Exit(DoubleSignedZero(False));
   end;
 
-  if (ABase < 0.0) and IsIntegerValue(AExponent) and
-    (AExponent >= -9223372036854775808.0) and
-    (AExponent < 9223372036854775808.0) then
+  if ABase < 0.0 then
   begin
+    if not IsIntegerValue(AExponent) then
+      Exit(DoubleQuietNaN);
     LAbsBase := -ABase;
-    LExponent := System.Trunc(AExponent);
     LResult := System.Exp(AExponent * System.Ln(LAbsBase));
-    if (LExponent and 1) <> 0 then
+    if IsOddIntegerValue(AExponent) then
       Result := -LResult
     else
       Result := LResult;

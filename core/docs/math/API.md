@@ -119,6 +119,7 @@ Trig helpers:
 - Power helpers: `Power`, `Sqrt`
 
 `Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity.
+`ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.
 `Power` preserves negative-zero sign only for odd integer exponents: positive odd exponents return
 `-0`, and negative odd exponents return negative infinity. Non-odd zero-base exponents follow the
 positive-zero / positive-infinity zero-base behavior. Except for exponent `0`, a NaN exponent takes
@@ -129,7 +130,8 @@ values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`.
 signed zero, returns `+Inf` for `+Inf`, and returns `NaN` for `NaN`, negative finite values, or `-Inf`.
 `Power` returns `1` for exponent `0` before NaN-base handling. Nonzero NaN bases return `NaN`;
 infinite exponents follow `|base|` relative to `1`, with `+1` and `-1` returning `1`; infinite bases
-follow exponent sign and odd/even sign rules.
+follow exponent sign and odd/even sign rules. `Power` returns `NaN` for negative finite bases with
+non-integer exponents instead of entering host logarithm domain errors.
 
 Most scalar and trig helpers have both `Single` and `Double` overloads. Integer helper overloads are
 limited to the signed and unsigned sizes declared in the source interface.

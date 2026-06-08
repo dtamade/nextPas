@@ -751,6 +751,18 @@ REQUIRED_TRIG_POWER_DOC_TRUTH = (
         "docs/math/GOAL_TREE.md",
         "zero-base NaN-exponent propagation",
     ),
+    (
+        "docs/math/README.md",
+        "`Power` returns `NaN` for negative finite bases with non-integer exponents instead of entering host logarithm domain errors.",
+    ),
+    (
+        "docs/math/API.md",
+        "`Power` returns `NaN` for negative finite bases with non-integer exponents instead of entering host logarithm domain errors.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`Power` returns `NaN` for negative finite bases with non-integer exponents instead of entering host logarithm domain errors.",
+    ),
 )
 REQUIRED_TRIG_CIRCULAR_DOC_TRUTH = (
     (
@@ -764,6 +776,18 @@ REQUIRED_TRIG_CIRCULAR_DOC_TRUTH = (
     (
         "docs/math/GOAL_TREE.md",
         "`Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity.",
+    ),
+    (
+        "docs/math/README.md",
+        "`ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.",
+    ),
+    (
+        "docs/math/API.md",
+        "`ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.",
     ),
 )
 REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
@@ -1203,11 +1227,15 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-overflow", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('overflow helpers'"),
     RequiredBehaviorTestMarker("trig-basic", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('basic trig values'"),
     RequiredBehaviorTestMarker("trig-inverse-domain", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('inverse trig domain contracts'"),
+    RequiredBehaviorTestMarker("trig-inverse-non-finite", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('inverse trig non-finite contracts'"),
+    RequiredBehaviorTestMarker("trig-inverse-domain-arcsin-low", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcSin below lower domain returns NaN"),
+    RequiredBehaviorTestMarker("trig-inverse-domain-arccos-high", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcCos above upper domain returns NaN"),
     RequiredBehaviorTestMarker("trig-circular-non-finite", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('circular trig non-finite contracts'"),
     RequiredBehaviorTestMarker("trig-circular-sin-infinity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Sin(+Inf)=NaN"),
     RequiredBehaviorTestMarker("trig-circular-cos-single-infinity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Cos(Single -Inf)=NaN"),
     RequiredBehaviorTestMarker("trig-circular-tan-nan", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Tan(NaN)=NaN"),
     RequiredBehaviorTestMarker("trig-atan2-special", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('ArcTan2 special cases'"),
+    RequiredBehaviorTestMarker("trig-atan2-one-infinite", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('ArcTan2 one-infinite contracts'"),
     RequiredBehaviorTestMarker("trig-exp-log-sqrt", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('exp/log/sqrt contracts'"),
     RequiredBehaviorTestMarker("trig-exp-sqrt-ieee", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('exp sqrt IEEE contracts'"),
     RequiredBehaviorTestMarker("trig-exp-negative-infinity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Exp(-Inf)=+0"),
@@ -1217,6 +1245,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("trig-log-domain-log2-negative-finite", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log2(-1.0)"),
     RequiredBehaviorTestMarker("trig-log-domain-log10-single-negative-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log10(SingleNegativeZero)"),
     RequiredBehaviorTestMarker("trig-power", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('power edge contracts'"),
+    RequiredBehaviorTestMarker("trig-power-negative-non-integer", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('power negative finite base non-integer contracts'"),
     RequiredBehaviorTestMarker("trig-power-non-finite", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('power non-finite contracts'"),
     RequiredBehaviorTestMarker("trig-power-nan-base", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Power NaN base nonzero exponent returns NaN"),
     RequiredBehaviorTestMarker("trig-power-unit-infinite-exponent", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Power -1 +Inf exponent returns 1"),

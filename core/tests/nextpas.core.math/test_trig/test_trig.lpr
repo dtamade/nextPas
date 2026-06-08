@@ -64,6 +64,14 @@ begin
   Result := LValue.Value;
 end;
 
+function DoublePowerOfTwo63: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $43E0000000000000;
+  Result := LValue.Value;
+end;
+
 function SingleNegativeZero: Single;
 var
   LValue: TSingleBitCast;
@@ -176,7 +184,9 @@ begin
   CheckNear(-HALF_PI, ArcSin(-1.0), 0.0001, 'ArcSin(-1)=-PI/2');
   CheckNear(HALF_PI, ArcSin(Single(1.0)), 0.0001, 'ArcSin(Single 1)=PI/2');
   CheckNear(HALF_PI, ArcCos(0.0), 0.0001, 'ArcCos(0)=PI/2');
+  CheckNear(0.0, ArcCos(1.0), 0.0001, 'ArcCos(1)=0');
   CheckNear(PI_VALUE, ArcCos(-1.0), 0.0001, 'ArcCos(-1)=PI');
+  CheckNear(0.0, ArcCos(Single(1.0)), 0.0001, 'ArcCos(Single 1)=0');
   CheckNear(HALF_PI, ArcCos(Single(0.0)), 0.0001, 'ArcCos(Single 0)=PI/2');
   CheckNear(PI_VALUE / 4.0, ArcTan(1.0), 0.0001, 'ArcTan(1)=PI/4');
   CheckNear(PI_VALUE / 4.0, ArcTan(Single(1.0)), 0.0001, 'ArcTan(Single 1)=PI/4');
@@ -188,9 +198,30 @@ end;
 procedure TestInverseTrigDomainContracts;
 begin
   Check(IsDoubleNaN(ArcSin(1.0001)), 'ArcSin(out of domain)=NaN');
+  Check(IsDoubleNaN(ArcSin(-1.0001)), 'ArcSin below lower domain returns NaN');
   Check(IsSingleNaN(ArcSin(Single(1.0001))), 'ArcSin(Single out of domain)=NaN');
+  Check(IsSingleNaN(ArcSin(Single(-1.0001))), 'ArcSin Single below lower domain returns NaN');
   Check(IsDoubleNaN(ArcCos(-1.0001)), 'ArcCos(out of domain)=NaN');
+  Check(IsDoubleNaN(ArcCos(1.0001)), 'ArcCos above upper domain returns NaN');
   Check(IsSingleNaN(ArcCos(Single(-1.0001))), 'ArcCos(Single out of domain)=NaN');
+  Check(IsSingleNaN(ArcCos(Single(1.0001))), 'ArcCos Single above upper domain returns NaN');
+end;
+
+procedure TestInverseTrigNonFiniteContracts;
+begin
+  Check(IsDoubleNaN(ArcSin(DoubleNaN)), 'ArcSin(NaN)=NaN');
+  Check(IsSingleNaN(ArcSin(SingleNaN)), 'ArcSin(Single NaN)=NaN');
+  Check(IsDoubleNaN(ArcSin(DoubleInfinity)), 'ArcSin(+Inf)=NaN');
+  Check(IsDoubleNaN(ArcSin(-DoubleInfinity)), 'ArcSin(-Inf)=NaN');
+  Check(IsSingleNaN(ArcSin(SingleInfinity)), 'ArcSin(Single +Inf)=NaN');
+  Check(IsSingleNaN(ArcSin(-SingleInfinity)), 'ArcSin(Single -Inf)=NaN');
+
+  Check(IsDoubleNaN(ArcCos(DoubleNaN)), 'ArcCos(NaN)=NaN');
+  Check(IsSingleNaN(ArcCos(SingleNaN)), 'ArcCos(Single NaN)=NaN');
+  Check(IsDoubleNaN(ArcCos(DoubleInfinity)), 'ArcCos(+Inf)=NaN');
+  Check(IsDoubleNaN(ArcCos(-DoubleInfinity)), 'ArcCos(-Inf)=NaN');
+  Check(IsSingleNaN(ArcCos(SingleInfinity)), 'ArcCos(Single +Inf)=NaN');
+  Check(IsSingleNaN(ArcCos(-SingleInfinity)), 'ArcCos(Single -Inf)=NaN');
 end;
 
 procedure TestCircularTrigNonFiniteContracts;
@@ -232,6 +263,51 @@ begin
     'ArcTan2(-Inf,-Inf)=-3PI/4');
   CheckNear(PI_VALUE / 4.0, ArcTan2(SingleInfinity, SingleInfinity), 0.0001,
     'ArcTan2(Single +Inf,+Inf)=PI/4');
+  CheckNear(3.0 * PI_VALUE / 4.0, ArcTan2(SingleInfinity, -SingleInfinity), 0.0001,
+    'ArcTan2(Single +Inf,-Inf)=3PI/4');
+  CheckNear(-PI_VALUE / 4.0, ArcTan2(-SingleInfinity, SingleInfinity), 0.0001,
+    'ArcTan2(Single -Inf,+Inf)=-PI/4');
+  CheckNear(-3.0 * PI_VALUE / 4.0, ArcTan2(-SingleInfinity, -SingleInfinity), 0.0001,
+    'ArcTan2(Single -Inf,-Inf)=-3PI/4');
+end;
+
+procedure TestArcTan2OneInfiniteContracts;
+begin
+  CheckNear(HALF_PI, ArcTan2(DoubleInfinity, 1.0), 0.000000000001,
+    'ArcTan2(+Inf,+finite)=PI/2');
+  CheckNear(-HALF_PI, ArcTan2(-DoubleInfinity, 1.0), 0.000000000001,
+    'ArcTan2(-Inf,+finite)=-PI/2');
+  CheckNear(HALF_PI, ArcTan2(DoubleInfinity, -1.0), 0.000000000001,
+    'ArcTan2(+Inf,-finite)=PI/2');
+  CheckNear(-HALF_PI, ArcTan2(-DoubleInfinity, -1.0), 0.000000000001,
+    'ArcTan2(-Inf,-finite)=-PI/2');
+
+  Check(IsDoublePositiveZero(ArcTan2(1.0, DoubleInfinity)),
+    'ArcTan2(+finite,+Inf)=+0');
+  Check(IsDoubleNegativeZero(ArcTan2(-1.0, DoubleInfinity)),
+    'ArcTan2(-finite,+Inf)=-0');
+  CheckNear(PI_VALUE, ArcTan2(1.0, -DoubleInfinity), 0.000000000001,
+    'ArcTan2(+finite,-Inf)=PI');
+  CheckNear(-PI_VALUE, ArcTan2(-1.0, -DoubleInfinity), 0.000000000001,
+    'ArcTan2(-finite,-Inf)=-PI');
+
+  CheckNear(HALF_PI, ArcTan2(SingleInfinity, Single(1.0)), 0.000001,
+    'ArcTan2(Single +Inf,+finite)=PI/2');
+  CheckNear(-HALF_PI, ArcTan2(-SingleInfinity, Single(1.0)), 0.000001,
+    'ArcTan2(Single -Inf,+finite)=-PI/2');
+  CheckNear(HALF_PI, ArcTan2(SingleInfinity, Single(-1.0)), 0.000001,
+    'ArcTan2(Single +Inf,-finite)=PI/2');
+  CheckNear(-HALF_PI, ArcTan2(-SingleInfinity, Single(-1.0)), 0.000001,
+    'ArcTan2(Single -Inf,-finite)=-PI/2');
+
+  Check(IsSinglePositiveZero(ArcTan2(Single(1.0), SingleInfinity)),
+    'ArcTan2(Single +finite,+Inf)=+0');
+  Check(IsSingleNegativeZero(ArcTan2(Single(-1.0), SingleInfinity)),
+    'ArcTan2(Single -finite,+Inf)=-0');
+  CheckNear(PI_VALUE, ArcTan2(Single(1.0), -SingleInfinity), 0.000001,
+    'ArcTan2(Single +finite,-Inf)=PI');
+  CheckNear(-PI_VALUE, ArcTan2(Single(-1.0), -SingleInfinity), 0.000001,
+    'ArcTan2(Single -finite,-Inf)=-PI');
 end;
 
 procedure TestArcTan2SignedZeroContracts;
@@ -362,6 +438,8 @@ begin
   CheckNear(-8.0, Power(-2.0, 3.0), 0.0001, 'Power negative base odd integer exponent');
   CheckNear(4.0, Power(-2.0, 2.0), 0.0001, 'Power negative base even integer exponent');
   CheckNear(-0.125, Power(-2.0, -3.0), 0.0001, 'Power negative base negative odd exponent');
+  CheckNear(0.25, Power(-2.0, -2.0), 0.000000000001,
+    'Power negative base negative even exponent');
   CheckNear(-8.0, Power(Single(-2.0), Single(3.0)), 0.0001,
     'Power Single negative base odd integer exponent');
   Check(IsDoubleNaN(Power(-2.0, 0.5)), 'Power negative base fractional exponent returns NaN');
@@ -395,6 +473,26 @@ begin
     'Power negative zero even negative exponent returns +Inf');
   Check(IsSinglePositiveInfinity(Power(SingleNegativeZero, Single(-2.0))),
     'Power Single negative zero even negative exponent returns +Inf');
+end;
+
+procedure TestPowerNegativeFiniteBaseNonIntegerContracts;
+begin
+  Check(IsDoubleNaN(Power(-1.0, 0.5)),
+    'Power negative unit base fractional exponent returns NaN');
+  Check(IsDoubleNaN(Power(-0.25, 0.5)),
+    'Power negative abs(base)<1 fractional exponent returns NaN');
+  Check(IsDoubleNaN(Power(-4.0, -0.5)),
+    'Power negative base negative fractional exponent returns NaN');
+  Check(IsDoubleNaN(Power(-8.0, 1.0 / 3.0)),
+    'Power negative base non-integer rational exponent returns NaN');
+  Check(IsSingleNaN(Power(Single(-0.25), Single(0.5))),
+    'Power Single negative abs(base)<1 fractional exponent returns NaN');
+  Check(IsSingleNaN(Power(Single(-4.0), Single(-0.5))),
+    'Power Single negative base negative fractional exponent returns NaN');
+  CheckNear(1.0, Power(-1.0, DoublePowerOfTwo63), 0.0,
+    'Power negative unit base huge even integer exponent returns 1');
+  Check(IsDoubleNaN(Power(-2.0, DoubleNaN)),
+    'Power finite negative base NaN exponent returns NaN');
 end;
 
 procedure TestPowerNonFiniteContracts;
@@ -468,13 +566,17 @@ begin
   T := TTestRunner.Create('nextpas.core.math.trig');
   T.Run('basic trig values', @TestBasicTrigValues);
   T.Run('inverse trig domain contracts', @TestInverseTrigDomainContracts);
+  T.Run('inverse trig non-finite contracts', @TestInverseTrigNonFiniteContracts);
   T.Run('circular trig non-finite contracts', @TestCircularTrigNonFiniteContracts);
   T.Run('ArcTan2 special cases', @TestArcTan2SpecialCases);
+  T.Run('ArcTan2 one-infinite contracts', @TestArcTan2OneInfiniteContracts);
   T.Run('ArcTan2 signed zero contracts', @TestArcTan2SignedZeroContracts);
   T.Run('exp/log/sqrt contracts', @TestExpLogAndSqrtContracts);
   T.Run('exp sqrt IEEE contracts', @TestExpSqrtIEEEContracts);
   T.Run('log domain signed zero contracts', @TestLogDomainSignedZeroContracts);
   T.Run('power edge contracts', @TestPowerEdgeContracts);
+  T.Run('power negative finite base non-integer contracts',
+    @TestPowerNegativeFiniteBaseNonIntegerContracts);
   T.Run('power non-finite contracts', @TestPowerNonFiniteContracts);
   T.Summary;
 end.

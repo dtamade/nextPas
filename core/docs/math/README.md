@@ -71,7 +71,7 @@ boundary, so the common-symbol namespace contract no longer depends on a direct 
 - `nextpas.core.math.scalar`: constants, min/max/clamp, interpolation, rounding, float predicates,
   degree/radian conversion, overflow helpers, `GCD`, `LCM`, `Hypot`, and `Fmod`.
 - `nextpas.core.math.trig`: trigonometric and exponential helpers such as `Sin`, `Cos`, `Tan`,
-  `ArcTan2`, `Exp`, `Ln`, `Power`, and `Sqrt`.
+  `ArcSin`, `ArcCos`, `ArcTan2`, `Exp`, `Ln`, `Power`, and `Sqrt`.
 - `nextpas.core.math.vec`: value types `TVec2f`, `TVec3f`, `TVec4f`, `TVec2d`, `TVec3d`, and
   `TVec4d`.
 - `nextpas.core.math.mat`: value types `TMat3f`, `TMat4f`, `TMat3d`, and `TMat4d`.
@@ -91,12 +91,13 @@ boundary, so the common-symbol namespace contract no longer depends on a direct 
 `Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.
 
 `Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity.
+`ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.
 
 `Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`.
 
 `Exp` propagates `NaN`, returns `+Inf` for `+Inf`, and returns `+0` for `-Inf`. `Sqrt` preserves signed zero, returns `+Inf` for `+Inf`, and returns `NaN` for `NaN`, negative finite values, or `-Inf`.
 
-`Power` returns `1` for exponent `0` before NaN-base handling. Nonzero NaN bases return `NaN`; infinite exponents follow `|base|` relative to `1`, with `+1` and `-1` returning `1`; infinite bases follow exponent sign and odd/even sign rules.
+`Power` returns `1` for exponent `0` before NaN-base handling. Nonzero NaN bases return `NaN`; infinite exponents follow `|base|` relative to `1`, with `+1` and `-1` returning `1`; infinite bases follow exponent sign and odd/even sign rules. `Power` returns `NaN` for negative finite bases with non-integer exponents instead of entering host logarithm domain errors.
 
 ## Vector, Matrix, And Quaternion Conventions
 

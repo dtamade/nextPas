@@ -29,19 +29,22 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - Edge-case fixes are locked by tests for exact owner-level integer conversion and integer-boundary
   messages across `Floor` / `Ceil` / `Round` / `Trunc` / `Frac`, including direct
   `Single` fail-fast parity for the conversion-boundary message families, `GCD` / `LCM`,
-  `Abs(Low(...))`, `Hypot(+Inf,+Inf)`, trig NaN/out-of-domain/double-infinity cases plus direct
-  `Log2` / `Log10` coverage, selected missing `Single`-path trig parity, and `Power`
-  negative-base / zero-base edge semantics including negative-zero odd-exponent sign preservation
-  and zero-base NaN-exponent propagation, and `SimdLnF32(NaN)`.
+  `Abs(Low(...))`, `Hypot(+Inf,+Inf)`, inverse trig domain/non-finite cases, `ArcTan2`
+  signed-zero and infinite-quadrant cases, direct `Log2` / `Log10` coverage, selected missing
+  `Single`-path trig parity, and `Power` negative-base / zero-base edge semantics including
+  negative-zero odd-exponent sign preservation, zero-base NaN-exponent propagation, and negative
+  finite bases with non-integer exponents returning NaN without host logarithm domain errors, and
+  `SimdLnF32(NaN)`.
 - `Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.
 - `Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, requires value, minimum, and maximum to be finite, and finite inputs return a finite value in range even when range or delta intermediates are not representable as finite `Double`.
 - `Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.
 - `FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.
 - `Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.
 - `Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity.
+- `ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.
 - `Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`.
 - `Exp` propagates `NaN`, returns `+Inf` for `+Inf`, and returns `+0` for `-Inf`. `Sqrt` preserves signed zero, returns `+Inf` for `+Inf`, and returns `NaN` for `NaN`, negative finite values, or `-Inf`.
-- `Power` returns `1` for exponent `0` before NaN-base handling. Nonzero NaN bases return `NaN`; infinite exponents follow `|base|` relative to `1`, with `+1` and `-1` returning `1`; infinite bases follow exponent sign and odd/even sign rules.
+- `Power` returns `1` for exponent `0` before NaN-base handling. Nonzero NaN bases return `NaN`; infinite exponents follow `|base|` relative to `1`, with `+1` and `-1` returning `1`; infinite bases follow exponent sign and odd/even sign rules. `Power` returns `NaN` for negative finite bases with non-integer exponents instead of entering host logarithm domain errors.
 - Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`, `TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without overflowing the intermediate squared length.
 - Vector `LengthSqr` avoids FPU overflow exceptions for huge finite inputs and returns `+Inf` when the true squared length is outside the target float range; vector `Data` aliases write through to named fields.
 - Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by
@@ -221,6 +224,9 @@ Status:
 - Current scalar IEEE coverage now locks `Round` ties away from zero, signed-zero behavior for
   `Abs`, `Frac`, and `Fmod`, finite `Fmod` quotient-overflow avoidance, infinity-dominant
   `Hypot`, and UInt32/SizeUInt overflow helper edge cases.
+- Current trig coverage now locks inverse trig non-finite/domain behavior, `ArcTan2`
+  one-infinite and double-infinite quadrant behavior, and negative finite `Power` non-integer
+  exponent fail-to-NaN behavior.
 - `nextpas.core.math.ffi.pas` is deleted in this branch.
 - API surface checks reject naked `external 'm'`, public/test `math.ffi` consumers, public impl consumers, and legacy vector bridge names.
 - macOS/Windows host link smokes are not run in this local round.
