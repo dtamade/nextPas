@@ -46,6 +46,7 @@ var
   GRetryBodyTimeoutSecondAttemptSeen: Boolean;
   GPoisonListener: ITcpListener;
   GPoisonAcceptCount: Int32;
+  GPoisonReusedMethod: string;
   GBodyLimitListener: ITcpListener;
   GBodyLimitDeclaredBody: string;
   GBodyLimitExtraBody: string;
@@ -723,6 +724,73 @@ begin
     end;
     LConn.Close;
   end;
+end;
+
+function MalformedPooledChunkedResponseThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LReply: string;
+  LMethod: string;
+  LBody: string;
+begin
+  Result := nil;
+  try
+    LConn := GPoisonListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  InterlockedIncrement(GPoisonAcceptCount);
+  try
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    LReply := 'HTTP/1.1 200 OK'#13#10 +
+              'Content-Length: 2'#13#10 +
+              #13#10 +
+              'ok';
+    LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    LReply := 'HTTP/1.1 200 OK'#13#10 +
+              'Transfer-Encoding: chunked'#13#10 +
+              #13#10 +
+              'Z'#13#10 +
+              'hello'#13#10;
+    LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+
+    ReadRetryRawRequest(LConn, GPoisonReusedMethod, LBody);
+    if GPoisonReusedMethod <> '' then
+    begin
+      LReply := 'HTTP/1.1 599 Poisoned'#13#10 +
+                'Content-Length: 6'#13#10 +
+                #13#10 +
+                'poison';
+      LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+    end;
+  except
+  end;
+  LConn.Close;
+
+  try
+    LConn := GPoisonListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  InterlockedIncrement(GPoisonAcceptCount);
+  try
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    LReply := 'HTTP/1.1 200 OK'#13#10 +
+              'Content-Length: 8'#13#10 +
+              #13#10 +
+              'fresh-ok';
+    LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+  except
+  end;
+  LConn.Close;
 end;
 
 function SwitchingProtocolsPoolThread(AArg: Pointer): Pointer; cdecl;
@@ -4998,6 +5066,72 @@ begin
   end;
 end;
 
+procedure TestClientDoesNotRetryPooledConnectionAfterMalformedChunkedResponse;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LRaised: Boolean;
+  LParseError: Boolean;
+  LRet: Pointer;
+begin
+  GPoisonAcceptCount := 0;
+  GPoisonReusedMethod := '';
+  GPoisonListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GPoisonListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @MalformedPooledChunkedResponseThread, nil);
+
+  try
+    LClient := NewHttpClient;
+
+    LResp := LClient.Get('http://127.0.0.1:' +
+      IntToStr(Int64(LPort)) + '/prime');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'priming response status 200');
+    CheckEqual('ok', ReadBodyStr(LResp), 'priming response body');
+    CheckEqual(Int64(1), Int64(GPoisonAcceptCount),
+      'priming request opens first connection');
+
+    LRaised := False;
+    LParseError := False;
+    try
+      LClient.Get('http://127.0.0.1:' +
+        IntToStr(Int64(LPort)) + '/malformed');
+    except
+      on E: EHttpError do
+      begin
+        LRaised := True;
+        LParseError := Pos('HTTP parse error', E.Message) > 0;
+      end;
+    end;
+
+    Check(LRaised, 'malformed chunked response raises EHttpError');
+    Check(LParseError, 'malformed chunked response reports parse error');
+    CheckEqual(Int64(1), Int64(GPoisonAcceptCount),
+      'client does not retry after malformed response has started');
+
+    LResp := LClient.Get('http://127.0.0.1:' +
+      IntToStr(Int64(LPort)) + '/fresh');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'follow-up response uses fresh connection');
+    CheckEqual('fresh-ok', ReadBodyStr(LResp), 'follow-up response body');
+    CheckEqual(Int64(2), Int64(GPoisonAcceptCount),
+      'malformed pooled connection was discarded before reuse');
+    CheckEqual('', GPoisonReusedMethod,
+      'follow-up request was not sent on malformed pooled connection');
+
+    LClient := nil;
+  finally
+    if GPoisonAcceptCount < 2 then
+      WakeRetryAcceptThread(LPort);
+    GPoisonListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GPoisonListener := nil;
+    GPoisonReusedMethod := '';
+  end;
+end;
+
 { Test 6: Client timeout on slow server }
 procedure TestClientTimeout;
 var
@@ -5612,6 +5746,8 @@ begin
     @TestClientDropsPooledConnectionWithUnreadResponseTail);
   T.Run('Client drops pooled connection with same-read response tail',
     @TestClientDropsPooledConnectionWithSameReadResponseTail);
+  T.Run('Client does not retry pooled connection after malformed chunked response',
+    @TestClientDoesNotRetryPooledConnectionAfterMalformedChunkedResponse);
   T.Run('Client timeout on slow server', @TestClientTimeout);
   T.Run('Client handles 404 response', @TestClientHandles404);
   T.Run('Client sets Host header automatically', @TestClientSetsHostHeader);
