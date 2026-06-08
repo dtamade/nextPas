@@ -34,7 +34,7 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   negative-base / zero-base edge semantics including negative-zero odd-exponent sign preservation
   and zero-base NaN-exponent propagation, and `SimdLnF32(NaN)`.
 - `Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.
-- `Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, and requires value, minimum, and maximum to be finite.
+- `Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, requires value, minimum, and maximum to be finite, and finite inputs return a finite value in range even when range or delta intermediates are not representable as finite `Double`.
 - `Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.
 - `FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.
 - `Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.

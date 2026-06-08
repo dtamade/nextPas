@@ -629,15 +629,15 @@ REQUIRED_SCALAR_CLAMP_DOC_TRUTH = (
 REQUIRED_SCALAR_WRAP_DOC_TRUTH = (
     (
         "docs/math/README.md",
-        "`Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, and requires value, minimum, and maximum to be finite.",
+        "`Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, requires value, minimum, and maximum to be finite, and finite inputs return a finite value in range even when range or delta intermediates are not representable as finite `Double`.",
     ),
     (
         "docs/math/API.md",
-        "`Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, and requires value, minimum, and maximum to be finite.",
+        "`Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, requires value, minimum, and maximum to be finite, and finite inputs return a finite value in range even when range or delta intermediates are not representable as finite `Double`.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "`Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, and requires value, minimum, and maximum to be finite.",
+        "`Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, requires value, minimum, and maximum to be finite, and finite inputs return a finite value in range even when range or delta intermediates are not representable as finite `Double`.",
     ),
 )
 REQUIRED_SCALAR_IEEE_DOC_TRUTH = (
@@ -1190,6 +1190,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-float-is-zero-invalid", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "FloatIsZero Double rejects NaN value"),
     RequiredBehaviorTestMarker("scalar-interpolation", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('interpolation'"),
     RequiredBehaviorTestMarker("scalar-wrap-equal-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap Double equal bounds returns minimum"),
+    RequiredBehaviorTestMarker("scalar-wrap-huge-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap Double huge finite range stays finite"),
     RequiredBehaviorTestMarker("scalar-wrap-reversed-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap: minimum must not exceed maximum"),
     RequiredBehaviorTestMarker("scalar-wrap-non-finite-inputs", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap: value, minimum, and maximum must be finite"),
     RequiredBehaviorTestMarker("scalar-rounding-sign", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('rounding and sign'"),

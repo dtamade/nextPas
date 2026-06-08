@@ -126,6 +126,11 @@ begin
   Check(LDelta <= AEpsilon, AMessage);
 end;
 
+procedure CheckScaledNear(const AExpected, AActual, AScale, AEpsilon: Double; const AMessage: string);
+begin
+  CheckNear(AExpected / AScale, AActual / AScale, AEpsilon, AMessage);
+end;
+
 procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string; const AProc: TTestProc);
 begin
   try
@@ -222,6 +227,8 @@ begin
 end;
 
 procedure TestInterpolation;
+var
+  LWrapped: Double;
 begin
   CheckNear(5.0, Lerp(Single(0.0), Single(10.0), Single(0.5)), 0.0, 'Lerp Single midpoint');
   CheckNear(5.0, Lerp(0.0, 10.0, 0.5), 0.0, 'Lerp midpoint');
@@ -236,6 +243,25 @@ begin
     'Wrap Single equal bounds returns minimum');
   CheckNear(5.0, Wrap(10.0, 5.0, 5.0), 0.0,
     'Wrap Double equal bounds returns minimum');
+  LWrapped := Wrap(Double(0.0), Double(-1.0e308), Double(1.0e308));
+  CheckNear(0.0, LWrapped, 0.0, 'Wrap Double huge finite range keeps in-range value');
+  Check((not IsNaN(LWrapped)) and (not IsInfinite(LWrapped)) and
+    (LWrapped >= Double(-1.0e308)) and (LWrapped < Double(1.0e308)),
+    'Wrap Double huge finite range stays finite');
+  LWrapped := Wrap(Double(1.7e308), Double(-1.0e308), Double(1.0e308));
+  CheckScaledNear(Double(-3.0e307), LWrapped, Double(1.0e307), 0.000000000000001,
+    'Wrap Double huge finite overflowed range wraps above max');
+  Check((not IsNaN(LWrapped)) and (not IsInfinite(LWrapped)) and
+    (LWrapped >= Double(-1.0e308)) and (LWrapped < Double(1.0e308)),
+    'Wrap Double huge finite overflowed range result stays finite');
+  LWrapped := Wrap(Double(1.7e308), Double(-8.0e307), Double(8.0e307));
+  Check((not IsNaN(LWrapped)) and (not IsInfinite(LWrapped)) and
+    (LWrapped >= Double(-8.0e307)) and (LWrapped < Double(8.0e307)),
+    'Wrap Double huge finite delta stays finite');
+  LWrapped := Wrap(Double(-1.7e308), Double(-8.0e307), Double(8.0e307));
+  Check((not IsNaN(LWrapped)) and (not IsInfinite(LWrapped)) and
+    (LWrapped >= Double(-8.0e307)) and (LWrapped < Double(8.0e307)),
+    'Wrap Double huge finite negative delta stays finite');
   ExpectArgumentErrorMessage('Wrap: minimum must not exceed maximum',
     'Wrap Single reversed bounds', @RaiseWrapSingleReversedBounds);
   ExpectArgumentErrorMessage('Wrap: minimum must not exceed maximum',

@@ -82,7 +82,7 @@ boundary, so the common-symbol namespace contract no longer depends on a direct 
 - `nextpas.core.math.random`: `TRandomState`, `TRandomGen`, and `TNoiseGen`.
 
 `Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.
-`Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, and requires value, minimum, and maximum to be finite.
+`Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, requires value, minimum, and maximum to be finite, and finite inputs return a finite value in range even when range or delta intermediates are not representable as finite `Double`.
 
 `Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.
 

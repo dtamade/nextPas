@@ -82,6 +82,9 @@ uses
   nextpas.core.errors,
   nextpas.core.math.impl.scalar;
 
+const
+  MAX_DOUBLE_VALUE: Double = 1.79769313486231570815e308;
+
 function UInt64AbsInt64(const AValue: Int64): UInt64; inline;
 begin
   if AValue < 0 then
@@ -197,6 +200,67 @@ begin
   if LDividend >= LDivisor then
     LDividend := LDividend - LDivisor;
   Result := LDividend;
+end;
+
+function EuclideanModuloFinite(const AValue, AModulus: Double): Double;
+var
+  LAbsRemainder: Double;
+begin
+  if AValue = 0.0 then
+    Exit(0.0);
+  if AValue > 0.0 then
+    Exit(FmodPositiveFinite(AValue, AModulus));
+
+  LAbsRemainder := FmodPositiveFinite(-AValue, AModulus);
+  if LAbsRemainder = 0.0 then
+    Exit(0.0);
+  Result := AModulus - LAbsRemainder;
+  if Result >= AModulus then
+    Result := 0.0;
+end;
+
+function DifferenceWouldOverflow(const ALeft, ARight: Double): Boolean;
+begin
+  if (ALeft > 0.0) and (ARight < 0.0) then
+    Exit(ALeft > MAX_DOUBLE_VALUE + ARight);
+  if (ALeft < 0.0) and (ARight > 0.0) then
+    Exit(ALeft < -MAX_DOUBLE_VALUE + ARight);
+  Result := False;
+end;
+
+function WrapOffsetFiniteRange(const AValue, AMin, ARange: Double): Double;
+var
+  LDelta: Double;
+  LValueRemainder: Double;
+  LMinRemainder: Double;
+begin
+  if not DifferenceWouldOverflow(AValue, AMin) then
+  begin
+    LDelta := AValue - AMin;
+    Exit(EuclideanModuloFinite(LDelta, ARange));
+  end;
+
+  LValueRemainder := EuclideanModuloFinite(AValue, ARange);
+  LMinRemainder := EuclideanModuloFinite(AMin, ARange);
+  Result := LValueRemainder - LMinRemainder;
+  if Result < 0.0 then
+    Result := Result + ARange;
+  if Result >= ARange then
+    Result := Result - ARange;
+end;
+
+function WrapFiniteOverflowedRange(const AValue, AMin, AMax: Double): Double;
+begin
+  if AValue >= AMax then
+    Exit(AMin + (AValue - AMax));
+  Result := AMax - (AMin - AValue);
+  if Result >= AMax then
+    Result := AMin;
+end;
+
+function WrapRangeWouldOverflow(const AMin, AMax: Double): Boolean;
+begin
+  Result := (AMin < 0.0) and (AMax > 0.0) and ((MAX_DOUBLE_VALUE - AMax) < -AMin);
 end;
 
 function ValidComparisonEpsilon(const AEpsilon: Single): Boolean; inline;
@@ -392,15 +456,34 @@ end;
 
 function Wrap(const AValue, AMin, AMax: Double): Double;
 var
+  LOffset: Double;
   LRange: Double;
 begin
   RequireWrapInputs(AValue, AMin, AMax);
+  if (AValue >= AMin) and (AValue < AMax) then
+    Exit(AValue);
+  if WrapRangeWouldOverflow(AMin, AMax) then
+    Exit(WrapFiniteOverflowedRange(AValue, AMin, AMax));
   LRange := AMax - AMin;
   if LRange = 0.0 then
     Exit(AMin);
-  Result := AValue - LRange * System.Int((AValue - AMin) / LRange);
-  if Result < AMin then
+  if DoubleIsInfinite(LRange) then
+  begin
+    if AValue >= AMax then
+      Exit(AMin + (AValue - AMax));
+    Exit(AMax - (AMin - AValue));
+  end;
+
+  LOffset := WrapOffsetFiniteRange(AValue, AMin, LRange);
+  Result := AMin + LOffset;
+  if Result >= AMax then
+    Result := AMin
+  else if Result < AMin then
+  begin
     Result := Result + LRange;
+    if Result >= AMax then
+      Result := AMin;
+  end;
 end;
 
 function SmoothStep(const AEdge0, AEdge1, AValue: Single): Single;
