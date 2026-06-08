@@ -1644,6 +1644,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("trig-atan2-single-subnormal-y-negative-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcTan2 Single subnormal y tiny negative finite ratio returns -0"),
     RequiredBehaviorTestMarker("trig-atan2-single-subnormal-y-positive-pi", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcTan2 Single subnormal y tiny positive ratio with negative x stays +PI"),
     RequiredBehaviorTestMarker("trig-exp-log-sqrt", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('exp/log/sqrt contracts'"),
+    RequiredBehaviorTestMarker("trig-exp-log-sqrt-finite-precision", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('exp log sqrt finite precision contracts'"),
     RequiredBehaviorTestMarker("trig-exp-sqrt-ieee", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('exp sqrt IEEE contracts'"),
     RequiredBehaviorTestMarker("trig-exp-negative-infinity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Exp(-Inf)=+0"),
     RequiredBehaviorTestMarker("trig-exp-finite-overflow-underflow", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('Exp finite overflow underflow contracts'"),

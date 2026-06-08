@@ -540,6 +540,56 @@ begin
   Check(IsSingleNaN(Sqrt(Single(-1.0))), 'Sqrt(Single -1)=NaN');
 end;
 
+procedure TestExpLogSqrtFinitePrecisionContracts;
+var
+  LDouble: Double;
+  LSingle: Single;
+begin
+  LDouble := Exp(Ln(Double(2.0)));
+  Check(IsDoubleFinite(LDouble), 'Exp(Ln(2)) finite precision result stays finite');
+  CheckNear(2.0, LDouble, 0.000000000001, 'Exp(Ln(2)) finite precision contract');
+
+  LDouble := Ln(Exp(Double(1.25)));
+  Check(IsDoubleFinite(LDouble), 'Ln(Exp(1.25)) finite precision result stays finite');
+  CheckNear(1.25, LDouble, 0.000000000001, 'Ln(Exp(1.25)) finite precision contract');
+
+  LDouble := Log2(Double(1024.0));
+  Check(IsDoubleFinite(LDouble), 'Log2(1024) finite precision result stays finite');
+  CheckNear(10.0, LDouble, 0.000000000001, 'Log2(1024) finite precision contract');
+
+  LDouble := Log10(Double(0.001));
+  Check(IsDoubleFinite(LDouble), 'Log10(0.001) finite precision result stays finite');
+  CheckNear(-3.0, LDouble, 0.000000000001, 'Log10(0.001) finite precision contract');
+
+  LDouble := Sqrt(Double(2.0));
+  Check(IsDoubleFinite(LDouble), 'Sqrt(2) finite precision result stays finite');
+  CheckNear(2.0, LDouble * LDouble, 0.0000000001,
+    'Sqrt(2)^2 finite precision contract');
+
+  LSingle := Exp(Ln(Single(2.0)));
+  Check(IsSingleFinite(LSingle), 'Exp(Ln(Single 2)) finite precision result stays finite');
+  CheckNear(2.0, LSingle, 0.00001, 'Exp(Ln(Single 2)) finite precision contract');
+
+  LSingle := Ln(Exp(Single(1.25)));
+  Check(IsSingleFinite(LSingle),
+    'Ln(Exp(Single 1.25)) finite precision result stays finite');
+  CheckNear(1.25, LSingle, 0.00001,
+    'Ln(Exp(Single 1.25)) finite precision contract');
+
+  LSingle := Log2(Single(1024.0));
+  Check(IsSingleFinite(LSingle), 'Log2(Single 1024) finite precision result stays finite');
+  CheckNear(10.0, LSingle, 0.00001, 'Log2(Single 1024) finite precision contract');
+
+  LSingle := Log10(Single(0.001));
+  Check(IsSingleFinite(LSingle), 'Log10(Single 0.001) finite precision result stays finite');
+  CheckNear(-3.0, LSingle, 0.00001, 'Log10(Single 0.001) finite precision contract');
+
+  LSingle := Sqrt(Single(2.0));
+  Check(IsSingleFinite(LSingle), 'Sqrt(Single 2) finite precision result stays finite');
+  CheckNear(2.0, LSingle * LSingle, 0.00001,
+    'Sqrt(Single 2)^2 finite precision contract');
+end;
+
 procedure TestExpSqrtIEEEContracts;
 begin
   Check(IsDoubleNaN(Exp(DoubleNaN)), 'Exp(NaN)=NaN');
@@ -894,6 +944,8 @@ begin
   T.Run('ArcTan2 one-infinite contracts', @TestArcTan2OneInfiniteContracts);
   T.Run('ArcTan2 signed zero contracts', @TestArcTan2SignedZeroContracts);
   T.Run('exp/log/sqrt contracts', @TestExpLogAndSqrtContracts);
+  T.Run('exp log sqrt finite precision contracts',
+    @TestExpLogSqrtFinitePrecisionContracts);
   T.Run('exp sqrt IEEE contracts', @TestExpSqrtIEEEContracts);
   T.Run('Exp finite overflow underflow contracts', @TestExpFiniteOverflowUnderflowContracts);
   T.Run('log domain signed zero contracts', @TestLogDomainSignedZeroContracts);
