@@ -5,6 +5,7 @@ program test_http_h1fast;
 uses
   SysUtils,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.http.base,
   nextpas.core.http.intf,
@@ -290,6 +291,30 @@ begin
     'GetAll preserves second duplicate value');
 end;
 
+procedure TestLazyHeadersForEachRejectsNilCallback;
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+  LCallback: THeaderIterator;
+  LRaised: Boolean;
+begin
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'X-Test: value'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LR.Success, 'lazy header nil callback request should parse');
+
+  LCallback := nil;
+  LRaised := False;
+  try
+    LR.Headers.ForEach(LCallback);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'lazy headers foreach rejects nil callback');
+end;
+
 procedure TestPolicyHeaderFlags;
 var
   LReq: AnsiString;
@@ -510,6 +535,8 @@ begin
   T.Run('Header value leading spaces', @TestHeaderValueLeadingSpaces);
   T.Run('Lazy headers raw lookup preserves semantics',
     @TestLazyHeadersRawLookupPreservesSemantics);
+  T.Run('Lazy headers ForEach rejects nil callback',
+    @TestLazyHeadersForEachRejectsNilCallback);
   T.Run('Policy header flags', @TestPolicyHeaderFlags);
   T.Run('Duplicate Host policy flag', @TestDuplicateHostPolicyFlag);
   T.Run('Empty path', @TestEmptyPath);

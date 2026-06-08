@@ -474,6 +474,25 @@ begin
   Check(LRaised, 'basic helper rejects nil headers');
 end;
 
+procedure TestForEachRejectsNilCallback;
+var
+  LH: IHttpHeaders;
+  LCallback: THeaderIterator;
+  LRaised: Boolean;
+begin
+  LH := NewHttpHeaders;
+  LH.SetHeader('X-Test', 'value');
+  LCallback := nil;
+  LRaised := False;
+  try
+    LH.ForEach(LCallback);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'foreach rejects nil callback');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.headers');
   T.Run('Headers public API does not expose Set underscore',
@@ -503,5 +522,6 @@ begin
   T.Run('SetBasicAuth sets Authorization', @TestSetBasicAuth);
   T.Run('SetBearerAuth sets Authorization', @TestSetBearerAuth);
   T.Run('Auth helpers reject nil headers', @TestAuthHelpersRejectNilHeaders);
+  T.Run('ForEach rejects nil callback', @TestForEachRejectsNilCallback);
   T.Summary;
 end.

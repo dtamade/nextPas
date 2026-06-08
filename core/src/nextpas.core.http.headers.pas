@@ -390,6 +390,9 @@ procedure THttpHeaders.ForEach(const ACallback: THeaderIterator);
 var
   LI: Int32;
 begin
+  if ACallback = nil then
+    raise EArgumentError.Create('HTTP header iterator is nil');
+
   for LI := 0 to FCount - 1 do
     ACallback(FEntries[LI].Name, FEntries[LI].Value);
 end;
