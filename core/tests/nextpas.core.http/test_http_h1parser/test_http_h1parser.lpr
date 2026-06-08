@@ -2017,6 +2017,36 @@ begin
   Check(not LP.HasError, 'no error on partial');
 end;
 
+procedure TestNilZeroLengthInputIsNoop;
+var
+  LP: IH1Parser;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LConsumed := LP.Execute(nil, 0);
+  CheckEqual(SizeUInt(0), LConsumed, 'nil zero-length input consumes nothing');
+  Check(not LP.HasError, 'nil zero-length input is not an error');
+  Check(not LP.IsComplete, 'nil zero-length input does not complete');
+  Check(LP.ErrorKind = pekNone, 'nil zero-length input keeps no error kind');
+end;
+
+procedure TestNilPositiveLengthInputReportsMalformed;
+var
+  LP: IH1Parser;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LConsumed := LP.Execute(nil, 1);
+  CheckEqual(SizeUInt(0), LConsumed,
+    'nil positive-length input consumes nothing');
+  Check(LP.HasError, 'nil positive-length input reports parser error');
+  Check(not LP.IsComplete, 'nil positive-length input is not complete');
+  Check(LP.ErrorKind = pekMalformed,
+    'nil positive-length input reports malformed input');
+  Check(LP.ErrorMessage <> '',
+    'nil positive-length input reports a non-empty error message');
+end;
+
 procedure TestResetAndReparse;
 var
   LP: IH1Parser;
@@ -2229,6 +2259,9 @@ begin
   T.Run('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF', @TestHeadersTruncatedAtEof);
   T.Run('Incomplete input', @TestIncompleteInput);
+  T.Run('Nil zero-length input is noop', @TestNilZeroLengthInputIsNoop);
+  T.Run('Nil positive-length input reports malformed',
+    @TestNilPositiveLengthInputReportsMalformed);
   T.Run('Reset and reparse', @TestResetAndReparse);
   T.Run('Request with query', @TestRequestWithQuery);
   T.Run('Multiple headers same name', @TestMultipleHeadersSameName);
