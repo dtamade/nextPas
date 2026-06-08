@@ -177,6 +177,19 @@ begin
   Check(LGotSpecific and not LGotRoot,
     'process error is a framework-root exception with specific catch priority');
 
+  LGotSpecific := False;
+  try
+    Command('/nonexistent_secret-token_binary_xyz_deep_test').Output;
+  except
+    on E: EProcessError do
+    begin
+      LGotSpecific := True;
+      Check(Pos('secret-token', E.Message) = 0,
+        'exec failure message must not include sensitive command path data');
+    end;
+  end;
+  Check(LGotSpecific, 'secret-marked nonexistent binary raises EProcessError');
+
   LGotRoot := False;
   try
     raise EProcessError.Create('unknown process failure');

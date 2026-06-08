@@ -416,10 +416,10 @@ begin
 
     if LErr <> 0 then
       case LFailStage of
-        pssChdir: raise EProcessError.Create('Failed to chdir: ' + FWorkDir, LErr);
-        pssExec: raise EProcessError.Create('Failed to exec: ' + FPath, LErr);
+        pssChdir: raise EProcessError.Create('Failed to chdir', LErr);
+        pssExec: raise EProcessError.Create('Failed to exec', LErr);
       else
-        raise EProcessError.Create('Failed to spawn: ' + FPath, LErr);
+        raise EProcessError.Create('Failed to spawn', LErr);
       end;
 
   except
