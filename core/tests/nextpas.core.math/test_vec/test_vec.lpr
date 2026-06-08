@@ -92,20 +92,32 @@ begin
   CheckNear(AExpectedW, AActual.W, 0.000000000001, AMessage + '.W');
 end;
 
-procedure CheckSinglePositiveInfinity(const AActual: Single; const AMessage: string);
+procedure CheckSingleBits(const AActual: Single; const AExpectedBits: LongWord;
+  const AMessage: string);
 var
   LValue: TSingleBitCast;
 begin
   LValue.Value := AActual;
-  CheckEqual(Int64($7F800000), Int64(LValue.Bits), AMessage);
+  CheckEqual(Int64(AExpectedBits), Int64(LValue.Bits), AMessage);
 end;
 
-procedure CheckDoublePositiveInfinity(const AActual: Double; const AMessage: string);
+procedure CheckDoubleBits(const AActual: Double; const AExpectedBits: QWord;
+  const AMessage: string);
 var
   LValue: TDoubleBitCast;
 begin
   LValue.Value := AActual;
-  CheckEqual(Int64($7FF0000000000000), Int64(LValue.Bits), AMessage);
+  Check(LValue.Bits = AExpectedBits, AMessage);
+end;
+
+procedure CheckSinglePositiveInfinity(const AActual: Single; const AMessage: string);
+begin
+  CheckSingleBits(AActual, $7F800000, AMessage);
+end;
+
+procedure CheckDoublePositiveInfinity(const AActual: Double; const AMessage: string);
+begin
+  CheckDoubleBits(AActual, $7FF0000000000000, AMessage);
 end;
 
 procedure CheckSingleNegativeInfinity(const AActual: Single; const AMessage: string);
@@ -176,12 +188,17 @@ begin
   Result := LValue.Value;
 end;
 
-function SingleMaxFinite: Single;
+function SingleFromBits(const ABits: LongWord): Single;
 var
   LValue: TSingleBitCast;
 begin
-  LValue.Bits := $7F7FFFFF;
+  LValue.Bits := ABits;
   Result := LValue.Value;
+end;
+
+function SingleMaxFinite: Single;
+begin
+  Result := SingleFromBits($7F7FFFFF);
 end;
 
 function SingleNegativeZero: Single;
@@ -216,12 +233,17 @@ begin
   Result := LValue.Value;
 end;
 
-function DoubleMaxFinite: Double;
+function DoubleFromBits(const ABits: QWord): Double;
 var
   LValue: TDoubleBitCast;
 begin
-  LValue.Bits := $7FEFFFFFFFFFFFFF;
+  LValue.Bits := ABits;
   Result := LValue.Value;
+end;
+
+function DoubleMaxFinite: Double;
+begin
+  Result := DoubleFromBits($7FEFFFFFFFFFFFFF);
 end;
 
 function DoubleNegativeZero: Double;
@@ -689,7 +711,17 @@ begin
 end;
 
 procedure TestVectorLengthSqrHugeFiniteOverflowContract;
+var
+  LSingleVec4Boundary: Single;
+  LSingleVec4AboveBoundary: Single;
+  LDoubleVec4Boundary: Double;
+  LDoubleVec4AboveBoundary: Double;
 begin
+  LSingleVec4Boundary := SingleFromBits($5EFFFFFF);
+  LSingleVec4AboveBoundary := SingleFromBits($5F000000);
+  LDoubleVec4Boundary := DoubleFromBits($5FDFFFFFFFFFFFFF);
+  LDoubleVec4AboveBoundary := DoubleFromBits($5FE0000000000000);
+
   CheckScaledNear(2.0e38, TVec2f.Create(Single(1.0e19), Single(1.0e19)).LengthSqr,
     1.0e38, 0.000001, 'TVec2f below overflow LengthSqr remains finite');
   CheckScaledNear(2.0e38, TVec3f.Create(Single(1.0e19), Single(1.0e19), 0.0).LengthSqr,
@@ -702,6 +734,20 @@ begin
     1.0e308, 0.000000000001, 'TVec3d below overflow LengthSqr remains finite');
   CheckScaledNear(1.62e308, TVec4d.Create(9.0e153, 9.0e153, 0.0, 0.0).LengthSqr,
     1.0e308, 0.000000000001, 'TVec4d below overflow LengthSqr remains finite');
+  CheckSingleBits(TVec4f.Create(LSingleVec4Boundary, LSingleVec4Boundary,
+    LSingleVec4Boundary, LSingleVec4Boundary).LengthSqr,
+    $7F7FFFFE,
+    'TVec4f exact finite LengthSqr boundary stays finite');
+  CheckDoubleBits(TVec4d.Create(LDoubleVec4Boundary, LDoubleVec4Boundary,
+    LDoubleVec4Boundary, LDoubleVec4Boundary).LengthSqr,
+    $7FEFFFFFFFFFFFFE,
+    'TVec4d exact finite LengthSqr boundary stays finite');
+  CheckSinglePositiveInfinity(TVec4f.Create(LSingleVec4AboveBoundary, LSingleVec4AboveBoundary,
+    LSingleVec4AboveBoundary, LSingleVec4AboveBoundary).LengthSqr,
+    'TVec4f first overflowing LengthSqr boundary saturates to +Inf');
+  CheckDoublePositiveInfinity(TVec4d.Create(LDoubleVec4AboveBoundary, LDoubleVec4AboveBoundary,
+    LDoubleVec4AboveBoundary, LDoubleVec4AboveBoundary).LengthSqr,
+    'TVec4d first overflowing LengthSqr boundary saturates to +Inf');
   CheckSinglePositiveInfinity(TVec2f.Create(Single(3.0e20), Single(4.0e20)).LengthSqr,
     'TVec2f huge finite LengthSqr saturates to +Inf');
   CheckSinglePositiveInfinity(TVec3f.Create(Single(3.0e20), Single(4.0e20), 0.0).LengthSqr,

@@ -491,7 +491,7 @@ begin
   LScaledW := LW / LMax;
   LScaledSum := LScaledX * LScaledX + LScaledY * LScaledY +
     LScaledZ * LScaledZ + LScaledW * LScaledW;
-  if LMax >= System.Sqrt(MAX_SINGLE_VALUE / LScaledSum) then
+  if LMax > System.Sqrt(MAX_SINGLE_VALUE / LScaledSum) then
     Exit(SinglePositiveInfinity);
   Result := Single((LMax * LMax) * LScaledSum);
 end;
@@ -534,7 +534,7 @@ begin
   LScaledW := LW / LMax;
   LScaledSum := LScaledX * LScaledX + LScaledY * LScaledY +
     LScaledZ * LScaledZ + LScaledW * LScaledW;
-  if LMax >= System.Sqrt(MAX_DOUBLE_VALUE / LScaledSum) then
+  if LMax > System.Sqrt(MAX_DOUBLE_VALUE / LScaledSum) then
     Exit(DoublePositiveInfinity);
   Result := (LMax * LMax) * LScaledSum;
 end;

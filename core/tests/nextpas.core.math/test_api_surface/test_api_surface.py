@@ -463,7 +463,7 @@ REQUIRED_VEC_QUAT_STABLE_DOC_TRUTH = (
     ),
     (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
-        "`LengthSqr` avoids FPU overflow exceptions for huge finite inputs and returns `+Inf` when the true squared length is outside the target float range.",
+        "`LengthSqr` avoids FPU overflow exceptions for huge finite inputs, keeps below-overflow results finite, and returns `+Inf` when the true squared length is outside the target float range.",
     ),
     (
         "docs/math/README.md",
@@ -1480,6 +1480,14 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("impl-simd-quatf-rotate", r"\bfunction\s+SimdQuatfRotate\s*\(\s*const\s+AQuat\s*:\s*TQuatf\s*;\s*const\s+AVector\s*:\s*TVec3f\s*\)\s*:\s*TVec3f\b"),
     ),
 }
+REQUIRED_VECTOR_LENGTH_SQR_RECORD_CONTRACTS = (
+    ("vec-2f-lengthsqr", "TVec2f", "Single"),
+    ("vec-3f-lengthsqr", "TVec3f", "Single"),
+    ("vec-4f-lengthsqr", "TVec4f", "Single"),
+    ("vec-2d-lengthsqr", "TVec2d", "Double"),
+    ("vec-3d-lengthsqr", "TVec3d", "Double"),
+    ("vec-4d-lengthsqr", "TVec4d", "Double"),
+)
 REQUIRED_BENCHMARK_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
     BENCH_SIMD_SEAM_PATH: (
         ("bench-mat4f-vector-scalar-baseline", "TMat4f scalar mat-vec"),
@@ -1688,6 +1696,8 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("vec-4d-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('TVec4d huge finite length + normalize'"),
     RequiredBehaviorTestMarker("vec-lengthsqr-huge-finite-overflow", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector huge finite LengthSqr overflow contract'"),
     RequiredBehaviorTestMarker("vec-lengthsqr-below-overflow", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec4d below overflow LengthSqr remains finite"),
+    RequiredBehaviorTestMarker("vec-lengthsqr-exact-boundary", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec4d exact finite LengthSqr boundary stays finite"),
+    RequiredBehaviorTestMarker("vec-lengthsqr-first-overflow-boundary", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec4d first overflowing LengthSqr boundary saturates to +Inf"),
     RequiredBehaviorTestMarker("vec-dot-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector huge finite Dot contract'"),
     RequiredBehaviorTestMarker("vec-cross-huge-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector huge finite Cross cancellation contract'"),
     RequiredBehaviorTestMarker("vec-cross-out-of-range-signed-inf", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector huge finite Cross out-of-range signed infinity contract'"),
@@ -2566,6 +2576,45 @@ def scan_required_public_declarations(root: Path, path: Path, text: str) -> list
                 1,
                 "missing required declaration",
             )
+    return findings
+
+
+def scan_vector_length_sqr_record_contract(root: Path, path: Path, text: str) -> list[Finding]:
+    findings: list[Finding] = []
+    if relative(path, root) != "src/nextpas.core.math.vec.pas":
+        return findings
+
+    code = interface_text(text)
+    for rule, record_name, return_type in REQUIRED_VECTOR_LENGTH_SQR_RECORD_CONTRACTS:
+        record_match = re.search(
+            rf"\b{record_name}\s*=\s*packed\s+record\b(?P<body>.*?)\bend\s*;",
+            code,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if record_match is None:
+            add_finding(
+                findings,
+                "missing-vector-lengthsqr-record:" + rule,
+                root,
+                path,
+                1,
+                "missing " + record_name + " record",
+            )
+            continue
+        if re.search(
+            rf"\bfunction\s+LengthSqr\s*:\s*{return_type}\b",
+            record_match.group("body"),
+            re.IGNORECASE,
+        ) is not None:
+            continue
+        add_finding(
+            findings,
+            "missing-vector-lengthsqr-signature:" + rule,
+            root,
+            path,
+            line_no_at(code, record_match.start()),
+            "missing " + record_name + ".LengthSqr: " + return_type,
+        )
     return findings
 
 
@@ -5167,6 +5216,7 @@ def build_report(root: Path) -> Report:
         findings.extend(scan_forbidden_fpc_math_unit_in_trig(root, path, text))
         findings.extend(scan_public_global_random_singletons(root, path, text))
         findings.extend(scan_required_public_declarations(root, path, text))
+        findings.extend(scan_vector_length_sqr_record_contract(root, path, text))
 
     for path in consumer_files:
         scanned.add(path)
