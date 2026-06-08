@@ -143,11 +143,12 @@ begin
 end;
 
 function ParseCharClass(var P: TParser): PAstNode;
-var negated: Boolean; lo, hi: Byte; ch: Char;
+var negated, hasItem: Boolean; lo, hi: Byte; ch: Char;
 begin
   Result := NewNode(P, akCharClass);
   CharBitmapClear(Result^.ClassBitmap);
   negated := False;
+  hasItem := False;
   if Peek(P) = '^' then begin negated := True; Next(P); end;
   Result^.ClassNegated := negated;
 
@@ -166,6 +167,7 @@ begin
       else
         CharBitmapSet(Result^.ClassBitmap, Ord(ch));
       end;
+      hasItem := True;
       Continue;
     end;
 
@@ -177,19 +179,26 @@ begin
       begin
         CharBitmapSet(Result^.ClassBitmap, lo);
         CharBitmapSet(Result^.ClassBitmap, Ord('-'));
+        hasItem := True;
         Break;
       end;
       hi := Ord(Next(P));
       if lo > hi then
         raise ERegexCompileError.Create('invalid character range', P.Pos);
       CharBitmapSetRange(Result^.ClassBitmap, lo, hi);
+      hasItem := True;
     end
     else
+    begin
       CharBitmapSet(Result^.ClassBitmap, lo);
+      hasItem := True;
+    end;
   end;
   if Peek(P) = ']' then Next(P)
   else
     raise ERegexCompileError.Create('unclosed character class', P.Pos);
+  if not hasItem then
+    raise ERegexCompileError.Create('empty character class', P.Pos);
 end;
 
 function ParseAtom(var P: TParser): PAstNode; forward;

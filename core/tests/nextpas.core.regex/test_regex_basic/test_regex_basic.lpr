@@ -655,6 +655,9 @@ begin
   Check(not TRegex.TryCompile('[abc', R, err), 'unclosed char class');
   Check(Pos('unclosed character class', err) > 0, 'unclosed char class msg');
 
+  Check(not TRegex.TryCompile('[]', R, err), 'empty char class');
+  Check(Pos('empty character class', err) > 0, 'empty char class msg');
+
   Check(not TRegex.TryCompile('[z-a]', R, err), 'invalid char class range');
   Check(Pos('invalid character range', err) > 0, 'invalid char class range msg');
 
