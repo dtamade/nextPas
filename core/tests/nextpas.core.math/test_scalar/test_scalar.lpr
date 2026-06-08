@@ -875,16 +875,22 @@ begin
   CheckEqual(Int64(9223372036854774784), Ceil(CNearMaxInt64), 'Ceil near 2^63');
   CheckEqual(Int64(9223372036854774784), Round(CNearMaxInt64), 'Round near 2^63');
   CheckEqual(Int64(9223372036854774784), Trunc(CNearMaxInt64), 'Trunc near 2^63');
+  Check(IsDoublePositiveZero(Frac(CNearMaxInt64)),
+    'Frac Double near 2^63 returns positive zero');
 
   CheckEqual(Low(Int64), Floor(CInt64Min), 'Floor -2^63');
   CheckEqual(Low(Int64), Ceil(CInt64Min), 'Ceil -2^63');
   CheckEqual(Low(Int64), Round(CInt64Min), 'Round -2^63');
   CheckEqual(Low(Int64), Trunc(CInt64Min), 'Trunc -2^63');
+  Check(IsDoubleNegativeZero(Frac(CInt64Min)),
+    'Frac Double -2^63 keeps negative zero');
 
   CheckEqual(Int64(-9223372036854774784), Floor(CNearMinInt64), 'Floor near -2^63');
   CheckEqual(Int64(-9223372036854774784), Ceil(CNearMinInt64), 'Ceil near -2^63');
   CheckEqual(Int64(-9223372036854774784), Round(CNearMinInt64), 'Round near -2^63');
   CheckEqual(Int64(-9223372036854774784), Trunc(CNearMinInt64), 'Trunc near -2^63');
+  Check(IsDoubleNegativeZero(Frac(CNearMinInt64)),
+    'Frac Double near -2^63 keeps negative zero');
 
   ExpectArgumentErrorMessage('Floor: NaN cannot be converted to Int64',
     'Floor(NaN)', @RaiseFloorNaN);
