@@ -611,33 +611,33 @@ REQUIRED_NOISE_DOC_TRUTH = (
 REQUIRED_SCALAR_CLAMP_DOC_TRUTH = (
     (
         "docs/math/README.md",
-        "`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.",
+        "`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, NaN values propagate as NaN, infinity values clamp to finite bounds, equal bounds return that bound, and in-range signed zero keeps its sign.",
     ),
     (
         "docs/math/API.md",
-        "`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.",
+        "`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, NaN values propagate as NaN, infinity values clamp to finite bounds, equal bounds return that bound, and in-range signed zero keeps its sign.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.",
+        "`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, NaN values propagate as NaN, infinity values clamp to finite bounds, equal bounds return that bound, and in-range signed zero keeps its sign.",
     ),
     (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
-        "`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.",
+        "`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, NaN values propagate as NaN, infinity values clamp to finite bounds, equal bounds return that bound, and in-range signed zero keeps its sign.",
     ),
 )
 REQUIRED_SCALAR_WRAP_DOC_TRUTH = (
     (
         "docs/math/README.md",
-        "`Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, requires value, minimum, and maximum to be finite, and finite inputs return a finite value in range even when range or delta intermediates are not representable as finite `Double`.",
+        "`Wrap` uses a half-open `[minimum, maximum)` interval, preserves equal-bound behavior by returning the minimum, maps the maximum endpoint back to the minimum, rejects reversed bounds, requires value, minimum, and maximum to be finite, and finite inputs return a finite value in range even when range or delta intermediates are not representable as finite `Double`.",
     ),
     (
         "docs/math/API.md",
-        "`Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, requires value, minimum, and maximum to be finite, and finite inputs return a finite value in range even when range or delta intermediates are not representable as finite `Double`.",
+        "`Wrap` uses a half-open `[minimum, maximum)` interval, preserves equal-bound behavior by returning the minimum, maps the maximum endpoint back to the minimum, rejects reversed bounds, requires value, minimum, and maximum to be finite, and finite inputs return a finite value in range even when range or delta intermediates are not representable as finite `Double`.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "`Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, requires value, minimum, and maximum to be finite, and finite inputs return a finite value in range even when range or delta intermediates are not representable as finite `Double`.",
+        "`Wrap` uses a half-open `[minimum, maximum)` interval, preserves equal-bound behavior by returning the minimum, maps the maximum endpoint back to the minimum, rejects reversed bounds, requires value, minimum, and maximum to be finite, and finite inputs return a finite value in range even when range or delta intermediates are not representable as finite `Double`.",
     ),
 )
 REQUIRED_SCALAR_IEEE_DOC_TRUTH = (
@@ -658,22 +658,36 @@ REQUIRED_SCALAR_IEEE_DOC_TRUTH = (
         "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
     ),
 )
-REQUIRED_SCALAR_MIN_MAX_DOC_TRUTH = (
-    (
-        "docs/math/README.md",
-        "`Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.",
-    ),
+REQUIRED_SCALAR_RANGE_DOC_TRUTH = (
     (
         "docs/math/API.md",
-        "`Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.",
+        "`InverseLerp` returns 0 for equal bounds, and `SmoothStep` handles equal edges without division by zero while preserving the documented step boundary behavior.",
+    ),
+    (
+        "docs/math/README.md",
+        "`InverseLerp` returns 0 for equal bounds, and `SmoothStep` handles equal edges without division by zero while preserving the documented step boundary behavior.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "`Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.",
+        "`InverseLerp` returns 0 for equal bounds, and `SmoothStep` handles equal edges without division by zero while preserving the documented step boundary behavior.",
+    ),
+)
+REQUIRED_SCALAR_MIN_MAX_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "`Min` and `Max` propagate NaN; mixed signed-zero ties return negative zero for `Min` and positive zero for `Max`, while same-sign zero ties preserve that sign.",
+    ),
+    (
+        "docs/math/API.md",
+        "`Min` and `Max` propagate NaN; mixed signed-zero ties return negative zero for `Min` and positive zero for `Max`, while same-sign zero ties preserve that sign.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`Min` and `Max` propagate NaN; mixed signed-zero ties return negative zero for `Min` and positive zero for `Max`, while same-sign zero ties preserve that sign.",
     ),
     (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
-        "`Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.",
+        "`Min` and `Max` propagate NaN; mixed signed-zero ties return negative zero for `Min` and positive zero for `Max`, while same-sign zero ties preserve that sign.",
     ),
 )
 REQUIRED_SCALAR_FLOAT_COMPARE_DOC_TRUTH = (
@@ -1215,6 +1229,9 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-interpolation", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('interpolation'"),
     RequiredBehaviorTestMarker("scalar-wrap-equal-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap Double equal bounds returns minimum"),
     RequiredBehaviorTestMarker("scalar-wrap-huge-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap Double huge finite range stays finite"),
+    RequiredBehaviorTestMarker("scalar-range-boundary-edges", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('scalar range boundary edge contracts'"),
+    RequiredBehaviorTestMarker("scalar-inverse-lerp-equal-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "InverseLerp Double equal bounds returns 0"),
+    RequiredBehaviorTestMarker("scalar-smoothstep-equal-edges", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "SmoothStep Double equal edges returns step boundary"),
     RequiredBehaviorTestMarker("scalar-wrap-reversed-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap: minimum must not exceed maximum"),
     RequiredBehaviorTestMarker("scalar-wrap-non-finite-inputs", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap: value, minimum, and maximum must be finite"),
     RequiredBehaviorTestMarker("scalar-rounding-sign", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('rounding and sign'"),
@@ -3676,6 +3693,15 @@ def scan_required_scalar_ieee_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_scalar_range_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_SCALAR_RANGE_DOC_TRUTH,
+        "missing-required-scalar-range-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def scan_required_scalar_min_max_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
@@ -3750,6 +3776,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_scalar_clamp_doc_truth(root))
     findings.extend(scan_required_scalar_wrap_doc_truth(root))
     findings.extend(scan_required_scalar_ieee_doc_truth(root))
+    findings.extend(scan_required_scalar_range_doc_truth(root))
     findings.extend(scan_required_scalar_min_max_doc_truth(root))
     findings.extend(scan_required_scalar_float_compare_doc_truth(root))
     findings.extend(scan_required_trig_power_doc_truth(root))

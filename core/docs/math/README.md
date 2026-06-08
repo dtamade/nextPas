@@ -81,10 +81,11 @@ boundary, so the common-symbol namespace contract no longer depends on a direct 
 - `nextpas.core.math.easing`: `TEasingFunction` plus the `Ease*` function family.
 - `nextpas.core.math.random`: `TRandomState`, `TRandomGen`, and `TNoiseGen`.
 
-`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.
-`Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, requires value, minimum, and maximum to be finite, and finite inputs return a finite value in range even when range or delta intermediates are not representable as finite `Double`.
+`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, NaN values propagate as NaN, infinity values clamp to finite bounds, equal bounds return that bound, and in-range signed zero keeps its sign.
+`Wrap` uses a half-open `[minimum, maximum)` interval, preserves equal-bound behavior by returning the minimum, maps the maximum endpoint back to the minimum, rejects reversed bounds, requires value, minimum, and maximum to be finite, and finite inputs return a finite value in range even when range or delta intermediates are not representable as finite `Double`.
+`InverseLerp` returns 0 for equal bounds, and `SmoothStep` handles equal edges without division by zero while preserving the documented step boundary behavior.
 
-`Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.
+`Min` and `Max` propagate NaN; mixed signed-zero ties return negative zero for `Min` and positive zero for `Max`, while same-sign zero ties preserve that sign.
 
 `FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.
 

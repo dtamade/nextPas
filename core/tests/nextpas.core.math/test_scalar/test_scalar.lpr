@@ -279,6 +279,49 @@ begin
   CheckNear(1.0, SmoothStep(0.0, 1.0, 2.0), 0.0, 'SmoothStep clamps high');
 end;
 
+procedure TestScalarRangeBoundaryEdgeContracts;
+begin
+  CheckNear(0.0, Wrap(0.0, 0.0, 360.0), 0.0,
+    'Wrap Double minimum endpoint stays minimum');
+  CheckNear(0.0, Wrap(360.0, 0.0, 360.0), 0.0,
+    'Wrap Double maximum endpoint returns minimum');
+  CheckNear(0.0, Wrap(Single(360.0), Single(0.0), Single(360.0)), 0.0,
+    'Wrap Single maximum endpoint returns minimum');
+  CheckNear(-1.0e308, Wrap(1.0e308, -1.0e308, 1.0e308), 0.0,
+    'Wrap Double huge maximum endpoint returns minimum');
+
+  CheckNear(5.0, Clamp(MakeSinglePositiveInfinity, Single(0.0), Single(5.0)), 0.0,
+    'Clamp Single positive infinity clamps high');
+  CheckNear(0.0, Clamp(MakeSingleNegativeInfinity, Single(0.0), Single(5.0)), 0.0,
+    'Clamp Single negative infinity clamps low');
+  CheckNear(5.0, Clamp(Single(100.0), Single(5.0), Single(5.0)), 0.0,
+    'Clamp Single equal bounds returns bound');
+  Check(IsSingleNegativeZero(Clamp(MakeSingleNegativeZero, Single(0.0), Single(1.0))),
+    'Clamp Single negative zero inside range keeps sign');
+
+  Check(IsDoubleNegativeZero(nextpas.core.math.scalar.Min(MakeDoubleNegativeZero, MakeDoubleNegativeZero)),
+    'Min Double same negative zero returns negative zero');
+  Check(IsDoubleNegativeZero(nextpas.core.math.scalar.Max(MakeDoubleNegativeZero, MakeDoubleNegativeZero)),
+    'Max Double same negative zero returns negative zero');
+  Check(IsSingleNegativeZero(nextpas.core.math.scalar.Min(MakeSingleNegativeZero, MakeSingleNegativeZero)),
+    'Min Single same negative zero returns negative zero');
+  Check(IsSingleNegativeZero(nextpas.core.math.scalar.Max(MakeSingleNegativeZero, MakeSingleNegativeZero)),
+    'Max Single same negative zero returns negative zero');
+
+  CheckNear(0.0, InverseLerp(5.0, 5.0, 99.0), 0.0,
+    'InverseLerp Double equal bounds returns 0');
+  CheckNear(0.0, InverseLerp(Single(5.0), Single(5.0), Single(-99.0)), 0.0,
+    'InverseLerp Single equal bounds returns 0');
+  CheckNear(0.0, SmoothStep(5.0, 5.0, 4.0), 0.0,
+    'SmoothStep Double equal edges returns step boundary below');
+  CheckNear(1.0, SmoothStep(5.0, 5.0, 5.0), 0.0,
+    'SmoothStep Double equal edges returns step boundary');
+  CheckNear(0.0, SmoothStep(Single(5.0), Single(5.0), Single(4.0)), 0.0,
+    'SmoothStep Single equal edges returns step boundary below');
+  CheckNear(1.0, SmoothStep(Single(5.0), Single(5.0), Single(5.0)), 0.0,
+    'SmoothStep Single equal edges returns step boundary');
+end;
+
 procedure TestAngleConversions;
 begin
   CheckNear(PI_VALUE, DegToRad(180.0), 0.0001, 'DegToRad(180)=PI');
@@ -847,6 +890,7 @@ begin
   T.Run('rounding and sign', @TestRoundingAndSign);
   T.Run('float predicates', @TestFloatPredicates);
   T.Run('scalar IEEE edge contracts', @TestScalarIEEEEdgeContracts);
+  T.Run('scalar range boundary edge contracts', @TestScalarRangeBoundaryEdgeContracts);
   T.Run('number theory and scalar extras', @TestNumberTheoryAndScalarExtras);
   T.Run('angle conversions', @TestAngleConversions);
   T.Run('integer rounding boundaries', @TestIntegerRoundingBoundaries);

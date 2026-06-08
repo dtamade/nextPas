@@ -147,9 +147,9 @@ easing/random submodules; the facade uses aliases and inline forwarding.
 - `IsNaN`, `IsInfinite`, `FloatEquals`, `FloatIsZero`
 - overflow helpers originally held by `nextpas.core.math`
 
-`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.
+`Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, NaN values propagate as NaN, infinity values clamp to finite bounds, equal bounds return that bound, and in-range signed zero keeps its sign.
 
-`Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.
+`Min` and `Max` propagate NaN; mixed signed-zero ties return negative zero for `Min` and positive zero for `Max`, while same-sign zero ties preserve that sign.
 
 `FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.
 

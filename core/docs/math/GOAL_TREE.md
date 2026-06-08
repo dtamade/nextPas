@@ -35,9 +35,10 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   negative-zero odd-exponent sign preservation, zero-base NaN-exponent propagation, and negative
   finite bases with non-integer exponents returning NaN without host logarithm domain errors, and
   `SimdLnF32(NaN)`.
-- `Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, while a NaN value propagates as NaN.
-- `Wrap` preserves equal-bound behavior by returning the minimum, rejects reversed bounds, requires value, minimum, and maximum to be finite, and finite inputs return a finite value in range even when range or delta intermediates are not representable as finite `Double`.
-- `Min` and `Max` propagate NaN, with zero ties returning negative zero for `Min` and positive zero for `Max`.
+- `Clamp` fails fast when the minimum exceeds the maximum; `Single` and `Double` clamp bounds must be finite, NaN values propagate as NaN, infinity values clamp to finite bounds, equal bounds return that bound, and in-range signed zero keeps its sign.
+- `Wrap` uses a half-open `[minimum, maximum)` interval, preserves equal-bound behavior by returning the minimum, maps the maximum endpoint back to the minimum, rejects reversed bounds, requires value, minimum, and maximum to be finite, and finite inputs return a finite value in range even when range or delta intermediates are not representable as finite `Double`.
+- `InverseLerp` returns 0 for equal bounds, and `SmoothStep` handles equal edges without division by zero while preserving the documented step boundary behavior.
+- `Min` and `Max` propagate NaN; mixed signed-zero ties return negative zero for `Min` and positive zero for `Max`, while same-sign zero ties preserve that sign.
 - `FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.
 - `Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.
 - `Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity.
@@ -220,7 +221,9 @@ Status:
   `core-math-symbol-scope-local-smoke`, plus a `core-math-trig-local-smoke` path that reuses the
   facade gate for the repeatable current-host proof path.
 - Current scalar edge coverage now locks the `Clamp` reversed-bounds fail-fast contract, finite
-  `Single` / `Double` bounds requirement, and NaN-value propagation.
+  `Single` / `Double` bounds requirement, NaN-value propagation, infinity-value clamping,
+  equal-bound behavior, signed-zero preservation, `Wrap` half-open endpoint behavior,
+  and `InverseLerp` / `SmoothStep` equal-bound behavior.
 - Current scalar IEEE coverage now locks `Round` ties away from zero, signed-zero behavior for
   `Abs`, `Frac`, and `Fmod`, finite `Fmod` quotient-overflow avoidance, infinity-dominant
   `Hypot`, and UInt32/SizeUInt overflow helper edge cases.
