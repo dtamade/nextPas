@@ -254,6 +254,84 @@ begin
   CheckEqual('ok', LP.GetBody, 'first pipelined response preserves body');
 end;
 
+procedure TestResponse100ContinueConsumesOnlyInterim;
+var
+  LP: IH1Parser;
+  LInterim: string;
+  LFinal: string;
+  LResp: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1ResponseParser;
+  LInterim := 'HTTP/1.1 100 Continue'#13#10#13#10;
+  LFinal := 'HTTP/1.1 200 OK'#13#10 +
+            'Content-Length: 2'#13#10#13#10 +
+            'ok';
+  LResp := LInterim + LFinal;
+  LConsumed := LP.Execute(PAnsiChar(LResp), Length(LResp));
+
+  Check(not LP.HasError, '100 Continue should parse without error');
+  Check(LP.IsComplete, '100 Continue should complete independently');
+  CheckEqual(SizeUInt(Length(LInterim)), LConsumed,
+    '100 Continue parser should consume only the interim response');
+  CheckEqual(Int64(100), Int64(LP.GetStatusCode),
+    '100 Continue parser preserves interim status');
+  CheckEqual('', LP.GetBody, '100 Continue has no body');
+end;
+
+procedure TestResponse103EarlyHintsConsumesOnlyInterim;
+var
+  LP: IH1Parser;
+  LInterim: string;
+  LFinal: string;
+  LResp: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1ResponseParser;
+  LInterim := 'HTTP/1.1 103 Early Hints'#13#10 +
+              'Link: </style.css>; rel=preload'#13#10#13#10;
+  LFinal := 'HTTP/1.1 200 OK'#13#10 +
+            'Content-Length: 2'#13#10#13#10 +
+            'ok';
+  LResp := LInterim + LFinal;
+  LConsumed := LP.Execute(PAnsiChar(LResp), Length(LResp));
+
+  Check(not LP.HasError, '103 Early Hints should parse without error');
+  Check(LP.IsComplete, '103 Early Hints should complete independently');
+  CheckEqual(SizeUInt(Length(LInterim)), LConsumed,
+    '103 Early Hints parser should consume only the interim response');
+  CheckEqual(Int64(103), Int64(LP.GetStatusCode),
+    '103 Early Hints parser preserves interim status');
+  CheckEqual('', LP.GetBody, '103 Early Hints has no body');
+end;
+
+procedure TestResponse101SwitchingProtocolsIsNotHttpKeepAlive;
+var
+  LP: IH1Parser;
+  LResp: string;
+  LUpgradeData: string;
+  LWire: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 101 Switching Protocols'#13#10 +
+           'Upgrade: websocket'#13#10 +
+           'Connection: Upgrade'#13#10#13#10;
+  LUpgradeData := 'not-http-upgrade-data';
+  LWire := LResp + LUpgradeData;
+  LConsumed := LP.Execute(PAnsiChar(LWire), Length(LWire));
+
+  Check(not LP.HasError, '101 Switching Protocols should parse without error');
+  Check(LP.IsComplete, '101 Switching Protocols should complete');
+  CheckEqual(SizeUInt(Length(LResp)), LConsumed,
+    '101 parser should leave upgrade data to the upgraded protocol');
+  CheckEqual(Int64(101), Int64(LP.GetStatusCode),
+    '101 parser preserves switching-protocols status');
+  CheckEqual('', LP.GetBody, '101 Switching Protocols has no HTTP body');
+  Check(not LP.ShouldKeepAlive,
+    '101 Switching Protocols must not be ordinary HTTP keep-alive');
+end;
+
 procedure TestResponseNonChunkedTransferEncodingEndsAtEof;
 var
   LP: IH1Parser;
@@ -2350,6 +2428,12 @@ begin
     @TestResponseConnectionCloseDuplicateHeaderDoesNotReuse);
   T.Run('Pipelined next response does not pollute current response',
     @TestPipelinedNextResponseDoesNotPolluteCurrentResponse);
+  T.Run('Response 100 Continue consumes only interim',
+    @TestResponse100ContinueConsumesOnlyInterim);
+  T.Run('Response 103 Early Hints consumes only interim',
+    @TestResponse103EarlyHintsConsumesOnlyInterim);
+  T.Run('Response 101 Switching Protocols is not HTTP keep-alive',
+    @TestResponse101SwitchingProtocolsIsNotHttpKeepAlive);
   T.Run('Response non-chunked transfer-encoding ends at EOF',
     @TestResponseNonChunkedTransferEncodingEndsAtEof);
   T.Run('Response transfer-encoding token boundary controls reuse',

@@ -995,6 +995,9 @@ var
   LConnValues: TStringArray;
   LTransferEncodingValues: TStringArray;
 begin
+  if FStatusCode = HTTP_STATUS_SWITCHING_PROTOCOLS then
+    Exit(False);
+
   if (not FSkipBody) and
      ((FStatusCode div 100) <> 1) and
      (FStatusCode <> 204) and
