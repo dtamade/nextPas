@@ -4985,7 +4985,85 @@ begin
   end;
 end;
 
+procedure RunPostCommitConnectionCloseHeaderMutationDoesNotStopKeepAlive(
+  const AUseEpoll: Boolean; const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+  LCallCount: Int32;
+const
+  REQ = 'GET /ping HTTP/1.1'#13#10'Host: localhost'#13#10#13#10;
+begin
+  LCallCount := 0;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ping', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    Inc(LCallCount);
+    LBody := 'pong';
+    AW.GetHeaders.SetHeader('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.GetHeaders.SetHeader('connection', 'close');
+    AW.Write(LBody[1], 4);
+  end);
+  if AUseEpoll then
+  begin
+    {$IFDEF NEXTPAS_LINUX}
+    LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort)
+    {$ELSE}
+    Fail(ALabel + ' epoll backend is not available on this platform')
+    {$ENDIF}
+  end
+  else
+    LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp1) > 0,
+        ALabel + ' post-commit connection close mutation: first response 200');
+      Check(Pos('connection: close', LowerCase(LResp1)) = 0,
+        ALabel + ' post-commit connection close mutation is not written to first response');
+
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp2) > 0,
+        ALabel + ' post-commit connection close mutation does not stop keep-alive');
+      Check(Pos('connection: close', LowerCase(LResp2)) = 0,
+        ALabel + ' post-commit connection close mutation is not written to second response');
+      Check(Pos('pong', LResp2) > 0,
+        ALabel + ' post-commit connection close mutation second body');
+      CheckEqual(Int64(2), Int64(LCallCount),
+        ALabel + ' post-commit connection close mutation handler call count');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestPostCommitConnectionCloseHeaderMutationDoesNotStopKeepAlive;
+begin
+  RunPostCommitConnectionCloseHeaderMutationDoesNotStopKeepAlive(False,
+    'threaded');
+end;
+
 {$IFDEF NEXTPAS_LINUX}
+procedure TestPostCommitConnectionCloseHeaderMutationDoesNotStopKeepAliveEpollBackend;
+begin
+  RunPostCommitConnectionCloseHeaderMutationDoesNotStopKeepAlive(True, 'epoll');
+end;
+
 procedure TestKeepAliveEpollBackend;
 var
   LRouter: THttpRouter;
@@ -12891,6 +12969,8 @@ begin
   T.Run('Simple GET 200 with epoll backend', @TestSimpleGet200EpollBackend);
   T.Run('Keep-alive: two requests one connection with epoll backend',
     @TestKeepAliveEpollBackend);
+  T.Run('Post-commit Connection close header mutation does not stop keep-alive with epoll backend',
+    @TestPostCommitConnectionCloseHeaderMutationDoesNotStopKeepAliveEpollBackend);
   T.Run('Informational response allows later final response with epoll backend',
     @TestInformationalResponseAllowsFinalResponseEpollBackend);
   T.Run('Expect: 100-continue sends interim response with epoll backend',
@@ -13198,6 +13278,8 @@ begin
   T.Run('Shutdown stops accepting', @TestShutdownStopsAccepting);
   T.Run('POST with body -> 201', @TestPostWithBody);
   T.Run('Keep-alive: two requests one connection', @TestKeepAlive);
+  T.Run('Post-commit Connection close header mutation does not stop keep-alive',
+    @TestPostCommitConnectionCloseHeaderMutationDoesNotStopKeepAlive);
   T.Run('Expect: 100-continue sends interim response',
     @TestExpectContinueSendsInterimResponse);
   T.Run('Expect: duplicate 100-continue members still send interim response',

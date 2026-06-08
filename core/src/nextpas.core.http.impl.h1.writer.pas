@@ -27,6 +27,7 @@ type
     FDeclaredContentLength: Int64;
     FContentLengthWritten: Int64;
     FForceConnectionClose: Boolean;
+    FCommittedHeaders: IHttpHeaders;
     procedure WriteStatusLine;
     procedure WriteInformationalHeader(const AStatus: THttpStatus);
     procedure WriteHeaderBlock;
@@ -54,6 +55,7 @@ type
     function Hijack: ITcpStream;
     function HasCommitted: Boolean;
     function IsHijacked: Boolean;
+    function GetCommittedHeaders: IHttpHeaders;
     property Headers: IHttpHeaders read GetHeaders;
   end;
 
@@ -143,6 +145,7 @@ begin
   FDeclaredContentLength := 0;
   FContentLengthWritten := 0;
   FForceConnectionClose := AForceConnectionClose;
+  FCommittedHeaders := nil;
 end;
 
 procedure TH1ResponseWriter.WriteStr(const AStr: string);
@@ -430,6 +433,7 @@ begin
     FHeaders.SetHeader('transfer-encoding', 'chunked');
   WriteStatusLine;
   WriteHeaderBlock;
+  FCommittedHeaders := FHeaders.Clone;
   FHeadersSent := True;
   if FHeaders.Get('transfer-encoding') = 'chunked' then
     FChunkedWriter := TChunkedWriter.Create(FWriter);
@@ -501,6 +505,11 @@ end;
 function TH1ResponseWriter.IsHijacked: Boolean;
 begin
   Result := FHijacked;
+end;
+
+function TH1ResponseWriter.GetCommittedHeaders: IHttpHeaders;
+begin
+  Result := FCommittedHeaders;
 end;
 
 end.

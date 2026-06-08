@@ -1209,7 +1209,7 @@ begin
     ArmDirectWriteDeadline;
     LOutbound.DrainAllTo(FConn as IWriter);
 
-    if ResponseRequestsClose(LW.GetHeaders) then
+    if ResponseRequestsClose((LW as TH1ResponseWriter).GetCommittedHeaders) then
       FKeepAlive := False;
   except
     on E: Exception do
@@ -1311,7 +1311,7 @@ begin
 
     LW.Flush;
 
-    if ResponseRequestsClose(LW.GetHeaders) then
+    if ResponseRequestsClose((LW as TH1ResponseWriter).GetCommittedHeaders) then
       LKeepAlive := False;
     AOutbound := LOutbound;
     ACloseAfterDrain := not LKeepAlive;
