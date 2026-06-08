@@ -23,6 +23,9 @@ type
     FFinalized: Boolean;
     FNoBodyAllowed: Boolean;
     FSuppressBody: Boolean;
+    FHasDeclaredContentLength: Boolean;
+    FDeclaredContentLength: Int64;
+    FContentLengthWritten: Int64;
     procedure WriteStatusLine;
     procedure WriteInformationalHeader(const AStatus: THttpStatus);
     procedure WriteHeaderBlock;
@@ -30,6 +33,8 @@ type
     procedure WriteCRLF;
     procedure WriteStr(const AStr: string);
     procedure ValidateResponseFramingHeaders;
+    procedure TrackFixedLengthWrite(const ACount: SizeUInt);
+    procedure ValidateFixedLengthComplete;
     function TryWriteKnownStatusLine: Boolean;
     function TryWriteSmallHeaderBlock: Boolean;
     function ResponseMustNotHaveBody: Boolean;
@@ -78,24 +83,23 @@ begin
   end;
 end;
 
-procedure ValidateContentLengthValue(const AValue: string);
+function ParseContentLengthValue(const AValue: string): Int64;
 var
   LI: SizeInt;
   LDigit: Int64;
-  LValue: Int64;
 begin
   if AValue = '' then
     raise EHttpError.Create('response content-length is invalid');
 
-  LValue := 0;
+  Result := 0;
   for LI := 1 to Length(AValue) do
   begin
     if (AValue[LI] < '0') or (AValue[LI] > '9') then
       raise EHttpError.Create('response content-length is invalid');
     LDigit := Ord(AValue[LI]) - Ord('0');
-    if LValue > ((High(Int64) - LDigit) div 10) then
+    if Result > ((High(Int64) - LDigit) div 10) then
       raise EHttpError.Create('response content-length is too large');
-    LValue := (LValue * 10) + LDigit;
+    Result := (Result * 10) + LDigit;
   end;
 end;
 
@@ -124,6 +128,9 @@ begin
   FFinalized := False;
   FNoBodyAllowed := False;
   FSuppressBody := ASuppressBody;
+  FHasDeclaredContentLength := False;
+  FDeclaredContentLength := 0;
+  FContentLengthWritten := 0;
 end;
 
 procedure TH1ResponseWriter.WriteStr(const AStr: string);
@@ -355,14 +362,39 @@ procedure TH1ResponseWriter.ValidateResponseFramingHeaders;
 var
   LContentLengths: TStringArray;
 begin
+  FHasDeclaredContentLength := False;
+  FDeclaredContentLength := 0;
+  FContentLengthWritten := 0;
   LContentLengths := FHeaders.GetAll('content-length');
   if Length(LContentLengths) > 1 then
     raise EHttpError.Create('response content-length is duplicated');
   if Length(LContentLengths) = 1 then
-    ValidateContentLengthValue(LContentLengths[0]);
+  begin
+    FDeclaredContentLength := ParseContentLengthValue(LContentLengths[0]);
+    FHasDeclaredContentLength := True;
+  end;
   if (Length(LContentLengths) > 0) and FHeaders.Has('transfer-encoding') then
     raise EHttpError.Create(
       'response cannot include both content-length and transfer-encoding');
+end;
+
+procedure TH1ResponseWriter.TrackFixedLengthWrite(const ACount: SizeUInt);
+begin
+  if not FHasDeclaredContentLength then
+    Exit;
+  if ACount > SizeUInt(High(Int64)) then
+    raise EHttpError.Create('response body exceeds declared content-length');
+  if Int64(ACount) > FDeclaredContentLength - FContentLengthWritten then
+    raise EHttpError.Create('response body exceeds declared content-length');
+  Inc(FContentLengthWritten, Int64(ACount));
+end;
+
+procedure TH1ResponseWriter.ValidateFixedLengthComplete;
+begin
+  if (not FSuppressBody) and
+     FHasDeclaredContentLength and
+     (FContentLengthWritten <> FDeclaredContentLength) then
+    raise EHttpError.Create('response body shorter than declared content-length');
 end;
 
 procedure TH1ResponseWriter.WriteHeader(const AStatus: THttpStatus);
@@ -409,6 +441,7 @@ begin
     raise EHttpError.Create('response status must not include a body');
   if FSuppressBody then
     Exit(ACount);
+  TrackFixedLengthWrite(ACount);
   if FChunkedWriter <> nil then
     Result := FChunkedWriter.Write(ABuf, ACount)
   else
@@ -427,6 +460,11 @@ begin
   if FChunkedWriter <> nil then
   begin
     (FChunkedWriter as IFlusher).Flush;
+    FFinalized := True;
+  end;
+  if FChunkedWriter = nil then
+  begin
+    ValidateFixedLengthComplete;
     FFinalized := True;
   end;
   if Supports(FWriter, IFlusher, LFlusher) then
