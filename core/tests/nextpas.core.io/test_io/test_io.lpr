@@ -18,6 +18,30 @@ uses
 var
   T: TTestRunner;
 
+procedure IgnoreReader(const AReader: IReader);
+begin
+  if AReader = nil then
+    Exit;
+end;
+
+procedure IgnoreWriter(const AWriter: IWriter);
+begin
+  if AWriter = nil then
+    Exit;
+end;
+
+procedure IgnoreReadCloser(const ACloser: IReadCloser);
+begin
+  if ACloser = nil then
+    Exit;
+end;
+
+procedure IgnoreScanner(const AScanner: IScanner);
+begin
+  if AScanner = nil then
+    Exit;
+end;
+
 type
   TZeroProgressWriter = class(TInterfacedObject, IWriter)
   private
@@ -419,6 +443,20 @@ begin
   CheckEqual(Byte(4), LBuf[4]);
 end;
 
+procedure TestLimitReaderNilInner;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    IgnoreReader(nextpas.core.io.LimitReader(IReader(nil), 5));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'LimitReader nil inner raises EArgumentError');
+end;
+
 { Util: TeeReader }
 
 procedure TestTeeReader;
@@ -499,6 +537,38 @@ begin
   CheckEqual(Int64(1), Int64(LTapObj.Calls), 'tee attempted tap write once');
 end;
 
+procedure TestTeeReaderNilInner;
+var
+  LRaised: Boolean;
+  LWriter: IWriter;
+begin
+  LWriter := nextpas.core.io.Discard;
+  LRaised := False;
+  try
+    IgnoreReader(nextpas.core.io.TeeReader(IReader(nil), LWriter));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'TeeReader nil reader raises EArgumentError');
+end;
+
+procedure TestTeeReaderNilWriter;
+var
+  LRaised: Boolean;
+  LSource: IStream;
+begin
+  LSource := BytesStreamFrom(TBytes.Create($01));
+  LRaised := False;
+  try
+    IgnoreReader(nextpas.core.io.TeeReader(LSource as IReader, IWriter(nil)));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'TeeReader nil writer raises EArgumentError');
+end;
+
 { Util: MultiReader }
 
 procedure TestMultiReader;
@@ -519,6 +589,22 @@ begin
   CheckEqual(Byte(4), LBuf[0]);
   LN := LR.Read(LBuf[0], 6);
   CheckEqual(SizeUInt(0), LN, 'EOF');
+end;
+
+procedure TestMultiReaderNilInner;
+var
+  LRaised: Boolean;
+  LSource: IStream;
+begin
+  LSource := BytesStreamFrom(TBytes.Create($01));
+  LRaised := False;
+  try
+    IgnoreReader(nextpas.core.io.MultiReader([LSource as IReader, IReader(nil)]));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'MultiReader nil inner raises EArgumentError');
 end;
 
 { Util: MultiWriter }
@@ -605,6 +691,22 @@ begin
   CheckEqual(Int64(1), Int64(LZeroObj.Calls), 'zero writer attempted once');
 end;
 
+procedure TestMultiWriterNilInner;
+var
+  LDest: IStream;
+  LRaised: Boolean;
+begin
+  LDest := BytesStream(16);
+  LRaised := False;
+  try
+    IgnoreWriter(nextpas.core.io.MultiWriter([LDest as IWriter, IWriter(nil)]));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'MultiWriter nil inner raises EArgumentError');
+end;
+
 { Util: Discard + NullReader }
 
 procedure TestDiscard;
@@ -638,6 +740,20 @@ begin
   CheckEqual(SizeUInt(3), LRC.Read(LBuf[0], 3), 'read through');
   LRC.Close;
   CheckEqual(Byte(7), LBuf[0]);
+end;
+
+procedure TestNopCloserNilInner;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    IgnoreReadCloser(nextpas.core.io.NopCloser(IReader(nil)));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'NopCloser nil inner raises EArgumentError');
 end;
 
 { Util: WriteString }
@@ -817,6 +933,20 @@ begin
   CheckEqual(Byte(3), LBuf[0]);
   CheckEqual(Byte(6), LBuf[3]);
   CheckEqual(SizeUInt(0), LR.Read(LBuf[0], 10), 'EOF');
+end;
+
+procedure TestSectionReaderNilInner;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    IgnoreReader(nextpas.core.io.SectionReader(IReaderAt(nil), 0, 1));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'SectionReader nil inner raises EArgumentError');
 end;
 
 procedure TestUnreadByteThenRead;
@@ -1004,6 +1134,20 @@ begin
   Check(not LScan.Scan, 'done');
 end;
 
+procedure TestScannerNilInner;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    IgnoreScanner(CreateScanner(IReader(nil), nil));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'Scanner nil inner raises EArgumentError');
+end;
+
 procedure TestByteWriterStream;
 var
   LS: IStream;
@@ -1044,17 +1188,23 @@ begin
   T.Run('ReadFull', @TestReadFull);
   T.Run('ReadFull short', @TestReadFullShort);
   T.Run('LimitReader', @TestLimitReader);
+  T.Run('LimitReader nil inner', @TestLimitReaderNilInner);
   T.Run('TeeReader', @TestTeeReader);
   T.Run('TeeReader retries partial tap write', @TestTeeReaderRetriesPartialTapWrite);
   T.Run('TeeReader zero-progress tap raises', @TestTeeReaderZeroProgressTapRaises);
+  T.Run('TeeReader nil inner', @TestTeeReaderNilInner);
+  T.Run('TeeReader nil writer', @TestTeeReaderNilWriter);
   T.Run('MultiReader', @TestMultiReader);
+  T.Run('MultiReader nil inner', @TestMultiReaderNilInner);
   T.Run('MultiWriter', @TestMultiWriter);
   T.Run('MultiWriter retries each writer to full payload',
     @TestMultiWriterRetriesEachWriterToFullPayload);
   T.Run('MultiWriter zero-progress raises', @TestMultiWriterZeroProgressRaises);
+  T.Run('MultiWriter nil inner', @TestMultiWriterNilInner);
   T.Run('Discard', @TestDiscard);
   T.Run('NullReader', @TestNullReader);
   T.Run('NopCloser', @TestNopCloser);
+  T.Run('NopCloser nil inner', @TestNopCloserNilInner);
   T.Run('WriteString', @TestWriteString);
   T.Run('ReadAtLeast', @TestReadAtLeast);
   T.Run('CopyBuffer', @TestCopyBuffer);
@@ -1075,12 +1225,14 @@ begin
   T.Run('ByteScanner', @TestByteScanner);
   T.Run('StringWriter', @TestStringWriter);
   T.Run('SectionReader', @TestSectionReader);
+  T.Run('SectionReader nil inner', @TestSectionReaderNilInner);
 
   T.Run('Scanner lines', @TestScannerLines);
   T.Run('Scanner CRLF', @TestScannerCRLF);
   T.Run('Scanner no trailing newline', @TestScannerNoTrailingNewline);
   T.Run('Scanner empty', @TestScannerEmpty);
   T.Run('Scanner empty lines', @TestScannerEmptyLines);
+  T.Run('Scanner nil inner', @TestScannerNilInner);
   T.Run('ByteWriter stream', @TestByteWriterStream);
 
   T.Summary;

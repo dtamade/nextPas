@@ -113,6 +113,8 @@ end;
 constructor TScanner.Create(const AInner: IReader; const ASplit: TSplitFunc);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentError.Create('TScanner: inner reader is nil');
   FInner := AInner;
   FSplit := ASplit;
   SetLength(FBuf, SCANNER_BUF_SIZE);

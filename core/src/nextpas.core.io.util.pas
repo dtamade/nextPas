@@ -177,6 +177,8 @@ type
 constructor TLimitReader.Create(const AInner: IReader; const ALimit: Int64);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentError.Create('TLimitReader: inner reader is nil');
   FInner := AInner;
   FRemaining := ALimit;
 end;
@@ -215,6 +217,10 @@ type
 constructor TTeeReader.Create(const AInner: IReader; const AWriter: IWriter);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentError.Create('TTeeReader: inner reader is nil');
+  if AWriter = nil then
+    raise EArgumentError.Create('TTeeReader: writer is nil');
   FInner := AInner;
   FWriter := AWriter;
 end;
@@ -249,6 +255,9 @@ var
 begin
   inherited Create;
   SetLength(FReaders, Length(AReaders));
+  for LI := 0 to High(AReaders) do
+    if AReaders[LI] = nil then
+      raise EArgumentError.Create('TMultiReader: inner reader is nil');
   for LI := 0 to High(AReaders) do
     FReaders[LI] := AReaders[LI];
   FIndex := 0;
@@ -289,6 +298,9 @@ begin
   inherited Create;
   SetLength(FWriters, Length(AWriters));
   for LI := 0 to High(AWriters) do
+    if AWriters[LI] = nil then
+      raise EArgumentError.Create('TMultiWriter: inner writer is nil');
+  for LI := 0 to High(AWriters) do
     FWriters[LI] := AWriters[LI];
 end;
 
@@ -321,6 +333,8 @@ type
 constructor TNopCloser.Create(const AInner: IReader);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentError.Create('TNopCloser: inner reader is nil');
   FInner := AInner;
 end;
 
@@ -445,6 +459,8 @@ type
 constructor TSectionReader.Create(const AInner: IReaderAt; const AOffset, ALimit: Int64);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentError.Create('TSectionReader: inner reader is nil');
   FInner := AInner;
   FOffset := AOffset;
   FLimit := ALimit;
