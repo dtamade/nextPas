@@ -157,12 +157,32 @@ begin
   SHA512FileHex('');
 end;
 
+procedure CallSHA256FileHexEmbeddedNulPath;
+begin
+  SHA256FileHex(GTmpDir + '/nul-real.bin' + #0 + '.shadow');
+end;
+
+procedure CallSHA512FileHexEmbeddedNulPath;
+begin
+  SHA512FileHex(GTmpDir + '/nul-real.bin' + #0 + '.shadow');
+end;
+
 procedure TestEmptyPathRaisesArgumentError;
 begin
   CheckRaisesArgumentError(@CallSHA256FileHexEmptyPath,
     'SHA256FileHex empty path');
   CheckRaisesArgumentError(@CallSHA512FileHexEmptyPath,
     'SHA512FileHex empty path');
+end;
+
+procedure TestEmbeddedNulPathRaisesArgumentError;
+begin
+  nextpas.core.fs.WriteFile(GTmpDir + '/nul-real.bin', BytesOfString('real'));
+
+  CheckRaisesArgumentError(@CallSHA256FileHexEmbeddedNulPath,
+    'SHA256FileHex embedded NUL path');
+  CheckRaisesArgumentError(@CallSHA512FileHexEmbeddedNulPath,
+    'SHA512FileHex embedded NUL path');
 end;
 
 begin
@@ -176,6 +196,7 @@ begin
     T.Run('SHA512FileHex binary bytes', @TestSHA512FileHexPreservesBinaryBytes);
     T.Run('SHA256FileHex missing file error', @TestMissingFileRaisesNotFound);
     T.Run('file hash empty path error', @TestEmptyPathRaisesArgumentError);
+    T.Run('file hash embedded NUL path error', @TestEmbeddedNulPathRaisesArgumentError);
     T.Summary;
   finally
     CleanupTmpDir;

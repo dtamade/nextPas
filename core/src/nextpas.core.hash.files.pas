@@ -35,6 +35,8 @@ var
 begin
   if APath = '' then
     raise EArgumentError.Create('HashFileHex: empty path');
+  if Pos(#0, APath) > 0 then
+    raise EArgumentError.Create('HashFileHex: path contains embedded NUL');
 
   LFile := FsOpen(APath, [fmRead]);
   try
