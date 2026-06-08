@@ -54,13 +54,16 @@ begin
   LReq := 'GET /api HTTP/1.1'#13#10 +
            'Host: example.com'#13#10 +
            'Accept: application/json'#13#10 +
-           'X-Request-Id: abc123'#13#10#13#10;
+           'X-Request-Id: abc123'#13#10 +
+           'X-!#$%&''*+-.^_`|~09: token'#13#10#13#10;
   LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
   Check(LR.Success, 'should succeed');
-  CheckEqual(Int64(3), Int64(LR.Headers.Count), 'header count');
+  CheckEqual(Int64(4), Int64(LR.Headers.Count), 'header count');
   CheckEqual('example.com', LR.Headers.Get('Host'), 'host');
   CheckEqual('application/json', LR.Headers.Get('Accept'), 'accept');
   CheckEqual('abc123', LR.Headers.Get('X-Request-Id'), 'x-request-id');
+  CheckEqual('token', LR.Headers.Get('X-!#$%&''*+-.^_`|~09'),
+    'tchar field-name remains accepted');
 end;
 
 procedure TestHttp10Version;
@@ -163,6 +166,32 @@ begin
            'Bad Header: value'#13#10#13#10;
   LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
   Check(not LR.Success, 'should fail — invalid header name fallback');
+end;
+
+procedure CheckInvalidHeaderNameFallsBack(const AName, ALabel: string);
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+begin
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           AName + ': value'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(not LR.Success, ALabel);
+end;
+
+procedure TestHeaderNameTCharSeparatorFallbacks;
+begin
+  CheckInvalidHeaderNameFallsBack('Bad Name',
+    'space is not allowed in header field-name');
+  CheckInvalidHeaderNameFallsBack('Bad/Name',
+    'slash is not allowed in header field-name');
+  CheckInvalidHeaderNameFallsBack('Bad;Name',
+    'semicolon is not allowed in header field-name');
+  CheckInvalidHeaderNameFallsBack('Bad=Name',
+    'equals is not allowed in header field-name');
+  CheckInvalidHeaderNameFallsBack('Bad(Name',
+    'left paren is not allowed in header field-name');
 end;
 
 procedure TestInvalidHeaderValueFallback;
@@ -472,6 +501,8 @@ begin
   T.Run('Duplicate Content-Length fallback', @TestDuplicateContentLengthFallback);
   T.Run('Invalid Content-Length fallback', @TestInvalidContentLengthFallback);
   T.Run('Invalid header name fallback', @TestInvalidHeaderNameFallback);
+  T.Run('Header name tchar separator fallbacks',
+    @TestHeaderNameTCharSeparatorFallbacks);
   T.Run('Invalid header value fallback', @TestInvalidHeaderValueFallback);
   T.Run('Incomplete body fallback', @TestIncompleteBodyFallback);
   T.Run('Large headers (>1KB)', @TestLargeHeaders);

@@ -1017,6 +1017,20 @@ begin
   end;
 end;
 
+procedure TestHeaderNameSeparatorRejected;
+const
+  REQ = 'GET / HTTP/1.1'#13#10 +
+        'Host: x'#13#10 +
+        'Bad/Name: value'#13#10 +
+        'Connection: close'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    THttpServerOptions.Default,
+    REQ,
+    'HTTP/1.1 400',
+    'separator in header field-name: explicit 400');
+end;
+
 { Test 6: Request line too long (>8KB URL) — server stays safe even if
   request-line bytes trip the same MaxHeaderSize/431 budget path }
 procedure TestRequestLineTooLong;
@@ -5829,6 +5843,8 @@ begin
   T.Run('Header field over MaxHeaderSize -> explicit 431',
     @TestHeaderFieldOverMaxHeaderSizeUsesExplicit431);
   T.Run('Null byte in header -> 400', @TestHeaderNullByte);
+  T.Run('Separator in header field-name -> 400',
+    @TestHeaderNameSeparatorRejected);
   T.Run('Request line too long', @TestRequestLineTooLong);
   T.Run('Request-target over MaxHeaderSize -> explicit 431',
     @TestRequestTargetOverMaxHeaderSizeUsesExplicit431);

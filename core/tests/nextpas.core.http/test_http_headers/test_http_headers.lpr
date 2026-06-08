@@ -395,8 +395,32 @@ procedure TestValidationRejectsInvalidNamesAndValues;
 begin
   ExpectHeaderError('add rejects empty name', False, '', 'value');
   ExpectHeaderError('set rejects colon in name', True, 'Bad:Name', 'value');
+  ExpectHeaderError('set rejects separator space in name', True,
+    'Bad Name', 'value');
+  ExpectHeaderError('add rejects separator slash in name', False,
+    'Bad/Name', 'value');
+  ExpectHeaderError('set rejects separator semicolon in name', True,
+    'Bad;Name', 'value');
+  ExpectHeaderError('add rejects separator equals in name', False,
+    'Bad=Name', 'value');
+  ExpectHeaderError('set rejects separator paren in name', True,
+    'Bad(Name', 'value');
   ExpectHeaderError('add rejects CR in value', False, 'x-good', 'bad'#13'value');
   ExpectHeaderError('set rejects NUL in value', True, 'x-good', 'bad'#0'value');
+end;
+
+procedure TestValidationAcceptsTCharNames;
+var
+  LH: IHttpHeaders;
+  LName: string;
+begin
+  LH := NewHttpHeaders;
+  LName := 'X-!#$%&''*+-.^_`|~09';
+
+  LH.SetHeader(LName, 'value');
+
+  CheckEqual('value', LH.Get(LName),
+    'valid tchar header field-name remains accepted');
 end;
 
 procedure TestSetBasicAuth;
@@ -475,6 +499,7 @@ begin
   T.Run('Parsed span add canonicalizes parser validated headers',
     @TestParsedSpanAddCanonicalizesParserValidatedHeaders);
   T.Run('Validation rejects invalid names and values', @TestValidationRejectsInvalidNamesAndValues);
+  T.Run('Validation accepts tchar names', @TestValidationAcceptsTCharNames);
   T.Run('SetBasicAuth sets Authorization', @TestSetBasicAuth);
   T.Run('SetBearerAuth sets Authorization', @TestSetBearerAuth);
   T.Run('Auth helpers reject nil headers', @TestAuthHelpersRejectNilHeaders);

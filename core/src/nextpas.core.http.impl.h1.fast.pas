@@ -82,16 +82,12 @@ function IsValidHeaderNameFast(const ABuf: PAnsiChar;
   const ALen: SizeUInt): Boolean; inline;
 var
   LI: SizeUInt;
-  LB: Byte;
 begin
   if ALen = 0 then
     Exit(False);
   for LI := 0 to ALen - 1 do
-  begin
-    LB := Byte(ABuf[LI]);
-    if (LB < 33) or (LB > 126) or (LB = Byte(':')) then
+    if not IsHttpHeaderNameChar(ABuf[LI]) then
       Exit(False);
-  end;
   Result := True;
 end;
 

@@ -48,6 +48,7 @@ type
   end;
 
 function NewHttpHeaders: IHttpHeaders;
+function IsHttpHeaderNameChar(const AChar: AnsiChar): Boolean;
 procedure SetBasicAuth(const AHeaders: IHttpHeaders;
   const AUsername, APassword: string);
 procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string);
@@ -65,6 +66,16 @@ begin
   SetLength(Result, Length(AValue));
   if AValue <> '' then
     Move(AValue[1], Result[0], Length(AValue));
+end;
+
+function IsHttpHeaderNameChar(const AChar: AnsiChar): Boolean;
+begin
+  Result :=
+    ((AChar >= 'A') and (AChar <= 'Z')) or
+    ((AChar >= 'a') and (AChar <= 'z')) or
+    ((AChar >= '0') and (AChar <= '9')) or
+    (AChar in ['!', '#', '$', '%', '&', '''', '*', '+', '-', '.', '^',
+      '_', '`', '|', '~']);
 end;
 
 procedure RequireHeaders(const AHeaders: IHttpHeaders);
@@ -168,7 +179,7 @@ begin
   Result := False;
   for LI := 1 to Length(AName) do
   begin
-    if (Ord(AName[LI]) < 33) or (Ord(AName[LI]) > 126) or (AName[LI] = ':') then
+    if not IsHttpHeaderNameChar(AnsiChar(AName[LI])) then
       raise EHttpError.Create('invalid header name character');
     if (AName[LI] >= 'A') and (AName[LI] <= 'Z') then
       Result := True;
