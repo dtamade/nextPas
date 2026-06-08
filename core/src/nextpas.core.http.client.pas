@@ -117,6 +117,15 @@ begin
     LStream.Close;
 end;
 
+procedure CloseRequestBodyIgnoringErrors(const ABody: IReader);
+begin
+  try
+    CloseRequestBody(ABody);
+  except
+    on E: Exception do ;
+  end;
+end;
+
 function MergeRedirectPath(const ABasePath, ATargetPath: string): string;
 var
   LI: SizeInt;
@@ -295,10 +304,15 @@ begin
   if ABody <> nil then
   begin
     try
-      LBody := nextpas.core.io.ReadAll(ABody)
-    finally
-      CloseRequestBody(ABody);
+      LBody := nextpas.core.io.ReadAll(ABody);
+    except
+      on E: Exception do
+      begin
+        CloseRequestBodyIgnoringErrors(ABody);
+        raise;
+      end;
     end;
+    CloseRequestBody(ABody);
   end
   else
     LBody := nil;

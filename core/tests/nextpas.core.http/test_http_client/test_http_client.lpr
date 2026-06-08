@@ -190,6 +190,17 @@ type
     property CloseCount: Int32 read FCloseCount;
   end;
 
+  TReadAndCloseFailingRequestBody = class(TInterfacedObject, IReader, IReadCloser)
+  private
+    FClosed: Boolean;
+    FCloseCount: Int32;
+  public
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Close;
+    property Closed: Boolean read FClosed;
+    property CloseCount: Int32 read FCloseCount;
+  end;
+
   TTrackedRequestBody = class(TInterfacedObject, IReader, IReadCloser)
   private
     FData: string;
@@ -1209,6 +1220,20 @@ begin
   FClosed := True;
   Inc(FCloseCount);
   raise EHttpError.Create('response body close failed');
+end;
+
+function TReadAndCloseFailingRequestBody.Read(var ABuf;
+  const ACount: SizeUInt): SizeUInt;
+begin
+  Result := 0;
+  raise EIOError.Create('request body read failed');
+end;
+
+procedure TReadAndCloseFailingRequestBody.Close;
+begin
+  FClosed := True;
+  Inc(FCloseCount);
+  raise EHttpError.Create('request body close failed');
 end;
 
 constructor TTrackedRequestBody.Create(const AData: string;
@@ -3512,6 +3537,58 @@ begin
     'reader shortcut still sends copied payload bytes');
   Check(LBody.Closed,
     'reader shortcut closes close-capable source body after buffering');
+end;
+
+procedure CheckClientReaderShortcutKeepsReadErrorWhenCloseFails(
+  const ALabel: string; const AMethod: THttpMethod);
+var
+  LBody: TReadAndCloseFailingRequestBody;
+  LClient: IHttpClient;
+  LRaisedReadError: Boolean;
+  LRaisedCloseError: Boolean;
+begin
+  LBody := TReadAndCloseFailingRequestBody.Create;
+  LClient := NewHttpClient(TRequestBodyCaptureTransport.Create(nil) as IHttpTransport);
+  LRaisedReadError := False;
+  LRaisedCloseError := False;
+
+  try
+    case AMethod of
+      hmPost:
+        LClient.Post('http://example.test/upload', 'text/plain',
+          LBody as IReader);
+      hmPut:
+        LClient.Put('http://example.test/upload', 'text/plain',
+          LBody as IReader);
+      hmPatch:
+        LClient.Patch('http://example.test/upload', 'text/plain',
+          LBody as IReader);
+    else
+      raise EArgumentError.Create('unsupported reader shortcut method');
+    end;
+  except
+    on E: Exception do
+    begin
+      LRaisedReadError := E.Message = 'request body read failed';
+      LRaisedCloseError := E.Message = 'request body close failed';
+    end;
+  end;
+
+  Check(LRaisedReadError,
+    ALabel + ' reader shortcut preserves primary request body read error');
+  Check(not LRaisedCloseError,
+    ALabel + ' reader shortcut close failure does not replace read error');
+  Check(LBody.Closed,
+    ALabel + ' reader shortcut still attempts close after read failure');
+  CheckEqual(Int64(1), Int64(LBody.CloseCount),
+    ALabel + ' reader shortcut closes source body once after read failure');
+end;
+
+procedure TestClientReaderShortcutsKeepReadErrorWhenCloseFails;
+begin
+  CheckClientReaderShortcutKeepsReadErrorWhenCloseFails('POST', hmPost);
+  CheckClientReaderShortcutKeepsReadErrorWhenCloseFails('PUT', hmPut);
+  CheckClientReaderShortcutKeepsReadErrorWhenCloseFails('PATCH', hmPatch);
 end;
 
 procedure CheckShortcutOmitsEmptyContentType(
@@ -5844,6 +5921,8 @@ begin
     @TestClientKeepsTransportErrorWhenRequestBodyCloseFails);
   T.Run('Client reader shortcut closes source body after buffering',
     @TestClientPostReaderClosesSourceBodyAfterBuffering);
+  T.Run('Client reader shortcuts keep read error when close fails',
+    @TestClientReaderShortcutsKeepReadErrorWhenCloseFails);
   T.Run('Client shortcut body overloads omit empty content-type',
     @TestClientShortcutBodyOverloadsOmitEmptyContentType);
   T.Run('HttpGetToFile writes final path atomically', @TestHttpGetToFileWritesFinalPathAtomically);
