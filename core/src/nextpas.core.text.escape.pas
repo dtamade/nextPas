@@ -159,12 +159,15 @@ begin
   while LPos + VecWidth <= ALen do
   begin
     LCombined := VecCmpEq(@ASrc[LPos], Ord('"')) or
-                 VecCmpEq(@ASrc[LPos], Ord('\'));
+                 VecCmpEq(@ASrc[LPos], Ord('\')) or
+                 VecCmpLtU(@ASrc[LPos], $20);
     if LCombined = TVecMask(0) then
       Inc(LPos, VecWidth)
     else
     begin
       LFirst := VecCtz(LCombined);
+      if Byte(ASrc[LPos + SizeUInt(LFirst)]) < $20 then
+        Exit(-1);
       if ASrc[LPos + SizeUInt(LFirst)] = '"' then
         Exit(PtrInt(LPos) + LFirst);
       Inc(LPos, SizeUInt(LFirst) + 2);
@@ -172,7 +175,9 @@ begin
   end;
   while LPos < ALen do
   begin
-    if ASrc[LPos] = '\' then
+    if Byte(ASrc[LPos]) < $20 then
+      Exit(-1)
+    else if ASrc[LPos] = '\' then
       Inc(LPos, 2)
     else if ASrc[LPos] = '"' then
       Exit(PtrInt(LPos))

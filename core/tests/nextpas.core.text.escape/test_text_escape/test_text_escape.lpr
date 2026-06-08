@@ -186,12 +186,22 @@ begin
 end;
 
 procedure TestFindStringEnd;
+var
+  Src: array[0..127] of AnsiChar;
+  I: SizeUInt;
 begin
   CheckEqual(Int64(5), Int64(JsonFindStringEnd(PAnsiChar('hello"'), 6)), 'simple');
   CheckEqual(Int64(6), Int64(JsonFindStringEnd(PAnsiChar('he'#92'"lo"'), 7)), 'escaped quote');
   CheckEqual(Int64(-1), Int64(JsonFindStringEnd(PAnsiChar('no end'), 6)), 'no end');
   CheckEqual(Int64(0), Int64(JsonFindStringEnd(PAnsiChar('"'), 1)), 'immediate');
   CheckEqual(Int64(2), Int64(JsonFindStringEnd(PAnsiChar(#92#92'"'), 3)), 'escaped bs then quote');
+  CheckEqual(Int64(-1), Int64(JsonFindStringEnd(PAnsiChar('a'#10'"'), 3)), 'reject scalar bare control');
+
+  for I := 0 to VecWidth + 2 do
+    Src[I] := 'x';
+  Src[5] := #10;
+  Src[VecWidth + 1] := '"';
+  CheckEqual(Int64(-1), Int64(JsonFindStringEnd(@Src[0], VecWidth + 3)), 'reject SIMD bare control');
 end;
 
 procedure TestEscapeLongString;
