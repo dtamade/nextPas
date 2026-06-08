@@ -39,6 +39,8 @@ var
   GPoolListener: ITcpListener;
   GRetryListener: ITcpListener;
   GRetryAcceptCount: Int32;
+  GRetryPooledMethod: string;
+  GRetryPooledBody: string;
   GRetrySecondMethod: string;
   GRetrySecondBody: string;
   GRetryBodyTimeoutSecondAttemptSeen: Boolean;
@@ -545,6 +547,64 @@ begin
               'Content-Length: 23'#13#10 +
               #13#10 +
               'retry-should-not-happen';
+    LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+  except
+  end;
+  LConn.Close;
+end;
+
+function PostWritePooledRetryThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LReply: string;
+  LMethod: string;
+  LBody: string;
+begin
+  Result := nil;
+  try
+    LConn := GRetryListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  InterlockedIncrement(GRetryAcceptCount);
+  try
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    LReply := 'HTTP/1.1 200 OK'#13#10 +
+              'Content-Length: 2'#13#10 +
+              'Connection: keep-alive'#13#10 +
+              #13#10 +
+              'ok';
+    LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+
+    ReadRetryRawRequest(LConn, GRetryPooledMethod, GRetryPooledBody);
+  except
+  end;
+  LConn.Close;
+
+  try
+    LConn := GRetryListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  InterlockedIncrement(GRetryAcceptCount);
+  try
+    ReadRetryRawRequest(LConn, GRetrySecondMethod, GRetrySecondBody);
+    if GRetrySecondBody = 'payload' then
+      LReply := 'HTTP/1.1 200 OK'#13#10 +
+                'Content-Length: 8'#13#10 +
+                #13#10 +
+                'retry-ok'
+    else
+      LReply := 'HTTP/1.1 400 Bad Request'#13#10 +
+                'Content-Length: 3'#13#10 +
+                #13#10 +
+                'bad';
     LConn.Write(LReply[1], SizeUInt(Length(LReply)));
   except
   end;
@@ -4473,6 +4533,68 @@ begin
   end;
 end;
 
+procedure TestClientRetriesReplayableBodyWhenPooledConnectionClosesAfterRequestWrite;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LHeaders: IHttpHeaders;
+  LRet: Pointer;
+begin
+  GRetryAcceptCount := 0;
+  GRetryPooledMethod := '';
+  GRetryPooledBody := '';
+  GRetrySecondMethod := '';
+  GRetrySecondBody := '';
+  GRetryListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRetryListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @PostWritePooledRetryThread, nil);
+
+  try
+    LClient := NewHttpClient;
+
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/prime');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'priming request status 200');
+    CheckEqual('ok', ReadBodyStr(LResp), 'priming response body');
+    CheckEqual(Int64(1), Int64(GRetryAcceptCount), 'priming request opened first connection');
+
+    LHeaders := NewHeaders;
+    LHeaders.SetHeader('idempotency-key', 'retry-safe');
+    LReq := NewRequest(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
+      LHeaders, StringBodyReader('payload'), Int64(7));
+    LResp := LClient.Send(LReq);
+
+    CheckEqual(Int64(2), Int64(GRetryAcceptCount),
+      'post-write pooled close reconnects once');
+    CheckEqual('POST', GRetryPooledMethod,
+      'old pooled connection observed retry-safe request method before close');
+    CheckEqual('payload', GRetryPooledBody,
+      'old pooled connection observed complete request body before close');
+    CheckEqual('POST', GRetrySecondMethod,
+      'fresh connection receives replayed request method');
+    CheckEqual('payload', GRetrySecondBody,
+      'fresh connection receives replayed request body');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'replayed request succeeds on fresh connection');
+    CheckEqual('retry-ok', ReadBodyStr(LResp), 'fresh response body');
+
+    LClient := nil;
+  finally
+    if LClient <> nil then
+      LClient.CloseIdleConnections;
+    if GRetryAcceptCount < 2 then
+      WakeRetryAcceptThread(LPort);
+    GRetryListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRetryListener := nil;
+    GRetryPooledMethod := '';
+    GRetryPooledBody := '';
+  end;
+end;
+
 procedure TestClientSendsNonIdempotentBodyAfterClosedPooledConnection;
 var
   LPort: UInt16;
@@ -5304,6 +5426,8 @@ begin
     @TestClientRequestWriteFailureClosesBodyAndDropsConnection);
   T.Run('Client sends idempotent replayable body after closed pooled connection',
     @TestClientSendsIdempotentReplayableBodyAfterClosedPooledConnection);
+  T.Run('Client retries replayable body when pooled connection closes after request write',
+    @TestClientRetriesReplayableBodyWhenPooledConnectionClosesAfterRequestWrite);
   T.Run('Client sends non-idempotent body after closed pooled connection',
     @TestClientSendsNonIdempotentBodyAfterClosedPooledConnection);
   T.Run('Client sends non-replayable idempotent body after closed pooled connection',
