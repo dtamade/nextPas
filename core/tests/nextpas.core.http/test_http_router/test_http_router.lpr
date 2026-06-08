@@ -450,6 +450,50 @@ begin
   end;
 end;
 
+procedure TestNilHandlerRaises;
+var
+  LRouter: THttpRouter;
+  LHandler: THttpHandlerFunc;
+  LCaught: Boolean;
+begin
+  LRouter := THttpRouter.Create;
+  try
+    LHandler := nil;
+    LCaught := False;
+    try
+      LRouter.Handle(hmGet, '/nil', LHandler);
+    except
+      on E: EHttpError do
+        LCaught := True;
+    end;
+    Check(LCaught, 'nil route handler raises EHttpError');
+  finally
+    LRouter.Free;
+  end;
+end;
+
+procedure TestNilMiddlewareRaises;
+var
+  LRouter: THttpRouter;
+  LMiddleware: IHttpMiddleware;
+  LCaught: Boolean;
+begin
+  LRouter := THttpRouter.Create;
+  try
+    LMiddleware := nil;
+    LCaught := False;
+    try
+      LRouter.Use(LMiddleware);
+    except
+      on E: EHttpError do
+        LCaught := True;
+    end;
+    Check(LCaught, 'nil router middleware raises EHttpError');
+  finally
+    LRouter.Free;
+  end;
+end;
+
 procedure TestWildcardMustBeLast;
 var
   LRouter: THttpRouter;
@@ -723,6 +767,8 @@ begin
   T.Run('Trailing slash', @TestTrailingSlash);
   T.Run('Duplicate route raises', @TestDuplicateRouteRaises);
   T.Run('Empty pattern raises', @TestEmptyPatternRaises);
+  T.Run('Nil handler raises', @TestNilHandlerRaises);
+  T.Run('Nil middleware raises', @TestNilMiddlewareRaises);
   T.Run('Wildcard must be last', @TestWildcardMustBeLast);
   T.Run('Deep static route', @TestDeepStaticRoute);
   T.Run('100 static routes', @Test100StaticRoutes);

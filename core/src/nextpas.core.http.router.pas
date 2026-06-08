@@ -403,6 +403,8 @@ end;
 
 procedure THttpRouter.Handle(const AMethod: THttpMethod; const APattern: string; const AHandler: THttpHandlerFunc);
 begin
+  if not Assigned(AHandler) then
+    raise EHttpError.Create('Route handler must not be nil');
   if APattern = '' then
     raise EHttpError.Create('Route pattern must not be empty');
   if (Length(APattern) < 1) or (APattern[1] <> '/') then
@@ -412,6 +414,8 @@ end;
 
 procedure THttpRouter.Use(const AMiddleware: IHttpMiddleware);
 begin
+  if AMiddleware = nil then
+    raise EHttpError.Create('Route middleware must not be nil');
   SetLength(FMiddlewares, Length(FMiddlewares) + 1);
   FMiddlewares[High(FMiddlewares)] := AMiddleware;
 end;
