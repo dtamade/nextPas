@@ -1293,6 +1293,16 @@ begin
     'invalid memory-order matrix must cover TAtomicUSize weak single-order CAS invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'LTypedPtr.CompareExchangeWeak(LExpectedFacadePtr, @LValueB, LInvalidOrder)',
     'invalid memory-order matrix must cover facade TAtomicPtr weak single-order CAS invalid ordinal');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedFlag.clear(mo_consume)',
+    'invalid memory-order matrix must cover TAtomicFlag clear consume-order rejection');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedFlag.clear(mo_acquire)',
+    'invalid memory-order matrix must cover TAtomicFlag clear acquire-order rejection');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedFlag.clear(mo_acq_rel)',
+    'invalid memory-order matrix must cover TAtomicFlag clear acq_rel-order rejection');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedFlag.test(mo_release)',
+    'invalid memory-order matrix must cover TAtomicFlag test release-order rejection');
+  CheckContains(LInvalidOrderMatrixSection, 'LTypedFlag.test(mo_acq_rel)',
+    'invalid memory-order matrix must cover TAtomicFlag test acq_rel-order rejection');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_compare_exchange_strong_64(LInt64, LExpectedInt64, 1302, LInvalidOrder)',
     'invalid memory-order matrix must cover 64-bit strong single-order CAS invalid ordinal');
   CheckContains(LInvalidOrderMatrixSection, 'nextpas.core.atomic.AtomicCompareExchange64(LInt64, 1501, 1502, LInvalidOrder)',
@@ -4296,6 +4306,69 @@ var
       'facade TAtomicPtr.Exchange invalid ordinal must not mutate the target');
   end;
 
+  procedure ExpectTypedFlagRejectsInvalidSemanticOrders;
+  begin
+    LTypedFlag := TAtomicFlag.Create(True);
+    LRaised := False;
+    try
+      LTypedFlag.clear(mo_consume);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'TAtomicFlag.clear consume-order must raise EArgumentError');
+    Check(LTypedFlag.test(mo_acquire),
+      'TAtomicFlag.clear consume-order must not clear the flag');
+
+    LTypedFlag := TAtomicFlag.Create(True);
+    LRaised := False;
+    try
+      LTypedFlag.clear(mo_acquire);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'TAtomicFlag.clear acquire-order must raise EArgumentError');
+    Check(LTypedFlag.test(mo_acquire),
+      'TAtomicFlag.clear acquire-order must not clear the flag');
+
+    LTypedFlag := TAtomicFlag.Create(True);
+    LRaised := False;
+    try
+      LTypedFlag.clear(mo_acq_rel);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'TAtomicFlag.clear acq_rel-order must raise EArgumentError');
+    Check(LTypedFlag.test(mo_acquire),
+      'TAtomicFlag.clear acq_rel-order must not clear the flag');
+
+    LTypedFlag := TAtomicFlag.Create(True);
+    LRaised := False;
+    try
+      LTypedFlag.test(mo_release);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'TAtomicFlag.test release-order must raise EArgumentError');
+    Check(LTypedFlag.test(mo_acquire),
+      'TAtomicFlag.test release-order must not clear the flag');
+
+    LTypedFlag := TAtomicFlag.Create(True);
+    LRaised := False;
+    try
+      LTypedFlag.test(mo_acq_rel);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'TAtomicFlag.test acq_rel-order must raise EArgumentError');
+    Check(LTypedFlag.test(mo_acquire),
+      'TAtomicFlag.test acq_rel-order must not clear the flag');
+  end;
+
   procedure ExpectTypedCasRejectsInvalidOrder;
   begin
     LTypedInt32 := TAtomicInt32.Create(901);
@@ -4638,6 +4711,7 @@ begin
   ExpectCanonicalSingleOrderCasRejectsInvalidOrder;
   ExpectPascalCaseCasRejectsInvalidOrder;
   ExpectTypedWrappersRejectInvalidOrder;
+  ExpectTypedFlagRejectsInvalidSemanticOrders;
   ExpectTypedCasRejectsInvalidOrder;
 
   LInt32 := 11;
