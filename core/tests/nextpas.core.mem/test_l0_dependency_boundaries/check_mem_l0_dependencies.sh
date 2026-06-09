@@ -17,9 +17,7 @@ FORBIDDEN_UNITS=(
   "SyncObjs"
 )
 
-KNOWN_DEBT=(
-  "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|SyncObjs"
-)
+KNOWN_DEBT=()
 
 FORBIDDEN_MEM_SECURE_RAW_SYMBOLS=(
   "GetModuleHandle"

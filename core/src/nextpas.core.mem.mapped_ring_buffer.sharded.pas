@@ -2,7 +2,8 @@ unit nextpas.core.mem.mapped_ring_buffer.sharded;
 
 interface
 uses
-  SyncObjs, nextpas.core.mem.mapped_ring_buffer;
+  nextpas.core.mem.mapped_ring_buffer,
+  nextpas.core.mem.mutex;
 
 type
   // 简单分片封装：将并发生产/消费分散到多条底层 ring
@@ -14,7 +15,7 @@ type
     FPushIdx: Integer;
     FPopIdx: Integer;
     FInit: Boolean;
-    FCSel: TRTLCriticalSection;
+    FSelectorLock: TMemMutex;
   public
     constructor Create; virtual;
     destructor Destroy; override;
@@ -50,13 +51,13 @@ begin
   FPushIdx := 0;
   FPopIdx := 0;
   FInit := False;
-  InitCriticalSection(FCSel);
+  FSelectorLock.Init;
 end;
 
 destructor TMappedRingBufferSharded.Destroy;
 begin
   Close;
-  DoneCriticalSection(FCSel);
+  FSelectorLock.Done;
   inherited Destroy;
 end;
 
@@ -121,12 +122,12 @@ var
   LIndex, LStart: Integer;
 begin
   if not FInit then Exit(False);
-  EnterCriticalSection(FCSel);
+  FSelectorLock.Acquire;
   try
     LStart := FPushIdx;
     FPushIdx := (FPushIdx + 1) mod FShardCount;
   finally
-    LeaveCriticalSection(FCSel);
+    FSelectorLock.Release;
   end;
   for LIndex := 0 to FShardCount-1 do
   begin
@@ -140,12 +141,12 @@ var
   LIndex, LStart: Integer;
 begin
   if not FInit then Exit(False);
-  EnterCriticalSection(FCSel);
+  FSelectorLock.Acquire;
   try
     LStart := FPopIdx;
     FPopIdx := (FPopIdx + 1) mod FShardCount;
   finally
-    LeaveCriticalSection(FCSel);
+    FSelectorLock.Release;
   end;
   for LIndex := 0 to FShardCount-1 do
   begin

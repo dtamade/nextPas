@@ -131,11 +131,11 @@ What is already aligned with the L0 direction:
 
 The boundary is not fully clean yet. The main remaining debt is:
 
-- The current source-boundary contract still carries 1 allowlisted debt
-  entries; this is a guardrail against regression, not proof that mem is
-  already layer-clean.
-- `mapped_ring_buffer.sharded` still carries a `SyncObjs` dependency that
-  should be revisited with its owning architecture slice.
+- The current source-boundary contract carries 0 allowlisted debt entries.
+  This means this source contract has no known exceptions; it is not proof that
+  the whole mem lane or every L0 owner boundary is complete.
+- Continue treating mapped structures and optional allocator backends as active
+  audit targets when new consumer pressure or host-compile evidence appears.
 
 Treat these as explicit debt, not as proof that mem is already layer-clean.
 
@@ -143,14 +143,11 @@ Treat these as explicit debt, not as proof that mem is already layer-clean.
 
 Priority follow-up slices:
 
-1. Revisit the mapped ring-buffer sharded synchronization helper so its
-   remaining `SyncObjs` dependency either moves behind a platform-owned seam or
-   leaves the L0 mem core.
-2. Keep the mem mapping compile surface honest across host branches: helper
+1. Keep the mem mapping compile surface honest across host branches: helper
    cleanups may stay in mem, but do not reopen the landed mapping/shared-memory
    owner slice without a new blocker.
-3. Keep allocator-manager behavior narrow and explicit: `rtl` now has a runtime
+2. Keep allocator-manager behavior narrow and explicit: `rtl` now has a runtime
    regression test for installation safety, while optional guarded backends such
    as CRT need at least compile truth before wider rollout.
-4. Keep narrowing public allocator claims so traits, ownership, and fallback
+3. Keep narrowing public allocator claims so traits, ownership, and fallback
    behavior remain verifiable and unsurprising.
