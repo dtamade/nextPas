@@ -447,6 +447,16 @@ make -C core core-math-impl-simd-win64-compile-smoke
 
 `core-math-impl-simd-win64-compile-smoke` is compile-only forced coverage for `math.impl.simd` on the Win64 target; it is not Windows host runtime, heaptrc, benchmark, or public SIMD wiring proof.
 
+Run the bounded internal SIMD seam benchmark smoke with:
+
+```sh
+make -C core core-math-simd-seam-bench-smoke
+```
+
+This smoke caps `bench_simd_seam` with `NEXTPAS_BENCH_MAX_ITERS=20000`; it proves the benchmark
+entrypoint and negative public-cutover marker stay runnable, not that public SIMD cutover is
+approved or that profiling is complete.
+
 For landing review, also run:
 
 ```sh

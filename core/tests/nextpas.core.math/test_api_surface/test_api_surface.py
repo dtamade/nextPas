@@ -1196,6 +1196,16 @@ REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
         ),
     ),
     RequiredCoreMakeTarget(
+        target="core-math-simd-seam-bench-smoke",
+        command="make -C core core-math-simd-seam-bench-smoke",
+        recipe_steps=(
+            (
+                "bench-simd-seam-bounded-smoke",
+                "$(MAKE) -C benchmarks/nextpas.core.math/bench_simd_seam clean smoke",
+            ),
+        ),
+    ),
+    RequiredCoreMakeTarget(
         target="core-math-trig-local-smoke",
         command="make -C core core-math-trig-local-smoke",
         recipe_steps=(
@@ -1789,6 +1799,13 @@ REQUIRED_QUATERNION_PUBLIC_RECORD_CONTRACTS = (
     ("quat-d", "TQuatd", "Double", "TVec3d", "TMat3d"),
 )
 REQUIRED_BENCHMARK_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
+    "benchmarks/nextpas.core.math/bench_simd_seam/Makefile": (
+        ("bench-simd-seam-smoke-target", "smoke:"),
+        (
+            "bench-simd-seam-smoke-bounds-iters",
+            "NEXTPAS_BENCH_MAX_ITERS=20000",
+        ),
+    ),
     BENCH_SIMD_SEAM_PATH: (
         (
             "bench-simd-seam-internal-only-decision",
