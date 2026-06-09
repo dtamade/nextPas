@@ -46,11 +46,14 @@ function ConfiguredMaxIterations: Int64;
 var
   LValue: string;
 begin
-  Result := DEFAULT_MAX_ITERS;
   LValue := Trim(GetEnvironmentVariable(BENCH_MAX_ITERS_ENV));
-  if (LValue <> '') and TryStrToInt64(LValue, Result) and (Result >= 100) then
+  if LValue = '' then
+    Exit(DEFAULT_MAX_ITERS);
+  if TryStrToInt64(LValue, Result) and (Result >= 100) then
     Exit;
-  Result := DEFAULT_MAX_ITERS;
+  WriteLn(StdErr, 'invalid ', BENCH_MAX_ITERS_ENV, ': ', LValue,
+    '; expected integer >= 100');
+  Halt(2);
 end;
 
 constructor TBenchRunner.Create;

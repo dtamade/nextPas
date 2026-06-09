@@ -4249,6 +4249,50 @@ begin
     'H1 parser benchmark fast lazy header ForEach row');
 end;
 
+procedure CheckH1ParserBenchmarkInvalidMaxItersRejected(
+  const AExecutable, AWorkingDir, AValue, ALabel: string);
+var
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  RunProcessAndCaptureWithEnv(AExecutable, [], AWorkingDir,
+    [BenchMaxItersEnvName + '=' + AValue], LExitCode, LOutput);
+  Check(LExitCode <> 0, ALabel + ' should reject invalid max iters: ' +
+    LOutput);
+  CheckContains(LOutput, 'invalid ' + BenchMaxItersEnvName,
+    ALabel + ' invalid max-iters diagnostic');
+  CheckContains(LOutput, AValue,
+    ALabel + ' invalid max-iters diagnostic includes value');
+  CheckNotContains(LOutput, ' iters',
+    ALabel + ' should not emit benchmark rows');
+end;
+
+procedure TestH1ParserBenchmarkRejectsInvalidMaxIters;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser benchmark invalid max-iters build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveH1ParserBenchBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath),
+    'H1 parser benchmark invalid max-iters binary exists');
+
+  CheckH1ParserBenchmarkInvalidMaxItersRejected(LBinaryPath, LBenchDir, 'abc',
+    'H1 parser benchmark non-integer max iters');
+  CheckH1ParserBenchmarkInvalidMaxItersRejected(LBinaryPath, LBenchDir, '99',
+    'H1 parser benchmark too-small max iters');
+end;
+
 procedure TestH1ParserBenchmarkFilterEnv;
 var
   LRootDir: string;
@@ -5289,6 +5333,8 @@ begin
     @TestCllhttpComparatorRequiresRoot);
   T.Run('H1 parser benchmark max iterations env',
     @TestH1ParserBenchmarkMaxItersEnv);
+  T.Run('H1 parser benchmark rejects invalid max iterations env',
+    @TestH1ParserBenchmarkRejectsInvalidMaxIters);
   T.Run('H1 parser benchmark filter env',
     @TestH1ParserBenchmarkFilterEnv);
   T.Run('H1 parser benchmark rejects no-match filter',
