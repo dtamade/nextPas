@@ -110,6 +110,7 @@ type
     function  GetTailIndex: SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  IsFull: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  IsValidIndex(aIndex: SizeUInt): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  IsRangeInBounds(aIndex, aCount: SizeUInt): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  IsEmpty: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  RequireAddCount(aBase, aAdditional: SizeUInt; const aCallerName: string): SizeUInt;
     procedure EnsureCapacity(aRequiredCapacity: SizeUInt);
@@ -958,6 +959,11 @@ end;
 function TVecDeque.IsValidIndex(aIndex: SizeUInt): Boolean;
 begin
   Result := aIndex < FCount;
+end;
+
+function TVecDeque.IsRangeInBounds(aIndex, aCount: SizeUInt): Boolean;
+begin
+  Result := (aCount = 0) or ((aIndex <= FCount) and (aCount <= FCount - aIndex));
 end;
 
 function TVecDeque.RequireAddCount(aBase, aAdditional: SizeUInt; const aCallerName: string): SizeUInt;
@@ -1870,7 +1876,7 @@ end;
 
 procedure TVecDeque.Overwrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 begin
-  if aIndex + aCount > FCount then
+  if not IsRangeInBounds(aIndex, aCount) then
     raise EOutOfRange.CreateFmt('TVecDeque.Overwrite: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
   OverwriteUnchecked(aIndex, aSrc, aCount);
@@ -1936,7 +1942,7 @@ begin
     raise EArgumentNil.Create('TVecDeque.Overwrite: aSrc is nil');
 
   // 由于环形缓冲区的复杂性，我们使用逐个元素复制
-  if aIndex + aSrc.GetCount > FCount then
+  if not IsRangeInBounds(aIndex, aSrc.GetCount) then
     raise EOutOfRange.CreateFmt('TVecDeque.Overwrite: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aSrc.GetCount - 1, FCount - 1]);
 
@@ -1976,7 +1982,7 @@ end;
 
 procedure TVecDeque.Read(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
 begin
-  if aIndex + aCount > FCount then
+  if not IsRangeInBounds(aIndex, aCount) then
     raise EOutOfRange.CreateFmt('TVecDeque.Read: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
   ReadUnchecked(aIndex, aDst, aCount);
@@ -2017,7 +2023,7 @@ end;
 
 procedure TVecDeque.Read(aIndex: SizeUInt; var aDst: TCollection; aCount: SizeUInt);
 begin
-  if aIndex + aCount > FCount then
+  if not IsRangeInBounds(aIndex, aCount) then
     raise EOutOfRange.CreateFmt('TVecDeque.Read: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
   ReadUnchecked(aIndex, aDst, aCount);
@@ -4320,11 +4326,7 @@ end;
 
 procedure TVecDeque.Read(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt);
 begin
-  // 边界检查
-  if aIndex >= GetCount then
-    raise EOutOfRange.CreateFmt('TVecDeque.Read: index %d out of range [0..%d]', [aIndex, GetCount - 1]);
-
-  if aIndex + aCount > GetCount then
+  if not IsRangeInBounds(aIndex, aCount) then
     raise EOutOfRange.CreateFmt('TVecDeque.Read: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, GetCount - 1]);
 
@@ -8787,7 +8789,12 @@ var
   LDrained: IVecT;
 begin
   // 半开区间 [aStart, aEnd) 转换为 (start, count) 格式
-  if aEnd <= aStart then
+  if aEnd < aStart then
+    raise EOutOfRange.Create('TVecDeque.DrainRange: end before start');
+  if (aStart > FCount) or (aEnd > FCount) then
+    raise EOutOfRange.Create('TVecDeque.DrainRange: range out of bounds');
+
+  if aEnd = aStart then
     LCount := 0
   else
     LCount := aEnd - aStart;
