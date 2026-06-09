@@ -1,0 +1,30 @@
+# Current direct FPC broad RTL route debt baseline.
+# Format: category|UnitName|count
+# Keep this compact: future migration slices should reduce counts, not add paths.
+collections-typinfo-debt|SysUtils|2
+compiler-production|Classes|4
+compiler-production|SysUtils|25
+core-foundation-legacy-debt|Classes|1
+core-foundation-legacy-debt|SysUtils|3
+git-legacy-host-debt|Classes|2
+git-legacy-host-debt|DateUtils|2
+git-legacy-host-debt|SysUtils|3
+mem-host-debt|SysUtils|2
+net-http-legacy-host-debt|SysUtils|6
+platform-fs-io-host-debt|BaseUnix|2
+platform-fs-io-host-debt|SysUtils|1
+simd-host-probe-debt|BaseUnix|1
+simd-host-probe-debt|Unix|1
+simd-host-probe-debt|Windows|2
+system-kernel-route|TypInfo|1
+tls-legacy-host-debt|BaseUnix|7
+tls-legacy-host-debt|Classes|138
+tls-legacy-host-debt|DateUtils|15
+tls-legacy-host-debt|SysUtils|218
+tls-legacy-host-debt|Unix|5
+tls-legacy-host-debt|Windows|18
+tui-legacy-host-debt|BaseUnix|1
+tui-legacy-host-debt|Classes|1
+tui-legacy-host-debt|DateUtils|1
+tui-legacy-host-debt|SysUtils|24
+tui-legacy-host-debt|Unix|1

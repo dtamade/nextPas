@@ -266,9 +266,84 @@ reject_repo_uses_unit_under() {
   done < <(find "$root" -type f \( -name '*.pas' -o -name '*.lpr' \))
 }
 
+canonical_fpc_broad_unit() {
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    sysutils) printf '%s\n' "SysUtils" ;;
+    classes) printf '%s\n' "Classes" ;;
+    typinfo) printf '%s\n' "TypInfo" ;;
+    dateutils) printf '%s\n' "DateUtils" ;;
+    baseunix) printf '%s\n' "BaseUnix" ;;
+    unix) printf '%s\n' "Unix" ;;
+    windows) printf '%s\n' "Windows" ;;
+    *) return 1 ;;
+  esac
+}
+
+fpc_broad_route_category() {
+  local path="$1"
+  case "$path" in
+    compiler/*) printf '%s\n' "compiler-production" ;;
+    core/src/nextpas.core.system*) printf '%s\n' "system-kernel-route" ;;
+    core/src/nextpas.core.platform*|core/src/nextpas.core.fs*|core/src/nextpas.core.io*) printf '%s\n' "platform-fs-io-host-debt" ;;
+    core/src/nextpas.core.mem*) printf '%s\n' "mem-host-debt" ;;
+    core/src/nextpas.core.tls*) printf '%s\n' "tls-legacy-host-debt" ;;
+    core/src/nextpas.core.tui*) printf '%s\n' "tui-legacy-host-debt" ;;
+    core/src/nextpas.core.http*|core/src/nextpas.core.net*) printf '%s\n' "net-http-legacy-host-debt" ;;
+    core/src/nextpas.core.git*) printf '%s\n' "git-legacy-host-debt" ;;
+    core/src/nextpas.core.collections*) printf '%s\n' "collections-typinfo-debt" ;;
+    core/src/nextpas.core.base*|core/src/nextpas.core.exception*|core/src/nextpas.core.crypto*|core/src/nextpas.core.bench*) printf '%s\n' "core-foundation-legacy-debt" ;;
+    core/src/nextpas.core.simd*) printf '%s\n' "simd-host-probe-debt" ;;
+    *) printf '%s\n' "unclassified-core-debt" ;;
+  esac
+}
+
+list_repo_fpc_broad_rtl_route_counts() {
+  local file_path rel_path unit_name canonical category
+  while IFS= read -r file_path; do
+    rel_path="${file_path#$REPO_ROOT/}"
+    while IFS= read -r unit_name; do
+      if canonical="$(canonical_fpc_broad_unit "$unit_name")"; then
+        category="$(fpc_broad_route_category "$rel_path")"
+        printf '%s|%s\n' "$category" "$canonical"
+      fi
+    done < <(list_pascal_uses_units "$file_path")
+  done < <(
+    {
+      find "$CORE_ROOT/src" -type f -name '*.pas'
+      find "$REPO_ROOT/compiler" -type f -name '*.pas' ! -path "$REPO_ROOT/compiler/tests/*"
+    } | sort
+  ) | sort | uniq -c | awk '{ print $2 "|" $1 }'
+}
+
+list_fpc_broad_rtl_allowlist() {
+  local allowlist="$CORE_ROOT/tests/nextpas.core.system/test_system_source_contracts/fpc_broad_rtl_allowlist.txt"
+  [[ -f "$allowlist" ]] || fail "missing FPC broad RTL allowlist: $allowlist"
+  sed -E 's/[[:space:]]+$//' "$allowlist" |
+    sed -E '/^[[:space:]]*($|#)/d' |
+    sort -u
+}
+
+require_fpc_broad_rtl_allowlist_stable() {
+  local actual expected
+  actual="$(list_repo_fpc_broad_rtl_route_counts | sort -u)"
+  expected="$(list_fpc_broad_rtl_allowlist)"
+  if [[ "$actual" != "$expected" ]]; then
+    printf '[FAIL] direct FPC broad RTL route debt baseline drifted\n' >&2
+    printf '%s\n' '--- registered category debt' >&2
+    printf '%s\n' "$expected" >&2
+    printf '%s\n' '--- current category debt' >&2
+    printf '%s\n' "$actual" >&2
+    exit 1
+  fi
+  if printf '%s\n' "$actual" | grep -F --quiet 'unclassified-core-debt|'; then
+    fail "direct FPC broad RTL route debt has unclassified owner category"
+  fi
+}
+
 require_file "docs/system/README.md"
 require_file "docs/system/rtl-mapping.md"
 require_file "docs/system/goal-tree.md"
+require_file "docs/system/fpc-rtl-route-boundary.md"
 require_file "docs/system/runtime-contracts.md"
 require_file "docs/system/lifecycle-contracts.md"
 require_file "docs/system/bootstrap-dual-surface-adapter.md"
@@ -301,6 +376,14 @@ require_token "docs/system/README.md" "Root facade live surface"
 require_token "docs/system/README.md" "delegating to owner"
 require_token "docs/system/README.md" "compiler/System compile-truth"
 require_token "docs/system/README.md" "not unit-owned wrapper functions"
+
+require_token "docs/system/fpc-rtl-route-boundary.md" "root kernel boundary"
+require_token "docs/system/fpc-rtl-route-boundary.md" "FPC-routed stage0"
+require_token "docs/system/fpc-rtl-route-boundary.md" "not a broad FPC compatibility library"
+require_token "docs/system/fpc-rtl-route-boundary.md" "debt baseline"
+require_token "docs/system/fpc-rtl-route-boundary.md" "fpc_broad_rtl_allowlist.txt"
+require_token "docs/system/fpc-rtl-route-boundary.md" "New direct uses outside the allowlist fail"
+require_token "docs/system/fpc-rtl-route-boundary.md" "Each future migration removes allowlist entries"
 
 for token in \
   "FPC-compatible source" \
@@ -809,5 +892,7 @@ while IFS='|' read -r file unit_name; do
       ;;
   esac
 done < "$tmp_found"
+
+require_fpc_broad_rtl_allowlist_stable
 
 echo "[PASS] nextpas.core.system source contracts"
