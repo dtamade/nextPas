@@ -293,6 +293,42 @@ begin
   end;
 end;
 
+procedure AssertSingleWideGlyphPatch(const APatches: TDiffEntries; ACount: Integer;
+  const AContext: string);
+begin
+  CheckEqual(Int64(1), Int64(ACount), AContext + ' patch count');
+  if ACount <= 0 then Exit;
+
+  CheckEqual(Int64(0), Int64(APatches[0].X), AContext + ' patch x');
+  CheckEqual(Int64(0), Int64(APatches[0].Y), AContext + ' patch y');
+  CheckEqual(Int64(2), Int64(APatches[0].Cell.Width), AContext + ' patch width');
+  Check(not APatches[0].Cell.Skip, AContext + ' patch is not skip sentinel');
+  CheckEqual(#$E4#$B8#$AD, CellGlyphAsString(APatches[0].Cell), AContext + ' patch glyph');
+end;
+
+procedure TestDiffFullRedrawSkipsWideGlyphTail;
+var
+  LPrev, LCurr: TBuffer;
+  LPatches: TDiffEntries;
+  LCount: Integer;
+begin
+  LPrev := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 1));
+  LCurr := TBuffer.CreateEmpty(TRect.Make(0, 0, 2, 1));
+  try
+    LCurr.SetString(0, 0, #$E4#$B8#$AD, StyleDefault);
+
+    LPrev.Diff(LCurr, LPatches);
+    AssertSingleWideGlyphPatch(LPatches, System.Length(LPatches), 'diff full redraw');
+
+    SetLength(LPatches, 0);
+    LCount := LPrev.DiffInto(LCurr, LPatches);
+    AssertSingleWideGlyphPatch(LPatches, LCount, 'diffinto full redraw');
+  finally
+    LPrev.Free;
+    LCurr.Free;
+  end;
+end;
+
 procedure TestResize;
 var
   LBuf: TBuffer;
@@ -547,6 +583,7 @@ begin
   T.Run('diff into', @TestDiffInto);
   T.Run('diff same size area origin change redraws at next origin',
     @TestDiffSameSizeAreaOriginChangeRedrawsAtNextOrigin);
+  T.Run('diff full redraw skips wide tail', @TestDiffFullRedrawSkipsWideGlyphTail);
   T.Run('resize', @TestResize);
   T.Run('resize drops wide lead clipped at right edge', @TestResizeDropsWideLeadClippedAtRightEdge);
   T.Run('resize drops orphan wide tail at left edge', @TestResizeDropsOrphanWideTailAtLeftEdge);

@@ -578,9 +578,41 @@ begin
   FDirtyRows := QWord(-1);
 end;
 
+function BuildFullRedrawDiff(const ANext: TBuffer; var APatches: TDiffEntries): Integer;
+var
+  LTotal, LI, LOutCount, LW: Integer;
+  LPosX, LPosY: Word;
+begin
+  LTotal := System.Length(ANext.FContent);
+  LOutCount := 0;
+  LPosX := ANext.FArea.X;
+  LPosY := ANext.FArea.Y;
+  LW := ANext.FArea.Width;
+
+  for LI := 0 to LTotal - 1 do
+  begin
+    if not ANext.FContent[LI].Skip then
+    begin
+      APatches[LOutCount].X := LPosX;
+      APatches[LOutCount].Y := LPosY;
+      APatches[LOutCount].Cell := ANext.FContent[LI];
+      Inc(LOutCount);
+    end;
+
+    Inc(LPosX);
+    if LPosX >= ANext.FArea.X + LW then
+    begin
+      LPosX := ANext.FArea.X;
+      Inc(LPosY);
+    end;
+  end;
+
+  Result := LOutCount;
+end;
+
 procedure TBuffer.Diff(const ANext: TBuffer; out APatches: TDiffEntries);
 var
-  LTotal, LI, LOutCount, LAffectedWidth: Integer;
+  LTotal, LOutCount, LAffectedWidth: Integer;
   LToSkip, LInvalidated: Integer;
   LPrev, LCurr: PCell;
   LPrevBase, LCurrBase: PCell;
@@ -600,21 +632,8 @@ begin
   begin
     LTotal := System.Length(ANext.FContent);
     SetLength(APatches, LTotal);
-    LPosX := ANext.FArea.X;
-    LPosY := ANext.FArea.Y;
-    LW := ANext.FArea.Width;
-    for LI := 0 to LTotal - 1 do
-    begin
-      APatches[LI].X := LPosX;
-      APatches[LI].Y := LPosY;
-      APatches[LI].Cell := ANext.FContent[LI];
-      Inc(LPosX);
-      if LPosX >= ANext.FArea.X + LW then
-      begin
-        LPosX := ANext.FArea.X;
-        Inc(LPosY);
-      end;
-    end;
+    LOutCount := BuildFullRedrawDiff(ANext, APatches);
+    SetLength(APatches, LOutCount);
     Exit;
   end;
 
@@ -706,22 +725,7 @@ begin
 
   if not RectEquals(ANext.FArea, FArea) then
   begin
-    LPosX := ANext.FArea.X;
-    LPosY := ANext.FArea.Y;
-    LW := ANext.FArea.Width;
-    for LCol := 0 to LTotal - 1 do
-    begin
-      APatches[LCol].X := LPosX;
-      APatches[LCol].Y := LPosY;
-      APatches[LCol].Cell := ANext.FContent[LCol];
-      Inc(LPosX);
-      if LPosX >= ANext.FArea.X + LW then
-      begin
-        LPosX := ANext.FArea.X;
-        Inc(LPosY);
-      end;
-    end;
-    Result := LTotal;
+    Result := BuildFullRedrawDiff(ANext, APatches);
     Exit;
   end;
 
