@@ -290,6 +290,22 @@ begin
   Result := Pos(AText, ASource) > 0;
 end;
 
+procedure CheckSourceDoesNotUseLegacyHeaderSetterSpelling(const ASource,
+  AContext: string);
+var
+  LLegacyName: string;
+begin
+  LLegacyName := 'Set' + '_';
+  Check(not SourceHas(ASource, '.' + LLegacyName),
+    AContext + ' must not use legacy header setter spelling');
+  Check(not SourceHas(ASource, ' ' + LLegacyName),
+    AContext + ' must not expose legacy header setter spelling');
+  Check(not SourceHas(ASource, '`' + LLegacyName),
+    AContext + ' docs must not expose legacy header setter spelling');
+  Check(not SourceHas(ASource, 'setheader'),
+    AContext + ' docs must spell public API as SetHeader');
+end;
+
 procedure PlainHandlerProc(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
 begin
   GProcHandlerCalled := True;
@@ -1743,6 +1759,29 @@ begin
     'API coverage must state release helper ownership boundary');
 end;
 
+procedure TestHttpPublicHeaderSetterNamingContract;
+var
+  LInterfaceSource: string;
+  LFacadeSource: string;
+  LApiCoverageSource: string;
+begin
+  LInterfaceSource := ReadTextFile('../../../src/nextpas.core.http.intf.pas');
+  LFacadeSource := ReadTextFile('../../../src/nextpas.core.http.pas');
+  LApiCoverageSource := ReadTextFile('../../../docs/http/API_COVERAGE.md');
+
+  Check(SourceHas(LInterfaceSource,
+    'procedure SetHeader(const AName, AValue: string);'),
+    'IHttpHeaders must expose SetHeader spelling');
+  Check(SourceHas(LApiCoverageSource, 'SetHeader'),
+    'API coverage must document SetHeader spelling');
+  CheckSourceDoesNotUseLegacyHeaderSetterSpelling(LInterfaceSource,
+    'HTTP interface source');
+  CheckSourceDoesNotUseLegacyHeaderSetterSpelling(LFacadeSource,
+    'HTTP facade source');
+  CheckSourceDoesNotUseLegacyHeaderSetterSpelling(LApiCoverageSource,
+    'HTTP API coverage');
+end;
+
 procedure TestChunkedRequestTrailerContract;
 var
   LRouter: IHttpRouter;
@@ -1993,6 +2032,8 @@ begin
     @TestHttpArchitectureDocsCurrentPublicApiContract);
   T.Run('HTTP API coverage response body helper truth contract',
     @TestHttpApiCoverageResponseBodyHelperTruthContract);
+  T.Run('HTTP public header setter naming contract',
+    @TestHttpPublicHeaderSetterNamingContract);
   T.Run('Chunked request trailer contract',
     @TestChunkedRequestTrailerContract);
   T.Run('Chunked request multiple trailer declaration contract',
