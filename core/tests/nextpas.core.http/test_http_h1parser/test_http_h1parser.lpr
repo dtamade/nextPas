@@ -629,6 +629,8 @@ begin
            'hello';
   LP.Execute(PAnsiChar(LResp), Length(LResp));
   Check(not LP.IsComplete, 'truncated content-length response is not complete');
+  Check(not LP.ShouldKeepAlive,
+    'truncated content-length response is not reusable before EOF');
   LP.Finish;
   Check(LP.HasError, 'finish reports truncated content-length as error');
   Check(not LP.IsComplete, 'truncated content-length response stays incomplete');

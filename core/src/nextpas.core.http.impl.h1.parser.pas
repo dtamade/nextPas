@@ -1088,6 +1088,8 @@ var
 begin
   if FError then
     Exit(False);
+  if not FComplete then
+    Exit(False);
 
   LConnValues := FHeaders.GetAll('connection');
   if HeaderValuesHaveToken(LConnValues, 'close') then
