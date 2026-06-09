@@ -215,7 +215,7 @@ begin
   CpuPause;
 end;
 
-procedure TestAtomicDefaultLoadSurface;
+procedure TestAtomicDefaultLoadStoreSurface;
 var
   LI32: Int32;
   LU32: UInt32;
@@ -247,6 +247,26 @@ begin
 
   LPtrUInt := PtrUInt(@LValue);
   CheckEqual(Int64(LPtrUInt), Int64(atomic_load(LPtrUInt)));
+
+  LI32 := 0;
+  atomic_store(LI32, 43);
+  CheckEqual(Int64(43), Int64(atomic_load(LI32, mo_seq_cst)));
+
+  LU32 := 0;
+  atomic_store(LU32, 44);
+  CheckEqual(Int64(44), Int64(atomic_load(LU32, mo_seq_cst)));
+
+  LPtr := nil;
+  atomic_store(LPtr, @LValue);
+  Check(LPtr = @LValue, 'default pointer atomic_store must be available');
+
+  LPtrInt := 0;
+  atomic_store(LPtrInt, PtrInt(@LValue));
+  CheckEqual(Int64(PtrInt(@LValue)), Int64(atomic_load(LPtrInt, mo_seq_cst)));
+
+  LPtrUInt := 0;
+  atomic_store(LPtrUInt, PtrUInt(@LValue));
+  CheckEqual(Int64(PtrUInt(@LValue)), Int64(atomic_load(LPtrUInt, mo_seq_cst)));
 end;
 
 procedure TestAtomicSourceContracts;
@@ -287,6 +307,10 @@ var
   LDefaultLoad64Section: string;
   LDefaultLoadPtrSection: string;
   LDefaultLoadPtrIntSection: string;
+  LDefaultStore32Section: string;
+  LDefaultStoreU32Section: string;
+  LDefaultStorePtrSection: string;
+  LDefaultStorePtrIntSection: string;
   LStore32Section: string;
   LStore64Section: string;
   LStore32SeqCstSection: string;
@@ -385,6 +409,18 @@ begin
   LDefaultLoadPtrIntSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_load(var aObj: PtrInt): PtrInt;',
     'function atomic_load(var aObj: PtrUInt; aOrder: memory_order_t): PtrUInt;');
+  LDefaultStore32Section := ExtractImplementationSection(LAtomicSource,
+    'procedure atomic_store(var aObj: Int32; aDesired: Int32);',
+    'procedure atomic_store(var aObj: UInt32; aDesired: UInt32; aOrder: memory_order_t);');
+  LDefaultStoreU32Section := ExtractImplementationSection(LAtomicSource,
+    'procedure atomic_store(var aObj: UInt32; aDesired: UInt32);',
+    '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}');
+  LDefaultStorePtrSection := ExtractImplementationSection(LAtomicSource,
+    'procedure atomic_store(var aObj: Pointer; aDesired: Pointer);',
+    '{$IFDEF CPU64}');
+  LDefaultStorePtrIntSection := ExtractImplementationSection(LAtomicSource,
+    'procedure atomic_store(var aObj: PtrInt; aDesired: PtrInt);',
+    'procedure atomic_store(var aObj: PtrUInt; aDesired: PtrUInt; aOrder: memory_order_t);');
   LStore32Section := ExtractImplementationSection(LAtomicSource,
     'procedure atomic_store(var aObj: Int32; aDesired: Int32; aOrder: memory_order_t);',
     'procedure atomic_store(var aObj: Int32; aDesired: Int32);');
@@ -538,6 +574,30 @@ begin
     'default tagged pointer load must use seq_cst');
   CheckNotContains(LDefaultTaggedPtrLoadSection, 'mo_relaxed',
     'default tagged pointer load must not use relaxed');
+  CheckContains(LDefaultStore32Section, 'mo_seq_cst',
+    'default Int32 atomic_store must use seq_cst');
+  CheckNotContains(LDefaultStore32Section, 'mo_relaxed',
+    'default Int32 atomic_store must not use relaxed');
+  CheckNotContains(LDefaultStore32Section, 'mo_release',
+    'default Int32 atomic_store must not use release');
+  CheckContains(LDefaultStoreU32Section, 'mo_seq_cst',
+    'default UInt32 atomic_store must use seq_cst');
+  CheckNotContains(LDefaultStoreU32Section, 'mo_relaxed',
+    'default UInt32 atomic_store must not use relaxed');
+  CheckNotContains(LDefaultStoreU32Section, 'mo_release',
+    'default UInt32 atomic_store must not use release');
+  CheckContains(LDefaultStorePtrSection, 'mo_seq_cst',
+    'default Pointer atomic_store must use seq_cst');
+  CheckNotContains(LDefaultStorePtrSection, 'mo_relaxed',
+    'default Pointer atomic_store must not use relaxed');
+  CheckNotContains(LDefaultStorePtrSection, 'mo_release',
+    'default Pointer atomic_store must not use release');
+  CheckContains(LDefaultStorePtrIntSection, 'mo_seq_cst',
+    'default PtrInt atomic_store must use seq_cst');
+  CheckNotContains(LDefaultStorePtrIntSection, 'mo_relaxed',
+    'default PtrInt atomic_store must not use relaxed');
+  CheckNotContains(LDefaultStorePtrIntSection, 'mo_release',
+    'default PtrInt atomic_store must not use release');
   CheckContains(LAtomicWaitSection, 'platform_wait_address32',
     'atomic_wait must delegate to platform wait-address primitive');
   CheckContains(LAtomicNotifyOneSection, 'platform_wake_address_one',
@@ -1003,7 +1063,7 @@ begin
   T.Run('Exchange64', @TestExchange64);
   T.Run('Pointer atomics', @TestPointerAtomics);
   T.Run('Fences (no crash)', @TestFence);
-  T.Run('default atomic_load surface', @TestAtomicDefaultLoadSurface);
+  T.Run('default atomic_load/store surface', @TestAtomicDefaultLoadStoreSurface);
   T.Run('atomic source contracts', @TestAtomicSourceContracts);
   T.Run('Concurrent FetchAdd (4 threads x 10000)', @TestConcurrentFetchAdd);
   T.Run('fafafa-style atomic API', @TestFafafaStyleAtomicApi);
