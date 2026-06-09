@@ -64,6 +64,7 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.hash,
   nextpas.core.hash.base,
   nextpas.core.encoding,
@@ -126,6 +127,21 @@ begin
   Result := (ACh = ' ') or (ACh = #9);
 end;
 
+function TrimOWS(const S: string): string;
+var
+  LFirst, LLast: Integer;
+begin
+  LFirst := 1;
+  LLast := Length(S);
+  while (LFirst <= LLast) and IsOWS(S[LFirst]) do
+    Inc(LFirst);
+  while (LLast >= LFirst) and IsOWS(S[LLast]) do
+    Dec(LLast);
+  if LFirst > LLast then
+    Exit('');
+  Result := Copy(S, LFirst, LLast - LFirst + 1);
+end;
+
 function LowerTrimOWS(const S: string): string;
 var
   LFirst, LLast: Integer;
@@ -180,6 +196,21 @@ begin
   SetLength(LBytes, SHA1_DIGEST_SIZE);
   Move(LDigest[0], LBytes[0], SHA1_DIGEST_SIZE);
   Result := Base64Encode(LBytes);
+end;
+
+procedure ValidateHandshakeKey(const AKey: string);
+var
+  LDecoded: TBytes;
+begin
+  try
+    LDecoded := Base64Decode(AKey);
+  except
+    on E: EConvertError do
+      raise EHttpError.Create('Invalid Sec-WebSocket-Key header');
+  end;
+
+  if Length(LDecoded) <> 16 then
+    raise EHttpError.Create('Invalid Sec-WebSocket-Key header');
 end;
 
 function IsValidOpcode(const AOpcode: Byte): Boolean;
@@ -263,16 +294,20 @@ function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWrite
   const AOptions: TWebSocketOptions): IWebSocket;
 var
   LUpgrade, LKey, LVersion: string;
-  LConnectionValues: TStringArray;
+  LConnectionValues, LKeyValues: TStringArray;
   LAccept: string;
   LResp: string;
   LHijacker: IHttpHijacker;
   LConn: ITcpStream;
 begin
-  LUpgrade := LowerCase(AReq.Headers.Get('upgrade'));
+  LUpgrade := LowerTrimOWS(AReq.Headers.Get('upgrade'));
   LConnectionValues := AReq.Headers.GetAll('connection');
-  LKey := AReq.Headers.Get('sec-websocket-key');
-  LVersion := AReq.Headers.Get('sec-websocket-version');
+  LKeyValues := AReq.Headers.GetAll('sec-websocket-key');
+  if Length(LKeyValues) = 1 then
+    LKey := TrimOWS(LKeyValues[0])
+  else
+    LKey := '';
+  LVersion := TrimOWS(AReq.Headers.Get('sec-websocket-version'));
 
   if LUpgrade <> 'websocket' then
     raise EHttpError.Create('Missing or invalid Upgrade header');
@@ -280,6 +315,7 @@ begin
     raise EHttpError.Create('Missing or invalid Connection header');
   if LKey = '' then
     raise EHttpError.Create('Missing Sec-WebSocket-Key header');
+  ValidateHandshakeKey(LKey);
   if LVersion <> '13' then
     raise EHttpError.Create('Unsupported Sec-WebSocket-Version');
 
