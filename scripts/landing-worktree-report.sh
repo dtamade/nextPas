@@ -194,23 +194,25 @@ classify_candidate() {
 }
 
 report_rows="$(
-  path=""
-  branch=""
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    case "$line" in
-      worktree\ *)
-        path="${line#worktree }"
-        branch=""
-        ;;
-      branch\ refs/heads/landing/*)
-        branch="${line#branch refs/heads/}"
-        classify_candidate "$path" "$branch"
-        ;;
-      branch\ refs/heads/*)
-        branch="${line#branch refs/heads/}"
-        ;;
-    esac
-  done < <(git -C "$repo_root" worktree list --porcelain)
+  {
+    path=""
+    branch=""
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      case "$line" in
+        worktree\ *)
+          path="${line#worktree }"
+          branch=""
+          ;;
+        branch\ refs/heads/landing/*)
+          branch="${line#branch refs/heads/}"
+          classify_candidate "$path" "$branch"
+          ;;
+        branch\ refs/heads/*)
+          branch="${line#branch refs/heads/}"
+          ;;
+      esac
+    done < <(git -C "$repo_root" worktree list --porcelain)
+  } | LC_ALL=C sort -t $'\t' -k2,2
 )"
 
 count_state() {
@@ -279,6 +281,40 @@ print_action_plan() {
   ' <<< "$report_rows"
 }
 
+print_action_details() {
+  if [[ -z "$report_rows" ]]; then
+    return
+  fi
+
+  awk -F '\t' '
+    function why_for_state(state) {
+      if (state == "absorbed") return "all-candidate-patches-absorbed"
+      if (state == "dirty-packaging") return "tracked-build-path-deleted"
+      if (state == "dirty-generated-artifacts") return "generated-artifacts-present"
+      if (state == "dirty") return "uncommitted-work-present"
+      if (state == "path-unsafe") return "changed-path-outside-allowlist"
+      if (state == "needs-replay") return "behind-base-without-local-delta"
+      if (state == "stale") return "behind-base-with-unapplied-patches"
+      if (state == "ready") return "clean-ahead-allowed-paths"
+      return "state-needs-review"
+    }
+    function safety_for_state(state) {
+      if (state == "absorbed") return "safe-report-only"
+      if (state == "dirty-packaging") return "unsafe-until-owner-review"
+      if (state == "dirty-generated-artifacts") return "unsafe-until-generated-files-cleared"
+      if (state == "dirty") return "unsafe-until-owner-review"
+      if (state == "path-unsafe") return "unsafe-for-current-package"
+      if (state == "needs-replay") return "needs-controller-decision"
+      if (state == "stale") return "needs-replay-before-landing"
+      if (state == "ready") return "safe-to-verify"
+      return "needs-controller-review"
+    }
+    $1 == "candidate" {
+      printf "action-detail\t%s\tnext-action=%s\twhy=%s\tsafety=%s\n", $2, $4, why_for_state($3), safety_for_state($3)
+    }
+  ' <<< "$report_rows"
+}
+
 printf 'landing-worktree-report=pass\n'
 printf 'base=%s\n' "$base_ref"
 printf 'readonly=true\n'
@@ -286,6 +322,7 @@ printf 'columns=kind branch state action ahead behind worktree\n'
 if [[ -n "$report_rows" ]]; then
   printf '%s\n' "$report_rows"
 fi
+print_action_details
 printf 'summary.absorbed=%s\n' "$(count_state absorbed)"
 printf 'summary.stale=%s\n' "$(count_state stale)"
 printf 'summary.dirty=%s\n' "$(count_dirty)"
