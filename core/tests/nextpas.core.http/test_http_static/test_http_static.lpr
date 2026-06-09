@@ -273,6 +273,28 @@ begin
   end;
 end;
 
+procedure TestServeDirBackslashTraversalRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/files/*filepath', ServeDir(CTmpDir));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, 'GET /files/..\\secret HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Windows-style traversal separator must be rejected before file lookup');
+    Check(Pos('HTTP/1.1 404', LResp) = 0,
+      'Windows-style traversal separator must not fall through to missing file');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
 { ===== Test 8: ServeDir missing file returns 404 ===== }
 procedure TestServeDirMissing;
 var
@@ -353,6 +375,8 @@ begin
     T.Run('ServeDir existing file', @TestServeDirExisting);
     T.Run('ServeDir nested path', @TestServeDirNested);
     T.Run('ServeDir path traversal blocked', @TestServeDirTraversalBlocked);
+    T.Run('ServeDir backslash traversal rejected',
+      @TestServeDirBackslashTraversalRejected);
     T.Run('ServeDir missing file returns 404', @TestServeDirMissing);
     T.Run('ServeDir absolute path rejected', @TestServeDirAbsolutePathRejected);
     T.Run('ServeDir MIME case-insensitive and fallback', @TestServeDirMimeTypeCaseInsensitiveAndFallback);

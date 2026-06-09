@@ -69,6 +69,10 @@ begin
   if LLen = 0 then Exit(False);
   { Reject absolute paths }
   if ARelative[1] = '/' then Exit(False);
+  { Reject Windows path separators before file lookup. }
+  for LI := 1 to LLen do
+    if ARelative[LI] = '\' then
+      Exit(False);
   { Reject any '..' component }
   LI := 1;
   while LI <= LLen do
