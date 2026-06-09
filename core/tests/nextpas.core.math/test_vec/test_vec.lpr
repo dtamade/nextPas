@@ -1220,6 +1220,34 @@ begin
   end;
 end;
 
+procedure TestVectorMeasureNonFiniteTypeMatrixContracts;
+var
+  SavedMask: TFPUExceptionMask;
+begin
+  SavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow,
+    exUnderflow, exPrecision]);
+  try
+    CheckDoubleNaNValue(TVec2d.Create(DoubleNaN, 1.0).Length,
+      'TVec2d Length NaN component returns NaN');
+    CheckDoublePositiveInfinity(TVec2d.Create(DoubleInfinity, 1.0).LengthSqr,
+      'TVec2d LengthSqr infinite component returns +Inf');
+
+    CheckSinglePositiveInfinity(TVec3f.Dot(
+      TVec3f.Create(SingleInfinity, 2.0, 0.0),
+      TVec3f.Create(1.0, 3.0, 0.0)),
+      'TVec3f Dot infinite component returns +Inf');
+    CheckDoubleNaNValue(TVec2d.Dot(TVec2d.Create(0.0, 1.0),
+      TVec2d.Create(DoubleInfinity, 2.0)),
+      'TVec2d Dot zero times infinity returns NaN');
+    CheckDoubleNaNValue(TVec4d.Dot(TVec4d.Create(0.0, 1.0, 2.0, 3.0),
+      TVec4d.Create(DoubleInfinity, 2.0, 3.0, 4.0)),
+      'TVec4d Dot zero times infinity returns NaN');
+  finally
+    SetExceptionMask(SavedMask);
+  end;
+end;
+
 procedure TestVectorRawArithmeticSpecialValueContracts;
 var
   V2f: TVec2f;
@@ -1640,6 +1668,8 @@ begin
     @TestVectorDataAliasesPreserveSignedZeroBits);
   T.Run('vector measure non-finite contracts',
     @TestVectorMeasureNonFiniteContracts);
+  T.Run('vector measure non-finite type matrix contracts',
+    @TestVectorMeasureNonFiniteTypeMatrixContracts);
   T.Run('vector raw arithmetic special-value contracts',
     @TestVectorRawArithmeticSpecialValueContracts);
   T.Run('vector signed-zero contracts',

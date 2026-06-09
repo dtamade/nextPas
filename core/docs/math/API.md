@@ -198,6 +198,8 @@ and true out-of-range components return signed infinity.
 Vector measure methods are non-throwing for non-finite inputs: NaN operands produce NaN,
 infinite operands produce `+Inf` where no NaN is present, and `Dot`/`Cross` use raw IEEE
 fallback for non-finite operands, so indeterminate products such as `0 * Inf` produce NaN.
+This contract is locked across representative `TVec2*`, `TVec3*`, and `TVec4*` single/double
+measure paths, including `Length`, `LengthSqr`, and `Dot` NaN/+Inf propagation.
 Signed-zero behavior is canonicalized only at measure/normalization boundaries: zero-vector
 `Normalize` returns positive-zero components, exact-zero `Dot` returns `+0`, and `Data` aliases
 preserve stored signed-zero bit patterns.
