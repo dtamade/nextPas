@@ -477,6 +477,16 @@ begin
   Vec4dSink := TVec4d.Create(1.0, 2.0, 3.0, 4.0) / DoubleNegativeInfinity;
 end;
 
+procedure RaiseVec2fScalarDivideNaNDividendByZeroDivisor;
+begin
+  Vec2fSink := TVec2f.Create(SingleNaN, 2.0) / Single(0.0);
+end;
+
+procedure RaiseVec4dScalarDivideInfDividendByNaNDivisor;
+begin
+  Vec4dSink := TVec4d.Create(DoubleInfinity, 2.0, 3.0, 4.0) / DoubleNaN;
+end;
+
 procedure RaiseVec2fDivComponentsZero;
 begin
   Vec2fSink := TVec2f.DivComponents(TVec2f.Create(1.0, 2.0), TVec2f.Create(1.0, 0.0));
@@ -521,6 +531,18 @@ procedure RaiseVec4dDivComponentsInfinity;
 begin
   Vec4dSink := TVec4d.DivComponents(TVec4d.Create(1.0, 2.0, 3.0, 4.0),
     TVec4d.Create(DoubleInfinity, 1.0, 1.0, 1.0));
+end;
+
+procedure RaiseVec3fDivComponentsNaNDividendByZeroAndNaNDivisors;
+begin
+  Vec3fSink := TVec3f.DivComponents(TVec3f.Create(SingleNaN, 2.0, 3.0),
+    TVec3f.Create(0.0, SingleNaN, 1.0));
+end;
+
+procedure RaiseVec4dDivComponentsFiniteDividendByZeroAndInfinityDivisors;
+begin
+  Vec4dSink := TVec4d.DivComponents(TVec4d.Create(1.0, 2.0, 3.0, 4.0),
+    TVec4d.Create(1.0, 0.0, DoubleInfinity, 1.0));
 end;
 
 procedure TestVec2fContracts;
@@ -1519,6 +1541,22 @@ begin
     'TVec4d component divide infinity', @RaiseVec4dDivComponentsInfinity);
 end;
 
+procedure TestVectorMixedInvalidDivisorPriorityContracts;
+begin
+  ExpectArgumentErrorMessage('TVec2f./: scalar divisor must be finite and non-zero',
+    'TVec2f scalar divide NaN dividend by zero divisor',
+    @RaiseVec2fScalarDivideNaNDividendByZeroDivisor);
+  ExpectArgumentErrorMessage('TVec4d./: scalar divisor must be finite and non-zero',
+    'TVec4d scalar divide infinite dividend by NaN divisor',
+    @RaiseVec4dScalarDivideInfDividendByNaNDivisor);
+  ExpectArgumentErrorMessage('TVec3f.DivComponents: divisor vector must be finite and non-zero',
+    'TVec3f component divide NaN dividend by zero and NaN divisors',
+    @RaiseVec3fDivComponentsNaNDividendByZeroAndNaNDivisors);
+  ExpectArgumentErrorMessage('TVec4d.DivComponents: divisor vector must be finite and non-zero',
+    'TVec4d component divide finite dividend by zero and infinity divisors',
+    @RaiseVec4dDivComponentsFiniteDividendByZeroAndInfinityDivisors);
+end;
+
 procedure TestVectorEqualsNonFiniteComparisonContracts;
 begin
   Check(not TVec2f.Equals(TVec2f.Create(SingleNaN, 1.0), TVec2f.Create(SingleNaN, 1.0),
@@ -1601,6 +1639,8 @@ begin
     @TestRawVectorNormalizeNonFiniteInputsFailFast);
   T.Run('vector division invalid divisors fail fast',
     @TestVectorDivisionInvalidDivisorsFailFast);
+  T.Run('vector mixed invalid divisor priority contracts',
+    @TestVectorMixedInvalidDivisorPriorityContracts);
   T.Run('vector Equals non-finite comparison contracts',
     @TestVectorEqualsNonFiniteComparisonContracts);
   TouchVectorSinks;
