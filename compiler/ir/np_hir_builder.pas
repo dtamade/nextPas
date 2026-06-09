@@ -2,6 +2,7 @@ unit np_hir_builder;
 
 {$mode objfpc}{$H+}
 {$modeswitch advancedrecords}
+{$UNITPATH ../../core/src}
 
 interface
 
@@ -292,7 +293,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  SysUtils, nextpas.core.system.contracts;
 
 procedure TExprStack.Init;
 begin
@@ -4128,7 +4129,7 @@ begin
   if OwnsObjectFreeDestroy then
   begin
     Instr.Kind := hikIntrinsic;
-    Instr.IntrinsicName := 'np.system.object_free.destroy';
+    Instr.IntrinsicName := NPSYSTEM_OBJECT_FREE_DESTROY;
   end
   else
     Instr.Kind := hikCall;
@@ -4146,7 +4147,7 @@ begin
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikIntrinsic;
     Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-    Instr.IntrinsicName := 'np.system.object_free.release';
+    Instr.IntrinsicName := NPSYSTEM_OBJECT_FREE_RELEASE;
     SetLength(Instr.Operands, 1);
     Instr.Operands[0] := MakeTypedOperand(ObjectFreeReceiverValue, GetPtrType);
     EmitInstr(Instr);
@@ -5535,7 +5536,7 @@ begin
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-  Instr.IntrinsicName := 'np.system.object_free.cleanup';
+  Instr.IntrinsicName := NPSYSTEM_OBJECT_FREE_CLEANUP;
   Instr.CallTarget := 'np_object_dynarray_cleanup_' + AClassName;
   SetLength(Instr.Operands, 1);
   Instr.Operands[0] := MakeTypedOperand(AReceiverPtr, GetPtrType);

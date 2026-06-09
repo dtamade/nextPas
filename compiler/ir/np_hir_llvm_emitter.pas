@@ -1,6 +1,7 @@
 unit np_hir_llvm_emitter;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
 
@@ -97,7 +98,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  SysUtils, nextpas.core.system.contracts;
 
 const
   NP_ALLOCATOR_PAGE_SIZE = 4096;
@@ -372,9 +373,9 @@ var
   I: LongInt;
 begin
   if FPendingObjectFreeActive and not ((AInstr.Kind = hikIntrinsic) and
-    (SameText(AInstr.IntrinsicName, 'np.system.object_free.destroy') or
-    SameText(AInstr.IntrinsicName, 'np.system.object_free.cleanup') or
-    SameText(AInstr.IntrinsicName, 'np.system.object_free.release'))) then
+    (SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_DESTROY) or
+    SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_CLEANUP) or
+    SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_RELEASE))) then
     ClosePendingObjectFreeGuard;
 
   LlvmType := TypeToLlvm(AInstr.TypeId);
@@ -499,17 +500,17 @@ begin
           Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
             ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ')');
       end
-      else if SameText(AInstr.IntrinsicName, 'np.system.object_free') then
+      else if SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE) then
         EmitObjectFreeGuardStart(AInstr)
-      else if SameText(AInstr.IntrinsicName, 'np.system.object_free.destroy') then
+      else if SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_DESTROY) then
         EmitObjectFreeOwnedDestroy(AInstr)
-      else if SameText(AInstr.IntrinsicName, 'np.system.object_free.cleanup') then
+      else if SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_CLEANUP) then
       begin
         if Length(AInstr.Operands) >= 1 then
           Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
             ValueRef(AInstr.Operands[0].ValueId) + ')');
       end
-      else if SameText(AInstr.IntrinsicName, 'np.system.object_free.release') then
+      else if SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_RELEASE) then
         EmitObjectFreeRelease(AInstr)
       else if AInstr.IntrinsicName = 'write_int' then
       begin

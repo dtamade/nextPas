@@ -7,6 +7,9 @@ not current `nextpas.core.system` facade functions.
 FPC-compatible source may provide a stage0 host fallback, but lifecycle semantics
 remain owned by `np.system.*` contracts and compiler/runtime metadata.
 
+`nextpas.core.system.contracts` mirrors lifecycle vocabulary only. Unit order
+comes from compiler metadata, not runtime path discovery or a registry.
+
 ## Exception Boundary
 
 `nextpas.core.system` owns the RTL-root vocabulary for exception raise and unwind behavior, but the

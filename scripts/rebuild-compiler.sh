@@ -43,6 +43,8 @@ fpc "$ROOT/tools/stage0/nextpas.pas" \
   -Fu"$ROOT/compiler/targets" \
   -Fu"$ROOT/rtl/core/base" \
   -Fu"$ROOT/rtl/core/text" \
+  -Fu"$ROOT/core/src" \
+  -Fi"$ROOT/core/src" \
   2>&1 | grep -E "compiled|Error|Fatal" | tail -3
 
 echo "rebuild done — 确认上面是 'NNNNN lines compiled'（应 40000+），不是 '481 lines'"

@@ -49,6 +49,10 @@ S3 lifecycle contract names and evidence categories live in `lifecycle-contracts
 exception raise/unwind ownership, RTTI / TypeInfo boundary rules, unit initialization/finalization
 ordering and runtime-fault classification.
 
+`nextpas.core.system.contracts` is the compact vocabulary anchor for these
+runtime and lifecycle names. It is constants-only: no helper implementation, no
+runtime registry, and no broader SysUtils, Classes or TypInfo surface.
+
 S4 compatibility facades are now split by evidence. `nextpas.core.system.typinfo`
 has a minimal live unit for the seven-symbol TypInfo pressure set, and
 `nextpas.core.system.sysutils` has a minimal live exception-formatting,

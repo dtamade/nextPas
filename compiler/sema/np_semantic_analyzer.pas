@@ -5,6 +5,7 @@ unit np_semantic_analyzer;
 {$UNITPATH ../diagnostics}
 {$UNITPATH ../frontend}
 {$UNITPATH ../syntax}
+{$UNITPATH ../../core/src}
 
 interface
 
@@ -514,7 +515,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  SysUtils, nextpas.core.system.contracts;
 
 type
   TStringArray = array of string;
@@ -5063,24 +5064,19 @@ begin
 end;
 
 procedure TSemanticAnalyzer.SeedRuntimeContracts;
-const
-  RuntimeContracts: array[0..1] of string = (
-    'np.system.process_init',
-    'np.system.process_fini'
-  );
-var
-  Index: LongInt;
+  procedure AddRuntimeContract(const AContractName: string);
+  begin
+    FModel.AddRuntimeContract(AContractName);
+    FModel.AddTypedHirNode('runtime-contract', AContractName, 0, 0, '');
+  end;
 begin
   if (FRootAst.RootKindName <> 'program') and
     (FRootAst.RootKindName <> 'library') and
     (FRootAst.RootKindName <> 'package') then
     Exit;
 
-  for Index := Low(RuntimeContracts) to High(RuntimeContracts) do
-  begin
-    FModel.AddRuntimeContract(RuntimeContracts[Index]);
-    FModel.AddTypedHirNode('runtime-contract', RuntimeContracts[Index], 0, 0, '');
-  end;
+  AddRuntimeContract(NPSYSTEM_PROCESS_INIT);
+  AddRuntimeContract(NPSYSTEM_PROCESS_FINI);
 end;
 
 procedure TSemanticAnalyzer.SeedForeignProcedureBindings;
@@ -12419,7 +12415,7 @@ begin
             DestroyFuncName := FuncName;
           FModel.AddTypedHirNode(
             'object-free-runtime',
-            'np.system.object_free',
+            NPSYSTEM_OBJECT_FREE,
             0,
             0,
             'var ' + ReceiverName + #10 +

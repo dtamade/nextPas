@@ -33,6 +33,7 @@ Source-contract guard tokens:
 | Surface | Role | Boundary |
 | --- | --- | --- |
 | stage0 host adapter | lets FPC build bootstrap System-facing source | may call FPC-compatible helpers, but must stay a fallback path |
+| `nextpas.core.system.contracts` | compact nextPas contract vocabulary | FPC path is not semantic authority or target helper ABI |
 | nextPas contract path | lowers System-facing behavior to `np.system.*` | owns semantic truth with compiler/runtime |
 | public facade | `nextpas.core.system.*` API consumed by core modules | exposes only reviewed, minimal, owner-delegating names |
 | bootstrap RTL units | `rtl/core/system`, `rtl/core/sysutils`, `rtl/core/classes` | prove bootstrap pressure, not public facade approval |

@@ -13,6 +13,10 @@ The purpose is to keep managed lifetime work explicit before implementation star
 - FPC-compatible source may provide a stage0 host fallback, but `np.system.*`
   remains the semantic authority.
 
+`nextpas.core.system.contracts` may name these handshakes for source-contracts
+and compiler/runtime consumers. It must not introduce a runtime registry,
+helper discovery table or private allocator path.
+
 ## Contract Rules
 
 - A contract name describes semantics, not a backend private helper string.
