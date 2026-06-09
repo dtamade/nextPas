@@ -630,7 +630,8 @@ procedure CheckFullchainBenchmarkOutput(const AOutput, AWorkload,
   const AH1Path: string = 'fast';
   const ADispatchPath: string = 'router';
   const ADirectHandlerHits: string = '0';
-  const ARouterHandlerHits: string = '128');
+  const ARouterHandlerHits: string = '128';
+  const AMiddlewareHits: string = '0');
 begin
   CheckContains(AOutput, 'operation=http.fullchain.keepalive',
     'fullchain operation marker');
@@ -646,6 +647,8 @@ begin
     'fullchain observed direct-handler hits marker');
   CheckContains(AOutput, 'observed_router_handler_hits=' + ARouterHandlerHits,
     'fullchain observed router-handler hits marker');
+  CheckContains(AOutput, 'observed_middleware_hits=' + AMiddlewareHits,
+    'fullchain observed middleware hits marker');
   CheckContains(AOutput, 'workload=' + AWorkload,
     'fullchain workload marker');
   CheckContains(AOutput,
@@ -1639,6 +1642,63 @@ begin
     'bench_fullchain direct scenarios should not use router host');
 end;
 
+procedure TestBenchFullchainMiddlewareDispatchSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+  LDispatchBody: string;
+  LMiddlewareBranch: string;
+  LScenarioBlock: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, BenchFullchainUnitPath));
+  LDispatchBody := ExtractSourceBlock(LSource,
+    'function ExpectedDispatchPathForWorkload',
+    'function ShouldRunScenario',
+    'bench_fullchain dispatch path mapper');
+  LMiddlewareBranch := ExtractSourceBlock(LSource,
+    'if AReq.Headers.Get(''host'') = MIDDLEWARE_HOST then',
+    'Inc(GRouterHandlerHits);' + LineEnding +
+    '      LRouterHandler.ServeHTTP(AReq, AW);',
+    'bench_fullchain middleware host branch');
+  LScenarioBlock := ExtractSourceBlock(LSource,
+    '{ Scenario 1c: Plaintext with no-op middleware }',
+    '{ Scenario 1: Plaintext }',
+    'bench_fullchain middleware scenario block');
+
+  CheckContains(LSource, 'MIDDLEWARE_HOST = ''middleware'';',
+    'bench_fullchain should define explicit middleware host');
+  CheckContains(LSource, 'GMiddlewareHits: Int64;',
+    'bench_fullchain should track observed middleware hits');
+  CheckContains(LSource, 'LMiddlewareRouter.Use(MiddlewareFunc',
+    'bench_fullchain should install a no-op middleware chain');
+  CheckContains(LSource, 'Inc(GMiddlewareHits);',
+    'bench_fullchain middleware should increment observed hits');
+  CheckContains(LSource, 'GMiddlewareHits := 0;',
+    'bench_fullchain should reset observed middleware hits after warmup');
+  CheckContains(LSource, 'observed_middleware_hits=',
+    'bench_fullchain output should expose observed middleware hits');
+  CheckContains(LDispatchBody, 'AWorkload = ''middleware_noop''',
+    'bench_fullchain dispatch mapper should mark middleware_noop');
+  CheckContains(LDispatchBody, 'Exit(''middleware_router'')',
+    'bench_fullchain middleware workload should map to middleware_router');
+  CheckNotContains(LDispatchBody, 'AWorkload = ''plaintext''',
+    'bench_fullchain plaintext should not map to middleware_router');
+  CheckContains(LMiddlewareBranch, 'Inc(GRouterHandlerHits);',
+    'bench_fullchain middleware branch should count router dispatch');
+  CheckContains(LMiddlewareBranch, 'LMiddlewareHandler.ServeHTTP(AReq, AW);' +
+    LineEnding + '        Exit;',
+    'bench_fullchain middleware branch should run middleware router and exit');
+  CheckNotContains(LMiddlewareBranch, 'LRouterHandler.ServeHTTP',
+    'bench_fullchain middleware branch should use the middleware router');
+  CheckContains(LScenarioBlock, 'MIDDLEWARE_HOST + #13#10',
+    'bench_fullchain middleware scenario should use middleware host');
+  CheckContains(LScenarioBlock, '''GET / HTTP/1.1''',
+    'bench_fullchain middleware scenario should use root request');
+  CheckNotContains(LScenarioBlock, 'Host: '' + ROUTER_HOST',
+    'bench_fullchain middleware scenario should not use plain router host');
+end;
+
 procedure TestBenchFullchainServerThreadLifecycleSourceContract;
 var
   LRootDir: string;
@@ -2043,6 +2103,38 @@ begin
     'bench_fullchain direct 1k smoke exit code: ' + LOutput);
   CheckFullchainBenchmarkOutput(LOutput, 'direct_1k', 'direct_1k', '0',
     '1024', 'threaded', 'fast', 'direct_handler', '128', '0');
+end;
+
+procedure TestBenchFullchainMiddlewareNoopSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchFullchainRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain middleware build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchFullchainBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_fullchain middleware binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + FullchainSmokeIterations,
+     BenchFilterEnvName + '=middleware_noop'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain middleware smoke exit code: ' + LOutput);
+  CheckFullchainBenchmarkOutput(LOutput, 'middleware_noop',
+    'middleware_noop', '0', '13', 'threaded', 'fast',
+    'middleware_router', '0', '128', '128');
+  CheckNotContains(LOutput, 'workload=plaintext',
+    'bench_fullchain middleware filter must not match plaintext');
 end;
 
 procedure TestBenchFullchainEcho1KSmoke;
@@ -4949,6 +5041,8 @@ begin
     @TestH1WriterOutboundDrainSourceContract);
   T.Run('bench_fullchain direct dispatch source contract',
     @TestBenchFullchainDirectDispatchSourceContract);
+  T.Run('bench_fullchain middleware dispatch source contract',
+    @TestBenchFullchainMiddlewareDispatchSourceContract);
   T.Run('bench_fullchain server thread lifecycle source contract',
     @TestBenchFullchainServerThreadLifecycleSourceContract);
   T.Run('bench_fullchain strict response validation source contract',
@@ -4971,6 +5065,8 @@ begin
     @TestBenchFullchainDirectPlaintextSmoke);
   T.Run('bench_fullchain direct 1k smoke',
     @TestBenchFullchainDirect1KSmoke);
+  T.Run('bench_fullchain middleware noop smoke',
+    @TestBenchFullchainMiddlewareNoopSmoke);
   T.Run('bench_fullchain echo 1k smoke',
     @TestBenchFullchainEcho1KSmoke);
   T.Run('bench_fullchain json smoke',

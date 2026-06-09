@@ -36,6 +36,7 @@ const
   ROUTER_HOST = 'router';
   DIRECT_HOST = 'direct';
   DIRECT_1K_HOST = 'direct-1k';
+  MIDDLEWARE_HOST = 'middleware';
 
 type
   TScenarioResult = record
@@ -63,6 +64,7 @@ var
   GBackend: TTcpServerBackend;
   GDirectHandlerHits: Int64;
   GRouterHandlerHits: Int64;
+  GMiddlewareHits: Int64;
 
 procedure WritePlaintextResponse(const AW: IHttpResponseWriter);
 begin
@@ -136,6 +138,8 @@ end;
 
 function ExpectedDispatchPathForWorkload(const AWorkload: string): string;
 begin
+  if AWorkload = 'middleware_noop' then
+    Exit('middleware_router');
   if (AWorkload = 'direct_root') or (AWorkload = 'direct_1k') then
     Exit('direct_handler');
   Result := 'router';
@@ -201,8 +205,10 @@ end;
 procedure SetupServer;
 var
   LRouter: THttpRouter;
+  LMiddlewareRouter: THttpRouter;
   LBody1K: string;
   LRouterHandler: IHttpHandler;
+  LMiddlewareHandler: IHttpHandler;
   LServerOptions: THttpServerOptions;
 begin
   SetLength(LBody1K, 1024);
@@ -213,8 +219,23 @@ begin
   LRouter := THttpRouter.Create;
   LRouterHandler := LRouter as IHttpHandler;
 
+  LMiddlewareRouter := THttpRouter.Create;
+  LMiddlewareHandler := LMiddlewareRouter as IHttpHandler;
+  LMiddlewareRouter.Use(MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
+  begin
+    Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      Inc(GMiddlewareHits);
+      ANext.ServeHTTP(AReq, AW);
+    end);
+  end));
+
   { Plaintext }
   LRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    WritePlaintextResponse(AW);
+  end);
+  LMiddlewareRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
     WritePlaintextResponse(AW);
   end);
@@ -287,6 +308,12 @@ begin
       begin
         Inc(GDirectHandlerHits);
         WriteBody1KResponse(AW, LBody1K);
+        Exit;
+      end;
+      if AReq.Headers.Get('host') = MIDDLEWARE_HOST then
+      begin
+        Inc(GRouterHandlerHits);
+        LMiddlewareHandler.ServeHTTP(AReq, AW);
         Exit;
       end;
       Inc(GRouterHandlerHits);
@@ -464,6 +491,7 @@ begin
 
   GDirectHandlerHits := 0;
   GRouterHandlerHits := 0;
+  GMiddlewareHits := 0;
   LStart := platform_monotonic_ns;
   for LI := 1 to GIterations do
   begin
@@ -497,6 +525,7 @@ begin
   WriteLn('nextpas_dispatch_path=', ExpectedDispatchPathForWorkload(AWorkload));
   WriteLn('observed_direct_handler_hits=', GDirectHandlerHits);
   WriteLn('observed_router_handler_hits=', GRouterHandlerHits);
+  WriteLn('observed_middleware_hits=', GMiddlewareHits);
   WriteLn('iterations=', GIterations);
   WriteLn('completed=', Result.Completed);
   WriteLn('elapsed_ns=', Result.ElapsedNs);
@@ -551,6 +580,13 @@ begin
       'GET / HTTP/1.1'#13#10'Host: ' + DIRECT_1K_HOST + #13#10'Content-Length: 0'#13#10#13#10;
     LResult := RunScenario('direct_1k',
       'Direct 1KB (GET /, no router)', LDirect1KReq, 0, 1024);
+    if LResult.ElapsedNs > 0 then
+      Inc(LScenariosRun);
+
+    { Scenario 1c: Plaintext with no-op middleware }
+    LResult := RunScenario('middleware_noop',
+      'Middleware no-op (GET /)', 'GET / HTTP/1.1'#13#10'Host: ' +
+      MIDDLEWARE_HOST + #13#10'Content-Length: 0'#13#10#13#10, 0, 13);
     if LResult.ElapsedNs > 0 then
       Inc(LScenariosRun);
 
