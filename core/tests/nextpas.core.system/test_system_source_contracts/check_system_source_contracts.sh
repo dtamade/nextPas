@@ -271,6 +271,7 @@ require_file "docs/system/rtl-mapping.md"
 require_file "docs/system/goal-tree.md"
 require_file "docs/system/runtime-contracts.md"
 require_file "docs/system/lifecycle-contracts.md"
+require_file "docs/system/bootstrap-dual-surface-adapter.md"
 require_file "docs/system/compatibility-facades.md"
 require_file "docs/system/compatibility-matrix.md"
 require_file "docs/system/typinfo-minimal-pressure.md"
@@ -289,6 +290,7 @@ require_token "docs/system/README.md" "non-goals"
 require_token "docs/system/README.md" "deferred"
 require_token "docs/system/README.md" "compatibility-facades.md"
 require_token "docs/system/README.md" "compatibility-matrix.md"
+require_token "docs/system/README.md" "bootstrap-dual-surface-adapter.md"
 require_token "docs/system/README.md" "typinfo-minimal-pressure.md"
 require_token "docs/system/README.md" "2026-06-07-system-typinfo-minimal-unlock-review.md"
 require_token "docs/system/README.md" "nextpas.core.system.typinfo"
@@ -299,6 +301,43 @@ require_token "docs/system/README.md" "Root facade live surface"
 require_token "docs/system/README.md" "delegating to owner"
 require_token "docs/system/README.md" "compiler/System compile-truth"
 require_token "docs/system/README.md" "not unit-owned wrapper functions"
+
+for token in \
+  "FPC-compatible source" \
+  "not semantic authority" \
+  "not nextPas target ABI" \
+  "stage0 host adapter" \
+  "nextPas contract path" \
+  "public facade" \
+  "bootstrap RTL units" \
+  "np.system.*" \
+  "do not freeze host FPC metadata layout" \
+  "TObject.Free" \
+  "InitializeArray" \
+  "FinalizeArray" \
+  "CopyArray" \
+  "TFileStream" \
+  "TStringList" \
+  "Needs Review" \
+  "fpc-compatible-source-is-stage0-build-vehicle" \
+  "fpc-compatibility-is-not-semantic-authority" \
+  "np-system-contracts-own-semantic-authority" \
+  "dual-surface-adapter-one-semantic-authority" \
+  "fpc-adapter-must-not-define-runtime-semantics" \
+  "compat-facade-must-not-own-system-semantics" \
+  "typeinfo-facade-does-not-freeze-metadata-abi" \
+  "lifecycle-contracts-match-live-typinfo-status"; do
+  require_token "docs/system/bootstrap-dual-surface-adapter.md" "$token"
+done
+
+require_token "docs/system/runtime-contracts.md" "FPC-compatible source"
+require_token "docs/system/runtime-contracts.md" "stage0 host fallback"
+require_token "docs/system/runtime-contracts.md" "semantic authority"
+require_token "docs/system/lifecycle-contracts.md" "FPC-compatible source"
+require_token "docs/system/lifecycle-contracts.md" "stage0 host fallback"
+require_token "docs/system/lifecycle-contracts.md" "compiler/runtime metadata"
+require_token "docs/system/lifecycle-contracts.md" "seven-symbol bridge"
+require_token "docs/system/lifecycle-contracts.md" "does not freeze metadata ABI"
 
 for unit_name in System SysUtils TypInfo Classes ObjPas; do
   require_token "docs/system/rtl-mapping.md" "$unit_name"

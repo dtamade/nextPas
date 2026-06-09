@@ -4,6 +4,9 @@ This document records S3-level contracts for exception raise/unwind, RTTI / Type
 initialization and unit finalization. These are compiler/runtime handshake contracts, not public ABI and
 not current `nextpas.core.system` facade functions.
 
+FPC-compatible source may provide a stage0 host fallback, but lifecycle semantics
+remain owned by `np.system.*` contracts and compiler/runtime metadata.
+
 ## Exception Boundary
 
 `nextpas.core.system` owns the RTL-root vocabulary for exception raise and unwind behavior, but the
@@ -37,9 +40,11 @@ Rules:
 
 Current S3 stance:
 
-- No `nextpas.core.system.typinfo` unit is created in this slice.
-- No RTTI helper symbol name is frozen beyond this boundary document.
-- `RTTI` / `TypeInfo` remain mapped as future compiler/runtime work until source-backed metadata exists.
+- `nextpas.core.system.typinfo` is live only as the S4 seven-symbol bridge.
+- The live facade does not freeze metadata ABI, property tables, method tables,
+  or string-based reflection helpers.
+- `RTTI` / `TypeInfo` metadata semantics remain compiler/runtime-owned until
+  source-backed metadata exists.
 
 ## Unit Lifecycle
 

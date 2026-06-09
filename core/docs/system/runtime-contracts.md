@@ -10,6 +10,8 @@ The purpose is to keep managed lifetime work explicit before implementation star
 - `nextpas.core.system` owns the contract vocabulary for the RTL root.
 - `nextpas.core.mem` owns allocator and heap-manager implementation details.
 - Runtime implementation must add leak-sensitive tests before any helper starts owning memory.
+- FPC-compatible source may provide a stage0 host fallback, but `np.system.*`
+  remains the semantic authority.
 
 ## Contract Rules
 

@@ -65,6 +65,11 @@ string helper additions beyond formatting.
 Detailed S4 design-only material lives in `compatibility-facades.md` and
 `compatibility-matrix.md`. Those docs distinguish bootstrap RTL pressure from a
 future public `nextpas.core.system.*` compatibility surface.
+The bootstrap dual-surface adapter contract lives in
+`bootstrap-dual-surface-adapter.md`; it records that FPC-compatible source is a
+stage0 build constraint, while nextPas-owned `np.system.*` contracts remain the
+semantic authority. Minimal compatibility facades do not own System semantics;
+they expose only reviewed, owner-delegating names.
 The TypInfo-only minimal pressure audit lives in `typinfo-minimal-pressure.md`;
 it records the seven-symbol candidate set without reopening broader SysUtils or
 Classes.
