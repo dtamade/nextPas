@@ -116,6 +116,128 @@ begin
   end;
 end;
 
+procedure TestSetStringLeftClipPreservesVisibleColumns;
+var
+  LBuf: TBuffer;
+  LLead, LTail, LNext: PCell;
+  LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  try
+    LWritten := LBuf.SetString(-1, 0, 'A' + #$E4#$B8#$AD + 'B', StyleDefault);
+    CheckEqual(Int64(3), Int64(LWritten), 'left clip writes visible display columns');
+
+    LLead := LBuf.CellAt(0, 0);
+    LTail := LBuf.CellAt(1, 0);
+    LNext := LBuf.CellAt(2, 0);
+    CheckEqual(Int64(2), Int64(LLead^.Width), 'visible wide glyph starts at left edge');
+    CheckEqual(#$E4#$B8#$AD, CellGlyphAsString(LLead^), 'visible wide glyph is preserved');
+    CheckEqual(Int64(0), Int64(LTail^.Width), 'wide glyph tail is skip sentinel');
+    Check(LTail^.Skip, 'wide glyph tail remains skipped');
+    CheckEqual('B', CellGlyphAsString(LNext^), 'following glyph stays aligned');
+    AssertRows(LBuf, [#$E4#$B8#$AD + 'B '], 'set string left clip visible columns');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestSetStringPLeftClipPreservesVisibleColumns;
+var
+  LBuf: TBuffer;
+  LStr: AnsiString;
+  LLead, LTail, LNext: PCell;
+  LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  try
+    LStr := 'A' + #$E4#$B8#$AD + 'B';
+    LWritten := LBuf.SetStringP(-1, 0, PAnsiChar(LStr), Length(LStr), MaxInt, StyleDefault);
+    CheckEqual(Int64(3), Int64(LWritten), 'set stringP left clip writes visible display columns');
+
+    LLead := LBuf.CellAt(0, 0);
+    LTail := LBuf.CellAt(1, 0);
+    LNext := LBuf.CellAt(2, 0);
+    CheckEqual(Int64(2), Int64(LLead^.Width), 'set stringP visible wide glyph starts at left edge');
+    CheckEqual(#$E4#$B8#$AD, CellGlyphAsString(LLead^), 'set stringP visible wide glyph is preserved');
+    CheckEqual(Int64(0), Int64(LTail^.Width), 'set stringP wide glyph tail is skip sentinel');
+    Check(LTail^.Skip, 'set stringP wide glyph tail remains skipped');
+    CheckEqual('B', CellGlyphAsString(LNext^), 'set stringP following glyph stays aligned');
+    AssertRows(LBuf, [#$E4#$B8#$AD + 'B '], 'set stringP left clip visible columns');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestSetStringNLeftClipKeepsMaxWidthVisible;
+var
+  LBuf: TBuffer;
+  LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  try
+    LWritten := LBuf.SetStringN(-1, 0, 'ABCD', 1, StyleDefault);
+    CheckEqual(Int64(1), Int64(LWritten),
+      'left clipped source column does not consume max visible width');
+    AssertRows(LBuf, ['B   '], 'set stringN left clip max visible width');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestSetStringLeftClipClearsPartialWideTail;
+var
+  LBuf: TBuffer;
+  LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  try
+    LBuf.FillRect(TRect.Make(0, 0, 4, 1), '#', StyleDefault);
+    LWritten := LBuf.SetString(-1, 0, #$E4#$B8#$AD + 'A', StyleDefault);
+    CheckEqual(Int64(2), Int64(LWritten),
+      'partial clipped wide glyph tail consumes one visible column');
+    AssertRows(LBuf, [' A##'], 'set string left clip clears partial wide tail');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestSetStringPLeftClipClearsPartialWideTail;
+var
+  LBuf: TBuffer;
+  LStr: AnsiString;
+  LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  try
+    LBuf.FillRect(TRect.Make(0, 0, 4, 1), '#', StyleDefault);
+    LStr := #$E4#$B8#$AD + 'A';
+    LWritten := LBuf.SetStringP(-1, 0, PAnsiChar(LStr), Length(LStr),
+      MaxInt, StyleDefault);
+    CheckEqual(Int64(2), Int64(LWritten),
+      'set stringP partial clipped wide glyph tail consumes one visible column');
+    AssertRows(LBuf, [' A##'], 'set stringP left clip clears partial wide tail');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestSetStringNLeftClipPartialWideTailConsumesMaxWidth;
+var
+  LBuf: TBuffer;
+  LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  try
+    LBuf.FillRect(TRect.Make(0, 0, 4, 1), '#', StyleDefault);
+    LWritten := LBuf.SetStringN(-1, 0, #$E4#$B8#$AD + 'A', 1, StyleDefault);
+    CheckEqual(Int64(1), Int64(LWritten),
+      'partial clipped wide glyph tail consumes max visible width');
+    AssertRows(LBuf, [' ###'], 'set stringN left clip partial wide max width');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 procedure TestCellAt;
 var
   LBuf: TBuffer;
@@ -574,6 +696,18 @@ begin
   T.Run('set string offset', @TestSetStringOffset);
   T.Run('set stringN wide clip', @TestSetStringNWideClip);
   T.Run('set stringP', @TestSetStringP);
+  T.Run('set string left clip preserves visible columns',
+    @TestSetStringLeftClipPreservesVisibleColumns);
+  T.Run('set stringP left clip preserves visible columns',
+    @TestSetStringPLeftClipPreservesVisibleColumns);
+  T.Run('set stringN left clip keeps max width visible',
+    @TestSetStringNLeftClipKeepsMaxWidthVisible);
+  T.Run('set string left clip clears partial wide tail',
+    @TestSetStringLeftClipClearsPartialWideTail);
+  T.Run('set stringP left clip clears partial wide tail',
+    @TestSetStringPLeftClipClearsPartialWideTail);
+  T.Run('set stringN left clip partial wide tail consumes max width',
+    @TestSetStringNLeftClipPartialWideTailConsumesMaxWidth);
   T.Run('cell at bounds', @TestCellAt);
   T.Run('cjk width', @TestCJKWidth);
   T.Run('fill rect', @TestFillRect);

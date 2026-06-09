@@ -309,122 +309,56 @@ end;
 
 function TBuffer.SetStringN(AX, AY: Integer; const AStr: AnsiString;
   AMaxWidth: Integer; const AStyle: TStyle): Integer;
-var
-  LRight, LRemaining, LI, LCursor, LGLen: Integer;
-  LCP: PCell;
-  LAdv: TGraphemeAdvance;
-  LAscii: Boolean;
-  LByte: Byte;
 begin
-  Result := 0;
-  if (AY < FArea.Y) or (AY >= FArea.Y + FArea.Height) then Exit;
-  if AX >= FArea.X + FArea.Width then Exit;
-  if AX < FArea.X then AX := FArea.X;
-  MarkRowDirty(AY - FArea.Y);
-
-  LRight := FArea.X + FArea.Width;
-  LRemaining := LRight - AX;
-  if LRemaining > AMaxWidth then LRemaining := AMaxWidth;
-  if LRemaining <= 0 then Exit;
-  LGLen := System.Length(AStr);
-  if LGLen = 0 then Exit;
-
-  { 热 ASCII 路径——多数 UI 串（状态栏、英文）为纯 ASCII，保留字节循环。 }
-  LAscii := True;
-  for LI := 1 to LGLen do
-    if Byte(AStr[LI]) >= $80 then
-    begin
-      LAscii := False;
-      Break;
-    end;
-
-  LCursor := AX;
-  if LAscii then
-  begin
-    for LI := 1 to LGLen do
-    begin
-      if LRemaining = 0 then Break;
-      LByte := Byte(AStr[LI]);
-      if LByte < 32 then Continue;        { 丢弃控制字符（ratatui 对齐） }
-      PrepareWriteSpan(LCursor, AY, 1);
-      LCP := @FContent[IndexOfPos(LCursor, AY)];
-      CellSetSymbolAscii(LCP^, AStr[LI]);
-      CellApplyStyle(LCP^, AStyle);
-      Inc(LCursor);
-      Inc(Result);
-      Dec(LRemaining);
-    end;
-    Exit;
-  end;
-
-  { UTF-8 grapheme 路径。逐码点解码。宽度 2 簇占两个 cell：前导 cell 携带
-    glyph 字节且 Width=2；尾随 cell 重置为 CELL_EMPTY、Width=0、Skip=True，
-    使 diff/render 层留空。 }
-  LI := 0;
-  while LI < LGLen do
-  begin
-    if LRemaining = 0 then Break;
-    LAdv := GraphemeAt(AStr[1], LGLen, LI);
-
-    if LAdv.Width = 0 then
-    begin
-      Inc(LI, LAdv.ByteLen);
-      Continue;
-    end;
-
-    if LAdv.Width > LRemaining then Break;   { 宽字形空间不足 }
-
-    PrepareWriteSpan(LCursor, AY, LAdv.Width);
-    LCP := @FContent[IndexOfPos(LCursor, AY)];
-    CellSetSymbolBytes(LCP^, PByte(@AStr[1])[LI], LAdv.ByteLen, LAdv.Width);
-    CellApplyStyle(LCP^, AStyle);
-
-    if LAdv.Width = 2 then
-    begin
-      LCP := @FContent[IndexOfPos(LCursor + 1, AY)];
-      CellReset(LCP^);
-      LCP^.Width := 0;
-      LCP^.Skip := True;
-    end;
-
-    Inc(LCursor, LAdv.Width);
-    Inc(Result, LAdv.Width);
-    Dec(LRemaining, LAdv.Width);
-    Inc(LI, LAdv.ByteLen);
-  end;
+  Result := SetStringP(AX, AY, PAnsiChar(AStr), System.Length(AStr), AMaxWidth, AStyle);
 end;
 
 function TBuffer.SetStringP(AX, AY: Integer; AStr: PAnsiChar; ALen, AMaxWidth: Integer;
   const AStyle: TStyle): Integer;
 var
-  LRight, LRemaining, LI, LCursor: Integer;
+  LLeft, LRight, LRemaining, LHidden, LVisibleTail, LI, LCursor, LX: Integer;
   LCP: PCell;
   LByte: Byte;
   LAdv: TGraphemeAdvance;
   LAscii: Boolean;
 begin
   Result := 0;
+  LLeft := Integer(FArea.X);
+  LRight := LLeft + Integer(FArea.Width);
+
   if (AY < FArea.Y) or (AY >= FArea.Y + FArea.Height) then Exit;
-  if AX >= FArea.X + FArea.Width then Exit;
-  if AX < FArea.X then AX := FArea.X;
+  if AX >= LRight then Exit;
+  if (ALen <= 0) or (AMaxWidth <= 0) then Exit;
+
+  LCursor := AX;
+  LHidden := 0;
+  if LCursor < LLeft then
+  begin
+    LHidden := LLeft - LCursor;
+    LCursor := LLeft;
+  end;
+
   MarkRowDirty(AY - FArea.Y);
-  LRight := FArea.X + FArea.Width;
-  LRemaining := LRight - AX;
+  LRemaining := LRight - LCursor;
   if LRemaining > AMaxWidth then LRemaining := AMaxWidth;
-  if (LRemaining <= 0) or (ALen <= 0) then Exit;
+  if LRemaining <= 0 then Exit;
 
   LAscii := True;
   for LI := 0 to ALen - 1 do
     if Byte(AStr[LI]) >= $80 then begin LAscii := False; Break; end;
 
-  LCursor := AX;
   if LAscii then
   begin
     for LI := 0 to ALen - 1 do
     begin
-      if LRemaining = 0 then Break;
       LByte := Byte(AStr[LI]);
       if LByte < 32 then Continue;
+      if LHidden > 0 then
+      begin
+        Dec(LHidden);
+        Continue;
+      end;
+      if LRemaining = 0 then Break;
       PrepareWriteSpan(LCursor, AY, 1);
       LCP := @FContent[IndexOfPos(LCursor, AY)];
       CellSetSymbolAscii(LCP^, AStr[LI]);
@@ -439,9 +373,35 @@ begin
   LI := 0;
   while LI < ALen do
   begin
-    if LRemaining = 0 then Break;
     LAdv := GraphemeAt(AStr^, ALen, LI);
     if LAdv.Width = 0 then begin Inc(LI, LAdv.ByteLen); Continue; end;
+    if LHidden > 0 then
+    begin
+      if LAdv.Width <= LHidden then
+      begin
+        Dec(LHidden, LAdv.Width);
+        Inc(LI, LAdv.ByteLen);
+        Continue;
+      end;
+
+      LVisibleTail := LAdv.Width - LHidden;
+      if LVisibleTail > LRemaining then
+        LVisibleTail := LRemaining;
+      PrepareWriteSpan(LCursor, AY, LVisibleTail);
+      for LX := LCursor to LCursor + LVisibleTail - 1 do
+      begin
+        LCP := @FContent[IndexOfPos(LX, AY)];
+        CellReset(LCP^);
+      end;
+      Inc(LCursor, LVisibleTail);
+      Inc(Result, LVisibleTail);
+      Dec(LRemaining, LVisibleTail);
+      LHidden := 0;
+      Inc(LI, LAdv.ByteLen);
+      Continue;
+    end;
+
+    if LRemaining = 0 then Break;
     if LAdv.Width > LRemaining then Break;
     PrepareWriteSpan(LCursor, AY, LAdv.Width);
     LCP := @FContent[IndexOfPos(LCursor, AY)];
