@@ -1248,6 +1248,31 @@ begin
   end;
 end;
 
+procedure TestVectorMeasureNonFiniteCoverageMatrixContracts;
+var
+  C3d: TVec3d;
+  SavedMask: TFPUExceptionMask;
+begin
+  SavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow,
+    exUnderflow, exPrecision]);
+  try
+    CheckSingleNaNValue(TVec3f.Create(SingleNaN, 1.0, 2.0).LengthSqr,
+      'TVec3f LengthSqr NaN component returns NaN');
+    CheckSinglePositiveInfinity(TVec4f.Create(1.0, SingleInfinity, 2.0, 3.0).Length,
+      'TVec4f Length infinite component returns +Inf');
+    CheckDoubleNaNValue(TVec3d.Dot(TVec3d.Create(DoubleNaN, 2.0, 0.0),
+      TVec3d.Create(1.0, 3.0, 0.0)),
+      'TVec3d Dot NaN operand returns NaN');
+
+    C3d := TVec3d.Cross(TVec3d.Create(DoubleNaN, 1.0, 0.0),
+      TVec3d.Create(0.0, 0.0, 1.0));
+    CheckDoubleNaNValue(C3d.Y, 'TVec3d Cross NaN operand returns NaN Y component');
+  finally
+    SetExceptionMask(SavedMask);
+  end;
+end;
+
 procedure TestVectorRawArithmeticSpecialValueContracts;
 var
   V2f: TVec2f;
@@ -1361,6 +1386,32 @@ begin
   Check(TVec2f.Equals(TVec2f.Create(SingleNegativeZero, 0.0),
     TVec2f.Create(0.0, SingleNegativeZero), Single(0.0)),
     'TVec2f Equals treats signed zero as equal');
+end;
+
+procedure TestVectorSignedZeroCoverageMatrixContracts;
+var
+  N3d: TVec3d;
+  C3d: TVec3d;
+begin
+  N3d := TVec3d.Create(DoubleNegativeZero, DoubleNegativeZero,
+    DoubleNegativeZero).Normalize;
+  CheckDoublePositiveZero(N3d.X, 'TVec3d negative-zero Normalize returns positive zero X');
+  CheckDoublePositiveZero(N3d.Y, 'TVec3d negative-zero Normalize returns positive zero Y');
+  CheckDoublePositiveZero(N3d.Z, 'TVec3d negative-zero Normalize returns positive zero Z');
+
+  CheckSinglePositiveZero(TVec2f.Create(SingleNegativeZero, 0.0).Length,
+    'TVec2f negative-zero Length returns +0');
+  CheckDoublePositiveZero(TVec2d.Create(DoubleNegativeZero, 0.0).LengthSqr,
+    'TVec2d negative-zero LengthSqr returns +0');
+  CheckSinglePositiveZero(TVec2f.Dot(TVec2f.Create(1.0, -1.0),
+    TVec2f.Create(1.0, 1.0)),
+    'TVec2f exact zero Dot returns +0');
+
+  C3d := TVec3d.Cross(TVec3d.Create(1.0, 0.0, 0.0),
+    TVec3d.Create(2.0, 0.0, 0.0));
+  CheckDoublePositiveZero(C3d.X, 'TVec3d collinear Cross returns +0 components X');
+  CheckDoublePositiveZero(C3d.Y, 'TVec3d collinear Cross returns +0 components Y');
+  CheckDoublePositiveZero(C3d.Z, 'TVec3d collinear Cross returns +0 components Z');
 end;
 
 procedure TestVectorMinSubnormalLengthAndNormalizeContracts;
@@ -1670,10 +1721,14 @@ begin
     @TestVectorMeasureNonFiniteContracts);
   T.Run('vector measure non-finite type matrix contracts',
     @TestVectorMeasureNonFiniteTypeMatrixContracts);
+  T.Run('vector measure non-finite coverage matrix contracts',
+    @TestVectorMeasureNonFiniteCoverageMatrixContracts);
   T.Run('vector raw arithmetic special-value contracts',
     @TestVectorRawArithmeticSpecialValueContracts);
   T.Run('vector signed-zero contracts',
     @TestVectorSignedZeroContracts);
+  T.Run('vector signed-zero coverage matrix contracts',
+    @TestVectorSignedZeroCoverageMatrixContracts);
   T.Run('vector min subnormal length and normalize contracts',
     @TestVectorMinSubnormalLengthAndNormalizeContracts);
   T.Run('vector Lerp scalar parity contracts',

@@ -206,6 +206,8 @@ measure paths, including `Length`, `LengthSqr`, and `Dot` NaN/+Inf propagation.
 Signed-zero behavior is canonicalized only at measure/normalization boundaries: zero-vector
 `Normalize` returns positive-zero components, exact-zero `Dot` returns `+0`, and `Data` aliases
 preserve stored signed-zero bit patterns.
+The focused coverage matrix is representative source/runtime truth, not a full Cartesian proof
+of every type-operation-special-value combination.
 Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by
 `Normalize`.
 Vector scalar division and `DivComponents` reject zero, NaN, and infinite divisors with `EArgumentError`.
