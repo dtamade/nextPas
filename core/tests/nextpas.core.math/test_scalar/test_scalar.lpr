@@ -456,6 +456,8 @@ begin
     'Clamp Single equal positive-zero bounds return bound');
   Check(IsSingleNegativeZero(Clamp(MakeSingleNegativeZero, Single(0.0), Single(1.0))),
     'Clamp Single negative zero inside range keeps sign');
+  Check(IsSinglePositiveZero(Clamp(Single(0.0), MakeSingleNegativeZero, Single(1.0))),
+    'Clamp Single positive zero inside range keeps sign');
 
   Check(IsDoubleNegativeZero(Clamp(0.0, MakeDoubleNegativeZero, MakeDoubleNegativeZero)),
     'Clamp Double equal negative-zero bounds return bound');
