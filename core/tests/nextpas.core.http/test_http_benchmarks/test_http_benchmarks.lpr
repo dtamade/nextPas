@@ -682,6 +682,8 @@ begin
     'fullchain iterations marker');
   CheckContains(AOutput, 'completed=' + FullchainSmokeIterations,
     'fullchain completed marker');
+  CheckContains(AOutput, 'validation_failures=0',
+    'fullchain validation-failures marker');
   CheckContains(AOutput, 'elapsed_ns=', 'fullchain elapsed marker');
   CheckContains(AOutput, 'ns/op=', 'fullchain ns/op marker');
   CheckContains(AOutput, 'req/s=', 'fullchain req/s marker');
@@ -1827,6 +1829,18 @@ begin
   CheckContains(LRunBody,
     'if ResponseMatchesScenario(LResponse, AResponseBodyBytes) then',
     'bench_fullchain completed count should use strict response validation');
+  CheckContains(LRunBody, 'Inc(Result.ValidationFailures);',
+    'bench_fullchain should count strict response validation failures');
+  CheckContains(LRunBody, 'validation_failures=',
+    'bench_fullchain should expose strict response validation failures');
+  CheckContains(LRunBody, 'if AResult.ValidationFailures <> 0 then',
+    'bench_fullchain should fail rows that have validation failures');
+  CheckContains(LSource, 'procedure RecordScenarioResult',
+    'bench_fullchain should centralize scenario result accounting');
+  CheckContains(LSource, 'AValidationFailure := True;',
+    'bench_fullchain should retain validation-failure state after scenarios');
+  CheckContains(LSource, 'Halt(3);',
+    'bench_fullchain should exit non-zero after response validation failure');
   CheckContains(LRunBody,
     'WriteLn(''response_validation=strict_status_content_length_body_bytes'');',
     'bench_fullchain output should disclose strict validation mode');
@@ -1877,6 +1891,8 @@ begin
   CheckContains(LMarkersBlock,
     '`response_validation=strict_status_content_length_body_bytes`',
     'BENCHMARKS fullchain stable markers should document strict response validation');
+  CheckContains(LMarkersBlock, '`validation_failures`',
+    'BENCHMARKS fullchain stable markers should document validation failures');
   CheckContains(LMarkersBlock, '`bench_max_iters=<iterations>`',
     'BENCHMARKS fullchain stable markers should document max iterations');
   CheckContains(LMarkersBlock, '`bench_filter=<filter when set>`',

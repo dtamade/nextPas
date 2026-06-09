@@ -41,6 +41,7 @@ const
 type
   TScenarioResult = record
     Completed: Int64;
+    ValidationFailures: Int64;
     ElapsedNs: UInt64;
     NsPerOp: Double;
     ReqPerSec: Double;
@@ -475,6 +476,7 @@ var
   LReqPerSec: Double;
 begin
   Result.Completed := 0;
+  Result.ValidationFailures := 0;
   Result.ElapsedNs := 0;
   Result.NsPerOp := 0;
   Result.ReqPerSec := 0;
@@ -502,7 +504,9 @@ begin
     LConn.Write(ARequest[1], SizeUInt(Length(ARequest)));
     LResponse := ReadResponse(LConn);
     if ResponseMatchesScenario(LResponse, AResponseBodyBytes) then
-      Inc(Result.Completed);
+      Inc(Result.Completed)
+    else
+      Inc(Result.ValidationFailures);
   end;
   LEnd := platform_monotonic_ns;
   LConn.Close;
@@ -532,10 +536,21 @@ begin
   WriteLn('observed_middleware_hits=', GMiddlewareHits);
   WriteLn('iterations=', GIterations);
   WriteLn('completed=', Result.Completed);
+  WriteLn('validation_failures=', Result.ValidationFailures);
   WriteLn('elapsed_ns=', Result.ElapsedNs);
   WriteLn('ns/op=', Result.NsPerOp:0:1);
   WriteLn('req/s=', Result.ReqPerSec:0:0);
   WriteLn;
+end;
+
+procedure RecordScenarioResult(const AResult: TScenarioResult;
+  var AScenariosRun: Int32; var AValidationFailure: Boolean);
+begin
+  if AResult.ElapsedNs = 0 then
+    Exit;
+  Inc(AScenariosRun);
+  if AResult.ValidationFailures <> 0 then
+    AValidationFailure := True;
 end;
 
 var
@@ -548,6 +563,7 @@ var
   LResult: TScenarioResult;
   LScenariosRun: Int32;
   LNoMatch: Boolean;
+  LValidationFailure: Boolean;
 
 begin
   GIterations := ConfiguredIterations;
@@ -555,6 +571,7 @@ begin
   GBackend := ConfiguredBackend;
   LScenariosRun := 0;
   LNoMatch := False;
+  LValidationFailure := False;
 
   WriteLn('=== nextpas.core.http.fullchain benchmark ===');
   WriteLn('operation=http.fullchain.keepalive');
@@ -576,37 +593,32 @@ begin
       'GET / HTTP/1.1'#13#10'Host: ' + DIRECT_HOST + #13#10'Content-Length: 0'#13#10#13#10;
     LResult := RunScenario('direct_root',
       'Direct root (GET /, no router)', LDirectPlaintextReq, 0, 13);
-    if LResult.ElapsedNs > 0 then
-      Inc(LScenariosRun);
+    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure);
 
     { Scenario 1b: 1 KiB fixed response without router dispatch }
     LDirect1KReq :=
       'GET / HTTP/1.1'#13#10'Host: ' + DIRECT_1K_HOST + #13#10'Content-Length: 0'#13#10#13#10;
     LResult := RunScenario('direct_1k',
       'Direct 1KB (GET /, no router)', LDirect1KReq, 0, 1024);
-    if LResult.ElapsedNs > 0 then
-      Inc(LScenariosRun);
+    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure);
 
     { Scenario 1c: Plaintext with no-op middleware }
     LResult := RunScenario('middleware_noop',
       'Middleware no-op (GET /)', 'GET / HTTP/1.1'#13#10'Host: ' +
       MIDDLEWARE_HOST + #13#10'Content-Length: 0'#13#10#13#10, 0, 13);
-    if LResult.ElapsedNs > 0 then
-      Inc(LScenariosRun);
+    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure);
 
     { Scenario 1: Plaintext }
     LResult := RunScenario('plaintext', 'Plaintext (GET /)',
       'GET / HTTP/1.1'#13#10'Host: ' + ROUTER_HOST + #13#10'Content-Length: 0'#13#10#13#10,
       0, 13);
-    if LResult.ElapsedNs > 0 then
-      Inc(LScenariosRun);
+    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure);
 
     { Scenario 2: JSON }
     LResult := RunScenario('json', 'JSON (GET /json)',
       'GET /json HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 0'#13#10#13#10,
       0, 27);
-    if LResult.ElapsedNs > 0 then
-      Inc(LScenariosRun);
+    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure);
 
     { Scenario 3: Body echo 1KB }
     SetLength(LBody1K, 1024);
@@ -614,8 +626,7 @@ begin
     LEchoReq := 'POST /echo HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 1024'#13#10#13#10 + LBody1K;
     LResult := RunScenario('echo_1k', 'Echo 1KB (POST /echo)', LEchoReq,
       1024, 1024);
-    if LResult.ElapsedNs > 0 then
-      Inc(LScenariosRun);
+    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure);
 
     { Scenario 4: Body sink 16KB }
     SetLength(LBody16K, 16 * 1024);
@@ -624,15 +635,13 @@ begin
       IntToStr(Int64(Length(LBody16K))) + #13#10#13#10 + LBody16K;
     LResult := RunScenario('sink_16k', 'Sink 16KB (POST /sink)', LSinkReq,
       SizeUInt(Length(LBody16K)), 0);
-    if LResult.ElapsedNs > 0 then
-      Inc(LScenariosRun);
+    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure);
 
     { Scenario 5: Router with params }
     LResult := RunScenario('param_route', 'Param (GET /users/12345)',
       'GET /users/12345 HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 0'#13#10#13#10,
       0, SizeUInt(Length('user:12345')));
-    if LResult.ElapsedNs > 0 then
-      Inc(LScenariosRun);
+    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure);
 
     LNoMatch := LScenariosRun = 0;
     if LNoMatch then
@@ -645,5 +654,10 @@ begin
 
   if LNoMatch then
     Halt(2);
+  if LValidationFailure then
+  begin
+    WriteLn(StdErr, 'full-chain response validation failed');
+    Halt(3);
+  end;
   WriteLn('Done.');
 end.
