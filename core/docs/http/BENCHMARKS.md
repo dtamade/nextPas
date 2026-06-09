@@ -111,14 +111,15 @@ an overlapping snapshot do not race while rebuilding the shared Go/Rust
 comparator binaries into the same output directory.
 
 The runner treats incomplete workload execution as a harness failure: every raw
-row must report `iterations=<requests>` and `completed=<requests>`. The median
-summary repeats this guard as `median_completed=<requests>`, nextPas rows print
-`nextpas_h1_path=fast` for current no-body HTTP/1.1 workloads, and Rust
-std-only / Hyper rows print `rust_profile=std_only` /
-`rust_profile=hyper_tokio` so fast-path and comparator interpretation stay
-explicit. The raw comparison header also prints `include_hyper=0|1`, so saved
-reports do not need to infer whether the optional Hyper/Tokio comparator was
-requested from later sections.
+row must report `iterations=<requests>` and `completed=<requests>`.
+Raw row `operation` and `workload` markers must match the runner request before
+a row can enter the median summary. The median summary repeats this guard as
+`median_completed=<requests>`, nextPas rows print `nextpas_h1_path=fast` for
+current no-body HTTP/1.1 workloads, and Rust std-only / Hyper rows print
+`rust_profile=std_only` / `rust_profile=hyper_tokio` so fast-path and comparator
+interpretation stay explicit. The raw comparison header also prints
+`include_hyper=0|1`, so saved reports do not need to infer whether the optional
+Hyper/Tokio comparator was requested from later sections.
 
 All single-implementation comparator binaries use the same workload allow-list
 as the runner. An explicit invalid `--workload` exits non-zero with an
@@ -2632,10 +2633,11 @@ summary_impl=rust_std runs=3 median_completed=50000 median_ns/op=9885.0 median_r
 
 Current summary rows also carry `summary_client_read_mode=...`,
 `summary_response_body_bytes=...`, `summary_rust_profile=...`,
-`summary_requested_threads=...`, and `summary_effective_threads=...`, so
-multi-run median reports retain the raw row context needed to compare
-`response_1k` fairly without losing Rust comparator profile or thread-clamp
-truth.
+`summary_requested_threads=...`, `summary_effective_threads=...`,
+`summary_operation=...`, and `summary_workload=...`, so multi-run median
+reports retain the raw row context needed to compare `response_1k` fairly
+without losing Rust comparator profile, thread-clamp truth, or workload
+identity.
 
 Each raw nextPas row for the current no-body H1 workloads also includes
 `nextpas_h1_path=fast`, which keeps the fast-gate interpretation visible in

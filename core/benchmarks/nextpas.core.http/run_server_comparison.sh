@@ -215,6 +215,8 @@ append_result_row() {
   local req_s
   local iterations
   local completed
+  local operation
+  local workload
   local client_read_mode
   local response_body_bytes
   local rust_profile
@@ -227,6 +229,8 @@ append_result_row() {
     exit 1
   fi
 
+  operation="$(printf '%s\n' "${output}" | sed -nE 's/^operation=([^[:space:]]+)$/\1/p' | tail -n 1)"
+  workload="$(printf '%s\n' "${output}" | sed -nE 's/^workload=([^[:space:]]+)$/\1/p' | tail -n 1)"
   iterations="$(printf '%s\n' "${output}" | sed -nE 's/^iterations=([0-9]+)$/\1/p' | tail -n 1)"
   completed="$(printf '%s\n' "${output}" | sed -nE 's/^completed=([0-9]+)$/\1/p' | tail -n 1)"
   ns_op="$(printf '%s\n' "${output}" | sed -nE 's/^ns\/op=([0-9]+)$/\1/p' | tail -n 1)"
@@ -239,12 +243,17 @@ append_result_row() {
   if [[ "${rust_profile}" == "" ]]; then
     rust_profile="n/a"
   fi
-  if [[ "${iterations}" == "" || "${completed}" == "" || "${ns_op}" == "" || "${req_s}" == "" || "${client_read_mode}" == "" || "${response_body_bytes}" == "" || "${requested_threads}" == "" || "${effective_threads}" == "" ]]; then
+  if [[ "${operation}" == "" || "${workload}" == "" || "${iterations}" == "" || "${completed}" == "" || "${ns_op}" == "" || "${req_s}" == "" || "${client_read_mode}" == "" || "${response_body_bytes}" == "" || "${requested_threads}" == "" || "${effective_threads}" == "" ]]; then
     echo "unable to parse benchmark output for impl=${expected_impl}" >&2
     echo "${output}" >&2
     exit 1
   fi
 
+  if [[ "${operation}" != "http.server.keepalive" || "${workload}" != "${WORKLOAD}" ]]; then
+    echo "operation/workload marker mismatch for impl=${expected_impl}: operation=${operation} workload=${workload} expected operation=http.server.keepalive workload=${WORKLOAD}" >&2
+    echo "${output}" >&2
+    exit 1
+  fi
   if [[ "${iterations}" != "${REQUESTS}" || "${completed}" != "${REQUESTS}" ]]; then
     echo "incomplete benchmark run for impl=${expected_impl}: iterations=${iterations} completed=${completed} expected=${REQUESTS}" >&2
     echo "${output}" >&2
@@ -256,10 +265,11 @@ append_result_row() {
     exit 1
   fi
 
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "${run_index}" "${expected_impl}" "${ns_op}" "${req_s}" "${completed}" \
     "${client_read_mode}" "${response_body_bytes}" "${rust_profile}" \
-    "${requested_threads}" "${effective_threads}" >> "${RESULTS_TMP}"
+    "${requested_threads}" "${effective_threads}" "${operation}" "${workload}" \
+    >> "${RESULTS_TMP}"
 }
 
 run_one_impl() {
@@ -310,6 +320,8 @@ write_summary() {
       rust_profile_values[impl, count[impl]] = $8;
       requested_thread_values[impl, count[impl]] = $9;
       effective_thread_values[impl, count[impl]] = $10;
+      operation_values[impl, count[impl]] = $11;
+      workload_values[impl, count[impl]] = $12;
     }
 
     END {
@@ -322,6 +334,8 @@ write_summary() {
         delete current_rust_profile;
         delete current_requested_threads;
         delete current_effective_threads;
+        delete current_operation;
+        delete current_workload;
         for (i = 1; i <= count[impl]; i++) {
           current_ns[i] = ns_values[impl, i];
           current_req[i] = req_values[impl, i];
@@ -331,12 +345,15 @@ write_summary() {
           current_rust_profile[i] = rust_profile_values[impl, i];
           current_requested_threads[i] = requested_thread_values[impl, i];
           current_effective_threads[i] = effective_thread_values[impl, i];
+          current_operation[i] = operation_values[impl, i];
+          current_workload[i] = workload_values[impl, i];
         }
-        printf "summary_impl=%s runs=%d median_completed=%.0f median_ns/op=%.1f median_req/s=%.0f summary_client_read_mode=%s summary_response_body_bytes=%s summary_rust_profile=%s summary_requested_threads=%s summary_effective_threads=%s\n",
+        printf "summary_impl=%s runs=%d median_completed=%.0f median_ns/op=%.1f median_req/s=%.0f summary_client_read_mode=%s summary_response_body_bytes=%s summary_rust_profile=%s summary_requested_threads=%s summary_effective_threads=%s summary_operation=%s summary_workload=%s\n",
           impl, count[impl], median(current_completed, count[impl]),
           median(current_ns, count[impl]), median(current_req, count[impl]),
           current_read_mode[1], current_body_bytes[1], current_rust_profile[1],
-          current_requested_threads[1], current_effective_threads[1];
+          current_requested_threads[1], current_effective_threads[1],
+          current_operation[1], current_workload[1];
       }
     }
   ' "${RESULTS_TMP}" | sort

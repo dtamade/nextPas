@@ -3295,6 +3295,10 @@ begin
     'server comparison summary prints client read mode');
   CheckContains(LSource, 'summary_response_body_bytes=%s',
     'server comparison summary prints response body bytes');
+  CheckContains(LSource, 'summary_operation=%s',
+    'server comparison summary prints operation marker');
+  CheckContains(LSource, 'summary_workload=%s',
+    'server comparison summary prints workload marker');
   CheckContains(LDocsBlock, '`summary_client_read_mode=...`',
     'BENCHMARKS should document summary client read mode marker');
   CheckContains(LDocsBlock, '`summary_response_body_bytes=...`',
@@ -3305,6 +3309,10 @@ begin
     'BENCHMARKS should document summary requested threads marker');
   CheckContains(LDocsBlock, '`summary_effective_threads=...`',
     'BENCHMARKS should document summary effective threads marker');
+  CheckContains(LDocsBlock, '`summary_operation=...`',
+    'BENCHMARKS should document summary operation marker');
+  CheckContains(LDocsBlock, '`summary_workload=...`',
+    'BENCHMARKS should document summary workload marker');
 end;
 
 procedure TestServerComparisonPreservesRequestedThreadsSourceContract;
@@ -3331,6 +3339,33 @@ begin
     'server comparison summary prints requested threads');
   CheckContains(LSource, 'summary_effective_threads=%s',
     'server comparison summary prints effective threads');
+end;
+
+procedure TestServerComparisonRunnerValidatesRawMarkersSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+  LDocs: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LSource := LoadTextFile(ResolveServerComparisonRunnerPath(LRootDir));
+  LDocs := LoadTextFile(PathJoin(LRootDir, BenchmarksDocPath));
+
+  CheckContains(LSource, 'operation="$(printf',
+    'server comparison parses operation from raw row');
+  CheckContains(LSource, 'workload="$(printf',
+    'server comparison parses workload from raw row');
+  CheckContains(LSource, 'expected operation=http.server.keepalive',
+    'server comparison documents expected raw operation');
+  CheckContains(LSource, 'operation/workload marker mismatch',
+    'server comparison rejects raw operation/workload mismatch');
+  CheckContains(LSource, 'operation_values[impl, count[impl]] = $11',
+    'server comparison summary stores operation column');
+  CheckContains(LSource, 'workload_values[impl, count[impl]] = $12',
+    'server comparison summary stores workload column');
+  CheckContains(LDocs,
+    'Raw row `operation` and `workload` markers must match the runner request',
+    'BENCHMARKS should document raw operation/workload guard');
 end;
 
 procedure TestServerComparisonRunnerPreservesRequestedThreads;
@@ -5289,6 +5324,8 @@ begin
     @TestServerComparisonSummaryKeepsReadModeMetadataSourceContract);
   T.Run('server comparison preserves requested threads source contract',
     @TestServerComparisonPreservesRequestedThreadsSourceContract);
+  T.Run('server comparison runner validates raw markers source contract',
+    @TestServerComparisonRunnerValidatesRawMarkersSourceContract);
   T.Run('server comparison runner preserves requested threads',
     @TestServerComparisonRunnerPreservesRequestedThreads);
   T.Run('server comparison runner rejects invalid nextpas backend',
