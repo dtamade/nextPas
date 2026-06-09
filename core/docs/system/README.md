@@ -76,6 +76,10 @@ Classes.
 The current TypInfo review stop lives in
 `../plans/2026-06-07-system-typinfo-minimal-unlock-review.md`; it records how
 the earlier `Needs Review` packet moved into this minimal live unlock.
+The S5 compiler integration contract lives in
+`compiler-integration-contract.md`; it records that source-backed System truth
+must flow through `nextpas.core.system` vocabulary and must not become
+backend-private magic strings.
 
 ## Boundaries
 
@@ -121,6 +125,11 @@ documents them here but does not claim implementation readiness in this slice:
 | `np.system.halt` | explicit program termination | future compiler/runtime only |
 | `np.system.object_free` | object `Free` nil guard, destructor and release intent | future compiler/runtime only |
 | `np.system.runtime_fault` | non-ignorable runtime fault | future compiler/runtime only |
+
+S5 compiler integration contract: these names are the stable vocabulary for
+source-backed System truth. Compiler and backend work may use them as reviewed
+contract names, but not as untracked backend-private magic strings or as a
+parallel System implementation outside `nextpas.core.system`.
 
 ## non-goals
 

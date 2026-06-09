@@ -83,7 +83,15 @@ Current phase note:
 
 ## S5 Compiler / Runtime Integration Readiness
 
-- [ ] Align facade docs with compiler runtime contract names and source-backed `System` truth.
+- [x] Add S5 compiler integration contract for compiler consumer pressure, root-kernel ownership and bypass bans.
+- [x] Align facade docs with compiler runtime contract names and source-backed `System` truth.
 - [ ] Prove runtime helper references are explicit, stable and not backend-private magic strings.
 - [ ] Add integration smoke once compiler/runtime can consume the core-system contract directly.
 - [ ] Prepare a landing candidate only after focused gates and cross-module risks are clean.
+
+Current S5 note:
+
+- This is readiness-only: it locks vocabulary, owner boundary and source-contract evidence, not a complete runtime implementation.
+- The compiler must not depend on a parallel System implementation; any long-term dependency must move through `nextpas.core.system` or a reviewed owner module in `nextpas.core`.
+- `TObject.Free`, destructor dispatch and object release pressure are tracked through `np.system.object_free`, `np.system.object_free.destroy` and `np.system.object_free.release`.
+- Unit lifecycle remains contract-level until runtime integration exists: `np.system.unit_init` and `np.system.unit_fini` are named, but not exposed as callable public facade functions.

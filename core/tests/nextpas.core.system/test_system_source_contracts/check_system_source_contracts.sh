@@ -340,6 +340,24 @@ require_fpc_broad_rtl_allowlist_stable() {
   fi
 }
 
+reject_compiler_production_uses_unit() {
+  local forbidden_unit="$1"
+  while IFS= read -r file_path; do
+    if list_pascal_uses_units "$file_path" | grep -Fxi --quiet "$forbidden_unit"; then
+      fail "${file_path#$REPO_ROOT/} must not directly use runtime owner unit: $forbidden_unit"
+    fi
+  done < <(find "$REPO_ROOT/compiler" -type f -name '*.pas' \
+    ! -path "$REPO_ROOT/compiler/tests/*" \
+    ! -path "$REPO_ROOT/compiler/docs/*")
+}
+
+reject_compiler_production_unitpath_token() {
+  local token="$1"
+  if rg --glob '*.pas' --glob '!tests/**' --glob '!docs/**' --quiet -- "$token" "$REPO_ROOT/compiler"; then
+    fail "compiler production sources must not use unitpath token: $token"
+  fi
+}
+
 require_file "docs/system/README.md"
 require_file "docs/system/rtl-mapping.md"
 require_file "docs/system/goal-tree.md"
@@ -347,6 +365,7 @@ require_file "docs/system/fpc-rtl-route-boundary.md"
 require_file "docs/system/runtime-contracts.md"
 require_file "docs/system/lifecycle-contracts.md"
 require_file "docs/system/bootstrap-dual-surface-adapter.md"
+require_file "docs/system/compiler-integration-contract.md"
 require_file "docs/system/compatibility-facades.md"
 require_file "docs/system/compatibility-matrix.md"
 require_file "docs/system/typinfo-minimal-pressure.md"
@@ -376,6 +395,9 @@ require_token "docs/system/README.md" "Root facade live surface"
 require_token "docs/system/README.md" "delegating to owner"
 require_token "docs/system/README.md" "compiler/System compile-truth"
 require_token "docs/system/README.md" "not unit-owned wrapper functions"
+require_token "docs/system/README.md" "S5 compiler integration contract"
+require_token "docs/system/README.md" "source-backed System truth"
+require_token "docs/system/README.md" "backend-private magic strings"
 
 require_token "docs/system/fpc-rtl-route-boundary.md" "root kernel boundary"
 require_token "docs/system/fpc-rtl-route-boundary.md" "FPC-routed stage0"
@@ -409,8 +431,39 @@ for token in \
   "fpc-adapter-must-not-define-runtime-semantics" \
   "compat-facade-must-not-own-system-semantics" \
   "typeinfo-facade-does-not-freeze-metadata-abi" \
-  "lifecycle-contracts-match-live-typinfo-status"; do
+  "lifecycle-contracts-match-live-typinfo-status" \
+  "compiler-consumes-nextpas-core-system-contract" \
+  "fpc-host-path-is-implementation-not-authority"; do
   require_token "docs/system/bootstrap-dual-surface-adapter.md" "$token"
+done
+
+for token in \
+  "S5 Compiler Integration Contract" \
+  "nextpas.core.system is the root kernel module" \
+  "compiler must consume nextpas.core.system through nextpas.core" \
+  "FPC path is host-backed implementation" \
+  "nextPas path uses nextPas-owned kernel implementation" \
+  "compiler must not depend on a parallel System implementation" \
+  "source-backed System truth" \
+  "backend-private magic strings" \
+  "TObject" \
+  "Free" \
+  "destructor" \
+  "np.system.object_free" \
+  "np.system.object_free.destroy" \
+  "np.system.object_free.release" \
+  "np.system.unit_init" \
+  "np.system.unit_fini" \
+  "PTypeInfo" \
+  "TTypeKind" \
+  "InitializeArray" \
+  "FinalizeArray" \
+  "CopyArray" \
+  "no broad FPC SysUtils" \
+  "no live nextpas.core.system.classes" \
+  "consumer-pressure evidence" \
+  "compile-truth evidence"; do
+  require_token "docs/system/compiler-integration-contract.md" "$token"
 done
 
 require_token "docs/system/runtime-contracts.md" "FPC-compatible source"
@@ -440,6 +493,9 @@ for phase in S0 S1 S2 S3 S4 S5; do
 done
 require_token "docs/system/goal-tree.md" "TypeInfo and GetTypeKind are compiler/System compile-truth imports"
 require_token "docs/system/goal-tree.md" "not unit-owned wrapper functions"
+require_token "docs/system/goal-tree.md" "S5 compiler integration contract"
+require_token "docs/system/goal-tree.md" "readiness-only"
+require_token "docs/system/goal-tree.md" "compiler must not depend on a parallel System implementation"
 
 for token in \
   "S4" \
@@ -619,6 +675,9 @@ require_repo_token() {
 
 require_repo_file "compiler/tests/test_sysutils_createfmt_contract.pas"
 require_repo_file "compiler/tests/test_typinfo_contract.pas"
+require_repo_file "units/linux-x86_64/System.pas"
+require_repo_file "tests/semantic/test_semantic_call_bindings.pas"
+require_repo_file "tests/hir/test_hir_object_free_contract.pas"
 require_repo_file "compiler/toolchain/np_toolchain_runner.pas"
 require_repo_file "compiler/frontend/np_workspace_model.pas"
 require_repo_file "rtl/core/sysutils/np_sysutils.pas"
@@ -635,6 +694,36 @@ require_repo_token "compiler/tests/test_typinfo_contract.pas" "CopyArray"
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "FinalizeArray"
 require_repo_reject_regex "compiler/tests/test_typinfo_contract.pas" '^[[:space:]]*TypInfo[,;]'
 require_repo_not_uses_unit "compiler/tests/test_typinfo_contract.pas" "TypInfo"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "TObject"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "destructor"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "object-free-runtime"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.object_free"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "nil-guard true"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "heap-release true"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.process_init"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.process_fini"
+require_repo_token "compiler/ir/np_hir_builder.pas" "np.system.object_free.destroy"
+require_repo_token "compiler/ir/np_hir_builder.pas" "np.system.object_free.cleanup"
+require_repo_token "compiler/ir/np_hir_builder.pas" "np.system.object_free.release"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "np.system.object_free"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_object_free_release(ptr "
+require_repo_token "compiler/frontend/np_unit_resolver.pas" "ruoImplicitRuntime"
+require_repo_token "compiler/frontend/np_unit_resolver.pas" "System.pas"
+require_repo_token "units/linux-x86_64/System.pas" "unit System;"
+require_repo_token "units/linux-x86_64/System.pas" "TObject = class"
+require_repo_token "units/linux-x86_64/System.pas" "destructor Destroy; virtual;"
+require_repo_token "units/linux-x86_64/System.pas" "procedure Free;"
+require_repo_token "tests/semantic/test_semantic_call_bindings.pas" "object-free-runtime"
+require_repo_token "tests/semantic/test_semantic_call_bindings.pas" "np.system.object_free"
+require_repo_token "tests/semantic/test_semantic_call_bindings.pas" "nil-guard true"
+require_repo_token "tests/semantic/test_semantic_call_bindings.pas" "heap-release true"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free.destroy"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free.release"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "call void @np_object_free_release(ptr "
+require_repo_token "docs/architecture/runtime-bootstrap-specification.md" "np.system.unit_init"
+require_repo_token "docs/architecture/runtime-bootstrap-specification.md" "np.system.unit_fini"
+reject_compiler_production_uses_unit "System"
+reject_compiler_production_unitpath_token "rtl/core/system"
 require_repo_token "compiler/toolchain/np_toolchain_runner.pas" "TFileStream"
 require_repo_token "compiler/toolchain/np_toolchain_runner.pas" "ExpandFileName"
 require_repo_token "compiler/frontend/np_workspace_model.pas" "ExpandFileName"

@@ -25,6 +25,8 @@ Source-contract guard tokens:
 - `compat-facade-must-not-own-system-semantics`
 - `typeinfo-facade-does-not-freeze-metadata-abi`
 - `lifecycle-contracts-match-live-typinfo-status`
+- `compiler-consumes-nextpas-core-system-contract`
+- `fpc-host-path-is-implementation-not-authority`
 
 ## Surfaces
 
@@ -38,6 +40,11 @@ Source-contract guard tokens:
 The adapter seam is the only place where host fallback and nextPas target truth
 may differ. Conditional compilation belongs at that seam, not inside broad
 owner modules or high-level facade logic.
+
+S5 keeps that seam explicit: the FPC host path is implementation, not
+authority. The compiler can bootstrap through FPC-compatible source, but its
+long-term System-facing contract must be `nextpas.core.system` vocabulary
+inside `nextpas.core`, not a private fallback ABI.
 
 ## Current Consumer Pressure
 
