@@ -467,6 +467,280 @@ begin
     'facade root forwarder compile surface touches easing family');
 end;
 
+procedure TestFacadePublicMemberCompileSurface;
+var
+  B: Boolean;
+  I: Integer;
+  F: Single;
+  D: Double;
+  V2fA: TVec2f;
+  V2fB: TVec2f;
+  V2fC: TVec2f;
+  V3fA: TVec3f;
+  V3fB: TVec3f;
+  V3fC: TVec3f;
+  V4fA: TVec4f;
+  V4fB: TVec4f;
+  V4fC: TVec4f;
+  V2dA: TVec2d;
+  V2dB: TVec2d;
+  V2dC: TVec2d;
+  V3dA: TVec3d;
+  V3dB: TVec3d;
+  V3dC: TVec3d;
+  V4dA: TVec4d;
+  V4dB: TVec4d;
+  V4dC: TVec4d;
+  M3fA: TMat3f;
+  M3fB: TMat3f;
+  M3fInv: TMat3f;
+  M4fA: TMat4f;
+  M4fB: TMat4f;
+  M4fInv: TMat4f;
+  M3dA: TMat3d;
+  M3dB: TMat3d;
+  M3dInv: TMat3d;
+  M4dA: TMat4d;
+  M4dB: TMat4d;
+  M4dInv: TMat4d;
+  QfA: TQuatf;
+  QfB: TQuatf;
+  QdA: TQuatd;
+  QdB: TQuatd;
+  AxisF: TVec3f;
+  AxisD: TVec3d;
+  AngleF: Single;
+  AngleD: Double;
+  State: TRandomState;
+  Rng: TRandomGen;
+  Noise: TNoiseGen;
+  Values: array[0..3] of Integer;
+begin
+  if ParamCount < 0 then
+  begin
+    V2fA := TVec2f.Create(Single(1.0), Single(2.0));
+    V2fB := TVec2f.Zero;
+    V2fC := V2fA + V2fB;
+    V2fC := V2fC - V2fA;
+    V2fC := -V2fC;
+    V2fC := V2fC * Single(2.0);
+    V2fC := Single(2.0) * V2fC;
+    V2fC := V2fC / Single(2.0);
+    V2fC := TVec2f.MulComponents(V2fA, V2fC);
+    V2fC := TVec2f.DivComponents(V2fC, TVec2f.Create(Single(1.0), Single(1.0)));
+    F := TVec2f.Dot(V2fA, V2fC) + V2fC.LengthSqr + V2fC.Length;
+    V2fC := TVec2f.Lerp(V2fA, V2fC, Single(0.5)).Normalize;
+    B := TVec2f.Equals(V2fC, V2fC, Single(0.0));
+
+    V3fA := TVec3f.Create(Single(1.0), Single(2.0), Single(3.0));
+    V3fB := TVec3f.Zero;
+    V3fC := V3fA + V3fB;
+    V3fC := V3fC - V3fA;
+    V3fC := -V3fC;
+    V3fC := V3fC * Single(2.0);
+    V3fC := Single(2.0) * V3fC;
+    V3fC := V3fC / Single(2.0);
+    V3fC := TVec3f.MulComponents(V3fA, V3fC);
+    V3fC := TVec3f.DivComponents(V3fC, TVec3f.Create(Single(1.0), Single(1.0), Single(1.0)));
+    F := F + TVec3f.Dot(V3fA, V3fC) + V3fC.LengthSqr + V3fC.Length;
+    V3fC := TVec3f.Cross(V3fA, V3fC);
+    V3fC := TVec3f.Lerp(V3fA, V3fC, Single(0.5)).Normalize;
+    B := B or TVec3f.Equals(V3fC, V3fC, Single(0.0));
+
+    V4fA := TVec4f.Create(Single(1.0), Single(2.0), Single(3.0), Single(4.0));
+    V4fB := TVec4f.Zero;
+    V4fC := V4fA + V4fB;
+    V4fC := V4fC - V4fA;
+    V4fC := -V4fC;
+    V4fC := V4fC * Single(2.0);
+    V4fC := Single(2.0) * V4fC;
+    V4fC := V4fC / Single(2.0);
+    V4fC := TVec4f.MulComponents(V4fA, V4fC);
+    V4fC := TVec4f.DivComponents(V4fC,
+      TVec4f.Create(Single(1.0), Single(1.0), Single(1.0), Single(1.0)));
+    F := F + TVec4f.Dot(V4fA, V4fC) + V4fC.LengthSqr + V4fC.Length;
+    V4fC := TVec4f.Lerp(V4fA, V4fC, Single(0.5)).Normalize;
+    B := B or TVec4f.Equals(V4fC, V4fC, Single(0.0));
+
+    V2dA := TVec2d.Create(1.0, 2.0);
+    V2dB := TVec2d.Zero;
+    V2dC := V2dA + V2dB;
+    V2dC := V2dC - V2dA;
+    V2dC := -V2dC;
+    V2dC := V2dC * 2.0;
+    V2dC := 2.0 * V2dC;
+    V2dC := V2dC / 2.0;
+    V2dC := TVec2d.MulComponents(V2dA, V2dC);
+    V2dC := TVec2d.DivComponents(V2dC, TVec2d.Create(1.0, 1.0));
+    D := TVec2d.Dot(V2dA, V2dC) + V2dC.LengthSqr + V2dC.Length;
+    V2dC := TVec2d.Lerp(V2dA, V2dC, 0.5).Normalize;
+    B := B or TVec2d.Equals(V2dC, V2dC, 0.0);
+
+    V3dA := TVec3d.Create(1.0, 2.0, 3.0);
+    V3dB := TVec3d.Zero;
+    V3dC := V3dA + V3dB;
+    V3dC := V3dC - V3dA;
+    V3dC := -V3dC;
+    V3dC := V3dC * 2.0;
+    V3dC := 2.0 * V3dC;
+    V3dC := V3dC / 2.0;
+    V3dC := TVec3d.MulComponents(V3dA, V3dC);
+    V3dC := TVec3d.DivComponents(V3dC, TVec3d.Create(1.0, 1.0, 1.0));
+    D := D + TVec3d.Dot(V3dA, V3dC) + V3dC.LengthSqr + V3dC.Length;
+    V3dC := TVec3d.Cross(V3dA, V3dC);
+    V3dC := TVec3d.Lerp(V3dA, V3dC, 0.5).Normalize;
+    B := B or TVec3d.Equals(V3dC, V3dC, 0.0);
+
+    V4dA := TVec4d.Create(1.0, 2.0, 3.0, 4.0);
+    V4dB := TVec4d.Zero;
+    V4dC := V4dA + V4dB;
+    V4dC := V4dC - V4dA;
+    V4dC := -V4dC;
+    V4dC := V4dC * 2.0;
+    V4dC := 2.0 * V4dC;
+    V4dC := V4dC / 2.0;
+    V4dC := TVec4d.MulComponents(V4dA, V4dC);
+    V4dC := TVec4d.DivComponents(V4dC, TVec4d.Create(1.0, 1.0, 1.0, 1.0));
+    D := D + TVec4d.Dot(V4dA, V4dC) + V4dC.LengthSqr + V4dC.Length;
+    V4dC := TVec4d.Lerp(V4dA, V4dC, 0.5).Normalize;
+    B := B or TVec4d.Equals(V4dC, V4dC, 0.0);
+
+    M3fA := TMat3f.Create(V3fA, V3fB, V3fC);
+    M3fB := TMat3f.Identity + TMat3f.Zero;
+    M3fA := M3fA + M3fB;
+    M3fA := M3fA - M3fB;
+    M3fA := -M3fA;
+    M3fA := M3fA * Single(2.0);
+    M3fA := Single(2.0) * M3fA;
+    V3fC := M3fA * V3fA;
+    M3fA := M3fA * M3fB;
+    M3fA[0, 0] := M3fA[0, 0];
+    M3fA.Rows[0] := M3fA.Rows[0];
+    M3fA.Columns[0] := M3fA.Columns[0];
+    F := F + M3fA.Transpose.Determinant;
+    B := B or M3fA.TryInverse(M3fInv) or TMat3f.Equals(M3fA, M3fB, Single(0.0));
+    M3fInv := M3fB.Inverse;
+
+    M4fA := TMat4f.Create(V4fA, V4fB, V4fC,
+      TVec4f.Create(Single(0.0), Single(0.0), Single(0.0), Single(1.0)));
+    M4fB := TMat4f.Identity + TMat4f.Zero;
+    M4fA := M4fA + M4fB;
+    M4fA := M4fA - M4fB;
+    M4fA := -M4fA;
+    M4fA := M4fA * Single(2.0);
+    M4fA := Single(2.0) * M4fA;
+    V4fC := M4fA * V4fA;
+    M4fA := M4fA * M4fB;
+    M4fA[0, 0] := M4fA[0, 0];
+    M4fA.Rows[0] := M4fA.Rows[0];
+    M4fA.Columns[0] := M4fA.Columns[0];
+    F := F + M4fA.Transpose.Determinant;
+    B := B or M4fA.TryInverse(M4fInv) or TMat4f.Equals(M4fA, M4fB, Single(0.0));
+    M4fInv := M4fB.Inverse;
+
+    M3dA := TMat3d.Create(V3dA, V3dB, V3dC);
+    M3dB := TMat3d.Identity + TMat3d.Zero;
+    M3dA := M3dA + M3dB;
+    M3dA := M3dA - M3dB;
+    M3dA := -M3dA;
+    M3dA := M3dA * 2.0;
+    M3dA := 2.0 * M3dA;
+    V3dC := M3dA * V3dA;
+    M3dA := M3dA * M3dB;
+    M3dA[0, 0] := M3dA[0, 0];
+    M3dA.Rows[0] := M3dA.Rows[0];
+    M3dA.Columns[0] := M3dA.Columns[0];
+    D := D + M3dA.Transpose.Determinant;
+    B := B or M3dA.TryInverse(M3dInv) or TMat3d.Equals(M3dA, M3dB, 0.0);
+    M3dInv := M3dB.Inverse;
+
+    M4dA := TMat4d.Create(V4dA, V4dB, V4dC, TVec4d.Create(0.0, 0.0, 0.0, 1.0));
+    M4dB := TMat4d.Identity + TMat4d.Zero;
+    M4dA := M4dA + M4dB;
+    M4dA := M4dA - M4dB;
+    M4dA := -M4dA;
+    M4dA := M4dA * 2.0;
+    M4dA := 2.0 * M4dA;
+    V4dC := M4dA * V4dA;
+    M4dA := M4dA * M4dB;
+    M4dA[0, 0] := M4dA[0, 0];
+    M4dA.Rows[0] := M4dA.Rows[0];
+    M4dA.Columns[0] := M4dA.Columns[0];
+    D := D + M4dA.Transpose.Determinant;
+    B := B or M4dA.TryInverse(M4dInv) or TMat4d.Equals(M4dA, M4dB, 0.0);
+    M4dInv := M4dB.Inverse;
+
+    QfA := TQuatf.Create(Single(0.0), Single(0.0), Single(0.0), Single(1.0));
+    QfB := TQuatf.Identity;
+    QfA := QfA * QfB;
+    QfA := TQuatf.FromAxisAngle(TVec3f.Create(Single(0.0), Single(0.0), Single(1.0)),
+      Single(0.25));
+    QfB := TQuatf.Slerp(QfA, QfB, Single(0.5));
+    QfB := TQuatf.Nlerp(QfA, QfB, Single(0.5));
+    B := B or TQuatf.Equals(QfA, QfB, Single(0.0));
+    QfB.ToAxisAngle(AxisF, AngleF);
+    M3fA := QfB.ToRotationMatrix;
+    V3fC := QfB.Rotate(V3fA);
+    QfB := QfB.Conjugate.Normalize;
+
+    QdA := TQuatd.Create(0.0, 0.0, 0.0, 1.0);
+    QdB := TQuatd.Identity;
+    QdA := QdA * QdB;
+    QdA := TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), 0.25);
+    QdB := TQuatd.Slerp(QdA, QdB, 0.5);
+    QdB := TQuatd.Nlerp(QdA, QdB, 0.5);
+    B := B or TQuatd.Equals(QdA, QdB, 0.0);
+    QdB.ToAxisAngle(AxisD, AngleD);
+    M3dA := QdB.ToRotationMatrix;
+    V3dC := QdB.Rotate(V3dA);
+    QdB := QdB.Conjugate.Normalize;
+
+    Rng := TRandomGen.Create(1);
+    Noise := TNoiseGen.Create(2);
+    try
+      Rng.SetSeed(3);
+      State := Rng.State;
+      Rng.State := State;
+      I := Rng.NextInt + Rng.NextIntRange(1, 3);
+      F := F + Rng.NextFloat + Rng.NextFloatRange(Single(0.0), Single(1.0)) +
+        Rng.NextGaussian;
+      D := D + Rng.NextDouble;
+      B := B or Rng.NextBool(Single(0.5));
+      V2fC := Rng.NextVec2InCircle + Rng.NextVec2OnCircle;
+      I := I + Rng.Roll(6) + Rng.RollMultiple(2, 6) +
+        Rng.WeightedChoice([Single(1.0), Single(2.0)]);
+      Values[0] := 1;
+      Values[1] := 2;
+      Values[2] := 3;
+      Values[3] := 4;
+      Rng.Shuffle(Values);
+
+      Noise.SetSeed(4);
+      D := D + Noise.Noise1D(0.25) + Noise.Noise2D(0.25, 0.5) +
+        Noise.Noise3D(0.25, 0.5, 0.75) + Noise.FBM1D(0.25, 2) +
+        Noise.FBM2D(0.25, 0.5, 2) + Noise.FBM3D(0.25, 0.5, 0.75, 2);
+    finally
+      Noise.Free;
+      Rng.Free;
+    end;
+
+    if B or (I = Low(Integer)) or (F < -1.0e30) or (D < -1.0e300) or
+      (M3fInv.Data[0, 0] < -1.0e30) or (M4fInv.Data[0, 0] < -1.0e30) or
+      (M3dInv.Data[0, 0] < -1.0e300) or (M4dInv.Data[0, 0] < -1.0e300) or
+      (M3fA.Data[0, 0] < -1.0e30) or (M3dA.Data[0, 0] < -1.0e300) or
+      (AxisF.X < -1.0e30) or (AxisD.X < -1.0e300) or
+      (AngleF < -1.0e30) or (AngleD < -1.0e300) or
+      (V2fC.X < -1.0e30) or (V3fC.X < -1.0e30) or (V4fC.X < -1.0e30) or
+      (V2dC.X < -1.0e300) or (V3dC.X < -1.0e300) or (V4dC.X < -1.0e300) then
+      Halt(1);
+  end;
+
+  Check(True, 'facade public member compile surface touches vector members');
+  Check(True, 'facade public member compile surface touches matrix members');
+  Check(True, 'facade public member compile surface touches quaternion members');
+  Check(True, 'facade public member compile surface touches random and noise members');
+end;
+
 procedure TestFacadeRootTrigDeclarationParityCompileSurface;
 var
   D: Double;
@@ -612,6 +886,7 @@ begin
   T.Run('facade random surface', @TestFacadeRandomSurface);
   T.Run('facade type alias compile surface', @TestFacadeTypeAliasCompileSurface);
   T.Run('facade root forwarder compile surface', @TestFacadeRootForwarderCompileSurface);
+  T.Run('facade public member compile surface', @TestFacadePublicMemberCompileSurface);
   T.Run('facade root trig declaration parity compile surface',
     @TestFacadeRootTrigDeclarationParityCompileSurface);
   T.Run('facade Power finite identity precision contracts',
