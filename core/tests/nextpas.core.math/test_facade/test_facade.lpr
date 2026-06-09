@@ -175,11 +175,17 @@ begin
 end;
 
 procedure TestFacadeNewScalarSurface;
+var
+  LWideRemainder: Extended;
 begin
   CheckEqual(Int64(6), GCD(Int64(12), Int64(18)), 'facade exposes GCD');
   CheckEqual(Int64(36), LCM(Int64(12), Int64(18)), 'facade exposes LCM');
   CheckNear(5.0, Hypot(3.0, 4.0), 'facade exposes Hypot');
   CheckNear(1.5, Fmod(5.5, 2.0), 'facade exposes Fmod');
+  LWideRemainder := Fmod(1.0e308, 3.0);
+  Check((LWideRemainder = LWideRemainder) and (LWideRemainder > -3.0) and
+    (LWideRemainder < 3.0),
+    'facade Fmod huge untyped finite literals choose wide finite remainder path');
   CheckNear(0.5, SmoothStep(0.0, 1.0, 0.5), 'facade exposes SmoothStep');
   CheckNear(0.5, SmoothStep(Single(0.0), Single(1.0), Single(0.5)), 'facade exposes Single SmoothStep');
 end;
@@ -303,6 +309,7 @@ var
   B: Boolean;
   F: Single;
   D: Double;
+  E: Extended;
   I: Int64;
   I32: Int32;
   SU: SizeUInt;
@@ -374,6 +381,8 @@ begin
     F := nextpas.core.math.Hypot(Single(3.0), Single(4.0));
     D := nextpas.core.math.Fmod(5.5, 2.0);
     F := nextpas.core.math.Fmod(Single(5.5), Single(2.0));
+    E := nextpas.core.math.Fmod(Extended(5.5), Extended(2.0));
+    B := B or (E = E);
     D := nextpas.core.math.Sin(0.0) + nextpas.core.math.Cos(0.0) +
       nextpas.core.math.Tan(0.0) + nextpas.core.math.ArcSin(0.5) +
       nextpas.core.math.ArcCos(0.5) + nextpas.core.math.ArcTan(1.0) +

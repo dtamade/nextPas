@@ -102,6 +102,9 @@ function Hypot(const AX, AY: Double): Double; overload; inline;
 function Hypot(const AX, AY: Single): Single; overload; inline;
 function Fmod(const AX, AY: Double): Double; overload; inline;
 function Fmod(const AX, AY: Single): Single; overload; inline;
+{$IF SizeOf(Extended) > SizeOf(Double)}
+function Fmod(const AX, AY: Extended): Extended; overload; inline;
+{$ENDIF}
 
 function Sin(const AX: Double): Double; overload; inline;
 function Sin(const AX: Single): Single; overload; inline;
@@ -470,6 +473,13 @@ function Fmod(const AX, AY: Double): Double;
 begin
   Result := nextpas.core.math.scalar.Fmod(AX, AY);
 end;
+
+{$IF SizeOf(Extended) > SizeOf(Double)}
+function Fmod(const AX, AY: Extended): Extended;
+begin
+  Result := nextpas.core.math.scalar.Fmod(AX, AY);
+end;
+{$ENDIF}
 
 function Sin(const AX: Single): Single;
 begin

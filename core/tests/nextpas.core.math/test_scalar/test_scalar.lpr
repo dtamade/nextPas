@@ -8,6 +8,14 @@ uses
   nextpas.core.testing,
   nextpas.core.math.scalar;
 
+{$IF (SizeOf(Extended) > SizeOf(Double)) AND (DEFINED(CPUX86_64) OR DEFINED(CPUX86) OR DEFINED(CPUI386))}
+  {$DEFINE NEXTPAS_TEST_MATH_EXTENDED_X87_80}
+{$ELSEIF SizeOf(Extended) = SizeOf(Double)}
+  {$DEFINE NEXTPAS_TEST_MATH_EXTENDED_DOUBLE_COMPAT}
+{$ELSE}
+  {$FATAL Unsupported Extended floating-point layout}
+{$ENDIF}
+
 var
   T: TTestRunner;
 
@@ -129,6 +137,80 @@ var
 begin
   Move(AValue, LBits, SizeOf(LBits));
   Result := LBits = UInt64(0);
+end;
+
+function MakeExtendedNaN: Extended;
+begin
+  Result := Extended(MakeNaN);
+end;
+
+function MakeExtendedPositiveInfinity: Extended;
+begin
+  Result := Extended(MakePositiveInfinity);
+end;
+
+function MakeExtendedNegativeInfinity: Extended;
+begin
+  Result := Extended(MakeNegativeInfinity);
+end;
+
+function MakeExtendedNegativeZero: Extended;
+begin
+  Result := Extended(MakeDoubleNegativeZero);
+end;
+
+function IsExtendedNegativeZero(const AValue: Extended): Boolean;
+{$IFDEF NEXTPAS_TEST_MATH_EXTENDED_X87_80}
+type
+  TExtendedBytes = packed array[0..SizeOf(Extended) - 1] of Byte;
+{$ENDIF}
+var
+  {$IFDEF NEXTPAS_TEST_MATH_EXTENDED_X87_80}
+  LBytes: TExtendedBytes;
+  LMantissa: UInt64;
+  {$ELSE}
+  LBits: UInt64;
+  {$ENDIF}
+begin
+  {$IFDEF NEXTPAS_TEST_MATH_EXTENDED_X87_80}
+  Move(AValue, LBytes, SizeOf(LBytes));
+  LMantissa := 0;
+  Move(LBytes[0], LMantissa, SizeOf(LMantissa));
+  Result := (LBytes[8] = 0) and (LBytes[9] = Byte($80)) and
+    (LMantissa = 0);
+  {$ELSE}
+  Move(AValue, LBits, SizeOf(LBits));
+  Result := LBits = UInt64($8000000000000000);
+  {$ENDIF}
+end;
+
+function IsExtendedNaN(const AValue: Extended): Boolean;
+{$IFDEF NEXTPAS_TEST_MATH_EXTENDED_X87_80}
+type
+  TExtended10Bytes = packed array[0..9] of Byte;
+{$ENDIF}
+var
+  {$IFDEF NEXTPAS_TEST_MATH_EXTENDED_X87_80}
+  LBytes: TExtended10Bytes;
+  LExp: UInt16;
+  LFraction: UInt64;
+  {$ELSE}
+  LBits: UInt64;
+  {$ENDIF}
+begin
+  {$IFDEF NEXTPAS_TEST_MATH_EXTENDED_X87_80}
+  Move(AValue, LBytes, SizeOf(LBytes));
+  LExp := (UInt16(LBytes[9]) and UInt16($7F)) shl 8;
+  LExp := LExp or UInt16(LBytes[8]);
+  LFraction := 0;
+  Move(LBytes[0], LFraction, SizeOf(LFraction));
+  Result := (LExp = UInt16($7FFF)) and
+    ((LFraction and UInt64($7FFFFFFFFFFFFFFF)) <> 0);
+  {$ELSE}
+  Move(AValue, LBits, SizeOf(LBits));
+  Result := ((LBits and UInt64($7FF0000000000000)) = UInt64($7FF0000000000000)) and
+    ((LBits and UInt64($000FFFFFFFFFFFFF)) <> 0);
+  {$ENDIF}
 end;
 
 function Pow2_63: Double;
@@ -618,6 +700,7 @@ var
   LHugeDouble: Double;
   LTinyDouble: Double;
   LDoubleRemainder: Double;
+  LWideRemainder: Extended;
   LHugeSingle: Single;
   LTinySingle: Single;
   LSingleRemainder: Single;
@@ -684,6 +767,30 @@ begin
     'Fmod Single exact negative dividend keeps negative zero remainder');
   CheckNear(1.5, Fmod(5.5, -2.0), 0.0, 'Fmod Double negative divisor positive dividend');
   CheckNear(-1.5, Fmod(-5.5, -2.0), 0.0, 'Fmod Double negative divisor negative dividend');
+  LWideRemainder := Fmod(1.0e308, 3.0);
+  Check((LWideRemainder = LWideRemainder) and (LWideRemainder > -3.0) and
+    (LWideRemainder < 3.0),
+    'Fmod huge untyped finite literals choose wide finite remainder path');
+  CheckNear(2.0, Fmod(Double(1.0e308), Double(3.0)), 0.0,
+    'Fmod Double typed huge finite literals keep double remainder');
+  Check(IsExtendedNegativeZero(Fmod(MakeExtendedNegativeZero, Extended(3.0))),
+    'Fmod Extended keeps negative zero dividend');
+  Check(IsExtendedNegativeZero(Fmod(Extended(-4.0), Extended(2.0))),
+    'Fmod Extended exact negative dividend keeps negative zero remainder');
+  Check((Fmod(Extended(1.0), MakeExtendedPositiveInfinity) = Extended(1.0)),
+    'Fmod Extended finite over positive infinity returns dividend');
+  Check((Fmod(Extended(-1.0), MakeExtendedNegativeInfinity) = Extended(-1.0)),
+    'Fmod Extended negative finite over negative infinity returns dividend');
+  Check(IsExtendedNaN(Fmod(Extended(1.0), Extended(0.0))),
+    'Fmod Extended zero divisor returns NaN');
+  Check(IsExtendedNaN(Fmod(MakeExtendedNaN, Extended(1.0))),
+    'Fmod Extended NaN dividend returns NaN');
+  Check(IsExtendedNaN(Fmod(Extended(1.0), MakeExtendedNaN)),
+    'Fmod Extended NaN divisor returns NaN');
+  Check(IsExtendedNaN(Fmod(MakeExtendedPositiveInfinity, Extended(1.0))),
+    'Fmod Extended positive infinity dividend returns NaN');
+  Check(IsExtendedNaN(Fmod(MakeExtendedNegativeInfinity, Extended(1.0))),
+    'Fmod Extended negative infinity dividend returns NaN');
   CheckNear(1.0, Fmod(1.0, MakePositiveInfinity), 0.0, 'Fmod Double finite over infinity');
   CheckNear(-1.0, Fmod(-1.0, MakeNegativeInfinity), 0.0, 'Fmod Double negative finite over infinity returns dividend');
   CheckNear(-1.0, Fmod(-1.0, MakePositiveInfinity), 0.0,

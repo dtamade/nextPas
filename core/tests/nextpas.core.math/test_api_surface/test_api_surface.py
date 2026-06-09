@@ -1398,6 +1398,7 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("root-hypot-single", r"\bfunction\s+Hypot\s*\(\s*const\s+AX\s*,\s*AY\s*:\s*Single\s*\)\s*:\s*Single\b"),
         ("root-fmod-double", r"\bfunction\s+Fmod\s*\(\s*const\s+AX\s*,\s*AY\s*:\s*Double\s*\)\s*:\s*Double\b"),
         ("root-fmod-single", r"\bfunction\s+Fmod\s*\(\s*const\s+AX\s*,\s*AY\s*:\s*Single\s*\)\s*:\s*Single\b"),
+        ("root-fmod-extended", r"\bfunction\s+Fmod\s*\(\s*const\s+AX\s*,\s*AY\s*:\s*Extended\s*\)\s*:\s*Extended\b"),
         ("root-smoothstep-single", r"\bfunction\s+SmoothStep\s*\(\s*const\s+AEdge0\s*,\s*AEdge1\s*,\s*AValue\s*:\s*Single\s*\)\s*:\s*Single\b"),
         ("root-trig-sin-double", r"\bfunction\s+Sin\s*\(\s*const\s+AX\s*:\s*Double\s*\)\s*:\s*Double\b"),
         ("root-trig-sin-single", r"\bfunction\s+Sin\s*\(\s*const\s+AX\s*:\s*Single\s*\)\s*:\s*Single\b"),
@@ -1451,6 +1452,7 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("scalar-hypot-single", r"\bfunction\s+Hypot\s*\(\s*const\s+AX\s*,\s*AY\s*:\s*Single\s*\)\s*:\s*Single\b"),
         ("scalar-fmod-double", r"\bfunction\s+Fmod\s*\(\s*const\s+AX\s*,\s*AY\s*:\s*Double\s*\)\s*:\s*Double\b"),
         ("scalar-fmod-single", r"\bfunction\s+Fmod\s*\(\s*const\s+AX\s*,\s*AY\s*:\s*Single\s*\)\s*:\s*Single\b"),
+        ("scalar-fmod-extended", r"\bfunction\s+Fmod\s*\(\s*const\s+AX\s*,\s*AY\s*:\s*Extended\s*\)\s*:\s*Extended\b"),
         ("scalar-single-smoothstep", r"\bfunction\s+SmoothStep\s*\(\s*const\s+AEdge0\s*,\s*AEdge1\s*,\s*AValue\s*:\s*Single\s*\)\s*:\s*Single\b"),
         ("scalar-smoothstep-double", r"\bfunction\s+SmoothStep\s*\(\s*const\s+AEdge0\s*,\s*AEdge1\s*,\s*AValue\s*:\s*Double\s*\)\s*:\s*Double\b"),
     ),
@@ -1618,6 +1620,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("facade-trig-power-finite-identity-precision", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade Power finite identity precision contracts'"),
     RequiredBehaviorTestMarker("facade-log-exact-identity", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade Log exact identity contracts'"),
     RequiredBehaviorTestMarker("facade-wrap-error-semantics", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade Wrap error semantics'"),
+    RequiredBehaviorTestMarker("facade-fmod-huge-untyped-literals", "tests/nextpas.core.math/test_facade/test_facade.lpr", "facade Fmod huge untyped finite literals choose wide finite remainder path"),
     RequiredBehaviorTestMarker("scalar-constants", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('constants'"),
     RequiredBehaviorTestMarker("scalar-min-max-clamp", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('min max clamp'"),
     RequiredBehaviorTestMarker("scalar-clamp-nan-value", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Clamp Double NaN value propagates NaN"),
@@ -1642,6 +1645,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-ieee-fmod-single-cross-infinite-divisor", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Single negative finite over positive infinity returns dividend"),
     RequiredBehaviorTestMarker("scalar-ieee-fmod-single-cross-infinite-divisor-symmetric", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Single positive finite over negative infinity returns dividend"),
     RequiredBehaviorTestMarker("scalar-ieee-fmod-huge-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Double huge finite quotient stays finite remainder"),
+    RequiredBehaviorTestMarker("scalar-ieee-fmod-huge-untyped-literals", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod huge untyped finite literals choose wide finite remainder path"),
     RequiredBehaviorTestMarker("scalar-ieee-fmod-single-negative-huge-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Single negative huge finite quotient keeps dividend sign"),
     RequiredBehaviorTestMarker("scalar-ieee-overflow-no-div-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "IsMulOverflow SizeUInt zero times high"),
     RequiredBehaviorTestMarker("scalar-ieee-overflow-no-div-zero-symmetric", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "IsMulOverflow SizeUInt high times zero"),
@@ -3241,6 +3245,7 @@ def run_required_public_declarations_self_tests() -> None:
         )
         rules = {finding.rule for finding in findings}
         expected_rules = {
+            "missing-required-public-math-api:root-fmod-extended",
             "missing-required-public-math-api:root-fmod-single",
             "missing-required-public-math-api:root-single-abs",
             "missing-required-public-math-api:root-single-clamp",
@@ -3259,6 +3264,7 @@ def run_required_public_declarations_self_tests() -> None:
             "missing-required-public-math-api:root-single-sign",
             "missing-required-public-math-api:root-single-trunc",
             "missing-required-public-math-api:root-single-wrap",
+            "missing-required-public-math-api:scalar-fmod-extended",
             "missing-required-public-math-api:scalar-fmod-single",
             "missing-required-public-math-api:scalar-single-abs",
             "missing-required-public-math-api:scalar-single-clamp",

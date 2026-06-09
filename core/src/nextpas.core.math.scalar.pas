@@ -75,12 +75,23 @@ function Hypot(const AX, AY: Double): Double; overload; inline;
 function Hypot(const AX, AY: Single): Single; overload; inline;
 function Fmod(const AX, AY: Double): Double; overload; inline;
 function Fmod(const AX, AY: Single): Single; overload; inline;
+{$IF SizeOf(Extended) > SizeOf(Double)}
+function Fmod(const AX, AY: Extended): Extended; overload; inline;
+{$ENDIF}
 
 implementation
 
 uses
   nextpas.core.errors,
   nextpas.core.math.impl.scalar;
+
+{$IF (SizeOf(Extended) > SizeOf(Double)) AND (DEFINED(CPUX86_64) OR DEFINED(CPUX86) OR DEFINED(CPUI386))}
+  {$DEFINE NEXTPAS_MATH_EXTENDED_X87_80}
+{$ELSEIF SizeOf(Extended) = SizeOf(Double)}
+  {$DEFINE NEXTPAS_MATH_EXTENDED_DOUBLE_COMPAT}
+{$ELSE}
+  {$FATAL Unsupported Extended floating-point layout}
+{$ENDIF}
 
 const
   MAX_DOUBLE_VALUE: Double = 1.79769313486231570815e308;
@@ -174,6 +185,61 @@ begin
   Move(LBits, Result, SizeOf(Result));
 end;
 
+function ExtendedHasSignBit(const AValue: Extended): Boolean; inline;
+{$IFDEF NEXTPAS_MATH_EXTENDED_X87_80}
+type
+  TExtendedBytes = packed array[0..SizeOf(Extended) - 1] of Byte;
+{$ENDIF}
+var
+  {$IFDEF NEXTPAS_MATH_EXTENDED_X87_80}
+  LBytes: TExtendedBytes;
+  {$ELSE}
+  LBits: UInt64;
+  {$ENDIF}
+begin
+  {$IFDEF NEXTPAS_MATH_EXTENDED_X87_80}
+  Move(AValue, LBytes, SizeOf(LBytes));
+  Result := (LBytes[9] and Byte($80)) <> 0;
+  {$ELSE}
+  Move(AValue, LBits, SizeOf(LBits));
+  Result := (LBits and UInt64($8000000000000000)) <> 0;
+  {$ENDIF}
+end;
+
+function ExtendedSignedZero(const ANegative: Boolean): Extended; inline;
+{$IFDEF NEXTPAS_MATH_EXTENDED_X87_80}
+type
+  TExtendedBytes = packed array[0..SizeOf(Extended) - 1] of Byte;
+{$ENDIF}
+var
+  {$IFDEF NEXTPAS_MATH_EXTENDED_X87_80}
+  LBytes: TExtendedBytes;
+  {$ELSE}
+  LBits: UInt64;
+  {$ENDIF}
+begin
+  {$IFDEF NEXTPAS_MATH_EXTENDED_X87_80}
+  FillChar(LBytes, SizeOf(LBytes), 0);
+  if ANegative then
+    LBytes[9] := Byte($80);
+  Move(LBytes, Result, SizeOf(Result));
+  {$ELSE}
+  if ANegative then
+    LBits := UInt64($8000000000000000)
+  else
+    LBits := UInt64(0);
+  Move(LBits, Result, SizeOf(Result));
+  {$ENDIF}
+end;
+
+function ExtendedAbsFinite(const AValue: Extended): Extended; inline;
+begin
+  if AValue < 0.0 then
+    Result := -AValue
+  else
+    Result := AValue;
+end;
+
 function SingleAbsBits(const AValue: Single): Single; inline;
 var
   LBits: UInt32;
@@ -224,6 +290,41 @@ begin
     LDividend := LDividend - LDivisor;
   Result := LDividend;
 end;
+
+{$IF SizeOf(Extended) > SizeOf(Double)}
+function FmodPositiveFinite(const ADividend, ADivisor: Extended): Extended;
+var
+  LDividend: Extended;
+  LDivisor: Extended;
+  LScaledDivisor: Extended;
+begin
+  LDividend := ADividend;
+  LDivisor := ADivisor;
+  if LDividend < LDivisor then
+    Exit(LDividend);
+  if LDividend = LDivisor then
+    Exit(0.0);
+
+  LScaledDivisor := LDivisor;
+  while LScaledDivisor <= LDividend - LScaledDivisor do
+    LScaledDivisor := LScaledDivisor + LScaledDivisor;
+
+  while LScaledDivisor >= LDivisor do
+  begin
+    if LDividend >= LScaledDivisor then
+    begin
+      LDividend := LDividend - LScaledDivisor;
+      if LDividend = 0.0 then
+        Exit(0.0);
+    end;
+    LScaledDivisor := LScaledDivisor * 0.5;
+  end;
+
+  if LDividend >= LDivisor then
+    LDividend := LDividend - LDivisor;
+  Result := LDividend;
+end;
+{$ENDIF}
 
 function EuclideanModuloFinite(const AValue, AModulus: Double): Double;
 var
@@ -977,5 +1078,27 @@ begin
   else
     Result := LResult;
 end;
+
+{$IF SizeOf(Extended) > SizeOf(Double)}
+function Fmod(const AX, AY: Extended): Extended;
+var
+  LResult: Extended;
+begin
+  if ExtendedIsNaN(AX) or ExtendedIsNaN(AY) or (AY = 0.0) or ExtendedIsInfinite(AX) then
+    Exit(ExtendedQuietNaN);
+  if ExtendedIsInfinite(AY) then
+    Exit(AX);
+  LResult := FmodPositiveFinite(ExtendedAbsFinite(AX), ExtendedAbsFinite(AY));
+  if LResult = 0.0 then
+  begin
+    Result := ExtendedSignedZero(ExtendedHasSignBit(AX));
+    Exit;
+  end;
+  if ExtendedHasSignBit(AX) then
+    Result := -LResult
+  else
+    Result := LResult;
+end;
+{$ENDIF}
 
 end.
