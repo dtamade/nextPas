@@ -26,6 +26,12 @@ class RequiredBehaviorTestMarker:
     marker: str
 
 
+@dataclass(frozen=True)
+class PascalClassContract:
+    class_name: str
+    public_members: tuple[str, ...]
+
+
 SUMMARY_PREFIX = "MATH_API_SURFACE"
 
 MATH_SOURCE_GLOBS = (
@@ -1368,8 +1374,28 @@ PUBLIC_MATH_SOURCE_SIMD_RE = re.compile(
     re.IGNORECASE,
 )
 PUBLIC_GLOBAL_RANDOM_RE = re.compile(
-    r"^\s*(?:threadvar|var)\s+(?:G(?:Random|Noise)|Global(?:Random|Noise))\b",
+    r"^[ \t]{0,2}(?:threadvar|var)\s+"
+    r"(?:G(?:Random|Noise)|Global(?:Random|Noise)|Default(?:Random|Noise)|"
+    r"Shared(?:Random|Noise)|(?:Random|Noise)(?:Instance|Singleton))\b",
     re.IGNORECASE | re.MULTILINE,
+)
+RANDOM_NOISE_GLOBAL_HELPER_RE = re.compile(
+    r"^[ \t]{0,2}(?:function|procedure)\s+("
+    r"Random[A-Za-z0-9_]*|Next[A-Za-z0-9_]*|Roll[A-Za-z0-9_]*|"
+    r"WeightedChoice|Shuffle|Noise[A-Za-z0-9_]*|FBM[A-Za-z0-9_]*|"
+    r"DefaultRandom|DefaultNoise|SharedRandom|SharedNoise|"
+    r"GlobalRandom|GlobalNoise"
+    r")\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+RANDOM_NOISE_CLASS_SINGLETON_RE = re.compile(
+    r"^\s*class\s+var\s+(?:G|F)?(?:Random|Noise|DefaultRandom|DefaultNoise|SharedRandom|SharedNoise)\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+RANDOM_NOISE_GLOBAL_NAME_RE = re.compile(
+    r"\b(G(?:Random|Noise)|Global(?:Random|Noise)|Default(?:Random|Noise)|"
+    r"Shared(?:Random|Noise)|(?:Random|Noise)(?:Instance|Singleton))\b",
+    re.IGNORECASE,
 )
 UNIT_NAME_RE = re.compile(
     r"^\s*unit\s+(?P<name>nextpas\.core\.math(?:\.[A-Za-z0-9_]+)*)\s*;",
@@ -1408,6 +1434,42 @@ PUBLIC_TYPE_ALIAS_RE = re.compile(
 PUBLIC_FUNCTION_RE = re.compile(
     r"^\s*function\s+([A-Za-z0-9_]+)\s*\(",
     re.MULTILINE,
+)
+RANDOM_NOISE_PUBLIC_CONTRACTS = (
+    PascalClassContract(
+        "TRandomGen",
+        (
+            "constructor Create(const ASeed: UInt64 = 0)",
+            "procedure SetSeed(const ASeed: UInt64)",
+            "function NextInt: Integer",
+            "function NextIntRange(const AMin, AMax: Integer): Integer",
+            "function NextFloat: Single",
+            "function NextFloatRange(const AMin, AMax: Single): Single",
+            "function NextDouble: Double",
+            "function NextBool(const AProbability: Single = 0.5): Boolean",
+            "function NextGaussian: Single",
+            "function NextVec2InCircle: TVec2f",
+            "function NextVec2OnCircle: TVec2f",
+            "function Roll(const ASides: Integer): Integer",
+            "function RollMultiple(const ADice, ASides: Integer): Integer",
+            "function WeightedChoice(const AWeights: array of Single): Integer",
+            "procedure Shuffle(var AValues: array of Integer)",
+            "property State: TRandomState read FState write FState",
+        ),
+    ),
+    PascalClassContract(
+        "TNoiseGen",
+        (
+            "constructor Create(const ASeed: UInt64 = 0)",
+            "procedure SetSeed(const ASeed: UInt64)",
+            "function Noise1D(const AX: Double): Double",
+            "function Noise2D(const AX, AY: Double): Double",
+            "function Noise3D(const AX, AY, AZ: Double): Double",
+            "function FBM1D(const AX: Double; const AOctaves: Integer; const ALacunarity: Double = 2.0; const AGain: Double = 0.5): Double",
+            "function FBM2D(const AX, AY: Double; const AOctaves: Integer; const ALacunarity: Double = 2.0; const AGain: Double = 0.5): Double",
+            "function FBM3D(const AX, AY, AZ: Double; const AOctaves: Integer; const ALacunarity: Double = 2.0; const AGain: Double = 0.5): Double",
+        ),
+    ),
 )
 REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
     "src/nextpas.core.math.pas": (
@@ -2899,6 +2961,137 @@ def scan_public_global_random_singletons(root: Path, path: Path, text: str) -> l
     return findings
 
 
+def normalize_pascal_member_statement(statement: str) -> str:
+    normalized = " ".join(statement.strip().split())
+    normalized = re.sub(r"\s*;\s*$", "", normalized)
+    normalized = re.sub(r"\s*;\s*(?:inline|static|overload)\b.*$", "", normalized, flags=re.IGNORECASE)
+    return normalized
+
+
+def split_pascal_member_statements(text: str) -> list[str]:
+    statements: list[str] = []
+    start = 0
+    depth = 0
+    for index, char in enumerate(text):
+        if char == "(":
+            depth += 1
+        elif char == ")" and depth > 0:
+            depth -= 1
+        elif char == ";" and depth == 0:
+            statements.append(text[start : index + 1])
+            start = index + 1
+    return statements
+
+
+def class_public_member_sets(text: str) -> dict[str, tuple[int, set[str]]]:
+    code = interface_text(text)
+    classes: dict[str, tuple[int, set[str]]] = {}
+    for match in re.finditer(
+        r"(?P<name>T[A-Za-z0-9_]*)\s*=\s*class\b(?P<body>.*?)\bend\s*;",
+        code,
+        re.IGNORECASE | re.DOTALL,
+    ):
+        class_name = match.group("name")
+        body = match.group("body")
+        class_line = line_no_at(code, match.start("name"))
+        public_match = re.search(
+            r"\bpublic\b(?P<body>.*?)(?=\b(?:private|protected|public|published)\b|\Z)",
+            body,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if public_match is None:
+            classes[class_name.lower()] = (class_line, set())
+            continue
+
+        public_body = public_match.group("body")
+        members = set()
+        for statement in split_pascal_member_statements(public_body):
+            member = normalize_pascal_member_statement(statement)
+            if member.lower() in {"inline", "static", "overload"}:
+                continue
+            if member:
+                members.add(member)
+        classes[class_name.lower()] = (class_line, members)
+    return classes
+
+
+def scan_random_noise_public_contract(root: Path, path: Path, text: str) -> list[Finding]:
+    findings: list[Finding] = []
+    rel = relative(path, root)
+    if rel not in {"src/nextpas.core.math.random.pas", ROOT_FACADE_PATH}:
+        return findings
+
+    code = interface_text(text)
+    for match in RANDOM_NOISE_GLOBAL_HELPER_RE.finditer(code):
+        name = match.group(1)
+        add_finding(
+            findings,
+            "random-noise-public-top-level-helper:" + name,
+            root,
+            path,
+            line_no_at(code, match.start(1)),
+            name,
+        )
+
+    for line_index, line in enumerate(code.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped or stripped.lower() in {"var", "threadvar"}:
+            continue
+        if (len(line) - len(line.lstrip(" "))) > 2:
+            continue
+        if not re.match(r"(?:var|threadvar)?\s*[A-Za-z_][A-Za-z0-9_]*\s*:", stripped, re.IGNORECASE):
+            continue
+        name_match = RANDOM_NOISE_GLOBAL_NAME_RE.search(stripped)
+        if name_match is None:
+            continue
+        name = name_match.group(1)
+        add_finding(
+            findings,
+            "random-noise-public-global-state:" + name,
+            root,
+            path,
+            line_index,
+            name,
+        )
+
+    if rel != "src/nextpas.core.math.random.pas":
+        return findings
+
+    class_members = class_public_member_sets(text)
+    for contract in RANDOM_NOISE_PUBLIC_CONTRACTS:
+        class_line, actual_members = class_members.get(contract.class_name.lower(), (1, set()))
+        expected_members = set(contract.public_members)
+        for member in sorted(expected_members - actual_members):
+            add_finding(
+                findings,
+                "random-noise-missing-public-member:" + contract.class_name + ":" + member,
+                root,
+                path,
+                class_line,
+                member,
+            )
+        for member in sorted(actual_members - expected_members):
+            add_finding(
+                findings,
+                "random-noise-extra-public-member:" + contract.class_name + ":" + member,
+                root,
+                path,
+                class_line,
+                member,
+            )
+
+    for match in RANDOM_NOISE_CLASS_SINGLETON_RE.finditer(code):
+        add_finding(
+            findings,
+            "random-noise-public-class-singleton",
+            root,
+            path,
+            line_no_at(code, match.start()),
+            original_line(text, line_no_at(code, match.start())),
+        )
+    return findings
+
+
 def scan_required_public_declarations(root: Path, path: Path, text: str) -> list[Finding]:
     findings: list[Finding] = []
     rel = relative(path, root)
@@ -3348,6 +3541,104 @@ def run_required_public_declarations_self_tests() -> None:
             raise AssertionError(
                 "required-public-declarations self-test expected "
                 + ", ".join(sorted(expected_rules))
+            )
+
+
+def run_random_noise_public_contract_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        path = root / "src/nextpas.core.math.random.pas"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "unit nextpas.core.math.random;\n"
+            "interface\n"
+            "type\n"
+            "  TRandomState = record S0: UInt64; S1: UInt64; end;\n"
+            "  TRandomGen = class\n"
+            "  private\n"
+            "    FState: TRandomState;\n"
+            "  public\n"
+            "    constructor Create(const ASeed: UInt64 = 0);\n"
+            "    procedure SetSeed(const ASeed: UInt64);\n"
+            "    function NextInt: Integer;\n"
+            "    function NextIntRange(const AMin, AMax: Integer): Integer;\n"
+            "    function NextFloat: Single;\n"
+            "    function NextFloatRange(const AMin, AMax: Single): Single;\n"
+            "    function NextDouble: Double;\n"
+            "    function NextBool(const AProbability: Single = 0.5): Boolean;\n"
+            "    function NextGaussian: Single;\n"
+            "    function NextVec2InCircle: TVec2f;\n"
+            "    function NextVec2OnCircle: TVec2f;\n"
+            "    function Roll(const ASides: Integer): Integer;\n"
+            "    function RollMultiple(const ADice, ASides: Integer): Integer;\n"
+            "    function WeightedChoice(const AWeights: array of Single): Integer;\n"
+            "    procedure Shuffle(var AValues: array of Integer);\n"
+            "    property State: TRandomState read FState write FState;\n"
+            "  end;\n"
+            "  TNoiseGen = class\n"
+            "  public\n"
+            "    constructor Create(const ASeed: UInt64 = 0);\n"
+            "    procedure SetSeed(const ASeed: UInt64);\n"
+            "    function Noise1D(const AX: Double): Double;\n"
+            "    function Noise2D(const AX, AY: Double): Double;\n"
+            "    function Noise3D(const AX, AY, AZ: Double): Double;\n"
+            "    function FBM1D(const AX: Double; const AOctaves: Integer; const ALacunarity: Double = 2.0; const AGain: Double = 0.5): Double;\n"
+            "    function FBM2D(const AX, AY: Double; const AOctaves: Integer; const ALacunarity: Double = 2.0; const AGain: Double = 0.5): Double;\n"
+            "    function FBM3D(const AX, AY, AZ: Double; const AOctaves: Integer; const ALacunarity: Double = 2.0; const AGain: Double = 0.5): Double;\n"
+            "  end;\n"
+            "function RandomDouble: Double;\n"
+            "var GlobalRandom: TRandomGen;\n"
+            "implementation\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        findings = scan_random_noise_public_contract(root, path, path.read_text(encoding="utf-8"))
+        rules = {finding.rule for finding in findings}
+        expected_rules = {
+            "random-noise-public-top-level-helper:RandomDouble",
+            "random-noise-public-global-state:GlobalRandom",
+        }
+        if not expected_rules <= rules:
+            raise AssertionError(
+                "random-noise-public-contract self-test missing "
+                + ", ".join(sorted(expected_rules - rules))
+            )
+
+        path.write_text(
+            path.read_text(encoding="utf-8")
+            .replace("function RandomDouble: Double;\n", "")
+            .replace("var GlobalRandom: TRandomGen;\n", ""),
+            encoding="utf-8",
+        )
+        findings = scan_random_noise_public_contract(root, path, path.read_text(encoding="utf-8"))
+        if findings:
+            raise AssertionError(
+                "random-noise-public-contract self-test expected no findings, got "
+                + ", ".join(sorted(finding.rule for finding in findings))
+            )
+
+        root_facade = root / ROOT_FACADE_PATH
+        root_facade.write_text(
+            "unit nextpas.core.math;\n"
+            "interface\n"
+            "uses nextpas.core.math.random;\n"
+            "type\n"
+            "  TRandomState = nextpas.core.math.random.TRandomState;\n"
+            "  TRandomGen = nextpas.core.math.random.TRandomGen;\n"
+            "  TNoiseGen = nextpas.core.math.random.TNoiseGen;\n"
+            "function DefaultRandom: TRandomGen;\n"
+            "implementation\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        findings = scan_random_noise_public_contract(
+            root, root_facade, root_facade.read_text(encoding="utf-8")
+        )
+        rules = {finding.rule for finding in findings}
+        expected_rule = "random-noise-public-top-level-helper:DefaultRandom"
+        if expected_rule not in rules:
+            raise AssertionError(
+                "random-noise-public-contract self-test expected " + expected_rule
             )
 
 
@@ -6315,6 +6606,7 @@ def build_report(root: Path) -> Report:
         findings.extend(scan_forbidden_fpc_math_unit_in_trig(root, path, text))
         findings.extend(scan_trig_log_exact_identity_source_contract(root, path, text))
         findings.extend(scan_public_global_random_singletons(root, path, text))
+        findings.extend(scan_random_noise_public_contract(root, path, text))
         findings.extend(scan_required_public_declarations(root, path, text))
         findings.extend(scan_vector_length_sqr_record_contract(root, path, text))
         findings.extend(scan_vector_public_record_contract(root, path, text))
@@ -6392,6 +6684,7 @@ def main() -> int:
         run_required_trig_host_compile_gate_self_tests()
         run_required_impl_simd_win64_compile_gate_self_tests()
         run_required_public_declarations_self_tests()
+        run_random_noise_public_contract_self_tests()
         run_vector_public_record_contract_self_tests()
         run_matrix_public_record_contract_self_tests()
         run_quaternion_public_record_contract_self_tests()
