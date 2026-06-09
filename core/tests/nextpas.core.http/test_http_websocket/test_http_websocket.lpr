@@ -393,6 +393,91 @@ begin
     'standalone WebSocket base uses RFC 6455 GUID');
 end;
 
+procedure TestHandshakeTrimsWebSocketHeaderOWS;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LWs: IWebSocket;
+  begin
+    try
+      LWs := UpgradeWebSocket(AReq, AW);
+      LWs.Close(1000, 'ok');
+    except
+      on E: EHttpError do
+      begin
+        AW.GetHeaders.SetHeader('content-length', '0');
+        AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
+      end;
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawAndRead(LPort,
+      'GET /ws HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Upgrade: websocket '#9#13#10 +
+      'Connection: keep-alive, Upgrade'#13#10 +
+      'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ== '#9#13#10 +
+      'Sec-WebSocket-Version: 13 '#9#13#10 +
+      #13#10, 256);
+    Check(Pos('HTTP/1.1 101', LResp) > 0,
+      'should accept legal OWS around WebSocket handshake header values');
+    Check(Pos('Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=', LResp) > 0,
+      'accept key should be computed from trimmed Sec-WebSocket-Key');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestHandshakeDuplicateKeyRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LWs: IWebSocket;
+  begin
+    try
+      LWs := UpgradeWebSocket(AReq, AW);
+      LWs.Close(1000, 'duplicate key accepted');
+    except
+      on E: EHttpError do
+      begin
+        AW.GetHeaders.SetHeader('content-length', '0');
+        AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
+      end;
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawAndRead(LPort,
+      'GET /ws HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Upgrade: websocket'#13#10 +
+      'Connection: Upgrade'#13#10 +
+      'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='#13#10 +
+      'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='#13#10 +
+      'Sec-WebSocket-Version: 13'#13#10 +
+      #13#10, 256);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'duplicate Sec-WebSocket-Key must be rejected');
+    Check(Pos('HTTP/1.1 101', LResp) = 0,
+      'duplicate Sec-WebSocket-Key must not upgrade');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 2: Handshake fails without Upgrade header }
 procedure TestHandshakeNoUpgrade;
 var
@@ -2737,6 +2822,9 @@ begin
   T.Run('HandshakeSuccess', @TestHandshakeSuccess);
   T.Run('WebSocketAcceptGuidSourceContract',
     @TestWebSocketAcceptGuidSourceContract);
+  T.Run('HandshakeTrimsWebSocketHeaderOWS',
+    @TestHandshakeTrimsWebSocketHeaderOWS);
+  T.Run('HandshakeDuplicateKeyRejected', @TestHandshakeDuplicateKeyRejected);
   T.Run('HandshakeNoUpgrade', @TestHandshakeNoUpgrade);
   T.Run('HandshakeNoKey', @TestHandshakeNoKey);
   T.Run('HandshakeInvalidKeyRejected', @TestHandshakeInvalidKeyRejected);

@@ -125,6 +125,21 @@ begin
   Result := (ACh = ' ') or (ACh = #9);
 end;
 
+function TrimOWS(const S: string): string;
+var
+  LFirst, LLast: Integer;
+begin
+  LFirst := 1;
+  LLast := Length(S);
+  while (LFirst <= LLast) and IsOWS(S[LFirst]) do
+    Inc(LFirst);
+  while (LLast >= LFirst) and IsOWS(S[LLast]) do
+    Dec(LLast);
+  if LFirst > LLast then
+    Exit('');
+  Result := Copy(S, LFirst, LLast - LFirst + 1);
+end;
+
 function LowerTrim(const S: string): string;
 var
   LFirst, LLast: Integer;
@@ -269,20 +284,27 @@ function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWrite
   const AOptions: TWebSocketOptions): IWebSocket;
 var
   LUpgrade, LConnection, LKey, LVersion: string;
+  LKeyValues: TStringArray;
   LAccept: string;
   LResp: string;
   LHijacker: IHttpHijacker;
   LConn: ITcpStream;
 begin
-  LUpgrade := LowerCase(AReq.Headers.Get('upgrade'));
+  LUpgrade := LowerTrim(AReq.Headers.Get('upgrade'));
   LConnection := AReq.Headers.Get('connection');
-  LKey := AReq.Headers.Get('sec-websocket-key');
-  LVersion := AReq.Headers.Get('sec-websocket-version');
+  LKeyValues := AReq.Headers.GetAll('sec-websocket-key');
+  if Length(LKeyValues) = 1 then
+    LKey := TrimOWS(LKeyValues[0])
+  else
+    LKey := '';
+  LVersion := TrimOWS(AReq.Headers.Get('sec-websocket-version'));
 
   if LUpgrade <> 'websocket' then
     raise EHttpError.Create('Missing or invalid Upgrade header');
   if not HeaderHasToken(LConnection, 'upgrade') then
     raise EHttpError.Create('Missing or invalid Connection header');
+  if Length(LKeyValues) > 1 then
+    raise EHttpError.Create('Duplicate Sec-WebSocket-Key header');
   if LKey = '' then
     raise EHttpError.Create('Missing Sec-WebSocket-Key header');
   ValidateHandshakeKey(LKey);
