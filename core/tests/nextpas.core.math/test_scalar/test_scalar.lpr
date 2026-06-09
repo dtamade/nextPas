@@ -572,15 +572,23 @@ begin
   Check((not IsNaN(DegToRad(MakeMaxFiniteDouble))) and
     (not IsInfinite(DegToRad(MakeMaxFiniteDouble))),
     'DegToRad Double max finite stays finite');
+  Check(DegToRad(MakeMaxFiniteDouble) > 0.0,
+    'DegToRad Double max finite stays positive');
   Check((not IsNaN(DegToRad(MakeMaxFiniteSingle))) and
     (not IsInfinite(DegToRad(MakeMaxFiniteSingle))),
     'DegToRad Single max finite stays finite');
+  Check(DegToRad(MakeMaxFiniteSingle) > Single(0.0),
+    'DegToRad Single max finite stays positive');
   Check((not IsNaN(DegToRad(-MakeMaxFiniteDouble))) and
     (not IsInfinite(DegToRad(-MakeMaxFiniteDouble))),
     'DegToRad Double negative max finite stays finite');
+  Check(DegToRad(-MakeMaxFiniteDouble) < 0.0,
+    'DegToRad Double negative max finite stays negative');
   Check((not IsNaN(DegToRad(-MakeMaxFiniteSingle))) and
     (not IsInfinite(DegToRad(-MakeMaxFiniteSingle))),
     'DegToRad Single negative max finite stays finite');
+  Check(DegToRad(-MakeMaxFiniteSingle) < Single(0.0),
+    'DegToRad Single negative max finite stays negative');
 
   Check(IsNaN(RadToDeg(MakeNaN)), 'RadToDeg Double NaN propagates NaN');
   Check(IsNaN(RadToDeg(MakeSingleNaN)), 'RadToDeg Single NaN propagates NaN');

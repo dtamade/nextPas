@@ -804,19 +804,19 @@ REQUIRED_SCALAR_INTEGER_BOUNDARY_DOC_TRUTH = (
 REQUIRED_SCALAR_SIGN_ANGLE_DOC_TRUTH = (
     (
         "docs/math/README.md",
-        "`Sign` propagates NaN, preserves signed zero, and maps infinities to `+/-1`; `DegToRad` and `RadToDeg` propagate NaN and infinities while preserving signed zero, and `RadToDeg` maps finite overflow to signed infinity.",
+        "`Sign` propagates NaN, preserves signed zero, and maps infinities to `+/-1`; `DegToRad` and `RadToDeg` propagate NaN and infinities while preserving signed zero. `DegToRad` keeps maximum finite inputs finite with their original sign, and `RadToDeg` maps finite overflow to signed infinity.",
     ),
     (
         "docs/math/API.md",
-        "`Sign` propagates NaN, preserves signed zero, and maps infinities to `+/-1`; `DegToRad` and `RadToDeg` propagate NaN and infinities while preserving signed zero, and `RadToDeg` maps finite overflow to signed infinity.",
+        "`Sign` propagates NaN, preserves signed zero, and maps infinities to `+/-1`; `DegToRad` and `RadToDeg` propagate NaN and infinities while preserving signed zero. `DegToRad` keeps maximum finite inputs finite with their original sign, and `RadToDeg` maps finite overflow to signed infinity.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "`Sign` propagates NaN, preserves signed zero, and maps infinities to `+/-1`; `DegToRad` and `RadToDeg` propagate NaN and infinities while preserving signed zero, and `RadToDeg` maps finite overflow to signed infinity.",
+        "`Sign` propagates NaN, preserves signed zero, and maps infinities to `+/-1`; `DegToRad` and `RadToDeg` propagate NaN and infinities while preserving signed zero. `DegToRad` keeps maximum finite inputs finite with their original sign, and `RadToDeg` maps finite overflow to signed infinity.",
     ),
     (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
-        "`Sign` propagates NaN, preserves signed zero, and maps infinities to `+/-1`; `DegToRad` and `RadToDeg` propagate NaN and infinities while preserving signed zero, and `RadToDeg` maps finite overflow to signed infinity.",
+        "`Sign` propagates NaN, preserves signed zero, and maps infinities to `+/-1`; `DegToRad` and `RadToDeg` propagate NaN and infinities while preserving signed zero. `DegToRad` keeps maximum finite inputs finite with their original sign, and `RadToDeg` maps finite overflow to signed infinity.",
     ),
 )
 REQUIRED_SCALAR_INTEGER_CONVERSION_DOC_TRUTH = (
@@ -1880,6 +1880,10 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-degtorad-positive-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "DegToRad Double positive zero keeps positive zero"),
     RequiredBehaviorTestMarker("scalar-degtorad-negative-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "DegToRad Double negative zero keeps negative zero"),
     RequiredBehaviorTestMarker("scalar-degtorad-max-finite-no-overflow", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "DegToRad Double max finite stays finite"),
+    RequiredBehaviorTestMarker("scalar-degtorad-double-max-finite-sign", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "DegToRad Double max finite stays positive"),
+    RequiredBehaviorTestMarker("scalar-degtorad-single-max-finite-sign", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "DegToRad Single max finite stays positive"),
+    RequiredBehaviorTestMarker("scalar-degtorad-double-negative-max-finite-sign", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "DegToRad Double negative max finite stays negative"),
+    RequiredBehaviorTestMarker("scalar-degtorad-single-negative-max-finite-sign", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "DegToRad Single negative max finite stays negative"),
     RequiredBehaviorTestMarker("scalar-radtodeg-nan", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "RadToDeg Double NaN propagates NaN"),
     RequiredBehaviorTestMarker("scalar-radtodeg-single-infinity", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "RadToDeg Single positive infinity propagates infinity"),
     RequiredBehaviorTestMarker("scalar-radtodeg-positive-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "RadToDeg Double positive zero keeps positive zero"),
