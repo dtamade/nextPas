@@ -1049,6 +1049,40 @@ REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
         ),
     ),
     RequiredCoreMakeTarget(
+        target="core-math-leak-local-smoke",
+        command="make -C core core-math-leak-local-smoke",
+        recipe_steps=(
+            (
+                "facade-local-smoke",
+                "$(MAKE) core-math-facade-local-smoke",
+            ),
+            (
+                "test-scalar",
+                "$(MAKE) -C tests/nextpas.core.math/test_scalar clean test",
+            ),
+            (
+                "test-trig",
+                "$(MAKE) -C tests/nextpas.core.math/test_trig clean test",
+            ),
+            (
+                "test-vec",
+                "$(MAKE) -C tests/nextpas.core.math/test_vec clean test",
+            ),
+            (
+                "test-impl-simd",
+                "$(MAKE) core-math-impl-simd-local-smoke",
+            ),
+            (
+                "test-random",
+                "$(MAKE) -C tests/nextpas.core.math/test_random clean test",
+            ),
+            (
+                "test-noise",
+                "$(MAKE) -C tests/nextpas.core.math/test_noise clean test",
+            ),
+        ),
+    ),
+    RequiredCoreMakeTarget(
         target="core-math-impl-simd-local-smoke",
         command="make -C core core-math-impl-simd-local-smoke",
         recipe_steps=(
@@ -1327,6 +1361,10 @@ PUBLIC_IMPL_RE = re.compile(
 )
 MATH_IMPL_SIMD_RE = re.compile(
     r"\bnextpas\.core\.math\.impl\.simd\b",
+    re.IGNORECASE,
+)
+PUBLIC_MATH_SOURCE_SIMD_RE = re.compile(
+    r"\bnextpas\.core\.(?:math\.impl\.simd|simd)\b",
     re.IGNORECASE,
 )
 PUBLIC_GLOBAL_RANDOM_RE = re.compile(
@@ -2620,7 +2658,7 @@ def scan_public_math_source_simd_wiring(root: Path, path: Path, text: str) -> li
     code = strip_pascal_comments_and_strings(text)
     for uses_match in USES_MATH_FFI_RE.finditer(code):
         body = uses_match.group("body")
-        for match in MATH_IMPL_SIMD_RE.finditer(body):
+        for match in PUBLIC_MATH_SOURCE_SIMD_RE.finditer(body):
             line = line_no_at(code, uses_match.start("body") + match.start())
             add_finding(
                 findings,
@@ -3799,6 +3837,16 @@ def run_public_math_source_simd_wiring_self_tests() -> None:
             "unit nextpas.core.math.vec;\n"
             "interface\n"
             "uses nextpas.core.math.impl.simd;\n"
+            "implementation\n"
+            "end.\n",
+            True,
+        ),
+        (
+            "active-public-simd-facade-uses",
+            "src/nextpas.core.math.vec.pas",
+            "unit nextpas.core.math.vec;\n"
+            "interface\n"
+            "uses nextpas.core.simd;\n"
             "implementation\n"
             "end.\n",
             True,

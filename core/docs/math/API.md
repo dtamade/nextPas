@@ -31,6 +31,8 @@ code, examples, public docs, or public tests.
 Current `TVec*`, `TMat*`, and `TQuat*` public value-type methods remain scalar: local SIMD seam
 benchmarks are negative wiring evidence, and public math source units must not import
 `math.impl.simd` until a later profiled cutover adds tested public SIMD primitives.
+The source-contract gate treats direct `nextpas.core.simd` imports in public math source units as
+the same prohibited cutover.
 
 ## Public Surface And Example
 
@@ -83,6 +85,17 @@ make -C core core-math-symbol-scope-local-smoke
 `core-math-symbol-scope-local-smoke` wraps
 `make -C core/tests/nextpas.core.math/test_symbol_scope clean test` through the same owner-level
 boundary, so the common-symbol namespace contract no longer depends on a direct subproject command.
+
+Run the named leak-local gate when you want the focused heaptrc-backed runtime smoke set without
+promoting to the full math aggregate:
+
+```sh
+make -C core core-math-leak-local-smoke
+```
+
+`core-math-leak-local-smoke` runs facade, scalar, trig, vector, SIMD seam, random, and noise local
+tests through stable owner-level targets or focused subproject Makefiles. It intentionally avoids
+examples, benchmarks, compile-only host gates, and the full math aggregate.
 
 ## Scalar And Trig
 
