@@ -117,8 +117,21 @@ procedure TProgressGroup.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   Inner: TRect;
   I, J, Y, BarW, PctW, FilledCells, Frac, StartX: Integer;
+  LCursorX, LRight, LRemaining: Integer;
   PctStr: AnsiString;
   EffLabelW: Integer;
+
+  procedure WriteSegment(const AText: AnsiString; AMaxWidth: Integer; const AStyle: TStyle);
+  var
+    LWriteWidth, LWritten: Integer;
+  begin
+    if (AMaxWidth <= 0) or (LRemaining <= 0) then Exit;
+    LWriteWidth := AMaxWidth;
+    if LWriteWidth > LRemaining then LWriteWidth := LRemaining;
+    LWritten := ABuffer.SetStringN(LCursorX, Y, AText, LWriteWidth, AStyle);
+    Inc(LCursorX, LWritten);
+    Dec(LRemaining, LWritten);
+  end;
 begin
   if AArea.IsEmpty then Exit;
   ABuffer.SetStyle(AArea, FStyle);
@@ -153,27 +166,33 @@ begin
     Y := Inner.Y + I;
     if Y >= Inner.Y + Inner.Height then Break;
 
-    ABuffer.SetStringN(Inner.X, Y, FItems[I].Label_, EffLabelW, FStyle);
+    LCursorX := Inner.X;
+    LRight := Inner.X + Inner.Width;
+    LRemaining := LRight - LCursorX;
+    if LRemaining <= 0 then Continue;
+
+    WriteSegment(FItems[I].Label_, EffLabelW, FStyle);
+    if LRemaining <= 0 then Continue;
 
     FilledCells := Trunc(FItems[I].Ratio * BarW);
     Frac := Trunc((FItems[I].Ratio * BarW - FilledCells) * 8);
     if FilledCells > BarW then FilledCells := BarW;
 
     for J := 0 to FilledCells - 1 do
-      ABuffer.SetStringN(Inner.X + EffLabelW + J, Y, FullBlock, 1, FItems[I].FilledStyle);
+      WriteSegment(FullBlock, 1, FItems[I].FilledStyle);
 
     if (FilledCells < BarW) and (Frac > 0) then
-      ABuffer.SetStringN(Inner.X + EffLabelW + FilledCells, Y, BlockChars[Frac], 1, FItems[I].FilledStyle);
+      WriteSegment(BlockChars[Frac], 1, FItems[I].FilledStyle);
 
     StartX := FilledCells;
     if Frac > 0 then Inc(StartX);
     for J := StartX to BarW - 1 do
-      ABuffer.SetStringN(Inner.X + EffLabelW + J, Y, #$E2#$96#$91, 1, FEmptyStyle);
+      WriteSegment(#$E2#$96#$91, 1, FEmptyStyle);
 
     if FShowPercent then
     begin
       PctStr := Format('%3d%%', [Round(FItems[I].Ratio * 100)]);
-      ABuffer.SetStringN(Inner.X + EffLabelW + BarW, Y, PctStr, PctW, FStyle);
+      WriteSegment(PctStr, PctW, FStyle);
     end;
   end;
 end;
