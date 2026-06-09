@@ -2104,6 +2104,13 @@ begin
     LBuf.Write(CRLF[1], 2);
   end);
 
+  if (AReq.ContentLength > 0) and (not AReq.Headers.Has('content-length')) then
+  begin
+    LStr := 'content-length: ' + IntToStr(AReq.ContentLength);
+    LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
+    LBuf.Write(CRLF[1], 2);
+  end;
+
   if (AAutoHost <> '') and (not AReq.Headers.Has('host')) then
   begin
     LStr := 'host: ' + AAutoHost;

@@ -3353,6 +3353,51 @@ begin
   end;
 end;
 
+procedure TestClientSerializesContentLengthWhenRequestHeaderRemoved;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+begin
+  GBodyLimitDeclaredBody := '';
+  GBodyLimitExtraBody := '';
+  GBodyLimitReplyAfterRead := True;
+  GBodyLimitListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GBodyLimitListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @BodyLimitCaptureThread, nil);
+
+  try
+    LClient := NewHttpClient;
+    LReq := NewRequest(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
+      NewHeaders, StringBodyReader('payload'), Int64(7));
+    LReq.Headers.Remove('content-length');
+    Check(not LReq.Headers.Has('content-length'),
+      'test precondition removes request content-length header');
+
+    LResp := LClient.Send(LReq);
+
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'removed content-length header request returns response');
+    CheckEqual('ok', ReadBodyStr(LResp),
+      'removed content-length header response body');
+    CheckEqual('payload', GBodyLimitDeclaredBody,
+      'transport serializes request ContentLength as fixed body framing');
+    CheckEqual('', GBodyLimitExtraBody,
+      'transport does not send unframed request body bytes');
+    Check(not LReq.Headers.Has('content-length'),
+      'transport framing does not mutate request headers');
+  finally
+    GBodyLimitListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GBodyLimitListener := nil;
+    GBodyLimitReplyAfterRead := False;
+  end;
+end;
+
 procedure TestClientRequestBodySkipsNonNilBodyWhenContentLengthZero;
 var
   LPort: UInt16;
@@ -6861,6 +6906,8 @@ begin
     @TestClientDoesNotPool101SwitchingProtocolsConnection);
   T.Run('Client request body does not exceed ContentLength',
     @TestClientRequestBodyDoesNotExceedContentLength);
+  T.Run('Client serializes ContentLength when request header removed',
+    @TestClientSerializesContentLengthWhenRequestHeaderRemoved);
   T.Run('Client request body skips non-nil body when ContentLength is zero',
     @TestClientRequestBodySkipsNonNilBodyWhenContentLengthZero);
   T.Run('Client rejects request body shorter than ContentLength',
