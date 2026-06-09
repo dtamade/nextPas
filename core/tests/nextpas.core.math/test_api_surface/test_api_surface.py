@@ -1254,6 +1254,7 @@ COMPILE_ONLY_GATE_AGGREGATE_EXCLUSIONS = (
 )
 COMPILE_ONLY_GATE_EXCLUSION_MARKER_PREFIX = "# compile-only opt-in gate:"
 BENCH_SIMD_SEAM_PATH = "benchmarks/nextpas.core.math/bench_simd_seam/bench_simd_seam.lpr"
+BENCHMARK_IMPL_ALLOWLIST = frozenset({BENCH_SIMD_SEAM_PATH})
 SIMD_MATHUTIL_PATH = "src/nextpas.core.simd.mathutil.pas"
 MATH_IMPL_SIMD_PATH = "src/nextpas.core.math.impl.simd.pas"
 MATH_TRIG_PATH = "src/nextpas.core.math.trig.pas"
@@ -1331,6 +1332,10 @@ LEGACY_PUBLIC_DOC_VECTORS_PATH_RE = re.compile(
 USES_MATH_FFI_RE = re.compile(
     r"\buses\b(?P<body>.*?);",
     re.IGNORECASE | re.DOTALL,
+)
+MATH_FFI_UNIT_RE = re.compile(
+    r"\b(?:nextpas\.core\.)?math\.ffi\b",
+    re.IGNORECASE,
 )
 EXTERNAL_M_RE = re.compile(
     r"\bexternal\s+(['\"])\s*m\s*\1",
@@ -2671,7 +2676,7 @@ def scan_math_ffi_uses(root: Path, path: Path, text: str) -> list[Finding]:
     code = strip_pascal_comments_and_strings(text)
     for match in USES_MATH_FFI_RE.finditer(code):
         body = match.group("body")
-        needle = re.search(r"\bnextpas\.core\.math\.ffi\b", body, re.IGNORECASE)
+        needle = MATH_FFI_UNIT_RE.search(body)
         if needle is None:
             continue
         line = line_no_at(code, match.start("body") + needle.start())
@@ -2952,6 +2957,26 @@ def scan_public_impl_consumers(root: Path, path: Path, text: str) -> list[Findin
         add_finding(
             findings,
             "no-public-impl-consumer",
+            root,
+            path,
+            line,
+            original_line(text, line),
+        )
+    return findings
+
+
+def scan_benchmark_public_impl_consumers(root: Path, path: Path, text: str) -> list[Finding]:
+    findings: list[Finding] = []
+    rel = relative(path, root)
+    if rel in BENCHMARK_IMPL_ALLOWLIST:
+        return findings
+
+    code = strip_pascal_comments_and_strings(text)
+    for match in PUBLIC_IMPL_RE.finditer(code):
+        line = line_no_at(code, match.start())
+        add_finding(
+            findings,
+            "no-benchmark-public-impl-consumer",
             root,
             path,
             line,
@@ -4606,6 +4631,130 @@ def run_public_math_source_simd_wiring_self_tests() -> None:
             if (not expected_finding) and findings:
                 raise AssertionError(
                     "public-math-source-simd-wiring self-test "
+                    + case_name
+                    + " expected no findings"
+                )
+
+
+def run_math_ffi_consumer_self_tests() -> None:
+    cases = (
+        (
+            "qualified-math-ffi",
+            "tests/nextpas.core.math/test_bad/test_bad.lpr",
+            "program test_bad;\n"
+            "uses nextpas.core.math.ffi;\n"
+            "begin\n"
+            "end.\n",
+            True,
+        ),
+        (
+            "bare-math-ffi",
+            "tests/nextpas.core.math/test_bad/test_bad.lpr",
+            "program test_bad;\n"
+            "uses math.ffi;\n"
+            "begin\n"
+            "end.\n",
+            True,
+        ),
+        (
+            "commented-bare-math-ffi",
+            "tests/nextpas.core.math/test_bad/test_bad.lpr",
+            "program test_bad;\n"
+            "// uses math.ffi;\n"
+            "begin\n"
+            "end.\n",
+            False,
+        ),
+        (
+            "string-bare-math-ffi",
+            "tests/nextpas.core.math/test_bad/test_bad.lpr",
+            "program test_bad;\n"
+            "const Msg = 'uses math.ffi;';\n"
+            "begin\n"
+            "end.\n",
+            False,
+        ),
+    )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        expected_rule = "no-math-ffi-consumers"
+        for case_name, rel, text, expected_finding in cases:
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+            findings = scan_math_ffi_uses(root, path, text)
+            rules = {finding.rule for finding in findings}
+            if expected_finding and expected_rule not in rules:
+                raise AssertionError(
+                    "math-ffi-consumer self-test "
+                    + case_name
+                    + " expected "
+                    + expected_rule
+                )
+            if (not expected_finding) and findings:
+                raise AssertionError(
+                    "math-ffi-consumer self-test "
+                    + case_name
+                    + " expected no findings"
+                )
+
+
+def run_benchmark_public_impl_consumer_self_tests() -> None:
+    cases = (
+        (
+            "allowed-simd-seam",
+            BENCH_SIMD_SEAM_PATH,
+            "program bench_simd_seam;\n"
+            "uses nextpas.core.math.impl.simd;\n"
+            "begin\n"
+            "end.\n",
+            False,
+        ),
+        (
+            "forbidden-scalar-impl",
+            "benchmarks/nextpas.core.math/bench_scalar_impl/bench_scalar_impl.lpr",
+            "program bench_scalar_impl;\n"
+            "uses nextpas.core.math.impl.scalar;\n"
+            "begin\n"
+            "end.\n",
+            True,
+        ),
+        (
+            "commented-impl",
+            "benchmarks/nextpas.core.math/bench_comment/bench_comment.lpr",
+            "program bench_comment;\n"
+            "// uses nextpas.core.math.impl.scalar;\n"
+            "begin\n"
+            "end.\n",
+            False,
+        ),
+    )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        expected_rule = "no-benchmark-public-impl-consumer"
+        for _case_name, rel, text, _expected_finding in cases:
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+
+        report = build_report(root)
+        for case_name, rel, _text, expected_finding in cases:
+            has_finding = any(
+                finding.path == rel and finding.rule == expected_rule
+                for finding in report.findings
+            )
+            if expected_finding and not has_finding:
+                raise AssertionError(
+                    "benchmark-public-impl-consumer self-test "
+                    + case_name
+                    + " expected "
+                    + expected_rule
+                )
+            if (not expected_finding) and has_finding:
+                raise AssertionError(
+                    "benchmark-public-impl-consumer self-test "
                     + case_name
                     + " expected no findings"
                 )
@@ -7150,6 +7299,7 @@ def build_report(root: Path) -> Report:
         text = path.read_text(encoding="utf-8", errors="replace")
         findings.extend(scan_math_ffi_uses(root, path, text))
         findings.extend(scan_private_simd(root, path, text))
+        findings.extend(scan_benchmark_public_impl_consumers(root, path, text))
         if path.suffix.lower() in {".lpr", ".pas"}:
             findings.extend(scan_external_m(root, path, text))
         if path.suffix.lower() in {".lpr", ".pas"} or path.name == "Makefile":
@@ -7186,6 +7336,8 @@ def main() -> int:
         run_facade_type_alias_compile_surface_self_tests()
         run_facade_root_import_contract_self_tests()
         run_public_math_source_simd_wiring_self_tests()
+        run_math_ffi_consumer_self_tests()
+        run_benchmark_public_impl_consumer_self_tests()
         run_math_impl_simd_facade_only_uses_self_tests()
         run_math_impl_simd_public_seam_self_tests()
         run_forbidden_simd_mathutil_bare_name_self_tests()
