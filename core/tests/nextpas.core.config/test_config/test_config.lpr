@@ -1227,6 +1227,93 @@ begin
   end;
 end;
 
+procedure TestMalformedYamlDiagnosticsAndFailClosed;
+var
+  LCfg: TConfig;
+  LError: string;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := '/tmp/test_nextpas_config_bad_yaml_diagnostics.yaml';
+  Remove(LPath);
+  WriteFileText(LPath, 'from_file: yes' + #10 +
+    'bad: *missing' + #10 +
+    'after: no' + #10);
+
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromYaml('keep: value' + #10);
+
+    LRaised := False;
+    try
+      LCfg.LoadFromYaml('before: yes' + #10 +
+        'bad: *missing' + #10 +
+        'after: no' + #10);
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('config yaml parse error', E.Message) > 0,
+          'LoadFromYaml error category');
+        Check(Pos('line 2', E.Message) > 0, 'LoadFromYaml error line');
+        Check(Pos('column', E.Message) > 0, 'LoadFromYaml error column');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'LoadFromYaml malformed yaml raises');
+    CheckEqual('value', LCfg.GetString('keep'), 'LoadFromYaml preserves old value');
+    CheckEqual(False, LCfg.Has('before'), 'LoadFromYaml does not partially apply');
+    CheckEqual(False, LCfg.Has('after'), 'LoadFromYaml ignores bad body');
+
+    LError := '';
+    CheckEqual(False,
+      LCfg.TryLoadFromYaml('try_before: yes' + #10 +
+        'bad: *missing' + #10 +
+        'try_after: no' + #10,
+        LError),
+      'TryLoadFromYaml malformed yaml returns false');
+    Check(Pos('config yaml parse error', LError) > 0,
+      'TryLoadFromYaml error category');
+    Check(Pos('line 2', LError) > 0, 'TryLoadFromYaml error line');
+    Check(Pos('column', LError) > 0, 'TryLoadFromYaml error column');
+    CheckEqual('value', LCfg.GetString('keep'), 'TryLoadFromYaml preserves old value');
+    CheckEqual(False, LCfg.Has('try_before'),
+      'TryLoadFromYaml does not partially apply');
+
+    LRaised := False;
+    try
+      LCfg.LoadFromFile(LPath, cfYaml);
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos(LPath, E.Message) > 0, 'LoadFromFile error includes path');
+        Check(Pos('config yaml parse error', E.Message) > 0,
+          'LoadFromFile error category');
+        Check(Pos('line 2', E.Message) > 0, 'LoadFromFile error line');
+        Check(Pos('column', E.Message) > 0, 'LoadFromFile error column');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'LoadFromFile malformed yaml raises');
+    CheckEqual('value', LCfg.GetString('keep'), 'LoadFromFile preserves old value');
+    CheckEqual(False, LCfg.Has('from_file'), 'LoadFromFile does not partially apply');
+
+    LError := '';
+    CheckEqual(False, LCfg.TryLoadFromFile(LPath, cfYaml, LError),
+      'TryLoadFromFile malformed yaml returns false');
+    Check(Pos(LPath, LError) > 0, 'TryLoadFromFile error includes path');
+    Check(Pos('config yaml parse error', LError) > 0,
+      'TryLoadFromFile error category');
+    Check(Pos('line 2', LError) > 0, 'TryLoadFromFile error line');
+    Check(Pos('column', LError) > 0, 'TryLoadFromFile error column');
+    CheckEqual('value', LCfg.GetString('keep'), 'TryLoadFromFile preserves old value');
+    CheckEqual(False, LCfg.Has('from_file'),
+      'TryLoadFromFile does not partially apply');
+  finally
+    LCfg.Free;
+    Remove(LPath);
+  end;
+end;
+
 procedure TestTryLoadFromJsonValid;
 var
   LCfg: TConfig;
@@ -1943,6 +2030,8 @@ begin
     @TestMalformedTomlDiagnosticsAndFailClosed);
   T.Run('MalformedJson.DiagnosticsAndFailClosed',
     @TestMalformedJsonDiagnosticsAndFailClosed);
+  T.Run('MalformedYaml.DiagnosticsAndFailClosed',
+    @TestMalformedYamlDiagnosticsAndFailClosed);
   T.Run('TryLoadFromJson.Valid', @TestTryLoadFromJsonValid);
   T.Run('TryLoadFromJson.Invalid', @TestTryLoadFromJsonInvalid);
   T.Run('TryLoad.ShortVariantsInvalid', @TestTryLoadShortVariantsInvalid);

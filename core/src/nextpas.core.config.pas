@@ -1791,7 +1791,7 @@ begin
   Result := AError.Message.ToString;
   if Result = '' then
     Result := 'parse error';
-  Result := 'YAML parse error at line ' + UIntToStr(AError.Line) +
+  Result := 'config yaml parse error at line ' + UIntToStr(AError.Line) +
     ', column ' + UIntToStr(AError.Col) + ': ' + Result;
 end;
 

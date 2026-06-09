@@ -553,7 +553,7 @@ begin
       on E: EConfigError do
       begin
         LRaised := True;
-        Check(Pos('YAML parse error', E.Message) > 0, 'yaml error message');
+        Check(Pos('config yaml parse error', E.Message) > 0, 'yaml error category');
       end;
     end;
     CheckEqual(True, LRaised, 'bad yaml raises');
