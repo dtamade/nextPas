@@ -99,8 +99,45 @@ begin
   Check(SimdIsInfinite(LLogInfinity) and (LLogInfinity > 0.0), 'SimdLnF32(+Inf) returns +Inf');
 end;
 
+procedure TestExpandedScalarTrigCommonSymbols;
+var
+  LFrac: Double;
+  LLog: Double;
+  LLog2: Double;
+  LLog10: Double;
+  LRoot: Double;
+  LSimdLog: Single;
+begin
+  CheckNear(2.5, Abs(-2.5), 'Root Abs resolves to nextpas.core.math');
+  CheckNear(-1.0, Sign(-42.0), 'Root Sign resolves to nextpas.core.math');
+  CheckEqual(Int64(2), Round(1.5), 'Root Round resolves to nextpas.core.math');
+  CheckEqual(Int64(-1), Trunc(-1.75), 'Root Trunc resolves to nextpas.core.math');
+
+  LFrac := Frac(-1.25);
+  CheckNear(-0.25, LFrac, 'Root Frac resolves to nextpas.core.math');
+  CheckNear(1.0, Fmod(5.5, 1.5), 'Root Fmod resolves to nextpas.core.math');
+
+  LLog := Ln(1.0);
+  LLog2 := Log2(2.0);
+  LLog10 := Log10(10.0);
+  LRoot := Sqrt(9.0);
+  CheckNear(0.0, LLog, 'Root Ln resolves to nextpas.core.math');
+  CheckNear(1.0, LLog2, 'Root Log2 resolves to nextpas.core.math');
+  CheckNear(1.0, LLog10, 'Root Log10 resolves to nextpas.core.math');
+  CheckNear(3.0, LRoot, 'Root Sqrt resolves to nextpas.core.math');
+  CheckNear(3.0, Power(9.0, 0.5), 'Root Power resolves to nextpas.core.math');
+  Check(True, 'Root Abs/Round/Ln/Log/Sqrt resolve to nextpas.core.math');
+
+  LSimdLog := SimdLnF32(1.0);
+  CheckNear(0.0, LSimdLog, 'SimdLnF32 keeps Simd* name');
+  CheckNear(2.0, SimdRoundF32(1.5), 'SimdRoundF32 keeps Simd* name');
+  CheckNear(-1.0, SimdTruncFloatF32(-1.75), 'SimdTruncFloatF32 keeps Simd* name');
+  Check(True, 'SimdLnF32/SimdRoundF32/SimdTruncFloatF32 keep Simd* names');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math symbol scope');
   T.Run('math + simd.mathutil common symbols', @TestMathAndSimdMathUtilNoAmbiguousCommonSymbols);
+  T.Run('expanded scalar/trig common symbols', @TestExpandedScalarTrigCommonSymbols);
   T.Summary;
 end.
