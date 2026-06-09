@@ -274,6 +274,37 @@ begin
   end;
 end;
 
+procedure TestFullFacadeCoversAppTaskRuntimeSurface;
+var
+  LApp: TApp;
+  LTaskId: TTaskId;
+  LTaskStatus: TTaskStatus;
+  LTaskResult: TTaskResult;
+  LCompletion: TCompletionSlot;
+  LLoading: TLoadingGroup;
+begin
+  LApp := TApp.Create;
+  try
+    LTaskId := 1;
+    LTaskStatus := tsRunning;
+    LTaskResult := Default(TTaskResult);
+    LTaskResult.Status := tsCompleted;
+    LCompletion.Id := LTaskId;
+    LCompletion.Result := LTaskResult;
+    LLoading := TLoadingGroup.Empty;
+    LLoading.Start(0, LCompletion.Id, 100);
+    LLoading.Update([LCompletion], 1);
+
+    Check(LApp.Tasks <> nil, 'full facade exposes app task manager slot');
+    CheckEqual(Int64(Ord(tsRunning)), Int64(Ord(LTaskStatus)),
+      'full facade exposes task status constants');
+    CheckEqual(Int64(Ord(lpSuccess)), Int64(Ord(LLoading.GetPhase(0))),
+      'full facade exposes loading group contract');
+  finally
+    LApp.Free;
+  end;
+end;
+
 procedure TestFullFacadeAdvancedWidgetCatalogRemainsUsable;
 var
   LSparkline: ISparkline;
@@ -363,6 +394,7 @@ begin
   T.Run('facade constants and helpers', @TestFacadeConstantsAndHelpers);
   T.Run('compatibility aliases remain', @TestCompatibilityAliasesRemain);
   T.Run('full facade covers ext and experimental contract', @TestFullFacadeCoversExtAndExperimentalSurface);
+  T.Run('full facade covers app task runtime surface', @TestFullFacadeCoversAppTaskRuntimeSurface);
   T.Run('full facade advanced widget catalog remains usable', @TestFullFacadeAdvancedWidgetCatalogRemainsUsable);
   T.Run('full facade app callback wiring compiles', @TestReadmeQuickStartCompiles);
   T.Summary;

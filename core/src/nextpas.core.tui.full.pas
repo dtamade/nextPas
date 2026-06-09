@@ -182,6 +182,24 @@ type
   TTuiScreenStack = nextpas.core.tui.app.screen.TScreenStack;
   TScreenStack = nextpas.core.tui.app.screen.TScreenStack;
   EFtuiScreenError = nextpas.core.tui.app.screen.EFtuiScreenError;
+  TTaskId = nextpas.core.tui.task.TTaskId;
+  TTaskStatus = nextpas.core.tui.task.TTaskStatus;
+  PCancelToken = nextpas.core.tui.task.PCancelToken;
+  TCancelToken = nextpas.core.tui.task.TCancelToken;
+  PTaskContext = nextpas.core.tui.task.PTaskContext;
+  TTaskContext = nextpas.core.tui.task.TTaskContext;
+  TTaskResult = nextpas.core.tui.task.TTaskResult;
+  TTaskFunc = nextpas.core.tui.task.TTaskFunc;
+  TTaskSpec = nextpas.core.tui.task.TTaskSpec;
+  TCompletionSlot = nextpas.core.tui.task.TCompletionSlot;
+  TTaskManager = nextpas.core.tui.task.TTaskManager;
+  TLoadingPhase = nextpas.core.tui.loading.TLoadingPhase;
+  TLoadingState = nextpas.core.tui.loading.TLoadingState;
+  TLoadingGroup = nextpas.core.tui.loading.TLoadingGroup;
+  TAppRenderProc = nextpas.core.tui.app.TAppRenderProc;
+  TAppEventProc = nextpas.core.tui.app.TAppEventProc;
+  TAppTickProc = nextpas.core.tui.app.TAppTickProc;
+  TAppTaskCompletionProc = nextpas.core.tui.app.TAppTaskCompletionProc;
   TTheme = nextpas.core.tui.theme.TTheme;
 
   { Widget 接口 }
@@ -384,6 +402,18 @@ const
   cmExternal = nextpas.core.tui.clipboard.cmExternal;
   cmNone = nextpas.core.tui.clipboard.cmNone;
 
+  TASK_QUEUE_CAPACITY = nextpas.core.tui.task.TASK_QUEUE_CAPACITY;
+  MAX_CONCURRENT_TASKS = nextpas.core.tui.task.MAX_CONCURRENT_TASKS;
+  tsQueued = nextpas.core.tui.task.tsQueued;
+  tsRunning = nextpas.core.tui.task.tsRunning;
+  tsCompleted = nextpas.core.tui.task.tsCompleted;
+  tsFailed = nextpas.core.tui.task.tsFailed;
+  tsCancelled = nextpas.core.tui.task.tsCancelled;
+  lpIdle = nextpas.core.tui.loading.lpIdle;
+  lpLoading = nextpas.core.tui.loading.lpLoading;
+  lpSuccess = nextpas.core.tui.loading.lpSuccess;
+  lpError = nextpas.core.tui.loading.lpError;
+
   ckLength = nextpas.core.tui.layout.ckLength;
   ckMin = nextpas.core.tui.layout.ckMin;
   ckMax = nextpas.core.tui.layout.ckMax;
@@ -518,6 +548,9 @@ function Idx(const AIndex: Byte): TColor; inline;
 function HexColor(const AHex: AnsiString): TColor; inline;
 function ModifierEquals(const A, B: TModifier): Boolean; inline;
 function ModifierIsEmpty(const AModifier: TModifier): Boolean; inline;
+function IsCancelled(const Ctx: TTaskContext): Boolean; inline;
+function MakeSpec(Func: TTaskFunc; Param: Pointer; ParamSize: UInt32;
+  const Name: ShortString): TTaskSpec; inline;
 function DetectImageProtocol: TImageProtocol; inline;
 
 function StyleDefault: TStyle; inline;
@@ -673,6 +706,17 @@ end;
 function ModifierIsEmpty(const AModifier: TModifier): Boolean;
 begin
   Result := nextpas.core.tui.modifier.ModifierIsEmpty(AModifier);
+end;
+
+function IsCancelled(const Ctx: TTaskContext): Boolean;
+begin
+  Result := nextpas.core.tui.task.IsCancelled(Ctx);
+end;
+
+function MakeSpec(Func: TTaskFunc; Param: Pointer; ParamSize: UInt32;
+  const Name: ShortString): TTaskSpec;
+begin
+  Result := nextpas.core.tui.task.MakeSpec(Func, Param, ParamSize, Name);
 end;
 
 function DetectImageProtocol: TImageProtocol;

@@ -67,9 +67,41 @@ begin
   end;
 end;
 
+procedure TestExtAppTaskSurface;
+var
+  LApp: TApp;
+  LTaskId: TTaskId;
+  LTaskStatus: TTaskStatus;
+  LTaskResult: TTaskResult;
+  LCompletion: TCompletionSlot;
+  LLoading: TLoadingGroup;
+begin
+  LApp := TApp.Create;
+  try
+    LTaskId := 1;
+    LTaskStatus := tsQueued;
+    LTaskResult := Default(TTaskResult);
+    LTaskResult.Status := tsCompleted;
+    LCompletion.Id := LTaskId;
+    LCompletion.Result := LTaskResult;
+    LLoading := TLoadingGroup.Empty;
+    LLoading.Start(0, LCompletion.Id, 100);
+    LLoading.Update([LCompletion], 1);
+
+    Check(LApp.Tasks <> nil, 'ext facade exposes app task manager slot');
+    CheckEqual(Int64(Ord(tsQueued)), Int64(Ord(LTaskStatus)),
+      'ext facade exposes task status constants');
+    CheckEqual(Int64(Ord(lpSuccess)), Int64(Ord(LLoading.GetPhase(0))),
+      'ext facade exposes loading group contract');
+  finally
+    LApp.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.tui.ext_facade');
   T.Run('ext surface', @TestExtSurface);
+  T.Run('ext app task surface', @TestExtAppTaskSurface);
   T.Summary;
   if not T.AllPassed then
     Halt(1);
