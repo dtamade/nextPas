@@ -1437,6 +1437,32 @@ begin
     'Abs(Low(Int64))', @RaiseAbsLowInt64);
 end;
 
+procedure TestScalarRoundingSubnormalContracts;
+var
+  LMinSubnormalDouble: Double;
+  LNegativeMinSubnormalDouble: Double;
+  LMinSubnormalSingle: Single;
+  LNegativeMinSubnormalSingle: Single;
+begin
+  LMinSubnormalDouble := MakeMinPositiveSubnormalDouble;
+  LNegativeMinSubnormalDouble := -LMinSubnormalDouble;
+  LMinSubnormalSingle := MakeMinPositiveSubnormalSingle;
+  LNegativeMinSubnormalSingle := -LMinSubnormalSingle;
+
+  CheckEqual(Int64(-1), Floor(LNegativeMinSubnormalDouble),
+    'Floor Double negative min subnormal returns negative one');
+  CheckEqual(Int64(1), Ceil(LMinSubnormalDouble),
+    'Ceil Double positive min subnormal returns one');
+  CheckEqual(Int64(0), Round(LNegativeMinSubnormalDouble),
+    'Round Double negative min subnormal returns zero');
+  CheckEqual(Int64(0), Trunc(LNegativeMinSubnormalSingle),
+    'Trunc Single negative min subnormal returns zero');
+  CheckNear(LNegativeMinSubnormalDouble, Frac(LNegativeMinSubnormalDouble), 0.0,
+    'Frac Double negative min subnormal preserves fractional sign');
+  CheckNear(LMinSubnormalSingle, Frac(LMinSubnormalSingle), Single(0.0),
+    'Frac Single min subnormal preserves one-ulp fractional value');
+end;
+
 procedure TestOwnerLevelBoundaryMessages;
 begin
   ExpectArgumentErrorMessage('Frac: NaN cannot be converted to Int64',
@@ -1541,6 +1567,7 @@ begin
   T.Run('angle conversions', @TestAngleConversions);
   T.Run('scalar sign and angle edge contracts', @TestSignAndAngleEdgeContracts);
   T.Run('integer rounding boundaries', @TestIntegerRoundingBoundaries);
+  T.Run('scalar rounding subnormal contracts', @TestScalarRoundingSubnormalContracts);
   T.Run('owner-level boundary messages', @TestOwnerLevelBoundaryMessages);
   T.Run('single-precision boundary messages', @TestSinglePrecisionBoundaryMessages);
   T.Run('overflow helpers', @TestOverflowHelpers);
