@@ -646,6 +646,12 @@ end;
 
 function Lerp(const AA, AB, AT: Single): Single;
 begin
+  if SingleIsNaN(AT) then
+    Exit(AT);
+  if AT = Single(0.0) then
+    Exit(AA);
+  if AT = Single(1.0) then
+    Exit(AB);
   if ShouldUseStableLerp(AA, AB) then
     Exit(Single(StableLerpFinite(Double(AA), Double(AB), Double(AT))));
   Result := AA + (AB - AA) * AT;
@@ -653,6 +659,12 @@ end;
 
 function Lerp(const AA, AB, AT: Double): Double;
 begin
+  if DoubleIsNaN(AT) then
+    Exit(AT);
+  if AT = 0.0 then
+    Exit(AA);
+  if AT = 1.0 then
+    Exit(AB);
   if ShouldUseStableLerp(AA, AB) then
     Exit(StableLerpFinite(AA, AB, AT));
   Result := AA + (AB - AA) * AT;

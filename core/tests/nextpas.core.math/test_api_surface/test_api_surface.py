@@ -871,15 +871,7 @@ REQUIRED_SCALAR_INTEGER_CONVERSION_DOC_TRUTH = (
 REQUIRED_SCALAR_RANGE_DOC_TRUTH = (
     (
         "docs/math/API.md",
-        "`Lerp`, `InverseLerp`, and `SmoothStep` keep huge finite opposite-sign midpoint interpolation finite; `InverseLerp` returns 0 for equal bounds, and `SmoothStep` propagates NaN values before edge validation, requires finite edges with `EArgumentError`, and preserves the documented equal-edge step boundary behavior.",
-    ),
-    (
-        "docs/math/README.md",
-        "`Lerp`, `InverseLerp`, and `SmoothStep` keep huge finite opposite-sign midpoint interpolation finite; `InverseLerp` returns 0 for equal bounds, and `SmoothStep` propagates NaN values before edge validation, requires finite edges with `EArgumentError`, and preserves the documented equal-edge step boundary behavior.",
-    ),
-    (
-        "docs/math/GOAL_TREE.md",
-        "`Lerp`, `InverseLerp`, and `SmoothStep` keep huge finite opposite-sign midpoint interpolation finite; `InverseLerp` returns 0 for equal bounds, and `SmoothStep` propagates NaN values before edge validation, requires finite edges with `EArgumentError`, and preserves the documented equal-edge step boundary behavior.",
+        "`Lerp`, `InverseLerp`, and `SmoothStep` keep huge finite opposite-sign midpoint interpolation finite; `Lerp` preserves endpoint identity for `t=0` and `t=1` before endpoint arithmetic can pollute non-finite endpoints, `Lerp` propagates a NaN `t`, `InverseLerp` returns 0 for equal bounds, and `SmoothStep` propagates NaN values before edge validation, requires finite edges with `EArgumentError`, clamps infinite values to the low or high endpoint, and preserves the documented equal-edge step boundary behavior.",
     ),
 )
 REQUIRED_SCALAR_MIN_MAX_DOC_TRUTH = (
@@ -1926,15 +1918,23 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-lerp-huge-finite-single", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Lerp Single huge opposite finite midpoint stays finite"),
     RequiredBehaviorTestMarker("scalar-lerp-huge-finite-off-center", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Lerp Double huge opposite finite off-center"),
     RequiredBehaviorTestMarker("scalar-lerp-huge-finite-reversed", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Lerp Double huge reversed finite off-center"),
+    RequiredBehaviorTestMarker("scalar-lerp-endpoint-identity-double", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Lerp Double endpoint t=0 preserves non-finite A"),
+    RequiredBehaviorTestMarker("scalar-lerp-endpoint-identity-single", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Lerp Single endpoint t=1 preserves B"),
+    RequiredBehaviorTestMarker("scalar-lerp-nan-t-propagates", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Lerp Double NaN t propagates NaN"),
     RequiredBehaviorTestMarker("scalar-inverse-lerp-huge-finite-double", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "InverseLerp Double huge opposite finite midpoint returns half"),
     RequiredBehaviorTestMarker("scalar-inverse-lerp-huge-finite-single", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "InverseLerp Single huge opposite finite midpoint returns half"),
     RequiredBehaviorTestMarker("scalar-inverse-lerp-huge-finite-off-center", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "InverseLerp Double huge opposite finite off-center returns quarter"),
     RequiredBehaviorTestMarker("scalar-inverse-lerp-huge-finite-reversed", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "InverseLerp Double huge reversed finite off-center returns quarter"),
+    RequiredBehaviorTestMarker("scalar-inverse-lerp-non-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "InverseLerp Double positive infinity value returns positive infinity"),
     RequiredBehaviorTestMarker("scalar-smoothstep-huge-finite-double", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "SmoothStep Double huge opposite finite midpoint returns half"),
     RequiredBehaviorTestMarker("scalar-smoothstep-huge-finite-single", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "SmoothStep Single huge opposite finite midpoint returns half"),
+    RequiredBehaviorTestMarker("scalar-smoothstep-infinite-value", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "SmoothStep Double positive infinity value clamps high"),
+    RequiredBehaviorTestMarker("scalar-smoothstep-single-infinite-value", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "SmoothStep Single negative infinity value clamps low"),
     RequiredBehaviorTestMarker("scalar-wrap-equal-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap Double equal bounds returns minimum"),
     RequiredBehaviorTestMarker("scalar-wrap-huge-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap Double huge finite range stays finite"),
     RequiredBehaviorTestMarker("scalar-wrap-single-huge-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap Single huge finite range stays finite"),
+    RequiredBehaviorTestMarker("scalar-wrap-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap Double in-range negative zero preserves sign"),
+    RequiredBehaviorTestMarker("scalar-wrap-single-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap Single in-range negative zero preserves sign"),
     RequiredBehaviorTestMarker("scalar-range-boundary-edges", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('scalar range boundary edge contracts'"),
     RequiredBehaviorTestMarker("scalar-inverse-lerp-equal-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "InverseLerp Double equal bounds returns 0"),
     RequiredBehaviorTestMarker("scalar-smoothstep-equal-edges", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "SmoothStep Double equal edges returns step boundary"),

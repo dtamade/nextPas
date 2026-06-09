@@ -375,11 +375,19 @@ begin
     Double(1.0e307), 0.000000000000001, 'Lerp Double huge opposite finite off-center');
   CheckScaledNear(Double(5.0e307), Lerp(Double(1.0e308), Double(-1.0e308), Double(0.25)),
     Double(1.0e307), 0.000000000000001, 'Lerp Double huge reversed finite off-center');
+  Check(IsInfinite(Lerp(MakePositiveInfinity, 1.0, 0.0)),
+    'Lerp Double endpoint t=0 preserves non-finite A');
+  CheckNear(-7.0, Lerp(MakePositiveInfinity, -7.0, 1.0), 0.0,
+    'Lerp Double endpoint t=1 preserves finite B');
+  Check(IsNaN(Lerp(1.0, 2.0, MakeNaN)),
+    'Lerp Double NaN t propagates NaN');
   LSingleResult := Lerp(Single(-3.0e38), Single(3.0e38), Single(0.5));
   Check((not IsNaN(LSingleResult)) and (not IsInfinite(LSingleResult)),
     'Lerp Single huge opposite finite midpoint stays finite');
   CheckNear(0.0, LSingleResult, 0.0,
     'Lerp Single huge opposite finite midpoint returns center');
+  CheckNear(-7.0, Lerp(MakeSinglePositiveInfinity, Single(-7.0), Single(1.0)), 0.0,
+    'Lerp Single endpoint t=1 preserves B');
   CheckNear(0.5, InverseLerp(Single(10.0), Single(20.0), Single(15.0)), 0.0, 'InverseLerp Single midpoint');
   CheckNear(0.5, InverseLerp(10.0, 20.0, 15.0), 0.0, 'InverseLerp midpoint');
   CheckNear(0.5, InverseLerp(Double(-1.0e308), Double(1.0e308), Double(0.0)), 0.000000000000001,
@@ -391,9 +399,15 @@ begin
   CheckNear(0.5, InverseLerp(Single(-3.0e38), Single(3.0e38), Single(0.0)), 0.000001,
     'InverseLerp Single huge opposite finite midpoint returns half');
   CheckNear(0.0, InverseLerp(5.0, 5.0, 5.0), 0.0, 'InverseLerp equal endpoints');
+  Check(IsInfinite(InverseLerp(0.0, 1.0, MakePositiveInfinity)),
+    'InverseLerp Double positive infinity value returns positive infinity');
   CheckNear(10.0, Wrap(Single(370.0), Single(0.0), Single(360.0)), 0.0, 'Wrap Single high');
   CheckNear(10.0, Wrap(370.0, 0.0, 360.0), 0.0, 'Wrap high');
   CheckNear(350.0, Wrap(-10.0, 0.0, 360.0), 0.0, 'Wrap low');
+  Check(IsDoubleNegativeZero(Wrap(MakeDoubleNegativeZero, -1.0, 1.0)),
+    'Wrap Double in-range negative zero preserves sign');
+  Check(IsSingleNegativeZero(Wrap(MakeSingleNegativeZero, Single(-1.0), Single(1.0))),
+    'Wrap Single in-range negative zero preserves sign');
   CheckNear(5.0, Wrap(Single(10.0), Single(5.0), Single(5.0)), 0.0,
     'Wrap Single equal bounds returns minimum');
   CheckNear(5.0, Wrap(10.0, 5.0, 5.0), 0.0,
@@ -440,6 +454,10 @@ begin
     'SmoothStep Single huge opposite finite midpoint returns half');
   CheckNear(0.0, SmoothStep(0.0, 1.0, -1.0), 0.0, 'SmoothStep clamps low');
   CheckNear(1.0, SmoothStep(0.0, 1.0, 2.0), 0.0, 'SmoothStep clamps high');
+  CheckNear(1.0, SmoothStep(0.0, 1.0, MakePositiveInfinity), 0.0,
+    'SmoothStep Double positive infinity value clamps high');
+  CheckNear(0.0, SmoothStep(Single(0.0), Single(1.0), MakeSingleNegativeInfinity), 0.0,
+    'SmoothStep Single negative infinity value clamps low');
 end;
 
 procedure TestScalarRangeBoundaryEdgeContracts;
