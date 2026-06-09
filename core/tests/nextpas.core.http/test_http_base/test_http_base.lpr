@@ -183,6 +183,28 @@ begin
   CheckEqual('/secure', LUrl.Path, 'path');
 end;
 
+procedure CheckUrlParseRejectsInvalidPort(const AUrl, AContext: string);
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    TUrl.Parse(AUrl);
+  except
+    on E: EHttpError do
+      LCaught := True;
+  end;
+  Check(LCaught, AContext + ' raises EHttpError');
+end;
+
+procedure TestUrlParseInvalidPortRaises;
+begin
+  CheckUrlParseRejectsInvalidPort('http://example.com:notaport/path',
+    'hostname invalid port');
+  CheckUrlParseRejectsInvalidPort('http://[::1]:bad/path',
+    'bracketed IPv6 invalid port');
+end;
+
 procedure TestUrlParseEmptyRaises;
 var
   LCaught: Boolean;
@@ -363,6 +385,7 @@ begin
   T.Run('TUrl.Parse with userinfo', @TestUrlParseWithUserInfo);
   T.Run('TUrl.Parse relative path', @TestUrlParseRelativePath);
   T.Run('TUrl.Parse with port', @TestUrlParseWithPort);
+  T.Run('TUrl.Parse invalid port raises', @TestUrlParseInvalidPortRaises);
   T.Run('TUrl.Parse empty raises', @TestUrlParseEmptyRaises);
   T.Run('TUrl.ToString round-trip', @TestUrlToString);
   T.Run('TUrl.HostPort', @TestUrlHostPort);

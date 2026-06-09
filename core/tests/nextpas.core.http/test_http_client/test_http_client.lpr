@@ -6639,6 +6639,30 @@ begin
     'custom transport sees original path');
 end;
 
+procedure TestClientDirectUrlRejectsInvalidPortBeforeTransport;
+var
+  LTransportObj: TUrlCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  LTransportObj := TUrlCaptureTransport.Create;
+  LTransport := LTransportObj as IHttpTransport;
+  LClient := NewHttpClient(LTransport);
+
+  LRaised := False;
+  try
+    LClient.Get('http://127.0.0.1:notaport/');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'direct URL invalid port raises EHttpError');
+  CheckEqual(Int64(0), Int64(LTransportObj.Calls),
+    'direct URL invalid port fails before transport dispatch');
+end;
+
 procedure TestClientRejectsUnsupportedDirectSchemes;
 begin
   CheckClientRejectsUnsupportedDirectScheme('https');
@@ -7366,6 +7390,8 @@ begin
     @TestClientRejectsUnsupportedDirectSchemes);
   T.Run('Client custom transport accepts non-http scheme',
     @TestClientCustomTransportAcceptsNonHttpScheme);
+  T.Run('Client direct URL rejects invalid port before transport',
+    @TestClientDirectUrlRejectsInvalidPortBeforeTransport);
   T.Run('Client auto Host rejects invalid header value',
     @TestClientAutoHostRejectsInvalidHeaderValue);
   T.Run('Client rejects custom header value injection before wire write',

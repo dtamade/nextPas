@@ -207,6 +207,17 @@ begin
   end;
 end;
 
+function ParseUrlPort(const APort: string): UInt16;
+var
+  LPortVal: Int64;
+begin
+  if (APort = '') or (not TryStrToInt(APort, LPortVal)) then
+    raise EHttpError.Create('Invalid port: ' + APort);
+  if (LPortVal < 0) or (LPortVal > 65535) then
+    raise EHttpError.Create('Port out of range: ' + APort);
+  Result := UInt16(LPortVal);
+end;
+
 { TUrl }
 
 class function TUrl.Parse(const ARaw: string): TUrl;
@@ -218,7 +229,6 @@ var
   LAtPos: SizeInt;
   LColonPos: SizeInt;
   LPortStr: string;
-  LPortVal: Int64;
   LI: SizeInt;
 begin
   Result := Default(TUrl);
@@ -271,12 +281,7 @@ begin
         if (LColonPos < Length(LAuthority)) and (LAuthority[LColonPos + 1] = ':') then
         begin
           LPortStr := Copy(LAuthority, LColonPos + 2, Length(LAuthority) - LColonPos - 1);
-          if TryStrToInt(LPortStr, LPortVal) then
-          begin
-            if (LPortVal < 0) or (LPortVal > 65535) then
-              raise EHttpError.Create('Port out of range: ' + LPortStr);
-            Result.Port := UInt16(LPortVal);
-          end;
+          Result.Port := ParseUrlPort(LPortStr);
         end;
       end
       else
@@ -289,14 +294,7 @@ begin
       begin
         Result.Host := Copy(LAuthority, 1, LColonPos - 1);
         LPortStr := Copy(LAuthority, LColonPos + 1, Length(LAuthority) - LColonPos);
-        if TryStrToInt(LPortStr, LPortVal) then
-        begin
-          if (LPortVal < 0) or (LPortVal > 65535) then
-            raise EHttpError.Create('Port out of range: ' + LPortStr);
-          Result.Port := UInt16(LPortVal);
-        end
-        else
-          Result.Port := 0;
+        Result.Port := ParseUrlPort(LPortStr);
       end
       else
       begin

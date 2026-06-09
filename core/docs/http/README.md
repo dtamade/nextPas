@@ -80,7 +80,7 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 
 ### URL Utilities
 
-- `TUrl.Parse` — parse full/relative URLs into scheme, userinfo, host, port, path, query, and fragment fields
+- `TUrl.Parse` — parse full/relative URLs into scheme, userinfo, host, port, path, query, and fragment fields; invalid explicit authority ports raise `EHttpError`
 - `TUrl.ParseRequestTarget` — parse HTTP request-target strings; origin-form skips authority parsing, absolute-form remains compatible with `TUrl.Parse`, and asterisk/authority-form targets are preserved as `Path`
 - `UrlEncode/UrlDecode` — percent encoding
 - `ParseQueryString/EncodeQueryString` — query parameter handling
