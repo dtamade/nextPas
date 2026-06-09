@@ -3,6 +3,7 @@ program test_mat;
 {$I nextpas.core.settings.inc}
 
 uses
+  Math,
   nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.math.vec,
@@ -118,6 +119,40 @@ var
 begin
   LValue.Value := AActual;
   Check(LValue.Bits = (QWord(1) shl 63), AMessage);
+end;
+
+procedure CheckSinglePositiveZero(const AActual: Single; const AMessage: string);
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AActual;
+  CheckEqual(Int64(0), Int64(LValue.Bits), AMessage);
+end;
+
+procedure CheckSingleNaNValue(const AActual: Single; const AMessage: string);
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AActual;
+  Check(((LValue.Bits and $7F800000) = $7F800000) and
+    ((LValue.Bits and $007FFFFF) <> 0), AMessage);
+end;
+
+procedure CheckDoubleNaNValue(const AActual: Double; const AMessage: string);
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Value := AActual;
+  Check(((LValue.Bits and $7FF0000000000000) = $7FF0000000000000) and
+    ((LValue.Bits and $000FFFFFFFFFFFFF) <> 0), AMessage);
+end;
+
+function DoubleMinPositiveSubnormal: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := 1;
+  Result := LValue.Value;
 end;
 
 procedure CheckVec3f(const AExpectedX, AExpectedY, AExpectedZ: Single; const AActual: TVec3f;
@@ -1154,6 +1189,62 @@ begin
     'TMat4d Equals rejects negative infinite epsilon');
 end;
 
+procedure TestMatrixArithmeticSpecialValueContracts;
+var
+  M3f: TMat3f;
+  M4f: TMat4f;
+  M3d: TMat3d;
+  M4d: TMat4d;
+  Inverse3d: TMat3d;
+  Product4f: TVec4f;
+  Determinant3d: Double;
+  SavedMask: TFPUExceptionMask;
+begin
+  SavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow,
+    exUnderflow, exPrecision]);
+  try
+    M3f := TMat3f.Identity;
+    M3f[0, 1] := SingleNegativeZero;
+    CheckSingleNegativeZero(M3f.Transpose[1, 0],
+      'TMat3f Transpose preserves negative-zero bits');
+
+    M3f := TMat3f.Zero;
+    M3f[0, 0] := SingleNegativeZero;
+    M3f[1, 1] := 0.0;
+    M3f := -M3f;
+    CheckSinglePositiveZero(M3f[0, 0],
+      'TMat3f unary minus negative zero returns positive zero');
+    CheckSingleNegativeZero(M3f[1, 1],
+      'TMat3f unary minus positive zero returns negative zero');
+
+    M4d := TMat4d.Identity;
+    M4d[2, 0] := DoubleInfinity;
+    M4d := M4d * 0.0;
+    CheckDoubleNaNValue(M4d[2, 0],
+      'TMat4d scalar multiply zero times infinity returns NaN');
+
+    M4f := TMat4f.Zero;
+    Product4f := M4f * TVec4f.Create(SingleInfinity, 0.0, 0.0, 0.0);
+    CheckSingleNaNValue(Product4f.X,
+      'TMat4f vector multiply zero times infinity returns NaN');
+
+    M3d := TMat3d.Create(
+      TVec3d.Create(DoubleMinPositiveSubnormal, 0.0, 0.0),
+      TVec3d.Create(0.0, 1.0, 0.0),
+      TVec3d.Create(0.0, 0.0, 1.0));
+    Determinant3d := M3d.Determinant;
+    Check(Determinant3d > 0.0, 'TMat3d min-subnormal determinant is positive');
+
+    Inverse3d := SentinelMat3d;
+    Check(not M3d.TryInverse(Inverse3d),
+      'TMat3d min-subnormal determinant is positive but TryInverse fail-closes');
+    CheckMat3dZero(Inverse3d, 'TMat3d min-subnormal TryInverse zeroes output');
+  finally
+    SetExceptionMask(SavedMask);
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.mat');
   T.Run('TMat3f contracts', @TestMat3fContracts);
@@ -1174,5 +1265,7 @@ begin
     @TestDoublePrecisionInverseOverwritesOutParameter);
   T.Run('matrix Equals non-finite comparison contracts',
     @TestMatrixEqualsNonFiniteComparisonContracts);
+  T.Run('matrix arithmetic special-value contracts',
+    @TestMatrixArithmeticSpecialValueContracts);
   T.Summary;
 end.
