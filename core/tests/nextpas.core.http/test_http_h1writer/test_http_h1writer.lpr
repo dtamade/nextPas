@@ -1117,6 +1117,61 @@ begin
   LRW.Free;
 end;
 
+procedure CheckNoBodyStatusStripsPresetChunkedTransferEncoding(
+  const AStatus: THttpStatus; const AStatusLine, ALabel: string);
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.SetHeader('Transfer-Encoding', 'chunked');
+    LRW.WriteHeader(AStatus);
+    LRW.Flush;
+    LOut := LW.GetOutput;
+    Check(Pos(AStatusLine + #13#10, LOut) = 1,
+      ALabel + ' status line written');
+    Check(Pos('transfer-encoding:', LOut) = 0,
+      ALabel + ' strips preset transfer-encoding');
+    Check(Pos('0'#13#10#13#10, LOut) = 0,
+      ALabel + ' does not write terminal chunk');
+  finally
+    LRW.Free;
+  end;
+end;
+
+procedure CheckInformationalStatusStripsPresetChunkedTransferEncoding(
+  const AStatus: THttpStatus; const AStatusLine, ALabel: string);
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.SetHeader('Transfer-Encoding', 'chunked');
+    LRW.WriteHeader(AStatus);
+    LOut := LW.GetOutput;
+    CheckEqual(AStatusLine + #13#10#13#10, LOut,
+      ALabel + ' strips preset transfer-encoding from informational block');
+  finally
+    LRW.Free;
+  end;
+end;
+
+procedure TestNoBodyStatusesStripPresetChunkedTransferEncoding;
+begin
+  CheckNoBodyStatusStripsPresetChunkedTransferEncoding(
+    HTTP_STATUS_NO_CONTENT, 'HTTP/1.1 204 No Content', '204');
+  CheckNoBodyStatusStripsPresetChunkedTransferEncoding(
+    HTTP_STATUS_SWITCHING_PROTOCOLS, 'HTTP/1.1 101 Switching Protocols', '101');
+  CheckInformationalStatusStripsPresetChunkedTransferEncoding(
+    HTTP_STATUS_CONTINUE, 'HTTP/1.1 100 Continue', '100');
+end;
+
 procedure TestSwitchingProtocolsResponseRejectsBodyWrite;
 var
   LW: TBytesWriter;
@@ -1796,6 +1851,8 @@ begin
     @TestNonSwitchingInformationalAllowsFinalResponse);
   T.Run('101 response does not inject chunked encoding',
     @TestSwitchingProtocolsResponseDoesNotInjectChunkedEncoding);
+  T.Run('no-body statuses strip preset chunked transfer-encoding',
+    @TestNoBodyStatusesStripPresetChunkedTransferEncoding);
   T.Run('101 response rejects body write',
     @TestSwitchingProtocolsResponseRejectsBodyWrite);
   T.Run('204 response rejects body write',

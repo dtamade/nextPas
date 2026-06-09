@@ -241,12 +241,21 @@ end;
 procedure TH1ResponseWriter.WriteInformationalHeader(const AStatus: THttpStatus);
 var
   LFinalStatus: THttpStatus;
+  LTransferEncodings: TStringArray;
+  LI: SizeInt;
 begin
   LFinalStatus := FStatus;
+  LTransferEncodings := FHeaders.GetAll('transfer-encoding');
+  FHeaders.Remove('transfer-encoding');
   FStatus := AStatus;
-  WriteStatusLine;
-  WriteHeaderBlock;
-  FStatus := LFinalStatus;
+  try
+    WriteStatusLine;
+    WriteHeaderBlock;
+  finally
+    FStatus := LFinalStatus;
+    for LI := 0 to Length(LTransferEncodings) - 1 do
+      FHeaders.Add('transfer-encoding', LTransferEncodings[LI]);
+  end;
 end;
 
 procedure TH1ResponseWriter.WriteHeaderBlock;
@@ -430,6 +439,8 @@ begin
   FNoBodyAllowed := ResponseMustNotHaveBody;
   if FForceConnectionClose then
     FHeaders.SetHeader('connection', 'close');
+  if FNoBodyAllowed then
+    FHeaders.Remove('transfer-encoding');
   ValidateResponseFramingHeaders;
   if (not FNoBodyAllowed) and
      (not FSuppressBody) and

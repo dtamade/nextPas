@@ -1779,6 +1779,18 @@ begin
     'API coverage must document implicit HEAD in Allow');
 end;
 
+procedure TestHttpApiCoverageNoBodyTransferEncodingTruthContract;
+var
+  LSource: string;
+begin
+  LSource := ReadTextFile('../../../docs/http/API_COVERAGE.md');
+
+  Check(SourceHas(LSource, 'strips preset chunked `Transfer-Encoding`'),
+    'API coverage must document no-body preset transfer-encoding strip');
+  Check(SourceHas(LSource, 'no-body / informational wire output'),
+    'API coverage must document response writer no-body/informational wire boundary');
+end;
+
 procedure TestHttpPublicHeaderSetterNamingContract;
 var
   LInterfaceSource: string;
@@ -2054,6 +2066,8 @@ begin
     @TestHttpApiCoverageResponseBodyHelperTruthContract);
   T.Run('HTTP API coverage router HEAD fallback truth contract',
     @TestHttpApiCoverageRouterHeadFallbackTruthContract);
+  T.Run('HTTP API coverage no-body transfer-encoding truth contract',
+    @TestHttpApiCoverageNoBodyTransferEncodingTruthContract);
   T.Run('HTTP public header setter naming contract',
     @TestHttpPublicHeaderSetterNamingContract);
   T.Run('Chunked request trailer contract',
