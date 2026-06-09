@@ -3,7 +3,7 @@
 > Last updated: 2026-06-09
 > Goal: make `nextpas.core.math.*` the only official framework math API for
 > scalar math, trig, vectors, matrices, quaternions, transforms, easing, random,
-> and noise.
+> and noise via `nextpas.core.math.random.TNoiseGen`.
 
 ## North Star
 
@@ -24,8 +24,8 @@ Detailed behavior contracts live in `API.md`; this goal tree stays compact.
 
 Current roadmap position: M8 partial, M7 partial, M9 not started.
 
-- The final facade and public submodules exist for scalar, trig, vec, mat, quat,
-  transform, easing, random, and noise.
+- The final facade and public units exist for scalar, trig, vec, mat, quat,
+  transform, easing, and random; noise is exposed through `random.TNoiseGen`.
 - `nextpas.core.math.ffi.pas` is deleted in this lane and must not return.
 - Public docs/source-contract gates reject legacy vector bridge type names,
   old vector imports/paths, public impl consumers, naked `external 'm'`, and

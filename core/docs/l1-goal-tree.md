@@ -1,6 +1,6 @@
 # nextPas Core Framework — 目标树
 
-> 最后更新: 2026-05-31 | CI: All tests passed | 2500+ tests, 0 leaks
+> 最后更新: 2026-06-09 | 真相口径: source-contract / focused runtime / forced compile / CI matrix
 
 ## 定位
 
@@ -19,7 +19,7 @@ nextPas Core 是 FreePascal 领域最优秀的框架之一。分三层：
 | `platform` | OS API 封装 (posix/linux/darwin/windows) | ✅ 完成 (Tier 1 全绿) |
 | `mem` | 内存管理 (IAllocator/Pool/Arena/StackPool) | ✅ 完成 |
 | `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | ✅ 完成 |
-| `math` | 数学函数 (Min/Max/Clamp/Abs/Pow/Trig) | ✅ 完成 |
+| `math` | 数学函数 (Min/Max/Clamp/Abs/Pow/Trig) | 🔶 M8 partial: source-contract + Linux focused runtime/heaptrc; Win64 forced compile; macOS/Windows host runtime and CI matrix pending |
 | `simd` | SIMD 抽象 (SSE2/AVX2/NEON, 统一宽度 API) | ✅ 完成 |
 
 ## L1 模块状态

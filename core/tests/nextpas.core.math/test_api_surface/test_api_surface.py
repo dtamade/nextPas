@@ -112,6 +112,7 @@ ROOT_MAKEFILE_PATH = "Makefile"
 MATH_SUITE_MAKEFILE_PATH = "tests/nextpas.core.math/Makefile"
 ROOT_FACADE_PATH = "src/nextpas.core.math.pas"
 API_DOC_PATH = "docs/math/API.md"
+L1_GOAL_TREE_PATH = "docs/l1-goal-tree.md"
 ROOT_FACADE_ALLOWED_USES = {
     "nextpas.core.math.scalar",
     "nextpas.core.math.trig",
@@ -6333,6 +6334,125 @@ def scan_control_doc_compaction(root: Path) -> list[Finding]:
     return findings
 
 
+def scan_l1_goal_tree_math_truth(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    path = root / L1_GOAL_TREE_PATH
+    if not path.is_file():
+        add_finding(
+            findings,
+            "missing-l1-goal-tree-math-truth",
+            root,
+            path,
+            1,
+            L1_GOAL_TREE_PATH,
+        )
+        return findings
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if "CI: All tests passed" in text or "2500+ tests, 0 leaks" in text:
+        add_finding(
+            findings,
+            "l1-goal-tree-forbidden-global-green-claim",
+            root,
+            path,
+            1,
+            "top-level goal tree must not claim full CI/leak truth",
+        )
+    if "真相口径: source-contract / focused runtime / forced compile / CI matrix" not in text:
+        add_finding(
+            findings,
+            "l1-goal-tree-missing-truth-header",
+            root,
+            path,
+            1,
+            "真相口径: source-contract / focused runtime / forced compile / CI matrix",
+        )
+
+    lines = text.splitlines()
+    for index, line in enumerate(lines, start=1):
+        if re.match(r"^\|\s*`math`\s*\|", line) is None:
+            continue
+        if "✅ 完成" in line:
+            add_finding(
+                findings,
+                "l1-goal-tree-math-must-not-be-complete",
+                root,
+                path,
+                index,
+                line,
+            )
+        if "M8 partial" not in line:
+            add_finding(
+                findings,
+                "l1-goal-tree-math-missing-partial-marker",
+                root,
+                path,
+                index,
+                line,
+            )
+        if "source-contract" not in line or "CI matrix" not in line:
+            add_finding(
+                findings,
+                "l1-goal-tree-math-missing-truth-levels",
+                root,
+                path,
+                index,
+                line,
+            )
+        return findings
+
+    add_finding(
+        findings,
+        "l1-goal-tree-math-row-missing",
+        root,
+        path,
+        1,
+        "`math` row is required",
+    )
+    return findings
+
+
+def run_l1_goal_tree_math_truth_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        path = root / L1_GOAL_TREE_PATH
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "# goal\n\n"
+            "> 最后更新: 2026-05-31 | CI: All tests passed | 2500+ tests, 0 leaks\n\n"
+            "`math` M8 partial source-contract CI matrix\n"
+            "| `math` | 数学函数 | ✅ 完成 |\n",
+            encoding="utf-8",
+        )
+        findings = scan_l1_goal_tree_math_truth(root)
+        rules = {finding.rule for finding in findings}
+        expected_rules = {
+            "l1-goal-tree-forbidden-global-green-claim",
+            "l1-goal-tree-missing-truth-header",
+            "l1-goal-tree-math-must-not-be-complete",
+            "l1-goal-tree-math-missing-partial-marker",
+            "l1-goal-tree-math-missing-truth-levels",
+        }
+        if not expected_rules <= rules:
+            raise AssertionError(
+                "l1-goal-tree-math-truth self-test missing "
+                + ", ".join(sorted(expected_rules - rules))
+            )
+
+        path.write_text(
+            "# goal\n\n"
+            "> 最后更新: 2026-06-09 | 真相口径: source-contract / focused runtime / forced compile / CI matrix\n\n"
+            "| `math` | 数学函数 | 🔶 M8 partial: source-contract + Linux focused runtime/heaptrc; Win64 forced compile; macOS/Windows host runtime and CI matrix pending |\n",
+            encoding="utf-8",
+        )
+        findings = scan_l1_goal_tree_math_truth(root)
+        if findings:
+            raise AssertionError(
+                "l1-goal-tree-math-truth self-test expected no findings, got "
+                + ", ".join(sorted(finding.rule for finding in findings))
+            )
+
+
 def scan_required_host_gate_residual_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
@@ -6538,6 +6658,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_impl_simd_win64_compile_gate(root))
     findings.extend(scan_math_impl_simd_facade_only_uses(root))
     findings.extend(scan_control_doc_compaction(root))
+    findings.extend(scan_l1_goal_tree_math_truth(root))
     findings.extend(scan_required_host_gate_residual_truth(root))
     findings.extend(scan_required_m8_residual_truth(root))
     findings.extend(scan_required_simd_seam_doc_truth(root))
@@ -6690,6 +6811,7 @@ def main() -> int:
         run_quaternion_public_record_contract_self_tests()
         run_required_doc_truth_self_tests()
         run_control_doc_compaction_self_tests()
+        run_l1_goal_tree_math_truth_self_tests()
         run_root_facade_contract_self_tests()
         run_root_facade_reexport_parity_self_tests()
         run_compile_only_gate_aggregate_exclusion_self_tests()
