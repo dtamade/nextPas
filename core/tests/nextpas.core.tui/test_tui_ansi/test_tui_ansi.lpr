@@ -120,6 +120,20 @@ begin
   Teardown;
 end;
 
+procedure TestSgrUnderlineColor;
+begin
+  Setup;
+  AnsiSgrUl(B, TUI_BLUE);
+  CheckEqual(#27'[58;5;4m', BufStr, 'underline indexed blue');
+  B.Clear;
+  AnsiSgrUl(B, RgbColor(10, 20, 30));
+  CheckEqual(#27'[58;2;10;20;30m', BufStr, 'underline rgb');
+  B.Clear;
+  AnsiSgrUl(B, ResetColor);
+  CheckEqual(#27'[59m', BufStr, 'underline reset');
+  Teardown;
+end;
+
 procedure TestSgrModifierAdd;
 begin
   Setup;
@@ -165,6 +179,7 @@ begin
   T.Run('sgr bg indexed', @TestSgrBgIndexed);
   T.Run('sgr fg rgb', @TestSgrFgRgb);
   T.Run('sgr fg reset', @TestSgrFgReset);
+  T.Run('sgr underline color', @TestSgrUnderlineColor);
   T.Run('sgr modifier add', @TestSgrModifierAdd);
   T.Run('sgr modifier clear', @TestSgrModifierClear);
   T.Run('mouse tracking', @TestMouseTracking);

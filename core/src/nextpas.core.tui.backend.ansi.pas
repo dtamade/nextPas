@@ -177,6 +177,8 @@ begin
         AnsiSgrFg(FOut, APatches[LI].Cell.Fg);
       if (APatches[LI].Cell.Bg.Kind = ckIndexed) or (APatches[LI].Cell.Bg.Kind = ckRgb) then
         AnsiSgrBg(FOut, APatches[LI].Cell.Bg);
+      if (APatches[LI].Cell.Ul.Kind = ckIndexed) or (APatches[LI].Cell.Ul.Kind = ckRgb) then
+        AnsiSgrUl(FOut, APatches[LI].Cell.Ul);
       if APatches[LI].Cell.Modifier <> [] then
         AnsiSgrModifierAdd(FOut, APatches[LI].Cell.Modifier);
       FLastFg := APatches[LI].Cell.Fg;

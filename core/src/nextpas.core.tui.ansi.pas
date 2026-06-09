@@ -41,6 +41,7 @@ procedure AnsiDisableAlternateScroll(var B: TStringBuilder);
 procedure AnsiSgrReset(var B: TStringBuilder); inline;
 procedure AnsiSgrFg(var B: TStringBuilder; const AColor: TColor);
 procedure AnsiSgrBg(var B: TStringBuilder; const AColor: TColor);
+procedure AnsiSgrUl(var B: TStringBuilder; const AColor: TColor);
 procedure AnsiSgrModifierAdd(var B: TStringBuilder; AModifier: TModifier);
 procedure AnsiSgrModifierClear(var B: TStringBuilder; AModifier: TModifier);
 
@@ -272,6 +273,38 @@ begin
       begin
         B.AppendByte(27); B.AppendChar('[');
         B.AppendChar('4'); B.AppendChar('8');
+        B.AppendChar(';'); B.AppendChar('2'); B.AppendChar(';');
+        B.AppendUInt(AColor.R); B.AppendChar(';');
+        B.AppendUInt(AColor.G); B.AppendChar(';');
+        B.AppendUInt(AColor.B);
+        B.AppendChar('m');
+      end;
+  end;
+end;
+
+procedure AnsiSgrUl(var B: TStringBuilder; const AColor: TColor);
+begin
+  case AColor.Kind of
+    ckUnset: ;
+    ckReset:
+      begin
+        { SGR 59 = default underline color }
+        B.AppendByte(27); B.AppendChar('[');
+        B.AppendChar('5'); B.AppendChar('9');
+        B.AppendChar('m');
+      end;
+    ckIndexed:
+      begin
+        B.AppendByte(27); B.AppendChar('[');
+        B.AppendChar('5'); B.AppendChar('8');
+        B.AppendChar(';'); B.AppendChar('5'); B.AppendChar(';');
+        B.AppendUInt(AColor.Index);
+        B.AppendChar('m');
+      end;
+    ckRgb:
+      begin
+        B.AppendByte(27); B.AppendChar('[');
+        B.AppendChar('5'); B.AppendChar('8');
         B.AppendChar(';'); B.AppendChar('2'); B.AppendChar(';');
         B.AppendUInt(AColor.R); B.AppendChar(';');
         B.AppendUInt(AColor.G); B.AppendChar(';');

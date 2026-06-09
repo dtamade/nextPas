@@ -329,6 +329,32 @@ begin
   end;
 end;
 
+procedure TestAnsiBackendDrawPatchesAppliesUnderlineColor;
+var
+  LBE: TAnsiBackend;
+  LPatches: TDiffEntries;
+begin
+  LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
+  SetLength(LPatches, 2);
+  try
+    LPatches[0].X := 0;
+    LPatches[0].Y := 0;
+    LPatches[0].Cell := StyledCell('A',
+      StyleDefault.WithUnderline(TUI_BLUE).WithModifier([mbUnderlined]));
+    LPatches[1].X := 1;
+    LPatches[1].Y := 0;
+    LPatches[1].Cell := StyledCell('B',
+      StyleDefault.WithUnderline(ResetColor).WithModifier([mbUnderlined]));
+
+    LBE.DrawPatchesN(LPatches, 2);
+    CheckEqual(#27'[1;1H'#27'[0m'#27'[58;5;4m'#27'[4mA' +
+      #27'[0m'#27'[4mB', PendingString(LBE),
+      'underline color is emitted and reset by sgr reset before default color cell');
+  finally
+    LBE.Free;
+  end;
+end;
+
 procedure TestAnsiBackendDrawPatchesWideGlyphAdvancesCursor;
 var
   LBE: TAnsiBackend;
@@ -375,6 +401,8 @@ begin
     @TestAnsiBackendDrawPatchesResetsStyleForDefaultCell);
   T.Run('ansi backend draw patches reapplies style on change',
     @TestAnsiBackendDrawPatchesReappliesStyleOnStyleChange);
+  T.Run('ansi backend draw patches applies underline color',
+    @TestAnsiBackendDrawPatchesAppliesUnderlineColor);
   T.Run('ansi backend draw patches wide glyph advances cursor',
     @TestAnsiBackendDrawPatchesWideGlyphAdvancesCursor);
   T.Summary;
