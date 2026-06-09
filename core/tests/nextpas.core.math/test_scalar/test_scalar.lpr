@@ -83,6 +83,22 @@ begin
   Move(LBits, Result, SizeOf(Result));
 end;
 
+function MakeMinPositiveSubnormalSingle: Single;
+var
+  LBits: UInt32;
+begin
+  LBits := UInt32($00000001);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
+function MakeMinPositiveSubnormalDouble: Double;
+var
+  LBits: UInt64;
+begin
+  LBits := UInt64($0000000000000001);
+  Move(LBits, Result, SizeOf(Result));
+end;
+
 function MakeSingleBelowInt64Min: Single;
 var
   LBits: UInt32;
@@ -699,18 +715,22 @@ var
   LHighUInt32: UInt32;
   LHugeDouble: Double;
   LTinyDouble: Double;
+  LMinSubnormalDouble: Double;
   LDoubleRemainder: Double;
   LWideRemainder: Extended;
   LHugeSingle: Single;
   LTinySingle: Single;
+  LMinSubnormalSingle: Single;
   LSingleRemainder: Single;
 begin
   LZeroUInt32 := UInt32(0);
   LHighUInt32 := High(UInt32);
   LHugeDouble := 1.0e308;
   LTinyDouble := 1.0e-308;
+  LMinSubnormalDouble := MakeMinPositiveSubnormalDouble;
   LHugeSingle := Single(3.0e30);
   LTinySingle := Single(1.0e-30);
+  LMinSubnormalSingle := MakeMinPositiveSubnormalSingle;
 
   CheckEqual(Int64(3), Round(2.5), 'Round Double ties away from zero positive');
   CheckEqual(Int64(-3), Round(-2.5), 'Round Double ties away from zero negative');
@@ -847,6 +867,20 @@ begin
   Check(((LSingleRemainder < Single(0.0)) or IsSingleNegativeZero(LSingleRemainder)) and
     (nextpas.core.math.scalar.Abs(LSingleRemainder) < LTinySingle),
     'Fmod Single negative huge finite quotient keeps dividend sign');
+  Check(IsDoublePositiveZero(Fmod(LMinSubnormalDouble * 4.0, LMinSubnormalDouble)),
+    'Fmod Double min subnormal exact multiple returns positive zero');
+  Check(IsDoubleNegativeZero(Fmod(-(LMinSubnormalDouble * 4.0), LMinSubnormalDouble)),
+    'Fmod Double min subnormal exact negative multiple returns negative zero');
+  CheckNear(LMinSubnormalDouble, Fmod(LMinSubnormalDouble * 5.0,
+    LMinSubnormalDouble * 2.0), 0.0,
+    'Fmod Double min subnormal divisor keeps one-ulp remainder');
+  Check(IsSinglePositiveZero(Fmod(LMinSubnormalSingle * Single(4.0), LMinSubnormalSingle)),
+    'Fmod Single min subnormal exact multiple returns positive zero');
+  Check(IsSingleNegativeZero(Fmod(-(LMinSubnormalSingle * Single(4.0)), LMinSubnormalSingle)),
+    'Fmod Single min subnormal exact negative multiple returns negative zero');
+  CheckNear(LMinSubnormalSingle, Fmod(LMinSubnormalSingle * Single(5.0),
+    LMinSubnormalSingle * Single(2.0)), Single(0.0),
+    'Fmod Single min subnormal divisor keeps one-ulp remainder');
 
   CheckNear(5.0, Clamp(MakePositiveInfinity, 0.0, 5.0), 0.0,
     'Clamp Double positive infinity clamps high');
