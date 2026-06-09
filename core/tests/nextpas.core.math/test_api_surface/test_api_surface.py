@@ -772,6 +772,16 @@ REQUIRED_SCALAR_IEEE_DOC_TRUTH = (
         "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Fmod` returns NaN for NaN inputs, zero divisors, and infinite dividends, returns the finite dividend for infinite divisors, and finite inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN, returns NaN for NaN-only inputs, and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
     ),
 )
+REQUIRED_SCALAR_INTEGER_BOUNDARY_DOC_TRUTH = (
+    (
+        "docs/math/API.md",
+        "`UInt32` overflow helpers report `High(UInt32)+1` and `High(UInt32)*2` as overflow; `High(UInt32)-1+1` and zero-times-high multiplication in either order return `False` without divide-by-zero.",
+    ),
+    (
+        "docs/math/API.md",
+        "`GCD` and `LCM` normalize signs and return non-negative `Int64` results; representable `Low(Int64)`/`High(Int64)` boundary cases succeed, zero LCM returns `0` before overflow checks, and unrepresentable results raise `EArgumentError`.",
+    ),
+)
 REQUIRED_SCALAR_SIGN_ANGLE_DOC_TRUTH = (
     (
         "docs/math/README.md",
@@ -1761,6 +1771,11 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-ieee-fmod-single-min-subnormal", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Single min subnormal divisor keeps one-ulp remainder"),
     RequiredBehaviorTestMarker("scalar-ieee-overflow-no-div-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "IsMulOverflow SizeUInt zero times high"),
     RequiredBehaviorTestMarker("scalar-ieee-overflow-no-div-zero-symmetric", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "IsMulOverflow SizeUInt high times zero"),
+    RequiredBehaviorTestMarker("scalar-overflow-uint32-add-high-plus-one", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "IsAddOverflow UInt32 high plus one"),
+    RequiredBehaviorTestMarker("scalar-overflow-uint32-add-high-minus-one-plus-one", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "IsAddOverflow UInt32 high minus one plus one"),
+    RequiredBehaviorTestMarker("scalar-overflow-uint32-mul-zero-times-high", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "IsMulOverflow UInt32 zero times high"),
+    RequiredBehaviorTestMarker("scalar-overflow-uint32-mul-high-times-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "IsMulOverflow UInt32 high times zero"),
+    RequiredBehaviorTestMarker("scalar-overflow-uint32-mul-high-times-two", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "IsMulOverflow UInt32 high times two"),
     RequiredBehaviorTestMarker("scalar-min-max-nan", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Min Double propagates NaN first"),
     RequiredBehaviorTestMarker("scalar-min-max-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Min Single keeps negative zero first"),
     RequiredBehaviorTestMarker("scalar-min-max-same-positive-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Min Double same positive zero returns positive zero"),
@@ -1829,6 +1844,13 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-float-predicates", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('float predicates'"),
     RequiredBehaviorTestMarker("scalar-extras", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('number theory and scalar extras'"),
     RequiredBehaviorTestMarker("scalar-gcd-lcm-int64-boundary", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('GCD LCM Int64 boundary contracts'"),
+    RequiredBehaviorTestMarker("scalar-gcd-low-int64-negative-two-representable", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "GCD Low(Int64) with negative two returns representable divisor"),
+    RequiredBehaviorTestMarker("scalar-gcd-zero-negative-high-normalizes-sign", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "GCD zero with negative High(Int64) normalizes sign"),
+    RequiredBehaviorTestMarker("scalar-gcd-low-low-raises", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "GCD(Low(Int64), Low(Int64))"),
+    RequiredBehaviorTestMarker("scalar-lcm-low-zero-before-overflow", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "LCM Low(Int64) with zero returns zero before overflow"),
+    RequiredBehaviorTestMarker("scalar-lcm-high-negative-one-normalizes-sign", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "LCM High(Int64) with negative one normalizes sign"),
+    RequiredBehaviorTestMarker("scalar-lcm-low-one-raises", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "LCM(Low(Int64), 1)"),
+    RequiredBehaviorTestMarker("scalar-lcm-high-times-two-raises", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "LCM(High(Int64), 2)"),
     RequiredBehaviorTestMarker("scalar-angle-conversions", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('angle conversions'"),
     RequiredBehaviorTestMarker("scalar-boundaries", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('integer rounding boundaries'"),
     RequiredBehaviorTestMarker("scalar-rounding-subnormal-contracts", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('scalar rounding subnormal contracts'"),
@@ -6583,6 +6605,15 @@ def scan_required_scalar_ieee_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_scalar_integer_boundary_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        api_doc_truth(REQUIRED_SCALAR_INTEGER_BOUNDARY_DOC_TRUTH),
+        "missing-required-scalar-integer-boundary-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def scan_required_scalar_sign_angle_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
@@ -6688,6 +6719,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_scalar_clamp_doc_truth(root))
     findings.extend(scan_required_scalar_wrap_doc_truth(root))
     findings.extend(scan_required_scalar_ieee_doc_truth(root))
+    findings.extend(scan_required_scalar_integer_boundary_doc_truth(root))
     findings.extend(scan_required_scalar_sign_angle_doc_truth(root))
     findings.extend(scan_required_scalar_integer_conversion_doc_truth(root))
     findings.extend(scan_required_scalar_range_doc_truth(root))
