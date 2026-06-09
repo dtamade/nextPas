@@ -1144,11 +1144,18 @@ end;
 procedure TestVectorSignedZeroContracts;
 var
   N2f: TVec2f;
+  N4d: TVec4d;
   C3f: TVec3f;
 begin
   N2f := TVec2f.Create(SingleNegativeZero, SingleNegativeZero).Normalize;
   CheckSinglePositiveZero(N2f.X, 'TVec2f negative-zero Normalize returns positive zero');
   CheckSinglePositiveZero(N2f.Y, 'TVec2f negative-zero Normalize returns positive zero Y');
+  N4d := TVec4d.Create(DoubleNegativeZero, DoubleNegativeZero,
+    DoubleNegativeZero, DoubleNegativeZero).Normalize;
+  CheckDoublePositiveZero(N4d.X, 'TVec4d negative-zero Normalize returns positive zero X');
+  CheckDoublePositiveZero(N4d.Y, 'TVec4d negative-zero Normalize returns positive zero Y');
+  CheckDoublePositiveZero(N4d.Z, 'TVec4d negative-zero Normalize returns positive zero Z');
+  CheckDoublePositiveZero(N4d.W, 'TVec4d negative-zero Normalize returns positive zero W');
 
   CheckDoublePositiveZero(TVec4d.Create(DoubleNegativeZero, 0.0, 0.0, 0.0).Length,
     'TVec4d zero Length returns +0');

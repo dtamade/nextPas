@@ -1897,6 +1897,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("vec-measure-cross-raw-non-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec3d Cross raw non-finite fallback returns NaN component"),
     RequiredBehaviorTestMarker("vec-signed-zero", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector signed-zero contracts'"),
     RequiredBehaviorTestMarker("vec-signed-zero-normalize", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec2f negative-zero Normalize returns positive zero"),
+    RequiredBehaviorTestMarker("vec-normalize-signed-zero-vec4d", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec4d negative-zero Normalize returns positive zero W"),
     RequiredBehaviorTestMarker("vec-signed-zero-dot", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec4d exact zero Dot returns +0"),
     RequiredBehaviorTestMarker("vec-data-signed-zero-bits", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector Data aliases preserve signed-zero bits'"),
     RequiredBehaviorTestMarker("vec-lerp-scalar-parity", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector Lerp scalar parity contracts'"),
