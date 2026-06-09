@@ -266,6 +266,26 @@ REQUIRED_HOST_GATE_RESIDUAL_TRUTH = (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
         "Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.",
     ),
+    (
+        "docs/math/API.md",
+        "Host truth matrix: Linux current-host runtime is the only local runtime proof.",
+    ),
+    (
+        "docs/math/API.md",
+        "Host truth matrix: Win64 forced compile is compile-only proof; it is not Windows host link, run, heaptrc, or precision proof.",
+    ),
+    (
+        "docs/math/API.md",
+        "Host truth matrix: Windows host link/runtime proof is pending.",
+    ),
+    (
+        "docs/math/API.md",
+        "Host truth matrix: macOS host link/runtime proof is pending.",
+    ),
+    (
+        "docs/math/API.md",
+        "Host truth matrix: CI matrix proof is pending.",
+    ),
 )
 REQUIRED_M8_RESIDUAL_TRUTH = (
     (

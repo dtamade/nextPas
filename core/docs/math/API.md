@@ -473,5 +473,14 @@ independently callable facade-consumer gate.
 `core-math-trig-win64-compile-smoke` is compile-only and uses `-Cn -Twin64 -Px86_64`; it proves the
 current facade/trig route compiles for Win64 with this toolchain, but it is not a Windows host
 link/run proof and it does not cover macOS.
+
+| Host truth matrix | Current truth |
+| --- | --- |
+| Linux current-host runtime | Host truth matrix: Linux current-host runtime is the only local runtime proof. |
+| Win64 forced compile | Host truth matrix: Win64 forced compile is compile-only proof; it is not Windows host link, run, heaptrc, or precision proof. |
+| Windows host runtime | Host truth matrix: Windows host link/runtime proof is pending. |
+| macOS host runtime | Host truth matrix: macOS host link/runtime proof is pending. |
+| CI matrix | Host truth matrix: CI matrix proof is pending. |
+
 Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.
 M8 is not complete until broader M7 SIMD acceleration decisions and host trig link evidence are resolved.
