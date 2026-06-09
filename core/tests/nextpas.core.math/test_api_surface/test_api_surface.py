@@ -27,6 +27,12 @@ class RequiredBehaviorTestMarker:
 
 
 @dataclass(frozen=True)
+class FacadeOnlyConsumerContract:
+    path: str
+    marker: str | None = None
+
+
+@dataclass(frozen=True)
 class PascalClassContract:
     class_name: str
     public_members: tuple[str, ...]
@@ -163,6 +169,15 @@ ROOT_FACADE_CONSTANT_PARITY_EXPECTATIONS = {
 FACADE_TYPE_ALIAS_COMPILE_TEST_PATH = "tests/nextpas.core.math/test_facade/test_facade.lpr"
 FACADE_TYPE_ALIAS_COMPILE_TEST_MARKER = "T.Run('facade type alias compile surface'"
 FACADE_ROOT_IMPORT_TEST_MARKER = "T.Run('facade imports only root math unit'"
+FACADE_ONLY_CONSUMER_CONTRACTS = (
+    FacadeOnlyConsumerContract(
+        path=FACADE_TYPE_ALIAS_COMPILE_TEST_PATH,
+        marker=FACADE_ROOT_IMPORT_TEST_MARKER,
+    ),
+    FacadeOnlyConsumerContract(
+        path="examples/nextpas.core.math/math_overview/math_overview.lpr",
+    ),
+)
 REQUIRED_FACADE_TYPE_ALIAS_COMPILE_USES = {
     "tvec2f": "LVec2f: TVec2f",
     "tvec3f": "LVec3f: TVec3f",
@@ -4209,52 +4224,54 @@ def scan_facade_type_alias_compile_surface(root: Path) -> list[Finding]:
 
 def scan_facade_root_import_contract(root: Path) -> list[Finding]:
     findings: list[Finding] = []
-    path = root / FACADE_TYPE_ALIAS_COMPILE_TEST_PATH
-    if not path.is_file():
-        add_finding(
-            findings,
-            "missing-facade-root-import-test-file",
-            root,
-            path,
-            1,
-            FACADE_TYPE_ALIAS_COMPILE_TEST_PATH,
-        )
-        return findings
-
-    text = path.read_text(encoding="utf-8", errors="replace")
-    code = strip_pascal_comments_and_strings(text)
-    if FACADE_ROOT_IMPORT_TEST_MARKER not in strip_pascal_comments(text):
-        add_finding(
-            findings,
-            "missing-facade-root-import-marker",
-            root,
-            path,
-            1,
-            FACADE_ROOT_IMPORT_TEST_MARKER,
-        )
-
-    units = active_uses_units_with_lines(interface_text(code))
-    seen_units = {unit for unit, _line in units}
-    if "nextpas.core.math" not in seen_units:
-        add_finding(
-            findings,
-            "facade-consumer-missing-root-import",
-            root,
-            path,
-            1,
-            "nextpas.core.math",
-        )
-    for unit, line in units:
-        if not unit.startswith("nextpas.core.math."):
+    for contract in FACADE_ONLY_CONSUMER_CONTRACTS:
+        path = root / contract.path
+        rule_suffix = contract.path.replace("/", ":")
+        if not path.is_file():
+            add_finding(
+                findings,
+                "missing-facade-root-import-consumer-file:" + rule_suffix,
+                root,
+                path,
+                1,
+                contract.path,
+            )
             continue
-        add_finding(
-            findings,
-            "facade-consumer-disallowed-math-import:" + unit,
-            root,
-            path,
-            line,
-            unit,
-        )
+
+        text = path.read_text(encoding="utf-8", errors="replace")
+        code = strip_pascal_comments_and_strings(text)
+        if contract.marker and contract.marker not in strip_pascal_comments(text):
+            add_finding(
+                findings,
+                "missing-facade-root-import-marker:" + rule_suffix,
+                root,
+                path,
+                1,
+                contract.marker,
+            )
+
+        units = active_uses_units_with_lines(interface_text(code))
+        seen_units = {unit for unit, _line in units}
+        if "nextpas.core.math" not in seen_units:
+            add_finding(
+                findings,
+                "facade-consumer-missing-root-import:" + rule_suffix,
+                root,
+                path,
+                1,
+                "nextpas.core.math",
+            )
+        for unit, line in units:
+            if not unit.startswith("nextpas.core.math."):
+                continue
+            add_finding(
+                findings,
+                "facade-consumer-disallowed-math-import:" + rule_suffix + ":" + unit,
+                root,
+                path,
+                line,
+                unit,
+            )
     return findings
 
 
@@ -4310,7 +4327,9 @@ def run_facade_root_import_contract_self_tests() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         path = root / FACADE_TYPE_ALIAS_COMPILE_TEST_PATH
+        overview_path = root / "examples/nextpas.core.math/math_overview/math_overview.lpr"
         path.parent.mkdir(parents=True, exist_ok=True)
+        overview_path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             "program test_facade;\n"
             "uses\n"
@@ -4323,11 +4342,26 @@ def run_facade_root_import_contract_self_tests() -> None:
             "end.\n",
             encoding="utf-8",
         )
+        overview_path.write_text(
+            "program math_overview;\n"
+            "uses\n"
+            "  nextpas.core.math,\n"
+            "  nextpas.core.math.vec;\n"
+            "begin\n"
+            "end.\n",
+            encoding="utf-8",
+        )
         findings = scan_facade_root_import_contract(root)
         rules = {finding.rule for finding in findings}
         expected_rules = {
-            "missing-facade-root-import-marker",
-            "facade-consumer-disallowed-math-import:nextpas.core.math.vec",
+            "missing-facade-root-import-marker:"
+            + FACADE_TYPE_ALIAS_COMPILE_TEST_PATH.replace("/", ":"),
+            "facade-consumer-disallowed-math-import:"
+            + FACADE_TYPE_ALIAS_COMPILE_TEST_PATH.replace("/", ":")
+            + ":nextpas.core.math.vec",
+            "facade-consumer-disallowed-math-import:"
+            + "examples:nextpas.core.math:math_overview:math_overview.lpr"
+            + ":nextpas.core.math.vec",
         }
         if not expected_rules <= rules:
             raise AssertionError(
@@ -4344,6 +4378,14 @@ def run_facade_root_import_contract_self_tests() -> None:
             "  nextpas.core.math;\n"
             "begin\n"
             "  T.Run('facade imports only root math unit', procedure begin end);\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        overview_path.write_text(
+            "program math_overview;\n"
+            "uses\n"
+            "  nextpas.core.math;\n"
+            "begin\n"
             "end.\n",
             encoding="utf-8",
         )
