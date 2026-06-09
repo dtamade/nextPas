@@ -62,6 +62,7 @@ make -C core/tests/nextpas.core.mem/test_memory_map_compile_gate clean test
 make -C core/tests/nextpas.core.mem/test_memory_manager_rtl clean test
 make -C core/tests/nextpas.core.mem/test_memory_manager_crt_compile_gate clean test
 make -C core/tests/nextpas.core.mem/test_mapped_ring_buffer clean test
+make -C core/tests/nextpas.core.mem/test_mapped_ring_buffer_sharded clean test
 make -C core/tests/nextpas.core.mem/test_mapped_slab_pool clean test
 make -C core/tests/nextpas.core.mem/test_stack_pool clean test
 make -C core/tests/nextpas.core.mem/test_oom clean test
@@ -99,6 +100,9 @@ What is already aligned with the L0 direction:
   `nextpas.core.text.conv` for manager-generated pool names or
   `nextpas.core.fs.util` for file existence checks; generated names stay local
   and file-backed pools now consume the platform-owned file stat facade.
+- `nextpas.core.mem.mapped_ring_buffer.sharded` no longer depends on
+  `nextpas.core.text.conv` for shard-name formatting; it keeps the existing
+  `_shNN` naming contract with local `Str` formatting.
 - `TSlabPool` no longer samples `platform.time` directly; the core keeps call
   counters but does not depend on L1 timing APIs.
 - `mem.blockpool.concurrent`, `mem.pool.fixed.concurrent`, and
@@ -127,10 +131,10 @@ What is already aligned with the L0 direction:
 
 The boundary is not fully clean yet. The main remaining debt is:
 
-- The current source-boundary contract still carries 2 allowlisted debt
+- The current source-boundary contract still carries 1 allowlisted debt
   entries; this is a guardrail against regression, not proof that mem is
   already layer-clean.
-- `mapped_ring_buffer.sharded` still carries non-L0 helper dependencies that
+- `mapped_ring_buffer.sharded` still carries a `SyncObjs` dependency that
   should be revisited with its owning architecture slice.
 
 Treat these as explicit debt, not as proof that mem is already layer-clean.
@@ -139,9 +143,9 @@ Treat these as explicit debt, not as proof that mem is already layer-clean.
 
 Priority follow-up slices:
 
-1. Revisit the mapped ring-buffer sharded helpers so their remaining
-   higher-layer dependencies either move behind platform-owned seams or leave
-   the L0 mem core.
+1. Revisit the mapped ring-buffer sharded synchronization helper so its
+   remaining `SyncObjs` dependency either moves behind a platform-owned seam or
+   leaves the L0 mem core.
 2. Keep the mem mapping compile surface honest across host branches: helper
    cleanups may stay in mem, but do not reopen the landed mapping/shared-memory
    owner slice without a new blocker.

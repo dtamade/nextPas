@@ -2,7 +2,7 @@ unit nextpas.core.mem.mapped_ring_buffer.sharded;
 
 interface
 uses
-  nextpas.core.text.conv, SyncObjs, nextpas.core.mem.mapped_ring_buffer;
+  SyncObjs, nextpas.core.mem.mapped_ring_buffer;
 
 type
   // 简单分片封装：将并发生产/消费分散到多条底层 ring
@@ -29,6 +29,18 @@ type
   end;
 
 implementation
+
+function ShardIndexToString(AIndex: Integer): string;
+begin
+  Str(AIndex, Result);
+  while Length(Result) < 2 do
+    Result := '0' + Result;
+end;
+
+function MappedShardName(const ABaseName: string; AIndex: Integer): string;
+begin
+  Result := ABaseName + '_sh' + ShardIndexToString(AIndex);
+end;
 
 constructor TMappedRingBufferSharded.Create;
 begin
@@ -76,7 +88,7 @@ begin
   for LIndex := 0 to ShardCount-1 do
   begin
     FShards[LIndex] := TMappedRingBuffer.Create;
-    LName := Format('%s_sh%0.2d', [BaseName, LIndex]);
+    LName := MappedShardName(BaseName, LIndex);
     if not FShards[LIndex].CreateShared(LName, Capacity, ElemSize) then Exit;
   end;
   FInit := True;
@@ -97,7 +109,7 @@ begin
   for LIndex := 0 to ShardCount-1 do
   begin
     FShards[LIndex] := TMappedRingBuffer.Create;
-    LName := Format('%s_sh%0.2d', [BaseName, LIndex]);
+    LName := MappedShardName(BaseName, LIndex);
     if not FShards[LIndex].OpenShared(LName) then Exit;
   end;
   FInit := True;

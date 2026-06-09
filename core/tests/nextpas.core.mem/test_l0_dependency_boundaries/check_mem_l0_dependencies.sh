@@ -19,7 +19,6 @@ FORBIDDEN_UNITS=(
 
 KNOWN_DEBT=(
   "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|SyncObjs"
-  "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|nextpas.core.text.conv"
 )
 
 FORBIDDEN_MEM_SECURE_RAW_SYMBOLS=(
