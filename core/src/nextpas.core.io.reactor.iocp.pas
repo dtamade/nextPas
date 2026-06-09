@@ -157,7 +157,7 @@ begin
   Dispose(AOp);
 end;
 
-procedure IocpCancelPendingOps(var AReactor: TIocpReactor; AError: DWORD);
+procedure IocpCancelPendingOps(var AReactor: TIocpReactor);
 var
   LOp: PIocpPendingOp;
 begin
@@ -239,7 +239,7 @@ end;
 procedure IocpReleasePendingOps(var AReactor: TIocpReactor;
   APort: HANDLE; AError: DWORD);
 begin
-  IocpCancelPendingOps(AReactor, AError);
+  IocpCancelPendingOps(AReactor);
   IocpDrainCancelledPendingOps(AReactor, APort, AError);
 end;
 

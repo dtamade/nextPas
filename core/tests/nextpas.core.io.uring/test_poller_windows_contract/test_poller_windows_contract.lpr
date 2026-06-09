@@ -301,13 +301,15 @@ begin
     'iocpreleasependingops(self, handle(lport), error_operation_aborted);',
     'closehandle(handle(lport))',
     'IOCP Close must dispatch abort callbacks before closing the port handle');
-  CheckContains(LReleaseBody, 'iocpcancelpendingops(areactor, aerror);',
+  CheckContains(LReleaseBody, 'iocpcancelpendingops(areactor);',
     'IOCP pending release must first request cancellation for owned file operations');
   CheckContains(LReleaseBody, 'iocpdraincancelledpendingops(areactor, aport, aerror);',
     'IOCP pending release must drain cancellation completions before freeing owners');
-  CheckBefore(LReleaseBody, 'iocpcancelpendingops(areactor, aerror);',
+  CheckBefore(LReleaseBody, 'iocpcancelpendingops(areactor);',
     'iocpdraincancelledpendingops(areactor, aport, aerror);',
     'IOCP pending release must cancel before draining completion ownership');
+  CheckAbsent(LReleaseBody, 'iocpcancelpendingops(areactor, aerror);',
+    'IOCP pending release must not pass abort error into cancellation request');
   CheckAbsent(LReleaseBody, 'areactor.fpendinghead := nil;',
     'IOCP pending release must keep pending ops linked until completion settle');
   CheckAbsent(LReleaseBody, 'areactor.fpendingcount := 0;',
@@ -375,6 +377,7 @@ end;
 procedure TestIocpCloseAbortCompletionDrainOwnershipContract;
 var
   LIocp: string;
+  LCancelSignature: string;
   LCancelBody: string;
   LAbortDispatchBody: string;
   LAbortRemainingBody: string;
@@ -382,6 +385,8 @@ var
   LReleaseBody: string;
 begin
   LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
+  LCancelSignature := ExtractBetween(LIocp, 'procedure iocpcancelpendingops',
+    'begin');
   LCancelBody := ExtractBetween(LIocp, 'procedure iocpcancelpendingops',
     'function iocpdispatchabortcompletion');
   LAbortDispatchBody := ExtractBetween(LIocp,
@@ -397,6 +402,8 @@ begin
 
   CheckContains(LCancelBody, 'cancelioex(lop^.handle, @lop^.overlapped);',
     'IOCP cancellation must request abort for each pending OVERLAPPED');
+  CheckAbsent(LCancelSignature, 'aerror',
+    'IOCP cancellation request must not accept abort error ownership');
   CheckAbsent(LCancelBody, 'dispose(lop);',
     'IOCP cancellation must not free OVERLAPPED storage');
   CheckAbsent(LCancelBody,
@@ -456,9 +463,13 @@ begin
     'iocpabortremainingpendingops(areactor, aerror);',
     'IOCP close-abort drain must fallback when no completion packet can be observed');
 
-  CheckBefore(LReleaseBody, 'iocpcancelpendingops(areactor, aerror);',
+  CheckBefore(LReleaseBody, 'iocpcancelpendingops(areactor);',
     'iocpdraincancelledpendingops(areactor, aport, aerror);',
     'IOCP release orchestration must cancel before completion drain');
+  CheckAbsent(LReleaseBody, 'iocpcancelpendingops(areactor, aerror);',
+    'IOCP release orchestration must not pass abort error into cancellation request');
+  CheckContains(LReleaseBody, 'iocpcancelpendingops(areactor);',
+    'IOCP release orchestration must keep abort error ownership in drain/dispatch');
 end;
 
 procedure TestAsyncLoopTimeoutCloseLifecycleContract;
