@@ -3390,6 +3390,11 @@ begin
     Exit(PLATFORM_ERR_AGAIN);
   if aTimeoutNs = 0 then
     Exit(PLATFORM_ERR_TIMEOUT);
+  if aTimeoutNs < 0 then
+  begin
+    Result := platform_wait_address32(@aObj, aExpected, -1);
+    Exit;
+  end;
 
   Result := platform_wait_address32(@aObj, aExpected, aTimeoutNs);
 end;
@@ -3400,6 +3405,11 @@ begin
     Exit(PLATFORM_ERR_AGAIN);
   if aTimeoutNs = 0 then
     Exit(PLATFORM_ERR_TIMEOUT);
+  if aTimeoutNs < 0 then
+  begin
+    Result := platform_wait_address32(PInt32(@aObj), Int32(aExpected), -1);
+    Exit;
+  end;
 
   Result := platform_wait_address32(PInt32(@aObj), Int32(aExpected), aTimeoutNs);
 end;

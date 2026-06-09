@@ -685,6 +685,8 @@ begin
     'atomic_wait Int32 zero-timeout path must be explicit before platform wait');
   CheckContains(LAtomicWaitSection, 'Exit(PLATFORM_ERR_TIMEOUT)',
     'atomic_wait Int32 zero-timeout path must return TIMEOUT before platform wait');
+  CheckContains(LAtomicWaitSection, 'aTimeoutNs < 0',
+    'atomic_wait Int32 negative timeout must be an explicit infinite-wait contract');
   CheckContains(LAtomicWaitUInt32Section, 'atomic_load(aObj, mo_seq_cst) <> aExpected',
     'atomic_wait UInt32 mismatch path must be owned before platform wait');
   CheckContains(LAtomicWaitUInt32Section, 'Exit(PLATFORM_ERR_AGAIN)',
@@ -693,6 +695,8 @@ begin
     'atomic_wait UInt32 zero-timeout path must be explicit before platform wait');
   CheckContains(LAtomicWaitUInt32Section, 'Exit(PLATFORM_ERR_TIMEOUT)',
     'atomic_wait UInt32 zero-timeout path must return TIMEOUT before platform wait');
+  CheckContains(LAtomicWaitUInt32Section, 'aTimeoutNs < 0',
+    'atomic_wait UInt32 negative timeout must be an explicit infinite-wait contract');
   CheckContains(LAtomicNotifyOneSection, 'platform_wake_address_one',
     'atomic_notify_one must delegate to platform wake-one primitive');
   CheckContains(LAtomicNotifyAllSection, 'platform_wake_address_all',
@@ -1023,6 +1027,9 @@ begin
   LRet := atomic_wait(LValue, 9, 1000000);
   CheckEqual(Int64(PLATFORM_ERR_AGAIN), Int64(LRet),
     'atomic_wait must return AGAIN on value mismatch');
+  LRet := atomic_wait(LValue, 9, -1);
+  CheckEqual(Int64(PLATFORM_ERR_AGAIN), Int64(LRet),
+    'atomic_wait mismatch must return AGAIN before considering infinite timeout');
 
   LValue := 11;
   LRet := atomic_wait(LValue, 11, 0);
