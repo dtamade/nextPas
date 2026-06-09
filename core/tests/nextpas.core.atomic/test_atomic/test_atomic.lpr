@@ -275,6 +275,7 @@ const
   AtomicCoreSourcePath = '../../../src/nextpas.core.atomic.core.pas';
   AtomicTypesSourcePath = '../../../src/nextpas.core.atomic.types.pas';
   AtomicCompatSourcePath = '../../../src/nextpas.core.atomic.compat.pas';
+  AtomicTestSourcePath = 'test_atomic.lpr';
   AtomicX8664SnapshotLegacyPath = '../../../src/nextpas.core.atomic.x86_64.inc';
   AtomicX8664SnapshotArchivePath = '../../../docs/archive/atomic/nextpas.core.atomic.x86_64.snapshot.txt';
 var
@@ -337,6 +338,7 @@ var
   LCompatLockFree32Section: string;
   LCompatLockFree64Section: string;
   LCompatLockFreePtrSection: string;
+  LWaitNotifyLifecycleTestSection: string;
 begin
   LAtomicSource := ReadUtf8TextFile(AtomicSourcePath);
   LAtomicCoreSource := ReadUtf8TextFile(AtomicCoreSourcePath);
@@ -507,6 +509,9 @@ begin
   LCompatLockFreePtrSection := ExtractImplementationSection(LAtomicCompatSource,
     'function atomic_is_lock_free_ptr: Boolean;',
     'function AtomicLoad32(var ATarget: Int32; const AOrder: TMemoryOrder): Int32;');
+  LWaitNotifyLifecycleTestSection := ExtractSection(ReadUtf8TextFile(AtomicTestSourcePath),
+    'procedure TestAtomicWaitNotifySurfaceAndBehavior;' + LineEnding + 'var',
+    'procedure TestAtomicRefCountContract;' + LineEnding + 'var');
 
   Check(Pos('mo_relaxed: 无效，会触发运行时错误', LAtomicSource) = 0,
     'atomic_thread_fence docs must not claim mo_relaxed raises runtime error');
@@ -674,6 +679,8 @@ begin
     'atomic_notify_one must delegate to platform wake-one primitive');
   CheckContains(LAtomicNotifyAllSection, 'platform_wake_address_all',
     'atomic_notify_all must delegate to platform wake-all primitive');
+  CheckNotContains(LWaitNotifyLifecycleTestSection, 'Sleep(',
+    'atomic wait/notify lifecycle test must use predicate progress instead of scheduler sleeps');
   CheckContains(LRefCountTypeSection, 'function Load(AOrder: memory_order_t = mo_relaxed): PtrUInt;',
     'TAtomicRefCount Load should default to relaxed');
   CheckContains(LRefCountTypeSection, 'function Inc: PtrUInt;',
@@ -977,7 +984,7 @@ var
   LState2: TAtomicWaitState;
   LThread1: TThread;
   LThread2: TThread;
-  LSpin: Integer;
+  LDeadline: QWord;
 begin
   LValue := 7;
   LRet := atomic_wait(LValue, 9, 1000000);
@@ -1046,12 +1053,12 @@ begin
   LThread1.Start;
   LThread2.Start;
 
-  for LSpin := 1 to 1000 do
-  begin
+  LDeadline := GetTickCount64 + 1000;
+  repeat
     if atomic_load(LStarted, mo_seq_cst) = 2 then
       Break;
-    Sleep(1);
-  end;
+    CpuPause;
+  until GetTickCount64 >= LDeadline;
   CheckEqual(Int64(2), Int64(atomic_load(LStarted, mo_seq_cst)),
     'waiter threads must start before notify path is exercised');
 
