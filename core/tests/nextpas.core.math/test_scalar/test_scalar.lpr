@@ -284,6 +284,10 @@ procedure RaiseClampInt32ReversedBounds; forward;
 procedure RaiseClampSingleNaNMin; forward;
 procedure RaiseClampDoubleNaNMax; forward;
 procedure RaiseClampSingleInfiniteMax; forward;
+procedure RaiseClampDoubleInfiniteMin; forward;
+procedure RaiseClampDoubleInfiniteMax; forward;
+procedure RaiseClampSingleInfiniteMin; forward;
+procedure RaiseClampSingleNaNMax; forward;
 procedure RaiseWrapSingleReversedBounds; forward;
 procedure RaiseWrapDoubleReversedBounds; forward;
 procedure RaiseWrapSingleNaNValue; forward;
@@ -722,6 +726,44 @@ begin
     'FloatIsZero rejects negative epsilon');
   Check(not FloatIsZero(Single(0.0), Single(-0.000001)),
     'FloatIsZero Single rejects negative epsilon');
+end;
+
+procedure TestScalarPredicateDirectMatrixContracts;
+begin
+  Check(IsInfinite(MakeSinglePositiveInfinity),
+    'IsInfinite Single positive infinity');
+  Check(IsInfinite(MakeSingleNegativeInfinity),
+    'IsInfinite Single negative infinity');
+  Check(IsInfinite(MakeNegativeInfinity),
+    'IsInfinite Double negative infinity');
+
+  Check((not IsNaN(Single(42.0))) and (not IsInfinite(Single(42.0))) and
+    (not IsNaN(42.0)) and (not IsInfinite(42.0)),
+    'IsNaN and IsInfinite reject finite values');
+  Check((not IsInfinite(MakeNaN)) and (not IsInfinite(MakeSingleNaN)) and
+    (not IsNaN(MakePositiveInfinity)) and (not IsNaN(MakeSinglePositiveInfinity)),
+    'IsInfinite rejects NaN and IsNaN rejects infinity');
+end;
+
+procedure TestScalarClampFiniteBoundMatrixContracts;
+begin
+  CheckNear(5.0, Clamp(MakePositiveInfinity, 0.0, 5.0), 0.0,
+    'Clamp Double positive infinity value clamps high');
+  CheckNear(0.0, Clamp(MakeNegativeInfinity, 0.0, 5.0), 0.0,
+    'Clamp Double negative infinity value clamps low');
+  CheckNear(5.0, Clamp(MakeSinglePositiveInfinity, Single(0.0), Single(5.0)), 0.0,
+    'Clamp Single positive infinity value clamps high');
+  CheckNear(0.0, Clamp(MakeSingleNegativeInfinity, Single(0.0), Single(5.0)), 0.0,
+    'Clamp Single negative infinity value clamps low');
+
+  ExpectArgumentErrorMessage('Clamp: minimum and maximum must be finite',
+    'Clamp Double infinite minimum', @RaiseClampDoubleInfiniteMin);
+  ExpectArgumentErrorMessage('Clamp: minimum and maximum must be finite',
+    'Clamp Double infinite maximum', @RaiseClampDoubleInfiniteMax);
+  ExpectArgumentErrorMessage('Clamp: minimum and maximum must be finite',
+    'Clamp Single infinite minimum', @RaiseClampSingleInfiniteMin);
+  ExpectArgumentErrorMessage('Clamp: minimum and maximum must be finite',
+    'Clamp Single NaN maximum', @RaiseClampSingleNaNMax);
 end;
 
 procedure TestScalarIEEEEdgeContracts;
@@ -1249,6 +1291,26 @@ begin
   Clamp(Single(1.0), Single(0.0), MakeSinglePositiveInfinity);
 end;
 
+procedure RaiseClampDoubleInfiniteMin;
+begin
+  Clamp(1.0, MakeNegativeInfinity, 2.0);
+end;
+
+procedure RaiseClampDoubleInfiniteMax;
+begin
+  Clamp(1.0, 0.0, MakePositiveInfinity);
+end;
+
+procedure RaiseClampSingleInfiniteMin;
+begin
+  Clamp(Single(1.0), MakeSingleNegativeInfinity, Single(2.0));
+end;
+
+procedure RaiseClampSingleNaNMax;
+begin
+  Clamp(Single(1.0), Single(0.0), MakeSingleNaN);
+end;
+
 procedure RaiseWrapSingleReversedBounds;
 begin
   Wrap(Single(1.0), Single(2.0), Single(1.0));
@@ -1573,6 +1635,10 @@ begin
   T.Run('interpolation', @TestInterpolation);
   T.Run('rounding and sign', @TestRoundingAndSign);
   T.Run('float predicates', @TestFloatPredicates);
+  T.Run('scalar predicate direct matrix contracts',
+    @TestScalarPredicateDirectMatrixContracts);
+  T.Run('scalar Clamp finite-bound matrix contracts',
+    @TestScalarClampFiniteBoundMatrixContracts);
   T.Run('scalar IEEE edge contracts', @TestScalarIEEEEdgeContracts);
   T.Run('scalar range boundary edge contracts', @TestScalarRangeBoundaryEdgeContracts);
   T.Run('number theory and scalar extras', @TestNumberTheoryAndScalarExtras);
