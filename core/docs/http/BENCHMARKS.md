@@ -740,6 +740,8 @@ markers:
 - `ns/op`
 - `req/s`
 - `client_read_mode=buffered`
+- `bench_max_iters=<iterations>`
+- `bench_filter=<filter when set>`
 
 The narrowest full-chain workloads now split router dispatch and response size
 from the rest of the keep-alive server path:

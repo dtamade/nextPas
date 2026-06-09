@@ -1857,6 +1857,10 @@ begin
   CheckContains(LMarkersBlock,
     '`response_validation=strict_status_content_length_body_bytes`',
     'BENCHMARKS fullchain stable markers should document strict response validation');
+  CheckContains(LMarkersBlock, '`bench_max_iters=<iterations>`',
+    'BENCHMARKS fullchain stable markers should document max iterations');
+  CheckContains(LMarkersBlock, '`bench_filter=<filter when set>`',
+    'BENCHMARKS fullchain stable markers should document filtered run marker');
 end;
 
 procedure TestReadmeFullchainBenchmarkTruthSourceContract;
