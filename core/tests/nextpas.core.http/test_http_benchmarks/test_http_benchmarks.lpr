@@ -3213,9 +3213,16 @@ procedure TestServerComparisonSummaryKeepsReadModeMetadataSourceContract;
 var
   LRootDir: string;
   LSource: string;
+  LDocs: string;
+  LDocsBlock: string;
 begin
   LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
   LSource := LoadTextFile(ResolveServerComparisonRunnerPath(LRootDir));
+  LDocs := LoadTextFile(PathJoin(LRootDir, BenchmarksDocPath));
+  LDocsBlock := ExtractSourceBlock(LDocs,
+    '## Benchmark Tooling: Multi-Run Server Comparison',
+    'Each raw nextPas row for the current no-body H1 workloads',
+    'BENCHMARKS multi-run server comparison summary block');
 
   CheckContains(LSource, 'client_read_mode="$(printf',
     'server comparison parses client read mode from raw row');
@@ -3229,6 +3236,16 @@ begin
     'server comparison summary prints client read mode');
   CheckContains(LSource, 'summary_response_body_bytes=%s',
     'server comparison summary prints response body bytes');
+  CheckContains(LDocsBlock, '`summary_client_read_mode=...`',
+    'BENCHMARKS should document summary client read mode marker');
+  CheckContains(LDocsBlock, '`summary_response_body_bytes=...`',
+    'BENCHMARKS should document summary response body bytes marker');
+  CheckContains(LDocsBlock, '`summary_rust_profile=...`',
+    'BENCHMARKS should document summary Rust profile marker');
+  CheckContains(LDocsBlock, '`summary_requested_threads=...`',
+    'BENCHMARKS should document summary requested threads marker');
+  CheckContains(LDocsBlock, '`summary_effective_threads=...`',
+    'BENCHMARKS should document summary effective threads marker');
 end;
 
 procedure TestServerComparisonPreservesRequestedThreadsSourceContract;

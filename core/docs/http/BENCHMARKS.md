@@ -2620,9 +2620,12 @@ summary_impl=nextpas runs=3 median_completed=50000 median_ns/op=11431.0 median_r
 summary_impl=rust_std runs=3 median_completed=50000 median_ns/op=9885.0 median_req/s=101153
 ```
 
-Current summary rows also carry `summary_client_read_mode=...` and
-`summary_response_body_bytes=...`, so multi-run median reports retain the raw
-row context needed to compare `response_1k` fairly.
+Current summary rows also carry `summary_client_read_mode=...`,
+`summary_response_body_bytes=...`, `summary_rust_profile=...`,
+`summary_requested_threads=...`, and `summary_effective_threads=...`, so
+multi-run median reports retain the raw row context needed to compare
+`response_1k` fairly without losing Rust comparator profile or thread-clamp
+truth.
 
 Each raw nextPas row for the current no-body H1 workloads also includes
 `nextpas_h1_path=fast`, which keeps the fast-gate interpretation visible in
