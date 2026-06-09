@@ -299,6 +299,33 @@ begin
   SetString(Result, AValuePtr, AValueLen);
 end;
 
+procedure TrimCapturedHeaderValue(var AValue: string; var AValuePtr: PAnsiChar;
+  var AValueLen: SizeUInt);
+var
+  LStart: SizeUInt;
+  LStop: SizeUInt;
+begin
+  if AValue <> '' then
+  begin
+    AValue := TextTrim(AValue);
+    AValuePtr := nil;
+    AValueLen := 0;
+    Exit;
+  end;
+  if (AValuePtr = nil) or (AValueLen = 0) then
+    Exit;
+  LStart := 0;
+  LStop := AValueLen;
+  while (LStart < LStop) and
+        ((AValuePtr[LStart] = ' ') or (AValuePtr[LStart] = #9)) do
+    Inc(LStart);
+  while (LStop > LStart) and
+        ((AValuePtr[LStop - 1] = ' ') or (AValuePtr[LStop - 1] = #9)) do
+    Dec(LStop);
+  AValuePtr := AValuePtr + LStart;
+  AValueLen := LStop - LStart;
+end;
+
 function CapturedHeaderValueIsNonEmpty(const AValue: string;
   const AValuePtr: PAnsiChar; const AValueLen: SizeUInt): Boolean; inline;
 begin
@@ -694,6 +721,8 @@ begin
   LSelf := GetSelf(p0);
   if (LSelf.FCurrentField <> '') or (LSelf.FCurrentFieldPtr <> nil) then
   begin
+    TrimCapturedHeaderValue(LSelf.FCurrentValue, LSelf.FCurrentValuePtr,
+      LSelf.FCurrentValueLen);
     if (p0^.flags and F_TRAILING) = 0 then
     begin
       Result := LSelf.ValidateContentLengthHeaderValue(LSelf.FCurrentField,

@@ -156,6 +156,11 @@ begin
     Result := AChar;
 end;
 
+function IsHeaderOwsFast(const AChar: AnsiChar): Boolean; inline;
+begin
+  Result := (AChar = ' ') or (AChar = #9);
+end;
+
 function FastHeaderNameMatches(const ARaw: string; const AStart: SizeInt;
   const ALen: SizeInt; const AName: string): Boolean; inline;
 var
@@ -185,6 +190,7 @@ var
   LLineEnd: SizeInt;
   LColon: SizeInt;
   LValStart: SizeInt;
+  LValEnd: SizeInt;
   LRawLen: SizeInt;
 begin
   Result := False;
@@ -210,13 +216,17 @@ begin
 
   LValStart := LColon + 1;
   while (LValStart < LLineEnd) and
-        ((FRaw[LValStart] = ' ') or (FRaw[LValStart] = #9)) do
+        IsHeaderOwsFast(AnsiChar(FRaw[LValStart])) do
     Inc(LValStart);
+  LValEnd := LLineEnd;
+  while (LValEnd > LValStart) and
+        IsHeaderOwsFast(AnsiChar(FRaw[LValEnd - 1])) do
+    Dec(LValEnd);
 
   ASpan.NameStart := ALineStart;
   ASpan.NameLen := LColon - ALineStart;
   ASpan.ValueStart := LValStart;
-  ASpan.ValueLen := LLineEnd - LValStart;
+  ASpan.ValueLen := LValEnd - LValStart;
 
   if (LLineEnd < LRawLen) and (FRaw[LLineEnd] = #13) then
     ALineStart := LLineEnd + 2
@@ -551,7 +561,7 @@ var
   LLineStart, LLineEnd: SizeUInt;
   LColonOff: SizeInt;
   LNameStart, LNameLen: SizeUInt;
-  LValStart, LValLen: SizeUInt;
+  LValStart, LValEnd, LValLen: SizeUInt;
   LHeadersStart, LHeadersLen: SizeUInt;
   LBodyStart: SizeUInt;
   LContentLength: Int64;
@@ -659,9 +669,12 @@ begin
 
     // Value starts after colon, trim leading OWS (spaces/tabs)
     LValStart := LLineStart + SizeUInt(LColonOff) + 1;
-    while (LValStart < LLineEnd) and ((ABuf[LValStart] = ' ') or (ABuf[LValStart] = #9)) do
+    while (LValStart < LLineEnd) and IsHeaderOwsFast(ABuf[LValStart]) do
       Inc(LValStart);
-    LValLen := LLineEnd - LValStart;
+    LValEnd := LLineEnd;
+    while (LValEnd > LValStart) and IsHeaderOwsFast(ABuf[LValEnd - 1]) do
+      Dec(LValEnd);
+    LValLen := LValEnd - LValStart;
 
     if (not IsValidHeaderNameFast(ABuf + LNameStart, LNameLen)) or
        (not IsValidHeaderValueFast(ABuf + LValStart, LValLen)) then

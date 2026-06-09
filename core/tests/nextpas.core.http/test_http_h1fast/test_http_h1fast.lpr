@@ -359,6 +359,57 @@ begin
   CheckEqual('*/*', LR.Headers.Get('Accept'), 'trimmed accept');
 end;
 
+procedure TestLazyHeadersTrimTrailingOwsLikeLlhttp;
+var
+  LReq: AnsiString;
+  LFast: TFastParseResult;
+  LP: IH1Parser;
+  LFastValues: TStringArray;
+  LParserValues: TStringArray;
+begin
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost '#9#13#10 +
+           'X-Dupe: first  '#13#10 +
+           'X-Dupe: second'#9' '#13#10#13#10;
+
+  LP := NewH1RequestParser;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'llhttp trailing OWS request completes');
+  Check(not LP.HasError, 'llhttp trailing OWS request has no parser error');
+
+  LFast := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LFast.Success, 'fast parser accepts trailing OWS request');
+
+  CheckEqual('localhost', LP.GetHeaders.Get('Host'),
+    'llhttp trims trailing OWS');
+  CheckEqual('localhost', LFast.Headers.Get('Host'),
+    'raw lazy Get trims trailing OWS');
+  LFastValues := LFast.Headers.GetAll('X-Dupe');
+  LParserValues := LP.GetHeaders.GetAll('X-Dupe');
+  CheckEqual(Int64(2), Int64(Length(LFastValues)),
+    'raw lazy GetAll keeps duplicate count');
+  CheckEqual('first', LParserValues[0],
+    'llhttp trims first duplicate trailing OWS');
+  CheckEqual('second', LParserValues[1],
+    'llhttp trims second duplicate trailing OWS');
+  CheckEqual('first', LFastValues[0],
+    'raw lazy GetAll trims first duplicate trailing OWS');
+  CheckEqual('second', LFastValues[1],
+    'raw lazy GetAll trims second duplicate trailing OWS');
+
+  LFast.Headers.ForEach(
+    procedure(const AName, AValue: string)
+    begin
+    end);
+  CheckEqual('localhost', LFast.Headers.Get('Host'),
+    'materialized lazy Get keeps trailing OWS trim');
+  LFastValues := LFast.Headers.GetAll('X-Dupe');
+  CheckEqual('first', LFastValues[0],
+    'materialized lazy GetAll keeps first duplicate trailing OWS trim');
+  CheckEqual('second', LFastValues[1],
+    'materialized lazy GetAll keeps second duplicate trailing OWS trim');
+end;
+
 procedure TestLazyHeadersRawLookupPreservesSemantics;
 var
   LReq: AnsiString;
@@ -685,6 +736,8 @@ begin
   T.Run('Large headers (>1KB)', @TestLargeHeaders);
   T.Run('Path with query string', @TestPathWithQuery);
   T.Run('Header value leading spaces', @TestHeaderValueLeadingSpaces);
+  T.Run('Lazy headers trim trailing OWS like llhttp',
+    @TestLazyHeadersTrimTrailingOwsLikeLlhttp);
   T.Run('Lazy headers raw lookup preserves semantics',
     @TestLazyHeadersRawLookupPreservesSemantics);
   T.Run('Lazy headers reject invalid lookup names',

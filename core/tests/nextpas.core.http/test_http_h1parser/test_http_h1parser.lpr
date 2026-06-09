@@ -108,6 +108,31 @@ begin
   CheckEqual('*/*', LP.GetHeaders.Get('Accept'), 'accept');
 end;
 
+procedure TestHeaderValuesTrimTrailingOws;
+var
+  LP: IH1Parser;
+  LReq: string;
+  LAll: TStringArray;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: example.com '#9#13#10 +
+           'X-Dupe: first  '#13#10 +
+           'X-Dupe: second'#9' '#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'trailing OWS header request complete');
+  Check(not LP.HasError, 'trailing OWS header request has no error');
+  CheckEqual('example.com', LP.GetHeaders.Get('Host'),
+    'parser trims trailing OWS from first header value');
+  LAll := LP.GetHeaders.GetAll('X-Dupe');
+  CheckEqual(Int64(2), Int64(Length(LAll)),
+    'parser preserves duplicate header count after trimming');
+  CheckEqual('first', LAll[0],
+    'parser trims trailing OWS from first duplicate');
+  CheckEqual('second', LAll[1],
+    'parser trims trailing OWS from second duplicate');
+end;
+
 procedure TestHttp10Version;
 var
   LP: IH1Parser;
@@ -3163,6 +3188,7 @@ begin
   T.Run('GET with path', @TestGetWithPath);
   T.Run('POST with body', @TestPostWithBody);
   T.Run('Multiple headers', @TestMultipleHeaders);
+  T.Run('Header values trim trailing OWS', @TestHeaderValuesTrimTrailingOws);
   T.Run('HTTP/1.0 version', @TestHttp10Version);
   T.Run('Response 200', @TestResponse200);
   T.Run('Response 404', @TestResponse404);
