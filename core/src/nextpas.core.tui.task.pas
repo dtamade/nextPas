@@ -498,6 +498,11 @@ var
   Ctx: TTaskContext;
 {$ENDIF}
 begin
+  if not Assigned(Spec.Func) then
+  begin
+    Result := 0;
+    Exit;
+  end;
   Id := TTaskId(InterlockedIncrement(FNextId));
   ParamCopy := nil;
   if (Spec.Param <> nil) and (Spec.ParamSize > 0) then
