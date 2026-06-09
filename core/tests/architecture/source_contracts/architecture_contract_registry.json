@@ -1,0 +1,319 @@
+{
+  "version": 1,
+  "l0_modules": [
+    "base",
+    "errors",
+    "platform",
+    "mem",
+    "system",
+    "atomic",
+    "math",
+    "simd"
+  ],
+  "truth_levels": [
+    "source-contract",
+    "forced-compile",
+    "focused-runtime",
+    "runtime-matrix",
+    "draft"
+  ],
+  "l0_support_units": [
+    {
+      "unit": "nextpas.core.exception",
+      "reason": "root exception compatibility surface used by base/errors/system"
+    },
+    {
+      "unit": "nextpas.core.contracts",
+      "reason": "contract assertion helper used by L0 allocator/base contracts"
+    }
+  ],
+  "l0_dependency_allowlist": [
+    {
+      "path": "src/nextpas.core.mem.allocator.mimalloc.pas",
+      "unit": "nextpas.core.os.env",
+      "reason": "known mimalloc environment override debt pending platform-owned loader"
+    },
+    {
+      "path": "src/nextpas.core.mem.allocator.mimalloc.pas",
+      "unit": "nextpas.core.path",
+      "reason": "known mimalloc path helper debt pending platform-owned loader"
+    },
+    {
+      "path": "src/nextpas.core.simd.cpuinfo.lazy.pas",
+      "unit": "nextpas.core.os.env",
+      "reason": "known SIMD CPUInfo environment override debt"
+    },
+    {
+      "path": "src/nextpas.core.system.sysutils.pas",
+      "unit": "nextpas.core.text.compare",
+      "reason": "temporary system compatibility facade text dependency"
+    },
+    {
+      "path": "src/nextpas.core.system.sysutils.pas",
+      "unit": "nextpas.core.text.conv",
+      "reason": "temporary system compatibility facade text dependency"
+    }
+  ],
+  "raw_ffi_tokens": [
+    "Windows",
+    "BaseUnix",
+    "Unix",
+    "DynLibs",
+    "ctypes"
+  ],
+  "raw_ffi_owner_allowlist": [
+    {
+      "owner": "platform-host-owner-units",
+      "path_globs": [
+        "src/nextpas.core.platform.*.base.pas",
+        "src/nextpas.core.platform.*.ffi.pas",
+        "src/nextpas.core.platform.*.host.pas"
+      ],
+      "tokens": [
+        "Windows",
+        "BaseUnix",
+        "Unix",
+        "DynLibs",
+        "ctypes"
+      ],
+      "reason": "platform host owner paths own raw ABI and host unit references"
+    },
+    {
+      "owner": "git-libgit2-foreign-backend",
+      "path_globs": [
+        "src/nextpas.core.git.libgit2*.pas"
+      ],
+      "tokens": [
+        "DynLibs",
+        "ctypes"
+      ],
+      "reason": "libgit2 backend owns its current foreign ABI/loading surface"
+    },
+    {
+      "owner": "mem-mimalloc-foreign-backend",
+      "path_globs": [
+        "src/nextpas.core.mem.allocator.mimalloc.pas",
+        "src/nextpas.core.mem.mimalloc*.pas"
+      ],
+      "tokens": [
+        "DynLibs"
+      ],
+      "reason": "mimalloc backend owns existing foreign loader debt"
+    },
+    {
+      "owner": "simd-cpuinfo-host-probe",
+      "path_globs": [
+        "src/nextpas.core.simd.cpuinfo*.pas"
+      ],
+      "tokens": [
+        "Windows",
+        "BaseUnix",
+        "Unix",
+        "ctypes"
+      ],
+      "reason": "SIMD CPUInfo probes are explicit debt until routed through platform"
+    },
+    {
+      "owner": "tls-openssl-backend",
+      "path_globs": [
+        "src/nextpas.core.tls.openssl*.pas"
+      ],
+      "tokens": [
+        "Windows",
+        "BaseUnix",
+        "DynLibs",
+        "ctypes"
+      ],
+      "reason": "OpenSSL backend owns current C ABI and dynamic loader surface"
+    },
+    {
+      "owner": "tls-winssl-backend",
+      "path_globs": [
+        "src/nextpas.core.tls.winssl*.pas"
+      ],
+      "tokens": [
+        "Windows"
+      ],
+      "reason": "WinSSL backend owns current Schannel Windows unit dependency"
+    },
+    {
+      "owner": "tls-wolfssl-backend",
+      "path_globs": [
+        "src/nextpas.core.tls.wolfssl*.pas"
+      ],
+      "tokens": [
+        "DynLibs",
+        "ctypes"
+      ],
+      "reason": "wolfSSL backend owns current C ABI and dynamic loader surface"
+    },
+    {
+      "owner": "tls-pkcs11-backend",
+      "path_globs": [
+        "src/nextpas.core.tls.pkcs11*.pas"
+      ],
+      "tokens": [
+        "DynLibs"
+      ],
+      "reason": "PKCS#11 backend owns current dynamic loader surface"
+    }
+  ],
+  "raw_ffi_explicit_allowlist": [
+    {
+      "path": "src/nextpas.core.fs.util.pas",
+      "token": "BaseUnix",
+      "reason": "existing fs helper host-unit debt"
+    },
+    {
+      "path": "src/nextpas.core.io.uring.pas",
+      "token": "BaseUnix",
+      "reason": "io_uring Linux runtime uses BaseUnix directly today"
+    },
+    {
+      "path": "src/nextpas.core.tls.crypto.utils.pas",
+      "token": "Windows",
+      "reason": "legacy TLS random utility Windows dependency"
+    },
+    {
+      "path": "src/nextpas.core.tls.dialer.pas",
+      "token": "BaseUnix",
+      "reason": "legacy TLS dialer Unix socket dependency"
+    },
+    {
+      "path": "src/nextpas.core.tls.dns.ldns.pas",
+      "token": "DynLibs",
+      "reason": "LDNS optional loader owner debt"
+    },
+    {
+      "path": "src/nextpas.core.tls.factory.pas",
+      "token": "Windows",
+      "reason": "legacy TLS backend selection Windows dependency"
+    },
+    {
+      "path": "src/nextpas.core.tls.freepascal.connection.pas",
+      "token": "Windows",
+      "reason": "FreePascal TLS backend compatibility debt"
+    },
+    {
+      "path": "src/nextpas.core.tls.freepascal.connection.pas",
+      "token": "BaseUnix",
+      "reason": "FreePascal TLS backend compatibility debt"
+    },
+    {
+      "path": "src/nextpas.core.tls.freepascal.connection.pas",
+      "token": "Unix",
+      "reason": "FreePascal TLS backend compatibility debt"
+    },
+    {
+      "path": "src/nextpas.core.tls.freepascal.earlydatareplay.dirstore.pas",
+      "token": "Unix",
+      "reason": "FreePascal TLS early-data replay store Unix dependency"
+    },
+    {
+      "path": "src/nextpas.core.tls.freepascal.earlydatareplay.fileprovider.pas",
+      "token": "Unix",
+      "reason": "FreePascal TLS early-data replay file provider Unix dependency"
+    },
+    {
+      "path": "src/nextpas.core.tls.mbedtls.api.pas",
+      "token": "DynLibs",
+      "reason": "mbedTLS optional loader owner debt"
+    },
+    {
+      "path": "src/nextpas.core.tls.nonblocking.pas",
+      "token": "BaseUnix",
+      "reason": "legacy TLS nonblocking socket dependency"
+    },
+    {
+      "path": "src/nextpas.core.tls.nonblocking.pas",
+      "token": "Unix",
+      "reason": "legacy TLS nonblocking socket dependency"
+    },
+    {
+      "path": "src/nextpas.core.tls.random.pas",
+      "token": "Windows",
+      "reason": "legacy TLS random Windows dependency"
+    },
+    {
+      "path": "src/nextpas.core.tls.session.cache.pas",
+      "token": "BaseUnix",
+      "reason": "legacy TLS session cache Unix time/lock dependency"
+    },
+    {
+      "path": "src/nextpas.core.tls.timeout.pas",
+      "token": "BaseUnix",
+      "reason": "legacy TLS timeout Unix dependency"
+    },
+    {
+      "path": "src/nextpas.core.tls.timeout.pas",
+      "token": "Unix",
+      "reason": "legacy TLS timeout Unix dependency"
+    },
+    {
+      "path": "src/nextpas.core.tls.transport.pas",
+      "token": "BaseUnix",
+      "reason": "legacy TLS transport socket dependency"
+    },
+    {
+      "path": "src/nextpas.core.tui.clipboard.pas",
+      "token": "BaseUnix",
+      "reason": "TUI clipboard external-command helper uses Unix units directly today"
+    },
+    {
+      "path": "src/nextpas.core.tui.clipboard.pas",
+      "token": "Unix",
+      "reason": "TUI clipboard external-command helper uses Unix units directly today"
+    }
+  ],
+  "governance_docs": [
+    {
+      "path": "docs/core-module-registry.md",
+      "max_lines": 120
+    },
+    {
+      "path": "docs/l1-goal-tree.md",
+      "max_lines": 120,
+      "forbidden_phrases": [
+        "✅ 完成",
+        "All tests passed",
+        "0 leaks",
+        "Tier 1 全绿",
+        "CI 全绿"
+      ]
+    },
+    {
+      "path": "docs/design-conventions.md",
+      "max_lines": 1300
+    },
+    {
+      "path": "docs/platform/README.md",
+      "max_lines": 80
+    },
+    {
+      "path": "docs/platform/master-spec.md",
+      "max_lines": 120
+    },
+    {
+      "path": "docs/platform/goal-tree.md",
+      "max_lines": 120
+    },
+    {
+      "path": "docs/platform/consumer-contract-audit.md",
+      "max_lines": 120
+    },
+    {
+      "path": "docs/platform-goal-tree.md",
+      "max_lines": 80,
+      "forbidden_phrases": [
+        "✅ 完成",
+        "CI 全绿",
+        "代码完成, 无 CI",
+        "G1-G7 全部完成"
+      ]
+    },
+    {
+      "path": "docs/plans/2026-06-09-core-governance-next-route.md",
+      "max_lines": 80
+    }
+  ]
+}

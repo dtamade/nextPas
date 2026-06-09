@@ -157,7 +157,7 @@ end.
 ### 四层架构
 
 ```
-L0: 内核 (base, errors, platform, mem, log.intf)
+L0: 内核 (base, errors, platform, mem, log.intf; current governance set also locks system, atomic, math, simd)
      ↑ 只依赖 FPC RTL
 
 L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, time, id, testing)
@@ -733,6 +733,10 @@ build/
 
 ### L0: 内核（只依赖 FPC RTL）
 
+逐模块层级、owner、public facade、允许依赖和 truth level 以
+`docs/core-module-registry.md` 为准。本节只保留设计分层说明；当模块从治理候选变成
+稳定层级事实时，先更新注册表和 source-contract gate。
+
 | 模块       | 职责                                           |
 | ---------- | ---------------------------------------------- |
 | `base`     | 基础类型、公共定义、编译器设置（settings.inc） |
@@ -740,6 +744,10 @@ build/
 | `platform` | OS/CPU 检测、平台类型（句柄等）                |
 | `mem`      | 内存管理（分配器抽象、arena、pool）            |
 | `log.intf` | ILogger 接口 + NullLogger（零开销）            |
+
+当前 L0 dependency-boundary source-contract 还锁定 `system`、`atomic`、`math`、
+`simd`。这些模块的债务和 host matrix 不能在本设计规范里用“完成”概括，必须回到注册表
+和模块文档记录证据等级。
 
 ### L1: 基础设施（只依赖 L0）
 
