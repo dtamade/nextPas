@@ -313,6 +313,11 @@ begin
   Result := SingleFromBits($7F7FFFFF);
 end;
 
+function SingleMinPositiveSubnormal: Single;
+begin
+  Result := SingleFromBits($00000001);
+end;
+
 function SingleNegativeZero: Single;
 var
   LValue: TSingleBitCast;
@@ -356,6 +361,11 @@ end;
 function DoubleMaxFinite: Double;
 begin
   Result := DoubleFromBits($7FEFFFFFFFFFFFFF);
+end;
+
+function DoubleMinPositiveSubnormal: Double;
+begin
+  Result := DoubleFromBits(1);
 end;
 
 function DoubleNegativeZero: Double;
@@ -1176,6 +1186,60 @@ begin
     'TVec2f Equals treats signed zero as equal');
 end;
 
+procedure TestVectorMinSubnormalLengthAndNormalizeContracts;
+var
+  MinSingle: Single;
+  MinDouble: Double;
+  N2f: TVec2f;
+  N3f: TVec3f;
+  N4f: TVec4f;
+  N2d: TVec2d;
+  N3d: TVec3d;
+  N4d: TVec4d;
+  SavedMask: TFPUExceptionMask;
+begin
+  MinSingle := SingleMinPositiveSubnormal;
+  MinDouble := DoubleMinPositiveSubnormal;
+  SavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow,
+    exUnderflow, exPrecision]);
+  try
+    CheckSingleBits(TVec2f.Create(MinSingle, 0.0).Length, $00000001,
+      'TVec2f min subnormal axis Length preserves subnormal');
+    CheckSingleBits(TVec3f.Create(0.0, -MinSingle, 0.0).Length, $00000001,
+      'TVec3f negative min subnormal axis Length returns positive subnormal');
+    CheckSingleBits(TVec4f.Create(0.0, 0.0, 0.0, MinSingle).Length, $00000001,
+      'TVec4f min subnormal W axis Length preserves subnormal');
+
+    N2f := TVec2f.Create(MinSingle, 0.0).Normalize;
+    CheckVec2f(1.0, 0.0, N2f, 'TVec2f min subnormal axis Normalize returns +X');
+    N3f := TVec3f.Create(0.0, -MinSingle, 0.0).Normalize;
+    CheckVec3f(0.0, -1.0, 0.0, N3f,
+      'TVec3f negative min subnormal axis Normalize preserves sign');
+    N4f := TVec4f.Create(0.0, 0.0, 0.0, MinSingle).Normalize;
+    CheckVec4f(0.0, 0.0, 0.0, 1.0, N4f,
+      'TVec4f min subnormal W axis Normalize returns +W');
+
+    CheckDoubleBits(TVec2d.Create(MinDouble, 0.0).Length, 1,
+      'TVec2d min subnormal axis Length preserves subnormal');
+    CheckDoubleBits(TVec3d.Create(0.0, -MinDouble, 0.0).Length, 1,
+      'TVec3d negative min subnormal axis Length returns positive subnormal');
+    CheckDoubleBits(TVec4d.Create(0.0, 0.0, 0.0, MinDouble).Length, 1,
+      'TVec4d min subnormal W axis Length preserves subnormal');
+
+    N2d := TVec2d.Create(MinDouble, 0.0).Normalize;
+    CheckVec2d(1.0, 0.0, N2d, 'TVec2d min subnormal axis Normalize returns +X');
+    N3d := TVec3d.Create(0.0, -MinDouble, 0.0).Normalize;
+    CheckVec3d(0.0, -1.0, 0.0, N3d,
+      'TVec3d negative min subnormal axis Normalize preserves sign');
+    N4d := TVec4d.Create(0.0, 0.0, 0.0, MinDouble).Normalize;
+    CheckVec4d(0.0, 0.0, 0.0, 1.0, N4d,
+      'TVec4d min subnormal W axis Normalize returns +W');
+  finally
+    SetExceptionMask(SavedMask);
+  end;
+end;
+
 procedure TestVectorLerpScalarParityContracts;
 var
   A2f: TVec2f;
@@ -1357,6 +1421,8 @@ begin
     @TestVectorMeasureNonFiniteContracts);
   T.Run('vector signed-zero contracts',
     @TestVectorSignedZeroContracts);
+  T.Run('vector min subnormal length and normalize contracts',
+    @TestVectorMinSubnormalLengthAndNormalizeContracts);
   T.Run('vector Lerp scalar parity contracts',
     @TestVectorLerpScalarParityContracts);
   T.Run('raw vector normalize non-finite inputs fail fast',

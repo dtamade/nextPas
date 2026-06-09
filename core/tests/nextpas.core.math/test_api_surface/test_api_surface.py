@@ -1706,6 +1706,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-float-compare-invalid-epsilon-equal-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "FloatEquals Double rejects infinite epsilon for equal finite values"),
     RequiredBehaviorTestMarker("scalar-float-compare-single-invalid-epsilon-equal-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "FloatEquals Single rejects infinite epsilon for equal finite values"),
     RequiredBehaviorTestMarker("vector-abi-data-offsets", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec4d Data offsets match packed named fields"),
+    RequiredBehaviorTestMarker("vector-min-subnormal-length-normalize", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector min subnormal length and normalize contracts'"),
     RequiredBehaviorTestMarker("matrix-abi-order-contracts", "tests/nextpas.core.math/test_mat/test_mat.lpr", "TMat4d multiplication order is column-vector associative"),
     RequiredBehaviorTestMarker("quaternion-abi-raw-hamilton", "tests/nextpas.core.math/test_quat/test_quat.lpr", "TQuatd operator multiply is raw Hamilton product without normalization"),
     RequiredBehaviorTestMarker("scalar-float-compare-double-nan-first", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "FloatEquals Double rejects NaN first"),
