@@ -5,8 +5,10 @@ unit nextpas.core.lockfree.wait;
 interface
 
 procedure LockFreeWaitData(AEpoch: PInt32; AWaiters: PInt32;
+  const AObservedEpoch: Int32;
   const ATimeoutNs: Int64);
 procedure LockFreeWaitSpace(AEpoch: PInt32; AWaiters: PInt32;
+  const AObservedEpoch: Int32;
   const ATimeoutNs: Int64);
 procedure LockFreeNotifyData(AEpoch: PInt32; AWaiters: PInt32);
 procedure LockFreeNotifySpace(AEpoch: PInt32; AWaiters: PInt32);
@@ -36,6 +38,7 @@ begin
 end;
 
 procedure LockFreeWaitData(AEpoch: PInt32; AWaiters: PInt32;
+  const AObservedEpoch: Int32;
   const ATimeoutNs: Int64);
 var
   LEpoch: Int32;
@@ -49,12 +52,17 @@ begin
     CpuPause;
   end;
   AtomicFetchAdd32(AWaiters^, 1, moAcqRel);
-  LEpoch := AtomicLoad32(AEpoch^, moAcquire);
-  platform_wait_address32(AEpoch, LEpoch, ATimeoutNs);
-  AtomicFetchSub32(AWaiters^, 1, moAcqRel);
+  try
+    if AtomicLoad32(AEpoch^, moAcquire) <> AObservedEpoch then
+      Exit;
+    platform_wait_address32(AEpoch, AObservedEpoch, ATimeoutNs);
+  finally
+    AtomicFetchSub32(AWaiters^, 1, moAcqRel);
+  end;
 end;
 
 procedure LockFreeWaitSpace(AEpoch: PInt32; AWaiters: PInt32;
+  const AObservedEpoch: Int32;
   const ATimeoutNs: Int64);
 var
   LEpoch: Int32;
@@ -68,9 +76,13 @@ begin
     CpuPause;
   end;
   AtomicFetchAdd32(AWaiters^, 1, moAcqRel);
-  LEpoch := AtomicLoad32(AEpoch^, moAcquire);
-  platform_wait_address32(AEpoch, LEpoch, ATimeoutNs);
-  AtomicFetchSub32(AWaiters^, 1, moAcqRel);
+  try
+    if AtomicLoad32(AEpoch^, moAcquire) <> AObservedEpoch then
+      Exit;
+    platform_wait_address32(AEpoch, AObservedEpoch, ATimeoutNs);
+  finally
+    AtomicFetchSub32(AWaiters^, 1, moAcqRel);
+  end;
 end;
 
 procedure LockFreeWakeAll(AEpoch: PInt32);

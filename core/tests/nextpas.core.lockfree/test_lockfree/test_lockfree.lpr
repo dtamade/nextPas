@@ -4,7 +4,7 @@ program test_lockfree;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils,
+  SysUtils, Classes,
   nextpas.core.testing,
   nextpas.core.errors,
   nextpas.core.atomic,
@@ -24,6 +24,58 @@ type
 
 var
   T: TTestRunner;
+
+function ReadUtf8TextFile(const APath: string): string;
+var
+  LStream: TFileStream;
+begin
+  LStream := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
+  try
+    SetLength(Result, LStream.Size);
+    if LStream.Size > 0 then
+      LStream.ReadBuffer(Result[1], LStream.Size);
+  finally
+    LStream.Free;
+  end;
+end;
+
+procedure CheckContains(const AText, AExpected, AMessage: string);
+begin
+  Check(Pos(AExpected, AText) > 0, AMessage + ': missing "' + AExpected + '"');
+end;
+
+function ExtractSection(const AText, AStartMarker, AEndMarker: string): string;
+var
+  LStartPos: SizeInt;
+  LEndPos: SizeInt;
+  LRelativeEndPos: SizeInt;
+begin
+  LStartPos := Pos(AStartMarker, AText);
+  Check(LStartPos > 0, 'section start missing: ' + AStartMarker);
+
+  LRelativeEndPos := Pos(AEndMarker,
+    Copy(AText, LStartPos + Length(AStartMarker), MaxInt));
+  if LRelativeEndPos > 0 then
+    LEndPos := LStartPos + Length(AStartMarker) + LRelativeEndPos - 1
+  else
+    LEndPos := 0;
+  Check(LEndPos > LStartPos, 'section end missing: ' + AEndMarker);
+
+  Result := Copy(AText, LStartPos, LEndPos - LStartPos);
+end;
+
+function ExtractImplementationSection(const AText, AStartMarker, AEndMarker: string): string;
+var
+  LImplementationPos: SizeInt;
+begin
+  LImplementationPos := Pos('implementation', AText);
+  Check(LImplementationPos > 0, 'implementation marker missing');
+  Result := ExtractSection(
+    Copy(AText, LImplementationPos, MaxInt),
+    AStartMarker,
+    AEndMarker
+  );
+end;
 
 { SPSC tests }
 
@@ -598,8 +650,86 @@ begin
   Check(LGot, 'managed type rejected');
 end;
 
+procedure TestLockFreeWaiterLifecycleSourceContract;
+var
+  LSource: string;
+  LSpscSource: string;
+  LMpmcSource: string;
+  LMpscSource: string;
+  LWaitDataSection: string;
+  LWaitSpaceSection: string;
+begin
+  LSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.wait.pas');
+  LSpscSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.spsc.pas');
+  LMpmcSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.mpmc.pas');
+  LMpscSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.mpsc.pas');
+  LWaitDataSection := ExtractImplementationSection(LSource,
+    'procedure LockFreeWaitData(AEpoch: PInt32; AWaiters: PInt32;',
+    'procedure LockFreeWaitSpace(AEpoch: PInt32; AWaiters: PInt32;');
+  LWaitSpaceSection := ExtractImplementationSection(LSource,
+    'procedure LockFreeWaitSpace(AEpoch: PInt32; AWaiters: PInt32;',
+    'procedure LockFreeWakeAll(AEpoch: PInt32);');
+
+  CheckContains(LWaitDataSection, 'const AObservedEpoch: Int32;',
+    'LockFreeWaitData must sleep against the caller-observed epoch');
+  CheckContains(LWaitDataSection, 'if AtomicLoad32(AEpoch^, moAcquire) <> AObservedEpoch then',
+    'LockFreeWaitData must avoid sleeping after a missed notification');
+  CheckContains(LWaitDataSection, 'AtomicFetchAdd32(AWaiters^, 1, moAcqRel);',
+    'LockFreeWaitData must increment waiter count before sleeping');
+  CheckContains(LWaitDataSection, 'try',
+    'LockFreeWaitData must guard waiter count release with try/finally');
+  CheckContains(LWaitDataSection, 'platform_wait_address32(AEpoch, AObservedEpoch, ATimeoutNs);',
+    'LockFreeWaitData must wait only while the observed epoch is unchanged');
+  CheckContains(LWaitDataSection, 'finally',
+    'LockFreeWaitData must release waiter count in a finally block');
+  CheckContains(LWaitDataSection, 'AtomicFetchSub32(AWaiters^, 1, moAcqRel);',
+    'LockFreeWaitData must decrement waiter count after sleeping');
+
+  CheckContains(LWaitSpaceSection, 'const AObservedEpoch: Int32;',
+    'LockFreeWaitSpace must sleep against the caller-observed epoch');
+  CheckContains(LWaitSpaceSection, 'if AtomicLoad32(AEpoch^, moAcquire) <> AObservedEpoch then',
+    'LockFreeWaitSpace must avoid sleeping after a missed notification');
+  CheckContains(LWaitSpaceSection, 'AtomicFetchAdd32(AWaiters^, 1, moAcqRel);',
+    'LockFreeWaitSpace must increment waiter count before sleeping');
+  CheckContains(LWaitSpaceSection, 'try',
+    'LockFreeWaitSpace must guard waiter count release with try/finally');
+  CheckContains(LWaitSpaceSection, 'platform_wait_address32(AEpoch, AObservedEpoch, ATimeoutNs);',
+    'LockFreeWaitSpace must wait only while the observed epoch is unchanged');
+  CheckContains(LWaitSpaceSection, 'finally',
+    'LockFreeWaitSpace must release waiter count in a finally block');
+  CheckContains(LWaitSpaceSection, 'AtomicFetchSub32(AWaiters^, 1, moAcqRel);',
+    'LockFreeWaitSpace must decrement waiter count after sleeping');
+
+  CheckContains(LSpscSource, 'LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, -1);',
+    'SPSC blocking enqueue must pass the observed space epoch');
+  CheckContains(LSpscSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);',
+    'SPSC blocking dequeue must pass the observed data epoch');
+  CheckContains(LSpscSource, 'LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LRemaining);',
+    'SPSC timed enqueue must pass the observed space epoch');
+  CheckContains(LSpscSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);',
+    'SPSC timed dequeue must pass the observed data epoch');
+
+  CheckContains(LMpmcSource, 'LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, -1);',
+    'MPMC blocking enqueue must pass the observed space epoch');
+  CheckContains(LMpmcSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);',
+    'MPMC blocking dequeue must pass the observed data epoch');
+  CheckContains(LMpmcSource, 'LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LRemaining);',
+    'MPMC timed enqueue must pass the observed space epoch');
+  CheckContains(LMpmcSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);',
+    'MPMC timed dequeue must pass the observed data epoch');
+
+  CheckContains(LMpscSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);',
+    'MPSC blocking dequeue must pass the observed data epoch');
+  CheckContains(LMpscSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);',
+    'MPSC timed dequeue must pass the observed data epoch');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.lockfree');
+  T.Run('waiter lifecycle source contract', @TestLockFreeWaiterLifecycleSourceContract);
+  if not T.AllPassed then
+    T.Summary;
+
   T.Run('SPSC basic', @TestSpscBasic);
   T.Run('SPSC close', @TestSpscClose);
   T.Run('SPSC approx count', @TestSpscApproxCount);

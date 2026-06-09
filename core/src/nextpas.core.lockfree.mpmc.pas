@@ -159,7 +159,7 @@ begin
     end;
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
-    LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, -1);
+    LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, -1);
   end;
 end;
 
@@ -182,7 +182,7 @@ begin
     end;
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
-    LockFreeWaitData(@FDataEpoch, @FDataWaiters, -1);
+    LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);
   end;
 end;
 
@@ -211,7 +211,7 @@ begin
     end;
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
-    LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LRemaining);
+    LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LRemaining);
   end;
 end;
 
@@ -240,7 +240,7 @@ begin
     end;
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
-    LockFreeWaitData(@FDataEpoch, @FDataWaiters, LRemaining);
+    LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);
   end;
 end;
 
