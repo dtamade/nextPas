@@ -596,8 +596,7 @@ begin
     Exit;
   end;
 
-  if (ANext.FArea.Width <> FArea.Width) or
-     (ANext.FArea.Height <> FArea.Height) then
+  if not RectEquals(ANext.FArea, FArea) then
   begin
     LTotal := System.Length(ANext.FContent);
     SetLength(APatches, LTotal);
@@ -699,15 +698,13 @@ begin
   end;
 
   LTotal := System.Length(FContent);
-  if (ANext.FArea.Width <> FArea.Width) or
-     (ANext.FArea.Height <> FArea.Height) then
+  if not RectEquals(ANext.FArea, FArea) then
     LTotal := System.Length(ANext.FContent);
 
   if System.Length(APatches) < LTotal then
     SetLength(APatches, LTotal);
 
-  if (ANext.FArea.Width <> FArea.Width) or
-     (ANext.FArea.Height <> FArea.Height) then
+  if not RectEquals(ANext.FArea, FArea) then
   begin
     LPosX := ANext.FArea.X;
     LPosY := ANext.FArea.Y;

@@ -256,6 +256,43 @@ begin
   end;
 end;
 
+procedure TestDiffSameSizeAreaOriginChangeRedrawsAtNextOrigin;
+var
+  LPrev, LCurr: TBuffer;
+  LPatches: TDiffEntries;
+  LCount: Integer;
+begin
+  LPrev := TBuffer.CreateEmpty(TRect.Make(0, 0, 3, 1));
+  LCurr := TBuffer.CreateEmpty(TRect.Make(5, 2, 3, 1));
+  try
+    LPrev.SetString(0, 0, 'abc', StyleDefault);
+    LCurr.SetString(5, 2, 'abc', StyleDefault);
+
+    LPrev.Diff(LCurr, LPatches);
+    CheckEqual(Int64(3), Int64(System.Length(LPatches)),
+      'area origin change redraws all cells');
+    CheckEqual(Int64(5), Int64(LPatches[0].X), 'diff patch 0 x uses next origin');
+    CheckEqual(Int64(2), Int64(LPatches[0].Y), 'diff patch 0 y uses next origin');
+    CheckEqual(Int64(6), Int64(LPatches[1].X), 'diff patch 1 x uses next origin');
+    CheckEqual(Int64(2), Int64(LPatches[1].Y), 'diff patch 1 y uses next origin');
+    CheckEqual(Int64(7), Int64(LPatches[2].X), 'diff patch 2 x uses next origin');
+    CheckEqual(Int64(2), Int64(LPatches[2].Y), 'diff patch 2 y uses next origin');
+
+    LCount := LPrev.DiffInto(LCurr, LPatches);
+    CheckEqual(Int64(3), Int64(LCount),
+      'diff into area origin change redraws all cells');
+    CheckEqual(Int64(5), Int64(LPatches[0].X), 'diff into patch 0 x uses next origin');
+    CheckEqual(Int64(2), Int64(LPatches[0].Y), 'diff into patch 0 y uses next origin');
+    CheckEqual(Int64(6), Int64(LPatches[1].X), 'diff into patch 1 x uses next origin');
+    CheckEqual(Int64(2), Int64(LPatches[1].Y), 'diff into patch 1 y uses next origin');
+    CheckEqual(Int64(7), Int64(LPatches[2].X), 'diff into patch 2 x uses next origin');
+    CheckEqual(Int64(2), Int64(LPatches[2].Y), 'diff into patch 2 y uses next origin');
+  finally
+    LPrev.Free;
+    LCurr.Free;
+  end;
+end;
+
 procedure TestResize;
 var
   LBuf: TBuffer;
@@ -508,6 +545,8 @@ begin
   T.Run('clear rect clears wide tail overlap', @TestClearRectClearsWideGlyphTailOverlap);
   T.Run('diff same size', @TestDiffSameSize);
   T.Run('diff into', @TestDiffInto);
+  T.Run('diff same size area origin change redraws at next origin',
+    @TestDiffSameSizeAreaOriginChangeRedrawsAtNextOrigin);
   T.Run('resize', @TestResize);
   T.Run('resize drops wide lead clipped at right edge', @TestResizeDropsWideLeadClippedAtRightEdge);
   T.Run('resize drops orphan wide tail at left edge', @TestResizeDropsOrphanWideTailAtLeftEdge);
