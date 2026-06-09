@@ -11,11 +11,19 @@ type
     paabPosix
   );
 
+  TPlatformSecureZeroBackend = (
+    pszbFallbackFillCharBarrier,
+    pszbWindowsNativeDeferred,
+    pszbPosixNativeDeferred
+  );
+
 function platform_aligned_alloc(ASize, AAlignment: SizeUInt): Pointer;
 function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt): Pointer;
 procedure platform_aligned_free(APtr: Pointer);
 function platform_aligned_alloc_backend: TPlatformAlignedAllocBackend;
 function platform_aligned_alloc_is_native: Boolean;
+function platform_secure_zero_memory_backend: TPlatformSecureZeroBackend;
+function platform_secure_zero_memory_is_native: Boolean;
 procedure platform_secure_zero_memory(APtr: Pointer; ASize: SizeUInt);
 
 implementation
@@ -99,6 +107,16 @@ end;
 function platform_aligned_alloc_is_native: Boolean;
 begin
   Result := platform_aligned_alloc_backend <> paabFallback;
+end;
+
+function platform_secure_zero_memory_backend: TPlatformSecureZeroBackend;
+begin
+  Result := pszbFallbackFillCharBarrier;
+end;
+
+function platform_secure_zero_memory_is_native: Boolean;
+begin
+  Result := platform_secure_zero_memory_backend <> pszbFallbackFillCharBarrier;
 end;
 
 procedure platform_secure_zero_memory_barrier; noinline;

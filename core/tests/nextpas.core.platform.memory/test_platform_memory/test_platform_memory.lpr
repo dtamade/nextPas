@@ -225,6 +225,19 @@ begin
   Check(LByte = $5A, 'secure zero nil/zero-size inputs are no-op');
 end;
 
+procedure TestSecureZeroBackendTruthIsDeferred;
+begin
+  Check(platform_secure_zero_memory_backend in [
+    pszbFallbackFillCharBarrier,
+    pszbWindowsNativeDeferred,
+    pszbPosixNativeDeferred
+  ], 'secure zero backend truth is explicit');
+  Check(platform_secure_zero_memory_backend = pszbFallbackFillCharBarrier,
+    'secure zero currently reports fallback FillChar+barrier truth');
+  Check(not platform_secure_zero_memory_is_native,
+    'secure zero native backend remains deferred until runtime evidence exists');
+end;
+
 procedure TestNativeBackendSourceContracts;
 var
   LPlatformMemory: string;
@@ -295,6 +308,22 @@ begin
     'platform.memory forced host branches must stay source-contract truth only');
   CheckTokenPresent(LPlatformMemory, 'windows-runtime-ready=false',
     'platform.memory must not claim Windows runtime readiness for secure zero');
+  CheckTokenPresent(LPlatformMemory, 'FillChar(',
+    'platform.memory secure zero fallback must keep FillChar source truth');
+  CheckTokenPresent(LPlatformMemory, 'ReadWriteBarrier',
+    'platform.memory secure zero fallback must keep compiler barrier source truth');
+  CheckTokenPresent(LPlatformMemory, 'TPlatformSecureZeroBackend',
+    'platform.memory must name secure-zero backend readiness truth');
+  CheckTokenPresent(LPlatformMemory, 'pszbFallbackFillCharBarrier',
+    'platform.memory secure zero must publish fallback FillChar+barrier truth');
+  CheckTokenPresent(LPlatformMemory, 'pszbWindowsNativeDeferred',
+    'platform.memory secure zero must publish Windows native deferred truth');
+  CheckTokenPresent(LPlatformMemory, 'pszbPosixNativeDeferred',
+    'platform.memory secure zero must publish POSIX native deferred truth');
+  CheckTokenPresent(LPlatformMemory, 'platform_secure_zero_memory_backend',
+    'platform.memory secure zero must keep backend truth centralized');
+  CheckTokenPresent(LPlatformMemory, 'platform_secure_zero_memory_is_native',
+    'platform.memory secure zero must keep native readiness truth explicit');
 
   CheckTokenAbsent(LPlatformMemory, 'rtlsecurezeromemory',
     'platform.memory must not own Windows secure-zero raw API names directly');
@@ -319,6 +348,7 @@ begin
   T.Run('native backend source contracts', @TestNativeBackendSourceContracts);
   T.Run('secure zero clears buffer', @TestSecureZeroMemoryClearsBuffer);
   T.Run('secure zero nil and zero-size no-op', @TestSecureZeroMemoryNilAndZeroSizeNoOp);
+  T.Run('secure zero backend truth is deferred', @TestSecureZeroBackendTruthIsDeferred);
   T.Run('secure zero source contracts', @TestSecureZeroSourceContracts);
   T.Summary;
 end.
