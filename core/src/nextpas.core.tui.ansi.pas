@@ -346,6 +346,13 @@ begin
   end;
 end;
 
+procedure EmitSgrCode(var B: TStringBuilder; ACode: Byte); inline;
+begin
+  B.AppendByte(27); B.AppendChar('[');
+  B.AppendUInt(ACode);
+  B.AppendChar('m');
+end;
+
 procedure AnsiSgrModifierAdd(var B: TStringBuilder; AModifier: TModifier);
 var
   LBit: TModifierBit;
@@ -355,9 +362,7 @@ begin
     if LBit in AModifier then
     begin
       LCode := SgrSet(LBit);
-      B.AppendByte(27); B.AppendChar('[');
-      B.AppendUInt(LCode);
-      B.AppendChar('m');
+      EmitSgrCode(B, LCode);
     end;
 end;
 
@@ -365,14 +370,18 @@ procedure AnsiSgrModifierClear(var B: TStringBuilder; AModifier: TModifier);
 var
   LBit: TModifierBit;
   LCode: Byte;
+  LEmitted: array[Byte] of Boolean;
 begin
+  FillChar(LEmitted, SizeOf(LEmitted), 0);
   for LBit := Low(TModifierBit) to High(TModifierBit) do
     if LBit in AModifier then
     begin
       LCode := SgrClear(LBit);
-      B.AppendByte(27); B.AppendChar('[');
-      B.AppendUInt(LCode);
-      B.AppendChar('m');
+      if not LEmitted[LCode] then
+      begin
+        EmitSgrCode(B, LCode);
+        LEmitted[LCode] := True;
+      end;
     end;
 end;
 
