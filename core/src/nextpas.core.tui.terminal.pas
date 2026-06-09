@@ -739,7 +739,8 @@ begin
       begin
         FLastMousePos.X := AEv.Mouse.X;
         FLastMousePos.Y := AEv.Mouse.Y;
-        if (AEv.Mouse.Kind = mkUp) and FCapture.Active then
+        if (AEv.Mouse.Kind = mkUp) and FCapture.Active and
+           (AEv.Mouse.Button = FCapture.Button) then
         begin
           if FSession.IsActive then FSession.Commit;
           FCapture.Release;

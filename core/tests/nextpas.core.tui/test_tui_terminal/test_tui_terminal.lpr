@@ -1848,6 +1848,37 @@ begin
   end;
 end;
 
+procedure TestCaptureIgnoresMismatchedRelease;
+var
+  LTerm: TTerminal;
+  LEv: TEvent;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.Capture.Acquire(nil, mbLeft);
+    LTerm.Session.Begin_(nil);
+    Check(LTerm.Capture.Active, 'capture active');
+
+    LTerm.InjectInputBytesForTest([27, Ord('['), Ord('<'),
+      Ord('1'), Ord(';'), Ord('1'), Ord(';'), Ord('1'), Ord('m')]);
+    Check(LTerm.PollQueuedEventForTest(True, LEv), 'middle release parsed');
+    Check(LTerm.Capture.Active, 'mismatched release keeps capture active');
+    Check(LTerm.Capture.Button = mbLeft,
+      'mismatched release keeps original capture button');
+    Check(LTerm.Session.State = ssActive,
+      'mismatched release keeps session active');
+
+    LTerm.InjectInputBytesForTest([27, Ord('['), Ord('<'),
+      Ord('0'), Ord(';'), Ord('1'), Ord(';'), Ord('1'), Ord('m')]);
+    Check(LTerm.PollQueuedEventForTest(True, LEv), 'left release parsed');
+    Check(not LTerm.Capture.Active, 'matching release frees capture');
+    Check(LTerm.Session.State = ssCommitted,
+      'matching release commits session');
+  finally
+    LTerm.Free;
+  end;
+end;
+
 procedure TestRequestQuit;
 var
   LTerm: TTerminal;
@@ -2278,6 +2309,8 @@ begin
   T.Run('kitty keyboard alt-codepoint preserves modifier',
     @TestKittyKeyboardAltCodepointPreservesModifier);
   T.Run('capture auto release', @TestCaptureAutoRelease);
+  T.Run('capture ignores mismatched release',
+    @TestCaptureIgnoresMismatchedRelease);
   T.Run('request quit', @TestRequestQuit);
   T.Run('terminal options default matches editor default',
     @TestTerminalOptionsDefaultMatchesEditorDefault);
