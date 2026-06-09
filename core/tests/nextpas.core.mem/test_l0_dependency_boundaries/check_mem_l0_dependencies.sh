@@ -22,8 +22,13 @@ KNOWN_DEBT=(
   "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|SyncObjs"
   "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|nextpas.core.text.conv"
   "src/nextpas.core.mem.mapped_slab_pool.pas|nextpas.core.fs.util"
-  "src/nextpas.core.mem.secure.pas|BaseUnix"
-  "src/nextpas.core.mem.secure.pas|Windows"
+)
+
+FORBIDDEN_MEM_SECURE_RAW_SYMBOLS=(
+  "GetModuleHandle"
+  "GetProcAddress"
+  "RtlSecureZeroMemory"
+  "InterlockedExchange"
 )
 
 is_forbidden_unit() {
@@ -50,7 +55,8 @@ is_known_debt() {
 
 tmp_found="$(mktemp)"
 tmp_unknown="$(mktemp)"
-trap 'rm -f "$tmp_found" "$tmp_unknown"' EXIT
+tmp_symbols_unknown="$(mktemp)"
+trap 'rm -f "$tmp_found" "$tmp_unknown" "$tmp_symbols_unknown"' EXIT
 
 while IFS= read -r file; do
   awk -v file="$file" '
@@ -92,9 +98,16 @@ while IFS='|' read -r file unit; do
   fi
 done < "$tmp_found"
 
-if [[ -s "$tmp_unknown" ]]; then
+mem_secure_file="src/nextpas.core.mem.secure.pas"
+for symbol in "${FORBIDDEN_MEM_SECURE_RAW_SYMBOLS[@]}"; do
+  if grep -Eq "\b${symbol}\b" "$mem_secure_file"; then
+    printf '%s|%s\n' "$mem_secure_file" "$symbol" >> "$tmp_symbols_unknown"
+  fi
+done
+
+if [[ -s "$tmp_unknown" || -s "$tmp_symbols_unknown" ]]; then
   echo "Unexpected mem L0 dependency boundary violations:"
-  cat "$tmp_unknown"
+  cat "$tmp_unknown" "$tmp_symbols_unknown"
   exit 1
 fi
 
