@@ -108,7 +108,9 @@ nextpas.core.math final migration
 
 - Docs-control: keep `README.md`, `GOAL_TREE.md`, and design record compact while
   `API.md` remains the detailed public behavior contract.
-- Scalar: add marker-only fail-close coverage for already-tested edge cases.
+- Scalar: integer conversion NaN/Inf/range boundary markers and Single huge
+  finite wrap parity are locked; keep adding source-contract markers when new
+  scalar edge semantics land.
 - Trig: obtain host matrix runtime truth for macOS/Windows.
 - Vector: finish full non-finite measure and signed-zero matrix coverage.
 - SIMD: finish profiled runtime evidence and public SIMD contract design before

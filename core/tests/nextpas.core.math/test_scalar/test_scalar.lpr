@@ -357,6 +357,7 @@ var
   LDoubleResult: Double;
   LSingleResult: Single;
   LWrapped: Double;
+  LSingleWrapped: Single;
 begin
   CheckNear(5.0, Lerp(Single(0.0), Single(10.0), Single(0.5)), 0.0, 'Lerp Single midpoint');
   CheckNear(5.0, Lerp(0.0, 10.0, 0.5), 0.0, 'Lerp midpoint');
@@ -412,6 +413,10 @@ begin
   Check((not IsNaN(LWrapped)) and (not IsInfinite(LWrapped)) and
     (LWrapped >= Double(-8.0e307)) and (LWrapped < Double(8.0e307)),
     'Wrap Double huge finite negative delta stays finite');
+  LSingleWrapped := Wrap(Single(3.0e38), Single(-2.0e38), Single(2.0e38));
+  Check((not IsNaN(LSingleWrapped)) and (not IsInfinite(LSingleWrapped)) and
+    (LSingleWrapped >= Single(-2.0e38)) and (LSingleWrapped < Single(2.0e38)),
+    'Wrap Single huge finite range stays finite');
   ExpectArgumentErrorMessage('Wrap: minimum must not exceed maximum',
     'Wrap Single reversed bounds', @RaiseWrapSingleReversedBounds);
   ExpectArgumentErrorMessage('Wrap: minimum must not exceed maximum',
