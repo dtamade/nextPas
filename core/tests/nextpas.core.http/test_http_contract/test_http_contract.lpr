@@ -1765,6 +1765,20 @@ begin
     'API coverage must state release helper ownership boundary');
 end;
 
+procedure TestHttpApiCoverageRouterHeadFallbackTruthContract;
+var
+  LSource: string;
+begin
+  LSource := ReadTextFile('../../../docs/http/API_COVERAGE.md');
+
+  Check(SourceHas(LSource, 'HEAD fallback to GET route'),
+    'API coverage must document router HEAD fallback to GET');
+  Check(SourceHas(LSource, 'explicit HEAD route wins'),
+    'API coverage must document explicit HEAD route precedence');
+  Check(SourceHas(LSource, '405 Allow includes implicit HEAD'),
+    'API coverage must document implicit HEAD in Allow');
+end;
+
 procedure TestHttpPublicHeaderSetterNamingContract;
 var
   LInterfaceSource: string;
@@ -2038,6 +2052,8 @@ begin
     @TestHttpArchitectureDocsCurrentPublicApiContract);
   T.Run('HTTP API coverage response body helper truth contract',
     @TestHttpApiCoverageResponseBodyHelperTruthContract);
+  T.Run('HTTP API coverage router HEAD fallback truth contract',
+    @TestHttpApiCoverageRouterHeadFallbackTruthContract);
   T.Run('HTTP public header setter naming contract',
     @TestHttpPublicHeaderSetterNamingContract);
   T.Run('Chunked request trailer contract',
