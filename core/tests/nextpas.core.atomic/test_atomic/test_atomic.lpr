@@ -555,15 +555,33 @@ begin
     'compat unit must mirror PascalCase load/store facade');
   CheckContains(LAtomicCompatSource, 'procedure AtomicThreadFence',
     'compat unit must mirror PascalCase fence facade');
+  CheckContains(LAtomicSource, 'function AtomicIsLockFree32: Boolean;',
+    'main atomic unit must mirror PascalCase Int32 lock-free query');
+  CheckContains(LAtomicSource, 'function AtomicIsLockFreePtr: Boolean;',
+    'main atomic unit must mirror PascalCase pointer lock-free query');
+  CheckContains(LAtomicCompatSource, 'function AtomicIsLockFree32: Boolean;',
+    'compat unit must mirror PascalCase Int32 lock-free query');
+  CheckContains(LAtomicCompatSource, 'function AtomicIsLockFreePtr: Boolean;',
+    'compat unit must mirror PascalCase pointer lock-free query');
   CheckContains(LAtomicCompatSource, 'function atomic_is_lock_free_32: Boolean;',
     'compat unit must declare Int32 lock-free query');
   CheckContains(LAtomicCompatSource, 'function atomic_is_lock_free_ptr: Boolean;',
     'compat unit must declare pointer lock-free query');
+  CheckContains(LAtomicCompatSource, 'nextpas.core.atomic.AtomicIsLockFree32',
+    'compat PascalCase Int32 lock-free query must forward to main atomic facade');
+  CheckContains(LAtomicCompatSource, 'nextpas.core.atomic.AtomicIsLockFreePtr',
+    'compat PascalCase pointer lock-free query must forward to main atomic facade');
   CheckContains(LCompatLockFree32Section, 'nextpas.core.atomic.atomic_is_lock_free_32',
     'compat Int32 lock-free query must forward to main atomic facade');
   CheckContains(LCompatLockFreePtrSection, 'nextpas.core.atomic.atomic_is_lock_free_ptr',
     'compat pointer lock-free query must forward to main atomic facade');
   {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  CheckContains(LAtomicSource, 'function AtomicIsLockFree64: Boolean;',
+    'main atomic unit must mirror PascalCase Int64 lock-free query on supported CPUs');
+  CheckContains(LAtomicCompatSource, 'function AtomicIsLockFree64: Boolean;',
+    'compat unit must mirror PascalCase Int64 lock-free query on supported CPUs');
+  CheckContains(LAtomicCompatSource, 'nextpas.core.atomic.AtomicIsLockFree64',
+    'compat PascalCase Int64 lock-free query must forward to main atomic facade');
   CheckContains(LAtomicCompatSource, 'function atomic_is_lock_free_64: Boolean;',
     'compat unit must declare Int64 lock-free query on supported CPUs');
   CheckContains(LCompatLockFree64Section, 'nextpas.core.atomic.atomic_is_lock_free_64',
@@ -920,6 +938,21 @@ begin
   nextpas.core.atomic.compat.AtomicThreadFence(moSeqCst);
   nextpas.core.atomic.compat.AtomicSignalFence(moSeqCst);
   nextpas.core.atomic.compat.CpuPause;
+
+  Check(nextpas.core.atomic.AtomicIsLockFree32 = atomic_is_lock_free_32,
+    'main PascalCase AtomicIsLockFree32 must match canonical runtime truth');
+  Check(nextpas.core.atomic.AtomicIsLockFreePtr = atomic_is_lock_free_ptr,
+    'main PascalCase AtomicIsLockFreePtr must match canonical runtime truth');
+  Check(nextpas.core.atomic.compat.AtomicIsLockFree32 = atomic_is_lock_free_32,
+    'compat PascalCase AtomicIsLockFree32 must match canonical runtime truth');
+  Check(nextpas.core.atomic.compat.AtomicIsLockFreePtr = atomic_is_lock_free_ptr,
+    'compat PascalCase AtomicIsLockFreePtr must match canonical runtime truth');
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  Check(nextpas.core.atomic.AtomicIsLockFree64 = atomic_is_lock_free_64,
+    'main PascalCase AtomicIsLockFree64 must match canonical runtime truth');
+  Check(nextpas.core.atomic.compat.AtomicIsLockFree64 = atomic_is_lock_free_64,
+    'compat PascalCase AtomicIsLockFree64 must match canonical runtime truth');
+  {$ENDIF}
 
   CheckEqual(Int64(PLATFORM_ERR_AGAIN),
     Int64(nextpas.core.atomic.compat.AtomicWait32(LVal, 99, 1000000)),
