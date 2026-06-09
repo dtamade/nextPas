@@ -1858,6 +1858,8 @@ begin
     'README fullchain quickstart should name the fullchain operation');
   CheckContains(LFullchainBlock, '`workload=plaintext`',
     'README fullchain quickstart should name the filtered workload marker');
+  CheckContains(LFullchainBlock, '`workload=middleware_noop`',
+    'README fullchain quickstart should name the middleware workload marker');
   CheckContains(LFullchainBlock, '`request_body_bytes`',
     'README fullchain quickstart should document request body marker');
   CheckContains(LFullchainBlock, '`response_body_bytes`',
@@ -1868,10 +1870,14 @@ begin
     'README fullchain quickstart should document H1 parser path marker');
   CheckContains(LFullchainBlock, '`nextpas_dispatch_path`',
     'README fullchain quickstart should document dispatch path marker');
+  CheckContains(LFullchainBlock, '`nextpas_dispatch_path=middleware_router`',
+    'README fullchain quickstart should document middleware dispatch marker');
   CheckContains(LFullchainBlock, '`observed_direct_handler_hits`',
     'README fullchain quickstart should document direct handler hit marker');
   CheckContains(LFullchainBlock, '`observed_router_handler_hits`',
     'README fullchain quickstart should document router handler hit marker');
+  CheckContains(LFullchainBlock, '`observed_middleware_hits`',
+    'README fullchain quickstart should document middleware hit marker');
   CheckContains(LFullchainBlock, '`client_read_mode=buffered`',
     'README fullchain quickstart should document buffered client read mode');
   CheckContains(LFullchainBlock, '`NEXTPAS_BENCH_FILTER` matches no scenario',
@@ -1895,6 +1901,10 @@ begin
 
   CheckContains(LBlock, '`BENCHMARKS.md`',
     'API coverage benchmark summary should point to BENCHMARKS.md');
+  CheckContains(LBlock, 'middleware_noop',
+    'API coverage benchmark summary should mention middleware fullchain row');
+  CheckContains(LBlock, 'observed_middleware_hits',
+    'API coverage benchmark summary should mention middleware hit marker');
   CheckContains(LBlock, '`impl=rust_std`',
     'API coverage benchmark summary should preserve rust std marker');
   CheckContains(LBlock, '`rust_profile=std_only`',

@@ -724,14 +724,15 @@ connection, sends requests, reads complete responses, and reports stable
 markers:
 
 - `operation=http.fullchain.keepalive`
-- `workload=<direct_root|direct_1k|plaintext|json|echo_1k|sink_16k|param_route>`
+- `workload=<direct_root|direct_1k|plaintext|json|echo_1k|sink_16k|param_route|middleware_noop>`
 - `request_body_bytes=<0|1024|16384|...>`
 - `response_body_bytes=<13|1024|...>`
 - `backend=<threaded|epoll>`
 - `nextpas_h1_path=<fast|llhttp>`
-- `nextpas_dispatch_path=<direct_handler|router>`
+- `nextpas_dispatch_path=<direct_handler|router|middleware_router>`
 - `observed_direct_handler_hits=<count>`
 - `observed_router_handler_hits=<count>`
+- `observed_middleware_hits=<count>`
 - `iterations`
 - `completed`
 - `elapsed_ns`
@@ -749,6 +750,8 @@ from the rest of the keep-alive server path:
   This isolates large-response runtime/socket cost without reintroducing router
   dispatch or request-path projection into the `direct_root` baseline.
 - `plaintext` still sends `GET /` through the router path.
+- `middleware_noop` sends `GET /` through `THttpRouter` plus one no-op
+  middleware layer and reports `observed_middleware_hits`.
 
 Each full-chain row now also reports `response_body_bytes=...`, so saved
 single-connection artifacts do not need to infer whether a row was the tiny
@@ -764,8 +767,9 @@ GET rows report `request_body_bytes=0`, `echo_1k` reports
 Full-chain rows now also report `nextpas_h1_path=...` for the current nextPas
 ingress choice:
 
-- `direct_root`, `direct_1k`, `plaintext`, `json`, and `param_route` are
-  current no-body HTTP/1.1 GET requests and report `nextpas_h1_path=fast`.
+- `direct_root`, `direct_1k`, `plaintext`, `json`, `param_route`, and
+  `middleware_noop` are current no-body HTTP/1.1 GET requests and report
+  `nextpas_h1_path=fast`.
 - `echo_1k` and `sink_16k` are body-bearing requests and report
   `nextpas_h1_path=llhttp`.
 
@@ -776,11 +780,14 @@ nextPas dispatch shape:
   benchmark handler answers them before router dispatch.
 - `plaintext`, `json`, `echo_1k`, `sink_16k`, and `param_route` report
   `router` because they go through `THttpRouter`.
+- `middleware_noop` reports `middleware_router` because it goes through the
+  benchmark middleware chain before `THttpRouter`.
 
 The dispatch marker is paired with observed handler hit counters from the timed
 measurement window. Direct rows should report direct hits equal to `iterations`
-and router hits `0`; router rows should report the inverse. Warmup requests are
-not included in these counters.
+and router hits `0`; router rows should report the inverse. The middleware row
+should report middleware hits equal to `iterations`. Warmup requests are not
+included in these counters.
 
 The filter is still substring-based, so the direct workload is intentionally
 named `direct_root` rather than `direct_plaintext`; this keeps

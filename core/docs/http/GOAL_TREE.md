@@ -154,7 +154,7 @@ Current isolation direction:
 - response writer serialization
 - outbound drain
 - writer plus outbound drain combination
-- full-chain correlation with workload splits
+- full-chain correlation with direct/router/middleware workload splits
 
 What still matters most now is isolating remaining runtime/socket overhead and other non-parser/non-writer costs, not collecting more final benchmark tables too early.
 

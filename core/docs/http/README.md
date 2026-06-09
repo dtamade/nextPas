@@ -336,14 +336,16 @@ NEXTPAS_BENCH_FILTER=plaintext \
 make -C benchmarks/nextpas.core.http/bench_fullchain clean run
 ```
 
-This emits `operation=http.fullchain.keepalive` and a `workload=plaintext` row.
-Keep the captured row with its truth markers: `request_body_bytes`,
-`response_body_bytes`, `backend`, `nextpas_h1_path`, `nextpas_dispatch_path`,
+This emits `operation=http.fullchain.keepalive` and a `workload=plaintext` row;
+`workload=middleware_noop` is the matching `GET /` router row with one no-op
+middleware layer. Keep the captured row with its truth markers:
+`request_body_bytes`, `response_body_bytes`, `backend`, `nextpas_h1_path`,
+`nextpas_dispatch_path`, `nextpas_dispatch_path=middleware_router`,
 `observed_direct_handler_hits`, `observed_router_handler_hits`,
-`client_read_mode=buffered`, `iterations`, `completed`, `elapsed_ns`, `ns/op`,
-and `req/s`. If `NEXTPAS_BENCH_FILTER` matches no scenario, the benchmark
-exits non-zero and prints the unmatched filter instead of emitting a
-misleading row.
+`observed_middleware_hits`, `client_read_mode=buffered`, `iterations`,
+`completed`, `elapsed_ns`, `ns/op`, and `req/s`. If
+`NEXTPAS_BENCH_FILTER` matches no scenario, the benchmark exits non-zero and
+prints the unmatched filter instead of emitting a misleading row.
 
 Run the focused comparator smoke from the test harness:
 
