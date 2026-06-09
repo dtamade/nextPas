@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ALLOC_PATH = ROOT / "src/nextpas.core.simd.alloc.pas"
 MEMUTILS_PATH = ROOT / "src/nextpas.core.simd.memutils.pas"
 MEMUTILS_TEST_PATH = ROOT / "tests/nextpas.core.simd/nextpas.core.simd.memutils.aliases.testcase.pas"
+MATRIX_PATH = ROOT / "tests/nextpas.core.simd/docs/allocator_runtime_truth_matrix.md"
 MAKEFILE_PATH = ROOT / "tests/nextpas.core.simd/Makefile"
 
 REQUIRED_TRUTH_TOKENS = (
@@ -36,6 +37,14 @@ REQUIRED_RUNTIME_EVIDENCE_TOKENS = (
     "platform_aligned_alloc_is_native",
     "SimdAlloc(128, sa64)",
     "SimdRealloc(LPtr, 192, sa64)",
+)
+
+REQUIRED_RUNTIME_MATRIX_TOKENS = (
+    "allocator_runtime_truth_matrix.md",
+    "SIMD consumes only nextpas.core.platform.memory public aligned allocation seam",
+    "fallback header internals are platform.memory private implementation details",
+    "Wine is not native runtime evidence",
+    "Windows/POSIX native runtime truth requires platform/native runner evidence",
 )
 
 FORBIDDEN_FALLBACK_INTERNAL_TOKENS = (
@@ -103,6 +112,17 @@ def check_runtime_consumer_evidence(a_issues: list[str]) -> None:
             add_issue(a_issues, MEMUTILS_TEST_PATH, f"missing platform.memory public consumer runtime evidence token `{l_token}`")
 
 
+def check_runtime_matrix(a_issues: list[str]) -> None:
+    if not MATRIX_PATH.exists():
+        add_issue(a_issues, MATRIX_PATH, "missing platform.memory consumer runtime truth matrix")
+        return
+
+    l_text = read_text(MATRIX_PATH)
+    for l_token in REQUIRED_RUNTIME_MATRIX_TOKENS:
+        if l_token not in l_text:
+            add_issue(a_issues, MATRIX_PATH, f"missing platform.memory consumer runtime matrix token `{l_token}`")
+
+
 def check_makefile_hook(a_issues: list[str]) -> None:
     l_text = read_text(MAKEFILE_PATH)
     if "check_simd_platform_memory_consumer_truth.py" not in l_text:
@@ -125,6 +145,7 @@ def main() -> int:
     check_public_seam_consumption(l_issues)
     check_no_fallback_header_dependency(l_issues)
     check_runtime_consumer_evidence(l_issues)
+    check_runtime_matrix(l_issues)
     check_makefile_hook(l_issues)
 
     if l_args.summary_line:

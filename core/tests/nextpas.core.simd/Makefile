@@ -67,6 +67,7 @@ audit:
 	$(PYTHON) check_simd_native_allocator_behavior_contract.py --summary-line
 	$(PYTHON) check_simd_allocator_consumer_seam_contract.py --summary-line
 	$(PYTHON) check_simd_platform_memory_consumer_truth.py --summary-line
+	$(PYTHON) check_simd_runtime_truth_matrix_contract.py --summary-line
 	$(PYTHON) check_cpuinfo_boundary_contract.py
 
 cpuinfo-focused: cpuinfo-heaptrc cpuinfo-nonx86-compile

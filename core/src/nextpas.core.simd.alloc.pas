@@ -53,6 +53,10 @@ uses
   - SIMD consumes only the platform.memory public aligned allocation seam.
   - SIMD must not depend on platform.memory fallback header layout or magic values.
   - SIMD native-ready claims must come from platform_aligned_alloc_is_native/platform_aligned_alloc_backend.
+
+  SimdAlloc runtime truth matrix:
+  - SIMD host runtime evidence is limited to the runner that actually executes the test.
+  - Windows/POSIX native runtime truth requires platform/native runner evidence.
 }
 
 function GetDefaultAlignment: NativeUInt; forward;
