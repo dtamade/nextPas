@@ -1845,6 +1845,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("trig-log-identity-log10-base", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log10(10)=1 exact bits"),
     RequiredBehaviorTestMarker("trig-log-domain-log2-negative-finite", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log2(-1.0)"),
     RequiredBehaviorTestMarker("trig-log-domain-log10-single-negative-zero", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log10(SingleNegativeZero)"),
+    RequiredBehaviorTestMarker("trig-log-positive-subnormal", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('log positive subnormal contracts'"),
     RequiredBehaviorTestMarker("trig-log-ln-double-min-subnormal", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Ln Double min positive subnormal stays finite negative"),
     RequiredBehaviorTestMarker("trig-log-log2-double-min-subnormal", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log2 Double min positive subnormal returns -1074"),
     RequiredBehaviorTestMarker("trig-log-log10-double-min-subnormal", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Log10 Double min positive subnormal stays finite negative"),
