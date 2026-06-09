@@ -2081,6 +2081,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("impl-simd-vec3f-cross-signed-infinity-negative-z", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "SimdVec3fCross signed infinity public parity negative Z"),
     RequiredBehaviorTestMarker("impl-simd-vec4f-lane-ieee-parity", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "T.Run('simd vec4f lane IEEE parity'"),
     RequiredBehaviorTestMarker("impl-simd-vec4f-reduction-ieee-parity", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "T.Run('simd vec4f reduction IEEE parity'"),
+    RequiredBehaviorTestMarker("impl-simd-mat4f-mul-vec4f-ieee-parity", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "T.Run('simd mat4f mul vec4f IEEE parity'"),
     RequiredBehaviorTestMarker("impl-simd-quatf-rotate-nan-vector", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "SimdQuatfRotate NaN vector public error parity"),
     RequiredBehaviorTestMarker("impl-simd-quatf-rotate-invalid-vector", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "SimdQuatfRotate infinite vector public error parity"),
     RequiredBehaviorTestMarker("impl-simd-quatf-rotate-invalid-priority", "tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr", "SimdQuatfRotate invalid quaternion priority public error parity"),

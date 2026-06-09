@@ -394,6 +394,43 @@ begin
     'SimdVec4fLength NaN reduction IEEE parity');
 end;
 
+procedure TestSimdMat4fMulVec4fIeeeParity;
+var
+  M: TMat4f;
+  V: TVec4f;
+begin
+  M := TMat4f.Create(
+    TVec4f.Create(Single(1.25), Single(-2.0), Single(3.5), Single(-4.0)),
+    TVec4f.Create(Single(-5.0), Single(6.25), Single(-7.0), Single(8.5)),
+    TVec4f.Create(Single(9.0), Single(-10.5), Single(11.25), Single(-12.0)),
+    TVec4f.Create(Single(13.5), Single(14.0), Single(-15.25), Single(16.0)));
+  V := TVec4f.Create(Single(0.5), Single(-1.25), Single(2.0), Single(-0.75));
+  CheckVec4fValue(M * V, SimdMat4fMulVec4f(M, V),
+    'SimdMat4fMulVec4f finite public parity');
+
+  M := TMat4f.Create(
+    TVec4f.Create(Single(1.0), Single(-2.0), Single(3.0), Single(-4.0)),
+    TVec4f.Create(Single(-1.0), Single(2.0), Single(-3.0), Single(4.0)),
+    TVec4f.Create(Single(2.0), Single(3.0), Single(-4.0), Single(-5.0)),
+    TVec4f.Create(Single(-2.0), Single(-3.0), Single(4.0), Single(5.0)));
+  V := TVec4f.Create(SingleNegativeZero, Single(0.0), SingleNegativeZero, Single(0.0));
+  CheckVec4fIeeeParity(M * V, SimdMat4fMulVec4f(M, V),
+    'SimdMat4fMulVec4f signed-zero IEEE parity');
+
+  M := TMat4f.Create(
+    TVec4f.Create(Single(2.0), Single(-2.0), Single(0.5), Single(-0.5)),
+    TVec4f.Create(Single(1.0), Single(1.0), Single(1.0), Single(1.0)),
+    TVec4f.Create(Single(-1.0), Single(2.0), Single(-3.0), Single(4.0)),
+    TVec4f.Create(Single(0.25), Single(-0.25), Single(0.5), Single(-0.5)));
+  V := TVec4f.Create(SingleInfinity, Single(2.0), Single(3.0), Single(4.0));
+  CheckVec4fIeeeParity(M * V, SimdMat4fMulVec4f(M, V),
+    'SimdMat4fMulVec4f infinity IEEE parity');
+
+  V := TVec4f.Create(SingleNaN, Single(2.0), Single(3.0), Single(4.0));
+  CheckVec4fIeeeParity(M * V, SimdMat4fMulVec4f(M, V),
+    'SimdMat4fMulVec4f NaN IEEE parity');
+end;
+
 procedure TestSimdQuatfRotateInvalidVectorPublicParity;
 begin
   ExpectArgumentErrorMessage('TQuatf.Rotate: AVector must be finite',
@@ -416,6 +453,7 @@ begin
   T.Run('simd dot length stable edge parity', @TestSimdDotLengthStableEdgeParity);
   T.Run('simd vec4f lane IEEE parity', @TestSimdVec4fLaneIeeeParity);
   T.Run('simd vec4f reduction IEEE parity', @TestSimdVec4fReductionIeeeParity);
+  T.Run('simd mat4f mul vec4f IEEE parity', @TestSimdMat4fMulVec4fIeeeParity);
   T.Run('simd quat rotate invalid vector public error parity',
     @TestSimdQuatfRotateInvalidVectorPublicParity);
   T.Summary;
