@@ -238,6 +238,47 @@ total_count() {
   awk -F '\t' '$1 == "candidate" { count++ } END { print count + 0 }' <<< "$report_rows"
 }
 
+print_action_plan() {
+  if [[ -z "$report_rows" ]]; then
+    printf 'action-plan=read-only\n'
+    return
+  fi
+
+  printf 'action-plan=read-only\n'
+  awk -F '\t' '
+    function rank_state(state) {
+      if (state == "absorbed") return 1
+      if (state == "dirty-packaging") return 2
+      if (state == "dirty-generated-artifacts") return 3
+      if (state == "dirty") return 4
+      if (state == "path-unsafe") return 5
+      if (state == "needs-replay") return 6
+      if (state == "stale") return 7
+      if (state == "ready") return 8
+      return 99
+    }
+    $1 == "candidate" {
+      count++
+      rank[count] = rank_state($3)
+      branch[count] = $2
+      state[count] = $3
+      action[count] = $4
+      worktree[count] = $7
+    }
+    END {
+      ordinal = 0
+      for (target = 1; target <= 99; target++) {
+        for (row = 1; row <= count; row++) {
+          if (rank[row] == target) {
+            ordinal++
+            printf "action\t%d\t%s\t%s\t%s\t%s\n", ordinal, state[row], action[row], branch[row], worktree[row]
+          }
+        }
+      }
+    }
+  ' <<< "$report_rows"
+}
+
 printf 'landing-worktree-report=pass\n'
 printf 'base=%s\n' "$base_ref"
 printf 'readonly=true\n'
@@ -254,3 +295,4 @@ printf 'summary.path-unsafe=%s\n' "$(count_state path-unsafe)"
 printf 'summary.needs-replay=%s\n' "$(count_state needs-replay)"
 printf 'summary.ready=%s\n' "$(count_state ready)"
 printf 'summary.total=%s\n' "$(total_count)"
+print_action_plan
