@@ -259,7 +259,6 @@ type
 implementation
 
 uses
-  nextpas.core.fs.util,
   nextpas.core.mem.error,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files;
@@ -293,6 +292,13 @@ var
 begin
   Str(aIndex, LIndexText);
   Result := aPrefix + LIndexText + aSuffix;
+end;
+
+function MappedSlabPoolFileExists(const aFileName: string): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  Result := platform_file_stat(PAnsiChar(aFileName), LStat) = 0;
 end;
 
 type
@@ -502,7 +508,7 @@ begin
   FMemoryMap := TMemoryMap.Create;
   try
     // 尝试打开现有文件
-    if FsExists(aFileName) then
+    if MappedSlabPoolFileExists(aFileName) then
     begin
       if not FMemoryMap.OpenFile(aFileName, mmaReadWrite) then Exit;
       FIsCreator := False;
@@ -543,7 +549,7 @@ begin
   Result := False;
   Close;
 
-  if not FsExists(aFileName) then Exit;
+  if not MappedSlabPoolFileExists(aFileName) then Exit;
 
   FMemoryMap := TMemoryMap.Create;
   try

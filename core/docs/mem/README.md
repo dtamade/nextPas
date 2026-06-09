@@ -92,9 +92,9 @@ What is already aligned with the L0 direction:
   for its debug-only leak message; the fixed pool keeps L0 ownership and uses
   local `Str` formatting instead.
 - `nextpas.core.mem.mapped_slab_pool` no longer depends on
-  `nextpas.core.text.conv` for manager-generated pool names; it uses local
-  `Str` formatting and leaves file existence policy unchanged for a later
-  focused slice.
+  `nextpas.core.text.conv` for manager-generated pool names or
+  `nextpas.core.fs.util` for file existence checks; generated names stay local
+  and file-backed pools now consume the platform-owned file stat facade.
 - `TSlabPool` no longer samples `platform.time` directly; the core keeps call
   counters but does not depend on L1 timing APIs.
 - `mem.blockpool.concurrent`, `mem.pool.fixed.concurrent`, and
@@ -123,13 +123,11 @@ What is already aligned with the L0 direction:
 
 The boundary is not fully clean yet. The main remaining debt is:
 
-- The current source-boundary contract still carries 6 allowlisted debt
+- The current source-boundary contract still carries 3 allowlisted debt
   entries; this is a guardrail against regression, not proof that mem is
   already layer-clean.
-- `mem.secure.pas` still depends on raw host units (`BaseUnix`, `Windows`) for
-  page-protection and secure-memory behavior.
-- `mapped_ring_buffer` and `mapped_slab_pool` still carry non-L0 helper
-  dependencies that should be revisited with their owning architecture slices.
+- `mapped_ring_buffer` still carries non-L0 helper dependencies that should be
+  revisited with their owning architecture slices.
 
 Treat these as explicit debt, not as proof that mem is already layer-clean.
 
@@ -137,17 +135,14 @@ Treat these as explicit debt, not as proof that mem is already layer-clean.
 
 Priority follow-up slices:
 
-1. Revisit the mapped ring-buffer and mapped slab-pool helpers so their
-   remaining higher-layer dependencies either move behind platform-owned seams
-   or leave the L0 mem core.
-2. Revisit `mem.secure` page-protection ownership. If it needs a new
-   platform-owned protection seam, stop at `Needs Review` before expanding the
-   slice.
-3. Keep the mem mapping compile surface honest across host branches: helper
+1. Revisit the mapped ring-buffer helpers so their remaining higher-layer
+   dependencies either move behind platform-owned seams or leave the L0 mem
+   core.
+2. Keep the mem mapping compile surface honest across host branches: helper
    cleanups may stay in mem, but do not reopen the landed mapping/shared-memory
    owner slice without a new blocker.
-4. Keep allocator-manager behavior narrow and explicit: `rtl` now has a runtime
+3. Keep allocator-manager behavior narrow and explicit: `rtl` now has a runtime
    regression test for installation safety, while optional guarded backends such
    as CRT need at least compile truth before wider rollout.
-5. Keep narrowing public allocator claims so traits, ownership, and fallback
+4. Keep narrowing public allocator claims so traits, ownership, and fallback
    behavior remain verifiable and unsurprising.

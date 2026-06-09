@@ -21,7 +21,6 @@ KNOWN_DEBT=(
   "src/nextpas.core.mem.mapped_ring_buffer.pas|nextpas.core.fs.util"
   "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|SyncObjs"
   "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|nextpas.core.text.conv"
-  "src/nextpas.core.mem.mapped_slab_pool.pas|nextpas.core.fs.util"
 )
 
 FORBIDDEN_MEM_SECURE_RAW_SYMBOLS=(

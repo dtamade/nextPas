@@ -69,6 +69,12 @@ begin
   Result := (LA < LB + ASizeB) and (LB < LA + ASizeA);
 end;
 
+function TempMappedSlabPath: string;
+begin
+  Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas_mapped_slab_pool_' + IntToStr(GetProcessID) + '.bin';
+end;
+
 procedure TestCreateAnonymous;
 var
   LAllocs, LFrees, LFailed: UInt64;
@@ -85,6 +91,80 @@ begin
   finally
     GPool.Free;
     GPool := nil;
+  end;
+end;
+
+procedure TestFileBackedCreateAndOpen;
+var
+  LPath: string;
+  LPool: TMappedSlabPool;
+  LOpenedPool: TMappedSlabPool;
+  LPtr: Pointer;
+  LAllocs, LFrees, LFailed: UInt64;
+  LUsedPages, LTotalPages: UInt32;
+begin
+  LPath := TempMappedSlabPath;
+  DeleteFile(LPath);
+
+  LPool := TMappedSlabPool.Create;
+  LOpenedPool := TMappedSlabPool.Create;
+  try
+    Check(LPool.CreateFile(LPath, 4096, 4096, 256), 'create file-backed pool');
+    Check(FileExists(LPath), 'file-backed pool should create backing file');
+    Check(LPool.IsCreator, 'first file-backed open should initialize the pool');
+
+    LPtr := LPool.Alloc(64);
+    Check(LPtr <> nil, 'allocation from file-backed pool');
+    LPool.FreeBlock(LPtr);
+    LPool.Close;
+
+    Check(LOpenedPool.OpenFile(LPath), 'open existing file-backed pool');
+    Check(not LOpenedPool.IsCreator, 'open existing file-backed pool should not reinitialize');
+    LOpenedPool.GetStats(LAllocs, LFrees, LFailed, LUsedPages, LTotalPages);
+    CheckEqual(Int64(1), Int64(LAllocs), 'persisted alloc count');
+    CheckEqual(Int64(1), Int64(LFrees), 'persisted free count');
+    CheckEqual(Int64(0), Int64(LFailed), 'persisted failed count');
+    CheckEqual(Int64(1), Int64(LTotalPages), 'persisted total pages');
+  finally
+    LOpenedPool.Free;
+    LPool.Free;
+    DeleteFile(LPath);
+  end;
+end;
+
+procedure TestFileBackedCreateFileReopensExisting;
+var
+  LPath: string;
+  LPool: TMappedSlabPool;
+  LReopenedPool: TMappedSlabPool;
+  LPtr: Pointer;
+  LAllocs, LFrees, LFailed: UInt64;
+  LUsedPages, LTotalPages: UInt32;
+begin
+  LPath := TempMappedSlabPath;
+  DeleteFile(LPath);
+
+  LPool := TMappedSlabPool.Create;
+  LReopenedPool := TMappedSlabPool.Create;
+  try
+    Check(LPool.CreateFile(LPath, 4096, 4096, 256), 'create first file-backed pool');
+    LPtr := LPool.Alloc(64);
+    Check(LPtr <> nil, 'allocation before reopening through CreateFile');
+    LPool.FreeBlock(LPtr);
+    LPool.Close;
+
+    Check(LReopenedPool.CreateFile(LPath, 4096, 4096, 256),
+      'CreateFile should reopen existing backing file');
+    Check(not LReopenedPool.IsCreator, 'CreateFile existing path should not reinitialize');
+    LReopenedPool.GetStats(LAllocs, LFrees, LFailed, LUsedPages, LTotalPages);
+    CheckEqual(Int64(1), Int64(LAllocs), 'CreateFile existing persisted alloc count');
+    CheckEqual(Int64(1), Int64(LFrees), 'CreateFile existing persisted free count');
+    CheckEqual(Int64(0), Int64(LFailed), 'CreateFile existing persisted failed count');
+    CheckEqual(Int64(1), Int64(LTotalPages), 'CreateFile existing persisted total pages');
+  finally
+    LReopenedPool.Free;
+    LPool.Free;
+    DeleteFile(LPath);
   end;
 end;
 
@@ -197,6 +277,8 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.mem.mapped_slab_pool');
   T.Run('create anonymous', @TestCreateAnonymous);
+  T.Run('file-backed create and open', @TestFileBackedCreateAndOpen);
+  T.Run('file-backed CreateFile reopens existing', @TestFileBackedCreateFileReopensExisting);
   T.Run('free reuses same-size block', @TestFreeReusesSameSizeBlock);
   T.Run('mixed-size allocations do not overlap', @TestMixedSizeAllocationsDoNotOverlap);
   T.Run('invalid and double free', @TestInvalidAndDoubleFree);
