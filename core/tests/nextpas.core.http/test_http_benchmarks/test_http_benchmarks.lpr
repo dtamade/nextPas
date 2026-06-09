@@ -392,8 +392,14 @@ begin
     CheckContains(AOutput, 'rust_profile=std_only',
       'Rust std-only profile marker');
   if AImplementation = 'rust_hyper' then
+  begin
     CheckContains(AOutput, 'rust_profile=hyper_tokio',
       'Rust Hyper/Tokio profile marker');
+    CheckContains(AOutput, 'rust_http_stack=hyper_http1',
+      'Rust Hyper HTTP stack marker');
+    CheckContains(AOutput, 'rust_runtime=tokio_multi_thread',
+      'Rust Tokio runtime marker');
+  end;
 end;
 
 procedure CheckInvalidWorkloadRejected(const AExecutable: string;
@@ -1993,6 +1999,10 @@ begin
     'API coverage benchmark summary should preserve hyper marker');
   CheckContains(LBlock, '`rust_profile=hyper_tokio`',
     'API coverage benchmark summary should preserve hyper profile marker');
+  CheckContains(LBlock, '`rust_http_stack=hyper_http1`',
+    'API coverage benchmark summary should preserve hyper HTTP stack marker');
+  CheckContains(LBlock, '`rust_runtime=tokio_multi_thread`',
+    'API coverage benchmark summary should preserve Tokio runtime marker');
   CheckContains(LBlock, 'not a permanent ranking',
     'API coverage benchmark summary should avoid ranking claims');
   CheckNotContains(LBlock, '`--requests 8 --threads 1 --output ...`',
@@ -2882,6 +2892,37 @@ begin
     'hyper comparator');
 end;
 
+procedure TestHyperTokioComparatorStackIdentitySourceContract;
+var
+  LRootDir: string;
+  LCargoToml: string;
+  LSource: string;
+begin
+  LRootDir := ResolveCoreRoot(CompareHyperRelativeDir);
+  LCargoToml := LoadTextFile(PathJoin(
+    PathJoin(LRootDir, CompareHyperRelativeDir), 'Cargo.toml'));
+  LSource := LoadTextFile(PathJoin(
+    PathJoin(LRootDir, CompareHyperRelativeDir), 'src/main.rs'));
+
+  CheckContains(LCargoToml,
+    'hyper = { version = "1", features = ["http1", "server"] }',
+    'Hyper comparator Cargo.toml should enable Hyper HTTP/1 server features');
+  CheckContains(LCargoToml,
+    'hyper-util = { version = "0.1", features = ["tokio"] }',
+    'Hyper comparator Cargo.toml should enable hyper-util Tokio feature');
+  CheckContains(LCargoToml,
+    'tokio = { version = "1", features = ["rt-multi-thread", "net", "time"] }',
+    'Hyper comparator Cargo.toml should enable Tokio multi-thread/net/time');
+  CheckContains(LSource, 'http1::Builder::new().serve_connection',
+    'Hyper comparator should serve with hyper http1::Builder');
+  CheckContains(LSource, 'TokioIo::new(stream)',
+    'Hyper comparator should adapt sockets through TokioIo');
+  CheckContains(LSource, 'TokioTcpListener::from_std',
+    'Hyper comparator should use Tokio TcpListener');
+  CheckContains(LSource, 'Builder::new_multi_thread()',
+    'Hyper comparator should use Tokio multi-thread runtime');
+end;
+
 procedure TestServerComparisonRunnerSmallSmoke;
 var
   LRootDir: string;
@@ -3329,10 +3370,18 @@ begin
     'server comparison summary stores client read mode column');
   CheckContains(LSource, 'body_bytes_values[impl, count[impl]] = $7',
     'server comparison summary stores response body bytes column');
+  CheckContains(LSource, 'rust_http_stack_values[impl, count[impl]] = $9',
+    'server comparison summary stores Rust HTTP stack column');
+  CheckContains(LSource, 'rust_runtime_values[impl, count[impl]] = $10',
+    'server comparison summary stores Rust runtime column');
   CheckContains(LSource, 'summary_client_read_mode=%s',
     'server comparison summary prints client read mode');
   CheckContains(LSource, 'summary_response_body_bytes=%s',
     'server comparison summary prints response body bytes');
+  CheckContains(LSource, 'summary_rust_http_stack=%s',
+    'server comparison summary prints Rust HTTP stack marker');
+  CheckContains(LSource, 'summary_rust_runtime=%s',
+    'server comparison summary prints Rust runtime marker');
   CheckContains(LSource, 'summary_operation=%s',
     'server comparison summary prints operation marker');
   CheckContains(LSource, 'summary_workload=%s',
@@ -3343,6 +3392,10 @@ begin
     'BENCHMARKS should document summary response body bytes marker');
   CheckContains(LDocsBlock, '`summary_rust_profile=...`',
     'BENCHMARKS should document summary Rust profile marker');
+  CheckContains(LDocsBlock, '`summary_rust_http_stack=...`',
+    'BENCHMARKS should document summary Rust HTTP stack marker');
+  CheckContains(LDocsBlock, '`summary_rust_runtime=...`',
+    'BENCHMARKS should document summary Rust runtime marker');
   CheckContains(LDocsBlock, '`summary_requested_threads=...`',
     'BENCHMARKS should document summary requested threads marker');
   CheckContains(LDocsBlock, '`summary_effective_threads=...`',
@@ -3369,9 +3422,9 @@ begin
     'server comparison parses requested threads from raw row');
   CheckContains(LSource, 'effective_threads="$(printf',
     'server comparison parses effective threads from raw row');
-  CheckContains(LSource, 'requested_thread_values[impl, count[impl]] = $9',
+  CheckContains(LSource, 'requested_thread_values[impl, count[impl]] = $11',
     'server comparison summary stores requested threads column');
-  CheckContains(LSource, 'effective_thread_values[impl, count[impl]] = $10',
+  CheckContains(LSource, 'effective_thread_values[impl, count[impl]] = $12',
     'server comparison summary stores effective threads column');
   CheckContains(LSource, 'summary_requested_threads=%s',
     'server comparison summary prints requested threads');
@@ -3397,9 +3450,13 @@ begin
     'server comparison documents expected raw operation');
   CheckContains(LSource, 'operation/workload marker mismatch',
     'server comparison rejects raw operation/workload mismatch');
-  CheckContains(LSource, 'operation_values[impl, count[impl]] = $11',
+  CheckContains(LSource, 'rust_hyper marker mismatch',
+    'server comparison rejects Hyper/Tokio identity marker mismatch');
+  CheckContains(LSource, 'expected profile=hyper_tokio stack=hyper_http1 runtime=tokio_multi_thread',
+    'server comparison documents expected Hyper/Tokio identity markers');
+  CheckContains(LSource, 'operation_values[impl, count[impl]] = $13',
     'server comparison summary stores operation column');
-  CheckContains(LSource, 'workload_values[impl, count[impl]] = $12',
+  CheckContains(LSource, 'workload_values[impl, count[impl]] = $14',
     'server comparison summary stores workload column');
   CheckContains(LDocs,
     'Raw row `operation` and `workload` markers must match the runner request',
@@ -5340,6 +5397,8 @@ begin
     @TestHyperTokioServerComparatorRejectsInvalidWorkload);
   T.Run('hyper/tokio server comparator rejects invalid scale',
     @TestHyperTokioServerComparatorRejectsInvalidScale);
+  T.Run('hyper/tokio comparator stack identity source contract',
+    @TestHyperTokioComparatorStackIdentitySourceContract);
   T.Run('server comparison runner small smoke',
     @TestServerComparisonRunnerSmallSmoke);
   T.Run('server comparison runner url_path small smoke',

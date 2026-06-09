@@ -297,8 +297,9 @@
   - Benchmark truth 继续收紧：std-only Rust comparator 仍标记为
     `impl=rust_std` / `rust_profile=std_only`，同时新增可选 Cargo-based
     Hyper/Tokio comparator smoke，输出 `impl=rust_hyper` /
-    `rust_profile=hyper_tokio`。这补上了真实 Rust HTTP stack 的 runner seam，
-    但仍不声明代表完整 Rust 生态性能排名。
+    `rust_profile=hyper_tokio`、`rust_http_stack=hyper_http1`、
+    `rust_runtime=tokio_multi_thread`。这补上了真实 Rust HTTP stack 的
+    runner seam，但仍不声明代表完整 Rust 生态性能排名。
   - Benchmark truth 继续收紧：nextPas `bench_server`、Go `net/http` comparator、
     Rust std-only comparator 与 Hyper/Tokio comparator 现在都拒绝显式非法
     `--workload`，输出 `invalid --workload` 诊断并非零退出。单体 comparator
@@ -322,7 +323,8 @@
   并锁住 runner / snapshot / H1 parser flag-matrix 的核心 truth markers；详细
   command matrix、workload rows 和历史结果放在 `BENCHMARKS.md`，不在 API 矩阵
   复制。Rust std-only 行标记为 `impl=rust_std` / `rust_profile=std_only`，
-  Hyper/Tokio 行标记为 `impl=rust_hyper` / `rust_profile=hyper_tokio`；这些是
+  Hyper/Tokio 行标记为 `impl=rust_hyper` / `rust_profile=hyper_tokio` /
+  `rust_http_stack=hyper_http1` / `rust_runtime=tokio_multi_thread`；这些是
   本地 benchmark evidence，not a permanent ranking。
 - `bench_fullchain` evidence 已覆盖 `middleware_noop` row，并用
   `observed_middleware_hits` 区分 middleware dispatch 成本；详细 workload

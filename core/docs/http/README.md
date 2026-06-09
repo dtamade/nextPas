@@ -359,9 +359,10 @@ keep-alive server benchmarks at smoke scale. Each implementation reports
 `elapsed_ns`, `ns/op`, and `req/s`, so later benchmark result capture can use
 one stable format. The std-only Rust row is labeled `impl=rust_std` and also
 reports `rust_profile=std_only`; the Hyper/Tokio row is labeled
-`impl=rust_hyper` and reports `rust_profile=hyper_tokio`. The harness also
-builds `bench_headers` and `bench_fullchain`, validating filtered header lookup
-and plaintext full-chain row markers.
+`impl=rust_hyper` and reports `rust_profile=hyper_tokio`,
+`rust_http_stack=hyper_http1`, and `rust_runtime=tokio_multi_thread`. The
+harness also builds `bench_headers` and `bench_fullchain`, validating filtered
+header lookup and plaintext full-chain row markers.
 
 For manual comparison runs, use the server comparison runner:
 
@@ -386,7 +387,9 @@ while `close`, `upgrade`, and unsupported connection-policy tokens still fall
 back to the llhttp adapter path. Use `--workload response_1k` to write and read
 a complete 1 KiB fixed-length response body.
 Pass `--include-hyper` when you want the optional Cargo-based Hyper/Tokio
-comparator included in the same runner output and median summary.
+comparator included in the same runner output and median summary. Summary rows
+preserve Rust identity through `summary_rust_profile`,
+`summary_rust_http_stack`, and `summary_rust_runtime`.
 
 To capture environment metadata and the comparison output in Markdown, run:
 

@@ -220,6 +220,8 @@ append_result_row() {
   local client_read_mode
   local response_body_bytes
   local rust_profile
+  local rust_http_stack
+  local rust_runtime
   local requested_threads
   local effective_threads
 
@@ -238,10 +240,18 @@ append_result_row() {
   client_read_mode="$(printf '%s\n' "${output}" | sed -nE 's/^client_read_mode=([^[:space:]]+)$/\1/p' | tail -n 1)"
   response_body_bytes="$(printf '%s\n' "${output}" | sed -nE 's/^response_body_bytes=([0-9]+)$/\1/p' | tail -n 1)"
   rust_profile="$(printf '%s\n' "${output}" | sed -nE 's/^rust_profile=([^[:space:]]+)$/\1/p' | tail -n 1)"
+  rust_http_stack="$(printf '%s\n' "${output}" | sed -nE 's/^rust_http_stack=([^[:space:]]+)$/\1/p' | tail -n 1)"
+  rust_runtime="$(printf '%s\n' "${output}" | sed -nE 's/^rust_runtime=([^[:space:]]+)$/\1/p' | tail -n 1)"
   requested_threads="$(printf '%s\n' "${output}" | sed -nE 's/^requested_threads=([0-9]+)$/\1/p' | tail -n 1)"
   effective_threads="$(printf '%s\n' "${output}" | sed -nE 's/^effective_threads=([0-9]+)$/\1/p' | tail -n 1)"
   if [[ "${rust_profile}" == "" ]]; then
     rust_profile="n/a"
+  fi
+  if [[ "${rust_http_stack}" == "" ]]; then
+    rust_http_stack="n/a"
+  fi
+  if [[ "${rust_runtime}" == "" ]]; then
+    rust_runtime="n/a"
   fi
   if [[ "${operation}" == "" || "${workload}" == "" || "${iterations}" == "" || "${completed}" == "" || "${ns_op}" == "" || "${req_s}" == "" || "${client_read_mode}" == "" || "${response_body_bytes}" == "" || "${requested_threads}" == "" || "${effective_threads}" == "" ]]; then
     echo "unable to parse benchmark output for impl=${expected_impl}" >&2
@@ -251,6 +261,11 @@ append_result_row() {
 
   if [[ "${operation}" != "http.server.keepalive" || "${workload}" != "${WORKLOAD}" ]]; then
     echo "operation/workload marker mismatch for impl=${expected_impl}: operation=${operation} workload=${workload} expected operation=http.server.keepalive workload=${WORKLOAD}" >&2
+    echo "${output}" >&2
+    exit 1
+  fi
+  if [[ "${expected_impl}" == "rust_hyper" && ("${rust_profile}" != "hyper_tokio" || "${rust_http_stack}" != "hyper_http1" || "${rust_runtime}" != "tokio_multi_thread") ]]; then
+    echo "rust_hyper marker mismatch: profile=${rust_profile} stack=${rust_http_stack} runtime=${rust_runtime} expected profile=hyper_tokio stack=hyper_http1 runtime=tokio_multi_thread" >&2
     echo "${output}" >&2
     exit 1
   fi
@@ -265,10 +280,11 @@ append_result_row() {
     exit 1
   fi
 
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "${run_index}" "${expected_impl}" "${ns_op}" "${req_s}" "${completed}" \
     "${client_read_mode}" "${response_body_bytes}" "${rust_profile}" \
-    "${requested_threads}" "${effective_threads}" "${operation}" "${workload}" \
+    "${rust_http_stack}" "${rust_runtime}" "${requested_threads}" \
+    "${effective_threads}" "${operation}" "${workload}" \
     >> "${RESULTS_TMP}"
 }
 
@@ -318,10 +334,12 @@ write_summary() {
       read_mode_values[impl, count[impl]] = $6;
       body_bytes_values[impl, count[impl]] = $7;
       rust_profile_values[impl, count[impl]] = $8;
-      requested_thread_values[impl, count[impl]] = $9;
-      effective_thread_values[impl, count[impl]] = $10;
-      operation_values[impl, count[impl]] = $11;
-      workload_values[impl, count[impl]] = $12;
+      rust_http_stack_values[impl, count[impl]] = $9;
+      rust_runtime_values[impl, count[impl]] = $10;
+      requested_thread_values[impl, count[impl]] = $11;
+      effective_thread_values[impl, count[impl]] = $12;
+      operation_values[impl, count[impl]] = $13;
+      workload_values[impl, count[impl]] = $14;
     }
 
     END {
@@ -332,6 +350,8 @@ write_summary() {
         delete current_read_mode;
         delete current_body_bytes;
         delete current_rust_profile;
+        delete current_rust_http_stack;
+        delete current_rust_runtime;
         delete current_requested_threads;
         delete current_effective_threads;
         delete current_operation;
@@ -343,15 +363,18 @@ write_summary() {
           current_read_mode[i] = read_mode_values[impl, i];
           current_body_bytes[i] = body_bytes_values[impl, i];
           current_rust_profile[i] = rust_profile_values[impl, i];
+          current_rust_http_stack[i] = rust_http_stack_values[impl, i];
+          current_rust_runtime[i] = rust_runtime_values[impl, i];
           current_requested_threads[i] = requested_thread_values[impl, i];
           current_effective_threads[i] = effective_thread_values[impl, i];
           current_operation[i] = operation_values[impl, i];
           current_workload[i] = workload_values[impl, i];
         }
-        printf "summary_impl=%s runs=%d median_completed=%.0f median_ns/op=%.1f median_req/s=%.0f summary_client_read_mode=%s summary_response_body_bytes=%s summary_rust_profile=%s summary_requested_threads=%s summary_effective_threads=%s summary_operation=%s summary_workload=%s\n",
+        printf "summary_impl=%s runs=%d median_completed=%.0f median_ns/op=%.1f median_req/s=%.0f summary_client_read_mode=%s summary_response_body_bytes=%s summary_rust_profile=%s summary_rust_http_stack=%s summary_rust_runtime=%s summary_requested_threads=%s summary_effective_threads=%s summary_operation=%s summary_workload=%s\n",
           impl, count[impl], median(current_completed, count[impl]),
           median(current_ns, count[impl]), median(current_req, count[impl]),
           current_read_mode[1], current_body_bytes[1], current_rust_profile[1],
+          current_rust_http_stack[1], current_rust_runtime[1],
           current_requested_threads[1], current_effective_threads[1],
           current_operation[1], current_workload[1];
       }

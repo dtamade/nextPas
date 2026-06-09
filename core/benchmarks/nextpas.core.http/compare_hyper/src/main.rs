@@ -247,6 +247,8 @@ fn print_results(
     println!("workload={}", workload);
     println!("impl=rust_hyper");
     println!("rust_profile=hyper_tokio");
+    println!("rust_http_stack=hyper_http1");
+    println!("rust_runtime=tokio_multi_thread");
     println!("client_read_mode={}", CLIENT_READ_MODE);
     println!(
         "response_body_bytes={}",
