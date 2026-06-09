@@ -8,7 +8,6 @@ unit nextpas.core.errors;
 interface
 
 uses
-  SysUtils,
   nextpas.core.exception;
 
 type

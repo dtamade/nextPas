@@ -9,10 +9,35 @@ uses
   nextpas.core.errors,
   nextpas.core.mem.error;
 
+type
+  TTrackedInnerError = class(SysUtils.Exception)
+  private
+    FFreedFlag: PBoolean;
+  public
+    constructor Create(const AMessage: string; const AFreedFlag: PBoolean);
+    destructor Destroy; override;
+  end;
+
 procedure Check(const ACondition: Boolean; const AMessage: string);
 begin
   if not ACondition then
     raise SysUtils.Exception.Create(AMessage);
+end;
+
+constructor TTrackedInnerError.Create(const AMessage: string;
+  const AFreedFlag: PBoolean);
+begin
+  inherited Create(AMessage);
+  FFreedFlag := AFreedFlag;
+  if FFreedFlag <> nil then
+    FFreedFlag^ := False;
+end;
+
+destructor TTrackedInnerError.Destroy;
+begin
+  if FFreedFlag <> nil then
+    FFreedFlag^ := True;
+  inherited;
 end;
 
 procedure TestBaseExceptionsCatchAsUnifiedRoot;
@@ -201,6 +226,140 @@ begin
   end;
 end;
 
+procedure CheckFormattedCategory(const AError: nextpas.core.exception.ENextPasError;
+  const AExpectedMessage: string; const AExpectedCategory: nextpas.core.exception.TErrorCategory;
+  const AContext: string);
+begin
+  try
+    Check(AError.Message = AExpectedMessage, AContext + ' must format the message');
+    Check(AError.Category = AExpectedCategory, AContext + ' must keep default category');
+    Check(AError.Inner = nil, AContext + ' must not attach an inner exception');
+  finally
+    AError.Free;
+  end;
+end;
+
+procedure TestTypedCreateFmtKeepsDefaultCategory;
+begin
+  CheckFormattedCategory(
+    nextpas.core.exception.EArgumentError.CreateFmt('argument %d', [1]),
+    'argument 1', nextpas.core.exception.ecInvalidArgument, 'EArgumentError.CreateFmt');
+  CheckFormattedCategory(
+    nextpas.core.exception.ETimeoutError.CreateFmt('timeout %d', [2]),
+    'timeout 2', nextpas.core.exception.ecTimeout, 'ETimeoutError.CreateFmt');
+  CheckFormattedCategory(
+    nextpas.core.exception.EIOError.CreateFmt('io %d', [3]),
+    'io 3', nextpas.core.exception.ecIO, 'EIOError.CreateFmt');
+  CheckFormattedCategory(
+    nextpas.core.exception.EParseError.CreateFmt('parse %d', [4]),
+    'parse 4', nextpas.core.exception.ecParse, 'EParseError.CreateFmt');
+end;
+
+procedure TestWrapperMessageDoesNotLeakInnerMessage;
+var
+  LInner: SysUtils.Exception;
+  LOuter: nextpas.core.exception.ENextPasError;
+begin
+  LInner := SysUtils.Exception.Create('inner secret token');
+  LOuter := nextpas.core.exception.ENextPasError.Create('outer public message',
+    nextpas.core.exception.ecInternal, LInner);
+  try
+    Check(LOuter.Message = 'outer public message',
+      'outer message must not concatenate inner exception message');
+    Check(LOuter.Inner = LInner, 'outer wrapper must retain inner exception reference');
+  finally
+    LOuter.Free;
+  end;
+end;
+
+procedure TestCreateFmtWrapperKeepsOuterMessageOnly;
+var
+  LInner: SysUtils.Exception;
+  LOuter: nextpas.core.exception.ENextPasError;
+begin
+  LInner := SysUtils.Exception.Create('inner secret token');
+  LOuter := nextpas.core.exception.ENextPasError.CreateFmt('outer %d',
+    nextpas.core.exception.ecNetwork, [9], LInner);
+  try
+    Check(LOuter.Message = 'outer 9',
+      'ENextPasError.CreateFmt wrapper must format only the outer message');
+    Check(LOuter.Category = nextpas.core.exception.ecNetwork,
+      'ENextPasError.CreateFmt wrapper must keep explicit category');
+    Check(LOuter.Inner = LInner,
+      'ENextPasError.CreateFmt wrapper must retain inner exception reference');
+    Check(Pos('inner secret token', LOuter.Message) = 0,
+      'ENextPasError.CreateFmt wrapper must not leak inner exception message');
+  finally
+    LOuter.Free;
+  end;
+end;
+
+procedure TestCreateFmtFormatFailureReleasesOwnedInner;
+var
+  LDestroyed: Boolean;
+begin
+  LDestroyed := False;
+  try
+    nextpas.core.exception.ENextPasError.CreateFmt('%d',
+      nextpas.core.exception.ecInternal, ['not an integer'],
+      TTrackedInnerError.Create('inner secret token', @LDestroyed));
+  except
+    on E: SysUtils.Exception do
+      begin
+        Check(LDestroyed,
+          'ENextPasError.CreateFmt must release owned inner when Format raises');
+        Exit;
+      end;
+  end;
+  Check(False, 'ENextPasError.CreateFmt must propagate Format errors');
+end;
+
+procedure TestInnerOwnershipAndMessageLeakageContract;
+var
+  LInnerFreed: Boolean;
+  LNonOwnedFreed: Boolean;
+  LInner: TTrackedInnerError;
+  LWrapped: nextpas.core.exception.ENextPasError;
+begin
+  LInnerFreed := False;
+  LInner := TTrackedInnerError.Create('secret-token-123', @LInnerFreed);
+  LWrapped := nextpas.core.exception.ENextPasError.Create(
+    'outer failure', nextpas.core.exception.ecInternal, LInner, True);
+  try
+    Check(LWrapped.Inner = LInner, 'owned wrapper must expose the inner exception');
+    Check(LWrapped.OwnsInner, 'owned wrapper must expose owns-inner truth');
+    Check(LWrapped.Message = 'outer failure',
+      'outer message must not concatenate the inner message');
+    Check(Pos('secret-token-123', LWrapped.Message) = 0,
+      'outer message must not leak sensitive inner details');
+  finally
+    LWrapped.Free;
+  end;
+  Check(LInnerFreed, 'owned inner exception must be released with the wrapper');
+
+  LNonOwnedFreed := False;
+  LInner := TTrackedInnerError.Create('non-owned-secret', @LNonOwnedFreed);
+  try
+    LWrapped := nextpas.core.exception.ENextPasError.Create(
+      'outer only', nextpas.core.exception.ecInternal, LInner, False);
+    try
+      Check(LWrapped.Inner = LInner,
+        'non-owned wrapper must expose the inner exception');
+      Check(not LWrapped.OwnsInner,
+        'non-owned wrapper must expose owns-inner false');
+      Check(Pos('non-owned-secret', LWrapped.Message) = 0,
+        'non-owned wrapper message must not leak inner details');
+    finally
+      LWrapped.Free;
+    end;
+    Check(not LNonOwnedFreed,
+      'non-owned inner exception must survive wrapper destruction');
+  finally
+    LInner.Free;
+  end;
+  Check(LNonOwnedFreed, 'test must release the non-owned inner exception');
+end;
+
 begin
   WriteLn('=== nextpas.core.exception root tests ===');
   TestBaseExceptionsCatchAsUnifiedRoot;
@@ -212,5 +371,10 @@ begin
   TestAllocOutOfMemoryUsesCanonicalCatchBeforeAllocRoot;
   TestMemOutOfMemoryKeepsConstructorCompatibility;
   TestOutOfMemoryCreateFmtKeepsResourceExhaustedCategory;
+  TestTypedCreateFmtKeepsDefaultCategory;
+  TestWrapperMessageDoesNotLeakInnerMessage;
+  TestCreateFmtWrapperKeepsOuterMessageOnly;
+  TestCreateFmtFormatFailureReleasesOwnedInner;
+  TestInnerOwnershipAndMessageLeakageContract;
   WriteLn('PASS: all exception root tests passed');
 end.
