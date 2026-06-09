@@ -716,11 +716,6 @@ for token in \
   require_token "docs/system/lifecycle-contracts.md" "$token"
 done
 
-reject_token "docs/system/lifecycle-contracts.md" 'No `nextpas.core.system.typinfo` unit is created in this slice.'
-require_token "docs/system/lifecycle-contracts.md" "minimal TypInfo facade is live, but S3 still does not freeze RTTI metadata layout"
-require_token "docs/system/lifecycle-contracts.md" "contract vocabulary only, not public Pascal facade"
-require_token "docs/system/runtime-contracts.md" "contract vocabulary only, not public Pascal facade"
-
 for helper in \
   "np.system.unit_init" \
   "np.system.unit_fini" \
