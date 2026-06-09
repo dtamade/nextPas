@@ -6,6 +6,15 @@
 
 Move reusable math capability from `fafafa.game` into `nextpas.core` and make `nextpas.core.math.*` the only official framework math API.
 
+## Current Status
+
+Current status: M0/M1 complete for current scope; M2 local Linux complete with macOS/Windows host proof pending; M7/M8 partial; M9 not started.
+
+This file is the historical migration checklist. Current roadmap truth lives in
+`docs/math/GOAL_TREE.md`; detailed public behavior lives in `docs/math/API.md`.
+Do not read unchecked historical subtasks below as current RED status unless the
+Current Status line or `GOAL_TREE.md` also marks them pending.
+
 ## Architecture
 
 The migration is final-API-first and tests-first. `fafafa.game` is a semantic reference, not a codebase to copy. SIMD is an implementation seam through `nextpas.core.simd`, and trig must be platform-safe without a public naked `external 'm'` binding.
@@ -36,11 +45,11 @@ Files:
 
 Steps:
 
-- [ ] Record the math goal tree and current roadmap position.
-- [ ] Record the final API architecture and rejected approaches.
-- [ ] Record implementation tasks, commit order, and verification gates.
-- [ ] Run `git diff --check`.
-- [ ] Commit with `docs(math): plan final api migration`.
+- [x] Record the math goal tree and current roadmap position.
+- [x] Record the final API architecture and rejected approaches.
+- [x] Record implementation tasks, commit order, and verification gates.
+- [x] Run `git diff --check`.
+- [x] Commit with `docs(math): plan final api migration`.
 
 Expected result:
 
@@ -67,18 +76,18 @@ Files:
 
 Steps:
 
-- [ ] Resolve and document pre-implementation policy choices: constructor names, singular `Inverse`, zero normalize, random invalid inputs, facade re-export breadth, and whether `TTransform3f/TTransform3d` is in the first cut.
-- [ ] Write scalar/trig tests for constants, `Min`, `Max`, `Clamp`, `Lerp`, `Floor`, `Ceil`, `Sqrt`, `Sin`, `Cos`, `Tan`, `Power`, and degree/radian conversion.
-- [ ] Write facade-only tests that `uses nextpas.core.math` and calls canonical final APIs without importing implementation units.
-- [ ] Write Vec tests for final type names and operators.
-- [ ] Write Mat tests for column-major identity/zero/multiply/inverse behavior.
-- [ ] Write Quat tests for identity, axis-angle, rotation matrix, rotate, slerp, and nlerp.
-- [ ] Write Transform tests with known matrices and transformed vectors.
-- [ ] Write Easing tests for every public function.
+- [x] Resolve and document pre-implementation policy choices: constructor names, singular `Inverse`, zero normalize, random invalid inputs, facade re-export breadth, and whether `TTransform3f/TTransform3d` is in the first cut.
+- [x] Write scalar/trig tests for constants, `Min`, `Max`, `Clamp`, `Lerp`, `Floor`, `Ceil`, `Sqrt`, `Sin`, `Cos`, `Tan`, `Power`, and degree/radian conversion.
+- [x] Write facade-only tests that `uses nextpas.core.math` and calls canonical final APIs without importing implementation units.
+- [x] Write Vec tests for final type names and operators.
+- [x] Write Mat tests for column-major identity/zero/multiply/inverse behavior.
+- [x] Write Quat tests for identity, axis-angle, rotation matrix, rotate, slerp, and nlerp.
+- [x] Write Transform tests with known matrices and transformed vectors.
+- [x] Write Easing tests for every public function.
 - [x] Write Random/Noise tests for seed determinism, boundaries, and invalid inputs.
-- [ ] Write surface tests that reject `nextpas.core.math.ffi`, naked `external 'm'`, public `Vectors` names, public `uses nextpas.core.math.impl.*`, backend-private SIMD dependencies, and untested public symbols.
-- [ ] Run each test project and confirm RED failures only because final API does not exist.
-- [ ] Commit with `test(math): lock final api contracts`.
+- [x] Write surface tests that reject `nextpas.core.math.ffi`, naked `external 'm'`, public `Vectors` names, public `uses nextpas.core.math.impl.*`, backend-private SIMD dependencies, and untested public symbols.
+- [x] Run each test project and confirm RED failures only because final API does not exist.
+- [x] Commit with `test(math): lock final api contracts`.
 
 Expected result:
 
@@ -98,15 +107,15 @@ Files:
 
 Steps:
 
-- [ ] Move scalar helpers into `nextpas.core.math.scalar`.
-- [ ] Keep `nextpas.core.math` as explicit facade/re-export.
-- [ ] Remove `test_trig` dependency on `nextpas.core.math.ffi`.
-- [ ] Route trig through safe scalar/platform implementation.
-- [ ] Do not delete `math.ffi` before the RED surface test proves the new boundary; deprecate or delete only after all public/test consumers are removed.
-- [ ] Ensure no source contains `external 'm'` under `nextpas.core.math*`.
+- [x] Move scalar helpers into `nextpas.core.math.scalar`.
+- [x] Keep `nextpas.core.math` as explicit facade/re-export.
+- [x] Remove `test_trig` dependency on `nextpas.core.math.ffi`.
+- [x] Route trig through safe scalar/platform implementation.
+- [x] Do not delete `math.ffi` before the RED surface test proves the new boundary; deprecate or delete only after all public/test consumers are removed.
+- [x] Ensure no source contains `external 'm'` under `nextpas.core.math*`.
 - [ ] Run local Linux trig/facade link tests; record macOS/Windows host link-smoke status or explicitly mark final cross-platform completion as blocked.
-- [ ] Run scalar/trig/surface tests with heaptrc.
-- [ ] Commit with `feat(math): add scalar and safe trig foundation`.
+- [x] Run scalar/trig/surface tests with heaptrc.
+- [x] Commit with `feat(math): add scalar and safe trig foundation`.
 
 Expected result:
 

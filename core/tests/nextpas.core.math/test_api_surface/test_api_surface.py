@@ -90,6 +90,10 @@ REQUIRED_CONTROL_DOC_MARKERS = (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
         "The final API rejects a long-term `Vectors` compatibility bridge.",
     ),
+    (
+        "docs/plans/2026-06-06-math-final-api-migration.md",
+        "Current status: M0/M1 complete for current scope; M2 local Linux complete with macOS/Windows host proof pending; M7/M8 partial; M9 not started.",
+    ),
 )
 REQUIRED_CORE_TARGET_DOC_PATHS = (
     "docs/math/README.md",
