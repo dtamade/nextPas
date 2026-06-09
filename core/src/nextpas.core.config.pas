@@ -1782,7 +1782,7 @@ begin
   if Result = '' then
     Result := 'parse error';
   JsonOffsetToLineColumn(AContent, AError.Offset, LLine, LColumn);
-  Result := 'JSON parse error at line ' + UIntToStr(LLine) + ', column ' +
+  Result := 'config json parse error at line ' + UIntToStr(LLine) + ', column ' +
     UIntToStr(LColumn) + ' (offset ' + UIntToStr(AError.Offset) + '): ' + Result;
 end;
 

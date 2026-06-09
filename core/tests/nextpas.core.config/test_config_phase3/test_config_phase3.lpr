@@ -260,7 +260,7 @@ begin
       'TryBuild fails for malformed file');
     Check(LCfg = nil, 'TryBuild returns nil config for malformed file');
     Check(Pos(LBadJsonPath, LError) > 0, 'malformed file path included');
-    Check(Pos('JSON parse error', LError) > 0, 'parser detail included');
+    Check(Pos('config json parse error', LError) > 0, 'parser detail included');
 
     LRaised := False;
     FillChar(LInvalidFormat, SizeOf(LInvalidFormat), $FF);

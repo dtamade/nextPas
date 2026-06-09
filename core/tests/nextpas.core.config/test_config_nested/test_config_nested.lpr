@@ -540,7 +540,7 @@ begin
       on E: EConfigError do
       begin
         LRaised := True;
-        Check(Pos('JSON parse error', E.Message) > 0, 'json error message');
+        Check(Pos('config json parse error', E.Message) > 0, 'json error category');
       end;
     end;
     CheckEqual(True, LRaised, 'bad json raises');
@@ -594,6 +594,7 @@ begin
       on E: EConfigError do
       begin
         LRaised := True;
+        Check(Pos('config json parse error', E.Message) > 0, 'json error category');
         Check(Pos('line 2', E.Message) > 0, 'json error line');
         Check(Pos('column', E.Message) > 0, 'json error column');
       end;
