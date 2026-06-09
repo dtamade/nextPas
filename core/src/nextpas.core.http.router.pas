@@ -428,9 +428,43 @@ var
   LPath: string;
   LM: THttpMethod;
   LFound: Boolean;
-  LI: SizeInt;
-  LWrapped: IHttpHandler;
   LAllow: string;
+
+  procedure InvokeHandler(const AHandler: THttpHandlerFunc;
+    const AParams: TRouteParams);
+  var
+    LParamIndex: SizeInt;
+    LWrappedHandler: IHttpHandler;
+  begin
+    if AParams <> nil then
+      for LParamIndex := 0 to High(AParams) do
+        (AReq as THttpRequest).SetPathParam(AParams[LParamIndex].Name,
+          AParams[LParamIndex].Value);
+    if Length(FMiddlewares) > 0 then
+    begin
+      LWrappedHandler := HandlerFunc(AHandler);
+      for LParamIndex := High(FMiddlewares) downto 0 do
+        LWrappedHandler := FMiddlewares[LParamIndex].Wrap(LWrappedHandler);
+      LWrappedHandler.ServeHTTP(AReq, AW);
+    end
+    else
+      AHandler(AReq, AW);
+  end;
+
+  procedure AppendAllowedMethod(const AMethod: THttpMethod);
+  begin
+    if LAllow <> '' then
+      LAllow := LAllow + ', ';
+    LAllow := LAllow + HttpMethodToStr(AMethod);
+  end;
+
+  function HasRouteFor(const AMethod: THttpMethod): Boolean;
+  var
+    LRouteParams: TRouteParams;
+  begin
+    LRouteParams := nil;
+    Result := MatchNode(FTrees[AMethod], LPath, LRouteParams) <> nil;
+  end;
 begin
   LMethod := AReq.Method;
   LPath := AReq.Path;
@@ -438,34 +472,33 @@ begin
   LHandler := MatchNode(FTrees[LMethod], LPath, LParams);
   if LHandler <> nil then
   begin
-    if LParams <> nil then
-      for LI := 0 to High(LParams) do
-        (AReq as THttpRequest).SetPathParam(LParams[LI].Name, LParams[LI].Value);
-    if Length(FMiddlewares) > 0 then
-    begin
-      LWrapped := HandlerFunc(LHandler);
-      for LI := High(FMiddlewares) downto 0 do
-        LWrapped := FMiddlewares[LI].Wrap(LWrapped);
-      LWrapped.ServeHTTP(AReq, AW);
-    end
-    else
-      LHandler(AReq, AW);
+    InvokeHandler(LHandler, LParams);
     Exit;
   end;
 
-  { Check other methods for 405 }
+  if LMethod = hmHead then
+  begin
+    LParams := nil;
+    LHandler := MatchNode(FTrees[hmGet], LPath, LParams);
+    if LHandler <> nil then
+    begin
+      InvokeHandler(LHandler, LParams);
+      Exit;
+    end;
+  end;
+
   LFound := False;
   LAllow := '';
   for LM := Low(THttpMethod) to High(THttpMethod) do
   begin
     if LM = LMethod then
       Continue;
-    LParams := nil;
-    if MatchNode(FTrees[LM], LPath, LParams) <> nil then
+    if HasRouteFor(LM) then
     begin
       LFound := True;
-      if LAllow <> '' then LAllow := LAllow + ', ';
-      LAllow := LAllow + HttpMethodToStr(LM);
+      AppendAllowedMethod(LM);
+      if (LM = hmGet) and (LMethod <> hmHead) and (not HasRouteFor(hmHead)) then
+        AppendAllowedMethod(hmHead);
     end;
   end;
 
@@ -473,9 +506,10 @@ begin
   begin
     AW.Headers.SetHeader('allow', LAllow);
     AW.WriteHeader(HTTP_STATUS_METHOD_NOT_ALLOWED);
-  end
-  else
-    AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+    Exit;
+  end;
+
+  AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
 end;
 
 procedure THttpRouter.Get(const APattern: string; const AHandler: THttpHandlerFunc);
