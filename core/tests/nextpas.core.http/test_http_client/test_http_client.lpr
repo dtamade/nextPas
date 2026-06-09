@@ -36,6 +36,8 @@ var
   GRawResponse2: string;
   GRawRequest1: string;
   GRawRequest2: string;
+  GPoolRequest1: string;
+  GPoolRequest2: string;
   GRawAcceptLimit: Int32;
   GRawAcceptCount: Int32;
   GAcceptCount: Int32;
@@ -388,6 +390,7 @@ begin
 end;
 
 function PoolAcceptThread(AArg: Pointer): Pointer; cdecl; forward;
+function PoolAuthorityCaseThread(AArg: Pointer): Pointer; cdecl; forward;
 
 function RawResponseThread(AArg: Pointer): Pointer; cdecl;
 var
@@ -447,6 +450,53 @@ begin
   LSpacePos := Pos(' ', ARawRequest);
   if LSpacePos > 1 then
     Result := System.Copy(ARawRequest, 1, LSpacePos - 1);
+end;
+
+function RawHeaderValue(const ARawRequest, AHeaderName: string): string;
+var
+  LLowerRequest: string;
+  LNeedle: string;
+  LHeaderPos: SizeInt;
+  LValueStart: SizeInt;
+  LValueEnd: SizeInt;
+begin
+  Result := '';
+  LLowerRequest := LowerCase(ARawRequest);
+  LNeedle := #13#10 + LowerCase(AHeaderName) + ':';
+  LHeaderPos := Pos(LNeedle, LLowerRequest);
+  if LHeaderPos = 0 then
+    Exit;
+
+  LValueStart := LHeaderPos + Length(#13#10) + Length(AHeaderName) + 1;
+  while (LValueStart <= Length(ARawRequest)) and
+    (ARawRequest[LValueStart] in [' ', #9]) do
+    Inc(LValueStart);
+
+  LValueEnd := LValueStart;
+  while (LValueEnd <= Length(ARawRequest)) and
+    (ARawRequest[LValueEnd] <> #13) do
+    Inc(LValueEnd);
+  Result := System.Copy(ARawRequest, LValueStart, LValueEnd - LValueStart);
+end;
+
+function ReadRawHttpRequest(const AConn: ITcpStream): string;
+var
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+begin
+  Result := '';
+  AConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(500)));
+  repeat
+    try
+      LN := AConn.Read(LBuf[0], 4096);
+    except
+      Break;
+    end;
+    if LN = 0 then
+      Break;
+    SetLength(Result, Length(Result) + Int32(LN));
+    Move(LBuf[0], Result[Length(Result) - Int32(LN) + 1], LN);
+  until Pos(#13#10#13#10, Result) > 0;
 end;
 
 function RetryRequestContentLength(const ARawHeaders: string): Int64;
@@ -6926,6 +6976,112 @@ begin
   end;
 end;
 
+procedure TestClientIdlePoolReusesCaseEquivalentAuthorityHost;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LLowerUrl: TUrl;
+  LUpperUrl: TUrl;
+  LRet: Pointer;
+begin
+  GAcceptCount := 0;
+  GPoolRequest1 := '';
+  GPoolRequest2 := '';
+  GPoolListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GPoolListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @PoolAuthorityCaseThread, nil);
+
+  try
+    LLowerUrl := TUrl.Parse('http://localhost:' + IntToStr(Int64(LPort)) + '/pool-a');
+    LUpperUrl := TUrl.Parse('http://LOCALHOST:' + IntToStr(Int64(LPort)) + '/pool-b');
+    CheckEqual('localhost', LLowerUrl.Host,
+      'url parser preserves lowercase host authority');
+    CheckEqual('LOCALHOST', LUpperUrl.Host,
+      'url parser preserves uppercase host authority');
+    CheckEqual('LOCALHOST:' + IntToStr(Int64(LPort)), LUpperUrl.HostPort,
+      'wire HostPort keeps parsed host case');
+
+    LClient := NewHttpClient;
+    LResp := LClient.Get(LLowerUrl.ToString);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'lowercase authority request status 200');
+    HttpReleaseResponseBody(LResp);
+
+    LResp := LClient.Get(LUpperUrl.ToString);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'uppercase authority request status 200');
+    HttpReleaseResponseBody(LResp);
+
+    CheckEqual('localhost:' + IntToStr(Int64(LPort)),
+      RawHeaderValue(GPoolRequest1, 'host'),
+      'first request wire Host keeps lowercase HostPort');
+    CheckEqual('LOCALHOST:' + IntToStr(Int64(LPort)),
+      RawHeaderValue(GPoolRequest2, 'host'),
+      'second request wire Host keeps uppercase HostPort');
+    CheckEqual(Int64(1), Int64(GAcceptCount),
+      'case-equivalent authority host reuses one idle connection');
+    LClient := nil;
+  finally
+    GPoolListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GPoolListener := nil;
+    GPoolRequest1 := '';
+    GPoolRequest2 := '';
+  end;
+end;
+
+function PoolAuthorityCaseThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LRaw: string;
+begin
+  Result := nil;
+  try
+    LConn := GPoolListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  InterlockedIncrement(GAcceptCount);
+  try
+    GPoolRequest1 := ReadRawHttpRequest(LConn);
+    if GPoolRequest1 <> '' then
+      WritePoolOkResponse(LConn);
+
+    LRaw := ReadRawHttpRequest(LConn);
+    if LRaw <> '' then
+    begin
+      GPoolRequest2 := LRaw;
+      WritePoolOkResponse(LConn);
+      LConn.Close;
+      Exit;
+    end;
+  except
+  end;
+  LConn.Close;
+
+  try
+    LConn := GPoolListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  InterlockedIncrement(GAcceptCount);
+  try
+    GPoolRequest2 := ReadRawHttpRequest(LConn);
+    if GPoolRequest2 <> '' then
+      WritePoolOkResponse(LConn);
+  except
+  end;
+  LConn.Close;
+end;
+
 { Main }
 
 begin
@@ -7166,6 +7322,8 @@ begin
     @TestClientRejectsCustomHeaderNameInjectionBeforeWireWrite);
   T.Run('Client rejects request target injection before wire write',
     @TestClientRejectsRequestTargetInjectionBeforeWireWrite);
+  T.Run('Client idle pool reuses case-equivalent authority host',
+    @TestClientIdlePoolReusesCaseEquivalentAuthorityHost);
   T.Run('Connection reuse', @TestConnectionReuse);
   T.Summary;
 end.

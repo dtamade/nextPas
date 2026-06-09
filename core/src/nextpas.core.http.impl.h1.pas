@@ -365,6 +365,11 @@ begin
       AUrl.Scheme);
 end;
 
+function CanonicalPoolHostKey(const AHost: string): string; inline;
+begin
+  Result := LowerCase(AHost);
+end;
+
 function HeadersHaveConnectionCloseToken(const AHeaders: IHttpHeaders): Boolean;
 var
   LValues: TStringArray;
@@ -2255,6 +2260,7 @@ function TH1ClientTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
 var
   LUrl: TUrl;
   LHost: string;
+  LPoolHostKey: string;
   LAutoHost: string;
   LPort: UInt16;
   LConn: ITcpStream;
@@ -2276,6 +2282,7 @@ begin
   LUrl := AReq.Url;
   ValidatePlainHttpClientUrlScheme(LUrl);
   LHost := LUrl.Host;
+  LPoolHostKey := CanonicalPoolHostKey(LHost);
   LAutoHost := '';
   if not AReq.Headers.Has('host') then
   begin
@@ -2289,7 +2296,7 @@ begin
 
   CaptureRetryBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LRequestDeadline := ClientRequestDeadline(FOptions.Timeout);
-  LConn := PoolGet(LHost, LPort);
+  LConn := PoolGet(LPoolHostKey, LPort);
   LPooled := LConn <> nil;
   if not LPooled then
     LConn := TcpConnect(LHost, LPort);
@@ -2335,7 +2342,7 @@ begin
   end;
 
   if LKeepAlive and (not LRequestClose) then
-    PoolPut(LHost, LPort, LConn)
+    PoolPut(LPoolHostKey, LPort, LConn)
   else
     LConn.Close;
 
