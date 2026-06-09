@@ -1432,6 +1432,14 @@ begin
   Check(LP.ErrorKind = AExpectedKind, AName + ': error kind');
   CheckEqual(SizeUInt(Length(LReqHead)), LConsumed,
     AName + ': consumes only through offending headers');
+  Check(not LP.HeadersComplete,
+    AName + ': does not publish headers-complete after adapter rejection');
+  CheckEqual('', LP.GetUrl,
+    AName + ': does not publish request target after adapter rejection');
+  CheckEqual(Int64(0), Int64(LP.GetHeaders.Count),
+    AName + ': does not publish parsed headers after adapter rejection');
+  Check(LP.NewBodyReader = nil,
+    AName + ': does not publish body reader after adapter rejection');
   CheckEqual(Int64(0), LP.GetBodySize,
     AName + ': does not publish ambiguous body size');
   CheckEqual('', LP.GetBody, AName + ': does not consume ambiguous body bytes');

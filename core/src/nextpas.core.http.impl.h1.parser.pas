@@ -747,7 +747,6 @@ begin
     LSelf.FVersion := hvHttp10
   else
     LSelf.FVersion := hvHttp11;
-  LSelf.FHeadersComplete := True;
   // Extract method (request) or status (response)
   if LSelf.FParserType = ptRequest then
   begin
@@ -772,9 +771,13 @@ begin
     LSelf.FHeaderCompleteUserError := Result = HPE_USER;
     if Result <> 0 then
       Exit;
+    LSelf.FHeadersComplete := True;
   end
   else
+  begin
     LSelf.FStatusCode := p0^.status_code;
+    LSelf.FHeadersComplete := True;
+  end;
   Result := 0;
 end;
 
