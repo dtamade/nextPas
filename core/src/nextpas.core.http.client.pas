@@ -236,9 +236,18 @@ begin
   if LAuthority[1] = '[' then
   begin
     LBracketPos := Pos(']', LAuthority);
-    if (LBracketPos = 0) or (LBracketPos >= Length(LAuthority)) or
-      (LAuthority[LBracketPos + 1] <> ':') then
+    if LBracketPos = 0 then
+    begin
+      Result := False;
       Exit;
+    end;
+    if LBracketPos = Length(LAuthority) then
+      Exit;
+    if LAuthority[LBracketPos + 1] <> ':' then
+    begin
+      Result := False;
+      Exit;
+    end;
     LPortStr := System.Copy(LAuthority, LBracketPos + 2,
       Length(LAuthority) - LBracketPos - 1);
   end

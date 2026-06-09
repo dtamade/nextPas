@@ -4873,6 +4873,40 @@ begin
     'network-path redirect with invalid port does not perform second round trip');
 end;
 
+procedure CheckClientRedirectRejectsMalformedBracketedAuthority(
+  const ALocation, ALabel: string);
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := ALocation;
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LRaised := False;
+  try
+    LClient.Get('http://example.test/old');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, ALabel + ' raises EHttpError');
+  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
+    ALabel + ' does not perform second round trip');
+end;
+
+procedure TestClientRedirectRejectsMalformedBracketedIpv6Authority;
+begin
+  CheckClientRedirectRejectsMalformedBracketedAuthority(
+    'http://[::1]evil/new',
+    'absolute redirect with malformed bracketed IPv6 authority');
+  CheckClientRedirectRejectsMalformedBracketedAuthority(
+    '//[::1]evil/new',
+    'network-path redirect with malformed bracketed IPv6 authority');
+end;
+
 procedure TestClientRedirectTransportResolvesUserInfoLocationWithPort;
 var
   LTransportObj: TRedirectCaptureTransport;
@@ -7232,6 +7266,8 @@ begin
     @TestClientRedirectRejectsNetworkPathLocationWithEmptyHost);
   T.Run('Client redirect rejects network-path Location with invalid port',
     @TestClientRedirectRejectsNetworkPathLocationWithInvalidPort);
+  T.Run('Client redirect rejects malformed bracketed IPv6 authority',
+    @TestClientRedirectRejectsMalformedBracketedIpv6Authority);
   T.Run('Client redirect transport resolves userinfo Location with port',
     @TestClientRedirectTransportResolvesUserInfoLocationWithPort);
   T.Run('Client redirect rejects unsupported non-hierarchical scheme',
