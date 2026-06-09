@@ -221,7 +221,8 @@ type
    * TAtomicFlag - 原子标志（最简单的原子类型）
    *
    * @desc
-   *   最简单的原子类型，保证无锁。只有两个操作：test_and_set 和 clear。
+   *   最简单的原子类型，锁自由状态跟随 32-bit 原子后端运行时 truth。
+   *   只有两个操作：test_and_set 和 clear。
    *   常用于实现自旋锁和简单的同步标志。
    *
    * @cpp_equivalent std::atomic_flag
@@ -249,9 +250,9 @@ type
     {**
      * is_lock_free - 查询原子操作是否无锁
      *
-     * @return 始终返回 True（atomic_flag 保证无锁）
+     * @return True 如果当前 32-bit 原子后端运行时为无锁
      *
-     * @cpp_equivalent std::atomic_flag::is_lock_free() (always true)
+     * @cpp_equivalent std::atomic_flag::is_lock_free()
      *}
     class function is_lock_free: Boolean; static; inline;
 
@@ -487,8 +488,7 @@ end;
 
 class function TAtomicInt32.is_lock_free: Boolean;
 begin
-  // 32-bit atomic operations are always lock-free on modern platforms
-  Result := True;
+  Result := atomic_is_lock_free_32;
 end;
 
 function TAtomicInt32.Load(AOrder: memory_order_t): Int32;
@@ -582,8 +582,7 @@ end;
 
 class function TAtomicUInt32.is_lock_free: Boolean;
 begin
-  // 32-bit atomic operations are always lock-free on modern platforms
-  Result := True;
+  Result := atomic_is_lock_free_32;
 end;
 
 function TAtomicUInt32.Load(AOrder: memory_order_t): UInt32;
@@ -870,8 +869,7 @@ end;
 
 class function TAtomicBool.is_lock_free: Boolean;
 begin
-  // Boolean is stored as Int32, which is always lock-free
-  Result := True;
+  Result := atomic_is_lock_free_32;
 end;
 
 function TAtomicBool.Load(AOrder: memory_order_t): Boolean;
@@ -997,8 +995,7 @@ end;
 
 class function TAtomicFlag.is_lock_free: Boolean;
 begin
-  // atomic_flag is guaranteed to be lock-free
-  Result := True;
+  Result := atomic_is_lock_free_32;
 end;
 
 function TAtomicFlag.test_and_set(AOrder: memory_order_t): Boolean;

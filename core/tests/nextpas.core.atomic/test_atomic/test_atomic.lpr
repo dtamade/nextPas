@@ -292,8 +292,12 @@ var
   LSingleWeakCasSection: string;
   LCompatFailureSection: string;
   LTypesFailureSection: string;
+  LTypesInt32LockFreeSection: string;
+  LTypesUInt32LockFreeSection: string;
   LTypesInt64LockFreeSection: string;
   LTypesUInt64LockFreeSection: string;
+  LTypesBoolLockFreeSection: string;
+  LTypesFlagLockFreeSection: string;
   LTypesISizeLockFreeSection: string;
   LTypesUSizeLockFreeSection: string;
   LTypesRefCountLockFreeSection: string;
@@ -364,12 +368,24 @@ begin
   LTypesFailureSection := ExtractImplementationSection(LAtomicTypesSource,
     'function _cas_failure_order(const ASuccessOrder: memory_order_t): memory_order_t; inline;',
     '{ TAtomicInt32 }');
+  LTypesInt32LockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
+    'class function TAtomicInt32.is_lock_free: Boolean;',
+    'function TAtomicInt32.Load(AOrder: memory_order_t): Int32;');
+  LTypesUInt32LockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
+    'class function TAtomicUInt32.is_lock_free: Boolean;',
+    'function TAtomicUInt32.Load(AOrder: memory_order_t): UInt32;');
   LTypesInt64LockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
     'class function TAtomicInt64.is_lock_free: Boolean;',
     'function TAtomicInt64.Load(AOrder: memory_order_t): Int64;');
   LTypesUInt64LockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
     'class function TAtomicUInt64.is_lock_free: Boolean;',
     'function TAtomicUInt64.Load(AOrder: memory_order_t): UInt64;');
+  LTypesBoolLockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
+    'class function TAtomicBool.is_lock_free: Boolean;',
+    'function TAtomicBool.Load(AOrder: memory_order_t): Boolean;');
+  LTypesFlagLockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
+    'class function TAtomicFlag.is_lock_free: Boolean;',
+    'function TAtomicFlag.test_and_set(AOrder: memory_order_t): Boolean;');
   LTypesISizeLockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
     'class function TAtomicISize.is_lock_free: Boolean;',
     'function TAtomicISize.Load(AOrder: memory_order_t): PtrInt;');
@@ -538,10 +554,18 @@ begin
     'AtomicCompatFailureOrder must treat consume explicitly');
   CheckContains(LTypesFailureSection, 'mo_consume',
     'typed CAS failure-order helper must treat consume explicitly');
+  CheckContains(LTypesInt32LockFreeSection, 'atomic_is_lock_free_32',
+    'typed Int32 lock-free query must delegate to 32-bit runtime truth');
+  CheckContains(LTypesUInt32LockFreeSection, 'atomic_is_lock_free_32',
+    'typed UInt32 lock-free query must delegate to 32-bit runtime truth');
   CheckContains(LTypesInt64LockFreeSection, 'atomic_is_lock_free_64',
     'typed Int64 lock-free query must delegate to runtime truth');
   CheckContains(LTypesUInt64LockFreeSection, 'atomic_is_lock_free_64',
     'typed UInt64 lock-free query must delegate to runtime truth');
+  CheckContains(LTypesBoolLockFreeSection, 'atomic_is_lock_free_32',
+    'typed Bool lock-free query must delegate to backing Int32 runtime truth');
+  CheckContains(LTypesFlagLockFreeSection, 'atomic_is_lock_free_32',
+    'typed Flag lock-free query must delegate to backing Int32 runtime truth');
   CheckContains(LTypesISizeLockFreeSection, 'atomic_is_lock_free_ptr',
     'typed ISize lock-free query must delegate to pointer-sized runtime truth');
   CheckContains(LTypesUSizeLockFreeSection, 'atomic_is_lock_free_ptr',
@@ -809,6 +833,14 @@ begin
     'record strong CAS succeeds');
   CheckEqual(Int64(18), Int64(LAtomic.IntoInner));
 
+  Check(TAtomicInt32.is_lock_free = atomic_is_lock_free_32,
+    'TAtomicInt32 lock-free surface must match 32-bit runtime truth');
+  Check(TAtomicUInt32.is_lock_free = atomic_is_lock_free_32,
+    'TAtomicUInt32 lock-free surface must match 32-bit runtime truth');
+  Check(TAtomicBool.is_lock_free = atomic_is_lock_free_32,
+    'TAtomicBool lock-free surface must match backing Int32 runtime truth');
+  Check(TAtomicFlag.is_lock_free = atomic_is_lock_free_32,
+    'TAtomicFlag lock-free surface must match backing Int32 runtime truth');
   Check(TAtomicISize.is_lock_free = atomic_is_lock_free_ptr,
     'TAtomicISize lock-free surface must match pointer-sized runtime truth');
   Check(TAtomicUSize.is_lock_free = atomic_is_lock_free_ptr,
