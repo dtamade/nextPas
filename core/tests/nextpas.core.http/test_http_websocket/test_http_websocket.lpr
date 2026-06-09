@@ -445,6 +445,53 @@ begin
   end;
 end;
 
+{ Test 3b: Handshake accepts upgrade token split across duplicate Connection headers }
+procedure TestHandshakeAcceptsDuplicateConnectionUpgradeToken;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LKey, LExpectedAccept: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LWs: IWebSocket;
+  begin
+    try
+      LWs := UpgradeWebSocket(AReq, AW);
+      LWs.Close(1000, 'ok');
+    except
+      on E: EHttpError do
+      begin
+        AW.GetHeaders.Set_('content-length', '0');
+        AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
+      end;
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LExpectedAccept := ComputeExpectedAccept(LKey);
+    LResp := SendRawAndRead(LPort,
+      'GET /ws HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Upgrade: websocket'#13#10 +
+      'Connection: keep-alive'#13#10 +
+      'Connection: Upgrade'#13#10 +
+      'Sec-WebSocket-Key: ' + LKey + #13#10 +
+      'Sec-WebSocket-Version: 13'#13#10 +
+      #13#10, 256);
+    Check(Pos('HTTP/1.1 101', LResp) > 0,
+      'duplicate Connection headers should expose upgrade token');
+    Check(Pos('Sec-WebSocket-Accept: ' + LExpectedAccept, LResp) > 0,
+      'duplicate Connection header upgrade should complete handshake');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 4: Text frame echo }
 procedure TestTextFrameEcho;
 var
@@ -2622,6 +2669,8 @@ begin
   T.Run('HandshakeSuccess', @TestHandshakeSuccess);
   T.Run('HandshakeNoUpgrade', @TestHandshakeNoUpgrade);
   T.Run('HandshakeNoKey', @TestHandshakeNoKey);
+  T.Run('HandshakeAcceptsDuplicateConnectionUpgradeToken',
+    @TestHandshakeAcceptsDuplicateConnectionUpgradeToken);
   T.Run('TextFrameEcho', @TestTextFrameEcho);
   T.Run('TextFrameEchoCoalescedFirstFrame', @TestTextFrameEchoWithCoalescedFirstFrame);
   T.Run('UpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket',

@@ -121,6 +121,54 @@ begin
       Result[I] := S[I];
 end;
 
+function IsOWS(const ACh: Char): Boolean;
+begin
+  Result := (ACh = ' ') or (ACh = #9);
+end;
+
+function LowerTrimOWS(const S: string): string;
+var
+  LFirst, LLast: Integer;
+begin
+  LFirst := 1;
+  LLast := Length(S);
+  while (LFirst <= LLast) and IsOWS(S[LFirst]) do
+    Inc(LFirst);
+  while (LLast >= LFirst) and IsOWS(S[LLast]) do
+    Dec(LLast);
+  if LFirst > LLast then
+    Exit('');
+  Result := LowerCase(Copy(S, LFirst, LLast - LFirst + 1));
+end;
+
+function HeaderValueHasToken(const AValue, AToken: string): Boolean;
+var
+  LStart, LPos: Integer;
+begin
+  Result := False;
+  LStart := 1;
+  while LStart <= Length(AValue) + 1 do
+  begin
+    LPos := LStart;
+    while (LPos <= Length(AValue)) and (AValue[LPos] <> ',') do
+      Inc(LPos);
+    if LowerTrimOWS(Copy(AValue, LStart, LPos - LStart)) = AToken then
+      Exit(True);
+    LStart := LPos + 1;
+  end;
+end;
+
+function HeaderValuesHaveToken(const AValues: TStringArray;
+  const AToken: string): Boolean;
+var
+  LI: SizeInt;
+begin
+  Result := False;
+  for LI := Low(AValues) to High(AValues) do
+    if HeaderValueHasToken(AValues[LI], AToken) then
+      Exit(True);
+end;
+
 function ComputeAcceptKey(const AKey: string): string;
 var
   LConcat: string;
@@ -214,20 +262,21 @@ end;
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter;
   const AOptions: TWebSocketOptions): IWebSocket;
 var
-  LUpgrade, LConnection, LKey, LVersion: string;
+  LUpgrade, LKey, LVersion: string;
+  LConnectionValues: TStringArray;
   LAccept: string;
   LResp: string;
   LHijacker: IHttpHijacker;
   LConn: ITcpStream;
 begin
   LUpgrade := LowerCase(AReq.Headers.Get('upgrade'));
-  LConnection := LowerCase(AReq.Headers.Get('connection'));
+  LConnectionValues := AReq.Headers.GetAll('connection');
   LKey := AReq.Headers.Get('sec-websocket-key');
   LVersion := AReq.Headers.Get('sec-websocket-version');
 
   if LUpgrade <> 'websocket' then
     raise EHttpError.Create('Missing or invalid Upgrade header');
-  if Pos('upgrade', LConnection) = 0 then
+  if not HeaderValuesHaveToken(LConnectionValues, 'upgrade') then
     raise EHttpError.Create('Missing or invalid Connection header');
   if LKey = '' then
     raise EHttpError.Create('Missing Sec-WebSocket-Key header');
