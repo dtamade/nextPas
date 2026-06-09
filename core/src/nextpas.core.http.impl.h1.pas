@@ -2119,7 +2119,12 @@ begin
       LReadSize := SizeUInt(SizeOf(LTmp));
       if LRemaining < Int64(LReadSize) then
         LReadSize := SizeUInt(LRemaining);
-      LN := AReq.Body.Read(LTmp[0], LReadSize);
+      try
+        LN := AReq.Body.Read(LTmp[0], LReadSize);
+      except
+        on E: Exception do
+          raise EHttpError.Create('HTTP request body read failed: ' + E.Message);
+      end;
       if LN > 0 then
       begin
         if Int64(LN) > LRemaining then

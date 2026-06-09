@@ -240,6 +240,20 @@ type
     property CloseCount: Int32 read FCloseCount;
   end;
 
+  TPartialReadFailingRequestBody = class(TInterfacedObject, IReader, IReadCloser)
+  private
+    FData: string;
+    FPos: SizeInt;
+    FClosed: Boolean;
+    FCloseCount: Int32;
+  public
+    constructor Create(const AData: string);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Close;
+    property Closed: Boolean read FClosed;
+    property CloseCount: Int32 read FCloseCount;
+  end;
+
   TTrackedRequestBody = class(TInterfacedObject, IReader, IReadCloser)
   private
     FData: string;
@@ -1470,6 +1484,38 @@ begin
   FClosed := True;
   Inc(FCloseCount);
   raise EHttpError.Create('request body close failed');
+end;
+
+constructor TPartialReadFailingRequestBody.Create(const AData: string);
+begin
+  inherited Create;
+  FData := AData;
+  FPos := 1;
+end;
+
+function TPartialReadFailingRequestBody.Read(var ABuf;
+  const ACount: SizeUInt): SizeUInt;
+var
+  LRemaining: SizeInt;
+begin
+  if FClosed or (ACount = 0) then
+    Exit(0);
+  if FPos > Length(FData) then
+    raise EIOError.Create('request body read failed');
+
+  LRemaining := Length(FData) - FPos + 1;
+  if SizeUInt(LRemaining) > ACount then
+    Result := ACount
+  else
+    Result := SizeUInt(LRemaining);
+  Move(FData[FPos], ABuf, Result);
+  Inc(FPos, SizeInt(Result));
+end;
+
+procedure TPartialReadFailingRequestBody.Close;
+begin
+  FClosed := True;
+  Inc(FCloseCount);
 end;
 
 constructor TTrackedRequestBody.Create(const AData: string;
@@ -5639,6 +5685,101 @@ begin
   end;
 end;
 
+procedure TestClientDoesNotRetryRequestBodyReadError;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LHeaders: IHttpHeaders;
+  LBody: TPartialReadFailingRequestBody;
+  LRaised: Boolean;
+  LErrorMessage: string;
+  LRet: Pointer;
+  LJoined: Boolean;
+begin
+  GRetryAcceptCount := 0;
+  GRetryPooledMethod := '';
+  GRetryPooledBody := '';
+  GRetrySecondMethod := '';
+  GRetrySecondBody := '';
+  GRetryListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRetryListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @PostWritePooledRetryThread, nil);
+  LJoined := False;
+
+  try
+    LClient := NewHttpClient;
+
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/prime');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'priming request status 200');
+    CheckEqual('ok', ReadBodyStr(LResp), 'priming response body');
+    CheckEqual(Int64(1), Int64(GRetryAcceptCount),
+      'priming request opened first connection');
+
+    LBody := TPartialReadFailingRequestBody.Create('abc');
+    LHeaders := NewHeaders;
+    LHeaders.SetHeader('idempotency-key', 'retry-safe');
+    LReq := NewRequest(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
+      LHeaders, LBody as IReader, Int64(6));
+
+    LRaised := False;
+    LErrorMessage := '';
+    try
+      LClient.Send(LReq);
+    except
+      on E: EHttpError do
+      begin
+        LRaised := True;
+        LErrorMessage := E.Message;
+      end;
+      on E: Exception do
+        LErrorMessage := E.ClassName + ': ' + E.Message;
+    end;
+
+    LClient := nil;
+    if GRetryAcceptCount < 2 then
+      WakeRetryAcceptThread(LPort);
+    GRetryListener.Close;
+    platform_thread_join(LHandle, LRet);
+    LJoined := True;
+    GRetryListener := nil;
+
+    Check(LRaised,
+      'request body read failure raises EHttpError');
+    Check(Pos('request body read failed', LErrorMessage) > 0,
+      'request body read error is preserved');
+    Check(LBody.Closed,
+      'request body read failure closes close-capable request body');
+    CheckEqual(Int64(1), Int64(LBody.CloseCount),
+      'request body read failure closes request body exactly once');
+    CheckEqual('POST', GRetryPooledMethod,
+      'old pooled connection observed retry-safe request method before read error');
+    CheckEqual('abc', GRetryPooledBody,
+      'old pooled connection observed partial request body before read error');
+    CheckEqual('', GRetrySecondMethod,
+      'request body read failure does not open fresh retry request');
+    CheckEqual('', GRetrySecondBody,
+      'request body read failure does not replay body');
+  finally
+    if not LJoined then
+    begin
+      if LClient <> nil then
+        LClient.CloseIdleConnections;
+      if GRetryAcceptCount < 2 then
+        WakeRetryAcceptThread(LPort);
+      if GRetryListener <> nil then
+        GRetryListener.Close;
+      platform_thread_join(LHandle, LRet);
+    end;
+    GRetryListener := nil;
+    GRetryPooledMethod := '';
+    GRetryPooledBody := '';
+  end;
+end;
+
 procedure TestClientPooledRetryUsesSingleTimeoutBudget;
 var
   LPort: UInt16;
@@ -6727,6 +6868,8 @@ begin
     @TestClientRetriesReplayableBodyWhenPooledConnectionClosesAfterRequestWrite);
   T.Run('Client does not retry local request body serialization error',
     @TestClientDoesNotRetryLocalRequestBodySerializationError);
+  T.Run('Client does not retry request body read error',
+    @TestClientDoesNotRetryRequestBodyReadError);
   T.Run('Client pooled retry uses single timeout budget',
     @TestClientPooledRetryUsesSingleTimeoutBudget);
   T.Run('Client sends non-idempotent body after closed pooled connection',
