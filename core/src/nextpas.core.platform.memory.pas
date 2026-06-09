@@ -110,6 +110,8 @@ end;
   secure-zero-backend=fallback-fillchar-readwritebarrier
   windows-native-secure-zero=deferred
   posix-native-secure-zero=deferred
+  native-secure-zero-promotion-requires=host-owned-ffi-or-dynamic-loading-seam
+  secure-zero-forced-compile-truth=source-contract
   windows-runtime-ready=false
 }
 procedure platform_secure_zero_memory(APtr: Pointer; ASize: SizeUInt);

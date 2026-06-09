@@ -289,6 +289,10 @@ begin
     'platform.memory must publish Windows native secure-zero backend as deferred');
   CheckTokenPresent(LPlatformMemory, 'posix-native-secure-zero=deferred',
     'platform.memory must publish POSIX native secure-zero backend as deferred');
+  CheckTokenPresent(LPlatformMemory, 'native-secure-zero-promotion-requires=host-owned-ffi-or-dynamic-loading-seam',
+    'platform.memory must gate native secure-zero promotion on a host-owned seam');
+  CheckTokenPresent(LPlatformMemory, 'secure-zero-forced-compile-truth=source-contract',
+    'platform.memory forced host branches must stay source-contract truth only');
   CheckTokenPresent(LPlatformMemory, 'windows-runtime-ready=false',
     'platform.memory must not claim Windows runtime readiness for secure zero');
 
