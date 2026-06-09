@@ -21,20 +21,35 @@ type
       1: (Bits: LongWord);
   end;
 
-function SingleNaN: Single;
+function SingleFromBits(const ABits: LongWord): Single;
 var
   LValue: TSingleBitCast;
 begin
-  LValue.Bits := $7FC00000;
+  LValue.Bits := ABits;
   Result := LValue.Value;
 end;
 
-function SingleInfinity: Single;
+function SingleBits(const AValue: Single): LongWord;
 var
   LValue: TSingleBitCast;
 begin
-  LValue.Bits := $7F800000;
-  Result := LValue.Value;
+  LValue.Value := AValue;
+  Result := LValue.Bits;
+end;
+
+function SingleNaN: Single;
+begin
+  Result := SingleFromBits($7FC00000);
+end;
+
+function SingleInfinity: Single;
+begin
+  Result := SingleFromBits($7F800000);
+end;
+
+function SingleNegativeZero: Single;
+begin
+  Result := SingleFromBits($80000000);
 end;
 
 procedure CheckNear(const AExpected, AActual, AEpsilon: Double; const AMessage: string);
@@ -66,11 +81,24 @@ end;
 
 procedure CheckSingleBits(const AActual: Single; const AExpectedBits: LongWord;
   const AMessage: string);
-var
-  LValue: TSingleBitCast;
 begin
-  LValue.Value := AActual;
-  CheckEqual(Int64(AExpectedBits), Int64(LValue.Bits), AMessage);
+  CheckEqual(Int64(AExpectedBits), Int64(SingleBits(AActual)), AMessage);
+end;
+
+procedure CheckSingleIeeeParity(const AExpected, AActual: Single; const AMessage: string);
+begin
+  if IsNaN(AExpected) then
+    Check(IsNaN(AActual), AMessage + ' NaN parity')
+  else
+    CheckSingleBits(AActual, SingleBits(AExpected), AMessage);
+end;
+
+procedure CheckVec4fIeeeParity(const AExpected, AActual: TVec4f; const AMessage: string);
+begin
+  CheckSingleIeeeParity(AExpected.X, AActual.X, AMessage + '.X');
+  CheckSingleIeeeParity(AExpected.Y, AActual.Y, AMessage + '.Y');
+  CheckSingleIeeeParity(AExpected.Z, AActual.Z, AMessage + '.Z');
+  CheckSingleIeeeParity(AExpected.W, AActual.W, AMessage + '.W');
 end;
 
 procedure CheckVec3fValue(const AExpected, AActual: TVec3f; const AMessage: string);
@@ -314,6 +342,58 @@ begin
     'SimdVec3fCross signed infinity public parity negative Z');
 end;
 
+procedure TestSimdVec4fLaneIeeeParity;
+var
+  A: TVec4f;
+  B: TVec4f;
+begin
+  A := TVec4f.Create(SingleNegativeZero, Single(0.0), SingleInfinity, SingleNaN);
+  B := TVec4f.Create(SingleNegativeZero, Single(0.0), Single(1.0), Single(1.0));
+  CheckVec4fIeeeParity(A + B, SimdVec4fAdd(A, B),
+    'SimdVec4fAdd lane IEEE parity');
+
+  A := TVec4f.Create(SingleNegativeZero, Single(0.0), SingleInfinity, SingleNaN);
+  B := TVec4f.Create(Single(0.0), SingleNegativeZero, Single(1.0), Single(1.0));
+  CheckVec4fIeeeParity(A - B, SimdVec4fSub(A, B),
+    'SimdVec4fSub lane IEEE parity');
+
+  A := TVec4f.Create(SingleNegativeZero, Single(0.0), SingleInfinity, SingleNaN);
+  B := TVec4f.Create(Single(2.0), Single(-3.0), Single(-2.0), Single(1.0));
+  CheckVec4fIeeeParity(TVec4f.MulComponents(A, B), SimdVec4fMulComponents(A, B),
+    'SimdVec4fMulComponents lane IEEE parity');
+
+  A := TVec4f.Create(SingleNegativeZero, Single(0.0), SingleInfinity, SingleNaN);
+  CheckVec4fIeeeParity(A * Single(-2.0), SimdVec4fScale(A, Single(-2.0)),
+    'SimdVec4fScale lane IEEE parity');
+end;
+
+procedure TestSimdVec4fReductionIeeeParity;
+var
+  A: TVec4f;
+  B: TVec4f;
+begin
+  A := TVec4f.Create(SingleNegativeZero, Single(0.0), SingleNegativeZero, Single(0.0));
+  B := TVec4f.Create(Single(1.0), Single(-1.0), Single(2.0), Single(-2.0));
+  CheckSingleIeeeParity(TVec4f.Dot(A, B), SimdVec4fDot(A, B),
+    'SimdVec4fDot signed-zero reduction IEEE parity');
+  CheckSingleIeeeParity(A.Length, SimdVec4fLength(A),
+    'SimdVec4fLength signed-zero reduction IEEE parity');
+
+  A := TVec4f.Create(SingleInfinity, Single(3.0), Single(4.0), Single(0.0));
+  B := TVec4f.Create(Single(2.0), Single(0.0), Single(0.0), Single(0.0));
+  CheckSingleIeeeParity(TVec4f.Dot(A, B), SimdVec4fDot(A, B),
+    'SimdVec4fDot infinity reduction IEEE parity');
+  CheckSingleIeeeParity(A.Length, SimdVec4fLength(A),
+    'SimdVec4fLength infinity reduction IEEE parity');
+
+  A := TVec4f.Create(SingleNaN, Single(3.0), Single(4.0), Single(0.0));
+  B := TVec4f.Create(Single(2.0), Single(0.0), Single(0.0), Single(0.0));
+  CheckSingleIeeeParity(TVec4f.Dot(A, B), SimdVec4fDot(A, B),
+    'SimdVec4fDot NaN reduction IEEE parity');
+  CheckSingleIeeeParity(A.Length, SimdVec4fLength(A),
+    'SimdVec4fLength NaN reduction IEEE parity');
+end;
+
 procedure TestSimdQuatfRotateInvalidVectorPublicParity;
 begin
   ExpectArgumentErrorMessage('TQuatf.Rotate: AVector must be finite',
@@ -334,6 +414,8 @@ begin
   T.Run('quatf simd helpers', @TestQuatfSimdHelpers);
   T.Run('simd helpers match public math semantics', @TestSimdHelpersMatchPublicMathSemantics);
   T.Run('simd dot length stable edge parity', @TestSimdDotLengthStableEdgeParity);
+  T.Run('simd vec4f lane IEEE parity', @TestSimdVec4fLaneIeeeParity);
+  T.Run('simd vec4f reduction IEEE parity', @TestSimdVec4fReductionIeeeParity);
   T.Run('simd quat rotate invalid vector public error parity',
     @TestSimdQuatfRotateInvalidVectorPublicParity);
   T.Summary;
