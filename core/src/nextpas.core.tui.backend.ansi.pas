@@ -208,7 +208,8 @@ begin
   LLen := Integer(FOut.Len);
   if LLen = 0 then Exit(True);
   Result := platform_console_write(FFd, Pointer(FOut.AsView.Data), LLen) = LLen;
-  FOut.Clear;
+  if Result then
+    FOut.Clear;
 end;
 
 procedure TAnsiBackend.AppendRawBytes(const AData; ALen: Integer);

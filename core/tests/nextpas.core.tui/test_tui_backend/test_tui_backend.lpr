@@ -161,6 +161,28 @@ begin
   end;
 end;
 
+procedure TestAnsiBackendFlushFailureRetainsPendingOutput;
+var
+  LBE: TAnsiBackend;
+  LBefore: AnsiString;
+  LBeforeLen: Integer;
+begin
+  LBE := TAnsiBackend.Create(-1);
+  try
+    LBE.HideCursor;
+    LBefore := PendingString(LBE);
+    LBeforeLen := LBE.PendingLength;
+    Check(LBeforeLen > 0, 'pending after hide cursor');
+    Check(not LBE.Flush, 'flush fails for invalid fd');
+    CheckEqual(Int64(LBeforeLen), Int64(LBE.PendingLength),
+      'pending length retained after failed flush');
+    CheckEqual(LBefore, PendingString(LBE),
+      'pending bytes retained after failed flush');
+  finally
+    LBE.Free;
+  end;
+end;
+
 procedure TestAnsiBackendDrawPatchesOutput;
 var
   LBE: TAnsiBackend;
@@ -338,6 +360,8 @@ begin
   T.Run('test backend wide glyph cursor parity',
     @TestTestBackendWideGlyphCursorParity);
   T.Run('ansi backend flush', @TestAnsiBackendFlush);
+  T.Run('ansi backend flush failure retains pending output',
+    @TestAnsiBackendFlushFailureRetainsPendingOutput);
   T.Run('ansi backend draw patches output', @TestAnsiBackendDrawPatchesOutput);
   T.Run('ansi backend enter alternate click tracking',
     @TestAnsiBackendEnterAlternateClickTracking);
