@@ -880,6 +880,10 @@ REQUIRED_SCALAR_MIN_MAX_DOC_TRUTH = (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
         "`Min` and `Max` propagate NaN; mixed signed-zero ties return negative zero for `Min` and positive zero for `Max`, while same-sign zero ties preserve that sign.",
     ),
+    (
+        "docs/math/API.md",
+        "`Min` and `Max` order infinities after NaN handling: negative infinity is less than finite values and positive infinity, positive infinity is greater than finite values and negative infinity, and finite values keep normal numeric ordering.",
+    ),
 )
 REQUIRED_SCALAR_FLOAT_COMPARE_DOC_TRUTH = (
     (
@@ -1843,6 +1847,10 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-min-max-same-negative-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Max Double same negative zero returns negative zero"),
     RequiredBehaviorTestMarker("scalar-min-max-single-same-positive-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Max Single same positive zero returns positive zero"),
     RequiredBehaviorTestMarker("scalar-min-max-single-same-negative-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Max Single same negative zero returns negative zero"),
+    RequiredBehaviorTestMarker("scalar-min-max-double-infinity-ordering", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Min Double negative infinity orders below positive infinity"),
+    RequiredBehaviorTestMarker("scalar-min-max-double-finite-infinity-ordering", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Max Double positive infinity orders above finite"),
+    RequiredBehaviorTestMarker("scalar-min-max-single-infinity-ordering", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Min Single negative infinity orders below positive infinity"),
+    RequiredBehaviorTestMarker("scalar-min-max-single-finite-infinity-ordering", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Max Single positive infinity orders above finite"),
     RequiredBehaviorTestMarker("scalar-float-compare-infinity", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "FloatEquals Double +Inf exact"),
     RequiredBehaviorTestMarker("scalar-float-compare-finite-vs-infinity", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "FloatEquals Double rejects finite versus +Inf with valid epsilon"),
     RequiredBehaviorTestMarker("scalar-float-compare-single-finite-vs-infinity", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "FloatEquals Single rejects finite versus +Inf with valid epsilon"),

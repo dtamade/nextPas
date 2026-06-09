@@ -490,6 +490,30 @@ begin
   Check(IsSinglePositiveZero(nextpas.core.math.scalar.Max(Single(0.0), Single(0.0))),
     'Max Single same positive zero returns positive zero');
 
+  Check(IsInfinite(nextpas.core.math.scalar.Min(MakeNegativeInfinity, MakePositiveInfinity)) and
+    (nextpas.core.math.scalar.Min(MakeNegativeInfinity, MakePositiveInfinity) < 0.0),
+    'Min Double negative infinity orders below positive infinity');
+  CheckNear(-42.0, nextpas.core.math.scalar.Min(-42.0, MakePositiveInfinity), 0.0,
+    'Min Double finite orders below positive infinity');
+  Check(IsInfinite(nextpas.core.math.scalar.Max(MakePositiveInfinity, -42.0)) and
+    (nextpas.core.math.scalar.Max(MakePositiveInfinity, -42.0) > 0.0),
+    'Max Double positive infinity orders above finite');
+  Check(IsInfinite(nextpas.core.math.scalar.Max(MakeNegativeInfinity, MakePositiveInfinity)) and
+    (nextpas.core.math.scalar.Max(MakeNegativeInfinity, MakePositiveInfinity) > 0.0),
+    'Max Double positive infinity orders above negative infinity');
+
+  Check(IsInfinite(nextpas.core.math.scalar.Min(MakeSingleNegativeInfinity, MakeSinglePositiveInfinity)) and
+    (nextpas.core.math.scalar.Min(MakeSingleNegativeInfinity, MakeSinglePositiveInfinity) < 0.0),
+    'Min Single negative infinity orders below positive infinity');
+  CheckNear(-42.0, nextpas.core.math.scalar.Min(Single(-42.0), MakeSinglePositiveInfinity), 0.0,
+    'Min Single finite orders below positive infinity');
+  Check(IsInfinite(nextpas.core.math.scalar.Max(MakeSinglePositiveInfinity, Single(-42.0))) and
+    (nextpas.core.math.scalar.Max(MakeSinglePositiveInfinity, Single(-42.0)) > 0.0),
+    'Max Single positive infinity orders above finite');
+  Check(IsInfinite(nextpas.core.math.scalar.Max(MakeSingleNegativeInfinity, MakeSinglePositiveInfinity)) and
+    (nextpas.core.math.scalar.Max(MakeSingleNegativeInfinity, MakeSinglePositiveInfinity) > 0.0),
+    'Max Single positive infinity orders above negative infinity');
+
   CheckNear(0.0, InverseLerp(5.0, 5.0, 99.0), 0.0,
     'InverseLerp Double equal bounds returns 0');
   CheckNear(0.0, InverseLerp(Single(5.0), Single(5.0), Single(-99.0)), 0.0,

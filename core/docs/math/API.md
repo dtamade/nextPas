@@ -126,6 +126,7 @@ Scalar helpers:
 `Lerp`, `InverseLerp`, and `SmoothStep` keep huge finite opposite-sign midpoint interpolation finite; `InverseLerp` returns 0 for equal bounds, and `SmoothStep` propagates NaN values before edge validation, requires finite edges with `EArgumentError`, and preserves the documented equal-edge step boundary behavior.
 
 `Min` and `Max` propagate NaN; mixed signed-zero ties return negative zero for `Min` and positive zero for `Max`, while same-sign zero ties preserve that sign.
+`Min` and `Max` order infinities after NaN handling: negative infinity is less than finite values and positive infinity, positive infinity is greater than finite values and negative infinity, and finite values keep normal numeric ordering.
 
 `FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.
 
