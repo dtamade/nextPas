@@ -283,6 +283,14 @@ begin
     'platform.memory secure zero must keep an optimization barrier seam');
   CheckTokenPresent(LPlatformMemory, 'noinline',
     'platform.memory secure zero barrier must not be inlined away');
+  CheckTokenPresent(LPlatformMemory, 'secure-zero-backend=fallback-fillchar-readwritebarrier',
+    'platform.memory must publish current secure-zero fallback truth');
+  CheckTokenPresent(LPlatformMemory, 'windows-native-secure-zero=deferred',
+    'platform.memory must publish Windows native secure-zero backend as deferred');
+  CheckTokenPresent(LPlatformMemory, 'posix-native-secure-zero=deferred',
+    'platform.memory must publish POSIX native secure-zero backend as deferred');
+  CheckTokenPresent(LPlatformMemory, 'windows-runtime-ready=false',
+    'platform.memory must not claim Windows runtime readiness for secure zero');
 
   CheckTokenAbsent(LPlatformMemory, 'rtlsecurezeromemory',
     'platform.memory must not own Windows secure-zero raw API names directly');

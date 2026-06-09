@@ -106,6 +106,12 @@ begin
   ReadWriteBarrier;
 end;
 
+{
+  secure-zero-backend=fallback-fillchar-readwritebarrier
+  windows-native-secure-zero=deferred
+  posix-native-secure-zero=deferred
+  windows-runtime-ready=false
+}
 procedure platform_secure_zero_memory(APtr: Pointer; ASize: SizeUInt);
 begin
   if (APtr = nil) or (ASize = 0) then
