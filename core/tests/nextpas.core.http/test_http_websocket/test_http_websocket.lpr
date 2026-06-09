@@ -645,6 +645,49 @@ begin
   end;
 end;
 
+procedure TestHandshakeAcceptsDuplicateConnectionUpgradeToken;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LWs: IWebSocket;
+  begin
+    try
+      LWs := UpgradeWebSocket(AReq, AW);
+      LWs.Close(1000, 'ok');
+    except
+      on E: EHttpError do
+      begin
+        AW.GetHeaders.SetHeader('content-length', '0');
+        AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
+      end;
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawAndRead(LPort,
+      'GET /ws HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Upgrade: websocket'#13#10 +
+      'Connection: keep-alive'#13#10 +
+      'Connection: Upgrade'#13#10 +
+      'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='#13#10 +
+      'Sec-WebSocket-Version: 13'#13#10 +
+      #13#10, 256);
+    Check(Pos('HTTP/1.1 101', LResp) > 0,
+      'duplicate Connection lines should expose upgrade token');
+    Check(Pos('Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=', LResp) > 0,
+      'duplicate Connection line upgrade should complete handshake');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 4: Text frame echo }
 procedure TestTextFrameEcho;
 var
@@ -2830,6 +2873,8 @@ begin
   T.Run('HandshakeInvalidKeyRejected', @TestHandshakeInvalidKeyRejected);
   T.Run('HandshakeConnectionUpgradeTokenRequired',
     @TestHandshakeConnectionUpgradeTokenRequired);
+  T.Run('HandshakeAcceptsDuplicateConnectionUpgradeToken',
+    @TestHandshakeAcceptsDuplicateConnectionUpgradeToken);
   T.Run('TextFrameEcho', @TestTextFrameEcho);
   T.Run('TextFrameEchoCoalescedFirstFrame', @TestTextFrameEchoWithCoalescedFirstFrame);
   T.Run('UpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket',

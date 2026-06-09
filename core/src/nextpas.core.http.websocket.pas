@@ -175,6 +175,17 @@ begin
   end;
 end;
 
+function HeaderValuesHaveToken(const AValues: TStringArray;
+  const AToken: string): Boolean;
+var
+  LI: SizeInt;
+begin
+  Result := False;
+  for LI := Low(AValues) to High(AValues) do
+    if HeaderHasToken(AValues[LI], AToken) then
+      Exit(True);
+end;
+
 function ComputeAcceptKey(const AKey: string): string;
 var
   LConcat: string;
@@ -283,15 +294,15 @@ end;
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter;
   const AOptions: TWebSocketOptions): IWebSocket;
 var
-  LUpgrade, LConnection, LKey, LVersion: string;
-  LKeyValues: TStringArray;
+  LUpgrade, LKey, LVersion: string;
+  LConnectionValues, LKeyValues: TStringArray;
   LAccept: string;
   LResp: string;
   LHijacker: IHttpHijacker;
   LConn: ITcpStream;
 begin
   LUpgrade := LowerTrim(AReq.Headers.Get('upgrade'));
-  LConnection := AReq.Headers.Get('connection');
+  LConnectionValues := AReq.Headers.GetAll('connection');
   LKeyValues := AReq.Headers.GetAll('sec-websocket-key');
   if Length(LKeyValues) = 1 then
     LKey := TrimOWS(LKeyValues[0])
@@ -301,7 +312,7 @@ begin
 
   if LUpgrade <> 'websocket' then
     raise EHttpError.Create('Missing or invalid Upgrade header');
-  if not HeaderHasToken(LConnection, 'upgrade') then
+  if not HeaderValuesHaveToken(LConnectionValues, 'upgrade') then
     raise EHttpError.Create('Missing or invalid Connection header');
   if Length(LKeyValues) > 1 then
     raise EHttpError.Create('Duplicate Sec-WebSocket-Key header');
