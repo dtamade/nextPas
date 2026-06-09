@@ -42,6 +42,7 @@ type
   TScenarioResult = record
     Completed: Int64;
     ValidationFailures: Int64;
+    DispatchFailures: Int64;
     ElapsedNs: UInt64;
     NsPerOp: Double;
     ReqPerSec: Double;
@@ -148,6 +149,23 @@ begin
   if (AWorkload = 'direct_root') or (AWorkload = 'direct_1k') then
     Exit('direct_handler');
   Result := 'router';
+end;
+
+function ValidateDispatchTruth(const AWorkload: string;
+  const AIterations: Int64): Boolean;
+var
+  LDispatchPath: string;
+begin
+  LDispatchPath := ExpectedDispatchPathForWorkload(AWorkload);
+  if LDispatchPath = 'direct_handler' then
+    Exit((GDirectHandlerHits = AIterations) and
+      (GRouterHandlerHits = 0) and (GMiddlewareHits = 0));
+  if LDispatchPath = 'middleware_router' then
+    Exit((GDirectHandlerHits = 0) and
+      (GRouterHandlerHits = AIterations) and
+      (GMiddlewareHits = AIterations));
+  Result := (GDirectHandlerHits = 0) and
+    (GRouterHandlerHits = AIterations) and (GMiddlewareHits = 0);
 end;
 
 function ShouldRunScenario(const AWorkload, AName: string): Boolean;
@@ -477,6 +495,7 @@ var
 begin
   Result.Completed := 0;
   Result.ValidationFailures := 0;
+  Result.DispatchFailures := 0;
   Result.ElapsedNs := 0;
   Result.NsPerOp := 0;
   Result.ReqPerSec := 0;
@@ -510,6 +529,8 @@ begin
   end;
   LEnd := platform_monotonic_ns;
   LConn.Close;
+  if not ValidateDispatchTruth(AWorkload, GIterations) then
+    Result.DispatchFailures := 1;
 
   LElapsedNs := LEnd - LStart;
   if GIterations > 0 then
@@ -531,6 +552,8 @@ begin
   WriteLn('backend=', BackendName);
   WriteLn('nextpas_h1_path=', ExpectedH1PathForWorkload(AWorkload));
   WriteLn('nextpas_dispatch_path=', ExpectedDispatchPathForWorkload(AWorkload));
+  WriteLn('dispatch_validation=observed_handler_hits');
+  WriteLn('dispatch_failures=', Result.DispatchFailures);
   WriteLn('observed_direct_handler_hits=', GDirectHandlerHits);
   WriteLn('observed_router_handler_hits=', GRouterHandlerHits);
   WriteLn('observed_middleware_hits=', GMiddlewareHits);
@@ -544,13 +567,16 @@ begin
 end;
 
 procedure RecordScenarioResult(const AResult: TScenarioResult;
-  var AScenariosRun: Int32; var AValidationFailure: Boolean);
+  var AScenariosRun: Int32; var AValidationFailure: Boolean;
+  var ADispatchFailure: Boolean);
 begin
   if AResult.ElapsedNs = 0 then
     Exit;
   Inc(AScenariosRun);
   if AResult.ValidationFailures <> 0 then
     AValidationFailure := True;
+  if AResult.DispatchFailures <> 0 then
+    ADispatchFailure := True;
 end;
 
 var
@@ -564,6 +590,7 @@ var
   LScenariosRun: Int32;
   LNoMatch: Boolean;
   LValidationFailure: Boolean;
+  LDispatchFailure: Boolean;
 
 begin
   GIterations := ConfiguredIterations;
@@ -572,6 +599,7 @@ begin
   LScenariosRun := 0;
   LNoMatch := False;
   LValidationFailure := False;
+  LDispatchFailure := False;
 
   WriteLn('=== nextpas.core.http.fullchain benchmark ===');
   WriteLn('operation=http.fullchain.keepalive');
@@ -593,32 +621,37 @@ begin
       'GET / HTTP/1.1'#13#10'Host: ' + DIRECT_HOST + #13#10'Content-Length: 0'#13#10#13#10;
     LResult := RunScenario('direct_root',
       'Direct root (GET /, no router)', LDirectPlaintextReq, 0, 13);
-    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure);
+    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure,
+      LDispatchFailure);
 
     { Scenario 1b: 1 KiB fixed response without router dispatch }
     LDirect1KReq :=
       'GET / HTTP/1.1'#13#10'Host: ' + DIRECT_1K_HOST + #13#10'Content-Length: 0'#13#10#13#10;
     LResult := RunScenario('direct_1k',
       'Direct 1KB (GET /, no router)', LDirect1KReq, 0, 1024);
-    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure);
+    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure,
+      LDispatchFailure);
 
     { Scenario 1c: Plaintext with no-op middleware }
     LResult := RunScenario('middleware_noop',
       'Middleware no-op (GET /)', 'GET / HTTP/1.1'#13#10'Host: ' +
       MIDDLEWARE_HOST + #13#10'Content-Length: 0'#13#10#13#10, 0, 13);
-    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure);
+    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure,
+      LDispatchFailure);
 
     { Scenario 1: Plaintext }
     LResult := RunScenario('plaintext', 'Plaintext (GET /)',
       'GET / HTTP/1.1'#13#10'Host: ' + ROUTER_HOST + #13#10'Content-Length: 0'#13#10#13#10,
       0, 13);
-    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure);
+    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure,
+      LDispatchFailure);
 
     { Scenario 2: JSON }
     LResult := RunScenario('json', 'JSON (GET /json)',
       'GET /json HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 0'#13#10#13#10,
       0, 27);
-    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure);
+    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure,
+      LDispatchFailure);
 
     { Scenario 3: Body echo 1KB }
     SetLength(LBody1K, 1024);
@@ -626,7 +659,8 @@ begin
     LEchoReq := 'POST /echo HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 1024'#13#10#13#10 + LBody1K;
     LResult := RunScenario('echo_1k', 'Echo 1KB (POST /echo)', LEchoReq,
       1024, 1024);
-    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure);
+    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure,
+      LDispatchFailure);
 
     { Scenario 4: Body sink 16KB }
     SetLength(LBody16K, 16 * 1024);
@@ -635,13 +669,15 @@ begin
       IntToStr(Int64(Length(LBody16K))) + #13#10#13#10 + LBody16K;
     LResult := RunScenario('sink_16k', 'Sink 16KB (POST /sink)', LSinkReq,
       SizeUInt(Length(LBody16K)), 0);
-    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure);
+    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure,
+      LDispatchFailure);
 
     { Scenario 5: Router with params }
     LResult := RunScenario('param_route', 'Param (GET /users/12345)',
       'GET /users/12345 HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 0'#13#10#13#10,
       0, SizeUInt(Length('user:12345')));
-    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure);
+    RecordScenarioResult(LResult, LScenariosRun, LValidationFailure,
+      LDispatchFailure);
 
     LNoMatch := LScenariosRun = 0;
     if LNoMatch then
@@ -658,6 +694,11 @@ begin
   begin
     WriteLn(StdErr, 'full-chain response validation failed');
     Halt(3);
+  end;
+  if LDispatchFailure then
+  begin
+    WriteLn(StdErr, 'full-chain dispatch validation failed');
+    Halt(4);
   end;
   WriteLn('Done.');
 end.

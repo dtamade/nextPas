@@ -732,6 +732,8 @@ markers:
 - `backend=<threaded|epoll>`
 - `nextpas_h1_path=<fast|llhttp>`
 - `nextpas_dispatch_path=<direct_handler|router|middleware_router>`
+- `dispatch_validation=observed_handler_hits`
+- `dispatch_failures`
 - `observed_direct_handler_hits=<count>`
 - `observed_router_handler_hits=<count>`
 - `observed_middleware_hits=<count>`
@@ -749,6 +751,8 @@ Invalid non-empty `NEXTPAS_BENCH_MAX_ITERS` values, including `0`, fail fast
 before any full-chain benchmark row is emitted.
 Any non-zero strict response validation failure is reported as
 `validation_failures=<count>` and exits non-zero after server teardown.
+Any dispatch marker mismatch is reported as `dispatch_failures=<count>` and
+also exits non-zero after server teardown.
 
 The narrowest full-chain workloads now split router dispatch and response size
 from the rest of the keep-alive server path:

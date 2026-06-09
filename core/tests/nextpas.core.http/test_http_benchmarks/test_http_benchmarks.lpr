@@ -663,6 +663,10 @@ begin
     'fullchain H1 path marker');
   CheckContains(AOutput, 'nextpas_dispatch_path=' + ADispatchPath,
     'fullchain dispatch path marker');
+  CheckContains(AOutput, 'dispatch_validation=observed_handler_hits',
+    'fullchain dispatch validation marker');
+  CheckContains(AOutput, 'dispatch_failures=0',
+    'fullchain dispatch-failures marker');
   CheckContains(AOutput, 'observed_direct_handler_hits=' + ADirectHandlerHits,
     'fullchain observed direct-handler hits marker');
   CheckContains(AOutput, 'observed_router_handler_hits=' + ARouterHandlerHits,
@@ -1632,6 +1636,14 @@ begin
     'bench_fullchain output should expose observed direct-handler hits');
   CheckContains(LSource, 'observed_router_handler_hits=',
     'bench_fullchain output should expose observed router-handler hits');
+  CheckContains(LSource, 'function ValidateDispatchTruth',
+    'bench_fullchain should isolate dispatch marker validation');
+  CheckContains(LSource, 'dispatch_validation=observed_handler_hits',
+    'bench_fullchain should disclose dispatch validation mode');
+  CheckContains(LSource, 'dispatch_failures=',
+    'bench_fullchain should expose dispatch validation failures');
+  CheckContains(LSource, 'ADispatchFailure := True;',
+    'bench_fullchain should retain dispatch-failure state after scenarios');
   CheckContains(LDispatchBody, 'AWorkload = ''direct_root''',
     'bench_fullchain dispatch mapper should mark direct_root');
   CheckContains(LDispatchBody, 'AWorkload = ''direct_1k''',
@@ -1700,6 +1712,12 @@ begin
     'bench_fullchain should reset observed middleware hits after warmup');
   CheckContains(LSource, 'observed_middleware_hits=',
     'bench_fullchain output should expose observed middleware hits');
+  CheckContains(LSource, 'function ValidateDispatchTruth',
+    'bench_fullchain should isolate dispatch marker validation');
+  CheckContains(LSource, 'dispatch_validation=observed_handler_hits',
+    'bench_fullchain should disclose dispatch validation mode');
+  CheckContains(LSource, 'dispatch_failures=',
+    'bench_fullchain should expose dispatch validation failures');
   CheckContains(LDispatchBody, 'AWorkload = ''middleware_noop''',
     'bench_fullchain dispatch mapper should mark middleware_noop');
   CheckContains(LDispatchBody, 'Exit(''middleware_router'')',
@@ -1893,6 +1911,10 @@ begin
     'BENCHMARKS fullchain stable markers should document strict response validation');
   CheckContains(LMarkersBlock, '`validation_failures`',
     'BENCHMARKS fullchain stable markers should document validation failures');
+  CheckContains(LMarkersBlock, '`dispatch_validation=observed_handler_hits`',
+    'BENCHMARKS fullchain stable markers should document dispatch validation');
+  CheckContains(LMarkersBlock, '`dispatch_failures`',
+    'BENCHMARKS fullchain stable markers should document dispatch failures');
   CheckContains(LMarkersBlock, '`bench_max_iters=<iterations>`',
     'BENCHMARKS fullchain stable markers should document max iterations');
   CheckContains(LMarkersBlock, '`bench_filter=<filter when set>`',
