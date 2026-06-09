@@ -57,6 +57,12 @@ uses
   SimdAlloc runtime truth matrix:
   - SIMD host runtime evidence is limited to the runner that actually executes the test.
   - Windows/POSIX native runtime truth requires platform/native runner evidence.
+
+  SimdAlloc cross-host runtime evidence truth:
+  - Linux host runtime evidence proves only the executing Linux runner.
+  - Wine smoke is compatibility smoke, not native Windows runtime truth.
+  - Windows/POSIX native-ready truth requires platform/native runner artifacts.
+  - SIMD consumes only the platform.memory public aligned allocation seam.
 }
 
 function GetDefaultAlignment: NativeUInt; forward;
