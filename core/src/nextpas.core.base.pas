@@ -317,6 +317,8 @@ end;
 
 class function TByteSpan.Create(const AData: PByte; const ALen: SizeUInt): TByteSpan;
 begin
+  if (AData = nil) and (ALen > 0) then
+    raise EArgumentNil.Create('TByteSpan.Create: data is nil');
   Result.Data := AData;
   Result.Len := ALen;
 end;
@@ -348,7 +350,7 @@ end;
 
 function TByteSpan.Slice(const AOffset, ALength: SizeUInt): TByteSpan;
 begin
-  if AOffset + ALength > Len then
+  if (AOffset > Len) or (ALength > Len - AOffset) then
     raise EOutOfRange.CreateFmt('TByteSpan.Slice: offset %d + length %d > span length %d',
       [AOffset, ALength, Len]);
   Result.Data := Data + AOffset;
@@ -400,6 +402,8 @@ begin
   Result := FNV_OFFSET_BASIS_32;
   if ALen = 0 then
     Exit;
+  if AData = nil then
+    raise EArgumentNil.Create('HashBytes: data is nil');
   for LI := 0 to ALen - 1 do
   begin
     Result := Result xor THashCode((AData + LI)^);

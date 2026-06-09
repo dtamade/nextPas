@@ -37,6 +37,17 @@ begin
   end;
 end;
 
+procedure ExpectOutOfRange(const AProc: TProc; const AMessage: string);
+begin
+  try
+    AProc();
+    Fail(AMessage);
+  except
+    on E: EOutOfRange do
+      ;
+  end;
+end;
+
 procedure ExpectInvariantViolation(const AProc: TProc; const AMessage: string);
 var
   LCaughtInvariant: Boolean;
@@ -183,6 +194,52 @@ begin
   Check(not CompareMem(@LA[0], @LB[0], 2), 'CompareMem should stay false for different buffers');
 end;
 
+procedure TestByteSpanNilAndBoundsContracts;
+var
+  LSpan: TByteSpan;
+  LEmpty: TByteSpan;
+  LOverflowSpan: TByteSpan;
+begin
+  LSpan := TByteSpan.Create(nil, 0);
+  Check(LSpan.IsEmpty, 'TByteSpan.Create(nil, 0) should stay empty');
+  Check(LSpan.Data = nil, 'empty span should keep nil data');
+
+  LEmpty := TByteSpan.Empty.Slice(0, 0);
+  Check(LEmpty.IsEmpty, 'empty span Slice(0, 0) should stay empty');
+
+  ExpectInvalidArgumentNil(
+    procedure
+    begin
+      TByteSpan.Create(nil, 1);
+    end,
+    'TByteSpan.Create(nil, >0) should raise EArgumentNil'
+  );
+
+  LOverflowSpan.Data := PByte(PtrUInt(1));
+  LOverflowSpan.Len := High(SizeUInt);
+  ExpectOutOfRange(
+    procedure
+    begin
+      LOverflowSpan.Slice(High(SizeUInt), 1);
+    end,
+    'TByteSpan.Slice should reject offset + length overflow'
+  );
+end;
+
+procedure TestHashBytesNilContracts;
+begin
+  CheckEqual(Int64(HashString('')), Int64(HashBytes(nil, 0)),
+    'HashBytes(nil, 0) should stay the empty hash');
+
+  ExpectInvalidArgumentNil(
+    procedure
+    begin
+      HashBytes(nil, 1);
+    end,
+    'HashBytes(nil, >0) should raise EArgumentNil'
+  );
+end;
+
 procedure TestNullableSurface;
 var
   LSome: TIntNullable;
@@ -267,6 +324,8 @@ begin
   T.Run('zeromem handles zero-size and nil', @TestZeroMemHandlesZeroSizeAndNil);
   T.Run('copymem handles zero-size and nil', @TestCopyMemHandlesZeroSizeAndNil);
   T.Run('comparemem semantics stay stable', @TestCompareMemSemanticsStayStable);
+  T.Run('bytespan nil and bounds contracts', @TestByteSpanNilAndBoundsContracts);
+  T.Run('hashbytes nil contracts', @TestHashBytesNilContracts);
   T.Run('nullable surface', @TestNullableSurface);
   T.Run('option surface', @TestOptionSurface);
   T.Run('result surface', @TestResultSurface);
