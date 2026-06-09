@@ -756,6 +756,20 @@ begin
     'Hypot Double huge finite inputs stay finite');
   Check(Hypot(Single(3.0e30), Single(4.0e30)) < MakeSinglePositiveInfinity,
     'Hypot Single huge finite inputs stay finite');
+  Check(IsInfinite(Hypot(MakeMaxFiniteDouble, MakeMaxFiniteDouble)) and
+    (Hypot(MakeMaxFiniteDouble, MakeMaxFiniteDouble) > 0.0),
+    'Hypot Double max finite pair saturates to positive infinity');
+  Check(IsInfinite(Hypot(MakeMaxFiniteSingle, MakeMaxFiniteSingle)) and
+    (Hypot(MakeMaxFiniteSingle, MakeMaxFiniteSingle) > Single(0.0)),
+    'Hypot Single max finite pair saturates to positive infinity');
+  Check(IsDoublePositiveZero(Hypot(MakeDoubleNegativeZero, 0.0)),
+    'Hypot Double signed-zero pair returns positive zero');
+  Check(IsDoublePositiveZero(Hypot(0.0, MakeDoubleNegativeZero)),
+    'Hypot Double positive and negative zero pair returns positive zero');
+  Check(IsSinglePositiveZero(Hypot(MakeSingleNegativeZero, Single(0.0))),
+    'Hypot Single signed-zero pair returns positive zero');
+  Check(IsSinglePositiveZero(Hypot(Single(0.0), MakeSingleNegativeZero)),
+    'Hypot Single positive and negative zero pair returns positive zero');
 
   Check(IsDoubleNegativeZero(Fmod(MakeDoubleNegativeZero, 3.0)),
     'Fmod Double keeps negative zero dividend');

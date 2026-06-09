@@ -1003,6 +1003,7 @@ end;
 function Hypot(const AX, AY: Single): Single;
 var
   LX, LY, LMax, LMin, LRatio: Single;
+  LFactor: Single;
 begin
   LX := Abs(AX);
   LY := Abs(AY);
@@ -1017,12 +1018,16 @@ begin
     Exit(0.0);
   LMin := Min(LX, LY);
   LRatio := LMin / LMax;
-  Result := LMax * Single(System.Sqrt(1.0 + LRatio * LRatio));
+  LFactor := Single(System.Sqrt(1.0 + LRatio * LRatio));
+  if LMax > MAX_SINGLE_VALUE / LFactor then
+    Exit(SingleSignedInfinity(False));
+  Result := LMax * LFactor;
 end;
 
 function Hypot(const AX, AY: Double): Double;
 var
   LX, LY, LMax, LMin, LRatio: Double;
+  LFactor: Double;
 begin
   LX := Abs(AX);
   LY := Abs(AY);
@@ -1037,7 +1042,10 @@ begin
     Exit(0.0);
   LMin := Min(LX, LY);
   LRatio := LMin / LMax;
-  Result := LMax * System.Sqrt(1.0 + LRatio * LRatio);
+  LFactor := System.Sqrt(1.0 + LRatio * LRatio);
+  if LMax > MAX_DOUBLE_VALUE / LFactor then
+    Exit(DoubleSignedInfinity(False));
+  Result := LMax * LFactor;
 end;
 
 function Fmod(const AX, AY: Single): Single;
