@@ -6658,6 +6658,89 @@ begin
     'custom header name CRLF injection');
 end;
 
+procedure CheckClientRejectsRequestTargetBeforeWireWrite(const APath,
+  ARawQuery, AInjectedMarker, AContext: string);
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LUrl: TUrl;
+  LRaised: Boolean;
+  LRejectedTarget: Boolean;
+begin
+  GRawRequest1 := '';
+  GRawRequest2 := '';
+  GRawResponse1 := 'HTTP/1.1 200 OK'#13#10 +
+                   'Content-Length: 2'#13#10 +
+                   #13#10 +
+                   'ok';
+  GRawResponse2 := '';
+  GRawAcceptLimit := 1;
+  GRawAcceptCount := 0;
+  GRawListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRawListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @RawResponseThread, nil);
+  LResp := nil;
+
+  try
+    LUrl := Default(TUrl);
+    LUrl.Scheme := 'http';
+    LUrl.Host := '127.0.0.1';
+    LUrl.Port := LPort;
+    LUrl.Path := APath;
+    LUrl.RawQuery := ARawQuery;
+
+    LClient := NewHttpClient;
+    LReq := NewRequest(hmGet, LUrl);
+
+    LRaised := False;
+    LRejectedTarget := False;
+    try
+      LResp := LClient.Send(LReq);
+    except
+      on E: EHttpError do
+      begin
+        LRaised := True;
+        LRejectedTarget := Pos('request target', LowerCase(E.Message)) > 0;
+      end;
+    end;
+
+    Check(LRaised, AContext + ': invalid request target raises EHttpError');
+    Check(LRejectedTarget,
+      AContext + ': invalid request target reports target failure');
+    Check(Pos(AInjectedMarker, GRawRequest1) = 0,
+      AContext + ': injected request target is not written to the wire');
+    if LResp <> nil then
+      HttpReleaseResponseBody(LResp);
+  finally
+    GRawListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRawListener := nil;
+    GRawRequest1 := '';
+    GRawRequest2 := '';
+    GRawResponse1 := '';
+    GRawResponse2 := '';
+    GRawAcceptLimit := 0;
+    GRawAcceptCount := 0;
+  end;
+end;
+
+procedure TestClientRejectsRequestTargetInjectionBeforeWireWrite;
+begin
+  CheckClientRejectsRequestTargetBeforeWireWrite(
+    '/safe'#13#10'x-injected: yes', '', 'x-injected: yes',
+    'request path CRLF injection');
+  CheckClientRejectsRequestTargetBeforeWireWrite(
+    '/safe', 'ok=1'#13#10'x-injected: yes', 'x-injected: yes',
+    'request query CRLF injection');
+  CheckClientRejectsRequestTargetBeforeWireWrite(
+    '/has space', '', '/has space',
+    'request path space injection');
+end;
+
 function PoolAcceptThread(AArg: Pointer): Pointer; cdecl;
 var
   LConn: ITcpStream;
@@ -7081,6 +7164,8 @@ begin
     @TestClientRejectsCustomHeaderValueInjectionBeforeWireWrite);
   T.Run('Client rejects custom header name injection before wire write',
     @TestClientRejectsCustomHeaderNameInjectionBeforeWireWrite);
+  T.Run('Client rejects request target injection before wire write',
+    @TestClientRejectsRequestTargetInjectionBeforeWireWrite);
   T.Run('Connection reuse', @TestConnectionReuse);
   T.Summary;
 end.

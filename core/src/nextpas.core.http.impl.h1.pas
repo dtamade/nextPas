@@ -335,6 +335,15 @@ begin
       raise EHttpError.Create('invalid header value character');
 end;
 
+procedure ValidateWireRequestTarget(const ATarget: string);
+var
+  LI: SizeInt;
+begin
+  for LI := 1 to Length(ATarget) do
+    if (ATarget[LI] <= #32) or (ATarget[LI] = #127) then
+      raise EHttpError.Create('invalid request target character');
+end;
+
 procedure ValidateWireHeaderName(const AName: string);
 var
   LI: SizeInt;
@@ -2076,17 +2085,18 @@ begin
   if not (AReq.Version in [hvHttp10, hvHttp11]) then
     raise EHttpError.Create('h1 transport only supports HTTP/1.x requests');
 
-  LBuf := CreateBufferedWriter(AWriter, 4096);
-
-  LStr := HttpMethodToStr(AReq.Method);
-  LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
-  LBuf.Write(PAnsiChar(' ')^, 1);
-
   LPath := AReq.Path;
   if LPath = '' then
     LPath := '/';
   if AReq.RawQuery <> '' then
     LPath := LPath + '?' + AReq.RawQuery;
+  ValidateWireRequestTarget(LPath);
+
+  LBuf := CreateBufferedWriter(AWriter, 4096);
+
+  LStr := HttpMethodToStr(AReq.Method);
+  LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
+  LBuf.Write(PAnsiChar(' ')^, 1);
   LBuf.Write(LPath[1], SizeUInt(Length(LPath)));
 
   LStr := ' ' + HttpVersionToStr(AReq.Version);
