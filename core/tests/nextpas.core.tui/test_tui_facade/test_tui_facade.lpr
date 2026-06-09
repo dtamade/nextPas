@@ -11,6 +11,11 @@ type
     procedure Render(AApp: TApp; var AFrame: TFrame);
   end;
 
+  TFullFacadeScreen = class(TScreen)
+  public
+    procedure Render(const AArea: TRect; ABuffer: TBuffer); override;
+  end;
+
 var
   T: TTestRunner;
 
@@ -18,6 +23,11 @@ procedure TFullFacadeRenderHost.Render(AApp: TApp; var AFrame: TFrame);
 begin
   AFrame.Buffer.SetString(0, 0, 'x', StyleDefault);
   AApp.RequestAnimationFrame;
+end;
+
+procedure TFullFacadeScreen.Render(const AArea: TRect; ABuffer: TBuffer);
+begin
+  ABuffer.SetString(AArea.X, AArea.Y, 'screen', StyleDefault);
 end;
 
 procedure TestCoreFacadeTypes;
@@ -205,6 +215,8 @@ end;
 procedure TestFullFacadeCoversExtAndExperimentalSurface;
 var
   LCompatApp: TTuiApp;
+  LCompatScreen: TTuiScreen;
+  LCompatStack: TTuiScreenStack;
   LCompatTheme: TTheme;
   LCompatChatTheme: TChatTheme;
   LCompatPanel: IPanel;
@@ -219,7 +231,12 @@ var
   LCompatClipboardMethod: TClipboardMethod;
 begin
   LCompatApp := TTuiApp.Create;
+  LCompatStack := TTuiScreenStack.Create;
   try
+    LCompatScreen := TFullFacadeScreen.Create;
+    LCompatStack.Push(LCompatScreen);
+    Check(LCompatStack.Top = LCompatScreen, 'full facade exposes app-first screen aliases');
+
     LCompatTheme := TTheme.Dark;
     LCompatChatTheme := ThemeDefaultDark;
     LCompatEdges := PanelEdgesOuter + PanelEdgesInner;
@@ -236,6 +253,7 @@ begin
 
     Check(LCompatApp <> nil, 'full facade exposes TTuiApp compatibility alias');
     Check(SizeOf(TTuiFrame) > 0, 'full facade exposes TTuiFrame compatibility alias');
+    Check(SizeOf(TScreenStack) > 0, 'full facade exposes TScreenStack alias');
     Check(ColorIsSet(LCompatTheme.Primary.Fg), 'full facade exposes stable TTheme record');
     Check(ColorIsSet(LCompatChatTheme.FgPrimary), 'full facade exposes stable chat theme preset');
     Check(LCompatEdge = peInnerV, 'full facade exposes panel edge constants');
@@ -251,6 +269,7 @@ begin
     LCompatProtocol := DetectImageProtocol;
     Check(Ord(LCompatProtocol) >= Ord(ipAuto), 'full facade exposes experimental image helper');
   finally
+    LCompatStack.Free;
     LCompatApp.Free;
   end;
 end;

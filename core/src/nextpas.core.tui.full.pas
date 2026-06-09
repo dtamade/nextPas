@@ -177,6 +177,11 @@ type
   { App }
   TTuiApp = nextpas.core.tui.app.TApp;
   TApp = nextpas.core.tui.app.TApp;
+  TTuiScreen = nextpas.core.tui.app.screen.TScreen;
+  TScreen = nextpas.core.tui.app.screen.TScreen;
+  TTuiScreenStack = nextpas.core.tui.app.screen.TScreenStack;
+  TScreenStack = nextpas.core.tui.app.screen.TScreenStack;
+  EFtuiScreenError = nextpas.core.tui.app.screen.EFtuiScreenError;
   TTheme = nextpas.core.tui.theme.TTheme;
 
   { Widget 接口 }

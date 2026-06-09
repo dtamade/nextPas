@@ -70,8 +70,33 @@ begin
   CheckTokenAbsent(LSource, 'PollEvent', 'demo_layout');
 end;
 
+procedure TestWidgetsDemoTeachesAppFirstFullPath;
+var
+  LSource: string;
+begin
+  LSource := ReadLowerSourceFile(ResolvePath(
+    '../../../examples/nextpas.core.tui/demo_widgets/demo_widgets.lpr',
+    'core/examples/nextpas.core.tui/demo_widgets/demo_widgets.lpr'));
+
+  CheckTokenPresent(LSource, 'nextpas.core.tui.full', 'demo_widgets');
+  CheckTokenPresent(LSource, 'class(TScreen)', 'demo_widgets');
+  CheckTokenPresent(LSource, 'TApp', 'demo_widgets');
+  CheckTokenPresent(LSource, 'App.Screens.Push', 'demo_widgets');
+  CheckTokenPresent(LSource, 'procedure Render', 'demo_widgets');
+  CheckTokenPresent(LSource, 'procedure HandleEvent', 'demo_widgets');
+  CheckTokenPresent(LSource, 'TGauge', 'demo_widgets');
+
+  CheckTokenAbsent(LSource, 'TTerminal', 'demo_widgets');
+  CheckTokenAbsent(LSource, 'EnterTui', 'demo_widgets');
+  CheckTokenAbsent(LSource, 'BeginFrame', 'demo_widgets');
+  CheckTokenAbsent(LSource, 'EndFrame', 'demo_widgets');
+  CheckTokenAbsent(LSource, 'PollEvent', 'demo_widgets');
+  CheckTokenAbsent(LSource, 'repeat', 'demo_widgets');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.tui.examples');
   T.Run('layout demo teaches app-first ext path', @TestLayoutDemoTeachesAppFirstExtPath);
+  T.Run('widgets demo teaches app-first full path', @TestWidgetsDemoTeachesAppFirstFullPath);
   T.Summary;
 end.
