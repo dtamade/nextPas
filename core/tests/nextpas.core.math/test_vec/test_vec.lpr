@@ -1185,6 +1185,86 @@ begin
   end;
 end;
 
+procedure TestVectorRawArithmeticSpecialValueContracts;
+var
+  V2f: TVec2f;
+  V2d: TVec2d;
+  V3d: TVec3d;
+  V4f: TVec4f;
+  V4d: TVec4d;
+  SavedMask: TFPUExceptionMask;
+begin
+  SavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow,
+    exUnderflow, exPrecision]);
+  try
+    V2f := TVec2f.Create(SingleInfinity, 1.0) +
+      TVec2f.Create(SingleNegativeInfinity, 2.0);
+    CheckSingleNaNValue(V2f.X, 'TVec2f add +Inf plus -Inf returns NaN');
+    CheckNear(3.0, V2f.Y, 0.0, 'TVec2f add finite lane remains raw');
+
+    V2f := TVec2f.Create(0.0, -2.0) * SingleInfinity;
+    CheckSingleNaNValue(V2f.X, 'TVec2f scalar multiply zero times infinity returns NaN');
+    CheckSingleNegativeInfinity(V2f.Y,
+      'TVec2f scalar multiply negative finite by +Inf returns -Inf');
+
+    V2f := SingleInfinity * TVec2f.Create(0.0, -2.0);
+    CheckSingleNaNValue(V2f.X, 'TVec2f left scalar multiply infinity times zero returns NaN');
+    CheckSingleNegativeInfinity(V2f.Y,
+      'TVec2f left scalar multiply +Inf by negative finite returns -Inf');
+
+    V2f := TVec2f.Create(SingleNegativeZero, 0.0) * -2.0;
+    CheckSinglePositiveZero(V2f.X,
+      'TVec2f scalar multiply negative zero by negative finite returns +0');
+    CheckSingleNegativeZero(V2f.Y,
+      'TVec2f scalar multiply positive zero by negative finite returns -0');
+
+    V2d := TVec2d.Create(0.0, -2.0) * DoubleInfinity;
+    CheckDoubleNaNValue(V2d.X, 'TVec2d scalar multiply zero times infinity returns NaN');
+    CheckDoubleNegativeInfinity(V2d.Y,
+      'TVec2d scalar multiply negative finite by +Inf returns -Inf');
+
+    V2d := DoubleInfinity * TVec2d.Create(0.0, -2.0);
+    CheckDoubleNaNValue(V2d.X, 'TVec2d left scalar multiply infinity times zero returns NaN');
+    CheckDoubleNegativeInfinity(V2d.Y,
+      'TVec2d left scalar multiply +Inf by negative finite returns -Inf');
+
+    V2d := -2.0 * TVec2d.Create(DoubleNegativeZero, 0.0);
+    CheckDoublePositiveZero(V2d.X,
+      'TVec2d left scalar multiply negative finite by negative zero returns +0');
+    CheckDoubleNegativeZero(V2d.Y,
+      'TVec2d left scalar multiply negative finite by positive zero returns -0');
+
+    V3d := TVec3d.MulComponents(
+      TVec3d.Create(0.0, DoubleNegativeZero, 2.0),
+      TVec3d.Create(DoubleInfinity, 3.0, DoubleNegativeZero));
+    CheckDoubleNaNValue(V3d.X, 'TVec3d component multiply zero times infinity returns NaN');
+    CheckDoubleNegativeZero(V3d.Y,
+      'TVec3d component multiply negative zero by positive finite keeps -0');
+    CheckDoubleNegativeZero(V3d.Z,
+      'TVec3d component multiply positive finite by negative zero keeps -0');
+
+    V4f := -TVec4f.Create(SingleNegativeZero, 0.0, SingleInfinity,
+      SingleNegativeInfinity);
+    CheckSinglePositiveZero(V4f.X, 'TVec4f unary minus negative zero returns +0');
+    CheckSingleNegativeZero(V4f.Y, 'TVec4f unary minus positive zero returns -0');
+    CheckSingleNegativeInfinity(V4f.Z, 'TVec4f unary minus +Inf returns -Inf');
+    CheckSinglePositiveInfinity(V4f.W, 'TVec4f unary minus -Inf returns +Inf');
+
+    V4d := TVec4d.Create(DoubleNegativeZero, 0.0, DoubleInfinity,
+      DoubleNegativeInfinity) - TVec4d.Create(0.0, DoubleNegativeZero,
+      DoubleInfinity, DoubleNegativeInfinity);
+    CheckDoubleNegativeZero(V4d.X,
+      'TVec4d subtract negative zero minus positive zero keeps -0');
+    CheckDoublePositiveZero(V4d.Y,
+      'TVec4d subtract positive zero minus negative zero keeps +0');
+    CheckDoubleNaNValue(V4d.Z, 'TVec4d subtract +Inf minus +Inf returns NaN');
+    CheckDoubleNaNValue(V4d.W, 'TVec4d subtract -Inf minus -Inf returns NaN');
+  finally
+    SetExceptionMask(SavedMask);
+  end;
+end;
+
 procedure TestVectorSignedZeroContracts;
 var
   N2f: TVec2f;
@@ -1453,6 +1533,8 @@ begin
     @TestVectorDataAliasesPreserveSignedZeroBits);
   T.Run('vector measure non-finite contracts',
     @TestVectorMeasureNonFiniteContracts);
+  T.Run('vector raw arithmetic special-value contracts',
+    @TestVectorRawArithmeticSpecialValueContracts);
   T.Run('vector signed-zero contracts',
     @TestVectorSignedZeroContracts);
   T.Run('vector min subnormal length and normalize contracts',

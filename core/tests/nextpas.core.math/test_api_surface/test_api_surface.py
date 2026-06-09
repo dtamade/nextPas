@@ -1977,6 +1977,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("vec-measure-lengthsqr-inf", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec4d LengthSqr infinite component returns +Inf"),
     RequiredBehaviorTestMarker("vec-measure-dot-zero-times-inf", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec2f Dot zero times infinity returns NaN"),
     RequiredBehaviorTestMarker("vec-measure-cross-raw-non-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec3d Cross raw non-finite fallback returns NaN component"),
+    RequiredBehaviorTestMarker("vec-raw-arithmetic-special-values", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector raw arithmetic special-value contracts'"),
     RequiredBehaviorTestMarker("vec-signed-zero", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector signed-zero contracts'"),
     RequiredBehaviorTestMarker("vec-signed-zero-normalize", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec2f negative-zero Normalize returns positive zero"),
     RequiredBehaviorTestMarker("vec-normalize-signed-zero-vec4d", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec4d negative-zero Normalize returns positive zero W"),
