@@ -451,7 +451,20 @@ begin
       (M4d.Data[0, 0] < -1.0e300) then
       Halt(1);
   end;
-  Check(True, 'facade root forwarder compile surface');
+  Check(nextpas.core.math.FloatEquals(nextpas.core.math.Clamp(2.0, 0.0, 3.0),
+    nextpas.core.math.Lerp(0.0, 4.0, 0.5), 0.0),
+    'facade root forwarder compile surface touches scalar family');
+  Check(nextpas.core.math.FloatEquals(nextpas.core.math.Sin(nextpas.core.math.HALF_PI),
+    nextpas.core.math.Sqrt(1.0), 0.000001),
+    'facade root forwarder compile surface touches trig family');
+  Check(nextpas.core.math.FloatEquals(
+    (nextpas.core.math.Translate(1.0, 0.0, 0.0) *
+      TVec4f.Create(1.0, 0.0, 0.0, 1.0)).X,
+    2.0, 0.000001),
+    'facade root forwarder compile surface touches transform family');
+  Check(nextpas.core.math.FloatEquals(nextpas.core.math.EaseInQuad(0.5),
+    0.25, 0.000001),
+    'facade root forwarder compile surface touches easing family');
 end;
 
 procedure TestFacadeRootTrigDeclarationParityCompileSurface;
