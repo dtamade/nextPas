@@ -146,9 +146,10 @@
     `NewResponse(Status, Headers, BodyBytes)` public helper，并经
     `nextpas.core.http` facade 转发。helper 会复制 fixed body、发布
     `content-length`，拒绝 caller-supplied `transfer-encoding` 与冲突
-    `content-length`；`NewResponse(Status, Headers, nil)` 保留 nil-body
-    compatibility，不发布 `content-length`。`test_http_message` 锁住 helper
-    contract 与 facade 可见性。
+    `content-length`，并在 `204` / `304` 这类 no-body status 收到非空 fixed body
+    时先抛 `EHttpError`、不改写 caller headers；`NewResponse(Status, Headers,
+    nil)` 保留 nil-body compatibility，不发布 `content-length`。
+    `test_http_message` 锁住 helper contract 与 facade 可见性。
   - 继续收紧：`THttpRequest.Create` 与 `CreateFromRequestTarget` 现在也会把 nil
     headers 规范化为空 `IHttpHeaders`。public helper 仍是推荐入口，但直接使用
     concrete request class 的内部/测试/高级调用方不会再把 nil headers 传播到

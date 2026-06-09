@@ -251,6 +251,13 @@ begin
     (AStatus = HTTP_STATUS_NOT_MODIFIED);
 end;
 
+procedure ValidateFixedBodyResponseStatus(const AStatus: THttpStatus;
+  const ABodyLength: Int64);
+begin
+  if (ABodyLength > 0) and ResponseStatusMustNotHaveBody(AStatus) then
+    raise EHttpError.Create('HTTP response status must not include a body');
+end;
+
 procedure RequireResponseWriter(const AW: IHttpResponseWriter);
 begin
   if AW = nil then
@@ -693,6 +700,7 @@ var
   LHeaders: IHttpHeaders;
 begin
   LHeaders := HeadersOrNew(AHeaders);
+  ValidateFixedBodyResponseStatus(AStatus, Int64(Length(ABodyText)));
   ValidateFixedBodyResponseHeaders(LHeaders, Int64(Length(ABodyText)));
   LHeaders.SetHeader('content-length', IntToStr(Int64(Length(ABodyText))));
   Result := THttpResponse.Create(AStatus, LHeaders, StringBodyReader(ABodyText));
@@ -704,6 +712,7 @@ var
   LHeaders: IHttpHeaders;
 begin
   LHeaders := HeadersOrNew(AHeaders);
+  ValidateFixedBodyResponseStatus(AStatus, Int64(Length(ABodyBytes)));
   ValidateFixedBodyResponseHeaders(LHeaders, Int64(Length(ABodyBytes)));
   LHeaders.SetHeader('content-length', IntToStr(Int64(Length(ABodyBytes))));
   Result := THttpResponse.Create(AStatus, LHeaders, BytesBodyReader(ABodyBytes));

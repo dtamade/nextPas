@@ -976,6 +976,57 @@ begin
     'response fixed-body helper rejects transfer-encoding');
 end;
 
+procedure TestNewResponseRejectsNoBodyStatusStringBody;
+var
+  LHeaders: IHttpHeaders;
+  LRaised: Boolean;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('x-client', 'no-body-string');
+
+  LRaised := False;
+  try
+    NewResponse(HTTP_STATUS_NO_CONTENT, LHeaders, 'payload');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+
+  Check(LRaised,
+    'response string helper rejects non-empty body for 204');
+  CheckEqual('', LHeaders.Get('content-length'),
+    'response string helper does not publish content-length after 204 rejection');
+  CheckEqual('no-body-string', LHeaders.Get('x-client'),
+    'response string helper preserves caller headers after 204 rejection');
+end;
+
+procedure TestNewResponseRejectsNoBodyStatusBytesBody;
+var
+  LHeaders: IHttpHeaders;
+  LBody: TBytes;
+  LRaised: Boolean;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('x-client', 'no-body-bytes');
+  SetLength(LBody, 1);
+  LBody[0] := Ord('x');
+
+  LRaised := False;
+  try
+    NewResponse(HTTP_STATUS_NOT_MODIFIED, LHeaders, LBody);
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+
+  Check(LRaised,
+    'response bytes helper rejects non-empty body for 304');
+  CheckEqual('', LHeaders.Get('content-length'),
+    'response bytes helper does not publish content-length after 304 rejection');
+  CheckEqual('no-body-bytes', LHeaders.Get('x-client'),
+    'response bytes helper preserves caller headers after 304 rejection');
+end;
+
 procedure TestRequestVersionDefaultsHttp11;
 var
   LReq: IHttpRequest;
@@ -1198,6 +1249,10 @@ begin
     @TestNewResponseRejectsConflictingContentLengthHeader);
   T.Run('NewResponse rejects transfer-encoding with fixed body',
     @TestNewResponseRejectsTransferEncodingWithFixedBody);
+  T.Run('NewResponse rejects no-body status with non-empty string body',
+    @TestNewResponseRejectsNoBodyStatusStringBody);
+  T.Run('NewResponse rejects no-body status with non-empty bytes body',
+    @TestNewResponseRejectsNoBodyStatusBytesBody);
   T.Run('Request version defaults to HTTP/1.1', @TestRequestVersionDefaultsHttp11);
   T.Run('Multiple path params', @TestMultiplePathParams);
   T.Run('Request content-length stored', @TestRequestContentLengthStored);
