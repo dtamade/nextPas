@@ -386,6 +386,7 @@ begin
   if not IsRedirectSameOrigin(AInitialUrl, ARedirectUrl) then
   begin
     Result.Remove('authorization');
+    Result.Remove('proxy-authorization');
     Result.Remove('www-authenticate');
     Result.Remove('cookie');
     Result.Remove('cookie2');

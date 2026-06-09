@@ -89,6 +89,7 @@ type
     FSeenHostHeader: string;
     FSeenTraceHeader: string;
     FSeenAuthorizationHeader: string;
+    FSeenProxyAuthorizationHeader: string;
     FSeenWwwAuthenticateHeader: string;
     FSeenCookieHeader: string;
     FSeenCookie2Header: string;
@@ -113,6 +114,8 @@ type
     property SeenHostHeader: string read FSeenHostHeader;
     property SeenTraceHeader: string read FSeenTraceHeader;
     property SeenAuthorizationHeader: string read FSeenAuthorizationHeader;
+    property SeenProxyAuthorizationHeader: string
+      read FSeenProxyAuthorizationHeader;
     property SeenWwwAuthenticateHeader: string read FSeenWwwAuthenticateHeader;
     property SeenCookieHeader: string read FSeenCookieHeader;
     property SeenCookie2Header: string read FSeenCookie2Header;
@@ -1314,6 +1317,7 @@ begin
   FSeenHostHeader := AReq.Headers.Get('host');
   FSeenTraceHeader := AReq.Headers.Get('x-trace');
   FSeenAuthorizationHeader := AReq.Headers.Get('authorization');
+  FSeenProxyAuthorizationHeader := AReq.Headers.Get('proxy-authorization');
   FSeenWwwAuthenticateHeader := AReq.Headers.Get('www-authenticate');
   FSeenCookieHeader := AReq.Headers.Get('cookie');
   FSeenCookie2Header := AReq.Headers.Get('cookie2');
@@ -5086,6 +5090,7 @@ begin
   LHeaders := NewHeaders;
   LHeaders.SetHeader('x-trace', 'trace-1');
   LHeaders.SetHeader('authorization', 'Bearer same-host');
+  LHeaders.SetHeader('proxy-authorization', 'Basic same-proxy');
   LHeaders.SetHeader('www-authenticate', 'Basic realm="api"');
   LHeaders.SetHeader('cookie', 'session=abc');
   LHeaders.SetHeader('cookie2', 'legacy=1');
@@ -5099,6 +5104,8 @@ begin
     'same-authority redirect preserves ordinary header');
   CheckEqual('Bearer same-host', LTransportObj.SeenAuthorizationHeader,
     'same-authority redirect preserves authorization header');
+  CheckEqual('Basic same-proxy', LTransportObj.SeenProxyAuthorizationHeader,
+    'same-authority redirect preserves proxy-authorization header');
   CheckEqual('Basic realm="api"', LTransportObj.SeenWwwAuthenticateHeader,
     'same-authority redirect preserves www-authenticate header');
   CheckEqual('session=abc', LTransportObj.SeenCookieHeader,
@@ -5124,6 +5131,7 @@ begin
   LHeaders := NewHeaders;
   LHeaders.SetHeader('x-trace', 'trace-2');
   LHeaders.SetHeader('authorization', 'Bearer cross-host');
+  LHeaders.SetHeader('proxy-authorization', 'Basic cross-proxy');
   LHeaders.SetHeader('www-authenticate', 'Basic realm="api"');
   LHeaders.SetHeader('cookie', 'session=def');
   LHeaders.SetHeader('cookie2', 'legacy=2');
@@ -5139,6 +5147,8 @@ begin
     'cross-authority redirect preserves ordinary header');
   CheckEqual('', LTransportObj.SeenAuthorizationHeader,
     'cross-authority redirect strips authorization header');
+  CheckEqual('', LTransportObj.SeenProxyAuthorizationHeader,
+    'cross-authority redirect strips proxy-authorization header');
   CheckEqual('', LTransportObj.SeenWwwAuthenticateHeader,
     'cross-authority redirect strips www-authenticate header');
   CheckEqual('', LTransportObj.SeenCookieHeader,
@@ -5164,6 +5174,7 @@ begin
   LHeaders := NewHeaders;
   LHeaders.SetHeader('x-trace', 'trace-scheme');
   LHeaders.SetHeader('authorization', 'Bearer scheme-change');
+  LHeaders.SetHeader('proxy-authorization', 'Basic scheme-proxy');
   LHeaders.SetHeader('www-authenticate', 'Basic realm="api"');
   LHeaders.SetHeader('cookie', 'session=scheme');
   LHeaders.SetHeader('cookie2', 'legacy=scheme');
@@ -5181,6 +5192,8 @@ begin
     'scheme-change redirect preserves ordinary header');
   CheckEqual('', LTransportObj.SeenAuthorizationHeader,
     'scheme-change redirect strips authorization header');
+  CheckEqual('', LTransportObj.SeenProxyAuthorizationHeader,
+    'scheme-change redirect strips proxy-authorization header');
   CheckEqual('', LTransportObj.SeenWwwAuthenticateHeader,
     'scheme-change redirect strips www-authenticate header');
   CheckEqual('', LTransportObj.SeenCookieHeader,
@@ -5207,6 +5220,7 @@ begin
   LHeaders := NewHeaders;
   LHeaders.SetHeader('x-trace', 'trace-subdomain');
   LHeaders.SetHeader('authorization', 'Bearer subdomain');
+  LHeaders.SetHeader('proxy-authorization', 'Basic subdomain-proxy');
   LHeaders.SetHeader('www-authenticate', 'Basic realm="api"');
   LHeaders.SetHeader('cookie', 'session=sub');
   LHeaders.SetHeader('cookie2', 'legacy=sub');
@@ -5222,6 +5236,8 @@ begin
     'subdomain redirect preserves ordinary header');
   CheckEqual('', LTransportObj.SeenAuthorizationHeader,
     'subdomain redirect strips authorization header');
+  CheckEqual('', LTransportObj.SeenProxyAuthorizationHeader,
+    'subdomain redirect strips proxy-authorization header');
   CheckEqual('', LTransportObj.SeenWwwAuthenticateHeader,
     'subdomain redirect strips www-authenticate header');
   CheckEqual('', LTransportObj.SeenCookieHeader,
