@@ -462,6 +462,8 @@ end;
 function TTerminal.BeginFrame: TFrame;
 begin
   EnsureFrameRuntime('BeginFrame');
+  if FFrameActive then
+    raise ETuiBackend.Create('TTerminal.BeginFrame called with an active frame');
   FCurr.Reset;
   FCurr.ImageProtocol := ImageProtocol;
   FOverlay.Clear;
