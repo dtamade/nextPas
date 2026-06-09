@@ -33,6 +33,8 @@ benchmarks are negative wiring evidence, and public math source units must not i
 `math.impl.simd` until a later profiled cutover adds tested public SIMD primitives.
 The source-contract gate treats direct `nextpas.core.simd` imports in public math source units as
 the same prohibited cutover.
+`bench_simd_seam` may import the math-owned internal SIMD seam only to measure that seam; it must
+not import private SIMD backend, dispatch, CPUInfo, direct, dataplane, or intrinsic units.
 
 ## Public Surface And Example
 

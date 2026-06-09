@@ -296,7 +296,8 @@ begin
     WriteLn('compiler-flags=-MObjFPC -Sh -O2');
     WriteLn('input-set=16 fixed vector/matrix/quaternion samples');
     WriteLn('scope=public scalar vector methods vs internal SIMD helper seam plus scalar candidate baselines');
-    WriteLn('decision-note=public math value methods are still scalar; this is evidence only');
+    WriteLn('decision-note=internal SIMD seam only; public value methods stay scalar');
+    WriteLn('public-cutover=not-approved-without-profiled-runtime-and-public-simd-contracts');
     WriteLn;
 
     B.Run('TVec4f scalar add', @BenchVec4fScalarAdd);

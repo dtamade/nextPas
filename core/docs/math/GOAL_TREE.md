@@ -34,6 +34,9 @@ Current roadmap position: M8 partial, M7 partial, M9 not started.
   evidence on Pascal behavior/facade tests where those gates were run.
 - `nextpas.core.math.impl.simd` is an internal seam only. Public value-type
   methods are not wired through it.
+- `bench_simd_seam` is source-contract guarded as internal-seam evidence only:
+  it must not import private SIMD backend/dispatch/CPUInfo/direct/dataplane units
+  and cannot approve public SIMD cutover by itself.
 - macOS and Windows host trig link/runtime proof is still pending.
 
 M8 cannot be marked complete without source-contract, focused runtime, heaptrc, and CI matrix evidence.
@@ -107,6 +110,6 @@ nextpas.core.math final migration
 - Trig: finish remaining direct non-finite overload parity and host matrix
   runtime truth for macOS/Windows.
 - Vector: finish full non-finite measure and signed-zero matrix coverage.
-- SIMD: add source-contract guards for public SIMD imports and benchmark private
-  backend leakage before any public cutover.
+- SIMD: finish profiled runtime evidence and public SIMD contract design before
+  any public cutover.
 - Host matrix: obtain macOS/Windows trig host link/runtime evidence.

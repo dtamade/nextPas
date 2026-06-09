@@ -1739,6 +1739,14 @@ REQUIRED_QUATERNION_PUBLIC_RECORD_CONTRACTS = (
 )
 REQUIRED_BENCHMARK_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
     BENCH_SIMD_SEAM_PATH: (
+        (
+            "bench-simd-seam-internal-only-decision",
+            "decision-note=internal SIMD seam only; public value methods stay scalar",
+        ),
+        (
+            "bench-simd-seam-no-public-cutover",
+            "public-cutover=not-approved-without-profiled-runtime-and-public-simd-contracts",
+        ),
         ("bench-mat4f-vector-scalar-baseline", "TMat4f scalar mat-vec"),
         ("bench-mat4f-vector-simd-seam", "TMat4f simd seam mat-vec"),
         ("bench-mat4f-matrix-scalar-baseline", "TMat4f scalar mat-mat"),
@@ -6952,6 +6960,7 @@ def build_report(root: Path) -> Report:
         scanned.add(path)
         text = path.read_text(encoding="utf-8", errors="replace")
         findings.extend(scan_math_ffi_uses(root, path, text))
+        findings.extend(scan_private_simd(root, path, text))
         if path.suffix.lower() in {".lpr", ".pas"}:
             findings.extend(scan_external_m(root, path, text))
         if path.suffix.lower() in {".lpr", ".pas"} or path.name == "Makefile":
