@@ -307,6 +307,10 @@ var
   LStore64FallbackSection: string;
   LExchange64FallbackSection: string;
   LCmpxchg64FallbackSection: string;
+  LTypesFlagStoreOrderSection: string;
+  LTypesFlagLoadOrderSection: string;
+  LTypesFlagClearSection: string;
+  LTypesFlagTestSection: string;
   LFetchAddFallbackSection: string;
   LLoad32Section: string;
   LLoad64Section: string;
@@ -421,6 +425,18 @@ begin
   LCmpxchg64FallbackSection := ExtractImplementationSection(LAtomicSource,
     'function _atomic_cmpxchg_64_x86(var aObj: Int64; var aExpected: Int64; aDesired: Int64): Boolean;',
     'function _atomic_fetch_add_64_x86(var aObj: Int64; aArg: Int64): Int64;');
+  LTypesFlagStoreOrderSection := ExtractImplementationSection(LAtomicTypesSource,
+    'procedure _validate_atomic_flag_store_order(const AOrder: memory_order_t);',
+    'procedure _validate_atomic_flag_load_order(const AOrder: memory_order_t);');
+  LTypesFlagLoadOrderSection := ExtractImplementationSection(LAtomicTypesSource,
+    'procedure _validate_atomic_flag_load_order(const AOrder: memory_order_t);',
+    'function _refcount_load_relaxed(var AValue: PtrUInt): PtrUInt;');
+  LTypesFlagClearSection := ExtractImplementationSection(LAtomicTypesSource,
+    'procedure TAtomicFlag.clear(AOrder: memory_order_t);',
+    'function TAtomicFlag.test(AOrder: memory_order_t): Boolean;');
+  LTypesFlagTestSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicFlag.test(AOrder: memory_order_t): Boolean;',
+    '{ TAtomicISize }');
   LFetchAddFallbackSection := ExtractImplementationSection(LAtomicSource,
     'function _atomic_fetch_add_64_x86(var aObj: Int64; aArg: Int64): Int64;',
     '{$ENDIF}');
@@ -663,6 +679,18 @@ begin
     'i386 64-bit fallback cmpxchg must guard lock release with try/finally');
   CheckContains(LCmpxchg64FallbackSection, 'finally',
     'i386 64-bit fallback cmpxchg must guard lock release with try/finally');
+  CheckContains(LTypesFlagStoreOrderSection, 'mo_consume, mo_acquire, mo_acq_rel',
+    'TAtomicFlag.clear must reject load-only/acquire-release orders');
+  CheckContains(LTypesFlagStoreOrderSection, 'EArgumentError',
+    'TAtomicFlag.clear invalid order must raise argument error');
+  CheckContains(LTypesFlagLoadOrderSection, 'mo_release, mo_acq_rel',
+    'TAtomicFlag.test must reject store-only/acquire-release orders');
+  CheckContains(LTypesFlagLoadOrderSection, 'EArgumentError',
+    'TAtomicFlag.test invalid order must raise argument error');
+  CheckContains(LTypesFlagClearSection, '_validate_atomic_flag_store_order(AOrder)',
+    'TAtomicFlag.clear must validate memory order before store');
+  CheckContains(LTypesFlagTestSection, '_validate_atomic_flag_load_order(AOrder)',
+    'TAtomicFlag.test must validate memory order before load');
   CheckContains(LFetchAddFallbackSection, 'try',
     'i386 64-bit fallback add must guard lock release with try/finally');
   CheckContains(LFetchAddFallbackSection, 'finally',
@@ -968,6 +996,68 @@ begin
     'TAtomicPtr lock-free surface must match pointer-sized runtime truth');
 end;
 
+procedure TestAtomicFlagMemoryOrderContract;
+var
+  LFlag: TAtomicFlag;
+  LRaised: Boolean;
+begin
+  LFlag := TAtomicFlag.Create(False);
+
+  LFlag.clear(mo_relaxed);
+  LFlag.clear(mo_release);
+  LFlag.clear(mo_seq_cst);
+
+  LRaised := False;
+  try
+    LFlag.clear(mo_consume);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'TAtomicFlag.clear must reject consume order');
+
+  LRaised := False;
+  try
+    LFlag.clear(mo_acquire);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'TAtomicFlag.clear must reject acquire order');
+
+  LRaised := False;
+  try
+    LFlag.clear(mo_acq_rel);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'TAtomicFlag.clear must reject acquire-release order');
+
+  Check(not LFlag.test(mo_relaxed), 'TAtomicFlag.test must allow relaxed order');
+  Check(not LFlag.test(mo_consume), 'TAtomicFlag.test must allow consume order');
+  Check(not LFlag.test(mo_acquire), 'TAtomicFlag.test must allow acquire order');
+  Check(not LFlag.test(mo_seq_cst), 'TAtomicFlag.test must allow seq_cst order');
+
+  LRaised := False;
+  try
+    LFlag.test(mo_release);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'TAtomicFlag.test must reject release order');
+
+  LRaised := False;
+  try
+    LFlag.test(mo_acq_rel);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'TAtomicFlag.test must reject acquire-release order');
+end;
+
 procedure TestAtomicCompatFacade;
 var
   LVal: Int32;
@@ -1235,6 +1325,7 @@ begin
   T.Run('Concurrent FetchAdd (4 threads x 10000)', @TestConcurrentFetchAdd);
   T.Run('fafafa-style atomic API', @TestFafafaStyleAtomicApi);
   T.Run('typed atomic record API', @TestAtomicRecordTypes);
+  T.Run('atomic flag memory-order contract', @TestAtomicFlagMemoryOrderContract);
   T.Run('compat PascalCase facade', @TestAtomicCompatFacade);
   T.Run('tagged pointer atomic API', @TestAtomicTaggedPointer);
   T.Run('tagged pointer rejects out-of-range x86_64 pointer', @TestAtomicTaggedPointerRejectsOutOfRangeX8664Pointer);

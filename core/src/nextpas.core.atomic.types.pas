@@ -448,6 +448,26 @@ begin
     Result := mo_seq_cst;
 end;
 
+procedure _validate_atomic_flag_store_order(const AOrder: memory_order_t); inline;
+begin
+  case AOrder of
+    mo_consume, mo_acquire, mo_acq_rel:
+      raise EArgumentError.Create('TAtomicFlag.clear: invalid memory order for store operation');
+  else
+    ;
+  end;
+end;
+
+procedure _validate_atomic_flag_load_order(const AOrder: memory_order_t); inline;
+begin
+  case AOrder of
+    mo_release, mo_acq_rel:
+      raise EArgumentError.Create('TAtomicFlag.test: invalid memory order for load operation');
+  else
+    ;
+  end;
+end;
+
 function _refcount_load_relaxed(var AValue: PtrUInt): PtrUInt; inline;
 begin
   {$IF SIZEOF(PtrUInt) = 4}
@@ -1006,13 +1026,13 @@ end;
 
 procedure TAtomicFlag.clear(AOrder: memory_order_t);
 begin
-  // Atomically set to 0
+  _validate_atomic_flag_store_order(AOrder);
   atomic_store(FValue, 0, AOrder);
 end;
 
 function TAtomicFlag.test(AOrder: memory_order_t): Boolean;
 begin
-  // Atomically read without modifying
+  _validate_atomic_flag_load_order(AOrder);
   Result := atomic_load(FValue, AOrder) <> 0;
 end;
 
