@@ -2036,6 +2036,20 @@ begin
     'BENCHMARKS should document the llhttp root fallback alias');
   CheckContains(LFlagMatrixBlock, '.raw',
     'BENCHMARKS should document transient raw artifact hygiene');
+  CheckContains(LFlagMatrixBlock, '`env.txt`',
+    'BENCHMARKS should document flag-matrix env artifact');
+  CheckContains(LFlagMatrixBlock, '`bench_filter=`',
+    'BENCHMARKS should document flag-matrix Pascal filter marker');
+  CheckContains(LFlagMatrixBlock, '`c_bench_filter=`',
+    'BENCHMARKS should document flag-matrix C filter marker');
+  CheckContains(LFlagMatrixBlock, '`perf_requested=`',
+    'BENCHMARKS should document flag-matrix perf request marker');
+  CheckContains(LFlagMatrixBlock, '`perf_usable=`',
+    'BENCHMARKS should document flag-matrix perf usability marker');
+  CheckContains(LFlagMatrixBlock, '`results.tsv` columns:',
+    'BENCHMARKS should document flag-matrix results columns');
+  CheckContains(LFlagMatrixBlock, '`summary.tsv` columns:',
+    'BENCHMARKS should document flag-matrix summary columns');
 
   CheckContains(LCReadme, 'case-insensitive substring',
     'C comparator README should document shared filter semantics');

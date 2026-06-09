@@ -2006,6 +2006,13 @@ precedence; `NEXTPAS_LLHTTP_ROOT` is accepted as a fallback for shared
 test/benchmark environments. Do not commit generated objects, binaries, `.raw`
 captures, flag-matrix outputs, perf logs, or vendored llhttp sources.
 
+Stable `env.txt` markers include `bench_filter=`, `c_bench_filter=`,
+`perf_requested=`, and `perf_usable=`. `results.tsv` columns:
+`variant`, `impl`, `benchmark`, `run`, `iterations`, `ns_per_op`,
+`ops_per_sec`, `flags`. `summary.tsv` columns: `variant`, `impl`,
+`benchmark`, `runs`, `median_iterations`, `median_ns_per_op`,
+`median_ops_per_sec`, `flags`.
+
 ```sh
 LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
 benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh --smoke --no-perf
