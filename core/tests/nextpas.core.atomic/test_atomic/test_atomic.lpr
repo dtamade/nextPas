@@ -333,6 +333,9 @@ var
   LFetchMax64Section: string;
   LFetchMin64Section: string;
   LFetchNand64Section: string;
+  LCompatLockFree32Section: string;
+  LCompatLockFree64Section: string;
+  LCompatLockFreePtrSection: string;
 begin
   LAtomicSource := ReadUtf8TextFile(AtomicSourcePath);
   LAtomicCoreSource := ReadUtf8TextFile(AtomicCoreSourcePath);
@@ -491,6 +494,15 @@ begin
   LFetchNand64Section := ExtractImplementationSection(LAtomicSource,
     'function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;',
     'function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64): Int64;');
+  LCompatLockFree32Section := ExtractImplementationSection(LAtomicCompatSource,
+    'function atomic_is_lock_free_32: Boolean;',
+    '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}');
+  LCompatLockFree64Section := ExtractImplementationSection(LAtomicCompatSource,
+    'function atomic_is_lock_free_64: Boolean;',
+    '{$ENDIF}');
+  LCompatLockFreePtrSection := ExtractImplementationSection(LAtomicCompatSource,
+    'function atomic_is_lock_free_ptr: Boolean;',
+    'function AtomicLoad32(var ATarget: Int32; const AOrder: TMemoryOrder): Int32;');
 
   Check(Pos('mo_relaxed: 无效，会触发运行时错误', LAtomicSource) = 0,
     'atomic_thread_fence docs must not claim mo_relaxed raises runtime error');
@@ -534,6 +546,20 @@ begin
     'compat unit must mirror PascalCase load/store facade');
   CheckContains(LAtomicCompatSource, 'procedure AtomicThreadFence',
     'compat unit must mirror PascalCase fence facade');
+  CheckContains(LAtomicCompatSource, 'function atomic_is_lock_free_32: Boolean;',
+    'compat unit must declare Int32 lock-free query');
+  CheckContains(LAtomicCompatSource, 'function atomic_is_lock_free_ptr: Boolean;',
+    'compat unit must declare pointer lock-free query');
+  CheckContains(LCompatLockFree32Section, 'nextpas.core.atomic.atomic_is_lock_free_32',
+    'compat Int32 lock-free query must forward to main atomic facade');
+  CheckContains(LCompatLockFreePtrSection, 'nextpas.core.atomic.atomic_is_lock_free_ptr',
+    'compat pointer lock-free query must forward to main atomic facade');
+  {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+  CheckContains(LAtomicCompatSource, 'function atomic_is_lock_free_64: Boolean;',
+    'compat unit must declare Int64 lock-free query on supported CPUs');
+  CheckContains(LCompatLockFree64Section, 'nextpas.core.atomic.atomic_is_lock_free_64',
+    'compat Int64 lock-free query must forward to main atomic facade');
+  {$ENDIF}
   CheckContains(LX8664SnapshotSource, 'Archived historical x86_64 atomic implementation snapshot.',
     'archived x86_64 snapshot must be marked historical');
   CheckContains(LX8664SnapshotSource, 'Documentation archive only.',

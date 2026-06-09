@@ -34,6 +34,12 @@ function atomic_compare_exchange_strong_ptr(var aObj: Pointer; var aExpected: Po
 
 procedure CpuPause; inline;
 
+function atomic_is_lock_free_32: Boolean; inline;
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+function atomic_is_lock_free_64: Boolean; inline;
+{$ENDIF}
+function atomic_is_lock_free_ptr: Boolean; inline;
+
 function AtomicLoad32(var ATarget: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32; inline;
 procedure AtomicStore32(var ATarget: Int32; const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst); inline;
 function AtomicExchange32(var ATarget: Int32; const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32; inline;
@@ -198,6 +204,23 @@ end;
 procedure CpuPause;
 begin
   nextpas.core.atomic.CpuPause;
+end;
+
+function atomic_is_lock_free_32: Boolean;
+begin
+  Result := nextpas.core.atomic.atomic_is_lock_free_32;
+end;
+
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+function atomic_is_lock_free_64: Boolean;
+begin
+  Result := nextpas.core.atomic.atomic_is_lock_free_64;
+end;
+{$ENDIF}
+
+function atomic_is_lock_free_ptr: Boolean;
+begin
+  Result := nextpas.core.atomic.atomic_is_lock_free_ptr;
 end;
 
 function AtomicLoad32(var ATarget: Int32; const AOrder: TMemoryOrder): Int32;
