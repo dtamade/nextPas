@@ -426,6 +426,7 @@ begin
   Check(IsDoubleNaN(ArcTan2(DoubleNaN, 1.0)), 'ArcTan2(NaN,1)=NaN');
   Check(IsDoubleNaN(ArcTan2(1.0, DoubleNaN)), 'ArcTan2(1,NaN)=NaN');
   Check(IsSingleNaN(ArcTan2(SingleNaN, Single(1.0))), 'ArcTan2(Single NaN,1)=NaN');
+  Check(IsSingleNaN(ArcTan2(Single(1.0), SingleNaN)), 'ArcTan2(Single 1,NaN)=NaN');
   CheckNear(PI_VALUE / 4.0, ArcTan2(DoubleInfinity, DoubleInfinity), 0.0001,
     'ArcTan2(+Inf,+Inf)=PI/4');
   CheckNear(3.0 * PI_VALUE / 4.0, ArcTan2(DoubleInfinity, -DoubleInfinity), 0.0001,

@@ -149,6 +149,7 @@ priority over zero-base handling, so `0^NaN` and `-0^NaN` return NaN.
 `Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite
 values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`; log identities preserve exact
 `+0` for input `1` and exact `1` for `Log2(2)` and `Log10(10)`.
+`Ln`, `Log2`, and `Log10` accept positive subnormal `Single` and `Double` inputs: results stay finite negative, with `Log2` returning exact exponent positions for the minimum positive subnormal values (`-149` for `Single`, `-1074` for `Double`).
 `Exp` propagates `NaN`, returns `+Inf` for `+Inf`, and returns `+0` for `-Inf`. `Sqrt` preserves
 signed zero, returns `+Inf` for `+Inf`, and returns `NaN` for `NaN`, negative finite values, or `-Inf`.
 `Sqrt` of positive finite maximum, minimum-normal, and minimum-subnormal inputs returns a positive finite result, and squaring that result stays close to the original input instead of flushing to zero; negative minimum-subnormal inputs return `NaN`.

@@ -965,6 +965,12 @@ REQUIRED_TRIG_POWER_DOC_TRUTH = (
         "Finite `Exp` overflow returns `+Inf`, and finite `Exp` underflow returns `+0`. Finite `Power` overflow and underflow preserve the mathematically required sign for odd integer exponents with negative finite bases.",
     ),
 )
+REQUIRED_TRIG_LOG_SUBNORMAL_DOC_TRUTH = (
+    (
+        "docs/math/API.md",
+        "`Ln`, `Log2`, and `Log10` accept positive subnormal `Single` and `Double` inputs: results stay finite negative, with `Log2` returning exact exponent positions for the minimum positive subnormal values (`-149` for `Single`, `-1074` for `Double`).",
+    ),
+)
 REQUIRED_TRIG_CIRCULAR_DOC_TRUTH = (
     (
         "docs/math/README.md",
@@ -1739,6 +1745,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("facade-trig-power-finite-identity-precision", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade Power finite identity precision contracts'"),
     RequiredBehaviorTestMarker("facade-log-exact-identity", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade Log exact identity contracts'"),
     RequiredBehaviorTestMarker("facade-trig-ieee-domain-smoke", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade trig IEEE domain smoke'"),
+    RequiredBehaviorTestMarker("trig-atan2-single-second-nan", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcTan2(Single 1,NaN)=NaN"),
     RequiredBehaviorTestMarker("facade-wrap-error-semantics", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade Wrap error semantics'"),
     RequiredBehaviorTestMarker("facade-fmod-huge-untyped-literals", "tests/nextpas.core.math/test_facade/test_facade.lpr", "facade Fmod huge untyped finite literals choose wide finite remainder path"),
     RequiredBehaviorTestMarker("scalar-constants", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('constants'"),
@@ -6792,6 +6799,15 @@ def scan_required_trig_circular_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_trig_log_subnormal_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        api_doc_truth(REQUIRED_TRIG_LOG_SUBNORMAL_DOC_TRUTH),
+        "missing-required-trig-log-subnormal-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def scan_required_impl_simd_win64_compile_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
@@ -6844,6 +6860,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_scalar_float_compare_doc_truth(root))
     findings.extend(scan_required_trig_power_doc_truth(root))
     findings.extend(scan_required_trig_circular_doc_truth(root))
+    findings.extend(scan_required_trig_log_subnormal_doc_truth(root))
 
     source_files = discover_files(root, MATH_SOURCE_GLOBS)
     math_ffi = root / "src/nextpas.core.math.ffi.pas"

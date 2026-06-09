@@ -104,8 +104,8 @@ nextpas.core.math final migration
 - Docs-control: keep `README.md`, `GOAL_TREE.md`, and design record compact while
   `API.md` remains the detailed public behavior contract.
 - Scalar: add marker-only fail-close coverage for already-tested edge cases.
-- Trig: harden `Log2(2)` and `Log10(10)` exact identity with implementation
-  fast paths and facade-level smoke.
+- Trig: finish remaining direct non-finite overload parity and host matrix
+  runtime truth for macOS/Windows.
 - Vector: add `Lerp` scalar parity, non-finite measure contracts, and signed-zero
   decisions.
 - SIMD: add source-contract guards for public SIMD imports and benchmark private
