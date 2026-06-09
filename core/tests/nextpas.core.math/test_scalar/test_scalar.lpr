@@ -298,6 +298,8 @@ procedure RaiseSmoothStepSingleNaNEdge; forward;
 procedure RaiseSmoothStepDoubleNaNEdge; forward;
 procedure RaiseSmoothStepSingleInfiniteEdge; forward;
 procedure RaiseSmoothStepDoubleInfiniteEdge; forward;
+procedure RaiseSmoothStepSingleReversedFiniteEdges; forward;
+procedure RaiseSmoothStepDoubleReversedFiniteEdges; forward;
 
 procedure TestMinMaxClamp;
 var
@@ -560,6 +562,10 @@ begin
     'SmoothStep Single infinite edge', @RaiseSmoothStepSingleInfiniteEdge);
   ExpectArgumentErrorMessage('SmoothStep: edges must be finite',
     'SmoothStep Double infinite edge', @RaiseSmoothStepDoubleInfiniteEdge);
+  ExpectArgumentErrorMessage('SmoothStep: edge0 must not exceed edge1',
+    'SmoothStep Single reversed finite edges', @RaiseSmoothStepSingleReversedFiniteEdges);
+  ExpectArgumentErrorMessage('SmoothStep: edge0 must not exceed edge1',
+    'SmoothStep Double reversed finite edges', @RaiseSmoothStepDoubleReversedFiniteEdges);
 end;
 
 procedure TestAngleConversions;
@@ -1401,6 +1407,16 @@ end;
 procedure RaiseSmoothStepDoubleInfiniteEdge;
 begin
   SmoothStep(0.0, MakePositiveInfinity, 0.5);
+end;
+
+procedure RaiseSmoothStepSingleReversedFiniteEdges;
+begin
+  SmoothStep(Single(2.0), Single(1.0), Single(1.5));
+end;
+
+procedure RaiseSmoothStepDoubleReversedFiniteEdges;
+begin
+  SmoothStep(2.0, 1.0, 1.5);
 end;
 
 procedure RaiseFracNaN;

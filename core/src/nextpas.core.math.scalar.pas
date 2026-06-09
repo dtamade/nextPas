@@ -588,6 +588,8 @@ begin
   if SingleIsNaN(AEdge0) or SingleIsNaN(AEdge1) or
     SingleIsInfinite(AEdge0) or SingleIsInfinite(AEdge1) then
     raise EArgumentError.Create('SmoothStep: edges must be finite');
+  if AEdge0 > AEdge1 then
+    raise EArgumentError.Create('SmoothStep: edge0 must not exceed edge1');
 end;
 
 procedure RequireSmoothStepEdges(const AEdge0, AEdge1: Double); inline;
@@ -595,6 +597,8 @@ begin
   if DoubleIsNaN(AEdge0) or DoubleIsNaN(AEdge1) or
     DoubleIsInfinite(AEdge0) or DoubleIsInfinite(AEdge1) then
     raise EArgumentError.Create('SmoothStep: edges must be finite');
+  if AEdge0 > AEdge1 then
+    raise EArgumentError.Create('SmoothStep: edge0 must not exceed edge1');
 end;
 
 procedure RequireClampBounds(const AMin, AMax: Int32); inline;

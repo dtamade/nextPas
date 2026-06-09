@@ -871,7 +871,7 @@ REQUIRED_SCALAR_INTEGER_CONVERSION_DOC_TRUTH = (
 REQUIRED_SCALAR_RANGE_DOC_TRUTH = (
     (
         "docs/math/API.md",
-        "`Lerp`, `InverseLerp`, and `SmoothStep` keep huge finite opposite-sign midpoint interpolation finite; `Lerp` preserves endpoint identity for `t=0` and `t=1` before endpoint arithmetic can pollute non-finite endpoints, `Lerp` propagates a NaN `t`, `InverseLerp` returns 0 for equal bounds, and `SmoothStep` propagates NaN values before edge validation, requires finite edges with `EArgumentError`, clamps infinite values to the low or high endpoint, and preserves the documented equal-edge step boundary behavior.",
+        "`Lerp`, `InverseLerp`, and `SmoothStep` keep huge finite opposite-sign midpoint interpolation finite; `Lerp` preserves endpoint identity for `t=0` and `t=1` before endpoint arithmetic can pollute non-finite endpoints, `Lerp` propagates a NaN `t`, `InverseLerp` returns 0 for equal bounds, and `SmoothStep` propagates NaN values before edge validation, rejects reversed finite edges with `EArgumentError`, requires finite edges with `EArgumentError`, clamps infinite values to the low or high endpoint, and preserves the documented equal-edge step boundary behavior.",
     ),
 )
 REQUIRED_SCALAR_MIN_MAX_DOC_TRUTH = (
@@ -1977,6 +1977,9 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-smoothstep-double-nan-edge", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "SmoothStep Double NaN edge"),
     RequiredBehaviorTestMarker("scalar-smoothstep-single-infinite-edge", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "SmoothStep Single infinite edge"),
     RequiredBehaviorTestMarker("scalar-smoothstep-double-infinite-edge", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "SmoothStep Double infinite edge"),
+    RequiredBehaviorTestMarker("scalar-smoothstep-reversed-edge-error-message", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "SmoothStep: edge0 must not exceed edge1"),
+    RequiredBehaviorTestMarker("scalar-smoothstep-single-reversed-finite-edge", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "SmoothStep Single reversed finite edges"),
+    RequiredBehaviorTestMarker("scalar-smoothstep-double-reversed-finite-edge", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "SmoothStep Double reversed finite edges"),
     RequiredBehaviorTestMarker("scalar-wrap-reversed-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap: minimum must not exceed maximum"),
     RequiredBehaviorTestMarker("scalar-wrap-non-finite-inputs", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Wrap: value, minimum, and maximum must be finite"),
     RequiredBehaviorTestMarker("scalar-rounding-sign", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('rounding and sign'"),
