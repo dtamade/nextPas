@@ -760,6 +760,30 @@ begin
     'Log10(Single 10)=1 exact bits');
 end;
 
+procedure TestLogPositiveSubnormalContracts;
+var
+  LDouble: Double;
+  LSingle: Single;
+begin
+  LDouble := Ln(DoubleMinPositiveSubnormal);
+  Check(IsDoubleFinite(LDouble) and (LDouble < 0.0),
+    'Ln Double min positive subnormal stays finite negative');
+  CheckNear(-1074.0, Log2(DoubleMinPositiveSubnormal), 0.0,
+    'Log2 Double min positive subnormal returns -1074');
+  LDouble := Log10(DoubleMinPositiveSubnormal);
+  Check(IsDoubleFinite(LDouble) and (LDouble < 0.0),
+    'Log10 Double min positive subnormal stays finite negative');
+
+  LSingle := Ln(SingleMinPositiveSubnormal);
+  Check(IsSingleFinite(LSingle) and (LSingle < Single(0.0)),
+    'Ln Single min positive subnormal stays finite negative');
+  CheckNear(-149.0, Log2(SingleMinPositiveSubnormal), 0.0,
+    'Log2 Single min positive subnormal returns -149');
+  LSingle := Log10(SingleMinPositiveSubnormal);
+  Check(IsSingleFinite(LSingle) and (LSingle < Single(0.0)),
+    'Log10 Single min positive subnormal stays finite negative');
+end;
+
 procedure TestPowerEdgeContracts;
 begin
   CheckNear(1024.0, Power(2.0, 10.0), 0.001, 'Power(2,10)=1024');
@@ -1072,6 +1096,7 @@ begin
   T.Run('Exp finite overflow underflow contracts', @TestExpFiniteOverflowUnderflowContracts);
   T.Run('log domain signed zero contracts', @TestLogDomainSignedZeroContracts);
   T.Run('log base identity contracts', @TestLogBaseIdentityContracts);
+  T.Run('log positive subnormal contracts', @TestLogPositiveSubnormalContracts);
   T.Run('power edge contracts', @TestPowerEdgeContracts);
   T.Run('power negative finite base non-integer contracts',
     @TestPowerNegativeFiniteBaseNonIntegerContracts);
