@@ -8,12 +8,31 @@ uses
   nextpas.core.testing;
 
 type
+  IBaseSupportsProbe = interface
+    ['{6C65DA2D-5B1A-4777-8E73-02C905783F77}']
+    function Value: Integer;
+  end;
+
+  IBaseSupportsOther = interface
+    ['{8748F136-F298-4C32-94C2-15B89BE06A12}']
+  end;
+
+  TBaseSupportsProbe = class(TInterfacedObject, IBaseSupportsProbe)
+  public
+    function Value: Integer;
+  end;
+
   TIntNullable = specialize TNullable<Integer>;
   TIntOption = specialize TOption<Integer>;
   TIntResult = specialize TResult<Integer, string>;
 
 var
   T: TTestRunner;
+
+function TBaseSupportsProbe.Value: Integer;
+begin
+  Result := 42;
+end;
 
 procedure ExpectInvalidArgumentNil(const AProc: TProc; const AMessage: string);
 begin
@@ -240,6 +259,61 @@ begin
   );
 end;
 
+procedure TestSupportsClearsOutInterfaceOnFailure;
+var
+  LObj: TBaseSupportsProbe;
+  LInstance: IInterface;
+  LProbe: IBaseSupportsProbe;
+  LOther: IBaseSupportsOther;
+begin
+  LObj := TBaseSupportsProbe.Create;
+  try
+    LProbe := LObj as IBaseSupportsProbe;
+    Check(not Supports(TObject(nil), IBaseSupportsProbe, LProbe),
+      'Supports(nil object) should return false');
+    Check(LProbe = nil, 'Supports(nil object) should clear the out interface');
+
+    LProbe := LObj as IBaseSupportsProbe;
+    LOther := nil;
+    Check(not Supports(LObj, IBaseSupportsOther, LOther),
+      'Supports(object, unsupported interface) should return false');
+    Check(LOther = nil,
+      'Supports(object, unsupported interface) should clear the out interface');
+
+    Check(Supports(LObj, IBaseSupportsProbe, LProbe),
+      'Supports(object, supported interface) should return true');
+    Check(LProbe <> nil,
+      'Supports(object, supported interface) should assign the out interface');
+    Check(LProbe.Value = 42,
+      'Supports(object, supported interface) should return the requested interface');
+
+    LInstance := LObj as IInterface;
+    LProbe := LObj as IBaseSupportsProbe;
+    Check(not Supports(IInterface(nil), IBaseSupportsProbe, LProbe),
+      'Supports(nil interface) should return false');
+    Check(LProbe = nil, 'Supports(nil interface) should clear the out interface');
+
+    LProbe := LObj as IBaseSupportsProbe;
+    LOther := nil;
+    Check(not Supports(LInstance, IBaseSupportsOther, LOther),
+      'Supports(interface, unsupported interface) should return false');
+    Check(LOther = nil,
+      'Supports(interface, unsupported interface) should clear the out interface');
+
+    Check(Supports(LInstance, IBaseSupportsProbe, LProbe),
+      'Supports(interface, supported interface) should return true');
+    Check(LProbe <> nil,
+      'Supports(interface, supported interface) should assign the out interface');
+    Check(LProbe.Value = 42,
+      'Supports(interface, supported interface) should return the requested interface');
+  finally
+    LProbe := nil;
+    LOther := nil;
+    LInstance := nil;
+    LObj := nil;
+  end;
+end;
+
 procedure TestNullableSurface;
 var
   LSome: TIntNullable;
@@ -326,6 +400,7 @@ begin
   T.Run('comparemem semantics stay stable', @TestCompareMemSemanticsStayStable);
   T.Run('bytespan nil and bounds contracts', @TestByteSpanNilAndBoundsContracts);
   T.Run('hashbytes nil contracts', @TestHashBytesNilContracts);
+  T.Run('supports clears out interface on failure', @TestSupportsClearsOutInterfaceOnFailure);
   T.Run('nullable surface', @TestNullableSurface);
   T.Run('option surface', @TestOptionSurface);
   T.Run('result surface', @TestResultSurface);
