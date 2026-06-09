@@ -3291,11 +3291,7 @@ end;
 
 procedure atomic_tagged_ptr_store(var aObj: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t);
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-    atomic_tagged_ptr_store(aObj, aDesired, mo_relaxed);
-  {$ELSE}
-    atomic_tagged_ptr_store(aObj, aDesired, mo_release);
-  {$ENDIF}
+  atomic_tagged_ptr_store(aObj, aDesired, mo_seq_cst);
 end;
 
 function atomic_tagged_ptr_exchange(var aObj: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t; aOrder: memory_order_t): atomic_tagged_ptr_t;

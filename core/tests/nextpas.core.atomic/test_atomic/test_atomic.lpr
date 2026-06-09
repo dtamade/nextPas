@@ -324,6 +324,7 @@ var
   LPascalCaseCas64Section: string;
   LPascalCaseCasPtrSection: string;
   LDefaultTaggedPtrLoadSection: string;
+  LDefaultTaggedPtrStoreSection: string;
   LAtomicWaitSection: string;
   LAtomicWaitUInt32Section: string;
   LAtomicNotifyOneSection: string;
@@ -467,6 +468,9 @@ begin
   LDefaultTaggedPtrLoadSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_tagged_ptr_load(var aObj: atomic_tagged_ptr_t): atomic_tagged_ptr_t;',
     'procedure atomic_tagged_ptr_store(var aObj: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t; aOrder: memory_order_t);');
+  LDefaultTaggedPtrStoreSection := ExtractImplementationSection(LAtomicSource,
+    'procedure atomic_tagged_ptr_store(var aObj: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t);',
+    'function atomic_tagged_ptr_exchange(var aObj: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t; aOrder: memory_order_t): atomic_tagged_ptr_t;');
   LAtomicWaitSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_wait(var aObj: Int32; aExpected: Int32; const aTimeoutNs: Int64): Int32;',
     'function atomic_wait(var aObj: UInt32; aExpected: UInt32; const aTimeoutNs: Int64): Int32;');
@@ -651,6 +655,12 @@ begin
     'default tagged pointer load must use seq_cst');
   CheckNotContains(LDefaultTaggedPtrLoadSection, 'mo_relaxed',
     'default tagged pointer load must not use relaxed');
+  CheckContains(LDefaultTaggedPtrStoreSection, 'mo_seq_cst',
+    'default tagged pointer store must use seq_cst');
+  CheckNotContains(LDefaultTaggedPtrStoreSection, 'mo_relaxed',
+    'default tagged pointer store must not use relaxed');
+  CheckNotContains(LDefaultTaggedPtrStoreSection, 'mo_release',
+    'default tagged pointer store must not use release');
   CheckContains(LDefaultStore32Section, 'mo_seq_cst',
     'default Int32 atomic_store must use seq_cst');
   CheckNotContains(LDefaultStore32Section, 'mo_relaxed',
