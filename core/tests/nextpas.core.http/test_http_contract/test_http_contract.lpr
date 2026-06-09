@@ -999,20 +999,22 @@ var
   LHandler: IHttpHandler;
   LOrder: string;
   LMw: IHttpMiddleware;
+  LWrapFunc: TMiddlewareWrapFunc;
 begin
   LOrder := '';
   LHandler := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
     LOrder := LOrder + 'H';
   end);
-  LMw := nextpas.core.http.middleware.MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
+  LWrapFunc := function(const ANext: IHttpHandler): IHttpHandler
   begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
       LOrder := LOrder + 'M';
       ANext.ServeHTTP(AReq, AW);
     end);
-  end);
+  end;
+  LMw := nextpas.core.http.MiddlewareFunc(LWrapFunc);
   LHandler := Chain(LHandler, [LMw]);
   LHandler.ServeHTTP(nil, nil);
   CheckEqual('MH', LOrder, 'Chain: middleware then handler');
@@ -1375,6 +1377,22 @@ begin
   CheckEqual('val ue', LParsed[0].Value, 'round-trip: value 0');
   CheckEqual('x', LParsed[1].Name, 'round-trip: name 1');
   CheckEqual('y&z', LParsed[1].Value, 'round-trip: value 1');
+end;
+
+procedure TestQueryParamHelpersAvailableThroughFacade;
+var
+  LParams: TQueryParams;
+begin
+  LParams := nextpas.core.http.ParseQueryString('q=hello&empty=');
+
+  Check(nextpas.core.http.QueryParamHas(LParams, 'q'),
+    'Facade QueryParamHas finds present query parameter');
+  CheckEqual('hello', nextpas.core.http.QueryParamValue(LParams, 'q'),
+    'Facade QueryParamValue returns query parameter value');
+  Check(nextpas.core.http.QueryParamHas(LParams, 'empty'),
+    'Facade QueryParamHas treats empty value as present');
+  CheckEqual('', nextpas.core.http.QueryParamValue(LParams, 'missing'),
+    'Facade QueryParamValue returns empty string for missing query parameter');
 end;
 
 { Test 16: HttpMethodToStr all methods }
@@ -1791,6 +1809,26 @@ begin
     'API coverage must document response writer no-body/informational wire boundary');
 end;
 
+procedure TestHttpFacadeHelperSourceContract;
+var
+  LFacadeSource: string;
+begin
+  LFacadeSource := ReadTextFile('../../../src/nextpas.core.http.pas');
+
+  Check(SourceHas(LFacadeSource,
+    'TMiddlewareWrapFunc = nextpas.core.http.middleware.TMiddlewareWrapFunc;'),
+    'HTTP facade must re-export middleware wrap callback type');
+  Check(SourceHas(LFacadeSource,
+    'function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware;'),
+    'HTTP facade must expose MiddlewareFunc helper');
+  Check(SourceHas(LFacadeSource,
+    'function QueryParamValue(const AParams: TQueryParams; const AName: string): string;'),
+    'HTTP facade must expose QueryParamValue helper');
+  Check(SourceHas(LFacadeSource,
+    'function QueryParamHas(const AParams: TQueryParams; const AName: string): Boolean;'),
+    'HTTP facade must expose QueryParamHas helper');
+end;
+
 procedure TestHttpPublicHeaderSetterNamingContract;
 var
   LInterfaceSource: string;
@@ -2042,6 +2080,8 @@ begin
   T.Run('UrlEncode/UrlDecode round-trip', @TestUrlEncodeDecodeRoundTrip);
   T.Run('ParseQueryString basic', @TestParseQueryString);
   T.Run('EncodeQueryString round-trip', @TestEncodeQueryStringRoundTrip);
+  T.Run('QueryParam helpers are available through facade',
+    @TestQueryParamHelpersAvailableThroughFacade);
   T.Run('HttpMethodToStr all methods', @TestHttpMethodToStr);
   T.Run('HttpStrToMethod all methods', @TestHttpStrToMethod);
   T.Run('HttpStatusText known codes', @TestHttpStatusText);
@@ -2068,6 +2108,8 @@ begin
     @TestHttpApiCoverageRouterHeadFallbackTruthContract);
   T.Run('HTTP API coverage no-body transfer-encoding truth contract',
     @TestHttpApiCoverageNoBodyTransferEncodingTruthContract);
+  T.Run('HTTP facade helper source contract',
+    @TestHttpFacadeHelperSourceContract);
   T.Run('HTTP public header setter naming contract',
     @TestHttpPublicHeaderSetterNamingContract);
   T.Run('Chunked request trailer contract',

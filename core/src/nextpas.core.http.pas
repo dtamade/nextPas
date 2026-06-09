@@ -58,6 +58,7 @@ type
   THttpHandlerMethod = nextpas.core.http.intf.THttpHandlerMethod;
   THttpHandlerProc = nextpas.core.http.intf.THttpHandlerProc;
   THeaderIterator = nextpas.core.http.intf.THeaderIterator;
+  TMiddlewareWrapFunc = nextpas.core.http.middleware.TMiddlewareWrapFunc;
   TWebSocketOptions = nextpas.core.http.websocket.TWebSocketOptions;
   TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
   TWebSocketFrame = nextpas.core.http.websocket.TWebSocketFrame;
@@ -133,6 +134,8 @@ function UrlEncode(const AStr: string): string; inline;
 function UrlDecode(const AStr: string): string; inline;
 function ParseQueryString(const AQuery: string): TQueryParams; inline;
 function EncodeQueryString(const AParams: TQueryParams): string; inline;
+function QueryParamValue(const AParams: TQueryParams; const AName: string): string; inline;
+function QueryParamHas(const AParams: TQueryParams; const AName: string): Boolean; inline;
 
 { Router factory }
 function NewRouter: IHttpRouter; inline;
@@ -141,6 +144,7 @@ function NewRouter: IHttpRouter; inline;
 function HandlerFunc(const AFunc: THttpHandlerFunc): IHttpHandler; overload; inline;
 function HandlerFunc(const AMethod: THttpHandlerMethod): IHttpHandler; overload; inline;
 function HandlerFunc(const AProc: THttpHandlerProc): IHttpHandler; overload; inline;
+function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware; inline;
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 
 { Message factories }
@@ -316,6 +320,16 @@ begin
   Result := nextpas.core.http.url.EncodeQueryString(AParams);
 end;
 
+function QueryParamValue(const AParams: TQueryParams; const AName: string): string;
+begin
+  Result := nextpas.core.http.url.QueryParamValue(AParams, AName);
+end;
+
+function QueryParamHas(const AParams: TQueryParams; const AName: string): Boolean;
+begin
+  Result := nextpas.core.http.url.QueryParamHas(AParams, AName);
+end;
+
 function NewRouter: IHttpRouter;
 begin
   Result := nextpas.core.http.router.NewRouter;
@@ -334,6 +348,11 @@ end;
 function HandlerFunc(const AProc: THttpHandlerProc): IHttpHandler;
 begin
   Result := nextpas.core.http.middleware.HandlerFunc(AProc);
+end;
+
+function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.MiddlewareFunc(AWrapFunc);
 end;
 
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
