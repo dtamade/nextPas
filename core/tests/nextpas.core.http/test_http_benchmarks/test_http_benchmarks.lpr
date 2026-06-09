@@ -1841,6 +1841,24 @@ begin
     'adapter_no_url docs should not cite old HasConnection rejection');
 end;
 
+procedure TestBenchmarkDocsFullchainStableMarkersSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+  LMarkersBlock: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, BenchmarksDocPath));
+  LMarkersBlock := ExtractSourceBlock(LSource,
+    'markers:',
+    'The narrowest full-chain workloads now split router dispatch',
+    'BENCHMARKS fullchain stable markers block');
+
+  CheckContains(LMarkersBlock,
+    '`response_validation=strict_status_content_length_body_bytes`',
+    'BENCHMARKS fullchain stable markers should document strict response validation');
+end;
+
 procedure TestReadmeFullchainBenchmarkTruthSourceContract;
 var
   LRootDir: string;
@@ -5059,6 +5077,8 @@ begin
     @TestBenchFullchainStrictResponseValidationSourceContract);
   T.Run('benchmark docs adapter_no_url fast-path source contract',
     @TestBenchmarkDocsAdapterNoUrlFastPathSourceContract);
+  T.Run('benchmark docs fullchain stable markers source contract',
+    @TestBenchmarkDocsFullchainStableMarkersSourceContract);
   T.Run('README fullchain benchmark truth source contract',
     @TestReadmeFullchainBenchmarkTruthSourceContract);
   T.Run('API coverage benchmark evidence summary source contract',

@@ -727,6 +727,7 @@ markers:
 - `workload=<direct_root|direct_1k|plaintext|json|echo_1k|sink_16k|param_route|middleware_noop>`
 - `request_body_bytes=<0|1024|16384|...>`
 - `response_body_bytes=<13|1024|...>`
+- `response_validation=strict_status_content_length_body_bytes`
 - `backend=<threaded|epoll>`
 - `nextpas_h1_path=<fast|llhttp>`
 - `nextpas_dispatch_path=<direct_handler|router|middleware_router>`
