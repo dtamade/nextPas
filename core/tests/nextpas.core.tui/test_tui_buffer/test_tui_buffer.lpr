@@ -273,6 +273,55 @@ begin
   end;
 end;
 
+procedure TestResizeDropsWideLeadClippedAtRightEdge;
+var
+  LPrev, LBuf: TBuffer;
+  LCell: PCell;
+  LPatches: TDiffEntries;
+  LI: Integer;
+begin
+  LPrev := TBuffer.CreateEmpty(TRect.Make(0, 0, 2, 1));
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  try
+    LBuf.SetString(0, 0, 'A' + #$E4#$B8#$AD + 'B', StyleDefault);
+    LBuf.Resize(TRect.Make(0, 0, 2, 1));
+
+    LCell := LBuf.CellAt(1, 0);
+    CheckEqual(Int64(1), Int64(LCell^.Width), 'right-clipped wide lead becomes regular cell');
+    Check(not LCell^.Skip, 'right-clipped wide lead is not a skip sentinel');
+    CheckEqual(' ', CellGlyphAsString(LCell^), 'right-clipped wide lead is blank');
+    AssertRows(LBuf, ['A '], 'resize clips incomplete wide glyph at right edge');
+
+    LPrev.Diff(LBuf, LPatches);
+    for LI := 0 to System.Length(LPatches) - 1 do
+      Check(not ((LPatches[LI].X = 1) and (LPatches[LI].Cell.Width = 2)),
+        'resize diff does not emit clipped width-2 cell at right edge');
+  finally
+    LPrev.Free;
+    LBuf.Free;
+  end;
+end;
+
+procedure TestResizeDropsOrphanWideTailAtLeftEdge;
+var
+  LBuf: TBuffer;
+  LCell: PCell;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  try
+    LBuf.SetString(0, 0, #$E4#$B8#$AD + 'AB', StyleDefault);
+    LBuf.Resize(TRect.Make(1, 0, 3, 1));
+
+    LCell := LBuf.CellAt(1, 0);
+    CheckEqual(Int64(1), Int64(LCell^.Width), 'left-clipped wide tail becomes regular cell');
+    Check(not LCell^.Skip, 'left-clipped wide tail is not a skip sentinel');
+    CheckEqual(' ', CellGlyphAsString(LCell^), 'left-clipped wide tail is blank');
+    AssertRows(LBuf, [' AB'], 'resize clips orphan wide tail at left edge');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 procedure TestStyleApplied;
 var
   LBuf: TBuffer;
@@ -460,6 +509,8 @@ begin
   T.Run('diff same size', @TestDiffSameSize);
   T.Run('diff into', @TestDiffInto);
   T.Run('resize', @TestResize);
+  T.Run('resize drops wide lead clipped at right edge', @TestResizeDropsWideLeadClippedAtRightEdge);
+  T.Run('resize drops orphan wide tail at left edge', @TestResizeDropsOrphanWideTailAtLeftEdge);
   T.Run('style applied', @TestStyleApplied);
   T.Run('combining mark grapheme', @TestCombiningMark);
   T.Run('zwj emoji grapheme', @TestZWJEmoji);

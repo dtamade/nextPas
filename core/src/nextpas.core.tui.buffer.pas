@@ -59,6 +59,7 @@ type
     FImageProtocol: TImageProtocol;
     function IndexOfPos(AX, AY: Integer): Integer; inline;
     procedure MarkRowDirty(ARow: Integer); inline;
+    procedure NormalizeWideGlyphBoundaries;
     procedure ClearWideOverlapCell(AX, AY: Integer); inline;
     procedure PrepareWriteSpan(AX, AY, AWidth: Integer); inline;
   public
@@ -208,6 +209,48 @@ procedure TBuffer.MarkRowDirty(ARow: Integer);
 begin
   if ARow < 64 then
     FDirtyRows := FDirtyRows or (QWord(1) shl ARow);
+end;
+
+procedure TBuffer.NormalizeWideGlyphBoundaries;
+var
+  LRow, LCol, LWidth, LIndex: Integer;
+  LCell, LNext, LPrev: PCell;
+begin
+  LWidth := FArea.Width;
+  if (LWidth <= 0) or (FArea.Height <= 0) then
+    Exit;
+
+  for LRow := 0 to FArea.Height - 1 do
+  begin
+    for LCol := 0 to LWidth - 1 do
+    begin
+      LIndex := (LRow * LWidth) + LCol;
+      LCell := @FContent[LIndex];
+
+      if LCell^.Skip and (LCell^.Width = 0) then
+      begin
+        if LCol = 0 then
+          CellReset(LCell^)
+        else
+        begin
+          LPrev := @FContent[LIndex - 1];
+          if (LPrev^.Width <> 2) or LPrev^.Skip then
+            CellReset(LCell^);
+        end;
+      end
+      else if (LCell^.Width = 2) and (not LCell^.Skip) then
+      begin
+        if LCol + 1 >= LWidth then
+          CellReset(LCell^)
+        else
+        begin
+          LNext := @FContent[LIndex + 1];
+          if (not LNext^.Skip) or (LNext^.Width <> 0) then
+            CellReset(LCell^);
+        end;
+      end;
+    end;
+  end;
 end;
 
 procedure TBuffer.ClearWideOverlapCell(AX, AY: Integer);
@@ -531,6 +574,7 @@ begin
       LSrc := @LOld[(LY - LOldArea.Y) * LOldArea.Width + (LX - LOldArea.X)];
       FContent[(LY - ANewArea.Y) * ANewArea.Width + (LX - ANewArea.X)] := LSrc^;
     end;
+  NormalizeWideGlyphBoundaries;
   FDirtyRows := QWord(-1);
 end;
 
