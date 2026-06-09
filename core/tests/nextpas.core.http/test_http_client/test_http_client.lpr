@@ -855,6 +855,72 @@ begin
   end;
 end;
 
+function RequestConnectionClosePoolThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LReply: string;
+  LMethod: string;
+  LBody: string;
+begin
+  Result := nil;
+  try
+    LConn := GPoisonListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  InterlockedIncrement(GPoisonAcceptCount);
+  try
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    LReply := 'HTTP/1.1 200 OK'#13#10 +
+              'Content-Length: 2'#13#10 +
+              'Connection: keep-alive'#13#10 +
+              #13#10 +
+              'ok';
+    LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(150)));
+    ReadRetryRawRequest(LConn, GPoisonReusedMethod, LBody);
+    if GPoisonReusedMethod <> '' then
+    begin
+      LReply := 'HTTP/1.1 599 Poisoned'#13#10 +
+                'Content-Length: 6'#13#10 +
+                'Connection: close'#13#10 +
+                #13#10 +
+                'poison';
+      LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+    end;
+  except
+  end;
+  LConn.Close;
+
+  try
+    LConn := GPoisonListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+
+  InterlockedIncrement(GPoisonAcceptCount);
+  try
+    ReadRetryRawRequest(LConn, LMethod, LBody);
+    if LMethod <> '' then
+    begin
+      LReply := 'HTTP/1.1 200 OK'#13#10 +
+                'Content-Length: 8'#13#10 +
+                'Connection: close'#13#10 +
+                #13#10 +
+                'fresh-ok';
+      LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+    end;
+  except
+  end;
+  LConn.Close;
+end;
+
 function MalformedPooledChunkedResponseThread(AArg: Pointer): Pointer; cdecl;
 var
   LConn: ITcpStream;
@@ -2913,6 +2979,73 @@ begin
     GRawResponse1 := '';
     GRawResponse2 := '';
     GRawAcceptLimit := 0;
+  end;
+end;
+
+procedure TestClientDoesNotPoolRequestWithConnectionCloseTokenList;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LHeaders: IHttpHeaders;
+  LResp: IHttpResponse;
+  LRaised: Boolean;
+begin
+  GPoisonAcceptCount := 0;
+  GPoisonReusedMethod := '';
+  GPoisonListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GPoisonListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @RequestConnectionClosePoolThread, nil);
+
+  try
+    LClient := NewHttpClient;
+    LHeaders := NewHeaders;
+    LHeaders.SetHeader('connection', 'keep-alive, close');
+    LReq := NewRequest(hmGet,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/close-after-request',
+      LHeaders);
+    LResp := LClient.Send(LReq);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'request connection close token-list status');
+    CheckEqual('ok', ReadBodyStr(LResp),
+      'request connection close token-list body');
+    CheckEqual(Int64(1), Int64(GPoisonAcceptCount),
+      'request connection close token-list opens first connection');
+
+    LRaised := False;
+    try
+      LResp := LClient.Get('http://127.0.0.1:' +
+        IntToStr(Int64(LPort)) + '/fresh-after-close');
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+
+    Check(not LRaised,
+      'client does not reuse request connection with close token-list');
+    if not LRaised then
+    begin
+      CheckEqual(Int64(200), Int64(LResp.StatusCode),
+        'fresh request after request close token-list succeeds');
+      CheckEqual('fresh-ok', ReadBodyStr(LResp),
+        'fresh request after request close token-list body');
+    end;
+    LClient := nil;
+    CheckEqual('', GPoisonReusedMethod,
+      'request close token-list is not reused on the first connection');
+    CheckEqual(Int64(2), Int64(GPoisonAcceptCount),
+      'request close token-list makes next request open a fresh connection');
+  finally
+    LClient := nil;
+    if GPoisonAcceptCount < 2 then
+      WakeRetryAcceptThread(LPort);
+    GPoisonListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GPoisonListener := nil;
+    GPoisonAcceptCount := 0;
+    GPoisonReusedMethod := '';
   end;
 end;
 
@@ -6713,6 +6846,8 @@ begin
   T.Run('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
   T.Run('Client does not pool response Connection close token-list',
     @TestClientDoesNotPoolResponseWithConnectionCloseTokenList);
+  T.Run('Client does not pool request Connection close token-list',
+    @TestClientDoesNotPoolRequestWithConnectionCloseTokenList);
   T.Run('Client Connection close same-read tail returns first response',
     @TestClientConnectionCloseSameReadTailReturnsFirstResponse);
   T.Run('Client rejects truncated content-length response', @TestClientRejectsTruncatedContentLengthResponse);

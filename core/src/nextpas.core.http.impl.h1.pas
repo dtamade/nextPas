@@ -356,7 +356,7 @@ begin
       AUrl.Scheme);
 end;
 
-function ResponseRequestsClose(const AHeaders: IHttpHeaders): Boolean;
+function HeadersHaveConnectionCloseToken(const AHeaders: IHttpHeaders): Boolean;
 var
   LValues: TStringArray;
   LI: SizeInt;
@@ -1240,7 +1240,8 @@ begin
     ArmDirectWriteDeadline;
     LOutbound.DrainAllTo(FConn as IWriter);
 
-    if ResponseRequestsClose((LW as TH1ResponseWriter).GetCommittedHeaders) then
+    if HeadersHaveConnectionCloseToken(
+      (LW as TH1ResponseWriter).GetCommittedHeaders) then
       FKeepAlive := False;
   except
     on E: Exception do
@@ -1342,7 +1343,8 @@ begin
 
     LW.Flush;
 
-    if ResponseRequestsClose((LW as TH1ResponseWriter).GetCommittedHeaders) then
+    if HeadersHaveConnectionCloseToken(
+      (LW as TH1ResponseWriter).GetCommittedHeaders) then
       LKeepAlive := False;
     AOutbound := LOutbound;
     ACloseAfterDrain := not LKeepAlive;
@@ -2242,6 +2244,7 @@ var
   LResp: IHttpResponse;
   LPooled: Boolean;
   LKeepAlive: Boolean;
+  LRequestClose: Boolean;
   LResponseStarted: Boolean;
   LRequestWriteComplete: Boolean;
   LBodyStream: IStream;
@@ -2262,6 +2265,7 @@ begin
     LAutoHost := LUrl.HostPort;
     ValidateWireHeaderValue(LAutoHost);
   end;
+  LRequestClose := HeadersHaveConnectionCloseToken(AReq.Headers);
   LPort := LUrl.Port;
   if LPort = 0 then
     LPort := 80;
@@ -2313,7 +2317,7 @@ begin
     end;
   end;
 
-  if LKeepAlive then
+  if LKeepAlive and (not LRequestClose) then
     PoolPut(LHost, LPort, LConn)
   else
     LConn.Close;
