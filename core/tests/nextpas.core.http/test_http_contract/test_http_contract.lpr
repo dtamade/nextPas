@@ -1050,6 +1050,15 @@ begin
     'Facade CorsMiddleware returns non-nil middleware');
 end;
 
+procedure TestRecoveryMiddlewareAvailableThroughFacade;
+var
+  LMiddleware: IHttpMiddleware;
+begin
+  LMiddleware := nextpas.core.http.RecoveryMiddleware;
+  Check(LMiddleware <> nil,
+    'Facade RecoveryMiddleware returns non-nil middleware');
+end;
+
 { Test 9: Facade exposes server overloads }
 procedure TestHttpServerFacadeOverloads;
 var
@@ -1861,6 +1870,9 @@ begin
     'function CorsMiddleware(const AOptions: TCorsOptions): IHttpMiddleware;'),
     'HTTP facade must expose CorsMiddleware helper');
   Check(SourceHas(LFacadeSource,
+    'function RecoveryMiddleware: IHttpMiddleware;'),
+    'HTTP facade must expose RecoveryMiddleware helper');
+  Check(SourceHas(LFacadeSource,
     'function QueryParamValue(const AParams: TQueryParams; const AName: string): string;'),
     'HTTP facade must expose QueryParamValue helper');
   Check(SourceHas(LFacadeSource,
@@ -2108,6 +2120,8 @@ begin
   T.Run('Chain applies middleware', @TestChainMiddleware);
   T.Run('CORS middleware is available through facade',
     @TestCorsMiddlewareAvailableThroughFacade);
+  T.Run('Recovery middleware is available through facade',
+    @TestRecoveryMiddlewareAvailableThroughFacade);
   T.Run('NewHttpServer overloads are available through facade', @TestHttpServerFacadeOverloads);
   T.Run('NewHttpClient overloads are available through facade', @TestHttpClientFacadeOverloads);
   T.Run('Facade NewHttpClient consumes registered HTTP/2 registry default',
