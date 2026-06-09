@@ -216,6 +216,12 @@ begin
 
   LUrl := TUrl.Parse('http://example.com/x');
   CheckEqual('example.com', LUrl.HostPort, 'without port');
+
+  LUrl := TUrl.Parse('http://[::1]:9090/x');
+  CheckEqual('[::1]:9090', LUrl.HostPort, 'ipv6 with port');
+
+  LUrl := TUrl.Parse('http://[fe80::1]/x');
+  CheckEqual('[fe80::1]', LUrl.HostPort, 'ipv6 without port');
 end;
 
 procedure TestUrlParseIPv6;

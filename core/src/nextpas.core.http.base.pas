@@ -382,11 +382,18 @@ begin
 end;
 
 function TUrl.HostPort: string;
+var
+  LHost: string;
 begin
-  if Port <> 0 then
-    Result := Host + ':' + IntToStr(Int64(Port))
+  if Pos(':', Host) > 0 then
+    LHost := '[' + Host + ']'
   else
-    Result := Host;
+    LHost := Host;
+
+  if Port <> 0 then
+    Result := LHost + ':' + IntToStr(Int64(Port))
+  else
+    Result := LHost;
 end;
 
 { THttpClientOptions }
