@@ -303,6 +303,10 @@ var
   LTypesUSizeLockFreeSection: string;
   LTypesRefCountLockFreeSection: string;
   LTypesPtrLockFreeSection: string;
+  LLoad64FallbackSection: string;
+  LStore64FallbackSection: string;
+  LExchange64FallbackSection: string;
+  LCmpxchg64FallbackSection: string;
   LFetchAddFallbackSection: string;
   LLoad32Section: string;
   LLoad64Section: string;
@@ -405,6 +409,18 @@ begin
   LTypesPtrLockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
     'class function TAtomicPtr.is_lock_free: Boolean;',
     'function TAtomicPtr.Load(AOrder: memory_order_t): PT;');
+  LLoad64FallbackSection := ExtractImplementationSection(LAtomicSource,
+    'function _atomic_load_64_x86(var aObj: Int64): Int64;',
+    'procedure _atomic_store_64_x86(var aObj: Int64; aDesired: Int64);');
+  LStore64FallbackSection := ExtractImplementationSection(LAtomicSource,
+    'procedure _atomic_store_64_x86(var aObj: Int64; aDesired: Int64);',
+    'function _atomic_exchange_64_x86(var aObj: Int64; aDesired: Int64): Int64;');
+  LExchange64FallbackSection := ExtractImplementationSection(LAtomicSource,
+    'function _atomic_exchange_64_x86(var aObj: Int64; aDesired: Int64): Int64;',
+    'function _atomic_cmpxchg_64_x86(var aObj: Int64; var aExpected: Int64; aDesired: Int64): Boolean;');
+  LCmpxchg64FallbackSection := ExtractImplementationSection(LAtomicSource,
+    'function _atomic_cmpxchg_64_x86(var aObj: Int64; var aExpected: Int64; aDesired: Int64): Boolean;',
+    'function _atomic_fetch_add_64_x86(var aObj: Int64; aArg: Int64): Int64;');
   LFetchAddFallbackSection := ExtractImplementationSection(LAtomicSource,
     'function _atomic_fetch_add_64_x86(var aObj: Int64; aArg: Int64): Int64;',
     '{$ENDIF}');
@@ -631,6 +647,22 @@ begin
     'typed refcount lock-free query must delegate to pointer-sized runtime truth');
   CheckContains(LTypesPtrLockFreeSection, 'atomic_is_lock_free_ptr',
     'typed pointer lock-free query must delegate to pointer-sized runtime truth');
+  CheckContains(LLoad64FallbackSection, 'try',
+    'i386 64-bit fallback load must guard lock release with try/finally');
+  CheckContains(LLoad64FallbackSection, 'finally',
+    'i386 64-bit fallback load must guard lock release with try/finally');
+  CheckContains(LStore64FallbackSection, 'try',
+    'i386 64-bit fallback store must guard lock release with try/finally');
+  CheckContains(LStore64FallbackSection, 'finally',
+    'i386 64-bit fallback store must guard lock release with try/finally');
+  CheckContains(LExchange64FallbackSection, 'try',
+    'i386 64-bit fallback exchange must guard lock release with try/finally');
+  CheckContains(LExchange64FallbackSection, 'finally',
+    'i386 64-bit fallback exchange must guard lock release with try/finally');
+  CheckContains(LCmpxchg64FallbackSection, 'try',
+    'i386 64-bit fallback cmpxchg must guard lock release with try/finally');
+  CheckContains(LCmpxchg64FallbackSection, 'finally',
+    'i386 64-bit fallback cmpxchg must guard lock release with try/finally');
   CheckContains(LFetchAddFallbackSection, 'try',
     'i386 64-bit fallback add must guard lock release with try/finally');
   CheckContains(LFetchAddFallbackSection, 'finally',

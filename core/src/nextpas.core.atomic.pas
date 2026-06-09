@@ -799,8 +799,11 @@ begin
   if not gAtomic64HasCmpxchg8b then
   begin
     _atomic64_fallback_lock;
-    Result := aObj;
-    _atomic64_fallback_unlock;
+    try
+      Result := aObj;
+    finally
+      _atomic64_fallback_unlock;
+    end;
     Exit;
   end;
 
@@ -830,8 +833,11 @@ begin
   if not gAtomic64HasCmpxchg8b then
   begin
     _atomic64_fallback_lock;
-    aObj := aDesired;
-    _atomic64_fallback_unlock;
+    try
+      aObj := aDesired;
+    finally
+      _atomic64_fallback_unlock;
+    end;
     Exit;
   end;
 
@@ -862,9 +868,12 @@ begin
   if not gAtomic64HasCmpxchg8b then
   begin
     _atomic64_fallback_lock;
-    Result := aObj;
-    aObj := aDesired;
-    _atomic64_fallback_unlock;
+    try
+      Result := aObj;
+      aObj := aDesired;
+    finally
+      _atomic64_fallback_unlock;
+    end;
     Exit;
   end;
 
@@ -899,17 +908,20 @@ begin
   if not gAtomic64HasCmpxchg8b then
   begin
     _atomic64_fallback_lock;
-    if aObj = aExpected then
-    begin
-      aObj := aDesired;
-      Result := True;
-    end
-    else
-    begin
-      aExpected := aObj;
-      Result := False;
+    try
+      if aObj = aExpected then
+      begin
+        aObj := aDesired;
+        Result := True;
+      end
+      else
+      begin
+        aExpected := aObj;
+        Result := False;
+      end;
+    finally
+      _atomic64_fallback_unlock;
     end;
-    _atomic64_fallback_unlock;
     Exit;
   end;
 
