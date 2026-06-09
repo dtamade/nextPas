@@ -1765,6 +1765,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("facade-trig-power-finite-identity-precision", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade Power finite identity precision contracts'"),
     RequiredBehaviorTestMarker("facade-log-exact-identity", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade Log exact identity contracts'"),
     RequiredBehaviorTestMarker("facade-trig-ieee-domain-smoke", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade trig IEEE domain smoke'"),
+    RequiredBehaviorTestMarker("trig-direct-non-finite-overload-parity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('direct trig non-finite overload parity contracts'"),
     RequiredBehaviorTestMarker("trig-atan2-single-second-nan", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcTan2(Single 1,NaN)=NaN"),
     RequiredBehaviorTestMarker("facade-wrap-error-semantics", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade Wrap error semantics'"),
     RequiredBehaviorTestMarker("facade-fmod-huge-untyped-literals", "tests/nextpas.core.math/test_facade/test_facade.lpr", "facade Fmod huge untyped finite literals choose wide finite remainder path"),

@@ -328,6 +328,94 @@ begin
   Check(IsSingleNaN(Tan(-SingleInfinity)), 'Tan(Single -Inf)=NaN');
 end;
 
+procedure TestDirectTrigNonFiniteOverloadParityContracts;
+begin
+  Check(IsDoubleNaN(Sin(DoubleNaN)), 'Direct Sin Double NaN returns NaN');
+  Check(IsSingleNaN(Sin(SingleNaN)), 'Direct Sin Single NaN returns NaN');
+  Check(IsDoubleNaN(Sin(DoubleInfinity)), 'Direct Sin Double +Inf returns NaN');
+  Check(IsSingleNaN(Sin(SingleInfinity)), 'Direct Sin Single +Inf returns NaN');
+
+  Check(IsDoubleNaN(Cos(DoubleNaN)), 'Direct Cos Double NaN returns NaN');
+  Check(IsSingleNaN(Cos(SingleNaN)), 'Direct Cos Single NaN returns NaN');
+  Check(IsDoubleNaN(Cos(-DoubleInfinity)), 'Direct Cos Double -Inf returns NaN');
+  Check(IsSingleNaN(Cos(-SingleInfinity)), 'Direct Cos Single -Inf returns NaN');
+
+  Check(IsDoubleNaN(Tan(DoubleNaN)), 'Direct Tan Double NaN returns NaN');
+  Check(IsSingleNaN(Tan(SingleNaN)), 'Direct Tan Single NaN returns NaN');
+  Check(IsDoubleNaN(Tan(DoubleInfinity)), 'Direct Tan Double +Inf returns NaN');
+  Check(IsSingleNaN(Tan(SingleInfinity)), 'Direct Tan Single +Inf returns NaN');
+
+  Check(IsDoubleNaN(ArcSin(DoubleNaN)), 'Direct ArcSin Double NaN returns NaN');
+  Check(IsSingleNaN(ArcSin(SingleNaN)), 'Direct ArcSin Single NaN returns NaN');
+  Check(IsDoubleNaN(ArcSin(DoubleInfinity)), 'Direct ArcSin Double +Inf returns NaN');
+  Check(IsSingleNaN(ArcSin(SingleInfinity)), 'Direct ArcSin Single +Inf returns NaN');
+
+  Check(IsDoubleNaN(ArcCos(DoubleNaN)), 'Direct ArcCos Double NaN returns NaN');
+  Check(IsSingleNaN(ArcCos(SingleNaN)), 'Direct ArcCos Single NaN returns NaN');
+  Check(IsDoubleNaN(ArcCos(-DoubleInfinity)), 'Direct ArcCos Double -Inf returns NaN');
+  Check(IsSingleNaN(ArcCos(-SingleInfinity)), 'Direct ArcCos Single -Inf returns NaN');
+
+  Check(IsDoubleNaN(ArcTan(DoubleNaN)), 'Direct ArcTan Double NaN returns NaN');
+  Check(IsSingleNaN(ArcTan(SingleNaN)), 'Direct ArcTan Single NaN returns NaN');
+  CheckNear(HALF_PI, ArcTan(DoubleInfinity), 0.000000000001,
+    'Direct ArcTan Double +Inf returns PI/2');
+  CheckNear(-HALF_PI, ArcTan(-SingleInfinity), 0.000001,
+    'Direct ArcTan Single -Inf returns -PI/2');
+
+  Check(IsDoubleNaN(ArcTan2(DoubleNaN, 1.0)),
+    'Direct ArcTan2 Double NaN first argument returns NaN');
+  Check(IsDoubleNaN(ArcTan2(1.0, DoubleNaN)),
+    'Direct ArcTan2 Double NaN second argument returns NaN');
+  Check(IsSingleNaN(ArcTan2(SingleNaN, Single(1.0))),
+    'Direct ArcTan2 Single NaN first argument returns NaN');
+  Check(IsSingleNaN(ArcTan2(Single(1.0), SingleNaN)),
+    'Direct ArcTan2 Single NaN second argument returns NaN');
+  CheckNear(3.0 * PI_VALUE / 4.0, ArcTan2(DoubleInfinity, -DoubleInfinity),
+    0.000000000001, 'Direct ArcTan2 Double +Inf,-Inf returns 3PI/4');
+  CheckNear(-3.0 * PI_VALUE / 4.0, ArcTan2(-SingleInfinity, -SingleInfinity),
+    0.000001, 'Direct ArcTan2 Single -Inf,-Inf returns -3PI/4');
+
+  Check(IsDoubleNaN(Exp(DoubleNaN)), 'Direct Exp Double NaN returns NaN');
+  Check(IsSingleNaN(Exp(SingleNaN)), 'Direct Exp Single NaN returns NaN');
+  Check(IsDoublePositiveInfinity(Exp(DoubleInfinity)),
+    'Direct Exp Double +Inf returns +Inf');
+  Check(IsSinglePositiveZero(Exp(-SingleInfinity)),
+    'Direct Exp Single -Inf returns +0');
+
+  Check(IsDoubleNaN(Ln(DoubleNaN)), 'Direct Ln Double NaN returns NaN');
+  Check(IsSingleNaN(Ln(SingleNaN)), 'Direct Ln Single NaN returns NaN');
+  Check(IsDoubleNaN(Ln(-DoubleInfinity)), 'Direct Ln Double -Inf returns NaN');
+  Check(IsSinglePositiveInfinity(Ln(SingleInfinity)),
+    'Direct Ln Single +Inf returns +Inf');
+
+  Check(IsDoubleNaN(Log2(DoubleNaN)), 'Direct Log2 Double NaN returns NaN');
+  Check(IsSingleNaN(Log2(SingleNaN)), 'Direct Log2 Single NaN returns NaN');
+  Check(IsDoubleNaN(Log2(-DoubleInfinity)), 'Direct Log2 Double -Inf returns NaN');
+  Check(IsSinglePositiveInfinity(Log2(SingleInfinity)),
+    'Direct Log2 Single +Inf returns +Inf');
+
+  Check(IsDoubleNaN(Log10(DoubleNaN)), 'Direct Log10 Double NaN returns NaN');
+  Check(IsSingleNaN(Log10(SingleNaN)), 'Direct Log10 Single NaN returns NaN');
+  Check(IsDoubleNaN(Log10(-DoubleInfinity)), 'Direct Log10 Double -Inf returns NaN');
+  Check(IsSinglePositiveInfinity(Log10(SingleInfinity)),
+    'Direct Log10 Single +Inf returns +Inf');
+
+  Check(IsDoubleNaN(Power(DoubleNaN, 2.0)),
+    'Direct Power Double NaN base returns NaN');
+  Check(IsSingleNaN(Power(SingleNaN, Single(2.0))),
+    'Direct Power Single NaN base returns NaN');
+  Check(IsDoublePositiveInfinity(Power(2.0, DoubleInfinity)),
+    'Direct Power Double finite base +Inf exponent returns +Inf');
+  Check(IsSinglePositiveZero(Power(Single(2.0), -SingleInfinity)),
+    'Direct Power Single finite base -Inf exponent returns +0');
+
+  Check(IsDoubleNaN(Sqrt(DoubleNaN)), 'Direct Sqrt Double NaN returns NaN');
+  Check(IsSingleNaN(Sqrt(SingleNaN)), 'Direct Sqrt Single NaN returns NaN');
+  Check(IsDoublePositiveInfinity(Sqrt(DoubleInfinity)),
+    'Direct Sqrt Double +Inf returns +Inf');
+  Check(IsSingleNaN(Sqrt(-SingleInfinity)), 'Direct Sqrt Single -Inf returns NaN');
+end;
+
 procedure TestCircularTrigSignedZeroContracts;
 begin
   Check(IsDoublePositiveZero(Sin(0.0)), 'Sin(+0)=+0');
@@ -1082,6 +1170,8 @@ begin
   T.Run('inverse trig domain contracts', @TestInverseTrigDomainContracts);
   T.Run('inverse trig non-finite contracts', @TestInverseTrigNonFiniteContracts);
   T.Run('circular trig non-finite contracts', @TestCircularTrigNonFiniteContracts);
+  T.Run('direct trig non-finite overload parity contracts',
+    @TestDirectTrigNonFiniteOverloadParityContracts);
   T.Run('circular trig signed zero contracts', @TestCircularTrigSignedZeroContracts);
   T.Run('circular trig finite precision contracts', @TestCircularTrigFinitePrecisionContracts);
   T.Run('ArcTan special contracts', @TestArcTanSpecialContracts);
