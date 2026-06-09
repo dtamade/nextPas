@@ -74,13 +74,23 @@ begin
   ACell := CELL_EMPTY;
 end;
 
+procedure CellClearGlyphTail(var ACell: TCell; AStart: Byte); inline;
+var
+  LI: Integer;
+begin
+  if AStart >= TUI_CELL_GLYPH_BYTES then
+    Exit;
+  for LI := AStart to TUI_CELL_GLYPH_BYTES - 1 do
+    ACell.Glyph.Bytes[LI] := 0;
+end;
+
 procedure CellSetSymbolAscii(var ACell: TCell; const ACh: AnsiChar);
 begin
-  { 只写 Bytes[0]，尾字节沿用 CellReset/CELL_EMPTY 的全零。
-    CellEquals 用完整 QWord 比较，故调用方必须先经 CellReset 再构造。 }
   ACell.Glyph.Len := 1;
   ACell.Glyph.Bytes[0] := Byte(ACh);
+  CellClearGlyphTail(ACell, 1);
   ACell.Width := 1;
+  ACell.Skip := False;
 end;
 
 procedure CellSetSymbolBytes(var ACell: TCell; const ABytes; ALen: Byte; AWidth: Byte);
@@ -95,8 +105,10 @@ begin
     LSrc := @ABytes;
     Move(LSrc^, ACell.Glyph.Bytes[0], ALen);
   end;
+  CellClearGlyphTail(ACell, ALen);
   if AWidth = 0 then AWidth := 1;
   ACell.Width := AWidth;
+  ACell.Skip := False;
 end;
 
 procedure CellApplyStyle(var ACell: TCell; const AStyle: TStyle);

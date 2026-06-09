@@ -417,6 +417,33 @@ begin
   end;
 end;
 
+procedure TestOverwriteWidthOneGraphemeClearsGlyphTailForDiff;
+var
+  LFresh, LReused: TBuffer;
+  LFreshCell, LReusedCell: PCell;
+  LPatches: TDiffEntries;
+begin
+  LFresh := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 1));
+  LReused := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 1));
+  try
+    LFresh.SetString(0, 0, 'A', StyleDefault);
+    LReused.SetString(0, 0, 'e' + #$CC#$81, StyleDefault);
+    LReused.SetString(0, 0, 'A', StyleDefault);
+
+    LFreshCell := LFresh.CellAt(0, 0);
+    LReusedCell := LReused.CellAt(0, 0);
+    Check(CellEquals(LFreshCell^, LReusedCell^),
+      'short overwrite canonicalizes glyph tail for QWord cell compare');
+
+    LFresh.Diff(LReused, LPatches);
+    CheckEqual(Int64(0), Int64(System.Length(LPatches)),
+      'canonicalized equal cells do not emit diff patches');
+  finally
+    LFresh.Free;
+    LReused.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.tui.buffer');
   T.Run('create empty', @TestCreateEmpty);
@@ -442,6 +469,7 @@ begin
   T.Run('overwrite wide lead with narrow', @TestOverwriteWideGlyphLeadWithNarrow);
   T.Run('overwrite wide tail with narrow', @TestOverwriteWideGlyphTailWithNarrow);
   T.Run('set stringP overwrite wide tail with narrow', @TestSetStringPOverwriteWideTailWithNarrow);
+  T.Run('overwrite width-1 grapheme clears glyph tail for diff', @TestOverwriteWidthOneGraphemeClearsGlyphTailForDiff);
   T.Summary;
   if not T.AllPassed then
     Halt(1);
