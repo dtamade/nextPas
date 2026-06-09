@@ -295,13 +295,16 @@ begin
       if FUseBudget then FBudget.BeginFrame;
       if FUseFocus then FFocus.BeginFrame;
       Frame := DoBeginFrame;
-      if Assigned(FOnRender) then
-        FOnRender(Self, Frame)
-      else
-        Render(Frame);
-      ConsumeScreenQuitRequest;
-      DoEndFrame(Frame);
-      if FUseBudget then FBudget.EndFrame;
+      try
+        if Assigned(FOnRender) then
+          FOnRender(Self, Frame)
+        else
+          Render(Frame);
+        ConsumeScreenQuitRequest;
+      finally
+        DoEndFrame(Frame);
+        if FUseBudget then FBudget.EndFrame;
+      end;
       if FShouldQuit then
         Continue;
       Ev := DoPollEvent;

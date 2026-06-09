@@ -42,6 +42,7 @@ type
     RequestQuitOnEvent: Boolean;
     RequestQuitOnTaskCompletion: Boolean;
     RaiseOnEnter: Boolean;
+    RaiseOnRender: Boolean;
     PushScreenOnTaskCompletion: TScreen;
     FollowUpTasks: TTaskManager;
     FollowUpTaskId: TTaskId;
@@ -179,6 +180,8 @@ procedure TRecordingScreen.Render(const Area: TRect; Buf: TBuffer);
 begin
   Inc(RenderCount);
   LastArea := Area;
+  if RaiseOnRender then
+    raise Exception.Create(String(Name) + ' render failed');
   if SharedStateObject <> nil then
     AppendLogEntry(RenderedSharedStateLog,
       TSharedStateBox(SharedStateObject).Value);
@@ -654,6 +657,43 @@ begin
   finally
     LOtherStack.Free;
     LOwnedStack.Free;
+  end;
+end;
+
+procedure TestAppEndsFrameWhenScreenRenderRaises;
+var
+  LApp: TFakeApp;
+  LScreen: TRecordingScreen;
+begin
+  LApp := TFakeApp.Create([KeyCharEvent(Ord('q'), [kmCtrl])]);
+  try
+    LApp.EnableBudget(16);
+    LScreen := TRecordingScreen.Create;
+    LScreen.Name := 'failing';
+    LScreen.RaiseOnRender := True;
+    LApp.Screens.Push(LScreen);
+
+    try
+      LApp.Run;
+      Fail('render failure should propagate');
+    except
+      on E: Exception do
+        Check(Pos('render failed', E.Message) > 0,
+          'app surfaces screen render failure');
+    end;
+
+    CheckEqual(Int64(1), Int64(LApp.BeginFrameCount),
+      'render failure begins exactly one frame');
+    CheckEqual(Int64(1), Int64(LApp.EndFrameCount),
+      'render failure still ends the active frame');
+    CheckEqual(Int64(1), Int64(LApp.Budget.Stats.FrameCount),
+      'render failure still ends the active budget frame');
+    CheckEqual(Int64(1), Int64(LApp.LeaveCount),
+      'render failure still leaves tui');
+    CheckEqual(Int64(0), Int64(LApp.PollCount),
+      'render failure happens before polling');
+  finally
+    LApp.Free;
   end;
 end;
 
@@ -1484,6 +1524,7 @@ begin
   T.Run('screen stack replace frees old top', @TestScreenStackReplaceFreesOldTop);
   T.Run('screen stack push rollback restores previous top', @TestScreenStackPushRollbackRestoresPreviousTop);
   T.Run('screen stack rejects nil and owned screens', @TestScreenStackRejectsNilAndOwnedScreens);
+  T.Run('app ends frame when screen render raises', @TestAppEndsFrameWhenScreenRenderRaises);
   T.Run('app routes task completions to top screen by default', @TestAppRoutesTaskCompletionsToTopScreenByDefault);
   T.Run('app routes task completions to callback path', @TestAppRoutesTaskCompletionsToCallbackPath);
   T.Run('app routes cancelled task completion to top screen by default', @TestAppRoutesCancelledTaskCompletionToTopScreenByDefault);
