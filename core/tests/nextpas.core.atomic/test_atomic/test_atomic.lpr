@@ -324,6 +324,7 @@ var
   LPascalCaseCasPtrSection: string;
   LDefaultTaggedPtrLoadSection: string;
   LAtomicWaitSection: string;
+  LAtomicWaitUInt32Section: string;
   LAtomicNotifyOneSection: string;
   LAtomicNotifyAllSection: string;
   LRefCountTypeSection: string;
@@ -467,6 +468,9 @@ begin
   LAtomicWaitSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_wait(var aObj: Int32; aExpected: Int32; const aTimeoutNs: Int64): Int32;',
     'function atomic_wait(var aObj: UInt32; aExpected: UInt32; const aTimeoutNs: Int64): Int32;');
+  LAtomicWaitUInt32Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_wait(var aObj: UInt32; aExpected: UInt32; const aTimeoutNs: Int64): Int32;',
+    'function atomic_notify_one(var aObj: Int32): Int32;');
   LAtomicNotifyOneSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_notify_one(var aObj: Int32): Int32;',
     'function atomic_notify_one(var aObj: UInt32): Int32;');
@@ -650,6 +654,22 @@ begin
     'default PtrInt atomic_store must not use release');
   CheckContains(LAtomicWaitSection, 'platform_wait_address32',
     'atomic_wait must delegate to platform wait-address primitive');
+  CheckContains(LAtomicWaitSection, 'atomic_load(aObj, mo_seq_cst) <> aExpected',
+    'atomic_wait Int32 mismatch path must be owned before platform wait');
+  CheckContains(LAtomicWaitSection, 'Exit(PLATFORM_ERR_AGAIN)',
+    'atomic_wait Int32 mismatch path must return AGAIN before platform wait');
+  CheckContains(LAtomicWaitSection, 'aTimeoutNs = 0',
+    'atomic_wait Int32 zero-timeout path must be explicit before platform wait');
+  CheckContains(LAtomicWaitSection, 'Exit(PLATFORM_ERR_TIMEOUT)',
+    'atomic_wait Int32 zero-timeout path must return TIMEOUT before platform wait');
+  CheckContains(LAtomicWaitUInt32Section, 'atomic_load(aObj, mo_seq_cst) <> aExpected',
+    'atomic_wait UInt32 mismatch path must be owned before platform wait');
+  CheckContains(LAtomicWaitUInt32Section, 'Exit(PLATFORM_ERR_AGAIN)',
+    'atomic_wait UInt32 mismatch path must return AGAIN before platform wait');
+  CheckContains(LAtomicWaitUInt32Section, 'aTimeoutNs = 0',
+    'atomic_wait UInt32 zero-timeout path must be explicit before platform wait');
+  CheckContains(LAtomicWaitUInt32Section, 'Exit(PLATFORM_ERR_TIMEOUT)',
+    'atomic_wait UInt32 zero-timeout path must return TIMEOUT before platform wait');
   CheckContains(LAtomicNotifyOneSection, 'platform_wake_address_one',
     'atomic_notify_one must delegate to platform wake-one primitive');
   CheckContains(LAtomicNotifyAllSection, 'platform_wake_address_all',

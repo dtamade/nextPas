@@ -3383,11 +3383,21 @@ end;
 
 function atomic_wait(var aObj: Int32; aExpected: Int32; const aTimeoutNs: Int64): Int32;
 begin
+  if atomic_load(aObj, mo_seq_cst) <> aExpected then
+    Exit(PLATFORM_ERR_AGAIN);
+  if aTimeoutNs = 0 then
+    Exit(PLATFORM_ERR_TIMEOUT);
+
   Result := platform_wait_address32(@aObj, aExpected, aTimeoutNs);
 end;
 
 function atomic_wait(var aObj: UInt32; aExpected: UInt32; const aTimeoutNs: Int64): Int32;
 begin
+  if atomic_load(aObj, mo_seq_cst) <> aExpected then
+    Exit(PLATFORM_ERR_AGAIN);
+  if aTimeoutNs = 0 then
+    Exit(PLATFORM_ERR_TIMEOUT);
+
   Result := platform_wait_address32(PInt32(@aObj), Int32(aExpected), aTimeoutNs);
 end;
 
