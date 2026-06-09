@@ -922,10 +922,12 @@ var
   A3f: TVec3f;
   B3f: TVec3f;
   C3f: TVec3f;
+  Expected3fY: Double;
   Expected3fZ: Double;
   A3d: TVec3d;
   B3d: TVec3d;
   C3d: TVec3d;
+  Expected3dY: Double;
   Expected3dZ: Double;
 begin
   A3f := TVec3f.Create(Single(2.0e19), Single(2.0e19), 0.0);
@@ -938,6 +940,16 @@ begin
   CheckScaledNear(Expected3fZ, C3f.Z, Expected3fZ, 0.00001,
     'TVec3f huge finite Cross cancellation preserves finite Z');
 
+  A3f := TVec3f.Create(Single(2.0e19), 0.0, Single(2.0e19));
+  B3f := TVec3f.Create(Single(2.00002e19), 0.0, A3f.Z);
+  C3f := TVec3f.Cross(A3f, B3f);
+  Expected3fY := Double(A3f.Z) * (Double(B3f.X) - Double(A3f.X));
+  CheckNear(0.0, C3f.X, 0.0, 'TVec3f huge finite Cross cancellation Y-axis X');
+  CheckSingleFinite(C3f.Y, 'TVec3f huge finite Cross cancellation Y stays finite');
+  CheckNear(0.0, C3f.Z, 0.0, 'TVec3f huge finite Cross cancellation Y-axis Z');
+  CheckScaledNear(Expected3fY, C3f.Y, Expected3fY, 0.00001,
+    'TVec3f huge finite Cross cancellation preserves finite Y');
+
   A3d := TVec3d.Create(1.5e154, 1.25e154, 0.0);
   B3d := TVec3d.Create(A3d.X, A3d.Y * (1.0 + 1.0e-15), 0.0);
   C3d := TVec3d.Cross(A3d, B3d);
@@ -947,6 +959,16 @@ begin
   CheckDoubleFinite(C3d.Z, 'TVec3d huge finite Cross cancellation Z stays finite');
   CheckScaledNear(Expected3dZ, C3d.Z, Expected3dZ, 0.000000000001,
     'TVec3d huge finite Cross cancellation preserves finite Z');
+
+  A3d := TVec3d.Create(1.25e154, 0.0, 1.5e154);
+  B3d := TVec3d.Create(A3d.X * (1.0 + 1.0e-15), 0.0, A3d.Z);
+  C3d := TVec3d.Cross(A3d, B3d);
+  Expected3dY := A3d.Z * (B3d.X - A3d.X);
+  CheckNear(0.0, C3d.X, 0.0, 'TVec3d huge finite Cross cancellation Y-axis X');
+  CheckDoubleFinite(C3d.Y, 'TVec3d huge finite Cross cancellation Y stays finite');
+  CheckNear(0.0, C3d.Z, 0.0, 'TVec3d huge finite Cross cancellation Y-axis Z');
+  CheckScaledNear(Expected3dY, C3d.Y, Expected3dY, 0.000000000001,
+    'TVec3d huge finite Cross cancellation preserves finite Y-axis');
 end;
 
 procedure TestVectorHugeFiniteCrossOutOfRangeSignedInfinityContract;
@@ -979,6 +1001,18 @@ begin
   C3d := TVec3d.Cross(A3d, B3d);
   CheckDoubleNegativeInfinity(C3d.X,
     'TVec3d huge finite Cross true negative out-of-range returns -Inf');
+
+  A3f := TVec3f.Create(Single(3.0e20), 0.0, 0.0);
+  B3f := TVec3f.Create(0.0, Single(-3.0e20), 0.0);
+  C3f := TVec3f.Cross(A3f, B3f);
+  CheckSingleNegativeInfinity(C3f.Z,
+    'TVec3f huge finite Cross true negative out-of-range Z returns -Inf');
+
+  A3d := TVec3d.Create(3.0e200, 0.0, 0.0);
+  B3d := TVec3d.Create(0.0, -3.0e200, 0.0);
+  C3d := TVec3d.Cross(A3d, B3d);
+  CheckDoubleNegativeInfinity(C3d.Z,
+    'TVec3d huge finite Cross true negative out-of-range Z returns -Inf');
 end;
 
 procedure TestVectorDataAliasesWriteThrough;
