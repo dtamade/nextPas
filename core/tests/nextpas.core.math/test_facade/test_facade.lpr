@@ -11,7 +11,7 @@ uses
 var
   T: TTestRunner;
 
-function MakeNaN: Double;
+function DoubleFromBits(const ABits: UInt64): Double;
 type
   TDoubleBits = packed record
     case Integer of
@@ -21,8 +21,13 @@ type
 var
   LCast: TDoubleBits;
 begin
-  LCast.Bits := UInt64($7FF8000000000000);
+  LCast.Bits := ABits;
   Result := LCast.Value;
+end;
+
+function MakeNaN: Double;
+begin
+  Result := DoubleFromBits(UInt64($7FF8000000000000));
 end;
 
 function MakeSingleNaN: Single;
@@ -37,6 +42,16 @@ var
 begin
   LCast.Bits := UInt32($7FC00000);
   Result := LCast.Value;
+end;
+
+function MakePositiveInfinity: Double;
+begin
+  Result := DoubleFromBits(UInt64($7FF0000000000000));
+end;
+
+function MakeDoubleNegativeZero: Double;
+begin
+  Result := DoubleFromBits(UInt64($8000000000000000));
 end;
 
 procedure CheckNear(const AExpected, AActual: Double; const AMessage: string);
@@ -516,6 +531,29 @@ begin
     'facade Log10(Single 10)=1 exact bits');
 end;
 
+procedure TestFacadeTrigIeeeDomainSmoke;
+var
+  LPositiveInfinity: Double;
+  LExpPositiveInfinity: Double;
+begin
+  LPositiveInfinity := MakePositiveInfinity;
+  LExpPositiveInfinity := nextpas.core.math.Exp(LPositiveInfinity);
+  Check(nextpas.core.math.IsNaN(nextpas.core.math.ArcSin(Double(1.0001))),
+    'facade ArcSin domain overflow returns NaN');
+  Check(nextpas.core.math.IsNaN(nextpas.core.math.Ln(Double(-1.0))),
+    'facade Ln negative input returns NaN');
+  Check(nextpas.core.math.IsNaN(nextpas.core.math.Sqrt(Double(-1.0))),
+    'facade Sqrt negative input returns NaN');
+  Check(nextpas.core.math.IsNaN(nextpas.core.math.Power(Double(-2.0), Double(0.5))),
+    'facade Power negative fractional exponent returns NaN');
+  Check(nextpas.core.math.IsInfinite(LExpPositiveInfinity) and
+    (LExpPositiveInfinity > 0.0),
+    'facade Exp positive infinity returns positive infinity');
+  Check(SameDoubleBits(-PI_VALUE,
+    nextpas.core.math.ArcTan2(MakeDoubleNegativeZero, MakeDoubleNegativeZero)),
+    'facade ArcTan2(-0,-0) returns -PI exact bits');
+end;
+
 procedure RaiseFacadeClampReversedBounds;
 begin
   Clamp(1.0, 2.0, 1.0);
@@ -558,5 +596,6 @@ begin
   T.Run('facade Power finite identity precision contracts',
     @TestFacadePowerFiniteIdentityPrecisionContracts);
   T.Run('facade Log exact identity contracts', @TestFacadeLogExactIdentityContracts);
+  T.Run('facade trig IEEE domain smoke', @TestFacadeTrigIeeeDomainSmoke);
   T.Summary;
 end.
