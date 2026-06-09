@@ -1175,6 +1175,7 @@ end;
 
 procedure TestVectorMeasureNonFiniteContracts;
 var
+  C3f: TVec3f;
   C3d: TVec3d;
   SavedMask: TFPUExceptionMask;
 begin
@@ -1188,13 +1189,25 @@ begin
       'TVec3f Length infinite component returns +Inf');
     CheckDoublePositiveInfinity(TVec4d.Create(1.0, DoubleInfinity, 2.0, 3.0).LengthSqr,
       'TVec4d LengthSqr infinite component returns +Inf');
+    CheckSinglePositiveInfinity(TVec4f.Create(1.0, SingleInfinity, 2.0, 3.0).LengthSqr,
+      'TVec4f LengthSqr infinite component returns +Inf');
 
     CheckSingleNaNValue(TVec2f.Dot(TVec2f.Create(0.0, 1.0),
       TVec2f.Create(SingleInfinity, 2.0)),
       'TVec2f Dot zero times infinity returns NaN');
+    CheckSingleNaNValue(TVec4f.Dot(TVec4f.Create(0.0, 1.0, 2.0, 3.0),
+      TVec4f.Create(SingleInfinity, 2.0, 3.0, 4.0)),
+      'TVec4f Dot zero times infinity returns NaN');
     CheckDoublePositiveInfinity(TVec3d.Dot(TVec3d.Create(DoubleInfinity, 2.0, 0.0),
       TVec3d.Create(1.0, 3.0, 0.0)),
       'TVec3d Dot infinite component returns +Inf');
+
+    C3f := TVec3f.Cross(TVec3f.Create(0.0, 1.0, 0.0),
+      TVec3f.Create(0.0, 0.0, SingleInfinity));
+    CheckSinglePositiveInfinity(C3f.X,
+      'TVec3f Cross raw non-finite fallback returns +Inf component');
+    CheckSingleNaNValue(C3f.Y,
+      'TVec3f Cross raw non-finite fallback returns NaN component');
 
     C3d := TVec3d.Cross(TVec3d.Create(0.0, 1.0, 0.0),
       TVec3d.Create(0.0, 0.0, DoubleInfinity));
