@@ -69,10 +69,8 @@ uses
   nextpas.core.hash.base,
   nextpas.core.encoding,
   nextpas.core.text.utf8,
+  nextpas.core.websocket.base,
   nextpas.core.net.intf;
-
-const
-  WS_GUID = '258EAFA5-E914-47DA-95CA-5AB53DC85B11';
 
 type
   TWebSocketImpl = class(TInterfacedObject, IWebSocket)
