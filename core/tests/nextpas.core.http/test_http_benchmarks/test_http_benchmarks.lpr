@@ -470,6 +470,26 @@ begin
     ALabel + ' should not emit a benchmark row');
 end;
 
+procedure CheckInvalidFullchainMaxItersRejected(const AExecutable: string;
+  const AWorkingDir, AValue, ALabel: string);
+var
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  RunProcessAndCaptureWithEnv(AExecutable, [], AWorkingDir,
+    [BenchMaxItersEnvName + '=' + AValue,
+     BenchFilterEnvName + '=plaintext'],
+    LExitCode, LOutput);
+  Check(LExitCode <> 0, ALabel + ' should reject invalid max iters: ' +
+    LOutput);
+  CheckContains(LOutput, 'invalid ' + BenchMaxItersEnvName,
+    ALabel + ' invalid max iters diagnostic');
+  CheckContains(LOutput, AValue,
+    ALabel + ' invalid max iters diagnostic includes value');
+  CheckNotContains(LOutput, 'operation=http.fullchain.keepalive',
+    ALabel + ' should not emit a benchmark row');
+end;
+
 procedure CheckRequestedAndEffectiveThreads(const AOutput,
   ARequestedThreads, AEffectiveThreads, ALabel: string);
 begin
@@ -2321,6 +2341,31 @@ begin
 
   CheckInvalidFullchainBackendRejected(LBinaryPath, LBenchDir,
     'bench_fullchain');
+end;
+
+procedure TestBenchFullchainRejectsInvalidMaxIters;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchFullchainRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain invalid max-iters build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchFullchainBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_fullchain invalid max-iters binary exists');
+
+  CheckInvalidFullchainMaxItersRejected(LBinaryPath, LBenchDir, '0',
+    'bench_fullchain zero max iters');
+  CheckInvalidFullchainMaxItersRejected(LBinaryPath, LBenchDir, 'not_an_int',
+    'bench_fullchain non-integer max iters');
 end;
 
 procedure TestBenchFullchainEpollDirectPlaintextSmoke;
@@ -5142,6 +5187,8 @@ begin
     @TestBenchFullchainSink16KSmoke);
   T.Run('bench_fullchain rejects invalid backend',
     @TestBenchFullchainRejectsInvalidBackend);
+  T.Run('bench_fullchain rejects invalid max iters',
+    @TestBenchFullchainRejectsInvalidMaxIters);
   T.Run('bench_fullchain epoll direct plaintext smoke',
     @TestBenchFullchainEpollDirectPlaintextSmoke);
   T.Run('bench_fullchain epoll direct 1k smoke',

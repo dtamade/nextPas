@@ -743,6 +743,9 @@ markers:
 - `bench_max_iters=<iterations>`
 - `bench_filter=<filter when set>`
 
+Invalid non-empty `NEXTPAS_BENCH_MAX_ITERS` values, including `0`, fail fast
+before any full-chain benchmark row is emitted.
+
 The narrowest full-chain workloads now split router dispatch and response size
 from the rest of the keep-alive server path:
 

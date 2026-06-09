@@ -86,11 +86,15 @@ function ConfiguredIterations: Int64;
 var
   LValue: string;
 begin
-  Result := DEFAULT_ITERATIONS;
   LValue := Trim(GetEnvironmentVariable(BENCH_MAX_ITERS_ENV));
-  if (LValue <> '') and TryStrToInt64(LValue, Result) and (Result > 0) then
-    Exit;
-  Result := DEFAULT_ITERATIONS;
+  if LValue = '' then
+    Exit(DEFAULT_ITERATIONS);
+  if (not TryStrToInt64(LValue, Result)) or (Result <= 0) then
+  begin
+    WriteLn(StdErr, 'invalid ', BENCH_MAX_ITERS_ENV, ': ', LValue,
+      '; expected positive integer');
+    Halt(2);
+  end;
 end;
 
 function ConfiguredFilter: string;
