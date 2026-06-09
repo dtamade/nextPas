@@ -1741,6 +1741,12 @@ begin
     'architecture docs must include request-target parse seam');
   Check(SourceHas(LSource, 'HostPort'),
     'architecture docs must include current TUrl.HostPort helper');
+  Check(SourceHas(LSource, 'property Version: THttpVersion read GetVersion;'),
+    'architecture docs must include handler-visible request version');
+  Check(SourceHas(LSource, 'property ContentLength: Int64 read GetContentLength;'),
+    'architecture docs must include handler-visible content length');
+  Check(SourceHas(LSource, 'property RemoteAddr: string read GetRemoteAddr;'),
+    'architecture docs must include handler-visible remote address');
 end;
 
 procedure TestHttpApiCoverageResponseBodyHelperTruthContract;

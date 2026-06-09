@@ -227,10 +227,13 @@ type
     { handler/router hot path should prefer Path / RawQuery over full Url materialization. }
     property Method: THttpMethod read GetMethod;
     property Url: TUrl read GetUrl;
+    property Version: THttpVersion read GetVersion;
     property Path: string read GetPath;
     property RawQuery: string read GetRawQuery;
     property Headers: IHttpHeaders read GetHeaders;
     property Body: IReader read GetBody;
+    property ContentLength: Int64 read GetContentLength;
+    property RemoteAddr: string read GetRemoteAddr;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
   end;
