@@ -74,6 +74,9 @@ make -C core core-math-facade-local-smoke
 `make -C core/tests/nextpas.core.math/test_facade clean test` through the same owner-level
 boundary, so the direct facade-consumer proof stays independently repeatable instead of being tied
 to the trig-specific gate.
+The canonical facade consumer test imports `nextpas.core.math` as its only math unit; support
+imports such as `SysUtils`, `nextpas.core.testing`, and `nextpas.core.errors` do not count as math
+API imports.
 
 Run the named symbol-scope gate when you want to prove `nextpas.core.math` still coexists cleanly
 with `nextpas.core.simd.mathutil`:

@@ -158,6 +158,7 @@ ROOT_FACADE_CONSTANT_PARITY_EXPECTATIONS = {
 }
 FACADE_TYPE_ALIAS_COMPILE_TEST_PATH = "tests/nextpas.core.math/test_facade/test_facade.lpr"
 FACADE_TYPE_ALIAS_COMPILE_TEST_MARKER = "T.Run('facade type alias compile surface'"
+FACADE_ROOT_IMPORT_TEST_MARKER = "T.Run('facade imports only root math unit'"
 REQUIRED_FACADE_TYPE_ALIAS_COMPILE_USES = {
     "tvec2f": "LVec2f: TVec2f",
     "tvec3f": "LVec3f: TVec3f",
@@ -300,6 +301,12 @@ REQUIRED_SIMD_SEAM_DOC_TRUTH = (
     (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
         "Current `TVec*`, `TMat*`, and `TQuat*` public value-type methods remain scalar: local SIMD seam benchmarks are negative wiring evidence, and public math source units must not import `math.impl.simd` until a later profiled cutover adds tested public SIMD primitives.",
+    ),
+)
+REQUIRED_FACADE_ONLY_DOC_TRUTH = (
+    (
+        "docs/math/API.md",
+        "The canonical facade consumer test imports `nextpas.core.math` as its only math unit; support imports such as `SysUtils`, `nextpas.core.testing`, and `nextpas.core.errors` do not count as math API imports.",
     ),
 )
 REQUIRED_IMPL_SIMD_WIN64_COMPILE_DOC_TRUTH = (
@@ -4052,6 +4059,57 @@ def scan_facade_type_alias_compile_surface(root: Path) -> list[Finding]:
     return findings
 
 
+def scan_facade_root_import_contract(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    path = root / FACADE_TYPE_ALIAS_COMPILE_TEST_PATH
+    if not path.is_file():
+        add_finding(
+            findings,
+            "missing-facade-root-import-test-file",
+            root,
+            path,
+            1,
+            FACADE_TYPE_ALIAS_COMPILE_TEST_PATH,
+        )
+        return findings
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    code = strip_pascal_comments_and_strings(text)
+    if FACADE_ROOT_IMPORT_TEST_MARKER not in strip_pascal_comments(text):
+        add_finding(
+            findings,
+            "missing-facade-root-import-marker",
+            root,
+            path,
+            1,
+            FACADE_ROOT_IMPORT_TEST_MARKER,
+        )
+
+    units = active_uses_units_with_lines(interface_text(code))
+    seen_units = {unit for unit, _line in units}
+    if "nextpas.core.math" not in seen_units:
+        add_finding(
+            findings,
+            "facade-consumer-missing-root-import",
+            root,
+            path,
+            1,
+            "nextpas.core.math",
+        )
+    for unit, line in units:
+        if not unit.startswith("nextpas.core.math."):
+            continue
+        add_finding(
+            findings,
+            "facade-consumer-disallowed-math-import:" + unit,
+            root,
+            path,
+            line,
+            unit,
+        )
+    return findings
+
+
 def run_facade_type_alias_compile_surface_self_tests() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -4097,6 +4155,54 @@ def run_facade_type_alias_compile_surface_self_tests() -> None:
         if findings:
             raise AssertionError(
                 "facade-type-alias-compile-surface self-test expected no findings"
+            )
+
+
+def run_facade_root_import_contract_self_tests() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        path = root / FACADE_TYPE_ALIAS_COMPILE_TEST_PATH
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "program test_facade;\n"
+            "uses\n"
+            "  SysUtils,\n"
+            "  nextpas.core.testing,\n"
+            "  nextpas.core.errors,\n"
+            "  nextpas.core.math,\n"
+            "  nextpas.core.math.vec;\n"
+            "begin\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        findings = scan_facade_root_import_contract(root)
+        rules = {finding.rule for finding in findings}
+        expected_rules = {
+            "missing-facade-root-import-marker",
+            "facade-consumer-disallowed-math-import:nextpas.core.math.vec",
+        }
+        if not expected_rules <= rules:
+            raise AssertionError(
+                "facade-root-import-contract self-test missing "
+                + ", ".join(sorted(expected_rules - rules))
+            )
+
+        path.write_text(
+            "program test_facade;\n"
+            "uses\n"
+            "  SysUtils,\n"
+            "  nextpas.core.testing,\n"
+            "  nextpas.core.errors,\n"
+            "  nextpas.core.math;\n"
+            "begin\n"
+            "  T.Run('facade imports only root math unit', procedure begin end);\n"
+            "end.\n",
+            encoding="utf-8",
+        )
+        findings = scan_facade_root_import_contract(root)
+        if findings:
+            raise AssertionError(
+                "facade-root-import-contract self-test expected no findings"
             )
 
 
@@ -6515,6 +6621,15 @@ def scan_required_simd_seam_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_facade_only_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        api_doc_truth(REQUIRED_FACADE_ONLY_DOC_TRUTH),
+        "missing-required-facade-only-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def scan_required_transform_doc_truth(root: Path) -> list[Finding]:
     return scan_required_doc_truth(
         root,
@@ -6694,6 +6809,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_missing_required_benchmark_markers(root))
     findings.extend(scan_required_behavior_test_markers(root))
     findings.extend(scan_facade_type_alias_compile_surface(root))
+    findings.extend(scan_facade_root_import_contract(root))
     findings.extend(scan_root_facade_api_doc_coverage(root))
     findings.extend(scan_root_facade_contract(root))
     findings.extend(scan_root_facade_reexport_parity(root))
@@ -6708,6 +6824,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_host_gate_residual_truth(root))
     findings.extend(scan_required_m8_residual_truth(root))
     findings.extend(scan_required_simd_seam_doc_truth(root))
+    findings.extend(scan_required_facade_only_doc_truth(root))
     findings.extend(scan_required_impl_simd_win64_compile_doc_truth(root))
     findings.extend(scan_required_mat_doc_truth(root))
     findings.extend(scan_required_transform_doc_truth(root))
@@ -6839,6 +6956,7 @@ def main() -> int:
     if args.self_test:
         run_behavior_marker_self_tests()
         run_facade_type_alias_compile_surface_self_tests()
+        run_facade_root_import_contract_self_tests()
         run_public_math_source_simd_wiring_self_tests()
         run_math_impl_simd_facade_only_uses_self_tests()
         run_math_impl_simd_public_seam_self_tests()

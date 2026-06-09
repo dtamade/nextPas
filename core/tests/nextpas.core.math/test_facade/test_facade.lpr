@@ -554,6 +554,14 @@ begin
     'facade ArcTan2(-0,-0) returns -PI exact bits');
 end;
 
+procedure TestFacadeImportsOnlyRootMathUnit;
+begin
+  CheckNear(PI_VALUE, nextpas.core.math.PI_VALUE,
+    'facade root import exposes constants');
+  CheckNear(1.0, nextpas.core.math.Cos(0.0),
+    'facade root import exposes functions');
+end;
+
 procedure RaiseFacadeClampReversedBounds;
 begin
   Clamp(1.0, 2.0, 1.0);
@@ -597,5 +605,6 @@ begin
     @TestFacadePowerFiniteIdentityPrecisionContracts);
   T.Run('facade Log exact identity contracts', @TestFacadeLogExactIdentityContracts);
   T.Run('facade trig IEEE domain smoke', @TestFacadeTrigIeeeDomainSmoke);
+  T.Run('facade imports only root math unit', @TestFacadeImportsOnlyRootMathUnit);
   T.Summary;
 end.
