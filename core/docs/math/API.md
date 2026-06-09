@@ -182,6 +182,7 @@ Common vector operations:
 - Normalization: `Normalize`
 
 `TVec3f` and `TVec3d` also provide `Cross`. Zero vector normalization returns zero.
+Vector `Lerp` delegates component-wise to scalar `Lerp`, so vector interpolation inherits scalar huge-finite stability and signed-zero behavior for every lane.
 Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `TVec2*`,
 `TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without
 overflowing the intermediate squared length.

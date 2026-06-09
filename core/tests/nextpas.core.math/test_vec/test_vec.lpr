@@ -1404,6 +1404,62 @@ begin
   CheckVec4dScalarLerpParity(A4d, B4d, 0.0, 'TVec4d Lerp scalar parity t=0');
   CheckVec4dScalarLerpParity(A4d, B4d, 0.75, 'TVec4d Lerp scalar parity t=0.75');
   CheckVec4dScalarLerpParity(A4d, B4d, 1.0, 'TVec4d Lerp scalar parity t=1');
+
+  A2f := TVec2f.Create(Single(-3.0e38), Single(3.0e38));
+  B2f := TVec2f.Create(Single(3.0e38), Single(-3.0e38));
+  CheckVec2fScalarLerpParity(A2f, B2f, Single(0.5),
+    'TVec2f Lerp huge finite scalar parity midpoint');
+  CheckVec2fScalarLerpParity(A2f, B2f, Single(0.25),
+    'TVec2f Lerp huge finite scalar parity off-center');
+  CheckVec2fScalarLerpParity(B2f, A2f, Single(0.25),
+    'TVec2f Lerp huge finite scalar parity reversed off-center');
+
+  A3f := TVec3f.Create(Single(-3.0e38), Single(3.0e38), Single(-3.0e38));
+  B3f := TVec3f.Create(Single(3.0e38), Single(-3.0e38), Single(3.0e38));
+  CheckVec3fScalarLerpParity(A3f, B3f, Single(0.5),
+    'TVec3f Lerp huge finite scalar parity midpoint');
+  CheckVec3fScalarLerpParity(A3f, B3f, Single(0.25),
+    'TVec3f Lerp huge finite scalar parity off-center');
+  CheckVec3fScalarLerpParity(B3f, A3f, Single(0.25),
+    'TVec3f Lerp huge finite scalar parity reversed off-center');
+
+  A4f := TVec4f.Create(Single(-3.0e38), Single(3.0e38),
+    Single(-3.0e38), Single(3.0e38));
+  B4f := TVec4f.Create(Single(3.0e38), Single(-3.0e38),
+    Single(3.0e38), Single(-3.0e38));
+  CheckVec4fScalarLerpParity(A4f, B4f, Single(0.5),
+    'TVec4f Lerp huge finite scalar parity midpoint');
+  CheckVec4fScalarLerpParity(A4f, B4f, Single(0.25),
+    'TVec4f Lerp huge finite scalar parity off-center');
+  CheckVec4fScalarLerpParity(B4f, A4f, Single(0.25),
+    'TVec4f Lerp huge finite scalar parity reversed off-center');
+
+  A2d := TVec2d.Create(-1.0e308, 1.0e308);
+  B2d := TVec2d.Create(1.0e308, -1.0e308);
+  CheckVec2dScalarLerpParity(A2d, B2d, 0.5,
+    'TVec2d Lerp huge finite scalar parity midpoint');
+  CheckVec2dScalarLerpParity(A2d, B2d, 0.25,
+    'TVec2d Lerp huge finite scalar parity off-center');
+  CheckVec2dScalarLerpParity(B2d, A2d, 0.25,
+    'TVec2d Lerp huge finite scalar parity reversed off-center');
+
+  A3d := TVec3d.Create(-1.0e308, 1.0e308, -1.0e308);
+  B3d := TVec3d.Create(1.0e308, -1.0e308, 1.0e308);
+  CheckVec3dScalarLerpParity(A3d, B3d, 0.5,
+    'TVec3d Lerp huge finite scalar parity midpoint');
+  CheckVec3dScalarLerpParity(A3d, B3d, 0.25,
+    'TVec3d Lerp huge finite scalar parity off-center');
+  CheckVec3dScalarLerpParity(B3d, A3d, 0.25,
+    'TVec3d Lerp huge finite scalar parity reversed off-center');
+
+  A4d := TVec4d.Create(-1.0e308, 1.0e308, -1.0e308, 1.0e308);
+  B4d := TVec4d.Create(1.0e308, -1.0e308, 1.0e308, -1.0e308);
+  CheckVec4dScalarLerpParity(A4d, B4d, 0.5,
+    'TVec4d Lerp huge finite scalar parity midpoint');
+  CheckVec4dScalarLerpParity(A4d, B4d, 0.25,
+    'TVec4d Lerp huge finite scalar parity off-center');
+  CheckVec4dScalarLerpParity(B4d, A4d, 0.25,
+    'TVec4d Lerp huge finite scalar parity reversed off-center');
 end;
 
 procedure TestRawVectorNormalizeNonFiniteInputsFailFast;

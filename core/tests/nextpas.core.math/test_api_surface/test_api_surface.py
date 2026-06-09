@@ -567,6 +567,18 @@ REQUIRED_VEC_QUAT_STABLE_DOC_TRUTH = (
         "Vector `Data` aliases write through to named fields.",
     ),
     (
+        "docs/math/API.md",
+        "Vector `Lerp` delegates component-wise to scalar `Lerp`, so vector interpolation inherits scalar huge-finite stability and signed-zero behavior for every lane.",
+    ),
+    (
+        "docs/math/API.md",
+        "Vector measure methods are non-throwing for non-finite inputs: NaN operands produce NaN, infinite operands produce `+Inf` where no NaN is present, and `Dot`/`Cross` use raw IEEE fallback for non-finite operands, so indeterminate products such as `0 * Inf` produce NaN.",
+    ),
+    (
+        "docs/math/API.md",
+        "Signed-zero behavior is canonicalized only at measure/normalization boundaries: zero-vector `Normalize` returns positive-zero components, exact-zero `Dot` returns `+0`, and `Data` aliases preserve stored signed-zero bit patterns.",
+    ),
+    (
         "docs/math/README.md",
         "Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` when used by `Normalize`.",
     ),
@@ -2022,6 +2034,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("vec-lerp-scalar-parity", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector Lerp scalar parity contracts'"),
     RequiredBehaviorTestMarker("vec-lerp-endpoint-t0", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec2f Lerp scalar parity t=0"),
     RequiredBehaviorTestMarker("vec-lerp-endpoint-t1", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec4d Lerp scalar parity t=1"),
+    RequiredBehaviorTestMarker("vec-lerp-huge-finite-parity", "tests/nextpas.core.math/test_vec/test_vec.lpr", "TVec4d Lerp huge finite scalar parity"),
     RequiredBehaviorTestMarker("vec-normalize-max-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector max finite normalize contract'"),
     RequiredBehaviorTestMarker("vec-normalize-raw-non-finite", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('raw vector normalize non-finite inputs fail fast'"),
     RequiredBehaviorTestMarker("vec-division-invalid-divisors", "tests/nextpas.core.math/test_vec/test_vec.lpr", "T.Run('vector division invalid divisors fail fast'"),

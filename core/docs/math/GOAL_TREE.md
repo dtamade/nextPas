@@ -106,8 +106,7 @@ nextpas.core.math final migration
 - Scalar: add marker-only fail-close coverage for already-tested edge cases.
 - Trig: finish remaining direct non-finite overload parity and host matrix
   runtime truth for macOS/Windows.
-- Vector: add `Lerp` scalar parity, non-finite measure contracts, and signed-zero
-  decisions.
+- Vector: finish full non-finite measure and signed-zero matrix coverage.
 - SIMD: add source-contract guards for public SIMD imports and benchmark private
   backend leakage before any public cutover.
 - Host matrix: obtain macOS/Windows trig host link/runtime evidence.
