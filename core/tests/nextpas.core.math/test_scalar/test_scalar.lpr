@@ -790,6 +790,12 @@ begin
     'Hypot Single signed-zero pair returns positive zero');
   Check(IsSinglePositiveZero(Hypot(Single(0.0), MakeSingleNegativeZero)),
     'Hypot Single positive and negative zero pair returns positive zero');
+  CheckNear(LMinSubnormalDouble * 5.0, Hypot(LMinSubnormalDouble * 3.0,
+    LMinSubnormalDouble * 4.0), 0.0,
+    'Hypot Double min subnormal 3-4-5 stays subnormal finite');
+  CheckNear(LMinSubnormalSingle * Single(5.0), Hypot(LMinSubnormalSingle * Single(3.0),
+    LMinSubnormalSingle * Single(4.0)), Single(0.0),
+    'Hypot Single min subnormal 3-4-5 stays subnormal finite');
 
   Check(IsDoubleNegativeZero(Fmod(MakeDoubleNegativeZero, 3.0)),
     'Fmod Double keeps negative zero dividend');

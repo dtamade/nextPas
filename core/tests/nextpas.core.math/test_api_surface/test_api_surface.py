@@ -1676,6 +1676,8 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-ieee-hypot-single-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Hypot Single signed-zero pair returns positive zero"),
     RequiredBehaviorTestMarker("scalar-ieee-hypot-max-finite-overflow", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Hypot Double max finite pair saturates to positive infinity"),
     RequiredBehaviorTestMarker("scalar-ieee-hypot-single-max-finite-overflow", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Hypot Single max finite pair saturates to positive infinity"),
+    RequiredBehaviorTestMarker("scalar-ieee-hypot-double-min-subnormal", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Hypot Double min subnormal 3-4-5 stays subnormal finite"),
+    RequiredBehaviorTestMarker("scalar-ieee-hypot-single-min-subnormal", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Hypot Single min subnormal 3-4-5 stays subnormal finite"),
     RequiredBehaviorTestMarker("scalar-ieee-fmod-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Double exact negative dividend keeps negative zero remainder"),
     RequiredBehaviorTestMarker("scalar-ieee-fmod-zero-divisor", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Double zero divisor returns NaN"),
     RequiredBehaviorTestMarker("scalar-ieee-fmod-negative-zero-divisor", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Double negative zero divisor returns NaN"),
