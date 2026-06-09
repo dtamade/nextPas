@@ -443,6 +443,24 @@ begin
     'facade SetBearerAuth replaces authorization');
 end;
 
+procedure TestHeaderValuesArrayAvailableThroughFacade;
+var
+  LH: IHttpHeaders;
+  LValues: nextpas.core.http.TStringArray;
+begin
+  LH := nextpas.core.http.NewHeaders;
+  LH.Add('x-repeat', 'first');
+  LH.Add('x-repeat', 'second');
+
+  LValues := LH.GetAll('x-repeat');
+  CheckEqual(Int64(2), Int64(Length(LValues)),
+    'Facade TStringArray receives repeated header values');
+  CheckEqual('first', LValues[0],
+    'Facade TStringArray preserves first header value');
+  CheckEqual('second', LValues[1],
+    'Facade TStringArray preserves second header value');
+end;
+
 { Test 2: NewRouter — Get route + FindRoute }
 procedure TestNewRouter;
 var
@@ -1816,6 +1834,9 @@ begin
   LFacadeSource := ReadTextFile('../../../src/nextpas.core.http.pas');
 
   Check(SourceHas(LFacadeSource,
+    'TStringArray = nextpas.core.http.intf.TStringArray;'),
+    'HTTP facade must re-export header value array type');
+  Check(SourceHas(LFacadeSource,
     'TMiddlewareWrapFunc = nextpas.core.http.middleware.TMiddlewareWrapFunc;'),
     'HTTP facade must re-export middleware wrap callback type');
   Check(SourceHas(LFacadeSource,
@@ -2031,6 +2052,8 @@ begin
   T.Run('NewHeaders: Set/Get/Has/Remove/Count/Clone', @TestNewHeaders);
   T.Run('Auth helpers are available through facade',
     @TestAuthHelpersAvailableThroughFacade);
+  T.Run('Header value array is available through facade',
+    @TestHeaderValuesArrayAvailableThroughFacade);
   T.Run('NewRouter: Get route + FindRoute', @TestNewRouter);
   T.Run('IHttpRouter convenience methods are callable through interface', @TestRouterConvenienceMethodsOnInterface);
   T.Run('NewRequest: Method/Url/Version', @TestNewRequest);

@@ -57,6 +57,7 @@ type
   THttpHandlerFunc = nextpas.core.http.intf.THttpHandlerFunc;
   THttpHandlerMethod = nextpas.core.http.intf.THttpHandlerMethod;
   THttpHandlerProc = nextpas.core.http.intf.THttpHandlerProc;
+  TStringArray = nextpas.core.http.intf.TStringArray;
   THeaderIterator = nextpas.core.http.intf.THeaderIterator;
   TMiddlewareWrapFunc = nextpas.core.http.middleware.TMiddlewareWrapFunc;
   TWebSocketOptions = nextpas.core.http.websocket.TWebSocketOptions;
