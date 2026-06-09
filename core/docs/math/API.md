@@ -98,9 +98,9 @@ promoting to the full math aggregate:
 make -C core core-math-leak-local-smoke
 ```
 
-`core-math-leak-local-smoke` runs facade, scalar, trig, vector, SIMD seam, random, and noise local
-tests through stable owner-level targets or focused subproject Makefiles. It intentionally avoids
-examples, benchmarks, compile-only host gates, and the full math aggregate.
+`core-math-leak-local-smoke` runs facade, scalar, trig, vector, matrix, quaternion, SIMD seam,
+random, and noise local tests through stable owner-level targets or focused subproject Makefiles.
+It intentionally avoids examples, benchmarks, compile-only host gates, and the full math aggregate.
 
 ## Scalar And Trig
 

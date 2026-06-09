@@ -1154,6 +1154,14 @@ REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
                 "$(MAKE) -C tests/nextpas.core.math/test_vec clean test",
             ),
             (
+                "test-mat",
+                "$(MAKE) -C tests/nextpas.core.math/test_mat clean test",
+            ),
+            (
+                "test-quat",
+                "$(MAKE) -C tests/nextpas.core.math/test_quat clean test",
+            ),
+            (
                 "test-impl-simd",
                 "$(MAKE) core-math-impl-simd-local-smoke",
             ),

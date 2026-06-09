@@ -74,6 +74,8 @@ core-math-leak-local-smoke: dirs
 	$(MAKE) -C tests/nextpas.core.math/test_scalar clean test
 	$(MAKE) -C tests/nextpas.core.math/test_trig clean test
 	$(MAKE) -C tests/nextpas.core.math/test_vec clean test
+	$(MAKE) -C tests/nextpas.core.math/test_mat clean test
+	$(MAKE) -C tests/nextpas.core.math/test_quat clean test
 	$(MAKE) core-math-impl-simd-local-smoke
 	$(MAKE) -C tests/nextpas.core.math/test_random clean test
 	$(MAKE) -C tests/nextpas.core.math/test_noise clean test
