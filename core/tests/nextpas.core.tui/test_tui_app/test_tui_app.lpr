@@ -112,6 +112,13 @@ type
       SlotCount: Integer);
   end;
 
+  TTickCallbackHost = class
+  public
+    Count: Integer;
+    LastTickCount: Integer;
+    procedure RequestScreenQuit(App: TApp; TickCount: Integer);
+  end;
+
 var
   T: TTestRunner;
 
@@ -292,6 +299,13 @@ begin
     App.Quit;
 end;
 
+procedure TTickCallbackHost.RequestScreenQuit(App: TApp; TickCount: Integer);
+begin
+  Inc(Count);
+  LastTickCount := TickCount;
+  App.Screens.RequestQuit;
+end;
+
 constructor TFakeApp.Create(const AEvents: array of TEvent);
 var
   LIndex: Integer;
@@ -456,6 +470,41 @@ begin
     CheckEqual(Int64(1), Int64(LApp.PollCount), 'screen quit request stops app immediately');
     CheckEqual(Int64(1), Int64(LApp.BeginFrameCount), 'screen quit request avoids extra frames');
   finally
+    LApp.Free;
+  end;
+end;
+
+procedure TestAppStopsBeforeNextFrameWhenTickRequestsScreenQuit;
+var
+  LApp: TFakeApp;
+  LScreen: TRecordingScreen;
+  LHost: TTickCallbackHost;
+begin
+  LApp := TFakeApp.Create([
+    NoneEvent
+  ]);
+  LHost := TTickCallbackHost.Create;
+  try
+    LScreen := TRecordingScreen.Create;
+    LApp.Screens.Push(LScreen);
+    LApp.OnTickCb := @LHost.RequestScreenQuit;
+
+    LApp.Run;
+
+    CheckEqual(Int64(1), Int64(LHost.Count),
+      'tick callback requests screen quit once');
+    CheckEqual(Int64(1), Int64(LHost.LastTickCount),
+      'tick callback receives first tick count');
+    CheckEqual(Int64(1), Int64(LScreen.RenderCount),
+      'tick screen quit stops before next frame render');
+    CheckEqual(Int64(1), Int64(LApp.BeginFrameCount),
+      'tick screen quit avoids the next begin frame');
+    CheckEqual(Int64(1), Int64(LApp.EndFrameCount),
+      'tick screen quit avoids the next end frame');
+    CheckEqual(Int64(1), Int64(LApp.PollCount),
+      'tick screen quit stops after the first none-event poll');
+  finally
+    LHost.Free;
     LApp.Free;
   end;
 end;
@@ -1518,6 +1567,7 @@ begin
   T.Run('app renders top screen by default', @TestAppRendersTopScreenByDefault);
   T.Run('app routes events to top screen by default', @TestAppRoutesEventsToTopScreenByDefault);
   T.Run('app stops when screen requests quit', @TestAppStopsWhenScreenRequestsQuit);
+  T.Run('app stops before next frame when tick requests screen quit', @TestAppStopsBeforeNextFrameWhenTickRequestsScreenQuit);
   T.Run('screen stack push leaves old top and enters new top', @TestScreenStackPushLeavesOldTopAndEntersNewTop);
   T.Run('screen stack pop resumes previous top', @TestScreenStackPopResumesPreviousTop);
   T.Run('screen stack owns screen stack reference', @TestScreenStackOwnsScreenStackReference);

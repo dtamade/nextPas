@@ -314,7 +314,10 @@ begin
         Continue;
       end;
       if Ev.Kind = evNone then
-        DispatchTick
+      begin
+        DispatchTick;
+        ConsumeScreenQuitRequest;
+      end
       else
       begin
         if IsQuitEvent(Ev) then
