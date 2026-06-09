@@ -17,6 +17,7 @@ uses
   nextpas.core.http.url,
   nextpas.core.http.router,
   nextpas.core.http.middleware,
+  nextpas.core.http.middleware.cors,
   nextpas.core.http.message,
   nextpas.core.http.static,
   nextpas.core.http.websocket,
@@ -60,6 +61,7 @@ type
   TStringArray = nextpas.core.http.intf.TStringArray;
   THeaderIterator = nextpas.core.http.intf.THeaderIterator;
   TMiddlewareWrapFunc = nextpas.core.http.middleware.TMiddlewareWrapFunc;
+  TCorsOptions = nextpas.core.http.middleware.cors.TCorsOptions;
   TWebSocketOptions = nextpas.core.http.websocket.TWebSocketOptions;
   TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
   TWebSocketFrame = nextpas.core.http.websocket.TWebSocketFrame;
@@ -146,6 +148,7 @@ function HandlerFunc(const AFunc: THttpHandlerFunc): IHttpHandler; overload; inl
 function HandlerFunc(const AMethod: THttpHandlerMethod): IHttpHandler; overload; inline;
 function HandlerFunc(const AProc: THttpHandlerProc): IHttpHandler; overload; inline;
 function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware; inline;
+function CorsMiddleware(const AOptions: TCorsOptions): IHttpMiddleware; inline;
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 
 { Message factories }
@@ -354,6 +357,11 @@ end;
 function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.MiddlewareFunc(AWrapFunc);
+end;
+
+function CorsMiddleware(const AOptions: TCorsOptions): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.cors.CorsMiddleware(AOptions);
 end;
 
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;

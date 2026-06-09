@@ -1038,6 +1038,18 @@ begin
   CheckEqual('MH', LOrder, 'Chain: middleware then handler');
 end;
 
+procedure TestCorsMiddlewareAvailableThroughFacade;
+var
+  LOptions: nextpas.core.http.TCorsOptions;
+  LMiddleware: IHttpMiddleware;
+begin
+  LOptions := nextpas.core.http.TCorsOptions.Default;
+  LOptions.AllowOrigins := 'https://example.test';
+  LMiddleware := nextpas.core.http.CorsMiddleware(LOptions);
+  Check(LMiddleware <> nil,
+    'Facade CorsMiddleware returns non-nil middleware');
+end;
+
 { Test 9: Facade exposes server overloads }
 procedure TestHttpServerFacadeOverloads;
 var
@@ -1840,8 +1852,14 @@ begin
     'TMiddlewareWrapFunc = nextpas.core.http.middleware.TMiddlewareWrapFunc;'),
     'HTTP facade must re-export middleware wrap callback type');
   Check(SourceHas(LFacadeSource,
+    'TCorsOptions = nextpas.core.http.middleware.cors.TCorsOptions;'),
+    'HTTP facade must re-export CORS options type');
+  Check(SourceHas(LFacadeSource,
     'function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware;'),
     'HTTP facade must expose MiddlewareFunc helper');
+  Check(SourceHas(LFacadeSource,
+    'function CorsMiddleware(const AOptions: TCorsOptions): IHttpMiddleware;'),
+    'HTTP facade must expose CorsMiddleware helper');
   Check(SourceHas(LFacadeSource,
     'function QueryParamValue(const AParams: TQueryParams; const AName: string): string;'),
     'HTTP facade must expose QueryParamValue helper');
@@ -2088,6 +2106,8 @@ begin
   T.Run('HandlerFunc wraps plain procedures through facade', @TestHandlerProcWrap);
   T.Run('HandlerFunc wraps object methods through facade', @TestHandlerMethodWrap);
   T.Run('Chain applies middleware', @TestChainMiddleware);
+  T.Run('CORS middleware is available through facade',
+    @TestCorsMiddlewareAvailableThroughFacade);
   T.Run('NewHttpServer overloads are available through facade', @TestHttpServerFacadeOverloads);
   T.Run('NewHttpClient overloads are available through facade', @TestHttpClientFacadeOverloads);
   T.Run('Facade NewHttpClient consumes registered HTTP/2 registry default',
