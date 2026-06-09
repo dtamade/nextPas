@@ -91,6 +91,10 @@ uses
   可直接访问上述所有子模块的公共类型和函数。 }
 
 type
+  { Exceptions }
+  ETui = nextpas.core.tui.error.ETui;
+  ETuiBackend = nextpas.core.tui.error.ETuiBackend;
+
   { 基础类型 }
   TTuiRect = nextpas.core.tui.base.TRect;
   TTuiPosition = nextpas.core.tui.base.TPosition;

@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.tui,
+  nextpas.core.tui.error,
   nextpas.core.tui.focus,
   nextpas.core.tui.interaction,
   nextpas.core.tui.keybind,
@@ -21,6 +22,8 @@ uses
   nextpas.core.tui.widget.chat_theme;
 
 type
+  ETui = nextpas.core.tui.error.ETui;
+  ETuiBackend = nextpas.core.tui.error.ETuiBackend;
   TTuiApp = nextpas.core.tui.app.TApp;
   TApp = nextpas.core.tui.app.TApp;
   TTuiFrame = nextpas.core.tui.TFrame;

@@ -96,7 +96,9 @@ type
 implementation
 
 uses
-  nextpas.core.platform.console, nextpas.core.platform.signal, nextpas.core.platform.time;
+  nextpas.core.platform.console, nextpas.core.platform.signal,
+  nextpas.core.platform.time,
+  nextpas.core.tui.error;
 
 constructor TApp.Create;
 begin
@@ -264,10 +266,7 @@ var
   LCompletions: array[0..TASK_QUEUE_CAPACITY - 1] of TCompletionSlot;
 begin
   if not DoEnterTui then
-  begin
-    WriteLn(StdErr, 'ftui: not a terminal');
-    Halt(1);
-  end;
+    raise ETuiBackend.Create('TApp.Run: failed to enter TUI terminal mode');
   try
     FShouldQuit := False;
     FTickCount := 0;

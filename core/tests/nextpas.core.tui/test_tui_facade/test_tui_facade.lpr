@@ -387,6 +387,31 @@ begin
   end;
 end;
 
+procedure TestFullFacadeExposesTuiExceptions;
+var
+  LBackend: ETuiBackend;
+  LTui: ETui;
+  LCaught: Boolean;
+begin
+  LBackend := ETuiBackend.Create('full facade backend');
+  try
+    LTui := LBackend;
+    Check(LTui is ETuiBackend,
+      'full facade exposes ETuiBackend as an ETui subtype');
+  finally
+    LBackend.Free;
+  end;
+
+  LCaught := False;
+  try
+    raise ETuiBackend.Create('full facade catch');
+  except
+    on E: ETui do
+      LCaught := E is ETuiBackend;
+  end;
+  Check(LCaught, 'full facade lets app code catch backend failures as ETui');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.tui.facade');
   T.Run('core facade types', @TestCoreFacadeTypes);
@@ -397,6 +422,7 @@ begin
   T.Run('full facade covers app task runtime surface', @TestFullFacadeCoversAppTaskRuntimeSurface);
   T.Run('full facade advanced widget catalog remains usable', @TestFullFacadeAdvancedWidgetCatalogRemainsUsable);
   T.Run('full facade app callback wiring compiles', @TestReadmeQuickStartCompiles);
+  T.Run('full facade exposes tui exceptions', @TestFullFacadeExposesTuiExceptions);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

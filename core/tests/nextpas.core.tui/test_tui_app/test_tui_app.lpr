@@ -10,6 +10,7 @@ uses
   nextpas.core.tui.buffer,
   nextpas.core.tui.style,
   nextpas.core.tui.app,
+  nextpas.core.tui.error,
   nextpas.core.tui.terminal,
   nextpas.core.tui.task,
   nextpas.core.tui.app.screen,
@@ -70,7 +71,12 @@ type
     FBeginFrameCount: Integer;
     FEndFrameCount: Integer;
     FLeaveCount: Integer;
+    FEnterResult: Boolean;
+    FInitCount: Integer;
+    FDestroyCount: Integer;
   protected
+    procedure OnInit; override;
+    procedure OnDestroy; override;
     function DoEnterTui: Boolean; override;
     procedure DoLeaveTui; override;
     function DoPollEvent: TEvent; override;
@@ -84,6 +90,9 @@ type
     property BeginFrameCount: Integer read FBeginFrameCount;
     property EndFrameCount: Integer read FEndFrameCount;
     property LeaveCount: Integer read FLeaveCount;
+    property EnterResult: Boolean read FEnterResult write FEnterResult;
+    property InitCount: Integer read FInitCount;
+    property DestroyCount: Integer read FDestroyCount;
   end;
 
   TTaskCallbackHost = class
@@ -315,6 +324,7 @@ begin
   for LIndex := 0 to High(AEvents) do
     FEvents[LIndex] := AEvents[LIndex];
   FPollIndex := 0;
+  FEnterResult := True;
   FFrameBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 12, 3));
 end;
 
@@ -324,9 +334,19 @@ begin
   inherited;
 end;
 
+procedure TFakeApp.OnInit;
+begin
+  Inc(FInitCount);
+end;
+
+procedure TFakeApp.OnDestroy;
+begin
+  Inc(FDestroyCount);
+end;
+
 function TFakeApp.DoEnterTui: Boolean;
 begin
-  Result := True;
+  Result := FEnterResult;
 end;
 
 procedure TFakeApp.DoLeaveTui;
@@ -396,6 +416,45 @@ begin
     ATasks.Spawn(LSpec);
   CancelledTaskId := ATasks.Spawn(LSpec);
   ATasks.Cancel(CancelledTaskId);
+end;
+
+procedure TestAppRunRaisesBackendExceptionWhenEnterFails;
+var
+  LApp: TFakeApp;
+begin
+  LApp := TFakeApp.Create([]);
+  try
+    LApp.EnterResult := False;
+    try
+      LApp.Run;
+      Fail('enter failure should raise a catchable TUI backend exception');
+    except
+      on E: ETuiBackend do
+      begin
+        Check(Pos('TApp.Run', E.Message) > 0,
+          'enter failure names the app run boundary');
+        Check((Pos('TUI', E.Message) > 0) or (Pos('terminal', E.Message) > 0),
+          'enter failure names the terminal/TUI context');
+      end;
+      on E: Exception do
+        Fail('enter failure should raise ETuiBackend, got ' + E.ClassName);
+    end;
+
+    CheckEqual(Int64(0), Int64(LApp.InitCount),
+      'enter failure does not call app init');
+    CheckEqual(Int64(0), Int64(LApp.DestroyCount),
+      'enter failure does not call app destroy hook');
+    CheckEqual(Int64(0), Int64(LApp.BeginFrameCount),
+      'enter failure does not begin a frame');
+    CheckEqual(Int64(0), Int64(LApp.EndFrameCount),
+      'enter failure does not end a frame');
+    CheckEqual(Int64(0), Int64(LApp.PollCount),
+      'enter failure does not poll events');
+    CheckEqual(Int64(0), Int64(LApp.LeaveCount),
+      'enter failure does not leave a TUI mode that was never entered');
+  finally
+    LApp.Free;
+  end;
 end;
 
 procedure TestAppRendersTopScreenByDefault;
@@ -1564,6 +1623,7 @@ end;
 
 begin
   T := TTestRunner.Create('nextpas.core.tui.app');
+  T.Run('app raises backend exception when enter fails', @TestAppRunRaisesBackendExceptionWhenEnterFails);
   T.Run('app renders top screen by default', @TestAppRendersTopScreenByDefault);
   T.Run('app routes events to top screen by default', @TestAppRoutesEventsToTopScreenByDefault);
   T.Run('app stops when screen requests quit', @TestAppStopsWhenScreenRequestsQuit);
