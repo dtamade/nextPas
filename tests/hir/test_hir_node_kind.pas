@@ -45,6 +45,7 @@ begin
   if ParseHirNodeKind('call-runtime') <> hnkCallRuntime then Fail('call-runtime');
   if ParseHirNodeKind('string-temp-owned-runtime') <> hnkStringTempOwnedRuntime then Fail('string-temp-owned-runtime');
   if ParseHirNodeKind('string-temp-borrow-arg-runtime') <> hnkStringTempBorrowArgRuntime then Fail('string-temp-borrow-arg-runtime');
+  if ParseHirNodeKind('string-temp-length-runtime') <> hnkStringTempLengthRuntime then Fail('string-temp-length-runtime');
   if ParseHirNodeKind('string-temp-release-runtime') <> hnkStringTempReleaseRuntime then Fail('string-temp-release-runtime');
   if ParseHirNodeKind('object-free-runtime') <> hnkObjectFreeRuntime then Fail('object-free-runtime');
   if ParseHirNodeKind('int-to-str-runtime') <> hnkIntToStrRuntime then Fail('int-to-str-runtime');

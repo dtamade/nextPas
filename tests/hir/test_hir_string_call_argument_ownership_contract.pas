@@ -100,16 +100,6 @@ const
     '  TakeOut(MakeText());' + LineEnding +
     'end.';
 
-  LengthOwnedArgumentSource =
-    'program test;' + LineEnding +
-    'function MakeText: string;' + LineEnding +
-    'begin' + LineEnding +
-    '  MakeText := ''length'';' + LineEnding +
-    'end;' + LineEnding +
-    'begin' + LineEnding +
-    '  Halt(Length(MakeText()));' + LineEnding +
-    'end.';
-
   CopyOwnedArgumentSource =
     'program test;' + LineEnding +
     'function MakeText: string;' + LineEnding +
@@ -355,8 +345,6 @@ begin
     'var-param-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(OutParamOwnedArgumentSource,
     'out-param-owned-string-temp-consumer-must-fail-closed');
-  RequireAnalyzeDeferredError(LengthOwnedArgumentSource,
-    'length-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(CopyOwnedArgumentSource,
     'copy-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(ConcatLeftOwnedArgumentSource,

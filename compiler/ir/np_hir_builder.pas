@@ -146,6 +146,7 @@ type
     procedure BlobCall(var S: TExprStack; const AArg: string);
     procedure BlobStrVar(var S: TExprStack; const AArg: string);
     procedure BlobStrLit(var S: TExprStack; const AArg: string);
+    procedure BlobStrLen(var S: TExprStack);
     procedure BlobStrCmpPos(var S: TExprStack; const AArg, AIntrinsic: string);
     procedure BlobArrLoadVar(var S: TExprStack; const AArg: string);
     procedure BlobField(var S: TExprStack; const AArg: string);
@@ -236,6 +237,7 @@ type
     procedure ProcessCallRuntime(const ANode: TTypedHirNode);
     procedure ProcessStringTempOwnedRuntime(const ANode: TTypedHirNode);
     procedure ProcessStringTempBorrowArgRuntime(const ANode: TTypedHirNode);
+    procedure ProcessStringTempLengthRuntime(const ANode: TTypedHirNode);
     procedure ProcessStringTempReleaseRuntime(const ANode: TTypedHirNode);
     procedure ProcessObjectFreeRuntime(const ANode: TTypedHirNode);
     procedure ProcessIntToStr(const ANode: TTypedHirNode);
@@ -2681,6 +2683,17 @@ begin
   S.Push(Instr.ResultId);
 end;
 
+procedure THIRBuilder.BlobStrLen(var S: TExprStack);
+var
+  LenValue, PtrValue: THIRValueId;
+  PtrType: THIRTypeId;
+begin
+  LenValue := S.Pop;
+  PtrValue := S.PopTyped(PtrType);
+  if (LenValue <> 0) and (PtrValue <> 0) and (PtrType = GetPtrType) then
+    S.Push(LenValue);
+end;
+
 procedure THIRBuilder.BlobStrCmpPos(var S: TExprStack;
   const AArg, AIntrinsic: string);
 var
@@ -3171,6 +3184,7 @@ begin
     else if Token = 'call' then BlobCall(S, Arg)
     else if Token = 'strvar' then BlobStrVar(S, Arg)
     else if Token = 'strlit' then BlobStrLit(S, Arg)
+    else if Token = 'strlen' then BlobStrLen(S)
     else if Token = 'strcmp' then BlobStrCmpPos(S, Arg, 'str_cmp')
     else if Token = 'strpos' then BlobStrCmpPos(S, Arg, 'str_pos')
     else if Token = 'arrvar' then
@@ -4938,6 +4952,26 @@ procedure THIRBuilder.ProcessStringTempBorrowArgRuntime(
   const ANode: TTypedHirNode);
 begin
   { Source-contract marker only; call-runtime lowers the borrowed ptr,len. }
+end;
+
+procedure THIRBuilder.ProcessStringTempLengthRuntime(
+  const ANode: TTypedHirNode);
+var
+  TempName: string;
+  LenSlot: THIRValueId;
+begin
+  TempName := ANode.Operand;
+  if Copy(TempName, 1, 7) = 'strvar ' then
+  begin
+    TempName := Copy(TempName, 8, Length(TempName) - 7);
+    if (Length(TempName) > 0) and (TempName[Length(TempName)] = #10) then
+      TempName := Copy(TempName, 1, Length(TempName) - 1);
+  end;
+  if TempName = '' then
+    Exit;
+  LenSlot := FindAlloca(TempName + '$len');
+  if LenSlot <> 0 then
+    EmitLoad(GetIntType, LenSlot);
 end;
 
 procedure THIRBuilder.ProcessStringTempReleaseRuntime(
@@ -6834,6 +6868,8 @@ begin
       ProcessStringTempOwnedRuntime(ANode);
     hnkStringTempBorrowArgRuntime:
       ProcessStringTempBorrowArgRuntime(ANode);
+    hnkStringTempLengthRuntime:
+      ProcessStringTempLengthRuntime(ANode);
     hnkStringTempReleaseRuntime:
       ProcessStringTempReleaseRuntime(ANode);
     hnkObjectFreeRuntime:

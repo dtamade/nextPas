@@ -120,6 +120,12 @@ type
     function DirectOwnedStringReturnAssignmentNode(const ANode: TGreenNode): Boolean;
     function IsSupportedOwnedStringReturnArgument(
       const ACallNode, AArgNode: TGreenNode; AArgPosition: LongInt): Boolean;
+    function LengthArgumentOwnsStringReturn(
+      const ANode: TGreenNode; out AFuncName: string): Boolean;
+    function IsSupportedOwnedStringReturnLengthArgument(
+      const ANode: TGreenNode; out AFuncName: string): Boolean;
+    function EmitOwnedStringLengthTemp(const ANode: TGreenNode;
+      out ABlob: string): Boolean;
     function NodeConsumesOwnedStringReturnDeferred(const ANode: TGreenNode;
       const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
     procedure ScanOwnedStringReturnConsumers(const ANode: TGreenNode;
@@ -1001,6 +1007,64 @@ begin
     IsOwnedStringReturnFunc(SourceName);
 end;
 
+function TSemanticAnalyzer.LengthArgumentOwnsStringReturn(
+  const ANode: TGreenNode; out AFuncName: string): Boolean;
+var
+  CalleeNode, ArgNode: TGreenNode;
+begin
+  AFuncName := '';
+  Result := False;
+  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
+    (ANode.ChildCount < 2) then
+    Exit;
+  CalleeNode := ANode.ChildAt(0);
+  ArgNode := ANode.ChildAt(1);
+  if (CalleeNode = nil) or (ArgNode = nil) or
+    (CalleeNode.NodeKind <> gnkIdentifier) or
+    (not SameText(CalleeNode.Text, 'Length')) then
+    Exit;
+  if (ArgNode.NodeKind <> gnkFunctionCall) or
+    (ArgNode.ChildCount < 1) or (ArgNode.ChildAt(0) = nil) or
+    (ArgNode.ChildAt(0).NodeKind <> gnkIdentifier) then
+    Exit;
+  if not StringReturnFunctionNameFromNode(ArgNode, AFuncName) then
+    Exit;
+  Result := not HasOverload(AFuncName);
+end;
+
+function TSemanticAnalyzer.IsSupportedOwnedStringReturnLengthArgument(
+  const ANode: TGreenNode; out AFuncName: string): Boolean;
+begin
+  Result := LengthArgumentOwnsStringReturn(ANode, AFuncName) and
+    IsOwnedStringReturnFunc(AFuncName);
+end;
+
+function TSemanticAnalyzer.EmitOwnedStringLengthTemp(const ANode: TGreenNode;
+  out ABlob: string): Boolean;
+var
+  SourceName, TempName: string;
+begin
+  ABlob := '';
+  Result := False;
+  if not IsSupportedOwnedStringReturnLengthArgument(ANode, SourceName) then
+    Exit;
+  Inc(FBlockLabelCounter);
+  TempName := '$str_len_tmp_' + IntToStr(FBlockLabelCounter);
+  RegisterRuntimeVar(TempName);
+  RegisterRuntimeStrVar(TempName);
+  FModel.AddTypedHirNode('var-decl-str-owned-runtime', TempName, 0, 0,
+    TempName);
+  FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
+    TempName + #9 + 'callee ' + SourceName + #9 +
+    'ptr len owner alloc_size');
+  FModel.AddTypedHirNode('string-temp-length-runtime', SourceName, 0, 0,
+    'strvar ' + TempName + #10);
+  FModel.AddTypedHirNode('string-temp-release-runtime', SourceName, 0, 0,
+    TempName);
+  ABlob := 'var ' + TempName + '$len' + #10;
+  Result := True;
+end;
+
 function TSemanticAnalyzer.NodeConsumesOwnedStringReturnDeferred(
   const ANode: TGreenNode;
   const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
@@ -1063,6 +1127,9 @@ begin
     Exit(False);
   end;
 
+  if IsSupportedOwnedStringReturnLengthArgument(ANode, SourceName) then
+    Exit(False);
+
   if StringReturnFunctionNameFromNode(ANode, SourceName) and
     IsOwnedStringReturnFunc(SourceName) and
     (not AInsideDirectOwnedAssignmentRhs) then
@@ -1105,6 +1172,7 @@ begin
     AChanged := True;
   end;
   if ANode.NodeKind = gnkFunctionCall then
+  begin
     for J := 1 to ANode.ChildCount - 1 do
       if CallArgumentOwnsStringReturn(
         ANode, ANode.ChildAt(J), J - 1, FuncName) and
@@ -1113,6 +1181,13 @@ begin
         RegisterOwnedStringReturnFunc(FuncName);
         AChanged := True;
       end;
+    if LengthArgumentOwnsStringReturn(ANode, FuncName) and
+      (not IsOwnedStringReturnFunc(FuncName)) then
+    begin
+      RegisterOwnedStringReturnFunc(FuncName);
+      AChanged := True;
+    end;
+  end;
   for I := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(I);
@@ -1141,6 +1216,7 @@ begin
     AChanged := True;
   end;
   if ANode.NodeKind = gnkFunctionCall then
+  begin
     for J := 1 to ANode.ChildCount - 1 do
       if CallArgumentOwnsStringReturn(
         ANode, ANode.ChildAt(J), J - 1, FuncName) and
@@ -1149,6 +1225,13 @@ begin
         RegisterOwnedStringReturnFunc(FuncName);
         AChanged := True;
       end;
+    if LengthArgumentOwnsStringReturn(ANode, FuncName) and
+      (not IsOwnedStringReturnFunc(FuncName)) then
+    begin
+      RegisterOwnedStringReturnFunc(FuncName);
+      AChanged := True;
+    end;
+  end;
   for I := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(I);
@@ -7640,6 +7723,8 @@ begin
   ABlob := '';
   if ANode = nil then
     Exit(False);
+  if EmitOwnedStringLengthTemp(ANode, ABlob) then
+    Exit(True);
   if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'nil') then
   begin
     ABlob := 'null' + #10;
@@ -7664,6 +7749,15 @@ begin
   if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'False') then
   begin
     ABlob := 'int 0' + #10;
+    Exit(True);
+  end;
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and
+    SameText(ANode.ChildAt(0).Text, 'Length') and
+    (ANode.ChildAt(1) <> nil) and
+    (ANode.ChildAt(1).NodeKind = gnkStringLiteral) then
+  begin
+    ABlob := 'strlit ' + ANode.ChildAt(1).Text + #10 + 'strlen' + #10;
     Exit(True);
   end;
   if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
@@ -9977,6 +10071,13 @@ begin
     (CallNode.ChildCount >= 1) and (CallNode.ChildAt(0) <> nil) and
     (CallNode.ChildAt(0).NodeKind = gnkFunctionCall) then
     CallNode := CallNode.ChildAt(0);
+
+  if (CallNode.NodeKind = gnkFunctionCall) and
+    (SameText(CallNode.Text, 'Length') or
+     ((CallNode.ChildCount >= 1) and (CallNode.ChildAt(0) <> nil) and
+      (CallNode.ChildAt(0).NodeKind = gnkIdentifier) and
+      SameText(CallNode.ChildAt(0).Text, 'Length'))) then
+    Exit(False);
 
   if ANode.NodeKind = gnkIntegerLiteral then
   begin

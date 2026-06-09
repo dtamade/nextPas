@@ -160,16 +160,6 @@ const
     '  Box.Text := MakeText();' + LineEnding +
     'end.';
 
-  LengthOwnedReturnConsumerSource =
-    'program test;' + LineEnding +
-    'function MakeText: string;' + LineEnding +
-    'begin' + LineEnding +
-    '  MakeText := ''length'';' + LineEnding +
-    'end;' + LineEnding +
-    'begin' + LineEnding +
-    '  Halt(Length(MakeText()));' + LineEnding +
-    'end.';
-
   CopyOwnedReturnConsumerSource =
     'program test;' + LineEnding +
     'function MakeText: string;' + LineEnding +
@@ -634,8 +624,6 @@ begin
     'overloaded-owned-string-return-must-fail-closed');
   RequireAnalyzeError(FieldOwnedReturnConsumerSource, DeferredCode,
     'field-owned-string-return-consumer-must-fail-closed');
-  RequireAnalyzeError(LengthOwnedReturnConsumerSource, DeferredCode,
-    'length-owned-string-return-consumer-must-fail-closed');
   RequireAnalyzeError(CopyOwnedReturnConsumerSource, DeferredCode,
     'copy-owned-string-return-consumer-must-fail-closed');
 end;

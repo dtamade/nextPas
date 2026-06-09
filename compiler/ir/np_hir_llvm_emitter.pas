@@ -1328,7 +1328,7 @@ begin
     Emit('calc_result:');
     Emit('  %result_pos = phi i64 [ %pos_next, %finish ], [ %sign_pos, %add_sign ]');
     Emit('  %result_ptr = getelementptr i8, ptr %buf, i64 %result_pos');
-    Emit('  %result_len = sub i64 21, %result_pos');
+    Emit('  %result_len = sub i64 20, %result_pos');
     Emit('  %r1 = insertvalue {ptr, i64} undef, ptr %result_ptr, 0');
     Emit('  %r2 = insertvalue {ptr, i64} %r1, i64 %result_len, 1');
     Emit('  ret {ptr, i64} %r2');
