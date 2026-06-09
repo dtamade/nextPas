@@ -142,13 +142,15 @@ Trig helpers:
 - Exponential and logarithmic: `Exp`, `Ln`, `Log2`, `Log10`
 - Power helpers: `Power`, `Sqrt`
 
-`Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity; `Sin` and `Tan` preserve signed zero.
-`ArcSin` preserves signed zero; `ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan` preserves signed zero, maps infinities to `+/-PI/2`, and returns `NaN` for `NaN`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.
+`Sin`, `Cos`, and `Tan` propagate `NaN` and return `NaN` for positive or negative infinity; `Sin` and `Tan` preserve signed zero. Exact `Tan(+/-HALF_PI)` returns signed infinity for both `Double` and `Single`, while nearby finite inputs remain finite-side results. Large finite circular inputs are guarded as finite and period-stable within broad host-portable tolerances, not as cross-libm bit-exact reductions.
+`ArcSin` preserves signed zero; `ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. Near `+/-1`, inverse trig results stay finite, remain inside the endpoint range, and stay close to the mathematical endpoint. `ArcTan` preserves signed zero, maps infinities to `+/-PI/2`, and returns `NaN` for `NaN`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.
 `ArcTan2` finite extreme ratios, including min-subnormal/max-finite pairs, stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.
 `Power` preserves negative-zero sign only for odd integer exponents: positive odd exponents return
 `-0`, and negative odd exponents return negative infinity. Non-odd zero-base exponents follow the
-positive-zero / positive-infinity zero-base behavior. Except for exponent `0`, a NaN exponent takes
-priority over zero-base handling, so `0^NaN` and `-0^NaN` return NaN.
+positive-zero / positive-infinity zero-base behavior, including negative zero with fractional
+exponents: positive fractional exponents return `+0`, and negative fractional exponents return
+`+Inf`. Except for exponent `0`, a NaN exponent takes priority over zero-base handling, so
+`0^NaN` and `-0^NaN` return NaN.
 `Ln`, `Log2`, and `Log10` return `-Inf` for positive or negative zero, `NaN` for negative finite
 values and `-Inf`, propagate `NaN`, and return `+Inf` for `+Inf`; log identities preserve exact
 `+0` for input `1` and exact `1` for `Log2(2)` and `Log10(10)`.

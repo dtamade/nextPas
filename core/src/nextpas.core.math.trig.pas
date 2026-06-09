@@ -160,6 +160,12 @@ end;
 
 function Tan(const AX: Single): Single;
 begin
+  if DoubleIsNaN(AX) or DoubleIsInfinite(AX) then
+    Exit(Single(Tan(Double(AX))));
+  if AX = Single(HALF_PI) then
+    Exit(SingleSignedInfinity(False));
+  if AX = Single(-HALF_PI) then
+    Exit(SingleSignedInfinity(True));
   Result := Single(Tan(Double(AX)));
 end;
 
@@ -169,6 +175,10 @@ begin
     Exit(DoubleQuietNaN);
   if AX = 0.0 then
     Exit(DoubleSignedZero(DoubleHasSignBit(AX)));
+  if AX = HALF_PI then
+    Exit(DoubleSignedInfinity(False));
+  if AX = -HALF_PI then
+    Exit(DoubleSignedInfinity(True));
   Result := Sin(AX) / Cos(AX);
 end;
 

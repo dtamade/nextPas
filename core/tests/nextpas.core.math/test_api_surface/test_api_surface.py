@@ -1030,7 +1030,7 @@ REQUIRED_TRIG_CIRCULAR_DOC_TRUTH = (
     ),
     (
         "docs/math/API.md",
-        "`ArcSin` preserves signed zero; `ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. `ArcTan` preserves signed zero, maps infinities to `+/-PI/2`, and returns `NaN` for `NaN`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.",
+        "`ArcSin` preserves signed zero; `ArcSin` and `ArcCos` return `NaN` for `NaN` or values outside `[-1, 1]`. Near `+/-1`, inverse trig results stay finite, remain inside the endpoint range, and stay close to the mathematical endpoint. `ArcTan` preserves signed zero, maps infinities to `+/-PI/2`, and returns `NaN` for `NaN`. `ArcTan2` returns `NaN` for `NaN` inputs and explicitly preserves signed-zero and infinite-quadrant behavior.",
     ),
     (
         "docs/math/GOAL_TREE.md",
@@ -1051,6 +1051,14 @@ REQUIRED_TRIG_CIRCULAR_DOC_TRUTH = (
     (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
         "`ArcTan2` finite extreme ratios, including min-subnormal/max-finite pairs, stay in the correct quadrant and do not raise host overflow exceptions while reducing the ratio.",
+    ),
+    (
+        "docs/math/API.md",
+        "Exact `Tan(+/-HALF_PI)` returns signed infinity for both `Double` and `Single`, while nearby finite inputs remain finite-side results.",
+    ),
+    (
+        "docs/math/API.md",
+        "Large finite circular inputs are guarded as finite and period-stable within broad host-portable tolerances, not as cross-libm bit-exact reductions.",
     ),
 )
 REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
@@ -1802,6 +1810,11 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("symbol-scope-simd-prefixed-log-round", "tests/nextpas.core.math/test_symbol_scope/test_symbol_scope.lpr", "SimdLnF32/SimdRoundF32/SimdTruncFloatF32 keep Simd* names"),
     RequiredBehaviorTestMarker("trig-direct-non-finite-overload-parity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('direct trig non-finite overload parity contracts'"),
     RequiredBehaviorTestMarker("trig-atan2-single-second-nan", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcTan2(Single 1,NaN)=NaN"),
+    RequiredBehaviorTestMarker("trig-precision-domain-hardening", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Run('trig precision domain hardening contracts'"),
+    RequiredBehaviorTestMarker("trig-tan-half-pi-singularity", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Tan(+HALF_PI) exact singularity returns +Inf"),
+    RequiredBehaviorTestMarker("trig-large-finite-period", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Sin large finite period relation stays stable"),
+    RequiredBehaviorTestMarker("trig-arcsin-near-one", "tests/nextpas.core.math/test_trig/test_trig.lpr", "ArcSin near +1 stays below +PI/2"),
+    RequiredBehaviorTestMarker("trig-power-negative-zero-fractional", "tests/nextpas.core.math/test_trig/test_trig.lpr", "Power negative zero positive fractional exponent returns +0"),
     RequiredBehaviorTestMarker("facade-wrap-error-semantics", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Run('facade Wrap error semantics'"),
     RequiredBehaviorTestMarker("facade-fmod-huge-untyped-literals", "tests/nextpas.core.math/test_facade/test_facade.lpr", "facade Fmod huge untyped finite literals choose wide finite remainder path"),
     RequiredBehaviorTestMarker("scalar-constants", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('constants'"),

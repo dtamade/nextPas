@@ -1164,6 +1164,63 @@ begin
     0.000001, 'ArcTan2 Single subnormal y tiny negative ratio with negative x stays -PI');
 end;
 
+procedure TestTrigPrecisionDomainHardeningContracts;
+var
+  LBase: Double;
+  LNearOne: Double;
+  LNearNegativeOne: Double;
+  LArcValue: Double;
+begin
+  Check(IsDoublePositiveInfinity(Tan(HALF_PI)),
+    'Tan(+HALF_PI) exact singularity returns +Inf');
+  Check(IsDoubleNegativeInfinity(Tan(-HALF_PI)),
+    'Tan(-HALF_PI) exact singularity returns -Inf');
+  Check(IsSinglePositiveInfinity(Tan(Single(HALF_PI))),
+    'Tan(Single +HALF_PI) exact singularity returns +Inf');
+  Check(IsSingleNegativeInfinity(Tan(Single(-HALF_PI))),
+    'Tan(Single -HALF_PI) exact singularity returns -Inf');
+
+  LBase := 123456.25;
+  Check(IsDoubleFinite(Sin(LBase)), 'Sin large finite input returns finite');
+  Check(IsDoubleFinite(Cos(LBase)), 'Cos large finite input returns finite');
+  Check(IsDoubleFinite(Tan(LBase)), 'Tan large finite input returns finite');
+  CheckNear(Sin(LBase), Sin(LBase + TWO_PI), 0.00000001,
+    'Sin large finite period relation stays stable');
+  CheckNear(Cos(LBase), Cos(LBase + TWO_PI), 0.00000001,
+    'Cos large finite period relation stays stable');
+  CheckNear(Tan(LBase), Tan(LBase + PI_VALUE), 0.0000001,
+    'Tan large finite period relation stays stable');
+
+  LNearOne := 1.0 - 0.000000000001;
+  LArcValue := ArcSin(LNearOne);
+  Check(IsDoubleFinite(LArcValue), 'ArcSin near +1 stays finite');
+  Check(LArcValue < HALF_PI, 'ArcSin near +1 stays below +PI/2');
+  CheckNear(HALF_PI, LArcValue, 0.000002, 'ArcSin near +1 stays close to +PI/2');
+  LArcValue := ArcCos(LNearOne);
+  Check(IsDoubleFinite(LArcValue), 'ArcCos near +1 stays finite');
+  Check(LArcValue > 0.0, 'ArcCos near +1 stays above +0');
+  CheckNear(0.0, LArcValue, 0.000002, 'ArcCos near +1 stays close to +0');
+
+  LNearNegativeOne := -1.0 + 0.000000000001;
+  LArcValue := ArcSin(LNearNegativeOne);
+  Check(IsDoubleFinite(LArcValue), 'ArcSin near -1 stays finite');
+  Check(LArcValue > -HALF_PI, 'ArcSin near -1 stays above -PI/2');
+  CheckNear(-HALF_PI, LArcValue, 0.000002, 'ArcSin near -1 stays close to -PI/2');
+  LArcValue := ArcCos(LNearNegativeOne);
+  Check(IsDoubleFinite(LArcValue), 'ArcCos near -1 stays finite');
+  Check(LArcValue < PI_VALUE, 'ArcCos near -1 stays below +PI');
+  CheckNear(PI_VALUE, LArcValue, 0.000002, 'ArcCos near -1 stays close to +PI');
+
+  Check(IsDoublePositiveZero(Power(DoubleNegativeZero, 0.5)),
+    'Power negative zero positive fractional exponent returns +0');
+  Check(IsDoublePositiveInfinity(Power(DoubleNegativeZero, -0.5)),
+    'Power negative zero negative fractional exponent returns +Inf');
+  Check(IsSinglePositiveZero(Power(SingleNegativeZero, Single(0.5))),
+    'Power Single negative zero positive fractional exponent returns +0');
+  Check(IsSinglePositiveInfinity(Power(SingleNegativeZero, Single(-0.5))),
+    'Power Single negative zero negative fractional exponent returns +Inf');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.trig');
   T.Run('basic trig values', @TestBasicTrigValues);
@@ -1197,5 +1254,7 @@ begin
   T.Run('Power finite overflow underflow sign contracts',
     @TestPowerFiniteOverflowUnderflowSignContracts);
   T.Run('ArcTan2 finite extreme ratio contracts', @TestArcTan2FiniteExtremeRatioContracts);
+  T.Run('trig precision domain hardening contracts',
+    @TestTrigPrecisionDomainHardeningContracts);
   T.Summary;
 end.
