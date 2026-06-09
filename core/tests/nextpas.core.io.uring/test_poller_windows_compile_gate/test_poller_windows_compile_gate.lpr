@@ -38,6 +38,24 @@ begin
 end;
 {$ENDIF}
 
+procedure TouchIocpReactorUnsupportedSurface;
+{$IFDEF NEXTPAS_WINDOWS}
+var
+  LIocp: TIocpReactor;
+begin
+  LIocp := TIocpReactor.Create(8);
+  LIocp.AsyncAccept(0, nil, nil, 0, nil, nil);
+  LIocp.AsyncConnect(0, nil, 0, nil, nil);
+  LIocp.AsyncSend(0, nil, 0, 0, nil, nil);
+  LIocp.AsyncRecv(0, nil, 0, 0, nil, nil);
+  LIocp.AsyncClose(0, nil, nil);
+  LIocp.Close;
+end;
+{$ELSE}
+begin
+end;
+{$ENDIF}
+
 procedure TouchPollerFileSurface;
 var
   LPoller: TPoller;
@@ -127,6 +145,7 @@ end;
 procedure TouchCompileGate;
 begin
   TouchIocpReactorFileSurface;
+  TouchIocpReactorUnsupportedSurface;
   TouchPollerFileSurface;
   TouchPollerUnsupportedSurface;
   TouchAsyncLoopFileSurface;

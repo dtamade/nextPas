@@ -99,7 +99,7 @@ begin
     Result := False;
 end;
 
-function IocpUnsupportedAsync(ACallback: TIoCompletion; AContext: Pointer): Boolean;
+function IocpUnsupportedAsync: Boolean;
 begin
   SetLastError(ERROR_NOT_SUPPORTED);
   Result := False;
@@ -458,31 +458,31 @@ function TIocpReactor.AsyncAccept(AFd: PtrInt; AAddr: Pointer;
   AAddrLen: Pointer; AFlags: Int32; ACallback: TIoCompletion;
   AContext: Pointer): Boolean;
 begin
-  Result := IocpUnsupportedAsync(ACallback, AContext);
+  Result := IocpUnsupportedAsync;
 end;
 
 function TIocpReactor.AsyncConnect(AFd: PtrInt; AAddr: Pointer;
   AAddrLen: UInt32; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
-  Result := IocpUnsupportedAsync(ACallback, AContext);
+  Result := IocpUnsupportedAsync;
 end;
 
 function TIocpReactor.AsyncSend(AFd: PtrInt; ABuf: Pointer; ALen: UInt32;
   AFlags: Int32; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
-  Result := IocpUnsupportedAsync(ACallback, AContext);
+  Result := IocpUnsupportedAsync;
 end;
 
 function TIocpReactor.AsyncRecv(AFd: PtrInt; ABuf: Pointer; ALen: UInt32;
   AFlags: Int32; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
-  Result := IocpUnsupportedAsync(ACallback, AContext);
+  Result := IocpUnsupportedAsync;
 end;
 
 function TIocpReactor.AsyncClose(AFd: PtrInt;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
-  Result := IocpUnsupportedAsync(ACallback, AContext);
+  Result := IocpUnsupportedAsync;
 end;
 
 function TIocpReactor.Poll: Int32;

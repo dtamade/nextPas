@@ -852,6 +852,7 @@ var
   LIocp: string;
   LAsyncLoop: string;
   LUnsupportedBody: string;
+  LUnsupportedSignature: string;
   LAcceptBody: string;
   LConnectBody: string;
   LSendBody: string;
@@ -862,6 +863,8 @@ var
 begin
   LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
   LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
+  LUnsupportedSignature := ExtractBetween(LIocp, 'function iocpunsupportedasync',
+    'begin');
   LUnsupportedBody := ExtractBetween(LIocp, 'function iocpunsupportedasync',
     'function iocpallocop');
   LAcceptBody := ExtractBetween(LIocp, 'function tiocpreactor.asyncaccept',
@@ -885,19 +888,23 @@ begin
     'IOCP unsupported helper must reject ownership transfer');
   CheckContains(LUnsupportedBody, 'setlasterror(error_not_supported);',
     'IOCP unsupported helper must preserve explicit unsupported truth');
+  CheckAbsent(LUnsupportedSignature, 'acallback',
+    'IOCP unsupported helper must not accept callback ownership it never consumes');
+  CheckAbsent(LUnsupportedSignature, 'acontext',
+    'IOCP unsupported helper must not accept callback context it never consumes');
   CheckAbsent(LUnsupportedBody, 'iocpfail(',
     'IOCP unsupported helper must not reuse synchronous failure ownership semantics');
   CheckAbsent(LUnsupportedBody, 'acallback(',
     'IOCP unsupported helper must not dispatch inline completion callbacks');
-  CheckContains(LAcceptBody, 'result := iocpunsupportedasync(acallback, acontext);',
+  CheckContains(LAcceptBody, 'result := iocpunsupportedasync;',
     'AsyncAccept must reject unsupported IOCP ownership through the helper');
-  CheckContains(LConnectBody, 'result := iocpunsupportedasync(acallback, acontext);',
+  CheckContains(LConnectBody, 'result := iocpunsupportedasync;',
     'AsyncConnect must reject unsupported IOCP ownership through the helper');
-  CheckContains(LSendBody, 'result := iocpunsupportedasync(acallback, acontext);',
+  CheckContains(LSendBody, 'result := iocpunsupportedasync;',
     'AsyncSend must reject unsupported IOCP ownership through the helper');
-  CheckContains(LRecvBody, 'result := iocpunsupportedasync(acallback, acontext);',
+  CheckContains(LRecvBody, 'result := iocpunsupportedasync;',
     'AsyncRecv must reject unsupported IOCP ownership through the helper');
-  CheckContains(LCloseBody, 'result := iocpunsupportedasync(acallback, acontext);',
+  CheckContains(LCloseBody, 'result := iocpunsupportedasync;',
     'AsyncClose must reject unsupported IOCP ownership through the helper');
   CheckContains(LRecvTimeoutBody, 'if not result then',
     'async recv timeout wrapper must reclaim timeout context only on rejected submission');
@@ -1040,6 +1047,7 @@ procedure TestWindowsForcedCompileAsyncFileSurfaceContract;
 var
   LCompileGate: string;
   LIocpFileBody: string;
+  LIocpUnsupportedBody: string;
   LPollerFileBody: string;
   LPollerUnsupportedBody: string;
   LLoopFileBody: string;
@@ -1050,7 +1058,9 @@ begin
   LCompileGate := LoadSourceText(
     'tests/nextpas.core.io.uring/test_poller_windows_compile_gate/test_poller_windows_compile_gate.lpr');
   LIocpFileBody := ExtractBetween(LCompileGate,
-    'procedure touchiocpreactorfilesurface', 'procedure touchpollerfilesurface');
+    'procedure touchiocpreactorfilesurface', 'procedure touchiocpreactorunsupportedsurface');
+  LIocpUnsupportedBody := ExtractBetween(LCompileGate,
+    'procedure touchiocpreactorunsupportedsurface', 'procedure touchpollerfilesurface');
   LPollerFileBody := ExtractBetween(LCompileGate,
     'procedure touchpollerfilesurface', 'procedure touchpollerunsupportedsurface');
   LPollerUnsupportedBody := ExtractBetween(LCompileGate,
@@ -1096,6 +1106,16 @@ begin
     'Windows IOCP file surface gate must not mix recv unsupported truth');
   CheckAbsent(LIocpFileBody, 'asyncclose',
     'Windows IOCP file surface gate must not mix close unsupported truth');
+  CheckContains(LIocpUnsupportedBody, 'liocp.asyncaccept',
+    'Windows compile gate must separately touch IOCP unsupported accept boundary');
+  CheckContains(LIocpUnsupportedBody, 'liocp.asyncconnect',
+    'Windows compile gate must separately touch IOCP unsupported connect boundary');
+  CheckContains(LIocpUnsupportedBody, 'liocp.asyncsend',
+    'Windows compile gate must separately touch IOCP unsupported send boundary');
+  CheckContains(LIocpUnsupportedBody, 'liocp.asyncrecv',
+    'Windows compile gate must separately touch IOCP unsupported recv boundary');
+  CheckContains(LIocpUnsupportedBody, 'liocp.asyncclose',
+    'Windows compile gate must separately touch IOCP unsupported close boundary');
 
   CheckContains(LPollerFileBody, 'lpoller.asyncread(0, nil, 0, 0, @noopiocompletion, nil);',
     'Windows compile gate must touch poller file AsyncRead');
