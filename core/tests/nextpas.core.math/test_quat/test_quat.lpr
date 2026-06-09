@@ -36,6 +36,12 @@ begin
   Check(LDelta <= AEpsilon, AMessage);
 end;
 
+procedure CheckPointerOffset(const ABase, AField: Pointer; const AExpectedOffset: PtrUInt;
+  const AMessage: string);
+begin
+  CheckEqual(Int64(AExpectedOffset), Int64(PtrUInt(AField) - PtrUInt(ABase)), AMessage);
+end;
+
 procedure CheckVec3f(const AExpectedX, AExpectedY, AExpectedZ: Single; const AActual: TVec3f;
   const AMessage: string);
 begin
@@ -68,6 +74,18 @@ begin
   CheckNear(AExpectedY, AActual.Y, 0.000000000001, AMessage + '.Y');
   CheckNear(AExpectedZ, AActual.Z, 0.000000000001, AMessage + '.Z');
   CheckNear(AExpectedW, AActual.W, 0.000000000001, AMessage + '.W');
+end;
+
+function QuatLengthSqr(const AValue: TQuatf): Single; overload;
+begin
+  Result := AValue.X * AValue.X + AValue.Y * AValue.Y +
+    AValue.Z * AValue.Z + AValue.W * AValue.W;
+end;
+
+function QuatLengthSqr(const AValue: TQuatd): Double; overload;
+begin
+  Result := AValue.X * AValue.X + AValue.Y * AValue.Y +
+    AValue.Z * AValue.Z + AValue.W * AValue.W;
 end;
 
 procedure CheckSingleNegativeZero(const AActual: Single; const AMessage: string);
@@ -621,6 +639,36 @@ begin
 
   Qd.W := DoubleNegativeZero;
   CheckDoubleNegativeZero(Qd.Data[3], 'TQuatd W preserves negative-zero bits in Data[3]');
+end;
+
+procedure TestQuaternionDataAliasOffsets;
+var
+  Qf: TQuatf;
+  Qd: TQuatd;
+begin
+  CheckPointerOffset(@Qf, @Qf.X, 0, 'TQuatf X starts at record base');
+  CheckPointerOffset(@Qf, @Qf.Y, PtrUInt(SizeOf(Single)), 'TQuatf Y packed offset');
+  CheckPointerOffset(@Qf, @Qf.Z, PtrUInt(2 * SizeOf(Single)), 'TQuatf Z packed offset');
+  CheckPointerOffset(@Qf, @Qf.W, PtrUInt(3 * SizeOf(Single)), 'TQuatf W packed offset');
+  CheckPointerOffset(@Qf, @Qf.Data[0], 0, 'TQuatf Data[0] aliases X offset');
+  CheckPointerOffset(@Qf, @Qf.Data[1], PtrUInt(SizeOf(Single)),
+    'TQuatf Data[1] aliases Y offset');
+  CheckPointerOffset(@Qf, @Qf.Data[2], PtrUInt(2 * SizeOf(Single)),
+    'TQuatf Data[2] aliases Z offset');
+  CheckPointerOffset(@Qf, @Qf.Data[3], PtrUInt(3 * SizeOf(Single)),
+    'TQuatf Data[3] aliases W offset');
+
+  CheckPointerOffset(@Qd, @Qd.X, 0, 'TQuatd X starts at record base');
+  CheckPointerOffset(@Qd, @Qd.Y, PtrUInt(SizeOf(Double)), 'TQuatd Y packed offset');
+  CheckPointerOffset(@Qd, @Qd.Z, PtrUInt(2 * SizeOf(Double)), 'TQuatd Z packed offset');
+  CheckPointerOffset(@Qd, @Qd.W, PtrUInt(3 * SizeOf(Double)), 'TQuatd W packed offset');
+  CheckPointerOffset(@Qd, @Qd.Data[0], 0, 'TQuatd Data[0] aliases X offset');
+  CheckPointerOffset(@Qd, @Qd.Data[1], PtrUInt(SizeOf(Double)),
+    'TQuatd Data[1] aliases Y offset');
+  CheckPointerOffset(@Qd, @Qd.Data[2], PtrUInt(2 * SizeOf(Double)),
+    'TQuatd Data[2] aliases Z offset');
+  CheckPointerOffset(@Qd, @Qd.Data[3], PtrUInt(3 * SizeOf(Double)),
+    'TQuatd Data offsets match packed named fields');
 end;
 
 procedure TestFromAxisAngleRejectsNonFiniteInputs;
@@ -1189,6 +1237,12 @@ var
   Qyf: TQuatf;
   Qxd: TQuatd;
   Qyd: TQuatd;
+  RawAf: TQuatf;
+  RawBf: TQuatf;
+  RawProductf: TQuatf;
+  RawAd: TQuatd;
+  RawBd: TQuatd;
+  RawProductd: TQuatd;
 begin
   Qxf := TQuatf.FromAxisAngle(TVec3f.Create(1.0, 0.0, 0.0), Single(HALF_PI));
   Qyf := TQuatf.FromAxisAngle(TVec3f.Create(0.0, 1.0, 0.0), Single(HALF_PI));
@@ -1207,6 +1261,22 @@ begin
   CheckVec3d(0.0, -1.0, 0.0,
     (Qyd * Qxd).Rotate(TVec3d.Create(0.0, 0.0, 1.0)),
     'TQuatd multiplication is non-commutative');
+
+  RawAf := TQuatf.Create(1.0, 2.0, 3.0, 4.0);
+  RawBf := TQuatf.Create(5.0, 6.0, 7.0, 8.0);
+  RawProductf := RawAf * RawBf;
+  CheckQuatf(24.0, 48.0, 48.0, -6.0, RawProductf,
+    'TQuatf operator multiply is raw Hamilton product without normalization');
+  CheckNear(5220.0, QuatLengthSqr(RawProductf), 0.0,
+    'TQuatf raw Hamilton product keeps non-unit length');
+
+  RawAd := TQuatd.Create(1.0, 2.0, 3.0, 4.0);
+  RawBd := TQuatd.Create(5.0, 6.0, 7.0, 8.0);
+  RawProductd := RawAd * RawBd;
+  CheckQuatd(24.0, 48.0, 48.0, -6.0, RawProductd,
+    'TQuatd operator multiply is raw Hamilton product without normalization');
+  CheckNear(5220.0, QuatLengthSqr(RawProductd), 0.0,
+    'TQuatd raw Hamilton product keeps non-unit length');
 end;
 
 procedure TestQuaternionEqualsNonFiniteComparisonContracts;
@@ -1242,6 +1312,7 @@ begin
   T.Run('quaternion Data aliases write through', @TestQuaternionDataAliasesWriteThrough);
   T.Run('quaternion Data aliases preserve signed-zero bits',
     @TestQuaternionDataAliasesPreserveSignedZeroBits);
+  T.Run('quaternion Data alias ABI offsets', @TestQuaternionDataAliasOffsets);
   T.Run('FromAxisAngle rejects non-finite inputs', @TestFromAxisAngleRejectsNonFiniteInputs);
   T.Run('FromAxisAngle normalizes huge finite axis', @TestFromAxisAngleNormalizesHugeFiniteAxis);
   T.Run('huge finite normalize', @TestHugeFiniteNormalize);

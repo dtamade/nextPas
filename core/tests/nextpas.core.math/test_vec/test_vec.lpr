@@ -46,6 +46,12 @@ begin
   CheckNear(AExpected / AScale, AActual / AScale, AEpsilon, AMessage);
 end;
 
+procedure CheckPointerOffset(const ABase, AField: Pointer; const AExpectedOffset: PtrUInt;
+  const AMessage: string);
+begin
+  CheckEqual(Int64(AExpectedOffset), Int64(PtrUInt(AField) - PtrUInt(ABase)), AMessage);
+end;
+
 procedure CheckVec2f(const AExpectedX, AExpectedY: Single; const AActual: TVec2f;
   const AMessage: string);
 begin
@@ -1011,6 +1017,70 @@ begin
   CheckVec4d(1.25, -2.5, 3.75, -4.5, V4d, 'TVec4d Data write-through');
 end;
 
+procedure TestVectorDataAliasOffsets;
+var
+  V2f: TVec2f;
+  V3f: TVec3f;
+  V4f: TVec4f;
+  V2d: TVec2d;
+  V3d: TVec3d;
+  V4d: TVec4d;
+begin
+  CheckPointerOffset(@V2f, @V2f.X, 0, 'TVec2f X starts at record base');
+  CheckPointerOffset(@V2f, @V2f.Y, PtrUInt(SizeOf(Single)), 'TVec2f Y packed offset');
+  CheckPointerOffset(@V2f, @V2f.Data[0], 0, 'TVec2f Data[0] aliases X offset');
+  CheckPointerOffset(@V2f, @V2f.Data[1], PtrUInt(SizeOf(Single)),
+    'TVec2f Data[1] aliases Y offset');
+
+  CheckPointerOffset(@V3f, @V3f.X, 0, 'TVec3f X starts at record base');
+  CheckPointerOffset(@V3f, @V3f.Y, PtrUInt(SizeOf(Single)), 'TVec3f Y packed offset');
+  CheckPointerOffset(@V3f, @V3f.Z, PtrUInt(2 * SizeOf(Single)), 'TVec3f Z packed offset');
+  CheckPointerOffset(@V3f, @V3f.Data[0], 0, 'TVec3f Data[0] aliases X offset');
+  CheckPointerOffset(@V3f, @V3f.Data[1], PtrUInt(SizeOf(Single)),
+    'TVec3f Data[1] aliases Y offset');
+  CheckPointerOffset(@V3f, @V3f.Data[2], PtrUInt(2 * SizeOf(Single)),
+    'TVec3f Data[2] aliases Z offset');
+
+  CheckPointerOffset(@V4f, @V4f.X, 0, 'TVec4f X starts at record base');
+  CheckPointerOffset(@V4f, @V4f.Y, PtrUInt(SizeOf(Single)), 'TVec4f Y packed offset');
+  CheckPointerOffset(@V4f, @V4f.Z, PtrUInt(2 * SizeOf(Single)), 'TVec4f Z packed offset');
+  CheckPointerOffset(@V4f, @V4f.W, PtrUInt(3 * SizeOf(Single)), 'TVec4f W packed offset');
+  CheckPointerOffset(@V4f, @V4f.Data[0], 0, 'TVec4f Data[0] aliases X offset');
+  CheckPointerOffset(@V4f, @V4f.Data[1], PtrUInt(SizeOf(Single)),
+    'TVec4f Data[1] aliases Y offset');
+  CheckPointerOffset(@V4f, @V4f.Data[2], PtrUInt(2 * SizeOf(Single)),
+    'TVec4f Data[2] aliases Z offset');
+  CheckPointerOffset(@V4f, @V4f.Data[3], PtrUInt(3 * SizeOf(Single)),
+    'TVec4f Data[3] aliases W offset');
+
+  CheckPointerOffset(@V2d, @V2d.X, 0, 'TVec2d X starts at record base');
+  CheckPointerOffset(@V2d, @V2d.Y, PtrUInt(SizeOf(Double)), 'TVec2d Y packed offset');
+  CheckPointerOffset(@V2d, @V2d.Data[0], 0, 'TVec2d Data[0] aliases X offset');
+  CheckPointerOffset(@V2d, @V2d.Data[1], PtrUInt(SizeOf(Double)),
+    'TVec2d Data[1] aliases Y offset');
+
+  CheckPointerOffset(@V3d, @V3d.X, 0, 'TVec3d X starts at record base');
+  CheckPointerOffset(@V3d, @V3d.Y, PtrUInt(SizeOf(Double)), 'TVec3d Y packed offset');
+  CheckPointerOffset(@V3d, @V3d.Z, PtrUInt(2 * SizeOf(Double)), 'TVec3d Z packed offset');
+  CheckPointerOffset(@V3d, @V3d.Data[0], 0, 'TVec3d Data[0] aliases X offset');
+  CheckPointerOffset(@V3d, @V3d.Data[1], PtrUInt(SizeOf(Double)),
+    'TVec3d Data[1] aliases Y offset');
+  CheckPointerOffset(@V3d, @V3d.Data[2], PtrUInt(2 * SizeOf(Double)),
+    'TVec3d Data[2] aliases Z offset');
+
+  CheckPointerOffset(@V4d, @V4d.X, 0, 'TVec4d X starts at record base');
+  CheckPointerOffset(@V4d, @V4d.Y, PtrUInt(SizeOf(Double)), 'TVec4d Y packed offset');
+  CheckPointerOffset(@V4d, @V4d.Z, PtrUInt(2 * SizeOf(Double)), 'TVec4d Z packed offset');
+  CheckPointerOffset(@V4d, @V4d.W, PtrUInt(3 * SizeOf(Double)), 'TVec4d W packed offset');
+  CheckPointerOffset(@V4d, @V4d.Data[0], 0, 'TVec4d Data[0] aliases X offset');
+  CheckPointerOffset(@V4d, @V4d.Data[1], PtrUInt(SizeOf(Double)),
+    'TVec4d Data[1] aliases Y offset');
+  CheckPointerOffset(@V4d, @V4d.Data[2], PtrUInt(2 * SizeOf(Double)),
+    'TVec4d Data[2] aliases Z offset');
+  CheckPointerOffset(@V4d, @V4d.Data[3], PtrUInt(3 * SizeOf(Double)),
+    'TVec4d Data offsets match packed named fields');
+end;
+
 procedure TestVectorDataAliasesPreserveSignedZeroBits;
 var
   V2f: TVec2f;
@@ -1273,6 +1343,7 @@ begin
   T.Run('vector huge finite Cross out-of-range signed infinity contract',
     @TestVectorHugeFiniteCrossOutOfRangeSignedInfinityContract);
   T.Run('vector Data aliases write through', @TestVectorDataAliasesWriteThrough);
+  T.Run('vector Data alias ABI offsets', @TestVectorDataAliasOffsets);
   T.Run('vector Data aliases preserve signed-zero bits',
     @TestVectorDataAliasesPreserveSignedZeroBits);
   T.Run('vector measure non-finite contracts',

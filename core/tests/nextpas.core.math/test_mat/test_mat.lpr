@@ -34,6 +34,12 @@ begin
   Check(LDelta <= AEpsilon, AMessage);
 end;
 
+procedure CheckPointerOffset(const ABase, AField: Pointer; const AExpectedOffset: PtrUInt;
+  const AMessage: string);
+begin
+  CheckEqual(Int64(AExpectedOffset), Int64(PtrUInt(AField) - PtrUInt(ABase)), AMessage);
+end;
+
 function SingleNaN: Single;
 var
   LValue: TSingleBitCast;
@@ -146,6 +152,16 @@ begin
   CheckNear(AExpectedY, AActual.Y, 0.000000000001, AMessage + '.Y');
   CheckNear(AExpectedZ, AActual.Z, 0.000000000001, AMessage + '.Z');
   CheckNear(AExpectedW, AActual.W, 0.000000000001, AMessage + '.W');
+end;
+
+procedure CheckVec3fEqual(const AExpected, AActual: TVec3f; const AMessage: string);
+begin
+  CheckVec3f(AExpected.X, AExpected.Y, AExpected.Z, AActual, AMessage);
+end;
+
+procedure CheckVec4dEqual(const AExpected, AActual: TVec4d; const AMessage: string);
+begin
+  CheckVec4d(AExpected.X, AExpected.Y, AExpected.Z, AExpected.W, AActual, AMessage);
 end;
 
 procedure CheckMat3fIdentity(const AActual: TMat3f; const AMessage: string);
@@ -1018,6 +1034,86 @@ begin
     'TMat4d Data[3,1] preserves negative-zero bits through Items');
 end;
 
+procedure TestMatrixDataLayoutOffsets;
+var
+  M3f: TMat3f;
+  M4f: TMat4f;
+  M3d: TMat3d;
+  M4d: TMat4d;
+begin
+  CheckPointerOffset(@M3f, @M3f.Data[0, 0], 0, 'TMat3f Data[0,0] starts at record base');
+  CheckPointerOffset(@M3f, @M3f.Data[0, 1], PtrUInt(SizeOf(Single)),
+    'TMat3f rows are contiguous inside a column');
+  CheckPointerOffset(@M3f, @M3f.Data[1, 0], PtrUInt(3 * SizeOf(Single)),
+    'TMat3f columns are contiguous column-major blocks');
+  CheckPointerOffset(@M3f, @M3f.Data[2, 1], PtrUInt((2 * 3 + 1) * SizeOf(Single)),
+    'TMat3f Data[column,row] offset is column-major');
+
+  CheckPointerOffset(@M4f, @M4f.Data[0, 0], 0, 'TMat4f Data[0,0] starts at record base');
+  CheckPointerOffset(@M4f, @M4f.Data[1, 0], PtrUInt(4 * SizeOf(Single)),
+    'TMat4f columns are contiguous column-major blocks');
+  CheckPointerOffset(@M4f, @M4f.Data[3, 2], PtrUInt((3 * 4 + 2) * SizeOf(Single)),
+    'TMat4f Data[column,row] offset is column-major');
+
+  CheckPointerOffset(@M3d, @M3d.Data[0, 0], 0, 'TMat3d Data[0,0] starts at record base');
+  CheckPointerOffset(@M3d, @M3d.Data[1, 0], PtrUInt(3 * SizeOf(Double)),
+    'TMat3d columns are contiguous column-major blocks');
+  CheckPointerOffset(@M3d, @M3d.Data[2, 2], PtrUInt((2 * 3 + 2) * SizeOf(Double)),
+    'TMat3d Data[column,row] offset is column-major');
+
+  CheckPointerOffset(@M4d, @M4d.Data[0, 0], 0, 'TMat4d Data[0,0] starts at record base');
+  CheckPointerOffset(@M4d, @M4d.Data[2, 1], PtrUInt((2 * 4 + 1) * SizeOf(Double)),
+    'TMat4d Data[column,row] offset is column-major');
+  CheckPointerOffset(@M4d, @M4d.Data[3, 3], PtrUInt((3 * 4 + 3) * SizeOf(Double)),
+    'TMat4d Data[column,row] offset is column-major');
+end;
+
+procedure TestMatrixMultiplicationOrderContracts;
+var
+  A3f: TMat3f;
+  B3f: TMat3f;
+  A4d: TMat4d;
+  B4d: TMat4d;
+  V3f: TVec3f;
+  V4d: TVec4d;
+  AB3f: TMat3f;
+  BA3f: TMat3f;
+  AB4d: TMat4d;
+  BA4d: TMat4d;
+begin
+  A3f := TMat3f.Create(
+    TVec3f.Create(1.0, 2.0, 0.0),
+    TVec3f.Create(0.0, 1.0, 3.0),
+    TVec3f.Create(4.0, 0.0, 1.0));
+  B3f := TMat3f.Create(
+    TVec3f.Create(2.0, 0.0, 1.0),
+    TVec3f.Create(1.0, 3.0, 0.0),
+    TVec3f.Create(0.0, 2.0, 1.0));
+  V3f := TVec3f.Create(1.0, -2.0, 3.0);
+  AB3f := A3f * B3f;
+  BA3f := B3f * A3f;
+  CheckVec3fEqual(AB3f * V3f, A3f * (B3f * V3f),
+    'TMat3f multiplication order is column-vector associative');
+  Check(not TMat3f.Equals(AB3f, BA3f, Single(0.0)), 'TMat3f multiplication is non-commutative');
+
+  A4d := TMat4d.Create(
+    TVec4d.Create(1.0, 2.0, 0.0, 0.0),
+    TVec4d.Create(0.0, 1.0, 3.0, 0.0),
+    TVec4d.Create(4.0, 0.0, 1.0, 5.0),
+    TVec4d.Create(0.0, 6.0, 0.0, 1.0));
+  B4d := TMat4d.Create(
+    TVec4d.Create(2.0, 0.0, 1.0, 0.0),
+    TVec4d.Create(1.0, 3.0, 0.0, 2.0),
+    TVec4d.Create(0.0, 2.0, 1.0, 0.0),
+    TVec4d.Create(3.0, 0.0, 4.0, 1.0));
+  V4d := TVec4d.Create(1.0, -2.0, 3.0, 1.0);
+  AB4d := A4d * B4d;
+  BA4d := B4d * A4d;
+  CheckVec4dEqual(AB4d * V4d, A4d * (B4d * V4d),
+    'TMat4d multiplication order is column-vector associative');
+  Check(not TMat4d.Equals(AB4d, BA4d, 0.0), 'TMat4d multiplication is non-commutative');
+end;
+
 procedure TestMatrixEqualsNonFiniteComparisonContracts;
 var
   M3f: TMat3f;
@@ -1066,6 +1162,8 @@ begin
   T.Run('matrix indexed aliases write through', @TestMatrixIndexedAliasesWriteThrough);
   T.Run('matrix indexed aliases preserve signed-zero bits',
     @TestMatrixIndexedAliasesPreserveSignedZeroBits);
+  T.Run('matrix Data layout ABI offsets', @TestMatrixDataLayoutOffsets);
+  T.Run('matrix multiplication order contracts', @TestMatrixMultiplicationOrderContracts);
   T.Run('single precision inverse fail-close contracts',
     @TestSinglePrecisionInverseFailCloseContracts);
   T.Run('double precision inverse fail-close contracts',
