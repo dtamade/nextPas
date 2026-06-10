@@ -902,6 +902,50 @@ begin
   CheckEqual(Byte(Ord('o')), LBuf[4]);
 end;
 
+procedure TestWriteStringRetriesPartialWriter;
+var
+  LS: IStream;
+  LWObj: TPartialForwardingWriter;
+  LW: IWriter;
+  LN: SizeUInt;
+  LBuf: array[0..4] of Byte;
+begin
+  LS := BytesStream(16);
+  LWObj := TPartialForwardingWriter.Create(LS as IWriter, 2);
+  LW := LWObj;
+
+  LN := nextpas.core.io.WriteString(LW, 'hello');
+
+  CheckEqual(SizeUInt(5), LN, 'WriteString returns full byte count');
+  CheckEqual(Int64(3), Int64(LWObj.Calls), 'WriteString retries partial writes');
+  CheckEqual(Int64(5), LS.Size, 'WriteString wrote full string');
+  LS.Seek(0, soBeginning);
+  LS.Read(LBuf[0], 5);
+  CheckEqual(Byte(Ord('h')), LBuf[0]);
+  CheckEqual(Byte(Ord('o')), LBuf[4]);
+end;
+
+procedure TestWriteStringZeroProgressRaises;
+var
+  LWObj: TZeroProgressWriter;
+  LW: IWriter;
+  LRaised: Boolean;
+begin
+  LWObj := TZeroProgressWriter.Create(1);
+  LW := LWObj;
+
+  LRaised := False;
+  try
+    nextpas.core.io.WriteString(LW, 'abc');
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'zero-progress WriteString raises EIOError');
+  CheckEqual(Int64(1), Int64(LWObj.Calls), 'WriteString attempted one write');
+end;
+
 { Util: ReadAtLeast }
 
 procedure TestReadAtLeast;
@@ -1464,6 +1508,10 @@ begin
   T.Run('NopCloser', @TestNopCloser);
   T.Run('NopCloser nil inner', @TestNopCloserNilInner);
   T.Run('WriteString', @TestWriteString);
+  T.Run('WriteString retries partial writer',
+    @TestWriteStringRetriesPartialWriter);
+  T.Run('WriteString zero-progress raises',
+    @TestWriteStringZeroProgressRaises);
   T.Run('ReadAtLeast', @TestReadAtLeast);
   T.Run('CopyBuffer', @TestCopyBuffer);
 

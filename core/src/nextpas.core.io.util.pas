@@ -439,7 +439,8 @@ function IoWriteString(const ADst: IWriter; const AStr: string): SizeUInt;
 begin
   if Length(AStr) = 0 then
     Exit(0);
-  Result := ADst.Write(AStr[1], SizeUInt(Length(AStr)));
+  Result := SizeUInt(Length(AStr));
+  WriteAll(ADst, AStr[1], Result, 'IoWriteString');
 end;
 
 { TSectionReader }
