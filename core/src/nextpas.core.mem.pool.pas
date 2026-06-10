@@ -18,7 +18,7 @@ type
   TFixedSlabPool = nextpas.core.mem.pool.fixed_slab.TFixedSlabPool;
 
   {**
-   * @desc 固定大小块池，O(1) 分配/释放
+   * @desc 固定大小块池，O(1) 分配；释放时验证所有权和重复释放
    * @note 非线程安全。适用于频繁创建/销毁相同大小对象的场景
    *}
   TLocalBlockPool = record
@@ -134,7 +134,30 @@ end;
 procedure TLocalBlockPool.Release(const APtr: Pointer);
 var
   LNode: PFreeNode;
+  LScan: PFreeNode;
+  LDiff: PtrUInt;
+  LScanned: SizeUInt;
 begin
+  if APtr = nil then
+    Exit;
+  if not Owns(APtr) then
+    raise EAllocError.Create(aeInvalidPointer, 'TLocalBlockPool.Release: pointer not owned');
+  LDiff := PtrUInt(APtr) - PtrUInt(FBacking);
+  if (FBlockSize = 0) or ((LDiff mod FBlockSize) <> 0) then
+    raise EAllocError.Create(aeInvalidPointer, 'TLocalBlockPool.Release: misaligned pointer');
+
+  LScan := PFreeNode(FFreeStack);
+  LScanned := 0;
+  while (LScan <> nil) and (LScanned < FBlockCount) do
+  begin
+    if Pointer(LScan) = APtr then
+      raise EAllocError.Create(aeDoubleFree, 'TLocalBlockPool.Release: double free detected');
+    LScan := LScan^.Next;
+    Inc(LScanned);
+  end;
+  if FAcquired = 0 then
+    raise EAllocError.Create(aeDoubleFree, 'TLocalBlockPool.Release: allocation count underflow');
+
   LNode := PFreeNode(APtr);
   LNode^.Next := PFreeNode(FFreeStack);
   FFreeStack := LNode;
@@ -187,9 +210,22 @@ begin
 end;
 
 function TLocalBlockPool.Owns(const APtr: Pointer): Boolean;
+var
+  LStart: PtrUInt;
+  LAddr: PtrUInt;
+  LTotalSize: SizeUInt;
 begin
-  Result := (APtr >= FBacking) and
-            (APtr < FBacking + FBlockSize * FBlockCount);
+  Result := False;
+  if (APtr = nil) or (FBacking = nil) or (FBlockSize = 0) or (FBlockCount = 0) then
+    Exit;
+
+  LStart := PtrUInt(FBacking);
+  LAddr := PtrUInt(APtr);
+  if LAddr < LStart then
+    Exit;
+
+  LTotalSize := FBlockSize * FBlockCount;
+  Result := (LAddr - LStart) < LTotalSize;
 end;
 
 end.

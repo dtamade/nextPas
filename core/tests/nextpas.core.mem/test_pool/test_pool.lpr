@@ -5,10 +5,43 @@ program test_pool;
 uses
   SysUtils,
   nextpas.core.testing,
+  nextpas.core.mem.error,
   nextpas.core.mem.pool;
+
+type
+  TExceptionProc = procedure;
 
 var
   T: TTestRunner;
+  GPool: TLocalBlockPool;
+  GPtr: Pointer = nil;
+  GExternalByte: Byte = 0;
+
+procedure CheckRaisesAllocError(AProc: TExceptionProc; AExpected: TAllocError; const AName: string);
+begin
+  try
+    AProc;
+    Fail(AName + ': expected allocation error');
+  except
+    on E: EAllocError do
+      CheckEqual(Int64(Ord(AExpected)), Int64(Ord(E.Error)), AName + ': error code');
+  end;
+end;
+
+procedure ReleaseExternalPointer;
+begin
+  GPool.Release(@GExternalByte);
+end;
+
+procedure ReleaseInteriorPointer;
+begin
+  GPool.Release(PByte(GPtr) + 1);
+end;
+
+procedure ReleaseDoubleFreePointer;
+begin
+  GPool.Release(GPtr);
+end;
 
 procedure TestPoolInit;
 var
@@ -93,6 +126,38 @@ begin
   LP.Done;
 end;
 
+procedure TestPoolRejectsInvalidReleasePointers;
+begin
+  GPool.Init(32, 2);
+  try
+    GPtr := GPool.Acquire;
+    Check(GPtr <> nil, 'acquire for invalid release');
+    CheckRaisesAllocError(@ReleaseExternalPointer, aeInvalidPointer, 'external pointer');
+    CheckRaisesAllocError(@ReleaseInteriorPointer, aeInvalidPointer, 'interior pointer');
+    CheckEqual(Int64(1), Int64(GPool.AcquiredCount), 'invalid releases do not mutate acquired count');
+    GPool.Release(GPtr);
+  finally
+    GPool.Done;
+    GPtr := nil;
+  end;
+end;
+
+procedure TestPoolRejectsDoubleFree;
+begin
+  GPool.Init(32, 1);
+  try
+    GPtr := GPool.Acquire;
+    Check(GPtr <> nil, 'acquire for double free');
+    GPool.Release(GPtr);
+    CheckRaisesAllocError(@ReleaseDoubleFreePointer, aeDoubleFree, 'double free');
+    CheckEqual(Int64(0), Int64(GPool.AcquiredCount), 'double free does not underflow acquired count');
+    CheckEqual(Int64(1), Int64(GPool.AvailableCount), 'double free does not duplicate free stack entries');
+  finally
+    GPool.Done;
+    GPtr := nil;
+  end;
+end;
+
 procedure TestPoolWriteRead;
 var
   LP: TLocalBlockPool;
@@ -174,6 +239,8 @@ begin
   T.Run('Exhaust', @TestPoolExhaust);
   T.Run('Reset', @TestPoolReset);
   T.Run('Owns', @TestPoolOwns);
+  T.Run('rejects invalid release pointers', @TestPoolRejectsInvalidReleasePointers);
+  T.Run('rejects double free', @TestPoolRejectsDoubleFree);
   T.Run('Write/Read', @TestPoolWriteRead);
   T.Run('Multiple blocks (100)', @TestPoolMultipleBlocks);
   T.Run('Done', @TestPoolDone);
