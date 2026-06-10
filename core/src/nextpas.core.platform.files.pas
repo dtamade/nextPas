@@ -491,6 +491,12 @@ begin
   LCopyLen := ALen;
   if LCopyLen >= ABufLen then
     LCopyLen := ABufLen - 1;
+  if LCopyLen <= 0 then
+  begin
+    ABuf[0] := #0;
+    Result := 0;
+    Exit;
+  end;
   LResult := readlink(APath, ABuf, LCopyLen);
   if LResult < 0 then
     Exit(platform_get_errno);

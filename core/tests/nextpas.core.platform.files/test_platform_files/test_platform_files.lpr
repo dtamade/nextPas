@@ -312,6 +312,33 @@ begin
   platform_file_unlink(TARGET);
 end;
 
+procedure TestSymlinkReadlinkOneByteBufferReturnsRequiredLength;
+var
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  LBuf: array[0..0] of AnsiChar;
+  LLen: Int32;
+const
+  TARGET = '/tmp/nextpas_readlink_one_byte_target.txt';
+  LINK = '/tmp/nextpas_readlink_one_byte_link.txt';
+begin
+  platform_file_unlink(LINK);
+  platform_file_unlink(TARGET);
+  platform_file_open(TARGET, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('abc'), 3, LWritten);
+  platform_file_close(H);
+  Check(platform_file_symlink(TARGET, LINK) = 0,
+    'one-byte readlink symlink create');
+  FillChar(LBuf, SizeOf(LBuf), Ord('?'));
+  Check(platform_file_readlink(LINK, @LBuf[0], SizeOf(LBuf), LLen) = 0,
+    'one-byte readlink succeeds');
+  Check(LLen = Length(TARGET),
+    'one-byte readlink returns required target length');
+  Check(LBuf[0] = #0, 'one-byte readlink is NUL terminated');
+  platform_file_unlink(LINK);
+  platform_file_unlink(TARGET);
+end;
+
 procedure TestOpenEx;
 var
   H: TPlatformFileHandle;
@@ -444,6 +471,8 @@ begin
   T.Run('symlink/readlink', @TestSymlinkReadlink);
   T.Run('symlink/readlink small buffer',
     @TestSymlinkReadlinkSmallBufferReturnsRequiredLength);
+  T.Run('symlink/readlink one-byte buffer',
+    @TestSymlinkReadlinkOneByteBufferReturnsRequiredLength);
   T.Run('open_ex append', @TestOpenEx);
   T.Run('pread/pwrite', @TestPreadPwrite);
   T.Run('fstat', @TestFstat);
