@@ -65,6 +65,9 @@ beyond minimum identity, kind, and managed-array helper contracts. The live
 SysUtils unit is not a path, file, environment, time, parsing, case-conversion,
 or broad string-helper surface; `SameText`, `IntToStr`, and `Trim` are the only
 currently live string helper additions beyond formatting.
+The system focused gate also includes a collections consumer proof for
+`TElementManager<string>` so TypInfo managed-array helpers stay tied to a real
+managed-lifetime path, not just standalone helper calls.
 
 Detailed S4 design-only material lives in `compatibility-facades.md` and
 `compatibility-matrix.md`. Those docs distinguish bootstrap RTL pressure from a

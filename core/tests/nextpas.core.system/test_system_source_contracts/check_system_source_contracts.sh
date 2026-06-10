@@ -583,6 +583,7 @@ require_token "docs/system/compatibility-matrix.md" "minimal live unit"
 require_token "docs/system/compatibility-matrix.md" "minimal live compile-truth contract"
 require_token "docs/system/compatibility-matrix.md" "minimal live exception-formatting facade"
 require_token "docs/system/compatibility-matrix.md" "TTypeKind collections coverage"
+require_token "docs/system/compatibility-matrix.md" "TypInfo collections consumer gate"
 require_token "docs/system/compatibility-matrix.md" '`IntToStr`'
 require_token "docs/system/compatibility-matrix.md" '`Trim`'
 require_token "docs/system/compatibility-matrix.md" '`CompareText` | no focused consumer pressure in this lane'
@@ -942,7 +943,15 @@ require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "CopyArray(LDest"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "FinalizeArray(LDest"
 require_token "tests/nextpas.core.system/Makefile" "test-typinfo-minimal"
+require_token "tests/nextpas.core.system/Makefile" "test-typinfo-collections-consumer"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/Makefile" "test: run compiler-contract"
+require_token "tests/nextpas.core.system/test_system_typinfo_collections_consumer/test_system_typinfo_collections_consumer.lpr" "nextpas.core.collections.element_manager"
+require_token "tests/nextpas.core.system/test_system_typinfo_collections_consumer/test_system_typinfo_collections_consumer.lpr" "TElementManager<string>"
+require_token "tests/nextpas.core.system/test_system_typinfo_collections_consumer/test_system_typinfo_collections_consumer.lpr" "ElementTypeInfo = TypeInfo(string)"
+require_token "tests/nextpas.core.system/test_system_typinfo_collections_consumer/test_system_typinfo_collections_consumer.lpr" "managed string lifecycle consumer path"
+require_token "tests/nextpas.core.system/test_system_typinfo_collections_consumer/test_system_typinfo_collections_consumer.lpr" "CopyElementsNonOverlap"
+require_token "tests/nextpas.core.system/test_system_typinfo_collections_consumer/test_system_typinfo_collections_consumer.lpr" "ReallocElements"
+require_token "tests/nextpas.core.system/test_system_typinfo_collections_consumer/test_system_typinfo_collections_consumer.lpr" "ZeroElements"
 
 require_token "src/nextpas.core.system.pas" "NEXTPAS_SYSTEM_NAME = 'nextpas.core.system';"
 require_token "src/nextpas.core.system.pas" "MAX_SIZE_INT = nextpas.core.base.MAX_SIZE_INT;"
