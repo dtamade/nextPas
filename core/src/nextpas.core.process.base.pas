@@ -6,8 +6,7 @@ interface
 
 uses
   nextpas.core.text.base,
-  nextpas.core.errors,
-  nextpas.core.platform.error;
+  nextpas.core.errors;
 
 type
   {**
@@ -66,15 +65,59 @@ type
 
 implementation
 
-constructor EProcessError.Create(const AMessage: string; const AExitCode: Integer);
-var
-  LCategory: TErrorCategory;
+function ProcessErrorCategory(AExitCode: Integer): TErrorCategory;
+const
+{$IFDEF NEXTPAS_WINDOWS}
+  PROCESS_ERROR_FILE_NOT_FOUND = 2;
+  PROCESS_ERROR_PATH_NOT_FOUND = 3;
+  PROCESS_ERROR_ACCESS_DENIED = 5;
+  PROCESS_ERROR_INVALID_PARAMETER = 87;
+  PROCESS_ERROR_TIMEOUT = 1460;
+{$ELSE}
+  PROCESS_ERROR_OPERATION_NOT_PERMITTED = 1;
+  PROCESS_ERROR_NO_ENTRY = 2;
+  PROCESS_ERROR_PERMISSION_DENIED = 13;
+  PROCESS_ERROR_INVALID_ARGUMENT = 22;
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  PROCESS_ERROR_TIMED_OUT = 60;
+{$ELSE}
+  PROCESS_ERROR_TIMED_OUT = 110;
+{$ENDIF}
+{$ENDIF}
 begin
   if AExitCode = -1 then
-    LCategory := ecInternal
-  else
-    LCategory := platform_error_category(AExitCode);
-  inherited Create(AMessage, LCategory);
+    Exit(ecInternal);
+{$IFDEF NEXTPAS_WINDOWS}
+  case AExitCode of
+    PROCESS_ERROR_FILE_NOT_FOUND,
+    PROCESS_ERROR_PATH_NOT_FOUND:
+      Exit(ecNotFound);
+    PROCESS_ERROR_ACCESS_DENIED:
+      Exit(ecPermission);
+    PROCESS_ERROR_INVALID_PARAMETER:
+      Exit(ecInvalidArgument);
+    PROCESS_ERROR_TIMEOUT:
+      Exit(ecTimeout);
+  end;
+{$ELSE}
+  case AExitCode of
+    PROCESS_ERROR_NO_ENTRY:
+      Exit(ecNotFound);
+    PROCESS_ERROR_OPERATION_NOT_PERMITTED,
+    PROCESS_ERROR_PERMISSION_DENIED:
+      Exit(ecPermission);
+    PROCESS_ERROR_INVALID_ARGUMENT:
+      Exit(ecInvalidArgument);
+    PROCESS_ERROR_TIMED_OUT:
+      Exit(ecTimeout);
+  end;
+{$ENDIF}
+  Result := ecIO;
+end;
+
+constructor EProcessError.Create(const AMessage: string; const AExitCode: Integer);
+begin
+  inherited Create(AMessage, ProcessErrorCategory(AExitCode));
   FExitCode := AExitCode;
 end;
 
