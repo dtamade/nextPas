@@ -156,8 +156,8 @@ var
   LRecvd: Int32;
   LResult: Int32;
 begin
-  if ACount = 0 then Exit(0);
   EnsureOpen('read');
+  if ACount = 0 then Exit(0);
   ApplyReadTimeout;
   LResult := platform_socket_recv(FSocket, @ABuf, Int32(ACount), 0, LRecvd);
   if LResult <> 0 then
@@ -172,8 +172,8 @@ var
   LPtr: PByte;
   LRemaining: SizeUInt;
 begin
-  if ACount = 0 then Exit(0);
   EnsureOpen('write');
+  if ACount = 0 then Exit(0);
   ApplyWriteTimeout;
   LPtr := @ABuf;
   LRemaining := ACount;
@@ -288,10 +288,10 @@ var
   LResult: Int32;
 begin
   ARead := 0;
-  if ACount = 0 then
-    Exit(tsiorOk);
   if FClosed then
     Exit(tsiorClosed);
+  if ACount = 0 then
+    Exit(tsiorOk);
   if FReadDeadline.IsExpired then
     raise ENetworkError.Create('read deadline exceeded');
 
@@ -315,10 +315,10 @@ var
   LResult: Int32;
 begin
   AWritten := 0;
-  if ACount = 0 then
-    Exit(tsiorOk);
   if FClosed then
     Exit(tsiorClosed);
+  if ACount = 0 then
+    Exit(tsiorOk);
   if FWriteDeadline.IsExpired then
     raise ENetworkError.Create('write deadline exceeded');
 

@@ -527,6 +527,24 @@ begin
         'client stream exposes runtime I/O before close');
       LClient.Close;
 
+      LRaised := False;
+      try
+        LClient.Read(LBuf[0], 0);
+      except
+        on ENetworkError do
+          LRaised := True;
+      end;
+      Check(LRaised, 'zero-length read after stream close raises ENetworkError');
+
+      LRaised := False;
+      try
+        LClient.Write(PAnsiChar('')^, 0);
+      except
+        on ENetworkError do
+          LRaised := True;
+      end;
+      Check(LRaised, 'zero-length write after stream close raises ENetworkError');
+
       LRead := 123;
       LResult := LRuntime.TryRead(LBuf[0], SizeOf(LBuf), LRead);
       CheckEqual(Int64(Ord(tsiorClosed)), Int64(Ord(LResult)),
@@ -534,12 +552,26 @@ begin
       CheckEqual(Int64(0), Int64(LRead),
         'runtime try-read reports zero bytes after stream close');
 
+      LRead := 123;
+      LResult := LRuntime.TryRead(LBuf[0], 0, LRead);
+      CheckEqual(Int64(Ord(tsiorClosed)), Int64(Ord(LResult)),
+        'runtime zero-length try-read reports closed after stream close');
+      CheckEqual(Int64(0), Int64(LRead),
+        'runtime zero-length try-read reports zero bytes after stream close');
+
       LWritten := 123;
       LResult := LRuntime.TryWrite(PAnsiChar('x')^, 1, LWritten);
       CheckEqual(Int64(Ord(tsiorClosed)), Int64(Ord(LResult)),
         'runtime try-write reports closed after stream close');
       CheckEqual(Int64(0), Int64(LWritten),
         'runtime try-write reports zero bytes after stream close');
+
+      LWritten := 123;
+      LResult := LRuntime.TryWrite(PAnsiChar('')^, 0, LWritten);
+      CheckEqual(Int64(Ord(tsiorClosed)), Int64(Ord(LResult)),
+        'runtime zero-length try-write reports closed after stream close');
+      CheckEqual(Int64(0), Int64(LWritten),
+        'runtime zero-length try-write reports zero bytes after stream close');
 
       LRaised := False;
       try
