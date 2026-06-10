@@ -83,6 +83,16 @@ begin
   Fail(AName + ': expected EArgumentError');
 end;
 
+procedure RaiseSmoothStepSingleReversedFiniteEdges;
+begin
+  SmoothStep(Single(2.0), Single(1.0), Single(1.5));
+end;
+
+procedure RaiseSmoothStepDoubleReversedFiniteEdges;
+begin
+  SmoothStep(2.0, 1.0, 1.5);
+end;
+
 procedure TestConstants;
 begin
   CheckNear(3.14159265358979323846, PI_VALUE, 0.000000000000001, 'PI_VALUE');
@@ -120,6 +130,10 @@ begin
   CheckNear(0.5, SmoothStep(Single(0.0), Single(1.0), Single(0.5)), 0.000001, 'SmoothStep Single midpoint');
   CheckNear(0.0, SmoothStep(0.0, 1.0, -1.0), 0.0, 'SmoothStep clamps low');
   CheckNear(1.0, SmoothStep(0.0, 1.0, 2.0), 0.0, 'SmoothStep clamps high');
+  ExpectArgumentError('SmoothStep Single reversed finite edges',
+    @RaiseSmoothStepSingleReversedFiniteEdges);
+  ExpectArgumentError('SmoothStep Double reversed finite edges',
+    @RaiseSmoothStepDoubleReversedFiniteEdges);
 end;
 
 procedure TestRoundingAndSign;

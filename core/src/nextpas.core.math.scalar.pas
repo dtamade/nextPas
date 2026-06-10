@@ -245,6 +245,8 @@ function SmoothStep(const AEdge0, AEdge1, AValue: Single): Single;
 var
   LT: Single;
 begin
+  if AEdge0 > AEdge1 then
+    raise EArgumentError.Create('SmoothStep: edge0 must not exceed edge1');
   if AEdge0 = AEdge1 then
   begin
     if AValue < AEdge0 then
@@ -259,6 +261,8 @@ function SmoothStep(const AEdge0, AEdge1, AValue: Double): Double;
 var
   LT: Double;
 begin
+  if AEdge0 > AEdge1 then
+    raise EArgumentError.Create('SmoothStep: edge0 must not exceed edge1');
   if AEdge0 = AEdge1 then
   begin
     if AValue < AEdge0 then
