@@ -276,6 +276,27 @@ begin
   Check(LDec[5] = $FF, 'mixed case byte 5');
 end;
 
+procedure TestHexInvalidCase;
+var
+  LData: TBytes;
+  LInvalidCase: THexCase;
+  LInvalidCaseOrd: Integer;
+  LRaised: Boolean;
+begin
+  SetLength(LData, 1);
+  LData[0] := $AB;
+  LInvalidCaseOrd := Ord(High(THexCase)) + 1;
+  LInvalidCase := THexCase(LInvalidCaseOrd);
+  LRaised := False;
+  try
+    HexEncode(LData, LInvalidCase);
+  except
+    on E: EConvertError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'invalid hex case should raise');
+end;
+
 { ===== URL Encoding ===== }
 
 procedure TestUrlEmpty;
@@ -598,6 +619,7 @@ begin
   T.Run('Hex odd length', @TestHexOddLength);
   T.Run('Hex invalid chars', @TestHexInvalidChars);
   T.Run('Hex mixed case', @TestHexMixedCase);
+  T.Run('Hex invalid case', @TestHexInvalidCase);
 
   { URL }
   T.Run('URL empty', @TestUrlEmpty);
