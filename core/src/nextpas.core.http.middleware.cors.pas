@@ -26,6 +26,38 @@ uses
   nextpas.core.http.middleware,
   nextpas.core.text.conv;
 
+{ Split AllowOrigins by comma and check if AOrigin is in the list.
+  '*' matches everything.  Comparison is case-insensitive. }
+function IsOriginAllowed(const AAllowOrigins, AOrigin: string): Boolean;
+var
+  LStart, LEnd, LLen: Integer;
+  LToken: string;
+begin
+  if AAllowOrigins = '*' then
+    Exit(True);
+  LLen := Length(AAllowOrigins);
+  LStart := 1;
+  while LStart <= LLen do
+  begin
+    { skip leading whitespace / commas }
+    while (LStart <= LLen) and (AAllowOrigins[LStart] in [' ', ',']) do
+      Inc(LStart);
+    if LStart > LLen then
+      Break;
+    LEnd := LStart;
+    while (LEnd <= LLen) and not (AAllowOrigins[LEnd] in [',']) do
+      Inc(LEnd);
+    LToken := Trim(Copy(AAllowOrigins, LStart, LEnd - LStart));
+    if LToken <> '' then
+    begin
+      if LowerCase(LToken) = LowerCase(AOrigin) then
+        Exit(True);
+    end;
+    LStart := LEnd + 1;
+  end;
+  Result := False;
+end;
+
 class function TCorsOptions.Default: TCorsOptions;
 begin
   Result.AllowOrigins := '*';
@@ -41,7 +73,8 @@ begin
   begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     var
-      LOrigin: string;
+      LOrigin, LAllowOrigin: string;
+      LIsWildcard: Boolean;
     begin
       LOrigin := AReq.Headers.Get('Origin');
       if LOrigin = '' then
@@ -50,8 +83,45 @@ begin
         Exit;
       end;
 
+      LIsWildcard := AOptions.AllowOrigins = '*';
+
+      { Determine the Access-Control-Allow-Origin value to emit.
+        W3C rule: must NOT be '*' when AllowCredentials is true;
+        the browser will reject that combination. }
+      if AOptions.AllowCredentials then
+      begin
+        { Credentials mode: always echo the concrete Origin. }
+        if LIsWildcard or IsOriginAllowed(AOptions.AllowOrigins, LOrigin) then
+          LAllowOrigin := LOrigin
+        else
+          LAllowOrigin := '';
+      end
+      else
+      begin
+        { Non-credentials mode. }
+        if LIsWildcard then
+          LAllowOrigin := '*'
+        else if IsOriginAllowed(AOptions.AllowOrigins, LOrigin) then
+          LAllowOrigin := LOrigin
+        else
+          LAllowOrigin := '';
+      end;
+
+      { Origin not allowed: no CORS headers, pass through normally }
+      if LAllowOrigin = '' then
+      begin
+        ANext.ServeHTTP(AReq, AW);
+        Exit;
+      end;
+
       { Set CORS response headers }
-      AW.Headers.SetHeader('Access-Control-Allow-Origin', AOptions.AllowOrigins);
+      AW.Headers.SetHeader('Access-Control-Allow-Origin', LAllowOrigin);
+
+      { When echoing a specific Origin (not '*'), add Vary: Origin
+        so caches distinguish responses per Origin. }
+      if LAllowOrigin <> '*' then
+        AW.Headers.SetHeader('Vary', 'Origin');
+
       AW.Headers.SetHeader('Access-Control-Allow-Methods', AOptions.AllowMethods);
       AW.Headers.SetHeader('Access-Control-Allow-Headers', AOptions.AllowHeaders);
       if AOptions.MaxAge > 0 then
@@ -59,7 +129,7 @@ begin
       if AOptions.AllowCredentials then
         AW.Headers.SetHeader('Access-Control-Allow-Credentials', 'true');
 
-      { Preflight: OPTIONS with Origin → 204, don't call next }
+      { Preflight: OPTIONS with Origin -> 204, don't call next }
       if AReq.Method = hmOptions then
       begin
         AW.WriteHeader(HTTP_STATUS_NO_CONTENT);
