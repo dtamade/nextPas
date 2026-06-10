@@ -19,6 +19,7 @@ uses
   nextpas.core.http.middleware,
   nextpas.core.http.middleware.cors,
   nextpas.core.http.middleware.recovery,
+  nextpas.core.http.middleware.timeout,
   nextpas.core.http.message,
   nextpas.core.http.static,
   nextpas.core.http.websocket,
@@ -79,28 +80,50 @@ type
 
 { Status constants - re-export }
 const
+  { 1xx Informational }
   HTTP_STATUS_CONTINUE = nextpas.core.http.base.HTTP_STATUS_CONTINUE;
-  HTTP_STATUS_EARLY_HINTS = nextpas.core.http.base.HTTP_STATUS_EARLY_HINTS;
   HTTP_STATUS_SWITCHING_PROTOCOLS = nextpas.core.http.base.HTTP_STATUS_SWITCHING_PROTOCOLS;
+  HTTP_STATUS_EARLY_HINTS = nextpas.core.http.base.HTTP_STATUS_EARLY_HINTS;
+
+  { 2xx Success }
   HTTP_STATUS_OK = nextpas.core.http.base.HTTP_STATUS_OK;
   HTTP_STATUS_CREATED = nextpas.core.http.base.HTTP_STATUS_CREATED;
+  HTTP_STATUS_ACCEPTED = nextpas.core.http.base.HTTP_STATUS_ACCEPTED;
   HTTP_STATUS_NO_CONTENT = nextpas.core.http.base.HTTP_STATUS_NO_CONTENT;
+  HTTP_STATUS_RESET_CONTENT = nextpas.core.http.base.HTTP_STATUS_RESET_CONTENT;
+  HTTP_STATUS_PARTIAL_CONTENT = nextpas.core.http.base.HTTP_STATUS_PARTIAL_CONTENT;
+
+  { 3xx Redirection }
   HTTP_STATUS_MOVED_PERMANENTLY = nextpas.core.http.base.HTTP_STATUS_MOVED_PERMANENTLY;
   HTTP_STATUS_FOUND = nextpas.core.http.base.HTTP_STATUS_FOUND;
   HTTP_STATUS_SEE_OTHER = nextpas.core.http.base.HTTP_STATUS_SEE_OTHER;
   HTTP_STATUS_NOT_MODIFIED = nextpas.core.http.base.HTTP_STATUS_NOT_MODIFIED;
+  HTTP_STATUS_TEMPORARY_REDIRECT = nextpas.core.http.base.HTTP_STATUS_TEMPORARY_REDIRECT;
+  HTTP_STATUS_PERMANENT_REDIRECT = nextpas.core.http.base.HTTP_STATUS_PERMANENT_REDIRECT;
+
+  { 4xx Client Error }
   HTTP_STATUS_BAD_REQUEST = nextpas.core.http.base.HTTP_STATUS_BAD_REQUEST;
   HTTP_STATUS_UNAUTHORIZED = nextpas.core.http.base.HTTP_STATUS_UNAUTHORIZED;
   HTTP_STATUS_FORBIDDEN = nextpas.core.http.base.HTTP_STATUS_FORBIDDEN;
   HTTP_STATUS_NOT_FOUND = nextpas.core.http.base.HTTP_STATUS_NOT_FOUND;
   HTTP_STATUS_METHOD_NOT_ALLOWED = nextpas.core.http.base.HTTP_STATUS_METHOD_NOT_ALLOWED;
+  HTTP_STATUS_NOT_ACCEPTABLE = nextpas.core.http.base.HTTP_STATUS_NOT_ACCEPTABLE;
+  HTTP_STATUS_REQUEST_TIMEOUT = nextpas.core.http.base.HTTP_STATUS_REQUEST_TIMEOUT;
+  HTTP_STATUS_CONFLICT = nextpas.core.http.base.HTTP_STATUS_CONFLICT;
+  HTTP_STATUS_GONE = nextpas.core.http.base.HTTP_STATUS_GONE;
   HTTP_STATUS_PAYLOAD_TOO_LARGE = nextpas.core.http.base.HTTP_STATUS_PAYLOAD_TOO_LARGE;
   HTTP_STATUS_EXPECTATION_FAILED = nextpas.core.http.base.HTTP_STATUS_EXPECTATION_FAILED;
+  HTTP_STATUS_UNPROCESSABLE_ENTITY = nextpas.core.http.base.HTTP_STATUS_UNPROCESSABLE_ENTITY;
+  HTTP_STATUS_TOO_MANY_REQUESTS = nextpas.core.http.base.HTTP_STATUS_TOO_MANY_REQUESTS;
   HTTP_STATUS_HEADER_TOO_LARGE = nextpas.core.http.base.HTTP_STATUS_HEADER_TOO_LARGE;
+
+  { 5xx Server Error }
   HTTP_STATUS_INTERNAL_SERVER_ERROR = nextpas.core.http.base.HTTP_STATUS_INTERNAL_SERVER_ERROR;
   HTTP_STATUS_NOT_IMPLEMENTED = nextpas.core.http.base.HTTP_STATUS_NOT_IMPLEMENTED;
   HTTP_STATUS_BAD_GATEWAY = nextpas.core.http.base.HTTP_STATUS_BAD_GATEWAY;
   HTTP_STATUS_SERVICE_UNAVAILABLE = nextpas.core.http.base.HTTP_STATUS_SERVICE_UNAVAILABLE;
+
+  { WebSocket opcodes }
   wsOpContinuation = nextpas.core.http.websocket.wsOpContinuation;
   wsOpText = nextpas.core.http.websocket.wsOpText;
   wsOpBinary = nextpas.core.http.websocket.wsOpBinary;
@@ -109,6 +132,8 @@ const
   wsOpPong = nextpas.core.http.websocket.wsOpPong;
   WEBSOCKET_DEFAULT_MAX_FRAME_SIZE = nextpas.core.http.websocket.WEBSOCKET_DEFAULT_MAX_FRAME_SIZE;
   WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE = nextpas.core.http.websocket.WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE;
+
+  { TCP server backends }
   TCP_SERVER_BACKEND_THREADED = nextpas.core.http.base.TCP_SERVER_BACKEND_THREADED;
   TCP_SERVER_BACKEND_EPOLL = nextpas.core.http.base.TCP_SERVER_BACKEND_EPOLL;
   TCP_SERVER_BACKEND_KQUEUE = nextpas.core.http.base.TCP_SERVER_BACKEND_KQUEUE;
@@ -151,6 +176,7 @@ function HandlerFunc(const AProc: THttpHandlerProc): IHttpHandler; overload; inl
 function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware; inline;
 function CorsMiddleware(const AOptions: TCorsOptions): IHttpMiddleware; inline;
 function RecoveryMiddleware: IHttpMiddleware; inline;
+function ResponseTimeMiddleware: IHttpMiddleware; inline;
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 
 { Message factories }
@@ -369,6 +395,11 @@ end;
 function RecoveryMiddleware: IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.recovery.RecoveryMiddleware;
+end;
+
+function ResponseTimeMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.timeout.ResponseTimeMiddleware;
 end;
 
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;

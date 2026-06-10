@@ -56,32 +56,54 @@ type
   end;
 
 const
+  { 1xx Informational }
   HTTP_STATUS_CONTINUE              = THttpStatus(100);
-  HTTP_STATUS_EARLY_HINTS           = THttpStatus(103);
-  TCP_SERVER_BACKEND_THREADED = nextpas.core.net.server.base.tsbThreaded;
-  TCP_SERVER_BACKEND_EPOLL = nextpas.core.net.server.base.tsbEpoll;
-  TCP_SERVER_BACKEND_KQUEUE = nextpas.core.net.server.base.tsbKqueue;
-  TCP_SERVER_BACKEND_IOCP = nextpas.core.net.server.base.tsbIocp;
   HTTP_STATUS_SWITCHING_PROTOCOLS   = THttpStatus(101);
+  HTTP_STATUS_EARLY_HINTS           = THttpStatus(103);
+
+  { 2xx Success }
   HTTP_STATUS_OK                    = THttpStatus(200);
   HTTP_STATUS_CREATED               = THttpStatus(201);
+  HTTP_STATUS_ACCEPTED              = THttpStatus(202);
   HTTP_STATUS_NO_CONTENT            = THttpStatus(204);
+  HTTP_STATUS_RESET_CONTENT         = THttpStatus(205);
+  HTTP_STATUS_PARTIAL_CONTENT       = THttpStatus(206);
+
+  { 3xx Redirection }
   HTTP_STATUS_MOVED_PERMANENTLY     = THttpStatus(301);
   HTTP_STATUS_FOUND                 = THttpStatus(302);
   HTTP_STATUS_SEE_OTHER             = THttpStatus(303);
   HTTP_STATUS_NOT_MODIFIED          = THttpStatus(304);
+  HTTP_STATUS_TEMPORARY_REDIRECT    = THttpStatus(307);
+  HTTP_STATUS_PERMANENT_REDIRECT    = THttpStatus(308);
+
+  { 4xx Client Error }
   HTTP_STATUS_BAD_REQUEST           = THttpStatus(400);
   HTTP_STATUS_UNAUTHORIZED          = THttpStatus(401);
   HTTP_STATUS_FORBIDDEN             = THttpStatus(403);
   HTTP_STATUS_NOT_FOUND             = THttpStatus(404);
   HTTP_STATUS_METHOD_NOT_ALLOWED    = THttpStatus(405);
+  HTTP_STATUS_NOT_ACCEPTABLE        = THttpStatus(406);
+  HTTP_STATUS_REQUEST_TIMEOUT       = THttpStatus(408);
+  HTTP_STATUS_CONFLICT              = THttpStatus(409);
+  HTTP_STATUS_GONE                  = THttpStatus(410);
   HTTP_STATUS_PAYLOAD_TOO_LARGE     = THttpStatus(413);
   HTTP_STATUS_EXPECTATION_FAILED    = THttpStatus(417);
+  HTTP_STATUS_UNPROCESSABLE_ENTITY  = THttpStatus(422);
+  HTTP_STATUS_TOO_MANY_REQUESTS     = THttpStatus(429);
+  HTTP_STATUS_HEADER_TOO_LARGE      = THttpStatus(431);
+
+  { 5xx Server Error }
   HTTP_STATUS_INTERNAL_SERVER_ERROR = THttpStatus(500);
   HTTP_STATUS_NOT_IMPLEMENTED       = THttpStatus(501);
   HTTP_STATUS_BAD_GATEWAY           = THttpStatus(502);
   HTTP_STATUS_SERVICE_UNAVAILABLE   = THttpStatus(503);
-  HTTP_STATUS_HEADER_TOO_LARGE      = THttpStatus(431);
+
+  { TCP server backend aliases }
+  TCP_SERVER_BACKEND_THREADED = nextpas.core.net.server.base.tsbThreaded;
+  TCP_SERVER_BACKEND_EPOLL = nextpas.core.net.server.base.tsbEpoll;
+  TCP_SERVER_BACKEND_KQUEUE = nextpas.core.net.server.base.tsbKqueue;
+  TCP_SERVER_BACKEND_IOCP = nextpas.core.net.server.base.tsbIocp;
 
 function HttpMethodToStr(const AMethod: THttpMethod): string;
 function HttpStrToMethod(const AStr: string): THttpMethod;
@@ -140,24 +162,40 @@ end;
 function HttpStatusText(const ACode: THttpStatus): string;
 begin
   case ACode of
+    { 1xx }
     100: Result := 'Continue';
     101: Result := 'Switching Protocols';
     103: Result := 'Early Hints';
+    { 2xx }
     200: Result := 'OK';
     201: Result := 'Created';
+    202: Result := 'Accepted';
     204: Result := 'No Content';
+    205: Result := 'Reset Content';
+    206: Result := 'Partial Content';
+    { 3xx }
     301: Result := 'Moved Permanently';
     302: Result := 'Found';
     303: Result := 'See Other';
     304: Result := 'Not Modified';
+    307: Result := 'Temporary Redirect';
+    308: Result := 'Permanent Redirect';
+    { 4xx }
     400: Result := 'Bad Request';
     401: Result := 'Unauthorized';
     403: Result := 'Forbidden';
     404: Result := 'Not Found';
     405: Result := 'Method Not Allowed';
+    406: Result := 'Not Acceptable';
+    408: Result := 'Request Timeout';
+    409: Result := 'Conflict';
+    410: Result := 'Gone';
     413: Result := 'Payload Too Large';
     417: Result := 'Expectation Failed';
+    422: Result := 'Unprocessable Entity';
+    429: Result := 'Too Many Requests';
     431: Result := 'Request Header Fields Too Large';
+    { 5xx }
     500: Result := 'Internal Server Error';
     501: Result := 'Not Implemented';
     502: Result := 'Bad Gateway';
@@ -244,7 +282,7 @@ begin
     Result.Scheme := Copy(LRest, 1, LSchemeEnd - 1);
     Delete(LRest, 1, LSchemeEnd + 2);
 
-    // Extract authority (up to first /, ?, or # — or end)
+    // Extract authority (up to first /, ?, or # -- or end)
     LPos := 0;
     for LI := 1 to Length(LRest) do
       if (LRest[LI] = '/') or (LRest[LI] = '?') or (LRest[LI] = '#') then

@@ -25,6 +25,8 @@ type
     FTransport: IHttpTransport;
     function DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32;
       var ARequestBodyCloseAttempted: Boolean): IHttpResponse;
+    function DoBodyRequest(const AMethod: THttpMethod;
+      const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
   public
     constructor Create(const AOptions: THttpClientOptions); overload;
     constructor Create(const ATransport: IHttpTransport;
@@ -612,7 +614,8 @@ begin
      ((LResp.StatusCode = HTTP_STATUS_MOVED_PERMANENTLY) or
       (LResp.StatusCode = HTTP_STATUS_FOUND) or
       (LResp.StatusCode = HTTP_STATUS_SEE_OTHER) or
-      (LResp.StatusCode = 307) or (LResp.StatusCode = 308)) then
+      (LResp.StatusCode = HTTP_STATUS_TEMPORARY_REDIRECT) or
+      (LResp.StatusCode = HTTP_STATUS_PERMANENT_REDIRECT)) then
   begin
     if ARedirectsLeft <= 0 then
     begin
@@ -677,6 +680,17 @@ begin
     Result := LResp;
 end;
 
+function THttpClient.DoBodyRequest(const AMethod: THttpMethod;
+  const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+begin
+  LUrl := TUrl.Parse(AUrl);
+  LReq := BufferedBodyRequest(AMethod, LUrl, AContentType, ABody);
+  Result := Send(LReq);
+end;
+
 function THttpClient.Send(const AReq: IHttpRequest): IHttpResponse;
 var
   LRequestBodyCloseAttempted: Boolean;
@@ -732,13 +746,8 @@ begin
 end;
 
 function THttpClient.Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-var
-  LUrl: TUrl;
-  LReq: IHttpRequest;
 begin
-  LUrl := TUrl.Parse(AUrl);
-  LReq := BufferedBodyRequest(hmPost, LUrl, AContentType, ABody);
-  Result := Send(LReq);
+  Result := DoBodyRequest(hmPost, AUrl, AContentType, ABody);
 end;
 
 function THttpClient.Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
@@ -752,13 +761,8 @@ begin
 end;
 
 function THttpClient.Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-var
-  LUrl: TUrl;
-  LReq: IHttpRequest;
 begin
-  LUrl := TUrl.Parse(AUrl);
-  LReq := BufferedBodyRequest(hmPut, LUrl, AContentType, ABody);
-  Result := Send(LReq);
+  Result := DoBodyRequest(hmPut, AUrl, AContentType, ABody);
 end;
 
 function THttpClient.Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
@@ -782,13 +786,8 @@ begin
 end;
 
 function THttpClient.Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-var
-  LUrl: TUrl;
-  LReq: IHttpRequest;
 begin
-  LUrl := TUrl.Parse(AUrl);
-  LReq := BufferedBodyRequest(hmPatch, LUrl, AContentType, ABody);
-  Result := Send(LReq);
+  Result := DoBodyRequest(hmPatch, AUrl, AContentType, ABody);
 end;
 
 function THttpClient.Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse;

@@ -213,6 +213,28 @@ begin
   Check(Pos('detailed error info', LWObj.Body) = 0, 'body does not expose exception message');
 end;
 
+procedure TestRecoveryEmptyMessage;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      raise Exception.Create('');
+    end),
+    [RecoveryMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/empty');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  CheckEqual(Int64(500), Int64(LWObj.Status), 'recovery returns 500 for empty message');
+  CheckEqual('Internal Server Error', LWObj.Body, 'recovery returns generic body for empty msg');
+end;
+
 { === Logger Tests === }
 
 procedure TestLoggerCallsNext;
@@ -384,11 +406,139 @@ begin
   LW := LWObj;
   LHandler.ServeHTTP(LReqIntf, LW);
   CheckEqual('true', LWObj.GetHeaders.Get('Access-Control-Allow-Credentials'), 'credentials header');
+  { W3C: credentials + wildcard must echo Origin, never '*' }
+  CheckEqual('http://example.com', LWObj.GetHeaders.Get('Access-Control-Allow-Origin'),
+    'ACAO echoes request Origin when credentials + wildcard');
+  CheckEqual('Origin', LWObj.GetHeaders.Get('Vary'), 'Vary: Origin when echoing Origin');
 end;
 
-{ === Timeout Tests === }
+procedure TestCorsCredentialsWithExplicitWhitelist;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LOpts: TCorsOptions;
+begin
+  LOpts := TCorsOptions.Default;
+  LOpts.AllowOrigins := 'http://foo.com, http://bar.com';
+  LOpts.AllowCredentials := True;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [CorsMiddleware(LOpts)]
+  );
+  { origin in whitelist -> allowed }
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.GetHeaders.SetHeader('Origin', 'http://foo.com');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('http://foo.com', LWObj.GetHeaders.Get('Access-Control-Allow-Origin'),
+    'whitelisted origin echoed');
+  CheckEqual('true', LWObj.GetHeaders.Get('Access-Control-Allow-Credentials'),
+    'credentials header set');
+  CheckEqual('Origin', LWObj.GetHeaders.Get('Vary'), 'Vary: Origin for explicit whitelist');
+end;
 
-procedure TestTimeoutFastHandler;
+procedure TestCorsOriginNotAllowed;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LOpts: TCorsOptions;
+begin
+  LOpts := TCorsOptions.Default;
+  LOpts.AllowOrigins := 'http://foo.com';
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [CorsMiddleware(LOpts)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.GetHeaders.SetHeader('Origin', 'http://evil.com');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('', LWObj.GetHeaders.Get('Access-Control-Allow-Origin'),
+    'disallowed origin gets no ACAO');
+  Check(not LWObj.GetHeaders.Has('Access-Control-Allow-Credentials'),
+    'no credentials header for disallowed origin');
+end;
+
+procedure TestCorsCredentialsDisallowOrigin;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LOpts: TCorsOptions;
+begin
+  LOpts := TCorsOptions.Default;
+  LOpts.AllowOrigins := 'http://foo.com';
+  LOpts.AllowCredentials := True;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [CorsMiddleware(LOpts)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.GetHeaders.SetHeader('Origin', 'http://evil.com');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('', LWObj.GetHeaders.Get('Access-Control-Allow-Origin'),
+    'disallowed origin + credentials: no CORS headers');
+  Check(not LWObj.GetHeaders.Has('Access-Control-Allow-Credentials'),
+    'no credentials header for disallowed origin');
+end;
+
+procedure TestCorsExplicitOriginNoWildcard;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LOpts: TCorsOptions;
+begin
+  LOpts := TCorsOptions.Default;
+  LOpts.AllowOrigins := 'http://example.com';
+  LOpts.AllowCredentials := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [CorsMiddleware(LOpts)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.GetHeaders.SetHeader('Origin', 'http://example.com');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('http://example.com', LWObj.GetHeaders.Get('Access-Control-Allow-Origin'),
+    'non-wildcard echoes specific origin');
+  CheckEqual('Origin', LWObj.GetHeaders.Get('Vary'), 'Vary: Origin for non-wildcard');
+end;
+
+{ === ResponseTime Tests === }
+
+procedure TestResponseTimeFastHandler;
 var
   LHandler: IHttpHandler;
   LWObj: TMockResponseWriter;
@@ -400,7 +550,7 @@ begin
     begin
       AW.WriteHeader(HTTP_STATUS_OK);
     end),
-    [TimeoutMiddleware(TDuration.FromSeconds(5))]
+    [ResponseTimeMiddleware]
   );
   LReq := TMockRequest.Create(hmGet, '/fast');
   LWObj := TMockResponseWriter.Create;
@@ -410,7 +560,7 @@ begin
   Check(LWObj.GetHeaders.Has('X-Response-Time'), 'has X-Response-Time header');
 end;
 
-procedure TestTimeoutSlowHandler;
+procedure TestResponseTimeSlowHandler;
 var
   LHandler: IHttpHandler;
   LWObj: TMockResponseWriter;
@@ -424,7 +574,7 @@ begin
       TSleep.ForDuration(TDuration.FromMilliseconds(50));
       AW.WriteHeader(HTTP_STATUS_OK);
     end),
-    [TimeoutMiddleware(TDuration.FromMilliseconds(10))]
+    [ResponseTimeMiddleware]
   );
   LReq := TMockRequest.Create(hmGet, '/slow');
   LWObj := TMockResponseWriter.Create;
@@ -435,7 +585,7 @@ begin
   Check(LVal <> '', 'X-Response-Time present for slow handler');
 end;
 
-procedure TestTimeoutResponseTimeValue;
+procedure TestResponseTimeValueFormat;
 var
   LHandler: IHttpHandler;
   LWObj: TMockResponseWriter;
@@ -448,7 +598,7 @@ begin
     begin
       AW.WriteHeader(HTTP_STATUS_OK);
     end),
-    [TimeoutMiddleware(TDuration.FromSeconds(1))]
+    [ResponseTimeMiddleware]
   );
   LReq := TMockRequest.Create(hmGet, '/check');
   LWObj := TMockResponseWriter.Create;
@@ -458,26 +608,56 @@ begin
   Check(Pos('ms', LVal) > 0, 'X-Response-Time contains ms suffix');
 end;
 
+procedure TestDeprecatedAlias;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+begin
+  {$PUSH}{$WARNINGS OFF}
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [TimeoutMiddleware]
+  );
+  {$POP}
+  LReq := TMockRequest.Create(hmGet, '/alias');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'deprecated alias still works');
+  Check(LWObj.GetHeaders.Has('X-Response-Time'), 'deprecated alias sets X-Response-Time');
+end;
+
 var
   T: TTestRunner;
 begin
   T := TTestRunner.Create('nextpas.core.http.middlewares');
   { Recovery }
-  T.Run('Recovery: handler raises → 500', @TestRecoveryHandlerRaises);
-  T.Run('Recovery: handler succeeds → passthrough', @TestRecoveryHandlerSucceeds);
+  T.Run('Recovery: handler raises -> 500', @TestRecoveryHandlerRaises);
+  T.Run('Recovery: handler succeeds -> passthrough', @TestRecoveryHandlerSucceeds);
   T.Run('Recovery: exception details hidden', @TestRecoveryHidesExceptionDetails);
+  T.Run('Recovery: empty message no crash', @TestRecoveryEmptyMessage);
   { Logger }
   T.Run('Logger: calls next handler', @TestLoggerCallsNext);
   T.Run('Logger: preserves status', @TestLoggerPreservesStatus);
   T.Run('Logger: no crash on 404', @TestLoggerNoCrash);
   { CORS }
-  T.Run('CORS: preflight → 204 + headers', @TestCorsPreflight);
+  T.Run('CORS: preflight -> 204 + headers', @TestCorsPreflight);
   T.Run('CORS: normal GET with Origin', @TestCorsNormalRequest);
-  T.Run('CORS: no Origin → no CORS headers', @TestCorsNoOriginHeader);
-  T.Run('CORS: AllowCredentials header', @TestCorsCredentials);
-  { Timeout }
-  T.Run('Timeout: fast handler has X-Response-Time', @TestTimeoutFastHandler);
-  T.Run('Timeout: slow handler still works', @TestTimeoutSlowHandler);
-  T.Run('Timeout: X-Response-Time has ms suffix', @TestTimeoutResponseTimeValue);
+  T.Run('CORS: no Origin -> no CORS headers', @TestCorsNoOriginHeader);
+  T.Run('CORS: AllowCredentials echoes Origin', @TestCorsCredentials);
+  T.Run('CORS: credentials + explicit whitelist', @TestCorsCredentialsWithExplicitWhitelist);
+  T.Run('CORS: origin not in whitelist rejected', @TestCorsOriginNotAllowed);
+  T.Run('CORS: credentials + disallowed origin', @TestCorsCredentialsDisallowOrigin);
+  T.Run('CORS: non-wildcard echoes specific origin', @TestCorsExplicitOriginNoWildcard);
+  { ResponseTime }
+  T.Run('ResponseTime: fast handler has X-Response-Time', @TestResponseTimeFastHandler);
+  T.Run('ResponseTime: slow handler still works', @TestResponseTimeSlowHandler);
+  T.Run('ResponseTime: X-Response-Time has ms suffix', @TestResponseTimeValueFormat);
+  T.Run('ResponseTime: deprecated TimeoutMiddleware alias', @TestDeprecatedAlias);
   T.Summary;
 end.
