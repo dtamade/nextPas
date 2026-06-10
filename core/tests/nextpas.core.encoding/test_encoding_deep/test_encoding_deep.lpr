@@ -513,30 +513,33 @@ begin
 end;
 
 procedure TestVarintNonCanonicalEncoding;
-var LData: TBytes;
+var
+  LData: TBytes;
+  LRead: Integer;
+  LGotException: Boolean;
 begin
   SetLength(LData, 2);
   LData[0] := $80;
   LData[1] := $00;
-  ExpectConvertError(
-    procedure
-    var LRead: Integer;
-    begin
-      VarintDecode(LData, LRead);
-    end,
-    'overlong zero varint should raise'
-  );
+  LGotException := False;
+  try
+    VarintDecode(LData, LRead);
+  except
+    on E: EConvertError do
+      LGotException := True;
+  end;
+  Check(LGotException, 'overlong zero varint should raise');
 
   LData[0] := $81;
   LData[1] := $00;
-  ExpectConvertError(
-    procedure
-    var LRead: Integer;
-    begin
-      SignedVarintDecode(LData, LRead);
-    end,
-    'overlong signed varint should raise'
-  );
+  LGotException := False;
+  try
+    SignedVarintDecode(LData, LRead);
+  except
+    on E: EConvertError do
+      LGotException := True;
+  end;
+  Check(LGotException, 'overlong signed varint should raise');
 end;
 
 procedure TestSignedVarintZigZag;
@@ -622,4 +625,3 @@ begin
 
   T.Summary;
 end.
-
