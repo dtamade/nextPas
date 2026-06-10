@@ -312,8 +312,8 @@ begin
   LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
   try
     LResp := SendRawRequest(LPort, 'GET /files/../etc/passwd HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
-    Check((Pos('HTTP/1.1 400', LResp) > 0) or (Pos('HTTP/1.1 404', LResp) > 0),
-      'traversal blocked with 400 or 404');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'traversal must be rejected with 400');
   finally
     StopTestServer(LServer, LHandle);
   end;
@@ -333,9 +333,7 @@ begin
   try
     LResp := SendRawRequest(LPort, 'GET /files/..\\secret HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
     Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Windows-style traversal separator must be rejected before file lookup');
-    Check(Pos('HTTP/1.1 404', LResp) = 0,
-      'Windows-style traversal separator must not fall through to missing file');
+      'Windows-style traversal separator must be rejected with 400');
   finally
     StopTestServer(LServer, LHandle);
   end;
@@ -375,8 +373,8 @@ begin
   LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
   try
     LResp := SendRawRequest(LPort, 'GET /files//etc/passwd HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
-    Check((Pos('HTTP/1.1 400', LResp) > 0) or (Pos('HTTP/1.1 404', LResp) > 0),
-      'absolute path rejected');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'absolute path must be rejected with 400');
   finally
     StopTestServer(LServer, LHandle);
   end;
@@ -409,16 +407,20 @@ begin
   end;
 end;
 
-{ ===== Test 11: Static file bodies use binary file reads ===== }
-procedure TestStaticFileBodiesUseBinaryFileReads;
+{ ===== Test 11: Static file uses stream-based transfer ===== }
+procedure TestStaticFileUsesStreamTransfer;
 var
   LSource: string;
 begin
   LSource := nextpas.core.fs.ReadFileText('../../../src/nextpas.core.http.static.pas');
   Check(Pos('ReadFileText(AFilePath)', LSource) = 0,
     'static file body path must not depend on text file reads');
-  Check(Pos('ReadFile(AFilePath)', LSource) > 0,
-    'static file body path uses binary file reads');
+  Check(Pos('ReadFile(AFilePath)', LSource) = 0,
+    'static file must not load entire file into memory');
+  Check(Pos('nextpas.core.fs.Open(AFilePath', LSource) > 0,
+    'static file uses stream-based Open for reading');
+  Check(Pos('nextpas.core.io.Copy(', LSource) > 0,
+    'static file uses io.Copy for streaming transfer');
 end;
 
 { ===== Test 12: ServeFile preserves binary body bytes ===== }
@@ -479,6 +481,50 @@ begin
   end;
 end;
 
+{ ===== Test 14: URL-encoded traversal blocked ===== }
+procedure TestServeDirUrlEncodedTraversalBlocked;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/files/*filepath', ServeDir(CTmpDir));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    { %2e%2e = .. }
+    LResp := SendRawRequest(LPort, 'GET /files/%2e%2e/etc/passwd HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'URL-encoded traversal (%2e%2e) must be rejected with 400');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+{ ===== Test 15: PathClean-based normalization ===== }
+procedure TestServeDirNormalizationProtects;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/files/*filepath', ServeDir(CTmpDir));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    { foo/../../etc normalizes to ../etc which should be rejected }
+    LResp := SendRawRequest(LPort, 'GET /files/foo/../../etc/passwd HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'double-dot traversal through nested path must be rejected with 400');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
 { ===== Main ===== }
 begin
   SetupTmpDir;
@@ -496,9 +542,11 @@ begin
     T.Run('ServeDir missing file returns 404', @TestServeDirMissing);
     T.Run('ServeDir absolute path rejected', @TestServeDirAbsolutePathRejected);
     T.Run('ServeDir MIME case-insensitive and fallback', @TestServeDirMimeTypeCaseInsensitiveAndFallback);
-    T.Run('Static file bodies use binary file reads', @TestStaticFileBodiesUseBinaryFileReads);
+    T.Run('Static file uses stream-based transfer', @TestStaticFileUsesStreamTransfer);
     T.Run('ServeFile preserves binary body bytes', @TestServeFilePreservesBinaryBodyBytes);
     T.Run('ServeDir preserves binary body bytes', @TestServeDirPreservesBinaryBodyBytes);
+    T.Run('URL-encoded traversal blocked', @TestServeDirUrlEncodedTraversalBlocked);
+    T.Run('PathClean normalization protects', @TestServeDirNormalizationProtects);
     T.Summary;
   finally
     CleanupTmpDir;

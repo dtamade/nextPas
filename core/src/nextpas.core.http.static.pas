@@ -18,9 +18,35 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.io,
+  nextpas.core.io.intf,
   nextpas.core.text.conv,
   nextpas.core.fs,
-  nextpas.core.http.base;
+  nextpas.core.fs.base,
+  nextpas.core.http.base,
+  nextpas.core.http.url;
+
+{ ===== Writer adapter: bridge IHttpResponseWriter to IWriter ===== }
+
+type
+  TResponseWriterAdapter = class(TInterfacedObject, IWriter)
+  private
+    FWriter: IHttpResponseWriter;
+  public
+    constructor Create(const AWriter: IHttpResponseWriter);
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
+constructor TResponseWriterAdapter.Create(const AWriter: IHttpResponseWriter);
+begin
+  inherited Create;
+  FWriter := AWriter;
+end;
+
+function TResponseWriterAdapter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := FWriter.Write(ABuf, ACount);
+end;
 
 { ===== Helpers ===== }
 
@@ -31,7 +57,7 @@ begin
   for LI := Length(APath) downto 1 do
   begin
     if APath[LI] = '.' then
-      Exit(Copy(APath, LI, Length(APath) - LI + 1));
+      Exit(System.Copy(APath, LI, Length(APath) - LI + 1));
     if APath[LI] = '/' then
       Exit('');
   end;
@@ -61,56 +87,80 @@ begin
   else Result := 'application/octet-stream';
 end;
 
-{ Returns True if the relative path is safe (no traversal). }
+{ Returns True if the relative path is safe (no traversal).
+  Hardened: URL-decodes first, replaces backslashes, normalizes with PathClean,
+  then checks the result does not escape the root. }
 function IsSafePath(const ARelative: string): Boolean;
 var
-  LI, LLen: SizeInt;
+  LDecoded: string;
+  LNormalized: string;
+  LI: SizeInt;
 begin
-  LLen := Length(ARelative);
-  if LLen = 0 then Exit(False);
+  if Length(ARelative) = 0 then Exit(False);
   { Reject absolute paths }
   if ARelative[1] = '/' then Exit(False);
-  { Reject Windows path separators before file lookup. }
-  for LI := 1 to LLen do
-    if ARelative[LI] = '\' then
-      Exit(False);
-  { Reject any '..' component }
-  LI := 1;
-  while LI <= LLen do
+  { URL decode to prevent %2e%2e bypass }
+  try
+    LDecoded := UrlDecode(ARelative);
+  except
+    Exit(False);
+  end;
+  { Replace backslashes to prevent Windows-style traversal }
+  for LI := 1 to Length(LDecoded) do
+    if LDecoded[LI] = '\' then
+      LDecoded[LI] := '/';
+  { Normalize path: resolves . and .. segments }
+  LNormalized := nextpas.core.fs.PathClean(LDecoded);
+  { Reject if normalization produced an absolute path }
+  if (Length(LNormalized) > 0) and (LNormalized[1] = '/') then Exit(False);
+  { Reject if normalization still starts with .. }
+  if (Length(LNormalized) >= 2) and (LNormalized[1] = '.') and (LNormalized[2] = '.') then
   begin
-    if (ARelative[LI] = '.') and (LI + 1 <= LLen) and (ARelative[LI + 1] = '.') then
-    begin
-      { Check it's a full component: at start or after '/', and at end or before '/' }
-      if ((LI = 1) or (ARelative[LI - 1] = '/')) and
-         ((LI + 2 > LLen) or (ARelative[LI + 2] = '/')) then
-        Exit(False);
-    end;
-    Inc(LI);
+    if (Length(LNormalized) = 2) or (LNormalized[3] = '/') then
+      Exit(False);
   end;
   Result := True;
 end;
 
 procedure ServeFileContent(const AFilePath: string; const AW: IHttpResponseWriter);
 var
-  LContent: TBytes;
+  LFile: nextpas.core.fs.IFile;
+  LSize: Int64;
   LExt: string;
   LMime: string;
+  LAdapter: IWriter;
+  LInfo: TFileInfo;
 begin
-  if not nextpas.core.fs.Exists(AFilePath) then
-  begin
+  { Open first to avoid TOCTOU: we get a consistent view of the file. }
+  try
+    LFile := nextpas.core.fs.Open(AFilePath, [fmRead]);
+  except
     AW.GetHeaders.SetHeader('content-length', '9');
     AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
     AW.Write(PAnsiChar('Not Found')^, 9);
     Exit;
   end;
-  LContent := nextpas.core.fs.ReadFile(AFilePath);
-  LExt := ExtractExt(AFilePath);
-  LMime := MimeTypeFromExt(LExt);
-  AW.GetHeaders.SetHeader('content-type', LMime);
-  AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LContent))));
-  AW.WriteHeader(HTTP_STATUS_OK);
-  if Length(LContent) > 0 then
-    AW.Write(LContent[0], SizeUInt(Length(LContent)));
+  try
+    { Reject symlinks, directories, and other non-regular files }
+    LInfo := LFile.Stat;
+    if LInfo.FileType <> ftRegular then
+    begin
+      AW.GetHeaders.SetHeader('content-length', '9');
+      AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+      AW.Write(PAnsiChar('Not Found')^, 9);
+      Exit;
+    end;
+    LSize := LInfo.Size;
+    LExt := ExtractExt(AFilePath);
+    LMime := MimeTypeFromExt(LExt);
+    AW.GetHeaders.SetHeader('content-type', LMime);
+    AW.GetHeaders.SetHeader('content-length', IntToStr(LSize));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    LAdapter := TResponseWriterAdapter.Create(AW);
+    nextpas.core.io.Copy(LAdapter, LFile as IReader);
+  finally
+    LFile.Close;
+  end;
 end;
 
 { ===== Public API ===== }
@@ -137,7 +187,7 @@ begin
       LRelative := AReq.Path;
       { Strip leading slash }
       if (Length(LRelative) > 0) and (LRelative[1] = '/') then
-        LRelative := Copy(LRelative, 2, Length(LRelative) - 1);
+        LRelative := System.Copy(LRelative, 2, Length(LRelative) - 1);
     end;
     { Security: reject traversal attempts }
     if not IsSafePath(LRelative) then
