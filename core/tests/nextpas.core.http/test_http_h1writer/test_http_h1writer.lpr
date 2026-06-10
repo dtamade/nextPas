@@ -631,7 +631,7 @@ begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
   try
-    LRW.GetHeaders.SetHeader('Content-Length', AValue);
+    LRW.GetHeaders.Set_('Content-Length', AValue);
     LRaised := False;
     try
       LRW.WriteHeader(HTTP_STATUS_OK);
