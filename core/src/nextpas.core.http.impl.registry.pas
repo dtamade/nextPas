@@ -76,6 +76,7 @@ begin
   Result := NewH1ServerTransport(LH1Options);
 end;
 
+{ Note: must be called before any concurrent HTTP client/server creation. }
 procedure RegisterClientTransport(const AVersion: THttpVersion;
   const AFactory: THttpClientTransportFactory);
 begin
@@ -84,6 +85,7 @@ begin
   GClientFactories[AVersion] := AFactory;
 end;
 
+{ Note: must be called before any concurrent HTTP client/server creation. }
 procedure RegisterServerTransport(const AVersion: THttpVersion;
   const AFactory: THttpServerTransportFactory);
 begin

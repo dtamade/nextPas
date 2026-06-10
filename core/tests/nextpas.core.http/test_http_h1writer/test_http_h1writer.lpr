@@ -1469,6 +1469,31 @@ begin
     'HTTP/1.1 500 Internal Server Error'#13#10, True);
   CheckStatusLine(HTTP_STATUS_NOT_IMPLEMENTED,
     'HTTP/1.1 501 Not Implemented'#13#10, True);
+  { New status codes from P1-4 fast path }
+  CheckStatusLine(HTTP_STATUS_ACCEPTED,
+    'HTTP/1.1 202 Accepted'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_RESET_CONTENT,
+    'HTTP/1.1 205 Reset Content'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_PARTIAL_CONTENT,
+    'HTTP/1.1 206 Partial Content'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_SEE_OTHER,
+    'HTTP/1.1 203 See Other'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_TEMPORARY_REDIRECT,
+    'HTTP/1.1 307 Temporary Redirect'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_PERMANENT_REDIRECT,
+    'HTTP/1.1 308 Permanent Redirect'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_NOT_ACCEPTABLE,
+    'HTTP/1.1 406 Not Acceptable'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_REQUEST_TIMEOUT,
+    'HTTP/1.1 408 Request Timeout'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_CONFLICT,
+    'HTTP/1.1 409 Conflict'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_GONE,
+    'HTTP/1.1 410 Gone'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_UNPROCESSABLE_ENTITY,
+    'HTTP/1.1 422 Unprocessable Entity'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_TOO_MANY_REQUESTS,
+    'HTTP/1.1 429 Too Many Requests'#13#10, True);
 end;
 
 procedure TestUnknownStatusLineKeepsFallbackReason;

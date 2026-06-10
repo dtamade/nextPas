@@ -191,6 +191,18 @@ const
   STATUS_NOT_IMPLEMENTED: AnsiString = 'HTTP/1.1 501 Not Implemented'#13#10;
   STATUS_BAD_GATEWAY: AnsiString = 'HTTP/1.1 502 Bad Gateway'#13#10;
   STATUS_SERVICE_UNAVAILABLE: AnsiString = 'HTTP/1.1 503 Service Unavailable'#13#10;
+  STATUS_ACCEPTED: AnsiString = 'HTTP/1.1 202 Accepted'#13#10;
+  STATUS_RESET_CONTENT: AnsiString = 'HTTP/1.1 205 Reset Content'#13#10;
+  STATUS_PARTIAL_CONTENT: AnsiString = 'HTTP/1.1 206 Partial Content'#13#10;
+  STATUS_SEE_OTHER: AnsiString = 'HTTP/1.1 203 See Other'#13#10;
+  STATUS_TEMPORARY_REDIRECT: AnsiString = 'HTTP/1.1 307 Temporary Redirect'#13#10;
+  STATUS_PERMANENT_REDIRECT: AnsiString = 'HTTP/1.1 308 Permanent Redirect'#13#10;
+  STATUS_NOT_ACCEPTABLE: AnsiString = 'HTTP/1.1 406 Not Acceptable'#13#10;
+  STATUS_REQUEST_TIMEOUT: AnsiString = 'HTTP/1.1 408 Request Timeout'#13#10;
+  STATUS_CONFLICT: AnsiString = 'HTTP/1.1 409 Conflict'#13#10;
+  STATUS_GONE: AnsiString = 'HTTP/1.1 410 Gone'#13#10;
+  STATUS_UNPROCESSABLE_ENTITY: AnsiString = 'HTTP/1.1 422 Unprocessable Entity'#13#10;
+  STATUS_TOO_MANY_REQUESTS: AnsiString = 'HTTP/1.1 429 Too Many Requests'#13#10;
 
   procedure WriteLine(const ALine: AnsiString);
   begin
@@ -221,6 +233,18 @@ begin
     HTTP_STATUS_NOT_IMPLEMENTED: WriteLine(STATUS_NOT_IMPLEMENTED);
     HTTP_STATUS_BAD_GATEWAY: WriteLine(STATUS_BAD_GATEWAY);
     HTTP_STATUS_SERVICE_UNAVAILABLE: WriteLine(STATUS_SERVICE_UNAVAILABLE);
+    HTTP_STATUS_ACCEPTED: WriteLine(STATUS_ACCEPTED);
+    HTTP_STATUS_RESET_CONTENT: WriteLine(STATUS_RESET_CONTENT);
+    HTTP_STATUS_PARTIAL_CONTENT: WriteLine(STATUS_PARTIAL_CONTENT);
+    HTTP_STATUS_SEE_OTHER: WriteLine(STATUS_SEE_OTHER);
+    HTTP_STATUS_TEMPORARY_REDIRECT: WriteLine(STATUS_TEMPORARY_REDIRECT);
+    HTTP_STATUS_PERMANENT_REDIRECT: WriteLine(STATUS_PERMANENT_REDIRECT);
+    HTTP_STATUS_NOT_ACCEPTABLE: WriteLine(STATUS_NOT_ACCEPTABLE);
+    HTTP_STATUS_REQUEST_TIMEOUT: WriteLine(STATUS_REQUEST_TIMEOUT);
+    HTTP_STATUS_CONFLICT: WriteLine(STATUS_CONFLICT);
+    HTTP_STATUS_GONE: WriteLine(STATUS_GONE);
+    HTTP_STATUS_UNPROCESSABLE_ENTITY: WriteLine(STATUS_UNPROCESSABLE_ENTITY);
+    HTTP_STATUS_TOO_MANY_REQUESTS: WriteLine(STATUS_TOO_MANY_REQUESTS);
   else
     Result := False;
   end;
@@ -485,6 +509,13 @@ begin
   end;
 end;
 
+{ Flushes the response stream.
+  In chunked mode (no explicit Content-Length), Flush sends the terminal
+  chunk "0\r\n\r\n" and marks the response as finalized.  After finalization
+  any subsequent Write raises EHttpError.
+  In Content-Length mode, Flush validates that the declared length has been
+  fully written before marking finalization.
+  If the underlying IWriter supports IFlusher, the flush is propagated. }
 procedure TH1ResponseWriter.Flush;
 var
   LFlusher: IFlusher;

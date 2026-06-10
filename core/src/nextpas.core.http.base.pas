@@ -145,16 +145,19 @@ begin
 end;
 
 function HttpStrToMethod(const AStr: string): THttpMethod;
+var
+  LUpper: string;
 begin
-  if AStr = 'GET' then Result := hmGet
-  else if AStr = 'HEAD' then Result := hmHead
-  else if AStr = 'POST' then Result := hmPost
-  else if AStr = 'PUT' then Result := hmPut
-  else if AStr = 'DELETE' then Result := hmDelete
-  else if AStr = 'PATCH' then Result := hmPatch
-  else if AStr = 'OPTIONS' then Result := hmOptions
-  else if AStr = 'CONNECT' then Result := hmConnect
-  else if AStr = 'TRACE' then Result := hmTrace
+  LUpper := UpperCase(AStr);
+  if LUpper = 'GET' then Result := hmGet
+  else if LUpper = 'HEAD' then Result := hmHead
+  else if LUpper = 'POST' then Result := hmPost
+  else if LUpper = 'PUT' then Result := hmPut
+  else if LUpper = 'DELETE' then Result := hmDelete
+  else if LUpper = 'PATCH' then Result := hmPatch
+  else if LUpper = 'OPTIONS' then Result := hmOptions
+  else if LUpper = 'CONNECT' then Result := hmConnect
+  else if LUpper = 'TRACE' then Result := hmTrace
   else
     raise EHttpError.Create('Unknown HTTP method: ' + AStr);
 end;
