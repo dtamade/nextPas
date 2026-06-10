@@ -3,6 +3,7 @@ program test_platform_mmap;
 {$I nextpas.core.settings.inc}
 
 uses
+  Classes,
   SysUtils,
   nextpas.core.platform.mmap,
   nextpas.core.platform.files.base,
@@ -15,6 +16,32 @@ var
 const
   TEST_PATH = '/tmp/nextpas_test_mmap.txt';
   TEST_DATA = 'Hello, mmap world! nextPas platform.mmap test data.';
+
+function ExpandRepoPath(const ARelativePath: string): string;
+begin
+  Result := ExpandFileName('../../../' + ARelativePath);
+end;
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LSourcePath: string;
+  LLines: TStringList;
+begin
+  LSourcePath := ExpandRepoPath(ARelativePath);
+  Check(FileExists(LSourcePath), 'source file should exist: ' + LSourcePath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(LSourcePath);
+    Result := LowerCase(LLines.Text);
+  finally
+    LLines.Free;
+  end;
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
+end;
 
 procedure CreateTestFile;
 var
@@ -195,6 +222,28 @@ begin
   Check(platform_shm_close(A) = 0, 'shared close creator');
 end;
 
+procedure TestUnixPageSizeSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.platform.mmap.pas');
+  CheckContains(LSource, 'sysconf(_SC_PAGESIZE)',
+    'Unix mmap page size must query the host runtime page size');
+  CheckContains(LSource, 'Result := 4096',
+    'Unix mmap page size keeps a conservative sysconf fallback');
+
+  CheckContains(LoadSourceText('src/nextpas.core.platform.linux.base.pas'),
+    '_SC_PAGESIZE', 'Linux base must expose sysconf page-size selector');
+  CheckContains(LoadSourceText('src/nextpas.core.platform.android.base.pas'),
+    '_SC_PAGESIZE', 'Android base must expose sysconf page-size selector');
+  CheckContains(LoadSourceText('src/nextpas.core.platform.darwin.base.pas'),
+    '_SC_PAGESIZE', 'Darwin base must expose sysconf page-size selector');
+  CheckContains(LoadSourceText('src/nextpas.core.platform.freebsd.base.pas'),
+    '_SC_PAGESIZE', 'FreeBSD base must expose sysconf page-size selector');
+  CheckContains(LoadSourceText('src/nextpas.core.platform.unix.base.pas'),
+    '_SC_PAGESIZE', 'generic Unix base must expose sysconf page-size selector');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.mmap');
   T.Run('map file + verify content', @TestMapFile);
@@ -207,6 +256,7 @@ begin
   T.Run('anonymous map', @TestAnonymousMap);
   T.Run('read-write file map', @TestReadWriteFileMap);
   T.Run('shared memory create/open', @TestSharedMemoryCreateOpen);
+  T.Run('Unix mmap page-size source contract', @TestUnixPageSizeSourceContract);
   T.Summary;
   Cleanup;
 end.

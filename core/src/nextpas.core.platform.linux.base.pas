@@ -141,6 +141,7 @@ const
   CLOCK_REALTIME_COARSE    = cint(5);
   CLOCK_MONOTONIC_COARSE   = cint(6);
 
+  _SC_PAGESIZE             = cint(30);
   _SC_NPROCESSORS_ONLN     = cint(84);
 
   _PTHREAD_MUTEX_TIMED_NP      = 0;
