@@ -349,14 +349,31 @@ var
   LNextEvents: TPlatformPollEvents;
   LOwnership: TTcpServerConnOwnership;
   LErr: Int32;
+  LSocketHandle: PtrUInt;
+  LHasSocketHandle: Boolean;
+  LCallbackCompleted: Boolean;
 begin
   LOwnership := tscoServer;
+  LSocketHandle := 0;
+  LHasSocketHandle := False;
+  LCallbackCompleted := False;
   try
+    if ATarget.CurrentEvents <> [] then
+    begin
+      LSocketHandle := ATarget.SocketHandle;
+      LHasSocketHandle := True;
+    end;
     LResult := ATarget.HandleEvents(AEvents, LNextEvents, LOwnership);
+    LCallbackCompleted := True;
     if LResult = tsprDone then
     begin
       if ATarget.CurrentEvents <> [] then
-        platform_poller_remove(FPoller, ATarget.SocketHandle);
+      begin
+        LErr := platform_poller_remove(FPoller, LSocketHandle);
+        if LErr <> 0 then
+          raise ENetworkError.Create('tcp readiness poller remove conn failed (' +
+            IntToStr(LErr) + ')');
+      end;
       UnregisterPollTarget(ATarget);
       if LOwnership = tscoServer then
         CloseServerOwnedTcpConn(ATarget.Connection);
@@ -370,7 +387,7 @@ begin
       begin
         if ATarget.CurrentEvents <> [] then
         begin
-          LErr := platform_poller_remove(FPoller, ATarget.SocketHandle);
+          LErr := platform_poller_remove(FPoller, LSocketHandle);
           if LErr <> 0 then
             raise ENetworkError.Create('tcp readiness poller remove conn failed (' +
               IntToStr(LErr) + ')');
@@ -396,7 +413,14 @@ begin
     end;
   except
     if ATarget.CurrentEvents <> [] then
-      platform_poller_remove(FPoller, ATarget.SocketHandle);
+    begin
+      if not LHasSocketHandle then
+        Exit;
+      LErr := platform_poller_remove(FPoller, LSocketHandle);
+      if (LErr <> 0) and LCallbackCompleted then
+        Exit;
+      ATarget.SetCurrentEvents([]);
+    end;
     UnregisterPollTarget(ATarget);
     CloseServerOwnedTcpConn(ATarget.Connection);
     ATarget.Free;

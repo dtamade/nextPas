@@ -199,6 +199,46 @@ type
     property AdvanceCount: Int32 read FAdvanceCount;
   end;
 
+  TSelfCloseThrowingHandler = class;
+
+  TSelfCloseThrowingSession = class(TInterfacedObject, ITcpServerSession,
+    ITcpServerPollDrivenSession)
+  private
+    FOwner: TSelfCloseThrowingHandler;
+    FConn: ITcpStream;
+    FConnRuntime: ITcpStreamRuntime;
+  public
+    constructor Create(const AOwner: TSelfCloseThrowingHandler;
+      const AConn: ITcpStream);
+    destructor Destroy; override;
+    function Run: TTcpServerConnOwnership;
+    function PollEvents: TPlatformPollEvents;
+    function Advance(const AEvents: TPlatformPollEvents;
+      out ANextEvents: TPlatformPollEvents;
+      out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+  end;
+
+  TSelfCloseThrowingHandler = class(TInterfacedObject, ITcpServerHandler,
+    ITcpServerSessionFactoryWithContext)
+  private
+    FServeConnCalled: Boolean;
+    FContextFactoryCalled: Boolean;
+    FCreateCount: Int32;
+    FRunCount: Int32;
+    FAdvanceCount: Int32;
+    FDestroyCount: Int32;
+  public
+    function ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
+    function NewSession(const AConn: ITcpStream;
+      const AContext: ITcpServerSessionContext): ITcpServerSession;
+    property ServeConnCalled: Boolean read FServeConnCalled;
+    property ContextFactoryCalled: Boolean read FContextFactoryCalled;
+    property CreateCount: Int32 read FCreateCount;
+    property RunCount: Int32 read FRunCount;
+    property AdvanceCount: Int32 read FAdvanceCount;
+    property DestroyCount: Int32 read FDestroyCount;
+  end;
+
   TWakeupPollDrivenHandler = class;
 
   TWakeupWork = class(TInterfacedObject, ITcpServerWork)
@@ -701,6 +741,83 @@ function TPollDrivenHandler.NewSession(const AConn: ITcpStream;
 begin
   FContextFactoryCalled := True;
   Result := TPollDrivenEchoSession.Create(Self, AConn);
+end;
+
+constructor TSelfCloseThrowingSession.Create(
+  const AOwner: TSelfCloseThrowingHandler; const AConn: ITcpStream);
+begin
+  inherited Create;
+  FOwner := AOwner;
+  FConn := AConn;
+  if not Supports(AConn, ITcpStreamRuntime, FConnRuntime) then
+    raise Exception.Create('self-close throwing session requires stream runtime seam');
+end;
+
+destructor TSelfCloseThrowingSession.Destroy;
+begin
+  InterlockedIncrement(FOwner.FDestroyCount);
+  FConnRuntime := nil;
+  FConn := nil;
+  FOwner := nil;
+  inherited;
+end;
+
+function TSelfCloseThrowingSession.Run: TTcpServerConnOwnership;
+begin
+  Fail('self-close throwing poll session should not fall back to Run');
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
+function TSelfCloseThrowingSession.PollEvents: TPlatformPollEvents;
+begin
+  Result := [peReadable];
+end;
+
+function TSelfCloseThrowingSession.Advance(const AEvents: TPlatformPollEvents;
+  out ANextEvents: TPlatformPollEvents;
+  out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+var
+  LByte: Byte;
+  LN: SizeUInt;
+  LResult: TTcpStreamIOResult;
+begin
+  InterlockedIncrement(FOwner.FAdvanceCount);
+  AOwnership := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+  ANextEvents := [];
+
+  if not (peReadable in AEvents) then
+  begin
+    ANextEvents := [peReadable];
+    Exit(TCP_SERVER_POLL_WAIT);
+  end;
+
+  LResult := FConnRuntime.TryRead(LByte, 1, LN);
+  if (LResult = tsiorOk) and (LN > 0) then
+  begin
+    FConn.Close;
+    raise Exception.Create('self-close throwing poll advance');
+  end;
+
+  Result := TCP_SERVER_POLL_DONE;
+end;
+
+function TSelfCloseThrowingHandler.ServeConn(
+  const AConn: ITcpStream): TTcpServerConnOwnership;
+begin
+  FServeConnCalled := True;
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+  Fail('self-close throwing handler should bypass ServeConn');
+end;
+
+function TSelfCloseThrowingHandler.NewSession(const AConn: ITcpStream;
+  const AContext: ITcpServerSessionContext): ITcpServerSession;
+begin
+  FContextFactoryCalled := True;
+  Inc(FCreateCount);
+  if FCreateCount = 1 then
+    Result := TSelfCloseThrowingSession.Create(Self, AConn)
+  else
+    Result := TCountingSession.Create(AConn, @FRunCount);
 end;
 
 constructor TWakeupWork.Create(const AOwner: TWakeupPollDrivenHandler);
@@ -1785,7 +1902,11 @@ begin
     'poll target handler');
   CheckSourceContains(LHandle, 'if lnextevents = [] then',
     'empty next events should be handled as a legal wait state');
-  CheckSourceOrder(LHandle, 'platform_poller_remove(fpoller, atarget.sockethandle);',
+  CheckSourceOrder(LHandle, 'lsockethandle := atarget.sockethandle;',
+    'lresult := atarget.handleevents(',
+    'poll target handler should cache socket handle before callback can self-close');
+  LHandle := Copy(LHandle, Pos('if lnextevents = [] then', LHandle), MaxInt);
+  CheckSourceOrder(LHandle, 'platform_poller_remove(fpoller, lsockethandle);',
     'atarget.setcurrentevents(lnextevents);',
     'empty-interest transition should remove readiness interest before recording empty state');
 end;
@@ -1837,7 +1958,13 @@ begin
     'if lresult = tsprdone then',
     'if lnextevents <> atarget.currentevents then',
     'done lifecycle branch');
-  CheckSourceOrder(LDoneBlock, 'platform_poller_remove(fpoller, atarget.sockethandle);',
+  CheckSourceOrder(LHandle, 'lsockethandle := atarget.sockethandle;',
+    'lresult := atarget.handleevents(',
+    'poll target lifecycle handler should cache socket handle before callback can self-close');
+  CheckSourceOrder(LHandle, 'lresult := atarget.handleevents(',
+    'lcallbackcompleted := true;',
+    'poll target lifecycle handler should mark callback return before later cleanup failures');
+  CheckSourceOrder(LDoneBlock, 'platform_poller_remove(fpoller, lsockethandle);',
     'unregisterpolltarget(atarget);',
     'done branch should remove readiness interest before unregistering target');
   CheckSourceOrder(LDoneBlock, 'unregisterpolltarget(atarget);',
@@ -1848,7 +1975,18 @@ begin
     'done branch should close connection before releasing target owner');
 
   LExceptBlock := Copy(LHandle, Pos('except', LHandle), MaxInt);
-  CheckSourceOrder(LExceptBlock, 'platform_poller_remove(fpoller, atarget.sockethandle);',
+  CheckSourceNotContains(LExceptBlock, 'atarget.sockethandle',
+    'exception branch should not query socket handle after callback may self-close');
+  CheckSourceOrder(LExceptBlock, 'if not lhassockethandle then',
+    'exit;',
+    'exception branch should retain target when no removable socket handle was captured');
+  CheckSourceOrder(LExceptBlock, 'platform_poller_remove(fpoller, lsockethandle);',
+    'if (lerr <> 0) and lcallbackcompleted then',
+    'exception branch should only retain remove failures after callback returned');
+  CheckSourceOrder(LExceptBlock, 'if (lerr <> 0) and lcallbackcompleted then',
+    'exit;',
+    'exception branch should preserve target ownership for post-callback remove failures');
+  CheckSourceOrder(LExceptBlock, 'platform_poller_remove(fpoller, lsockethandle);',
     'unregisterpolltarget(atarget);',
     'exception branch should remove readiness interest before unregistering target');
   CheckSourceOrder(LExceptBlock, 'unregisterpolltarget(atarget);',
@@ -2217,6 +2355,111 @@ begin
   platform_thread_join(LHandle, LRet);
 end;
 
+procedure TestEpollServerReleasesPollTargetAfterSelfCloseThrow;
+var
+  LHandler: TSelfCloseThrowingHandler;
+  LHandlerRef: ITcpServerHandler;
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LPort: UInt16;
+  LClient: ITcpStream;
+  LBuf: array[0..31] of Byte;
+  LN: SizeUInt;
+  LReadRaised: Boolean;
+  LRet: Pointer;
+  LOptions: TTcpServerOptions;
+begin
+  LHandler := TSelfCloseThrowingHandler.Create;
+  LHandlerRef := LHandler;
+  Check(LHandlerRef <> nil, 'self-close throwing handler keepalive installed');
+  LOptions := TTcpServerOptions.Default;
+  LOptions.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LServer := NewTcpServer(LOptions);
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := LHandler;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+  try
+    LWait := 0;
+    while (not LServer.IsRunning) and (LWait < 200) do
+    begin
+      platform_thread_sleep_ns(5000000);
+      Inc(LWait);
+    end;
+
+    LPort := LServer.LocalAddr.Port;
+    Check(LPort > 0, 'self-close throwing epoll server exposes bound port');
+
+    LClient := TcpConnect('127.0.0.1', LPort);
+    try
+      LClient.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(200)));
+      LClient.Write(PAnsiChar('x')^, 1);
+      LReadRaised := False;
+      LN := 1;
+      try
+        LN := LClient.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+      except
+        on ENetworkError do
+          LReadRaised := True;
+      end;
+      Check((LN = 0) or LReadRaised,
+        'self-close throwing connection is closed by server');
+    finally
+      LClient.Close;
+    end;
+
+    LWait := 0;
+    while (LHandler.DestroyCount = 0) and (LWait < 200) do
+    begin
+      platform_thread_sleep_ns(5000000);
+      Inc(LWait);
+    end;
+
+    CheckEqual(Int64(1), Int64(LHandler.CreateCount),
+      'self-close throwing session was created once');
+    CheckEqual(Int64(1), Int64(LHandler.AdvanceCount),
+      'self-close throwing session advanced once');
+    CheckEqual(Int64(1), Int64(LHandler.DestroyCount),
+      'self-close throwing poll target releases before shutdown');
+    Check(LServer.IsRunning,
+      'epoll accept loop keeps running after self-close throwing advance');
+
+    LClient := TcpConnect('127.0.0.1', LPort);
+    try
+      LClient.Write(PAnsiChar('pong')^, 4);
+      LClient.Shutdown;
+      LN := LClient.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+      CheckEqual(SizeUInt(4), LN,
+        'second connection still echoes after self-close throwing advance');
+      CheckEqual(Byte(Ord('p')), LBuf[0],
+        'second connection first byte after self-close throwing advance');
+    finally
+      LClient.Close;
+    end;
+
+    LWait := 0;
+    while (LHandler.RunCount < 1) and (LWait < 200) do
+    begin
+      platform_thread_sleep_ns(5000000);
+      Inc(LWait);
+    end;
+
+    CheckEqual(Int64(2), Int64(LHandler.CreateCount),
+      'factory saw both self-close and valid connections');
+    CheckEqual(Int64(1), Int64(LHandler.RunCount),
+      'second session ran after self-close throwing advance');
+    Check(not LHandler.ServeConnCalled,
+      'self-close throwing path does not fall back to ServeConn');
+  finally
+    LServer.Shutdown;
+    platform_thread_join(LHandle, LRet);
+  end;
+end;
+
 procedure TestEpollServerWakesPollDrivenSessionAfterWorkerCompletion;
 var
   LHandler: TWakeupPollDrivenHandler;
@@ -2422,6 +2665,8 @@ begin
     @TestEpollServerPrefersContextSessionFactoryWhenAvailable);
   T.Run('Epoll server uses poll-driven session when available',
     @TestEpollServerUsesPollDrivenSessionWhenAvailable);
+  T.Run('Epoll server releases poll target after self-close throw',
+    @TestEpollServerReleasesPollTargetAfterSelfCloseThrow);
   T.Run('Epoll server wakes poll-driven session after worker completion',
     @TestEpollServerWakesPollDrivenSessionAfterWorkerCompletion);
   T.Run('Epoll server wakes poll-driven session on deadline',
