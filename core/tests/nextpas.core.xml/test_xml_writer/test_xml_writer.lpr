@@ -218,6 +218,49 @@ begin
   end;
 end;
 
+procedure TestEndElementRejectsMismatchedName;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('root');
+    LRaised := False;
+    try
+      LW.EndElement('child');
+      Fail('mismatched closing name must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'mismatched closing name raises EArgumentError');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestEndElementRejectsUnexpectedClose;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LRaised := False;
+    try
+      LW.EndElement('root');
+      Fail('closing without an open element must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'unexpected closing name raises EArgumentError');
+  finally
+    LW.Free;
+  end;
+end;
+
 procedure TestXmlDecl;
 var
   LW: TXmlWriter;
@@ -482,6 +525,8 @@ begin
   T.Run('PINoData', @TestPINoData);
   T.Run('EmptyElement', @TestEmptyElement);
   T.Run('EndElementCollapsesEmpty', @TestEndElementCollapsesEmpty);
+  T.Run('EndElementRejectsMismatchedName', @TestEndElementRejectsMismatchedName);
+  T.Run('EndElementRejectsUnexpectedClose', @TestEndElementRejectsUnexpectedClose);
   T.Run('XmlDecl', @TestXmlDecl);
   T.Run('XmlDeclPretty', @TestXmlDeclPretty);
   T.Run('TextEscape', @TestTextEscape);

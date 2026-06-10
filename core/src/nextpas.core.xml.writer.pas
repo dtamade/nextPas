@@ -52,6 +52,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 { TXmlWriter }
 
 constructor TXmlWriter.Create(APretty: Boolean; const AIndent: string);
@@ -201,9 +204,14 @@ end;
 
 procedure TXmlWriter.EndElement(const AName: string);
 begin
-  { HIGH 6 fix: validate depth > 0 before decrementing }
-  if (FDepth <= 0) and (not FInStartTag) then
-    Exit; { prevent negative depth }
+  if FElementStackTop < 0 then
+    raise EArgumentError.CreateFmt(
+      'TXmlWriter.EndElement: unexpected close "%s" with no open element',
+      [AName]);
+  if (FElementStackTop >= 0) and (FElementStack[FElementStackTop] <> AName) then
+    raise EArgumentError.CreateFmt(
+      'TXmlWriter.EndElement: expected "%s" but got "%s"',
+      [FElementStack[FElementStackTop], AName]);
   Dec(FDepth);
   if FInStartTag then
   begin
