@@ -3,6 +3,7 @@ program test_async;
 {$I nextpas.core.settings.inc}
 
 uses
+  Classes,
   SysUtils,
   nextpas.core.testing,
   nextpas.core.time.base,
@@ -17,6 +18,48 @@ uses
 
 var
   T: TTestRunner;
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LLines: TStringList;
+  LPath: string;
+begin
+  LPath := ARelativePath;
+  if not FileExists(LPath) then
+    LPath := '../../../' + ARelativePath;
+  Check(FileExists(LPath), 'source file exists: ' + ARelativePath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(LPath);
+    Result := LowerCase(LLines.Text);
+  finally
+    LLines.Free;
+  end;
+end;
+
+function ExtractSourceRange(const ASource, AStartToken, AEndToken,
+  ALabel: string): string;
+var
+  LStart, LEnd: SizeInt;
+  LTail: string;
+begin
+  LStart := Pos(AStartToken, ASource);
+  Check(LStart > 0, ALabel + ' start exists: ' + AStartToken);
+  LTail := Copy(ASource, LStart + Length(AStartToken), Length(ASource));
+  LEnd := Pos(AEndToken, LTail);
+  Check(LEnd > 0, ALabel + ' end exists: ' + AEndToken);
+  Result := Copy(ASource, LStart, Length(AStartToken) + LEnd - 1);
+end;
+
+procedure CheckSourceOrder(const ASource, AFirstToken, ASecondToken,
+  AMessage: string);
+var
+  LFirst, LSecond: SizeInt;
+begin
+  LFirst := Pos(AFirstToken, ASource);
+  LSecond := Pos(ASecondToken, ASource);
+  Check((LFirst > 0) and (LSecond > 0) and (LFirst < LSecond), AMessage);
+end;
 
 { === Timer Heap Tests === }
 
