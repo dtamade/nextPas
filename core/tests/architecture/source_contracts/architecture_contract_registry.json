@@ -14,8 +14,90 @@
     "source-contract",
     "forced-compile",
     "focused-runtime",
-    "runtime-matrix",
+    "ci-matrix",
     "draft"
+  ],
+  "l0_module_contracts": [
+    {
+      "module": "atomic",
+      "layer": "L0",
+      "owner": "atomic primitives",
+      "facade_path": "src/nextpas.core.atomic.pas",
+      "doc_path": "docs/atomic/README.md",
+      "allowed_dependency_policy": "l0-only",
+      "boundary_truth": "source-contract",
+      "runtime_truth": "focused-runtime"
+    },
+    {
+      "module": "base",
+      "layer": "L0",
+      "owner": "root types/contracts",
+      "facade_path": "src/nextpas.core.base.pas",
+      "doc_path": "docs/base/README.md",
+      "allowed_dependency_policy": "l0-root-bootstrap",
+      "boundary_truth": "source-contract",
+      "runtime_truth": "focused-runtime"
+    },
+    {
+      "module": "errors",
+      "layer": "L0",
+      "owner": "error facade",
+      "facade_path": "src/nextpas.core.errors.pas",
+      "doc_path": "docs/errors/README.md",
+      "allowed_dependency_policy": "l0-error-taxonomy",
+      "boundary_truth": "source-contract",
+      "runtime_truth": "focused-runtime"
+    },
+    {
+      "module": "math",
+      "layer": "L0",
+      "owner": "scalar/math contracts",
+      "facade_path": "src/nextpas.core.math.pas",
+      "doc_path": "docs/math/GOAL_TREE.md",
+      "allowed_dependency_policy": "l0-only",
+      "boundary_truth": "source-contract",
+      "runtime_truth": "focused-runtime"
+    },
+    {
+      "module": "mem",
+      "layer": "L0 with debt",
+      "owner": "allocators/pools",
+      "facade_path": "src/nextpas.core.mem.pas",
+      "doc_path": "docs/mem/README.md",
+      "allowed_dependency_policy": "l0-only-with-explicit-debt",
+      "boundary_truth": "source-contract",
+      "runtime_truth": "focused-runtime"
+    },
+    {
+      "module": "platform",
+      "layer": "L0",
+      "owner": "host ABI and OS semantics",
+      "facade_path": "src/nextpas.core.platform.pas",
+      "doc_path": "docs/platform/master-spec.md",
+      "allowed_dependency_policy": "host-owner-l0",
+      "boundary_truth": "source-contract",
+      "runtime_truth": "focused-runtime"
+    },
+    {
+      "module": "simd",
+      "layer": "L0 accelerator",
+      "owner": "SIMD and CPU feature seam",
+      "facade_path": "src/nextpas.core.simd.pas",
+      "doc_path": "docs/simd/README.md",
+      "allowed_dependency_policy": "l0-only-with-cpuinfo-debt",
+      "boundary_truth": "source-contract",
+      "runtime_truth": "focused-runtime"
+    },
+    {
+      "module": "system",
+      "layer": "L0 root facade exception",
+      "owner": "RTL frontier facade",
+      "facade_path": "src/nextpas.core.system.pas",
+      "doc_path": "docs/system/README.md",
+      "allowed_dependency_policy": "l0-only-with-explicit-text-debt",
+      "boundary_truth": "source-contract",
+      "runtime_truth": "focused-runtime"
+    }
   ],
   "l0_support_units": [
     {
@@ -268,17 +350,32 @@
   "governance_docs": [
     {
       "path": "docs/core-module-registry.md",
-      "max_lines": 120
+      "max_lines": 120,
+      "required_truth_tokens": [
+        "source-contract",
+        "forced-compile",
+        "focused-runtime",
+        "ci-matrix"
+      ]
     },
     {
       "path": "docs/l1-goal-tree.md",
       "max_lines": 120,
-      "forbidden_phrases": [
-        "✅ 完成",
-        "All tests passed",
-        "0 leaks",
-        "Tier 1 全绿",
-        "CI 全绿"
+      "required_headings": [
+        "## Truth Levels",
+        "## Evidence",
+        "## Governance gates",
+        "## Next priorities"
+      ],
+      "required_truth_tokens": [
+        "source-contract",
+        "forced-compile",
+        "focused-runtime",
+        "ci-matrix"
+      ],
+      "forbidden_patterns": [
+        "(?i)\\b(complete|completed|completion|done|finished|production ready|all tests passed|0 leaks)\\b",
+        "完成|已完成|完工|全绿"
       ]
     },
     {
@@ -291,7 +388,14 @@
     },
     {
       "path": "docs/platform/master-spec.md",
-      "max_lines": 120
+      "max_lines": 120,
+      "required_truth_tokens": [
+        "source-contract",
+        "forced-compile",
+        "focused-runtime",
+        "ci-matrix",
+        "not runtime ready"
+      ]
     },
     {
       "path": "docs/platform/goal-tree.md",
@@ -299,7 +403,11 @@
     },
     {
       "path": "docs/platform/consumer-contract-audit.md",
-      "max_lines": 120
+      "max_lines": 120,
+      "required_headings": [
+        "## Readiness lane",
+        "## Completion lane"
+      ]
     },
     {
       "path": "docs/platform-goal-tree.md",
@@ -313,7 +421,13 @@
     },
     {
       "path": "docs/plans/2026-06-09-core-governance-next-route.md",
-      "max_lines": 80
+      "max_lines": 80,
+      "required_truth_tokens": [
+        "source-contract",
+        "forced-compile",
+        "focused-runtime",
+        "ci-matrix"
+      ]
     }
   ]
 }

@@ -10,4 +10,4 @@ This is the next route after architecture governance hardening lands.
 | Platform runtime truth matrix | record host/feature runtime evidence without overclaiming | matrix document plus Linux/Windows/macOS focused gate rows |
 
 Benchmarks stay deferred until source-contract, forced-compile, focused-runtime,
-and CI matrix evidence are aligned for the relevant module.
+and ci-matrix evidence are aligned for the relevant module.

@@ -1,38 +1,41 @@
 # nextPas Core Framework Goal Tree
 
-This goal tree tracks evidence, not optimism. Do not use plain "complete" for a
-module unless the row also names the evidence tier that supports the claim.
+This goal tree tracks evidence, not optimism. Every status row must name the
+evidence tier that supports it.
 
-## Position
-
-nextPas Core is moving from module-by-module feature growth to architecture
-governance hardening. The current control vocabulary is:
+## Truth Levels
 
 - `source-contract`: source/static guards lock a boundary or public claim.
 - `forced-compile`: a host or facade path compiles under an explicit target gate.
 - `focused-runtime`: focused runtime tests cover named behavior on a host.
-- `CI matrix`: repeated CI proof across the named host/arch matrix.
+- `ci-matrix`: repeated CI proof across the named host/arch matrix.
+
+## Position
+
+nextPas Core is moving from module-by-module feature growth to architecture
+governance hardening. The control surface is intentionally compact; module
+details live in module docs or focused plans.
 
 ## Layer map
 
 | Layer | Module families | Required proof before stronger claims |
 | --- | --- | --- |
-| L0 | `base`, `errors`, `platform`, `mem`, `system`, `atomic`, `math`, `simd`, `log.intf` | source-contract for owner boundaries; focused runtime for public behavior; CI matrix for host truth |
+| L0 | `base`, `errors`, `platform`, `mem`, `system`, `atomic`, `math`, `simd`, `log.intf` | source-contract for owner boundaries; focused runtime for public behavior; ci-matrix for host truth |
 | L1 | `bytes`, `text`, `encoding`, `collections`, `sync`, `thread`, `lockfree`, `async`, `io`, `time`, `id`, `testing`, `stopwatch` | source-contract for public facade/dependencies; focused runtime for each public API group |
 | L2 | `fs`, `net`, `process`, `args`, `json`, `toml`, `yaml`, `compress`, `regex`, `hash`, `crypto`, `tls` | forced compile for host/backend seams; focused runtime for behavior; no backend readiness claim without runtime evidence |
 | L3 | `log`, `config`, `http`, `websocket`, `tui`, `event`, `coroutine`, `template` | consumer contracts, focused runtime, leak proof for lifecycle paths |
 
-## Current evidence
+## Evidence
 
 | Area | Current truth | Required next proof |
 | --- | --- | --- |
-| L0 owner boundary | source-contract gate being hardened for `base/errors/platform/mem/system/atomic/math/simd` | shrink explicit debt allowlists to zero where the module is meant to stay L0 |
-| Platform | Linux has focused runtime; Windows/macOS/Android evidence is mixed source-contract and forced-compile | platform runtime truth matrix by host and feature |
-| Mem | public allocator/pool paths have focused runtime; L0 dependency debt remains explicit | mem L0 debt zero lane |
-| System | source-contract and focused runtime exist for root/facade slices; final facade is not closed | system final facade plan and consumer compile matrix |
-| Math/SIMD | focused runtime exists for many APIs; SIMD public cutover and host matrix are not final | source-contract guards plus runtime matrix before performance claims |
-| TLS/Crypto | public and backend docs/tests exist, but backend truth is mixed | TLS master spec with backend truth tiers |
-| HTTP/TUI/Config | focused runtime exists for many slices | keep consumer contracts aligned with lower-layer owner boundaries |
+| L0 owner boundary | truth=source-contract; scope=`base/errors/platform/mem/system/atomic/math/simd` | shrink explicit debt allowlists where L0 policy requires it |
+| Platform | truth=focused-runtime; host=Linux; other hosts=source-contract/forced-compile | platform runtime truth matrix by host and feature |
+| Mem | truth=focused-runtime; scope=public allocator/pool; debt=explicit L0 allowlist | mem L0 debt zero lane |
+| System | truth=source-contract+focused-runtime; scope=root/facade slices | system final facade plan and consumer compile matrix |
+| Math/SIMD | truth=focused-runtime; scope=current APIs; matrix=not frozen | source-contract guards plus ci-matrix before performance claims |
+| TLS/Crypto | truth=mixed source-contract/focused-runtime; backend truth not normalized | TLS master spec with backend truth tiers |
+| HTTP/TUI/Config | truth=focused-runtime; scope=active slices | keep consumer contracts aligned with lower-layer owner boundaries |
 
 ## Governance gates
 

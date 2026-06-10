@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "l0_modules": [],
+  "truth_levels": [
+    "source-contract",
+    "forced-compile",
+    "focused-runtime",
+    "ci-matrix",
+    "draft"
+  ],
+  "l0_module_contracts": [],
+  "l0_support_units": [],
+  "l0_dependency_allowlist": [],
+  "raw_ffi_tokens": [],
+  "raw_ffi_owner_allowlist": [],
+  "raw_ffi_explicit_allowlist": [],
+  "governance_docs": [
+    {
+      "path": "docs/l1-goal-tree.md",
+      "max_lines": 20,
+      "required_headings": [
+        "## Truth Levels",
+        "## Evidence",
+        "## Governance gates"
+      ],
+      "required_truth_tokens": [
+        "source-contract",
+        "forced-compile",
+        "focused-runtime",
+        "ci-matrix"
+      ],
+      "forbidden_patterns": [
+        "(?i)\\b(complete|completed|completion|done|finished|production ready|all tests passed|0 leaks)\\b",
+        "完成|已完成|完工|全绿"
+      ]
+    }
+  ]
+}

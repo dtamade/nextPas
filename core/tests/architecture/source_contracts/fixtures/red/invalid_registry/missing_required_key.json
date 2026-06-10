@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "l0_modules": [],
+  "truth_levels": [],
+  "l0_module_contracts": [],
+  "l0_support_units": [],
+  "l0_dependency_allowlist": [],
+  "raw_ffi_tokens": [],
+  "raw_ffi_explicit_allowlist": [],
+  "governance_docs": []
+}

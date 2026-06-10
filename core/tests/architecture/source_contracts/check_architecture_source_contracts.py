@@ -16,6 +16,22 @@ from typing import Iterable
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_CORE_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_REGISTRY = SCRIPT_DIR / "architecture_contract_registry.json"
+REQUIRED_REGISTRY_KEYS = (
+    ("version", int),
+    ("l0_modules", list),
+    ("truth_levels", list),
+    ("l0_module_contracts", list),
+    ("l0_support_units", list),
+    ("l0_dependency_allowlist", list),
+    ("raw_ffi_tokens", list),
+    ("raw_ffi_owner_allowlist", list),
+    ("raw_ffi_explicit_allowlist", list),
+    ("governance_docs", list),
+)
+
+
+class RegistryError(Exception):
+    pass
 
 
 @dataclass(frozen=True)
@@ -41,6 +57,18 @@ class RegistryRow:
     facade: str
     allowed_deps: str
     truth_level: str
+
+
+@dataclass(frozen=True)
+class L0ModuleProfile:
+    module: str
+    layer: str
+    owner: str
+    facade_path: str
+    doc_path: str
+    allowed_dependency_policy: str
+    boundary_truth: str
+    runtime_truth: str
 
 
 def read_text(a_path: Path) -> str:
@@ -135,7 +163,29 @@ def module_from_path(a_rel_path: str) -> str | None:
 
 
 def load_registry(a_path: Path) -> dict:
-    return json.loads(read_text(a_path))
+    if not a_path.is_file():
+        raise RegistryError(f"registry not found: {a_path}")
+
+    try:
+        l_registry = json.loads(read_text(a_path))
+    except json.JSONDecodeError as l_error:
+        raise RegistryError(
+            f"registry is not valid JSON: {a_path}:{l_error.lineno}:{l_error.colno}"
+        ) from l_error
+
+    if not isinstance(l_registry, dict):
+        raise RegistryError(f"registry root must be a JSON object: {a_path}")
+
+    for l_key, l_type in REQUIRED_REGISTRY_KEYS:
+        if l_key not in l_registry:
+            raise RegistryError(f"registry missing key `{l_key}`")
+        if not isinstance(l_registry[l_key], l_type):
+            raise RegistryError(
+                f"registry key `{l_key}` must be {l_type.__name__}, "
+                f"got {type(l_registry[l_key]).__name__}"
+            )
+
+    return l_registry
 
 
 def collect_top_level_modules(a_source_root: Path) -> set[str]:
@@ -189,6 +239,35 @@ def parse_module_registry(a_core_root: Path) -> list[RegistryRow]:
             )
         )
     return l_rows
+
+
+def parse_l0_module_profile(a_item: dict) -> L0ModuleProfile:
+    l_required = (
+        "module",
+        "layer",
+        "owner",
+        "facade_path",
+        "doc_path",
+        "allowed_dependency_policy",
+        "boundary_truth",
+        "runtime_truth",
+    )
+    for l_key in l_required:
+        if l_key not in a_item:
+            raise RegistryError(f"l0_module_contracts item missing key `{l_key}`")
+        if not isinstance(a_item[l_key], str):
+            raise RegistryError(f"l0_module_contracts key `{l_key}` must be string")
+
+    return L0ModuleProfile(
+        module=normalize_unit(a_item["module"]),
+        layer=a_item["layer"],
+        owner=a_item["owner"],
+        facade_path=a_item["facade_path"],
+        doc_path=a_item["doc_path"],
+        allowed_dependency_policy=a_item["allowed_dependency_policy"],
+        boundary_truth=a_item["boundary_truth"],
+        runtime_truth=a_item["runtime_truth"],
+    )
 
 
 def collect_uses_entries(a_source_root: Path) -> list[UsesEntry]:
@@ -335,6 +414,26 @@ def check_governance_docs(a_core_root: Path, a_registry: dict) -> list[str]:
                     f"governance-doc: {l_doc['path']} contains forbidden phrase `{l_phrase}`"
                 )
 
+        for l_pattern in l_doc.get("forbidden_patterns", []):
+            for l_line_no, l_line in enumerate(l_text.splitlines(), start=1):
+                if re.search(l_pattern, l_line):
+                    l_issues.append(
+                        f"governance-doc: {l_doc['path']}:{l_line_no} "
+                        f"matches forbidden pattern `{l_pattern}`"
+                    )
+
+        for l_heading in l_doc.get("required_headings", []):
+            if l_heading not in l_text:
+                l_issues.append(
+                    f"governance-doc: {l_doc['path']} is missing heading `{l_heading}`"
+                )
+
+        for l_token in l_doc.get("required_truth_tokens", []):
+            if l_token not in l_text:
+                l_issues.append(
+                    f"governance-doc: {l_doc['path']} is missing truth token `{l_token}`"
+                )
+
     return l_issues
 
 
@@ -348,6 +447,7 @@ def check_module_registry(
     l_row_by_module = {l_row.module: l_row for l_row in l_rows}
     l_live_modules = collect_top_level_modules(a_source_root)
     l_truth_levels = set(a_registry["truth_levels"])
+    l_l0_modules = {normalize_unit(l_module) for l_module in a_registry["l0_modules"]}
 
     for l_module in sorted(l_live_modules - set(l_row_by_module)):
         l_issues.append(f"module-registry: live module `{l_module}` is missing")
@@ -380,6 +480,58 @@ def check_module_registry(
                     f"module-registry: `{l_row.module}` has unknown truth level `{l_token}`"
                 )
 
+    l_profile_by_module: dict[str, L0ModuleProfile] = {}
+    for l_item in a_registry["l0_module_contracts"]:
+        l_profile = parse_l0_module_profile(l_item)
+        if l_profile.module in l_profile_by_module:
+            l_issues.append(f"module-registry-profile: duplicate L0 profile `{l_profile.module}`")
+        l_profile_by_module[l_profile.module] = l_profile
+
+    for l_module in sorted(l_l0_modules - set(l_profile_by_module)):
+        l_issues.append(f"module-registry-profile: missing L0 profile `{l_module}`")
+
+    for l_module in sorted(set(l_profile_by_module) - l_l0_modules):
+        l_issues.append(f"module-registry-profile: unknown L0 profile `{l_module}`")
+
+    for l_profile in sorted(l_profile_by_module.values(), key=lambda a_item: a_item.module):
+        l_row = l_row_by_module.get(l_profile.module)
+        if l_row is None:
+            continue
+
+        if not l_profile.layer.lower().startswith("l0"):
+            l_issues.append(
+                f"module-registry-profile: `{l_profile.module}` layer must be L0, "
+                f"got `{l_profile.layer}`"
+            )
+        if l_row.layer != l_profile.layer:
+            l_issues.append(
+                f"module-registry-profile: `{l_profile.module}` layer `{l_profile.layer}` "
+                f"does not match markdown `{l_row.layer}`"
+            )
+        if l_profile.boundary_truth != "source-contract":
+            l_issues.append(
+                f"module-registry-profile: `{l_profile.module}` boundary_truth must be "
+                "`source-contract`"
+            )
+        for l_truth in (l_profile.boundary_truth, l_profile.runtime_truth):
+            if l_truth not in l_truth_levels:
+                l_issues.append(
+                    f"module-registry-profile: `{l_profile.module}` has unknown truth `{l_truth}`"
+                )
+        for l_path_key, l_rel_path in (
+            ("facade", l_profile.facade_path),
+            ("doc", l_profile.doc_path),
+        ):
+            if not (a_core_root / l_rel_path).is_file():
+                l_issues.append(
+                    f"module-registry-profile: `{l_profile.module}` {l_path_key} path "
+                    f"`{l_rel_path}` is missing"
+                )
+        if not l_profile.owner or not l_profile.allowed_dependency_policy:
+            l_issues.append(
+                f"module-registry-profile: `{l_profile.module}` must name owner and policy"
+            )
+
     return l_issues
 
 
@@ -388,6 +540,7 @@ def render_registry_summary(a_registry: dict) -> str:
         "ARCH_SOURCE_CONTRACT_REGISTRY "
         f"l0_modules={len(a_registry['l0_modules'])} "
         f"truth_levels={len(a_registry['truth_levels'])} "
+        f"l0_module_contracts={len(a_registry['l0_module_contracts'])} "
         f"l0_dependency_allowlist={len(a_registry['l0_dependency_allowlist'])} "
         f"raw_ffi_tokens={len(a_registry['raw_ffi_tokens'])} "
         f"raw_ffi_owner_allowlist={len(a_registry['raw_ffi_owner_allowlist'])} "
@@ -431,21 +584,36 @@ def main() -> int:
     )
     l_args = l_parser.parse_args()
 
-    l_registry = load_registry(l_args.registry)
+    try:
+        l_registry = load_registry(l_args.registry)
+    except RegistryError as l_error:
+        print(f"[ARCH-SOURCE-CONTRACT] FAIL: {l_error}", file=sys.stderr)
+        return 2
+
     l_source_root = l_args.source_root or (l_args.core_root / "src")
-    if not l_source_root.is_dir():
+    l_needs_source_root = l_args.check in (
+        "all",
+        "module-registry",
+        "dependency-boundary",
+        "host-raw-ffi",
+    )
+    if l_needs_source_root and not l_source_root.is_dir():
         print(f"[ARCH-SOURCE-CONTRACT] FAIL: source root not found: {l_source_root}", file=sys.stderr)
         return 2
 
     l_issues: list[str] = []
-    if l_args.check in ("all", "module-registry"):
-        l_issues.extend(check_module_registry(l_args.core_root, l_source_root, l_registry))
-    if l_args.check in ("all", "dependency-boundary"):
-        l_issues.extend(check_l0_dependencies(l_source_root, l_registry))
-    if l_args.check in ("all", "host-raw-ffi"):
-        l_issues.extend(check_raw_ffi_tokens(l_source_root, l_registry))
-    if l_args.check in ("all", "governance-docs"):
-        l_issues.extend(check_governance_docs(l_args.core_root, l_registry))
+    try:
+        if l_args.check in ("all", "module-registry"):
+            l_issues.extend(check_module_registry(l_args.core_root, l_source_root, l_registry))
+        if l_args.check in ("all", "dependency-boundary"):
+            l_issues.extend(check_l0_dependencies(l_source_root, l_registry))
+        if l_args.check in ("all", "host-raw-ffi"):
+            l_issues.extend(check_raw_ffi_tokens(l_source_root, l_registry))
+        if l_args.check in ("all", "governance-docs"):
+            l_issues.extend(check_governance_docs(l_args.core_root, l_registry))
+    except RegistryError as l_error:
+        print(f"[ARCH-SOURCE-CONTRACT] FAIL: {l_error}", file=sys.stderr)
+        return 2
 
     if l_args.summary_line:
         print(render_registry_summary(l_registry))

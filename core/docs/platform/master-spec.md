@@ -13,7 +13,7 @@
    IOCP and future proactor/completion queues belong to
    `nextpas.core.io.reactor.*` plus consumer adapters.
 3. Truth is evidence-tiered. A status must say whether it is
-   `source-contract`, `forced-compile`, `focused-runtime`, or `CI matrix`.
+   `source-contract`, `forced-compile`, `focused-runtime`, or `ci-matrix`.
 4. Public API first, host workaround second. If a consumer exposes a bad
    platform facade, fix the facade instead of hiding the problem in the
    consumer.
@@ -27,7 +27,7 @@
 | `source-contract` | Static/focused source guard. | Owner boundary or source shape is locked. |
 | `forced-compile` | Host branch compiles under a forced target. | Symbols/types/uses are compile-coherent. |
 | `focused-runtime` | Focused behavior gate runs on a real host. | The named path works on that host. |
-| `CI matrix` | CI repeats runtime proof across host/arch entries. | Runtime truth is durable for those entries. |
+| `ci-matrix` | CI repeats runtime proof across host/arch entries. | Runtime truth is durable for those entries. |
 
 Without real runtime evidence, a host is not runtime ready.
 
@@ -35,7 +35,7 @@ Without real runtime evidence, a host is not runtime ready.
 
 Windows x86_64 has host ABI declarations, source-contract coverage, and forced
 Windows compile gates for key readiness/completion seams. It does not have real
-Windows runtime or CI matrix evidence in this repository.
+Windows runtime or ci-matrix evidence in this repository.
 
 Allowed wording:
 

@@ -11,7 +11,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `source-contract` | Source/static guards lock the boundary. |
 | `forced-compile` | Host-specific compile path is exercised. |
 | `focused-runtime` | Focused runtime tests cover the named behavior on a host. |
-| `runtime-matrix` | Runtime proof exists across the named host/arch matrix. |
+| `ci-matrix` | Runtime proof is repeated across the named host/arch CI matrix. |
 | `draft` | Owner or API is not hardened enough for stronger claims. |
 
 ## Registry

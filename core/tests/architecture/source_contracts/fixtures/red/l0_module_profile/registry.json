@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "l0_modules": [
+    "base",
+    "errors"
+  ],
+  "truth_levels": [
+    "source-contract",
+    "focused-runtime"
+  ],
+  "l0_module_contracts": [
+    {
+      "module": "base",
+      "layer": "L1",
+      "owner": "bad owner",
+      "facade_path": "src/nextpas.core.base.pas",
+      "doc_path": "docs/base/README.md",
+      "allowed_dependency_policy": "bad-policy",
+      "boundary_truth": "focused-runtime",
+      "runtime_truth": "focused-runtime"
+    }
+  ],
+  "l0_support_units": [],
+  "l0_dependency_allowlist": [],
+  "raw_ffi_tokens": [],
+  "raw_ffi_owner_allowlist": [],
+  "raw_ffi_explicit_allowlist": [],
+  "governance_docs": []
+}
