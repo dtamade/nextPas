@@ -17,11 +17,35 @@ function ServeDir(const ARoot: string): THttpHandlerFunc;
 implementation
 
 uses
+  nextpas.core.fs.base,
   nextpas.core.text.conv,
   nextpas.core.fs,
-  nextpas.core.http.base;
+  nextpas.core.io,
+  nextpas.core.io.intf,
+  nextpas.core.http.base,
+  nextpas.core.http.url;
+
+type
+  TResponseWriterAdapter = class(TInterfacedObject, IWriter)
+  private
+    FWriter: IHttpResponseWriter;
+  public
+    constructor Create(const AWriter: IHttpResponseWriter);
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
 
 { ===== Helpers ===== }
+
+constructor TResponseWriterAdapter.Create(const AWriter: IHttpResponseWriter);
+begin
+  inherited Create;
+  FWriter := AWriter;
+end;
+
+function TResponseWriterAdapter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := FWriter.Write(ABuf, ACount);
+end;
 
 function ExtractExt(const APath: string): string;
 var
@@ -30,7 +54,7 @@ begin
   for LI := Length(APath) downto 1 do
   begin
     if APath[LI] = '.' then
-      Exit(Copy(APath, LI, Length(APath) - LI + 1));
+      Exit(System.Copy(APath, LI, Length(APath) - LI + 1));
     if APath[LI] = '/' then
       Exit('');
   end;
@@ -91,7 +115,9 @@ end;
 
 procedure ServeFileContent(const AFilePath: string; const AW: IHttpResponseWriter);
 var
-  LContent: string;
+  LFile: IFile;
+  LInfo: TFileInfo;
+  LWriter: IWriter;
   LExt: string;
   LMime: string;
 begin
@@ -102,14 +128,22 @@ begin
     AW.Write(PAnsiChar('Not Found')^, 9);
     Exit;
   end;
-  LContent := nextpas.core.fs.ReadFileText(AFilePath);
+  LInfo := nextpas.core.fs.Stat(AFilePath);
+  if LInfo.FileType <> ftRegular then
+  begin
+    AW.GetHeaders.Set_('content-length', '9');
+    AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+    AW.Write(PAnsiChar('Not Found')^, 9);
+    Exit;
+  end;
+  LFile := nextpas.core.fs.Open(AFilePath, [fmRead]);
   LExt := ExtractExt(AFilePath);
   LMime := MimeTypeFromExt(LExt);
   AW.GetHeaders.Set_('content-type', LMime);
-  AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LContent))));
+  AW.GetHeaders.Set_('content-length', IntToStr(LInfo.Size));
   AW.WriteHeader(HTTP_STATUS_OK);
-  if Length(LContent) > 0 then
-    AW.Write(LContent[1], SizeUInt(Length(LContent)));
+  LWriter := TResponseWriterAdapter.Create(AW);
+  nextpas.core.io.Copy(LWriter, LFile);
 end;
 
 { ===== Public API ===== }
@@ -136,7 +170,15 @@ begin
       LRelative := AReq.Path;
       { Strip leading slash }
       if (Length(LRelative) > 0) and (LRelative[1] = '/') then
-        LRelative := Copy(LRelative, 2, Length(LRelative) - 1);
+        LRelative := System.Copy(LRelative, 2, Length(LRelative) - 1);
+    end;
+    try
+      LRelative := nextpas.core.http.url.UrlDecode(LRelative);
+    except
+      AW.GetHeaders.Set_('content-length', '11');
+      AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
+      AW.Write(PAnsiChar('Bad Request')^, 11);
+      Exit;
     end;
     { Security: reject traversal attempts }
     if not IsSafePath(LRelative) then

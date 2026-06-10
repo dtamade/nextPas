@@ -111,6 +111,8 @@ begin
 end;
 
 procedure SetupTmpDir;
+var
+  LBinary: TBytes;
 begin
   { Create test directory structure }
   nextpas.core.fs.MkdirAll(CTmpDir);
@@ -120,6 +122,8 @@ begin
   nextpas.core.fs.WriteFileText(CTmpDir + '/css/main.css', '.a{color:red}');
   nextpas.core.fs.WriteFileText(CTmpDir + '/data.JSON', '{"ok":true}');
   nextpas.core.fs.WriteFileText(CTmpDir + '/asset.unknownext', 'opaque');
+  LBinary := TBytes.Create($00, $01, $FE, $FF, Ord('A'), Ord('Z'));
+  nextpas.core.fs.WriteFile(CTmpDir + '/binary.bin', LBinary);
 end;
 
 procedure CleanupTmpDir;
@@ -295,6 +299,28 @@ begin
   end;
 end;
 
+procedure TestServeDirUrlEncodedTraversalRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/files/*filepath', ServeDir(CTmpDir));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, 'GET /files/%2e%2e/etc/passwd HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'URL-encoded traversal should be rejected before file lookup');
+    Check(Pos('HTTP/1.1 404', LResp) = 0,
+      'URL-encoded traversal must not fall through to missing file');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
 { ===== Test 8: ServeDir missing file returns 404 ===== }
 procedure TestServeDirMissing;
 var
@@ -363,6 +389,53 @@ begin
   end;
 end;
 
+procedure TestStaticFileUsesBinaryStreamTransfer;
+var
+  LSource: string;
+begin
+  LSource := nextpas.core.fs.ReadFileText('../../../src/nextpas.core.http.static.pas');
+  Check(Pos('ReadFileText(AFilePath)', LSource) = 0,
+    'static file body path must not depend on text file reads');
+  Check(Pos('ReadFile(AFilePath)', LSource) = 0,
+    'static file body path must not load entire file into memory');
+  Check(Pos('nextpas.core.fs.Open(AFilePath', LSource) > 0,
+    'static file body path opens a file stream');
+  Check(Pos('nextpas.core.io.Copy(', LSource) > 0,
+    'static file body path streams through io.Copy');
+end;
+
+procedure TestServeFilePreservesBinaryBodyBytes;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LBodyPos: SizeInt;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', ServeFile(CTmpDir + '/binary.bin'));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'binary file status 200');
+    Check(Pos('content-length: 6', LResp) > 0,
+      'binary content length should match raw byte count');
+    LBodyPos := Pos(#13#10#13#10, LResp);
+    Check(LBodyPos > 0, 'binary response contains header-body separator');
+    Inc(LBodyPos, 4);
+    Check(Length(LResp) >= LBodyPos + 5, 'binary response includes all body bytes');
+    Check(Ord(LResp[LBodyPos]) = $00, 'binary byte 0 preserved');
+    Check(Ord(LResp[LBodyPos + 1]) = $01, 'binary byte 1 preserved');
+    Check(Ord(LResp[LBodyPos + 2]) = $FE, 'binary byte 2 preserved');
+    Check(Ord(LResp[LBodyPos + 3]) = $FF, 'binary byte 3 preserved');
+    Check(LResp[LBodyPos + 4] = 'A', 'binary byte A preserved');
+    Check(LResp[LBodyPos + 5] = 'Z', 'binary byte Z preserved');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
 { ===== Main ===== }
 begin
   SetupTmpDir;
@@ -377,9 +450,15 @@ begin
     T.Run('ServeDir path traversal blocked', @TestServeDirTraversalBlocked);
     T.Run('ServeDir backslash traversal rejected',
       @TestServeDirBackslashTraversalRejected);
+    T.Run('ServeDir URL-encoded traversal rejected',
+      @TestServeDirUrlEncodedTraversalRejected);
     T.Run('ServeDir missing file returns 404', @TestServeDirMissing);
     T.Run('ServeDir absolute path rejected', @TestServeDirAbsolutePathRejected);
     T.Run('ServeDir MIME case-insensitive and fallback', @TestServeDirMimeTypeCaseInsensitiveAndFallback);
+    T.Run('Static file uses binary stream transfer',
+      @TestStaticFileUsesBinaryStreamTransfer);
+    T.Run('ServeFile preserves binary body bytes',
+      @TestServeFilePreservesBinaryBodyBytes);
     T.Summary;
   finally
     CleanupTmpDir;
