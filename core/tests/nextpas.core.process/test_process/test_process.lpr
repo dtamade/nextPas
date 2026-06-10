@@ -443,6 +443,60 @@ begin
   Check('Chdir fail — raises EProcessError', LRaised);
 end;
 
+function OpenFdCount: Integer;
+var
+  LSearch: TSearchRec;
+begin
+  Result := 0;
+  if FindFirst('/proc/self/fd/*', faAnyFile, LSearch) = 0 then
+  begin
+    repeat
+      if (LSearch.Name <> '.') and (LSearch.Name <> '..') then
+        Inc(Result);
+    until FindNext(LSearch) <> 0;
+    FindClose(LSearch);
+  end
+  else
+    Result := -1;
+end;
+
+procedure ExpectProcessErrorNoFdLeak(const AName: string; const AProc: TProcedure);
+var
+  LBefore: Integer;
+  LAfter: Integer;
+begin
+  LBefore := OpenFdCount;
+  ExpectProcessError(AName + ' — raises EProcessError', AProc);
+  LAfter := OpenFdCount;
+  if (LBefore >= 0) and (LAfter >= 0) then
+    Check(AName + ' — parent fd count returns to baseline', LAfter = LBefore)
+  else
+    Check(AName + ' — /proc/self/fd unavailable', True);
+end;
+
+procedure TestSpawnNullStdioFailureDoesNotLeakParentFds;
+begin
+  ExpectProcessErrorNoFdLeak('stNull exec fail cleanup',
+    procedure
+    begin
+      TCommand.New('/nonexistent_binary_xyz_123')
+        .Stdin(stNull)
+        .Stdout(stNull)
+        .Stderr(stNull)
+        .Spawn;
+    end);
+  ExpectProcessErrorNoFdLeak('stNull chdir fail cleanup',
+    procedure
+    begin
+      TCommand.New('/bin/true')
+        .Dir('/nonexistent_dir_xyz')
+        .Stdin(stNull)
+        .Stdout(stNull)
+        .Stderr(stNull)
+        .Spawn;
+    end);
+end;
+
 procedure TestEnvAddInheritsPath;
 var LOut: TProcessOutput;
 begin
@@ -576,6 +630,7 @@ begin
   TestSpawnError;
   TestSpawnExecFailRaisesException;
   TestSpawnChdirFailRaisesException;
+  TestSpawnNullStdioFailureDoesNotLeakParentFds;
   TestEnvAddInheritsPath;
   TestEnvReplaceWithPathSearch;
   TestEnvReplaceSkipsNonExecutablePathShadow;

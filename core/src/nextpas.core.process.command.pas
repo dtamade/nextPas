@@ -115,6 +115,15 @@ begin
     raise EProcessError.Create(AField + ' must not contain NUL');
 end;
 
+procedure CloseFd(var AFd: PtrInt);
+begin
+  if AFd >= 0 then
+  begin
+    nextpas.core.platform.posix.ffi.close(AFd);
+    AFd := -1;
+  end;
+end;
+
 procedure ValidatePath(const APath: string);
 begin
   if APath = '' then
@@ -421,6 +430,12 @@ begin
     if LStdoutPipe[1] >= 0 then nextpas.core.platform.posix.ffi.close(LStdoutPipe[1]);
     if LStderrPipe[0] >= 0 then nextpas.core.platform.posix.ffi.close(LStderrPipe[0]);
     if LStderrPipe[1] >= 0 then nextpas.core.platform.posix.ffi.close(LStderrPipe[1]);
+    if FStdinMode = stNull then
+      CloseFd(LChildStdin);
+    if FStdoutMode = stNull then
+      CloseFd(LChildStdout);
+    if FStderrMode = stNull then
+      CloseFd(LChildStderr);
     raise;
   end;
 
