@@ -143,6 +143,7 @@ const
 
   _SC_PAGESIZE             = cint(30);
   _SC_NPROCESSORS_ONLN     = cint(84);
+  _SC_PAGESIZE             = cint(30);
 
   _PTHREAD_MUTEX_TIMED_NP      = 0;
   _PTHREAD_MUTEX_RECURSIVE_NP  = 1;
