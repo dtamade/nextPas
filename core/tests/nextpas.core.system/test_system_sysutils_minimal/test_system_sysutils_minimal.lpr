@@ -69,6 +69,16 @@ begin
     'IntToStr should cover diagnostic negative values');
 end;
 
+procedure TestTrimDelegatesToTextConvOwner;
+begin
+  CheckEqual('compiler<T>', nextpas.core.system.sysutils.Trim('  compiler<T>  '),
+    'Trim should cover compiler token normalization pressure');
+  CheckEqual('runtime', nextpas.core.system.sysutils.Trim(#9'runtime'#10),
+    'Trim should remove surrounding ASCII whitespace only');
+  CheckEqual('', nextpas.core.system.sysutils.Trim('   '),
+    'Trim should collapse all-whitespace input to empty text');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.system.sysutils minimal');
   T.Run('Format delegates to text contract', @TestFormatDelegatesToTextContract);
@@ -76,5 +86,6 @@ begin
   T.Run('convert error alias canonical root', @TestConvertErrorAliasCanonicalRoot);
   T.Run('SameText delegates to text compare owner', @TestSameTextDelegatesToTextCompareOwner);
   T.Run('IntToStr delegates to text conversion owner', @TestIntToStrDelegatesToTextConvOwner);
+  T.Run('Trim delegates to text conversion owner', @TestTrimDelegatesToTextConvOwner);
   T.Summary;
 end.

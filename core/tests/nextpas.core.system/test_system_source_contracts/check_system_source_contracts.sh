@@ -550,6 +550,7 @@ require_token "docs/system/compatibility-facades.md" 'A minimal live `nextpas.co
 require_token "docs/system/compatibility-facades.md" 'Format'
 require_token "docs/system/compatibility-facades.md" 'Exception.CreateFmt'
 require_token "docs/system/compatibility-facades.md" 'IntToStr'
+require_token "docs/system/compatibility-facades.md" 'Trim'
 require_token "docs/system/compatibility-facades.md" '`CompareText` | no focused consumer pressure in this lane'
 require_token "docs/system/compatibility-facades.md" "typinfo-minimal-pressure.md"
 require_token "docs/system/compatibility-facades.md" "2026-06-07-system-typinfo-minimal-unlock-review.md"
@@ -575,6 +576,7 @@ require_token "docs/system/compatibility-matrix.md" "minimal live compile-truth 
 require_token "docs/system/compatibility-matrix.md" "minimal live exception-formatting facade"
 require_token "docs/system/compatibility-matrix.md" "TTypeKind collections coverage"
 require_token "docs/system/compatibility-matrix.md" '`IntToStr`'
+require_token "docs/system/compatibility-matrix.md" '`Trim`'
 require_token "docs/system/compatibility-matrix.md" '`CompareText` | no focused consumer pressure in this lane'
 
 for token in \
@@ -793,6 +795,7 @@ require_repo_file "core/src/nextpas.core.collections.hashmap.swiss.pas"
 require_repo_token "compiler/tests/test_sysutils_createfmt_contract.pas" "CreateFmt"
 require_repo_token "compiler/tests/test_sysutils_createfmt_contract.pas" "Format("
 require_repo_token "compiler/sema/np_semantic_analyzer.pas" "IntToStr"
+require_repo_token "compiler/sema/np_semantic_model.pas" "SameText(Trim(Copy(Params"
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "nextpas.core.system.typinfo"
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "InitializeArray"
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "CopyArray"
@@ -1019,6 +1022,8 @@ require_token "src/nextpas.core.system.sysutils.pas" "function SameText"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.compare.TextEqualI"
 require_token "src/nextpas.core.system.sysutils.pas" "function IntToStr"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv.IntToStr"
+require_token "src/nextpas.core.system.sysutils.pas" "function Trim"
+require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv.Trim"
 require_repo_uses_allowlist \
   "core/src/nextpas.core.system.sysutils.pas" \
   "nextpas.core.exception" \
@@ -1034,7 +1039,6 @@ reject_token "src/nextpas.core.system.sysutils.pas" "ExtractFileName"
 reject_token "src/nextpas.core.system.sysutils.pas" "IncludeTrailingPathDelimiter"
 reject_token "src/nextpas.core.system.sysutils.pas" "ExcludeTrailingPathDelimiter"
 reject_token "src/nextpas.core.system.sysutils.pas" "GetEnvironmentVariable"
-reject_token "src/nextpas.core.system.sysutils.pas" "Trim"
 reject_token "src/nextpas.core.system.sysutils.pas" "CompareText"
 reject_token "src/nextpas.core.system.sysutils.pas" "LowerCase"
 reject_token "src/nextpas.core.system.sysutils.pas" "UpperCase"

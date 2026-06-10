@@ -1,6 +1,6 @@
 unit nextpas.core.system.sysutils;
 {**
- * @desc Minimal SysUtils compatibility facade for exception formatting.
+ * @desc Minimal SysUtils compatibility facade for proven compiler/bootstrap pressure.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -21,6 +21,7 @@ type
 function Format(const AFmt: string; const AArgs: array of const): string;
 function SameText(const ALeft, ARight: string): Boolean;
 function IntToStr(const AValue: Int64): string;
+function Trim(const AValue: string): string;
 
 implementation
 
@@ -37,6 +38,11 @@ end;
 function IntToStr(const AValue: Int64): string;
 begin
   Result := nextpas.core.text.conv.IntToStr(AValue);
+end;
+
+function Trim(const AValue: string): string;
+begin
+  Result := nextpas.core.text.conv.Trim(AValue);
 end;
 
 end.

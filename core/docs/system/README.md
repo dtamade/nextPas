@@ -56,15 +56,15 @@ runtime registry, and no broader SysUtils, Classes or TypInfo surface.
 S4 compatibility facades are now split by evidence. `nextpas.core.system.typinfo`
 has a minimal live unit for the seven-symbol TypInfo pressure set, and
 `nextpas.core.system.sysutils` has a minimal live exception-formatting,
-`SameText`, and `IntToStr` facade for `Format`, `SameText`, `IntToStr`, plus
-canonical exception aliases.
+`SameText`, `IntToStr`, and `Trim` facade for `Format`, `SameText`,
+`IntToStr`, `Trim`, plus canonical exception aliases.
 Classes remain deferred.
 The live TypInfo unit is a compile-truth/runtime-helper bridge; it is not a
 complete FPC `TypInfo` reflection facade and does not freeze metadata layout ABI
 beyond minimum identity, kind, and managed-array helper contracts. The live
-SysUtils unit is not a path, file, environment, time, parsing, or broad
-string-helper surface; `SameText` and `IntToStr` are the only currently live
-string helper additions beyond formatting.
+SysUtils unit is not a path, file, environment, time, parsing, case-conversion,
+or broad string-helper surface; `SameText`, `IntToStr`, and `Trim` are the only
+currently live string helper additions beyond formatting.
 
 Detailed S4 design-only material lives in `compatibility-facades.md` and
 `compatibility-matrix.md`. Those docs distinguish bootstrap RTL pressure from a
@@ -103,7 +103,7 @@ backend-private magic strings.
 S4 boundary note:
 
 - no public unit yet for `system.classes`
-- `system.sysutils` is live only for `Format`, `SameText`, `IntToStr`,
+- `system.sysutils` is live only for `Format`, `SameText`, `IntToStr`, `Trim`,
   `Exception`, `ExceptClass`, `EConvertError`, and `EAssertionFailed`
 - `system.typinfo` is live for `PTypeInfo`, `TTypeKind`,
   `InitializeArray`, `FinalizeArray`, `CopyArray`, and the kind aliases used by
