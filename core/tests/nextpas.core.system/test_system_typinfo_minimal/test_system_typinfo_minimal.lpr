@@ -10,12 +10,44 @@ uses
 type
   PAnsiStringSlots = ^TAnsiStringSlots;
   TAnsiStringSlots = array[0..1] of AnsiString;
+  PInterfaceSlots = ^TInterfaceSlots;
+  IManagedProbe = interface
+    ['{6B4F155E-2098-4E59-9A83-24E6959715DE}']
+    function ProbeId: Int32;
+  end;
+  TManagedProbe = class(TInterfacedObject, IManagedProbe)
+  private
+    FProbeId: Int32;
+  public
+    constructor Create(AProbeId: Int32);
+    destructor Destroy; override;
+    function ProbeId: Int32;
+  end;
+  TInterfaceSlots = array[0..1] of IManagedProbe;
   TIntDynArray = array of Int32;
   TObjectMethod = procedure of object;
   TKindEnum = (keFirst, keSecond);
 
 var
   T: TTestRunner;
+  ManagedProbeDestroyedCount: Int32 = 0;
+
+constructor TManagedProbe.Create(AProbeId: Int32);
+begin
+  inherited Create;
+  FProbeId := AProbeId;
+end;
+
+destructor TManagedProbe.Destroy;
+begin
+  Inc(ManagedProbeDestroyedCount);
+  inherited Destroy;
+end;
+
+function TManagedProbe.ProbeId: Int32;
+begin
+  Result := FProbeId;
+end;
 
 procedure CheckTypeInfoKind(const AName: string;
   ATypeInfo: nextpas.core.system.typinfo.PTypeInfo;
@@ -198,6 +230,69 @@ begin
     'GetTypeKind should classify dynamic arrays as tkDynArray');
 end;
 
+procedure TestManagedInterfaceArrayLifecycleHelpers;
+var
+  LDest: PInterfaceSlots;
+  LDestInitialized: Boolean;
+  LSource: PInterfaceSlots;
+  LSourceInitialized: Boolean;
+  LTypeInfo: nextpas.core.system.typinfo.PTypeInfo;
+begin
+  ManagedProbeDestroyedCount := 0;
+  LTypeInfo := TypeInfo(IManagedProbe);
+  CheckTypeInfoKind('IManagedProbe', LTypeInfo, GetTypeKind(IManagedProbe),
+    nextpas.core.system.typinfo.tkInterface);
+
+  GetMem(LSource, SizeOf(TInterfaceSlots));
+  GetMem(LDest, SizeOf(TInterfaceSlots));
+  LSourceInitialized := False;
+  LDestInitialized := False;
+  try
+    nextpas.core.system.typinfo.InitializeArray(LSource, LTypeInfo,
+      Length(LSource^));
+    LSourceInitialized := True;
+    nextpas.core.system.typinfo.InitializeArray(LDest, LTypeInfo,
+      Length(LDest^));
+    LDestInitialized := True;
+
+    Check(LSource^[0] = nil, 'interface source slot 0 should initialize to nil');
+    Check(LSource^[1] = nil, 'interface source slot 1 should initialize to nil');
+    Check(LDest^[0] = nil, 'interface destination slot 0 should initialize to nil');
+    Check(LDest^[1] = nil, 'interface destination slot 1 should initialize to nil');
+
+    LSource^[0] := TManagedProbe.Create(10) as IManagedProbe;
+    LSource^[1] := TManagedProbe.Create(20) as IManagedProbe;
+    nextpas.core.system.typinfo.CopyArray(LDest, LSource, LTypeInfo,
+      Length(LSource^));
+
+    Check(LDest^[0] = LSource^[0], 'CopyArray should preserve interface identity 0');
+    Check(LDest^[1] = LSource^[1], 'CopyArray should preserve interface identity 1');
+    CheckEqual(10, LDest^[0].ProbeId, 'CopyArray should preserve interface value 0');
+    CheckEqual(20, LDest^[1].ProbeId, 'CopyArray should preserve interface value 1');
+
+    nextpas.core.system.typinfo.FinalizeArray(LSource, LTypeInfo,
+      Length(LSource^));
+    LSourceInitialized := False;
+    CheckEqual(0, ManagedProbeDestroyedCount,
+      'destination interface slots should keep probes alive after source finalize');
+    CheckEqual(10, LDest^[0].ProbeId,
+      'destination interface slot 0 should stay usable after source finalize');
+    CheckEqual(20, LDest^[1].ProbeId,
+      'destination interface slot 1 should stay usable after source finalize');
+
+    nextpas.core.system.typinfo.FinalizeArray(LDest, LTypeInfo, Length(LDest^));
+    LDestInitialized := False;
+  finally
+    if LDestInitialized then
+      nextpas.core.system.typinfo.FinalizeArray(LDest, LTypeInfo, Length(LDest^));
+    if LSourceInitialized then
+      nextpas.core.system.typinfo.FinalizeArray(LSource, LTypeInfo,
+        Length(LSource^));
+    FreeMem(LDest);
+    FreeMem(LSource);
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.system.typinfo');
   T.Run('TypeInfo and GetTypeKind compile-truth', @TestTypeInfoAndGetTypeKindCompileTruth);
@@ -205,5 +300,7 @@ begin
   T.Run('PTypeInfo kind consistency compile-truth', @TestPTypeInfoKindConsistencyCompileTruth);
   T.Run('managed array lifecycle helpers', @TestManagedArrayLifecycleHelpers);
   T.Run('collection kind aliases compile-truth', @TestCollectionKindAliasesCompileTruth);
+  T.Run('managed interface array lifecycle helpers',
+    @TestManagedInterfaceArrayLifecycleHelpers);
   T.Summary;
 end.

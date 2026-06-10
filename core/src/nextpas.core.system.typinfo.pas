@@ -33,6 +33,7 @@ const
   tkVariant = TypInfo.tkVariant;
   tkMethod = TypInfo.tkMethod;
   tkPointer = TypInfo.tkPointer;
+  tkInterface = TypInfo.tkInterface;
   tkDynArray = TypInfo.tkDynArray;
 
 procedure InitializeArray(APtr: Pointer; ATypeInfo: PTypeInfo; ACount: SizeInt); inline;

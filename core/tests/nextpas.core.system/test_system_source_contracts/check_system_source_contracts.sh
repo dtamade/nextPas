@@ -560,8 +560,10 @@ require_token "docs/system/compatibility-facades.md" 'Exception.CreateFmt'
 require_token "docs/system/compatibility-facades.md" 'IntToStr'
 require_token "docs/system/compatibility-facades.md" 'Trim'
 require_token "docs/system/compatibility-facades.md" '`CompareText` | no focused consumer pressure in this lane'
+require_token "docs/system/compatibility-facades.md" "pointer, interface, and"
 require_token "docs/system/compatibility-facades.md" "typinfo-minimal-pressure.md"
 require_token "docs/system/compatibility-facades.md" "2026-06-07-system-typinfo-minimal-unlock-review.md"
+require_token "docs/system/goal-tree.md" "interface managed-lifetime"
 
 for token in \
   "compiler/toolchain/np_toolchain_runner.pas" \
@@ -608,6 +610,7 @@ done
 require_token "docs/system/typinfo-minimal-pressure.md" '`nextpas.core.system.typinfo` is live'
 require_token "docs/system/typinfo-minimal-pressure.md" "2026-06-07-system-typinfo-minimal-unlock-review.md"
 require_token "docs/system/typinfo-minimal-pressure.md" "compile-truth"
+require_token "docs/system/typinfo-minimal-pressure.md" "tkInterface"
 
 for token in \
   "PTypeInfo" \
@@ -902,6 +905,7 @@ require_token "src/nextpas.core.system.typinfo.pas" "tkWString"
 require_token "src/nextpas.core.system.typinfo.pas" "tkVariant"
 require_token "src/nextpas.core.system.typinfo.pas" "tkMethod"
 require_token "src/nextpas.core.system.typinfo.pas" "tkPointer"
+require_token "src/nextpas.core.system.typinfo.pas" "tkInterface"
 require_token "src/nextpas.core.system.typinfo.pas" "tkDynArray"
 require_token "src/nextpas.core.system.typinfo.pas" "InitializeArray"
 require_token "src/nextpas.core.system.typinfo.pas" "FinalizeArray"
@@ -939,6 +943,7 @@ reject_token_ci "src/nextpas.core.system.typinfo.pas" "function GetTypeKind"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "integer PTypeInfo identity compile-truth"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "PTypeInfo kind consistency compile-truth"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "managed array lifecycle helpers"
+require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "managed interface array lifecycle helpers"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "InitializeArray(LSource"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "CopyArray(LDest"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "FinalizeArray(LDest"

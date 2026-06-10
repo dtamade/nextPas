@@ -129,10 +129,10 @@ or binary layout should be exposed.
 `GetTypeKind(K)` users branch on values such as `tkInteger`, `tkAString`,
 `tkLString`, `tkUString`, `tkWString`, `tkEnumeration`, `tkInt64`, and
 `tkQWord`. `core/src/nextpas.core.collections.base.pas` also consumes
-`tkFloat`, `tkSString`, `tkVariant`, `tkMethod`, `tkPointer`, and `tkDynArray`
-for comparer/equality dispatch. If nextPas changes these names or grouping
-semantics, collection hashing and ordering behavior can change without visible
-type errors.
+`tkFloat`, `tkSString`, `tkVariant`, `tkMethod`, `tkPointer`, `tkInterface`,
+and `tkDynArray` for comparer/equality dispatch. If nextPas changes these names
+or grouping semantics, collection hashing and ordering behavior can change
+without visible type errors.
 
 ### Managed-array lifecycle risk
 

@@ -77,6 +77,8 @@ Current phase note:
 - TypeInfo and GetTypeKind are compiler/System compile-truth imports, not unit-owned wrapper functions in `nextpas.core.system.typinfo`.
 - TypInfo `TTypeKind` aliases cover current collections comparer/equality
   dispatch needs without expanding into reflection metadata.
+- TypInfo has an interface managed-lifetime proof through managed interface
+  array lifecycle helpers, without expanding metadata layout promises.
 - S4 is not a current phase gate for this lane.
 - no public unit yet should exist for `nextpas.core.system.classes`.
 - If real consumer pressure appears, reopen as `Needs Review` with focused evidence instead of creating
