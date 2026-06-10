@@ -50,7 +50,7 @@ live consumer evidence.
 | --- | --- | --- |
 | Exception base aliases | `system facade delegating to owner` | Live in `nextpas.core.system.sysutils`; aliases delegate to `nextpas.core.exception`. |
 | `Format` for exception messages | `system facade delegating to owner` | Live in `nextpas.core.system.sysutils`; implementation delegates to `nextpas.core.text.conv`. |
-| `SameText` for case-insensitive comparison | `system facade delegating to owner` | Live in `nextpas.core.system.sysutils`; implementation delegates to `nextpas.core.text.compare`. |
+| `SameText` for case-insensitive comparison | `system-owned minimal facade` | Live in `nextpas.core.system.sysutils`; implementation uses a local ASCII fold to avoid pulling L1 text comparison into L0 system. |
 | `IntToStr` for numeric diagnostics and generated labels | `system facade delegating to owner` | Live in `nextpas.core.system.sysutils`; implementation delegates to `nextpas.core.text.conv`. |
 | `Trim` for compiler token normalization | `system facade delegating to owner` | Live in `nextpas.core.system.sysutils`; implementation delegates to `nextpas.core.text.conv`. |
 | Conversion/parsing helpers | `owned by another module, no system facade yet` | Text/encoding/validation modules decide exact surfaces. |

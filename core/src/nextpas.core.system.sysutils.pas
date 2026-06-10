@@ -9,7 +9,6 @@ interface
 
 uses
   nextpas.core.exception,
-  nextpas.core.text.compare,
   nextpas.core.text.conv;
 
 type
@@ -25,14 +24,33 @@ function Trim(const AValue: string): string;
 
 implementation
 
+function FoldAsciiLower(const AByte: Byte): Byte; inline;
+begin
+  case AByte of
+    Ord('A')..Ord('Z'): Result := AByte or $20;
+  else
+    Result := AByte;
+  end;
+end;
+
 function Format(const AFmt: string; const AArgs: array of const): string;
 begin
   Result := nextpas.core.text.conv.Format(AFmt, AArgs);
 end;
 
 function SameText(const ALeft, ARight: string): Boolean;
+var
+  LI, LLength: SizeInt;
 begin
-  Result := nextpas.core.text.compare.TextEqualI(ALeft, ARight);
+  LLength := System.Length(ALeft);
+  if LLength <> System.Length(ARight) then
+    Exit(False);
+
+  for LI := 1 to LLength do
+    if FoldAsciiLower(Byte(ALeft[LI])) <> FoldAsciiLower(Byte(ARight[LI])) then
+      Exit(False);
+
+  Result := True;
 end;
 
 function IntToStr(const AValue: Int64): string;

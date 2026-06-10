@@ -55,7 +55,7 @@ Exit evidence:
 - [x] Prepare a TypInfo minimal unlock `Needs Review` packet with exact symbol list, owner boundary, file set, and focused gates.
 - [x] Add the minimal live `nextpas.core.system.typinfo` unit for the seven-symbol pressure set.
 - [x] Add the minimal live `nextpas.core.system.sysutils` exception-formatting unit for `Format` and canonical exception aliases.
-- [x] Add the minimal live `SameText` string-comparison slice, delegating to the text owner.
+- [x] Add the minimal live `SameText` string-comparison slice with system-local ASCII fold.
 - [x] Add the minimal live `IntToStr` numeric conversion slice, delegating to the text owner.
 - [x] Add the minimal live `Trim` token-normalization slice for compiler generic parameter matching, delegating to the text owner.
 - [ ] Decide whether broader SysUtils or Classes deserve `system.*` facade units.

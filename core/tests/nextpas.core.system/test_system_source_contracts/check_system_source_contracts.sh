@@ -1033,7 +1033,6 @@ reject_token "src/nextpas.core.system.pas" "Classes"
 
 require_token "src/nextpas.core.system.sysutils.pas" "unit nextpas.core.system.sysutils;"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.exception"
-require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.compare"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv"
 require_token "src/nextpas.core.system.sysutils.pas" "Exception = nextpas.core.exception.Exception;"
 require_token "src/nextpas.core.system.sysutils.pas" "ExceptClass = nextpas.core.exception.ExceptClass;"
@@ -1042,7 +1041,8 @@ require_token "src/nextpas.core.system.sysutils.pas" "EAssertionFailed = nextpas
 require_token "src/nextpas.core.system.sysutils.pas" "function Format"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv.Format"
 require_token "src/nextpas.core.system.sysutils.pas" "function SameText"
-require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.compare.TextEqualI"
+require_token "src/nextpas.core.system.sysutils.pas" "FoldAsciiLower"
+require_token "src/nextpas.core.system.sysutils.pas" "Ord('A')..Ord('Z')"
 require_token "src/nextpas.core.system.sysutils.pas" "function IntToStr"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv.IntToStr"
 require_token "src/nextpas.core.system.sysutils.pas" "function Trim"
@@ -1050,8 +1050,9 @@ require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv.Tri
 require_repo_uses_allowlist \
   "core/src/nextpas.core.system.sysutils.pas" \
   "nextpas.core.exception" \
-  "nextpas.core.text.compare" \
   "nextpas.core.text.conv"
+reject_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.compare"
+reject_token "src/nextpas.core.system.sysutils.pas" "TextEqualI"
 reject_token "src/nextpas.core.system.sysutils.pas" "FileExists"
 reject_token_ci "src/nextpas.core.system.sysutils.pas" "FileExists"
 reject_token "src/nextpas.core.system.sysutils.pas" "DirectoryExists"

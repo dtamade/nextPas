@@ -54,7 +54,7 @@ inside `nextpas.core`, not a private fallback ABI.
 | `TObject.Free` / object release | compiler/runtime System truth | lower through `np.system.object_free`; do not expose as a Classes starter API |
 | `PTypeInfo`, `TTypeKind`, `TypeInfo`, `GetTypeKind` | minimal live TypInfo bridge | do not freeze host FPC metadata layout as nextPas target layout |
 | `InitializeArray`, `FinalizeArray`, `CopyArray` | minimal live managed-array bridge | require leak-sensitive runtime evidence before widening |
-| `Format`, `SameText`, `IntToStr` | minimal live SysUtils facade | delegate to owner modules; no broad SysUtils clone |
+| `Format`, `SameText`, `IntToStr` | minimal live SysUtils facade | keep SameText system-local and delegate conversion/formatting to narrow owner modules; no broad SysUtils clone |
 | `TFileStream`, `TStringList`, file mode constants | bootstrap Classes pressure only | no live `nextpas.core.system.classes` until a focused review packet exists |
 | path, file, environment, time helpers | real bootstrap/toolchain pressure | owner modules decide semantics before any system facade |
 

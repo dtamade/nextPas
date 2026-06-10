@@ -49,12 +49,16 @@ begin
   end;
 end;
 
-procedure TestSameTextDelegatesToTextCompareOwner;
+procedure TestSameTextUsesSystemLocalAsciiFold;
 begin
   Check(nextpas.core.system.sysutils.SameText('CompilerProc', 'compilerproc'),
     'SameText should satisfy compiler case-insensitive symbol pressure');
   Check(nextpas.core.system.sysutils.SameText('Runtime-ABI', 'runtime-abi'),
     'SameText should compare ASCII letters without changing punctuation');
+  Check(nextpas.core.system.sysutils.SameText('', ''),
+    'SameText should accept two empty strings');
+  Check(not nextpas.core.system.sysutils.SameText('compiler', 'compiler-runtime'),
+    'SameText should reject different lengths');
   Check(not nextpas.core.system.sysutils.SameText('compiler', 'runtime'),
     'SameText should reject different text');
 end;
@@ -84,7 +88,7 @@ begin
   T.Run('Format delegates to text contract', @TestFormatDelegatesToTextContract);
   T.Run('exception formatting aliases canonical root', @TestExceptionFormattingAliasesCanonicalRoot);
   T.Run('convert error alias canonical root', @TestConvertErrorAliasCanonicalRoot);
-  T.Run('SameText delegates to text compare owner', @TestSameTextDelegatesToTextCompareOwner);
+  T.Run('SameText uses system-local ASCII fold', @TestSameTextUsesSystemLocalAsciiFold);
   T.Run('IntToStr delegates to text conversion owner', @TestIntToStrDelegatesToTextConvOwner);
   T.Run('Trim delegates to text conversion owner', @TestTrimDelegatesToTextConvOwner);
   T.Summary;

@@ -27,7 +27,7 @@ The repository already contains bootstrap-oriented RTL source-of-truth files:
 | `rtl/core/sysutils/np_sysutils.pas` | minimal `SysUtils` subset for compiler bootstrap and Stage 2 self-hosting | bootstrap scope is "compiler can build", not "public core API is settled" |
 | `rtl/core/classes/np_classes.pas` | minimal `Classes` subset with `TFileStream` and `TStringList` | current shape is pragmatic bootstrap RTL, not a reviewed owner-boundary facade |
 | `compiler/tests/test_sysutils_createfmt_contract.pas` | proof that compiler bootstrap currently needs `Format`, `Exception.CreateFmt`, and `ExceptClass` behavior | pressure is enough for a minimal exception-formatting facade, but not for path, file, environment, time, or broad string-helper compatibility |
-| compiler semantic and toolchain `SameText` uses | proof that case-insensitive identifier/config comparison is real pressure | pressure is enough for one tiny delegating `SameText` facade, but not for `CompareText`, case conversion, path, file, environment, or time helpers |
+| compiler semantic and toolchain `SameText` uses | proof that case-insensitive identifier/config comparison is real pressure | pressure is enough for one tiny system-local ASCII `SameText` facade, but not for `CompareText`, case conversion, path, file, environment, or time helpers |
 | compiler/runtime diagnostic `IntToStr` uses | proof that numeric label, counter, and diagnostic conversion is real pressure | pressure is enough for one tiny delegating `IntToStr` facade, but not for parsing, case conversion, path, file, environment, or time helpers |
 | compiler generic parameter token normalization | `compiler/sema/np_semantic_model.pas` uses `SameText(Trim(Copy(Params, ...)), AParamName)` | pressure is enough for one tiny delegating `Trim` facade, but not for case conversion, parsing, path, file, environment, or time helpers |
 | `compiler/tests/test_typinfo_contract.pas` | proof that compiler/runtime contracts already need `PTypeInfo`, `TypeInfo`, `InitializeArray`, `CopyArray`, and `FinalizeArray` | this proves RTTI lifecycle pressure, but also proves ABI/layout truth must stay compiler/runtime-led |
@@ -59,7 +59,7 @@ The pressure clusters into a few narrow capability families:
 | exception formatting | `Format`, `Exception.CreateFmt`, `ExceptClass`, `EAssertionFailed` | real bootstrap/compiler pressure | minimal live facade delegates `Format` to `nextpas.core.text.conv` and exception aliases to `nextpas.core.exception` |
 | path normalization | `ExpandFileName`, `ExtractFileDir`, `ExtractFileName`, `IncludeTrailingPathDelimiter`, `ExcludeTrailingPathDelimiter` | real toolchain/workspace pressure | path and filesystem semantics belong to `fs` / platform / process owners |
 | file and environment discovery | `FileExists`, `DirectoryExists`, `ForceDirectories`, `FileSearch`, `GetEnvironmentVariable` | real toolchain pressure | keep implementation ownership outside system |
-| string comparison | `SameText` | real compiler semantic/toolchain pressure | minimal live facade delegates to `nextpas.core.text.compare`; broad string helpers stay deferred |
+| string comparison | `SameText` | real compiler semantic/toolchain pressure | minimal live facade uses system-local ASCII fold; broad string helpers stay deferred |
 | string conversion | `IntToStr` | real compiler/runtime diagnostic pressure | minimal live facade delegates to `nextpas.core.text.conv`; parsing and broad text helpers stay deferred |
 | token normalization | `Trim` | real compiler generic-parameter matching pressure | minimal live facade delegates to `nextpas.core.text.conv`; case conversion and parsing stay deferred |
 | string convenience | `LowerCase`, `UpperCase`, `StrToInt` | real compiler pressure, but mixed parsing/case policy | text/number helpers should stay explicit about owner and behavior |
@@ -73,8 +73,8 @@ The pressure clusters into a few narrow capability families:
   `ExceptClass`, `EConvertError`, and `EAssertionFailed`.
 - Do not create a mirror of FPC `SysUtils`.
 - Do not move filesystem, environment, time, or text ownership into `system`.
-- Any further `system.sysutils` shape must stay tiny, consumer-proven, and
-  delegating to existing owners.
+- Any further `system.sysutils` shape must stay tiny and consumer-proven; do not
+  pull broad text, filesystem, environment, or time ownership into system.
 
 ### Current live minimum
 

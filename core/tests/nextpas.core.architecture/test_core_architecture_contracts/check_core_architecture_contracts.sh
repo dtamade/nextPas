@@ -74,11 +74,15 @@ require_file "docs/platform/goal-tree.md"
 require_file "docs/platform/consumer-contract-audit.md"
 require_file "docs/platform/runtime-truth-matrix.md"
 
-for tier in source-contract forced-compile focused-runtime ci-runtime-matrix; do
+for tier in source-contract forced-compile focused-runtime; do
   require_token "docs/module-registry.md" "$tier"
   require_token "docs/l1-goal-tree.md" "$tier"
   require_token "docs/platform/master-spec.md" "$tier"
 done
+
+require_token "docs/module-registry.md" "ci-runtime-matrix"
+require_token "docs/l1-goal-tree.md" "ci-matrix"
+require_token "docs/platform/master-spec.md" "ci-matrix"
 
 for module_name in base errors platform mem system atomic math simd; do
   require_token "docs/module-registry.md" "| \`$module_name\` |"
@@ -94,8 +98,8 @@ reject_token "docs/platform/goal-tree.md" "runtime ready"
 require_token "docs/design-conventions.md" "docs/module-registry.md"
 require_token "docs/platform/master-spec.md" "Readiness and completion stay split"
 require_token "docs/platform/master-spec.md" "not runtime ready"
-require_token "docs/platform/consumer-contract-audit.md" "readiness lane"
-require_token "docs/platform/consumer-contract-audit.md" "completion lane"
+require_token "docs/platform/consumer-contract-audit.md" "Readiness lane"
+require_token "docs/platform/consumer-contract-audit.md" "Completion lane"
 require_token "docs/platform/runtime-truth-matrix.md" "AsyncRead/AsyncWrite file completion"
 
 ALLOWED_L0_TOP_MODULES=(
