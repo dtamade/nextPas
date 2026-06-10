@@ -33,6 +33,28 @@ begin
   LDoc.Done;
 end;
 
+procedure CheckRejectsAt(const AToml, AExpectedMessage, ACaseName: string;
+  AExpectedOffset, AExpectedLine, AExpectedCol: Int64);
+var
+  LDoc: TTomlDocument;
+begin
+  LDoc.Init(DefaultAllocator);
+  try
+    Check(not LDoc.Parse(TStringView.FromStr(AToml)),
+      ACaseName + ' rejected');
+    CheckEqual(AExpectedMessage, LDoc.Error.Message.ToString,
+      ACaseName + ' diagnostic');
+    CheckEqual(AExpectedOffset, Int64(LDoc.Error.Offset),
+      ACaseName + ' error offset');
+    CheckEqual(AExpectedLine, Int64(LDoc.Error.Line),
+      ACaseName + ' error line');
+    CheckEqual(AExpectedCol, Int64(LDoc.Error.Col),
+      ACaseName + ' error column');
+  finally
+    LDoc.Done;
+  end;
+end;
+
 procedure TestEmptyInput;
 var
   LDoc: TTomlDocument;
