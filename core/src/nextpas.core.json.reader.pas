@@ -77,6 +77,70 @@ begin
   Result := True;
 end;
 
+function IsJsonNumberTailByte(const ACh: Byte): Boolean; inline;
+begin
+  Result := IsDigit(ACh) or (ACh = Ord('.')) or (ACh = Ord('e')) or
+    (ACh = Ord('E')) or (ACh = Ord('+')) or (ACh = Ord('-'));
+end;
+
+function IsValidJsonNumberLexeme(const ANumber: TStringView): Boolean;
+var
+  I: SizeUInt;
+begin
+  Result := False;
+  I := 0;
+
+  if ANumber.Len = 0 then
+    Exit;
+  if ANumber.Data[I] = '-' then
+  begin
+    Inc(I);
+    if I >= ANumber.Len then
+      Exit;
+  end;
+
+  if ANumber.Data[I] = '0' then
+  begin
+    Inc(I);
+    if (I < ANumber.Len) and IsDigit(Byte(ANumber.Data[I])) then
+      Exit;
+  end
+  else if IsDigit(Byte(ANumber.Data[I])) then
+  begin
+    repeat
+      Inc(I);
+    until (I >= ANumber.Len) or not IsDigit(Byte(ANumber.Data[I]));
+  end
+  else
+    Exit;
+
+  if (I < ANumber.Len) and (ANumber.Data[I] = '.') then
+  begin
+    Inc(I);
+    if (I >= ANumber.Len) or not IsDigit(Byte(ANumber.Data[I])) then
+      Exit;
+    repeat
+      Inc(I);
+    until (I >= ANumber.Len) or not IsDigit(Byte(ANumber.Data[I]));
+  end;
+
+  if (I < ANumber.Len) and
+    ((ANumber.Data[I] = 'e') or (ANumber.Data[I] = 'E')) then
+  begin
+    Inc(I);
+    if (I < ANumber.Len) and
+      ((ANumber.Data[I] = '+') or (ANumber.Data[I] = '-')) then
+      Inc(I);
+    if (I >= ANumber.Len) or not IsDigit(Byte(ANumber.Data[I])) then
+      Exit;
+    repeat
+      Inc(I);
+    until (I >= ANumber.Len) or not IsDigit(Byte(ANumber.Data[I]));
+  end;
+
+  Result := I = ANumber.Len;
+end;
+
 function TJsonReader.ReadNumber: Boolean;
 var
   LNumLen: SizeUInt;
@@ -91,6 +155,12 @@ begin
     Exit(False);
   end;
   LNumView := FInput.Left(LNumLen);
+  if (not IsValidJsonNumberLexeme(LNumView)) or
+    ((LNumLen < FInput.Len) and IsJsonNumberTailByte(Byte(FInput.Data[LNumLen]))) then
+  begin
+    FError.Message := TStringView.Create(PAnsiChar('invalid number'), 14);
+    Exit(False);
+  end;
   LHasDot := False;
   LHasExp := False;
   for I := 0 to LNumLen - 1 do
