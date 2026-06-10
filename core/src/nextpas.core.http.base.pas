@@ -41,6 +41,7 @@ type
   THttpClientOptions = record
     Timeout: Int64;
     MaxRedirects: Int32;
+    MaxPoolSize: Int32;
     FollowRedirects: Boolean;
     class function Default: THttpClientOptions; static;
   end;
@@ -441,6 +442,7 @@ class function THttpClientOptions.Default: THttpClientOptions;
 begin
   Result.Timeout := 30000;
   Result.MaxRedirects := 10;
+  Result.MaxPoolSize := 64;
   Result.FollowRedirects := True;
 end;
 

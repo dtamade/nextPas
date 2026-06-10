@@ -21,6 +21,7 @@ uses
 type
   TH1ClientTransportOptions = record
     Timeout: Int64;
+    MaxPoolSize: Int32;
   end;
 
   TH1ServerTransportOptions = record
@@ -1995,6 +1996,8 @@ constructor TH1ClientTransport.Create(const AOptions: TH1ClientTransportOptions)
 begin
   inherited Create;
   FOptions := AOptions;
+  if FOptions.MaxPoolSize <= 0 then
+    FOptions.MaxPoolSize := 64;
   FPoolCount := 0;
 end;
 
@@ -2051,6 +2054,11 @@ end;
 procedure TH1ClientTransport.PoolPut(const AHost: string; const APort: UInt16;
   const AConn: ITcpStream);
 begin
+  if (FOptions.MaxPoolSize > 0) and (FPoolCount >= FOptions.MaxPoolSize) then
+  begin
+    AConn.Close;
+    Exit;
+  end;
   AConn.SetReadDeadline(TDeadline.Infinite);
   AConn.SetWriteDeadline(TDeadline.Infinite);
   if FPoolCount >= Length(FPool) then
@@ -2319,6 +2327,8 @@ begin
       if LResponseStarted then
         raise;
       if not IsRetrySafeRequest(AReq) then
+        raise;
+      if (AReq.Body <> nil) and (AReq.ContentLength > 0) and (LBodyStream = nil) then
         raise;
       RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
       LConn := TcpConnect(LHost, LPort);

@@ -60,6 +60,7 @@ var
   LH1Options: TH1ClientTransportOptions;
 begin
   LH1Options.Timeout := AOptions.Timeout;
+  LH1Options.MaxPoolSize := AOptions.MaxPoolSize;
   Result := NewH1ClientTransport(LH1Options);
 end;
 
