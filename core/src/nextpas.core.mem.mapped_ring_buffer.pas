@@ -48,6 +48,8 @@ type
     procedure SetReadIndex(const Value: UInt64); inline;
     function GetAvailableSpace: UInt64;
     function GetUsedSpace: UInt64;
+    function TryCalculateRequiredSize(aCapacity: UInt64; aElementSize: UInt32;
+      out aRequiredSize: UInt64): Boolean;
     function CalculateRequiredSize(aCapacity: UInt64; aElementSize: UInt32): UInt64;
     procedure InitializeHeader(aCapacity: UInt64; aElementSize: UInt32);
     function ValidateHeader: Boolean;
@@ -218,6 +220,27 @@ begin
   Result := x;
 end;
 
+function TryAddU64(aLeft, aRight: UInt64; out aResult: UInt64): Boolean; inline;
+begin
+  if aLeft > High(UInt64) - aRight then
+  begin
+    aResult := 0;
+    Exit(False);
+  end;
+  aResult := aLeft + aRight;
+  Result := True;
+end;
+
+function TryMulU64(aLeft, aRight: UInt64; out aResult: UInt64): Boolean; inline;
+begin
+  if (aLeft <> 0) and (aRight > High(UInt64) div aLeft) then
+  begin
+    aResult := 0;
+    Exit(False);
+  end;
+  aResult := aLeft * aRight;
+  Result := True;
+end;
 
 const
   // 缓存行大小，避免伪共享
@@ -280,18 +303,49 @@ begin
   inherited Destroy;
 end;
 
+function TMappedRingBuffer.TryCalculateRequiredSize(aCapacity: UInt64; aElementSize: UInt32;
+  out aRequiredSize: UInt64): Boolean;
+var
+  LSeqBytes: UInt64;
+  LDataBytes: UInt64;
+  LTotal: UInt64;
+begin
+  aRequiredSize := 0;
+  if (aCapacity = 0) or (aElementSize = 0) then
+    Exit(False);
+
+  if (aCapacity and (aCapacity - 1)) <> 0 then
+  begin
+    if aCapacity > (UInt64(1) shl 63) then
+      Exit(False);
+    aCapacity := NextPow2U64(aCapacity);
+    if aCapacity = 0 then
+      Exit(False);
+  end;
+
+  if not TryMulU64(aCapacity, SizeOf(Int64), LSeqBytes) then
+    Exit(False);
+  if not TryMulU64(aCapacity, aElementSize, LDataBytes) then
+    Exit(False);
+  if not TryAddU64(HEADER_SIZE, LSeqBytes, LTotal) then
+    Exit(False);
+  if not TryAddU64(LTotal, LDataBytes, LTotal) then
+    Exit(False);
+  if not TryAddU64(LTotal, LSeqBytes, LTotal) then
+    Exit(False);
+  if not TryAddU64(LTotal, LDataBytes, LTotal) then
+    Exit(False);
+  if not TryAddU64(LTotal, CACHE_LINE_SIZE - 1, LTotal) then
+    Exit(False);
+
+  aRequiredSize := (LTotal div CACHE_LINE_SIZE) * CACHE_LINE_SIZE;
+  Result := True;
+end;
+
 function TMappedRingBuffer.CalculateRequiredSize(aCapacity: UInt64; aElementSize: UInt32): UInt64;
 begin
-  // 头部 + 数据缓冲区（对齐到缓存行）
-  // 强制容量为2的幂
-  if (aCapacity and (aCapacity - 1)) <> 0 then
-    aCapacity := NextPow2U64(aCapacity);
-  // 头 + 两套序号数组 + 两套数据区（双向）
-  Result := HEADER_SIZE
-          + (aCapacity * SizeOf(Int64)) + (aCapacity * aElementSize) // AB
-          + (aCapacity * SizeOf(Int64)) + (aCapacity * aElementSize); // BA
-  // 对齐到缓存行
-  Result := ((Result + CACHE_LINE_SIZE - 1) div CACHE_LINE_SIZE) * CACHE_LINE_SIZE;
+  if not TryCalculateRequiredSize(aCapacity, aElementSize, Result) then
+    Result := 0;
 end;
 
 procedure TMappedRingBuffer.InitializeHeader(aCapacity: UInt64; aElementSize: UInt32);
@@ -420,7 +474,8 @@ begin
 
   if (aCapacity = 0) or (aElementSize = 0) then Exit;
 
-  LRequiredSize := CalculateRequiredSize(aCapacity, aElementSize);
+  if not TryCalculateRequiredSize(aCapacity, aElementSize, LRequiredSize) then
+    Exit;
 
   // 根据模式确定访问权限
   case aMode of
@@ -527,7 +582,8 @@ begin
 
   if (aCapacity = 0) or (aElementSize = 0) then Exit;
 
-  LRequiredSize := CalculateRequiredSize(aCapacity, aElementSize);
+  if not TryCalculateRequiredSize(aCapacity, aElementSize, LRequiredSize) then
+    Exit;
 
   case aMode of
     mrbProducer: LAccess := mmaWrite;

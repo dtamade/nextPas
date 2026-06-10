@@ -91,10 +91,31 @@ begin
   end;
 end;
 
+procedure TestCreateFileRejectsLayoutOverflow;
+var
+  LPath: string;
+  LBuffer: TMappedRingBuffer;
+begin
+  LPath := TempMappedRingPath;
+  DeleteFile(LPath);
+
+  LBuffer := TMappedRingBuffer.Create;
+  try
+    Check(not LBuffer.CreateFile(LPath, UInt64(1) shl 63, SizeOf(UInt64)),
+      'CreateFile should reject layout overflow before creating a backing file');
+    Check(not LBuffer.IsValid, 'layout overflow must not leave a valid ring buffer');
+    Check(not FileExists(LPath), 'layout overflow must not create backing file');
+  finally
+    LBuffer.Free;
+    DeleteFile(LPath);
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.mapped_ring_buffer');
   T.Run('file-backed create and open', @TestFileBackedCreateAndOpen);
   T.Run('CreateFile reopens existing file', @TestCreateFileReopensExisting);
   T.Run('OpenFile rejects missing file', @TestOpenFileRejectsMissingBackingFile);
+  T.Run('CreateFile rejects layout overflow', @TestCreateFileRejectsLayoutOverflow);
   T.Summary;
 end.
