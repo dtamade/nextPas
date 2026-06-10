@@ -40,6 +40,20 @@ begin
   Result := True;
 end;
 
+procedure ExpectConvertError(const AProc: TProcedure; const AMessage: string);
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    AProc;
+  except
+    on E: EConvertError do
+      LRaised := True;
+  end;
+  Check(LRaised, AMessage);
+end;
+
 { ===== Base64 RFC 4648 Test Vectors ===== }
 
 procedure TestBase64RFC4648Empty;
