@@ -279,6 +279,49 @@ begin
   end;
 end;
 
+procedure TestIniContentSourceErrors;
+var
+  LExisting: IConfig;
+  LCfg: IConfig;
+  LError: string;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    ConfigBuilder
+      .AddIni('host=valid-host' + #10)
+      .AddIni('  [broken' + #10)
+      .Build;
+  except
+    on E: EConfigError do
+    begin
+      LRaised := True;
+      Check(Pos('config ini parse error', E.Message) > 0,
+        'AddIni Build error names INI parser context');
+      Check(Pos('line 1', E.Message) > 0,
+        'AddIni Build error includes INI line context');
+    end;
+  end;
+  CheckEqual(True, LRaised, 'AddIni Build raises on malformed content source');
+
+  LExisting := ConfigBuilder.AddJson('{"host":"existing-host"}').Build;
+  LCfg := LExisting;
+  LError := 'stale';
+  CheckEqual(False,
+    ConfigBuilder
+      .AddIni('host=valid-host' + #10)
+      .AddIni('  [broken' + #10)
+      .TryBuild(LCfg, LError),
+    'AddIni TryBuild rejects malformed content source');
+  Check(LCfg = nil, 'AddIni TryBuild clears preexisting output config');
+  Check(Pos('config ini parse error', LError) > 0,
+    'AddIni TryBuild error names INI parser context');
+  Check(Pos('line 1', LError) > 0,
+    'AddIni TryBuild error includes INI line context');
+  CheckEqual('existing-host', LExisting.GetString('host'),
+    'separate existing reference stays valid after AddIni failure');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.config.phase3');
   T.Run('Build.ReadSurface', @TestBuildReturnsReadableIConfig);
@@ -290,5 +333,6 @@ begin
   T.Run('Builder.RequireAndTryBuild', @TestRequireKeysAndTryBuildFailure);
   T.Run('FileSources.AndConfigLoad', @TestFileSourcesAndConfigLoad);
   T.Run('FileSources.Errors', @TestFileSourceErrorsIncludePathAndParserDetail);
+  T.Run('IniContentSource.Errors', @TestIniContentSourceErrors);
   T.Summary;
 end.
