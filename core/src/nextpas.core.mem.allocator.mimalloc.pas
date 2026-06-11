@@ -219,7 +219,7 @@ begin
   // - AllocMem uses mi_calloc => zero initialized; GetMem not guaranteed
   // - SupportsAligned remains False here (use aligned bridge or module)
   // - HasMemSize is true only when the optional usable-size symbol is present
-  Result.ZeroInitialized := True;
+  Result.ZeroInitialized := False; // mi_malloc 不保证零初始化，只有 mi_calloc 才清零
   Result.SupportsAligned := False;
   Result.HasMemSize      := MimallocUsableSizeAvailable;
 end;

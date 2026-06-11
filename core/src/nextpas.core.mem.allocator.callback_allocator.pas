@@ -5,9 +5,7 @@ unit nextpas.core.mem.allocator.callback_allocator;
 interface
 
 uses
-  {$IFDEF NEXTPAS_CORE_CONTRACTS}
   nextpas.core.base,
-  {$ENDIF}
   nextpas.core.mem.allocator.base;
 
 type
@@ -47,11 +45,7 @@ constructor TCallbackAllocator.Init(aGetMem: TGetMemCallback; aAllocMem: TAllocM
 begin
   inherited Create;
   if (aGetMem = nil) or (aAllocMem = nil) or (aReallocMem = nil) or (aFreeMem = nil) then
-  begin
-    {$IFDEF NEXTPAS_CORE_CONTRACTS}
-    raise EArgumentNil.Create('TCallbackAllocator.Create: aGetMem, aAllocMem, aReallocMem, aFreeMem cannot be nil.');
-    {$ENDIF}
-  end;
+    raise EArgumentNil.Create('TCallbackAllocator.Create: callbacks cannot be nil.');
   FGetMemCallback     := aGetMem;
   FAllocMemCallback   := aAllocMem;
   FReallocMemCallback := aReallocMem;
