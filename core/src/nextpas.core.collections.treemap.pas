@@ -859,8 +859,9 @@ var
   LEntry: TMapEntryType;
   LCompareHigh: SizeInt;
 begin
-  Result := True;
+  Result := False;
   if FRoot = @FSentinel then Exit;
+  if FCompareMethod(aLow, aHigh, nil) > 0 then Exit;
 
   { 找到范围内的第一个节点 }
   LStartNode := GetLowerBoundNode(aLow);
@@ -879,6 +880,7 @@ begin
     LEntry.Key := LCurrent^.Key;
     LEntry.Value := LCurrent^.Value;
     aCallback(LEntry, nil);
+    Result := True;
 
     { 移动到下一个节点（中序遍历的后继）}
     LCurrent := GetSuccessor(LCurrent);

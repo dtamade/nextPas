@@ -5,14 +5,23 @@ program test_treemap;
 uses
   SysUtils,
   nextpas.core.testing,
+  nextpas.core.collections.base,
   nextpas.core.collections.treemap;
 
 type
   TIntTreeMap = specialize TTreeMap<Integer, Integer>;
 
+var
+  GRangeCallbackCalls: SizeUInt;
+
 function CompareInt(const A, B: Integer; aData: Pointer): SizeInt;
 begin
   Result := SizeInt(A) - SizeInt(B);
+end;
+
+procedure CountRangeEntry(const aEntry: specialize TMapEntry<Integer, Integer>; aData: Pointer);
+begin
+  Inc(GRangeCallbackCalls);
 end;
 
 var
@@ -70,6 +79,39 @@ begin
   finally LM.Free; end;
 end;
 
+procedure TestGetRangeReturnsFalseWhenNoEntries;
+var
+  LM: TIntTreeMap;
+begin
+  LM := TIntTreeMap.Create(nil, @CompareInt);
+  try
+    LM.Put(10, 100);
+    LM.Put(20, 200);
+    GRangeCallbackCalls := 0;
+    Check(not LM.GetRange(30, 40, @CountRangeEntry), 'empty range should return false');
+    CheckEqual(Int64(0), Int64(GRangeCallbackCalls), 'empty range should not call callback');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestGetRangeLowGreaterThanHighDoesNotCallCallback;
+var
+  LM: TIntTreeMap;
+begin
+  LM := TIntTreeMap.Create(nil, @CompareInt);
+  try
+    LM.Put(10, 100);
+    LM.Put(20, 200);
+    LM.Put(30, 300);
+    GRangeCallbackCalls := 0;
+    Check(not LM.GetRange(30, 20, @CountRangeEntry), 'inverted range should return false');
+    CheckEqual(Int64(0), Int64(GRangeCallbackCalls), 'inverted range should not call callback');
+  finally
+    LM.Free;
+  end;
+end;
+
 procedure TestGrow;
 var LM: TIntTreeMap; i, v: Integer; ok: Boolean;
 begin
@@ -103,6 +145,8 @@ begin
   T.Run('Update', @TestUpdate);
   T.Run('Remove', @TestRemove);
   T.Run('Ordered ops (LowerBound/UpperBound)', @TestOrderedOps);
+  T.Run('GetRange returns false when no entries', @TestGetRangeReturnsFalseWhenNoEntries);
+  T.Run('GetRange low greater than high does not call callback', @TestGetRangeLowGreaterThanHighDoesNotCallCallback);
   T.Run('Grow (1000)', @TestGrow);
   T.Run('Clear', @TestClear);
   T.Summary;

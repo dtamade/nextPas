@@ -226,6 +226,24 @@ begin
   finally M.Free; end;
 end;
 
+procedure TestRankInternalSeparatorKey;
+var
+  M: TIntBTree;
+  I, K, V: Integer;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    for I := 0 to 31 do
+      M.Put(I, I * 10);
+
+    Check(M.Select(15, K, V), 'select separator rank');
+    CheckEqual(Int64(15), Int64(K), 'select separator key');
+    CheckEqual(Int64(15), Int64(M.Rank(15)), 'rank internal separator key');
+  finally
+    M.Free;
+  end;
+end;
+
 procedure TestEnumerator;
 var M: TIntBTree; E: TIntBTree.TEntry; i, prev, count: Integer; sorted: Boolean;
 begin
@@ -260,6 +278,7 @@ begin
   T.Run('Range', @TestRange);
   T.Run('Floor', @TestFloor);
   T.Run('Rank', @TestRank);
+  T.Run('Rank internal separator key', @TestRankInternalSeparatorKey);
   T.Run('Enumerator (for-in)', @TestEnumerator);
   T.Summary;
 end.

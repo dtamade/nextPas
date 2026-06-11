@@ -836,8 +836,11 @@ begin
     if SearchNode(LNode, AKey, LIdx) then
     begin
       if not LNode^.IsLeaf then
+      begin
         for i := 0 to LIdx - 1 do
           Result := Result + LNode^.Children[i]^.Size;
+        Result := Result + LNode^.Children[LIdx]^.Size;
+      end;
       Result := Result + SizeUInt(LIdx);
       Exit;
     end;
