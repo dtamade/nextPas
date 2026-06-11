@@ -401,8 +401,6 @@ begin
     'out-param-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(CompareConcatOwnedArgumentSource,
     'compare-concat-owned-string-temp-consumer-must-fail-closed');
-  RequireAnalyzeDeferredError(CompareBothOwnedArgumentSource,
-    'compare-both-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(VirtualOwnedArgumentSource,
     'virtual-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(InterfaceOwnedArgumentSource,
@@ -659,6 +657,7 @@ var
   Model: TSemanticModel;
   Node: TTypedHirNode;
   OwnedIndex, CompareIndex, ReleaseIndex: LongInt;
+  MakeAIndex, MakeBIndex, ReleaseAIndex, ReleaseBIndex: LongInt;
 begin
   Model := BuildModel(CompareOwnedArgumentSource);
   try
@@ -738,6 +737,45 @@ begin
     if not FindFirstNodeByKindAndDisplayName(Model,
       'string-temp-release-runtime', 'MakeText', Node) then
       Fail('missing-compare-not-equal-string-temp-release-runtime');
+  finally
+    Model.Free;
+  end;
+
+  Model := BuildModel(CompareBothOwnedArgumentSource);
+  try
+    if Model = nil then
+      Fail('compare-both-owned-argument-model-nil');
+    MakeAIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeA');
+    MakeBIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeB');
+    CompareIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'cond-br-runtime', 'if');
+    ReleaseAIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeA');
+    ReleaseBIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeB');
+    if (MakeAIndex < 0) or (MakeBIndex < 0) or (CompareIndex < 0) or
+      (ReleaseAIndex < 0) or (ReleaseBIndex < 0) then
+      Fail('missing-compare-both-string-temp-order-node');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'cond-br-runtime', 'if', Node) then
+      Fail('missing-compare-both-cond-br-runtime');
+    if Pos('strcmp eq', Node.Operand) = 0 then
+      Fail('missing-compare-both-string-strcmp-runtime');
+    if (Pos('strvar $str_cmp_tmp_', Node.Operand) = 0) or
+      (Pos('strvar $str_cmp_tmp_', Copy(Node.Operand,
+        Pos('strvar $str_cmp_tmp_', Node.Operand) + 1,
+        Length(Node.Operand))) = 0) then
+      Fail('missing-compare-both-string-temp-operands-runtime');
+    if MakeAIndex >= MakeBIndex then
+      Fail('compare-both-temp-creation-must-follow-left-to-right-order');
+    if MakeBIndex >= CompareIndex then
+      Fail('compare-both-temp-owned-must-precede-compare');
+    if CompareIndex >= ReleaseBIndex then
+      Fail('compare-both-temp-release-must-follow-compare');
+    if ReleaseBIndex >= ReleaseAIndex then
+      Fail('compare-both-temp-release-order-must-be-reverse-creation');
   finally
     Model.Free;
   end;

@@ -182,6 +182,21 @@ const
     '  Halt(45);' + LineEnding +
     'end.';
 
+  CompareBothOwnedArgumentSource =
+    'program c6h11_compare_both_string_arg_runtime;' + LineEnding +
+    'function MakeA: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeA := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'function MakeB: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeB := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  if MakeA() = MakeB() then Halt(42);' + LineEnding +
+    '  Halt(47);' + LineEnding +
+    'end.';
+
 procedure Fail(const AMessage: string);
 begin
   WriteLn('hir-string-call-argument-ownership-runtime-smoke-failure=', AMessage);
@@ -454,6 +469,27 @@ begin
     Fail('compare-owned-string-temp-release-order-runtime');
 end;
 
+procedure AssertCompareBothOwnedRuntimeContract(const ALlvmText: string);
+var
+  MakeAPos, MakeBPos, ComparePos, ReleaseBPos, ReleaseAPos: LongInt;
+begin
+  MakeAPos := Pos(' = call {ptr, i64, ptr, i64} @MakeA(', ALlvmText);
+  MakeBPos := Pos(' = call {ptr, i64, ptr, i64} @MakeB(', ALlvmText);
+  ComparePos := Pos(' = call i64 @np_str_cmp(', ALlvmText);
+  if (MakeAPos = 0) or (MakeBPos = 0) or (ComparePos = 0) then
+    Fail('missing-compare-both-owned-string-runtime');
+  ReleaseBPos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ComparePos + 1);
+  ReleaseAPos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ReleaseBPos + 1);
+  if (ReleaseBPos = 0) or (ReleaseAPos = 0) then
+    Fail('missing-compare-both-owned-string-release-runtime');
+  if (MakeAPos >= MakeBPos) or (MakeBPos >= ComparePos) then
+    Fail('compare-both-owned-string-temp-creation-order-runtime');
+  if ReleaseBPos >= ReleaseAPos then
+    Fail('compare-both-owned-string-temp-release-order-runtime');
+end;
+
 procedure RunRuntimeSmoke(const AOutputDir, AStem: string);
 var
   LlPath: string;
@@ -499,6 +535,8 @@ begin
     AssertConcatBothOwnedRuntimeContract(LlvmText)
   else if AAssertKind = 'compare' then
     AssertCompareOwnedRuntimeContract(LlvmText)
+  else if AAssertKind = 'compare-both' then
+    AssertCompareBothOwnedRuntimeContract(LlvmText)
   else
     Fail('unknown-assert-kind:' + AAssertKind);
 
@@ -541,5 +579,7 @@ begin
     CompareNotEqualOwnedArgumentSource, 'compare');
   EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_compare_runtime_var',
     CompareRuntimeVarOwnedArgumentSource, 'compare');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_compare_both',
+    CompareBothOwnedArgumentSource, 'compare-both');
   WriteLn('hir-string-call-argument-ownership-runtime-smoke-status=pass');
 end.

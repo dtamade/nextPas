@@ -411,3 +411,13 @@
   `llvm_string_arg_owned_compare_not_equal` /
   `llvm_string_arg_owned_compare_runtime_var` 均通过 LLVM verify/llc/link/run，
   exit 42；`build/verify_local.sh` 已纳入新增 compare runtime smoke 输出。
+- 2026-06-12 C6-H11：owned string return 的双 direct compare operand 第一刀：
+  `if MakeA() = MakeB() then ...` 现在从 fail-closed 推进为两个 owned temp ->
+  `cond-br-runtime` string compare -> 双 temp 逆序 release。sema 仍只在 `if`
+  条件的 direct `=` / `<>` 字符串比较中放行 zero-arg direct root owned
+  string-return operand；compare concat、复合布尔、循环条件、field store、
+  var/out、virtual/interface/external 等 consumer 继续 fail-closed。RED=
+  `test_hir_string_call_argument_ownership_runtime_smoke` 失败
+  `sema.c6h4-owned-string-return-deferred-consumer`；GREEN 后
+  `llvm_string_arg_owned_compare_both` 通过 LLVM verify/llc/link/run，exit 42；
+  `build/verify_local.sh` 已纳入 compare-both runtime smoke 输出。

@@ -1288,7 +1288,6 @@ function TSemanticAnalyzer.CompareExpressionConsumesOwnedStringReturnDeferred(
   const ANode: TGreenNode): Boolean;
 var
   I: LongInt;
-  SourceName: string;
 begin
   Result := False;
   if ANode = nil then
@@ -1302,11 +1301,8 @@ begin
         Exit(True);
     Exit(False);
   end;
-  if IsSupportedOwnedStringReturnCompareOperand(ANode.ChildAt(0), SourceName) and
-    CanEmitStrCompareOperand(ANode.ChildAt(1), False) then
-    Exit(False);
-  if IsSupportedOwnedStringReturnCompareOperand(ANode.ChildAt(1), SourceName) and
-    CanEmitStrCompareOperand(ANode.ChildAt(0), False) then
+  if CanEmitStrCompareOperand(ANode.ChildAt(0), True) and
+    CanEmitStrCompareOperand(ANode.ChildAt(1), True) then
     Exit(False);
   Result := NodeConsumesOwnedStringReturnDeferred(ANode, False);
 end;
