@@ -300,6 +300,37 @@ begin
   finally M.Free; end;
 end;
 
+function HashModuloTen(const A: Integer): UInt32;
+begin
+  Result := UInt32(A mod 10);
+end;
+
+function EqualModuloTen(const A, B: Integer): Boolean;
+begin
+  Result := (A mod 10) = (B mod 10);
+end;
+
+procedure TestCustomCallbacksForwardedToSegments;
+var
+  M: TIntConcMap;
+  v: Integer;
+begin
+  M := TIntConcMap.Create(@HashModuloTen, @EqualModuloTen);
+  try
+    M.Put(1, 10);
+    M.Put(11, 110);
+    CheckEqual(Int64(1), Int64(M.Count), 'equivalent keys share one slot');
+    Check(M.TryGetValue(21, v), 'lookup with equivalent key');
+    CheckEqual(Int64(110), Int64(v), 'equivalent key sees updated value');
+    Check(not M.PutIfAbsent(31, 310), 'put-if-absent rejects equivalent key');
+    Check(M.Replace(41, 410), 'replace equivalent key');
+    Check(M.TryGetValue(51, v), 'lookup after equivalent replace');
+    CheckEqual(Int64(410), Int64(v), 'equivalent replace value');
+    Check(M.Remove(61), 'remove equivalent key');
+    CheckEqual(Int64(0), Int64(M.Count), 'count after equivalent remove');
+  finally M.Free; end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.concurrent.hashmap');
   T.Run('Put/Get', @TestPutGet);
@@ -312,6 +343,7 @@ begin
   T.Run('IsEmpty', @TestIsEmpty);
   T.Run('Keys', @TestKeys);
   T.Run('Default hash (nil)', @TestDefaultHash);
+  T.Run('Custom callbacks forwarded to segments', @TestCustomCallbacksForwardedToSegments);
   T.Run('Clear', @TestClear);
   T.Run('String key', @TestStringKey);
   T.Run('Multi-thread stress (4W+4R)', @TestMultiThreadStress);

@@ -118,7 +118,7 @@ begin
   for i := 0 to CONCURRENT_SEGMENT_COUNT - 1 do
   begin
     FSegmentLocks[i] := TRWLock.Create;
-    FSegments[i] := TSegmentTable.Create(AInitialCapacityPerSegment);
+    FSegments[i] := TSegmentTable.Create(AInitialCapacityPerSegment, AHash, AEquals);
   end;
 end;
 
