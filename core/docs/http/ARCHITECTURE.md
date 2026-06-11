@@ -3,13 +3,15 @@
 ## 概述
 
 HTTP 模块是 L3 框架层的核心模块，提供 HTTP 服务器和客户端能力。
-采用统一门面 + 协议实现隔离的架构。当前内建实现为 HTTP/1.1；
-H2/H3 仅保留版本枚举、registry / transport seam 与规划，不声明内建
-H2/H3 protocol implementation。
+采用统一门面 + 协议实现隔离的架构。当前内建 transport 实现为 HTTP/1.1；
+H2 已开始落内部 codec foundation（HPACK Huffman 表/编码/解码），但还没有
+内建 H2 transport/session。H3 仍只保留版本枚举、registry / transport seam 与规划。
+这些内部基础不声明内建 H2/H3 protocol implementation。
 
-消费方只需 `uses nextpas.core.http` 即可获得当前 H1 能力；默认版本解析对应用层透明，但 H2/H3 仍处于规划阶段。
+消费方只需 `uses nextpas.core.http` 即可获得当前 H1 能力；默认版本解析对应用层透明。
+H2/H3 对消费方仍处于未开放阶段。
 
-## 当前落地状态（2026-06-04）
+## 当前落地状态（2026-06-12）
 
 - `nextpas.core.http.impl.h1.pas` 已落地，作为默认 H1 transport owner。
 - `nextpas.core.http.impl.registry.pas` 已落地，统一负责默认版本到 transport factory 的解析。
@@ -18,7 +20,8 @@ H2/H3 protocol implementation。
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，默认 client/server 版本都为 `hvHttp11`。
-- 当前真实源码库存为 25 个 HTTP 单元，测试工程为 23 个；H2/H3 仍未进入实现。
+- 当前真实源码库存为 27 个 HTTP 单元，测试工程为 24 个；其中 H2 只有
+  HPACK Huffman 内部基础单元和 focused 测试，H2 transport/session 与 H3 仍未进入可用实现。
 
 HTTP server runtime 的权威方向已经固定在
 [docs/net/ARCHITECTURE.md](/home/dtamade/projects/nextPas/core/docs/net/ARCHITECTURE.md:1)：
@@ -173,9 +176,14 @@ src/
   nextpas.core.http.impl.h1.outbound.pas ← H1 internal outbound queue/drain helper
   nextpas.core.http.impl.h1.writer.pas   ← H1 响应序列化
   nextpas.core.http.impl.h1.chunked.pas  ← chunked writer/helper
+
+  { HTTP/2 内部 codec foundation（不等于 H2 transport/session 已可用） }
+  nextpas.core.http.impl.h2.hpack.table.pas   ← HPACK static/Huffman 表
+  nextpas.core.http.impl.h2.hpack.huffman.pas ← HPACK Huffman encode/decode
 ```
 
-H2/H3 相关单元目前仍是架构规划，不属于当前源码库存。
+H2/H3 public transport 仍是架构规划；当前 H2 源码只覆盖 HPACK Huffman
+内部基础，不对外声明 H2 可用。
 
 ---
 

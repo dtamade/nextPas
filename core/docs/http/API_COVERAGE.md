@@ -1,6 +1,6 @@
 # nextpas.core.http API Coverage Matrix
 
-最近更新：2026-06-09
+最近更新：2026-06-12
 
 这份矩阵只记录公开 API 的覆盖状态，不替代测试输出。状态含义：
 
@@ -20,8 +20,9 @@
     helper 已有 focused coverage；没有 range、streaming static file、WebSocket
     extension negotiation 等稳定 contract 前，不扩大成独立 builder 或 service
     family。
-  - 已够稳：H2/H3 只保留 registry / transport seam 和规划文档。不创建伪 H2/H3
-    public API，不用空实现制造“支持”假象。
+  - 已够稳：H2/H3 public surface 仍只保留 registry / transport seam 和规划文档。
+    当前 H2 只有内部 HPACK Huffman codec foundation 和 focused proof；不创建伪
+    H2/H3 public API，不用空实现制造“支持”假象。
   - 继续补齐：landed internal registry 现在也有 future-version positive proof。
     `test_http_registry` 直接锁住“调用方可注册 custom `hvHttp2` client transport /
     custom `hvHttp3` server transport，并把它们设为 default version 供 concrete
