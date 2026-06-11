@@ -145,6 +145,41 @@ begin
   end;
 end;
 
+procedure TestSlabAlignedFallbackRejectsBackingSizeOverflow;
+var
+  LAllocator: TFixedSlabRecordingAllocator;
+  LAllocatorRef: IAllocator;
+  LPool: TSlabPool;
+  LPtr: Pointer;
+  LGetCallsBefore: Integer;
+  LStats: TSlabPoolStats;
+begin
+  LAllocator := TFixedSlabRecordingAllocator.Create;
+  LAllocatorRef := LAllocator as IAllocator;
+  LPool := TSlabPool.Create(4096, LAllocatorRef);
+  try
+    LGetCallsBefore := LAllocator.GetCalls;
+    LPtr := LPool.AllocAligned(High(SizeUInt), 256);
+    try
+      Check(LPtr = nil, 'overflowing aligned fallback request should fail closed');
+      CheckEqual(Int64(LGetCallsBefore), Int64(LAllocator.GetCalls),
+        'overflowing aligned fallback request must not call backing allocator');
+      LStats := LPool.Stats;
+      CheckEqual(Int64(0), Int64(LStats.FallbackAllocCount),
+        'overflowing aligned fallback request must not be tracked');
+      CheckEqual(Int64(0), Int64(LStats.FallbackBytes),
+        'overflowing aligned fallback request must not change fallback bytes');
+    finally
+      if LPtr <> nil then
+        LPool.FreeAligned(LPtr);
+    end;
+  finally
+    LPool.Free;
+    LAllocatorRef := nil;
+    LAllocator := nil;
+  end;
+end;
+
 procedure TestFixedSlabCreateRejectsCapacityOverflow;
 var
   LAllocator: TFixedSlabRecordingAllocator;
@@ -183,6 +218,7 @@ begin
   T.Run('create stats and traits', @TestCreateStatsAndTraits);
   T.Run('alloc free and perf counters', @TestAllocFreeAndPerfCounters);
   T.Run('aligned fallback tracking', @TestAllocAlignedFallsBackAndTracksStats);
+  T.Run('aligned fallback rejects backing size overflow', @TestSlabAlignedFallbackRejectsBackingSizeOverflow);
   T.Run('fixed slab rejects capacity overflow', @TestFixedSlabCreateRejectsCapacityOverflow);
   T.Summary;
 end.

@@ -643,6 +643,8 @@ begin
     raise EInvalidArgument.Create('TSlabPool.AllocFallback: aAlignment must be power of two and >= pointer size');
 
   // over-allocate for alignment; raw pointer is tracked out-of-band
+  if aSize > High(SizeUInt) - (LAlign - 1) then
+    Exit(nil);
   LNeeded := aSize + (LAlign - 1);
   LRaw := FAllocator.GetMem(LNeeded);
   if LRaw = nil then Exit(nil);
