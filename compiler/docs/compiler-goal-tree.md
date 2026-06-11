@@ -421,3 +421,14 @@
   `sema.c6h4-owned-string-return-deferred-consumer`；GREEN 后
   `llvm_string_arg_owned_compare_both` 通过 LLVM verify/llc/link/run，exit 42；
   `build/verify_local.sh` 已纳入 compare-both runtime smoke 输出。
+- 2026-06-12 C6-H12：owned string return 的 compare concat consumer 第一刀：
+  `if MakeText() + 'y' = 'xy' then ...` 现在从 fail-closed 推进为 producer
+  owned temp -> compare concat owned temp -> `cond-br-runtime` string compare ->
+  concat temp 与 producer temp 逆序 release。sema 只在 direct `if` 字符串 `=` / `<>`
+  比较中放行包含 supported owned string-return operand 的 concat tree；普通 field
+  store、var/out、virtual/interface/external、复合布尔和循环条件继续 fail-closed。
+  RED=`test_hir_string_call_argument_ownership_contract` 失败
+  `missing-compare-concat-temp-order-node`，runtime smoke 失败
+  `sema.c6h4-owned-string-return-deferred-consumer`；GREEN 后
+  `llvm_string_arg_owned_compare_concat` 通过 LLVM verify/llc/link/run，exit 42；
+  `build/verify_local.sh` 已纳入 compare-concat runtime smoke 输出。

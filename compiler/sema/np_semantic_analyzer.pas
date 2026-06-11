@@ -172,6 +172,9 @@ type
     function LookupRecordVar(const AName: string): string;
     function LookupPointerVar(const AName: string): string;
     function LookupPtrReturnFunc(const AName: string): string;
+    function ConcatTreeHasSupportedOwnedStringReturn(
+      const ANode: TGreenNode): Boolean;
+    function CanEmitStrConcatOperand(const ANode: TGreenNode): Boolean;
     function EmitStrConcatOperand(const ANode: TGreenNode;
       const ADestVar: string): string;
     function CanEmitStrCompareOperand(const ANode: TGreenNode;
@@ -2042,6 +2045,50 @@ begin
   Result := TempName;
 end;
 
+function TSemanticAnalyzer.ConcatTreeHasSupportedOwnedStringReturn(
+  const ANode: TGreenNode): Boolean;
+var
+  Dummy: string;
+begin
+  Result := False;
+  if ANode = nil then
+    Exit;
+  if IsSupportedOwnedStringReturnConcatOperand(ANode, Dummy) then
+    Exit(True);
+  if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') and
+    (ANode.ChildCount >= 2) then
+    Exit(ConcatTreeHasSupportedOwnedStringReturn(ANode.ChildAt(0)) or
+      ConcatTreeHasSupportedOwnedStringReturn(ANode.ChildAt(1)));
+end;
+
+function TSemanticAnalyzer.CanEmitStrConcatOperand(
+  const ANode: TGreenNode): Boolean;
+var
+  Dummy: string;
+begin
+  Result := False;
+  if ANode = nil then
+    Exit;
+  if (ANode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ANode.Text) then
+    Exit(True);
+  if (ANode.NodeKind = gnkIdentifier) and (FCurrentMethodClass <> '') and
+    TypeMetaFieldIsStr(FCurrentMethodClass, ANode.Text) then
+    Exit(True);
+  if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') and
+    (ANode.ChildCount >= 2) then
+    Exit(CanEmitStrConcatOperand(ANode.ChildAt(0)) and
+      CanEmitStrConcatOperand(ANode.ChildAt(1)));
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and SameText(ANode.ChildAt(0).Text,
+    'IntToStr') and EncodeRuntimeIntExprFold(ANode.ChildAt(1), Dummy) then
+    Exit(True);
+  if IsSupportedOwnedStringReturnConcatOperand(ANode, Dummy) then
+    Exit(True);
+  if ANode.NodeKind = gnkStringLiteral then
+    Exit(True);
+  Result := EvaluateStringConstant(ANode, Dummy);
+end;
+
 function TSemanticAnalyzer.CanEmitStrCompareOperand(const ANode: TGreenNode;
   const AAllowOwnedStringReturn: Boolean): Boolean;
 var
@@ -2054,6 +2101,10 @@ begin
     Exit(True);
   if ANode.NodeKind = gnkStringLiteral then
     Exit(True);
+  if AAllowOwnedStringReturn and (ANode.NodeKind = gnkBinaryExpression) and
+    (ANode.Text = '+') and ConcatTreeHasSupportedOwnedStringReturn(ANode) and
+    CanEmitStrConcatOperand(ANode) then
+    Exit(True);
   if AAllowOwnedStringReturn and
     IsSupportedOwnedStringReturnCompareOperand(ANode, SourceName) then
     Exit(True);
@@ -2062,7 +2113,7 @@ end;
 function TSemanticAnalyzer.EmitStrCompareOperand(const ANode: TGreenNode;
   const AAllowOwnedStringReturn: Boolean; out ABlob: string): Boolean;
 var
-  SourceName, TempName: string;
+  LeftName, RightName, SourceName, TempName: string;
 begin
   ABlob := '';
   Result := False;
@@ -2076,6 +2127,27 @@ begin
   if ANode.NodeKind = gnkStringLiteral then
   begin
     ABlob := 'strlit ' + ANode.Text + #10;
+    Exit(True);
+  end;
+  if AAllowOwnedStringReturn and (ANode.NodeKind = gnkBinaryExpression) and
+    (ANode.Text = '+') and (ANode.ChildCount >= 2) and
+    ConcatTreeHasSupportedOwnedStringReturn(ANode) and
+    CanEmitStrConcatOperand(ANode) then
+  begin
+    LeftName := EmitStrConcatOperand(ANode.ChildAt(0), '');
+    RightName := EmitStrConcatOperand(ANode.ChildAt(1), '');
+    if (LeftName = '') or (RightName = '') then
+      Exit(False);
+    Inc(FBlockLabelCounter);
+    TempName := '$str_cmp_cat_tmp_' + IntToStr(FBlockLabelCounter);
+    RegisterRuntimeVar(TempName);
+    RegisterRuntimeStrVar(TempName);
+    FModel.AddTypedHirNode('var-decl-str-owned-runtime', TempName, 0, 0,
+      TempName);
+    FModel.AddTypedHirNode('assign-str-owned-concat-runtime', TempName, 0, 0,
+      LeftName + #9 + RightName);
+    QueuePendingStringTempRelease(TempName, TempName);
+    ABlob := 'strvar ' + TempName + #10;
     Exit(True);
   end;
   if AAllowOwnedStringReturn and

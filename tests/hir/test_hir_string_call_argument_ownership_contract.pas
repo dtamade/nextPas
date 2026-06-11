@@ -382,6 +382,23 @@ begin
   end;
 end;
 
+function FindNodeIndexByKindAndDisplayNamePrefix(const AModel: TSemanticModel;
+  const AKind, ADisplayNamePrefix: string): LongInt;
+var
+  I: LongInt;
+  Node: TTypedHirNode;
+begin
+  Result := -1;
+  for I := 0 to AModel.TypedHirNodeCount - 1 do
+  begin
+    Node := AModel.TypedHirNodeAt(I);
+    if (Node.Kind = AKind) and
+      SameText(Copy(Node.DisplayName, 1, Length(ADisplayNamePrefix)),
+        ADisplayNamePrefix) then
+      Exit(I);
+  end;
+end;
+
 procedure RequireAnalyzeDeferredError(const ASource, AMessage: string);
 const
   C6H4Code = 'sema.c6h4-owned-string-return-deferred-consumer';
@@ -399,8 +416,6 @@ begin
     'var-param-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(OutParamOwnedArgumentSource,
     'out-param-owned-string-temp-consumer-must-fail-closed');
-  RequireAnalyzeDeferredError(CompareConcatOwnedArgumentSource,
-    'compare-concat-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(VirtualOwnedArgumentSource,
     'virtual-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(InterfaceOwnedArgumentSource,
@@ -658,6 +673,7 @@ var
   Node: TTypedHirNode;
   OwnedIndex, CompareIndex, ReleaseIndex: LongInt;
   MakeAIndex, MakeBIndex, ReleaseAIndex, ReleaseBIndex: LongInt;
+  ConcatIndex, ConcatReleaseIndex: LongInt;
 begin
   Model := BuildModel(CompareOwnedArgumentSource);
   try
@@ -776,6 +792,42 @@ begin
       Fail('compare-both-temp-release-must-follow-compare');
     if ReleaseBIndex >= ReleaseAIndex then
       Fail('compare-both-temp-release-order-must-be-reverse-creation');
+  finally
+    Model.Free;
+  end;
+
+  Model := BuildModel(CompareConcatOwnedArgumentSource);
+  try
+    if Model = nil then
+      Fail('compare-concat-owned-argument-model-nil');
+    OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText');
+    ConcatIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
+      'assign-str-owned-concat-runtime', '$str_cmp_cat_tmp_');
+    CompareIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'cond-br-runtime', 'if');
+    ConcatReleaseIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
+      'string-temp-release-runtime', '$str_cmp_cat_tmp_');
+    ReleaseIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText');
+    if (OwnedIndex < 0) or (ConcatIndex < 0) or (CompareIndex < 0) or
+      (ConcatReleaseIndex < 0) or (ReleaseIndex < 0) then
+      Fail('missing-compare-concat-temp-order-node');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'cond-br-runtime', 'if', Node) then
+      Fail('missing-compare-concat-cond-br-runtime');
+    if Pos('strcmp eq', Node.Operand) = 0 then
+      Fail('missing-compare-concat-string-strcmp-runtime');
+    if Pos('strvar $str_cmp_cat_tmp_', Node.Operand) = 0 then
+      Fail('missing-compare-concat-string-temp-operand-runtime');
+    if OwnedIndex >= ConcatIndex then
+      Fail('compare-concat-source-temp-must-precede-concat');
+    if ConcatIndex >= CompareIndex then
+      Fail('compare-concat-temp-must-precede-compare');
+    if CompareIndex >= ConcatReleaseIndex then
+      Fail('compare-concat-temp-release-must-follow-compare');
+    if ConcatReleaseIndex >= ReleaseIndex then
+      Fail('compare-concat-temp-release-must-precede-source-release');
   finally
     Model.Free;
   end;

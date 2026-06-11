@@ -197,6 +197,17 @@ const
     '  Halt(47);' + LineEnding +
     'end.';
 
+  CompareConcatOwnedArgumentSource =
+    'program c6h12_compare_concat_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  if MakeText() + ''y'' = ''xy'' then Halt(42);' + LineEnding +
+    '  Halt(49);' + LineEnding +
+    'end.';
+
 procedure Fail(const AMessage: string);
 begin
   WriteLn('hir-string-call-argument-ownership-runtime-smoke-failure=', AMessage);
@@ -490,6 +501,30 @@ begin
     Fail('compare-both-owned-string-temp-release-order-runtime');
 end;
 
+procedure AssertCompareConcatOwnedRuntimeContract(const ALlvmText: string);
+var
+  ProducerPos, ConcatPos, ComparePos, ConcatReleasePos, SourceReleasePos: LongInt;
+begin
+  ProducerPos := Pos(' = call {ptr, i64, ptr, i64} @MakeText(', ALlvmText);
+  ConcatPos := Pos(' = call {ptr, i64, ptr, i64} @np_str_concat_owned(',
+    ALlvmText);
+  ComparePos := Pos(' = call i64 @np_str_cmp(', ALlvmText);
+  if (ProducerPos = 0) or (ConcatPos = 0) or (ComparePos = 0) then
+    Fail('missing-compare-concat-owned-string-runtime');
+  ConcatReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ComparePos + 1);
+  SourceReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ConcatReleasePos + 1);
+  if (ConcatReleasePos = 0) or (SourceReleasePos = 0) then
+    Fail('missing-compare-concat-owned-string-release-runtime');
+  if (ProducerPos >= ConcatPos) or (ConcatPos >= ComparePos) then
+    Fail('compare-concat-owned-string-temp-creation-order-runtime');
+  if ComparePos >= ConcatReleasePos then
+    Fail('compare-concat-owned-string-release-must-follow-compare-runtime');
+  if ConcatReleasePos >= SourceReleasePos then
+    Fail('compare-concat-owned-string-release-order-runtime');
+end;
+
 procedure RunRuntimeSmoke(const AOutputDir, AStem: string);
 var
   LlPath: string;
@@ -537,6 +572,8 @@ begin
     AssertCompareOwnedRuntimeContract(LlvmText)
   else if AAssertKind = 'compare-both' then
     AssertCompareBothOwnedRuntimeContract(LlvmText)
+  else if AAssertKind = 'compare-concat' then
+    AssertCompareConcatOwnedRuntimeContract(LlvmText)
   else
     Fail('unknown-assert-kind:' + AAssertKind);
 
@@ -581,5 +618,7 @@ begin
     CompareRuntimeVarOwnedArgumentSource, 'compare');
   EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_compare_both',
     CompareBothOwnedArgumentSource, 'compare-both');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_compare_concat',
+    CompareConcatOwnedArgumentSource, 'compare-concat');
   WriteLn('hir-string-call-argument-ownership-runtime-smoke-status=pass');
 end.
