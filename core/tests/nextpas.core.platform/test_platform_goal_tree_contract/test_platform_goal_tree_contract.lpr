@@ -1,0 +1,146 @@
+program test_platform_goal_tree_contract;
+
+{$I nextpas.core.settings.inc}
+
+uses
+  Classes,
+  SysUtils,
+  nextpas.core.testing;
+
+const
+  GOAL_TREE_PATH_FROM_TEST = '../../../docs/platform/goal-tree.md';
+  GOAL_TREE_PATH_FROM_ROOT = 'core/docs/platform/goal-tree.md';
+  POLLER_GATE_MAKEFILE_FROM_TEST =
+    '../../nextpas.core.platform.io/test_platform_windows_poller_compile_gate/Makefile';
+  POLLER_GATE_MAKEFILE_FROM_ROOT =
+    'core/tests/nextpas.core.platform.io/test_platform_windows_poller_compile_gate/Makefile';
+
+var
+  T: TTestRunner;
+
+function ResolvePath(const APathFromTest, APathFromRoot: string): string;
+begin
+  if FileExists(APathFromTest) then
+    Exit(APathFromTest);
+  if FileExists(APathFromRoot) then
+    Exit(APathFromRoot);
+  Result := APathFromTest;
+end;
+
+function LoadDocText: string;
+var
+  LPath: string;
+  LLines: TStringList;
+begin
+  LPath := ResolvePath(GOAL_TREE_PATH_FROM_TEST, GOAL_TREE_PATH_FROM_ROOT);
+  Check(FileExists(LPath), 'platform goal tree must exist: ' + LPath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(LPath);
+    Result := LowerCase(LLines.Text);
+  finally
+    LLines.Free;
+  end;
+end;
+
+function LoadTextFile(const APathFromTest, APathFromRoot, AMessage: string): string;
+var
+  LPath: string;
+  LLines: TStringList;
+begin
+  LPath := ResolvePath(APathFromTest, APathFromRoot);
+  Check(FileExists(LPath), AMessage + ': ' + LPath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(LPath);
+    Result := LowerCase(LLines.Text);
+  finally
+    LLines.Free;
+  end;
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
+end;
+
+procedure CheckAbsent(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
+end;
+
+procedure TestWindowsStatusDoesNotOverstateRuntimeReadiness;
+var
+  LDoc: string;
+begin
+  LDoc := LoadDocText;
+
+  CheckAbsent(LDoc, '| windows | x86_64           | 代码完成, 无 ci',
+    'Windows Tier 1 status must not overstate runtime readiness');
+  CheckContains(LDoc, 'Windows x86_64',
+    'goal tree must keep a Windows x86_64 status entry');
+  CheckContains(LDoc, 'source-contract',
+    'goal tree must distinguish source-contract proof from runtime proof');
+  CheckContains(LDoc, 'forced Windows compile',
+    'goal tree must name the forced Windows compile boundary');
+  CheckContains(LDoc, 'real-Windows runtime',
+    'goal tree must name the remaining real-Windows runtime gap');
+end;
+
+procedure TestWindowsEvidenceNamesCurrentFocusedGates;
+var
+  LDoc: string;
+begin
+  LDoc := LoadDocText;
+
+  CheckContains(LDoc, 'test_poller_windows_contract',
+    'goal tree must record the IOCP/poller source-contract gate');
+  CheckContains(LDoc, 'test_poller_windows_compile_gate',
+    'goal tree must record the IOCP forced Windows compile gate');
+  CheckContains(LDoc, 'test_platform_windows_poller_compile_gate',
+    'goal tree must record the platform poller forced Windows compile gate');
+  CheckContains(LDoc, 'test_async',
+    'goal tree must record the Linux async consumer gate');
+  CheckContains(LDoc, 'heaptrc',
+    'goal tree must preserve leak-proof expectations for focused runtime gates');
+end;
+
+procedure TestIocpBoundaryIsTruthful;
+var
+  LDoc: string;
+begin
+  LDoc := LoadDocText;
+
+  CheckContains(LDoc, 'IOCP read/write',
+    'goal tree must describe the implemented IOCP operation subset');
+  CheckContains(LDoc, 'unsupported',
+    'goal tree must state that non-read/write IOCP operations remain unsupported');
+  CheckContains(LDoc, 'Windows readiness poller',
+    'goal tree must keep readiness poller status separate from IOCP completion status');
+end;
+
+procedure TestNamedWindowsPollerCompileGateForcesWindowsHost;
+var
+  LMakefile: string;
+begin
+  LMakefile := LoadTextFile(POLLER_GATE_MAKEFILE_FROM_TEST,
+    POLLER_GATE_MAKEFILE_FROM_ROOT,
+    'platform Windows poller compile gate Makefile must exist');
+
+  CheckContains(LMakefile, 'force_windows_flags ?= -dnextpas_force_host_windows',
+    'named Windows poller compile gate must define a force-Windows flag');
+  CheckContains(LMakefile, '$(force_windows_flags)',
+    'named Windows poller compile gate test build must compile the Windows branch');
+end;
+
+begin
+  T := TTestRunner.Create('nextpas.core.platform.goal_tree_contract');
+  T.Run('Windows status does not overstate runtime readiness',
+    @TestWindowsStatusDoesNotOverstateRuntimeReadiness);
+  T.Run('Windows evidence names current focused gates',
+    @TestWindowsEvidenceNamesCurrentFocusedGates);
+  T.Run('IOCP boundary is truthful', @TestIocpBoundaryIsTruthful);
+  T.Run('named Windows poller compile gate forces Windows host',
+    @TestNamedWindowsPollerCompileGateForcesWindowsHost);
+  T.Summary;
+end.
