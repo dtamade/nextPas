@@ -79,16 +79,11 @@ const
   WNOHANG = Int32(1);
   WUNTRACED = Int32(2);
 
-  SIGHUP = Int32(1);
-  SIGINT = Int32(2);
-  SIGKILL = Int32(9);
-  SIGTERM = Int32(15);
-  SIGCHLD = Int32(17);
-  SA_SIGINFO = Int32(4);
-  SA_RESTART = Int32($10000000);
-  SIG_BLOCK = Int32(0);
-  SIG_UNBLOCK = Int32(1);
-  SIG_SETMASK = Int32(2);
+  { Signal numbers and sigprocmask actions are host-specific. Use each
+    platform base unit's signal.inc for those constants. }
+  SIG_DFL = Int32(0);
+  SIG_IGN = Int32(1);
+  SIG_ERR = Int32(-1);
 
   RTLD_LAZY = Int32(1);
   RTLD_NOW = Int32(2);
