@@ -16,7 +16,7 @@ middleware chaining, and a centralized internal transport registry.
 Facade (nextpas.core.http) — single uses entry point
   Application layer: Request, Response, Headers, Router, Middleware
   Internal registry: default version -> transport factory
-  Protocol layer: impl.h1 (landed), impl.h2/impl.h3 (planned)
+  Protocol layer: impl.h1 (landed), impl.h2 codec foundation (started), impl.h2 transport / impl.h3 (planned)
 ```
 
 Current built-in mapping is `hvHttp10` / `hvHttp11` -> H1, with `hvHttp11`

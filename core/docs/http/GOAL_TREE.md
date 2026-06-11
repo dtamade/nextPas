@@ -23,8 +23,8 @@ This lane is in **G2/G3 active hardening**:
 - G1 stable H1 public surface is largely landed: server/client/router/headers/url/message/middleware/static/websocket all exist and already have substantial focused coverage.
 - G2 correctness and lifecycle proof is well advanced: threaded and Linux `epoll` paths have broad raw-wire/server proof, client redirect/body ownership semantics are materially tighter, and examples have runnable smoke coverage.
 - G3 API and performance isolation is still active: client ergonomics keeps closing real gaps, and H1 performance work is now splitting costs into parser, lazy header, writer, outbound, and full-chain layers.
-- H2/H3 remain non-production claims. H2 now has an internal HPACK Huffman
-  foundation slice with focused proof, but no H2 transport/session support is exposed.
+- H2/H3 remain non-production claims. H2 now has internal frame codec and HPACK
+  Huffman foundation slices with focused proof, but no H2 transport/session support is exposed.
 
 ## Map
 
@@ -171,9 +171,10 @@ Rules:
 - Future H2/H3 work must preserve the same public HTTP contract unless there is a clear, documented reason to expand it.
 - Rust or Go feature parity is not a reason to create empty abstractions.
 
-The current H2 foundation proof is HPACK Huffman encoding/decoding against RFC
-7541 Appendix C vectors and full single-byte roundtrips. The next legitimate
-H2/H3 step is codec/seam quality, not pseudo-support.
+The current H2 foundation proof covers RFC 9113 frame header/basic payload
+codec behavior and HPACK Huffman encoding/decoding against RFC 7541 Appendix C
+vectors plus full single-byte roundtrips. The next legitimate H2/H3 step is
+codec/seam quality, not pseudo-support.
 
 ## Static And WebSocket Graduation Criteria
 
@@ -220,7 +221,7 @@ As of 2026-06-07, the best next slices are:
    - keep Rust std-only vs. Hyper/Tokio labeling honest
    - improve reproducibility and workload clarity before headline comparisons
 5. **Protocol seam readiness**
-   - continue H2 codec proof with frame header validation, HPACK integer/string/header-block coverage, and later QPACK/QUIC planning
+   - continue H2 codec proof with HPACK integer/string/header-block coverage, frame-type-specific validation, and later QPACK/QUIC planning
    - improve H2/H3 seam quality only where it reduces future design risk without faking support
 
 ## Immediate Do-Not-Drift Rules
