@@ -652,6 +652,15 @@ for helper in \
   require_token "docs/system/runtime-contracts.md" "$helper"
 done
 for helper in \
+  "@np_alloc" \
+  "@np_free" \
+  "@np_object_alloc" \
+  "@np_allocator_fault"; do
+  require_token "docs/system/runtime-contracts.md" "$helper"
+done
+require_token "docs/system/runtime-contracts.md" "backend-private allocator helpers"
+require_token "docs/system/runtime-contracts.md" "not allocator owner transfer"
+for helper in \
   "np.system.object_free" \
   "np.system.object_free.destroy" \
   "np.system.object_free.cleanup" \
@@ -912,6 +921,12 @@ require_repo_token "tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas"
 require_repo_token "tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas" "define internal void @np_object_dynarray_cleanup_TBase(ptr "
 require_repo_token "tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas" "free-worker-destroy-cleanup-release-order"
 require_repo_token "tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas" "hir-field-dynarray-release-runtime-smoke-status=pass"
+require_repo_file "tests/hir/test_hir_large_alloc_runtime_smoke.pas"
+require_repo_token "tests/hir/test_hir_large_alloc_runtime_smoke.pas" "call ptr @np_alloc(i64 65536)"
+require_repo_token "tests/hir/test_hir_large_alloc_runtime_smoke.pas" "call void @np_free(ptr %payload, i64 65536)"
+require_repo_token "tests/hir/test_hir_large_alloc_runtime_smoke.pas" "call ptr @np_object_alloc(i64 70001)"
+require_repo_token "tests/hir/test_hir_large_alloc_runtime_smoke.pas" "call void @np_object_free_release(ptr %obj)"
+require_repo_token "tests/hir/test_hir_large_alloc_runtime_smoke.pas" "hir-large-alloc-runtime-smoke-status=pass"
 require_repo_file "rtl/core/system/System.pas"
 require_repo_token "rtl/core/system/System.pas" "unit System;"
 require_repo_token "rtl/core/system/System.pas" "TObject = class"
@@ -1033,6 +1048,11 @@ require_token "tests/nextpas.core.system/Makefile" "FIELD_DYNARRAY_RUNTIME_SOURC
 require_token "tests/nextpas.core.system/Makefile" "test_hir_field_dynarray_release_runtime_smoke.pas"
 require_token "tests/nextpas.core.system/Makefile" "FIELD_DYNARRAY_RUNTIME_FPC_FLAGS"
 require_token "tests/nextpas.core.system/Makefile" "FIELD_DYNARRAY_RUNTIME_BINARY"
+require_token "tests/nextpas.core.system/Makefile" "test-large-alloc-runtime-smoke"
+require_token "tests/nextpas.core.system/Makefile" "LARGE_ALLOC_RUNTIME_SOURCE"
+require_token "tests/nextpas.core.system/Makefile" "test_hir_large_alloc_runtime_smoke.pas"
+require_token "tests/nextpas.core.system/Makefile" "LARGE_ALLOC_RUNTIME_FPC_FLAGS"
+require_token "tests/nextpas.core.system/Makefile" "LARGE_ALLOC_RUNTIME_BINARY"
 
 require_token "src/nextpas.core.system.pas" "NEXTPAS_SYSTEM_NAME = 'nextpas.core.system';"
 require_token "src/nextpas.core.system.pas" "MAX_SIZE_INT = nextpas.core.base.MAX_SIZE_INT;"

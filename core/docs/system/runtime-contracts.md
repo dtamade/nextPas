@@ -185,6 +185,17 @@ Rules:
 - The heap manager contract must preserve size/alignment truth needed by mem.
 - Out-of-memory behavior must map to canonical exception/error taxonomy.
 - Any implementation must prove leak-sensitive behavior before it can be treated as Ready.
+- Compiler/HIR may currently project heap ownership through backend-private allocator helpers
+  such as `@np_alloc`, `@np_free`, `@np_object_alloc` and `@np_allocator_fault`.
+  These helper names are LLVM/backend evidence only,
+  not public ABI, not Pascal facade symbols, and not allocator owner transfer
+  away from `nextpas.core.mem`.
+- Object allocation and object release may share heap helpers with direct
+  runtime-managed allocations, but the stable system contract remains
+  `np.system.heap_alloc` / `np.system.heap_free` plus the object-free lifecycle
+  contracts. Allocation headers, large-allocation mapping thresholds,
+  free-list/coalescing policy and allocator fault codes remain implementation
+  details until the mem owner exposes a stable contract.
 
 ## Verification Expectations
 

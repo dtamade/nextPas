@@ -1,4 +1,4 @@
-.PHONY: test test-source-contracts test-facade test-typinfo-minimal test-sysutils-minimal test-process-runtime-contract-seed test-object-free-runtime-contract test-field-dynarray-contract test-field-dynarray-runtime-smoke clean
+.PHONY: test test-source-contracts test-facade test-typinfo-minimal test-sysutils-minimal test-process-runtime-contract-seed test-object-free-runtime-contract test-field-dynarray-contract test-field-dynarray-runtime-smoke test-large-alloc-runtime-smoke clean
 
 ROOT_DIR := $(abspath ../../..)
 PROCESS_RUNTIME_CONTRACT_SEED_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-process-runtime-contract-seed
@@ -17,8 +17,12 @@ FIELD_DYNARRAY_RUNTIME_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-field-dyn
 FIELD_DYNARRAY_RUNTIME_BINARY := $(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)/test_hir_field_dynarray_release_runtime_smoke
 FIELD_DYNARRAY_RUNTIME_SOURCE := $(ROOT_DIR)/tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas
 FIELD_DYNARRAY_RUNTIME_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/diagnostics -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text
+LARGE_ALLOC_RUNTIME_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-large-alloc-runtime-smoke
+LARGE_ALLOC_RUNTIME_BINARY := $(LARGE_ALLOC_RUNTIME_BUILD_DIR)/test_hir_large_alloc_runtime_smoke
+LARGE_ALLOC_RUNTIME_SOURCE := $(ROOT_DIR)/tests/hir/test_hir_large_alloc_runtime_smoke.pas
+LARGE_ALLOC_RUNTIME_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/diagnostics -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text
 
-test: test-source-contracts test-facade test-typinfo-minimal test-sysutils-minimal test-process-runtime-contract-seed test-object-free-runtime-contract test-field-dynarray-contract test-field-dynarray-runtime-smoke
+test: test-source-contracts test-facade test-typinfo-minimal test-sysutils-minimal test-process-runtime-contract-seed test-object-free-runtime-contract test-field-dynarray-contract test-field-dynarray-runtime-smoke test-large-alloc-runtime-smoke
 
 test-source-contracts:
 	$(MAKE) -C test_system_source_contracts test
@@ -56,6 +60,12 @@ test-field-dynarray-runtime-smoke:
 	fpc $(FIELD_DYNARRAY_RUNTIME_FPC_FLAGS) -FE"$(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)" -FU"$(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)" "$(FIELD_DYNARRAY_RUNTIME_SOURCE)"
 	"$(FIELD_DYNARRAY_RUNTIME_BINARY)" "$(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)"
 
+test-large-alloc-runtime-smoke:
+	rm -rf "$(LARGE_ALLOC_RUNTIME_BUILD_DIR)"
+	mkdir -p "$(LARGE_ALLOC_RUNTIME_BUILD_DIR)"
+	fpc $(LARGE_ALLOC_RUNTIME_FPC_FLAGS) -FE"$(LARGE_ALLOC_RUNTIME_BUILD_DIR)" -FU"$(LARGE_ALLOC_RUNTIME_BUILD_DIR)" "$(LARGE_ALLOC_RUNTIME_SOURCE)"
+	"$(LARGE_ALLOC_RUNTIME_BINARY)" "$(LARGE_ALLOC_RUNTIME_BUILD_DIR)"
+
 clean:
 	$(MAKE) -C test_system_facade clean
 	$(MAKE) -C test_system_typinfo_minimal clean
@@ -64,3 +74,4 @@ clean:
 	rm -rf "$(OBJECT_FREE_RUNTIME_CONTRACT_BUILD_DIR)"
 	rm -rf "$(FIELD_DYNARRAY_CONTRACT_BUILD_DIR)"
 	rm -rf "$(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)"
+	rm -rf "$(LARGE_ALLOC_RUNTIME_BUILD_DIR)"
