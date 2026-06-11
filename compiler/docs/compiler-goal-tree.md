@@ -432,3 +432,14 @@
   `sema.c6h4-owned-string-return-deferred-consumer`；GREEN 后
   `llvm_string_arg_owned_compare_concat` 通过 LLVM verify/llc/link/run，exit 42；
   `build/verify_local.sh` 已纳入 compare-concat runtime smoke 输出。
+- 2026-06-12 C6-H13：owned string return 的 direct `if` compound bool compare
+  第一刀：`if (MakeText() = 'x') and True then ...` 现在从 fail-closed 推进为
+  owned temp -> compound `cond-br-runtime` string compare -> temp release。sema 只在
+  direct `if` 条件中让 `not` / `and` / `or` wrapper 递归保留 owned string compare
+  allow flag；while/repeat/for 条件、field store、var/out、
+  virtual/interface/external 继续 fail-closed。RED=
+  `test_hir_string_call_argument_ownership_contract` 失败
+  `missing-compare-compound-string-temp-order-node`，runtime smoke 失败
+  `sema.c6h4-owned-string-return-deferred-consumer`；GREEN 后
+  `llvm_string_arg_owned_compare_compound` 通过 LLVM verify/llc/link/run，exit 42；
+  `build/verify_local.sh` 已纳入 compare-compound runtime smoke 输出。

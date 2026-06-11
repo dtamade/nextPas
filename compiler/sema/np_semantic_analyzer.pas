@@ -1295,6 +1295,14 @@ begin
   Result := False;
   if ANode = nil then
     Exit;
+  if (ANode.NodeKind = gnkUnaryExpression) and SameText(ANode.Text, 'not') and
+    (ANode.ChildCount >= 1) then
+    Exit(CompareExpressionConsumesOwnedStringReturnDeferred(ANode.ChildAt(0)));
+  if (ANode.NodeKind = gnkBinaryExpression) and
+    (SameText(ANode.Text, 'and') or SameText(ANode.Text, 'or')) and
+    (ANode.ChildCount >= 2) then
+    Exit(CompareExpressionConsumesOwnedStringReturnDeferred(ANode.ChildAt(0)) or
+      CompareExpressionConsumesOwnedStringReturnDeferred(ANode.ChildAt(1)));
   if (ANode.NodeKind <> gnkBinaryExpression) or
     ((ANode.Text <> '=') and (ANode.Text <> '<>')) or
     (ANode.ChildCount < 2) then
@@ -11006,7 +11014,8 @@ begin
   if (ANode.NodeKind = gnkUnaryExpression) and
     SameText(ANode.Text, 'not') and (ANode.ChildCount >= 1) then
   begin
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob, False) then
+    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob,
+      AAllowOwnedStringCompare) then
       Exit(False);
     ABlob := 'int 1' + #10 + LeftBlob + 'zext' + #10 + 'sub' + #10 +
       'int 0' + #10 + 'cmp ne' + #10;
@@ -11049,9 +11058,11 @@ begin
   else if Op = '>=' then Pred := 'sge'
   else if SameText(Op, 'and') then
   begin
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob, False) then
+    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob,
+      AAllowOwnedStringCompare) then
       Exit(False);
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(1), RightBlob, False) then
+    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(1), RightBlob,
+      AAllowOwnedStringCompare) then
       Exit(False);
     ABlob := LeftBlob + 'zext' + #10 + RightBlob + 'zext' + #10 +
       'mul' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
@@ -11059,9 +11070,11 @@ begin
   end
   else if SameText(Op, 'or') then
   begin
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob, False) then
+    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob,
+      AAllowOwnedStringCompare) then
       Exit(False);
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(1), RightBlob, False) then
+    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(1), RightBlob,
+      AAllowOwnedStringCompare) then
       Exit(False);
     ABlob := LeftBlob + 'zext' + #10 + RightBlob + 'zext' + #10 +
       'add' + #10 + 'int 0' + #10 + 'cmp ne' + #10;

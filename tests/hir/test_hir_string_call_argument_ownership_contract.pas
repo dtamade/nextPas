@@ -198,6 +198,17 @@ const
     '    Halt(0);' + LineEnding +
     'end.';
 
+  CompareCompoundOwnedArgumentSource =
+    'program test;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  if (MakeText() = ''x'') and True then' + LineEnding +
+    '    Halt(0);' + LineEnding +
+    'end.';
+
   WriteLnOwnedArgumentSource =
     'program test;' + LineEnding +
     'function MakeText: string;' + LineEnding +
@@ -828,6 +839,35 @@ begin
       Fail('compare-concat-temp-release-must-follow-compare');
     if ConcatReleaseIndex >= ReleaseIndex then
       Fail('compare-concat-temp-release-must-precede-source-release');
+  finally
+    Model.Free;
+  end;
+
+  Model := BuildModel(CompareCompoundOwnedArgumentSource);
+  try
+    if Model = nil then
+      Fail('compare-compound-owned-argument-model-nil');
+    OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText');
+    CompareIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'cond-br-runtime', 'if');
+    ReleaseIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText');
+    if (OwnedIndex < 0) or (CompareIndex < 0) or (ReleaseIndex < 0) then
+      Fail('missing-compare-compound-string-temp-order-node');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'cond-br-runtime', 'if', Node) then
+      Fail('missing-compare-compound-cond-br-runtime');
+    if Pos('strcmp eq', Node.Operand) = 0 then
+      Fail('missing-compare-compound-string-strcmp-runtime');
+    if Pos('strvar $str_cmp_tmp_', Node.Operand) = 0 then
+      Fail('missing-compare-compound-string-temp-operand-runtime');
+    if Pos('mul', Node.Operand) = 0 then
+      Fail('missing-compare-compound-and-runtime');
+    if OwnedIndex >= CompareIndex then
+      Fail('compare-compound-temp-owned-must-precede-compare');
+    if CompareIndex >= ReleaseIndex then
+      Fail('compare-compound-temp-release-must-follow-compare');
   finally
     Model.Free;
   end;
