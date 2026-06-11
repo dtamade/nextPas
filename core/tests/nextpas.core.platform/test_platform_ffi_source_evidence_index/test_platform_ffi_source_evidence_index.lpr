@@ -119,6 +119,10 @@ begin
     'source evidence doc must cover Linux/Android native thread id evidence');
   CheckTokenPresent(ADoc, '_sc_nprocessors_onln',
     'source evidence doc must cover CPU count sysconf token evidence');
+  CheckTokenPresent(ADoc, 'android_syscall_getdents64',
+    'source evidence doc must cover Android getdents64 syscall evidence');
+  CheckTokenPresent(ADoc, 'directory enumeration',
+    'source evidence doc must cover Android directory enumeration evidence');
 
   CheckTokenPresent(ADoc, 'futex',
     'source evidence doc must cover Linux futex declarations');

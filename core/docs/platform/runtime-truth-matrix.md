@@ -7,7 +7,7 @@
 | Windows IOCP lifecycle | source-contract, forced-compile, wine-runtime-smoke | Real port lifecycle exists; Wine smoke is optional and is not real Windows runtime ready. |
 | Windows IOCP AsyncRead/AsyncWrite file completion | source-contract, forced-compile, wine-runtime-smoke | Runtime smoke covers file operations through IOCP/poller only when explicitly run under Wine; not real Windows runtime ready. |
 | Windows IOCP socket completion | source-contract | `AsyncAccept/Connect/Send/Recv/Close` unsupported. |
-| Android files/mmap | forced-compile/source-contract | Android files stat/lstat/fstat and mmap size paths compile through host-owned declarations; directory enumeration remains unsupported and no Android device runtime proof exists. |
+| Android files/mmap | forced-compile/source-contract | Android files stat/lstat/fstat, directory enumeration through getdents64, and mmap size paths compile through host-owned declarations; no Android device runtime proof exists. |
 | Resource limits | Linux focused-runtime, Android forced-compile/source-contract | Linux rlimit get/set is focused-runtime covered; Android is compile/source proof only, not device runtime proof. |
 | Darwin/FreeBSD best-effort CI | ci-runtime-matrix for passed rows | Skipped rows are non-evidence. |
 | Android/other forced host surfaces | forced-compile | Compile truth only. |

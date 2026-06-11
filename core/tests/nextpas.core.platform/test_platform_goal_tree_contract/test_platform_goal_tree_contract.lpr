@@ -176,9 +176,15 @@ end;
 
 procedure TestAndroidFilesMmapCompileGatesAreWired;
 var
+  LDoc: string;
+  LMatrix: string;
   LFilesMakefile: string;
   LMmapMakefile: string;
 begin
+  LDoc := LoadDocText;
+  LMatrix := LoadTextFile(RUNTIME_TRUTH_MATRIX_PATH_FROM_TEST,
+    RUNTIME_TRUTH_MATRIX_PATH_FROM_ROOT,
+    'platform runtime truth matrix must exist');
   LFilesMakefile := LoadTextFile(FILES_GATE_MAKEFILE_FROM_TEST,
     FILES_GATE_MAKEFILE_FROM_ROOT,
     'platform files Makefile must exist');
@@ -192,6 +198,14 @@ begin
     'platform files gate must force the Android host branch');
   CheckContains(LFilesMakefile, '-cn',
     'platform files Android gate must be compile-only');
+  CheckContains(LDoc, 'Android files/mmap forced-compile proof only',
+    'goal tree must keep Android files/mmap compile-only truth');
+  CheckContains(LMatrix, 'directory enumeration through getdents64',
+    'runtime truth matrix must name Android directory enumeration source proof');
+  CheckContains(LMatrix, 'no Android device runtime proof',
+    'runtime truth matrix must keep Android device runtime gap visible');
+  CheckAbsent(LMatrix, 'directory enumeration remains unsupported',
+    'runtime truth matrix must not keep stale Android directory unsupported truth');
 
   CheckContains(LMmapMakefile, 'test_platform_mmap_android_compile.lpr',
     'platform mmap gate must compile its Android source-contract program');

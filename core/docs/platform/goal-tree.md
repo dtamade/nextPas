@@ -30,7 +30,9 @@ Current Windows readiness and completion source/compile proof is split across:
   Windows stable unsupported behavior, and Android resource limits
   forced-compile/source-contract proof.
 - `test_platform_files_android_compile` and `test_platform_mmap_android_compile`
-  for Android files/mmap forced-compile proof only.
+  for Android files/mmap forced-compile proof only. The files gate includes
+  stat/lstat/fstat and directory enumeration source proof; it is not Android
+  device runtime proof.
 
 These gates do not prove Windows runtime behavior. They only prove source shape,
 forced Windows compile coherence, and Linux focused-runtime behavior where the

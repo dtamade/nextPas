@@ -536,7 +536,7 @@ begin
 end;
 
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
-{$IFDEF NEXTPAS_LINUX}
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID)}
 type
   PDirent64 = ^TDirent64;
   TDirent64 = packed record
@@ -588,16 +588,18 @@ var
 {$ENDIF}
 begin
   FillChar(AEntry, SizeOf(AEntry), 0);
-{$IFDEF NEXTPAS_ANDROID}
-  Result := -1;
-  Exit;
-{$ENDIF}
-{$IFDEF NEXTPAS_LINUX}
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID)}
   while True do
   begin
     if AHandle.Pos >= AHandle.Len then
     begin
+{$IFDEF NEXTPAS_ANDROID}
+      AHandle.Len := Int32(syscall(ANDROID_SYSCALL_GETDENTS64,
+        PtrUInt(AHandle.Fd), PtrUInt(@AHandle.Buf[0]), SizeOf(AHandle.Buf),
+        0, 0, 0));
+{$ELSE}
       AHandle.Len := Int32(getdents64(AHandle.Fd, @AHandle.Buf[0], SizeOf(AHandle.Buf)));
+{$ENDIF}
       if AHandle.Len <= 0 then
       begin
         if AHandle.Len = 0 then
