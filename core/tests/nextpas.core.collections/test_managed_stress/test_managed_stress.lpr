@@ -5,6 +5,7 @@ program test_managed_stress;
 uses
   SysUtils,
   leak_tracker,
+  nextpas.core.base,
   nextpas.core.collections.base,
   nextpas.core.collections.vec,
   nextpas.core.collections.vecdeque,
@@ -714,10 +715,21 @@ end;
 
 var
   GSwissDrainVisits: Int32;
+  GSwissDrainFailVisits: Int32;
+  GSwissDrainFirstKeyId: Int32;
 
 procedure CountSwissDrainVisit(const AKey: ITracked; const AValue: ITracked);
 begin
   Inc(GSwissDrainVisits);
+end;
+
+procedure FailOnSecondSwissDrainVisit(const AKey: ITracked; const AValue: ITracked);
+begin
+  Inc(GSwissDrainFailVisits);
+  if GSwissDrainFailVisits = 1 then
+    GSwissDrainFirstKeyId := AKey.GetId
+  else
+    raise EInvalidOperation.Create('forced SwissTable Drain callback failure');
 end;
 
 procedure TestSwissTableManagedKeyValueLifecycle;
@@ -780,6 +792,109 @@ begin
   end;
   SnapAssert(Snap, 'SwissTable managed key/value lifecycle');
   Pass('SwissTable managed key/value lifecycle');
+end;
+
+procedure TestSwissTableDrainExceptionKeepsPartialStateConsistent;
+type TSwissT = specialize TSwissTable<ITracked, ITracked>;
+const
+  CItemCount = 4;
+var
+  Snap: TLeakSnapshot;
+
+  procedure RunScenario;
+  var
+    M: TSwissT;
+    I: Integer;
+    K, V: ITracked;
+    Raised: Boolean;
+  begin
+    M := TSwissT.Create(0, @TrackedHash, @TrackedEquals);
+    try
+      for I := 1 to CItemCount do
+      begin
+        K := MakeTracked(I);
+        V := MakeTracked(I + 100);
+        M.Put(K, V);
+        K := nil;
+        V := nil;
+      end;
+
+      GSwissDrainFailVisits := 0;
+      GSwissDrainFirstKeyId := 0;
+      Raised := False;
+      try
+        M.Drain(@FailOnSecondSwissDrainVisit);
+      except
+        on E: EInvalidOperation do
+          Raised := True;
+      end;
+      if not Raised then
+      begin
+        WriteLn('FAIL: SwissTable Drain exception test expected callback failure');
+        Halt(1);
+      end;
+      if GSwissDrainFailVisits <> 2 then
+      begin
+        WriteLn('FAIL: SwissTable Drain exception visit count expected=2 actual=', GSwissDrainFailVisits);
+        Halt(1);
+      end;
+      if M.Count <> CItemCount - 1 then
+      begin
+        WriteLn('FAIL: SwissTable Drain exception count expected=', CItemCount - 1, ' actual=', M.Count);
+        Halt(1);
+      end;
+
+      for I := 1 to CItemCount do
+      begin
+        K := MakeTracked(I);
+        V := nil;
+        if I = GSwissDrainFirstKeyId then
+        begin
+          if M.TryGetValue(K, V) then
+          begin
+            WriteLn('FAIL: SwissTable Drain exception kept first drained key=', I);
+            Halt(1);
+          end;
+        end
+        else
+        begin
+          if not M.TryGetValue(K, V) then
+          begin
+            WriteLn('FAIL: SwissTable Drain exception lost undrained key=', I);
+            Halt(1);
+          end;
+          if (V = nil) or (V.GetId <> I + 100) then
+          begin
+            WriteLn('FAIL: SwissTable Drain exception wrong value for key=', I);
+            Halt(1);
+          end;
+        end;
+        K := nil;
+        V := nil;
+      end;
+
+      K := MakeTracked(GSwissDrainFirstKeyId);
+      V := MakeTracked(GSwissDrainFirstKeyId + 200);
+      M.Put(K, V);
+      K := nil;
+      V := nil;
+      if M.Count <> CItemCount then
+      begin
+        WriteLn('FAIL: SwissTable Drain exception reinsert count expected=', CItemCount, ' actual=', M.Count);
+        Halt(1);
+      end;
+
+      M.Clear;
+    finally
+      M.Free;
+    end;
+  end;
+
+begin
+  Snap := SnapTake;
+  RunScenario;
+  SnapAssert(Snap, 'SwissTable Drain callback exception keeps partial state consistent');
+  Pass('SwissTable Drain callback exception keeps partial state consistent');
 end;
 
 function BTreeCmpInt(const A, B: Int32; aData: Pointer): SizeInt;
@@ -1018,6 +1133,7 @@ begin
   TestHashMapRehash;
   TestHashMapOverwrite;
   TestSwissTableManagedKeyValueLifecycle;
+  TestSwissTableDrainExceptionKeepsPartialStateConsistent;
   TestBTreeRemoveMerge;
   TestLruCacheEvict;
   TestSkipListRemove;
