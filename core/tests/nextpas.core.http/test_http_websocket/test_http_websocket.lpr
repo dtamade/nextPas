@@ -1501,6 +1501,95 @@ begin
   end;
 end;
 
+{ Test 4h2: close frames with reserved close code 1005 are rejected }
+procedure TestCloseCode1005InPayloadRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LFrame: string;
+  LPayloadLen: Byte;
+  LCode: UInt16;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    try
+      LF := LWs.ReadFrame;
+      if LF.Opcode = wsOpClose then
+        LWs.Close(1000, 'bye');
+    except
+      on E: EHttpError do
+        LWs.Close(1002, 'protocol');
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('HTTP/1.1 101', LResp) > 0, 'close-code-1005: got 101');
+
+      LFrame := BuildMaskedFrame($08, #$03#$ED);
+      LConn.Write(LFrame[1], SizeUInt(Length(LFrame)));
+
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LResp) >= 4) or (LN = 0);
+
+      Check(Length(LResp) >= 4, 'close-code-1005: got close response');
+      Check(Ord(LResp[1]) = $88, 'close-code-1005: server sends close frame');
+      LPayloadLen := Ord(LResp[2]) and $7F;
+      Check(LPayloadLen >= 2, 'close-code-1005: close frame includes code');
+      LCode := (UInt16(Ord(LResp[3])) shl 8) or UInt16(Ord(LResp[4]));
+      CheckEqual(Int64(1002), Int64(LCode), 'close-code-1005: close code protocol error');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 4i: text frames must carry valid UTF-8 payloads }
 procedure TestInvalidUtf8TextFrameRejected;
 var
@@ -2600,6 +2689,13 @@ begin
     'WebSocket: invalid close code');
 end;
 
+{ Test 4t2: server Close must reject reserved outbound close code 1004 }
+procedure TestOutgoingCloseReservedCode1004Rejected;
+begin
+  CheckOutgoingCloseRejected('outgoing-close-reserved-1004', 1004, 'reserved',
+    'WebSocket: invalid close code');
+end;
+
 { Test 4u: server Close must reject invalid outbound close reason encoding }
 procedure TestOutgoingCloseInvalidUtf8ReasonRejected;
 begin
@@ -2680,6 +2776,188 @@ begin
       LPayloadLen := Ord(LResp[2]) and $7F;
       CheckEqual('WebSocket: invalid text payload encoding',
         Copy(LResp, 3, LPayloadLen), 'outgoing-text-invalid-utf8: fail-fast reason');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 4w: sending data frames after receiving Close is rejected }
+procedure TestSendAfterCloseReceivedRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LFrame: string;
+  LPayloadLen: Byte;
+  LCode: UInt16;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    try
+      LF := LWs.ReadFrame;
+      if LF.Opcode = wsOpClose then
+      begin
+        try
+          LWs.WriteText('after-close');
+        except
+          on E: EHttpError do
+            LWs.Close(1000, E.Message);
+        end;
+      end;
+    except
+      on E: EHttpError do
+        LWs.Close(1002, 'protocol');
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('HTTP/1.1 101', LResp) > 0, 'send-after-close: got 101');
+
+      LFrame := BuildMaskedFrame($08, #$03#$E8);
+      LConn.Write(LFrame[1], SizeUInt(Length(LFrame)));
+
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LResp) >= 4) or (LN = 0);
+
+      Check(Length(LResp) >= 4, 'send-after-close: got close response');
+      Check(Ord(LResp[1]) = $88, 'send-after-close: server sends close frame');
+      LPayloadLen := Ord(LResp[2]) and $7F;
+      Check(LPayloadLen >= 2, 'send-after-close: close frame includes code');
+      LCode := (UInt16(Ord(LResp[3])) shl 8) or UInt16(Ord(LResp[4]));
+      CheckEqual(Int64(1000), Int64(LCode), 'send-after-close: close code 1000');
+      Check(Pos('cannot send after close received', Copy(LResp, 5, LPayloadLen - 2)) > 0,
+        'send-after-close: reason mentions close received');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 4x: receiving Ping auto-responds with Pong }
+procedure TestPingAutoPong;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LFrame: string;
+  LPayloadLen: Byte;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    LF := LWs.ReadFrame;
+    if LF.Opcode = wsOpPing then
+      LWs.Close(1000, 'pong-tested');
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('HTTP/1.1 101', LResp) > 0, 'ping-auto-pong: got 101');
+
+      LFrame := BuildMaskedFrame($09, 'ping123');
+      LConn.Write(LFrame[1], SizeUInt(Length(LFrame)));
+
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LResp) >= 9) or (LN = 0);
+
+      Check(Length(LResp) >= 9, 'ping-auto-pong: got response');
+      Check(Ord(LResp[1]) = $8A, 'ping-auto-pong: server sends pong frame');
+      LPayloadLen := Ord(LResp[2]) and $7F;
+      CheckEqual(Int64(7), Int64(LPayloadLen), 'ping-auto-pong: pong payload len = 7');
+      CheckEqual('ping123', Copy(LResp, 3, LPayloadLen), 'ping-auto-pong: pong payload matches');
+      Check(Length(LResp) >= 16, 'ping-auto-pong: got close frame after pong');
+      Check(Ord(LResp[10]) = $88, 'ping-auto-pong: close frame follows pong');
     finally
       LConn.Close;
     end;
@@ -2885,6 +3163,7 @@ begin
   T.Run('ReservedBitsRejected', @TestReservedBitsRejected);
   T.Run('FragmentedControlFrameRejected', @TestFragmentedControlFrameRejected);
   T.Run('InvalidCloseCodeRejected', @TestInvalidCloseCodeRejected);
+  T.Run('CloseCode1005InPayloadRejected', @TestCloseCode1005InPayloadRejected);
   T.Run('InvalidUtf8TextFrameRejected', @TestInvalidUtf8TextFrameRejected);
   T.Run('InvalidUtf8CloseReasonRejected', @TestInvalidUtf8CloseReasonRejected);
   T.Run('StandaloneContinuationFrameRejected', @TestStandaloneContinuationFrameRejected);
@@ -2899,9 +3178,13 @@ begin
   T.Run('OutgoingPingPayloadTooLargeRejected', @TestOutgoingPingPayloadTooLargeRejected);
   T.Run('OutgoingClosePayloadTooLargeRejected', @TestOutgoingClosePayloadTooLargeRejected);
   T.Run('OutgoingCloseInvalidCodeRejected', @TestOutgoingCloseInvalidCodeRejected);
+  T.Run('OutgoingCloseReservedCode1004Rejected',
+    @TestOutgoingCloseReservedCode1004Rejected);
   T.Run('OutgoingCloseInvalidUtf8ReasonRejected',
     @TestOutgoingCloseInvalidUtf8ReasonRejected);
   T.Run('OutgoingTextInvalidUtf8Rejected', @TestOutgoingTextInvalidUtf8Rejected);
+  T.Run('SendAfterCloseReceivedRejected', @TestSendAfterCloseReceivedRejected);
+  T.Run('PingAutoPong', @TestPingAutoPong);
   T.Run('BinaryFrame', @TestBinaryFrame);
   T.Run('CloseFrame', @TestCloseFrame);
   T.Summary;

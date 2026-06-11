@@ -68,6 +68,7 @@ uses
   nextpas.core.hash,
   nextpas.core.hash.base,
   nextpas.core.encoding,
+  nextpas.core.io.binary,
   nextpas.core.text.utf8,
   nextpas.core.websocket.base,
   nextpas.core.net.intf;
@@ -300,6 +301,7 @@ var
   LResp: string;
   LHijacker: IHttpHijacker;
   LConn: ITcpStream;
+  LBinaryWriter: TBinaryWriter;
 begin
   LUpgrade := LowerTrim(AReq.Headers.Get('upgrade'));
   LConnectionValues := AReq.Headers.GetAll('connection');
@@ -334,7 +336,8 @@ begin
            'Connection: Upgrade'#13#10 +
            'Sec-WebSocket-Accept: ' + LAccept + #13#10 +
            #13#10;
-  LConn.Write(LResp[1], SizeUInt(Length(LResp)));
+  LBinaryWriter.Init(LConn as IWriter);
+  LBinaryWriter.WriteString(LResp);
 
   Result := TWebSocketImpl.Create(LConn as IReader, LConn as IWriter, AOptions);
 end;
@@ -458,6 +461,15 @@ begin
 
   Result.Payload := LBuf;
 
+  if Result.Opcode = wsOpPing then
+  begin
+    try
+      WriteFrameRaw(wsOpPong, Result.Payload);
+    except
+      { Best effort: pong failure means connection is broken. }
+    end;
+  end;
+
   if Result.Opcode = wsOpClose then
   begin
     ValidateClosePayload(Result.Payload);
@@ -543,6 +555,8 @@ procedure TWebSocketImpl.WriteFrame(AOpcode: TWebSocketOpcode; const APayload: s
 begin
   if not FOpen then
     raise EHttpError.Create('WebSocket: connection closed');
+  if FCloseReceived and (AOpcode <> wsOpClose) then
+    raise EHttpError.Create('WebSocket: cannot send after close received');
   if AOpcode in [wsOpClose, wsOpPing, wsOpPong] then
     ValidateControlPayloadSize(APayload);
   WriteFrameRaw(AOpcode, APayload);
@@ -575,6 +589,8 @@ var
 begin
   if FCloseSent then
     Exit; { Already sent close }
+  if not IsValidCloseCode(ACode) then
+    raise EHttpError.Create('WebSocket: invalid close code');
   SetLength(LPayload, 2 + Length(AReason));
   LPayload[1] := Chr(ACode shr 8);
   LPayload[2] := Chr(ACode and $FF);
