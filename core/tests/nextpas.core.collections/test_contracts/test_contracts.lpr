@@ -139,10 +139,23 @@ var
   LManager: TStringManager;
   LElements: TStringManager.PElement;
   LSecond: TStringManager.PElement;
+  LRaised: Boolean;
 begin
   LManager := TStringManager.Create(GetRtlAllocator);
   try
     CheckEqual(True, LManager.IsManagedType, 'string should be a managed type');
+
+    LRaised := False;
+    try
+      LElements := LManager.ReallocElements(nil, 1, 2);
+      if LElements <> nil then
+        LManager.FreeElements(LElements, 2);
+    except
+      on E: EInvalidOperation do
+        LRaised := True;
+    end;
+    Check(LRaised, 'ReallocElements should reject nil pointer with nonzero old count');
+
     LElements := LManager.AllocElements(3);
     Check(LElements <> nil, 'AllocElements should allocate managed storage');
     try
@@ -167,6 +180,18 @@ begin
       CheckEqual('B', LElements[2], 'managed overlap copy index 2');
       CheckEqual('C', LElements[3], 'managed overlap copy index 3');
       CheckEqual('', LElements[4], 'managed overlap copy index 4');
+
+      LElements[0] := 'A';
+      LElements[1] := 'B';
+      LElements[2] := 'C';
+      LElements[3] := 'D';
+      LElements[4] := 'E';
+      LManager.CopyElements(LElements + 1, LElements, 4);
+      CheckEqual('B', LElements[0], 'managed reverse overlap copy index 0');
+      CheckEqual('C', LElements[1], 'managed reverse overlap copy index 1');
+      CheckEqual('D', LElements[2], 'managed reverse overlap copy index 2');
+      CheckEqual('E', LElements[3], 'managed reverse overlap copy index 3');
+      CheckEqual('E', LElements[4], 'managed reverse overlap copy index 4');
 
       LManager.ZeroElements(LElements, 5);
       CheckEqual('', LElements[0], 'ZeroElements should clear managed slot 0');
