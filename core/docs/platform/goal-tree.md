@@ -29,6 +29,9 @@ Current Windows readiness and completion source/compile proof is split across:
 - `test_platform_resource` for Linux resource limits focused-runtime proof,
   Windows stable unsupported behavior, and Android resource limits
   forced-compile/source-contract proof.
+- `test_platform_memory` and `test_platform_memory_secure_zero_compile_gate`
+  for POSIX `explicit_bzero` secure-zero backend truth, Linux runtime zeroing,
+  and Windows fallback/deferred source-contract proof.
 - `test_platform_files_android_compile` and `test_platform_mmap_android_compile`
   for Android files/mmap forced-compile proof only. The files gate includes
   stat/lstat/fstat and directory enumeration source proof; it is not Android

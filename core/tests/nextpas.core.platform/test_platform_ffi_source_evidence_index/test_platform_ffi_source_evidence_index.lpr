@@ -123,6 +123,8 @@ begin
     'source evidence doc must cover Android getdents64 syscall evidence');
   CheckTokenPresent(ADoc, 'directory enumeration',
     'source evidence doc must cover Android directory enumeration evidence');
+  CheckTokenPresent(ADoc, 'explicit_bzero',
+    'source evidence doc must cover POSIX explicit_bzero secure-zero declaration evidence');
 
   CheckTokenPresent(ADoc, 'futex',
     'source evidence doc must cover Linux futex declarations');
@@ -226,6 +228,8 @@ begin
     'host gap matrix must point to the source evidence index');
   CheckTokenPresent(LGapMatrix, 'fpc source evidence',
     'host gap matrix must keep source evidence separate from runtime proof');
+  CheckTokenPresent(LGapMatrix, 'explicit_bzero',
+    'host gap matrix must record POSIX explicit_bzero secure-zero ownership');
 
   CheckTokenPresent(LVerify, 'require_path core/docs/platform-ffi-source-evidence-index.md',
     'verify_local must require the source evidence doc');
