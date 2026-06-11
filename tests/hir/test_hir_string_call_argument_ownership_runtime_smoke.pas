@@ -93,6 +93,49 @@ const
     '  Halt(42);' + LineEnding +
     'end.';
 
+  ConcatLeftOwnedArgumentSource =
+    'program c6h9_concat_left_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''left'';' + LineEnding +
+    'end;' + LineEnding +
+    'var S: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  S := MakeText() + ''x'';' + LineEnding +
+    '  if Length(S) = 5 then Halt(42);' + LineEnding +
+    '  Halt(29);' + LineEnding +
+    'end.';
+
+  ConcatRightOwnedArgumentSource =
+    'program c6h9_concat_right_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''right'';' + LineEnding +
+    'end;' + LineEnding +
+    'var S: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  S := ''x'' + MakeText();' + LineEnding +
+    '  if Length(S) = 6 then Halt(42);' + LineEnding +
+    '  Halt(31);' + LineEnding +
+    'end.';
+
+  ConcatBothOwnedArgumentSource =
+    'program c6h9_concat_both_string_arg_runtime;' + LineEnding +
+    'function MakeA: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeA := ''left'';' + LineEnding +
+    'end;' + LineEnding +
+    'function MakeB: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeB := ''right'';' + LineEnding +
+    'end;' + LineEnding +
+    'var S: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  S := MakeA() + MakeB();' + LineEnding +
+    '  if Length(S) = 9 then Halt(42);' + LineEnding +
+    '  Halt(37);' + LineEnding +
+    'end.';
+
 procedure Fail(const AMessage: string);
 begin
   WriteLn('hir-string-call-argument-ownership-runtime-smoke-failure=', AMessage);
@@ -130,7 +173,7 @@ begin
     Proc.Executable := AExecutable;
     for I := Low(AArgs) to High(AArgs) do
       Proc.Parameters.Add(AArgs[I]);
-    Proc.Options := [poWaitOnExit];
+    Proc.Options := [poWaitOnExit, poUsePipes];
     Proc.Execute;
     if Proc.ExitStatus <> AExpectedExit then
       Fail(ALabel + '-exit:' + IntToStr(Proc.ExitStatus) +
@@ -310,6 +353,45 @@ begin
     Fail('writeln-owned-string-temp-release-order-runtime');
 end;
 
+procedure AssertConcatOwnedRuntimeContract(const ALlvmText: string);
+var
+  ProducerPos, ConcatPos, ReleasePos: LongInt;
+begin
+  ProducerPos := Pos(' = call {ptr, i64, ptr, i64} @MakeText(', ALlvmText);
+  ConcatPos := Pos(' = call {ptr, i64, ptr, i64} @np_str_concat_owned(',
+    ALlvmText);
+  if (ProducerPos = 0) or (ConcatPos = 0) then
+    Fail('missing-concat-owned-string-runtime');
+  ReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ConcatPos + 1);
+  if ReleasePos = 0 then
+    Fail('missing-concat-owned-string-release-runtime');
+  if (ProducerPos >= ConcatPos) or (ConcatPos >= ReleasePos) then
+    Fail('concat-owned-string-temp-release-order-runtime');
+end;
+
+procedure AssertConcatBothOwnedRuntimeContract(const ALlvmText: string);
+var
+  MakeAPos, MakeBPos, ConcatPos, ReleaseBPos, ReleaseAPos: LongInt;
+begin
+  MakeAPos := Pos(' = call {ptr, i64, ptr, i64} @MakeA(', ALlvmText);
+  MakeBPos := Pos(' = call {ptr, i64, ptr, i64} @MakeB(', ALlvmText);
+  ConcatPos := Pos(' = call {ptr, i64, ptr, i64} @np_str_concat_owned(',
+    ALlvmText);
+  if (MakeAPos = 0) or (MakeBPos = 0) or (ConcatPos = 0) then
+    Fail('missing-concat-both-owned-string-runtime');
+  ReleaseBPos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ConcatPos + 1);
+  ReleaseAPos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ReleaseBPos + 1);
+  if (ReleaseBPos = 0) or (ReleaseAPos = 0) then
+    Fail('missing-concat-both-owned-string-release-runtime');
+  if (MakeAPos >= MakeBPos) or (MakeBPos >= ConcatPos) then
+    Fail('concat-both-owned-string-temp-creation-order-runtime');
+  if ReleaseBPos >= ReleaseAPos then
+    Fail('concat-both-owned-string-temp-release-order-runtime');
+end;
+
 procedure RunRuntimeSmoke(const AOutputDir, AStem: string);
 var
   LlPath: string;
@@ -349,6 +431,10 @@ begin
     AssertLiteralBorrowedRuntimeContract(LlvmText)
   else if AAssertKind = 'writeln' then
     AssertWriteLnOwnedRuntimeContract(LlvmText)
+  else if AAssertKind = 'concat' then
+    AssertConcatOwnedRuntimeContract(LlvmText)
+  else if AAssertKind = 'concat-both' then
+    AssertConcatBothOwnedRuntimeContract(LlvmText)
   else
     Fail('unknown-assert-kind:' + AAssertKind);
 
@@ -377,5 +463,11 @@ begin
     LiteralBorrowedArgumentSource, 'literal');
   EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_writeln',
     WriteLnOwnedArgumentSource, 'writeln');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_concat_left',
+    ConcatLeftOwnedArgumentSource, 'concat');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_concat_right',
+    ConcatRightOwnedArgumentSource, 'concat');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_concat_both',
+    ConcatBothOwnedArgumentSource, 'concat-both');
   WriteLn('hir-string-call-argument-ownership-runtime-smoke-status=pass');
 end.

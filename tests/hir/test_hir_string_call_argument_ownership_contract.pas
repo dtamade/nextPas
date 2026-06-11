@@ -122,6 +122,21 @@ const
     '  S := ''x'' + MakeText();' + LineEnding +
     'end.';
 
+  ConcatBothOwnedArgumentSource =
+    'program test;' + LineEnding +
+    'function MakeA: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeA := ''left'';' + LineEnding +
+    'end;' + LineEnding +
+    'function MakeB: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeB := ''right'';' + LineEnding +
+    'end;' + LineEnding +
+    'var S: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  S := MakeA() + MakeB();' + LineEnding +
+    'end.';
+
   CompareOwnedArgumentSource =
     'program test;' + LineEnding +
     'function MakeText: string;' + LineEnding +
@@ -130,6 +145,17 @@ const
     'end;' + LineEnding +
     'begin' + LineEnding +
     '  if MakeText() = ''x'' then' + LineEnding +
+    '    Halt(0);' + LineEnding +
+    'end.';
+
+  CompareConcatOwnedArgumentSource =
+    'program test;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  if MakeText() + ''y'' = ''xy'' then' + LineEnding +
     '    Halt(0);' + LineEnding +
     'end.';
 
@@ -334,12 +360,10 @@ begin
     'var-param-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(OutParamOwnedArgumentSource,
     'out-param-owned-string-temp-consumer-must-fail-closed');
-  RequireAnalyzeDeferredError(ConcatLeftOwnedArgumentSource,
-    'concat-left-owned-string-temp-consumer-must-fail-closed');
-  RequireAnalyzeDeferredError(ConcatRightOwnedArgumentSource,
-    'concat-right-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(CompareOwnedArgumentSource,
     'compare-owned-string-temp-consumer-must-fail-closed');
+  RequireAnalyzeDeferredError(CompareConcatOwnedArgumentSource,
+    'compare-concat-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(VirtualOwnedArgumentSource,
     'virtual-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(InterfaceOwnedArgumentSource,
@@ -450,6 +474,98 @@ begin
   end;
 end;
 
+procedure AssertConcatTempOwnershipNodes;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+  OwnedIndex, ConcatIndex, ReleaseIndex: LongInt;
+  MakeAIndex, MakeBIndex, ReleaseAIndex, ReleaseBIndex: LongInt;
+begin
+  Model := BuildModel(ConcatLeftOwnedArgumentSource);
+  try
+    if Model = nil then
+      Fail('concat-left-owned-argument-model-nil');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText', Node) then
+      Fail('missing-concat-left-string-temp-owned-runtime');
+    if Pos('ptr', Node.Operand) = 0 then
+      Fail('concat-left-string-temp-owned-runtime-missing-ptr-field');
+    if Pos('len', Node.Operand) = 0 then
+      Fail('concat-left-string-temp-owned-runtime-missing-len-field');
+    if Pos('owner', Node.Operand) = 0 then
+      Fail('concat-left-string-temp-owned-runtime-missing-owner-field');
+    if Pos('alloc_size', Node.Operand) = 0 then
+      Fail('concat-left-string-temp-owned-runtime-missing-alloc-size-field');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'assign-str-owned-concat-runtime', 'S', Node) then
+      Fail('missing-concat-left-assign-str-owned-concat-runtime');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText', Node) then
+      Fail('missing-concat-left-string-temp-release-runtime');
+
+    OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText');
+    ConcatIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'assign-str-owned-concat-runtime', 'S');
+    ReleaseIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText');
+    if (OwnedIndex < 0) or (ConcatIndex < 0) or (ReleaseIndex < 0) then
+      Fail('missing-concat-left-temp-order-node');
+    if OwnedIndex >= ConcatIndex then
+      Fail('concat-left-temp-owned-must-precede-concat');
+    if ConcatIndex >= ReleaseIndex then
+      Fail('concat-left-temp-release-must-follow-concat');
+  finally
+    Model.Free;
+  end;
+
+  Model := BuildModel(ConcatRightOwnedArgumentSource);
+  try
+    if Model = nil then
+      Fail('concat-right-owned-argument-model-nil');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText', Node) then
+      Fail('missing-concat-right-string-temp-owned-runtime');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'assign-str-owned-concat-runtime', 'S', Node) then
+      Fail('missing-concat-right-assign-str-owned-concat-runtime');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText', Node) then
+      Fail('missing-concat-right-string-temp-release-runtime');
+  finally
+    Model.Free;
+  end;
+
+  Model := BuildModel(ConcatBothOwnedArgumentSource);
+  try
+    if Model = nil then
+      Fail('concat-both-owned-argument-model-nil');
+    MakeAIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeA');
+    MakeBIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeB');
+    ConcatIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'assign-str-owned-concat-runtime', 'S');
+    ReleaseAIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeA');
+    ReleaseBIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeB');
+    if (MakeAIndex < 0) or (MakeBIndex < 0) or (ConcatIndex < 0) or
+      (ReleaseAIndex < 0) or (ReleaseBIndex < 0) then
+      Fail('missing-concat-both-temp-order-node');
+    if MakeAIndex >= MakeBIndex then
+      Fail('concat-both-temp-creation-must-follow-left-to-right-order');
+    if MakeBIndex >= ConcatIndex then
+      Fail('concat-both-temp-owned-must-precede-concat');
+    if ConcatIndex >= ReleaseBIndex then
+      Fail('concat-both-temp-release-must-follow-concat');
+    if ReleaseBIndex >= ReleaseAIndex then
+      Fail('concat-both-temp-release-order-must-be-reverse-creation');
+  finally
+    Model.Free;
+  end;
+end;
+
 procedure AssertWriteLnArgumentTempOwnershipNodes;
 var
   Model: TSemanticModel;
@@ -504,6 +620,7 @@ begin
   AssertReverseReleaseOrder;
   AssertNestedArgumentTempOwnershipNodes;
   AssertWriteLnArgumentTempOwnershipNodes;
+  AssertConcatTempOwnershipNodes;
   AssertDeferredConsumersFailClosed;
   WriteLn('hir-string-call-argument-ownership-contract-status=pass');
 end.

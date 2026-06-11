@@ -386,3 +386,14 @@
   GREEN 后 `llvm_string_copy_owned_direct` 通过 LLVM verify/llc/link/run，exit 42。
   concat、compare、field store、var/out、virtual/interface/external 等 consumer 仍保持
   fail-closed。
+- 2026-06-12 C6-H9：owned string return 的 assignment concat consumer 第一刀：
+  `S := MakeText() + 'x'`、`S := 'x' + MakeText()` 和 `S := MakeA() + MakeB()` 现在从 fail-closed 推进为
+  owned temp -> `assign-str-owned-concat-runtime` -> temp release。sema 只在字符串赋值 RHS 的
+  binary `+` 中放行 zero-arg direct root owned string-return operand；带参数 producer、
+  compare concat、field store、var/out、virtual/interface/external 等 consumer 继续 fail-closed。RED=
+  `test_hir_string_call_argument_ownership_contract` 失败
+  `missing-concat-left-string-temp-owned-runtime`；GREEN 后
+  `llvm_string_arg_owned_concat_left` / `llvm_string_arg_owned_concat_right` /
+  `llvm_string_arg_owned_concat_both` 均通过 LLVM
+  verify/llc/link/run，exit 42；`build/verify_local.sh` 已纳入 string-call-argument
+  contract 和 runtime smoke。

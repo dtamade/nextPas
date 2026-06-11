@@ -139,6 +139,12 @@ type
       const ANode: TGreenNode; out AFuncName: string): Boolean;
     function EmitOwnedStringWriteTemp(
       const ANode: TGreenNode; out ATempName: string): Boolean;
+    function ConcatOperandOwnsStringReturn(
+      const ANode: TGreenNode; out AFuncName: string): Boolean;
+    function IsSupportedOwnedStringReturnConcatOperand(
+      const ANode: TGreenNode; out AFuncName: string): Boolean;
+    function ConcatExpressionConsumesOwnedStringReturnDeferred(
+      const ANode: TGreenNode): Boolean;
     function NodeConsumesOwnedStringReturnDeferred(const ANode: TGreenNode;
       const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
     procedure ScanOwnedStringReturnConsumers(const ANode: TGreenNode;
@@ -888,7 +894,7 @@ var
 begin
   Result := False;
   if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount < 1) then
+    (ANode.ChildCount <> 1) then
     Exit;
   CalleeNode := ANode.ChildAt(0);
   if (CalleeNode = nil) or (CalleeNode.NodeKind <> gnkDotAccess) or
@@ -1150,7 +1156,7 @@ begin
   AFuncName := '';
   Result := False;
   if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount < 1) then
+    (ANode.ChildCount <> 1) then
     Exit;
   CalleeNode := ANode.ChildAt(0);
   if (CalleeNode = nil) or (CalleeNode.NodeKind <> gnkIdentifier) then
@@ -1190,12 +1196,63 @@ begin
   Result := True;
 end;
 
+function TSemanticAnalyzer.ConcatOperandOwnsStringReturn(
+  const ANode: TGreenNode; out AFuncName: string): Boolean;
+var
+  FuncNode: TGreenNode;
+begin
+  AFuncName := '';
+  Result := False;
+  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
+    (ANode.ChildCount <> 1) then
+    Exit;
+  FuncNode := ANode.ChildAt(0);
+  if (FuncNode = nil) or (FuncNode.NodeKind <> gnkIdentifier) then
+    Exit;
+  if not StringReturnFunctionNameFromNode(ANode, AFuncName) then
+    Exit;
+  Result := SameText(FuncNode.Text, AFuncName) and
+    (not HasOverload(AFuncName));
+end;
+
+function TSemanticAnalyzer.IsSupportedOwnedStringReturnConcatOperand(
+  const ANode: TGreenNode; out AFuncName: string): Boolean;
+begin
+  Result := ConcatOperandOwnsStringReturn(ANode, AFuncName) and
+    IsOwnedStringReturnFunc(AFuncName);
+end;
+
+function TSemanticAnalyzer.ConcatExpressionConsumesOwnedStringReturnDeferred(
+  const ANode: TGreenNode): Boolean;
+var
+  I: LongInt;
+  Child: TGreenNode;
+  SourceName: string;
+begin
+  Result := False;
+  if ANode = nil then
+    Exit;
+  if IsSupportedOwnedStringReturnConcatOperand(ANode, SourceName) then
+    Exit(False);
+  if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') then
+  begin
+    for I := 0 to ANode.ChildCount - 1 do
+    begin
+      Child := ANode.ChildAt(I);
+      if ConcatExpressionConsumesOwnedStringReturnDeferred(Child) then
+        Exit(True);
+    end;
+    Exit(False);
+  end;
+  Result := NodeConsumesOwnedStringReturnDeferred(ANode, False);
+end;
+
 function TSemanticAnalyzer.NodeConsumesOwnedStringReturnDeferred(
   const ANode: TGreenNode;
   const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
 var
   I: LongInt;
-  BodyNode, Child, DeclNode: TGreenNode;
+  BodyNode, Child, DeclNode, DestNode, SourceNode: TGreenNode;
   SourceName: string;
 begin
   Result := False;
@@ -1229,8 +1286,17 @@ begin
   if ANode.NodeKind = gnkAssignmentStatement then
   begin
     if ANode.ChildCount >= 2 then
+    begin
+      DestNode := ANode.ChildAt(0);
+      SourceNode := ANode.ChildAt(1);
+      if (DestNode <> nil) and (DestNode.NodeKind = gnkIdentifier) and
+        IsRuntimeStrVar(DestNode.Text) and
+        (SourceNode <> nil) and (SourceNode.NodeKind = gnkBinaryExpression) and
+        (SourceNode.Text = '+') then
+        Exit(ConcatExpressionConsumesOwnedStringReturnDeferred(SourceNode));
       Exit(NodeConsumesOwnedStringReturnDeferred(
-        ANode.ChildAt(1), AInsideDirectOwnedAssignmentRhs));
+        SourceNode, AInsideDirectOwnedAssignmentRhs));
+    end;
     Exit(False);
   end;
 
@@ -1347,6 +1413,18 @@ begin
       AChanged := True;
     end;
   end;
+  if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') then
+  begin
+    for J := 0 to ANode.ChildCount - 1 do
+    begin
+      if ConcatOperandOwnsStringReturn(ANode.ChildAt(J), FuncName) and
+        (not IsOwnedStringReturnFunc(FuncName)) then
+      begin
+        RegisterOwnedStringReturnFunc(FuncName);
+        AChanged := True;
+      end;
+    end;
+  end;
   for I := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(I);
@@ -1404,6 +1482,18 @@ begin
     begin
       RegisterOwnedStringReturnFunc(FuncName);
       AChanged := True;
+    end;
+  end;
+  if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') then
+  begin
+    for J := 0 to ANode.ChildCount - 1 do
+    begin
+      if ConcatOperandOwnsStringReturn(ANode.ChildAt(J), FuncName) and
+        (not IsOwnedStringReturnFunc(FuncName)) then
+      begin
+        RegisterOwnedStringReturnFunc(FuncName);
+        AChanged := True;
+      end;
     end;
   end;
   for I := 0 to ANode.ChildCount - 1 do
@@ -1826,6 +1916,20 @@ begin
     FModel.AddTypedHirNode('var-decl-str-runtime', TempName, 0, 0, TempName);
     FModel.AddTypedHirNode('int-to-str-runtime', TempName, 0, 0,
       TempName + #9 + LitValue);
+    Exit(TempName);
+  end;
+  if IsSupportedOwnedStringReturnConcatOperand(ANode, LitValue) then
+  begin
+    Inc(FBlockLabelCounter);
+    TempName := '$str_cat_tmp_' + IntToStr(FBlockLabelCounter);
+    RegisterRuntimeVar(TempName);
+    RegisterRuntimeStrVar(TempName);
+    FModel.AddTypedHirNode('var-decl-str-owned-runtime', TempName, 0, 0,
+      TempName);
+    FModel.AddTypedHirNode('string-temp-owned-runtime', LitValue, 0, 0,
+      TempName + #9 + 'callee ' + LitValue + #9 +
+      'ptr len owner alloc_size');
+    QueuePendingStringTempRelease(TempName, LitValue);
     Exit(TempName);
   end;
   if ANode.NodeKind = gnkStringLiteral then
@@ -11910,6 +12014,7 @@ begin
                     StringValue + #9 + Operand,
                     0, 0, Decoded
                   );
+                EmitPendingStringTempReleases;
               end;
             end;
           end;
