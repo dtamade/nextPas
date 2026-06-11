@@ -138,6 +138,20 @@ begin
     'Windows IOCP file completion must not claim bare focused-runtime without a real Windows host');
 end;
 
+procedure TestResourceEvidenceNamesCurrentFocusedGate;
+var
+  LDoc: string;
+begin
+  LDoc := LoadDocText;
+
+  CheckContains(LDoc, 'test_platform_resource',
+    'goal tree must record the platform resource focused gate');
+  CheckContains(LDoc, 'Linux resource limits',
+    'goal tree must name Linux resource-limit runtime proof');
+  CheckContains(LDoc, 'Android resource limits',
+    'goal tree must name Android resource-limit source/compile proof');
+end;
+
 procedure TestNamedWindowsPollerCompileGateForcesWindowsHost;
 var
   LMakefile: string;
@@ -161,6 +175,8 @@ begin
   T.Run('IOCP boundary is truthful', @TestIocpBoundaryIsTruthful);
   T.Run('runtime truth matrix does not overstate Windows runtime',
     @TestRuntimeTruthMatrixDoesNotOverstateWindowsRuntime);
+  T.Run('resource evidence names current focused gate',
+    @TestResourceEvidenceNamesCurrentFocusedGate);
   T.Run('named Windows poller compile gate forces Windows host',
     @TestNamedWindowsPollerCompileGateForcesWindowsHost);
   T.Summary;

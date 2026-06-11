@@ -26,6 +26,11 @@ Current Windows readiness and completion source/compile proof is split across:
 - `test_poller_windows_compile_gate` for the consumer-facing IOCP forced Windows compile gate.
 - `test_platform_windows_poller_compile_gate` for the platform readiness poller forced Windows compile gate.
 - `test_async` for the Linux async consumer runtime gate with heaptrc expectations.
+- `test_platform_resource` for Linux resource limits focused-runtime proof,
+  Windows stable unsupported behavior, and Android resource limits
+  forced-compile/source-contract proof.
+- `test_platform_files_android_compile` and `test_platform_mmap_android_compile`
+  for Android files/mmap forced-compile proof only.
 
 These gates do not prove Windows runtime behavior. They only prove source shape,
 forced Windows compile coherence, and Linux focused-runtime behavior where the
@@ -46,7 +51,7 @@ have implementation and real-Windows runtime proof.
 | Milestone | Goal | Current truth | Next proof |
 | --- | --- | --- | --- |
 | P1 Host ABI inventory | Host constants, records, handles, raw declarations | source-contract + focused ABI tests for many hosts | keep gap matrix current and fail new raw owner leaks |
-| P2 Feature facades | Portable APIs for time, sync, thread, files, io, process, mmap, env, random, signal, console, path, fs, args | Linux focused-runtime; other hosts mixed | per-feature truth matrix by host |
+| P2 Feature facades | Portable APIs for time, sync, thread, files, io, process, mmap, env, random, signal, console, path, fs, args, resource | Linux focused-runtime; other hosts mixed | per-feature truth matrix by host |
 | P3 Readiness lane | `platform_poller_*`, wake, userdata, empty-interest, net readiness consumers | Linux runtime; Windows source/compile | Windows runtime proof and ci-matrix |
 | P4 Completion lane | IOCP/proactor ownership and async loop completion consumers | source-contract + forced compile | Windows real runtime for file lifecycle and timeout/close paths |
 | P5 Tier 2 targets | Windows aarch64, Linux riscv64/arm32, FreeBSD/Android | source/compile fragments | cross-compile and runtime matrix |

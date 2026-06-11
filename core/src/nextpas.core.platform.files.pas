@@ -63,6 +63,10 @@ uses
   , nextpas.core.platform.freebsd.base
   , nextpas.core.platform.freebsd.ffi
 {$ENDIF}
+{$IFDEF NEXTPAS_ANDROID}
+  , nextpas.core.platform.android.base
+  , nextpas.core.platform.android.ffi
+{$ENDIF}
   ;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
@@ -298,15 +302,37 @@ begin
   ClassifyStatType(AStat);
 end;
 {$ENDIF}
+{$IFDEF NEXTPAS_ANDROID}
+procedure FillPlatformStat(const LStat: TPlatformAndroidStat; out AStat: TPlatformFileStat);
+begin
+  FillChar(AStat, SizeOf(AStat), 0);
+  AStat.Size := LStat.st_size;
+  AStat.Mode := LStat.st_mode;
+  AStat.Uid := LStat.st_uid;
+  AStat.Gid := LStat.st_gid;
+  AStat.NLink := UInt32(LStat.st_nlink);
+  AStat.Dev := LStat.st_dev;
+  AStat.Ino := LStat.st_ino;
+  AStat.ModTime := Int64(LStat.st_mtime) * 1000000000 + Int64(LStat.st_mtime_nsec);
+  AStat.AccessTime := Int64(LStat.st_atime) * 1000000000 + Int64(LStat.st_atime_nsec);
+  AStat.CreateTime := Int64(LStat.st_ctime) * 1000000000 + Int64(LStat.st_ctime_nsec);
+  ClassifyStatType(AStat);
+end;
+{$ENDIF}
 
 function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
 var
   LStat: {$IFDEF NEXTPAS_LINUX}TPlatformLinuxStat{$ENDIF}
          {$IFDEF NEXTPAS_MACOS}TDarwinStat{$ENDIF}
-         {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF};
+         {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF}
+         {$IFDEF NEXTPAS_ANDROID}TPlatformAndroidStat{$ENDIF};
 begin
 {$IFDEF NEXTPAS_LINUX}
   if fstatat(AT_FDCWD, APath, LStat, 0) <> 0 then
+    Exit(platform_get_errno);
+{$ELSEIF defined(NEXTPAS_ANDROID)}
+  if syscall(ANDROID_SYSCALL_NEWFSTATAT, PtrUInt(PLATFORM_ANDROID_AT_FDCWD),
+    PtrUInt(APath), PtrUInt(@LStat), 0, 0, 0) <> 0 then
     Exit(platform_get_errno);
 {$ELSE}
   if fpstat(APath, @LStat) <> 0 then
@@ -320,10 +346,16 @@ function platform_file_lstat(const APath: PAnsiChar; out AStat: TPlatformFileSta
 var
   LStat: {$IFDEF NEXTPAS_LINUX}TPlatformLinuxStat{$ENDIF}
          {$IFDEF NEXTPAS_MACOS}TDarwinStat{$ENDIF}
-         {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF};
+         {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF}
+         {$IFDEF NEXTPAS_ANDROID}TPlatformAndroidStat{$ENDIF};
 begin
 {$IFDEF NEXTPAS_LINUX}
   if fstatat(AT_FDCWD, APath, LStat, AT_SYMLINK_NOFOLLOW) <> 0 then
+    Exit(platform_get_errno);
+{$ELSEIF defined(NEXTPAS_ANDROID)}
+  if syscall(ANDROID_SYSCALL_NEWFSTATAT, PtrUInt(PLATFORM_ANDROID_AT_FDCWD),
+    PtrUInt(APath), PtrUInt(@LStat),
+    PtrUInt(PLATFORM_ANDROID_AT_SYMLINK_NOFOLLOW), 0, 0) <> 0 then
     Exit(platform_get_errno);
 {$ELSE}
   if fplstat(APath, @LStat) <> 0 then
@@ -337,10 +369,15 @@ function platform_file_fstat(const AHandle: TPlatformFileHandle; out AStat: TPla
 var
   LStat: {$IFDEF NEXTPAS_LINUX}TPlatformLinuxStat{$ENDIF}
          {$IFDEF NEXTPAS_MACOS}TDarwinStat{$ENDIF}
-         {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF};
+         {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF}
+         {$IFDEF NEXTPAS_ANDROID}TPlatformAndroidStat{$ENDIF};
 begin
 {$IFDEF NEXTPAS_LINUX}
   if __fxstat(1, AHandle.Value, LStat) <> 0 then
+    Exit(platform_get_errno);
+{$ELSEIF defined(NEXTPAS_ANDROID)}
+  if syscall(ANDROID_SYSCALL_FSTAT, PtrUInt(AHandle.Value),
+    PtrUInt(@LStat), 0, 0, 0, 0) <> 0 then
     Exit(platform_get_errno);
 {$ELSE}
   if fpfstat(AHandle.Value, @LStat) <> 0 then
@@ -551,6 +588,10 @@ var
 {$ENDIF}
 begin
   FillChar(AEntry, SizeOf(AEntry), 0);
+{$IFDEF NEXTPAS_ANDROID}
+  Result := -1;
+  Exit;
+{$ENDIF}
 {$IFDEF NEXTPAS_LINUX}
   while True do
   begin
