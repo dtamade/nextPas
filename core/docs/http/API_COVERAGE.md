@@ -21,7 +21,7 @@
     extension negotiation 等稳定 contract 前，不扩大成独立 builder 或 service
     family。
   - 已够稳：H2/H3 public surface 仍只保留 registry / transport seam 和规划文档。
-    当前 H2 只有内部 frame codec / HPACK Huffman / request-sequence HPACK
+    当前 H2 只有内部 frame codec + type-specific validation / HPACK Huffman / request-sequence HPACK
     header-block codec foundation 和 focused proof；不创建伪 H2/H3 public API，
     不用空实现制造“支持”假象。
   - 继续补齐：landed internal registry 现在也有 future-version positive proof。

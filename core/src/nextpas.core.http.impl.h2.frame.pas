@@ -197,6 +197,12 @@ function H2IsValidFrameSize(const ALen: UInt32;
 { Validate SETTINGS identifier. }
 function H2IsValidSettingIdentifier(const AId: UInt16): Boolean; inline;
 
+{ Validate decoded frame envelope against frame-type rules.
+  AErrorCode is H2_ERR_NO_ERROR on success, otherwise the RFC error code
+  suitable for the detected violation. }
+function H2ValidateFrame(const AFrame: TH2Frame; const AMaxFrameSize: UInt32;
+  out AErrorCode: UInt32): Boolean;
+
 { Get frame type name for diagnostics. }
 function H2FrameTypeName(const AType: Byte): string;
 
@@ -492,6 +498,141 @@ function H2IsValidSettingIdentifier(const AId: UInt16): Boolean; inline;
 begin
   Result := (AId >= H2_SETTINGS_HEADER_TABLE_SIZE) and
             (AId <= H2_SETTINGS_MAX_HEADER_LIST_SIZE);
+end;
+
+function H2ValidationError(const ACode: UInt32; out AErrorCode: UInt32): Boolean;
+begin
+  AErrorCode := ACode;
+  Result := False;
+end;
+
+function H2ValidatePaddedPayload(const APayload: AnsiString;
+  const AFixedPrefixLen: UInt32; out AErrorCode: UInt32): Boolean;
+var
+  LLen: UInt32;
+  LPadLen: UInt32;
+  LAvailableLen: UInt32;
+begin
+  LLen := UInt32(Length(APayload));
+  if LLen = 0 then
+    Exit(H2ValidationError(H2_ERR_FRAME_SIZE_ERROR, AErrorCode));
+  if LLen < 1 + AFixedPrefixLen then
+    Exit(H2ValidationError(H2_ERR_FRAME_SIZE_ERROR, AErrorCode));
+  LPadLen := UInt32(Byte(APayload[1]));
+  LAvailableLen := LLen - 1 - AFixedPrefixLen;
+  if LPadLen > LAvailableLen then
+    Exit(H2ValidationError(H2_ERR_FRAME_SIZE_ERROR, AErrorCode));
+  Result := True;
+end;
+
+function H2ValidateFrame(const AFrame: TH2Frame; const AMaxFrameSize: UInt32;
+  out AErrorCode: UInt32): Boolean;
+var
+  LLen: UInt32;
+  LWindowSizeIncrement: UInt32;
+begin
+  AErrorCode := H2_ERR_NO_ERROR;
+  if SizeUInt(Length(AFrame.Payload)) > H2_ABSOLUTE_MAX_FRAME_SIZE then
+    Exit(H2ValidationError(H2_ERR_FRAME_SIZE_ERROR, AErrorCode));
+  LLen := UInt32(Length(AFrame.Payload));
+  if AFrame.Header.Len <> LLen then
+    Exit(H2ValidationError(H2_ERR_FRAME_SIZE_ERROR, AErrorCode));
+  if not H2IsValidFrameSize(LLen, AMaxFrameSize) then
+    Exit(H2ValidationError(H2_ERR_FRAME_SIZE_ERROR, AErrorCode));
+
+  case AFrame.Header.FrameType of
+    H2_FRAME_DATA:
+      begin
+        if AFrame.Header.StreamID = 0 then
+          Exit(H2ValidationError(H2_ERR_PROTOCOL_ERROR, AErrorCode));
+        if ((AFrame.Header.Flags and H2_FLAG_DATA_PADDED) <> 0) and
+          not H2ValidatePaddedPayload(AFrame.Payload, 0, AErrorCode) then
+          Exit(False);
+      end;
+    H2_FRAME_HEADERS:
+      begin
+        if AFrame.Header.StreamID = 0 then
+          Exit(H2ValidationError(H2_ERR_PROTOCOL_ERROR, AErrorCode));
+        if (AFrame.Header.Flags and H2_FLAG_HEADERS_PADDED) <> 0 then
+        begin
+          if (AFrame.Header.Flags and H2_FLAG_HEADERS_PRIORITY) <> 0 then
+          begin
+            if not H2ValidatePaddedPayload(AFrame.Payload, 5, AErrorCode) then
+              Exit(False);
+          end
+          else if not H2ValidatePaddedPayload(AFrame.Payload, 0, AErrorCode) then
+            Exit(False);
+        end
+        else if ((AFrame.Header.Flags and H2_FLAG_HEADERS_PRIORITY) <> 0) and
+          (LLen < 5) then
+          Exit(H2ValidationError(H2_ERR_FRAME_SIZE_ERROR, AErrorCode));
+      end;
+    H2_FRAME_PRIORITY:
+      begin
+        if AFrame.Header.StreamID = 0 then
+          Exit(H2ValidationError(H2_ERR_PROTOCOL_ERROR, AErrorCode));
+        if LLen <> 5 then
+          Exit(H2ValidationError(H2_ERR_FRAME_SIZE_ERROR, AErrorCode));
+      end;
+    H2_FRAME_RST_STREAM:
+      begin
+        if AFrame.Header.StreamID = 0 then
+          Exit(H2ValidationError(H2_ERR_PROTOCOL_ERROR, AErrorCode));
+        if LLen <> 4 then
+          Exit(H2ValidationError(H2_ERR_FRAME_SIZE_ERROR, AErrorCode));
+      end;
+    H2_FRAME_SETTINGS:
+      begin
+        if AFrame.Header.StreamID <> 0 then
+          Exit(H2ValidationError(H2_ERR_PROTOCOL_ERROR, AErrorCode));
+        if ((AFrame.Header.Flags and H2_FLAG_SETTINGS_ACK) <> 0) and
+          (LLen <> 0) then
+          Exit(H2ValidationError(H2_ERR_FRAME_SIZE_ERROR, AErrorCode));
+        if LLen mod 6 <> 0 then
+          Exit(H2ValidationError(H2_ERR_FRAME_SIZE_ERROR, AErrorCode));
+      end;
+    H2_FRAME_PUSH_PROMISE:
+      begin
+        if AFrame.Header.StreamID = 0 then
+          Exit(H2ValidationError(H2_ERR_PROTOCOL_ERROR, AErrorCode));
+        if (AFrame.Header.Flags and H2_FLAG_PUSH_PROMISE_PADDED) <> 0 then
+        begin
+          if not H2ValidatePaddedPayload(AFrame.Payload, 4, AErrorCode) then
+            Exit(False);
+        end
+        else if LLen < 4 then
+          Exit(H2ValidationError(H2_ERR_FRAME_SIZE_ERROR, AErrorCode));
+      end;
+    H2_FRAME_PING:
+      begin
+        if AFrame.Header.StreamID <> 0 then
+          Exit(H2ValidationError(H2_ERR_PROTOCOL_ERROR, AErrorCode));
+        if LLen <> 8 then
+          Exit(H2ValidationError(H2_ERR_FRAME_SIZE_ERROR, AErrorCode));
+      end;
+    H2_FRAME_GOAWAY:
+      begin
+        if AFrame.Header.StreamID <> 0 then
+          Exit(H2ValidationError(H2_ERR_PROTOCOL_ERROR, AErrorCode));
+        if LLen < 8 then
+          Exit(H2ValidationError(H2_ERR_FRAME_SIZE_ERROR, AErrorCode));
+      end;
+    H2_FRAME_WINDOW_UPDATE:
+      begin
+        if LLen <> 4 then
+          Exit(H2ValidationError(H2_ERR_FRAME_SIZE_ERROR, AErrorCode));
+        H2DecodeWindowUpdate(AFrame.Payload, LWindowSizeIncrement);
+        if LWindowSizeIncrement = 0 then
+          Exit(H2ValidationError(H2_ERR_PROTOCOL_ERROR, AErrorCode));
+      end;
+    H2_FRAME_CONTINUATION:
+      begin
+        if AFrame.Header.StreamID = 0 then
+          Exit(H2ValidationError(H2_ERR_PROTOCOL_ERROR, AErrorCode));
+      end;
+  end;
+
+  Result := True;
 end;
 
 function H2FrameTypeName(const AType: Byte): string;

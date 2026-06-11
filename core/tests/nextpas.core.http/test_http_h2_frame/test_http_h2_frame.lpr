@@ -52,6 +52,37 @@ begin
     Result := Result + IntToHex(Byte(AData[LI]), 2);
 end;
 
+function NewFrame(const AFrameType: Byte; const AFlags: Byte;
+  const AStreamID: UInt32; const APayload: AnsiString): TH2Frame;
+begin
+  Result := Default(TH2Frame);
+  Result.Header.Len := UInt32(Length(APayload));
+  Result.Header.FrameType := AFrameType;
+  Result.Header.Flags := AFlags;
+  Result.Header.StreamID := AStreamID;
+  Result.Payload := APayload;
+end;
+
+procedure CheckFrameValid(const AFrame: TH2Frame; const AMessage: string);
+var
+  LErrorCode: UInt32;
+begin
+  LErrorCode := $FFFFFFFF;
+  Check(H2ValidateFrame(AFrame, H2_DEFAULT_MAX_FRAME_SIZE, LErrorCode), AMessage);
+  CheckEqual(Int64(H2_ERR_NO_ERROR), Int64(LErrorCode), AMessage + ' error');
+end;
+
+procedure CheckFrameInvalid(const AFrame: TH2Frame; const AExpectedError: UInt32;
+  const AMessage: string);
+var
+  LErrorCode: UInt32;
+begin
+  LErrorCode := H2_ERR_NO_ERROR;
+  Check(not H2ValidateFrame(AFrame, H2_DEFAULT_MAX_FRAME_SIZE, LErrorCode),
+    AMessage);
+  CheckEqual(Int64(AExpectedError), Int64(LErrorCode), AMessage + ' error');
+end;
+
 procedure TestDecodeFrameHeaderMasksReservedBit;
 var
   LWire: AnsiString;
@@ -210,6 +241,86 @@ begin
   Check(not H2IsValidSettingIdentifier(0), 'setting id zero invalid');
 end;
 
+procedure TestFrameTypeSpecificValidation;
+begin
+  CheckFrameValid(NewFrame(H2_FRAME_DATA, 0, 1, 'abc'), 'DATA stream frame');
+  CheckFrameInvalid(NewFrame(H2_FRAME_DATA, 0, 0, 'abc'),
+    H2_ERR_PROTOCOL_ERROR, 'DATA stream id 0 rejected');
+  CheckFrameInvalid(NewFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_END_HEADERS, 0, ''),
+    H2_ERR_PROTOCOL_ERROR, 'HEADERS stream id 0 rejected');
+  CheckFrameInvalid(NewFrame(H2_FRAME_CONTINUATION,
+    H2_FLAG_CONTINUATION_END_HEADERS, 0, ''),
+    H2_ERR_PROTOCOL_ERROR, 'CONTINUATION stream id 0 rejected');
+  CheckFrameInvalid(NewFrame(H2_FRAME_PRIORITY, 0, 0, #0#0#0#0#0),
+    H2_ERR_PROTOCOL_ERROR, 'PRIORITY stream id 0 rejected');
+  CheckFrameInvalid(NewFrame(H2_FRAME_PRIORITY, 0, 1, #0#0#0#0),
+    H2_ERR_FRAME_SIZE_ERROR, 'PRIORITY length must be 5');
+  CheckFrameInvalid(NewFrame(H2_FRAME_RST_STREAM, 0, 0,
+    H2EncodeRstStream(H2_ERR_CANCEL)),
+    H2_ERR_PROTOCOL_ERROR, 'RST_STREAM stream id 0 rejected');
+  CheckFrameInvalid(NewFrame(H2_FRAME_RST_STREAM, 0, 1, #0#0#0),
+    H2_ERR_FRAME_SIZE_ERROR, 'RST_STREAM length must be 4');
+  CheckFrameValid(NewFrame(H2_FRAME_SETTINGS, 0, 0,
+    H2EncodeSettingsPayload(nil)), 'SETTINGS empty payload');
+  CheckFrameInvalid(NewFrame(H2_FRAME_SETTINGS, 0, 1, ''),
+    H2_ERR_PROTOCOL_ERROR, 'SETTINGS stream id must be 0');
+  CheckFrameInvalid(NewFrame(H2_FRAME_SETTINGS, H2_FLAG_SETTINGS_ACK, 0,
+    #0#1#0#0#0#0),
+    H2_ERR_FRAME_SIZE_ERROR, 'SETTINGS ACK payload must be empty');
+  CheckFrameInvalid(NewFrame(H2_FRAME_SETTINGS, 0, 0, #0#1#0#0#0),
+    H2_ERR_FRAME_SIZE_ERROR, 'SETTINGS payload must be multiple of 6');
+  CheckFrameValid(NewFrame(H2_FRAME_PING, 0, 0,
+    H2EncodePing($0123456789ABCDEF)), 'PING connection frame');
+  CheckFrameInvalid(NewFrame(H2_FRAME_PING, 0, 1,
+    H2EncodePing($0123456789ABCDEF)),
+    H2_ERR_PROTOCOL_ERROR, 'PING stream id must be 0');
+  CheckFrameInvalid(NewFrame(H2_FRAME_PING, 0, 0, #0#0#0#0#0#0#0),
+    H2_ERR_FRAME_SIZE_ERROR, 'PING length must be 8');
+  CheckFrameInvalid(NewFrame(H2_FRAME_GOAWAY, 0, 1,
+    H2EncodeGoaway(0, H2_ERR_NO_ERROR, '')),
+    H2_ERR_PROTOCOL_ERROR, 'GOAWAY stream id must be 0');
+  CheckFrameInvalid(NewFrame(H2_FRAME_GOAWAY, 0, 0, #0#0#0#0#0#0#0),
+    H2_ERR_FRAME_SIZE_ERROR, 'GOAWAY length must be at least 8');
+  CheckFrameValid(NewFrame(H2_FRAME_WINDOW_UPDATE, 0, 1,
+    H2EncodeWindowUpdate(1)), 'WINDOW_UPDATE stream frame');
+  CheckFrameValid(NewFrame(H2_FRAME_WINDOW_UPDATE, 0, 0,
+    H2EncodeWindowUpdate(1)), 'WINDOW_UPDATE connection frame');
+  CheckFrameInvalid(NewFrame(H2_FRAME_WINDOW_UPDATE, 0, 0, #0#0#0),
+    H2_ERR_FRAME_SIZE_ERROR, 'WINDOW_UPDATE length must be 4');
+  CheckFrameInvalid(NewFrame(H2_FRAME_WINDOW_UPDATE, 0, 1,
+    H2EncodeWindowUpdate(0)),
+    H2_ERR_PROTOCOL_ERROR, 'WINDOW_UPDATE zero increment rejected');
+end;
+
+procedure TestFramePaddingValidation;
+begin
+  CheckFrameInvalid(NewFrame(H2_FRAME_DATA, H2_FLAG_DATA_PADDED, 1, ''),
+    H2_ERR_FRAME_SIZE_ERROR, 'DATA padded frame needs pad length byte');
+  CheckFrameInvalid(NewFrame(H2_FRAME_DATA, H2_FLAG_DATA_PADDED, 1,
+    #3'ab'),
+    H2_ERR_FRAME_SIZE_ERROR, 'DATA pad length cannot exceed payload');
+  CheckFrameValid(NewFrame(H2_FRAME_DATA, H2_FLAG_DATA_PADDED, 1,
+    #2'ab'), 'DATA can carry only padding after pad length');
+
+  CheckFrameInvalid(NewFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_PADDED, 1, ''),
+    H2_ERR_FRAME_SIZE_ERROR, 'HEADERS padded frame needs pad length byte');
+  CheckFrameInvalid(NewFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_PADDED, 1,
+    #1),
+    H2_ERR_FRAME_SIZE_ERROR, 'HEADERS pad length cannot consume pad byte');
+  CheckFrameInvalid(NewFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_PRIORITY, 1,
+    #0#0#0#0),
+    H2_ERR_FRAME_SIZE_ERROR, 'HEADERS priority flag needs 5 bytes');
+  CheckFrameValid(NewFrame(H2_FRAME_HEADERS,
+    H2_FLAG_HEADERS_PADDED or H2_FLAG_HEADERS_PRIORITY, 1,
+    #0#0#0#0#0#0), 'HEADERS padded priority minimum');
+
+  CheckFrameInvalid(NewFrame(H2_FRAME_PUSH_PROMISE, H2_FLAG_PUSH_PROMISE_PADDED,
+    1, #1#0#0#0#0),
+    H2_ERR_FRAME_SIZE_ERROR, 'PUSH_PROMISE pad length cannot consume payload');
+  CheckFrameValid(NewFrame(H2_FRAME_PUSH_PROMISE, H2_FLAG_PUSH_PROMISE_PADDED,
+    1, #0#0#0#0#2), 'PUSH_PROMISE padded minimum');
+end;
+
 procedure TestClientPreface;
 begin
   CheckEqual('PRI * HTTP/2.0'#13#10#13#10'SM'#13#10#13#10,
@@ -235,6 +346,9 @@ begin
       @TestSettingsRejectsTrailingPartialEntry);
     Run('Fixed payload codecs', @TestFixedPayloadCodecs);
     Run('Names and validation helpers', @TestNamesAndValidationHelpers);
+    Run('Frame type specific validation',
+      @TestFrameTypeSpecificValidation);
+    Run('Frame padding validation', @TestFramePaddingValidation);
     Run('Client preface', @TestClientPreface);
     Summary;
   end;
