@@ -1008,6 +1008,11 @@ require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "FinalizeArray(LSource, TypeInfo(ISystemTypInfoProbe)"
 require_token "tests/nextpas.core.system/Makefile" "test-typinfo-minimal"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/Makefile" "test: run compiler-contract"
+require_token "tests/nextpas.core.system/Makefile" "test-object-free-runtime-contract"
+require_token "tests/nextpas.core.system/Makefile" "OBJECT_FREE_RUNTIME_CONTRACT_SOURCE"
+require_token "tests/nextpas.core.system/Makefile" "test_hir_object_free_contract.pas"
+require_token "tests/nextpas.core.system/Makefile" "OBJECT_FREE_RUNTIME_CONTRACT_FPC_FLAGS"
+require_token "tests/nextpas.core.system/Makefile" "OBJECT_FREE_RUNTIME_CONTRACT_BINARY"
 
 require_token "src/nextpas.core.system.pas" "NEXTPAS_SYSTEM_NAME = 'nextpas.core.system';"
 require_token "src/nextpas.core.system.pas" "MAX_SIZE_INT = nextpas.core.base.MAX_SIZE_INT;"
