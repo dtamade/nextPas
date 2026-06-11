@@ -108,6 +108,14 @@ Rules:
 - Nil interface references must be safe.
 - Release ordering must be deterministic and testable.
 - Any interaction with object destruction must align with `np.system.object_free`.
+- Compiler/HIR may currently project interface reference ownership through
+  backend-private interface helpers such as `@np_intf_addref` and
+  `@np_intf_release`. These names are LLVM/backend evidence only,
+  not public ABI, not Pascal facade symbols, not object-free completion, and
+  not finalized reference-counting strategy.
+- Current helper bodies are allowed to show nil-safety and refcount-slot
+  mechanics in LLVM-focused tests. They must not be read as a final COM,
+  elision, destruction, or interface-table policy for the future runtime.
 
 ## Object Free
 

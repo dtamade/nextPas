@@ -664,6 +664,21 @@ for helper in \
   require_token "docs/system/runtime-contracts.md" "$helper"
 done
 for helper in \
+  "@np_intf_addref" \
+  "@np_intf_release"; do
+  require_token "docs/system/runtime-contracts.md" "$helper"
+done
+require_token "docs/system/runtime-contracts.md" "backend-private interface helpers"
+require_token "docs/system/runtime-contracts.md" "not Pascal facade symbols"
+require_token "docs/system/runtime-contracts.md" "not object-free completion"
+require_token "docs/system/runtime-contracts.md" "not finalized reference-counting strategy"
+require_repo_token "compiler/ir/np_hir_builder.pas" "Instr.IntrinsicName := 'intf_addref';"
+require_repo_token "compiler/ir/np_hir_builder.pas" "Instr.IntrinsicName := 'intf_release';"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_intf_addref"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_intf_release"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_intf_addref"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_intf_release"
+for helper in \
   "@np_alloc" \
   "@np_free" \
   "@np_object_alloc" \
