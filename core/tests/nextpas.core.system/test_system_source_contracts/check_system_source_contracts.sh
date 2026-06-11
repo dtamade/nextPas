@@ -492,9 +492,18 @@ require_token "docs/system/README.md" '| `np.system.process_fini` | process-leve
 require_token "docs/system/README.md" '| `np.system.unit_init` | run a unit initialization entry | future compiler/runtime only |'
 require_token "docs/system/README.md" '| `np.system.unit_fini` | run a unit finalization entry | future compiler/runtime only |'
 require_token "docs/system/README.md" 'program, library and package roots project exact `runtime-contract` entries'
+require_token "docs/system/README.md" "source-backed System truth"
+require_token "docs/system/README.md" '`rtl/core/system/System.pas`'
+require_token "docs/system/README.md" '`TObject.Free`'
+require_token "docs/system/README.md" '`test-stage0-system-object-free-query`'
+require_token "docs/system/README.md" "stage0 query evidence"
 require_token "docs/system/rtl-mapping.md" "compiler/HIR contract live; no public facade"
 require_token "docs/system/rtl-mapping.md" 'Program startup and shutdown | `compiler semantic contract live; runtime execution deferred`'
 require_token "docs/system/rtl-mapping.md" "np.system.object_free"
+require_token "docs/system/rtl-mapping.md" "source-backed System truth"
+require_token "docs/system/rtl-mapping.md" '`rtl/core/system/System.pas`'
+require_token "docs/system/rtl-mapping.md" '`TObject.Free`'
+require_token "docs/system/rtl-mapping.md" '`test-stage0-system-object-free-query`'
 
 for unit_name in System SysUtils TypInfo Classes ObjPas; do
   require_token "docs/system/rtl-mapping.md" "$unit_name"
@@ -517,6 +526,9 @@ require_token "docs/system/goal-tree.md" "TypeInfo and GetTypeKind are compiler/
 require_token "docs/system/goal-tree.md" "not unit-owned wrapper functions"
 require_token "docs/system/goal-tree.md" "process-level startup/shutdown semantic seed"
 require_token "docs/system/goal-tree.md" "without upgrading runtime execution or unit lifecycle"
+require_token "docs/system/goal-tree.md" "source-backed System truth"
+require_token "docs/system/goal-tree.md" '`test-stage0-system-object-free-query`'
+require_token "docs/system/goal-tree.md" "stage0 query evidence"
 
 for token in \
   "S4" \

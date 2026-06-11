@@ -84,7 +84,13 @@ Current phase note:
 - [x] Prove managed dynamic-array contract vocabulary is explicit without freezing backend-private helper symbols.
 - [x] Align process-level startup/shutdown semantic seed with `np.system.process_init` / `np.system.process_fini`.
 - [x] Prove process lifecycle semantic seed exact-name order without upgrading runtime execution or unit lifecycle.
-- [ ] Align remaining facade docs with compiler runtime contract names and source-backed `System` truth.
+- [x] Align remaining facade docs with compiler runtime contract names and source-backed `System` truth.
 - [ ] Prove remaining runtime helper references are explicit, stable and not backend-private magic strings.
 - [ ] Add integration smoke once compiler/runtime can consume the core-system contract directly.
 - [ ] Prepare a landing candidate only after focused gates and cross-module risks are clean.
+
+Current S5 evidence:
+
+- Managed dynamic-array contract names and backend-private helper boundaries are locked by source-contract checks and HIR dynamic-array focused gates.
+- Process lifecycle semantic seed order is locked by `test-process-runtime-contract-seed`; unit lifecycle execution remains deferred.
+- Object-free source-backed System truth is locked by `rtl/core/system/System.pas`, `TObject.Free`, object-free HIR gates, and the focused `test-stage0-system-object-free-query` stage0 query evidence.

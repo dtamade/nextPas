@@ -120,6 +120,15 @@ program, library and package roots project exact `runtime-contract` entries for
 unit lifecycle ordering and fault handling are still deferred and must not be
 treated as a public callable facade.
 
+Object-free lowering now has source-backed System truth: `rtl/core/system/System.pas`
+is the compiler-visible minimum root for `TObject.Create`, `TObject.Destroy`,
+and `TObject.Free`. The focused `test-stage0-system-object-free-query` gate
+provides stage0 query evidence that both explicit `uses System` and implicit
+System resolution bind ordinary class `Free` calls to `System.TObject.Free`
+with definitions under `units/linux-x86_64/System.pas`. This evidence keeps the
+compiler/runtime contract aligned with the source-backed unit, but it still
+does not expose `TObject` or `Free` as a public `nextpas.core.system` facade.
+
 ## non-goals
 
 - Do not clone the historical FPC `System` / `SysUtils` / `Classes` grab bag into nextPas.
