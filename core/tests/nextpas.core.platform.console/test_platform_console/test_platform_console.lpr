@@ -3,12 +3,58 @@ program test_platform_console;
 {$I nextpas.core.settings.inc}
 
 uses
+  Classes,
+  SysUtils,
   nextpas.core.platform.console,
   nextpas.core.platform.pipe,
   nextpas.core.testing;
 
 var
   T: TTestRunner;
+
+function ExpandRepoPath(const ARelativePath: string): string;
+begin
+  Result := ExpandFileName('../../../' + ARelativePath);
+end;
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LSourcePath: string;
+  LLines: TStringList;
+begin
+  LSourcePath := ExpandRepoPath(ARelativePath);
+  Check(FileExists(LSourcePath), 'source file should exist: ' + LSourcePath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(LSourcePath);
+    Result := LowerCase(LLines.Text);
+  finally
+    LLines.Free;
+  end;
+end;
+
+function SliceBetween(const ASource, AStartToken, AEndToken: string): string;
+var
+  LStart: SizeInt;
+  LEndPos: SizeInt;
+begin
+  LStart := Pos(AStartToken, ASource);
+  Check(LStart > 0, 'start token exists: ' + AStartToken);
+  LEndPos := Pos(AEndToken, Copy(ASource, LStart + Length(AStartToken),
+    Length(ASource)));
+  Check(LEndPos > 0, 'end token exists: ' + AEndToken);
+  Result := Copy(ASource, LStart, Length(AStartToken) + LEndPos - 1);
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
+end;
+
+procedure CheckAbsent(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
+end;
 
 procedure TestIsTerminalStdout;
 begin
@@ -55,6 +101,43 @@ begin
   platform_pipe_close(P);
 end;
 
+procedure TestWindowsConsoleSourceContract;
+var
+  LConsole: string;
+  LWindowsBranch: string;
+begin
+  LConsole := LoadSourceText('src/nextpas.core.platform.console.pas');
+  LWindowsBranch := SliceBetween(LConsole, '{$ifdef nextpas_windows}',
+    '{$if not defined(nextpas_unix) and not defined(nextpas_windows)}');
+
+  CheckContains(LWindowsBranch, 'function windowsconsolehandlefromfd',
+    'Windows console must map public std fds to standard handles internally');
+  CheckContains(LWindowsBranch, 'std_input_handle',
+    'Windows console must use STD_INPUT_HANDLE for fd 0');
+  CheckContains(LWindowsBranch, 'std_output_handle',
+    'Windows console must use STD_OUTPUT_HANDLE for fd 1');
+  CheckContains(LWindowsBranch, 'std_error_handle',
+    'Windows console must use STD_ERROR_HANDLE for fd 2');
+  CheckContains(LWindowsBranch, 'enable_virtual_terminal_input',
+    'Windows raw mode must enable virtual-terminal input');
+  CheckContains(LWindowsBranch, 'enable_line_input',
+    'Windows raw mode must disable line input');
+  CheckContains(LWindowsBranch, 'enable_echo_input',
+    'Windows raw mode must disable echo input');
+  CheckContains(LWindowsBranch, 'readfile(',
+    'Windows console read must use nextPas-owned ReadFile binding');
+  CheckContains(LWindowsBranch, 'writefile(',
+    'Windows console write must use nextPas-owned WriteFile binding');
+  CheckContains(LWindowsBranch, 'waitforsingleobject',
+    'Windows console wait must use WaitForSingleObject');
+  CheckContains(LWindowsBranch, 'cwtimeout',
+    'Windows console wait must map timeout result');
+  CheckContains(LWindowsBranch, 'error_invalid_handle',
+    'invalid Windows std fd must return stable invalid-handle semantics');
+  CheckAbsent(LWindowsBranch, 'windows raw mode / io / wait',
+    'Windows console branch must not document raw/io/wait as stubs');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.console');
   T.Run('is_terminal stdout', @TestIsTerminalStdout);
@@ -62,5 +145,6 @@ begin
   T.Run('get size', @TestGetSize);
   T.Run('enable ansi', @TestEnableAnsi);
   T.Run('pipe not terminal', @TestPipeNotTerminal);
+  T.Run('Windows console source contract', @TestWindowsConsoleSourceContract);
   T.Summary;
 end.
