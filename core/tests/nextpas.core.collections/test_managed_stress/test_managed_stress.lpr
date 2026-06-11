@@ -16,7 +16,8 @@ uses
   nextpas.core.collections.skiplist,
   nextpas.core.collections.circularbuffer,
   nextpas.core.collections.linkedhashmap,
-  nextpas.core.collections.priorityqueue;
+  nextpas.core.collections.priorityqueue,
+  nextpas.core.collections.iterators;
 
 var
   GPass: Integer;
@@ -909,6 +910,91 @@ begin
   Pass('PriorityQueue managed ToArray owns refs after clear');
 end;
 
+function MapIntToTracked(const AValue: Integer; aData: Pointer): ITracked;
+begin
+  Result := MakeTracked(AValue);
+end;
+
+procedure TestMapIterManagedReinitReleasesCurrent;
+type
+  TIntVec = specialize TVec<Integer>;
+  TTrackedMapIter = specialize TMapIter<Integer, ITracked>;
+var
+  V: TIntVec;
+  Iter: TTrackedMapIter;
+  Snap: TLeakSnapshot;
+  Current: ITracked;
+begin
+  Snap := SnapTake;
+  V := TIntVec.Create;
+  try
+    V.Push(1);
+    Iter.Init(V.Iter, @MapIntToTracked, nil);
+    if not Iter.MoveNext then
+    begin
+      WriteLn('FAIL: MapIter should yield first item');
+      Halt(1);
+    end;
+
+    Current := Iter.Current;
+    if Current.GetId <> 1 then
+    begin
+      WriteLn('FAIL: MapIter returned unexpected id');
+      Halt(1);
+    end;
+    Current := nil;
+
+    Iter.Init(V.Iter, @MapIntToTracked, nil);
+  finally
+    V.Free;
+  end;
+  SnapAssert(Snap, 'MapIter managed reinit releases current');
+  Pass('MapIter managed reinit releases current');
+end;
+
+procedure TestChainIterManagedReinitReleasesCurrent;
+type
+  TTrackedVec = specialize TVec<ITracked>;
+  TTrackedChainIter = specialize TChainIter<ITracked>;
+var
+  First, Second: TTrackedVec;
+  Iter: TTrackedChainIter;
+  Snap: TLeakSnapshot;
+  Current, Tracked: ITracked;
+begin
+  Snap := SnapTake;
+  First := TTrackedVec.Create;
+  Second := TTrackedVec.Create;
+  try
+    Tracked := MakeTracked(21);
+    First.Push(Tracked);
+    Tracked := nil;
+
+    Iter.Init(First.Iter, Second.Iter);
+    if not Iter.MoveNext then
+    begin
+      WriteLn('FAIL: ChainIter should yield first item');
+      Halt(1);
+    end;
+
+    Current := Iter.Current;
+    if Current.GetId <> 21 then
+    begin
+      WriteLn('FAIL: ChainIter returned unexpected id');
+      Halt(1);
+    end;
+    Current := nil;
+
+    First.Clear;
+    Iter.Init(First.Iter, Second.Iter);
+  finally
+    Second.Free;
+    First.Free;
+  end;
+  SnapAssert(Snap, 'ChainIter managed reinit releases current');
+  Pass('ChainIter managed reinit releases current');
+end;
+
 begin
   GPass := 0;
   WriteLn('=== Managed Type Stress Tests ===');
@@ -938,6 +1024,8 @@ begin
   TestCircularBufferOverwrite;
   TestLinkedHashMapClear;
   TestPriorityQueueManagedToArrayOwnsRefsAfterClear;
+  TestMapIterManagedReinitReleasesCurrent;
+  TestChainIterManagedReinitReleasesCurrent;
   WriteLn(Format('--- %d passed ---', [GPass]));
   WriteLn('ALL PASS');
 end.

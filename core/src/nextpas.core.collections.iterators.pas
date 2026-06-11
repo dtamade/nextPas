@@ -556,7 +556,7 @@ begin
   FStartIndex := aStartIndex;
   FIndex := aStartIndex;
   FStarted := False;
-  FillChar(FCurrent, SizeOf(FCurrent), 0);
+  FCurrent := Default(T);
 end;
 
 class function TEnumerateIter.Create(const aSource: TSourceIter; aStartIndex: SizeUInt): specialize TEnumerateIter<T>;
@@ -600,8 +600,8 @@ procedure TZipIter.Init(const aFirst: TFirstIter; const aSecond: TSecondIter);
 begin
   FFirst := aFirst;
   FSecond := aSecond;
-  FillChar(FCurrentFirst, SizeOf(FCurrentFirst), 0);
-  FillChar(FCurrentSecond, SizeOf(FCurrentSecond), 0);
+  FCurrentFirst := Default(T);
+  FCurrentSecond := Default(U);
 end;
 
 class function TZipIter.Create(const aFirst: TFirstIter; const aSecond: TSecondIter): specialize TZipIter<T, U>;
@@ -637,7 +637,7 @@ begin
   FFirst := aFirst;
   FSecond := aSecond;
   FFirstExhausted := False;
-  FillChar(FCurrent, SizeOf(FCurrent), 0);
+  FCurrent := Default(T);
 end;
 
 class function TChainIter.Create(const aFirst: TSourceIter; const aSecond: TSourceIter): specialize TChainIter<T>;
@@ -678,7 +678,7 @@ begin
   FMapper := aMapper;
   FData := aData;
   FStarted := False;
-  FillChar(FCurrent, SizeOf(FCurrent), 0);
+  FCurrent := Default(U);
 end;
 
 class function TMapIter.Create(const aSource: TSourceIter; aMapper: TMapperFunc; aData: Pointer): specialize TMapIter<T, U>;
@@ -706,7 +706,7 @@ begin
   FPredicate := aPredicate;
   FData := aData;
   FStarted := False;
-  FillChar(FCurrent, SizeOf(FCurrent), 0);
+  FCurrent := Default(T);
 end;
 
 class function TFilterIter.Create(const aSource: TSourceIter; aPredicate: TPredicateFunc; aData: Pointer): specialize TFilterIter<T>;
@@ -745,7 +745,7 @@ begin
   FSource := aSource;
   FRemaining := aCount;
   FStarted := False;
-  FillChar(FCurrent, SizeOf(FCurrent), 0);
+  FCurrent := Default(T);
 end;
 
 class function TTakeIter.Create(const aSource: TSourceIter; aCount: SizeUInt): specialize TTakeIter<T>;
@@ -801,7 +801,7 @@ begin
   // Initialize for reverse iteration
   FIndex := SizeInt(LCount);  // Start past the end
   FInitialized := True;
-  FillChar(FCurrent, SizeOf(T), 0);
+  FCurrent := Default(T);
 end;
 
 class function TRevIter.Create(const aSource: TSourceIter): specialize TRevIter<T>;
@@ -835,7 +835,7 @@ begin
   // Initialize for reverse iteration
   Result.FIndex := SizeInt(LCount);  // Start past the end
   Result.FInitialized := True;
-  FillChar(Result.FCurrent, SizeOf(T), 0);
+  Result.FCurrent := Default(T);
 end;
 
 function TRevIter.MoveNext: Boolean;
@@ -864,7 +864,7 @@ begin
   FSkipCount := aCount;
   FSkipped := False;
   FStarted := False;
-  FillChar(FCurrent, SizeOf(FCurrent), 0);
+  FCurrent := Default(T);
 end;
 
 class function TSkipIter.Create(const aSource: TSourceIter; aCount: SizeUInt): specialize TSkipIter<T>;
@@ -906,7 +906,7 @@ begin
   FPredicate := aPredicate;
   FData := aData;
   FDone := False;
-  FillChar(FCurrent, SizeOf(FCurrent), 0);
+  FCurrent := Default(T);
 end;
 
 class function TTakeWhileIter.Create(const aSource: TSourceIter; aPredicate: TPredicateFunc; aData: Pointer): specialize TTakeWhileIter<T>;
@@ -945,7 +945,7 @@ begin
   FPredicate := aPredicate;
   FData := aData;
   FSkipping := True;
-  FillChar(FCurrent, SizeOf(FCurrent), 0);
+  FCurrent := Default(T);
 end;
 
 class function TSkipWhileIter.Create(const aSource: TSourceIter; aPredicate: TPredicateFunc; aData: Pointer): specialize TSkipWhileIter<T>;
@@ -987,7 +987,7 @@ procedure TFlattenIter.Init(const aSource: TOuterIter);
 begin
   FOuterIter := aSource;
   FHasInner := False;
-  FillChar(FCurrent, SizeOf(FCurrent), 0);
+  FCurrent := Default(T);
 end;
 
 class function TFlattenIter.Create(const aSource: TOuterIter): specialize TFlattenIter<T>;
