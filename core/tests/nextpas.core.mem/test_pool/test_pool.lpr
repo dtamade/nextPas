@@ -6,10 +6,22 @@ uses
   SysUtils,
   nextpas.core.testing,
   nextpas.core.mem.error,
-  nextpas.core.mem.pool;
+  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.pool,
+  nextpas.core.mem.pool.fixed;
 
 type
   TExceptionProc = procedure;
+  TFixedPoolRecordingAllocator = class(TAllocator)
+  protected
+    function DoGetMem(aSize: SizeUInt): Pointer; override;
+    function DoAllocMem(aSize: SizeUInt): Pointer; override;
+    function DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(aDst: Pointer); override;
+  public
+    GetCalls: Integer;
+    FreeCalls: Integer;
+  end;
 
 var
   T: TTestRunner;
@@ -26,6 +38,27 @@ begin
     on E: EAllocError do
       CheckEqual(Int64(Ord(AExpected)), Int64(Ord(E.Error)), AName + ': error code');
   end;
+end;
+
+function TFixedPoolRecordingAllocator.DoGetMem(aSize: SizeUInt): Pointer;
+begin
+  Inc(GetCalls);
+  Result := nil;
+end;
+
+function TFixedPoolRecordingAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
+begin
+  Result := DoGetMem(aSize);
+end;
+
+function TFixedPoolRecordingAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+begin
+  Result := nil;
+end;
+
+procedure TFixedPoolRecordingAllocator.DoFreeMem(aDst: Pointer);
+begin
+  Inc(FreeCalls);
 end;
 
 procedure ReleaseExternalPointer;
@@ -232,6 +265,39 @@ begin
   end;
 end;
 
+procedure TestFixedPoolRejectsTotalSizeOverflowBeforeAlloc;
+var
+  LPool: TFixedPool;
+  LAllocator: TFixedPoolRecordingAllocator;
+  LAllocatorRef: IAllocator;
+  LBlockSize: SizeUInt;
+  LRaised: Boolean;
+begin
+  LAllocator := TFixedPoolRecordingAllocator.Create;
+  LAllocatorRef := LAllocator;
+  LBlockSize := High(SizeUInt) - (High(SizeUInt) mod 16);
+  LRaised := False;
+  LPool := nil;
+  try
+    try
+      LPool := TFixedPool.Create(LBlockSize, 2, 16, LAllocatorRef);
+    except
+      on E: EAllocError do
+      begin
+        LRaised := True;
+        CheckEqual(Int64(Ord(aeInvalidLayout)), Int64(Ord(E.Error)),
+          'fixed pool total-size overflow error');
+      end;
+    end;
+    Check(LRaised, 'fixed pool total-size overflow must fail closed');
+    CheckEqual(Int64(0), Int64(LAllocator.GetCalls),
+      'fixed pool total-size overflow must not call backing allocator');
+  finally
+    LPool.Free;
+    LAllocatorRef := nil;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.pool');
   T.Run('Init', @TestPoolInit);
@@ -246,5 +312,6 @@ begin
   T.Run('Done', @TestPoolDone);
   T.Run('Small block size', @TestPoolSmallBlockSize);
   T.Run('legacy TPool alias', @TestPoolLegacyAlias);
+  T.Run('fixed pool rejects total-size overflow before alloc', @TestFixedPoolRejectsTotalSizeOverflowBeforeAlloc);
   T.Summary;
 end.

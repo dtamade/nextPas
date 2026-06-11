@@ -254,7 +254,7 @@ begin
   begin
     LOverflowCheck := FTotalSize div FBlockSize;
     if LOverflowCheck <> SizeUInt(FCapacity) then
-      raise EOutOfMemory.Create(aeOutOfMemory, 'Total size overflow');
+      raise EMemFixedPoolError.Create(aeInvalidLayout, 'Total size overflow');
   end;
 
   // 分配连续 Arena（对齐）
