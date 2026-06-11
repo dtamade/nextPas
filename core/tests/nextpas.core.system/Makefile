@@ -1,4 +1,4 @@
-.PHONY: test test-source-contracts test-facade test-typinfo-minimal test-sysutils-minimal test-process-runtime-contract-seed test-object-free-runtime-contract clean
+.PHONY: test test-source-contracts test-facade test-typinfo-minimal test-sysutils-minimal test-process-runtime-contract-seed test-object-free-runtime-contract test-field-dynarray-contract test-field-dynarray-runtime-smoke clean
 
 ROOT_DIR := $(abspath ../../..)
 PROCESS_RUNTIME_CONTRACT_SEED_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-process-runtime-contract-seed
@@ -9,8 +9,16 @@ OBJECT_FREE_RUNTIME_CONTRACT_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-obj
 OBJECT_FREE_RUNTIME_CONTRACT_BINARY := $(OBJECT_FREE_RUNTIME_CONTRACT_BUILD_DIR)/test_hir_object_free_contract
 OBJECT_FREE_RUNTIME_CONTRACT_SOURCE := $(ROOT_DIR)/tests/hir/test_hir_object_free_contract.pas
 OBJECT_FREE_RUNTIME_CONTRACT_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text
+FIELD_DYNARRAY_CONTRACT_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-field-dynarray-contract
+FIELD_DYNARRAY_CONTRACT_BINARY := $(FIELD_DYNARRAY_CONTRACT_BUILD_DIR)/test_hir_field_dynarray_contract
+FIELD_DYNARRAY_CONTRACT_SOURCE := $(ROOT_DIR)/tests/hir/test_hir_field_dynarray_contract.pas
+FIELD_DYNARRAY_CONTRACT_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/diagnostics -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text
+FIELD_DYNARRAY_RUNTIME_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-field-dynarray-runtime-smoke
+FIELD_DYNARRAY_RUNTIME_BINARY := $(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)/test_hir_field_dynarray_release_runtime_smoke
+FIELD_DYNARRAY_RUNTIME_SOURCE := $(ROOT_DIR)/tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas
+FIELD_DYNARRAY_RUNTIME_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/diagnostics -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text
 
-test: test-source-contracts test-facade test-typinfo-minimal test-sysutils-minimal test-process-runtime-contract-seed test-object-free-runtime-contract
+test: test-source-contracts test-facade test-typinfo-minimal test-sysutils-minimal test-process-runtime-contract-seed test-object-free-runtime-contract test-field-dynarray-contract test-field-dynarray-runtime-smoke
 
 test-source-contracts:
 	$(MAKE) -C test_system_source_contracts test
@@ -36,9 +44,23 @@ test-object-free-runtime-contract:
 	fpc $(OBJECT_FREE_RUNTIME_CONTRACT_FPC_FLAGS) -FE"$(OBJECT_FREE_RUNTIME_CONTRACT_BUILD_DIR)" -FU"$(OBJECT_FREE_RUNTIME_CONTRACT_BUILD_DIR)" "$(OBJECT_FREE_RUNTIME_CONTRACT_SOURCE)"
 	"$(OBJECT_FREE_RUNTIME_CONTRACT_BINARY)"
 
+test-field-dynarray-contract:
+	rm -rf "$(FIELD_DYNARRAY_CONTRACT_BUILD_DIR)"
+	mkdir -p "$(FIELD_DYNARRAY_CONTRACT_BUILD_DIR)"
+	fpc $(FIELD_DYNARRAY_CONTRACT_FPC_FLAGS) -FE"$(FIELD_DYNARRAY_CONTRACT_BUILD_DIR)" -FU"$(FIELD_DYNARRAY_CONTRACT_BUILD_DIR)" "$(FIELD_DYNARRAY_CONTRACT_SOURCE)"
+	"$(FIELD_DYNARRAY_CONTRACT_BINARY)"
+
+test-field-dynarray-runtime-smoke:
+	rm -rf "$(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)"
+	mkdir -p "$(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)"
+	fpc $(FIELD_DYNARRAY_RUNTIME_FPC_FLAGS) -FE"$(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)" -FU"$(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)" "$(FIELD_DYNARRAY_RUNTIME_SOURCE)"
+	"$(FIELD_DYNARRAY_RUNTIME_BINARY)" "$(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)"
+
 clean:
 	$(MAKE) -C test_system_facade clean
 	$(MAKE) -C test_system_typinfo_minimal clean
 	$(MAKE) -C test_system_sysutils_minimal clean
 	rm -rf "$(PROCESS_RUNTIME_CONTRACT_SEED_BUILD_DIR)"
 	rm -rf "$(OBJECT_FREE_RUNTIME_CONTRACT_BUILD_DIR)"
+	rm -rf "$(FIELD_DYNARRAY_CONTRACT_BUILD_DIR)"
+	rm -rf "$(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)"
