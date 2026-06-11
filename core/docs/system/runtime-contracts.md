@@ -80,8 +80,12 @@ Rules:
   `np.system.dynarray_fini` and element contracts such as
   `np.system.string_fini` for `array of string` and
   `np.system.interface_release` for `array of interface`. Backend-private
-  helpers such as `@np_dynarray_resize` and `@np_dynarray_release` remain
-  implementation details, not public ABI.
+  helpers such as `@np_dynarray_resize`, `@np_dynarray_release` and
+  `@np_dynarray_fault` remain implementation details, not public ABI.
+- The dynamic-array fault helper is current backend evidence for rejecting
+  impossible helper states in generated LLVM. It is not a public runtime-fault
+  taxonomy, not a Pascal exception facade, and not proof that all dynamic-array
+  failure semantics are finalized.
 - Managed dynamic-array contract tests prove semantic contract projection only.
   They must not use backend-private LLVM helper calls as evidence that element
   finalization semantics are implemented.
