@@ -6,10 +6,45 @@ uses
   SysUtils,
   nextpas.core.testing,
   nextpas.core.mem.allocator.base,
+  nextpas.core.mem.error,
+  nextpas.core.mem.pool.fixed_slab,
   nextpas.core.mem.pool.slab;
+
+type
+  TFixedSlabRecordingAllocator = class(TAllocator)
+  protected
+    function DoGetMem(aSize: SizeUInt): Pointer; override;
+    function DoAllocMem(aSize: SizeUInt): Pointer; override;
+    function DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(aDst: Pointer); override;
+  public
+    GetCalls: Integer;
+    FreeCalls: Integer;
+  end;
 
 var
   T: TTestRunner;
+
+function TFixedSlabRecordingAllocator.DoGetMem(aSize: SizeUInt): Pointer;
+begin
+  Inc(GetCalls);
+  Result := nil;
+end;
+
+function TFixedSlabRecordingAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
+begin
+  Result := DoGetMem(aSize);
+end;
+
+function TFixedSlabRecordingAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+begin
+  Result := nil;
+end;
+
+procedure TFixedSlabRecordingAllocator.DoFreeMem(aDst: Pointer);
+begin
+  Inc(FreeCalls);
+end;
 
 procedure TestCreateStatsAndTraits;
 var
@@ -110,10 +145,44 @@ begin
   end;
 end;
 
+procedure TestFixedSlabCreateRejectsCapacityOverflow;
+var
+  LAllocator: TFixedSlabRecordingAllocator;
+  LAllocatorRef: IAllocator;
+  LPool: TFixedSlabPool;
+  LRaised: Boolean;
+begin
+  LAllocator := TFixedSlabRecordingAllocator.Create;
+  LAllocatorRef := LAllocator as IAllocator;
+  LPool := nil;
+  try
+    LRaised := False;
+    try
+      LPool := TFixedSlabPool.Create(High(SizeUInt), LAllocatorRef);
+    except
+      on E: EAllocError do
+      begin
+        LRaised := True;
+        CheckEqual(Int64(Ord(aeInvalidLayout)), Int64(Ord(E.Error)),
+          'fixed slab overflow capacity error');
+      end;
+    end;
+
+    Check(LRaised, 'fixed slab overflow capacity must fail closed');
+    CheckEqual(Int64(0), Int64(LAllocator.GetCalls),
+      'fixed slab overflow capacity must not call backing allocator');
+  finally
+    LPool.Free;
+    LAllocatorRef := nil;
+    LAllocator := nil;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.slab_pool');
   T.Run('create stats and traits', @TestCreateStatsAndTraits);
   T.Run('alloc free and perf counters', @TestAllocFreeAndPerfCounters);
   T.Run('aligned fallback tracking', @TestAllocAlignedFallsBackAndTracksStats);
+  T.Run('fixed slab rejects capacity overflow', @TestFixedSlabCreateRejectsCapacityOverflow);
   T.Summary;
 end.

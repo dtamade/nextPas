@@ -12,7 +12,8 @@ interface
 uses
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.allocator,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.error;
 
 type
   {$IFDEF NEXTPAS_CORE_SLAB_STATS}
@@ -944,6 +945,8 @@ var
   desired_pages: SizeUInt;
   overhead_base: SizeUInt;
   per_page_cost: SizeUInt;
+  page_payload_cost: SizeUInt;
+  allocation_size: SizeUInt;
   total_size: SizeUInt;
 begin
   inherited Create;
@@ -966,14 +969,27 @@ begin
   // Compute conservative total size to ensure at least ACapacity data bytes.
   // n = number of slots (and stats)
   n := NGX_SLAB_PAGE_SHIFT - FMinShift;
+  if ACapacity > High(SizeUInt) - (NGX_SLAB_PAGE_SIZE - 1) then
+    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: capacity overflow');
   desired_pages := (ACapacity + NGX_SLAB_PAGE_SIZE - 1) div NGX_SLAB_PAGE_SIZE;
   overhead_base := SizeOf(ngx_slab_pool_t) + n * (SizeOf(ngx_slab_page_t) + SizeOf(ngx_slab_stat_t));
   // total per-page cost inside the region = page descriptor + one page
   per_page_cost := SizeOf(ngx_slab_page_t) + NGX_SLAB_PAGE_SIZE;
-  total_size := overhead_base + desired_pages * per_page_cost + NGX_SLAB_PAGE_SIZE; // add one page slack
+  if (desired_pages <> 0) and (per_page_cost > High(SizeUInt) div desired_pages) then
+    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: region size overflow');
+  page_payload_cost := desired_pages * per_page_cost;
+  if overhead_base > High(SizeUInt) - page_payload_cost then
+    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: region size overflow');
+  total_size := overhead_base + page_payload_cost;
+  if total_size > High(SizeUInt) - NGX_SLAB_PAGE_SIZE then
+    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: region size overflow');
+  total_size := total_size + NGX_SLAB_PAGE_SIZE; // add one page slack
+  if total_size > High(SizeUInt) - (NGX_SLAB_PAGE_SIZE - 1) then
+    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: allocation size overflow');
+  allocation_size := total_size + (NGX_SLAB_PAGE_SIZE - 1);
 
   // Allocate and align the region
-  FRaw := FAllocator.GetMem(total_size + (NGX_SLAB_PAGE_SIZE - 1));
+  FRaw := FAllocator.GetMem(allocation_size);
   if FRaw = nil then Exit;
 
   // Pool header will live at aligned base
