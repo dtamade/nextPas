@@ -326,7 +326,7 @@ end;
 function TMemoryMapAllocator.Traits: TAllocatorTraits;
 begin
   Result := inherited Traits;
-  Result.ZeroInitialized := True;
+  Result.ZeroInitialized := False;
   Result.ThreadSafe := True;
   Result.HasMemSize := False;
   Result.SupportsAligned := False;

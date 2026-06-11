@@ -14,7 +14,8 @@ uses
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.pool.fixed_slab,
-  nextpas.core.mem.error;        // EAllocError, TAllocError
+  nextpas.core.mem.error,        // EAllocError, TAllocError
+  nextpas.core.mem.layout;       // IsPowerOfTwo, NextPowerOfTwo
 
 type
   // 性能计数器（供测试）
@@ -248,30 +249,11 @@ begin
   Result := (aSize <> 0) and (FConfig.MaxAllocSize > 0) and (aSize > FConfig.MaxAllocSize);
 end;
 
-function IsPowerOfTwoSize(aValue: SizeUInt): Boolean; inline;
-begin
-  Result := (aValue <> 0) and ((aValue and (aValue - 1)) = 0);
-end;
+// IsPowerOfTwoSize removed: use nextpas.core.mem.layout.IsPowerOfTwo
 
-function AlignUpPtrLocal(aPtr: Pointer; aAlignment: SizeUInt): Pointer; inline;
-var
-  LAddr, LMask: PtrUInt;
-begin
-  LAddr := PtrUInt(aPtr);
-  LMask := PtrUInt(aAlignment - 1);
-  Result := Pointer((LAddr + LMask) and not LMask);
-end;
+// AlignUpPtrLocal removed: use nextpas.core.mem.allocator.base.AlignUpPtr (already in scope via allocator)
 
-function NextPow2(const aValue: SizeUInt): SizeUInt; inline;
-var
-  LResult: SizeUInt;
-begin
-  if aValue <= 1 then Exit(1);
-  LResult := 1;
-  while LResult < aValue do
-    LResult := LResult shl 1;
-  Result := LResult;
-end;
+// NextPow2 removed: use nextpas.core.mem.layout.NextPowerOfTwo (O(1) bit smearing)
 
 function TSlabPool.ShouldUseFallback(const aSize: SizeUInt): Boolean; inline;
 begin
@@ -289,7 +271,7 @@ begin
   if aSize <= LMinSize then Exit(LMinSize);
   LPageSize := SizeUInt(1) shl FSegments[0].PageShift;
   if aSize >= (LPageSize shr 1) then Exit(LPageSize);
-  Result := NextPow2(aSize);
+  Result := nextpas.core.mem.layout.NextPowerOfTwo(aSize);
 end;
 
 function TSlabPool.GetFallbackAllocCount: Integer; inline;
@@ -377,8 +359,8 @@ var
 begin
   if aNewCapacity < HASH_MIN_CAP then
     aNewCapacity := HASH_MIN_CAP;
-  if not IsPowerOfTwoSize(aNewCapacity) then
-    aNewCapacity := NextPow2(aNewCapacity);
+  if not nextpas.core.mem.layout.IsPowerOfTwo(aNewCapacity) then
+    aNewCapacity := nextpas.core.mem.layout.NextPowerOfTwo(aNewCapacity);
 
   LOldCap := SizeUInt(Length(FFbKeys));
   LOldKeys := FFbKeys;
@@ -639,7 +621,7 @@ begin
     LAlign := 16;
   if LAlign < SizeOf(Pointer) then
     LAlign := SizeOf(Pointer);
-  if not IsPowerOfTwoSize(LAlign) then
+  if not nextpas.core.mem.layout.IsPowerOfTwo(LAlign) then
     raise EInvalidArgument.Create('TSlabPool.AllocFallback: aAlignment must be power of two and >= pointer size');
 
   // over-allocate for alignment; raw pointer is tracked out-of-band
@@ -649,7 +631,7 @@ begin
   LRaw := FAllocator.GetMem(LNeeded);
   if LRaw = nil then Exit(nil);
 
-  LUser := AlignUpPtrLocal(LRaw, LAlign);
+  LUser := AlignUpPtr(LRaw, LAlign);
   try
     FbMapInsert(LUser, LRaw, aSize, LAlign);
   except
@@ -931,7 +913,7 @@ end;
 
 function TSlabPool.Traits: TAllocatorTraits;
 begin
-  Result.ZeroInitialized := True;   // AllocMem 保证零填充
+  Result.ZeroInitialized := False;   // AllocMem 保证零填充
   Result.ThreadSafe      := False;  // 当前未加锁
   Result.HasMemSize      := True;   // 通过 ChunkSizeOf/MemSizeOf
   Result.SupportsAligned := False;  // 未提供对齐 API
@@ -1263,7 +1245,7 @@ begin
 
   if aAlignment < SizeOf(Pointer) then
     aAlignment := SizeOf(Pointer);
-  if not IsPowerOfTwoSize(aAlignment) then
+  if not nextpas.core.mem.layout.IsPowerOfTwo(aAlignment) then
     raise EInvalidArgument.Create('TSlabPool.AllocAligned: aAlignment must be power of two and >= pointer size');
 
   if ShouldUseFallback(aSize) then
