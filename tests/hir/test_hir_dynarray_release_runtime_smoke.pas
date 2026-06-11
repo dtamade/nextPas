@@ -27,6 +27,26 @@ const
     '  Halt(I - 4);' + LineEnding +
     'end.';
 
+  HaltArrayParamSource =
+    'program dynarray_halt_array_param;' + LineEnding +
+    'function Sum(Arr: array of Integer; Count: Integer): Integer;' + LineEnding +
+    'var I, S: Integer;' + LineEnding +
+    'begin' + LineEnding +
+    '  S := 0;' + LineEnding +
+    '  for I := 0 to Count - 1 do' + LineEnding +
+    '    S := S + Arr[I];' + LineEnding +
+    '  Result := S;' + LineEnding +
+    'end;' + LineEnding +
+    'var A: array of Integer;' + LineEnding +
+    'begin' + LineEnding +
+    '  SetLength(A, 4);' + LineEnding +
+    '  A[0] := 10;' + LineEnding +
+    '  A[1] := 11;' + LineEnding +
+    '  A[2] := 12;' + LineEnding +
+    '  A[3] := 9;' + LineEnding +
+    '  Halt(Sum(A, 4));' + LineEnding +
+    'end.';
+
   ExitSource =
     'program dynarray_exit;' + LineEnding +
     'procedure Work;' + LineEnding +
@@ -216,11 +236,14 @@ begin
 end;
 
 procedure AssertGeneratedContracts(const ADirectIr, AResizeLlvm,
-  AExitLlvm: string);
+  AExitLlvm, AHaltArrayParamLlvm: string);
 var
   ExitReleasePos: LongInt;
   ExitRetPos: LongInt;
   ExitHaltPos: LongInt;
+  HaltSumPos: LongInt;
+  HaltReleasePos: LongInt;
+  HaltExitPos: LongInt;
 begin
   if Pos('define internal ptr @np_dynarray_resize(', AResizeLlvm) = 0 then
     Fail('missing-dynarray-resize-helper');
@@ -250,6 +273,23 @@ begin
   if (ExitReleasePos > 0) and (ExitHaltPos > 0) and
     (ExitReleasePos > ExitHaltPos) then
     Fail('exit-cleanup-after-halt');
+
+  HaltSumPos := Pos('call i64 @Sum(', AHaltArrayParamLlvm);
+  HaltReleasePos := Pos('call void @np_dynarray_release(',
+    AHaltArrayParamLlvm);
+  HaltExitPos := FindAfter(
+    'call void asm sideeffect "movq $$60, %rax; syscall"',
+    AHaltArrayParamLlvm, HaltSumPos);
+  if HaltSumPos = 0 then
+    Fail('missing-halt-array-param-sum-call');
+  if HaltReleasePos = 0 then
+    Fail('missing-halt-array-param-release-call');
+  if HaltExitPos = 0 then
+    Fail('missing-halt-array-param-exit');
+  if HaltReleasePos < HaltSumPos then
+    Fail('halt-array-param-cleanup-before-sum');
+  if HaltReleasePos > HaltExitPos then
+    Fail('halt-array-param-cleanup-after-exit');
 end;
 
 procedure RunRuntimeSmoke(const AOutputDir, AStem: string);
@@ -275,6 +315,7 @@ var
   OutputDir: string;
   ResizeLlvm: string;
   ExitLlvm: string;
+  HaltArrayParamLlvm: string;
   DirectIr: string;
   Helpers: string;
 begin
@@ -287,9 +328,11 @@ begin
 
   ResizeLlvm := EmitLlvmFromSource(ResizeSource);
   ExitLlvm := EmitLlvmFromSource(ExitSource);
+  HaltArrayParamLlvm := EmitLlvmFromSource(HaltArrayParamSource);
   Helpers := ExtractHelperSuffix(ResizeLlvm);
   DirectIr := BuildDirectResizeIr(Helpers);
-  AssertGeneratedContracts(DirectIr, ResizeLlvm, ExitLlvm);
+  AssertGeneratedContracts(DirectIr, ResizeLlvm, ExitLlvm,
+    HaltArrayParamLlvm);
 
   WriteTextFile(IncludeTrailingPathDelimiter(OutputDir) +
     'llvm_dynarray_direct_helper.ll', DirectIr);
@@ -297,12 +340,16 @@ begin
     'llvm_dynarray_resize.ll', ResizeLlvm);
   WriteTextFile(IncludeTrailingPathDelimiter(OutputDir) +
     'llvm_dynarray_exit.ll', ExitLlvm);
+  WriteTextFile(IncludeTrailingPathDelimiter(OutputDir) +
+    'llvm_dynarray_halt_array_param.ll', HaltArrayParamLlvm);
 
   WriteLn('hir-dynarray-release-runtime-smoke-output-dir=', OutputDir);
   RunRuntimeSmoke(OutputDir, 'llvm_dynarray_direct_helper');
   WriteLn('hir-dynarray-release-runtime-smoke-direct-exit=42');
   RunRuntimeSmoke(OutputDir, 'llvm_dynarray_resize');
   WriteLn('hir-dynarray-release-runtime-smoke-resize-exit=42');
+  RunRuntimeSmoke(OutputDir, 'llvm_dynarray_halt_array_param');
+  WriteLn('hir-dynarray-release-runtime-smoke-halt-array-param-exit=42');
   RunRuntimeSmoke(OutputDir, 'llvm_dynarray_exit');
   WriteLn('hir-dynarray-release-runtime-smoke-exit-cleanup=42');
   WriteLn('hir-dynarray-release-runtime-smoke-status=pass');

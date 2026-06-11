@@ -59,6 +59,8 @@ type
     FPendingObjectFreeReceiverValue: THIRValueId;
     FPendingObjectFreeCleanupClass: string;
     FPendingObjectFreeHeapRelease: Boolean;
+    FPendingCleanupNodes: array of TTypedHirNode;
+    FPendingCleanupCount: LongInt;
     FSretValueId: THIRValueId;
 
     FAllocas: array of TAllocaEntry;
@@ -224,6 +226,8 @@ type
     procedure ProcessIntfAddRef(const ANode: TTypedHirNode);
     procedure ProcessIntfRelease(const ANode: TTypedHirNode);
     procedure ProcessNode(const ANode: TTypedHirNode);
+    procedure QueueCleanupNode(const ANode: TTypedHirNode);
+    procedure FlushPendingCleanupNodes;
     procedure ProcessVarDecl(const ANode: TTypedHirNode);
     procedure ProcessAssign(const ANode: TTypedHirNode);
     procedure ProcessHaltCall(const ANode: TTypedHirNode);
@@ -397,6 +401,8 @@ begin
   FPendingObjectFreeReceiverValue := 0;
   FPendingObjectFreeCleanupClass := '';
   FPendingObjectFreeHeapRelease := False;
+  SetLength(FPendingCleanupNodes, 0);
+  FPendingCleanupCount := 0;
   FLegacyIntType := 0;
   FBoolType := 0;
   FStringType := 0;
@@ -3563,6 +3569,7 @@ begin
     Exit;
   if V <> 0 then
   begin
+    FlushPendingCleanupNodes;
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikIntrinsic;
@@ -3579,6 +3586,7 @@ procedure THIRBuilder.ProcessHaltCallConst(const ANode: TTypedHirNode);
 var
   Instr: THIRInstr;
 begin
+  FlushPendingCleanupNodes;
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
@@ -3954,6 +3962,7 @@ begin
   Func := FModule.FunctionAt(FModule.FunctionCount - 1);
   if (Length(Func.Params) > 0) and (Func.Params[0].Name = 'sret_ptr') then
   begin
+    FlushPendingCleanupNodes;
     FillChar(Term, SizeOf(Term), 0);
     Term.Kind := htkReturn;
     Term.ReturnValue := 0;
@@ -3966,6 +3975,7 @@ begin
   else
   begin
     V := LowerNodeExprOrBlob(ANode, ANode.Operand);
+    FlushPendingCleanupNodes;
     FillChar(Term, SizeOf(Term), 0);
     Term.Kind := htkReturn;
     Term.ReturnValue := V;
@@ -6862,6 +6872,16 @@ begin
     FPendingObjectFreeHeapRelease := False;
   end;
 
+  if (FPendingCleanupCount > 0) and
+    (ANode.NodeKind <> hnkDynArrayCleanupRuntime) and
+    (ANode.NodeKind <> hnkStringCleanupRuntime) and
+    (ANode.NodeKind <> hnkHaltCallRuntime) and
+    (ANode.NodeKind <> hnkHaltCall) and
+    (ANode.NodeKind <> hnkRetRuntime) and
+    (ANode.NodeKind <> hnkRetStrRuntime) and
+    (ANode.NodeKind <> hnkRetStrOwnedRuntime) then
+    FlushPendingCleanupNodes;
+
   case ANode.NodeKind of
     hnkVarDeclRuntime, hnkVarDeclStrRuntime, hnkVarDeclStrOwnedRuntime,
     hnkVarDeclStrBorrowedRuntime, hnkVarDeclArrRuntime,
@@ -6943,9 +6963,9 @@ begin
     hnkSetLengthFieldArrRuntime:
       ProcessSetLengthFieldArr(ANode);
     hnkDynArrayCleanupRuntime:
-      ProcessDynArrayCleanup(ANode);
+      QueueCleanupNode(ANode);
     hnkStringCleanupRuntime:
-      ProcessStringCleanup(ANode);
+      QueueCleanupNode(ANode);
     hnkAssignArrElemRuntime:
       ProcessAssignArrElem(ANode);
     hnkMethodBodyBegin:
@@ -6978,6 +6998,32 @@ begin
     hnkUnknown:
       ;
   end;
+end;
+
+procedure THIRBuilder.QueueCleanupNode(const ANode: TTypedHirNode);
+begin
+  if FPendingCleanupCount >= Length(FPendingCleanupNodes) then
+    SetLength(FPendingCleanupNodes, FPendingCleanupCount + 8);
+  FPendingCleanupNodes[FPendingCleanupCount] := ANode;
+  Inc(FPendingCleanupCount);
+end;
+
+procedure THIRBuilder.FlushPendingCleanupNodes;
+var
+  I: LongInt;
+  Node: TTypedHirNode;
+begin
+  for I := 0 to FPendingCleanupCount - 1 do
+  begin
+    Node := FPendingCleanupNodes[I];
+    case Node.NodeKind of
+      hnkDynArrayCleanupRuntime:
+        ProcessDynArrayCleanup(Node);
+      hnkStringCleanupRuntime:
+        ProcessStringCleanup(Node);
+    end;
+  end;
+  FPendingCleanupCount := 0;
 end;
 
 procedure THIRBuilder.Build;
@@ -7039,6 +7085,7 @@ begin
 
   if not FBlockTerminated then
   begin
+    FlushPendingCleanupNodes;
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikIntrinsic;

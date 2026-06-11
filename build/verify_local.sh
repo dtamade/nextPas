@@ -1310,6 +1310,7 @@ fi
 cat "$HIR_DYNARRAY_RELEASE_RUNTIME_OUTPUT"
 require_output_pattern '^hir-dynarray-release-runtime-smoke-direct-exit=42$' "$HIR_DYNARRAY_RELEASE_RUNTIME_OUTPUT" 'missing-hir-dynarray-release-runtime-direct-exit'
 require_output_pattern '^hir-dynarray-release-runtime-smoke-resize-exit=42$' "$HIR_DYNARRAY_RELEASE_RUNTIME_OUTPUT" 'missing-hir-dynarray-release-runtime-resize-exit'
+require_output_pattern '^hir-dynarray-release-runtime-smoke-halt-array-param-exit=42$' "$HIR_DYNARRAY_RELEASE_RUNTIME_OUTPUT" 'missing-hir-dynarray-release-runtime-halt-array-param-exit'
 require_output_pattern '^hir-dynarray-release-runtime-smoke-exit-cleanup=42$' "$HIR_DYNARRAY_RELEASE_RUNTIME_OUTPUT" 'missing-hir-dynarray-release-runtime-exit-cleanup'
 require_output_pattern '^hir-dynarray-release-runtime-smoke-status=pass$' "$HIR_DYNARRAY_RELEASE_RUNTIME_OUTPUT" 'missing-hir-dynarray-release-runtime-pass'
 printf 'hir-dynarray-release-runtime-smoke=pass\n'
