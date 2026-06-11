@@ -241,7 +241,12 @@ var
   LIter: TPtrIter;
   PDst: PK;
 begin
-  if (aDst = nil) or (aCount = 0) or (GetCount = 0) then Exit;
+  if aCount = 0 then
+    Exit;
+  if aDst = nil then
+    raise EArgumentNil.Create('THashSet.SerializeToArrayBuffer: aDst is nil');
+  if aCount > GetCount then
+    raise EOutOfRange.Create('THashSet.SerializeToArrayBuffer: aCount out of range');
 
   PDst := aDst;
   LCopied := 0;

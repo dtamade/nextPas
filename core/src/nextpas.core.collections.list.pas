@@ -306,8 +306,12 @@ var
   LDstArray: ^T;
   LI: SizeUInt;
 begin
-  if (aDst = nil) or (aCount = 0) then
+  if aCount = 0 then
     Exit;
+  if aDst = nil then
+    raise EArgumentNil.Create('TList.SerializeToArrayBuffer: aDst is nil');
+  if aCount > FCount then
+    raise EOutOfRange.Create('TList.SerializeToArrayBuffer: aCount out of range');
 
   LDstArray := aDst;
   LCurrent := FHead;

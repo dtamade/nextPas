@@ -4,6 +4,7 @@ program test_hashset;
 
 uses
   SysUtils,
+  nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.collections.hashset.intf,
   nextpas.core.collections.hashset;
@@ -114,6 +115,49 @@ begin
   Check(True);
 end;
 
+procedure TestSerializeNilPositiveCountRaises;
+var
+  LS: TIntSet;
+  LRaised: Boolean;
+begin
+  LS := TIntSet.Create;
+  try
+    LS.Add(10);
+    LRaised := False;
+    try
+      LS.SerializeToArrayBuffer(nil, 1);
+    except
+      on E: EArgumentNil do
+        LRaised := True;
+    end;
+    Check(LRaised, 'serialize nil destination raises');
+  finally
+    LS.Free;
+  end;
+end;
+
+procedure TestSerializeCountPastEndRaises;
+var
+  LS: TIntSet;
+  LOut: Integer;
+  LRaised: Boolean;
+begin
+  LS := TIntSet.Create;
+  try
+    LS.Add(10);
+    LRaised := False;
+    try
+      LS.SerializeToArrayBuffer(@LOut, 2);
+    except
+      on E: EOutOfRange do
+        LRaised := True;
+    end;
+    Check(LRaised, 'serialize count past end raises');
+  finally
+    LS.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.hashset');
   T.Run('Add/Contains', @TestAddContains);
@@ -124,5 +168,7 @@ begin
   T.Run('Grow (100 elements)', @TestGrow);
   T.Run('Reserve', @TestReserve);
   T.Run('Auto free (interface)', @TestAutoFree);
+  T.Run('SerializeToArrayBuffer nil positive count raises', @TestSerializeNilPositiveCountRaises);
+  T.Run('SerializeToArrayBuffer count past end raises', @TestSerializeCountPastEndRaises);
   T.Summary;
 end.

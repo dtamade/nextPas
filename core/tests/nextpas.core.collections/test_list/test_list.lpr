@@ -8,10 +8,12 @@ uses
   nextpas.core.testing,
   nextpas.core.collections,
   nextpas.core.collections.base,
+  nextpas.core.collections.list,
   nextpas.core.collections.list.intf;
 
 type
   IIntList = specialize IList<Integer>;
+  TIntList = specialize TList<Integer>;
 
 var
   T: TTestRunner;
@@ -153,6 +155,50 @@ begin
   CheckEqual(Int64(5), Int64(LL.GetCount), 'appended count');
 end;
 
+procedure TestSerializeNilPositiveCountRaises;
+var
+  LL: TIntList;
+  LRaised: Boolean;
+begin
+  LL := TIntList.Create;
+  try
+    LL.PushBack(10);
+
+    LRaised := False;
+    try
+      LL.SerializeToArrayBuffer(nil, 1);
+    except
+      on E: EArgumentNil do
+        LRaised := True;
+    end;
+    Check(LRaised, 'serialize nil destination raises');
+  finally
+    LL.Free;
+  end;
+end;
+
+procedure TestSerializeCountPastEndRaises;
+var
+  LL: TIntList;
+  LOut: Integer;
+  LRaised: Boolean;
+begin
+  LL := TIntList.Create;
+  try
+    LL.PushBack(10);
+    LRaised := False;
+    try
+      LL.SerializeToArrayBuffer(@LOut, 2);
+    except
+      on E: EOutOfRange do
+        LRaised := True;
+    end;
+    Check(LRaised, 'serialize count past end raises');
+  finally
+    LL.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.list');
   T.Run('PushFront/PopFront', @TestPushFrontPopFront);
@@ -164,5 +210,7 @@ begin
   T.Run('Clear', @TestClear);
   T.Run('String type (leak check)', @TestStringType);
   T.Run('TryLoadFrom/TryAppend', @TestTryLoadFromTryAppend);
+  T.Run('SerializeToArrayBuffer nil positive count raises', @TestSerializeNilPositiveCountRaises);
+  T.Run('SerializeToArrayBuffer count past end raises', @TestSerializeCountPastEndRaises);
   T.Summary;
 end.
