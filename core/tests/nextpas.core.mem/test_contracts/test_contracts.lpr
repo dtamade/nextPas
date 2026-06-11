@@ -210,7 +210,7 @@ begin
   Check(LAllocator <> nil, 'RTL allocator should exist');
 
   LTraits := LAllocator.Traits;
-  CheckEqual(True, LTraits.ZeroInitialized, 'RTL AllocMem should be zero initialized');
+  CheckEqual(False, LTraits.ZeroInitialized, 'RTL GetMem should not claim zero initialization');
   CheckEqual(False, LTraits.SupportsAligned, 'RTL allocator should report non-native aligned support');
   CheckEqual(False, LTraits.HasMemSize, 'RTL allocator should not expose MemSize');
 
