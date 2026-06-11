@@ -111,6 +111,14 @@ Rules:
 lowering. It describes the semantic lifecycle group for a class instance, not a
 callable Pascal facade and not a public ABI exported from `nextpas.core.system`.
 
+The current source-backed System truth is intentionally small:
+`rtl/core/system/System.pas` provides `TObject.Create`, virtual
+`TObject.Destroy`, and `TObject.Free` as the minimum compiler-visible object
+root. That source-backed unit lets implicit runtime analysis bind ordinary
+class `Free` calls to real `TObject.Free` / effective `Destroy` truth instead of
+falling back to host RTL guesses. It does not make the core facade expose
+`TObject`, and it does not mean the full nextPas `System` runtime is complete.
+
 | Contract | Meaning | Owner boundary |
 | --- | --- | --- |
 | `np.system.object_free` | nil-safe object `Free` operation with effective destroy and heap-release intent | system contract vocabulary, compiler/runtime implementation |
@@ -129,6 +137,11 @@ Rules:
 - A backend-private helper such as `@np_object_free_release` is an implementation
   detail. It may appear in LLVM-focused tests as backend evidence, but it
   is not public ABI and must not become a callable facade symbol.
+- The current LLVM helper path reads the object allocation header, checks the
+  object magic, and splits into `@np_object_release_valid` or
+  `@np_object_release_invalid`. These are backend/runtime boundary hooks for
+  source-backed System object ownership proof, not allocator free completion,
+  public ABI, or a promise that invalid release diagnostics are final.
 - The release helper must stay field-agnostic and must not walk object fields.
   Field dynamic-array, string, interface, and managed-record cleanup stays in
   compiler-planned cleanup calls or the relevant managed runtime contracts.

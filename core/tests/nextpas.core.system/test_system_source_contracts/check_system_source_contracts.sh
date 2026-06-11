@@ -683,6 +683,12 @@ require_repo_token "tests/hir/test_hir_node_kind.pas" "halt-call-runtime"
 require_token "docs/system/runtime-contracts.md" "compiler-planned cleanup"
 require_token "docs/system/runtime-contracts.md" "field-agnostic"
 require_token "docs/system/runtime-contracts.md" "Compiler HIR may project"
+require_token "docs/system/runtime-contracts.md" "source-backed System truth"
+require_token "docs/system/runtime-contracts.md" '`rtl/core/system/System.pas`'
+require_token "docs/system/runtime-contracts.md" '`TObject.Free`'
+require_token "docs/system/runtime-contracts.md" "@np_object_release_valid"
+require_token "docs/system/runtime-contracts.md" "@np_object_release_invalid"
+require_token "docs/system/runtime-contracts.md" "not allocator free completion"
 require_token "docs/system/runtime-contracts.md" "array of interface"
 require_token "docs/system/runtime-contracts.md" "@np_dynarray_resize"
 require_token "docs/system/runtime-contracts.md" "not public ABI"
@@ -879,7 +885,18 @@ require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.obje
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free.destroy"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free.release"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "@np_object_free_release"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "@np_object_release_valid"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "@np_object_release_invalid"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "object-free-release-helper-must-not-walk-fields"
+require_repo_file "rtl/core/system/System.pas"
+require_repo_token "rtl/core/system/System.pas" "unit System;"
+require_repo_token "rtl/core/system/System.pas" "TObject = class"
+require_repo_token "rtl/core/system/System.pas" "constructor Create;"
+require_repo_token "rtl/core/system/System.pas" "destructor Destroy; virtual;"
+require_repo_token "rtl/core/system/System.pas" "procedure Free;"
+require_repo_token "docs/architecture/runtime-bootstrap-specification.md" 'source-backed `System` truth'
+require_repo_token "docs/architecture/runtime-bootstrap-specification.md" '`rtl/core/system/System.pas`'
+require_repo_token "docs/architecture/runtime-bootstrap-specification.md" '`TObject.Free`'
 require_repo_token "tests/semantic/test_semantic_call_bindings.pas" "np.system.object_free"
 require_repo_token "compiler/sema/np_semantic_analyzer.pas" "object-free-runtime"
 require_repo_token "compiler/sema/np_semantic_analyzer.pas" "cleanup-class "
@@ -890,6 +907,8 @@ require_repo_token "compiler/ir/np_hir_builder.pas" "np.system.object_free.clean
 require_repo_token "compiler/ir/np_hir_builder.pas" "np.system.object_free.release"
 require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "np.system.object_free"
 require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_object_free_release"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_object_release_valid"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_object_release_invalid"
 
 for path in \
   "core/src/nextpas.core.collections.arr.pas" \
