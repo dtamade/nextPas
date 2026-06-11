@@ -634,13 +634,10 @@ procedure TList.DoZero;
 var
   LCurrent: PDoubleNode;
 begin
-  // 将所有元素设置为零值
   LCurrent := FHead;
   while LCurrent <> nil do
   begin
-    if System.IsManagedType(T) then
-      Finalize(LCurrent^.Data);
-    FillChar(LCurrent^.Data, SizeOf(T), 0);
+    GetElementManager.ZeroElements(@LCurrent^.Data, 1);
     LCurrent := PDoubleNode(LCurrent^.GetNext);
   end;
 end;
