@@ -10,6 +10,8 @@ uses
 const
   GOAL_TREE_PATH_FROM_TEST = '../../../docs/platform/goal-tree.md';
   GOAL_TREE_PATH_FROM_ROOT = 'core/docs/platform/goal-tree.md';
+  RUNTIME_TRUTH_MATRIX_PATH_FROM_TEST = '../../../docs/platform/runtime-truth-matrix.md';
+  RUNTIME_TRUTH_MATRIX_PATH_FROM_ROOT = 'core/docs/platform/runtime-truth-matrix.md';
   POLLER_GATE_MAKEFILE_FROM_TEST =
     '../../nextpas.core.platform.io/test_platform_windows_poller_compile_gate/Makefile';
   POLLER_GATE_MAKEFILE_FROM_ROOT =
@@ -119,6 +121,23 @@ begin
     'goal tree must keep readiness poller status separate from IOCP completion status');
 end;
 
+procedure TestRuntimeTruthMatrixDoesNotOverstateWindowsRuntime;
+var
+  LMatrix: string;
+begin
+  LMatrix := LoadTextFile(RUNTIME_TRUTH_MATRIX_PATH_FROM_TEST,
+    RUNTIME_TRUTH_MATRIX_PATH_FROM_ROOT,
+    'platform runtime truth matrix must exist');
+
+  CheckContains(LMatrix, 'wine-runtime-smoke',
+    'Windows IOCP file smoke must be labeled as Wine-only evidence');
+  CheckContains(LMatrix, 'not real Windows runtime ready',
+    'Windows IOCP file smoke must preserve the real-Windows runtime gap');
+  CheckAbsent(LMatrix,
+    '| windows iocp asyncread/asyncwrite file completion | focused-runtime |',
+    'Windows IOCP file completion must not claim bare focused-runtime without a real Windows host');
+end;
+
 procedure TestNamedWindowsPollerCompileGateForcesWindowsHost;
 var
   LMakefile: string;
@@ -140,6 +159,8 @@ begin
   T.Run('Windows evidence names current focused gates',
     @TestWindowsEvidenceNamesCurrentFocusedGates);
   T.Run('IOCP boundary is truthful', @TestIocpBoundaryIsTruthful);
+  T.Run('runtime truth matrix does not overstate Windows runtime',
+    @TestRuntimeTruthMatrixDoesNotOverstateWindowsRuntime);
   T.Run('named Windows poller compile gate forces Windows host',
     @TestNamedWindowsPollerCompileGateForcesWindowsHost);
   T.Summary;
