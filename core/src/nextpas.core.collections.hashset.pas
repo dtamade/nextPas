@@ -49,9 +49,15 @@ type
     type
       {** 内部映射类型：K -> Byte（Byte 仅作占位） *}
       TInternalMap = specialize THashMap<K, Byte>;
+      THash = specialize TKeyHashFunc<K>;
+      TEquals = specialize TKeyEqualsFunc<K>;
       PK = ^K;
     var
       FMap: TInternalMap;
+      FHash: THash;
+      FEquals: TEquals;
+
+    function CreateSibling(aCapacity: SizeUInt): specialize THashSet<K>;
   protected
     // TCollection 抽象方法实现
     function IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; override;
@@ -170,6 +176,8 @@ implementation
 constructor THashSet.Create(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: IAllocator);
 begin
   inherited Create(aAllocator);
+  FHash := aHash;
+  FEquals := aEquals;
   FMap := TInternalMap.Create(aCapacity, aHash, aEquals, aAllocator);
 end;
 
@@ -330,11 +338,16 @@ begin
   Result := FMap.Remove(AKey);
 end;
 
+function THashSet.CreateSibling(aCapacity: SizeUInt): specialize THashSet<K>;
+begin
+  Result := specialize THashSet<K>.Create(aCapacity, FHash, FEquals, FAllocator);
+end;
+
 function THashSet.Union(const Other: specialize THashSet<K>): specialize THashSet<K>;
 var
   Element: K;
 begin
-  Result := specialize THashSet<K>.Create;
+  Result := CreateSibling(GetCount + Other.GetCount);
 
   for Element in Self do
     Result.Add(Element);
@@ -347,7 +360,10 @@ function THashSet.Intersection(const Other: specialize THashSet<K>): specialize 
 var
   Element: K;
 begin
-  Result := specialize THashSet<K>.Create;
+  if GetCount <= Other.GetCount then
+    Result := CreateSibling(GetCount)
+  else
+    Result := CreateSibling(Other.GetCount);
 
   for Element in Self do
     if Other.Contains(Element) then
@@ -358,7 +374,7 @@ function THashSet.Difference(const Other: specialize THashSet<K>): specialize TH
 var
   Element: K;
 begin
-  Result := specialize THashSet<K>.Create;
+  Result := CreateSibling(GetCount);
 
   for Element in Self do
     if not Other.Contains(Element) then
@@ -369,7 +385,7 @@ function THashSet.SymmetricDifference(const Other: specialize THashSet<K>): spec
 var
   Element: K;
 begin
-  Result := specialize THashSet<K>.Create;
+  Result := CreateSibling(GetCount + Other.GetCount);
 
   for Element in Self do
     if not Other.Contains(Element) then
