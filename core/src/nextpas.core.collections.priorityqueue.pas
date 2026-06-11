@@ -324,16 +324,15 @@ begin
 end;
 
 procedure TPriorityQueue.SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt);
-var
-  LCopyCount: SizeUInt;
 begin
-  if (aDst = nil) or (aCount = 0) then
+  if aCount = 0 then
     Exit;
-  LCopyCount := aCount;
-  if LCopyCount > FCount then
-    LCopyCount := FCount;
-  if LCopyCount > 0 then
-    FElementManager.CopyElementsUnchecked(@FItems[0], aDst, LCopyCount);
+  if aDst = nil then
+    raise EArgumentNil.Create('TPriorityQueue.SerializeToArrayBuffer: aDst is nil');
+  if aCount > FCount then
+    raise EOutOfRange.Create('TPriorityQueue.SerializeToArrayBuffer: aCount out of range');
+
+  FElementManager.CopyElementsUnchecked(@FItems[0], aDst, aCount);
 end;
 
 procedure TPriorityQueue.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);

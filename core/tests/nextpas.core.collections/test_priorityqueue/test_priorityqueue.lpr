@@ -7,10 +7,15 @@ uses
   nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.collections,
+  nextpas.core.collections.priorityqueue,
   nextpas.core.collections.priorityqueue.intf;
 
 type
   IIntPQ = specialize IPriorityQueue<Integer>;
+  TInspectableIntPQ = class(specialize TPriorityQueue<Integer>)
+  public
+    procedure CopyToBuffer(aDst: Pointer; aCount: SizeUInt);
+  end;
 
 function CompareIntDesc(const A, B: Integer; aData: Pointer): SizeInt;
 begin
@@ -21,6 +26,11 @@ end;
 
 var
   T: TTestRunner;
+
+procedure TInspectableIntPQ.CopyToBuffer(aDst: Pointer; aCount: SizeUInt);
+begin
+  SerializeToArrayBuffer(aDst, aCount);
+end;
 
 procedure TestPushAndPop;
 var
@@ -119,6 +129,49 @@ begin
   end;
 end;
 
+procedure TestSerializeCountPastEndRaises;
+var
+  LQ: TInspectableIntPQ;
+  LOut: Integer;
+  LRaised: Boolean;
+begin
+  LQ := TInspectableIntPQ.Create(@CompareIntDesc);
+  try
+    LQ.Push(10);
+    LRaised := False;
+    try
+      LQ.CopyToBuffer(@LOut, 2);
+    except
+      on E: EOutOfRange do
+        LRaised := True;
+    end;
+    Check(LRaised, 'serialize count past end raises');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestSerializeNilPositiveCountRaises;
+var
+  LQ: TInspectableIntPQ;
+  LRaised: Boolean;
+begin
+  LQ := TInspectableIntPQ.Create(@CompareIntDesc);
+  try
+    LQ.Push(10);
+    LRaised := False;
+    try
+      LQ.CopyToBuffer(nil, 1);
+    except
+      on E: EArgumentNil do
+        LRaised := True;
+    end;
+    Check(LRaised, 'serialize nil destination raises');
+  finally
+    LQ.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.priorityqueue');
   T.Run('Push and Pop (priority order)', @TestPushAndPop);
@@ -128,5 +181,7 @@ begin
   T.Run('Clear', @TestClear);
   T.Run('IsEmpty', @TestIsEmpty);
   T.Run('Many elements (100)', @TestManyElements);
+  T.Run('SerializeToArrayBuffer count past end raises', @TestSerializeCountPastEndRaises);
+  T.Run('SerializeToArrayBuffer nil positive count raises', @TestSerializeNilPositiveCountRaises);
   T.Summary;
 end.
