@@ -6032,7 +6032,9 @@ begin
   end;
   if IntfCount = 0 then
     Exit;
-  SlotOffset := Length(Meta.Fields) + 1;
+  SlotOffset := LongInt(Meta.Size div 8);
+  if SlotOffset <= 0 then
+    SlotOffset := Length(Meta.Fields) + 1;
   SetLength(Meta.InterfaceSlots, IntfCount);
   for I := 0 to IntfCount - 1 do
   begin
