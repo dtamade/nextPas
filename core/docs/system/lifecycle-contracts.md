@@ -22,6 +22,14 @@ Current S3 stance:
 - No callable `RaiseException` facade is exposed by `nextpas.core.system`.
 - No new exception class is introduced for system lifecycle work.
 - The runtime-fault contract name is `np.system.runtime_fault`.
+- Current LLVM exception lowering may use backend-private exception helpers
+  such as `@np_try_push`, `@np_try_pop`, `@np_finally_end`,
+  `@np_except_end`, and `@np_raise`. These helper names are LLVM/backend
+  evidence only, not public ABI, not public Pascal facade, not final unwind ABI,
+  and not exception taxonomy owned by system.
+- HIR exception tests may use those helpers to prove try/finally/except/raise
+  lowering shape. They do not prove final exception object layout, unwinder
+  strategy, diagnostics, or public taxonomy behavior.
 
 ## RTTI And TypeInfo Boundary
 

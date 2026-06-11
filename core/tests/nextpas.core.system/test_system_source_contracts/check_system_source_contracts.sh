@@ -752,6 +752,34 @@ for token in \
   "runtime-abort"; do
   require_token "docs/system/lifecycle-contracts.md" "$token"
 done
+for helper in \
+  "@np_try_push" \
+  "@np_try_pop" \
+  "@np_finally_end" \
+  "@np_except_end" \
+  "@np_raise"; do
+  require_token "docs/system/lifecycle-contracts.md" "$helper"
+done
+require_token "docs/system/lifecycle-contracts.md" "backend-private exception helpers"
+require_token "docs/system/lifecycle-contracts.md" "not public Pascal facade"
+require_token "docs/system/lifecycle-contracts.md" "not final unwind ABI"
+require_token "docs/system/lifecycle-contracts.md" "not exception taxonomy"
+require_repo_file "tests/hir/test_hir_exception.pas"
+require_repo_token "tests/hir/test_hir_exception.pas" "hir-exception-status=pass"
+require_repo_token "tests/hir/test_hir_exception.pas" "np_try_push"
+require_repo_token "tests/hir/test_hir_exception.pas" "np_finally_end"
+require_repo_token "tests/hir/test_hir_exception.pas" "np_try_pop"
+require_repo_token "tests/hir/test_hir_exception.pas" "np_except_end"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_try_push"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_try_pop"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_finally_end"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_except_end"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_raise"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_try_push"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_try_pop"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_finally_end"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_except_end"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_raise"
 
 for token in \
   "Process Lifecycle" \
