@@ -1182,7 +1182,7 @@ begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
   try
-    LRW.GetHeaders.SetHeader('Content-Length', '5');
+    LRW.GetHeaders.Set_('Content-Length', '5');
     LBody := 'hello';
     CheckEqual(Int64(5), Int64(LRW.Write(LBody[1], SizeUInt(Length(LBody)))),
       'declared content-length body write succeeds');
@@ -1216,7 +1216,7 @@ begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
   try
-    LRW.GetHeaders.SetHeader('Content-Length', '5');
+    LRW.GetHeaders.Set_('Content-Length', '5');
     LBody := 'hell';
     CheckEqual(Int64(4), Int64(LRW.Write(LBody[1], SizeUInt(Length(LBody)))),
       'short content-length body prefix writes');
