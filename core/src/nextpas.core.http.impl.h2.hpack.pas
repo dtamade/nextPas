@@ -237,6 +237,92 @@ end;
 
 { === THPackEncoder === }
 
+function AnsiStringEqualsPtr(const ALeft: AnsiString; const ARight: PAnsiChar;
+  ARightLen: SizeUInt): Boolean;
+begin
+  if SizeUInt(Length(ALeft)) <> ARightLen then
+    Exit(False);
+  if ARightLen = 0 then
+    Exit(True);
+  Result := CompareMem(@ALeft[1], ARight, ARightLen);
+end;
+
+function TryFindStaticFull(const AName, AValue: AnsiString; out AIndex: SizeInt): Boolean;
+var
+  LIndex: SizeInt;
+begin
+  for LIndex := 1 to HPACK_STATIC_TABLE_COUNT do
+  begin
+    if AnsiStringEqualsPtr(AName, HPACK_STATIC_TABLE[LIndex].Name,
+      HPACK_STATIC_TABLE[LIndex].NameLen) and
+      (HPACK_STATIC_TABLE[LIndex].Value <> nil) and
+      AnsiStringEqualsPtr(AValue, HPACK_STATIC_TABLE[LIndex].Value,
+        HPACK_STATIC_TABLE[LIndex].ValueLen) then
+    begin
+      AIndex := LIndex;
+      Exit(True);
+    end;
+  end;
+  AIndex := 0;
+  Result := False;
+end;
+
+function TryFindStaticName(const AName: AnsiString; out AIndex: SizeInt): Boolean;
+var
+  LIndex: SizeInt;
+begin
+  for LIndex := 1 to HPACK_STATIC_TABLE_COUNT do
+  begin
+    if AnsiStringEqualsPtr(AName, HPACK_STATIC_TABLE[LIndex].Name,
+      HPACK_STATIC_TABLE[LIndex].NameLen) then
+    begin
+      AIndex := LIndex;
+      Exit(True);
+    end;
+  end;
+  AIndex := 0;
+  Result := False;
+end;
+
+function TryFindDynamicFull(const ADynamicTable: THPackDynamicTable;
+  const AName, AValue: AnsiString; out AIndex: SizeInt): Boolean;
+var
+  LDynamicIndex: SizeInt;
+  LName: AnsiString;
+  LValue: AnsiString;
+begin
+  for LDynamicIndex := 0 to ADynamicTable.Count - 1 do
+  begin
+    if ADynamicTable.Get(LDynamicIndex, LName, LValue) and
+      (LName = AName) and (LValue = AValue) then
+    begin
+      AIndex := HPACK_STATIC_TABLE_COUNT + 1 + LDynamicIndex;
+      Exit(True);
+    end;
+  end;
+  AIndex := 0;
+  Result := False;
+end;
+
+function TryFindDynamicName(const ADynamicTable: THPackDynamicTable;
+  const AName: AnsiString; out AIndex: SizeInt): Boolean;
+var
+  LDynamicIndex: SizeInt;
+  LName: AnsiString;
+  LValue: AnsiString;
+begin
+  for LDynamicIndex := 0 to ADynamicTable.Count - 1 do
+  begin
+    if ADynamicTable.Get(LDynamicIndex, LName, LValue) and (LName = AName) then
+    begin
+      AIndex := HPACK_STATIC_TABLE_COUNT + 1 + LDynamicIndex;
+      Exit(True);
+    end;
+  end;
+  AIndex := 0;
+  Result := False;
+end;
+
 procedure THPackEncoder.Init(ADynamicTableSize: SizeInt);
 begin
   FDynamicTable.Init(ADynamicTableSize);
@@ -324,7 +410,6 @@ var
   I: SizeInt;
   LIndex: SizeInt;
   LNameIndex: SizeInt;
-  LFound: Boolean;
   LName, LValue: AnsiString;
 begin
   Result := '';
@@ -332,37 +417,17 @@ begin
   begin
     LName := AHeaders[I].Name;
     LValue := AHeaders[I].Value;
-    { Search static table for full match (name + value) }
-    LFound := False;
-    for LIndex := 1 to HPACK_STATIC_TABLE_COUNT do
+
+    if TryFindStaticFull(LName, LValue, LIndex) or
+      TryFindDynamicFull(FDynamicTable, LName, LValue, LIndex) then
     begin
-      if (HPACK_STATIC_TABLE[LIndex].NameLen = Length(LName)) and
-         (CompareMem(HPACK_STATIC_TABLE[LIndex].Name, @LName[1], Length(LName))) then
-      begin
-        if (HPACK_STATIC_TABLE[LIndex].ValueLen = Length(LValue)) and
-           (HPACK_STATIC_TABLE[LIndex].Value <> nil) and
-           (CompareMem(HPACK_STATIC_TABLE[LIndex].Value, @LValue[1], Length(LValue))) then
-        begin
-          { Full match: use indexed representation }
-          EncodeInteger(Result, UInt32(LIndex), 7, $80);
-          LFound := True;
-          Break;
-        end;
-      end;
-    end;
-    if LFound then
+      EncodeInteger(Result, UInt32(LIndex), 7, $80);
       Continue;
-    { Search for name-only match in static table }
-    LNameIndex := 0;
-    for LIndex := 1 to HPACK_STATIC_TABLE_COUNT do
-    begin
-      if (HPACK_STATIC_TABLE[LIndex].NameLen = Length(LName)) and
-         (CompareMem(HPACK_STATIC_TABLE[LIndex].Name, @LName[1], Length(LName))) then
-      begin
-        LNameIndex := LIndex;
-        Break;
-      end;
     end;
+
+    if not TryFindStaticName(LName, LNameIndex) then
+      TryFindDynamicName(FDynamicTable, LName, LNameIndex);
+
     { Literal Header Field with Incremental Indexing }
     if LNameIndex > 0 then
       EncodeInteger(Result, UInt32(LNameIndex), 6, $40)

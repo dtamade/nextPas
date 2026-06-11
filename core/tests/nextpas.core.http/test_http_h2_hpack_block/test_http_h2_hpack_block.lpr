@@ -64,6 +64,27 @@ begin
   CheckEqual('www.example.com', string(AHeaders[3].Value), 'header 3 value');
 end;
 
+procedure CheckSecondRequestHeaders(const AHeaders: array of THPackHeader);
+begin
+  CheckFirstRequestHeaders(AHeaders);
+  CheckEqual('cache-control', string(AHeaders[4].Name), 'header 4 name');
+  CheckEqual('no-cache', string(AHeaders[4].Value), 'header 4 value');
+end;
+
+procedure CheckThirdRequestHeaders(const AHeaders: array of THPackHeader);
+begin
+  CheckEqual(':method', string(AHeaders[0].Name), 'header 0 name');
+  CheckEqual('GET', string(AHeaders[0].Value), 'header 0 value');
+  CheckEqual(':scheme', string(AHeaders[1].Name), 'header 1 name');
+  CheckEqual('https', string(AHeaders[1].Value), 'header 1 value');
+  CheckEqual(':path', string(AHeaders[2].Name), 'header 2 name');
+  CheckEqual('/index.html', string(AHeaders[2].Value), 'header 2 value');
+  CheckEqual(':authority', string(AHeaders[3].Name), 'header 3 name');
+  CheckEqual('www.example.com', string(AHeaders[3].Value), 'header 3 value');
+  CheckEqual('custom-key', string(AHeaders[4].Name), 'header 4 name');
+  CheckEqual('custom-value', string(AHeaders[4].Value), 'header 4 value');
+end;
+
 procedure TestDecodeFirstRequestWithoutHuffman;
 var
   LDecoder: THPackDecoder;
@@ -124,6 +145,70 @@ begin
   CheckEqual('www.example.com', string(LIndexed[0].Value), 'dynamic value');
 end;
 
+procedure TestDecodeRfcHuffmanRequestSequence;
+var
+  LDecoder: THPackDecoder;
+  LFirst: array[0..3] of THPackHeader;
+  LSecond: array[0..4] of THPackHeader;
+  LThird: array[0..4] of THPackHeader;
+begin
+  LDecoder.Init;
+  Check(LDecoder.Decode(HexToBytes(
+    '828684418CF1E3C2E5F23A6BA0AB90F4FF'), LFirst),
+    'C.4.1 decode should succeed');
+  Check(LDecoder.Decode(HexToBytes(
+    '828684BE5886A8EB10649CBF'), LSecond),
+    'C.4.2 decode should succeed');
+  Check(LDecoder.Decode(HexToBytes(
+    '828785BF408825A849E95BA97D7F8925A849E95BB8E8B4BF'), LThird),
+    'C.4.3 decode should succeed');
+  CheckFirstRequestHeaders(LFirst);
+  CheckSecondRequestHeaders(LSecond);
+  CheckThirdRequestHeaders(LThird);
+end;
+
+procedure TestEncodeRfcHuffmanRequestSequence;
+var
+  LEncoder: THPackEncoder;
+  LFirst: array[0..3] of THPackHeader;
+  LSecond: array[0..4] of THPackHeader;
+  LThird: array[0..4] of THPackHeader;
+begin
+  LEncoder.Init;
+
+  LFirst[0].Name := ':method';
+  LFirst[0].Value := 'GET';
+  LFirst[1].Name := ':scheme';
+  LFirst[1].Value := 'http';
+  LFirst[2].Name := ':path';
+  LFirst[2].Value := '/';
+  LFirst[3].Name := ':authority';
+  LFirst[3].Value := 'www.example.com';
+
+  LSecond[0] := LFirst[0];
+  LSecond[1] := LFirst[1];
+  LSecond[2] := LFirst[2];
+  LSecond[3] := LFirst[3];
+  LSecond[4].Name := 'cache-control';
+  LSecond[4].Value := 'no-cache';
+
+  LThird[0] := LFirst[0];
+  LThird[1].Name := ':scheme';
+  LThird[1].Value := 'https';
+  LThird[2].Name := ':path';
+  LThird[2].Value := '/index.html';
+  LThird[3] := LFirst[3];
+  LThird[4].Name := 'custom-key';
+  LThird[4].Value := 'custom-value';
+
+  CheckEqual('828684418CF1E3C2E5F23A6BA0AB90F4FF',
+    BytesToHex(LEncoder.Encode(LFirst)), 'C.4.1 exact encoded block');
+  CheckEqual('828684BE5886A8EB10649CBF',
+    BytesToHex(LEncoder.Encode(LSecond)), 'C.4.2 exact encoded block');
+  CheckEqual('828785BF408825A849E95BA97D7F8925A849E95BB8E8B4BF',
+    BytesToHex(LEncoder.Encode(LThird)), 'C.4.3 exact encoded block');
+end;
+
 begin
   with TTestRunner.Create('nextpas.core.http.impl.h2.hpack') do
   begin
@@ -135,6 +220,10 @@ begin
       @TestEncodeFirstRequestWithHuffman);
     Run('Dynamic table can reference decoded entry',
       @TestDynamicTableCanReferenceDecodedEntry);
+    Run('Decode RFC Huffman request sequence',
+      @TestDecodeRfcHuffmanRequestSequence);
+    Run('Encode RFC Huffman request sequence',
+      @TestEncodeRfcHuffmanRequestSequence);
     Summary;
   end;
 end.

@@ -4,7 +4,7 @@
 
 HTTP 模块是 L3 框架层的核心模块，提供 HTTP 服务器和客户端能力。
 采用统一门面 + 协议实现隔离的架构。当前内建 transport 实现为 HTTP/1.1；
-H2 已开始落内部 codec foundation（frame、HPACK Huffman、HPACK request header block），
+H2 已开始落内部 codec foundation（frame、HPACK Huffman、HPACK request sequence header block），
 但还没有内建 H2 transport/session。H3 仍只保留版本枚举、registry / transport seam 与规划。
 这些内部基础不声明内建 H2/H3 protocol implementation。
 
@@ -21,7 +21,7 @@ H2/H3 对消费方仍处于未开放阶段。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，默认 client/server 版本都为 `hvHttp11`。
 - 当前真实源码库存为 29 个 HTTP 单元，测试工程为 26 个；其中 H2 只有
-  frame codec、HPACK Huffman 和 HPACK first-request header-block 内部基础单元及
+  frame codec、HPACK Huffman 和 HPACK request-sequence header-block 内部基础单元及
   focused 测试，H2 transport/session 与 H3 仍未进入可用实现。
 
 HTTP server runtime 的权威方向已经固定在
@@ -182,11 +182,11 @@ src/
   nextpas.core.http.impl.h2.frame.pas         ← H2 9-byte frame header 与基础 payload codec
   nextpas.core.http.impl.h2.hpack.table.pas   ← HPACK static/Huffman 表
   nextpas.core.http.impl.h2.hpack.huffman.pas ← HPACK Huffman encode/decode
-  nextpas.core.http.impl.h2.hpack.pas         ← HPACK first-request header-block encode/decode
+  nextpas.core.http.impl.h2.hpack.pas         ← HPACK request-sequence header-block encode/decode
 ```
 
-H2/H3 public transport 仍是架构规划；当前 H2 源码只覆盖 HPACK Huffman
-、HPACK request header-block 和 frame codec 内部基础，不对外声明 H2 可用。
+H2/H3 public transport 仍是架构规划；当前 H2 源码只覆盖 HPACK Huffman、
+HPACK request-sequence header-block 和 frame codec 内部基础，不对外声明 H2 可用。
 
 ---
 

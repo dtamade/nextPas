@@ -24,7 +24,7 @@ This lane is in **G2/G3 active hardening**:
 - G2 correctness and lifecycle proof is well advanced: threaded and Linux `epoll` paths have broad raw-wire/server proof, client redirect/body ownership semantics are materially tighter, and examples have runnable smoke coverage.
 - G3 API and performance isolation is still active: client ergonomics keeps closing real gaps, and H1 performance work is now splitting costs into parser, lazy header, writer, outbound, and full-chain layers.
 - H2/H3 remain non-production claims. H2 now has internal frame codec, HPACK
-  Huffman, and first-request HPACK header-block foundation slices with focused proof,
+  Huffman, and RFC C.4 request-sequence HPACK header-block foundation slices with focused proof,
   but no H2 transport/session support is exposed.
 
 ## Map
@@ -174,8 +174,9 @@ Rules:
 
 The current H2 foundation proof covers RFC 9113 frame header/basic payload
 codec behavior, HPACK Huffman encoding/decoding against RFC 7541 Appendix C
-vectors plus full single-byte roundtrips, and RFC 7541 first-request HPACK
-header-block encode/decode vectors. The next legitimate H2/H3 step is
+vectors plus full single-byte roundtrips, and RFC 7541 C.3/C.4 HPACK
+request-sequence header-block encode/decode vectors with dynamic-table reuse.
+The next legitimate H2/H3 step is
 codec/seam quality, not pseudo-support.
 
 ## Static And WebSocket Graduation Criteria
