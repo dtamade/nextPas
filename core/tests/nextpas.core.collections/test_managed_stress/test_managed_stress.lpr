@@ -15,7 +15,8 @@ uses
   nextpas.core.collections.lrucache,
   nextpas.core.collections.skiplist,
   nextpas.core.collections.circularbuffer,
-  nextpas.core.collections.linkedhashmap;
+  nextpas.core.collections.linkedhashmap,
+  nextpas.core.collections.priorityqueue;
 
 var
   GPass: Integer;
@@ -169,6 +170,79 @@ begin
   finally D.Free; end;
   SnapAssert(Snap, 'VecDeque wrap + resize');
   Pass('VecDeque wrap + resize');
+end;
+
+function KeepTrackedOddId(const AValue: ITracked; aData: Pointer): Boolean;
+begin
+  Result := (AValue <> nil) and ((AValue.GetId mod 2) <> 0);
+end;
+
+procedure TestVecDequeManagedResizeAndRetainReleaseSlots;
+type TDequeT = specialize TVecDeque<ITracked>;
+var
+  D: TDequeT;
+  i: Integer;
+  Snap: TLeakSnapshot;
+  t, kept0, kept1: ITracked;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    for i := 1 to 5 do
+    begin
+      t := MakeTracked(i);
+      D.PushBack(t);
+      t := nil;
+    end;
+
+    D.Resize(2);
+    if GTrackedAlive <> Snap + 2 then
+    begin
+      WriteLn('FAIL: VecDeque managed Resize shrink should release discarded refs');
+      Halt(1);
+    end;
+
+    D.Resize(4);
+    if GTrackedAlive <> Snap + 2 then
+    begin
+      WriteLn('FAIL: VecDeque managed Resize grow should default-initialize new slots');
+      Halt(1);
+    end;
+    if (D.Get(2) <> nil) or (D.Get(3) <> nil) then
+    begin
+      WriteLn('FAIL: VecDeque managed Resize grow exposed non-default slots');
+      Halt(1);
+    end;
+
+    t := MakeTracked(6);
+    D.Put(2, t);
+    t := nil;
+    t := MakeTracked(7);
+    D.Put(3, t);
+    t := nil;
+
+    D.Retain(@KeepTrackedOddId, nil);
+    if GTrackedAlive <> Snap + 2 then
+    begin
+      WriteLn('FAIL: VecDeque managed Retain should release filtered refs');
+      Halt(1);
+    end;
+    kept0 := D.Get(0);
+    kept1 := D.Get(1);
+    if (D.Count <> 2) or (kept0.GetId <> 1) or (kept1.GetId <> 7) then
+    begin
+      WriteLn('FAIL: VecDeque managed Retain kept unexpected items');
+      Halt(1);
+    end;
+    kept0 := nil;
+    kept1 := nil;
+
+    D.Clear;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed Resize/Retain releases slots');
+  Pass('VecDeque managed Resize/Retain releases slots');
 end;
 
 procedure TestVecDequeManagedTryPopPointerOwnsRefsAndSyncsTail;
@@ -355,6 +429,52 @@ begin
   Pass('VecDeque managed Read(pointer) owns refs after clear');
 end;
 
+procedure TestVecDequeManagedWritePointerReleasesOverwrittenRef;
+type TDequeT = specialize TVecDeque<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  oldItem: ITracked;
+
+  procedure WriteReplacement;
+  var
+    newItem: ITracked;
+  begin
+    newItem := MakeTracked(36);
+    D.WriteExact(0, @newItem, 1);
+
+    if GTrackedAlive <> Snap + 1 then
+    begin
+      WriteLn('FAIL: VecDeque managed WriteExact(pointer) did not release overwritten ref');
+      Halt(1);
+    end;
+
+    newItem := nil;
+  end;
+
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    oldItem := MakeTracked(35);
+    D.PushBack(oldItem);
+    oldItem := nil;
+
+    WriteReplacement;
+    if GTrackedAlive <> Snap + 1 then
+    begin
+      WriteLn('FAIL: VecDeque managed WriteExact(pointer) output did not own ref after local clear');
+      Halt(1);
+    end;
+
+    D.Clear;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed WriteExact(pointer) releases overwritten ref');
+  Pass('VecDeque managed WriteExact(pointer) releases overwritten ref');
+end;
+
 procedure TestVecDequeManagedTryPeekCopyOwnsRefsAfterClear;
 type TDequeT = specialize TVecDeque<ITracked>;
 var
@@ -470,6 +590,71 @@ begin
   end;
   SnapAssert(Snap, 'VecDeque managed SwapRemoveCopyAt(pointer) owns refs after clear');
   Pass('VecDeque managed SwapRemoveCopyAt(pointer) owns refs after clear');
+end;
+
+procedure TestVecDequeManagedToArrayOwnsRefsAfterClear;
+type
+  TDequeT = specialize TVecDeque<ITracked>;
+  TTrackedArray = specialize TGenericArray<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, tmp: ITracked;
+  Items: TTrackedArray;
+  i: Integer;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    for i := 1 to 64 do
+    begin
+      t := MakeTracked(700 + i);
+      D.PushBack(t);
+      t := nil;
+    end;
+    for i := 1 to 48 do
+    begin
+      tmp := D.PopFront;
+      tmp := nil;
+    end;
+    for i := 65 to 80 do
+    begin
+      t := MakeTracked(700 + i);
+      D.PushBack(t);
+      t := nil;
+    end;
+
+    Items := D.ToArray;
+    if Length(Items) <> 32 then
+    begin
+      WriteLn('FAIL: VecDeque managed ToArray length expected=32 actual=',
+        Length(Items));
+      Halt(1);
+    end;
+
+    D.Clear;
+
+    if GTrackedAlive <> Snap + Length(Items) then
+    begin
+      WriteLn('FAIL: VecDeque managed ToArray output did not own refs after clear');
+      Halt(1);
+    end;
+
+    if (Items[0] = nil) or (Items[0].GetId <> 749) or
+       (Items[15] = nil) or (Items[15].GetId <> 764) or
+       (Items[16] = nil) or (Items[16].GetId <> 765) or
+       (Items[31] = nil) or (Items[31].GetId <> 780) then
+    begin
+      WriteLn('FAIL: VecDeque managed ToArray returned wrong wrapped order');
+      Halt(1);
+    end;
+
+    Items := nil;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed ToArray owns refs after clear');
+  Pass('VecDeque managed ToArray owns refs after clear');
 end;
 
 procedure TestHashMapRehash;
@@ -673,6 +858,57 @@ begin
   Pass('LinkedHashMap clear stress');
 end;
 
+function CompareTrackedAsc(const A, B: ITracked; aData: Pointer): SizeInt;
+begin
+  if A.GetId < B.GetId then
+    Result := -1
+  else if A.GetId > B.GetId then
+    Result := 1
+  else
+    Result := 0;
+end;
+
+procedure TestPriorityQueueManagedToArrayOwnsRefsAfterClear;
+type
+  TPQT = specialize TPriorityQueue<ITracked>;
+  TTrackedArray = specialize TGenericArray<ITracked>;
+var
+  Q: TPQT;
+  Snap: TLeakSnapshot;
+  t: ITracked;
+  Items: TTrackedArray;
+begin
+  Snap := SnapTake;
+  Q := TPQT.Create(@CompareTrackedAsc);
+  try
+    t := MakeTracked(810); Q.Push(t); t := nil;
+    t := MakeTracked(811); Q.Push(t); t := nil;
+    t := MakeTracked(812); Q.Push(t); t := nil;
+
+    Items := Q.ToArray;
+    if Length(Items) <> 3 then
+    begin
+      WriteLn('FAIL: PriorityQueue managed ToArray length expected=3 actual=',
+        Length(Items));
+      Halt(1);
+    end;
+
+    Q.Clear;
+
+    if (Items[0] = nil) or (Items[0].GetId <> 810) then
+    begin
+      WriteLn('FAIL: PriorityQueue managed ToArray output did not own refs after clear');
+      Halt(1);
+    end;
+
+    Items := nil;
+  finally
+    Q.Free;
+  end;
+  SnapAssert(Snap, 'PriorityQueue managed ToArray owns refs after clear');
+  Pass('PriorityQueue managed ToArray owns refs after clear');
+end;
+
 begin
   GPass := 0;
   WriteLn('=== Managed Type Stress Tests ===');
@@ -683,13 +919,16 @@ begin
   TestSmallVecManagedSpillDoneReleasesInlineCopies;
   TestVecDequePushPopClear;
   TestVecDequeWrapResize;
+  TestVecDequeManagedResizeAndRetainReleaseSlots;
   TestVecDequeManagedTryPopPointerOwnsRefsAndSyncsTail;
   TestVecDequeManagedTryPopArrayOwnsRefsAndSyncsTail;
   TestVecDequeManagedTryPopElementOwnsRefsAndSyncsTail;
   TestVecDequeManagedPointerReadOwnsRefsAfterClear;
+  TestVecDequeManagedWritePointerReleasesOverwrittenRef;
   TestVecDequeManagedTryPeekCopyOwnsRefsAfterClear;
   TestVecDequeManagedRemoveCopyAtOwnsRefsAfterClear;
   TestVecDequeManagedSwapRemoveCopyAtOwnsRefsAfterClear;
+  TestVecDequeManagedToArrayOwnsRefsAfterClear;
   TestHashMapRehash;
   TestHashMapOverwrite;
   TestSwissTableManagedKeyValueLifecycle;
@@ -698,6 +937,7 @@ begin
   TestSkipListRemove;
   TestCircularBufferOverwrite;
   TestLinkedHashMapClear;
+  TestPriorityQueueManagedToArrayOwnsRefsAfterClear;
   WriteLn(Format('--- %d passed ---', [GPass]));
   WriteLn('ALL PASS');
 end.

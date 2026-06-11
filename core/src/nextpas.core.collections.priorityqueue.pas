@@ -229,10 +229,16 @@ procedure TPriorityQueue.Clear;
 var
   i: SizeUInt;
 begin
+  if FCount = 0 then
+    Exit;
+
   // Finalize managed types
   if IsManagedType then
+  begin
     for i := 0 to FCount - 1 do
       Finalize(FItems[i]);
+    FillChar(FItems[0], FCount * SizeOf(T), 0);
+  end;
   FCount := 0;
 end;
 
@@ -327,7 +333,7 @@ begin
   if LCopyCount > FCount then
     LCopyCount := FCount;
   if LCopyCount > 0 then
-    Move(FItems[0], aDst^, LCopyCount * SizeOf(T));
+    FElementManager.CopyElementsUnchecked(@FItems[0], aDst, LCopyCount);
 end;
 
 procedure TPriorityQueue.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);

@@ -1565,8 +1565,7 @@ procedure TVecDeque.SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt);
 var
   LPtr1, LPtr2: PElement;
   LLen1, LLen2: SizeUInt;
-  LDstPtr: PByte;
-  LElementSize: SizeUInt;
+  LDstPtr: PElement;
 begin
   if aDst = nil then
     raise EArgumentNil.Create('TVecDeque.SerializeToArrayBuffer: aDst is nil');
@@ -1574,18 +1573,12 @@ begin
     raise EOutOfRange.Create('TVecDeque.SerializeToArrayBuffer: aCount > Count');
   if aCount = 0 then Exit;
 
-  LDstPtr := PByte(aDst);
-  LElementSize := GetElementSize;
-
-  // 使用统一的两段切片拆分
+  LDstPtr := PElement(aDst);
   GetTwoSlices(0, aCount, LPtr1, LLen1, LPtr2, LLen2);
   if LLen1 > 0 then
-  begin
-    Move(LPtr1^, LDstPtr^, LLen1 * LElementSize);
-    Inc(LDstPtr, LLen1 * LElementSize);
-  end;
+    FElementManager.CopyElementsUnchecked(LPtr1, LDstPtr, LLen1);
   if LLen2 > 0 then
-    Move(LPtr2^, LDstPtr^, LLen2 * LElementSize);
+    FElementManager.CopyElementsUnchecked(LPtr2, LDstPtr + LLen1, LLen2);
 end;
 
 procedure TVecDeque.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
@@ -1862,10 +1855,7 @@ end;
 
 procedure TVecDeque.Resize(aNewSize: SizeUInt);
 begin
-  if aNewSize > FBuffer.GetCount then
-    EnsureCapacity(aNewSize);
-  FCount := aNewSize;
-  FTail := WrapAdd(FHead, FCount);
+  ResizeExact(aNewSize);
 end;
 
 procedure TVecDeque.Ensure(aIndex: SizeUInt);
@@ -1900,7 +1890,7 @@ begin
   if LStartPhysical <= LEndPhysical then
   begin
     // 情况1：要覆写的范围是连续的
-    Move(LSrcPtr^, FBuffer.GetPtrUnchecked(LStartPhysical)^, aCount * LElementSize);
+    FBuffer.OverwriteUnchecked(LStartPhysical, LSrcPtr, aCount);
   end
   else
   begin
@@ -1909,12 +1899,12 @@ begin
     LSecondPartSize := aCount - LFirstPartSize;           // 从缓冲区开头的剩余部分
 
     // 覆写第一段：从起始位置到缓冲区末尾
-    Move(LSrcPtr^, FBuffer.GetPtrUnchecked(LStartPhysical)^, LFirstPartSize * LElementSize);
+    FBuffer.OverwriteUnchecked(LStartPhysical, LSrcPtr, LFirstPartSize);
     Inc(LSrcPtr, LFirstPartSize * LElementSize);
 
     // 覆写第二段：从缓冲区开头
     if LSecondPartSize > 0 then
-      Move(LSrcPtr^, FBuffer.GetPtrUnchecked(0)^, LSecondPartSize * LElementSize);
+      FBuffer.OverwriteUnchecked(0, LSrcPtr, LSecondPartSize);
   end;
 end;
 
