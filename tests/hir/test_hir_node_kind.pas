@@ -51,6 +51,7 @@ begin
   if ParseHirNodeKind('int-to-str-runtime') <> hnkIntToStrRuntime then Fail('int-to-str-runtime');
   if ParseHirNodeKind('int-to-str-owned-runtime') = hnkUnknown then Fail('int-to-str-owned-runtime');
   if ParseHirNodeKind('copy-str-runtime') <> hnkCopyStrRuntime then Fail('copy-str-runtime');
+  if ParseHirNodeKind('copy-str-owned-runtime') <> hnkCopyStrOwnedRuntime then Fail('copy-str-owned-runtime');
   if ParseHirNodeKind('write-int-runtime') <> hnkWriteIntRuntime then Fail('write-int-runtime');
   if ParseHirNodeKind('write-string-runtime') <> hnkWriteStringRuntime then Fail('write-string-runtime');
   if ParseHirNodeKind('write-str-var-runtime') <> hnkWriteStrVarRuntime then Fail('write-str-var-runtime');

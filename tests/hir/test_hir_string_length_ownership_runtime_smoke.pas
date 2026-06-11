@@ -31,6 +31,21 @@ const
     '  Halt(Length(''literal'') + 35);' + LineEnding +
     'end.';
 
+  CopyOwnedTempSource =
+    'program c6h8_string_copy_owned_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := IntToStr(42) + ''tail'';' + LineEnding +
+    'end;' + LineEnding +
+    'var S: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  S := Copy(MakeText(), 2, 2);' + LineEnding +
+    '  if S = ''2t'' then' + LineEnding +
+    '    Halt(42)' + LineEnding +
+    '  else' + LineEnding +
+    '    Halt(7);' + LineEnding +
+    'end.';
+
 procedure Fail(const AMessage: string);
 begin
   WriteLn('hir-string-length-ownership-runtime-smoke-failure=', AMessage);
@@ -204,6 +219,22 @@ begin
     'literal-length-must-not-release-runtime');
 end;
 
+procedure AssertCopyOwnedRuntimeContract(const ALlvmText: string);
+begin
+  RequireContains(ALlvmText,
+    ' = call {ptr, i64, ptr, i64} @MakeText(',
+    'missing-owned-string-copy-producer-runtime');
+  RequireContains(ALlvmText,
+    ' = call {ptr, i64, ptr, i64} @np_str_copy_owned(',
+    'missing-owned-string-copy-helper-runtime');
+  RequireContains(ALlvmText, 'call void @np_string_release(',
+    'missing-owned-string-copy-release-runtime');
+  RequireOrder(ALlvmText,
+    ' = call {ptr, i64, ptr, i64} @np_str_copy_owned(',
+    'call void @np_string_release(',
+    'copy-temp-release-must-follow-owned-copy-runtime');
+end;
+
 procedure EmitAssertAndRun(const AOutputDir, AStem, ASource,
   AAssertKind: string);
 var
@@ -219,6 +250,8 @@ begin
     AssertOwnedLengthRuntimeContract(LlvmText)
   else if AAssertKind = 'literal-length' then
     AssertLiteralLengthRuntimeContract(LlvmText)
+  else if AAssertKind = 'owned-copy' then
+    AssertCopyOwnedRuntimeContract(LlvmText)
   else
     Fail('unknown-assert-kind:' + AAssertKind);
 
@@ -241,5 +274,7 @@ begin
     DirectLengthOwnedTempSource, 'owned-length');
   EmitAssertAndRun(OutputDir, 'llvm_string_length_literal',
     LiteralLengthSource, 'literal-length');
+  EmitAssertAndRun(OutputDir, 'llvm_string_copy_owned_direct',
+    CopyOwnedTempSource, 'owned-copy');
   WriteLn('hir-string-length-ownership-runtime-smoke-status=pass');
 end.

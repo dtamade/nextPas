@@ -100,17 +100,6 @@ const
     '  TakeOut(MakeText());' + LineEnding +
     'end.';
 
-  CopyOwnedArgumentSource =
-    'program test;' + LineEnding +
-    'function MakeText: string;' + LineEnding +
-    'begin' + LineEnding +
-    '  MakeText := ''copy'';' + LineEnding +
-    'end;' + LineEnding +
-    'var S: string;' + LineEnding +
-    'begin' + LineEnding +
-    '  S := Copy(MakeText(), 1, 2);' + LineEnding +
-    'end.';
-
   ConcatLeftOwnedArgumentSource =
     'program test;' + LineEnding +
     'function MakeText: string;' + LineEnding +
@@ -345,16 +334,12 @@ begin
     'var-param-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(OutParamOwnedArgumentSource,
     'out-param-owned-string-temp-consumer-must-fail-closed');
-  RequireAnalyzeDeferredError(CopyOwnedArgumentSource,
-    'copy-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(ConcatLeftOwnedArgumentSource,
     'concat-left-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(ConcatRightOwnedArgumentSource,
     'concat-right-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(CompareOwnedArgumentSource,
     'compare-owned-string-temp-consumer-must-fail-closed');
-  RequireAnalyzeDeferredError(WriteLnOwnedArgumentSource,
-    'writeln-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(VirtualOwnedArgumentSource,
     'virtual-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(InterfaceOwnedArgumentSource,
@@ -465,10 +450,60 @@ begin
   end;
 end;
 
+procedure AssertWriteLnArgumentTempOwnershipNodes;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+  OwnedIndex, WriteIndex, ReleaseIndex: LongInt;
+begin
+  Model := BuildModel(WriteLnOwnedArgumentSource);
+  try
+    if Model = nil then
+      Fail('writeln-owned-argument-model-nil');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText', Node) then
+      Fail('missing-writeln-string-temp-owned-runtime');
+    if Pos('ptr', Node.Operand) = 0 then
+      Fail('writeln-string-temp-owned-runtime-missing-ptr-field');
+    if Pos('len', Node.Operand) = 0 then
+      Fail('writeln-string-temp-owned-runtime-missing-len-field');
+    if Pos('owner', Node.Operand) = 0 then
+      Fail('writeln-string-temp-owned-runtime-missing-owner-field');
+    if Pos('alloc_size', Node.Operand) = 0 then
+      Fail('writeln-string-temp-owned-runtime-missing-alloc-size-field');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'write-str-var-runtime', 'Write', Node) then
+      Fail('missing-writeln-string-temp-write-runtime');
+    if Pos('owner', Node.Operand) <> 0 then
+      Fail('writeln-string-writer-must-not-receive-owner');
+    if Pos('alloc_size', Node.Operand) <> 0 then
+      Fail('writeln-string-writer-must-not-receive-alloc-size');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText', Node) then
+      Fail('missing-writeln-string-temp-release-runtime');
+
+    OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText');
+    WriteIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'write-str-var-runtime', 'Write');
+    ReleaseIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText');
+    if (OwnedIndex < 0) or (WriteIndex < 0) or (ReleaseIndex < 0) then
+      Fail('missing-writeln-string-temp-order-node');
+    if OwnedIndex >= WriteIndex then
+      Fail('writeln-string-temp-owned-must-precede-write');
+    if WriteIndex >= ReleaseIndex then
+      Fail('writeln-string-temp-release-must-follow-write');
+  finally
+    Model.Free;
+  end;
+end;
+
 begin
   AssertDirectArgumentTempOwnershipNodes;
   AssertReverseReleaseOrder;
   AssertNestedArgumentTempOwnershipNodes;
+  AssertWriteLnArgumentTempOwnershipNodes;
   AssertDeferredConsumersFailClosed;
   WriteLn('hir-string-call-argument-ownership-contract-status=pass');
 end.

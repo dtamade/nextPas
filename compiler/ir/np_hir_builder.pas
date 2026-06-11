@@ -244,6 +244,7 @@ type
     procedure ProcessIntToStr(const ANode: TTypedHirNode);
     procedure ProcessOwnedIntToStr(const ANode: TTypedHirNode);
     procedure ProcessCopyStr(const ANode: TTypedHirNode);
+    procedure ProcessCopyStrOwned(const ANode: TTypedHirNode);
     procedure ProcessWriteInt(const ANode: TTypedHirNode);
     procedure ProcessWriteStr(const ANode: TTypedHirNode);
     procedure ProcessWriteStrVar(const ANode: TTypedHirNode);
@@ -4363,6 +4364,54 @@ begin
   ClearStringOwner(DstName);
 end;
 
+procedure THIRBuilder.ProcessCopyStrOwned(const ANode: TTypedHirNode);
+var
+  TabPos: LongInt;
+  DstName, SrcName, Rest, StartBlob, LenBlob: string;
+  SrcPtr, SrcLen, StartVal, LenVal: THIRValueId;
+  Instr: THIRInstr;
+begin
+  TabPos := Pos(#9, ANode.Operand);
+  if TabPos = 0 then Exit;
+  DstName := Copy(ANode.Operand, 1, TabPos - 1);
+  Rest := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
+
+  TabPos := Pos(#9, Rest);
+  if TabPos = 0 then Exit;
+  SrcName := Copy(Rest, 1, TabPos - 1);
+  Rest := Copy(Rest, TabPos + 1, Length(Rest));
+
+  TabPos := Pos(#9, Rest);
+  if TabPos = 0 then Exit;
+  StartBlob := Copy(Rest, 1, TabPos - 1);
+  LenBlob := Copy(Rest, TabPos + 1, Length(Rest));
+
+  SrcPtr := FindAlloca(SrcName + '$ptr');
+  SrcLen := FindAlloca(SrcName + '$len');
+  if (SrcPtr = 0) or (SrcLen = 0) then Exit;
+  SrcPtr := EmitLoad(GetPtrType, SrcPtr);
+  SrcLen := EmitLoad(GetIntType, SrcLen);
+
+  StartVal := ParseIntBlob(StartBlob);
+  LenVal := ParseIntBlob(LenBlob);
+  if (StartVal = 0) or (LenVal = 0) then Exit;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'str_copy_owned';
+  SetLength(Instr.Operands, 4);
+  Instr.Operands[0] := MakeTypedOperand(SrcPtr, GetPtrType);
+  Instr.Operands[1] := MakeTypedOperand(SrcLen, GetIntType);
+  Instr.Operands[2] := MakeTypedOperand(StartVal, GetIntType);
+  Instr.Operands[3] := MakeTypedOperand(LenVal, GetIntType);
+  EmitInstr(Instr);
+
+  ReleaseStringOwner(DstName);
+  StoreOwnedStringResult(DstName, Instr.ResultId);
+end;
+
 procedure THIRBuilder.ProcessWriteInt(const ANode: TTypedHirNode);
 var
   V: THIRValueId;
@@ -6881,6 +6930,8 @@ begin
       ProcessOwnedIntToStr(ANode);
     hnkCopyStrRuntime:
       ProcessCopyStr(ANode);
+    hnkCopyStrOwnedRuntime:
+      ProcessCopyStrOwned(ANode);
     hnkWriteIntRuntime:
       ProcessWriteInt(ANode);
     hnkWriteStringRuntime, hnkWriteCall:

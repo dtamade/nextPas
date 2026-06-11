@@ -37,25 +37,15 @@ const
     '  Halt(Length(MakeA()) + Length(MakeB()) + 39);' + LineEnding +
     'end.';
 
-  CopyStillDeferredSource =
+  CopyOwnedTempSource =
     'program test;' + LineEnding +
     'function MakeText: string;' + LineEnding +
     'begin' + LineEnding +
-    '  MakeText := ''copy'';' + LineEnding +
+    '  MakeText := IntToStr(42) + ''tail'';' + LineEnding +
     'end;' + LineEnding +
     'var S: string;' + LineEnding +
     'begin' + LineEnding +
-    '  S := Copy(MakeText(), 1, 2);' + LineEnding +
-    'end.';
-
-  WriteLnStillDeferredSource =
-    'program test;' + LineEnding +
-    'function MakeText: string;' + LineEnding +
-    'begin' + LineEnding +
-    '  MakeText := ''write'';' + LineEnding +
-    'end;' + LineEnding +
-    'begin' + LineEnding +
-    '  WriteLn(MakeText());' + LineEnding +
+    '  S := Copy(MakeText(), 2, 2);' + LineEnding +
     'end.';
 
 procedure Fail(const AMessage: string);
@@ -92,43 +82,6 @@ begin
     if Diagnostics.HasErrors then
       Fail(ARedPrefix + ':' + Diagnostics.LastDiagnosticCode);
     Result := Analyzer.DetachModel;
-  finally
-    Analyzer.Free;
-    Graph.Free;
-    Ast.Free;
-    Tree.Free;
-    Lexer.Free;
-    Diagnostics.Free;
-  end;
-end;
-
-function AnalyzeSourceHasError(const ASource, ACode: string): Boolean;
-var
-  Diagnostics: TDiagnosticsSink;
-  Lexer: TLexerResult;
-  Tree: TGreenTree;
-  Ast: TAstFacade;
-  Graph: TUnitGraph;
-  Analyzer: TSemanticAnalyzer;
-begin
-  Result := False;
-  Diagnostics := TDiagnosticsSink.CreateDefault;
-  Lexer := nil;
-  Tree := nil;
-  Ast := nil;
-  Graph := nil;
-  Analyzer := nil;
-  try
-    Lexer := TLexerResult.Create(ASource, Diagnostics, 1);
-    Tree := ParseGreenTree(Lexer, Diagnostics, 1);
-    Ast := TAstFacade.Create(Tree);
-    Graph := TUnitGraph.Create;
-    Graph.SetRootName('test');
-    Graph.MarkReady;
-    Analyzer := TSemanticAnalyzer.Create(Ast, Graph, Diagnostics, 1, True);
-    Analyzer.Analyze;
-    Result := Diagnostics.HasErrors and
-      SameText(Diagnostics.LastDiagnosticCode, ACode);
   finally
     Analyzer.Free;
     Graph.Free;
@@ -247,19 +200,57 @@ begin
   end;
 end;
 
-procedure AssertOtherConsumersStayDeferred;
-const
-  DeferredCode = 'sema.c6h4-owned-string-return-deferred-consumer';
+procedure AssertCopyOwnedTempOwnershipNodes;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+  OwnedIndex, CopyIndex, ReleaseIndex: LongInt;
 begin
-  if not AnalyzeSourceHasError(CopyStillDeferredSource, DeferredCode) then
-    Fail('copy-owned-string-temp-must-remain-deferred');
-  if not AnalyzeSourceHasError(WriteLnStillDeferredSource, DeferredCode) then
-    Fail('writeln-owned-string-temp-must-remain-deferred');
+  Model := BuildModel(CopyOwnedTempSource,
+    'missing-owned-string-copy-hir');
+  try
+    if not FindNodeByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText', Node) then
+      Fail('missing-copy-string-temp-owned-runtime');
+    if Pos('ptr', Node.Operand) = 0 then
+      Fail('copy-owned-temp-missing-ptr');
+    if Pos('len', Node.Operand) = 0 then
+      Fail('copy-owned-temp-missing-len');
+    if Pos('owner', Node.Operand) = 0 then
+      Fail('copy-owned-temp-missing-owner');
+    if Pos('alloc_size', Node.Operand) = 0 then
+      Fail('copy-owned-temp-missing-alloc-size');
+    if not FindNodeByKindAndDisplayName(Model,
+      'copy-str-owned-runtime', 'S', Node) then
+      Fail('missing-copy-str-owned-runtime');
+    if Pos('owner', Node.Operand) <> 0 then
+      Fail('copy-consumer-must-not-receive-owner');
+    if Pos('alloc_size', Node.Operand) <> 0 then
+      Fail('copy-consumer-must-not-receive-alloc-size');
+    if not FindNodeByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText', Node) then
+      Fail('missing-copy-string-temp-release-runtime');
+
+    OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText');
+    CopyIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'copy-str-owned-runtime', 'S');
+    ReleaseIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText');
+    if (OwnedIndex < 0) or (CopyIndex < 0) or (ReleaseIndex < 0) then
+      Fail('missing-copy-temp-order-node');
+    if OwnedIndex >= CopyIndex then
+      Fail('copy-temp-owned-must-precede-copy');
+    if CopyIndex >= ReleaseIndex then
+      Fail('copy-temp-release-must-follow-copy');
+  finally
+    Model.Free;
+  end;
 end;
 
 begin
   AssertDirectLengthTempOwnershipNodes;
   AssertRepeatedLengthOrder;
-  AssertOtherConsumersStayDeferred;
+  AssertCopyOwnedTempOwnershipNodes;
   WriteLn('hir-string-length-ownership-contract-status=pass');
 end.

@@ -366,3 +366,23 @@
   137/137 LLVM smoke 全绿。C5 下一步建议优先收口 `WalkHaltCalls` 剩余
   constructor-like / raw object-dot / pointer-return helper call special-case，
   再设计更显式的 receiver/address call contract。
+- 2026-06-12 C6-H7：owned string return 的 `Write/WriteLn` consumer 第一刀：
+  `WriteLn(MakeText())` 现在从 fail-closed 推进为可验证的临时所有权路径，
+  形态是 `string-temp-owned-runtime -> write-str-var-runtime -> string-temp-release-runtime`。
+  sema 只对 `Write/WriteLn` 的 direct root owned string return 参数放行，不放宽
+  `Copy`、concat、compare、field store、var/out、virtual/interface/external 等 consumer。
+  RED=`test_hir_string_call_argument_ownership_contract` 失败
+  `missing-writeln-string-temp-owned-runtime`；GREEN 后新增 runtime smoke
+  `llvm_string_arg_owned_writeln`，真实输出 `42` 并以 exit 42 通过；相邻 C6 string
+  ownership/return/length contract 与 runtime smoke 全绿。C6 仍在推进中，下一步可继续
+  从剩余 fail-closed string consumer 中选择最小可释放切片。
+- 2026-06-12 C6-H8：owned string return 的 `Copy` consumer 第一刀：
+  `S := Copy(MakeText(), 2, 2)` 现在从 fail-closed 推进为 owned slice copy。
+  sema 只识别 `Copy` 第一个参数是 direct root owned string-return call、起点和长度可编码
+  的 assignment consumer；旧 `copy-str-runtime` 继续表示 borrowed alias copy，不改语义。
+  新增 `copy-str-owned-runtime` 走 `np_str_copy_owned`，先分配独立 slice owner，再释放
+  producer temp，避免目标字符串悬空。RED=`test_hir_string_length_ownership_contract`
+  失败 `missing-owned-string-copy-hir:sema.c6h4-owned-string-return-deferred-consumer`；
+  GREEN 后 `llvm_string_copy_owned_direct` 通过 LLVM verify/llc/link/run，exit 42。
+  concat、compare、field store、var/out、virtual/interface/external 等 consumer 仍保持
+  fail-closed。

@@ -72,6 +72,7 @@ type
     hnkIntToStrRuntime,
     hnkIntToStrOwnedRuntime,
     hnkCopyStrRuntime,
+    hnkCopyStrOwnedRuntime,
     hnkWriteIntRuntime,
     hnkWriteStringRuntime,
     hnkWriteStrVarRuntime,
@@ -214,6 +215,7 @@ begin
     'int-to-str-runtime': Result := hnkIntToStrRuntime;
     'int-to-str-owned-runtime': Result := hnkIntToStrOwnedRuntime;
     'copy-str-runtime': Result := hnkCopyStrRuntime;
+    'copy-str-owned-runtime': Result := hnkCopyStrOwnedRuntime;
     'write-int-runtime': Result := hnkWriteIntRuntime;
     'write-string-runtime': Result := hnkWriteStringRuntime;
     'write-str-var-runtime': Result := hnkWriteStrVarRuntime;

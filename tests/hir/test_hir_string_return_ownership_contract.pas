@@ -160,17 +160,6 @@ const
     '  Box.Text := MakeText();' + LineEnding +
     'end.';
 
-  CopyOwnedReturnConsumerSource =
-    'program test;' + LineEnding +
-    'function MakeText: string;' + LineEnding +
-    'begin' + LineEnding +
-    '  MakeText := ''copy'';' + LineEnding +
-    'end;' + LineEnding +
-    'var S: string;' + LineEnding +
-    'begin' + LineEnding +
-    '  S := Copy(MakeText(), 1, 2);' + LineEnding +
-    'end.';
-
   ArgumentOwnedReturnConsumerSource =
     'program test;' + LineEnding +
     'function MakeText: string;' + LineEnding +
@@ -624,8 +613,6 @@ begin
     'overloaded-owned-string-return-must-fail-closed');
   RequireAnalyzeError(FieldOwnedReturnConsumerSource, DeferredCode,
     'field-owned-string-return-consumer-must-fail-closed');
-  RequireAnalyzeError(CopyOwnedReturnConsumerSource, DeferredCode,
-    'copy-owned-string-return-consumer-must-fail-closed');
 end;
 
 begin

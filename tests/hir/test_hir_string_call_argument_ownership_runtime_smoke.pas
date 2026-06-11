@@ -82,6 +82,17 @@ const
     '  Halt(5);' + LineEnding +
     'end.';
 
+  WriteLnOwnedArgumentSource =
+    'program c6h7_writeln_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := IntToStr(42);' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  WriteLn(MakeText());' + LineEnding +
+    '  Halt(42);' + LineEnding +
+    'end.';
+
 procedure Fail(const AMessage: string);
 begin
   WriteLn('hir-string-call-argument-ownership-runtime-smoke-failure=', AMessage);
@@ -282,6 +293,23 @@ begin
     'literal-borrowed-argument-must-not-release-runtime');
 end;
 
+procedure AssertWriteLnOwnedRuntimeContract(const ALlvmText: string);
+var
+  ProducerPos, WritePos, ReleasePos: LongInt;
+begin
+  ProducerPos := Pos(' = call {ptr, i64, ptr, i64} @MakeText(', ALlvmText);
+  WritePos := Pos('call void asm sideeffect "movq $$1, %rax; syscall"',
+    ALlvmText);
+  if (ProducerPos = 0) or (WritePos = 0) then
+    Fail('missing-writeln-owned-string-write-runtime');
+  ReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    WritePos + 1);
+  if ReleasePos = 0 then
+    Fail('missing-writeln-owned-string-release-runtime');
+  if (ProducerPos >= WritePos) or (WritePos >= ReleasePos) then
+    Fail('writeln-owned-string-temp-release-order-runtime');
+end;
+
 procedure RunRuntimeSmoke(const AOutputDir, AStem: string);
 var
   LlPath: string;
@@ -319,6 +347,8 @@ begin
     RequireReverseReleaseOrder(LlvmText)
   else if AAssertKind = 'literal' then
     AssertLiteralBorrowedRuntimeContract(LlvmText)
+  else if AAssertKind = 'writeln' then
+    AssertWriteLnOwnedRuntimeContract(LlvmText)
   else
     Fail('unknown-assert-kind:' + AAssertKind);
 
@@ -345,5 +375,7 @@ begin
     MultiOwnedArgumentSource, 'multi');
   EmitAssertAndRun(OutputDir, 'llvm_string_arg_borrowed_literal',
     LiteralBorrowedArgumentSource, 'literal');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_writeln',
+    WriteLnOwnedArgumentSource, 'writeln');
   WriteLn('hir-string-call-argument-ownership-runtime-smoke-status=pass');
 end.

@@ -127,6 +127,18 @@ type
       const ANode: TGreenNode; out AFuncName: string): Boolean;
     function EmitOwnedStringLengthTemp(const ANode: TGreenNode;
       out ABlob: string): Boolean;
+    function CopyArgumentOwnsStringReturn(
+      const ANode: TGreenNode; out AFuncName: string): Boolean;
+    function IsSupportedOwnedStringReturnCopyArgument(
+      const ANode: TGreenNode; out AFuncName: string): Boolean;
+    function EmitOwnedStringCopyTemp(const ACopyNode: TGreenNode;
+      const ADestName: string; out ATempName: string): Boolean;
+    function WriteArgumentOwnsStringReturn(
+      const ANode: TGreenNode; out AFuncName: string): Boolean;
+    function IsSupportedOwnedStringReturnWriteArgument(
+      const ANode: TGreenNode; out AFuncName: string): Boolean;
+    function EmitOwnedStringWriteTemp(
+      const ANode: TGreenNode; out ATempName: string): Boolean;
     function NodeConsumesOwnedStringReturnDeferred(const ANode: TGreenNode;
       const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
     procedure ScanOwnedStringReturnConsumers(const ANode: TGreenNode;
@@ -1066,6 +1078,118 @@ begin
   Result := True;
 end;
 
+function TSemanticAnalyzer.CopyArgumentOwnsStringReturn(
+  const ANode: TGreenNode; out AFuncName: string): Boolean;
+var
+  CalleeNode, ArgNode, FuncNode: TGreenNode;
+begin
+  AFuncName := '';
+  Result := False;
+  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
+    (ANode.ChildCount < 4) then
+    Exit;
+  CalleeNode := ANode.ChildAt(0);
+  ArgNode := ANode.ChildAt(1);
+  if (CalleeNode = nil) or (ArgNode = nil) or
+    (CalleeNode.NodeKind <> gnkIdentifier) or
+    (not SameText(CalleeNode.Text, 'Copy')) then
+    Exit;
+  if (ArgNode.NodeKind <> gnkFunctionCall) or
+    (ArgNode.ChildCount < 1) then
+    Exit;
+  FuncNode := ArgNode.ChildAt(0);
+  if (FuncNode = nil) or (FuncNode.NodeKind <> gnkIdentifier) then
+    Exit;
+  if not StringReturnFunctionNameFromNode(ArgNode, AFuncName) then
+    Exit;
+  Result := SameText(FuncNode.Text, AFuncName) and
+    (not HasOverload(AFuncName));
+end;
+
+function TSemanticAnalyzer.IsSupportedOwnedStringReturnCopyArgument(
+  const ANode: TGreenNode; out AFuncName: string): Boolean;
+begin
+  Result := CopyArgumentOwnsStringReturn(ANode, AFuncName) and
+    IsOwnedStringReturnFunc(AFuncName);
+end;
+
+function TSemanticAnalyzer.EmitOwnedStringCopyTemp(const ACopyNode: TGreenNode;
+  const ADestName: string; out ATempName: string): Boolean;
+var
+  SourceName, StartBlob, LenBlob: string;
+begin
+  ATempName := '';
+  Result := False;
+  if (ADestName = '') or
+    (not IsSupportedOwnedStringReturnCopyArgument(ACopyNode, SourceName)) then
+    Exit;
+  if (not EncodeRuntimeIntExprFold(ACopyNode.ChildAt(2), StartBlob)) or
+    (not EncodeRuntimeIntExprFold(ACopyNode.ChildAt(3), LenBlob)) then
+    Exit;
+  Inc(FBlockLabelCounter);
+  ATempName := '$str_cpy_tmp_' + IntToStr(FBlockLabelCounter);
+  RegisterRuntimeVar(ATempName);
+  RegisterRuntimeStrVar(ATempName);
+  FModel.AddTypedHirNode('var-decl-str-owned-runtime', ATempName, 0, 0,
+    ATempName);
+  FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
+    ATempName + #9 + 'callee ' + SourceName + #9 +
+    'ptr len owner alloc_size');
+  FModel.AddTypedHirNode('copy-str-owned-runtime', ADestName, 0, 0,
+    ADestName + #9 + ATempName + #9 + StartBlob + #9 + LenBlob);
+  FModel.AddTypedHirNode('string-temp-release-runtime', SourceName, 0, 0,
+    ATempName);
+  Result := True;
+end;
+
+function TSemanticAnalyzer.WriteArgumentOwnsStringReturn(
+  const ANode: TGreenNode; out AFuncName: string): Boolean;
+var
+  CalleeNode: TGreenNode;
+begin
+  AFuncName := '';
+  Result := False;
+  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
+    (ANode.ChildCount < 1) then
+    Exit;
+  CalleeNode := ANode.ChildAt(0);
+  if (CalleeNode = nil) or (CalleeNode.NodeKind <> gnkIdentifier) then
+    Exit;
+  if not StringReturnFunctionNameFromNode(ANode, AFuncName) then
+    Exit;
+  Result := SameText(CalleeNode.Text, AFuncName) and
+    (not HasOverload(AFuncName));
+end;
+
+function TSemanticAnalyzer.IsSupportedOwnedStringReturnWriteArgument(
+  const ANode: TGreenNode; out AFuncName: string): Boolean;
+begin
+  Result := WriteArgumentOwnsStringReturn(ANode, AFuncName) and
+    IsOwnedStringReturnFunc(AFuncName);
+end;
+
+function TSemanticAnalyzer.EmitOwnedStringWriteTemp(
+  const ANode: TGreenNode; out ATempName: string): Boolean;
+var
+  SourceName: string;
+begin
+  ATempName := '';
+  Result := False;
+  if not IsSupportedOwnedStringReturnWriteArgument(ANode, SourceName) then
+    Exit;
+  Inc(FBlockLabelCounter);
+  ATempName := '$str_wrt_tmp_' + IntToStr(FBlockLabelCounter);
+  RegisterRuntimeVar(ATempName);
+  RegisterRuntimeStrVar(ATempName);
+  FModel.AddTypedHirNode('var-decl-str-owned-runtime', ATempName, 0, 0,
+    ATempName);
+  FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
+    ATempName + #9 + 'callee ' + SourceName + #9 +
+    'ptr len owner alloc_size');
+  QueuePendingStringTempRelease(ATempName, SourceName);
+  Result := True;
+end;
+
 function TSemanticAnalyzer.NodeConsumesOwnedStringReturnDeferred(
   const ANode: TGreenNode;
   const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
@@ -1111,6 +1235,23 @@ begin
   end;
 
   if (ANode.NodeKind = gnkFunctionCall) and
+    ((SameText(ANode.Text, 'WriteLn')) or (SameText(ANode.Text, 'Write'))) then
+  begin
+    for I := 1 to ANode.ChildCount - 1 do
+    begin
+      Child := ANode.ChildAt(I);
+      if Child = nil then
+        Continue;
+      if IsSupportedOwnedStringReturnWriteArgument(Child, SourceName) then
+        Continue;
+      if NodeConsumesOwnedStringReturnDeferred(
+        Child, AInsideDirectOwnedAssignmentRhs) then
+        Exit(True);
+    end;
+    Exit(False);
+  end;
+
+  if (ANode.NodeKind = gnkFunctionCall) and
     LookupProcedureBody(ANode.Text, BodyNode, DeclNode) and
     (not FunctionCallReturnsString(ANode)) then
   begin
@@ -1129,6 +1270,8 @@ begin
   end;
 
   if IsSupportedOwnedStringReturnLengthArgument(ANode, SourceName) then
+    Exit(False);
+  if IsSupportedOwnedStringReturnCopyArgument(ANode, SourceName) then
     Exit(False);
 
   if StringReturnFunctionNameFromNode(ANode, SourceName) and
@@ -1175,6 +1318,7 @@ begin
   if ANode.NodeKind = gnkFunctionCall then
   begin
     for J := 1 to ANode.ChildCount - 1 do
+    begin
       if CallArgumentOwnsStringReturn(
         ANode, ANode.ChildAt(J), J - 1, FuncName) and
         (not IsOwnedStringReturnFunc(FuncName)) then
@@ -1182,7 +1326,21 @@ begin
         RegisterOwnedStringReturnFunc(FuncName);
         AChanged := True;
       end;
+      if (SameText(ANode.Text, 'WriteLn') or SameText(ANode.Text, 'Write')) and
+        WriteArgumentOwnsStringReturn(ANode.ChildAt(J), FuncName) and
+        (not IsOwnedStringReturnFunc(FuncName)) then
+      begin
+        RegisterOwnedStringReturnFunc(FuncName);
+        AChanged := True;
+      end;
+    end;
     if LengthArgumentOwnsStringReturn(ANode, FuncName) and
+      (not IsOwnedStringReturnFunc(FuncName)) then
+    begin
+      RegisterOwnedStringReturnFunc(FuncName);
+      AChanged := True;
+    end;
+    if CopyArgumentOwnsStringReturn(ANode, FuncName) and
       (not IsOwnedStringReturnFunc(FuncName)) then
     begin
       RegisterOwnedStringReturnFunc(FuncName);
@@ -1219,6 +1377,7 @@ begin
   if ANode.NodeKind = gnkFunctionCall then
   begin
     for J := 1 to ANode.ChildCount - 1 do
+    begin
       if CallArgumentOwnsStringReturn(
         ANode, ANode.ChildAt(J), J - 1, FuncName) and
         (not IsOwnedStringReturnFunc(FuncName)) then
@@ -1226,7 +1385,21 @@ begin
         RegisterOwnedStringReturnFunc(FuncName);
         AChanged := True;
       end;
+      if (SameText(ANode.Text, 'WriteLn') or SameText(ANode.Text, 'Write')) and
+        WriteArgumentOwnsStringReturn(ANode.ChildAt(J), FuncName) and
+        (not IsOwnedStringReturnFunc(FuncName)) then
+      begin
+        RegisterOwnedStringReturnFunc(FuncName);
+        AChanged := True;
+      end;
+    end;
     if LengthArgumentOwnsStringReturn(ANode, FuncName) and
+      (not IsOwnedStringReturnFunc(FuncName)) then
+    begin
+      RegisterOwnedStringReturnFunc(FuncName);
+      AChanged := True;
+    end;
+    if CopyArgumentOwnsStringReturn(ANode, FuncName) and
       (not IsOwnedStringReturnFunc(FuncName)) then
     begin
       RegisterOwnedStringReturnFunc(FuncName);
@@ -11620,15 +11793,18 @@ begin
             (Arg.ChildCount >= 4) and (Arg.ChildAt(0) <> nil) and
             SameText(Arg.ChildAt(0).Text, 'Copy') then
           begin
-            if (Arg.ChildAt(1) <> nil) and
-              (Arg.ChildAt(1).NodeKind = gnkIdentifier) and
-              IsRuntimeStrVar(Arg.ChildAt(1).Text) and
-              EncodeRuntimeIntExprFold(Arg.ChildAt(2), Operand) and
-              EncodeRuntimeIntExprFold(Arg.ChildAt(3), StringValue) then
-              FModel.AddTypedHirNode(
-                'copy-str-runtime', Decoded, 0, 0,
-                Decoded + #9 + Arg.ChildAt(1).Text + #9 + Operand + #9 + StringValue
-              );
+            if not EmitOwnedStringCopyTemp(Arg, Decoded, Operand) then
+            begin
+              if (Arg.ChildAt(1) <> nil) and
+                (Arg.ChildAt(1).NodeKind = gnkIdentifier) and
+                IsRuntimeStrVar(Arg.ChildAt(1).Text) and
+                EncodeRuntimeIntExprFold(Arg.ChildAt(2), Operand) and
+                EncodeRuntimeIntExprFold(Arg.ChildAt(3), StringValue) then
+                FModel.AddTypedHirNode(
+                  'copy-str-runtime', Decoded, 0, 0,
+                  Decoded + #9 + Arg.ChildAt(1).Text + #9 + Operand + #9 + StringValue
+                );
+            end;
           end
           else if (Arg.NodeKind = gnkIdentifier) and
             (FCurrentMethodClass <> '') and
@@ -12066,6 +12242,10 @@ begin
               SameText(RhsNode.ChildAt(0).Text, 'IntToStr') and
               EncodeRuntimeIntExprFold(RhsNode.ChildAt(1), Operand) then
               AddWriteIntRuntimeNode(RhsNode.ChildAt(1), Operand)
+            else if EmitOwnedStringWriteTemp(RhsNode, Operand) then
+              FModel.AddTypedHirNode(
+                'write-str-var-runtime', 'Write', 0, 0, Operand
+              )
             else if (RhsNode.NodeKind = gnkIdentifier) and
               LookupProcedureBody(RhsNode.Text, BranchNode, DeclNode) and
               IsRuntimeStrVar(RhsNode.Text) then
@@ -12122,6 +12302,7 @@ begin
             FModel.AddTypedHirNode(
               'write-string-runtime', 'Write', 0, 0, #10
             );
+          EmitPendingStringTempReleases;
           Continue;
         end;
         Decoded := '';
