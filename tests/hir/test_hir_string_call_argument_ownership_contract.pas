@@ -148,6 +148,45 @@ const
     '    Halt(0);' + LineEnding +
     'end.';
 
+  CompareNotEqualOwnedArgumentSource =
+    'program test;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  if MakeText() <> ''y'' then' + LineEnding +
+    '    Halt(0);' + LineEnding +
+    'end.';
+
+  CompareRuntimeVarOwnedArgumentSource =
+    'program test;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'var S: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  S := ''x'';' + LineEnding +
+    '  if MakeText() = S then' + LineEnding +
+    '    Halt(0);' + LineEnding +
+    'end.';
+
+  CompareBothOwnedArgumentSource =
+    'program test;' + LineEnding +
+    'function MakeA: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeA := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'function MakeB: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeB := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  if MakeA() = MakeB() then' + LineEnding +
+    '    Halt(0);' + LineEnding +
+    'end.';
+
   CompareConcatOwnedArgumentSource =
     'program test;' + LineEnding +
     'function MakeText: string;' + LineEnding +
@@ -360,10 +399,10 @@ begin
     'var-param-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(OutParamOwnedArgumentSource,
     'out-param-owned-string-temp-consumer-must-fail-closed');
-  RequireAnalyzeDeferredError(CompareOwnedArgumentSource,
-    'compare-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(CompareConcatOwnedArgumentSource,
     'compare-concat-owned-string-temp-consumer-must-fail-closed');
+  RequireAnalyzeDeferredError(CompareBothOwnedArgumentSource,
+    'compare-both-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(VirtualOwnedArgumentSource,
     'virtual-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(InterfaceOwnedArgumentSource,
@@ -615,12 +654,102 @@ begin
   end;
 end;
 
+procedure AssertCompareTempOwnershipNodes;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+  OwnedIndex, CompareIndex, ReleaseIndex: LongInt;
+begin
+  Model := BuildModel(CompareOwnedArgumentSource);
+  try
+    if Model = nil then
+      Fail('compare-owned-argument-model-nil');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText', Node) then
+      Fail('missing-compare-string-temp-owned-runtime');
+    if Pos('ptr', Node.Operand) = 0 then
+      Fail('compare-string-temp-owned-runtime-missing-ptr-field');
+    if Pos('len', Node.Operand) = 0 then
+      Fail('compare-string-temp-owned-runtime-missing-len-field');
+    if Pos('owner', Node.Operand) = 0 then
+      Fail('compare-string-temp-owned-runtime-missing-owner-field');
+    if Pos('alloc_size', Node.Operand) = 0 then
+      Fail('compare-string-temp-owned-runtime-missing-alloc-size-field');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'cond-br-runtime', 'if', Node) then
+      Fail('missing-compare-cond-br-runtime');
+    if Pos('strcmp eq', Node.Operand) = 0 then
+      Fail('missing-compare-string-strcmp-runtime');
+    if Pos('strvar $str_cmp_tmp_', Node.Operand) = 0 then
+      Fail('missing-compare-string-temp-operand-runtime');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText', Node) then
+      Fail('missing-compare-string-temp-release-runtime');
+
+    OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText');
+    CompareIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'cond-br-runtime', 'if');
+    ReleaseIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText');
+    if (OwnedIndex < 0) or (CompareIndex < 0) or (ReleaseIndex < 0) then
+      Fail('missing-compare-string-temp-order-node');
+    if OwnedIndex >= CompareIndex then
+      Fail('compare-string-temp-owned-must-precede-compare');
+    if CompareIndex >= ReleaseIndex then
+      Fail('compare-string-temp-release-must-follow-compare');
+  finally
+    Model.Free;
+  end;
+
+  Model := BuildModel(CompareRuntimeVarOwnedArgumentSource);
+  try
+    if Model = nil then
+      Fail('compare-runtime-var-owned-argument-model-nil');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText', Node) then
+      Fail('missing-compare-runtime-var-string-temp-owned-runtime');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'cond-br-runtime', 'if', Node) then
+      Fail('missing-compare-runtime-var-cond-br-runtime');
+    if Pos('strvar S', Node.Operand) = 0 then
+      Fail('missing-compare-runtime-var-string-operand-runtime');
+    if Pos('strcmp eq', Node.Operand) = 0 then
+      Fail('missing-compare-runtime-var-string-strcmp-runtime');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText', Node) then
+      Fail('missing-compare-runtime-var-string-temp-release-runtime');
+  finally
+    Model.Free;
+  end;
+
+  Model := BuildModel(CompareNotEqualOwnedArgumentSource);
+  try
+    if Model = nil then
+      Fail('compare-not-equal-owned-argument-model-nil');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText', Node) then
+      Fail('missing-compare-not-equal-string-temp-owned-runtime');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'cond-br-runtime', 'if', Node) then
+      Fail('missing-compare-not-equal-cond-br-runtime');
+    if Pos('strcmp ne', Node.Operand) = 0 then
+      Fail('missing-compare-not-equal-string-strcmp-runtime');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText', Node) then
+      Fail('missing-compare-not-equal-string-temp-release-runtime');
+  finally
+    Model.Free;
+  end;
+end;
+
 begin
   AssertDirectArgumentTempOwnershipNodes;
   AssertReverseReleaseOrder;
   AssertNestedArgumentTempOwnershipNodes;
   AssertWriteLnArgumentTempOwnershipNodes;
   AssertConcatTempOwnershipNodes;
+  AssertCompareTempOwnershipNodes;
   AssertDeferredConsumersFailClosed;
   WriteLn('hir-string-call-argument-ownership-contract-status=pass');
 end.

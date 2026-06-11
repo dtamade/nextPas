@@ -145,6 +145,12 @@ type
       const ANode: TGreenNode; out AFuncName: string): Boolean;
     function ConcatExpressionConsumesOwnedStringReturnDeferred(
       const ANode: TGreenNode): Boolean;
+    function CompareOperandOwnsStringReturn(
+      const ANode: TGreenNode; out AFuncName: string): Boolean;
+    function IsSupportedOwnedStringReturnCompareOperand(
+      const ANode: TGreenNode; out AFuncName: string): Boolean;
+    function CompareExpressionConsumesOwnedStringReturnDeferred(
+      const ANode: TGreenNode): Boolean;
     function NodeConsumesOwnedStringReturnDeferred(const ANode: TGreenNode;
       const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
     procedure ScanOwnedStringReturnConsumers(const ANode: TGreenNode;
@@ -168,6 +174,10 @@ type
     function LookupPtrReturnFunc(const AName: string): string;
     function EmitStrConcatOperand(const ANode: TGreenNode;
       const ADestVar: string): string;
+    function CanEmitStrCompareOperand(const ANode: TGreenNode;
+      const AAllowOwnedStringReturn: Boolean): Boolean;
+    function EmitStrCompareOperand(const ANode: TGreenNode;
+      const AAllowOwnedStringReturn: Boolean; out ABlob: string): Boolean;
     function EncodeStrCallArgs(const ACallNode: TGreenNode;
       const ADestVar: string): string;
     function EncodeCallStatementArgs(
@@ -498,7 +508,8 @@ type
     function EncodeRuntimeIntExprFold(const ANode: TGreenNode;
       out ABlob: string): Boolean;
     function EncodeRuntimeBoolExprFold(const ANode: TGreenNode;
-      out ABlob: string): Boolean;
+      out ABlob: string;
+      const AAllowOwnedStringCompare: Boolean = False): Boolean;
     procedure LowerRuntimeIfStatement(
       const AIfNode: TGreenNode; const ACondBlob: string);
     procedure LowerRuntimeWhileStatement(const ANode: TGreenNode);
@@ -1247,6 +1258,59 @@ begin
   Result := NodeConsumesOwnedStringReturnDeferred(ANode, False);
 end;
 
+function TSemanticAnalyzer.CompareOperandOwnsStringReturn(
+  const ANode: TGreenNode; out AFuncName: string): Boolean;
+var
+  FuncNode: TGreenNode;
+begin
+  AFuncName := '';
+  Result := False;
+  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
+    (ANode.ChildCount <> 1) then
+    Exit;
+  FuncNode := ANode.ChildAt(0);
+  if (FuncNode = nil) or (FuncNode.NodeKind <> gnkIdentifier) then
+    Exit;
+  if not StringReturnFunctionNameFromNode(ANode, AFuncName) then
+    Exit;
+  Result := SameText(FuncNode.Text, AFuncName) and
+    (not HasOverload(AFuncName));
+end;
+
+function TSemanticAnalyzer.IsSupportedOwnedStringReturnCompareOperand(
+  const ANode: TGreenNode; out AFuncName: string): Boolean;
+begin
+  Result := CompareOperandOwnsStringReturn(ANode, AFuncName) and
+    IsOwnedStringReturnFunc(AFuncName);
+end;
+
+function TSemanticAnalyzer.CompareExpressionConsumesOwnedStringReturnDeferred(
+  const ANode: TGreenNode): Boolean;
+var
+  I: LongInt;
+  SourceName: string;
+begin
+  Result := False;
+  if ANode = nil then
+    Exit;
+  if (ANode.NodeKind <> gnkBinaryExpression) or
+    ((ANode.Text <> '=') and (ANode.Text <> '<>')) or
+    (ANode.ChildCount < 2) then
+  begin
+    for I := 0 to ANode.ChildCount - 1 do
+      if NodeConsumesOwnedStringReturnDeferred(ANode.ChildAt(I), False) then
+        Exit(True);
+    Exit(False);
+  end;
+  if IsSupportedOwnedStringReturnCompareOperand(ANode.ChildAt(0), SourceName) and
+    CanEmitStrCompareOperand(ANode.ChildAt(1), False) then
+    Exit(False);
+  if IsSupportedOwnedStringReturnCompareOperand(ANode.ChildAt(1), SourceName) and
+    CanEmitStrCompareOperand(ANode.ChildAt(0), False) then
+    Exit(False);
+  Result := NodeConsumesOwnedStringReturnDeferred(ANode, False);
+end;
+
 function TSemanticAnalyzer.NodeConsumesOwnedStringReturnDeferred(
   const ANode: TGreenNode;
   const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
@@ -1262,6 +1326,17 @@ begin
   if (ANode.NodeKind = gnkProcedureDecl) or
     (ANode.NodeKind = gnkFunctionDecl) then
     Exit;
+
+  if (ANode.NodeKind = gnkIfStatement) and (ANode.ChildCount >= 1) then
+  begin
+    if CompareExpressionConsumesOwnedStringReturnDeferred(ANode.ChildAt(0)) then
+      Exit(True);
+    for I := 1 to ANode.ChildCount - 1 do
+      if NodeConsumesOwnedStringReturnDeferred(
+        ANode.ChildAt(I), AInsideDirectOwnedAssignmentRhs) then
+        Exit(True);
+    Exit(False);
+  end;
 
   if DirectOwnedStringReturnAssignmentNode(ANode) then
   begin
@@ -1425,6 +1500,19 @@ begin
       end;
     end;
   end;
+  if (ANode.NodeKind = gnkBinaryExpression) and
+    ((ANode.Text = '=') or (ANode.Text = '<>')) then
+  begin
+    for J := 0 to ANode.ChildCount - 1 do
+    begin
+      if CompareOperandOwnsStringReturn(ANode.ChildAt(J), FuncName) and
+        (not IsOwnedStringReturnFunc(FuncName)) then
+      begin
+        RegisterOwnedStringReturnFunc(FuncName);
+        AChanged := True;
+      end;
+    end;
+  end;
   for I := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(I);
@@ -1489,6 +1577,19 @@ begin
     for J := 0 to ANode.ChildCount - 1 do
     begin
       if ConcatOperandOwnsStringReturn(ANode.ChildAt(J), FuncName) and
+        (not IsOwnedStringReturnFunc(FuncName)) then
+      begin
+        RegisterOwnedStringReturnFunc(FuncName);
+        AChanged := True;
+      end;
+    end;
+  end;
+  if (ANode.NodeKind = gnkBinaryExpression) and
+    ((ANode.Text = '=') or (ANode.Text = '<>')) then
+  begin
+    for J := 0 to ANode.ChildCount - 1 do
+    begin
+      if CompareOperandOwnsStringReturn(ANode.ChildAt(J), FuncName) and
         (not IsOwnedStringReturnFunc(FuncName)) then
       begin
         RegisterOwnedStringReturnFunc(FuncName);
@@ -1943,6 +2044,60 @@ begin
   FModel.AddTypedHirNode('var-decl-str-runtime', TempName, 0, 0, TempName);
   FModel.AddTypedHirNode('assign-str-runtime', LitValue, 0, 0, TempName);
   Result := TempName;
+end;
+
+function TSemanticAnalyzer.CanEmitStrCompareOperand(const ANode: TGreenNode;
+  const AAllowOwnedStringReturn: Boolean): Boolean;
+var
+  SourceName: string;
+begin
+  Result := False;
+  if ANode = nil then
+    Exit;
+  if (ANode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ANode.Text) then
+    Exit(True);
+  if ANode.NodeKind = gnkStringLiteral then
+    Exit(True);
+  if AAllowOwnedStringReturn and
+    IsSupportedOwnedStringReturnCompareOperand(ANode, SourceName) then
+    Exit(True);
+end;
+
+function TSemanticAnalyzer.EmitStrCompareOperand(const ANode: TGreenNode;
+  const AAllowOwnedStringReturn: Boolean; out ABlob: string): Boolean;
+var
+  SourceName, TempName: string;
+begin
+  ABlob := '';
+  Result := False;
+  if ANode = nil then
+    Exit;
+  if (ANode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ANode.Text) then
+  begin
+    ABlob := 'strvar ' + ANode.Text + #10;
+    Exit(True);
+  end;
+  if ANode.NodeKind = gnkStringLiteral then
+  begin
+    ABlob := 'strlit ' + ANode.Text + #10;
+    Exit(True);
+  end;
+  if AAllowOwnedStringReturn and
+    IsSupportedOwnedStringReturnCompareOperand(ANode, SourceName) then
+  begin
+    Inc(FBlockLabelCounter);
+    TempName := '$str_cmp_tmp_' + IntToStr(FBlockLabelCounter);
+    RegisterRuntimeVar(TempName);
+    RegisterRuntimeStrVar(TempName);
+    FModel.AddTypedHirNode('var-decl-str-owned-runtime', TempName, 0, 0,
+      TempName);
+    FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
+      TempName + #9 + 'callee ' + SourceName + #9 +
+      'ptr len owner alloc_size');
+    QueuePendingStringTempRelease(TempName, SourceName);
+    ABlob := 'strvar ' + TempName + #10;
+    Exit(True);
+  end;
 end;
 
 function TSemanticAnalyzer.EncodeStrCallArgs(const ACallNode: TGreenNode;
@@ -10772,7 +10927,8 @@ begin
 end;
 
 function TSemanticAnalyzer.EncodeRuntimeBoolExprFold(
-  const ANode: TGreenNode; out ABlob: string): Boolean;
+  const ANode: TGreenNode; out ABlob: string;
+  const AAllowOwnedStringCompare: Boolean): Boolean;
 var
   LeftBlob, RightBlob, Op, Pred: string;
 begin
@@ -10782,7 +10938,7 @@ begin
   if (ANode.NodeKind = gnkUnaryExpression) and
     SameText(ANode.Text, 'not') and (ANode.ChildCount >= 1) then
   begin
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob) then
+    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob, False) then
       Exit(False);
     ABlob := 'int 1' + #10 + LeftBlob + 'zext' + #10 + 'sub' + #10 +
       'int 0' + #10 + 'cmp ne' + #10;
@@ -10825,9 +10981,9 @@ begin
   else if Op = '>=' then Pred := 'sge'
   else if SameText(Op, 'and') then
   begin
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob) then
+    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob, False) then
       Exit(False);
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(1), RightBlob) then
+    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(1), RightBlob, False) then
       Exit(False);
     ABlob := LeftBlob + 'zext' + #10 + RightBlob + 'zext' + #10 +
       'mul' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
@@ -10835,9 +10991,9 @@ begin
   end
   else if SameText(Op, 'or') then
   begin
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob) then
+    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob, False) then
       Exit(False);
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(1), RightBlob) then
+    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(1), RightBlob, False) then
       Exit(False);
     ABlob := LeftBlob + 'zext' + #10 + RightBlob + 'zext' + #10 +
       'add' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
@@ -10882,30 +11038,22 @@ begin
   end
   else
     Exit(False);
-  if ((ANode.ChildAt(0).NodeKind = gnkIdentifier) and
-    IsRuntimeStrVar(ANode.ChildAt(0).Text)) or
-    (ANode.ChildAt(0).NodeKind = gnkStringLiteral) or
-    ((ANode.ChildAt(1).NodeKind = gnkIdentifier) and
-    IsRuntimeStrVar(ANode.ChildAt(1).Text)) or
-    (ANode.ChildAt(1).NodeKind = gnkStringLiteral) then
+  if (Op = '=') or (Op = '<>') then
   begin
-    LeftBlob := '';
-    RightBlob := '';
-    if (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
-      IsRuntimeStrVar(ANode.ChildAt(0).Text) then
-      LeftBlob := 'strvar ' + ANode.ChildAt(0).Text + #10
-    else if ANode.ChildAt(0).NodeKind = gnkStringLiteral then
-      LeftBlob := 'strlit ' + ANode.ChildAt(0).Text + #10;
-    if (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
-      IsRuntimeStrVar(ANode.ChildAt(1).Text) then
-      RightBlob := 'strvar ' + ANode.ChildAt(1).Text + #10
-    else if ANode.ChildAt(1).NodeKind = gnkStringLiteral then
-      RightBlob := 'strlit ' + ANode.ChildAt(1).Text + #10;
-    if (LeftBlob <> '') and (RightBlob <> '') then
+    if CanEmitStrCompareOperand(ANode.ChildAt(0),
+      AAllowOwnedStringCompare) and
+      CanEmitStrCompareOperand(ANode.ChildAt(1),
+      AAllowOwnedStringCompare) then
     begin
-      ABlob := LeftBlob + RightBlob + 'strcmp ' + Pred + #10 +
-        'int 0' + #10 + 'cmp ne' + #10;
-      Exit(True);
+      if EmitStrCompareOperand(ANode.ChildAt(0),
+        AAllowOwnedStringCompare, LeftBlob) and
+        EmitStrCompareOperand(ANode.ChildAt(1),
+        AAllowOwnedStringCompare, RightBlob) then
+      begin
+        ABlob := LeftBlob + RightBlob + 'strcmp ' + Pred + #10 +
+          'int 0' + #10 + 'cmp ne' + #10;
+        Exit(True);
+      end;
     end;
   end;
   if not EncodeRuntimeIntExprFold(ANode.ChildAt(0), LeftBlob) then
@@ -11306,7 +11454,7 @@ begin
         Continue;
       end;
       if FNoFold and (Child.ChildCount >= 2) and
-        EncodeRuntimeBoolExprFold(Child.ChildAt(0), Operand) then
+        EncodeRuntimeBoolExprFold(Child.ChildAt(0), Operand, True) then
       begin
         LowerRuntimeIfStatement(Child, Operand);
         Continue;
@@ -12902,6 +13050,7 @@ begin
   );
   if AIfNode.ChildCount >= 1 then
     AttachRuntimeConditionExpr(NodeId, AIfNode.ChildAt(0));
+  EmitPendingStringTempReleases;
   FCurrentBlockTerminated := True;
   EmitBlockLabel(ThenLabel);
   WalkHaltCalls(AIfNode.ChildAt(1));

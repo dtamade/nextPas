@@ -397,3 +397,17 @@
   `llvm_string_arg_owned_concat_both` 均通过 LLVM
   verify/llc/link/run，exit 42；`build/verify_local.sh` 已纳入 string-call-argument
   contract 和 runtime smoke。
+- 2026-06-12 C6-H10：owned string return 的 direct string compare consumer 第一刀：
+  `if MakeText() = 'x' then ...`、`if 'x' = MakeText() then ...`、
+  `if MakeText() <> 'y' then ...` 和 `if MakeText() = S then ...` 现在从
+  fail-closed 推进为 owned temp -> `cond-br-runtime` string compare -> temp release。
+  sema 只在 `if` 条件的 direct `=` / `<>` 字符串比较中放行 zero-arg direct root
+  owned string-return operand，另一侧必须是 literal 或 runtime string var；compare concat、
+  双 owned operand、复合布尔、循环条件、field store、var/out、
+  virtual/interface/external 等 consumer 继续 fail-closed。RED=
+  `test_hir_string_call_argument_ownership_contract` 失败
+  `missing-compare-string-temp-owned-runtime`；GREEN 后
+  `llvm_string_arg_owned_compare_left` / `llvm_string_arg_owned_compare_right` /
+  `llvm_string_arg_owned_compare_not_equal` /
+  `llvm_string_arg_owned_compare_runtime_var` 均通过 LLVM verify/llc/link/run，
+  exit 42；`build/verify_local.sh` 已纳入新增 compare runtime smoke 输出。
