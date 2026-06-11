@@ -16,6 +16,12 @@ begin
   Result := PathJoin([GetTempDir, AName]);
 end;
 
+procedure RemoveIfExists(const APath: string);
+begin
+  if Exists(APath) then
+    Remove(APath);
+end;
+
 procedure TestToJsonBuildsNestedObjectsAndArrays;
 var
   LCfg: TConfig;
@@ -181,7 +187,7 @@ var
   LLoaded: IConfig;
 begin
   LPath := TempJsonPath('nextpas_config_export_test.json');
-  Remove(LPath);
+  RemoveIfExists(LPath);
 
   LCfg := TConfig.Create;
   try
@@ -198,7 +204,7 @@ begin
       'saved json reload keeps canonical export');
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
 end;
 

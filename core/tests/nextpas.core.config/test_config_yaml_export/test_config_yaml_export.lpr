@@ -17,6 +17,12 @@ begin
   Result := PathJoin([GetTempDir, AName]);
 end;
 
+procedure RemoveIfExists(const APath: string);
+begin
+  if Exists(APath) then
+    Remove(APath);
+end;
+
 procedure TestToYamlBuildsNestedObjectsAndArrays;
 var
   LCfg: TConfig;
@@ -233,7 +239,7 @@ var
   LDoc: IYamlDocument;
 begin
   LPath := TempYamlPath('nextpas_config_yaml_export_test.yaml');
-  Remove(LPath);
+  RemoveIfExists(LPath);
 
   LCfg := TConfig.Create;
   try
@@ -254,7 +260,7 @@ begin
       'saved yaml reload preserves raw string');
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
 end;
 
