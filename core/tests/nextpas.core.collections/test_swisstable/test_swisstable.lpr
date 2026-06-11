@@ -14,6 +14,11 @@ type
 var
   T: TTestRunner;
 
+function HashFirstSwissGroup(const AKey: Integer): UInt32;
+begin
+  Result := UInt32(AKey and $7F);
+end;
+
 procedure TestPutGet;
 var M: TIntSwiss; v: Integer;
 begin
@@ -75,6 +80,33 @@ begin
   CheckEqual(Int64(1000), Int64(M.Count), 'count after reinsert');
   Check(M.TryGetValue(0, v), 'get 0'); CheckEqual(Int64(1000), Int64(v), 'reinserted val');
   M.Free;
+end;
+
+procedure TestDeletedSlotReuseKeepsStableCapacity;
+var
+  M: TIntSwiss;
+  I: Integer;
+  InitialCapacity: SizeUInt;
+begin
+  M := TIntSwiss.Create(GROUP_SIZE * 4, @HashFirstSwissGroup);
+  try
+    for I := 0 to GROUP_SIZE - 1 do
+      M.Put(I, I);
+
+    InitialCapacity := M.Capacity;
+
+    for I := 1 to Integer(InitialCapacity) do
+    begin
+      Check(M.Remove(0), 'remove churn key');
+      M.Put(0, I);
+      CheckEqual(Int64(GROUP_SIZE), Int64(M.Count), 'stable count');
+    end;
+
+    CheckEqual(Int64(InitialCapacity), Int64(M.Capacity),
+      'deleted slot reuse keeps capacity stable');
+  finally
+    M.Free;
+  end;
 end;
 
 procedure TestStringKey;
@@ -193,6 +225,7 @@ begin
   T.Run('Remove', @TestRemove);
   T.Run('Grow (10000 elements)', @TestGrow);
   T.Run('Remove + Reinsert', @TestRemoveReinsert);
+  T.Run('Deleted slot reuse keeps stable capacity', @TestDeletedSlotReuseKeepsStableCapacity);
   T.Run('String key', @TestStringKey);
   T.Run('Clear', @TestClear);
   T.Run('Prealloc', @TestPrealloc);

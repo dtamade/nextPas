@@ -92,7 +92,7 @@ type
     function MatchEmpty(ACtrl: PByte): TSwissMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     function MatchEmptyOrDeleted(ACtrl: PByte): TSwissMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     function FindIndex(const AKey: K; AHash: UInt32; out AIndex: SizeUInt): Boolean;
-    function FindInsertSlot(AHash: UInt32): SizeUInt;
+    function FindInsertSlot(AHash: UInt32; out AWasEmpty: Boolean): SizeUInt;
     procedure SetCtrl(AIndex: SizeUInt; AValue: Byte); {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     procedure AllocTable(ACapacity: SizeUInt);
     procedure FreeTable;
@@ -367,10 +367,11 @@ begin
   end;
 end;
 
-function TSwissTable.FindInsertSlot(AHash: UInt32): SizeUInt;
+function TSwissTable.FindInsertSlot(AHash: UInt32; out AWasEmpty: Boolean): SizeUInt;
 var
   LGroupIdx, LProbeOfs: SizeUInt;
-  LMask: TSwissMask;
+  LMask, LEmptyMask: TSwissMask;
+  LBit: Int32;
 begin
   LGroupIdx := (AHash shr 7) and (FGroupCount - 1);
   LProbeOfs := 0;
@@ -380,7 +381,10 @@ begin
     LMask := SwissMatchEmptyOrDeleted(@FCtrl[LGroupIdx * GROUP_SIZE]);
     if LMask <> 0 then
     begin
-      Result := LGroupIdx * GROUP_SIZE + SizeUInt(SwissCtz(LMask));
+      LBit := SwissCtz(LMask);
+      LEmptyMask := SwissMatchEmpty(@FCtrl[LGroupIdx * GROUP_SIZE]);
+      AWasEmpty := (LEmptyMask and (TSwissMask(1) shl LBit)) <> 0;
+      Result := LGroupIdx * GROUP_SIZE + SizeUInt(LBit);
       Exit;
     end;
     Inc(LProbeOfs);
@@ -396,6 +400,7 @@ var
   LNewCap: SizeUInt;
   Lh: UInt32;
   LIdx: SizeUInt;
+  LWasEmpty: Boolean;
 begin
   LOldCtrl := FCtrl;
   LOldSlots := FSlots;
@@ -416,13 +421,14 @@ begin
       if LOldCtrl[i] < $80 then
       begin
         Lh := KeyHash(LOldSlots[i].Key);
-        LIdx := FindInsertSlot(Lh);
+        LIdx := FindInsertSlot(Lh, LWasEmpty);
         SetCtrl(LIdx, Lh and $7F);
         // 所有权转移：用 Move 把旧 slot 的内容（含 managed 引用）搬到新 slot，
         // 不触发 refcount 增减。旧 slot 内存随后整块释放，无需 finalize。
         Move(LOldSlots[i], FSlots[LIdx], SizeOf(TSlot));
         Inc(FCount);
-        Dec(FGrowthLeft);
+        if LWasEmpty then
+          Dec(FGrowthLeft);
       end;
     end;
     if FAllocator <> nil then
@@ -559,6 +565,7 @@ var
   LMask, LFreeMask, LEmptyMask: TSwissMask;
   LBit: Integer;
   LFoundInsert: Boolean;
+  LInsertWasEmpty: Boolean;
   LCtrlPtr: PByte;
 begin
   if FGrowthLeft = 0 then
@@ -614,11 +621,13 @@ begin
     LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
   end;
 
+  LInsertWasEmpty := FCtrl[LInsertIdx] = CTRL_EMPTY;
   SetCtrl(LInsertIdx, Lh2);
   FSlots[LInsertIdx].Key := AKey;
   FSlots[LInsertIdx].Value := AValue;
   Inc(FCount);
-  Dec(FGrowthLeft);
+  if LInsertWasEmpty then
+    Dec(FGrowthLeft);
   Result := True;
 end;
 
@@ -660,6 +669,7 @@ procedure TSwissTable.PutNew(const AKey: K; const AValue: V);
 var
   Lh: UInt32;
   LIdx: SizeUInt;
+  LWasEmpty: Boolean;
 begin
   if FGrowthLeft = 0 then
     GrowAndRehash;
@@ -667,12 +677,13 @@ begin
     Lh := InlineHashMix32(PUInt32(@AKey)^)
   else
     Lh := KeyHash(AKey);
-  LIdx := FindInsertSlot(Lh);
+  LIdx := FindInsertSlot(Lh, LWasEmpty);
   SetCtrl(LIdx, Lh and $7F);
   FSlots[LIdx].Key := AKey;
   FSlots[LIdx].Value := AValue;
   Inc(FCount);
-  Dec(FGrowthLeft);
+  if LWasEmpty then
+    Dec(FGrowthLeft);
 end;
 
 function TSwissTable.Get(const AKey: K): V;
@@ -731,6 +742,7 @@ var
   LOldCap, i: SizeUInt;
   LNewCap, Lh: UInt32;
   LIdx: SizeUInt;
+  LWasEmpty: Boolean;
 begin
   if FCount = 0 then begin Clear; Exit; end;
   LNewCap := FCount + FCount div 7 + 1;
@@ -758,11 +770,12 @@ begin
     if LOldCtrl[i] < $80 then
     begin
       Lh := KeyHash(LOldSlots[i].Key);
-      LIdx := FindInsertSlot(Lh);
+      LIdx := FindInsertSlot(Lh, LWasEmpty);
       SetCtrl(LIdx, Lh and $7F);
       Move(LOldSlots[i], FSlots[LIdx], SizeOf(TSlot));
       Inc(FCount);
-      Dec(FGrowthLeft);
+      if LWasEmpty then
+        Dec(FGrowthLeft);
     end;
   end;
 
