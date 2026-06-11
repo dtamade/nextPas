@@ -82,8 +82,11 @@ begin
 {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.ffi.write(2, S, ALen);
 {$ELSE}
-  // fallback: use System.Write
-  System.Write(StdErr, S);
+  var LWritten: DWORD;
+  begin
+    if ALen > 0 then
+      WriteFile(GetStdHandle(STD_ERROR_HANDLE), S, ALen, @LWritten, nil);
+  end;
 {$ENDIF}
 end;
 

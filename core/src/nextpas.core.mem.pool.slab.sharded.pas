@@ -1043,7 +1043,7 @@ end;
 function TSlabPoolSharded.Traits: TAllocatorTraits;
 begin
   // keep consistent with TSlabPool but mark as thread-safe
-  Result.ZeroInitialized := True;
+  Result.ZeroInitialized := False;
   Result.ThreadSafe := True;
   Result.HasMemSize := True;
   Result.SupportsAligned := False;

@@ -168,7 +168,7 @@ type
     ScopeDestructions: UInt64;    // 作用域销毁次数
     MaxScopeDepth: Integer;       // 最大作用域深度
     CurrentScopeDepth: Integer;   // 当前作用域深度
-    FragmentationRatio: Double;   // 碎片化比率
+    FreeRatio: Double;   // 空闲空间比率（栈池顺序分配，不存在碎片）
   end;
 
   {**
@@ -265,7 +265,7 @@ type
     procedure UpdateStatistics(aAllocSize: SizeUInt);
     procedure GrowPool(aRequiredSize: SizeUInt);
     function CanRelocateBufferForGrow: Boolean;
-    function CalculateFragmentation: Double;
+    function CalculateFreeRatio: Double;
 
   public
     constructor Create(aSize: SizeUInt; const aPolicy: TStackPoolPolicy; aAllocator: IAllocator = nil);
@@ -305,7 +305,7 @@ type
     procedure ResetStatistics;
 
     {** 获取碎片化比率 *}
-    function GetFragmentation: Double;
+    function GetFreeRatio: Double;
 
     {** 优化池状态 *}
     procedure Optimize;
@@ -544,7 +544,7 @@ end;
 
 destructor TStackPoolScope.Destroy;
 begin
-  if FActive then
+  if FActive and (FPool <> nil) then
     Release;
   // 从 ScopeManager 中移除自己（如果存在）
   if Assigned(FPool) and Assigned(FPool.FScopeManager) then
@@ -622,6 +622,12 @@ begin
 
   LScope := FScopes[LLen - 1];
   SetLength(FScopes, LLen - 1);
+  // 先恢复池状态再断开关联，避免 Destroy 中访问空指针
+  if LScope.FActive and (LScope.FPool <> nil) then
+  begin
+    LScope.FPool.RestoreState(LScope.FSavedState);
+    LScope.FActive := False;
+  end;
   LScope.FPool := nil;
   LScope.Free;
 
@@ -801,7 +807,7 @@ begin
   if FPolicy.EnableStatistics then
   begin
     FStatistics.CurrentUsage := UsedSize;
-    FStatistics.FragmentationRatio := CalculateFragmentation;
+    FStatistics.FreeRatio := CalculateFreeRatio;
     Result := FStatistics;
   end;
 end;
@@ -811,9 +817,9 @@ begin
   FillChar(FStatistics, SizeOf(FStatistics), 0);
 end;
 
-function TScopedStackPool.GetFragmentation: Double;
+function TScopedStackPool.GetFreeRatio: Double;
 begin
-  Result := CalculateFragmentation;
+  Result := CalculateFreeRatio;
 end;
 
 procedure TScopedStackPool.Optimize;
@@ -898,7 +904,7 @@ begin
     Result := FScopeManager.GetScopeDepth = 0;
 end;
 
-function TScopedStackPool.CalculateFragmentation: Double;
+function TScopedStackPool.CalculateFreeRatio: Double;
 begin
   // 栈池的碎片化很简单：已使用空间 / 总空间
   if FSize = 0 then
