@@ -53,6 +53,8 @@ type
   THPackEncoder = record
   private
     FDynamicTable: THPackDynamicTable;
+    FHasPendingTableSizeUpdate: Boolean;
+    FPendingTableSizeUpdate: UInt32;
     procedure EncodeInteger(var AOut: AnsiString; AValue: UInt32;
       APrefixBits: Byte; APrefixMask: Byte);
     procedure EncodeHuffman(var AOut: AnsiString; const AStr: AnsiString);
@@ -326,6 +328,8 @@ end;
 procedure THPackEncoder.Init(ADynamicTableSize: SizeInt);
 begin
   FDynamicTable.Init(ADynamicTableSize);
+  FHasPendingTableSizeUpdate := False;
+  FPendingTableSizeUpdate := UInt32(ADynamicTableSize);
 end;
 
 procedure THPackEncoder.EncodeInteger(var AOut: AnsiString; AValue: UInt32;
@@ -413,6 +417,11 @@ var
   LName, LValue: AnsiString;
 begin
   Result := '';
+  if FHasPendingTableSizeUpdate then
+  begin
+    EncodeInteger(Result, FPendingTableSizeUpdate, 5, $20);
+    FHasPendingTableSizeUpdate := False;
+  end;
   for I := 0 to High(AHeaders) do
   begin
     LName := AHeaders[I].Name;
@@ -445,6 +454,8 @@ end;
 procedure THPackEncoder.SetDynamicTableSize(ASize: UInt32);
 begin
   FDynamicTable.Resize(ASize);
+  FPendingTableSizeUpdate := ASize;
+  FHasPendingTableSizeUpdate := True;
 end;
 
 { === THPackDecoder === }

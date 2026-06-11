@@ -209,6 +209,74 @@ begin
     BytesToHex(LEncoder.Encode(LThird)), 'C.4.3 exact encoded block');
 end;
 
+procedure TestEncodeDynamicTableSizeUpdate;
+var
+  LEncoder: THPackEncoder;
+begin
+  LEncoder.Init;
+  LEncoder.SetDynamicTableSize(0);
+  CheckEqual('20', BytesToHex(LEncoder.Encode([])),
+    'dynamic table size update to 0');
+  CheckEqual('', BytesToHex(LEncoder.Encode([])),
+    'size update is emitted once');
+end;
+
+procedure TestDecodeDynamicTableSizeUpdateEvictsEntries;
+var
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..3] of THPackHeader;
+  LIndexed: array[0..0] of THPackHeader;
+begin
+  LDecoder.Init;
+  Check(LDecoder.Decode(HexToBytes(
+    '828684418CF1E3C2E5F23A6BA0AB90F4FF'), LHeaders),
+    'initial decode should succeed');
+  Check(LDecoder.Decode(HexToBytes('20'), LIndexed),
+    'size update to 0 should decode');
+  Check(not LDecoder.Decode(HexToBytes('BE'), LIndexed),
+    'dynamic index 62 should be evicted after size update to 0');
+end;
+
+procedure TestDecodeRejectsOversizedDynamicTableUpdate;
+var
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..0] of THPackHeader;
+begin
+  LDecoder.Init(128);
+  Check(not LDecoder.Decode(HexToBytes('3FE11F'), LHeaders),
+    'dynamic table size update above max should be rejected');
+end;
+
+procedure TestLiteralWithoutIndexingDoesNotUpdateDynamicTable;
+var
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..0] of THPackHeader;
+  LIndexed: array[0..0] of THPackHeader;
+begin
+  LDecoder.Init;
+  Check(LDecoder.Decode(HexToBytes('0406736563726574'), LHeaders),
+    'literal without indexing with indexed name should decode');
+  CheckEqual(':path', string(LHeaders[0].Name), 'without-indexing name');
+  CheckEqual('secret', string(LHeaders[0].Value), 'without-indexing value');
+  Check(not LDecoder.Decode(HexToBytes('BE'), LIndexed),
+    'literal without indexing should not enter dynamic table');
+end;
+
+procedure TestNeverIndexedLiteralDoesNotUpdateDynamicTable;
+var
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..0] of THPackHeader;
+  LIndexed: array[0..0] of THPackHeader;
+begin
+  LDecoder.Init;
+  Check(LDecoder.Decode(HexToBytes('1F0806736563726574'), LHeaders),
+    'never-indexed literal with indexed name should decode');
+  CheckEqual('authorization', string(LHeaders[0].Name), 'never-indexed name');
+  CheckEqual('secret', string(LHeaders[0].Value), 'never-indexed value');
+  Check(not LDecoder.Decode(HexToBytes('BE'), LIndexed),
+    'never-indexed literal should not enter dynamic table');
+end;
+
 begin
   with TTestRunner.Create('nextpas.core.http.impl.h2.hpack') do
   begin
@@ -224,6 +292,16 @@ begin
       @TestDecodeRfcHuffmanRequestSequence);
     Run('Encode RFC Huffman request sequence',
       @TestEncodeRfcHuffmanRequestSequence);
+    Run('Encode dynamic table size update',
+      @TestEncodeDynamicTableSizeUpdate);
+    Run('Decode dynamic table size update evicts entries',
+      @TestDecodeDynamicTableSizeUpdateEvictsEntries);
+    Run('Decode rejects oversized dynamic table update',
+      @TestDecodeRejectsOversizedDynamicTableUpdate);
+    Run('Literal without indexing does not update dynamic table',
+      @TestLiteralWithoutIndexingDoesNotUpdateDynamicTable);
+    Run('Never-indexed literal does not update dynamic table',
+      @TestNeverIndexedLiteralDoesNotUpdateDynamicTable);
     Summary;
   end;
 end.
