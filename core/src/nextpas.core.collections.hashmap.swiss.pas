@@ -96,6 +96,8 @@ type
     procedure SetCtrl(AIndex: SizeUInt; AValue: Byte); {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     procedure AllocTable(ACapacity: SizeUInt);
     procedure FreeTable;
+    procedure ClearSlot(AIndex: SizeUInt);
+    procedure AssignNewSlot(AIndex: SizeUInt; const AKey: K; const AValue: V);
     procedure GrowAndRehash;
 
   public
@@ -305,10 +307,7 @@ begin
   begin
     for i := 0 to FCapacity - 1 do
       if FCtrl[i] < $80 then
-      begin
-        Finalize(FSlots[i].Key);
-        Finalize(FSlots[i].Value);
-      end;
+        ClearSlot(i);
   end;
   if FAllocator <> nil then
   begin
@@ -322,6 +321,53 @@ begin
   end;
   FCtrl := nil;
   FSlots := nil;
+end;
+
+procedure TSwissTable.ClearSlot(AIndex: SizeUInt);
+begin
+  if System.IsManagedType(K) then
+    Finalize(FSlots[AIndex].Key);
+  if System.IsManagedType(V) then
+    Finalize(FSlots[AIndex].Value);
+  FillChar(FSlots[AIndex], SizeOf(TSlot), 0);
+end;
+
+procedure TSwissTable.AssignNewSlot(AIndex: SizeUInt; const AKey: K; const AValue: V);
+var
+  LKeyInitialized: Boolean;
+  LValueInitialized: Boolean;
+begin
+  if System.IsManagedType(K) or System.IsManagedType(V) then
+  begin
+    LKeyInitialized := False;
+    LValueInitialized := False;
+    try
+      if System.IsManagedType(K) then
+      begin
+        Initialize(FSlots[AIndex].Key);
+        LKeyInitialized := True;
+      end;
+      if System.IsManagedType(V) then
+      begin
+        Initialize(FSlots[AIndex].Value);
+        LValueInitialized := True;
+      end;
+      FSlots[AIndex].Key := AKey;
+      FSlots[AIndex].Value := AValue;
+    except
+      if LKeyInitialized then
+        Finalize(FSlots[AIndex].Key);
+      if LValueInitialized then
+        Finalize(FSlots[AIndex].Value);
+      FillChar(FSlots[AIndex], SizeOf(TSlot), 0);
+      raise;
+    end;
+  end
+  else
+  begin
+    FSlots[AIndex].Key := AKey;
+    FSlots[AIndex].Value := AValue;
+  end;
 end;
 
 { Probe and find }
@@ -568,7 +614,7 @@ var
   LInsertWasEmpty: Boolean;
   LCtrlPtr: PByte;
 begin
-  if FGrowthLeft = 0 then
+  if FCapacity = 0 then
     GrowAndRehash;
 
   if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
@@ -592,8 +638,7 @@ begin
       Li := LBase + SizeUInt(LBit);
       if KeysEqual(FSlots[Li].Key, AKey) then
       begin
-        if System.IsManagedType(V) then
-          Finalize(FSlots[Li].Value);
+        { Managed assignment releases the old value and handles self-alias. }
         FSlots[Li].Value := AValue;
         Exit(False);
       end;
@@ -622,9 +667,15 @@ begin
   end;
 
   LInsertWasEmpty := FCtrl[LInsertIdx] = CTRL_EMPTY;
+  if LInsertWasEmpty and (FGrowthLeft = 0) then
+  begin
+    GrowAndRehash;
+    PutNew(AKey, AValue);
+    Exit(True);
+  end;
+
+  AssignNewSlot(LInsertIdx, AKey, AValue);
   SetCtrl(LInsertIdx, Lh2);
-  FSlots[LInsertIdx].Key := AKey;
-  FSlots[LInsertIdx].Value := AValue;
   Inc(FCount);
   if LInsertWasEmpty then
     Dec(FGrowthLeft);
@@ -643,9 +694,7 @@ begin
     Lh := KeyHash(AKey);
   if not FindIndex(AKey, Lh, LIdx) then Exit(False);
 
-  if System.IsManagedType(K) then Finalize(FSlots[LIdx].Key);
-  if System.IsManagedType(V) then Finalize(FSlots[LIdx].Value);
-  FillChar(FSlots[LIdx], SizeOf(TSlot), 0);
+  ClearSlot(LIdx);
 
   LGroupBase := (LIdx div GROUP_SIZE) * GROUP_SIZE;
   if SwissMatchEmpty(@FCtrl[LGroupBase]) <> 0 then
@@ -671,16 +720,20 @@ var
   LIdx: SizeUInt;
   LWasEmpty: Boolean;
 begin
-  if FGrowthLeft = 0 then
+  if FCapacity = 0 then
     GrowAndRehash;
   if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
     Lh := InlineHashMix32(PUInt32(@AKey)^)
   else
     Lh := KeyHash(AKey);
   LIdx := FindInsertSlot(Lh, LWasEmpty);
+  if LWasEmpty and (FGrowthLeft = 0) then
+  begin
+    GrowAndRehash;
+    LIdx := FindInsertSlot(Lh, LWasEmpty);
+  end;
+  AssignNewSlot(LIdx, AKey, AValue);
   SetCtrl(LIdx, Lh and $7F);
-  FSlots[LIdx].Key := AKey;
-  FSlots[LIdx].Value := AValue;
   Inc(FCount);
   if LWasEmpty then
     Dec(FGrowthLeft);
@@ -801,9 +854,7 @@ begin
     begin
       if not AFunc(FSlots[i].Key, FSlots[i].Value) then
       begin
-        if System.IsManagedType(K) then Finalize(FSlots[i].Key);
-        if System.IsManagedType(V) then Finalize(FSlots[i].Value);
-        FillChar(FSlots[i], SizeOf(TSlot), 0);
+        ClearSlot(i);
         SetCtrl(i, CTRL_DELETED);
         Dec(FCount);
       end;
@@ -821,17 +872,36 @@ begin
 end;
 
 procedure TSwissTable.Drain(AFunc: TVisitFunc);
-var i: SizeUInt;
+var
+  i: SizeUInt;
+  LGroupBase: SizeUInt;
+  LKey: K;
+  LValue: V;
 begin
   if FCapacity = 0 then Exit;
   for i := 0 to FCapacity - 1 do
     if FCtrl[i] < $80 then
     begin
-      AFunc(FSlots[i].Key, FSlots[i].Value);
-      if System.IsManagedType(K) then Finalize(FSlots[i].Key);
-      if System.IsManagedType(V) then Finalize(FSlots[i].Value);
-      SetCtrl(i, CTRL_EMPTY);
+      LKey := FSlots[i].Key;
+      LValue := FSlots[i].Value;
+      try
+        AFunc(LKey, LValue);
+      finally
+        LKey := Default(K);
+        LValue := Default(V);
+      end;
+      ClearSlot(i);
+      LGroupBase := (i div GROUP_SIZE) * GROUP_SIZE;
+      if SwissMatchEmpty(@FCtrl[LGroupBase]) <> 0 then
+      begin
+        SetCtrl(i, CTRL_EMPTY);
+        Inc(FGrowthLeft);
+      end
+      else
+        SetCtrl(i, CTRL_DELETED);
+      Dec(FCount);
     end;
+  FillChar(FCtrl^, FCapacity + GROUP_SIZE, CTRL_EMPTY);
   FCount := 0;
   FGrowthLeft := FCapacity - FCapacity div 8;
 end;
