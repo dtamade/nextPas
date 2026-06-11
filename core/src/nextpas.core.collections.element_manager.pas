@@ -449,7 +449,10 @@ begin
     raise EArgumentNil.Create('TElementManager.ZeroElements: aDst is nil');
 
   if FIsManagedType then
-    FinalizeManagedElementsUnchecked(aDst, aElementCount)
+  begin
+    FinalizeManagedElementsUnchecked(aDst, aElementCount);
+    InitializeElementsUnchecked(aDst, aElementCount);
+  end
   else
   begin
     case FElementSize of

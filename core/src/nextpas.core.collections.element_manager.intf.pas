@@ -477,9 +477,12 @@ type
      *                  要清零的元素数量.
      *
      * @remark
-     *   For managed types, this means finalizing them (e.g., setting to `nil`).
+     *   For managed types, this finalizes the current value and reinitializes
+     *   the slot to its zero-equivalent value so it remains safe to reuse or
+     *   finalize again.
      *   For non-managed types, this means a binary zeroing of the memory.
-     *   对于托管类型, 零等价意味着终结它们 (设为 `nil`, 减少引用计数).
+     *   对于托管类型, 会先终结当前值再重新初始化为零等价值, 确保槽位可复用
+     *   且后续再次终结安全.
      *   对于非托管类型, 零等价意味着将内存按位清零.
      *
      * @exceptions

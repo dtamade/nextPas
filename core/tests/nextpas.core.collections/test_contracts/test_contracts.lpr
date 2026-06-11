@@ -14,6 +14,13 @@ uses
 type
   TIntManager = specialize TElementManager<Integer>;
   TStringManager = specialize TElementManager<string>;
+  TManagedRecord = record
+    Initialized: Boolean;
+    Id: Int32;
+    class operator Initialize(var ARecord: TManagedRecord);
+    class operator Finalize(var ARecord: TManagedRecord);
+  end;
+  TManagedRecordManager = specialize TElementManager<TManagedRecord>;
   TIntVec = specialize TVec<Integer>;
 
   TGrowthRecorder = class
@@ -42,6 +49,26 @@ var
   GRandomFuncCalls: Integer = 0;
   GRandomFuncLastData: Pointer = nil;
   GRandomFuncRanges: array[0..7] of Int64;
+  GManagedRecordAlive: Int32 = 0;
+  GManagedRecordBadFinalize: Int32 = 0;
+
+class operator TManagedRecord.Initialize(var ARecord: TManagedRecord);
+begin
+  ARecord.Initialized := True;
+  ARecord.Id := 0;
+  Inc(GManagedRecordAlive);
+end;
+
+class operator TManagedRecord.Finalize(var ARecord: TManagedRecord);
+begin
+  if not ARecord.Initialized then
+    Inc(GManagedRecordBadFinalize)
+  else
+  begin
+    ARecord.Initialized := False;
+    Dec(GManagedRecordAlive);
+  end;
+end;
 
 function TGrowthRecorder.Grow(aCurrentSize, aRequiredSize: SizeUInt): SizeUInt;
 begin
@@ -208,6 +235,34 @@ begin
   end;
 end;
 
+procedure TestElementManagerManagedRecordZeroReinitializesBeforeFree;
+var
+  LManager: TManagedRecordManager;
+  LElements: TManagedRecordManager.PElement;
+begin
+  GManagedRecordAlive := 0;
+  GManagedRecordBadFinalize := 0;
+  LManager := TManagedRecordManager.Create(GetRtlAllocator);
+  LElements := nil;
+  try
+    LElements := LManager.AllocElements(2);
+    CheckEqual(Int64(2), Int64(GManagedRecordAlive), 'managed record alloc should initialize slots');
+    LElements[0].Id := 10;
+    LElements[1].Id := 20;
+
+    LManager.ZeroElements(LElements, 2);
+    CheckEqual(Int64(2), Int64(GManagedRecordAlive), 'ZeroElements should reinitialize managed record slots');
+    CheckEqual(Int64(0), Int64(GManagedRecordBadFinalize), 'ZeroElements should not finalize uninitialized slots');
+  finally
+    if LElements <> nil then
+      LManager.FreeElements(LElements, 2);
+    LManager.Free;
+  end;
+
+  CheckEqual(Int64(0), Int64(GManagedRecordAlive), 'FreeElements should finalize reinitialized managed record slots');
+  CheckEqual(Int64(0), Int64(GManagedRecordBadFinalize), 'FreeElements should not double-finalize managed record slots');
+end;
+
 procedure TestGrowthStrategiesHonorBoundsAndAlignment;
 var
   LStrategy: IGrowthStrategy;
@@ -319,6 +374,7 @@ begin
   T := TTestRunner.Create('nextpas.core.collections.contracts');
   T.Run('element manager unmanaged copy fill zero and overlap', @TestElementManagerUnmanagedCopyFillZeroAndOverlap);
   T.Run('element manager managed realloc and overlap copy', @TestElementManagerManagedReallocAndOverlapCopy);
+  T.Run('element manager managed record ZeroElements reinitializes before free', @TestElementManagerManagedRecordZeroReinitializesBeforeFree);
   T.Run('growth strategies honor bounds and alignment', @TestGrowthStrategiesHonorBoundsAndAlignment);
   T.Run('custom growth strategy function and method callbacks', @TestCustomGrowthStrategyFunctionAndMethodCallbacks);
   T.Run('shuffle random generator function and method callbacks', @TestShuffleRandomGeneratorFunctionAndMethodCallbacks);

@@ -15,6 +15,7 @@ type
   IIntFList = specialize IForwardList<Integer>;
   TIntFList = specialize TForwardList<Integer>;
   TIntIter = specialize TIter<Integer>;
+  TIntArray = specialize TGenericArray<Integer>;
 
 function IsEven(const V: Integer; Data: Pointer): Boolean;
 begin
@@ -24,6 +25,17 @@ end;
 function EqualsInt(const L, R: Integer; Data: Pointer): Boolean;
 begin
   Result := L = R;
+end;
+
+procedure CheckListValues(AList: TIntFList; const AExpected: array of Integer; const AMessage: string);
+var
+  LItems: TIntArray;
+  I: Integer;
+begin
+  LItems := AList.ToArray;
+  CheckEqual(Int64(Length(AExpected)), Int64(Length(LItems)), AMessage + ' length');
+  for I := Low(AExpected) to High(AExpected) do
+    CheckEqual(Int64(AExpected[I]), Int64(LItems[I]), AMessage + ' item ' + IntToStr(I));
 end;
 
 var
@@ -229,6 +241,150 @@ begin
   end;
 end;
 
+procedure TestSpliceSingleTailKeepsSourceAppendIsolated;
+var
+  Dst, Src: TIntFList;
+  Pos, BeforeTail: TIntIter;
+  NewValue: Integer;
+begin
+  Dst := TIntFList.Create;
+  Src := TIntFList.Create;
+  try
+    Dst.PushFront(10);
+
+    Src.PushFront(3);
+    Src.PushFront(2);
+    Src.PushFront(1);
+
+    Pos := Dst.BeforeBegin;
+    BeforeTail := Src.Find(2);
+    CheckEqual(Int64(2), Int64(BeforeTail.Current), 'find node before source tail');
+
+    Dst.Splice(Pos, Src, BeforeTail);
+    CheckEqual(Int64(2), Int64(Src.GetCount), 'source count after moving tail');
+    CheckEqual(Int64(2), Int64(Dst.GetCount), 'destination count after moving tail');
+
+    NewValue := 4;
+    Check(Src.TryAppend(@NewValue, 1), 'append to source after tail splice');
+    CheckEqual(Int64(3), Int64(Src.GetCount), 'source count after append');
+    CheckEqual(Int64(2), Int64(Dst.GetCount), 'destination count remains isolated');
+    CheckEqual(Int64(4), Int64(Src.ToArray[2]), 'source append stays in source');
+    CheckEqual(Int64(10), Int64(Dst.ToArray[1]), 'destination tail remains original');
+  finally
+    Src.Free;
+    Dst.Free;
+  end;
+end;
+
+procedure TestSpliceRangeTailKeepsSourceAppendIsolated;
+var
+  Dst, Src: TIntFList;
+  Pos, FirstMoved, EndIter: TIntIter;
+  NewValue: Integer;
+begin
+  Dst := TIntFList.Create;
+  Src := TIntFList.Create;
+  try
+    Dst.PushFront(10);
+
+    Src.PushFront(4);
+    Src.PushFront(3);
+    Src.PushFront(2);
+    Src.PushFront(1);
+
+    Pos := Dst.BeforeBegin;
+    FirstMoved := Src.Find(3);
+    CheckEqual(Int64(3), Int64(FirstMoved.Current), 'find source tail range head');
+    EndIter := Src.CEnd;
+
+    Dst.Splice(Pos, Src, FirstMoved, EndIter);
+    CheckEqual(Int64(2), Int64(Src.GetCount), 'source count after moving tail range');
+    CheckEqual(Int64(3), Int64(Dst.GetCount), 'destination count after moving tail range');
+
+    NewValue := 5;
+    Check(Src.TryAppend(@NewValue, 1), 'append to source after tail range splice');
+    CheckEqual(Int64(3), Int64(Src.GetCount), 'source count after range append');
+    CheckEqual(Int64(3), Int64(Dst.GetCount), 'destination count remains isolated after range append');
+    CheckEqual(Int64(5), Int64(Src.ToArray[2]), 'source range append stays in source');
+    CheckEqual(Int64(10), Int64(Dst.ToArray[2]), 'destination range tail remains original');
+  finally
+    Src.Free;
+    Dst.Free;
+  end;
+end;
+
+procedure TestSpliceAllKeepsDestinationAfterSourceFree;
+var
+  Dst, Src: TIntFList;
+  Pos: TIntIter;
+begin
+  Dst := TIntFList.Create;
+  Src := TIntFList.Create;
+  try
+    Dst.PushFront(10);
+    Src.PushFront(2);
+    Src.PushFront(1);
+
+    Pos := Dst.BeforeBegin;
+    Dst.Splice(Pos, Src);
+    CheckEqual(Int64(0), Int64(Src.GetCount), 'source count after splice all');
+    CheckListValues(Dst, [1, 2, 10], 'destination after splice all');
+
+    Src.Free;
+    Src := nil;
+    CheckListValues(Dst, [1, 2, 10], 'destination after splice source free');
+  finally
+    Src.Free;
+    Dst.Free;
+  end;
+end;
+
+procedure TestMergeKeepsDestinationAfterSourceFree;
+var
+  Dst, Src: TIntFList;
+begin
+  Dst := TIntFList.Create;
+  Src := TIntFList.Create;
+  try
+    Dst.PushFront(3);
+    Dst.PushFront(1);
+    Src.PushFront(4);
+    Src.PushFront(2);
+
+    Dst.Merge(Src);
+    CheckEqual(Int64(0), Int64(Src.GetCount), 'source count after merge');
+    CheckListValues(Dst, [1, 2, 3, 4], 'destination after merge');
+
+    Src.Free;
+    Src := nil;
+    CheckListValues(Dst, [1, 2, 3, 4], 'destination after merge source free');
+  finally
+    Src.Free;
+    Dst.Free;
+  end;
+end;
+
+procedure TestMergeCopyKeepsDestinationAfterTempFree;
+var
+  Dst, Src: TIntFList;
+begin
+  Dst := TIntFList.Create;
+  Src := TIntFList.Create;
+  try
+    Dst.PushFront(3);
+    Dst.PushFront(1);
+    Src.PushFront(4);
+    Src.PushFront(2);
+
+    Dst.MergeCopy(Src);
+    CheckListValues(Src, [2, 4], 'source after merge copy');
+    CheckListValues(Dst, [1, 2, 3, 4], 'destination after merge copy');
+  finally
+    Src.Free;
+    Dst.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.forwardlist');
   T.Run('PushFront/PopFront', @TestPushFrontPopFront);
@@ -244,5 +400,10 @@ begin
   T.Run('FindIf', @TestFindIf);
   T.Run('InsertAfter/EraseAfter', @TestInsertAfterEraseAfter);
   T.Run('TryLoadFrom/TryAppend', @TestTryLoadFromTryAppend);
+  T.Run('Splice single tail keeps source append isolated', @TestSpliceSingleTailKeepsSourceAppendIsolated);
+  T.Run('Splice range tail keeps source append isolated', @TestSpliceRangeTailKeepsSourceAppendIsolated);
+  T.Run('Splice all keeps destination after source free', @TestSpliceAllKeepsDestinationAfterSourceFree);
+  T.Run('Merge keeps destination after source free', @TestMergeKeepsDestinationAfterSourceFree);
+  T.Run('MergeCopy keeps destination after temp free', @TestMergeCopyKeepsDestinationAfterTempFree);
   T.Summary;
 end.
