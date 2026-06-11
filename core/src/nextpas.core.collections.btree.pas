@@ -977,7 +977,13 @@ end;
 procedure TBTreeMap.PutSorted(const AKeys: array of K; const AValues: array of V; ACount: SizeUInt);
 var i: SizeUInt;
 begin
+  if (ACount > SizeUInt(Length(AKeys))) or (ACount > SizeUInt(Length(AValues))) then
+    raise EInvalidArgument.Create('TBTreeMap.PutSorted: count exceeds input length');
+
   Clear;
+  if ACount = 0 then
+    Exit;
+
   for i := 0 to ACount - 1 do
     Put(AKeys[i], AValues[i]);
 end;

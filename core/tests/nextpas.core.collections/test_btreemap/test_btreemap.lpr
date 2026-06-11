@@ -4,6 +4,7 @@ program test_btreemap;
 
 uses
   SysUtils,
+  nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.collections.btree;
 
@@ -244,6 +245,42 @@ begin
   end;
 end;
 
+procedure TestPutSortedRejectsInvalidCountBeforeClear;
+var
+  M: TIntBTree;
+  Keys: array[0..1] of Integer;
+  Values: array[0..1] of Integer;
+  V: Integer;
+  Raised: Boolean;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    M.Put(42, 420);
+    Keys[0] := 1;
+    Keys[1] := 2;
+    Values[0] := 10;
+    Values[1] := 20;
+
+    Raised := False;
+    try
+      M.PutSorted(Keys, Values, 3);
+    except
+      on EInvalidArgument do
+        Raised := True;
+    end;
+
+    Check(Raised, 'invalid count raises');
+    CheckEqual(Int64(1), Int64(M.Count), 'invalid count keeps old count');
+    Check(M.TryGetValue(42, V), 'invalid count keeps old key');
+    CheckEqual(Int64(420), Int64(V), 'invalid count keeps old value');
+
+    M.PutSorted(Keys, Values, 0);
+    CheckEqual(Int64(0), Int64(M.Count), 'zero count clears map');
+  finally
+    M.Free;
+  end;
+end;
+
 procedure TestEnumerator;
 var M: TIntBTree; E: TIntBTree.TEntry; i, prev, count: Integer; sorted: Boolean;
 begin
@@ -279,6 +316,7 @@ begin
   T.Run('Floor', @TestFloor);
   T.Run('Rank', @TestRank);
   T.Run('Rank internal separator key', @TestRankInternalSeparatorKey);
+  T.Run('PutSorted invalid count', @TestPutSortedRejectsInvalidCountBeforeClear);
   T.Run('Enumerator (for-in)', @TestEnumerator);
   T.Summary;
 end.
