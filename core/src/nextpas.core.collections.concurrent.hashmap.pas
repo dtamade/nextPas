@@ -9,6 +9,7 @@ uses
   nextpas.core.base,
   nextpas.core.sync.rwlock,
   nextpas.core.sync.intf,
+  nextpas.core.collections.hashmap,
   nextpas.core.collections.hashmap.swiss,
   nextpas.core.collections.concurrent.map.intf;
 
@@ -73,14 +74,9 @@ begin
     else if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 8) then
       LHash := InlineHashMix32(UInt32(PQWord(@AKey)^ xor (PQWord(@AKey)^ shr 32)))
     else if (GetTypeKind(K) = tkAString) or (GetTypeKind(K) = tkLString) then
-    begin
-      LHash := UInt32(Length(PAnsiString(@AKey)^));
-      if Length(PAnsiString(@AKey)^) >= 4 then
-        LHash := LHash xor PUInt32(Pointer(PAnsiString(@AKey)^))^;
-      if Length(PAnsiString(@AKey)^) >= 8 then
-        LHash := LHash xor PUInt32(Pointer(PAnsiString(@AKey)^) + 4)^;
-      LHash := InlineHashMix32(LHash);
-    end
+      LHash := HashOfAnsiString(PAnsiString(@AKey)^)
+    else if (GetTypeKind(K) = tkUString) or (GetTypeKind(K) = tkWString) then
+      LHash := HashOfUnicodeString(PUnicodeString(@AKey)^)
     else
     begin
       case SizeOf(K) of

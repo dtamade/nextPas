@@ -11,6 +11,7 @@ uses
 type
   TIntConcMap = specialize TConcurrentHashMap<Integer, Integer>;
   TStrConcMap = specialize TConcurrentHashMap<string, Integer>;
+  TUnicodeConcMap = specialize TConcurrentHashMap<UnicodeString, Integer>;
 
 function HashInt(const A: Integer): UInt32;
 begin
@@ -286,6 +287,43 @@ begin
   finally M.Free; end;
 end;
 
+function RebuildUnicodeKey(AIndex: Integer): UnicodeString;
+var
+  LPrefix: UnicodeString;
+  LSuffix: UnicodeString;
+begin
+  LPrefix := UnicodeString('unicode-key-');
+  LSuffix := UnicodeString(IntToStr(AIndex));
+  Result := Copy(LPrefix + LSuffix + UnicodeString('-payload'), 1,
+    Length(LPrefix) + Length(LSuffix));
+end;
+
+procedure TestDefaultUnicodeStringHashUsesStringContent;
+const
+  ITEM_COUNT = 128;
+var
+  M: TUnicodeConcMap;
+  i, v: Integer;
+  K: UnicodeString;
+begin
+  M := TUnicodeConcMap.Create(nil, nil);
+  try
+    for i := 0 to ITEM_COUNT - 1 do
+    begin
+      K := RebuildUnicodeKey(i);
+      M.Put(K, i * 11);
+    end;
+
+    CheckEqual(Int64(ITEM_COUNT), Int64(M.Count), 'unicode count');
+    for i := 0 to ITEM_COUNT - 1 do
+    begin
+      K := RebuildUnicodeKey(i);
+      Check(M.TryGetValue(K, v), 'rebuilt unicode key lookup');
+      CheckEqual(Int64(i * 11), Int64(v), 'rebuilt unicode key value');
+    end;
+  finally M.Free; end;
+end;
+
 procedure TestReplace;
 var M: TIntConcMap; v: Integer;
 begin
@@ -343,6 +381,7 @@ begin
   T.Run('IsEmpty', @TestIsEmpty);
   T.Run('Keys', @TestKeys);
   T.Run('Default hash (nil)', @TestDefaultHash);
+  T.Run('Default UnicodeString hash uses string content', @TestDefaultUnicodeStringHashUsesStringContent);
   T.Run('Custom callbacks forwarded to segments', @TestCustomCallbacksForwardedToSegments);
   T.Run('Clear', @TestClear);
   T.Run('String key', @TestStringKey);
