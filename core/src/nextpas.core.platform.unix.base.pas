@@ -79,11 +79,8 @@ const
   WNOHANG = Int32(1);
   WUNTRACED = Int32(2);
 
-  { Signal numbers and sigprocmask actions are host-specific. Use each
-    platform base unit's signal.inc for those constants. }
-  SIG_DFL = Int32(0);
-  SIG_IGN = Int32(1);
-  SIG_ERR = Int32(-1);
+  { Signal numbers, signal-handler sentinels, and sigprocmask actions are
+    host-specific. Each platform base unit defines them in its signal.inc. }
 
   RTLD_LAZY = Int32(1);
   RTLD_NOW = Int32(2);
