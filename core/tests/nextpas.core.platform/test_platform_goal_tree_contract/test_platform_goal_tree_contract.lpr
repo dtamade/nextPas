@@ -16,6 +16,14 @@ const
     '../../nextpas.core.platform.io/test_platform_windows_poller_compile_gate/Makefile';
   POLLER_GATE_MAKEFILE_FROM_ROOT =
     'core/tests/nextpas.core.platform.io/test_platform_windows_poller_compile_gate/Makefile';
+  FILES_GATE_MAKEFILE_FROM_TEST =
+    '../../nextpas.core.platform.files/test_platform_files/Makefile';
+  FILES_GATE_MAKEFILE_FROM_ROOT =
+    'core/tests/nextpas.core.platform.files/test_platform_files/Makefile';
+  MMAP_GATE_MAKEFILE_FROM_TEST =
+    '../../nextpas.core.platform.mmap/test_platform_mmap/Makefile';
+  MMAP_GATE_MAKEFILE_FROM_ROOT =
+    'core/tests/nextpas.core.platform.mmap/test_platform_mmap/Makefile';
 
 var
   T: TTestRunner;
@@ -166,6 +174,33 @@ begin
     'named Windows poller compile gate test build must compile the Windows branch');
 end;
 
+procedure TestAndroidFilesMmapCompileGatesAreWired;
+var
+  LFilesMakefile: string;
+  LMmapMakefile: string;
+begin
+  LFilesMakefile := LoadTextFile(FILES_GATE_MAKEFILE_FROM_TEST,
+    FILES_GATE_MAKEFILE_FROM_ROOT,
+    'platform files Makefile must exist');
+  LMmapMakefile := LoadTextFile(MMAP_GATE_MAKEFILE_FROM_TEST,
+    MMAP_GATE_MAKEFILE_FROM_ROOT,
+    'platform mmap Makefile must exist');
+
+  CheckContains(LFilesMakefile, 'test_platform_files_android_compile.lpr',
+    'platform files gate must compile its Android source-contract program');
+  CheckContains(LFilesMakefile, 'nextpas_force_host_android',
+    'platform files gate must force the Android host branch');
+  CheckContains(LFilesMakefile, '-cn',
+    'platform files Android gate must be compile-only');
+
+  CheckContains(LMmapMakefile, 'test_platform_mmap_android_compile.lpr',
+    'platform mmap gate must compile its Android source-contract program');
+  CheckContains(LMmapMakefile, 'nextpas_force_host_android',
+    'platform mmap gate must force the Android host branch');
+  CheckContains(LMmapMakefile, '-cn',
+    'platform mmap Android gate must be compile-only');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.goal_tree_contract');
   T.Run('Windows status does not overstate runtime readiness',
@@ -179,5 +214,7 @@ begin
     @TestResourceEvidenceNamesCurrentFocusedGate);
   T.Run('named Windows poller compile gate forces Windows host',
     @TestNamedWindowsPollerCompileGateForcesWindowsHost);
+  T.Run('Android files/mmap compile gates are wired',
+    @TestAndroidFilesMmapCompileGatesAreWired);
   T.Summary;
 end.
