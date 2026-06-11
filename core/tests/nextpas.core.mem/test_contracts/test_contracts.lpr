@@ -305,6 +305,84 @@ begin
   end;
 end;
 
+procedure TestAllocatorToAllocAdapterRejectsUnsupportedAlignment;
+var
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
+  LAlloc: IAlloc;
+  LLayout: TMemLayout;
+  LResult: TAllocResult;
+begin
+  LAllocator := GetRtlAllocator;
+  LAlloc := WrapAsAlloc(LAllocator);
+  Check(LAlloc <> nil, 'WrapAsAlloc should return an adapter');
+
+  LLayout := TMemLayout.Create(64, MEM_CACHE_LINE_SIZE);
+  CheckEqual(False, LAlloc.Caps.SupportsLayout(LLayout),
+    'wrapped RTL allocator caps should reject cache-line alignment');
+
+  LResult := LAlloc.Alloc(LLayout);
+  if LResult.IsOk and (LResult.Ptr <> nil) then
+    LAllocator.FreeAligned(LResult.Ptr);
+  Check(LResult.IsErr, 'adapter Alloc should reject unsupported alignment');
+  CheckEqual(Int64(Ord(aeAlignmentNotSupported)), Int64(Ord(LResult.Error)),
+    'adapter Alloc unsupported alignment error');
+
+  LResult := LAlloc.AllocZeroed(LLayout);
+  if LResult.IsOk and (LResult.Ptr <> nil) then
+    LAllocator.FreeAligned(LResult.Ptr);
+  Check(LResult.IsErr, 'adapter AllocZeroed should reject unsupported alignment');
+  CheckEqual(Int64(Ord(aeAlignmentNotSupported)), Int64(Ord(LResult.Error)),
+    'adapter AllocZeroed unsupported alignment error');
+
+  LResult := LAlloc.Realloc(nil, TMemLayout.Empty, LLayout);
+  if LResult.IsOk and (LResult.Ptr <> nil) then
+    LAllocator.FreeAligned(LResult.Ptr);
+  Check(LResult.IsErr, 'adapter Realloc(nil) should reject unsupported alignment');
+  CheckEqual(Int64(Ord(aeAlignmentNotSupported)), Int64(Ord(LResult.Error)),
+    'adapter Realloc(nil) unsupported alignment error');
+end;
+
+procedure TestAllocatorToAllocAdapterRejectsInvalidOldLayout;
+var
+  LRecording: TRecordingAlloc;
+  LAlloc: IAlloc;
+  LPtr: Pointer;
+  LOldLayout: TMemLayout;
+  LNewLayout: TMemLayout;
+  LResult: TAllocResult;
+begin
+  LRecording := TRecordingAlloc.Create;
+  LAlloc := WrapAsAlloc(WrapAsAllocator(LRecording as IAlloc));
+  Check(LAlloc <> nil, 'round-trip adapter should return an IAlloc');
+
+  LNewLayout := TMemLayout.Create(32, MEM_DEFAULT_ALIGN);
+  LResult := LAlloc.Alloc(LNewLayout);
+  Check(LResult.IsOk and (LResult.Ptr <> nil), 'round-trip adapter should allocate');
+  LPtr := LResult.Ptr;
+
+  try
+    FillChar(LOldLayout, SizeOf(LOldLayout), 0);
+    CheckEqual(False, LOldLayout.IsValid, 'test old layout should be invalid');
+
+    LResult := LAlloc.Realloc(LPtr, LOldLayout, TMemLayout.Create(64, MEM_DEFAULT_ALIGN));
+    if LResult.IsOk then
+    begin
+      LPtr := LResult.Ptr;
+      LNewLayout := TMemLayout.Create(64, MEM_DEFAULT_ALIGN);
+    end;
+
+    Check(LResult.IsErr, 'adapter Realloc should reject invalid old layout');
+    CheckEqual(Int64(Ord(aeInvalidLayout)), Int64(Ord(LResult.Error)),
+      'adapter Realloc invalid old layout error');
+    CheckEqual(Int64(0), Int64(LRecording.ReallocCalls),
+      'invalid old layout must not reach wrapped allocator Realloc');
+    CheckEqual(Int64(0), Int64(LRecording.DeallocCalls),
+      'invalid old layout must not release the old block');
+  finally
+    LAlloc.Dealloc(LPtr, LNewLayout);
+  end;
+end;
+
 procedure TestAllocatorAdapterAlignedRoundTrip;
 var
   LAlloc: IAlloc;
@@ -550,6 +628,8 @@ begin
   T.Run('canonical allocator surface', @TestCanonicalAllocatorSurface);
   T.Run('allocator aliases are canonical', @TestAllocatorAliasesAreCanonical);
   T.Run('allocator adapter round trip', @TestAllocatorAdapterRoundTrip);
+  T.Run('allocator-to-alloc adapter rejects unsupported alignment', @TestAllocatorToAllocAdapterRejectsUnsupportedAlignment);
+  T.Run('allocator-to-alloc adapter rejects invalid old layout', @TestAllocatorToAllocAdapterRejectsInvalidOldLayout);
   T.Run('allocator adapter aligned round trip', @TestAllocatorAdapterAlignedRoundTrip);
   T.Run('aligned alloc rejects backing size overflow', @TestAlignedAllocRejectsBackingSizeOverflow);
   T.Run('alloc adapter tracks layouts and rejects untracked pointers', @TestAllocToAllocatorAdapterTracksLayoutsAndRejectsUntrackedPointers);

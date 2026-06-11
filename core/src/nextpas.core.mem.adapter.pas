@@ -288,6 +288,12 @@ begin
     Exit;
   end;
 
+  if not FCaps.SupportsLayout(aLayout) then
+  begin
+    Result := TAllocResult.Err(aeAlignmentNotSupported);
+    Exit;
+  end;
+
   // 需要对齐分配？
   if aLayout.Align > MEM_DEFAULT_ALIGN then
   begin
@@ -317,6 +323,12 @@ begin
   if aLayout.IsZeroSized then
   begin
     Result := TAllocResult.Ok(nil);
+    Exit;
+  end;
+
+  if not FCaps.SupportsLayout(aLayout) then
+  begin
+    Result := TAllocResult.Err(aeAlignmentNotSupported);
     Exit;
   end;
 
@@ -362,6 +374,18 @@ begin
     Exit;
   end;
 
+  if not aOldLayout.IsValid then
+  begin
+    Result := TAllocResult.Err(aeInvalidLayout);
+    Exit;
+  end;
+
+  if not FCaps.SupportsLayout(aOldLayout) then
+  begin
+    Result := TAllocResult.Err(aeAlignmentNotSupported);
+    Exit;
+  end;
+
   // Zero size → Dealloc
   if aNewLayout.IsZeroSized then
   begin
@@ -373,6 +397,12 @@ begin
   if not aNewLayout.IsValid then
   begin
     Result := TAllocResult.Err(aeInvalidLayout);
+    Exit;
+  end;
+
+  if not FCaps.SupportsLayout(aNewLayout) then
+  begin
+    Result := TAllocResult.Err(aeAlignmentNotSupported);
     Exit;
   end;
 
