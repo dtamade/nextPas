@@ -177,19 +177,20 @@ end;
 
 function platform_fs_mkdir_p(const APath: PAnsiChar; AMode: UInt32): Int32;
 var
-  LBuf: array[0..1023] of AnsiChar;
+  LBuf: array[0..4095] of AnsiChar;
   LLen, I: Int32;
   LR: Int32;
 begin
   if (APath = nil) or (APath[0] = #0) then
     Exit(-1);
   LLen := 0;
-  while (LLen < 1023) and (APath[LLen] <> #0) do
+  while (LLen < 4095) and (APath[LLen] <> #0) do
   begin
     LBuf[LLen] := APath[LLen];
     Inc(LLen);
   end;
   LBuf[LLen] := #0;
+  if LLen >= 4095 then Exit(-36); { ENAMETOOLONG }
 
   I := 1;
   while I <= LLen do
@@ -269,7 +270,8 @@ begin
   if (APath = nil) or (APath[0] = #0) then
     Exit(-1);
   LBaseLen := 0;
-  while (LBaseLen < 1000) and (APath[LBaseLen] <> #0) do
+  { Invariant: 1024 buffer - 1(dot) - 12(hex) - 1(NUL) = 1010 max base path }
+  while (LBaseLen < 1010) and (APath[LBaseLen] <> #0) do
   begin
     LTmpPath[LBaseLen] := APath[LBaseLen];
     Inc(LBaseLen);

@@ -101,6 +101,7 @@ begin
     LFlags := LFlags or O_APPEND;
   if ASync then
     LFlags := LFlags or O_SYNC;
+  LFlags := LFlags or O_CLOEXEC;
   AHandle.Value := open(APath, LFlags, APerm);
   if AHandle.Value < 0 then
     Result := platform_get_errno
@@ -231,7 +232,6 @@ begin
     Result := platform_get_errno;
 end;
 
-{$IFDEF NEXTPAS_LINUX}
 procedure ClassifyStatType(var AStat: TPlatformFileStat);
 begin
   case AStat.Mode and S_IFMT of
@@ -246,22 +246,6 @@ begin
     AStat.FileType := ftUnknown;
   end;
 end;
-{$ELSE}
-procedure ClassifyStatType(var AStat: TPlatformFileStat);
-begin
-  case AStat.Mode and S_IFMT of
-    S_IFREG:  AStat.FileType := ftRegular;
-    S_IFDIR:  AStat.FileType := ftDirectory;
-    S_IFLNK:  AStat.FileType := ftSymlink;
-    S_IFCHR:  AStat.FileType := ftCharDevice;
-    S_IFBLK:  AStat.FileType := ftBlockDevice;
-    S_IFIFO:  AStat.FileType := ftFifo;
-    S_IFSOCK: AStat.FileType := ftSocket;
-  else
-    AStat.FileType := ftUnknown;
-  end;
-end;
-{$ENDIF}
 
 {$IFDEF NEXTPAS_LINUX}
 procedure FillPlatformStat(const LStat: TPlatformLinuxStat; out AStat: TPlatformFileStat);
