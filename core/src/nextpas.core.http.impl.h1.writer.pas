@@ -66,29 +66,8 @@ uses
   nextpas.core.errors,
   nextpas.core.text.conv,
   nextpas.core.http.headers,
-  nextpas.core.http.impl.h1.chunked;
-
-procedure WriteAllOrRaise(const AWriter: IWriter; const ABuf;
-  const ACount: SizeUInt);
-var
-  LWritten: SizeUInt;
-  LTotal: SizeUInt;
-  LPtr: PByte;
-begin
-  if ACount = 0 then
-    Exit;
-  LPtr := @ABuf;
-  LTotal := 0;
-  while LTotal < ACount do
-  begin
-    LWritten := AWriter.Write(LPtr[LTotal], ACount - LTotal);
-    if LWritten = 0 then
-      raise EIOError.Create('h1 response writer: write failed (zero progress)');
-    if LWritten > ACount - LTotal then
-      raise EIOError.Create('h1 response writer: write over-reported progress');
-    Inc(LTotal, LWritten);
-  end;
-end;
+  nextpas.core.http.impl.h1.chunked,
+  nextpas.core.io.util;
 
 function ParseContentLengthValue(const AValue: string): Int64;
 var
@@ -156,14 +135,14 @@ end;
 procedure TH1ResponseWriter.WriteStr(const AStr: string);
 begin
   if Length(AStr) > 0 then
-    WriteAllOrRaise(FWriter, AStr[1], SizeUInt(Length(AStr)));
+    IoWriteAll(FWriter, AStr[1], SizeUInt(Length(AStr)));
 end;
 
 procedure TH1ResponseWriter.WriteCRLF;
 const
   CRLF: AnsiString = #13#10;
 begin
-  WriteAllOrRaise(FWriter, CRLF[1], 2);
+  IoWriteAll(FWriter, CRLF[1], 2);
 end;
 
 function TH1ResponseWriter.TryWriteKnownStatusLine: Boolean;
@@ -206,7 +185,7 @@ const
 
   procedure WriteLine(const ALine: AnsiString);
   begin
-    WriteAllOrRaise(FWriter, ALine[1], SizeUInt(Length(ALine)));
+    IoWriteAll(FWriter, ALine[1], SizeUInt(Length(ALine)));
   end;
 
 begin
@@ -344,7 +323,7 @@ begin
 
   Move(CRLF[1], LBuf[LPos], 2);
   Inc(LPos, 2);
-  WriteAllOrRaise(FWriter, LBuf[0], SizeUInt(LPos));
+  IoWriteAll(FWriter, LBuf[0], SizeUInt(LPos));
 end;
 
 procedure TH1ResponseWriter.WriteAllHeaders;
@@ -381,7 +360,7 @@ begin
         Inc(LPos, LValueLen);
       end;
       Move(CRLF[1], LBuf[LPos], 2);
-      WriteAllOrRaise(FWriter, LBuf[0], SizeUInt(LLineLen));
+      IoWriteAll(FWriter, LBuf[0], SizeUInt(LLineLen));
       Exit;
     end;
 
@@ -504,7 +483,7 @@ begin
     Result := FChunkedWriter.Write(ABuf, ACount)
   else
   begin
-    WriteAllOrRaise(FWriter, ABuf, ACount);
+    IoWriteAll(FWriter, ABuf, ACount);
     Result := ACount;
   end;
 end;

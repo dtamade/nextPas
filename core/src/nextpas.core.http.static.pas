@@ -99,9 +99,10 @@ begin
   if Length(ARelative) = 0 then Exit(False);
   { Reject absolute paths }
   if ARelative[1] = '/' then Exit(False);
-  { URL decode to prevent %2e%2e bypass }
+  { URL decode to prevent %2e%2e bypass. Uses UrlDecodePath (RFC 3986)
+    so that '+' is treated as a literal character, not a space. }
   try
-    LDecoded := UrlDecode(ARelative);
+    LDecoded := UrlDecodePath(ARelative);
   except
     Exit(False);
   end;

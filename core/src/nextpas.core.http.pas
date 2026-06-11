@@ -161,6 +161,8 @@ procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string); inl
 { URL utilities }
 function UrlEncode(const AStr: string): string; inline;
 function UrlDecode(const AStr: string): string; inline;
+function UrlDecodeQuery(const AStr: string): string; inline;
+function UrlDecodePath(const AStr: string): string; inline;
 function ParseQueryString(const AQuery: string): TQueryParams; inline;
 function EncodeQueryString(const AParams: TQueryParams): string; inline;
 function QueryParamValue(const AParams: TQueryParams; const AName: string): string; inline;
@@ -340,6 +342,16 @@ end;
 function UrlDecode(const AStr: string): string;
 begin
   Result := nextpas.core.http.url.UrlDecode(AStr);
+end;
+
+function UrlDecodeQuery(const AStr: string): string;
+begin
+  Result := nextpas.core.http.url.UrlDecodeQuery(AStr);
+end;
+
+function UrlDecodePath(const AStr: string): string;
+begin
+  Result := nextpas.core.http.url.UrlDecodePath(AStr);
 end;
 
 function ParseQueryString(const AQuery: string): TQueryParams;

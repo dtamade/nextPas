@@ -24,6 +24,7 @@ function IoNullReader: IReader;
 function IoCopyBuffer(const ADst: IWriter; const ASrc: IReader; var ABuf; const ABufSize: SizeUInt): Int64;
 procedure IoReadAtLeast(const ASrc: IReader; var ABuf; const ACount, AMin: SizeUInt);
 function IoWriteString(const ADst: IWriter; const AStr: string): SizeUInt;
+procedure IoWriteAll(const ADst: IWriter; const ABuf; const ACount: SizeUInt);
 function IoSectionReader(const AInner: IReaderAt; const AOffset, ALimit: Int64): IReader;
 
 implementation
@@ -116,8 +117,8 @@ begin
         LCap := COPY_BUF_SIZE
       else
         LCap := LCap * 2;
-      if LCap < LSize + LRead then
-        LCap := LSize + LRead;
+      while LCap < LSize + LRead do
+        LCap := LCap * 2;
       SetLength(Result, LCap);
     end;
     Move(LBuf[0], Result[LSize], LRead);
@@ -130,17 +131,18 @@ end;
 
 procedure IoReadFull(const ASrc: IReader; var ABuf; const ACount: SizeUInt);
 var
-  LDst: PByte;
-  LRemaining, LRead: SizeUInt;
+  LPtr: PByte;
+  LRemaining: SizeUInt;
+  LRead: SizeUInt;
 begin
-  LDst := @ABuf;
+  LPtr := @ABuf;
   LRemaining := ACount;
   while LRemaining > 0 do
   begin
-    LRead := ASrc.Read(LDst^, LRemaining);
+    LRead := ASrc.Read(LPtr^, LRemaining);
     if LRead = 0 then
       raise EIOError.Create('IoReadFull: unexpected EOF');
-    Inc(LDst, LRead);
+    Inc(LPtr, LRead);
     Dec(LRemaining, LRead);
   end;
 end;
@@ -165,16 +167,13 @@ begin
 end;
 
 function TLimitReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
-var
-  LToRead: SizeUInt;
 begin
   if FRemaining <= 0 then
     Exit(0);
   if Int64(ACount) > FRemaining then
-    LToRead := SizeUInt(FRemaining)
+    Result := FInner.Read(ABuf, SizeUInt(FRemaining))
   else
-    LToRead := ACount;
-  Result := FInner.Read(ABuf, LToRead);
+    Result := FInner.Read(ABuf, ACount);
   Dec(FRemaining, Int64(Result));
 end;
 
@@ -204,14 +203,19 @@ end;
 
 function TTeeReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
-  LWritten: SizeUInt;
+  LWritten, LTotal: SizeUInt;
 begin
   Result := FInner.Read(ABuf, ACount);
   if Result > 0 then
   begin
-    LWritten := FWriter.Write(ABuf, Result);
-    if LWritten < Result then
-      Result := LWritten;
+    LTotal := 0;
+    while LTotal < Result do
+    begin
+      LWritten := FWriter.Write(PByte(@ABuf)[LTotal], Result - LTotal);
+      if LWritten = 0 then
+        raise EIOError.Create('IoTeeReader: write returned 0');
+      Inc(LTotal, LWritten);
+    end;
   end;
 end;
 
@@ -226,7 +230,7 @@ type
   TMultiReader = class(TInterfacedObject, IReader)
   private
     FReaders: array of IReader;
-    FIndex: Integer;
+    FCurrent: SizeInt;
   public
     constructor Create(const AReaders: array of IReader);
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -234,25 +238,25 @@ type
 
 constructor TMultiReader.Create(const AReaders: array of IReader);
 var
-  LI: Integer;
+  LI: SizeInt;
 begin
   inherited Create;
   SetLength(FReaders, Length(AReaders));
   for LI := 0 to High(AReaders) do
     FReaders[LI] := AReaders[LI];
-  FIndex := 0;
+  FCurrent := 0;
 end;
 
 function TMultiReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 begin
-  while FIndex <= High(FReaders) do
+  Result := 0;
+  while FCurrent < Length(FReaders) do
   begin
-    Result := FReaders[FIndex].Read(ABuf, ACount);
+    Result := FReaders[FCurrent].Read(ABuf, ACount);
     if Result > 0 then
       Exit;
-    Inc(FIndex);
+    Inc(FCurrent);
   end;
-  Result := 0;
 end;
 
 function IoMultiReader(const AReaders: array of IReader): IReader;
@@ -273,7 +277,7 @@ type
 
 constructor TMultiWriter.Create(const AWriters: array of IWriter);
 var
-  LI: Integer;
+  LI: SizeInt;
 begin
   inherited Create;
   SetLength(FWriters, Length(AWriters));
@@ -283,16 +287,18 @@ end;
 
 function TMultiWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
-  LI: Integer;
+  LI: SizeInt;
   LWritten: SizeUInt;
+  LMin: SizeUInt;
 begin
-  Result := ACount;
+  LMin := ACount;
   for LI := 0 to High(FWriters) do
   begin
     LWritten := FWriters[LI].Write(ABuf, ACount);
-    if LWritten < Result then
-      Result := LWritten;
+    if LWritten < LMin then
+      LMin := LWritten;
   end;
+  Result := LMin;
 end;
 
 function IoMultiWriter(const AWriters: array of IWriter): IWriter;
@@ -303,7 +309,7 @@ end;
 { TNopCloser }
 
 type
-  TNopCloser = class(TInterfacedObject, IReader, IReadCloser)
+  TNopCloser = class(TInterfacedObject, IReadCloser)
   private
     FInner: IReader;
   public
@@ -325,6 +331,7 @@ end;
 
 procedure TNopCloser.Close;
 begin
+  { no-op }
 end;
 
 function IoNopCloser(const AInner: IReader): IReadCloser;
@@ -372,19 +379,17 @@ end;
 
 function IoCopyBuffer(const ADst: IWriter; const ASrc: IReader; var ABuf; const ABufSize: SizeUInt): Int64;
 var
-  LBuf: PByte;
   LRead, LWritten, LTotal: SizeUInt;
 begin
   Result := 0;
-  LBuf := @ABuf;
   repeat
-    LRead := ASrc.Read(LBuf^, ABufSize);
+    LRead := ASrc.Read(ABuf, ABufSize);
     if LRead = 0 then
       Break;
     LTotal := 0;
     while LTotal < LRead do
     begin
-      LWritten := ADst.Write(LBuf[LTotal], LRead - LTotal);
+      LWritten := ADst.Write(PByte(@ABuf)[LTotal], LRead - LTotal);
       if LWritten = 0 then
         raise EIOError.Create('IoCopyBuffer: write returned 0');
       Inc(LTotal, LWritten);
@@ -420,6 +425,29 @@ begin
   if Length(AStr) = 0 then
     Exit(0);
   Result := ADst.Write(AStr[1], SizeUInt(Length(AStr)));
+end;
+
+{ IoWriteAll }
+
+procedure IoWriteAll(const ADst: IWriter; const ABuf; const ACount: SizeUInt);
+var
+  LWritten: SizeUInt;
+  LTotal: SizeUInt;
+  LPtr: PByte;
+begin
+  if ACount = 0 then
+    Exit;
+  LPtr := @ABuf;
+  LTotal := 0;
+  while LTotal < ACount do
+  begin
+    LWritten := ADst.Write(LPtr[LTotal], ACount - LTotal);
+    if LWritten = 0 then
+      raise EIOError.Create('IoWriteAll: write returned 0');
+    if LWritten > ACount - LTotal then
+      raise EIOError.Create('IoWriteAll: write over-reported progress');
+    Inc(LTotal, LWritten);
+  end;
 end;
 
 { TSectionReader }
