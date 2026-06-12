@@ -31,7 +31,7 @@ type
     FCount: SizeUInt;   // 元素数量
     FElemSize: SizeUInt;// 元素大小（字节）
   public
-    class function FromPointer(aPtr: Pointer; aCount, aElemSize: SizeUInt): TReadOnlySpan; static; inline;
+    class function FromPointer(aPtr: Pointer; aCount, aElemSize: SizeUInt): TReadOnlySpan; static;
     function  Count: SizeUInt; inline;
     function  IsEmpty: Boolean; inline;
     function  Get(aIndex: SizeUInt): T; inline;
@@ -76,10 +76,13 @@ implementation
 
 class function TReadOnlySpan.FromPointer(aPtr: Pointer; aCount, aElemSize: SizeUInt): TReadOnlySpan;
 begin
-  if (aCount > 0) and (aPtr = nil) then
-    raise nextpas.core.base.EArgumentNil.Create('Span.FromPointer: pointer is nil');
-  if (aCount > 0) and (aElemSize = 0) then
-    raise nextpas.core.base.EInvalidArgument.Create('Span.FromPointer: element size is zero');
+  if aCount > 0 then
+  begin
+    if aPtr = nil then
+      raise nextpas.core.base.EArgumentNil.Create('Span.FromPointer: pointer is nil');
+    if aElemSize = 0 then
+      raise nextpas.core.base.EInvalidArgument.Create('Span.FromPointer: element size is zero');
+  end;
   Result.FPtr := aPtr;
   Result.FCount := aCount;
   Result.FElemSize := aElemSize;
@@ -134,6 +137,8 @@ end;
 
 class function TReadOnlySpan2.FromTwo(constref A, B: TReadOnlySpan2.TSpan): TReadOnlySpan2;
 begin
+  if A.Count > High(SizeUInt) - B.Count then
+    raise nextpas.core.base.EOutOfRange.Create('Span2.FromTwo: aggregate count overflow');
   Result.FA := A;
   Result.FB := B;
 end;
@@ -149,15 +154,8 @@ begin
 end;
 
 function TReadOnlySpan2.Count: SizeUInt; inline;
-var
-  LA: SizeUInt;
-  LB: SizeUInt;
 begin
-  LA := FA.Count;
-  LB := FB.Count;
-  if LB > High(SizeUInt) - LA then
-    Exit(High(SizeUInt));
-  Result := LA + LB;
+  Result := FA.Count + FB.Count;
 end;
 
 function TReadOnlySpan2.IsEmpty: Boolean; inline;
@@ -222,18 +220,16 @@ end;
 function TReadOnlySpan2.SubSpan(aIndex, aCount: SizeUInt): TReadOnlySpan2;
 var
   LA: SizeUInt;
-  LTotal: SizeUInt;
   A1, B1: TSpan;
 begin
   if aCount = 0 then Exit(FromTwo(TSpan.FromPointer(nil,0,FA.FElemSize), TSpan.FromPointer(nil,0,FA.FElemSize)));
-  LTotal := Count;
-  if (aIndex >= LTotal) or (aCount > LTotal - aIndex) then
+  if (aIndex >= Count) or (aCount > Count - aIndex) then
     raise nextpas.core.base.EOutOfRange.Create('Span2.SubSpan: range out of bounds');
   LA := FA.Count;
   if aIndex < LA then
   begin
     // 起点在 A 段
-    if aIndex + aCount <= LA then
+    if aCount <= LA - aIndex then
     begin
       // 完全落在 A
       A1 := FA.SubSpan(aIndex, aCount);

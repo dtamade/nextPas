@@ -176,13 +176,8 @@ begin
 end;
 
 procedure TBTreeMap.FreeNode(ANode: PNode);
-var i: Int32;
 begin
   if ANode = nil then Exit;
-  if System.IsManagedType(K) then
-    for i := 0 to ANode^.Count - 1 do Finalize(ANode^.Keys[i]);
-  if System.IsManagedType(V) then
-    for i := 0 to ANode^.Count - 1 do Finalize(ANode^.Values[i]);
   Dispose(ANode);
 end;
 
@@ -390,7 +385,6 @@ begin
       cmp := CompareKeys(AKey, ANode^.Keys[i]);
       if cmp = 0 then
       begin
-        if System.IsManagedType(V) then Finalize(ANode^.Values[i]);
         ANode^.Values[i] := AValue;
         Exit;
       end;
@@ -424,7 +418,6 @@ begin
   begin
     if SearchNode(LNode, AKey, LIdx) then
     begin
-      if System.IsManagedType(V) then Finalize(LNode^.Values[LIdx]);
       LNode^.Values[LIdx] := AValue;
       Exit;
     end;
@@ -447,12 +440,13 @@ end;
 { Remove — simplified: mark as not implemented for now }
 
 function TBTreeMap.Remove(const AKey: K): Boolean;
-var LOld: PNode; LOldCount: SizeUInt;
+var
+  LOld: PNode;
+  LOldCount: SizeUInt;
 begin
   if FRoot = nil then Exit(False);
   LOldCount := FCount;
   RemoveFromNode(FRoot, AKey);
-  if FCount = LOldCount then Exit(False);
   FSizeDirty := True;
   if (FRoot <> nil) and (FRoot^.Count = 0) then
   begin
@@ -469,7 +463,7 @@ begin
       FreeNode(LOld);
     end;
   end;
-  Result := True;
+  Result := FCount <> LOldCount;
 end;
 
 procedure TBTreeMap.RemoveFromNode(ANode: PNode; const AKey: K);
@@ -498,16 +492,14 @@ end;
 procedure TBTreeMap.RemoveFromLeaf(ANode: PNode; AIndex: Int32);
 var i: Int32;
 begin
-  if System.IsManagedType(K) then Finalize(ANode^.Keys[AIndex]);
-  if System.IsManagedType(V) then Finalize(ANode^.Values[AIndex]);
   for i := AIndex to ANode^.Count - 2 do
   begin
     ANode^.Keys[i] := ANode^.Keys[i + 1];
     ANode^.Values[i] := ANode^.Values[i + 1];
   end;
   Dec(ANode^.Count);
-  if System.IsManagedType(K) then begin Finalize(ANode^.Keys[ANode^.Count]); FillChar(ANode^.Keys[ANode^.Count], SizeOf(K), 0); end;
-  if System.IsManagedType(V) then begin Finalize(ANode^.Values[ANode^.Count]); FillChar(ANode^.Values[ANode^.Count], SizeOf(V), 0); end;
+  if System.IsManagedType(K) then ANode^.Keys[ANode^.Count] := Default(K);
+  if System.IsManagedType(V) then ANode^.Values[ANode^.Count] := Default(V);
   Dec(FCount);
 end;
 
@@ -540,6 +532,7 @@ end;
 
 procedure TBTreeMap.Fill(ANode: PNode; AIndex: Int32);
 begin
+  FSizeDirty := True;
   if (AIndex > 0) and (ANode^.Children[AIndex - 1]^.Count >= BTREE_ORDER) then
     BorrowFromPrev(ANode, AIndex)
   else if (AIndex < ANode^.Count) and (ANode^.Children[AIndex + 1]^.Count >= BTREE_ORDER) then
@@ -580,8 +573,8 @@ begin
 
   Inc(LChild^.Count);
   Dec(LSibling^.Count);
-  if System.IsManagedType(K) then begin Finalize(LSibling^.Keys[LSibling^.Count]); FillChar(LSibling^.Keys[LSibling^.Count], SizeOf(K), 0); end;
-  if System.IsManagedType(V) then begin Finalize(LSibling^.Values[LSibling^.Count]); FillChar(LSibling^.Values[LSibling^.Count], SizeOf(V), 0); end;
+  if System.IsManagedType(K) then LSibling^.Keys[LSibling^.Count] := Default(K);
+  if System.IsManagedType(V) then LSibling^.Values[LSibling^.Count] := Default(V);
 end;
 
 procedure TBTreeMap.BorrowFromNext(ANode: PNode; AIndex: Int32);
@@ -617,8 +610,8 @@ begin
 
   Inc(LChild^.Count);
   Dec(LSibling^.Count);
-  if System.IsManagedType(K) then begin Finalize(LSibling^.Keys[LSibling^.Count]); FillChar(LSibling^.Keys[LSibling^.Count], SizeOf(K), 0); end;
-  if System.IsManagedType(V) then begin Finalize(LSibling^.Values[LSibling^.Count]); FillChar(LSibling^.Values[LSibling^.Count], SizeOf(V), 0); end;
+  if System.IsManagedType(K) then LSibling^.Keys[LSibling^.Count] := Default(K);
+  if System.IsManagedType(V) then LSibling^.Values[LSibling^.Count] := Default(V);
 end;
 
 procedure TBTreeMap.MergeChildren(ANode: PNode; AIndex: Int32);
@@ -651,8 +644,8 @@ begin
   for i := AIndex + 1 to ANode^.Count - 1 do
     ANode^.Children[i] := ANode^.Children[i + 1];
   Dec(ANode^.Count);
-  if System.IsManagedType(K) then begin Finalize(ANode^.Keys[ANode^.Count]); FillChar(ANode^.Keys[ANode^.Count], SizeOf(K), 0); end;
-  if System.IsManagedType(V) then begin Finalize(ANode^.Values[ANode^.Count]); FillChar(ANode^.Values[ANode^.Count], SizeOf(V), 0); end;
+  if System.IsManagedType(K) then ANode^.Keys[ANode^.Count] := Default(K);
+  if System.IsManagedType(V) then ANode^.Values[ANode^.Count] := Default(V);
 
   FreeNode(LRight);
 end;

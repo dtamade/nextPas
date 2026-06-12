@@ -4,6 +4,7 @@ program test_treeset;
 
 uses
   SysUtils,
+  Classes,
   nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.collections,
@@ -180,6 +181,36 @@ begin
   CheckEqual(Int64(1), Int64(LSet.Count), 'usable after clear');
 end;
 
+procedure TestTreeSetRemoveAllThenFreeReleasesPoolBlocks;
+var
+  LSet: IIntTreeSet;
+  i: Integer;
+begin
+  LSet := specialize MakeTreeSet<Integer>;
+  for i := 0 to 599 do
+    LSet.Add(i);
+  for i := 0 to 599 do
+    Check(LSet.Remove(i), 'remove inserted item');
+  CheckEqual(Int64(0), Int64(LSet.Count), 'count after remove all');
+  LSet := nil;
+end;
+
+procedure TestRBTreeClearReleasesPoolWhenRootEmpty;
+const
+  SourcePath = '../../../src/nextpas.core.collections.tree.rb.pas';
+var
+  Source: TStringList;
+begin
+  Source := TStringList.Create;
+  try
+    Source.LoadFromFile(SourcePath);
+    Check(Pos('if FRoot = @FSentinel then Exit;', Source.Text) = 0,
+      'RBTree Clear must release pool blocks even when root is empty');
+  finally
+    Source.Free;
+  end;
+end;
+
 procedure TestTreeSetSerializeRespectsCount;
 var
   LSet: TInspectableIntTreeSet;
@@ -240,6 +271,8 @@ begin
   T.Run('TreeSet Min/Max', @TestTreeSetMinMax);
   T.Run('TreeSet empty boundary', @TestTreeSetEmptyBoundary);
   T.Run('TreeSet clear', @TestTreeSetClear);
+  T.Run('TreeSet remove all then free releases pool blocks', @TestTreeSetRemoveAllThenFreeReleasesPoolBlocks);
+  T.Run('RBTree Clear releases pool when root empty', @TestRBTreeClearReleasesPoolWhenRootEmpty);
   T.Run('TreeSet SerializeToArrayBuffer respects count', @TestTreeSetSerializeRespectsCount);
   T.Run('TreeSet SerializeToArrayBuffer errors', @TestTreeSetSerializeErrors);
   T.Run('TreeSet LowerBound/UpperBound', @TestTreeSetBounds);

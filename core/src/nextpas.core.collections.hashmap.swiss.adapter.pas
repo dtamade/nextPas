@@ -221,6 +221,7 @@ end;
 
 procedure TSwissHashMap.Clear;
 begin
+  FIterEntry := Default(TEntry);
   FInner.Clear;
 end;
 

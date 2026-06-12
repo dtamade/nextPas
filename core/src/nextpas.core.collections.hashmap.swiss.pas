@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.system.typinfo,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.mem.allocator,
   nextpas.core.collections.hashmap.base,
   nextpas.core.simd.base,
@@ -76,6 +77,16 @@ type
       property Current: PSlot read GetCurrent;
     end;
   private
+  type
+    TTableBuffers = record
+      Ctrl: PByte;
+      Slots: PSlot;
+      Capacity: SizeUInt;
+      GroupCount: SizeUInt;
+      GrowthLeft: SizeUInt;
+    end;
+
+  private
     FCtrl: PByte;
     FSlots: PSlot;
     FCapacity: SizeUInt;
@@ -94,10 +105,16 @@ type
     function FindIndex(const AKey: K; AHash: UInt32; out AIndex: SizeUInt): Boolean;
     function FindInsertSlot(AHash: UInt32; out AWasEmpty: Boolean): SizeUInt;
     procedure SetCtrl(AIndex: SizeUInt; AValue: Byte); {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    procedure AllocBuffers(ACapacity: SizeUInt; out ABuffers: TTableBuffers);
+    procedure FreeRawBuffers(var ABuffers: TTableBuffers);
+    function FindInsertSlotIn(ACtrl: PByte; AGroupCount: SizeUInt; AHash: UInt32;
+      out AWasEmpty: Boolean): SizeUInt;
+    procedure SetCtrlIn(ACtrl: PByte; ACapacity, AIndex: SizeUInt; AValue: Byte);
     procedure AllocTable(ACapacity: SizeUInt);
     procedure FreeTable;
     procedure ClearSlot(AIndex: SizeUInt);
     procedure AssignNewSlot(AIndex: SizeUInt; const AKey: K; const AValue: V);
+    procedure RehashToCapacity(ANewCapacity: SizeUInt);
     procedure GrowAndRehash;
 
   public
@@ -184,14 +201,15 @@ end;
 function TSwissTable.KeyHash(const AKey: K): UInt32;
 var
   p: Pointer;
+  LKind: TTypeKind;
 begin
   if Assigned(FHash) then Exit(FHash(AKey));
 
   p := @AKey;
+  LKind := GetTypeKind(K);
   // 默认路径：内置 key 类型直接计算，避免额外回调开销。
-  if (GetTypeKind(K) = tkInteger) or (GetTypeKind(K) = tkChar) or
-     (GetTypeKind(K) = tkWChar) or (GetTypeKind(K) = tkBool) or
-     (GetTypeKind(K) = tkEnumeration) then
+  if (LKind = tkInteger) or (LKind = tkChar) or (LKind = tkWChar) or
+     (LKind = tkBool) or (LKind = tkEnumeration) then
   begin
     case SizeOf(K) of
       1: Exit(InlineHashMix32(PByte(p)^));
@@ -200,32 +218,27 @@ begin
       8: Exit(HashOfUInt64(PQWord(p)^));
     end;
   end;
-  if (GetTypeKind(K) = tkInt64) or (GetTypeKind(K) = tkQWord) then
+  if (LKind = tkInt64) or (LKind = tkQWord) then
     Exit(HashOfUInt64(PQWord(p)^));
 
-  if (GetTypeKind(K) = tkAString) or (GetTypeKind(K) = tkLString) then
+  if (LKind = tkAString) or (LKind = tkLString) then
     Exit(HashOfAnsiString(PAnsiString(p)^));
-  if (GetTypeKind(K) = tkUString) or (GetTypeKind(K) = tkWString) then
+  if (LKind = tkUString) or (LKind = tkWString) then
     Exit(HashOfUnicodeString(PUnicodeString(p)^));
 
-  case SizeOf(K) of
-    1: Result := InlineHashMix32(PByte(p)^);
-    2: Result := InlineHashMix32(PWord(p)^);
-    4: Result := InlineHashMix32(PUInt32(p)^);
-    8: Result := HashOfUInt64(PQWord(p)^);
-  else
-    Result := InlineHashMix32(PUInt32(p)^);
-  end;
+  raise ENotSupportedError.Create('TSwissTable: custom hash/equality required for this key type');
 end;
 
 function TSwissTable.KeysEqual(const L, R: K): Boolean;
+var
+  LKind: TTypeKind;
 begin
   if Assigned(FEquals) then Exit(FEquals(L, R));
 
+  LKind := GetTypeKind(K);
   // 默认路径：ordinal 类型直接整数比较，避免额外回调开销。
-  if (GetTypeKind(K) = tkInteger) or (GetTypeKind(K) = tkChar) or
-     (GetTypeKind(K) = tkWChar) or (GetTypeKind(K) = tkBool) or
-     (GetTypeKind(K) = tkEnumeration) then
+  if (LKind = tkInteger) or (LKind = tkChar) or (LKind = tkWChar) or
+     (LKind = tkBool) or (LKind = tkEnumeration) then
   begin
     case SizeOf(K) of
       1: Exit(PByte(@L)^ = PByte(@R)^);
@@ -234,10 +247,15 @@ begin
       8: Exit(PQWord(@L)^ = PQWord(@R)^);
     end;
   end;
-  if (GetTypeKind(K) = tkInt64) or (GetTypeKind(K) = tkQWord) then
+  if (LKind = tkInt64) or (LKind = tkQWord) then
     Exit(PQWord(@L)^ = PQWord(@R)^);
 
-  Result := L = R;
+  if (LKind = tkAString) or (LKind = tkLString) then
+    Exit(PAnsiString(@L)^ = PAnsiString(@R)^);
+  if (LKind = tkUString) or (LKind = tkWString) then
+    Exit(PUnicodeString(@L)^ = PUnicodeString(@R)^);
+
+  raise ENotSupportedError.Create('TSwissTable: custom hash/equality required for this key type');
 end;
 
 function TSwissTable.MatchGroup(ACtrl: PByte; AH2: Byte): TSwissMask;
@@ -264,38 +282,79 @@ end;
 
 { Memory management }
 
-procedure TSwissTable.AllocTable(ACapacity: SizeUInt);
+procedure TSwissTable.AllocBuffers(ACapacity: SizeUInt; out ABuffers: TTableBuffers);
 var
   LCtrlSize, LSlotSize: SizeUInt;
 begin
-  FCapacity := ACapacity;
-  FGroupCount := ACapacity div GROUP_SIZE;
+  ABuffers.Ctrl := nil;
+  ABuffers.Slots := nil;
+  ABuffers.Capacity := ACapacity;
+  ABuffers.GroupCount := ACapacity div GROUP_SIZE;
+  ABuffers.GrowthLeft := ACapacity - ACapacity div 8;
   LCtrlSize := ACapacity + GROUP_SIZE;
   LSlotSize := ACapacity * SizeOf(TSlot);
-  FCtrl := nil;
-  FSlots := nil;
 
   if FAllocator <> nil then
   begin
-    FCtrl := PByte(FAllocator.GetMem(LCtrlSize));
-    FSlots := PSlot(FAllocator.GetMem(LSlotSize));
+    ABuffers.Ctrl := PByte(FAllocator.GetMem(LCtrlSize));
+    try
+      ABuffers.Slots := PSlot(FAllocator.GetMem(LSlotSize));
+    except
+      FAllocator.FreeMem(ABuffers.Ctrl);
+      ABuffers.Ctrl := nil;
+      raise;
+    end;
   end
   else
   begin
-    GetMem(FCtrl, LCtrlSize);
+    GetMem(ABuffers.Ctrl, LCtrlSize);
     try
-      GetMem(FSlots, LSlotSize);
+      GetMem(ABuffers.Slots, LSlotSize);
     except
-      FreeMem(FCtrl);
-      FCtrl := nil;
+      FreeMem(ABuffers.Ctrl);
+      ABuffers.Ctrl := nil;
       raise;
     end;
   end;
 
-  FillChar(FCtrl^, LCtrlSize, CTRL_EMPTY);
+  FillChar(ABuffers.Ctrl^, LCtrlSize, CTRL_EMPTY);
   if System.IsManagedType(K) or System.IsManagedType(V) then
-    FillChar(FSlots^, LSlotSize, 0);
-  FGrowthLeft := ACapacity - ACapacity div 8;
+    FillChar(ABuffers.Slots^, LSlotSize, 0);
+end;
+
+procedure TSwissTable.FreeRawBuffers(var ABuffers: TTableBuffers);
+begin
+  if ABuffers.Ctrl = nil then
+    Exit;
+
+  if FAllocator <> nil then
+  begin
+    FAllocator.FreeMem(ABuffers.Slots);
+    FAllocator.FreeMem(ABuffers.Ctrl);
+  end
+  else
+  begin
+    FreeMem(ABuffers.Slots);
+    FreeMem(ABuffers.Ctrl);
+  end;
+
+  ABuffers.Ctrl := nil;
+  ABuffers.Slots := nil;
+  ABuffers.Capacity := 0;
+  ABuffers.GroupCount := 0;
+  ABuffers.GrowthLeft := 0;
+end;
+
+procedure TSwissTable.AllocTable(ACapacity: SizeUInt);
+var
+  LBuffers: TTableBuffers;
+begin
+  AllocBuffers(ACapacity, LBuffers);
+  FCtrl := LBuffers.Ctrl;
+  FSlots := LBuffers.Slots;
+  FCapacity := LBuffers.Capacity;
+  FGroupCount := LBuffers.GroupCount;
+  FGrowthLeft := LBuffers.GrowthLeft;
 end;
 
 procedure TSwissTable.FreeTable;
@@ -438,12 +497,45 @@ begin
   end;
 end;
 
-procedure TSwissTable.GrowAndRehash;
+function TSwissTable.FindInsertSlotIn(ACtrl: PByte; AGroupCount: SizeUInt; AHash: UInt32;
+  out AWasEmpty: Boolean): SizeUInt;
+var
+  LGroupIdx, LProbeOfs: SizeUInt;
+  LMask, LEmptyMask: TSwissMask;
+  LBit: Int32;
+begin
+  LGroupIdx := (AHash shr 7) and (AGroupCount - 1);
+  LProbeOfs := 0;
+
+  while True do
+  begin
+    LMask := SwissMatchEmptyOrDeleted(@ACtrl[LGroupIdx * GROUP_SIZE]);
+    if LMask <> 0 then
+    begin
+      LBit := SwissCtz(LMask);
+      LEmptyMask := SwissMatchEmpty(@ACtrl[LGroupIdx * GROUP_SIZE]);
+      AWasEmpty := (LEmptyMask and (TSwissMask(1) shl LBit)) <> 0;
+      Result := LGroupIdx * GROUP_SIZE + SizeUInt(LBit);
+      Exit;
+    end;
+    Inc(LProbeOfs);
+    LGroupIdx := (LGroupIdx + LProbeOfs) and (AGroupCount - 1);
+  end;
+end;
+
+procedure TSwissTable.SetCtrlIn(ACtrl: PByte; ACapacity, AIndex: SizeUInt; AValue: Byte);
+begin
+  ACtrl[AIndex] := AValue;
+  if AIndex < GROUP_SIZE then
+    ACtrl[ACapacity + AIndex] := AValue;
+end;
+
+procedure TSwissTable.RehashToCapacity(ANewCapacity: SizeUInt);
 var
   LOldCtrl: PByte;
   LOldSlots: PSlot;
-  LOldCap, i: SizeUInt;
-  LNewCap: SizeUInt;
+  LOldCap, LOldCount, i: SizeUInt;
+  LNewTable: TTableBuffers;
   Lh: UInt32;
   LIdx: SizeUInt;
   LWasEmpty: Boolean;
@@ -451,32 +543,40 @@ begin
   LOldCtrl := FCtrl;
   LOldSlots := FSlots;
   LOldCap := FCapacity;
+  LOldCount := FCount;
+  AllocBuffers(ANewCapacity, LNewTable);
+  try
+    if LOldCtrl <> nil then
+    begin
+      for i := 0 to LOldCap - 1 do
+      begin
+        if LOldCtrl[i] < $80 then
+        begin
+          Lh := KeyHash(LOldSlots[i].Key);
+          LIdx := FindInsertSlotIn(LNewTable.Ctrl, LNewTable.GroupCount, Lh, LWasEmpty);
+          SetCtrlIn(LNewTable.Ctrl, LNewTable.Capacity, LIdx, Lh and $7F);
+          // Move transfers ownership only after the whole operation commits.
+          // On exception, the old table remains the owner and the temporary table is freed raw.
+          Move(LOldSlots[i], LNewTable.Slots[LIdx], SizeOf(TSlot));
+          if LWasEmpty then
+            Dec(LNewTable.GrowthLeft);
+        end;
+      end;
+    end;
+  except
+    FreeRawBuffers(LNewTable);
+    raise;
+  end;
 
-  if FCapacity = 0 then
-    LNewCap := MIN_CAPACITY
-  else
-    LNewCap := FCapacity * 2;
-
-  AllocTable(LNewCap);
-  FCount := 0;
+  FCtrl := LNewTable.Ctrl;
+  FSlots := LNewTable.Slots;
+  FCapacity := LNewTable.Capacity;
+  FGroupCount := LNewTable.GroupCount;
+  FCount := LOldCount;
+  FGrowthLeft := LNewTable.GrowthLeft;
 
   if LOldCtrl <> nil then
   begin
-    for i := 0 to LOldCap - 1 do
-    begin
-      if LOldCtrl[i] < $80 then
-      begin
-        Lh := KeyHash(LOldSlots[i].Key);
-        LIdx := FindInsertSlot(Lh, LWasEmpty);
-        SetCtrl(LIdx, Lh and $7F);
-        // 所有权转移：用 Move 把旧 slot 的内容（含 managed 引用）搬到新 slot，
-        // 不触发 refcount 增减。旧 slot 内存随后整块释放，无需 finalize。
-        Move(LOldSlots[i], FSlots[LIdx], SizeOf(TSlot));
-        Inc(FCount);
-        if LWasEmpty then
-          Dec(FGrowthLeft);
-      end;
-    end;
     if FAllocator <> nil then
     begin
       FAllocator.FreeMem(LOldSlots);
@@ -490,11 +590,25 @@ begin
   end;
 end;
 
+procedure TSwissTable.GrowAndRehash;
+var
+  LNewCap: SizeUInt;
+begin
+  if FCapacity = 0 then
+    LNewCap := MIN_CAPACITY
+  else
+    LNewCap := FCapacity * 2;
+
+  RehashToCapacity(LNewCap);
+end;
+
 { Public API }
 
 constructor TSwissTable.Create(aCapacity: SizeUInt; aHash: THash; aEquals: TEquals; aAllocator: IAllocator);
 begin
   inherited Create;
+  if Assigned(aHash) <> Assigned(aEquals) then
+    raise EArgumentError.Create('TSwissTable: hash/equality callbacks must be provided together');
   FHash := aHash;
   FEquals := aEquals;
   FAllocator := aAllocator;
@@ -638,7 +752,7 @@ begin
       Li := LBase + SizeUInt(LBit);
       if KeysEqual(FSlots[Li].Key, AKey) then
       begin
-        { Managed assignment releases the old value and handles self-alias. }
+        // Managed assignment releases the old value and also handles self-alias.
         FSlots[Li].Value := AValue;
         Exit(False);
       end;
@@ -790,12 +904,7 @@ end;
 
 procedure TSwissTable.ShrinkToFit;
 var
-  LOldCtrl: PByte;
-  LOldSlots: PSlot;
-  LOldCap, i: SizeUInt;
-  LNewCap, Lh: UInt32;
-  LIdx: SizeUInt;
-  LWasEmpty: Boolean;
+  LNewCap: SizeUInt;
 begin
   if FCount = 0 then begin Clear; Exit; end;
   LNewCap := FCount + FCount div 7 + 1;
@@ -811,37 +920,7 @@ begin
   if LNewCap < MIN_CAPACITY then LNewCap := MIN_CAPACITY;
   if LNewCap >= FCapacity then Exit;
 
-  LOldCtrl := FCtrl;
-  LOldSlots := FSlots;
-  LOldCap := FCapacity;
-
-  AllocTable(LNewCap);
-  FCount := 0;
-
-  for i := 0 to LOldCap - 1 do
-  begin
-    if LOldCtrl[i] < $80 then
-    begin
-      Lh := KeyHash(LOldSlots[i].Key);
-      LIdx := FindInsertSlot(Lh, LWasEmpty);
-      SetCtrl(LIdx, Lh and $7F);
-      Move(LOldSlots[i], FSlots[LIdx], SizeOf(TSlot));
-      Inc(FCount);
-      if LWasEmpty then
-        Dec(FGrowthLeft);
-    end;
-  end;
-
-  if FAllocator <> nil then
-  begin
-    FAllocator.FreeMem(LOldSlots);
-    FAllocator.FreeMem(LOldCtrl);
-  end
-  else
-  begin
-    FreeMem(LOldSlots);
-    FreeMem(LOldCtrl);
-  end;
+  RehashToCapacity(LNewCap);
 end;
 
 procedure TSwissTable.Retain(AFunc: TRetainFunc);
@@ -901,6 +980,7 @@ begin
         SetCtrl(i, CTRL_DELETED);
       Dec(FCount);
     end;
+
   FillChar(FCtrl^, FCapacity + GROUP_SIZE, CTRL_EMPTY);
   FCount := 0;
   FGrowthLeft := FCapacity - FCapacity div 8;

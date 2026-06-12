@@ -232,13 +232,9 @@ begin
   if FCount = 0 then
     Exit;
 
-  // Finalize managed types
   if IsManagedType then
-  begin
     for i := 0 to FCount - 1 do
-      Finalize(FItems[i]);
-    FillChar(FItems[0], FCount * SizeOf(T), 0);
-  end;
+      FItems[i] := Default(T);
   FCount := 0;
 end;
 
@@ -258,9 +254,12 @@ var i: SizeUInt;
 begin
   if FCount = 0 then Exit;
   if IsManagedType then
+  begin
     for i := 0 to FCount - 1 do
-      Finalize(FItems[i]);
-  FillChar(FItems[0], FCount * SizeOf(T), 0);
+      FItems[i] := Default(T);
+  end
+  else
+    FillChar(FItems[0], FCount * SizeOf(T), 0);
 end;
 
 procedure TPriorityQueue.DoReverse;

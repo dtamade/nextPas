@@ -1272,23 +1272,27 @@ begin
   end;
   {$ENDIF}
 
-  // before_begin: erase head
+  // before_begin: erase [head, aLast)
   if (aPosition.PtrIter.Data = nil) and (not aPosition.PtrIter.Started) then
   begin
-    if FHead = nil then
-    begin
-      Result.Init(aPosition.PtrIter);
-      Result.PtrIter.Data := nil;
-      Exit;
-    end;
     LCurrentNode := FHead;
-    FHead := PSingleNode(LCurrentNode^.Next);
-    if FHead = nil then FLast := nil;
-    DestroyNode(LCurrentNode);
-    Dec(FCount);
+    LEraseCount := 0;
+    while (LCurrentNode <> nil) and
+      ((aLast.PtrIter.Data = nil) or (LCurrentNode <> PSingleNode(aLast.PtrIter.Data))) do
+    begin
+      LNextNode := PSingleNode(LCurrentNode^.GetNext);
+      DestroyNode(LCurrentNode);
+      Inc(LEraseCount);
+      LCurrentNode := LNextNode;
+    end;
+
+    FHead := LCurrentNode;
+    if FHead = nil then
+      FLast := nil;
+    Dec(FCount, LEraseCount);
 
     Result.Init(aPosition.PtrIter);
-    Result.PtrIter.Data := FHead; // iterator to element after erased head
+    Result.PtrIter.Data := LCurrentNode;
     Exit;
   end;
 

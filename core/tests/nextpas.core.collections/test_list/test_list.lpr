@@ -5,7 +5,10 @@ program test_list;
 uses
   SysUtils,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
+  nextpas.core.mem.allocator,
+  failing_allocator,
   nextpas.core.collections,
   nextpas.core.collections.base,
   nextpas.core.collections.list,
@@ -257,6 +260,34 @@ begin
   end;
 end;
 
+procedure TestPushBackBlockRegistryAllocationFailureIsAtomic;
+var
+  LL: TIntList;
+  LAllocator: IAllocator;
+  LAlloc: TFailingAllocatorSnapshot;
+  LCaught: Boolean;
+begin
+  LAllocator := MakeFailingAllocator(2);
+  LL := TIntList.Create(LAllocator);
+  try
+    LCaught := False;
+    try
+      LL.PushBack(10);
+    except
+      on E: EOutOfMemoryError do
+        LCaught := True;
+    end;
+
+    Check(LCaught, 'node block registry allocation failure raises canonical OOM');
+    CheckEqual(Int64(0), Int64(LL.GetCount), 'failed push keeps count unchanged');
+    LAlloc := FailingAllocatorSnapshot;
+    CheckEqual(Int64(2), Int64(LAlloc.GetMemCalls), 'failure happened on second GetMem');
+    CheckEqual(Int64(1), Int64(LAlloc.FreeMemCalls), 'allocated node block released after registry failure');
+  finally
+    LL.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.list');
   T.Run('PushFront/PopFront', @TestPushFrontPopFront);
@@ -271,5 +302,6 @@ begin
   T.Run('TryLoadFrom/TryAppend', @TestTryLoadFromTryAppend);
   T.Run('SerializeToArrayBuffer nil positive count raises', @TestSerializeNilPositiveCountRaises);
   T.Run('SerializeToArrayBuffer count past end raises', @TestSerializeCountPastEndRaises);
+  T.Run('PushBack block registry allocation failure is atomic', @TestPushBackBlockRegistryAllocationFailureIsAtomic);
   T.Summary;
 end.

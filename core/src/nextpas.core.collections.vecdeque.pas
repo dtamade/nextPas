@@ -1755,9 +1755,7 @@ procedure TVecDeque.MakeContiguous(out aPtr: PElement; out aLen: SizeUInt);
 var
   P1, P2: PElement;
   L1, L2: SizeUInt;
-  LElementSize: SizeUInt;
   Tmp: TInternalArray;
-  LDst: PByte;
 begin
   aPtr := nil; aLen := 0;
   if FCount = 0 then Exit;
@@ -1772,18 +1770,25 @@ begin
 
   // 逻辑跨环：整理为连续。策略：用临时数组转存两段，线性覆写回 0..Count-1
   GetTwoSlices(P1, L1, P2, L2);
-  LElementSize := GetElementSize;
 
   // ✅ 优化：使用携带分配器，只分配实际需要的大小
   Tmp := TInternalArray.Create(FBuffer.GetAllocator);
   try
     Tmp.Resize(FCount);  // ✅ 只分配 FCount 而不是 FBuffer.GetCount
-    LDst := PByte(Tmp.GetPtr(0));
-    if L1 > 0 then begin Move(P1^, LDst^, L1 * LElementSize); Inc(LDst, L1 * LElementSize); end;
-    if L2 > 0 then begin Move(P2^, LDst^, L2 * LElementSize); end;
+    if L1 > 0 then
+      Tmp.OverwriteUnchecked(0, P1, L1);
+    if L2 > 0 then
+      Tmp.OverwriteUnchecked(L1, P2, L2);
 
     // 线性覆写回主缓冲的前 Count 段
     FBuffer.Overwrite(0, Tmp, FCount);
+
+    if GetIsManagedType then
+    begin
+      if FCount < FBuffer.GetCount then
+        FElementManager.ZeroElements(FBuffer.GetPtrUnchecked(FCount),
+          FBuffer.GetCount - FCount);
+    end;
 
     // 修正头尾指针，形成连续 [0..Count)
     FHead := 0;

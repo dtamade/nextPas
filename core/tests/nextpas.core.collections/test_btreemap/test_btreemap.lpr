@@ -245,6 +245,59 @@ begin
   end;
 end;
 
+procedure TestMissingRemoveRebalanceKeepsRankSelect;
+var
+  M: TIntBTree;
+  I, K, V: Integer;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    for I := 0 to 95 do
+      M.Put(I, I * 10);
+
+    for I := 0 to 95 do
+    begin
+      Check(M.Select(SizeUInt(I), K, V), 'baseline select ' + IntToStr(I));
+      CheckEqual(Int64(I), Int64(K), 'baseline select key ' + IntToStr(I));
+      CheckEqual(Int64(I), Int64(M.Rank(I)), 'baseline rank ' + IntToStr(I));
+    end;
+
+    Check(not M.Remove(-1), 'missing remove reports false');
+    CheckEqual(Int64(96), Int64(M.Count), 'missing remove keeps count');
+
+    for I := 0 to 95 do
+    begin
+      Check(M.Select(SizeUInt(I), K, V), 'post-missing-remove select ' + IntToStr(I));
+      CheckEqual(Int64(I), Int64(K), 'post-missing-remove select key ' + IntToStr(I));
+      CheckEqual(Int64(I * 10), Int64(V), 'post-missing-remove select value ' + IntToStr(I));
+      CheckEqual(Int64(I), Int64(M.Rank(I)), 'post-missing-remove rank ' + IntToStr(I));
+    end;
+  finally
+    M.Free;
+  end;
+end;
+
+procedure TestMissingRemoveAfterRootMergeShrinksRoot;
+var
+  M: TIntBTree;
+  I, K, V: Integer;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    for I := 0 to BTREE_MAX_KEYS do
+      M.Put(I, I * 10);
+
+    Check(M.Remove(BTREE_MAX_KEYS), 'trim right child to min');
+    Check(not M.Remove(-1), 'missing remove reports false after root merge');
+    CheckEqual(Int64(BTREE_MAX_KEYS), Int64(M.Count), 'missing remove after root merge keeps count');
+    Check(M.Select(0, K, V), 'select after missing root merge');
+    CheckEqual(Int64(0), Int64(K), 'first key after missing root merge');
+    CheckEqual(Int64(0), Int64(V), 'first value after missing root merge');
+  finally
+    M.Free;
+  end;
+end;
+
 procedure TestPutSortedRejectsInvalidCountBeforeClear;
 var
   M: TIntBTree;
@@ -316,6 +369,8 @@ begin
   T.Run('Floor', @TestFloor);
   T.Run('Rank', @TestRank);
   T.Run('Rank internal separator key', @TestRankInternalSeparatorKey);
+  T.Run('Missing remove rebalance keeps Rank/Select', @TestMissingRemoveRebalanceKeepsRankSelect);
+  T.Run('Missing remove after root merge shrinks root', @TestMissingRemoveAfterRootMergeShrinksRoot);
   T.Run('PutSorted invalid count', @TestPutSortedRejectsInvalidCountBeforeClear);
   T.Run('Enumerator (for-in)', @TestEnumerator);
   T.Summary;

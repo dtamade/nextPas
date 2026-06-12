@@ -248,9 +248,8 @@ begin
     if not FOverwriteOldest then
       Exit(False);  // 拒绝添加
 
-    // 覆盖模式：移除最旧元素
     if GetIsManagedType then
-      GetElementManager.FinalizeManagedElementsUnchecked(@FBuffer[FHead], 1);
+      FBuffer[FHead] := Default(T);
 
     FHead := WrapIndex(FHead + 1);
     Dec(FCount);
@@ -272,7 +271,7 @@ begin
   Result := FBuffer[FHead];
 
   if GetIsManagedType then
-    GetElementManager.FinalizeManagedElementsUnchecked(@FBuffer[FHead], 1);
+    FBuffer[FHead] := Default(T);
 
   FHead := WrapIndex(FHead + 1);
   Dec(FCount);
@@ -286,7 +285,7 @@ begin
   aElement := FBuffer[FHead];
 
   if GetIsManagedType then
-    GetElementManager.FinalizeManagedElementsUnchecked(@FBuffer[FHead], 1);
+    FBuffer[FHead] := Default(T);
 
   FHead := WrapIndex(FHead + 1);
   Dec(FCount);
@@ -323,21 +322,16 @@ begin
 end;
 
 procedure TCircularBuffer.Clear;
+var
+  i, idx: SizeUInt;
 begin
   if (FCount > 0) and GetIsManagedType then
   begin
-    // 需要Finalize所有元素
-    if FHead < FTail then
+    idx := FHead;
+    for i := 0 to FCount - 1 do
     begin
-      // 连续区间
-      GetElementManager.FinalizeManagedElementsUnchecked(@FBuffer[FHead], FCount);
-    end
-    else
-    begin
-      // 分为两段
-      GetElementManager.FinalizeManagedElementsUnchecked(@FBuffer[FHead], FCapacity - FHead);
-      if FTail > 0 then
-        GetElementManager.FinalizeManagedElementsUnchecked(@FBuffer[0], FTail);
+      FBuffer[idx] := Default(T);
+      idx := WrapIndex(idx + 1);
     end;
   end;
 
@@ -432,7 +426,6 @@ end;
 
 procedure TCircularBuffer.SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt);
 var
-  Arr: TInternalArray;
   i: SizeUInt;
   pDst: ^T;
 begin
