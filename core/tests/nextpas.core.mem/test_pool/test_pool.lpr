@@ -8,19 +8,28 @@ uses
   nextpas.core.mem.error,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.pool,
-  nextpas.core.mem.pool.fixed;
+  nextpas.core.mem.pool.base,
+  nextpas.core.mem.pool.fixed,
+  nextpas.core.mem.pool.object_pool;
 
 type
   TExceptionProc = procedure;
-  TFixedPoolRecordingAllocator = class(TAllocator)
-  protected
-    function DoGetMem(aSize: SizeUInt): Pointer; override;
-    function DoAllocMem(aSize: SizeUInt): Pointer; override;
-    function DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(aDst: Pointer); override;
+  TBatchObject = class
+  end;
+  TFixedPoolRecordingAllocator = class(TInterfacedObject, IAllocator)
   public
     GetCalls: Integer;
     FreeCalls: Integer;
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
+    function GetMem(aSize: SizeUInt): Pointer;
+    function AllocMem(aSize: SizeUInt): Pointer;
+    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+    procedure FreeMem(aDst: Pointer);
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(aPtr: Pointer);
+    function Traits: TAllocatorTraits;
   end;
 
 var
@@ -40,25 +49,58 @@ begin
   end;
 end;
 
-function TFixedPoolRecordingAllocator.DoGetMem(aSize: SizeUInt): Pointer;
+function TFixedPoolRecordingAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TFixedPoolRecordingAllocator.Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TFixedPoolRecordingAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
+end;
+
+function TFixedPoolRecordingAllocator.GetMem(aSize: SizeUInt): Pointer;
 begin
   Inc(GetCalls);
   Result := nil;
 end;
 
-function TFixedPoolRecordingAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
+function TFixedPoolRecordingAllocator.AllocMem(aSize: SizeUInt): Pointer;
 begin
-  Result := DoGetMem(aSize);
+  Result := GetMem(aSize);
 end;
 
-function TFixedPoolRecordingAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TFixedPoolRecordingAllocator.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
 begin
   Result := nil;
 end;
 
-procedure TFixedPoolRecordingAllocator.DoFreeMem(aDst: Pointer);
+procedure TFixedPoolRecordingAllocator.FreeMem(aDst: Pointer);
 begin
   Inc(FreeCalls);
+end;
+
+function TFixedPoolRecordingAllocator.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+begin
+  Result := GetMem(aSize);
+end;
+
+procedure TFixedPoolRecordingAllocator.FreeAligned(aPtr: Pointer);
+begin
+  Inc(FreeCalls);
+end;
+
+function TFixedPoolRecordingAllocator.Traits: TAllocatorTraits;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.HasMemSize := False;
+  Result.SupportsAligned := False;
 end;
 
 procedure ReleaseExternalPointer;
@@ -265,6 +307,27 @@ begin
   end;
 end;
 
+procedure TestFixedPoolBatchClampsToOpenArrayLength;
+var
+  LPool: TFixedPool;
+  LPtrs: array[0..0] of Pointer;
+  LAcquired: Integer;
+begin
+  LPool := TFixedPool.Create(32, 2);
+  try
+    LPtrs[0] := nil;
+    LAcquired := LPool.AcquireN(LPtrs, 2);
+    CheckEqual(Int64(1), Int64(LAcquired), 'AcquireN should clamp to open-array length');
+    CheckEqual(Int64(1), Int64(LPool.AllocatedCount), 'AcquireN should acquire only one block');
+
+    LPool.ReleaseN(LPtrs, 2);
+    CheckEqual(Int64(0), Int64(LPool.AllocatedCount), 'ReleaseN should release only the provided slot');
+    CheckEqual(Int64(2), Int64(LPool.Available), 'ReleaseN should restore one acquired block');
+  finally
+    LPool.Free;
+  end;
+end;
+
 procedure TestFixedPoolRejectsTotalSizeOverflowBeforeAlloc;
 var
   LPool: TFixedPool;
@@ -288,6 +351,12 @@ begin
         CheckEqual(Int64(Ord(aeInvalidLayout)), Int64(Ord(E.Error)),
           'fixed pool total-size overflow error');
       end;
+      on E: nextpas.core.mem.error.EOutOfMemory do
+      begin
+        LRaised := True;
+        CheckEqual(Int64(Ord(aeInvalidLayout)), Int64(Ord(E.Error)),
+          'fixed pool total-size overflow error');
+      end;
     end;
     Check(LRaised, 'fixed pool total-size overflow must fail closed');
     CheckEqual(Int64(0), Int64(LAllocator.GetCalls),
@@ -295,6 +364,31 @@ begin
   finally
     LPool.Free;
     LAllocatorRef := nil;
+  end;
+end;
+
+procedure TestObjectPoolBatchClampsToOpenArrayLength;
+type
+  TBatchPool = specialize TObjectPool<TBatchObject>;
+var
+  LPool: TBatchPool;
+  LPtrs: array[0..0] of Pointer;
+  LAcquired: Integer;
+begin
+  LPool := TBatchPool.Create(10, function: TBatchObject
+    begin
+      Result := TBatchObject.Create;
+    end);
+  try
+    LPtrs[0] := nil;
+    LAcquired := LPool.AcquireN(LPtrs, 2);
+    CheckEqual(Int64(1), Int64(LAcquired), 'object AcquireN should clamp to open-array length');
+    CheckEqual(Int64(1), Int64(LPool.TotalCreated), 'object AcquireN should create only one object');
+
+    LPool.ReleaseN(LPtrs, 2);
+    CheckEqual(Int64(1), Int64(LPool.InPoolCount), 'object ReleaseN should release only the provided slot');
+  finally
+    LPool.Free;
   end;
 end;
 
@@ -312,6 +406,8 @@ begin
   T.Run('Done', @TestPoolDone);
   T.Run('Small block size', @TestPoolSmallBlockSize);
   T.Run('legacy TPool alias', @TestPoolLegacyAlias);
+  T.Run('fixed pool batch clamps to open-array length', @TestFixedPoolBatchClampsToOpenArrayLength);
   T.Run('fixed pool rejects total-size overflow before alloc', @TestFixedPoolRejectsTotalSizeOverflowBeforeAlloc);
+  T.Run('object pool batch clamps to open-array length', @TestObjectPoolBatchClampsToOpenArrayLength);
   T.Summary;
 end.

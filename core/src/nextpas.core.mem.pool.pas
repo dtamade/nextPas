@@ -18,7 +18,7 @@ type
   TFixedSlabPool = nextpas.core.mem.pool.fixed_slab.TFixedSlabPool;
 
   {**
-   * @desc 固定大小块池，O(1) 分配；释放时验证所有权和重复释放
+   * @desc 固定大小块池，O(1) 分配/释放
    * @note 非线程安全。适用于频繁创建/销毁相同大小对象的场景
    *}
   TLocalBlockPool = record

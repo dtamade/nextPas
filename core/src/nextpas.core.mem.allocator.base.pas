@@ -6,7 +6,6 @@ interface
 
 uses
   nextpas.core.mem.intf,
-  nextpas.core.mem.layout,
   nextpas.core.contracts
   {$IFDEF NEXTPAS_CORE_STRICT_NULL_FREE}
   , nextpas.core.base
@@ -50,7 +49,7 @@ implementation
 
 function IsPowerOfTwo(x: SizeUInt): Boolean; inline;
 begin
-  Result := nextpas.core.mem.layout.IsPowerOfTwo(x);
+  Result := (x <> 0) and ((x and (x - 1)) = 0);
 end;
 
 function AlignUpPtr(P: Pointer; AAlignment: SizeUInt): Pointer; inline;

@@ -50,6 +50,10 @@ type
     function DataOffsetToPointer(aOffset: UInt64): Pointer;
     function PointerToDataOffset(aPtr: Pointer; out aOffset: UInt64): Boolean;
     function PageUsableSize(aPageIndex: UInt32): UInt32;
+    function CanAllocate(aSize: UInt64): Boolean;
+    function CurrentMappingSize: UInt64;
+    function TryCalculateRequiredSize(aPoolSize: UInt64; aPageSize: UInt32;
+      out aRequiredSize: UInt64; out aTotalPages: UInt32): Boolean;
     function CalculateRequiredSize(aPoolSize: UInt64): UInt64;
     procedure InitializeHeader(aPoolSize: UInt64; aPageSize: UInt32; aMaxSizeClass: UInt32);
     function ValidateHeader: Boolean;
@@ -209,8 +213,14 @@ type
     FLargeObjectThreshold: UInt64;          // 大对象阈值
     FBasePath: string;                      // 文件池的基础路径
     FSharedPrefix: string;                  // 共享池的名称前缀
+    FLargeFallbacks: array of Pointer;       // manager-owned system fallback blocks
 
     function GetPoolForSize(aSize: UInt64): TMappedSlabPool;
+    function GetMaxValidSizeClass: UInt64;
+    function AllocLargeFallback(aSize: UInt64): Pointer;
+    procedure TrackLargeFallback(aPtr: Pointer);
+    function UntrackLargeFallback(aPtr: Pointer): Boolean;
+    procedure FreeLargeFallbacks;
     procedure InitializePools(aMode: TMappedSlabPoolMode);
     procedure DestroyPools;
 
@@ -298,7 +308,7 @@ function MappedSlabPoolFileExists(const aFileName: string): Boolean;
 var
   LStat: TPlatformFileStat;
 begin
-  Result := platform_file_stat(PAnsiChar(aFileName), LStat) = 0;
+  Result := (aFileName <> '') and (platform_file_stat(PAnsiChar(aFileName), LStat) = 0);
 end;
 
 type
@@ -340,6 +350,47 @@ type
     Generation: UInt32;
     NextFreeOffset: UInt64;
   end;
+
+function TryAddU64(A, B: UInt64; out AResult: UInt64): Boolean; inline;
+begin
+  Result := A <= High(UInt64) - B;
+  if Result then
+    AResult := A + B
+  else
+    AResult := 0;
+end;
+
+function TryMulU64(A, B: UInt64; out AResult: UInt64): Boolean; inline;
+begin
+  Result := (A = 0) or (B <= High(UInt64) div A);
+  if Result then
+    AResult := A * B
+  else
+    AResult := 0;
+end;
+
+function TryRoundUpU64(AValue: UInt64; AAlignment: UInt32; out AResult: UInt64): Boolean; inline;
+var
+  LAdjusted: UInt64;
+  LAlignment: UInt64;
+begin
+  AResult := 0;
+  if AAlignment = 0 then
+    Exit(False);
+
+  LAlignment := AAlignment;
+  if not TryAddU64(AValue, LAlignment - 1, LAdjusted) then
+    Exit(False);
+
+  AResult := (LAdjusted div LAlignment) * LAlignment;
+  Result := True;
+end;
+
+function IsValidMappedSlabMaxSizeClass(AMaxSizeClass: UInt32): Boolean; inline;
+begin
+  Result := (AMaxSizeClass > 0) and
+    (UInt64(AMaxSizeClass) <= High(UInt32) - SizeOf(TMappedSlabBlockHeader) - 7);
+end;
 
 { TMappedSlabPool }
 
@@ -416,22 +467,89 @@ begin
     Result := UInt32(LRemaining);
 end;
 
-function TMappedSlabPool.CalculateRequiredSize(aPoolSize: UInt64): UInt64;
+function TMappedSlabPool.CanAllocate(aSize: UInt64): Boolean;
+var
+  LHeader: PMappedSlabHeader;
+  LBlockSize: UInt32;
+  LBlockBytes: UInt32;
+  LPageIndex: UInt32;
+  LPage: PMappedSlabPage;
+  LPageUsable: UInt32;
+begin
+  Result := False;
+  if not IsValid then Exit;
+
+  if (aSize = 0) or (aSize > FMaxSizeClass) or
+     (aSize > UInt64(High(UInt32)) - SizeOf(TMappedSlabBlockHeader) - 7) then
+    Exit;
+
+  LHeader := PMappedSlabHeader(FHeader);
+  LBlockSize := UInt32((aSize + 7) and not UInt64(7));
+  LBlockBytes := LBlockSize + SizeOf(TMappedSlabBlockHeader);
+
+  for LPageIndex := 0 to LHeader^.TotalPages - 1 do
+  begin
+    LPage := PMappedSlabPage(GetPageDescriptor(LPageIndex));
+    LPageUsable := PageUsableSize(LPageIndex);
+
+    if (LPage^.BlockSize = LBlockSize) and
+       ((LPage^.FreeHeadOffset <> NO_FREE_OFFSET) or
+        (UInt64(LPage^.BumpOffset) + LBlockBytes <= LPageUsable)) then
+      Exit(True);
+
+    if (LPage^.BlockSize = 0) and (LBlockBytes <= LPageUsable) then
+      Exit(True);
+  end;
+end;
+
+function TMappedSlabPool.CurrentMappingSize: UInt64;
+begin
+  if FMemoryMap <> nil then
+    Exit(FMemoryMap.Size);
+  if FSharedMemory <> nil then
+    Exit(FSharedMemory.Size);
+  Result := 0;
+end;
+
+function TMappedSlabPool.TryCalculateRequiredSize(aPoolSize: UInt64;
+  aPageSize: UInt32; out aRequiredSize: UInt64; out aTotalPages: UInt32): Boolean;
 var
   LPageCount: UInt64;
   LPageDescriptorSize: UInt64;
+  LLayoutSize: UInt64;
 begin
-  // 计算页面数量
-  LPageCount := (aPoolSize + FPageSize - 1) div FPageSize;
+  aRequiredSize := 0;
+  aTotalPages := 0;
+  Result := False;
 
-  // 页面描述符保存在映射区，不能保存进程本地指针。
-  LPageDescriptorSize := LPageCount * SizeOf(TMappedSlabPage);
+  if (aPoolSize = 0) or (aPageSize = 0) then
+    Exit;
 
-  // 总大小 = 头部 + 页面描述符 + 数据区域
-  Result := HEADER_SIZE + LPageDescriptorSize + aPoolSize;
+  LPageCount := aPoolSize div aPageSize;
+  if (aPoolSize mod aPageSize) <> 0 then
+    Inc(LPageCount);
+  if (LPageCount = 0) or (LPageCount > High(UInt32)) then
+    Exit;
 
-  // 对齐到页面边界
-  Result := ((Result + FPageSize - 1) div FPageSize) * FPageSize;
+  if not TryMulU64(LPageCount, SizeOf(TMappedSlabPage), LPageDescriptorSize) then
+    Exit;
+  if not TryAddU64(HEADER_SIZE, LPageDescriptorSize, LLayoutSize) then
+    Exit;
+  if not TryAddU64(LLayoutSize, aPoolSize, LLayoutSize) then
+    Exit;
+  if not TryRoundUpU64(LLayoutSize, aPageSize, aRequiredSize) then
+    Exit;
+
+  aTotalPages := UInt32(LPageCount);
+  Result := True;
+end;
+
+function TMappedSlabPool.CalculateRequiredSize(aPoolSize: UInt64): UInt64;
+var
+  LTotalPages: UInt32;
+begin
+  if not TryCalculateRequiredSize(aPoolSize, FPageSize, Result, LTotalPages) then
+    Result := 0;
 end;
 
 procedure TMappedSlabPool.InitializeHeader(aPoolSize: UInt64; aPageSize: UInt32; aMaxSizeClass: UInt32);
@@ -460,17 +578,41 @@ end;
 function TMappedSlabPool.ValidateHeader: Boolean;
 var
   LHeader: PMappedSlabHeader;
+  LPoolSize: UInt64;
+  LPageSize: UInt32;
+  LMaxSizeClass: UInt32;
+  LTotalPages: UInt32;
+  LRequiredSize: UInt64;
 begin
   Result := False;
   if FHeader = nil then Exit;
+  if CurrentMappingSize < HEADER_SIZE then Exit;
 
   LHeader := PMappedSlabHeader(FHeader);
   if (LHeader^.Magic <> SLAB_MAGIC) or (LHeader^.Version <> SLAB_VERSION) then
     Exit;
 
-  FPoolSize := LHeader^.PoolSize;
-  FPageSize := LHeader^.PageSize;
-  FMaxSizeClass := LHeader^.MaxSizeClass;
+  LPoolSize := LHeader^.PoolSize;
+  LPageSize := LHeader^.PageSize;
+  LMaxSizeClass := LHeader^.MaxSizeClass;
+
+  if not TryCalculateRequiredSize(LPoolSize, LPageSize, LRequiredSize, LTotalPages) then
+    Exit;
+  if LHeader^.TotalPages <> LTotalPages then
+    Exit;
+  if LHeader^.UsedPages > LHeader^.TotalPages then
+    Exit;
+  if LHeader^.ResetGeneration = 0 then
+    Exit;
+  if CurrentMappingSize < LRequiredSize then
+    Exit;
+
+  if not IsValidMappedSlabMaxSizeClass(LMaxSizeClass) then
+    Exit;
+
+  FPoolSize := LPoolSize;
+  FPageSize := LPageSize;
+  FMaxSizeClass := LMaxSizeClass;
   Result := True;
 end;
 
@@ -496,32 +638,52 @@ function TMappedSlabPool.CreateFile(const aFileName: string; aPoolSize: UInt64;
   aPageSize: UInt32; aMaxSizeClass: UInt32): Boolean;
 var
   LRequiredSize: UInt64;
+  LTotalPages: UInt32;
   LFileHandle: TPlatformFileHandle;
 begin
   Result := False;
   Close;
-
-  FPageSize := aPageSize;
-  FMaxSizeClass := aMaxSizeClass;
-  LRequiredSize := CalculateRequiredSize(aPoolSize);
 
   FMemoryMap := TMemoryMap.Create;
   try
     // 尝试打开现有文件
     if MappedSlabPoolFileExists(aFileName) then
     begin
-      if not FMemoryMap.OpenFile(aFileName, mmaReadWrite) then Exit;
+      if not FMemoryMap.OpenFile(aFileName, mmaReadWrite) then
+      begin
+        Close;
+        Exit;
+      end;
       FIsCreator := False;
     end
     else
     begin
+      if (not IsValidMappedSlabMaxSizeClass(aMaxSizeClass)) or
+         (not TryCalculateRequiredSize(aPoolSize, aPageSize, LRequiredSize, LTotalPages)) then
+      begin
+        Close;
+        Exit;
+      end;
+
       // 创建新文件并设置大小
       if platform_file_open(PAnsiChar(aFileName), fomReadWrite, fcmCreateAlways, LFileHandle) <> 0 then
+      begin
+        Close;
         Exit;
-      platform_file_truncate(LFileHandle, LRequiredSize);
+      end;
+      if platform_file_truncate(LFileHandle, LRequiredSize) <> 0 then
+      begin
+        platform_file_close(LFileHandle);
+        Close;
+        Exit;
+      end;
       platform_file_close(LFileHandle);
 
-      if not FMemoryMap.OpenFile(aFileName, mmaReadWrite) then Exit;
+      if not FMemoryMap.OpenFile(aFileName, mmaReadWrite) then
+      begin
+        Close;
+        Exit;
+      end;
       FIsCreator := True;
     end;
 
@@ -534,7 +696,11 @@ begin
     end
     else
     begin
-      if not ValidateHeader then Exit;
+      if not ValidateHeader then
+      begin
+        Close;
+        Exit;
+      end;
     end;
 
     InitializeSlabStructures;
@@ -553,13 +719,21 @@ begin
 
   FMemoryMap := TMemoryMap.Create;
   try
-    if not FMemoryMap.OpenFile(aFileName, mmaReadWrite) then Exit;
+    if not FMemoryMap.OpenFile(aFileName, mmaReadWrite) then
+    begin
+      Close;
+      Exit;
+    end;
 
     FMode := mspFile;
     FIsCreator := False;
     FHeader := FMemoryMap.BaseAddress;
 
-    if not ValidateHeader then Exit;
+    if not ValidateHeader then
+    begin
+      Close;
+      Exit;
+    end;
     InitializeSlabStructures;
 
     Result := True;
@@ -572,25 +746,49 @@ function TMappedSlabPool.CreateShared(const aName: string; aPoolSize: UInt64;
   aPageSize: UInt32; aMaxSizeClass: UInt32): Boolean;
 var
   LRequiredSize: UInt64;
+  LTotalPages: UInt32;
 begin
   Result := False;
   Close;
 
-  FPageSize := aPageSize;
-  FMaxSizeClass := aMaxSizeClass;
-  LRequiredSize := CalculateRequiredSize(aPoolSize);
-
   FSharedMemory := TSharedMemory.Create;
   try
-    if FSharedMemory.CreateShared(aName, LRequiredSize, mmaReadWrite) then
+    if FSharedMemory.OpenShared(aName, mmaReadWrite) then
     begin
-      FIsCreator := FSharedMemory.IsCreator;
+      FIsCreator := False;
     end
     else
     begin
-      // 尝试打开已存在的
-      if not FSharedMemory.OpenShared(aName, mmaReadWrite) then Exit;
-      FIsCreator := False;
+      if (not IsValidMappedSlabMaxSizeClass(aMaxSizeClass)) or
+         (not TryCalculateRequiredSize(aPoolSize, aPageSize, LRequiredSize, LTotalPages)) then
+      begin
+        Close;
+        Exit;
+      end;
+
+      FPageSize := aPageSize;
+      FMaxSizeClass := aMaxSizeClass;
+      if not FSharedMemory.CreateShared(aName, LRequiredSize, mmaReadWrite) then
+      begin
+        Close;
+        Exit;
+      end;
+      FIsCreator := FSharedMemory.IsCreator;
+      if not FIsCreator then
+      begin
+        FSharedMemory.Close;
+        if not FSharedMemory.OpenShared(aName, mmaReadWrite) then
+        begin
+          Close;
+          Exit;
+        end;
+      end;
+    end;
+
+    if (not FIsCreator) and (not FSharedMemory.IsValid) then
+    begin
+      Close;
+      Exit;
     end;
 
     FMode := mspShared;
@@ -602,7 +800,11 @@ begin
     end
     else
     begin
-      if not ValidateHeader then Exit;
+      if not ValidateHeader then
+      begin
+        Close;
+        Exit;
+      end;
     end;
 
     InitializeSlabStructures;
@@ -619,13 +821,21 @@ begin
 
   FSharedMemory := TSharedMemory.Create;
   try
-    if not FSharedMemory.OpenShared(aName, mmaReadWrite) then Exit;
+    if not FSharedMemory.OpenShared(aName, mmaReadWrite) then
+    begin
+      Close;
+      Exit;
+    end;
 
     FMode := mspShared;
     FIsCreator := False;
     FHeader := FSharedMemory.BaseAddress;
 
-    if not ValidateHeader then Exit;
+    if not ValidateHeader then
+    begin
+      Close;
+      Exit;
+    end;
     InitializeSlabStructures;
 
     Result := True;
@@ -638,17 +848,25 @@ function TMappedSlabPool.CreateAnonymous(aPoolSize: UInt64;
   aPageSize: UInt32; aMaxSizeClass: UInt32): Boolean;
 var
   LRequiredSize: UInt64;
+  LTotalPages: UInt32;
 begin
   Result := False;
   Close;
 
+  if (not IsValidMappedSlabMaxSizeClass(aMaxSizeClass)) or
+     (not TryCalculateRequiredSize(aPoolSize, aPageSize, LRequiredSize, LTotalPages)) then
+    Exit;
+
   FPageSize := aPageSize;
   FMaxSizeClass := aMaxSizeClass;
-  LRequiredSize := CalculateRequiredSize(aPoolSize);
 
   FMemoryMap := TMemoryMap.Create;
   try
-    if not FMemoryMap.CreateAnonymous(LRequiredSize, mmaReadWrite) then Exit;
+    if not FMemoryMap.CreateAnonymous(LRequiredSize, mmaReadWrite) then
+    begin
+      Close;
+      Exit;
+    end;
 
     FMode := mspAnonymous;
     FIsCreator := True;
@@ -950,6 +1168,7 @@ end;
 
 destructor TMappedSlabPoolManager.Destroy;
 begin
+  FreeLargeFallbacks;
   DestroyPools;
   inherited Destroy;
 end;
@@ -1011,19 +1230,120 @@ begin
     end;
   end;
 
-  // 如果没有合适的池，返回最大的池
-  Result := FPools[High(FPools)];
+  Result := nil;
+end;
+
+function TMappedSlabPoolManager.GetMaxValidSizeClass: UInt64;
+var
+  LIndex: Integer;
+begin
+  Result := 0;
+  for LIndex := 0 to High(FPools) do
+  begin
+    if (FPools[LIndex] <> nil) and FPools[LIndex].IsValid and
+       (UInt64(FPools[LIndex].MaxSizeClass) > Result) then
+      Result := FPools[LIndex].MaxSizeClass;
+  end;
+end;
+
+function TMappedSlabPoolManager.AllocLargeFallback(aSize: UInt64): Pointer;
+begin
+  Result := nil;
+  if aSize = 0 then Exit;
+  {$IFNDEF CPU64}
+  if aSize > UInt64(High(SizeUInt)) then Exit;
+  {$ENDIF}
+
+  GetMem(Result, SizeUInt(aSize));
+  if Result <> nil then
+  begin
+    try
+      TrackLargeFallback(Result);
+    except
+      FreeMem(Result);
+      Result := nil;
+      raise;
+    end;
+  end;
+end;
+
+procedure TMappedSlabPoolManager.TrackLargeFallback(aPtr: Pointer);
+var
+  LIndex: Integer;
+  LCount: Integer;
+begin
+  if aPtr = nil then Exit;
+
+  for LIndex := 0 to High(FLargeFallbacks) do
+  begin
+    if FLargeFallbacks[LIndex] = nil then
+    begin
+      FLargeFallbacks[LIndex] := aPtr;
+      Exit;
+    end;
+  end;
+
+  LCount := Length(FLargeFallbacks);
+  SetLength(FLargeFallbacks, LCount + 1);
+  FLargeFallbacks[LCount] := aPtr;
+end;
+
+function TMappedSlabPoolManager.UntrackLargeFallback(aPtr: Pointer): Boolean;
+var
+  LIndex: Integer;
+  LLast: Integer;
+begin
+  Result := False;
+  if aPtr = nil then Exit;
+
+  for LIndex := 0 to High(FLargeFallbacks) do
+  begin
+    if FLargeFallbacks[LIndex] = aPtr then
+    begin
+      LLast := High(FLargeFallbacks);
+      FLargeFallbacks[LIndex] := FLargeFallbacks[LLast];
+      SetLength(FLargeFallbacks, LLast);
+      Exit(True);
+    end;
+  end;
+end;
+
+procedure TMappedSlabPoolManager.FreeLargeFallbacks;
+var
+  LIndex: Integer;
+begin
+  for LIndex := 0 to High(FLargeFallbacks) do
+  begin
+    if FLargeFallbacks[LIndex] <> nil then
+      FreeMem(FLargeFallbacks[LIndex]);
+  end;
+  SetLength(FLargeFallbacks, 0);
 end;
 
 function TMappedSlabPoolManager.AllocAny(aSize: UInt64): Pointer;
 var
+  LIndex: Integer;
+  LMaxSizeClass: UInt64;
   LPool: TMappedSlabPool;
 begin
   if aSize > FLargeObjectThreshold then
+    Exit(AllocLargeFallback(aSize));
+
+  for LIndex := 0 to High(FPools) do
   begin
-    // 超大对象，使用系统分配器
-    GetMem(Result, aSize);
-  end
+    if (FPools[LIndex] <> nil) and FPools[LIndex].IsValid and
+       (aSize <= FPools[LIndex].MaxSizeClass) and
+       FPools[LIndex].CanAllocate(aSize) then
+    begin
+      Result := FPools[LIndex].Alloc(aSize);
+      if Result <> nil then
+        Exit;
+    end;
+  end;
+
+  LMaxSizeClass := GetMaxValidSizeClass;
+  if (aSize > LMaxSizeClass) and (LMaxSizeClass > 0) then
+    Result := AllocLargeFallback(aSize)
   else
   begin
     LPool := GetPoolForSize(aSize);
@@ -1072,8 +1392,13 @@ begin
     end;
   end;
 
-  // 如果在池中找不到，假设是系统分配的大对象
-  FreeMem(aPtr);
+  if UntrackLargeFallback(aPtr) then
+  begin
+    FreeMem(aPtr);
+    Exit;
+  end;
+
+  raise EAllocError.Create(aeInvalidPointer, 'TMappedSlabPoolManager.FreeAny: pointer is not owned by this manager');
 end;
 {$POP}
 

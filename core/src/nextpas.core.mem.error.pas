@@ -273,10 +273,7 @@ end;
 class function TAllocResult.Err(aError: TAllocError): TAllocResult;
 begin
   Result.FPtr := nil;
-  if aError = aeNone then
-    Result.FError := aeInternalError
-  else
-    Result.FError := aError;
+  Result.FError := aError;
 end;
 
 function TAllocResult.IsOk: Boolean;
@@ -313,12 +310,8 @@ function TAllocResult.ExpectPtr(const aMsg: string): Pointer;
         raise EOutOfMemory.Create(aError, aMessage);
       aeInvalidLayout, aeAlignmentNotSupported, aeSizeMismatch:
         raise EInvalidLayout.Create(aError, aMessage);
-      aeInvalidPointer:
+      aeInvalidPointer, aeCapacityExhausted, aePoolClosed, aeReallocNotSupported:
         raise EInvalidPointer.Create(aError, aMessage);
-      aePoolClosed, aeReallocNotSupported:
-        raise EAllocError.Create(aError, aMessage);
-      aeCapacityExhausted:
-        raise EAllocError.Create(aError, aMessage);
       aeDoubleFree:
         raise EDoubleFree.Create(aError, aMessage);
       aeInternalError:

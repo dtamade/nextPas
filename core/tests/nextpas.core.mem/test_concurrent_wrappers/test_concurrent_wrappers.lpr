@@ -18,6 +18,7 @@ uses
 const
   THREAD_COUNT = 8;
   ITERATION_COUNT = 32;
+  NEGATIVE_ITERATION_COUNT = 256;
 
 type
   TPoolWorker = class(TThread)
@@ -41,6 +42,18 @@ type
     procedure Execute; override;
   public
     constructor Create(APool: TSlabPoolConcurrent; AStartFlag: PLongInt);
+    property Failure: string read FFailure;
+  end;
+
+  TFixedPoolNegativeWorker = class(TThread)
+  private
+    FPool: TFixedPoolConcurrent;
+    FStartFlag: PLongInt;
+    FFailure: string;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(APool: TFixedPoolConcurrent; AStartFlag: PLongInt);
     property Failure: string read FFailure;
   end;
 
@@ -103,6 +116,50 @@ begin
         raise Exception.Create('TSlabPoolConcurrent.GetMem returned nil');
       PByte(LPtr)^ := Byte(LIndex);
       FPool.FreeMem(LPtr);
+    end;
+  except
+    on E: Exception do
+      FFailure := E.Message;
+  end;
+end;
+
+constructor TFixedPoolNegativeWorker.Create(APool: TFixedPoolConcurrent; AStartFlag: PLongInt);
+begin
+  inherited Create(True);
+  FreeOnTerminate := False;
+  FPool := APool;
+  FStartFlag := AStartFlag;
+end;
+
+procedure TFixedPoolNegativeWorker.Execute;
+var
+  LIndex: Integer;
+  LPtr: Pointer;
+  LLocal: Byte;
+begin
+  while FStartFlag^ = 0 do
+    Sleep(0);
+
+  try
+    for LIndex := 0 to NEGATIVE_ITERATION_COUNT - 1 do
+    begin
+      if not FPool.Acquire(LPtr) then
+        raise Exception.Create('negative worker Acquire returned false');
+      if LPtr = nil then
+        raise Exception.Create('negative worker Acquire returned nil');
+      PByte(LPtr)^ := Byte(LIndex);
+      FPool.Release(LPtr);
+
+      try
+        FPool.Release(@LLocal);
+        raise Exception.Create('external pointer Release should fail');
+      except
+        on E: EAllocError do
+        begin
+          if E.Error <> aeInvalidPointer then
+            raise Exception.Create('external pointer Release returned wrong error');
+        end;
+      end;
     end;
   except
     on E: Exception do
@@ -176,6 +233,54 @@ begin
   end;
 end;
 
+procedure TestFixedPoolConcurrentRejectsInvalidReleaseAfterContention;
+var
+  LPool: TFixedPoolConcurrent;
+  LThreads: array[0..THREAD_COUNT - 1] of TFixedPoolNegativeWorker;
+  LStartFlag: LongInt;
+  LIndex: Integer;
+  LPtr: Pointer;
+  LFailure: string;
+begin
+  LPool := TFixedPoolConcurrent.Create(64, THREAD_COUNT);
+  try
+    LStartFlag := 0;
+    for LIndex := 0 to High(LThreads) do
+    begin
+      LThreads[LIndex] := TFixedPoolNegativeWorker.Create(LPool, @LStartFlag);
+      LThreads[LIndex].Start;
+    end;
+
+    LStartFlag := 1;
+    for LIndex := 0 to High(LThreads) do
+      LThreads[LIndex].WaitFor;
+
+    LFailure := '';
+    for LIndex := 0 to High(LThreads) do
+    begin
+      if (LFailure = '') and (LThreads[LIndex].Failure <> '') then
+        LFailure := LThreads[LIndex].Failure;
+      LThreads[LIndex].Free;
+    end;
+
+    Check(LFailure = '', 'fixed-pool negative worker should not fail: ' + LFailure);
+    Check(LPool.AllocatedCount = 0, 'negative stress should release all blocks');
+    Check(LPool.Acquire(LPtr), 'pool should remain usable after invalid release exceptions');
+    LPool.Release(LPtr);
+    try
+      LPool.Release(LPtr);
+      Fail('fixed-pool double Release should fail after contention');
+    except
+      on E: EAllocError do
+        CheckEqual(Int64(Ord(aeDoubleFree)), Int64(Ord(E.Error)),
+          'fixed-pool double Release error code after contention');
+    end;
+    Check(LPool.AllocatedCount = 0, 'post-exception release should leave pool empty');
+  finally
+    TObject(LPool).Free;
+  end;
+end;
+
 procedure TestSlabPoolConcurrentContention;
 var
   LPool: TSlabPoolConcurrent;
@@ -212,6 +317,7 @@ begin
   T.Run('blockpool wrapper basics', @TestBlockPoolConcurrentWrapper);
   T.Run('arena wrapper basics', @TestArenaConcurrentWrapper);
   T.Run('fixed-pool wrapper contention', @TestFixedPoolConcurrentContention);
+  T.Run('fixed-pool wrapper rejects invalid release after contention', @TestFixedPoolConcurrentRejectsInvalidReleaseAfterContention);
   T.Run('slab wrapper contention', @TestSlabPoolConcurrentContention);
   T.Summary;
 end.

@@ -54,6 +54,13 @@ type
     FSize: SizeUInt;      // 数据区容量（endp - start）
     FMinShift: SizeUInt;  // 最小阶（默认 3 -> 8B）
     FCore: Pointer;       // 指向 pool header（等于 FBase）
+    FOwnKeys: array of PtrUInt;
+    FOwnStates: array of Byte;
+    FOwnSizes: array of SizeUInt;
+    FOwnMask: SizeUInt;
+    FOwnFill: SizeUInt;
+    FAlignedFallbackPtrs: array of Pointer;
+    FAlignedFallbackStates: array of Byte;
 
     // Private helpers
     {$IFDEF NEXTPAS_CORE_SLAB_STATS}
@@ -63,6 +70,18 @@ type
     function BuildSlotStat(Index: SizeUInt): TFixedSlabSlotStat;
     {$ENDIF}
     function ChunkSizeOf(APtr: Pointer): SizeUInt;
+    function IsLiveChunkStart(APtr: Pointer; out AChunkSize: SizeUInt): Boolean;
+    procedure OwnershipInit(AMinCapacity: SizeUInt);
+    procedure OwnershipClear;
+    procedure OwnershipRehash(ANewCapacity: SizeUInt);
+    procedure OwnershipGrowIfNeeded;
+    function OwnershipLookup(AKey: PtrUInt; out AIndex: SizeUInt): Boolean;
+    procedure TrackAllocated(APtr: Pointer; ASize: SizeUInt);
+    procedure ValidateTrackedLivePointer(APtr: Pointer; const AOperation: string; out ASize: SizeUInt);
+    function AlignedFallbackIndexOf(APtr: Pointer): Integer;
+    procedure TrackAlignedFallback(APtr: Pointer);
+    function ValidateAlignedFallbackPointer(APtr: Pointer; const AOperation: string): Integer;
+    procedure FreeActiveAlignedFallbacks;
 
   public
     constructor Create(ACapacity: SizeUInt; AAllocator: IAllocator = nil; AMinShift: SizeUInt = 3);
@@ -113,6 +132,11 @@ implementation
 const
   NGX_SLAB_PAGE_SIZE  = 4096;
   NGX_SLAB_PAGE_SHIFT = 12;
+  FIXED_SLAB_OWNERSHIP_MIN_CAP = 64;
+  FIXED_SLAB_OWNERSHIP_ACTIVE = Byte(1);
+  FIXED_SLAB_OWNERSHIP_RELEASED = Byte(2);
+  FIXED_SLAB_ALIGNED_ACTIVE = Byte(1);
+  FIXED_SLAB_ALIGNED_RELEASED = Byte(2);
 
   NGX_SLAB_PAGE_MASK   = 3;
   NGX_SLAB_PAGE        = 0;
@@ -139,6 +163,14 @@ const
   NGX_SLAB_MAP_SHIFT   = 32;
   NGX_SLAB_BUSY        = PtrUInt($FFFFFFFFFFFFFFFF);
 {$endif}
+
+{$PUSH}
+{$Q-}
+function FixedSlabHash(AKey: PtrUInt): PtrUInt; inline;
+begin
+  Result := PtrUInt(QWord(AKey) * QWord(11400714819323198485));
+end;
+{$POP}
 
 {$IFDEF NEXTPAS_SLAB_TESTGUARD}
 procedure SlabDbg(const s: AnsiString);
@@ -947,6 +979,7 @@ var
   per_page_cost: SizeUInt;
   page_payload_cost: SizeUInt;
   allocation_size: SizeUInt;
+  ownership_capacity: SizeUInt;
   total_size: SizeUInt;
 begin
   inherited Create;
@@ -987,6 +1020,9 @@ begin
   if total_size > High(SizeUInt) - (NGX_SLAB_PAGE_SIZE - 1) then
     raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: allocation size overflow');
   allocation_size := total_size + (NGX_SLAB_PAGE_SIZE - 1);
+  if desired_pages > High(SizeUInt) div 16 then
+    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: ownership index overflow');
+  ownership_capacity := desired_pages * 16;
 
   // Allocate and align the region
   FRaw := FAllocator.GetMem(allocation_size);
@@ -1006,14 +1042,23 @@ begin
 
   // After init, compute usable data capacity (endp - start)
   FSize := PtrUInt(Pngx_slab_pool_t(FCore)^.endp) - PtrUInt(Pngx_slab_pool_t(FCore)^.start);
+  OwnershipInit(ownership_capacity);
 end;
 
 destructor TFixedSlabPool.Destroy;
 begin
+  FreeActiveAlignedFallbacks;
+  SetLength(FAlignedFallbackPtrs, 0);
+  SetLength(FAlignedFallbackStates, 0);
   // In the current design, FCore points inside the aligned region FRaw.
   // So we must only free FRaw to avoid double free.
   if FRaw <> nil then
     FAllocator.FreeMem(FRaw);
+  SetLength(FOwnKeys, 0);
+  SetLength(FOwnStates, 0);
+  SetLength(FOwnSizes, 0);
+  FOwnMask := 0;
+  FOwnFill := 0;
   FCore := nil;
   FBase := nil;
   inherited Destroy;
@@ -1065,63 +1110,331 @@ end;
 procedure TFixedSlabPool.ReleaseN(const AUnits: array of Pointer; aCount: Integer);
 var i: Integer;
 begin
+  if aCount <= 0 then Exit;
   for i := 0 to aCount-1 do
+  begin
+    if i > High(AUnits) then
+      Break;
     FreeMem(AUnits[i]);
+  end;
 end;
 
 function TFixedSlabPool.ChunkSizeOf(APtr: Pointer): SizeUInt;
+begin
+  if not IsLiveChunkStart(APtr, Result) then
+    Result := 0;
+end;
+
+function TFixedSlabPool.IsLiveChunkStart(APtr: Pointer; out AChunkSize: SizeUInt): Boolean;
 var
   pool: Pngx_slab_pool_t;
-  n, page_type, shift: SizeUInt;
+  n, page_type, shift, chunk, word_index, map: SizeUInt;
+  slab, m: PtrUInt;
+  bitmap: PPtrUInt;
   page: Pngx_slab_page_t;
 begin
-  Result := 0;
-  if (APtr = nil) or (FCore = nil) then Exit;
+  AChunkSize := 0;
+  Result := False;
+  if (APtr = nil) or (FCore = nil) then Exit(False);
 
   pool := Pngx_slab_pool_t(FCore);
 
   // 边界检查
   if (PByte(APtr) < pool^.start) or (PByte(APtr) >= pool^.endp) then
-    Exit;
+    Exit(False);
 
   // 计算页面索引
   n := (PtrUInt(APtr) - PtrUInt(pool^.start)) shr ngx_pagesize_shift;
   page := @pool^.pages[n];
+  slab := page^.slab;
   page_type := ngx_slab_page_type(page);
 
   case page_type of
     NGX_SLAB_SMALL:
     begin
-      shift := page^.slab and NGX_SLAB_SHIFT_MASK;
-      Result := SizeUInt(1) shl shift;
+      shift := slab and NGX_SLAB_SHIFT_MASK;
+      AChunkSize := SizeUInt(1) shl shift;
+      if (PtrUInt(APtr) and (AChunkSize - 1)) <> 0 then
+        Exit(False);
+
+      chunk := (PtrUInt(APtr) and (ngx_pagesize - 1)) shr shift;
+      n := (ngx_pagesize shr shift) div (AChunkSize * 8);
+      if n = 0 then n := 1;
+      if chunk < n then
+        Exit(False);
+
+      map := (ngx_pagesize shr shift) div (8 * SizeOf(PtrUInt));
+      word_index := chunk div (8 * SizeOf(PtrUInt));
+      if word_index >= map then
+        Exit(False);
+
+      m := PtrUInt(1) shl (chunk mod (8 * SizeOf(PtrUInt)));
+      bitmap := PPtrUInt(ngx_slab_page_addr(pool, page));
+      Result := (bitmap[word_index] and m) <> 0;
+      if not Result then
+        AChunkSize := 0;
     end;
 
     NGX_SLAB_EXACT:
     begin
-      Result := ngx_slab_exact_size;
+      AChunkSize := ngx_slab_exact_size;
+      if (PtrUInt(APtr) and (AChunkSize - 1)) <> 0 then
+        Exit(False);
+      chunk := (PtrUInt(APtr) and (ngx_pagesize - 1)) shr ngx_slab_exact_shift;
+      if chunk >= (8 * SizeOf(PtrUInt)) then
+        Exit(False);
+      m := PtrUInt(1) shl chunk;
+      Result := (slab and m) <> 0;
+      if not Result then
+        AChunkSize := 0;
     end;
 
     NGX_SLAB_BIG:
     begin
-      shift := page^.slab and NGX_SLAB_SHIFT_MASK;
-      Result := SizeUInt(1) shl shift;
+      shift := slab and NGX_SLAB_SHIFT_MASK;
+      AChunkSize := SizeUInt(1) shl shift;
+      if (PtrUInt(APtr) and (AChunkSize - 1)) <> 0 then
+        Exit(False);
+      chunk := (PtrUInt(APtr) and (ngx_pagesize - 1)) shr shift;
+      if chunk >= (ngx_pagesize shr shift) then
+        Exit(False);
+      m := PtrUInt(1) shl (chunk + NGX_SLAB_MAP_SHIFT);
+      Result := (slab and m) <> 0;
+      if not Result then
+        AChunkSize := 0;
     end;
 
     NGX_SLAB_PAGE:
     begin
+      if (PtrUInt(APtr) and (ngx_pagesize - 1)) <> 0 then
+        Exit(False);
       // only start page holds size with START bit
-      if (page^.slab and NGX_SLAB_PAGE_START) = 0 then
-        Exit(0);
-      Result := (page^.slab and not NGX_SLAB_PAGE_START) shl ngx_pagesize_shift;
+      if (slab and NGX_SLAB_PAGE_START) = 0 then
+        Exit(False);
+      if slab = NGX_SLAB_PAGE_BUSY then
+        Exit(False);
+      AChunkSize := (slab and not NGX_SLAB_PAGE_START) shl ngx_pagesize_shift;
+      Result := AChunkSize > 0;
     end;
 
     else
-      Result := SizeUInt(1) shl FMinShift; // 默认最小大小
+      AChunkSize := 0;
   end;
+end;
+
+procedure TFixedSlabPool.OwnershipInit(AMinCapacity: SizeUInt);
+var
+  LCap: SizeUInt;
+begin
+  LCap := FIXED_SLAB_OWNERSHIP_MIN_CAP;
+  while LCap < AMinCapacity do
+    LCap := LCap shl 1;
+  SetLength(FOwnKeys, LCap);
+  SetLength(FOwnStates, LCap);
+  SetLength(FOwnSizes, LCap);
+  FOwnMask := LCap - 1;
+  FOwnFill := 0;
+end;
+
+procedure TFixedSlabPool.OwnershipClear;
+var
+  LIndex: SizeUInt;
+begin
+  if Length(FOwnKeys) = 0 then
+    Exit;
+
+  for LIndex := 0 to FOwnMask do
+  begin
+    FOwnKeys[LIndex] := 0;
+    FOwnStates[LIndex] := 0;
+    FOwnSizes[LIndex] := 0;
+  end;
+  FOwnFill := 0;
+end;
+
+procedure TFixedSlabPool.OwnershipRehash(ANewCapacity: SizeUInt);
+var
+  LOldKeys: array of PtrUInt;
+  LOldStates: array of Byte;
+  LOldSizes: array of SizeUInt;
+  LOldCap, LIndex, LPos: SizeUInt;
+  LKey: PtrUInt;
+begin
+  LOldKeys := FOwnKeys;
+  LOldStates := FOwnStates;
+  LOldSizes := FOwnSizes;
+  LOldCap := Length(LOldKeys);
+
+  SetLength(FOwnKeys, ANewCapacity);
+  SetLength(FOwnStates, ANewCapacity);
+  SetLength(FOwnSizes, ANewCapacity);
+  FOwnMask := ANewCapacity - 1;
+  FOwnFill := 0;
+
+  for LIndex := 0 to LOldCap - 1 do
+  begin
+    LKey := LOldKeys[LIndex];
+    if LKey = 0 then
+      Continue;
+    LPos := FixedSlabHash(LKey) and FOwnMask;
+    while FOwnKeys[LPos] <> 0 do
+      LPos := (LPos + 1) and FOwnMask;
+    FOwnKeys[LPos] := LKey;
+    FOwnStates[LPos] := LOldStates[LIndex];
+    FOwnSizes[LPos] := LOldSizes[LIndex];
+    Inc(FOwnFill);
+  end;
+end;
+
+procedure TFixedSlabPool.OwnershipGrowIfNeeded;
+begin
+  if Length(FOwnKeys) = 0 then
+    OwnershipInit(FIXED_SLAB_OWNERSHIP_MIN_CAP);
+  if (FOwnFill + 1) * 2 >= SizeUInt(Length(FOwnKeys)) then
+    OwnershipRehash(SizeUInt(Length(FOwnKeys)) shl 1);
+end;
+
+function TFixedSlabPool.OwnershipLookup(AKey: PtrUInt; out AIndex: SizeUInt): Boolean;
+var
+  LIndex: SizeUInt;
+begin
+  Result := False;
+  AIndex := 0;
+  if (AKey = 0) or (Length(FOwnKeys) = 0) then
+    Exit;
+
+  LIndex := FixedSlabHash(AKey) and FOwnMask;
+  while True do
+  begin
+    if FOwnKeys[LIndex] = 0 then
+      Exit(False);
+    if FOwnKeys[LIndex] = AKey then
+    begin
+      AIndex := LIndex;
+      Exit(True);
+    end;
+    LIndex := (LIndex + 1) and FOwnMask;
+  end;
+end;
+
+procedure TFixedSlabPool.TrackAllocated(APtr: Pointer; ASize: SizeUInt);
+var
+  LIndex, LPos: SizeUInt;
+  LKey: PtrUInt;
+begin
+  if APtr = nil then
+    Exit;
+  LKey := PtrUInt(APtr);
+  if OwnershipLookup(LKey, LIndex) then
+  begin
+    FOwnStates[LIndex] := FIXED_SLAB_OWNERSHIP_ACTIVE;
+    FOwnSizes[LIndex] := ASize;
+    Exit;
+  end;
+
+  OwnershipGrowIfNeeded;
+  LPos := FixedSlabHash(LKey) and FOwnMask;
+  while FOwnKeys[LPos] <> 0 do
+    LPos := (LPos + 1) and FOwnMask;
+  FOwnKeys[LPos] := LKey;
+  FOwnStates[LPos] := FIXED_SLAB_OWNERSHIP_ACTIVE;
+  FOwnSizes[LPos] := ASize;
+  Inc(FOwnFill);
+end;
+
+procedure TFixedSlabPool.ValidateTrackedLivePointer(APtr: Pointer; const AOperation: string; out ASize: SizeUInt);
+var
+  LIndex: SizeUInt;
+  LLiveSize: SizeUInt;
+begin
+  ASize := 0;
+  if APtr = nil then
+    raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.' + AOperation + ': pointer cannot be nil');
+
+  if not OwnershipLookup(PtrUInt(APtr), LIndex) then
+    raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.' + AOperation + ': pointer is not tracked');
+
+  if FOwnStates[LIndex] = FIXED_SLAB_OWNERSHIP_RELEASED then
+    raise EAllocError.Create(aeDoubleFree, 'TFixedSlabPool.' + AOperation + ': double free detected');
+
+  if (FOwnStates[LIndex] <> FIXED_SLAB_OWNERSHIP_ACTIVE) or
+     (not IsLiveChunkStart(APtr, LLiveSize)) then
+    raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.' + AOperation + ': pointer is not a live block');
+
+  ASize := FOwnSizes[LIndex];
+  if ASize = 0 then
+    ASize := LLiveSize;
+end;
+
+function TFixedSlabPool.AlignedFallbackIndexOf(APtr: Pointer): Integer;
+var
+  LIndex: Integer;
+begin
+  for LIndex := 0 to High(FAlignedFallbackPtrs) do
+    if FAlignedFallbackPtrs[LIndex] = APtr then
+      Exit(LIndex);
+  Result := -1;
+end;
+
+procedure TFixedSlabPool.TrackAlignedFallback(APtr: Pointer);
+var
+  LIndex: Integer;
+  LCount: Integer;
+begin
+  if APtr = nil then
+    Exit;
+
+  LIndex := AlignedFallbackIndexOf(APtr);
+  if LIndex >= 0 then
+  begin
+    FAlignedFallbackStates[LIndex] := FIXED_SLAB_ALIGNED_ACTIVE;
+    Exit;
+  end;
+
+  LCount := Length(FAlignedFallbackPtrs);
+  SetLength(FAlignedFallbackPtrs, LCount + 1);
+  SetLength(FAlignedFallbackStates, LCount + 1);
+  FAlignedFallbackPtrs[LCount] := APtr;
+  FAlignedFallbackStates[LCount] := FIXED_SLAB_ALIGNED_ACTIVE;
+end;
+
+function TFixedSlabPool.ValidateAlignedFallbackPointer(APtr: Pointer; const AOperation: string): Integer;
+begin
+  if APtr = nil then
+    raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.' + AOperation + ': pointer cannot be nil');
+
+  Result := AlignedFallbackIndexOf(APtr);
+  if Result < 0 then
+    raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.' + AOperation + ': pointer is not tracked');
+
+  if FAlignedFallbackStates[Result] = FIXED_SLAB_ALIGNED_RELEASED then
+    raise EAllocError.Create(aeDoubleFree, 'TFixedSlabPool.' + AOperation + ': double free detected');
+
+  if FAlignedFallbackStates[Result] <> FIXED_SLAB_ALIGNED_ACTIVE then
+    raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.' + AOperation + ': pointer is not active');
+end;
+
+procedure TFixedSlabPool.FreeActiveAlignedFallbacks;
+var
+  LIndex: Integer;
+begin
+  if FAllocator = nil then
+    Exit;
+
+  for LIndex := 0 to High(FAlignedFallbackPtrs) do
+    if (FAlignedFallbackPtrs[LIndex] <> nil) and
+       (FAlignedFallbackStates[LIndex] = FIXED_SLAB_ALIGNED_ACTIVE) then
+    begin
+      FAllocator.FreeAligned(FAlignedFallbackPtrs[LIndex]);
+      FAlignedFallbackStates[LIndex] := FIXED_SLAB_ALIGNED_RELEASED;
+    end;
 end;
 
 procedure TFixedSlabPool.Reset;
 begin
+  FreeActiveAlignedFallbacks;
+  SetLength(FAlignedFallbackPtrs, 0);
+  SetLength(FAlignedFallbackStates, 0);
   if (FBase <> nil) and (FCore <> nil) and (FRegionEnd <> nil) then
   begin
     Pngx_slab_pool_t(FCore)^.min_shift := FMinShift;
@@ -1129,6 +1442,7 @@ begin
     ngx_slab_init(Pngx_slab_pool_t(FCore));
     // refresh FSize after init
     FSize := PtrUInt(Pngx_slab_pool_t(FCore)^.endp) - PtrUInt(Pngx_slab_pool_t(FCore)^.start);
+    OwnershipClear;
   end;
 end;
 
@@ -1193,7 +1507,7 @@ end;
 function TFixedSlabPool.Traits: TAllocatorTraits;
 begin
   // 固定 slab：AllocMem 保证零填充，默认非线程安全，提供块大小查询
-  Result.ZeroInitialized := False;   // AllocMem 中有 FillChar
+  Result.ZeroInitialized := True;   // AllocMem 中有 FillChar
   Result.ThreadSafe      := False;  // 当前实现未加锁
   Result.HasMemSize      := True;   // 提供 ChunkSizeOf / MemSizeOf
   Result.SupportsAligned := False;  // 未提供专门对齐 API
@@ -1205,9 +1519,10 @@ begin
 end;
 
 function TFixedSlabPool.Owns(aPtr: Pointer): Boolean;
+var
+  LSize: SizeUInt;
 begin
-  if (aPtr = nil) or (FCore = nil) then Exit(False);
-  Result := (PByte(aPtr) >= Pngx_slab_pool_t(FCore)^.start) and (PByte(aPtr) < Pngx_slab_pool_t(FCore)^.endp);
+  Result := IsLiveChunkStart(aPtr, LSize);
 end;
 
 function TFixedSlabPool.PageShift: SizeUInt;
@@ -1264,10 +1579,21 @@ begin
 end;
 
 function TFixedSlabPool.GetMem(aSize: SizeUInt): Pointer;
+var
+  LChunkSize: SizeUInt;
 begin
   if aSize = 0 then Exit(nil);
   if FCore = nil then Exit(nil);
+  OwnershipGrowIfNeeded;
   Result := ngx_slab_alloc_locked(Pngx_slab_pool_t(FCore), aSize);
+  if Result = nil then
+    Exit;
+  if not IsLiveChunkStart(Result, LChunkSize) then
+  begin
+    ngx_slab_free_locked(Pngx_slab_pool_t(FCore), Result);
+    raise EAllocError.Create(aeInternalError, 'TFixedSlabPool.GetMem: allocated pointer is not a live block');
+  end;
+  TrackAllocated(Result, LChunkSize);
 end;
 
 function TFixedSlabPool.AllocMem(aSize: SizeUInt): Pointer;
@@ -1281,8 +1607,6 @@ function TFixedSlabPool.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
 var
   p: Pointer;
   oldSize, copySize: SizeUInt;
-  pool: Pngx_slab_pool_t;
-  offInPool, offInPage, pageRemain: SizeUInt;
 begin
   if aDst = nil then Exit(GetMem(aSize));
   if aSize = 0 then
@@ -1291,26 +1615,14 @@ begin
     Exit(nil);
   end;
 
+  ValidateTrackedLivePointer(aDst, 'ReallocMem', oldSize);
   p := GetMem(aSize);
   if p = nil then Exit(nil);
 
-  // 估算旧块大小，并复制不超过块大小且不跨页边界的最小字节数
-  oldSize := ChunkSizeOf(aDst);
   if oldSize > aSize then copySize := aSize else copySize := oldSize;
 
-  pool := Pngx_slab_pool_t(FCore);
-  if (pool <> nil) and (aDst <> nil) then
-  begin
-    // 计算页内剩余空间，slab 小块永不跨页
-    offInPool := PtrUInt(aDst) - PtrUInt(pool^.start);
-    offInPage := offInPool and (ngx_pagesize - 1);
-    pageRemain := ngx_pagesize - offInPage;
-    if copySize > pageRemain then
-      copySize := pageRemain;
-  end;
-
   {$IFDEF NEXTPAS_SLAB_TESTGUARD}
-  WriteLn('[Realloc] aDst=', PtrUInt(aDst):16, ', aSize=', aSize, ', oldSize=', oldSize, ', copySize=', copySize, ', pageRemain=', pageRemain);
+  WriteLn('[Realloc] aDst=', PtrUInt(aDst):16, ', aSize=', aSize, ', oldSize=', oldSize, ', copySize=', copySize);
   {$ENDIF}
 
   if copySize > 0 then
@@ -1321,9 +1633,20 @@ begin
 end;
 
 procedure TFixedSlabPool.FreeMem(aDst: Pointer);
+var
+  LIndex: SizeUInt;
+  LSize: SizeUInt;
 begin
-  if (aDst = nil) or (FCore = nil) then Exit;
+  if aDst = nil then Exit;
+  if FCore = nil then
+    raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.FreeMem: pool is not initialized');
+  ValidateTrackedLivePointer(aDst, 'FreeMem', LSize);
   ngx_slab_free_locked(Pngx_slab_pool_t(FCore), aDst);
+  if OwnershipLookup(PtrUInt(aDst), LIndex) then
+  begin
+    FOwnStates[LIndex] := FIXED_SLAB_OWNERSHIP_RELEASED;
+    FOwnSizes[LIndex] := LSize;
+  end;
 end;
 
 function TFixedSlabPool.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
@@ -1337,19 +1660,30 @@ begin
   if (aAlignment <= 8) or (aAlignment <= aSize) then
     Result := GetMem(aSize)
   else if FAllocator <> nil then
-    Result := FAllocator.AllocAligned(aSize, aAlignment)
+  begin
+    Result := FAllocator.AllocAligned(aSize, aAlignment);
+    TrackAlignedFallback(Result);
+  end
   else
     Result := nil; // Cannot satisfy alignment request without backing allocator
 end;
 
 procedure TFixedSlabPool.FreeAligned(aPtr: Pointer);
+var
+  LIndex: Integer;
+  LSize: SizeUInt;
 begin
-  // If pointer is within our region, free it ourselves; otherwise delegate
+  if aPtr = nil then Exit;
   if Owns(aPtr) then
     FreeMem(aPtr)
-  else if FAllocator <> nil then
+  else
+  begin
+    if AlignedFallbackIndexOf(aPtr) < 0 then
+      ValidateTrackedLivePointer(aPtr, 'FreeAligned', LSize);
+    LIndex := ValidateAlignedFallbackPointer(aPtr, 'FreeAligned');
     FAllocator.FreeAligned(aPtr);
-  // else: ignore (pointer not ours and no backing allocator)
+    FAlignedFallbackStates[LIndex] := FIXED_SLAB_ALIGNED_RELEASED;
+  end;
 end;
 
 initialization

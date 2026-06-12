@@ -46,10 +46,7 @@ uses
 
 procedure SecureZeroMemory(Buffer: Pointer; Size: NativeUInt);
 begin
-  if (Buffer = nil) or (Size = 0) then
-    Exit;
-
-  platform_secure_zero_memory(Buffer, Size);
+  platform_secure_zero(Buffer, Size);
 end;
 
 procedure SecureZeroBytes(var Data: TBytes);

@@ -10,7 +10,6 @@ interface
 uses
   nextpas.core.base.utils,
   nextpas.core.base,
-  nextpas.core.atomic,
   nextpas.core.mem.allocator,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.mutex,
@@ -38,7 +37,6 @@ type
         Pool: TSlabPool;
         Lock: TMemMutex;
         KnownSegmentCount: Integer;
-        RemoteFreeHead: Pointer; // lock-free remote frees (slab only)
       end;
   private
     FAllocator: IAllocator;
@@ -90,9 +88,6 @@ type
 
     procedure IndexShardNewSegmentsLocked(aShard: Integer);
     procedure IndexSegmentPagesLocked(aShard: Integer; aSegIndex: Integer);
-
-    procedure FlushRemoteFreesLocked(aShard: Integer); inline; // requires shard lock
-    procedure RemoteFreePush(aShard: Integer; aPtr: Pointer); inline; // lock-free push
 
     function NaturalAlignmentForSize(const aSize: SizeUInt): SizeUInt; inline;
     function ShouldUseFallback(const aSize: SizeUInt): Boolean; inline;
@@ -167,39 +162,6 @@ begin
 end;
 
 { TSlabPoolSharded }
-
-procedure TSlabPoolSharded.FlushRemoteFreesLocked(aShard: Integer);
-var
-  LNode: Pointer;
-  LNext: Pointer;
-begin
-  if (aShard < 0) or (aShard >= FShardCount) then Exit;
-  if FShards[aShard].Pool = nil then Exit;
-
-  LNode := atomic_load(FShards[aShard].RemoteFreeHead);
-  if LNode = nil then Exit;
-  LNode := atomic_exchange(FShards[aShard].RemoteFreeHead, nil);
-  while LNode <> nil do
-  begin
-    LNext := PPointer(LNode)^;
-    FShards[aShard].Pool.FreeMem(LNode);
-    LNode := LNext;
-  end;
-end;
-
-procedure TSlabPoolSharded.RemoteFreePush(aShard: Integer; aPtr: Pointer);
-var
-  LExpected: Pointer;
-begin
-  if aPtr = nil then Exit;
-  if (aShard < 0) or (aShard >= FShardCount) then
-    raise EInvalidArgument.Create('TSlabPoolSharded.RemoteFreePush: invalid shard index');
-
-  LExpected := atomic_load(FShards[aShard].RemoteFreeHead);
-  repeat
-    PPointer(aPtr)^ := LExpected;
-  until atomic_compare_exchange_strong(FShards[aShard].RemoteFreeHead, LExpected, aPtr);
-end;
 
 function TSlabPoolSharded.IsPowerOfTwoInt(aValue: Integer): Boolean; inline;
 begin
@@ -700,7 +662,6 @@ begin
     FShards[LIdx].Lock.Init;
     FShards[LIdx].Pool := TSlabPool.Create(aCapacity, FConfig, FAllocator);
     FShards[LIdx].KnownSegmentCount := FShards[LIdx].Pool.SegmentCount;
-    FShards[LIdx].RemoteFreeHead := nil;
   end;
 
   // initialize page shift from shard 0 (segment 0)
@@ -754,8 +715,6 @@ begin
 
     for LIdx := 0 to High(FShards) do
     begin
-      if FShards[LIdx].Pool <> nil then
-        FlushRemoteFreesLocked(LIdx);
       FreeAndNil(FShards[LIdx].Pool);
     end;
   finally
@@ -829,10 +788,7 @@ begin
   try
     for LIdx := 0 to High(FShards) do
       if FShards[LIdx].Pool <> nil then
-      begin
-        FlushRemoteFreesLocked(LIdx);
         FShards[LIdx].Pool.Reset;
-      end;
 
     FRoutingLock.AcquireWrite;
     try
@@ -862,7 +818,6 @@ begin
   LShard := ChooseShardIndex;
   FShards[LShard].Lock.Acquire;
   try
-    FlushRemoteFreesLocked(LShard);
     Result := FShards[LShard].Pool.GetMem(aSize);
     if Result <> nil then
     begin
@@ -911,7 +866,8 @@ begin
 
   FShards[LShard].Lock.Acquire;
   try
-    FlushRemoteFreesLocked(LShard);
+    if (not LIsFallback) and (not FShards[LShard].Pool.Owns(aDst)) then
+      raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
     Result := FShards[LShard].Pool.ReallocMem(aDst, aSize);
     if Result <> nil then
     begin
@@ -939,31 +895,17 @@ procedure TSlabPoolSharded.FreeMem(aDst: Pointer);
 var
   LShard: Integer;
   LIsFallback: Boolean;
-  {$IFNDEF FAF_MEM_DEBUG}
-  LLocalShard: Integer;
-  {$ENDIF}
 begin
   if aDst = nil then Exit;
 
   if not TryRouteShardIndex(aDst, LShard, LIsFallback) then
     raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
 
-  {$IFNDEF FAF_MEM_DEBUG}
-  // Fast path: cross-shard slab frees are enqueued lock-free and drained by the owning shard.
-  if not LIsFallback then
-  begin
-    LLocalShard := ChooseShardIndex;
-    if (LLocalShard >= 0) and (LLocalShard <> LShard) then
-    begin
-      RemoteFreePush(LShard, aDst);
-      Exit;
-    end;
-  end;
-  {$ENDIF}
-
   FShards[LShard].Lock.Acquire;
   try
-    FlushRemoteFreesLocked(LShard);
+    if (not LIsFallback) and (not FShards[LShard].Pool.Owns(aDst)) then
+      raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
+
     FShards[LShard].Pool.FreeMem(aDst);
     if LIsFallback then
     begin
@@ -1009,7 +951,6 @@ begin
   LShard := ChooseShardIndex;
   FShards[LShard].Lock.Acquire;
   try
-    FlushRemoteFreesLocked(LShard);
     Result := FShards[LShard].Pool.AllocAligned(aSize, aAlignment);
     if Result <> nil then
     begin
@@ -1043,7 +984,7 @@ end;
 function TSlabPoolSharded.Traits: TAllocatorTraits;
 begin
   // keep consistent with TSlabPool but mark as thread-safe
-  Result.ZeroInitialized := False;
+  Result.ZeroInitialized := True;
   Result.ThreadSafe := True;
   Result.HasMemSize := True;
   Result.SupportsAligned := False;
@@ -1054,7 +995,17 @@ var
   LShard: Integer;
   LIsFallback: Boolean;
 begin
-  Result := TryRouteShardIndex(aPtr, LShard, LIsFallback);
+  if not TryRouteShardIndex(aPtr, LShard, LIsFallback) then
+    Exit(False);
+  if LIsFallback then
+    Exit(True);
+
+  FShards[LShard].Lock.Acquire;
+  try
+    Result := FShards[LShard].Pool.Owns(aPtr);
+  finally
+    FShards[LShard].Lock.Release;
+  end;
 end;
 
 function TSlabPoolSharded.MemSizeOf(aPtr: Pointer): SizeUInt;
@@ -1088,7 +1039,6 @@ begin
   begin
     FShards[LIdx].Lock.Acquire;
     try
-      FlushRemoteFreesLocked(LIdx);
       LInner := FShards[LIdx].Pool.Stats;
     finally
       FShards[LIdx].Lock.Release;
@@ -1113,7 +1063,6 @@ begin
       Continue;
     FShards[LIdx].Lock.Acquire;
     try
-      FlushRemoteFreesLocked(LIdx);
       LInner := FShards[LIdx].Pool.GetPerfCounters;
     finally
       FShards[LIdx].Lock.Release;

@@ -65,7 +65,7 @@ begin
   // - AllocMem uses calloc path => zero initialized; GetMem not guaranteed
   // - No native aligned API exposed via this allocator
   // - No MemSize/usable_size available
-  Result.ZeroInitialized := False;
+  Result.ZeroInitialized := True;
   Result.SupportsAligned := False;
   Result.HasMemSize      := False;
 end;

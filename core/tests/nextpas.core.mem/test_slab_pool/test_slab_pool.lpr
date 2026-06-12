@@ -5,45 +5,246 @@ program test_slab_pool;
 uses
   SysUtils,
   nextpas.core.testing,
-  nextpas.core.mem.allocator.base,
   nextpas.core.mem.error,
-  nextpas.core.mem.pool.fixed_slab,
-  nextpas.core.mem.pool.slab;
+  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.pool.slab,
+  nextpas.core.mem.pool.fixed_slab;
 
 type
-  TFixedSlabRecordingAllocator = class(TAllocator)
-  protected
-    function DoGetMem(aSize: SizeUInt): Pointer; override;
-    function DoAllocMem(aSize: SizeUInt): Pointer; override;
-    function DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(aDst: Pointer); override;
+  TExceptionProc = procedure;
+
+  TFixedSlabRecordingAllocator = class(TInterfacedObject, IAllocator)
+  private
+    FPtrs: array of Pointer;
+    function IndexOf(aPtr: Pointer): Integer;
+    procedure Track(aPtr: Pointer);
+    function Untrack(aPtr: Pointer): Boolean;
   public
     GetCalls: Integer;
-    FreeCalls: Integer;
+    FreeAlignedCalls: Integer;
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
+    function GetMem(aSize: SizeUInt): Pointer;
+    function AllocMem(aSize: SizeUInt): Pointer;
+    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+    procedure FreeMem(aDst: Pointer);
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(aPtr: Pointer);
+    function Traits: TAllocatorTraits;
   end;
 
 var
   T: TTestRunner;
+  GPool: TSlabPool = nil;
+  GFixedSlabPool: TFixedSlabPool = nil;
+  GFixedSlabFallback: TFixedSlabRecordingAllocator = nil;
+  GPtr: PByte = nil;
+  GStackByte: Byte = 0;
 
-function TFixedSlabRecordingAllocator.DoGetMem(aSize: SizeUInt): Pointer;
+procedure CheckRaisesAllocError(AProc: TExceptionProc; AExpected: TAllocError; const AName: string);
 begin
+  try
+    AProc;
+    Fail(AName + ': expected allocation error');
+  except
+    on E: EAllocError do
+      CheckEqual(Int64(Ord(AExpected)), Int64(Ord(E.Error)), AName + ': error code');
+  end;
+end;
+
+function TFixedSlabRecordingAllocator.IndexOf(aPtr: Pointer): Integer;
+var
+  LIndex: Integer;
+begin
+  for LIndex := 0 to High(FPtrs) do
+    if FPtrs[LIndex] = aPtr then
+      Exit(LIndex);
+  Result := -1;
+end;
+
+procedure TFixedSlabRecordingAllocator.Track(aPtr: Pointer);
+var
+  LCount: Integer;
+begin
+  if aPtr = nil then
+    Exit;
+  LCount := Length(FPtrs);
+  SetLength(FPtrs, LCount + 1);
+  FPtrs[LCount] := aPtr;
+end;
+
+function TFixedSlabRecordingAllocator.Untrack(aPtr: Pointer): Boolean;
+var
+  LIndex: Integer;
+  LLast: Integer;
+begin
+  LIndex := IndexOf(aPtr);
+  Result := LIndex >= 0;
+  if not Result then
+    Exit;
+  LLast := High(FPtrs);
+  FPtrs[LIndex] := FPtrs[LLast];
+  SetLength(FPtrs, LLast);
+end;
+
+function TFixedSlabRecordingAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TFixedSlabRecordingAllocator.Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TFixedSlabRecordingAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
+end;
+
+function TFixedSlabRecordingAllocator.GetMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then Exit(nil);
   Inc(GetCalls);
-  Result := nil;
+  Result := System.GetMem(aSize);
+  Track(Result);
 end;
 
-function TFixedSlabRecordingAllocator.DoAllocMem(aSize: SizeUInt): Pointer;
+function TFixedSlabRecordingAllocator.AllocMem(aSize: SizeUInt): Pointer;
 begin
-  Result := DoGetMem(aSize);
+  if aSize = 0 then Exit(nil);
+  Result := System.AllocMem(aSize);
+  Track(Result);
 end;
 
-function TFixedSlabRecordingAllocator.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+function TFixedSlabRecordingAllocator.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+var
+  LIndex: Integer;
 begin
-  Result := nil;
+  if aSize = 0 then
+  begin
+    FreeMem(aDst);
+    Exit(nil);
+  end;
+  if aDst = nil then
+    Exit(GetMem(aSize));
+  LIndex := IndexOf(aDst);
+  if LIndex < 0 then
+    Exit(nil);
+  Result := System.ReallocMem(aDst, aSize);
+  FPtrs[LIndex] := Result;
 end;
 
-procedure TFixedSlabRecordingAllocator.DoFreeMem(aDst: Pointer);
+procedure TFixedSlabRecordingAllocator.FreeMem(aDst: Pointer);
 begin
-  Inc(FreeCalls);
+  if aDst = nil then Exit;
+  if Untrack(aDst) then
+    System.FreeMem(aDst);
+end;
+
+function TFixedSlabRecordingAllocator.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+var
+  LRaw: Pointer;
+  LNeeded: SizeUInt;
+  LMask: PtrUInt;
+begin
+  if aSize = 0 then Exit(nil);
+  LNeeded := aSize + aAlignment - 1 + SizeOf(Pointer);
+  LRaw := GetMem(LNeeded);
+  if LRaw = nil then Exit(nil);
+  LMask := PtrUInt(aAlignment - 1);
+  Result := Pointer((PtrUInt(LRaw) + SizeOf(Pointer) + LMask) and not LMask);
+  PPointer(PtrUInt(Result) - SizeOf(Pointer))^ := LRaw;
+end;
+
+procedure TFixedSlabRecordingAllocator.FreeAligned(aPtr: Pointer);
+var
+  LRaw: Pointer;
+begin
+  if aPtr = nil then Exit;
+  Inc(FreeAlignedCalls);
+  LRaw := PPointer(PtrUInt(aPtr) - SizeOf(Pointer))^;
+  FreeMem(LRaw);
+end;
+
+function TFixedSlabRecordingAllocator.Traits: TAllocatorTraits;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.HasMemSize := False;
+  Result.SupportsAligned := True;
+end;
+
+procedure FreeInteriorSlabPointer;
+begin
+  GPool.FreeMem(GPtr + 1);
+end;
+
+procedure ReallocInteriorSlabPointer;
+var
+  LNewPtr: Pointer;
+begin
+  LNewPtr := GPool.ReallocMem(GPtr + 1, 128);
+  if LNewPtr <> nil then
+    GPool.FreeMem(LNewPtr);
+end;
+
+procedure FreeDoubleSlabPointer;
+begin
+  GPool.FreeMem(GPtr);
+end;
+
+procedure ReallocDoubleSlabPointer;
+var
+  LNewPtr: Pointer;
+begin
+  LNewPtr := GPool.ReallocMem(GPtr, 128);
+  if LNewPtr <> nil then
+    GPool.FreeMem(LNewPtr);
+end;
+
+procedure FreeForeignFixedSlabPointer;
+begin
+  GFixedSlabPool.FreeMem(@GStackByte);
+end;
+
+procedure FreeInteriorFixedSlabPointer;
+begin
+  GFixedSlabPool.FreeMem(GPtr + 1);
+end;
+
+procedure ReallocInteriorFixedSlabPointer;
+var
+  LNewPtr: Pointer;
+begin
+  LNewPtr := GFixedSlabPool.ReallocMem(GPtr + 1, 128);
+  if LNewPtr <> nil then
+    GFixedSlabPool.FreeMem(LNewPtr);
+end;
+
+procedure FreeDoubleFixedSlabPointer;
+begin
+  GFixedSlabPool.FreeMem(GPtr);
+end;
+
+procedure ReallocDoubleFixedSlabPointer;
+var
+  LNewPtr: Pointer;
+begin
+  LNewPtr := GFixedSlabPool.ReallocMem(GPtr, 128);
+  if LNewPtr <> nil then
+    GFixedSlabPool.FreeMem(LNewPtr);
+end;
+
+procedure FreeForeignFixedSlabAlignedPointer;
+begin
+  GFixedSlabPool.FreeAligned(@GStackByte);
+end;
+
+procedure FreeFixedSlabAlignedFallbackAgain;
+begin
+  GFixedSlabPool.FreeAligned(GPtr);
 end;
 
 procedure TestCreateStatsAndTraits;
@@ -112,6 +313,83 @@ begin
   end;
 end;
 
+procedure TestOwnershipDiagnosticsRejectInteriorPointer;
+const
+  REQUESTED_SIZES: array[0..3] of SizeUInt = (8, 64, 256, 4096);
+  CHUNK_SIZES: array[0..3] of SizeUInt = (8, 64, 256, 4096);
+var
+  LPool: TSlabPool;
+  LPtr: PByte;
+  LIndex: Integer;
+begin
+  LPool := TSlabPool.Create(4096 * 8);
+  try
+    for LIndex := Low(REQUESTED_SIZES) to High(REQUESTED_SIZES) do
+    begin
+      LPtr := PByte(LPool.GetMem(REQUESTED_SIZES[LIndex]));
+      try
+        Check(LPtr <> nil, 'GetMem should allocate');
+        Check(LPool.Owns(LPtr), 'pool should own exact allocation pointer');
+        CheckEqual(Int64(CHUNK_SIZES[LIndex]), Int64(LPool.MemSizeOf(LPtr)), 'exact pointer should report slab chunk size');
+        Check(not LPool.Owns(LPtr + 1), 'pool should not own interior pointer diagnostically');
+        CheckEqual(Int64(0), Int64(LPool.MemSizeOf(LPtr + 1)), 'interior pointer should not report chunk size');
+      finally
+        LPool.FreeMem(LPtr);
+      end;
+      Check(not LPool.Owns(LPtr), 'pool should not own released allocation pointer');
+      CheckEqual(Int64(0), Int64(LPool.MemSizeOf(LPtr)), 'released pointer should not report chunk size');
+    end;
+  finally
+    LPool.Free;
+  end;
+end;
+
+procedure TestReleaseAndReallocRejectInteriorPointer;
+begin
+  GPool := TSlabPool.Create(4096);
+  try
+    GPtr := PByte(GPool.GetMem(64));
+    Check(GPtr <> nil, 'GetMem should allocate');
+
+    CheckRaisesAllocError(@FreeInteriorSlabPointer, aeInvalidPointer, 'interior FreeMem');
+    Check(GPool.Owns(GPtr), 'invalid FreeMem should not release exact pointer');
+    CheckEqual(Int64(64), Int64(GPool.MemSizeOf(GPtr)), 'invalid FreeMem should preserve exact pointer size');
+
+    CheckRaisesAllocError(@ReallocInteriorSlabPointer, aeInvalidPointer, 'interior ReallocMem');
+    Check(GPool.Owns(GPtr), 'invalid ReallocMem should not release exact pointer');
+    CheckEqual(Int64(64), Int64(GPool.MemSizeOf(GPtr)), 'invalid ReallocMem should preserve exact pointer size');
+
+    GPool.FreeMem(GPtr);
+  finally
+    GPtr := nil;
+    GPool.Free;
+    GPool := nil;
+  end;
+end;
+
+procedure TestTopLevelSlabDoubleFreeFailsClosed;
+begin
+  GPool := TSlabPool.Create(4096);
+  try
+    GPtr := PByte(GPool.GetMem(64));
+    Check(GPtr <> nil, 'GetMem should allocate');
+
+    GPool.FreeMem(GPtr);
+    CheckRaisesAllocError(@FreeDoubleSlabPointer, aeDoubleFree,
+      'top-level slab double FreeMem');
+    CheckRaisesAllocError(@ReallocDoubleSlabPointer, aeDoubleFree,
+      'top-level slab double ReallocMem');
+    Check(not GPool.Owns(GPtr),
+      'top-level slab double free should not restore ownership');
+    CheckEqual(Int64(0), Int64(GPool.MemSizeOf(GPtr)),
+      'top-level slab released pointer should not report chunk size');
+  finally
+    GPtr := nil;
+    GPool.Free;
+    GPool := nil;
+  end;
+end;
+
 procedure TestAllocAlignedFallsBackAndTracksStats;
 var
   LPool: TSlabPool;
@@ -148,15 +426,13 @@ end;
 procedure TestSlabAlignedFallbackRejectsBackingSizeOverflow;
 var
   LAllocator: TFixedSlabRecordingAllocator;
-  LAllocatorRef: IAllocator;
   LPool: TSlabPool;
   LPtr: Pointer;
   LGetCallsBefore: Integer;
   LStats: TSlabPoolStats;
 begin
   LAllocator := TFixedSlabRecordingAllocator.Create;
-  LAllocatorRef := LAllocator as IAllocator;
-  LPool := TSlabPool.Create(4096, LAllocatorRef);
+  LPool := TSlabPool.Create(4096, LAllocator);
   try
     LGetCallsBefore := LAllocator.GetCalls;
     LPtr := LPool.AllocAligned(High(SizeUInt), 256);
@@ -175,7 +451,6 @@ begin
     end;
   finally
     LPool.Free;
-    LAllocatorRef := nil;
     LAllocator := nil;
   end;
 end;
@@ -213,12 +488,98 @@ begin
   end;
 end;
 
+procedure TestFixedSlabDirectApiFailsClosed;
+begin
+  GFixedSlabPool := TFixedSlabPool.Create(4096);
+  try
+    CheckRaisesAllocError(@FreeForeignFixedSlabPointer, aeInvalidPointer,
+      'fixed slab foreign FreeMem');
+
+    GPtr := PByte(GFixedSlabPool.GetMem(64));
+    Check(GPtr <> nil, 'fixed slab GetMem should allocate');
+
+    CheckRaisesAllocError(@FreeInteriorFixedSlabPointer, aeInvalidPointer,
+      'fixed slab interior FreeMem');
+    Check(GFixedSlabPool.Owns(GPtr),
+      'fixed slab invalid FreeMem should not release exact pointer');
+    CheckEqual(Int64(64), Int64(GFixedSlabPool.MemSizeOf(GPtr)),
+      'fixed slab invalid FreeMem should preserve exact pointer size');
+
+    CheckRaisesAllocError(@ReallocInteriorFixedSlabPointer, aeInvalidPointer,
+      'fixed slab interior ReallocMem');
+    Check(GFixedSlabPool.Owns(GPtr),
+      'fixed slab invalid ReallocMem should not release exact pointer');
+    CheckEqual(Int64(64), Int64(GFixedSlabPool.MemSizeOf(GPtr)),
+      'fixed slab invalid ReallocMem should preserve exact pointer size');
+
+    GFixedSlabPool.FreeMem(GPtr);
+    CheckRaisesAllocError(@FreeDoubleFixedSlabPointer, aeDoubleFree,
+      'fixed slab double FreeMem');
+    CheckRaisesAllocError(@ReallocDoubleFixedSlabPointer, aeDoubleFree,
+      'fixed slab double ReallocMem');
+    Check(not GFixedSlabPool.Owns(GPtr),
+      'fixed slab double FreeMem should not restore ownership');
+  finally
+    GPtr := nil;
+    GFixedSlabPool.Free;
+    GFixedSlabPool := nil;
+  end;
+end;
+
+procedure TestFixedSlabAlignedDirectFailsClosed;
+begin
+  GFixedSlabPool := TFixedSlabPool.Create(4096);
+  try
+    GPtr := PByte(GFixedSlabPool.AllocAligned(64, 8));
+    Check(GPtr <> nil, 'fixed slab aligned direct path should allocate');
+    GFixedSlabPool.FreeAligned(GPtr);
+    CheckRaisesAllocError(@FreeFixedSlabAlignedFallbackAgain, aeDoubleFree,
+      'fixed slab aligned direct double FreeAligned');
+  finally
+    GPtr := nil;
+    GFixedSlabPool.Free;
+    GFixedSlabPool := nil;
+  end;
+end;
+
+procedure TestFixedSlabAlignedFallbackFailsClosed;
+begin
+  GFixedSlabFallback := TFixedSlabRecordingAllocator.Create;
+  GFixedSlabPool := TFixedSlabPool.Create(4096, GFixedSlabFallback);
+  try
+    GPtr := PByte(GFixedSlabPool.AllocAligned(96, 256));
+    Check(GPtr <> nil, 'fixed slab aligned fallback should allocate');
+    Check((PtrUInt(GPtr) mod 256) = 0, 'fixed slab aligned fallback should honor alignment');
+
+    GFixedSlabPool.FreeAligned(GPtr);
+    CheckRaisesAllocError(@FreeFixedSlabAlignedFallbackAgain, aeDoubleFree,
+      'fixed slab aligned fallback double FreeAligned');
+    GPtr := nil;
+
+    CheckRaisesAllocError(@FreeForeignFixedSlabAlignedPointer, aeInvalidPointer,
+      'fixed slab foreign FreeAligned');
+    CheckEqual(Int64(1), Int64(GFixedSlabFallback.FreeAlignedCalls),
+      'foreign FreeAligned must not delegate to backing allocator');
+  finally
+    GPtr := nil;
+    GFixedSlabPool.Free;
+    GFixedSlabPool := nil;
+    GFixedSlabFallback := nil;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.slab_pool');
   T.Run('create stats and traits', @TestCreateStatsAndTraits);
   T.Run('alloc free and perf counters', @TestAllocFreeAndPerfCounters);
+  T.Run('ownership diagnostics reject interior pointer', @TestOwnershipDiagnosticsRejectInteriorPointer);
+  T.Run('release and realloc reject interior pointer', @TestReleaseAndReallocRejectInteriorPointer);
+  T.Run('top-level slab double free fails closed', @TestTopLevelSlabDoubleFreeFailsClosed);
   T.Run('aligned fallback tracking', @TestAllocAlignedFallsBackAndTracksStats);
   T.Run('aligned fallback rejects backing size overflow', @TestSlabAlignedFallbackRejectsBackingSizeOverflow);
   T.Run('fixed slab rejects capacity overflow', @TestFixedSlabCreateRejectsCapacityOverflow);
+  T.Run('fixed slab direct api fails closed', @TestFixedSlabDirectApiFailsClosed);
+  T.Run('fixed slab aligned direct fails closed', @TestFixedSlabAlignedDirectFailsClosed);
+  T.Run('fixed slab aligned fallback fails closed', @TestFixedSlabAlignedFallbackFailsClosed);
   T.Summary;
 end.

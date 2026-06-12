@@ -2,8 +2,7 @@ unit nextpas.core.mem.mapped_ring_buffer.sharded;
 
 interface
 uses
-  nextpas.core.mem.mapped_ring_buffer,
-  nextpas.core.mem.mutex;
+  nextpas.core.mem.mutex, nextpas.core.mem.mapped_ring_buffer;
 
 type
   // 简单分片封装：将并发生产/消费分散到多条底层 ring
@@ -15,7 +14,7 @@ type
     FPushIdx: Integer;
     FPopIdx: Integer;
     FInit: Boolean;
-    FSelectorLock: TMemMutex;
+    FCSel: TMemMutex;
   public
     constructor Create; virtual;
     destructor Destroy; override;
@@ -31,16 +30,14 @@ type
 
 implementation
 
-function ShardIndexToString(AIndex: Integer): string;
+function MappedRingBufferShardName(const BaseName: string; ShardIndex: Integer): string;
+var
+  LIndexText: string;
 begin
-  Str(AIndex, Result);
-  while Length(Result) < 2 do
-    Result := '0' + Result;
-end;
-
-function MappedShardName(const ABaseName: string; AIndex: Integer): string;
-begin
-  Result := ABaseName + '_sh' + ShardIndexToString(AIndex);
+  Str(ShardIndex, LIndexText);
+  if ShardIndex < 10 then
+    LIndexText := '0' + LIndexText;
+  Result := BaseName + '_sh' + LIndexText;
 end;
 
 constructor TMappedRingBufferSharded.Create;
@@ -51,13 +48,13 @@ begin
   FPushIdx := 0;
   FPopIdx := 0;
   FInit := False;
-  FSelectorLock.Init;
+  FCSel.Init;
 end;
 
 destructor TMappedRingBufferSharded.Destroy;
 begin
   Close;
-  FSelectorLock.Done;
+  FCSel.Done;
   inherited Destroy;
 end;
 
@@ -89,7 +86,7 @@ begin
   for LIndex := 0 to ShardCount-1 do
   begin
     FShards[LIndex] := TMappedRingBuffer.Create;
-    LName := MappedShardName(BaseName, LIndex);
+    LName := MappedRingBufferShardName(BaseName, LIndex);
     if not FShards[LIndex].CreateShared(LName, Capacity, ElemSize) then Exit;
   end;
   FInit := True;
@@ -110,7 +107,7 @@ begin
   for LIndex := 0 to ShardCount-1 do
   begin
     FShards[LIndex] := TMappedRingBuffer.Create;
-    LName := MappedShardName(BaseName, LIndex);
+    LName := MappedRingBufferShardName(BaseName, LIndex);
     if not FShards[LIndex].OpenShared(LName) then Exit;
   end;
   FInit := True;
@@ -122,12 +119,12 @@ var
   LIndex, LStart: Integer;
 begin
   if not FInit then Exit(False);
-  FSelectorLock.Acquire;
+  FCSel.Acquire;
   try
     LStart := FPushIdx;
     FPushIdx := (FPushIdx + 1) mod FShardCount;
   finally
-    FSelectorLock.Release;
+    FCSel.Release;
   end;
   for LIndex := 0 to FShardCount-1 do
   begin
@@ -141,12 +138,12 @@ var
   LIndex, LStart: Integer;
 begin
   if not FInit then Exit(False);
-  FSelectorLock.Acquire;
+  FCSel.Acquire;
   try
     LStart := FPopIdx;
     FPopIdx := (FPopIdx + 1) mod FShardCount;
   finally
-    FSelectorLock.Release;
+    FCSel.Release;
   end;
   for LIndex := 0 to FShardCount-1 do
   begin
