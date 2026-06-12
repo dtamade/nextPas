@@ -38,20 +38,54 @@ const
 type
   TBytes = array of Byte;
   ECore = nextpas.core.exception.ENextPasError;
-  EInvariantViolation = class(ECore);
+  EInvariantViolation = class(ECore)
+  protected
+    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+  end;
   EWow = EInvariantViolation;
-  EArgumentNil = class(ECore);
-  EEmptyCollection = class(ECore);
-  EInvalidArgument = class(ECore);
-  EInvalidResult = class(ECore);
+  EArgumentNil = class(ECore)
+  protected
+    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+  end;
+  EEmptyCollection = class(ECore)
+  protected
+    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+  end;
+  EInvalidArgument = class(ECore)
+  protected
+    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+  end;
+  EInvalidResult = class(ECore)
+  protected
+    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+  end;
   ETimeoutError = nextpas.core.exception.ETimeoutError;
-  EInvalidState = class(ECore);
-  EOutOfRange = class(ECore);
-  ENotSupported = class(ECore);
-  ENotCompatible = class(ECore);
-  EInvalidOperation = class(ECore);
+  EInvalidState = class(ECore)
+  protected
+    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+  end;
+  EOutOfRange = class(ECore)
+  protected
+    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+  end;
+  ENotSupported = class(ECore)
+  protected
+    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+  end;
+  ENotCompatible = class(ECore)
+  protected
+    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+  end;
+  EInvalidOperation = class(ECore)
+  protected
+    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+  end;
+  EOutOfMemoryError = nextpas.core.exception.EOutOfMemoryError;
   EOutOfMemory = nextpas.core.exception.EOutOfMemory;
-  EOverflow = class(ECore);
+  EOverflow = class(ECore)
+  protected
+    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+  end;
 
   THashCode = UInt32;
 
@@ -179,6 +213,63 @@ function HashInteger(const AValue: Int64): THashCode;
 function HashPointer(const AValue: Pointer): THashCode;
 
 implementation
+
+{ Base validation exceptions }
+
+class function EInvariantViolation.DefaultCategory: nextpas.core.exception.TErrorCategory;
+begin
+  Result := nextpas.core.exception.ecInternal;
+end;
+
+class function EArgumentNil.DefaultCategory: nextpas.core.exception.TErrorCategory;
+begin
+  Result := nextpas.core.exception.ecInvalidArgument;
+end;
+
+class function EInvalidArgument.DefaultCategory: nextpas.core.exception.TErrorCategory;
+begin
+  Result := nextpas.core.exception.ecInvalidArgument;
+end;
+
+class function EInvalidResult.DefaultCategory: nextpas.core.exception.TErrorCategory;
+begin
+  Result := nextpas.core.exception.ecInternal;
+end;
+
+class function EEmptyCollection.DefaultCategory: nextpas.core.exception.TErrorCategory;
+begin
+  Result := nextpas.core.exception.ecInvalidOperation;
+end;
+
+class function EInvalidState.DefaultCategory: nextpas.core.exception.TErrorCategory;
+begin
+  Result := nextpas.core.exception.ecInvalidOperation;
+end;
+
+class function EOutOfRange.DefaultCategory: nextpas.core.exception.TErrorCategory;
+begin
+  Result := nextpas.core.exception.ecInvalidArgument;
+end;
+
+class function ENotSupported.DefaultCategory: nextpas.core.exception.TErrorCategory;
+begin
+  Result := nextpas.core.exception.ecNotSupported;
+end;
+
+class function ENotCompatible.DefaultCategory: nextpas.core.exception.TErrorCategory;
+begin
+  Result := nextpas.core.exception.ecInvalidArgument;
+end;
+
+class function EInvalidOperation.DefaultCategory: nextpas.core.exception.TErrorCategory;
+begin
+  Result := nextpas.core.exception.ecInvalidOperation;
+end;
+
+class function EOverflow.DefaultCategory: nextpas.core.exception.TErrorCategory;
+begin
+  Result := nextpas.core.exception.ecInvalidArgument;
+end;
 
 { TPair<TKey, TValue> }
 
@@ -315,10 +406,15 @@ end;
 
 { TByteSpan }
 
+procedure RequireNonEmptyPointer(const AData: Pointer; const ALen: SizeUInt; const AContext: string);
+begin
+  if (ALen > 0) and (AData = nil) then
+    raise EArgumentNil.Create(AContext + ': data is nil');
+end;
+
 class function TByteSpan.Create(const AData: PByte; const ALen: SizeUInt): TByteSpan;
 begin
-  if (AData = nil) and (ALen > 0) then
-    raise EArgumentNil.Create('TByteSpan.Create: data is nil');
+  RequireNonEmptyPointer(AData, ALen, 'TByteSpan.Create');
   Result.Data := AData;
   Result.Len := ALen;
 end;
@@ -350,17 +446,25 @@ end;
 
 function TByteSpan.Slice(const AOffset, ALength: SizeUInt): TByteSpan;
 begin
+  RequireNonEmptyPointer(Data, Len, 'TByteSpan.Slice');
   if (AOffset > Len) or (ALength > Len - AOffset) then
     raise EOutOfRange.CreateFmt('TByteSpan.Slice: offset %d + length %d > span length %d',
       [AOffset, ALength, Len]);
+  if ALength = 0 then
+    Exit(TByteSpan.Empty);
   Result.Data := Data + AOffset;
   Result.Len := ALength;
 end;
 
 function TByteSpan.GetByte(const AIndex: SizeUInt): Byte;
 begin
+  RequireNonEmptyPointer(Data, Len, 'TByteSpan.GetByte');
   if AIndex >= Len then
+  begin
+    if Len = 0 then
+      raise EOutOfRange.CreateFmt('TByteSpan: index %d out of range for empty span', [AIndex]);
     raise EOutOfRange.CreateFmt('TByteSpan: index %d out of range [0..%d]', [AIndex, Len - 1]);
+  end;
   Result := (Data + AIndex)^;
 end;
 
@@ -395,6 +499,15 @@ const
   FNV_OFFSET_BASIS_32 = THashCode(2166136261);
   FNV_PRIME_32        = THashCode(16777619);
 
+function FnvStep(const AHash: THashCode; const AByte: Byte): THashCode; inline;
+begin
+  {$PUSH}
+  {$R-}
+  {$Q-}
+  Result := (AHash xor THashCode(AByte)) * FNV_PRIME_32;
+  {$POP}
+end;
+
 function HashBytes(const AData: PByte; const ALen: SizeUInt): THashCode;
 var
   LI: SizeUInt;
@@ -402,13 +515,9 @@ begin
   Result := FNV_OFFSET_BASIS_32;
   if ALen = 0 then
     Exit;
-  if AData = nil then
-    raise EArgumentNil.Create('HashBytes: data is nil');
+  RequireNonEmptyPointer(AData, ALen, 'HashBytes');
   for LI := 0 to ALen - 1 do
-  begin
-    Result := Result xor THashCode((AData + LI)^);
-    Result := Result * FNV_PRIME_32;
-  end;
+    Result := FnvStep(Result, (AData + LI)^);
 end;
 
 function HashString(const AValue: string): THashCode;

@@ -4,22 +4,85 @@ unit nextpas.core.platform.error;
 
 interface
 
+uses
+  nextpas.core.exception;
+
 function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_error_category(ACode: Int32): TErrorCategory;
 procedure platform_fatal(const AMsg: PAnsiChar);
 procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
 
 implementation
 
-{$IFDEF NEXTPAS_UNIX}
 uses
+  nextpas.core.platform.error.base
+  {$IFDEF NEXTPAS_UNIX},
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi;
+  nextpas.core.platform.posix.ffi
+  {$ENDIF}
+  {$IFDEF NEXTPAS_LINUX},
+  nextpas.core.platform.linux.base
+  {$ENDIF}
+  {$IFDEF NEXTPAS_MACOS},
+  nextpas.core.platform.darwin.base
+  {$ENDIF}
+  {$IFDEF NEXTPAS_FREEBSD},
+  nextpas.core.platform.freebsd.base
+  {$ENDIF}
+  {$IFDEF NEXTPAS_WINDOWS},
+  nextpas.core.platform.windows.base,
+  nextpas.core.platform.windows.ffi
+  {$ENDIF}
+  ;
 
+function CopyPlatformErrorMessage(const AMessage: PAnsiChar; ABuf: PAnsiChar;
+  ABufLen: Int32): Int32;
+var
+  LLen: Int32;
+begin
+  if (ABuf = nil) or (ABufLen <= 0) then
+    Exit(-1);
+
+  LLen := 0;
+  while AMessage[LLen] <> #0 do
+    Inc(LLen);
+  if LLen >= ABufLen then
+    LLen := ABufLen - 1;
+  if LLen > 0 then
+    Move(AMessage^, ABuf^, LLen);
+  ABuf[LLen] := #0;
+  Result := LLen;
+end;
+
+function TryPlatformErrorTokenMessage(ACode: Int32; ABuf: PAnsiChar;
+  ABufLen: Int32; out ALen: Int32): Boolean;
+begin
+  Result := True;
+  case ACode of
+    PLATFORM_ERR_INVALID:
+      ALen := CopyPlatformErrorMessage('invalid', ABuf, ABufLen);
+    PLATFORM_ERR_UNSUPPORTED:
+      ALen := CopyPlatformErrorMessage('unsupported', ABuf, ABufLen);
+    PLATFORM_ERR_TIMEOUT:
+      ALen := CopyPlatformErrorMessage('timeout', ABuf, ABufLen);
+    PLATFORM_ERR_AGAIN:
+      ALen := CopyPlatformErrorMessage('again', ABuf, ABufLen);
+    PLATFORM_ERR_BUSY:
+      ALen := CopyPlatformErrorMessage('busy', ABuf, ABufLen);
+  else
+    Result := False;
+    ALen := -1;
+  end;
+end;
+
+{$IFDEF NEXTPAS_UNIX}
 function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
 var
   LMsg: PAnsiChar;
   LLen, I: Int32;
 begin
+  if TryPlatformErrorTokenMessage(ACode, ABuf, ABufLen, Result) then
+    Exit;
   if (ABuf = nil) or (ABufLen <= 0) then
     Exit(-1);
   LMsg := strerror(ACode);
@@ -41,15 +104,13 @@ end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
-uses
-  nextpas.core.platform.windows.base,
-  nextpas.core.platform.windows.ffi;
-
 function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
 var
   LLen: DWORD;
   I: Int32;
 begin
+  if TryPlatformErrorTokenMessage(ACode, ABuf, ABufLen, Result) then
+    Exit;
   if (ABuf = nil) or (ABufLen <= 0) then
     Exit(-1);
   LLen := FormatMessageA(
@@ -72,21 +133,115 @@ end;
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
 function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
 begin
+  if TryPlatformErrorTokenMessage(ACode, ABuf, ABufLen, Result) then
+    Exit;
   if ABuf <> nil then ABuf[0] := #0;
   Result := -1;
 end;
 {$ENDIF}
+
+function platform_error_category(ACode: Int32): TErrorCategory;
+begin
+  case ACode of
+    0:
+      Result := ecNone;
+    {$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    ESysENOENT:
+      Result := ecNotFound;
+    ESysEPERM,
+    ESysEACCES:
+      Result := ecPermission;
+    ESysEEXIST:
+      Result := ecAlreadyExists;
+    ESysEADDRINUSE:
+      Result := ecAlreadyExists;
+    ESysENETUNREACH,
+    ESysEHOSTUNREACH,
+    ESysENOTCONN:
+      Result := ecNetwork;
+    ESysENOMEM,
+    ESysENOSPC:
+      Result := ecResourceExhausted;
+    ESysEINVAL:
+      Result := ecInvalidArgument;
+    ESysEOPNOTSUPP:
+      Result := ecNotSupported;
+    ESysETIMEDOUT:
+      Result := ecTimeout;
+    ESysEAGAIN,
+    ESysEBUSY:
+      Result := ecWouldBlock;
+    ESysEIO:
+      Result := ecIO;
+    ESysEPIPE,
+    ESysECONNABORTED,
+    ESysECONNRESET,
+    ESysECONNREFUSED:
+      Result := ecIO;
+    ESysEINTR:
+      Result := ecInterrupted;
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    ERROR_FILE_NOT_FOUND,
+    ERROR_PATH_NOT_FOUND,
+    ERROR_MOD_NOT_FOUND,
+    ERROR_PROC_NOT_FOUND,
+    ERROR_ENVVAR_NOT_FOUND,
+    ERROR_NOT_FOUND,
+    WSAHOST_NOT_FOUND:
+      Result := ecNotFound;
+    ERROR_ACCESS_DENIED:
+      Result := ecPermission;
+    ERROR_FILE_EXISTS,
+    ERROR_ALREADY_EXISTS,
+    WSAEADDRINUSE:
+      Result := ecAlreadyExists;
+    WSAENETUNREACH,
+    WSAEHOSTUNREACH,
+    WSAENOTCONN:
+      Result := ecNetwork;
+    ERROR_NOT_ENOUGH_MEMORY,
+    ERROR_OUTOFMEMORY,
+    WSAENOBUFS:
+      Result := ecResourceExhausted;
+    ERROR_INVALID_PARAMETER:
+      Result := ecInvalidArgument;
+    ERROR_NOT_SUPPORTED:
+      Result := ecNotSupported;
+    ERROR_TIMEOUT,
+    WSAETIMEDOUT:
+      Result := ecTimeout;
+    WSAEWOULDBLOCK:
+      Result := ecWouldBlock;
+    ERROR_BROKEN_PIPE,
+    WSAECONNABORTED,
+    WSAECONNRESET,
+    WSAECONNREFUSED:
+      Result := ecIO;
+    ERROR_OPERATION_ABORTED:
+      Result := ecInterrupted;
+    {$ENDIF}
+    PLATFORM_ERR_INVALID:
+      Result := ecInvalidArgument;
+    PLATFORM_ERR_UNSUPPORTED:
+      Result := ecNotSupported;
+    PLATFORM_ERR_TIMEOUT:
+      Result := ecTimeout;
+    PLATFORM_ERR_AGAIN,
+    PLATFORM_ERR_BUSY:
+      Result := ecWouldBlock;
+  else
+    Result := ecInternal;
+  end;
+end;
 
 procedure WriteStderr(const S: PAnsiChar; ALen: Int32);
 begin
 {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.ffi.write(2, S, ALen);
 {$ELSE}
-  var LWritten: DWORD;
-  begin
-    if ALen > 0 then
-      WriteFile(GetStdHandle(STD_ERROR_HANDLE), S, ALen, @LWritten, nil);
-  end;
+  // fallback: use System.Write
+  System.Write(StdErr, S);
 {$ENDIF}
 end;
 
