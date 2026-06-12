@@ -65,28 +65,34 @@ Addr := Resolve('example.com');
 Reusable server runtime ownership now lives in `nextpas.core.net.server`, not in
 protocol modules such as HTTP.
 
-Current truth:
+### Truth Matrix
 
-- `nextpas.core.net` provides socket/listener primitives.
-- `nextpas.core.net.server` provides the reusable TCP server runtime seam.
-- `ITcpSocketRuntime` now exposes the native-handle / blocking-control prerequisite seam that future evented backends can consume without relying on concrete `TTcpStream` / `TTcpListener` casts.
-- `nextpas.core.net.server` now also resolves backends through a factory registry seam, so runtime selection is no longer hardcoded inside `NewTcpServer(...)`.
-- `ITcpListenerRuntime.TryAccept` plus `ITcpStreamRuntime.TryRead/TryWrite`
-  are already landed as the narrow nonblocking runtime I/O seam.
-- `ITcpServerPollDrivenSession` is now the first per-connection evented driver seam;
-  Linux `epoll` can already drive sessions that opt into it, while blocking sessions
-  still fall back to worker execution.
-- Current shipped backends are `threaded` plus a Linux-only phase-1 `epoll`
-  backend that uses readiness-driven accept and then hands accepted connections
-  to foundation workers.
-- Planned next backends are `kqueue` and `IOCP`, and Linux `epoll` still has a
-  later phase where real protocol sessions such as HTTP H1 migrate onto the
-  poll-driven path backed by `TryRead/TryWrite`.
-- `kqueue` is expected to reuse the same readiness-family driver shape as `epoll`.
-- Windows `IOCP` remains a first-class target, but it is a completion/proactor
-  family backend, so it must plug into the same ownership/session public contract
-  through a completion-aware foundation driver instead of pretending to be
-  readiness-only.
+#### threaded runtime backend
+- `tsbThreaded` is the default backend when no options override it
+- Accept + blocking session execution on a per-connection worker thread
+- Correctness baseline: all session/context/handoff semantics are proven through focused tests
+
+#### linux runtime truth
+- `tsbEpoll` is a shipped Linux-only phase-1 epoll backend
+- Uses readiness-driven accept via `platform_poller_*` facade
+- Accepted connections are handed to foundation workers for synchronous session execution
+- `ITcpServerPollDrivenSession` is the per-connection evented driver seam: Linux `epoll` can drive sessions that opt into it, while blocking sessions fall back to worker execution
+- Foundation-owned reactor self-wakeup, worker completion re-entry, and deadline wake are all landed
+- `epoll` still has a later phase where real protocol sessions such as HTTP H1 migrate fully onto the poll-driven path backed by `TryRead/TryWrite`
+
+#### macos/freebsd compile truth (kqueue source-landed)
+- `tsbKqueue` exists in the backend enum (`TTcpServerBackend`)
+- `nextpas.core.net.server.kqueue.pas` is a readiness-backed unit that calls `NewTcpReadinessServer`
+- The kqueue backend is source-landed and compiles on macOS/FreeBSD hosts
+- The host facade (`registertcpserverfactory(tsbKqueue, ...)`) is registered for non-Linux hosts
+- `readiness-backed` — kqueue reuses the same `TTcpReadinessServer` readiness-family driver shape as epoll
+- **not macos/freebsd runtime ready** — no runtime verification has been done on an actual macOS or FreeBSD host; compile-only confidence
+
+#### Windows truth
+- `tsbIocp` exists in the backend enum but `iocp is not registered` as a built-in server factory
+- `nextpas.core.io.reactor.iocp.pas` is a compile-only stub — no functional IOCP server backend exists
+- `nextpas.core.net.server.iocp.pas` does not yet exist as a source unit
+- **not windows server runtime ready** — no Windows server runtime verification
 
 The public goal is a stable, synchronous application-facing contract with
 runtime/backend policy hidden underneath the foundation layer.
@@ -105,7 +111,8 @@ TNetAddress.IPv6('::1', 8080)
 - `nextpas.core.net` socket APIs are the common cross-platform base.
 - `nextpas.core.net.server` currently ships a threaded runtime backend and a
   Linux-only phase-1 `epoll` backend.
-- Planned cross-platform evented backends remain `kqueue` on macOS / FreeBSD
-  and `IOCP` on Windows.
+- macOS/FreeBSD: kqueue source-landed, readiness-backed, compile truth only — not macOS/FreeBSD runtime ready.
+- Windows: tsbIocp enum exists but IOCP is not registered as a built-in server factory — not windows server runtime ready.
+- IOCP is a completion/proactor family backend and must plug into a completion-aware foundation driver.
 
 Deadline support via `nextpas.core.time.deadline.TDeadline`.

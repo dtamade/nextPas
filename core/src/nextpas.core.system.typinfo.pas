@@ -39,7 +39,6 @@ const
   tkInterface = TypInfo.tkInterface;
   tkClassRef = TypInfo.tkClassRef;
   tkPointer = TypInfo.tkPointer;
-  tkInterface = TypInfo.tkInterface;
   tkDynArray = TypInfo.tkDynArray;
   tkProcVar = TypInfo.tkProcVar;
 
