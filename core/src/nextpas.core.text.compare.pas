@@ -107,6 +107,8 @@ end;
 
 function TextContains(const AStr, ASub: string): Boolean;
 begin
+  if ASub = '' then
+    Exit(True);
   Result := Pos(ASub, AStr) > 0;
 end;
 

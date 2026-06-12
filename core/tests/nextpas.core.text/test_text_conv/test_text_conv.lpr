@@ -137,6 +137,13 @@ begin
   CheckEqual('00000', TextOfChar('0', 5));
 end;
 
+procedure TestStringReplace;
+begin
+  CheckEqual('hXllo', StringReplace('hello', 'e', 'X', False), 'replace first');
+  CheckEqual('XbXbX', StringReplace('ababa', 'a', 'X', True), 'replace all');
+  CheckEqual('hello', StringReplace('hello', '', 'X', True), 'empty needle');
+end;
+
 { format tests }
 
 procedure TestFormatBasic;
@@ -206,6 +213,7 @@ begin
   T.Run('FloatToStr', @TestFloatToStr);
   T.Run('TryStrToFloat', @TestTryStrToFloat);
   T.Run('TextOfChar', @TestTextOfChar);
+  T.Run('StringReplace', @TestStringReplace);
 
   T.Run('Format basic', @TestFormatBasic);
   T.Run('Format hex', @TestFormatHex);

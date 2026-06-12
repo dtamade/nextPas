@@ -47,6 +47,7 @@ function StringsIndexOf(const AArr: TStringArray; const AValue: string): SizeInt
 function StringsLastIndexOf(const AArr: TStringArray; const AValue: string): SizeInt;
 procedure StringsSort(var AArr: TStringArray);
 procedure StringsReverse(var AArr: TStringArray);
+function StringsSplit(const AValue, ADelimiter: string): TStringArray;
 function StringsJoin(const AArr: TStringArray; const ASep: string): string;
 function StringsFilter(const AArr: TStringArray; APredicate: TStringPredicate): TStringArray;
 function StringsMap(const AArr: TStringArray; AMapper: TStringMapper): TStringArray;
@@ -147,6 +148,45 @@ begin
     tmp := AArr[i]; AArr[i] := AArr[j]; AArr[j] := tmp;
     Inc(i); Dec(j);
   end;
+end;
+
+function StringsSplit(const AValue, ADelimiter: string): TStringArray;
+var
+  LPos: SizeInt;
+  LStart: SizeInt;
+  LDelimLen: SizeInt;
+  LCount: SizeInt;
+  LCapacity: SizeInt;
+begin
+  Result := nil;
+  LDelimLen := Length(ADelimiter);
+  if LDelimLen = 0 then
+  begin
+    SetLength(Result, 1);
+    Result[0] := AValue;
+    Exit;
+  end;
+
+  LCount := 0;
+  LCapacity := 0;
+  LStart := 1;
+  repeat
+    LPos := Pos(ADelimiter, AValue, LStart);
+    if LPos = 0 then
+      LPos := Length(AValue) + 1;
+    if LCount >= LCapacity then
+    begin
+      if LCapacity = 0 then
+        LCapacity := 8
+      else
+        LCapacity := LCapacity * 2;
+      SetLength(Result, LCapacity);
+    end;
+    Result[LCount] := System.Copy(AValue, LStart, LPos - LStart);
+    Inc(LCount);
+    LStart := LPos + LDelimLen;
+  until LPos > Length(AValue);
+  SetLength(Result, LCount);
 end;
 
 function StringsJoin(const AArr: TStringArray; const ASep: string): string;

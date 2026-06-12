@@ -54,6 +54,25 @@ begin
   CheckEqual('hello world', StringsJoin(A, ' '), 'join space');
 end;
 
+procedure TestSplit;
+var
+  A: TStringArray;
+begin
+  A := StringsSplit('a,b,c', ',');
+  CheckEqual(Int64(3), Int64(Length(A)), 'split count');
+  CheckEqual('a', A[0], 'split[0]');
+  CheckEqual('c', A[2], 'split[2]');
+
+  A := StringsSplit(',a,', ',');
+  CheckEqual(Int64(3), Int64(Length(A)), 'leading and trailing delimiter');
+  CheckEqual('', A[0], 'leading empty');
+  CheckEqual('', A[2], 'trailing empty');
+
+  A := StringsSplit('abc', '');
+  CheckEqual(Int64(1), Int64(Length(A)), 'empty delimiter count');
+  CheckEqual('abc', A[0], 'empty delimiter value');
+end;
+
 function IsLong(const S: string): Boolean;
 begin
   Result := Length(S) > 3;
@@ -239,6 +258,7 @@ begin
   T.Run('Sort', @TestSort);
   T.Run('Reverse', @TestReverse);
   T.Run('Join', @TestJoin);
+  T.Run('Split', @TestSplit);
   T.Run('Filter', @TestFilter);
   T.Run('Map', @TestMap);
   T.Run('Unique', @TestUnique);

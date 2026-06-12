@@ -7,7 +7,12 @@ interface
 function Trim(const S: string): string;
 function TrimLeft(const S: string): string;
 function TrimRight(const S: string): string;
+function IsEmpty(const S: string): Boolean; inline;
+function IsBlank(const S: string): Boolean;
 function UpperCase(const S: string): string;
+function PadLeft(const S: string; AWidth: Integer; APadChar: Char = ' '): string;
+function PadRight(const S: string; AWidth: Integer; APadChar: Char = ' '): string;
+function RepeatString(const S: string; ACount: Integer): string;
 function StrToIntDef(const S: string; ADefault: Int64): Int64;
 function BoolToStr(AValue: Boolean; const ATrueStr: string = 'True'; const AFalseStr: string = 'False'): string;
 function StringReplace(const S, OldPattern, NewPattern: string; AReplaceAll: Boolean = True): string;
@@ -48,6 +53,21 @@ begin
   Result := Copy(S, 1, R);
 end;
 
+function IsEmpty(const S: string): Boolean;
+begin
+  Result := Length(S) = 0;
+end;
+
+function IsBlank(const S: string): Boolean;
+var
+  I: SizeInt;
+begin
+  for I := 1 to Length(S) do
+    if S[I] > ' ' then
+      Exit(False);
+  Result := True;
+end;
+
 function UpperCase(const S: string): string;
 var
   I: SizeInt;
@@ -55,6 +75,47 @@ begin
   SetLength(Result, Length(S));
   for I := 1 to Length(S) do
     Result[I] := Chr(ToUpper(Byte(S[I])));
+end;
+
+function PadLeft(const S: string; AWidth: Integer; APadChar: Char): string;
+var
+  LPadLen: Integer;
+begin
+  LPadLen := AWidth - Length(S);
+  if LPadLen <= 0 then
+    Exit(S);
+  Result := TextOfChar(APadChar, LPadLen) + S;
+end;
+
+function PadRight(const S: string; AWidth: Integer; APadChar: Char): string;
+var
+  LPadLen: Integer;
+begin
+  LPadLen := AWidth - Length(S);
+  if LPadLen <= 0 then
+    Exit(S);
+  Result := S + TextOfChar(APadChar, LPadLen);
+end;
+
+function RepeatString(const S: string; ACount: Integer): string;
+var
+  I: Integer;
+  LChunkLen: SizeInt;
+  LPos: SizeInt;
+begin
+  if (ACount <= 0) or (S = '') then
+    Exit('');
+  if ACount = 1 then
+    Exit(S);
+
+  LChunkLen := Length(S);
+  SetLength(Result, LChunkLen * ACount);
+  LPos := 1;
+  for I := 1 to ACount do
+  begin
+    Move(S[1], Result[LPos], LChunkLen);
+    Inc(LPos, LChunkLen);
+  end;
 end;
 
 function StrToIntDef(const S: string; ADefault: Int64): Int64;
