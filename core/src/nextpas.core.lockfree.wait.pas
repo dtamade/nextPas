@@ -5,11 +5,9 @@ unit nextpas.core.lockfree.wait;
 interface
 
 procedure LockFreeWaitData(AEpoch: PInt32; AWaiters: PInt32;
-  const AObservedEpoch: Int32;
-  const ATimeoutNs: Int64);
+  const AExpectedEpoch: Int32; const ATimeoutNs: Int64);
 procedure LockFreeWaitSpace(AEpoch: PInt32; AWaiters: PInt32;
-  const AObservedEpoch: Int32;
-  const ATimeoutNs: Int64);
+  const AExpectedEpoch: Int32; const ATimeoutNs: Int64);
 procedure LockFreeNotifyData(AEpoch: PInt32; AWaiters: PInt32);
 procedure LockFreeNotifySpace(AEpoch: PInt32; AWaiters: PInt32);
 procedure LockFreeWakeAll(AEpoch: PInt32);
@@ -38,48 +36,40 @@ begin
 end;
 
 procedure LockFreeWaitData(AEpoch: PInt32; AWaiters: PInt32;
-  const AObservedEpoch: Int32;
-  const ATimeoutNs: Int64);
+  const AExpectedEpoch: Int32; const ATimeoutNs: Int64);
 var
-  LEpoch: Int32;
   LI: Int32;
 begin
   for LI := 0 to SPIN_LIMIT - 1 do
   begin
-    LEpoch := AtomicLoad32(AEpoch^, moAcquire);
-    if LEpoch <> AtomicLoad32(AEpoch^, moAcquire) then
+    if AtomicLoad32(AEpoch^, moAcquire) <> AExpectedEpoch then
       Exit;
     CpuPause;
   end;
   AtomicFetchAdd32(AWaiters^, 1, moAcqRel);
   try
-    if AtomicLoad32(AEpoch^, moAcquire) <> AObservedEpoch then
-      Exit;
-    platform_wait_address32(AEpoch, AObservedEpoch, ATimeoutNs);
+    if AtomicLoad32(AEpoch^, moAcquire) = AExpectedEpoch then
+      platform_wait_address32(AEpoch, AExpectedEpoch, ATimeoutNs);
   finally
     AtomicFetchSub32(AWaiters^, 1, moAcqRel);
   end;
 end;
 
 procedure LockFreeWaitSpace(AEpoch: PInt32; AWaiters: PInt32;
-  const AObservedEpoch: Int32;
-  const ATimeoutNs: Int64);
+  const AExpectedEpoch: Int32; const ATimeoutNs: Int64);
 var
-  LEpoch: Int32;
   LI: Int32;
 begin
   for LI := 0 to SPIN_LIMIT - 1 do
   begin
-    LEpoch := AtomicLoad32(AEpoch^, moAcquire);
-    if LEpoch <> AtomicLoad32(AEpoch^, moAcquire) then
+    if AtomicLoad32(AEpoch^, moAcquire) <> AExpectedEpoch then
       Exit;
     CpuPause;
   end;
   AtomicFetchAdd32(AWaiters^, 1, moAcqRel);
   try
-    if AtomicLoad32(AEpoch^, moAcquire) <> AObservedEpoch then
-      Exit;
-    platform_wait_address32(AEpoch, AObservedEpoch, ATimeoutNs);
+    if AtomicLoad32(AEpoch^, moAcquire) = AExpectedEpoch then
+      platform_wait_address32(AEpoch, AExpectedEpoch, ATimeoutNs);
   finally
     AtomicFetchSub32(AWaiters^, 1, moAcqRel);
   end;

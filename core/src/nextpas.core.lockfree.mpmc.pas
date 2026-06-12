@@ -8,7 +8,12 @@ uses
   nextpas.core.lockfree.base;
 
 type
-  generic TMpmcQueue<T> = class
+  generic TMpmcQueueImpl<T> = class
+  private
+    class function EmptySequence(const APos: Int64): Int64; static; inline;
+    class function FullSequence(const APos: Int64): Int64; static; inline;
+    function ClosedAndNoActiveEnqueues: Boolean; inline;
+    procedure LeaveActiveEnqueue; inline;
   private
     type
       TSlot = record
@@ -22,6 +27,7 @@ type
     FEnqueuePos: Int64;
     FDequeuePos: Int64;
     FClosed: Int32;
+    FActiveEnqueues: Int32;
     FDataEpoch: Int32;
     FSpaceEpoch: Int32;
     FDataWaiters: Int32;
@@ -44,6 +50,9 @@ type
     function ApproxCount: PtrUInt;
   end;
 
+  generic TMpmcQueue<T> = class(specialize TMpmcQueueImpl<T>)
+  end;
+
 implementation
 
 uses
@@ -52,82 +61,117 @@ uses
   nextpas.core.lockfree.wait,
   nextpas.core.time.base;
 
-constructor TMpmcQueue.Create(const ACapacity: PtrUInt);
+class function TMpmcQueueImpl.EmptySequence(const APos: Int64): Int64;
+begin
+  Result := APos * 2;
+end;
+
+class function TMpmcQueueImpl.FullSequence(const APos: Int64): Int64;
+begin
+  Result := (APos * 2) + 1;
+end;
+
+constructor TMpmcQueueImpl.Create(const ACapacity: PtrUInt);
 var
   LCap: PtrUInt;
   LI: PtrUInt;
 begin
-  inherited Create;
   if IsManagedType(T) then
     raise EArgumentError.Create('TMpmcQueue: T must be unmanaged');
   if ACapacity = 0 then
     raise EArgumentError.Create('TMpmcQueue: capacity must be > 0');
+  inherited Create;
   LCap := LockFreeNextPow2(ACapacity);
   FCapacity := LCap;
   FMask := LCap - 1;
   SetLength(FSlots, LCap);
   for LI := 0 to LCap - 1 do
-    FSlots[LI].Sequence := Int64(LI);
+    FSlots[LI].Sequence := EmptySequence(Int64(LI));
   FEnqueuePos := 0;
   FDequeuePos := 0;
   FClosed := 0;
+  FActiveEnqueues := 0;
   FDataEpoch := 0;
   FSpaceEpoch := 0;
   FDataWaiters := 0;
   FSpaceWaiters := 0;
 end;
 
-function TMpmcQueue.TryEnqueue(const AValue: T): Boolean;
-var
-  LPos: Int64;
-  LIdx: PtrUInt;
-  LSeq, LDiff: Int64;
+function TMpmcQueueImpl.ClosedAndNoActiveEnqueues: Boolean;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
-    Exit(False);
-  while True do
+  Result := (AtomicLoad32(FClosed, moAcquire) <> 0) and
+    (AtomicLoad32(FActiveEnqueues, moAcquire) = 0);
+end;
+
+procedure TMpmcQueueImpl.LeaveActiveEnqueue;
+begin
+  if AtomicFetchSub32(FActiveEnqueues, 1, moAcqRel) = 1 then
   begin
-    LPos := AtomicLoad64(FEnqueuePos, moRelaxed);
-    LIdx := PtrUInt(LPos) and FMask;
-    LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
-    LDiff := LSeq - LPos;
-    if LDiff = 0 then
-    begin
-      if AtomicCompareExchange64(FEnqueuePos, LPos, LPos + 1, moRelaxed) = LPos then
-      begin
-        FSlots[LIdx].Value := AValue;
-        AtomicStore64(FSlots[LIdx].Sequence, LPos + 1, moRelease);
-        LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
-        Result := True;
-        Exit;
-      end;
-    end
-    else if LDiff < 0 then
-      Exit(False)
-    else
-      CpuPause;
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      LockFreeWakeAll(@FDataEpoch);
   end;
 end;
 
-function TMpmcQueue.TryDequeue(out AValue: T): Boolean;
+function TMpmcQueueImpl.TryEnqueue(const AValue: T): Boolean;
 var
   LPos: Int64;
   LIdx: PtrUInt;
-  LSeq, LDiff: Int64;
+  LSeq, LExpected, LDiff: Int64;
+begin
+  AtomicFetchAdd32(FActiveEnqueues, 1, moAcqRel);
+  try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(False);
+    while True do
+    begin
+      if AtomicLoad32(FClosed, moAcquire) <> 0 then
+        Exit(False);
+      LPos := AtomicLoad64(FEnqueuePos, moRelaxed);
+      LIdx := PtrUInt(LPos) and FMask;
+      LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
+      LExpected := EmptySequence(LPos);
+      LDiff := LSeq - LExpected;
+      if LDiff = 0 then
+      begin
+        if AtomicCompareExchange64(FEnqueuePos, LPos, LPos + 1, moRelaxed) = LPos then
+        begin
+          FSlots[LIdx].Value := AValue;
+          AtomicStore64(FSlots[LIdx].Sequence, FullSequence(LPos), moRelease);
+          LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
+          Result := True;
+          Exit;
+        end;
+      end
+      else if LDiff < 0 then
+        Exit(False)
+      else
+        CpuPause;
+    end;
+  finally
+    LeaveActiveEnqueue;
+  end;
+end;
+
+function TMpmcQueueImpl.TryDequeue(out AValue: T): Boolean;
+var
+  LPos: Int64;
+  LIdx: PtrUInt;
+  LSeq, LExpected, LDiff: Int64;
 begin
   while True do
   begin
     LPos := AtomicLoad64(FDequeuePos, moRelaxed);
     LIdx := PtrUInt(LPos) and FMask;
     LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
-    LDiff := LSeq - (LPos + 1);
+    LExpected := FullSequence(LPos);
+    LDiff := LSeq - LExpected;
     if LDiff = 0 then
     begin
       if AtomicCompareExchange64(FDequeuePos, LPos, LPos + 1, moRelaxed) = LPos then
       begin
         AValue := FSlots[LIdx].Value;
         FSlots[LIdx].Value := Default(T);
-        AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease);
+        AtomicStore64(FSlots[LIdx].Sequence, EmptySequence(LPos + Int64(FCapacity)), moRelease);
         LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
         Result := True;
         Exit;
@@ -140,7 +184,7 @@ begin
   end;
 end;
 
-function TMpmcQueue.EnqueueWait(const AValue: T): Boolean;
+function TMpmcQueueImpl.EnqueueWait(const AValue: T): Boolean;
 var
   LEpoch: Int32;
 begin
@@ -163,7 +207,7 @@ begin
   end;
 end;
 
-function TMpmcQueue.DequeueWait(out AValue: T): Boolean;
+function TMpmcQueueImpl.DequeueWait(out AValue: T): Boolean;
 var
   LEpoch: Int32;
 begin
@@ -180,13 +224,17 @@ begin
       
       Exit(True);
     end;
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if ClosedAndNoActiveEnqueues then
+    begin
+      if TryDequeue(AValue) then
+        Exit(True);
       Exit(False);
+    end;
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);
   end;
 end;
 
-function TMpmcQueue.EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
+function TMpmcQueueImpl.EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
 var
   LEpoch: Int32;
   LStart: TInstant;
@@ -215,7 +263,7 @@ begin
   end;
 end;
 
-function TMpmcQueue.DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+function TMpmcQueueImpl.DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
 var
   LEpoch: Int32;
   LStart: TInstant;
@@ -238,13 +286,17 @@ begin
       
       Exit(True);
     end;
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if ClosedAndNoActiveEnqueues then
+    begin
+      if TryDequeue(AValue) then
+        Exit(True);
       Exit(False);
+    end;
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);
   end;
 end;
 
-procedure TMpmcQueue.Close;
+procedure TMpmcQueueImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
   LockFreeWakeAll(@FDataEpoch);
@@ -253,12 +305,12 @@ begin
   
 end;
 
-function TMpmcQueue.IsClosed: Boolean;
+function TMpmcQueueImpl.IsClosed: Boolean;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TMpmcQueue.ApproxCount: PtrUInt;
+function TMpmcQueueImpl.ApproxCount: PtrUInt;
 var
   LEnq, LDeq: Int64;
 begin
@@ -270,11 +322,13 @@ begin
     Result := 0;
 end;
 
-function TMpmcQueue.EnqueueBatch(const AValues: array of T): PtrUInt;
+function TMpmcQueueImpl.EnqueueBatch(const AValues: array of T): PtrUInt;
 var
   LI: PtrUInt;
 begin
   if Length(AValues) = 0 then
+    Exit(0);
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(0);
   Result := 0;
   for LI := 0 to PtrUInt(High(AValues)) do
@@ -285,7 +339,7 @@ begin
   end;
 end;
 
-function TMpmcQueue.DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
+function TMpmcQueueImpl.DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
 var
   LI, LCount: PtrUInt;
 begin
@@ -303,17 +357,17 @@ begin
   end;
 end;
 
-function TMpmcQueue.IsEmpty: Boolean;
+function TMpmcQueueImpl.IsEmpty: Boolean;
 begin
   Result := ApproxCount = 0;
 end;
 
-function TMpmcQueue.IsFull: Boolean;
+function TMpmcQueueImpl.IsFull: Boolean;
 begin
   Result := ApproxCount >= FCapacity;
 end;
 
-function TMpmcQueue.Capacity: PtrUInt;
+function TMpmcQueueImpl.Capacity: PtrUInt;
 begin
   Result := FCapacity;
 end;

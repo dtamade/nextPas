@@ -7,6 +7,25 @@ interface
 uses
   nextpas.core.atomic;
 
+type
+  memory_order_t = nextpas.core.atomic.memory_order_t;
+  TMemoryOrder = nextpas.core.atomic.TMemoryOrder;
+  atomic_tagged_ptr_t = nextpas.core.atomic.atomic_tagged_ptr_t;
+
+const
+  mo_relaxed = nextpas.core.atomic.mo_relaxed;
+  mo_consume = nextpas.core.atomic.mo_consume;
+  mo_acquire = nextpas.core.atomic.mo_acquire;
+  mo_release = nextpas.core.atomic.mo_release;
+  mo_acq_rel = nextpas.core.atomic.mo_acq_rel;
+  mo_seq_cst = nextpas.core.atomic.mo_seq_cst;
+  moRelaxed = mo_relaxed;
+  moConsume = mo_consume;
+  moAcquire = mo_acquire;
+  moRelease = mo_release;
+  moAcqRel = mo_acq_rel;
+  moSeqCst = mo_seq_cst;
+
 // NOTE: This unit intentionally exposes legacy / potentially-misleading overloads.
 // In v3, these APIs should not live in the main nextpas.core.atomic surface.
 // Legacy PascalCase compatibility facade mirrored for older call sites.
@@ -34,12 +53,6 @@ function atomic_compare_exchange_strong_ptr(var aObj: Pointer; var aExpected: Po
 
 procedure CpuPause; inline;
 
-function atomic_is_lock_free_32: Boolean; inline;
-{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
-function atomic_is_lock_free_64: Boolean; inline;
-{$ENDIF}
-function atomic_is_lock_free_ptr: Boolean; inline;
-
 function AtomicLoad32(var ATarget: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32; inline;
 procedure AtomicStore32(var ATarget: Int32; const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst); inline;
 function AtomicExchange32(var ATarget: Int32; const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32; inline;
@@ -49,7 +62,6 @@ function AtomicFetchSub32(var ATarget: Int32; const AValue: Int32; const AOrder:
 function AtomicFetchAnd32(var ATarget: Int32; const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32; inline;
 function AtomicFetchOr32(var ATarget: Int32; const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32; inline;
 function AtomicFetchXor32(var ATarget: Int32; const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32; inline;
-function AtomicIsLockFree32: Boolean; inline;
 
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function AtomicLoad64(var ATarget: Int64; const AOrder: TMemoryOrder = moSeqCst): Int64; inline;
@@ -58,14 +70,12 @@ function AtomicExchange64(var ATarget: Int64; const AValue: Int64; const AOrder:
 function AtomicCompareExchange64(var ATarget: Int64; const AExpected, ADesired: Int64; const AOrder: TMemoryOrder = moSeqCst): Int64; inline;
 function AtomicFetchAdd64(var ATarget: Int64; const AValue: Int64; const AOrder: TMemoryOrder = moSeqCst): Int64; inline;
 function AtomicFetchSub64(var ATarget: Int64; const AValue: Int64; const AOrder: TMemoryOrder = moSeqCst): Int64; inline;
-function AtomicIsLockFree64: Boolean; inline;
 {$ENDIF}
 
 function AtomicLoadPtr(var ATarget: Pointer; const AOrder: TMemoryOrder = moSeqCst): Pointer; inline;
 procedure AtomicStorePtr(var ATarget: Pointer; const AValue: Pointer; const AOrder: TMemoryOrder = moSeqCst); inline;
 function AtomicExchangePtr(var ATarget: Pointer; const AValue: Pointer; const AOrder: TMemoryOrder = moSeqCst): Pointer; inline;
 function AtomicCompareExchangePtr(var ATarget: Pointer; const AExpected, ADesired: Pointer; const AOrder: TMemoryOrder = moSeqCst): Pointer; inline;
-function AtomicIsLockFreePtr: Boolean; inline;
 function AtomicWait32(var ATarget: Int32; const AExpected: Int32; const ATimeoutNs: Int64 = -1): Int32; inline;
 function AtomicNotifyOne32(var ATarget: Int32): Int32; inline;
 function AtomicNotifyAll32(var ATarget: Int32): Int32; inline;
@@ -209,23 +219,6 @@ begin
   nextpas.core.atomic.CpuPause;
 end;
 
-function atomic_is_lock_free_32: Boolean;
-begin
-  Result := nextpas.core.atomic.atomic_is_lock_free_32;
-end;
-
-{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
-function atomic_is_lock_free_64: Boolean;
-begin
-  Result := nextpas.core.atomic.atomic_is_lock_free_64;
-end;
-{$ENDIF}
-
-function atomic_is_lock_free_ptr: Boolean;
-begin
-  Result := nextpas.core.atomic.atomic_is_lock_free_ptr;
-end;
-
 function AtomicLoad32(var ATarget: Int32; const AOrder: TMemoryOrder): Int32;
 begin
   Result := nextpas.core.atomic.AtomicLoad32(ATarget, AOrder);
@@ -271,11 +264,6 @@ begin
   Result := nextpas.core.atomic.AtomicFetchXor32(ATarget, AValue, AOrder);
 end;
 
-function AtomicIsLockFree32: Boolean;
-begin
-  Result := nextpas.core.atomic.AtomicIsLockFree32;
-end;
-
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function AtomicLoad64(var ATarget: Int64; const AOrder: TMemoryOrder): Int64;
 begin
@@ -306,11 +294,6 @@ function AtomicFetchSub64(var ATarget: Int64; const AValue: Int64; const AOrder:
 begin
   Result := nextpas.core.atomic.AtomicFetchSub64(ATarget, AValue, AOrder);
 end;
-
-function AtomicIsLockFree64: Boolean;
-begin
-  Result := nextpas.core.atomic.AtomicIsLockFree64;
-end;
 {$ENDIF}
 
 function AtomicLoadPtr(var ATarget: Pointer; const AOrder: TMemoryOrder): Pointer;
@@ -331,11 +314,6 @@ end;
 function AtomicCompareExchangePtr(var ATarget: Pointer; const AExpected, ADesired: Pointer; const AOrder: TMemoryOrder): Pointer;
 begin
   Result := nextpas.core.atomic.AtomicCompareExchangePtr(ATarget, AExpected, ADesired, AOrder);
-end;
-
-function AtomicIsLockFreePtr: Boolean;
-begin
-  Result := nextpas.core.atomic.AtomicIsLockFreePtr;
 end;
 
 function AtomicWait32(var ATarget: Int32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;

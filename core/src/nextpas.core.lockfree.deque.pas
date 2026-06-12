@@ -8,7 +8,7 @@ uses
   nextpas.core.lockfree.base;
 
 type
-  generic TWorkStealingDeque<T> = class
+  generic TWorkStealingDequeImpl<T> = class
   private
     type
       TItemArray = array of T;
@@ -28,21 +28,24 @@ type
     function Capacity: PtrUInt;
   end;
 
+  generic TWorkStealingDeque<T> = class(specialize TWorkStealingDequeImpl<T>)
+  end;
+
 implementation
 
 uses
   nextpas.core.errors,
   nextpas.core.atomic;
 
-constructor TWorkStealingDeque.Create(const ACapacity: PtrUInt);
+constructor TWorkStealingDequeImpl.Create(const ACapacity: PtrUInt);
 var
   LCap: PtrUInt;
 begin
-  inherited Create;
   if IsManagedType(T) then
     raise EArgumentError.Create('TWorkStealingDeque: T must be unmanaged');
   if ACapacity = 0 then
     raise EArgumentError.Create('TWorkStealingDeque: capacity must be > 0');
+  inherited Create;
   LCap := LockFreeNextPow2(ACapacity);
   FCapacity := LCap;
   FMask := LCap - 1;
@@ -51,7 +54,7 @@ begin
   FBottom := 0;
 end;
 
-function TWorkStealingDeque.TryPush(const AValue: T): Boolean;
+function TWorkStealingDequeImpl.TryPush(const AValue: T): Boolean;
 var
   LBottom, LTop, LSize: Int64;
 begin
@@ -65,7 +68,7 @@ begin
   Result := True;
 end;
 
-function TWorkStealingDeque.TryPop(out AValue: T): Boolean;
+function TWorkStealingDequeImpl.TryPop(out AValue: T): Boolean;
 var
   LBottom, LTop: Int64;
 begin
@@ -93,7 +96,7 @@ begin
   end;
 end;
 
-function TWorkStealingDeque.TrySteal(out AValue: T): Boolean;
+function TWorkStealingDequeImpl.TrySteal(out AValue: T): Boolean;
 var
   LTop, LBottom: Int64;
 begin
@@ -107,7 +110,7 @@ begin
   Result := True;
 end;
 
-function TWorkStealingDeque.IsEmpty: Boolean;
+function TWorkStealingDequeImpl.IsEmpty: Boolean;
 var
   LTop, LBottom: Int64;
 begin
@@ -116,7 +119,7 @@ begin
   Result := LTop >= LBottom;
 end;
 
-function TWorkStealingDeque.ApproxCount: PtrUInt;
+function TWorkStealingDequeImpl.ApproxCount: PtrUInt;
 var
   LTop, LBottom: Int64;
 begin
@@ -128,7 +131,7 @@ begin
     Result := 0;
 end;
 
-function TWorkStealingDeque.Capacity: PtrUInt;
+function TWorkStealingDequeImpl.Capacity: PtrUInt;
 begin
   Result := FCapacity;
 end;

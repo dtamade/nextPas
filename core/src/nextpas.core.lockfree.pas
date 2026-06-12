@@ -12,6 +12,22 @@ uses
   nextpas.core.lockfree.mpsc,
   nextpas.core.lockfree.deque;
 
+type
+  generic TSpscQueue<T> = class(specialize TSpscQueueImpl<T>)
+  end;
+
+  generic TMpmcQueue<T> = class(specialize TMpmcQueueImpl<T>)
+  end;
+
+  generic TLockFreeStack<T> = class(specialize TLockFreeStackImpl<T>)
+  end;
+
+  generic TMpscQueue<T> = class(specialize TMpscQueueImpl<T>)
+  end;
+
+  generic TWorkStealingDeque<T> = class(specialize TWorkStealingDequeImpl<T>)
+  end;
+
 implementation
 
 end.
