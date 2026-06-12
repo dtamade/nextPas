@@ -209,6 +209,29 @@ const
     '    Halt(0);' + LineEnding +
     'end.';
 
+  CompareWhileOwnedArgumentSource =
+    'program test;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  while MakeText() = ''x'' do' + LineEnding +
+    '    Halt(0);' + LineEnding +
+    'end.';
+
+  CompareRepeatOwnedArgumentSource =
+    'program test;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  repeat' + LineEnding +
+    '    Halt(0);' + LineEnding +
+    '  until MakeText() = ''x'';' + LineEnding +
+    'end.';
+
   WriteLnOwnedArgumentSource =
     'program test;' + LineEnding +
     'function MakeText: string;' + LineEnding +
@@ -685,6 +708,7 @@ var
   OwnedIndex, CompareIndex, ReleaseIndex: LongInt;
   MakeAIndex, MakeBIndex, ReleaseAIndex, ReleaseBIndex: LongInt;
   ConcatIndex, ConcatReleaseIndex: LongInt;
+  WhileLabelIndex, RepeatLabelIndex: LongInt;
 begin
   Model := BuildModel(CompareOwnedArgumentSource);
   try
@@ -868,6 +892,70 @@ begin
       Fail('compare-compound-temp-owned-must-precede-compare');
     if CompareIndex >= ReleaseIndex then
       Fail('compare-compound-temp-release-must-follow-compare');
+  finally
+    Model.Free;
+  end;
+
+  Model := BuildModel(CompareWhileOwnedArgumentSource);
+  try
+    if Model = nil then
+      Fail('compare-while-owned-argument-model-nil');
+    WhileLabelIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
+      'block-label-runtime', 'while-cond');
+    OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText');
+    CompareIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'cond-br-runtime', 'while');
+    ReleaseIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText');
+    if (WhileLabelIndex < 0) or (OwnedIndex < 0) or (CompareIndex < 0) or
+      (ReleaseIndex < 0) then
+      Fail('missing-compare-while-string-temp-order-node');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'cond-br-runtime', 'while', Node) then
+      Fail('missing-compare-while-cond-br-runtime');
+    if Pos('strcmp eq', Node.Operand) = 0 then
+      Fail('missing-compare-while-string-strcmp-runtime');
+    if Pos('strvar $str_cmp_tmp_', Node.Operand) = 0 then
+      Fail('missing-compare-while-string-temp-operand-runtime');
+    if WhileLabelIndex >= OwnedIndex then
+      Fail('compare-while-temp-owned-must-be-in-condition-block');
+    if OwnedIndex >= CompareIndex then
+      Fail('compare-while-temp-owned-must-precede-compare');
+    if CompareIndex >= ReleaseIndex then
+      Fail('compare-while-temp-release-must-follow-compare');
+  finally
+    Model.Free;
+  end;
+
+  Model := BuildModel(CompareRepeatOwnedArgumentSource);
+  try
+    if Model = nil then
+      Fail('compare-repeat-owned-argument-model-nil');
+    RepeatLabelIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
+      'block-label-runtime', 'repeat-cond');
+    OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText');
+    CompareIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'cond-br-runtime', 'until');
+    ReleaseIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText');
+    if (RepeatLabelIndex < 0) or (OwnedIndex < 0) or (CompareIndex < 0) or
+      (ReleaseIndex < 0) then
+      Fail('missing-compare-repeat-string-temp-order-node');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'cond-br-runtime', 'until', Node) then
+      Fail('missing-compare-repeat-cond-br-runtime');
+    if Pos('strcmp eq', Node.Operand) = 0 then
+      Fail('missing-compare-repeat-string-strcmp-runtime');
+    if Pos('strvar $str_cmp_tmp_', Node.Operand) = 0 then
+      Fail('missing-compare-repeat-string-temp-operand-runtime');
+    if RepeatLabelIndex >= OwnedIndex then
+      Fail('compare-repeat-temp-owned-must-be-in-condition-block');
+    if OwnedIndex >= CompareIndex then
+      Fail('compare-repeat-temp-owned-must-precede-compare');
+    if CompareIndex >= ReleaseIndex then
+      Fail('compare-repeat-temp-release-must-follow-compare');
   finally
     Model.Free;
   end;

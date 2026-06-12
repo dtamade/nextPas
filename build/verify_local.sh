@@ -1298,6 +1298,8 @@ require_output_pattern '^hir-string-call-argument-ownership-runtime-smoke-llvm_s
 require_output_pattern '^hir-string-call-argument-ownership-runtime-smoke-llvm_string_arg_owned_compare_both-exit=42$' "$HIR_STRING_CALL_ARGUMENT_RUNTIME_OUTPUT" 'missing-hir-string-call-argument-runtime-compare-both-exit'
 require_output_pattern '^hir-string-call-argument-ownership-runtime-smoke-llvm_string_arg_owned_compare_concat-exit=42$' "$HIR_STRING_CALL_ARGUMENT_RUNTIME_OUTPUT" 'missing-hir-string-call-argument-runtime-compare-concat-exit'
 require_output_pattern '^hir-string-call-argument-ownership-runtime-smoke-llvm_string_arg_owned_compare_compound-exit=42$' "$HIR_STRING_CALL_ARGUMENT_RUNTIME_OUTPUT" 'missing-hir-string-call-argument-runtime-compare-compound-exit'
+require_output_pattern '^hir-string-call-argument-ownership-runtime-smoke-llvm_string_arg_owned_compare_while-exit=42$' "$HIR_STRING_CALL_ARGUMENT_RUNTIME_OUTPUT" 'missing-hir-string-call-argument-runtime-compare-while-exit'
+require_output_pattern '^hir-string-call-argument-ownership-runtime-smoke-llvm_string_arg_owned_compare_repeat-exit=42$' "$HIR_STRING_CALL_ARGUMENT_RUNTIME_OUTPUT" 'missing-hir-string-call-argument-runtime-compare-repeat-exit'
 require_output_pattern '^hir-string-call-argument-ownership-runtime-smoke-status=pass$' "$HIR_STRING_CALL_ARGUMENT_RUNTIME_OUTPUT" 'missing-hir-string-call-argument-runtime-pass'
 printf 'hir-string-call-argument-ownership-runtime-smoke=pass\n'
 

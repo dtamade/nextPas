@@ -443,3 +443,17 @@
   `sema.c6h4-owned-string-return-deferred-consumer`；GREEN 后
   `llvm_string_arg_owned_compare_compound` 通过 LLVM verify/llc/link/run，exit 42；
   `build/verify_local.sh` 已纳入 compare-compound runtime smoke 输出。
+- 2026-06-12 C6-H14：owned string return 的 `while` / `repeat until` 条件
+  compare 第一刀：`while MakeText() = 'x' do ...` 与
+  `repeat ... until MakeText() = 'x'` 现在从 fail-closed 推进为 condition block 内
+  owned temp -> `cond-br-runtime` string compare -> temp release。sema 不再在 loop
+  label 生成前试探性编码 owned condition，而是先进入 `while-cond` / `repeat-cond`
+  block，再发出 owned temp 与 compare，保证每次迭代重新创建 temp；builder/emitter 仍把
+  release 放在 LLVM `br i1` 前。`for`、field store、var/out、
+  virtual/interface/external 和更宽泛的 loop condition 仍保持 fail-closed。RED=
+  `test_hir_string_call_argument_ownership_contract` 失败
+  `missing-compare-while-string-temp-order-node`，runtime smoke 失败
+  `missing-owned-string-return-runtime:sema.c6h4-owned-string-return-deferred-consumer`；
+  GREEN 后 `llvm_string_arg_owned_compare_while` 与
+  `llvm_string_arg_owned_compare_repeat` 均通过 LLVM verify/llc/link/run，exit 42；
+  `build/verify_local.sh` 已纳入 compare-while / compare-repeat runtime smoke 输出。

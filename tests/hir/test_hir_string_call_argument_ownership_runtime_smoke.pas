@@ -219,6 +219,29 @@ const
     '  Halt(51);' + LineEnding +
     'end.';
 
+  CompareWhileOwnedArgumentSource =
+    'program c6h14_compare_while_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  while MakeText() = ''x'' do Halt(42);' + LineEnding +
+    '  Halt(53);' + LineEnding +
+    'end.';
+
+  CompareRepeatOwnedArgumentSource =
+    'program c6h14_compare_repeat_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''x'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  repeat' + LineEnding +
+    '  until MakeText() = ''x'';' + LineEnding +
+    '  Halt(42);' + LineEnding +
+    'end.';
+
 procedure Fail(const AMessage: string);
 begin
   WriteLn('hir-string-call-argument-ownership-runtime-smoke-failure=', AMessage);
@@ -554,6 +577,29 @@ begin
     Fail('compare-compound-owned-string-release-must-follow-compare-runtime');
 end;
 
+procedure AssertCompareLoopOwnedRuntimeContract(const ALlvmText: string);
+var
+  ProducerPos, ComparePos, ReleasePos, BranchPos: LongInt;
+begin
+  ProducerPos := Pos(' = call {ptr, i64, ptr, i64} @MakeText(', ALlvmText);
+  ComparePos := Pos(' = call i64 @np_str_cmp(', ALlvmText);
+  ReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ComparePos + 1);
+  BranchPos := FindAfter(ALlvmText, 'br i1 ', ReleasePos + 1);
+  if (ProducerPos = 0) or (ComparePos = 0) then
+    Fail('missing-compare-loop-owned-string-runtime');
+  if ReleasePos = 0 then
+    Fail('missing-compare-loop-owned-string-release-runtime');
+  if BranchPos = 0 then
+    Fail('missing-compare-loop-conditional-branch-runtime');
+  if ProducerPos >= ComparePos then
+    Fail('compare-loop-owned-string-temp-creation-order-runtime');
+  if ComparePos >= ReleasePos then
+    Fail('compare-loop-owned-string-release-must-follow-compare-runtime');
+  if ReleasePos >= BranchPos then
+    Fail('compare-loop-owned-string-release-must-precede-branch-runtime');
+end;
+
 procedure RunRuntimeSmoke(const AOutputDir, AStem: string);
 var
   LlPath: string;
@@ -605,6 +651,8 @@ begin
     AssertCompareConcatOwnedRuntimeContract(LlvmText)
   else if AAssertKind = 'compare-compound' then
     AssertCompareCompoundOwnedRuntimeContract(LlvmText)
+  else if AAssertKind = 'compare-loop' then
+    AssertCompareLoopOwnedRuntimeContract(LlvmText)
   else
     Fail('unknown-assert-kind:' + AAssertKind);
 
@@ -653,5 +701,9 @@ begin
     CompareConcatOwnedArgumentSource, 'compare-concat');
   EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_compare_compound',
     CompareCompoundOwnedArgumentSource, 'compare-compound');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_compare_while',
+    CompareWhileOwnedArgumentSource, 'compare-loop');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_compare_repeat',
+    CompareRepeatOwnedArgumentSource, 'compare-loop');
   WriteLn('hir-string-call-argument-ownership-runtime-smoke-status=pass');
 end.

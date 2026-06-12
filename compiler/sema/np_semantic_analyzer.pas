@@ -149,6 +149,8 @@ type
       const ANode: TGreenNode; out AFuncName: string): Boolean;
     function IsSupportedOwnedStringReturnCompareOperand(
       const ANode: TGreenNode; out AFuncName: string): Boolean;
+    function BoolConditionHasSupportedOwnedStringCompare(
+      const ANode: TGreenNode): Boolean;
     function CompareExpressionConsumesOwnedStringReturnDeferred(
       const ANode: TGreenNode): Boolean;
     function NodeConsumesOwnedStringReturnDeferred(const ANode: TGreenNode;
@@ -1287,6 +1289,95 @@ begin
     IsOwnedStringReturnFunc(AFuncName);
 end;
 
+function TSemanticAnalyzer.BoolConditionHasSupportedOwnedStringCompare(
+  const ANode: TGreenNode): Boolean;
+var
+  Dummy: string;
+
+  function CanEmitOwnedCompareOperand(const ALocalNode: TGreenNode): Boolean;
+  begin
+    Result := False;
+    if ALocalNode = nil then
+      Exit;
+    if (ALocalNode.NodeKind = gnkIdentifier) and
+      IsRuntimeStrVar(ALocalNode.Text) then
+      Exit(True);
+    if ALocalNode.NodeKind = gnkStringLiteral then
+      Exit(True);
+    if IsSupportedOwnedStringReturnCompareOperand(ALocalNode, Dummy) then
+      Exit(True);
+    if (ALocalNode.NodeKind = gnkBinaryExpression) and
+      (ALocalNode.Text = '+') and (ALocalNode.ChildCount >= 2) then
+      Exit(
+        ConcatTreeHasSupportedOwnedStringReturn(ALocalNode) and
+        CanEmitOwnedCompareOperand(ALocalNode.ChildAt(0)) and
+        CanEmitOwnedCompareOperand(ALocalNode.ChildAt(1)));
+  end;
+
+  function IsSupportedCompareNode(const ALocalNode: TGreenNode): Boolean;
+  begin
+    Result := False;
+    if (ALocalNode = nil) or (ALocalNode.NodeKind <> gnkBinaryExpression) or
+      ((ALocalNode.Text <> '=') and (ALocalNode.Text <> '<>')) or
+      (ALocalNode.ChildCount < 2) then
+      Exit;
+    if not (CanEmitOwnedCompareOperand(ALocalNode.ChildAt(0)) and
+      CanEmitOwnedCompareOperand(ALocalNode.ChildAt(1))) then
+      Exit;
+    Result :=
+      IsSupportedOwnedStringReturnCompareOperand(ALocalNode.ChildAt(0),
+        Dummy) or
+      IsSupportedOwnedStringReturnCompareOperand(ALocalNode.ChildAt(1),
+        Dummy) or
+      ConcatTreeHasSupportedOwnedStringReturn(ALocalNode.ChildAt(0)) or
+      ConcatTreeHasSupportedOwnedStringReturn(ALocalNode.ChildAt(1));
+  end;
+
+  function HasSupportedOwnedCompare(const ALocalNode: TGreenNode): Boolean;
+  begin
+    Result := False;
+    if ALocalNode = nil then
+      Exit;
+    if (ALocalNode.NodeKind = gnkUnaryExpression) and
+      SameText(ALocalNode.Text, 'not') and (ALocalNode.ChildCount >= 1) then
+      Exit(HasSupportedOwnedCompare(ALocalNode.ChildAt(0)));
+    if (ALocalNode.NodeKind = gnkBinaryExpression) and
+      (SameText(ALocalNode.Text, 'and') or SameText(ALocalNode.Text, 'or')) and
+      (ALocalNode.ChildCount >= 2) then
+      Exit(HasSupportedOwnedCompare(ALocalNode.ChildAt(0)) or
+        HasSupportedOwnedCompare(ALocalNode.ChildAt(1)));
+    Result := IsSupportedCompareNode(ALocalNode);
+  end;
+
+  function CanEmitOwnedBoolCondition(const ALocalNode: TGreenNode): Boolean;
+  begin
+    Result := False;
+    if ALocalNode = nil then
+      Exit;
+    if (ALocalNode.NodeKind = gnkUnaryExpression) and
+      SameText(ALocalNode.Text, 'not') and (ALocalNode.ChildCount >= 1) then
+      Exit(CanEmitOwnedBoolCondition(ALocalNode.ChildAt(0)));
+    if (ALocalNode.NodeKind = gnkIdentifier) and
+      (IsRuntimeVar(ALocalNode.Text) or SameText(ALocalNode.Text, 'True') or
+       SameText(ALocalNode.Text, 'False')) then
+      Exit(True);
+    if (ALocalNode.NodeKind = gnkBinaryExpression) and
+      (SameText(ALocalNode.Text, 'and') or SameText(ALocalNode.Text, 'or')) and
+      (ALocalNode.ChildCount >= 2) then
+      Exit(CanEmitOwnedBoolCondition(ALocalNode.ChildAt(0)) and
+        CanEmitOwnedBoolCondition(ALocalNode.ChildAt(1)));
+    Result :=
+      (ALocalNode.NodeKind = gnkBinaryExpression) and
+      ((ALocalNode.Text = '=') or (ALocalNode.Text = '<>')) and
+      (ALocalNode.ChildCount >= 2) and
+      CanEmitOwnedCompareOperand(ALocalNode.ChildAt(0)) and
+      CanEmitOwnedCompareOperand(ALocalNode.ChildAt(1));
+  end;
+begin
+  Result := CanEmitOwnedBoolCondition(ANode) and
+    HasSupportedOwnedCompare(ANode);
+end;
+
 function TSemanticAnalyzer.CompareExpressionConsumesOwnedStringReturnDeferred(
   const ANode: TGreenNode): Boolean;
 var
@@ -1343,6 +1434,26 @@ begin
         ANode.ChildAt(I), AInsideDirectOwnedAssignmentRhs) then
         Exit(True);
     Exit(False);
+  end;
+
+  if ((ANode.NodeKind = gnkWhileStatement) or
+    (ANode.NodeKind = gnkRepeatStatement)) and (ANode.ChildCount >= 2) then
+  begin
+    if ANode.NodeKind = gnkWhileStatement then
+    begin
+      Child := ANode.ChildAt(0);
+      BodyNode := ANode.ChildAt(1);
+    end
+    else
+    begin
+      BodyNode := ANode.ChildAt(0);
+      Child := ANode.ChildAt(1);
+    end;
+    if CompareExpressionConsumesOwnedStringReturnDeferred(Child) then
+      Exit(True);
+    if BoolConditionHasSupportedOwnedStringCompare(Child) then
+      Exit(NodeConsumesOwnedStringReturnDeferred(
+        BodyNode, AInsideDirectOwnedAssignmentRhs));
   end;
 
   if DirectOwnedStringReturnAssignmentNode(ANode) then
@@ -13150,12 +13261,16 @@ var
   NodeId: LongInt;
   CondNode, BodyNode: TGreenNode;
   CondBlob, CondLabel, BodyLabel, ExitLabel: string;
+  UseOwnedCompareCondition: Boolean;
 begin
   if (ANode = nil) or (ANode.ChildCount < 2) then
     Exit;
   CondNode := ANode.ChildAt(0);
   BodyNode := ANode.ChildAt(1);
-  if not EncodeRuntimeBoolExprFold(CondNode, CondBlob) then
+  UseOwnedCompareCondition := BoolConditionHasSupportedOwnedStringCompare(
+    CondNode);
+  if (not UseOwnedCompareCondition) and
+    (not EncodeRuntimeBoolExprFold(CondNode, CondBlob)) then
     Exit;
   CondLabel := NewBlockLabel('while-cond');
   BodyLabel := NewBlockLabel('while-body');
@@ -13166,11 +13281,15 @@ begin
   FContinueLabels[High(FContinueLabels)] := CondLabel;
   EmitGotoLabel(CondLabel);
   EmitBlockLabel(CondLabel);
+  if UseOwnedCompareCondition and
+    (not EncodeRuntimeBoolExprFold(CondNode, CondBlob, True)) then
+    Exit;
   NodeId := FModel.AddTypedHirNode(
     'cond-br-runtime', 'while', 0, 0,
     CondBlob + 'labels ' + BodyLabel + #9 + ExitLabel + #10
   );
   AttachRuntimeConditionExpr(NodeId, CondNode);
+  EmitPendingStringTempReleases;
   FCurrentBlockTerminated := True;
   EmitBlockLabel(BodyLabel);
   WalkHaltCalls(BodyNode);
@@ -13185,12 +13304,16 @@ var
   NodeId: LongInt;
   CondNode, BodyNode: TGreenNode;
   CondBlob, BodyLabel, CondLabel, ExitLabel: string;
+  UseOwnedCompareCondition: Boolean;
 begin
   if (ANode = nil) or (ANode.ChildCount < 2) then
     Exit;
   BodyNode := ANode.ChildAt(0);
   CondNode := ANode.ChildAt(1);
-  if not EncodeRuntimeBoolExprFold(CondNode, CondBlob) then
+  UseOwnedCompareCondition := BoolConditionHasSupportedOwnedStringCompare(
+    CondNode);
+  if (not UseOwnedCompareCondition) and
+    (not EncodeRuntimeBoolExprFold(CondNode, CondBlob)) then
     Exit;
   BodyLabel := NewBlockLabel('repeat-body');
   CondLabel := NewBlockLabel('repeat-cond');
@@ -13204,11 +13327,15 @@ begin
   WalkHaltCalls(BodyNode);
   EmitGotoLabel(CondLabel);
   EmitBlockLabel(CondLabel);
+  if UseOwnedCompareCondition and
+    (not EncodeRuntimeBoolExprFold(CondNode, CondBlob, True)) then
+    Exit;
   NodeId := FModel.AddTypedHirNode(
     'cond-br-runtime', 'until', 0, 0,
     CondBlob + 'labels ' + ExitLabel + #9 + BodyLabel + #10
   );
   AttachRuntimeConditionExpr(NodeId, CondNode);
+  EmitPendingStringTempReleases;
   FCurrentBlockTerminated := True;
   EmitBlockLabel(ExitLabel);
   SetLength(FBreakLabels, Length(FBreakLabels) - 1);
