@@ -3,6 +3,7 @@ program test_async_stress;
 {$I nextpas.core.settings.inc}
 
 uses
+  {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils,
   nextpas.core.testing,
   nextpas.core.time.base,

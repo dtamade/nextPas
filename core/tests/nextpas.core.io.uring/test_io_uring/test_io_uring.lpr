@@ -189,6 +189,29 @@ begin
   LRing.Close;
 end;
 
+procedure TestPostCloseAccessors;
+var
+  LRing: TIoUring;
+  LSqe: PIoUringSqe;
+  LCqe: PIoUringCqe;
+begin
+  LRing := TIoUring.Create(8);
+  Check(LRing.IsValid, 'ring valid');
+  LRing.Close;
+
+  LSqe := LRing.GetSqe;
+  Check(LSqe = nil, 'closed ring returns nil sqe');
+  CheckEqual(Int64(-1), Int64(LRing.Submit), 'closed ring submit rejected');
+  CheckEqual(Int64(-1), Int64(LRing.SubmitAndWait(1)),
+    'closed ring submit-and-wait rejected');
+  Check(not LRing.PeekCqe(LCqe), 'closed ring has no cqe');
+  CheckEqual(Int64(-1), Int64(LRing.WaitCqe(LCqe)),
+    'closed ring wait rejected');
+  Check(LCqe = nil, 'closed ring wait clears cqe');
+  CheckEqual(Int64(0), Int64(LRing.CqeReady), 'closed ring has no ready cqe');
+  LRing.CqeSeen(nil);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.io.uring');
   T.Run('Create/Close', @TestCreateClose);
@@ -198,5 +221,6 @@ begin
   T.Run('CqeReady', @TestCqeReady);
   T.Run('SQE full', @TestSqeFull);
   T.Run('User data', @TestUserData);
+  T.Run('Post-close accessors', @TestPostCloseAccessors);
   T.Summary;
 end.

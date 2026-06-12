@@ -69,6 +69,8 @@ end;
 constructor TBufferedReader.Create(const AInner: IReader; const ABufSize: SizeUInt);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentError.Create('TBufferedReader: inner reader is nil');
   if ABufSize = 0 then
     raise EArgumentError.Create('TBufferedReader: buffer size must be > 0');
   FInner := AInner;
@@ -174,6 +176,8 @@ end;
 constructor TBufferedWriter.Create(const AInner: IWriter; const ABufSize: SizeUInt);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentError.Create('TBufferedWriter: inner writer is nil');
   if ABufSize = 0 then
     raise EArgumentError.Create('TBufferedWriter: buffer size must be > 0');
   FInner := AInner;

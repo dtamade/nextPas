@@ -183,7 +183,17 @@ begin
 end;
 
 procedure TTimerHeap.Clear;
+var
+  LI: UInt32;
 begin
+  if FEntryCount > 0 then
+  begin
+    for LI := 0 to FEntryCount - 1 do
+    begin
+      FEntries[LI].Callback := nil;
+      FEntries[LI].Context := nil;
+    end;
+  end;
   SetLength(FEntries, 0);
   SetLength(FHeap, 0);
   FHeapCount := 0;

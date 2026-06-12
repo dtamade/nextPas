@@ -175,6 +175,21 @@ begin
   CheckEqual(Int64(6), LBuf.Size, 'LineWriter.Flush forwards to inner flusher');
 end;
 
+procedure TestLineWriterNilInner;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    CreateLineWriter(IWriter(nil));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'LineWriter nil inner writer raises EArgumentError');
+end;
+
 procedure TestIoWriteLines;
 var
   LBuf: IStream;
@@ -399,6 +414,7 @@ begin
     @TestLineWriterZeroProgressRaises);
   T.Run('LineWriter flush forwards inner flusher',
     @TestLineWriterFlushForwardsInnerFlusher);
+  T.Run('LineWriter nil inner', @TestLineWriterNilInner);
   T.Run('IoWriteLines', @TestIoWriteLines);
   T.Run('IoWriteLine retries partial writer',
     @TestIoWriteLineRetriesPartialWriter);

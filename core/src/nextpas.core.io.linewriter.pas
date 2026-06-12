@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.text.base,
-  nextpas.core.io.intf;
+  nextpas.core.io.intf,
+  nextpas.core.errors;
 
 type
   ILineWriter = interface(IWriter)
@@ -42,6 +43,8 @@ type
 constructor TLineWriter.Create(const AInner: IWriter; const ALineSep: string);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentError.Create('TLineWriter: inner writer is nil');
   FInner := AInner;
   FLineSep := ALineSep;
 end;

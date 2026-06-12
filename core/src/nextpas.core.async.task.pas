@@ -8,7 +8,7 @@ uses
   nextpas.core.async.base;
 
 type
-  TAsyncTaskStatus = (atsIdle, atsPending, atsCompleted, atsFailed, atsTimedOut, atsCancelled);
+  TAsyncTaskStatus = nextpas.core.async.base.TAsyncTaskStatus;
 
   PAsyncTask = ^TAsyncTask;
   TAsyncTask = record
@@ -17,6 +17,7 @@ type
     FResult: Int32;
     FOnComplete: TAsyncCallback;
     FOnCompleteCtx: Pointer;
+    procedure Finish(AStatus: TAsyncTaskStatus; AResult: Int32);
   public
     class function Create: TAsyncTask; static;
     procedure Complete(AResult: Int32);
@@ -40,44 +41,41 @@ begin
   Result.FStatus := atsIdle;
 end;
 
-procedure TAsyncTask.Complete(AResult: Int32);
+procedure TAsyncTask.Finish(AStatus: TAsyncTaskStatus; AResult: Int32);
+var
+  LCallback: TAsyncCallback;
+  LContext: Pointer;
 begin
   if FStatus in [atsCompleted, atsFailed, atsTimedOut, atsCancelled] then
     Exit;
-  FStatus := atsCompleted;
+  FStatus := AStatus;
   FResult := AResult;
-  if Assigned(FOnComplete) then
-    FOnComplete(FOnCompleteCtx);
+  LCallback := FOnComplete;
+  LContext := FOnCompleteCtx;
+  FOnComplete := nil;
+  FOnCompleteCtx := nil;
+  if Assigned(LCallback) then
+    LCallback(LContext);
+end;
+
+procedure TAsyncTask.Complete(AResult: Int32);
+begin
+  Finish(atsCompleted, AResult);
 end;
 
 procedure TAsyncTask.Fail(AResult: Int32);
 begin
-  if FStatus in [atsCompleted, atsFailed, atsTimedOut, atsCancelled] then
-    Exit;
-  FStatus := atsFailed;
-  FResult := AResult;
-  if Assigned(FOnComplete) then
-    FOnComplete(FOnCompleteCtx);
+  Finish(atsFailed, AResult);
 end;
 
 procedure TAsyncTask.Timeout;
 begin
-  if FStatus in [atsCompleted, atsFailed, atsTimedOut, atsCancelled] then
-    Exit;
-  FStatus := atsTimedOut;
-  FResult := -110;
-  if Assigned(FOnComplete) then
-    FOnComplete(FOnCompleteCtx);
+  Finish(atsTimedOut, -110);
 end;
 
 procedure TAsyncTask.Cancel;
 begin
-  if FStatus in [atsCompleted, atsFailed, atsTimedOut, atsCancelled] then
-    Exit;
-  FStatus := atsCancelled;
-  FResult := 0;
-  if Assigned(FOnComplete) then
-    FOnComplete(FOnCompleteCtx);
+  Finish(atsCancelled, 0);
 end;
 
 function TAsyncTask.Status: TAsyncTaskStatus;
@@ -102,6 +100,12 @@ end;
 
 procedure TAsyncTask.OnComplete(ACallback: TAsyncCallback; AContext: Pointer);
 begin
+  if IsDone then
+  begin
+    if Assigned(ACallback) then
+      ACallback(AContext);
+    Exit;
+  end;
   FOnComplete := ACallback;
   FOnCompleteCtx := AContext;
 end;
