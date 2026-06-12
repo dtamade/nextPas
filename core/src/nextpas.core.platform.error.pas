@@ -15,7 +15,7 @@ procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
 implementation
 
 uses
-  nextpas.core.platform.error.base
+  nextpas.core.platform.sync.base
   {$IFDEF NEXTPAS_UNIX},
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi
@@ -221,6 +221,7 @@ begin
     ERROR_OPERATION_ABORTED:
       Result := ecInterrupted;
     {$ENDIF}
+    {$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD)}
     PLATFORM_ERR_INVALID:
       Result := ecInvalidArgument;
     PLATFORM_ERR_UNSUPPORTED:
@@ -230,6 +231,7 @@ begin
     PLATFORM_ERR_AGAIN,
     PLATFORM_ERR_BUSY:
       Result := ecWouldBlock;
+    {$ENDIF}
   else
     Result := ecInternal;
   end;
