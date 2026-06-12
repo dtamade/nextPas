@@ -67,3 +67,86 @@ through `nextpas.core.system.typinfo`. Consumers using these are **metadata-sens
 | `nextpas.core.collections` | `TypeInfo(T)` for comparer/equality dispatch | RTTI shape drift → silent dispatch wrong |
 | `nextpas.core.system.typinfo` test suite | `GetTypeKind`, managed array helpers | Test proof under host truth only |
 | Compiler HIR dynarray operations | `InitializeArray` / `FinalizeArray` / `CopyArray` | Compiler-managed type metadata must align with runtime helpers |
+
+## S5.4 Remaining Open Risks
+
+The following risks remain open at the S5.4 boundary. They must be addressed before
+a landing candidate can be declared fully ready.
+
+### Risk 1: TypInfo RTTI Shape Drift
+
+**Description**: `TypeInfo(T)` and `GetTypeKind(K)` are compile-truth imports that
+reflect the host FPC RTTI layout. When nextPas's own RTTI shape diverges from the
+FPC host truth, metadata-sensitive consumers (primarily `nextpas.core.collections`)
+may silently dispatch incorrectly without any visible failure.
+
+**Current mitigations**:
+- `nextpas.core.system.typinfo` is explicitly scoped to identity/kind/managed-array helpers only.
+- Property reflection and metadata layout remain out of scope.
+- The TypInfo seven-symbol unlock was preceded by a `Needs Review` packet with consumer pressure evidence.
+
+**What remains**:
+- No automated regression test that detects RTTI shape divergence between FPC host and nextPas target.
+- When nextPas self-hosts and emits its own RTTI, all TypInfo consumers must enter a dedicated
+  regression cycle.
+
+**Severity**: High — silent behavioral bugs in collections comparer/equality dispatch.
+
+### Risk 2: Managed Array Leak-Sensitive Gap
+
+**Description**: `@np_dynarray_release` only operates on ptr/len/elem_size. Managed element cleanup
+(array of string, array of interface) depends on compiler contract node projection. If the compiler
+fails to project a managed element cleanup contract, the runtime will leak or double-free without
+any diagnostic.
+
+**Current mitigations**:
+- `test_hir_field_dynarray_contract` and `test_hir_dynarray_release_contract` verify HIR contract
+  projection for managed element types.
+- `test_hir_field_dynarray_release_runtime_smoke` verifies runtime behavior for managed string arrays.
+- Source-contract checks verify dynarray contract name stability.
+
+**What remains**:
+- No heaptrc (or equivalent leak-sensitive) evidence for all managed element type paths.
+- Managed interface array release (`array of IInterface`) runtime smoke exists in TypInfo tests
+  but lacks dedicated heaptrc 0-leak evidence.
+- Partial initialization cleanup paths (resize failure, early exit) are not tested.
+
+**Severity**: Medium — leak-sensitive paths exist for some element types but not all.
+
+### Risk 3: Process/Unit Lifecycle Execution Gap
+
+**Description**: Process lifecycle has semantic seed proof (`test-process-runtime-contract-seed`)
+but no runtime execution proof. Unit lifecycle (`np.system.unit_init`, `np.system.unit_fini`)
+has no semantic seed and no execution at all. This means the compiler can emit contract names
+but cannot yet drive runtime initialization/finalization ordering.
+
+**Current mitigations**:
+- `np.system.process_init` / `np.system.process_fini` are seeded as HIR nodes for program/library/package roots.
+- Integration smoke via `build/verify_local.sh` proves compiler → LLVM → executable for basic program lifecycle.
+- Unit lifecycle is explicitly deferred until the compiler has a UnitGraph consumption path.
+
+**What remains**:
+- No runtime execution of `np.system.process_init` / `np.system.process_fini` beyond the inline
+  syscall path (halt-based programs).
+- No unit initialization/finalization ordering at all.
+- No runtime fault classification (`np.system.runtime_fault`) beyond partial allocator/dynarray evidence.
+
+**Severity**: Low for current scope (deferred to future compiler/runtime integration) — but high
+for self-hosting target.
+
+### Risk 4: Exception Boundary Naming Consistency
+
+**Description**: Exception helpers (`@np_try_push`, `@np_try_pop`, `@np_raise`, etc.) are
+backend-private LLVM helpers with no `np.system.*` contract name mapping. They exist in the
+emitter but are not covered by source-contract checks or documentation in `runtime-contracts.md`.
+
+**Current mitigations**:
+- `lifecycle-contracts.md` documents the exception boundary as a future compiler/runtime contract area.
+- The helpers are backend-private evidence, not public ABI.
+
+**What remains**:
+- No source-contract check verifying exception helper existence or naming stability.
+- No focused test for exception lowering beyond `test_hir_exception.pas` (which tests HIR shape, not
+  runtime behavior).
+
+**Severity**: Low — exception helpers are backend-private and not in the `np.system.*` facade scope.

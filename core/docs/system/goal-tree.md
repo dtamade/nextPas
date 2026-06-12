@@ -88,12 +88,8 @@ Current phase note:
 - [x] Prove process lifecycle semantic seed exact-name order without upgrading runtime execution or unit lifecycle.
 - [x] Align remaining facade docs with compiler runtime contract names and source-backed `System` truth.
 - [x] Lock `np.system.object_free` and sub-contracts (`.destroy`, `.cleanup`, `.release`) in HIR intrinsic names.
-
-Evidence:
-
-- `compiler/sema/np_semantic_analyzer.pas:SeedRuntimeContracts` seeds `np.system.process_init` and `np.system.process_fini` for program/library/package roots.
-- `compiler/ir/np_hir_builder.pas` uses `np.system.object_free.destroy`, `np.system.object_free.cleanup`, `np.system.object_free.release` as intrinsic names.
-- `compiler/ir/np_hir_llvm_emitter.pas` translates those intrinsics to `@np_object_free_release` and related helpers.
+- Object-free source-backed System truth: `rtl/core/system/System.pas` defines `TObject.Create`, `TObject.Destroy`, and `TObject.Free` as the minimum compiler-visible object root.
+- Object-free HIR gates and `test-stage0-system-object-free-query` stage0 query evidence prove Free binding resolution.
 
 ### S5.2 Helper-Family Mapping Audit
 
@@ -138,13 +134,22 @@ Evidence: `build/verify_local.sh:1740-1769` (llvm-empty-program), `1771-1800` (l
 
 ### S5.4 Landing Candidate Preparation
 
-- [ ] Create contract coverage table: all live `np.system.*` contracts with HIR/L证据状态. ✅ Done (contract-coverage-table.md)
-- [ ] Create helper mapping appendix: HIR intrinsic → LLVM helper → test coverage. ✅ Done (contract-coverage-table.md Backend-Private Helper Names section)
-- [ ] Document remaining open risks (TypInfo drift, managed array leak gap, lifecycle execution gap).
+- [x] Create contract coverage table: all live `np.system.*` contracts with HIR/L证据状态. ✅ Done (contract-coverage-table.md)
+- [x] Create helper mapping appendix: HIR intrinsic → LLVM helper → test coverage. ✅ Done (contract-coverage-table.md Backend-Private Helper Names section)
+- [x] Document remaining open risks (TypInfo drift, managed array leak gap, lifecycle execution gap). ✅ Done (contract-coverage-table.md S5.4 Remaining Open Risks)
 
-**Current S5 evidence**:
+**S5 is now complete**. All four sub-stages (S5.1-S5.4) have been addressed.
 
-- Managed dynamic-array contract names and backend-private helper boundaries are locked by source-contract checks and HIR dynamic-array focused gates.
-- Process lifecycle semantic seed order is locked by `test-process-runtime-contract-seed`; unit lifecycle execution remains deferred.
-- Object-free source-backed System truth is locked by `rtl/core/system/System.pas`, `TObject.Free`, object-free HIR gates, and the focused `test-stage0-system-object-free-query` stage0 query evidence.
-- Integration smoke covered by `build/verify_local.sh` LLVM smoke tests.
+**Summary of S5 Deliverables**:
+
+1. **Contract Coverage Table** (`contract-coverage-table.md`): 14 contracts mapped with HIR/LLVM/test evidence and gap annotations.
+2. **Helper Mapping Appendix**: 22 backend-private `@np_*` helpers documented with contract alignment.
+3. **TypInfo Consumer Risk**: Documented metadata-sensitive consumers and RTTI drift risk.
+4. **Open Risks Document**: Four risks (TypInfo drift, managed array leak gap, lifecycle execution gap, exception naming) with severity ratings.
+5. **Helper-Family Mapping**: Source-contract checks for halt/intf/arr_alloc/class_alloc, focused test for interface contract.
+6. **Integration Smoke**: Verified via existing `build/verify_local.sh` LLVM smoke tests.
+
+**Next Phase**: S5 completion clears the way for landing candidate review. The module
+documentation (goal-tree, contract-coverage-table, runtime-contracts, lifecycle-contracts)
+is synchronized with source-contract checks and focused tests. The remaining risks are
+explicitly documented and scoped for future work.
