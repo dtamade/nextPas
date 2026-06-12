@@ -469,3 +469,14 @@
   `missing-owned-string-length-runtime:sema.c6h4-owned-string-return-deferred-consumer`；
   GREEN 后 focused runtime smoke 中 `llvm_string_length_owned_concat` 通过
   LLVM verify/llc/link/run，exit 42。
+- 2026-06-12 C6-H16：owned string return 的 concat `Write/WriteLn` consumer 第一刀：
+  `WriteLn(MakeText() + 'z')` 现在从 fail-closed 推进为 producer owned temp ->
+  writer concat owned temp -> `write-str-var-runtime` -> concat temp 与 producer
+  temp 逆序 release。sema 只在 `Write/WriteLn(<supported string concat tree>)`
+  中放行 zero-arg direct root owned string-return operand；field store、var/out、
+  virtual/interface/external 和对象 string field ownership 继续 fail-closed。RED=
+  `test_hir_string_call_argument_ownership_contract` 失败
+  `missing-writeln-concat-temp-order-node`，runtime smoke 失败
+  `missing-owned-string-return-runtime:sema.c6h4-owned-string-return-deferred-consumer`；
+  GREEN 后 focused runtime smoke 中 `llvm_string_arg_owned_writeln_concat` 通过
+  LLVM verify/llc/link/run，exit 42。

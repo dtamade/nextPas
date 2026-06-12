@@ -143,6 +143,8 @@ type
       const ANode: TGreenNode; out AFuncName: string): Boolean;
     function EmitOwnedStringWriteTemp(
       const ANode: TGreenNode; out ATempName: string): Boolean;
+    function EmitOwnedStringConcatWriteTemp(
+      const ANode: TGreenNode; out ATempName: string): Boolean;
     function ConcatOperandOwnsStringReturn(
       const ANode: TGreenNode; out AFuncName: string): Boolean;
     function IsSupportedOwnedStringReturnConcatOperand(
@@ -1275,6 +1277,34 @@ begin
   Result := True;
 end;
 
+function TSemanticAnalyzer.EmitOwnedStringConcatWriteTemp(
+  const ANode: TGreenNode; out ATempName: string): Boolean;
+var
+  LeftName, RightName: string;
+begin
+  ATempName := '';
+  Result := False;
+  if (ANode = nil) or (ANode.NodeKind <> gnkBinaryExpression) or
+    (ANode.Text <> '+') or (ANode.ChildCount < 2) or
+    (not ConcatTreeHasSupportedOwnedStringReturn(ANode)) or
+    (not CanEmitStrConcatOperand(ANode)) then
+    Exit;
+  LeftName := EmitStrConcatOperand(ANode.ChildAt(0), '');
+  RightName := EmitStrConcatOperand(ANode.ChildAt(1), '');
+  if (LeftName = '') or (RightName = '') then
+    Exit;
+  Inc(FBlockLabelCounter);
+  ATempName := '$str_wrt_cat_tmp_' + IntToStr(FBlockLabelCounter);
+  RegisterRuntimeVar(ATempName);
+  RegisterRuntimeStrVar(ATempName);
+  FModel.AddTypedHirNode('var-decl-str-owned-runtime', ATempName, 0, 0,
+    ATempName);
+  FModel.AddTypedHirNode('assign-str-owned-concat-runtime', ATempName, 0, 0,
+    LeftName + #9 + RightName);
+  QueuePendingStringTempRelease(ATempName, ATempName);
+  Result := True;
+end;
+
 function TSemanticAnalyzer.ConcatOperandOwnsStringReturn(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
 var
@@ -1566,6 +1596,10 @@ begin
         Continue;
       if IsSupportedOwnedStringReturnWriteArgument(Child, SourceName) then
         Continue;
+      if (Child.NodeKind = gnkBinaryExpression) and (Child.Text = '+') and
+        ConcatTreeHasSupportedOwnedStringReturn(Child) and
+        CanEmitStrConcatOperand(Child) then
+        Continue;
       if NodeConsumesOwnedStringReturnDeferred(
         Child, AInsideDirectOwnedAssignmentRhs) then
         Exit(True);
@@ -1663,6 +1697,8 @@ begin
         RegisterOwnedStringReturnFunc(FuncName);
         AChanged := True;
       end;
+      if SameText(ANode.Text, 'WriteLn') or SameText(ANode.Text, 'Write') then
+        RegisterConcatOwnedStringReturnConsumers(ANode.ChildAt(J), AChanged);
     end;
     if LengthArgumentOwnsStringReturn(ANode, FuncName) and
       (not IsOwnedStringReturnFunc(FuncName)) then
@@ -1750,6 +1786,8 @@ begin
         RegisterOwnedStringReturnFunc(FuncName);
         AChanged := True;
       end;
+      if SameText(ANode.Text, 'WriteLn') or SameText(ANode.Text, 'Write') then
+        RegisterConcatOwnedStringReturnConsumers(ANode.ChildAt(J), AChanged);
     end;
     if LengthArgumentOwnsStringReturn(ANode, FuncName) and
       (not IsOwnedStringReturnFunc(FuncName)) then
@@ -12769,6 +12807,10 @@ begin
               EncodeRuntimeIntExprFold(RhsNode.ChildAt(1), Operand) then
               AddWriteIntRuntimeNode(RhsNode.ChildAt(1), Operand)
             else if EmitOwnedStringWriteTemp(RhsNode, Operand) then
+              FModel.AddTypedHirNode(
+                'write-str-var-runtime', 'Write', 0, 0, Operand
+              )
+            else if EmitOwnedStringConcatWriteTemp(RhsNode, Operand) then
               FModel.AddTypedHirNode(
                 'write-str-var-runtime', 'Write', 0, 0, Operand
               )

@@ -242,6 +242,16 @@ const
     '  WriteLn(MakeText());' + LineEnding +
     'end.';
 
+  WriteLnConcatOwnedArgumentSource =
+    'program test;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''write'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  WriteLn(MakeText() + ''!'');' + LineEnding +
+    'end.';
+
   VirtualOwnedArgumentSource =
     'program test;' + LineEnding +
     'type TBase = class' + LineEnding +
@@ -657,6 +667,7 @@ var
   Model: TSemanticModel;
   Node: TTypedHirNode;
   OwnedIndex, WriteIndex, ReleaseIndex: LongInt;
+  ConcatIndex, ConcatReleaseIndex, SourceReleaseIndex: LongInt;
 begin
   Model := BuildModel(WriteLnOwnedArgumentSource);
   try
@@ -696,6 +707,40 @@ begin
       Fail('writeln-string-temp-owned-must-precede-write');
     if WriteIndex >= ReleaseIndex then
       Fail('writeln-string-temp-release-must-follow-write');
+  finally
+    Model.Free;
+  end;
+
+  Model := BuildModel(WriteLnConcatOwnedArgumentSource);
+  try
+    if Model = nil then
+      Fail('writeln-concat-owned-argument-model-nil');
+    OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText');
+    ConcatIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
+      'assign-str-owned-concat-runtime', '$str_wrt_cat_tmp_');
+    WriteIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'write-str-var-runtime', 'Write');
+    ConcatReleaseIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
+      'string-temp-release-runtime', '$str_wrt_cat_tmp_');
+    SourceReleaseIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText');
+    if (OwnedIndex < 0) or (ConcatIndex < 0) or (WriteIndex < 0) or
+      (ConcatReleaseIndex < 0) or (SourceReleaseIndex < 0) then
+      Fail('missing-writeln-concat-temp-order-node');
+    if not FindFirstNodeByKindAndDisplayName(Model,
+      'write-str-var-runtime', 'Write', Node) then
+      Fail('missing-writeln-concat-string-temp-write-runtime');
+    if Pos('$str_wrt_cat_tmp_', Node.Operand) = 0 then
+      Fail('writeln-concat-writer-must-use-concat-temp');
+    if Pos('owner', Node.Operand) <> 0 then
+      Fail('writeln-concat-writer-must-not-receive-owner');
+    if Pos('alloc_size', Node.Operand) <> 0 then
+      Fail('writeln-concat-writer-must-not-receive-alloc-size');
+    if not ((OwnedIndex < ConcatIndex) and (ConcatIndex < WriteIndex) and
+      (WriteIndex < ConcatReleaseIndex) and
+      (ConcatReleaseIndex < SourceReleaseIndex)) then
+      Fail('writeln-concat-temp-release-order');
   finally
     Model.Free;
   end;

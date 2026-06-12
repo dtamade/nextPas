@@ -93,6 +93,17 @@ const
     '  Halt(42);' + LineEnding +
     'end.';
 
+  WriteLnConcatOwnedArgumentSource =
+    'program c6h16_writeln_concat_string_arg_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := IntToStr(4);' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  WriteLn(MakeText() + ''2'');' + LineEnding +
+    '  Halt(42);' + LineEnding +
+    'end.';
+
   ConcatLeftOwnedArgumentSource =
     'program c6h9_concat_left_string_arg_runtime;' + LineEnding +
     'function MakeText: string;' + LineEnding +
@@ -459,6 +470,32 @@ begin
     Fail('writeln-owned-string-temp-release-order-runtime');
 end;
 
+procedure AssertWriteLnConcatOwnedRuntimeContract(const ALlvmText: string);
+var
+  ProducerPos, ConcatPos, WritePos, ConcatReleasePos,
+    SourceReleasePos: LongInt;
+begin
+  ProducerPos := Pos(' = call {ptr, i64, ptr, i64} @MakeText(', ALlvmText);
+  ConcatPos := Pos(' = call {ptr, i64, ptr, i64} @np_str_concat_owned(',
+    ALlvmText);
+  WritePos := FindAfter(ALlvmText,
+    'call void asm sideeffect "movq $$1, %rax; syscall"', ConcatPos + 1);
+  if (ProducerPos = 0) or (ConcatPos = 0) or (WritePos = 0) then
+    Fail('missing-writeln-concat-owned-string-runtime');
+  ConcatReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    WritePos + 1);
+  SourceReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ConcatReleasePos + 1);
+  if (ConcatReleasePos = 0) or (SourceReleasePos = 0) then
+    Fail('missing-writeln-concat-owned-string-release-runtime');
+  if (ProducerPos >= ConcatPos) or (ConcatPos >= WritePos) then
+    Fail('writeln-concat-owned-string-temp-creation-order-runtime');
+  if WritePos >= ConcatReleasePos then
+    Fail('writeln-concat-owned-string-release-must-follow-write-runtime');
+  if ConcatReleasePos >= SourceReleasePos then
+    Fail('writeln-concat-owned-string-release-order-runtime');
+end;
+
 procedure AssertConcatOwnedRuntimeContract(const ALlvmText: string);
 var
   ProducerPos, ConcatPos, ReleasePos: LongInt;
@@ -639,6 +676,8 @@ begin
     AssertLiteralBorrowedRuntimeContract(LlvmText)
   else if AAssertKind = 'writeln' then
     AssertWriteLnOwnedRuntimeContract(LlvmText)
+  else if AAssertKind = 'writeln-concat' then
+    AssertWriteLnConcatOwnedRuntimeContract(LlvmText)
   else if AAssertKind = 'concat' then
     AssertConcatOwnedRuntimeContract(LlvmText)
   else if AAssertKind = 'concat-both' then
@@ -681,6 +720,8 @@ begin
     LiteralBorrowedArgumentSource, 'literal');
   EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_writeln',
     WriteLnOwnedArgumentSource, 'writeln');
+  EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_writeln_concat',
+    WriteLnConcatOwnedArgumentSource, 'writeln-concat');
   EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_concat_left',
     ConcatLeftOwnedArgumentSource, 'concat');
   EmitAssertAndRun(OutputDir, 'llvm_string_arg_owned_concat_right',
