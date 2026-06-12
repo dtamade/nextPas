@@ -24,14 +24,19 @@ type
     FSlots: array of TSlot;
     FCapacity: PtrUInt;
     FMask: PtrUInt;
+    // Producer-owned fields (cache line 1)
     FEnqueuePos: Int64;
-    FDequeuePos: Int64;
-    FClosed: Int32;
     FActiveEnqueues: Int32;
-    FDataEpoch: Int32;
     FSpaceEpoch: Int32;
-    FDataWaiters: Int32;
     FSpaceWaiters: Int32;
+    FPadProducer: array[0..3] of Int64;
+    // Consumer-owned fields (cache line 2)
+    FDequeuePos: Int64;
+    FDataEpoch: Int32;
+    FDataWaiters: Int32;
+    FPadConsumer: array[0..3] of Int64;
+    // Shared (published) fields (cache line 3)
+    FClosed: Int32;
   public
     constructor Create(const ACapacity: PtrUInt);
     function TryEnqueue(const AValue: T): Boolean;
