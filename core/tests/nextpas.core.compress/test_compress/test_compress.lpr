@@ -52,11 +52,20 @@ end;
 procedure TestDeflateEmpty;
 var
   LR: TBytes;
+  LGotException: Boolean;
 begin
   LR := DeflateCompress(nil);
-  Check(LR = nil, 'empty compress = nil');
-  LR := DeflateDecompress(nil);
-  Check(LR = nil, 'empty decompress = nil');
+  Check(Length(LR) > 0, 'empty compress produces zlib stream');
+  LR := DeflateDecompress(LR);
+  CheckEqual(Int64(0), Int64(Length(LR)), 'empty stream decompresses to empty');
+
+  LGotException := False;
+  try
+    LR := DeflateDecompress(nil);
+  except
+    LGotException := True;
+  end;
+  Check(LGotException, 'empty encoded deflate input raises');
 end;
 
 procedure TestDeflateLarge;
@@ -517,6 +526,13 @@ begin
     LGotException := True;
   end;
   Check(LGotException, 'deflate write-after-close raises');
+  LGotException := False;
+  try
+    LWriter.Write(LB, 0);
+  except
+    LGotException := True;
+  end;
+  Check(LGotException, 'deflate zero-write-after-close raises');
 
   LBuf := CreateBytesStream;
   LWriter := GzipWriter(LBuf as IWriter);
@@ -528,6 +544,13 @@ begin
     LGotException := True;
   end;
   Check(LGotException, 'gzip write-after-close raises');
+  LGotException := False;
+  try
+    LWriter.Write(LB, 0);
+  except
+    LGotException := True;
+  end;
+  Check(LGotException, 'gzip zero-write-after-close raises');
 end;
 
 procedure TestReadAfterClose;
@@ -559,6 +582,21 @@ begin
   LWriter.Close;
   LWriter.Close;
   Check(True, 'deflate writer double-close safe');
+
+  LData := TBytes.Create(1, 2, 3);
+  LCompressed := DeflateCompress(LData);
+  LBuf := CreateBytesStreamFrom(LCompressed);
+  LReader := DeflateReader(LBuf as IReader);
+  IoReadAll(LReader as IReader);
+  LReader.Close;
+  LReader.Close;
+  Check(True, 'deflate reader double-close safe');
+
+  LBuf := CreateBytesStream;
+  LWriter := GzipWriter(LBuf as IWriter);
+  LWriter.Close;
+  LWriter.Close;
+  Check(True, 'gzip writer double-close safe');
 
   LData := TBytes.Create(1, 2, 3);
   LCompressed := GzipCompress(LData);
