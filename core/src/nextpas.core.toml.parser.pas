@@ -528,6 +528,19 @@ begin
     or (ACh = Ord('-')) or (ACh = Ord('_'));
 end;
 
+function IsTomlForbiddenStringByte(ACh: Byte; AAllowNewlines: Boolean): Boolean; inline;
+begin
+  if ACh = 127 then
+    Exit(True);
+  if ACh >= 32 then
+    Exit(False);
+  if ACh = Ord(#9) then
+    Exit(False);
+  if AAllowNewlines and ((ACh = Ord(#10)) or (ACh = Ord(#13))) then
+    Exit(False);
+  Result := True;
+end;
+
 function TTomlParser.ParseBareKey(out AKey: TStringView): Boolean;
 var
   LStart: SizeUInt;
@@ -594,7 +607,7 @@ var
   LBuf: PAnsiChar;
   LBufLen: SizeUInt;
   LErr: TUnescapeError;
-  LFound, LCtrl: PtrInt;
+  LFound, LCtrl, LDel, LBad: PtrInt;
   LRemaining: SizeUInt;
 begin
   AOwned := False;
@@ -606,18 +619,22 @@ begin
     LRemaining := SrcLen - Pos;
     LFound := ScanFindByte2(Src + Pos, LRemaining, Ord('"'), Ord('\'));
     LCtrl := ScanFindInRange(Src + Pos, LRemaining, 0, 31);
-    if (LCtrl >= 0) and ((LFound < 0) or (LCtrl < LFound)) then
+    LDel := ScanFindByte(Src + Pos, LRemaining, 127);
+    LBad := LCtrl;
+    if (LBad < 0) or ((LDel >= 0) and (LDel < LBad)) then
+      LBad := LDel;
+    if (LBad >= 0) and ((LFound < 0) or (LBad < LFound)) then
     begin
-      if Src[Pos + SizeUInt(LCtrl)] = #9 then
+      if Src[Pos + SizeUInt(LBad)] = #9 then
       begin
-        Inc(Pos, SizeUInt(LCtrl) + 1);
-        Col := Col + UInt32(LCtrl) + 1;
+        Inc(Pos, SizeUInt(LBad) + 1);
+        Col := Col + UInt32(LBad) + 1;
         Continue;
       end
       else
       begin
-        Inc(Pos, SizeUInt(LCtrl));
-        Col := Col + UInt32(LCtrl);
+        Inc(Pos, SizeUInt(LBad));
+        Col := Col + UInt32(LBad);
         Exit(SetError('control char in string', 22));
       end;
     end
@@ -672,7 +689,7 @@ begin
   LStart := Pos;
   while (Pos < SrcLen) and (Src[Pos] <> '''') do
   begin
-    if (Byte(Src[Pos]) < 32) and (Src[Pos] <> #9) then
+    if IsTomlForbiddenStringByte(Byte(Src[Pos]), False) then
       Exit(SetError('control char in string', 22));
     Inc(Pos);
     Inc(Col);
@@ -785,7 +802,7 @@ begin
       Doc^.AddOwnedBuf(LBuf);
       Exit(True);
     end;
-    if (Byte(Src[Pos]) < 32) and (Src[Pos] <> #9) and (Src[Pos] <> #10) and (Src[Pos] <> #13) then
+    if IsTomlForbiddenStringByte(Byte(Src[Pos]), True) then
       Exit(SetError('control char in multi-line string', 33));
     Inc(Pos);
     if Src[Pos-1] = #10 then begin Inc(Line); Col := 1; end else Inc(Col);
@@ -848,7 +865,7 @@ begin
       Doc^.AddOwnedBuf(LBuf);
       Exit(True);
     end;
-    if (Byte(Src[Pos]) < 32) and (Src[Pos] <> #9) and (Src[Pos] <> #10) and (Src[Pos] <> #13) then
+    if IsTomlForbiddenStringByte(Byte(Src[Pos]), True) then
       Exit(SetError('control char in multi-line literal string', 41));
     Inc(Pos);
     if Src[Pos-1] = #10 then begin Inc(Line); Col := 1; end else Inc(Col);
@@ -1373,7 +1390,7 @@ end;
 function TTomlParser.ParseInlineTable(out ANodeIdx: UInt32): Boolean;
 var
   LTableIdx, LChildIdx, LTarget: UInt32;
-  LKeys: array[0..31] of TStringView;
+  LKeys: array[0..MAX_NESTING_DEPTH - 1] of TStringView;
   LKeyCount: Int32;
   LI: Int32;
   LFirst: Boolean;
@@ -1596,7 +1613,7 @@ end;
 
 function TTomlParser.ParseKeyValue(ATableIdx: UInt32): Boolean;
 var
-  LKeys: array[0..31] of TStringView;
+  LKeys: array[0..MAX_NESTING_DEPTH - 1] of TStringView;
   LKeyCount: Int32;
   LValueIdx, LTargetTable: UInt32;
   LI: Int32;
@@ -1634,7 +1651,7 @@ end;
 
 function TTomlParser.ParseTableHeader(out AIsArray: Boolean): Boolean;
 var
-  LKeys: array[0..31] of TStringView;
+  LKeys: array[0..MAX_NESTING_DEPTH - 1] of TStringView;
   LKeyCount: Int32;
   LI: Int32;
   LCurrent, LNewIdx, LArrayIdx: UInt32;

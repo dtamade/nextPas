@@ -447,6 +447,15 @@ begin
 
     LRaised := False;
     try
+      LCfg.SetDefault('', 'value');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'SetDefault rejects empty key');
+
+    LRaised := False;
+    try
       LCfg.DeleteKey('');
     except
       on E: EConfigError do

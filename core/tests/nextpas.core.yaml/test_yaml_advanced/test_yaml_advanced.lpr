@@ -80,18 +80,18 @@ begin
   Check(LRoot.MapGet('text').IsStr, 'is str');
 end;
 
-{ P8: Multi-document }
+{ P8: Document markers }
 
-procedure TestMultiDocFirst;
+procedure TestRejectsMultiDoc;
 var
   LDoc: IYamlDocument;
   LInput: string;
 begin
   LInput := '---' + #10 + 'hello' + #10 + '---' + #10 + 'world';
   LDoc := YamlParse(LInput);
-  Check(not LDoc.HasError, 'no error');
-  Check(LDoc.Root.IsStr, 'first doc is str');
-  Check(LDoc.Root.AsStr.ToString = 'hello', 'first doc value');
+  Check(LDoc.HasError, 'multiple documents are rejected');
+  Check(Pos('multiple YAML documents', LDoc.Error.Message.ToString) > 0,
+    'multiple document diagnostic');
 end;
 
 procedure TestDocEnd;
@@ -188,7 +188,7 @@ begin
   T.Run('Undefined alias', @TestUndefinedAlias);
   T.Run('Block literal', @TestBlockLiteral);
   T.Run('Block folded', @TestBlockFolded);
-  T.Run('Multi-doc first', @TestMultiDocFirst);
+  T.Run('Rejects multi-doc', @TestRejectsMultiDoc);
   T.Run('Doc end marker', @TestDocEnd);
   T.Run('Empty mapping', @TestEmptyMapping);
   T.Run('Empty sequence', @TestEmptySequence);

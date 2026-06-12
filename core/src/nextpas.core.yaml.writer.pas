@@ -51,8 +51,15 @@ begin
      (LCh = Byte('"')) or (LCh = Byte('|')) or
      (LCh = Byte('>')) or (LCh = Byte('%')) or
      (LCh = Byte('@')) or (LCh = Byte('`')) or
-     (LCh = Byte('!')) or (LCh = Byte(',')) or
+     (LCh = Byte('!')) or (LCh = Byte('?')) or (LCh = Byte(',')) or
      (LCh = Byte(' ')) or (LCh = Byte(#9)) then
+  begin
+    Result := True;
+    Exit;
+  end;
+  if (AView.Len > 0) and
+     ((Byte(AView.Data[AView.Len - 1]) = Byte(' ')) or
+      (Byte(AView.Data[AView.Len - 1]) = Byte(#9))) then
   begin
     Result := True;
     Exit;
@@ -68,7 +75,7 @@ begin
   begin
     LCh := Byte(AView.Data[LI]);
     if (LCh = Byte(':')) or (LCh = Byte('#')) or (LCh = Byte('"')) or
-       (LCh = Byte('\')) or (LCh = Byte(',')) or (LCh = Byte('[')) or
+       (LCh = Byte(',')) or (LCh = Byte('[')) or
        (LCh = Byte(']')) or (LCh = Byte('{')) or (LCh = Byte('}')) or
        (LCh < 32) then
     begin

@@ -20,12 +20,28 @@ uses
   nextpas.core.text.view,
   nextpas.core.text.builder;
 
+const
+  JSON_WRITER_MAX_DEPTH = 512;
+
 type
   TJsonWriter = record
   private
     FBuilder: ^TStringBuilder;
     FDepth: Int32;
-    FNeedComma: Boolean;
+    FRootWritten: Boolean;
+    FContainers: array[1..JSON_WRITER_MAX_DEPTH] of Byte;
+    FElementCounts: array[1..JSON_WRITER_MAX_DEPTH] of UInt32;
+    FObjectAwaitingKey: array[1..JSON_WRITER_MAX_DEPTH] of Boolean;
+    procedure ValidateValue;
+    procedure WriteValuePrefix;
+    procedure BeginValue;
+    procedure BeginContainerValue;
+    procedure EndValue;
+    procedure BeginKey;
+    procedure RequireContainerCapacity;
+    procedure PushContainer(const AContainer: Byte);
+    procedure RequireContainer(const AOperation: string;
+      const AContainer: Byte);
   public
     procedure Init(var ABuilder: TStringBuilder);
     procedure BeginObject;
@@ -51,46 +67,143 @@ type
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.simd.base,
   nextpas.core.simd.vec,
   nextpas.core.text.escape,
   nextpas.core.text.number;
 
+const
+  JSON_CONTAINER_OBJECT = 1;
+  JSON_CONTAINER_ARRAY = 2;
+
 procedure TJsonWriter.Init(var ABuilder: TStringBuilder);
 begin
   FBuilder := @ABuilder;
   FDepth := 0;
-  FNeedComma := False;
+  FRootWritten := False;
+end;
+
+procedure TJsonWriter.ValidateValue;
+begin
+  if FDepth = 0 then
+  begin
+    if FRootWritten then
+      raise EInvalidOperationError.Create(
+        'TJsonWriter: root value has already been written');
+    Exit;
+  end;
+
+  if (FContainers[FDepth] = JSON_CONTAINER_OBJECT) and
+    FObjectAwaitingKey[FDepth] then
+    raise EInvalidOperationError.Create(
+      'TJsonWriter: object value requires a key');
+end;
+
+procedure TJsonWriter.WriteValuePrefix;
+begin
+  if (FDepth > 0) and (FContainers[FDepth] = JSON_CONTAINER_ARRAY) and
+    (FElementCounts[FDepth] > 0) then
+    FBuilder^.AppendChar(',');
+end;
+
+procedure TJsonWriter.BeginValue;
+begin
+  ValidateValue;
+  WriteValuePrefix;
+end;
+
+procedure TJsonWriter.BeginContainerValue;
+begin
+  ValidateValue;
+  RequireContainerCapacity;
+  WriteValuePrefix;
+end;
+
+procedure TJsonWriter.EndValue;
+begin
+  if FDepth = 0 then
+  begin
+    FRootWritten := True;
+    Exit;
+  end;
+
+  Inc(FElementCounts[FDepth]);
+  if FContainers[FDepth] = JSON_CONTAINER_OBJECT then
+    FObjectAwaitingKey[FDepth] := True;
+end;
+
+procedure TJsonWriter.BeginKey;
+begin
+  if (FDepth <= 0) or (FContainers[FDepth] <> JSON_CONTAINER_OBJECT) then
+    raise EInvalidOperationError.Create(
+      'TJsonWriter: key requires an open object');
+  if not FObjectAwaitingKey[FDepth] then
+    raise EInvalidOperationError.Create(
+      'TJsonWriter: object key requires a preceding value');
+  if FElementCounts[FDepth] > 0 then
+    FBuilder^.AppendChar(',');
+  FObjectAwaitingKey[FDepth] := False;
+end;
+
+procedure TJsonWriter.RequireContainerCapacity;
+begin
+  if FDepth >= JSON_WRITER_MAX_DEPTH then
+    raise EResourceExhaustedError.Create(
+      'TJsonWriter: container stack limit exceeded');
+end;
+
+procedure TJsonWriter.PushContainer(const AContainer: Byte);
+begin
+  RequireContainerCapacity;
+  Inc(FDepth);
+  FContainers[FDepth] := AContainer;
+  FElementCounts[FDepth] := 0;
+  FObjectAwaitingKey[FDepth] := AContainer = JSON_CONTAINER_OBJECT;
+end;
+
+procedure TJsonWriter.RequireContainer(const AOperation: string;
+  const AContainer: Byte);
+begin
+  if FDepth <= 0 then
+    raise EInvalidOperationError.Create(
+      'TJsonWriter.' + AOperation + ': no container is open');
+  if FContainers[FDepth] <> AContainer then
+    raise EInvalidOperationError.Create(
+      'TJsonWriter.' + AOperation + ': mismatched container end');
+  if (AContainer = JSON_CONTAINER_OBJECT) and (not FObjectAwaitingKey[FDepth]) then
+    raise EInvalidOperationError.Create(
+      'TJsonWriter.' + AOperation + ': object key has no value');
 end;
 
 procedure TJsonWriter.BeginObject;
 begin
-  if FNeedComma then FBuilder^.AppendChar(',');
+  BeginContainerValue;
   FBuilder^.AppendChar('{');
-  FNeedComma := False;
-  Inc(FDepth);
+  PushContainer(JSON_CONTAINER_OBJECT);
 end;
 
 procedure TJsonWriter.EndObject;
 begin
+  RequireContainer('EndObject', JSON_CONTAINER_OBJECT);
   FBuilder^.AppendChar('}');
   Dec(FDepth);
-  FNeedComma := True;
+  EndValue;
 end;
 
 procedure TJsonWriter.BeginArray;
 begin
-  if FNeedComma then FBuilder^.AppendChar(',');
+  BeginContainerValue;
   FBuilder^.AppendChar('[');
-  FNeedComma := False;
-  Inc(FDepth);
+  PushContainer(JSON_CONTAINER_ARRAY);
 end;
 
 procedure TJsonWriter.EndArray;
 begin
+  RequireContainer('EndArray', JSON_CONTAINER_ARRAY);
   FBuilder^.AppendChar(']');
   Dec(FDepth);
-  FNeedComma := True;
+  EndValue;
 end;
 
 procedure TJsonWriter.Key(const AKey: PAnsiChar; const ALen: SizeUInt);
@@ -99,7 +212,7 @@ var
   LPos: SizeUInt;
   LMask: TVecMask;
 begin
-  if FNeedComma then FBuilder^.AppendChar(',');
+  BeginKey;
   FBuilder^.AppendChar('"');
   LNeedsEscape := False;
   LPos := 0;
@@ -129,7 +242,6 @@ begin
   else
     FBuilder^.AppendBytes(AKey, ALen);
   FBuilder^.AppendBytes('":', 2);
-  FNeedComma := False;
 end;
 
 procedure TJsonWriter.Key(const AKey: TStringView);
@@ -139,40 +251,40 @@ end;
 
 procedure TJsonWriter.Null;
 begin
-  if FNeedComma then FBuilder^.AppendChar(',');
+  BeginValue;
   FBuilder^.AppendBytes('null', 4);
-  FNeedComma := True;
+  EndValue;
 end;
 
 procedure TJsonWriter.Bool(const AValue: Boolean);
 begin
-  if FNeedComma then FBuilder^.AppendChar(',');
+  BeginValue;
   if AValue then
     FBuilder^.AppendBytes('true', 4)
   else
     FBuilder^.AppendBytes('false', 5);
-  FNeedComma := True;
+  EndValue;
 end;
 
 procedure TJsonWriter.Int(const AValue: Int64);
 begin
-  if FNeedComma then FBuilder^.AppendChar(',');
+  BeginValue;
   FBuilder^.AppendInt(AValue);
-  FNeedComma := True;
+  EndValue;
 end;
 
 procedure TJsonWriter.UInt(const AValue: UInt64);
 begin
-  if FNeedComma then FBuilder^.AppendChar(',');
+  BeginValue;
   FBuilder^.AppendUInt(AValue);
-  FNeedComma := True;
+  EndValue;
 end;
 
 procedure TJsonWriter.Float(const AValue: Double);
 begin
-  if FNeedComma then FBuilder^.AppendChar(',');
+  BeginValue;
   FBuilder^.AppendFloat(AValue);
-  FNeedComma := True;
+  EndValue;
 end;
 
 procedure TJsonWriter.Str(const AValue: PAnsiChar; const ALen: SizeUInt);
@@ -181,7 +293,7 @@ var
   LPos: SizeUInt;
   LMask: TVecMask;
 begin
-  if FNeedComma then FBuilder^.AppendChar(',');
+  BeginValue;
   FBuilder^.AppendChar('"');
   LNeedsEscape := False;
   LPos := 0;
@@ -212,7 +324,7 @@ begin
   else
     FBuilder^.AppendBytes(AValue, ALen);
   FBuilder^.AppendChar('"');
-  FNeedComma := True;
+  EndValue;
 end;
 
 procedure TJsonWriter.Str(const AValue: TStringView);
@@ -235,21 +347,15 @@ var
   LNeed: SizeUInt;
   LP: PAnsiChar;
 begin
-  if FNeedComma then
-    LNeed := ALen + 3
-  else
-    LNeed := ALen + 2;
+  BeginValue;
+  LNeed := ALen + 2;
   FBuilder^.Reserve(LNeed);
   LP := FBuilder^.Tail;
-  if FNeedComma then
-  begin
-    LP^ := ','; Inc(LP);
-  end;
   LP^ := '"'; Inc(LP);
   Move(AValue^, LP^, ALen); Inc(LP, ALen);
   LP^ := '"'; Inc(LP);
   FBuilder^.AdvanceLen(LNeed);
-  FNeedComma := True;
+  EndValue;
 end;
 
 procedure TJsonWriter.KeyClean(const AKey: PAnsiChar; const ALen: SizeUInt);
@@ -257,29 +363,22 @@ var
   LNeed: SizeUInt;
   LP: PAnsiChar;
 begin
-  if FNeedComma then
-    LNeed := ALen + 4
-  else
-    LNeed := ALen + 3;
+  BeginKey;
+  LNeed := ALen + 3;
   FBuilder^.Reserve(LNeed);
   LP := FBuilder^.Tail;
-  if FNeedComma then
-  begin
-    LP^ := ','; Inc(LP);
-  end;
   LP^ := '"'; Inc(LP);
   Move(AKey^, LP^, ALen); Inc(LP, ALen);
   LP^ := '"'; Inc(LP);
   LP^ := ':'; Inc(LP);
   FBuilder^.AdvanceLen(LNeed);
-  FNeedComma := False;
 end;
 
 procedure TJsonWriter.RawValue(const AJson: PAnsiChar; const ALen: SizeUInt);
 begin
-  if FNeedComma then FBuilder^.AppendChar(',');
+  BeginValue;
   FBuilder^.AppendBytes(AJson, ALen);
-  FNeedComma := True;
+  EndValue;
 end;
 
 end.

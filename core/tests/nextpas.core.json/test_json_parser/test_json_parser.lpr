@@ -572,6 +572,32 @@ begin
   Doc.Done;
 end;
 
+procedure TestRejectInvalidNumberTokens;
+var
+  Doc: TJsonDocument;
+
+  procedure ExpectInvalidNumber(const AInput, ACase: string);
+  begin
+    Doc.Init(DefaultAllocator);
+    Check(not Doc.Parse(SV(AInput)), ACase + ' rejected');
+    Check(Doc.HasError, ACase + ' has error');
+    CheckEqual('invalid number', Doc.Error.Message.ToString,
+      ACase + ' message');
+    Doc.Done;
+  end;
+
+begin
+  ExpectInvalidNumber('01', 'leading zero');
+  ExpectInvalidNumber('-01', 'negative leading zero');
+  ExpectInvalidNumber('-', 'minus only');
+  ExpectInvalidNumber('-.1', 'minus without integer digits');
+  ExpectInvalidNumber('1.', 'fraction without digits');
+  ExpectInvalidNumber('1.e2', 'fraction before exponent without digits');
+  ExpectInvalidNumber('1e', 'exponent without digits');
+  ExpectInvalidNumber('1e+', 'positive exponent sign without digits');
+  ExpectInvalidNumber('1e-', 'negative exponent sign without digits');
+end;
+
 procedure TestMultipleErrors;
 var Doc: TJsonDocument;
 begin
@@ -664,6 +690,7 @@ begin
   T.Run('surrogate pair', @TestSurrogatePair);
   T.Run('large document', @TestLargeDocument);
   T.Run('number edge cases', @TestNumberEdgeCases);
+  T.Run('reject invalid number tokens', @TestRejectInvalidNumberTokens);
   T.Run('multiple errors', @TestMultipleErrors);
   T.Run('doc reuse', @TestDocReuse);
   T.Run('nested object array', @TestNestedObjectArray);

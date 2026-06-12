@@ -61,7 +61,6 @@ uses
   nextpas.core.text.scan,
   nextpas.core.text.escape,
   nextpas.core.text.number,
-  nextpas.core.text.char,
   nextpas.core.hash.wyhash,
   nextpas.core.json.scanner,
   nextpas.core.mem.default;
@@ -249,12 +248,17 @@ type
     function ConsumeStruct: UInt32; inline;
     function GetValueSlice(out AStart: PAnsiChar; out ALen: SizeUInt): Boolean;
     function SetError(const AMsg: PAnsiChar; ALen: Int32): Boolean;
+    function SetErrorAtOffset(const AMsg: PAnsiChar; ALen: Int32;
+      AOffset: SizeUInt): Boolean;
     function ParseValue: UInt32;
     function ParseObject: UInt32;
     function ParseArray: UInt32;
     function ParseString: UInt32;
     function ParseNumber(const AData: PAnsiChar; const ALen: SizeUInt): UInt32;
     function ParseLiteral(const AData: PAnsiChar; const ALen: SizeUInt): UInt32;
+    function ParseMatchedLiteral(const AData: PAnsiChar;
+      const ALen, AExpectedLen: SizeUInt; const AKind: TJsonNodeKind;
+      const ABoolVal: Boolean): UInt32;
   end;
 
 function TParserState.PeekCh: Byte;
@@ -291,13 +295,85 @@ begin
 end;
 
 function TParserState.SetError(const AMsg: PAnsiChar; ALen: Int32): Boolean;
+var
+  LOffset: SizeUInt;
 begin
   Doc^.FError.Message := TStringView.Create(AMsg, SizeUInt(ALen));
   if LastPos <> POS_NONE then
-    Doc^.FError.Offset := SizeUInt(LastPos)
+    LOffset := SizeUInt(LastPos)
   else
-    Doc^.FError.Offset := 0;
+    LOffset := 0;
+  JsonErrorSetPosition(Doc^.FError, Doc^.FInput, LOffset);
   Doc^.FHasError := True;
+  Result := False;
+end;
+
+function TParserState.SetErrorAtOffset(const AMsg: PAnsiChar; ALen: Int32;
+  AOffset: SizeUInt): Boolean;
+begin
+  Doc^.FError.Message := TStringView.Create(AMsg, SizeUInt(ALen));
+  JsonErrorSetPosition(Doc^.FError, Doc^.FInput, AOffset);
+  Doc^.FHasError := True;
+  Result := False;
+end;
+
+function SetErrorAtCurrentOffset(var AState: TParserState; const AMsg: PAnsiChar;
+  ALen: Int32): Boolean;
+var
+  LOffset: SizeUInt;
+  LNextPos: UInt32;
+begin
+  LNextPos := AState.Scanner.Peek;
+  if LNextPos = POS_NONE then
+    LOffset := AState.InputLen
+  else
+    LOffset := SizeUInt(LNextPos);
+  AState.Doc^.FError.Message := TStringView.Create(AMsg, SizeUInt(ALen));
+  JsonErrorSetPosition(AState.Doc^.FError, AState.Doc^.FInput, LOffset);
+  AState.Doc^.FHasError := True;
+  Result := False;
+end;
+
+function IsJsonWhitespace(const ACh: Byte): Boolean; inline;
+begin
+  Result := (ACh = 32) or (ACh = 9) or (ACh = 10) or (ACh = 13);
+end;
+
+function TParserState.ParseMatchedLiteral(const AData: PAnsiChar;
+  const ALen, AExpectedLen: SizeUInt; const AKind: TJsonNodeKind;
+  const ABoolVal: Boolean): UInt32;
+var
+  LIdx: UInt32;
+begin
+  if (ALen > AExpectedLen) and
+    (not IsJsonWhitespace(Byte(AData[AExpectedLen]))) then
+    Exit(JSON_NODE_NONE);
+
+  LIdx := Doc^.AddNode;
+  Doc^.FNodes[LIdx].Kind := AKind;
+  if AKind = jnkBool then
+    Doc^.FNodes[LIdx].BoolVal := ABoolVal;
+  LastPos := UInt32((AData - Input) + AExpectedLen - 1);
+  Result := LIdx;
+end;
+
+function ValidateJsonParserEscapes(var AState: TParserState;
+  const AStr: TStringView; const AContentOffset, AStart: SizeUInt): Boolean;
+var
+  LError: TJsonStringValidationError;
+  LErrorOffset: SizeUInt;
+begin
+  if JsonValidateStringToken(AStr.Data + AStart, AStr.Len - AStart, LError,
+    LErrorOffset) then
+    Exit(True);
+  case LError of
+    jsveControlChar:
+      AState.SetErrorAtOffset('control char in string', 22,
+        AContentOffset + AStart + LErrorOffset);
+  else
+    AState.SetErrorAtOffset('invalid escape sequence', 23,
+      AContentOffset + AStart + LErrorOffset);
+  end;
   Result := False;
 end;
 
@@ -311,7 +387,8 @@ var
   LDecLen: SizeUInt;
   LErr: TUnescapeError;
   I: SizeUInt;
-  LMask: TVecMask;
+  LMask, LControlMask, LEscapeMask: TVecMask;
+  LFirst: Int32;
 begin
   LStartPos := ConsumeStruct;
   LEndPos := ConsumeStruct;
@@ -330,12 +407,17 @@ begin
   I := 0;
   while I + VecWidth <= LRaw.Len do
   begin
-    LMask := VecCmpLtU(@LRaw.Data[I], $20) or VecCmpEq(@LRaw.Data[I], Ord('\'));
+    LControlMask := VecCmpLtU(@LRaw.Data[I], $20);
+    LEscapeMask := VecCmpEq(@LRaw.Data[I], Ord('\'));
+    LMask := LControlMask or LEscapeMask;
     if LMask <> TVecMask(0) then
     begin
-      if VecCmpLtU(@LRaw.Data[I], $20) <> TVecMask(0) then
+      LFirst := VecCtz(LMask);
+      Inc(I, SizeUInt(LFirst));
+      if (LControlMask and (TVecMask(1) shl LFirst)) <> TVecMask(0) then
       begin
-        SetError('control char in string', 22);
+        SetErrorAtOffset('control char in string', 22,
+          SizeUInt(LStartPos) + 1 + I);
         Exit(JSON_NODE_NONE);
       end;
       LHasEscape := True;
@@ -345,19 +427,23 @@ begin
   end;
   if not LHasEscape then
     while I < LRaw.Len do
+  begin
+    if Byte(LRaw.Data[I]) < $20 then
     begin
-      if Byte(LRaw.Data[I]) < $20 then
-      begin
-        SetError('control char in string', 22);
-        Exit(JSON_NODE_NONE);
-      end;
-      if LRaw.Data[I] = '\' then
+      SetErrorAtOffset('control char in string', 22,
+        SizeUInt(LStartPos) + 1 + I);
+      Exit(JSON_NODE_NONE);
+    end;
+    if LRaw.Data[I] = '\' then
       begin
         LHasEscape := True;
         Break;
-      end;
-      Inc(I);
     end;
+    Inc(I);
+  end;
+  if LHasEscape and
+    (not ValidateJsonParserEscapes(Self, LRaw, SizeUInt(LStartPos) + 1, I)) then
+    Exit(JSON_NODE_NONE);
   LIdx := Doc^.AddNode;
   Doc^.FNodes[LIdx].Kind := jnkString;
   if LHasEscape then
@@ -382,102 +468,86 @@ end;
 function TParserState.ParseNumber(const AData: PAnsiChar; const ALen: SizeUInt): UInt32;
 var
   LNumLen: SizeUInt;
+  LNumberOffset: SizeUInt;
   LIdx: UInt32;
   LHasDot, LHasExp: Boolean;
   I: SizeUInt;
   LInt: Int64;
   LFloat: Double;
-  LStart: SizeUInt;
 begin
   LNumLen := ALen;
+  LNumberOffset := SizeUInt(AData - Input);
   if LNumLen = 0 then
   begin
-    SetError('invalid number', 14);
+    SetErrorAtOffset('invalid number', 14, LNumberOffset);
     Exit(JSON_NODE_NONE);
   end;
-  if ScanJsonNumber(AData, LNumLen) <> LNumLen then
+  if (ScanJsonNumber(AData, LNumLen) <> LNumLen) or
+     (not ScanIsJsonNumberToken(AData, LNumLen)) then
   begin
-    SetError('invalid number', 14);
-    Exit(JSON_NODE_NONE);
-  end;
-  LStart := 0;
-  if AData[0] = '-' then LStart := 1;
-  if (LStart < LNumLen - 1) and (AData[LStart] = '0') and (AData[LStart+1] >= '0') and (AData[LStart+1] <= '9') then
-  begin
-    SetError('leading zero', 12);
-    Exit(JSON_NODE_NONE);
-  end;
-  if AData[LNumLen - 1] = '.' then
-  begin
-    SetError('trailing dot', 12);
-    Exit(JSON_NODE_NONE);
-  end;
-  if (AData[LNumLen - 1] = 'e') or (AData[LNumLen - 1] = 'E') or
-     (AData[LNumLen - 1] = '+') or (AData[LNumLen - 1] = '-') then
-  begin
-    SetError('truncated exponent', 18);
+    if ScanJsonNumberHasIncompleteExponent(AData, LNumLen) then
+      SetErrorAtOffset('invalid number', 14, LNumberOffset + LNumLen)
+    else
+      SetErrorAtOffset('invalid number', 14, LNumberOffset);
     Exit(JSON_NODE_NONE);
   end;
   LHasDot := False;
   LHasExp := False;
-  for I := LStart to LNumLen - 1 do
+  for I := 0 to LNumLen - 1 do
   begin
     if AData[I] = '.' then begin LHasDot := True; Break; end;
     if (AData[I] = 'e') or (AData[I] = 'E') then begin LHasExp := True; Break; end;
   end;
-  LIdx := Doc^.AddNode;
   if LHasDot or LHasExp then
   begin
-    ParseDouble(AData, LNumLen, LFloat);
+    if not ParseDouble(AData, LNumLen, LFloat) then
+    begin
+      SetErrorAtOffset('number overflow', 15, LNumberOffset);
+      Exit(JSON_NODE_NONE);
+    end;
+    LIdx := Doc^.AddNode;
     Doc^.FNodes[LIdx].Kind := jnkReal;
     Doc^.FNodes[LIdx].RealVal := LFloat;
   end
   else
   begin
-    if ParseInt64(AData, LNumLen, LInt) then
+    if not ParseInt64(AData, LNumLen, LInt) then
     begin
-      Doc^.FNodes[LIdx].Kind := jnkInt;
-      Doc^.FNodes[LIdx].IntVal := LInt;
-    end
-    else
-    begin
-      ParseDouble(AData, LNumLen, LFloat);
-      Doc^.FNodes[LIdx].Kind := jnkReal;
-      Doc^.FNodes[LIdx].RealVal := LFloat;
+      SetErrorAtOffset('number overflow', 15, LNumberOffset);
+      Exit(JSON_NODE_NONE);
     end;
+    LIdx := Doc^.AddNode;
+    Doc^.FNodes[LIdx].Kind := jnkInt;
+    Doc^.FNodes[LIdx].IntVal := LInt;
   end;
   LastPos := UInt32((AData - Input) + LNumLen - 1);
   Result := LIdx;
 end;
 
 function TParserState.ParseLiteral(const AData: PAnsiChar; const ALen: SizeUInt): UInt32;
-var
-  LIdx: UInt32;
 begin
-  if (ALen = 4) and (AData[0] = 't') and (AData[1] = 'r') and (AData[2] = 'u') and (AData[3] = 'e') then
+  if (ALen >= 4) and (AData[0] = 't') and (AData[1] = 'r') and
+    (AData[2] = 'u') and (AData[3] = 'e') then
   begin
-    LIdx := Doc^.AddNode;
-    Doc^.FNodes[LIdx].Kind := jnkBool;
-    Doc^.FNodes[LIdx].BoolVal := True;
-    LastPos := UInt32((AData - Input) + ALen - 1);
-    Exit(LIdx);
-  end;
-  if (ALen = 5) and (AData[0] = 'f') and (AData[1] = 'a') and (AData[2] = 'l') and (AData[3] = 's') and (AData[4] = 'e') then
+    Result := ParseMatchedLiteral(AData, ALen, 4, jnkBool, True);
+    if Result <> JSON_NODE_NONE then
+      Exit;
+  end
+  else if (ALen >= 5) and (AData[0] = 'f') and (AData[1] = 'a') and
+    (AData[2] = 'l') and (AData[3] = 's') and (AData[4] = 'e') then
   begin
-    LIdx := Doc^.AddNode;
-    Doc^.FNodes[LIdx].Kind := jnkBool;
-    Doc^.FNodes[LIdx].BoolVal := False;
-    LastPos := UInt32((AData - Input) + ALen - 1);
-    Exit(LIdx);
-  end;
-  if (ALen = 4) and (AData[0] = 'n') and (AData[1] = 'u') and (AData[2] = 'l') and (AData[3] = 'l') then
+    Result := ParseMatchedLiteral(AData, ALen, 5, jnkBool, False);
+    if Result <> JSON_NODE_NONE then
+      Exit;
+  end
+  else if (ALen >= 4) and (AData[0] = 'n') and (AData[1] = 'u') and
+    (AData[2] = 'l') and (AData[3] = 'l') then
   begin
-    LIdx := Doc^.AddNode;
-    Doc^.FNodes[LIdx].Kind := jnkNull;
-    LastPos := UInt32((AData - Input) + ALen - 1);
-    Exit(LIdx);
+    Result := ParseMatchedLiteral(AData, ALen, 4, jnkNull, False);
+    if Result <> JSON_NODE_NONE then
+      Exit;
   end;
-  SetError('invalid literal', 15);
+  SetErrorAtOffset('invalid literal', 15, SizeUInt(AData - Input));
   Result := JSON_NODE_NONE;
 end;
 
@@ -518,7 +588,7 @@ begin
     if LChild = JSON_NODE_NONE then Exit(JSON_NODE_NONE);
     if GetValueSlice(LGapData, LGapLen) then
     begin
-      SetError('expected , or ]', 15);
+      SetErrorAtOffset('expected , or ]', 15, SizeUInt(LGapData - Input));
       Exit(JSON_NODE_NONE);
     end;
     if LCount = 0 then
@@ -537,7 +607,7 @@ begin
     end
     else
     begin
-      SetError('expected , or ]', 15);
+      SetErrorAtCurrentOffset(Self, 'expected , or ]', 15);
       Exit(JSON_NODE_NONE);
     end;
   end;
@@ -583,24 +653,24 @@ begin
   begin
     if GetValueSlice(LGapData, LGapLen) then
     begin
-      SetError('expected string key', 19);
+      SetErrorAtOffset('expected string key', 19, SizeUInt(LGapData - Input));
       Exit(JSON_NODE_NONE);
     end;
     if PeekCh <> Ord('"') then
     begin
-      SetError('expected string key', 19);
+      SetErrorAtCurrentOffset(Self, 'expected string key', 19);
       Exit(JSON_NODE_NONE);
     end;
     LKeyIdx := ParseString;
     if LKeyIdx = JSON_NODE_NONE then Exit(JSON_NODE_NONE);
     if GetValueSlice(LGapData, LGapLen) then
     begin
-      SetError('expected :', 10);
+      SetErrorAtOffset('expected :', 10, SizeUInt(LGapData - Input));
       Exit(JSON_NODE_NONE);
     end;
     if PeekCh <> Ord(':') then
     begin
-      SetError('expected :', 10);
+      SetErrorAtCurrentOffset(Self, 'expected :', 10);
       Exit(JSON_NODE_NONE);
     end;
     ConsumeStruct;
@@ -608,7 +678,7 @@ begin
     if LValIdx = JSON_NODE_NONE then Exit(JSON_NODE_NONE);
     if GetValueSlice(LGapData, LGapLen) then
     begin
-      SetError('expected , or }', 15);
+      SetErrorAtOffset('expected , or }', 15, SizeUInt(LGapData - Input));
       Exit(JSON_NODE_NONE);
     end;
     Doc^.FNodes[LKeyIdx].Next := LValIdx;
@@ -628,7 +698,7 @@ begin
     end
     else
     begin
-      SetError('expected , or }', 15);
+      SetErrorAtCurrentOffset(Self, 'expected , or }', 15);
       Exit(JSON_NODE_NONE);
     end;
   end;
@@ -660,7 +730,7 @@ begin
     Ord('"'): Result := ParseString;
   else
     if LCh = 0 then
-      SetError('unexpected end of input', 22)
+      SetErrorAtCurrentOffset(Self, 'unexpected end of input', 23)
     else
       SetError('unexpected character', 20);
     Result := JSON_NODE_NONE;
@@ -673,12 +743,13 @@ var
   LEstimate: UInt32;
   I: UInt32;
   LBase: PAnsiChar;
+  LTrailingOffset: SizeUInt;
 begin
   FInput := AInput;
   FNodeCount := 0;
   FHasError := False;
   FError.Message := TStringView.Create(nil, 0);
-  FError.Offset := 0;
+  JsonErrorSetPosition(FError, AInput, 0);
   { Clear cached object indices from previous parse }
   if FIndices <> nil then
   begin
@@ -726,6 +797,13 @@ begin
   if not LState.Scanner.IsEmpty then
   begin
     FError.Message := TStringView.Create(PAnsiChar('trailing content'), 16);
+    if LState.LastPos = POS_NONE then
+      LTrailingOffset := 0
+    else
+      LTrailingOffset := SizeUInt(LState.LastPos) + 1;
+    while (LTrailingOffset < AInput.Len) and (Byte(AInput.Data[LTrailingOffset]) <= 32) do
+      Inc(LTrailingOffset);
+    JsonErrorSetPosition(FError, AInput, LTrailingOffset);
     FHasError := True;
     Exit(False);
   end;
@@ -737,6 +815,7 @@ begin
     if LState.LastPos < UInt32(AInput.Len) then
     begin
       FError.Message := TStringView.Create(PAnsiChar('trailing content'), 16);
+      JsonErrorSetPosition(FError, AInput, SizeUInt(LState.LastPos));
       FHasError := True;
       Exit(False);
     end;

@@ -17,6 +17,10 @@ uses
   nextpas.core.json.writer;
 
 type
+  TJsonNodeKind = nextpas.core.json.types.TJsonNodeKind;
+  TJsonError = nextpas.core.json.types.TJsonError;
+  TJsonValue = nextpas.core.json.value.TJsonValue;
+
   { Parsed JSON document with automatic lifetime management.
     All values remain valid as long as the document is alive. }
   IJsonDocument = interface
@@ -44,6 +48,7 @@ implementation
 
 uses
   nextpas.core.mem.default,
+  nextpas.core.errors,
   nextpas.core.text.escape;
 
 type
@@ -58,6 +63,7 @@ type
     function Root: TJsonValue;
     function HasError: Boolean;
     function Error: TJsonError;
+    procedure RequireStringifiable(const AOperation: string);
     function Stringify: string;
     function StringifyPretty(const AIndent: Int32 = 2): string;
   end;
@@ -97,6 +103,13 @@ end;
 function TJsonDocumentImpl.Error: TJsonError;
 begin
   Result := FDoc.Error;
+end;
+
+procedure TJsonDocumentImpl.RequireStringifiable(const AOperation: string);
+begin
+  if FDoc.HasError then
+    raise EInvalidOperationError.Create(
+      'TJsonDocument.' + AOperation + ': diagnostic document cannot be stringified');
 end;
 
 procedure StringifyNode(var ADoc: TJsonDocument; AIdx: UInt32; var AW: TJsonWriter); forward;
@@ -187,6 +200,7 @@ var
   LBuilder: TStringBuilder;
   LWriter: TJsonWriter;
 begin
+  RequireStringifiable('Stringify');
   LBuilder.Init(FDoc.Input.Len + 32);
   try
     LWriter.Init(LBuilder);
@@ -280,6 +294,7 @@ var
   end;
 
 begin
+  RequireStringifiable('StringifyPretty');
   LBuilder.Init(512);
   try
     WritePrettyNode(FDoc.Root, 0);
@@ -320,6 +335,10 @@ var
   LBuilder: TStringBuilder;
   LWriter: TJsonWriter;
 begin
+  if (AValue.FDoc <> nil) and AValue.FDoc^.HasError then
+    raise EInvalidOperationError.Create(
+      'JsonStringify: diagnostic document cannot be stringified');
+
   LBuilder.Init(256);
   try
     LWriter.Init(LBuilder);

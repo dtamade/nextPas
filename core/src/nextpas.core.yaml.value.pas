@@ -61,7 +61,9 @@ begin
   end;
   LIdx := FIdx;
   LDepth := 0;
-  while (LIdx < FDoc^.NodeCount) and (FDoc^.Nodes[LIdx].Kind = ynkAlias) and (LDepth < 64) do
+  while (LIdx < FDoc^.NodeCount) and
+    (FDoc^.Nodes[LIdx].Kind = ynkAlias) and
+    (LDepth < YAML_ALIAS_RESOLUTION_DEPTH_LIMIT) do
   begin
     LIdx := FDoc^.Nodes[LIdx].AliasTarget;
     Inc(LDepth);

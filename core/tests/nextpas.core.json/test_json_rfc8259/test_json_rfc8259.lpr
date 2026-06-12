@@ -96,7 +96,13 @@ begin
   Check(MustReject('.5', 2), 'leading dot');
   Check(MustReject('1.', 2), 'trailing dot');
   Check(MustReject('01', 2), 'leading zero');
+  Check(MustReject('-01', 3), 'negative leading zero');
+  Check(MustReject('-', 1), 'minus only');
+  Check(MustReject('-.1', 3), 'minus without integer digits');
+  Check(MustReject('1.e2', 4), 'fraction before exponent without digits');
   Check(MustReject('1e', 2), 'truncated exp');
+  Check(MustReject('1e+', 3), 'positive exp sign without digits');
+  Check(MustReject('1e-', 3), 'negative exp sign without digits');
 end;
 
 procedure TestRejectBadStrings;

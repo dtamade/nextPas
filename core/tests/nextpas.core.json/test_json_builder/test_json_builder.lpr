@@ -6,6 +6,8 @@ uses
   SysUtils,
   nextpas.core.text.view,
   nextpas.core.json.builder,
+  nextpas.core.json.writer,
+  nextpas.core.errors,
   nextpas.core.testing;
 
 var
@@ -215,6 +217,108 @@ begin
   CheckEqual('[{"a":1},[2,3],null]', B.ToString, 'multiple raw');
 end;
 
+procedure TestInvalidSequenceFailClosed;
+var
+  B: IJsonBuilder;
+  LRaised: Boolean;
+begin
+  B := JsonBuilder;
+
+  LRaised := False;
+  try
+    B.EndArray;
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'root EndArray raises invalid operation');
+  CheckEqual('', B.ToString, 'root EndArray writes nothing');
+
+  B.BeginObject;
+  LRaised := False;
+  try
+    B.Bool(True);
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'object value before key raises invalid operation');
+  CheckEqual('{', B.ToString, 'object value before key writes nothing');
+
+  B.Key('x');
+  LRaised := False;
+  try
+    B.EndObject;
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'pending object key close raises invalid operation');
+  B.Int(1);
+  B.EndObject;
+  CheckEqual('{"x":1}', B.ToString, 'builder recovers after invalid sequence');
+end;
+
+procedure TestArrayKeyAndRootExtraValueFailClosed;
+var
+  B: IJsonBuilder;
+  LRaised: Boolean;
+begin
+  B := JsonBuilder;
+  B.BeginArray;
+  LRaised := False;
+  try
+    B.Key('bad');
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'array key raises invalid operation');
+  B.RawJson('null');
+  B.EndArray;
+  CheckEqual('[null]', B.ToString, 'array key failure writes nothing');
+
+  LRaised := False;
+  try
+    B.Int(2);
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'root rejects value after completed root value');
+  CheckEqual('[null]', B.ToString, 'root extra value writes nothing');
+end;
+
+procedure TestContainerDepthLimitFailsBeforeWriting;
+var
+  B: IJsonBuilder;
+  I: Int32;
+  LBefore: string;
+  LRaised: Boolean;
+begin
+  B := JsonBuilder(SizeUInt(JSON_WRITER_MAX_DEPTH * 2 + 16));
+  for I := 1 to JSON_WRITER_MAX_DEPTH do
+    B.BeginArray;
+  LBefore := B.ToString;
+
+  LRaised := False;
+  try
+    B.BeginArray;
+  except
+    on E: EResourceExhaustedError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'builder container stack overflow raises resource exhausted');
+  CheckEqual(LBefore, B.ToString,
+    'builder container stack overflow writes nothing');
+
+  for I := 1 to JSON_WRITER_MAX_DEPTH do
+    B.EndArray;
+  CheckEqual(StringOfChar('[', JSON_WRITER_MAX_DEPTH) +
+    StringOfChar(']', JSON_WRITER_MAX_DEPTH), B.ToString,
+    'builder remains recoverable after depth-limit failure');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.json.builder');
   T.Run('simple object', @TestSimpleObject);
@@ -232,5 +336,10 @@ begin
   T.Run('special strings', @TestSpecialStrings);
   T.Run('number edges', @TestNumberEdges);
   T.Run('multiple raw json', @TestMultipleRawJson);
+  T.Run('invalid sequence fail closed', @TestInvalidSequenceFailClosed);
+  T.Run('array key and root extra value fail closed',
+    @TestArrayKeyAndRootExtraValueFailClosed);
+  T.Run('container depth limit fails before writing',
+    @TestContainerDepthLimitFailsBeforeWriting);
   T.Summary;
 end.

@@ -17,12 +17,6 @@ begin
   Result := PathJoin([GetTempDir, AName]);
 end;
 
-procedure RemoveIfExists(const APath: string);
-begin
-  if Exists(APath) then
-    Remove(APath);
-end;
-
 procedure TestToYamlBuildsNestedObjectsAndArrays;
 var
   LCfg: TConfig;
@@ -166,6 +160,7 @@ begin
   try
     LCfg.SetString('special.value', 'a,b]}');
     LCfg.SetString('special.empty', '');
+    LCfg.SetString('special.trailing', 'two spaces  ');
 
     LDoc := YamlParse(LCfg.ToYaml);
     Check(not LDoc.HasError, 'special-string yaml parses');
@@ -173,6 +168,9 @@ begin
       'flow special characters survive');
     CheckEqual('', LDoc.Root.MapGet('special').MapGet('empty').AsStr.ToString,
       'empty string survives');
+    CheckEqual('two spaces  ',
+      LDoc.Root.MapGet('special').MapGet('trailing').AsStr.ToString,
+      'trailing spaces survive');
   finally
     LCfg.Free;
   end;
@@ -239,7 +237,7 @@ var
   LDoc: IYamlDocument;
 begin
   LPath := TempYamlPath('nextpas_config_yaml_export_test.yaml');
-  RemoveIfExists(LPath);
+  Remove(LPath);
 
   LCfg := TConfig.Create;
   try
@@ -260,7 +258,42 @@ begin
       'saved yaml reload preserves raw string');
   finally
     LCfg.Free;
-    RemoveIfExists(LPath);
+    Remove(LPath);
+  end;
+end;
+
+procedure TestSaveToYamlPreservesExistingFileOnExportFailure;
+var
+  LCfg: TConfig;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := TempYamlPath('nextpas_config_yaml_export_fail_closed.yaml');
+  Remove(LPath);
+  WriteFileText(LPath, 'keep: old' + #10);
+
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('db', 'root');
+    LCfg.SetString('db.host', 'localhost');
+
+    LRaised := False;
+    try
+      LCfg.SaveToYaml(LPath);
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('db', E.Message) > 0,
+          'yaml save failure names conflicting key');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'yaml save raises on export conflict');
+    CheckEqual('keep: old' + #10, ReadFileText(LPath),
+      'yaml save failure preserves existing file');
+  finally
+    LCfg.Free;
+    Remove(LPath);
   end;
 end;
 
@@ -284,5 +317,7 @@ begin
     @TestToYamlRejectsEmptyPathSegments);
   T.Run('YamlExport.SaveToYamlWritesFile',
     @TestSaveToYamlWritesFile);
+  T.Run('YamlExport.SaveToYamlPreservesExistingFileOnExportFailure',
+    @TestSaveToYamlPreservesExistingFileOnExportFailure);
   T.Summary;
 end.

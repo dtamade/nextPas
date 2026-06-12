@@ -12,11 +12,14 @@ uses
   nextpas.core.yaml.types,
   nextpas.core.yaml.parser,
   nextpas.core.yaml.value,
+  nextpas.core.yaml.builder,
   nextpas.core.yaml.writer;
 
 type
   TYamlNodeKind = nextpas.core.yaml.types.TYamlNodeKind;
+  TYamlError = nextpas.core.yaml.types.TYamlError;
   TYamlValue = nextpas.core.yaml.value.TYamlValue;
+  TYamlBuilder = nextpas.core.yaml.builder.TYamlBuilder;
 
   IYamlDocument = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-EA0100000001}']
@@ -33,11 +36,15 @@ function TryYamlParse(const AInput: string; out ADoc: IYamlDocument): Boolean;
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 type
   TYamlDocumentImpl = class(TInterfacedObject, IYamlDocument)
   private
     FDoc: TYamlDocument;
     FInput: string;
+    procedure RequireStringifiable(const AOperation: string);
   public
     constructor Create(const AInput: string);
     constructor CreateFromView(const AView: TStringView);
@@ -83,13 +90,23 @@ begin
   Result := FDoc.Error;
 end;
 
+procedure TYamlDocumentImpl.RequireStringifiable(const AOperation: string);
+begin
+  if FDoc.HasError then
+    raise EInvalidOperationError.Create(
+      'TYamlDocument.' + AOperation +
+      ': diagnostic document cannot be stringified');
+end;
+
 function TYamlDocumentImpl.Stringify: string;
 begin
+  RequireStringifiable('Stringify');
   Result := YamlStringify(FDoc, FDoc.RootIdx);
 end;
 
 function TYamlDocumentImpl.StringifyPretty(const AIndent: Int32): string;
 begin
+  RequireStringifiable('StringifyPretty');
   Result := YamlStringifyPretty(FDoc, FDoc.RootIdx, AIndent);
 end;
 

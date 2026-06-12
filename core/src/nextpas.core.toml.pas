@@ -18,6 +18,14 @@ uses
   nextpas.core.toml.builder;
 
 type
+  TTomlNodeKind = nextpas.core.toml.base.TTomlNodeKind;
+  TTomlDateTimeKind = nextpas.core.toml.base.TTomlDateTimeKind;
+  TTomlDateTime = nextpas.core.toml.base.TTomlDateTime;
+  TTomlError = nextpas.core.toml.base.TTomlError;
+  TTomlValue = nextpas.core.toml.value.TTomlValue;
+  TTomlValueEnumerator = nextpas.core.toml.value.TTomlValueEnumerator;
+  ITomlBuilder = nextpas.core.toml.builder.ITomlBuilder;
+
   ITomlDocument = interface
     ['{D4E5F6A7-B8C9-0123-DEFA-456789012345}']
     function Root: TTomlValue;
@@ -32,17 +40,31 @@ function TomlParse(const AInput: TStringView): ITomlDocument; overload;
 function TryTomlParse(const AInput: string; out ADoc: ITomlDocument): Boolean;
 function TomlParseWith(const AInput: string; const AAllocator: IAllocator): ITomlDocument; overload;
 function TomlParseWith(const AInput: TStringView; const AAllocator: IAllocator): ITomlDocument; overload;
+function TomlBuilder: ITomlBuilder; overload; inline;
+function TomlBuilder(const AInitialCap: SizeUInt): ITomlBuilder; overload; inline;
+function TomlDateTime(AYear: UInt16; AMonth, ADay, AHour, AMinute, ASecond: Byte;
+  ANanosecond: UInt32): TTomlDateTime; inline;
+function TomlDateTimeWithOffset(AYear: UInt16; AMonth, ADay, AHour, AMinute, ASecond: Byte;
+  ANanosecond: UInt32; AOffsetMinutes: Int16): TTomlDateTime; inline;
+function TomlDate(AYear: UInt16; AMonth, ADay: Byte): TTomlDateTime; inline;
+function TomlTime(AHour, AMinute, ASecond: Byte; ANanosecond: UInt32): TTomlDateTime; inline;
+function TomlEnumerate(const AValue: TTomlValue): TTomlValueEnumerator; inline;
 
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.mem.default;
+
+const
+  TOML_STRINGIFY_MAX_PATH_SEGMENTS = 128;
 
 type
   TTomlDocumentImpl = class(TInterfacedObject, ITomlDocument)
   private
     FDoc: TTomlDocument;
     FInputCopy: string;
+    procedure RequireStringifiable(const AOperation: string);
   public
     constructor Create(const AInput: string; const AAllocator: IAllocator);
     constructor CreateFromView(const AInput: TStringView; const AAllocator: IAllocator);
@@ -91,6 +113,13 @@ begin
   Result := FDoc.Error;
 end;
 
+procedure TTomlDocumentImpl.RequireStringifiable(const AOperation: string);
+begin
+  if FDoc.HasError then
+    raise EInvalidOperationError.Create(
+      'TTomlDocument.' + AOperation + ': diagnostic document cannot be stringified');
+end;
+
 procedure StringifyValue(var ADoc: TTomlDocument; AIdx: UInt32; var AW: TTomlWriter; ATopLevel: Boolean); forward;
 
 function IsArrayTable(var ADoc: TTomlDocument; AIdx: UInt32): Boolean;
@@ -101,9 +130,18 @@ end;
 
 type
   TPathSegments = record
-    Segs: array[0..127] of TStringView;
+    Segs: array[0..TOML_STRINGIFY_MAX_PATH_SEGMENTS - 1] of TStringView;
     Count: Int32;
   end;
+
+procedure PushPathSegment(var APath: TPathSegments; const AKey: TStringView);
+begin
+  if APath.Count >= TOML_STRINGIFY_MAX_PATH_SEGMENTS then
+    raise EResourceExhaustedError.Create(
+      'TTomlDocument: table path stack limit exceeded');
+  APath.Segs[APath.Count] := AKey;
+  Inc(APath.Count);
+end;
 
 function IsBareKeyView(const AView: TStringView): Boolean;
 var
@@ -131,48 +169,51 @@ var
   LCh: Byte;
 begin
   LBuilder.Init(64);
-  for LI := 0 to APath.Count - 1 do
-  begin
-    if LI > 0 then LBuilder.AppendChar('.');
-    if IsBareKeyView(APath.Segs[LI]) then
-      LBuilder.AppendBytes(APath.Segs[LI].Data, APath.Segs[LI].Len)
-    else
+  try
+    for LI := 0 to APath.Count - 1 do
     begin
-      LBuilder.AppendChar('"');
-      if APath.Segs[LI].Len > 0 then
-      for LJ := 0 to APath.Segs[LI].Len - 1 do
+      if LI > 0 then LBuilder.AppendChar('.');
+      if IsBareKeyView(APath.Segs[LI]) then
+        LBuilder.AppendBytes(APath.Segs[LI].Data, APath.Segs[LI].Len)
+      else
       begin
-        LCh := Byte(APath.Segs[LI].Data[LJ]);
-        case LCh of
-          Ord('"'): LBuilder.AppendBytes('\"', 2);
-          Ord('\'): LBuilder.AppendBytes('\\', 2);
-          8: LBuilder.AppendBytes('\b', 2);
-          9: LBuilder.AppendBytes('\t', 2);
-          10: LBuilder.AppendBytes('\n', 2);
-          12: LBuilder.AppendBytes('\f', 2);
-          13: LBuilder.AppendBytes('\r', 2);
-        else
-          if LCh < 32 then
-          begin
-            LBuilder.AppendBytes('\u00', 4);
-            LBuilder.AppendChar(AnsiChar(Ord('0') + (LCh shr 4)));
-            if (LCh and $F) < 10 then
-              LBuilder.AppendChar(AnsiChar(Ord('0') + (LCh and $F)))
-            else
-              LBuilder.AppendChar(AnsiChar(Ord('a') + (LCh and $F) - 10));
-          end
+        LBuilder.AppendChar('"');
+        if APath.Segs[LI].Len > 0 then
+        for LJ := 0 to APath.Segs[LI].Len - 1 do
+        begin
+          LCh := Byte(APath.Segs[LI].Data[LJ]);
+          case LCh of
+            Ord('"'): LBuilder.AppendBytes('\"', 2);
+            Ord('\'): LBuilder.AppendBytes('\\', 2);
+            8: LBuilder.AppendBytes('\b', 2);
+            9: LBuilder.AppendBytes('\t', 2);
+            10: LBuilder.AppendBytes('\n', 2);
+            12: LBuilder.AppendBytes('\f', 2);
+            13: LBuilder.AppendBytes('\r', 2);
           else
-            LBuilder.AppendChar(AnsiChar(LCh));
+            if LCh < 32 then
+            begin
+              LBuilder.AppendBytes('\u00', 4);
+              LBuilder.AppendChar(AnsiChar(Ord('0') + (LCh shr 4)));
+              if (LCh and $F) < 10 then
+                LBuilder.AppendChar(AnsiChar(Ord('0') + (LCh and $F)))
+              else
+                LBuilder.AppendChar(AnsiChar(Ord('a') + (LCh and $F) - 10));
+            end
+            else
+              LBuilder.AppendChar(AnsiChar(LCh));
+          end;
         end;
+        LBuilder.AppendChar('"');
       end;
-      LBuilder.AppendChar('"');
     end;
+    if AIsArray then
+      AW.BeginArrayTableRaw(LBuilder.ToString)
+    else
+      AW.BeginTableRaw(LBuilder.ToString);
+  finally
+    LBuilder.Done;
   end;
-  if AIsArray then
-    AW.BeginArrayTableRaw(LBuilder.ToString)
-  else
-    AW.BeginTableRaw(LBuilder.ToString);
-  LBuilder.Done;
 end;
 
 procedure StringifyTable(var ADoc: TTomlDocument; AIdx: UInt32; var AW: TTomlWriter; var APath: TPathSegments); forward;
@@ -200,24 +241,28 @@ begin
     LNode := ADoc.Node(LCur);
     if LNode^.Kind = tnkTable then
     begin
-      APath.Segs[APath.Count] := LNode^.Key;
-      Inc(APath.Count);
-      WriteTableHeader(AW, APath, False);
-      StringifyTable(ADoc, LCur, AW, APath);
-      Dec(APath.Count);
+      PushPathSegment(APath, LNode^.Key);
+      try
+        WriteTableHeader(AW, APath, False);
+        StringifyTable(ADoc, LCur, AW, APath);
+      finally
+        Dec(APath.Count);
+      end;
     end
     else if IsArrayTable(ADoc, LCur) then
     begin
-      APath.Segs[APath.Count] := LNode^.Key;
-      Inc(APath.Count);
-      LArrayChild := LNode^.Container.FirstChild;
-      while LArrayChild <> TOML_NODE_NONE do
-      begin
-        WriteTableHeader(AW, APath, True);
-        StringifyTable(ADoc, LArrayChild, AW, APath);
-        LArrayChild := ADoc.Node(LArrayChild)^.Next;
+      PushPathSegment(APath, LNode^.Key);
+      try
+        LArrayChild := LNode^.Container.FirstChild;
+        while LArrayChild <> TOML_NODE_NONE do
+        begin
+          WriteTableHeader(AW, APath, True);
+          StringifyTable(ADoc, LArrayChild, AW, APath);
+          LArrayChild := ADoc.Node(LArrayChild)^.Next;
+        end;
+      finally
+        Dec(APath.Count);
       end;
-      Dec(APath.Count);
     end;
     LCur := LNode^.Next;
   end;
@@ -227,7 +272,6 @@ procedure StringifyValue(var ADoc: TTomlDocument; AIdx: UInt32; var AW: TTomlWri
 var
   LNode: PTomlNode;
   LCur: UInt32;
-  LFirst: Boolean;
 begin
   if AIdx = TOML_NODE_NONE then Exit;
   LNode := ADoc.Node(AIdx);
@@ -252,7 +296,6 @@ begin
     begin
       AW.BeginInlineTable;
       LCur := LNode^.Container.FirstChild;
-      LFirst := True;
       while LCur <> TOML_NODE_NONE do
       begin
         AW.Key(ADoc.Node(LCur)^.Key);
@@ -270,12 +313,16 @@ var
   LWriter: TTomlWriter;
   LPath: TPathSegments;
 begin
+  RequireStringifiable('Stringify');
   LBuilder.Init(256);
-  LWriter.Init(LBuilder);
-  LPath.Count := 0;
-  StringifyTable(FDoc, FDoc.Root, LWriter, LPath);
-  Result := LBuilder.ToString;
-  LBuilder.Done;
+  try
+    LWriter.Init(LBuilder);
+    LPath.Count := 0;
+    StringifyTable(FDoc, FDoc.Root, LWriter, LPath);
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
 end;
 
 function TTomlDocumentImpl.StringifyPretty(const AIndent: Int32): string;
@@ -284,12 +331,16 @@ var
   LWriter: TTomlWriter;
   LPath: TPathSegments;
 begin
+  RequireStringifiable('StringifyPretty');
   LBuilder.Init(256);
-  LWriter.InitPretty(LBuilder, AIndent);
-  LPath.Count := 0;
-  StringifyTable(FDoc, FDoc.Root, LWriter, LPath);
-  Result := LBuilder.ToString;
-  LBuilder.Done;
+  try
+    LWriter.InitPretty(LBuilder, AIndent);
+    LPath.Count := 0;
+    StringifyTable(FDoc, FDoc.Root, LWriter, LPath);
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
 end;
 
 function TomlParse(const AInput: string): ITomlDocument;
@@ -316,6 +367,45 @@ end;
 function TomlParseWith(const AInput: TStringView; const AAllocator: IAllocator): ITomlDocument;
 begin
   Result := TTomlDocumentImpl.CreateFromView(AInput, AAllocator);
+end;
+
+function TomlBuilder: ITomlBuilder;
+begin
+  Result := nextpas.core.toml.builder.TomlBuilder;
+end;
+
+function TomlBuilder(const AInitialCap: SizeUInt): ITomlBuilder;
+begin
+  Result := nextpas.core.toml.builder.TomlBuilder(AInitialCap);
+end;
+
+function TomlDateTime(AYear: UInt16; AMonth, ADay, AHour, AMinute, ASecond: Byte;
+  ANanosecond: UInt32): TTomlDateTime;
+begin
+  Result := nextpas.core.toml.base.TomlDateTime(
+    AYear, AMonth, ADay, AHour, AMinute, ASecond, ANanosecond);
+end;
+
+function TomlDateTimeWithOffset(AYear: UInt16; AMonth, ADay, AHour, AMinute, ASecond: Byte;
+  ANanosecond: UInt32; AOffsetMinutes: Int16): TTomlDateTime;
+begin
+  Result := nextpas.core.toml.base.TomlDateTimeWithOffset(
+    AYear, AMonth, ADay, AHour, AMinute, ASecond, ANanosecond, AOffsetMinutes);
+end;
+
+function TomlDate(AYear: UInt16; AMonth, ADay: Byte): TTomlDateTime;
+begin
+  Result := nextpas.core.toml.base.TomlDate(AYear, AMonth, ADay);
+end;
+
+function TomlTime(AHour, AMinute, ASecond: Byte; ANanosecond: UInt32): TTomlDateTime;
+begin
+  Result := nextpas.core.toml.base.TomlTime(AHour, AMinute, ASecond, ANanosecond);
+end;
+
+function TomlEnumerate(const AValue: TTomlValue): TTomlValueEnumerator;
+begin
+  Result := nextpas.core.toml.value.TomlEnumerate(AValue);
 end;
 
 end.

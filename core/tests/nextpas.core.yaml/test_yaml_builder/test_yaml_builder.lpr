@@ -4,6 +4,7 @@ program test_yaml_builder;
 
 uses
   SysUtils,
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.text.view,
   nextpas.core.yaml.types,
@@ -154,13 +155,16 @@ var
   LDoc: IYamlDocument;
 begin
   LDoc := YamlParse('}');
-  Check(not LDoc.HasError or LDoc.Root.IsNull, 'lone } handled');
+  Check(LDoc.HasError, 'lone } reports error');
 
   LDoc := YamlParse(']');
-  Check(not LDoc.HasError or LDoc.Root.IsNull, 'lone ] handled');
+  Check(LDoc.HasError, 'lone ] reports error');
 
   LDoc := YamlParse('{{{');
-  Check(LDoc.HasError or LDoc.Root.IsMap, 'unclosed { handled');
+  Check(LDoc.HasError, 'unclosed { reports error');
+
+  LDoc := YamlParse('[[[');
+  Check(LDoc.HasError, 'unclosed [ reports error');
 end;
 
 procedure TestLargeInput;
@@ -359,17 +363,358 @@ begin
   LB.PutStr('a,b]}');
   LB.PutKey('empty');
   LB.PutStr('');
+  LB.PutKey('trailing');
+  LB.PutStr('two spaces  ');
+  LB.PutKey('question');
+  LB.PutStr('? value');
+  LB.PutKey('dash');
+  LB.PutStr('- value');
+  LB.PutKey('backslash');
+  LB.PutStr('path\name');
   LB.EndMap;
   LB.EndMap;
   LOut := LB.Stringify;
   LB.Done;
 
   LDoc := YamlParse(LOut);
+  Check(Pos('"? value"', LOut) > 0, 'question-indicator scalar quoted');
+  Check(Pos('"- value"', LOut) > 0, 'dash-indicator scalar quoted');
   Check(not LDoc.HasError, 'quoted specials stringify to valid yaml');
   CheckEqual('a,b]}', LDoc.Root.MapGet('special').MapGet('value').AsStr.ToString,
     'flow-special scalar survives');
   CheckEqual('', LDoc.Root.MapGet('special').MapGet('empty').AsStr.ToString,
     'empty scalar survives');
+  CheckEqual('two spaces  ',
+    LDoc.Root.MapGet('special').MapGet('trailing').AsStr.ToString,
+    'trailing-space scalar survives');
+  CheckEqual('? value',
+    LDoc.Root.MapGet('special').MapGet('question').AsStr.ToString,
+    'question-indicator scalar survives');
+  CheckEqual('- value',
+    LDoc.Root.MapGet('special').MapGet('dash').AsStr.ToString,
+    'dash-indicator scalar survives');
+  CheckEqual('path\name',
+    LDoc.Root.MapGet('special').MapGet('backslash').AsStr.ToString,
+    'plain-safe backslash scalar survives');
+end;
+
+procedure TestBuilderFailsFastWhenContainerStackIsFull;
+var
+  LB: TYamlBuilder;
+  LDoc: IYamlDocument;
+  LOut: string;
+  LValue: TYamlValue;
+  LI: Integer;
+  LRaised: Boolean;
+begin
+  LB.Init;
+  try
+    for LI := 1 to 32 do
+      LB.BeginSeq;
+
+    LRaised := False;
+    try
+      LB.BeginSeq;
+    except
+      on E: EInvalidOperationError do
+        LRaised := Pos('YAML builder nesting too deep', E.Message) > 0;
+    end;
+    Check(LRaised, '33rd nested container raises before mutation');
+
+    LB.PutInt(7);
+    for LI := 1 to 32 do
+      LB.EndSeq;
+
+    LOut := LB.Stringify;
+  finally
+    LB.Done;
+  end;
+
+  LDoc := YamlParse(LOut);
+  Check(not LDoc.HasError, 'builder output remains valid after rejected overflow');
+  LValue := LDoc.Root;
+  for LI := 1 to 32 do
+  begin
+    Check(LValue.IsSeq, 'allowed depth stays nested sequence');
+    CheckEqual(Int64(1), Int64(LValue.SeqLen), 'allowed depth keeps one child');
+    LValue := LValue.SeqGet(0);
+  end;
+  CheckEqual(Int64(7), LValue.AsInt, 'deep value remains in current container');
+end;
+
+procedure TestBuilderEndContainerFailsClosed;
+var
+  LB: TYamlBuilder;
+  LDoc: IYamlDocument;
+  LOut: string;
+  LRaised: Boolean;
+begin
+  LB.Init;
+  try
+    LRaised := False;
+    try
+      LB.EndSeq;
+    except
+      on E: EInvalidOperationError do
+        LRaised := Pos('YAML builder sequence is not open', E.Message) > 0;
+    end;
+    Check(LRaised, 'empty EndSeq raises');
+
+    LRaised := False;
+    try
+      LB.EndMap;
+    except
+      on E: EInvalidOperationError do
+        LRaised := Pos('YAML builder mapping is not open', E.Message) > 0;
+    end;
+    Check(LRaised, 'empty EndMap raises');
+  finally
+    LB.Done;
+  end;
+
+  LB.Init;
+  try
+    LB.BeginMap;
+    LB.PutKey('name');
+    LB.PutStr('Alice');
+    LRaised := False;
+    try
+      LB.EndSeq;
+    except
+      on E: EInvalidOperationError do
+        LRaised := Pos('YAML builder sequence is not open', E.Message) > 0;
+    end;
+    Check(LRaised, 'EndSeq on map raises');
+    LB.PutKey('age');
+    LB.PutInt(30);
+    LB.EndMap;
+    LOut := LB.Stringify;
+  finally
+    LB.Done;
+  end;
+
+  LDoc := YamlParse(LOut);
+  Check(not LDoc.HasError, 'map output remains valid after rejected EndSeq');
+  CheckEqual('Alice', LDoc.Root.MapGet('name').AsStr.ToString,
+    'map value before rejected EndSeq remains');
+  CheckEqual(Int64(30), LDoc.Root.MapGet('age').AsInt,
+    'map accepts value after rejected EndSeq');
+
+  LB.Init;
+  try
+    LB.BeginSeq;
+    LB.PutInt(1);
+    LRaised := False;
+    try
+      LB.EndMap;
+    except
+      on E: EInvalidOperationError do
+        LRaised := Pos('YAML builder mapping is not open', E.Message) > 0;
+    end;
+    Check(LRaised, 'EndMap on sequence raises');
+    LB.PutInt(2);
+    LB.EndSeq;
+    LOut := LB.Stringify;
+  finally
+    LB.Done;
+  end;
+
+  LDoc := YamlParse(LOut);
+  Check(not LDoc.HasError, 'sequence output remains valid after rejected EndMap');
+  CheckEqual(Int64(2), Int64(LDoc.Root.SeqLen),
+    'sequence accepts value after rejected EndMap');
+  CheckEqual(Int64(1), LDoc.Root.SeqGet(0).AsInt,
+    'sequence first value remains');
+  CheckEqual(Int64(2), LDoc.Root.SeqGet(1).AsInt,
+    'sequence second value remains');
+end;
+
+procedure TestBuilderMappingPendingKeyFailsClosed;
+var
+  LB: TYamlBuilder;
+  LDoc: IYamlDocument;
+  LOut: string;
+  LRaised: Boolean;
+begin
+  LB.Init;
+  try
+    LB.BeginMap;
+    LB.PutKey('dangling');
+    LRaised := False;
+    try
+      LB.EndMap;
+    except
+      on E: EInvalidOperationError do
+        LRaised := Pos('YAML builder mapping key has no value', E.Message) > 0;
+    end;
+    Check(LRaised, 'EndMap rejects pending mapping key');
+    LB.PutStr('value');
+    LB.EndMap;
+    LOut := LB.Stringify;
+  finally
+    LB.Done;
+  end;
+
+  LDoc := YamlParse(LOut);
+  Check(not LDoc.HasError, 'map output remains valid after rejected pending EndMap');
+  CheckEqual('value', LDoc.Root.MapGet('dangling').AsStr.ToString,
+    'pending key accepts value after rejected EndMap');
+
+  LB.Init;
+  try
+    LB.BeginMap;
+    LB.PutKey('first');
+    LRaised := False;
+    try
+      LB.PutKey('second');
+    except
+      on E: EInvalidOperationError do
+        LRaised := Pos('YAML builder mapping key has no value', E.Message) > 0;
+    end;
+    Check(LRaised, 'PutKey rejects previous pending mapping key');
+    LB.PutInt(1);
+    LB.EndMap;
+    LOut := LB.Stringify;
+  finally
+    LB.Done;
+  end;
+
+  LDoc := YamlParse(LOut);
+  Check(not LDoc.HasError, 'map output remains valid after rejected second key');
+  CheckEqual(Int64(1), LDoc.Root.MapGet('first').AsInt,
+    'first key accepts value after rejected second key');
+  Check(not LDoc.Root.MapGet('second').IsValid,
+    'rejected second key is not published');
+
+  LB.Init;
+  try
+    LB.BeginMap;
+    LRaised := False;
+    try
+      LB.PutInt(9);
+    except
+      on E: EInvalidOperationError do
+        LRaised := Pos('YAML builder mapping value has no key', E.Message) > 0;
+    end;
+    Check(LRaised, 'mapping value without key raises');
+    LB.PutKey('value');
+    LB.PutInt(9);
+    LB.EndMap;
+    LOut := LB.Stringify;
+  finally
+    LB.Done;
+  end;
+
+  LDoc := YamlParse(LOut);
+  Check(not LDoc.HasError, 'map output remains valid after rejected keyless value');
+  CheckEqual(Int64(9), LDoc.Root.MapGet('value').AsInt,
+    'map accepts keyed value after rejected keyless value');
+
+  LB.Init;
+  try
+    LB.BeginMap;
+    LB.PutKey('dangling');
+    LRaised := False;
+    try
+      LOut := LB.Stringify;
+    except
+      on E: EInvalidOperationError do
+        LRaised := Pos('YAML builder mapping key has no value', E.Message) > 0;
+    end;
+    Check(LRaised, 'Stringify rejects pending mapping key');
+    LB.PutBool(True);
+    LB.EndMap;
+    LOut := LB.Stringify;
+  finally
+    LB.Done;
+  end;
+
+  LDoc := YamlParse(LOut);
+  Check(not LDoc.HasError, 'map output remains valid after rejected pending Stringify');
+  Check(LDoc.Root.MapGet('dangling').AsBool,
+    'pending key accepts value after rejected Stringify');
+
+  LB.Init;
+  try
+    LRaised := False;
+    try
+      LB.PutKey('outside');
+    except
+      on E: EInvalidOperationError do
+        LRaised := Pos('YAML builder mapping is not open', E.Message) > 0;
+    end;
+    Check(LRaised, 'PutKey outside map raises');
+    LB.BeginSeq;
+    LB.PutInt(1);
+    LRaised := False;
+    try
+      LB.PutKey('inside-seq');
+    except
+      on E: EInvalidOperationError do
+        LRaised := Pos('YAML builder mapping is not open', E.Message) > 0;
+    end;
+    Check(LRaised, 'PutKey inside sequence raises');
+    LB.PutInt(2);
+    LB.EndSeq;
+    LOut := LB.Stringify;
+  finally
+    LB.Done;
+  end;
+
+  LDoc := YamlParse(LOut);
+  Check(not LDoc.HasError, 'sequence output remains valid after rejected PutKey');
+  CheckEqual(Int64(2), Int64(LDoc.Root.SeqLen),
+    'sequence accepts values around rejected PutKey');
+end;
+
+procedure TestBuilderSecondRootFailsClosed;
+var
+  LB: TYamlBuilder;
+  LDoc: IYamlDocument;
+  LOut: string;
+  LRaised: Boolean;
+begin
+  LB.Init;
+  try
+    LB.PutInt(1);
+    LRaised := False;
+    try
+      LB.PutInt(2);
+    except
+      on E: EInvalidOperationError do
+        LRaised := Pos('YAML builder root value is already set', E.Message) > 0;
+    end;
+    Check(LRaised, 'second scalar root raises');
+    LOut := LB.Stringify;
+  finally
+    LB.Done;
+  end;
+
+  LDoc := YamlParse(LOut);
+  Check(not LDoc.HasError, 'root output remains valid after rejected scalar root');
+  CheckEqual(Int64(1), LDoc.Root.AsInt,
+    'rejected scalar root does not overwrite first root');
+
+  LB.Init;
+  try
+    LB.PutStr('first');
+    LRaised := False;
+    try
+      LB.BeginSeq;
+    except
+      on E: EInvalidOperationError do
+        LRaised := Pos('YAML builder root value is already set', E.Message) > 0;
+    end;
+    Check(LRaised, 'second container root raises');
+    LOut := LB.Stringify;
+  finally
+    LB.Done;
+  end;
+
+  LDoc := YamlParse(LOut);
+  Check(not LDoc.HasError, 'root output remains valid after rejected container root');
+  CheckEqual('first', LDoc.Root.AsStr.ToString,
+    'rejected container root does not overwrite first root');
 end;
 
 begin
@@ -395,5 +740,13 @@ begin
   T.Run('StringifyPretty custom indent', @TestStringifyPrettyCustomIndent);
   T.Run('StringifyPretty zero indent', @TestStringifyPrettyZeroIndent);
   T.Run('Build owns quoted special strings', @TestBuildOwnsQuotedSpecialStrings);
+  T.Run('Builder fails fast when container stack is full',
+    @TestBuilderFailsFastWhenContainerStackIsFull);
+  T.Run('Builder end container fails closed',
+    @TestBuilderEndContainerFailsClosed);
+  T.Run('Builder mapping pending key fails closed',
+    @TestBuilderMappingPendingKeyFailsClosed);
+  T.Run('Builder second root fails closed',
+    @TestBuilderSecondRootFailsClosed);
   T.Summary;
 end.

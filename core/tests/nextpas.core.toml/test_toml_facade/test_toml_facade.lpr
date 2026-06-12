@@ -3,6 +3,8 @@ program test_toml_facade;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
+  nextpas.core.errors,
   nextpas.core.text.view,
   nextpas.core.mem.default,
   nextpas.core.mem.intf,
@@ -24,6 +26,37 @@ begin
   Check(LDoc.HasError, ACaseName + ' has error');
   CheckEqual(AExpectedMessage, LDoc.Error.Message.ToString,
     ACaseName + ' diagnostic message');
+end;
+
+function NestedArrayToml(const AKey: string; const ADepth: Int32): string;
+begin
+  Result := AKey + ' = ' + StringOfChar('[', ADepth) + '1' +
+    StringOfChar(']', ADepth);
+end;
+
+function DottedPath(const ACount: Int32): string;
+var
+  LI: Int32;
+begin
+  Result := '';
+  for LI := 1 to ACount do
+  begin
+    if LI > 1 then
+      Result := Result + '.';
+    Result := Result + 'k' + IntToStr(LI);
+  end;
+end;
+
+function NestedInlineTables(const ACount: Int32): string;
+var
+  LI: Int32;
+begin
+  Result := '';
+  for LI := 1 to ACount do
+    Result := Result + 'k' + IntToStr(LI) + ' = { ';
+  Result := Result + 'leaf = 1';
+  for LI := 1 to ACount do
+    Result := Result + ' }';
 end;
 
 procedure TestParseSimple;
@@ -70,10 +103,17 @@ end;
 procedure TestTryTomlParseFailureReturnsDiagnosticDoc;
 var
   LDoc: ITomlDocument;
+  LErr: TTomlError;
 begin
-  Check(not TryTomlParse('= invalid', LDoc), 'try parse failure');
+  Check(not TryTomlParse('key = ', LDoc), 'try parse failure');
   Check(LDoc <> nil, 'diagnostic doc assigned');
   Check(LDoc.HasError, 'diagnostic doc has error');
+  LErr := LDoc.Error;
+  CheckEqual('unexpected end of input', LErr.Message.ToString,
+    'diagnostic message');
+  CheckEqual(Int64(6), Int64(LErr.Offset), 'diagnostic byte offset');
+  CheckEqual(Int64(1), Int64(LErr.Line), 'diagnostic line');
+  CheckEqual(Int64(7), Int64(LErr.Col), 'diagnostic column');
 end;
 
 procedure TestParseUnexpectedEndOfInputPosition;
@@ -134,6 +174,147 @@ begin
   CheckEqual(Int64(25), LDoc.Root.Get('age').AsInt, 'age = 25');
 end;
 
+procedure TestBuilderRejectsUnmatchedEndArray;
+var
+  LB: ITomlBuilder;
+  LRaised: Boolean;
+begin
+  LB := TomlBuilder;
+  LB.Key('name'); LB.Str('Bob');
+  LRaised := False;
+  try
+    LB.EndArray;
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'builder unmatched EndArray raises EInvalidOperationError');
+  CheckEqual('name = "Bob"' + #10, LB.ToString,
+    'builder unmatched EndArray leaves output unchanged');
+end;
+
+procedure TestBuilderRejectsUnmatchedEndInlineTable;
+var
+  LB: ITomlBuilder;
+  LRaised: Boolean;
+begin
+  LB := TomlBuilder;
+  LB.Key('name'); LB.Str('Bob');
+  LRaised := False;
+  try
+    LB.EndInlineTable;
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'builder unmatched EndInlineTable raises EInvalidOperationError');
+  CheckEqual('name = "Bob"' + #10, LB.ToString,
+    'builder unmatched EndInlineTable leaves output unchanged');
+end;
+
+procedure TestBuilderRejectsMismatchedInlineContainerEnd;
+var
+  LB: ITomlBuilder;
+  LRaised: Boolean;
+begin
+  LB := TomlBuilder;
+  LB.Key('point');
+  LB.BeginInlineTable;
+  LRaised := False;
+  try
+    LB.EndArray;
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'builder EndArray rejects open inline table');
+  LB.Key('x'); LB.Int(1);
+  LB.EndInlineTable;
+  CheckEqual('point = { x = 1 }' + #10, LB.ToString,
+    'builder mismatched end leaves inline table usable');
+end;
+
+procedure TestBuilderRejectsInlineContainerStackOverflow;
+var
+  LB: ITomlBuilder;
+  LI: Int32;
+  LRaised: Boolean;
+begin
+  LB := TomlBuilder(1024);
+  LB.Key('nested');
+  for LI := 1 to 128 do
+    LB.BeginArray;
+  LRaised := False;
+  try
+    LB.BeginArray;
+  except
+    on E: EResourceExhaustedError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'builder inline container overflow raises EResourceExhaustedError');
+  for LI := 1 to 128 do
+    LB.EndArray;
+  CheckEqual('nested = ' + StringOfChar('[', 128) + StringOfChar(']', 128) + #10,
+    LB.ToString, 'builder overflow leaves existing stack balanced');
+end;
+
+procedure TestBuilderRejectsTableHeaderInsideArray;
+var
+  LB: ITomlBuilder;
+  LDoc: ITomlDocument;
+  LRaised: Boolean;
+begin
+  LB := TomlBuilder;
+  LB.Key('items');
+  LB.BeginArray;
+  LB.Int(1);
+  LRaised := False;
+  try
+    LB.BeginTable('bad');
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'builder BeginTable rejects open inline array');
+  LB.Int(2);
+  LB.EndArray;
+  CheckEqual('items = [1, 2]' + #10, LB.ToString,
+    'builder rejected table header leaves array usable');
+  LDoc := TomlParse(LB.ToString);
+  Check(not LDoc.HasError, 'builder output reparses after rejected table header');
+  CheckEqual(Int64(2), LDoc.Root.Get('items').ArrayLen,
+    'builder rejected table header preserves two array items');
+end;
+
+procedure TestBuilderRejectsArrayTableHeaderInsideArray;
+var
+  LB: ITomlBuilder;
+  LDoc: ITomlDocument;
+  LRaised: Boolean;
+begin
+  LB := TomlBuilder;
+  LB.Key('items');
+  LB.BeginArray;
+  LB.Int(1);
+  LRaised := False;
+  try
+    LB.BeginArrayTable('bad');
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'builder BeginArrayTable rejects open inline array');
+  LB.Int(2);
+  LB.EndArray;
+  CheckEqual('items = [1, 2]' + #10, LB.ToString,
+    'builder rejected array table header leaves array usable');
+  LDoc := TomlParse(LB.ToString);
+  Check(not LDoc.HasError,
+    'builder output reparses after rejected array table header');
+  CheckEqual(Int64(2), LDoc.Root.Get('items').ArrayLen,
+    'builder rejected array table header preserves two array items');
+end;
+
 procedure TestBuilderTable;
 var
   LB: ITomlBuilder;
@@ -158,6 +339,115 @@ begin
   Check(Length(LStr) > 0, 'stringify not empty');
   Check(Pos('name', LStr) > 0, 'contains name');
   Check(Pos('Alice', LStr) > 0, 'contains Alice');
+end;
+
+procedure TestDiagnosticDocumentRejectsStringify;
+var
+  LDoc: ITomlDocument;
+  LRaised: Boolean;
+begin
+  LDoc := TomlParse('value = ');
+  Check(LDoc.HasError, 'diagnostic doc produced');
+
+  LRaised := False;
+  try
+    LDoc.Stringify;
+  except
+    on E: EInvalidOperationError do
+    begin
+      LRaised := True;
+      Check(Pos('diagnostic document', E.Message) > 0,
+        'diagnostic stringify message identifies diagnostic document');
+    end;
+  end;
+  Check(LRaised, 'diagnostic stringify rejected');
+
+  LRaised := False;
+  try
+    LDoc.StringifyPretty(2);
+  except
+    on E: EInvalidOperationError do
+    begin
+      LRaised := True;
+      Check(Pos('diagnostic document', E.Message) > 0,
+        'diagnostic pretty stringify message identifies diagnostic document');
+    end;
+  end;
+  Check(LRaised, 'diagnostic pretty stringify rejected');
+end;
+
+procedure TestStringifyMatchesParserDepthBoundary;
+var
+  LDoc: ITomlDocument;
+  LRtDoc: ITomlDocument;
+  LOutput: string;
+begin
+  LDoc := TomlParse(NestedArrayToml('nested', 128));
+  Check(not LDoc.HasError, '128-deep parse ok');
+
+  LOutput := LDoc.Stringify;
+  CheckEqual(NestedArrayToml('nested', 128) + #10, LOutput,
+    '128-deep stringify ok');
+
+  LRtDoc := TomlParse(LOutput);
+  Check(not LRtDoc.HasError, '128-deep stringify reparses');
+
+  LDoc := TomlParse(NestedArrayToml('nested', 129));
+  Check(LDoc.HasError, '129-deep parse rejected');
+  CheckEqual('max nesting depth exceeded', LDoc.Error.Message.ToString,
+    '129-deep diagnostic message');
+end;
+
+procedure TestStringifyDeepTablePath;
+var
+  LDoc: ITomlDocument;
+  LRtDoc: ITomlDocument;
+  LOutput: string;
+begin
+  LDoc := TomlParse('[' + DottedPath(128) + ']' + #10 + 'value = 1');
+  Check(not LDoc.HasError, '128-segment table path parse ok');
+
+  LOutput := LDoc.Stringify;
+  Check(Pos('[' + DottedPath(128) + ']', LOutput) > 0,
+    '128-segment table path stringified');
+
+  LRtDoc := TomlParse(LOutput);
+  Check(not LRtDoc.HasError, '128-segment table path stringify reparses');
+end;
+
+procedure TestStringifyRejectsPathStackOverflow;
+var
+  LDoc: ITomlDocument;
+  LRaised: Boolean;
+begin
+  LDoc := TomlParse('[root]' + #10 + NestedInlineTables(128));
+  Check(not LDoc.HasError, '129-segment stringify source parses');
+
+  LRaised := False;
+  try
+    LDoc.Stringify;
+  except
+    on E: EResourceExhaustedError do
+    begin
+      LRaised := True;
+      Check(Pos('table path stack limit exceeded', E.Message) > 0,
+        'stringify overflow message identifies path stack');
+    end;
+  end;
+  Check(LRaised, 'stringify rejects path stack overflow');
+
+  LRaised := False;
+  try
+    LDoc.StringifyPretty(2);
+  except
+    on E: EResourceExhaustedError do
+    begin
+      LRaised := True;
+      Check(Pos('table path stack limit exceeded', E.Message) > 0,
+        'pretty stringify overflow message identifies path stack');
+    end;
+  end;
+  Check(LRaised, 'pretty stringify rejects path stack overflow');
 end;
 
 procedure TestRealWorldConfig;
@@ -260,8 +550,27 @@ begin
     @TestParseFractionalSecondsDiagnosticMessage);
   T.Run('auto release', @TestAutoRelease);
   T.Run('builder', @TestBuilder);
+  T.Run('builder rejects unmatched EndArray',
+    @TestBuilderRejectsUnmatchedEndArray);
+  T.Run('builder rejects unmatched EndInlineTable',
+    @TestBuilderRejectsUnmatchedEndInlineTable);
+  T.Run('builder rejects mismatched inline container end',
+    @TestBuilderRejectsMismatchedInlineContainerEnd);
+  T.Run('builder rejects inline container stack overflow',
+    @TestBuilderRejectsInlineContainerStackOverflow);
+  T.Run('builder rejects table header inside array',
+    @TestBuilderRejectsTableHeaderInsideArray);
+  T.Run('builder rejects array table header inside array',
+    @TestBuilderRejectsArrayTableHeaderInsideArray);
   T.Run('builder table', @TestBuilderTable);
   T.Run('stringify', @TestStringify);
+  T.Run('diagnostic document rejects stringify',
+    @TestDiagnosticDocumentRejectsStringify);
+  T.Run('stringify matches parser depth boundary',
+    @TestStringifyMatchesParserDepthBoundary);
+  T.Run('stringify deep table path', @TestStringifyDeepTablePath);
+  T.Run('stringify rejects path stack overflow',
+    @TestStringifyRejectsPathStackOverflow);
   T.Run('real-world config', @TestRealWorldConfig);
   T.Run('builder all types', @TestBuilderAllTypes);
   T.Run('builder array table', @TestBuilderArrayTable);

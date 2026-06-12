@@ -63,6 +63,146 @@ begin
   end;
 end;
 
+procedure TestParseRejectsDuplicateAttributes;
+var
+  LDoc: TXmlDocument;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  LDoc := nil;
+  try
+    try
+      LDoc := TXmlDocument.Parse('<r a="1" a="2"/>');
+    except
+      on E: EXmlError do
+      begin
+        LRaised := True;
+        Check(Pos('attribute "a" must not appear more than once',
+          E.Message) > 0, 'duplicate attribute error text');
+        CheckEqual(Int64(1), Int64(E.Pos.Line),
+          'duplicate attribute error line');
+        Check(E.Pos.Column > 1, 'duplicate attribute error column');
+      end;
+    end;
+    Check(LRaised, 'DOM parse rejects duplicate attributes');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestParseRejectsDuplicateExpandedAttributes;
+var
+  LDoc: TXmlDocument;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  LDoc := nil;
+  try
+    try
+      LDoc := TXmlDocument.Parse(
+        '<r xmlns:p="urn:x" xmlns:q="urn:x" p:a="1" q:a="2"/>');
+    except
+      on E: EXmlError do
+      begin
+        LRaised := True;
+        Check(Pos('must not appear more than once', E.Message) > 0,
+          'duplicate expanded attribute error text');
+        CheckEqual(Int64(1), Int64(E.Pos.Line),
+          'duplicate expanded attribute error line');
+        Check(E.Pos.Column > 1, 'duplicate expanded attribute error column');
+      end;
+    end;
+    Check(LRaised, 'DOM parse rejects duplicate expanded attributes');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestParseAllowsDistinctExpandedAttributes;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse(
+    '<r p:a="1" q:a="2" xmlns:p="urn:p" xmlns:q="urn:q"/>');
+  try
+    Check(LDoc.Root <> nil,
+      'DOM parse allows same local attributes in distinct namespaces');
+  finally
+    LDoc.Free;
+  end;
+
+  LDoc := TXmlDocument.Parse(
+    '<r a="1" p:a="2" xmlns="urn:x" xmlns:p="urn:x"/>');
+  try
+    Check(LDoc.Root <> nil,
+      'DOM parse allows default namespace plus prefixed same local attr');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestParseRejectsUnboundNamespacePrefix;
+var
+  LDoc: TXmlDocument;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  LDoc := nil;
+  try
+    try
+      LDoc := TXmlDocument.Parse('<root bad:attr="x"/>');
+    except
+      on E: EXmlError do
+      begin
+        LRaised := True;
+        Check(Pos('namespace prefix "bad" is not bound', E.Message) > 0,
+          'unbound namespace error text');
+        CheckEqual(Int64(1), Int64(E.Pos.Line),
+          'unbound namespace error line');
+        Check(E.Pos.Column > 1, 'unbound namespace error column');
+      end;
+    end;
+    Check(LRaised, 'DOM parse rejects unbound namespace prefix');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestParseRejectsRawLessThanInAttributeValue;
+var
+  LDoc: TXmlDocument;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  LDoc := nil;
+  try
+    try
+      LDoc := TXmlDocument.Parse('<root attr="raw<bad"/>');
+    except
+      on E: EXmlError do
+      begin
+        LRaised := True;
+        Check(Pos('attribute value must not contain raw <', E.Message) > 0,
+          'raw less-than attribute error text');
+        CheckEqual(Int64(1), Int64(E.Pos.Line),
+          'raw less-than attribute error line');
+        Check(E.Pos.Column > 1, 'raw less-than attribute error column');
+      end;
+    end;
+    Check(LRaised, 'DOM parse rejects raw less-than in attribute value');
+  finally
+    LDoc.Free;
+  end;
+
+  LDoc := TXmlDocument.Parse('<root attr="safe&lt;value"/>');
+  try
+    CheckEqual('safe<value', LDoc.Root.GetAttr('attr'),
+      'DOM parse keeps escaped less-than attribute valid');
+  finally
+    LDoc.Free;
+  end;
+end;
+
 procedure TestFindChild;
 var
   LDoc: TXmlDocument;
@@ -192,6 +332,163 @@ begin
   end;
 end;
 
+procedure TestDocumentWhitespace;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse('  ' + #10 + '<root/>' + #10 + '  ');
+  try
+    Check(LDoc.Root <> nil, 'root present with surrounding whitespace');
+    CheckEqual('root', LDoc.Root.Name.Local, 'root name with surrounding whitespace');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestPreRootDoctype;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse('<?xml version="1.0"?><!--pre--><!DOCTYPE root><root/><?tail data?>');
+  try
+    Check(LDoc.Root <> nil, 'root present with pre-root doctype');
+    CheckEqual('root', LDoc.Root.Name.Local, 'root name with pre-root doctype');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestInvalidDocumentText;
+  procedure ExpectParseError(const AXml, AExpectedFragment, ALabel: string);
+  var
+    LRaised: Boolean;
+    LDoc: TXmlDocument;
+  begin
+    LRaised := False;
+    LDoc := nil;
+    try
+      try
+        LDoc := TXmlDocument.Parse(AXml);
+      except
+        on E: EXmlError do
+        begin
+          LRaised := True;
+          Check(Pos(AExpectedFragment, E.Message) > 0,
+            ALabel + ' reports the expected error text');
+          CheckEqual(Int64(1), Int64(E.Pos.Line), ALabel + ' error line');
+          Check(E.Pos.Column > 0, ALabel + ' error column recorded');
+        end;
+      end;
+      Check(LRaised, ALabel + ' raises EXmlError');
+    finally
+      LDoc.Free;
+    end;
+  end;
+begin
+  ExpectParseError(
+    'hello<root/>',
+    'Document text outside root element must be whitespace only',
+    'leading document text');
+  ExpectParseError(
+    '<root/>tail',
+    'Document text outside root element must be whitespace only',
+    'trailing document text');
+  ExpectParseError(
+    '<![CDATA[text]]><root/>',
+    'Document text outside root element must be whitespace only',
+    'leading document cdata');
+  ExpectParseError(
+    '<a/><b/>',
+    'Multiple root elements',
+    'multiple root elements');
+end;
+
+procedure TestMisplacedDoctype;
+  procedure ExpectParseError(const AXml, AExpectedFragment, ALabel: string);
+  var
+    LRaised: Boolean;
+    LDoc: TXmlDocument;
+  begin
+    LRaised := False;
+    LDoc := nil;
+    try
+      try
+        LDoc := TXmlDocument.Parse(AXml);
+      except
+        on E: EXmlError do
+        begin
+          LRaised := True;
+          Check(Pos(AExpectedFragment, E.Message) > 0,
+            ALabel + ' reports the expected error text');
+          CheckEqual(Int64(1), Int64(E.Pos.Line), ALabel + ' error line');
+          Check(E.Pos.Column > 0, ALabel + ' error column recorded');
+        end;
+      end;
+      Check(LRaised, ALabel + ' raises EXmlError');
+    finally
+      LDoc.Free;
+    end;
+  end;
+begin
+  ExpectParseError(
+    '<!DOCTYPE root><!DOCTYPE root><root/>',
+    'DOCTYPE must not appear more than once',
+    'duplicate doctype');
+  ExpectParseError(
+    '<root/><!DOCTYPE root>',
+    'DOCTYPE must appear before the root element',
+    'post-root doctype');
+  ExpectParseError(
+    '<root><!DOCTYPE root></root>',
+    'DOCTYPE must appear before the root element',
+    'in-content doctype');
+end;
+
+procedure TestMissingRootElement;
+  procedure ExpectParseError(const AXml, AExpectedFragment, ALabel: string);
+  var
+    LRaised: Boolean;
+    LDoc: TXmlDocument;
+  begin
+    LRaised := False;
+    LDoc := nil;
+    try
+      try
+        LDoc := TXmlDocument.Parse(AXml);
+      except
+        on E: EXmlError do
+        begin
+          LRaised := True;
+          Check(Pos(AExpectedFragment, E.Message) > 0,
+            ALabel + ' reports the expected error text');
+          CheckEqual(Int64(1), Int64(E.Pos.Line), ALabel + ' error line');
+          Check(E.Pos.Column > 0, ALabel + ' error column recorded');
+        end;
+      end;
+      Check(LRaised, ALabel + ' raises EXmlError');
+    finally
+      LDoc.Free;
+    end;
+  end;
+begin
+  ExpectParseError(
+    '<?xml version="1.0"?>',
+    'Document must contain a root element',
+    'xml declaration only');
+  ExpectParseError(
+    '<!--comment-->',
+    'Document must contain a root element',
+    'comment only');
+  ExpectParseError(
+    '<?target data?>',
+    'Document must contain a root element',
+    'processing instruction only');
+  ExpectParseError(
+    '<!DOCTYPE root>',
+    'Document must contain a root element',
+    'doctype only');
+end;
+
 procedure TestSelfClosingElement;
 var
   LDoc: TXmlDocument;
@@ -227,6 +524,41 @@ begin
   finally
     LDoc.Free;
   end;
+end;
+
+procedure TestRejectsInvalidCommentPayload;
+  procedure ExpectParseError(const AXml, AExpectedFragment, ALabel: string);
+  var
+    LRaised: Boolean;
+    LDoc: TXmlDocument;
+  begin
+    LRaised := False;
+    LDoc := nil;
+    try
+      try
+        LDoc := TXmlDocument.Parse(AXml);
+      except
+        on E: EXmlError do
+        begin
+          LRaised := True;
+          Check(Pos(AExpectedFragment, E.Message) > 0,
+            ALabel + ' reports comment payload error');
+          Check(E.Pos.Line > 0, ALabel + ' error line recorded');
+          Check(E.Pos.Column > 0, ALabel + ' error column recorded');
+        end;
+      end;
+      Check(LRaised, ALabel + ' raises EXmlError');
+    finally
+      LDoc.Free;
+    end;
+  end;
+begin
+  ExpectParseError('<root><!--alpha--omega--></root>',
+    'comment text must not contain "--"',
+    'comment with double hyphen payload');
+  ExpectParseError('<root><!--alpha---></root>',
+    'comment text must not end with "-"',
+    'comment with trailing hyphen payload');
 end;
 
 procedure TestCDataNode;
@@ -504,6 +836,15 @@ begin
   T.Run('ParseSimple', @TestParseSimple);
   T.Run('ParseNested', @TestParseNested);
   T.Run('ParseAttributes', @TestParseAttributes);
+  T.Run('ParseRejectsDuplicateAttributes', @TestParseRejectsDuplicateAttributes);
+  T.Run('ParseRejectsDuplicateExpandedAttributes',
+    @TestParseRejectsDuplicateExpandedAttributes);
+  T.Run('ParseAllowsDistinctExpandedAttributes',
+    @TestParseAllowsDistinctExpandedAttributes);
+  T.Run('ParseRejectsUnboundNamespacePrefix',
+    @TestParseRejectsUnboundNamespacePrefix);
+  T.Run('ParseRejectsRawLessThanInAttributeValue',
+    @TestParseRejectsRawLessThanInAttributeValue);
   T.Run('FindChild', @TestFindChild);
   T.Run('FindChildren', @TestFindChildren);
   T.Run('TextConcat', @TestTextConcat);
@@ -513,8 +854,14 @@ begin
   T.Run('SelectPathNoMatch', @TestSelectPathNoMatch);
   T.Run('SelectPathRootMismatch', @TestSelectPathRootMismatch);
   T.Run('EmptyDocument', @TestEmptyDocument);
+  T.Run('DocumentWhitespace', @TestDocumentWhitespace);
+  T.Run('PreRootDoctype', @TestPreRootDoctype);
+  T.Run('InvalidDocumentText', @TestInvalidDocumentText);
+  T.Run('MisplacedDoctype', @TestMisplacedDoctype);
+  T.Run('MissingRootElement', @TestMissingRootElement);
   T.Run('SelfClosingElement', @TestSelfClosingElement);
   T.Run('CommentNode', @TestCommentNode);
+  T.Run('RejectsInvalidCommentPayload', @TestRejectsInvalidCommentPayload);
   T.Run('CDataNode', @TestCDataNode);
   T.Run('PINode', @TestPINode);
   T.Run('NamespacedAttributes', @TestNamespacedAttributes);

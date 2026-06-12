@@ -139,6 +139,34 @@ begin
   end;
 end;
 
+procedure TestToIniPreservesTrailingWhitespaceValue;
+var
+  LCfg: TConfig;
+  LReloaded: TConfig;
+  LIni: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('special.trailing', 'two spaces  ');
+
+    LIni := LCfg.ToIni;
+    CheckEqual('[special]' + #10 +
+      'trailing=two spaces  ' + #10,
+      LIni, 'ini export preserves trailing whitespace');
+
+    LReloaded := TConfig.Create;
+    try
+      LReloaded.LoadFromIni(LIni);
+      CheckEqual('two spaces  ', LReloaded.GetRawString('special.trailing'),
+        'trailing whitespace survives ini round-trip');
+    finally
+      LReloaded.Free;
+    end;
+  finally
+    LCfg.Free;
+  end;
+end;
+
 procedure TestToIniPreservesScalarSubtreeConflict;
 var
   LCfg: TConfig;
@@ -218,6 +246,40 @@ begin
   end;
 end;
 
+procedure TestSaveToIniPreservesExistingFileOnExportFailure;
+var
+  LCfg: TConfig;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := TempIniPath('nextpas_config_ini_export_fail_closed.ini');
+  Remove(LPath);
+  WriteFileText(LPath, 'keep=old' + #10);
+
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('special.leading', '  two spaces');
+
+    LRaised := False;
+    try
+      LCfg.SaveToIni(LPath);
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('special.leading', E.Message) > 0,
+          'ini save failure names non-representable key');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'ini save raises on non-representable value');
+    CheckEqual('keep=old' + #10, ReadFileText(LPath),
+      'ini save failure preserves existing file');
+  finally
+    LCfg.Free;
+    Remove(LPath);
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.config.ini_export');
   T.Run('IniExport.ToIniBuildsSectionsAndGlobals',
@@ -230,11 +292,15 @@ begin
     @TestIConfigToIniExportsSnapshot);
   T.Run('IniExport.ToIniRoundTripsCanonicalStringValues',
     @TestToIniRoundTripsCanonicalStringValues);
+  T.Run('IniExport.ToIniPreservesTrailingWhitespaceValue',
+    @TestToIniPreservesTrailingWhitespaceValue);
   T.Run('IniExport.ToIniPreservesScalarSubtreeConflict',
     @TestToIniPreservesScalarSubtreeConflict);
   T.Run('IniExport.ToIniRejectsNonRepresentableValue',
     @TestToIniRejectsNonRepresentableValue);
   T.Run('IniExport.SaveToIniWritesFile',
     @TestSaveToIniWritesFile);
+  T.Run('IniExport.SaveToIniPreservesExistingFileOnExportFailure',
+    @TestSaveToIniPreservesExistingFileOnExportFailure);
   T.Summary;
 end.

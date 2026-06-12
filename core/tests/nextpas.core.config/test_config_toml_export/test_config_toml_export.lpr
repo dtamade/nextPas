@@ -40,6 +40,45 @@ begin
   end;
 end;
 
+procedure TestToTomlPreservesEscapedLiteralKeys;
+var
+  LCfg: TConfig;
+  LReloaded: TConfig;
+  LToml: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('key with space', 'spaced');
+    LCfg.SetString('quote"key', 'quoted');
+    LCfg.SetString('path\slash', 'slashed');
+    LCfg.SetString('mix.dot "key"\path', 'mixed');
+
+    LToml := LCfg.ToToml;
+    CheckEqual('"key with space" = "spaced"' + #10 +
+      '"quote\"key" = "quoted"' + #10 +
+      '"path\\slash" = "slashed"' + #10 +
+      '"mix.dot \"key\"\\path" = "mixed"' + #10,
+      LToml, 'toml export quotes and escapes literal keys');
+
+    LReloaded := TConfig.Create;
+    try
+      LReloaded.LoadFromToml(LToml);
+      CheckEqual('spaced', LReloaded.GetRawString('key with space'),
+        'space key survives toml round-trip');
+      CheckEqual('quoted', LReloaded.GetRawString('quote"key'),
+        'quote key survives toml round-trip');
+      CheckEqual('slashed', LReloaded.GetRawString('path\slash'),
+        'backslash key survives toml round-trip');
+      CheckEqual('mixed', LReloaded.GetRawString('mix.dot "key"\path'),
+        'mixed literal key survives toml round-trip');
+    finally
+      LReloaded.Free;
+    end;
+  finally
+    LCfg.Free;
+  end;
+end;
+
 procedure TestToTomlSupportsTopLevelDenseArrayKeys;
 var
   LCfg: TConfig;
@@ -183,10 +222,48 @@ begin
   end;
 end;
 
+procedure TestSaveToTomlOverwritesAfterInMemoryLiteralExport;
+var
+  LCfg: TConfig;
+  LPath: string;
+  LLoaded: IConfig;
+begin
+  LPath := TempTomlPath('nextpas_config_toml_export_overwrite.toml');
+  Remove(LPath);
+  WriteFileText(LPath, '"keep" = "old"' + #10);
+
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('db', 'root');
+    LCfg.SetString('db.host', 'localhost');
+    LCfg.SetString('key with space', 'spaced');
+    LCfg.SaveToToml(LPath);
+
+    CheckEqual('db = "root"' + #10 +
+      '"db.host" = "localhost"' + #10 +
+      '"key with space" = "spaced"' + #10,
+      ReadFileText(LPath),
+      'toml save overwrites after literal flat-key export succeeds');
+
+    LLoaded := ConfigLoad(LPath, cfToml);
+    CheckEqual('root', LLoaded.GetRawString('db'),
+      'saved toml keeps scalar key');
+    CheckEqual('localhost', LLoaded.GetRawString('db.host'),
+      'saved toml keeps subtree key as literal flat key');
+    CheckEqual('spaced', LLoaded.GetRawString('key with space'),
+      'saved toml keeps escaped literal key');
+  finally
+    LCfg.Free;
+    Remove(LPath);
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.config.toml_export');
   T.Run('TomlExport.ToTomlExportsLiteralFlatKeys',
     @TestToTomlExportsLiteralFlatKeys);
+  T.Run('TomlExport.ToTomlPreservesEscapedLiteralKeys',
+    @TestToTomlPreservesEscapedLiteralKeys);
   T.Run('TomlExport.ToTomlSupportsTopLevelDenseArrayKeys',
     @TestToTomlSupportsTopLevelDenseArrayKeys);
   T.Run('TomlExport.IConfigToTomlExportsSnapshot',
@@ -199,5 +276,7 @@ begin
     @TestToTomlPreservesEscapedStrings);
   T.Run('TomlExport.SaveToTomlWritesFile',
     @TestSaveToTomlWritesFile);
+  T.Run('TomlExport.SaveToTomlOverwritesAfterInMemoryLiteralExport',
+    @TestSaveToTomlOverwritesAfterInMemoryLiteralExport);
   T.Summary;
 end.

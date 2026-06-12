@@ -75,8 +75,26 @@ begin
     begin
       Result := ADoc.Anchors[LI - 1].NodeIdx;
       Exit;
-    end;
+  end;
   Result := YAML_NODE_NONE;
+end;
+
+function AliasResolutionDepthExceedsLimit(const ADoc: TYamlDocument;
+  ANodeIdx: UInt32): Boolean;
+var
+  LIdx: UInt32;
+  LDepth: UInt32;
+begin
+  Result := False;
+  LIdx := ANodeIdx;
+  LDepth := 1;
+  while (LIdx < ADoc.NodeCount) and (ADoc.Nodes[LIdx].Kind = ynkAlias) do
+  begin
+    if LDepth >= YAML_ALIAS_RESOLUTION_DEPTH_LIMIT then
+      Exit(True);
+    LIdx := ADoc.Nodes[LIdx].AliasTarget;
+    Inc(LDepth);
+  end;
 end;
 
 procedure SetError(var ADoc: TYamlDocument; const AMsg: string;
@@ -87,6 +105,59 @@ begin
   ADoc.Error.Line := ALine;
   ADoc.Error.Col := ACol;
   ADoc.Error.Offset := AOffset;
+end;
+
+function IsBareMergeKeyToken(const AToken: TYamlToken): Boolean;
+begin
+  Result :=
+    (AToken.Kind = ytkScalar) and
+    (AToken.Style = yssPlain) and
+    (AToken.Value.Len = 2) and
+    (AToken.Value.Data <> nil) and
+    (AToken.Value.Data[0] = '<') and
+    (AToken.Value.Data[1] = '<');
+end;
+
+procedure SetUnsupportedMergeKeyError(var ADoc: TYamlDocument;
+  const AToken: TYamlToken);
+begin
+  SetError(ADoc, 'YAML merge keys are not supported',
+    AToken.Line, AToken.Col, AToken.Offset);
+end;
+
+procedure SetUnsupportedExplicitMappingKeyError(var ADoc: TYamlDocument;
+  const AToken: TYamlToken);
+begin
+  SetError(ADoc, 'YAML explicit mapping keys are not supported',
+    AToken.Line, AToken.Col, AToken.Offset);
+end;
+
+function MappingContainsKey(const ADoc: TYamlDocument; AFirstKeyIdx: UInt32;
+  const AKey: TStringView): Boolean;
+var
+  LCur: UInt32;
+begin
+  Result := False;
+  LCur := AFirstKeyIdx;
+  while LCur <> YAML_NODE_NONE do
+  begin
+    if (ADoc.Nodes[LCur].Kind = ynkString) and
+       ADoc.Nodes[LCur].Str.Equals(AKey) then
+    begin
+      Result := True;
+      Exit;
+    end;
+    if ADoc.Nodes[LCur].Next = YAML_NODE_NONE then
+      Exit;
+    LCur := ADoc.Nodes[ADoc.Nodes[LCur].Next].Next;
+  end;
+end;
+
+procedure SetDuplicateMappingKeyError(var ADoc: TYamlDocument;
+  const AToken: TYamlToken);
+begin
+  SetError(ADoc, 'duplicate mapping key',
+    AToken.Line, AToken.Col, AToken.Offset);
 end;
 
 function TryParseHex(const AView: TStringView; out AValue: Int64): Boolean;
@@ -325,6 +396,18 @@ begin
 
     if ACurToken.Kind = ytkScalar then
     begin
+      if IsBareMergeKeyToken(ACurToken) then
+      begin
+        SetUnsupportedMergeKeyError(ADoc, ACurToken);
+        Result := LIdx;
+        Exit;
+      end;
+      if MappingContainsKey(ADoc, LFirst, ACurToken.Value) then
+      begin
+        SetDuplicateMappingKeyError(ADoc, ACurToken);
+        Result := LIdx;
+        Exit;
+      end;
       LKeyNode := AddNode(ADoc);
       ADoc.Nodes[LKeyNode].Kind := ynkString;
       ADoc.Nodes[LKeyNode].Str := ACurToken.Value;
@@ -332,7 +415,12 @@ begin
       ACurToken := AScanner.NextToken;
     end
     else
-      Break;
+    begin
+      SetError(ADoc, 'expected mapping key', ACurToken.Line, ACurToken.Col,
+        ACurToken.Offset);
+      Result := LIdx;
+      Exit;
+    end;
 
     // Value
     if ACurToken.Kind = ytkValue then
@@ -408,7 +496,16 @@ begin
   end;
 
   if ACurToken.Kind = ytkFlowSeqEnd then
+  begin
     ACurToken := AScanner.NextToken; // consume ]
+  end
+  else if (ACurToken.Kind = ytkStreamEnd) and (not ADoc.HasError) then
+  begin
+    SetError(ADoc, 'expected "]"', ACurToken.Line, ACurToken.Col,
+      ACurToken.Offset);
+    Result := LIdx;
+    Exit;
+  end;
 
   ADoc.Nodes[LIdx].Container.FirstChild := LFirst;
   ADoc.Nodes[LIdx].Container.Count := LCount;
@@ -432,6 +529,13 @@ begin
   while (ACurToken.Kind <> ytkFlowMapEnd) and (ACurToken.Kind <> ytkStreamEnd) and
         (ACurToken.Kind <> ytkError) do
   begin
+    if ACurToken.Kind = ytkKey then
+    begin
+      SetUnsupportedExplicitMappingKeyError(ADoc, ACurToken);
+      Result := LIdx;
+      Exit;
+    end;
+
     if (LCount > 0) then
     begin
       if ACurToken.Kind <> ytkFlowEntry then
@@ -447,11 +551,20 @@ begin
     end;
 
     // Key
-    if ACurToken.Kind = ytkKey then
-      ACurToken := AScanner.NextToken; // explicit ? key
-
     if ACurToken.Kind = ytkScalar then
     begin
+      if IsBareMergeKeyToken(ACurToken) then
+      begin
+        SetUnsupportedMergeKeyError(ADoc, ACurToken);
+        Result := LIdx;
+        Exit;
+      end;
+      if MappingContainsKey(ADoc, LFirst, ACurToken.Value) then
+      begin
+        SetDuplicateMappingKeyError(ADoc, ACurToken);
+        Result := LIdx;
+        Exit;
+      end;
       LKeyNode := AddNode(ADoc);
       ADoc.Nodes[LKeyNode].Kind := ynkString;
       ADoc.Nodes[LKeyNode].Str := ACurToken.Value;
@@ -492,7 +605,16 @@ begin
   end;
 
   if ACurToken.Kind = ytkFlowMapEnd then
+  begin
     ACurToken := AScanner.NextToken; // consume }
+  end
+  else if (ACurToken.Kind = ytkStreamEnd) and (not ADoc.HasError) then
+  begin
+    SetError(ADoc, 'expected "}"', ACurToken.Line, ACurToken.Col,
+      ACurToken.Offset);
+    Result := LIdx;
+    Exit;
+  end;
 
   ADoc.Nodes[LIdx].Container.FirstChild := LFirst;
   ADoc.Nodes[LIdx].Container.Count := LCount;
@@ -503,6 +625,7 @@ function ParseNode(var ADoc: TYamlDocument; var AScanner: TYamlScanner;
   var ACurToken: TYamlToken): UInt32;
 var
   LAnchorName, LKeyView: TStringView;
+  LKeyToken: TYamlToken;
   LKeyNode, LValNode, LFirst, LPrev, LIdx: UInt32;
   LCount, LMapCol: UInt32;
 begin
@@ -527,12 +650,26 @@ begin
       Result := ParseBlockSequence(ADoc, AScanner, ACurToken);
     ytkScalar:
     begin
+      LKeyToken := ACurToken;
       LKeyView := ACurToken.Value;
       LMapCol := ACurToken.Col;
       Result := ResolveScalar(ACurToken.Value, ACurToken.Style, ADoc);
       ACurToken := AScanner.NextToken;
       if ACurToken.Kind = ytkValue then
       begin
+        if ACurToken.Line <> LKeyToken.Line then
+        begin
+          SetError(ADoc, 'expected mapping key', ACurToken.Line, ACurToken.Col,
+            ACurToken.Offset);
+          Dec(ADoc.ParseDepth);
+          Exit;
+        end;
+        if IsBareMergeKeyToken(LKeyToken) then
+        begin
+          SetUnsupportedMergeKeyError(ADoc, LKeyToken);
+          Dec(ADoc.ParseDepth);
+          Exit;
+        end;
         LKeyNode := Result;
         ADoc.Nodes[LKeyNode].Kind := ynkString;
         ADoc.Nodes[LKeyNode].Str := LKeyView;
@@ -555,6 +692,20 @@ begin
           Inc(LCount);
           if (ACurToken.Kind = ytkScalar) and (ACurToken.Col = LMapCol) then
           begin
+            if IsBareMergeKeyToken(ACurToken) then
+            begin
+              SetUnsupportedMergeKeyError(ADoc, ACurToken);
+              Result := LIdx;
+              Dec(ADoc.ParseDepth);
+              Exit;
+            end;
+            if MappingContainsKey(ADoc, LFirst, ACurToken.Value) then
+            begin
+              SetDuplicateMappingKeyError(ADoc, ACurToken);
+              Result := LIdx;
+              Dec(ADoc.ParseDepth);
+              Exit;
+            end;
             LKeyView := ACurToken.Value;
             LKeyNode := AddNode(ADoc);
             ADoc.Nodes[LKeyNode].Kind := ynkString;
@@ -564,6 +715,14 @@ begin
           end
           else
             Break;
+        end;
+        if ACurToken.Kind = ytkValue then
+        begin
+          SetError(ADoc, 'expected mapping key', ACurToken.Line, ACurToken.Col,
+            ACurToken.Offset);
+          Result := LIdx;
+          Dec(ADoc.ParseDepth);
+          Exit;
         end;
         if ACurToken.Kind = ytkBlockEnd then
           ACurToken := AScanner.NextToken;
@@ -579,6 +738,13 @@ begin
       begin
         SetError(ADoc, 'undefined alias', ACurToken.Line, ACurToken.Col,
           ACurToken.Offset);
+        Result := AddNode(ADoc);
+        ADoc.Nodes[Result].Kind := ynkNull;
+      end
+      else if AliasResolutionDepthExceedsLimit(ADoc, LIdx) then
+      begin
+        SetError(ADoc, 'alias resolution depth exceeds limit',
+          ACurToken.Line, ACurToken.Col, ACurToken.Offset);
         Result := AddNode(ADoc);
         ADoc.Nodes[Result].Kind := ynkNull;
       end
@@ -601,11 +767,41 @@ begin
         RegisterAnchor(ADoc, LAnchorName, Result);
       end;
     end;
+    ytkKey:
+    begin
+      SetUnsupportedExplicitMappingKeyError(ADoc, ACurToken);
+      Result := AddNode(ADoc);
+      ADoc.Nodes[Result].Kind := ynkNull;
+    end;
+    ytkValue:
+    begin
+      SetError(ADoc, 'expected mapping key', ACurToken.Line, ACurToken.Col,
+        ACurToken.Offset);
+      Result := AddNode(ADoc);
+      ADoc.Nodes[Result].Kind := ynkNull;
+    end;
   else
     Result := AddNode(ADoc);
     ADoc.Nodes[Result].Kind := ynkNull;
   end;
   Dec(ADoc.ParseDepth);
+end;
+
+procedure ValidateDocumentTail(var ADoc: TYamlDocument; var AScanner: TYamlScanner;
+  var ACurToken: TYamlToken);
+begin
+  if ACurToken.Kind = ytkDocEnd then
+    ACurToken := AScanner.NextToken;
+
+  if ACurToken.Kind = ytkStreamEnd then
+    Exit;
+
+  if ACurToken.Kind = ytkDocStart then
+    SetError(ADoc, 'multiple YAML documents are not supported',
+      ACurToken.Line, ACurToken.Col, ACurToken.Offset)
+  else
+    SetError(ADoc, 'unexpected content after YAML document',
+      ACurToken.Line, ACurToken.Col, ACurToken.Offset);
 end;
 
 procedure YamlDocParse(var ADoc: TYamlDocument; const AInput: PAnsiChar; const ALen: SizeUInt);
@@ -637,6 +833,9 @@ begin
   end;
 
   ADoc.RootIdx := ParseNode(ADoc, LScanner, LTok);
+
+  if (not ADoc.HasError) and (not LScanner.HasError) then
+    ValidateDocumentTail(ADoc, LScanner, LTok);
 
   if LScanner.HasError then
   begin

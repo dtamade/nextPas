@@ -15,6 +15,19 @@ uses
 var
   T: TTestRunner;
 
+function DottedPath(const ACount: Int32): string;
+var
+  LI: Int32;
+begin
+  Result := '';
+  for LI := 1 to ACount do
+  begin
+    if LI > 1 then
+      Result := Result + '.';
+    Result := Result + 'k' + IntToStr(LI);
+  end;
+end;
+
 procedure VerifyRoundTrip(const AInput: string; const ALabel: string);
 var
   LDoc1, LDoc2: ITomlDocument;
@@ -160,6 +173,12 @@ begin
   VerifyRoundTrip('a.b.c = "deep"', 'dotted keys');
 end;
 
+procedure TestDeepTablePath;
+begin
+  VerifyRoundTrip('[' + DottedPath(128) + ']' + #10 + 'value = 1',
+    '128-segment table path');
+end;
+
 procedure TestArrayTable;
 begin
   VerifyRoundTrip(
@@ -250,6 +269,7 @@ begin
   T.Run('floats', @TestFloats);
   T.Run('escaped strings', @TestEscapedStrings);
   T.Run('dotted keys', @TestDottedKeys);
+  T.Run('deep table path', @TestDeepTablePath);
   T.Run('array table', @TestArrayTable);
   T.Run('complex config', @TestComplexConfig);
   T.Run('special chars in strings', @TestSpecialCharsInStrings);

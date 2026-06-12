@@ -3,6 +3,7 @@ program test_toml_parser;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.text.view,
   nextpas.core.mem.default,
   nextpas.core.toml.base,
@@ -31,6 +32,35 @@ begin
   LDoc.Init(DefaultAllocator);
   Result := not LDoc.Parse(TStringView.FromStr(AToml));
   LDoc.Done;
+end;
+
+function DottedPath(const ACount: Int32): string;
+var
+  LI: Int32;
+begin
+  Result := '';
+  for LI := 1 to ACount do
+  begin
+    if LI > 1 then
+      Result := Result + '.';
+    Result := Result + 'k' + IntToStr(LI);
+  end;
+end;
+
+procedure CheckRejectsWithMessage(const AToml, AExpectedMessage,
+  ACaseName: string);
+var
+  LDoc: TTomlDocument;
+begin
+  LDoc.Init(DefaultAllocator);
+  try
+    Check(not LDoc.Parse(TStringView.FromStr(AToml)),
+      ACaseName + ' rejected');
+    CheckEqual(AExpectedMessage, LDoc.Error.Message.ToString,
+      ACaseName + ' diagnostic');
+  finally
+    LDoc.Done;
+  end;
 end;
 
 procedure CheckRejectsAt(const AToml, AExpectedMessage, ACaseName: string;
@@ -309,6 +339,42 @@ begin
   LDoc.Done;
 end;
 
+procedure TestDottedKeyPathDepthBoundary;
+var
+  LDoc: TTomlDocument;
+begin
+  LDoc := MustParse(DottedPath(128) + ' = 1');
+  Check(not LDoc.HasError, '128-segment dotted key accepted');
+  LDoc.Done;
+
+  CheckRejectsWithMessage(DottedPath(129) + ' = 1',
+    'key too deeply nested', '129-segment dotted key');
+end;
+
+procedure TestTablePathDepthBoundary;
+var
+  LDoc: TTomlDocument;
+begin
+  LDoc := MustParse('[' + DottedPath(128) + ']' + #10 + 'value = 1');
+  Check(not LDoc.HasError, '128-segment table path accepted');
+  LDoc.Done;
+
+  CheckRejectsWithMessage('[' + DottedPath(129) + ']' + #10 + 'value = 1',
+    'key too deeply nested', '129-segment table path');
+end;
+
+procedure TestArrayTablePathDepthBoundary;
+var
+  LDoc: TTomlDocument;
+begin
+  LDoc := MustParse('[[' + DottedPath(128) + ']]' + #10 + 'value = 1');
+  Check(not LDoc.HasError, '128-segment array-table path accepted');
+  LDoc.Done;
+
+  CheckRejectsWithMessage('[[' + DottedPath(129) + ']]' + #10 + 'value = 1',
+    'key too deeply nested', '129-segment array-table path');
+end;
+
 procedure TestArray;
 var
   LDoc: TTomlDocument;
@@ -331,6 +397,18 @@ begin
   Check(LDoc.Node(LChild)^.Kind = tnkTable, 'is table');
   CheckEqual(Int64(2), Int64(LDoc.Node(LChild)^.Container.Count), '2 entries');
   LDoc.Done;
+end;
+
+procedure TestInlineTableDottedKeyPathDepthBoundary;
+var
+  LDoc: TTomlDocument;
+begin
+  LDoc := MustParse('root = { ' + DottedPath(128) + ' = 1 }');
+  Check(not LDoc.HasError, '128-segment inline table dotted key accepted');
+  LDoc.Done;
+
+  CheckRejectsWithMessage('root = { ' + DottedPath(129) + ' = 1 }',
+    'key too deeply nested', '129-segment inline table dotted key');
 end;
 
 procedure TestLiteralString;
@@ -356,6 +434,24 @@ begin
   Check(LDoc.Node(LChild)^.Kind = tnkString, 'is string');
   Check(LDoc.Node(LChild)^.Str.Equals(
     TStringView.Create(PAnsiChar('hello' + #10 + 'world'), 11)), 'escaped newline');
+  LDoc.Done;
+end;
+
+procedure TestRawDelControlCharInStrings;
+var
+  LDoc: TTomlDocument;
+begin
+  CheckRejectsAt('msg = "a' + #127 + 'b"', 'control char in string',
+    'basic string raw DEL', 8, 1, 9);
+  CheckRejectsAt('msg = ''a' + #127 + 'b''', 'control char in string',
+    'literal string raw DEL', 8, 1, 9);
+  CheckRejectsAt('msg = """a' + #127 + 'b"""', 'control char in multi-line string',
+    'multi-line basic string raw DEL', 10, 1, 11);
+  CheckRejectsAt('msg = ''''''a' + #127 + 'b''''''',
+    'control char in multi-line literal string',
+    'multi-line literal string raw DEL', 10, 1, 11);
+
+  LDoc := MustParse('tab = "a' + #9 + 'b"' + #10 + 'lit = ''a' + #9 + 'b''');
   LDoc.Done;
 end;
 
@@ -486,10 +582,19 @@ begin
   T.Run('table', @TestTable);
   T.Run('nested table', @TestNestedTable);
   T.Run('dotted key', @TestDottedKey);
+  T.Run('dotted key path depth boundary',
+    @TestDottedKeyPathDepthBoundary);
+  T.Run('table path depth boundary',
+    @TestTablePathDepthBoundary);
+  T.Run('array table path depth boundary',
+    @TestArrayTablePathDepthBoundary);
   T.Run('array', @TestArray);
   T.Run('inline table', @TestInlineTable);
+  T.Run('inline table dotted key path depth boundary',
+    @TestInlineTableDottedKeyPathDepthBoundary);
   T.Run('literal string', @TestLiteralString);
   T.Run('escaped string', @TestEscapedString);
+  T.Run('raw DEL control char in strings', @TestRawDelControlCharInStrings);
   T.Run('quoted key', @TestQuotedKey);
   T.Run('datetime offset', @TestDateTimeOffset);
   T.Run('local date', @TestLocalDate);
