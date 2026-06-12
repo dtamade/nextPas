@@ -97,18 +97,22 @@ Evidence:
 
 ### S5.2 Helper-Family Mapping Audit
 
-- [ ] Audit and document all HIR intrinsic name → LLVM helper name mappings.
-- [ ] Lock `np.system.interface_addref` / `np.system.interface_release` contract names in HIR (currently using implementation names).
-- [ ] Lock `np.system.halt` contract name in HIR (currently implicit in backend).
-- [ ] Lock `np.system.heap_alloc` / `np.system.heap_free` contract names (currently using `@np_alloc` / `@np_free`).
-- [ ] Add source-contract check: HIR intrinsic name must match documented `np.system.*` contract or be a known internal intrinsic.
+- [x] Audit and document all HIR intrinsic name → LLVM helper name mappings.
+- [x] Document `intf_addref` / `intf_release` as implementation names mapping to `np.system.interface_addref` / `np.system.interface_release` contracts.
+- [x] Document `halt` as implementation name mapping to `np.system.halt` contract.
+- [x] Document `arr_alloc` / `class_alloc` as implementation names mapping to `np.system.heap_alloc` contract.
+- [x] Add source-contract checks: HIR intrinsic name existence and LLVM helper mapping.
+- [x] Add focused test for interface contract (`test_hir_interface_contract`).
 
-Gap evidence:
+**Decision**: Keep implementation names in HIR (`intf_addref`, `intf_release`, `halt`, `arr_alloc`, `class_alloc`), document mapping in `runtime-contracts.md` and `contract-coverage-table.md`. This is consistent with existing pattern where `np.system.object_free.destroy/cleanup/release` use semantic names but other helpers use implementation names.
 
-- `np_hir_llvm_emitter.pas:750-756` uses `@np_intf_addref` / `@np_intf_release` directly without HIR intrinsic contract name.
-- `np_hir_llvm_emitter.pas:891` uses `@np_raise` without HIR intrinsic contract name.
-- No HIR intrinsic for `halt`; backend uses syscall directly.
-- `np_hir_llvm_emitter.pas:1275` defines `@np_alloc` without contract name mapping.
+**Evidence**:
+
+- `runtime-contracts.md:34-39` documents HIR uses `halt` as internal intrinsic name.
+- `runtime-contracts.md:111-112` documents HIR uses `intf_addref`/`intf_release` as internal intrinsic names.
+- `runtime-contracts.md:199-201` documents HIR uses `arr_alloc`/`class_alloc` as allocation intrinsics.
+- `check_system_source_contracts.sh:681-689` verifies HIR builder and emitter use implementation names.
+- `test_hir_interface_contract` verifies `intf_addref`/`intf_release` HIR intrinsics and LLVM helper emission.
 
 ### S5.3 Integration Smoke
 
