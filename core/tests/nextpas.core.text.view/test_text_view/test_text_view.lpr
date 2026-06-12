@@ -48,12 +48,11 @@ begin
   V := TStringView.FromSpan(S);
   Check(V.IsEmpty, 'nil+zero span is empty');
 
-  S := TByteSpan.Create(nil, 1);
   try
-    V := TStringView.FromSpan(S);
-    Fail('nil+nonzero span: expected EInvalidArgument');
+    S := TByteSpan.Create(nil, 1);
+    Fail('nil+nonzero span create: expected EArgumentNil');
   except
-    on E: EInvalidArgument do
+    on E: EArgumentNil do
       ;
   end;
 end;
