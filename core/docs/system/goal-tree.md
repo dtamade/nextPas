@@ -105,9 +105,9 @@ Current phase note:
 **Evidence**:
 
 - `runtime-contracts.md:34-39` documents HIR uses `halt` as internal intrinsic name.
-- `runtime-contracts.md:111-112` documents HIR uses `intf_addref`/`intf_release` as internal intrinsic names.
-- `runtime-contracts.md:199-201` documents HIR uses `arr_alloc`/`class_alloc` as allocation intrinsics.
-- `check_system_source_contracts.sh:681-689` verifies HIR builder and emitter use implementation names.
+- `runtime-contracts.md:115-116` documents HIR uses `intf_addref`/`intf_release` as internal intrinsic names.
+- `runtime-contracts.md:203-208` documents HIR uses `arr_alloc`/`class_alloc` as allocation intrinsics.
+- `check_system_source_contracts.sh:681-692` verifies HIR builder and emitter use implementation names.
 - `test_hir_interface_contract` verifies `intf_addref`/`intf_release` HIR intrinsics and LLVM helper emission.
 
 ### S5.3 Integration Smoke
