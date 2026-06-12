@@ -30,14 +30,14 @@ type
 
 implementation
 
-function MappedRingBufferShardName(const BaseName: string; ShardIndex: Integer): string;
+function BuildShardName(const BaseName: string; Index: Integer): string;
 var
-  LIndexText: string;
+  LIndexStr: string;
 begin
-  Str(ShardIndex, LIndexText);
-  if ShardIndex < 10 then
-    LIndexText := '0' + LIndexText;
-  Result := BaseName + '_sh' + LIndexText;
+  Str(Index, LIndexStr);
+  if Index < 10 then
+    LIndexStr := '0' + LIndexStr;
+  Result := BaseName + '_sh' + LIndexStr;
 end;
 
 constructor TMappedRingBufferSharded.Create;
@@ -86,7 +86,7 @@ begin
   for LIndex := 0 to ShardCount-1 do
   begin
     FShards[LIndex] := TMappedRingBuffer.Create;
-    LName := MappedRingBufferShardName(BaseName, LIndex);
+    LName := BuildShardName(BaseName, LIndex);
     if not FShards[LIndex].CreateShared(LName, Capacity, ElemSize) then Exit;
   end;
   FInit := True;
@@ -107,7 +107,7 @@ begin
   for LIndex := 0 to ShardCount-1 do
   begin
     FShards[LIndex] := TMappedRingBuffer.Create;
-    LName := MappedRingBufferShardName(BaseName, LIndex);
+    LName := BuildShardName(BaseName, LIndex);
     if not FShards[LIndex].OpenShared(LName) then Exit;
   end;
   FInit := True;
