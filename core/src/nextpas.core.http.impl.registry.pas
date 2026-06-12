@@ -48,6 +48,7 @@ implementation
 
 uses
   nextpas.core.http.impl.h1,
+  nextpas.core.http.impl.h2.client,
   nextpas.core.http.impl.h2.server,
   nextpas.core.http.impl.h2.types;
 
@@ -64,6 +65,16 @@ begin
   LH1Options.Timeout := AOptions.Timeout;
   LH1Options.MaxPoolSize := AOptions.MaxPoolSize;
   Result := NewH1ClientTransport(LH1Options);
+end;
+
+function CreateH2ClientTransport(const AOptions: THttpClientOptions): IHttpTransport;
+var
+  LH2Options: TH2ClientTransportOptions;
+begin
+  LH2Options := TH2ClientTransportOptions.Default;
+  LH2Options.Timeout := AOptions.Timeout;
+  LH2Options.MaxPoolSize := AOptions.MaxPoolSize;
+  Result := NewH2ClientTransport(LH2Options);
 end;
 
 function CreateH1ServerTransport(
@@ -215,6 +226,7 @@ procedure RegisterBuiltins;
 begin
   RegisterClientTransport(hvHttp10, @CreateH1ClientTransport);
   RegisterClientTransport(hvHttp11, @CreateH1ClientTransport);
+  RegisterClientTransport(hvHttp2, @CreateH2ClientTransport);
   RegisterServerTransport(hvHttp10, @CreateH1ServerTransport);
   RegisterServerTransport(hvHttp11, @CreateH1ServerTransport);
   RegisterServerTransport(hvHttp2, @CreateH2ServerTransport);
