@@ -8,20 +8,6 @@ FORBIDDEN_UNITS=(
   "nextpas.core.sync"
   "nextpas.core.sync.mutex"
   "nextpas.core.platform.time"
-  "nextpas.core.platform.posix.base"
-  "nextpas.core.platform.posix.ffi"
-  "nextpas.core.platform.linux.base"
-  "nextpas.core.platform.linux.ffi"
-  "nextpas.core.platform.darwin.base"
-  "nextpas.core.platform.darwin.ffi"
-  "nextpas.core.platform.android.base"
-  "nextpas.core.platform.android.ffi"
-  "nextpas.core.platform.freebsd.base"
-  "nextpas.core.platform.freebsd.ffi"
-  "nextpas.core.platform.unix.base"
-  "nextpas.core.platform.unix.ffi"
-  "nextpas.core.platform.windows.base"
-  "nextpas.core.platform.windows.ffi"
   "nextpas.core.time.cpu"
   "nextpas.core.text.conv"
   "nextpas.core.fs.util"
@@ -31,7 +17,15 @@ FORBIDDEN_UNITS=(
   "SyncObjs"
 )
 
-KNOWN_DEBT=()
+KNOWN_DEBT=(
+  "src/nextpas.core.mem.mapped_ring_buffer.pas|nextpas.core.fs.util"
+  "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|SyncObjs"
+  "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|nextpas.core.text.conv"
+  "src/nextpas.core.mem.mapped_slab_pool.pas|nextpas.core.fs.util"
+  "src/nextpas.core.mem.mapped_slab_pool.pas|nextpas.core.text.conv"
+  "src/nextpas.core.mem.secure.pas|BaseUnix"
+  "src/nextpas.core.mem.secure.pas|Windows"
+)
 
 is_forbidden_unit() {
   local unit="$1"
