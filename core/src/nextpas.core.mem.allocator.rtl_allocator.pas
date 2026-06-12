@@ -60,7 +60,7 @@ begin
   // - AllocMem zero-initializes; GetMem does not guarantee zero
   // - No native aligned API exposed via this allocator (use aligned module/bridge)
   // - No MemSize/usable_size available
-  Result.ZeroInitialized := False; // GetMem 不保证零初始化，只有 AllocMem 才清零
+  Result.ZeroInitialized := True;
   Result.SupportsAligned := False;
   Result.HasMemSize      := False;
 end;

@@ -6,7 +6,8 @@ uses
   SysUtils,
   nextpas.core.testing,
   nextpas.core.mem.error,
-  nextpas.core.mem.mapped_slab_pool;
+  nextpas.core.mem.mapped_slab_pool,
+  nextpas.core.platform.files;
 
 type
   TExceptionProc = procedure;
@@ -14,6 +15,7 @@ type
 var
   T: TTestRunner;
   GPool: TMappedSlabPool = nil;
+  GManager: TMappedSlabPoolManager = nil;
   GOtherPool: TMappedSlabPool = nil;
   GPtr: Pointer = nil;
   GExternalPtr: Pointer = nil;
@@ -60,6 +62,16 @@ begin
   GPool.FreeBlock(GPtr);
 end;
 
+procedure RaiseManagerExternalPointerFree;
+begin
+  GManager.FreeAny(@GStackByte);
+end;
+
+procedure RaiseManagerStoredPointerFree;
+begin
+  GManager.FreeAny(GExternalPtr);
+end;
+
 function RangesOverlap(APtrA: Pointer; ASizeA: SizeUInt; APtrB: Pointer; ASizeB: SizeUInt): Boolean;
 var
   LA, LB: PtrUInt;
@@ -69,10 +81,27 @@ begin
   Result := (LA < LB + ASizeB) and (LB < LA + ASizeA);
 end;
 
-function TempMappedSlabPath: string;
+function MappedSlabPoolTestPath: string;
 begin
   Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
-    'nextpas_mapped_slab_pool_' + IntToStr(GetProcessID) + '.bin';
+    'nextpas_mapped_slab_pool_' + IntToStr(GetProcessID) + '.dat';
+end;
+
+function MappedSlabPoolSharedName: string;
+begin
+  Result := 'nextpas_mapped_slab_pool_' + IntToStr(GetProcessID);
+end;
+
+procedure RemoveMappedSlabPoolTestFile(const APath: string);
+begin
+  if APath <> '' then
+    platform_file_unlink(PAnsiChar(APath));
+end;
+
+procedure CheckMappedSlabPoolTestFileRemoved(const APath: string);
+begin
+  if APath <> '' then
+    Check(platform_file_unlink(PAnsiChar(APath)) = 0, 'remove file-backed pool test file');
 end;
 
 procedure TestCreateAnonymous;
@@ -94,77 +123,123 @@ begin
   end;
 end;
 
-procedure TestFileBackedCreateAndOpen;
+procedure TestFileBackedCreateOpenUsesExistingMapping;
 var
   LPath: string;
-  LPool: TMappedSlabPool;
-  LOpenedPool: TMappedSlabPool;
+  LCreator: TMappedSlabPool;
+  LOpener: TMappedSlabPool;
+  LRecreator: TMappedSlabPool;
   LPtr: Pointer;
-  LAllocs, LFrees, LFailed: UInt64;
-  LUsedPages, LTotalPages: UInt32;
+  LAllocs: UInt64;
+  LFrees: UInt64;
+  LFailed: UInt64;
+  LUsedPages: UInt32;
+  LTotalPages: UInt32;
 begin
-  LPath := TempMappedSlabPath;
-  DeleteFile(LPath);
-
-  LPool := TMappedSlabPool.Create;
-  LOpenedPool := TMappedSlabPool.Create;
+  LPath := MappedSlabPoolTestPath;
+  LCreator := nil;
+  LOpener := nil;
+  LRecreator := nil;
+  RemoveMappedSlabPoolTestFile(LPath);
   try
-    Check(LPool.CreateFile(LPath, 4096, 4096, 256), 'create file-backed pool');
-    Check(FileExists(LPath), 'file-backed pool should create backing file');
-    Check(LPool.IsCreator, 'first file-backed open should initialize the pool');
+    LCreator := TMappedSlabPool.Create;
+    Check(LCreator.CreateFile(LPath, 4096, 4096, 256), 'create file-backed pool');
+    Check(LCreator.IsCreator, 'first CreateFile creates backing file');
+    LPtr := LCreator.Alloc(64);
+    Check(LPtr <> nil, 'file-backed allocation');
+    LCreator.FreeBlock(LPtr);
+    Check(LCreator.Flush, 'flush file-backed pool');
+    FreeAndNil(LCreator);
 
-    LPtr := LPool.Alloc(64);
-    Check(LPtr <> nil, 'allocation from file-backed pool');
-    LPool.FreeBlock(LPtr);
-    LPool.Close;
+    LOpener := TMappedSlabPool.Create;
+    Check(LOpener.OpenFile(LPath), 'OpenFile opens existing backing file');
+    Check(not LOpener.IsCreator, 'OpenFile attaches as non-creator');
+    LOpener.GetStats(LAllocs, LFrees, LFailed, LUsedPages, LTotalPages);
+    CheckEqual(Int64(1), Int64(LAllocs), 'allocation count persisted after OpenFile');
+    CheckEqual(Int64(1), Int64(LFrees), 'free count persisted after OpenFile');
+    FreeAndNil(LOpener);
 
-    Check(LOpenedPool.OpenFile(LPath), 'open existing file-backed pool');
-    Check(not LOpenedPool.IsCreator, 'open existing file-backed pool should not reinitialize');
-    LOpenedPool.GetStats(LAllocs, LFrees, LFailed, LUsedPages, LTotalPages);
-    CheckEqual(Int64(1), Int64(LAllocs), 'persisted alloc count');
-    CheckEqual(Int64(1), Int64(LFrees), 'persisted free count');
-    CheckEqual(Int64(0), Int64(LFailed), 'persisted failed count');
-    CheckEqual(Int64(1), Int64(LTotalPages), 'persisted total pages');
+    LRecreator := TMappedSlabPool.Create;
+    Check(LRecreator.CreateFile(LPath, 4096, 4096, 256), 'CreateFile opens existing backing file');
+    Check(not LRecreator.IsCreator, 'second CreateFile must not recreate existing file');
+    FreeAndNil(LRecreator);
+
+    LRecreator := TMappedSlabPool.Create;
+    Check(LRecreator.CreateFile(LPath, 0, 0, 0),
+      'CreateFile existing backing uses persisted header instead of caller shape');
+    Check(not LRecreator.IsCreator, 'existing CreateFile with invalid caller shape still attaches');
   finally
-    LOpenedPool.Free;
-    LPool.Free;
-    DeleteFile(LPath);
+    LRecreator.Free;
+    LOpener.Free;
+    LCreator.Free;
+    CheckMappedSlabPoolTestFileRemoved(LPath);
   end;
 end;
 
-procedure TestFileBackedCreateFileReopensExisting;
+procedure TestCreateSharedExistingUsesPersistedHeader;
+var
+  LName: string;
+  LCreator: TMappedSlabPool;
+  LAttacher: TMappedSlabPool;
+begin
+  LName := MappedSlabPoolSharedName;
+  LCreator := nil;
+  LAttacher := nil;
+  try
+    LCreator := TMappedSlabPool.Create;
+    Check(LCreator.CreateShared(LName, 4096, 4096, 256),
+      'create shared slab pool');
+    Check(LCreator.IsCreator, 'first CreateShared creates shared backing');
+
+    LAttacher := TMappedSlabPool.Create;
+    Check(LAttacher.CreateShared(LName, 0, 0, 0),
+      'CreateShared existing backing uses persisted header instead of caller shape');
+    Check(not LAttacher.IsCreator, 'existing CreateShared attaches as non-creator');
+  finally
+    LAttacher.Free;
+    LCreator.Free;
+  end;
+end;
+
+procedure TestOpenFileRejectsTruncatedBackingFile;
 var
   LPath: string;
-  LPool: TMappedSlabPool;
-  LReopenedPool: TMappedSlabPool;
-  LPtr: Pointer;
-  LAllocs, LFrees, LFailed: UInt64;
-  LUsedPages, LTotalPages: UInt32;
+  LCreator: TMappedSlabPool;
+  LOpener: TMappedSlabPool;
 begin
-  LPath := TempMappedSlabPath;
-  DeleteFile(LPath);
-
-  LPool := TMappedSlabPool.Create;
-  LReopenedPool := TMappedSlabPool.Create;
+  LPath := MappedSlabPoolTestPath;
+  LCreator := nil;
+  LOpener := nil;
+  RemoveMappedSlabPoolTestFile(LPath);
   try
-    Check(LPool.CreateFile(LPath, 4096, 4096, 256), 'create first file-backed pool');
-    LPtr := LPool.Alloc(64);
-    Check(LPtr <> nil, 'allocation before reopening through CreateFile');
-    LPool.FreeBlock(LPtr);
-    LPool.Close;
+    LCreator := TMappedSlabPool.Create;
+    Check(LCreator.CreateFile(LPath, 4096, 4096, 256),
+      'create file-backed slab pool for truncation test');
+    FreeAndNil(LCreator);
 
-    Check(LReopenedPool.CreateFile(LPath, 4096, 4096, 256),
-      'CreateFile should reopen existing backing file');
-    Check(not LReopenedPool.IsCreator, 'CreateFile existing path should not reinitialize');
-    LReopenedPool.GetStats(LAllocs, LFrees, LFailed, LUsedPages, LTotalPages);
-    CheckEqual(Int64(1), Int64(LAllocs), 'CreateFile existing persisted alloc count');
-    CheckEqual(Int64(1), Int64(LFrees), 'CreateFile existing persisted free count');
-    CheckEqual(Int64(0), Int64(LFailed), 'CreateFile existing persisted failed count');
-    CheckEqual(Int64(1), Int64(LTotalPages), 'CreateFile existing persisted total pages');
+    CheckEqual(Int64(0), Int64(platform_file_truncate_path(PAnsiChar(LPath), 1024)),
+      'truncate backing file below mapped slab pool layout size');
+
+    LOpener := TMappedSlabPool.Create;
+    Check(not LOpener.OpenFile(LPath), 'OpenFile rejects a truncated mapped slab pool backing file');
+    Check(not LOpener.IsValid, 'failed OpenFile must not leave a valid mapped slab pool');
   finally
-    LReopenedPool.Free;
-    LPool.Free;
-    DeleteFile(LPath);
+    LOpener.Free;
+    LCreator.Free;
+    CheckMappedSlabPoolTestFileRemoved(LPath);
+  end;
+end;
+
+procedure TestCreateRejectsInvalidHeaderShape;
+begin
+  GPool := TMappedSlabPool.Create;
+  try
+    Check(not GPool.CreateAnonymous(4096, 4096, 0),
+      'CreateAnonymous rejects zero max size class');
+    Check(not GPool.IsValid, 'failed CreateAnonymous must not leave a valid pool');
+  finally
+    GPool.Free;
+    GPool := nil;
   end;
 end;
 
@@ -274,15 +349,97 @@ begin
   end;
 end;
 
+procedure TestManagerAllocAnyLargeFallback;
+var
+  LManager: TMappedSlabPoolManager;
+  LSmall: Pointer;
+  LLarge: Pointer;
+  LLeakedLarge: Pointer;
+begin
+  LManager := TMappedSlabPoolManager.Create(mspAnonymous);
+  try
+    GManager := LManager;
+    LSmall := LManager.AllocAny(64);
+    Check(LSmall <> nil, 'manager should allocate small slab-backed block');
+    PByte(LSmall)^ := $5A;
+    LManager.FreeAny(LSmall);
+
+    LLarge := LManager.AllocAny(4096);
+    Check(LLarge <> nil, 'manager should allocate size-class overflow through large fallback');
+    PByte(LLarge)^ := $A5;
+    LManager.FreeAny(LLarge);
+    GExternalPtr := LLarge;
+    CheckRaisesAllocError(@RaiseManagerStoredPointerFree, aeInvalidPointer,
+      'manager fallback double free');
+
+    CheckRaisesAllocError(@RaiseManagerExternalPointerFree, aeInvalidPointer,
+      'manager external pointer');
+
+    LLeakedLarge := LManager.AllocAny(4096);
+    Check(LLeakedLarge <> nil, 'manager should own unfreed fallback until destroy');
+    PByte(LLeakedLarge)^ := $3C;
+  finally
+    GManager := nil;
+    GExternalPtr := nil;
+    LManager.Free;
+  end;
+end;
+
+procedure TestManagerAllocAnySpillsAfterFirstPoolFull;
+const
+  ALLOCATION_SIZE = 2048;
+  FIRST_POOL_2048_BLOCKS = 256;
+  SPILL_ALLOCATION_COUNT = FIRST_POOL_2048_BLOCKS + 1;
+var
+  LManager: TMappedSlabPoolManager;
+  LBlocks: array[0..SPILL_ALLOCATION_COUNT - 1] of Pointer;
+  LIndex: Integer;
+  LAllocs: UInt64;
+  LFrees: UInt64;
+  LFailed: UInt64;
+  LUsedMemory: UInt64;
+  LTotalMemory: UInt64;
+begin
+  FillChar(LBlocks, SizeOf(LBlocks), 0);
+  LManager := TMappedSlabPoolManager.Create(mspAnonymous);
+  try
+    for LIndex := 0 to FIRST_POOL_2048_BLOCKS - 1 do
+    begin
+      LBlocks[LIndex] := LManager.AllocAny(ALLOCATION_SIZE);
+      Check(LBlocks[LIndex] <> nil,
+        'manager fills first 2048-byte mapped slab pool #' + IntToStr(LIndex + 1));
+    end;
+
+    LBlocks[FIRST_POOL_2048_BLOCKS] := LManager.AllocAny(ALLOCATION_SIZE);
+    Check(LBlocks[FIRST_POOL_2048_BLOCKS] <> nil,
+      'manager should spill 2048-byte allocation to a later mapped slab pool');
+
+    LManager.GetTotalStats(LAllocs, LFrees, LFailed, LUsedMemory, LTotalMemory);
+    CheckEqual(Int64(SPILL_ALLOCATION_COUNT), Int64(LAllocs),
+      'manager spill should count successful allocations only');
+    CheckEqual(Int64(0), Int64(LFailed),
+      'manager spill should not expose internal pool probes as failed allocations');
+  finally
+    for LIndex := 0 to High(LBlocks) do
+      if LBlocks[LIndex] <> nil then
+        LManager.FreeAny(LBlocks[LIndex]);
+    LManager.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.mapped_slab_pool');
   T.Run('create anonymous', @TestCreateAnonymous);
-  T.Run('file-backed create and open', @TestFileBackedCreateAndOpen);
-  T.Run('file-backed CreateFile reopens existing', @TestFileBackedCreateFileReopensExisting);
+  T.Run('file-backed create/open uses existing mapping', @TestFileBackedCreateOpenUsesExistingMapping);
+  T.Run('shared create/open uses existing mapping', @TestCreateSharedExistingUsesPersistedHeader);
+  T.Run('OpenFile rejects truncated backing file', @TestOpenFileRejectsTruncatedBackingFile);
+  T.Run('create rejects invalid header shape', @TestCreateRejectsInvalidHeaderShape);
   T.Run('free reuses same-size block', @TestFreeReusesSameSizeBlock);
   T.Run('mixed-size allocations do not overlap', @TestMixedSizeAllocationsDoNotOverlap);
   T.Run('invalid and double free', @TestInvalidAndDoubleFree);
   T.Run('cross-pool free', @TestCrossPoolFree);
   T.Run('reset invalidates old pointers', @TestResetInvalidatesOldPointers);
+  T.Run('manager AllocAny large fallback', @TestManagerAllocAnyLargeFallback);
+  T.Run('manager AllocAny spills after first pool full', @TestManagerAllocAnySpillsAfterFirstPoolFull);
   T.Summary;
 end.

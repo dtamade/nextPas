@@ -75,7 +75,7 @@ end;
 
 function TMimallocAllocator.Traits: TAllocatorTraits;
 begin
-  Result.ZeroInitialized := False;
+  Result.ZeroInitialized := True;
   Result.ThreadSafe := True;
   Result.HasMemSize := True;
   Result.SupportsAligned := True;

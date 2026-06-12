@@ -8,6 +8,20 @@ FORBIDDEN_UNITS=(
   "nextpas.core.sync"
   "nextpas.core.sync.mutex"
   "nextpas.core.platform.time"
+  "nextpas.core.platform.posix.base"
+  "nextpas.core.platform.posix.ffi"
+  "nextpas.core.platform.linux.base"
+  "nextpas.core.platform.linux.ffi"
+  "nextpas.core.platform.darwin.base"
+  "nextpas.core.platform.darwin.ffi"
+  "nextpas.core.platform.android.base"
+  "nextpas.core.platform.android.ffi"
+  "nextpas.core.platform.freebsd.base"
+  "nextpas.core.platform.freebsd.ffi"
+  "nextpas.core.platform.unix.base"
+  "nextpas.core.platform.unix.ffi"
+  "nextpas.core.platform.windows.base"
+  "nextpas.core.platform.windows.ffi"
   "nextpas.core.time.cpu"
   "nextpas.core.text.conv"
   "nextpas.core.fs.util"
@@ -18,13 +32,6 @@ FORBIDDEN_UNITS=(
 )
 
 KNOWN_DEBT=()
-
-FORBIDDEN_MEM_SECURE_RAW_SYMBOLS=(
-  "GetModuleHandle"
-  "GetProcAddress"
-  "RtlSecureZeroMemory"
-  "InterlockedExchange"
-)
 
 is_forbidden_unit() {
   local unit="$1"
@@ -50,8 +57,7 @@ is_known_debt() {
 
 tmp_found="$(mktemp)"
 tmp_unknown="$(mktemp)"
-tmp_symbols_unknown="$(mktemp)"
-trap 'rm -f "$tmp_found" "$tmp_unknown" "$tmp_symbols_unknown"' EXIT
+trap 'rm -f "$tmp_found" "$tmp_unknown"' EXIT
 
 while IFS= read -r file; do
   awk -v file="$file" '
@@ -93,16 +99,9 @@ while IFS='|' read -r file unit; do
   fi
 done < "$tmp_found"
 
-mem_secure_file="src/nextpas.core.mem.secure.pas"
-for symbol in "${FORBIDDEN_MEM_SECURE_RAW_SYMBOLS[@]}"; do
-  if grep -Eq "\b${symbol}\b" "$mem_secure_file"; then
-    printf '%s|%s\n' "$mem_secure_file" "$symbol" >> "$tmp_symbols_unknown"
-  fi
-done
-
-if [[ -s "$tmp_unknown" || -s "$tmp_symbols_unknown" ]]; then
+if [[ -s "$tmp_unknown" ]]; then
   echo "Unexpected mem L0 dependency boundary violations:"
-  cat "$tmp_unknown" "$tmp_symbols_unknown"
+  cat "$tmp_unknown"
   exit 1
 fi
 

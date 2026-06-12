@@ -210,7 +210,7 @@ begin
   Check(LAllocator <> nil, 'RTL allocator should exist');
 
   LTraits := LAllocator.Traits;
-  CheckEqual(False, LTraits.ZeroInitialized, 'RTL GetMem should not claim zero initialization');
+  CheckEqual(True, LTraits.ZeroInitialized, 'RTL AllocMem should be zero initialized');
   CheckEqual(False, LTraits.SupportsAligned, 'RTL allocator should report non-native aligned support');
   CheckEqual(False, LTraits.HasMemSize, 'RTL allocator should not expose MemSize');
 
@@ -360,27 +360,19 @@ begin
   Check(LResult.IsOk and (LResult.Ptr <> nil), 'round-trip adapter should allocate');
   LPtr := LResult.Ptr;
 
-  try
-    FillChar(LOldLayout, SizeOf(LOldLayout), 0);
-    CheckEqual(False, LOldLayout.IsValid, 'test old layout should be invalid');
+  FillChar(LOldLayout, SizeOf(LOldLayout), 0);
+  CheckEqual(False, LOldLayout.IsValid, 'test old layout should be invalid');
 
-    LResult := LAlloc.Realloc(LPtr, LOldLayout, TMemLayout.Create(64, MEM_DEFAULT_ALIGN));
-    if LResult.IsOk then
-    begin
-      LPtr := LResult.Ptr;
-      LNewLayout := TMemLayout.Create(64, MEM_DEFAULT_ALIGN);
-    end;
+  LResult := LAlloc.Realloc(LPtr, LOldLayout, TMemLayout.Create(64, MEM_DEFAULT_ALIGN));
+  Check(LResult.IsErr, 'adapter Realloc should reject invalid old layout');
+  CheckEqual(Int64(Ord(aeInvalidLayout)), Int64(Ord(LResult.Error)),
+    'adapter Realloc invalid old layout error');
+  CheckEqual(Int64(0), Int64(LRecording.ReallocCalls),
+    'invalid old layout must not reach wrapped allocator Realloc');
+  CheckEqual(Int64(0), Int64(LRecording.DeallocCalls),
+    'invalid old layout must not release the old block');
 
-    Check(LResult.IsErr, 'adapter Realloc should reject invalid old layout');
-    CheckEqual(Int64(Ord(aeInvalidLayout)), Int64(Ord(LResult.Error)),
-      'adapter Realloc invalid old layout error');
-    CheckEqual(Int64(0), Int64(LRecording.ReallocCalls),
-      'invalid old layout must not reach wrapped allocator Realloc');
-    CheckEqual(Int64(0), Int64(LRecording.DeallocCalls),
-      'invalid old layout must not release the old block');
-  finally
-    LAlloc.Dealloc(LPtr, LNewLayout);
-  end;
+  LAlloc.Dealloc(LPtr, LNewLayout);
 end;
 
 procedure TestAllocatorAdapterAlignedRoundTrip;

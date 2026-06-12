@@ -24,8 +24,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.math,
-  nextpas.core.mem.layout;
+  nextpas.core.math;
 
 {**
  * IsOverlap
@@ -987,11 +986,12 @@ begin
     else
       LChunkSize := SizeInt(LRemainingCount);
 
-    { 检查乘法溢出风险 — 在实际操作之前验证 }
+    FillWord(Pointer(LCurrentDst)^, LChunkSize, aValue);
+
+    { 检查乘法溢出风险 }
     if LChunkSize > MAX_SIZE_INT div SIZE_16 then
       raise EOverflow.Create('nextpas.core.mem.utils.Fill16: pointer arithmetic overflow');
 
-    FillWord(Pointer(LCurrentDst)^, LChunkSize, aValue);
     Inc(LCurrentDst, LChunkSize * SIZE_16);
     Dec(LRemainingCount, LChunkSize);
   end;
@@ -1032,11 +1032,12 @@ begin
     else
       LChunkSize := SizeInt(LRemainingCount);
 
-    { 检查乘法溢出风险 — 在实际操作之前验证 }
+    FillDWord(Pointer(LCurrentDst)^, LChunkSize, aValue);
+
+    { 检查乘法溢出风险 }
     if LChunkSize > MAX_SIZE_INT div SIZE_32 then
       raise EOverflow.Create('nextpas.core.mem.utils.Fill32: pointer arithmetic overflow');
 
-    FillDWord(Pointer(LCurrentDst)^, LChunkSize, aValue);
     Inc(LCurrentDst, LChunkSize * SIZE_32);
     Dec(LRemainingCount, LChunkSize);
   end;
@@ -1077,11 +1078,12 @@ begin
     else
       LChunkSize := SizeInt(LRemainingCount);
 
-    { 检查乘法溢出风险 — 在实际操作之前验证 }
+    FillQWord(Pointer(LCurrentDst)^, LChunkSize, aValue);
+
+    { 检查乘法溢出风险 }
     if LChunkSize > MAX_SIZE_INT div SIZE_64 then
       raise EOverflow.Create('nextpas.core.mem.utils.Fill64: pointer arithmetic overflow');
 
-    FillQWord(Pointer(LCurrentDst)^, LChunkSize, aValue);
     Inc(LCurrentDst, LChunkSize * SIZE_64);
     Dec(LRemainingCount, LChunkSize);
   end;
@@ -1141,7 +1143,7 @@ begin
     else
       LChunkSize := SizeInt(LRemainingCount);
 
-    LResult := System.CompareByte(Pointer(LCurrentPtr1)^, Pointer(LCurrentPtr2)^, LChunkSize);
+    LResult := Compare8(Pointer(LCurrentPtr1), Pointer(LCurrentPtr2), LChunkSize);
 
     if LResult <> 0 then
       Exit(LResult);
@@ -1150,8 +1152,8 @@ begin
     Inc(LCurrentPtr2, LChunkSize);
     Dec(LRemainingCount, LChunkSize);
   end;
-  Result := 0;
   {$POP}
+  Result := LResult;
 end;
 
 function Compare8(aPtr1, aPtr2: Pointer; aCount: SizeInt): Integer;
@@ -1287,7 +1289,7 @@ end;
 
 function IsPowerOfTwo(N: SizeUInt): Boolean;
 begin
-  Result := nextpas.core.mem.layout.IsPowerOfTwo(N);
+  Result := (N<>0) and ((N and (N-1))=0);
 end;
 
 function AlignDown(aPtr: Pointer; aAlignment: SizeUInt): Pointer;

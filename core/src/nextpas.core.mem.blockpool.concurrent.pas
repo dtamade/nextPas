@@ -130,6 +130,8 @@ begin
   if aCount <= 0 then Exit(0);
   FLock.Acquire;
   try
+    if aCount > Length(aPtrs) then
+      aCount := Length(aPtrs);
     if Supports(FInner, IBlockPoolBatch, LBatch) then
       Exit(LBatch.AcquireN(aPtrs, aCount));
     for LIdx := 0 to aCount - 1 do
@@ -155,6 +157,8 @@ begin
   if aCount <= 0 then Exit;
   FLock.Acquire;
   try
+    if aCount > Length(aPtrs) then
+      aCount := Length(aPtrs);
     if Supports(FInner, IBlockPoolBatch, LBatch) then
     begin
       LBatch.ReleaseN(aPtrs, aCount);

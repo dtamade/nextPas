@@ -977,11 +977,10 @@ var
 
   FPoolId := NextShardedBlockPoolId;
   FCacheEpoch := 1;
-  FThreadCacheCapacity := aConfig.ThreadCacheCapacity;
-  if FThreadCacheCapacity < 0 then
-    FThreadCacheCapacity := 0
-  else if FThreadCacheCapacity > SHARDED_BLOCKPOOL_THREADCACHE_MAX then
-    FThreadCacheCapacity := SHARDED_BLOCKPOOL_THREADCACHE_MAX;
+  // Disable the old per-thread cache until it has generation ownership and
+  // thread-exit cleanup. Otherwise duplicate frees can be hidden in TLS state
+  // and cache nodes leak after pool destruction.
+  FThreadCacheCapacity := 0;
   FThreadCacheCheckDoubleFree := aConfig.ThreadCacheCheckDoubleFree;
   FTrackInUse := aConfig.TrackInUse;
   FTotalCapacity := 0;
@@ -1197,12 +1196,8 @@ end;
 procedure TShardedBlockPool.Release(aPtr: Pointer);
 var
   LShard: Integer;
-  LLocalShard: Integer;
   LBase: PByte;
   LDiff: PtrUInt;
-  LNode: PThreadCacheNode;
-  LIdx: Integer;
-  LFlush: Integer;
 begin
   if aPtr = nil then Exit;
 
@@ -1224,65 +1219,9 @@ begin
       raise EAllocError.Create(aeInvalidPointer, 'TShardedBlockPool.Release: misaligned pointer');
   end;
 
-  LLocalShard := GetLocalShardIndex;
-  if (FThreadCacheCapacity > 0) and (LLocalShard = LShard) then
-  begin
-    LNode := GetThreadCacheNode;
-    if (LNode <> nil) and (LNode^.Shard = LShard) then
-    begin
-      if FThreadCacheCheckDoubleFree then
-        for LIdx := 0 to LNode^.Count - 1 do
-          if LNode^.Ptrs[LIdx] = aPtr then
-            raise EAllocError.Create(aeDoubleFree, 'TShardedBlockPool.Release: double free detected (thread cache)');
-
-      if LNode^.Count >= FThreadCacheCapacity then
-      begin
-        LFlush := FThreadCacheCapacity div 2;
-        if LFlush < 1 then
-          LFlush := 1;
-        if LFlush > LNode^.Count then
-          LFlush := LNode^.Count;
-
-        FShards[LShard].Lock.Acquire;
-        try
-          FlushRemoteFreesLocked(LShard);
-          FlushThreadCacheLocked(LShard, LNode, LFlush);
-        finally
-          FShards[LShard].Lock.Release;
-        end;
-      end;
-
-      if LNode^.Count < FThreadCacheCapacity then
-      begin
-        LNode^.Ptrs[LNode^.Count] := aPtr;
-        Inc(LNode^.Count);
-        if FTrackInUse then
-          atomic_fetch_add_64(FShards[LShard].InUseCount, -1, mo_relaxed);
-        Exit;
-      end;
-    end;
-  end;
-
-  {$IFNDEF FAF_MEM_DEBUG}
-  // Cross-shard frees are enqueued lock-free and drained by the owning shard.
-  if (LLocalShard >= 0) and (LLocalShard <> LShard) then
-  begin
-    if FThreadCacheCapacity > 0 then
-    begin
-      LNode := GetThreadCacheNode;
-      if LNode <> nil then
-        RemoteFreeBufferPush(LNode, LShard, aPtr)
-      else
-        RemoteFreePush(LShard, aPtr);
-    end
-    else
-      RemoteFreePush(LShard, aPtr);
-    if FTrackInUse then
-      atomic_fetch_add_64(FShards[LShard].InUseCount, -1, mo_relaxed);
-    Exit;
-  end;
-  {$ENDIF}
-
+  // Release must perform the owner-shard state transition synchronously.
+  // Without a per-block pending/free generation state, deferred remote queues
+  // can accept duplicate frees before the owning bitmap observes the first one.
   FShards[LShard].Lock.Acquire;
   try
     FlushRemoteFreesLocked(LShard);
