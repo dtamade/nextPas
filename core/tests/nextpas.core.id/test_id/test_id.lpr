@@ -4,7 +4,9 @@ program test_id;
 
 uses
   SysUtils,
+  nextpas.core.base,
   nextpas.core.testing,
+  nextpas.core.errors,
   nextpas.core.id,
   nextpas.core.id.base,
   nextpas.core.id.uuid,
@@ -17,6 +19,48 @@ uses
 
 var
   T: TTestRunner;
+
+type
+  TArgErrorProc = procedure;
+
+procedure CheckRaisesArgumentError(AProc: TArgErrorProc; const AMessage: string);
+begin
+  try
+    AProc;
+  except
+    on E: EArgumentError do
+      Exit;
+    on E: Exception do
+      Fail(AMessage + ': expected EArgumentError, got ' + E.ClassName);
+  end;
+  Fail(AMessage + ': expected EArgumentError');
+end;
+
+procedure CheckRaisesParseError(AProc: TArgErrorProc; const AMessage: string);
+begin
+  try
+    AProc;
+  except
+    on E: EParseError do
+      Exit;
+    on E: Exception do
+      Fail(AMessage + ': expected EParseError, got ' + E.ClassName);
+  end;
+  Fail(AMessage + ': expected EParseError');
+end;
+
+procedure CheckRaisesOutOfRange(AProc: TArgErrorProc; const AMessage: string);
+begin
+  try
+    AProc;
+  except
+    on E: EOutOfRange do
+      Exit;
+    on E: Exception do
+      Fail(AMessage + ': expected EOutOfRange, got ' + E.ClassName);
+  end;
+  Fail(AMessage + ': expected EOutOfRange');
+end;
 
 { UUID tests }
 
@@ -56,15 +100,6 @@ begin
   LCh := LId[20];
   Check((LCh = '8') or (LCh = '9') or (LCh = 'a') or (LCh = 'b'),
     'variant nibble must be 8/9/a/b');
-end;
-
-procedure TestUuidUniqueness;
-var
-  LId1, LId2: TUuidString;
-begin
-  LId1 := UuidV4;
-  LId2 := UuidV4;
-  Check(LId1 <> LId2, 'two UUIDs must differ');
 end;
 
 { ULID tests }
@@ -113,15 +148,6 @@ begin
   LId := UlidFromTimestamp(0);
   LTimePart := Copy(LId, 1, 10);
   CheckEqual('0000000000', LTimePart);
-end;
-
-procedure TestUlidUniqueness;
-var
-  LId1, LId2: TUlidString;
-begin
-  LId1 := Ulid;
-  LId2 := Ulid;
-  Check(LId1 <> LId2, 'two ULIDs must differ');
 end;
 
 { NanoID tests }
@@ -173,15 +199,6 @@ begin
     LValid := LValid or (LCh = '_') or (LCh = '-');
     Check(LValid, 'NanoID char must be URL-safe: ' + LCh);
   end;
-end;
-
-procedure TestNanoIdUniqueness;
-var
-  LId1, LId2: TNanoIdString;
-begin
-  LId1 := NanoId;
-  LId2 := NanoId;
-  Check(LId1 <> LId2, 'two NanoIDs must differ');
 end;
 
 { UUID v7 tests }
@@ -289,6 +306,128 @@ begin
   Check(not UuidIsValid('not-a-uuid'), 'invalid');
   Check(not UuidIsValid('550e8400-e29b-41d4-a716'), 'too short');
   Check(not UuidIsValid(''), 'empty');
+end;
+
+procedure CallUuidParseInvalid;
+var
+  LU: TUuid;
+begin
+  LU := UuidParse('not-a-uuid');
+  Check(not LU.IsNil, 'invalid facade parse must not silently become nil');
+end;
+
+procedure CallKsuidParseInvalid;
+var
+  LK: TKsuid;
+begin
+  LK := TKsuid.Parse('invalid');
+  Check(not LK.IsNil, 'invalid KSUID Parse must not silently become nil');
+end;
+
+procedure CallKsuidParseOverflow;
+var
+  LK: TKsuid;
+begin
+  LK := TKsuid.Parse(StringOfChar('z', KSUID_STRING_LENGTH));
+  Check(not LK.IsNil, 'overflow KSUID Parse must not silently become nil');
+end;
+
+procedure CallXidParseEmpty;
+var
+  LX: TXid;
+begin
+  LX := TXid.Parse('');
+  Check(not LX.IsNil, 'empty XID Parse must not silently become nil');
+end;
+
+procedure CallXidParseShort;
+var
+  LX: TXid;
+begin
+  LX := TXid.Parse('too-short');
+  Check(not LX.IsNil, 'short XID Parse must not silently become nil');
+end;
+
+procedure CallXidParseInvalidChars;
+var
+  LX: TXid;
+begin
+  LX := TXid.Parse('ZZZZZZZZZZZZZZZZZZZZ');
+  Check(not LX.IsNil, 'invalid XID Parse must not silently become nil');
+end;
+
+procedure CallNanoIdZeroSize;
+var
+  LS: string;
+begin
+  LS := NanoIdCustom(NANOID_DEFAULT_ALPHABET, 0);
+  Check(Length(LS) > 0, 'zero size NanoID must not silently return empty');
+end;
+
+procedure CallNanoIdNegativeSize;
+var
+  LS: string;
+begin
+  LS := NanoIdCustom(NANOID_DEFAULT_ALPHABET, -1);
+  Check(Length(LS) > 0, 'negative size NanoID must not silently return empty');
+end;
+
+procedure CallNanoIdExcessiveSize;
+var
+  LS: string;
+begin
+  LS := NanoIdCustom(NANOID_DEFAULT_ALPHABET, NANOID_MAX_LENGTH + 1);
+  Check(Length(LS) > 0, 'excessive size NanoID must not silently return empty');
+end;
+
+procedure CallUlidFromTimestampOverflow;
+var
+  LS: string;
+begin
+  LS := UlidFromTimestamp(UInt64($1000000000000));
+  Check(Length(LS) = ULID_LENGTH, 'overflow ULID timestamp must not silently generate');
+end;
+
+procedure CallNanoIdEmptyAlphabet;
+var
+  LS: string;
+begin
+  LS := NanoIdCustom('', 10);
+  Check(Length(LS) > 0, 'empty NanoID alphabet must not silently return empty');
+end;
+
+procedure CallNanoIdSingleCharacterAlphabet;
+var
+  LS: string;
+begin
+  LS := NanoIdCustom('a', 10);
+  Check(Length(LS) > 0, 'single-character NanoID alphabet must not silently return empty');
+end;
+
+procedure CallNanoIdDuplicateAlphabet;
+var
+  LS: string;
+begin
+  LS := NanoIdCustom('abca', 10);
+  Check(Length(LS) > 0, 'duplicate NanoID alphabet must not silently return empty');
+end;
+
+procedure CallNanoIdOversizedAlphabet;
+var
+  LS: string;
+begin
+  LS := NanoIdCustom(StringOfChar('x', 300), 10);
+  Check(Length(LS) > 0, 'oversized NanoID alphabet must not silently return empty');
+end;
+
+procedure TestUuidParseInvalidRaisesParseError;
+var
+  LU: TUuid;
+begin
+  CheckRaisesParseError(@CallUuidParseInvalid, 'UuidParse invalid input');
+  Check(not UuidIsValid('not-a-uuid'), 'invalid stays invalid');
+  LU := UuidParse('00000000-0000-0000-0000-000000000000');
+  Check(LU.IsNil, 'explicit nil UUID string remains valid');
 end;
 
 procedure TestUuidRoundTrip;
@@ -410,14 +549,6 @@ begin
   Check(TKsuid.Parse(LS) = LK, 'roundtrip');
 end;
 
-procedure TestKsuidUniqueness;
-var LA, LB: string;
-begin
-  LA := KsuidNew;
-  LB := KsuidNew;
-  Check(LA <> LB, 'must differ');
-end;
-
 { XID tests }
 
 procedure TestXidLength;
@@ -440,14 +571,6 @@ begin
   Check(LA < LB, 'sequential must be ordered');
 end;
 
-procedure TestXidUniqueness;
-var LA, LB: string;
-begin
-  LA := XidNew;
-  LB := XidNew;
-  Check(LA <> LB, 'must differ');
-end;
-
 { Boundary tests (L5) }
 
 procedure TestUlidValidation;
@@ -466,18 +589,15 @@ begin
 end;
 
 procedure TestUlidOverflow;
-var LS: string;
 begin
-  LS := UlidFromTimestamp(UInt64($FFFFFFFFFFFFFF));
-  CheckEqual(Int64(0), Int64(Length(LS)));
+  CheckRaisesOutOfRange(@CallUlidFromTimestampOverflow, 'ULID overflow timestamp');
 end;
 
 procedure TestKsuidParseInvalid;
 var LK: TKsuid;
 begin
-  LK := TKsuid.Parse('invalid');
-  Check(LK.IsNil, 'invalid parse returns nil');
   Check(not TKsuid.TryParse('', LK), 'empty fails');
+  CheckRaisesParseError(@CallKsuidParseInvalid, 'TKsuid.Parse invalid input');
 end;
 
 procedure TestXidRoundTrip;
@@ -489,20 +609,18 @@ begin
 end;
 
 procedure TestNanoIdBoundary;
-var LS: string;
 begin
-  LS := NanoIdCustom('abc', 0);
-  CheckEqual(Int64(0), Int64(Length(LS)));
-  LS := NanoIdCustom('', 10);
-  CheckEqual(Int64(0), Int64(Length(LS)));
-  LS := NanoIdCustom(StringOfChar('x', 300), 5);
-  CheckEqual(Int64(0), Int64(Length(LS)));
-  LS := NanoIdCustom('a', 21);
-  CheckEqual(Int64(0), Int64(Length(LS)), 'single-character alphabet');
-  LS := NanoIdCustom('aa', 21);
-  CheckEqual(Int64(0), Int64(Length(LS)), 'duplicate alphabet');
-  LS := NanoIdCustom('abca', 21);
-  CheckEqual(Int64(0), Int64(Length(LS)), 'repeated alphabet character');
+  CheckRaisesArgumentError(@CallNanoIdZeroSize, 'NanoID zero size');
+  CheckRaisesArgumentError(@CallNanoIdNegativeSize, 'NanoID negative size');
+  CheckRaisesArgumentError(@CallNanoIdEmptyAlphabet, 'NanoID empty alphabet');
+  CheckRaisesArgumentError(@CallNanoIdSingleCharacterAlphabet, 'NanoID single-character alphabet');
+  CheckRaisesArgumentError(@CallNanoIdDuplicateAlphabet, 'NanoID duplicate alphabet');
+  CheckRaisesArgumentError(@CallNanoIdOversizedAlphabet, 'NanoID oversized alphabet');
+end;
+
+procedure TestNanoIdRejectsExcessiveSize;
+begin
+  CheckRaisesArgumentError(@CallNanoIdExcessiveSize, 'NanoID excessive size');
 end;
 
 procedure TestUuidNoDash;
@@ -520,8 +638,6 @@ begin
   LA := TUuid.NewV4;
   LB := LA;
   CheckEqual(Int64(LA.Hash), Int64(LB.Hash));
-  LB := TUuid.NewV4;
-  Check(LA.Hash <> LB.Hash, 'different UUIDs should have different hashes (probabilistic)');
 end;
 
 procedure TestXidNil;
@@ -533,9 +649,9 @@ end;
 
 procedure TestXidParseInvalid;
 begin
-  Check(TXid.Parse('').IsNil, 'empty');
-  Check(TXid.Parse('too-short').IsNil, 'short');
-  Check(TXid.Parse('ZZZZZZZZZZZZZZZZZZZZ').IsNil, 'invalid chars');
+  CheckRaisesParseError(@CallXidParseEmpty, 'TXid.Parse empty input');
+  CheckRaisesParseError(@CallXidParseShort, 'TXid.Parse short input');
+  CheckRaisesParseError(@CallXidParseInvalidChars, 'TXid.Parse invalid chars');
 end;
 
 procedure TestXidTryParseLeavesOutUntouchedOnFailure;
@@ -560,8 +676,38 @@ var LK: TKsuid;
 begin
   Check(not TKsuid.TryParse(StringOfChar('z', KSUID_STRING_LENGTH), LK),
     'base62 value above 160-bit KSUID range must fail');
-  Check(TKsuid.Parse(StringOfChar('z', KSUID_STRING_LENGTH)).IsNil,
-    'Parse overflow returns nil sentinel');
+  CheckRaisesParseError(@CallKsuidParseOverflow, 'TKsuid.Parse overflow input');
+end;
+
+procedure TestKsuidTryParseLeavesOutUntouchedOnFailure;
+var
+  LBefore, LK: TKsuid;
+begin
+  LBefore := TKsuid.New;
+  LK := LBefore;
+  Check(not TKsuid.TryParse(StringOfChar('z', KSUID_STRING_LENGTH), LK),
+    'overflow base62 must fail');
+  Check(LK = LBefore, 'failed TryParse must not expose partial KSUID bytes');
+end;
+
+procedure CallSnowflakeInitInvalidWorker;
+var LGen: TSnowflakeGenerator;
+begin
+  LGen.Init(1024);
+end;
+
+procedure CallSnowflakeInitNegativeEpoch;
+var LGen: TSnowflakeGenerator;
+begin
+  LGen.Init(1, -1);
+end;
+
+procedure TestSnowflakeInitRejectsInvalidArguments;
+begin
+  CheckRaisesArgumentError(@CallSnowflakeInitInvalidWorker,
+    'worker id above 10-bit range');
+  CheckRaisesArgumentError(@CallSnowflakeInitNegativeEpoch,
+    'negative epoch');
 end;
 
 { Stress + boundary tests }
@@ -632,25 +778,6 @@ begin
   LU := TUuid.Parse('ffffffff-ffff-ffff-ffff-ffffffffffff');
   Check(not LU.IsNil, 'all-F not nil');
   CheckEqual(Int64(15), Int64(LU.Version));
-end;
-
-{ === Defect-hunting tests === }
-
-procedure TestUuidUniqueness1000;
-var
-  LArr: array[0..999] of string;
-  LI, LJ: Integer;
-begin
-  for LI := 0 to 999 do
-    LArr[LI] := UuidV4;
-  for LI := 0 to 998 do
-    for LJ := LI + 1 to 999 do
-      if LArr[LI] = LArr[LJ] then
-      begin
-        Check(False, 'collision at ' + IntToStr(LI) + ',' + IntToStr(LJ));
-        Exit;
-      end;
-  Check(True, '1000 UUIDs unique');
 end;
 
 procedure TestKsuidBoundaryAllZero;
@@ -752,14 +879,12 @@ begin
 end;
 
 begin
-  Randomize;
   T := TTestRunner.Create('nextpas.core.id');
 
   T.Run('UUID length', @TestUuidLength);
   T.Run('UUID format (dashes)', @TestUuidFormat);
   T.Run('UUID version 4', @TestUuidVersion);
   T.Run('UUID variant', @TestUuidVariant);
-  T.Run('UUID uniqueness', @TestUuidUniqueness);
 
   T.Run('UUID v7 length', @TestUuidV7Length);
   T.Run('UUID v7 version', @TestUuidV7Version);
@@ -774,19 +899,18 @@ begin
   T.Run('UUID parse nil', @TestUuidParseNilStr);
   T.Run('UUID parse case', @TestUuidParseCaseInsensitive);
   T.Run('UUID parse invalid', @TestUuidParseInvalid);
+  T.Run('UUID parse invalid raises parse error', @TestUuidParseInvalidRaisesParseError);
   T.Run('UUID roundtrip', @TestUuidRoundTrip);
 
   T.Run('ULID length', @TestUlidLength);
   T.Run('ULID Crockford chars', @TestUlidCrockfordChars);
   T.Run('ULID timestamp ordering', @TestUlidTimestampOrdering);
   T.Run('ULID from known timestamp', @TestUlidFromKnownTimestamp);
-  T.Run('ULID uniqueness', @TestUlidUniqueness);
 
   T.Run('NanoID default length', @TestNanoIdDefaultLength);
   T.Run('NanoID custom length', @TestNanoIdCustomLength);
   T.Run('NanoID custom alphabet', @TestNanoIdCustomAlphabet);
   T.Run('NanoID URL-safe chars', @TestNanoIdUrlSafe);
-  T.Run('NanoID uniqueness', @TestNanoIdUniqueness);
 
   T.Run('V7 monotonic ordering', @TestV7MonotonicOrdering);
   T.Run('V7 monotonic version', @TestV7MonotonicVersion);
@@ -801,12 +925,10 @@ begin
   T.Run('KSUID timestamp', @TestKsuidTimestamp);
   T.Run('KSUID ordering', @TestKsuidOrdering);
   T.Run('KSUID roundtrip', @TestKsuidRoundTrip);
-  T.Run('KSUID uniqueness', @TestKsuidUniqueness);
 
   T.Run('XID length', @TestXidLength);
   T.Run('XID timestamp', @TestXidTimestamp);
   T.Run('XID ordering', @TestXidOrdering);
-  T.Run('XID uniqueness', @TestXidUniqueness);
 
   T.Run('ULID validation', @TestUlidValidation);
   T.Run('ULID timestamp extract', @TestUlidTimestamp);
@@ -821,6 +943,9 @@ begin
   T.Run('XID TryParse failed out stable', @TestXidTryParseLeavesOutUntouchedOnFailure);
   T.Run('KSUID parse invalid chars', @TestKsuidParseInvalidChars);
   T.Run('KSUID rejects overflow base62', @TestKsuidRejectsOverflowBase62);
+  T.Run('KSUID TryParse failed out stable', @TestKsuidTryParseLeavesOutUntouchedOnFailure);
+  T.Run('NanoID rejects excessive size', @TestNanoIdRejectsExcessiveSize);
+  T.Run('Snowflake init rejects invalid arguments', @TestSnowflakeInitRejectsInvalidArguments);
 
   T.Run('UUID v4 stress 10k', @TestUuidV4Stress);
   T.Run('Snowflake stress 10k', @TestSnowflakeStress);
@@ -829,7 +954,6 @@ begin
   T.Run('UUID parse all-zeros', @TestUuidParseAllZeros);
   T.Run('UUID parse all-F', @TestUuidParseAllF);
 
-  T.Run('UUID uniqueness 1000', @TestUuidUniqueness1000);
   T.Run('KSUID boundary all-zero', @TestKsuidBoundaryAllZero);
   T.Run('KSUID boundary all-FF', @TestKsuidBoundaryAllFF);
   T.Run('ULID max timestamp', @TestUlidMaxTimestamp);

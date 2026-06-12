@@ -10,16 +10,23 @@ uses
   nextpas.core.id.rng,
   nextpas.core.id.uuid,
   nextpas.core.id.v7.monotonic,
-  nextpas.core.platform.random;
+  nextpas.core.platform.random,
+  nextpas.core.platform.time;
 
 var
   T: TTestRunner;
+
+function ExtractUuidV7RandA(const AUuid: TUuid): UInt16;
+begin
+  Result := (UInt16(AUuid.FBytes[6] and $0F) shl 8) or UInt16(AUuid.FBytes[7]);
+end;
 
 procedure ExpectIoErrorFromMonotonicString;
 var
   LRaised: Boolean;
 begin
   TestRandomReset;
+  TestClockReset;
   IdRngReseed;
   GlobalV7Gen.Init;
   TestRandomSetFailure(True);
@@ -43,6 +50,7 @@ var
   LRaised: Boolean;
 begin
   TestRandomReset;
+  TestClockReset;
   IdRngReseed;
   GlobalV7Gen.Init;
   TestRandomSetFailure(True);
@@ -81,9 +89,42 @@ begin
   Check(TestRandomCallCount > 1, 'retry must reach random source');
 end;
 
+procedure TestNewMsEntropyFailureDoesNotCommitState;
+var
+  LRaised: Boolean;
+  LUuid: TUuid;
+begin
+  TestRandomReset;
+  TestClockReset;
+  IdRngReseed;
+  GlobalV7Gen.Init;
+  TestClockSetRealtimeMs(4000);
+  TestRandomSetFillByte($AB);
+  TestRandomSetFailure(True);
+
+  LRaised := False;
+  try
+    UuidV7MonotonicRaw;
+  except
+    on E: EIOError do
+      LRaised := True;
+    on E: Exception do
+      Fail('expected EIOError, got ' + E.ClassName + ': ' + E.Message);
+  end;
+  Check(LRaised, 'new millisecond entropy failure must be catchable');
+
+  TestRandomSetFailure(False);
+  LUuid := UuidV7MonotonicRaw;
+
+  CheckEqual(Int64(4000), Int64(LUuid.TimestampMs), 'retry keeps realtime millisecond');
+  CheckEqual(Int64($0BAB), Int64(ExtractUuidV7RandA(LUuid)),
+    'retry after failed new-ms seed must reseed randA');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.id.uuid.v7_monotonic_failure_contract');
   T.Run('monotonic string unlocks after entropy failure', @TestMonotonicStringUnlocksAfterEntropyFailure);
   T.Run('monotonic raw unlocks after entropy failure', @TestMonotonicRawUnlocksAfterEntropyFailure);
+  T.Run('new ms entropy failure does not commit state', @TestNewMsEntropyFailureDoesNotCommitState);
   T.Summary;
 end.

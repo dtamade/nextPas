@@ -27,9 +27,12 @@ implementation
 
 uses
   nextpas.core.atomic,
+  nextpas.core.base,
   nextpas.core.id.rng,
-  nextpas.core.platform.time,
-  nextpas.core.platform.thread;
+  nextpas.core.platform.time;
+
+const
+  UUID_V7_MAX_TIMESTAMP_MS = UInt64($FFFFFFFFFFFF);
 
 procedure TUuidV7Generator.Init;
 begin
@@ -41,38 +44,34 @@ function TUuidV7Generator.Next: TUuid;
 var
   LMs: UInt64;
   LRandA: UInt16;
+  LRandB: array[0..7] of Byte;
 begin
   LMs := platform_realtime_ns div 1000000;
+  if LMs > UUID_V7_MAX_TIMESTAMP_MS then
+    raise EOutOfRange.Create('TUuidV7Generator.Next: timestamp must fit 48 bits');
+
   if LMs < FLastMs then
-  begin
-    while LMs < FLastMs do
-    begin
-      platform_thread_yield;
-      LMs := platform_realtime_ns div 1000000;
-    end;
-  end;
+    LMs := FLastMs;
   if LMs = FLastMs then
   begin
-    Inc(FRandA);
-    if FRandA > $0FFF then
+    LRandA := FRandA + 1;
+    if LRandA > $0FFF then
     begin
-      while LMs = FLastMs do
-      begin
-        platform_thread_yield;
-        LMs := platform_realtime_ns div 1000000;
-      end;
-      FLastMs := LMs;
-      IdRngFillBytes(@FRandA, 2);
-      FRandA := FRandA and $0FFF;
+      if LMs >= UUID_V7_MAX_TIMESTAMP_MS then
+        raise EOutOfRange.Create('TUuidV7Generator.Next: logical timestamp exceeds 48 bits');
+      Inc(LMs);
+      IdRngFillBytes(@LRandA, 2);
+      LRandA := LRandA and $0FFF;
     end;
   end
   else
   begin
-    FLastMs := LMs;
-    IdRngFillBytes(@FRandA, 2);
-    FRandA := FRandA and $0FFF;
+    IdRngFillBytes(@LRandA, 2);
+    LRandA := LRandA and $0FFF;
   end;
-  LRandA := FRandA;
+  IdRngFillBytes(@LRandB[0], Length(LRandB));
+  FLastMs := LMs;
+  FRandA := LRandA;
 
   Result.FBytes[0] := Byte(LMs shr 40);
   Result.FBytes[1] := Byte(LMs shr 32);
@@ -82,7 +81,7 @@ begin
   Result.FBytes[5] := Byte(LMs);
   Result.FBytes[6] := $70 or Byte(LRandA shr 8);
   Result.FBytes[7] := Byte(LRandA);
-  IdRngFillBytes(@Result.FBytes[8], 8);
+  Move(LRandB[0], Result.FBytes[8], Length(LRandB));
   Result.FBytes[8] := (Result.FBytes[8] and $3F) or $80;
 end;
 

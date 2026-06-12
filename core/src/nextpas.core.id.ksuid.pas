@@ -15,7 +15,7 @@ type
     class function Nil_: TKsuid; static;
     function ToString: string;
     function Timestamp: UInt32;
-    function TimestampUnix: UInt32;
+    function TimestampUnix: UInt64;
     function IsNil: Boolean;
     function CompareTo(const AOther: TKsuid): Int32;
     class operator = (const A, B: TKsuid): Boolean;
@@ -27,15 +27,34 @@ const
   KSUID_STRING_LENGTH = 27;
 
 function KsuidNew: string;
+function KsuidIsValid(const AStr: string): Boolean;
+function KsuidTimestampUnix(const AStr: string): UInt64;
+function KsuidTryTimestampUnix(const AStr: string; out ATimestampUnix: UInt64): Boolean;
 
 implementation
 
 uses
+  nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.id.rng,
   nextpas.core.platform.time;
 
 const
   BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+
+function KsuidTimestampFromRealtime: UInt32;
+var
+  LUnixSeconds: UInt64;
+  LDelta: UInt64;
+begin
+  LUnixSeconds := platform_realtime_ns div 1000000000;
+  if LUnixSeconds < UInt64(KSUID_EPOCH) then
+    raise EInvalidOperationError.Create('TKsuid.New: realtime clock is before KSUID epoch');
+  LDelta := LUnixSeconds - UInt64(KSUID_EPOCH);
+  if LDelta > UInt64(High(UInt32)) then
+    raise EOutOfRange.Create('TKsuid.New: realtime clock exceeds KSUID timestamp range');
+  Result := UInt32(LDelta);
+end;
 
 procedure Base62Encode(const ABytes: array of Byte; ALen: Integer; var ADst: string);
 var
@@ -90,7 +109,7 @@ class function TKsuid.New: TKsuid;
 var
   LTs: UInt32;
 begin
-  LTs := UInt32(platform_realtime_ns div 1000000000) - KSUID_EPOCH;
+  LTs := KsuidTimestampFromRealtime;
   Result.FBytes[0] := Byte(LTs shr 24);
   Result.FBytes[1] := Byte(LTs shr 16);
   Result.FBytes[2] := Byte(LTs shr 8);
@@ -115,7 +134,7 @@ end;
 class function TKsuid.Parse(const AStr: string): TKsuid;
 begin
   if not TryParse(AStr, Result) then
-    FillChar(Result.FBytes, 20, 0);
+    raise EParseError.Create('TKsuid.Parse: invalid KSUID string');
 end;
 
 class function TKsuid.Nil_: TKsuid;
@@ -125,6 +144,7 @@ end;
 
 function TKsuid.ToString: string;
 begin
+  Result := '';
   Base62Encode(FBytes, 20, Result);
 end;
 
@@ -134,9 +154,9 @@ begin
             (UInt32(FBytes[2]) shl 8) or UInt32(FBytes[3]);
 end;
 
-function TKsuid.TimestampUnix: UInt32;
+function TKsuid.TimestampUnix: UInt64;
 begin
-  Result := Timestamp + KSUID_EPOCH;
+  Result := UInt64(Timestamp) + UInt64(KSUID_EPOCH);
 end;
 
 function TKsuid.IsNil: Boolean;
@@ -174,6 +194,32 @@ end;
 function KsuidNew: string;
 begin
   Result := TKsuid.New.ToString;
+end;
+
+function KsuidIsValid(const AStr: string): Boolean;
+var
+  LKsuid: TKsuid;
+begin
+  Result := TKsuid.TryParse(AStr, LKsuid);
+end;
+
+function KsuidTimestampUnix(const AStr: string): UInt64;
+var
+  LTimestampUnix: UInt64;
+begin
+  if not KsuidTryTimestampUnix(AStr, LTimestampUnix) then
+    Exit(0);
+  Result := LTimestampUnix;
+end;
+
+function KsuidTryTimestampUnix(const AStr: string; out ATimestampUnix: UInt64): Boolean;
+var
+  LKsuid: TKsuid;
+begin
+  if not TKsuid.TryParse(AStr, LKsuid) then
+    Exit(False);
+  ATimestampUnix := LKsuid.TimestampUnix;
+  Result := True;
 end;
 
 end.

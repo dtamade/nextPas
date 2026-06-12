@@ -16,7 +16,8 @@ uses
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.hash.base,
-  nextpas.core.hash.intf;
+  nextpas.core.hash.intf,
+  nextpas.core.hash.util;
 
 type
   TSHA256Hasher = class(TInterfacedObject, IHasher)
@@ -187,6 +188,8 @@ var
   LRemaining, LCopy: SizeUInt;
 begin
   Result := ACount;
+  HashRequireTotalLength(FTotalLen, ACount, 'SHA256.Write');
+  HashRequireBuffer(ABuf, ACount, 'SHA256.Write');
   LSrc := @ABuf;
   LRemaining := ACount;
   Inc(FTotalLen, ACount);
@@ -238,7 +241,12 @@ var
   LTotalBits: UInt64;
   I: Integer;
   LDst: PByte;
+  LOutSize: SizeUInt;
 begin
+  LOutSize := DigestOutputSize(SHA256_DIGEST_SIZE, ASize);
+  if LOutSize = 0 then Exit;
+  HashRequireBuffer(ADst, LOutSize, 'SHA256.Sum');
+
   Move(FH[0], LH[0], SizeOf(FH));
   Move(FBuf[0], LBuf[0], FBufLen);
   LBufLen := FBufLen;
@@ -296,10 +304,10 @@ begin
   LDst := @ADst;
   for I := 0 to 7 do
   begin
-    LDst[I*4]   := Byte(LH[I] shr 24);
-    LDst[I*4+1] := Byte(LH[I] shr 16);
-    LDst[I*4+2] := Byte(LH[I] shr 8);
-    LDst[I*4+3] := Byte(LH[I]);
+    WriteDigestByte(LDst, LOutSize, SizeUInt(I) * 4, Byte(LH[I] shr 24));
+    WriteDigestByte(LDst, LOutSize, SizeUInt(I) * 4 + 1, Byte(LH[I] shr 16));
+    WriteDigestByte(LDst, LOutSize, SizeUInt(I) * 4 + 2, Byte(LH[I] shr 8));
+    WriteDigestByte(LDst, LOutSize, SizeUInt(I) * 4 + 3, Byte(LH[I]));
   end;
 end;
 

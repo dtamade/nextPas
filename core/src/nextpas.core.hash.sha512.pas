@@ -14,7 +14,8 @@ uses
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.hash.base,
-  nextpas.core.hash.intf;
+  nextpas.core.hash.intf,
+  nextpas.core.hash.util;
 
 type
   TSHA512Hasher = class(TInterfacedObject, IHasher)
@@ -152,6 +153,16 @@ var
   LRemaining, LCopy: SizeUInt;
 begin
   Result := ACount;
+  if FIs384 then
+  begin
+    HashRequireTotalLength(FTotalLen, ACount, 'SHA384.Write');
+    HashRequireBuffer(ABuf, ACount, 'SHA384.Write');
+  end
+  else
+  begin
+    HashRequireTotalLength(FTotalLen, ACount, 'SHA512.Write');
+    HashRequireBuffer(ABuf, ACount, 'SHA512.Write');
+  end;
   LSrc := @ABuf;
   LRemaining := ACount;
   Inc(FTotalLen, ACount);
@@ -193,8 +204,19 @@ var
   LTotalBits: UInt64;
   I: Integer;
   LDst: PByte;
+  LDigestSize: SizeUInt;
   LOutSize: SizeUInt;
 begin
+  LDigestSize := SHA512_DIGEST_SIZE;
+  if FIs384 then
+    LDigestSize := SHA384_DIGEST_SIZE;
+  LOutSize := DigestOutputSize(LDigestSize, ASize);
+  if LOutSize = 0 then Exit;
+  if FIs384 then
+    HashRequireBuffer(ADst, LOutSize, 'SHA384.Sum')
+  else
+    HashRequireBuffer(ADst, LOutSize, 'SHA512.Sum');
+
   Move(FH[0], LH[0], SizeOf(FH));
   Move(FBuf[0], LBuf[0], FBufLen);
   LBufLen := FBufLen;
@@ -226,27 +248,17 @@ begin
 
   ProcessBlockLocal512(@LBuf[0], LH);
 
-  LOutSize := ASize;
-  if FIs384 then
-  begin
-    if LOutSize > SHA384_DIGEST_SIZE then LOutSize := SHA384_DIGEST_SIZE;
-  end
-  else
-  begin
-    if LOutSize > SHA512_DIGEST_SIZE then LOutSize := SHA512_DIGEST_SIZE;
-  end;
-
   LDst := @ADst;
-  for I := 0 to (LOutSize div 8) - 1 do
+  for I := 0 to (LDigestSize div 8) - 1 do
   begin
-    LDst[I*8]   := Byte(LH[I] shr 56);
-    LDst[I*8+1] := Byte(LH[I] shr 48);
-    LDst[I*8+2] := Byte(LH[I] shr 40);
-    LDst[I*8+3] := Byte(LH[I] shr 32);
-    LDst[I*8+4] := Byte(LH[I] shr 24);
-    LDst[I*8+5] := Byte(LH[I] shr 16);
-    LDst[I*8+6] := Byte(LH[I] shr 8);
-    LDst[I*8+7] := Byte(LH[I]);
+    WriteDigestByte(LDst, LOutSize, SizeUInt(I) * 8, Byte(LH[I] shr 56));
+    WriteDigestByte(LDst, LOutSize, SizeUInt(I) * 8 + 1, Byte(LH[I] shr 48));
+    WriteDigestByte(LDst, LOutSize, SizeUInt(I) * 8 + 2, Byte(LH[I] shr 40));
+    WriteDigestByte(LDst, LOutSize, SizeUInt(I) * 8 + 3, Byte(LH[I] shr 32));
+    WriteDigestByte(LDst, LOutSize, SizeUInt(I) * 8 + 4, Byte(LH[I] shr 24));
+    WriteDigestByte(LDst, LOutSize, SizeUInt(I) * 8 + 5, Byte(LH[I] shr 16));
+    WriteDigestByte(LDst, LOutSize, SizeUInt(I) * 8 + 6, Byte(LH[I] shr 8));
+    WriteDigestByte(LDst, LOutSize, SizeUInt(I) * 8 + 7, Byte(LH[I]));
   end;
 end;
 
