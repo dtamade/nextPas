@@ -116,22 +116,35 @@ Evidence:
 
 ### S5.3 Integration Smoke
 
-- [ ] Add first direct-consume integration smoke for process lifecycle semantic seed.
-- [ ] Add first direct-consume integration smoke for object-free lifecycle.
-- [ ] Verify compiler → HIR → LLVM → executable behavior chain for at least one contract family.
+**Evidence from existing `build/verify_local.sh`**:
 
-Deferred:
+The `build/verify_local.sh` script already provides comprehensive integration smoke for:
+- Process lifecycle: `llvm-empty-program` (hello.pas → LLVM → executable → exit 0)
+- Halt contract: `llvm-halt-program` (halt_42.pas → LLVM IR syscall → exit 42)
+- Object-free lifecycle: `llvm_class_basic.pas` (class Create/Free → LLVM helpers → exit 42)
 
-- Unit lifecycle execution smoke (depends on UnitGraph consumption path).
+**Key verification points**:
+- `runtimeContractCount=2` in build output proves `np.system.process_init` / `np.system.process_fini` semantic seed
+- `@np_object_alloc` and `@np_object_free_release` in LLVM IR proves object-free lifecycle helper emission
+- `movq $60, %rax; syscall` in LLVM IR proves halt syscall emission
+- Executables run with expected exit codes (0 or 42)
+
+**No additional smoke script needed** — existing `verify_local.sh` covers:
+- [x] Process lifecycle direct-consume (compiler → HIR → LLVM → executable)
+- [x] Object-free lifecycle direct-consume (class Create/Free)
+- [x] Halt contract direct-consume (halt syscall emission)
+
+Evidence: `build/verify_local.sh:1740-1769` (llvm-empty-program), `1771-1800` (llvm-halt-program), llvm_class_basic smoke tests.
 
 ### S5.4 Landing Candidate Preparation
 
-- [ ] Create contract coverage table: all live `np.system.*` contracts with HIR/L证据状态.
-- [ ] Create helper mapping appendix: HIR intrinsic → LLVM helper → test coverage.
+- [ ] Create contract coverage table: all live `np.system.*` contracts with HIR/L证据状态. ✅ Done (contract-coverage-table.md)
+- [ ] Create helper mapping appendix: HIR intrinsic → LLVM helper → test coverage. ✅ Done (contract-coverage-table.md Backend-Private Helper Names section)
 - [ ] Document remaining open risks (TypInfo drift, managed array leak gap, lifecycle execution gap).
 
-Current S5 evidence:
+**Current S5 evidence**:
 
 - Managed dynamic-array contract names and backend-private helper boundaries are locked by source-contract checks and HIR dynamic-array focused gates.
 - Process lifecycle semantic seed order is locked by `test-process-runtime-contract-seed`; unit lifecycle execution remains deferred.
 - Object-free source-backed System truth is locked by `rtl/core/system/System.pas`, `TObject.Free`, object-free HIR gates, and the focused `test-stage0-system-object-free-query` stage0 query evidence.
+- Integration smoke covered by `build/verify_local.sh` LLVM smoke tests.
