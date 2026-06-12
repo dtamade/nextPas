@@ -16,6 +16,27 @@ uses
 var
   T: TTestRunner;
 
+function SnapshotStreamPreservingPosition(const AStream: IStream): TBytes;
+var
+  LPosition: Int64;
+  LRead: SizeUInt;
+begin
+  LPosition := AStream.Position;
+  Result := nil;
+  try
+    AStream.Seek(0, soBeginning);
+    SetLength(Result, AStream.Size);
+    if Length(Result) > 0 then
+    begin
+      LRead := AStream.Read(Result[0], Length(Result));
+      CheckEqual(Int64(Length(Result)), Int64(LRead),
+        'stream snapshot length');
+    end;
+  finally
+    AStream.Position := LPosition;
+  end;
+end;
+
 { === 1. Round-trip integrity with known data patterns === }
 
 procedure TestGzipRoundTripSequential;
@@ -81,12 +102,22 @@ begin
 end;
 
 procedure TestDeflateEmptyOneShot;
-var LC, LD: TBytes;
+var
+  LC, LD: TBytes;
+  LGotException: Boolean;
 begin
   LC := DeflateCompress(nil);
-  Check(LC = nil, 'deflate nil = nil');
-  LD := DeflateDecompress(nil);
-  Check(LD = nil, 'deflate decompress nil = nil');
+  Check(Length(LC) > 0, 'deflate nil produces zlib stream');
+  LD := DeflateDecompress(LC);
+  CheckEqual(Int64(0), Int64(Length(LD)), 'deflate nil decompresses to empty');
+
+  LGotException := False;
+  try
+    LD := DeflateDecompress(nil);
+  except
+    LGotException := True;
+  end;
+  Check(LGotException, 'deflate empty encoded input raises');
 end;
 
 procedure TestLz4EmptyOneShot;
@@ -377,6 +408,42 @@ begin
   Check(True, 'gzip streaming 64KB ok');
 end;
 
+procedure TestDeflateStreamingLargeChunks;
+var
+  LBuf: IStream;
+  LWriter: ICompressWriter;
+  LReader: IDecompressReader;
+  LSrc, LOut: TBytes;
+  LI: Integer;
+begin
+  SetLength(LSrc, 98304);
+  for LI := 0 to High(LSrc) do
+    LSrc[LI] := Byte((LI * 11 + LI div 97) mod 251);
+
+  LBuf := CreateBytesStream;
+  LWriter := DeflateWriter(LBuf as IWriter, clNone);
+  LWriter.Write(LSrc[0], 32768);
+  LWriter.Write(LSrc[32768], 12345);
+  LWriter.Write(LSrc[45113], 20000);
+  LWriter.Write(LSrc[65113], Length(LSrc) - 65113);
+  LWriter.Close;
+
+  LBuf.Seek(0, soBeginning);
+  LReader := DeflateReader(LBuf as IReader);
+  LOut := IoReadAll(LReader as IReader);
+  LReader.Close;
+
+  CheckEqual(Int64(Length(LSrc)), Int64(Length(LOut)),
+    'deflate streaming 96KB length');
+  for LI := 0 to High(LSrc) do
+    if LSrc[LI] <> LOut[LI] then
+    begin
+      Check(False, 'deflate streaming 96KB mismatch at ' + IntToStr(LI));
+      Exit;
+    end;
+  Check(True, 'deflate streaming 96KB ok');
+end;
+
 procedure TestDeflateStreamingFlushBetweenWrites;
 var
   LBuf: IStream;
@@ -410,6 +477,112 @@ begin
       Exit;
     end;
   Check(True, 'deflate flush-between ok');
+end;
+
+procedure TestDeflateStreamingFlushPublishesReadablePrefix;
+var
+  LBuf: IStream;
+  LWriter: ICompressWriter;
+  LReader: IDecompressReader;
+  LSrc, LPrefix, LOut, LFinal: TBytes;
+  LRead: SizeUInt;
+  LI: Integer;
+begin
+  SetLength(LSrc, 1024);
+  for LI := 0 to High(LSrc) do
+    LSrc[LI] := Byte((LI * 17 + 5) mod 251);
+
+  LBuf := CreateBytesStream;
+  LWriter := DeflateWriter(LBuf as IWriter);
+  LWriter.Write(LSrc[0], 128);
+  LWriter.Flush;
+
+  LPrefix := SnapshotStreamPreservingPosition(LBuf);
+  Check(Length(LPrefix) > 0, 'deflate flush emits compressed prefix');
+
+  LReader := DeflateReader(CreateBytesStreamFrom(LPrefix) as IReader);
+  SetLength(LOut, 128);
+  LRead := LReader.Read(LOut[0], Length(LOut));
+  CheckEqual(Int64(128), Int64(LRead), 'deflate flush prefix read length');
+  LReader.Close;
+
+  for LI := 0 to High(LOut) do
+    if LOut[LI] <> LSrc[LI] then
+    begin
+      Check(False, 'deflate flush prefix mismatch at ' + IntToStr(LI));
+      Exit;
+    end;
+
+  LWriter.Write(LSrc[128], Length(LSrc) - 128);
+  LWriter.Close;
+
+  LBuf.Seek(0, soBeginning);
+  LReader := DeflateReader(LBuf as IReader);
+  LFinal := IoReadAll(LReader as IReader);
+  LReader.Close;
+
+  CheckEqual(Int64(Length(LSrc)), Int64(Length(LFinal)),
+    'deflate flush final length');
+  for LI := 0 to High(LSrc) do
+    if LSrc[LI] <> LFinal[LI] then
+    begin
+      Check(False, 'deflate flush final mismatch at ' + IntToStr(LI));
+      Exit;
+    end;
+  Check(True, 'deflate flush publishes readable prefix');
+end;
+
+procedure TestGzipStreamingFlushPublishesReadablePrefix;
+var
+  LBuf: IStream;
+  LWriter: ICompressWriter;
+  LReader: IDecompressReader;
+  LSrc, LPrefix, LOut, LFinal: TBytes;
+  LRead: SizeUInt;
+  LI: Integer;
+begin
+  SetLength(LSrc, 1024);
+  for LI := 0 to High(LSrc) do
+    LSrc[LI] := Byte((LI * 19 + 7) mod 251);
+
+  LBuf := CreateBytesStream;
+  LWriter := GzipWriter(LBuf as IWriter);
+  LWriter.Write(LSrc[0], 128);
+  LWriter.Flush;
+
+  LPrefix := SnapshotStreamPreservingPosition(LBuf);
+  Check(Length(LPrefix) > 10, 'gzip flush emits compressed prefix');
+
+  LReader := GzipReader(CreateBytesStreamFrom(LPrefix) as IReader);
+  SetLength(LOut, 128);
+  LRead := LReader.Read(LOut[0], Length(LOut));
+  CheckEqual(Int64(128), Int64(LRead), 'gzip flush prefix read length');
+  LReader.Close;
+
+  for LI := 0 to High(LOut) do
+    if LOut[LI] <> LSrc[LI] then
+    begin
+      Check(False, 'gzip flush prefix mismatch at ' + IntToStr(LI));
+      Exit;
+    end;
+
+  LWriter.Write(LSrc[128], Length(LSrc) - 128);
+  LWriter.Close;
+
+  LBuf.Seek(0, soBeginning);
+  LReader := GzipReader(LBuf as IReader);
+  LFinal := IoReadAll(LReader as IReader);
+  LReader.Close;
+
+  CheckEqual(Int64(Length(LSrc)), Int64(Length(LFinal)),
+    'gzip flush final length');
+  for LI := 0 to High(LSrc) do
+    if LSrc[LI] <> LFinal[LI] then
+    begin
+      Check(False, 'gzip flush final mismatch at ' + IntToStr(LI));
+      Exit;
+    end;
+  Check(True, 'gzip flush publishes readable prefix');
 end;
 
 procedure TestGzipStreamingCrossAPIOneshot;
@@ -604,8 +777,7 @@ begin
 end;
 
 { === 10. Deflate streaming one-shot interop note === }
-{ Note: DeflateCompress uses zlib compress2 (zlib-wrapped format)
-  while DeflateWriter uses raw deflate. They are NOT interchangeable.
+{ Note: one-shot and streaming Deflate paths both use zlib-wrapped streams.
   This test verifies each path works independently. }
 
 procedure TestDeflateOneShotVsStreamIndependent;
@@ -684,7 +856,12 @@ begin
   T.Run('Deflate all levels round-trip', @TestDeflateAllLevelsRoundTrip);
   { Streaming }
   T.Run('Gzip streaming 64KB chunks', @TestGzipStreamingLargeChunks);
+  T.Run('Deflate streaming 96KB chunks', @TestDeflateStreamingLargeChunks);
   T.Run('Deflate streaming flush-between', @TestDeflateStreamingFlushBetweenWrites);
+  T.Run('Deflate streaming flush publishes readable prefix',
+    @TestDeflateStreamingFlushPublishesReadablePrefix);
+  T.Run('Gzip streaming flush publishes readable prefix',
+    @TestGzipStreamingFlushPublishesReadablePrefix);
   T.Run('Gzip cross-API stream->oneshot', @TestGzipStreamingCrossAPIOneshot);
   { Memory leak cycles }
   T.Run('Gzip 5000 cycles', @TestGzipCycle5000);
