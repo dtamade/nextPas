@@ -16,7 +16,7 @@ uses
 
 {**
  * Securely zero memory to prevent sensitive data from remaining
- * in memory after use. Uses platform-specific secure zeroing if available.
+ * in memory after use. Uses explicit zeroing followed by a barrier.
  * 
  * This function ensures the compiler cannot optimize away the zeroing operation.
  * 
@@ -41,12 +41,47 @@ procedure SecureZeroString(var Str: AnsiString);
 
 implementation
 
-uses
-  nextpas.core.platform.memory;
+procedure SecureZeroBarrier; inline;
+begin
+  {$IFDEF CPUX86_64}
+  asm
+    mfence
+  end;
+  {$ENDIF}
+  {$IFDEF CPUI386}
+  asm
+    lock
+    addl $0, (%esp)
+  end;
+  {$ENDIF}
+  {$IFDEF CPUARM}
+  asm
+    dmb
+  end;
+  {$ENDIF}
+  {$IFDEF CPUAARCH64}
+  asm
+    dmb sy
+  end;
+  {$ENDIF}
+  {$IFNDEF CPUX86_64}
+  {$IFNDEF CPUI386}
+  {$IFNDEF CPUARM}
+  {$IFNDEF CPUAARCH64}
+  ReadWriteBarrier;
+  {$ENDIF}
+  {$ENDIF}
+  {$ENDIF}
+  {$ENDIF}
+end;
 
 procedure SecureZeroMemory(Buffer: Pointer; Size: NativeUInt);
 begin
-  platform_secure_zero(Buffer, Size);
+  if (Buffer = nil) or (Size = 0) then
+    Exit;
+
+  FillChar(Buffer^, Size, 0);
+  SecureZeroBarrier;
 end;
 
 procedure SecureZeroBytes(var Data: TBytes);

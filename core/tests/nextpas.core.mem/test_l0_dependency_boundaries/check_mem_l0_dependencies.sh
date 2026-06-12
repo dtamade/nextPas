@@ -18,8 +18,6 @@ FORBIDDEN_UNITS=(
 )
 
 KNOWN_DEBT=(
-  "src/nextpas.core.mem.secure.pas|BaseUnix"
-  "src/nextpas.core.mem.secure.pas|Windows"
 )
 
 is_forbidden_unit() {
