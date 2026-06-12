@@ -114,6 +114,13 @@ type
       out AName: string): Boolean;
     function FunctionCallReturnsString(const ANode: TGreenNode): Boolean;
     function MemberCallReturnsString(const ANode: TGreenNode): Boolean;
+    function TypeIdIsManagedString(const ATypeId: LongInt): Boolean;
+    function IsSupportedOwnedStringReturnIdentifierTarget(
+      const ATargetNode: TGreenNode): Boolean;
+    function IsSupportedOwnedStringReturnStoreTarget(
+      const ATargetNode: TGreenNode): Boolean;
+    function IsSupportedOwnedStringReturnConsumerTarget(
+      const ATargetNode: TGreenNode): Boolean;
     function AssignmentOwnsStringReturn(const ANode: TGreenNode;
       const AEntry: TProcedureBodyEntry): Boolean;
     function AssignmentOwnsTopLevelStringReturn(const ANode: TGreenNode): Boolean;
@@ -967,11 +974,112 @@ begin
     TypeMetaRetStr(ReceiverTypeName, MemberNode.Text);
 end;
 
+function TSemanticAnalyzer.TypeIdIsManagedString(
+  const ATypeId: LongInt): Boolean;
+var
+  TypeName: string;
+begin
+  Result := False;
+  if (ATypeId <= 0) or (ATypeId > FModel.TypeCount) then
+    Exit;
+  TypeName := FModel.TypeAt(ATypeId - 1).Name;
+  Result := SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString');
+end;
+
+function TSemanticAnalyzer.IsSupportedOwnedStringReturnIdentifierTarget(
+  const ATargetNode: TGreenNode): Boolean;
+var
+  LookupName, RetName: string;
+  Symbol: TSemanticSymbol;
+  SymbolId: LongInt;
+begin
+  Result := False;
+  if (ATargetNode = nil) or (ATargetNode.NodeKind <> gnkIdentifier) then
+    Exit;
+
+  LookupName := ATargetNode.Text;
+  if LookupName = '' then
+    Exit;
+  if SameText(LookupName, 'Result') and (FCurrentRetVarName <> '') then
+    LookupName := FCurrentRetVarName;
+
+  SymbolId := FModel.LookupSymbol(LookupName, FCurrentScopeId);
+  if SymbolId <= 0 then
+    SymbolId := FModel.FindSymbolByName(LookupName);
+  if SymbolId <= 0 then
+    Exit;
+
+  Symbol := FModel.SymbolAt(SymbolId - 1);
+  if SameText(Symbol.Kind, 'variable') then
+    Exit(TypeIdIsManagedString(Symbol.TypeId));
+
+  RetName := FCurrentRetVarName;
+  Result := SameText(Symbol.Kind, 'function') and (RetName <> '') and
+    SameText(LookupName, RetName) and TypeIdIsManagedString(Symbol.TypeId);
+end;
+
+function TSemanticAnalyzer.IsSupportedOwnedStringReturnStoreTarget(
+  const ATargetNode: TGreenNode): Boolean;
+var
+  BaseNode, FieldNode: TGreenNode;
+  BaseName, ClassTypeName: string;
+  BaseSymbolId, BaseTypeId: LongInt;
+  FieldMeta: TFieldMeta;
+begin
+  Result := False;
+  if (ATargetNode = nil) or (ATargetNode.NodeKind <> gnkDotAccess) or
+    (ATargetNode.ChildCount < 2) then
+    Exit;
+
+  BaseNode := ATargetNode.ChildAt(0);
+  FieldNode := ATargetNode.ChildAt(1);
+  if (BaseNode = nil) or (FieldNode = nil) or
+    (BaseNode.NodeKind <> gnkIdentifier) or
+    (FieldNode.NodeKind <> gnkIdentifier) then
+    Exit;
+
+  BaseName := BaseNode.Text;
+  if BaseName = '' then
+    Exit;
+  if SameText(BaseName, 'Self') then
+  begin
+    if FCurrentMethodClass = '' then
+      Exit;
+    BaseTypeId := FModel.FindTypeByName(FCurrentMethodClass);
+  end
+  else
+  begin
+    BaseSymbolId := FModel.LookupSymbol(BaseName, FCurrentScopeId);
+    if BaseSymbolId <= 0 then
+      BaseSymbolId := FModel.FindSymbolByName(BaseName);
+    if BaseSymbolId <= 0 then
+      Exit;
+    BaseTypeId := FModel.SymbolTypeId(BaseSymbolId);
+  end;
+  if (BaseTypeId <= 0) or (BaseTypeId > FModel.TypeCount) then
+    Exit;
+
+  ClassTypeName := FModel.TypeAt(BaseTypeId - 1).Name;
+  if (ClassTypeName = '') or (not TypeMetaIsClass(ClassTypeName)) then
+    Exit;
+  if not FModel.GetFieldMetaByName(BaseTypeId, FieldNode.Text, FieldMeta) then
+    Exit;
+
+  Result := FieldMeta.IsString and TypeIdIsManagedString(FieldMeta.TypeId);
+end;
+
+function TSemanticAnalyzer.IsSupportedOwnedStringReturnConsumerTarget(
+  const ATargetNode: TGreenNode): Boolean;
+begin
+  Result := IsSupportedOwnedStringReturnIdentifierTarget(ATargetNode) or
+    IsSupportedOwnedStringReturnStoreTarget(ATargetNode);
+end;
+
 function TSemanticAnalyzer.AssignmentOwnsStringReturn(const ANode: TGreenNode;
   const AEntry: TProcedureBodyEntry): Boolean;
 var
   DestNode, SourceNode: TGreenNode;
-  DestName, FuncName, RetName: string;
+  FuncName: string;
 begin
   Result := False;
   if (ANode = nil) or (ANode.NodeKind <> gnkAssignmentStatement) or
@@ -979,27 +1087,23 @@ begin
     Exit;
   DestNode := ANode.ChildAt(0);
   SourceNode := ANode.ChildAt(1);
-  if (DestNode = nil) or (DestNode.NodeKind <> gnkIdentifier) or
+  if (DestNode = nil) or
     (not StringReturnFunctionNameFromNode(SourceNode, FuncName)) then
     Exit;
   if HasOverload(FuncName) then
     Exit;
+  if IsSupportedOwnedStringReturnStoreTarget(DestNode) then
+    Exit(True);
   if not IsRootOwnedStringReturnCandidate(AEntry, DeclReturnsString(AEntry.Decl)) then
     Exit;
-  DestName := DestNode.Text;
-  if SameText(DestName, 'Result') then
-    DestName := AEntry.Name;
-  RetName := AEntry.Name;
-  if Pos('.', RetName) > 0 then
-    RetName := Copy(RetName, Pos('.', RetName) + 1, Length(RetName));
-  Result := SameText(DestName, RetName) or DeclaresStringLocal(AEntry.Decl, DestName);
+  Result := IsSupportedOwnedStringReturnIdentifierTarget(DestNode);
 end;
 
 function TSemanticAnalyzer.AssignmentOwnsTopLevelStringReturn(
   const ANode: TGreenNode): Boolean;
 var
   DestNode, SourceNode: TGreenNode;
-  DestName, FuncName: string;
+  FuncName: string;
 begin
   Result := False;
   if (ANode = nil) or (ANode.NodeKind <> gnkAssignmentStatement) or
@@ -1007,13 +1111,12 @@ begin
     Exit;
   DestNode := ANode.ChildAt(0);
   SourceNode := ANode.ChildAt(1);
-  if (DestNode = nil) or (DestNode.NodeKind <> gnkIdentifier) or
+  if (DestNode = nil) or
     (not StringReturnFunctionNameFromNode(SourceNode, FuncName)) then
     Exit;
   if HasOverload(FuncName) then
     Exit;
-  DestName := DestNode.Text;
-  Result := IsRuntimeStrVar(DestName);
+  Result := IsSupportedOwnedStringReturnConsumerTarget(DestNode);
 end;
 
 function TSemanticAnalyzer.CallArgumentOwnsStringReturn(
@@ -1048,15 +1151,18 @@ end;
 function TSemanticAnalyzer.DirectOwnedStringReturnAssignmentNode(
   const ANode: TGreenNode): Boolean;
 var
+  DestNode: TGreenNode;
   SourceName: string;
 begin
   Result := False;
   if (ANode = nil) or (ANode.NodeKind <> gnkAssignmentStatement) or
     (ANode.ChildCount < 2) then
     Exit;
+  DestNode := ANode.ChildAt(0);
   if not StringReturnFunctionNameFromNode(ANode.ChildAt(1), SourceName) then
     Exit;
-  Result := IsOwnedStringReturnFunc(SourceName);
+  Result := (DestNode <> nil) and IsOwnedStringReturnFunc(SourceName) and
+    IsSupportedOwnedStringReturnConsumerTarget(DestNode);
 end;
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnArgument(
@@ -1575,6 +1681,10 @@ begin
     begin
       DestNode := ANode.ChildAt(0);
       SourceNode := ANode.ChildAt(1);
+      if IsSupportedOwnedStringReturnStoreTarget(DestNode) and
+        StringReturnFunctionNameFromNode(SourceNode, SourceName) and
+        IsOwnedStringReturnFunc(SourceName) then
+        Exit(False);
       if (DestNode <> nil) and (DestNode.NodeKind = gnkIdentifier) and
         IsRuntimeStrVar(DestNode.Text) and
         (SourceNode <> nil) and (SourceNode.NodeKind = gnkBinaryExpression) and
@@ -1862,6 +1972,8 @@ var
   Changed: Boolean;
   Entry: TProcedureBodyEntry;
   RootNode: TGreenNode;
+  SavedMethodClass, SavedRetVarName: string;
+  SavedScopeId: LongInt;
 begin
   repeat
     Changed := False;
@@ -1876,7 +1988,26 @@ begin
       Entry := FProcedureBodies[I];
       if (Entry.Body = nil) or (Entry.Decl = nil) or (Pos('<', Entry.Name) > 0) then
         Continue;
-      ScanOwnedStringReturnConsumers(Entry.Body, Entry, Changed);
+      SavedMethodClass := FCurrentMethodClass;
+      SavedRetVarName := FCurrentRetVarName;
+      SavedScopeId := FCurrentScopeId;
+      if Pos('.', Entry.Name) > 0 then
+        FCurrentMethodClass := Copy(Entry.Name, 1, Pos('.', Entry.Name) - 1)
+      else
+        FCurrentMethodClass := '';
+      FCurrentRetVarName := Entry.Name;
+      if Pos('.', FCurrentRetVarName) > 0 then
+        FCurrentRetVarName := Copy(FCurrentRetVarName,
+          Pos('.', FCurrentRetVarName) + 1, Length(FCurrentRetVarName));
+      if Entry.ScopeId > 0 then
+        FCurrentScopeId := Entry.ScopeId;
+      try
+        ScanOwnedStringReturnConsumers(Entry.Body, Entry, Changed);
+      finally
+        FCurrentMethodClass := SavedMethodClass;
+        FCurrentRetVarName := SavedRetVarName;
+        FCurrentScopeId := SavedScopeId;
+      end;
     end;
   until not Changed;
   if (FRootAst <> nil) and FRootAst.IsValid then
@@ -1892,7 +2023,26 @@ begin
       Entry := FProcedureBodies[I];
       if (Entry.Body = nil) or (Entry.Decl = nil) or (Pos('<', Entry.Name) > 0) then
         Continue;
-      CheckDeferredOwnedStringReturnConsumers(Entry.Body);
+      SavedMethodClass := FCurrentMethodClass;
+      SavedRetVarName := FCurrentRetVarName;
+      SavedScopeId := FCurrentScopeId;
+      if Pos('.', Entry.Name) > 0 then
+        FCurrentMethodClass := Copy(Entry.Name, 1, Pos('.', Entry.Name) - 1)
+      else
+        FCurrentMethodClass := '';
+      FCurrentRetVarName := Entry.Name;
+      if Pos('.', FCurrentRetVarName) > 0 then
+        FCurrentRetVarName := Copy(FCurrentRetVarName,
+          Pos('.', FCurrentRetVarName) + 1, Length(FCurrentRetVarName));
+      if Entry.ScopeId > 0 then
+        FCurrentScopeId := Entry.ScopeId;
+      try
+        CheckDeferredOwnedStringReturnConsumers(Entry.Body);
+      finally
+        FCurrentMethodClass := SavedMethodClass;
+        FCurrentRetVarName := SavedRetVarName;
+        FCurrentScopeId := SavedScopeId;
+      end;
       if FDiagnostics.HasErrors then
         Exit;
     end;

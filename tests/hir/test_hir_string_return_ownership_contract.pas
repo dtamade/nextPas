@@ -146,7 +146,8 @@ const
     '  S := MakeText(42);' + LineEnding +
     'end.';
 
-  FieldOwnedReturnConsumerSource =
+  // H17: class field owned string store (now supported)
+  ClassFieldOwnedReturnConsumerSource =
     'program test;' + LineEnding +
     'type TStringBox = class' + LineEnding +
     '  Text: string;' + LineEnding +
@@ -158,6 +159,52 @@ const
     'var Box: TStringBox;' + LineEnding +
     'begin' + LineEnding +
     '  Box.Text := MakeText();' + LineEnding +
+    'end.';
+
+  // H17: Self class field owned string store (now supported)
+  SelfFieldOwnedReturnConsumerSource =
+    'program test;' + LineEnding +
+    'type TStringBox = class' + LineEnding +
+    '  Text: string;' + LineEnding +
+    '  procedure StoreSelf;' + LineEnding +
+    'end;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''self'';' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TStringBox.StoreSelf;' + LineEnding +
+    'begin' + LineEnding +
+    '  Self.Text := MakeText();' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    'end.';
+
+  // H17: record field owned string store (still fail-closed)
+  RecordFieldOwnedReturnConsumerSource =
+    'program test;' + LineEnding +
+    'type TDataRec = record' + LineEnding +
+    '  Name: string;' + LineEnding +
+    'end;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''record'';' + LineEnding +
+    'end;' + LineEnding +
+    'var Rec: TDataRec;' + LineEnding +
+    'begin' + LineEnding +
+    '  Rec.Name := MakeText();' + LineEnding +
+    'end.';
+
+  // H17: array element owned string store (still fail-closed)
+  ArrayElementOwnedReturnConsumerSource =
+    'program test;' + LineEnding +
+    'var Arr: array of string;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''array'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  SetLength(Arr, 3);' + LineEnding +
+    '  Arr[0] := MakeText();' + LineEnding +
     'end.';
 
   ArgumentOwnedReturnConsumerSource =
@@ -611,8 +658,46 @@ begin
     'mixed-owned-string-return-consumer-must-fail-closed');
   RequireAnalyzeError(OverloadedStringReturnSource, DeferredCode,
     'overloaded-owned-string-return-must-fail-closed');
-  RequireAnalyzeError(FieldOwnedReturnConsumerSource, DeferredCode,
-    'field-owned-string-return-consumer-must-fail-closed');
+  // H17: record field and array element still fail-closed
+  RequireAnalyzeError(RecordFieldOwnedReturnConsumerSource, DeferredCode,
+    'record-field-owned-string-return-must-fail-closed');
+  RequireAnalyzeError(ArrayElementOwnedReturnConsumerSource, DeferredCode,
+    'array-element-owned-string-return-must-fail-closed');
+end;
+
+procedure AssertClassFieldOwnedStoreContract;
+var
+  Model: TSemanticModel;
+  LlvmText: string;
+begin
+  // H17: class field owned string store should now pass sema
+  Model := BuildModel(ClassFieldOwnedReturnConsumerSource);
+  try
+    if Model = nil then
+      Fail('class-field-owned-store-model-nil');
+    if not SameText(Model.Status, 'ready') then
+      Fail('class-field-owned-store-must-pass-sema');
+    // TODO H17 GREEN: verify new field-store-str-owned-runtime node kind
+    LlvmText := EmitLlvm(Model);
+    if LlvmText = '' then
+      Fail('class-field-owned-store-llvm-empty');
+    // TODO H17 GREEN: verify string_release in LLVM IR
+  finally
+    Model.Free;
+  end;
+
+  Model := BuildModel(SelfFieldOwnedReturnConsumerSource);
+  try
+    if Model = nil then
+      Fail('self-field-owned-store-model-nil');
+    if not SameText(Model.Status, 'ready') then
+      Fail('self-field-owned-store-must-pass-sema');
+    LlvmText := EmitLlvm(Model);
+    if LlvmText = '' then
+      Fail('self-field-owned-store-llvm-empty');
+  finally
+    Model.Free;
+  end;
 end;
 
 begin
@@ -622,5 +707,6 @@ begin
   AssertMoveAndChainedReturnContract;
   AssertDeferredBoundariesPreserved;
   AssertDeferredOwnedReturnConsumersFailClosed;
+  AssertClassFieldOwnedStoreContract; // H17: new test
   WriteLn('hir-string-return-ownership-contract-status=pass');
 end.
