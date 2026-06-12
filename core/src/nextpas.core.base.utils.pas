@@ -13,6 +13,13 @@ procedure ZeroMem(ADst: Pointer; ASize: SizeUInt); inline;
 procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt); inline;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean; inline;
 
+{** SizeUInt 边界与溢出 guard *}
+function TryAddSizeUInt(const ALeft, ARight: SizeUInt; var ASum: SizeUInt): Boolean; inline;
+function CheckedAddSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt; inline;
+function TryMulSizeUInt(const ALeft, ARight: SizeUInt; var AProduct: SizeUInt): Boolean; inline;
+function CheckedMulSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt; inline;
+procedure CheckSizeRange(const AOffset, ALength, ASize: SizeUInt);
+
 {** 接口查询 *}
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean;
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean;
@@ -21,11 +28,6 @@ implementation
 
 uses
   nextpas.core.base;
-
-procedure ClearOutInterface(out AIntf);
-begin
-  IInterface(AIntf) := nil;
-end;
 
 procedure FreeAndNil(var AObj);
 var LTemp: TObject;
@@ -63,32 +65,64 @@ end;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
 begin
   if ASize = 0 then Exit(True);
-  if (A = nil) or (B = nil) then Exit(A = B);
+  if (A = nil) or (B = nil) then Exit(False);
   Result := System.CompareByte(A^, B^, ASize) = 0;
+end;
+
+function TryAddSizeUInt(const ALeft, ARight: SizeUInt; var ASum: SizeUInt): Boolean;
+begin
+  Result := ALeft <= MAX_SIZE_UINT - ARight;
+  if Result then
+    ASum := ALeft + ARight;
+end;
+
+function CheckedAddSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt;
+begin
+  if not TryAddSizeUInt(ALeft, ARight, Result) then
+    raise EOverflow.Create('CheckedAddSizeUInt: size overflow');
+end;
+
+function TryMulSizeUInt(const ALeft, ARight: SizeUInt; var AProduct: SizeUInt): Boolean;
+begin
+  if (ALeft = 0) or (ARight = 0) then
+  begin
+    AProduct := 0;
+    Exit(True);
+  end;
+
+  Result := ALeft <= MAX_SIZE_UINT div ARight;
+  if Result then
+    AProduct := ALeft * ARight;
+end;
+
+function CheckedMulSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt;
+begin
+  if not TryMulSizeUInt(ALeft, ARight, Result) then
+    raise EOverflow.Create('CheckedMulSizeUInt: size overflow');
+end;
+
+procedure CheckSizeRange(const AOffset, ALength, ASize: SizeUInt);
+begin
+  if AOffset > ASize then
+    raise EOutOfRange.CreateFmt(
+      'CheckSizeRange: offset %d + length %d > size %d',
+      [AOffset, ALength, ASize]);
+  if ALength > ASize - AOffset then
+    raise EOutOfRange.CreateFmt(
+      'CheckSizeRange: offset %d + length %d > size %d',
+      [AOffset, ALength, ASize]);
 end;
 
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean;
 begin
-  if AInstance = nil then
-  begin
-    ClearOutInterface(AIntf);
-    Exit(False);
-  end;
+  if AInstance = nil then Exit(False);
   Result := AInstance.GetInterface(AIID, AIntf);
-  if not Result then
-    ClearOutInterface(AIntf);
 end;
 
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean;
 begin
-  if AInstance = nil then
-  begin
-    ClearOutInterface(AIntf);
-    Exit(False);
-  end;
+  if AInstance = nil then Exit(False);
   Result := AInstance.QueryInterface(AIID, AIntf) = S_OK;
-  if not Result then
-    ClearOutInterface(AIntf);
 end;
 
 end.

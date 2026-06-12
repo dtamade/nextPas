@@ -10,34 +10,26 @@ uses
   nextpas.core.mem.error;
 
 type
-  TTrackedInnerError = class(SysUtils.Exception)
-  private
-    FFreedFlag: PBoolean;
+  TNextPasErrorClass = class of nextpas.core.exception.ENextPasError;
+
+  TTrackedInnerException = class(SysUtils.Exception)
   public
-    constructor Create(const AMessage: string; const AFreedFlag: PBoolean);
     destructor Destroy; override;
   end;
+
+var
+  GTrackedInnerDestroyCount: Integer;
+
+destructor TTrackedInnerException.Destroy;
+begin
+  Inc(GTrackedInnerDestroyCount);
+  inherited;
+end;
 
 procedure Check(const ACondition: Boolean; const AMessage: string);
 begin
   if not ACondition then
     raise SysUtils.Exception.Create(AMessage);
-end;
-
-constructor TTrackedInnerError.Create(const AMessage: string;
-  const AFreedFlag: PBoolean);
-begin
-  inherited Create(AMessage);
-  FFreedFlag := AFreedFlag;
-  if FFreedFlag <> nil then
-    FFreedFlag^ := False;
-end;
-
-destructor TTrackedInnerError.Destroy;
-begin
-  if FFreedFlag <> nil then
-    FFreedFlag^ := True;
-  inherited;
 end;
 
 procedure TestBaseExceptionsCatchAsUnifiedRoot;
@@ -226,138 +218,449 @@ begin
   end;
 end;
 
-procedure CheckFormattedCategory(const AError: nextpas.core.exception.ENextPasError;
-  const AExpectedMessage: string; const AExpectedCategory: nextpas.core.exception.TErrorCategory;
-  const AContext: string);
+procedure TestRootCreateFmtKeepsExplicitCategory;
+var
+  LErr: nextpas.core.exception.ENextPasError;
 begin
+  LErr := nextpas.core.exception.ENextPasError.CreateFmt(
+    'plain code %d', [12]);
   try
-    Check(AError.Message = AExpectedMessage, AContext + ' must format the message');
-    Check(AError.Category = AExpectedCategory, AContext + ' must keep default category');
-    Check(AError.Inner = nil, AContext + ' must not attach an inner exception');
+    Check(LErr.Message = 'plain code 12',
+      'ENextPasError.CreateFmt must keep inherited message-only format constructor');
+    Check(LErr.Category = nextpas.core.exception.ecNone,
+      'ENextPasError.CreateFmt without explicit category must keep ecNone');
   finally
-    AError.Free;
+    LErr.Free;
+  end;
+
+  LErr := nextpas.core.exception.ENextPasError.CreateFmt(
+    'network code %d', nextpas.core.exception.ecNetwork, [54]);
+  try
+    Check(LErr.Message = 'network code 54',
+      'ENextPasError.CreateFmt must format explicit-category messages');
+    Check(LErr.Category = nextpas.core.exception.ecNetwork,
+      'ENextPasError.CreateFmt must keep explicit category');
+  finally
+    LErr.Free;
   end;
 end;
 
-procedure TestTypedCreateFmtKeepsDefaultCategory;
-begin
-  CheckFormattedCategory(
-    nextpas.core.exception.EArgumentError.CreateFmt('argument %d', [1]),
-    'argument 1', nextpas.core.exception.ecInvalidArgument, 'EArgumentError.CreateFmt');
-  CheckFormattedCategory(
-    nextpas.core.exception.ETimeoutError.CreateFmt('timeout %d', [2]),
-    'timeout 2', nextpas.core.exception.ecTimeout, 'ETimeoutError.CreateFmt');
-  CheckFormattedCategory(
-    nextpas.core.exception.EIOError.CreateFmt('io %d', [3]),
-    'io 3', nextpas.core.exception.ecIO, 'EIOError.CreateFmt');
-  CheckFormattedCategory(
-    nextpas.core.exception.EParseError.CreateFmt('parse %d', [4]),
-    'parse 4', nextpas.core.exception.ecParse, 'EParseError.CreateFmt');
-end;
-
-procedure TestWrapperMessageDoesNotLeakInnerMessage;
+procedure TestRootCreateFmtKeepsInnerOwnershipContract;
 var
-  LInner: SysUtils.Exception;
-  LOuter: nextpas.core.exception.ENextPasError;
+  LInner: TTrackedInnerException;
+  LErr: nextpas.core.exception.ENextPasError;
 begin
-  LInner := SysUtils.Exception.Create('inner secret token');
-  LOuter := nextpas.core.exception.ENextPasError.Create('outer public message',
-    nextpas.core.exception.ecInternal, LInner);
+  GTrackedInnerDestroyCount := 0;
+  LInner := TTrackedInnerException.Create('password=secret-token');
+  LErr := nextpas.core.exception.ENextPasError.CreateFmt(
+    'outer failure %d', nextpas.core.exception.ecNetwork, [99], LInner, True);
   try
-    Check(LOuter.Message = 'outer public message',
-      'outer message must not concatenate inner exception message');
-    Check(LOuter.Inner = LInner, 'outer wrapper must retain inner exception reference');
+    Check(LErr.Message = 'outer failure 99',
+      'ENextPasError.CreateFmt with inner must format the outer message');
+    Check(Pos('secret-token', LErr.Message) = 0,
+      'ENextPasError.CreateFmt must not append inner sensitive data to outer message');
+    Check(LErr.Category = nextpas.core.exception.ecNetwork,
+      'ENextPasError.CreateFmt with inner must keep explicit category');
+    Check(LErr.Inner = LInner,
+      'ENextPasError.CreateFmt with inner must keep the inner exception pointer');
   finally
-    LOuter.Free;
+    LErr.Free;
   end;
-end;
+  Check(GTrackedInnerDestroyCount = 1,
+    'owned inner exception must be freed when ENextPasError is freed');
 
-procedure TestCreateFmtWrapperKeepsOuterMessageOnly;
-var
-  LInner: SysUtils.Exception;
-  LOuter: nextpas.core.exception.ENextPasError;
-begin
-  LInner := SysUtils.Exception.Create('inner secret token');
-  LOuter := nextpas.core.exception.ENextPasError.CreateFmt('outer %d',
-    nextpas.core.exception.ecNetwork, [9], LInner);
+  GTrackedInnerDestroyCount := 0;
+  LInner := TTrackedInnerException.Create('token=caller-owned');
+  LErr := nextpas.core.exception.ENextPasError.CreateFmt(
+    'outer non-owning %d', nextpas.core.exception.ecIO, [7], LInner, False);
   try
-    Check(LOuter.Message = 'outer 9',
-      'ENextPasError.CreateFmt wrapper must format only the outer message');
-    Check(LOuter.Category = nextpas.core.exception.ecNetwork,
-      'ENextPasError.CreateFmt wrapper must keep explicit category');
-    Check(LOuter.Inner = LInner,
-      'ENextPasError.CreateFmt wrapper must retain inner exception reference');
-    Check(Pos('inner secret token', LOuter.Message) = 0,
-      'ENextPasError.CreateFmt wrapper must not leak inner exception message');
+    Check(LErr.Message = 'outer non-owning 7',
+      'non-owning ENextPasError.CreateFmt must format the outer message');
+    Check(LErr.Category = nextpas.core.exception.ecIO,
+      'non-owning ENextPasError.CreateFmt must keep explicit category');
+    Check(LErr.Inner = LInner,
+      'non-owning ENextPasError.CreateFmt must keep the inner exception pointer');
   finally
-    LOuter.Free;
+    LErr.Free;
   end;
+  Check(GTrackedInnerDestroyCount = 0,
+    'non-owned inner exception must not be freed by ENextPasError');
+  LInner.Free;
+  Check(GTrackedInnerDestroyCount = 1,
+    'caller must still be able to free a non-owned inner exception');
 end;
 
-procedure TestCreateFmtFormatFailureReleasesOwnedInner;
+procedure TestRootCreateFmtFormatFailureFreesOwnedInner;
 var
-  LDestroyed: Boolean;
+  LInner: TTrackedInnerException;
+  LCaught: Boolean;
 begin
-  LDestroyed := False;
+  GTrackedInnerDestroyCount := 0;
+  LInner := TTrackedInnerException.Create('password=format-failure-secret');
+  LCaught := False;
   try
-    nextpas.core.exception.ENextPasError.CreateFmt('%d',
-      nextpas.core.exception.ecInternal, ['not an integer'],
-      TTrackedInnerError.Create('inner secret token', @LDestroyed));
+    nextpas.core.exception.ENextPasError.CreateFmt(
+      'bad format %d %d', nextpas.core.exception.ecInternal, [1], LInner, True);
   except
-    on E: SysUtils.Exception do
-      begin
-        Check(LDestroyed,
-          'ENextPasError.CreateFmt must release owned inner when Format raises');
-        Exit;
-      end;
+    on E: SysUtils.EConvertError do
+      LCaught := True;
   end;
-  Check(False, 'ENextPasError.CreateFmt must propagate Format errors');
+  Check(LCaught,
+    'ENextPasError.CreateFmt should surface the format failure');
+  Check(GTrackedInnerDestroyCount = 1,
+    'owned inner exception must be freed when ENextPasError.CreateFmt fails before construction');
+
+  GTrackedInnerDestroyCount := 0;
+  LInner := TTrackedInnerException.Create('token=caller-owned-format-failure');
+  LCaught := False;
+  try
+    nextpas.core.exception.ENextPasError.CreateFmt(
+      'bad format %d %d', nextpas.core.exception.ecInternal, [1], LInner, False);
+  except
+    on E: SysUtils.EConvertError do
+      LCaught := True;
+  end;
+  Check(LCaught,
+    'non-owned ENextPasError.CreateFmt should surface the format failure');
+  Check(GTrackedInnerDestroyCount = 0,
+    'non-owned inner exception must remain caller-owned when ENextPasError.CreateFmt fails');
+  LInner.Free;
+  Check(GTrackedInnerDestroyCount = 1,
+    'caller must still be able to free non-owned inner after ENextPasError.CreateFmt failure');
 end;
 
-procedure TestInnerOwnershipAndMessageLeakageContract;
-var
-  LInnerFreed: Boolean;
-  LNonOwnedFreed: Boolean;
-  LInner: TTrackedInnerError;
-  LWrapped: nextpas.core.exception.ENextPasError;
+procedure CheckCategoryText(const ACategory: nextpas.core.exception.TErrorCategory;
+  const AExpected: string);
 begin
-  LInnerFreed := False;
-  LInner := TTrackedInnerError.Create('secret-token-123', @LInnerFreed);
-  LWrapped := nextpas.core.exception.ENextPasError.Create(
-    'outer failure', nextpas.core.exception.ecInternal, LInner, True);
-  try
-    Check(LWrapped.Inner = LInner, 'owned wrapper must expose the inner exception');
-    Check(LWrapped.OwnsInner, 'owned wrapper must expose owns-inner truth');
-    Check(LWrapped.Message = 'outer failure',
-      'outer message must not concatenate the inner message');
-    Check(Pos('secret-token-123', LWrapped.Message) = 0,
-      'outer message must not leak sensitive inner details');
-  finally
-    LWrapped.Free;
-  end;
-  Check(LInnerFreed, 'owned inner exception must be released with the wrapper');
+  Check(nextpas.core.exception.ErrorCategoryToString(ACategory) = AExpected,
+    'ErrorCategoryToString must return ' + AExpected);
+end;
 
-  LNonOwnedFreed := False;
-  LInner := TTrackedInnerError.Create('non-owned-secret', @LNonOwnedFreed);
+procedure TestErrorCategoryToStringUsesStableTokens;
+var
+  LInner: TTrackedInnerException;
+  LErr: nextpas.core.exception.ENextPasError;
+  LToken: string;
+begin
+  CheckCategoryText(nextpas.core.exception.ecNone, 'none');
+  CheckCategoryText(nextpas.core.exception.ecInvalidArgument, 'invalid_argument');
+  CheckCategoryText(nextpas.core.exception.ecNullReference, 'null_reference');
+  CheckCategoryText(nextpas.core.exception.ecInvalidOperation, 'invalid_operation');
+  CheckCategoryText(nextpas.core.exception.ecNotImplemented, 'not_implemented');
+  CheckCategoryText(nextpas.core.exception.ecNotSupported, 'not_supported');
+  CheckCategoryText(nextpas.core.exception.ecTimeout, 'timeout');
+  CheckCategoryText(nextpas.core.exception.ecCancelled, 'cancelled');
+  CheckCategoryText(nextpas.core.exception.ecInterrupted, 'interrupted');
+  CheckCategoryText(nextpas.core.exception.ecWouldBlock, 'would_block');
+  CheckCategoryText(nextpas.core.exception.ecPermission, 'permission');
+  CheckCategoryText(nextpas.core.exception.ecNotFound, 'not_found');
+  CheckCategoryText(nextpas.core.exception.ecAlreadyExists, 'already_exists');
+  CheckCategoryText(nextpas.core.exception.ecResourceExhausted, 'resource_exhausted');
+  CheckCategoryText(nextpas.core.exception.ecIO, 'io');
+  CheckCategoryText(nextpas.core.exception.ecNetwork, 'network');
+  CheckCategoryText(nextpas.core.exception.ecParse, 'parse');
+  CheckCategoryText(nextpas.core.exception.ecInternal, 'internal');
+
+  LInner := TTrackedInnerException.Create('password=secret-token');
+  LErr := nextpas.core.exception.ENextPasError.Create(
+    'outer secret token', nextpas.core.exception.ecNetwork, LInner, True);
   try
-    LWrapped := nextpas.core.exception.ENextPasError.Create(
-      'outer only', nextpas.core.exception.ecInternal, LInner, False);
-    try
-      Check(LWrapped.Inner = LInner,
-        'non-owned wrapper must expose the inner exception');
-      Check(not LWrapped.OwnsInner,
-        'non-owned wrapper must expose owns-inner false');
-      Check(Pos('non-owned-secret', LWrapped.Message) = 0,
-        'non-owned wrapper message must not leak inner details');
-    finally
-      LWrapped.Free;
-    end;
-    Check(not LNonOwnedFreed,
-      'non-owned inner exception must survive wrapper destruction');
+    LToken := nextpas.core.exception.ErrorCategoryToString(LErr.Category);
+    Check(LToken = 'network',
+      'ErrorCategoryToString must classify by category');
+    Check(Pos('secret', LToken) = 0,
+      'ErrorCategoryToString must not include sensitive inner message data');
+    Check(Pos('outer', LToken) = 0,
+      'ErrorCategoryToString must not include outer message data');
   finally
-    LInner.Free;
+    LErr.Free;
   end;
-  Check(LNonOwnedFreed, 'test must release the non-owned inner exception');
+end;
+
+procedure TestUnknownExplicitCategoryFallsBackToInternal;
+var
+  LErr: nextpas.core.exception.ENextPasError;
+  LUnknown: nextpas.core.exception.TErrorCategory;
+  LUnknownOrdinal: Integer;
+begin
+  LUnknownOrdinal := Ord(High(nextpas.core.exception.TErrorCategory));
+  Inc(LUnknownOrdinal);
+  LUnknown := nextpas.core.exception.TErrorCategory(LUnknownOrdinal);
+
+  LErr := nextpas.core.exception.ENextPasError.Create('unknown category', LUnknown);
+  try
+    Check(LErr.Category = nextpas.core.exception.ecInternal,
+      'unknown explicit root category must normalize to ecInternal');
+    Check(nextpas.core.exception.ErrorCategoryToString(LErr.Category) = 'internal',
+      'unknown explicit root category must publish the internal token');
+  finally
+    LErr.Free;
+  end;
+end;
+
+procedure TestSpecificInnerConstructorsKeepSubclassCategory;
+var
+  LInner: TTrackedInnerException;
+  LErr: nextpas.core.exception.ENextPasError;
+begin
+  GTrackedInnerDestroyCount := 0;
+  LInner := TTrackedInnerException.Create('password=timeout-secret');
+  LErr := nextpas.core.exception.ETimeoutError.Create('outer timeout', LInner, False);
+  try
+    Check(LErr.Message = 'outer timeout',
+      'specific inner constructor must keep the outer message');
+    Check(Pos('timeout-secret', LErr.Message) = 0,
+      'specific inner constructor must not append inner sensitive data');
+    Check(LErr.Category = nextpas.core.exception.ecTimeout,
+      'ETimeoutError inner constructor must keep timeout category');
+    Check(LErr.Inner = LInner,
+      'specific inner constructor must keep the inner exception pointer');
+  finally
+    LErr.Free;
+  end;
+  Check(GTrackedInnerDestroyCount = 0,
+    'non-owned specific inner exception must not be freed by ENextPasError');
+  LInner.Free;
+  Check(GTrackedInnerDestroyCount = 1,
+    'caller must still be able to free a non-owned specific inner exception');
+
+  GTrackedInnerDestroyCount := 0;
+  LInner := TTrackedInnerException.Create('token=io-secret');
+  LErr := nextpas.core.exception.EIOError.Create('outer io', LInner, True);
+  try
+    Check(LErr.Message = 'outer io',
+      'owned specific inner constructor must keep the outer message');
+    Check(Pos('io-secret', LErr.Message) = 0,
+      'owned specific inner constructor must not append inner sensitive data');
+    Check(LErr.Category = nextpas.core.exception.ecIO,
+      'EIOError inner constructor must keep IO category');
+    Check(LErr.Inner = LInner,
+      'owned specific inner constructor must keep the inner exception pointer');
+  finally
+    LErr.Free;
+  end;
+  Check(GTrackedInnerDestroyCount = 1,
+    'owned specific inner exception must be freed when ENextPasError is freed');
+end;
+
+procedure TestSpecificLeavesRejectMismatchedExplicitCategory;
+var
+  LInner: TTrackedInnerException;
+  LErr: nextpas.core.exception.ENextPasError;
+begin
+  LErr := nextpas.core.exception.ETimeoutError.Create(
+    'timeout typed as io', nextpas.core.exception.ecIO);
+  try
+    Check(LErr.Category = nextpas.core.exception.ecTimeout,
+      'ETimeoutError explicit-category constructor must keep timeout category');
+  finally
+    LErr.Free;
+  end;
+
+  LErr := nextpas.core.exception.EIOError.CreateFmt(
+    'io typed as network %d', nextpas.core.exception.ecNetwork, [11]);
+  try
+    Check(LErr.Message = 'io typed as network 11',
+      'EIOError explicit-category CreateFmt must still format the message');
+    Check(LErr.Category = nextpas.core.exception.ecIO,
+      'EIOError explicit-category CreateFmt must keep IO category');
+  finally
+    LErr.Free;
+  end;
+
+  GTrackedInnerDestroyCount := 0;
+  LInner := TTrackedInnerException.Create('password=leaf-secret');
+  LErr := nextpas.core.exception.EParseError.Create(
+    'parse typed as internal', nextpas.core.exception.ecInternal, LInner, True);
+  try
+    Check(LErr.Message = 'parse typed as internal',
+      'EParseError explicit-category inner constructor must keep outer message');
+    Check(Pos('leaf-secret', LErr.Message) = 0,
+      'EParseError explicit-category inner constructor must not append inner sensitive data');
+    Check(LErr.Category = nextpas.core.exception.ecParse,
+      'EParseError explicit-category inner constructor must keep parse category');
+    Check(LErr.Inner = LInner,
+      'EParseError explicit-category inner constructor must keep inner pointer');
+  finally
+    LErr.Free;
+  end;
+  Check(GTrackedInnerDestroyCount = 1,
+    'owned explicit-category leaf inner exception must be freed');
+end;
+
+procedure CheckLeafDefaultCategory(const AName: string;
+  const AClass: TNextPasErrorClass;
+  const ACategory: nextpas.core.exception.TErrorCategory);
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    raise AClass.Create(AName + ' default category');
+  except
+    on E: nextpas.core.exception.ENextPasError do
+    begin
+      LCaught := True;
+      Check(E.ClassType = AClass,
+        AName + ' class reference must create the requested public leaf');
+      Check(E.Category = ACategory,
+        AName + ' public leaf must keep its default category');
+    end;
+  end;
+  Check(LCaught,
+    AName + ' public leaf must catch as ENextPasError');
+end;
+
+procedure TestAllLeafDefaultCategories;
+begin
+  CheckLeafDefaultCategory('EArgumentError',
+    nextpas.core.exception.EArgumentError,
+    nextpas.core.exception.ecInvalidArgument);
+  CheckLeafDefaultCategory('ENullReferenceError',
+    nextpas.core.exception.ENullReferenceError,
+    nextpas.core.exception.ecNullReference);
+  CheckLeafDefaultCategory('EInvalidOperationError',
+    nextpas.core.exception.EInvalidOperationError,
+    nextpas.core.exception.ecInvalidOperation);
+  CheckLeafDefaultCategory('ENotImplementedError',
+    nextpas.core.exception.ENotImplementedError,
+    nextpas.core.exception.ecNotImplemented);
+  CheckLeafDefaultCategory('ENotSupportedError',
+    nextpas.core.exception.ENotSupportedError,
+    nextpas.core.exception.ecNotSupported);
+  CheckLeafDefaultCategory('ETimeoutError',
+    nextpas.core.exception.ETimeoutError,
+    nextpas.core.exception.ecTimeout);
+  CheckLeafDefaultCategory('ECancelledError',
+    nextpas.core.exception.ECancelledError,
+    nextpas.core.exception.ecCancelled);
+  CheckLeafDefaultCategory('EInterruptedError',
+    nextpas.core.exception.EInterruptedError,
+    nextpas.core.exception.ecInterrupted);
+  CheckLeafDefaultCategory('EWouldBlockError',
+    nextpas.core.exception.EWouldBlockError,
+    nextpas.core.exception.ecWouldBlock);
+  CheckLeafDefaultCategory('EPermissionError',
+    nextpas.core.exception.EPermissionError,
+    nextpas.core.exception.ecPermission);
+  CheckLeafDefaultCategory('ENotFoundError',
+    nextpas.core.exception.ENotFoundError,
+    nextpas.core.exception.ecNotFound);
+  CheckLeafDefaultCategory('EAlreadyExistsError',
+    nextpas.core.exception.EAlreadyExistsError,
+    nextpas.core.exception.ecAlreadyExists);
+  CheckLeafDefaultCategory('EResourceExhaustedError',
+    nextpas.core.exception.EResourceExhaustedError,
+    nextpas.core.exception.ecResourceExhausted);
+  CheckLeafDefaultCategory('EIOError',
+    nextpas.core.exception.EIOError,
+    nextpas.core.exception.ecIO);
+  CheckLeafDefaultCategory('ENetworkError',
+    nextpas.core.exception.ENetworkError,
+    nextpas.core.exception.ecNetwork);
+  CheckLeafDefaultCategory('EParseError',
+    nextpas.core.exception.EParseError,
+    nextpas.core.exception.ecParse);
+  CheckLeafDefaultCategory('EIndexOutOfRangeError',
+    nextpas.core.exception.EIndexOutOfRangeError,
+    nextpas.core.exception.ecInvalidArgument);
+  CheckLeafDefaultCategory('EOutOfMemoryError',
+    nextpas.core.exception.EOutOfMemoryError,
+    nextpas.core.exception.ecResourceExhausted);
+  CheckLeafDefaultCategory('EOutOfMemory',
+    nextpas.core.exception.EOutOfMemory,
+    nextpas.core.exception.ecResourceExhausted);
+end;
+
+procedure CheckLeafInnerConstructorKeepsDefaultCategory(const AName: string;
+  const AClass: TNextPasErrorClass;
+  const ACategory: nextpas.core.exception.TErrorCategory);
+var
+  LInner: TTrackedInnerException;
+  LSecret: string;
+begin
+  GTrackedInnerDestroyCount := 0;
+  LSecret := AName + '-inner-secret-token';
+  LInner := TTrackedInnerException.Create(LSecret);
+  try
+    raise AClass.Create(AName + ' outer message',
+      nextpas.core.exception.ecInternal, LInner, True);
+  except
+    on E: nextpas.core.exception.ENextPasError do
+    begin
+      Check(E.ClassType = AClass,
+        AName + ' inner constructor must create the requested public leaf');
+      Check(E.Category = ACategory,
+        AName + ' inner constructor must keep the leaf default category');
+      Check(E.Inner = LInner,
+        AName + ' inner constructor must keep the inner pointer');
+      Check(Pos(LSecret, E.Message) = 0,
+        AName + ' inner constructor must not leak inner sensitive data');
+    end;
+  end;
+  Check(GTrackedInnerDestroyCount = 1,
+    AName + ' owned inner exception must be freed after the leaf is handled');
+end;
+
+procedure TestAllLeafInnerConstructorsKeepDefaultCategory;
+begin
+  CheckLeafInnerConstructorKeepsDefaultCategory('EArgumentError',
+    nextpas.core.exception.EArgumentError,
+    nextpas.core.exception.ecInvalidArgument);
+  CheckLeafInnerConstructorKeepsDefaultCategory('ENullReferenceError',
+    nextpas.core.exception.ENullReferenceError,
+    nextpas.core.exception.ecNullReference);
+  CheckLeafInnerConstructorKeepsDefaultCategory('EInvalidOperationError',
+    nextpas.core.exception.EInvalidOperationError,
+    nextpas.core.exception.ecInvalidOperation);
+  CheckLeafInnerConstructorKeepsDefaultCategory('ENotImplementedError',
+    nextpas.core.exception.ENotImplementedError,
+    nextpas.core.exception.ecNotImplemented);
+  CheckLeafInnerConstructorKeepsDefaultCategory('ENotSupportedError',
+    nextpas.core.exception.ENotSupportedError,
+    nextpas.core.exception.ecNotSupported);
+  CheckLeafInnerConstructorKeepsDefaultCategory('ETimeoutError',
+    nextpas.core.exception.ETimeoutError,
+    nextpas.core.exception.ecTimeout);
+  CheckLeafInnerConstructorKeepsDefaultCategory('ECancelledError',
+    nextpas.core.exception.ECancelledError,
+    nextpas.core.exception.ecCancelled);
+  CheckLeafInnerConstructorKeepsDefaultCategory('EInterruptedError',
+    nextpas.core.exception.EInterruptedError,
+    nextpas.core.exception.ecInterrupted);
+  CheckLeafInnerConstructorKeepsDefaultCategory('EWouldBlockError',
+    nextpas.core.exception.EWouldBlockError,
+    nextpas.core.exception.ecWouldBlock);
+  CheckLeafInnerConstructorKeepsDefaultCategory('EPermissionError',
+    nextpas.core.exception.EPermissionError,
+    nextpas.core.exception.ecPermission);
+  CheckLeafInnerConstructorKeepsDefaultCategory('ENotFoundError',
+    nextpas.core.exception.ENotFoundError,
+    nextpas.core.exception.ecNotFound);
+  CheckLeafInnerConstructorKeepsDefaultCategory('EAlreadyExistsError',
+    nextpas.core.exception.EAlreadyExistsError,
+    nextpas.core.exception.ecAlreadyExists);
+  CheckLeafInnerConstructorKeepsDefaultCategory('EResourceExhaustedError',
+    nextpas.core.exception.EResourceExhaustedError,
+    nextpas.core.exception.ecResourceExhausted);
+  CheckLeafInnerConstructorKeepsDefaultCategory('EIOError',
+    nextpas.core.exception.EIOError,
+    nextpas.core.exception.ecIO);
+  CheckLeafInnerConstructorKeepsDefaultCategory('ENetworkError',
+    nextpas.core.exception.ENetworkError,
+    nextpas.core.exception.ecNetwork);
+  CheckLeafInnerConstructorKeepsDefaultCategory('EParseError',
+    nextpas.core.exception.EParseError,
+    nextpas.core.exception.ecParse);
+  CheckLeafInnerConstructorKeepsDefaultCategory('EIndexOutOfRangeError',
+    nextpas.core.exception.EIndexOutOfRangeError,
+    nextpas.core.exception.ecInvalidArgument);
+  CheckLeafInnerConstructorKeepsDefaultCategory('EOutOfMemoryError',
+    nextpas.core.exception.EOutOfMemoryError,
+    nextpas.core.exception.ecResourceExhausted);
+  CheckLeafInnerConstructorKeepsDefaultCategory('EOutOfMemory',
+    nextpas.core.exception.EOutOfMemory,
+    nextpas.core.exception.ecResourceExhausted);
 end;
 
 begin
@@ -371,10 +674,14 @@ begin
   TestAllocOutOfMemoryUsesCanonicalCatchBeforeAllocRoot;
   TestMemOutOfMemoryKeepsConstructorCompatibility;
   TestOutOfMemoryCreateFmtKeepsResourceExhaustedCategory;
-  TestTypedCreateFmtKeepsDefaultCategory;
-  TestWrapperMessageDoesNotLeakInnerMessage;
-  TestCreateFmtWrapperKeepsOuterMessageOnly;
-  TestCreateFmtFormatFailureReleasesOwnedInner;
-  TestInnerOwnershipAndMessageLeakageContract;
+  TestRootCreateFmtKeepsExplicitCategory;
+  TestRootCreateFmtKeepsInnerOwnershipContract;
+  TestRootCreateFmtFormatFailureFreesOwnedInner;
+  TestErrorCategoryToStringUsesStableTokens;
+  TestUnknownExplicitCategoryFallsBackToInternal;
+  TestSpecificInnerConstructorsKeepSubclassCategory;
+  TestSpecificLeavesRejectMismatchedExplicitCategory;
+  TestAllLeafDefaultCategories;
+  TestAllLeafInnerConstructorsKeepDefaultCategory;
   WriteLn('PASS: all exception root tests passed');
 end.
