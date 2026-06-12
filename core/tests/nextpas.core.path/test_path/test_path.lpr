@@ -61,9 +61,34 @@ begin
   Check(PathJoin('', '') = '', 'join both empty');
 end;
 
+procedure TestPathJoinLongResult;
+var
+  LBase: string;
+  LChild: string;
+  LExpected: string;
+  LResult: string;
+begin
+  LBase := '/' + StringOfChar('a', 4090);
+  LChild := StringOfChar('b', 128);
+  LExpected := LBase + '/' + LChild;
+  LResult := PathJoin(LBase, LChild);
+  CheckEqual(Int64(Length(LExpected)), Int64(Length(LResult)), 'long join preserves length');
+  CheckEqual(LExpected, LResult, 'long join preserves content');
+end;
+
 procedure TestPathJoin3;
 begin
   Check(PathJoin3('/home', 'user', 'docs') = '/home/user/docs', 'join3 basic');
+end;
+
+procedure TestPathJoin3LongIntermediate;
+var
+  LFirst: string;
+  LExpected: string;
+begin
+  LFirst := '/' + StringOfChar('j', 4090);
+  LExpected := LFirst + '/child/file.txt';
+  CheckEqual(LExpected, PathJoin3(LFirst, 'child', 'file.txt'), 'long join3 preserves content');
 end;
 
 procedure TestPathDir;
@@ -74,6 +99,16 @@ begin
   Check(PathDir('') = '', 'dir empty');
 end;
 
+procedure TestPathDirLongResult;
+var
+  LDir: string;
+  LPath: string;
+begin
+  LDir := '/' + StringOfChar('d', 4090);
+  LPath := LDir + '/file.txt';
+  CheckEqual(LDir, PathDir(LPath), 'long dir preserves content');
+end;
+
 procedure TestPathBase;
 begin
   Check(PathBase('/home/user/file.txt') = 'file.txt', 'base with path');
@@ -82,13 +117,56 @@ begin
   Check(PathBase('') = '', 'base empty');
 end;
 
+procedure TestPathSplit;
+var
+  LDir: string;
+  LBase: string;
+begin
+  PathSplit('/home/user/file.txt', LDir, LBase);
+  CheckEqual('/home/user', LDir, 'split dir with file');
+  CheckEqual('file.txt', LBase, 'split base with file');
+
+  PathSplit('file.txt', LDir, LBase);
+  CheckEqual('', LDir, 'split no path dir');
+  CheckEqual('file.txt', LBase, 'split no path base');
+
+  PathSplit('/home/user/', LDir, LBase);
+  CheckEqual('/home/user', LDir, 'split trailing sep dir');
+  CheckEqual('user', LBase, 'split trailing sep base');
+
+  PathSplit('', LDir, LBase);
+  CheckEqual('', LDir, 'split empty dir');
+  CheckEqual('', LBase, 'split empty base');
+end;
+
+procedure TestPathBaseLongResult;
+var
+  LBase: string;
+  LPath: string;
+begin
+  LBase := StringOfChar('b', 4100);
+  LPath := '/tmp/' + LBase;
+  CheckEqual(LBase, PathBase(LPath), 'long base preserves content');
+end;
+
 procedure TestPathExt;
 begin
   Check(PathExt('/home/file.txt') = '.txt', 'ext basic');
   Check(PathExt('archive.tar.gz') = '.gz', 'ext double');
+  Check(PathExt('/tmp/file.txt/') = '.txt', 'ext ignores trailing sep');
   Check(PathExt('noext') = '', 'ext none');
   Check(PathExt('.hidden') = '', 'ext dotfile');
   Check(PathExt('') = '', 'ext empty');
+end;
+
+procedure TestPathExtLongResult;
+var
+  LExt: string;
+  LPath: string;
+begin
+  LExt := '.' + StringOfChar('x', 4096);
+  LPath := 'file' + LExt;
+  CheckEqual(LExt, PathExt(LPath), 'long extension preserves content');
 end;
 
 procedure TestPathChangeExt;
@@ -96,6 +174,20 @@ begin
   Check(PathChangeExt('/home/file.txt', '.md') = '/home/file.md', 'change ext');
   Check(PathChangeExt('file.txt', '.pas') = 'file.pas', 'change ext no path');
   Check(PathChangeExt('noext', '.txt') = 'noext.txt', 'add ext');
+  Check(PathChangeExt('/tmp/file.txt/', '.md') = '/tmp/file.md',
+    'change ext ignores trailing sep');
+  Check(PathChangeExt('/tmp/noext/', '.txt') = '/tmp/noext.txt',
+    'change ext adds before trailing sep');
+end;
+
+procedure TestPathChangeExtLongResult;
+var
+  LPath: string;
+  LExpected: string;
+begin
+  LPath := StringOfChar('c', 4096) + '.txt';
+  LExpected := StringOfChar('c', 4096) + '.pas';
+  CheckEqual(LExpected, PathChangeExt(LPath, '.pas'), 'long change ext preserves content');
 end;
 
 procedure TestPathIsAbsolute;
@@ -110,6 +202,39 @@ begin
   Check(PathNormalize('/home/user/../docs') = '/home/docs', 'normalize ..');
   Check(PathNormalize('/home/./user') = '/home/user', 'normalize .');
   Check(PathNormalize('') = '', 'normalize empty');
+end;
+
+procedure TestPathNormalizeLongResult;
+var
+  LSegment: string;
+  LPath: string;
+  LExpected: string;
+begin
+  LSegment := StringOfChar('n', 4096);
+  LPath := '/root/./' + LSegment + '/../' + LSegment + '/file.txt';
+  LExpected := '/root/' + LSegment + '/file.txt';
+  CheckEqual(LExpected, PathNormalize(LPath), 'long normalize preserves content');
+end;
+
+procedure TestPathRelative;
+begin
+  CheckEqual('c/d', PathRelative('/a/b', '/a/b/c/d'),
+    'relative descendant');
+  CheckEqual('../../d/e', PathRelative('/a/b/c', '/a/d/e'),
+    'relative sibling branch');
+  CheckEqual('.', PathRelative('/a/b', '/a/b'), 'relative same path');
+  CheckEqual('c', PathRelative('a/b', 'a/b/c'), 'relative paths supported');
+end;
+
+procedure TestPathRelativeLongResult;
+var
+  LSegment: string;
+  LExpected: string;
+begin
+  LSegment := StringOfChar('r', 4096);
+  LExpected := '../target/' + LSegment + '/file.txt';
+  CheckEqual(LExpected, PathRelative('/root/base',
+    '/root/target/' + LSegment + '/file.txt'), 'long relative preserves content');
 end;
 
 procedure TestPathHasExt;
@@ -152,19 +277,94 @@ begin
     'ExtractFilePath does not hard-code Unix separator');
 end;
 
+procedure TestPathJoinFallbackSourceContract;
+var
+  LSource, LImpl, LBody: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.path.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'path unit has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+  LBody := ExtractFunctionBody(LImpl,
+    'function PathJoin(const ABase, AChild: string): string;',
+    'function PathJoin3');
+
+  CheckContains(LBody, 'PLATFORM_PATH_SEP',
+    'PathJoin fallback uses platform separator');
+  CheckAbsent(LBody, 'ABase + ''/'' + AChild',
+    'PathJoin fallback does not hard-code Unix separator');
+end;
+
+procedure TestPathDelegatesPlatformRootContract;
+var
+  LSource, LImpl: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.path.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'path unit has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+
+  CheckContains(LImpl, 'platform_path_join',
+    'PathJoin delegates root semantics to platform.path');
+  CheckContains(LImpl, 'platform_path_dirname',
+    'PathDir delegates root semantics to platform.path');
+  CheckContains(LImpl, 'platform_path_is_absolute',
+    'PathIsAbsolute delegates root semantics to platform.path');
+  CheckContains(LImpl, 'platform_path_normalize',
+    'PathNormalize delegates root semantics to platform.path');
+end;
+
+{$IFDEF NEXTPAS_WINDOWS}
+procedure TestWindowsRootWrapperContract;
+begin
+  Check(PathIsAbsolute('C:\tools'), 'drive absolute is absolute');
+  Check(PathIsAbsolute('\\server\share'), 'UNC share is absolute');
+  Check(not PathIsAbsolute('C:tools'), 'drive-relative path is not absolute');
+  Check(not PathIsAbsolute('\tools'), 'rooted-relative path is not absolute');
+  Check(PathDir('C:\tools') = 'C:\', 'PathDir keeps drive root');
+  Check(PathDir('\\server\share\file.txt') = '\\server\share',
+    'PathDir keeps UNC share root');
+  Check(PathNormalize('C:\tools\..\bin') = 'C:\bin',
+    'PathNormalize keeps drive root');
+  Check(PathNormalize('C:tools\..\bin') = 'C:bin',
+    'PathNormalize keeps drive-relative volume');
+  Check(PathNormalize('\tools\..\bin') = '\bin',
+    'PathNormalize keeps rooted-relative root');
+  Check(PathJoin('C:\base', '\child') = 'C:\base\child',
+    'PathJoin does not treat rooted-relative child as absolute');
+end;
+{$ENDIF}
+
 begin
   T := TTestRunner.Create('nextpas.core.path');
   T.Run('PathJoin', @TestPathJoin);
+  T.Run('PathJoin long result', @TestPathJoinLongResult);
   T.Run('PathJoin3', @TestPathJoin3);
+  T.Run('PathJoin3 long intermediate', @TestPathJoin3LongIntermediate);
   T.Run('PathDir', @TestPathDir);
+  T.Run('PathDir long result', @TestPathDirLongResult);
   T.Run('PathBase', @TestPathBase);
+  T.Run('PathSplit', @TestPathSplit);
+  T.Run('PathBase long result', @TestPathBaseLongResult);
   T.Run('PathExt', @TestPathExt);
+  T.Run('PathExt long result', @TestPathExtLongResult);
   T.Run('PathChangeExt', @TestPathChangeExt);
+  T.Run('PathChangeExt long result', @TestPathChangeExtLongResult);
   T.Run('PathIsAbsolute', @TestPathIsAbsolute);
   T.Run('PathNormalize', @TestPathNormalize);
+  T.Run('PathNormalize long result', @TestPathNormalizeLongResult);
+  T.Run('PathRelative', @TestPathRelative);
+  T.Run('PathRelative long result', @TestPathRelativeLongResult);
   T.Run('PathHasExt', @TestPathHasExt);
   T.Run('PathWithoutExt', @TestPathWithoutExt);
   T.Run('SysUtils compat', @TestSysUtilsCompat);
   T.Run('ExtractFilePath source contract', @TestExtractFilePathSourceContract);
+  T.Run('PathJoin fallback source contract', @TestPathJoinFallbackSourceContract);
+  T.Run('Path delegates platform root contract', @TestPathDelegatesPlatformRootContract);
+{$IFDEF NEXTPAS_WINDOWS}
+  T.Run('Windows root wrapper contract', @TestWindowsRootWrapperContract);
+{$ENDIF}
   T.Summary;
 end.

@@ -4,49 +4,112 @@ unit nextpas.core.os.env;
 
 interface
 
+uses
+  nextpas.core.text.base;
+
+function EnvironmentVariables: TStringArray;
 function GetEnvironmentVariable(const AName: string): string;
 function GetEnv(const AName: string): string; inline;
+function TryGetEnv(const AName: string; out AValue: string): Boolean;
 function HasEnv(const AName: string): Boolean;
+function EnvironmentVariableNamesCaseSensitive: Boolean; inline;
 procedure SetEnv(const AName, AValue: string);
 procedure UnsetEnv(const AName: string);
 
 implementation
 
-{$IFDEF NEXTPAS_UNIX}
-function c_getenv(name: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'getenv';
-function c_setenv(name: PAnsiChar; value: PAnsiChar; overwrite: Int32): Int32; cdecl; external 'c' name 'setenv';
-function c_unsetenv(name: PAnsiChar): Int32; cdecl; external 'c' name 'unsetenv';
-{$ENDIF}
-
-{$IFDEF NEXTPAS_WINDOWS}
 uses
-  nextpas.core.platform.windows.ffi;
-{$ENDIF}
+  nextpas.core.errors,
+  nextpas.core.text.conv,
+  nextpas.core.platform.env;
+
+type
+  PStringArray = ^TStringArray;
+
+procedure ValidateEnvName(const AName: string);
+var
+  I: Integer;
+begin
+  if AName = '' then
+    raise EArgumentError.Create('environment variable name must not be empty');
+  if Pos('=', AName) > 0 then
+    raise EArgumentError.Create('environment variable name must not contain "="');
+  for I := 1 to Length(AName) do
+    if AName[I] = #0 then
+      raise EArgumentError.Create('environment variable name must not contain NUL');
+end;
+
+procedure ValidateEnvValue(const AValue: string);
+var
+  I: Integer;
+begin
+  for I := 1 to Length(AValue) do
+    if AValue[I] = #0 then
+      raise EArgumentError.Create('environment variable value must not contain NUL');
+end;
+
+procedure RaiseEnvError(const ACode: Int32; const AOp, AName: string);
+begin
+  if ACode = 0 then
+    Exit;
+  raise EIOError.Create(AOp + ' failed (' + IntToStr(ACode) + '): ' + AName);
+end;
+
+function CollectEnvEntry(const AEntry: PAnsiChar; AData: Pointer): Boolean;
+var
+  LValues: PStringArray;
+  LCount: Integer;
+begin
+  LValues := PStringArray(AData);
+  LCount := Length(LValues^);
+  SetLength(LValues^, LCount + 1);
+  LValues^[LCount] := string(AEntry);
+  Result := True;
+end;
+
+function EnvironmentVariables: TStringArray;
+var
+  LValues: TStringArray;
+begin
+  SetLength(LValues, 0);
+  RaiseEnvError(platform_env_enumerate(@CollectEnvEntry, @LValues),
+    'environment enumeration', '');
+  Result := LValues;
+end;
 
 function GetEnvironmentVariable(const AName: string): string;
+begin
+  if not TryGetEnv(AName, Result) then
+    Result := '';
+end;
+
+function TryGetEnv(const AName: string; out AValue: string): Boolean;
 var
   LName: string;
-  P: PAnsiChar;
-  {$IFDEF NEXTPAS_WINDOWS}
-  LBuf: array[0..4095] of AnsiChar;
-  LLen: DWORD;
-  {$ENDIF}
+  LBuf: array of AnsiChar;
+  LLen: Int32;
 begin
+  Result := False;
+  AValue := '';
+  ValidateEnvName(AName);
   LName := AName;
-  {$IFDEF NEXTPAS_UNIX}
-  P := c_getenv(PAnsiChar(LName));
-  if P <> nil then
-    Result := string(P)
-  else
-    Result := '';
-  {$ENDIF}
-  {$IFDEF NEXTPAS_WINDOWS}
-  LLen := GetEnvironmentVariableA(PAnsiChar(LName), @LBuf[0], SizeOf(LBuf));
-  if (LLen > 0) and (LLen < SizeOf(LBuf)) then
-    SetString(Result, @LBuf[0], LLen)
-  else
-    Result := '';
-  {$ENDIF}
+  repeat
+    if platform_env_get(PAnsiChar(LName), nil, 0, LLen) <> 0 then
+      Exit;
+    if LLen <= 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
+    SetLength(LBuf, LLen + 1);
+    if platform_env_get(PAnsiChar(LName), @LBuf[0], Length(LBuf), LLen) <> 0 then
+      Exit;
+    if LLen >= Length(LBuf) then
+      Continue;
+    SetString(AValue, @LBuf[0], LLen);
+    Result := True;
+    Exit;
+  until False;
 end;
 
 function GetEnv(const AName: string): string;
@@ -57,46 +120,35 @@ end;
 function HasEnv(const AName: string): Boolean;
 var
   LName: string;
-  P: PAnsiChar;
-  {$IFDEF NEXTPAS_WINDOWS}
-  LBuf: array[0..0] of AnsiChar;
-  LLen: DWORD;
-  {$ENDIF}
 begin
+  ValidateEnvName(AName);
   LName := AName;
-  {$IFDEF NEXTPAS_UNIX}
-  P := c_getenv(PAnsiChar(LName));
-  Result := P <> nil;
-  {$ENDIF}
-  {$IFDEF NEXTPAS_WINDOWS}
-  LLen := GetEnvironmentVariableA(PAnsiChar(LName), @LBuf[0], 0);
-  Result := LLen > 0;
-  {$ENDIF}
+  Result := platform_env_exists(PAnsiChar(LName));
+end;
+
+function EnvironmentVariableNamesCaseSensitive: Boolean;
+begin
+  Result := platform_env_names_case_sensitive;
 end;
 
 procedure SetEnv(const AName, AValue: string);
-var LN, LV: string;
+var
+  LN, LV: string;
 begin
+  ValidateEnvName(AName);
+  ValidateEnvValue(AValue);
   LN := AName;
   LV := AValue;
-  {$IFDEF NEXTPAS_UNIX}
-  c_setenv(PAnsiChar(LN), PAnsiChar(LV), 1);
-  {$ENDIF}
-  {$IFDEF NEXTPAS_WINDOWS}
-  SetEnvironmentVariableA(PAnsiChar(LN), PAnsiChar(LV));
-  {$ENDIF}
+  RaiseEnvError(platform_env_set(PAnsiChar(LN), PAnsiChar(LV)), 'setenv', AName);
 end;
 
 procedure UnsetEnv(const AName: string);
-var LN: string;
+var
+  LN: string;
 begin
+  ValidateEnvName(AName);
   LN := AName;
-  {$IFDEF NEXTPAS_UNIX}
-  c_unsetenv(PAnsiChar(LN));
-  {$ENDIF}
-  {$IFDEF NEXTPAS_WINDOWS}
-  SetEnvironmentVariableA(PAnsiChar(LN), nil);
-  {$ENDIF}
+  RaiseEnvError(platform_env_unset(PAnsiChar(LN)), 'unsetenv', AName);
 end;
 
 end.

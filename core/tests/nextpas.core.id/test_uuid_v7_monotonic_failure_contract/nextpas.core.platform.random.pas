@@ -9,6 +9,7 @@ const
 
 procedure TestRandomReset;
 procedure TestRandomSetFailure(const AEnabled: Boolean);
+procedure TestRandomSetFillByte(const AValue: Byte);
 function TestRandomCallCount: SizeUInt;
 function platform_random_bytes(ABuf: Pointer; ALen: PtrUInt): Int32;
 
@@ -17,18 +18,23 @@ implementation
 var
   GFail: Boolean = False;
   GCallCount: SizeUInt = 0;
-  GNextByte: Byte = 1;
+  GFillByte: Byte = 1;
 
 procedure TestRandomReset;
 begin
   GFail := False;
   GCallCount := 0;
-  GNextByte := 1;
+  GFillByte := 1;
 end;
 
 procedure TestRandomSetFailure(const AEnabled: Boolean);
 begin
   GFail := AEnabled;
+end;
+
+procedure TestRandomSetFillByte(const AValue: Byte);
+begin
+  GFillByte := AValue;
 end;
 
 function TestRandomCallCount: SizeUInt;
@@ -40,20 +46,15 @@ function platform_random_bytes(ABuf: Pointer; ALen: PtrUInt): Int32;
 var
   LI: PtrUInt;
 begin
-  Inc(GCallCount);
-  if GFail then
-    Exit(TEST_RANDOM_FAILURE);
   if ALen = 0 then
     Exit(0);
   if ABuf = nil then
+    Exit(-1);
+  Inc(GCallCount);
+  if GFail then
     Exit(TEST_RANDOM_FAILURE);
   for LI := 0 to ALen - 1 do
-  begin
-    PByte(ABuf + LI)^ := GNextByte;
-    Inc(GNextByte);
-    if GNextByte = 0 then
-      GNextByte := 1;
-  end;
+    PByte(ABuf + LI)^ := GFillByte;
   Result := 0;
 end;
 

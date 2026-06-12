@@ -13,6 +13,7 @@ function NanoIdCustom(const AAlphabet: string; const ASize: Integer): TNanoIdStr
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.id.rng;
 
 function NanoIdAlphabetIsValid(const AAlphabet: string): Boolean;
@@ -45,10 +46,15 @@ var
   LBuf: array[0..63] of Byte;
   LBufPos, LBufLen: Integer;
   LByte: Integer;
+  LAttempts, LMaxAttempts: SizeUInt;
 begin
   LAlphaLen := Length(AAlphabet);
-  if ASize <= 0 then Exit('');
-  if not NanoIdAlphabetIsValid(AAlphabet) then Exit('');
+  if ASize <= 0 then
+    raise EArgumentError.Create('NanoIdCustom: size must be positive');
+  if ASize > NANOID_MAX_LENGTH then
+    raise EArgumentError.Create('NanoIdCustom: size exceeds maximum length');
+  if not NanoIdAlphabetIsValid(AAlphabet) then
+    raise EArgumentError.Create('NanoIdCustom: alphabet must contain 2..256 unique characters');
 
   LMask := 1;
   while LMask < LAlphaLen do
@@ -58,6 +64,8 @@ begin
   SetLength(Result, ASize);
   LBufPos := 64;
   LBufLen := 64;
+  LAttempts := 0;
+  LMaxAttempts := SizeUInt(ASize) * 64 + 1024;
   LI := 1;
   while LI <= ASize do
   begin
@@ -68,6 +76,9 @@ begin
     end;
     LByte := LBuf[LBufPos] and LMask;
     Inc(LBufPos);
+    Inc(LAttempts);
+    if LAttempts > LMaxAttempts then
+      raise EIOError.Create('NanoIdCustom: entropy stream made no progress');
     if LByte < LAlphaLen then
     begin
       Result[LI] := AAlphabet[LByte + 1];

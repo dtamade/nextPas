@@ -11,10 +11,12 @@ function Ulid: TUlidString;
 function UlidFromTimestamp(const ATimestampMs: UInt64): TUlidString;
 function UlidIsValid(const AStr: string): Boolean;
 function UlidTimestampMs(const AStr: string): UInt64;
+function UlidTryTimestampMs(const AStr: string; out ATimestampMs: UInt64): Boolean;
 
 implementation
 
 uses
+  nextpas.core.base,
   nextpas.core.id.rng,
   nextpas.core.platform.time;
 
@@ -28,10 +30,7 @@ var
   LTs: UInt64;
 begin
   if ATimestampMs > UInt64($FFFFFFFFFFFF) then
-  begin
-    Result := '';
-    Exit;
-  end;
+    raise EOutOfRange.Create('UlidFromTimestamp: timestamp must fit 48 bits');
   SetLength(Result, ULID_LENGTH);
 
   LTs := ATimestampMs;
@@ -104,18 +103,33 @@ begin
 end;
 
 function UlidTimestampMs(const AStr: string): UInt64;
-var LI: Integer; LVal: Int32;
+var
+  LValue: UInt64;
 begin
-  Result := 0;
-  if Length(AStr) <> ULID_LENGTH then Exit;
-  if not UlidIsValid(AStr) then Exit;
+  if UlidTryTimestampMs(AStr, LValue) then
+    Result := LValue
+  else
+    Result := 0;
+end;
+
+function UlidTryTimestampMs(const AStr: string; out ATimestampMs: UInt64): Boolean;
+var
+  LI: Integer;
+  LVal: Int32;
+  LValue: UInt64;
+begin
+  if Length(AStr) <> ULID_LENGTH then Exit(False);
+  if not UlidIsValid(AStr) then Exit(False);
+  LValue := 0;
   for LI := 1 to 10 do
   begin
     LVal := CrockfordVal(AStr[LI]);
-    if LVal < 0 then Exit(0);
-    if (LI = 1) and (LVal > 7) then Exit(0);
-    Result := (Result shl 5) or UInt64(LVal);
+    if LVal < 0 then Exit(False);
+    if (LI = 1) and (LVal > 7) then Exit(False);
+    LValue := (LValue shl 5) or UInt64(LVal);
   end;
+  ATimestampMs := LValue;
+  Result := True;
 end;
 
 end.

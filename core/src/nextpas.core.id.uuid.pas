@@ -21,6 +21,7 @@ type
     class function Nil_: TUuid; static;
     class function Max: TUuid; static;
     class function FromBytes(const ABytes: array of Byte): TUuid; static;
+    procedure ToBytes(out ABytes: array of Byte);
     function ToString: string;
     function ToStringNoDash: string;
     function ToURN: string;
@@ -44,6 +45,7 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.id.rng,
   nextpas.core.platform.time,
   nextpas.core.hash.intf,
@@ -64,6 +66,14 @@ begin
   else
     Result := -1;
   end;
+end;
+
+function LoadLe32(const ABytes: array of Byte; const AOffset: Integer): UInt32;
+begin
+  Result := UInt32(ABytes[AOffset]) or
+            (UInt32(ABytes[AOffset + 1]) shl 8) or
+            (UInt32(ABytes[AOffset + 2]) shl 16) or
+            (UInt32(ABytes[AOffset + 3]) shl 24);
 end;
 
 procedure FormatUuid(const ABytes: array of Byte; var ADst: string);
@@ -149,6 +159,16 @@ begin
     Result.FBytes[LI] := ABytes[LI];
 end;
 
+procedure TUuid.ToBytes(out ABytes: array of Byte);
+var
+  LI: Integer;
+begin
+  if Length(ABytes) <> 16 then
+    raise EOutOfRange.Create('TUuid.ToBytes: length must be 16 bytes');
+  for LI := 0 to 15 do
+    ABytes[LI] := FBytes[LI];
+end;
+
 class function TUuid.TryParse(const AStr: string; out AUuid: TUuid): Boolean;
 var
   LI, LJ, LHi, LLo: Int32;
@@ -181,7 +201,7 @@ end;
 class function TUuid.Parse(const AStr: string): TUuid;
 begin
   if not TryParse(AStr, Result) then
-    FillChar(Result.FBytes, 16, 0);
+    raise EParseError.Create('TUuid.Parse: invalid UUID string');
 end;
 
 class function TUuid.Nil_: TUuid;
@@ -263,10 +283,10 @@ end;
 function TUuid.Hash: UInt32;
 var LA, LB, LC, LD: UInt32;
 begin
-  Move(FBytes[0], LA, 4);
-  Move(FBytes[4], LB, 4);
-  Move(FBytes[8], LC, 4);
-  Move(FBytes[12], LD, 4);
+  LA := LoadLe32(FBytes, 0);
+  LB := LoadLe32(FBytes, 4);
+  LC := LoadLe32(FBytes, 8);
+  LD := LoadLe32(FBytes, 12);
   Result := LA xor LB xor LC xor LD;
 end;
 

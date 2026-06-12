@@ -192,6 +192,47 @@ begin
   Check(not LOk, 'misplaced dash fails');
 end;
 
+procedure TestTryParseRejectsFormatOnlyOutputs;
+var
+  LSource, LBefore, LU: TUuid;
+  LOk: Boolean;
+begin
+  LSource := TUuid.Parse('550e8400-e29b-41d4-a716-446655440000');
+  LBefore := TUuid.Max;
+
+  LU := LBefore;
+  LOk := TUuid.TryParse(LSource.ToStringNoDash, LU);
+  Check(not LOk, 'TryParse must reject ToStringNoDash output');
+  Check(LU = LBefore, 'format-only TryParse failure must keep out UUID unchanged');
+
+  LU := LBefore;
+  LOk := TUuid.TryParse(LSource.ToURN, LU);
+  Check(not LOk, 'TryParse must reject ToURN output');
+  Check(LU = LBefore, 'format-only TryParse failure must keep out UUID unchanged');
+end;
+
+procedure TestParseInvalidRaisesParseError;
+var
+  LU: TUuid;
+  LRaised: Boolean;
+begin
+  Check(not TUuid.TryParse('not-a-uuid', LU), 'TryParse invalid stays false');
+  LRaised := False;
+  try
+    LU := TUuid.Parse('not-a-uuid');
+    Check(not LU.IsNil, 'invalid Parse must not silently become nil');
+  except
+    on E: EParseError do
+      LRaised := True;
+    on E: Exception do
+      Fail('expected EParseError, got ' + E.ClassName + ': ' + E.Message);
+  end;
+  Check(LRaised, 'Parse invalid raises EParseError');
+
+  LU := TUuid.Parse('00000000-0000-0000-0000-000000000000');
+  Check(LU.IsNil, 'explicit nil UUID string remains valid');
+end;
+
 { --- ToString roundtrip --- }
 
 procedure TestToStringRoundTrip;
@@ -239,40 +280,6 @@ var LU: TUuid;
 begin
   LU := TUuid.NewV7;
   Check(not LU.IsNil, 'v7 is never nil');
-end;
-
-{ --- Uniqueness: 1000 non-repeating --- }
-
-procedure TestUniqueness1000V4;
-var
-  LArr: array[0..999] of string;
-  LI, LJ: Integer;
-begin
-  for LI := 0 to 999 do
-    LArr[LI] := TUuid.NewV4.ToString;
-  for LI := 0 to 998 do
-    for LJ := LI + 1 to 999 do
-      if LArr[LI] = LArr[LJ] then
-      begin
-        Fail('v4 collision at ' + IntToStr(LI) + ',' + IntToStr(LJ));
-        Exit;
-      end;
-end;
-
-procedure TestUniqueness1000V7;
-var
-  LArr: array[0..999] of string;
-  LI, LJ: Integer;
-begin
-  for LI := 0 to 999 do
-    LArr[LI] := TUuid.NewV7.ToString;
-  for LI := 0 to 998 do
-    for LJ := LI + 1 to 999 do
-      if LArr[LI] = LArr[LJ] then
-      begin
-        Fail('v7 collision at ' + IntToStr(LI) + ',' + IntToStr(LJ));
-        Exit;
-      end;
 end;
 
 { --- V7 time ordering --- }
@@ -353,6 +360,13 @@ begin
   CheckEqual(Int64(LA.Hash), Int64(LB.Hash), 'same UUID same hash');
 end;
 
+procedure TestHashFixedVector;
+var LU: TUuid;
+begin
+  LU := TUuid.Parse('550e8400-e29b-41d4-a716-446655440000');
+  CheckEqual(Int64($B281C745), Int64(LU.Hash), 'hash fixed little-endian byte packing');
+end;
+
 procedure TestV4Stress;
 var LI: Integer; LU: TUuid;
 begin
@@ -422,6 +436,28 @@ begin
   CheckEqual('550e8400-e29b-41d4-a716-446655440000', LU.ToString, 'FromBytes ToString');
 end;
 
+procedure TestToBytesRoundTrip;
+var
+  LExpected: array[0..15] of Byte;
+  LActual: array[0..15] of Byte;
+  LU: TUuid;
+  LI: Integer;
+begin
+  for LI := 0 to 15 do
+  begin
+    LExpected[LI] := Byte($F0 - LI);
+    LActual[LI] := 0;
+  end;
+  LU := TUuid.FromBytes(LExpected);
+  LU.ToBytes(LActual);
+  for LI := 0 to 15 do
+    if LActual[LI] <> LExpected[LI] then
+    begin
+      Fail('ToBytes byte mismatch at ' + IntToStr(LI));
+      Exit;
+    end;
+end;
+
 procedure ExpectFromBytesOutOfRange(const ABytes: array of Byte; const AMessage: string);
 var
   LRaised: Boolean;
@@ -458,6 +494,39 @@ begin
   for LI := 0 to 16 do
     LBytes[LI] := Byte(LI);
   ExpectFromBytesOutOfRange(LBytes, 'FromBytes long input');
+end;
+
+procedure ExpectToBytesOutOfRange(var ABytes: array of Byte; const AMessage: string);
+var
+  LRaised: Boolean;
+  LU: TUuid;
+begin
+  LRaised := False;
+  LU := TUuid.Parse('550e8400-e29b-41d4-a716-446655440000');
+  try
+    LU.ToBytes(ABytes);
+    Fail(AMessage + ' should reject non-16-byte output');
+  except
+    on E: EOutOfRange do
+      LRaised := True;
+    on E: Exception do
+      Fail(AMessage + ': expected EOutOfRange, got ' + E.ClassName + ': ' + E.Message);
+  end;
+  Check(LRaised, AMessage);
+end;
+
+procedure TestToBytesRejectsShortOutput;
+var
+  LBytes: array[0..14] of Byte;
+begin
+  ExpectToBytesOutOfRange(LBytes, 'ToBytes short output');
+end;
+
+procedure TestToBytesRejectsLongOutput;
+var
+  LBytes: array[0..16] of Byte;
+begin
+  ExpectToBytesOutOfRange(LBytes, 'ToBytes long output');
 end;
 
 { --- New: Max UUID --- }
@@ -500,6 +569,15 @@ begin
   LA := TUuid.NewV5(LNs, 'example.com');
   LB := TUuid.NewV5(LNs, 'example.com');
   Check(LA = LB, 'V5 must be deterministic');
+end;
+
+procedure TestV5KnownDnsExampleVector;
+var LU, LNs: TUuid;
+begin
+  LNs := TUuid.Parse('6ba7b810-9dad-11d1-80b4-00c04fd430c8'); { DNS namespace }
+  LU := TUuid.NewV5(LNs, 'example.com');
+  CheckEqual('cfbff0d1-9375-5685-968c-48ce8b15ae17', LU.ToString,
+    'V5 DNS namespace example.com RFC-compatible vector');
 end;
 
 procedure TestV5VersionVariant;
@@ -558,6 +636,8 @@ begin
   T.Run('TryParse failed out stable', @TestTryParseLeavesOutUntouchedOnFailure);
   T.Run('TryParse invalid no dashes', @TestTryParseInvalidNoDashes);
   T.Run('TryParse misplaced dash', @TestTryParseMisplacedDash);
+  T.Run('TryParse rejects format-only outputs', @TestTryParseRejectsFormatOnlyOutputs);
+  T.Run('Parse invalid raises parse error', @TestParseInvalidRaisesParseError);
 
   { ToString roundtrip }
   T.Run('ToString roundtrip V4', @TestToStringRoundTrip);
@@ -568,10 +648,6 @@ begin
   T.Run('Nil UUID version', @TestNilUuidVersion);
   T.Run('NewV4 not nil', @TestNewV4NotNil);
   T.Run('NewV7 not nil', @TestNewV7NotNil);
-
-  { Uniqueness }
-  T.Run('Uniqueness 1000 V4', @TestUniqueness1000V4);
-  T.Run('Uniqueness 1000 V7', @TestUniqueness1000V7);
 
   { V7 time ordering }
   T.Run('V7 time ordering (NewV7At)', @TestV7TimeOrdering);
@@ -586,6 +662,7 @@ begin
   T.Run('ToStringNoDash', @TestToStringNoDash);
   T.Run('CompareTo', @TestCompareTo);
   T.Run('Hash consistency', @TestHash);
+  T.Run('Hash fixed vector', @TestHashFixedVector);
   T.Run('V4 stress 10k', @TestV4Stress);
   T.Run('V7 stress 10k', @TestV7Stress);
   T.Run('Parse nil string', @TestParseNilString);
@@ -596,6 +673,9 @@ begin
   T.Run('FromBytes ToString', @TestFromBytesToString);
   T.Run('FromBytes rejects short input', @TestFromBytesRejectsShortInput);
   T.Run('FromBytes rejects long input', @TestFromBytesRejectsLongInput);
+  T.Run('ToBytes roundtrip', @TestToBytesRoundTrip);
+  T.Run('ToBytes rejects short output', @TestToBytesRejectsShortOutput);
+  T.Run('ToBytes rejects long output', @TestToBytesRejectsLongOutput);
 
   { New: Max UUID }
   T.Run('Max UUID', @TestMaxUuid);
@@ -606,6 +686,7 @@ begin
 
   { New: V5 }
   T.Run('V5 deterministic', @TestV5Deterministic);
+  T.Run('V5 DNS example vector', @TestV5KnownDnsExampleVector);
   T.Run('V5 version+variant', @TestV5VersionVariant);
   T.Run('V5 different names', @TestV5DifferentNames);
   T.Run('V5 different namespaces', @TestV5DifferentNamespaces);

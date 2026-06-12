@@ -4,7 +4,8 @@ unit nextpas.core.hash.base;
 
 { nextpas.core.hash.base — 哈希模块基础类型定义
 
-  纯数据类型，无依赖。固定大小 digest 使用静态数组（零堆分配）。
+  固定大小 digest 使用静态数组（零堆分配）。公开 size helper
+  只依赖本单元类型，implementation 负责拒绝非法算法值。
 }
 
 interface
@@ -42,29 +43,32 @@ function GetBlockSize(AAlgo: THashAlgorithm): SizeUInt;
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 function GetDigestSize(AAlgo: THashAlgorithm): SizeUInt;
 begin
-  case AAlgo of
-    haMD5:    Result := MD5_DIGEST_SIZE;
-    haSHA1:   Result := SHA1_DIGEST_SIZE;
-    haSHA256: Result := SHA256_DIGEST_SIZE;
-    haSHA384: Result := SHA384_DIGEST_SIZE;
-    haSHA512: Result := SHA512_DIGEST_SIZE;
+  case Ord(AAlgo) of
+    Ord(haMD5):    Result := MD5_DIGEST_SIZE;
+    Ord(haSHA1):   Result := SHA1_DIGEST_SIZE;
+    Ord(haSHA256): Result := SHA256_DIGEST_SIZE;
+    Ord(haSHA384): Result := SHA384_DIGEST_SIZE;
+    Ord(haSHA512): Result := SHA512_DIGEST_SIZE;
   else
-    Result := 0;
+    raise EArgumentError.Create('GetDigestSize: invalid hash algorithm');
   end;
 end;
 
 function GetBlockSize(AAlgo: THashAlgorithm): SizeUInt;
 begin
-  case AAlgo of
-    haMD5:    Result := MD5_BLOCK_SIZE;
-    haSHA1:   Result := SHA1_BLOCK_SIZE;
-    haSHA256: Result := SHA256_BLOCK_SIZE;
-    haSHA384: Result := SHA384_BLOCK_SIZE;
-    haSHA512: Result := SHA512_BLOCK_SIZE;
+  case Ord(AAlgo) of
+    Ord(haMD5):    Result := MD5_BLOCK_SIZE;
+    Ord(haSHA1):   Result := SHA1_BLOCK_SIZE;
+    Ord(haSHA256): Result := SHA256_BLOCK_SIZE;
+    Ord(haSHA384): Result := SHA384_BLOCK_SIZE;
+    Ord(haSHA512): Result := SHA512_BLOCK_SIZE;
   else
-    Result := 0;
+    raise EArgumentError.Create('GetBlockSize: invalid hash algorithm');
   end;
 end;
 

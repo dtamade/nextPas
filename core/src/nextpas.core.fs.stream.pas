@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.io.base,
   nextpas.core.io.intf,
+  nextpas.core.platform.files.base,
   nextpas.core.fs.base,
   nextpas.core.fs.intf;
 
@@ -15,13 +16,15 @@ function FsCreate(const APath: string; const APerm: TFilePermission = PermDefaul
 function FsOpenFile(const APath: string; const AMode: TFileMode;
   const APerm: TFilePermission): IFile;
 function FsFromHandle(const AHandle: Int32; const AName: string): IFile;
+{ Takes ownership of AHandle; the returned IFile closes it. }
+function FsFromPlatformHandle(const AHandle: TPlatformFileHandle;
+  const AName: string): IFile;
 
 implementation
 
 uses
   nextpas.core.errors,
   nextpas.core.fs.errors,
-  nextpas.core.platform.files.base,
   nextpas.core.platform.files;
 
 type
@@ -137,6 +140,12 @@ begin
   LH.Value := AHandle;
 {$ENDIF}
   Result := TFile.Create(LH, AName);
+end;
+
+function FsFromPlatformHandle(const AHandle: TPlatformFileHandle;
+  const AName: string): IFile;
+begin
+  Result := TFile.Create(AHandle, AName);
 end;
 
 { TFile }

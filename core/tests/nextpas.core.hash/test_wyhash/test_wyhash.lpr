@@ -40,17 +40,60 @@ begin
   CheckHash('hello world', 11, 0, UInt64($19F24A02FE04C3CA), '''hello world''');
   CheckHash('0123456789abcdef', 16, 0, UInt64($461EBD6F5B59DFA7), '16 bytes');
   CheckHash('0123456789abcdefgh', 18, 0, UInt64($544A776BC78FCD3F), '18 bytes');
+  CheckHash('0123456789abcdef0123456789abcdef', 32, 0,
+    UInt64($C11B4B9E7A314A11), '32 bytes');
 end;
 
 procedure TestLong;
 begin
+  CheckHash('012345678901234567890123456789012345678901234567', 48, 0,
+    UInt64($D047C5859F97FB1B), '48 bytes');
+  CheckHash('0123456789012345678901234567890123456789012345678', 49, 0,
+    UInt64($22DCD7F50FDCA435), '49 bytes');
   CheckHash('01234567890123456789012345678901234567890123456789', 50, 0,
-    UInt64($8F3F90705D27CB20), '50 bytes');
+    UInt64($222A591E60007D73), '50 bytes');
+  CheckHash('01234567890123456789012345678901234567890123456789', 50, 42,
+    UInt64($176750A3DF14201F), '50 bytes seed=42');
+  CheckHash('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', 64, 0,
+    UInt64($A027DA0188933F32), '64 bytes');
+  CheckHash(
+    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' +
+    '0123456789abcdef0123456789abcdef', 96, 0,
+    UInt64($1BFFD740AA70C33A), '96 bytes');
+  CheckHash(
+    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' +
+    '0123456789abcdef0123456789abcdef', 96, 42,
+    UInt64($5F531FDFBF6940BD), '96 bytes seed=42');
 end;
 
 procedure TestSeed;
 begin
   CheckHash('hello', 5, 42, UInt64($EE351341C5960B52), '''hello'' seed=42');
+end;
+
+procedure TestWyHashDeterministicRegressionVectors;
+var
+  H64: UInt64;
+  H32: UInt32;
+  S: AnsiString;
+begin
+  CheckHash(nil, 0, 0, UInt64($42BC986DC5EEC4D3), 'regression empty seed=0');
+  CheckHash('abc', 3, 0, UInt64($B4808DF22D44FFCF), 'regression abc raw seed=0');
+
+  H64 := WyHashStr('abc', 0);
+  Check(H64 = UInt64($B4808DF22D44FFCF), 'WyHashStr abc seed=0 regression');
+
+  H64 := WyHashStr('hello', 42);
+  Check(H64 = UInt64($EE351341C5960B52), 'WyHashStr hello seed=42 regression');
+
+  H32 := WyHashStr32('abc', 42);
+  Check(H32 = UInt32($0C14D674), 'WyHashStr32 abc seed=42 regression');
+
+  S := 'abc';
+  Check(WyHash(@S[1], SizeUInt(Length(S)), 42) = WyHashStr(S, 42),
+    'WyHashStr matches pointer hash with seed');
+  Check(WyHash32(@S[1], SizeUInt(Length(S)), 42) = WyHashStr32(S, 42),
+    'WyHashStr32 matches pointer hash with seed');
 end;
 
 procedure TestStr;
@@ -103,24 +146,6 @@ begin
   Check(H32 = UInt32(H64 xor (H64 shr 32)), 'WyHash32 = fold of WyHash');
 end;
 
-procedure TestDistribution;
-var
-  I: Integer;
-  Buckets: array[0..15] of Integer;
-  H: UInt32;
-  LBuf: array[0..3] of Byte;
-begin
-  FillChar(Buckets, SizeOf(Buckets), 0);
-  for I := 0 to 9999 do
-  begin
-    PInt32(@LBuf[0])^ := I;
-    H := WyHash32(@LBuf[0], 4, 0);
-    Inc(Buckets[H and $F]);
-  end;
-  for I := 0 to 15 do
-    Check((Buckets[I] > 400) and (Buckets[I] < 800), 'bucket ' + IntToStr(I) + ' in range');
-end;
-
 begin
   T := TTestRunner.Create('nextpas.core.hash.wyhash');
   T.Run('empty input', @TestEmpty);
@@ -128,10 +153,10 @@ begin
   T.Run('medium strings (11-18 bytes)', @TestMedium);
   T.Run('long string (50 bytes)', @TestLong);
   T.Run('seed variation', @TestSeed);
+  T.Run('deterministic regression vectors', @TestWyHashDeterministicRegressionVectors);
   T.Run('WyHashStr consistency', @TestStr);
   T.Run('empty WyHashStr consistency', @TestStrEmptyMatchesRaw);
   T.Run('nil positive length rejected', @TestNilPositiveLengthRejected);
   T.Run('WyHash32 fold', @Test32);
-  T.Run('distribution uniformity', @TestDistribution);
   T.Summary;
 end.

@@ -4,9 +4,11 @@ program test_facade;
 
 uses
   SysUtils,
-  nextpas.core.hash.base,
-  nextpas.core.hash.intf,
+  nextpas.core.errors,
   nextpas.core.hash;
+
+type
+  TTestProc = procedure;
 
 var
   GPass, GFail: Integer;
@@ -15,6 +17,51 @@ procedure Check(const AName: string; ACondition: Boolean);
 begin
   if ACondition then begin WriteLn('  [PASS] ', AName); Inc(GPass); end
   else begin WriteLn('  [FAIL] ', AName); Inc(GFail); end;
+end;
+
+procedure CheckRaisesArgumentError(const AName: string; const AProc: TTestProc);
+begin
+  try
+    AProc;
+    Check(AName, False);
+  except
+    on E: EArgumentError do
+      Check(AName, True);
+    on E: Exception do
+    begin
+      WriteLn('  [FAIL] ', AName, ' - expected EArgumentError, got ', E.ClassName, ': ', E.Message);
+      Inc(GFail);
+    end;
+  end;
+end;
+
+function InvalidHashAlgorithm: THashAlgorithm;
+var
+  LValue: Integer;
+begin
+  LValue := Ord(High(THashAlgorithm));
+  Inc(LValue);
+  Result := THashAlgorithm(LValue);
+end;
+
+procedure CallNewHasherWithInvalidAlgorithm;
+begin
+  NewHasher(InvalidHashAlgorithm);
+end;
+
+procedure CallGetDigestSizeWithInvalidAlgorithm;
+begin
+  GetDigestSize(InvalidHashAlgorithm);
+end;
+
+procedure CallGetBlockSizeWithInvalidAlgorithm;
+begin
+  GetBlockSize(InvalidHashAlgorithm);
+end;
+
+procedure CallWyHashNilPositiveLength;
+begin
+  WyHash(nil, 1, 0);
 end;
 
 function HexStr(const ABuf; ALen: Integer): string;
@@ -59,6 +106,18 @@ begin
   H := NewHasher(haSHA512);
   Check('SHA512 DigestSize=64', H.DigestSize = 64);
   Check('SHA512 BlockSize=128', H.BlockSize = 128);
+end;
+
+procedure TestInvalidHashAlgorithm;
+begin
+  WriteLn('--- Invalid hash algorithm ---');
+
+  CheckRaisesArgumentError('NewHasher rejects invalid algorithm',
+    @CallNewHasherWithInvalidAlgorithm);
+  CheckRaisesArgumentError('GetDigestSize rejects invalid algorithm',
+    @CallGetDigestSizeWithInvalidAlgorithm);
+  CheckRaisesArgumentError('GetBlockSize rejects invalid algorithm',
+    @CallGetBlockSizeWithInvalidAlgorithm);
 end;
 
 procedure TestOneShotFunctions;
@@ -114,6 +173,80 @@ begin
   Check('DigestToHex empty', DigestToHex(DATA[0], 0) = '');
 end;
 
+procedure TestWyHashFacade;
+var
+  H64: UInt64;
+  H32: UInt32;
+begin
+  WriteLn('--- WyHash facade ---');
+  H64 := WyHash(PAnsiChar('abc'), 3, 0);
+  Check('WyHash(abc)', H64 = UInt64($B4808DF22D44FFCF));
+  H64 := WyHashStr('abc', 0);
+  Check('WyHashStr(abc)', H64 = UInt64($B4808DF22D44FFCF));
+  H32 := WyHash32(PAnsiChar('test'), 4, 0);
+  H64 := WyHash(PAnsiChar('test'), 4, 0);
+  Check('WyHash32 fold', H32 = UInt32(H64 xor (H64 shr 32)));
+  CheckRaisesArgumentError('WyHash rejects nil positive length',
+    @CallWyHashNilPositiveLength);
+end;
+
+function NewHasherForContract(AAlgo: THashAlgorithm): IHasher;
+const
+  DATA: array[0..2] of Byte = (Ord('a'), Ord('b'), Ord('c'));
+begin
+  Result := NewHasher(AAlgo);
+  Result.Write(DATA[0], Length(DATA));
+end;
+
+procedure CheckSumSizeContract(AAlgo: THashAlgorithm; const AName: string);
+const
+  SENTINEL = $A5;
+var
+  H: IHasher;
+  Full: TBytes;
+  Buf: array[0..127] of Byte;
+  I: Integer;
+  Ok: Boolean;
+begin
+  H := NewHasherForContract(AAlgo);
+  Full := H.SumBytes;
+
+  FillChar(Buf[0], SizeOf(Buf), SENTINEL);
+  H.Sum(Buf[0], 0);
+  Ok := True;
+  for I := 0 to High(Buf) do
+    Ok := Ok and (Buf[I] = SENTINEL);
+  Check(AName + ' Sum size 0 leaves destination untouched', Ok);
+
+  FillChar(Buf[0], SizeOf(Buf), SENTINEL);
+  H.Sum(Buf[0], 3);
+  Ok := True;
+  for I := 0 to 2 do
+    Ok := Ok and (Buf[I] = Full[I]);
+  for I := 3 to High(Buf) do
+    Ok := Ok and (Buf[I] = SENTINEL);
+  Check(AName + ' Sum short buffer writes digest prefix only', Ok);
+
+  FillChar(Buf[0], SizeOf(Buf), SENTINEL);
+  H.Sum(Buf[0], H.DigestSize + 5);
+  Ok := True;
+  for I := 0 to H.DigestSize - 1 do
+    Ok := Ok and (Buf[I] = Full[I]);
+  for I := H.DigestSize to High(Buf) do
+    Ok := Ok and (Buf[I] = SENTINEL);
+  Check(AName + ' Sum oversized buffer stops at digest size', Ok);
+end;
+
+procedure TestSumSizeContract;
+begin
+  WriteLn('--- Sum output-size contract ---');
+  CheckSumSizeContract(haMD5, 'MD5');
+  CheckSumSizeContract(haSHA1, 'SHA1');
+  CheckSumSizeContract(haSHA256, 'SHA256');
+  CheckSumSizeContract(haSHA384, 'SHA384');
+  CheckSumSizeContract(haSHA512, 'SHA512');
+end;
+
 procedure TestConsistency;
 var
   H: IHasher;
@@ -145,8 +278,11 @@ begin
   WriteLn;
 
   TestNewHasherFactory;
+  TestInvalidHashAlgorithm;
   TestOneShotFunctions;
   TestDigestToHex;
+  TestWyHashFacade;
+  TestSumSizeContract;
   TestConsistency;
 
   WriteLn;

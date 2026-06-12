@@ -64,7 +64,7 @@ end;
 function WyHash(const AData: Pointer; ALen: SizeUInt; ASeed: UInt64): UInt64;
 var
   p: PByte;
-  a, b, seed: UInt64;
+  a, b, seed, see1, see2: UInt64;
   i: SizeUInt;
 begin
   {$PUSH}{$Q-}{$R-}
@@ -92,10 +92,10 @@ begin
       b := 0;
     end;
   end
-  else if ALen <= 48 then
+  else if ALen < 48 then
   begin
     i := 0;
-    while i + 16 <= ALen do
+    while i + 16 < ALen do
     begin
       seed := WyMix(WyR8(p + i) xor WY_P1, WyR8(p + i + 8) xor seed);
       Inc(i, 16);
@@ -105,15 +105,18 @@ begin
   end
   else
   begin
+    see1 := seed;
+    see2 := seed;
     i := 0;
     while i + 48 <= ALen do
     begin
       seed := WyMix(WyR8(p + i) xor WY_P1, WyR8(p + i + 8) xor seed);
-      seed := WyMix(WyR8(p + i + 16) xor WY_P2, WyR8(p + i + 24) xor seed);
-      seed := WyMix(WyR8(p + i + 32) xor WY_P3, WyR8(p + i + 40) xor seed);
+      see1 := WyMix(WyR8(p + i + 16) xor WY_P2, WyR8(p + i + 24) xor see1);
+      see2 := WyMix(WyR8(p + i + 32) xor WY_P3, WyR8(p + i + 40) xor see2);
       Inc(i, 48);
     end;
-    while i + 16 <= ALen do
+    seed := seed xor see1 xor see2;
+    while i + 16 < ALen do
     begin
       seed := WyMix(WyR8(p + i) xor WY_P1, WyR8(p + i + 8) xor seed);
       Inc(i, 16);

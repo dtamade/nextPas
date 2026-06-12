@@ -95,6 +95,8 @@ uses
   nextpas.core.platform.process.base,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.posix.base,
+  nextpas.core.os.env,
+  nextpas.core.text.compare,
   nextpas.core.process.pathresolve;
 
 { TCommand }
@@ -113,15 +115,6 @@ procedure ValidateNoNul(const AValue, AField: string);
 begin
   if ContainsNul(AValue) then
     raise EProcessError.Create(AField + ' must not contain NUL');
-end;
-
-procedure CloseFd(var AFd: PtrInt);
-begin
-  if AFd >= 0 then
-  begin
-    nextpas.core.platform.posix.ffi.close(AFd);
-    AFd := -1;
-  end;
 end;
 
 procedure ValidatePath(const APath: string);
@@ -158,14 +151,20 @@ end;
 procedure EnvPut(var AItems: TStringArray; const AKey, AValue: string);
 var
   I, P: Integer;
+  LKey: string;
 begin
   for I := 0 to High(AItems) do
   begin
     P := Pos('=', AItems[I]);
-    if (P > 0) and (Copy(AItems[I], 1, P - 1) = AKey) then
+    if P > 0 then
     begin
-      AItems[I] := AKey + '=' + AValue;
-      Exit;
+      LKey := Copy(AItems[I], 1, P - 1);
+      if (EnvironmentVariableNamesCaseSensitive and (LKey = AKey)) or
+        ((not EnvironmentVariableNamesCaseSensitive) and TextEqualI(LKey, AKey)) then
+      begin
+        AItems[I] := AKey + '=' + AValue;
+        Exit;
+      end;
     end;
   end;
   SetLength(AItems, Length(AItems) + 1);
@@ -175,8 +174,7 @@ end;
 function BuildFinalEnv(const AMode: TProcessEnvMode;
   const AExplicit: TStringArray): TStringArray;
 var
-  I, P, LCount: Integer;
-  LCur: PPAnsiChar;
+  I, P: Integer;
 begin
   case AMode of
     pemInherit:
@@ -189,16 +187,7 @@ begin
     end;
     pemOverlay:
     begin
-      { Snapshot parent environment }
-      LCur := environ;
-      LCount := 0;
-      if LCur <> nil then
-        while LCur[LCount] <> nil do
-          Inc(LCount);
-      SetLength(Result, LCount);
-      for I := 0 to LCount - 1 do
-        Result[I] := string(LCur[I]);
-      { Apply overlays }
+      Result := EnvironmentVariables;
       for I := 0 to High(AExplicit) do
       begin
         P := Pos('=', AExplicit[I]);
@@ -207,6 +196,15 @@ begin
             Copy(AExplicit[I], P + 1, Length(AExplicit[I]) - P));
       end;
     end;
+  end;
+end;
+
+procedure CloseFd(var AFd: PtrInt);
+begin
+  if AFd >= 0 then
+  begin
+    nextpas.core.platform.posix.ffi.close(AFd);
+    AFd := -1;
   end;
 end;
 
@@ -323,7 +321,7 @@ begin
   if (FEnvMode <> pemInherit) and (not CommandPathHasDirectoryPart(FPath)) then
   begin
     LFinalEnv := BuildFinalEnv(FEnvMode, FEnvPairs);
-    LResolvedPath := ResolveExecutablePath(FPath, LFinalEnv);
+    LResolvedPath := ResolveExecutablePath(FPath, LFinalEnv, FWorkDir);
   end
   else
     LResolvedPath := FPath;
@@ -416,10 +414,10 @@ begin
 
     if LErr <> 0 then
       case LFailStage of
-        pssChdir: raise EProcessError.Create('Failed to chdir', LErr);
-        pssExec: raise EProcessError.Create('Failed to exec', LErr);
+        pssChdir: raise EProcessError.Create('Failed to chdir: ' + FWorkDir, LErr);
+        pssExec: raise EProcessError.Create('Failed to exec: ' + FPath, LErr);
       else
-        raise EProcessError.Create('Failed to spawn', LErr);
+        raise EProcessError.Create('Failed to spawn: ' + FPath, LErr);
       end;
 
   except

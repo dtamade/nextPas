@@ -33,6 +33,36 @@ type
   IDirIterator = nextpas.core.fs.intf.IDirIterator;
   TWalkFunc = nextpas.core.fs.dir.TWalkFunc;
 
+const
+  fmRead = nextpas.core.fs.base.fmRead;
+  fmWrite = nextpas.core.fs.base.fmWrite;
+  fmAppend = nextpas.core.fs.base.fmAppend;
+  fmCreate = nextpas.core.fs.base.fmCreate;
+  fmTruncate = nextpas.core.fs.base.fmTruncate;
+  fmExclusive = nextpas.core.fs.base.fmExclusive;
+  fmSync = nextpas.core.fs.base.fmSync;
+
+  ftRegular = nextpas.core.fs.base.ftRegular;
+  ftDirectory = nextpas.core.fs.base.ftDirectory;
+  ftSymlink = nextpas.core.fs.base.ftSymlink;
+  ftCharDevice = nextpas.core.fs.base.ftCharDevice;
+  ftBlockDevice = nextpas.core.fs.base.ftBlockDevice;
+  ftFifo = nextpas.core.fs.base.ftFifo;
+  ftSocket = nextpas.core.fs.base.ftSocket;
+  ftUnknown = nextpas.core.fs.base.ftUnknown;
+
+  PermOwnerRead = nextpas.core.fs.base.PermOwnerRead;
+  PermOwnerWrite = nextpas.core.fs.base.PermOwnerWrite;
+  PermOwnerExec = nextpas.core.fs.base.PermOwnerExec;
+  PermGroupRead = nextpas.core.fs.base.PermGroupRead;
+  PermGroupWrite = nextpas.core.fs.base.PermGroupWrite;
+  PermGroupExec = nextpas.core.fs.base.PermGroupExec;
+  PermOtherRead = nextpas.core.fs.base.PermOtherRead;
+  PermOtherWrite = nextpas.core.fs.base.PermOtherWrite;
+  PermOtherExec = nextpas.core.fs.base.PermOtherExec;
+  PermDefault = nextpas.core.fs.base.PermDefault;
+  PermDirDefault = nextpas.core.fs.base.PermDirDefault;
+
 { File operations }
 function Open(const APath: string; const AMode: TFileMode): IFile; inline;
 function Create(const APath: string;
@@ -84,14 +114,17 @@ procedure Walk(const ARoot: string; const AFunc: TWalkFunc); inline;
 function PathJoin(const AParts: array of string): string;
 function PathDir(const APath: string): string; inline;
 function PathBase(const APath: string): string; inline;
+procedure PathSplit(const APath: string; out ADir, ABase: string); inline;
 function PathExt(const APath: string): string; inline;
 function PathClean(const APath: string): string; inline;
 function PathAbs(const APath: string): string; inline;
 function PathIsAbs(const APath: string): Boolean; inline;
+function PathRelative(const ABase, ATarget: string): string; inline;
 function PathEnsureSep(const APath: string): string; inline;
 function PathTrimSep(const APath: string): string; inline;
 function PathChangeExt(const APath, ANewExt: string): string; inline;
 function PathWithoutExt(const APath: string): string; inline;
+function SameFileName(const A, B: string): Boolean; inline;
 function GetCwd: string; inline;
 procedure SetCwd(const APath: string); inline;
 function GetEnv(const AName: string): string; inline;
@@ -331,6 +364,11 @@ begin
   Result := nextpas.core.fs.path.FsPathBase(APath);
 end;
 
+procedure PathSplit(const APath: string; out ADir, ABase: string);
+begin
+  nextpas.core.fs.path.FsPathSplit(APath, ADir, ABase);
+end;
+
 function PathExt(const APath: string): string;
 begin
   Result := nextpas.core.fs.path.FsPathExt(APath);
@@ -351,6 +389,11 @@ begin
   Result := nextpas.core.fs.path.FsPathIsAbs(APath);
 end;
 
+function PathRelative(const ABase, ATarget: string): string;
+begin
+  Result := nextpas.core.fs.path.FsPathRelative(ABase, ATarget);
+end;
+
 function PathEnsureSep(const APath: string): string;
 begin
   Result := nextpas.core.fs.path.FsPathEnsureSep(APath);
@@ -369,6 +412,11 @@ end;
 function PathWithoutExt(const APath: string): string;
 begin
   Result := nextpas.core.fs.path.FsPathWithoutExt(APath);
+end;
+
+function SameFileName(const A, B: string): Boolean;
+begin
+  Result := nextpas.core.fs.path.FsSameFileName(A, B);
 end;
 
 function GetCwd: string;

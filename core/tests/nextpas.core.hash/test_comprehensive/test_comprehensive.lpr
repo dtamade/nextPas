@@ -2,7 +2,7 @@ program test_comprehensive;
 {$mode objfpc}{$H+}
 uses SysUtils, nextpas.core.hash.base, nextpas.core.hash.intf,
   nextpas.core.hash.sha256, nextpas.core.hash.sha512,
-  nextpas.core.crypto.hmac, nextpas.core.crypto.hkdf, nextpas.core.hash;
+  nextpas.core.hash;
 var GPass: Integer = 0;
 procedure Check(const AName: string; ACond: Boolean);
 begin
@@ -14,12 +14,6 @@ var I: Integer; P: PByte;
 begin Result := ''; P := @ABuf;
   for I := 0 to ALen-1 do Result := Result + LowerCase(IntToHex(P[I], 2));
 end;
-function HexToBytes(const AHex: string): TBytes;
-var I: Integer;
-begin SetLength(Result, Length(AHex) div 2);
-  for I := 0 to High(Result) do Result[I] := StrToInt('$' + Copy(AHex, I*2+1, 2));
-end;
-
 procedure TestSHA256MillionA;
 var LH: IHasher; LD: TSHA256Digest; I: Integer;
   LBlock: array[0..999] of Byte;
@@ -77,42 +71,6 @@ begin
   Check('Block boundary: 128 bytes split at 100', CompareMem(@LD1[0], @LD2[0], 32));
 end;
 
-procedure TestHMACLongKey;
-var LKey, LData: TBytes; LD: TSHA256Digest;
-begin
-  // RFC 4231 Test Case 3: key longer than block size
-  LKey := HexToBytes('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
-  LData := HexToBytes('54657374205573696e67204c6172676572205468616e20426c6f636b2d53697a65204b6579202d2048617368204b6579204669727374');
-  LD := HmacSHA256(LKey, LData);
-  Check('HMAC-SHA256 long key (RFC4231 TC6)',
-    ToHex(LD, 32) = '60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54');
-end;
-
-procedure TestHMACsha384;
-var LKey, LData: TBytes; LD: TSHA384Digest;
-begin
-  LKey := HexToBytes('0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b');
-  LData := TEncoding.UTF8.GetBytes(UnicodeString('Hi There'));
-  LD := HmacSHA384(LKey, LData);
-  Check('HMAC-SHA384 RFC4231 TC1',
-    Copy(ToHex(LD, 48), 1, 16) = 'afd03944d8489562');
-end;
-
-procedure TestHKDFTC2;
-var LIKM, LSalt, LInfo, LPRK, LOKM: TBytes;
-begin
-  // RFC 5869 Test Case 2 (long inputs)
-  LIKM := HexToBytes('000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f');
-  LSalt := HexToBytes('606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeaf');
-  LInfo := HexToBytes('b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff');
-  LPRK := HKDF_ExtractBytes(haSHA256, LSalt, LIKM);
-  Check('HKDF TC2 Extract',
-    ToHex(LPRK[0], Length(LPRK)) = '06a6b88c5853361a06104c9ceb35b45cef760014904671014a193f40c15fc244');
-  LOKM := HKDF_ExpandBytes(haSHA256, LPRK, LInfo, 82);
-  Check('HKDF TC2 Expand (82 bytes)',
-    Copy(ToHex(LOKM[0], Length(LOKM)), 1, 32) = 'b11e398dc80327a1c8e7f78c596a4934');
-end;
-
 procedure TestDigestToHex;
 var LD: TSHA256Digest;
 begin
@@ -122,14 +80,11 @@ begin
 end;
 
 begin
-  WriteLn('=== Comprehensive hash/crypto tests ===');
+  WriteLn('=== Comprehensive hash tests ===');
   TestSHA256MillionA;
   TestSHA512Full;
   TestSHA384Full;
   TestBlockBoundary;
-  TestHMACLongKey;
-  TestHMACsha384;
-  TestHKDFTC2;
   TestDigestToHex;
   WriteLn; WriteLn('Results: ', GPass, ' passed');
 end.

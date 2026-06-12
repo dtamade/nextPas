@@ -40,12 +40,12 @@ function platform_random_bytes(ABuf: Pointer; ALen: PtrUInt): Int32;
 var
   LI: PtrUInt;
 begin
-  Inc(GCallCount);
-  if GFail then
-    Exit(TEST_RANDOM_FAILURE);
   if ALen = 0 then
     Exit(0);
   if ABuf = nil then
+    Exit(-1);
+  Inc(GCallCount);
+  if GFail then
     Exit(TEST_RANDOM_FAILURE);
   for LI := 0 to ALen - 1 do
   begin

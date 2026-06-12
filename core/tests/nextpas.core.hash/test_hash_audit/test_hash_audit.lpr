@@ -4,226 +4,363 @@ program test_hash_audit;
 
 uses
   SysUtils,
+  nextpas.core.errors,
   nextpas.core.testing,
-  nextpas.core.crypto.hash;
+  nextpas.core.hash.base,
+  nextpas.core.hash,
+  nextpas.core.hash.wyhash;
+
+type
+  TArgErrorProc = procedure;
 
 var
   T: TTestRunner;
+  GNilByte: PByte = nil;
 
-{ === Padding Boundary Tests (SHA-256) === }
-
-procedure TestSHA256_55Bytes;
-var LS: TSHA256State; LData: string;
+procedure CheckRaisesArgumentError(AProc: TArgErrorProc; const AMessage: string);
 begin
-  // 55 bytes: padding fits in same block (55 + 1 + 8 = 64)
-  SetLength(LData, 55);
-  FillChar(LData[1], 55, 'a');
-  Check(Length(SHA256StrHex(LData)) = 64, 'sha256 55 bytes produces hash');
+  try
+    AProc;
+  except
+    on E: EArgumentError do
+      Exit;
+    on E: Exception do
+      Fail(AMessage + ': expected EArgumentError, got ' + E.ClassName);
+  end;
+
+  Fail(AMessage + ': expected EArgumentError');
 end;
 
-procedure TestSHA256_56Bytes;
-var LData: string;
+procedure CheckRaisesArgumentErrorContaining(AProc: TArgErrorProc;
+  const AExpectedText, AMessage: string);
 begin
-  // 56 bytes: padding needs extra block (56 + 1 + 8 = 65 > 64)
-  SetLength(LData, 56);
-  FillChar(LData[1], 56, 'b');
-  Check(Length(SHA256StrHex(LData)) = 64, 'sha256 56 bytes produces hash');
+  try
+    AProc;
+  except
+    on E: EArgumentError do
+    begin
+      Check(Pos(AExpectedText, E.Message) > 0,
+        AMessage + ': expected message containing "' + AExpectedText +
+        '", got "' + E.Message + '"');
+      Exit;
+    end;
+    on E: Exception do
+      Fail(AMessage + ': expected EArgumentError, got ' + E.ClassName);
+  end;
+
+  Fail(AMessage + ': expected EArgumentError');
 end;
 
-procedure TestSHA256_64Bytes;
-var LData: string;
+function InvalidHashAlgorithm: THashAlgorithm;
+var
+  LValue: Integer;
 begin
-  // 64 bytes: full block, padding is entire new block
-  SetLength(LData, 64);
-  FillChar(LData[1], 64, 'c');
-  Check(Length(SHA256StrHex(LData)) = 64, 'sha256 64 bytes produces hash');
+  LValue := Ord(High(THashAlgorithm));
+  Inc(LValue);
+  Result := THashAlgorithm(LValue);
 end;
 
-procedure TestSHA256_SingleByte;
+function HexStrOf(const ABuf; ASize: SizeUInt): string;
 begin
-  // Known vector: SHA256("a") = ca978112...
-  Check(SHA256StrHex('a') =
+  Result := DigestToHex(ABuf, ASize);
+end;
+
+function SHA256HexOfString(const AText: AnsiString): string;
+var
+  LDigest: TSHA256Digest;
+begin
+  if Length(AText) = 0 then
+    LDigest := SHA256Of(GNilByte^, 0)
+  else
+    LDigest := SHA256Of(AText[1], SizeUInt(Length(AText)));
+  Result := HexStrOf(LDigest[0], SizeOf(LDigest));
+end;
+
+function MD5HexOfString(const AText: AnsiString): string;
+var
+  LDigest: TMD5Digest;
+begin
+  if Length(AText) = 0 then
+    LDigest := MD5Of(GNilByte^, 0)
+  else
+    LDigest := MD5Of(AText[1], SizeUInt(Length(AText)));
+  Result := HexStrOf(LDigest[0], SizeOf(LDigest));
+end;
+
+function StreamingHashHex(AAlgo: THashAlgorithm; const AData: AnsiString): string;
+var
+  LHasher: IHasher;
+  LDigest: TBytes;
+  LSplit: SizeUInt;
+begin
+  LHasher := NewHasher(AAlgo);
+  LSplit := SizeUInt(Length(AData) div 2);
+  if LSplit > 0 then
+    LHasher.Write(AData[1], LSplit);
+  if SizeUInt(Length(AData)) > LSplit then
+    LHasher.Write(AData[LSplit + 1], SizeUInt(Length(AData)) - LSplit);
+  LDigest := LHasher.SumBytes;
+  if Length(LDigest) = 0 then
+    Exit('');
+  Result := DigestToHex(LDigest[0], SizeUInt(Length(LDigest)));
+end;
+
+procedure TestKnownVectors;
+begin
+  CheckEqual(
+    'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    SHA256HexOfString(''), 'SHA256 empty vector');
+  CheckEqual(
     'ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb',
-    'sha256 single byte a');
-end;
-
-procedure TestSHA256_AllZeros;
-var LData: TBytes;
-begin
-  SetLength(LData, 32);
-  FillChar(LData[0], 32, 0);
-  Check(Length(SHA256Hex(@LData[0], 32)) = 64, 'sha256 all zeros');
-end;
-
-procedure TestSHA256_AllFF;
-var LData: TBytes;
-begin
-  SetLength(LData, 64);
-  FillChar(LData[0], 64, $FF);
-  Check(Length(SHA256Hex(@LData[0], 64)) = 64, 'sha256 all FF');
-end;
-
-{ === MD5 Boundary Tests === }
-
-procedure TestMD5_55Bytes;
-var LData: string;
-begin
-  SetLength(LData, 55);
-  FillChar(LData[1], 55, 'x');
-  Check(Length(MD5StrHex(LData)) = 32, 'md5 55 bytes');
-end;
-
-procedure TestMD5_56Bytes;
-var LData: string;
-begin
-  SetLength(LData, 56);
-  FillChar(LData[1], 56, 'y');
-  Check(Length(MD5StrHex(LData)) = 32, 'md5 56 bytes');
-end;
-
-procedure TestMD5_64Bytes;
-var LData: string;
-begin
-  SetLength(LData, 64);
-  FillChar(LData[1], 64, 'z');
-  Check(Length(MD5StrHex(LData)) = 32, 'md5 64 bytes');
-end;
-
-procedure TestMD5Streaming;
-var LS: TMD5State; LI: Int32;
-begin
-  LS.Init;
-  for LI := 1 to 100 do
-    LS.UpdateStr('a');
-  // MD5 of 100 'a's
-  Check(Length(DigestToHex(LS.Finalize, 16)) = 32, 'md5 streaming 100a');
-end;
-
-{ === CRC32 Tests === }
-
-procedure TestCRC32_LargeData;
-var LData: TBytes; LI: Int32; LResult: UInt32;
-begin
-  SetLength(LData, 65536);
-  for LI := 0 to 65535 do LData[LI] := Byte(LI mod 256);
-  LResult := CRC32(@LData[0], 65536);
-  Check(LResult <> 0, 'crc32 64KB non-zero');
-  // Verify deterministic
-  Check(CRC32(@LData[0], 65536) = LResult, 'crc32 deterministic');
-end;
-
-procedure TestCRC32_SingleByte;
-begin
-  Check(CRC32Str('A') <> 0, 'crc32 single byte');
-  Check(CRC32Str('A') <> CRC32Str('B'), 'crc32 different for different input');
-end;
-
-{ === Finalize Misuse Detection === }
-
-procedure TestSHA256_DoubleFinalize;
-var LS: TSHA256State; LD1, LD2: TSHA256Digest;
-begin
-  LS.Init;
-  LS.UpdateStr('test');
-  LD1 := LS.Finalize;
-  // Second finalize on consumed state — should produce different (wrong) hash
-  LD2 := LS.Finalize;
-  // They WILL be different because state is corrupted after first Finalize
-  // This test documents the behavior (not a crash)
-  Check(Length(DigestToHex(LD1, 32)) = 64, 'first finalize ok');
-  Check(Length(DigestToHex(LD2, 32)) = 64, 'second finalize no crash');
-end;
-
-procedure TestMD5_DoubleFinalize;
-var LS: TMD5State; LD1, LD2: TMD5Digest;
-begin
-  LS.Init;
-  LS.UpdateStr('test');
-  LD1 := LS.Finalize;
-  LD2 := LS.Finalize;
-  Check(Length(DigestToHex(LD1, 16)) = 32, 'md5 first finalize ok');
-  Check(Length(DigestToHex(LD2, 16)) = 32, 'md5 second finalize no crash');
-end;
-
-{ === Stress/Lifecycle === }
-
-procedure TestSHA256_1000Cycles;
-var LI: Int32; LData: string;
-begin
-  LData := 'stress test data for hashing';
-  for LI := 1 to 1000 do
-    SHA256Str(LData);
-  Check(True, '1000 sha256 cycles no leak');
-end;
-
-procedure TestCRC32_1000Cycles;
-var LI: Int32; LData: string;
-begin
-  LData := 'crc32 stress';
-  for LI := 1 to 1000 do
-    CRC32Str(LData);
-  Check(True, '1000 crc32 cycles no leak');
-end;
-
-{ === DigestToHex Edge Cases === }
-
-procedure TestDigestToHex_Zero;
-var LD: array[0..3] of Byte;
-begin
-  FillChar(LD, 4, 0);
-  Check(DigestToHex(LD, 4) = '00000000', 'hex of zeros');
-end;
-
-procedure TestDigestToHex_Max;
-var LD: array[0..3] of Byte;
-begin
-  FillChar(LD, 4, $FF);
-  Check(DigestToHex(LD, 4) = 'ffffffff', 'hex of FF');
-end;
-
-{ === Openssl Comparison (known vectors) === }
-
-procedure TestSHA256_KnownVectors;
-begin
-  // echo -n "hello" | sha256sum
-  Check(SHA256StrHex('hello') =
+    SHA256HexOfString('a'), 'SHA256 single byte vector');
+  CheckEqual(
     '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
-    'sha256 hello');
-  // echo -n "The quick brown fox jumps over the lazy dog" | sha256sum
-  Check(SHA256StrHex('The quick brown fox jumps over the lazy dog') =
-    'd7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592',
-    'sha256 fox');
+    SHA256HexOfString('hello'), 'SHA256 hello vector');
+  CheckEqual('d41d8cd98f00b204e9800998ecf8427e',
+    MD5HexOfString(''), 'MD5 empty vector');
+  CheckEqual('5d41402abc4b2a76b9719d911017c592',
+    MD5HexOfString('hello'), 'MD5 hello vector');
 end;
 
-procedure TestMD5_KnownVectors;
+procedure TestStreamingBoundaries;
+var
+  LData55, LData56, LData64: AnsiString;
 begin
-  // echo -n "" | md5sum
-  Check(MD5StrHex('') = 'd41d8cd98f00b204e9800998ecf8427e', 'md5 empty');
-  // echo -n "hello" | md5sum
-  Check(MD5StrHex('hello') = '5d41402abc4b2a76b9719d911017c592', 'md5 hello');
+  LData55 := StringOfChar('a', 55);
+  LData56 := StringOfChar('b', 56);
+  LData64 := StringOfChar('c', 64);
+
+  CheckEqual(SHA256HexOfString(LData55), StreamingHashHex(haSHA256, LData55),
+    'SHA256 streaming boundary 55 bytes');
+  CheckEqual(SHA256HexOfString(LData56), StreamingHashHex(haSHA256, LData56),
+    'SHA256 streaming boundary 56 bytes');
+  CheckEqual(SHA256HexOfString(LData64), StreamingHashHex(haSHA256, LData64),
+    'SHA256 streaming boundary 64 bytes');
+  CheckEqual(MD5HexOfString(LData55), StreamingHashHex(haMD5, LData55),
+    'MD5 streaming boundary 55 bytes');
+  CheckEqual(MD5HexOfString(LData56), StreamingHashHex(haMD5, LData56),
+    'MD5 streaming boundary 56 bytes');
+  CheckEqual(MD5HexOfString(LData64), StreamingHashHex(haMD5, LData64),
+    'MD5 streaming boundary 64 bytes');
+end;
+
+procedure TestSumDestinationBounds;
+const
+  SENTINEL = $A5;
+var
+  LHasher: IHasher;
+  LFull: TBytes;
+  LBuf: array[0..127] of Byte;
+  I: Integer;
+  LOk: Boolean;
+begin
+  LHasher := NewSHA256;
+  LHasher.Write('abc'[1], 3);
+  LFull := LHasher.SumBytes;
+
+  FillChar(LBuf[0], SizeOf(LBuf), SENTINEL);
+  LHasher.Sum(LBuf[0], 0);
+  LOk := True;
+  for I := 0 to High(LBuf) do
+    LOk := LOk and (LBuf[I] = SENTINEL);
+  Check(LOk, 'Sum size 0 leaves destination untouched');
+
+  FillChar(LBuf[0], SizeOf(LBuf), SENTINEL);
+  LHasher.Sum(LBuf[0], 3);
+  LOk := True;
+  for I := 0 to 2 do
+    LOk := LOk and (LBuf[I] = LFull[I]);
+  for I := 3 to High(LBuf) do
+    LOk := LOk and (LBuf[I] = SENTINEL);
+  Check(LOk, 'Sum short buffer writes prefix only');
+
+  FillChar(LBuf[0], SizeOf(LBuf), SENTINEL);
+  LHasher.Sum(LBuf[0], LHasher.DigestSize + 5);
+  LOk := True;
+  for I := 0 to LHasher.DigestSize - 1 do
+    LOk := LOk and (LBuf[I] = LFull[I]);
+  for I := LHasher.DigestSize to High(LBuf) do
+    LOk := LOk and (LBuf[I] = SENTINEL);
+  Check(LOk, 'Sum oversized buffer stops at digest size');
+end;
+
+procedure CallDigestToHexNilPositive;
+begin
+  DigestToHex(GNilByte^, 1);
+end;
+
+procedure CallDigestToHexLengthOverflow;
+var
+  LByte: Byte;
+begin
+  LByte := 0;
+  DigestToHex(LByte, SizeUInt(High(SizeInt)) div 2 + 1);
+end;
+
+procedure CallSHA256OfNilPositive;
+begin
+  SHA256Of(GNilByte^, 1);
+end;
+
+procedure CallMD5OfNilPositive;
+begin
+  MD5Of(GNilByte^, 1);
+end;
+
+procedure CallSHA1OfNilPositive;
+begin
+  SHA1Of(GNilByte^, 1);
+end;
+
+procedure CallSHA384OfNilPositive;
+begin
+  SHA384Of(GNilByte^, 1);
+end;
+
+procedure CallSHA512OfNilPositive;
+begin
+  SHA512Of(GNilByte^, 1);
+end;
+
+procedure CallSHA384WriteNilPositive;
+var
+  LHasher: IHasher;
+begin
+  LHasher := NewSHA384;
+  LHasher.Write(GNilByte^, 1);
+end;
+
+procedure CallSHA384SumNilPositive;
+var
+  LHasher: IHasher;
+begin
+  LHasher := NewSHA384;
+  LHasher.Sum(GNilByte^, 1);
+end;
+
+{$IFDEF CPU64}
+procedure CallMD5WriteTotalLengthOverflow;
+var
+  LHasher: IHasher;
+begin
+  LHasher := NewMD5;
+  LHasher.Write(GNilByte^, SizeUInt(High(UInt64) div 8) + 1);
+end;
+
+procedure CallSHA1WriteTotalLengthOverflow;
+var
+  LHasher: IHasher;
+begin
+  LHasher := NewSHA1;
+  LHasher.Write(GNilByte^, SizeUInt(High(UInt64) div 8) + 1);
+end;
+
+procedure CallSHA256WriteTotalLengthOverflow;
+var
+  LHasher: IHasher;
+begin
+  LHasher := NewSHA256;
+  LHasher.Write(GNilByte^, SizeUInt(High(UInt64) div 8) + 1);
+end;
+
+procedure CallSHA384WriteTotalLengthOverflow;
+var
+  LHasher: IHasher;
+begin
+  LHasher := NewSHA384;
+  LHasher.Write(GNilByte^, SizeUInt(High(UInt64) div 8) + 1);
+end;
+
+procedure CallSHA512WriteTotalLengthOverflow;
+var
+  LHasher: IHasher;
+begin
+  LHasher := NewSHA512;
+  LHasher.Write(GNilByte^, SizeUInt(High(UInt64) div 8) + 1);
+end;
+{$ENDIF}
+
+procedure CallWyHashNilPositive;
+begin
+  WyHash(nil, 1, 0);
+end;
+
+procedure CallNewHasherInvalidAlgorithm;
+begin
+  NewHasher(InvalidHashAlgorithm);
+end;
+
+procedure CallSHA256FileHexEmptyPath;
+begin
+  SHA256FileHex('');
+end;
+
+procedure CallSHA512FileHexEmptyPath;
+begin
+  SHA512FileHex('');
+end;
+
+procedure CallSHA256FileHexEmbeddedNulPath;
+begin
+  SHA256FileHex('/tmp/nextpas-hash-real.bin' + #0 + '.shadow');
+end;
+
+procedure CallSHA512FileHexEmbeddedNulPath;
+begin
+  SHA512FileHex('/tmp/nextpas-hash-real.bin' + #0 + '.shadow');
+end;
+
+procedure TestMalformedInputs;
+begin
+  CheckRaisesArgumentError(@CallDigestToHexNilPositive,
+    'DigestToHex nil+positive');
+  CheckRaisesArgumentError(@CallDigestToHexLengthOverflow,
+    'DigestToHex length overflow');
+  CheckRaisesArgumentError(@CallSHA256OfNilPositive,
+    'SHA256Of nil+positive');
+  CheckRaisesArgumentError(@CallMD5OfNilPositive,
+    'MD5Of nil+positive');
+  CheckRaisesArgumentError(@CallSHA1OfNilPositive,
+    'SHA1Of nil+positive');
+  CheckRaisesArgumentError(@CallSHA384OfNilPositive,
+    'SHA384Of nil+positive');
+  CheckRaisesArgumentError(@CallSHA512OfNilPositive,
+    'SHA512Of nil+positive');
+  CheckRaisesArgumentErrorContaining(@CallSHA384WriteNilPositive,
+    'SHA384.Write', 'SHA384 Write nil+positive context');
+  CheckRaisesArgumentErrorContaining(@CallSHA384SumNilPositive,
+    'SHA384.Sum', 'SHA384 Sum nil+positive context');
+  {$IFDEF CPU64}
+  CheckRaisesArgumentErrorContaining(@CallMD5WriteTotalLengthOverflow,
+    'total length', 'MD5 Write total length overflow');
+  CheckRaisesArgumentErrorContaining(@CallSHA1WriteTotalLengthOverflow,
+    'total length', 'SHA1 Write total length overflow');
+  CheckRaisesArgumentErrorContaining(@CallSHA256WriteTotalLengthOverflow,
+    'total length', 'SHA256 Write total length overflow');
+  CheckRaisesArgumentErrorContaining(@CallSHA384WriteTotalLengthOverflow,
+    'SHA384.Write', 'SHA384 Write total length overflow context');
+  CheckRaisesArgumentErrorContaining(@CallSHA512WriteTotalLengthOverflow,
+    'total length', 'SHA512 Write total length overflow');
+  {$ENDIF}
+  CheckRaisesArgumentError(@CallWyHashNilPositive,
+    'WyHash nil+positive');
+  CheckRaisesArgumentError(@CallNewHasherInvalidAlgorithm,
+    'NewHasher invalid algorithm');
+  CheckRaisesArgumentError(@CallSHA256FileHexEmptyPath,
+    'SHA256FileHex empty path');
+  CheckRaisesArgumentError(@CallSHA512FileHexEmptyPath,
+    'SHA512FileHex empty path');
+  CheckRaisesArgumentError(@CallSHA256FileHexEmbeddedNulPath,
+    'SHA256FileHex embedded NUL path');
+  CheckRaisesArgumentError(@CallSHA512FileHexEmbeddedNulPath,
+    'SHA512FileHex embedded NUL path');
 end;
 
 begin
   T := TTestRunner.Create('nextpas.core.hash.audit');
-  T.Run('SHA256 55 bytes', @TestSHA256_55Bytes);
-  T.Run('SHA256 56 bytes', @TestSHA256_56Bytes);
-  T.Run('SHA256 64 bytes', @TestSHA256_64Bytes);
-  T.Run('SHA256 single byte', @TestSHA256_SingleByte);
-  T.Run('SHA256 all zeros', @TestSHA256_AllZeros);
-  T.Run('SHA256 all FF', @TestSHA256_AllFF);
-  T.Run('MD5 55 bytes', @TestMD5_55Bytes);
-  T.Run('MD5 56 bytes', @TestMD5_56Bytes);
-  T.Run('MD5 64 bytes', @TestMD5_64Bytes);
-  T.Run('MD5 streaming 100', @TestMD5Streaming);
-  T.Run('CRC32 large data', @TestCRC32_LargeData);
-  T.Run('CRC32 single byte', @TestCRC32_SingleByte);
-  T.Run('SHA256 double finalize', @TestSHA256_DoubleFinalize);
-  T.Run('MD5 double finalize', @TestMD5_DoubleFinalize);
-  T.Run('SHA256 1000 cycles', @TestSHA256_1000Cycles);
-  T.Run('CRC32 1000 cycles', @TestCRC32_1000Cycles);
-  T.Run('DigestToHex zeros', @TestDigestToHex_Zero);
-  T.Run('DigestToHex max', @TestDigestToHex_Max);
-  T.Run('SHA256 known vectors', @TestSHA256_KnownVectors);
-  T.Run('MD5 known vectors', @TestMD5_KnownVectors);
+  T.Run('known vectors', @TestKnownVectors);
+  T.Run('streaming boundary sizes', @TestStreamingBoundaries);
+  T.Run('sum destination bounds', @TestSumDestinationBounds);
+  T.Run('malformed input contracts', @TestMalformedInputs);
   T.Summary;
 end.

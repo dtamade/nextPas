@@ -24,20 +24,31 @@ const
   XID_STRING_LENGTH = 20;
 
 function XidNew: string;
+function XidIsValid(const AStr: string): Boolean;
+function XidTimestamp(const AStr: string): UInt32;
+function XidTryTimestamp(const AStr: string; out ATimestamp: UInt32): Boolean;
 
 implementation
 
 uses
   nextpas.core.atomic,
+  nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.id.rng,
   nextpas.core.platform.time;
 
 const
   XID_ENCODING = '0123456789abcdefghijklmnopqrstuv';
+  XID_COUNTER_MASK = UInt32($FFFFFF);
 
 var
   GMachineId: array[0..2] of Byte;
   GCounter: Int32 = 0;
+  GNewLock: Int32 = 0;
+  GLastTs: UInt32 = 0;
+  GLastCnt: UInt32 = 0;
+  GHasLastXid: Boolean = False;
+  GXidInitState: Int32 = 0;
   GXidDecodeTable: array[0..127] of ShortInt;
 
 procedure InitXidDecodeTable;
@@ -58,28 +69,88 @@ begin
   {$ENDIF}
 end;
 
+procedure EnsureXidSeeded;
+var
+  LCounterSeed: array[0..2] of Byte;
+begin
+  if AtomicLoad32(GXidInitState, moAcquire) = 2 then
+    Exit;
+
+  if AtomicCompareExchange32(GXidInitState, 0, 1, moAcqRel) = 0 then
+  begin
+    try
+      IdRngFillBytes(@GMachineId[0], 3);
+      IdRngFillBytes(@LCounterSeed[0], 3);
+      GCounter := (Int32(LCounterSeed[0]) shl 16) or
+                  (Int32(LCounterSeed[1]) shl 8) or
+                  Int32(LCounterSeed[2]);
+      AtomicStore32(GXidInitState, 2, moRelease);
+    except
+      AtomicStore32(GXidInitState, 0, moRelease);
+      raise;
+    end;
+    Exit;
+  end;
+
+  while AtomicLoad32(GXidInitState, moAcquire) = 1 do
+    CpuPause;
+  EnsureXidSeeded;
+end;
+
+function CurrentXidTimestamp: UInt32;
+var
+  LUnixSeconds: UInt64;
+begin
+  LUnixSeconds := platform_realtime_ns div 1000000000;
+  if LUnixSeconds > UInt64(High(UInt32)) then
+    raise EOutOfRange.Create('TXid.New: realtime clock exceeds XID timestamp range');
+  Result := UInt32(LUnixSeconds);
+end;
+
 class function TXid.New: TXid;
 var
   LTs: UInt32;
   LPid: UInt16;
+  LRawCnt: UInt32;
   LCnt: UInt32;
 begin
-  LTs := UInt32(platform_realtime_ns div 1000000000);
-  LPid := GetPid16;
-  LCnt := UInt32(AtomicFetchAdd32(GCounter, 1)) and $FFFFFF;
+  EnsureXidSeeded;
+  while AtomicCompareExchange32(GNewLock, 0, 1) <> 0 do
+    CpuPause;
+  try
+    LTs := CurrentXidTimestamp;
+    if LTs < GLastTs then
+      LTs := GLastTs;
+    LPid := GetPid16;
+    LRawCnt := UInt32(AtomicFetchAdd32(GCounter, 1));
+    LCnt := LRawCnt and XID_COUNTER_MASK;
+    if GHasLastXid and (LCnt <= GLastCnt) and (LTs <= GLastTs) then
+    begin
+      if GLastTs = High(UInt32) then
+        raise EOutOfRange.Create('TXid.New: logical timestamp exceeds XID timestamp range');
+      LTs := GLastTs + 1;
+    end
+    else if LTs < GLastTs then
+      LTs := GLastTs;
+    GLastTs := LTs;
+    GLastCnt := LCnt;
+    GHasLastXid := True;
 
-  Result.FBytes[0] := Byte(LTs shr 24);
-  Result.FBytes[1] := Byte(LTs shr 16);
-  Result.FBytes[2] := Byte(LTs shr 8);
-  Result.FBytes[3] := Byte(LTs);
-  Result.FBytes[4] := GMachineId[0];
-  Result.FBytes[5] := GMachineId[1];
-  Result.FBytes[6] := GMachineId[2];
-  Result.FBytes[7] := Byte(LPid shr 8);
-  Result.FBytes[8] := Byte(LPid);
-  Result.FBytes[9] := Byte(LCnt shr 16);
-  Result.FBytes[10] := Byte(LCnt shr 8);
-  Result.FBytes[11] := Byte(LCnt);
+    Result.FBytes[0] := Byte(LTs shr 24);
+    Result.FBytes[1] := Byte(LTs shr 16);
+    Result.FBytes[2] := Byte(LTs shr 8);
+    Result.FBytes[3] := Byte(LTs);
+    Result.FBytes[4] := GMachineId[0];
+    Result.FBytes[5] := GMachineId[1];
+    Result.FBytes[6] := GMachineId[2];
+    Result.FBytes[7] := Byte(LPid shr 8);
+    Result.FBytes[8] := Byte(LPid);
+    Result.FBytes[9] := Byte(LCnt shr 16);
+    Result.FBytes[10] := Byte(LCnt shr 8);
+    Result.FBytes[11] := Byte(LCnt);
+  finally
+    AtomicStore32(GNewLock, 0, moRelease);
+  end;
 end;
 
 class function TXid.TryParse(const AStr: string; out AXid: TXid): Boolean;
@@ -119,7 +190,7 @@ end;
 class function TXid.Parse(const AStr: string): TXid;
 begin
   if not TryParse(AStr, Result) then
-    FillChar(Result.FBytes, 12, 0);
+    raise EParseError.Create('TXid.Parse: invalid XID string');
 end;
 
 class function TXid.Nil_: TXid;
@@ -198,9 +269,34 @@ begin
   Result := TXid.New.ToString;
 end;
 
+function XidIsValid(const AStr: string): Boolean;
+var
+  LXid: TXid;
+begin
+  Result := TXid.TryParse(AStr, LXid);
+end;
+
+function XidTimestamp(const AStr: string): UInt32;
+var
+  LTimestamp: UInt32;
+begin
+  if XidTryTimestamp(AStr, LTimestamp) then
+    Result := LTimestamp
+  else
+    Result := 0;
+end;
+
+function XidTryTimestamp(const AStr: string; out ATimestamp: UInt32): Boolean;
+var
+  LXid: TXid;
+begin
+  if not TXid.TryParse(AStr, LXid) then
+    Exit(False);
+  ATimestamp := LXid.Timestamp;
+  Result := True;
+end;
+
 initialization
   InitXidDecodeTable;
-  IdRngFillBytes(@GMachineId[0], 3);
-  IdRngFillBytes(@GCounter, 3);
 
 end.

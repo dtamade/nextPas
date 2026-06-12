@@ -15,10 +15,12 @@ const
 function FsPathJoin(const AParts: array of string): string;
 function FsPathDir(const APath: string): string;
 function FsPathBase(const APath: string): string;
+procedure FsPathSplit(const APath: string; out ADir, ABase: string);
 function FsPathExt(const APath: string): string;
 function FsPathClean(const APath: string): string;
 function FsPathAbs(const APath: string): string;
 function FsPathIsAbs(const APath: string): Boolean;
+function FsPathRelative(const ABase, ATarget: string): string;
 function FsPathEnsureSep(const APath: string): string;
 function FsPathTrimSep(const APath: string): string;
 function FsPathChangeExt(const APath, ANewExt: string): string;
@@ -29,14 +31,6 @@ implementation
 
 const
   PATH_BUF_SIZE = 1024;
-
-function IsPathSep(const AChar: Char): Boolean; inline;
-begin
-  Result := AChar = PLATFORM_PATH_SEP;
-{$IFDEF NEXTPAS_WINDOWS}
-  Result := Result or (AChar = PLATFORM_PATH_ALT_SEP);
-{$ENDIF}
-end;
 
 function FsPathJoin(const AParts: array of string): string;
 var
@@ -103,6 +97,12 @@ begin
   SetLength(LHeap, LNeed + 1);
   platform_path_basename(PAnsiChar(APath), @LHeap[0], Length(LHeap));
   SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
+end;
+
+procedure FsPathSplit(const APath: string; out ADir, ABase: string);
+begin
+  ADir := FsPathDir(APath);
+  ABase := FsPathBase(APath);
 end;
 
 function FsPathExt(const APath: string): string;
@@ -180,6 +180,27 @@ begin
   Result := platform_path_is_absolute(PAnsiChar(APath));
 end;
 
+function FsPathRelative(const ABase, ATarget: string): string;
+var
+  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LNeed: Int32;
+  LHeap: array of AnsiChar;
+begin
+  LNeed := platform_path_relative(PAnsiChar(ABase), PAnsiChar(ATarget),
+    @LStack[0], PATH_BUF_SIZE);
+  if LNeed < 0 then
+    Exit(FsPathClean(ATarget));
+  if LNeed < PATH_BUF_SIZE then
+  begin
+    SetString(Result, PAnsiChar(@LStack[0]), LNeed);
+    Exit;
+  end;
+  SetLength(LHeap, LNeed + 1);
+  platform_path_relative(PAnsiChar(ABase), PAnsiChar(ATarget),
+    @LHeap[0], Length(LHeap));
+  SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
+end;
+
 function FsPathEnsureSep(const APath: string): string;
 var
   LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
@@ -200,13 +221,22 @@ begin
 end;
 
 function FsPathTrimSep(const APath: string): string;
-var L: SizeInt;
+var
+  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LNeed: Int32;
+  LHeap: array of AnsiChar;
 begin
-  L := Length(APath);
-  while (L > 1) and IsPathSep(APath[L]) and
-    not ((L = 3) and (APath[2] = ':')) do
-    Dec(L);
-  Result := Copy(APath, 1, L);
+  LNeed := platform_path_trim_sep(PAnsiChar(APath), @LStack[0], PATH_BUF_SIZE);
+  if LNeed < 0 then
+    Exit(APath);
+  if LNeed < PATH_BUF_SIZE then
+  begin
+    SetString(Result, PAnsiChar(@LStack[0]), LNeed);
+    Exit;
+  end;
+  SetLength(LHeap, LNeed + 1);
+  platform_path_trim_sep(PAnsiChar(APath), @LHeap[0], Length(LHeap));
+  SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
 end;
 
 function FsPathChangeExt(const APath, ANewExt: string): string;
@@ -239,12 +269,7 @@ end;
 
 function FsSameFileName(const A, B: string): Boolean;
 begin
-  if Length(A) <> Length(B) then Exit(False);
-  {$IFDEF NEXTPAS_WINDOWS}
-  Result := LowerCase(A) = LowerCase(B);
-  {$ELSE}
-  Result := A = B;
-  {$ENDIF}
+  Result := platform_path_same_file_name(PAnsiChar(A), PAnsiChar(B));
 end;
 
 end.
