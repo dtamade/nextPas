@@ -108,6 +108,8 @@ Rules:
 - Nil interface references must be safe.
 - Release ordering must be deterministic and testable.
 - Any interaction with object destruction must align with `np.system.object_free`.
+- HIR uses `intf_addref` and `intf_release` as internal intrinsic names (not the full `np.system.*` contract names).
+- LLVM emitter translates `intf_addref` → `@np_intf_addref` and `intf_release` → `@np_intf_release`.
 - Compiler/HIR may currently project interface reference ownership through
   backend-private interface helpers such as `@np_intf_addref` and
   `@np_intf_release`. These names are LLVM/backend evidence only,
@@ -116,6 +118,7 @@ Rules:
 - Current helper bodies are allowed to show nil-safety and refcount-slot
   mechanics in LLVM-focused tests. They must not be read as a final COM,
   elision, destruction, or interface-table policy for the future runtime.
+- Source-contract check `check_system_source_contracts.sh:675-680` verifies HIR intrinsic name and LLVM helper existence.
 
 ## Object Free
 
@@ -193,6 +196,8 @@ Rules:
 - The heap manager contract must preserve size/alignment truth needed by mem.
 - Out-of-memory behavior must map to canonical exception/error taxonomy.
 - Any implementation must prove leak-sensitive behavior before it can be treated as Ready.
+- HIR does not currently use `np.system.heap_alloc` or `np.system.heap_free` intrinsic names.
+- LLVM emitter uses `@np_alloc` and `@np_free` directly without HIR intrinsic contract names.
 - Compiler/HIR may currently project heap ownership through backend-private allocator helpers
   such as `@np_alloc`, `@np_free`, `@np_object_alloc` and `@np_allocator_fault`.
   These helper names are LLVM/backend evidence only,

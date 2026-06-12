@@ -80,14 +80,51 @@ Current phase note:
 
 ## S5 Compiler / Runtime Integration Readiness
 
+### S5.1 Contract Vocabulary Lock
+
 - [x] Align managed dynamic-array compiler contract projection with system runtime contract names.
 - [x] Prove managed dynamic-array contract vocabulary is explicit without freezing backend-private helper symbols.
 - [x] Align process-level startup/shutdown semantic seed with `np.system.process_init` / `np.system.process_fini`.
 - [x] Prove process lifecycle semantic seed exact-name order without upgrading runtime execution or unit lifecycle.
 - [x] Align remaining facade docs with compiler runtime contract names and source-backed `System` truth.
-- [ ] Prove remaining runtime helper references are explicit, stable and not backend-private magic strings.
-- [ ] Add integration smoke once compiler/runtime can consume the core-system contract directly.
-- [ ] Prepare a landing candidate only after focused gates and cross-module risks are clean.
+- [x] Lock `np.system.object_free` and sub-contracts (`.destroy`, `.cleanup`, `.release`) in HIR intrinsic names.
+
+Evidence:
+
+- `compiler/sema/np_semantic_analyzer.pas:SeedRuntimeContracts` seeds `np.system.process_init` and `np.system.process_fini` for program/library/package roots.
+- `compiler/ir/np_hir_builder.pas` uses `np.system.object_free.destroy`, `np.system.object_free.cleanup`, `np.system.object_free.release` as intrinsic names.
+- `compiler/ir/np_hir_llvm_emitter.pas` translates those intrinsics to `@np_object_free_release` and related helpers.
+
+### S5.2 Helper-Family Mapping Audit
+
+- [ ] Audit and document all HIR intrinsic name → LLVM helper name mappings.
+- [ ] Lock `np.system.interface_addref` / `np.system.interface_release` contract names in HIR (currently using implementation names).
+- [ ] Lock `np.system.halt` contract name in HIR (currently implicit in backend).
+- [ ] Lock `np.system.heap_alloc` / `np.system.heap_free` contract names (currently using `@np_alloc` / `@np_free`).
+- [ ] Add source-contract check: HIR intrinsic name must match documented `np.system.*` contract or be a known internal intrinsic.
+
+Gap evidence:
+
+- `np_hir_llvm_emitter.pas:750-756` uses `@np_intf_addref` / `@np_intf_release` directly without HIR intrinsic contract name.
+- `np_hir_llvm_emitter.pas:891` uses `@np_raise` without HIR intrinsic contract name.
+- No HIR intrinsic for `halt`; backend uses syscall directly.
+- `np_hir_llvm_emitter.pas:1275` defines `@np_alloc` without contract name mapping.
+
+### S5.3 Integration Smoke
+
+- [ ] Add first direct-consume integration smoke for process lifecycle semantic seed.
+- [ ] Add first direct-consume integration smoke for object-free lifecycle.
+- [ ] Verify compiler → HIR → LLVM → executable behavior chain for at least one contract family.
+
+Deferred:
+
+- Unit lifecycle execution smoke (depends on UnitGraph consumption path).
+
+### S5.4 Landing Candidate Preparation
+
+- [ ] Create contract coverage table: all live `np.system.*` contracts with HIR/L证据状态.
+- [ ] Create helper mapping appendix: HIR intrinsic → LLVM helper → test coverage.
+- [ ] Document remaining open risks (TypInfo drift, managed array leak gap, lifecycle execution gap).
 
 Current S5 evidence:
 
