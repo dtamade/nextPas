@@ -139,7 +139,13 @@ type
     function IsBorrowedRuntimeArrVar(const AName: string): Boolean;
     function IsStaticRuntimeArrVar(const AName: string): Boolean;
     function DynArrayElemSizeOfVar(const AName: string): Int64;
-    procedure EmitOwnedStringCleanupNodes(const AExceptName: string = '');
+    function DynArrayElemTypeOfVar(const AName: string): string;
+    function DynArrayElemTypeIsManagedString(const AName: string): Boolean;
+    function DynArrayElemTypeIsManagedInterface(const AName: string): Boolean;
+    function DynArrayElemTypeNeedsManagedContract(const AName: string): Boolean;
+    procedure EnsureRuntimeContractNode(const AContractName: string);
+    procedure MarkDynArraySetLengthContract(const AName: string);
+    procedure MarkDynArrayFiniContract(const AName: string);
     procedure EmitOwnedDynArrayCleanupNodes;
     function IsRecordVar(const AName: string): Boolean;
     function IsVarParam(const AName: string): Boolean;
@@ -1363,25 +1369,77 @@ begin
     Result := 8;
 end;
 
-procedure TSemanticAnalyzer.EmitOwnedStringCleanupNodes(const AExceptName: string);
+function TSemanticAnalyzer.DynArrayElemTypeOfVar(const AName: string): string;
+begin
+  if not FModel.LookupStringConstValue(AName + '$arr_elem_type', Result) then
+    Result := '';
+end;
+
+function TSemanticAnalyzer.DynArrayElemTypeIsManagedString(
+  const AName: string): Boolean;
+var
+  ElemTypeName: string;
+begin
+  ElemTypeName := DynArrayElemTypeOfVar(AName);
+  Result :=
+    SameText(ElemTypeName, 'String') or
+    SameText(ElemTypeName, 'AnsiString') or
+    SameText(ElemTypeName, 'ShortString') or
+    SameText(ElemTypeName, 'WideString') or
+    SameText(ElemTypeName, 'UnicodeString');
+end;
+
+function TSemanticAnalyzer.DynArrayElemTypeIsManagedInterface(
+  const AName: string): Boolean;
+var
+  ElemTypeName: string;
+begin
+  ElemTypeName := DynArrayElemTypeOfVar(AName);
+  Result := (ElemTypeName <> '') and TypeMetaIsInterface(ElemTypeName);
+end;
+
+function TSemanticAnalyzer.DynArrayElemTypeNeedsManagedContract(
+  const AName: string): Boolean;
+begin
+  Result := DynArrayElemTypeIsManagedString(AName) or
+    DynArrayElemTypeIsManagedInterface(AName);
+end;
+
+procedure TSemanticAnalyzer.EnsureRuntimeContractNode(
+  const AContractName: string);
 var
   I: LongInt;
-  VarName: string;
+  Node: TTypedHirNode;
 begin
-  for I := 0 to Length(FOwnedRuntimeStrVarNames) - 1 do
+  if AContractName = '' then
+    Exit;
+  for I := 0 to FModel.TypedHirNodeCount - 1 do
   begin
-    VarName := FOwnedRuntimeStrVarNames[I];
-    if (VarName = '') or IsBorrowedRuntimeStrVar(VarName) or
-      SameText(VarName, AExceptName) then
-      Continue;
-    FModel.AddTypedHirNode(
-      'string-cleanup-runtime',
-      VarName,
-      0,
-      0,
-      VarName
-    );
+    Node := FModel.TypedHirNodeAt(I);
+    if (Node.Kind = 'runtime-contract') and
+      SameText(Node.DisplayName, AContractName) then
+      Exit;
   end;
+  FModel.AddRuntimeContract(AContractName);
+  FModel.AddTypedHirNode('runtime-contract', AContractName, 0, 0, '');
+end;
+
+procedure TSemanticAnalyzer.MarkDynArraySetLengthContract(const AName: string);
+begin
+  if not DynArrayElemTypeNeedsManagedContract(AName) then
+    Exit;
+  EnsureRuntimeContractNode('np.system.dynarray_set_length');
+end;
+
+procedure TSemanticAnalyzer.MarkDynArrayFiniContract(const AName: string);
+begin
+  if not DynArrayElemTypeNeedsManagedContract(AName) then
+    Exit;
+  EnsureRuntimeContractNode('np.system.dynarray_fini');
+  if DynArrayElemTypeIsManagedString(AName) then
+    EnsureRuntimeContractNode('np.system.string_fini');
+  if DynArrayElemTypeIsManagedInterface(AName) then
+    EnsureRuntimeContractNode('np.system.interface_release');
 end;
 
 procedure TSemanticAnalyzer.EmitOwnedDynArrayCleanupNodes;
@@ -1395,6 +1453,7 @@ begin
     if (VarName = '') or IsBorrowedRuntimeArrVar(VarName) or
       IsStaticRuntimeArrVar(VarName) then
       Continue;
+    MarkDynArrayFiniContract(VarName);
     FModel.AddTypedHirNode(
       'dynarray-cleanup-runtime',
       VarName,
@@ -12172,11 +12231,14 @@ begin
             (not IsStaticRuntimeArrVar(RhsNode.Text)) then
           begin
             if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), Operand) then
+            begin
+              MarkDynArraySetLengthContract(RhsNode.Text);
               FModel.AddTypedHirNode(
                 'setlength-arr-runtime', RhsNode.Text, 0, 0,
                 RhsNode.Text + #9 + Operand + #9 +
                 IntToStr(DynArrayElemSizeOfVar(RhsNode.Text))
               );
+            end;
           end
           else if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) and
             (FCurrentMethodClass <> '') and

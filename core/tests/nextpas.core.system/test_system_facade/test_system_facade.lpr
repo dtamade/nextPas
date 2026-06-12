@@ -92,6 +92,49 @@ begin
     'system THashCode should be assignable to base THashCode');
 end;
 
+procedure TestSystemAbiAliasesMirrorCompilerTruth;
+var
+  LSystemSizeInt: nextpas.core.system.SizeInt;
+  LSystemSizeUInt: nextpas.core.system.SizeUInt;
+  LSystemPtrInt: nextpas.core.system.PtrInt;
+  LSystemPtrUInt: nextpas.core.system.PtrUInt;
+  LSystemNativeInt: nextpas.core.system.NativeInt;
+  LSystemNativeUInt: nextpas.core.system.NativeUInt;
+  LCompilerSizeInt: System.SizeInt;
+  LCompilerSizeUInt: System.SizeUInt;
+  LCompilerPtrInt: System.PtrInt;
+  LCompilerPtrUInt: System.PtrUInt;
+  LCompilerNativeInt: System.NativeInt;
+  LCompilerNativeUInt: System.NativeUInt;
+begin
+  LSystemSizeInt := -42;
+  LSystemSizeUInt := 42;
+  LSystemPtrInt := -21;
+  LSystemPtrUInt := 21;
+  LSystemNativeInt := -7;
+  LSystemNativeUInt := 7;
+
+  LCompilerSizeInt := LSystemSizeInt;
+  LCompilerSizeUInt := LSystemSizeUInt;
+  LCompilerPtrInt := LSystemPtrInt;
+  LCompilerPtrUInt := LSystemPtrUInt;
+  LCompilerNativeInt := LSystemNativeInt;
+  LCompilerNativeUInt := LSystemNativeUInt;
+
+  CheckEqual(Int64(-42), Int64(LCompilerSizeInt),
+    'system SizeInt should mirror compiler/System SizeInt');
+  CheckEqual(Int64(42), Int64(LCompilerSizeUInt),
+    'system SizeUInt should mirror compiler/System SizeUInt');
+  CheckEqual(Int64(-21), Int64(LCompilerPtrInt),
+    'system PtrInt should mirror compiler/System PtrInt');
+  CheckEqual(Int64(21), Int64(LCompilerPtrUInt),
+    'system PtrUInt should mirror compiler/System PtrUInt');
+  CheckEqual(Int64(-7), Int64(LCompilerNativeInt),
+    'system NativeInt should mirror compiler/System NativeInt');
+  CheckEqual(Int64(7), Int64(LCompilerNativeUInt),
+    'system NativeUInt should mirror compiler/System NativeUInt');
+end;
+
 function TSystemFacadeProbe.Value: Integer;
 begin
   Result := 42;
@@ -225,6 +268,35 @@ begin
       LCaught := E is nextpas.core.exception.ENextPasError;
   end;
   Check(LCaught, 'system CopyMem should preserve base nil destination exception root');
+end;
+
+procedure TestSystemFillMemDelegatesToBaseUtils;
+var
+  LBytes: array[0..3] of Byte = (1, 2, 3, 4);
+  LCaught: Boolean;
+begin
+  nextpas.core.system.FillMem(nil, 0, $AA);
+  nextpas.core.system.FillMem(@LBytes[0], 0, $AA);
+  CheckEqual(Int64(1), Int64(LBytes[0]), 'system FillMem size 0 should not mutate');
+
+  nextpas.core.system.FillMem(@LBytes[0], SizeOf(LBytes), $AA);
+  CheckEqual(Int64($AA), Int64(LBytes[0]), 'system FillMem should fill first byte');
+  CheckEqual(Int64($AA), Int64(LBytes[3]), 'system FillMem should fill last byte');
+
+  nextpas.core.system.FillMem(@LBytes[1], 2, $11);
+  CheckEqual(Int64($AA), Int64(LBytes[0]), 'system FillMem should preserve byte before range');
+  CheckEqual(Int64($11), Int64(LBytes[1]), 'system FillMem should fill range start');
+  CheckEqual(Int64($11), Int64(LBytes[2]), 'system FillMem should fill range end');
+  CheckEqual(Int64($AA), Int64(LBytes[3]), 'system FillMem should preserve byte after range');
+
+  LCaught := False;
+  try
+    nextpas.core.system.FillMem(nil, 1, $AA);
+  except
+    on E: nextpas.core.base.EArgumentNil do
+      LCaught := E is nextpas.core.exception.ENextPasError;
+  end;
+  Check(LCaught, 'system FillMem should preserve base nil destination exception root');
 end;
 
 procedure TestObjectLifecycleHelpersDelegateToBaseUtils;
@@ -579,10 +651,12 @@ begin
   T := TTestRunner.Create('nextpas.core.system facade');
   T.Run('system constants mirror base compile-truth', @TestSystemConstantsMirrorBaseCompileTruth);
   T.Run('system base carrier aliases mirror base compile-truth', @TestSystemBaseCarrierAliasesMirrorBaseCompileTruth);
+  T.Run('system ABI aliases mirror compiler truth', @TestSystemAbiAliasesMirrorCompilerTruth);
   T.Run('base and system byte aliases coexist', @TestBaseAndSystemByteAliasesCoexist);
   T.Run('system memory guards delegate to base contract', @TestSystemMemoryGuardsDelegateToBaseContract);
   T.Run('copy and compare facade delegates to base utils', @TestCopyAndCompareFacadeDelegatesToBaseUtils);
   T.Run('system memory facade delegates full base utils contract', @TestSystemMemoryFacadeDelegatesFullBaseUtilsContract);
+  T.Run('system FillMem delegates to base utils', @TestSystemFillMemDelegatesToBaseUtils);
   T.Run('object lifecycle helpers delegate to base utils', @TestObjectLifecycleHelpersDelegateToBaseUtils);
   T.Run('supports facade delegates object and interface queries', @TestSupportsFacadeDelegatesObjectAndInterfaceQueries);
   T.Run('system exception root is canonical', @TestSystemExceptionRootIsCanonical);

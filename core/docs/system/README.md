@@ -28,7 +28,7 @@ final object lifetime, managed lifetime, RTTI metadata, unit lifecycle, or runti
 
 - `TBytes` 等低层基础载体类型来自 `nextpas.core.base`。
 - `ENextPasError`、`TErrorCategory` 和错误分类来自 `nextpas.core.exception` / `nextpas.core.errors`。
-- `ZeroMem`、`CopyMem`、`CompareMem`、`FreeAndNil`、`SafeFree` 和 `Supports` 只委派给
+- `ZeroMem`、`FillMem`、`CopyMem`、`CompareMem`、`FreeAndNil`、`SafeFree` 和 `Supports` 只委派给
   `nextpas.core.base.utils`，保持现有 guard 和异常语义。
 
 Root facade live surface:
@@ -37,13 +37,18 @@ Root facade live surface:
 | --- | --- | --- |
 | `NEXTPAS_SYSTEM_NAME` | `nextpas.core.system` | root module identity only. |
 | `MAX_SIZE_INT`, `MAX_SIZE_UINT`, `MIN_SIZE_INT`, `SIZE_PTR`, `SIZE_8`, `SIZE_16`, `SIZE_32`, `SIZE_64` | `nextpas.core.base` | mirrored compile-time constants; no new sizing policy. |
+| `SizeInt`, `SizeUInt`, `PtrInt`, `PtrUInt`, `NativeInt`, `NativeUInt` | compiler `System` | ABI carrier aliases; no new target sizing policy or layout promise beyond compiler truth. |
 | `TBytes`, `TByteSpan`, `THashCode` | `nextpas.core.base` | carrier aliases for RTL-root consumers; base remains owner. |
 | `Exception`, `ExceptClass`, `EConvertError`, `EAssertionFailed`, `ENextPasError`, `TErrorCategory` | `nextpas.core.exception` | canonical exception aliases; no shadow taxonomy. |
 | `EArgumentError`, `ETimeoutError`, `EIOError`, `EOutOfMemoryError` and the other `nextpas.core.errors` classes / `ec*` constants | `nextpas.core.errors` public facade; canonical definitions remain in `nextpas.core.exception` | public taxonomy aliases; categories stay canonical. |
-| `ZeroMem`, `CopyMem`, `CompareMem`, `FreeAndNil`, `SafeFree`, `Supports` | `nextpas.core.base.utils` | inline forwarding helpers; guard and nil behavior stay with base utils. |
+| `ZeroMem`, `FillMem`, `CopyMem`, `CompareMem`, `FreeAndNil`, `SafeFree`, `Supports` | `nextpas.core.base.utils` | inline forwarding helpers; guard and nil behavior stay with base utils. |
 
 S2 runtime/managed lifetime contract names live in `runtime-contracts.md`. They are documented
 compiler/runtime handshake names, not public ABI and not current facade functions.
+The compiler may project managed dynamic-array operations as
+`np.system.dynarray_set_length`, `np.system.dynarray_fini` and nested element
+contracts such as `np.system.string_fini` and `np.system.interface_release`;
+those names describe semantics and do not freeze backend-private helper symbols.
 
 S3 lifecycle contract names and evidence categories live in `lifecycle-contracts.md`. They cover
 exception raise/unwind ownership, RTTI / TypeInfo boundary rules, unit initialization/finalization
@@ -68,6 +73,12 @@ currently live string helper additions beyond formatting.
 The system focused gate also includes a collections consumer proof for
 `TElementManager<string>` so TypInfo managed-array helpers stay tied to a real
 managed-lifetime path, not just standalone helper calls.
+
+S5 is now split into sub-stages. See `goal-tree.md` for the full staged path.
+The contract coverage table in `contract-coverage-table.md` maps all live
+`np.system.*` contracts to their HIR evidence, LLVM helper evidence, and test
+coverage, with explicit gap annotations for contracts missing HIR intrinsic
+names or focused tests.
 
 Detailed S4 design-only material lives in `compatibility-facades.md` and
 `compatibility-matrix.md`. Those docs distinguish bootstrap RTL pressure from a
@@ -139,10 +150,14 @@ program, library and package roots project exact `runtime-contract` entries for
 unit lifecycle ordering and fault handling are still deferred and must not be
 treated as a public callable facade.
 
-S5 compiler integration contract: these names are the stable vocabulary for
-source-backed System truth. Compiler and backend work may use them as reviewed
-contract names, but not as untracked backend-private magic strings or as a
-parallel System implementation outside `nextpas.core.system`.
+Object-free lowering now has source-backed System truth: `rtl/core/system/System.pas`
+is the compiler-visible minimum root for `TObject.Create`, `TObject.Destroy`,
+and `TObject.Free`. The focused `test-stage0-system-object-free-query` gate
+provides stage0 query evidence that both explicit `uses System` and implicit
+System resolution bind ordinary class `Free` calls to `System.TObject.Free`
+with definitions under `units/linux-x86_64/System.pas`. This evidence keeps the
+compiler/runtime contract aligned with the source-backed unit, but it still
+does not expose `TObject` or `Free` as a public `nextpas.core.system` facade.
 
 ## non-goals
 
