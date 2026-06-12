@@ -17,9 +17,9 @@ mapping each contract name to its HIR evidence, LLVM helper evidence, and test c
 | `np.system.object_free.release` | `np_hir_builder.pas:3950` sets `IntrinsicName := 'np.system.object_free.release'` | `@np_object_free_release` → `@np_object_release_valid` / `@np_object_release_invalid` | stage0 query gate, LLVM object-free tests | Release path tested but cleanup-before-release ordering not verified |
 | `np.system.interface_addref` | **No HIR intrinsic** — emitter uses `@np_intf_addref` directly | `@np_intf_addref` (line 750) | No focused test | **Missing contract name in HIR; no focused test** |
 | `np.system.interface_release` | **No HIR intrinsic** — emitter uses `@np_intf_release` directly | `@np_intf_release` (line 756) | No focused test | **Missing contract name in HIR; no focused test** |
-| `np.system.halt` | **No HIR intrinsic** — backend uses syscall directly | No named helper; inline syscall or `@np_exit` pattern | No focused test | **Missing contract name in HIR; no focused test** |
-| `np.system.heap_alloc` | **No HIR intrinsic** — emitter uses `@np_alloc` directly | `@np_alloc` (line 686, 698, 1153, 1275) | allocator-focused tests in LLVM emitter | **Missing contract name mapping** |
-| `np.system.heap_free` | **No HIR intrinsic** — emitter uses `@np_free` directly | `@np_free` (line 1439) | allocator-focused tests in LLVM emitter | **Missing contract name mapping** |
+| `np.system.halt` | **No HIR intrinsic** — backend uses syscall directly | No named helper; inline syscall (`movq $60, %rax; syscall`) | No focused test | **Missing contract name in HIR; no focused test** |
+| `np.system.heap_alloc` | **No HIR intrinsic** — emitter uses `@np_alloc` directly | `@np_alloc` (line 686, 698, 1153, 1275) | emitter integration tests (allocator paths covered) | **Missing contract name mapping** |
+| `np.system.heap_free` | **No HIR intrinsic** — emitter uses `@np_free` directly | `@np_free` (line 1439) | emitter integration tests (allocator paths covered) | **Missing contract name mapping** |
 | `np.system.unit_init` | Not seeded (future feature) | No LLVM helper | No test | Fully deferred |
 | `np.system.unit_fini` | Not seeded (future feature) | No LLVM helper | No test | Fully deferred |
 | `np.system.runtime_fault` | Not seeded (future feature) | `@np_allocator_fault`, `@np_dynarray_fault` are partial evidence | No focused lifecycle fault test | Partial evidence only in allocator/dynarray contexts |
