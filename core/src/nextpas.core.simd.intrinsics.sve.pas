@@ -1,13 +1,17 @@
 unit nextpas.core.simd.intrinsics.sve;
-// Disposition: STABLE — low-level intrinsics for non-x86 backends
+// Disposition: Experimental Isolated — SVE stub intrinsics for opt-in bring-up
 
 {$I nextpas.core.settings.inc}
 {$I nextpas.core.simd.settings.inc}
 
 {
   === nextpas.core.simd.intrinsics.sve ===
-  Placeholder ARM SVE intrinsics surface for isolated experimental bring-up.
+  Stub ARM SVE intrinsics surface for isolated experimental bring-up.
   SVE adds scalable vector-length programming to AArch64 targets.
+  ISA qualification only: this raw leaf documents SVE capability shape for
+  opt-in experiments, not a stable public backend.
+  It is only qualified on AArch64 targets whose cpuinfo reports SVE.
+  Opt-in gate: NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS.
   Highlights:
   - scalable vector lengths (128-2048 bits)
   - predicate registers

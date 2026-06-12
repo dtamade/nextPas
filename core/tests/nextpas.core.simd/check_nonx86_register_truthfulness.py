@@ -77,6 +77,12 @@ ALLOWED_NO_ASM_ONLY_BACKEND_COMPOSED_SLOTS_BY_BACKEND: dict[str, set[str]] = {
 }
 
 ALLOWED_ALWAYS_ASM_HELPER_SLOTS_BY_BACKEND: dict[str, set[str]] = {
+    "neon": {
+        "ShiftLeftI32x8", "ShiftRightI32x8", "ShiftRightArithI32x8",
+        "ShiftLeftI32x16", "ShiftRightI32x16", "ShiftRightArithI32x16",
+        "ShiftLeftI64x4", "ShiftRightI64x4", "ShiftRightArithI64x4",
+        "ShiftRightU64x4",
+    },
     "riscvv": {
         "ShiftLeftI32x8", "ShiftRightI32x8", "ShiftRightArithI32x8",
         "ShiftLeftI32x16", "ShiftRightI32x16", "ShiftRightArithI32x16",
@@ -146,7 +152,7 @@ def build_config(a_root: Path, a_args: argparse.Namespace) -> CheckerConfig:
         l_sources.append(l_src / "nextpas.core.simd.scalar.pas")
         return CheckerConfig(
             backend="neon",
-            asm_symbol="FAFAFA_SIMD_NEON_ASM_ENABLED",
+            asm_symbol="NEXTPAS_SIMD_NEON_ASM_ENABLED",
             symbol_prefix="NEON",
             register_file=l_src / "nextpas.core.simd.neon.register.inc",
             source_files=[l_file for l_file in l_sources if l_file.is_file()],

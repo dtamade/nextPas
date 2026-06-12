@@ -6,10 +6,13 @@ unit nextpas.core.simd.neon;
 
 {
   === nextpas.core.simd.neon ===
-  ARM NEON SIMD Backend Implementation
+  ARM NEON backend adapter (asm opt-in activation)
 
-  This provides NEON-optimized implementations for ARM processors.
-  NEON is available on ARMv7-A, ARMv8-A (AArch32), and AArch64 processors.
+  This unit hosts NEON backend adapters and raw leaf implementations for ARM processors.
+  The default public behavior remains default scalar fallback; NEON asm opt-in is
+  required before this backend can join the active dispatch path.
+  NEON capability exists on ARMv7-A, ARMv8-A (AArch32), and AArch64 processors,
+  but CPU support alone does not change the default public backend selection.
 
   Features:
   - 128-bit vector registers (v0-v31 on AArch64, q0-q15 on ARMv7)

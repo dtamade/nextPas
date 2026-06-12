@@ -111,16 +111,66 @@ ALLOWED_INTRINSICS_STATUS = {
 }
 
 EXPECTED_BACKEND_TRUTH = {
-    'Scalar': ('backend adapter', 'src/nextpas.core.simd.scalar.pas', 'yes'),
-    'SSE2': ('backend adapter', 'src/nextpas.core.simd.sse2.pas', 'yes'),
-    'SSE3': ('backend adapter', 'src/nextpas.core.simd.sse3.pas', 'yes'),
-    'SSSE3': ('backend adapter', 'src/nextpas.core.simd.ssse3.pas', 'yes'),
-    'SSE4.1': ('backend adapter', 'src/nextpas.core.simd.sse41.pas', 'yes'),
-    'SSE4.2': ('backend adapter', 'src/nextpas.core.simd.sse42.pas', 'yes'),
-    'AVX-512': ('backend adapter', 'src/nextpas.core.simd.avx512.pas', 'yes'),
-    'AVX2': ('backend adapter', 'src/nextpas.core.simd.avx2.pas', 'yes'),
-    'NEON': ('backend adapter', 'src/nextpas.core.simd.neon.pas', 'yes'),
-    'RISCVV': ('backend adapter', 'src/nextpas.core.simd.riscvv.pas', 'opt-in only'),
+    'Scalar': (
+        'backend adapter',
+        'src/nextpas.core.simd.scalar.pas',
+        'default entry chain',
+        'default scalar fallback',
+    ),
+    'SSE2': (
+        'backend adapter',
+        'src/nextpas.core.simd.sse2.pas',
+        'x86 entry chain',
+        'dispatchable when CPU/runtime qualification passes',
+    ),
+    'SSE3': (
+        'backend adapter',
+        'src/nextpas.core.simd.sse3.pas',
+        'x86 entry chain',
+        'dispatchable when CPU/runtime qualification passes',
+    ),
+    'SSSE3': (
+        'backend adapter',
+        'src/nextpas.core.simd.ssse3.pas',
+        'x86 entry chain',
+        'dispatchable when CPU/runtime qualification passes',
+    ),
+    'SSE4.1': (
+        'backend adapter',
+        'src/nextpas.core.simd.sse41.pas',
+        'x86 entry chain',
+        'dispatchable when CPU/runtime qualification passes',
+    ),
+    'SSE4.2': (
+        'backend adapter',
+        'src/nextpas.core.simd.sse42.pas',
+        'x86 entry chain',
+        'dispatchable when CPU/runtime qualification passes',
+    ),
+    'AVX-512': (
+        'backend adapter',
+        'src/nextpas.core.simd.avx512.pas',
+        'opt-in AVX-512 entry chain',
+        'dispatchable when CPU/runtime qualification passes',
+    ),
+    'AVX2': (
+        'backend adapter',
+        'src/nextpas.core.simd.avx2.pas',
+        'x86 entry chain',
+        'dispatchable when CPU/runtime qualification passes',
+    ),
+    'NEON': (
+        'backend adapter',
+        'src/nextpas.core.simd.neon.pas',
+        'conditional on `SIMD_ARM_AVAILABLE`',
+        'default scalar fallback + asm opt-in; NEON asm requires `NEXTPAS_SIMD_ENABLE_NEON_ASM` and `NEXTPAS_SIMD_NEON_ASM_COMPILER_READY`',
+    ),
+    'RISCVV': (
+        'backend adapter',
+        'src/nextpas.core.simd.riscvv.pas',
+        'opt-in only with `SIMD_RISCV_AVAILABLE` + `SIMD_EXPERIMENTAL_RISCVV`',
+        'experimental opt-in only',
+    ),
 }
 
 EXPECTED_INTRINSICS_DISPOSITION = {
@@ -217,22 +267,27 @@ def strip_pascal_comments(a_text: str) -> str:
 def extract_markdown_rows(a_text: str) -> list[list[str]]:
     l_rows: list[list[str]] = []
     for match in MARKDOWN_TABLE_RE.finditer(a_text):
-        l_cells = [cell.strip().strip('`') for cell in match.group(1).split('|')]
+        l_cells = []
+        for cell in match.group(1).split('|'):
+            l_cell = cell.strip()
+            if len(l_cell) >= 2 and l_cell.startswith('`') and l_cell.endswith('`'):
+                l_cell = l_cell[1:-1]
+            l_cells.append(l_cell)
         if all(MARKDOWN_SEPARATOR_RE.fullmatch(cell.replace(' ', '')) for cell in l_cells if cell):
             continue
         l_rows.append(l_cells)
     return l_rows
 
 
-def extract_backend_truth(a_text: str) -> dict[str, tuple[str, str, str]]:
+def extract_backend_truth(a_text: str) -> dict[str, tuple[str, str, str, str]]:
     l_rows = extract_markdown_rows(a_text)
-    l_result: dict[str, tuple[str, str, str]] = {}
+    l_result: dict[str, tuple[str, str, str, str]] = {}
     for l_cells in l_rows:
-        if len(l_cells) < 4:
+        if len(l_cells) < 5:
             continue
         if l_cells[0] == 'Backend':
             continue
-        l_result[l_cells[0]] = (l_cells[1], l_cells[2], l_cells[3])
+        l_result[l_cells[0]] = (l_cells[1], l_cells[2], l_cells[3], l_cells[4])
     return l_result
 
 
@@ -337,15 +392,16 @@ def main() -> int:
     root = Path(__file__).resolve().parents[2]
     src_dir = root / 'src'
     docs_dir = root / 'docs'
+    simd_docs_dir = docs_dir / 'simd'
 
     root_unit_path = src_dir / 'nextpas.core.simd.sse2.pas'
     register_inc_path = src_dir / 'nextpas.core.simd.sse2.register.inc'
     wide_inc_path = src_dir / 'nextpas.core.simd.sse2.wide_emulation.inc'
     select_inc_path = src_dir / 'nextpas.core.simd.sse2.select.inc'
     intrinsics_raw_leaf_path = src_dir / 'nextpas.core.simd.intrinsics.x86.sse2.pas'
-    backend_truth_doc_path = docs_dir / 'SIMD_BACKEND_TRUTH.md'
-    intrinsics_disposition_doc_path = docs_dir / 'SIMD_INTRINSICS_DISPOSITION.md'
-    migration_map_doc_path = docs_dir / 'SIMD_SSE2_MIGRATION_MAP.md'
+    backend_truth_doc_path = simd_docs_dir / 'backend-truth.md'
+    intrinsics_disposition_doc_path = simd_docs_dir / 'intrinsics-disposition.md'
+    migration_map_doc_path = simd_docs_dir / 'sse2-migration-map.md'
 
     failures: list[str] = []
     duplicate_leaf_names: list[str] = []
@@ -574,7 +630,7 @@ def main() -> int:
     if backend_truth_rows:
         if set(backend_truth_rows) != set(EXPECTED_BACKEND_TRUTH):
             failures.append(
-                'SIMD_BACKEND_TRUTH.md backend rows drifted from expected mainline set: '
+                f'{backend_truth_doc_path.relative_to(root)} backend rows drifted from expected mainline set: '
                 f'missing={sorted(set(EXPECTED_BACKEND_TRUTH) - set(backend_truth_rows))}, '
                 f'extra={sorted(set(backend_truth_rows) - set(EXPECTED_BACKEND_TRUTH))}'
             )
@@ -584,12 +640,15 @@ def main() -> int:
                 continue
             if actual_row != expected_row:
                 failures.append(
-                    f'SIMD_BACKEND_TRUTH.md row mismatch for {backend_name}: '
+                    f'{backend_truth_doc_path.relative_to(root)} row mismatch for {backend_name}: '
                     f'expected={expected_row}, actual={actual_row}'
                 )
             expected_path = root / actual_row[1]
             if not expected_path.exists():
-                failures.append(f'SIMD_BACKEND_TRUTH.md points to missing file for {backend_name}: {actual_row[1]}')
+                failures.append(
+                    f'{backend_truth_doc_path.relative_to(root)} points to missing file for '
+                    f'{backend_name}: {actual_row[1]}'
+                )
 
     repo_intrinsics_units = collect_repo_intrinsics_units(src_dir)
     invalid_intrinsics_status_rows: list[str] = []
@@ -598,7 +657,7 @@ def main() -> int:
             invalid_intrinsics_status_rows.append(f'{unit_name}={status}')
     if invalid_intrinsics_status_rows:
         failures.append(
-            'SIMD_INTRINSICS_DISPOSITION.md contains invalid status rows: '
+            f'{intrinsics_disposition_doc_path.relative_to(root)} contains invalid status rows: '
             + ', '.join(sorted(invalid_intrinsics_status_rows))
         )
 
@@ -607,7 +666,7 @@ def main() -> int:
         active_disposition_units = {u for u, s in intrinsics_disposition_rows.items() if s != 'retire target'}
         if active_disposition_units != set(repo_intrinsics_units):
             failures.append(
-                'SIMD_INTRINSICS_DISPOSITION.md unit rows drifted from repo units: '
+                f'{intrinsics_disposition_doc_path.relative_to(root)} unit rows drifted from repo units: '
                 f'missing={sorted(set(repo_intrinsics_units) - active_disposition_units)}, '
                 f'extra={sorted(active_disposition_units - set(repo_intrinsics_units))}'
             )
@@ -617,7 +676,7 @@ def main() -> int:
                 continue
             if actual_status != expected_status:
                 failures.append(
-                    f'SIMD_INTRINSICS_DISPOSITION.md row mismatch for {unit_name}: '
+                    f'{intrinsics_disposition_doc_path.relative_to(root)} row mismatch for {unit_name}: '
                     f'expected={expected_status}, actual={actual_status}'
                 )
 

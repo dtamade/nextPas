@@ -18,70 +18,17 @@ function SimdAllocAlignment: NativeUInt;
 implementation
 
 uses
-  nextpas.core.platform.memory,
+  nextpas.core.errors,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch;
 
-{
-  SimdAlloc runtime truth:
-  - Delegates storage ownership to nextpas.core.platform.memory.
-  - SIMD does not declare raw Windows/POSIX allocator FFI.
-  - Native/fallback backend truth is reported by platform_aligned_alloc_backend.
-  - Wine or cross-compile evidence is forced-compile truth only until real
-    Windows runtime evidence is captured.
-
-  SimdAlloc native allocator behavior truth:
-  - Aligned allocation owner: nextpas.core.platform.memory.
-  - SIMD allocator state: consumes platform-owned aligned allocation seam.
-  - SIMD raw host allocator state: no Windows/POSIX allocator FFI declarations.
-  - Wine or cross-compile evidence is not real Windows runtime readiness.
-
-  SimdAlloc platform-owned aligned allocation seam consumer contract:
-  - Alignment values must be powers of two.
-  - Allocation size calculation must be overflow-guarded before calling the lower seam.
-  - Invalid alignment and overflow must fail closed with nil.
-  - SimdFree(nil) must be a no-op.
-  - SimdAlloc(0, *) must return nil.
-  - SimdRealloc(nil, size, alignment) must behave like SimdAlloc.
-  - SimdRealloc(ptr, 0, alignment) must free and return nil.
-  - SimdRealloc must preserve the requested alignment.
-  - SimdRealloc must preserve the overlapping prefix bytes.
-  - Current fallback/native backend truth lives in nextpas.core.platform.memory.
-  - Native Windows/POSIX allocator runtime readiness requires platform-owned seam integration plus real runtime evidence.
-
-  SimdAlloc platform.memory consumer integration truth:
-  - SIMD consumes only the platform.memory public aligned allocation seam.
-  - SIMD must not depend on platform.memory fallback header layout or magic values.
-  - SIMD native-ready claims must come from platform_aligned_alloc_is_native/platform_aligned_alloc_backend.
-
-  SimdAlloc runtime truth matrix:
-  - SIMD host runtime evidence is limited to the runner that actually executes the test.
-  - Windows/POSIX native runtime truth requires platform/native runner evidence.
-
-  SimdAlloc cross-host runtime evidence truth:
-  - Linux host runtime evidence proves only the executing Linux runner.
-  - Wine smoke is compatibility smoke, not native Windows runtime truth.
-  - Windows/POSIX native-ready truth requires platform/native runner artifacts.
-  - SIMD consumes only the platform.memory public aligned allocation seam.
-}
-
-function GetDefaultAlignment: NativeUInt; forward;
-
-function TryResolveAlignment(aAlignment: TSimdAlignment; out aResolved: NativeUInt): Boolean;
-begin
-  case NativeUInt(aAlignment) of
-    NativeUInt(saAuto): aResolved := GetDefaultAlignment;
-    NativeUInt(sa16):   aResolved := 16;
-    NativeUInt(sa32):   aResolved := 32;
-    NativeUInt(sa64):   aResolved := 64;
-    else
-    begin
-      aResolved := 0;
-      Exit(False);
-    end;
+type
+  PAllocHeader = ^TAllocHeader;
+  TAllocHeader = record
+    OrigPtr: Pointer;
+    Size: SizeUInt;
+    Alignment: NativeUInt;
   end;
-  Result := True;
-end;
 
 function GetDefaultAlignment: NativeUInt;
 begin
@@ -97,30 +44,75 @@ begin
   Result := GetDefaultAlignment;
 end;
 
+function ResolveAlignment(const AAlignment: TSimdAlignment): NativeUInt; inline;
+begin
+  if AAlignment = saAuto then
+    Result := GetDefaultAlignment
+  else
+    Result := NativeUInt(AAlignment);
+end;
+
+function ComputeRawAllocationSize(const ASize, AAlignment: SizeUInt): SizeUInt; inline;
+const
+  CHeaderSize = SizeUInt(SizeOf(TAllocHeader));
+begin
+  if (ASize > High(SizeUInt) - CHeaderSize) or
+    (ASize + CHeaderSize > High(SizeUInt) - AAlignment) then
+    raise EOutOfMemory.CreateFmt(
+      'SIMD allocation size overflow: size=%d, alignment=%d',
+      [ASize, AAlignment]);
+  Result := ASize + CHeaderSize + AAlignment;
+end;
+
 function SimdAlloc(aSize: SizeUInt; aAlignment: TSimdAlignment = saAuto): Pointer;
 var
   LAlign: NativeUInt;
+  LRawSize: SizeUInt;
+  LRaw, LAligned: Pointer;
+  LHeader: PAllocHeader;
 begin
   if aSize = 0 then Exit(nil);
 
-  if not TryResolveAlignment(aAlignment, LAlign) then
-    Exit(nil);
+  LAlign := ResolveAlignment(aAlignment);
+  LRawSize := ComputeRawAllocationSize(aSize, LAlign);
+  GetMem(LRaw, LRawSize);
 
-  Result := platform_aligned_alloc(aSize, LAlign);
+  LAligned := Pointer((PtrUInt(LRaw) + SizeOf(TAllocHeader) + LAlign - 1) and not (PtrUInt(LAlign) - 1));
+
+  LHeader := PAllocHeader(PtrUInt(LAligned) - SizeOf(TAllocHeader));
+  LHeader^.OrigPtr := LRaw;
+  LHeader^.Size := aSize;
+  LHeader^.Alignment := LAlign;
+
+  Result := LAligned;
 end;
 
 procedure SimdFree(aPtr: Pointer);
+var
+  LHeader: PAllocHeader;
 begin
-  platform_aligned_free(aPtr);
+  if aPtr = nil then Exit;
+  LHeader := PAllocHeader(PtrUInt(aPtr) - SizeOf(TAllocHeader));
+  FreeMem(LHeader^.OrigPtr);
 end;
 
 function SimdRealloc(aPtr: Pointer; aNewSize: SizeUInt; aAlignment: TSimdAlignment = saAuto): Pointer;
 var
-  LAlign: NativeUInt;
+  LHeader: PAllocHeader;
+  LOldSize: SizeUInt;
 begin
-  if not TryResolveAlignment(aAlignment, LAlign) then
-    Exit(nil);
-  Result := platform_aligned_realloc(aPtr, aNewSize, LAlign);
+  if aPtr = nil then Exit(SimdAlloc(aNewSize, aAlignment));
+  if aNewSize = 0 then begin SimdFree(aPtr); Exit(nil); end;
+
+  LHeader := PAllocHeader(PtrUInt(aPtr) - SizeOf(TAllocHeader));
+  LOldSize := LHeader^.Size;
+
+  Result := SimdAlloc(aNewSize, aAlignment);
+  if LOldSize < aNewSize then
+    Move(aPtr^, Result^, LOldSize)
+  else
+    Move(aPtr^, Result^, aNewSize);
+  SimdFree(aPtr);
 end;
 
 end.

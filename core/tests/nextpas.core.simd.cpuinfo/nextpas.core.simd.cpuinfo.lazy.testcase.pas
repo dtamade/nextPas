@@ -35,6 +35,7 @@ type
     procedure Test_ParseCacheSizeTextToKB_Boundaries;
     procedure Test_GetCPUInfoLazy_BasicFields;
     procedure Test_HasFeatureLazy_Consistency;
+    procedure Test_X86LazyQuickPredicates_UseUsableView;
     procedure Test_LazyEager_GenericFeatureParity;
     procedure Test_Reset_ReloadConsistency;
     procedure Test_NonX86CacheInfoOnLinux;
@@ -136,6 +137,35 @@ begin
       LFeature in LCPUInfo.GenericUsable,
       HasFeatureLazy(LFeature)
     );
+end;
+
+procedure TTestCase_LazyCPUInfo.Test_X86LazyQuickPredicates_UseUsableView;
+var
+  LLazy: TLazyCPUInfo;
+  LCPUInfo: TCPUInfo;
+begin
+  {$IFDEF SIMD_X86_AVAILABLE}
+  LLazy := LazyCPUInfo;
+  LLazy.Reset;
+  LCPUInfo := GetCPUInfoLazy;
+
+  if LCPUInfo.Arch = caX86 then
+  begin
+    AssertEquals(
+      'lazy HasAVX2 property should use usable AVX2 semantics',
+      LCPUInfo.X86.HasAVX2 and (gfSimd256 in LCPUInfo.GenericUsable),
+      LLazy.HasAVX2
+    );
+    AssertEquals(
+      'lazy HasAVX512F property should use usable AVX-512 semantics',
+      LCPUInfo.X86.HasAVX512F and (gfSimd512 in LCPUInfo.GenericUsable),
+      LLazy.HasAVX512F
+    );
+  end;
+  {$ELSE}
+  Ignore('lazy x86 quick predicate semantics skipped when SIMD_X86_AVAILABLE is off');
+  Exit;
+  {$ENDIF}
 end;
 
 procedure TTestCase_LazyCPUInfo.Test_LazyEager_GenericFeatureParity;

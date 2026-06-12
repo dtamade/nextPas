@@ -24,9 +24,9 @@ unit nextpas.core.simd.intrinsics;
 
   Supported ISA families:
   - x86/x64: MMX, SSE, SSE2, SSE3, SSE4.1, SSE4.2, AVX, AVX2, AVX-512, AES, SHA, FMA3
-  - ARM: NEON, SVE, SVE2
-  - RISC-V: RVV (Vector Extension)
-  - LoongArch: LASX
+  - ARM: NEON (experimental isolated stub, opt-in bring-up), SVE/SVE2 (experimental isolated stubs)
+  - RISC-V: RVV (experimental isolated stub)
+  - LoongArch: LASX (experimental isolated stub)
 
   Usage:
     uses nextpas.core.simd.intrinsics;
@@ -600,4 +600,3 @@ begin
 end;
 
 end.
-

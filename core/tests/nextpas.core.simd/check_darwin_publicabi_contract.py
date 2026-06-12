@@ -56,10 +56,10 @@ def build_result() -> dict[str, Any]:
     l_smoke = read_text(PUBLICABI_SMOKE)
 
     for l_pattern, l_message in (
-        (r'libfafafa.*\.dylib', "runner missing dylib library discovery"),
+        (r'libnextpas.*\.dylib', "runner missing dylib library discovery"),
         (r'nm -gU', "runner missing Darwin export inspection path"),
-        (r'FAFAFA_PUBLICABI_DLOPEN_SCOPE=global', "runner missing Darwin global-scope retry"),
-        (r'fafafa_simd_get_public_api_v2', "runner no longer requires public_api_v2 export"),
+        (r'NEXTPAS_PUBLICABI_DLOPEN_SCOPE=global', "runner missing Darwin global-scope retry"),
+        (r'nextpas_simd_get_public_api_v2', "runner no longer requires public_api_v2 export"),
     ):
         l_checks += require_pattern(l_runner, PUBLICABI_RUNNER, l_pattern, l_message, l_issues)
 
@@ -69,8 +69,8 @@ def build_result() -> dict[str, Any]:
         (r'probe_symbol_variant', "smoke harness missing Darwin symbol variant probes"),
         (r'resolve_required_symbol', "smoke harness missing required-symbol resolver"),
         (r'RTLD_DEFAULT underscore', "smoke harness missing RTLD_DEFAULT underscore probe"),
-        (r'FAFAFA_PUBLICABI_DLOPEN_SCOPE', "smoke harness missing env-controlled loader scope"),
-        (r'fafafa_simd_get_public_api_v2', "smoke harness lost public_api_v2 coverage"),
+        (r'NEXTPAS_PUBLICABI_DLOPEN_SCOPE', "smoke harness missing env-controlled loader scope"),
+        (r'nextpas_simd_get_public_api_v2', "smoke harness lost public_api_v2 coverage"),
     ):
         l_checks += require_pattern(l_smoke, PUBLICABI_SMOKE, l_pattern, l_message, l_issues)
 

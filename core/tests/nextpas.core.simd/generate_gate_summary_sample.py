@@ -66,7 +66,7 @@ def build_rows(scenario: str, warn_ms: int, fail_ms: int) -> list[dict[str, str]
                     "duration": "1333",
                     "event": "FAILED",
                     "detail": "rc=1; cpuinfo x86 suite failed; cmd=gate_step_cpuinfo_x86 /mock/tests",
-                    "artifacts": "tests/nextpas.core.simd.cpuinfo.x86/logs/test.txt",
+                    "artifacts": "tests/nextpas.core.simd.cpuinfo/logs/test.txt",
                 },
                 {
                     "step": "gate",

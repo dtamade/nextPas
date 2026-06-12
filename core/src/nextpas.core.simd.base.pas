@@ -326,8 +326,8 @@ type
     sbSSE42,    // SSE4.2 - 字符串处理/CRC32 (PCMPESTRI, CRC32 等)
     sbAVX2,
     sbAVX512,
-    sbNEON,
-    sbRISCVV    // ⚠️ EXPERIMENTAL - 实验性后端，API 可能变更
+    sbNEON,      // AArch64 default scalar fallback；NEON asm opt-in 需显式启用
+    sbRISCVV     // ⚠️ EXPERIMENTAL opt-in；not a stable public backend，API 可能变更
   );
 
   TSimdBackendArray = array of TSimdBackend;

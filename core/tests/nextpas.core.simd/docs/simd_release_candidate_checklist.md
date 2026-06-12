@@ -9,15 +9,15 @@
 - [x] strict-extra 模式通过
 - [x] 机器检查（接口->dispatch->后端->测试）已接入并可复验
   - `python3 tests/nextpas.core.simd/check_interface_implementation_completeness.py --strict`
-  - 当前快照：`dispatch=558, P0=0, P1=0, P2=0`
+  - 当前快照：`dispatch=616, scalar=616, sse2=520, avx2=416, avx512=232, neon=458, riscvv=529, P0=0, P1=0, P2=0`
   - 说明：该检查属于 token/赋值启发式扫描，用于发现缺口；不等价于完整语义证明。
 - [x] dispatch contract signature guard 已接入并可复验
   - `python3 tests/nextpas.core.simd/check_dispatch_contract_signature.py --summary-line`
-  - 当前快照：`backend_info_fields=6, dispatch_table_fields=560`
+  - 当前快照：`backend_info_fields=6, dispatch_table_fields=618`
   - 说明：该检查用于守住仓库内 `TSimdBackendInfo` / `TSimdDispatchTable` 声明签名，不把当前 record layout 当成 public binary ABI。
 - [x] public ABI signature/layout guard 已接入并可复验
   - `python3 tests/nextpas.core.simd/check_public_abi_signature.py --summary-line`
-  - 当前快照：`backends=10, capabilities=12, backend_pod_fields=5, public_api_fields=15, pascal_api=7, export_aliases=7`
+  - 当前快照：`backends=10, capabilities=12, backend_pod_fields=5, public_api_fields=22, pascal_api=8, export_aliases=8`
   - 说明：该检查用于守住 public ABI wrapper 的 Pascal 声明、ABI 常量、backend/capability ID 映射，以及 `publicabi_smoke.h` 的 consumer-side contract。
 
 ## B. 正确性
@@ -32,8 +32,20 @@
   - 命令：`FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh closeout-release SIMD-YYYYMMDD-152`
   - 固定顺序：`win-evidence-preflight -> impl-smoke-x86 -> closeout-host-local -> win-evidence-via-gh -> freeze-status`
   - 当前 `HEAD` 额外前提：这条 closeout lane 已在 `SIMD-20260519-152` fresh 收口到 `freeze-status = ready=True / cross-ready=True`。如果 future `freeze-status` 再次红在 `linux_sources_not_newer_than_gate` / `windows_sources_not_newer_than_evidence`，先补 fresh `gate` 与 fresh Windows evidence；只有 future preflight 再次回到 `RECENT_BILLING_BLOCK` 时，才在 preflight 处 fail-close，状态按 `code-green / release-evidence-blocked` 记录。
+
+Historical Windows/GH closeout shell helpers are not restored in this worktree.
+
+- `BuildOrTest.sh closeout-release`
+- `BuildOrTest.sh win-evidence-preflight`
+- `BuildOrTest.sh win-evidence-via-gh`
+- `BuildOrTest.sh win-closeout-finalize`
+
+当前仍保留的 local guidance：
+
+- `BuildOrTest.sh freeze-status-linux`
+- `BuildOrTest.sh gate-summary-selfcheck`
 - [x] `perf-smoke` 通过（non-scalar backend healthy）
-- [x] `gate` 通过（simd + cpuinfo + cpuinfo.x86）
+- [x] `gate` 通过（simd + cpuinfo + unified x86/global suite）
 - [x] `gate` 在 Release + nonx86/qemu 选项下通过
   - 命令：`FAFAFA_BUILD_MODE=Release SIMD_GATE_NONX86_IEEE754=1 SIMD_GATE_QEMU_NONX86_EVIDENCE=1 SIMD_GATE_QEMU_CPUINFO_NONX86_EVIDENCE=1 SIMD_GATE_QEMU_ARCH_MATRIX_EVIDENCE=1 bash tests/nextpas.core.simd/BuildOrTest.sh gate`
   - 结果：`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-02 09:43:02`）
@@ -139,9 +151,9 @@
   - 结果：新增 case `case_linux_lazy_missing_rc=1`（缺少 `cpuinfo-lazy-repeat` 必须失败）与补齐后 PASS 路径均通过；并新增 `case_linux_platform_missing_rc=1`（`qemu-cpuinfo-nonx86-evidence/full-*` 缺少 `arm-v7` 平台时必须失败）。
 - [x] 关键 suite repeat 压测通过（Release，串行）
   - `tests/nextpas.core.simd/BuildOrTest.sh test-concurrent-repeat 20`（`TTestCase_SimdConcurrent` 20/20 通过，日志：`tests/nextpas.core.simd/logs/repeat.TTestCase_SimdConcurrent_.{1..20}.txt`）
-  - `tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh test --suite=TTestCase_PlatformSpecific`（5/5 通过）
-  - `tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh test --suite=TTestCase_LazyCPUInfo`（5/5 通过）
-  - `for i in 1 2 3 4 5; do FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh test --suite=TTestCase_PlatformSpecific; done`（2026-03-03 新一轮 5/5 通过）
+  - `make -C core/tests/nextpas.core.simd cpuinfo-focused`（5/5 通过）
+  - `make -C core/tests/nextpas.core.simd cpuinfo-focused`（含 `TTestCase_LazyCPUInfo`，5/5 通过）
+  - `for i in 1 2 3 4 5; do make -C core/tests/nextpas.core.simd cpuinfo-focused; done`（2026-03-03 新一轮 5/5 通过）
   - `FAFAFA_BUILD_MODE=Release SIMD_CPUINFO_LAZY_REPEAT_ROUNDS=10 bash tests/nextpas.core.simd/BuildOrTest.sh cpuinfo-lazy-repeat`（2026-03-04 新一轮 10/10 通过；`TTestCase_LazyCPUInfo` + leak check 全 PASS）
   - `FAFAFA_BUILD_MODE=Release SIMD_QEMU_CPUINFO_REPEAT_ROUNDS=2 SIMD_QEMU_PLATFORMS='linux/arm/v7 linux/arm64 linux/riscv64' bash tests/nextpas.core.simd/BuildOrTest.sh qemu-cpuinfo-nonx86-full-repeat`（2026-03-04 独立三架构复压 2 轮全 PASS，见 `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-002539/summary.md`）
   - `FAFAFA_BUILD_MODE=Release SIMD_QEMU_CPUINFO_REPEAT_ROUNDS=2 SIMD_QEMU_PLATFORMS='linux/arm/v7 linux/arm64 linux/riscv64' bash tests/nextpas.core.simd/BuildOrTest.sh qemu-cpuinfo-nonx86-full-repeat`（2026-03-04 多代理并行复压 2 轮全 PASS，见 `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-024846/summary.md`）
@@ -149,7 +161,7 @@
   - 修复：`evaluate_simd_freeze_status.py` 已引入 gate-step 时间锚点选证据（`parse_gate_row_time` + `not_after` 过滤），避免并发场景误选“更晚但未完成”的 qemu summary。
   - 修复：`freeze_status.json` payload 增加兼容字段 `ready`（等价 `freeze_ready`）与 `linux_only`，并在 `freeze-status-rehearsal` 增加 JSON 字段断言，避免文本/JSON 判定口径不一致。
   - `freeze-status-rehearsal` 已新增并发回归样例（构造 `qemu-multiarch-20260210-000020/000021/000022` 不完整 summary），验证 freeze 仅使用 gate 对应时间点及之前的证据。
-  - 修复：`tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh` 改为按 FPC target 隔离产物目录（`bin/<cpu>-<os>`、`lib/<cpu>-<os>`），避免本地 x86_64 与 QEMU arm/arm64/riscv64 并发构建时 `.o/.ppu` 互相污染（`file in wrong format`）。
+  - 修复：`cpuinfo-focused` 现在通过 `build/bin` 与 `build/lib/cpuinfo-*` 隔离产物目录，避免本地 x86_64 与 QEMU arm/arm64/riscv64 并发构建时 `.o/.ppu` 互相污染（`file in wrong format`）。
   - 并发复验（Release）通过：在 `qemu-cpuinfo-nonx86-full-repeat` 执行期间并行执行本地 `cpuinfo PlatformSpecific` 多轮，最终 `arm-v7/arm64/riscv64` 全 PASS（见 `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-031955/summary.md`）。
   - 增强：`cpuinfo` runner 新增 `log-layout-check`，用于校验 `logs/<cpu>-<os>/{build,test}.txt` 与 legacy `logs/{build,test}.txt` 双路径同步。
   - 增强：`run_multiarch_qemu.sh` 在 `cpuinfo-*` 场景重试失败时自动输出 target/legacy 构建日志 tail（`SIMD_QEMU_CPUINFO_RETRY_LOG_TAIL_LINES` 可调），用于定位 riscv64 偶发重试。
@@ -289,15 +301,15 @@
   - 修复：
     - `src/nextpas.core.simd.cpuinfo.riscv.pas`：新增 `misa/csr misa` 键识别，仅在值可解析为数值位图时生效（支持十进制/十六进制、`0x`/`$`、`_` 分隔），并按位回填 `RV32I/RV64I + M/A/F/D/C/V`。
     - `tests/nextpas.core.simd.cpuinfo/nextpas.core.simd.cpuinfo.testcase.pas`：`Test_RISCVISAParserSamples` 新增 `misa` rv64/rv32 数值样例，并保留非数值 `misa` 负样例防误判。
-  - 复验：`FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh test --suite=TTestCase_PlatformSpecific`、`FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh test`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-004333/summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-004733/summary.md`（arm-v7/arm64/riscv64 全 PASS）。
+  - 复验：`make -C core/tests/nextpas.core.simd cpuinfo-focused`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-004333/summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-004733/summary.md`（arm-v7/arm64/riscv64 全 PASS）。
 - [x] RISC-V ISA 候选优选与 `misa` 回填 ISA 字符串已接入（2026-03-04）：
   - 缺口：`GetRISCVProcessorInfo` 先前对多 ISA 键采用“首个命中”，在 `extensions` 先出现或仅有 `misa` 位图时，`ISA/Architecture/XLEN` 回填不够稳定。
   - 修复：
     - `src/nextpas.core.simd.cpuinfo.riscv.pas`：新增 `ExtractBestRISCVISAFromCpuInfo`，按“含 RV 基线 + 键优先级 + 信息量”选择最佳 ISA 候选；合并数值 `misa` 证据，并在无可用 ISA 字符串时合成基线 ISA（如 `rv64imafdcv`）。
     - `tests/nextpas.core.simd.cpuinfo/nextpas.core.simd.cpuinfo.testcase.pas`：新增 `Test_RISCVISASelectionSamples`，覆盖多键优选、`misa` 合成、非数值 `misa` 负样例。
   - 复验：
-    - `FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh test`
-    - `FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh test --suite=TTestCase_PlatformSpecific`
+    - `make -C core/tests/nextpas.core.simd cpuinfo-focused`
+    - `make -C core/tests/nextpas.core.simd cpuinfo-focused`
     - `FAFAFA_BUILD_MODE=Release SIMD_QEMU_PLATFORMS='linux/arm/v7 linux/arm64 linux/riscv64' bash tests/nextpas.core.simd/BuildOrTest.sh qemu-cpuinfo-nonx86-full-evidence`
     - `FAFAFA_BUILD_MODE=Release SIMD_QEMU_CPUINFO_REPEAT_ROUNDS=1 SIMD_QEMU_PLATFORMS='linux/arm/v7 linux/arm64 linux/riscv64' bash tests/nextpas.core.simd/BuildOrTest.sh qemu-cpuinfo-nonx86-full-repeat`
     - `FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh gate-strict`

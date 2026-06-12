@@ -13,11 +13,14 @@
 ## Abstract
 
 SIMD-accelerated array operations for floating-point data.
-Provides high-level array APIs that automatically dispatch to the best available
-SIMD backend (Scalar/SSE2/AVX2/AVX-512/NEON).
+Provides high-level array APIs that route through the SIMD dispatch table.
+On x86_64 this may bind Scalar/SSE2/AVX2/AVX-512 candidates; AArch64 default scalar fallback
+remains the public behavior unless NEON asm opt-in is enabled.
 
 SIMD 加速的浮点数组操作。
-提供高级数组 API，自动派发到最佳可用 SIMD 后端。
+提供高级数组 API，通过 SIMD dispatch table 路由到当前 active backend；
+x86_64 可在 Scalar/SSE2/AVX2/AVX-512 等可派发候选中选择；AArch64 default scalar fallback
+是默认 public 行为，NEON asm opt-in 需显式启用。
 
 ## Declaration
 

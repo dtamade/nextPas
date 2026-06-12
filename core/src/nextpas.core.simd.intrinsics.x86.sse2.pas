@@ -1,4 +1,5 @@
 unit nextpas.core.simd.intrinsics.x86.sse2;
+// Disposition: STABLE — low-level intrinsics, used by the SSE2 backend
 
 {$I nextpas.core.settings.inc}
 {$I nextpas.core.simd.settings.inc}
@@ -7,7 +8,9 @@ interface
 
 {
   Role marker (2026-05-09):
+  - Active SSE2 intrinsics leaf
   - active raw ISA leaf for SSE2 128-bit primitives
+  - only qualified on x86/x86_64 targets
   - TM128/raw intrinsic surface only
   - no TVec/TMask facade, no dispatch registration, no runtime control-plane knowledge
   - 128-bit delegation frontier already has raw semantic parity coverage
@@ -5246,5 +5249,4 @@ end;
 {$POP}
 
 end.
-
 

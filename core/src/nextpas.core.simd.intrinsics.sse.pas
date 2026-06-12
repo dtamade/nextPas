@@ -7,8 +7,9 @@ unit nextpas.core.simd.intrinsics.sse;
 
 {
   === nextpas.core.simd.intrinsics.sse ===
-  Placeholder SSE intrinsics surface for isolated experimental bring-up.
+  Active SSE intrinsics leaf.
   SSE is Intel's 1999 128-bit SIMD extension, focused on single-precision math.
+  This active raw leaf is only qualified on x86/x86_64 targets.
   Highlights:
   - 128-bit vector registers (xmm0-xmm7/xmm15)
   - single-precision floating-point operations (4 x 32-bit)
@@ -129,8 +130,6 @@ function sse_getcsr: Integer;
 procedure sse_setcsr(Value: Integer);
 
 implementation
-
-uses
 
 // Helper: check whether a floating-point value is NaN.
 function IsNaN(Value: Single): Boolean;
@@ -1662,9 +1661,11 @@ end;
 procedure sse_stream_ps(var Dest; constref Src: TM128);
 var
   LDestPtr: PByte;
+  LSrcPtr: PByte;
   LDestAddr: PtrUInt;
 begin
   LDestPtr := @Dest;
+  LSrcPtr := @Src;
   {$push}
   {$warn 4055 off}
   LDestAddr := PtrUInt(LDestPtr);
@@ -1675,7 +1676,8 @@ begin
   begin
     asm
       mov rax, LDestPtr
-      movups xmm0, [Src]
+      mov rdx, LSrcPtr
+      movups xmm0, [rdx]
       movntps [rax], xmm0
     end;
     sse_sfence;

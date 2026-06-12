@@ -28,6 +28,26 @@
 - Windows PowerShell 先设置：`$env:FAFAFA_BUILD_MODE = 'Release'`
 - Gate 回灌阶段启用 fail-close，并补 fresh CPUInfo mainline/full/full-repeat + lazy-repeat：`SIMD_GATE_REQUIRE_WINDOWS_EVIDENCE=1` + `SIMD_GATE_QEMU_CPUINFO_NONX86_EVIDENCE=1` + `SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_EVIDENCE=1` + `SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_REPEAT=1` + `SIMD_GATE_CPUINFO_LAZY_REPEAT=3`
 
+## 当前 worktree 真相
+
+当前 worktree 当前不提供：
+
+- `BuildOrTest.sh closeout-release`
+- `BuildOrTest.sh win-evidence-preflight`
+- `BuildOrTest.sh win-evidence-via-gh`
+- `BuildOrTest.sh finalize-win-evidence`
+- `BuildOrTest.sh evidence-linux`
+- `BuildOrTest.sh win-closeout-snippets`
+- `BuildOrTest.sh win-closeout-finalize`
+
+当前这条 lane 仍保留的 live local path：
+
+- `BuildOrTest.sh gate-summary-selfcheck`
+- `BuildOrTest.sh freeze-status`
+- `BuildOrTest.sh freeze-status-linux`
+- `BuildOrTest.sh win-closeout-3cmd`
+- `buildOrTest.bat evidence-win-verify`
+
 如果你要从 Linux/Git Bash/WSL 侧把整条 release closeout 主线一波收口，直接运行：
 
 `FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh closeout-release SIMD-YYYYMMDD-152`
@@ -85,6 +105,7 @@
 - 若传入显式 `run-id`，脚本会直接复用现成 workflow run，不再执行 dispatch 前的 dirty worktree / remote ref 一致性拒绝；适合在本地继续修脚本、但要先消费既有 Windows artifact 的场景。
 - 如果你只是想单独重生 closeout summary 而不执行 freeze/apply，可使用低层 helper：`BuildOrTest.sh finalize-win-evidence`。
 - `collect_windows_b07_evidence.bat` / `buildOrTest.bat evidence-win-verify` 现在默认优先走 native batch gate，避免静默绕开 Windows 自己的 `publicabi-smoke` 路径。只有在显式设置 `SIMD_WIN_EVIDENCE_USE_BASH_GATE=1` 时，才会切到 bash gate 口径做诊断性预演。
+- `collect_windows_b07_evidence.bat` 会保存并恢复 `SIMD_OUTPUT_ROOT`，并把 sibling publicabi runner 固定到 `core/build/tests/nextpas.core.simd.publicabi`；不要让 Windows publicabi evidence 链隐式跟随 runner 默认输出根漂移。
 - 这里的 `LAZBUILD` 必须解析到 native Windows `.exe/.bat/.cmd`；不要把它指到 `Z:\opt\...` 这种 Wine 可见但 `cmd.exe` 不能执行的 Linux ELF。
 - 当前本机 Wine 探针里，`where bash` 在 `cmd.exe` 下不可用，`wine start /unix ...` 也没有形成可用的 `lazbuild` bridge；不要把 host-side Unix bridge 当成 native Windows `LAZBUILD` 的替代。
 - native batch 采集路径不会额外导出 `gate_summary.json`；这是有意为之，因为该路径本身不生成一份新的 `gate_summary.md`，强行导出只会冒着复用旧摘要的风险。若你需要归档 `gate_summary.md/json`，请走 `win-evidence-via-gh`，或仅在 `cmd.exe` 真的能解析 `bash` 的环境里显式 opt-in `SIMD_WIN_EVIDENCE_USE_BASH_GATE=1` 做诊断性预演；当前本机 Wine 不属于这种环境。

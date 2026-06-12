@@ -18,11 +18,13 @@ goto :collect_args
 :args_done
 
 set "ROOT=%~dp0"
+set "OUTPUT_ROOT=%SIMD_OUTPUT_ROOT%"
+if "%OUTPUT_ROOT%"=="" set "OUTPUT_ROOT=%ROOT%"
 set "PROG=%ROOT%nextpas.core.simd.cpuinfo.test.lpr"
-set "BIN_DIR=%ROOT%bin"
-set "LIB_DIR=%ROOT%lib"
+set "BIN_DIR=%OUTPUT_ROOT%\bin"
+set "LIB_DIR=%OUTPUT_ROOT%\lib"
 set "BIN=%BIN_DIR%\nextpas.core.simd.cpuinfo.test.exe"
-set "LOG_DIR=%ROOT%logs"
+set "LOG_DIR=%OUTPUT_ROOT%\logs"
 set "BUILD_LOG=%LOG_DIR%\build.txt"
 set "TEST_LOG=%LOG_DIR%\test.txt"
 set "MODE=%FAFAFA_BUILD_MODE%"
@@ -46,7 +48,7 @@ echo Usage: %~nx0 [clean^|build^|check^|test^|debug^|release] [test-args...]
 exit /b 2
 
 :clean
-echo [CLEAN] Removing bin, lib, logs
+echo [CLEAN] Removing %BIN_DIR%, %LIB_DIR%, %LOG_DIR%
 if exist "%BIN_DIR%" rmdir /s /q "%BIN_DIR%"
 if exist "%LIB_DIR%" rmdir /s /q "%LIB_DIR%"
 if exist "%LOG_DIR%" rmdir /s /q "%LOG_DIR%"
@@ -59,9 +61,9 @@ if /I "%MODE%"=="Debug" (
   set "MODE=Release"
   set "FPC_MODE_FLAGS=-O2 -gl"
 )
-echo [BUILD] Program: %PROG% (mode=%MODE%)
+echo [BUILD] Program: %PROG% (mode=%MODE%, output_root=%OUTPUT_ROOT%)
 echo. > "%BUILD_LOG%"
-fpc -B -Mobjfpc -Sc -Si %FPC_MODE_FLAGS% ^
+	fpc -B -Mobjfpc -Sc -Si %FPC_MODE_FLAGS% ^
   -Fu"%ROOT%" -Fu"%ROOT%..\..\src" -Fi"%ROOT%..\..\src" ^
   -FE"%BIN_DIR%" -FU"%LIB_DIR%" ^
   -o"%BIN%" "%PROG%" > "%BUILD_LOG%" 2>&1

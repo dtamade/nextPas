@@ -30,10 +30,13 @@ uses
   nextpas.core.simd.backend.priority;
 
 // =============================================================
-// RISC-V V (Vector Extension) SIMD Backend
+// RISC-V V (Vector Extension) experimental opt-in backend adapter
 // =============================================================
-// This unit implements SIMD operations using RISC-V V extension.
-// On non-RISC-V platforms, scalar fallback implementations are used.
+// This unit hosts the RISCVV backend adapter and source-contract surface.
+// It is not a default stable public backend: the stable umbrella only wires it
+// when the experimental RISCVV opt-in path is explicitly enabled.
+// On non-RISC-V platforms and non-asm builds, scalar fallback implementations
+// are used.
 //
 // RISC-V V Key Features:
 // - Scalable vector length (VLEN)

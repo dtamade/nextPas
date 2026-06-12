@@ -12,7 +12,7 @@ unit nextpas.core.simd.testcase;
 interface
 
 uses
-  Classes, SysUtils, Math, nextpas.core.math, fpcunit, testregistry,
+  Classes, SysUtils, Math, nextpas.core.base, nextpas.core.math, fpcunit, testregistry,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.fixturehelpers,
@@ -590,6 +590,7 @@ type
     procedure Test_VecF32x4_Gather_Sequential;
     procedure Test_VecF32x4_Gather_Stride;
     procedure Test_VecF32x4_Gather_Random;
+    procedure Test_VecF32x4_Gather_DuplicateIndices_DuplicateValues;
     procedure Test_VecI32x4_Gather_Sequential;
     procedure Test_VecI32x4_Gather_Negative;
     
@@ -597,6 +598,24 @@ type
     procedure Test_VecF32x4_Scatter_Sequential;
     procedure Test_VecF32x4_Scatter_Stride;
     procedure Test_VecI32x4_Scatter_Sequential;
+    procedure Test_VecI32x4_Scatter_DuplicateIndices_LastLaneWins;
+    procedure Test_VecF32x4_GatherSelect_Preserves_OrValue_On_Masked_Lanes;
+    procedure Test_VecI32x4_GatherSelect_Preserves_OrValue_On_Masked_Lanes;
+    procedure Test_VecF32x4_ScatterSelect_Skips_Disabled_Lanes;
+    procedure Test_VecI32x4_ScatterSelect_Skips_Disabled_Lanes;
+    procedure Test_VecF32x4_ScatterSelect_DuplicateIndices_LastEnabledLaneWins;
+    procedure Test_VecF32x4_Gather_NilBase_Raises_EArgumentNil;
+    procedure Test_VecI32x4_Gather_NilBase_Raises_EArgumentNil;
+    procedure Test_VecF32x4_Scatter_NilBase_Raises_EArgumentNil;
+    procedure Test_VecI32x4_Scatter_NilBase_Raises_EArgumentNil;
+    procedure Test_VecF32x4_GatherSelect_NilBase_AllDisabled_Returns_OrValue;
+    procedure Test_VecI32x4_GatherSelect_NilBase_AllDisabled_Returns_OrValue;
+    procedure Test_VecF32x4_GatherSelect_NilBase_EnabledLane_Raises_EArgumentNil;
+    procedure Test_VecI32x4_GatherSelect_NilBase_EnabledLane_Raises_EArgumentNil;
+    procedure Test_VecF32x4_ScatterSelect_NilBase_AllDisabled_Is_NoOp;
+    procedure Test_VecI32x4_ScatterSelect_NilBase_AllDisabled_Is_NoOp;
+    procedure Test_VecF32x4_ScatterSelect_NilBase_EnabledLane_Raises_EArgumentNil;
+    procedure Test_VecI32x4_ScatterSelect_NilBase_EnabledLane_Raises_EArgumentNil;
     
     // 边界条件
     procedure Test_Gather_ZeroIndex;
@@ -14158,7 +14177,7 @@ begin
   indices.i[2] := 2;
   indices.i[3] := 3;
   
-  r := VecF32x4Gather(@data[0], indices);
+  r := nextpas.core.simd.VecF32x4Gather(@data[0], indices);
   
   AssertEquals('Gather[0]', 10.0, r.f[0], 0.0001);
   AssertEquals('Gather[1]', 20.0, r.f[1], 0.0001);
@@ -14182,7 +14201,7 @@ begin
   indices.i[2] := 4;
   indices.i[3] := 6;
   
-  r := VecF32x4Gather(@data[0], indices);
+  r := nextpas.core.simd.VecF32x4Gather(@data[0], indices);
   
   AssertEquals('Gather stride[0]', 10.0, r.f[0], 0.0001);
   AssertEquals('Gather stride[1]', 30.0, r.f[1], 0.0001);
@@ -14206,12 +14225,35 @@ begin
   indices.i[2] := 15;
   indices.i[3] := 3;
   
-  r := VecF32x4Gather(@data[0], indices);
+  r := nextpas.core.simd.VecF32x4Gather(@data[0], indices);
   
   AssertEquals('Gather random[0]', 80.0, r.f[0], 0.0001);
   AssertEquals('Gather random[1]', 10.0, r.f[1], 0.0001);
   AssertEquals('Gather random[2]', 160.0, r.f[2], 0.0001);
   AssertEquals('Gather random[3]', 40.0, r.f[3], 0.0001);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecF32x4_Gather_DuplicateIndices_DuplicateValues;
+var
+  data: array[0..7] of Single;
+  indices: TVecI32x4;
+  r: TVecF32x4;
+  i: Integer;
+begin
+  for i := 0 to 7 do
+    data[i] := (i + 1) * 10.0;
+
+  indices.i[0] := 3;
+  indices.i[1] := 1;
+  indices.i[2] := 3;
+  indices.i[3] := 1;
+
+  r := nextpas.core.simd.VecF32x4Gather(@data[0], indices);
+
+  AssertEquals('Gather duplicate[0]', 40.0, r.f[0], 0.0001);
+  AssertEquals('Gather duplicate[1]', 20.0, r.f[1], 0.0001);
+  AssertEquals('Gather duplicate[2]', 40.0, r.f[2], 0.0001);
+  AssertEquals('Gather duplicate[3]', 20.0, r.f[3], 0.0001);
 end;
 
 procedure TTestCase_GatherScatter.Test_VecI32x4_Gather_Sequential;
@@ -14229,7 +14271,7 @@ begin
   indices.i[2] := 2;
   indices.i[3] := 3;
   
-  r := VecI32x4Gather(@data[0], indices);
+  r := nextpas.core.simd.VecI32x4Gather(@data[0], indices);
   
   AssertEquals('Gather[0]', 100, r.i[0]);
   AssertEquals('Gather[1]', 200, r.i[1]);
@@ -14252,7 +14294,7 @@ begin
   indices.i[2] := 15;
   indices.i[3] := 4;
   
-  r := VecI32x4Gather(@data[0], indices);
+  r := nextpas.core.simd.VecI32x4Gather(@data[0], indices);
   
   AssertEquals('Gather negative[0]', -8, r.i[0]);
   AssertEquals('Gather negative[1]', 0, r.i[1]);
@@ -14283,7 +14325,7 @@ begin
   values.f[2] := 33.0;
   values.f[3] := 44.0;
   
-  VecF32x4Scatter(@data[0], indices, values);
+  nextpas.core.simd.VecF32x4Scatter(@data[0], indices, values);
   
   AssertEquals('Scatter[0]', 11.0, data[0], 0.0001);
   AssertEquals('Scatter[1]', 22.0, data[1], 0.0001);
@@ -14314,7 +14356,7 @@ begin
   values.f[2] := 300.0;
   values.f[3] := 400.0;
   
-  VecF32x4Scatter(@data[0], indices, values);
+  nextpas.core.simd.VecF32x4Scatter(@data[0], indices, values);
   
   AssertEquals('Scatter stride[0]', 100.0, data[0], 0.0001);
   AssertEquals('Scatter stride[4]', 200.0, data[4], 0.0001);
@@ -14345,7 +14387,7 @@ begin
   values.i[2] := 333;
   values.i[3] := 444;
   
-  VecI32x4Scatter(@data[0], indices, values);
+  nextpas.core.simd.VecI32x4Scatter(@data[0], indices, values);
   
   AssertEquals('Scatter[5]', 111, data[5]);
   AssertEquals('Scatter[10]', 222, data[10]);
@@ -14353,6 +14395,394 @@ begin
   AssertEquals('Scatter[15]', 444, data[15]);
   // 确保其它位置未被修改
   AssertEquals('Scatter[0] unchanged', 0, data[0]);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecI32x4_Scatter_DuplicateIndices_LastLaneWins;
+var
+  data: array[0..7] of Int32;
+  indices: TVecI32x4;
+  values: TVecI32x4;
+  i: Integer;
+begin
+  for i := 0 to 7 do
+    data[i] := -1;
+
+  indices.i[0] := 5;
+  indices.i[1] := 2;
+  indices.i[2] := 5;
+  indices.i[3] := 5;
+
+  values.i[0] := 111;
+  values.i[1] := 222;
+  values.i[2] := 333;
+  values.i[3] := 444;
+
+  nextpas.core.simd.VecI32x4Scatter(@data[0], indices, values);
+
+  AssertEquals('Scatter duplicate last lane wins[5]', 444, data[5]);
+  AssertEquals('Scatter duplicate preserved unrelated write[2]', 222, data[2]);
+  AssertEquals('Scatter duplicate untouched[0]', -1, data[0]);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecF32x4_GatherSelect_Preserves_OrValue_On_Masked_Lanes;
+var
+  data: array[0..7] of Single;
+  indices: TVecI32x4;
+  orVal: TVecF32x4;
+  r: TVecF32x4;
+  i: Integer;
+begin
+  for i := 0 to 7 do
+    data[i] := (i + 1) * 10.0;
+
+  indices.i[0] := 0;
+  indices.i[1] := 5;
+  indices.i[2] := 2;
+  indices.i[3] := 7;
+
+  orVal.f[0] := -1.0;
+  orVal.f[1] := -2.0;
+  orVal.f[2] := -3.0;
+  orVal.f[3] := -4.0;
+
+  r := nextpas.core.simd.VecF32x4GatherSelect(@data[0], TMask4($05), indices, orVal);
+
+  AssertEquals('GatherSelect f32 enabled[0]', 10.0, r.f[0], 0.0001);
+  AssertEquals('GatherSelect f32 masked[1]', -2.0, r.f[1], 0.0001);
+  AssertEquals('GatherSelect f32 enabled[2]', 30.0, r.f[2], 0.0001);
+  AssertEquals('GatherSelect f32 masked[3]', -4.0, r.f[3], 0.0001);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecI32x4_GatherSelect_Preserves_OrValue_On_Masked_Lanes;
+var
+  data: array[0..7] of Int32;
+  indices: TVecI32x4;
+  orVal: TVecI32x4;
+  r: TVecI32x4;
+  i: Integer;
+begin
+  for i := 0 to 7 do
+    data[i] := (i + 1) * 100;
+
+  indices.i[0] := 6;
+  indices.i[1] := 1;
+  indices.i[2] := 4;
+  indices.i[3] := 0;
+
+  orVal.i[0] := -10;
+  orVal.i[1] := -20;
+  orVal.i[2] := -30;
+  orVal.i[3] := -40;
+
+  r := nextpas.core.simd.VecI32x4GatherSelect(@data[0], TMask4($0A), indices, orVal);
+
+  AssertEquals('GatherSelect i32 masked[0]', -10, r.i[0]);
+  AssertEquals('GatherSelect i32 enabled[1]', 200, r.i[1]);
+  AssertEquals('GatherSelect i32 masked[2]', -30, r.i[2]);
+  AssertEquals('GatherSelect i32 enabled[3]', 100, r.i[3]);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecF32x4_ScatterSelect_Skips_Disabled_Lanes;
+var
+  data: array[0..7] of Single;
+  indices: TVecI32x4;
+  values: TVecF32x4;
+  i: Integer;
+begin
+  for i := 0 to 7 do
+    data[i] := -(i + 1);
+
+  indices.i[0] := 0;
+  indices.i[1] := 3;
+  indices.i[2] := 5;
+  indices.i[3] := 7;
+
+  values.f[0] := 11.0;
+  values.f[1] := 22.0;
+  values.f[2] := 33.0;
+  values.f[3] := 44.0;
+
+  nextpas.core.simd.VecF32x4ScatterSelect(@data[0], TMask4($09), indices, values);
+
+  AssertEquals('ScatterSelect f32 enabled[0]', 11.0, data[0], 0.0001);
+  AssertEquals('ScatterSelect f32 masked[1]', -4.0, data[3], 0.0001);
+  AssertEquals('ScatterSelect f32 masked[2]', -6.0, data[5], 0.0001);
+  AssertEquals('ScatterSelect f32 enabled[3]', 44.0, data[7], 0.0001);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecI32x4_ScatterSelect_Skips_Disabled_Lanes;
+var
+  data: array[0..7] of Int32;
+  indices: TVecI32x4;
+  values: TVecI32x4;
+  i: Integer;
+begin
+  for i := 0 to 7 do
+    data[i] := -(i + 1) * 10;
+
+  indices.i[0] := 1;
+  indices.i[1] := 2;
+  indices.i[2] := 4;
+  indices.i[3] := 6;
+
+  values.i[0] := 111;
+  values.i[1] := 222;
+  values.i[2] := 333;
+  values.i[3] := 444;
+
+  nextpas.core.simd.VecI32x4ScatterSelect(@data[0], TMask4($06), indices, values);
+
+  AssertEquals('ScatterSelect i32 masked[0]', -20, data[1]);
+  AssertEquals('ScatterSelect i32 enabled[1]', 222, data[2]);
+  AssertEquals('ScatterSelect i32 enabled[2]', 333, data[4]);
+  AssertEquals('ScatterSelect i32 masked[3]', -70, data[6]);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecF32x4_ScatterSelect_DuplicateIndices_LastEnabledLaneWins;
+var
+  data: array[0..7] of Single;
+  indices: TVecI32x4;
+  values: TVecF32x4;
+  i: Integer;
+begin
+  for i := 0 to 7 do
+    data[i] := -1.0;
+
+  indices.i[0] := 4;
+  indices.i[1] := 4;
+  indices.i[2] := 4;
+  indices.i[3] := 6;
+
+  values.f[0] := 10.0;
+  values.f[1] := 20.0;
+  values.f[2] := 30.0;
+  values.f[3] := 40.0;
+
+  nextpas.core.simd.VecF32x4ScatterSelect(@data[0], TMask4($0D), indices, values);
+
+  AssertEquals('ScatterSelect duplicate last enabled lane wins[4]', 30.0, data[4], 0.0001);
+  AssertEquals('ScatterSelect duplicate enabled tail[6]', 40.0, data[6], 0.0001);
+  AssertEquals('ScatterSelect duplicate untouched[0]', -1.0, data[0], 0.0001);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecF32x4_Gather_NilBase_Raises_EArgumentNil;
+var
+  indices: TVecI32x4;
+  raisedArgumentNil: Boolean;
+begin
+  indices := VecI32x4Make(0, 1, 2, 3);
+  raisedArgumentNil := False;
+  try
+    nextpas.core.simd.VecF32x4Gather(nil, indices);
+  except
+    on EArgumentNil do
+      raisedArgumentNil := True;
+    on E: Exception do
+      Fail('VecF32x4Gather nil base raised ' + E.ClassName);
+  end;
+  AssertTrue('VecF32x4Gather nil base should raise EArgumentNil', raisedArgumentNil);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecI32x4_Gather_NilBase_Raises_EArgumentNil;
+var
+  indices: TVecI32x4;
+  raisedArgumentNil: Boolean;
+begin
+  indices := VecI32x4Make(0, 1, 2, 3);
+  raisedArgumentNil := False;
+  try
+    nextpas.core.simd.VecI32x4Gather(nil, indices);
+  except
+    on EArgumentNil do
+      raisedArgumentNil := True;
+    on E: Exception do
+      Fail('VecI32x4Gather nil base raised ' + E.ClassName);
+  end;
+  AssertTrue('VecI32x4Gather nil base should raise EArgumentNil', raisedArgumentNil);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecF32x4_Scatter_NilBase_Raises_EArgumentNil;
+var
+  indices: TVecI32x4;
+  values: TVecF32x4;
+  raisedArgumentNil: Boolean;
+begin
+  indices := VecI32x4Make(0, 1, 2, 3);
+  values := VecF32x4Make(1.0, 2.0, 3.0, 4.0);
+  raisedArgumentNil := False;
+  try
+    nextpas.core.simd.VecF32x4Scatter(nil, indices, values);
+  except
+    on EArgumentNil do
+      raisedArgumentNil := True;
+    on E: Exception do
+      Fail('VecF32x4Scatter nil base raised ' + E.ClassName);
+  end;
+  AssertTrue('VecF32x4Scatter nil base should raise EArgumentNil', raisedArgumentNil);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecI32x4_Scatter_NilBase_Raises_EArgumentNil;
+var
+  indices: TVecI32x4;
+  values: TVecI32x4;
+  raisedArgumentNil: Boolean;
+begin
+  indices := VecI32x4Make(0, 1, 2, 3);
+  values := VecI32x4Make(11, 22, 33, 44);
+  raisedArgumentNil := False;
+  try
+    nextpas.core.simd.VecI32x4Scatter(nil, indices, values);
+  except
+    on EArgumentNil do
+      raisedArgumentNil := True;
+    on E: Exception do
+      Fail('VecI32x4Scatter nil base raised ' + E.ClassName);
+  end;
+  AssertTrue('VecI32x4Scatter nil base should raise EArgumentNil', raisedArgumentNil);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecF32x4_GatherSelect_NilBase_AllDisabled_Returns_OrValue;
+var
+  indices: TVecI32x4;
+  orVal: TVecF32x4;
+  r: TVecF32x4;
+begin
+  indices := VecI32x4Make(0, 1, 2, 3);
+  orVal := VecF32x4Make(-1.0, -2.0, -3.0, -4.0);
+
+  r := nextpas.core.simd.VecF32x4GatherSelect(nil, TMask4($00), indices, orVal);
+
+  AssertEquals('GatherSelect f32 nil base all-disabled[0]', -1.0, r.f[0], 0.0001);
+  AssertEquals('GatherSelect f32 nil base all-disabled[1]', -2.0, r.f[1], 0.0001);
+  AssertEquals('GatherSelect f32 nil base all-disabled[2]', -3.0, r.f[2], 0.0001);
+  AssertEquals('GatherSelect f32 nil base all-disabled[3]', -4.0, r.f[3], 0.0001);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecI32x4_GatherSelect_NilBase_AllDisabled_Returns_OrValue;
+var
+  indices: TVecI32x4;
+  orVal: TVecI32x4;
+  r: TVecI32x4;
+begin
+  indices := VecI32x4Make(0, 1, 2, 3);
+  orVal := VecI32x4Make(-10, -20, -30, -40);
+
+  r := nextpas.core.simd.VecI32x4GatherSelect(nil, TMask4($00), indices, orVal);
+
+  AssertEquals('GatherSelect i32 nil base all-disabled[0]', -10, r.i[0]);
+  AssertEquals('GatherSelect i32 nil base all-disabled[1]', -20, r.i[1]);
+  AssertEquals('GatherSelect i32 nil base all-disabled[2]', -30, r.i[2]);
+  AssertEquals('GatherSelect i32 nil base all-disabled[3]', -40, r.i[3]);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecF32x4_GatherSelect_NilBase_EnabledLane_Raises_EArgumentNil;
+var
+  indices: TVecI32x4;
+  orVal: TVecF32x4;
+  raisedArgumentNil: Boolean;
+begin
+  indices := VecI32x4Make(0, 1, 2, 3);
+  orVal := VecF32x4Make(-1.0, -2.0, -3.0, -4.0);
+  raisedArgumentNil := False;
+  try
+    nextpas.core.simd.VecF32x4GatherSelect(nil, TMask4($01), indices, orVal);
+  except
+    on EArgumentNil do
+      raisedArgumentNil := True;
+    on E: Exception do
+      Fail('VecF32x4GatherSelect nil base with enabled lane raised ' + E.ClassName);
+  end;
+  AssertTrue('VecF32x4GatherSelect nil base with enabled lane should raise EArgumentNil', raisedArgumentNil);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecI32x4_GatherSelect_NilBase_EnabledLane_Raises_EArgumentNil;
+var
+  indices: TVecI32x4;
+  orVal: TVecI32x4;
+  raisedArgumentNil: Boolean;
+begin
+  indices := VecI32x4Make(0, 1, 2, 3);
+  orVal := VecI32x4Make(-10, -20, -30, -40);
+  raisedArgumentNil := False;
+  try
+    nextpas.core.simd.VecI32x4GatherSelect(nil, TMask4($02), indices, orVal);
+  except
+    on EArgumentNil do
+      raisedArgumentNil := True;
+    on E: Exception do
+      Fail('VecI32x4GatherSelect nil base with enabled lane raised ' + E.ClassName);
+  end;
+  AssertTrue('VecI32x4GatherSelect nil base with enabled lane should raise EArgumentNil', raisedArgumentNil);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecF32x4_ScatterSelect_NilBase_AllDisabled_Is_NoOp;
+var
+  indices: TVecI32x4;
+  values: TVecF32x4;
+begin
+  indices := VecI32x4Make(0, 1, 2, 3);
+  values := VecF32x4Make(11.0, 22.0, 33.0, 44.0);
+  try
+    nextpas.core.simd.VecF32x4ScatterSelect(nil, TMask4($00), indices, values);
+  except
+    on E: Exception do
+      Fail('VecF32x4ScatterSelect nil base with all-disabled mask raised ' + E.ClassName);
+  end;
+end;
+
+procedure TTestCase_GatherScatter.Test_VecI32x4_ScatterSelect_NilBase_AllDisabled_Is_NoOp;
+var
+  indices: TVecI32x4;
+  values: TVecI32x4;
+begin
+  indices := VecI32x4Make(0, 1, 2, 3);
+  values := VecI32x4Make(11, 22, 33, 44);
+  try
+    nextpas.core.simd.VecI32x4ScatterSelect(nil, TMask4($00), indices, values);
+  except
+    on E: Exception do
+      Fail('VecI32x4ScatterSelect nil base with all-disabled mask raised ' + E.ClassName);
+  end;
+end;
+
+procedure TTestCase_GatherScatter.Test_VecF32x4_ScatterSelect_NilBase_EnabledLane_Raises_EArgumentNil;
+var
+  indices: TVecI32x4;
+  values: TVecF32x4;
+  raisedArgumentNil: Boolean;
+begin
+  indices := VecI32x4Make(0, 1, 2, 3);
+  values := VecF32x4Make(11.0, 22.0, 33.0, 44.0);
+  raisedArgumentNil := False;
+  try
+    nextpas.core.simd.VecF32x4ScatterSelect(nil, TMask4($01), indices, values);
+  except
+    on EArgumentNil do
+      raisedArgumentNil := True;
+    on E: Exception do
+      Fail('VecF32x4ScatterSelect nil base with enabled lane raised ' + E.ClassName);
+  end;
+  AssertTrue('VecF32x4ScatterSelect nil base with enabled lane should raise EArgumentNil', raisedArgumentNil);
+end;
+
+procedure TTestCase_GatherScatter.Test_VecI32x4_ScatterSelect_NilBase_EnabledLane_Raises_EArgumentNil;
+var
+  indices: TVecI32x4;
+  values: TVecI32x4;
+  raisedArgumentNil: Boolean;
+begin
+  indices := VecI32x4Make(0, 1, 2, 3);
+  values := VecI32x4Make(11, 22, 33, 44);
+  raisedArgumentNil := False;
+  try
+    nextpas.core.simd.VecI32x4ScatterSelect(nil, TMask4($08), indices, values);
+  except
+    on EArgumentNil do
+      raisedArgumentNil := True;
+    on E: Exception do
+      Fail('VecI32x4ScatterSelect nil base with enabled lane raised ' + E.ClassName);
+  end;
+  AssertTrue('VecI32x4ScatterSelect nil base with enabled lane should raise EArgumentNil', raisedArgumentNil);
 end;
 
 procedure TTestCase_GatherScatter.Test_Gather_ZeroIndex;
@@ -14371,7 +14801,7 @@ begin
   indices.i[2] := 0;
   indices.i[3] := 0;
   
-  r := VecF32x4Gather(@data[0], indices);
+  r := nextpas.core.simd.VecF32x4Gather(@data[0], indices);
   
   // 所有结果应该都是 data[0]
   AssertEquals('Gather zero[0]', 0.0, r.f[0], 0.0001);
@@ -14396,7 +14826,7 @@ begin
   indices.i[2] := 512;
   indices.i[3] := 1023;
   
-  r := VecF32x4Gather(@data[0], indices);
+  r := nextpas.core.simd.VecF32x4Gather(@data[0], indices);
   
   AssertEquals('Gather large[0]', 0.0, r.f[0], 0.0001);
   AssertEquals('Gather large[1]', 256.0, r.f[1], 0.0001);

@@ -2,32 +2,53 @@
 
 ## 目标
 
-为 `sse/mmx` intrinsics 建立“接口声明 ↔ 测试用例”直接映射检查，避免后续迭代出现新增接口未补测试的情况。
+为当前 live intrinsics carrier 建立“接口声明 ↔ direct-test 引用”映射检查，避免后续迭代出现新增接口未补低层测试的情况。
 
 ## 检查脚本
 
-- 脚本：`tests/nextpas.core.simd/check_intrinsics_coverage.py`
+- 脚本：
+  - `tests/nextpas.core.simd/check_intrinsics_coverage_layout_contract.py`
+  - `tests/nextpas.core.simd/check_intrinsics_coverage.py`
 - 检查范围：
   - `src/nextpas.core.simd.intrinsics.sse.pas`
   - `src/nextpas.core.simd.intrinsics.mmx.pas`
-  - 对应 `tests/*intrinsics*.testcase.pas` 中的 `Test_<intrinsic>`
+  - `src/nextpas.core.simd.intrinsics.avx2.pas`
+  - `src/nextpas.core.simd.intrinsics.aes.pas`
+  - `src/nextpas.core.simd.intrinsics.sha.pas`
+  - `src/nextpas.core.simd.intrinsics.x86.sse2.pas`
+  - 当前 live carrier：
+    - `tests/nextpas.core.simd/nextpas.core.simd.intrinsics.avx2.testcase.pas`
+    - `tests/nextpas.core.simd/nextpas.core.simd.sse2contracts.testcase.pas`
+    - `tests/nextpas.core.simd/nextpas.core.simd.sse3_correctness.testcase.pas`
+    - `tests/nextpas.core.simd/test_mmx_raw_leaf_parity/test_mmx_raw_leaf_parity.lpr`
+    - `tests/nextpas.core.simd/test_sse_raw_leaf_parity/test_sse_raw_leaf_parity.lpr`
+    - `tests/nextpas.core.simd/test_sse2_raw_leaf_parity.pas`
+    - `tests/nextpas.core.simd.intrinsics.experimental/nextpas.core.simd.intrinsics.experimental.testcase.pas`
+
+> `symbol_ref` coverage 直接扫描源码文本，不会预处理 `{$I ...}` wrapper。对采用“顶层兼容 wrapper + 子目录 canonical project”布局的测试，carrier 应指向 canonical `.lpr` / `.pas`，而不是顶层 include wrapper。
 
 脚本输出字段：
 
 - `declared`：接口声明数
-- `tested`：测试名覆盖数
+- `tested`：被 current carrier 直接引用的声明数
 - `missing`：声明存在但缺少同名测试
 - `extra`：测试存在但无同名声明（通常是组合/别名测试）
+- `thin`：已命中但引用密度仍低于当前阈值的符号
+- `carrier`：当前用于聚合统计的 live test carrier
 
-> 判定规则：`missing > 0` 时返回非零（失败）。
+> 判定规则：required 模块以 `missing_required=0` 为通过条件；optional tracked 模块会报告
+> `missing_optional`，但默认不阻塞。启用对应 `--require-*` 开关后，optional 模块才进入
+> required blocker。
 
 ## 运行方式
 
-### Linux/macOS
+### 默认 coverage
 
 ```bash
 bash tests/nextpas.core.simd/BuildOrTest.sh coverage
 ```
+
+该入口先跑 `check_intrinsics_coverage_layout_contract.py`，再跑 live `check_intrinsics_coverage.py`。默认只把 `sse`、`mmx`、`sse2-x86-raw` 作为 required blocker；`avx2`、`aes`、`sha` 会被统计，但默认是 optional tracked coverage。
 
 ### Windows
 
@@ -35,129 +56,83 @@ bash tests/nextpas.core.simd/BuildOrTest.sh coverage
 tests\nextpas.core.simd\buildOrTest.bat coverage
 ```
 
-## 与 gate 的关系
+> 当前 worktree 已恢复 `BuildOrTest.sh coverage`；它会先跑 `check_intrinsics_coverage_layout_contract.py`，再跑 live `check_intrinsics_coverage.py`。
+> 当前本地可执行 helper：`BuildOrTest.sh coverage`、`BuildOrTest.sh wiring-sync`、`BuildOrTest.sh nonx86-ieee754`、`BuildOrTest.sh perf-smoke`、`run_backend_benchmarks.sh`、`BuildOrTest.sh gate-summary-selfcheck`、`BuildOrTest.sh freeze-status-linux`。
+> 当前 historical `evidence-linux` / `gate` / `gate-strict` shell mainline 仍未恢复。
+> 以当前 HEAD 为准，默认 required coverage 是 `sse` 79/79、`mmx` 75/75、`sse2-x86-raw` 221/221，`missing_required=0 missing_optional=0`。
 
-当前默认 `gate` 已启用基础覆盖检查（`SIMD_GATE_COVERAGE=1`）。
+## Strict 与 closure 入口
 
-如需临时关闭或调整 gate 内覆盖行为，可使用开关：
-
-### Linux/macOS
-
-```bash
-SIMD_GATE_COVERAGE=0 bash tests/nextpas.core.simd/BuildOrTest.sh gate
-```
-
-### Windows
-
-```bat
-set SIMD_GATE_COVERAGE=0 && tests\nextpas.core.simd\buildOrTest.bat gate
-```
-
-## 建议的长期执行顺序
-
-1. `coverage`（接口-测试映射）
-2. `test --suite=TTestCase_AdvancedAlgorithms`（关键正确性）
-3. `perf-smoke`（性能烟测）
-4. `gate`（全链路门禁）
-
-这样可以在“结构完整性 → 正确性 → 性能 → 门禁”顺序上尽早发现问题。
-
-
-## `strict-extra` 模式
-
-默认模式仅要求 `missing=0`。
+默认模式只要求 required 模块没有缺口。
 
 如需把 `extra`（测试名无同名声明）也作为失败条件，可启用 strict 模式。
 
-当前基线（2026-02-08）：`sse/mmx` 已达到 `missing=0, extra=0`，可按需要在 CI 默认启用 strict-extra。
-
-### Linux/macOS
+历史 `2026-02-08` 的 `sse/mmx missing=0, extra=0` 基线已不再代表当前树；当前应以 live checker 输出为准，不再沿用旧日志当真值。
 
 ```bash
 SIMD_COVERAGE_STRICT_EXTRA=1 bash tests/nextpas.core.simd/BuildOrTest.sh coverage
 ```
 
-### Windows
+如需把 experimental AES/SHA direct-test coverage 提升为 required：
 
-```bat
-set SIMD_COVERAGE_STRICT_EXTRA=1 && tests\nextpas.core.simd\buildOrTest.bat coverage
+```bash
+SIMD_COVERAGE_STRICT_EXTRA=1 SIMD_COVERAGE_REQUIRE_EXPERIMENTAL=1 bash tests/nextpas.core.simd/BuildOrTest.sh coverage
 ```
 
+如需同时把 AVX2 也提升为 required：
 
+```bash
+SIMD_COVERAGE_STRICT_EXTRA=1 SIMD_COVERAGE_REQUIRE_AVX2=1 SIMD_COVERAGE_REQUIRE_EXPERIMENTAL=1 bash tests/nextpas.core.simd/BuildOrTest.sh coverage
+```
 
+`BuildOrTest.sh experimental-intrinsics-tests` 运行 dedicated AES/SHA experimental runner：
+
+```bash
+bash tests/nextpas.core.simd/BuildOrTest.sh experimental-intrinsics-tests
+make -C core/tests/nextpas.core.simd experimental-intrinsics-focused
+```
+
+Makefile focused 入口是 `make -C core/tests/nextpas.core.simd experimental-intrinsics-focused`。
+
+当前 `experimental-intrinsics-focused` 还会运行 forced non-x86 AES import/fail-close probe：
+它在本机编译 `nextpas.core.simd.intrinsics.aes` import/call surface，并通过
+test-only guard 证明调用会 fail-close。This is not real non-x86 runtime evidence；
+真实 non-x86 runtime 仍必须依赖 QEMU 或目标机证据。
+
+`BuildOrTest.sh experimental-intrinsics-closure` 是显式 opt-in closure gate。它会串行执行：
+
+1. `BuildOrTest.sh check`
+2. `SIMD_COVERAGE_STRICT_EXTRA=1 SIMD_COVERAGE_REQUIRE_AVX2=1 SIMD_COVERAGE_REQUIRE_EXPERIMENTAL=1 BuildOrTest.sh coverage`
+3. `check_intrinsics_experimental_status.py --summary-line`
+4. `BuildOrTest.sh experimental-intrinsics-tests`
+
+```bash
+bash tests/nextpas.core.simd/BuildOrTest.sh experimental-intrinsics-closure
+make -C core/tests/nextpas.core.simd experimental-intrinsics-closure
+```
+
+closure 固定启用 `SIMD_COVERAGE_STRICT_EXTRA=1`、`SIMD_COVERAGE_REQUIRE_AVX2=1`、`SIMD_COVERAGE_REQUIRE_EXPERIMENTAL=1`。当前 strict closure truth 是 `aes` 6/6、`sha` 7/7，且 stable/default coverage 仍保持 `missing_required=0 missing_optional=0`。
+
+当前 experimental intrinsics tests 不进入 default stable/nightly blocker；默认口径只保护 experimental isolation，runtime experimental tests 通过显式 closure gate 收口。
+
+Experimental closure proof is not stable public semantic proof. AESENC, AESENCLAST, AESDEC, AESDECLAST, AESKEYGENASSIST standard-rcon, and AESIMC each have hardware semantic evidence
+for `aes_aesenc_si128`, `aes_aesenclast_si128`, `aes_aesdec_si128`, `aes_aesdeclast_si128`,
+`aes_aeskeygenassist_si128`, and `aes_aesimc_si128`
+on `CPUX86_64 + simd_has_aes`; `aes_aeskeygenassist_si128` is limited to the
+AES key schedule rcon subset, and unsupported rcon values fail-close. SHA coverage 当前只证明
+显式 opt-in runner 在 `CPUX86_64 + simd_has_sha` 条件下有 smoke-only availability checks；
+SHA smoke-only availability checks are not SHA semantic vectors。更多 AES-NI / SHA-NI semantic
+vectors 必须另起 focused slice，并带硬件 evidence 或明确的 skip/host-capability 边界。
 
 ## Linux 证据一键收集
 
-可通过 `evidence-linux` action 串行收集一批完整 Linux closeout 证据（coverage/strict/advanced/backend-bench/perf/gate-summary/freeze-status-linux）：
+历史上可通过 `evidence-linux` action 串行收集一批完整 Linux closeout 证据（coverage/strict/advanced/backend-bench/perf/gate-summary/freeze-status-linux）：
 
-```bash
-bash tests/nextpas.core.simd/BuildOrTest.sh evidence-linux
-```
+当前 worktree 中，这条 historical shell mainline 仍保持 fail-close；若只是本地继续复验 Linux 证据面，请按上面的细粒度 helper 串行执行，并直接调用 `tests/nextpas.core.simd/run_backend_benchmarks.sh` 补 bench 证据。
 
-默认输出目录：`tests/nextpas.core.simd/logs/evidence-<timestamp>/`
-若显式设置 `SIMD_OUTPUT_ROOT=/tmp/simd-run-123`，则 evidence bundle 与内部 `backend-bench-*` 子目录都会改写到 `/tmp/simd-run-123/logs/` 下，避免污染默认模块目录。
-摘要文件：`summary.md`
+当前仓库没有 dedicated SIMD nightly workflow 文件。不要把 `evidence-linux`、Windows B07 证据或 `gate-strict` 写成已恢复的 CI blocker；本 worktree 当前的真实 Linux 复验方式是按 `coverage`、`experimental-intrinsics-closure`、`wiring-sync`、`nonx86-ieee754`、`perf-smoke`、`gate-summary-selfcheck`、`freeze-status-linux` 等细粒度 helper 串行执行。
 
-该入口现已作为 nightly 证据链的 Linux 段使用；默认以 Release 口径运行，并与后续 Windows 实机证据、cross-platform `freeze-status` 组合成完整收口链。
-它会固定产出：
-
-- `backend_bench.log`
-- `gate_strict.log`
-- `gate_summary_json.log`
-- `freeze_status_linux.log`
-- 汇总摘要 `summary.md`
-
-当前 `evidence-linux` 内部的 `gate-strict` 已固定启用：
-
-- `SIMD_GATE_PERF_SMOKE=1`
-- `SIMD_PERF_VECTOR_ASM=auto`
-
-也就是说，Linux 证据链里的 `perf-smoke` 不再只是独立附带步骤，而是会进入 `gate-strict` 摘要口径。
-若 active backend 仍然是 `Scalar`，`perf-smoke` 现在会直接失败，而不是 `SKIP 0`，避免把“没有 SIMD 性能证据”的状态误记成 closeout 通过。
-但这仍然只是 Linux 段证据；cross-platform closeout 仍要回到 Windows evidence + `freeze-status` 主线。
-
-本地验证（2026-03-11）：
-
-- `SIMD_GATE_PERF_SMOKE=1 SIMD_PERF_VECTOR_ASM=auto bash tests/nextpas.core.simd/BuildOrTest.sh gate-strict`
-- 在 `tests/nextpas.core.simd/logs/gate_summary.md` 中可见：
-  - gate `START` 详情里 `perf=1`
-  - `perf-smoke | PASS`
-
-
-## Nightly / GitHub Actions 证据归档
-
-为了避免把重门禁塞进每次 push / PR，SIMD 现使用独立 workflow 做 nightly / 手工归档：
-
-- `.github/workflows/simd-nightly-closeout.yml`
-  - 触发：`schedule` + `workflow_dispatch`
-  - Linux 段：`BuildOrTest.sh evidence-linux`
-  - Windows 段：复用 `.github/workflows/simd-windows-b07-evidence.yml`
-  - 审计段：恢复 artifacts 到 canonical `logs/`，执行 `win-closeout-finalize` 与 cross-platform `freeze-status`
-- `.github/workflows/simd-windows-b07-evidence.yml`
-  - 触发：`workflow_dispatch` + `workflow_call`
-  - 作用：只负责采集并校验 Windows B07 实机 evidence，不承担 Linux freeze 判定
-
-nightly 固定口径：
-
-- `FAFAFA_BUILD_MODE=Release`
-- `SIMD_GATE_COVERAGE=1`
-- `SIMD_COVERAGE_STRICT_EXTRA=1`
-- `SIMD_GATE_WIRING_SYNC=1`
-- `SIMD_WIRING_SYNC_STRICT_EXTRA=1`
-- `SIMD_GATE_EXPERIMENTAL_TESTS=0`
-
-说明：
-
-- nightly closeout 以 stable lane 为准，继续强制 coverage、wiring、cpuinfo non-x86 与 Windows evidence。
-- `experimental intrinsics tests` 仍保留为独立长期线，不再作为 nightly closeout 的默认阻塞项。
-- experimental boundary 仍通过 `experimental-intrinsics` 隔离检查维持，不等于放弃对实验路径的后续收敛。
-
-归档产物：
-
-- `simd-linux-evidence`
-- `simd-windows-b07-evidence`
-- `simd-freeze-audit`
-
+如果未来恢复 dedicated nightly closeout workflow，必须先恢复对应 workflow 文件与 shell mainline，再同步更新本页和 `check_linux_evidence_shell_surface.py` 的 source-contract。
 
 
 ## Wiring 对账与门禁摘要
@@ -172,9 +147,6 @@ SIMD_WIRING_SYNC_STRICT_EXTRA=1 bash tests/nextpas.core.simd/BuildOrTest.sh wiri
 
 # check 默认会跑 wiring-sync；如需 strict-extra，再叠加这个环境变量
 SIMD_WIRING_SYNC_STRICT_EXTRA=1 bash tests/nextpas.core.simd/BuildOrTest.sh check
-
-# gate 阶段附加对账并生成摘要
-SIMD_GATE_WIRING_SYNC=1 SIMD_WIRING_SYNC_STRICT_EXTRA=1 bash tests/nextpas.core.simd/BuildOrTest.sh gate
 
 # 查看 gate 摘要
 bash tests/nextpas.core.simd/BuildOrTest.sh gate-summary
@@ -200,9 +172,9 @@ tests\nextpas.core.simd\buildOrTest.bat gate-summary
 如需临时关闭 `check` 里的这条默认对账，显式设置 `SIMD_CHECK_WIRING_SYNC=0`。
 
 
-### gate 失败链路记录（Linux）
+### historical gate 失败链路记录（Linux）
 
-`BuildOrTest.sh gate` 会将关键步骤写入 `gate_summary.md`，包含 `PASS/FAIL/SKIP`。当某一步失败时，会记录失败步骤与错误码，便于快速定位。
+Historical `BuildOrTest.sh gate` 曾将关键步骤写入 `gate_summary.md`，包含 `PASS/FAIL/SKIP`。当前 `gate` mainline 仍是 fail-close placeholder；如果需要复验摘要导出和过滤能力，请直接运行 `gate-summary-selfcheck`，不要把 historical `gate` 当成 live Linux command。
 
 可选参数：
 - `SIMD_GATE_SUMMARY_FILE`：自定义摘要文件路径
@@ -218,7 +190,7 @@ tests\nextpas.core.simd\buildOrTest.bat gate-summary
 - `SIMD_GATE_SUMMARY_APPLY=1`：`gate-summary-inject` 将样本覆盖到当前摘要（默认非侵入 shadow）
 - `SIMD_GATE_SUMMARY_BACKUP_FILE=<path>`：`gate-summary-rollback` 指定回滚备份文件
 - 失败传播语义：`gate` 对步骤采用 fail-fast，首个失败 step 会立即终止 gate 并写入 `failed-step=<step>`
-- 强制失败演练：`LAZBUILD=/nonexistent bash tests/nextpas.core.simd/BuildOrTest.sh gate`（用于验证失败链路记录）
+- 强制失败演练当前不通过 historical `gate` 入口执行；需要恢复时，先恢复 shell mainline，再同步更新本页和 source-contract。
 
 
 ## gate-summary 诊断手册（Linux）

@@ -1,6 +1,5 @@
 program bench_riscvv_vs_scalar;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 

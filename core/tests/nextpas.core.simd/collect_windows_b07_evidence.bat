@@ -106,14 +106,21 @@ if not exist "%BIN%" (
 )
 
 echo [GATE] Optional public ABI smoke >> "%TMP_LOG%"
+set "PREV_SIMD_OUTPUT_ROOT=%SIMD_OUTPUT_ROOT%"
+set "SIMD_OUTPUT_ROOT=%ROOT%..\..\build\tests\nextpas.core.simd.publicabi"
 pushd "%TESTS_ROOT%\nextpas.core.simd.publicabi"
 if not exist ".\BuildOrTest.bat" (
   set "GATE_RC=1"
+  set "SIMD_OUTPUT_ROOT=%PREV_SIMD_OUTPUT_ROOT%"
+  set "PREV_SIMD_OUTPUT_ROOT="
   popd
   goto :after_gate
 )
 call ".\BuildOrTest.bat" test >> "%TMP_LOG%" 2>&1
-if errorlevel 1 (
+set "PUBLICABI_RC=%ERRORLEVEL%"
+set "SIMD_OUTPUT_ROOT=%PREV_SIMD_OUTPUT_ROOT%"
+set "PREV_SIMD_OUTPUT_ROOT="
+if not "%PUBLICABI_RC%"=="0" (
   set "GATE_RC=1"
   popd
   goto :after_gate
@@ -173,45 +180,56 @@ if errorlevel 1 (
 popd
 
 echo [GATE] 5/6 CPUInfo x86 suites >> "%TMP_LOG%"
-pushd "%TESTS_ROOT%\nextpas.core.simd.cpuinfo.x86"
+set "PREV_SIMD_OUTPUT_ROOT=%SIMD_OUTPUT_ROOT%"
+set "SIMD_OUTPUT_ROOT=%ROOT%..\..\build\tests\nextpas.core.simd.cpuinfo.global"
+pushd "%TESTS_ROOT%\nextpas.core.simd.cpuinfo"
 call ".\buildOrTest.bat" build >> "%TMP_LOG%" 2>&1
 set "CPUINFO_X86_BUILD_RC=%ERRORLEVEL%"
-if not exist ".\bin\nextpas.core.simd.cpuinfo.x86.test.exe" (
+if not exist "%SIMD_OUTPUT_ROOT%\bin\nextpas.core.simd.cpuinfo.test.exe" (
   set "GATE_RC=1"
+  set "SIMD_OUTPUT_ROOT=%PREV_SIMD_OUTPUT_ROOT%"
+  set "PREV_SIMD_OUTPUT_ROOT="
   popd
   goto :after_gate
 )
 findstr /c:"Fatal:" /c:"returned an error exitcode" ".\logs\build.txt" >nul 2>nul
 if not errorlevel 1 (
   set "GATE_RC=1"
+  set "SIMD_OUTPUT_ROOT=%PREV_SIMD_OUTPUT_ROOT%"
+  set "PREV_SIMD_OUTPUT_ROOT="
   popd
   goto :after_gate
 )
 if not "%CPUINFO_X86_BUILD_RC%"=="0" (
   echo [B07] WARN: cpuinfo.x86 build command returned rc=%CPUINFO_X86_BUILD_RC% but artifact and build log look usable >> "%TMP_LOG%"
 )
-".\bin\nextpas.core.simd.cpuinfo.x86.test.exe" --list >> "%TMP_LOG%" 2>&1
+".\buildOrTest.bat" test --list-suites >> "%TMP_LOG%" 2>&1
 if errorlevel 1 (
   set "GATE_RC=1"
+  set "SIMD_OUTPUT_ROOT=%PREV_SIMD_OUTPUT_ROOT%"
+  set "PREV_SIMD_OUTPUT_ROOT="
   popd
   goto :after_gate
 )
-".\bin\nextpas.core.simd.cpuinfo.x86.test.exe" --suite=TTestCase_Global >> "%TMP_LOG%" 2>&1
+call ".\buildOrTest.bat" test --suite=TTestCase_Global >> "%TMP_LOG%" 2>&1
 if errorlevel 1 (
   set "GATE_RC=1"
+  set "SIMD_OUTPUT_ROOT=%PREV_SIMD_OUTPUT_ROOT%"
+  set "PREV_SIMD_OUTPUT_ROOT="
   popd
   goto :after_gate
 )
+set "SIMD_OUTPUT_ROOT=%PREV_SIMD_OUTPUT_ROOT%"
+set "PREV_SIMD_OUTPUT_ROOT="
 popd
 
 echo [GATE] 6/6 Filtered run_all check chain >> "%TMP_LOG%"
-set "RUNALL_TOTAL=5"
-set "RUNALL_PASSED=5"
+set "RUNALL_TOTAL=4"
+set "RUNALL_PASSED=4"
 set "RUNALL_FAILED=0"
 set "RUNALL_FAILED_LIST="
 echo [PASS] nextpas.core.simd ^(covered by steps 1-3^) >> "%TMP_LOG%"
 echo [PASS] nextpas.core.simd.cpuinfo ^(covered by step 4^) >> "%TMP_LOG%"
-echo [PASS] nextpas.core.simd.cpuinfo.x86 ^(covered by step 5^) >> "%TMP_LOG%"
 echo [PASS] nextpas.core.simd.intrinsics.sse ^(covered by explicit intrinsics closeout lane^) >> "%TMP_LOG%"
 echo [PASS] nextpas.core.simd.intrinsics.mmx ^(covered by explicit intrinsics closeout lane^) >> "%TMP_LOG%"
 

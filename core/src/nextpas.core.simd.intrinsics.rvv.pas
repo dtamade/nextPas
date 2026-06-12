@@ -8,6 +8,9 @@ unit nextpas.core.simd.intrinsics.rvv;
   === nextpas.core.simd.intrinsics.rvv ===
   Stub RISC-V Vector Extension (RVV) intrinsics surface.
   RVV provides scalable vector-length programming for RISC-V targets.
+  ISA qualification only: this raw leaf documents RVV capability shape for
+  opt-in experiments, not a stable public backend.
+  It is only qualified on RISC-V targets whose cpuinfo reports RVV.
   Highlights:
   - configurable vector lengths
   - vector mask operations

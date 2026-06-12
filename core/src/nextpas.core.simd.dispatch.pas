@@ -250,8 +250,8 @@ begin
     sbSSE42: Result := 'x86-64 SSE4.2 SIMD implementation';
     sbAVX2: Result := 'x86-64 AVX2 SIMD implementation';
     sbAVX512: Result := 'x86-64 AVX-512 SIMD implementation';
-    sbNEON: Result := 'ARM NEON 128-bit SIMD';
-    sbRISCVV: Result := 'RISC-V Vector Extension (RVV)';
+    sbNEON: Result := 'ARM NEON 128-bit SIMD (default scalar fallback; asm opt-in)';
+    sbRISCVV: Result := 'RISC-V Vector Extension (RVV) (experimental opt-in)';
   end;
 end;
 

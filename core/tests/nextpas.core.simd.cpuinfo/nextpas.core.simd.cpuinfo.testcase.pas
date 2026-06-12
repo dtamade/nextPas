@@ -12,6 +12,10 @@ uses
   nextpas.core.simd.intrinsics,
   nextpas.core.simd.cpuinfo.base,
   nextpas.core.simd.cpuinfo,
+  {$IFDEF SIMD_X86_AVAILABLE}
+  nextpas.core.simd.cpuinfo.x86.base,
+  nextpas.core.simd.cpuinfo.x86,
+  {$ENDIF}
   {$IFDEF SIMD_ARM_AVAILABLE}
   nextpas.core.simd.cpuinfo.arm,
   {$ENDIF}
@@ -51,6 +55,10 @@ type
     procedure Test_IntrinsicsAVXAvailability_Semantics;
     procedure Test_IntrinsicsFacade_FullConsistency;
     procedure Test_BackendFeatureBidirectionalConsistency;
+    procedure Test_X86RawAVX_RemainsVisible_When_OSXSAVE_Disabled;
+    procedure Test_X86RawAVX_RemainsVisible_When_XCR0_Disabled;
+    procedure Test_X86UsableAVX_FailCloses_When_AVX2_Without_AVX;
+    procedure Test_X86UsableAVX512_FailCloses_When_AVX512F_Without_AVX2;
     procedure Test_AVXUsable_XCR0Semantics;
     procedure Test_AVX512Usable_XCR0Semantics;
     procedure Test_DiagnosticReport_UsableViewConsistency;
@@ -853,6 +861,204 @@ begin
   {$ENDIF}
 end;
 
+procedure TTestCase_PlatformSpecific.Test_X86RawAVX_RemainsVisible_When_OSXSAVE_Disabled;
+{$IFDEF SIMD_X86_AVAILABLE}
+var
+  LLeaf1: TX86CPUIDRegs;
+  LLeaf7: TX86CPUIDRegs;
+  LExtLeaf1: TX86CPUIDRegs;
+  LFeatures: TX86Features;
+  {$if declared(X86GenericRawFeatures)}
+  LRaw: TGenericFeatureSet;
+  LUsable: TGenericFeatureSet;
+  {$endif}
+{$ENDIF}
+begin
+  {$IFDEF SIMD_X86_AVAILABLE}
+  LLeaf1 := MakeX86CPUIDRegs(
+    0,
+    0,
+    (1 shl 12) or (1 shl 25) or (1 shl 28),
+    (1 shl 25) or (1 shl 26)
+  );
+  LLeaf7 := MakeX86CPUIDRegs(
+    0,
+    (1 shl 5) or (1 shl 16) or (1 shl 17) or (1 shl 29) or (1 shl 30) or (1 shl 31),
+    (1 shl 1),
+    0
+  );
+  LExtLeaf1 := MakeX86CPUIDRegs(0, 0, 0, 0);
+
+  LFeatures := X86FeaturesFromCPUID(7, 0, LLeaf1, LLeaf7, LExtLeaf1, 0);
+  {$if declared(X86GenericRawFeatures)}
+  LRaw := X86GenericRawFeatures(LFeatures);
+  LUsable := X86GenericUsableFeatures(LFeatures, False, 0);
+  {$endif}
+
+  AssertTrue('raw AVX should remain visible without OSXSAVE', LFeatures.HasAVX);
+  AssertTrue('raw AVX2 should remain visible without OSXSAVE', LFeatures.HasAVX2);
+  AssertTrue('raw FMA should remain visible without OSXSAVE', LFeatures.HasFMA);
+  AssertTrue('raw AVX512F should remain visible without OSXSAVE', LFeatures.HasAVX512F);
+  AssertTrue('raw AVX512BW should remain visible without OSXSAVE', LFeatures.HasAVX512BW);
+  {$if declared(X86GenericRawFeatures)}
+  AssertTrue('GenericRaw should include SIMD-256 when raw AVX/AVX2 exists', gfSimd256 in LRaw);
+  AssertTrue('GenericRaw should include SIMD-512 when raw AVX512F exists', gfSimd512 in LRaw);
+  AssertTrue('GenericRaw should include FMA when raw FMA exists', gfFMA in LRaw);
+  AssertFalse('GenericUsable should gate SIMD-256 without OSXSAVE', gfSimd256 in LUsable);
+  AssertFalse('GenericUsable should gate SIMD-512 without OSXSAVE', gfSimd512 in LUsable);
+  AssertFalse('GenericUsable should gate FMA without OSXSAVE', gfFMA in LUsable);
+  {$endif}
+  {$ELSE}
+  Ignore('x86 raw AVX OSXSAVE fixture skipped when SIMD_X86_AVAILABLE is off');
+  Exit;
+  {$ENDIF}
+end;
+
+procedure TTestCase_PlatformSpecific.Test_X86RawAVX_RemainsVisible_When_XCR0_Disabled;
+{$IFDEF SIMD_X86_AVAILABLE}
+var
+  LLeaf1: TX86CPUIDRegs;
+  LLeaf7: TX86CPUIDRegs;
+  LExtLeaf1: TX86CPUIDRegs;
+  LFeatures: TX86Features;
+  {$if declared(X86GenericRawFeatures)}
+  LRaw: TGenericFeatureSet;
+  LUsable: TGenericFeatureSet;
+  {$endif}
+{$ENDIF}
+begin
+  {$IFDEF SIMD_X86_AVAILABLE}
+  LLeaf1 := MakeX86CPUIDRegs(
+    0,
+    0,
+    (1 shl 12) or (1 shl 27) or (1 shl 28),
+    (1 shl 25) or (1 shl 26)
+  );
+  LLeaf7 := MakeX86CPUIDRegs(
+    0,
+    (1 shl 5) or (1 shl 16) or (1 shl 17) or (1 shl 30) or (1 shl 31),
+    (1 shl 1),
+    0
+  );
+  LExtLeaf1 := MakeX86CPUIDRegs(0, 0, 0, 0);
+
+  LFeatures := X86FeaturesFromCPUID(7, 0, LLeaf1, LLeaf7, LExtLeaf1, 0);
+  {$if declared(X86GenericRawFeatures)}
+  LRaw := X86GenericRawFeatures(LFeatures);
+  LUsable := X86GenericUsableFeatures(LFeatures, True, 0);
+  {$endif}
+
+  AssertTrue('raw AVX should remain visible when XCR0 lacks XMM/YMM', LFeatures.HasAVX);
+  AssertTrue('raw AVX2 should remain visible when XCR0 lacks XMM/YMM', LFeatures.HasAVX2);
+  AssertTrue('raw FMA should remain visible when XCR0 lacks XMM/YMM', LFeatures.HasFMA);
+  AssertTrue('raw AVX512F should remain visible when XCR0 lacks ZMM state', LFeatures.HasAVX512F);
+  {$if declared(X86GenericRawFeatures)}
+  AssertTrue('GenericRaw should include SIMD-256 when XCR0 disables execution', gfSimd256 in LRaw);
+  AssertTrue('GenericRaw should include SIMD-512 when XCR0 disables execution', gfSimd512 in LRaw);
+  AssertTrue('GenericRaw should include FMA when XCR0 disables execution', gfFMA in LRaw);
+  AssertFalse('GenericUsable should gate SIMD-256 when XCR0 lacks XMM/YMM', gfSimd256 in LUsable);
+  AssertFalse('GenericUsable should gate SIMD-512 when XCR0 lacks ZMM state', gfSimd512 in LUsable);
+  AssertFalse('GenericUsable should gate FMA when XCR0 lacks XMM/YMM', gfFMA in LUsable);
+  {$endif}
+  {$ELSE}
+  Ignore('x86 raw AVX XCR0 fixture skipped when SIMD_X86_AVAILABLE is off');
+  Exit;
+  {$ENDIF}
+end;
+
+procedure TTestCase_PlatformSpecific.Test_X86UsableAVX_FailCloses_When_AVX2_Without_AVX;
+{$IFDEF SIMD_X86_AVAILABLE}
+var
+  LLeaf1: TX86CPUIDRegs;
+  LLeaf7: TX86CPUIDRegs;
+  LExtLeaf1: TX86CPUIDRegs;
+  LFeatures: TX86Features;
+  LRaw: TGenericFeatureSet;
+  LUsable: TGenericFeatureSet;
+{$ENDIF}
+begin
+  {$IFDEF SIMD_X86_AVAILABLE}
+  LLeaf1 := MakeX86CPUIDRegs(
+    0,
+    0,
+    (1 shl 12) or (1 shl 23) or (1 shl 27),
+    (1 shl 25) or (1 shl 26)
+  );
+  LLeaf7 := MakeX86CPUIDRegs(
+    0,
+    (1 shl 5) or (1 shl 16) or (1 shl 30),
+    0,
+    0
+  );
+  LExtLeaf1 := MakeX86CPUIDRegs(0, 0, 0, 0);
+
+  LFeatures := X86FeaturesFromCPUID(7, 0, LLeaf1, LLeaf7, LExtLeaf1, 0);
+  LRaw := X86GenericRawFeatures(LFeatures);
+  LUsable := X86GenericUsableFeatures(LFeatures, True, (UInt64(1) shl 1) or (UInt64(1) shl 2));
+
+  AssertFalse('raw AVX should remain false in malformed AVX2-only CPUID fixture', LFeatures.HasAVX);
+  AssertTrue('raw AVX2 should remain visible in malformed CPUID fixture', LFeatures.HasAVX2);
+  AssertTrue('raw FMA should remain visible in malformed CPUID fixture', LFeatures.HasFMA);
+  AssertTrue('GenericRaw should preserve SIMD-256 when raw AVX2 exists', gfSimd256 in LRaw);
+  AssertTrue('GenericRaw should preserve FMA when raw FMA exists', gfFMA in LRaw);
+  AssertFalse('GenericUsable should fail-close SIMD-256 when raw AVX prerequisite is missing', gfSimd256 in LUsable);
+  AssertFalse('GenericUsable should fail-close FMA when raw AVX prerequisite is missing', gfFMA in LUsable);
+  AssertFalse('AVX-512 backend helper should fail-close when only raw AVX prerequisite is missing',
+    X86SupportsAVX512BackendOnCPU(LFeatures, True));
+  {$ELSE}
+  Ignore('x86 malformed AVX2-only fixture skipped when SIMD_X86_AVAILABLE is off');
+  Exit;
+  {$ENDIF}
+end;
+
+procedure TTestCase_PlatformSpecific.Test_X86UsableAVX512_FailCloses_When_AVX512F_Without_AVX2;
+{$IFDEF SIMD_X86_AVAILABLE}
+var
+  LLeaf1: TX86CPUIDRegs;
+  LLeaf7: TX86CPUIDRegs;
+  LExtLeaf1: TX86CPUIDRegs;
+  LFeatures: TX86Features;
+  LRaw: TGenericFeatureSet;
+  LUsable: TGenericFeatureSet;
+{$ENDIF}
+begin
+  {$IFDEF SIMD_X86_AVAILABLE}
+  LLeaf1 := MakeX86CPUIDRegs(
+    0,
+    0,
+    (1 shl 12) or (1 shl 27) or (1 shl 28),
+    (1 shl 23) or (1 shl 25) or (1 shl 26)
+  );
+  LLeaf7 := MakeX86CPUIDRegs(
+    0,
+    (1 shl 16) or (1 shl 30),
+    0,
+    0
+  );
+  LExtLeaf1 := MakeX86CPUIDRegs(0, 0, 0, 0);
+
+  LFeatures := X86FeaturesFromCPUID(7, 0, LLeaf1, LLeaf7, LExtLeaf1, 0);
+  LRaw := X86GenericRawFeatures(LFeatures);
+  LUsable := X86GenericUsableFeatures(
+    LFeatures,
+    True,
+    (UInt64(1) shl 1) or (UInt64(1) shl 2) or
+    (UInt64(1) shl 5) or (UInt64(1) shl 6) or (UInt64(1) shl 7)
+  );
+
+  AssertTrue('raw AVX should remain visible in malformed AVX512F-only fixture', LFeatures.HasAVX);
+  AssertFalse('raw AVX2 should remain false in malformed AVX512F-only fixture', LFeatures.HasAVX2);
+  AssertTrue('raw AVX512F should remain visible in malformed AVX512F-only fixture', LFeatures.HasAVX512F);
+  AssertTrue('GenericRaw should preserve SIMD-512 when raw AVX512F exists', gfSimd512 in LRaw);
+  AssertFalse('GenericUsable should fail-close SIMD-512 when raw AVX2 prerequisite is missing', gfSimd512 in LUsable);
+  AssertFalse('AVX-512 backend helper should fail-close when raw AVX2 prerequisite is missing',
+    X86SupportsAVX512BackendOnCPU(LFeatures, True));
+  {$ELSE}
+  Ignore('x86 malformed AVX512F-only fixture skipped when SIMD_X86_AVAILABLE is off');
+  Exit;
+  {$ENDIF}
+end;
+
 procedure TTestCase_PlatformSpecific.Test_AVXUsable_XCR0Semantics;
 var
   LCPUInfo: TCPUInfo;
@@ -863,20 +1069,21 @@ begin
 
   if LCPUInfo.Arch = caX86 then
   begin
-    LExpectedUsable256 := (LCPUInfo.X86.HasAVX or LCPUInfo.X86.HasAVX2) and LCPUInfo.OSXSAVE and XCR0EnablesAVX_Local(LCPUInfo);
+    LExpectedUsable256 := LCPUInfo.X86.HasAVX and LCPUInfo.OSXSAVE and XCR0EnablesAVX_Local(LCPUInfo);
     AssertEquals('gfSimd256 usable should follow AVX XCR0 semantics', LExpectedUsable256, gfSimd256 in LCPUInfo.GenericUsable);
-    AssertEquals('HasAVX2 should match AVX2 usable semantics', LCPUInfo.X86.HasAVX2 and LExpectedUsable256, HasAVX2);
+    AssertEquals('HasAVX2 should match AVX2 usable semantics', LCPUInfo.X86.HasAVX2 and LExpectedUsable256, nextpas.core.simd.cpuinfo.HasAVX2);
+    AssertEquals('legacy x86 HasAVX2 should match AVX2 usable semantics', LCPUInfo.X86.HasAVX2 and LExpectedUsable256, nextpas.core.simd.cpuinfo.x86.HasAVX2);
     AssertEquals('simd_has_avx should match AVX usable semantics', LCPUInfo.X86.HasAVX and LExpectedUsable256, simd_has_avx);
     AssertEquals('simd_has_avx2 should match AVX2 usable semantics', LCPUInfo.X86.HasAVX2 and LExpectedUsable256, simd_has_avx2);
   end
   else
   begin
-    AssertFalse('HasAVX2 should be false on non-x86 arch', HasAVX2);
+    AssertFalse('HasAVX2 should be false on non-x86 arch', nextpas.core.simd.cpuinfo.HasAVX2);
     AssertFalse('simd_has_avx should be false on non-x86 arch', simd_has_avx);
     AssertFalse('simd_has_avx2 should be false on non-x86 arch', simd_has_avx2);
   end;
   {$ELSE}
-  AssertFalse('HasAVX2 should be false when x86 cpuinfo is disabled', HasAVX2);
+  AssertFalse('HasAVX2 should be false when x86 cpuinfo is disabled', nextpas.core.simd.cpuinfo.HasAVX2);
   AssertFalse('simd_has_avx should be false when x86 cpuinfo is disabled', simd_has_avx);
   AssertFalse('simd_has_avx2 should be false when x86 cpuinfo is disabled', simd_has_avx2);
   {$ENDIF}
@@ -892,18 +1099,18 @@ begin
 
   if LCPUInfo.Arch = caX86 then
   begin
-    LExpectedUsable := LCPUInfo.X86.HasAVX512F and LCPUInfo.OSXSAVE and XCR0EnablesAVX512_Local(LCPUInfo);
+    LExpectedUsable := LCPUInfo.X86.HasAVX and LCPUInfo.X86.HasAVX2 and LCPUInfo.X86.HasAVX512F and LCPUInfo.OSXSAVE and XCR0EnablesAVX512_Local(LCPUInfo);
     AssertEquals('gfSimd512 usable should follow AVX-512 XCR0 semantics', LExpectedUsable, gfSimd512 in LCPUInfo.GenericUsable);
-    AssertEquals('HasAVX512 should match AVX-512 usable semantics', LExpectedUsable, HasAVX512);
+    AssertEquals('HasAVX512 should match AVX-512 usable semantics', LExpectedUsable, nextpas.core.simd.cpuinfo.HasAVX512);
     AssertEquals('simd_has_avx512f should match AVX-512 usable semantics', LExpectedUsable, simd_has_avx512f);
   end
   else
   begin
-    AssertFalse('HasAVX512 should be false on non-x86 arch', HasAVX512);
+    AssertFalse('HasAVX512 should be false on non-x86 arch', nextpas.core.simd.cpuinfo.HasAVX512);
     AssertFalse('simd_has_avx512f should be false on non-x86 arch', simd_has_avx512f);
   end;
   {$ELSE}
-  AssertFalse('HasAVX512 should be false when x86 cpuinfo is disabled', HasAVX512);
+  AssertFalse('HasAVX512 should be false when x86 cpuinfo is disabled', nextpas.core.simd.cpuinfo.HasAVX512);
   AssertFalse('simd_has_avx512f should be false when x86 cpuinfo is disabled', simd_has_avx512f);
   {$ENDIF}
 end;
@@ -917,18 +1124,18 @@ begin
   LReport := GenerateDiagnosticReport;
 
   AssertEquals('Diagnostic report validation should match ValidateCPUInfo', ValidateCPUInfo(LReport.CPUInfo), LReport.ValidationPassed);
-  AssertEquals('HasFeature(gfSimd128) should match report GenericUsable', HasFeature(gfSimd128), gfSimd128 in LReport.CPUInfo.GenericUsable);
-  AssertEquals('HasFeature(gfSimd256) should match report GenericUsable', HasFeature(gfSimd256), gfSimd256 in LReport.CPUInfo.GenericUsable);
-  AssertEquals('HasFeature(gfSimd512) should match report GenericUsable', HasFeature(gfSimd512), gfSimd512 in LReport.CPUInfo.GenericUsable);
-  AssertEquals('HasFeature(gfAES) should match report GenericUsable', HasFeature(gfAES), gfAES in LReport.CPUInfo.GenericUsable);
-  AssertEquals('HasFeature(gfSHA) should match report GenericUsable', HasFeature(gfSHA), gfSHA in LReport.CPUInfo.GenericUsable);
-  AssertEquals('HasFeature(gfFMA) should match report GenericUsable', HasFeature(gfFMA), gfFMA in LReport.CPUInfo.GenericUsable);
+  AssertEquals('HasFeature(gfSimd128) should match report GenericUsable', nextpas.core.simd.cpuinfo.HasFeature(gfSimd128), gfSimd128 in LReport.CPUInfo.GenericUsable);
+  AssertEquals('HasFeature(gfSimd256) should match report GenericUsable', nextpas.core.simd.cpuinfo.HasFeature(gfSimd256), gfSimd256 in LReport.CPUInfo.GenericUsable);
+  AssertEquals('HasFeature(gfSimd512) should match report GenericUsable', nextpas.core.simd.cpuinfo.HasFeature(gfSimd512), gfSimd512 in LReport.CPUInfo.GenericUsable);
+  AssertEquals('HasFeature(gfAES) should match report GenericUsable', nextpas.core.simd.cpuinfo.HasFeature(gfAES), gfAES in LReport.CPUInfo.GenericUsable);
+  AssertEquals('HasFeature(gfSHA) should match report GenericUsable', nextpas.core.simd.cpuinfo.HasFeature(gfSHA), gfSHA in LReport.CPUInfo.GenericUsable);
+  AssertEquals('HasFeature(gfFMA) should match report GenericUsable', nextpas.core.simd.cpuinfo.HasFeature(gfFMA), gfFMA in LReport.CPUInfo.GenericUsable);
 
   {$IFDEF SIMD_X86_AVAILABLE}
   if LReport.CPUInfo.Arch = caX86 then
   begin
-    LExpectedUsable256 := (LReport.CPUInfo.X86.HasAVX or LReport.CPUInfo.X86.HasAVX2) and LReport.CPUInfo.OSXSAVE and XCR0EnablesAVX_Local(LReport.CPUInfo);
-    LExpectedUsable512 := LReport.CPUInfo.X86.HasAVX512F and LReport.CPUInfo.OSXSAVE and XCR0EnablesAVX512_Local(LReport.CPUInfo);
+    LExpectedUsable256 := LReport.CPUInfo.X86.HasAVX and LReport.CPUInfo.OSXSAVE and XCR0EnablesAVX_Local(LReport.CPUInfo);
+    LExpectedUsable512 := LReport.CPUInfo.X86.HasAVX and LReport.CPUInfo.X86.HasAVX2 and LReport.CPUInfo.X86.HasAVX512F and LReport.CPUInfo.OSXSAVE and XCR0EnablesAVX512_Local(LReport.CPUInfo);
     AssertEquals('Diagnostic report SIMD-256 usable should follow AVX XCR0 semantics', LExpectedUsable256, gfSimd256 in LReport.CPUInfo.GenericUsable);
     AssertEquals('Diagnostic report SIMD-512 usable should follow AVX-512 XCR0 semantics', LExpectedUsable512, gfSimd512 in LReport.CPUInfo.GenericUsable);
   end;
@@ -2243,8 +2450,8 @@ begin
   if cpuInfo.X86.HasAVX2 then
     AssertTrue('AVX2 requires AVX', cpuInfo.X86.HasAVX);
     
-  if cpuInfo.X86.HasAVX512F then
-    AssertTrue('AVX512F requires AVX2', cpuInfo.X86.HasAVX2);
+  if IsBackendSupportedOnCPU(sbAVX512) then
+    AssertTrue('AVX512 backend requires AVX2 backend prerequisite', cpuInfo.X86.HasAVX2);
   {$ENDIF}
 end;
 

@@ -32,6 +32,9 @@ function X86BrandStringFromExtendedLeaves(const aVendor: string; aMaxExtLeaf: DW
   constref aLeaf80000002, aLeaf80000003, aLeaf80000004: TX86CPUIDRegs): string;
 function X86FeaturesFromCPUID(aMaxLeaf, aMaxExtLeaf: DWord;
   constref aLeaf1, aLeaf7, aExtLeaf1: TX86CPUIDRegs; aXCR0: UInt64): TX86Features;
+function X86GenericRawFeatures(constref aX86: TX86Features): TGenericFeatureSet;
+function X86GenericUsableFeatures(constref aX86: TX86Features; aOSXSAVE: Boolean;
+  aXCR0: UInt64): TGenericFeatureSet;
 
 implementation
 
@@ -100,11 +103,9 @@ begin
     Result := aVendor + ' Processor';
 end;
 
+{$PUSH}{$WARN 5024 OFF}
 function X86FeaturesFromCPUID(aMaxLeaf, aMaxExtLeaf: DWord;
   constref aLeaf1, aLeaf7, aExtLeaf1: TX86CPUIDRegs; aXCR0: UInt64): TX86Features;
-var
-  LOSXSAVE: Boolean;
-  LXCR0: UInt64;
 begin
   Result := Default(TX86Features);
   if aMaxLeaf < 1 then
@@ -125,15 +126,6 @@ begin
   Result.HasF16C := (aLeaf1.ECX and (1 shl 29)) <> 0;
   Result.HasRDRAND := (aLeaf1.ECX and (1 shl 30)) <> 0;
 
-  LOSXSAVE := (aLeaf1.ECX and (1 shl 27)) <> 0;
-  if LOSXSAVE then
-    LXCR0 := aXCR0
-  else
-    LXCR0 := 0;
-
-  if Result.HasAVX then
-    Result.HasAVX := XCR0HasAVX(LXCR0);
-
   if aMaxLeaf >= 7 then
   begin
     Result.HasBMI1 := (aLeaf7.EBX and (1 shl 3)) <> 0;
@@ -146,34 +138,42 @@ begin
     Result.HasAVX512VBMI := (aLeaf7.ECX and (1 shl 1)) <> 0;
     Result.HasSHA := (aLeaf7.EBX and (1 shl 29)) <> 0;
     Result.HasRDSEED := (aLeaf7.ECX and (1 shl 18)) <> 0;
-
-    if not Result.HasAVX then
-    begin
-      Result.HasAVX2 := False;
-      Result.HasFMA := False;
-    end;
-
-    if not Result.HasAVX2 then
-    begin
-      Result.HasAVX512F := False;
-      Result.HasAVX512DQ := False;
-      Result.HasAVX512BW := False;
-      Result.HasAVX512VL := False;
-      Result.HasAVX512VBMI := False;
-    end;
-
-    if not XCR0HasAVX512(LXCR0) then
-    begin
-      Result.HasAVX512F := False;
-      Result.HasAVX512DQ := False;
-      Result.HasAVX512BW := False;
-      Result.HasAVX512VL := False;
-      Result.HasAVX512VBMI := False;
-    end;
   end;
 
   if aMaxExtLeaf >= $80000001 then
     Result.HasFMA4 := (aExtLeaf1.ECX and (1 shl 16)) <> 0;
+end;
+{$POP}
+
+function X86GenericRawFeatures(constref aX86: TX86Features): TGenericFeatureSet;
+begin
+  Result := [];
+  if aX86.HasSSE2 then Include(Result, gfSimd128);
+  if aX86.HasAVX or aX86.HasAVX2 then Include(Result, gfSimd256);
+  if aX86.HasAVX512F then Include(Result, gfSimd512);
+  if aX86.HasAES then Include(Result, gfAES);
+  if aX86.HasSHA then Include(Result, gfSHA);
+  if aX86.HasFMA then Include(Result, gfFMA);
+end;
+
+function X86GenericUsableFeatures(constref aX86: TX86Features; aOSXSAVE: Boolean;
+  aXCR0: UInt64): TGenericFeatureSet;
+var
+  LAVXUsable: Boolean;
+  LAVXStateUsable: Boolean;
+  LAVX512Usable: Boolean;
+begin
+  Result := [];
+  LAVXStateUsable := aOSXSAVE and XCR0HasAVX(aXCR0);
+  LAVXUsable := aX86.HasAVX and LAVXStateUsable;
+  LAVX512Usable := LAVXUsable and aX86.HasAVX2 and XCR0HasAVX512(aXCR0);
+
+  if aX86.HasSSE2 then Include(Result, gfSimd128);
+  if (aX86.HasAVX or aX86.HasAVX2) and LAVXUsable then Include(Result, gfSimd256);
+  if aX86.HasAVX512F and LAVX512Usable then Include(Result, gfSimd512);
+  if aX86.HasAES then Include(Result, gfAES);
+  if aX86.HasSHA then Include(Result, gfSHA);
+  if aX86.HasFMA and LAVXUsable then Include(Result, gfFMA);
 end;
 
 end.
