@@ -275,6 +275,24 @@ begin
     LMethod, 'EnsureAttached;', 'platform_process_try_wait');
 end;
 
+procedure TestWaitTimeoutSleepOwnerSourceContract;
+var
+  LSource, LMethod: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.process.child.pas');
+  LMethod := ExtractMethodBody(LSource, 'function TChild.Wait: TProcessOutput;',
+    'function TChild.TryWait');
+
+  CheckContains('Wait timeout sleep — process child uses platform thread seam',
+    LSource, 'nextpas.core.platform.thread');
+  CheckContains('Wait timeout sleep — timeout loop uses platform sleep',
+    LMethod, 'platform_thread_sleep_ns(10000000)');
+  CheckAbsent('Wait timeout sleep — timeout loop avoids raw nanosleep',
+    LMethod, 'nanosleep');
+  CheckAbsent('Wait timeout sleep — timeout loop avoids raw TTimeSpec',
+    LMethod, 'TTimeSpec');
+end;
+
 procedure TestPathResolverSourceContract;
 var
   LResolver, LCommand, LSpawnMethod: string;
@@ -290,18 +308,40 @@ begin
     '(Length(AName) >= 2) and (AName[2] = '':'')');
   CheckContains('Path resolver — PATH name helper exists', LResolver,
     'function IsPathEnvPair');
-  CheckContains('Path resolver — Windows PATH key case-insensitive', LResolver,
+  CheckContains('Path resolver — PATHEXT name helper exists', LResolver,
+    'function IsPathExtEnvPair');
+  CheckContains('Path resolver — PATH name follows env owner case contract',
+    LResolver, 'platform_env_names_case_sensitive');
+  CheckContains('Path resolver — PATHEXT follows env owner case contract',
+    LResolver, 'platform_env_names_case_sensitive');
+  CheckContains('Path resolver — case-insensitive env name fallback', LResolver,
     'TextStartsWithI(AValue, ''PATH='')');
-  CheckContains('Path resolver — Unix PATH key exact', LResolver,
+  CheckContains('Path resolver — case-sensitive env name fallback', LResolver,
     'TextStartsWith(AValue, ''PATH='')');
+  CheckContains('Path resolver — Windows PATHEXT case-insensitive fallback',
+    LResolver, 'TextStartsWithI(AValue, ''PATHEXT='')');
+  CheckContains('Path resolver — Windows PATHEXT case-sensitive fallback',
+    LResolver, 'TextStartsWith(AValue, ''PATHEXT='')');
   CheckContains('Path resolver — Windows path list separator', LResolver,
     'PROCESS_PATH_LIST_SEP = '';''');
   CheckContains('Path resolver — Unix path list separator', LResolver,
     'PROCESS_PATH_LIST_SEP = '':''');
+  CheckContains('Path resolver — PATHEXT split uses Windows path list separator',
+    LResolver, 'PROCESS_PATH_EXT_SEP = '';''');
+  CheckContains('Path resolver — replacement env has no implicit PATH fallback',
+    LResolver, 'Result := '''';');
+  CheckContains('Path resolver — Windows appends PATHEXT candidates',
+    LResolver, 'AppendWindowsPathExtCandidate');
   CheckAbsent('Path resolver — no bare slash-only directory check', LResolver,
     'if Pos(''/'', AName) > 0 then');
   CheckContains('Path resolver — ResolveExecutablePath uses helper', LResolver,
     'if CommandPathHasDirectoryPart(AName) then');
+  CheckContains('Path resolver — uses platform executable facade', LResolver,
+    'platform_fs_is_executable');
+  CheckAbsent('Path resolver — no direct POSIX FFI import', LResolver,
+    'nextpas.core.platform.posix.ffi');
+  CheckAbsent('Path resolver — no direct POSIX access call', LResolver,
+    'access(PAnsiChar');
 
   LSpawnMethod := ExtractMethodBody(LCommand, 'function TCommand.Spawn: IChild;',
     'function TCommand.Output');
@@ -309,6 +349,29 @@ begin
     'CommandPathHasDirectoryPart(FPath)');
   CheckAbsent('Command spawn — no slash-only path check', LSpawnMethod,
     'Pos(''/'', FPath)');
+  CheckContains('Env overlay — uses env owner case contract', LCommand,
+    'EnvironmentVariableNamesCaseSensitive');
+  CheckContains('Env overlay — case-insensitive final key match', LCommand,
+    'TextEqualI');
+end;
+
+procedure TestProcessEnvSnapshotSourceContract;
+var
+  LSource, LBody: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.process.command.pas');
+  LBody := ExtractMethodBody(LSource,
+    'function BuildFinalEnv(const AMode: TProcessEnvMode;',
+    'constructor TCommand.Create');
+
+  CheckContains('Env snapshot — uses os.env owner', LSource,
+    'nextpas.core.os.env');
+  CheckContains('Env snapshot — delegates parent snapshot', LBody,
+    'EnvironmentVariables');
+  CheckAbsent('Env snapshot — no direct POSIX env pointer', LBody,
+    'PPAnsiChar');
+  CheckAbsent('Env snapshot — no direct POSIX environ read', LBody,
+    'LCur := environ');
 end;
 
 procedure TestSpawnStdinPipe;
@@ -605,8 +668,7 @@ end;
 
 procedure ExpectProcessErrorNoFdLeak(const AName: string; const AProc: TProcedure);
 var
-  LBefore: Integer;
-  LAfter: Integer;
+  LBefore, LAfter: Integer;
 begin
   LBefore := OpenFdCount;
   ExpectProcessError(AName + ' — raises EProcessError', AProc);
@@ -734,6 +796,54 @@ begin
     Pos('envadd-path-final-view', LOut.StdOut) > 0);
 end;
 
+procedure TestEnvReplaceRelativePathSearchUsesCommandDir;
+var
+  LTempRoot, LToolDir, LToolName, LToolPath: string;
+  LFile: TextFile;
+  LOut: TProcessOutput;
+  LRaised: Boolean;
+begin
+  LToolName := 'nextpas_process_dir_path_tool';
+  LTempRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-process-dir-path-' + IntToStr(GetProcessID);
+  LToolDir := IncludeTrailingPathDelimiter(LTempRoot) + 'tools';
+  LToolPath := IncludeTrailingPathDelimiter(LToolDir) + LToolName;
+  if DirectoryExists(LTempRoot) then
+    RemoveDir(LTempRoot);
+  ForceDirectories(LToolDir);
+  try
+    AssignFile(LFile, LToolPath);
+    Rewrite(LFile);
+    WriteLn(LFile, '#!/bin/sh');
+    WriteLn(LFile, 'printf dir-path-resolved');
+    CloseFile(LFile);
+    nextpas.core.platform.posix.ffi.chmod(PAnsiChar(LToolPath), &755);
+
+    LRaised := False;
+    try
+      LOut := TCommand.New(LToolName)
+        .Dir(LTempRoot)
+        .Env(['PATH=tools'])
+        .Output;
+    except
+      on E: EProcessError do
+        LRaised := True;
+    end;
+
+    Check('Env replace + Dir relative PATH — no spawn error', not LRaised);
+    if not LRaised then
+      Check('Env replace + Dir relative PATH — resolved from command dir',
+        Pos('dir-path-resolved', LOut.StdOut) > 0);
+  finally
+    if FileExists(LToolPath) then
+      DeleteFile(LToolPath);
+    if DirectoryExists(LToolDir) then
+      RemoveDir(LToolDir);
+    if DirectoryExists(LTempRoot) then
+      RemoveDir(LTempRoot);
+  end;
+end;
+
 
 procedure TestTimeout;
 var LOut: TProcessOutput; LStart: TInstant;
@@ -783,7 +893,9 @@ begin
   TestSpawnKill;
   TestSpawnDetach;
   TestDetachedLifecycleGuards;
+  TestWaitTimeoutSleepOwnerSourceContract;
   TestPathResolverSourceContract;
+  TestProcessEnvSnapshotSourceContract;
   TestSpawnStdinPipe;
   TestSpawnStdoutReader;
   TestCommandEnv;
@@ -795,6 +907,7 @@ begin
   TestEnvReplaceWithPathSearch;
   TestEnvReplaceSkipsNonExecutablePathShadow;
   TestEnvAddDuplicatePathUsesFinalResolvedView;
+  TestEnvReplaceRelativePathSearchUsesCommandDir;
   TestTimeout;
   TestTimeoutOutputDrainsBeforeWait;
   TestEnvAdd;

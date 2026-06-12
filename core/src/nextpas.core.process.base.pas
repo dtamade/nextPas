@@ -55,7 +55,7 @@ type
    *
    * @note ExitCode 为平台错误码（errno 或 GetLastError）
    *}
-  EProcessError = class(ENextPasError)
+  EProcessError = class(Exception)
   private
     FExitCode: Integer;
   public
@@ -65,59 +65,9 @@ type
 
 implementation
 
-function ProcessErrorCategory(AExitCode: Integer): TErrorCategory;
-const
-{$IFDEF NEXTPAS_WINDOWS}
-  PROCESS_ERROR_FILE_NOT_FOUND = 2;
-  PROCESS_ERROR_PATH_NOT_FOUND = 3;
-  PROCESS_ERROR_ACCESS_DENIED = 5;
-  PROCESS_ERROR_INVALID_PARAMETER = 87;
-  PROCESS_ERROR_TIMEOUT = 1460;
-{$ELSE}
-  PROCESS_ERROR_OPERATION_NOT_PERMITTED = 1;
-  PROCESS_ERROR_NO_ENTRY = 2;
-  PROCESS_ERROR_PERMISSION_DENIED = 13;
-  PROCESS_ERROR_INVALID_ARGUMENT = 22;
-{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
-  PROCESS_ERROR_TIMED_OUT = 60;
-{$ELSE}
-  PROCESS_ERROR_TIMED_OUT = 110;
-{$ENDIF}
-{$ENDIF}
-begin
-  if AExitCode = -1 then
-    Exit(ecInternal);
-{$IFDEF NEXTPAS_WINDOWS}
-  case AExitCode of
-    PROCESS_ERROR_FILE_NOT_FOUND,
-    PROCESS_ERROR_PATH_NOT_FOUND:
-      Exit(ecNotFound);
-    PROCESS_ERROR_ACCESS_DENIED:
-      Exit(ecPermission);
-    PROCESS_ERROR_INVALID_PARAMETER:
-      Exit(ecInvalidArgument);
-    PROCESS_ERROR_TIMEOUT:
-      Exit(ecTimeout);
-  end;
-{$ELSE}
-  case AExitCode of
-    PROCESS_ERROR_NO_ENTRY:
-      Exit(ecNotFound);
-    PROCESS_ERROR_OPERATION_NOT_PERMITTED,
-    PROCESS_ERROR_PERMISSION_DENIED:
-      Exit(ecPermission);
-    PROCESS_ERROR_INVALID_ARGUMENT:
-      Exit(ecInvalidArgument);
-    PROCESS_ERROR_TIMED_OUT:
-      Exit(ecTimeout);
-  end;
-{$ENDIF}
-  Result := ecIO;
-end;
-
 constructor EProcessError.Create(const AMessage: string; const AExitCode: Integer);
 begin
-  inherited Create(AMessage, ProcessErrorCategory(AExitCode));
+  inherited Create(AMessage);
   FExitCode := AExitCode;
 end;
 

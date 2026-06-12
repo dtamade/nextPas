@@ -173,8 +173,13 @@ begin
 end;
 
 function FsMkdirAll(const APath: string; const APerm: TFilePermission): Boolean;
+var
+  LResult: Int32;
 begin
-  Result := platform_fs_mkdir_p(PAnsiChar(APath), UInt32(APerm)) = 0;
+  LResult := platform_fs_mkdir_p(PAnsiChar(APath), UInt32(APerm));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'mkdirall', APath);
+  Result := True;
 end;
 
 { True only for a real directory; a symlink to a directory returns False so
@@ -211,14 +216,18 @@ var
   LIter: IDirIterator;
   LEntry: TDirEntry;
   LChild: string;
-  LOk: Boolean;
+  LResult: Int32;
 begin
   if (APath = '') or (APath = '/') or (APath = '\') then
-    Exit(False);
+    raise EInvalidOperationError.Create('removeall refused unsafe root: ' + APath);
   if not IsRealDir(APath) then
-    Exit(platform_file_unlink(PAnsiChar(APath)) = 0);
+  begin
+    LResult := platform_file_unlink(PAnsiChar(APath));
+    if LResult <> 0 then
+      RaiseFsError(LResult, 'removeall', APath);
+    Exit(True);
+  end;
 
-  LOk := True;
   LIter := FsOpenDir(APath);
   while LIter.Next do
   begin
@@ -228,16 +237,20 @@ begin
     LChild := APath + '/' + LEntry.Name;
     if IsRealDir(LChild) then
     begin
-      if not FsRemoveAll(LChild) then LOk := False;
+      FsRemoveAll(LChild);
     end
     else
     begin
-      if platform_file_unlink(PAnsiChar(LChild)) <> 0 then LOk := False;
+      LResult := platform_file_unlink(PAnsiChar(LChild));
+      if LResult <> 0 then
+        RaiseFsError(LResult, 'removeall', LChild);
     end;
   end;
   LIter.Close;
-  if platform_file_rmdir(PAnsiChar(APath)) <> 0 then LOk := False;
-  Result := LOk;
+  LResult := platform_file_rmdir(PAnsiChar(APath));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'removeall', APath);
+  Result := True;
 end;
 
 function FsRename(const AOld, ANew: string): Boolean;

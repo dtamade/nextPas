@@ -80,6 +80,7 @@ uses
   nextpas.core.platform.process,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.thread,
   nextpas.core.process.pipe;
 
 const
@@ -149,7 +150,6 @@ function TChild.Wait: TProcessOutput;
 var
   LResult: TPlatformProcessResult;
   LDeadline: TInstant;
-  LTs: TTimeSpec;
 begin
   if FWaited then
     Exit(FLastOutput);
@@ -177,9 +177,7 @@ begin
         platform_process_wait(FProc, LResult);
         Break;
       end;
-      LTs.tv_sec := 0;
-      LTs.tv_nsec := 10000000;
-      nanosleep(@LTs, nil);
+      platform_thread_sleep_ns(10000000);
     until False;
   end;
   Result := FinishWaitResult(LResult, '', '');

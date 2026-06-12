@@ -4,12 +4,19 @@ unit nextpas.core.platform.env;
 
 interface
 
+type
+  TPlatformEnvEnumerateCallback = function(const AEntry: PAnsiChar;
+    AData: Pointer): Boolean;
+
 function platform_env_get(const AName: PAnsiChar; ABuf: PAnsiChar;
   ABufLen: Int32; out ALen: Int32): Int32;
 function platform_env_set(const AName: PAnsiChar;
   const AValue: PAnsiChar): Int32;
 function platform_env_unset(const AName: PAnsiChar): Int32;
 function platform_env_exists(const AName: PAnsiChar): Boolean;
+function platform_env_enumerate(ACallback: TPlatformEnvEnumerateCallback;
+  AData: Pointer): Int32;
+function platform_env_names_case_sensitive: Boolean;
 
 implementation
 
@@ -95,6 +102,25 @@ begin
   if not platform_env_name_valid(AName) then
     Exit(False);
   Result := getenv(AName) <> nil;
+end;
+
+function platform_env_enumerate(ACallback: TPlatformEnvEnumerateCallback;
+  AData: Pointer): Int32;
+var
+  LCur: PPAnsiChar;
+begin
+  if not Assigned(ACallback) then
+    Exit(22);
+  LCur := environ;
+  if LCur = nil then
+    Exit(0);
+  while LCur^ <> nil do
+  begin
+    if not ACallback(LCur^, AData) then
+      Break;
+    Inc(LCur);
+  end;
+  Result := 0;
 end;
 {$ENDIF}
 
@@ -183,6 +209,35 @@ begin
   Result := (GetEnvironmentVariableW(PWideChar(LName), nil, 0) > 0) or
             (GetLastError <> ERROR_ENVVAR_NOT_FOUND);
 end;
+
+function platform_env_enumerate(ACallback: TPlatformEnvEnumerateCallback;
+  AData: Pointer): Int32;
+var
+  LBlock: LPWSTR;
+  LCur: PWideChar;
+  LUtf8: AnsiString;
+begin
+  if not Assigned(ACallback) then
+    Exit(Int32(ERROR_INVALID_PARAMETER));
+
+  LBlock := GetEnvironmentStringsW;
+  if LBlock = nil then
+    Exit(Int32(GetLastError));
+  try
+    LCur := PWideChar(LBlock);
+    while LCur^ <> #0 do
+    begin
+      if not platform_windows_wide_to_utf8_checked(LCur, LUtf8) then
+        Exit(Int32(ERROR_INVALID_DATA));
+      if not ACallback(PAnsiChar(LUtf8), AData) then
+        Break;
+      Inc(LCur, Length(UnicodeString(LCur)) + 1);
+    end;
+    Result := 0;
+  finally
+    FreeEnvironmentStringsW(LBlock);
+  end;
+end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
@@ -196,6 +251,18 @@ function platform_env_unset(const AName: PAnsiChar): Int32;
 begin Result := -1; end;
 function platform_env_exists(const AName: PAnsiChar): Boolean;
 begin Result := False; end;
+function platform_env_enumerate(ACallback: TPlatformEnvEnumerateCallback;
+  AData: Pointer): Int32;
+begin Result := -1; end;
 {$ENDIF}
+
+function platform_env_names_case_sensitive: Boolean;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := False;
+{$ELSE}
+  Result := True;
+{$ENDIF}
+end;
 
 end.

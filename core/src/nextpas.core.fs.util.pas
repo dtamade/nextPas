@@ -37,7 +37,6 @@ function FsGetEnv(const AName: string): string;
 implementation
 
 uses
-  {$IFDEF UNIX}BaseUnix,{$ENDIF}
   nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.fs.errors,
@@ -152,7 +151,7 @@ const
   MAX_ATTEMPTS = 32;
 var
   LPathBuf: array[0..1023] of AnsiChar;
-  LFd: Int32;
+  LHandle: TPlatformFileHandle;
   LResult: Int32;
   LPath: string;
   LRand: array[0..7] of Byte;
@@ -162,12 +161,12 @@ begin
   { Empty ADir: defer to platform temp-dir helper (system temp). }
   if ADir = '' then
   begin
-    LResult := platform_fs_mktemp(PAnsiChar(APattern), PAnsiChar(''),
-      @LPathBuf[0], SizeOf(LPathBuf), LFd);
+    LResult := platform_fs_mktemp_handle(PAnsiChar(APattern), PAnsiChar(''),
+      @LPathBuf[0], SizeOf(LPathBuf), LHandle);
     if LResult <> 0 then
       raise EIOError.Create('mktemp failed (' + IntToStr(LResult) + ')');
     LPath := StrPas(@LPathBuf[0]);
-    Result := FsFromHandle(LFd, LPath);
+    Result := FsFromPlatformHandle(LHandle, LPath);
     Exit;
   end;
 
@@ -379,24 +378,46 @@ begin
 end;
 
 function FsGetCwd: string;
+const
+  CWD_STACK_BUF_SIZE = 1024;
+  CWD_MAX_BUF_SIZE = 65536;
+var
+  LStack: array[0..CWD_STACK_BUF_SIZE - 1] of AnsiChar;
+  LHeap: array of AnsiChar;
+  LBufSize: SizeInt;
 begin
-  GetDir(0, Result);
+  if platform_file_getcwd(@LStack[0], CWD_STACK_BUF_SIZE) <> nil then
+  begin
+    Result := StrPas(@LStack[0]);
+    Exit;
+  end;
+
+  LBufSize := CWD_STACK_BUF_SIZE * 2;
+  repeat
+    if LBufSize > CWD_MAX_BUF_SIZE then
+      raise EIOError.Create('getcwd path too long');
+    SetLength(LHeap, LBufSize);
+    if platform_file_getcwd(@LHeap[0], PtrUInt(LBufSize)) <> nil then
+    begin
+      Result := StrPas(@LHeap[0]);
+      Exit;
+    end;
+    LBufSize := LBufSize * 2;
+  until False;
 end;
 
 procedure FsSetCwd(const APath: string);
+var
+  LResult: Int32;
 begin
-  ChDir(APath);
+  LResult := platform_file_chdir(PAnsiChar(APath));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'chdir', APath);
 end;
 
 function FsGetEnv(const AName: string): string;
-var P: PChar;
 begin
-  {$IFDEF UNIX}
-  P := BaseUnix.fpGetEnv(PChar(AName));
-  if P <> nil then Result := P else Result := '';
-  {$ELSE}
   Result := nextpas.core.os.env.GetEnvironmentVariable(AName);
-  {$ENDIF}
 end;
 
 end.
