@@ -175,6 +175,13 @@ type
       const AContext: ITcpServerSessionContext): ITcpServerSession;
   end;
 
+  IH2StreamControl = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-400000000010}']
+    procedure Reset(const AErrorCode: UInt32);
+    function GetStreamID: UInt32;
+    property StreamID: UInt32 read GetStreamID;
+  end;
+
 const
   TCP_SERVER_CONN_OWNERSHIP_SERVER = nextpas.core.net.server.base.tscoServer;
   TCP_SERVER_CONN_OWNERSHIP_HANDLER = nextpas.core.net.server.base.tscoHandler;

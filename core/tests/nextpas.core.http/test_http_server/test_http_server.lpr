@@ -21,6 +21,8 @@ uses
   nextpas.core.http.intf,
   nextpas.core.http.headers,
   nextpas.core.http.impl.h1,
+  nextpas.core.http.impl.h2.server,
+  nextpas.core.http.impl.h2.types,
   nextpas.core.http.message,
   nextpas.core.http.router,
   nextpas.core.http.server,
@@ -1231,6 +1233,23 @@ begin
   Result.MaxBodySize := AHttpOptions.MaxBodySize;
 end;
 
+function DefaultH2ServerTransportOptions(
+  const AHttpOptions: THttpServerOptions): TH2ServerTransportOptions;
+begin
+  Result := TH2ServerTransportOptions.Default;
+  Result.ReadTimeout := AHttpOptions.ReadTimeout;
+  Result.WriteTimeout := AHttpOptions.WriteTimeout;
+  Result.IdleTimeout := AHttpOptions.IdleTimeout;
+  if AHttpOptions.MaxHeaderSize > 0 then
+    Result.MaxHeaderListSize := UInt32(AHttpOptions.MaxHeaderSize)
+  else
+    Result.MaxHeaderListSize := 0;
+  if AHttpOptions.MaxBodySize > 0 then
+    Result.MaxBodySize := UInt32(AHttpOptions.MaxBodySize)
+  else
+    Result.MaxBodySize := 0;
+end;
+
 function ServerThreadFunc(AArg: Pointer): Pointer; cdecl;
 var
   LCtx: PServerCtx;
@@ -1897,6 +1916,97 @@ begin
     end);
   Check(LContextFactory.NewSession(LStream, LHandler, nil) <> nil,
     'context NewSession accepts nil context');
+end;
+
+procedure TestH2TransportExposesContextSessionFactory;
+var
+  LHttpOpts: THttpServerOptions;
+  LH2Opts: TH2ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactoryWithContext;
+  LSession: ITcpServerSession;
+  LPollSession: ITcpServerPollDrivenSession;
+  LStreamObj: TZeroProgressTcpStream;
+  LStream: ITcpStream;
+  LContext: ITcpServerSessionContext;
+  LHandoff: ITcpServerWorkerHandoff;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LH2Opts := DefaultH2ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH2ServerTransport(LH2Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LFactory),
+    'h2 transport exposes context-aware session factory');
+
+  LStreamObj := TZeroProgressTcpStream.Create('');
+  LStream := LStreamObj as ITcpStream;
+  LHandoff := TMockWorkerHandoff.Create;
+  LContext := TMockSessionContext.Create(LHandoff);
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+    end), LContext);
+  Check(LSession <> nil, 'context-aware h2 session factory returns session');
+  Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
+    'context-aware h2 session exposes poll-driven seam');
+end;
+
+procedure TestH2TransportRejectsNilConnOrHandler;
+var
+  LHttpOpts: THttpServerOptions;
+  LH2Opts: TH2ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactory;
+  LContextFactory: IHttpServerSessionFactoryWithContext;
+  LStreamObj: TZeroProgressTcpStream;
+  LStream: ITcpStream;
+  LHandler: IHttpHandler;
+  LContext: ITcpServerSessionContext;
+  LHandoff: ITcpServerWorkerHandoff;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LH2Opts := DefaultH2ServerTransportOptions(LHttpOpts);
+  LTransport := NewH2ServerTransport(LH2Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactory, LFactory),
+    'h2 transport exposes session factory');
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LContextFactory),
+    'h2 transport exposes context-aware session factory');
+
+  LStreamObj := TZeroProgressTcpStream.Create('');
+  LStream := LStreamObj as ITcpStream;
+  LHandler := HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+    end);
+  LHandoff := TMockWorkerHandoff.Create;
+  LContext := TMockSessionContext.Create(LHandoff);
+
+  CheckRaisesEArgumentError('H2 ServeConn nil connection', procedure
+    begin
+      LTransport.ServeConn(nil, LHandler);
+    end);
+  CheckRaisesEArgumentError('H2 ServeConn nil handler', procedure
+    begin
+      LTransport.ServeConn(LStream, nil);
+    end);
+  CheckRaisesEArgumentError('H2 NewSession nil connection', procedure
+    begin
+      LFactory.NewSession(nil, LHandler);
+    end);
+  CheckRaisesEArgumentError('H2 NewSession nil handler', procedure
+    begin
+      LFactory.NewSession(LStream, nil);
+    end);
+  CheckRaisesEArgumentError('H2 context NewSession nil connection', procedure
+    begin
+      LContextFactory.NewSession(nil, LHandler, LContext);
+    end);
+  CheckRaisesEArgumentError('H2 context NewSession nil handler', procedure
+    begin
+      LContextFactory.NewSession(LStream, nil, LContext);
+    end);
+  Check(LContextFactory.NewSession(LStream, LHandler, nil) <> nil,
+    'h2 context NewSession accepts nil context');
 end;
 
 procedure TestH1PollDrivenSessionHandsOffPerCompletedRequest;
@@ -13246,6 +13356,10 @@ begin
     @TestH1TransportExposesContextSessionFactory);
   T.Run('H1 transport rejects nil connection or handler',
     @TestH1TransportRejectsNilConnOrHandler);
+  T.Run('H2 transport exposes context-aware session factory',
+    @TestH2TransportExposesContextSessionFactory);
+  T.Run('H2 transport rejects nil connection or handler',
+    @TestH2TransportRejectsNilConnOrHandler);
   T.Run('H1 poll-driven session hands off per completed request',
     @TestH1PollDrivenSessionHandsOffPerCompletedRequest);
   T.Run('H1 poll-driven session drains response via writable events',

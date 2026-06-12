@@ -4,6 +4,7 @@ program test_http_registry;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
+  SysUtils,
   nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.net,
@@ -404,6 +405,21 @@ begin
   end;
 end;
 
+procedure TestBuiltinHttp2ServerTransportIsRegistered;
+var
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactory;
+  LContextFactory: IHttpServerSessionFactoryWithContext;
+begin
+  LTransport := ResolveServerTransport(hvHttp2, THttpServerOptions.Default);
+  Check(LTransport <> nil, 'built-in HTTP/2 server transport resolves');
+  Check(Supports(LTransport, IHttpServerSessionFactory, LFactory),
+    'built-in HTTP/2 server transport exposes session factory');
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext,
+    LContextFactory),
+    'built-in HTTP/2 server transport exposes context-aware session factory');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.impl.registry');
   T.Run('ResolveClientTransport raises when version is missing',
@@ -418,5 +434,7 @@ begin
     @TestServerConstructorUsesRegistryDefault);
   T.Run('THttpServer default constructor accepts registered HTTP/3 registry default',
     @TestServerConstructorUsesRegisteredHttp3RegistryDefault);
+  T.Run('Built-in HTTP/2 server transport is registered',
+    @TestBuiltinHttp2ServerTransportIsRegistered);
   T.Summary;
 end.

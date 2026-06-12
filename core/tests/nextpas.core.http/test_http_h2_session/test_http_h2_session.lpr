@@ -1,0 +1,1010 @@
+program test_http_h2_session;
+
+{$I nextpas.core.settings.inc}
+
+uses
+  SysUtils,
+  nextpas.core.base,
+  nextpas.core.errors,
+  nextpas.core.io.intf,
+  nextpas.core.io.base,
+  nextpas.core.io.memory,
+  nextpas.core.net.base,
+  nextpas.core.net.intf,
+  nextpas.core.net.server.intf,
+  nextpas.core.platform.io.base,
+  nextpas.core.time.deadline,
+  nextpas.core.http.base,
+  nextpas.core.http.intf,
+  nextpas.core.http.impl.h2.frame,
+  nextpas.core.http.impl.h2.hpack,
+  nextpas.core.http.impl.h2.session,
+  nextpas.core.http.impl.h2.types,
+  nextpas.core.testing;
+
+type
+  TFakeTcpStream = class(TInterfacedObject, ITcpStream)
+  private
+    FReadData: AnsiString;
+    FReadPos: SizeInt;
+    FWrittenData: AnsiString;
+    FClosed: Boolean;
+    FLocalAddr: TNetAddress;
+    FRemoteAddr: TNetAddress;
+    FReadDeadline: TDeadline;
+    FWriteDeadline: TDeadline;
+    FMaxWriteChunk: SizeUInt;
+  public
+    constructor Create(const AReadData: AnsiString);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
+    function LocalAddr: TNetAddress;
+    function RemoteAddr: TNetAddress;
+    procedure Shutdown;
+    procedure SetNoDelay(const AValue: Boolean);
+    procedure SetKeepAlive(const AValue: Boolean);
+    procedure SetReadDeadline(const ADeadline: TDeadline);
+    procedure SetWriteDeadline(const ADeadline: TDeadline);
+    procedure AppendReadData(const AData: AnsiString);
+    function WrittenData: AnsiString;
+    property MaxWriteChunk: SizeUInt read FMaxWriteChunk write FMaxWriteChunk;
+  end;
+
+  TCollectingHandler = class(TInterfacedObject, IHttpHandler)
+  private
+    FSeenMethod: THttpMethod;
+    FSeenPath: string;
+    FSeenBody: string;
+    FCallCount: Int32;
+    FResponseStatus: THttpStatus;
+    FResponseHeaders: array of record
+      Name: string;
+      Value: string;
+    end;
+    FResponseBody: string;
+  public
+    constructor Create;
+    procedure SetResponse(const AStatus: THttpStatus; const ABody: string);
+    procedure AddResponseHeader(const AName, AValue: string);
+    procedure ServeHTTP(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
+    property SeenMethod: THttpMethod read FSeenMethod;
+    property SeenPath: string read FSeenPath;
+    property SeenBody: string read FSeenBody;
+    property CallCount: Int32 read FCallCount;
+  end;
+
+function HexNibble(const ACh: Char): Byte;
+begin
+  case ACh of
+    '0'..'9':
+      Result := Ord(ACh) - Ord('0');
+    'a'..'f':
+      Result := Ord(ACh) - Ord('a') + 10;
+    'A'..'F':
+      Result := Ord(ACh) - Ord('A') + 10;
+  else
+    Result := 0;
+  end;
+end;
+
+function HexToBytes(const AHex: string): AnsiString;
+var
+  LI: SizeInt;
+  LOut: SizeInt;
+begin
+  SetLength(Result, Length(AHex) div 2);
+  LOut := 1;
+  LI := 1;
+  while LI < Length(AHex) do
+  begin
+    Result[LOut] := AnsiChar((HexNibble(AHex[LI]) shl 4) or
+      HexNibble(AHex[LI + 1]));
+    Inc(LOut);
+    Inc(LI, 2);
+  end;
+end;
+
+function EncodeHeaders(const AHeaders: array of THPackHeader): AnsiString;
+var
+  LEncoder: THPackEncoder;
+begin
+  LEncoder.Init;
+  Result := LEncoder.Encode(AHeaders);
+end;
+
+function ComposeRequestHeaders(const AMethod, APath: AnsiString): AnsiString;
+var
+  LHeaders: array[0..3] of THPackHeader;
+begin
+  LHeaders[0].Name := ':method';
+  LHeaders[0].Value := AMethod;
+  LHeaders[1].Name := ':path';
+  LHeaders[1].Value := APath;
+  LHeaders[2].Name := ':scheme';
+  LHeaders[2].Value := 'https';
+  LHeaders[3].Name := ':authority';
+  LHeaders[3].Value := 'example.com';
+  Result := EncodeHeaders(LHeaders);
+end;
+
+function ComposePrefaceHandshake(const ASettingsPayload: AnsiString = ''): AnsiString;
+begin
+  Result := H2_CLIENT_PREFACE +
+    H2EncodeFrame(H2_FRAME_SETTINGS, 0, 0, ASettingsPayload);
+end;
+
+function ReadAllBody(const ABody: IReader): string;
+var
+  LBuf: array[0..255] of Byte;
+  LRead: SizeUInt;
+  LOldLen: SizeInt;
+begin
+  Result := '';
+  if ABody = nil then
+    Exit;
+  repeat
+    LRead := ABody.Read(LBuf[0], SizeOf(LBuf));
+    if LRead = 0 then
+      Break;
+    LOldLen := Length(Result);
+    SetLength(Result, LOldLen + SizeInt(LRead));
+    Move(LBuf[0], Result[LOldLen + 1], LRead);
+  until False;
+end;
+
+procedure DecodeFrames(const AWire: AnsiString; out AFrames: array of TH2Frame;
+  out ACount: SizeInt);
+var
+  LOffset: SizeInt;
+  LConsumed: SizeUInt;
+  LFrame: TH2Frame;
+begin
+  ACount := 0;
+  LOffset := 1;
+  while LOffset <= Length(AWire) do
+  begin
+    Check(LOffset + H2_FRAME_HEADER_SIZE - 1 <= Length(AWire),
+      'wire contains full frame header');
+    Check(H2DecodeFrame(@AWire[LOffset], Length(AWire) - LOffset + 1,
+      LFrame, LConsumed), 'frame decodes from wire');
+    Check(ACount < Length(AFrames), 'frame output capacity sufficient');
+    AFrames[ACount] := LFrame;
+    Inc(ACount);
+    Inc(LOffset, SizeInt(LConsumed));
+  end;
+end;
+
+function ExtractStatusHeader(const ABlock: AnsiString): string;
+var
+  LDecoder: THPackDecoder;
+  LHeaders: array of THPackHeader;
+  LI: SizeInt;
+begin
+  LDecoder.Init;
+  SetLength(LHeaders, Length(ABlock) + 4);
+  Check(LDecoder.Decode(ABlock, LHeaders), 'response header block decodes');
+  for LI := 0 to High(LHeaders) do
+  begin
+    if LHeaders[LI].Name = ':status' then
+      Exit(string(LHeaders[LI].Value));
+    if LHeaders[LI].Name = '' then
+      Break;
+  end;
+  Result := '';
+end;
+
+procedure CheckPrefaceStatus(const AWire: AnsiString;
+  const AExpectedStatus: TH2PrefaceStatus; const AExpectedConsumed: SizeUInt;
+  const AExpectedError: UInt32; const AMessage: string);
+var
+  LConsumed: SizeUInt;
+  LErrorCode: UInt32;
+  LStatus: TH2PrefaceStatus;
+begin
+  LConsumed := 12345;
+  LErrorCode := $FFFFFFFF;
+  if Length(AWire) = 0 then
+    LStatus := H2ValidateServerPreface(nil, 0, LConsumed, LErrorCode)
+  else
+    LStatus := H2ValidateServerPreface(@AWire[1], Length(AWire), LConsumed,
+      LErrorCode);
+  CheckEqual(Int64(Ord(AExpectedStatus)), Int64(Ord(LStatus)),
+    AMessage + ' status');
+  CheckEqual(Int64(AExpectedConsumed), Int64(LConsumed),
+    AMessage + ' consumed');
+  CheckEqual(Int64(AExpectedError), Int64(LErrorCode), AMessage + ' error');
+end;
+
+{ TFakeTcpStream }
+
+constructor TFakeTcpStream.Create(const AReadData: AnsiString);
+begin
+  inherited Create;
+  FReadData := AReadData;
+  FReadPos := 1;
+  FWrittenData := '';
+  FClosed := False;
+  FLocalAddr := TNetAddress.Loopback(8443);
+  FRemoteAddr := TNetAddress.IPv4('127.0.0.2', 5050);
+  FReadDeadline := TDeadline.Infinite;
+  FWriteDeadline := TDeadline.Infinite;
+  FMaxWriteChunk := 0;
+end;
+
+function TFakeTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LAvailable: SizeUInt;
+begin
+  if FClosed or (FReadPos > Length(FReadData)) then
+    Exit(0);
+  LAvailable := SizeUInt(Length(FReadData) - FReadPos + 1);
+  if ACount < LAvailable then
+    Result := ACount
+  else
+    Result := LAvailable;
+  Move(FReadData[FReadPos], ABuf, Result);
+  Inc(FReadPos, SizeInt(Result));
+end;
+
+function TFakeTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LWriteCount: SizeUInt;
+  LOldLen: SizeInt;
+begin
+  if FClosed then
+    Exit(0);
+  LWriteCount := ACount;
+  if (FMaxWriteChunk > 0) and (LWriteCount > FMaxWriteChunk) then
+    LWriteCount := FMaxWriteChunk;
+  if LWriteCount = 0 then
+    Exit(0);
+  LOldLen := Length(FWrittenData);
+  SetLength(FWrittenData, LOldLen + SizeInt(LWriteCount));
+  Move(ABuf, FWrittenData[LOldLen + 1], LWriteCount);
+  Result := LWriteCount;
+end;
+
+function TFakeTcpStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+begin
+  Result := 0;
+  raise EIOError.Create('fake tcp stream does not support seek');
+end;
+
+procedure TFakeTcpStream.Close;
+begin
+  FClosed := True;
+end;
+
+function TFakeTcpStream.GetSize: Int64;
+begin
+  Result := Length(FReadData);
+end;
+
+function TFakeTcpStream.GetPosition: Int64;
+begin
+  Result := FReadPos - 1;
+end;
+
+procedure TFakeTcpStream.SetPosition(const AValue: Int64);
+begin
+  if (AValue < 0) or (AValue > Length(FReadData)) then
+    raise EArgumentError.Create('fake tcp stream position out of range');
+  FReadPos := SizeInt(AValue) + 1;
+end;
+
+function TFakeTcpStream.LocalAddr: TNetAddress;
+begin
+  Result := FLocalAddr;
+end;
+
+function TFakeTcpStream.RemoteAddr: TNetAddress;
+begin
+  Result := FRemoteAddr;
+end;
+
+procedure TFakeTcpStream.Shutdown;
+begin
+  FClosed := True;
+end;
+
+procedure TFakeTcpStream.SetNoDelay(const AValue: Boolean);
+begin
+end;
+
+procedure TFakeTcpStream.SetKeepAlive(const AValue: Boolean);
+begin
+end;
+
+procedure TFakeTcpStream.SetReadDeadline(const ADeadline: TDeadline);
+begin
+  FReadDeadline := ADeadline;
+end;
+
+procedure TFakeTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
+begin
+  FWriteDeadline := ADeadline;
+end;
+
+procedure TFakeTcpStream.AppendReadData(const AData: AnsiString);
+var
+  LOldLen: SizeInt;
+begin
+  LOldLen := Length(FReadData);
+  SetLength(FReadData, LOldLen + Length(AData));
+  if AData <> '' then
+    Move(AData[1], FReadData[LOldLen + 1], Length(AData));
+end;
+
+function TFakeTcpStream.WrittenData: AnsiString;
+begin
+  Result := FWrittenData;
+end;
+
+{ TCollectingHandler }
+
+constructor TCollectingHandler.Create;
+begin
+  inherited Create;
+  FSeenMethod := hmGet;
+  FSeenPath := '';
+  FSeenBody := '';
+  FCallCount := 0;
+  FResponseStatus := HTTP_STATUS_OK;
+  FResponseBody := '';
+  SetLength(FResponseHeaders, 0);
+end;
+
+procedure TCollectingHandler.SetResponse(const AStatus: THttpStatus;
+  const ABody: string);
+begin
+  FResponseStatus := AStatus;
+  FResponseBody := ABody;
+end;
+
+procedure TCollectingHandler.AddResponseHeader(const AName, AValue: string);
+var
+  LLen: SizeInt;
+begin
+  LLen := Length(FResponseHeaders);
+  SetLength(FResponseHeaders, LLen + 1);
+  FResponseHeaders[LLen].Name := AName;
+  FResponseHeaders[LLen].Value := AValue;
+end;
+
+procedure TCollectingHandler.ServeHTTP(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter);
+var
+  LI: SizeInt;
+begin
+  Inc(FCallCount);
+  FSeenMethod := AReq.Method;
+  FSeenPath := AReq.Path;
+  FSeenBody := ReadAllBody(AReq.Body);
+  for LI := 0 to High(FResponseHeaders) do
+    AW.GetHeaders.SetHeader(FResponseHeaders[LI].Name,
+      FResponseHeaders[LI].Value);
+  if FResponseBody <> '' then
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Length(FResponseBody)));
+  AW.WriteHeader(FResponseStatus);
+  if FResponseBody <> '' then
+    CheckEqual(Int64(Length(FResponseBody)),
+      Int64(AW.Write(FResponseBody[1], Length(FResponseBody))),
+      'response writer writes full body');
+end;
+
+procedure TestPartialPrefaceWaits;
+begin
+  CheckPrefaceStatus(Copy(H2_CLIENT_PREFACE, 1, 7), h2psNeedMore, 0,
+    H2_ERR_NO_ERROR, 'partial preface');
+end;
+
+procedure TestWrongPrefaceIsConnectionError;
+var
+  LWire: AnsiString;
+begin
+  LWire := H2_CLIENT_PREFACE;
+  LWire[1] := 'X';
+  CheckPrefaceStatus(LWire, h2psConnectionError, 0, H2_ERR_PROTOCOL_ERROR,
+    'wrong preface');
+end;
+
+procedure TestPrefaceWithoutFirstFrameWaits;
+begin
+  CheckPrefaceStatus(H2_CLIENT_PREFACE, h2psNeedMore, 0, H2_ERR_NO_ERROR,
+    'preface only');
+end;
+
+procedure TestPartialFirstFrameWaits;
+var
+  LSettings: AnsiString;
+begin
+  LSettings := H2EncodeFrame(H2_FRAME_SETTINGS, 0, 0, '');
+  CheckPrefaceStatus(H2_CLIENT_PREFACE + Copy(LSettings, 1, 4),
+    h2psNeedMore, 0, H2_ERR_NO_ERROR, 'partial first frame');
+end;
+
+procedure TestInitialSettingsAccepted;
+var
+  LSettings: AnsiString;
+begin
+  LSettings := H2EncodeFrame(H2_FRAME_SETTINGS, 0, 0, '');
+  CheckPrefaceStatus(H2_CLIENT_PREFACE + LSettings, h2psOk,
+    Length(H2_CLIENT_PREFACE) + Length(LSettings), H2_ERR_NO_ERROR,
+    'initial SETTINGS');
+end;
+
+procedure TestInitialSettingsWithPayloadAccepted;
+var
+  LEntries: TH2SettingEntries;
+  LSettings: AnsiString;
+begin
+  SetLength(LEntries, 2);
+  LEntries[0].Identifier := H2_SETTINGS_HEADER_TABLE_SIZE;
+  LEntries[0].Value := 4096;
+  LEntries[1].Identifier := H2_SETTINGS_MAX_FRAME_SIZE;
+  LEntries[1].Value := 16384;
+  LSettings := H2EncodeFrame(H2_FRAME_SETTINGS, 0, 0,
+    H2EncodeSettingsPayload(LEntries));
+  CheckPrefaceStatus(H2_CLIENT_PREFACE + LSettings, h2psOk,
+    Length(H2_CLIENT_PREFACE) + Length(LSettings), H2_ERR_NO_ERROR,
+    'initial SETTINGS payload');
+end;
+
+procedure TestFirstFrameMustBeSettings;
+var
+  LPing: AnsiString;
+begin
+  LPing := H2EncodeFrame(H2_FRAME_PING, 0, 0,
+    HexToBytes('0102030405060708'));
+  CheckPrefaceStatus(H2_CLIENT_PREFACE + LPing, h2psConnectionError, 0,
+    H2_ERR_PROTOCOL_ERROR, 'first frame PING');
+end;
+
+procedure TestInitialSettingsMustNotAck;
+var
+  LSettings: AnsiString;
+begin
+  LSettings := H2EncodeFrame(H2_FRAME_SETTINGS, H2_FLAG_SETTINGS_ACK, 0, '');
+  CheckPrefaceStatus(H2_CLIENT_PREFACE + LSettings, h2psConnectionError, 0,
+    H2_ERR_PROTOCOL_ERROR, 'initial SETTINGS ACK');
+end;
+
+procedure TestInitialSettingsUsesConnectionStream;
+var
+  LSettings: AnsiString;
+begin
+  LSettings := H2EncodeFrame(H2_FRAME_SETTINGS, 0, 1, '');
+  CheckPrefaceStatus(H2_CLIENT_PREFACE + LSettings, h2psConnectionError, 0,
+    H2_ERR_PROTOCOL_ERROR, 'initial SETTINGS stream id');
+end;
+
+procedure TestRunHandshakeAndSimpleRequestResponse;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, 'world');
+    LHandler.AddResponseHeader('content-type', 'text/plain');
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/hello'));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        CheckEqual(Int64(TCP_SERVER_CONN_OWNERSHIP_SERVER), Int64(LSession.Run),
+          'Run returns server ownership');
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(1), Int64(LHandler.CallCount), 'handler called once');
+      CheckEqual(Int64(Ord(hmGet)), Int64(Ord(LHandler.SeenMethod)),
+        'handler sees method');
+      CheckEqual('/hello', LHandler.SeenPath, 'handler sees path');
+      CheckEqual('', LHandler.SeenBody, 'handler sees empty body');
+
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      CheckEqual(Int64(4), Int64(LFrameCount), 'server writes handshake + response frames');
+      CheckEqual(Int64(H2_FRAME_SETTINGS), Int64(LFrames[0].Header.FrameType),
+        'first frame is server SETTINGS');
+      CheckEqual(Int64(H2_FRAME_SETTINGS), Int64(LFrames[1].Header.FrameType),
+        'second frame is SETTINGS ACK');
+      CheckEqual(Int64(H2_FRAME_HEADERS), Int64(LFrames[2].Header.FrameType),
+        'third frame is response HEADERS');
+      CheckEqual('200', ExtractStatusHeader(LFrames[2].Payload),
+        'response status encoded');
+      CheckEqual(Int64(H2_FRAME_DATA), Int64(LFrames[3].Header.FrameType),
+        'fourth frame is DATA');
+      CheckEqual('world', string(LFrames[3].Payload), 'response body encoded');
+      Check((LFrames[3].Header.Flags and H2_FLAG_DATA_END_STREAM) <> 0,
+        'response DATA ends stream');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunDataEndStreamTriggersHandlerAndFlowControlUpdate;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LOptions: TH2ServerTransportOptions;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..9] of TH2Frame;
+  LFrameCount: SizeInt;
+  LWindowUpdateCount: SizeInt;
+  LI: SizeInt;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_CREATED, '');
+    LOptions := TH2ServerTransportOptions.Default;
+    LOptions.InitialStreamWindowSize := 4;
+    LOptions.InitialConnectionWindowSize := 4;
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_END_HEADERS, 1,
+        ComposeRequestHeaders('POST', '/upload')) +
+      H2EncodeFrame(H2_FRAME_DATA, H2_FLAG_DATA_END_STREAM, 1, 'ABCD');
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler, LOptions);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(1), Int64(LHandler.CallCount), 'handler called for POST');
+      CheckEqual('ABCD', LHandler.SeenBody, 'handler sees full request body');
+
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      CheckEqual(Int64(H2_FRAME_HEADERS), Int64(LFrames[2].Header.FrameType),
+        'server responds after request completion');
+      Check((LFrames[2].Header.Flags and H2_FLAG_HEADERS_END_STREAM) <> 0,
+        'header-only response ends stream');
+      LWindowUpdateCount := 0;
+      for LI := 0 to LFrameCount - 1 do
+        if LFrames[LI].Header.FrameType = H2_FRAME_WINDOW_UPDATE then
+          Inc(LWindowUpdateCount);
+      CheckEqual(Int64(2), Int64(LWindowUpdateCount),
+        'server emits stream and connection WINDOW_UPDATE frames');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunDataOverMaxBodySizeReturns413WithoutHandler;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LOptions: TH2ServerTransportOptions;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LOptions := TH2ServerTransportOptions.Default;
+    LOptions.MaxBodySize := 4;
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_END_HEADERS, 1,
+        ComposeRequestHeaders('POST', '/too-large')) +
+      H2EncodeFrame(H2_FRAME_DATA, H2_FLAG_DATA_END_STREAM, 1, 'ABCDE');
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler, LOptions);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+
+      CheckEqual(Int64(0), Int64(LHandler.CallCount),
+        'oversize H2 request body does not reach handler');
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      CheckEqual(Int64(5), Int64(LFrameCount),
+        'oversize H2 request writes handshake, 413 response, and window updates');
+      CheckEqual(Int64(H2_FRAME_HEADERS), Int64(LFrames[2].Header.FrameType),
+        'oversize H2 request responds with HEADERS');
+      CheckEqual('413', ExtractStatusHeader(LFrames[2].Payload),
+        'oversize H2 request responds with 413 status');
+      Check((LFrames[2].Header.Flags and H2_FLAG_HEADERS_END_STREAM) <> 0,
+        'oversize H2 request ends stream in 413 response');
+      CheckEqual(Int64(H2_FRAME_WINDOW_UPDATE), Int64(LFrames[3].Header.FrameType),
+        'oversize H2 request restores stream receive window');
+      CheckEqual(Int64(H2_FRAME_WINDOW_UPDATE), Int64(LFrames[4].Header.FrameType),
+        'oversize H2 request restores connection receive window');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunPingGetsAcked;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..3] of TH2Frame;
+  LFrameCount: SizeInt;
+  LPingData: UInt64;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_PING, 0, 0, HexToBytes('0102030405060708'));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      CheckEqual(Int64(3), Int64(LFrameCount), 'server writes handshake plus ping ack');
+      CheckEqual(Int64(H2_FRAME_PING), Int64(LFrames[2].Header.FrameType),
+        'server writes PING ack');
+      Check((LFrames[2].Header.Flags and H2_FLAG_PING_ACK) <> 0,
+        'ping ack flag set');
+      Check(H2DecodePing(LFrames[2].Payload, LPingData), 'ack payload decodes');
+      CheckEqual(Int64($0102030405060708), Int64(LPingData), 'ack echoes opaque data');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunRstStreamCancelsPendingRequest;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_END_HEADERS, 1,
+        ComposeRequestHeaders('POST', '/cancel')) +
+      H2EncodeFrame(H2_FRAME_RST_STREAM, 0, 1, H2EncodeRstStream(H2_ERR_CANCEL));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(0), Int64(LHandler.CallCount),
+        'RST_STREAM before END_STREAM prevents handler execution');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunGoawayStopsNewStreams;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_GOAWAY, 0, 0,
+        H2EncodeGoaway(0, H2_ERR_NO_ERROR, '')) +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/late'));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(0), Int64(LHandler.CallCount),
+        'GOAWAY stops accepting new requests');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestAdvancePollsReadableThenWritable;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LNextEvents: TPlatformPollEvents;
+  LOwnership: TTcpServerConnOwnership;
+  LResult: TTcpServerPollResult;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LCurrentEvents: TPlatformPollEvents;
+  LSteps: Int32;
+  LReachedReadableIdle: Boolean;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, 'pong');
+    LStream := TFakeTcpStream.Create(ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/poll')));
+    try
+      LConnRef := LStream as ITcpStream;
+      LStream.MaxWriteChunk := 5;
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        CheckEqual(Int64(1), Int64(Ord(peReadable in LSession.PollEvents)),
+          'poll starts readable');
+
+        LResult := LSession.Advance([peReadable], LNextEvents, LOwnership);
+        CheckEqual(Int64(Ord(tsprWait)), Int64(Ord(LResult)),
+          'advance remains active after readable step');
+        CheckEqual(Int64(TCP_SERVER_CONN_OWNERSHIP_SERVER), Int64(LOwnership),
+          'advance preserves server ownership');
+        Check(peWritable in LNextEvents, 'partial write moves poll to writable');
+
+        LCurrentEvents := LNextEvents;
+        LSteps := 0;
+        LReachedReadableIdle := False;
+        repeat
+          LResult := LSession.Advance(LCurrentEvents, LNextEvents, LOwnership);
+          Inc(LSteps);
+          if (LResult = tsprWait) and (LNextEvents = [peReadable]) then
+          begin
+            LReachedReadableIdle := True;
+            Break;
+          end;
+          if LResult = tsprDone then
+            Break;
+          LCurrentEvents := LNextEvents;
+          Check(LCurrentEvents <> [], 'poll path keeps producing next events');
+          Check(LSteps < 16, 'poll path converges');
+        until False;
+        Check(LReachedReadableIdle, 'poll path returns to readable idle after flush');
+      finally
+        LSession.Free;
+      end;
+
+      CheckEqual(Int64(1), Int64(LHandler.CallCount), 'poll path executes handler');
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      CheckEqual(Int64(H2_FRAME_DATA), Int64(LFrames[LFrameCount - 1].Header.FrameType),
+        'poll path eventually flushes DATA');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunUnknownExtensionFrameIsIgnored;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, '');
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame($0A, 0, 0, 'ignored') +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/ext'));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(1), Int64(LHandler.CallCount),
+        'unknown extension frame does not stop request processing');
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      CheckEqual(Int64(H2_FRAME_HEADERS), Int64(LFrames[LFrameCount - 1].Header.FrameType),
+        'response still emitted after unknown frame');
+      Check((LFrames[LFrameCount - 1].Header.Flags and H2_FLAG_HEADERS_END_STREAM) <> 0,
+        'header-only response still ends stream');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunWindowUpdateResumesBlockedResponseBody;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..9] of TH2Frame;
+  LFrameCount: SizeInt;
+  LEntries: TH2SettingEntries;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, 'abcdef');
+    SetLength(LEntries, 1);
+    LEntries[0].Identifier := H2_SETTINGS_INITIAL_WINDOW_SIZE;
+    LEntries[0].Value := 3;
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_SETTINGS, 0, 0, H2EncodeSettingsPayload(LEntries)) +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/resume')) +
+      H2EncodeFrame(H2_FRAME_WINDOW_UPDATE, 0, 1, H2EncodeWindowUpdate(3));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(1), Int64(LHandler.CallCount),
+        'handler executes once for blocked response body case');
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      CheckEqual(Int64(6), Int64(LFrameCount),
+        'server emits second DATA frame after WINDOW_UPDATE');
+      CheckEqual(Int64(H2_FRAME_SETTINGS), Int64(LFrames[0].Header.FrameType),
+        'first frame is server settings');
+      CheckEqual(Int64(H2_FRAME_SETTINGS), Int64(LFrames[1].Header.FrameType),
+        'second frame ACKs preface settings');
+      CheckEqual(Int64(H2_FRAME_SETTINGS), Int64(LFrames[2].Header.FrameType),
+        'third frame ACKs runtime settings');
+      CheckEqual(Int64(H2_FRAME_HEADERS), Int64(LFrames[3].Header.FrameType),
+        'fourth frame is response headers');
+      CheckEqual(Int64(H2_FRAME_DATA), Int64(LFrames[4].Header.FrameType),
+        'fifth frame is first response body chunk');
+      CheckEqual('abc', string(LFrames[4].Payload),
+        'first body chunk obeys reduced stream window');
+      Check((LFrames[4].Header.Flags and H2_FLAG_DATA_END_STREAM) = 0,
+        'first body chunk does not end stream while bytes remain');
+      CheckEqual(Int64(H2_FRAME_DATA), Int64(LFrames[5].Header.FrameType),
+        'sixth frame is resumed response body chunk');
+      CheckEqual('def', string(LFrames[5].Payload),
+        'second body chunk flushes after WINDOW_UPDATE');
+      Check((LFrames[5].Header.Flags and H2_FLAG_DATA_END_STREAM) <> 0,
+        'second body chunk ends stream');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+begin
+  with TTestRunner.Create('nextpas.core.http.impl.h2.session') do
+  begin
+    Run('Partial preface waits', @TestPartialPrefaceWaits);
+    Run('Wrong preface is connection error', @TestWrongPrefaceIsConnectionError);
+    Run('Preface without first frame waits', @TestPrefaceWithoutFirstFrameWaits);
+    Run('Partial first frame waits', @TestPartialFirstFrameWaits);
+    Run('Initial SETTINGS accepted', @TestInitialSettingsAccepted);
+    Run('Initial SETTINGS with payload accepted',
+      @TestInitialSettingsWithPayloadAccepted);
+    Run('First frame must be SETTINGS', @TestFirstFrameMustBeSettings);
+    Run('Initial SETTINGS must not ACK', @TestInitialSettingsMustNotAck);
+    Run('Initial SETTINGS uses connection stream',
+      @TestInitialSettingsUsesConnectionStream);
+    Run('Run handshake and simple request response',
+      @TestRunHandshakeAndSimpleRequestResponse);
+    Run('Run DATA END_STREAM triggers handler and flow control update',
+      @TestRunDataEndStreamTriggersHandlerAndFlowControlUpdate);
+    Run('Run DATA over MaxBodySize returns 413 without handler',
+      @TestRunDataOverMaxBodySizeReturns413WithoutHandler);
+    Run('Run PING gets ACKed', @TestRunPingGetsAcked);
+    Run('Run RST_STREAM cancels pending request',
+      @TestRunRstStreamCancelsPendingRequest);
+    Run('Run GOAWAY stops new streams', @TestRunGoawayStopsNewStreams);
+    Run('Advance polls readable then writable',
+      @TestAdvancePollsReadableThenWritable);
+    Run('Run unknown extension frame is ignored',
+      @TestRunUnknownExtensionFrameIsIgnored);
+    Run('Run WINDOW_UPDATE resumes blocked response body',
+      @TestRunWindowUpdateResumesBlockedResponseBody);
+    Summary;
+  end;
+end.

@@ -52,6 +52,7 @@ type
   ITcpServerSessionContext = nextpas.core.http.intf.ITcpServerSessionContext;
   IHttpServerSessionFactory = nextpas.core.http.intf.IHttpServerSessionFactory;
   IHttpServerSessionFactoryWithContext = nextpas.core.http.intf.IHttpServerSessionFactoryWithContext;
+  IH2StreamControl = nextpas.core.http.intf.IH2StreamControl;
   IHttpHijacker = nextpas.core.http.intf.IHttpHijacker;
   IWebSocket = nextpas.core.http.websocket.IWebSocket;
   TTcpServerConnOwnership = nextpas.core.http.intf.TTcpServerConnOwnership;

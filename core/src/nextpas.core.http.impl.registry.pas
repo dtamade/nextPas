@@ -47,7 +47,9 @@ function ResolveDefaultServerTransport(
 implementation
 
 uses
-  nextpas.core.http.impl.h1;
+  nextpas.core.http.impl.h1,
+  nextpas.core.http.impl.h2.server,
+  nextpas.core.http.impl.h2.types;
 
 var
   GClientFactories: array[THttpVersion] of THttpClientTransportFactory;
@@ -75,6 +77,26 @@ begin
   LH1Options.MaxHeaderSize := AOptions.MaxHeaderSize;
   LH1Options.MaxBodySize := AOptions.MaxBodySize;
   Result := NewH1ServerTransport(LH1Options);
+end;
+
+function CreateH2ServerTransport(
+  const AOptions: THttpServerOptions): IHttpServerTransport;
+var
+  LH2Options: TH2ServerTransportOptions;
+begin
+  LH2Options := TH2ServerTransportOptions.Default;
+  LH2Options.ReadTimeout := AOptions.ReadTimeout;
+  LH2Options.WriteTimeout := AOptions.WriteTimeout;
+  LH2Options.IdleTimeout := AOptions.IdleTimeout;
+  if AOptions.MaxHeaderSize > 0 then
+    LH2Options.MaxHeaderListSize := UInt32(AOptions.MaxHeaderSize)
+  else
+    LH2Options.MaxHeaderListSize := 0;
+  if AOptions.MaxBodySize > 0 then
+    LH2Options.MaxBodySize := UInt32(AOptions.MaxBodySize)
+  else
+    LH2Options.MaxBodySize := 0;
+  Result := NewH2ServerTransport(LH2Options);
 end;
 
 { Note: must be called before any concurrent HTTP client/server creation. }
@@ -195,6 +217,7 @@ begin
   RegisterClientTransport(hvHttp11, @CreateH1ClientTransport);
   RegisterServerTransport(hvHttp10, @CreateH1ServerTransport);
   RegisterServerTransport(hvHttp11, @CreateH1ServerTransport);
+  RegisterServerTransport(hvHttp2, @CreateH2ServerTransport);
   GDefaultClientVersion := hvHttp11;
   GDefaultServerVersion := hvHttp11;
 end;
