@@ -1135,7 +1135,8 @@ begin
   FCurrentReturnTypeId := AFunc.ReturnTypeId;
 
   Emit('');
-  if Pos('np_object_dynarray_cleanup_', AFunc.Name) = 1 then
+  if (Pos('np_object_dynarray_cleanup_', AFunc.Name) = 1) or
+    (Pos('np_object_string_cleanup_', AFunc.Name) = 1) then
     Emit('define internal ' + RetStr + ' @' + AFunc.Name +
       '(' + ParamStr + ') {')
   else

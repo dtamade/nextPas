@@ -88,6 +88,7 @@ type
     hnkRecordFieldStoreRuntime,
     hnkRecordCopyRuntime,
     hnkFieldStoreStrRuntime,
+    hnkFieldStoreStrOwnedRuntime,
     hnkAssignStrFieldLoadRuntime,
     hnkVmtStoreRuntime,
     hnkIntfAdjustRuntime,
@@ -231,6 +232,7 @@ begin
     'record-field-store-runtime': Result := hnkRecordFieldStoreRuntime;
     'record-copy-runtime': Result := hnkRecordCopyRuntime;
     'field-store-str-runtime': Result := hnkFieldStoreStrRuntime;
+    'field-store-str-owned-runtime': Result := hnkFieldStoreStrOwnedRuntime;
     'assign-str-field-load-runtime': Result := hnkAssignStrFieldLoadRuntime;
     'vmt-store-runtime': Result := hnkVmtStoreRuntime;
     'intf-adjust-runtime': Result := hnkIntfAdjustRuntime;

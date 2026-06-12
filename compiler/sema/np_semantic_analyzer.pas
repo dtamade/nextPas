@@ -7203,7 +7203,7 @@ begin
          SameText(Child.ChildAt(0).Text, 'AnsiString')) then
       begin
         FModel.AddConstValue(ClsName + '.' + Child.Text + '$str', 1);
-        Inc(FieldIndex, 2);
+        Inc(FieldIndex, 4);
       end
       else if IsDynArrayField then
         Inc(FieldIndex, 2)
@@ -11530,6 +11530,7 @@ var
   Operand: string;
   Value, CondValue: Int64;
   Decoded, StringValue, FuncName, ArgName, DestroyFuncName: string;
+  OwnerClassName: string;
   ReceiverName: string;
   ParamSnaps: TParamSnapshots;
   InhTypeId, InhParentId: LongInt;
@@ -11573,6 +11574,17 @@ var
       'field-store-runtime', ADisplayName, 0, 0, AOperand
     );
     AttachRuntimeScalarExpr(LocalNodeId, AExprNode);
+    AttachFieldStoreTargetExpr(LocalNodeId, ATargetNode);
+  end;
+
+  procedure AddFieldStoreStrOwnedRuntimeNode(const ADisplayName,
+    AOperand: string; const ATargetNode: TGreenNode);
+  var
+    LocalNodeId: LongInt;
+  begin
+    LocalNodeId := FModel.AddTypedHirNode(
+      'field-store-str-owned-runtime', ADisplayName, 0, 0, AOperand
+    );
     AttachFieldStoreTargetExpr(LocalNodeId, ATargetNode);
   end;
 
@@ -12125,37 +12137,86 @@ begin
           (Child.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
           (Child.ChildAt(0).ChildAt(1) <> nil) and
           (Child.ChildAt(0).ChildAt(1).NodeKind = gnkIdentifier) and
-          (LookupClassVar(Child.ChildAt(0).ChildAt(0).Text) <> '') and
-          TypeMetaFieldIsStr(
-            LookupClassVar(Child.ChildAt(0).ChildAt(0).Text),
-            Child.ChildAt(0).ChildAt(1).Text) then
+          (((LookupClassVar(Child.ChildAt(0).ChildAt(0).Text) <> '') and
+            TypeMetaFieldIsStr(
+              LookupClassVar(Child.ChildAt(0).ChildAt(0).Text),
+              Child.ChildAt(0).ChildAt(1).Text)) or
+           (SameText(Child.ChildAt(0).ChildAt(0).Text, 'Self') and
+            (FCurrentMethodClass <> '') and
+            TypeMetaFieldIsStr(
+              FCurrentMethodClass,
+              Child.ChildAt(0).ChildAt(1).Text))) then
         begin
+          if SameText(Child.ChildAt(0).ChildAt(0).Text, 'Self') then
+          begin
+            OwnerClassName := FCurrentMethodClass;
+            ArgName := 'self';
+          end
+          else
+          begin
+            OwnerClassName := LookupClassVar(Child.ChildAt(0).ChildAt(0).Text);
+            ArgName := Child.ChildAt(0).ChildAt(0).Text;
+          end;
           Value := TypeMetaFieldIndex(
-            LookupClassVar(Child.ChildAt(0).ChildAt(0).Text),
+            OwnerClassName,
             Child.ChildAt(0).ChildAt(1).Text);
           Arg := nil;
           if Child.ChildCount >= 2 then
             Arg := Child.ChildAt(1);
           if Arg <> nil then
           begin
+            if AssignmentOwnsTopLevelStringReturn(Child) and
+              StringReturnFunctionNameFromNode(Arg, FuncName) and
+              IsOwnedStringReturnFunc(FuncName) then
+            begin
+              Inc(FBlockLabelCounter);
+              StringValue := '$str_field_owned_tmp_' + IntToStr(FBlockLabelCounter);
+              RegisterRuntimeVar(StringValue);
+              RegisterRuntimeStrVar(StringValue);
+              RegisterOwnedRuntimeStrVar(StringValue);
+              FModel.AddTypedHirNode(
+                'var-decl-str-owned-runtime', StringValue, 0, 0, StringValue);
+              if Arg.NodeKind = gnkIdentifier then
+                FModel.AddTypedHirNode(
+                  'string-temp-owned-runtime', FuncName, 0, 0,
+                  StringValue + #9 + 'callee ' + FuncName + #9 +
+                  'ptr len owner alloc_size')
+              else
+              begin
+                Operand := EncodeStrCallArgs(Arg, StringValue);
+                if Operand <> '' then
+                  Operand := #9 + Operand;
+                FModel.AddTypedHirNode(
+                  'assign-str-owned-call-runtime', StringValue, 0, 0,
+                  StringValue + #9 + 'callee ' + FuncName + Operand);
+                EmitPendingStringTempReleases;
+              end;
+              AddFieldStoreStrOwnedRuntimeNode(
+                Decoded,
+                ArgName + #9 + IntToStr(Value) +
+                #9 + StringValue,
+                Child.ChildAt(0)
+              );
+              Continue;
+            end;
             if Arg.NodeKind = gnkStringLiteral then
               FModel.AddTypedHirNode(
                 'field-store-str-runtime', Decoded, 0, 0,
-                Child.ChildAt(0).ChildAt(0).Text + #9 +
+                ArgName + #9 +
                 IntToStr(Value) + #9 + 'lit ' +
                 DecodePascalStringLiteral(Arg.Text)
               )
             else if EvaluateStringConstant(Arg, StringValue) then
               FModel.AddTypedHirNode(
                 'field-store-str-runtime', Decoded, 0, 0,
-                Child.ChildAt(0).ChildAt(0).Text + #9 +
+                ArgName + #9 +
                 IntToStr(Value) + #9 + 'lit ' + StringValue
               )
             else if (Arg.NodeKind = gnkIdentifier) and
               IsRuntimeStrVar(Arg.Text) then
               FModel.AddTypedHirNode(
                 'field-store-str-runtime', Decoded, 0, 0,
-                Child.ChildAt(0).ChildAt(0).Text + #9 +
+                ArgName + #9 +
                 IntToStr(Value) + #9 + 'var ' + Arg.Text
               )
             else if (Arg.NodeKind = gnkDotAccess) and
@@ -12180,7 +12241,7 @@ begin
                   LookupClassVar(Arg.ChildAt(0).Text), Arg.ChildAt(1).Text)));
               FModel.AddTypedHirNode(
                 'field-store-str-runtime', Decoded, 0, 0,
-                Child.ChildAt(0).ChildAt(0).Text + #9 +
+                ArgName + #9 +
                 IntToStr(Value) + #9 + 'var ' + FuncName
               );
             end;
@@ -12630,6 +12691,39 @@ begin
           TypeMetaFieldIsStr(FCurrentMethodClass, Decoded) then
         begin
           Value := TypeMetaFieldIndex(FCurrentMethodClass, Decoded);
+          if AssignmentOwnsTopLevelStringReturn(Child) and
+            StringReturnFunctionNameFromNode(Arg, FuncName) and
+            IsOwnedStringReturnFunc(FuncName) then
+          begin
+            Inc(FBlockLabelCounter);
+            StringValue := '$str_field_owned_tmp_' + IntToStr(FBlockLabelCounter);
+            RegisterRuntimeVar(StringValue);
+            RegisterRuntimeStrVar(StringValue);
+            RegisterOwnedRuntimeStrVar(StringValue);
+            FModel.AddTypedHirNode(
+              'var-decl-str-owned-runtime', StringValue, 0, 0, StringValue);
+            if Arg.NodeKind = gnkIdentifier then
+              FModel.AddTypedHirNode(
+                'string-temp-owned-runtime', FuncName, 0, 0,
+                StringValue + #9 + 'callee ' + FuncName + #9 +
+                'ptr len owner alloc_size')
+            else
+            begin
+              Operand := EncodeStrCallArgs(Arg, StringValue);
+              if Operand <> '' then
+                Operand := #9 + Operand;
+              FModel.AddTypedHirNode(
+                'assign-str-owned-call-runtime', StringValue, 0, 0,
+                StringValue + #9 + 'callee ' + FuncName + Operand);
+              EmitPendingStringTempReleases;
+            end;
+            AddFieldStoreStrOwnedRuntimeNode(
+              Decoded,
+              'self' + #9 + IntToStr(Value) + #9 + StringValue,
+              Child.ChildAt(0)
+            );
+            Continue;
+          end;
           if (Arg.NodeKind = gnkStringLiteral) then
           begin
             StringValue := DecodePascalStringLiteral(Arg.Text);

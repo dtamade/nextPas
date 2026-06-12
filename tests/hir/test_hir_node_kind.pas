@@ -68,6 +68,7 @@ begin
   if ParseHirNodeKind('record-field-store-runtime') <> hnkRecordFieldStoreRuntime then Fail('record-field-store-runtime');
   if ParseHirNodeKind('record-copy-runtime') <> hnkRecordCopyRuntime then Fail('record-copy-runtime');
   if ParseHirNodeKind('field-store-str-runtime') <> hnkFieldStoreStrRuntime then Fail('field-store-str-runtime');
+  if ParseHirNodeKind('field-store-str-owned-runtime') = hnkUnknown then Fail('field-store-str-owned-runtime');
   if ParseHirNodeKind('assign-str-field-load-runtime') <> hnkAssignStrFieldLoadRuntime then Fail('assign-str-field-load-runtime');
   if ParseHirNodeKind('vmt-store-runtime') <> hnkVmtStoreRuntime then Fail('vmt-store-runtime');
 end;

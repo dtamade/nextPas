@@ -668,6 +668,7 @@ end;
 procedure AssertClassFieldOwnedStoreContract;
 var
   Model: TSemanticModel;
+  Node: TTypedHirNode;
   LlvmText: string;
 begin
   // H17: class field owned string store should now pass sema
@@ -677,11 +678,13 @@ begin
       Fail('class-field-owned-store-model-nil');
     if not SameText(Model.Status, 'ready') then
       Fail('class-field-owned-store-must-pass-sema');
-    // TODO H17 GREEN: verify new field-store-str-owned-runtime node kind
+    if not FindFirstNodeByKind(Model, 'field-store-str-owned-runtime', Node) then
+      Fail('missing-class-field-owned-store-node');
     LlvmText := EmitLlvm(Model);
     if LlvmText = '' then
       Fail('class-field-owned-store-llvm-empty');
-    // TODO H17 GREEN: verify string_release in LLVM IR
+    RequireContains(LlvmText, 'call void @np_string_release(',
+      'class-field-owned-store-must-release-previous-owner');
   finally
     Model.Free;
   end;
@@ -692,9 +695,13 @@ begin
       Fail('self-field-owned-store-model-nil');
     if not SameText(Model.Status, 'ready') then
       Fail('self-field-owned-store-must-pass-sema');
+    if not FindFirstNodeByKind(Model, 'field-store-str-owned-runtime', Node) then
+      Fail('missing-self-field-owned-store-node');
     LlvmText := EmitLlvm(Model);
     if LlvmText = '' then
       Fail('self-field-owned-store-llvm-empty');
+    RequireContains(LlvmText, 'call void @np_string_release(',
+      'self-field-owned-store-must-release-previous-owner');
   finally
     Model.Free;
   end;

@@ -332,8 +332,6 @@ begin
     LlvmText := EmitLlvm(FieldModel);
     if Pos('call {ptr, i64} @np_str_concat(', LlvmText) = 0 then
       Fail('string-field-concat-must-stay-visible-abi');
-    if Pos('@np_object_string_cleanup_', LlvmText) <> 0 then
-      Fail('string-field-cleanup-must-remain-deferred');
   finally
     FieldModel.Free;
   end;
@@ -349,6 +347,10 @@ begin
       Fail('missing-object-free-release-helper');
     if Pos('np_object_string_cleanup', ReleaseSlice) <> 0 then
       Fail('object-free-release-must-stay-field-agnostic');
+    if Pos('define internal void @np_object_string_cleanup_TStringBox(ptr %', LlvmText) = 0 then
+      Fail('missing-object-string-cleanup-helper');
+    if Pos('call void @np_object_string_cleanup_TStringBox(ptr %', LlvmText) = 0 then
+      Fail('missing-object-free-string-cleanup-call');
   finally
     FreeModel.Free;
   end;
