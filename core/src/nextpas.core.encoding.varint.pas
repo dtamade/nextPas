@@ -47,29 +47,32 @@ function VarintDecode(const AData: TBytes; out ABytesRead: Integer): UInt64;
 var
   LShift: Integer;
   LByte: Byte;
+  LBytesRead: Integer;
 begin
   Result := 0;
   LShift := 0;
   ABytesRead := 0;
+  LBytesRead := 0;
 
   if Length(AData) = 0 then
     raise EConvertError.Create('Empty varint data');
 
   repeat
-    if ABytesRead >= Length(AData) then
+    if LBytesRead >= Length(AData) then
       raise EConvertError.Create('Truncated varint');
     if LShift >= 64 then
       raise EConvertError.Create('Varint overflow (>10 bytes)');
-    LByte := AData[ABytesRead];
+    LByte := AData[LBytesRead];
     if (LShift = 63) and ((LByte and $7E) <> 0) then
       raise EConvertError.Create('Varint overflow (10th byte > 1)');
     Result := Result or (UInt64(LByte and $7F) shl LShift);
-    Inc(ABytesRead);
+    Inc(LBytesRead);
     Inc(LShift, 7);
   until (LByte and $80) = 0;
 
-  if Result < VarintMinValueForLength(ABytesRead) then
+  if Result < VarintMinValueForLength(LBytesRead) then
     raise EConvertError.Create('Non-canonical varint encoding');
+  ABytesRead := LBytesRead;
 end;
 
 function ZigZagEncode(const AValue: Int64): UInt64; inline;

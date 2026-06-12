@@ -71,6 +71,25 @@ begin
   CheckEqual(Int64(0), Int64(D.ByteLen), 'surrogate U+D800');
 end;
 
+procedure TestNilNonzeroSpan;
+var
+  D: TUTF8DecodeResult;
+  Iter: TUTF8Iterator;
+  CP: UInt32;
+begin
+  D := UTF8Decode(nil, 1);
+  CheckEqual(Int64(0), Int64(D.ByteLen), 'nil decode fails closed');
+  CheckEqual(Int64(0), Int64(D.CodePoint), 'nil decode codepoint = 0');
+  Check(not UTF8IsValid(nil, 1), 'nil span is not valid UTF-8');
+  CheckEqual(Int64(0), Int64(UTF8CodePointCount(nil, 1)), 'nil span has no codepoints');
+
+  Iter.Init(nil, 1);
+  Check(not Iter.HasNext, 'nil iterator has no next');
+  CheckEqual(Int64(0), Int64(Iter.Remaining), 'nil iterator remaining = 0');
+  Check(not Iter.Next(CP), 'nil iterator does not decode');
+  CheckEqual(Int64(0), Int64(CP), 'nil iterator codepoint = 0');
+end;
+
 procedure TestEncode;
 var
   Buf: array[0..5] of Byte;
@@ -177,6 +196,7 @@ begin
   T.Run('decode 3-byte', @TestDecode3Byte);
   T.Run('decode 4-byte', @TestDecode4Byte);
   T.Run('decode invalid', @TestDecodeInvalid);
+  T.Run('nil nonzero span', @TestNilNonzeroSpan);
   T.Run('encode', @TestEncode);
   T.Run('encode nil destination fails closed', @TestEncodeNilDestinationFailsClosed);
   T.Run('isValid', @TestIsValid);

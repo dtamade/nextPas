@@ -105,6 +105,10 @@ begin
   { a😀 = 1 + 2 = 3 }
   CheckEqual(Int64(3), Int64(StringDisplayWidth('a' + #$F0#$9F#$98#$80)), 'a emoji');
   CheckEqual(Int64(2), Int64(StringDisplayWidth(#$E2#$9D#$A4 + #$EF#$B8#$8F)), 'heart VS16 emoji');
+  CheckEqual(Int64(2), Int64(StringDisplayWidth(#$E2#$98#$8E + #$EF#$B8#$8F)), 'telephone VS16 emoji');
+  CheckEqual(Int64(2), Int64(StringDisplayWidth(#$E2#$9C#$88 + #$EF#$B8#$8F)), 'airplane VS16 emoji');
+  CheckEqual(Int64(2), Int64(StringDisplayWidth(#$E2#$98#$BA + #$EF#$B8#$8F)), 'smiling face VS16 emoji');
+  CheckEqual(Int64(4), Int64(StringDisplayWidth('x' + #$E2#$98#$8E + #$EF#$B8#$8F + 'y')), 'mixed telephone VS16 width');
   CheckEqual(Int64(1), Int64(StringDisplayWidth(#$E2#$98#$86 + #$EF#$B8#$8F)), 'white star VS16 remains narrow');
 end;
 
@@ -112,15 +116,32 @@ procedure TestEmojiClusterString;
 var
   LFamily: AnsiString;
   LSkinTone: AnsiString;
+  LEnglandFlag: AnsiString;
 begin
   LFamily := #$F0#$9F#$91#$A8 + #$E2#$80#$8D +
              #$F0#$9F#$91#$A9 + #$E2#$80#$8D +
              #$F0#$9F#$91#$A7 + #$E2#$80#$8D +
              #$F0#$9F#$91#$A6;
   LSkinTone := #$F0#$9F#$91#$8D + #$F0#$9F#$8F#$BD;
+  LEnglandFlag := #$F0#$9F#$8F#$B4 +
+                  #$F3#$A0#$81#$A7 +
+                  #$F3#$A0#$81#$A2 +
+                  #$F3#$A0#$81#$A5 +
+                  #$F3#$A0#$81#$AE +
+                  #$F3#$A0#$81#$A7 +
+                  #$F3#$A0#$81#$BF;
   CheckEqual(Int64(2), Int64(StringDisplayWidth(LFamily)), 'family emoji cluster width');
   CheckEqual(Int64(2), Int64(StringDisplayWidth(LSkinTone)), 'skin tone emoji cluster width');
+  CheckEqual(Int64(2), Int64(StringDisplayWidth(LEnglandFlag)), 'emoji tag sequence width');
   CheckEqual(Int64(5), Int64(StringDisplayWidth('a' + LFamily + LSkinTone)), 'mixed emoji clusters width');
+end;
+
+procedure TestZWJAfterNonEmojiString;
+begin
+  CheckEqual(Int64(2), Int64(StringDisplayWidth(#$E2#$80#$8D + #$F0#$9F#$98#$80)),
+    'orphan ZWJ+emoji stays two display clusters');
+  CheckEqual(Int64(3), Int64(StringDisplayWidth('A' + #$E2#$80#$8D + #$F0#$9F#$98#$80)),
+    'A+ZWJ+emoji stays two display clusters');
 end;
 
 procedure TestKeycapEmojiString;
@@ -149,6 +170,39 @@ begin
   CheckEqual(Int64(1), Int64(StringDisplayWidth('A' + #$DF#$AB)), 'A + NKo combining mark');
 end;
 
+procedure TestWidthZeroWidthCombiningString;
+begin
+  CheckEqual(Int64(0), Int64(CodepointWidth($1E000)), 'Glagolitic combining letter');
+  CheckEqual(Int64(0), Int64(CodepointWidth($1E02A)), 'Glagolitic combining upper bound');
+  CheckEqual(Int64(1), Int64(CodepointWidth($1E02B)), 'after Glagolitic combining range');
+  CheckEqual(Int64(1), Int64(StringDisplayWidth(#$D8#$80 + 'A')),
+    'Arabic prepend mark joins following base');
+  CheckEqual(Int64(2), Int64(StringDisplayWidth('x' + #$D8#$80 + 'A')),
+    'ASCII plus Arabic prepend cluster');
+  CheckEqual(Int64(2), Int64(StringDisplayWidth(#$E1#$84#$80 + #$E1#$85#$A0)),
+    'Hangul conjoining mark stays with wide base');
+  CheckEqual(Int64(2), Int64(StringDisplayWidth(#$E1#$84#$80 + #$E1#$87#$BF)),
+    'Hangul conjoining upper bound stays with wide base');
+  CheckEqual(Int64(3), Int64(StringDisplayWidth(#$E1#$84#$80 + #$E1#$88#$80)),
+    'after Hangul conjoining range starts a new cluster');
+  CheckEqual(Int64(1), Int64(StringDisplayWidth('A' + #$F0#$9E#$80#$80)),
+    'A + Glagolitic combining mark');
+  CheckEqual(Int64(1), Int64(StringDisplayWidth('A' + #$F0#$9E#$80#$AA)),
+    'A + Glagolitic combining upper bound');
+  CheckEqual(Int64(2), Int64(StringDisplayWidth('A' + #$F0#$9E#$80#$AB)),
+    'after Glagolitic combining range starts a new cluster');
+end;
+
+procedure TestIndicClusterWidth;
+begin
+  CheckEqual(Int64(1), Int64(StringDisplayWidth(#$E0#$AE#$95 + #$E0#$AE#$BE)),
+    'Tamil KA + AA is one display cluster');
+  CheckEqual(Int64(1), Int64(StringDisplayWidth(#$E0#$A4#$95 + #$E0#$A5#$8D + #$E0#$A4#$B7)),
+    'Devanagari KA + VIRAMA + SSA is one display cluster');
+  CheckEqual(Int64(1), Int64(StringDisplayWidth(#$E0#$AE#$95 + #$E0#$AF#$8D + #$E0#$AE#$95)),
+    'Tamil KA + VIRAMA + KA is one display cluster');
+end;
+
 { CodepointWidth - 补充的 wide 区间（Codex 审查后新增） }
 procedure TestAddedWideRanges;
 begin
@@ -165,6 +219,7 @@ end;
 { CodepointWidth - 补充的零宽区间 }
 procedure TestAddedZeroWidth;
 begin
+  CheckEqual(Int64(0), Int64(CodepointWidth($0600)), 'Arabic number sign prepend');
   CheckEqual(Int64(0), Int64(CodepointWidth($05C7)), 'Hebrew qamats qatan');
   CheckEqual(Int64(0), Int64(CodepointWidth($06DF)), 'Arabic mark');
   CheckEqual(Int64(0), Int64(CodepointWidth($1160)), 'Hangul jungseong (conjoining)');
@@ -176,6 +231,11 @@ end;
 procedure TestEmptyString;
 begin
   CheckEqual(Int64(0), Int64(StringDisplayWidth('')), 'empty string = 0');
+end;
+
+procedure TestNilNonzeroSpan;
+begin
+  CheckEqual(Int64(0), Int64(StringDisplayWidth(nil, 1)), 'nil nonzero span = 0');
 end;
 
 procedure TestSimdBoundary16;
@@ -231,10 +291,14 @@ begin
   T.Run('mixed cjk string', @TestMixedString);
   T.Run('emoji string', @TestEmojiString);
   T.Run('emoji cluster string', @TestEmojiClusterString);
+  T.Run('zwj after non-emoji string', @TestZWJAfterNonEmojiString);
   T.Run('keycap emoji string', @TestKeycapEmojiString);
   T.Run('combining string', @TestCombiningString);
   T.Run('nko combining string', @TestNKoCombiningString);
+  T.Run('width zero-width combining string', @TestWidthZeroWidthCombiningString);
+  T.Run('Indic cluster width', @TestIndicClusterWidth);
   T.Run('empty string', @TestEmptyString);
+  T.Run('nil nonzero span', @TestNilNonzeroSpan);
   T.Run('simd boundary 16B', @TestSimdBoundary16);
   T.Run('simd boundary 32B', @TestSimdBoundary32);
   T.Run('long ascii 4096B', @TestLongAscii);

@@ -58,6 +58,8 @@ uses
 
 class function TStringView.Create(const AData: PAnsiChar; const ALen: SizeUInt): TStringView;
 begin
+  if (ALen > 0) and (AData = nil) then
+    raise EInvalidArgument.Create('TStringView.Create: non-empty view has nil data');
   Result.FData := AData;
   Result.FLen := ALen;
 end;
@@ -70,8 +72,7 @@ end;
 
 class function TStringView.FromSpan(const ASpan: TByteSpan): TStringView;
 begin
-  Result.FData := PAnsiChar(ASpan.Data);
-  Result.FLen := ASpan.Len;
+  Result := Create(PAnsiChar(ASpan.Data), ASpan.Len);
 end;
 
 class function TStringView.Empty: TStringView;
@@ -86,6 +87,8 @@ begin
 end;
 
 function TStringView.Slice(const AOffset, ALength: SizeUInt): TStringView;
+var
+  LRemaining: SizeUInt;
 begin
   if AOffset >= FLen then
   begin
@@ -94,8 +97,9 @@ begin
     Exit;
   end;
   Result.FData := FData + AOffset;
-  if AOffset + ALength > FLen then
-    Result.FLen := FLen - AOffset
+  LRemaining := FLen - AOffset;
+  if ALength > LRemaining then
+    Result.FLen := LRemaining
   else
     Result.FLen := ALength;
 end;

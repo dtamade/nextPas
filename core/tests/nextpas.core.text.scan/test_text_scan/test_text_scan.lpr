@@ -108,6 +108,20 @@ begin
   Check(not ScanMatchLiteral(PAnsiChar('True'), 4, PAnsiChar('true'), 4), 'case sensitive');
 end;
 
+procedure TestMatchLiteralEmpty;
+var
+  V: TStringView;
+begin
+  Check(ScanMatchLiteral(nil, 0, nil, 0), 'empty literal matches empty span');
+  Check(ScanMatchLiteral(PAnsiChar('abc'), 3, PAnsiChar(''), 0),
+    'empty literal matches non-empty span');
+
+  V := TStringView.Create(PAnsiChar('abc'), 3);
+  Check(ViewMatchLiteral(V, PAnsiChar(''), 0), 'empty view literal matches');
+  CheckEqual(Int64(3), Int64(V.Len), 'empty view literal does not advance');
+  Check(V.Data[0] = 'a', 'empty view literal keeps data pointer');
+end;
+
 procedure TestViewSkipWhitespace;
 var
   V: TStringView;
@@ -183,6 +197,7 @@ begin
   T.Run('JsonNumber', @TestJsonNumber);
   T.Run('JsonNumber invalid boundaries', @TestJsonNumberInvalidBoundaries);
   T.Run('MatchLiteral', @TestMatchLiteral);
+  T.Run('MatchLiteral empty', @TestMatchLiteralEmpty);
   T.Run('ViewSkipWhitespace', @TestViewSkipWhitespace);
   T.Run('ViewMatchLiteral', @TestViewMatchLiteral);
   T.Run('FindByte2 long', @TestFindByte2Long);

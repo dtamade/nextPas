@@ -4,10 +4,22 @@ program test_text_view;
 
 uses
   nextpas.core.text.view,
+  nextpas.core.base,
   nextpas.core.testing;
 
 var
   T: TTestRunner;
+
+procedure CheckInvalidViewCreateRaises(const AMessage: string);
+begin
+  try
+    TStringView.Create(nil, 1);
+    Fail(AMessage + ': expected EInvalidArgument');
+  except
+    on E: EInvalidArgument do
+      ;
+  end;
+end;
 
 procedure TestCreateAndBasic;
 var
@@ -21,6 +33,29 @@ begin
   V := TStringView.Empty;
   Check(V.IsEmpty, 'empty');
   CheckEqual(Int64(0), Int64(V.Len), 'len=0');
+end;
+
+procedure TestRejectNilDataWithNonZeroLength;
+var
+  V: TStringView;
+  S: TByteSpan;
+begin
+  V := TStringView.Create(nil, 0);
+  Check(V.IsEmpty, 'nil+zero create is empty');
+  CheckInvalidViewCreateRaises('nil+nonzero create');
+
+  S := TByteSpan.Create(nil, 0);
+  V := TStringView.FromSpan(S);
+  Check(V.IsEmpty, 'nil+zero span is empty');
+
+  S := TByteSpan.Create(nil, 1);
+  try
+    V := TStringView.FromSpan(S);
+    Fail('nil+nonzero span: expected EInvalidArgument');
+  except
+    on E: EInvalidArgument do
+      ;
+  end;
 end;
 
 procedure TestFromStr;
@@ -48,6 +83,16 @@ begin
 
   S := V.Slice(10, 1);
   Check(S.IsEmpty, 'slice past end');
+end;
+
+procedure TestSliceClampsOverflowedLength;
+var
+  V, S: TStringView;
+begin
+  V := TStringView.Create(PAnsiChar('abcdef'), 6);
+  S := V.Slice(1, High(SizeUInt));
+  CheckEqual(Int64(5), Int64(S.Len), 'overflowed length clamps to remaining bytes');
+  Check(S.Data[0] = 'b', 'clamped slice starts at offset');
 end;
 
 procedure TestLeftRight;
@@ -221,8 +266,10 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.text.view');
   T.Run('create and basic', @TestCreateAndBasic);
+  T.Run('reject nil data with non-zero length', @TestRejectNilDataWithNonZeroLength);
   T.Run('from string', @TestFromStr);
   T.Run('slice', @TestSlice);
+  T.Run('slice clamps overflowed length', @TestSliceClampsOverflowedLength);
   T.Run('left/right', @TestLeftRight);
   T.Run('trim', @TestTrim);
   T.Run('equals', @TestEquals);
