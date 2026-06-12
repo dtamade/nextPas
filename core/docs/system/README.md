@@ -59,6 +59,12 @@ beyond minimum identity, kind, and managed-array helper contracts. The live
 SysUtils unit is not a path, file, environment, time, or broad string-helper
 surface.
 
+S5 is now split into sub-stages. See `goal-tree.md` for the full staged path.
+The contract coverage table in `contract-coverage-table.md` maps all live
+`np.system.*` contracts to their HIR evidence, LLVM helper evidence, and test
+coverage, with explicit gap annotations for contracts missing HIR intrinsic
+names or focused tests.
+
 Detailed S4 design-only material lives in `compatibility-facades.md` and
 `compatibility-matrix.md`. Those docs distinguish bootstrap RTL pressure from a
 future public `nextpas.core.system.*` compatibility surface.
