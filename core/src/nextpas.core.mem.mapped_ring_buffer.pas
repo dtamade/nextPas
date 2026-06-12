@@ -572,6 +572,7 @@ var
   LRequiredSize: UInt64;
   LAccess: TMemoryMapAccess;
   LFileHandle: TPlatformFileHandle;
+  LStat: TPlatformFileStat;
 begin
   Result := False;
   Close;
@@ -584,7 +585,7 @@ begin
   FMemoryMap := TMemoryMap.Create;
   try
     // 尝试打开现有文件
-    if MappedRingBufferFileExists(aFileName) then
+    if platform_file_stat(PAnsiChar(aFileName), LStat) = 0 then
     begin
       if not FMemoryMap.OpenFile(aFileName, LAccess) then Exit;
       FIsCreator := False;
@@ -631,11 +632,12 @@ function TMappedRingBuffer.OpenFile(const aFileName: string;
   aMode: TMappedRingBufferMode): Boolean;
 var
   LAccess: TMemoryMapAccess;
+  LStat: TPlatformFileStat;
 begin
   Result := False;
   Close;
 
-  if not MappedRingBufferFileExists(aFileName) then Exit;
+  if platform_file_stat(PAnsiChar(aFileName), LStat) <> 0 then Exit;
 
   LAccess := mmaReadWrite;
 
