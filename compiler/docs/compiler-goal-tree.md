@@ -457,3 +457,15 @@
   GREEN 后 `llvm_string_arg_owned_compare_while` 与
   `llvm_string_arg_owned_compare_repeat` 均通过 LLVM verify/llc/link/run，exit 42；
   `build/verify_local.sh` 已纳入 compare-while / compare-repeat runtime smoke 输出。
+- 2026-06-12 C6-H15：owned string return 的 concat `Length` consumer 第一刀：
+  `Length(MakeText() + 'z')` 现在从 fail-closed 推进为 producer owned temp ->
+  length concat owned temp -> `string-temp-length-runtime` -> concat temp 与 producer
+  temp 逆序 release。sema 只在 `Length(<supported string concat tree>)` 中放行
+  zero-arg direct root owned string-return operand；field store、var/out、
+  virtual/interface/external 和对象 string field ownership 继续 fail-closed。RED=
+  `test_hir_string_length_ownership_contract` 失败
+  `missing-owned-string-concat-length-hir:sema.c6h4-owned-string-return-deferred-consumer`，
+  runtime smoke 失败
+  `missing-owned-string-length-runtime:sema.c6h4-owned-string-return-deferred-consumer`；
+  GREEN 后 focused runtime smoke 中 `llvm_string_length_owned_concat` 通过
+  LLVM verify/llc/link/run，exit 42。

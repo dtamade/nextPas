@@ -31,6 +31,16 @@ const
     '  Halt(Length(''literal'') + 35);' + LineEnding +
     'end.';
 
+  ConcatLengthOwnedTempSource =
+    'program c6h15_string_concat_length_runtime;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''xy'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  Halt(Length(MakeText() + ''z'') + 39);' + LineEnding +
+    'end.';
+
   CopyOwnedTempSource =
     'program c6h8_string_copy_owned_runtime;' + LineEnding +
     'function MakeText: string;' + LineEnding +
@@ -178,6 +188,22 @@ begin
     Fail(AMessage);
 end;
 
+function FindAfter(const AText, ANeedle: string; AStart: LongInt): LongInt;
+var
+  Slice: string;
+  Offset: LongInt;
+begin
+  Result := 0;
+  if AStart < 1 then
+    AStart := 1;
+  if AStart > Length(AText) then
+    Exit;
+  Slice := Copy(AText, AStart, MaxInt);
+  Offset := Pos(ANeedle, Slice);
+  if Offset > 0 then
+    Result := AStart + Offset - 1;
+end;
+
 procedure RunRuntimeSmoke(const AOutputDir, AStem: string);
 var
   LlPath: string;
@@ -209,6 +235,31 @@ begin
   RequireOrder(ALlvmText, 'extractvalue {ptr, i64, ptr, i64}',
     'call void @np_string_release(',
     'length-temp-release-must-follow-length-runtime');
+end;
+
+procedure AssertConcatLengthRuntimeContract(const ALlvmText: string);
+var
+  ProducerPos, ConcatPos, LenExtractPos, ConcatReleasePos,
+    SourceReleasePos: LongInt;
+begin
+  ProducerPos := Pos(' = call {ptr, i64, ptr, i64} @MakeText(',
+    ALlvmText);
+  ConcatPos := Pos(' = call {ptr, i64, ptr, i64} @np_str_concat_owned(',
+    ALlvmText);
+  LenExtractPos := FindAfter(ALlvmText,
+    'extractvalue {ptr, i64, ptr, i64}', ConcatPos + 1);
+  ConcatReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    LenExtractPos + 1);
+  SourceReleasePos := FindAfter(ALlvmText, 'call void @np_string_release(',
+    ConcatReleasePos + 1);
+  if (ProducerPos = 0) or (ConcatPos = 0) or (LenExtractPos = 0) then
+    Fail('missing-owned-string-concat-length-runtime');
+  if (ConcatReleasePos = 0) or (SourceReleasePos = 0) then
+    Fail('missing-owned-string-concat-length-release-runtime');
+  if not ((ProducerPos < ConcatPos) and (ConcatPos < LenExtractPos) and
+    (LenExtractPos < ConcatReleasePos) and
+    (ConcatReleasePos < SourceReleasePos)) then
+    Fail('concat-length-release-order-runtime');
 end;
 
 procedure AssertLiteralLengthRuntimeContract(const ALlvmText: string);
@@ -248,6 +299,8 @@ begin
 
   if AAssertKind = 'owned-length' then
     AssertOwnedLengthRuntimeContract(LlvmText)
+  else if AAssertKind = 'owned-concat-length' then
+    AssertConcatLengthRuntimeContract(LlvmText)
   else if AAssertKind = 'literal-length' then
     AssertLiteralLengthRuntimeContract(LlvmText)
   else if AAssertKind = 'owned-copy' then
@@ -274,6 +327,8 @@ begin
     DirectLengthOwnedTempSource, 'owned-length');
   EmitAssertAndRun(OutputDir, 'llvm_string_length_literal',
     LiteralLengthSource, 'literal-length');
+  EmitAssertAndRun(OutputDir, 'llvm_string_length_owned_concat',
+    ConcatLengthOwnedTempSource, 'owned-concat-length');
   EmitAssertAndRun(OutputDir, 'llvm_string_copy_owned_direct',
     CopyOwnedTempSource, 'owned-copy');
   WriteLn('hir-string-length-ownership-runtime-smoke-status=pass');

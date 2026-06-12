@@ -89,6 +89,8 @@ type
     procedure ClearPendingStringTempReleases;
     procedure QueuePendingStringTempRelease(const ATempName, ASourceName: string);
     procedure EmitPendingStringTempReleases;
+    procedure RegisterConcatOwnedStringReturnConsumers(
+      const AConcatNode: TGreenNode; var AChanged: Boolean);
     procedure RegisterRuntimeArrVar(const AName: string);
     procedure RegisterBorrowedRuntimeArrVar(const AName: string);
     procedure RegisterClassVar(const AName, AClassName: string);
@@ -126,6 +128,8 @@ type
     function IsSupportedOwnedStringReturnLengthArgument(
       const ANode: TGreenNode; out AFuncName: string): Boolean;
     function EmitOwnedStringLengthTemp(const ANode: TGreenNode;
+      out ABlob: string): Boolean;
+    function EmitOwnedStringConcatLengthTemp(const ANode: TGreenNode;
       out ABlob: string): Boolean;
     function CopyArgumentOwnsStringReturn(
       const ANode: TGreenNode; out AFuncName: string): Boolean;
@@ -800,6 +804,27 @@ begin
   ClearPendingStringTempReleases;
 end;
 
+procedure TSemanticAnalyzer.RegisterConcatOwnedStringReturnConsumers(
+  const AConcatNode: TGreenNode; var AChanged: Boolean);
+var
+  I: LongInt;
+  FuncName: string;
+begin
+  if (AConcatNode = nil) or (AConcatNode.NodeKind <> gnkBinaryExpression) or
+    (AConcatNode.Text <> '+') then
+    Exit;
+  for I := 0 to AConcatNode.ChildCount - 1 do
+  begin
+    if ConcatOperandOwnsStringReturn(AConcatNode.ChildAt(I), FuncName) and
+      (not IsOwnedStringReturnFunc(FuncName)) then
+    begin
+      RegisterOwnedStringReturnFunc(FuncName);
+      AChanged := True;
+    end;
+    RegisterConcatOwnedStringReturnConsumers(AConcatNode.ChildAt(I), AChanged);
+  end;
+end;
+
 function TSemanticAnalyzer.IsRootOwnedStringReturnCandidate(
   const AEntry: TProcedureBodyEntry; const AIsStrReturn: Boolean): Boolean;
 begin
@@ -1096,6 +1121,44 @@ begin
     'strvar ' + TempName + #10);
   FModel.AddTypedHirNode('string-temp-release-runtime', SourceName, 0, 0,
     TempName);
+  ABlob := 'var ' + TempName + '$len' + #10;
+  Result := True;
+end;
+
+function TSemanticAnalyzer.EmitOwnedStringConcatLengthTemp(
+  const ANode: TGreenNode; out ABlob: string): Boolean;
+var
+  ConcatNode: TGreenNode;
+  LeftName, RightName, TempName: string;
+begin
+  ABlob := '';
+  Result := False;
+  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
+    (ANode.ChildCount < 2) or (ANode.ChildAt(0) = nil) or
+    (not SameText(ANode.ChildAt(0).Text, 'Length')) then
+    Exit;
+  ConcatNode := ANode.ChildAt(1);
+  if (ConcatNode = nil) or (ConcatNode.NodeKind <> gnkBinaryExpression) or
+    (ConcatNode.Text <> '+') or (ConcatNode.ChildCount < 2) or
+    (not ConcatTreeHasSupportedOwnedStringReturn(ConcatNode)) or
+    (not CanEmitStrConcatOperand(ConcatNode)) then
+    Exit;
+  LeftName := EmitStrConcatOperand(ConcatNode.ChildAt(0), '');
+  RightName := EmitStrConcatOperand(ConcatNode.ChildAt(1), '');
+  if (LeftName = '') or (RightName = '') then
+    Exit;
+  Inc(FBlockLabelCounter);
+  TempName := '$str_len_cat_tmp_' + IntToStr(FBlockLabelCounter);
+  RegisterRuntimeVar(TempName);
+  RegisterRuntimeStrVar(TempName);
+  FModel.AddTypedHirNode('var-decl-str-owned-runtime', TempName, 0, 0,
+    TempName);
+  FModel.AddTypedHirNode('assign-str-owned-concat-runtime', TempName, 0, 0,
+    LeftName + #9 + RightName);
+  FModel.AddTypedHirNode('string-temp-length-runtime', TempName, 0, 0,
+    'strvar ' + TempName + #10);
+  QueuePendingStringTempRelease(TempName, TempName);
+  EmitPendingStringTempReleases;
   ABlob := 'var ' + TempName + '$len' + #10;
   Result := True;
 end;
@@ -1530,6 +1593,14 @@ begin
 
   if IsSupportedOwnedStringReturnLengthArgument(ANode, SourceName) then
     Exit(False);
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and SameText(ANode.ChildAt(0).Text, 'Length') and
+    (ANode.ChildAt(1) <> nil) and
+    (ANode.ChildAt(1).NodeKind = gnkBinaryExpression) and
+    (ANode.ChildAt(1).Text = '+') and
+    ConcatTreeHasSupportedOwnedStringReturn(ANode.ChildAt(1)) and
+    CanEmitStrConcatOperand(ANode.ChildAt(1)) then
+    Exit(False);
   if IsSupportedOwnedStringReturnCopyArgument(ANode, SourceName) then
     Exit(False);
 
@@ -1599,6 +1670,9 @@ begin
       RegisterOwnedStringReturnFunc(FuncName);
       AChanged := True;
     end;
+    if (ANode.ChildCount >= 2) and (ANode.ChildAt(0) <> nil) and
+      SameText(ANode.ChildAt(0).Text, 'Length') then
+      RegisterConcatOwnedStringReturnConsumers(ANode.ChildAt(1), AChanged);
     if CopyArgumentOwnsStringReturn(ANode, FuncName) and
       (not IsOwnedStringReturnFunc(FuncName)) then
     begin
@@ -1683,6 +1757,9 @@ begin
       RegisterOwnedStringReturnFunc(FuncName);
       AChanged := True;
     end;
+    if (ANode.ChildCount >= 2) and (ANode.ChildAt(0) <> nil) and
+      SameText(ANode.ChildAt(0).Text, 'Length') then
+      RegisterConcatOwnedStringReturnConsumers(ANode.ChildAt(1), AChanged);
     if CopyArgumentOwnsStringReturn(ANode, FuncName) and
       (not IsOwnedStringReturnFunc(FuncName)) then
     begin
@@ -8340,6 +8417,8 @@ begin
   ABlob := '';
   if ANode = nil then
     Exit(False);
+  if EmitOwnedStringConcatLengthTemp(ANode, ABlob) then
+    Exit(True);
   if EmitOwnedStringLengthTemp(ANode, ABlob) then
     Exit(True);
   if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'nil') then

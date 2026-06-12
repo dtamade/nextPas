@@ -37,6 +37,16 @@ const
     '  Halt(Length(MakeA()) + Length(MakeB()) + 39);' + LineEnding +
     'end.';
 
+  ConcatLengthOwnedTempSource =
+    'program test;' + LineEnding +
+    'function MakeText: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeText := ''xy'';' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  Halt(Length(MakeText() + ''z'') + 39);' + LineEnding +
+    'end.';
+
   CopyOwnedTempSource =
     'program test;' + LineEnding +
     'function MakeText: string;' + LineEnding +
@@ -103,6 +113,23 @@ begin
   begin
     Node := AModel.TypedHirNodeAt(I);
     if (Node.Kind = AKind) and SameText(Node.DisplayName, ADisplayName) then
+      Exit(I);
+  end;
+end;
+
+function FindNodeIndexByKindAndDisplayNamePrefix(const AModel: TSemanticModel;
+  const AKind, ADisplayNamePrefix: string): LongInt;
+var
+  I: LongInt;
+  Node: TTypedHirNode;
+begin
+  Result := -1;
+  for I := 0 to AModel.TypedHirNodeCount - 1 do
+  begin
+    Node := AModel.TypedHirNodeAt(I);
+    if (Node.Kind = AKind) and
+      SameText(Copy(Node.DisplayName, 1, Length(ADisplayNamePrefix)),
+        ADisplayNamePrefix) then
       Exit(I);
   end;
 end;
@@ -200,6 +227,37 @@ begin
   end;
 end;
 
+procedure AssertConcatLengthTempOwnershipNodes;
+var
+  Model: TSemanticModel;
+  OwnedIndex, ConcatIndex, LengthIndex, ConcatReleaseIndex,
+    SourceReleaseIndex: LongInt;
+begin
+  Model := BuildModel(ConcatLengthOwnedTempSource,
+    'missing-owned-string-concat-length-hir');
+  try
+    OwnedIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-owned-runtime', 'MakeText');
+    ConcatIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
+      'assign-str-owned-concat-runtime', '$str_len_cat_tmp_');
+    LengthIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
+      'string-temp-length-runtime', '$str_len_cat_tmp_');
+    ConcatReleaseIndex := FindNodeIndexByKindAndDisplayNamePrefix(Model,
+      'string-temp-release-runtime', '$str_len_cat_tmp_');
+    SourceReleaseIndex := FindNodeIndexByKindAndDisplayName(Model,
+      'string-temp-release-runtime', 'MakeText');
+    if (OwnedIndex < 0) or (ConcatIndex < 0) or (LengthIndex < 0) or
+      (ConcatReleaseIndex < 0) or (SourceReleaseIndex < 0) then
+      Fail('missing-concat-length-temp-order-node');
+    if not ((OwnedIndex < ConcatIndex) and (ConcatIndex < LengthIndex) and
+      (LengthIndex < ConcatReleaseIndex) and
+      (ConcatReleaseIndex < SourceReleaseIndex)) then
+      Fail('concat-length-temp-release-order');
+  finally
+    Model.Free;
+  end;
+end;
+
 procedure AssertCopyOwnedTempOwnershipNodes;
 var
   Model: TSemanticModel;
@@ -251,6 +309,7 @@ end;
 begin
   AssertDirectLengthTempOwnershipNodes;
   AssertRepeatedLengthOrder;
+  AssertConcatLengthTempOwnershipNodes;
   AssertCopyOwnedTempOwnershipNodes;
   WriteLn('hir-string-length-ownership-contract-status=pass');
 end.
