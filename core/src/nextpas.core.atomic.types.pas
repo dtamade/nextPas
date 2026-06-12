@@ -52,6 +52,9 @@ type
     function FetchAnd(AMask: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;
     function FetchOr(AMask: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;
     function FetchXor(AMask: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;
+    function FetchMax(AValue: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;
+    function FetchMin(AValue: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;
+    function FetchNand(AMask: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;
 
     // 便利方法 - 返回新值
     function Increment(AOrder: memory_order_t = mo_seq_cst): Int32; inline;
@@ -133,6 +136,9 @@ type
     function FetchAnd(AMask: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;
     function FetchOr(AMask: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;
     function FetchXor(AMask: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;
+    function FetchMax(AValue: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;
+    function FetchMin(AValue: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;
+    function FetchNand(AMask: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;
 
     function Increment(AOrder: memory_order_t = mo_seq_cst): Int64; inline;
     function Decrement(AOrder: memory_order_t = mo_seq_cst): Int64; inline;
@@ -221,8 +227,7 @@ type
    * TAtomicFlag - 原子标志（最简单的原子类型）
    *
    * @desc
-   *   最简单的原子类型，锁自由状态跟随 32-bit 原子后端运行时 truth。
-   *   只有两个操作：test_and_set 和 clear。
+   *   最简单的原子类型，保证无锁。只有两个操作：test_and_set 和 clear。
    *   常用于实现自旋锁和简单的同步标志。
    *
    * @cpp_equivalent std::atomic_flag
@@ -250,9 +255,9 @@ type
     {**
      * is_lock_free - 查询原子操作是否无锁
      *
-     * @return True 如果当前 32-bit 原子后端运行时为无锁
+     * @return 始终返回 True（atomic_flag 保证无锁）
      *
-     * @cpp_equivalent std::atomic_flag::is_lock_free()
+     * @cpp_equivalent std::atomic_flag::is_lock_free() (always true)
      *}
     class function is_lock_free: Boolean; static; inline;
 
@@ -423,6 +428,14 @@ uses
   nextpas.core.atomic,
   nextpas.core.errors;
 
+type
+  TAtomicBoolRmwOp = (
+    abroAnd,
+    abroOr,
+    abroXor,
+    abroNand
+  );
+
 function _cas_success_order(const AOrder: memory_order_t): memory_order_t; inline;
 begin
   // Treat consume as acquire for CAS/RMW in the high-level wrappers.
@@ -448,24 +461,175 @@ begin
     Result := mo_seq_cst;
 end;
 
-procedure _validate_atomic_flag_store_order(const AOrder: memory_order_t); inline;
+function _bool_raw(const AValue: Boolean): Int32; inline;
 begin
-  case AOrder of
-    mo_consume, mo_acquire, mo_acq_rel:
-      raise EArgumentError.Create('TAtomicFlag.clear: invalid memory order for store operation');
+  if AValue then
+    Result := 1
   else
-    ;
-  end;
+    Result := 0;
 end;
 
-procedure _validate_atomic_flag_load_order(const AOrder: memory_order_t); inline;
+function _atomic_bool_fetch(var AValue: Int32; const AOperand: Boolean;
+  const AOrder: memory_order_t; const AOp: TAtomicBoolRmwOp): Boolean; inline;
+var
+  LOldRaw: Int32;
+  LExpectedRaw: Int32;
+  LNew: Boolean;
+  LSuccessOrder: memory_order_t;
+  LFailureOrder: memory_order_t;
 begin
-  case AOrder of
-    mo_release, mo_acq_rel:
-      raise EArgumentError.Create('TAtomicFlag.test: invalid memory order for load operation');
+  LSuccessOrder := _cas_success_order(AOrder);
+  LFailureOrder := _cas_failure_order(LSuccessOrder);
+
+  LOldRaw := atomic_load(AValue, mo_relaxed);
+  repeat
+    Result := LOldRaw <> 0;
+
+    case AOp of
+      abroAnd:
+        LNew := Result and AOperand;
+      abroOr:
+        LNew := Result or AOperand;
+      abroXor:
+        LNew := Result xor AOperand;
+    else
+      LNew := not (Result and AOperand);
+    end;
+
+    LExpectedRaw := LOldRaw;
+    if atomic_compare_exchange_weak(AValue, LExpectedRaw, _bool_raw(LNew),
+      LSuccessOrder, LFailureOrder) then
+      Exit;
+
+    LOldRaw := LExpectedRaw;
+    cpu_pause;
+  until False;
+end;
+
+function _uint32_inc_result(const AOld: UInt32): UInt32; inline;
+begin
+  if AOld = High(UInt32) then
+    Result := UInt32(0)
   else
-    ;
-  end;
+    Result := AOld + UInt32(1);
+end;
+
+function _uint32_dec_result(const AOld: UInt32): UInt32; inline;
+begin
+  if AOld = UInt32(0) then
+    Result := High(UInt32)
+  else
+    Result := AOld - UInt32(1);
+end;
+
+function _uint64_inc_result(const AOld: UInt64): UInt64; inline;
+begin
+  if AOld = High(UInt64) then
+    Result := UInt64(0)
+  else
+    Result := AOld + UInt64(1);
+end;
+
+function _uint64_dec_result(const AOld: UInt64): UInt64; inline;
+begin
+  if AOld = UInt64(0) then
+    Result := High(UInt64)
+  else
+    Result := AOld - UInt64(1);
+end;
+
+function _ptruint_inc_result(const AOld: PtrUInt): PtrUInt; inline;
+begin
+  if AOld = High(PtrUInt) then
+    Result := PtrUInt(0)
+  else
+    Result := AOld + PtrUInt(1);
+end;
+
+function _ptruint_dec_result(const AOld: PtrUInt): PtrUInt; inline;
+begin
+  if AOld = PtrUInt(0) then
+    Result := High(PtrUInt)
+  else
+    Result := AOld - PtrUInt(1);
+end;
+
+function _int32_from_bits(const AValue: UInt32): Int32; inline;
+var
+  LBits: UInt32;
+begin
+  LBits := AValue;
+  Result := PInt32(@LBits)^;
+end;
+
+function _int32_to_bits(const AValue: Int32): UInt32; inline;
+var
+  LValue: Int32;
+begin
+  LValue := AValue;
+  Result := PUInt32(@LValue)^;
+end;
+
+function _int64_from_bits(const AValue: UInt64): Int64; inline;
+var
+  LBits: UInt64;
+begin
+  LBits := AValue;
+  Result := PInt64(@LBits)^;
+end;
+
+function _int64_to_bits(const AValue: Int64): UInt64; inline;
+var
+  LValue: Int64;
+begin
+  LValue := AValue;
+  Result := PUInt64(@LValue)^;
+end;
+
+function _ptrint_from_bits(const AValue: PtrUInt): PtrInt; inline;
+var
+  LBits: PtrUInt;
+begin
+  LBits := AValue;
+  Result := PPtrInt(@LBits)^;
+end;
+
+function _ptrint_to_bits(const AValue: PtrInt): PtrUInt; inline;
+var
+  LValue: PtrInt;
+begin
+  LValue := AValue;
+  Result := PPtrUInt(@LValue)^;
+end;
+
+function _int32_inc_result(const AOld: Int32): Int32; inline;
+begin
+  Result := _int32_from_bits(_uint32_inc_result(_int32_to_bits(AOld)));
+end;
+
+function _int32_dec_result(const AOld: Int32): Int32; inline;
+begin
+  Result := _int32_from_bits(_uint32_dec_result(_int32_to_bits(AOld)));
+end;
+
+function _int64_inc_result(const AOld: Int64): Int64; inline;
+begin
+  Result := _int64_from_bits(_uint64_inc_result(_int64_to_bits(AOld)));
+end;
+
+function _int64_dec_result(const AOld: Int64): Int64; inline;
+begin
+  Result := _int64_from_bits(_uint64_dec_result(_int64_to_bits(AOld)));
+end;
+
+function _ptrint_inc_result(const AOld: PtrInt): PtrInt; inline;
+begin
+  Result := _ptrint_from_bits(_ptruint_inc_result(_ptrint_to_bits(AOld)));
+end;
+
+function _ptrint_dec_result(const AOld: PtrInt): PtrInt; inline;
+begin
+  Result := _ptrint_from_bits(_ptruint_dec_result(_ptrint_to_bits(AOld)));
 end;
 
 function _refcount_load_relaxed(var AValue: PtrUInt): PtrUInt; inline;
@@ -573,14 +737,29 @@ begin
   Result := atomic_fetch_xor(FValue, AMask, AOrder);
 end;
 
+function TAtomicInt32.FetchMax(AValue: Int32; AOrder: memory_order_t): Int32;
+begin
+  Result := atomic_fetch_max(FValue, AValue, AOrder);
+end;
+
+function TAtomicInt32.FetchMin(AValue: Int32; AOrder: memory_order_t): Int32;
+begin
+  Result := atomic_fetch_min(FValue, AValue, AOrder);
+end;
+
+function TAtomicInt32.FetchNand(AMask: Int32; AOrder: memory_order_t): Int32;
+begin
+  Result := atomic_fetch_nand(FValue, AMask, AOrder);
+end;
+
 function TAtomicInt32.Increment(AOrder: memory_order_t): Int32;
 begin
-  Result := FetchAdd(1, AOrder) + 1;
+  Result := _int32_inc_result(FetchAdd(1, AOrder));
 end;
 
 function TAtomicInt32.Decrement(AOrder: memory_order_t): Int32;
 begin
-  Result := FetchSub(1, AOrder) - 1;
+  Result := _int32_dec_result(FetchSub(1, AOrder));
 end;
 
 function TAtomicInt32.GetMut: PInt32;
@@ -669,12 +848,12 @@ end;
 
 function TAtomicUInt32.Increment(AOrder: memory_order_t): UInt32;
 begin
-  Result := FetchAdd(1, AOrder) + 1;
+  Result := _uint32_inc_result(FetchAdd(1, AOrder));
 end;
 
 function TAtomicUInt32.Decrement(AOrder: memory_order_t): UInt32;
 begin
-  Result := FetchSub(1, AOrder) - 1;
+  Result := _uint32_dec_result(FetchSub(1, AOrder));
 end;
 
 function TAtomicUInt32.GetMut: PUInt32;
@@ -762,14 +941,29 @@ begin
   Result := atomic_fetch_xor_64(FValue, AMask, AOrder);
 end;
 
+function TAtomicInt64.FetchMax(AValue: Int64; AOrder: memory_order_t): Int64;
+begin
+  Result := atomic_fetch_max_64(FValue, AValue, AOrder);
+end;
+
+function TAtomicInt64.FetchMin(AValue: Int64; AOrder: memory_order_t): Int64;
+begin
+  Result := atomic_fetch_min_64(FValue, AValue, AOrder);
+end;
+
+function TAtomicInt64.FetchNand(AMask: Int64; AOrder: memory_order_t): Int64;
+begin
+  Result := atomic_fetch_nand_64(FValue, AMask, AOrder);
+end;
+
 function TAtomicInt64.Increment(AOrder: memory_order_t): Int64;
 begin
-  Result := FetchAdd(1, AOrder) + 1;
+  Result := _int64_inc_result(FetchAdd(1, AOrder));
 end;
 
 function TAtomicInt64.Decrement(AOrder: memory_order_t): Int64;
 begin
-  Result := FetchSub(1, AOrder) - 1;
+  Result := _int64_dec_result(FetchSub(1, AOrder));
 end;
 
 function TAtomicInt64.GetMut: PInt64;
@@ -858,12 +1052,12 @@ end;
 
 function TAtomicUInt64.Increment(AOrder: memory_order_t): UInt64;
 begin
-  Result := FetchAdd(1, AOrder) + 1;
+  Result := _uint64_inc_result(FetchAdd(1, AOrder));
 end;
 
 function TAtomicUInt64.Decrement(AOrder: memory_order_t): UInt64;
 begin
-  Result := FetchSub(1, AOrder) - 1;
+  Result := _uint64_dec_result(FetchSub(1, AOrder));
 end;
 
 function TAtomicUInt64.GetMut: PUInt64;
@@ -948,49 +1142,23 @@ begin
 end;
 
 function TAtomicBool.FetchAnd(AValue: Boolean; AOrder: memory_order_t): Boolean;
-var
-  LMask: Int32;
 begin
-  if AValue then LMask := 1 else LMask := 0;
-  Result := atomic_fetch_and(FValue, LMask, AOrder) <> 0;
+  Result := _atomic_bool_fetch(FValue, AValue, AOrder, abroAnd);
 end;
 
 function TAtomicBool.FetchOr(AValue: Boolean; AOrder: memory_order_t): Boolean;
-var
-  LMask: Int32;
 begin
-  if AValue then LMask := 1 else LMask := 0;
-  Result := atomic_fetch_or(FValue, LMask, AOrder) <> 0;
+  Result := _atomic_bool_fetch(FValue, AValue, AOrder, abroOr);
 end;
 
 function TAtomicBool.FetchXor(AValue: Boolean; AOrder: memory_order_t): Boolean;
-var
-  LMask: Int32;
 begin
-  if AValue then LMask := 1 else LMask := 0;
-  Result := atomic_fetch_xor(FValue, LMask, AOrder) <> 0;
+  Result := _atomic_bool_fetch(FValue, AValue, AOrder, abroXor);
 end;
 
 function TAtomicBool.FetchNand(AValue: Boolean; AOrder: memory_order_t): Boolean;
-var
-  LOld, LNew, LMask: Int32;
-  LSuccessOrder: memory_order_t;
-  LFailureOrder: memory_order_t;
 begin
-  if AValue then LMask := 1 else LMask := 0;
-
-  LSuccessOrder := _cas_success_order(AOrder);
-  LFailureOrder := _cas_failure_order(LSuccessOrder);
-
-  LOld := atomic_load(FValue, mo_relaxed);
-  repeat
-    LNew := not (LOld and LMask) and 1;  // NAND 并限制为 0/1
-    if atomic_compare_exchange_weak(FValue, LOld, LNew, LSuccessOrder, LFailureOrder) then
-      Break;
-    cpu_pause;
-  until False;
-
-  Result := LOld <> 0;
+  Result := _atomic_bool_fetch(FValue, AValue, AOrder, abroNand);
 end;
 
 function TAtomicBool.GetMut: PInt32;
@@ -1015,7 +1183,8 @@ end;
 
 class function TAtomicFlag.is_lock_free: Boolean;
 begin
-  Result := atomic_is_lock_free_32;
+  // atomic_flag is guaranteed to be lock-free
+  Result := True;
 end;
 
 function TAtomicFlag.test_and_set(AOrder: memory_order_t): Boolean;
@@ -1026,13 +1195,13 @@ end;
 
 procedure TAtomicFlag.clear(AOrder: memory_order_t);
 begin
-  _validate_atomic_flag_store_order(AOrder);
+  // Atomically set to 0
   atomic_store(FValue, 0, AOrder);
 end;
 
 function TAtomicFlag.test(AOrder: memory_order_t): Boolean;
 begin
-  _validate_atomic_flag_load_order(AOrder);
+  // Atomically read without modifying
   Result := atomic_load(FValue, AOrder) <> 0;
 end;
 
@@ -1178,12 +1347,12 @@ end;
 
 function TAtomicISize.Increment(AOrder: memory_order_t): PtrInt;
 begin
-  Result := FetchAdd(1, AOrder) + 1;
+  Result := _ptrint_inc_result(FetchAdd(1, AOrder));
 end;
 
 function TAtomicISize.Decrement(AOrder: memory_order_t): PtrInt;
 begin
-  Result := FetchSub(1, AOrder) - 1;
+  Result := _ptrint_dec_result(FetchSub(1, AOrder));
 end;
 
 function TAtomicISize.GetMut: PPtrInt;
@@ -1338,12 +1507,12 @@ end;
 
 function TAtomicUSize.Increment(AOrder: memory_order_t): PtrUInt;
 begin
-  Result := FetchAdd(1, AOrder) + 1;
+  Result := _ptruint_inc_result(FetchAdd(1, AOrder));
 end;
 
 function TAtomicUSize.Decrement(AOrder: memory_order_t): PtrUInt;
 begin
-  Result := FetchSub(1, AOrder) - 1;
+  Result := _ptruint_dec_result(FetchSub(1, AOrder));
 end;
 
 function TAtomicUSize.GetMut: PPtrUInt;

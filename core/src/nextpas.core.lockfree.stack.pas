@@ -8,7 +8,7 @@ uses
   nextpas.core.lockfree.base;
 
 type
-  generic TLockFreeStack<T> = class
+  generic TLockFreeStackImpl<T> = class
   private
     type
       TSlot = record
@@ -31,36 +31,41 @@ type
     function ApproxCount: PtrUInt;
   end;
 
+  generic TLockFreeStack<T> = class(specialize TLockFreeStackImpl<T>)
+  end;
+
 implementation
 
 uses
   nextpas.core.errors,
   nextpas.core.atomic;
 
-function TLockFreeStack.PackTagIdx(AIdx: Int32; ATag: UInt32): Int64; inline;
+function TLockFreeStackImpl.PackTagIdx(AIdx: Int32; ATag: UInt32): Int64; inline;
 begin
   Result := Int64(UInt32(AIdx)) or (Int64(ATag) shl 32);
 end;
 
-function TLockFreeStack.UnpackIdx(ATagged: Int64): Int32; inline;
+function TLockFreeStackImpl.UnpackIdx(ATagged: Int64): Int32; inline;
 begin
   Result := Int32(ATagged and $FFFFFFFF);
 end;
 
-function TLockFreeStack.UnpackTag(ATagged: Int64): UInt32; inline;
+function TLockFreeStackImpl.UnpackTag(ATagged: Int64): UInt32; inline;
 begin
   Result := UInt32((ATagged shr 32) and $FFFFFFFF);
 end;
 
-constructor TLockFreeStack.Create(const ACapacity: PtrUInt);
+constructor TLockFreeStackImpl.Create(const ACapacity: PtrUInt);
 var
   LI: Int32;
 begin
-  inherited Create;
   if IsManagedType(T) then
     raise EArgumentError.Create('TLockFreeStack: T must be unmanaged');
   if ACapacity = 0 then
     raise EArgumentError.Create('TLockFreeStack: capacity must be > 0');
+  if ACapacity > PtrUInt(High(Int32)) then
+    raise EArgumentError.Create('TLockFreeStack: capacity exceeds 32-bit slot index limit');
+  inherited Create;
   FCapacity := Int32(ACapacity);
   SetLength(FSlots, FCapacity);
   for LI := 0 to FCapacity - 2 do
@@ -70,7 +75,7 @@ begin
   FFreeHead := PackTagIdx(0, 0);
 end;
 
-function TLockFreeStack.TryPush(const AValue: T): Boolean;
+function TLockFreeStackImpl.TryPush(const AValue: T): Boolean;
 var
   LOldFree, LNewFree, LOldTop, LNewTop: Int64;
   LIdx: Int32;
@@ -93,7 +98,7 @@ begin
   Result := True;
 end;
 
-function TLockFreeStack.TryPop(out AValue: T): Boolean;
+function TLockFreeStackImpl.TryPop(out AValue: T): Boolean;
 var
   LOldTop, LNewTop, LOldFree, LNewFree: Int64;
   LIdx: Int32;
@@ -117,12 +122,12 @@ begin
   Result := True;
 end;
 
-function TLockFreeStack.IsEmpty: Boolean;
+function TLockFreeStackImpl.IsEmpty: Boolean;
 begin
   Result := UnpackIdx(AtomicLoad64(FTop, moAcquire)) = -1;
 end;
 
-function TLockFreeStack.ApproxCount: PtrUInt;
+function TLockFreeStackImpl.ApproxCount: PtrUInt;
 var
   LIdx: Int32;
   LCount: PtrUInt;
