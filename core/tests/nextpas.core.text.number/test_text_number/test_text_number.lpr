@@ -220,6 +220,29 @@ begin
   Check(not ParseDouble(PAnsiChar('1.e2'), 4, V), 'exponent after dot still requires fraction digit');
 end;
 
+procedure TestParseDoubleRejectsOverflowFallback;
+var
+  V: Double;
+  S: AnsiString;
+  I: Integer;
+begin
+  V := 123.0;
+  Check(not ParseDouble(PAnsiChar('1e999'), 5, V), 'overflow exponent is rejected');
+  Check(V = 0.0, 'overflow exponent resets output');
+
+  V := 123.0;
+  Check(not ParseDouble(PAnsiChar('9e308'), 5, V), 'overflow finite exponent is rejected');
+  Check(V = 0.0, 'overflow finite exponent resets output');
+
+  SetLength(S, 1100);
+  for I := 1 to Length(S) do
+    S[I] := '9';
+
+  V := 123.0;
+  Check(not ParseDouble(PAnsiChar(S), Length(S), V), 'very long decimal is rejected');
+  Check(V = 0.0, 'very long decimal resets output');
+end;
+
 procedure TestFloatRoundTrip;
 var
   Buf: array[0..31] of AnsiChar;
@@ -293,6 +316,7 @@ begin
   T.Run('FloatToJsonBuffer', @TestFloatToJsonBuffer);
   T.Run('ParseDouble', @TestParseDouble);
   T.Run('ParseDouble rejects empty fraction', @TestParseDoubleRejectsFractionWithoutDigits);
+  T.Run('ParseDouble rejects overflow fallback', @TestParseDoubleRejectsOverflowFallback);
   T.Run('ViewToDouble', @TestViewToDouble);
   T.Run('float round-trip', @TestFloatRoundTrip);
   T.Summary;

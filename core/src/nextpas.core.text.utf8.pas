@@ -41,6 +41,9 @@ var
   LPos: SizeUInt;
   LDec: TUTF8DecodeResult;
 begin
+  if (ALen > 0) and (AData = nil) then
+    Exit(False);
+
   LPos := 0;
   while LPos < ALen do
   begin
@@ -72,7 +75,7 @@ var
 begin
   Result.CodePoint := 0;
   Result.ByteLen := 0;
-  if ALen = 0 then
+  if (ALen = 0) or (AData = nil) then
     Exit;
   B := AData[0];
   if B < $80 then
@@ -158,6 +161,8 @@ var
 begin
   if ALen = 0 then
     Exit(True);
+  if AData = nil then
+    Exit(False);
   LDispatch := GetDispatchTable;
   if (LDispatch <> nil) and Assigned(LDispatch^.Utf8Validate) then
     Result := LDispatch^.Utf8Validate(AData, ALen)
@@ -171,7 +176,7 @@ var
   LDec: TUTF8DecodeResult;
 begin
   Result := 0;
-  if ALen = 0 then
+  if (ALen = 0) or (AData = nil) then
     Exit;
   LPos := 0;
   while LPos < ALen do
@@ -188,7 +193,10 @@ end;
 procedure TUTF8Iterator.Init(const AData: PByte; const ALen: SizeUInt);
 begin
   FData := AData;
-  FLen := ALen;
+  if (ALen > 0) and (AData = nil) then
+    FLen := 0
+  else
+    FLen := ALen;
   FPos := 0;
 end;
 
@@ -211,6 +219,13 @@ function TUTF8Iterator.Next(out ACodePoint: UInt32): Boolean;
 var
   LDec: TUTF8DecodeResult;
 begin
+  if FData = nil then
+  begin
+    FPos := FLen;
+    ACodePoint := 0;
+    Exit(False);
+  end;
+
   if FPos >= FLen then
   begin
     ACodePoint := 0;

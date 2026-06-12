@@ -138,7 +138,7 @@ const
 
 { 零宽表 - 组合标记 Mn/Me 与零宽控制字符的代表性区间（Unicode 15.1）。
   按 Lo 升序排列。覆盖常见组合附标、变体选择符、ZWJ/ZWNJ 等。 }
-  ZERO_WIDTH_RANGES: array[0..46] of TCodepointRange = (
+  ZERO_WIDTH_RANGES: array[0..52] of TCodepointRange = (
     (Lo: $0300; Hi: $036F),    { Combining Diacritical Marks }
     (Lo: $0483; Hi: $0489),    { Cyrillic combining }
     (Lo: $0591; Hi: $05BD),    { Hebrew points }
@@ -146,18 +146,23 @@ const
     (Lo: $05C1; Hi: $05C2),
     (Lo: $05C4; Hi: $05C5),
     (Lo: $05C7; Hi: $05C7),
+    (Lo: $0600; Hi: $0605),    { Arabic prepend marks }
     (Lo: $0610; Hi: $061A),    { Arabic marks }
     (Lo: $064B; Hi: $065F),
     (Lo: $0670; Hi: $0670),
     (Lo: $06D6; Hi: $06DC),
+    (Lo: $06DD; Hi: $06DD),    { Arabic end of ayah prepend }
     (Lo: $06DF; Hi: $06E4),
     (Lo: $06E7; Hi: $06E8),
     (Lo: $06EA; Hi: $06ED),
+    (Lo: $070F; Hi: $070F),    { Syriac abbreviation mark prepend }
     (Lo: $0711; Hi: $0711),    { Syriac }
     (Lo: $0730; Hi: $074A),
     (Lo: $07A6; Hi: $07B0),    { Thaana }
     (Lo: $07EB; Hi: $07F3),    { NKo combining marks }
     (Lo: $07FD; Hi: $07FD),    { NKo dantayalan }
+    (Lo: $0890; Hi: $0891),    { Arabic honorific sign prepend }
+    (Lo: $08E2; Hi: $08E2),    { Arabic disputed end of ayah prepend }
     (Lo: $0900; Hi: $0902),    { Devanagari Mn (excl. 0903 Mc) }
     (Lo: $093A; Hi: $093A),
     (Lo: $093C; Hi: $093C),
@@ -185,6 +190,7 @@ const
     (Lo: $FE20; Hi: $FE2F),    { Combining Half Marks }
     (Lo: $FEFF; Hi: $FEFF),    { ZWNBSP / BOM }
     (Lo: $1E000; Hi: $1E02A),  { Glagolitic Supplement combining }
+    (Lo: $E0020; Hi: $E007F),  { Tags }
     (Lo: $E0100; Hi: $E01EF)   { Variation Selectors Supplement }
   );
 
@@ -242,6 +248,8 @@ var
 begin
   if ALen = 0 then
     Exit(0);
+  if AData = nil then
+    Exit(0);
 
   Result := ALen;
   for LPos := 0 to ALen - 1 do
@@ -279,6 +287,8 @@ var
   {$endif}
 begin
   if ALen = 0 then
+    Exit(0);
+  if AData = nil then
     Exit(0);
 
   {$ifdef CPUX86_64}

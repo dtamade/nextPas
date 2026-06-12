@@ -301,14 +301,74 @@ function ParseDoubleFallback(const AData: PAnsiChar; const ALen: SizeUInt;
 var
   LBuf: array[0..1023] of AnsiChar;
   LCode: Integer;
-  LActualLen: SizeUInt;
+  LValue: Double;
 begin
-  LActualLen := ALen;
-  if LActualLen > 1023 then LActualLen := 1023;
-  Move(AData^, LBuf[0], LActualLen);
-  LBuf[LActualLen] := #0;
-  Val(PAnsiChar(@LBuf[0]), AValue, LCode);
-  Result := LCode = 0;
+  AValue := 0.0;
+  if ALen > 1023 then
+    Exit(False);
+  Move(AData^, LBuf[0], ALen);
+  LBuf[ALen] := #0;
+  try
+    Val(PAnsiChar(@LBuf[0]), LValue, LCode);
+  except
+    Exit(False);
+  end;
+  if (LCode <> 0) or DoubleIsInf(LValue) or DoubleIsNaN(LValue) then
+    Exit(False);
+  AValue := LValue;
+  Result := True;
+end;
+
+function UInt64DecimalDigits(const AValue: UInt64): Int32; inline;
+var
+  LValue: UInt64;
+begin
+  Result := 1;
+  LValue := AValue;
+  while LValue >= 10 do
+  begin
+    LValue := LValue div 10;
+    Inc(Result);
+  end;
+end;
+
+function DecimalMagnitudeOverflowsDouble(const AMant: UInt64;
+  const AExp10: Int32): Boolean;
+const
+  MAX_DOUBLE_SCI_EXP10 = 308;
+  MAX_DOUBLE_SIG17 = UInt64(17976931348623157);
+var
+  LDigits: Int32;
+  LSciExp: Int32;
+  LSig: UInt64;
+  LTrimmedNonZero: Boolean;
+begin
+  if AMant = 0 then
+    Exit(False);
+
+  LDigits := UInt64DecimalDigits(AMant);
+  LSciExp := AExp10 + LDigits - 1;
+  if LSciExp > MAX_DOUBLE_SCI_EXP10 then
+    Exit(True);
+  if LSciExp < MAX_DOUBLE_SCI_EXP10 then
+    Exit(False);
+
+  LSig := AMant;
+  LTrimmedNonZero := False;
+  while LDigits > 17 do
+  begin
+    LTrimmedNonZero := LTrimmedNonZero or ((LSig mod 10) <> 0);
+    LSig := LSig div 10;
+    Dec(LDigits);
+  end;
+  while LDigits < 17 do
+  begin
+    LSig := LSig * 10;
+    Inc(LDigits);
+  end;
+
+  Result := (LSig > MAX_DOUBLE_SIG17) or
+    ((LSig = MAX_DOUBLE_SIG17) and LTrimmedNonZero);
 end;
 
 function ParseDouble(const AData: PAnsiChar; const ALen: SizeUInt;
@@ -417,6 +477,11 @@ begin
   end;
 
   LExp := LExpVal - LFracDigits;
+  if DecimalMagnitudeOverflowsDouble(LMant, LExp) then
+  begin
+    AValue := 0.0;
+    Exit(False);
+  end;
 
   if LPos <> ALen then
     Exit(False);

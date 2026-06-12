@@ -444,13 +444,19 @@ end;
 function ScanMatchLiteral(const AData: PAnsiChar; const ALen: SizeUInt;
   const AExpected: PAnsiChar; const AExpectedLen: Byte): Boolean;
 var
-  I: Byte;
+  I: SizeUInt;
 begin
+  if AExpectedLen = 0 then
+    Exit(True);
   if ALen < AExpectedLen then
     Exit(False);
-  for I := 0 to AExpectedLen - 1 do
+  I := 0;
+  while I < AExpectedLen do
+  begin
     if AData[I] <> AExpected[I] then
       Exit(False);
+    Inc(I);
+  end;
   Result := True;
 end;
 
