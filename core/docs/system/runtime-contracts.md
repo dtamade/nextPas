@@ -198,6 +198,12 @@ Rules:
   These helper names are LLVM/backend evidence only,
   not public ABI, not Pascal facade symbols, and not allocator owner transfer
   away from `nextpas.core.mem`.
+- Current LLVM output may also use backend-private memory helpers such as
+  `@np_memcpy` and `@np_memzero` while lowering string concatenation,
+  dynamic-array resize, and object allocation zeroing. These names are
+  implementation evidence only, not public ABI,
+  not aliases for public `CopyMem` / `ZeroMem`, not raw memory facade expansion,
+  and not allocator owner transfer away from `nextpas.core.mem`.
 - Object allocation and object release may share heap helpers with direct
   runtime-managed allocations, but the stable system contract remains
   `np.system.heap_alloc` / `np.system.heap_free` plus the object-free lifecycle

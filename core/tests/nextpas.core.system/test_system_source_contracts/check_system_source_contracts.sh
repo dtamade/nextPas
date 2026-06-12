@@ -688,6 +688,20 @@ done
 require_token "docs/system/runtime-contracts.md" "backend-private allocator helpers"
 require_token "docs/system/runtime-contracts.md" "not allocator owner transfer"
 for helper in \
+  "@np_memcpy" \
+  "@np_memzero"; do
+  require_token "docs/system/runtime-contracts.md" "$helper"
+done
+require_token "docs/system/runtime-contracts.md" "backend-private memory helpers"
+require_token "docs/system/runtime-contracts.md" 'not aliases for public `CopyMem` / `ZeroMem`'
+require_token "docs/system/runtime-contracts.md" "not raw memory facade expansion"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_memcpy"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_memzero"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_memcpy"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_memzero"
+require_repo_token "tests/hir/test_hir_class_alloc_contract.pas" "define internal void @np_memzero"
+require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "call {ptr, i64} @np_str_concat("
+for helper in \
   "np.system.object_free" \
   "np.system.object_free.destroy" \
   "np.system.object_free.cleanup" \
