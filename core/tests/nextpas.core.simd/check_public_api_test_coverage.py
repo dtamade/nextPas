@@ -11,6 +11,11 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
+from simd_public_api_sources import (
+    PUBLIC_API_INTERFACE_FILES,
+    resolve_public_api_interface_files,
+)
+
 
 DECL_RE = re.compile(
     r"^\s*(?P<kind>function|procedure)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\b",
@@ -33,7 +38,7 @@ class SymbolCoverage:
 def parse_args() -> argparse.Namespace:
     l_parser = argparse.ArgumentParser(
         description=(
-            "Check that public SIMD facade/API/api.v2 declarations are covered "
+            "Check that public SIMD facade declarations are covered "
             "by test source references across tests/nextpas.core.simd*."
         )
     )
@@ -221,11 +226,7 @@ def main() -> int:
         return 2
 
     l_repo_root = Path(__file__).resolve().parents[2]
-    l_interface_files = [
-        l_repo_root / "src" / "nextpas.core.simd.pas",
-        l_repo_root / "src" / "nextpas.core.simd.api.pas",
-        l_repo_root / "src" / "nextpas.core.simd.api.v2.pas",
-    ]
+    l_interface_files = resolve_public_api_interface_files(l_repo_root)
     l_test_files = collect_test_files(l_repo_root)
 
     l_symbols = [
@@ -277,6 +278,7 @@ def main() -> int:
     l_payload = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "analyzer": "pascal-state-machine-mask + case-insensitive token scan",
+        "public_api_sources": list(PUBLIC_API_INTERFACE_FILES),
         "test_files": len(l_test_files),
         "public_symbols_total": len(l_items),
         "covered_symbols": l_covered,

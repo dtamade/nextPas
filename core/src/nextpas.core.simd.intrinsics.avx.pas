@@ -26,6 +26,7 @@ uses
   - This unit still contains placeholder implementations for several AVX APIs.
   - It should not be used as a default public entry path.
   - There is no current in-repo consumer beyond isolated smoke / opt-in bring-up.
+  - This raw leaf is only qualified on x86/x86_64 targets.
 }
 
 // === AVX 256-bit 浮点运算 ===

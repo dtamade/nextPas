@@ -1,23 +1,23 @@
 # SIMD Interface/Implementation Completeness Report
 
-- generated_at: 2026-05-26T07:11:08
-- dispatch_slots_total: `566`
+- generated_at: 2026-06-06T12:29:20
+- dispatch_slots_total: `616`
 - strict: `True`
 - strict_level: `p2`
 - analyzer: `heuristic token/assignment scan (not semantic proof)`
 
 ## Backend Slot Coverage
 
-- scalar: `566/566`
-- sse2: `470/566`
-- sse3: `10/566`
-- ssse3: `0/566`
-- sse41: `28/566`
-- sse42: `1/566`
-- avx2: `497/566`
-- avx512: `183/566`
-- neon: `458/566`
-- riscvv: `529/566`
+- scalar: `616/616`
+- sse2: `520/616`
+- sse3: `10/616`
+- ssse3: `0/616`
+- sse41: `28/616`
+- sse42: `2/616`
+- avx2: `416/616`
+- avx512: `232/616`
+- neon: `458/616`
+- riscvv: `529/616`
 
 ## Severity Summary
 

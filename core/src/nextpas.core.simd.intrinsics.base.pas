@@ -4,6 +4,13 @@ unit nextpas.core.simd.intrinsics.base;
 {$I nextpas.core.settings.inc}
 {$I nextpas.core.simd.settings.inc}
 
+{
+  Foundational intrinsics type leaf.
+  Owns the TM128/TM256/TM512 storage model and shared raw ISA aliases.
+  This unit has no concrete ISA implementation, dispatch registration, or
+  runtime control-plane behavior.
+}
+
 interface
 
 // === SIMD Intrinsics 基础定义模块 ===

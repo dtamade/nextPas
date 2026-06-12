@@ -205,7 +205,7 @@ end;
 
 function X86HasAVX512BackendRequiredFeatures(const aX86: TX86Features): Boolean; inline;
 begin
-  Result := aX86.HasAVX2 and aX86.HasAVX512F and aX86.HasAVX512BW and
+  Result := aX86.HasAVX and aX86.HasAVX2 and aX86.HasAVX512F and aX86.HasAVX512BW and
             aX86.HasPOPCNT and aX86.HasFMA;
 end;
 
@@ -334,6 +334,5 @@ begin
 end;
 
 end.
-
 
 

@@ -6,7 +6,7 @@ unit nextpas.core.simd.intrinsics.mmx;
 
 {
   === nextpas.core.simd.intrinsics.mmx ===
-  Placeholder MMX intrinsics surface for isolated legacy x86 bring-up.
+  Active MMX intrinsics leaf.
   MMX is Intel's original 64-bit SIMD extension from 1997.
 
   Highlights:
@@ -16,7 +16,7 @@ unit nextpas.core.simd.intrinsics.mmx;
 
   Notes:
   - the default path keeps a Pascal fallback for portability
-  - inline asm is only relevant on x86/x64 hosts
+  - inline asm is only qualified on x86/x86_64 hosts
   - modern code should prefer SSE2 or newer SIMD families
 }
 

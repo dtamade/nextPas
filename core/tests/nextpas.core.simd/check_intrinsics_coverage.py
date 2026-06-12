@@ -27,7 +27,7 @@ class ModuleConfig:
     test_mode: str
     required: bool
     src: Path
-    test: Path
+    tests: tuple[Path, ...]
     min_refs: int = 0
     min_ref_overrides: dict[str, int] | None = None
 
@@ -280,27 +280,51 @@ def extract_test_counts(
             a_test_text=a_test_text,
             a_prefix=a_prefix,
             a_keep_strings=a_keep_strings,
-        )
+    )
     raise ValueError(f"unknown test extraction mode: {a_mode}")
 
 
+def build_current_intrinsics_test_carriers(a_repo_root: Path) -> tuple[Path, ...]:
+    l_tests_root = a_repo_root / "tests" / "nextpas.core.simd"
+    return (
+        l_tests_root / "nextpas.core.simd.intrinsics.avx2.testcase.pas",
+        l_tests_root / "nextpas.core.simd.sse2contracts.testcase.pas",
+        l_tests_root / "nextpas.core.simd.sse3_correctness.testcase.pas",
+        # Symbol-ref coverage scans raw source text, so wrapper-based tests must
+        # point at their canonical project file instead of the top-level include.
+        l_tests_root / "test_mmx_raw_leaf_parity" / "test_mmx_raw_leaf_parity.lpr",
+        l_tests_root / "test_sse_raw_leaf_parity" / "test_sse_raw_leaf_parity.lpr",
+        l_tests_root / "test_sse2_raw_leaf_parity.pas",
+    )
+
+
+def build_experimental_intrinsics_test_carriers(a_repo_root: Path) -> tuple[Path, ...]:
+    l_tests_root = a_repo_root / "tests" / "nextpas.core.simd.intrinsics.experimental"
+    return (
+        l_tests_root / "nextpas.core.simd.intrinsics.experimental.testcase.pas",
+    )
+
+
 def build_module_configs(a_repo_root: Path, a_args: argparse.Namespace) -> list[ModuleConfig]:
+    l_tests_root = a_repo_root / "tests" / "nextpas.core.simd"
+    l_current_intrinsics_tests = build_current_intrinsics_test_carriers(a_repo_root)
+    l_experimental_intrinsics_tests = build_experimental_intrinsics_test_carriers(a_repo_root)
     return [
         ModuleConfig(
             name="sse",
             prefix="sse",
-            test_mode="suite_name",
+            test_mode="symbol_ref",
             required=True,
             src=a_repo_root / "src" / "nextpas.core.simd.intrinsics.sse.pas",
-            test=a_repo_root / "tests" / "nextpas.core.simd.intrinsics.sse" / "nextpas.core.simd.intrinsics.sse.testcase.pas",
+            tests=l_current_intrinsics_tests,
         ),
         ModuleConfig(
             name="mmx",
             prefix="mmx",
-            test_mode="suite_name",
+            test_mode="symbol_ref",
             required=True,
             src=a_repo_root / "src" / "nextpas.core.simd.intrinsics.mmx.pas",
-            test=a_repo_root / "tests" / "nextpas.core.simd.intrinsics.mmx" / "nextpas.core.simd.intrinsics.mmx.testcase.pas",
+            tests=l_current_intrinsics_tests,
         ),
         ModuleConfig(
             name="avx2",
@@ -308,7 +332,7 @@ def build_module_configs(a_repo_root: Path, a_args: argparse.Namespace) -> list[
             test_mode="symbol_ref",
             required=a_args.require_avx2,
             src=a_repo_root / "src" / "nextpas.core.simd.intrinsics.avx2.pas",
-            test=a_repo_root / "tests" / "nextpas.core.simd" / "nextpas.core.simd.intrinsics.avx2.testcase.pas",
+            tests=(l_tests_root / "nextpas.core.simd.intrinsics.avx2.testcase.pas",),
         ),
         ModuleConfig(
             name="aes",
@@ -316,7 +340,7 @@ def build_module_configs(a_repo_root: Path, a_args: argparse.Namespace) -> list[
             test_mode="symbol_ref",
             required=a_args.require_experimental,
             src=a_repo_root / "src" / "nextpas.core.simd.intrinsics.aes.pas",
-            test=a_repo_root / "tests" / "nextpas.core.simd.intrinsics.experimental" / "nextpas.core.simd.intrinsics.experimental.testcase.pas",
+            tests=l_experimental_intrinsics_tests,
         ),
         ModuleConfig(
             name="sha",
@@ -324,7 +348,7 @@ def build_module_configs(a_repo_root: Path, a_args: argparse.Namespace) -> list[
             test_mode="symbol_ref",
             required=a_args.require_experimental,
             src=a_repo_root / "src" / "nextpas.core.simd.intrinsics.sha.pas",
-            test=a_repo_root / "tests" / "nextpas.core.simd.intrinsics.experimental" / "nextpas.core.simd.intrinsics.experimental.testcase.pas",
+            tests=l_experimental_intrinsics_tests,
         ),
         ModuleConfig(
             name="sse2-x86-raw",
@@ -332,7 +356,7 @@ def build_module_configs(a_repo_root: Path, a_args: argparse.Namespace) -> list[
             test_mode="symbol_ref",
             required=True,
             src=a_repo_root / "src" / "nextpas.core.simd.intrinsics.x86.sse2.pas",
-            test=a_repo_root / "tests" / "nextpas.core.simd.intrinsics.experimental" / "nextpas.core.simd.intrinsics.experimental.testcase.pas",
+            tests=(l_tests_root / "test_sse2_raw_leaf_parity.pas",),
             min_refs=a_args.sse2_min_refs,
         ),
     ]
@@ -340,21 +364,27 @@ def build_module_configs(a_repo_root: Path, a_args: argparse.Namespace) -> list[
 
 def check_module(a_config: ModuleConfig) -> dict:
     l_src_text = a_config.src.read_text(encoding="utf-8", errors="ignore")
-    l_test_text = a_config.test.read_text(encoding="utf-8", errors="ignore")
-
     l_declared = extract_declared(l_src_text, a_config.prefix)
-    l_test_counts = extract_test_counts(
-        a_test_text=l_test_text,
-        a_prefix=a_config.prefix,
-        a_mode=a_config.test_mode,
-        a_keep_strings=False,
-    )
-    l_witness_counts = extract_test_counts(
-        a_test_text=l_test_text,
-        a_prefix=a_config.prefix,
-        a_mode=a_config.test_mode,
-        a_keep_strings=a_config.min_refs > 0,
-    )
+    l_test_counts: Counter[str] = Counter()
+    l_witness_counts: Counter[str] = Counter()
+    for l_test_path in a_config.tests:
+        l_test_text = l_test_path.read_text(encoding="utf-8", errors="ignore")
+        l_test_counts.update(
+            extract_test_counts(
+                a_test_text=l_test_text,
+                a_prefix=a_config.prefix,
+                a_mode=a_config.test_mode,
+                a_keep_strings=False,
+            )
+        )
+        l_witness_counts.update(
+            extract_test_counts(
+                a_test_text=l_test_text,
+                a_prefix=a_config.prefix,
+                a_mode=a_config.test_mode,
+                a_keep_strings=a_config.min_refs > 0,
+            )
+        )
 
     l_missing = sorted(
         l_declared[l_name]
@@ -390,6 +420,10 @@ def check_module(a_config: ModuleConfig) -> dict:
         "prefix": a_config.prefix,
         "test_mode": a_config.test_mode,
         "required": a_config.required,
+        "test_files": [
+            str(l_path.relative_to(a_config.src.parents[2])).replace("\\", "/")
+            for l_path in a_config.tests
+        ],
         "declared_count": len(l_declared),
         "tested_count": l_recognized_tested,
         "missing_count": len(l_missing),
@@ -416,9 +450,15 @@ def main() -> int:
     l_modules = build_module_configs(a_repo_root=l_repo_root, a_args=l_args)
 
     for l_module in l_modules:
-        if not l_module.src.is_file() or not l_module.test.is_file():
-            print(f"[COVERAGE] ERROR: missing file for {l_module.name}: {l_module.src} or {l_module.test}")
+        if not l_module.src.is_file():
+            print(f"[COVERAGE] ERROR: missing source file for {l_module.name}: {l_module.src}")
             return 2
+        for l_test_path in l_module.tests:
+            if not l_test_path.is_file():
+                print(
+                    f"[COVERAGE] ERROR: missing test carrier for {l_module.name}: {l_test_path}"
+                )
+                return 2
 
     l_results = [check_module(a_config=l_module) for l_module in l_modules]
 
@@ -477,6 +517,8 @@ def main() -> int:
                 f"extra={l_item['extra_count']} mode={l_item['test_mode']} "
                 f"scope={l_scope}{l_extra_text}"
             )
+            for l_test_file in l_item["test_files"]:
+                print(f"      carrier: {l_test_file}")
             for l_name in l_item["missing"]:
                 print(f"      missing: {l_name}")
             for l_name in l_item["extra"]:

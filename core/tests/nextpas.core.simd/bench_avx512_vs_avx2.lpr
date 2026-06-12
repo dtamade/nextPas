@@ -1,6 +1,5 @@
 program bench_avx512_vs_avx2;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 

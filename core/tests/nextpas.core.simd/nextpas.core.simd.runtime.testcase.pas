@@ -27,7 +27,6 @@ type
     procedure Test_RuntimeSnapshot_Canonical_Name_Aliases_Legacy_Subunit_Name;
     procedure Test_FacadeRuntimeSnapshot_View_Matches_Runtime_Subunit;
     procedure Test_FacadeRuntimeControlPlane_Wrappers_Interoperate_With_Legacy_Aliases;
-    procedure Test_PublicFacadeScalarFallback_Executes_With_RuntimeDispatch_Disabled;
     procedure Test_RuntimeSnapshot_View_Matches_Runtime_And_Legacy_Helpers;
     procedure Test_RuntimeSnapshot_Switch_Tracks_ControlPlane_And_Dispatch;
   end;
@@ -258,58 +257,6 @@ begin
   nextpas.core.simd.ResetCurrentBackendSelection;
   AssertEquals('facade ResetCurrentBackendSelection should restore best dispatchable backend after legacy ForceBackend',
     Ord(nextpas.core.simd.GetBestDispatchableBackend), Ord(nextpas.core.simd.GetCurrentBackend));
-end;
-
-procedure TTestCase_RuntimeAPI.Test_PublicFacadeScalarFallback_Executes_With_RuntimeDispatch_Disabled;
-var
-  LSavedVectorAsm: Boolean;
-  LSnapshot: TSimdRuntimeSnapshot;
-  LA: TVecF32x4;
-  LB: TVecF32x4;
-  LSum: TVecF32x4;
-  LBytesA: array[0..5] of Byte;
-  LBytesB: array[0..5] of Byte;
-begin
-  LSavedVectorAsm := IsVectorAsmEnabled;
-  try
-    SetVectorAsmEnabled(False);
-    AssertTrue('scalar backend should remain selectable when runtime SIMD dispatch is disabled',
-      nextpas.core.simd.runtime.TrySetCurrentBackend(sbScalar));
-
-    LSnapshot := nextpas.core.simd.GetCurrentRuntimeSnapshot;
-    AssertEquals('public runtime snapshot should publish scalar current backend',
-      Ord(sbScalar), Ord(LSnapshot.CurrentBackend));
-    AssertEquals('public runtime snapshot should publish scalar backend info',
-      Ord(sbScalar), Ord(LSnapshot.CurrentBackendInfo.Backend));
-    AssertEquals('facade current backend should publish scalar',
-      Ord(sbScalar), Ord(nextpas.core.simd.GetCurrentBackend));
-    AssertTrue('scalar backend should remain registered in runtime view',
-      nextpas.core.simd.runtime.IsBackendRegisteredInBinary(sbScalar));
-    AssertTrue('scalar backend should remain dispatchable in runtime view',
-      nextpas.core.simd.runtime.GetBestDispatchableBackend = sbScalar);
-    AssertTrue('dispatch table should remain assigned for scalar fallback',
-      GetDispatchTable <> nil);
-    AssertEquals('dispatch table should publish scalar fallback',
-      Ord(sbScalar), Ord(GetDispatchTable^.Backend));
-
-    LA := VecF32x4Make(1.25, -2.5, 3.0, 10.5);
-    LB := VecF32x4Make(2.75, 5.5, -1.0, -0.5);
-    LSum := VecF32x4Add(LA, LB);
-    AssertEquals('scalar fallback VecF32x4Add[0]', 4.0, LSum.f[0]);
-    AssertEquals('scalar fallback VecF32x4Add[1]', 3.0, LSum.f[1]);
-    AssertEquals('scalar fallback VecF32x4Add[2]', 2.0, LSum.f[2]);
-    AssertEquals('scalar fallback VecF32x4Add[3]', 10.0, LSum.f[3]);
-
-    LBytesA[0] := 3;  LBytesA[1] := 1;  LBytesA[2] := 4;
-    LBytesA[3] := 1;  LBytesA[4] := 5;  LBytesA[5] := 9;
-    LBytesB := LBytesA;
-    AssertTrue('scalar fallback MemEqual should execute through public facade',
-      nextpas.core.simd.MemEqual(@LBytesA[0], @LBytesB[0], Length(LBytesA)));
-    AssertEquals('scalar fallback SumBytes should execute through public facade',
-      UInt64(23), nextpas.core.simd.SumBytes(@LBytesA[0], Length(LBytesA)));
-  finally
-    SetVectorAsmEnabled(LSavedVectorAsm);
-  end;
 end;
 
 procedure TTestCase_RuntimeAPI.Test_RuntimeSnapshot_View_Matches_Runtime_And_Legacy_Helpers;

@@ -41,7 +41,7 @@ uses
   This is the main user interface for the SIMD framework, providing:
   @unorderedlist(
     @item(High-level vector types with type safety)
-    @item(Automatic backend selection (Scalar/SSE2/AVX2/AVX-512/NEON))
+    @item(Runtime binding from the dispatchable backend set to the current active backend, with scalar fallback when no stable SIMD backend is available)
     @item(Zero-overhead dispatch via function pointer tables)
     @item(Rust portable-simd compatible naming conventions)
   )
@@ -53,7 +53,7 @@ uses
   begin
     a := VecF32x4Splat(1.5);
     b := VecF32x4Splat(2.0);
-    c := VecF32x4Add(a, b);  // SIMD accelerated
+    c := VecF32x4Add(a, b);  // Uses the current active backend or scalar fallback
   end;
   #)
   
@@ -1348,6 +1348,32 @@ function VecF64x2Blend(const a, b: TVecF64x2; mask: Byte): TVecF64x2; inline;
 {** Blend two I32x4 vectors. Same semantics as VecF32x4Blend. *}
 function VecI32x4Blend(const a, b: TVecI32x4; mask: Byte): TVecI32x4; inline;
 
+// === Gather/Scatter Operations (re-exported from simd.utils) ===
+
+{** Gather F32x4 lanes from non-contiguous memory locations. *}
+function VecF32x4Gather(base: PSingle; const indices: TVecI32x4): TVecF32x4; inline;
+
+{** Gather I32x4 lanes from non-contiguous memory locations. *}
+function VecI32x4Gather(base: PInt32; const indices: TVecI32x4): TVecI32x4; inline;
+
+{** Scatter F32x4 lanes to non-contiguous memory locations. *}
+procedure VecF32x4Scatter(base: PSingle; const indices: TVecI32x4; const values: TVecF32x4); inline;
+
+{** Scatter I32x4 lanes to non-contiguous memory locations. *}
+procedure VecI32x4Scatter(base: PInt32; const indices: TVecI32x4; const values: TVecI32x4); inline;
+
+{** Gather F32x4 lanes where enable bits are set; masked lanes preserve orVal. *}
+function VecF32x4GatherSelect(base: PSingle; const enable: TMask4; const indices: TVecI32x4; const orVal: TVecF32x4): TVecF32x4; inline;
+
+{** Gather I32x4 lanes where enable bits are set; masked lanes preserve orVal. *}
+function VecI32x4GatherSelect(base: PInt32; const enable: TMask4; const indices: TVecI32x4; const orVal: TVecI32x4): TVecI32x4; inline;
+
+{** Scatter F32x4 lanes where enable bits are set; masked lanes are skipped. *}
+procedure VecF32x4ScatterSelect(base: PSingle; const enable: TMask4; const indices: TVecI32x4; const values: TVecF32x4); inline;
+
+{** Scatter I32x4 lanes where enable bits are set; masked lanes are skipped. *}
+procedure VecI32x4ScatterSelect(base: PInt32; const enable: TMask4; const indices: TVecI32x4; const values: TVecI32x4); inline;
+
 // === Type Conversion Operations (re-exported from simd.utils) ===
 
 {**
@@ -2041,6 +2067,48 @@ end;
 function VecI32x4Blend(const a, b: TVecI32x4; mask: Byte): TVecI32x4;
 begin
   Result := nextpas.core.simd.utils.VecI32x4Blend(a, b, mask);
+end;
+
+// === Gather/Scatter Operations (wrappers for simd.utils) ===
+
+function VecF32x4Gather(base: PSingle; const indices: TVecI32x4): TVecF32x4;
+begin
+  Result := nextpas.core.simd.utils.VecF32x4Gather(base, indices);
+end;
+
+function VecI32x4Gather(base: PInt32; const indices: TVecI32x4): TVecI32x4;
+begin
+  Result := nextpas.core.simd.utils.VecI32x4Gather(base, indices);
+end;
+
+procedure VecF32x4Scatter(base: PSingle; const indices: TVecI32x4; const values: TVecF32x4);
+begin
+  nextpas.core.simd.utils.VecF32x4Scatter(base, indices, values);
+end;
+
+procedure VecI32x4Scatter(base: PInt32; const indices: TVecI32x4; const values: TVecI32x4);
+begin
+  nextpas.core.simd.utils.VecI32x4Scatter(base, indices, values);
+end;
+
+function VecF32x4GatherSelect(base: PSingle; const enable: TMask4; const indices: TVecI32x4; const orVal: TVecF32x4): TVecF32x4;
+begin
+  Result := nextpas.core.simd.utils.VecF32x4GatherSelect(base, enable, indices, orVal);
+end;
+
+function VecI32x4GatherSelect(base: PInt32; const enable: TMask4; const indices: TVecI32x4; const orVal: TVecI32x4): TVecI32x4;
+begin
+  Result := nextpas.core.simd.utils.VecI32x4GatherSelect(base, enable, indices, orVal);
+end;
+
+procedure VecF32x4ScatterSelect(base: PSingle; const enable: TMask4; const indices: TVecI32x4; const values: TVecF32x4);
+begin
+  nextpas.core.simd.utils.VecF32x4ScatterSelect(base, enable, indices, values);
+end;
+
+procedure VecI32x4ScatterSelect(base: PInt32; const enable: TMask4; const indices: TVecI32x4; const values: TVecI32x4);
+begin
+  nextpas.core.simd.utils.VecI32x4ScatterSelect(base, enable, indices, values);
 end;
 
 // === Type Conversion Operations (wrappers for simd.utils) ===

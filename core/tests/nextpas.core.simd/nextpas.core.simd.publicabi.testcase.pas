@@ -1859,7 +1859,11 @@ begin
 
     if LBackend = sbRISCVV then
       AssertTrue('experimental flag missing for RISCVV',
-        (LInfo.Flags and FAF_SIMD_ABI_FLAG_EXPERIMENTAL) <> 0);
+        (LInfo.Flags and FAF_SIMD_ABI_FLAG_EXPERIMENTAL) <> 0)
+    else
+      AssertTrue('experimental flag should stay clear for non-RISCVV backend=' +
+        PublicAbiBackendName(LBackend),
+        (LInfo.Flags and FAF_SIMD_ABI_FLAG_EXPERIMENTAL) = 0);
 
     LNamePtr := GetSimdBackendNamePtr(LBackend);
     AssertNotNull('Backend name pointer should not be nil for backend=' + PublicAbiBackendName(LBackend), Pointer(LNamePtr));

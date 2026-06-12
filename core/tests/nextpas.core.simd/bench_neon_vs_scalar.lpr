@@ -1,6 +1,5 @@
 program bench_neon_vs_scalar;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 
@@ -204,6 +203,12 @@ begin
     // Analysis
     WriteLn(F, '## Analysis');
     WriteLn(F);
+    WriteLn(F, '### AArch64 ABI caveat');
+    WriteLn(F);
+    WriteLn(F, '- Some 16-byte record calls on AArch64 arrive through general-purpose registers, so the NEON asm wrapper can pay GPR-to-vector setup (`fmov` / `ins`) and vector-to-GPR return (`umov`) overhead around the real SIMD instruction.');
+    WriteLn(F, '- This report covers only the measured workload mix in this benchmark. Any observed speedup is valid only when the measured workload amortizes that bridge cost; it is not a blanket claim that NEON is always faster than scalar fallback, especially for tiny or record-heavy call shapes.');
+    WriteLn(F);
+
     WriteLn(F, '### Memory Operations');
     WriteLn(F);
     WriteLn(F, 'Memory operations (MemEqual, MemFindByte, SumBytes, etc.) show significant speedup with NEON:');
@@ -229,16 +234,10 @@ begin
     WriteLn(F, '## Conclusion');
     WriteLn(F);
     if Count > 0 then
-    begin
-      if TotalSpeedup / Count >= 2.0 then
-        WriteLn(F, 'NEON backend provides **excellent** performance improvement over Scalar backend.')
-      else if TotalSpeedup / Count >= 1.5 then
-        WriteLn(F, 'NEON backend provides **good** performance improvement over Scalar backend.')
-      else if TotalSpeedup / Count >= 1.2 then
-        WriteLn(F, 'NEON backend provides **moderate** performance improvement over Scalar backend.')
-      else
-        WriteLn(F, 'NEON backend provides **minimal** performance improvement over Scalar backend.');
-    end;
+      WriteLn(F, Format('For this measured workload set, NEON averaged %.2fx over scalar after the AArch64 ABI setup/teardown cost was amortized.', [TotalSpeedup / Count]))
+    else
+      WriteLn(F, 'No comparable NEON-vs-scalar result set was produced for this run.');
+    WriteLn(F, 'Treat this as benchmark-scoped evidence, not a blanket claim that NEON is always faster than scalar fallback.');
     WriteLn(F);
 
   finally

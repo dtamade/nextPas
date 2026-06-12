@@ -25,6 +25,7 @@ uses
   - This unit remains on the experimental x86 intrinsics lane.
   - It must not be treated as a default stable raw leaf.
   - Non-x86 branches remain compile scaffolding; runtime fail-close is intentional.
+  - This raw leaf is only qualified on x86/x86_64 targets.
 }
 
 // === SSE4.2 string-compare primitives ===

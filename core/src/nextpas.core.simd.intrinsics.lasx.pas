@@ -8,6 +8,9 @@ unit nextpas.core.simd.intrinsics.lasx;
   === nextpas.core.simd.intrinsics.lasx ===
   Stub LoongArch/LASX intrinsics surface for isolated experimental bring-up.
   LASX is the 256-bit SIMD extension for LoongArch targets.
+  ISA qualification only: this raw leaf documents LoongArch/LASX capability
+  shape for opt-in experiments, not a stable public backend.
+  It is only qualified on LoongArch64 targets whose cpuinfo reports LASX.
   Highlights:
   - 256-bit vector registers (xr0-xr31)
   - integer and floating-point operations

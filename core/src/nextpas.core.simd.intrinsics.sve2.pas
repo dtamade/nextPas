@@ -1,13 +1,17 @@
 unit nextpas.core.simd.intrinsics.sve2;
-// Disposition: STABLE — low-level intrinsics for non-x86 backends
+// Disposition: Experimental Isolated — SVE2 stub intrinsics for opt-in bring-up
 
 {$I nextpas.core.settings.inc}
 {$I nextpas.core.simd.settings.inc}
 
 {
   === nextpas.core.simd.intrinsics.sve2 ===
-  Placeholder ARM SVE2 intrinsics surface for isolated experimental bring-up.
+  Stub ARM SVE2 intrinsics surface for isolated experimental bring-up.
   SVE2 extends SVE with richer integer, DSP, crypto, and bit-manipulation lanes.
+  ISA qualification only: this raw leaf documents SVE2 capability shape for
+  opt-in experiments, not a stable public backend.
+  It is only qualified on AArch64 targets whose cpuinfo reports SVE2.
+  Opt-in gate: NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS.
   Highlights:
   - expanded integer operations
   - DSP-oriented instructions
