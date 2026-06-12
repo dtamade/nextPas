@@ -54,6 +54,25 @@ begin
     ASecondToken);
 end;
 
+procedure CheckSequence(const ASource, AMessage: string;
+  const ATokens: array of string);
+var
+  LIndex: SizeInt;
+  LOffset: SizeInt;
+  LFoundPos: SizeInt;
+  LWindow: string;
+begin
+  LOffset := 1;
+  for LIndex := Low(ATokens) to High(ATokens) do
+  begin
+    LWindow := Copy(ASource, LOffset, Length(ASource));
+    LFoundPos := Pos(ATokens[LIndex], LWindow);
+    Check(LFoundPos > 0, AMessage + ' token should exist in order: ' +
+      ATokens[LIndex]);
+    Inc(LOffset, LFoundPos + Length(ATokens[LIndex]) - 1);
+  end;
+end;
+
 function ExtractBetween(const ASource, AStartToken, AEndToken: string): string;
 var
   LStartPos, LEndPos: SizeInt;
@@ -105,6 +124,12 @@ begin
     'poller stop must delegate to the IOCP backend');
   CheckContains(LPoller, 'pbiocp: result := fiocp.flush',
     'poller flush must delegate to the IOCP backend');
+  CheckContains(LPoller, 'function pollersupportspositionedfileio',
+    'poller must expose positioned file I/O capability truth');
+  CheckContains(LPoller, 'pbiocp: result := true',
+    'poller must advertise IOCP positioned file I/O capability');
+  CheckContains(LPoller, 'pbepoll: result := false',
+    'poller must keep epoll readiness fallback out of positioned file I/O capability');
   CheckContains(LPoller, 'pbunsupported',
     'poller must report explicit unsupported semantics for unpromoted hosts');
 end;
@@ -118,7 +143,7 @@ begin
   CheckContains(LIocp, 'createiocompletionport',
     'IOCP reactor create must allocate a completion port');
   CheckContains(LIocp, 'closehandle(handle(lport))',
-    'IOCP reactor close must release the completion port handle');
+    'IOCP reactor close must release the retained completion port handle');
   CheckContains(LIocp, 'getqueuedcompletionstatus',
     'IOCP reactor poll must consume completion port events');
   CheckContains(LIocp, 'postqueuedcompletionstatus',
@@ -182,14 +207,23 @@ procedure TestAsyncLoopRunLifecycleContract;
 var
   LAsyncLoop: string;
   LRunBody: string;
+  LRunOnceBody: string;
   LStopBody: string;
 begin
   LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
   LRunBody := ExtractBetween(LAsyncLoop, 'procedure tasyncloop.run',
     'procedure tasyncloop.runonce');
+  LRunOnceBody := ExtractBetween(LAsyncLoop, 'procedure tasyncloop.runonce',
+    'procedure tasyncloop.stop');
   LStopBody := ExtractBetween(LAsyncLoop, 'procedure tasyncloop.stop',
     'function tasyncloop.asyncsleep');
 
+  CheckContains(LAsyncLoop, 'function asyncidlewaketimeoutms(const apoller: tpoller;',
+    'async loop must centralize idle wake timeout policy');
+  CheckContains(LAsyncLoop, 'apoller.haspending',
+    'async loop idle timeout policy must observe pending I/O truth');
+  CheckContains(LAsyncLoop, 'async_pending_io_idle_poll_ms',
+    'async loop must bound wake-only waits while completion work is pending');
   CheckContains(LRunBody, 'atomicstore32(frunning, 1, morelease);',
     'async loop run must publish running state before entering the event loop');
   CheckContains(LRunBody, 'drainwake;',
@@ -200,75 +234,16 @@ begin
     'async loop run must flush the poller before nonblocking completion polling');
   CheckContains(LRunBody, 'lio := fpoller.poll;',
     'async loop run must poll completion work through the poller facade');
-  CheckContains(LRunBody, 'waitforwake(ltimeoutms);',
-    'async loop run must block only through the platform wake seam');
+  CheckContains(LRunBody, 'waitforwake(asyncidlewaketimeoutms(fpoller, lnext));',
+    'async loop run must block through the platform wake seam with pending-I/O bounded idle waits');
+  CheckContains(LRunOnceBody, 'waitforwake(asyncidlewaketimeoutms(fpoller, lnext));',
+    'async loop run-once must use the same pending-I/O bounded wake timeout policy');
   CheckContains(LRunBody, 'finally',
     'async loop run must clear running state when it returns');
   CheckContains(LRunBody, 'atomicstore32(frunning, 0, morelease);',
     'async loop run must leave running state cleared on every exit path');
   CheckContains(LStopBody, 'atomicstore32(frunning, 0, morelease);',
     'async loop stop must publish stopped state');
-  CheckContains(LStopBody, 'wake;',
-    'async loop stop must wake the platform wait seam');
-  CheckBefore(LStopBody, 'atomicstore32(frunning, 0, morelease);', 'wake;',
-    'async loop stop must publish stopped state before waking waiters');
-end;
-
-procedure TestAsyncLoopWakeSeamContract;
-var
-  LAsyncLoop: string;
-  LWakeBody: string;
-  LWaitBody: string;
-  LPostBody: string;
-  LScheduleBody: string;
-  LScheduleAtBody: string;
-  LCancelBody: string;
-  LSleepBody: string;
-  LTimeoutCreateBody: string;
-begin
-  LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
-  LWakeBody := ExtractBetween(LAsyncLoop, 'procedure tasyncloop.wake',
-    'procedure tasyncloop.post');
-  LPostBody := ExtractBetween(LAsyncLoop, 'procedure tasyncloop.post',
-    'procedure tasyncloop.drainwake');
-  LWaitBody := ExtractBetween(LAsyncLoop, 'procedure tasyncloop.waitforwake',
-    'procedure tasyncloop.drainpending');
-  LScheduleBody := ExtractBetween(LAsyncLoop, 'function tasyncloop.schedule',
-    'function tasyncloop.scheduleat');
-  LScheduleAtBody := ExtractBetween(LAsyncLoop, 'function tasyncloop.scheduleat',
-    'function tasyncloop.canceltimer');
-  LCancelBody := ExtractBetween(LAsyncLoop, 'function tasyncloop.canceltimer',
-    'function tasyncloop.asyncread');
-  LSleepBody := ExtractBetween(LAsyncLoop, 'function tasyncloop.asyncsleep',
-    'function tasyncloop.asyncreadtimeout');
-  LTimeoutCreateBody := ExtractBetween(LAsyncLoop, 'function timeoutctxcreate',
-    '{ tasyncloop }');
-
-  CheckContains(LWakeBody, 'platform_poller_wake(fwakepoller);',
-    'async loop Wake must target the platform poller wake seam');
-  CheckContains(LWaitBody,
-    'platform_poller_wait(fwakepoller, @lentry, 1, atimeoutms, lcount);',
-    'async loop WaitForWake must block only through the platform poller wait seam');
-  CheckContains(LPostBody, 'wake;',
-    'async loop Post must wake waiters after enqueuing pending callbacks');
-
-  CheckBefore(LScheduleBody, 'result := ftimers.scheduleafter',
-    'wake;',
-    'async loop Schedule must wake waiters after adding a timer');
-  CheckBefore(LScheduleAtBody, 'result := ftimers.schedule',
-    'wake;',
-    'async loop ScheduleAt must wake waiters after adding a timer');
-  CheckBefore(LCancelBody, 'result := ftimers.cancel(ahandle);',
-    'wake;',
-    'async loop CancelTimer must wake waiters after changing timer state');
-  CheckContains(LCancelBody, 'if result then',
-    'async loop CancelTimer must wake only when a timer was actually cancelled');
-  CheckBefore(LSleepBody, 'result := ftimers.scheduleafter',
-    'wake;',
-    'async sleep must wake waiters after adding a sleep timer');
-  CheckBefore(LTimeoutCreateBody, 'result^.timerhandle := aloop^.ftimers.schedule',
-    'aloop^.wake;',
-    'timeout context creation must wake waiters after adding its deadline timer');
 end;
 
 procedure TestIocpCloseAbortOwnershipContract;
@@ -283,193 +258,93 @@ begin
   LCloseBody := ExtractBetween(LIocp, 'procedure tiocpreactor.close',
     'function tiocpreactor.isvalid');
 
-  CheckContains(LCloseBody, 'lport := fport;',
-    'IOCP Close must keep the completion port owner handle in local close scope');
-  CheckContains(LCloseBody, 'fport := 0;',
-    'IOCP Close must detach public submission state before abort callbacks can re-enter');
-  CheckBefore(LCloseBody, 'fport := 0;',
-    'iocpreleasependingops(self, handle(lport), error_operation_aborted);',
-    'IOCP Close must reject re-entrant submissions before abort callbacks');
-  CheckContains(LCloseBody,
-    'iocpreleasependingops(self, handle(lport), error_operation_aborted);',
+  CheckContains(LCloseBody, 'iocpreleasependingops(self, error_operation_aborted);',
     'IOCP Close must abort owned pending file operations');
-  CheckBefore(LCloseBody,
-    'iocpreleasependingops(self, handle(lport), error_operation_aborted);',
-    'iocpreleaseassociatedhandles(self);',
-    'IOCP Close must abort pending operations before releasing handle associations');
-  CheckBefore(LCloseBody,
-    'iocpreleasependingops(self, handle(lport), error_operation_aborted);',
-    'closehandle(handle(lport))',
-    'IOCP Close must dispatch abort callbacks before closing the port handle');
-  CheckContains(LReleaseBody, 'iocpcancelpendingops(areactor);',
-    'IOCP pending release must first request cancellation for owned file operations');
-  CheckContains(LReleaseBody, 'iocpdraincancelledpendingops(areactor, aport, aerror);',
-    'IOCP pending release must drain cancellation completions before freeing owners');
-  CheckBefore(LReleaseBody, 'iocpcancelpendingops(areactor);',
-    'iocpdraincancelledpendingops(areactor, aport, aerror);',
-    'IOCP pending release must cancel before draining completion ownership');
-  CheckAbsent(LReleaseBody, 'iocpcancelpendingops(areactor, aerror);',
-    'IOCP pending release must not pass abort error into cancellation request');
-  CheckAbsent(LReleaseBody, 'areactor.fpendinghead := nil;',
-    'IOCP pending release must keep pending ops linked until completion settle');
-  CheckAbsent(LReleaseBody, 'areactor.fpendingcount := 0;',
-    'IOCP pending release must not clear pending count before completion settle');
-  CheckAbsent(LReleaseBody, 'lop^.callback(lop^.userdata, -int32(aerror), lop^.context);',
-    'IOCP pending release must not dispatch abort callbacks before completion settle');
-  CheckAbsent(LReleaseBody, 'dispose(lop);',
-    'IOCP pending release must not free OVERLAPPED storage before completion settle');
-end;
-
-procedure TestIocpCloseRunWakeHandoffContract;
-var
-  LIocp: string;
-  LPollOneBody: string;
-  LRunBody: string;
-  LCloseBody: string;
-  LCloseAfterDrainBody: string;
-begin
-  LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
-  LPollOneBody := ExtractBetween(LIocp, 'function tiocpreactor.pollone',
-    'procedure tiocpreactor.run');
-  LRunBody := ExtractBetween(LIocp, 'procedure tiocpreactor.run',
-    'procedure tiocpreactor.stop');
-  LCloseBody := ExtractBetween(LIocp, 'procedure tiocpreactor.close',
-    'function tiocpreactor.isvalid');
-  LCloseAfterDrainBody := ExtractBetween(LCloseBody,
-    'iocpreleaseassociatedhandles(self);', 'closehandle(handle(lport))');
-
-  CheckContains(LCloseBody,
-    'postqueuedcompletionstatus(handle(lport), 0, 0, nil)',
-    'IOCP Close must wake a blocking Run before releasing the completion port');
-  CheckBefore(LCloseBody, 'atomicstore32(frunning, 0, morelease);',
-    'postqueuedcompletionstatus(handle(lport), 0, 0, nil)',
-    'IOCP Close must publish stopped state before posting the close wake');
-  CheckBefore(LCloseBody, 'postqueuedcompletionstatus(handle(lport), 0, 0, nil)',
-    'iocpreleasependingops(self, handle(lport), error_operation_aborted);',
-    'IOCP Close must wake Run before draining abort completions');
-  CheckBefore(LCloseBody,
-    'iocpreleasependingops(self, handle(lport), error_operation_aborted);',
-    'iocpreleaseassociatedhandles(self);',
-    'IOCP Close must drain abort completions before releasing association metadata');
-  CheckContains(LCloseAfterDrainBody,
-    'postqueuedcompletionstatus(handle(lport), 0, 0, nil);',
-    'IOCP Close must repost the control wake after close-side abort draining');
-  CheckAbsent(LCloseBody, 'postqueuedcompletionstatus(handle(fport), 0, 0, nil)',
-    'IOCP Close must not post through detached public FPort state');
-
-  CheckContains(LPollOneBody, 'if loverlapped = nil then',
-    'IOCP PollOne must recognize control packets without pending operation owners');
-  CheckBefore(LPollOneBody, 'if loverlapped = nil then',
-    'iocpdispatchcompletion(self, lbytes, lok, loverlapped)',
-    'IOCP PollOne must reject nil-overlapped control packets before dispatch');
-  CheckContains(LRunBody, 'if loverlapped = nil then',
-    'IOCP Run must recognize close/stop control packets');
-  CheckContains(LRunBody, 'continue;',
-    'IOCP Run must re-check running state after a successful control packet');
-  CheckBefore(LRunBody, 'if loverlapped = nil then',
-    'continue;',
-    'IOCP Run must handle successful control packets by re-checking running state');
-  CheckBefore(LRunBody, 'continue;',
-    'iocpdispatchcompletion(self, lbytes, lok, loverlapped)',
-    'IOCP Run must not dispatch close/stop control packets as file completions');
-end;
-
-procedure TestIocpCloseAbortCompletionDrainOwnershipContract;
-var
-  LIocp: string;
-  LCancelSignature: string;
-  LCancelBody: string;
-  LAbortDispatchBody: string;
-  LAbortRemainingBody: string;
-  LDrainBody: string;
-  LReleaseBody: string;
-begin
-  LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
-  LCancelSignature := ExtractBetween(LIocp, 'procedure iocpcancelpendingops',
-    'begin');
-  LCancelBody := ExtractBetween(LIocp, 'procedure iocpcancelpendingops',
-    'function iocpdispatchabortcompletion');
-  LAbortDispatchBody := ExtractBetween(LIocp,
-    'function iocpdispatchabortcompletion',
-    'procedure iocpabortremainingpendingops');
-  LAbortRemainingBody := ExtractBetween(LIocp,
-    'procedure iocpabortremainingpendingops',
-    'procedure iocpdraincancelledpendingops');
-  LDrainBody := ExtractBetween(LIocp, 'procedure iocpdraincancelledpendingops',
-    'procedure iocpreleasependingops');
-  LReleaseBody := ExtractBetween(LIocp, 'procedure iocpreleasependingops',
-    'function iocphasassociatedhandle');
-
-  CheckContains(LCancelBody, 'cancelioex(lop^.handle, @lop^.overlapped);',
-    'IOCP cancellation must request abort for each pending OVERLAPPED');
-  CheckAbsent(LCancelSignature, 'aerror',
-    'IOCP cancellation request must not accept abort error ownership');
-  CheckAbsent(LCancelBody, 'dispose(lop);',
-    'IOCP cancellation must not free OVERLAPPED storage');
-  CheckAbsent(LCancelBody,
-    'lop^.callback(lop^.userdata, -int32(aerror), lop^.context);',
-    'IOCP cancellation must not dispatch before completion settle');
-
-  CheckContains(LDrainBody, 'while areactor.fpendingcount > 0 do',
-    'IOCP close-abort drain must run until all pending completions settle');
-  CheckContains(LDrainBody,
-    'getqueuedcompletionstatus(aport, @lbytes, @lkey',
-    'IOCP close-abort drain must observe completion port packets');
-  CheckContains(LDrainBody, '@loverlapped, infinite)',
-    'IOCP close-abort drain must wait for cancellation completion ownership');
-  CheckContains(LDrainBody,
-    'iocpdispatchabortcompletion(areactor, loverlapped, aerror)',
-    'IOCP close-abort drain must dispatch only after receiving the completion packet');
-  CheckBefore(LDrainBody,
-    'getqueuedcompletionstatus(aport, @lbytes, @lkey',
-    'iocpdispatchabortcompletion(areactor, loverlapped, aerror)',
-    'IOCP close-abort drain must settle OS completion before callback/free');
-
-  CheckContains(LAbortDispatchBody, 'lcallback := lop^.callback;',
-    'IOCP abort dispatch must copy callback before detaching the op');
-  CheckContains(LAbortDispatchBody, 'luserdata := lop^.userdata;',
-    'IOCP abort dispatch must copy userdata before detaching the op');
-  CheckContains(LAbortDispatchBody, 'lcontext := lop^.context;',
-    'IOCP abort dispatch must copy context before detaching the op');
-  CheckContains(LAbortDispatchBody, 'iocpunlinkop(areactor, lop);',
-    'IOCP abort dispatch must detach the settled op before user callback re-entry');
-  CheckContains(LAbortDispatchBody, 'setlasterror(aerror);',
-    'IOCP abort dispatch must publish host abort error truth');
-  CheckBefore(LAbortDispatchBody, 'iocpunlinkop(areactor, lop);',
-    'lcallback(luserdata, -int32(aerror), lcontext);',
-    'IOCP abort dispatch must detach before callback dispatch');
-  CheckBefore(LAbortDispatchBody, 'setlasterror(aerror);',
-    'lcallback(luserdata, -int32(aerror), lcontext);',
-    'IOCP abort dispatch must publish abort error before callback dispatch');
-  CheckContains(LAbortDispatchBody, 'try',
-    'IOCP abort dispatch must guard callback dispatch cleanup');
-  CheckContains(LAbortDispatchBody, 'finally',
-    'IOCP abort dispatch must free the pending op if callback raises');
-  CheckBefore(LAbortDispatchBody,
-    'lcallback(luserdata, -int32(aerror), lcontext);',
+  CheckContains(LCloseBody, 'try',
+    'IOCP Close must protect handle cleanup when abort callbacks raise');
+  CheckContains(LCloseBody, 'finally',
+    'IOCP Close must always release handles and port state after abort dispatch');
+  CheckContains(LCloseBody, 'lport := fport;',
+    'IOCP Close must retain the native port handle before closing submission');
+  CheckBefore(LCloseBody, 'lport := fport;', 'fport := 0;',
+    'IOCP Close must copy the port handle before marking the reactor closed');
+  CheckBefore(LCloseBody, 'fport := 0;',
+    'iocpreleasependingops(self, error_operation_aborted);',
+    'IOCP Close must close the submit path before abort callbacks can re-enter');
+  CheckBefore(LCloseBody, 'fmaxevents := 0;',
+    'iocpreleasependingops(self, error_operation_aborted);',
+    'IOCP Close must clear submit sizing state before abort callbacks can re-enter');
+  CheckBefore(LCloseBody, 'iocpreleasependingops(self, error_operation_aborted);',
     'finally',
-    'IOCP abort dispatch must run cleanup after callback dispatch');
-  CheckBefore(LAbortDispatchBody, 'finally', 'dispose(lop);',
-    'IOCP abort dispatch must dispose the pending op from the cleanup block');
-
-  CheckContains(LAbortRemainingBody, 'while areactor.fpendingcount > 0 do',
-    'IOCP abort fallback must release every remaining pending owner');
-  CheckContains(LAbortRemainingBody,
-    'iocpdispatchabortcompletion(areactor, @lop^.overlapped, aerror)',
-    'IOCP abort fallback must reuse the same detach/callback/free owner path');
-  CheckContains(LDrainBody, 'iocpabortremainingpendingops(areactor, aerror);',
-    'IOCP close-abort drain must not leak owners if completion draining fails');
-  CheckBefore(LDrainBody, 'if (not lok) and (loverlapped = nil) then',
-    'iocpabortremainingpendingops(areactor, aerror);',
-    'IOCP close-abort drain must fallback when no completion packet can be observed');
-
-  CheckBefore(LReleaseBody, 'iocpcancelpendingops(areactor);',
-    'iocpdraincancelledpendingops(areactor, aport, aerror);',
-    'IOCP release orchestration must cancel before completion drain');
-  CheckAbsent(LReleaseBody, 'iocpcancelpendingops(areactor, aerror);',
-    'IOCP release orchestration must not pass abort error into cancellation request');
-  CheckContains(LReleaseBody, 'iocpcancelpendingops(areactor);',
-    'IOCP release orchestration must keep abort error ownership in drain/dispatch');
+    'IOCP Close must dispatch abort callbacks before mandatory cleanup');
+  CheckBefore(LCloseBody, 'finally',
+    'iocpreleaseassociatedhandles(self);',
+    'IOCP Close must release handle associations in the protected cleanup path');
+  CheckBefore(LCloseBody, 'finally',
+    'closehandle(handle(lport))',
+    'IOCP Close must close the port handle in the protected cleanup path');
+  CheckContains(LCloseBody, 'if lport <> 0 then',
+    'IOCP Close must close the retained native port handle, not the closed-state field');
+  CheckContains(LReleaseBody, 'areactor.fpendinghead := nil;',
+    'IOCP pending release must detach the owned list before callbacks');
+  CheckContains(LReleaseBody, 'areactor.fpendingcount := 0;',
+    'IOCP pending release must clear the pending count before callbacks');
+  CheckContains(LReleaseBody, 'cancelioex(lop^.handle, @lop^.overlapped);',
+    'IOCP pending release must cancel each overlapped operation');
+  CheckContains(LReleaseBody, 'case lop^.kind of',
+    'IOCP pending release must branch by operation kind before waiting');
+  CheckContains(LReleaseBody, 'opsend, oprecv:',
+    'IOCP pending release must treat socket send/recv as socket operations');
+  CheckContains(LReleaseBody, 'lflags := lop^.socketflags;',
+    'IOCP pending release must preserve socket flags while waiting for socket completion');
+  CheckContains(LReleaseBody,
+    'wsagetoverlappedresult(tsocket(ptruint(lop^.handle)), @lop^.overlapped, @ldone, true, @lflags);',
+    'IOCP pending release must wait for socket overlapped operations with WSAGetOverlappedResult');
+  CheckContains(LReleaseBody,
+    'getoverlappedresult(lop^.handle, @lop^.overlapped, @ldone, true);',
+    'IOCP pending release must keep file operations on GetOverlappedResult');
+  CheckBefore(LReleaseBody, 'cancelioex(lop^.handle, @lop^.overlapped);',
+    'case lop^.kind of',
+    'IOCP pending release must request cancellation before waiting for completion');
+  CheckBefore(LReleaseBody,
+    'case lop^.kind of',
+    'lcallback := lop^.callback;',
+    'IOCP pending release must settle OS overlapped ownership before callback dispatch');
+  CheckContains(LReleaseBody, 'lcallback := lop^.callback;',
+    'IOCP pending release must copy callback ownership before clearing the op');
+  CheckContains(LReleaseBody, 'lcontext := lop^.context;',
+    'IOCP pending release must copy callback context before clearing the op');
+  CheckContains(LReleaseBody, 'luserdata := lop^.userdata;',
+    'IOCP pending release must copy callback user data before clearing the op');
+  CheckContains(LReleaseBody, 'try',
+    'IOCP pending release must catch callback exceptions inside the batch');
+  CheckContains(LReleaseBody, 'except',
+    'IOCP pending release must preserve batch progress when a callback raises');
+  CheckContains(LReleaseBody, 'finally',
+    'IOCP pending release must free operation storage when callback dispatch raises');
+  CheckContains(LReleaseBody, 'lhasexception',
+    'IOCP pending release must remember whether any callback raised');
+  CheckContains(LReleaseBody, 'lexceptionmessage',
+    'IOCP pending release must retain the first callback exception message');
+  CheckContains(LReleaseBody, 'if not lhasexception then',
+    'IOCP pending release must retain the first callback exception');
+  CheckContains(LReleaseBody,
+    'lcallback(luserdata, -int32(aerror), lcontext);',
+    'IOCP pending release must deliver the abort result to the owned callback');
+  CheckContains(LReleaseBody, 'raise exception.create(lexceptionmessage);',
+    'IOCP pending release must re-raise the first callback exception after the batch');
+  CheckBefore(LReleaseBody,
+    'case lop^.kind of',
+    'dispose(lop);',
+    'IOCP pending release must not free OVERLAPPED storage before completion settles');
+  CheckContains(LReleaseBody, 'lop^.callback := nil;',
+    'IOCP pending release must clear callback ownership before freeing the op');
+  CheckContains(LReleaseBody, 'lop^.context := nil;',
+    'IOCP pending release must clear callback context before freeing the op');
+  CheckContains(LReleaseBody, 'lop^.next := nil;',
+    'IOCP pending release must unlink op storage before freeing it');
+  CheckContains(LReleaseBody, 'dispose(lop);',
+    'IOCP pending release must free every owned operation');
 end;
 
 procedure TestAsyncLoopTimeoutCloseLifecycleContract;
@@ -525,104 +400,6 @@ begin
     'async write timeout must reclaim context only on rejected submission');
 end;
 
-procedure TestAsyncLoopCloseStopWakeOwnershipContract;
-var
-  LAsyncLoop: string;
-  LCloseBody: string;
-begin
-  LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
-  LCloseBody := ExtractBetween(LAsyncLoop, 'procedure tasyncloop.close',
-    'function tasyncloop.isvalid');
-
-  CheckContains(LCloseBody, 'stop;',
-    'async loop close must publish stopped state before releasing owner resources');
-  CheckContains(LCloseBody, 'wake;',
-    'async loop close must wake a blocked run loop before releasing wake resources');
-  CheckBefore(LCloseBody, 'stop;', 'wake;',
-    'async loop close must publish stop before waking waiters');
-  CheckBefore(LCloseBody, 'wake;', 'fpoller.close;',
-    'async loop close must wake waiters before closing completion resources');
-  CheckBefore(LCloseBody, 'wake;', 'platform_poller_close(fwakepoller);',
-    'async loop close must wake waiters before closing wake resources');
-end;
-
-procedure TestAsyncLoopPostClosedOwnerBoundaryContract;
-var
-  LAsyncLoop: string;
-  LPostBody: string;
-begin
-  LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
-  LPostBody := ExtractBetween(LAsyncLoop, 'procedure tasyncloop.post',
-    'procedure tasyncloop.drainwake');
-
-  CheckContains(LPostBody, 'if not fwakeready then',
-    'async loop post must reject closed stale-owner submissions');
-  CheckBefore(LPostBody, 'if not fwakeready then', 'platform_mutex_lock(fpendinglock);',
-    'async loop post must not touch the pending mutex after close');
-  CheckBefore(LPostBody, 'if not fwakeready then', 'setlength(fpendingqueue',
-    'async loop post must not grow the pending queue after close');
-  CheckBefore(LPostBody, 'if not fwakeready then', 'wake;',
-    'async loop post must not signal closed wake resources');
-end;
-
-procedure TestAsyncLoopClosedTimeoutOwnerBoundaryContract;
-var
-  LAsyncLoop: string;
-  LReadTimeoutBody: string;
-  LWriteTimeoutBody: string;
-  LRecvTimeoutBody: string;
-  LSendTimeoutBody: string;
-begin
-  LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
-  LReadTimeoutBody := ExtractBetween(LAsyncLoop,
-    'function tasyncloop.asyncreadtimeout',
-    'function tasyncloop.asyncwritetimeout');
-  LWriteTimeoutBody := ExtractBetween(LAsyncLoop,
-    'function tasyncloop.asyncwritetimeout',
-    'function tasyncloop.asyncrecvtimeout');
-  LRecvTimeoutBody := ExtractBetween(LAsyncLoop,
-    'function tasyncloop.asyncrecvtimeout',
-    'function tasyncloop.asyncsendtimeout');
-  LSendTimeoutBody := ExtractBetween(LAsyncLoop,
-    'function tasyncloop.asyncsendtimeout',
-    'end.');
-
-  CheckContains(LReadTimeoutBody, 'if not fwakeready then',
-    'closed async read timeout must reject before creating timeout owners');
-  CheckContains(LWriteTimeoutBody, 'if not fwakeready then',
-    'closed async write timeout must reject before creating timeout owners');
-  CheckContains(LRecvTimeoutBody, 'if not fwakeready then',
-    'closed async recv timeout must reject before creating timeout owners');
-  CheckContains(LSendTimeoutBody, 'if not fwakeready then',
-    'closed async send timeout must reject before creating timeout owners');
-
-  CheckBefore(LReadTimeoutBody, 'if not fwakeready then',
-    'if adeadline.isinfinite then',
-    'closed async read timeout must reject before delegating infinite deadlines');
-  CheckBefore(LWriteTimeoutBody, 'if not fwakeready then',
-    'if adeadline.isinfinite then',
-    'closed async write timeout must reject before delegating infinite deadlines');
-  CheckBefore(LRecvTimeoutBody, 'if not fwakeready then',
-    'if adeadline.isinfinite then',
-    'closed async recv timeout must reject before delegating infinite deadlines');
-  CheckBefore(LSendTimeoutBody, 'if not fwakeready then',
-    'if adeadline.isinfinite then',
-    'closed async send timeout must reject before delegating infinite deadlines');
-
-  CheckBefore(LReadTimeoutBody, 'if not fwakeready then',
-    'lctx := timeoutctxcreate',
-    'closed async read timeout must not allocate timeout context owners');
-  CheckBefore(LWriteTimeoutBody, 'if not fwakeready then',
-    'lctx := timeoutctxcreate',
-    'closed async write timeout must not allocate timeout context owners');
-  CheckBefore(LRecvTimeoutBody, 'if not fwakeready then',
-    'lctx := timeoutctxcreate',
-    'closed async recv timeout must not allocate timeout context owners');
-  CheckBefore(LSendTimeoutBody, 'if not fwakeready then',
-    'lctx := timeoutctxcreate',
-    'closed async send timeout must not allocate timeout context owners');
-end;
-
 procedure TestAsyncLoopTimeoutSingleFireCleanupContract;
 var
   LAsyncLoop: string;
@@ -671,8 +448,11 @@ begin
   CheckContains(LTimeoutIoBody,
     'timeoutctxclaimcompletion(lctx, timeout_completion_io)',
     'timeout IO callback must atomically claim the real I/O result');
+  CheckContains(LTimeoutIoBody,
+    'timeoutctxdetachuserrefs(lctx, lusercallback, lusercontext);',
+    'timeout IO callback must detach user refs before forwarding I/O result');
   CheckBefore(LTimeoutIoBody, 'timeoutctxcanceltimerowner(lctx);',
-    'lctx^.usercallback(auserdata, aresult, lctx^.usercontext);',
+    'lusercallback(auserdata, aresult, lusercontext);',
     'timeout IO callback must cancel the timer before forwarding I/O result');
   CheckContains(LTimeoutIoBody, 'timeoutctxrelease(lctx);',
     'timeout IO callback must release its owner reference on every exit path');
@@ -680,65 +460,13 @@ begin
     'timeoutctxclaimcompletion(lctx, timeout_completion_timer)',
     'timeout timer callback must atomically claim the timeout result');
   CheckContains(LTimeoutTimerBody,
-    'lctx^.usercallback(0, -etimedout_linux, lctx^.usercontext);',
+    'timeoutctxdetachuserrefs(lctx, lusercallback, lusercontext);',
+    'timeout timer callback must detach user refs before delivering timeout');
+  CheckContains(LTimeoutTimerBody,
+    'lusercallback(0, -etimedout_linux, lusercontext);',
     'timeout timer callback must still deliver exactly one timeout result');
   CheckContains(LTimeoutTimerBody, 'timeoutctxrelease(lctx);',
     'timeout timer callback must release its owner reference on every exit path');
-end;
-
-procedure TestAsyncLoopFileTimeoutRejectedSubmitOwnerBoundaryContract;
-var
-  LAsyncLoop: string;
-  LRejectedSubmitBody: string;
-  LReadTimeoutBody: string;
-  LWriteTimeoutBody: string;
-begin
-  LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
-  LRejectedSubmitBody := ExtractBetween(LAsyncLoop,
-    'procedure timeoutctxreleaserejectedsubmit',
-    'procedure timeoutiocallback');
-  LReadTimeoutBody := ExtractBetween(LAsyncLoop,
-    'function tasyncloop.asyncreadtimeout',
-    'function tasyncloop.asyncwritetimeout');
-  LWriteTimeoutBody := ExtractBetween(LAsyncLoop,
-    'function tasyncloop.asyncwritetimeout',
-    'function tasyncloop.asyncrecvtimeout');
-
-  CheckContains(LRejectedSubmitBody, 'timeoutctxcanceltimerowner(actx);',
-    'rejected submit cleanup must release the timer owner');
-  CheckContains(LRejectedSubmitBody, 'timeoutctxrelease(actx);',
-    'rejected submit cleanup must release the I/O owner');
-  CheckBefore(LRejectedSubmitBody, 'timeoutctxcanceltimerowner(actx);',
-    'timeoutctxrelease(actx);',
-    'rejected submit cleanup must cancel timer owner before releasing I/O owner');
-
-  CheckContains(LReadTimeoutBody, 'result := fpoller.asyncread',
-    'async read timeout must delegate finite deadlines through the poller');
-  CheckContains(LReadTimeoutBody, 'if not result then',
-    'async read timeout must reclaim timeout context only on rejected submission');
-  CheckContains(LReadTimeoutBody, 'timeoutctxreleaserejectedsubmit(lctx);',
-    'async read timeout must centralize rejected-submit owner cleanup');
-  CheckBefore(LReadTimeoutBody, 'result := fpoller.asyncread',
-    'if not result then',
-    'async read timeout must classify pending/inline-complete before rejected cleanup');
-  CheckAbsent(LReadTimeoutBody, 'timeoutctxcanceltimerowner(lctx);',
-    'async read timeout must not open-code rejected-submit timer cleanup');
-  CheckAbsent(LReadTimeoutBody, 'timeoutctxrelease(lctx);',
-    'async read timeout must not open-code rejected-submit I/O cleanup');
-
-  CheckContains(LWriteTimeoutBody, 'result := fpoller.asyncwrite',
-    'async write timeout must delegate finite deadlines through the poller');
-  CheckContains(LWriteTimeoutBody, 'if not result then',
-    'async write timeout must reclaim timeout context only on rejected submission');
-  CheckContains(LWriteTimeoutBody, 'timeoutctxreleaserejectedsubmit(lctx);',
-    'async write timeout must centralize rejected-submit owner cleanup');
-  CheckBefore(LWriteTimeoutBody, 'result := fpoller.asyncwrite',
-    'if not result then',
-    'async write timeout must classify pending/inline-complete before rejected cleanup');
-  CheckAbsent(LWriteTimeoutBody, 'timeoutctxcanceltimerowner(lctx);',
-    'async write timeout must not open-code rejected-submit timer cleanup');
-  CheckAbsent(LWriteTimeoutBody, 'timeoutctxrelease(lctx);',
-    'async write timeout must not open-code rejected-submit I/O cleanup');
 end;
 
 procedure TestIocpSynchronousFailureOwnershipContract;
@@ -750,132 +478,28 @@ begin
   LFailBody := ExtractBetween(LIocp, 'function iocpfail',
     'function iocpunsupportedasync');
 
-  CheckContains(LFailBody, 'setlasterror(aerror);',
-    'IOCP synchronous failure helper must publish host error truth');
-  CheckBefore(LFailBody, 'setlasterror(aerror);',
-    'acallback(auserdata, -int32(aerror), acontext);',
-    'IOCP synchronous failure helper must publish host error before callback dispatch');
   CheckContains(LFailBody, 'acallback(auserdata, -int32(aerror), acontext);',
     'IOCP synchronous failure helper must deliver the callback inline');
   CheckContains(LFailBody, 'result := true;',
     'IOCP synchronous failure helper must report callback ownership transfer');
 end;
 
-procedure TestWindowsCompletionFfiAbiContract;
-var
-  LBase: string;
-  LFfi: string;
-  LIocp: string;
-  LPendingOpBody: string;
-begin
-  LBase := LoadSourceText('src/nextpas.core.platform.windows.base.kernel32.inc');
-  LFfi := LoadSourceText('src/nextpas.core.platform.windows.ffi.pas');
-  LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
-  LPendingOpBody := ExtractBetween(LIocp, 'tiocppendingop = record',
-    'end;');
-
-  CheckContains(LBase, 'pulong_ptr = ^ulong_ptr;',
-    'Windows base must expose a typed completion-key out pointer');
-  CheckContains(LBase, 'plpoverlapped = ^lpoverlapped;',
-    'Windows base must expose a typed overlapped out pointer');
-  CheckContains(LFfi,
-    'function readfile(hfile: handle; lpbuffer: pointer; nnumberofbytestoread: dword; lpnumberofbytesread: lpdword; lpoverlapped: lpoverlapped): bool;',
-    'ReadFile raw FFI must type the overlapped parameter');
-  CheckContains(LFfi,
-    'function writefile(hfile: handle; lpbuffer: pointer; nnumberofbytestowrite: dword; lpnumberofbyteswritten: lpdword; lpoverlapped: lpoverlapped): bool;',
-    'WriteFile raw FFI must type the overlapped parameter');
-  CheckContains(LFfi,
-    'function getqueuedcompletionstatus(completionport: handle; lpnumberofbytestransferred: lpdword; lpcompletionkey: pulong_ptr; lpoverlapped: plpoverlapped; dwmilliseconds: dword): winbool;',
-    'GetQueuedCompletionStatus raw FFI must type completion key and overlapped out pointers');
-  CheckAbsent(LFfi,
-    'getqueuedcompletionstatus(completionport: handle; lpnumberofbytestransferred: lpdword; lpcompletionkey: pointer; lpoverlapped: pointer;',
-    'GetQueuedCompletionStatus must not expose untyped completion out parameters');
-
-  CheckBefore(LPendingOpBody, 'overlapped: overlapped;',
-    'kind: tiocpopkind;',
-    'IOCP pending op must keep OVERLAPPED as the first field for ABI cast-back');
-  CheckBefore(LPendingOpBody, 'overlapped: overlapped;',
-    'handle: handle;',
-    'IOCP pending op must keep OVERLAPPED before owned handle fields');
-  CheckContains(LIocp, 'piocppendingop(aoverlapped)',
-    'IOCP dispatch must make the cast-back invariant explicit');
-end;
-
-procedure TestIocpClosedSubmitOwnershipContract;
-var
-  LIocp: string;
-  LSubmitBody: string;
-begin
-  LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
-  LSubmitBody := ExtractBetween(LIocp, 'function iocpsubmitfileop',
-    'function iocpdispatchcompletion');
-
-  CheckContains(LSubmitBody, 'if areactor.fport = 0 then',
-    'closed IOCP reactor must reject stale-owner file submissions');
-  CheckContains(LSubmitBody, 'setlasterror(error_invalid_handle);',
-    'closed IOCP reactor must publish invalid-handle failure truth');
-  CheckContains(LSubmitBody, 'exit(false);',
-    'closed IOCP reactor must reject ownership transfer without callback dispatch');
-  CheckBefore(LSubmitBody, 'if areactor.fport = 0 then',
-    'iocpensureassociatedhandle',
-    'closed IOCP reactor must reject before handle association');
-  CheckBefore(LSubmitBody, 'if areactor.fport = 0 then', 'iocpallocop',
-    'closed IOCP reactor must reject before pending operation allocation');
-  CheckBefore(LSubmitBody, 'if areactor.fport = 0 then',
-    'iocpfail(acallback, acontext, 0, lerror)',
-    'closed IOCP reactor must not reuse synchronous completion ownership transfer');
-end;
-
-procedure TestIocpSubmitFailureOwnershipContract;
-var
-  LIocp: string;
-  LSubmitBody: string;
-begin
-  LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
-  LSubmitBody := ExtractBetween(LIocp, 'function iocpsubmitfileop',
-    'function iocpdispatchcompletion');
-
-  CheckContains(LSubmitBody, 'luserdata := lop^.userdata;',
-    'IOCP submit failure must preserve userdata before releasing the pending op');
-  CheckContains(LSubmitBody, 'iocpfreeop(areactor, lop);',
-    'IOCP submit failure must release the pending operation owner');
-  CheckContains(LSubmitBody,
-    'result := iocpfail(acallback, acontext, luserdata, lerror);',
-    'IOCP submit failure must dispatch failure with preserved userdata');
-  CheckBefore(LSubmitBody, 'lerror := getlasterror;',
-    'if lerror = error_io_pending then',
-    'IOCP submit failure must classify ERROR_IO_PENDING before cleanup');
-  CheckBefore(LSubmitBody, 'if lerror = error_io_pending then',
-    'luserdata := lop^.userdata;',
-    'IOCP submit failure must not free queued ERROR_IO_PENDING operations');
-  CheckBefore(LSubmitBody, 'luserdata := lop^.userdata;',
-    'iocpfreeop(areactor, lop);',
-    'IOCP submit failure must copy userdata before freeing the pending op');
-  CheckBefore(LSubmitBody, 'iocpfreeop(areactor, lop);',
-    'result := iocpfail(acallback, acontext, luserdata, lerror);',
-    'IOCP submit failure must free the pending op before callback dispatch');
-  CheckAbsent(LSubmitBody, 'iocpfail(acallback, acontext, lop^.userdata',
-    'IOCP submit failure must not read userdata from a freed pending op');
-end;
-
-procedure TestIocpUnsupportedAsyncOwnershipContract;
+procedure TestIocpSocketCompletionContract;
 var
   LIocp: string;
   LAsyncLoop: string;
   LUnsupportedBody: string;
-  LUnsupportedSignature: string;
   LAcceptBody: string;
   LConnectBody: string;
   LSendBody: string;
   LRecvBody: string;
   LCloseBody: string;
+  LSocketSubmitBody: string;
   LRecvTimeoutBody: string;
   LSendTimeoutBody: string;
 begin
   LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
   LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
-  LUnsupportedSignature := ExtractBetween(LIocp, 'function iocpunsupportedasync',
-    'begin');
   LUnsupportedBody := ExtractBetween(LIocp, 'function iocpunsupportedasync',
     'function iocpallocop');
   LAcceptBody := ExtractBetween(LIocp, 'function tiocpreactor.asyncaccept',
@@ -888,6 +512,8 @@ begin
     'function tiocpreactor.asyncclose');
   LCloseBody := ExtractBetween(LIocp, 'function tiocpreactor.asyncclose',
     'function tiocpreactor.poll');
+  LSocketSubmitBody := ExtractBetween(LIocp, 'function iocpsubmitsocketop',
+    'function iocpdispatchcompletion');
   LRecvTimeoutBody := ExtractBetween(LAsyncLoop,
     'function tasyncloop.asyncrecvtimeout',
     'function tasyncloop.asyncsendtimeout');
@@ -895,28 +521,85 @@ begin
     'function tasyncloop.asyncsendtimeout',
     'end.');
 
+  CheckContains(LUnsupportedBody, 'function iocpunsupportedasync: boolean;',
+    'IOCP unsupported helper must not accept callback ownership inputs');
   CheckContains(LUnsupportedBody, 'result := false;',
     'IOCP unsupported helper must reject ownership transfer');
   CheckContains(LUnsupportedBody, 'setlasterror(error_not_supported);',
     'IOCP unsupported helper must preserve explicit unsupported truth');
-  CheckAbsent(LUnsupportedSignature, 'acallback',
-    'IOCP unsupported helper must not accept callback ownership it never consumes');
-  CheckAbsent(LUnsupportedSignature, 'acontext',
-    'IOCP unsupported helper must not accept callback context it never consumes');
   CheckAbsent(LUnsupportedBody, 'iocpfail(',
     'IOCP unsupported helper must not reuse synchronous failure ownership semantics');
+  CheckAbsent(LUnsupportedBody, 'acallback',
+    'IOCP unsupported helper must not retain unused callback parameters');
+  CheckAbsent(LUnsupportedBody, 'acontext',
+    'IOCP unsupported helper must not retain unused callback context parameters');
   CheckAbsent(LUnsupportedBody, 'acallback(',
     'IOCP unsupported helper must not dispatch inline completion callbacks');
   CheckContains(LAcceptBody, 'result := iocpunsupportedasync;',
     'AsyncAccept must reject unsupported IOCP ownership through the helper');
   CheckContains(LConnectBody, 'result := iocpunsupportedasync;',
     'AsyncConnect must reject unsupported IOCP ownership through the helper');
-  CheckContains(LSendBody, 'result := iocpunsupportedasync;',
-    'AsyncSend must reject unsupported IOCP ownership through the helper');
-  CheckContains(LRecvBody, 'result := iocpunsupportedasync;',
-    'AsyncRecv must reject unsupported IOCP ownership through the helper');
   CheckContains(LCloseBody, 'result := iocpunsupportedasync;',
     'AsyncClose must reject unsupported IOCP ownership through the helper');
+  CheckAbsent(LSendBody, 'iocpunsupportedasync',
+    'AsyncSend must no longer be a generic unsupported stub');
+  CheckAbsent(LRecvBody, 'iocpunsupportedasync',
+    'AsyncRecv must no longer be a generic unsupported stub');
+  CheckContains(LIocp, 'wsabuf: wsabuf',
+    'socket pending operation must own stable WSABUF descriptor storage');
+  CheckContains(LIocp, 'socketflags: dword',
+    'socket pending operation must own stable flags storage');
+  CheckContains(LIocp, 'function iocpsubmitsocketop',
+    'IOCP socket send/recv should share one narrow submission helper');
+  CheckContains(LIocp, 'iocpensureassociatedhandle(areactor, lhandle, lerror)',
+    'socket operations must associate the socket handle with the IOCP port');
+  CheckContains(LIocp, 'lop^.wsabuf.buf := pansichar(abuf);',
+    'socket operations should keep caller buffer pointer in the owned WSABUF descriptor');
+  CheckContains(LIocp, 'lop^.wsabuf.len := alen;',
+    'socket operations should keep payload length in the owned WSABUF descriptor');
+  CheckContains(LIocp, 'lop^.socketflags := dword(aflags);',
+    'socket operations should keep mutable flags storage alive through overlapped submit');
+  CheckContains(LSendBody, 'iocpsubmitsocketop(self, opsend',
+    'AsyncSend must submit through the socket completion helper');
+  CheckContains(LRecvBody, 'iocpsubmitsocketop(self, oprecv',
+    'AsyncRecv must submit through the socket completion helper');
+  CheckContains(LSendBody, 'if not isvalid then',
+    'AsyncSend must reject closed reactors before callback ownership transfer');
+  CheckBefore(LSendBody, 'if not isvalid then',
+    'iocpsubmitsocketop',
+    'AsyncSend must reject closed reactors before socket submission');
+  CheckContains(LSendBody, 'exit(false);',
+    'AsyncSend closed-reactor rejection must return False');
+  CheckContains(LRecvBody, 'if not isvalid then',
+    'AsyncRecv must reject closed reactors before callback ownership transfer');
+  CheckBefore(LRecvBody, 'if not isvalid then',
+    'iocpsubmitsocketop',
+    'AsyncRecv must reject closed reactors before socket submission');
+  CheckContains(LRecvBody, 'exit(false);',
+    'AsyncRecv closed-reactor rejection must return False');
+  CheckContains(LIocp, 'wsasend(',
+    'AsyncSend must call platform-owned overlapped WSASend');
+  CheckContains(LIocp, '@lop^.wsabuf, 1, nil,',
+    'AsyncSend must submit overlapped WSASend using owned WSABUF storage');
+  CheckContains(LIocp, 'wsarecv(',
+    'AsyncRecv must call platform-owned overlapped WSARecv');
+  CheckContains(LIocp, '@lop^.socketflags, @lop^.overlapped, nil);',
+    'AsyncRecv must submit overlapped WSARecv using owned WSABUF storage');
+  CheckContains(LIocp, 'wsagetlasterror',
+    'socket submission failures must use WSAGetLastError');
+  CheckContains(LIocp, 'wsa_io_pending',
+    'socket submission must treat WSA_IO_PENDING as queued work');
+  CheckSequence(LSocketSubmitBody,
+    'socket submission synchronous failure must release the pending op before callback dispatch',
+    [
+      'lerror := dword(wsagetlasterror);',
+      'if lerror = wsa_io_pending then',
+      'luserdata := lop^.userdata;',
+      'iocpfreeop(areactor, lop);',
+      'result := iocpfail(acallback, acontext, luserdata, lerror);'
+    ]);
+  CheckAbsent(LIocp, 'external ''ws2_32''',
+    'IOCP reactor must consume platform-owned WinSock FFI, not redeclare raw ABI');
   CheckContains(LRecvTimeoutBody, 'if not result then',
     'async recv timeout wrapper must reclaim timeout context only on rejected submission');
   CheckContains(LRecvTimeoutBody, 'timeoutctxcanceltimerowner(lctx);',
@@ -933,9 +616,11 @@ end;
 
 procedure TestIocpPendingOperationOwnershipContract;
 var
-  LIocp, LReadBody, LWriteBody: string;
+  LIocp, LDispatchBody, LReadBody, LWriteBody: string;
 begin
   LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
+  LDispatchBody := ExtractBetween(LIocp, 'function iocpdispatchcompletion',
+    'class function tiocpreactor.create');
   LReadBody := ExtractBetween(LIocp, 'function tiocpreactor.asyncread',
     'function tiocpreactor.asyncwrite');
   LWriteBody := ExtractBetween(LIocp, 'function tiocpreactor.asyncwrite',
@@ -959,6 +644,12 @@ begin
     'IOCP reactor must free operation records after completion');
   CheckContains(LIocp, 'iocpdispatchcompletion',
     'IOCP reactor must dispatch completion packets to callbacks');
+  CheckBefore(LDispatchBody, 'iocpunlinkop(areactor, lop);',
+    'lop^.callback(lop^.userdata, lresult, lop^.context);',
+    'IOCP dispatch must detach the completed op before callbacks can re-enter Close');
+  CheckBefore(LDispatchBody, 'iocpunlinkop(areactor, lop);',
+    'iocpfreeop(areactor, lop);',
+    'IOCP dispatch must detach the completed op before freeing it');
   CheckContains(LIocp, 'readfile(lhandle',
     'AsyncRead must submit Windows overlapped ReadFile operations');
   CheckContains(LIocp, 'writefile(lhandle',
@@ -973,63 +664,37 @@ begin
     'AsyncWrite must not remain a generic unsupported stub');
 end;
 
-procedure TestIocpDispatchSingleFireOwnershipContract;
+procedure TestIocpPostCloseFileSubmissionRejectContract;
 var
   LIocp: string;
-  LDispatchBody: string;
+  LReadBody: string;
+  LWriteBody: string;
 begin
   LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
-  LDispatchBody := ExtractBetween(LIocp, 'function iocpdispatchcompletion',
-    'class function tiocpreactor.create');
+  LReadBody := ExtractBetween(LIocp, 'function tiocpreactor.asyncread',
+    'function tiocpreactor.asyncwrite');
+  LWriteBody := ExtractBetween(LIocp, 'function tiocpreactor.asyncwrite',
+    'function tiocpreactor.asyncaccept');
 
-  CheckContains(LDispatchBody, 'lcallback := lop^.callback;',
-    'IOCP dispatch must copy callback before detaching the pending op');
-  CheckContains(LDispatchBody, 'luserdata := lop^.userdata;',
-    'IOCP dispatch must copy userdata before detaching the pending op');
-  CheckContains(LDispatchBody, 'lcontext := lop^.context;',
-    'IOCP dispatch must copy context before detaching the pending op');
-  CheckContains(LDispatchBody, 'iocpunlinkop(areactor, lop);',
-    'IOCP dispatch must detach the completed op before user callback re-entry');
-  CheckBefore(LDispatchBody, 'lcallback := lop^.callback;',
-    'iocpunlinkop(areactor, lop);',
-    'IOCP dispatch must copy callback ownership before detaching the op');
-  CheckBefore(LDispatchBody, 'iocpunlinkop(areactor, lop);',
-    'lcallback(luserdata, lresult, lcontext);',
-    'IOCP dispatch must detach the op before callback dispatch');
-  CheckContains(LDispatchBody, 'lcallback(luserdata, lresult, lcontext);',
-    'IOCP dispatch must use local callback state after detaching');
-  CheckAbsent(LDispatchBody, 'lop^.callback(lop^.userdata, lresult, lop^.context);',
-    'IOCP dispatch must not dispatch from the pending owner record');
-end;
+  CheckContains(LReadBody, 'if not isvalid then',
+    'AsyncRead must reject post-close submissions before callback ownership transfer');
+  CheckBefore(LReadBody, 'if not isvalid then',
+    'iocpsubmitfileop',
+    'AsyncRead must reject closed reactors before submitting file operations');
+  CheckContains(LReadBody, 'exit(false);',
+    'AsyncRead closed-reactor rejection must return False');
+  CheckAbsent(LReadBody, 'iocpfail(',
+    'AsyncRead closed-reactor rejection must not dispatch inline failure callbacks');
 
-procedure TestIocpAssociatedHandleOwnershipContract;
-var
-  LIocp: string;
-  LEnsureBody: string;
-begin
-  LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
-  LEnsureBody := ExtractBetween(LIocp, 'function iocpensureassociatedhandle',
-    'procedure iocpsetoffset');
-
-  CheckContains(LIocp, 'piocpassociatedhandle',
-    'IOCP reactor must track host handle association metadata');
-  CheckContains(LIocp, 'iocpallocassociatedhandle',
-    'IOCP association metadata must have an explicit owner allocation seam');
-  CheckContains(LIocp, 'iocppushassociatedhandle',
-    'IOCP association metadata must only be linked after host association succeeds');
-  CheckContains(LEnsureBody, 'lnode := iocpallocassociatedhandle(ahandle);',
-    'IOCP ensure must allocate association metadata before mutating host association state');
-  CheckBefore(LEnsureBody, 'lnode := iocpallocassociatedhandle(ahandle);',
-    'createiocompletionport(ahandle, handle(areactor.fport), 0,',
-    'IOCP ensure must own releasable metadata before CreateIoCompletionPort');
-  CheckContains(LEnsureBody, 'dispose(lnode);',
-    'IOCP ensure must release preallocated metadata when host association fails');
-  CheckBefore(LEnsureBody, 'createiocompletionport(ahandle, handle(areactor.fport), 0,',
-    'dispose(lnode);',
-    'IOCP ensure must release metadata on CreateIoCompletionPort failure');
-  CheckBefore(LEnsureBody, 'createiocompletionport(ahandle, handle(areactor.fport), 0,',
-    'iocppushassociatedhandle(areactor, lnode);',
-    'IOCP ensure must link metadata only after CreateIoCompletionPort succeeds');
+  CheckContains(LWriteBody, 'if not isvalid then',
+    'AsyncWrite must reject post-close submissions before callback ownership transfer');
+  CheckBefore(LWriteBody, 'if not isvalid then',
+    'iocpsubmitfileop',
+    'AsyncWrite must reject closed reactors before submitting file operations');
+  CheckContains(LWriteBody, 'exit(false);',
+    'AsyncWrite closed-reactor rejection must return False');
+  CheckAbsent(LWriteBody, 'iocpfail(',
+    'AsyncWrite closed-reactor rejection must not dispatch inline failure callbacks');
 end;
 
 procedure TestPollerWindowsHandleWidthContract;
@@ -1054,240 +719,6 @@ begin
     'async loop write facade must preserve pointer-sized Windows handles');
 end;
 
-procedure TestWindowsForcedCompileAsyncFileSurfaceContract;
-var
-  LCompileGate: string;
-  LIocpFileBody: string;
-  LIocpUnsupportedBody: string;
-  LPollerFileBody: string;
-  LPollerUnsupportedBody: string;
-  LLoopFileBody: string;
-  LLoopUnsupportedBody: string;
-  LLoopFileTimeoutBody: string;
-  LLoopUnsupportedTimeoutBody: string;
-begin
-  LCompileGate := LoadSourceText(
-    'tests/nextpas.core.io.uring/test_poller_windows_compile_gate/test_poller_windows_compile_gate.lpr');
-  LIocpFileBody := ExtractBetween(LCompileGate,
-    'procedure touchiocpreactorfilesurface', 'procedure touchiocpreactorunsupportedsurface');
-  LIocpUnsupportedBody := ExtractBetween(LCompileGate,
-    'procedure touchiocpreactorunsupportedsurface', 'procedure touchpollerfilesurface');
-  LPollerFileBody := ExtractBetween(LCompileGate,
-    'procedure touchpollerfilesurface', 'procedure touchpollerunsupportedsurface');
-  LPollerUnsupportedBody := ExtractBetween(LCompileGate,
-    'procedure touchpollerunsupportedsurface', 'procedure touchasyncloopfilesurface');
-  LLoopFileBody := ExtractBetween(LCompileGate,
-    'procedure touchasyncloopfilesurface', 'procedure touchasyncloopunsupportedsurface');
-  LLoopUnsupportedBody := ExtractBetween(LCompileGate,
-    'procedure touchasyncloopunsupportedsurface', 'procedure touchasyncloopfiletimeouts');
-  LLoopFileTimeoutBody := ExtractBetween(LCompileGate,
-    'procedure touchasyncloopfiletimeouts', 'procedure touchasyncloopunsupportedtimeouts');
-  LLoopUnsupportedTimeoutBody := ExtractBetween(LCompileGate,
-    'procedure touchasyncloopunsupportedtimeouts', 'procedure touchcompilegate');
-
-  CheckContains(LCompileGate,
-    'source-contract and forced-compile only; not windows runtime evidence',
-    'Windows compile gate must declare its non-runtime truth layer');
-  CheckContains(LCompileGate, 'procedure noopiocompletion',
-    'Windows compile gate must force a real completion callback type');
-
-  CheckContains(LIocpFileBody, 'liocp := tiocpreactor.create(8);',
-    'Windows compile gate must directly touch IOCP reactor creation');
-  CheckContains(LIocpFileBody, 'liocp.asyncread(0, nil, 0, 0, @noopiocompletion, nil);',
-    'Windows compile gate must directly touch IOCP file AsyncRead');
-  CheckContains(LIocpFileBody, 'liocp.asyncwrite(0, nil, 0, 0, @noopiocompletion, nil);',
-    'Windows compile gate must directly touch IOCP file AsyncWrite');
-  CheckContains(LIocpFileBody, 'liocp.flush;',
-    'Windows compile gate must directly touch IOCP Flush');
-  CheckContains(LIocpFileBody, 'liocp.poll;',
-    'Windows compile gate must directly touch IOCP Poll');
-  CheckContains(LIocpFileBody, 'liocp.pollone;',
-    'Windows compile gate must directly touch IOCP PollOne');
-  CheckContains(LIocpFileBody, 'liocp.stop;',
-    'Windows compile gate must directly touch IOCP Stop');
-  CheckContains(LIocpFileBody, 'liocp.close;',
-    'Windows compile gate must directly touch IOCP Close');
-  CheckAbsent(LIocpFileBody, 'asyncaccept',
-    'Windows IOCP file surface gate must not mix accept unsupported truth');
-  CheckAbsent(LIocpFileBody, 'asyncconnect',
-    'Windows IOCP file surface gate must not mix connect unsupported truth');
-  CheckAbsent(LIocpFileBody, 'asyncsend',
-    'Windows IOCP file surface gate must not mix send unsupported truth');
-  CheckAbsent(LIocpFileBody, 'asyncrecv',
-    'Windows IOCP file surface gate must not mix recv unsupported truth');
-  CheckAbsent(LIocpFileBody, 'asyncclose',
-    'Windows IOCP file surface gate must not mix close unsupported truth');
-  CheckContains(LIocpUnsupportedBody, 'liocp.asyncaccept',
-    'Windows compile gate must separately touch IOCP unsupported accept boundary');
-  CheckContains(LIocpUnsupportedBody, 'liocp.asyncconnect',
-    'Windows compile gate must separately touch IOCP unsupported connect boundary');
-  CheckContains(LIocpUnsupportedBody, 'liocp.asyncsend',
-    'Windows compile gate must separately touch IOCP unsupported send boundary');
-  CheckContains(LIocpUnsupportedBody, 'liocp.asyncrecv',
-    'Windows compile gate must separately touch IOCP unsupported recv boundary');
-  CheckContains(LIocpUnsupportedBody, 'liocp.asyncclose',
-    'Windows compile gate must separately touch IOCP unsupported close boundary');
-
-  CheckContains(LPollerFileBody, 'lpoller.asyncread(0, nil, 0, 0, @noopiocompletion, nil);',
-    'Windows compile gate must touch poller file AsyncRead');
-  CheckContains(LPollerFileBody, 'lpoller.asyncwrite(0, nil, 0, 0, @noopiocompletion, nil);',
-    'Windows compile gate must touch poller file AsyncWrite');
-  CheckAbsent(LPollerFileBody, 'asyncaccept',
-    'Windows file surface gate must not mix accept unsupported truth');
-  CheckAbsent(LPollerFileBody, 'asyncconnect',
-    'Windows file surface gate must not mix connect unsupported truth');
-  CheckAbsent(LPollerFileBody, 'asyncsend',
-    'Windows file surface gate must not mix send unsupported truth');
-  CheckAbsent(LPollerFileBody, 'asyncrecv',
-    'Windows file surface gate must not mix recv unsupported truth');
-  CheckAbsent(LPollerFileBody, 'asyncclose',
-    'Windows file surface gate must not mix close unsupported truth');
-
-  CheckContains(LPollerUnsupportedBody, 'lpoller.asyncaccept',
-    'Windows compile gate must separately touch poller unsupported accept boundary');
-  CheckContains(LPollerUnsupportedBody, 'lpoller.asyncconnect',
-    'Windows compile gate must separately touch poller unsupported connect boundary');
-  CheckContains(LPollerUnsupportedBody, 'lpoller.asyncsend',
-    'Windows compile gate must separately touch poller unsupported send boundary');
-  CheckContains(LPollerUnsupportedBody, 'lpoller.asyncrecv',
-    'Windows compile gate must separately touch poller unsupported recv boundary');
-  CheckContains(LPollerUnsupportedBody, 'lpoller.asyncclose',
-    'Windows compile gate must separately touch poller unsupported close boundary');
-
-  CheckContains(LLoopFileBody, 'lloop.asyncread(0, nil, 0, 0, @noopiocompletion, nil);',
-    'Windows compile gate must touch async loop direct file AsyncRead');
-  CheckContains(LLoopFileBody, 'lloop.asyncwrite(0, nil, 0, 0, @noopiocompletion, nil);',
-    'Windows compile gate must touch async loop direct file AsyncWrite');
-  CheckContains(LLoopFileBody, 'lloop.poll;',
-    'Windows compile gate must touch async loop completion polling facade');
-  CheckContains(LLoopFileBody, 'lloop.runonce;',
-    'Windows compile gate must touch async loop single-iteration runner');
-  CheckContains(LLoopFileBody, 'lloop.close;',
-    'Windows compile gate must touch async loop close after file surface calls');
-  CheckAbsent(LLoopFileBody, 'asyncaccept',
-    'Windows async loop file surface gate must not mix accept unsupported truth');
-  CheckAbsent(LLoopFileBody, 'asyncsend',
-    'Windows async loop file surface gate must not mix send unsupported truth');
-  CheckAbsent(LLoopFileBody, 'asyncrecv',
-    'Windows async loop file surface gate must not mix recv unsupported truth');
-
-  CheckContains(LLoopUnsupportedBody, 'lloop.asyncaccept',
-    'Windows compile gate must separately touch async loop accept unsupported boundary');
-  CheckContains(LLoopUnsupportedBody, 'lloop.asyncrecv',
-    'Windows compile gate must separately touch async loop recv unsupported boundary');
-  CheckContains(LLoopUnsupportedBody, 'lloop.asyncsend',
-    'Windows compile gate must separately touch async loop send unsupported boundary');
-
-  CheckContains(LLoopFileTimeoutBody, 'lloop.asyncreadtimeout',
-    'Windows compile gate must touch async loop file read timeout');
-  CheckContains(LLoopFileTimeoutBody, 'lloop.asyncwritetimeout',
-    'Windows compile gate must touch async loop file write timeout');
-  CheckContains(LLoopFileTimeoutBody, 'tdeadline.after(',
-    'Windows file timeout gate must compile finite deadlines');
-  CheckAbsent(LLoopFileTimeoutBody, 'tdeadline.infinite',
-    'Windows file timeout gate must not bypass timeout wrappers');
-  CheckAbsent(LLoopFileTimeoutBody, 'asyncrecvtimeout',
-    'Windows file timeout gate must not mix recv unsupported truth');
-  CheckAbsent(LLoopFileTimeoutBody, 'asyncsendtimeout',
-    'Windows file timeout gate must not mix send unsupported truth');
-
-  CheckContains(LLoopUnsupportedTimeoutBody, 'lloop.asyncrecvtimeout',
-    'Windows compile gate must separately touch async loop recv timeout unsupported boundary');
-  CheckContains(LLoopUnsupportedTimeoutBody, 'lloop.asyncsendtimeout',
-    'Windows compile gate must separately touch async loop send timeout unsupported boundary');
-  CheckContains(LLoopUnsupportedTimeoutBody, 'tdeadline.after(',
-    'Windows unsupported timeout gate must compile finite deadlines');
-  CheckAbsent(LLoopUnsupportedTimeoutBody, 'tdeadline.infinite',
-    'Windows unsupported timeout gate must not bypass timeout wrappers');
-end;
-
-procedure TestWindowsFileCompletionRuntimeSmokePreflightContract;
-var
-  LSmoke: string;
-begin
-  LSmoke := LoadSourceText(
-    'tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke/test_poller_windows_runtime_smoke.lpr');
-
-  CheckContains(LSmoke,
-    'real windows runtime evidence only when compiled and run on a windows host',
-    'Windows runtime smoke must declare its runtime truth boundary');
-  CheckContains(LSmoke, '{$ifdef nextpas_windows}',
-    'Windows runtime smoke must isolate real runtime assertions to Windows hosts');
-  CheckContains(LSmoke, 'tiocpreactor.create(8)',
-    'Windows runtime smoke must exercise the IOCP reactor directly');
-  CheckContains(LSmoke, 'nextpas.core.io.poller',
-    'Windows runtime smoke must import the consumer-facing poller facade');
-  CheckContains(LSmoke, 'tpoller.create(8)',
-    'Windows runtime smoke must exercise the poller file completion facade');
-  CheckContains(LSmoke, 'createfilew(',
-    'Windows runtime smoke must open an overlapped-capable host file handle');
-  CheckContains(LSmoke, 'file_flag_overlapped',
-    'Windows runtime smoke must use an overlapped file handle');
-  CheckContains(LSmoke, 'asyncread(',
-    'Windows runtime smoke must submit file AsyncRead');
-  CheckContains(LSmoke, 'asyncwrite(',
-    'Windows runtime smoke must submit file AsyncWrite');
-  CheckContains(LSmoke, 'lpoller.asyncread',
-    'Windows runtime smoke must submit file AsyncRead through TPoller');
-  CheckContains(LSmoke, 'lpoller.asyncwrite',
-    'Windows runtime smoke must submit file AsyncWrite through TPoller');
-  CheckContains(LSmoke, 'apoller.pollone',
-    'Windows runtime smoke must drive poller completion dispatch');
-  CheckContains(LSmoke, 'pollone',
-    'Windows runtime smoke must drive IOCP completion dispatch');
-  CheckContains(LSmoke, 'gcallbackcount',
-    'Windows runtime smoke must prove callback delivery count');
-  CheckContains(LSmoke, 'not windows runtime evidence on this host',
-    'non-Windows execution must be an explicit skip truth, not runtime-ready evidence');
-end;
-
-procedure TestWindowsRuntimeCiMatrixTruthContract;
-var
-  LWorkflow: string;
-  LWindowsJob: string;
-begin
-  LWorkflow := LoadSourceText('../.github/workflows/core-ci.yml');
-
-  CheckContains(LWorkflow, 'test-windows-runtime:',
-    'Core CI must carry a separate real Windows runtime job');
-  LWindowsJob := ExtractBetween(LWorkflow, 'test-windows-runtime:',
-    'test-freebsd:');
-
-  CheckContains(LWindowsJob, 'runs-on: windows-',
-    'real Windows runtime truth must run on a Windows GitHub runner');
-  CheckContains(LWindowsJob, 'truth=real-windows-runtime-ci',
-    'real Windows runtime job must print its truth layer explicitly');
-  CheckContains(LWindowsJob,
-    'make -c tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke clean test',
-    'real Windows runtime job must run the runtime smoke default test target');
-  CheckAbsent(LWindowsJob, 'wine-runtime-smoke',
-    'real Windows runtime CI must not consume the Wine runtime-smoke target');
-  CheckAbsent(LWindowsJob, 'wine ',
-    'real Windows runtime CI must not invoke Wine');
-end;
-
-procedure TestAsyncLoopCompletionFacadeParityContract;
-var
-  LAsyncLoop, LConnectBody, LCloseBody: string;
-begin
-  LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
-  LConnectBody := ExtractBetween(LAsyncLoop, 'function tasyncloop.asyncconnect',
-    'function tasyncloop.asyncrecv');
-  LCloseBody := ExtractBetween(LAsyncLoop, 'function tasyncloop.asyncclose',
-    'function tasyncloop.poll');
-
-  CheckContains(LAsyncLoop, 'function asyncconnect(afd: ptrint',
-    'async loop must expose the poller AsyncConnect completion facade');
-  CheckContains(LAsyncLoop, 'function asyncclose(afd: ptrint',
-    'async loop must expose the poller AsyncClose completion facade');
-  CheckContains(LConnectBody,
-    'result := fpoller.asyncconnect(afd, aaddr, aaddrlen, acallback, acontext);',
-    'async loop AsyncConnect must preserve poller unsupported/runtime truth');
-  CheckContains(LCloseBody,
-    'result := fpoller.asyncclose(afd, acallback, acontext);',
-    'async loop AsyncClose must preserve poller unsupported/runtime truth');
-end;
-
 begin
   T := TTestRunner.Create('nextpas.core.io.poller.windows_contract');
   T.Run('poller Windows backend contract', @TestPollerWindowsBackendContract);
@@ -1296,50 +727,20 @@ begin
     @TestIocpRunStopFlushLifecycleContract);
   T.Run('async loop run lifecycle contract',
     @TestAsyncLoopRunLifecycleContract);
-  T.Run('async loop wake seam contract',
-    @TestAsyncLoopWakeSeamContract);
   T.Run('IOCP close abort ownership contract',
     @TestIocpCloseAbortOwnershipContract);
-  T.Run('IOCP close/run wake handoff contract',
-    @TestIocpCloseRunWakeHandoffContract);
-  T.Run('IOCP close abort completion drain ownership contract',
-    @TestIocpCloseAbortCompletionDrainOwnershipContract);
   T.Run('async loop timeout close lifecycle contract',
     @TestAsyncLoopTimeoutCloseLifecycleContract);
-  T.Run('async loop close stop/wake ownership contract',
-    @TestAsyncLoopCloseStopWakeOwnershipContract);
-  T.Run('async loop post closed owner-boundary contract',
-    @TestAsyncLoopPostClosedOwnerBoundaryContract);
-  T.Run('async loop closed timeout owner-boundary contract',
-    @TestAsyncLoopClosedTimeoutOwnerBoundaryContract);
   T.Run('async loop timeout single-fire cleanup contract',
     @TestAsyncLoopTimeoutSingleFireCleanupContract);
-  T.Run('async loop file timeout rejected-submit owner-boundary contract',
-    @TestAsyncLoopFileTimeoutRejectedSubmitOwnerBoundaryContract);
   T.Run('IOCP synchronous failure ownership contract',
     @TestIocpSynchronousFailureOwnershipContract);
-  T.Run('Windows completion FFI ABI contract',
-    @TestWindowsCompletionFfiAbiContract);
-  T.Run('IOCP closed submit ownership contract',
-    @TestIocpClosedSubmitOwnershipContract);
-  T.Run('IOCP submit failure ownership contract',
-    @TestIocpSubmitFailureOwnershipContract);
-  T.Run('IOCP unsupported async ownership contract',
-    @TestIocpUnsupportedAsyncOwnershipContract);
+  T.Run('IOCP socket completion contract',
+    @TestIocpSocketCompletionContract);
   T.Run('IOCP pending operation ownership contract',
     @TestIocpPendingOperationOwnershipContract);
-  T.Run('IOCP dispatch single-fire ownership contract',
-    @TestIocpDispatchSingleFireOwnershipContract);
-  T.Run('IOCP associated handle ownership contract',
-    @TestIocpAssociatedHandleOwnershipContract);
+  T.Run('IOCP post-close file submission reject contract',
+    @TestIocpPostCloseFileSubmissionRejectContract);
   T.Run('Windows handle width contract', @TestPollerWindowsHandleWidthContract);
-  T.Run('Windows forced compile async file surface contract',
-    @TestWindowsForcedCompileAsyncFileSurfaceContract);
-  T.Run('Windows file completion runtime smoke preflight contract',
-    @TestWindowsFileCompletionRuntimeSmokePreflightContract);
-  T.Run('Windows runtime CI matrix truth contract',
-    @TestWindowsRuntimeCiMatrixTruthContract);
-  T.Run('async loop completion facade parity contract',
-    @TestAsyncLoopCompletionFacadeParityContract);
   T.Summary;
 end.

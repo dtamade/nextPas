@@ -1319,6 +1319,20 @@ begin
   Check(LGotException, 'zero buf size raises');
 end;
 
+procedure TestBufReaderNilInner;
+var
+  LGotException: Boolean;
+begin
+  LGotException := False;
+  try
+    CreateBufferedReader(IReader(nil), 16);
+  except
+    on E: EArgumentError do
+      LGotException := True;
+  end;
+  Check(LGotException, 'nil inner reader raises');
+end;
+
 procedure TestBufWriterZeroSize;
 var
   LS: IStream;
@@ -1333,6 +1347,20 @@ begin
       LGotException := True;
   end;
   Check(LGotException, 'zero buf size raises');
+end;
+
+procedure TestBufWriterNilInner;
+var
+  LGotException: Boolean;
+begin
+  LGotException := False;
+  try
+    CreateBufferedWriter(IWriter(nil), 16);
+  except
+    on E: EArgumentError do
+      LGotException := True;
+  end;
+  Check(LGotException, 'nil inner writer raises');
 end;
 
 procedure TestReadAtLeastMinGtCount;
@@ -1539,7 +1567,9 @@ begin
   T.Run('UnreadByte after bulk read raises',
     @TestUnreadByteAfterBulkReadRaises);
   T.Run('BufReader zero size', @TestBufReaderZeroSize);
+  T.Run('BufReader nil inner', @TestBufReaderNilInner);
   T.Run('BufWriter zero size', @TestBufWriterZeroSize);
+  T.Run('BufWriter nil inner', @TestBufWriterNilInner);
   T.Run('ReadAtLeast min>count', @TestReadAtLeastMinGtCount);
 
   T.Run('Pipe basic', @TestPipeBasic);

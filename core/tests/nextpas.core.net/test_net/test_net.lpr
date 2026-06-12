@@ -690,6 +690,59 @@ begin
   end;
 end;
 
+procedure TestTcpListenerPostCloseRuntimeGuards;
+var
+  LListener: ITcpListener;
+  LRuntime: nextpas.core.net.ITcpListenerRuntime;
+  LAccepted: ITcpStream;
+  LRaised: Boolean;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  Check(Supports(LListener, ITcpListenerRuntime, LRuntime),
+    'listener exposes runtime accept before close');
+  LListener.Close;
+
+  LRaised := False;
+  try
+    LListener.Accept;
+  except
+    on ENetworkError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'accept after listener close raises ENetworkError');
+
+  LRaised := False;
+  try
+    LRuntime.NativeSocketHandle;
+  except
+    on ENetworkError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'native handle after listener close raises ENetworkError');
+
+  LRaised := False;
+  try
+    LRuntime.SetBlocking(False);
+  except
+    on ENetworkError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'set blocking after listener close raises ENetworkError');
+
+  LAccepted := nil;
+  LRaised := False;
+  try
+    LRuntime.TryAccept(LAccepted);
+  except
+    on ENetworkError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'try-accept after listener close raises ENetworkError');
+  Check(LAccepted = nil, 'try-accept after listener close does not return conn');
+
+  LListener.Close;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.net');
   T.Run('TCP stream write zero-progress source contract',
@@ -718,5 +771,7 @@ begin
     @TestTcpStreamRuntimeTryReadAndTryWrite);
   T.Run('TCP stream post-close runtime guards',
     @TestTcpStreamPostCloseRuntimeGuards);
+  T.Run('TCP listener post-close runtime guards',
+    @TestTcpListenerPostCloseRuntimeGuards);
   T.Summary;
 end.

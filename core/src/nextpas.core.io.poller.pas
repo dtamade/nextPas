@@ -19,6 +19,7 @@ type
   TIoCompletion = procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);
 
   TPollerBackend = (pbIoUring, pbEpoll, pbIocp, pbUnsupported);
+  TPollerBackendModel = (pbmCompletionQueue, pbmReadiness, pbmUnsupported);
 
   TPoller = record
   private
@@ -56,9 +57,12 @@ type
     procedure Run;
     procedure Stop;
     function Flush: Int32;
+    function HasPending: Boolean;
   end;
 
 function PollerDetectBackend: TPollerBackend;
+function PollerBackendModel(ABackend: TPollerBackend): TPollerBackendModel;
+function PollerSupportsPositionedFileIO(ABackend: TPollerBackend): Boolean;
 
 implementation
 
@@ -98,14 +102,51 @@ begin
   {$ENDIF}
 end;
 
+function PollerBackendModel(ABackend: TPollerBackend): TPollerBackendModel;
+begin
+  case ABackend of
+    pbIoUring: Result := pbmCompletionQueue;
+    pbIocp: Result := pbmCompletionQueue;
+    pbEpoll: Result := pbmReadiness;
+  else
+    Result := pbmUnsupported;
+  end;
+end;
+
+function PollerSupportsPositionedFileIO(ABackend: TPollerBackend): Boolean;
+begin
+  case ABackend of
+    pbIoUring: Result := True;
+    pbIocp: Result := True;
+    pbEpoll: Result := False;
+  else
+    Result := False;
+  end;
+end;
+
 class function TPoller.Create(AQueueDepth: UInt32): TPoller;
 begin
   Result := Default(TPoller);
   Result.FBackend := PollerDetectBackend;
   case Result.FBackend of
     {$IFDEF NEXTPAS_LINUX}
-    pbIoUring: Result.FUring := TIoReactor.Create(AQueueDepth);
-    pbEpoll:   Result.FEpoll := TEpollReactor.Create(AQueueDepth);
+    pbIoUring:
+      begin
+        Result.FUring := TIoReactor.Create(AQueueDepth);
+        if not Result.FUring.IsValid then
+        begin
+          Result.FBackend := pbEpoll;
+          Result.FEpoll := TEpollReactor.Create(AQueueDepth);
+          if not Result.FEpoll.IsValid then
+            Result.FBackend := pbUnsupported;
+        end;
+      end;
+    pbEpoll:
+      begin
+        Result.FEpoll := TEpollReactor.Create(AQueueDepth);
+        if not Result.FEpoll.IsValid then
+          Result.FBackend := pbUnsupported;
+      end;
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp:
@@ -162,8 +203,13 @@ begin
     {$IFDEF NEXTPAS_LINUX}
     pbIoUring: Result := FUring.AsyncRead(Int32(AFd), ABuf, ALen, AOffset,
                  nextpas.core.io.reactor.TIoCompletion(ACallback), AContext);
-    pbEpoll:   Result := FEpoll.AsyncRead(Int32(AFd), ABuf, ALen, AOffset,
-                 nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
+    pbEpoll:
+      begin
+        if AOffset >= 0 then
+          Exit(False);
+        Result := FEpoll.AsyncRead(Int32(AFd), ABuf, ALen, AOffset,
+          nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
+      end;
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp:    Result := FIocp.AsyncRead(AFd, ABuf, ALen, AOffset,
@@ -181,8 +227,13 @@ begin
     {$IFDEF NEXTPAS_LINUX}
     pbIoUring: Result := FUring.AsyncWrite(Int32(AFd), ABuf, ALen, AOffset,
                  nextpas.core.io.reactor.TIoCompletion(ACallback), AContext);
-    pbEpoll:   Result := FEpoll.AsyncWrite(Int32(AFd), ABuf, ALen, AOffset,
-                 nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
+    pbEpoll:
+      begin
+        if AOffset >= 0 then
+          Exit(False);
+        Result := FEpoll.AsyncWrite(Int32(AFd), ABuf, ALen, AOffset,
+          nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
+      end;
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp:    Result := FIocp.AsyncWrite(AFd, ABuf, ALen, AOffset,
@@ -360,6 +411,21 @@ begin
     {$ENDIF}
   else
     Result := 0;
+  end;
+end;
+
+function TPoller.HasPending: Boolean;
+begin
+  case FBackend of
+    {$IFDEF NEXTPAS_LINUX}
+    pbIoUring: Result := FUring.HasPending;
+    pbEpoll:   Result := FEpoll.HasPending;
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp: Result := FIocp.HasPending;
+    {$ENDIF}
+  else
+    Result := False;
   end;
 end;
 

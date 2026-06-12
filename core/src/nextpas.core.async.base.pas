@@ -17,7 +17,8 @@ type
     function IsValid: Boolean; inline;
   end;
 
-  TAsyncTaskState = (atsPending, atsCompleted, atsFailed, atsCancelled);
+  TAsyncTaskState = (atsIdle, atsPending, atsCompleted, atsFailed, atsTimedOut, atsCancelled);
+  TAsyncTaskStatus = TAsyncTaskState;
 
 implementation
 

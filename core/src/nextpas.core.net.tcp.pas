@@ -76,6 +76,7 @@ type
     FSocket: TPlatformSocket;
     FLocal: TNetAddress;
     FClosed: Boolean;
+    procedure EnsureOpen(const AOperation: string);
   public
     constructor Create(const ASocket: TPlatformSocket; const ALocal: TNetAddress);
     destructor Destroy; override;
@@ -404,6 +405,12 @@ begin
   inherited;
 end;
 
+procedure TTcpListener.EnsureOpen(const AOperation: string);
+begin
+  if FClosed then
+    raise ENetworkError.Create('tcp listener ' + AOperation + ' after close');
+end;
+
 function TTcpListener.Accept: ITcpStream;
 var
   LClient: TPlatformSocket;
@@ -412,6 +419,7 @@ var
   LResult: Int32;
   LLocal: TNetAddress;
 begin
+  EnsureOpen('accept');
   LAddrLen := SizeOf(LAddr);
   LResult := platform_socket_accept(FSocket, @LAddr, @LAddrLen, LClient);
   if LResult <> 0 then
@@ -435,16 +443,19 @@ begin
   begin
     FClosed := True;
     platform_socket_close(FSocket);
+    FSocket := PLATFORM_INVALID_SOCKET;
   end;
 end;
 
 function TTcpListener.NativeSocketHandle: PtrUInt;
 begin
+  EnsureOpen('native handle');
   Result := PtrUInt(FSocket.Value);
 end;
 
 procedure TTcpListener.SetBlocking(const ABlocking: Boolean);
 begin
+  EnsureOpen('set blocking');
   if platform_socket_set_nonblocking(FSocket, not ABlocking) <> 0 then
     raise ENetworkError.Create('tcp listener set blocking failed');
 end;
@@ -458,6 +469,7 @@ var
   LLocal: TNetAddress;
 begin
   AConn := nil;
+  EnsureOpen('try accept');
   LAddrLen := SizeOf(LAddr);
   LResult := platform_socket_accept(FSocket, @LAddr, @LAddrLen, LClient);
   if LResult = 0 then

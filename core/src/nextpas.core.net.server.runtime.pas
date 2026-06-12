@@ -14,22 +14,29 @@ uses
 
 type
   TTcpServerPollSessionTarget = class;
+  ITcpServerPollTargetTicket = interface;
   TTcpServerPollSessionTargetArray = array of TTcpServerPollSessionTarget;
 
   TTcpServerPollCompletionEnqueueProc = procedure(
-    const ATarget: TTcpServerPollSessionTarget;
+    const ATicket: ITcpServerPollTargetTicket;
     const ACompletion: ITcpServerWorkCompletion;
     const AOutcome: TTcpServerWorkOutcome;
     const AOwnership: TTcpServerConnOwnership) of object;
   TTcpServerPollWakeProc = procedure of object;
 
   TTcpServerPollPendingCompletion = record
-    Target: TTcpServerPollSessionTarget;
+    TargetTicket: ITcpServerPollTargetTicket;
     Completion: ITcpServerWorkCompletion;
     Outcome: TTcpServerWorkOutcome;
     Ownership: TTcpServerConnOwnership;
   end;
   TTcpServerPollPendingCompletionArray = array of TTcpServerPollPendingCompletion;
+
+  ITcpServerPollTargetTicket = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-410000000012}']
+    function ResolveTarget(out ATarget: TTcpServerPollSessionTarget): Boolean;
+    procedure DetachTarget;
+  end;
 
   TTcpServerPollSessionTarget = class
   private
@@ -40,17 +47,24 @@ type
     FDeadlineSession: ITcpServerPollDrivenSessionWithDeadline;
     FEvents: TPlatformPollEvents;
     FWakeDeadline: TDeadline;
+    FTicket: ITcpServerPollTargetTicket;
     procedure RefreshWakeDeadline;
   public
     constructor Create(const AConn: ITcpStream;
       const ASocketRuntime: ITcpSocketRuntime;
       const ASession: ITcpServerSession;
-      const APollSession: ITcpServerPollDrivenSession);
+      const APollSession: ITcpServerPollDrivenSession;
+      const AInitialEvents: TPlatformPollEvents;
+      const AInitialWakeDeadline: TDeadline);
+    destructor Destroy; override;
     function SocketHandle: PtrUInt;
     function CurrentEvents: TPlatformPollEvents;
     procedure SetCurrentEvents(const AEvents: TPlatformPollEvents);
     function WakeDeadline: TDeadline;
     function Connection: ITcpStream;
+    function TargetTicket: ITcpServerPollTargetTicket;
+    procedure DetachTicket;
+    procedure RestoreBlocking;
     function HandleEvents(const AEvents: TPlatformPollEvents;
       out ANextEvents: TPlatformPollEvents;
       out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
@@ -60,7 +74,7 @@ type
     ITcpServerWorkerHandoff)
   private
     FBaseHandoff: ITcpServerWorkerHandoff;
-    FTarget: TTcpServerPollSessionTarget;
+    FTargetTicket: ITcpServerPollTargetTicket;
     FEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
     FWake: TTcpServerPollWakeProc;
   public
@@ -93,7 +107,7 @@ type
     FCount: SizeUInt;
   public
     constructor Create;
-    procedure Enqueue(const ATarget: TTcpServerPollSessionTarget;
+    procedure Enqueue(const ATicket: ITcpServerPollTargetTicket;
       const ACompletion: ITcpServerWorkCompletion;
       const AOutcome: TTcpServerWorkOutcome;
       const AOwnership: TTcpServerConnOwnership);
@@ -108,6 +122,7 @@ type
   public
     procedure RegisterTarget(const ATarget: TTcpServerPollSessionTarget);
     procedure UnregisterTarget(const ATarget: TTcpServerPollSessionTarget);
+    function ContainsTarget(const ATarget: TTcpServerPollSessionTarget): Boolean;
     function ComputePollTimeoutMs: Int32;
     function CollectExpiredTargets: TTcpServerPollSessionTargetArray;
     function Drain: TTcpServerPollSessionTargetArray;
@@ -174,12 +189,12 @@ type
   TTcpServerPollQueuedCompletion = class(TInterfacedObject,
     ITcpServerWorkCompletion)
   private
-    FTarget: TTcpServerPollSessionTarget;
+    FTargetTicket: ITcpServerPollTargetTicket;
     FInner: ITcpServerWorkCompletion;
     FEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
     FWake: TTcpServerPollWakeProc;
   public
-    constructor Create(const ATarget: TTcpServerPollSessionTarget;
+    constructor Create(const ATicket: ITcpServerPollTargetTicket;
       const AInner: ITcpServerWorkCompletion;
       const AEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
       const AWake: TTcpServerPollWakeProc);
@@ -187,23 +202,76 @@ type
       const AOwnership: TTcpServerConnOwnership);
   end;
 
+  TTcpServerPollTargetTicket = class(TInterfacedObject,
+    ITcpServerPollTargetTicket)
+  private
+    FLock: IMutex;
+    FTarget: TTcpServerPollSessionTarget;
+  public
+    constructor Create(const ATarget: TTcpServerPollSessionTarget);
+    function ResolveTarget(out ATarget: TTcpServerPollSessionTarget): Boolean;
+    procedure DetachTarget;
+  end;
+
+constructor TTcpServerPollTargetTicket.Create(
+  const ATarget: TTcpServerPollSessionTarget);
+begin
+  inherited Create;
+  FLock := nextpas.core.sync.mutex.TMutex.Create;
+  FTarget := ATarget;
+end;
+
+function TTcpServerPollTargetTicket.ResolveTarget(
+  out ATarget: TTcpServerPollSessionTarget): Boolean;
+begin
+  FLock.Acquire;
+  try
+    ATarget := FTarget;
+    Result := ATarget <> nil;
+  finally
+    FLock.Release;
+  end;
+end;
+
+procedure TTcpServerPollTargetTicket.DetachTarget;
+begin
+  FLock.Acquire;
+  try
+    FTarget := nil;
+  finally
+    FLock.Release;
+  end;
+end;
+
 constructor TTcpServerPollSessionTarget.Create(const AConn: ITcpStream;
   const ASocketRuntime: ITcpSocketRuntime; const ASession: ITcpServerSession;
-  const APollSession: ITcpServerPollDrivenSession);
+  const APollSession: ITcpServerPollDrivenSession;
+  const AInitialEvents: TPlatformPollEvents;
+  const AInitialWakeDeadline: TDeadline);
 begin
   inherited Create;
   FConn := AConn;
   FSocketRuntime := ASocketRuntime;
   FSession := ASession;
   FPollSession := APollSession;
-  FEvents := FPollSession.PollEvents;
+  FEvents := AInitialEvents;
   if Supports(ASession, ITcpServerPollDrivenSessionWithDeadline,
     FDeadlineSession) then
-    RefreshWakeDeadline
+    FWakeDeadline := AInitialWakeDeadline
   else
     FWakeDeadline := TDeadline.Infinite;
-  if (FEvents = []) and FWakeDeadline.IsInfinite then
-    raise EArgumentError.Create('poll-driven session must expose poll events');
+  FTicket := TTcpServerPollTargetTicket.Create(Self);
+end;
+
+destructor TTcpServerPollSessionTarget.Destroy;
+begin
+  DetachTicket;
+  FDeadlineSession := nil;
+  FPollSession := nil;
+  FSession := nil;
+  FSocketRuntime := nil;
+  FConn := nil;
+  inherited;
 end;
 
 function TTcpServerPollSessionTarget.SocketHandle: PtrUInt;
@@ -240,6 +308,22 @@ begin
   Result := FConn;
 end;
 
+function TTcpServerPollSessionTarget.TargetTicket: ITcpServerPollTargetTicket;
+begin
+  Result := FTicket;
+end;
+
+procedure TTcpServerPollSessionTarget.DetachTicket;
+begin
+  if FTicket <> nil then
+    FTicket.DetachTarget;
+end;
+
+procedure TTcpServerPollSessionTarget.RestoreBlocking;
+begin
+  FSocketRuntime.SetBlocking(True);
+end;
+
 function TTcpServerPollSessionTarget.HandleEvents(
   const AEvents: TPlatformPollEvents; out ANextEvents: TPlatformPollEvents;
   out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
@@ -249,13 +333,13 @@ begin
 end;
 
 constructor TTcpServerPollQueuedCompletion.Create(
-  const ATarget: TTcpServerPollSessionTarget;
+  const ATicket: ITcpServerPollTargetTicket;
   const AInner: ITcpServerWorkCompletion;
   const AEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
   const AWake: TTcpServerPollWakeProc);
 begin
   inherited Create;
-  FTarget := ATarget;
+  FTargetTicket := ATicket;
   FInner := AInner;
   FEnqueueCompletion := AEnqueueCompletion;
   FWake := AWake;
@@ -267,14 +351,14 @@ procedure TTcpServerPollQueuedCompletion.Complete(
 begin
   if Assigned(FEnqueueCompletion) then
   begin
-    FEnqueueCompletion(FTarget, FInner, AOutcome, AOwnership);
+    FEnqueueCompletion(FTargetTicket, FInner, AOutcome, AOwnership);
     if Assigned(FWake) then
       FWake();
   end
   else if FInner <> nil then
     FInner.Complete(AOutcome, AOwnership);
   FInner := nil;
-  FTarget := nil;
+  FTargetTicket := nil;
 end;
 
 constructor TTcpServerPollWorkerHandoff.Create(
@@ -284,7 +368,7 @@ constructor TTcpServerPollWorkerHandoff.Create(
 begin
   inherited Create;
   FBaseHandoff := ABaseHandoff;
-  FTarget := nil;
+  FTargetTicket := nil;
   FEnqueueCompletion := AEnqueueCompletion;
   FWake := AWake;
 end;
@@ -292,7 +376,10 @@ end;
 procedure TTcpServerPollWorkerHandoff.BindTarget(
   const ATarget: TTcpServerPollSessionTarget);
 begin
-  FTarget := ATarget;
+  if ATarget <> nil then
+    FTargetTicket := ATarget.TargetTicket
+  else
+    FTargetTicket := nil;
 end;
 
 function TTcpServerPollWorkerHandoff.Submit(const AWork: ITcpServerWork;
@@ -300,9 +387,9 @@ function TTcpServerPollWorkerHandoff.Submit(const AWork: ITcpServerWork;
 var
   LCompletion: ITcpServerWorkCompletion;
 begin
-  if (FTarget <> nil) and Assigned(FEnqueueCompletion) then
-    LCompletion := TTcpServerPollQueuedCompletion.Create(FTarget, ACompletion,
-      FEnqueueCompletion, FWake)
+  if (FTargetTicket <> nil) and Assigned(FEnqueueCompletion) then
+    LCompletion := TTcpServerPollQueuedCompletion.Create(FTargetTicket,
+      ACompletion, FEnqueueCompletion, FWake)
   else
     LCompletion := ACompletion;
   Result := FBaseHandoff.Submit(AWork, LCompletion);
@@ -343,7 +430,7 @@ begin
 end;
 
 procedure TTcpServerPollCompletionQueue.Enqueue(
-  const ATarget: TTcpServerPollSessionTarget;
+  const ATicket: ITcpServerPollTargetTicket;
   const ACompletion: ITcpServerWorkCompletion;
   const AOutcome: TTcpServerWorkOutcome;
   const AOwnership: TTcpServerConnOwnership);
@@ -364,7 +451,7 @@ begin
         LCapacity := LCapacity * 2;
       SetLength(FItems, LCapacity);
     end;
-    FItems[FCount].Target := ATarget;
+    FItems[FCount].TargetTicket := ATicket;
     FItems[FCount].Completion := ACompletion;
     FItems[FCount].Outcome := AOutcome;
     FItems[FCount].Ownership := AOwnership;
@@ -387,7 +474,7 @@ begin
     for LI := 0 to FCount - 1 do
     begin
       Result[LI] := FItems[LI];
-      FItems[LI].Target := nil;
+      FItems[LI].TargetTicket := nil;
       FItems[LI].Completion := nil;
     end;
     FCount := 0;
@@ -423,8 +510,22 @@ begin
       Dec(FCount);
       FItems[LI] := FItems[FCount];
       FItems[FCount] := nil;
+      ATarget.DetachTicket;
       Exit;
     end;
+end;
+
+function TTcpServerPollTargetRegistry.ContainsTarget(
+  const ATarget: TTcpServerPollSessionTarget): Boolean;
+var
+  LI: SizeUInt;
+begin
+  Result := False;
+  if (ATarget = nil) or (FCount = 0) then
+    Exit;
+  for LI := 0 to FCount - 1 do
+    if FItems[LI] = ATarget then
+      Exit(True);
 end;
 
 function TTcpServerPollTargetRegistry.ComputePollTimeoutMs: Int32;
@@ -486,6 +587,8 @@ begin
   for LI := 0 to FCount - 1 do
   begin
     Result[LI] := FItems[LI];
+    if FItems[LI] <> nil then
+      FItems[LI].DetachTicket;
     FItems[LI] := nil;
   end;
   FCount := 0;
@@ -641,7 +744,10 @@ function TryCreateTcpServerPollSessionTarget(const AConn: ITcpStream;
   out ATarget: TTcpServerPollSessionTarget): Boolean;
 var
   LPollSession: ITcpServerPollDrivenSession;
+  LDeadlineSession: ITcpServerPollDrivenSessionWithDeadline;
   LSocketRuntime: ITcpSocketRuntime;
+  LEvents: TPlatformPollEvents;
+  LWakeDeadline: TDeadline;
 begin
   ATarget := nil;
   if not Supports(ASession, ITcpServerPollDrivenSession, LPollSession) then
@@ -649,9 +755,18 @@ begin
   if not Supports(AConn, ITcpSocketRuntime, LSocketRuntime) then
     Exit(False);
 
+  LEvents := LPollSession.PollEvents;
+  if Supports(ASession, ITcpServerPollDrivenSessionWithDeadline,
+    LDeadlineSession) then
+    LWakeDeadline := LDeadlineSession.WakeDeadline
+  else
+    LWakeDeadline := TDeadline.Infinite;
+  if (LEvents = []) and LWakeDeadline.IsInfinite then
+    Exit(False);
+
   LSocketRuntime.SetBlocking(False);
   ATarget := TTcpServerPollSessionTarget.Create(AConn, LSocketRuntime,
-    ASession, LPollSession);
+    ASession, LPollSession, LEvents, LWakeDeadline);
   Result := True;
 end;
 

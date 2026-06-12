@@ -225,6 +225,11 @@ function TIoUring.GetSqe: PIoUringSqe;
 var
   LIdx: UInt32;
 begin
+  if not FValid then
+  begin
+    Result := nil;
+    Exit;
+  end;
   // Read kernel's SQ head to know how many slots are free
   ReadBarrier;
   FSqHead := FSqRing.Head^;
@@ -244,6 +249,8 @@ var
   LToSubmit: UInt32;
   LIdx, LI: UInt32;
 begin
+  if not FValid then
+    Exit(-1);
   LToSubmit := FSqTail - FSqRing.Tail^;
   if LToSubmit = 0 then begin Result := 0; Exit; end;
 
@@ -265,6 +272,8 @@ var
   LToSubmit: UInt32;
   LIdx, LI: UInt32;
 begin
+  if not FValid then
+    Exit(-1);
   LToSubmit := FSqTail - FSqRing.Tail^;
 
   if LToSubmit > 0 then
@@ -286,6 +295,12 @@ function TIoUring.PeekCqe(out ACqe: PIoUringCqe): Boolean;
 var
   LHead, LTail, LIdx: UInt32;
 begin
+  if not FValid then
+  begin
+    ACqe := nil;
+    Result := False;
+    Exit;
+  end;
   ReadBarrier;
   LHead := FCqRing.Head^;
   LTail := FCqRing.Tail^;
@@ -302,6 +317,11 @@ end;
 
 function TIoUring.WaitCqe(out ACqe: PIoUringCqe): Int32;
 begin
+  if not FValid then
+  begin
+    ACqe := nil;
+    Exit(-1);
+  end;
   if PeekCqe(ACqe) then begin Result := 0; Exit; end;
   Result := io_uring_enter(FFd, 0, 1, IORING_ENTER_GETEVENTS, nil);
   if Result < 0 then begin ACqe := nil; Exit; end;
@@ -310,6 +330,7 @@ end;
 
 procedure TIoUring.CqeSeen(ACqe: PIoUringCqe);
 begin
+  if not FValid then Exit;
   if ACqe = nil then Exit;
   ReadBarrier;
   Inc(FCqRing.Head^);
@@ -318,6 +339,8 @@ end;
 
 function TIoUring.CqeReady: UInt32;
 begin
+  if not FValid then
+    Exit(0);
   ReadBarrier;
   Result := FCqRing.Tail^ - FCqRing.Head^;
 end;
