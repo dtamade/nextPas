@@ -18,6 +18,8 @@ type
   TXmlName = nextpas.core.xml.base.TXmlName;
   TXmlAttribute = nextpas.core.xml.base.TXmlAttribute;
   TXmlAttributeArray = nextpas.core.xml.base.TXmlAttributeArray;
+  TXmlNamespace = nextpas.core.xml.base.TXmlNamespace;
+  TXmlNamespaceArray = nextpas.core.xml.base.TXmlNamespaceArray;
   TXmlToken = nextpas.core.xml.base.TXmlToken;
   TXmlTokenArray = nextpas.core.xml.base.TXmlTokenArray;
   TXmlPosition = nextpas.core.xml.base.TXmlPosition;
@@ -41,6 +43,13 @@ const
   xtkProcessingInstr = nextpas.core.xml.base.xtkProcessingInstr;
   xtkXmlDecl         = nextpas.core.xml.base.xtkXmlDecl;
   xtkDoctype         = nextpas.core.xml.base.xtkDoctype;
+
+  xnkElement  = nextpas.core.xml.dom.xnkElement;
+  xnkText     = nextpas.core.xml.dom.xnkText;
+  xnkCData    = nextpas.core.xml.dom.xnkCData;
+  xnkComment  = nextpas.core.xml.dom.xnkComment;
+  xnkPI       = nextpas.core.xml.dom.xnkPI;
+  xnkDocument = nextpas.core.xml.dom.xnkDocument;
 
 function XmlParse(const AInput: string): TXmlDocument; inline;
 function TryXmlParse(const AInput: string; out ADoc: TXmlDocument): Boolean;

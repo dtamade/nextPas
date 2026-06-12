@@ -87,6 +87,7 @@ type
   end;
 
 const
+  YAML_ALIAS_RESOLUTION_DEPTH_LIMIT = 64;
   YAML_NODE_NONE = UInt32($FFFFFFFF);
 
 implementation

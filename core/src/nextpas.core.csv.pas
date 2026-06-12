@@ -8,9 +8,19 @@ unit nextpas.core.csv;
 
 interface
 
+uses
+  nextpas.core.errors;
+
 type
   TStringArray = array of string;
   TStringMatrix = array of TStringArray;
+
+  TCsvError = record
+    Message: string;
+    Offset: SizeUInt;
+    Line: UInt32;
+    Column: UInt32;
+  end;
 
   { TCsvReader — streaming CSV parser with RFC 4180 support }
   TCsvReader = record
@@ -24,10 +34,15 @@ type
     FTrimSpace: Boolean;
     FComment: AnsiChar;
     FHasError: Boolean;
-    FError: string;
+    FError: TCsvError;
     procedure SetError(const AMessage: string);
+    procedure SetErrorAt(const AMessage: string; AOffset: SizeUInt);
+    procedure SetErrorPosition(var AError: TCsvError; AOffset: SizeUInt);
+    procedure SetDelimiter(AValue: AnsiChar);
     function PeekChar: AnsiChar; inline;
     function AtEnd: Boolean; inline;
+    procedure SkipLineEnding;
+    procedure SkipIgnoredLines;
     function ReadQuotedField: string;
     function ReadUnquotedField: string;
     function TrimStr(const S: string): string;
@@ -39,7 +54,8 @@ type
     function ReadAll: TStringMatrix;
     function HasError: Boolean;
     function GetError: string;
-    property Delimiter: AnsiChar read FDelimiter write FDelimiter;
+    function Error: TCsvError;
+    property Delimiter: AnsiChar read FDelimiter write SetDelimiter;
   end;
 
   { TCsvWriter — builds CSV output with proper quoting }
@@ -48,9 +64,11 @@ type
     FResult: string;
     FDelimiter: AnsiChar;
     FUseCRLF: Boolean;
+    FComment: AnsiChar;
     FFieldCount: Integer;
   public
-    class function Create(ADelimiter: AnsiChar = ','; AUseCRLF: Boolean = False): TCsvWriter; static;
+    class function Create(ADelimiter: AnsiChar = ',';
+      AUseCRLF: Boolean = False; AComment: AnsiChar = #0): TCsvWriter; static;
     procedure WriteRow(const AFields: array of string);
     procedure WriteField(const AField: string);
     procedure EndRow;
@@ -59,11 +77,34 @@ type
 
 implementation
 
+procedure ValidateCsvDelimiter(ADelimiter: AnsiChar; const AContext: string);
+begin
+  if (ADelimiter = #0) or (ADelimiter = '"') or
+    (ADelimiter = #10) or (ADelimiter = #13) then
+    raise EArgumentError.Create(AContext +
+      ': delimiter must not be NUL, quote, CR, or LF');
+end;
+
+procedure ValidateCsvCommentMarker(AComment, ADelimiter: AnsiChar;
+  const AContext: string);
+begin
+  if AComment = #0 then
+    Exit;
+  if AComment = ADelimiter then
+    raise EArgumentError.Create(AContext +
+      ': comment marker must not equal delimiter');
+  if (AComment = '"') or (AComment = #10) or (AComment = #13) then
+    raise EArgumentError.Create(AContext +
+      ': comment marker must not be quote, CR, or LF');
+end;
+
 { ===== TCsvReader ===== }
 
 class function TCsvReader.Create(const AInput: string; ADelimiter: AnsiChar;
   AFieldsPerRecord: Integer; ATrimSpace: Boolean; AComment: AnsiChar): TCsvReader;
 begin
+  ValidateCsvDelimiter(ADelimiter, 'TCsvReader.Create');
+  ValidateCsvCommentMarker(AComment, ADelimiter, 'TCsvReader.Create');
   Result.FInput := AInput;
   Result.FData := PAnsiChar(Result.FInput);
   Result.FLen := Length(AInput);
@@ -73,7 +114,10 @@ begin
   Result.FTrimSpace := ATrimSpace;
   Result.FComment := AComment;
   Result.FHasError := False;
-  Result.FError := '';
+  Result.FError.Message := '';
+  Result.FError.Offset := 0;
+  Result.FError.Line := 1;
+  Result.FError.Column := 1;
 end;
 
 function TCsvReader.PeekChar: AnsiChar;
@@ -86,12 +130,90 @@ begin
   Result := FPos >= FLen;
 end;
 
+procedure TCsvReader.SkipLineEnding;
+begin
+  if (not AtEnd) and (FData[FPos] = #13) then
+    Inc(FPos);
+  if (not AtEnd) and (FData[FPos] = #10) then
+    Inc(FPos);
+end;
+
+procedure TCsvReader.SkipIgnoredLines;
+var
+  LStart: SizeUInt;
+begin
+  repeat
+    LStart := FPos;
+    while (not AtEnd) and ((FData[FPos] = #13) or (FData[FPos] = #10)) do
+      SkipLineEnding;
+
+    if (FComment <> #0) and (not AtEnd) and (FData[FPos] = FComment) then
+    begin
+      while (not AtEnd) and (FData[FPos] <> #13) and (FData[FPos] <> #10) do
+        Inc(FPos);
+      SkipLineEnding;
+    end;
+  until FPos = LStart;
+end;
+
 procedure TCsvReader.SetError(const AMessage: string);
+begin
+  SetErrorAt(AMessage, FPos);
+end;
+
+procedure TCsvReader.SetErrorAt(const AMessage: string; AOffset: SizeUInt);
 begin
   if FHasError then
     Exit;
   FHasError := True;
-  FError := AMessage;
+  FError.Message := AMessage;
+  FError.Offset := AOffset;
+  SetErrorPosition(FError, AOffset);
+end;
+
+procedure TCsvReader.SetErrorPosition(var AError: TCsvError; AOffset: SizeUInt);
+var
+  LIdx, LStop: SizeUInt;
+  LLine, LColumn: UInt32;
+begin
+  if AOffset > FLen then
+    LStop := FLen
+  else
+    LStop := AOffset;
+
+  LIdx := 0;
+  LLine := 1;
+  LColumn := 1;
+  while LIdx < LStop do
+  begin
+    case FData[LIdx] of
+      #10:
+      begin
+        Inc(LLine);
+        LColumn := 1;
+      end;
+      #13:
+      begin
+        Inc(LLine);
+        LColumn := 1;
+        if (LIdx + 1 < LStop) and (FData[LIdx + 1] = #10) then
+          Inc(LIdx);
+      end;
+    else
+      Inc(LColumn);
+    end;
+    Inc(LIdx);
+  end;
+
+  AError.Line := LLine;
+  AError.Column := LColumn;
+end;
+
+procedure TCsvReader.SetDelimiter(AValue: AnsiChar);
+begin
+  ValidateCsvDelimiter(AValue, 'TCsvReader.Delimiter');
+  ValidateCsvCommentMarker(FComment, AValue, 'TCsvReader.Delimiter');
+  FDelimiter := AValue;
 end;
 
 function TCsvReader.TrimStr(const S: string): string;
@@ -112,10 +234,10 @@ end;
 
 function TCsvReader.ReadQuotedField: string;
 var
-  LStart: SizeUInt;
+  LStart, LQuoteOffset: SizeUInt;
   LBuf, LPart: string;
 begin
-  { Skip opening quote }
+  LQuoteOffset := FPos;
   Inc(FPos);
   LBuf := '';
   while not AtEnd do
@@ -131,7 +253,7 @@ begin
     end;
     if AtEnd then
     begin
-      SetError('Unclosed quoted field');
+      SetErrorAt('Unclosed quoted field', LQuoteOffset);
       Break;
     end;
     { We hit a quote }
@@ -168,34 +290,28 @@ var
   LCount: Integer;
   LField: string;
   LWasQuoted: Boolean;
+  LRecordEndOffset: SizeUInt;
 begin
   Result := False;
+  SetLength(AFields, 0);
+  if FHasError then
+    Exit;
+
+  SkipIgnoredLines;
   if AtEnd then
     Exit;
 
-  { Comment line handling: skip lines starting with FComment }
-  if FComment <> #0 then
-  begin
-    while not AtEnd do
-    begin
-      if PeekChar <> FComment then
-        Break;
-      { Skip entire line }
-      while (not AtEnd) and (FData[FPos] <> #13) and (FData[FPos] <> #10) do
-        Inc(FPos);
-      if (not AtEnd) and (FData[FPos] = #13) then Inc(FPos);
-      if (not AtEnd) and (FData[FPos] = #10) then Inc(FPos);
-    end;
-    if AtEnd then
-      Exit;
-  end;
-
-  SetLength(AFields, 0);
   LCount := 0;
 
   repeat
     { Parse one field }
     LWasQuoted := False;
+    { TrimSpace also permits leading spaces or tabs before an opening quote. }
+    if FTrimSpace then
+      while (not AtEnd) and
+        (((PeekChar = ' ') and (FDelimiter <> ' ')) or
+         ((PeekChar = #9) and (FDelimiter <> #9))) do
+        Inc(FPos);
     if (not AtEnd) and (PeekChar = '"') then
     begin
       LWasQuoted := True;
@@ -203,6 +319,11 @@ begin
     end
     else
       LField := ReadUnquotedField;
+
+    if FTrimSpace and LWasQuoted then
+      while (not AtEnd) and (PeekChar <> FDelimiter) and
+        ((PeekChar = ' ') or (PeekChar = #9)) do
+        Inc(FPos);
 
     if LWasQuoted and (not AtEnd) and
       (PeekChar <> FDelimiter) and (PeekChar <> #13) and (PeekChar <> #10) then
@@ -213,8 +334,8 @@ begin
         Inc(FPos);
     end;
 
-    { Trim if requested }
-    if FTrimSpace then
+    { Trim only unquoted fields; quoted payload is data, not surrounding space. }
+    if FTrimSpace and (not LWasQuoted) then
       LField := TrimStr(LField);
 
     { Append to result }
@@ -253,6 +374,8 @@ begin
       Break; { end of row (newline or end) }
   until False;
 
+  LRecordEndOffset := FPos;
+
   { Consume line ending }
   if (not AtEnd) and (PeekChar = #13) then
     Inc(FPos);
@@ -260,8 +383,10 @@ begin
     Inc(FPos);
 
   { FieldsPerRecord check }
-  if (FFieldsPerRecord > 0) and (LCount <> FFieldsPerRecord) then
-    SetError('Wrong number of fields');
+  if FFieldsPerRecord = 0 then
+    FFieldsPerRecord := LCount
+  else if (FFieldsPerRecord > 0) and (LCount <> FFieldsPerRecord) then
+    SetErrorAt('Wrong number of fields', LRecordEndOffset);
 
   Result := True;
 end;
@@ -275,6 +400,8 @@ begin
   LCount := 0;
   while ReadRow(LRow) do
   begin
+    if FHasError then
+      Break;
     Inc(LCount);
     SetLength(Result, LCount);
     Result[LCount - 1] := LRow;
@@ -288,24 +415,50 @@ end;
 
 function TCsvReader.GetError: string;
 begin
+  Result := FError.Message;
+end;
+
+function TCsvReader.Error: TCsvError;
+begin
   Result := FError;
 end;
 
 { ===== TCsvWriter ===== }
 
-class function TCsvWriter.Create(ADelimiter: AnsiChar; AUseCRLF: Boolean): TCsvWriter;
+class function TCsvWriter.Create(ADelimiter: AnsiChar; AUseCRLF: Boolean;
+  AComment: AnsiChar): TCsvWriter;
 begin
+  ValidateCsvDelimiter(ADelimiter, 'TCsvWriter.Create');
+  ValidateCsvCommentMarker(AComment, ADelimiter, 'TCsvWriter.Create');
   Result.FResult := '';
   Result.FDelimiter := ADelimiter;
   Result.FUseCRLF := AUseCRLF;
+  Result.FComment := AComment;
   Result.FFieldCount := 0;
 end;
 
-function NeedsQuoting(const AField: string; ADelimiter: AnsiChar): Boolean;
+function NeedsQuoting(const AField: string; ADelimiter, AComment: AnsiChar;
+  AIsFirstField: Boolean): Boolean;
 var
   I: Integer;
 begin
   Result := False;
+  if Length(AField) = 0 then
+  begin
+    Result := True;
+    Exit;
+  end;
+  if AIsFirstField and (AComment <> #0) and (AField[1] = AComment) then
+  begin
+    Result := True;
+    Exit;
+  end;
+  if (AField[1] = ' ') or (AField[1] = #9) or
+    (AField[Length(AField)] = ' ') or (AField[Length(AField)] = #9) then
+  begin
+    Result := True;
+    Exit;
+  end;
   for I := 1 to Length(AField) do
     case AField[I] of
       '"', #10, #13: begin Result := True; Exit; end;
@@ -346,7 +499,7 @@ procedure TCsvWriter.WriteField(const AField: string);
 begin
   if FFieldCount > 0 then
     FResult := FResult + FDelimiter;
-  if NeedsQuoting(AField, FDelimiter) then
+  if NeedsQuoting(AField, FDelimiter, FComment, FFieldCount = 0) then
     FResult := FResult + QuoteField(AField)
   else
     FResult := FResult + AField;
@@ -355,6 +508,9 @@ end;
 
 procedure TCsvWriter.EndRow;
 begin
+  if FFieldCount = 0 then
+    raise EInvalidOperationError.Create(
+      'TCsvWriter.EndRow: zero-field rows are not supported');
   if FUseCRLF then
     FResult := FResult + #13#10
   else
@@ -364,6 +520,9 @@ end;
 
 function TCsvWriter.ToString: string;
 begin
+  if FFieldCount > 0 then
+    raise EInvalidOperationError.Create(
+      'TCsvWriter.ToString: unfinished row must be ended with EndRow');
   Result := FResult;
 end;
 

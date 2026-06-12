@@ -58,6 +58,16 @@ begin
   CheckEqual(Int64(3), LRoot.MapGet('svc2').MapGet('retries').AsInt, 'svc2.retries');
 end;
 
+procedure TestUndefinedAlias;
+var
+  LDoc: IYamlDocument;
+begin
+  LDoc := YamlParse('{svc: *missing}');
+  Check(LDoc.HasError, 'undefined alias rejected');
+  Check(Pos('undefined alias', LDoc.Error.Message.ToString) > 0,
+    'undefined alias diagnostic');
+end;
+
 { === P0: Block Scalar Content Verification === }
 
 procedure TestBlockLiteralContent;
@@ -87,7 +97,7 @@ begin
   LInput := LInput + '1';
   for LI := 1 to 300 do LInput := LInput + ']';
   LDoc := YamlParse(LInput);
-  Check(LDoc.HasError or LDoc.Root.IsSeq, 'deep nesting handled');
+  Check(LDoc.HasError, 'deep flow nesting rejected');
 end;
 
 procedure TestDeepBlockNesting;
@@ -96,14 +106,28 @@ var
   LInput: string;
   LI: Int32;
 begin
-  // 70 levels of block indent — should trigger indent stack limit (64)
+  // 300 nested block mappings — should trigger parser depth limit (256)
+  LInput := '';
+  for LI := 0 to 299 do
+    LInput := LInput + StringOfChar(' ', LI * 2) + 'k' + IntToStr(LI) + ':' + #10;
+  LInput := LInput + StringOfChar(' ', 600) + 'leaf';
+  LDoc := YamlParse(LInput);
+  Check(LDoc.HasError, 'deep block mapping nesting rejected');
+end;
+
+procedure TestDeepBlockSequenceNesting;
+var
+  LDoc: IYamlDocument;
+  LInput: string;
+  LI: Int32;
+begin
+  // 70 nested block sequences — should trigger scanner indent stack limit (64)
   LInput := '';
   for LI := 0 to 69 do
-    LInput := LInput + StringOfChar(' ', LI * 2) + 'k' + IntToStr(LI) + ':' + #10;
+    LInput := LInput + StringOfChar(' ', LI * 2) + '- ' + #10;
   LInput := LInput + StringOfChar(' ', 140) + 'leaf';
   LDoc := YamlParse(LInput);
-  // Should either error or parse partially — not crash
-  Check(True, 'deep block nesting no crash');
+  Check(LDoc.HasError, 'deep block sequence nesting rejected');
 end;
 
 { === P1: Truncated Input === }
@@ -124,14 +148,49 @@ begin
   Check(LDoc.HasError, 'truncated single quote → error');
 end;
 
-procedure TestUnclosedSequence;
+procedure TestMalformedFlowCollections;
 var
   LDoc: IYamlDocument;
 begin
   LDoc := YamlParse('[1, 2, 3');
-  // 解析器对未闭合 flow 序列采取宽松恢复：不报错，恢复出完整 3 元素序列。
-  Check(LDoc.HasError or (LDoc.Root.IsSeq and (LDoc.Root.SeqLen = 3)),
-    'unclosed seq recovered as 3-element sequence');
+  Check(LDoc.HasError, 'unclosed flow sequence is rejected');
+  Check(Pos('expected "]"', LDoc.Error.Message.ToString) > 0,
+    'unclosed flow sequence diagnostic');
+
+  LDoc := YamlParse('{a: 1, b: 2');
+  Check(LDoc.HasError, 'unclosed flow mapping is rejected');
+  Check(Pos('expected "}"', LDoc.Error.Message.ToString) > 0,
+    'unclosed flow mapping diagnostic');
+end;
+
+procedure TestTrailingDocumentContent;
+var
+  LDoc: IYamlDocument;
+begin
+  LDoc := YamlParse('---' + #10 + 'a: 1' + #10 + '...' + #10 + 'tail');
+  Check(LDoc.HasError, 'trailing content after document rejected');
+  Check(Pos('unexpected content after YAML document',
+    LDoc.Error.Message.ToString) > 0, 'trailing content diagnostic');
+end;
+
+procedure TestMissingValueSeparator;
+var
+  LDoc: IYamlDocument;
+begin
+  LDoc := YamlParse('{svc value}');
+  Check(LDoc.HasError, 'missing value separator rejected');
+  Check(Pos('expected ":"', LDoc.Error.Message.ToString) > 0,
+    'missing value separator diagnostic');
+end;
+
+procedure TestMissingMappingKey;
+var
+  LDoc: IYamlDocument;
+begin
+  LDoc := YamlParse('{svc: 1, : 2}');
+  Check(LDoc.HasError, 'missing mapping key rejected');
+  Check(Pos('expected mapping key', LDoc.Error.Message.ToString) > 0,
+    'missing mapping key diagnostic');
 end;
 
 { === P1: Round-trip All Types === }
@@ -204,9 +263,9 @@ var
   LDoc: IYamlDocument;
 begin
   LDoc := YamlParse('{a: 1, a: 2}');
-  Check(not LDoc.HasError, 'dup keys no error');
-  // YAML spec says last value wins, but our impl returns first match
-  Check(LDoc.Root.MapGet('a').IsInt, 'dup key has value');
+  Check(LDoc.HasError, 'dup keys rejected');
+  Check(Pos('duplicate mapping key', LDoc.Error.Message.ToString) > 0,
+    'dup key diagnostic');
 end;
 
 begin
@@ -215,12 +274,17 @@ begin
   T.Run('Bool key', @TestBoolKey);
   T.Run('Null key', @TestNullKey);
   T.Run('Alias multiple refs', @TestAliasMultipleRefs);
+  T.Run('Undefined alias', @TestUndefinedAlias);
   T.Run('Block literal content', @TestBlockLiteralContent);
   T.Run('Deep flow nesting', @TestDeepFlowNesting);
   T.Run('Deep block nesting', @TestDeepBlockNesting);
+  T.Run('Deep block sequence nesting', @TestDeepBlockSequenceNesting);
   T.Run('Truncated double quote', @TestTruncatedDoubleQuote);
   T.Run('Truncated single quote', @TestTruncatedSingleQuote);
-  T.Run('Unclosed sequence', @TestUnclosedSequence);
+  T.Run('Malformed flow collections', @TestMalformedFlowCollections);
+  T.Run('Trailing document content', @TestTrailingDocumentContent);
+  T.Run('Missing value separator', @TestMissingValueSeparator);
+  T.Run('Missing mapping key', @TestMissingMappingKey);
   T.Run('Round-trip all types', @TestRoundTripAllTypes);
   T.Run('Large sequence 5000', @TestLargeSequence);
   T.Run('Large mapping 500', @TestLargeMapping);

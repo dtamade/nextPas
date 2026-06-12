@@ -4,6 +4,7 @@ program test_json_robustness;
 
 uses
   SysUtils,
+  nextpas.core.simd.vec,
   nextpas.core.text.view,
   nextpas.core.text.builder,
   nextpas.core.mem.default,
@@ -73,14 +74,39 @@ end;
 
 procedure TestNumberOverflow;
 var Doc: IJsonDocument;
-begin
-  Doc := JsonParse('99999999999999999999');
-  Check(not Doc.HasError, 'large number parsed as float');
-  Check(Doc.Root.IsReal, 'overflow → float');
 
-  Doc := JsonParse('-99999999999999999999');
-  Check(not Doc.HasError, 'large neg number parsed');
-  Check(Doc.Root.IsReal, 'neg overflow → float');
+  procedure ExpectOverflow(const AInput, ACase: string);
+  begin
+    Doc := JsonParse(AInput);
+    Check(Doc.HasError, ACase + ' rejected');
+    CheckEqual('number overflow', Doc.Error.Message.ToString,
+      ACase + ' error message');
+  end;
+
+begin
+  Doc := JsonParse('9223372036854775807');
+  Check(not Doc.HasError, 'max int64 accepted');
+  Check(Doc.Root.IsInt, 'max int64 stays integer');
+  CheckEqual(High(Int64), Doc.Root.AsInt, 'max int64 value');
+
+  Doc := JsonParse('-9223372036854775808');
+  Check(not Doc.HasError, 'min int64 accepted');
+  Check(Doc.Root.IsInt, 'min int64 stays integer');
+  CheckEqual(Low(Int64), Doc.Root.AsInt, 'min int64 value');
+
+  Doc := JsonParse('1e20');
+  Check(not Doc.HasError, 'explicit exponent parsed as float');
+  Check(Doc.Root.IsReal, 'explicit exponent stays float');
+
+  Doc := JsonParse('1.0');
+  Check(not Doc.HasError, 'explicit decimal parsed as float');
+  Check(Doc.Root.IsReal, 'explicit decimal stays float');
+
+  ExpectOverflow('9223372036854775808', 'positive int64 overflow');
+  ExpectOverflow('-9223372036854775809', 'negative int64 overflow');
+  ExpectOverflow('99999999999999999999', 'large integer overflow');
+  ExpectOverflow('-99999999999999999999', 'large negative integer overflow');
+  ExpectOverflow('1e1000', 'explicit float overflow');
 end;
 
 procedure TestMalformedStructure;
@@ -146,6 +172,113 @@ begin
   Check(Doc.HasError, 'missing comma between pairs');
 end;
 
+procedure TestStructuralErrorPositions;
+var
+  Doc: IJsonDocument;
+
+  procedure ExpectStructuralErrorPosition(const AInput, AExpectedMessage,
+    ACase: string; AExpectedOffset, AExpectedLine, AExpectedColumn: Int64);
+  begin
+    Doc := JsonParse(AInput);
+    Check(Doc.HasError, ACase + ' rejected');
+    CheckEqual(AExpectedMessage, Doc.Error.Message.ToString,
+      ACase + ' error message');
+    CheckEqual(AExpectedOffset, Int64(Doc.Error.Offset),
+      ACase + ' error offset');
+    CheckEqual(AExpectedLine, Int64(Doc.Error.Line),
+      ACase + ' error line');
+    CheckEqual(AExpectedColumn, Int64(Doc.Error.Column),
+      ACase + ' error column');
+  end;
+
+begin
+  ExpectStructuralErrorPosition('{"a" "b"}',
+    'expected :', 'object missing colon before next key', 5, 1, 6);
+  ExpectStructuralErrorPosition('{"a":1 "b":2}',
+    'expected , or }', 'object missing comma before next key', 7, 1, 8);
+  ExpectStructuralErrorPosition('["a" "b"]',
+    'expected , or ]', 'array missing comma before next string', 5, 1, 6);
+  ExpectStructuralErrorPosition('[true false]',
+    'expected , or ]', 'array missing comma before next literal', 6, 1, 7);
+  ExpectStructuralErrorPosition('[false null]',
+    'expected , or ]', 'array missing comma after false', 7, 1, 8);
+  ExpectStructuralErrorPosition('[null true]',
+    'expected , or ]', 'array missing comma after null', 6, 1, 7);
+  ExpectStructuralErrorPosition('{"a":true "b":false}',
+    'expected , or }', 'object missing comma after literal value', 10, 1, 11);
+end;
+
+procedure TestLiteralBoundaryRegressions;
+var
+  Doc: IJsonDocument;
+
+  procedure ExpectInvalidLiteral(const AInput, ACase: string);
+  begin
+    Doc := JsonParse(AInput);
+    Check(Doc.HasError, ACase + ' rejected');
+    CheckEqual('invalid literal', Doc.Error.Message.ToString,
+      ACase + ' error message');
+  end;
+
+begin
+  ExpectInvalidLiteral('truex', 'top-level true suffix');
+  ExpectInvalidLiteral('falsex', 'top-level false suffix');
+  ExpectInvalidLiteral('nullx', 'top-level null suffix');
+  ExpectInvalidLiteral('[truex]', 'array true suffix');
+  ExpectInvalidLiteral('[false2]', 'array false suffix');
+  ExpectInvalidLiteral('[nullfoo]', 'array null suffix');
+  ExpectInvalidLiteral('tru e', 'split incomplete true');
+  ExpectInvalidLiteral('fals e', 'split incomplete false');
+  ExpectInvalidLiteral('nul l', 'split incomplete null');
+end;
+
+procedure TestStringErrorPositions;
+var
+  Doc: IJsonDocument;
+
+  procedure ExpectStringErrorPosition(const AInput, ACase: string;
+    AExpectedOffset, AExpectedLine, AExpectedColumn: Int64);
+  begin
+    Doc := JsonParse(AInput);
+    Check(Doc.HasError, ACase + ' rejected');
+    CheckEqual('invalid escape sequence', Doc.Error.Message.ToString,
+      ACase + ' error message');
+    CheckEqual(AExpectedOffset, Int64(Doc.Error.Offset),
+      ACase + ' error offset');
+    CheckEqual(AExpectedLine, Int64(Doc.Error.Line),
+      ACase + ' error line');
+    CheckEqual(AExpectedColumn, Int64(Doc.Error.Column),
+      ACase + ' error column');
+  end;
+
+begin
+  ExpectStringErrorPosition(
+    '{' + #10 +
+    '  "x": "ok\q"' + #10 +
+    '}',
+    'invalid escape',
+    12, 2, 11);
+  ExpectStringErrorPosition(
+    '{"x":"\uD800x"}',
+    'unpaired high surrogate',
+    6, 1, 7);
+  ExpectStringErrorPosition(
+    '"\uDC00"',
+    'unpaired low surrogate',
+    1, 1, 2);
+
+  Doc := JsonParse('["a' + #10 + 'b"]');
+  Check(Doc.HasError, 'bare newline in string rejected');
+  CheckEqual('control char in string', Doc.Error.Message.ToString,
+    'bare newline error message');
+  CheckEqual(Int64(3), Int64(Doc.Error.Offset),
+    'bare newline error offset');
+  CheckEqual(Int64(1), Int64(Doc.Error.Line),
+    'bare newline error line');
+  CheckEqual(Int64(4), Int64(Doc.Error.Column),
+    'bare newline error column');
+end;
+
 procedure TestAccessOnWrongType;
 var Doc: IJsonDocument; V: TJsonValue;
 begin
@@ -180,19 +313,20 @@ end;
 procedure TestConsecutiveBackslashes;
 var
   Buf: array[0..1099] of AnsiChar;
-  I: Int32;
+  I, PrefixLen: Int32;
   Doc: IJsonDocument;
   S: string;
+  Decoded: string;
 begin
   Buf[0] := '"';
   for I := 1 to 100 do Buf[I] := '\';
   Buf[101] := '"';
   SetString(S, @Buf[0], 102);
   Doc := JsonParse(S);
-  if not Doc.HasError then
-    CheckEqual(Int64(50), Int64(Doc.Root.AsStr.Len), '100 bs = 50 decoded')
-  else
-    Check(True, '100 bs rejected (acceptable)');
+  Check(not Doc.HasError, '100 consecutive backslashes parsed');
+  CheckEqual(Int64(50), Int64(Doc.Root.AsStr.Len), '100 bs = 50 decoded');
+  CheckEqual(StringOfChar('\', 50), Doc.Root.AsStr.ToString,
+    '100 bs decoded content');
 
   Buf[0] := '"';
   for I := 1 to 99 do Buf[I] := '\';
@@ -200,10 +334,37 @@ begin
   Buf[101] := '"';
   SetString(S, @Buf[0], 102);
   Doc := JsonParse(S);
-  if not Doc.HasError then
-    Check(Doc.Root.AsStr.Len > 0, '99 bs + quote parsed')
-  else
-    Check(True, '99 bs rejected (acceptable)');
+  Check(not Doc.HasError, '99 consecutive backslashes plus escaped quote parsed');
+  CheckEqual(Int64(50), Int64(Doc.Root.AsStr.Len),
+    '99 bs plus quote decoded length');
+  Decoded := Doc.Root.AsStr.ToString;
+  CheckEqual(StringOfChar('\', 49) + '"', Decoded,
+    '99 bs plus quote decoded content');
+
+  Buf[0] := '"';
+  PrefixLen := VecWidth - 1;
+  for I := 1 to PrefixLen do Buf[I] := 'a';
+  for I := PrefixLen + 1 to PrefixLen + 3 do Buf[I] := '\';
+  Buf[PrefixLen + 4] := '"';
+  Buf[PrefixLen + 5] := '"';
+  SetString(S, @Buf[0], PrefixLen + 6);
+  Doc := JsonParse(S);
+  Check(not Doc.HasError, 'cross-chunk odd backslash carry parsed');
+  CheckEqual(StringOfChar('a', PrefixLen) + '\"', Doc.Root.AsStr.ToString,
+    'cross-chunk odd backslash carry content');
+
+  Buf[0] := '"';
+  for I := 1 to VecWidth - 2 do Buf[I] := 'a';
+  for I := VecWidth - 1 to VecWidth + 1 do Buf[I] := '\';
+  Buf[VecWidth + 2] := '"';
+  Buf[VecWidth + 3] := 'b';
+  Buf[VecWidth + 4] := '"';
+  for I := VecWidth + 5 to (2 * VecWidth) - 1 do Buf[I] := ' ';
+  SetString(S, @Buf[0], 2 * VecWidth);
+  Doc := JsonParse(S);
+  Check(not Doc.HasError, 'simd chunk boundary odd backslash carry parsed');
+  CheckEqual(StringOfChar('a', VecWidth - 2) + '\"b',
+    Doc.Root.AsStr.ToString, 'simd chunk boundary odd backslash carry content');
 end;
 
 procedure TestUnicodeInKey;
@@ -221,8 +382,40 @@ const
   INPUT = '1234567890123456789012345678901234567890';
 begin
   Doc := JsonParse(INPUT);
-  Check(not Doc.HasError, 'very long number parsed');
-  Check(Doc.Root.IsReal, 'long number → float');
+  Check(Doc.HasError, 'very long bare integer rejected');
+  CheckEqual('number overflow', Doc.Error.Message.ToString,
+    'very long bare integer error message');
+end;
+
+procedure TestNestedNumberErrorPositions;
+var
+  Doc: IJsonDocument;
+
+  procedure ExpectNumberErrorPosition(const AInput, AExpectedMessage,
+    ACase: string; AExpectedOffset, AExpectedLine, AExpectedColumn: Int64);
+  begin
+    Doc := JsonParse(AInput);
+    Check(Doc.HasError, ACase + ' rejected');
+    CheckEqual(AExpectedMessage, Doc.Error.Message.ToString,
+      ACase + ' error message');
+    CheckEqual(AExpectedOffset, Int64(Doc.Error.Offset),
+      ACase + ' error offset');
+    CheckEqual(AExpectedLine, Int64(Doc.Error.Line),
+      ACase + ' error line');
+    CheckEqual(AExpectedColumn, Int64(Doc.Error.Column),
+      ACase + ' error column');
+  end;
+
+begin
+  ExpectNumberErrorPosition('{"n":9223372036854775808}',
+    'number overflow', 'object int64 overflow', 5, 1, 6);
+  ExpectNumberErrorPosition('[0, 1e1000]',
+    'number overflow', 'array float overflow', 4, 1, 5);
+  ExpectNumberErrorPosition('{' + #13#10 + '  "n": 01' + #10 + '}',
+    'invalid number', 'object invalid number after CRLF', 10, 2, 8);
+  ExpectNumberErrorPosition('{' + #13#10 + '  "n": 1e+}' + #10 + '}',
+    'invalid number', 'object exponent without digits after CRLF',
+    13, 2, 11);
 end;
 
 procedure TestNestedObjects;
@@ -277,11 +470,15 @@ begin
   T.Run('special strings', @TestSpecialStrings);
   T.Run('null byte in string', @TestNullByteInString);
   T.Run('invalid value positions', @TestInvalidValuePositions);
+  T.Run('structural error positions', @TestStructuralErrorPositions);
+  T.Run('literal boundary regressions', @TestLiteralBoundaryRegressions);
+  T.Run('string error positions', @TestStringErrorPositions);
   T.Run('access on wrong type', @TestAccessOnWrongType);
   T.Run('stress large array', @TestStressLargeArray);
   T.Run('consecutive backslashes', @TestConsecutiveBackslashes);
   T.Run('unicode in key', @TestUnicodeInKey);
   T.Run('very long number', @TestVeryLongNumber);
+  T.Run('nested number error positions', @TestNestedNumberErrorPositions);
   T.Run('nested objects', @TestNestedObjects);
   T.Run('empty string key', @TestEmptyStringKey);
   T.Run('repeated parse', @TestRepeatedParse);

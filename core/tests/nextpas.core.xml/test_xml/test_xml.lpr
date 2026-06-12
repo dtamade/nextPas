@@ -162,6 +162,32 @@ begin
   end;
 end;
 
+procedure TestXmlParseAllowsDocumentWhitespace;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := XmlParse('  ' + #10 + '<root/>' + #10 + '  ');
+  try
+    Check(LDoc.Root <> nil, 'root present with surrounding whitespace');
+    CheckEqual('root', LDoc.Root.Name.Local, 'root name with surrounding whitespace');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestXmlParseAllowsPreRootDoctype;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := XmlParse('<?xml version="1.0"?><!--pre--><!DOCTYPE root><root/><?tail data?>');
+  try
+    Check(LDoc.Root <> nil, 'root present with pre-root doctype');
+    CheckEqual('root', LDoc.Root.Name.Local, 'root name with pre-root doctype');
+  finally
+    LDoc.Free;
+  end;
+end;
+
 procedure TestXmlTokenizeEmptyInput;
 var
   LToks: TXmlTokenArray;
@@ -185,6 +211,590 @@ begin
   Check(LRaised, 'malformed XML raises EXmlError');
 end;
 
+procedure TestXmlTokenizeReportsExactEofPosition;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    XmlTokenize('<root><unclosed>');
+  except
+    on E: EXmlError do
+    begin
+      LRaised := True;
+      Check(Pos('Unclosed element: unclosed', E.Message) > 0,
+        'EOF error text');
+      CheckEqual(Int64(16), Int64(E.Pos.ByteOffset),
+        'EOF error byte offset');
+      CheckEqual(Int64(1), Int64(E.Pos.Line), 'EOF error line');
+      CheckEqual(Int64(17), Int64(E.Pos.Column), 'EOF error column');
+    end;
+  end;
+  Check(LRaised, 'EOF error raises EXmlError');
+end;
+
+procedure TestXmlTokenizeReportsExactCROnlyEofPosition;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    XmlTokenize('<root>' + #13 + '<unclosed>');
+  except
+    on E: EXmlError do
+    begin
+      LRaised := True;
+      Check(Pos('Unclosed element: unclosed', E.Message) > 0,
+        'CR-only EOF error text');
+      CheckEqual(Int64(17), Int64(E.Pos.ByteOffset),
+        'CR-only EOF error byte offset');
+      CheckEqual(Int64(2), Int64(E.Pos.Line), 'CR-only EOF error line');
+      CheckEqual(Int64(11), Int64(E.Pos.Column),
+        'CR-only EOF error column');
+    end;
+  end;
+  Check(LRaised, 'CR-only EOF error raises EXmlError');
+end;
+
+procedure TestXmlTokenizeRejectsInvalidReservedNamespaceBinding;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    XmlTokenize('<root xmlns:xmlns="urn:x"/>');
+  except
+    on E: EXmlError do
+    begin
+      LRaised := True;
+      Check(Pos('prefix "xmlns" is reserved', E.Message) > 0,
+        'reserved namespace failure text');
+      CheckEqual(Int64(1), Int64(E.Pos.Line), 'error line');
+      Check(E.Pos.Column > 1, 'error column recorded');
+    end;
+  end;
+  Check(LRaised, 'invalid reserved namespace binding raises EXmlError');
+end;
+
+procedure TestXmlTokenizeRejectsUnboundNamespacePrefix;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    XmlTokenize('<ns:root/>');
+  except
+    on E: EXmlError do
+    begin
+      LRaised := True;
+      Check(Pos('namespace prefix "ns" is not bound', E.Message) > 0,
+        'unbound namespace failure text');
+      CheckEqual(Int64(1), Int64(E.Pos.Line), 'error line');
+      Check(E.Pos.Column > 1, 'error column recorded');
+    end;
+  end;
+  Check(LRaised, 'unbound namespace prefix raises EXmlError');
+end;
+
+procedure TestXmlRejectsInvalidCommentPayload;
+  procedure ExpectCommentError(const AXml, AExpectedFragment,
+    ALabel: string);
+  var
+    LRaised: Boolean;
+    LDoc: TXmlDocument;
+  begin
+    LRaised := False;
+    LDoc := nil;
+    try
+      try
+        XmlTokenize(AXml);
+      except
+        on E: EXmlError do
+        begin
+          LRaised := True;
+          Check(Pos(AExpectedFragment, E.Message) > 0,
+            ALabel + ' tokenize reports comment payload error');
+          Check(E.Pos.Line > 0, ALabel + ' tokenize error line recorded');
+          Check(E.Pos.Column > 0, ALabel + ' tokenize error column recorded');
+        end;
+      end;
+      Check(LRaised, ALabel + ' XmlTokenize raises EXmlError');
+
+      Check(not TryXmlParse(AXml, LDoc),
+        ALabel + ' TryXmlParse rejects invalid comment payload');
+      Check(LDoc = nil, ALabel + ' TryXmlParse keeps nil doc');
+    finally
+      LDoc.Free;
+    end;
+  end;
+begin
+  ExpectCommentError('<root><!--alpha--omega--></root>',
+    'comment text must not contain "--"',
+    'comment with double hyphen payload');
+  ExpectCommentError('<root><!--alpha---></root>',
+    'comment text must not end with "-"',
+    'comment with trailing hyphen payload');
+end;
+
+procedure TestXmlRejectsInvalidDocumentStructure;
+  procedure ExpectParseError(const AXml, AExpectedFragment, ALabel: string);
+  var
+    LRaised: Boolean;
+    LDoc: TXmlDocument;
+  begin
+    LRaised := False;
+    LDoc := nil;
+    try
+      try
+        LDoc := XmlParse(AXml);
+      except
+        on E: EXmlError do
+        begin
+          LRaised := True;
+          Check(Pos(AExpectedFragment, E.Message) > 0,
+            ALabel + ' reports the expected error text');
+          CheckEqual(Int64(1), Int64(E.Pos.Line), ALabel + ' error line');
+          Check(E.Pos.Column > 0, ALabel + ' error column recorded');
+        end;
+      end;
+      Check(LRaised, ALabel + ' raises EXmlError');
+    finally
+      LDoc.Free;
+    end;
+  end;
+var
+  LDoc: TXmlDocument;
+begin
+  ExpectParseError(
+    'hello<root/>',
+    'Document text outside root element must be whitespace only',
+    'leading document text');
+  ExpectParseError(
+    '<root/>tail',
+    'Document text outside root element must be whitespace only',
+    'trailing document text');
+  ExpectParseError(
+    '<![CDATA[text]]><root/>',
+    'Document text outside root element must be whitespace only',
+    'leading document cdata');
+  ExpectParseError(
+    '<a/><b/>',
+    'Multiple root elements',
+    'multiple root elements');
+
+  LDoc := nil;
+  Check(not TryXmlParse('hello<root/>', LDoc),
+    'TryXmlParse rejects leading document text');
+  Check(LDoc = nil, 'TryXmlParse keeps nil doc for leading document text');
+  Check(not TryXmlParse('<root/>tail', LDoc),
+    'TryXmlParse rejects trailing document text');
+  Check(LDoc = nil, 'TryXmlParse keeps nil doc for trailing document text');
+  Check(not TryXmlParse('<a/><b/>', LDoc),
+    'TryXmlParse rejects multiple root elements');
+  Check(LDoc = nil, 'TryXmlParse keeps nil doc for multiple root elements');
+end;
+
+procedure TestXmlRejectsMisplacedDoctype;
+  procedure ExpectParseError(const AXml, AExpectedFragment, ALabel: string);
+  var
+    LRaised: Boolean;
+    LDoc: TXmlDocument;
+  begin
+    LRaised := False;
+    LDoc := nil;
+    try
+      try
+        LDoc := XmlParse(AXml);
+      except
+        on E: EXmlError do
+        begin
+          LRaised := True;
+          Check(Pos(AExpectedFragment, E.Message) > 0,
+            ALabel + ' reports the expected error text');
+          CheckEqual(Int64(1), Int64(E.Pos.Line), ALabel + ' error line');
+          Check(E.Pos.Column > 0, ALabel + ' error column recorded');
+        end;
+      end;
+      Check(LRaised, ALabel + ' raises EXmlError');
+    finally
+      LDoc.Free;
+    end;
+  end;
+var
+  LDoc: TXmlDocument;
+begin
+  ExpectParseError(
+    '<!DOCTYPE root><!DOCTYPE root><root/>',
+    'DOCTYPE must not appear more than once',
+    'duplicate doctype');
+  ExpectParseError(
+    '<root/><!DOCTYPE root>',
+    'DOCTYPE must appear before the root element',
+    'post-root doctype');
+  ExpectParseError(
+    '<root><!DOCTYPE root></root>',
+    'DOCTYPE must appear before the root element',
+    'in-content doctype');
+
+  LDoc := nil;
+  Check(not TryXmlParse('<!DOCTYPE root><!DOCTYPE root><root/>', LDoc),
+    'TryXmlParse rejects duplicate doctype');
+  Check(LDoc = nil, 'TryXmlParse keeps nil doc for duplicate doctype');
+  Check(not TryXmlParse('<root/><!DOCTYPE root>', LDoc),
+    'TryXmlParse rejects post-root doctype');
+  Check(LDoc = nil, 'TryXmlParse keeps nil doc for post-root doctype');
+end;
+
+procedure TestXmlRejectsMissingRootElement;
+  procedure ExpectParseError(const AXml, AExpectedFragment, ALabel: string);
+  var
+    LRaised: Boolean;
+    LDoc: TXmlDocument;
+  begin
+    LRaised := False;
+    LDoc := nil;
+    try
+      try
+        LDoc := XmlParse(AXml);
+      except
+        on E: EXmlError do
+        begin
+          LRaised := True;
+          Check(Pos(AExpectedFragment, E.Message) > 0,
+            ALabel + ' reports the expected error text');
+          CheckEqual(Int64(1), Int64(E.Pos.Line), ALabel + ' error line');
+          Check(E.Pos.Column > 0, ALabel + ' error column recorded');
+        end;
+      end;
+      Check(LRaised, ALabel + ' raises EXmlError');
+    finally
+      LDoc.Free;
+    end;
+  end;
+var
+  LDoc: TXmlDocument;
+begin
+  ExpectParseError(
+    '<?xml version="1.0"?>',
+    'Document must contain a root element',
+    'xml declaration only');
+  ExpectParseError(
+    '<!--comment-->',
+    'Document must contain a root element',
+    'comment only');
+  ExpectParseError(
+    '<?target data?>',
+    'Document must contain a root element',
+    'processing instruction only');
+  ExpectParseError(
+    '<!DOCTYPE root>',
+    'Document must contain a root element',
+    'doctype only');
+
+  LDoc := nil;
+  Check(not TryXmlParse('<?xml version="1.0"?>', LDoc),
+    'TryXmlParse rejects xml declaration without root');
+  Check(LDoc = nil, 'TryXmlParse keeps nil doc for xml declaration without root');
+  Check(not TryXmlParse('<!DOCTYPE root>', LDoc),
+    'TryXmlParse rejects doctype without root');
+  Check(LDoc = nil, 'TryXmlParse keeps nil doc for doctype without root');
+end;
+
+procedure TestXmlTokenizeRejectsInvalidNames;
+  procedure ExpectTokenizeError(
+    const AXml, AExpectedFragment, ALabel: string);
+  var
+    LRaised: Boolean;
+  begin
+    LRaised := False;
+    try
+      XmlTokenize(AXml);
+    except
+      on E: EXmlError do
+      begin
+        LRaised := True;
+        Check(Pos(AExpectedFragment, E.Message) > 0,
+          ALabel + ' reports the expected error text');
+        CheckEqual(Int64(1), Int64(E.Pos.Line), ALabel + ' error line');
+        Check(E.Pos.Column > 1, ALabel + ' error column recorded');
+      end;
+    end;
+    Check(LRaised, ALabel + ' raises EXmlError');
+  end;
+begin
+  ExpectTokenizeError(
+    '<ns:bad:name/>',
+    'element name must be a valid XML QName',
+    'invalid element QName');
+  ExpectTokenizeError(
+    '<?XML version="1.0"?>',
+    'processing-instruction target "xml" is reserved for XML declarations',
+    'reserved XML processing-instruction target');
+end;
+
+procedure TestXmlRejectsMisplacedXmlDecl;
+  procedure ExpectXmlError(
+    const AXml, AExpectedFragment, ALabel: string; AUseParse: Boolean);
+  var
+    LRaised: Boolean;
+    LDoc: TXmlDocument;
+  begin
+    LRaised := False;
+    LDoc := nil;
+    try
+      try
+        if AUseParse then
+          LDoc := XmlParse(AXml)
+        else
+          XmlTokenize(AXml);
+      except
+        on E: EXmlError do
+        begin
+          LRaised := True;
+          Check(Pos(AExpectedFragment, E.Message) > 0,
+            ALabel + ' reports the expected error text');
+          CheckEqual(Int64(1), Int64(E.Pos.Line), ALabel + ' error line');
+          Check(E.Pos.Column > 1, ALabel + ' error column recorded');
+        end;
+      end;
+      Check(LRaised, ALabel + ' raises EXmlError');
+    finally
+      LDoc.Free;
+    end;
+  end;
+begin
+  ExpectXmlError(
+    '<root/><?xml version="1.0"?>',
+    'XML declaration must be the first token in the document',
+    'tokenize late xml declaration',
+    False);
+  ExpectXmlError(
+    '<?xml version="1.0"?><?xml version="1.0"?><root/>',
+    'XML declaration must be the first token in the document',
+    'parse duplicate xml declaration',
+    True);
+end;
+
+procedure TestXmlRejectsInvalidXmlDeclAttributes;
+  procedure ExpectXmlError(
+    const AXml, AExpectedFragment, ALabel: string; AUseParse: Boolean);
+  var
+    LRaised: Boolean;
+    LDoc: TXmlDocument;
+  begin
+    LRaised := False;
+    LDoc := nil;
+    try
+      try
+        if AUseParse then
+          LDoc := XmlParse(AXml)
+        else
+          XmlTokenize(AXml);
+      except
+        on E: EXmlError do
+        begin
+          LRaised := True;
+          Check(Pos(AExpectedFragment, E.Message) > 0,
+            ALabel + ' reports the expected error text');
+          CheckEqual(Int64(1), Int64(E.Pos.Line), ALabel + ' error line');
+          Check(E.Pos.Column > 1, ALabel + ' error column recorded');
+        end;
+      end;
+      Check(LRaised, ALabel + ' raises EXmlError');
+    finally
+      LDoc.Free;
+    end;
+  end;
+begin
+  ExpectXmlError(
+    '<?xml encoding="UTF-8"?><root/>',
+    'XML declaration must include a version attribute first',
+    'tokenize missing declaration version',
+    False);
+  ExpectXmlError(
+    '<?xml version="1.0" standalone="yes" encoding="UTF-8"?><root/>',
+    'XML declaration attribute "encoding" must appear before "standalone"',
+    'parse invalid declaration attribute order',
+    True);
+  ExpectXmlError(
+    '<?xml version="1.0"><root/>',
+    'XML declaration must end with ?>',
+    'tokenize declaration without pi terminator',
+    False);
+end;
+
+procedure TestXmlRejectsDuplicateAttributes;
+var
+  LDoc: TXmlDocument;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    XmlTokenize('<r a="1" a="2"/>');
+  except
+    on E: EXmlError do
+    begin
+      LRaised := True;
+      Check(Pos('attribute "a" must not appear more than once',
+        E.Message) > 0, 'tokenize duplicate attribute error text');
+      CheckEqual(Int64(1), Int64(E.Pos.Line),
+        'tokenize duplicate attribute error line');
+      Check(E.Pos.Column > 1, 'tokenize duplicate attribute error column');
+    end;
+  end;
+  Check(LRaised, 'XmlTokenize rejects duplicate attributes');
+
+  LDoc := nil;
+  Check(not TryXmlParse('<r a="1" a="2"/>', LDoc),
+    'TryXmlParse rejects duplicate attributes');
+  Check(LDoc = nil, 'TryXmlParse keeps nil doc for duplicate attributes');
+
+  LRaised := False;
+  try
+    LDoc := XmlParse('<r a="1" a="2"/>');
+  except
+    on E: EXmlError do
+    begin
+      LRaised := True;
+      Check(Pos('attribute "a" must not appear more than once',
+        E.Message) > 0, 'XmlParse duplicate attribute error text');
+    end;
+  end;
+  try
+    Check(LRaised, 'XmlParse rejects duplicate attributes');
+  finally
+    LDoc.Free;
+  end;
+
+  LRaised := False;
+  try
+    XmlTokenize('<r xmlns:p="urn:x" xmlns:q="urn:x" p:a="1" q:a="2"/>');
+  except
+    on E: EXmlError do
+    begin
+      LRaised := True;
+      Check(Pos('must not appear more than once', E.Message) > 0,
+        'tokenize duplicate expanded attribute error text');
+    end;
+  end;
+  Check(LRaised, 'XmlTokenize rejects duplicate expanded attributes');
+
+  LDoc := nil;
+  Check(not TryXmlParse(
+    '<r xmlns:p="urn:x" xmlns:q="urn:x" p:a="1" q:a="2"/>',
+    LDoc),
+    'TryXmlParse rejects duplicate expanded attributes');
+  Check(LDoc = nil,
+    'TryXmlParse keeps nil doc for duplicate expanded attributes');
+
+  LRaised := False;
+  try
+    LDoc := XmlParse(
+      '<r xmlns:p="urn:x" xmlns:q="urn:x" p:a="1" q:a="2"/>');
+  except
+    on E: EXmlError do
+    begin
+      LRaised := True;
+      Check(Pos('must not appear more than once', E.Message) > 0,
+        'XmlParse duplicate expanded attribute error text');
+    end;
+  end;
+  try
+    Check(LRaised, 'XmlParse rejects duplicate expanded attributes');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestXmlRejectsRawLessThanInAttributeValue;
+var
+  LDoc: TXmlDocument;
+  LToks: TXmlTokenArray;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    XmlTokenize('<r a="raw<bad"/>');
+  except
+    on E: EXmlError do
+    begin
+      LRaised := True;
+      Check(Pos('attribute value must not contain raw <', E.Message) > 0,
+        'XmlTokenize raw less-than attribute error text');
+      CheckEqual(Int64(1), Int64(E.Pos.Line),
+        'XmlTokenize raw less-than attribute error line');
+      Check(E.Pos.Column > 1,
+        'XmlTokenize raw less-than attribute error column');
+    end;
+  end;
+  Check(LRaised, 'XmlTokenize rejects raw less-than in attribute value');
+
+  LDoc := nil;
+  Check(not TryXmlParse('<r a="raw<bad"/>', LDoc),
+    'TryXmlParse rejects raw less-than in attribute value');
+  Check(LDoc = nil,
+    'TryXmlParse keeps nil doc for raw less-than in attribute value');
+
+  LRaised := False;
+  try
+    LDoc := XmlParse('<r a="raw<bad"/>');
+  except
+    on E: EXmlError do
+    begin
+      LRaised := True;
+      Check(Pos('attribute value must not contain raw <', E.Message) > 0,
+        'XmlParse raw less-than attribute error text');
+    end;
+  end;
+  try
+    Check(LRaised, 'XmlParse rejects raw less-than in attribute value');
+  finally
+    LDoc.Free;
+  end;
+
+  LToks := XmlTokenize('<r a="safe&lt;value"/>');
+  CheckEqual(Int64(1), Int64(Length(LToks)),
+    'XmlTokenize keeps escaped less-than attribute valid');
+  CheckEqual('safe<value', LToks[0].Attributes[0].Value,
+    'XmlTokenize decodes escaped less-than attribute value');
+end;
+
+procedure TestXmlAllowsDistinctExpandedAttributes;
+var
+  LDoc: TXmlDocument;
+  LToks: TXmlTokenArray;
+begin
+  LToks := XmlTokenize(
+    '<r p:a="1" q:a="2" xmlns:p="urn:p" xmlns:q="urn:q"/>');
+  CheckEqual(Int64(1), Int64(Length(LToks)),
+    'distinct namespace attributes tokenize one token');
+  CheckEqual(Int64(4), Int64(Length(LToks[0].Attributes)),
+    'distinct namespace attributes and declarations are retained');
+
+  LDoc := nil;
+  Check(TryXmlParse(
+    '<r p:a="1" q:a="2" xmlns:p="urn:p" xmlns:q="urn:q"/>',
+    LDoc),
+    'TryXmlParse allows same local attributes in distinct namespaces');
+  try
+    Check(LDoc <> nil,
+      'TryXmlParse returns doc for distinct namespace attributes');
+  finally
+    LDoc.Free;
+  end;
+
+  LDoc := XmlParse(
+    '<r a="1" p:a="2" xmlns="urn:x" xmlns:p="urn:x"/>');
+  try
+    Check(LDoc.Root <> nil,
+      'XmlParse allows unprefixed attr beside same-URI prefixed attr');
+    CheckEqual('1', LDoc.Root.GetAttr('a'),
+      'unprefixed attribute remains visible by local name');
+  finally
+    LDoc.Free;
+  end;
+end;
+
 procedure TestXmlEncodeAttrApos;
 begin
   CheckEqual('it&apos;s', XmlEncodeAttr('it''s'), 'encode single quote in attr');
@@ -205,8 +815,38 @@ begin
   T.Run('XmlEncodeAttr', @TestXmlEncodeAttr);
   T.Run('EncodeDecodeRoundTrip', @TestEncodeDecodeRoundTrip);
   T.Run('XmlParseIgnoresDeclAndDoctype', @TestXmlParseIgnoresDeclAndDoctype);
+  T.Run('XmlParseAllowsDocumentWhitespace', @TestXmlParseAllowsDocumentWhitespace);
+  T.Run('XmlParseAllowsPreRootDoctype', @TestXmlParseAllowsPreRootDoctype);
   T.Run('XmlTokenizeEmptyInput', @TestXmlTokenizeEmptyInput);
   T.Run('XmlTokenizePropagatesError', @TestXmlTokenizePropagatesError);
+  T.Run('XmlTokenizeReportsExactEofPosition',
+    @TestXmlTokenizeReportsExactEofPosition);
+  T.Run('XmlTokenizeReportsExactCROnlyEofPosition',
+    @TestXmlTokenizeReportsExactCROnlyEofPosition);
+  T.Run('XmlTokenizeRejectsInvalidReservedNamespaceBinding',
+    @TestXmlTokenizeRejectsInvalidReservedNamespaceBinding);
+  T.Run('XmlTokenizeRejectsUnboundNamespacePrefix',
+    @TestXmlTokenizeRejectsUnboundNamespacePrefix);
+  T.Run('XmlRejectsInvalidCommentPayload',
+    @TestXmlRejectsInvalidCommentPayload);
+  T.Run('XmlRejectsInvalidDocumentStructure',
+    @TestXmlRejectsInvalidDocumentStructure);
+  T.Run('XmlRejectsMisplacedDoctype',
+    @TestXmlRejectsMisplacedDoctype);
+  T.Run('XmlRejectsMissingRootElement',
+    @TestXmlRejectsMissingRootElement);
+  T.Run('XmlTokenizeRejectsInvalidNames',
+    @TestXmlTokenizeRejectsInvalidNames);
+  T.Run('XmlRejectsMisplacedXmlDecl',
+    @TestXmlRejectsMisplacedXmlDecl);
+  T.Run('XmlRejectsInvalidXmlDeclAttributes',
+    @TestXmlRejectsInvalidXmlDeclAttributes);
+  T.Run('XmlRejectsDuplicateAttributes',
+    @TestXmlRejectsDuplicateAttributes);
+  T.Run('XmlRejectsRawLessThanInAttributeValue',
+    @TestXmlRejectsRawLessThanInAttributeValue);
+  T.Run('XmlAllowsDistinctExpandedAttributes',
+    @TestXmlAllowsDistinctExpandedAttributes);
   T.Run('XmlEncodeAttrApos', @TestXmlEncodeAttrApos);
   T.Summary;
 end.

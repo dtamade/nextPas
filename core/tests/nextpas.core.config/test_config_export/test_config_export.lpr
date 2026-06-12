@@ -16,12 +16,6 @@ begin
   Result := PathJoin([GetTempDir, AName]);
 end;
 
-procedure RemoveIfExists(const APath: string);
-begin
-  if Exists(APath) then
-    Remove(APath);
-end;
-
 procedure TestToJsonBuildsNestedObjectsAndArrays;
 var
   LCfg: TConfig;
@@ -187,7 +181,7 @@ var
   LLoaded: IConfig;
 begin
   LPath := TempJsonPath('nextpas_config_export_test.json');
-  RemoveIfExists(LPath);
+  Remove(LPath);
 
   LCfg := TConfig.Create;
   try
@@ -204,7 +198,42 @@ begin
       'saved json reload keeps canonical export');
   finally
     LCfg.Free;
-    RemoveIfExists(LPath);
+    Remove(LPath);
+  end;
+end;
+
+procedure TestSaveToJsonPreservesExistingFileOnExportFailure;
+var
+  LCfg: TConfig;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := TempJsonPath('nextpas_config_export_fail_closed.json');
+  Remove(LPath);
+  WriteFileText(LPath, '{"keep":"old"}');
+
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('db', 'root');
+    LCfg.SetString('db.host', 'localhost');
+
+    LRaised := False;
+    try
+      LCfg.SaveToJson(LPath);
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('db', E.Message) > 0,
+          'json save failure names conflicting key');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'json save raises on export conflict');
+    CheckEqual('{"keep":"old"}', ReadFileText(LPath),
+      'json save failure preserves existing file');
+  finally
+    LCfg.Free;
+    Remove(LPath);
   end;
 end;
 
@@ -226,5 +255,7 @@ begin
     @TestToJsonRejectsEmptyPathSegments);
   T.Run('Export.SaveToJsonWritesFile',
     @TestSaveToJsonWritesFile);
+  T.Run('Export.SaveToJsonPreservesExistingFileOnExportFailure',
+    @TestSaveToJsonPreservesExistingFileOnExportFailure);
   T.Summary;
 end.

@@ -65,42 +65,47 @@ begin
   FPrevEscaped := False;
 end;
 
-function OddBackslashEscaped(ABs: TVecMask; APrevEscaped: Boolean): TVecMask; inline;
-const
-  EVEN_BITS: TVecMask = TVecMask({$IF VecWidth = 32}$55555555{$ELSE}$5555{$ENDIF});
-  ODD_BITS: TVecMask = TVecMask({$IF VecWidth = 32}$AAAAAAAA{$ELSE}$AAAA{$ENDIF});
+procedure ClassifyJsonChunkQuotes(const AQuote, ABackslash: TVecMask;
+  const AInString, APrevEscaped: Boolean; out ARealQuotes: TVecMask;
+  out ANextPrevEscaped: Boolean); inline;
 var
-  LStarts, LEvenStarts, LOddStarts: TVecMask;
-  LEvenCarries, LOddCarries: TVecMask;
-  LEvenEsc, LOddEsc, LEscaped: TVecMask;
+  I: Int32;
+  LBit: TVecMask;
+  LInString, LEscaped: Boolean;
 begin
-  if (ABs = TVecMask(0)) and (not APrevEscaped) then
-    Exit(TVecMask(0));
-  if (ABs = TVecMask(0)) and APrevEscaped then
-    Exit(TVecMask(1));
+  ARealQuotes := TVecMask(0);
+  LInString := AInString;
+  LEscaped := APrevEscaped and AInString;
 
-  LStarts := ABs and (not (ABs shl 1));
-  if APrevEscaped then
-    LStarts := LStarts and not TVecMask(1);
+  for I := 0 to VecWidth - 1 do
+  begin
+    LBit := TVecMask(1) shl I;
+    if not LInString then
+    begin
+      LEscaped := False;
+      if (AQuote and LBit) <> TVecMask(0) then
+      begin
+        ARealQuotes := ARealQuotes or LBit;
+        LInString := True;
+      end;
+    end
+    else if LEscaped then
+      LEscaped := False
+    else if (ABackslash and LBit) <> TVecMask(0) then
+      LEscaped := True
+    else if (AQuote and LBit) <> TVecMask(0) then
+    begin
+      ARealQuotes := ARealQuotes or LBit;
+      LInString := False;
+    end;
+  end;
 
-  LEvenStarts := LStarts and EVEN_BITS;
-  LOddStarts := LStarts and ODD_BITS;
-
-  LEvenCarries := (ABs + LEvenStarts) xor ABs;
-  LOddCarries := (ABs + LOddStarts) xor ABs;
-
-  LEvenEsc := LEvenCarries and ODD_BITS and (not ABs);
-  LOddEsc := LOddCarries and EVEN_BITS and (not ABs);
-
-  LEscaped := LEvenEsc or LOddEsc;
-  if APrevEscaped then
-    LEscaped := LEscaped or TVecMask(1);
-  Result := LEscaped;
+  ANextPrevEscaped := LInString and LEscaped;
 end;
 
 procedure TJsonStructScanner.FillBuffer;
 var
-  LQuote, LBs, LEscaped, LRealQuotes, LInStr, LStruct, LResult: TVecMask;
+  LQuote, LBs, LRealQuotes, LInStr, LStruct, LResult: TVecMask;
   LBit: Int32;
   LCarry: TVecMask;
 begin
@@ -111,13 +116,11 @@ begin
     if (LBs = TVecMask(0)) and (not FPrevEscaped) then
     begin
       LRealQuotes := LQuote;
+      FPrevEscaped := False;
     end
     else
-    begin
-      LEscaped := OddBackslashEscaped(LBs, FPrevEscaped);
-      FPrevEscaped := (LEscaped shr (VecWidth - 1)) <> 0;
-      LRealQuotes := LQuote and (not LEscaped);
-    end;
+      ClassifyJsonChunkQuotes(LQuote, LBs, FInString, FPrevEscaped,
+        LRealQuotes, FPrevEscaped);
     if FInString then LCarry := TVecMask(not TVecMask(0)) else LCarry := TVecMask(0);
     LInStr := PrefixXorMask(LRealQuotes) xor LCarry;
     FInString := (LInStr shr (VecWidth - 1)) <> 0;
@@ -144,31 +147,35 @@ begin
   end;
   while (Byte(FTail - FHead) < 128) and (FScanPos < FLen) do
   begin
-    case FInput[FScanPos] of
-      '"':
-        if not FInString then
-        begin
-          FBuf[FTail] := UInt32(FScanPos);
-          Inc(FTail);
-          FInString := True;
-        end
-        else
-        begin
-          FBuf[FTail] := UInt32(FScanPos);
-          Inc(FTail);
-          FInString := False;
-        end;
-      '\':
-        if FInString then
-        begin
-          Inc(FScanPos);
-        end;
-      '{', '}', '[', ']', ':', ',':
-        if not FInString then
-        begin
-          FBuf[FTail] := UInt32(FScanPos);
-          Inc(FTail);
-        end;
+    if FInString then
+    begin
+      if FPrevEscaped then
+        FPrevEscaped := False
+      else if FInput[FScanPos] = '\' then
+        FPrevEscaped := True
+      else if FInput[FScanPos] = '"' then
+      begin
+        FBuf[FTail] := UInt32(FScanPos);
+        Inc(FTail);
+        FInString := False;
+      end;
+    end
+    else
+    begin
+      FPrevEscaped := False;
+      case FInput[FScanPos] of
+        '"':
+          begin
+            FBuf[FTail] := UInt32(FScanPos);
+            Inc(FTail);
+            FInString := True;
+          end;
+        '{', '}', '[', ']', ':', ',':
+          begin
+            FBuf[FTail] := UInt32(FScanPos);
+            Inc(FTail);
+          end;
+      end;
     end;
     Inc(FScanPos);
   end;

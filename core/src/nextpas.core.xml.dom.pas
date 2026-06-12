@@ -56,6 +56,28 @@ type
 
 implementation
 
+function IsDocumentWhitespaceOnly(const AValue: string): Boolean;
+var
+  LI: Integer;
+begin
+  for LI := 1 to Length(AValue) do
+    case AValue[LI] of
+      ' ', #9, #10, #13:
+        ;
+    else
+      Exit(False);
+    end;
+  Result := True;
+end;
+
+procedure RaiseDocumentParseError(var ADoc: TXmlDocument; const AMessage: string;
+  const APos: TXmlPosition);
+begin
+  ADoc.Free;
+  ADoc := nil;
+  raise EXmlError.Create(AMessage, APos);
+end;
+
 { TXmlNode }
 
 constructor TXmlNode.Create(AKind: TXmlNodeKind);
@@ -174,10 +196,14 @@ var
   LChild: TXmlNode;
   LI: Integer;
   LRootCount: Integer;
+  LSeenDoctype: Boolean;
+  LRequiresRoot: Boolean;
 begin
   LDoc := TXmlDocument.Create(xnkDocument);
   LCurrent := LDoc;
   LRootCount := 0;
+  LSeenDoctype := False;
+  LRequiresRoot := False;
   LReader := TXmlReader.Create(AInput);
   try
     while LReader.Next(LTok) do
@@ -190,10 +216,8 @@ begin
           begin
             Inc(LRootCount);
             if LRootCount > 1 then
-            begin
-              LDoc.Free;
-              raise EXmlError.Create('Multiple root elements', LReader.Position);
-            end;
+              RaiseDocumentParseError(LDoc, 'Multiple root elements',
+                LTok.Position);
           end;
           LChild := TXmlNode.Create(xnkElement);
           LChild.FName := LTok.Name;
@@ -213,10 +237,8 @@ begin
           begin
             Inc(LRootCount);
             if LRootCount > 1 then
-            begin
-              LDoc.Free;
-              raise EXmlError.Create('Multiple root elements', LReader.Position);
-            end;
+              RaiseDocumentParseError(LDoc, 'Multiple root elements',
+                LTok.Position);
           end;
           LChild := TXmlNode.Create(xnkElement);
           LChild.FName := LTok.Name;
@@ -225,31 +247,60 @@ begin
         end;
         xtkText:
         begin
+          if (LCurrent = LDoc) and (not IsDocumentWhitespaceOnly(LTok.Value)) then
+            RaiseDocumentParseError(LDoc,
+              'Document text outside root element must be whitespace only',
+              LTok.Position);
           LChild := TXmlNode.Create(xnkText);
           LChild.FValue := LTok.Value;
           LCurrent.AddChild(LChild);
         end;
         xtkCData:
         begin
+          if LCurrent = LDoc then
+            RaiseDocumentParseError(LDoc,
+              'Document text outside root element must be whitespace only',
+              LTok.Position);
           LChild := TXmlNode.Create(xnkCData);
           LChild.FValue := LTok.Value;
           LCurrent.AddChild(LChild);
         end;
         xtkComment:
         begin
+          if LCurrent = LDoc then
+            LRequiresRoot := True;
           LChild := TXmlNode.Create(xnkComment);
           LChild.FValue := LTok.Value;
           LCurrent.AddChild(LChild);
         end;
         xtkProcessingInstr:
         begin
+          if LCurrent = LDoc then
+            LRequiresRoot := True;
           LChild := TXmlNode.Create(xnkPI);
           LChild.FName := LTok.Name;
           LChild.FValue := LTok.Value;
           LCurrent.AddChild(LChild);
         end;
-        xtkNone, xtkXmlDecl, xtkDoctype:
-          { 声明/DTD/空 token 不构建 DOM 节点（当前 DOM 合同不表示它们） }
+        xtkDoctype:
+        begin
+          if (LCurrent <> LDoc) or (LRootCount > 0) then
+            RaiseDocumentParseError(LDoc,
+              'DOCTYPE must appear before the root element',
+              LTok.Position);
+          if LSeenDoctype then
+            RaiseDocumentParseError(LDoc,
+              'DOCTYPE must not appear more than once',
+              LTok.Position);
+          LSeenDoctype := True;
+          LRequiresRoot := True;
+        end;
+        xtkXmlDecl:
+          begin
+            LRequiresRoot := True;
+          end;
+        xtkNone:
+          { 空 token 不构建 DOM 节点 }
           ;
       end; { case }
     end;
@@ -258,6 +309,10 @@ begin
       LDoc.Free;
       raise EXmlError.Create(LReader.GetError, LReader.Position);
     end;
+    if (LRootCount = 0) and LRequiresRoot then
+      RaiseDocumentParseError(LDoc,
+        'Document must contain a root element',
+        LReader.Position);
   finally
     LReader.Free;
   end;
