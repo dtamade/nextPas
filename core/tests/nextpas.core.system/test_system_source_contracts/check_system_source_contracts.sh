@@ -678,6 +678,18 @@ require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_intf_add
 require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_intf_release"
 require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_intf_addref"
 require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_intf_release"
+# Halt intrinsic uses implementation name 'halt', not 'np.system.halt'
+require_repo_token "compiler/ir/np_hir_builder.pas" "Instr.IntrinsicName := 'halt';"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "if AInstr.IntrinsicName = 'halt' then"
+# Heap allocation intrinsics use implementation names 'arr_alloc' and 'class_alloc'
+require_repo_token "compiler/ir/np_hir_builder.pas" "Instr.IntrinsicName := 'arr_alloc';"
+require_repo_token "compiler/ir/np_hir_builder.pas" "Instr.IntrinsicName := 'class_alloc';"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "@np_alloc"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "@np_object_alloc"
+# Halt and allocation intrinsic mapping documented in runtime-contracts
+require_token "docs/system/runtime-contracts.md" "HIR uses \`halt\` as the internal intrinsic name"
+require_token "docs/system/runtime-contracts.md" "arr_alloc"
+require_token "docs/system/runtime-contracts.md" "class_alloc"
 for helper in \
   "@np_alloc" \
   "@np_free" \

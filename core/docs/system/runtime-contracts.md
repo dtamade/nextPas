@@ -33,6 +33,10 @@ Rules:
 
 - The semantic source node is `halt-call-runtime`; sema owns selecting the exit
   expression and sequencing required cleanup before termination.
+- HIR uses `halt` as the internal intrinsic name for program termination.
+  This is implementation vocabulary, not the `np.system.halt` contract name.
+- LLVM emitter translates `halt` intrinsic to inline syscall
+  (`movq $60, %rax; syscall`). No named LLVM helper for halt.
 - HIR may project the contract as HIR intrinsic `halt`; this is a compiler/HIR
   lowering detail, not a public Pascal symbol.
 - Current LLVM output may use syscall inline assembly as backend-private
@@ -196,8 +200,12 @@ Rules:
 - The heap manager contract must preserve size/alignment truth needed by mem.
 - Out-of-memory behavior must map to canonical exception/error taxonomy.
 - Any implementation must prove leak-sensitive behavior before it can be treated as Ready.
-- HIR does not currently use `np.system.heap_alloc` or `np.system.heap_free` intrinsic names.
-- LLVM emitter uses `@np_alloc` and `@np_free` directly without HIR intrinsic contract names.
+- HIR uses `arr_alloc` and `arr_alloc_sized` as internal intrinsic names for dynamic
+  array allocation; `class_alloc` for object instance allocation. These are
+  implementation vocabulary, not the `np.system.heap_alloc` contract name.
+- LLVM emitter translates `arr_alloc` → `@np_alloc` (array allocation) and
+  `class_alloc` → `@np_object_alloc` (object allocation). HIR does not currently
+  use `np.system.heap_alloc` or `np.system.heap_free` intrinsic names.
 - Compiler/HIR may currently project heap ownership through backend-private allocator helpers
   such as `@np_alloc`, `@np_free`, `@np_object_alloc` and `@np_allocator_fault`.
   These helper names are LLVM/backend evidence only,
