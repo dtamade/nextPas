@@ -265,13 +265,17 @@ var
   Lh: UInt32;
   Lh2: Byte;
   LGroupIdx, LProbeOfs, Li, LBase, LInsertIdx: SizeUInt;
-  LMask, LEmptyMask: TMask16;
+  LMask, LFreeMask, LEmptyMask, LDeletedMask: TMask16;
+  LInsertWasEmpty: Boolean;
+  LFoundInsert: Boolean;
 begin
-  if FGrowthLeft = 0 then GrowAndRehash;
+  if FCapacity = 0 then GrowAndRehash;
   Lh := InlineHash32(UInt32(AKey));
   Lh2 := Lh and $7F;
   LGroupIdx := (Lh shr 7) and (FGroupCount - 1);
   LProbeOfs := 0;
+  LInsertIdx := 0;
+  LFoundInsert := False;
   while True do
   begin
     LBase := LGroupIdx * GROUP_SIZE;
@@ -281,26 +285,46 @@ begin
       Li := LBase + SizeUInt(Vec16Ctz(LMask));
       if FSlots[Li].Key = AKey then
       begin
-        if System.IsManagedType(V) then Finalize(FSlots[Li].Value);
         FSlots[Li].Value := AValue;
         Exit;
       end;
       LMask := LMask and (LMask - 1);
     end;
+    LFreeMask := Vec16CmpGtU(@FCtrl[LBase], $7F);
     LEmptyMask := Vec16CmpEq(@FCtrl[LBase], CTRL_EMPTY);
-    if LEmptyMask <> 0 then
+    if LFreeMask <> 0 then
     begin
-      LInsertIdx := LBase + SizeUInt(Vec16Ctz(LEmptyMask));
-      SetCtrl(LInsertIdx, Lh2);
-      FSlots[LInsertIdx].Key := AKey;
-      FSlots[LInsertIdx].Value := AValue;
-      Inc(FCount);
-      Dec(FGrowthLeft);
-      Exit;
+      LDeletedMask := LFreeMask and not LEmptyMask;
+      if (LDeletedMask <> 0) and (not LFoundInsert) then
+      begin
+        LInsertIdx := LBase + SizeUInt(Vec16Ctz(LDeletedMask));
+        LFoundInsert := True;
+      end;
+      if LEmptyMask <> 0 then
+      begin
+        if not LFoundInsert then
+          LInsertIdx := LBase + SizeUInt(Vec16Ctz(LEmptyMask));
+        Break;
+      end;
     end;
     Inc(LProbeOfs);
     LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
   end;
+
+  LInsertWasEmpty := FCtrl[LInsertIdx] = CTRL_EMPTY;
+  if LInsertWasEmpty and (FGrowthLeft = 0) then
+  begin
+    GrowAndRehash;
+    Put(AKey, AValue);
+    Exit;
+  end;
+
+  SetCtrl(LInsertIdx, Lh2);
+  FSlots[LInsertIdx].Key := AKey;
+  FSlots[LInsertIdx].Value := AValue;
+  Inc(FCount);
+  if LInsertWasEmpty then
+    Dec(FGrowthLeft);
 end;
 
 function TSwissTableI32.Get(AKey: Int32): V;

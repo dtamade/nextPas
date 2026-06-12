@@ -365,14 +365,17 @@ var
   LRoot: PNode;
   i: SizeUInt;
 begin
-  if FRoot = @FSentinel then Exit;
-  LRoot := FRoot;
-  FRoot := @FSentinel;
+  if FRoot <> @FSentinel then
+  begin
+    LRoot := FRoot;
+    FRoot := @FSentinel;
+    if Assigned(FFinalize) then
+      FinalizeSubtree(LRoot);
+  end;
   FCount := 0;
-  if Assigned(FFinalize) then
-    FinalizeSubtree(LRoot);
-  for i := 0 to FPoolBlockCount - 1 do
-    FreeMem(FPoolBlocks[i]);
+  if FPoolBlockCount > 0 then
+    for i := 0 to FPoolBlockCount - 1 do
+      FreeMem(FPoolBlocks[i]);
   SetLength(FPoolBlocks, 0);
   FPoolBlockCount := 0;
   FPoolNext := nil;

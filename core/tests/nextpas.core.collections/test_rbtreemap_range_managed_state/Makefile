@@ -1,10 +1,10 @@
 FPC ?= fpc
 CORE_ROOT := ../../..
-BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.collections/test_contracts
-PROGRAM := test_contracts
+BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.collections/test_rbtreemap_range_managed_state
+PROGRAM := test_rbtreemap_range_managed_state
 SOURCE := $(PROGRAM).lpr
 FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -gh
-FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fu$(CORE_ROOT)/tests/shared -Fi$(CORE_ROOT)/src
+FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src -Fu$(CORE_ROOT)/tests/shared
 
 .PHONY: build run test clean
 

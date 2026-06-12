@@ -783,8 +783,7 @@ begin
     begin
       if ((FBuckets + idx)^.Hash = h) and KeysEqual((FBuckets + idx)^.Key, AKey) then
       begin
-        // 覆盖旧值（先 Finalize 再赋值，避免泄漏）
-        Finalize((FBuckets + idx)^.Value);
+        // Managed assignment releases the old value and also handles self-alias.
         (FBuckets + idx)^.Value := AValue;
         Exit(False);
       end;

@@ -6,18 +6,19 @@ program test_swisstable;
 uses
   SysUtils,
   nextpas.core.testing,
-  nextpas.core.collections.hashmap.swiss;
+  nextpas.core.collections.hashmap.swiss,
+  nextpas.core.collections.hashmap.swiss.str;
 
 type
   TIntSwiss = specialize TSwissTable<Integer, Integer>;
   TStrSwiss = specialize TSwissTable<string, Integer>;
+  TStringKeySwiss = specialize TSwissTableStr<Integer>;
   TManagedRecord = record
     Initialized: Boolean;
     Id: Int32;
     Payload: string;
     class operator Initialize(var ARecord: TManagedRecord);
     class operator Finalize(var ARecord: TManagedRecord);
-    class operator =(const L, R: TManagedRecord): Boolean;
   end;
   TManagedRecordSwiss = specialize TSwissTable<TManagedRecord, TManagedRecord>;
 
@@ -47,14 +48,14 @@ begin
   end;
 end;
 
-class operator TManagedRecord.=(const L, R: TManagedRecord): Boolean;
-begin
-  Result := L.Id = R.Id;
-end;
-
 function HashFirstSwissGroup(const AKey: Integer): UInt32;
 begin
   Result := UInt32(AKey and $7F);
+end;
+
+function EqualInteger(const L, R: Integer): Boolean;
+begin
+  Result := L = R;
 end;
 
 function MakeManagedRecord(AId: Int32): TManagedRecord;
@@ -159,7 +160,7 @@ var
   I: Integer;
   InitialCapacity: SizeUInt;
 begin
-  M := TIntSwiss.Create(GROUP_SIZE * 4, @HashFirstSwissGroup);
+  M := TIntSwiss.Create(GROUP_SIZE * 4, @HashFirstSwissGroup, @EqualInteger);
   try
     for I := 0 to GROUP_SIZE - 1 do
       M.Put(I, I);
@@ -180,6 +181,43 @@ begin
   end;
 end;
 
+procedure TestGrowthBudgetExhaustionReusesBeforeGrow;
+var
+  M: TIntSwiss;
+  I, V: Integer;
+  InitialCapacity, GrowthLimit: SizeUInt;
+begin
+  M := TIntSwiss.Create(GROUP_SIZE * 4, @HashFirstSwissGroup, @EqualInteger);
+  try
+    InitialCapacity := M.Capacity;
+    GrowthLimit := InitialCapacity - InitialCapacity div 8;
+
+    for I := 0 to Integer(GrowthLimit) - 1 do
+      M.Put(I, I);
+
+    CheckEqual(Int64(GrowthLimit), Int64(M.Count), 'growth limit count');
+
+    M.Put(0, -1);
+    CheckEqual(Int64(InitialCapacity), Int64(M.Capacity),
+      'update at growth limit keeps capacity');
+    CheckEqual(Int64(GrowthLimit), Int64(M.Count),
+      'update at growth limit keeps count');
+    Check(M.TryGetValue(0, V), 'get updated key');
+    CheckEqual(Int64(-1), Int64(V), 'updated value');
+
+    Check(M.Remove(0), 'remove full-group key at growth limit');
+    M.Put(0, -2);
+    CheckEqual(Int64(InitialCapacity), Int64(M.Capacity),
+      'deleted slot at growth limit keeps capacity');
+    CheckEqual(Int64(GrowthLimit), Int64(M.Count),
+      'deleted slot at growth limit keeps count');
+    Check(M.TryGetValue(0, V), 'get reused deleted slot key');
+    CheckEqual(Int64(-2), Int64(V), 'reused deleted slot value');
+  finally
+    M.Free;
+  end;
+end;
+
 procedure TestStringKey;
 var M: TStrSwiss; i, v: Integer; ok: Boolean;
 begin
@@ -194,6 +232,41 @@ begin
   M.Remove('key500');
   CheckEqual(Int64(999), Int64(M.Count), 'str count after remove');
   M.Free;
+end;
+
+procedure TestStringSpecializedGrowthBudgetReusesBeforeGrow;
+var
+  M: TStringKeySwiss;
+  I, V: Integer;
+  InitialCapacity, GrowthLimit: SizeUInt;
+begin
+  M := TStringKeySwiss.Create(128);
+  try
+    InitialCapacity := M.Capacity;
+    GrowthLimit := InitialCapacity - InitialCapacity div 8;
+
+    for I := 0 to Integer(GrowthLimit) - 1 do
+      M.Put('key' + IntToStr(I), I);
+
+    CheckEqual(Int64(GrowthLimit), Int64(M.Count), 'string specialized growth limit count');
+
+    M.Put('key0', -1);
+    CheckEqual(Int64(InitialCapacity), Int64(M.Capacity),
+      'string specialized update at growth limit keeps capacity');
+    Check(M.TryGetValue('key0', V), 'string specialized get updated key');
+    CheckEqual(Int64(-1), Int64(V), 'string specialized updated value');
+
+    Check(M.Remove('key0'), 'string specialized remove full table key');
+    M.Put('key0', -2);
+    CheckEqual(Int64(InitialCapacity), Int64(M.Capacity),
+      'string specialized deleted slot at growth limit keeps capacity');
+    CheckEqual(Int64(GrowthLimit), Int64(M.Count),
+      'string specialized deleted slot keeps count');
+    Check(M.TryGetValue('key0', V), 'string specialized get reused key');
+    CheckEqual(Int64(-2), Int64(V), 'string specialized reused value');
+  finally
+    M.Free;
+  end;
 end;
 
 procedure TestClear;
@@ -335,7 +408,10 @@ begin
   T.Run('Grow (10000 elements)', @TestGrow);
   T.Run('Remove + Reinsert', @TestRemoveReinsert);
   T.Run('Deleted slot reuse keeps stable capacity', @TestDeletedSlotReuseKeepsStableCapacity);
+  T.Run('Growth budget exhaustion reuses before grow', @TestGrowthBudgetExhaustionReusesBeforeGrow);
   T.Run('String key', @TestStringKey);
+  T.Run('String specialized growth budget reuses before grow',
+    @TestStringSpecializedGrowthBudgetReusesBeforeGrow);
   T.Run('Clear', @TestClear);
   T.Run('Prealloc', @TestPrealloc);
   T.Run('Retain', @TestRetain);

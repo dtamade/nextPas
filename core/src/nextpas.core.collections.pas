@@ -225,7 +225,11 @@ generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: 
 // ==== HashMap / HashSet (OA default) ====
 {$IFNDEF NEXTPAS_COLLECTIONS_DISABLE_HASH}
   generic function MakeHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
+  generic function MakeHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>;
+    aEquals: specialize TKeyEqualsFunc<K>; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
   generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
+  generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>;
+    aEquals: specialize TKeyEqualsFunc<K>; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
   generic function MakeHashSet<K>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashSet<K>;
 {$ENDIF}
 
@@ -805,9 +809,21 @@ begin
   Result := specialize TSwissHashMap<K,V>.Create(aCapacity, nil, nil, aAllocator);
 end;
 
+generic function MakeHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>;
+  aEquals: specialize TKeyEqualsFunc<K>; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
+begin
+  Result := specialize TSwissHashMap<K,V>.Create(aCapacity, aHash, aEquals, aAllocator);
+end;
+
 generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
 begin
   Result := specialize TSwissHashMap<K,V>.Create(aCapacity, nil, nil, aAllocator);
+end;
+
+generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>;
+  aEquals: specialize TKeyEqualsFunc<K>; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
+begin
+  Result := specialize TSwissHashMap<K,V>.Create(aCapacity, aHash, aEquals, aAllocator);
 end;
 
 generic function MakeHashSet<K>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashSet<K>;
