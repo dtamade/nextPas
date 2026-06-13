@@ -796,6 +796,28 @@ require_repo_token "tests/hir/test_hir_exception.pas" "np_try_push"
 require_repo_token "tests/hir/test_hir_exception.pas" "np_finally_end"
 require_repo_token "tests/hir/test_hir_exception.pas" "np_try_pop"
 require_repo_token "tests/hir/test_hir_exception.pas" "np_except_end"
+# Exception helper existence in LLVM emitter
+for helper in \
+  "@np_try_push" \
+  "@np_try_pop" \
+  "@np_raise" \
+  "@np_finally_end" \
+  "@np_except_end"; do
+  require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "$helper"
+done
+# Exception contract names documented in lifecycle-contracts.md
+for contract in \
+  "np.system.exception_try_push" \
+  "np.system.exception_try_pop" \
+  "np.system.exception_raise" \
+  "np.system.exception_finally_end" \
+  "np.system.exception_except_end"; do
+  require_token "docs/system/lifecycle-contracts.md" "$contract"
+done
+# Exception contract-to-helper mapping documented
+require_token "docs/system/lifecycle-contracts.md" "HIR intrinsic"
+require_token "docs/system/lifecycle-contracts.md" "LLVM helper"
+require_token "docs/system/lifecycle-contracts.md" "Exception helper contracts map"
 require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_try_push"
 require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_try_pop"
 require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_finally_end"

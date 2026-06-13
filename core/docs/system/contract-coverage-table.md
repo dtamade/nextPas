@@ -23,6 +23,11 @@ mapping each contract name to its HIR evidence, LLVM helper evidence, and test c
 | `np.system.unit_init` | Not seeded (future feature) | No LLVM helper | No test | Fully deferred |
 | `np.system.unit_fini` | Not seeded (future feature) | No LLVM helper | No test | Fully deferred |
 | `np.system.runtime_fault` | Not seeded (future feature) | `@np_allocator_fault`, `@np_dynarray_fault` are partial evidence | No focused lifecycle fault test | Partial evidence only in allocator/dynarray contexts |
+| `np.system.exception_try_push` | HIR uses `try-begin-runtime` / `try-end-runtime` nodes | `@np_try_push` (line 854, 1725) | `test_hir_exception` | **Contract name in docs, impl nodes in HIR** |
+| `np.system.exception_try_pop` | HIR uses `finally-end-runtime` / `except-end-runtime` nodes | `@np_try_pop` (line 868, 1734) | `test_hir_exception` | **Contract name in docs, impl nodes in HIR** |
+| `np.system.exception_raise` | HIR uses `raise-runtime` node | `@np_raise` (line 891, 1780) | `test_hir_exception` | **Contract name in docs, impl nodes in HIR** |
+| `np.system.exception_finally_end` | HIR uses `finally-end-runtime` node | `@np_finally_end` (line 877, 1794) | `test_hir_exception` | **Contract name in docs, impl nodes in HIR** |
+| `np.system.exception_except_end` | HIR uses `except-end-runtime` node | `@np_except_end` (line 886) | `test_hir_exception` | **Contract name in docs, impl nodes in HIR** |
 
 ## Backend-Private Helper Names (NOT Public ABI)
 

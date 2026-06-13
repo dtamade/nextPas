@@ -159,3 +159,34 @@ Evidence: `build/verify_local.sh:1740-1769` (llvm-empty-program), `1771-1800` (l
 documentation (goal-tree, contract-coverage-table, runtime-contracts, lifecycle-contracts)
 is synchronized with source-contract checks and focused tests. The remaining risks are
 explicitly documented and scoped for future work.
+
+## S6 Contract-to-Implementation Bridge
+
+S6 prepares the contract vocabulary for self-hosting readiness without implementing runtime
+behavior. Focus: close documentation gaps, fill test coverage, define self-hosting gates.
+
+### S6.1 Exception Boundary Contract Lock
+
+- [ ] Add `np.system.exception_try_push`, `np.system.exception_try_pop`, `np.system.exception_raise`, `np.system.exception_finally_end`, `np.system.exception_except_end` contract names to `lifecycle-contracts.md`.
+- [ ] Add source-contract checks for all 5 exception helpers.
+- [ ] Update `contract-coverage-table.md` with exception contract rows.
+- [ ] Verify all source-contract checks pass.
+
+### S6.2 Leak-Sensitive Test Fill
+
+- [ ] Add heaptrc 0-leak evidence for `array of interface` release path.
+- [ ] Add HIR contract projection test for `array of record-with-managed-fields`.
+- [ ] Add dynarray resize failure path HIR contract verification.
+- [ ] Verify all tests pass.
+
+### S6.3 Contract Vocabulary Final Audit
+
+- [ ] Audit all `np.system.*` contracts for owner/status/path consistency.
+- [ ] Cross-check `contract-coverage-table.md` ↔ `runtime-contracts.md` ↔ `lifecycle-contracts.md`.
+- [ ] Ensure every live contract has HIR evidence and test coverage documented.
+- [ ] Verify all source-contract checks pass.
+
+### S6.4 Self-Hosting Readiness Gates
+
+- [ ] Create `self-hosting-readiness.md` with RTTI drift detection strategy, unit lifecycle implementation path, per-gate owner assignment.
+- [ ] Update `goal-tree.md` with S6 completion status.
