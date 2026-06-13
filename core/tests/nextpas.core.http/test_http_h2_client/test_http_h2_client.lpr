@@ -131,6 +131,17 @@ begin
   Result := H2EncodeFrame(H2_FRAME_SETTINGS, 0, 0, ASettingsPayload);
 end;
 
+function ComposeSingleSettingPayload(const AIdentifier: UInt16;
+  const AValue: UInt32): AnsiString;
+var
+  LEntries: TH2SettingEntries;
+begin
+  SetLength(LEntries, 1);
+  LEntries[0].Identifier := AIdentifier;
+  LEntries[0].Value := AValue;
+  Result := H2EncodeSettingsPayload(LEntries);
+end;
+
 function ComposeResponseHeaders(const AStatus: string;
   const AExtraHeaders: array of THPackHeader): AnsiString;
 var
@@ -503,6 +514,121 @@ begin
   end;
 end;
 
+procedure TestRuntimeSettingsInitialWindowSizeUpdatesActiveStream;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LBody: IStream;
+  LFrames: array[0..15] of TH2Frame;
+  LCount: SizeInt;
+  LDataCount: SizeInt;
+  LFirstData: AnsiString;
+  LSecondData: AnsiString;
+  LI: SizeInt;
+begin
+  LBody := CreateBytesStreamFrom([Byte('a'), Byte('b'), Byte('c'), Byte('d')]);
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake(ComposeSingleSettingPayload(
+      H2_SETTINGS_INITIAL_WINDOW_SIZE, 2)) +
+    H2EncodeFrame(H2_FRAME_SETTINGS, 0, 0,
+      ComposeSingleSettingPayload(H2_SETTINGS_INITIAL_WINDOW_SIZE, 4)) +
+    ComposeResponse(1, '200', '', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmPost,
+      'http://example.com/settings-window', NewHttpHeaders, LBody as IReader, 4));
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'runtime SETTINGS response status');
+
+    DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
+      MaxInt), LFrames, LCount);
+    LDataCount := 0;
+    LFirstData := '';
+    LSecondData := '';
+    for LI := 0 to LCount - 1 do
+      if (LFrames[LI].Header.FrameType = H2_FRAME_DATA) and
+         (LFrames[LI].Header.StreamID = 1) then
+      begin
+        Inc(LDataCount);
+        if LDataCount = 1 then
+          LFirstData := LFrames[LI].Payload
+        else if LDataCount = 2 then
+          LSecondData := LFrames[LI].Payload;
+      end;
+    CheckEqual(Int64(2), Int64(LDataCount),
+      'runtime SETTINGS resumes active stream request body');
+    CheckEqual('ab', string(LFirstData),
+      'first request DATA obeys original small stream window');
+    CheckEqual('cd', string(LSecondData),
+      'second request DATA uses updated initial stream window');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+    LBody := nil;
+  end;
+end;
+
+procedure TestRequestBodyReadsWindowUpdateWhenSendWindowBlocked;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LBody: IStream;
+  LFrames: array[0..15] of TH2Frame;
+  LCount: SizeInt;
+  LDataCount: SizeInt;
+  LFirstData: AnsiString;
+  LSecondData: AnsiString;
+  LI: SizeInt;
+begin
+  LBody := CreateBytesStreamFrom([Byte('w'), Byte('x'), Byte('y'), Byte('z')]);
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake(ComposeSingleSettingPayload(
+      H2_SETTINGS_INITIAL_WINDOW_SIZE, 2)) +
+    H2EncodeFrame(H2_FRAME_WINDOW_UPDATE, 0, 1, H2EncodeWindowUpdate(2)) +
+    ComposeResponse(1, '201', '', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmPost,
+      'http://example.com/window-update', NewHttpHeaders, LBody as IReader, 4));
+    CheckEqual(Int64(201), Int64(LResp.StatusCode),
+      'WINDOW_UPDATE response status');
+
+    DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
+      MaxInt), LFrames, LCount);
+    LDataCount := 0;
+    LFirstData := '';
+    LSecondData := '';
+    for LI := 0 to LCount - 1 do
+      if (LFrames[LI].Header.FrameType = H2_FRAME_DATA) and
+         (LFrames[LI].Header.StreamID = 1) then
+      begin
+        Inc(LDataCount);
+        if LDataCount = 1 then
+          LFirstData := LFrames[LI].Payload
+        else if LDataCount = 2 then
+          LSecondData := LFrames[LI].Payload;
+      end;
+    CheckEqual(Int64(2), Int64(LDataCount),
+      'WINDOW_UPDATE resumes blocked request body send');
+    CheckEqual('wx', string(LFirstData),
+      'first request DATA consumes original stream window');
+    CheckEqual('yz', string(LSecondData),
+      'second request DATA is sent after WINDOW_UPDATE');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+    LBody := nil;
+  end;
+end;
+
 procedure TestStreamIdIncrementsAcrossRequests;
 var
   LConn: TH2ClientConnection;
@@ -721,6 +847,10 @@ begin
     @TestRoundTripGetReadsResponse);
   T.Run('RoundTrip POST writes data frame',
     @TestRoundTripPostWritesDataFrame);
+  T.Run('Runtime SETTINGS_INITIAL_WINDOW_SIZE updates active stream',
+    @TestRuntimeSettingsInitialWindowSizeUpdatesActiveStream);
+  T.Run('Request body reads WINDOW_UPDATE when send window blocked',
+    @TestRequestBodyReadsWindowUpdateWhenSendWindowBlocked);
   T.Run('Stream ID increments across requests',
     @TestStreamIdIncrementsAcrossRequests);
   T.Run('GOAWAY marks connection not reusable',

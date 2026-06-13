@@ -47,6 +47,10 @@ type
       PendingWindowUpdate: UInt32;
       class procedure Init(out AState: TH2ResponseState); static;
     end;
+    TH2ActiveStreamState = record
+      StreamID: UInt32;
+      Flow: TH2StreamFlowControl;
+    end;
   private
     FConn: ITcpStream;
     FOptions: TH2ClientTransportOptions;
@@ -64,6 +68,8 @@ type
     FLastPeerStreamID: UInt32;
     FPendingContinuationStreamID: UInt32;
     FPendingConnectionWindowUpdate: UInt32;
+    FActiveStreams: array of TH2ActiveStreamState;
+    FActiveStreamCount: SizeInt;
     FLastPingData: UInt64;
     procedure ApplyDeadline;
     procedure EnsureActive;
@@ -93,7 +99,17 @@ type
     function EncodeRequestHeaders(const AReq: IHttpRequest): AnsiString;
     procedure SendRequestHeaders(const AStreamID: UInt32; const AReq: IHttpRequest;
       const AEndStream: Boolean);
-    procedure SendRequestBody(const AStreamID: UInt32; const AReq: IHttpRequest);
+    function AddActiveStream(const AStreamID: UInt32): SizeInt;
+    function FindActiveStreamIndex(const AStreamID: UInt32): SizeInt;
+    procedure RemoveActiveStream(const AStreamID: UInt32);
+    procedure ApplyRemoteInitialWindowSizeToActiveStreams(
+      const ANewInitialWindowSize: UInt32);
+    function RequestBodySendCapacity(
+      const AStreamFlow: TH2StreamFlowControl): UInt32;
+    procedure ReadRequestBodyFlowControlFrame(const AStreamID: UInt32;
+      var AStreamFlow: TH2StreamFlowControl; var AResponse: TH2ResponseState);
+    procedure SendRequestBody(const AStreamID: UInt32; const AReq: IHttpRequest;
+      var AStreamFlow: TH2StreamFlowControl; var AResponse: TH2ResponseState);
     class function ExtractHeadersFragment(const AFlags: Byte;
       const APayload: AnsiString; out AFragment: AnsiString): Boolean; static;
     class function ExtractDataPayload(const AFlags: Byte;
@@ -349,6 +365,8 @@ begin
   FLastPeerStreamID := 0;
   FPendingContinuationStreamID := 0;
   FPendingConnectionWindowUpdate := 0;
+  FActiveStreams := nil;
+  FActiveStreamCount := 0;
   FLastPingData := 0;
 end;
 
@@ -670,10 +688,94 @@ begin
   SendFrame(H2_FRAME_HEADERS, LFlags, AStreamID, EncodeRequestHeaders(AReq));
 end;
 
-procedure TH2ClientConnection.SendRequestBody(const AStreamID: UInt32;
-  const AReq: IHttpRequest);
+function TH2ClientConnection.FindActiveStreamIndex(
+  const AStreamID: UInt32): SizeInt;
 var
-  LStreamFlow: TH2StreamFlowControl;
+  LI: SizeInt;
+begin
+  for LI := 0 to FActiveStreamCount - 1 do
+    if FActiveStreams[LI].StreamID = AStreamID then
+      Exit(LI);
+  Result := -1;
+end;
+
+function TH2ClientConnection.AddActiveStream(const AStreamID: UInt32): SizeInt;
+begin
+  if FindActiveStreamIndex(AStreamID) >= 0 then
+    raise EHttpError.Create('HTTP/2 client stream is already active');
+  if FActiveStreamCount >= Length(FActiveStreams) then
+    SetLength(FActiveStreams, FActiveStreamCount + 4);
+  Result := FActiveStreamCount;
+  FActiveStreams[Result].StreamID := AStreamID;
+  FActiveStreams[Result].Flow.Init(AStreamID, FRemoteSettings.InitialWindowSize,
+    FLocalSettings.InitialWindowSize);
+  Inc(FActiveStreamCount);
+end;
+
+procedure TH2ClientConnection.RemoveActiveStream(const AStreamID: UInt32);
+var
+  LIndex: SizeInt;
+begin
+  LIndex := FindActiveStreamIndex(AStreamID);
+  if LIndex < 0 then
+    Exit;
+  Dec(FActiveStreamCount);
+  if LIndex <> FActiveStreamCount then
+    FActiveStreams[LIndex] := FActiveStreams[FActiveStreamCount];
+  FActiveStreams[FActiveStreamCount] := Default(TH2ActiveStreamState);
+end;
+
+procedure TH2ClientConnection.ApplyRemoteInitialWindowSizeToActiveStreams(
+  const ANewInitialWindowSize: UInt32);
+var
+  LI: SizeInt;
+begin
+  for LI := 0 to FActiveStreamCount - 1 do
+    FActiveStreams[LI].Flow.ApplyPeerInitialWindowSize(ANewInitialWindowSize);
+end;
+
+function TH2ClientConnection.RequestBodySendCapacity(
+  const AStreamFlow: TH2StreamFlowControl): UInt32;
+var
+  LCapacity: Int64;
+  LStreamCapacity: Int64;
+begin
+  LCapacity := FConnectionFlow.SendWindow.AvailableCapacity;
+  LStreamCapacity := AStreamFlow.SendWindow.AvailableCapacity;
+  if LStreamCapacity < LCapacity then
+    LCapacity := LStreamCapacity;
+  if LCapacity <= 0 then
+    Exit(0);
+  if LCapacity > High(UInt32) then
+    Exit(High(UInt32));
+  Result := UInt32(LCapacity);
+end;
+
+procedure TH2ClientConnection.ReadRequestBodyFlowControlFrame(
+  const AStreamID: UInt32; var AStreamFlow: TH2StreamFlowControl;
+  var AResponse: TH2ResponseState);
+var
+  LFrame: TH2Frame;
+begin
+  if not ReadFrame(LFrame) then
+    raise EHttpError.Create(
+      'HTTP/2 client request body stalled: connection closed');
+  DispatchFrame(LFrame, AStreamID, AStreamFlow, AResponse);
+  if AResponse.PendingWindowUpdate > 0 then
+  begin
+    SendWindowUpdate(AStreamID, AResponse.PendingWindowUpdate);
+    AResponse.PendingWindowUpdate := 0;
+  end;
+  FlushPendingConnectionWindowUpdate;
+  if AResponse.Reset then
+    raise EHttpError.Create('HTTP/2 stream reset while sending request body: ' +
+      H2ErrorCodeName(AResponse.ResetCode));
+end;
+
+procedure TH2ClientConnection.SendRequestBody(const AStreamID: UInt32;
+  const AReq: IHttpRequest; var AStreamFlow: TH2StreamFlowControl;
+  var AResponse: TH2ResponseState);
+var
   LRemaining: UInt32;
   LRead: SizeUInt;
   LChunkSize: UInt32;
@@ -685,15 +787,15 @@ begin
   if (AReq.Body = nil) or (AReq.ContentLength <= 0) then
     Exit;
 
-  LStreamFlow.Init(AStreamID, FRemoteSettings.InitialWindowSize,
-    FLocalSettings.InitialWindowSize);
   LRemaining := UInt32(AReq.ContentLength);
   while LRemaining > 0 do
   begin
-    LCapacity := UInt32(MinUInt32(UInt32(FConnectionFlow.SendWindow.AvailableCapacity),
-      UInt32(LStreamFlow.SendWindow.AvailableCapacity)));
-    if LCapacity = 0 then
-      raise EHttpError.Create('HTTP/2 client request body stalled on send window');
+    LCapacity := RequestBodySendCapacity(AStreamFlow);
+    while LCapacity = 0 do
+    begin
+      ReadRequestBodyFlowControlFrame(AStreamID, AStreamFlow, AResponse);
+      LCapacity := RequestBodySendCapacity(AStreamFlow);
+    end;
     LChunkSize := MinUInt32(FRemoteSettings.MaxFrameSize, LCapacity);
     LChunkSize := MinUInt32(LChunkSize, LRemaining);
     SetLength(LBuffer, LChunkSize);
@@ -702,7 +804,7 @@ begin
       raise EHttpError.Create('HTTP/2 client request body ended before content-length');
     if not FConnectionFlow.SendWindow.TryReserve(UInt32(LRead)) then
       raise EHttpError.Create('HTTP/2 client connection send window reserve failed');
-    if not LStreamFlow.SendWindow.TryReserve(UInt32(LRead)) then
+    if not AStreamFlow.SendWindow.TryReserve(UInt32(LRead)) then
     begin
       FConnectionFlow.SendWindow.ReleaseReserved(UInt32(LRead));
       raise EHttpError.Create('HTTP/2 client stream send window reserve failed');
@@ -710,7 +812,7 @@ begin
     SetLength(LPayload, LRead);
     Move(LBuffer[0], LPayload[1], LRead);
     FConnectionFlow.SendWindow.CommitSend(UInt32(LRead));
-    LStreamFlow.SendWindow.CommitSend(UInt32(LRead));
+    AStreamFlow.SendWindow.CommitSend(UInt32(LRead));
     Dec(LRemaining, UInt32(LRead));
     if LRemaining = 0 then
       LFlags := H2_FLAG_DATA_END_STREAM
@@ -877,6 +979,7 @@ end;
 procedure TH2ClientConnection.HandleSettings(const AFrame: TH2Frame);
 var
   LSettings: TH2Settings;
+  LOldInitialWindowSize: UInt32;
 begin
   if (AFrame.Header.Flags and H2_FLAG_SETTINGS_ACK) <> 0 then
   begin
@@ -885,7 +988,11 @@ begin
   end;
   if not ParseSettingsPayload(AFrame.Payload, LSettings) then
     raise EHttpError.Create('HTTP/2 invalid SETTINGS payload');
+  LOldInitialWindowSize := FRemoteSettings.InitialWindowSize;
   FRemoteSettings := LSettings;
+  if FRemoteSettings.InitialWindowSize <> LOldInitialWindowSize then
+    ApplyRemoteInitialWindowSizeToActiveStreams(
+      FRemoteSettings.InitialWindowSize);
   FEncoder.SetDynamicTableSize(FRemoteSettings.HeaderTableSize);
   SendSettingsAck;
 end;
@@ -1116,9 +1223,9 @@ end;
 function TH2ClientConnection.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
 var
   LStreamID: UInt32;
+  LStreamIndex: SizeInt;
   LHasBody: Boolean;
   LFrame: TH2Frame;
-  LStreamFlow: TH2StreamFlowControl;
   LResponse: TH2ResponseState;
 begin
   if AReq = nil then
@@ -1131,28 +1238,34 @@ begin
   LStreamID := AllocateStreamID;
   TH2ResponseState.Init(LResponse);
   LResponse.StreamID := LStreamID;
-  LStreamFlow.Init(LStreamID, FRemoteSettings.InitialWindowSize,
-    FLocalSettings.InitialWindowSize);
-  LHasBody := (AReq.Body <> nil) and (AReq.ContentLength > 0);
-  SendRequestHeaders(LStreamID, AReq, not LHasBody);
-  if LHasBody then
-    SendRequestBody(LStreamID, AReq);
-  while not LResponse.EndStream do
-  begin
-    if not ReadFrame(LFrame) then
-      raise EHttpError.Create('HTTP/2 response incomplete: connection closed');
-    DispatchFrame(LFrame, LStreamID, LStreamFlow, LResponse);
-    if LResponse.PendingWindowUpdate > 0 then
+  LStreamIndex := AddActiveStream(LStreamID);
+  try
+    LHasBody := (AReq.Body <> nil) and (AReq.ContentLength > 0);
+    SendRequestHeaders(LStreamID, AReq, not LHasBody);
+    if LHasBody then
+      SendRequestBody(LStreamID, AReq, FActiveStreams[LStreamIndex].Flow,
+        LResponse);
+    while not LResponse.EndStream do
     begin
-      SendWindowUpdate(LStreamID, LResponse.PendingWindowUpdate);
-      LResponse.PendingWindowUpdate := 0;
+      if not ReadFrame(LFrame) then
+        raise EHttpError.Create('HTTP/2 response incomplete: connection closed');
+      DispatchFrame(LFrame, LStreamID, FActiveStreams[LStreamIndex].Flow,
+        LResponse);
+      if LResponse.PendingWindowUpdate > 0 then
+      begin
+        SendWindowUpdate(LStreamID, LResponse.PendingWindowUpdate);
+        LResponse.PendingWindowUpdate := 0;
+      end;
+      FlushPendingConnectionWindowUpdate;
     end;
-    FlushPendingConnectionWindowUpdate;
+    DrainBufferedFrames(LStreamID, FActiveStreams[LStreamIndex].Flow,
+      LResponse);
+    Result := BuildResponse(LResponse);
+  finally
+    RemoveActiveStream(LStreamID);
+    LResponse.Headers := nil;
+    LResponse.HeadersStore := nil;
   end;
-  DrainBufferedFrames(LStreamID, LStreamFlow, LResponse);
-  Result := BuildResponse(LResponse);
-  LResponse.Headers := nil;
-  LResponse.HeadersStore := nil;
 end;
 
 function TH2ClientConnection.IsReusable: Boolean;

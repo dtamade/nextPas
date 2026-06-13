@@ -136,6 +136,10 @@ type
     function HandleRstStream(const AFrame: TH2Frame): Boolean;
     function HandlePing(const AFrame: TH2Frame): Boolean;
     function HandleGoaway(const AFrame: TH2Frame): Boolean;
+    function ClosedStreamDataLength(const AFrame: TH2Frame;
+      out ADataLen: UInt32): Boolean;
+    function ConsumeClosedStreamDataConnectionWindow(
+      const AFrame: TH2Frame): Boolean;
     function RejectFrame(const AStreamID: UInt32; const AErrorCode: UInt32;
       const AConnectionLevel: Boolean): Boolean;
     function ParseSettingsPayload(const APayload: AnsiString;
@@ -889,6 +893,48 @@ begin
   Result := True;
 end;
 
+function TH2ServerSession.ClosedStreamDataLength(const AFrame: TH2Frame;
+  out ADataLen: UInt32): Boolean;
+var
+  LPayloadLen: UInt32;
+  LPadLen: UInt32;
+begin
+  ADataLen := 0;
+  LPayloadLen := UInt32(Length(AFrame.Payload));
+  if (AFrame.Header.Flags and H2_FLAG_DATA_PADDED) = 0 then
+  begin
+    ADataLen := LPayloadLen;
+    Exit(True);
+  end;
+
+  if LPayloadLen < 1 then
+    Exit(False);
+  LPadLen := UInt32(Byte(AFrame.Payload[1]));
+  if LPayloadLen < 1 + LPadLen then
+    Exit(False);
+  ADataLen := LPayloadLen - 1 - LPadLen;
+  Result := True;
+end;
+
+function TH2ServerSession.ConsumeClosedStreamDataConnectionWindow(
+  const AFrame: TH2Frame): Boolean;
+var
+  LDataLen: UInt32;
+begin
+  Result := True;
+  if not ClosedStreamDataLength(AFrame, LDataLen) then
+    Exit(True);
+  if LDataLen = 0 then
+    Exit(True);
+  try
+    FConnectionFlow.RecvWindow.OnDataReceived(LDataLen);
+    FConnectionFlow.RecvWindow.OnDataConsumed(LDataLen);
+  except
+    Exit(RejectFrame(0, H2_ERR_FLOW_CONTROL_ERROR, True));
+  end;
+  QueueWindowUpdate(0, LDataLen);
+end;
+
 function TH2ServerSession.HandleData(const AFrame: TH2Frame): Boolean;
 var
   LStream: TH2Stream;
@@ -899,7 +945,12 @@ begin
     Exit(RejectFrame(0, H2_ERR_PROTOCOL_ERROR, True));
   LStream := FStreams.Find(AFrame.Header.StreamID);
   if LStream = nil then
-    Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED, False));
+  begin
+    QueueRstStream(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED);
+    if not ConsumeClosedStreamDataConnectionWindow(AFrame) then
+      Exit(False);
+    Exit(False);
+  end;
   LStream.OnData(AFrame.Header.Flags, AFrame.Payload);
   if LStream.ResetReceived then
   begin

@@ -1023,6 +1023,81 @@ begin
   end;
 end;
 
+procedure TestRunDataOnClosedStreamRestoresConnectionWindow;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..9] of TH2Frame;
+  LFrameCount: SizeInt;
+  LRstCode: UInt32;
+  LWindowIncrement: UInt32;
+  LFoundRst: Boolean;
+  LFoundConnectionWindowUpdateAfterRst: Boolean;
+  LI: SizeInt;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, '');
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/closed')) +
+      H2EncodeFrame(H2_FRAME_DATA, H2_FLAG_DATA_END_STREAM, 1, 'xy');
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(1), Int64(LHandler.CallCount),
+        'initial request reaches handler before stream is closed');
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      LFoundRst := False;
+      LFoundConnectionWindowUpdateAfterRst := False;
+      for LI := 0 to LFrameCount - 1 do
+      begin
+        if (LFrames[LI].Header.FrameType = H2_FRAME_RST_STREAM) and
+           (LFrames[LI].Header.StreamID = 1) then
+        begin
+          Check(H2DecodeRstStream(LFrames[LI].Payload, LRstCode),
+            'RST_STREAM payload decodes');
+          CheckEqual(Int64(H2_ERR_STREAM_CLOSED), Int64(LRstCode),
+            'closed stream DATA receives STREAM_CLOSED');
+          LFoundRst := True;
+        end
+        else if LFoundRst and
+          (LFrames[LI].Header.FrameType = H2_FRAME_WINDOW_UPDATE) and
+          (LFrames[LI].Header.StreamID = 0) then
+        begin
+          Check(H2DecodeWindowUpdate(LFrames[LI].Payload, LWindowIncrement),
+            'connection WINDOW_UPDATE payload decodes');
+          CheckEqual(Int64(2), Int64(LWindowIncrement),
+            'connection WINDOW_UPDATE restores closed-stream DATA bytes');
+          LFoundConnectionWindowUpdateAfterRst := True;
+        end;
+      end;
+      Check(LFoundRst, 'closed stream DATA emits RST_STREAM');
+      Check(LFoundConnectionWindowUpdateAfterRst,
+        'closed stream DATA still emits connection WINDOW_UPDATE');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
 procedure TestHandleDataConnectionStreamSourceContract;
 var
   LSource: string;
@@ -1185,6 +1260,8 @@ begin
       @TestRunUnknownExtensionFrameIsIgnored);
     Run('Run DATA on connection stream sends GOAWAY',
       @TestRunDataOnConnectionStreamSendsGoaway);
+    Run('Run DATA on closed stream restores connection window',
+      @TestRunDataOnClosedStreamRestoresConnectionWindow);
     Run('HandleData connection stream source contract',
       @TestHandleDataConnectionStreamSourceContract);
     Run('Run client PUSH_PROMISE sends GOAWAY',
