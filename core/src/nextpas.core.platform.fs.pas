@@ -40,6 +40,8 @@ function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
 function platform_fs_temp_dir(ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
   APathBuf: PAnsiChar; APathBufLen: Int32; out AFd: Int32): Int32;
+function platform_fs_mktemp_handle(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
+  APathBuf: PAnsiChar; APathBufLen: Int32; out AHandle: TPlatformFileHandle): Int32;
 function platform_fs_mkdir_p(const APath: PAnsiChar; AMode: UInt32): Int32;
 function platform_fs_copy_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
 function platform_fs_write_atomic(const APath: PAnsiChar;
@@ -406,6 +408,23 @@ begin
     end;
   end;
   Result := -1;
+end;
+
+function platform_fs_mktemp_handle(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
+  APathBuf: PAnsiChar; APathBufLen: Int32; out AHandle: TPlatformFileHandle): Int32;
+var
+  LFd: Int32;
+begin
+  AHandle := Default(TPlatformFileHandle);
+  Result := platform_fs_mktemp(APrefix, ASuffix, APathBuf, APathBufLen, LFd);
+  if Result = 0 then
+  begin
+    {$IFDEF NEXTPAS_WINDOWS}
+    AHandle.Value := PtrUInt(LFd);
+    {$ELSE}
+    AHandle.Value := LFd;
+    {$ENDIF}
+  end;
 end;
 
 function platform_fs_read_file(const APath: PAnsiChar;
