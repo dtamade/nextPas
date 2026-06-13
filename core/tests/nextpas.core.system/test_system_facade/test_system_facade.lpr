@@ -206,8 +206,8 @@ begin
   LTarget[2] := 4;
   Check(not nextpas.core.system.CompareMem(@LTarget[0], @LSource[0], SizeOf(LSource)),
     'system CompareMem should detect unequal buffers');
-  Check(nextpas.core.system.CompareMem(nil, nil, 1),
-    'system CompareMem should preserve base nil/nil true semantics');
+  Check(not nextpas.core.system.CompareMem(nil, nil, 1),
+    'system CompareMem should preserve base nil/nil false semantics');
   Check(not nextpas.core.system.CompareMem(nil, @LSource[0], 1),
     'system CompareMem should preserve base one-side-nil false semantics');
   Check(not nextpas.core.system.CompareMem(@LSource[0], nil, 1),

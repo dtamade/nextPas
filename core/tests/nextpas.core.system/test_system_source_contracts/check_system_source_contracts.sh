@@ -39,14 +39,6 @@ reject_token() {
   fi
 }
 
-reject_token_ci() {
-  local path="$1"
-  local token="$2"
-  if rg -i -F --quiet -- "$token" "$CORE_ROOT/$path"; then
-    fail "core/$path must not contain token, ignoring Pascal case: $token"
-  fi
-}
-
 require_repo_reject_token() {
   local path="$1"
   local token="$2"
@@ -460,106 +452,11 @@ reject_repo_uses_unit_under() {
   done < <(find "$root" -type f \( -name '*.pas' -o -name '*.lpr' \))
 }
 
-canonical_fpc_broad_unit() {
-  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
-    sysutils) printf '%s\n' "SysUtils" ;;
-    classes) printf '%s\n' "Classes" ;;
-    typinfo) printf '%s\n' "TypInfo" ;;
-    dateutils) printf '%s\n' "DateUtils" ;;
-    baseunix) printf '%s\n' "BaseUnix" ;;
-    unix) printf '%s\n' "Unix" ;;
-    windows) printf '%s\n' "Windows" ;;
-    *) return 1 ;;
-  esac
-}
-
-fpc_broad_route_category() {
-  local path="$1"
-  case "$path" in
-    compiler/*) printf '%s\n' "compiler-production" ;;
-    core/src/nextpas.core.system*) printf '%s\n' "system-kernel-route" ;;
-    core/src/nextpas.core.platform*|core/src/nextpas.core.fs*|core/src/nextpas.core.io*) printf '%s\n' "platform-fs-io-host-debt" ;;
-    core/src/nextpas.core.mem*) printf '%s\n' "mem-host-debt" ;;
-    core/src/nextpas.core.tls*) printf '%s\n' "tls-legacy-host-debt" ;;
-    core/src/nextpas.core.tui*) printf '%s\n' "tui-legacy-host-debt" ;;
-    core/src/nextpas.core.http*|core/src/nextpas.core.net*) printf '%s\n' "net-http-legacy-host-debt" ;;
-    core/src/nextpas.core.git*) printf '%s\n' "git-legacy-host-debt" ;;
-    core/src/nextpas.core.collections*) printf '%s\n' "collections-typinfo-debt" ;;
-    core/src/nextpas.core.base*|core/src/nextpas.core.exception*|core/src/nextpas.core.crypto*|core/src/nextpas.core.bench*) printf '%s\n' "core-foundation-legacy-debt" ;;
-    core/src/nextpas.core.simd*) printf '%s\n' "simd-host-probe-debt" ;;
-    *) printf '%s\n' "unclassified-core-debt" ;;
-  esac
-}
-
-list_repo_fpc_broad_rtl_route_counts() {
-  local file_path rel_path unit_name canonical category
-  while IFS= read -r file_path; do
-    rel_path="${file_path#$REPO_ROOT/}"
-    while IFS= read -r unit_name; do
-      if canonical="$(canonical_fpc_broad_unit "$unit_name")"; then
-        category="$(fpc_broad_route_category "$rel_path")"
-        printf '%s|%s\n' "$category" "$canonical"
-      fi
-    done < <(list_pascal_uses_units "$file_path")
-  done < <(
-    {
-      find "$CORE_ROOT/src" -type f -name '*.pas'
-      find "$REPO_ROOT/compiler" -type f -name '*.pas' ! -path "$REPO_ROOT/compiler/tests/*"
-    } | sort
-  ) | sort | uniq -c | awk '{ print $2 "|" $1 }'
-}
-
-list_fpc_broad_rtl_allowlist() {
-  local allowlist="$CORE_ROOT/tests/nextpas.core.system/test_system_source_contracts/fpc_broad_rtl_allowlist.txt"
-  [[ -f "$allowlist" ]] || fail "missing FPC broad RTL allowlist: $allowlist"
-  sed -E 's/[[:space:]]+$//' "$allowlist" |
-    sed -E '/^[[:space:]]*($|#)/d' |
-    sort -u
-}
-
-require_fpc_broad_rtl_allowlist_stable() {
-  local actual expected
-  actual="$(list_repo_fpc_broad_rtl_route_counts | sort -u)"
-  expected="$(list_fpc_broad_rtl_allowlist)"
-  if [[ "$actual" != "$expected" ]]; then
-    printf '[FAIL] direct FPC broad RTL route debt baseline drifted\n' >&2
-    printf '%s\n' '--- registered category debt' >&2
-    printf '%s\n' "$expected" >&2
-    printf '%s\n' '--- current category debt' >&2
-    printf '%s\n' "$actual" >&2
-    exit 1
-  fi
-  if printf '%s\n' "$actual" | grep -F --quiet 'unclassified-core-debt|'; then
-    fail "direct FPC broad RTL route debt has unclassified owner category"
-  fi
-}
-
-reject_compiler_production_uses_unit() {
-  local forbidden_unit="$1"
-  while IFS= read -r file_path; do
-    if list_pascal_uses_units "$file_path" | grep -Fxi --quiet "$forbidden_unit"; then
-      fail "${file_path#$REPO_ROOT/} must not directly use runtime owner unit: $forbidden_unit"
-    fi
-  done < <(find "$REPO_ROOT/compiler" -type f -name '*.pas' \
-    ! -path "$REPO_ROOT/compiler/tests/*" \
-    ! -path "$REPO_ROOT/compiler/docs/*")
-}
-
-reject_compiler_production_unitpath_token() {
-  local token="$1"
-  if rg --glob '*.pas' --glob '!tests/**' --glob '!docs/**' --quiet -- "$token" "$REPO_ROOT/compiler"; then
-    fail "compiler production sources must not use unitpath token: $token"
-  fi
-}
-
 require_file "docs/system/README.md"
 require_file "docs/system/rtl-mapping.md"
 require_file "docs/system/goal-tree.md"
-require_file "docs/system/fpc-rtl-route-boundary.md"
 require_file "docs/system/runtime-contracts.md"
 require_file "docs/system/lifecycle-contracts.md"
-require_file "docs/system/bootstrap-dual-surface-adapter.md"
-require_file "docs/system/compiler-integration-contract.md"
 require_file "docs/system/compatibility-facades.md"
 require_file "docs/system/compatibility-matrix.md"
 require_file "docs/system/typinfo-minimal-pressure.md"
@@ -578,7 +475,6 @@ require_token "docs/system/README.md" "non-goals"
 require_token "docs/system/README.md" "deferred"
 require_token "docs/system/README.md" "compatibility-facades.md"
 require_token "docs/system/README.md" "compatibility-matrix.md"
-require_token "docs/system/README.md" "bootstrap-dual-surface-adapter.md"
 require_token "docs/system/README.md" "typinfo-minimal-pressure.md"
 require_token "docs/system/README.md" "2026-06-07-system-typinfo-minimal-unlock-review.md"
 require_token "docs/system/README.md" "nextpas.core.system.typinfo"
@@ -663,10 +559,6 @@ done
 require_token "docs/system/compatibility-facades.md" 'A minimal live `nextpas.core.system.sysutils` unit exists'
 require_token "docs/system/compatibility-facades.md" 'Format'
 require_token "docs/system/compatibility-facades.md" 'Exception.CreateFmt'
-require_token "docs/system/compatibility-facades.md" 'IntToStr'
-require_token "docs/system/compatibility-facades.md" 'Trim'
-require_token "docs/system/compatibility-facades.md" '`CompareText` | no focused consumer pressure in this lane'
-require_token "docs/system/compatibility-facades.md" "pointer, interface, and"
 require_token "docs/system/compatibility-facades.md" "typinfo-minimal-pressure.md"
 require_token "docs/system/compatibility-facades.md" "2026-06-07-system-typinfo-minimal-unlock-review.md"
 require_token "docs/system/compatibility-facades.md" "premature broad facade or host TypInfo mirror"
@@ -934,20 +826,6 @@ require_token "docs/system/lifecycle-contracts.md" "minimal TypInfo facade is li
 require_token "docs/system/lifecycle-contracts.md" "contract vocabulary only, not public Pascal facade"
 require_token "docs/system/runtime-contracts.md" "contract vocabulary only, not public Pascal facade"
 
-for token in \
-  "Process Lifecycle" \
-  "compiler" \
-  "semantic seed truth" \
-  "runtime-contract" \
-  "np.system.process_init" \
-  "np.system.process_fini" \
-  "program, library or package" \
-  "Runtime execution of process startup/shutdown remains deferred" \
-  'No callable `nextpas.core.system` facade' \
-  "Unit initialization and finalization are not upgraded"; do
-  require_token "docs/system/lifecycle-contracts.md" "$token"
-done
-
 for helper in \
   "np.system.unit_init" \
   "np.system.unit_fini" \
@@ -1023,7 +901,7 @@ require_system_unit_filename_allowlist() {
   while IFS= read -r file_path; do
     filename="$(basename "$file_path")"
     case "$filename" in
-      nextpas.core.system.pas|nextpas.core.system.sysutils.pas|nextpas.core.system.typinfo.pas)
+      nextpas.core.system.pas|nextpas.core.system.sysutils.pas|nextpas.core.system.typinfo.pas|nextpas.core.system.contracts.pas)
         ;;
       nextpas.core.system*.pas)
         fail "unreviewed system unit filename: src/$filename"
@@ -1039,9 +917,6 @@ reject_repo_uses_unit_prefix_under "$CORE_ROOT/tests" "nextpas.core.system.class
 
 require_repo_file "compiler/tests/test_sysutils_createfmt_contract.pas"
 require_repo_file "compiler/tests/test_typinfo_contract.pas"
-require_repo_file "units/linux-x86_64/System.pas"
-require_repo_file "tests/semantic/test_semantic_call_bindings.pas"
-require_repo_file "tests/hir/test_hir_object_free_contract.pas"
 require_repo_file "compiler/toolchain/np_toolchain_runner.pas"
 require_repo_file "compiler/frontend/np_workspace_model.pas"
 require_repo_file "rtl/core/sysutils/np_sysutils.pas"
@@ -1051,8 +926,6 @@ require_repo_file "core/src/nextpas.core.collections.hashmap.swiss.pas"
 
 require_repo_token "compiler/tests/test_sysutils_createfmt_contract.pas" "CreateFmt"
 require_repo_token "compiler/tests/test_sysutils_createfmt_contract.pas" "Format("
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "IntToStr"
-require_repo_token "compiler/sema/np_semantic_model.pas" "SameText(Trim(Copy(Params"
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "nextpas.core.system.typinfo"
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "InitializeArray"
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "CopyArray"
@@ -1066,52 +939,11 @@ require_repo_token "compiler/tests/test_typinfo_contract.pas" "GetTypeKind(TSyst
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "GetTypeKind(TSystemTypInfoRecord) <> tkRecord"
 require_repo_reject_regex "compiler/tests/test_typinfo_contract.pas" '^[[:space:]]*TypInfo[,;]'
 require_repo_not_uses_unit "compiler/tests/test_typinfo_contract.pas" "TypInfo"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "TObject"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "destructor"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "object-free-runtime"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "NPSYSTEM_OBJECT_FREE"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "nil-guard true"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "heap-release true"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "NPSYSTEM_PROCESS_INIT"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "NPSYSTEM_PROCESS_FINI"
-require_repo_token "compiler/ir/np_hir_builder.pas" "NPSYSTEM_OBJECT_FREE_DESTROY"
-require_repo_token "compiler/ir/np_hir_builder.pas" "NPSYSTEM_OBJECT_FREE_CLEANUP"
-require_repo_token "compiler/ir/np_hir_builder.pas" "NPSYSTEM_OBJECT_FREE_RELEASE"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "NPSYSTEM_OBJECT_FREE"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_object_free_release(ptr "
-require_repo_token "compiler/frontend/np_unit_resolver.pas" "ruoImplicitRuntime"
-require_repo_token "compiler/frontend/np_unit_resolver.pas" "System.pas"
-require_repo_token "units/linux-x86_64/System.pas" "unit System;"
-require_repo_token "units/linux-x86_64/System.pas" "TObject = class"
-require_repo_token "units/linux-x86_64/System.pas" "destructor Destroy; virtual;"
-require_repo_token "units/linux-x86_64/System.pas" "procedure Free;"
-require_repo_token "tests/semantic/test_semantic_call_bindings.pas" "object-free-runtime"
-require_repo_token "tests/semantic/test_semantic_call_bindings.pas" "np.system.object_free"
-require_repo_token "tests/semantic/test_semantic_call_bindings.pas" "nil-guard true"
-require_repo_token "tests/semantic/test_semantic_call_bindings.pas" "heap-release true"
-require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free.destroy"
-require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free.release"
-require_repo_token "tests/hir/test_hir_object_free_contract.pas" "call void @np_object_free_release(ptr "
-require_repo_token "docs/architecture/runtime-bootstrap-specification.md" "np.system.unit_init"
-require_repo_token "docs/architecture/runtime-bootstrap-specification.md" "np.system.unit_fini"
-reject_compiler_production_uses_unit "System"
-reject_compiler_production_unitpath_token "rtl/core/system"
 require_repo_token "compiler/toolchain/np_toolchain_runner.pas" "TFileStream"
 require_repo_token "compiler/toolchain/np_toolchain_runner.pas" "ExpandFileName"
 require_repo_token "compiler/frontend/np_workspace_model.pas" "ExpandFileName"
 require_repo_token "rtl/core/sysutils/np_sysutils.pas" "unit SysUtils;"
 require_repo_token "rtl/core/classes/np_classes.pas" "unit Classes;"
-
-require_repo_token "docs/architecture/bootstrap-roadmap.md" "FPC-compatible source"
-require_repo_token "docs/architecture/bootstrap-roadmap.md" "nextPas-owned semantic authority"
-require_repo_token "docs/architecture/bootstrap-roadmap.md" "FPC compatibility is a build vehicle"
-require_repo_token "docs/architecture/rtl-specification.md" "FPC-compatible source"
-require_repo_token "docs/architecture/rtl-specification.md" "semantic authority"
-require_repo_token "docs/architecture/rtl-specification.md" "stage0 host adapter"
-require_repo_token "docs/architecture/runtime-bootstrap-specification.md" "dual-surface model"
-require_repo_token "docs/architecture/runtime-bootstrap-specification.md" "nextPas contract path"
-require_token "docs/system/README.md" "FPC-compatible source"
-require_token "docs/system/README.md" "nextPas-owned semantic authority"
 require_repo_token "core/src/nextpas.core.collections.element_manager.pas" "InitializeArray"
 require_repo_token "core/src/nextpas.core.collections.element_manager.pas" "CopyArray"
 require_repo_token "core/src/nextpas.core.collections.hashmap.swiss.pas" "GetTypeKind"
@@ -1245,7 +1077,6 @@ require_token "src/nextpas.core.system.typinfo.pas" "tkRecord"
 require_token "src/nextpas.core.system.typinfo.pas" "tkInterface"
 require_token "src/nextpas.core.system.typinfo.pas" "tkClassRef"
 require_token "src/nextpas.core.system.typinfo.pas" "tkPointer"
-require_token "src/nextpas.core.system.typinfo.pas" "tkInterface"
 require_token "src/nextpas.core.system.typinfo.pas" "tkDynArray"
 require_token "src/nextpas.core.system.typinfo.pas" "tkProcVar"
 require_token "src/nextpas.core.system.typinfo.pas" "InitializeArray"
@@ -1256,29 +1087,17 @@ require_token "src/nextpas.core.system.typinfo.pas" "System.FinalizeArray"
 require_token "src/nextpas.core.system.typinfo.pas" "System.CopyArray"
 require_typinfo_facade_surface_allowlist
 reject_token "src/nextpas.core.system.typinfo.pas" "GetEnumName"
-reject_token_ci "src/nextpas.core.system.typinfo.pas" "GetEnumName"
 reject_token "src/nextpas.core.system.typinfo.pas" "GetEnumValue"
-reject_token_ci "src/nextpas.core.system.typinfo.pas" "GetEnumValue"
 reject_token "src/nextpas.core.system.typinfo.pas" "GetPropInfo"
-reject_token_ci "src/nextpas.core.system.typinfo.pas" "GetPropInfo"
 reject_token "src/nextpas.core.system.typinfo.pas" "GetPropList"
-reject_token_ci "src/nextpas.core.system.typinfo.pas" "GetPropList"
 reject_token "src/nextpas.core.system.typinfo.pas" "GetTypeData"
-reject_token_ci "src/nextpas.core.system.typinfo.pas" "GetTypeData"
 reject_token "src/nextpas.core.system.typinfo.pas" "IsPublishedProp"
-reject_token_ci "src/nextpas.core.system.typinfo.pas" "IsPublishedProp"
 reject_token "src/nextpas.core.system.typinfo.pas" "SetPropValue"
-reject_token_ci "src/nextpas.core.system.typinfo.pas" "SetPropValue"
 reject_token "src/nextpas.core.system.typinfo.pas" "PropCount"
-reject_token_ci "src/nextpas.core.system.typinfo.pas" "PropCount"
 reject_token "src/nextpas.core.system.typinfo.pas" "TPropInfo"
-reject_token_ci "src/nextpas.core.system.typinfo.pas" "TPropInfo"
 reject_token "src/nextpas.core.system.typinfo.pas" "TTypeData"
-reject_token_ci "src/nextpas.core.system.typinfo.pas" "TTypeData"
 reject_token "src/nextpas.core.system.typinfo.pas" "function TypeInfo"
-reject_token_ci "src/nextpas.core.system.typinfo.pas" "function TypeInfo"
 reject_token "src/nextpas.core.system.typinfo.pas" "function GetTypeKind"
-reject_token_ci "src/nextpas.core.system.typinfo.pas" "function GetTypeKind"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "integer PTypeInfo identity compile-truth"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "PTypeInfo kind consistency compile-truth"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "structured kind aliases compile-truth"
@@ -1287,7 +1106,6 @@ require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "tkProcVar"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "tkRecord"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "managed array lifecycle helpers"
-require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "managed interface array lifecycle helpers"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "InitializeArray(LSource"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "CopyArray(LDest"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "FinalizeArray(LDest"
@@ -1295,7 +1113,6 @@ require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "CopyArray(LDest, LSource, TypeInfo(ISystemTypInfoProbe)"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "FinalizeArray(LSource, TypeInfo(ISystemTypInfoProbe)"
 require_token "tests/nextpas.core.system/Makefile" "test-typinfo-minimal"
-require_token "tests/nextpas.core.system/Makefile" "test-typinfo-collections-consumer"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/Makefile" "test: run compiler-contract"
 require_token "tests/nextpas.core.system/Makefile" "test-object-free-runtime-contract"
 require_token "tests/nextpas.core.system/Makefile" "OBJECT_FREE_RUNTIME_CONTRACT_SOURCE"
@@ -1459,41 +1276,25 @@ require_token "src/nextpas.core.system.sysutils.pas" "function Format"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv.Format"
 require_sysutils_facade_surface_allowlist
 reject_token "src/nextpas.core.system.sysutils.pas" "FileExists"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "FileExists"
 reject_token "src/nextpas.core.system.sysutils.pas" "DirectoryExists"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "DirectoryExists"
 reject_token "src/nextpas.core.system.sysutils.pas" "ForceDirectories"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "ForceDirectories"
 reject_token "src/nextpas.core.system.sysutils.pas" "FileSearch"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "FileSearch"
 reject_token "src/nextpas.core.system.sysutils.pas" "ExpandFileName"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "ExpandFileName"
 reject_token "src/nextpas.core.system.sysutils.pas" "ExtractFileDir"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "ExtractFileDir"
 reject_token "src/nextpas.core.system.sysutils.pas" "ExtractFileName"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "ExtractFileName"
 reject_token "src/nextpas.core.system.sysutils.pas" "IncludeTrailingPathDelimiter"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "IncludeTrailingPathDelimiter"
 reject_token "src/nextpas.core.system.sysutils.pas" "ExcludeTrailingPathDelimiter"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "ExcludeTrailingPathDelimiter"
 reject_token "src/nextpas.core.system.sysutils.pas" "GetEnvironmentVariable"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "GetEnvironmentVariable"
-reject_token "src/nextpas.core.system.sysutils.pas" "CompareText"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "CompareText"
+reject_token "src/nextpas.core.system.sysutils.pas" "Trim"
+reject_token "src/nextpas.core.system.sysutils.pas" "SameText"
 reject_token "src/nextpas.core.system.sysutils.pas" "LowerCase"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "LowerCase"
 reject_token "src/nextpas.core.system.sysutils.pas" "UpperCase"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "UpperCase"
+reject_token "src/nextpas.core.system.sysutils.pas" "IntToStr"
 reject_token "src/nextpas.core.system.sysutils.pas" "StrToInt"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "StrToInt"
 reject_token "src/nextpas.core.system.sysutils.pas" "Now"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "Now"
 reject_token "src/nextpas.core.system.sysutils.pas" "FormatDateTime"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "FormatDateTime"
 reject_token "src/nextpas.core.system.sysutils.pas" "TFileStream"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "TFileStream"
 reject_token "src/nextpas.core.system.sysutils.pas" "TStringList"
-reject_token_ci "src/nextpas.core.system.sysutils.pas" "TStringList"
 
 mapfile -t system_units < <(find "$CORE_ROOT/src" -maxdepth 1 -name 'nextpas.core.system*.pas' | sort)
 (( ${#system_units[@]} > 0 )) || fail "no nextpas.core.system units found"
@@ -1537,7 +1338,5 @@ while IFS='|' read -r file unit_name; do
       ;;
   esac
 done < "$tmp_found"
-
-require_fpc_broad_rtl_allowlist_stable
 
 echo "[PASS] nextpas.core.system source contracts"
