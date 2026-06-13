@@ -124,20 +124,29 @@ What is already aligned with the L0 direction:
 The live dependency-boundary gate now reports **0 allowlisted debt entries**.
 
 That means mem currently has no known new helper or host-unit boundary
-regressions, but it does **not** mean mapped-family ownership is already
+regressions, but it does **not** mean mapped-family ownership was already
 settled. The debt gate only proves known source-boundary violations have been
 removed.
 
-The architecture debt that remains is:
+The ownership decision is now explicit:
 
-- `mapped_ring_buffer` and `mapped_ring_buffer.sharded` are still L0 mem
-  surface, even though their preferred long-term home is a higher mapped IO
-  owner. Do not treat them as settled L0 surface just because the helper
-  imports were cleaned.
+- `nextpas.core.mem.memory_map` stays in L0 mem for now.
+- `nextpas.core.mem.allocator.memory_map_allocator` stays in L0 mem for now.
+- `mapped_slab_pool` anonymous allocator path stays in L0 mem for now.
+- `mapped_ring_buffer` is future migration surface.
+- `mapped_ring_buffer.sharded` is future migration surface.
+- `mapped_slab_pool` file/shared manager path is future migration surface.
+
+See `docs/mem/mapped-family-ownership-decision.md` for the full decision note.
+
+Additional architecture debt that remains:
+
+- `mapped_ring_buffer*` are still present in `mem`, but their preferred
+  long-term home is a higher mapped IO owner. Do not treat them as permanent
+  L0 surface.
 - `mapped_slab_pool` still mixes anonymous allocator behavior with
-  file-backed/shared-memory manager behavior. The anonymous allocator path
-  may remain in mem; the file/shared manager path should eventually move
-  behind higher ownership or be explicitly reclassified.
+  file-backed/shared-memory manager behavior; that split must be preserved
+  during any future work.
 - `mem.secure` was cleaned by removing direct host-unit uses, not by
   introducing a dedicated platform-owned secure seam. The current
   `FillChar` + barrier strategy is honest for L0, but a later slice may
@@ -147,13 +156,10 @@ The architecture debt that remains is:
 
 Priority follow-up work:
 
-1. Decide whether `mapped_ring_buffer*` should be relocated out of L0 mem.
-   Until that decision is explicit, treat these units as eligible for future
-   migration, not as permanent L0 surface.
-2. Split `mapped_slab_pool` review into two surfaces:
-   - anonymous mapped allocator behavior, which can stay in mem
-   - file-backed and shared-memory manager behavior, which should be
-     reclassified if it cannot stay layer-honest
+1. If migration is later approved, open a narrow lane to relocate
+   `mapped_ring_buffer` and `mapped_ring_buffer.sharded` first.
+2. Split `mapped_slab_pool` review into allocator surface vs manager surface
+   before any move.
 3. Revisit the `mem.secure` barrier strategy if a later platform slice
    requires a more explicit secure-memory primitive.
 4. Keep allocator-manager behavior narrow and explicit: `rtl` already has a
