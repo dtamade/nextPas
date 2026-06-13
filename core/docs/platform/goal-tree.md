@@ -14,7 +14,7 @@ no real runtime or ci-matrix proof. macOS, FreeBSD, and Android remain mixed.
 | Host | Current truth | Required next proof |
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime through platform/io, async, process, file, and consumer gates with heaptrc expectations | keep focused gates green and expand consumer coverage only when contracts change |
-| Windows x86_64 | source-contract plus forced Windows compile coverage for readiness and completion seams; real-Windows runtime proof missing | run named real-Windows runtime gates on a Windows host and promote only after ci-matrix proof |
+| Windows x86_64 | wine-runtime-smoke for time, memory, sync, thread, io, process, files, fs, path, env, mmap, random; source-contract and forced-compile for signal, console, args; real-Windows runtime proof missing | run named real-Windows runtime gates on a Windows host and promote only after ci-matrix proof |
 | macOS / FreeBSD | source-contract and selected compile/runtime fragments | record passed rows separately; skipped rows are non-evidence |
 | Android / other forced hosts | forced-compile fragments | add host-specific runtime rows before claiming runtime readiness |
 
@@ -40,6 +40,32 @@ Current Windows readiness and completion source/compile proof is split across:
 These gates do not prove Windows runtime behavior. They only prove source shape,
 forced Windows compile coherence, and Linux focused-runtime behavior where the
 gate actually runs.
+
+## Wine Runtime Smoke Evidence
+
+Wine 10.0 runtime smoke evidence covers 12 facade modules. These tests are
+cross-compiled to Win64 PE via `-Twin64` and executed under Wine. Evidence tier
+is `wine-runtime-smoke` (not `focused-runtime` and not `ci-matrix`).
+
+| Module | Gate path | Tests | Heaptrc | Known gaps |
+| --- | --- | --- | --- | --- |
+| platform.time | `tests/nextpas.core.platform.time/test_platform_time_wine/` | 5 | 0 leak | — |
+| platform.memory | `tests/nextpas.core.platform.memory/test_platform_memory_wine/` | 8 | 0 leak | — |
+| platform.sync | `tests/nextpas.core.platform.sync/test_platform_sync_wine/` | 14 | 0 leak | recursive mutex (SRWLOCK does not support recursive) |
+| platform.thread | `tests/nextpas.core.platform.thread/test_platform_thread_wine/` | 9 | 0 leak | WaitOnAddress/WakeByAddressSingle not implemented in Wine 10.0 |
+| platform.io | `tests/nextpas.core.platform.io/test_platform_io_wine/` | 4 | 0 leak | enable_wake (WSAPoll loopback) not stable under Wine |
+| platform.process | `tests/nextpas.core.platform.process/test_platform_process_wine/` | 7 | 0 leak | — |
+| platform.files | `tests/nextpas.core.platform.files/test_platform_files_wine/` | 14 | 0 leak | — |
+| platform.fs | `tests/nextpas.core.platform.fs/test_platform_fs_wine/` | 11 | 0 leak | — |
+| platform.path | `tests/nextpas.core.platform.path/test_platform_path_wine/` | 11 | 0 leak | — |
+| platform.env | `tests/nextpas.core.platform.env/test_platform_env_wine/` | 5 | 0 leak | — |
+| platform.mmap | `tests/nextpas.core.platform.mmap/test_platform_mmap_wine/` | 7 | 0 leak | file-backed mmap (CreateFileMappingA path encoding) |
+| platform.random | `tests/nextpas.core.platform.random/test_platform_random_wine/` | 4 | 0 leak | — |
+
+Not covered by Wine runtime smoke: platform.signal, platform.console, platform.args
+(no Wine runtime test needed — signal uses SetConsoleCtrlHandler which is
+Wine-unsupported; console relies on Wine pseudo-TTY behavior not suitable for
+evidence; args uses FPC RTL ParamStr which is cross-platform).
 
 ## Readiness And Completion Boundaries
 
