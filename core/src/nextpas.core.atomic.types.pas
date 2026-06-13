@@ -143,6 +143,10 @@ type
     function Increment(AOrder: memory_order_t = mo_seq_cst): Int64; inline;
     function Decrement(AOrder: memory_order_t = mo_seq_cst): Int64; inline;
 
+    function Wait(AExpected: Int64; const ATimeoutNs: Int64 = -1): Int32; inline;
+    procedure NotifyOne; inline;
+    procedure NotifyAll; inline;
+
     function GetMut: PInt64; inline;
     function IntoInner: Int64; inline;
   end;
@@ -182,6 +186,10 @@ type
 
     function Increment(AOrder: memory_order_t = mo_seq_cst): UInt64; inline;
     function Decrement(AOrder: memory_order_t = mo_seq_cst): UInt64; inline;
+
+    function Wait(AExpected: UInt64; const ATimeoutNs: Int64 = -1): Int32; inline;
+    procedure NotifyOne; inline;
+    procedure NotifyAll; inline;
 
     function GetMut: PUInt64; inline;
     function IntoInner: UInt64; inline;
@@ -976,6 +984,21 @@ begin
   Result := FValue;
 end;
 
+function TAtomicInt64.Wait(AExpected: Int64; const ATimeoutNs: Int64): Int32;
+begin
+  Result := atomic_wait(FValue, AExpected, ATimeoutNs);
+end;
+
+procedure TAtomicInt64.NotifyOne;
+begin
+  atomic_notify_one(FValue);
+end;
+
+procedure TAtomicInt64.NotifyAll;
+begin
+  atomic_notify_all(FValue);
+end;
+
 { TAtomicUInt64 }
 
 class function TAtomicUInt64.Create(AValue: UInt64): TAtomicUInt64;
@@ -1068,6 +1091,21 @@ end;
 function TAtomicUInt64.IntoInner: UInt64;
 begin
   Result := FValue;
+end;
+
+function TAtomicUInt64.Wait(AExpected: UInt64; const ATimeoutNs: Int64): Int32;
+begin
+  Result := atomic_wait(FValue, AExpected, ATimeoutNs);
+end;
+
+procedure TAtomicUInt64.NotifyOne;
+begin
+  atomic_notify_one(FValue);
+end;
+
+procedure TAtomicUInt64.NotifyAll;
+begin
+  atomic_notify_all(FValue);
 end;
 {$ENDIF}
 

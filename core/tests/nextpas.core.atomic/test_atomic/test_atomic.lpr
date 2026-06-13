@@ -6339,6 +6339,39 @@ begin
     'atomic_notify_one should succeed on supported platforms');
 end;
 
+procedure TestAtomicWaitNotify64SurfaceAndBehavior;
+var
+  LValue64: Int64;
+  LRet: Int32;
+  LExpected: Int64;
+begin
+  LValue64 := 7;
+  LRet := atomic_wait(LValue64, 9, 1000000);
+  CheckEqual(Int64(PLATFORM_ERR_AGAIN), Int64(LRet),
+    'atomic_wait(int64) must return AGAIN on value mismatch');
+
+  LValue64 := 11;
+  LRet := atomic_wait(LValue64, 11, 0);
+  CheckEqual(Int64(PLATFORM_ERR_TIMEOUT), Int64(LRet),
+    'atomic_wait(int64) timeout=0 must report TIMEOUT when still equal');
+
+  LValue64 := 42;
+  LExpected := 99;
+  LRet := atomic_wait(LValue64, LExpected, 1000000);
+  CheckEqual(Int64(PLATFORM_ERR_AGAIN), Int64(LRet),
+    'atomic_wait(int64) must return AGAIN when value differs from expected');
+
+  LValue64 := 42;
+  LRet := atomic_notify_one(LValue64);
+  CheckEqual(Int64(0), Int64(LRet),
+    'atomic_notify_one(int64) should succeed on supported platforms');
+
+  LValue64 := 42;
+  LRet := atomic_notify_all(LValue64);
+  CheckEqual(Int64(0), Int64(LRet),
+    'atomic_notify_all(int64) should succeed on supported platforms');
+end;
+
 procedure TestAtomicRefCountContract;
 var
   LRef: TAtomicRefCount;
@@ -6709,6 +6742,7 @@ begin
   T.Run('tagged pointer update contracts', @TestAtomicTaggedPointerUpdateContracts);
   T.Run('tagged pointer rejects out-of-range x86_64 pointer', @TestAtomicTaggedPointerRejectsOutOfRangeX8664Pointer);
   T.Run('atomic wait/notify API', @TestAtomicWaitNotifySurfaceAndBehavior);
+  T.Run('atomic wait/notify 64-bit API', @TestAtomicWaitNotify64SurfaceAndBehavior);
   T.Run('atomic refcount contract', @TestAtomicRefCountContract);
   T.Run('atomic refcount concurrent borrow contract', @TestAtomicRefCountConcurrentBorrowContract);
   T.Run('atomic refcount terminal race contract', @TestAtomicRefCountTerminalRaceContract);
