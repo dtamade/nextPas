@@ -156,14 +156,17 @@ Additional architecture debt that remains:
 
 Priority follow-up work:
 
-1. If migration is later approved, open a narrow lane to relocate
-   `mapped_ring_buffer` and `mapped_ring_buffer.sharded` first.
-2. Split `mapped_slab_pool` review into allocator surface vs manager surface
-   before any move.
-3. Revisit the `mem.secure` barrier strategy if a later platform slice
+1. If migration is later approved, relocate `mapped_ring_buffer` and
+   `mapped_ring_buffer.sharded` first.
+2. Split `mapped_slab_pool` into allocator surface and file/shared manager
+   surface before moving it.
+3. Treat `memory_map` as temporary L0 surface, not permanent stable surface;
+   always replay `nextpas.core.io.mapped` before changing `memory_map`
+   ownership.
+4. Revisit the `mem.secure` barrier strategy if a later platform slice
    requires a more explicit secure-memory primitive.
-4. Keep allocator-manager behavior narrow and explicit: `rtl` already has a
+5. Keep allocator-manager behavior narrow and explicit: `rtl` already has a
    runtime regression test for installation safety, while optional guarded
    backends such as CRT still need at least compile truth before wider rollout.
-5. Keep narrowing public allocator claims so traits, ownership, and fallback
+6. Keep narrowing public allocator claims so traits, ownership, and fallback
    behavior remain verifiable and unsurprising.

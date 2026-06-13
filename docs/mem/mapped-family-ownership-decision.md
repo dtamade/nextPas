@@ -43,6 +43,10 @@ If migration is later approved, `mapped_ring_buffer` should be the first relocat
 
 ## Next slices
 
-1. If migration is approved, open a narrow lane to relocate `mapped_ring_buffer` and `mapped_ring_buffer.sharded`.
-2. Split `mapped_slab_pool` review into allocator surface vs manager surface.
-3. Keep `memory_map` in L0 mem until an explicit higher-owner lane is approved.
+1. If migration is later approved, relocate `mapped_ring_buffer` and
+   `mapped_ring_buffer.sharded` first.
+2. Split `mapped_slab_pool` into allocator surface and file/shared manager
+   surface before moving it.
+3. Treat `memory_map` as temporary L0 surface, not permanent stable surface.
+4. Always replay `nextpas.core.io.mapped` before changing `memory_map`
+   ownership.
