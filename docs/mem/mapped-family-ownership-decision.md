@@ -50,3 +50,16 @@ If migration is later approved, `mapped_ring_buffer` should be the first relocat
 3. Treat `memory_map` as temporary L0 surface, not permanent stable surface.
 4. Always replay `nextpas.core.io.mapped` before changing `memory_map`
    ownership.
+
+## Migration target
+
+`nextpas.core.io.mapped.ring_buffer` is the approved migration target for
+`mapped_ring_buffer*`.
+
+- `mapped_ring_buffer.sharded` follows the same target.
+- `io.mapped` is the mapped-data-structure family in L1 IO.
+- `io.mapped.ring_buffer` expresses "mapped ring buffer data structure".
+- `io.ring_buffer` was rejected as ambiguous (could be in-memory-only).
+- `ipc` was rejected as premature (no shared-memory naming/event/semaphore family exists).
+- `io.mapped` itself was rejected as the direct owner (it is currently mapped file/mapped lines view, not ring protocol owner).
+- The current `nextpas.core.mem.mapped_ring_buffer*` will become a thin compatibility wrapper during migration.
