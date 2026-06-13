@@ -14,7 +14,7 @@ type
   TPlatformSecureZeroBackend = (
     pszbFallbackFillCharBarrier,
     pszbWindowsNativeDeferred,
-    pszbPosixNativeDeferred
+    pszbPosixExplicitBZero
   );
 
 function platform_aligned_alloc(ASize, AAlignment: SizeUInt): Pointer;
@@ -111,12 +111,16 @@ end;
 
 function platform_secure_zero_memory_backend: TPlatformSecureZeroBackend;
 begin
+{$IFDEF NEXTPAS_UNIX}
+  Result := pszbPosixExplicitBZero;
+{$ELSE}
   Result := pszbFallbackFillCharBarrier;
+{$ENDIF}
 end;
 
 function platform_secure_zero_memory_is_native: Boolean;
 begin
-  Result := platform_secure_zero_memory_backend <> pszbFallbackFillCharBarrier;
+  Result := platform_secure_zero_memory_backend = pszbPosixExplicitBZero;
 end;
 
 procedure platform_secure_zero_memory_barrier; noinline;
@@ -127,7 +131,7 @@ end;
 {
   secure-zero-backend=fallback-fillchar-readwritebarrier
   windows-native-secure-zero=deferred
-  posix-native-secure-zero=deferred
+  posix-native-secure-zero=explicit_bzero
   native-secure-zero-promotion-requires=host-owned-ffi-or-dynamic-loading-seam
   secure-zero-forced-compile-truth=source-contract
   windows-runtime-ready=false
@@ -137,8 +141,12 @@ begin
   if (APtr = nil) or (ASize = 0) then
     Exit;
 
+{$IFDEF NEXTPAS_UNIX}
+  nextpas.core.platform.posix.ffi.explicit_bzero(APtr, size_t(ASize));
+{$ELSE}
   FillChar(APtr^, ASize, 0);
   platform_secure_zero_memory_barrier;
+{$ENDIF}
 end;
 
 function platform_fallback_aligned_raw_alloc(ARawSize: SizeUInt): Pointer;

@@ -225,17 +225,24 @@ begin
   Check(LByte = $5A, 'secure zero nil/zero-size inputs are no-op');
 end;
 
-procedure TestSecureZeroBackendTruthIsDeferred;
+procedure TestSecureZeroBackendTruthMatchesHost;
 begin
   Check(platform_secure_zero_memory_backend in [
     pszbFallbackFillCharBarrier,
     pszbWindowsNativeDeferred,
-    pszbPosixNativeDeferred
+    pszbPosixExplicitBZero
   ], 'secure zero backend truth is explicit');
+{$IFDEF NEXTPAS_UNIX}
+  Check(platform_secure_zero_memory_backend = pszbPosixExplicitBZero,
+    'POSIX secure zero must report explicit_bzero native backend truth');
+  Check(platform_secure_zero_memory_is_native,
+    'POSIX secure zero explicit_bzero backend must report native truth');
+{$ELSE}
   Check(platform_secure_zero_memory_backend = pszbFallbackFillCharBarrier,
-    'secure zero currently reports fallback FillChar+barrier truth');
+    'non-POSIX secure zero currently reports fallback FillChar+barrier truth');
   Check(not platform_secure_zero_memory_is_native,
-    'secure zero native backend remains deferred until runtime evidence exists');
+    'non-POSIX secure zero native backend remains deferred until runtime evidence exists');
+{$ENDIF}
 end;
 
 procedure TestNativeBackendSourceContracts;
@@ -285,10 +292,14 @@ end;
 procedure TestSecureZeroSourceContracts;
 var
   LPlatformMemory: string;
+  LPosixFFI: string;
 begin
   LPlatformMemory := ReadSourceFile(ResolveSourcePath(
     PLATFORM_MEMORY_SOURCE_PATH_FROM_TEST,
     PLATFORM_MEMORY_SOURCE_PATH_FROM_ROOT));
+  LPosixFFI := ReadSourceFile(ResolveSourcePath(
+    POSIX_FFI_SOURCE_PATH_FROM_TEST,
+    POSIX_FFI_SOURCE_PATH_FROM_ROOT));
 
   CheckTokenPresent(LPlatformMemory, 'procedure platform_secure_zero_memory',
     'platform.memory must publish the secure-zero owner seam');
@@ -297,11 +308,11 @@ begin
   CheckTokenPresent(LPlatformMemory, 'noinline',
     'platform.memory secure zero barrier must not be inlined away');
   CheckTokenPresent(LPlatformMemory, 'secure-zero-backend=fallback-fillchar-readwritebarrier',
-    'platform.memory must publish current secure-zero fallback truth');
+    'platform.memory must publish secure-zero fallback truth');
   CheckTokenPresent(LPlatformMemory, 'windows-native-secure-zero=deferred',
     'platform.memory must publish Windows native secure-zero backend as deferred');
-  CheckTokenPresent(LPlatformMemory, 'posix-native-secure-zero=deferred',
-    'platform.memory must publish POSIX native secure-zero backend as deferred');
+  CheckTokenPresent(LPlatformMemory, 'posix-native-secure-zero=explicit_bzero',
+    'platform.memory must publish POSIX native secure-zero backend as explicit_bzero');
   CheckTokenPresent(LPlatformMemory, 'native-secure-zero-promotion-requires=host-owned-ffi-or-dynamic-loading-seam',
     'platform.memory must gate native secure-zero promotion on a host-owned seam');
   CheckTokenPresent(LPlatformMemory, 'secure-zero-forced-compile-truth=source-contract',
@@ -318,12 +329,20 @@ begin
     'platform.memory secure zero must publish fallback FillChar+barrier truth');
   CheckTokenPresent(LPlatformMemory, 'pszbWindowsNativeDeferred',
     'platform.memory secure zero must publish Windows native deferred truth');
-  CheckTokenPresent(LPlatformMemory, 'pszbPosixNativeDeferred',
-    'platform.memory secure zero must publish POSIX native deferred truth');
+  CheckTokenPresent(LPlatformMemory, 'pszbPosixExplicitBZero',
+    'platform.memory secure zero must publish POSIX explicit_bzero native truth');
+  CheckTokenPresent(LPlatformMemory, 'explicit_bzero',
+    'platform.memory POSIX secure zero must consume explicit_bzero through posix.ffi');
   CheckTokenPresent(LPlatformMemory, 'platform_secure_zero_memory_backend',
     'platform.memory secure zero must keep backend truth centralized');
   CheckTokenPresent(LPlatformMemory, 'platform_secure_zero_memory_is_native',
     'platform.memory secure zero must keep native readiness truth explicit');
+  CheckTokenPresent(LPosixFFI, 'procedure explicit_bzero',
+    'posix.ffi must own POSIX explicit_bzero raw binding');
+  CheckTokenPresent(LPosixFFI, 'external ''c'' name ''explicit_bzero''',
+    'posix.ffi explicit_bzero binding must name the raw libc symbol');
+  CheckTokenAbsent(LPlatformMemory, 'pszbPosixNativeDeferred',
+    'platform.memory must not keep stale POSIX secure-zero deferred truth');
 
   CheckTokenAbsent(LPlatformMemory, 'rtlsecurezeromemory',
     'platform.memory must not own Windows secure-zero raw API names directly');
@@ -348,7 +367,7 @@ begin
   T.Run('native backend source contracts', @TestNativeBackendSourceContracts);
   T.Run('secure zero clears buffer', @TestSecureZeroMemoryClearsBuffer);
   T.Run('secure zero nil and zero-size no-op', @TestSecureZeroMemoryNilAndZeroSizeNoOp);
-  T.Run('secure zero backend truth is deferred', @TestSecureZeroBackendTruthIsDeferred);
+  T.Run('secure zero backend truth matches host', @TestSecureZeroBackendTruthMatchesHost);
   T.Run('secure zero source contracts', @TestSecureZeroSourceContracts);
   T.Summary;
 end.

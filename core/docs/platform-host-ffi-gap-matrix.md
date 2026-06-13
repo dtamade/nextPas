@@ -5,10 +5,12 @@ This document records the current platform host ABI surface for
 proof. Runtime behavior tests cover the unified public contracts in
 `platform.time`, `platform.sync`, and `platform.thread`; raw OS APIs such as
 `clock_gettime`, `pthread_*`, `futex`, POSIX `fork`, POSIX `read` / `write` /
-`lseek`, POSIX host `stat`, `lstat`, and `fstat`, `WaitOnAddress`,
+`lseek`, POSIX `explicit_bzero`, POSIX host `stat`, `lstat`, and `fstat`,
+`WaitOnAddress`,
 `CreateProcessA/W`, `QueryPerformanceCounter`, and `GetSystemTimeAsFileTime`
-are accepted from FPC source, copied into host-owned declarations, and guarded
-through source-surface integration checks and compile-only gates.
+are accepted from FPC source or documented OS/libc header fallback, copied into
+host-owned declarations, and guarded through source-surface integration checks
+and compile-only gates.
 
 The source evidence route for those declarations is tracked in
 `docs/platform-ffi-source-evidence-index.md`. Keep that index, this gap matrix,
@@ -30,17 +32,24 @@ convenience APIs. Feature modules are unified platform function layers and
 should not create `platform.time.ffi`, `platform.sync.ffi`, or
 `platform.thread.ffi`; they directly consume host/shared `base` + raw `ffi`.
 
-| Host | Base owner | FFI owner | Clock | Errno | CPU count | Native thread id | Thread lifecycle | TLS | pthread sync | Timeout capability | File / status ABI |
+| Host | Base owner | FFI owner | Clock | Errno | CPU count | Native thread id | Thread lifecycle | TLS | pthread sync | Timeout capability | File / status / resource ABI |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Linux | `nextpas.core.platform.linux.base` | `nextpas.core.platform.linux.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 1`; raw `clock_gettime` / `clock_getres` live in shared POSIX FFI | `linux_errno_location`, Linux `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 84`; raw `sysconf` lives in shared POSIX FFI | raw `gettid`; `pthread_self` is the self-token fallback input | raw `pthread_create`, `pthread_join`, `pthread_detach` live in shared POSIX FFI | raw `pthread_key_*` live in shared POSIX FFI | raw `pthread_*` sync declarations live in shared POSIX FFI; Linux raw `syscall` plus `FUTEX_*` tokens support futex wait/wake in `platform.sync` | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX raw file descriptor / I/O declarations, Linux `statx` syscall number, Linux traditional stat records and raw libc wrappers |
-| Android | `nextpas.core.platform.android.base` | `nextpas.core.platform.android.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 1`; raw `clock_gettime` / `clock_getres` live in shared POSIX FFI | `android_errno_location`, Android `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 97`; raw `sysconf` lives in shared POSIX FFI | raw `gettid`; `pthread_self` is the self-token fallback input | raw `pthread_create`, `pthread_join`, `pthread_detach` live in shared POSIX FFI | raw `pthread_key_*` live in shared POSIX FFI | raw `pthread_*` sync declarations live in shared POSIX FFI | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX raw file descriptor / I/O declarations; Android traditional stat records and raw `syscall` route tokens |
-| Darwin | `nextpas.core.platform.darwin.base` | `nextpas.core.platform.darwin.ffi` | POSIX realtime token plus raw Mach monotonic declarations: `mach_absolute_time` / `mach_timebase_info` | `darwin_errno_location`, Darwin `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 58`; raw `sysconf` lives in shared POSIX FFI | raw `pthread_threadid_np`; `pthread_self` is the optional self-token fallback input | raw `pthread_create`, `pthread_join`, `pthread_detach` live in shared POSIX FFI | raw `pthread_key_*` live in shared POSIX FFI | raw `pthread_*` sync declarations live in shared POSIX FFI | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 0`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0` | POSIX raw file descriptor / I/O declarations; Darwin `$INODE64` stat records and raw libc bindings |
-| FreeBSD | `nextpas.core.platform.freebsd.base` | `nextpas.core.platform.freebsd.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 4`; raw `clock_gettime` / `clock_getres` live in shared POSIX FFI | `freebsd_errno_location`, FreeBSD `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 58`; raw `sysconf` lives in shared POSIX FFI | raw `pthread_getthreadid_np`; `pthread_self` is the optional self-token fallback input | raw `pthread_create`, `pthread_join`, `pthread_detach` live in shared POSIX FFI | raw `pthread_key_*` live in shared POSIX FFI | raw `pthread_*` sync declarations live in shared POSIX FFI | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX raw file descriptor / I/O declarations; FreeBSD traditional stat records and raw libc bindings |
-| generic Unix | `nextpas.core.platform.unix.base` | `nextpas.core.platform.unix.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 1`; raw `clock_gettime` / `clock_getres` live in shared POSIX FFI | `unix_errno_location`, generic `PLATFORM_POSIX_E*` fallback values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = -1`; raw `sysconf` lives in shared POSIX FFI | native thread id explicitly falls back to raw `pthread_self` token until a concrete host API is promoted | raw `pthread_create`, `pthread_join`, `pthread_detach` live in shared POSIX FFI | raw `pthread_key_*` live in shared POSIX FFI | raw `pthread_*` sync declarations live in shared POSIX FFI | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0` | POSIX raw file descriptor / I/O declarations; generic stat remains deferred |
+| Linux | `nextpas.core.platform.linux.base` | `nextpas.core.platform.linux.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 1`; raw `clock_gettime` / `clock_getres` live in shared POSIX FFI | `linux_errno_location`, Linux `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 84`; raw `sysconf` lives in shared POSIX FFI | raw `gettid`; `pthread_self` is the self-token fallback input | raw `pthread_create`, `pthread_join`, `pthread_detach` live in shared POSIX FFI | raw `pthread_key_*` live in shared POSIX FFI | raw `pthread_*` sync declarations live in shared POSIX FFI; Linux raw `syscall` plus `FUTEX_*` tokens support futex wait/wake in `platform.sync` | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX raw file descriptor / I/O declarations, shared POSIX `explicit_bzero`, Linux `statx` syscall number, Linux traditional stat records and raw libc wrappers; `platform.resource` consumes Linux `RLIMIT_*`, `TRLimit`, and raw `prlimit64` for current-process rlimit get/set |
+| Android | `nextpas.core.platform.android.base` | `nextpas.core.platform.android.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 1`; raw `clock_gettime` / `clock_getres` live in shared POSIX FFI | `android_errno_location`, Android `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 97`; raw `sysconf` lives in shared POSIX FFI | raw `gettid`; `pthread_self` is the self-token fallback input | raw `pthread_create`, `pthread_join`, `pthread_detach` live in shared POSIX FFI | raw `pthread_key_*` live in shared POSIX FFI | raw `pthread_*` sync declarations live in shared POSIX FFI | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX raw file descriptor / I/O and mmap declarations plus shared POSIX `explicit_bzero`; Android traditional stat records and raw `ANDROID_SYSCALL_NEWFSTATAT`, `ANDROID_SYSCALL_FSTAT`, and `ANDROID_SYSCALL_GETDENTS64` route tokens consumed by `platform.files` and `platform.mmap`; Android `RLIMIT_*` and `TPlatformAndroidRLimit` consumed by `platform.resource` through shared POSIX `getrlimit` / `setrlimit` |
+| Darwin | `nextpas.core.platform.darwin.base` | `nextpas.core.platform.darwin.ffi` | POSIX realtime token plus raw Mach monotonic declarations: `mach_absolute_time` / `mach_timebase_info` | `darwin_errno_location`, Darwin `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 58`; raw `sysconf` lives in shared POSIX FFI | raw `pthread_threadid_np`; `pthread_self` is the optional self-token fallback input | raw `pthread_create`, `pthread_join`, `pthread_detach` live in shared POSIX FFI | raw `pthread_key_*` live in shared POSIX FFI | raw `pthread_*` sync declarations live in shared POSIX FFI | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 0`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0` | POSIX raw file descriptor / I/O declarations plus shared POSIX `explicit_bzero`; Darwin `$INODE64` stat records and raw libc bindings |
+| FreeBSD | `nextpas.core.platform.freebsd.base` | `nextpas.core.platform.freebsd.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 4`; raw `clock_gettime` / `clock_getres` live in shared POSIX FFI | `freebsd_errno_location`, FreeBSD `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 58`; raw `sysconf` lives in shared POSIX FFI | raw `pthread_getthreadid_np`; `pthread_self` is the optional self-token fallback input | raw `pthread_create`, `pthread_join`, `pthread_detach` live in shared POSIX FFI | raw `pthread_key_*` live in shared POSIX FFI | raw `pthread_*` sync declarations live in shared POSIX FFI | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX raw file descriptor / I/O declarations plus shared POSIX `explicit_bzero`; FreeBSD traditional stat records and raw libc bindings |
+| generic Unix | `nextpas.core.platform.unix.base` | `nextpas.core.platform.unix.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 1`; raw `clock_gettime` / `clock_getres` live in shared POSIX FFI | `unix_errno_location`, generic `PLATFORM_POSIX_E*` fallback values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = -1`; raw `sysconf` lives in shared POSIX FFI | native thread id explicitly falls back to raw `pthread_self` token until a concrete host API is promoted | raw `pthread_create`, `pthread_join`, `pthread_detach` live in shared POSIX FFI | raw `pthread_key_*` live in shared POSIX FFI | raw `pthread_*` sync declarations live in shared POSIX FFI | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0` | POSIX raw file descriptor / I/O declarations plus shared POSIX `explicit_bzero`; generic stat remains deferred |
 | Windows | `nextpas.core.platform.windows.base` | `nextpas.core.platform.windows.ffi` | Windows kernel32 raw entries: `QueryPerformanceCounter`, `QueryPerformanceFrequency`, and `GetSystemTimeAsFileTime` | raw `GetLastError` plus Windows error tokens in base | raw `GetSystemInfo` | raw `GetCurrentThreadId` | raw `CreateThread`, `WaitForSingleObject`, `CloseHandle`, and `InterlockedDecrement` | raw `TlsAlloc`, `TlsFree`, `TlsSetValue`, `TlsGetValue` | raw `InitializeSRWLock`, `CONDITION_VARIABLE`, and `WaitOnAddress` entrypoints | timeout and wait/error tokens live in base; conversion/classification belongs in unified modules | Windows kernel32 raw file I/O and file status entrypoints |
 
 ## Known Gaps
 
+- `platform.memory` secure-zero now consumes shared POSIX `explicit_bzero`
+  through `nextpas.core.platform.posix.ffi` and reports native POSIX backend
+  truth. Linux has focused runtime proof through `test_platform_memory`; other
+  Unix hosts remain source/compile proof until host runtime evidence exists.
+  Windows secure-zero remains fallback/deferred because direct
+  `RtlSecureZeroMemory` promotion still needs a separate host-owned
+  dynamic-loading or raw symbol seam.
 - Platform Host ABI Completeness Wave 15 corrects the FFI boundary: all
   host/shared `.ffi` files are raw external declaration owners only. The earlier
   Wave 13/14 helper-name direction is superseded; wrapper/projection logic now
@@ -48,6 +57,24 @@ should not create `platform.time.ffi`, `platform.sync.ffi`, or
   `platform.sync`, and `platform.thread`, or future explicit unified modules
   such as `platform.file`, `platform.path`, `platform.env`, or
   `platform.process`.
+- `platform.resource` promotes a narrow public resource-limit contract for
+  current-process rlimit get/set. Linux is runtime-backed through host-owned
+  `RLIMIT_*`, `TRLimit`, and raw `prlimit64`; Android has compile/source proof
+  through host-owned `RLIMIT_*`, `TPlatformAndroidRLimit`, and shared POSIX
+  `getrlimit` / `setrlimit`; Windows and other unpromoted Unix hosts return a
+  stable unsupported code until their host resource-limit ABI and public
+  semantics are proven. This does not create `platform.resource.ffi`.
+- Android `platform.files` now has a forced Android compile gate in
+  `test_platform_files`; it proves the unified files facade consumes
+  Android-owned open/stat constants, `TPlatformAndroidStat`,
+  `ANDROID_SYSCALL_NEWFSTATAT`, and `ANDROID_SYSCALL_FSTAT` for
+  stat/lstat/fstat, plus `ANDROID_SYSCALL_GETDENTS64` for directory
+  enumeration through the shared Linux `dirent64` parsing path. This is
+  compile/source evidence, not Android device runtime proof.
+- Android `platform.mmap` now has a forced Android compile gate in
+  `test_platform_mmap`; it proves the unified mmap facade can compile through
+  the Android `platform.files` size path before shared POSIX `mmap`. This is
+  compile/source evidence, not Android device runtime proof.
 - Platform Host ABI Completeness Wave 11 covers POSIX signal-control raw ABI
   inventory for host `base/ffi` owners. Linux now carries
   `TPlatformLinuxSignalSet`, `PPlatformLinuxSignalSet`,
@@ -87,14 +114,16 @@ should not create `platform.time.ffi`, `platform.sync.ffi`, or
   `freebsd_lstat`, and `freebsd_fstat`. Android now carries
   `TPlatformAndroidStat`, `PPlatformAndroidStat`, `PLATFORM_ANDROID_AT_FDCWD`,
   `PLATFORM_ANDROID_AT_SYMLINK_NOFOLLOW`, `ANDROID_SYSCALL_NEWFSTATAT`,
-  `ANDROID_SYSCALL_FSTAT`, and `android_syscall`. Android stat path/fd helper
+  `ANDROID_SYSCALL_FSTAT`, `ANDROID_SYSCALL_GETDENTS64`, and
+  `android_syscall`. Android stat path/fd and directory enumeration helper
   projections are intentionally absent from `.ffi`. FPC evidence starts in
   `rtl/bsd/ostypes.inc`,
   `rtl/darwin/ptypes.inc`, `rtl/freebsd/ptypes.inc`,
   `rtl/unix/oscdeclh.inc`, `rtl/android/Makefile`,
   `rtl/android/x86_64/sysnr.inc`, `rtl/android/aarch64/sysnr.inc`,
   `rtl/linux/ossysc.inc`, and `rtl/linux/bunxsysc.inc`. This remains
-  source-surface and compile evidence, not a new public platform.file contract.
+  source-surface and compile evidence, not Android device runtime proof or a
+  new feature-specific platform.file.ffi contract.
 - Generic Unix remains deferred: shared POSIX owners still do not carry a
   generic `TPlatformStat`, `stat`, `lstat`, or `fstat`, and generic Unix does
   not invent `TPlatformUnixStat`.
