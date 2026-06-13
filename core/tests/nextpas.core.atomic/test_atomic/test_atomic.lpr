@@ -397,6 +397,7 @@ var
   LTypesInt64IncrementSection: string;
   LTypesInt64DecrementSection: string;
   LTypesUInt64FetchSection: string;
+  LTypesUInt64UpdateIfEqualSection: string;
   LTypesISizeLockFreeSection: string;
   LTypesUSizeLockFreeSection: string;
   LTypesISizeFetchSection: string;
@@ -605,6 +606,9 @@ begin
   LTypesUInt64FetchSection := ExtractImplementationSection(LAtomicTypesSource,
     'function TAtomicUInt64.FetchAdd(ADelta: UInt64; AOrder: memory_order_t): UInt64;',
     'function TAtomicUInt64.Increment(AOrder: memory_order_t): UInt64;');
+  LTypesUInt64UpdateIfEqualSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicUInt64.UpdateIfEqual(AExpected: UInt64; ADesired: UInt64; out AObserved: UInt64;',
+    'function TAtomicUInt64.GetMut: PUInt64;');
   LTypesISizeLockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
     'class function TAtomicISize.is_lock_free: Boolean;',
     'function TAtomicISize.Load(AOrder: memory_order_t): PtrInt;');
@@ -2103,6 +2107,8 @@ begin
     'typed Int32 FetchOr must delegate to the Int32 atomic root');
   CheckContains(LTypesInt32FetchSection, 'atomic_fetch_xor(FValue, AMask, AOrder);',
     'typed Int32 FetchXor must delegate to the Int32 atomic root');
+  CheckContains(LTypesInt32FetchSection, 'atomic_update_if_equal(FValue, AExpected, ADesired, AObserved, AOrder);',
+    'typed Int32 UpdateIfEqual must delegate to the 32-bit update-if-equal helper');
   CheckContains(LAtomicTypesSource, 'function FetchMax(AValue: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;',
     'typed Int32 must declare FetchMax in the public record surface');
   CheckContains(LAtomicTypesSource, 'function FetchMin(AValue: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;',
@@ -2125,6 +2131,8 @@ begin
     'typed UInt32 FetchOr must delegate to the UInt32 atomic root');
   CheckContains(LTypesUInt32FetchSection, 'atomic_fetch_xor(FValue, AMask, AOrder);',
     'typed UInt32 FetchXor must delegate to the UInt32 atomic root');
+  CheckContains(LTypesUInt32FetchSection, 'atomic_update_if_equal(FValue, AExpected, ADesired, AObserved, AOrder);',
+    'typed UInt32 UpdateIfEqual must delegate to the 32-bit update-if-equal helper');
   CheckNotContains(LTypesUInt32FetchSection, 'FetchMax',
     'typed UInt32 must not expose signed FetchMax until root unsigned max semantics land');
   CheckNotContains(LTypesUInt32FetchSection, 'FetchMin',
@@ -2161,6 +2169,8 @@ begin
     'typed Int64 FetchMin must delegate to the signed Int64 atomic root');
   CheckContains(LTypesInt64FetchSection, 'atomic_fetch_nand_64(FValue, AMask, AOrder);',
     'typed Int64 FetchNand must delegate to the signed Int64 atomic root');
+  CheckContains(LTypesInt64FetchSection, 'atomic_update_if_equal_64(FValue, AExpected, ADesired, AObserved, AOrder);',
+    'typed Int64 UpdateIfEqual must delegate to the 64-bit update-if-equal helper');
   CheckContains(LTypesUInt64FetchSection, 'atomic_fetch_add_64(FValue, ADelta, AOrder);',
     'typed UInt64 FetchAdd must delegate to the UInt64 atomic root');
   CheckContains(LTypesUInt64FetchSection, 'atomic_fetch_sub_64(FValue, ADelta, AOrder);',
@@ -2171,6 +2181,9 @@ begin
     'typed UInt64 FetchOr must delegate to the UInt64 atomic root');
   CheckContains(LTypesUInt64FetchSection, 'atomic_fetch_xor_64(FValue, AMask, AOrder);',
     'typed UInt64 FetchXor must delegate to the UInt64 atomic root');
+  CheckContains(LTypesUInt64UpdateIfEqualSection,
+    'atomic_update_if_equal_64(FValue, AExpected, ADesired, AObserved, AOrder);',
+    'typed UInt64 UpdateIfEqual must delegate to the 64-bit update-if-equal helper');
   CheckNotContains(LTypesUInt64FetchSection, 'FetchMax',
     'typed UInt64 must not expose signed FetchMax until root unsigned max semantics land');
   CheckNotContains(LTypesUInt64FetchSection, 'FetchMin',
@@ -2295,6 +2308,7 @@ begin
     '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}' + LineEnding +
     '  T.Run(''typed atomic int64/uint64 contract'', @TestAtomicInt64UInt64Contract);' + LineEnding +
     '  T.Run(''typed atomic int64/uint64 fetch contract'', @TestAtomicInt64UInt64FetchContract);' + LineEnding +
+    '  T.Run(''typed atomic update-if-equal contract'', @TestAtomicUpdateIfEqualContract);' + LineEnding +
     '  {$ENDIF}',
     'typed Int64/UInt64 runner registration must match the production 64-bit API gate');
   CheckContains(LTypesISizeLockFreeSection, 'atomic_is_lock_free_ptr',
@@ -2325,6 +2339,12 @@ begin
     'typed ISize FetchXor must keep the 32-bit pointer-width delegation path');
   CheckContains(LTypesISizeFetchSection, 'atomic_fetch_xor_64(PInt64(@FValue)^, Int64(AMask), AOrder));',
     'typed ISize FetchXor must keep the 64-bit pointer-width delegation path');
+  CheckContains(LTypesISizeFetchSection,
+    'atomic_update_if_equal(PInt32(@FValue)^, Int32(AExpected), Int32(ADesired), PInt32(@AObserved)^, AOrder);',
+    'typed ISize UpdateIfEqual must keep the 32-bit pointer-width delegation path');
+  CheckContains(LTypesISizeFetchSection,
+    'atomic_update_if_equal_64(PInt64(@FValue)^, Int64(AExpected), Int64(ADesired), PInt64(@AObserved)^, AOrder);',
+    'typed ISize UpdateIfEqual must keep the 64-bit pointer-width delegation path');
   CheckContains(LTypesUSizeFetchSection, 'atomic_fetch_add(PUInt32(@FValue)^, UInt32(ADelta), AOrder));',
     'typed USize FetchAdd must keep the 32-bit pointer-width delegation path');
   CheckContains(LTypesUSizeFetchSection, 'atomic_fetch_add_64(PUInt64(@FValue)^, UInt64(ADelta), AOrder));',
@@ -2345,6 +2365,12 @@ begin
     'typed USize FetchXor must keep the 32-bit pointer-width delegation path');
   CheckContains(LTypesUSizeFetchSection, 'atomic_fetch_xor_64(PUInt64(@FValue)^, UInt64(AMask), AOrder));',
     'typed USize FetchXor must keep the 64-bit pointer-width delegation path');
+  CheckContains(LTypesUSizeFetchSection,
+    'atomic_update_if_equal(PUInt32(@FValue)^, UInt32(AExpected), UInt32(ADesired), PUInt32(@AObserved)^, AOrder);',
+    'typed USize UpdateIfEqual must keep the 32-bit pointer-width delegation path');
+  CheckContains(LTypesUSizeFetchSection,
+    'atomic_update_if_equal_64(PUInt64(@FValue)^, UInt64(AExpected), UInt64(ADesired), PUInt64(@AObserved)^, AOrder);',
+    'typed USize UpdateIfEqual must keep the 64-bit pointer-width delegation path');
   CheckContains(LTypesRefCountLockFreeSection, 'atomic_is_lock_free_ptr',
     'typed refcount lock-free query must delegate to pointer-sized runtime truth');
   CheckNotContains(LTypesRefCountLockFreeSection, 'Result := True',
@@ -3353,6 +3379,29 @@ begin
     'TAtomicUInt64.FetchXor should return the previous value');
   CheckEqual(Int64($0FF000F00FF000F0), Int64(LAtomicUInt64.Load(mo_acquire)),
     'TAtomicUInt64.FetchXor should publish the XOR result');
+end;
+{$ENDIF}
+
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+procedure TestAtomicUpdateIfEqualContract;
+var
+  LInt32: TAtomicInt32;
+  LInt64: TAtomicInt64;
+  LObs32: Int32;
+  LObs64: Int64;
+begin
+  LInt32 := TAtomicInt32.Create(10);
+  Check(LInt32.UpdateIfEqual(10, 20, LObs32), 'UpdateIfEqual(10->20) should succeed');
+  CheckEqual(Int64(10), Int64(LObs32), 'observed should be old value 10');
+  CheckEqual(Int64(20), Int64(LInt32.Load), 'value should be 20');
+  Check(not LInt32.UpdateIfEqual(10, 30, LObs32), 'UpdateIfEqual(10->30) should fail after value changed');
+  CheckEqual(Int64(20), Int64(LObs32), 'observed should be 20');
+  CheckEqual(Int64(20), Int64(LInt32.Load), 'value should still be 20');
+
+  LInt64 := TAtomicInt64.Create(100);
+  Check(LInt64.UpdateIfEqual(100, 200, LObs64), 'UpdateIfEqual(100->200) for int64 should succeed');
+  CheckEqual(Int64(100), LObs64);
+  CheckEqual(Int64(200), LInt64.Load);
 end;
 {$ENDIF}
 
@@ -6880,6 +6929,7 @@ begin
   {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
   T.Run('typed atomic int64/uint64 contract', @TestAtomicInt64UInt64Contract);
   T.Run('typed atomic int64/uint64 fetch contract', @TestAtomicInt64UInt64FetchContract);
+  T.Run('typed atomic update-if-equal contract', @TestAtomicUpdateIfEqualContract);
   {$ENDIF}
   T.Run('typed atomic unsigned wrap contract', @TestAtomicUnsignedWrapContract);
   T.Run('typed atomic signed wrap contract', @TestAtomicSignedWrapContract);

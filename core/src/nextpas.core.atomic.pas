@@ -371,6 +371,17 @@ function atomic_compare_exchange_weak_64(var aObj: UInt64; var aExpected: UInt64
 function atomic_compare_exchange_weak(var aObj: Pointer; var aExpected: Pointer; aDesired: Pointer;
   aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
 
+function atomic_update_if_equal(var aObj: Int32; const AExpected: Int32; const ADesired: Int32; out AObserved: Int32;
+  AOrder: memory_order_t = mo_seq_cst): Boolean; overload; inline;
+function atomic_update_if_equal(var aObj: UInt32; const AExpected: UInt32; const ADesired: UInt32; out AObserved: UInt32;
+  AOrder: memory_order_t = mo_seq_cst): Boolean; overload; inline;
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+function atomic_update_if_equal_64(var aObj: Int64; const AExpected: Int64; const ADesired: Int64; out AObserved: Int64;
+  AOrder: memory_order_t = mo_seq_cst): Boolean; overload; inline;
+function atomic_update_if_equal_64(var aObj: UInt64; const AExpected: UInt64; const ADesired: UInt64; out AObserved: UInt64;
+  AOrder: memory_order_t = mo_seq_cst): Boolean; overload; inline;
+{$ENDIF}
+
 // ✅ P1-002: CAS 带单内存序参数 (aOrder) - 简化常见用法（自动派生合法 failure order）
 {**
  * @desc 原子比较并交换操作（单内存序版本）
@@ -2460,6 +2471,41 @@ begin
   Result := atomic_compare_exchange_weak(aObj, aExpected, aDesired,
     _cas_success_order(aOrder), AtomicCompatFailureOrder(aOrder));
 end;
+
+// atomic_update_if_equal: typed CAS-loop helper
+function atomic_update_if_equal(var aObj: Int32; const AExpected: Int32; const ADesired: Int32; out AObserved: Int32;
+  AOrder: memory_order_t): Boolean;
+begin
+  AObserved := AExpected;
+  Result := atomic_compare_exchange_strong(aObj, AObserved, ADesired,
+    _cas_success_order(AOrder), AtomicCompareExchangeMaxFailureOrder(_cas_success_order(AOrder)));
+end;
+
+function atomic_update_if_equal(var aObj: UInt32; const AExpected: UInt32; const ADesired: UInt32; out AObserved: UInt32;
+  AOrder: memory_order_t): Boolean;
+begin
+  AObserved := AExpected;
+  Result := atomic_compare_exchange_strong(aObj, AObserved, ADesired,
+    _cas_success_order(AOrder), AtomicCompareExchangeMaxFailureOrder(_cas_success_order(AOrder)));
+end;
+
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+function atomic_update_if_equal_64(var aObj: Int64; const AExpected: Int64; const ADesired: Int64; out AObserved: Int64;
+  AOrder: memory_order_t): Boolean;
+begin
+  AObserved := AExpected;
+  Result := atomic_compare_exchange_strong_64(aObj, AObserved, ADesired,
+    _cas_success_order(AOrder), AtomicCompareExchangeMaxFailureOrder(_cas_success_order(AOrder)));
+end;
+
+function atomic_update_if_equal_64(var aObj: UInt64; const AExpected: UInt64; const ADesired: UInt64; out AObserved: UInt64;
+  AOrder: memory_order_t): Boolean;
+begin
+  AObserved := AExpected;
+  Result := atomic_compare_exchange_strong_64(aObj, AObserved, ADesired,
+    _cas_success_order(AOrder), AtomicCompareExchangeMaxFailureOrder(_cas_success_order(AOrder)));
+end;
+{$ENDIF}
 
 function atomic_increment(var aObj: Int32): Int32;
 begin
