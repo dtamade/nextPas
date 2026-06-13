@@ -9,6 +9,7 @@ uses
   nextpas.core.os.env,
   nextpas.core.time,
   nextpas.core.config,
+  nextpas.core.config.watcher,
   nextpas.core.testing;
 
 var
@@ -36,6 +37,12 @@ type
     property ObservedHasFeatureEnabled: Boolean read FObservedHasFeatureEnabled;
     property ObservedFeatureEnabled: Boolean read FObservedFeatureEnabled;
   end;
+
+procedure RemoveIfExists(const APath: string);
+begin
+  if Exists(APath) then
+    Remove(APath);
+end;
 
 procedure TConfigReloadProbe.MarkReloaded(ASender: TConfig);
 begin
@@ -1192,8 +1199,8 @@ begin
     LCfg.SetString('keep', 'value');
     CheckEqual(False, LCfg.TryLoadFromIni('root=1' + #13#10 + '  [broken' + #10, LError),
       'TryLoadFromIni invalid section');
-    CheckEqual('INI parse error at line 2, column 3 (offset 10): ' +
-      'Line 2: missing closing ] in section header', LError,
+    CheckEqual('INI parse error: line 2, column 1: ' +
+      'missing closing ] in section header', LError,
       'TryLoadFromIni returns positioned parse error');
     CheckEqual('value', LCfg.GetString('keep'), 'TryLoadFromIni preserves existing');
   finally
@@ -1739,7 +1746,7 @@ var
   LPath: string;
 begin
   LPath := '/tmp/test_nextpas_config_load_from_file.json';
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath, '{"server":{"host":"file-host","port":8080},"debug":true}');
   LCfg := TConfig.Create;
   try
@@ -1749,7 +1756,7 @@ begin
     CheckEqual(True, LCfg.GetBool('debug'), 'file bool');
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
 end;
 
@@ -1808,11 +1815,11 @@ begin
   LMissingPath := '/tmp/test_nextpas_config_try_load_missing.toml';
   LBadPath := '/tmp/test_nextpas_config_try_load_bad.toml';
   LBadIniPath := '/tmp/test_nextpas_config_try_load_bad.ini';
-  Remove(LBadJsonPath);
-  Remove(LValidPath);
-  Remove(LMissingPath);
-  Remove(LBadPath);
-  Remove(LBadIniPath);
+  RemoveIfExists(LBadJsonPath);
+  RemoveIfExists(LValidPath);
+  RemoveIfExists(LMissingPath);
+  RemoveIfExists(LBadPath);
+  RemoveIfExists(LBadIniPath);
   WriteFileText(LBadJsonPath, '{"ok":true}' + #13#10 + 'oops');
   WriteFileText(LValidPath, '[server]' + #10 + 'host = "valid-host"' + #10);
   WriteFileText(LBadPath, 'server = ');
@@ -1857,18 +1864,18 @@ begin
     CheckEqual(False, LCfg.TryLoadFromFile(LBadIniPath, cfIni, LError),
       'bad ini file returns false');
     CheckEqual('Config file load error: ' + LBadIniPath +
-      ': INI parse error at line 2, column 3 (offset 10): ' +
-      'Line 2: missing closing ] in section header', LError,
+      ': INI parse error: line 2, column 1: missing closing ] in section header',
+      LError,
       'bad ini file reports path and position');
     CheckEqual('value', LCfg.GetString('keep'), 'bad ini file preserves keep');
     CheckEqual('valid-host', LCfg.GetString('server.host'),
       'bad ini file preserves loaded host');
   finally
     LCfg.Free;
-    Remove(LBadJsonPath);
-    Remove(LValidPath);
-    Remove(LBadPath);
-    Remove(LBadIniPath);
+    RemoveIfExists(LBadJsonPath);
+    RemoveIfExists(LValidPath);
+    RemoveIfExists(LBadPath);
+    RemoveIfExists(LBadIniPath);
   end;
 end;
 
@@ -1884,7 +1891,7 @@ var
   LAttempt: Integer;
 begin
   LPath := '/tmp/test_hotreload_nextpas_config.ini';
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath, '[server]' + #10 + 'host=initial' + #10 + 'port=1000' + #10);
   LCfg := TConfig.Create;
   try
@@ -1918,7 +1925,7 @@ begin
     end;
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
 end;
 
@@ -1944,10 +1951,10 @@ begin
   LSeedPath := LFile.Name;
   LFile.Close;
   Result := LSeedPath + '.' + LName;
-  Remove(Result);
+  RemoveIfExists(Result);
   if not Rename(LSeedPath, Result) then
   begin
-    Remove(LSeedPath);
+    RemoveIfExists(LSeedPath);
     Result := LSeedPath;
   end;
 end;
@@ -2099,7 +2106,7 @@ begin
     end;
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
 end;
 
@@ -2126,7 +2133,7 @@ var
   LRaised: Boolean;
 begin
   LPath := '/tmp/test_hotreload_nextpas_config_bad_json.json';
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath, '{"server":{"host":"initial","port":1000}}');
   LCfg := TConfig.Create;
   try
@@ -2152,7 +2159,7 @@ begin
     end;
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
 end;
 
@@ -2165,7 +2172,7 @@ var
   LRaised: Boolean;
 begin
   LPath := '/tmp/test_hotreload_nextpas_config_callback_guard.json';
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath, '{"server":{"host":"initial","port":1000}}');
   LCfg := TConfig.Create;
   try
@@ -2198,7 +2205,7 @@ begin
     end;
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
 end;
 
@@ -2210,7 +2217,7 @@ var
   LRaised: Boolean;
 begin
   LPath := '/tmp/test_hotreload_nextpas_config_bad_yaml.yaml';
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath, 'server:' + #10 + '  host: initial' + #10 + '  port: 1000' + #10);
   LCfg := TConfig.Create;
   try
@@ -2236,7 +2243,7 @@ begin
     end;
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
 end;
 
@@ -2248,7 +2255,7 @@ var
   LRaised: Boolean;
 begin
   LPath := '/tmp/test_hotreload_nextpas_config_bad_toml.toml';
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath, '[server]' + #10 + 'host = "initial"' + #10 + 'port = 1000' + #10);
   LCfg := TConfig.Create;
   try
@@ -2274,7 +2281,7 @@ begin
     end;
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
 end;
 
@@ -2286,7 +2293,7 @@ var
   LRaised: Boolean;
 begin
   LPath := '/tmp/test_hotreload_nextpas_config_ambiguous_json.json';
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath, '{"server":{"host":"initial","port":1000}}');
   LCfg := TConfig.Create;
   try
@@ -2322,7 +2329,7 @@ begin
     end;
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
 end;
 
@@ -2334,7 +2341,7 @@ var
   LRaised: Boolean;
 begin
   LPath := '/tmp/test_hotreload_nextpas_config_ambiguous_yaml.yaml';
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath, 'server:' + #10 + '  host: initial' + #10 + '  port: 1000' + #10);
   LCfg := TConfig.Create;
   try
@@ -2367,7 +2374,7 @@ begin
     end;
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
 end;
 
@@ -2379,7 +2386,7 @@ var
   LRaised: Boolean;
 begin
   LPath := '/tmp/test_hotreload_nextpas_config_ambiguous_toml.toml';
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath, '[server]' + #10 + 'host = "initial"' + #10 + 'port = 1000' + #10);
   LCfg := TConfig.Create;
   try
@@ -2412,7 +2419,7 @@ begin
     end;
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
 end;
 
@@ -2424,7 +2431,7 @@ var
   LRaised: Boolean;
 begin
   LPath := '/tmp/test_hotreload_nextpas_config_bad_ini.ini';
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath, '[server]' + #10 + 'host=initial' + #10 + 'port=1000' + #10);
   LCfg := TConfig.Create;
   try
@@ -2450,7 +2457,7 @@ begin
     end;
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
 end;
 
@@ -2462,7 +2469,7 @@ var
   LRaised: Boolean;
 begin
   LPath := '/tmp/test_hotreload_nextpas_config_missing.toml';
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath, '[server]' + #10 + 'host = "initial"' + #10 +
     'port = 1000' + #10);
   LCfg := TConfig.Create;
@@ -2471,7 +2478,7 @@ begin
     LWatcher := TConfigWatcher.Create(LCfg, LPath, cfToml);
     try
       TSleep.ForDuration(TDuration.FromMilliseconds(20));
-      Remove(LPath);
+      RemoveIfExists(LPath);
 
       LRaised := False;
       try
@@ -2489,7 +2496,7 @@ begin
     end;
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
 end;
 

@@ -33,7 +33,7 @@ end;
 ```
 
 Use `TConfig` when you need a mutable instance, direct `LoadFromXxx` calls,
-`ReplaceFrom`, or `TConfigWatcher`.
+`ReplaceFrom`, or `TConfigWatcher` from `nextpas.core.config.watcher`.
 
 ## Build config snapshots
 
@@ -162,7 +162,8 @@ behavior.
 ### Keep one mutable live config for reloads
 
 Use `BuildConfig` when an application needs a mutable `TConfig` instance that
-stays alive for `TConfigWatcher` or manual updates:
+stays alive for `TConfigWatcher` or manual updates. Add
+`nextpas.core.config.watcher` to the `uses` clause when you use the watcher:
 
 ```pascal
 var
