@@ -156,6 +156,10 @@ Additional architecture debt that remains:
 
 Priority follow-up work:
 
+0. **mapped_ring_buffer migration readiness** (active):
+   - Target owner: `nextpas.core.io.mapped.ring_buffer`
+   - Compatibility: thin wrapper with deprecation
+   - Status: readiness gates in progress; no unit moved yet
 1. If migration is later approved, relocate `mapped_ring_buffer` and
    `mapped_ring_buffer.sharded` first.
 2. Split `mapped_slab_pool` into allocator surface and file/shared manager
