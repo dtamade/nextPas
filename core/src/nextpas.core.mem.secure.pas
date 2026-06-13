@@ -41,47 +41,12 @@ procedure SecureZeroString(var Str: AnsiString);
 
 implementation
 
-procedure SecureZeroBarrier; inline;
-begin
-  {$IFDEF CPUX86_64}
-  asm
-    mfence
-  end;
-  {$ENDIF}
-  {$IFDEF CPUI386}
-  asm
-    lock
-    addl $0, (%esp)
-  end;
-  {$ENDIF}
-  {$IFDEF CPUARM}
-  asm
-    dmb
-  end;
-  {$ENDIF}
-  {$IFDEF CPUAARCH64}
-  asm
-    dmb sy
-  end;
-  {$ENDIF}
-  {$IFNDEF CPUX86_64}
-  {$IFNDEF CPUI386}
-  {$IFNDEF CPUARM}
-  {$IFNDEF CPUAARCH64}
-  ReadWriteBarrier;
-  {$ENDIF}
-  {$ENDIF}
-  {$ENDIF}
-  {$ENDIF}
-end;
+uses
+  nextpas.core.platform.secure;
 
 procedure SecureZeroMemory(Buffer: Pointer; Size: NativeUInt);
 begin
-  if (Buffer = nil) or (Size = 0) then
-    Exit;
-
-  FillChar(Buffer^, Size, 0);
-  SecureZeroBarrier;
+  platform_secure_zero(Buffer, Size);
 end;
 
 procedure SecureZeroBytes(var Data: TBytes);
