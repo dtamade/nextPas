@@ -333,6 +333,7 @@ end;
 procedure TestAtomicSourceContracts;
 const
   AtomicSourcePath = '../../../src/nextpas.core.atomic.pas';
+  PlatformSyncSourcePath = '../../../src/nextpas.core.platform.sync.pas';
   AtomicCoreSourcePath = '../../../src/nextpas.core.atomic.core.pas';
   AtomicTypesSourcePath = '../../../src/nextpas.core.atomic.types.pas';
   AtomicCompatSourcePath = '../../../src/nextpas.core.atomic.compat.pas';
@@ -352,6 +353,7 @@ const
   AtomicDirectTypesPtrTestPath = 'test_atomic_direct_types_ptr.pas';
 var
   LAtomicSource: string;
+  LPlatformSyncSource: string;
   LAtomicCoreSource: string;
   LAtomicTypesSource: string;
   LAtomicCompatSource: string;
@@ -458,6 +460,7 @@ var
   LAtomicWaitSection: string;
   LAtomicNotifyOneSection: string;
   LAtomicNotifyAllSection: string;
+  LPlatformWaitAddress64WindowsSection: string;
   LCompatFacadeTestSection: string;
   LCompatAliasTestSection: string;
   LTypedInt64ContractSection: string;
@@ -494,6 +497,7 @@ var
   LSingleOrderCasMatrixSection: string;
 begin
   LAtomicSource := ReadUtf8TextFile(AtomicSourcePath);
+  LPlatformSyncSource := ReadUtf8TextFile(PlatformSyncSourcePath);
   LAtomicCoreSource := ReadUtf8TextFile(AtomicCoreSourcePath);
   LAtomicTypesSource := ReadUtf8TextFile(AtomicTypesSourcePath);
   LAtomicCompatSource := ReadUtf8TextFile(AtomicCompatSourcePath);
@@ -804,6 +808,11 @@ begin
   LAtomicNotifyAllSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_notify_all(var aObj: Int32): Int32;',
     'function atomic_notify_all(var aObj: UInt32): Int32;');
+  LPlatformWaitAddress64WindowsSection := ExtractImplementationSection(LPlatformSyncSource,
+    'function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const ATimeoutNs: Int64): Int32;' + LineEnding +
+    'var' + LineEnding +
+    '  LExpected: Int64;',
+    'function platform_wake_address_one64(AAddr: PInt64): Int32;');
   LCompatFacadeTestSection := ExtractSection(LAtomicTestSource,
     'procedure TestAtomicCompatFacade;' + LineEnding +
     'var',
@@ -1620,6 +1629,12 @@ begin
     'atomic README must document the wait/notify surface');
   CheckContains(LAtomicDocsReadme, 'platform_wait_address32',
     'atomic README must disclose the current 32-bit wait-address seam');
+  CheckContains(LAtomicDocsReadme, 'platform_wait_address64',
+    'atomic README must disclose the 64-bit wait-address seam');
+  CheckContains(LAtomicDocsReadme, 'Linux futex has no native 64-bit compare wait',
+    'atomic README must document Linux futex 64-bit wait limitation');
+  CheckContains(LAtomicDocsReadme, 'fallback `notify_one` can wake an unrelated address in the same bucket',
+    'atomic README must document fallback notify_one collision predicate-loop requirement');
   CheckContains(LAtomicDocsReadme,
     '`atomic_flag_t` and `TAtomicFlag` model C++ `atomic_flag`: `test_and_set` returns the previous set state, `clear` resets the flag, and `test` observes without modifying.',
     'atomic README must document atomic_flag operation semantics');
@@ -2569,6 +2584,15 @@ begin
     'atomic_notify_one must delegate to platform wake-one primitive');
   CheckContains(LAtomicNotifyAllSection, 'platform_wake_address_all',
     'atomic_notify_all must delegate to platform wake-all primitive');
+  CheckContains(LPlatformSyncSource,
+    'function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const ATimeoutNs: Int64): Int32;',
+    'platform.sync must declare the 64-bit wait-address primitive');
+  CheckContains(LPlatformSyncSource, 'function platform_posix_wait_address_fallback64(',
+    'platform.sync must keep the POSIX 64-bit wait-address fallback');
+  CheckContains(LPlatformWaitAddress64WindowsSection, 'WaitOnAddress(',
+    'Windows 64-bit wait-address path must use native WaitOnAddress');
+  CheckContains(LPlatformWaitAddress64WindowsSection, 'SizeOf(LExpected)',
+    'Windows 64-bit WaitOnAddress path must compare the full expected value size');
   CheckContains(LAtomicFlagTestAndSetSection, 'atomic_exchange(PInt32(@aFlag)^, 1, mo_seq_cst)',
     'atomic_flag_test_and_set must set and return the previous flag state');
   CheckContains(LAtomicFlagTestSection, 'atomic_load(PInt32(@aFlag)^, mo_seq_cst)',
@@ -6339,11 +6363,49 @@ begin
     'atomic_notify_one should succeed on supported platforms');
 end;
 
+function AtomicWaitInt64Until(var AValue: Int64; const ADesired: Int64;
+  const AWaitTimeoutNs: Int64; const AMaxWaits: Integer): Int32;
+var
+  LAttempt: Integer;
+  LObserved: Int64;
+  LRet: Int32;
+begin
+  Result := PLATFORM_ERR_TIMEOUT;
+  for LAttempt := 1 to AMaxWaits do
+  begin
+    LObserved := atomic_load_64(AValue, mo_seq_cst);
+    if LObserved = ADesired then
+      Exit(0);
+
+    LRet := atomic_wait(AValue, LObserved, AWaitTimeoutNs);
+    if (LRet <> 0) and (LRet <> PLATFORM_ERR_AGAIN) and
+      (LRet <> PLATFORM_ERR_TIMEOUT) then
+      Exit(LRet);
+  end;
+
+  if atomic_load_64(AValue, mo_seq_cst) = ADesired then
+    Result := 0;
+end;
+
 procedure TestAtomicWaitNotify64SurfaceAndBehavior;
+const
+  PingPongIterations = 1000;
+  PingPongWaitTimeoutNs = 1000000;
+  PingPongMaxWaits = 2000;
 var
   LValue64: Int64;
+  LValueU64: UInt64;
   LRet: Int32;
   LExpected: Int64;
+  LExpectedU64: UInt64;
+  LTurn: Int64;
+  LStarted: Int32;
+  LWorkerRet: Int32;
+  LWorkerIteration: Int32;
+  LMainRet: Int32;
+  LThread: TThread;
+  LSpin: Integer;
+  LI: Integer;
 begin
   LValue64 := 7;
   LRet := atomic_wait(LValue64, 9, 1000000);
@@ -6361,6 +6423,12 @@ begin
   CheckEqual(Int64(PLATFORM_ERR_AGAIN), Int64(LRet),
     'atomic_wait(int64) must return AGAIN when value differs from expected');
 
+  LValueU64 := UInt64($800000000000002A);
+  LExpectedU64 := UInt64($8000000000000063);
+  LRet := atomic_wait(LValueU64, LExpectedU64, 1000000);
+  CheckEqual(Int64(PLATFORM_ERR_AGAIN), Int64(LRet),
+    'atomic_wait(uint64) must return AGAIN when value differs from expected');
+
   LValue64 := 42;
   LRet := atomic_notify_one(LValue64);
   CheckEqual(Int64(0), Int64(LRet),
@@ -6370,6 +6438,98 @@ begin
   LRet := atomic_notify_all(LValue64);
   CheckEqual(Int64(0), Int64(LRet),
     'atomic_notify_all(int64) should succeed on supported platforms');
+
+  LValueU64 := UInt64($800000000000002A);
+  LRet := atomic_notify_all(LValueU64);
+  CheckEqual(Int64(0), Int64(LRet),
+    'atomic_notify_all(uint64) should succeed on supported platforms');
+
+  LTurn := 0;
+  LStarted := 0;
+  LWorkerRet := 0;
+  LWorkerIteration := 0;
+  LMainRet := 0;
+
+  LThread := TThread.CreateAnonymousThread(procedure
+    var
+      LJ: Integer;
+      LLocalRet: Int32;
+    begin
+      atomic_store(LStarted, 1, mo_seq_cst);
+      for LJ := 1 to PingPongIterations do
+      begin
+        LLocalRet := AtomicWaitInt64Until(LTurn, Int64(LJ * 2 - 1),
+          PingPongWaitTimeoutNs, PingPongMaxWaits);
+        if LLocalRet <> 0 then
+        begin
+          atomic_store(LWorkerIteration, LJ, mo_seq_cst);
+          atomic_store(LWorkerRet, LLocalRet, mo_seq_cst);
+          atomic_notify_all(LTurn);
+          Exit;
+        end;
+
+        atomic_store_64(LTurn, Int64(LJ * 2), mo_seq_cst);
+        LLocalRet := atomic_notify_one(LTurn);
+        if LLocalRet <> 0 then
+        begin
+          atomic_store(LWorkerIteration, LJ, mo_seq_cst);
+          atomic_store(LWorkerRet, LLocalRet, mo_seq_cst);
+          atomic_notify_all(LTurn);
+          Exit;
+        end;
+      end;
+    end);
+  LThread.FreeOnTerminate := False;
+
+  try
+    LThread.Start;
+    for LSpin := 1 to 1000 do
+    begin
+      if atomic_load(LStarted, mo_seq_cst) = 1 then
+        Break;
+      Sleep(1);
+    end;
+
+    if atomic_load(LStarted, mo_seq_cst) <> 1 then
+      LMainRet := PLATFORM_ERR_TIMEOUT
+    else
+    begin
+      for LI := 1 to PingPongIterations do
+      begin
+        atomic_store_64(LTurn, Int64(LI * 2 - 1), mo_seq_cst);
+        LMainRet := atomic_notify_one(LTurn);
+        if LMainRet <> 0 then
+          Break;
+
+        LMainRet := AtomicWaitInt64Until(LTurn, Int64(LI * 2),
+          PingPongWaitTimeoutNs, PingPongMaxWaits);
+        if LMainRet <> 0 then
+          Break;
+
+        if atomic_load(LWorkerRet, mo_seq_cst) <> 0 then
+          Break;
+      end;
+    end;
+  finally
+    if LMainRet <> 0 then
+    begin
+      atomic_store_64(LTurn, -1, mo_seq_cst);
+      atomic_notify_all(LTurn);
+    end;
+    LThread.WaitFor;
+    LThread.Free;
+  end;
+
+  CheckEqual(Int64(1), Int64(atomic_load(LStarted, mo_seq_cst)),
+    '64-bit ping-pong worker must start');
+  CheckEqual(Int64(0), Int64(LMainRet),
+    '64-bit ping-pong main side must not lose wakes');
+  CheckEqual(Int64(0), Int64(atomic_load(LWorkerRet, mo_seq_cst)),
+    '64-bit ping-pong worker side must not lose wakes');
+  CheckEqual(Int64(0), Int64(atomic_load(LWorkerIteration, mo_seq_cst)),
+    '64-bit ping-pong worker must not stop mid-iteration');
+  CheckEqual(Int64(PingPongIterations * 2), atomic_load_64(LTurn, mo_seq_cst),
+    '64-bit ping-pong must complete all turns');
 end;
 
 procedure TestAtomicRefCountContract;

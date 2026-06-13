@@ -93,16 +93,32 @@ Direct `nextpas.core.atomic.types.TAtomicPtr<T>` follows the same load/store/exc
 
 ## AtomicWait/Notify
 
-当前 wait/notify surface 只覆盖 32-bit address wait：
+当前 wait/notify surface 覆盖 32-bit 和 64-bit address wait：
 
 - `atomic_wait(var Int32/UInt32, Expected, TimeoutNs)`
 - `atomic_notify_one(var Int32/UInt32)`
 - `atomic_notify_all(var Int32/UInt32)`
-- legacy wrapper：`AtomicWait32`、`AtomicNotifyOne32`、`AtomicNotifyAll32`
+- `atomic_wait(var Int64/UInt64, Expected, TimeoutNs)`
+- `atomic_notify_one(var Int64/UInt64)`
+- `atomic_notify_all(var Int64/UInt64)`
+- legacy wrapper：`AtomicWait32`、`AtomicNotifyOne32`、`AtomicNotifyAll32`、`AtomicWait64`、
+  `AtomicNotifyOne64`、`AtomicNotifyAll64`
 
-主实现只通过 `platform_wait_address32`、`platform_wake_address_one` 和
-`platform_wake_address_all` 暴露平台能力。不要在 atomic 层自行扩展 64-bit 或 pointer wait；
-如果要扩展，先设计 platform contract，再补当前模块 consumer gate。
+32-bit wait 直接走平台 address-wait seam：`platform_wait_address32`、`platform_wake_address_one`
+和 `platform_wake_address_all`。Linux 走 futex 32-bit compare wait，Windows 走 `WaitOnAddress`，
+其它 POSIX host 使用 wait-bucket fallback。
+
+64-bit wait 通过 `platform_wait_address64`、`platform_wake_address_one64` 和
+`platform_wake_address_all64` 暴露平台能力。Windows 使用 native `WaitOnAddress` 和 8-byte compare；
+Linux futex has no native 64-bit compare wait, so Linux and POSIX hosts use the
+`platform_posix_wait_address_fallback64` bucket fallback.
+
+Fallback wait buckets can collide by address. In fallback mode, `notify_all` wakes the whole bucket, and
+fallback `notify_one` can wake an unrelated address in the same bucket. Callers must always use a predicate loop:
+check the value before waiting, wait only while the predicate is still false, and re-check after wake,
+`PLATFORM_ERR_AGAIN`, or timeout.
+
+不要在 atomic 层自行扩展 pointer wait；如果要扩展，先设计 platform contract，再补当前模块 consumer gate。
 
 ## Tagged Pointer
 
