@@ -32,6 +32,9 @@ function platform_process_try_wait(const AProc: TPlatformProcess;
 procedure platform_process_detach(var AProc: TPlatformProcess);
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
+function platform_process_create_pipe(out AReadHandle, AWriteHandle: PtrInt): Int32;
+function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrInt): Int32;
+function platform_process_close_handle(var AHandle: PtrInt): Int32;
 
 implementation
 
@@ -113,6 +116,40 @@ begin
     Exit;
 {$ENDIF}
   CloseChildFdLoop(APreserveFd);
+end;
+
+function platform_process_create_pipe(out AReadHandle, AWriteHandle: PtrInt): Int32;
+var
+  LPipe: array[0..1] of Int32;
+begin
+  AReadHandle := -1;
+  AWriteHandle := -1;
+  if pipe(@LPipe[0]) <> 0 then
+    Exit(platform_get_errno);
+  AReadHandle := LPipe[0];
+  AWriteHandle := LPipe[1];
+  Result := 0;
+end;
+
+function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrInt): Int32;
+begin
+  if AForWrite then
+    AHandle := open('/dev/null', 1, 0)
+  else
+    AHandle := open('/dev/null', 0, 0);
+  if AHandle < 0 then
+    Exit(platform_get_errno);
+  Result := 0;
+end;
+
+function platform_process_close_handle(var AHandle: PtrInt): Int32;
+begin
+  if AHandle < 0 then
+    Exit(0);
+  if close(Int32(AHandle)) <> 0 then
+    Exit(platform_get_errno);
+  AHandle := -1;
+  Result := 0;
 end;
 
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar;
@@ -621,6 +658,53 @@ begin if TerminateProcess(HANDLE(AProc.ProcessHandle), 1) then Result := 0 else 
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
 begin Result := Int32(AProc.Pid); end;
 
+function platform_process_create_pipe(out AReadHandle, AWriteHandle: PtrInt): Int32;
+var
+  LReadHandle, LWriteHandle: HANDLE;
+  LSA: SECURITY_ATTRIBUTES;
+begin
+  AReadHandle := -1;
+  AWriteHandle := -1;
+  FillChar(LSA, SizeOf(LSA), 0);
+  LSA.nLength := SizeOf(LSA);
+  LSA.bInheritHandle := True;
+  if not CreatePipe(@LReadHandle, @LWriteHandle, @LSA, 0) then
+    Exit(Int32(GetLastError));
+  AReadHandle := PtrInt(PtrUInt(LReadHandle));
+  AWriteHandle := PtrInt(PtrUInt(LWriteHandle));
+  Result := 0;
+end;
+
+function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrInt): Int32;
+var
+  LNulPath: UnicodeString;
+  LAccess: DWORD;
+  LHandle: HANDLE;
+begin
+  LNulPath := 'NUL';
+  if AForWrite then
+    LAccess := GENERIC_WRITE
+  else
+    LAccess := GENERIC_READ;
+  LHandle := CreateFileW(PWideChar(LNulPath), LAccess,
+    FILE_SHARE_READ or FILE_SHARE_WRITE, nil, OPEN_EXISTING,
+    FILE_ATTRIBUTE_NORMAL, nil);
+  if LHandle = HANDLE(PtrInt(-1)) then
+    Exit(Int32(GetLastError));
+  AHandle := PtrInt(PtrUInt(LHandle));
+  Result := 0;
+end;
+
+function platform_process_close_handle(var AHandle: PtrInt): Int32;
+begin
+  if AHandle < 0 then
+    Exit(0);
+  if not CloseHandle(HANDLE(PtrUInt(AHandle))) then
+    Exit(Int32(GetLastError));
+  AHandle := -1;
+  Result := 0;
+end;
+
 function platform_process_spawn_piped(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; out AProc: TPlatformProcess;
   out APipes: TPlatformProcessPipes): Int32;
@@ -899,6 +983,12 @@ function platform_process_kill(const AProc: TPlatformProcess): Int32;
 begin Result := -1; end;
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
 begin Result := -1; end;
+function platform_process_create_pipe(out AReadHandle, AWriteHandle: PtrInt): Int32;
+begin AReadHandle := -1; AWriteHandle := -1; Result := -1; end;
+function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrInt): Int32;
+begin AHandle := -1; Result := -1; end;
+function platform_process_close_handle(var AHandle: PtrInt): Int32;
+begin AHandle := -1; Result := -1; end;
 function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar; const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32; out AOutLen: Int32; out AExitCode: Int32): Int32;
 begin AOutLen := 0; AExitCode := -1; Result := -1; end;
 {$ENDIF}

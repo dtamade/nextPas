@@ -54,6 +54,7 @@ procedure TestStdinPiping;
 var
   LChild: IChild;
   LStdin: IWriter;
+  LCloser: IWriteCloser;
   LOut: TProcessOutput;
   LData: string;
 begin
@@ -64,7 +65,9 @@ begin
   LStdin := LChild.TakeStdin;
   LData := 'piped_input_data_12345';
   LStdin.Write(LData[1], Length(LData));
-  (LStdin as TPipeWriter).Close;
+  LCloser := LStdin as IWriteCloser;
+  LCloser.Close;
+  LCloser := nil;
   LStdin := nil;
   LOut := LChild.WaitWithOutput;
   CheckEqual(Int64(0), Int64(LOut.ExitCode), 'cat exit 0');
@@ -314,6 +317,7 @@ procedure TestWaitWithOutputStdin;
 var
   LChild: IChild;
   LStdin: IWriter;
+  LCloser: IWriteCloser;
   LOut: TProcessOutput;
   LData: string;
 begin
@@ -326,7 +330,9 @@ begin
   LStdin := LChild.TakeStdin;
   LData := 'waitwithoutput_test';
   LStdin.Write(LData[1], Length(LData));
-  (LStdin as TPipeWriter).Close;
+  LCloser := LStdin as IWriteCloser;
+  LCloser.Close;
+  LCloser := nil;
   LStdin := nil;
   LOut := LChild.WaitWithOutput;
   CheckEqual(Int64(0), Int64(LOut.ExitCode), 'wwo exit 0');

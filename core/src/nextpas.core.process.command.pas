@@ -93,8 +93,6 @@ uses
   nextpas.core.process.pipe,
   nextpas.core.platform.process,
   nextpas.core.platform.process.base,
-  nextpas.core.platform.posix.ffi,
-  nextpas.core.platform.posix.base,
   nextpas.core.os.env,
   nextpas.core.text.compare,
   nextpas.core.process.pathresolve;
@@ -196,15 +194,6 @@ begin
             Copy(AExplicit[I], P + 1, Length(AExplicit[I]) - P));
       end;
     end;
-  end;
-end;
-
-procedure CloseFd(var AFd: PtrInt);
-begin
-  if AFd >= 0 then
-  begin
-    nextpas.core.platform.posix.ffi.close(AFd);
-    AFd := -1;
   end;
 end;
 
@@ -310,9 +299,9 @@ var
   LStdinW: IWriter;
   LStdoutR: IReader;
   LStderrR: IReader;
-  LStdinPipe, LStdoutPipe, LStderrPipe: array[0..1] of Int32;
+  LStdinPipe, LStdoutPipe, LStderrPipe: array[0..1] of PtrInt;
   LChildStdin, LChildStdout, LChildStderr: PtrInt;
-  LDevNull: Int32;
+  LDevNull: PtrInt;
   LFinalEnv: TStringArray;
   LFailStage: TPlatformProcessSpawnStage;
   LResolvedPath: string;
@@ -364,43 +353,40 @@ begin
   try
     if FStdinMode = stPiped then
     begin
-      if pipe(@LStdinPipe[0]) <> 0 then
+      if platform_process_create_pipe(LStdinPipe[0], LStdinPipe[1]) <> 0 then
         raise EProcessError.Create('Failed to create stdin pipe');
       LChildStdin := LStdinPipe[0];
     end
     else if FStdinMode = stNull then
     begin
-      LDevNull := nextpas.core.platform.posix.ffi.open(PAnsiChar('/dev/null'), 0, 0);
-      if LDevNull < 0 then
-        raise EProcessError.Create('Failed to open /dev/null for stdin');
+      if platform_process_open_null(False, LDevNull) <> 0 then
+        raise EProcessError.Create('Failed to open null stdin');
       LChildStdin := LDevNull;
     end;
 
     if FStdoutMode = stPiped then
     begin
-      if pipe(@LStdoutPipe[0]) <> 0 then
+      if platform_process_create_pipe(LStdoutPipe[0], LStdoutPipe[1]) <> 0 then
         raise EProcessError.Create('Failed to create stdout pipe');
       LChildStdout := LStdoutPipe[1];
     end
     else if FStdoutMode = stNull then
     begin
-      LDevNull := nextpas.core.platform.posix.ffi.open(PAnsiChar('/dev/null'), 1, 0);
-      if LDevNull < 0 then
-        raise EProcessError.Create('Failed to open /dev/null for stdout');
+      if platform_process_open_null(True, LDevNull) <> 0 then
+        raise EProcessError.Create('Failed to open null stdout');
       LChildStdout := LDevNull;
     end;
 
     if FStderrMode = stPiped then
     begin
-      if pipe(@LStderrPipe[0]) <> 0 then
+      if platform_process_create_pipe(LStderrPipe[0], LStderrPipe[1]) <> 0 then
         raise EProcessError.Create('Failed to create stderr pipe');
       LChildStderr := LStderrPipe[1];
     end
     else if FStderrMode = stNull then
     begin
-      LDevNull := nextpas.core.platform.posix.ffi.open(PAnsiChar('/dev/null'), 1, 0);
-      if LDevNull < 0 then
-        raise EProcessError.Create('Failed to open /dev/null for stderr');
+      if platform_process_open_null(True, LDevNull) <> 0 then
+        raise EProcessError.Create('Failed to open null stderr');
       LChildStderr := LDevNull;
     end;
 
@@ -422,34 +408,34 @@ begin
 
   except
     { Clean up all created fds on failure }
-    if LStdinPipe[0] >= 0 then nextpas.core.platform.posix.ffi.close(LStdinPipe[0]);
-    if LStdinPipe[1] >= 0 then nextpas.core.platform.posix.ffi.close(LStdinPipe[1]);
-    if LStdoutPipe[0] >= 0 then nextpas.core.platform.posix.ffi.close(LStdoutPipe[0]);
-    if LStdoutPipe[1] >= 0 then nextpas.core.platform.posix.ffi.close(LStdoutPipe[1]);
-    if LStderrPipe[0] >= 0 then nextpas.core.platform.posix.ffi.close(LStderrPipe[0]);
-    if LStderrPipe[1] >= 0 then nextpas.core.platform.posix.ffi.close(LStderrPipe[1]);
+    platform_process_close_handle(LStdinPipe[0]);
+    platform_process_close_handle(LStdinPipe[1]);
+    platform_process_close_handle(LStdoutPipe[0]);
+    platform_process_close_handle(LStdoutPipe[1]);
+    platform_process_close_handle(LStderrPipe[0]);
+    platform_process_close_handle(LStderrPipe[1]);
     if FStdinMode = stNull then
-      CloseFd(LChildStdin);
+      platform_process_close_handle(LChildStdin);
     if FStdoutMode = stNull then
-      CloseFd(LChildStdout);
+      platform_process_close_handle(LChildStdout);
     if FStderrMode = stNull then
-      CloseFd(LChildStderr);
+      platform_process_close_handle(LChildStderr);
     raise;
   end;
 
   { Close child-side fds in parent }
   if (FStdinMode = stPiped) then
-    nextpas.core.platform.posix.ffi.close(LStdinPipe[0]);
+    platform_process_close_handle(LStdinPipe[0]);
   if (FStdoutMode = stPiped) then
-    nextpas.core.platform.posix.ffi.close(LStdoutPipe[1]);
+    platform_process_close_handle(LStdoutPipe[1]);
   if (FStderrMode = stPiped) then
-    nextpas.core.platform.posix.ffi.close(LStderrPipe[1]);
+    platform_process_close_handle(LStderrPipe[1]);
   if (FStdinMode = stNull) and (LChildStdin >= 0) then
-    nextpas.core.platform.posix.ffi.close(LChildStdin);
+    platform_process_close_handle(LChildStdin);
   if (FStdoutMode = stNull) and (LChildStdout >= 0) then
-    nextpas.core.platform.posix.ffi.close(LChildStdout);
+    platform_process_close_handle(LChildStdout);
   if (FStderrMode = stNull) and (LChildStderr >= 0) then
-    nextpas.core.platform.posix.ffi.close(LChildStderr);
+    platform_process_close_handle(LChildStderr);
 
   { Create pipe wrappers }
   if FStdinMode = stPiped then
