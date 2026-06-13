@@ -227,13 +227,14 @@ begin
   T.Run('anonymous map multi-byte write/read (256B)', @TestAnonymousMapMultiByte);
   T.Run('page size is positive', @TestPageSizePositive);
   T.Run('page size is power of two', @TestPageSizePowerOfTwo);
+  T.Run('double close returns error', @TestDoubleClose);
   { SKIPPED: file-backed mmap tests fail under Wine due to
-    CreateFileMappingA not accepting Wine Z: drive mapped Unicode paths
-    with embedded spaces. Anonymous maps work fine. }
+    Wine's CreateFileW not handling Z: drive mapped Unicode paths
+    with embedded spaces. The mmap code itself (CreateFileMappingW)
+    is correct -- verified by anonymous maps passing. }
   { T.Run('file-backed map open + read content', @TestFileBackedMap); }
   { T.Run('file-backed map write + flush + persist', @TestFileBackedMapWrite); }
   { T.Run('file map with explicit size and offset', @TestFileMapExplicit); }
-  T.Run('double close returns error', @TestDoubleClose);
   {$ELSE}
   T.Run('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
