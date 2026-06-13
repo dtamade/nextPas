@@ -160,6 +160,15 @@ begin
       AStreamID, ABody);
 end;
 
+function ComposePushPromisePayload(const APromisedStreamID: UInt32): AnsiString;
+begin
+  SetLength(Result, 4);
+  Result[1] := AnsiChar(Byte((APromisedStreamID shr 24) and $7F));
+  Result[2] := AnsiChar(Byte(APromisedStreamID shr 16));
+  Result[3] := AnsiChar(Byte(APromisedStreamID shr 8));
+  Result[4] := AnsiChar(Byte(APromisedStreamID));
+end;
+
 function ReadAllBody(const ABody: IReader): string;
 var
   LBuf: array[0..255] of Byte;
@@ -197,6 +206,42 @@ begin
     Inc(ACount);
     Inc(LOffset, SizeInt(LConsumed));
   end;
+end;
+
+function FindSettingsValue(const APayload: AnsiString;
+  const AIdentifier: UInt16; out AValue: UInt32): Boolean;
+var
+  LEntries: TH2SettingEntries;
+  LI: SizeInt;
+begin
+  AValue := 0;
+  Check(H2DecodeSettingsPayload(APayload, LEntries),
+    'settings payload decodes');
+  for LI := 0 to High(LEntries) do
+    if LEntries[LI].Identifier = AIdentifier then
+    begin
+      AValue := LEntries[LI].Value;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+function FindGoawayError(const AFrames: array of TH2Frame;
+  const ACount: SizeInt; out AErrorCode: UInt32): Boolean;
+var
+  LI: SizeInt;
+  LLastStreamID: UInt32;
+  LDebugData: AnsiString;
+begin
+  AErrorCode := H2_ERR_NO_ERROR;
+  for LI := 0 to ACount - 1 do
+    if AFrames[LI].Header.FrameType = H2_FRAME_GOAWAY then
+    begin
+      Check(H2DecodeGoaway(AFrames[LI].Payload, LLastStreamID, AErrorCode,
+        LDebugData), 'GOAWAY payload decodes');
+      Exit(True);
+    end;
+  Result := False;
 end;
 
 function HeaderValue(const AHeaders: array of THPackHeader;
@@ -349,6 +394,7 @@ var
   LStream: TFakeTcpStream;
   LFrames: array[0..7] of TH2Frame;
   LCount: SizeInt;
+  LEnablePushValue: UInt32;
 begin
   LStream := TFakeTcpStream.Create(ComposeServerHandshake);
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
@@ -364,6 +410,10 @@ begin
     Check(LCount >= 2, 'client wrote settings and ack/window delta');
     CheckEqual(Int64(H2_FRAME_SETTINGS), Int64(LFrames[0].Header.FrameType),
       'first frame is settings');
+    Check(FindSettingsValue(LFrames[0].Payload, H2_SETTINGS_ENABLE_PUSH,
+      LEnablePushValue), 'client sends SETTINGS_ENABLE_PUSH');
+    CheckEqual(Int64(0), Int64(LEnablePushValue),
+      'client disables server push');
     CheckEqual(Int64(H2_FRAME_SETTINGS), Int64(LFrames[1].Header.FrameType),
       'second frame is settings ack');
     CheckEqual(Int64(H2_FLAG_SETTINGS_ACK), Int64(LFrames[1].Header.Flags),
@@ -502,6 +552,52 @@ begin
   end;
 end;
 
+procedure TestPushPromiseTriggersProtocolGoaway;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LFrames: array[0..15] of TH2Frame;
+  LCount: SizeInt;
+  LErrorCode: UInt32;
+  LErrorRaised: Boolean;
+begin
+  LResp := nil;
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    H2EncodeFrame(H2_FRAME_PUSH_PROMISE, H2_FLAG_PUSH_PROMISE_END_HEADERS, 1,
+      ComposePushPromisePayload(2)) +
+    ComposeResponse(1, '200', '', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LErrorRaised := False;
+    try
+      LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/push'));
+      LResp := nil;
+    except
+      on E: Exception do
+        LErrorRaised := True;
+    end;
+    Check(LErrorRaised, 'PUSH_PROMISE aborts client round trip');
+    CheckEqual(Int64(Ord(h2ccsClosed)), Int64(Ord(LConn.State)),
+      'PUSH_PROMISE closes client connection');
+    CheckEqual(True, LStream.FClosed, 'PUSH_PROMISE closes TCP stream');
+
+    DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
+      MaxInt), LFrames, LCount);
+    Check(FindGoawayError(LFrames, LCount, LErrorCode),
+      'client writes GOAWAY for PUSH_PROMISE');
+    CheckEqual(Int64(H2_ERR_PROTOCOL_ERROR), Int64(LErrorCode),
+      'PUSH_PROMISE GOAWAY uses PROTOCOL_ERROR');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
 procedure TestPingGetsAcked;
 var
   LConn: TH2ClientConnection;
@@ -629,6 +725,8 @@ begin
     @TestStreamIdIncrementsAcrossRequests);
   T.Run('GOAWAY marks connection not reusable',
     @TestGoawayMarksConnectionNotReusable);
+  T.Run('PUSH_PROMISE triggers PROTOCOL_ERROR GOAWAY',
+    @TestPushPromiseTriggersProtocolGoaway);
   T.Run('PING gets acked',
     @TestPingGetsAcked);
   T.Run('Transport reuses pooled connection',

@@ -762,6 +762,8 @@ begin
       Result := HandleContinuation(AFrame);
     H2_FRAME_DATA:
       Result := HandleData(AFrame);
+    H2_FRAME_PUSH_PROMISE:
+      Result := RejectFrame(0, H2_ERR_PROTOCOL_ERROR, True);
     H2_FRAME_WINDOW_UPDATE:
       Result := HandleWindowUpdate(AFrame);
     H2_FRAME_RST_STREAM:
@@ -893,6 +895,8 @@ var
 begin
   if FPendingContinuationStreamID <> 0 then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_PROTOCOL_ERROR, True));
+  if AFrame.Header.StreamID = 0 then
+    Exit(RejectFrame(0, H2_ERR_PROTOCOL_ERROR, True));
   LStream := FStreams.Find(AFrame.Header.StreamID);
   if LStream = nil then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED, False));

@@ -22,6 +22,12 @@ uses
   nextpas.core.http.impl.h2.types,
   nextpas.core.testing;
 
+const
+  H2_SESSION_SOURCE_PATH_FROM_TEST =
+    '../../../src/nextpas.core.http.impl.h2.session.pas';
+  H2_SESSION_SOURCE_PATH_FROM_ROOT =
+    'core/src/nextpas.core.http.impl.h2.session.pas';
+
 type
   TFakeTcpStream = class(TInterfacedObject, ITcpStream)
   private
@@ -109,6 +115,43 @@ begin
   end;
 end;
 
+function ReadSourceFile(const APath: string): string;
+var
+  LFile: Text;
+  LLine: string;
+begin
+  Result := '';
+  Assign(LFile, APath);
+  Reset(LFile);
+  try
+    while not Eof(LFile) do
+    begin
+      ReadLn(LFile, LLine);
+      Result := Result + LLine + #10;
+    end;
+  finally
+    Close(LFile);
+  end;
+end;
+
+function ResolveSourcePath(const APathFromTest, APathFromRoot: string): string;
+begin
+  if FileExists(APathFromTest) then
+    Exit(APathFromTest);
+  if FileExists(APathFromRoot) then
+    Exit(APathFromRoot);
+  Result := APathFromTest;
+end;
+
+function ComposePushPromisePayload(const APromisedStreamID: UInt32): AnsiString;
+begin
+  SetLength(Result, 4);
+  Result[1] := AnsiChar(Byte((APromisedStreamID shr 24) and $7F));
+  Result[2] := AnsiChar(Byte(APromisedStreamID shr 16));
+  Result[3] := AnsiChar(Byte(APromisedStreamID shr 8));
+  Result[4] := AnsiChar(Byte(APromisedStreamID));
+end;
+
 function EncodeHeaders(const AHeaders: array of THPackHeader): AnsiString;
 var
   LEncoder: THPackEncoder;
@@ -177,6 +220,35 @@ begin
     Inc(ACount);
     Inc(LOffset, SizeInt(LConsumed));
   end;
+end;
+
+function FindGoawayError(const AFrames: array of TH2Frame;
+  const ACount: SizeInt; out AErrorCode: UInt32): Boolean;
+var
+  LI: SizeInt;
+  LLastStreamID: UInt32;
+  LDebugData: AnsiString;
+begin
+  AErrorCode := H2_ERR_NO_ERROR;
+  for LI := 0 to ACount - 1 do
+    if AFrames[LI].Header.FrameType = H2_FRAME_GOAWAY then
+    begin
+      Check(H2DecodeGoaway(AFrames[LI].Payload, LLastStreamID, AErrorCode,
+        LDebugData), 'GOAWAY payload decodes');
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+function HasFrameType(const AFrames: array of TH2Frame; const ACount: SizeInt;
+  const AFrameType: Byte): Boolean;
+var
+  LI: SizeInt;
+begin
+  for LI := 0 to ACount - 1 do
+    if AFrames[LI].Header.FrameType = AFrameType then
+      Exit(True);
+  Result := False;
 end;
 
 function ExtractStatusHeader(const ABlock: AnsiString): string;
@@ -905,6 +977,114 @@ begin
   end;
 end;
 
+procedure TestRunDataOnConnectionStreamSendsGoaway;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_DATA, H2_FLAG_DATA_END_STREAM, 0, 'bad');
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(0), Int64(LHandler.CallCount),
+        'DATA on connection stream does not reach handler');
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'server writes GOAWAY for DATA on stream 0');
+      CheckEqual(Int64(H2_ERR_PROTOCOL_ERROR), Int64(LErrorCode),
+        'DATA stream 0 GOAWAY uses PROTOCOL_ERROR');
+      Check(not HasFrameType(LFrames, LFrameCount, H2_FRAME_RST_STREAM),
+        'DATA on stream 0 does not emit RST_STREAM');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestHandleDataConnectionStreamSourceContract;
+var
+  LSource: string;
+  LHandleDataPos: SizeInt;
+  LHandleDataBlock: string;
+begin
+  LSource := ReadSourceFile(ResolveSourcePath(H2_SESSION_SOURCE_PATH_FROM_TEST,
+    H2_SESSION_SOURCE_PATH_FROM_ROOT));
+  LHandleDataPos := Pos('function TH2ServerSession.HandleData', LSource);
+  Check(LHandleDataPos > 0, 'HandleData implementation is present');
+  LHandleDataBlock := Copy(LSource, LHandleDataPos, 700);
+  Check(Pos('AFrame.Header.StreamID = 0', LHandleDataBlock) > 0,
+    'HandleData explicitly checks DATA on connection stream');
+  Check(Pos('RejectFrame(0, H2_ERR_PROTOCOL_ERROR, True)', LHandleDataBlock) > 0,
+    'HandleData maps DATA stream 0 to connection-level PROTOCOL_ERROR');
+end;
+
+procedure TestRunPushPromiseSendsGoaway;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_PUSH_PROMISE, H2_FLAG_PUSH_PROMISE_END_HEADERS, 1,
+        ComposePushPromisePayload(2));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(0), Int64(LHandler.CallCount),
+        'client PUSH_PROMISE does not reach handler');
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'server writes GOAWAY for client PUSH_PROMISE');
+      CheckEqual(Int64(H2_ERR_PROTOCOL_ERROR), Int64(LErrorCode),
+        'client PUSH_PROMISE GOAWAY uses PROTOCOL_ERROR');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
 procedure TestRunWindowUpdateResumesBlockedResponseBody;
 var
   LHandler: TCollectingHandler;
@@ -1003,6 +1183,12 @@ begin
       @TestAdvancePollsReadableThenWritable);
     Run('Run unknown extension frame is ignored',
       @TestRunUnknownExtensionFrameIsIgnored);
+    Run('Run DATA on connection stream sends GOAWAY',
+      @TestRunDataOnConnectionStreamSendsGoaway);
+    Run('HandleData connection stream source contract',
+      @TestHandleDataConnectionStreamSourceContract);
+    Run('Run client PUSH_PROMISE sends GOAWAY',
+      @TestRunPushPromiseSendsGoaway);
     Run('Run WINDOW_UPDATE resumes blocked response body',
       @TestRunWindowUpdateResumesBlockedResponseBody);
     Summary;

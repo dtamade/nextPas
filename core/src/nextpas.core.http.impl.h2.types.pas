@@ -372,7 +372,7 @@ begin
   Result.Timeout := 30000;
   Result.MaxPoolSize := 64;
   Result.HeaderTableSize := H2_DEFAULT_HEADER_TABLE_SIZE;
-  Result.EnablePush := H2_DEFAULT_ENABLE_PUSH;
+  Result.EnablePush := False;
   Result.InitialStreamWindowSize := H2_DEFAULT_INITIAL_WINDOW_SIZE;
   Result.InitialConnectionWindowSize := H2_DEFAULT_INITIAL_WINDOW_SIZE;
   Result.MaxFrameSize := H2_DEFAULT_MAX_FRAME_SIZE;

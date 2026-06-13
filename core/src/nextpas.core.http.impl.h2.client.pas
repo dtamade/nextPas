@@ -82,6 +82,8 @@ type
     procedure SendWindowUpdate(const AStreamID: UInt32; const AIncrement: UInt32);
     procedure SendGoaway(const ALastStreamID: UInt32; const AErrorCode: UInt32;
       const ADebugData: AnsiString = '');
+    procedure FailConnection(const AErrorCode: UInt32; const ADebugData: AnsiString;
+      const AMessage: string);
     procedure SendConnectionWindowDelta;
     function ParseSettingsPayload(const APayload: AnsiString;
       out ASettings: TH2Settings): Boolean;
@@ -520,6 +522,26 @@ begin
   FGoawaySent := True;
   if FState <> h2ccsClosed then
     FState := h2ccsGoaway;
+end;
+
+procedure TH2ClientConnection.FailConnection(const AErrorCode: UInt32;
+  const ADebugData: AnsiString; const AMessage: string);
+begin
+  try
+    if FConn <> nil then
+      SendGoaway(FLastPeerStreamID, AErrorCode, ADebugData);
+  finally
+    if FConn <> nil then
+    begin
+      try
+        FConn.Close;
+      except
+      end;
+      FConn := nil;
+    end;
+    TransitionClosed;
+  end;
+  raise EHttpError.Create(AMessage);
 end;
 
 procedure TH2ClientConnection.SendConnectionWindowDelta;
@@ -1000,6 +1022,9 @@ begin
       HandlePing(AFrame);
     H2_FRAME_GOAWAY:
       HandleGoaway(AFrame);
+    H2_FRAME_PUSH_PROMISE:
+      FailConnection(H2_ERR_PROTOCOL_ERROR, 'PUSH_PROMISE',
+        'HTTP/2 PUSH_PROMISE received while server push is disabled');
     H2_FRAME_RST_STREAM:
       HandleRstStream(AFrame, AStreamID, AResponse);
     H2_FRAME_HEADERS:
