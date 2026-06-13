@@ -85,30 +85,18 @@ What is already aligned with the L0 direction:
 - `DefaultAllocator` stays small and delegates to the RTL allocator singleton.
 - `TMemoryMapAllocator` gives mem an allocator backend without forcing file or
   shared-memory policy into the default path.
-- `nextpas.core.mem.memory_map` no longer depends on `nextpas.core.fs.util` or
-  `nextpas.core.text.conv` for local helper behavior; existence checks now go
-  through platform file stat and string replacement stays at the RTL level.
-- The mem mapping path now has a focused Windows host-compile gate so local
-  helper cleanups cannot silently break `memory_map` or its anonymous allocator
-  path under `NEXTPAS_FORCE_HOST_WINDOWS`.
-- `nextpas.core.mem.allocator.mimalloc` no longer depends on `text.conv` for
-  platform-library path selection; the remaining helper is explicit RTL
-  `SysUtils.LowerCase`.
-- `nextpas.core.mem.pool.fixed` no longer depends on `nextpas.core.text.conv`
-  for its debug-only leak message; the fixed pool keeps L0 ownership and uses
-  local `Str` formatting instead.
-- `nextpas.core.mem.mapped_ring_buffer` no longer depends on
-  `nextpas.core.fs.util` for file existence checks; file-backed ring buffers
-  now consume the platform-owned file-stat facade directly.
-- `nextpas.core.mem.mapped_slab_pool` no longer depends on
-  `nextpas.core.text.conv` for manager-generated pool names or
-  `nextpas.core.fs.util` for file existence checks; generated names stay local
-  and file-backed pools now consume the platform-owned file stat facade.
-- `nextpas.core.mem.mapped_ring_buffer.sharded` no longer depends on
-  `nextpas.core.text.conv` for shard-name formatting; it keeps the existing
-  `_shNN` naming contract with local `Str` formatting.
-- `TSlabPool` no longer samples `platform.time` directly; the core keeps call
-  counters but does not depend on L1 timing APIs.
+- `nextpas.core.mem.memory_map` and the mapped-family units no longer use
+  `nextpas.core.fs.util` or `nextpas.core.text.conv` where they were previously
+  avoidable; file existence checks now go through platform file stat helpers.
+- `nextpas.core.mem.mapped_ring_buffer.sharded` now uses `nextpas.core.mem.mutex`
+  instead of `SyncObjs`, so the concurrent wrapper stays inside the mem-local
+  sync surface rather than pulling in a broader host-only unit.
+- `nextpas.core.mem.pool.fixed` no longer depends on `nextpas.core.text.conv`;
+  the debug-only `Format` path was moved behind a narrow `{$IFDEF FAF_MEM_DEBUG}`
+  implementation guard.
+- `nextpas.core.mem.secure` no longer uses raw `Windows` or `BaseUnix` units
+  directly; secure zeroing is now expressed through explicit zeroing plus
+  memory/compiler barriers.
 - `mem.blockpool.concurrent`, `mem.pool.fixed.concurrent`, and
   `mem.pool.slab.concurrent` no longer depend on `nextpas.core.sync`; they use
   the local `TMemMutex` helper backed by `nextpas.core.platform.sync`.
@@ -133,25 +121,43 @@ What is already aligned with the L0 direction:
 
 ## Known Debt
 
-The boundary is not fully clean yet. The main remaining debt is:
+The live dependency-boundary gate now reports **0 allowlisted debt entries**.
 
-- The current source-boundary contract carries 0 allowlisted debt entries.
-  This means this source contract has no known exceptions; it is not proof that
-  the whole mem lane or every L0 owner boundary is complete.
-- Continue treating mapped structures and optional allocator backends as active
-  audit targets when new consumer pressure or host-compile evidence appears.
+That means mem currently has no known new helper or host-unit boundary
+regressions, but it does **not** mean mapped-family ownership is already
+settled. The debt gate only proves known source-boundary violations have been
+removed.
 
-Treat these as explicit debt, not as proof that mem is already layer-clean.
+The architecture debt that remains is:
+
+- `mapped_ring_buffer` and `mapped_ring_buffer.sharded` are still L0 mem
+  surface, even though their preferred long-term home is a higher mapped IO
+  owner. Do not treat them as settled L0 surface just because the helper
+  imports were cleaned.
+- `mapped_slab_pool` still mixes anonymous allocator behavior with
+  file-backed/shared-memory manager behavior. The anonymous allocator path
+  may remain in mem; the file/shared manager path should eventually move
+  behind higher ownership or be explicitly reclassified.
+- `mem.secure` was cleaned by removing direct host-unit uses, not by
+  introducing a dedicated platform-owned secure seam. The current
+  `FillChar` + barrier strategy is honest for L0, but a later slice may
+  still decide to promote this into a minimal platform primitive.
 
 ## Follow-Up Route
 
-Priority follow-up slices:
+Priority follow-up work:
 
-1. Keep the mem mapping compile surface honest across host branches: helper
-   cleanups may stay in mem, but do not reopen the landed mapping/shared-memory
-   owner slice without a new blocker.
-2. Keep allocator-manager behavior narrow and explicit: `rtl` now has a runtime
-   regression test for installation safety, while optional guarded backends such
-   as CRT need at least compile truth before wider rollout.
-3. Keep narrowing public allocator claims so traits, ownership, and fallback
+1. Decide whether `mapped_ring_buffer*` should be relocated out of L0 mem.
+   Until that decision is explicit, treat these units as eligible for future
+   migration, not as permanent L0 surface.
+2. Split `mapped_slab_pool` review into two surfaces:
+   - anonymous mapped allocator behavior, which can stay in mem
+   - file-backed and shared-memory manager behavior, which should be
+     reclassified if it cannot stay layer-honest
+3. Revisit the `mem.secure` barrier strategy if a later platform slice
+   requires a more explicit secure-memory primitive.
+4. Keep allocator-manager behavior narrow and explicit: `rtl` already has a
+   runtime regression test for installation safety, while optional guarded
+   backends such as CRT still need at least compile truth before wider rollout.
+5. Keep narrowing public allocator claims so traits, ownership, and fallback
    behavior remain verifiable and unsurprising.
