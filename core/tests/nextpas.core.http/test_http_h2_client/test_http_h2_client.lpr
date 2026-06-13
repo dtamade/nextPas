@@ -724,6 +724,80 @@ begin
   end;
 end;
 
+procedure CheckRoundTripFailsWithProtocolGoaway(const AServerFrames: AnsiString;
+  const AUrl: string; const AMessage: string);
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LFrames: array[0..15] of TH2Frame;
+  LCount: SizeInt;
+  LErrorCode: UInt32;
+  LErrorRaised: Boolean;
+begin
+  LResp := nil;
+  LStream := TFakeTcpStream.Create(ComposeServerHandshake + AServerFrames);
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LErrorRaised := False;
+    try
+      LResp := LConn.RoundTrip(NewRequest(hmGet, AUrl));
+      LResp := nil;
+    except
+      on E: Exception do
+        LErrorRaised := True;
+    end;
+    Check(LErrorRaised, AMessage + ' aborts client round trip');
+    CheckEqual(Int64(Ord(h2ccsClosed)), Int64(Ord(LConn.State)),
+      AMessage + ' closes client state');
+    CheckEqual(True, LStream.FClosed, AMessage + ' closes TCP stream');
+
+    DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
+      MaxInt), LFrames, LCount);
+    Check(FindGoawayError(LFrames, LCount, LErrorCode),
+      AMessage + ' writes GOAWAY');
+    CheckEqual(Int64(H2_ERR_PROTOCOL_ERROR), Int64(LErrorCode),
+      AMessage + ' GOAWAY uses PROTOCOL_ERROR');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestDataOnConnectionStreamTriggersProtocolGoaway;
+begin
+  CheckRoundTripFailsWithProtocolGoaway(
+    H2EncodeFrame(H2_FRAME_DATA, H2_FLAG_DATA_END_STREAM, 0, 'bad'),
+    'http://example.com/data-stream-zero',
+    'DATA on connection stream');
+end;
+
+procedure TestHeadersOnConnectionStreamTriggersProtocolGoaway;
+begin
+  CheckRoundTripFailsWithProtocolGoaway(
+    H2EncodeFrame(H2_FRAME_HEADERS,
+      H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 0,
+      ComposeResponseHeaders('200', [])),
+    'http://example.com/headers-stream-zero',
+    'HEADERS on connection stream');
+end;
+
+procedure TestContinuationOnDifferentStreamTriggersProtocolGoaway;
+var
+  LHeaderBlock: AnsiString;
+begin
+  LHeaderBlock := ComposeResponseHeaders('200', []);
+  CheckRoundTripFailsWithProtocolGoaway(
+    H2EncodeFrame(H2_FRAME_HEADERS, 0, 1, Copy(LHeaderBlock, 1, 1)) +
+    H2EncodeFrame(H2_FRAME_CONTINUATION, H2_FLAG_CONTINUATION_END_HEADERS,
+      3, Copy(LHeaderBlock, 2, MaxInt)),
+    'http://example.com/bad-continuation',
+    'CONTINUATION on different stream');
+end;
+
 procedure TestPingGetsAcked;
 var
   LConn: TH2ClientConnection;
@@ -857,6 +931,12 @@ begin
     @TestGoawayMarksConnectionNotReusable);
   T.Run('PUSH_PROMISE triggers PROTOCOL_ERROR GOAWAY',
     @TestPushPromiseTriggersProtocolGoaway);
+  T.Run('DATA on connection stream triggers PROTOCOL_ERROR GOAWAY',
+    @TestDataOnConnectionStreamTriggersProtocolGoaway);
+  T.Run('HEADERS on connection stream triggers PROTOCOL_ERROR GOAWAY',
+    @TestHeadersOnConnectionStreamTriggersProtocolGoaway);
+  T.Run('CONTINUATION on different stream triggers PROTOCOL_ERROR GOAWAY',
+    @TestContinuationOnDifferentStreamTriggersProtocolGoaway);
   T.Run('PING gets acked',
     @TestPingGetsAcked);
   T.Run('Transport reuses pooled connection',

@@ -173,7 +173,7 @@ const
   STATUS_ACCEPTED: AnsiString = 'HTTP/1.1 202 Accepted'#13#10;
   STATUS_RESET_CONTENT: AnsiString = 'HTTP/1.1 205 Reset Content'#13#10;
   STATUS_PARTIAL_CONTENT: AnsiString = 'HTTP/1.1 206 Partial Content'#13#10;
-  STATUS_SEE_OTHER: AnsiString = 'HTTP/1.1 203 See Other'#13#10;
+  STATUS_SEE_OTHER: AnsiString = 'HTTP/1.1 303 See Other'#13#10;
   STATUS_TEMPORARY_REDIRECT: AnsiString = 'HTTP/1.1 307 Temporary Redirect'#13#10;
   STATUS_PERMANENT_REDIRECT: AnsiString = 'HTTP/1.1 308 Permanent Redirect'#13#10;
   STATUS_NOT_ACCEPTABLE: AnsiString = 'HTTP/1.1 406 Not Acceptable'#13#10;

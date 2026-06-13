@@ -34,6 +34,8 @@ type
     FHeaderBlock: AnsiString;
     FHeaderStore: TObject;
     FHeadersDecoded: IHttpHeaders;
+    FTrailerStore: TObject;
+    FTrailersDecoded: IHttpHeaders;
     FBodyBuffer: TBytes;
     FBodyReadPos: SizeInt;
     FEndStreamReceived: Boolean;
@@ -102,6 +104,7 @@ type
     property StreamID: UInt32 read FStreamID;
     property State: TH2StreamState read FState;
     property Headers: IHttpHeaders read FHeadersDecoded;
+    property Trailers: IHttpHeaders read FTrailersDecoded;
     property BodyBuffer: TBytes read FBodyBuffer;
     property EndStreamReceived: Boolean read FEndStreamReceived;
     property EndStreamSent: Boolean read FEndStreamSent;
@@ -189,6 +192,8 @@ begin
   FDecoder := @ADecoder;
   FHeaderStore := nil;
   FHeadersDecoded := nil;
+  FTrailerStore := nil;
+  FTrailersDecoded := nil;
   FHeaderFragments := nil;
   FHeaderBlock := '';
   FBodyBuffer := nil;
@@ -209,6 +214,8 @@ begin
   ClearPendingHeaderBlock;
   FHeadersDecoded := nil;
   FHeaderStore := nil;
+  FTrailersDecoded := nil;
+  FTrailerStore := nil;
   FBodyBuffer := nil;
   FPendingResponseBody := nil;
   inherited Destroy;
@@ -236,6 +243,7 @@ var
   LIndex: SizeInt;
   LTotalLen: SizeInt;
   LWritePos: SizeInt;
+  LTargetStore: TObject;
 begin
   LTotalLen := 0;
   for LIndex := 0 to High(FHeaderFragments) do
@@ -259,17 +267,27 @@ begin
     Exit;
   end;
 
-  if FHeaderStore = nil then
+  if FHeadersDecoded = nil then
   begin
     FHeaderStore := THttpHeaders.Create;
     FHeadersDecoded := HeaderStoreAsConcrete(FHeaderStore);
+    LTargetStore := FHeaderStore;
+  end
+  else
+  begin
+    if FTrailerStore = nil then
+    begin
+      FTrailerStore := THttpHeaders.Create;
+      FTrailersDecoded := HeaderStoreAsConcrete(FTrailerStore);
+    end;
+    LTargetStore := FTrailerStore;
   end;
 
   for LIndex := 0 to High(LHeaders) do
   begin
     if LHeaders[LIndex].Name = '' then
       Break;
-    HeaderStoreAsConcrete(FHeaderStore).AddParsed(string(LHeaders[LIndex].Name),
+    HeaderStoreAsConcrete(LTargetStore).AddParsed(string(LHeaders[LIndex].Name),
       string(LHeaders[LIndex].Value));
   end;
 

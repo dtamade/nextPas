@@ -846,11 +846,16 @@ begin
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_REFUSED_STREAM, False));
   if (AFrame.Header.StreamID and 1) = 0 then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_PROTOCOL_ERROR, True));
-  if AFrame.Header.StreamID <= FLastPeerStreamID then
-    Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED, False));
-  LStream := FStreams.FindOrCreate(AFrame.Header.StreamID,
-    FRemoteSettings.InitialWindowSize, FOptions.InitialStreamWindowSize,
-    FConnectionFlow, FDecoder);
+  LStream := FStreams.Find(AFrame.Header.StreamID);
+  if LStream = nil then
+  begin
+    if AFrame.Header.StreamID <= FLastPeerStreamID then
+      Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED, False));
+    LStream := FStreams.FindOrCreate(AFrame.Header.StreamID,
+      FRemoteSettings.InitialWindowSize, FOptions.InitialStreamWindowSize,
+      FConnectionFlow, FDecoder);
+    FLastPeerStreamID := AFrame.Header.StreamID;
+  end;
   LStream.OnHeaders(AFrame.Header.Flags, AFrame.Payload);
   if LStream.ResetReceived then
   begin
@@ -858,7 +863,6 @@ begin
     FStreams.Remove(LStream.StreamID);
     Exit(True);
   end;
-  FLastPeerStreamID := AFrame.Header.StreamID;
   if (AFrame.Header.Flags and H2_FLAG_HEADERS_END_HEADERS) = 0 then
     FPendingContinuationStreamID := AFrame.Header.StreamID
   else

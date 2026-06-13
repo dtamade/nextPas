@@ -1477,7 +1477,7 @@ begin
   CheckStatusLine(HTTP_STATUS_PARTIAL_CONTENT,
     'HTTP/1.1 206 Partial Content'#13#10, True);
   CheckStatusLine(HTTP_STATUS_SEE_OTHER,
-    'HTTP/1.1 203 See Other'#13#10, True);
+    'HTTP/1.1 303 See Other'#13#10, True);
   CheckStatusLine(HTTP_STATUS_TEMPORARY_REDIRECT,
     'HTTP/1.1 307 Temporary Redirect'#13#10, True);
   CheckStatusLine(HTTP_STATUS_PERMANENT_REDIRECT,

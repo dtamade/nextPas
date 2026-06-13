@@ -441,7 +441,8 @@ begin
     end;
   end;
   if not H2ValidateFrame(AFrame, FRemoteSettings.MaxFrameSize, LErrorCode) then
-    raise EHttpError.Create('HTTP/2 frame validation failed: ' +
+    FailConnection(LErrorCode, AnsiString(H2FrameTypeName(
+      AFrame.Header.FrameType)), 'HTTP/2 frame validation failed: ' +
       H2ErrorCodeName(LErrorCode));
   DiscardConsumed(LConsumed);
   Result := True;
@@ -1056,6 +1057,9 @@ procedure TH2ClientConnection.HandleHeaders(const AFrame: TH2Frame;
 var
   LFragment: AnsiString;
 begin
+  if AFrame.Header.StreamID = 0 then
+    FailConnection(H2_ERR_PROTOCOL_ERROR, 'HEADERS',
+      'HTTP/2 HEADERS received on connection stream');
   if AFrame.Header.StreamID <> AStreamID then
     Exit;
   if not ExtractHeadersFragment(AFrame.Header.Flags, AFrame.Payload, LFragment) then
@@ -1077,18 +1081,21 @@ end;
 procedure TH2ClientConnection.HandleContinuation(const AFrame: TH2Frame;
   const AStreamID: UInt32; var AResponse: TH2ResponseState);
 begin
-  if FPendingContinuationStreamID <> AFrame.Header.StreamID then
-    raise EHttpError.Create('HTTP/2 unexpected CONTINUATION');
-  if AFrame.Header.StreamID = AStreamID then
-    AppendResponseHeaderFragment(AResponse, AFrame.Payload);
+  if (FPendingContinuationStreamID = 0) or
+     (FPendingContinuationStreamID <> AFrame.Header.StreamID) or
+     (AFrame.Header.StreamID <> AStreamID) then
+  begin
+    FPendingContinuationStreamID := 0;
+    FailConnection(H2_ERR_PROTOCOL_ERROR, 'CONTINUATION',
+      'HTTP/2 unexpected CONTINUATION');
+  end;
+
+  AppendResponseHeaderFragment(AResponse, AFrame.Payload);
   if (AFrame.Header.Flags and H2_FLAG_CONTINUATION_END_HEADERS) <> 0 then
   begin
     FPendingContinuationStreamID := 0;
-    if AFrame.Header.StreamID = AStreamID then
-    begin
-      AResponse.HeadersComplete := True;
-      DecodeResponseHeaders(AResponse);
-    end;
+    AResponse.HeadersComplete := True;
+    DecodeResponseHeaders(AResponse);
   end;
 end;
 
@@ -1099,6 +1106,9 @@ var
   LData: AnsiString;
   LDataLen: UInt32;
 begin
+  if AFrame.Header.StreamID = 0 then
+    FailConnection(H2_ERR_PROTOCOL_ERROR, 'DATA',
+      'HTTP/2 DATA received on connection stream');
   if AFrame.Header.StreamID <> AStreamID then
     Exit;
   if not ExtractDataPayload(AFrame.Header.Flags, AFrame.Payload, LData) then

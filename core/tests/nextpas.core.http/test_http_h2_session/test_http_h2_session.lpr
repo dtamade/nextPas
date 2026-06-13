@@ -66,6 +66,7 @@ type
     FSeenMethod: THttpMethod;
     FSeenPath: string;
     FSeenBody: string;
+    FSeenHeaders: IHttpHeaders;
     FCallCount: Int32;
     FResponseStatus: THttpStatus;
     FResponseHeaders: array of record
@@ -81,6 +82,7 @@ type
     property SeenMethod: THttpMethod read FSeenMethod;
     property SeenPath: string read FSeenPath;
     property SeenBody: string read FSeenBody;
+    property SeenHeaders: IHttpHeaders read FSeenHeaders;
     property CallCount: Int32 read FCallCount;
   end;
 
@@ -160,10 +162,13 @@ begin
   Result := LEncoder.Encode(AHeaders);
 end;
 
-function ComposeRequestHeaders(const AMethod, APath: AnsiString): AnsiString;
+function ComposeRequestHeadersWithExtras(const AMethod, APath: AnsiString;
+  const AExtraHeaders: array of THPackHeader): AnsiString;
 var
-  LHeaders: array[0..3] of THPackHeader;
+  LHeaders: array of THPackHeader;
+  LI: SizeInt;
 begin
+  SetLength(LHeaders, 4 + Length(AExtraHeaders));
   LHeaders[0].Name := ':method';
   LHeaders[0].Value := AMethod;
   LHeaders[1].Name := ':path';
@@ -172,7 +177,14 @@ begin
   LHeaders[2].Value := 'https';
   LHeaders[3].Name := ':authority';
   LHeaders[3].Value := 'example.com';
+  for LI := 0 to High(AExtraHeaders) do
+    LHeaders[LI + 4] := AExtraHeaders[LI];
   Result := EncodeHeaders(LHeaders);
+end;
+
+function ComposeRequestHeaders(const AMethod, APath: AnsiString): AnsiString;
+begin
+  Result := ComposeRequestHeadersWithExtras(AMethod, APath, []);
 end;
 
 function ComposePrefaceHandshake(const ASettingsPayload: AnsiString = ''): AnsiString;
@@ -425,6 +437,7 @@ begin
   FSeenMethod := hmGet;
   FSeenPath := '';
   FSeenBody := '';
+  FSeenHeaders := nil;
   FCallCount := 0;
   FResponseStatus := HTTP_STATUS_OK;
   FResponseBody := '';
@@ -457,6 +470,10 @@ begin
   FSeenMethod := AReq.Method;
   FSeenPath := AReq.Path;
   FSeenBody := ReadAllBody(AReq.Body);
+  if AReq.Headers <> nil then
+    FSeenHeaders := AReq.Headers.Clone
+  else
+    FSeenHeaders := nil;
   for LI := 0 to High(FResponseHeaders) do
     AW.GetHeaders.SetHeader(FResponseHeaders[LI].Name,
       FResponseHeaders[LI].Value);
@@ -1160,6 +1177,73 @@ begin
   end;
 end;
 
+procedure TestRunTrailingHeadersCompleteRequestWithoutOverwritingHeaders;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LInitialHeaders: array[0..0] of THPackHeader;
+  LTrailers: array[0..1] of THPackHeader;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LRequestValues: TStringArray;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, '');
+    LInitialHeaders[0].Name := 'x-request';
+    LInitialHeaders[0].Value := 'initial';
+    LTrailers[0].Name := 'x-request';
+    LTrailers[0].Value := 'trailer';
+    LTrailers[1].Name := 'x-trailer';
+    LTrailers[1].Value := 'done';
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_END_HEADERS, 1,
+        ComposeRequestHeadersWithExtras('POST', '/trailers',
+          LInitialHeaders)) +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        EncodeHeaders(LTrailers));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(1), Int64(LHandler.CallCount),
+        'trailing HEADERS complete request once');
+      Check(LHandler.SeenHeaders <> nil, 'handler sees request headers');
+      LRequestValues := LHandler.SeenHeaders.GetAll('x-request');
+      CheckEqual(Int64(1), Int64(Length(LRequestValues)),
+        'trailers do not duplicate request header values');
+      CheckEqual('initial', LRequestValues[0],
+        'request header value is preserved');
+      CheckEqual(False, LHandler.SeenHeaders.Has('x-trailer'),
+        'trailers are not exposed as request headers');
+
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      CheckEqual(Int64(H2_FRAME_HEADERS), Int64(LFrames[2].Header.FrameType),
+        'server responds to request completed by trailers');
+      Check((LFrames[2].Header.Flags and H2_FLAG_HEADERS_END_STREAM) <> 0,
+        'header-only response closes stream after trailers');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
 procedure TestRunWindowUpdateResumesBlockedResponseBody;
 var
   LHandler: TCollectingHandler;
@@ -1266,6 +1350,8 @@ begin
       @TestHandleDataConnectionStreamSourceContract);
     Run('Run client PUSH_PROMISE sends GOAWAY',
       @TestRunPushPromiseSendsGoaway);
+    Run('Run trailing HEADERS complete request without overwriting headers',
+      @TestRunTrailingHeadersCompleteRequestWithoutOverwritingHeaders);
     Run('Run WINDOW_UPDATE resumes blocked response body',
       @TestRunWindowUpdateResumesBlockedResponseBody);
     Summary;
