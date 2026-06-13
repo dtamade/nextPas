@@ -132,6 +132,16 @@ function GetTempDir: string;
 
 implementation
 
+function Utf8TextToBytes(const AText: string): TBytes;
+var
+  LLen: SizeInt;
+begin
+  LLen := Length(AText);
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(AText[1], Result[0], LLen);
+end;
+
 function Open(const APath: string; const AMode: TFileMode): IFile;
 begin
   Result := FsOpen(APath, AMode);
@@ -165,23 +175,14 @@ end;
 
 procedure WriteFileText(const APath: string; const AText: string;
   const APerm: TFilePermission);
-var
-  LData: TBytes;
 begin
-  if Length(AText) > 0 then
-  begin
-    SetLength(LData, Length(AText));
-    Move(PAnsiChar(AText)^, LData[0], Length(AText));
-    nextpas.core.fs.util.FsWriteFile(APath, LData, APerm);
-  end
-  else
-    nextpas.core.fs.util.FsWriteFile(APath, nil, APerm);
+  nextpas.core.fs.util.FsWriteFile(APath, Utf8TextToBytes(AText), APerm);
 end;
 
 procedure WriteFileLines(const APath: string; const ALines: TStringArray;
   const APerm: TFilePermission);
 var
-  LData: TBytes;
+  LData, LLineBytes: TBytes;
   LTotal, LPos, LLen, LI: SizeInt;
 begin
   LTotal := 0;
@@ -196,10 +197,11 @@ begin
   LPos := 0;
   for LI := 0 to Length(ALines) - 1 do
   begin
-    LLen := Length(ALines[LI]);
+    LLineBytes := Utf8TextToBytes(ALines[LI]);
+    LLen := Length(LLineBytes);
     if LLen > 0 then
     begin
-      Move(ALines[LI][1], LData[LPos], LLen);
+      Move(LLineBytes[0], LData[LPos], LLen);
       Inc(LPos, LLen);
     end;
     LData[LPos] := 10;
@@ -214,15 +216,8 @@ begin
 end;
 
 procedure AppendFileText(const APath: string; const AText: string);
-var
-  LData: TBytes;
 begin
-  if Length(AText) > 0 then
-  begin
-    SetLength(LData, Length(AText));
-    Move(PAnsiChar(AText)^, LData[0], Length(AText));
-    AppendFile(APath, LData);
-  end;
+  AppendFile(APath, Utf8TextToBytes(AText));
 end;
 
 procedure AppendFileLine(const APath: string; const ALine: string);

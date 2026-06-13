@@ -35,7 +35,10 @@ uses
   nextpas.core.platform.path;
 
 const
+  PATH_ENV_PREFIX = 'PATH=';
+  PATHEXT_ENV_PREFIX = 'PATHEXT=';
 {$IFDEF NEXTPAS_WINDOWS}
+  PATHEXT_ENV_PREFIX = 'PATHEXT=';
   PROCESS_PATH_LIST_SEP = ';';
   PROCESS_PATH_EXT_SEP = ';';
 {$ELSE}
@@ -61,17 +64,17 @@ end;
 function IsPathEnvPair(const AValue: string): Boolean;
 begin
   if platform_env_names_case_sensitive then
-    Result := TextStartsWith(AValue, 'PATH=')
+    Result := TextStartsWith(AValue, PATH_ENV_PREFIX)
   else
-    Result := TextStartsWithI(AValue, 'PATH=');
+    Result := TextStartsWithI(AValue, PATH_ENV_PREFIX);
 end;
 
 function IsPathExtEnvPair(const AValue: string): Boolean;
 begin
   if platform_env_names_case_sensitive then
-    Result := TextStartsWith(AValue, 'PATHEXT=')
+    Result := TextStartsWith(AValue, PATHEXT_ENV_PREFIX)
   else
-    Result := TextStartsWithI(AValue, 'PATHEXT=');
+    Result := TextStartsWithI(AValue, PATHEXT_ENV_PREFIX);
 end;
 
 function HasFileExtension(const AName: string): Boolean;
@@ -109,7 +112,8 @@ begin
   if AEnv = nil then Exit;
   for I := 0 to High(AEnv) do
     if IsPathEnvPair(AEnv[I]) then
-      Result := Copy(AEnv[I], 6, Length(AEnv[I]) - 5);
+      Result := Copy(AEnv[I], Length(PATH_ENV_PREFIX) + 1,
+        Length(AEnv[I]) - Length(PATH_ENV_PREFIX));
 end;
 
 function ExtractPathExtFromEnv(const AEnv: TStringArray): string;
@@ -120,7 +124,8 @@ begin
   if AEnv = nil then Exit;
   for I := 0 to High(AEnv) do
     if IsPathExtEnvPair(AEnv[I]) then
-      Result := Copy(AEnv[I], 9, Length(AEnv[I]) - 8);
+      Result := Copy(AEnv[I], Length(PATHEXT_ENV_PREFIX) + 1,
+        Length(AEnv[I]) - Length(PATHEXT_ENV_PREFIX));
 end;
 
 function SearchCheckPath(const ASearchBase, AExecCandidate: string): string;

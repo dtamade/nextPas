@@ -260,6 +260,8 @@ begin
     if (LR <> 0) or (LRead = 0) then Break;
     LR := platform_fs_write_all(LDstH, @LBuf[0], LRead);
   until LR <> 0;
+  if LR = 0 then
+    LR := platform_file_sync(LDstH);
   LCloseR := platform_file_close(LDstH);
   if (LR = 0) and (LCloseR <> 0) then
     LR := LCloseR;

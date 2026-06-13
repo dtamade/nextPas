@@ -38,6 +38,7 @@ implementation
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.text.utf8,
   nextpas.core.errors,
   nextpas.core.fs.errors,
   nextpas.core.platform.files.base,
@@ -124,25 +125,15 @@ end;
 
 function FsCopyFile(const ASrc, ADst: string): Int64;
 var
-  LSrcFile, LDstFile: IFile;
-  LBuf: array[0..32767] of Byte;
-  LRead: SizeUInt;
   LStat: TFileInfo;
+  LResult: Int32;
 begin
-  LSrcFile := FsOpen(ASrc, [fmRead]);
   LStat := FsStat(ASrc);
-  LDstFile := FsOpenFile(ADst, [fmWrite, fmCreate, fmTruncate], LStat.Permission);
-  Result := 0;
-  repeat
-    LRead := LSrcFile.Read(LBuf[0], SizeOf(LBuf));
-    if LRead = 0 then
-      Break;
-    WriteAllOrRaise(LDstFile, LBuf[0], LRead, 'copy');
-    Inc(Result, Int64(LRead));
-  until False;
-  LDstFile.Sync;
-  LDstFile.Close;
-  LSrcFile.Close;
+  LResult := platform_fs_copy_file(PAnsiChar(ASrc), PAnsiChar(ADst));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'copy', ASrc);
+  FsChmod(ADst, LStat.Permission);
+  Result := LStat.Size;
 end;
 
 function FsTempFile(const ADir, APattern: string): IFile;
@@ -330,10 +321,18 @@ end;
 function FsReadFileText(const APath: string): string;
 var
   Bytes: TBytes;
+  LOffset, LLen: SizeInt;
 begin
   Bytes := FsReadFile(APath);
-  if Length(Bytes) > 0 then
-    SetString(Result, PAnsiChar(@Bytes[0]), Length(Bytes))
+  LOffset := 0;
+  if (Length(Bytes) >= 3) and (Bytes[0] = $EF) and
+    (Bytes[1] = $BB) and (Bytes[2] = $BF) then
+    LOffset := 3;
+  LLen := Length(Bytes) - LOffset;
+  if (LLen > 0) and (not UTF8IsValid(@Bytes[LOffset], SizeUInt(LLen))) then
+    raise EConvertError.Create('read file: invalid UTF-8: ' + APath);
+  if LLen > 0 then
+    SetString(Result, PAnsiChar(@Bytes[LOffset]), LLen)
   else
     Result := '';
 end;

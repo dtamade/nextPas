@@ -392,13 +392,13 @@ begin
   CheckContains('Path resolver — PATHEXT follows env owner case contract',
     LResolver, 'platform_env_names_case_sensitive');
   CheckContains('Path resolver — case-insensitive env name fallback', LResolver,
-    'TextStartsWithI(AValue, ''PATH='')');
+    'TextStartsWithI(AValue, PATH_ENV_PREFIX)');
   CheckContains('Path resolver — case-sensitive env name fallback', LResolver,
-    'TextStartsWith(AValue, ''PATH='')');
+    'TextStartsWith(AValue, PATH_ENV_PREFIX)');
   CheckContains('Path resolver — Windows PATHEXT case-insensitive fallback',
-    LResolver, 'TextStartsWithI(AValue, ''PATHEXT='')');
+    LResolver, 'TextStartsWithI(AValue, PATHEXT_ENV_PREFIX)');
   CheckContains('Path resolver — Windows PATHEXT case-sensitive fallback',
-    LResolver, 'TextStartsWith(AValue, ''PATHEXT='')');
+    LResolver, 'TextStartsWith(AValue, PATHEXT_ENV_PREFIX)');
   CheckContains('Path resolver — Windows path list separator', LResolver,
     'PROCESS_PATH_LIST_SEP = '';''');
   CheckContains('Path resolver — Unix path list separator', LResolver,
