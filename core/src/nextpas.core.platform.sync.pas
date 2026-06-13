@@ -1037,6 +1037,8 @@ end;
 
 function platform_mutex_init(var AMutex: TPlatformMutex; const AKind: Int32): Int32;
 begin
+  if AKind = PLATFORM_MUTEX_RECURSIVE then
+    Exit(PLATFORM_ERR_UNSUPPORTED);
   FillChar(AMutex, SizeOf(AMutex), 0);
   Result := platform_sync_windows_mutex_init(@AMutex.FOpaque[0]);
 end;
