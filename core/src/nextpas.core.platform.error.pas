@@ -4,6 +4,14 @@ unit nextpas.core.platform.error;
 
 interface
 
+{ Portable platform error codes — canonical definitions }
+const
+  PLATFORM_ERR_AGAIN       = 11;    { Resource temporarily unavailable }
+  PLATFORM_ERR_BUSY        = 16;    { Device or resource busy }
+  PLATFORM_ERR_INVALID     = 22;    { Invalid argument }
+  PLATFORM_ERR_UNSUPPORTED = 95;    { Operation not supported }
+  PLATFORM_ERR_TIMEOUT     = 110;   { Operation timed out }
+
 function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
 procedure platform_fatal(const AMsg: PAnsiChar);
 procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
