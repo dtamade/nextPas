@@ -31,6 +31,7 @@ function platform_path_extension_ptr(const APath: PAnsiChar;
 function platform_path_change_ext(const APath, ANewExt: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_path_is_absolute(const APath: PAnsiChar): Boolean;
+function platform_path_is_root(const APath: PAnsiChar): Boolean;
 function platform_path_normalize(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_path_relative(const ABase, ATarget: PAnsiChar;
@@ -626,6 +627,19 @@ begin
     Exit(False);
   LRoot := ClassifyPathRoot(APath, StrLen(APath));
   Result := PathRootIsAbsolute(LRoot);
+end;
+
+function platform_path_is_root(const APath: PAnsiChar): Boolean;
+var
+  LRoot: TPlatformPathRoot;
+  LLen: Int32;
+begin
+  if (APath = nil) or (APath[0] = #0) then
+    Exit(False);
+  LLen := PathNameLenWithoutTrailingSeparators(APath);
+  LRoot := ClassifyPathRoot(APath, LLen);
+  Result := (LRoot.Len > 0) and (LRoot.Len = LLen) and
+    PathRootIsAbsolute(LRoot);
 end;
 
 function platform_path_normalize(const APath: PAnsiChar;

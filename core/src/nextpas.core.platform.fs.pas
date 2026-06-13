@@ -64,6 +64,11 @@ uses
 const
   PLATFORM_FS_SHORT_WRITE_ERROR = -5;
   PLATFORM_FS_SHORT_READ_ERROR = -6;
+{$IFDEF NEXTPAS_WINDOWS}
+  PLATFORM_FS_NOT_DIR_ERROR = 267;
+{$ELSE}
+  PLATFORM_FS_NOT_DIR_ERROR = 20;
+{$ENDIF}
 
 function platform_fs_write_all(const AHandle: TPlatformFileHandle;
   AData: Pointer; ALen: PtrUInt): Int32;
@@ -215,8 +220,14 @@ begin
       begin
         LBuf[I] := #0;
         LR := platform_file_mkdir(@LBuf[0], AMode);
-        if (LR <> 0) and (not platform_fs_is_dir(@LBuf[0])) then
-          Exit(LR);
+        if LR <> 0 then
+        begin
+          if platform_fs_is_dir(@LBuf[0]) then
+            LR := 0
+          else
+            LR := PLATFORM_FS_NOT_DIR_ERROR;
+        end;
+        if LR <> 0 then Exit(LR);
       {$IFDEF NEXTPAS_WINDOWS}
         LBuf[I] := '\';
       {$ELSE}
