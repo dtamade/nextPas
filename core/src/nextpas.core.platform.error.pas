@@ -86,15 +86,14 @@ end;
 {$ENDIF}
 
 procedure WriteStderr(const S: PAnsiChar; ALen: Int32);
+var
+  LWritten: DWORD;
 begin
 {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.ffi.write(2, S, ALen);
 {$ELSE}
-  var LWritten: DWORD;
-  begin
-    if ALen > 0 then
-      WriteFile(GetStdHandle(STD_ERROR_HANDLE), S, ALen, @LWritten, nil);
-  end;
+  if ALen > 0 then
+    WriteFile(GetStdHandle(STD_ERROR_HANDLE), S, ALen, @LWritten, nil);
 {$ENDIF}
 end;
 

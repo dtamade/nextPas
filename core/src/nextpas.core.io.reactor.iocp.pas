@@ -374,6 +374,61 @@ begin
   Result := IocpFail(ACallback, AContext, LUserData, LError);
 end;
 
+function IocpSubmitSocketOp(var AReactor: TIocpReactor; AKind: TIocpOpKind;
+  AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: UInt32;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var
+  LHandle: HANDLE;
+  LOp: PIocpPendingOp;
+  LDone: DWORD;
+  LError: DWORD;
+  LUserData: UInt64;
+  LOk: LongInt;
+  LWsaBuf: WSABUF;
+  LRecvFlags: DWORD;
+begin
+  if (ALen > 0) and (ABuf = nil) then
+    Exit(IocpFail(ACallback, AContext, 0, ERROR_INVALID_PARAMETER));
+  if AReactor.FPort = 0 then
+  begin
+    SetLastError(ERROR_INVALID_HANDLE);
+    Exit(False);
+  end;
+
+  LHandle := IocpHandleFromFd(AFd);
+  if not IocpEnsureAssociatedHandle(AReactor, LHandle, LError) then
+    Exit(IocpFail(ACallback, AContext, 0, LError));
+
+  LOp := IocpAllocOp(AReactor, AKind, LHandle, ACallback, AContext);
+  LWsaBuf.len := ALen;
+  LWsaBuf.buf := ABuf;
+
+  case AKind of
+    opSend:
+      LOk := WSASend(TSocket(AFd), @LWsaBuf, 1, @LDone, AFlags,
+        @LOp^.Overlapped, nil);
+    opRecv:
+      begin
+        LRecvFlags := AFlags;
+        LOk := WSARecv(TSocket(AFd), @LWsaBuf, 1, @LDone, @LRecvFlags,
+          @LOp^.Overlapped, nil);
+      end;
+  else
+    LOk := SOCKET_ERROR;
+  end;
+
+  if (LOk <> SOCKET_ERROR) then
+    Exit(True);
+
+  LError := WSAGetLastError;
+  if LError = WSA_IO_PENDING then
+    Exit(True);
+
+  LUserData := LOp^.UserData;
+  IocpFreeOp(AReactor, LOp);
+  Result := IocpFail(ACallback, AContext, LUserData, LError);
+end;
+
 function IocpDispatchCompletion(var AReactor: TIocpReactor; ABytes: DWORD;
   ASucceeded: Boolean; AOverlapped: LPOVERLAPPED): Boolean;
 var
@@ -470,13 +525,15 @@ end;
 function TIocpReactor.AsyncSend(AFd: PtrInt; ABuf: Pointer; ALen: UInt32;
   AFlags: Int32; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
-  Result := IocpUnsupportedAsync;
+  Result := IocpSubmitSocketOp(Self, opSend, AFd, ABuf, ALen, UInt32(AFlags),
+    ACallback, AContext);
 end;
 
 function TIocpReactor.AsyncRecv(AFd: PtrInt; ABuf: Pointer; ALen: UInt32;
   AFlags: Int32; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
-  Result := IocpUnsupportedAsync;
+  Result := IocpSubmitSocketOp(Self, opRecv, AFd, ABuf, ALen, UInt32(AFlags),
+    ACallback, AContext);
 end;
 
 function TIocpReactor.AsyncClose(AFd: PtrInt;
