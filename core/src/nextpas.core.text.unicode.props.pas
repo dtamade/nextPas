@@ -110,72 +110,8 @@ begin
 end;
 
 function ContainsRange2(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange2): Boolean;
-var
-  LLo: SizeInt;
-  LHi: SizeInt;
-  LMid: SizeInt;
 begin
-  LLo := 0;
-  LHi := High(ARanges);
-  while LLo <= LHi do
-  begin
-    LMid := LLo + ((LHi - LLo) div 2);
-    if ACp < ARanges[LMid].Lo then
-      LHi := LMid - 1
-    else if ACp > ARanges[LMid].Hi then
-      LLo := LMid + 1
-    else
-      Exit(True);
-  end;
-  Result := False;
-end;
-
-function FindRange3Value(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange3; out AValue: Byte): Boolean;
-var
-  LLo: SizeInt;
-  LHi: SizeInt;
-  LMid: SizeInt;
-begin
-  LLo := 0;
-  LHi := High(ARanges);
-  while LLo <= LHi do
-  begin
-    LMid := LLo + ((LHi - LLo) div 2);
-    if ACp < ARanges[LMid].Lo then
-      LHi := LMid - 1
-    else if ACp > ARanges[LMid].Hi then
-      LLo := LMid + 1
-    else
-    begin
-      AValue := ARanges[LMid].Value;
-      Exit(True);
-    end;
-  end;
-  Result := False;
-end;
-
-function FindRange2Delta(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange2; out ADelta: Int32): Boolean;
-var
-  LLo: SizeInt;
-  LHi: SizeInt;
-  LMid: SizeInt;
-begin
-  LLo := 0;
-  LHi := High(ARanges);
-  while LLo <= LHi do
-  begin
-    LMid := LLo + ((LHi - LLo) div 2);
-    if ACp < ARanges[LMid].Lo then
-      LHi := LMid - 1
-    else if ACp > ARanges[LMid].Hi then
-      LLo := LMid + 1
-    else
-    begin
-      ADelta := ARanges[LMid].Delta;
-      Exit(True);
-    end;
-  end;
-  Result := False;
+  Result := FindRange2(ACp, ARanges) >= 0;
 end;
 
 function ApplyDelta(const ACp: TUnicodeCodepoint; const ADelta: Int32): TUnicodeCodepoint; inline;
@@ -186,18 +122,23 @@ end;
 function ApplySimpleMap(const ACp: TUnicodeCodepoint; const ABmpRanges: array of TCodepointRange2;
   const ASmpRanges: array of TCodepointRange2): TUnicodeCodepoint;
 var
-  LDelta: Int32;
+  LIdx: Int32;
 begin
   if ACp > UNICODE_MAX_CODEPOINT then
     Exit(ACp);
 
   if ACp <= $FFFF then
   begin
-    if FindRange2Delta(ACp, ABmpRanges, LDelta) then
-      Exit(ApplyDelta(ACp, LDelta));
+    LIdx := FindRange2(ACp, ABmpRanges);
+    if LIdx >= 0 then
+      Exit(ApplyDelta(ACp, ABmpRanges[LIdx].Delta));
   end
-  else if FindRange2Delta(ACp, ASmpRanges, LDelta) then
-    Exit(ApplyDelta(ACp, LDelta));
+  else
+  begin
+    LIdx := FindRange2(ACp, ASmpRanges);
+    if LIdx >= 0 then
+      Exit(ApplyDelta(ACp, ASmpRanges[LIdx].Delta));
+  end;
 
   Result := ACp;
 end;

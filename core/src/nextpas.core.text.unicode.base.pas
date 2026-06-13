@@ -91,6 +91,56 @@ const
   UNICODE_SURROGATE_FIRST = TUnicodeCodepoint($D800);
   UNICODE_SURROGATE_LAST = TUnicodeCodepoint($DFFF);
 
+function FindRange2(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange2): Int32; inline;
+function FindRange3Value(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange3;
+  out AValue: Byte): Boolean; inline;
+
 implementation
+
+function FindRange2(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange2): Int32;
+var
+  LLo: SizeInt;
+  LHi: SizeInt;
+  LMid: SizeInt;
+begin
+  LLo := 0;
+  LHi := High(ARanges);
+  while LLo <= LHi do
+  begin
+    LMid := LLo + ((LHi - LLo) div 2);
+    if ACp < ARanges[LMid].Lo then
+      LHi := LMid - 1
+    else if ACp > ARanges[LMid].Hi then
+      LLo := LMid + 1
+    else
+      Exit(Int32(LMid));
+  end;
+  Result := -1;
+end;
+
+function FindRange3Value(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange3;
+  out AValue: Byte): Boolean;
+var
+  LLo: SizeInt;
+  LHi: SizeInt;
+  LMid: SizeInt;
+begin
+  LLo := 0;
+  LHi := High(ARanges);
+  while LLo <= LHi do
+  begin
+    LMid := LLo + ((LHi - LLo) div 2);
+    if ACp < ARanges[LMid].Lo then
+      LHi := LMid - 1
+    else if ACp > ARanges[LMid].Hi then
+      LLo := LMid + 1
+    else
+    begin
+      AValue := ARanges[LMid].Value;
+      Exit(True);
+    end;
+  end;
+  Result := False;
+end;
 
 end.

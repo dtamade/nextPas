@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.text.unicode.base,
-  nextpas.core.text.unicode.props;
+  nextpas.core.text.unicode.props,
+  nextpas.core.text.unicode.&case;
 
 type
   TUnicodeCodepoint = nextpas.core.text.unicode.base.TUnicodeCodepoint;
@@ -40,6 +41,12 @@ function IsSeparator(const ACp: TUnicodeCodepoint): Boolean; inline;
 function CodepointToLower(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
 function CodepointToUpper(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
 function CodepointToTitle(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
+function CaseFoldSimple(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
+function CaseFoldFull(const ACp: TUnicodeCodepoint; out ADst: TCaseFoldMap): Byte; inline;
+function UTF8ToUpper(const AValue: string): string; inline;
+function UTF8ToLower(const AValue: string): string; inline;
+function UTF8CaseFold(const AValue: string): string; inline;
+function UTF8CaseFoldSimple(const AValue: string): string; inline;
 
 implementation
 
@@ -115,17 +122,47 @@ end;
 
 function CodepointToLower(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
 begin
-  Result := nextpas.core.text.unicode.props.CodepointToLower(ACp);
+  Result := nextpas.core.text.unicode.&case.CodepointToLower(ACp);
 end;
 
 function CodepointToUpper(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
 begin
-  Result := nextpas.core.text.unicode.props.CodepointToUpper(ACp);
+  Result := nextpas.core.text.unicode.&case.CodepointToUpper(ACp);
 end;
 
 function CodepointToTitle(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
 begin
-  Result := nextpas.core.text.unicode.props.CodepointToTitle(ACp);
+  Result := nextpas.core.text.unicode.&case.CodepointToTitle(ACp);
+end;
+
+function CaseFoldSimple(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
+begin
+  Result := nextpas.core.text.unicode.&case.CaseFoldSimple(ACp);
+end;
+
+function CaseFoldFull(const ACp: TUnicodeCodepoint; out ADst: TCaseFoldMap): Byte;
+begin
+  Result := nextpas.core.text.unicode.&case.CaseFoldFull(ACp, ADst);
+end;
+
+function UTF8ToUpper(const AValue: string): string;
+begin
+  Result := nextpas.core.text.unicode.&case.UTF8ToUpper(AValue);
+end;
+
+function UTF8ToLower(const AValue: string): string;
+begin
+  Result := nextpas.core.text.unicode.&case.UTF8ToLower(AValue);
+end;
+
+function UTF8CaseFold(const AValue: string): string;
+begin
+  Result := nextpas.core.text.unicode.&case.UTF8CaseFold(AValue);
+end;
+
+function UTF8CaseFoldSimple(const AValue: string): string;
+begin
+  Result := nextpas.core.text.unicode.&case.UTF8CaseFoldSimple(AValue);
 end;
 
 end.
