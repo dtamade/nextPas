@@ -40,6 +40,8 @@ function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
 function platform_fs_temp_dir(ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
   APathBuf: PAnsiChar; APathBufLen: Int32; out AFd: Int32): Int32;
+function platform_fs_mktemp_handle(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
+  APathBuf: PAnsiChar; APathBufLen: Int32; out AHandle: TPlatformFileHandle): Int32;
 function platform_fs_mkdir_p(const APath: PAnsiChar; AMode: UInt32): Int32;
 function platform_fs_copy_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
 function platform_fs_write_atomic(const APath: PAnsiChar;
@@ -330,6 +332,22 @@ end;
 
 function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
   APathBuf: PAnsiChar; APathBufLen: Int32; out AFd: Int32): Int32;
+var
+  LHandle: TPlatformFileHandle;
+begin
+  AFd := -1;
+  Result := platform_fs_mktemp_handle(APrefix, ASuffix, APathBuf, APathBufLen, LHandle);
+  if Result <> 0 then
+    Exit;
+{$IFDEF NEXTPAS_WINDOWS}
+  AFd := Int32(PtrUInt(LHandle.Value));
+{$ELSE}
+  AFd := LHandle.Value;
+{$ENDIF}
+end;
+
+function platform_fs_mktemp_handle(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
+  APathBuf: PAnsiChar; APathBufLen: Int32; out AHandle: TPlatformFileHandle): Int32;
 const
   HEX_CHARS: array[0..15] of AnsiChar = '0123456789abcdef';
   MAX_ATTEMPTS = 16;
@@ -337,9 +355,8 @@ var
   LTmpDir: array[0..511] of AnsiChar;
   LTmpLen, LPrefixLen, LSuffixLen, LPos, I, LAttempt: Int32;
   LRandBytes: array[0..7] of Byte;
-  LHandle: TPlatformFileHandle;
 begin
-  AFd := -1;
+  AHandle := PLATFORM_FILE_INVALID_HANDLE;
   if (APathBuf = nil) or (APathBufLen <= 0) then
     Exit(-1);
 
@@ -394,16 +411,9 @@ begin
     end;
     APathBuf[LPos] := #0;
 
-    Result := platform_file_open(APathBuf, fomReadWrite, fcmCreateNew, LHandle);
+    Result := platform_file_open(APathBuf, fomReadWrite, fcmCreateNew, AHandle);
     if Result = 0 then
-    begin
-    {$IFDEF NEXTPAS_WINDOWS}
-      AFd := Int32(PtrUInt(LHandle.Value));
-    {$ELSE}
-      AFd := LHandle.Value;
-    {$ENDIF}
       Exit(0);
-    end;
   end;
   Result := -1;
 end;
