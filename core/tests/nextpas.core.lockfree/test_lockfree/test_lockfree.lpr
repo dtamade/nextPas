@@ -10,6 +10,7 @@ uses
   nextpas.core.atomic,
   nextpas.core.lockfree,
   nextpas.core.lockfree.wait,
+  nextpas.core.lockfree.ebr,
   nextpas.core.platform.thread;
 
 type
@@ -2012,6 +2013,73 @@ begin
   LD.Free;
 end;
 
+{ EBR reclamation tests }
+
+var
+  GEbrReclaimCount: Int32;
+
+procedure EbrTestReclaimProc(AData: Pointer; AUserData: Pointer);
+begin
+  AtomicFetchAdd32(GEbrReclaimCount, 1, moSeqCst);
+end;
+
+procedure TestEbrRetireAndCollect;
+var
+  LDomain: TEbrDomain;
+begin
+  LDomain := TEbrDomain.Create;
+  try
+    GEbrReclaimCount := 0;
+    LDomain.Retire(Pointer(1), @EbrTestReclaimProc);
+    LDomain.Retire(Pointer(2), @EbrTestReclaimProc);
+    CheckEqual(Int64(2), Int64(LDomain.RetiredCount), 'retired count should be 2');
+    LDomain.Collect;
+    CheckEqual(Int64(2), Int64(GEbrReclaimCount), 'both retirements should be reclaimed');
+    CheckEqual(Int64(0), Int64(LDomain.RetiredCount), 'retired count should be 0 after collect');
+  finally
+    LDomain.Free;
+  end;
+end;
+
+procedure TestEbrDefersWhileGuardActive;
+var
+  LDomain: TEbrDomain;
+  LGuard: TEbrGuard;
+begin
+  LDomain := TEbrDomain.Create;
+  try
+    GEbrReclaimCount := 0;
+    LGuard := TEbrGuard.Acquire(LDomain);
+    LDomain.Retire(Pointer(1), @EbrTestReclaimProc);
+    LDomain.Collect;
+    CheckEqual(Int64(0), Int64(GEbrReclaimCount), 'should NOT reclaim while guard active');
+    CheckEqual(Int64(1), Int64(LDomain.RetiredCount), 'retired count stays 1');
+    LGuard.Release;
+    LDomain.Collect;
+    CheckEqual(Int64(1), Int64(GEbrReclaimCount), 'should reclaim after guard released');
+  finally
+    LDomain.Free;
+  end;
+end;
+
+procedure TestEbrGuardLeaveIdempotent;
+var
+  LDomain: TEbrDomain;
+  LGuard: TEbrGuard;
+begin
+  LDomain := TEbrDomain.Create;
+  try
+    LGuard := TEbrGuard.Acquire(LDomain);
+    CheckEqual(Int64(1), Int64(LDomain.ActiveCount), 'should be active after acquire');
+    LGuard.Release;
+    CheckEqual(Int64(0), Int64(LDomain.ActiveCount), 'should be inactive after release');
+    LGuard.Release;
+    CheckEqual(Int64(0), Int64(LDomain.ActiveCount), 'double release should be idempotent');
+  finally
+    LDomain.Free;
+  end;
+end;
+
 { Multi-thread stress tests }
 
 const
@@ -3547,6 +3615,9 @@ begin
   T.Run('MPSC timeout wakes on publish', @TestMpscDequeueTimeoutWakesOnPublish);
   T.Run('MPSC dequeue timeout', @TestMpscDequeueTimeout);
   T.Run('Deque capacity', @TestDequeCapacity);
+  T.Run('EBR retire and collect', @TestEbrRetireAndCollect);
+  T.Run('EBR defers while guard active', @TestEbrDefersWhileGuardActive);
+  T.Run('EBR guard leave idempotent', @TestEbrGuardLeaveIdempotent);
   T.Run('Stack 4P+4C stress', @TestStackStress);
   T.Run('Deque owner+thief stress', @TestDequeOwnerThief);
   T.Run('Managed type reject', @TestManagedTypeReject);
