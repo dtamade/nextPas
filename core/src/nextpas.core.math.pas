@@ -106,6 +106,31 @@ function Power(const ABase, AExponent: Single): Single; overload; inline;
 function Sqrt(const AX: Double): Double; overload; inline;
 function Sqrt(const AX: Single): Single; overload; inline;
 
+function Sinh(const AX: Double): Double; overload; inline;
+function Sinh(const AX: Single): Single; overload; inline;
+function Cosh(const AX: Double): Double; overload; inline;
+function Cosh(const AX: Single): Single; overload; inline;
+function Tanh(const AX: Double): Double; overload; inline;
+function Tanh(const AX: Single): Single; overload; inline;
+function ArcSinh(const AX: Double): Double; overload; inline;
+function ArcSinh(const AX: Single): Single; overload; inline;
+function ArcCosh(const AX: Double): Double; overload; inline;
+function ArcCosh(const AX: Single): Single; overload; inline;
+function ArcTanh(const AX: Double): Double; overload; inline;
+function ArcTanh(const AX: Single): Single; overload; inline;
+
+function Sec(const AX: Double): Double; overload; inline;
+function Sec(const AX: Single): Single; overload; inline;
+function Csc(const AX: Double): Double; overload; inline;
+function Csc(const AX: Single): Single; overload; inline;
+
+function LogN(const ABase, AX: Double): Double; overload; inline;
+function LogN(const ABase, AX: Single): Single; overload; inline;
+function IntPower(const ABase: Double; AExponent: Int64): Double; overload; inline;
+function IntPower(const ABase: Single; AExponent: Int64): Single; overload; inline;
+function Ldexp(const AX: Double; AExp: Integer): Double; overload; inline;
+function Ldexp(const AX: Single; AExp: Integer): Single; overload; inline;
+
 implementation
 
 function IsAddOverflow(AA, AB: SizeUInt): Boolean;
@@ -531,6 +556,116 @@ end;
 function Sqrt(const AX: Single): Single;
 begin
   Result := nextpas.core.math.trig.Sqrt(AX);
+end;
+
+function Sinh(const AX: Double): Double;
+begin
+  Result := nextpas.core.math.trig.Sinh(AX);
+end;
+
+function Sinh(const AX: Single): Single;
+begin
+  Result := nextpas.core.math.trig.Sinh(AX);
+end;
+
+function Cosh(const AX: Double): Double;
+begin
+  Result := nextpas.core.math.trig.Cosh(AX);
+end;
+
+function Cosh(const AX: Single): Single;
+begin
+  Result := nextpas.core.math.trig.Cosh(AX);
+end;
+
+function Tanh(const AX: Double): Double;
+begin
+  Result := nextpas.core.math.trig.Tanh(AX);
+end;
+
+function Tanh(const AX: Single): Single;
+begin
+  Result := nextpas.core.math.trig.Tanh(AX);
+end;
+
+function ArcSinh(const AX: Double): Double;
+begin
+  Result := nextpas.core.math.trig.ArcSinh(AX);
+end;
+
+function ArcSinh(const AX: Single): Single;
+begin
+  Result := nextpas.core.math.trig.ArcSinh(AX);
+end;
+
+function ArcCosh(const AX: Double): Double;
+begin
+  Result := nextpas.core.math.trig.ArcCosh(AX);
+end;
+
+function ArcCosh(const AX: Single): Single;
+begin
+  Result := nextpas.core.math.trig.ArcCosh(AX);
+end;
+
+function ArcTanh(const AX: Double): Double;
+begin
+  Result := nextpas.core.math.trig.ArcTanh(AX);
+end;
+
+function ArcTanh(const AX: Single): Single;
+begin
+  Result := nextpas.core.math.trig.ArcTanh(AX);
+end;
+
+function Sec(const AX: Double): Double;
+begin
+  Result := nextpas.core.math.trig.Sec(AX);
+end;
+
+function Sec(const AX: Single): Single;
+begin
+  Result := nextpas.core.math.trig.Sec(AX);
+end;
+
+function Csc(const AX: Double): Double;
+begin
+  Result := nextpas.core.math.trig.Csc(AX);
+end;
+
+function Csc(const AX: Single): Single;
+begin
+  Result := nextpas.core.math.trig.Csc(AX);
+end;
+
+function LogN(const ABase, AX: Double): Double;
+begin
+  Result := nextpas.core.math.trig.LogN(ABase, AX);
+end;
+
+function LogN(const ABase, AX: Single): Single;
+begin
+  Result := nextpas.core.math.trig.LogN(ABase, AX);
+end;
+
+function IntPower(const ABase: Double; AExponent: Int64): Double;
+begin
+  Result := nextpas.core.math.trig.IntPower(ABase, AExponent);
+end;
+
+function IntPower(const ABase: Single; AExponent: Int64): Single;
+begin
+  Result := nextpas.core.math.trig.IntPower(ABase, AExponent);
+end;
+
+function Ldexp(const AX: Double; AExp: Integer): Double;
+begin
+  Result := nextpas.core.math.trig.Ldexp(AX, AExp);
+end;
+
+function Ldexp(const AX: Single; AExp: Integer): Single;
+begin
+  Result := nextpas.core.math.trig.Ldexp(AX, AExp);
 end;
 
 end.

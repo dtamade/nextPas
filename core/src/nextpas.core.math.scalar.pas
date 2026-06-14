@@ -619,4 +619,208 @@ begin
   Result := AX - AY * System.Int(AX / AY);
 end;
 
+function RoundTo(const AValue: Double; const ADecimals: Integer): Double;
+var
+  LFactor: Double;
+  i: Integer;
+begin
+  if DoubleIsNaN(AValue) then
+    Exit(DoubleQuietNaN);
+  LFactor := 1.0;
+  if ADecimals >= 0 then
+  begin
+    for i := 1 to ADecimals do
+      LFactor := LFactor * 10.0;
+    Result := System.Round(AValue * LFactor) / LFactor;
+  end
+  else
+  begin
+    for i := 1 to -ADecimals do
+      LFactor := LFactor * 10.0;
+    Result := System.Round(AValue / LFactor) * LFactor;
+  end;
+end;
+
+function RoundTo(const AValue: Single; const ADecimals: Integer): Single;
+begin
+  Result := Single(RoundTo(Double(AValue), ADecimals));
+end;
+
+function Sum(const AData: array of Double): Double;
+var
+  i: Integer;
+begin
+  Result := 0.0;
+  for i := 0 to Length(AData) - 1 do
+    Result := Result + AData[i];
+end;
+
+function Sum(const AData: array of Single): Single;
+var
+  i: Integer;
+begin
+  Result := 0.0;
+  for i := 0 to Length(AData) - 1 do
+    Result := Result + AData[i];
+end;
+
+function SumInt(const AData: array of Integer): Int64;
+var
+  i: Integer;
+begin
+  Result := 0;
+  for i := 0 to Length(AData) - 1 do
+    Result := Result + AData[i];
+end;
+
+procedure SumsAndSquares(const AData: array of Double; out ASum, ASumOfSquares: Double);
+var
+  i: Integer;
+  LVal: Double;
+begin
+  ASum := 0.0;
+  ASumOfSquares := 0.0;
+  for i := 0 to Length(AData) - 1 do
+  begin
+    LVal := AData[i];
+    ASum := ASum + LVal;
+    ASumOfSquares := ASumOfSquares + LVal * LVal;
+  end;
+end;
+
+procedure SumsAndSquares(const AData: array of Single; out ASum, ASumOfSquares: Single);
+var
+  i: Integer;
+  LVal: Single;
+begin
+  ASum := 0.0;
+  ASumOfSquares := 0.0;
+  for i := 0 to Length(AData) - 1 do
+  begin
+    LVal := AData[i];
+    ASum := ASum + LVal;
+    ASumOfSquares := ASumOfSquares + LVal * LVal;
+  end;
+end;
+
+function Mean(const AData: array of Double): Double;
+var
+  LCount: Integer;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(DoubleQuietNaN);
+  Result := Sum(AData) / LCount;
+end;
+
+function Mean(const AData: array of Single): Single;
+var
+  LCount: Integer;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(SingleQuietNaN);
+  Result := Sum(AData) / LCount;
+end;
+
+function Variance(const AData: array of Double): Double;
+var
+  i, LCount: Integer;
+  LMean, LSumSqDiff: Double;
+begin
+  LCount := Length(AData);
+  if LCount < 2 then
+    Exit(DoubleQuietNaN);
+  LMean := Mean(AData);
+  LSumSqDiff := 0.0;
+  for i := 0 to LCount - 1 do
+    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
+  Result := LSumSqDiff / (LCount - 1);
+end;
+
+function Variance(const AData: array of Single): Single;
+var
+  i, LCount: Integer;
+  LMean, LSumSqDiff: Single;
+begin
+  LCount := Length(AData);
+  if LCount < 2 then
+    Exit(SingleQuietNaN);
+  LMean := Mean(AData);
+  LSumSqDiff := 0.0;
+  for i := 0 to LCount - 1 do
+    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
+  Result := LSumSqDiff / (LCount - 1);
+end;
+
+function PopnVariance(const AData: array of Double): Double;
+var
+  i, LCount: Integer;
+  LMean, LSumSqDiff: Double;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(DoubleQuietNaN);
+  LMean := Mean(AData);
+  LSumSqDiff := 0.0;
+  for i := 0 to LCount - 1 do
+    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
+  Result := LSumSqDiff / LCount;
+end;
+
+function PopnVariance(const AData: array of Single): Single;
+var
+  i, LCount: Integer;
+  LMean, LSumSqDiff: Single;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(SingleQuietNaN);
+  LMean := Mean(AData);
+  LSumSqDiff := 0.0;
+  for i := 0 to LCount - 1 do
+    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
+  Result := LSumSqDiff / LCount;
+end;
+
+function StdDev(const AData: array of Double): Double;
+begin
+  Result := System.Sqrt(Variance(AData));
+end;
+
+function StdDev(const AData: array of Single): Single;
+begin
+  Result := Single(System.Sqrt(Double(Variance(AData))));
+end;
+
+function PopnStdDev(const AData: array of Double): Double;
+begin
+  Result := System.Sqrt(PopnVariance(AData));
+end;
+
+function PopnStdDev(const AData: array of Single): Single;
+begin
+  Result := Single(System.Sqrt(Double(PopnVariance(AData))));
+end;
+
+function TotalVariance(const AData: array of Double): Double;
+var
+  LCount: Integer;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(DoubleQuietNaN);
+  Result := PopnVariance(AData) * LCount;
+end;
+
+function TotalVariance(const AData: array of Single): Single;
+var
+  LCount: Integer;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(SingleQuietNaN);
+  Result := PopnVariance(AData) * LCount;
+end;
+
 end.

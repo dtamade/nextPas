@@ -38,11 +38,33 @@ function Power(const ABase, AExponent: Double): Double; overload; inline;
 function Power(const ABase, AExponent: Single): Single; overload; inline;
 function Sqrt(const AX: Double): Double; overload; inline;
 function Sqrt(const AX: Single): Single; overload; inline;
-
 function DegToRad(const ADeg: Double): Double; overload; inline;
 function DegToRad(const ADeg: Single): Single; overload; inline;
 function RadToDeg(const ARad: Double): Double; overload; inline;
 function RadToDeg(const ARad: Single): Single; overload; inline;
+
+function Sinh(const AX: Double): Double; overload; inline;
+function Sinh(const AX: Single): Single; overload; inline;
+function Cosh(const AX: Double): Double; overload; inline;
+function Cosh(const AX: Single): Single; overload; inline;
+function Tanh(const AX: Double): Double; overload; inline;
+function Tanh(const AX: Single): Single; overload; inline;
+function ArcSinh(const AX: Double): Double; overload; inline;
+function ArcSinh(const AX: Single): Single; overload; inline;
+function ArcCosh(const AX: Double): Double; overload; inline;
+function ArcCosh(const AX: Single): Single; overload; inline;
+function ArcTanh(const AX: Double): Double; overload; inline;
+function ArcTanh(const AX: Single): Single; overload; inline;
+function Sec(const AX: Double): Double; overload; inline;
+function Sec(const AX: Single): Single; overload; inline;
+function Csc(const AX: Double): Double; overload; inline;
+function Csc(const AX: Single): Single; overload; inline;
+function LogN(const ABase, AX: Double): Double; overload; inline;
+function LogN(const ABase, AX: Single): Single; overload; inline;
+function IntPower(const ABase: Double; AExponent: Int64): Double; overload; inline;
+function IntPower(const ABase: Single; AExponent: Int64): Single; overload; inline;
+function Ldexp(const AX: Double; AExp: Integer): Double; overload; inline;
+function Ldexp(const AX: Single; AExp: Integer): Single; overload; inline;
 
 implementation
 
@@ -256,6 +278,212 @@ end;
 function Sqrt(const AX: Single): Single;
 begin
   Result := Single(Sqrt(Double(AX)));
+end;
+
+// === Hyperbolic functions ===
+
+function Sinh(const AX: Double): Double;
+begin
+  if DoubleIsNaN(AX) then
+    Exit(DoubleQuietNaN);
+  if DoubleIsInfinite(AX) then
+    Exit(AX);
+  Result := (System.Exp(AX) - System.Exp(-AX)) / 2.0;
+end;
+
+function Sinh(const AX: Single): Single;
+begin
+  Result := Single(Sinh(Double(AX)));
+end;
+
+function Cosh(const AX: Double): Double;
+begin
+  if DoubleIsNaN(AX) then
+    Exit(DoubleQuietNaN);
+  if DoubleIsInfinite(AX) then
+    Exit(Abs(AX));
+  Result := (System.Exp(AX) + System.Exp(-AX)) / 2.0;
+end;
+
+function Cosh(const AX: Single): Single;
+begin
+  Result := Single(Cosh(Double(AX)));
+end;
+
+function Tanh(const AX: Double): Double;
+var
+  LExp2X: Double;
+begin
+  if DoubleIsNaN(AX) then
+    Exit(DoubleQuietNaN);
+  if DoubleIsInfinite(AX) then
+  begin
+    if AX > 0.0 then Exit(1.0)
+    else Exit(-1.0);
+  end;
+  LExp2X := System.Exp(2.0 * AX);
+  Result := (LExp2X - 1.0) / (LExp2X + 1.0);
+end;
+
+function Tanh(const AX: Single): Single;
+begin
+  Result := Single(Tanh(Double(AX)));
+end;
+
+// === Inverse hyperbolic functions ===
+
+function ArcSinh(const AX: Double): Double;
+begin
+  if DoubleIsNaN(AX) then
+    Exit(DoubleQuietNaN);
+  if DoubleIsInfinite(AX) then
+    Exit(AX);
+  Result := System.Ln(AX + System.Sqrt(AX * AX + 1.0));
+end;
+
+function ArcSinh(const AX: Single): Single;
+begin
+  Result := Single(ArcSinh(Double(AX)));
+end;
+
+function ArcCosh(const AX: Double): Double;
+begin
+  if DoubleIsNaN(AX) then
+    Exit(DoubleQuietNaN);
+  if AX < 1.0 then
+    Exit(DoubleQuietNaN);
+  if AX = 1.0 then
+    Exit(0.0);
+  Result := System.Ln(AX + System.Sqrt(AX * AX - 1.0));
+end;
+
+function ArcCosh(const AX: Single): Single;
+begin
+  Result := Single(ArcCosh(Double(AX)));
+end;
+
+function ArcTanh(const AX: Double): Double;
+begin
+  if DoubleIsNaN(AX) then
+    Exit(DoubleQuietNaN);
+  if (AX <= -1.0) or (AX >= 1.0) then
+    Exit(DoubleQuietNaN);
+  Result := System.Ln((1.0 + AX) / (1.0 - AX)) / 2.0;
+end;
+
+function ArcTanh(const AX: Single): Single;
+begin
+  Result := Single(ArcTanh(Double(AX)));
+end;
+
+// === Secant / Cosecant ===
+
+function Sec(const AX: Double): Double;
+begin
+  if DoubleIsNaN(AX) then
+    Exit(DoubleQuietNaN);
+  Result := 1.0 / Cos(AX);
+end;
+
+function Sec(const AX: Single): Single;
+begin
+  Result := Single(Sec(Double(AX)));
+end;
+
+function Csc(const AX: Double): Double;
+begin
+  if DoubleIsNaN(AX) then
+    Exit(DoubleQuietNaN);
+  Result := 1.0 / Sin(AX);
+end;
+
+function Csc(const AX: Single): Single;
+begin
+  Result := Single(Csc(Double(AX)));
+end;
+
+// === LogN / IntPower / Ldexp ===
+
+function LogN(const ABase, AX: Double): Double;
+begin
+  if DoubleIsNaN(ABase) or DoubleIsNaN(AX) then
+    Exit(DoubleQuietNaN);
+  if (ABase <= 0.0) or (ABase = 1.0) or (AX <= 0.0) then
+    Exit(DoubleQuietNaN);
+  Result := System.Ln(AX) / System.Ln(ABase);
+end;
+
+function LogN(const ABase, AX: Single): Single;
+begin
+  Result := Single(LogN(Double(ABase), Double(AX)));
+end;
+
+function IntPower(const ABase: Double; AExponent: Int64): Double;
+var
+  LBase: Double;
+  LExp: Int64;
+begin
+  if AExponent = 0 then
+    Exit(1.0);
+  if ABase = 0.0 then
+  begin
+    if AExponent > 0 then
+      Exit(0.0);
+    Exit(1.0 / 0.0);
+  end;
+  LBase := ABase;
+  LExp := AExponent;
+  if LExp < 0 then
+  begin
+    LBase := 1.0 / LBase;
+    LExp := -LExp;
+  end;
+  Result := 1.0;
+  while LExp > 0 do
+  begin
+    if (LExp and 1) <> 0 then
+      Result := Result * LBase;
+    LBase := LBase * LBase;
+    LExp := LExp shr 1;
+  end;
+end;
+
+function IntPower(const ABase: Single; AExponent: Int64): Single;
+begin
+  Result := Single(IntPower(Double(ABase), AExponent));
+end;
+
+function Ldexp(const AX: Double; AExp: Integer): Double;
+var
+  LPow: Double;
+  LE: Integer;
+begin
+  if AExp = 0 then
+    Exit(AX);
+  LPow := 1.0;
+  LE := AExp;
+  if LE < 0 then
+  begin
+    while LE < 0 do
+    begin
+      LPow := LPow / 2.0;
+      Inc(LE);
+    end;
+  end
+  else
+  begin
+    while LE > 0 do
+    begin
+      LPow := LPow * 2.0;
+      Dec(LE);
+    end;
+  end;
+  Result := AX * LPow;
+end;
+
+function Ldexp(const AX: Single; AExp: Integer): Single;
+begin
+  Result := Single(Ldexp(Double(AX), AExp));
 end;
 
 function DegToRad(const ADeg: Single): Single;
