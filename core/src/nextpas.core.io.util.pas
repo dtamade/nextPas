@@ -13,6 +13,7 @@ function IoCopy(const ADst: IWriter; const ASrc: IReader): Int64;
 function IoCopyN(const ADst: IWriter; const ASrc: IReader; const AN: Int64): Int64;
 function IoReadAll(const ASrc: IReader): TBytes;
 procedure IoReadFull(const ASrc: IReader; var ABuf; const ACount: SizeUInt);
+procedure IoWriteAll(const ADst: IWriter; const ABuf; const ACount: SizeUInt);
 function IoLimitReader(const AInner: IReader; const ALimit: Int64): IReader;
 function IoTeeReader(const AInner: IReader; const AWriter: IWriter): IReader;
 function IoMultiReader(const AReaders: array of IReader): IReader;
@@ -49,6 +50,11 @@ begin
       raise EIOError.Create(AContext + ': write returned 0');
     Inc(LTotal, LWritten);
   end;
+end;
+
+procedure IoWriteAll(const ADst: IWriter; const ABuf; const ACount: SizeUInt);
+begin
+  WriteAll(ADst, ABuf, ACount, 'IoWriteAll');
 end;
 
 { IoCopy }

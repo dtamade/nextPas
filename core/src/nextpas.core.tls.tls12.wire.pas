@@ -4,6 +4,8 @@ unit nextpas.core.tls.tls12.wire;
 
 interface
 
+uses
+  nextpas.core.base;
 
 const
   TLS12_VERSION_MAJOR = 3;

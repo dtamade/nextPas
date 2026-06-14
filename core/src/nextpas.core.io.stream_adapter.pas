@@ -26,6 +26,7 @@ type
     FOwnsStream: Boolean;
   public
     constructor Create(AStream: TStream; AOwnsStream: Boolean = False);
+    destructor Destroy; override;
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     function Seek(const AOffset: Int64; const AOrigin: TCoreSeekOrigin): Int64;
@@ -110,6 +111,12 @@ begin
   inherited Create;
   FStream := AStream;
   FOwnsStream := AOwnsStream;
+end;
+
+destructor TStreamWrapper.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TStreamWrapper.Read(var ABuf; const ACount: SizeUInt): SizeUInt;

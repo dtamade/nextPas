@@ -136,6 +136,7 @@ function CreateCRLManager: ICRLManager;
 implementation
 
 uses
+  nextpas.core.fs.base,
   nextpas.core.fs.intf,
   nextpas.core.fs.stream,
   nextpas.core.io,

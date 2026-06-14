@@ -127,6 +127,7 @@ function CRLRevokeReasonToString(AReason: TCRLRevokeReason): string;
 implementation
 
 uses
+  nextpas.core.fs.base,
   nextpas.core.fs.stream,
   nextpas.core.io,
   nextpas.core.text.strings,
