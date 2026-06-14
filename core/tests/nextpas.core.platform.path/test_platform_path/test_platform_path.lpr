@@ -207,6 +207,24 @@ begin
   Check(BufEq(@Buf[0], '/opt/fpc/bin'), 'join3 absolute');
 end;
 
+procedure TestIsRoot;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Check(platform_path_is_root('C:\'), 'C:\ is root');
+  Check(platform_path_is_root('C:/'), 'C:/ is root');
+  Check(platform_path_is_root('\\server\share'), 'UNC share is root');
+  Check(platform_path_is_root('\\?\C:\'), 'extended drive root is root');
+  Check(not platform_path_is_root('C:\tmp'), 'C:\tmp is not root');
+  Check(not platform_path_is_root('\\server\share\dir'), 'UNC child is not root');
+{$ELSE}
+  Check(platform_path_is_root('/'), '/ is root');
+  Check(platform_path_is_root('///'), '/// is root');
+  Check(not platform_path_is_root('/tmp'), '/tmp is not root');
+  Check(not platform_path_is_root('.'), '. is not root');
+{$ENDIF}
+  Check(not platform_path_is_root(''), 'empty is not root');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.path');
   T.Run('join basic', @TestJoinBasic);
@@ -228,5 +246,6 @@ begin
   T.Run('resolve relative', @TestResolveRelative);
   T.Run('resolve non-existent', @TestResolveNonExistent);
   T.Run('join3', @TestJoin3);
+  T.Run('is_root', @TestIsRoot);
   T.Summary;
 end.

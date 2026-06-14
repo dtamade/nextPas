@@ -275,6 +275,56 @@ begin
     LMethod, 'EnsureAttached;', 'platform_process_try_wait');
 end;
 
+procedure TestChildPlatformErrorSourceContract;
+var
+  LSource, LMethod: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.process.child.pas');
+  CheckContains('Process platform error helper — private declaration exists',
+    LSource, 'procedure RaiseProcessPlatformError(const AOp: string; ACode: Int32);');
+  CheckContains('Process platform error helper — implementation exists',
+    LSource, 'procedure TChild.RaiseProcessPlatformError(const AOp: string; ACode: Int32);');
+  CheckContains('Process platform error helper — uses platform error message',
+    LSource, 'platform_error_message(ACode, @LBuf[0], SizeOf(LBuf))');
+  CheckContains('Process platform error helper — raises EProcessError',
+    LSource, 'raise EProcessError.Create(LMsg, ACode);');
+
+  LMethod := ExtractMethodBody(LSource, 'function TChild.Wait: TProcessOutput;',
+    'function TChild.TryWait');
+  CheckContains('Wait — platform wait result stored', LMethod,
+    'LErr := platform_process_wait(FProc, LResult);');
+  CheckContains('Wait — platform wait error propagated', LMethod,
+    'RaiseProcessPlatformError(''platform_process_wait'', LErr);');
+  CheckContains('Wait timeout — platform try_wait result stored', LMethod,
+    'LErr := platform_process_try_wait(FProc, LResult);');
+  CheckContains('Wait timeout — try_wait error propagated', LMethod,
+    'RaiseProcessPlatformError(''platform_process_try_wait'', LErr);');
+  CheckContains('Wait timeout — platform kill result stored', LMethod,
+    'LErr := platform_process_kill(FProc);');
+  CheckContains('Wait timeout — kill error propagated', LMethod,
+    'RaiseProcessPlatformError(''platform_process_kill'', LErr);');
+
+  LMethod := ExtractMethodBody(LSource,
+    'function TChild.TryWait(out AOutput: TProcessOutput): Boolean;',
+    'procedure TChild.Detach;');
+  CheckContains('TryWait — platform try_wait result stored', LMethod,
+    'LErr := platform_process_try_wait(FProc, LResult);');
+  CheckContains('TryWait — platform error propagated', LMethod,
+    'RaiseProcessPlatformError(''platform_process_try_wait'', LErr);');
+
+  LMethod := ExtractMethodBody(LSource, 'procedure TChild.Kill;',
+    'function TChild.Pid');
+  CheckContains('Kill — platform kill result stored', LMethod,
+    'LErr := platform_process_kill(FProc);');
+  CheckContains('Kill — platform error propagated', LMethod,
+    'RaiseProcessPlatformError(''platform_process_kill'', LErr);');
+
+  LMethod := ExtractMethodBody(LSource, 'destructor TChild.Destroy;',
+    'function TChild.Wait: TProcessOutput;');
+  CheckAbsent('Destroy — does not call public Kill', LMethod, 'Kill;');
+  CheckAbsent('Destroy — does not call public Wait', LMethod, 'Wait;');
+end;
+
 procedure TestWaitTimeoutSleepOwnerSourceContract;
 var
   LSource, LMethod: string;
@@ -291,6 +341,33 @@ begin
     LMethod, 'nanosleep');
   CheckAbsent('Wait timeout sleep — timeout loop avoids raw TTimeSpec',
     LMethod, 'TTimeSpec');
+end;
+
+procedure TestWaitWithOutputDrainSourceContract;
+var
+  LSource, LMethod: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.process.child.pas');
+  CheckContains('WaitWithOutput drain — keeps process.pipe seam', LSource,
+    'nextpas.core.process.pipe');
+  CheckAbsent('WaitWithOutput drain — no direct POSIX base import', LSource,
+    'nextpas.core.platform.posix.base');
+  CheckAbsent('WaitWithOutput drain — no direct POSIX ffi import', LSource,
+    'nextpas.core.platform.posix.ffi');
+  CheckAbsent('WaitWithOutput drain — no concrete stdin writer cast', LSource,
+    '(FStdinWriter as TPipeWriter).Close');
+
+  LMethod := ExtractMethodBody(LSource,
+    'function TChild.WaitWithOutput: TProcessOutput;',
+    'function TChild.FinishWaitResult');
+  CheckContains('WaitWithOutput drain — uses DrainPipePair seam', LMethod,
+    'DrainPipePair(');
+  CheckAbsent('WaitWithOutput drain — no raw poll loop', LMethod,
+    'poll(@LFds[0]');
+  CheckAbsent('WaitWithOutput drain — no raw stdout read', LMethod,
+    'read(LStdoutFd');
+  CheckAbsent('WaitWithOutput drain — no raw stderr read', LMethod,
+    'read(LStderrFd');
 end;
 
 procedure TestPathResolverSourceContract;
@@ -315,13 +392,13 @@ begin
   CheckContains('Path resolver — PATHEXT follows env owner case contract',
     LResolver, 'platform_env_names_case_sensitive');
   CheckContains('Path resolver — case-insensitive env name fallback', LResolver,
-    'TextStartsWithI(AValue, ''PATH='')');
+    'TextStartsWithI(AValue, PATH_ENV_PREFIX)');
   CheckContains('Path resolver — case-sensitive env name fallback', LResolver,
-    'TextStartsWith(AValue, ''PATH='')');
+    'TextStartsWith(AValue, PATH_ENV_PREFIX)');
   CheckContains('Path resolver — Windows PATHEXT case-insensitive fallback',
-    LResolver, 'TextStartsWithI(AValue, ''PATHEXT='')');
+    LResolver, 'TextStartsWithI(AValue, PATHEXT_ENV_PREFIX)');
   CheckContains('Path resolver — Windows PATHEXT case-sensitive fallback',
-    LResolver, 'TextStartsWith(AValue, ''PATHEXT='')');
+    LResolver, 'TextStartsWith(AValue, PATHEXT_ENV_PREFIX)');
   CheckContains('Path resolver — Windows path list separator', LResolver,
     'PROCESS_PATH_LIST_SEP = '';''');
   CheckContains('Path resolver — Unix path list separator', LResolver,
@@ -353,6 +430,44 @@ begin
     'EnvironmentVariableNamesCaseSensitive');
   CheckContains('Env overlay — case-insensitive final key match', LCommand,
     'TextEqualI');
+end;
+
+procedure TestCommandSpawnPlatformHelperSourceContract;
+var
+  LProcessSource, LCommandSource, LSpawnMethod: string;
+begin
+  LProcessSource := LoadSourceText('src/nextpas.core.platform.process.pas');
+  CheckContains('Platform process helpers — create pipe declared',
+    LProcessSource,
+    'function platform_process_create_pipe(out AReadHandle, AWriteHandle: PtrInt): Int32;');
+  CheckContains('Platform process helpers — open null declared',
+    LProcessSource,
+    'function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrInt): Int32;');
+  CheckContains('Platform process helpers — close handle declared',
+    LProcessSource,
+    'function platform_process_close_handle(var AHandle: PtrInt): Int32;');
+
+  LCommandSource := LoadSourceText('src/nextpas.core.process.command.pas');
+  CheckAbsent('Command spawn helpers — no direct POSIX base import',
+    LCommandSource, 'nextpas.core.platform.posix.base');
+  CheckAbsent('Command spawn helpers — no direct POSIX ffi import',
+    LCommandSource, 'nextpas.core.platform.posix.ffi');
+
+  LSpawnMethod := ExtractMethodBody(LCommandSource,
+    'function TCommand.Spawn: IChild;',
+    'function TCommand.Timeout');
+  CheckContains('Command spawn helpers — uses platform pipe helper',
+    LSpawnMethod, 'platform_process_create_pipe');
+  CheckContains('Command spawn helpers — uses platform null helper',
+    LSpawnMethod, 'platform_process_open_null');
+  CheckContains('Command spawn helpers — uses platform close helper',
+    LSpawnMethod, 'platform_process_close_handle');
+  CheckAbsent('Command spawn helpers — no raw pipe syscall', LSpawnMethod,
+    'pipe(@');
+  CheckAbsent('Command spawn helpers — no raw dev-null path', LSpawnMethod,
+    '/dev/null');
+  CheckAbsent('Command spawn helpers — no raw POSIX close', LSpawnMethod,
+    'nextpas.core.platform.posix.ffi.close');
 end;
 
 procedure TestProcessEnvSnapshotSourceContract;
@@ -537,6 +652,7 @@ procedure TestWaitWithOutputDualPipe;
 var
   LChild: IChild;
   LStdin: IWriter;
+  LCloser: IWriteCloser;
   LOut: TProcessOutput;
   LData: string;
 begin
@@ -549,7 +665,9 @@ begin
   LStdin := LChild.TakeStdin;
   LData := 'dual pipe test';
   LStdin.Write(LData[1], Length(LData));
-  (LStdin as TPipeWriter).Close;
+  LCloser := LStdin as IWriteCloser;
+  LCloser.Close;
+  LCloser := nil;
   LStdin := nil;
   LOut := LChild.WaitWithOutput;
   Check('Dual pipe — stdout', Pos('dual pipe test', LOut.StdOut) > 0);
@@ -893,8 +1011,11 @@ begin
   TestSpawnKill;
   TestSpawnDetach;
   TestDetachedLifecycleGuards;
+  TestChildPlatformErrorSourceContract;
   TestWaitTimeoutSleepOwnerSourceContract;
+  TestWaitWithOutputDrainSourceContract;
   TestPathResolverSourceContract;
+  TestCommandSpawnPlatformHelperSourceContract;
   TestProcessEnvSnapshotSourceContract;
   TestSpawnStdinPipe;
   TestSpawnStdoutReader;

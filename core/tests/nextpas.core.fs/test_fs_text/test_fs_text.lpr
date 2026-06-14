@@ -150,6 +150,35 @@ begin
   DeleteFile(LPath);
 end;
 
+procedure TestReadFileTextStripsUtf8Bom;
+var
+  LPath, LText: string;
+begin
+  LPath := TmpPath + '.txt';
+  WriteFile(LPath, TBytes.Create($EF, $BB, $BF, Ord('o'), Ord('k')));
+  LText := ReadFileText(LPath);
+  Check(LText = 'ok', 'UTF-8 BOM stripped');
+  DeleteFile(LPath);
+end;
+
+procedure TestReadFileTextRejectsInvalidUtf8;
+var
+  LPath: string;
+  LGot: Boolean;
+begin
+  LPath := TmpPath + '.txt';
+  WriteFile(LPath, TBytes.Create($C3, $28));
+  LGot := False;
+  try
+    ReadFileText(LPath);
+  except
+    on E: EConvertError do
+      LGot := True;
+  end;
+  Check(LGot, 'invalid UTF-8 rejected');
+  DeleteFile(LPath);
+end;
+
 procedure TestScanFileLines;
 var
   LPath: string;
@@ -193,6 +222,8 @@ begin
   T.Run('Large text 100KB', @TestWriteReadLargeText);
   T.Run('Unicode lines', @TestWriteFileLinesUnicode);
   T.Run('AppendFileLine', @TestAppendFileLine);
+  T.Run('ReadFileText strips UTF-8 BOM', @TestReadFileTextStripsUtf8Bom);
+  T.Run('ReadFileText rejects invalid UTF-8', @TestReadFileTextRejectsInvalidUtf8);
   T.Run('ScanFileLines', @TestScanFileLines);
   T.Run('MapFileLines', @TestMapFileLines);
   T.Summary;

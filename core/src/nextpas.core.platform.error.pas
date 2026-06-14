@@ -23,17 +23,18 @@ procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
 implementation
 
 uses
-{$IFDEF NEXTPAS_UNIX}
+  nextpas.core.platform.sync.base,
+  {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi
-{$ENDIF}
-{$IFDEF NEXTPAS_WINDOWS}
+  nextpas.core.platform.posix.ffi,
+  {$ENDIF}
+  {$IFDEF NEXTPAS_WINDOWS}
   nextpas.core.platform.windows.base,
-  nextpas.core.platform.windows.ffi
-{$ENDIF}
-{$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-  SysUtils
-{$ENDIF}
+  nextpas.core.platform.windows.ffi,
+  {$ENDIF}
+  {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
+  SysUtils,
+  {$ENDIF}
   ;
 
 function CopyPlatformErrorMessage(const AMessage: PAnsiChar; ABuf: PAnsiChar;
@@ -222,6 +223,7 @@ begin
     ERROR_OPERATION_ABORTED:
       Result := ecInterrupted;
     {$ENDIF}
+    {$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD)}
     PLATFORM_ERR_INVALID:
       Result := ecInvalidArgument;
     PLATFORM_ERR_UNSUPPORTED:
@@ -231,6 +233,7 @@ begin
     PLATFORM_ERR_AGAIN,
     PLATFORM_ERR_BUSY:
       Result := ecWouldBlock;
+    {$ENDIF}
   else
     Result := ecInternal;
   end;

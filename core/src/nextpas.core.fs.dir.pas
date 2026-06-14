@@ -28,10 +28,12 @@ implementation
 
 uses
   nextpas.core.fs.errors,
+  nextpas.core.platform.path,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.platform.fs,
-  nextpas.core.fs.util;
+  nextpas.core.fs.util,
+  nextpas.core.fs.path;
 
 type
   TDirIterator = class(TInterfacedObject, IDirIterator)
@@ -193,6 +195,21 @@ begin
   Result := LStat.FileType = nextpas.core.platform.files.base.ftDirectory;
 end;
 
+function IsUnsafeRemoveAllRoot(const APath: string): Boolean;
+var
+  LClean: string;
+begin
+  if APath = '' then
+    Exit(True);
+  LClean := FsPathClean(APath);
+  Result := platform_path_is_root(PAnsiChar(LClean));
+end;
+
+function JoinChildPath(const ADir, AName: string): string;
+begin
+  Result := FsPathJoin([ADir, AName]);
+end;
+
 function FsRemove(const APath: string): Boolean;
 var
   LStat: TPlatformFileStat;
@@ -218,7 +235,7 @@ var
   LChild: string;
   LResult: Int32;
 begin
-  if (APath = '') or (APath = '/') or (APath = '\') then
+  if IsUnsafeRemoveAllRoot(APath) then
     raise EInvalidOperationError.Create('removeall refused unsafe root: ' + APath);
   if not IsRealDir(APath) then
   begin
@@ -234,7 +251,7 @@ begin
     LEntry := LIter.Entry;
     if (LEntry.Name = '.') or (LEntry.Name = '..') then
       Continue;
-    LChild := APath + '/' + LEntry.Name;
+    LChild := JoinChildPath(APath, LEntry.Name);
     if IsRealDir(LChild) then
     begin
       FsRemoveAll(LChild);
@@ -267,6 +284,15 @@ procedure FsWalk(const ARoot: string; const AFunc: TWalkFunc);
 const
   MAX_WALK_DEPTH = 256;
 
+  procedure ReportWalkError(const APath: string; const AErr: Exception);
+  var
+    LInfo: TFileInfo;
+  begin
+    LInfo := Default(TFileInfo);
+    LInfo.Name := APath;
+    AFunc(APath, LInfo, AErr);
+  end;
+
   procedure DoWalk(const APath: string; ADepth: Int32);
   var
     LInfo: TFileInfo;
@@ -281,9 +307,7 @@ const
     except
       on E: Exception do
       begin
-        LInfo := Default(TFileInfo);
-        LInfo.Name := APath;
-        AFunc(APath, LInfo, E);
+        ReportWalkError(APath, E);
         Exit;
       end;
     end;
@@ -294,16 +318,38 @@ const
     if not LInfo.IsDir then
       Exit;
 
-    LIter := FsOpenDir(APath);
-    while LIter.Next do
-    begin
-      LEntry := LIter.Entry;
-      if (LEntry.Name = '.') or (LEntry.Name = '..') then
-        Continue;
-      LChild := APath + '/' + LEntry.Name;
-      DoWalk(LChild, ADepth + 1);
+    try
+      LIter := FsOpenDir(APath);
+    except
+      on E: Exception do
+      begin
+        ReportWalkError(APath, E);
+        Exit;
+      end;
     end;
-    LIter.Close;
+
+    try
+      try
+        while LIter.Next do
+        begin
+          LEntry := LIter.Entry;
+          if (LEntry.Name = '.') or (LEntry.Name = '..') then
+            Continue;
+          LChild := JoinChildPath(APath, LEntry.Name);
+          DoWalk(LChild, ADepth + 1);
+        end;
+      except
+        on E: Exception do
+          ReportWalkError(APath, E);
+      end;
+    finally
+      try
+        LIter.Close;
+      except
+        on E: Exception do
+          ReportWalkError(APath, E);
+      end;
+    end;
   end;
 
 begin
