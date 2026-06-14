@@ -5,7 +5,8 @@ unit nextpas.core.io.reactor.iocp;
 {$IFDEF NEXTPAS_WINDOWS}
 interface
 
-uses nextpas.core.platform.windows.base;
+uses
+  nextpas.core.platform.windows.base;
 
 type
   TIoCompletion = procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);
@@ -61,7 +62,10 @@ type
 
 implementation
 
-uses nextpas.core.atomic, nextpas.core.platform.windows.ffi;
+uses
+  SysUtils,
+  nextpas.core.atomic,
+  nextpas.core.platform.windows.ffi;
 
 const
   WSAID_ACCEPTEX: TGUID = '{b5367df1-cbac-11cf-95ca-00805f48a192}';
@@ -114,6 +118,7 @@ end;
 function IocpFail(ACallback: TIoCompletion; AContext: Pointer;
   AUserData: UInt64; AError: DWORD): Boolean;
 begin
+  SetLastError(AError);
   if Assigned(ACallback) then
   begin
     ACallback(AUserData, -Int32(AError), AContext);
@@ -475,6 +480,8 @@ var
 begin
   AtomicStore32(FRunning, 0, moRelease);
   LPort := FPort;
+  if LPort <> 0 then
+    PostQueuedCompletionStatus(HANDLE(LPort), 0, 0, nil);
   FPort := 0;
   FMaxEvents := 0;
   try
