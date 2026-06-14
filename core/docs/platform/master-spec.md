@@ -33,19 +33,35 @@ Without real runtime evidence, a host is not runtime ready.
 
 ## Current Windows truth
 
-Windows x86_64 has host ABI declarations, source-contract coverage, and forced
-Windows compile gates for key readiness/completion seams. It does not have real
-Windows runtime or ci-matrix evidence in this repository.
+Windows x86_64 has host ABI declarations, source-contract coverage, forced
+Windows compile gates, and Wine runtime smoke for key readiness/completion
+seams. It does not have a real Windows CI runner.
 
 Allowed wording:
 
 - `source-contract covered`
 - `forced Windows compile covered`
-- `not runtime ready`
+- `wine runtime smoke (not runtime ready)`
 
-Unsupported IOCP socket operations such as async accept/connect/send/recv/close
-remain explicit unsupported boundaries until implementation and runtime evidence
-exist.
+### IOCP completion operations
+
+IOCP socket completion operations are structurally implemented in
+`nextpas.core.io.reactor.iocp`:
+
+| Operation | API | Status |
+|-----------|-----|--------|
+| AsyncRead | `ReadFile` + OVERLAPPED | implemented |
+| AsyncWrite | `WriteFile` + OVERLAPPED | implemented |
+| AsyncSend | `WSASend` + OVERLAPPED | implemented |
+| AsyncRecv | `WSARecv` + OVERLAPPED | implemented |
+| AsyncClose | `CancelIoEx` + `closesocket` | implemented |
+| AsyncConnect | `ConnectEx` (WSAIoctl-loaded) | implemented |
+| AsyncAccept | `AcceptEx` (WSAIoctl-loaded) | implemented — accepts pre-created socket via `WSASocketW`, caller retrieves via `LastAcceptedSocket` |
+
+All seven operations have source-contract coverage and forced Windows compile
+gates. `AsyncSend`/`AsyncRecv` have Wine runtime smoke evidence. The complete
+IOCP reactor path (listen → accept → send/recv → close) lacks end-to-end
+Wine runtime evidence (P2-3).
 
 ## Host raw FFI ownership
 

@@ -189,21 +189,22 @@ procedure IocpLoadWinsockExt;
 var
   L: TSocket;
   LB: DWORD;
+  LAcceptOk, LConnectOk: Boolean;
 begin
   if _WinsockExtLoaded then Exit;
   L := winsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if L = TSocket(PtrUInt(-1)) then Exit;
   try
-    WSAIoctl(L, SIO_GET_EXTENSION_FUNCTION_POINTER,
+    LAcceptOk := WSAIoctl(L, SIO_GET_EXTENSION_FUNCTION_POINTER,
       @WSAID_ACCEPTEX, SizeOf(WSAID_ACCEPTEX),
-      @_AcceptEx, SizeOf(_AcceptEx), @LB, nil, nil);
-    WSAIoctl(L, SIO_GET_EXTENSION_FUNCTION_POINTER,
+      @_AcceptEx, SizeOf(_AcceptEx), @LB, nil, nil) = 0;
+    LConnectOk := WSAIoctl(L, SIO_GET_EXTENSION_FUNCTION_POINTER,
       @WSAID_CONNECTEX, SizeOf(WSAID_CONNECTEX),
-      @_ConnectEx, SizeOf(_ConnectEx), @LB, nil, nil);
+      @_ConnectEx, SizeOf(_ConnectEx), @LB, nil, nil) = 0;
   finally
     closesocket(L);
   end;
-  _WinsockExtLoaded := True;
+  _WinsockExtLoaded := LAcceptOk or LConnectOk;
 end;
 
 
@@ -744,6 +745,8 @@ end;
 
 function TIocpReactor.Flush: Int32;
 begin
+  { IOCP submits inline in each Async* call (WSASend/WSARecv/ReadFile/etc.),
+    so there is no deferred submission queue to flush. }
   Result := 0;
 end;
 
