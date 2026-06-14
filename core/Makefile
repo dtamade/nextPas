@@ -16,7 +16,7 @@ BENCHMARKS_DIR := benchmarks
 # FPC unit/output paths
 FPC_FLAGS += -FU$(LIB_DIR) -FE$(BIN_DIR) -Fu$(SRC_DIR) -Fi$(SRC_DIR)
 
-.PHONY: build test examples benchmarks clean dirs
+.PHONY: build test examples benchmarks clean wine-smoke dirs
 
 # Default target
 build: dirs
@@ -87,3 +87,26 @@ benchmarks: dirs
 clean:
 	@rm -rf $(BUILD_DIR)
 	@echo "Clean."
+
+# Compile and run Wine runtime smoke tests (NOT real Windows evidence)
+wine-smoke:
+	@if ! fpc -Twin64 -Px86_64 -iV >/dev/null 2>&1; then \
+		echo "SKIP: Win64 cross-compiler not available"; \
+		exit 0; \
+	fi; \
+	if ! command -v wine >/dev/null 2>&1; then \
+		echo "SKIP: wine not available"; \
+		exit 0; \
+	fi; \
+	missing=$$(find $(TESTS_DIR) -name 'Makefile' -path '*_wine/*' | sort); \
+	if [ -z "$$missing" ]; then \
+		echo "No Wine smoke tests found."; \
+		exit 0; \
+	fi; \
+	for mk in $$missing; do \
+		dir=$$(dirname "$$mk"); \
+		echo "=== Wine smoke: $$dir ==="; \
+		$(MAKE) -C "$$dir" wine-runtime-smoke && echo "PASS: $$dir" || { echo "FAIL: $$dir"; exit 1; }; \
+		echo ""; \
+	done; \
+	echo "All Wine smoke tests passed."
