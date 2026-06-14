@@ -10,6 +10,7 @@ uses
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.http.base,
+  nextpas.core.http.impl.h2.hpack,
   nextpas.core.text.conv,
   nextpas.core.testing,
   nextpas.core.http.impl.h2.hpack.huffman;
@@ -52,6 +53,13 @@ begin
   Result := '';
   for LI := 1 to Length(AData) do
     Result := Result + IntToHex(Byte(AData[LI]), 2);
+end;
+
+function SpanToString(const ASpan: TH2ByteSpan): AnsiString;
+begin
+  if (ASpan.Ptr = nil) or (ASpan.Len <= 0) then
+    Exit('');
+  SetString(Result, ASpan.Ptr, ASpan.Len);
 end;
 
 { ---------- Roundtrip tests ---------- }
@@ -232,8 +240,81 @@ begin
     'Truncated decode should return empty string');
 end;
 
+procedure TestDecodeViewRoundtrip;
+var
+  LEncoder: THPackEncoder;
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..4] of THPackHeader;
+  LViews: array[0..9] of THPackHeaderView;
+  LBlock: AnsiString;
 begin
-  with TTestRunner.Create('nextpas.core.http.impl.h2.hpack.huffman') do
+  LHeaders[0].Name := ':method'; LHeaders[0].Value := 'POST';
+  LHeaders[1].Name := ':path'; LHeaders[1].Value := '/api/v1/users';
+  LHeaders[2].Name := ':authority'; LHeaders[2].Value := 'example.com';
+  LHeaders[3].Name := 'content-type'; LHeaders[3].Value := 'application/json';
+  LHeaders[4].Name := 'content-length'; LHeaders[4].Value := '42';
+
+  LEncoder.Init;
+  LBlock := LEncoder.Encode(LHeaders);
+  LDecoder.Init(0);
+
+  Check(LDecoder.DecodeView(LBlock, LViews),
+    'DecodeView should decode encoder-produced block');
+  CheckEqual(':method', string(SpanToString(LViews[0].Name)),
+    'Header[0] name should match');
+  CheckEqual('POST', string(SpanToString(LViews[0].Value)),
+    'Header[0] value should match');
+  CheckEqual('content-type', string(SpanToString(LViews[3].Name)),
+    'Header[3] name should match');
+  CheckEqual('application/json', string(SpanToString(LViews[3].Value)),
+    'Header[3] value should match');
+end;
+
+procedure TestDecodeViewRawInlineNameValue;
+var
+  LDecoder: THPackDecoder;
+  LViews: array[0..1] of THPackHeaderView;
+  LBlock: AnsiString;
+begin
+  LBlock := AnsiString(#0#3'foo'#3'bar');
+  LDecoder.Init(0);
+
+  Check(LDecoder.DecodeView(LBlock, LViews),
+    'DecodeView should decode raw inline name/value literal');
+  CheckEqual('foo', string(SpanToString(LViews[0].Name)),
+    'Inline raw name should match');
+  CheckEqual('bar', string(SpanToString(LViews[0].Value)),
+    'Inline raw value should match');
+end;
+
+procedure TestDecodeViewDynamicTableReuse;
+var
+  LDecoder: THPackDecoder;
+  LViews: array[0..1] of THPackHeaderView;
+  LLiteralBlock: AnsiString;
+  LIndexedBlock: AnsiString;
+begin
+  LLiteralBlock := AnsiString(#64#3'foo'#3'bar');
+  LIndexedBlock := AnsiString(#190);
+  LDecoder.Init(HPACK_DEFAULT_DYNAMIC_TABLE_SIZE);
+
+  Check(LDecoder.DecodeView(LLiteralBlock, LViews),
+    'DecodeView should accept incremental-indexing literal');
+  CheckEqual('foo', string(SpanToString(LViews[0].Name)),
+    'Indexed literal name should match');
+  CheckEqual('bar', string(SpanToString(LViews[0].Value)),
+    'Indexed literal value should match');
+
+  Check(LDecoder.DecodeView(LIndexedBlock, LViews),
+    'DecodeView should resolve dynamic-table indexed header');
+  CheckEqual('foo', string(SpanToString(LViews[0].Name)),
+    'Dynamic-table name should match');
+  CheckEqual('bar', string(SpanToString(LViews[0].Value)),
+    'Dynamic-table value should match');
+end;
+
+begin
+  with TTestRunner.Create('nextpas.core.http.impl.h2.hpack') do
   begin
     { Roundtrip tests }
     Run('RFC Appendix C string vectors', @TestRfcAppendixCStringVectors);
@@ -247,6 +328,9 @@ begin
     Run('Invalid padding raises', @TestInvalidPaddingRaises);
     Run('Partial 1s padding raises', @TestPartial1sPaddingRaises);
     Run('Limited decode truncation', @TestLimitedDecode);
+    Run('DecodeView roundtrip', @TestDecodeViewRoundtrip);
+    Run('DecodeView raw inline name/value', @TestDecodeViewRawInlineNameValue);
+    Run('DecodeView dynamic table reuse', @TestDecodeViewDynamicTableReuse);
 
     Summary;
   end;

@@ -94,6 +94,38 @@ begin
   WriteLn('Ops/sec: ', (ITERATIONS * 1000000000) div LTotalNs);
 end;
 
+procedure BenchHPACKDecodeView;
+const
+  ITERATIONS = 50000;
+var
+  LEncoder: THPackEncoder;
+  LDecoder: THPackDecoder;
+  LBlock: AnsiString;
+  LOutput: array[0..9] of THPackHeaderView;
+  LI: Integer;
+  LTotalNs: Int64;
+  LHeaders: array[0..4] of THPackHeader;
+begin
+  LHeaders[0].Name := ':method'; LHeaders[0].Value := 'POST';
+  LHeaders[1].Name := ':path'; LHeaders[1].Value := '/api/v1/users';
+  LHeaders[2].Name := ':authority'; LHeaders[2].Value := 'example.com';
+  LHeaders[3].Name := 'content-type'; LHeaders[3].Value := 'application/json';
+  LHeaders[4].Name := 'content-length'; LHeaders[4].Value := '42';
+  LEncoder.Init;
+  LBlock := LEncoder.Encode(LHeaders);
+  LDecoder.Init(0);
+  BenchStart;
+  for LI := 1 to ITERATIONS do
+    LDecoder.DecodeView(LBlock, LOutput);
+  LTotalNs := BenchElapsedNs;
+  WriteLn('--- HPACK Decode (View) ---');
+  WriteLn('Iterations: ', ITERATIONS);
+  WriteLn('Total time: ', LTotalNs div 1000, ' us');
+  WriteLn('Avg: ', LTotalNs div ITERATIONS, ' ns/op');
+  if LTotalNs < 1 then LTotalNs := 1;
+  WriteLn('Ops/sec: ', (ITERATIONS * 1000000000) div LTotalNs);
+end;
+
 procedure BenchFrameEncode;
 const
   ITERATIONS = 100000;
@@ -187,6 +219,7 @@ begin
     WriteLn;
     BenchHPACKEncode;
     BenchHPACKDecode;
+    BenchHPACKDecodeView;
     BenchFrameEncode;
     BenchFrameDecode;
     BenchFlowControlOps;

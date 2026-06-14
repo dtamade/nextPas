@@ -29,6 +29,18 @@ type
     Value: AnsiString;
   end;
 
+  { Borrowed byte span — zero-ownership view with no refcount traffic }
+  TH2ByteSpan = record
+    Ptr: PAnsiChar;
+    Len: SizeInt;
+  end;
+
+  { Borrowed header view used by DecodeView fast path }
+  THPackHeaderView = record
+    Name: TH2ByteSpan;
+    Value: TH2ByteSpan;
+  end;
+
   { Dynamic table: ring buffer of recently used header fields }
   THPackDynamicTable = record
   private
@@ -86,6 +98,9 @@ type
   private
     FDynamicTable: THPackDynamicTable;
     FMaxDynamicTableSize: UInt32;
+    FScratchBuf: TBytes;
+    FScratchPos: SizeInt;
+    procedure EnsureScratchCapacity(AMinCapacity: SizeInt);
     procedure DecodeInteger(const ABlock: AnsiString; var APos: SizeInt;
       APrefixBits: Byte; out AValue: UInt32);
   public
@@ -93,6 +108,8 @@ type
     { Decode an HPACK header block into a list of header fields }
     function DecodeString(const ABlock: AnsiString; var APos: SizeInt;
       out AStr: AnsiString): Boolean;
+    function DecodeView(const ABlock: AnsiString;
+      out AHeaders: array of THPackHeaderView): Boolean;
     function Decode(const ABlock: AnsiString; out AHeaders: array of THPackHeader): Boolean;
     { Maximum allowed dynamic table size (for SETTINGS acknowledgment) }
     property MaxDynamicTableSize: UInt32 read FMaxDynamicTableSize write FMaxDynamicTableSize;
@@ -139,6 +156,49 @@ begin
       FStaticValues[LI] := '';
   end;
   FStaticBuilt := True;
+end;
+
+procedure SetByteSpan(out ASpan: TH2ByteSpan; const APtr: PAnsiChar;
+  const ALen: SizeInt); inline;
+begin
+  if ALen > 0 then
+    ASpan.Ptr := APtr
+  else
+    ASpan.Ptr := nil;
+  ASpan.Len := ALen;
+end;
+
+procedure SetByteSpanFromString(out ASpan: TH2ByteSpan;
+  const AStr: AnsiString); inline;
+begin
+  SetByteSpan(ASpan, PAnsiChar(AStr), Length(AStr));
+end;
+
+function DynamicTableTryGetEntryView(const ATable: THPackDynamicTable;
+  const AIndex: SizeInt; out AName, AValue: TH2ByteSpan): Boolean;
+var
+  LRawIndex: SizeInt;
+begin
+  if (AIndex < 0) or (AIndex >= ATable.FCount) then
+    Exit(False);
+  LRawIndex := (ATable.FTail - 1 - AIndex + Length(ATable.FEntries)) mod
+    Length(ATable.FEntries);
+  SetByteSpanFromString(AName, ATable.FEntries[LRawIndex].Name);
+  SetByteSpanFromString(AValue, ATable.FEntries[LRawIndex].Value);
+  Result := True;
+end;
+
+function DynamicTableTryGetNameView(const ATable: THPackDynamicTable;
+  const AIndex: SizeInt; out AName: TH2ByteSpan): Boolean;
+var
+  LRawIndex: SizeInt;
+begin
+  if (AIndex < 0) or (AIndex >= ATable.FCount) then
+    Exit(False);
+  LRawIndex := (ATable.FTail - 1 - AIndex + Length(ATable.FEntries)) mod
+    Length(ATable.FEntries);
+  SetByteSpanFromString(AName, ATable.FEntries[LRawIndex].Name);
+  Result := True;
 end;
 
 { Hash function for dynamic table lookups. djb2 variant mod 256. }
@@ -677,6 +737,22 @@ procedure THPackDecoder.Init(ADynamicTableSize: UInt32);
 begin
   FDynamicTable.Init(ADynamicTableSize);
   FMaxDynamicTableSize := ADynamicTableSize;
+  SetLength(FScratchBuf, 4096);
+  FScratchPos := 0;
+end;
+
+procedure THPackDecoder.EnsureScratchCapacity(AMinCapacity: SizeInt);
+var
+  LCapacity: SizeInt;
+begin
+  if AMinCapacity <= Length(FScratchBuf) then
+    Exit;
+  LCapacity := Length(FScratchBuf);
+  if LCapacity <= 0 then
+    LCapacity := 4096;
+  while LCapacity < AMinCapacity do
+    LCapacity := LCapacity * 2;
+  SetLength(FScratchBuf, LCapacity);
 end;
 
 procedure THPackDecoder.DecodeInteger(const ABlock: AnsiString; var APos: SizeInt;
@@ -745,6 +821,248 @@ begin
   else
     SetString(AStr, @ABlock[APos], LLen);
   Inc(APos, LLen);
+  Result := True;
+end;
+
+function THPackDecoder.DecodeView(const ABlock: AnsiString;
+  out AHeaders: array of THPackHeaderView): Boolean;
+var
+  LBlockLen: SizeInt;
+  LPos: SizeInt;
+  LByte: Byte;
+  LIndex: UInt32;
+  LLen: UInt32;
+  LShift: Byte;
+  LHeaderCount: SizeInt;
+  LOutLen: SizeInt;
+  LNameSpan: TH2ByteSpan;
+  LValueSpan: TH2ByteSpan;
+  LAddDynamic: Boolean;
+  LAddName: AnsiString;
+  LAddValue: AnsiString;
+begin
+  Result := False;
+  HPackEnsureStaticBuilt;
+  LBlockLen := Length(ABlock);
+  FScratchPos := 0;
+  if LBlockLen > 0 then
+    EnsureScratchCapacity((LBlockLen * 2) + 16);
+
+  LPos := 1;
+  LHeaderCount := 0;
+  while LPos <= LBlockLen do
+  begin
+    if LHeaderCount > High(AHeaders) then
+      Exit;
+
+    LByte := Byte(ABlock[LPos]);
+    if (LByte and $80) <> 0 then
+    begin
+      { Indexed Header Field (1xxxxxxx) }
+      LIndex := LByte and $7F;
+      Inc(LPos);
+      if LIndex = $7F then
+      begin
+        LShift := 0;
+        repeat
+          if LPos > LBlockLen then
+            Exit;
+          LByte := Byte(ABlock[LPos]);
+          Inc(LPos);
+          LIndex := LIndex + (UInt32(LByte and $7F) shl LShift);
+          Inc(LShift, 7);
+        until (LByte and $80) = 0;
+      end;
+      if LIndex = 0 then
+        Exit;
+      if LIndex <= HPACK_STATIC_TABLE_COUNT then
+      begin
+        SetByteSpanFromString(LNameSpan, FStaticNames[LIndex]);
+        SetByteSpanFromString(LValueSpan, FStaticValues[LIndex]);
+      end
+      else if not DynamicTableTryGetEntryView(FDynamicTable,
+        LIndex - HPACK_STATIC_TABLE_COUNT - 1, LNameSpan, LValueSpan) then
+        Exit;
+      AHeaders[LHeaderCount].Name := LNameSpan;
+      AHeaders[LHeaderCount].Value := LValueSpan;
+      Inc(LHeaderCount);
+      Continue;
+    end;
+
+    if (LByte and $E0) = $20 then
+    begin
+      { Dynamic Table Size Update (001xxxxx) }
+      LIndex := LByte and $1F;
+      Inc(LPos);
+      if LIndex = $1F then
+      begin
+        LShift := 0;
+        repeat
+          if LPos > LBlockLen then
+            Exit;
+          LByte := Byte(ABlock[LPos]);
+          Inc(LPos);
+          LIndex := LIndex + (UInt32(LByte and $7F) shl LShift);
+          Inc(LShift, 7);
+        until (LByte and $80) = 0;
+      end;
+      if LIndex > FMaxDynamicTableSize then
+        Exit;
+      FDynamicTable.Resize(LIndex);
+      Continue;
+    end;
+
+    if (LByte and $C0) = $40 then
+    begin
+      { Literal Header Field with Incremental Indexing (01xxxxxx) }
+      LIndex := LByte and $3F;
+      LAddDynamic := True;
+      Inc(LPos);
+      if LIndex = $3F then
+      begin
+        LShift := 0;
+        repeat
+          if LPos > LBlockLen then
+            Exit;
+          LByte := Byte(ABlock[LPos]);
+          Inc(LPos);
+          LIndex := LIndex + (UInt32(LByte and $7F) shl LShift);
+          Inc(LShift, 7);
+        until (LByte and $80) = 0;
+      end;
+    end
+    else if (LByte and $F0) = $00 then
+    begin
+      { Literal Header Field without Indexing (0000xxxx) }
+      LIndex := LByte and $0F;
+      LAddDynamic := False;
+      Inc(LPos);
+      if LIndex = $0F then
+      begin
+        LShift := 0;
+        repeat
+          if LPos > LBlockLen then
+            Exit;
+          LByte := Byte(ABlock[LPos]);
+          Inc(LPos);
+          LIndex := LIndex + (UInt32(LByte and $7F) shl LShift);
+          Inc(LShift, 7);
+        until (LByte and $80) = 0;
+      end;
+    end
+    else if (LByte and $F0) = $10 then
+    begin
+      { Literal Header Field Never Indexed (0001xxxx) }
+      LIndex := LByte and $0F;
+      LAddDynamic := False;
+      Inc(LPos);
+      if LIndex = $0F then
+      begin
+        LShift := 0;
+        repeat
+          if LPos > LBlockLen then
+            Exit;
+          LByte := Byte(ABlock[LPos]);
+          Inc(LPos);
+          LIndex := LIndex + (UInt32(LByte and $7F) shl LShift);
+          Inc(LShift, 7);
+        until (LByte and $80) = 0;
+      end;
+    end
+    else
+      Exit;
+
+    if LIndex > 0 then
+    begin
+      if LIndex <= HPACK_STATIC_TABLE_COUNT then
+        SetByteSpanFromString(LNameSpan, FStaticNames[LIndex])
+      else if not DynamicTableTryGetNameView(FDynamicTable,
+        LIndex - HPACK_STATIC_TABLE_COUNT - 1, LNameSpan) then
+        Exit;
+    end
+    else
+    begin
+      if LPos > LBlockLen then
+        Exit;
+      LByte := Byte(ABlock[LPos]);
+      LLen := LByte and $7F;
+      Inc(LPos);
+      if LLen = $7F then
+      begin
+        LShift := 0;
+        repeat
+          if LPos > LBlockLen then
+            Exit;
+          LByte := Byte(ABlock[LPos]);
+          Inc(LPos);
+          LLen := LLen + (UInt32(LByte and $7F) shl LShift);
+          Inc(LShift, 7);
+        until (LByte and $80) = 0;
+      end;
+      if LPos + SizeInt(LLen) - 1 > LBlockLen then
+        Exit;
+      if LLen = 0 then
+        SetByteSpan(LNameSpan, nil, 0)
+      else if (LByte and $80) <> 0 then
+      begin
+        EnsureScratchCapacity(FScratchPos + (SizeInt(LLen) * 2) + 16);
+        if not H2HuffmanDecodeBuf(@ABlock[LPos], SizeInt(LLen),
+          FScratchBuf[FScratchPos], Length(FScratchBuf) - FScratchPos, LOutLen) then
+          Exit;
+        SetByteSpan(LNameSpan, PAnsiChar(@FScratchBuf[FScratchPos]), LOutLen);
+        Inc(FScratchPos, LOutLen);
+      end
+      else
+        SetByteSpan(LNameSpan, @ABlock[LPos], LLen);
+      Inc(LPos, LLen);
+    end;
+
+    if LPos > LBlockLen then
+      Exit;
+    LByte := Byte(ABlock[LPos]);
+    LLen := LByte and $7F;
+    Inc(LPos);
+    if LLen = $7F then
+    begin
+      LShift := 0;
+      repeat
+        if LPos > LBlockLen then
+          Exit;
+        LByte := Byte(ABlock[LPos]);
+        Inc(LPos);
+        LLen := LLen + (UInt32(LByte and $7F) shl LShift);
+        Inc(LShift, 7);
+      until (LByte and $80) = 0;
+    end;
+    if LPos + SizeInt(LLen) - 1 > LBlockLen then
+      Exit;
+    if LLen = 0 then
+      SetByteSpan(LValueSpan, nil, 0)
+    else if (LByte and $80) <> 0 then
+    begin
+      EnsureScratchCapacity(FScratchPos + (SizeInt(LLen) * 2) + 16);
+      if not H2HuffmanDecodeBuf(@ABlock[LPos], SizeInt(LLen),
+        FScratchBuf[FScratchPos], Length(FScratchBuf) - FScratchPos, LOutLen) then
+        Exit;
+      SetByteSpan(LValueSpan, PAnsiChar(@FScratchBuf[FScratchPos]), LOutLen);
+      Inc(FScratchPos, LOutLen);
+    end
+    else
+      SetByteSpan(LValueSpan, @ABlock[LPos], LLen);
+    Inc(LPos, LLen);
+
+    AHeaders[LHeaderCount].Name := LNameSpan;
+    AHeaders[LHeaderCount].Value := LValueSpan;
+
+    if LAddDynamic and (FDynamicTable.Capacity > 0) then
+    begin
+      SetString(LAddName, LNameSpan.Ptr, LNameSpan.Len);
+      SetString(LAddValue, LValueSpan.Ptr, LValueSpan.Len);
+      FDynamicTable.Add(LAddName, LAddValue);
+    end;
+    Inc(LHeaderCount);
+  end;
+
   Result := True;
 end;
 
@@ -881,4 +1199,3 @@ initialization
   HPackEnsureStaticBuilt;
 
 end.
-
