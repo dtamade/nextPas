@@ -7,6 +7,14 @@ interface
 uses
   nextpas.core.exception;
 
+{ Portable platform error codes — canonical definitions }
+const
+  PLATFORM_ERR_AGAIN       = 11;    { Resource temporarily unavailable }
+  PLATFORM_ERR_BUSY        = 16;    { Device or resource busy }
+  PLATFORM_ERR_INVALID     = 22;    { Invalid argument }
+  PLATFORM_ERR_UNSUPPORTED = 95;    { Operation not supported }
+  PLATFORM_ERR_TIMEOUT     = 110;   { Operation timed out }
+
 function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_error_category(ACode: Int32): TErrorCategory;
 procedure platform_fatal(const AMsg: PAnsiChar);
@@ -15,24 +23,17 @@ procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
 implementation
 
 uses
-  nextpas.core.platform.error.base
-  {$IFDEF NEXTPAS_UNIX},
+{$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi
-  {$ENDIF}
-  {$IFDEF NEXTPAS_LINUX},
-  nextpas.core.platform.linux.base
-  {$ENDIF}
-  {$IFDEF NEXTPAS_MACOS},
-  nextpas.core.platform.darwin.base
-  {$ENDIF}
-  {$IFDEF NEXTPAS_FREEBSD},
-  nextpas.core.platform.freebsd.base
-  {$ENDIF}
-  {$IFDEF NEXTPAS_WINDOWS},
+{$ENDIF}
+{$IFDEF NEXTPAS_WINDOWS}
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi
-  {$ENDIF}
+{$ENDIF}
+{$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
+  SysUtils
+{$ENDIF}
   ;
 
 function CopyPlatformErrorMessage(const AMessage: PAnsiChar; ABuf: PAnsiChar;
@@ -236,12 +237,14 @@ begin
 end;
 
 procedure WriteStderr(const S: PAnsiChar; ALen: Int32);
+var
+  LWritten: DWORD;
 begin
 {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.ffi.write(2, S, ALen);
 {$ELSE}
-  // fallback: use System.Write
-  System.Write(StdErr, S);
+  if ALen > 0 then
+    WriteFile(GetStdHandle(STD_ERROR_HANDLE), S, ALen, @LWritten, nil);
 {$ENDIF}
 end;
 

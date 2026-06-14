@@ -5,6 +5,7 @@ unit nextpas.core.platform.sync;
 interface
 
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.sync.base;
 
 type
@@ -22,11 +23,11 @@ const
   PLATFORM_MUTEX_NORMAL = nextpas.core.platform.sync.base.PLATFORM_MUTEX_NORMAL;
   PLATFORM_MUTEX_ERRORCHECK = nextpas.core.platform.sync.base.PLATFORM_MUTEX_ERRORCHECK;
   PLATFORM_MUTEX_RECURSIVE = nextpas.core.platform.sync.base.PLATFORM_MUTEX_RECURSIVE;
-  PLATFORM_ERR_AGAIN = nextpas.core.platform.sync.base.PLATFORM_ERR_AGAIN;
-  PLATFORM_ERR_BUSY = nextpas.core.platform.sync.base.PLATFORM_ERR_BUSY;
-  PLATFORM_ERR_INVALID = nextpas.core.platform.sync.base.PLATFORM_ERR_INVALID;
-  PLATFORM_ERR_UNSUPPORTED = nextpas.core.platform.sync.base.PLATFORM_ERR_UNSUPPORTED;
-  PLATFORM_ERR_TIMEOUT = nextpas.core.platform.sync.base.PLATFORM_ERR_TIMEOUT;
+  PLATFORM_ERR_AGAIN = nextpas.core.platform.error.PLATFORM_ERR_AGAIN;
+  PLATFORM_ERR_BUSY = nextpas.core.platform.error.PLATFORM_ERR_BUSY;
+  PLATFORM_ERR_INVALID = nextpas.core.platform.error.PLATFORM_ERR_INVALID;
+  PLATFORM_ERR_UNSUPPORTED = nextpas.core.platform.error.PLATFORM_ERR_UNSUPPORTED;
+  PLATFORM_ERR_TIMEOUT = nextpas.core.platform.error.PLATFORM_ERR_TIMEOUT;
 
 { Mutex }
 function platform_mutex_init(var AMutex: TPlatformMutex; const AKind: Int32 = PLATFORM_MUTEX_ERRORCHECK): Int32;

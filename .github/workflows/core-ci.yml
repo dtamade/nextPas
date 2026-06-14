@@ -54,6 +54,12 @@ jobs:
       - name: Run all tests
         run: make -C .. core-ci-test
 
+      - name: Install wine for Windows cross-runtime smoke
+        run: sudo apt-get install -y wine
+
+      - name: Run Wine runtime smoke (not real Windows evidence)
+        run: make wine-smoke
+
   test-macos:
     runs-on: macos-14
     steps:
