@@ -288,6 +288,9 @@ begin
     Exit(DoubleQuietNaN);
   if DoubleIsInfinite(AX) then
     Exit(AX);
+  // Odd function: avoid cancellation for large negative values
+  if AX < 0.0 then
+    Exit(-Sinh(-AX));
   Result := (System.Exp(AX) - System.Exp(-AX)) / 2.0;
 end;
 
@@ -338,6 +341,9 @@ begin
     Exit(DoubleQuietNaN);
   if DoubleIsInfinite(AX) then
     Exit(AX);
+  // Odd function: avoid cancellation for large negative values
+  if AX < 0.0 then
+    Exit(-ArcSinh(-AX));
   Result := System.Ln(AX + System.Sqrt(AX * AX + 1.0));
 end;
 
@@ -454,31 +460,11 @@ begin
 end;
 
 function Ldexp(const AX: Double; AExp: Integer): Double;
-var
-  LPow: Double;
-  LE: Integer;
 begin
   if AExp = 0 then
     Exit(AX);
-  LPow := 1.0;
-  LE := AExp;
-  if LE < 0 then
-  begin
-    while LE < 0 do
-    begin
-      LPow := LPow / 2.0;
-      Inc(LE);
-    end;
-  end
-  else
-  begin
-    while LE > 0 do
-    begin
-      LPow := LPow * 2.0;
-      Dec(LE);
-    end;
-  end;
-  Result := AX * LPow;
+  // O(1) implementation using exp(n * ln2) instead of O(|n|) loop
+  Result := AX * System.Exp(AExp * 0.69314718055994530942);
 end;
 
 function Ldexp(const AX: Single; AExp: Integer): Single;
