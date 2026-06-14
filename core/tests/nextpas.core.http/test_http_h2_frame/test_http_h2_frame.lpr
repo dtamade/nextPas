@@ -8,6 +8,7 @@ program test_http_h2_frame;
 
 uses
   nextpas.core.base,
+  nextpas.core.http.base,
   nextpas.core.http.impl.h2.frame,
   nextpas.core.testing,
   nextpas.core.text.conv;
@@ -327,6 +328,66 @@ begin
     H2_CLIENT_PREFACE, 'client connection preface');
 end;
 
+{ -- Additional validation coverage -- }
+
+procedure TestEncodeFrameEmptyPayload;
+var
+  LWire: AnsiString;
+begin
+  LWire := H2EncodeFrame(H2_FRAME_DATA, 0, 1, '');
+  CheckEqual(Int64(H2_FRAME_HEADER_SIZE), Int64(Length(LWire)),
+    'empty payload frame has header only');
+end;
+
+procedure TestEncodeFrameOversizedPayload;
+var
+  LPayload: AnsiString;
+  LCaptured: Boolean;
+begin
+  SetLength(LPayload, H2_ABSOLUTE_MAX_FRAME_SIZE + 1);
+  LCaptured := False;
+  try
+    H2EncodeFrame(H2_FRAME_DATA, 0, 1, LPayload);
+  except
+    on E: EHttpError do
+      LCaptured := True;
+  end;
+  Check(LCaptured, 'oversized payload raises EHttpError');
+end;
+
+procedure TestFrameTypesComplete;
+begin
+  CheckEqual('DATA', H2FrameTypeName(H2_FRAME_DATA), 'type 0 name');
+  CheckEqual('HEADERS', H2FrameTypeName(H2_FRAME_HEADERS), 'type 1 name');
+  CheckEqual('PRIORITY', H2FrameTypeName(H2_FRAME_PRIORITY), 'type 2 name');
+  CheckEqual('RST_STREAM', H2FrameTypeName(H2_FRAME_RST_STREAM), 'type 3 name');
+  CheckEqual('SETTINGS', H2FrameTypeName(H2_FRAME_SETTINGS), 'type 4 name');
+  CheckEqual('PUSH_PROMISE', H2FrameTypeName(H2_FRAME_PUSH_PROMISE), 'type 5 name');
+  CheckEqual('PING', H2FrameTypeName(H2_FRAME_PING), 'type 6 name');
+  CheckEqual('GOAWAY', H2FrameTypeName(H2_FRAME_GOAWAY), 'type 7 name');
+  CheckEqual('WINDOW_UPDATE', H2FrameTypeName(H2_FRAME_WINDOW_UPDATE), 'type 8 name');
+  CheckEqual('CONTINUATION', H2FrameTypeName(H2_FRAME_CONTINUATION), 'type 9 name');
+end;
+
+procedure TestStreamIDValidation;
+begin
+  Check(not H2IsValidStreamID(0), 'stream id 0 is not stream-level');
+  Check(H2IsValidStreamID(1), 'client-initiated odd stream valid');
+  Check(H2IsValidStreamID(2), 'server-initiated even stream valid');
+  Check(H2IsValidStreamID($7FFFFFFF), 'max stream id valid');
+  Check(not H2IsValidStreamID($80000000), 'stream id with MSB set invalid');
+end;
+
+procedure TestPUSH_PROMISEValidation;
+begin
+  CheckFrameInvalid(NewFrame(H2_FRAME_PUSH_PROMISE, 0, 0, #0#0#0#0#1),
+    H2_ERR_PROTOCOL_ERROR, 'PUSH_PROMISE stream id 0 rejects');
+  CheckFrameInvalid(NewFrame(H2_FRAME_PUSH_PROMISE, 0, 1, #0#0#0),
+    H2_ERR_FRAME_SIZE_ERROR, 'PUSH_PROMISE length must be at least 4');
+  CheckFrameValid(NewFrame(H2_FRAME_PUSH_PROMISE, 0, 1, #0#0#0#0),
+    'PUSH_PROMISE min valid');
+end;
+
 begin
   with TTestRunner.Create('nextpas.core.http.impl.h2.frame') do
   begin
@@ -350,6 +411,12 @@ begin
       @TestFrameTypeSpecificValidation);
     Run('Frame padding validation', @TestFramePaddingValidation);
     Run('Client preface', @TestClientPreface);
+    Run('Encode frame empty payload', @TestEncodeFrameEmptyPayload);
+    Run('Encode frame oversized payload raises',
+      @TestEncodeFrameOversizedPayload);
+    Run('Frame type names complete', @TestFrameTypesComplete);
+    Run('Stream ID validation', @TestStreamIDValidation);
+    Run('PUSH_PROMISE validation', @TestPUSH_PROMISEValidation);
     Summary;
   end;
 end.
