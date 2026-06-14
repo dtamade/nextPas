@@ -67,7 +67,7 @@ Same 14 modules cross-compiled and executed on a real Windows 10 VM
 | platform.mmap | `tests/nextpas.core.platform.mmap/test_platform_mmap_wine/` | 7 | ✅ | — |
 | platform.random | `tests/nextpas.core.platform.random/test_platform_random_wine/` | 4 | ✅ | — |
 | platform.socket | `tests/nextpas.core.platform.socket/test_platform_socket_wine/` | 4 | ✅ | — |
-| io.reactor.iocp | `tests/nextpas.core.io.uring/test_reactor_iocp_wine/` | 4 | ✅ | — |
+| io.reactor.iocp | `tests/nextpas.core.io.uring/test_reactor_iocp_wine/` | 6 | ✅ | ConnectEx graceful skip on Wine (not a gap) |
 
 Not covered by Wine runtime smoke: platform.signal, platform.console, platform.args
 (no Wine runtime test needed — signal uses SetConsoleCtrlHandler which is
