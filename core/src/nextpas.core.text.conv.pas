@@ -13,6 +13,7 @@ function FloatToStr(const AValue: Double): string; inline;
 function FloatToStrF(const AValue: Double; ADecimals: Integer): string;
 function FormatFloat(const AFmt: string; const AValue: Double): string;
 function BoolToStr(const AValue: Boolean): string; inline;
+function BoolToStr(const AValue: Boolean; const ATrueStr, AFalseStr: string): string; inline;
 
 function StrToInt(const AStr: string): Int64; inline;
 function StrToIntDef(const AStr: string; const ADefault: Int64): Int64; inline;
@@ -107,6 +108,11 @@ end;
 function BoolToStr(const AValue: Boolean): string;
 begin
   if AValue then Result := 'true' else Result := 'false';
+end;
+
+function BoolToStr(const AValue: Boolean; const ATrueStr, AFalseStr: string): string;
+begin
+  if AValue then Result := ATrueStr else Result := AFalseStr;
 end;
 
 {== String to number ==}

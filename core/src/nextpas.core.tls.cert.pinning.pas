@@ -30,7 +30,7 @@ unit nextpas.core.tls.cert.pinning;
 interface
 
 uses
-  Classes, SysUtils, nextpas.core.tls.base,
+  SysUtils, nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.x509,
@@ -214,7 +214,9 @@ type
 implementation
 
 uses
-  nextpas.core.tls.utils, nextpas.core.tls.encoding, Base64;
+  nextpas.core.encoding.base64,
+  nextpas.core.tls.utils,
+  nextpas.core.tls.encoding;
 
 { TCertificatePin }
 
@@ -222,8 +224,6 @@ class function TCertificatePin.FromBase64(const ABase64Hash: string;
   AType: TPinType; const ADescription: string; AIsBackup: Boolean): TCertificatePin;
 var
   DecodedBytes: TBytes;
-  Stream: TStringStream;
-  Decoder: TBase64DecodingStream;
 begin
   Result.PinType := AType;
   Result.Description := ADescription;
@@ -231,39 +231,23 @@ begin
   Result.AddedDate := Now;
   Result.ExpiryDate := 0;  // Never expires by default
 
-  // Decode Base64 hash
-  Stream := TStringStream.Create(ABase64Hash);
-  try
-    Decoder := TBase64DecodingStream.Create(Stream);
-    try
-      SetLength(DecodedBytes, 32);  // SHA-256 = 32 bytes
-      Decoder.Read(DecodedBytes[0], 32);
-      Move(DecodedBytes[0], Result.Hash[0], 32);
-    finally
-      Decoder.Free;
-    end;
-  finally
-    Stream.Free;
-  end;
+  DecodedBytes := nextpas.core.encoding.base64.Base64Decode(ABase64Hash);
+  if Length(DecodedBytes) <> SizeOf(Result.Hash) then
+    raise ESSLInvalidArgument.Create(
+      Format('Pin hash must decode to %d bytes, got %d',
+        [SizeOf(Result.Hash), Length(DecodedBytes)])
+    );
+
+  Move(DecodedBytes[0], Result.Hash[0], SizeOf(Result.Hash));
 end;
 
 function TCertificatePin.ToBase64: string;
 var
-  Stream: TStringStream;
-  Encoder: TBase64EncodingStream;
+  LBytes: TBytes;
 begin
-  Stream := TStringStream.Create('');
-  try
-    Encoder := TBase64EncodingStream.Create(Stream);
-    try
-      Encoder.Write(Hash[0], 32);
-    finally
-      Encoder.Free;
-    end;
-    Result := Stream.DataString;
-  finally
-    Stream.Free;
-  end;
+  SetLength(LBytes, SizeOf(Hash));
+  Move(Hash[0], LBytes[0], SizeOf(Hash));
+  Result := nextpas.core.encoding.base64.Base64Encode(LBytes);
 end;
 
 function TCertificatePin.IsValid: Boolean;

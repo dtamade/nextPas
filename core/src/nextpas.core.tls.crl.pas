@@ -127,6 +127,8 @@ function CRLRevokeReasonToString(AReason: TCRLRevokeReason): string;
 implementation
 
 uses
+  nextpas.core.fs.stream,
+  nextpas.core.io,
   nextpas.core.text.strings,
     nextpas.core.time;
 
@@ -223,26 +225,18 @@ end;
 
 procedure TX509CRL.LoadFromFile(const AFileName: string);
 var
-  Stream: TFileStream;
+  Stream: IStream;
   Data: TBytes;
 begin
-  Stream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
-  try
-    SetLength(Data, Stream.Size);
-    if Stream.Size > 0 then
-    begin
-      Stream.ReadBuffer(Data[0], Stream.Size);
+  Stream := FsOpen(AFileName, [fmRead]);
+  Data := ReadAll(Stream);
+  if Length(Data) = 0 then
+    Exit;
 
-      // 检测格式
-      if (Length(Data) > 0) and (Data[0] = $30) then
-        // DER 格式
-        LoadFromDER(Data)
-      else
-        // 假设是 PEM 格式
-        LoadFromPEM(AnsiString(nextpas.core.text.conv.UTF8BytesToString(Data)));
-    end;
-  finally
-  end;
+  if Data[0] = $30 then
+    LoadFromDER(Data)
+  else
+    LoadFromPEM(nextpas.core.text.conv.UTF8BytesToString(Data));
 end;
 
 procedure TX509CRL.ParseCRL(ARoot: TASN1Node);

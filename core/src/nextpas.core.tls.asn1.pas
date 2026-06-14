@@ -23,7 +23,8 @@ unit nextpas.core.tls.asn1;
 interface
 
 uses
-  SysUtils,Contnrs;
+  SysUtils, Classes, Contnrs,
+  nextpas.core.io.intf;
 
 const
   // ========================================================================
@@ -235,7 +236,7 @@ type
   // ========================================================================
   TASN1Writer = class
   private
-    FStream: TMemoryStream;
+    FStream: nextpas.core.io.intf.IStream;
     FPositionStack: array of Int64;  // 用于跟踪序列/集合的起始位置
     FTagStack: array of Byte;        // 保存对应的标签
 
@@ -296,6 +297,8 @@ function TagToString(ATag: Byte): string;
 implementation
 
 uses
+  nextpas.core.io,
+  nextpas.core.io.memory,
   nextpas.core.text.strings;
 
 
@@ -1009,7 +1012,7 @@ end;
 constructor TASN1Writer.Create;
 begin
   inherited Create;
-  FStream := TMemoryStream.Create;
+  FStream := CreateBytesStream;
 end;
 
 destructor TASN1Writer.Destroy;
@@ -1019,7 +1022,7 @@ end;
 
 procedure TASN1Writer.WriteTag(ATag: Byte);
 begin
-  FStream.WriteByte(ATag);
+  FStream.Write(ATag, SizeOf(ATag));
 end;
 
 procedure TASN1Writer.WriteLength(ALength: Int64);
@@ -1031,7 +1034,8 @@ begin
   if ALength < 128 then
   begin
     // 短格式
-    FStream.WriteByte(Byte(ALength));
+    LenBytes[0] := Byte(ALength);
+    FStream.Write(LenBytes[0], SizeOf(Byte));
   end
   else
   begin
@@ -1045,21 +1049,23 @@ begin
       Inc(NumBytes);
     end;
 
-    FStream.WriteByte($80 or NumBytes);
+    LenBytes[0] := $80 or NumBytes;
+    FStream.Write(LenBytes[0], SizeOf(Byte));
     for I := NumBytes - 1 downto 0 do
-      FStream.WriteByte(LenBytes[I]);
+      FStream.Write(LenBytes[I], SizeOf(Byte));
   end;
 end;
 
 procedure TASN1Writer.WriteBytes(const AData: TBytes);
 begin
   if Length(AData) > 0 then
-    FStream.WriteBuffer(AData[0], Length(AData));
+    FStream.Write(AData[0], Length(AData));
 end;
 
 procedure TASN1Writer.PushPosition(ATag: Byte);
 var
   Len: Integer;
+  Placeholder: array[0..4] of Byte;
 begin
   // 写入标签
   WriteTag(ATag);
@@ -1069,8 +1075,7 @@ begin
   SetLength(FTagStack, Len + 1);
   FPositionStack[Len] := FStream.Position;
   FTagStack[Len] := ATag;
-  // 写入占位符（最多支持 4 字节长度，即最大 2^32 字节内容）
-  FStream.WriteBuffer(#0#0#0#0#0, 5);  // 1字节长度类型 + 4字节长度值
+  FStream.Write(Placeholder[0], SizeOf(Placeholder));
 end;
 
 procedure TASN1Writer.PopAndWriteLength;
@@ -1079,7 +1084,15 @@ var
   StartPos, EndPos, ContentLen: Int64;
   LengthBytes: array[0..4] of Byte;
   LengthSize: Integer;
-  TempData: TBytes;
+  ContentData: TBytes;
+  PrefixData: TBytes;
+  SuffixData: TBytes;
+  ReaderAt: IReaderAt;
+  WriterAt: IWriterAt;
+  NewStream: nextpas.core.io.intf.IStream;
+  PrefixLen: Int64;
+  SuffixLen: Int64;
+  NewPos: Int64;
 begin
   StackLen := Length(FPositionStack);
   if StackLen = 0 then
@@ -1132,21 +1145,54 @@ begin
   end;
 
   // 读取内容
-  SetLength(TempData, ContentLen);
+  SetLength(ContentData, ContentLen);
   if ContentLen > 0 then
   begin
-    FStream.Position := StartPos + 5;
-    FStream.ReadBuffer(TempData[0], ContentLen);
+    if not Supports(FStream, IReaderAt, ReaderAt) then
+      raise EASN1InvalidDataException.Create('ASN.1 writer stream does not support ReadAt');
+    if ReaderAt.ReadAt(ContentData[0], ContentLen, StartPos + 5) <> SizeUInt(ContentLen) then
+      raise EASN1ParseException.Create('Unexpected end of writer content while backfilling length');
   end;
 
-  // 回到长度字段位置，重写长度和内容
-  FStream.Position := StartPos;
-  FStream.WriteBuffer(LengthBytes[0], LengthSize);
-  if ContentLen > 0 then
-    FStream.WriteBuffer(TempData[0], ContentLen);
+  if LengthSize = 5 then
+  begin
+    if not Supports(FStream, IWriterAt, WriterAt) then
+      raise EASN1InvalidDataException.Create('ASN.1 writer stream does not support WriteAt');
+    if WriterAt.WriteAt(LengthBytes[0], LengthSize, StartPos) <> SizeUInt(LengthSize) then
+      raise EASN1ParseException.Create('Failed to backfill ASN.1 length');
+    FStream.Position := EndPos;
+    Exit;
+  end;
 
-  // 调整流大小（如果长度字段变短了）
-  FStream.Size := FStream.Position;
+  PrefixLen := StartPos;
+  SuffixLen := FStream.Size - EndPos;
+  NewStream := CreateBytesStream;
+
+  if PrefixLen > 0 then
+  begin
+    SetLength(PrefixData, PrefixLen);
+    if not Supports(FStream, IReaderAt, ReaderAt) then
+      raise EASN1InvalidDataException.Create('ASN.1 writer stream does not support ReadAt');
+    if ReaderAt.ReadAt(PrefixData[0], PrefixLen, 0) <> SizeUInt(PrefixLen) then
+      raise EASN1ParseException.Create('Unexpected end of ASN.1 prefix while rebuilding stream');
+    NewStream.Write(PrefixData[0], PrefixLen);
+  end;
+
+  NewStream.Write(LengthBytes[0], LengthSize);
+  if ContentLen > 0 then
+    NewStream.Write(ContentData[0], ContentLen);
+
+  if SuffixLen > 0 then
+  begin
+    SetLength(SuffixData, SuffixLen);
+    if ReaderAt.ReadAt(SuffixData[0], SuffixLen, EndPos) <> SizeUInt(SuffixLen) then
+      raise EASN1ParseException.Create('Unexpected end of ASN.1 suffix while rebuilding stream');
+    NewStream.Write(SuffixData[0], SuffixLen);
+  end;
+
+  NewPos := StartPos + LengthSize + ContentLen;
+  FStream := NewStream;
+  FStream.Position := NewPos;
 end;
 
 procedure TASN1Writer.WriteNull;
@@ -1160,9 +1206,9 @@ begin
   WriteTag(ASN1_TAG_BOOLEAN);
   WriteLength(1);
   if AValue then
-    FStream.WriteByte($FF)
+    WriteTag($FF)
   else
-    FStream.WriteByte($00);
+    WriteTag($00);
 end;
 
 procedure TASN1Writer.WriteInteger(AValue: Int64);
@@ -1261,7 +1307,7 @@ procedure TASN1Writer.WriteBitString(const AData: TBytes; AUnusedBits: Byte);
 begin
   WriteTag(ASN1_TAG_BIT_STRING);
   WriteLength(Length(AData) + 1);
-  FStream.WriteByte(AUnusedBits);
+  FStream.Write(AUnusedBits, SizeOf(AUnusedBits));
   WriteBytes(AData);
 end;
 
@@ -1269,7 +1315,7 @@ procedure TASN1Writer.WriteUTF8String(const AValue: string);
 var
   Data: TBytes;
 begin
-  Data := nextpas.core.text.conv.StringToUTF8Bytes(AValue));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(AValue);
   WriteTag(ASN1_TAG_UTF8STRING);
   WriteLength(Length(Data));
   WriteBytes(Data);
@@ -1279,7 +1325,7 @@ procedure TASN1Writer.WritePrintableString(const AValue: string);
 var
   Data: TBytes;
 begin
-  Data := nextpas.core.text.conv.StringToASCIIBytes(AValue));
+  Data := nextpas.core.text.conv.StringToASCIIBytes(AValue);
   WriteTag(ASN1_TAG_PRINTABLESTRING);
   WriteLength(Length(Data));
   WriteBytes(Data);
@@ -1289,7 +1335,7 @@ procedure TASN1Writer.WriteIA5String(const AValue: string);
 var
   Data: TBytes;
 begin
-  Data := nextpas.core.text.conv.StringToASCIIBytes(AValue));
+  Data := nextpas.core.text.conv.StringToASCIIBytes(AValue);
   WriteTag(ASN1_TAG_IA5STRING);
   WriteLength(Length(Data));
   WriteBytes(Data);
@@ -1306,7 +1352,7 @@ begin
 
   // UTCTime: YYMMDDhhmmssZ
   TimeStr := Format('%.2d%.2d%.2d%.2d%.2d%.2dZ', [Y mod 100, M, D, H, Mi, S]);
-  Data := nextpas.core.text.conv.StringToASCIIBytes(TimeStr));
+  Data := nextpas.core.text.conv.StringToASCIIBytes(TimeStr);
 
   WriteTag(ASN1_TAG_UTCTIME);
   WriteLength(Length(Data));
@@ -1324,7 +1370,7 @@ begin
 
   // GeneralizedTime: YYYYMMDDhhmmssZ
   TimeStr := Format('%.4d%.2d%.2d%.2d%.2d%.2dZ', [Y, M, D, H, Mi, S]);
-  Data := nextpas.core.text.conv.StringToASCIIBytes(TimeStr));
+  Data := nextpas.core.text.conv.StringToASCIIBytes(TimeStr);
 
   WriteTag(ASN1_TAG_GENERALIZEDTIME);
   WriteLength(Length(Data));
@@ -1377,13 +1423,15 @@ begin
   if FStream.Size > 0 then
   begin
     FStream.Position := 0;
-    FStream.ReadBuffer(Result[0], FStream.Size);
+    ReadFull(FStream, Result[0], SizeUInt(FStream.Size));
   end;
 end;
 
 procedure TASN1Writer.Clear;
 begin
-  FStream.Clear;
+  FStream := CreateBytesStream;
+  SetLength(FPositionStack, 0);
+  SetLength(FTagStack, 0);
 end;
 
 // ========================================================================
@@ -1440,7 +1488,8 @@ var
   I: Integer;
   First, Second, Value: Cardinal;
   TempBytes: array of Byte;
-  ResultStream: TMemoryStream;
+  ResultStream: nextpas.core.io.intf.IStream;
+  ByteWriter: IByteWriter;
 
   procedure EncodeComponent(AValue: Cardinal);
   var
@@ -1448,7 +1497,7 @@ var
   begin
     if AValue = 0 then
     begin
-      ResultStream.WriteByte(0);
+      ByteWriter.WriteByte(0);
     end
     else
     begin
@@ -1470,39 +1519,38 @@ var
         AValue := AValue shr 7;
       end;
 
-      ResultStream.WriteBuffer(TempBytes[0], Count);
+      ResultStream.Write(TempBytes[0], Count);
     end;
   end;
 
 begin
-  ResultStream := TMemoryStream.Create;
-  try
+  ResultStream := CreateBytesStream;
+  if not Supports(ResultStream, IByteWriter, ByteWriter) then
+    raise EASN1InvalidDataException.Create('ASN.1 OID encoder requires byte-writable stream');
+  Parts := StringsSplit(AOID, '.', True);
 
-    if Length(Parts) < 2 then
-    begin
-      SetLength(Result, 0);
-      Exit;
-    end;
-
-    // 编码前两个组件
-    First := StrToIntDef(Parts[0], 0);
-    Second := StrToIntDef(Parts[1], 0);
-    ResultStream.WriteByte(Byte(First * 40 + Second));
-
-    // 编码后续组件
-    for I := 2 to Length(Parts) - 1 do
-    begin
-      Value := StrToIntDef(Parts[I], 0);
-      EncodeComponent(Value);
-    end;
-
-    SetLength(Result, ResultStream.Size);
-    ResultStream.Position := 0;
-    if ResultStream.Size > 0 then
-      ResultStream.ReadBuffer(Result[0], ResultStream.Size);
-
-  finally
+  if Length(Parts) < 2 then
+  begin
+    SetLength(Result, 0);
+    Exit;
   end;
+
+  // 编码前两个组件
+  First := StrToIntDef(Parts[0], 0);
+  Second := StrToIntDef(Parts[1], 0);
+  ByteWriter.WriteByte(Byte(First * 40 + Second));
+
+  // 编码后续组件
+  for I := 2 to Length(Parts) - 1 do
+  begin
+    Value := StrToIntDef(Parts[I], 0);
+    EncodeComponent(Value);
+  end;
+
+  SetLength(Result, ResultStream.Size);
+  ResultStream.Position := 0;
+  if ResultStream.Size > 0 then
+    ReadFull(ResultStream, Result[0], SizeUInt(ResultStream.Size));
 end;
 
 function OIDToName(const AOID: string): string;
