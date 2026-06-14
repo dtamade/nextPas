@@ -535,12 +535,12 @@ begin
     'IOCP unsupported helper must not retain unused callback context parameters');
   CheckAbsent(LUnsupportedBody, 'acallback(',
     'IOCP unsupported helper must not dispatch inline completion callbacks');
-  CheckContains(LAcceptBody, 'result := iocpunsupportedasync;',
-    'AsyncAccept must reject unsupported IOCP ownership through the helper');
-  CheckContains(LConnectBody, 'result := iocpunsupportedasync;',
-    'AsyncConnect must reject unsupported IOCP ownership through the helper');
-  CheckContains(LCloseBody, 'result := iocpunsupportedasync;',
-    'AsyncClose must reject unsupported IOCP ownership through the helper');
+  CheckContains(LAcceptBody, 'iocpunsupportedasync',
+    'AsyncAccept must have a guard path for unsupported IOCP via helper');
+  CheckContains(LConnectBody, 'iocpunsupportedasync',
+    'AsyncConnect must have a guard path for unsupported IOCP via helper');
+  CheckAbsent(LCloseBody, 'iocpunsupportedasync',
+    'AsyncClose must no longer be a generic unsupported stub');
   CheckAbsent(LSendBody, 'iocpunsupportedasync',
     'AsyncSend must no longer be a generic unsupported stub');
   CheckAbsent(LRecvBody, 'iocpunsupportedasync',
@@ -557,7 +557,7 @@ begin
     'socket operations should keep caller buffer pointer in the owned WSABUF descriptor');
   CheckContains(LIocp, 'lop^.wsabuf.len := alen;',
     'socket operations should keep payload length in the owned WSABUF descriptor');
-  CheckContains(LIocp, 'lop^.socketflags := dword(aflags);',
+  CheckContains(LIocp, 'lop^.socketflags := aflags;',
     'socket operations should keep mutable flags storage alive through overlapped submit');
   CheckContains(LSendBody, 'iocpsubmitsocketop(self, opsend',
     'AsyncSend must submit through the socket completion helper');
