@@ -285,6 +285,10 @@ begin
     'Inline raw name should match');
   CheckEqual('bar', string(SpanToString(LViews[0].Value)),
     'Inline raw value should match');
+
+  LBlock := AnsiString(#0#$81#0#0);
+  Check(not LDecoder.DecodeView(LBlock, LViews),
+    'DecodeView should reject invalid Huffman name padding');
 end;
 
 procedure TestDecodeViewDynamicTableReuse;

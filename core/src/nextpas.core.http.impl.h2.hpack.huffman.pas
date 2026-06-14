@@ -19,7 +19,7 @@ function H2HuffmanDecodeLimited(const AData: AnsiString;
   const ALimit: SizeInt; out ATruncated: Boolean): AnsiString;
 function H2HuffmanDecodeRaw(const AData: PAnsiChar; const ALen: SizeInt): AnsiString;
 {** Decode huffman data into a caller-provided buffer (typically stack-allocated).
- *  Returns True on success, False if EOS symbol encountered.
+ *  Returns True on success, False if EOS symbol or invalid padding is encountered.
  *  ABuf must be at least ADataLen * 2 bytes (huffman max expansion < 2x).
  *  ABufSize is the buffer capacity in bytes.
  *  Sets AOutLen to the decoded length. If buffer is too small, AOutLen = 0
@@ -54,6 +54,7 @@ type
 const
   HUFF_ROOT = 0;
   HUFF_EOS_SYM = 256;
+  HUFF_INVALID_SYM = 257;
 
 var
   FNodes: array of THuffNode;
@@ -117,10 +118,29 @@ begin
         Inc(LConsumed); LCurNode := LChild;
         if FNodes[LCurNode].Sym >= 0 then begin LSym := FNodes[LCurNode].Sym; LCurNode := HUFF_ROOT; end;
       end;
+      if LConsumed <> 4 then
+        LSym := HUFF_INVALID_SYM;
       FNibbleTable[LNodeIdx, LNibble].Symbol := LSym;
       FNibbleTable[LNodeIdx, LNibble].NextNode := LCurNode;
       FNibbleTable[LNodeIdx, LNibble].Consumed := LConsumed;
     end;
+end;
+
+function IsValidFinalNode(const ANode: UInt16): Boolean; inline;
+var
+  LNodeIdx: UInt16;
+  LBits: Byte;
+begin
+  if ANode = HUFF_ROOT then
+    Exit(True);
+  LNodeIdx := HUFF_ROOT;
+  for LBits := 1 to 7 do
+  begin
+    LNodeIdx := FNodes[LNodeIdx].Right;
+    if ANode = LNodeIdx then
+      Exit(True);
+  end;
+  Result := False;
 end;
 
 function CoreDecode(const AData: PAnsiChar; const ADataLen: SizeInt;
@@ -143,7 +163,7 @@ begin
     LEntry := @FNibbleTable[LNode, LNibble];
     if LEntry^.Symbol >= 0 then
     begin
-      if LEntry^.Symbol = HUFF_EOS_SYM then raise EHttpError.Create('HPACK Huffman: EOS symbol');
+      if LEntry^.Symbol >= HUFF_EOS_SYM then raise EHttpError.Create('HPACK Huffman: invalid padding');
       Inc(LOutputPos);
       if (ALimit >= 0) and (LOutputPos > ALimit) then begin ATruncated := True; Exit(''); end;
       if LOutputPos <= STACK_BUF_SIZE then
@@ -165,7 +185,7 @@ begin
     LEntry := @FNibbleTable[LNode, LNibble];
     if LEntry^.Symbol >= 0 then
     begin
-      if LEntry^.Symbol = HUFF_EOS_SYM then raise EHttpError.Create('HPACK Huffman: EOS symbol');
+      if LEntry^.Symbol >= HUFF_EOS_SYM then raise EHttpError.Create('HPACK Huffman: invalid padding');
       Inc(LOutputPos);
       if (ALimit >= 0) and (LOutputPos > ALimit) then begin ATruncated := True; Exit(''); end;
       if LOutputPos <= STACK_BUF_SIZE then
@@ -185,6 +205,8 @@ begin
     LNode := LEntry^.NextNode;
     Inc(I);
   end;
+  if not IsValidFinalNode(LNode) then
+    raise EHttpError.Create('HPACK Huffman: invalid padding');
   if LHeapStr <> '' then
   begin
     SetLength(LHeapStr, LOutputPos);
@@ -258,7 +280,7 @@ begin
     LEntry := @FNibbleTable[LNode, LNibble];
     if LEntry^.Symbol >= 0 then
     begin
-      if LEntry^.Symbol = HUFF_EOS_SYM then begin AOutLen := 0; Exit(False); end;
+      if LEntry^.Symbol >= HUFF_EOS_SYM then begin AOutLen := 0; Exit(False); end;
       Inc(LOutputPos);
       if LOutputPos > ABufSize then begin AOutLen := 0; Exit(False); end;
       LOut[LOutputPos - 1] := AnsiChar(LEntry^.Symbol);
@@ -268,7 +290,7 @@ begin
     LEntry := @FNibbleTable[LNode, LNibble];
     if LEntry^.Symbol >= 0 then
     begin
-      if LEntry^.Symbol = HUFF_EOS_SYM then begin AOutLen := 0; Exit(False); end;
+      if LEntry^.Symbol >= HUFF_EOS_SYM then begin AOutLen := 0; Exit(False); end;
       Inc(LOutputPos);
       if LOutputPos > ABufSize then begin AOutLen := 0; Exit(False); end;
       LOut[LOutputPos - 1] := AnsiChar(LEntry^.Symbol);
@@ -276,6 +298,7 @@ begin
     LNode := LEntry^.NextNode;
     Inc(I);
   end;
+  if not IsValidFinalNode(LNode) then begin AOutLen := 0; Exit(False); end;
   AOutLen := LOutputPos;
   Result := True;
 end;
@@ -298,7 +321,7 @@ begin
     LEntry := @FNibbleTable[LNode, LNibble];
     if LEntry^.Symbol >= 0 then
     begin
-      if LEntry^.Symbol = HUFF_EOS_SYM then begin AStr := ''; Exit; end;
+      if LEntry^.Symbol >= HUFF_EOS_SYM then begin AStr := ''; Exit; end;
       LOut[LOutputPos] := AnsiChar(LEntry^.Symbol);
       Inc(LOutputPos);
     end;
@@ -307,13 +330,14 @@ begin
     LEntry := @FNibbleTable[LNode, LNibble];
     if LEntry^.Symbol >= 0 then
     begin
-      if LEntry^.Symbol = HUFF_EOS_SYM then begin AStr := ''; Exit; end;
+      if LEntry^.Symbol >= HUFF_EOS_SYM then begin AStr := ''; Exit; end;
       LOut[LOutputPos] := AnsiChar(LEntry^.Symbol);
       Inc(LOutputPos);
     end;
     LNode := LEntry^.NextNode;
     Inc(I);
   end;
+  if not IsValidFinalNode(LNode) then begin AStr := ''; Exit; end;
   SetLength(AStr, LOutputPos);
 end;
 
