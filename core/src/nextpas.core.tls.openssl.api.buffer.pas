@@ -186,7 +186,7 @@ begin
   Result := False;
   if not Assigned(Buffer) or (Str = '') then Exit;
   
-  StrBytes := TEncoding.UTF8.GetBytes(UnicodeString(Str));
+  StrBytes := nextpas.core.text.conv.StringToUTF8Bytes(Str));
   Result := AppendToBuffer(Buffer, @StrBytes[0], Length(StrBytes));
 end;
 
@@ -208,7 +208,7 @@ begin
   
   SetLength(Bytes, Buffer^.length);
   Move(Buffer^.data^, Bytes[0], Buffer^.length);
-  Result := AnsiString(TEncoding.UTF8.GetString(Bytes));
+  Result := AnsiString(nextpas.core.text.conv.UTF8BytesToString(Bytes));
 end;
 
 function DuplicateString(const Str: string): PAnsiChar;
@@ -218,7 +218,7 @@ begin
   Result := nil;
   if not Assigned(BUF_strdup) then Exit;
   
-  StrBytes := TEncoding.UTF8.GetBytes(UnicodeString(Str));
+  StrBytes := nextpas.core.text.conv.StringToUTF8Bytes(Str));
   Result := BUF_strdup(PAnsiChar(StrBytes));
 end;
 

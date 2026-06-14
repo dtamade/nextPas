@@ -601,7 +601,7 @@ begin
       LoadFromDER(Data)
     else if (FirstByte = Ord('-')) or (FirstByte = Ord('M')) then
       // PEM 格式 (以 "-----" 或 "M" (Base64) 开头)
-      LoadFromPEM(AnsiString(TEncoding.ASCII.GetString(Data)))
+      LoadFromPEM(AnsiString(nextpas.core.text.conv.ASCIIBytesToString(Data)))
     else
       raise EX509ParseException.Create('Unknown certificate format');
   end;

@@ -240,7 +240,7 @@ begin
         LoadFromDER(Data)
       else
         // 假设是 PEM 格式
-        LoadFromPEM(AnsiString(TEncoding.UTF8.GetString(Data)));
+        LoadFromPEM(AnsiString(nextpas.core.text.conv.UTF8BytesToString(Data)));
     end;
   finally
     Stream.Free;

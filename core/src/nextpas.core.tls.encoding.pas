@@ -428,7 +428,7 @@ class function TEncodingUtils.Base64Encode(const AInput: string): string;
 var
   LBytes: TBytes;
 begin
-  LBytes := TEncoding.UTF8.GetBytes(UnicodeString(AInput));
+  LBytes := nextpas.core.text.conv.StringToUTF8Bytes(AInput));
   Result := Base64Encode(LBytes);
 end;
 
@@ -487,7 +487,7 @@ end;
 
 class function TEncodingUtils.Base64DecodeString(const AInput: string): string;
 begin
-  Result := string(TEncoding.UTF8.GetString(Base64Decode(AInput)));
+  Result := string(nextpas.core.text.conv.UTF8BytesToString(Base64Decode(AInput)));
 end;
 
 class function TEncodingUtils.TryBase64Encode(
@@ -611,7 +611,7 @@ class function TEncodingUtils.StringToHex(const AStr: string): string;
 var
   LBytes: TBytes;
 begin
-  LBytes := TEncoding.UTF8.GetBytes(UnicodeString(AStr));
+  LBytes := nextpas.core.text.conv.StringToUTF8Bytes(AStr));
   Result := BytesToHex(LBytes);
 end;
 
@@ -620,7 +620,7 @@ var
   LBytes: TBytes;
 begin
   LBytes := HexToBytes(AHex);
-  Result := string(TEncoding.UTF8.GetString(LBytes));
+  Result := string(nextpas.core.text.conv.UTF8BytesToString(LBytes));
 end;
 
 end.

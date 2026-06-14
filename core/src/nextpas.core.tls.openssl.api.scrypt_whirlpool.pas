@@ -150,7 +150,7 @@ var
   UStr: UnicodeString;
 begin
   UStr := UnicodeString(S);
-  Data := TEncoding.UTF8.GetBytes(UStr);
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(UStr);
   Hash := WhirlpoolHash(Data);
   HexStr := '';
   for I := 0 to High(Hash) do

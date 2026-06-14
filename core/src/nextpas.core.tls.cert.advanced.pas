@@ -485,9 +485,9 @@ begin
   
   // Prepare password and name
   if AOptions.Password <> '' then
-    LPassBytes := TEncoding.UTF8.GetBytes(UnicodeString(AOptions.Password));
+    LPassBytes := nextpas.core.text.conv.StringToUTF8Bytes(AOptions.Password));
   if AOptions.FriendlyName <> '' then
-    LNameBytes := TEncoding.UTF8.GetBytes(UnicodeString(AOptions.FriendlyName));
+    LNameBytes := nextpas.core.text.conv.StringToUTF8Bytes(AOptions.FriendlyName));
   
   // Create PKCS#12 structure
   LP12 := nextpas.core.tls.openssl.api.pkcs12.PKCS12_create(
@@ -586,7 +586,7 @@ begin
     if not Assigned(LP12) then Exit;
     
     try
-      LPassBytes := TEncoding.UTF8.GetBytes(UnicodeString(APassword));
+      LPassBytes := nextpas.core.text.conv.StringToUTF8Bytes(APassword));
       LCertPtr := nil;
       LKeyPtr := nil;
       LCAStack := nil;
