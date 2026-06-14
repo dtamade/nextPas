@@ -239,9 +239,11 @@ end;
 
 procedure TH2Stream.FinalizeHeaders;
 var
-  LHeaders: array of THPackHeader;
+  LHeaders: array of THPackHeaderView;
   LIndex: SizeInt;
+  LNameStr: AnsiString;
   LTotalLen: SizeInt;
+  LValueStr: AnsiString;
   LWritePos: SizeInt;
   LTargetStore: TObject;
 begin
@@ -261,7 +263,7 @@ begin
   end;
 
   SetLength(LHeaders, Length(FHeaderBlock));
-  if (FDecoder = nil) or not FDecoder^.Decode(FHeaderBlock, LHeaders) then
+  if (FDecoder = nil) or not FDecoder^.DecodeView(FHeaderBlock, LHeaders) then
   begin
     InternalReset(H2_ERR_COMPRESSION_ERROR);
     Exit;
@@ -285,10 +287,12 @@ begin
 
   for LIndex := 0 to High(LHeaders) do
   begin
-    if LHeaders[LIndex].Name = '' then
+    if LHeaders[LIndex].Name.Ptr = nil then
       Break;
-    HeaderStoreAsConcrete(LTargetStore).AddParsed(string(LHeaders[LIndex].Name),
-      string(LHeaders[LIndex].Value));
+    SetString(LNameStr, LHeaders[LIndex].Name.Ptr, LHeaders[LIndex].Name.Len);
+    SetString(LValueStr, LHeaders[LIndex].Value.Ptr, LHeaders[LIndex].Value.Len);
+    HeaderStoreAsConcrete(LTargetStore).AddParsed(string(LNameStr),
+      string(LValueStr));
   end;
 
   FEndHeadersReceived := True;

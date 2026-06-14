@@ -889,13 +889,15 @@ end;
 
 procedure TH2ClientConnection.DecodeResponseHeaders(var AResponse: TH2ResponseState);
 var
-  LHeaders: array of THPackHeader;
+  LHeaders: array of THPackHeaderView;
   LBlock: AnsiString;
+  LNameStr: AnsiString;
   LTotalLen: SizeInt;
   LWritePos: SizeInt;
   LI: SizeInt;
   LStatusText: string;
   LStatusValue: Int64;
+  LValueStr: AnsiString;
 begin
   if AResponse.HeadersDecoded then
     Exit;
@@ -913,7 +915,7 @@ begin
     Inc(LWritePos, Length(AResponse.HeaderFragments[LI]));
   end;
   SetLength(LHeaders, Length(LBlock));
-  if not FDecoder.Decode(LBlock, LHeaders) then
+  if not FDecoder.DecodeView(LBlock, LHeaders) then
     raise EHttpError.Create('HTTP/2 client HPACK decode failed');
   if AResponse.HeadersStore = nil then
   begin
@@ -923,13 +925,15 @@ begin
   LStatusText := '';
   for LI := 0 to High(LHeaders) do
   begin
-    if LHeaders[LI].Name = '' then
+    if LHeaders[LI].Name.Ptr = nil then
       Break;
-    if LHeaders[LI].Name = ':status' then
-      LStatusText := string(LHeaders[LI].Value)
+    SetString(LNameStr, LHeaders[LI].Name.Ptr, LHeaders[LI].Name.Len);
+    SetString(LValueStr, LHeaders[LI].Value.Ptr, LHeaders[LI].Value.Len);
+    if LNameStr = ':status' then
+      LStatusText := string(LValueStr)
     else
-      TH2OwnedHeaders(AResponse.HeadersStore).Add(string(LHeaders[LI].Name),
-        string(LHeaders[LI].Value));
+      TH2OwnedHeaders(AResponse.HeadersStore).Add(string(LNameStr),
+        string(LValueStr));
   end;
   if (LStatusText = '') or (not TryStrToInt64(LStatusText, LStatusValue)) then
     raise EHttpError.Create('HTTP/2 response missing valid :status');
