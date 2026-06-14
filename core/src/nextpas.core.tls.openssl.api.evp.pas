@@ -12,7 +12,13 @@ unit nextpas.core.tls.openssl.api.evp;
 
 interface
 
-uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader; type // EVP structures PEVP_MD = ^EVP_MD;
+uses
+  nextpas.core.tls.openssl.base,
+  nextpas.core.tls.openssl.loader;
+
+type
+  // EVP structures
+  PEVP_MD = ^EVP_MD;
   EVP_MD = record end;
   
   PEVP_MD_CTX = ^EVP_MD_CTX;
@@ -877,7 +883,14 @@ function EVP_PKEY_CTX_set_rsa_padding(ctx: PEVP_PKEY_CTX; pad: Integer): Integer
 
 implementation
 
-uses nextpas.core.tls.openssl.api; // Runtime storage avoids platform-specific regressions in const procvar binding tables. var EVP_BINDINGS: array[0..98] of TFunctionBinding = ( // MD Context functions (Name: 'EVP_MD_CTX_new'; FuncPtr: @EVP_MD_CTX_new; Required: True);
+uses
+  nextpas.core.tls.openssl.api;
+
+var
+  // Runtime storage avoids platform-specific regressions in const procvar binding tables.
+  EVP_BINDINGS: array[0..98] of TFunctionBinding = (
+    // MD Context functions
+    (Name: 'EVP_MD_CTX_new'; FuncPtr: @EVP_MD_CTX_new; Required: True),
     (Name: 'EVP_MD_CTX_free'; FuncPtr: @EVP_MD_CTX_free; Required: True),
     (Name: 'EVP_MD_CTX_reset'; FuncPtr: @EVP_MD_CTX_reset; Required: False),
     // Digest functions
