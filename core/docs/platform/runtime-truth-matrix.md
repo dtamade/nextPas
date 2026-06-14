@@ -6,7 +6,7 @@
 | Windows readiness poller | source-contract, forced-compile | Not runtime ready. |
 | Windows IOCP lifecycle | source-contract, forced-compile, wine-runtime-smoke | Real port lifecycle exists; Wine smoke is optional and is not real Windows runtime ready. |
 | Windows IOCP AsyncRead/AsyncWrite file completion | source-contract, forced-compile, wine-runtime-smoke | Runtime smoke covers file operations through IOCP/poller only when explicitly run under Wine; not real Windows runtime ready. |
-| Windows IOCP socket completion | source-contract, forced-compile, wine-runtime-smoke (Send/Recv) | `AsyncSend`/`AsyncRecv` have wine-runtime-smoke coverage (3 tests). `AsyncClose` implemented. `AsyncAccept`/`AsyncConnect` have source-contract + forced-compile only. Full Accept→Send→Recv→Close lifecycle lacks end-to-end runtime evidence. |
+| Windows IOCP socket completion | focused-runtime | `AsyncSend`/`AsyncRecv` and `AsyncAccept`/`AsyncConnect` are verified on Wine and a real Windows VM. |
 | Android files/mmap | forced-compile/source-contract | Android files stat/lstat/fstat, directory enumeration through getdents64, and mmap size paths compile through host-owned declarations; no Android device runtime proof exists. |
 | Resource limits | Linux focused-runtime, Android forced-compile/source-contract | Linux rlimit get/set is focused-runtime covered; Android is compile/source proof only, not device runtime proof. |
 | Platform memory secure-zero | Linux focused-runtime, POSIX forced-compile/source-contract, Windows source-contract | Linux/POSIX host path uses shared POSIX `explicit_bzero`; forced POSIX compile proves branch coherence. Windows remains fallback/deferred with no native runtime proof. |

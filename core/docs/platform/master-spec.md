@@ -34,8 +34,9 @@ Without real runtime evidence, a host is not runtime ready.
 ## Current Windows truth
 
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
-Windows compile gates, and Wine runtime smoke for key readiness/completion
-seams. It does not have a real Windows CI runner.
+Windows compile gates, and Wine runtime smoke + real Windows focused-runtime
+for send/recv/AcceptEx/ConnectEx on Wine 10.0 and Windows 10 VM. It does not
+have a real Windows CI runner.
 
 Allowed wording:
 
@@ -56,12 +57,11 @@ IOCP socket completion operations are structurally implemented in
 | AsyncRecv | `WSARecv` + OVERLAPPED | implemented |
 | AsyncClose | `CancelIoEx` + `closesocket` | implemented |
 | AsyncConnect | `ConnectEx` (WSAIoctl-loaded) | implemented |
-| AsyncAccept | `AcceptEx` (WSAIoctl-loaded) | implemented — accepts pre-created socket via `WSASocketW`, caller retrieves via `LastAcceptedSocket` |
+| AsyncAccept | `AcceptEx` (WSAIoctl-loaded) | implemented — accepts pre-created socket via `winsock_socket`, caller retrieves via `LastAcceptedSocket` |
 
 All seven operations have source-contract coverage and forced Windows compile
-gates. `AsyncSend`/`AsyncRecv` have Wine runtime smoke evidence. The complete
-IOCP reactor path (listen → accept → send/recv → close) lacks end-to-end
-Wine runtime evidence (P2-3).
+gates. `AsyncSend`/`AsyncRecv` and `AsyncAccept`/`AsyncConnect` have
+focused-runtime evidence on Wine and a real Windows VM.
 
 ## Host raw FFI ownership
 
