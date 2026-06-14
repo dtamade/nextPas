@@ -33,9 +33,7 @@ unit nextpas.core.tls.result.utils;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base;
+uses Classes, nextpas.core.tls.base, nextpas.core.text.conv;
 
 type
   { 操作函数类型 }
@@ -152,8 +150,7 @@ function ToResult(ASuccess: Boolean; const AContext: string = ''): TSSLOperation
 
 implementation
 
-uses
-  nextpas.core.tls.exceptions;
+uses nextpas.core.tls.exceptions, nextpas.core.text.conv;
 
 { TResultUtils }
 

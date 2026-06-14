@@ -16,8 +16,7 @@ unit nextpas.core.tls.http.client;
 
 interface
 
-uses
-  SysUtils, Classes;
+uses Classes;
 
 type
   // ========================================================================
@@ -42,9 +41,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.tls.base,
-  nextpas.core.tls.net.hooks;
+uses nextpas.core.tls.base, nextpas.core.tls.net.hooks;
 
 // ========================================================================
 // TSimpleHTTPClient

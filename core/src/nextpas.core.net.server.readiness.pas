@@ -4,27 +4,14 @@ unit nextpas.core.net.server.readiness;
 
 interface
 
-uses
-  nextpas.core.net.base,
-  nextpas.core.net.intf,
-  nextpas.core.net.server.base,
-  nextpas.core.net.server.intf;
+uses nextpas.core.net.base, nextpas.core.net.intf, nextpas.core.net.server.base, nextpas.core.net.server.intf, nextpas.core.text.conv;
 
 function NewTcpReadinessServer(
   const AOptions: TTcpServerOptions): ITcpServer;
 
 implementation
 
-uses
-  SysUtils,
-  nextpas.core.errors,
-  nextpas.core.thread,
-  nextpas.core.time.base,
-  nextpas.core.time.deadline,
-  nextpas.core.platform.io.base,
-  nextpas.core.platform.io,
-  nextpas.core.net.tcp,
-  nextpas.core.net.server.runtime;
+uses nextpas.core.errors, nextpas.core.thread, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.platform.io.base, nextpas.core.platform.io, nextpas.core.net.tcp, nextpas.core.net.server.runtime, nextpas.core.text.conv;
 
 type
   TTcpReadinessServer = class;

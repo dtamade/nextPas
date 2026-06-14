@@ -4,10 +4,7 @@ unit nextpas.core.tls.openssl.api;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.exceptions,
-  nextpas.core.tls.openssl.loader;
+uses Classes, nextpas.core.tls.exceptions, nextpas.core.tls.openssl.loader, nextpas.core.text.conv;
 
 const
   {$IFDEF MSWINDOWS}

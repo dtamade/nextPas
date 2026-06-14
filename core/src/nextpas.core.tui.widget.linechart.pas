@@ -7,19 +7,7 @@ unit nextpas.core.tui.widget.linechart;
 
 interface
 
-uses
-  SysUtils,
-  nextpas.core.text.width, nextpas.core.text.utf8,
-  nextpas.core.tui.base,
-  nextpas.core.tui.color,
-  nextpas.core.tui.modifier,
-  nextpas.core.tui.style,
-  nextpas.core.tui.cell,
-  nextpas.core.tui.buffer,
-  nextpas.core.tui.widget.block,
-  nextpas.core.tui.borders,
-  nextpas.core.tui.widget.canvas,
-  nextpas.core.tui.widget.intf;
+uses nextpas.core.text.width, nextpas.core.text.utf8, nextpas.core.tui.base, nextpas.core.tui.color, nextpas.core.tui.modifier, nextpas.core.tui.style, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.widget.block, nextpas.core.tui.borders, nextpas.core.tui.widget.canvas, nextpas.core.tui.widget.intf, nextpas.core.text.conv;
 
 type
   TDataSeries = record

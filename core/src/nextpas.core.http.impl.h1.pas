@@ -9,14 +9,7 @@ unit nextpas.core.http.impl.h1;
 
 interface
 
-uses
-  nextpas.core.io.intf,
-  nextpas.core.net.intf,
-  nextpas.core.net.server.intf,
-  nextpas.core.net.server.base,
-  nextpas.core.platform.io.base,
-  nextpas.core.http.base,
-  nextpas.core.http.intf;
+uses nextpas.core.io.intf, nextpas.core.net.intf, nextpas.core.net.server.intf, nextpas.core.net.server.base, nextpas.core.platform.io.base, nextpas.core.http.base, nextpas.core.http.intf;
 
 type
   TH1ClientTransportOptions = record
@@ -36,23 +29,7 @@ function NewH1ServerTransport(const AOptions: TH1ServerTransportOptions): IHttpS
 
 implementation
 
-uses
-  SysUtils,
-  nextpas.core.base,
-  nextpas.core.base.utils,
-  nextpas.core.errors,
-  nextpas.core.io.base,
-  nextpas.core.io.buffer,
-  nextpas.core.net,
-  nextpas.core.time.base,
-  nextpas.core.time.deadline,
-  nextpas.core.text.conv,
-  nextpas.core.http.headers,
-  nextpas.core.http.message,
-  nextpas.core.http.impl.h1.outbound,
-  nextpas.core.http.impl.h1.fast,
-  nextpas.core.http.impl.h1.parser,
-  nextpas.core.http.impl.h1.writer;
+uses nextpas.core.base, nextpas.core.base.utils, nextpas.core.errors, nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.net, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.text.conv, nextpas.core.http.headers, nextpas.core.http.message, nextpas.core.http.impl.h1.outbound, nextpas.core.http.impl.h1.fast, nextpas.core.http.impl.h1.parser, nextpas.core.http.impl.h1.writer;
 
 type
   TPoolEntry = record

@@ -4,21 +4,7 @@ unit nextpas.core.tls.openssl.api.ocsp;
 
 interface
 
-uses
-  SysUtils, Classes, dynlibs,
-  nextpas.core.tls.base,
-  nextpas.core.tls.net.hooks,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader,
-  nextpas.core.tls.openssl.api.consts,
-  nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.ssl,
-  nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.crypto,
-  nextpas.core.tls.openssl.api.asn1,
-  nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.stack;
+uses Classes, dynlibs, nextpas.core.tls.base, nextpas.core.tls.net.hooks, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.ssl, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.crypto, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.stack, nextpas.core.text.conv;
 
 type
   // Additional pointer types needed

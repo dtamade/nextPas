@@ -5,8 +5,6 @@ unit nextpas.core.tls.pkcs12;
 
 interface
 
-uses
-  SysUtils;
 
 type
   TPKCS12ParseResult = record
@@ -21,8 +19,7 @@ function TryParsePKCS12(const AData: TBytes; const APassword: string;
 
 implementation
 
-uses
-  nextpas.core.tls.asn1, nextpas.core.crypto.hash;
+uses nextpas.core.tls.asn1, nextpas.core.crypto.hash;
 
 const
   OID_PKCS12_PBE_SHA1_3DES = '1.2.840.113549.1.12.1.3';

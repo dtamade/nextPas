@@ -11,9 +11,7 @@ interface
   {$ENDIF}
 {$ENDIF}
 
-uses
-  ctypes,
-  nextpas.core.git.libgit2.ffi;
+uses ctypes, nextpas.core.git.libgit2.ffi;
 
 // Basic library functions
 // Runtime loader contract
@@ -167,12 +165,7 @@ procedure git_buf_dispose(buffer: Pgit_buf); cdecl;
 
 implementation
 
-uses
-  SysUtils
-  {$IFNDEF NEXTPAS_CORE_GIT_LIBGIT2_STATIC}
-  , Dynlibs
-  {$ENDIF}
-  ;
+uses Dynlibs;
 
 const
   LIBGIT2_PATH_ENV = 'NEXTPAS_LIBGIT2_PATH';

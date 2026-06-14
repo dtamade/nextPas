@@ -24,16 +24,7 @@ unit nextpas.core.tls.pkcs11.engine;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.pkcs11.types,
-  nextpas.core.tls.pkcs11.api,
-  nextpas.core.tls.pkcs11.backend,
-  nextpas.core.tls.pkcs11.uri,
-  nextpas.core.tls.openssl.api.types,
-  nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.engine,
-  nextpas.core.tls.openssl.api.ui;
+uses Classes, nextpas.core.tls.pkcs11.types, nextpas.core.tls.pkcs11.api, nextpas.core.tls.pkcs11.backend, nextpas.core.tls.pkcs11.uri, nextpas.core.tls.openssl.api.types, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.engine, nextpas.core.tls.openssl.api.ui, nextpas.core.text.conv;
 
 type
   { TPKCS11PINCallbackData - 用于传递给 UI_METHOD 回调的数据结构 }
@@ -88,8 +79,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.x509;
+uses nextpas.core.tls.openssl.api.x509, nextpas.core.text.conv;
 
 var
   { 全局变量用于 UI 回调（因为 cdecl 回调无法直接访问对象方法）}

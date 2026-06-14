@@ -5,8 +5,7 @@ unit nextpas.core.io.reactor.iocp;
 {$IFDEF NEXTPAS_WINDOWS}
 interface
 
-uses
-  nextpas.core.platform.windows.base;
+uses nextpas.core.platform.windows.base;
 
 type
   TIoCompletion = procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);
@@ -60,10 +59,7 @@ type
 
 implementation
 
-uses
-  SysUtils,
-  nextpas.core.atomic,
-  nextpas.core.platform.windows.ffi;
+uses nextpas.core.atomic, nextpas.core.platform.windows.ffi;
 
 type
   PIocpPendingOp = ^TIocpPendingOp;

@@ -4,10 +4,7 @@ unit nextpas.core.tls.dialer;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
-  nextpas.core.tls.tls;
+uses Classes, nextpas.core.tls.base, nextpas.core.tls.tls, nextpas.core.text.conv;
 
 type
   TSSLDialResult = record
@@ -36,13 +33,7 @@ type
 
 implementation
 
-uses
-  {$IFDEF UNIX}Sockets, BaseUnix,{$ENDIF}
-  {$IFDEF WINDOWS}WinSock2,{$ENDIF}
-  nextpas.core.net.base,
-  nextpas.core.net.resolve,
-  nextpas.core.tls.quick,
-  nextpas.core.tls.connection.builder;
+uses Sockets, BaseUnix, WinSock2, nextpas.core.net.base, nextpas.core.net.resolve, nextpas.core.tls.quick, nextpas.core.tls.connection.builder, nextpas.core.text.conv;
 
 function ResolveAndConnect(const AHost: string; APort: Word;
   out ASocket: THandle; out AError: string): Boolean;
