@@ -11,11 +11,7 @@ unit nextpas.core.tls.openssl.api.thread;
 
 interface
 
-uses Classes, Windows, cthreads, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
-
-type
-  { Thread types }
-  CRYPTO_RWLOCK = record end;
+uses Windows, cthreads, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader; type CRYPTO_RWLOCK = record end;
   PCRYPTO_RWLOCK = ^CRYPTO_RWLOCK;
   
   CRYPTO_THREAD_LOCAL = TOpenSSLULong;
@@ -130,13 +126,7 @@ function AtomicDecrement(var Value: TOpenSSLInt; Lock: PCRYPTO_RWLOCK = nil): TO
 
 implementation
 
-uses nextpas.core.tls.openssl.api.utils;
-
-const
-  { Function bindings for batch loading }
-  ThreadBindings: array[0..25] of TFunctionBinding = (
-    { Thread functions }
-    (Name: 'CRYPTO_thread_setup';              FuncPtr: @CRYPTO_thread_setup;              Required: False),
+uses nextpas.core.tls.openssl.api.utils; const ThreadBindings: array[0..25] of TFunctionBinding = ( (Name: 'CRYPTO_thread_setup'; FuncPtr: @CRYPTO_thread_setup; Required: False);
     (Name: 'CRYPTO_thread_cleanup';            FuncPtr: @CRYPTO_thread_cleanup;            Required: False),
     (Name: 'CRYPTO_THREAD_run_once';           FuncPtr: @CRYPTO_THREAD_run_once;           Required: False),
     (Name: 'CRYPTO_THREAD_get_current_id';     FuncPtr: @CRYPTO_THREAD_get_current_id;     Required: False),

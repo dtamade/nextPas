@@ -16,15 +16,7 @@ unit nextpas.core.tls.http.client;
 
 interface
 
-uses Classes;
-
-type
-  // ========================================================================
-  // 简单 HTTP 客户端
-  // ========================================================================
-  TSimpleHTTPClient = class
-  private
-    FTimeout: Integer;           // 超时时间 (毫秒)
+uses Classes; type // ======================================================================== // 简单 HTTP 客户端 // ======================================================================== TSimpleHTTPClient = class private FTimeout: Integer; // 超时时间 (毫秒);
     FContentType: string;        // Content-Type 头
     FUserAgent: string;          // User-Agent 头
   public
@@ -41,13 +33,7 @@ type
 
 implementation
 
-uses nextpas.core.tls.base, nextpas.core.tls.net.hooks;
-
-// ========================================================================
-// TSimpleHTTPClient
-// ========================================================================
-
-constructor TSimpleHTTPClient.Create;
+uses nextpas.core.tls.base, nextpas.core.tls.net.hooks; // ======================================================================== // TSimpleHTTPClient // ======================================================================== constructor TSimpleHTTPClient.Create;
 begin
   inherited Create;
   FTimeout := 10000;  // 10 秒

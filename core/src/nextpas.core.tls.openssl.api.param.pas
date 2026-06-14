@@ -11,11 +11,7 @@ unit nextpas.core.tls.openssl.api.param;
 
 interface
 
-uses Classes, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.consts;
-
-const
-  { OSSL_PARAM data types }
-  OSSL_PARAM_END = 0;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.consts; const OSSL_PARAM_END = 0;
   OSSL_PARAM_INTEGER = 1;
   OSSL_PARAM_UNSIGNED_INTEGER = 2; 
   OSSL_PARAM_REAL = 3;
@@ -217,13 +213,7 @@ function SetParamValue(Params: POSSL_PARAM; const Key: string; const Value: stri
 
 implementation
 
-uses nextpas.core.tls.openssl.api.utils;
-
-const
-  { Function bindings for batch loading }
-  OSSL_PARAM_BINDINGS: array[0..53] of TFunctionBinding = (
-    { Construction functions }
-    (Name: 'OSSL_PARAM_construct_int'; FuncPtr: @OSSL_PARAM_construct_int; Required: False),
+uses nextpas.core.tls.openssl.api.utils; const OSSL_PARAM_BINDINGS: array[0..53] of TFunctionBinding = ( (Name: 'OSSL_PARAM_construct_int'; FuncPtr: @OSSL_PARAM_construct_int; Required: False);
     (Name: 'OSSL_PARAM_construct_uint'; FuncPtr: @OSSL_PARAM_construct_uint; Required: False),
     (Name: 'OSSL_PARAM_construct_long'; FuncPtr: @OSSL_PARAM_construct_long; Required: False),
     (Name: 'OSSL_PARAM_construct_ulong'; FuncPtr: @OSSL_PARAM_construct_ulong; Required: False),

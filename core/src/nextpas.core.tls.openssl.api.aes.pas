@@ -12,10 +12,7 @@ unit nextpas.core.tls.openssl.api.aes;
 
 interface
 
-uses Classes, nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
-
-const
-  AES_MAXNR = 14;
+uses nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader; const AES_MAXNR = 14;
   AES_BLOCK_SIZE = 16;
   
   // AES encryption/decryption mode constants
@@ -120,11 +117,7 @@ function AESDecryptCTR(const Data: TBytes; const Key: TBytes; const IV: TBytes):
 
 implementation
 
-uses nextpas.core.tls.openssl.api;
-
-const
-  { AES 函数绑定数组 - 用于批量加载 }
-  AES_FUNCTION_COUNT = 16;
+uses nextpas.core.tls.openssl.api; const AES_FUNCTION_COUNT = 16;
 
 var
   AESFunctionBindings: array[0..AES_FUNCTION_COUNT-1] of TFunctionBinding = (

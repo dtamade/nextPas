@@ -17,11 +17,7 @@ unit nextpas.core.tls;
 
 interface
 
-uses Classes, nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.tls, nextpas.core.tls.dialer, nextpas.core.tls.quick, nextpas.core.tls.context.builder, nextpas.core.tls.connection.builder;
-
-type
-  // Primary API (rustls-aligned)
-  TSSLConnector = nextpas.core.tls.tls.TSSLConnector;
+uses nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.tls, nextpas.core.tls.dialer, nextpas.core.tls.quick, nextpas.core.tls.context.builder, nextpas.core.tls.connection.builder; type // Primary API (rustls-aligned) TSSLConnector = nextpas.core.tls.tls.TSSLConnector;
   TSSLAcceptor = nextpas.core.tls.tls.TSSLAcceptor;
   TSSLStream = nextpas.core.tls.tls.TSSLStream;
 
@@ -36,10 +32,7 @@ function TryTLSDial(const AHost: string; APort: Word;
 
 implementation
 
-uses nextpas.core.tls.freepascal.lib;
-
-var
-  GDefaultDialer: TSSLDialer = nil;
+uses nextpas.core.tls.freepascal.lib; var GDefaultDialer: TSSLDialer = nil;
 
 function GetDefaultDialer: TSSLDialer;
 begin

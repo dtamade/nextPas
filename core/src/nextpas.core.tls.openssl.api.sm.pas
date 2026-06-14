@@ -4,11 +4,7 @@ unit nextpas.core.tls.openssl.api.sm;
 
 interface
 
-uses Classes, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
-
-const
-  // SM2 curve NID
-  NID_sm2 = 1172;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader; const // SM2 curve NID NID_sm2 = 1172;
   
   // SM3 digest NID
   NID_sm3 = 1143;

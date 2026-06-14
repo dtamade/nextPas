@@ -57,9 +57,7 @@ type
 
 implementation
 
-uses BaseUnix, Sockets, WinSock2, Classes;
-
-constructor TSSLMemoryTransport.Create(ACapacity: Integer);
+uses BaseUnix, Sockets, WinSock2, Classes; constructor TSSLMemoryTransport.Create(ACapacity: Integer);
 begin
   inherited Create;
   SetLength(FBuffer, ACapacity);

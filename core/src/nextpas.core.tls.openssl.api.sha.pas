@@ -12,12 +12,7 @@ unit nextpas.core.tls.openssl.api.sha;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.consts,
-  nextpas.core.tls.openssl.loader;
+uses SysUtils, nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
 
 const
   SHA_DIGEST_LENGTH = 20;
@@ -193,8 +188,7 @@ function SHA512HashString(const S: string): string;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api;
+uses nextpas.core.tls.openssl.api;
 
 const
   { SHA 函数绑定数组 - 用于批量加载 }

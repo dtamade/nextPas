@@ -15,11 +15,7 @@ unit nextpas.core.tls.cert.builder;
 
 interface
 
-uses Classes, nextpas.core.tls.base, nextpas.core.tls.safety;
-
-type
-  { Forward declarations }
-  ICertificate = interface;
+uses nextpas.core.tls.base, nextpas.core.tls.safety; type ICertificate = interface;
   IPrivateKey = interface;
   IKeyPairWithCertificate = interface;
   ICertificateBuilder = interface;
@@ -186,9 +182,7 @@ type
 
 implementation
 
-uses nextpas.core.tls.cert.builder.impl;
-
-class function TCertificateBuilder.Create: ICertificateBuilder;
+uses nextpas.core.tls.cert.builder.impl; class function TCertificateBuilder.Create: ICertificateBuilder;
 begin
   Result := TCertificateBuilderImpl.Create;
 end;

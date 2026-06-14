@@ -12,12 +12,7 @@ unit nextpas.core.tls.openssl.api.md;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.consts,
-  nextpas.core.tls.openssl.loader;
+uses SysUtils, nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
 
 const
   MD4_DIGEST_LENGTH = 16;
@@ -147,8 +142,7 @@ function RIPEMD160HashString(const S: string): string;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api;
+uses nextpas.core.tls.openssl.api;
 
 const
   { Function bindings for batch loading }

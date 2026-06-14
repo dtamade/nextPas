@@ -4,8 +4,7 @@ unit nextpas.core.tls.openssl.api.x509v3;
 
 interface
 
-uses
-  Classes, SysUtils, DynLibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts;
+uses SysUtils, DynLibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts;
 
 type
   // Forward declarations for missing types
@@ -202,10 +201,7 @@ function X509AddSubjectAltName(Cert: PX509; const DNS: string): Boolean;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.utils, nextpas.core.tls.openssl.loader,
-  nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.asn1,
-  nextpas.core.tls.openssl.api.x509;
+uses nextpas.core.tls.openssl.api.utils, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.x509;
 
 const
   { X509V3 函数绑定数组 - 用于批量加载 }

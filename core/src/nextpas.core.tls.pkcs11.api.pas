@@ -17,11 +17,7 @@ unit nextpas.core.tls.pkcs11.api;
 
 interface
 
-uses Classes, DynLibs;
-
-const
-  // PKCS#11 version
-  CRYPTOKI_VERSION_MAJOR = 2;
+uses DynLibs; const // PKCS#11 version CRYPTOKI_VERSION_MAJOR = 2;
   CRYPTOKI_VERSION_MINOR = 40;
 
 type

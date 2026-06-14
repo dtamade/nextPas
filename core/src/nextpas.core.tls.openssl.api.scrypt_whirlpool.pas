@@ -5,8 +5,7 @@ unit nextpas.core.tls.openssl.api.scrypt_whirlpool;
 
 interface
 
-uses
-  Classes, SysUtils, nextpas.core.tls.openssl.base;
+uses SysUtils, nextpas.core.tls.openssl.base;
 
 type
   // WHIRLPOOL types
@@ -65,8 +64,7 @@ function WhirlpoolHashString(const S: string): string;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.utils;
+uses nextpas.core.tls.openssl.api.utils;
 
 procedure LoadScryptWhirlpoolFunctions(AHandle: TLibHandle);
 type

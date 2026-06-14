@@ -12,14 +12,7 @@ unit nextpas.core.tls.cert;
 
 interface
 
-uses Classes, nextpas.core.tls.cert.builder;
-
-type
-  { High-level certificate facade - scenario-based API }
-  TCertificate = class
-  public
-    { Creation }
-    class function CreateBuilder: ICertificateBuilder; static;
+uses nextpas.core.tls.cert.builder; type TCertificate = class public class function CreateBuilder: ICertificateBuilder; static;
     class function CreateSelfSigned(const ACommonName: string): IKeyPairWithCertificate; static;
     class function CreateServerCert(const ACommonName: string; const ASANs: array of string): IKeyPairWithCertificate; static;
     class function CreateClientCert(const ACommonName: string): IKeyPairWithCertificate; static;
@@ -36,11 +29,7 @@ type
 
 implementation
 
-uses nextpas.core.tls.cert.utils, nextpas.core.tls.cert.builder.impl, nextpas.core.tls.safety;
-
-{ TCertificate }
-
-class function TCertificate.CreateBuilder: ICertificateBuilder;
+uses nextpas.core.tls.cert.utils, nextpas.core.tls.cert.builder.impl, nextpas.core.tls.safety; class function TCertificate.CreateBuilder: ICertificateBuilder;
 begin
   Result := TCertificateBuilder.Create;
 end;

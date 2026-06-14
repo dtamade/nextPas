@@ -4,11 +4,7 @@ unit nextpas.core.tls.dialer;
 
 interface
 
-uses Classes, nextpas.core.tls.base, nextpas.core.tls.tls, nextpas.core.text.conv;
-
-type
-  TSSLDialResult = record
-    Connection: ISSLConnection;
+uses nextpas.core.tls.base, nextpas.core.tls.tls, nextpas.core.text.conv; type TSSLDialResult = record Connection: ISSLConnection;
     Stream: TSSLStream;
     Error: TSSLOperationResult;
   end;
@@ -33,9 +29,7 @@ type
 
 implementation
 
-uses Sockets, BaseUnix, WinSock2, nextpas.core.net.base, nextpas.core.net.resolve, nextpas.core.tls.quick, nextpas.core.tls.connection.builder, nextpas.core.text.conv;
-
-function ResolveAndConnect(const AHost: string; APort: Word;
+uses Sockets, BaseUnix, WinSock2, nextpas.core.net.base, nextpas.core.net.resolve, nextpas.core.tls.quick, nextpas.core.tls.connection.builder, nextpas.core.text.conv; function ResolveAndConnect(const AHost: string; APort: Word;
   out ASocket: THandle; out AError: string): Boolean;
 var
   LAddr: TNetAddress;

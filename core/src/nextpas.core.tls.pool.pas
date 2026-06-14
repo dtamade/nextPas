@@ -4,11 +4,7 @@ unit nextpas.core.tls.pool;
 
 interface
 
-uses Classes, SyncObjs, nextpas.core.tls.base, nextpas.core.tls.tls, nextpas.core.tls.dialer;
-
-type
-  TSSLPoolEntry = record
-    Host: string;
+uses SyncObjs, nextpas.core.tls.base, nextpas.core.tls.tls, nextpas.core.tls.dialer; type TSSLPoolEntry = record Host: string;
     Port: Word;
     Stream: TSSLStream;
     IdleSince: TDateTime;
@@ -38,9 +34,7 @@ type
 
 implementation
 
-uses nextpas.core.time;
-
-constructor TSSLConnectionPool.Create(ADialer: TSSLDialer; AMaxIdle: Integer;
+uses nextpas.core.time; constructor TSSLConnectionPool.Create(ADialer: TSSLDialer; AMaxIdle: Integer;
   AIdleTimeoutMs: Integer);
 begin
   inherited Create;

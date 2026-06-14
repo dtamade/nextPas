@@ -4,11 +4,7 @@ unit nextpas.core.tls.openssl.api.asn1;
 
 interface
 
-uses Classes, dynlibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
-
-type
-  // ASN.1 类型定义
-  ASN1_TYPE = Pointer;
+uses dynlibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader; type // ASN.1 类型定义 ASN1_TYPE = Pointer;
   ASN1_OBJECT = Pointer;
   ASN1_STRING = Pointer;
   ASN1_OCTET_STRING = Pointer;

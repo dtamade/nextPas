@@ -42,15 +42,7 @@ unit nextpas.core.tls.encoding;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
-  nextpas.core.tls.exceptions,
-  nextpas.core.tls.errors,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader,
-  nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.bio;
+uses SysUtils, nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.errors, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.bio;
 
 type
   {**
