@@ -118,6 +118,7 @@ end;
 function IocpFail(ACallback: TIoCompletion; AContext: Pointer;
   AUserData: UInt64; AError: DWORD): Boolean;
 begin
+  SetLastError(AError);
   if Assigned(ACallback) then
   begin
     ACallback(AUserData, -Int32(AError), AContext);
@@ -479,6 +480,8 @@ var
 begin
   AtomicStore32(FRunning, 0, moRelease);
   LPort := FPort;
+  if LPort <> 0 then
+    PostQueuedCompletionStatus(HANDLE(LPort), 0, 0, nil);
   FPort := 0;
   FMaxEvents := 0;
   try
