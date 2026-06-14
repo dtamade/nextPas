@@ -13,6 +13,9 @@ interface
 
 uses
   SysUtils,Base64, DateUtils,
+  nextpas.core.io.intf,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.io.util,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.logging,
@@ -96,6 +99,8 @@ type
     FServerStapledOCSPResponse: TBytes;
 
     function ReadStreamToBytes(AStream: TStream): TBytes;
+    function ReadIStreamToBytes(const AStream: IStream; AMaxSize: Int64;
+      const AContext: string): TBytes;
     function TicketKey(const ATicket: TBytes): string;
     procedure RefreshConfiguredCipherSuites12;
     procedure RefreshConfiguredCipherSuites13;
@@ -297,19 +302,18 @@ begin
 end;
 
 function TFreePascalContext.ReadStreamToBytes(AStream: TStream): TBytes;
-var
-  LSize: Int64;
 begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
+  Result := ReadIStreamToBytes(WrapTStream(AStream, False), High(Int64), 'AStream');
+end;
 
-  LSize := AStream.Size - AStream.Position;
-  if LSize < 0 then
-    LSize := 0;
-
-  SetLength(Result, LSize);
-  if LSize > 0 then
-    AStream.ReadBuffer(Result[0], LSize);
+function TFreePascalContext.ReadIStreamToBytes(const AStream: IStream;
+  AMaxSize: Int64; const AContext: string): TBytes;
+begin
+  if AStream = nil then
+    RaiseInvalidParameter(AContext);
+  Result := IoReadAllLimited(AStream, AMaxSize);
 end;
 
 function TFreePascalContext.TicketKey(const ATicket: TBytes): string;
@@ -613,14 +617,13 @@ begin
 end;
 
 procedure TFreePascalContext.LoadCertificate(AStream: TStream);
+var
+  LTransport: IStream;
 begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
-  if AStream.Size - AStream.Position > MAX_CERTIFICATE_SIZE then
-    raise ESSLInvalidArgument.CreateFmt(
-      'Certificate stream exceeds maximum allowed size (%d > %d bytes)',
-      [AStream.Size - AStream.Position, MAX_CERTIFICATE_SIZE]);
-  FCertificateData := ReadStreamToBytes(AStream);
+  LTransport := WrapTStream(AStream, False);
+  FCertificateData := ReadIStreamToBytes(LTransport, MAX_CERTIFICATE_SIZE, 'AStream');
 end;
 
 procedure TFreePascalContext.LoadCertificate(ACert: ISSLCertificate);
@@ -658,6 +661,7 @@ begin
     FPrivateKeyData := ReadStreamToBytes(LStream);
     FPrivateKeyFile := AFileName;
   finally
+    LStream.Free;
   end;
 
   if APassword <> '' then
@@ -665,14 +669,13 @@ begin
 end;
 
 procedure TFreePascalContext.LoadPrivateKey(AStream: TStream; const APassword: string);
+var
+  LTransport: IStream;
 begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
-  if AStream.Size - AStream.Position > MAX_PRIVATE_KEY_SIZE then
-    raise ESSLInvalidArgument.CreateFmt(
-      'Private key stream exceeds maximum allowed size (%d > %d bytes)',
-      [AStream.Size - AStream.Position, MAX_PRIVATE_KEY_SIZE]);
-  FPrivateKeyData := ReadStreamToBytes(AStream);
+  LTransport := WrapTStream(AStream, False);
+  FPrivateKeyData := ReadIStreamToBytes(LTransport, MAX_PRIVATE_KEY_SIZE, 'AStream');
   if APassword <> '' then
     DecryptPrivateKeyData(APassword, 'TFreePascalContext.LoadPrivateKey(AStream)');
 end;
@@ -1179,8 +1182,11 @@ begin
 end;
 
 function TFreePascalContext.CreateConnection(AStream: TStream): ISSLConnection;
+var
+  LTransport: IStream;
 begin
-  Result := TFreePascalConnection.Create(Self as ISSLContext, AStream);
+  LTransport := WrapTStream(AStream, False);
+  Result := TFreePascalConnection.Create(Self as ISSLContext, LTransport);
 end;
 
 function TFreePascalContext.IsValid: Boolean;

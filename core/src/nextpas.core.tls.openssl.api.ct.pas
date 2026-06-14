@@ -8,7 +8,7 @@ unit nextpas.core.tls.openssl.api.ct;
 
 interface
 
-uses SysUtils, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.evp;
+uses nextpas.core.text.conv, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.evp;
 
 const
   // CT 日志条目类型

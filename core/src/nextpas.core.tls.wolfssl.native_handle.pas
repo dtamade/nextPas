@@ -4,7 +4,7 @@ unit nextpas.core.tls.wolfssl.native_handle;
 
 interface
 
-uses nextpas.core.tls.base, nextpas.core.tls.errors, nextpas.core.tls.exceptions;
+uses SysUtils, nextpas.core.tls.base, nextpas.core.tls.errors, nextpas.core.tls.exceptions;
 
 {**
  * WolfSSL 原生句柄辅助函数

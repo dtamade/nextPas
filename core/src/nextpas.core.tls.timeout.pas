@@ -25,7 +25,6 @@ type
       AWriteTimeoutMs: Integer = 30000); overload;
     function Read(var Buffer; Count: Longint): Longint; overload;
     function Write(const Buffer; Count: Longint): Longint; overload;
-
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt; overload;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt; overload;
     function Seek(const AOffset: Int64;

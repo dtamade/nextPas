@@ -21,7 +21,7 @@ unit nextpas.core.tls.logging;
 interface
 
 uses
-  SysUtils,nextpas.core.tls.base;  // P2: TSSLProtocolVersions for shared helpers
+  SysUtils, Classes, nextpas.core.tls.base;  // P2: TSSLProtocolVersions for shared helpers
 
 {$IFDEF USE_SYNCOBJS}
   {$DEFINE HAS_CRITICAL_SECTION}
@@ -185,7 +185,7 @@ type
   private
     class var FInstance: TSSLProfiler;
     class var FEnabled: Boolean;
-    FEntries: TStringArray;
+    FEntries: TStringList;
     FLock: TRTLCriticalSection;
   public
     constructor CreateInstance;
@@ -482,7 +482,7 @@ begin
     Exit;
   EnterCriticalSection(FLock);
   try
-    for I := 0 to Length(FLoggers) - 1 do
+    for I := 0 to FLoggers.Count - 1 do
       (FLoggers[I] as ISecurityLogger).Log(ALevel, ACategory, AMessage);
   finally
     LeaveCriticalSection(FLock);
@@ -517,7 +517,7 @@ begin
     Exit;
   EnterCriticalSection(FLock);
   try
-    for I := 0 to Length(FLoggers) - 1 do
+    for I := 0 to FLoggers.Count - 1 do
       (FLoggers[I] as ISecurityLogger).LogError(ACategory, AMessage, AException);
   finally
     LeaveCriticalSection(FLock);
@@ -532,7 +532,7 @@ begin
     Exit;
   EnterCriticalSection(FLock);
   try
-    for I := 0 to Length(FLoggers) - 1 do
+    for I := 0 to FLoggers.Count - 1 do
       (FLoggers[I] as ISecurityLogger).LogAudit(ACategory, AAction, AUser, ADetails);
   finally
     LeaveCriticalSection(FLock);
@@ -617,7 +617,7 @@ var
   I: Integer;
   LEntry: ^TProfileEntry;
 begin
-  for I := 0 to Length(FEntries) - 1 do
+  for I := 0 to FEntries.Count - 1 do
   begin
     LEntry := Pointer(FEntries.Objects[I]);
     if LEntry <> nil then
@@ -704,7 +704,7 @@ begin
 
     EnterCriticalSection(FLock);
     try
-      for I := 0 to Length(FEntries) - 1 do
+      for I := 0 to FEntries.Count - 1 do
       begin
         LEntry := Pointer(FEntries.Objects[I]);
         if LEntry^.Count > 0 then
@@ -721,7 +721,7 @@ begin
     end;
 
     LResult.Add(StringOfChar('=', 80));
-    Result := LResult.Text;
+    Result := StringsJoin(LResult, sLineBreak);
   finally
   end;
 end;
@@ -733,7 +733,7 @@ var
 begin
   EnterCriticalSection(FLock);
   try
-    for I := 0 to Length(FEntries) - 1 do
+    for I := 0 to FEntries.Count - 1 do
     begin
       LEntry := Pointer(FEntries.Objects[I]);
       if LEntry <> nil then

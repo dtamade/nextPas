@@ -21,7 +21,11 @@ unit nextpas.core.tls.mbedtls.base;
 
 interface
 
-uses nextpas.core.tls.base; const MBEDTLS_LIB_NAME = 'mbedtls.dll';
+uses nextpas.core.tls.base;
+
+const
+  {$IFDEF WINDOWS}
+  MBEDTLS_LIB_NAME = 'mbedtls.dll';
   MBEDCRYPTO_LIB_NAME = 'mbedcrypto.dll';
   MBEDX509_LIB_NAME = 'mbedx509.dll';
   {$ENDIF}

@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.utils;
 
 interface
 
-uses SysUtils;
+uses nextpas.core.text.conv;
 
 { Library handle management }
 function GetLibHandle: HMODULE;

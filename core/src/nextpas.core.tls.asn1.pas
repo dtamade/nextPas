@@ -297,8 +297,9 @@ function TagToString(ATag: Byte): string;
 implementation
 
 uses
-  nextpas.core.io,
   nextpas.core.io.memory,
+  nextpas.core.io.util,
+  nextpas.core.text.conv,
   nextpas.core.text.strings;
 
 
@@ -431,6 +432,7 @@ end;
 
 destructor TASN1Node.Destroy;
 begin
+  FreeAndNil(FChildren);
   inherited Destroy;
 end;
 
@@ -441,7 +443,7 @@ end;
 
 function TASN1Node.ChildCount: Integer;
 begin
-  Result := Length(FChildren);
+  Result := FChildren.Count;
 end;
 
 function TASN1Node.GetChild(AIndex: Integer): TASN1Node;
@@ -451,7 +453,7 @@ end;
 
 function TASN1Node.FirstChild: TASN1Node;
 begin
-  if Length(FChildren) > 0 then
+  if FChildren.Count > 0 then
     Result := FChildren[0]
   else
     Result := nil;
@@ -459,8 +461,8 @@ end;
 
 function TASN1Node.LastChild: TASN1Node;
 begin
-  if Length(FChildren) > 0 then
-    Result := FChildren[Length(FChildren) - 1]
+  if FChildren.Count > 0 then
+    Result := FChildren[FChildren.Count - 1]
   else
     Result := nil;
 end;
@@ -585,15 +587,15 @@ begin
 
   case FTag.TagNumber of
     ASN1_TAG_UTF8STRING:
-      Result := AnsiString(nextpas.core.text.conv.UTF8BytesToString(FRawData));
+      Result := AnsiString(UTF8BytesToString(FRawData));
     ASN1_TAG_BMPSTRING:
-      Result := AnsiString(nextpas.core.text.conv.BigEndianUnicodeBytesToString(FRawData));
+      Result := AnsiString(BigEndianUnicodeBytesToString(FRawData));
     ASN1_TAG_UNIVERSALSTRING:
       // 4字节 Unicode - 简化处理
-      Result := AnsiString(nextpas.core.text.conv.UTF8BytesToString(FRawData));
+      Result := AnsiString(UTF8BytesToString(FRawData));
     else
       // PrintableString, IA5String, VisibleString 等使用 ASCII
-      Result := AnsiString(nextpas.core.text.conv.ASCIIBytesToString(FRawData));
+      Result := AnsiString(ASCIIBytesToString(FRawData));
   end;
 end;
 
@@ -610,7 +612,7 @@ var
   S: string;
   Year, Month, Day, Hour, Min, Sec: Word;
 begin
-  S := AnsiString(nextpas.core.text.conv.ASCIIBytesToString(FRawData));
+  S := AnsiString(ASCIIBytesToString(FRawData));
 
   if FTag.TagNumber = ASN1_TAG_UTCTIME then
   begin
@@ -719,7 +721,7 @@ begin
   Result := Result + LineEnding;
 
   // 递归显示子节点
-  for I := 0 to Length(FChildren) - 1 do
+  for I := 0 to FChildren.Count - 1 do
     Result := Result + FChildren[I].Dump(AIndent + 1);
 end;
 
@@ -735,6 +737,7 @@ end;
 
 destructor TASN1NodeList.Destroy;
 begin
+  FreeAndNil(FList);
   inherited Destroy;
 end;
 
@@ -750,7 +753,7 @@ end;
 
 function TASN1NodeList.GetCount: Integer;
 begin
-  Result := Length(FList);
+  Result := FList.Count;
 end;
 
 function TASN1NodeList.GetItem(AIndex: Integer): TASN1Node;
@@ -784,6 +787,7 @@ end;
 
 destructor TASN1Reader.Destroy;
 begin
+  FData := nil;
   inherited Destroy;
 end;
 
@@ -1000,6 +1004,7 @@ begin
       end;
     end;
   except
+    FreeAndNil(Result);
     Result := nil;
     raise;
   end;
@@ -1017,6 +1022,7 @@ end;
 
 destructor TASN1Writer.Destroy;
 begin
+  FStream := nil;
   inherited Destroy;
 end;
 
@@ -1315,7 +1321,7 @@ procedure TASN1Writer.WriteUTF8String(const AValue: string);
 var
   Data: TBytes;
 begin
-  Data := nextpas.core.text.conv.StringToUTF8Bytes(AValue);
+  Data := StringToUTF8Bytes(AValue);
   WriteTag(ASN1_TAG_UTF8STRING);
   WriteLength(Length(Data));
   WriteBytes(Data);
@@ -1325,7 +1331,7 @@ procedure TASN1Writer.WritePrintableString(const AValue: string);
 var
   Data: TBytes;
 begin
-  Data := nextpas.core.text.conv.StringToASCIIBytes(AValue);
+  Data := StringToASCIIBytes(AValue);
   WriteTag(ASN1_TAG_PRINTABLESTRING);
   WriteLength(Length(Data));
   WriteBytes(Data);
@@ -1335,7 +1341,7 @@ procedure TASN1Writer.WriteIA5String(const AValue: string);
 var
   Data: TBytes;
 begin
-  Data := nextpas.core.text.conv.StringToASCIIBytes(AValue);
+  Data := StringToASCIIBytes(AValue);
   WriteTag(ASN1_TAG_IA5STRING);
   WriteLength(Length(Data));
   WriteBytes(Data);
@@ -1352,7 +1358,7 @@ begin
 
   // UTCTime: YYMMDDhhmmssZ
   TimeStr := Format('%.2d%.2d%.2d%.2d%.2d%.2dZ', [Y mod 100, M, D, H, Mi, S]);
-  Data := nextpas.core.text.conv.StringToASCIIBytes(TimeStr);
+  Data := StringToASCIIBytes(TimeStr);
 
   WriteTag(ASN1_TAG_UTCTIME);
   WriteLength(Length(Data));
@@ -1370,7 +1376,7 @@ begin
 
   // GeneralizedTime: YYYYMMDDhhmmssZ
   TimeStr := Format('%.4d%.2d%.2d%.2d%.2d%.2dZ', [Y, M, D, H, Mi, S]);
-  Data := nextpas.core.text.conv.StringToASCIIBytes(TimeStr);
+  Data := StringToASCIIBytes(TimeStr);
 
   WriteTag(ASN1_TAG_GENERALIZEDTIME);
   WriteLength(Length(Data));
@@ -1423,7 +1429,7 @@ begin
   if FStream.Size > 0 then
   begin
     FStream.Position := 0;
-    ReadFull(FStream, Result[0], SizeUInt(FStream.Size));
+    IoReadFull(FStream, Result[0], SizeUInt(FStream.Size));
   end;
 end;
 
@@ -1550,7 +1556,7 @@ begin
   SetLength(Result, ResultStream.Size);
   ResultStream.Position := 0;
   if ResultStream.Size > 0 then
-    ReadFull(ResultStream, Result[0], SizeUInt(ResultStream.Size));
+    IoReadFull(ResultStream, Result[0], SizeUInt(ResultStream.Size));
 end;
 
 function OIDToName(const AOID: string): string;

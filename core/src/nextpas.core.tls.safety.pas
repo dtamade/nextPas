@@ -22,7 +22,7 @@ unit nextpas.core.tls.safety;
 
 interface
 
-uses SysUtils;
+uses nextpas.core.exception, nextpas.core.text.conv;
 
 type
   { ==================== Enumerations (Phase 2.4.1) ==================== }

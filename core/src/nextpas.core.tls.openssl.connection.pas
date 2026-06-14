@@ -20,6 +20,9 @@ interface
 
 uses
   SysUtils, Classes, ctypes,
+  nextpas.core.io.intf,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.io.util,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.net.hooks,
@@ -50,7 +53,7 @@ type
     ISSLNativeHandleAccess)
   private
     FSocket: THandle;
-    FStream: TStream;
+    FStream: IStream;
     FSSL: PSSL;
     FBioRead: PBIO;
     FBioWrite: PBIO;
@@ -115,6 +118,7 @@ type
   public
     constructor Create(AContext: ISSLContext; ASocket: THandle); overload;
     constructor Create(AContext: ISSLContext; AStream: TStream); overload;
+    constructor Create(AContext: ISSLContext; AStream: IStream); overload;
     destructor Destroy; override;
 
     { ISSLClientConnection }
@@ -198,6 +202,11 @@ begin
 end;
 
 constructor TOpenSSLConnection.Create(AContext: ISSLContext; AStream: TStream);
+begin
+  Create(AContext, WrapTStream(AStream, False));
+end;
+
+constructor TOpenSSLConnection.Create(AContext: ISSLContext; AStream: IStream);
 var
   Ctx: PSSL_CTX;
   LConstructed: Boolean;
@@ -1541,7 +1550,7 @@ begin
     if LRead <= 0 then
       Break;
 
-    FStream.WriteBuffer(LBuffer[0], LRead);
+    IoWriteAll(FStream, LBuffer[0], SizeUInt(LRead));
     Inc(Result, LRead);
   end;
 end;

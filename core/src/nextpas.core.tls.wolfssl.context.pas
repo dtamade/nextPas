@@ -19,6 +19,9 @@ interface
 
 uses
   SysUtils, Classes, Base64,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.io.intf,
+  nextpas.core.io.util,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
@@ -85,6 +88,8 @@ type
       const AFeature, AMethodName: string);
     procedure RejectUnsupportedCustomCipherAssignment(
       const AFeature, AMethodName: string);
+    function ReadLimitedStreamBytes(const AStream: IStream; const AMaxSize: Int64;
+      const ASubject: string): TBytes;
 
   public
     constructor Create(ALibrary: ISSLLibrary; AType: TSSLContextType);
@@ -321,6 +326,26 @@ begin
   inherited Destroy;
 end;
 
+function TWolfSSLContext.ReadLimitedStreamBytes(const AStream: IStream;
+  const AMaxSize: Int64; const ASubject: string): TBytes;
+var
+  LReader: IReader;
+begin
+  if AStream = nil then
+    raise ESSLCertError.Create('Stream is nil');
+
+  LReader := IoLimitReader(AStream, AMaxSize + 1);
+  Result := IoReadAll(LReader);
+
+  if Length(Result) = 0 then
+    raise ESSLCertError.Create('Stream is empty');
+  if Length(Result) > AMaxSize then
+    raise ESSLInvalidArgument.CreateFmt(
+      '%s exceeds maximum allowed size (%d > %d bytes)',
+      [ASubject, Length(Result), AMaxSize]
+    );
+end;
+
 function TWolfSSLContext.GetWolfSSLMethod: PWOLFSSL_METHOD;
 begin
   Result := nil;
@@ -524,16 +549,11 @@ begin
   if not Assigned(wolfSSL_CTX_use_certificate_buffer) then
     raise ESSLCertError.Create('wolfSSL_CTX_use_certificate_buffer not available');
 
-  // 读取流内容到缓冲区
-  SetLength(LBuffer, AStream.Size - AStream.Position);
-  if Length(LBuffer) = 0 then
-    raise ESSLCertError.Create('Stream is empty');
-  if Length(LBuffer) > MAX_CERTIFICATE_SIZE then
-    raise ESSLInvalidArgument.CreateFmt(
-      'Certificate stream exceeds maximum allowed size (%d > %d bytes)',
-      [Length(LBuffer), MAX_CERTIFICATE_SIZE]);
-
-  AStream.ReadBuffer(LBuffer[0], Length(LBuffer));
+  LBuffer := ReadLimitedStreamBytes(
+    WrapTStream(AStream, False),
+    MAX_CERTIFICATE_SIZE,
+    'Certificate stream'
+  );
 
   // 尝试 PEM 格式
   LRet := wolfSSL_CTX_use_certificate_buffer(FWolfSSLCtx, @LBuffer[0],
@@ -617,19 +637,14 @@ begin
   if not Assigned(wolfSSL_CTX_use_PrivateKey_buffer) then
     raise ESSLCertError.Create('wolfSSL_CTX_use_PrivateKey_buffer not available');
 
-  // 读取流内容到缓冲区
-  SetLength(LBuffer, AStream.Size - AStream.Position);
-  if Length(LBuffer) = 0 then
-    raise ESSLCertError.Create('Stream is empty');
-  if Length(LBuffer) > MAX_PRIVATE_KEY_SIZE then
-    raise ESSLInvalidArgument.CreateFmt(
-      'Private key stream exceeds maximum allowed size (%d > %d bytes)',
-      [Length(LBuffer), MAX_PRIVATE_KEY_SIZE]);
-
   if APassword <> '' then
     RejectUnsupportedPasswordProtectedKey('TWolfSSLContext.LoadPrivateKey(AStream)');
 
-  AStream.ReadBuffer(LBuffer[0], Length(LBuffer));
+  LBuffer := ReadLimitedStreamBytes(
+    WrapTStream(AStream, False),
+    MAX_PRIVATE_KEY_SIZE,
+    'Private key stream'
+  );
 
   // 尝试 PEM 格式
   LRet := wolfSSL_CTX_use_PrivateKey_buffer(FWolfSSLCtx, @LBuffer[0],
@@ -1067,6 +1082,7 @@ function TWolfSSLContext.CreateConnection(AStream: TStream): ISSLConnection;
 var
   LExposeEarlyData: Boolean;
   LExposeOCSP: Boolean;
+  LTransport: IStream;
 begin
   RequireValidContext('CreateConnection');
 
@@ -1079,15 +1095,16 @@ begin
 
   LExposeEarlyData := HasEarlyDataCapability;
   LExposeOCSP := HasClientOCSPCapability;
+  LTransport := WrapTStream(AStream, False);
 
   if LExposeEarlyData and LExposeOCSP then
-    Result := nextpas.core.tls.wolfssl.connection.TWolfSSLAdvancedConnection.Create(Self, AStream)
+    Result := nextpas.core.tls.wolfssl.connection.TWolfSSLAdvancedConnection.Create(Self, LTransport)
   else if LExposeEarlyData then
-    Result := nextpas.core.tls.wolfssl.connection.TWolfSSLEarlyDataConnection.Create(Self, AStream)
+    Result := nextpas.core.tls.wolfssl.connection.TWolfSSLEarlyDataConnection.Create(Self, LTransport)
   else if LExposeOCSP then
-    Result := nextpas.core.tls.wolfssl.connection.TWolfSSLOCSPConnection.Create(Self, AStream)
+    Result := nextpas.core.tls.wolfssl.connection.TWolfSSLOCSPConnection.Create(Self, LTransport)
   else
-    Result := nextpas.core.tls.wolfssl.connection.TWolfSSLConnection.Create(Self, AStream);
+    Result := nextpas.core.tls.wolfssl.connection.TWolfSSLConnection.Create(Self, LTransport);
 end;
 
 { 状态查询 }

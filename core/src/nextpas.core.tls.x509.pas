@@ -37,7 +37,7 @@ unit nextpas.core.tls.x509;
 interface
 
 uses
-  SysUtils,DateUtils,
+  SysUtils, Classes, DateUtils,
   nextpas.core.tls.asn1;
 
 type
@@ -282,8 +282,9 @@ type
 implementation
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.text.strings,
-    nextpas.core.time;
+  nextpas.core.time;
 
 // ========================================================================
 // Base64 解码辅助函数 (必须在使用前声明)
@@ -501,6 +502,8 @@ end;
 
 destructor TX509Certificate.Destroy;
 begin
+  FRawTBSCertificate := nil;
+  FRawCertificate := nil;
   inherited Destroy;
 end;
 
@@ -516,11 +519,10 @@ begin
     Root := Reader.Parse;
     if Root = nil then
       raise EX509ParseException.Create('Failed to parse certificate');
-    try
-      ParseFromASN1(Root);
-    finally
-    end;
+    ParseFromASN1(Root);
   finally
+    Root.Free;
+    Reader.Free;
   end;
 end;
 
@@ -550,16 +552,13 @@ begin
     EndPos - StartPos - Length(StartMarker));
 
   // 移除空白字符
-  try
-    Lines.Text := Base64Data;
-    Base64Data := '';
-    for I := 0 to Length(Lines) - 1 do
-    begin
-      Line := Trim(Lines[I]);
-      if Line <> '' then
-        Base64Data := Base64Data + Line;
-    end;
-  finally
+  Lines := StringsParseLines(Base64Data);
+  Base64Data := '';
+  for I := 0 to Length(Lines) - 1 do
+  begin
+    Line := Trim(Lines[I]);
+    if Line <> '' then
+      Base64Data := Base64Data + Line;
   end;
 
   // Base64 解码
@@ -576,6 +575,7 @@ begin
   try
     LoadFromStream(Stream);
   finally
+    Stream.Free;
   end;
 end;
 
@@ -597,7 +597,7 @@ begin
       LoadFromDER(Data)
     else if (FirstByte = Ord('-')) or (FirstByte = Ord('M')) then
       // PEM 格式 (以 "-----" 或 "M" (Base64) 开头)
-      LoadFromPEM(AnsiString(nextpas.core.text.conv.ASCIIBytesToString(Data)))
+      LoadFromPEM(ASCIIBytesToString(Data))
     else
       raise EX509ParseException.Create('Unknown certificate format');
   end;

@@ -16,7 +16,7 @@ unit nextpas.core.tls.wolfssl.certificate;
 
 interface
 
-uses
+uses Classes,
   SysUtils,nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
@@ -145,8 +145,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.text.strings,
+uses nextpas.core.text.strings,
     Contnrs, DateUtils,
   nextpas.core.time,
   nextpas.core.tls.utils,

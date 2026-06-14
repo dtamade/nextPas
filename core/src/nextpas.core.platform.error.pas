@@ -155,6 +155,18 @@ end;
 function platform_error_category(ACode: Int32): TErrorCategory;
 begin
   case ACode of
+    PLATFORM_ERR_INVALID:
+      Exit(ecInvalidArgument);
+    PLATFORM_ERR_UNSUPPORTED:
+      Exit(ecNotSupported);
+    PLATFORM_ERR_TIMEOUT:
+      Exit(ecTimeout);
+    PLATFORM_ERR_AGAIN,
+    PLATFORM_ERR_BUSY:
+      Exit(ecWouldBlock);
+  end;
+
+  case ACode of
     0:
       Result := ecNone;
     {$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
@@ -233,15 +245,6 @@ begin
     ERROR_OPERATION_ABORTED:
       Result := ecInterrupted;
     {$ENDIF}
-    PLATFORM_ERR_INVALID:
-      Result := ecInvalidArgument;
-    PLATFORM_ERR_UNSUPPORTED:
-      Result := ecNotSupported;
-    PLATFORM_ERR_TIMEOUT:
-      Result := ecTimeout;
-    PLATFORM_ERR_AGAIN,
-    PLATFORM_ERR_BUSY:
-      Result := ecWouldBlock;
   else
     Result := ecInternal;
   end;

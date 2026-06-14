@@ -127,14 +127,10 @@ begin
 end;
 
 procedure WriteFrame(const AStream: IStream; const AFrame: TBytes);
-var
-  LWriter: IWriter;
 begin
   if (AStream = nil) or (Length(AFrame) = 0) then
     Exit;
-  if not Supports(AStream, IWriter, LWriter) then
-    Exit;
-  IoWriteAll(LWriter, AFrame[0], SizeUInt(Length(AFrame)));
+  IoWriteAll(AStream, AFrame[0], SizeUInt(Length(AFrame)));
 end;
 
 function TWebSocketConnection.SendText(const AText: string): Boolean;

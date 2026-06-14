@@ -20,6 +20,9 @@ interface
 
 uses
   SysUtils, Classes, SyncObjs,
+  nextpas.core.io.intf,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.io.util,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
@@ -413,13 +416,28 @@ begin
 end;
 
 function ReadPrivateKeyStreamBytes(AStream: TStream): TBytes;
-var
-  LSize: Int64;
 begin
-  LSize := AStream.Size - AStream.Position;
-  SetLength(Result, LSize);
-  if LSize > 0 then
-    AStream.ReadBuffer(Result[0], LSize);
+  Result := IoReadAll(WrapTStream(AStream, False));
+end;
+
+function ReadLimitedStreamBytes(AStream: TStream; const AMaxSize: Int64;
+  const ASubject: string): TBytes;
+var
+  LReader: IReader;
+begin
+  if AStream = nil then
+    RaiseInvalidParameter('AStream');
+
+  LReader := IoLimitReader(WrapTStream(AStream, False), AMaxSize + 1);
+  Result := IoReadAll(LReader);
+
+  if Length(Result) = 0 then
+    RaiseInvalidParameter('Stream is empty');
+  if Length(Result) > AMaxSize then
+    raise ESSLInvalidArgument.CreateFmt(
+      '%s exceeds maximum allowed size (%d > %d bytes)',
+      [ASubject, Length(Result), AMaxSize]
+    );
 end;
 
 function TryLoadPrivateKeyFromPEMBuffer(
@@ -1319,7 +1337,6 @@ end;
 procedure TOpenSSLContext.LoadCertificate(AStream: TStream);
 var
   Data: TBytes;
-  Size: Int64;
   BIO: PBIO;
   Cert: PX509;
 begin
@@ -1329,19 +1346,10 @@ begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
 
-  Size := AStream.Size - AStream.Position;
-  if Size <= 0 then
-    RaiseInvalidParameter('Stream is empty');
-  if Size > MAX_CERTIFICATE_SIZE then
-    raise ESSLInvalidArgument.CreateFmt(
-      'Certificate stream exceeds maximum allowed size (%d > %d bytes)',
-      [Size, MAX_CERTIFICATE_SIZE]);
-
-  SetLength(Data, Size);
-  AStream.Read(Data[0], Size);
+  Data := ReadLimitedStreamBytes(AStream, MAX_CERTIFICATE_SIZE, 'Certificate stream');
 
   RequireContextCertificateMemoryBIOHelpers('TOpenSSLContext.LoadCertificate');
-  BIO := BIO_new_mem_buf(@Data[0], Size);
+  BIO := BIO_new_mem_buf(@Data[0], Length(Data));
   try
     Cert := PEM_read_bio_X509(BIO, nil, nil, nil);
     if Cert = nil then
@@ -1535,12 +1543,7 @@ begin
   if AStream = nil then
     RaiseInvalidParameter('Stream');
 
-  if AStream.Size - AStream.Position > MAX_PRIVATE_KEY_SIZE then
-    raise ESSLInvalidArgument.CreateFmt(
-      'Private key stream exceeds maximum allowed size (%d > %d bytes)',
-      [AStream.Size - AStream.Position, MAX_PRIVATE_KEY_SIZE]);
-
-  Data := ReadPrivateKeyStreamBytes(AStream);
+  Data := ReadLimitedStreamBytes(AStream, MAX_PRIVATE_KEY_SIZE, 'Private key stream');
   if not ParsePrivateKeyBuffer(Data, APassword, PKey) then
     raise ESSLKeyException.CreateWithContext(
       'Failed to parse private key from stream',
@@ -2369,6 +2372,7 @@ var
   LEarlyDataContext: ISSLEarlyDataContext;
   LExposeEarlyData: Boolean;
   LExposeOCSP: Boolean;
+  LTransport: IStream;
 begin
   RequireValidContext('TOpenSSLContext.CreateConnection');
 
@@ -2379,17 +2383,18 @@ begin
     );
 
   try
+    LTransport := WrapTStream(AStream, False);
     LExposeEarlyData := Supports(Self, ISSLEarlyDataContext, LEarlyDataContext);
     LExposeOCSP := HasClientOCSPCapability;
 
     if LExposeEarlyData and LExposeOCSP then
-      Result := TOpenSSLAdvancedConnection.Create(Self, AStream)
+      Result := TOpenSSLAdvancedConnection.Create(Self, LTransport)
     else if LExposeEarlyData then
-      Result := TOpenSSLEarlyDataConnection.Create(Self, AStream)
+      Result := TOpenSSLEarlyDataConnection.Create(Self, LTransport)
     else if LExposeOCSP then
-      Result := TOpenSSLOCSPConnection.Create(Self, AStream)
+      Result := TOpenSSLOCSPConnection.Create(Self, LTransport)
     else
-      Result := TOpenSSLConnection.Create(Self, AStream);
+      Result := TOpenSSLConnection.Create(Self, LTransport);
   except
     on E: ESSLException do
       raise;  // Re-raise SSL exceptions as-is

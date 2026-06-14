@@ -14,7 +14,7 @@ unit nextpas.core.tls.tls13.clienthello.parser;
 
 interface
 
-uses nextpas.core.tls.tls13.wire;
+uses SysUtils, nextpas.core.base, nextpas.core.tls.tls13.wire;
 
 type
   TTLS13WordArray = array of Word;

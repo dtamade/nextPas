@@ -30,6 +30,9 @@ uses
   Sockets,
   {$ENDIF}
   SysUtils, Classes,
+  nextpas.core.io.intf,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.io.util,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
@@ -52,8 +55,7 @@ type
     ISSLCertificateTransparencyValidation)
   private
     FSocket: THandle;
-    FStream: TStream;
-    FOwnsStream: Boolean;
+    FStream: IStream;
     FReadTimeoutMs: Integer;
     FWriteTimeoutMs: Integer;
     FServerName: string;
@@ -226,6 +228,7 @@ type
   public
     constructor Create(AContext: ISSLContext; ASocket: THandle); overload;
     constructor Create(AContext: ISSLContext; AStream: TStream); overload;
+    constructor Create(AContext: ISSLContext; AStream: IStream); overload;
     destructor Destroy; override;
 
     procedure SetServerName(const AServerName: string);
@@ -882,18 +885,21 @@ begin
   inherited Create(AContext);
   FSocket := ASocket;
   FStream := nil;
-  FOwnsStream := False;
   InitializeState(AContext);
 end;
 
 constructor TFreePascalConnection.Create(AContext: ISSLContext; AStream: TStream);
+begin
+  Create(AContext, WrapTStream(AStream, False));
+end;
+
+constructor TFreePascalConnection.Create(AContext: ISSLContext; AStream: IStream);
 begin
   inherited Create(AContext);
   if AStream = nil then
     RaiseInvalidParameter('AStream');
   FSocket := -1;
   FStream := AStream;
-  FOwnsStream := False;
   InitializeState(AContext);
 end;
 
@@ -948,8 +954,6 @@ end;
 
 destructor TFreePascalConnection.Destroy;
 begin
-  if FOwnsStream then
-    FStream.Free;
   SecureZeroBytes(FX25519PrivateKey);
   SecureZeroBytes(FX25519PublicKey);
   SecureZeroBytes(FP256PrivateKey);
@@ -978,7 +982,7 @@ end;
 function TFreePascalConnection.SendData(const ABuffer; ASize: Integer): Integer;
 begin
   if FStream <> nil then
-    Exit(FStream.Write(ABuffer, ASize));
+    Exit(Integer(FStream.Write(ABuffer, ASize)));
 
   if FSocket < 0 then
     Exit(-1);
@@ -1001,7 +1005,7 @@ var
 {$ENDIF}
 begin
   if FStream <> nil then
-    Exit(FStream.Read(ABuffer, ASize));
+    Exit(Integer(FStream.Read(ABuffer, ASize)));
 
   if FSocket < 0 then
     Exit(-1);
@@ -1355,9 +1359,9 @@ begin
   Inc(LWriteSeqNum^);
   LHeader := TLS12BuildRecordHeader(AContentType, Length(LEncrypted));
   try
-    FStream.WriteBuffer(LHeader[0], Length(LHeader));
+    IoWriteAll(FStream, LHeader[0], Length(LHeader));
     if Length(LEncrypted) > 0 then
-      FStream.WriteBuffer(LEncrypted[0], Length(LEncrypted));
+      IoWriteAll(FStream, LEncrypted[0], Length(LEncrypted));
   except
     on E: Exception do
     begin
@@ -1382,16 +1386,28 @@ var
   LDecryptError: string;
   LReadKey, LReadIV, LReadMACKey: TBytes;
   LReadSeqNum: PQWord;
+  LStreamAdapter: TStream;
 begin
   Result := False;
   AContentType := 0;
   AError := '';
   SetLength(APlaintext, 0);
 
-  if (FStream = nil) or not TLS12ReadRecord(FStream, AContentType, LEncrypted) then
+  if FStream = nil then
   begin
     AError := 'Failed to read TLS 1.2 protected record';
     Exit;
+  end;
+
+  LStreamAdapter := WrapIStream(FStream);
+  try
+    if not TLS12ReadRecord(LStreamAdapter, AContentType, LEncrypted) then
+    begin
+      AError := 'Failed to read TLS 1.2 protected record';
+      Exit;
+    end;
+  finally
+    LStreamAdapter.Free;
   end;
 
   if not TLS12GetCipherSuiteInfo(FTLS12State.CipherSuite, LSuiteInfo) then
@@ -3151,10 +3167,7 @@ begin
         else
           FCipherName := Format('TLS12_0x%s', [IntToHex(LState.CipherSuite, 4)]);
         if FStream = nil then
-        begin
-          FStream := THandleStream.Create(FSocket);
-          FOwnsStream := True;
-        end;
+          FStream := WrapTStream(THandleStream.Create(FSocket), True);
 
         if (Length(LState.SessionID) > 0) and (not LState.Resumed) then
         begin
@@ -3257,8 +3270,7 @@ begin
           FCipherName := LSuiteInfo.Name
         else
           FCipherName := Format('TLS12_0x%s', [IntToHex(LState.CipherSuite, 4)]);
-        FStream := THandleStream.Create(FSocket);
-        FOwnsStream := True;
+        FStream := WrapTStream(THandleStream.Create(FSocket), True);
 
         if LState.Resumed then
           FSessionReused := True;
@@ -3292,6 +3304,7 @@ var
   LProtos: array of string;
   LProtoList: TStringArray;
   LCertificate: ISSLCertificate;
+  LStreamAdapter: TStream;
   LContextCipherSuites: IFreePascalContextCipherSuites;
   LConfiguredCipherSuites12: TTLS12CipherSuiteList;
   LSuiteInfo: TTLS12CipherSuiteInfo;
@@ -3321,8 +3334,7 @@ begin
         MarkUnsupported('TLS 1.2 requires transport (socket or stream)');
         Exit;
       end;
-      FStream := THandleStream.Create(FSocket);
-      FOwnsStream := True;
+      FStream := WrapTStream(THandleStream.Create(FSocket), True);
     end;
 
     if Trim(FALPNProtocols) <> '' then
@@ -3355,20 +3367,30 @@ begin
       LCachedSession.CipherSuite := LTLS12ResumeSession.GetTLS12CipherSuite;
       LCachedSession.ServerName := FServerName;
 
-      if Length(LConfiguredCipherSuites12) > 0 then
-        LHandshakeOk := TryTLS12ClientHandshakeWithResume(
-          FStream, FServerName, LProtos, LConfiguredCipherSuites12,
-          LCachedSession, FTLS12State, LError)
-      else
-        LHandshakeOk := TryTLS12ClientHandshakeWithResume(
-          FStream, FServerName, LProtos,
-          LCachedSession, FTLS12State, LError);
+      LStreamAdapter := WrapIStream(FStream);
+      try
+        if Length(LConfiguredCipherSuites12) > 0 then
+          LHandshakeOk := TryTLS12ClientHandshakeWithResume(
+            LStreamAdapter, FServerName, LProtos, LConfiguredCipherSuites12,
+            LCachedSession, FTLS12State, LError)
+        else
+          LHandshakeOk := TryTLS12ClientHandshakeWithResume(
+            LStreamAdapter, FServerName, LProtos,
+            LCachedSession, FTLS12State, LError);
+      finally
+        LStreamAdapter.Free;
+      end;
     end
     else
     begin
-      LHandshakeOk := TryTLS12ClientHandshake(
-        FStream, FServerName, LProtos, LConfiguredCipherSuites12,
-        FTLS12State, LError);
+      LStreamAdapter := WrapIStream(FStream);
+      try
+        LHandshakeOk := TryTLS12ClientHandshake(
+          LStreamAdapter, FServerName, LProtos, LConfiguredCipherSuites12,
+          FTLS12State, LError);
+      finally
+        LStreamAdapter.Free;
+      end;
     end;
 
     if not LHandshakeOk then

@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.buffer;
 
 interface
 
-uses SysUtils, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
 
 type
   // Buffer 结构体

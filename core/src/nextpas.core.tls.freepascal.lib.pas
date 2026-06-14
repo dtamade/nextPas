@@ -12,6 +12,7 @@ interface
 
 uses
   SysUtils,
+  nextpas.core.io.intf,
   nextpas.core.tls.base;
 
 type
@@ -73,6 +74,8 @@ implementation
 
 uses
   Classes,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.io.util,
   nextpas.core.time,
   nextpas.core.tls.context.config,
   nextpas.core.tls.exceptions,
@@ -210,19 +213,11 @@ begin
 end;
 
 function TFreePascalCertificate.ReadAllBytes(AStream: TStream): TBytes;
-var
-  LSize: Int64;
 begin
   SetLength(Result, 0);
   if AStream = nil then
     Exit;
-
-  LSize := AStream.Size - AStream.Position;
-  if LSize <= 0 then
-    Exit;
-
-  SetLength(Result, LSize);
-  AStream.ReadBuffer(Result[0], LSize);
+  Result := IoReadAll(WrapTStream(AStream, False));
 end;
 
 function TFreePascalCertificate.HexNormalize(const AValue: string): string;

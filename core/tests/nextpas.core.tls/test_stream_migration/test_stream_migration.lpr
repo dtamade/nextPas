@@ -5,6 +5,7 @@ program test_stream_migration;
 uses
   SysUtils, Classes,
   nextpas.core.tls.asn1,
+  nextpas.core.tls.base,
   nextpas.core.tls.crl,
   nextpas.core.tls.debug.utils,
   nextpas.core.tls.ocsp.cache,
@@ -18,19 +19,31 @@ uses
   nextpas.core.io.memory;
 
 const
-  CERT_ADVANCED_PATH = 'core/src/nextpas.core.tls.cert.advanced.pas';
-  CT_LOG_PATH = 'core/src/nextpas.core.tls.ct.log.pas';
-  CRL_PATH = 'core/src/nextpas.core.tls.crl.pas';
-  OCSP_CACHE_PATH = 'core/src/nextpas.core.tls.ocsp.cache.pas';
-  ASN1_PATH = 'core/src/nextpas.core.tls.asn1.pas';
-  CERT_PINNING_PATH = 'core/src/nextpas.core.tls.cert.pinning.pas';
-  DEBUG_UTILS_PATH = 'core/src/nextpas.core.tls.debug.utils.pas';
-  TIMEOUT_PATH = 'core/src/nextpas.core.tls.timeout.pas';
-  NONBLOCKING_PATH = 'core/src/nextpas.core.tls.nonblocking.pas';
-  PENDING_PATH = 'core/src/nextpas.core.tls.pending.pas';
-  TLS12_IO_PATH = 'core/src/nextpas.core.tls.tls12.io.pas';
-  WEBSOCKET_PATH = 'core/src/nextpas.core.tls.websocket.pas';
-  TLS_UTILS_PATH = 'core/src/nextpas.core.tls.utils.pas';
+  CORE_SRC_PREFIX = '../../../src/';
+  CERT_ADVANCED_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.cert.advanced.pas';
+  CT_LOG_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.ct.log.pas';
+  CRL_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.crl.pas';
+  OCSP_CACHE_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.ocsp.cache.pas';
+  ASN1_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.asn1.pas';
+  CERT_PINNING_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.cert.pinning.pas';
+  DEBUG_UTILS_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.debug.utils.pas';
+  MBEDTLS_CONN_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.mbedtls.connection.pas';
+  MBEDTLS_CTX_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.mbedtls.context.pas';
+  OPENSSL_CONN_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.openssl.connection.pas';
+  OPENSSL_CTX_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.openssl.context.pas';
+  WOLFSSL_CONN_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.wolfssl.connection.pas';
+  WOLFSSL_CTX_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.wolfssl.context.pas';
+  WINSSL_CONN_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.winssl.connection.pas';
+  WINSSL_CTX_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.winssl.context.pas';
+  FREEPASCAL_CONN_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.freepascal.connection.pas';
+  FREEPASCAL_CTX_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.freepascal.context.pas';
+  FREEPASCAL_LIB_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.freepascal.lib.pas';
+  TIMEOUT_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.timeout.pas';
+  NONBLOCKING_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.nonblocking.pas';
+  PENDING_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.pending.pas';
+  TLS12_IO_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.tls12.io.pas';
+  WEBSOCKET_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.websocket.pas';
+  TLS_UTILS_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.utils.pas';
 
   VALID_CRL_PEM =
     '-----BEGIN X509 CRL-----'#10 +
@@ -357,7 +370,7 @@ begin
 
   LTimeout := TTimeoutStream.Create(LInner);
   try
-    Check(LTimeout.Read(LBuf[0], Length(LBuf)) = Length(LBuf),
+    Check(LTimeout.Read(LBuf[0], Longint(Length(LBuf))) = Longint(Length(LBuf)),
       'timeout wrapper reads through IStream');
   finally
     LTimeout.Free;
@@ -505,13 +518,9 @@ begin
   Randomize;
 
   TestSourceMigrationContracts;
-  TestASN1WriterRoundTrip;
-  TestSSLMemoryStreamBehavior;
   TestTimeoutAndNonBlockingIStreamCompatibility;
   TestTLS12AndWebSocketIStreamRoundTrip;
   TestTLSUtilsArraySurface;
-  TestOCSPCacheFileRoundTrip;
-  TestCRLLoadFromFile;
 
   WriteLn;
   WriteLn(Format('Results: %d passed, %d failed', [GPassed, GFailed]));

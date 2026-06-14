@@ -19,6 +19,9 @@ interface
 
 uses
   Windows, SysUtils, Classes, StrUtils,
+  nextpas.core.io.intf,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.io.util,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,      // 添加：RaiseInvalidParameter
   nextpas.core.tls.exceptions,  // 新增：类型化异常
@@ -80,6 +83,8 @@ type
     procedure RequireValidContext(const AMethodName: string);
     { P1: PEM→DER 转换 - 消除跨平台差异 }
     function PEMToDER(const APEM: string): TBytes;
+    function ReadLimitedStreamBytes(const AStream: IStream;
+      const AMaxSize: Int64; const ASubject, AMethodName: string): TBytes;
     procedure RejectUnsupportedCallbackAssignment(
       const AFeature, AMethodName: string);
     procedure RejectUnsupportedCustomCipherAssignment(
@@ -238,6 +243,36 @@ begin
   // 凭据获取移至 EnsureCredentialsAcquired 方法
   FInitialized := True;  // 上下文已初始化，但凭据尚未获取
   ApplyOptions;
+end;
+
+function TWinSSLContext.ReadLimitedStreamBytes(const AStream: IStream;
+  const AMaxSize: Int64; const ASubject, AMethodName: string): TBytes;
+var
+  LReader: IReader;
+begin
+  if AStream = nil then
+    raise ESSLInvalidArgument.CreateWithContext(
+      ASubject + ' is nil',
+      sslErrInvalidParam,
+      AMethodName
+    );
+
+  LReader := IoLimitReader(AStream, AMaxSize + 1);
+  Result := IoReadAll(LReader);
+
+  if Length(Result) = 0 then
+    raise ESSLInvalidArgument.CreateWithContext(
+      ASubject + ' is empty',
+      sslErrInvalidParam,
+      AMethodName
+    );
+  if Length(Result) > AMaxSize then
+    raise ESSLInvalidArgument.CreateWithContext(
+      Format('%s exceeds maximum allowed size (%d > %d bytes)',
+        [ASubject, Length(Result), AMaxSize]),
+      sslErrInvalidParam,
+      AMethodName
+    );
 end;
 
 destructor TWinSSLContext.Destroy;
@@ -564,7 +599,6 @@ end;
 procedure TWinSSLContext.LoadCertificate(AStream: TStream);
 var
   LCertData: TBytes;
-  LSize: Int64;
   Blob: CRYPT_DATA_BLOB;
   PFXStore: HCERTSTORE;
   CertContext: PCCERT_CONTEXT;
@@ -576,13 +610,12 @@ begin
   // 清理之前的证书
   CleanupCertificate;
 
-  // 读取证书数据
-  LSize := AStream.Size - AStream.Position;
-  if LSize <= 0 then
-    RaiseInvalidParameter('Stream is empty or at end position');
-
-  SetLength(LCertData, LSize);
-  AStream.Read(LCertData[0], LSize);
+  LCertData := ReadLimitedStreamBytes(
+    WrapTStream(AStream, False),
+    MAX_CERTIFICATE_SIZE,
+    'Certificate stream',
+    'TWinSSLContext.LoadCertificate'
+  );
   
   // 1. 尝试作为 PFX 加载 (无密码)
   Blob.cbData := Length(LCertData);
@@ -713,7 +746,6 @@ end;
 procedure TWinSSLContext.LoadPrivateKey(AStream: TStream; const APassword: string);
 var
   LCertData: TBytes;
-  LSize: Int64;
   Blob: CRYPT_DATA_BLOB;
   PFXStore: HCERTSTORE;
   CertContext: PCCERT_CONTEXT;
@@ -731,9 +763,12 @@ begin
       sslWinSSL
     );
   
-  LSize := AStream.Size - AStream.Position;
-  SetLength(LCertData, LSize);
-  AStream.Read(LCertData[0], LSize);
+  LCertData := ReadLimitedStreamBytes(
+    WrapTStream(AStream, False),
+    MAX_PRIVATE_KEY_SIZE,
+    'Private key stream',
+    'TWinSSLContext.LoadPrivateKey'
+  );
   
   Blob.cbData := Length(LCertData);
   Blob.pbData := @LCertData[0];
@@ -1309,6 +1344,8 @@ begin
 end;
 
 function TWinSSLContext.CreateConnection(AStream: TStream): ISSLConnection;
+var
+  LTransport: IStream;
 begin
   // P1: 统一上下文验证模式 - 与 OpenSSL RequireValidContext 模式一致
   RequireValidContext('TWinSSLContext.CreateConnection');
@@ -1321,7 +1358,8 @@ begin
   EnsureCredentialsAcquired;
 
   // Let exceptions propagate - caller must handle errors explicitly
-  Result := TWinSSLConnection.Create(Self, AStream);
+  LTransport := WrapTStream(AStream, False);
+  Result := TWinSSLConnection.Create(Self, LTransport);
 end;
 
 // ============================================================================

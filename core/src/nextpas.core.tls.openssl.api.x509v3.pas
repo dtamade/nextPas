@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.x509v3;
 
 interface
 
-uses SysUtils, DynLibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts;
+uses DynLibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts;
 
 type
   // Forward declarations for missing types

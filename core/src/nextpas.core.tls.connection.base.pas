@@ -19,7 +19,7 @@ unit nextpas.core.tls.connection.base;
 
 interface
 
-uses SysUtils, nextpas.core.time, nextpas.core.tls.base, nextpas.core.tls.exceptions;
+uses nextpas.core.text.conv, nextpas.core.time, nextpas.core.tls.base, nextpas.core.tls.exceptions;
 
 const
   { 字符串缓冲区大小 }

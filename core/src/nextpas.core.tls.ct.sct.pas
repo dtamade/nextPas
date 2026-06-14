@@ -9,7 +9,7 @@ unit nextpas.core.tls.ct.sct;
 
 interface
 
-uses SysUtils, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.ct, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.ssl, nextpas.core.tls.openssl.api.stack;
+uses nextpas.core.text.conv, nextpas.core.time, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.ct, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.ssl, nextpas.core.tls.openssl.api.stack;
 
 type
   // SCT 来源类型
