@@ -4,6 +4,7 @@ program test_http_h2_types;
 
 uses
   nextpas.core.base,
+  nextpas.core.http.base,
   nextpas.core.http.impl.h2.types,
   nextpas.core.testing;
 
@@ -221,6 +222,255 @@ begin
     'stream recv flow available');
 end;
 
+{ -- Flow control overflow and error path tests -- }
+
+procedure TestFlowOnDataReceivedExceedsCapacity;
+var
+  LFlow: TH2FlowState;
+  LCaptured: Boolean;
+begin
+  LCaptured := False;
+  try
+    LFlow.Init(8);
+    LFlow.OnDataReceived(9);
+  except
+    on E: EHttpError do
+      LCaptured := True;
+  end;
+  Check(LCaptured, 'OnDataReceived exceeding capacity raises');
+end;
+
+procedure TestFlowOnDataConsumedReturnsWindow;
+var
+  LFlow: TH2FlowState;
+begin
+  LFlow.Init(100);
+  LFlow.OnDataReceived(50);
+  CheckEqual(Int64(50), LFlow.AvailableWindow, 'recv depletes window');
+  CheckEqual(Int64(50), LFlow.InFlightBytes, 'recv tracks inflight');
+  LFlow.OnDataConsumed(30);
+  CheckEqual(Int64(80), LFlow.AvailableWindow, 'consume returns credit');
+  CheckEqual(Int64(20), LFlow.InFlightBytes, 'consume reduces inflight');
+end;
+
+procedure TestFlowOnDataConsumedExceedsInflight;
+var
+  LFlow: TH2FlowState;
+  LCaptured: Boolean;
+begin
+  LCaptured := False;
+  try
+    LFlow.Init(100);
+    LFlow.OnDataReceived(30);
+    LFlow.OnDataConsumed(50);
+  except
+    on E: EHttpError do
+      LCaptured := True;
+  end;
+  Check(LCaptured, 'OnDataConsumed exceeding inflight raises');
+end;
+
+procedure TestFlowReleaseReservedBasic;
+var
+  LFlow: TH2FlowState;
+begin
+  LFlow.Init(100);
+  Check(LFlow.TryReserve(60), 'reserve 60');
+  LFlow.ReleaseReserved(20);
+  CheckEqual(Int64(60), LFlow.AvailableWindow, 'release restores available');
+  CheckEqual(Int64(40), LFlow.ReservedBytes, 'release reduces reserved');
+end;
+
+procedure TestFlowReleaseReservedExceedsReserved;
+var
+  LFlow: TH2FlowState;
+  LCaptured: Boolean;
+begin
+  LCaptured := False;
+  try
+    LFlow.Init(100);
+    LFlow.TryReserve(30);
+    LFlow.ReleaseReserved(50);
+  except
+    on E: EHttpError do
+      LCaptured := True;
+  end;
+  Check(LCaptured, 'ReleaseReserved exceeding reserved raises');
+end;
+
+procedure TestFlowOnWindowUpdateZero;
+var
+  LFlow: TH2FlowState;
+  LCaptured: Boolean;
+begin
+  LCaptured := False;
+  try
+    LFlow.Init(100);
+    LFlow.OnWindowUpdate(0);
+  except
+    on E: EHttpError do
+      LCaptured := True;
+  end;
+  Check(LCaptured, 'OnWindowUpdate with zero increment raises');
+end;
+
+procedure TestFlowOnWindowUpdateOverflow;
+var
+  LFlow: TH2FlowState;
+  LCaptured: Boolean;
+begin
+  LCaptured := False;
+  try
+    LFlow.Init(H2_MAX_WINDOW_SIZE - 1);
+    LFlow.OnWindowUpdate(100);
+  except
+    on E: EHttpError do
+      LCaptured := True;
+  end;
+  Check(LCaptured, 'OnWindowUpdate exceeding H2_MAX_WINDOW_SIZE raises');
+end;
+
+procedure TestFlowCanReserveBoundaries;
+var
+  LFlow: TH2FlowState;
+begin
+  LFlow.Init(0);
+  Check(not LFlow.CanReserve(1), 'zero window cannot reserve');
+  Check(LFlow.CanReserve(0), 'zero window can reserve zero');
+
+  LFlow.Init(100);
+  Check(LFlow.CanReserve(100), 'can reserve entire window');
+  Check(not LFlow.CanReserve(101), 'cannot reserve beyond window');
+end;
+
+procedure TestFlowHasSendAndReceiveCapacity;
+var
+  LFlow: TH2FlowState;
+begin
+  LFlow.Init(0);
+  Check(not LFlow.HasSendCapacity, 'zero window has no send capacity');
+  Check(not LFlow.HasReceiveCapacity, 'zero window has no recv capacity');
+
+  LFlow.Init(10);
+  Check(LFlow.HasSendCapacity, 'positive window has send capacity');
+  Check(LFlow.HasReceiveCapacity, 'positive window has recv capacity');
+
+  LFlow.OnDataReceived(10);
+  Check(not LFlow.HasReceiveCapacity, 'depleted recv window has no recv capacity');
+end;
+
+{ -- Options validation tests -- }
+
+procedure TestClientOptionsValidation;
+var
+  LOptions: TH2ClientTransportOptions;
+  LCaptured: Boolean;
+begin
+  LOptions := TH2ClientTransportOptions.Default;
+  LOptions.MaxPoolSize := 0;
+  LCaptured := False;
+  try LOptions.Validate; except on E: EHttpError do LCaptured := True; end;
+  Check(LCaptured, 'client MaxPoolSize=0 raises');
+
+  LOptions := TH2ClientTransportOptions.Default;
+  LOptions.InitialStreamWindowSize := 2147483648; { > H2_MAX_WINDOW_SIZE }
+  LCaptured := False;
+  try LOptions.Validate; except on E: EHttpError do LCaptured := True; end;
+  Check(LCaptured, 'client stream window too large raises');
+
+  LOptions := TH2ClientTransportOptions.Default;
+  LOptions.MaxFrameSize := 100;
+  LCaptured := False;
+  try LOptions.Validate; except on E: EHttpError do LCaptured := True; end;
+  Check(LCaptured, 'client MaxFrameSize too small raises');
+
+  LOptions := TH2ClientTransportOptions.Default;
+  LOptions.Timeout := -1;
+  LCaptured := False;
+  try LOptions.Validate; except on E: EHttpError do LCaptured := True; end;
+  Check(LCaptured, 'client negative timeout raises');
+end;
+
+procedure TestServerOptionsValidation;
+var
+  LOptions: TH2ServerTransportOptions;
+  LCaptured: Boolean;
+begin
+  LOptions := TH2ServerTransportOptions.Default;
+  LOptions.InitialStreamWindowSize := 2147483648;
+  LCaptured := False;
+  try LOptions.Validate; except on E: EHttpError do LCaptured := True; end;
+  Check(LCaptured, 'server stream window too large raises');
+
+  LOptions := TH2ServerTransportOptions.Default;
+  LOptions.ReadTimeout := -5;
+  LCaptured := False;
+  try LOptions.Validate; except on E: EHttpError do LCaptured := True; end;
+  Check(LCaptured, 'server negative read timeout raises');
+
+  LOptions := TH2ServerTransportOptions.Default;
+  LOptions.MaxBodySize := High(Int32) + 1;
+  LCaptured := False;
+  try LOptions.Validate; except on E: EHttpError do LCaptured := True; end;
+  Check(LCaptured, 'server MaxBodySize too large raises');
+end;
+
+{ -- Connection/Stream flow control edge cases -- }
+
+procedure TestConnectionFlowReset;
+var
+  LConn: TH2ConnectionFlowControl;
+begin
+  LConn.Init(100, 200);
+  LConn.SendWindow.TryReserve(80);
+  LConn.SendWindow.CommitSend(80);
+  LConn.RecvWindow.OnDataReceived(150);
+
+  LConn.SendWindow.Reset(200);
+  LConn.RecvWindow.Reset(300);
+
+  CheckEqual(Int64(200), LConn.SendWindow.AvailableWindow, 'send reset restores window');
+  CheckEqual(Int64(0), LConn.SendWindow.InFlightBytes, 'send reset clears inflight');
+  CheckEqual(Int64(300), LConn.RecvWindow.AvailableWindow, 'recv reset restores window');
+end;
+
+procedure TestStreamFlowApplyWindows;
+var
+  LStream: TH2StreamFlowControl;
+begin
+  LStream.Init(1, 10000, 20000);
+  CheckEqual(Int64(10000), LStream.SendWindow.AvailableWindow, 'stream send init');
+  CheckEqual(Int64(20000), LStream.RecvWindow.AvailableWindow, 'stream recv init');
+
+  LStream.ApplyPeerInitialWindowSize(32768);
+  Check(LStream.SendWindow.AvailableWindow > 10000,
+    'peer initial window increase expands send window');
+
+  LStream.ApplyLocalInitialWindowSize(65535);
+  Check(LStream.RecvWindow.AvailableWindow > 20000,
+    'local initial window increase expands recv window');
+end;
+
+{ -- TH2Settings validation -- }
+
+procedure TestSettingsValidation;
+var
+  LSettings: TH2Settings;
+  LCaptured: Boolean;
+begin
+  LSettings := TH2Settings.Default;
+  LSettings.MaxFrameSize := 100;
+  LCaptured := False;
+  try LSettings.Validate; except on E: EHttpError do LCaptured := True; end;
+  Check(LCaptured, 'settings MaxFrameSize too small raises');
+
+  LSettings := TH2Settings.Default;
+  LSettings.InitialWindowSize := 2147483648;
+  LCaptured := False;
+  try LSettings.Validate; except on E: EHttpError do LCaptured := True; end;
+  Check(LCaptured, 'settings InitialWindowSize too large raises');
+end;
+
 begin
   with TTestRunner.Create('nextpas.core.http.impl.h2.types') do
   begin
@@ -237,6 +487,34 @@ begin
       @TestFlowWindowShrinkCanGoNegativeUntilConsumed);
     Run('Connection and stream flow carry identity',
       @TestConnectionAndStreamFlowCarryIdentity);
+    Run('OnDataReceived exceeding capacity raises',
+      @TestFlowOnDataReceivedExceedsCapacity);
+    Run('OnDataConsumed returns credit',
+      @TestFlowOnDataConsumedReturnsWindow);
+    Run('OnDataConsumed exceeding inflight raises',
+      @TestFlowOnDataConsumedExceedsInflight);
+    Run('ReleaseReserved basic',
+      @TestFlowReleaseReservedBasic);
+    Run('ReleaseReserved exceeding reserved raises',
+      @TestFlowReleaseReservedExceedsReserved);
+    Run('OnWindowUpdate zero raises',
+      @TestFlowOnWindowUpdateZero);
+    Run('OnWindowUpdate overflow raises',
+      @TestFlowOnWindowUpdateOverflow);
+    Run('CanReserve boundary conditions',
+      @TestFlowCanReserveBoundaries);
+    Run('HasSendCapacity and HasReceiveCapacity',
+      @TestFlowHasSendAndReceiveCapacity);
+    Run('Client options validation rejects invalid',
+      @TestClientOptionsValidation);
+    Run('Server options validation rejects invalid',
+      @TestServerOptionsValidation);
+    Run('Connection flow reset',
+      @TestConnectionFlowReset);
+    Run('Stream flow apply windows',
+      @TestStreamFlowApplyWindows);
+    Run('Settings validation rejects invalid',
+      @TestSettingsValidation);
     Summary;
   end;
 end.
