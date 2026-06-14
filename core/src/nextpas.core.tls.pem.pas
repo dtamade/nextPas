@@ -30,7 +30,8 @@ unit nextpas.core.tls.pem;
 interface
 
 uses
-  SysUtils;
+  SysUtils,
+  Classes;
 
 type
   // ========================================================================
