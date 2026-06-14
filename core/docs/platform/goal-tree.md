@@ -43,7 +43,7 @@ gate actually runs.
 
 ## Wine Runtime Smoke Evidence
 
-Wine 10.0 runtime smoke evidence covers 12 facade modules. These tests are
+Wine 10.0 runtime smoke evidence covers 14 facade modules. These tests are
 cross-compiled to Win64 PE via `-Twin64` and executed under Wine. Evidence tier
 is `wine-runtime-smoke` (not `focused-runtime` and not `ci-matrix`).
 
@@ -62,6 +62,7 @@ is `wine-runtime-smoke` (not `focused-runtime` and not `ci-matrix`).
 | platform.mmap | `tests/nextpas.core.platform.mmap/test_platform_mmap_wine/` | 7 | 0 leak | file-backed mmap (CreateFileMappingA path encoding) |
 | platform.random | `tests/nextpas.core.platform.random/test_platform_random_wine/` | 4 | 0 leak | — |
 | platform.socket | `tests/nextpas.core.platform.socket/test_platform_socket_wine/` | 4 | 0 leak | — |
+| io.reactor.iocp | `tests/nextpas.core.io.uring/test_reactor_iocp_wine/` | 3 | 0 leak | AsyncAccept/AsyncConnect not covered (needs AcceptEx + ConnectEx flow) |
 
 Not covered by Wine runtime smoke: platform.signal, platform.console, platform.args
 (no Wine runtime test needed — signal uses SetConsoleCtrlHandler which is
@@ -74,8 +75,9 @@ The Windows readiness poller remains separate from IOCP completion. The
 readiness lane covers `platform_poller_*`, wake, userdata, and empty-interest
 re-entry. The completion lane covers IOCP read/write file operations, async
 send/recv over sockets, accept (via AcceptEx), connect (via ConnectEx), and
-close. IOCP socket completion operations now have real Windows implementation
-but no dedicated Wine smoke test yet (file path has Wine smoke coverage).
+close. IOCP socket completion operations now have wine-runtime-smoke for
+AsyncSend/AsyncRecv (3 tests), and are additionally covered by source-contract
+and forced Windows compile gates.
 
 ## Milestones
 
@@ -84,7 +86,7 @@ but no dedicated Wine smoke test yet (file path has Wine smoke coverage).
 | P1 Host ABI inventory | Host constants, records, handles, raw declarations | source-contract + focused ABI tests for many hosts | keep gap matrix current and fail new raw owner leaks |
 | P2 Feature facades | Portable APIs for time, sync, thread, files, io, process, mmap, env, random, signal, console, path, fs, args, resource | Linux focused-runtime; other hosts mixed | per-feature truth matrix by host |
 | P3 Readiness lane | `platform_poller_*`, wake, userdata, empty-interest, net readiness consumers | Linux runtime; Windows source/compile | Windows runtime proof and ci-matrix |
-| P4 Completion lane | IOCP/proactor ownership and async loop completion consumers | source-contract + forced compile | Windows real runtime for file lifecycle and timeout/close paths |
+| P4 Completion lane | IOCP/proactor ownership and async loop completion consumers | source-contract + forced compile + wine-runtime-smoke (AsyncSend/Recv) | Windows real runtime for AcceptEx/ConnectEx lifecycle and timeout/close paths |
 | P5 Tier 2 targets | Windows aarch64, Linux riscv64/arm32, FreeBSD/Android | source/compile fragments | cross-compile and runtime matrix |
 | P6 Benchmarks | Platform performance comparison | deferred | only after contract/runtime truth stabilizes |
 
