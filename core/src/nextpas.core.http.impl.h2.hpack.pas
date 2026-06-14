@@ -98,6 +98,8 @@ type
     property MaxDynamicTableSize: UInt32 read FMaxDynamicTableSize write FMaxDynamicTableSize;
   end;
 
+procedure HPackEnsureStaticBuilt;
+
 {** Helper: look up a header in the combined static+dynamic table.
  *  AIndex is 1-based. Indices 1..61 are static, 62+ are dynamic.
  *  Returns True if found. }
@@ -310,6 +312,11 @@ end;
 function THPackDynamicTable.TotalSize: SizeInt;
 begin
   Result := FTotalSize;
+end;
+
+procedure HPackEnsureStaticBuilt;
+begin
+  if not FStaticBuilt then BuildStaticStrings;
 end;
 
 { === THPackEncoder === }
@@ -753,9 +760,14 @@ begin
     begin
       { Indexed Header Field (1xxxxxxx) }
       DecodeInteger(ABlock, LPos, 7, LIndex);
-      if not HPackLookup(HPACK_STATIC_TABLE_COUNT, FDynamicTable, LIndex,
-        AHeaders[LHeaderCount].Name, AHeaders[LHeaderCount].Value) then
-        Exit;
+      if (LIndex >= 1) and (LIndex <= HPACK_STATIC_TABLE_COUNT) then
+      begin
+        if not FStaticBuilt then BuildStaticStrings;
+        AHeaders[LHeaderCount].Name := FStaticNames[LIndex];
+        AHeaders[LHeaderCount].Value := FStaticValues[LIndex];
+      end
+      else if not FDynamicTable.Get(LIndex - HPACK_STATIC_TABLE_COUNT - 1,
+        AHeaders[LHeaderCount].Name, AHeaders[LHeaderCount].Value) then Exit;
       Inc(LHeaderCount);
     end
     else if (LByte and $C0) = $40 then
@@ -766,7 +778,7 @@ begin
       begin
         if LIndex <= HPACK_STATIC_TABLE_COUNT then
         begin
-          if not FStaticBuilt then BuildStaticStrings;
+          HPackEnsureStaticBuilt;
           AHeaders[LHeaderCount].Name := FStaticNames[LIndex];
         end
         else if not FDynamicTable.GetName(LIndex - HPACK_STATIC_TABLE_COUNT - 1,
@@ -816,7 +828,7 @@ begin
       begin
         if LIndex <= HPACK_STATIC_TABLE_COUNT then
         begin
-          if not FStaticBuilt then BuildStaticStrings;
+          HPackEnsureStaticBuilt;
           AHeaders[LHeaderCount].Name := FStaticNames[LIndex];
         end
         else if not FDynamicTable.GetName(LIndex - HPACK_STATIC_TABLE_COUNT - 1,
@@ -864,7 +876,7 @@ begin
       begin
         if LIndex <= HPACK_STATIC_TABLE_COUNT then
         begin
-          if not FStaticBuilt then BuildStaticStrings;
+          HPackEnsureStaticBuilt;
           AHeaders[LHeaderCount].Name := FStaticNames[LIndex];
         end
         else if not FDynamicTable.GetName(LIndex - HPACK_STATIC_TABLE_COUNT - 1,
@@ -916,6 +928,9 @@ begin
   end;
   Result := True;
 end;
+
+initialization
+  HPackEnsureStaticBuilt;
 
 end.
 
