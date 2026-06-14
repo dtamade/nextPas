@@ -5,7 +5,9 @@ unit nextpas.core.tls.tls13.recordsealer;
 
 interface
 
-uses nextpas.core.text.conv;
+uses
+  nextpas.core.base,
+  nextpas.core.text.conv;
 
 type
   TTLS13SealerState = (tssReady, tssExhausted);
@@ -43,7 +45,7 @@ type
 
 implementation
 
-uses nextpas.core.tls.tls13.aead, nextpas.core.tls.tls13.recordcrypto, nextpas.core.tls.tls13.wire, nextpas.core.text.conv;
+uses nextpas.core.tls.tls13.aead, nextpas.core.tls.tls13.recordcrypto, nextpas.core.tls.tls13.wire;
 
 { TTLS13RecordSealer }
 

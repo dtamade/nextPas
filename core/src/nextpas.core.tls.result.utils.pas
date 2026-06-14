@@ -33,7 +33,11 @@ unit nextpas.core.tls.result.utils;
 
 interface
 
-uses nextpas.core.tls.base, nextpas.core.text.conv; type TBooleanFunc = function: Boolean;
+uses
+  SysUtils,
+  nextpas.core.base,
+  nextpas.core.tls.base,
+  nextpas.core.text.conv; type TBooleanFunc = function: Boolean;
   TBooleanFuncOfObject = function: Boolean of object;
   TOperationResultFunc = function: TSSLOperationResult;
   TOperationResultFuncOfObject = function: TSSLOperationResult of object;
@@ -146,7 +150,7 @@ function ToResult(ASuccess: Boolean; const AContext: string = ''): TSSLOperation
 
 implementation
 
-uses nextpas.core.tls.exceptions, nextpas.core.text.conv; class function TResultUtils.FromBool(ASuccess: Boolean;
+uses nextpas.core.tls.exceptions; class function TResultUtils.FromBool(ASuccess: Boolean;
   const AContext: string): TSSLOperationResult;
 begin
   if ASuccess then

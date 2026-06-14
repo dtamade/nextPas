@@ -15,6 +15,8 @@ unit nextpas.core.tls.tls13.chacha20poly1305;
 
 interface
 
+uses
+  nextpas.core.base;
 
 function TryChaCha20Poly1305Encrypt(
   const AKey, ANonce, AAAD, APlaintext: TBytes;

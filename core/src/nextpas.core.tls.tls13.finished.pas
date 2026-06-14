@@ -9,8 +9,8 @@ unit nextpas.core.tls.tls13.finished;
 
 interface
 
-
-function TLS13FinishedKeySHA256(const ATrafficSecret: TBytes): TBytes;
+uses
+  nextpas.core.base;
 function TLS13FinishedKeySHA384(const ATrafficSecret: TBytes): TBytes;
 function TLS13ComputeFinishedVerifyDataSHA256(const AFinishedKey, ATranscriptHash: TBytes): TBytes;
 function TLS13ComputeFinishedVerifyDataSHA384(const AFinishedKey, ATranscriptHash: TBytes): TBytes;

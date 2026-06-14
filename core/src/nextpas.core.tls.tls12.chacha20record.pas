@@ -4,6 +4,9 @@ unit nextpas.core.tls.tls12.chacha20record;
 
 interface
 
+uses
+  SysUtils,
+  nextpas.core.base;
 
 function TLS12ChaCha20Poly1305EncryptRecord(
   const AKey: TBytes;
@@ -27,7 +30,8 @@ function TLS12ChaCha20Poly1305DecryptRecord(
 
 implementation
 
-uses nextpas.core.tls.tls13.chacha20poly1305;
+uses
+  nextpas.core.tls.tls13.chacha20poly1305;
 
 const
   TAG_LEN = 16;

@@ -16,7 +16,7 @@ unit nextpas.core.tls.mbedtls.certificate;
 
 interface
 
-uses
+uses Classes,
   SysUtils,nextpas.core.tls.base,
   nextpas.core.tls.base64,
   nextpas.core.tls.errors,
@@ -152,8 +152,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.text.strings,
+uses nextpas.core.text.strings,
     Contnrs, DateUtils,
   nextpas.core.time,
   nextpas.core.tls.utils,
@@ -1677,7 +1676,7 @@ begin
 
     if LTarget <> '' then
     begin
-      for I := 0 to Length(FCertificates) - 1 do
+      for I := 0 to FCertificates.Count - 1 do
       begin
         LExisting := FCertificates[I] as ISSLCertificate;
         if NormalizeMbedTLSCertFingerprint(LExisting.GetFingerprintSHA256) = LTarget then
@@ -1715,7 +1714,7 @@ begin
   if LTarget = '' then
     Exit(False);
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     LExisting := FCertificates[I] as ISSLCertificate;
     if NormalizeMbedTLSCertFingerprint(LExisting.GetFingerprintSHA256) = LTarget then
@@ -1730,13 +1729,13 @@ end;
 
 function TMbedTLSCertificateStore.GetCount: Integer;
 begin
-  Result := Length(FCertificates);
+  Result := FCertificates.Count;
 end;
 
 function TMbedTLSCertificateStore.GetCertificate(AIndex: Integer): ISSLCertificate;
 begin
   Result := nil;
-  if (AIndex >= 0) and (AIndex < Length(FCertificates)) then
+  if (AIndex >= 0) and (AIndex < FCertificates.Count) then
     Result := FCertificates[AIndex] as ISSLCertificate;
 end;
 
@@ -1807,7 +1806,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if Pos(LTarget, NormalizeMbedTLSCertText(LCert.GetSubject)) > 0 then
@@ -1829,7 +1828,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if Pos(LTarget, NormalizeMbedTLSCertText(LCert.GetIssuer)) > 0 then
@@ -1851,7 +1850,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if NormalizeMbedTLSCertHex(LCert.GetSerialNumber) = LTarget then
@@ -1873,7 +1872,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to Length(FCertificates) - 1 do
+  for I := 0 to FCertificates.Count - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if NormalizeMbedTLSCertFingerprint(LCert.GetFingerprintSHA256) = LTarget then

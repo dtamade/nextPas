@@ -4,7 +4,9 @@ unit nextpas.core.tls.verify.custom;
 
 interface
 
-uses nextpas.core.tls.base, nextpas.core.text.conv;
+uses
+  nextpas.core.base,
+  nextpas.core.tls.base;
 
 type
   { TSSLPinningVerifier — verify server cert by SHA-256 pin }
@@ -33,7 +35,10 @@ type
 
 implementation
 
-uses nextpas.core.tls.exceptions, nextpas.core.crypto.hash, nextpas.core.text.conv;
+uses
+  SysUtils,
+  nextpas.core.tls.exceptions,
+  nextpas.core.crypto.hash;
 
 { TSSLPinningVerifier }
 
@@ -44,7 +49,7 @@ begin
   FAllowIfNoPins := False;
 end;
 
-procedure TSSLPinningVerifier.AddPin(const ASHA256Hash: TBytes);
+procedure TSSLPinningVerifier.AddPin(const ASHA256Hash: nextpas.core.base.TBytes);
 var
   LIdx: Integer;
 begin
