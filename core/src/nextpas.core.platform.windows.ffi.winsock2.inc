@@ -32,3 +32,4 @@ function htons(hostshort: WORD): WORD; stdcall; external 'ws2_32' name 'htons';
 function ntohs(netshort: WORD): WORD; stdcall; external 'ws2_32' name 'ntohs';
 function htonl(hostlong: DWORD): DWORD; stdcall; external 'ws2_32' name 'htonl';
 function ntohl(netlong: DWORD): DWORD; stdcall; external 'ws2_32' name 'ntohl';
+function WSAIoctl(s: TSocket; dwIoControlCode: DWORD; lpvInBuffer: Pointer; cbInBuffer: DWORD; lpvOutBuffer: Pointer; cbOutBuffer: DWORD; lpcbBytesReturned: LPDWORD; lpOverlapped: LPWSAOVERLAPPED; lpCompletionRoutine: LPWSAOVERLAPPED_COMPLETION_ROUTINE): LongInt; stdcall; external 'ws2_32' name 'WSAIoctl';
