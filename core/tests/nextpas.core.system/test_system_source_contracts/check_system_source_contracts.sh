@@ -1361,4 +1361,30 @@ while IFS='|' read -r file unit_name; do
   esac
 done < "$tmp_found"
 
+
+# === FPC broad RTL file-level enforcement gate ===
+require_no_new_fpc_rtl_debt() {
+  local allowlist="$CORE_ROOT/tests/nextpas.core.system/test_system_source_contracts/fpc_rtl_file_allowlist.txt"
+  local fail_count=0
+  local file unit_name
+
+  while IFS='|' read -r file unit_name; do
+    case "$unit_name" in
+      SysUtils|Classes|TypInfo|DateUtils|BaseUnix|Unix|Windows)
+        local basename="${file##*/}"
+        if ! grep -qF "$unit_name|$basename" "$allowlist" 2>/dev/null; then
+          echo "[FAIL] FPC RTL debt: ${file#$CORE_ROOT/src/} uses $unit_name but not in fpc_rtl_file_allowlist.txt" >&2
+          fail_count=$((fail_count + 1))
+        fi
+        ;;
+    esac
+  done < "$tmp_found"
+
+  if [ "$fail_count" -gt 0 ]; then
+    fail "FPC broad RTL file-level enforcement gate rejected $fail_count new debt entries"
+  fi
+}
+
+require_no_new_fpc_rtl_debt
+
 echo "[PASS] nextpas.core.system source contracts"

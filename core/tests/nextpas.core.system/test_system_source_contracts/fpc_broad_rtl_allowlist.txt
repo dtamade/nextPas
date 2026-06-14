@@ -1,6 +1,10 @@
-# Current direct FPC broad RTL route debt baseline.
+# Current direct FPC broad RTL route debt baseline (summary counts).
 # Format: category|UnitName|count
 # Keep this compact: future migration slices should reduce counts, not add paths.
+#
+# NOTE: Active enforcement now lives in fpc_rtl_file_allowlist.txt (file-level).
+# This file is the summary view only. Any NEW file using SysUtils/Classes/etc
+# MUST be added to fpc_rtl_file_allowlist.txt first.
 collections-typinfo-debt|SysUtils|2
 compiler-production|Classes|4
 compiler-production|SysUtils|25
