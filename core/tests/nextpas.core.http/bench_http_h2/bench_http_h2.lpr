@@ -77,7 +77,8 @@ begin
   LHeaders[4].Name := 'content-length'; LHeaders[4].Value := '42';
   LEncoder.Init;
   LBlock := LEncoder.Encode(LHeaders);
-  LDecoder.Init;
+  LDecoder.Init(0);
+  FillChar(LOutput, SizeOf(LOutput), 0);
   BenchStart;
   for LI := 1 to ITERATIONS do
   begin
