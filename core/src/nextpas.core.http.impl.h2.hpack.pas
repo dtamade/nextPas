@@ -669,13 +669,9 @@ end;
 
 procedure THPackDecoder.DecodeHuffman(const ABlock: AnsiString; var APos: SizeInt;
   ALen: SizeInt; out AStr: AnsiString);
-var
-  LSlice: AnsiString;
 begin
-  { Slice out the HPACK Huffman-encoded bytes and delegate to the
-    shared Huffman decoder in hpack.huffman. }
-  SetString(LSlice, @ABlock[APos], ALen);
-  AStr := H2HuffmanDecode(LSlice);
+  { Direct decode from block pointer, avoiding intermediate string allocation }
+  AStr := H2HuffmanDecodeRaw(@ABlock[APos], ALen);
   Inc(APos, ALen);
 end;
 
