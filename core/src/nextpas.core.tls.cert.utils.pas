@@ -90,7 +90,7 @@ type
     PublicKeyType: string;     // 公钥类型
     PublicKeyBits: Integer;    // 公钥位数
     SignatureAlgorithm: string;// 签名算法
-    SubjectAltNames: TStringList; // SAN (备用名称)
+    SubjectAltNames: TStringArray; // SAN (备用名称)
     KeyUsage: string;          // 密钥用途
     IsCA: Boolean;             // 是否CA证书
     Version: Integer;          // 证书版本
@@ -110,7 +110,7 @@ type
     KeyType: TKeyType;         // 密钥类型
     KeyBits: Integer;          // RSA密钥位数 (2048/4096)
     ECCurve: string;           // EC曲线名称 (prime256v1/secp384r1)
-    SubjectAltNames: TStringList; // 备用名称
+    SubjectAltNames: TStringArray; // 备用名称
     IsCA: Boolean;             // 是否CA证书
     SerialNumber: Int64;       // 序列号 (0=自动生成)
     OCSPResponderURL: string;  // 可选：写入 AIA 的 OCSP Responder URL（http/https）
@@ -286,7 +286,8 @@ type
 implementation
 
 uses
-  nextpas.core.time,
+  nextpas.core.text.strings,
+    nextpas.core.time,
   nextpas.core.tls.openssl.api.asn1,
   nextpas.core.tls.openssl.api.x509v3,
   nextpas.core.tls.openssl.api.stack,  // Added stack support
@@ -968,7 +969,7 @@ begin
       AddExtension(LCert, LCert, NID_authority_key_identifier, 'keyid:always');
 
       // Subject Alternative Names
-      if (AOptions.SubjectAltNames <> nil) and (AOptions.SubjectAltNames.Count > 0) then
+      if (AOptions.SubjectAltNames <> nil) and (AOptions.Length(SubjectAltNames) > 0) then
       begin
         // Force comma delimiter without quotes
         AOptions.SubjectAltNames.Delimiter := ',';
@@ -1266,7 +1267,7 @@ begin
           AddExtension(LCert, LCACert, NID_authority_key_identifier, 'keyid:always,issuer');
           
           // Subject Alternative Names
-          if (AOptions.SubjectAltNames <> nil) and (AOptions.SubjectAltNames.Count > 0) then
+          if (AOptions.SubjectAltNames <> nil) and (AOptions.Length(SubjectAltNames) > 0) then
             AddExtension(LCert, LCACert, NID_subject_alt_name, AOptions.SubjectAltNames.DelimitedText);
 
           // Authority Information Access (OCSP)
@@ -1946,7 +1947,6 @@ begin
       LStream.Read(LBytes[0], LStream.Size);
     Result := AnsiString(nextpas.core.text.conv.UTF8BytesToString(LBytes));
   finally
-    LStream.Free;
   end;
 end;
 
@@ -1964,7 +1964,6 @@ begin
         LStream.Write(LBytes[0], Length(LBytes));
       Result := True;
     finally
-      LStream.Free;
     end;
   except
     Result := False;
@@ -2053,7 +2052,7 @@ class function TCertificateUtils.CompareX509Names(
 ): Boolean;
 var
   LName1, LName2: string;
-  LComponents1, LComponents2: TStringList;
+  LComponents1, LComponents2: TStringArray;
   i: Integer;
   
   function NormalizeDN(const ADN: string): string;
@@ -2072,7 +2071,7 @@ var
       Result := s;
   end;
   
-  procedure ParseDN(const ADN: string; AList: TStringList);
+  procedure ParseDN(const ADN: string; AList: TStringArray);
   var
     Components: TStringArray;
     j: Integer;
@@ -2103,18 +2102,15 @@ begin
     Result := True;
     Exit;
   end;
-  
-  LComponents1 := TStringList.Create;
-  LComponents2 := TStringList.Create;
   try
     ParseDN(LName1, LComponents1);
     ParseDN(LName2, LComponents2);
     
-    if LComponents1.Count <> LComponents2.Count then
+    if Length(LComponents1) <> Length(LComponents2) then
       Exit;
       
     Result := True;
-    for i := 0 to LComponents1.Count - 1 do
+    for i := 0 to Length(LComponents1) - 1 do
     begin
       if LComponents1[i] <> LComponents2[i] then
       begin
@@ -2123,8 +2119,6 @@ begin
       end;
     end;
   finally
-    LComponents1.Free;
-    LComponents2.Free;
   end;
 end;
 

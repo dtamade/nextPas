@@ -23,7 +23,7 @@ unit nextpas.core.tls.asn1;
 interface
 
 uses
-  SysUtils, Classes, Contnrs;
+  SysUtils,Contnrs;
 
 const
   // ========================================================================
@@ -295,6 +295,10 @@ function TagToString(ATag: Byte): string;
 
 implementation
 
+uses
+  nextpas.core.text.strings;
+
+
 // ========================================================================
 // 常用 OID 定义
 // ========================================================================
@@ -424,7 +428,6 @@ end;
 
 destructor TASN1Node.Destroy;
 begin
-  FChildren.Free;
   inherited Destroy;
 end;
 
@@ -435,7 +438,7 @@ end;
 
 function TASN1Node.ChildCount: Integer;
 begin
-  Result := FChildren.Count;
+  Result := Length(FChildren);
 end;
 
 function TASN1Node.GetChild(AIndex: Integer): TASN1Node;
@@ -445,7 +448,7 @@ end;
 
 function TASN1Node.FirstChild: TASN1Node;
 begin
-  if FChildren.Count > 0 then
+  if Length(FChildren) > 0 then
     Result := FChildren[0]
   else
     Result := nil;
@@ -453,8 +456,8 @@ end;
 
 function TASN1Node.LastChild: TASN1Node;
 begin
-  if FChildren.Count > 0 then
-    Result := FChildren[FChildren.Count - 1]
+  if Length(FChildren) > 0 then
+    Result := FChildren[Length(FChildren) - 1]
   else
     Result := nil;
 end;
@@ -713,7 +716,7 @@ begin
   Result := Result + LineEnding;
 
   // 递归显示子节点
-  for I := 0 to FChildren.Count - 1 do
+  for I := 0 to Length(FChildren) - 1 do
     Result := Result + FChildren[I].Dump(AIndent + 1);
 end;
 
@@ -729,7 +732,6 @@ end;
 
 destructor TASN1NodeList.Destroy;
 begin
-  FList.Free;
   inherited Destroy;
 end;
 
@@ -745,7 +747,7 @@ end;
 
 function TASN1NodeList.GetCount: Integer;
 begin
-  Result := FList.Count;
+  Result := Length(FList);
 end;
 
 function TASN1NodeList.GetItem(AIndex: Integer): TASN1Node;
@@ -995,7 +997,6 @@ begin
       end;
     end;
   except
-    Result.Free;
     Result := nil;
     raise;
   end;
@@ -1013,7 +1014,6 @@ end;
 
 destructor TASN1Writer.Destroy;
 begin
-  FStream.Free;
   inherited Destroy;
 end;
 
@@ -1436,7 +1436,7 @@ end;
 
 function EncodeOID(const AOID: string): TBytes;
 var
-  Parts: TStringList;
+  Parts: TStringArray;
   I: Integer;
   First, Second, Value: Cardinal;
   TempBytes: array of Byte;
@@ -1475,14 +1475,10 @@ var
   end;
 
 begin
-  Parts := TStringList.Create;
   ResultStream := TMemoryStream.Create;
   try
-    Parts.Delimiter := '.';
-    Parts.StrictDelimiter := True;
-    Parts.DelimitedText := AOID;
 
-    if Parts.Count < 2 then
+    if Length(Parts) < 2 then
     begin
       SetLength(Result, 0);
       Exit;
@@ -1494,7 +1490,7 @@ begin
     ResultStream.WriteByte(Byte(First * 40 + Second));
 
     // 编码后续组件
-    for I := 2 to Parts.Count - 1 do
+    for I := 2 to Length(Parts) - 1 do
     begin
       Value := StrToIntDef(Parts[I], 0);
       EncodeComponent(Value);
@@ -1506,8 +1502,6 @@ begin
       ResultStream.ReadBuffer(Result[0], ResultStream.Size);
 
   finally
-    Parts.Free;
-    ResultStream.Free;
   end;
 end;
 

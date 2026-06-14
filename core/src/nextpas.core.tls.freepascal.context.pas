@@ -12,7 +12,7 @@ unit nextpas.core.tls.freepascal.context;
 interface
 
 uses
-  SysUtils, Classes, Base64, DateUtils,
+  SysUtils,Base64, DateUtils,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.logging,
@@ -92,7 +92,7 @@ type
     FPrivateKeyData: TBytes;
     FCAFile: string;
     FCAPath: string;
-    FCRLMaterial: TStringList;
+    FCRLMaterial: TStringArray;
     FServerStapledOCSPResponse: TBytes;
 
     function ReadStreamToBytes(AStream: TStream): TBytes;
@@ -193,7 +193,7 @@ type
     procedure ClearCRLMaterial;
     procedure AddCRLPEM(const APEM: string);
     procedure AddCRLFile(const AFileName: string);
-    function BuildCRLStore: TStringList;
+    function BuildCRLStore: TStringArray;
     procedure ClearServerStapledOCSPResponse;
     procedure SetServerStapledOCSPResponse(const AResponseDER: TBytes);
     procedure LoadServerStapledOCSPResponseFile(const AFileName: string);
@@ -219,7 +219,8 @@ type
 implementation
 
 uses
-  nextpas.core.tls.exceptions,
+  nextpas.core.text.strings,
+    nextpas.core.tls.exceptions,
   nextpas.core.mem.secure,
   nextpas.core.tls.utils,
   nextpas.core.crypto.constant_time,
@@ -286,14 +287,12 @@ begin
   SetLength(FCertificateData, 0);
   SetLength(FPrivateKeyData, 0);
   SetLength(FServerStapledOCSPResponse, 0);
-  FCRLMaterial := TStringList.Create;
 end;
 
 destructor TFreePascalContext.Destroy;
 begin
   SecureZeroBytes(FPrivateKeyData);
   DoneCriticalSection(FResumptionLock);
-  FCRLMaterial.Free;
   inherited Destroy;
 end;
 
@@ -610,7 +609,6 @@ begin
     FCertificateData := ReadStreamToBytes(LStream);
     FCertificateFile := AFileName;
   finally
-    LStream.Free;
   end;
 end;
 
@@ -660,7 +658,6 @@ begin
     FPrivateKeyData := ReadStreamToBytes(LStream);
     FPrivateKeyFile := AFileName;
   finally
-    LStream.Free;
   end;
 
   if APassword <> '' then
@@ -833,7 +830,7 @@ begin
     else if LBlock.IsEncrypted and (LBlock.Headers <> nil) then
     begin
       LDEKInfo := '';
-      for I := 0 to LBlock.Headers.Count - 1 do
+      for I := 0 to LBlock.Length(Headers) - 1 do
       begin
         if Pos('DEK-Info:', LBlock.Headers[I]) = 1 then
         begin
@@ -869,7 +866,6 @@ begin
         'Private key does not appear to be encrypted, but a password was provided',
         sslErrLoadFailed, AMethodName, 0, sslFreePascal);
   finally
-    LReader.Free;
   end;
 end;
 
@@ -1286,7 +1282,7 @@ end;
 
 procedure TFreePascalContext.AddCRLFile(const AFileName: string);
 var
-  LCRLText: TStringList;
+  LCRLText: TStringArray;
 begin
   if not FileExists(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
@@ -1296,22 +1292,17 @@ begin
       0,
       sslFreePascal
     );
-
-  LCRLText := TStringList.Create;
   try
     LCRLText.LoadFromFile(AFileName);
     AddCRLPEM(LCRLText.Text);
   finally
-    LCRLText.Free;
   end;
 end;
 
-function TFreePascalContext.BuildCRLStore: TStringList;
+function TFreePascalContext.BuildCRLStore: TStringArray;
 begin
-  if (FCRLMaterial = nil) or (FCRLMaterial.Count = 0) then
+  if (FCRLMaterial = nil) or (Length(FCRLMaterial) = 0) then
     Exit(nil);
-
-  Result := TStringList.Create;
   Result.Assign(FCRLMaterial);
 end;
 
@@ -1361,7 +1352,6 @@ begin
       );
     SetServerStapledOCSPResponse(ReadStreamToBytes(LStream));
   finally
-    LStream.Free;
   end;
 end;
 

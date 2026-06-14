@@ -14,7 +14,7 @@ unit nextpas.core.git.libgit2.backend;
 interface
 
 uses
-  SysUtils, Classes, DateUtils, ctypes,
+  SysUtils,DateUtils, ctypes,
   nextpas.core.git.libgit2.ffi, nextpas.core.git.libgit2.binding,
   nextpas.core.git.base;
 
@@ -213,6 +213,10 @@ function GitTimeToString(const ATime: TGitTime): string;
 
 implementation
 
+uses
+  nextpas.core.text.strings;
+
+
 const
   GIT_REF_NAME_DELIMITER = '/';
   GIT_VERSION_UNKNOWN = '0.0.0';
@@ -220,7 +224,7 @@ const
 type
   PStatusListPayload = ^TStatusListPayload;
   TStatusListPayload = record
-    List: TStringList;
+    List: TStringArray;
   end;
 
   PGitStatusEntry = ^TGitStatusEntry;
@@ -588,7 +592,6 @@ begin
   try
     Result := HeadRef.ShortName;
   finally
-    HeadRef.Free;
   end;
 end;
 
@@ -598,11 +601,10 @@ var
   RefHandle: git_reference;
   BranchType: git_branch_t;
   BranchName: string;
-  List: TStringList;
+  List: TStringArray;
   rc: cint;
 begin
   Result := nil;
-  List := TStringList.Create;
   try
     CheckGitResult(git_branch_iterator_new(Iterator, FHandle, AType), 'New branch iterator');
     try
@@ -619,12 +621,11 @@ begin
     finally
       git_branch_iterator_free(Iterator);
     end;
-    SetLength(Result, List.Count);
-    if List.Count > 0 then
-      for rc := 0 to List.Count - 1 do
+    SetLength(Result, Length(List));
+    if Length(List) > 0 then
+      for rc := 0 to Length(List) - 1 do
         Result[rc] := List[rc];
   finally
-    List.Free;
   end;
 end;
 
@@ -665,7 +666,6 @@ begin
   try
     Result := TGitCommit.Create(Self, HeadRef.OID);
   finally
-    HeadRef.Free;
   end;
 end;
 
@@ -676,7 +676,7 @@ end;
 
 function TGitRepository.Status: TStringArray;
 var
-  LList: TStringList;
+  LList: TStringArray;
   LCount: SizeInt;
   LP: TStatusListPayload;
   function StatusCb(const APath: PChar; AFlags: cuint; APayload: Pointer): cint; cdecl;
@@ -689,18 +689,16 @@ var
   end;
 begin
   Result := nil;
-  LList := TStringList.Create;
   try
     LP.List := LList;
     CheckGitResult(git_status_foreach(FHandle, @StatusListCb, @LP), 'Status foreach');
-    LCount := LList.Count;
+    LCount := Length(LList);
     if LCount > 0 then
     begin
       SetLength(Result, LCount);
       while LCount > 0 do begin Dec(LCount); Result[LCount] := LList[LCount]; end;
     end;
   finally
-    LList.Free;
   end;
 end;
 
@@ -717,8 +715,8 @@ begin
     LP.Filter := Filter;
     LP.Items := LList;
     CheckGitResult(git_status_foreach(FHandle, @StatusEntriesCb, @LP), 'Status foreach');
-    SetLength(Result, LList.Count);
-    for i := 0 to LList.Count-1 do
+    SetLength(Result, Length(LList));
+    for i := 0 to Length(LList)-1 do
     begin
       LItem := PGitStatusEntry(LList[i]);
       Result[i] := LItem^;
@@ -726,10 +724,9 @@ begin
       LList[i] := nil;
     end;
   finally
-    for i := 0 to LList.Count - 1 do
+    for i := 0 to Length(LList) - 1 do
       if LList[i] <> nil then
         Dispose(PGitStatusEntry(LList[i]));
-    LList.Free;
   end;
   Exit; // keep function structure consistent
 end;
@@ -776,7 +773,6 @@ begin
   try
     Result := Remote.Fetch;
   finally
-    Remote.Free;
   end;
 end;
 
@@ -924,9 +920,7 @@ begin
     Result := gpffNeedsMerge;
   finally
     if Assigned(RemoteRef) then
-      RemoteRef.Free;
     if Assigned(LocalRef) then
-      LocalRef.Free;
   end;
 
   // Keep compiler happy about unreachable warnings in some configurations

@@ -43,7 +43,7 @@ type
     SelfSigned: Boolean;
     HostnameMatch: Boolean;
     RevocationStatus: Cardinal;
-    Warnings: TStringList;
+    Warnings: TStringArray;
   end;
   
   {**
@@ -68,8 +68,8 @@ type
     function GetIntermediateStore: ISSLCertificateStore;
     
     // 设置CRL存储
-    procedure SetCRLStore(ACRLs: TStringList);
-    function GetCRLStore: TStringList;
+    procedure SetCRLStore(ACRLs: TStringArray);
+    function GetCRLStore: TStringArray;
     
     // 验证单个证书
     function VerifyCertificate(ACert: ISSLCertificate; 
@@ -100,7 +100,7 @@ type
     FOptions: TChainVerifyOptions;
     FTrustedStore: ISSLCertificateStore;
     FIntermediateStore: ISSLCertificateStore;
-    FCRLStore: TStringList;
+    FCRLStore: TStringArray;
     FLastRevocationStatus: Cardinal;
     FLastRevocationError: string;
     
@@ -126,8 +126,8 @@ type
     procedure SetIntermediateStore(AStore: ISSLCertificateStore);
     function GetIntermediateStore: ISSLCertificateStore;
     
-    procedure SetCRLStore(ACRLs: TStringList);
-    function GetCRLStore: TStringList;
+    procedure SetCRLStore(ACRLs: TStringArray);
+    function GetCRLStore: TStringArray;
     
     function VerifyCertificate(ACert: ISSLCertificate;
                               const AHostname: string = ''): TChainVerifyResult;
@@ -171,7 +171,8 @@ const
 implementation
 
 uses
-  nextpas.core.time;
+  nextpas.core.text.strings,
+    nextpas.core.time;
 
 { TSSLCertificateChainVerifier }
 
@@ -179,14 +180,12 @@ constructor TSSLCertificateChainVerifier.Create;
 begin
   inherited Create;
   FOptions := DefaultChainVerifyOptions;
-  FCRLStore := TStringList.Create;
   FLastRevocationStatus := 0;
   FLastRevocationError := '';
 end;
 
 destructor TSSLCertificateChainVerifier.Destroy;
 begin
-  FCRLStore.Free;
   inherited;
 end;
 
@@ -220,14 +219,14 @@ begin
   Result := FIntermediateStore;
 end;
 
-procedure TSSLCertificateChainVerifier.SetCRLStore(ACRLs: TStringList);
+procedure TSSLCertificateChainVerifier.SetCRLStore(ACRLs: TStringArray);
 begin
   FCRLStore.Clear;
   if ACRLs <> nil then
     FCRLStore.Assign(ACRLs);
 end;
 
-function TSSLCertificateChainVerifier.GetCRLStore: TStringList;
+function TSSLCertificateChainVerifier.GetCRLStore: TStringArray;
 begin
   Result := FCRLStore;
 end;
@@ -323,7 +322,7 @@ end;
 
 function TSSLCertificateChainVerifier.MatchHostname(const ACertName, AHostname: string): Boolean;
 var
-  CertParts, HostParts: TStringList;
+  CertParts, HostParts: TStringArray;
   i: Integer;
 begin
   Result := False;
@@ -338,21 +337,14 @@ begin
   // 通配符匹配
   if (Pos('*.', ACertName) = 1) then
   begin
-    CertParts := TStringList.Create;
-    HostParts := TStringList.Create;
     try
-      CertParts.Delimiter := '.';
-      CertParts.DelimitedText := ACertName;
-      
-      HostParts.Delimiter := '.';
-      HostParts.DelimitedText := AHostname;
       
       // 域名级数必须相同
-      if CertParts.Count = HostParts.Count then
+      if Length(CertParts) = Length(HostParts) then
       begin
         Result := True;
         // 从第二级开始比较（跳过通配符）
-        for i := 1 to CertParts.Count - 1 do
+        for i := 1 to Length(CertParts) - 1 do
         begin
           if not SameText(CertParts[i], HostParts[i]) then
           begin
@@ -362,8 +354,6 @@ begin
         end;
       end;
     finally
-      CertParts.Free;
-      HostParts.Free;
     end;
   end;
 end;
@@ -374,7 +364,6 @@ var
   Line, Item: string;
   i, SepPos: Integer;
 begin
-  Result := TStringList.Create;
 
   if ACert = nil then
     Exit;
@@ -475,10 +464,8 @@ begin
       end;
       Result := VerifyChainSignatureEx(LSubjectX509, LIssuerX509, LError);
     finally
-      LIssuerX509.Free;
     end;
   finally
-    LSubjectX509.Free;
   end;
 end;
 
@@ -554,7 +541,7 @@ begin
     Exit;
   end;
 
-  if (FCRLStore = nil) or (FCRLStore.Count = 0) then
+  if (FCRLStore = nil) or (Length(FCRLStore) = 0) then
   begin
     FLastRevocationStatus := 2;
     FLastRevocationError := 'No caller-provided CRL material is configured';
@@ -587,7 +574,7 @@ begin
     LHasUsableCRL := False;
     LLastMaterialError := '';
 
-    for LCRLIndex := 0 to FCRLStore.Count - 1 do
+    for LCRLIndex := 0 to Length(FCRLStore) - 1 do
     begin
       if Trim(FCRLStore[LCRLIndex]) = '' then
         Continue;
@@ -629,7 +616,6 @@ begin
           Exit(False);
         end;
       finally
-        LCRL.Free;
       end;
     end;
 
@@ -649,7 +635,6 @@ begin
     else
       FLastRevocationError := 'No applicable caller-provided CRL material found for certificate issuer';
   finally
-    LCertificate.Free;
   end;
 end;
 
@@ -657,7 +642,7 @@ function TSSLCertificateChainVerifier.CheckHostname(ACert: ISSLCertificate;
   const AHostname: string): Boolean;
 var
   CN: string;
-  SANs: TStringList;
+  SANs: TStringArray;
   i: Integer;
   LSANCount: Integer;
   CertInfo: TSSLCertificateInfo;
@@ -669,8 +654,8 @@ begin
 
   SANs := ParseSubjectAltNames(ACert);
   try
-    LSANCount := SANs.Count;
-    for i := 0 to SANs.Count - 1 do
+    LSANCount := Length(SANs);
+    for i := 0 to Length(SANs) - 1 do
     begin
       if MatchHostname(SANs[i], AHostname) then
       begin
@@ -679,7 +664,6 @@ begin
       end;
     end;
   finally
-    SANs.Free;
   end;
 
   // RFC 6125: when dNSName SANs exist, CN must be ignored even if no SAN matched.
@@ -721,7 +705,7 @@ begin
     // 构建证书链
     while (not IsSelfSigned(CurrentCert)) and
           (not IsRootCertificate(CurrentCert)) and
-          (ChainList.Count < MaxDepth) do
+          (Length(ChainList) < MaxDepth) do
     begin
       IssuerCert := FindIssuer(CurrentCert);
       if IssuerCert = nil then
@@ -739,13 +723,12 @@ begin
     end;
 
     // 转换为数组
-    SetLength(AChain, ChainList.Count);
-    for LIndex := 0 to ChainList.Count - 1 do
+    SetLength(AChain, Length(ChainList));
+    for LIndex := 0 to Length(ChainList) - 1 do
       AChain[LIndex] := ISSLCertificate(ChainList[LIndex]);
 
     Result := True;
   finally
-    ChainList.Free;
   end;
 end;
 

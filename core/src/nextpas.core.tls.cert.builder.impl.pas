@@ -144,7 +144,8 @@ type
 implementation
 
 uses
-  nextpas.core.time;
+  nextpas.core.text.strings,
+    nextpas.core.time;
 
 function CertificateECDSACurveToToken(ACurve: TEllipticCurve): string;
 begin
@@ -328,8 +329,8 @@ begin
   SetLength(Result, 0);
   if Assigned(FInfo.SubjectAltNames) then
   begin
-    SetLength(Result, FInfo.SubjectAltNames.Count);
-    for I := 0 to FInfo.SubjectAltNames.Count - 1 do
+    SetLength(Result, FInfo.Length(SubjectAltNames));
+    for I := 0 to FInfo.Length(SubjectAltNames) - 1 do
       Result[I] := FInfo.SubjectAltNames[I];
   end;
 end;
