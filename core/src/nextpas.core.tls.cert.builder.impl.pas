@@ -602,7 +602,7 @@ end;
 function TCertificateBuilderImpl.AddSubjectAltName(const ASAN: string): ICertificateBuilder;
 begin
   if not Assigned(FOptions.SubjectAltNames) then
-    FOptions.SubjectAltNames := TStringList.Create;
+    FOptions.SubjectAltNames 
   FOptions.SubjectAltNames.Add(ASAN);
   Result := Self;
 end;

@@ -1434,7 +1434,7 @@ var
   LKeyUsageFlags: Cardinal;
 begin
   FillChar(Result, SizeOf(Result), 0);
-  Result.SubjectAltNames := TStringList.Create;
+  Result.SubjectAltNames 
   
   if not TOpenSSLLoader.IsModuleLoaded(osmCore) then
     LoadOpenSSLCore();
@@ -2178,7 +2178,7 @@ begin
     Result := True;
   except
     FillChar(AInfo, SizeOf(AInfo), 0);
-    AInfo.SubjectAltNames := TStringList.Create;
+    AInfo.SubjectAltNames 
     Result := False;
   end;
 end;

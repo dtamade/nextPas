@@ -68,7 +68,7 @@ type
     function GetIntermediateStore: ISSLCertificateStore;
     
     // 设置CRL存储
-    procedure SetCRLStore(ACRLs: TStringArray);
+    procedure SetCRLStore(const ACRLs: TStringArray);
     function GetCRLStore: TStringArray;
     
     // 验证单个证书
@@ -109,7 +109,7 @@ type
     function IsSelfSigned(ACert: ISSLCertificate): Boolean;
     function ValidatePathLength(const AChain: TSSLCertificateArray): Boolean;
     function MatchHostname(const ACertName, AHostname: string): Boolean;
-    function ParseSubjectAltNames(ACert: ISSLCertificate): TStringList;
+    function ParseSubjectAltNames(ACert: ISSLCertificate): TStringArray;
     function CheckCertificateExtendedKeyUsage(ACert: ISSLCertificate;
       AIsCA: Boolean): Boolean;
   public
@@ -126,7 +126,7 @@ type
     procedure SetIntermediateStore(AStore: ISSLCertificateStore);
     function GetIntermediateStore: ISSLCertificateStore;
     
-    procedure SetCRLStore(ACRLs: TStringArray);
+    procedure SetCRLStore(const ACRLs: TStringArray);
     function GetCRLStore: TStringArray;
     
     function VerifyCertificate(ACert: ISSLCertificate;
@@ -219,7 +219,7 @@ begin
   Result := FIntermediateStore;
 end;
 
-procedure TSSLCertificateChainVerifier.SetCRLStore(ACRLs: TStringArray);
+procedure TSSLCertificateChainVerifier.SetCRLStore(const ACRLs: TStringArray);
 begin
   FCRLStore.Clear;
   if ACRLs <> nil then
@@ -358,7 +358,7 @@ begin
   end;
 end;
 
-function TSSLCertificateChainVerifier.ParseSubjectAltNames(ACert: ISSLCertificate): TStringList;
+function TSSLCertificateChainVerifier.ParseSubjectAltNames(ACert: ISSLCertificate): TStringArray;
 var
   RawSANs: TSSLStringArray;
   Line, Item: string;
@@ -769,7 +769,7 @@ begin
   Result.SelfSigned := False;
   Result.HostnameMatch := True;
   Result.RevocationStatus := 0;
-  Result.Warnings := TStringList.Create;
+  
   FLastRevocationStatus := 0;
   FLastRevocationError := '';
   
