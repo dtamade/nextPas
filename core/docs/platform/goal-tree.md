@@ -61,6 +61,7 @@ is `wine-runtime-smoke` (not `focused-runtime` and not `ci-matrix`).
 | platform.env | `tests/nextpas.core.platform.env/test_platform_env_wine/` | 5 | 0 leak | — |
 | platform.mmap | `tests/nextpas.core.platform.mmap/test_platform_mmap_wine/` | 7 | 0 leak | file-backed mmap (CreateFileMappingA path encoding) |
 | platform.random | `tests/nextpas.core.platform.random/test_platform_random_wine/` | 4 | 0 leak | — |
+| platform.socket | `tests/nextpas.core.platform.socket/test_platform_socket_wine/` | 4 | 0 leak | — |
 
 Not covered by Wine runtime smoke: platform.signal, platform.console, platform.args
 (no Wine runtime test needed — signal uses SetConsoleCtrlHandler which is
@@ -71,11 +72,10 @@ evidence; args uses FPC RTL ParamStr which is cross-platform).
 
 The Windows readiness poller remains separate from IOCP completion. The
 readiness lane covers `platform_poller_*`, wake, userdata, and empty-interest
-re-entry. The completion lane covers IOCP read/write file operations and async
-loop ownership. IOCP read/write has source-contract and compile coverage, plus
-optional Wine smoke coverage recorded as non-real-Windows evidence. Socket
-completion operations that are not implemented remain unsupported until they
-have implementation and real-Windows runtime proof.
+re-entry. The completion lane covers IOCP read/write file operations, async
+send/recv over sockets, accept (via AcceptEx), connect (via ConnectEx), and
+close. IOCP socket completion operations now have real Windows implementation
+but no dedicated Wine smoke test yet (file path has Wine smoke coverage).
 
 ## Milestones
 
