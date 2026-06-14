@@ -121,6 +121,26 @@ uses
 var
   FStaticHashes: array[1..HPACK_STATIC_TABLE_COUNT] of Byte;
   FStaticHashesBuilt: Boolean = False;
+  FStaticNames: array[1..HPACK_STATIC_TABLE_COUNT] of AnsiString;
+  FStaticValues: array[1..HPACK_STATIC_TABLE_COUNT] of AnsiString;
+  FStaticBuilt: Boolean = False;
+
+procedure BuildStaticStrings;
+var
+  LI: SizeInt;
+begin
+  if FStaticBuilt then Exit;
+  for LI := 1 to HPACK_STATIC_TABLE_COUNT do
+  begin
+    FStaticNames[LI] := string(HPACK_STATIC_TABLE[LI].Name);
+    if HPACK_STATIC_TABLE[LI].Value <> nil then
+      SetString(FStaticValues[LI], HPACK_STATIC_TABLE[LI].Value,
+        HPACK_STATIC_TABLE[LI].ValueLen)
+    else
+      FStaticValues[LI] := '';
+  end;
+  FStaticBuilt := True;
+end;
 
 { Hash function for dynamic table lookups. djb2 variant mod 256. }
 function H2NameHash(const AName: AnsiString): Byte;
@@ -153,13 +173,15 @@ function HPackLookup(AStaticCount: SizeInt;
 var
   LDynamicIdx: SizeInt;
 begin
+  if not FStaticBuilt then BuildStaticStrings;
   if (AIndex >= 1) and (AIndex <= AStaticCount) then
   begin
-    AName := HPACK_STATIC_TABLE[AIndex].Name;
-    if HPACK_STATIC_TABLE[AIndex].Value <> nil then
-      SetString(AValue, HPACK_STATIC_TABLE[AIndex].Value, HPACK_STATIC_TABLE[AIndex].ValueLen)
-    else
-      AValue := '';
+    AName := FStaticNames[AIndex];
+    AValue := FStaticValues[AIndex];
+    if AValue = '' then
+    begin
+      { Value-only entry: the value is the name itself, no separate value }
+    end;
     Result := True;
   end
   else if AIndex > AStaticCount then
