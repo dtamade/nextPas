@@ -18,6 +18,19 @@ function H2HuffmanDecode(const AData: AnsiString): AnsiString;
 function H2HuffmanDecodeLimited(const AData: AnsiString;
   const ALimit: SizeInt; out ATruncated: Boolean): AnsiString;
 function H2HuffmanDecodeRaw(const AData: PAnsiChar; const ALen: SizeInt): AnsiString;
+{** Decode huffman data into a caller-provided buffer (typically stack-allocated).
+ *  Returns True on success, False if EOS symbol encountered.
+ *  ABuf must be at least ADataLen * 2 bytes (huffman max expansion < 2x).
+ *  ABufSize is the buffer capacity in bytes.
+ *  Sets AOutLen to the decoded length. If buffer is too small, AOutLen = 0
+ *  and returns False. }
+function H2HuffmanDecodeBuf(const AData: PAnsiChar; const ADataLen: SizeInt;
+  var ABuf; const ABufSize: SizeInt; out AOutLen: SizeInt): Boolean;
+{** Decode huffman data directly into a newly allocated AnsiString.
+ *  Pre-allocates to max possible size, decodes in-place, then trims.
+ *  Avoids the intermediate stack buffer + copy of H2HuffmanDecodeBuf + SetString. }
+procedure H2HuffmanDecodeInto(const AData: PAnsiChar; const ADataLen: SizeInt;
+  out AStr: AnsiString);
 
 implementation
 
@@ -112,12 +125,17 @@ end;
 
 function CoreDecode(const AData: PAnsiChar; const ADataLen: SizeInt;
   const ALimit: SizeInt; out ATruncated: Boolean): AnsiString;
-var LByte: Byte; I: SizeInt; LOutputPos: SizeInt; LStr: AnsiString;
+const
+  STACK_BUF_SIZE = 512;
+var LByte: Byte; I: SizeInt; LOutputPos: SizeInt;
   LNode: UInt16; LEntry: ^THuffNibbleEntry; LNibble: Byte;
+  LStackBuf: array[0..STACK_BUF_SIZE - 1] of AnsiChar;
+  LHeapStr: AnsiString;
 begin
   ATruncated := False;
   if (AData = nil) or (ADataLen <= 0) then Exit('');
-  SetLength(LStr, 256); LOutputPos := 0; LNode := HUFF_ROOT; I := 0;
+  LOutputPos := 0; LNode := HUFF_ROOT; I := 0;
+  LHeapStr := '';
   while I < ADataLen do
   begin
     LByte := Byte(AData[I]);
@@ -128,8 +146,19 @@ begin
       if LEntry^.Symbol = HUFF_EOS_SYM then raise EHttpError.Create('HPACK Huffman: EOS symbol');
       Inc(LOutputPos);
       if (ALimit >= 0) and (LOutputPos > ALimit) then begin ATruncated := True; Exit(''); end;
-      if LOutputPos > Length(LStr) then SetLength(LStr, Length(LStr) + 256);
-      LStr[LOutputPos] := AnsiChar(LEntry^.Symbol);
+      if LOutputPos <= STACK_BUF_SIZE then
+        LStackBuf[LOutputPos - 1] := AnsiChar(LEntry^.Symbol)
+      else
+      begin
+        if LHeapStr = '' then
+        begin
+          SetLength(LHeapStr, LOutputPos);
+          Move(LStackBuf[0], LHeapStr[1], LOutputPos - 1);
+        end;
+        if LOutputPos > Length(LHeapStr) then
+          SetLength(LHeapStr, LOutputPos + 255);
+        LHeapStr[LOutputPos] := AnsiChar(LEntry^.Symbol);
+      end;
     end;
     LNode := LEntry^.NextNode;
     LNibble := LByte and $F;
@@ -139,14 +168,30 @@ begin
       if LEntry^.Symbol = HUFF_EOS_SYM then raise EHttpError.Create('HPACK Huffman: EOS symbol');
       Inc(LOutputPos);
       if (ALimit >= 0) and (LOutputPos > ALimit) then begin ATruncated := True; Exit(''); end;
-      if LOutputPos > Length(LStr) then SetLength(LStr, Length(LStr) + 256);
-      LStr[LOutputPos] := AnsiChar(LEntry^.Symbol);
+      if LOutputPos <= STACK_BUF_SIZE then
+        LStackBuf[LOutputPos - 1] := AnsiChar(LEntry^.Symbol)
+      else
+      begin
+        if LHeapStr = '' then
+        begin
+          SetLength(LHeapStr, LOutputPos);
+          Move(LStackBuf[0], LHeapStr[1], LOutputPos - 1);
+        end;
+        if LOutputPos > Length(LHeapStr) then
+          SetLength(LHeapStr, LOutputPos + 255);
+        LHeapStr[LOutputPos] := AnsiChar(LEntry^.Symbol);
+      end;
     end;
     LNode := LEntry^.NextNode;
     Inc(I);
   end;
-  SetLength(LStr, LOutputPos);
-  Result := LStr;
+  if LHeapStr <> '' then
+  begin
+    SetLength(LHeapStr, LOutputPos);
+    Result := LHeapStr;
+  end
+  else
+    SetString(Result, LStackBuf, LOutputPos);
 end;
 
 function H2HuffmanEncode(const AData: AnsiString): AnsiString;
@@ -195,6 +240,81 @@ var LTruncated: Boolean;
 begin
   if (AData = nil) or (ALen <= 0) then Exit('');
   Result := CoreDecode(AData, ALen, -1, LTruncated);
+end;
+
+function H2HuffmanDecodeBuf(const AData: PAnsiChar; const ADataLen: SizeInt;
+  var ABuf; const ABufSize: SizeInt; out AOutLen: SizeInt): Boolean;
+var LByte: Byte; I: SizeInt; LOutputPos: SizeInt;
+  LNode: UInt16; LEntry: ^THuffNibbleEntry; LNibble: Byte;
+  LOut: PAnsiChar;
+begin
+  if (AData = nil) or (ADataLen <= 0) then begin AOutLen := 0; Exit(True); end;
+  LOutputPos := 0; LNode := HUFF_ROOT; I := 0;
+  LOut := PAnsiChar(@ABuf);
+  while I < ADataLen do
+  begin
+    LByte := Byte(AData[I]);
+    LNibble := (LByte shr 4) and $F;
+    LEntry := @FNibbleTable[LNode, LNibble];
+    if LEntry^.Symbol >= 0 then
+    begin
+      if LEntry^.Symbol = HUFF_EOS_SYM then begin AOutLen := 0; Exit(False); end;
+      Inc(LOutputPos);
+      if LOutputPos > ABufSize then begin AOutLen := 0; Exit(False); end;
+      LOut[LOutputPos - 1] := AnsiChar(LEntry^.Symbol);
+    end;
+    LNode := LEntry^.NextNode;
+    LNibble := LByte and $F;
+    LEntry := @FNibbleTable[LNode, LNibble];
+    if LEntry^.Symbol >= 0 then
+    begin
+      if LEntry^.Symbol = HUFF_EOS_SYM then begin AOutLen := 0; Exit(False); end;
+      Inc(LOutputPos);
+      if LOutputPos > ABufSize then begin AOutLen := 0; Exit(False); end;
+      LOut[LOutputPos - 1] := AnsiChar(LEntry^.Symbol);
+    end;
+    LNode := LEntry^.NextNode;
+    Inc(I);
+  end;
+  AOutLen := LOutputPos;
+  Result := True;
+end;
+
+procedure H2HuffmanDecodeInto(const AData: PAnsiChar; const ADataLen: SizeInt;
+  out AStr: AnsiString);
+var LByte: Byte; I: SizeInt; LOutputPos: SizeInt;
+  LNode: UInt16; LEntry: ^THuffNibbleEntry; LNibble: Byte;
+  LOut: PAnsiChar;
+begin
+  if (AData = nil) or (ADataLen <= 0) then begin AStr := ''; Exit; end;
+  { Pre-allocate to max possible size (huffman max expansion < 2x) }
+  SetLength(AStr, ADataLen * 2 + 16);
+  LOut := PAnsiChar(AStr);
+  LOutputPos := 0; LNode := HUFF_ROOT; I := 0;
+  while I < ADataLen do
+  begin
+    LByte := Byte(AData[I]);
+    LNibble := (LByte shr 4) and $F;
+    LEntry := @FNibbleTable[LNode, LNibble];
+    if LEntry^.Symbol >= 0 then
+    begin
+      if LEntry^.Symbol = HUFF_EOS_SYM then begin AStr := ''; Exit; end;
+      LOut[LOutputPos] := AnsiChar(LEntry^.Symbol);
+      Inc(LOutputPos);
+    end;
+    LNode := LEntry^.NextNode;
+    LNibble := LByte and $F;
+    LEntry := @FNibbleTable[LNode, LNibble];
+    if LEntry^.Symbol >= 0 then
+    begin
+      if LEntry^.Symbol = HUFF_EOS_SYM then begin AStr := ''; Exit; end;
+      LOut[LOutputPos] := AnsiChar(LEntry^.Symbol);
+      Inc(LOutputPos);
+    end;
+    LNode := LEntry^.NextNode;
+    Inc(I);
+  end;
+  SetLength(AStr, LOutputPos);
 end;
 
 initialization

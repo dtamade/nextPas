@@ -45,6 +45,7 @@ type
     procedure Resize(ACapacity: SizeInt);
     procedure Add(const AName, AValue: AnsiString);
     function Get(AIndex: SizeInt; out AName, AValue: AnsiString): Boolean;
+    function GetName(AIndex: SizeInt; out AName: AnsiString): Boolean;
     function Count: SizeInt; inline;
     function Capacity: SizeInt; inline;
     function TotalSize: SizeInt; inline;
@@ -87,15 +88,11 @@ type
     FMaxDynamicTableSize: UInt32;
     procedure DecodeInteger(const ABlock: AnsiString; var APos: SizeInt;
       APrefixBits: Byte; out AValue: UInt32);
-    procedure DecodeHuffman(const ABlock: AnsiString; var APos: SizeInt;
-      ALen: SizeInt; out AStr: AnsiString);
-    procedure DecodeRaw(const ABlock: AnsiString; var APos: SizeInt;
-      ALen: SizeInt; out AStr: AnsiString);
-    function DecodeString(const ABlock: AnsiString; var APos: SizeInt;
-      out AStr: AnsiString): Boolean;
   public
     procedure Init(ADynamicTableSize: UInt32 = HPACK_DEFAULT_DYNAMIC_TABLE_SIZE);
     { Decode an HPACK header block into a list of header fields }
+    function DecodeString(const ABlock: AnsiString; var APos: SizeInt;
+      out AStr: AnsiString): Boolean;
     function Decode(const ABlock: AnsiString; out AHeaders: array of THPackHeader): Boolean;
     { Maximum allowed dynamic table size (for SETTINGS acknowledgment) }
     property MaxDynamicTableSize: UInt32 read FMaxDynamicTableSize write FMaxDynamicTableSize;
@@ -241,6 +238,8 @@ var
   LEntrySize: SizeInt;
   LIdx: SizeInt;
 begin
+  if FCapacity <= 0 then
+    Exit;  { table disabled, nothing to add }
   LEntrySize := Length(AName) + Length(AValue) + HPACK_ENTRY_OVERHEAD;
   if LEntrySize > FCapacity then
   begin
@@ -278,6 +277,20 @@ begin
     LIdx := (FTail - 1 - AIndex + Length(FEntries)) mod Length(FEntries);
     AName := FEntries[LIdx].Name;
     AValue := FEntries[LIdx].Value;
+    Result := True;
+  end
+  else
+    Result := False;
+end;
+
+function THPackDynamicTable.GetName(AIndex: SizeInt; out AName: AnsiString): Boolean;
+var
+  LIdx: SizeInt;
+begin
+  if (AIndex >= 0) and (AIndex < FCount) then
+  begin
+    LIdx := (FTail - 1 - AIndex + Length(FEntries)) mod Length(FEntries);
+    AName := FEntries[LIdx].Name;
     Result := True;
   end
   else
@@ -689,55 +702,46 @@ begin
   until (LByte and $80) = 0;
 end;
 
-procedure THPackDecoder.DecodeHuffman(const ABlock: AnsiString; var APos: SizeInt;
-  ALen: SizeInt; out AStr: AnsiString);
-begin
-  { Direct decode from block pointer, avoiding intermediate string allocation }
-  AStr := H2HuffmanDecodeRaw(@ABlock[APos], ALen);
-  Inc(APos, ALen);
-end;
-
-procedure THPackDecoder.DecodeRaw(const ABlock: AnsiString; var APos: SizeInt;
-  ALen: SizeInt; out AStr: AnsiString);
-begin
-  if APos + ALen - 1 > Length(ABlock) then
-  begin
-    AStr := '';
-    Exit;
-  end;
-  SetString(AStr, @ABlock[APos], ALen);
-  Inc(APos, ALen);
-end;
-
 function THPackDecoder.DecodeString(const ABlock: AnsiString; var APos: SizeInt;
   out AStr: AnsiString): Boolean;
 var
   LByte: Byte;
   LLen: UInt32;
   LHuffman: Boolean;
+  LBuf: array[0..255] of AnsiChar;
+  LOutLen: SizeInt;
 begin
   Result := False;
-  if APos > Length(ABlock) then
-    Exit;
+  if APos > Length(ABlock) then Exit;
   LByte := Byte(ABlock[APos]);
   LHuffman := (LByte and $80) <> 0;
   DecodeInteger(ABlock, APos, 7, LLen);
-  if APos + SizeInt(LLen) - 1 > Length(ABlock) then
-    Exit;
+  if APos + SizeInt(LLen) - 1 > Length(ABlock) then Exit;
   if LHuffman then
-    DecodeHuffman(ABlock, APos, LLen, AStr)
+  begin
+    if not H2HuffmanDecodeBuf(@ABlock[APos], SizeInt(LLen), LBuf, SizeOf(LBuf), LOutLen) then
+      Exit;
+    SetString(AStr, LBuf, LOutLen);
+  end
   else
-    DecodeRaw(ABlock, APos, LLen, AStr);
+    SetString(AStr, @ABlock[APos], LLen);
+  Inc(APos, LLen);
   Result := True;
 end;
+
+
 
 function THPackDecoder.Decode(const ABlock: AnsiString; out AHeaders: array of THPackHeader): Boolean;
 var
   LPos: SizeInt;
   LByte: Byte;
   LIndex: UInt32;
-  LName, LValue: AnsiString;
   LHeaderCount: SizeInt;
+  LDStrByte: Byte;
+  LDStrLen: UInt32;
+  LDStrHuff: Boolean;
+  LDStrBuf: array[0..511] of AnsiChar;
+  LDStrOutLen: SizeInt;
 begin
   Result := False;
   LPos := 1;
@@ -749,13 +753,9 @@ begin
     begin
       { Indexed Header Field (1xxxxxxx) }
       DecodeInteger(ABlock, LPos, 7, LIndex);
-      if not HPackLookup(HPACK_STATIC_TABLE_COUNT, FDynamicTable, LIndex, LName, LValue) then
+      if not HPackLookup(HPACK_STATIC_TABLE_COUNT, FDynamicTable, LIndex,
+        AHeaders[LHeaderCount].Name, AHeaders[LHeaderCount].Value) then
         Exit;
-      if LHeaderCount <= High(AHeaders) then
-      begin
-        AHeaders[LHeaderCount].Name := LName;
-        AHeaders[LHeaderCount].Value := LValue;
-      end;
       Inc(LHeaderCount);
     end
     else if (LByte and $C0) = $40 then
@@ -764,25 +764,48 @@ begin
       DecodeInteger(ABlock, LPos, 6, LIndex);
       if LIndex > 0 then
       begin
-        if not HPackLookup(HPACK_STATIC_TABLE_COUNT, FDynamicTable, LIndex, LName, LValue) then
-          Exit;
-        { LName is the name, we still need to read the value }
+        if LIndex <= HPACK_STATIC_TABLE_COUNT then
+        begin
+          if not FStaticBuilt then BuildStaticStrings;
+          AHeaders[LHeaderCount].Name := FStaticNames[LIndex];
+        end
+        else if not FDynamicTable.GetName(LIndex - HPACK_STATIC_TABLE_COUNT - 1,
+          AHeaders[LHeaderCount].Name) then Exit;
       end;
-      if not DecodeString(ABlock, LPos, LValue) then
-        Exit;
-      if LIndex = 0 then
       begin
-        { New name }
-        LName := LValue;
-        if not DecodeString(ABlock, LPos, LValue) then
-          Exit;
-      end;
-      FDynamicTable.Add(LName, LValue);
-      if LHeaderCount <= High(AHeaders) then
+          LDStrByte := Byte(ABlock[LPos]);
+          LDStrHuff := (LDStrByte and $80) <> 0;
+          DecodeInteger(ABlock, LPos, 7, LDStrLen);
+          if LDStrHuff then
+          begin
+            if not H2HuffmanDecodeBuf(@ABlock[LPos], SizeInt(LDStrLen), LDStrBuf, SizeOf(LDStrBuf), LDStrOutLen) then
+              Exit;
+            SetString(AHeaders[LHeaderCount].Value, LDStrBuf, LDStrOutLen);
+          end
+          else
+            SetString(AHeaders[LHeaderCount].Value, @ABlock[LPos], LDStrLen);
+          Inc(LPos, LDStrLen);
+        end;
+          if LIndex = 0 then
       begin
-        AHeaders[LHeaderCount].Name := LName;
-        AHeaders[LHeaderCount].Value := LValue;
-      end;
+        AHeaders[LHeaderCount].Name := AHeaders[LHeaderCount].Value;
+        begin
+          LDStrByte := Byte(ABlock[LPos]);
+          LDStrHuff := (LDStrByte and $80) <> 0;
+          DecodeInteger(ABlock, LPos, 7, LDStrLen);
+          if LDStrHuff then
+          begin
+            if not H2HuffmanDecodeBuf(@ABlock[LPos], SizeInt(LDStrLen), LDStrBuf, SizeOf(LDStrBuf), LDStrOutLen) then
+              Exit;
+            SetString(AHeaders[LHeaderCount].Value, LDStrBuf, LDStrOutLen);
+          end
+          else
+            SetString(AHeaders[LHeaderCount].Value, @ABlock[LPos], LDStrLen);
+          Inc(LPos, LDStrLen);
+        end;
+        end;
+      if FDynamicTable.Capacity > 0 then
+        FDynamicTable.Add(AHeaders[LHeaderCount].Name, AHeaders[LHeaderCount].Value);
       Inc(LHeaderCount);
     end
     else if (LByte and $F0) = $00 then
@@ -791,22 +814,46 @@ begin
       DecodeInteger(ABlock, LPos, 4, LIndex);
       if LIndex > 0 then
       begin
-        if not HPackLookup(HPACK_STATIC_TABLE_COUNT, FDynamicTable, LIndex, LName, LValue) then
-          Exit;
+        if LIndex <= HPACK_STATIC_TABLE_COUNT then
+        begin
+          if not FStaticBuilt then BuildStaticStrings;
+          AHeaders[LHeaderCount].Name := FStaticNames[LIndex];
+        end
+        else if not FDynamicTable.GetName(LIndex - HPACK_STATIC_TABLE_COUNT - 1,
+          AHeaders[LHeaderCount].Name) then Exit;
       end;
-      if not DecodeString(ABlock, LPos, LValue) then
-        Exit;
-      if LIndex = 0 then
       begin
-        LName := LValue;
-        if not DecodeString(ABlock, LPos, LValue) then
-          Exit;
-      end;
-      if LHeaderCount <= High(AHeaders) then
+          LDStrByte := Byte(ABlock[LPos]);
+          LDStrHuff := (LDStrByte and $80) <> 0;
+          DecodeInteger(ABlock, LPos, 7, LDStrLen);
+          if LDStrHuff then
+          begin
+            if not H2HuffmanDecodeBuf(@ABlock[LPos], SizeInt(LDStrLen), LDStrBuf, SizeOf(LDStrBuf), LDStrOutLen) then
+              Exit;
+            SetString(AHeaders[LHeaderCount].Value, LDStrBuf, LDStrOutLen);
+          end
+          else
+            SetString(AHeaders[LHeaderCount].Value, @ABlock[LPos], LDStrLen);
+          Inc(LPos, LDStrLen);
+        end;
+          if LIndex = 0 then
       begin
-        AHeaders[LHeaderCount].Name := LName;
-        AHeaders[LHeaderCount].Value := LValue;
-      end;
+        AHeaders[LHeaderCount].Name := AHeaders[LHeaderCount].Value;
+        begin
+          LDStrByte := Byte(ABlock[LPos]);
+          LDStrHuff := (LDStrByte and $80) <> 0;
+          DecodeInteger(ABlock, LPos, 7, LDStrLen);
+          if LDStrHuff then
+          begin
+            if not H2HuffmanDecodeBuf(@ABlock[LPos], SizeInt(LDStrLen), LDStrBuf, SizeOf(LDStrBuf), LDStrOutLen) then
+              Exit;
+            SetString(AHeaders[LHeaderCount].Value, LDStrBuf, LDStrOutLen);
+          end
+          else
+            SetString(AHeaders[LHeaderCount].Value, @ABlock[LPos], LDStrLen);
+          Inc(LPos, LDStrLen);
+        end;
+        end;
       Inc(LHeaderCount);
     end
     else if (LByte and $F0) = $10 then
@@ -815,36 +862,60 @@ begin
       DecodeInteger(ABlock, LPos, 4, LIndex);
       if LIndex > 0 then
       begin
-        if not HPackLookup(HPACK_STATIC_TABLE_COUNT, FDynamicTable, LIndex, LName, LValue) then
-          Exit;
+        if LIndex <= HPACK_STATIC_TABLE_COUNT then
+        begin
+          if not FStaticBuilt then BuildStaticStrings;
+          AHeaders[LHeaderCount].Name := FStaticNames[LIndex];
+        end
+        else if not FDynamicTable.GetName(LIndex - HPACK_STATIC_TABLE_COUNT - 1,
+          AHeaders[LHeaderCount].Name) then Exit;
       end;
-      if not DecodeString(ABlock, LPos, LValue) then
-        Exit;
-      if LIndex = 0 then
       begin
-        LName := LValue;
-        if not DecodeString(ABlock, LPos, LValue) then
-          Exit;
-      end;
-      if LHeaderCount <= High(AHeaders) then
+          LDStrByte := Byte(ABlock[LPos]);
+          LDStrHuff := (LDStrByte and $80) <> 0;
+          DecodeInteger(ABlock, LPos, 7, LDStrLen);
+          if LDStrHuff then
+          begin
+            if not H2HuffmanDecodeBuf(@ABlock[LPos], SizeInt(LDStrLen), LDStrBuf, SizeOf(LDStrBuf), LDStrOutLen) then
+              Exit;
+            SetString(AHeaders[LHeaderCount].Value, LDStrBuf, LDStrOutLen);
+          end
+          else
+            SetString(AHeaders[LHeaderCount].Value, @ABlock[LPos], LDStrLen);
+          Inc(LPos, LDStrLen);
+        end;
+          if LIndex = 0 then
       begin
-        AHeaders[LHeaderCount].Name := LName;
-        AHeaders[LHeaderCount].Value := LValue;
-      end;
+        AHeaders[LHeaderCount].Name := AHeaders[LHeaderCount].Value;
+        begin
+          LDStrByte := Byte(ABlock[LPos]);
+          LDStrHuff := (LDStrByte and $80) <> 0;
+          DecodeInteger(ABlock, LPos, 7, LDStrLen);
+          if LDStrHuff then
+          begin
+            if not H2HuffmanDecodeBuf(@ABlock[LPos], SizeInt(LDStrLen), LDStrBuf, SizeOf(LDStrBuf), LDStrOutLen) then
+              Exit;
+            SetString(AHeaders[LHeaderCount].Value, LDStrBuf, LDStrOutLen);
+          end
+          else
+            SetString(AHeaders[LHeaderCount].Value, @ABlock[LPos], LDStrLen);
+          Inc(LPos, LDStrLen);
+        end;
+        end;
       Inc(LHeaderCount);
     end
     else if (LByte and $E0) = $20 then
     begin
       { Dynamic Table Size Update (001xxxxx) }
       DecodeInteger(ABlock, LPos, 5, LIndex);
-      if LIndex > FMaxDynamicTableSize then
-        Exit; { protocol error }
+      if LIndex > FMaxDynamicTableSize then Exit;
       FDynamicTable.Resize(LIndex);
     end
     else
-      Exit; { unknown first byte pattern }
+      Exit;
   end;
   Result := True;
 end;
 
 end.
+
