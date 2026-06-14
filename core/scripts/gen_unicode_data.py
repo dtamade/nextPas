@@ -12,6 +12,7 @@ Output:
     - nextpas.core.text.unicode.data.inc
     - nextpas.core.text.unicode.props.inc
     - nextpas.core.text.unicode.casefold.inc
+    - nextpas.core.text.unicode.normalize.inc
 """
 
 import urllib.error
@@ -20,11 +21,21 @@ import argparse
 import os
 import sys
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 # ─── Unicode version ───────────────────────────────────────────────
 DEFAULT_VERSION = "16.0.0"
 UCD_BASE = "https://www.unicode.org/Public/{version}/ucd/"
+HANGUL_SBASE = 0xAC00
+HANGUL_LBASE = 0x1100
+HANGUL_VBASE = 0x1161
+HANGUL_TBASE = 0x11A7
+HANGUL_LCOUNT = 19
+HANGUL_VCOUNT = 21
+HANGUL_TCOUNT = 28
+HANGUL_NCOUNT = HANGUL_VCOUNT * HANGUL_TCOUNT
+HANGUL_SCOUNT = HANGUL_LCOUNT * HANGUL_NCOUNT
+MAX_DECOMP_MAP_LEN = 18
 
 # ─── General Category constants ────────────────────────────────────
 CAT_NAMES = {
@@ -185,8 +196,9 @@ def parse_unicode_data(text: str) -> Dict[int, CodepointData]:
 def parse_ranges(text: str) -> List[Tuple[int, int, str]]:
     """Parse a UCD property file (like DerivedCoreProperties.txt) into range+value list."""
     ranges: List[Tuple[int, int, str]] = []
-    for line in text.splitlines():
-        if not line.strip() or line.startswith("#"):
+    for raw_line in text.splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
             continue
         parts = line.split(";")
         if len(parts) < 2:
@@ -237,6 +249,31 @@ def parse_simple_case_maps(records: Dict[int, CodepointData], unidata_text: str)
         if fields[14]:
             records[cp].simple_title = int(fields[14], 16)
     return records
+
+
+def parse_decomposition(records: Dict[int, CodepointData]) -> Dict[int, List[int]]:
+    """Extract decomposition mappings from UnicodeData.txt field 5."""
+    result: Dict[int, List[int]] = {}
+    for cp, rec in records.items():
+        decomposition = rec.decomposition.strip()
+        if not decomposition:
+            continue
+        parts = decomposition.split()
+        if parts and parts[0].startswith("<"):
+            parts = parts[1:]
+        if not parts:
+            continue
+        result[cp] = [int(item, 16) for item in parts]
+    return result
+
+
+def count_data_lines(text: str) -> int:
+    count = 0
+    for raw_line in text.splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if line:
+            count += 1
+    return count
 
 
 # ─── Table generation ──────────────────────────────────────────────
@@ -414,6 +451,196 @@ def build_case_fold_table(folds: List[CaseFoldData]) -> Tuple[List[Tuple[int, in
     return merged, full_map
 
 
+def is_hangul_syllable(cp: int) -> bool:
+    return HANGUL_SBASE <= cp < (HANGUL_SBASE + HANGUL_SCOUNT)
+
+
+def is_hangul_lv(cp: int) -> bool:
+    if not is_hangul_syllable(cp):
+        return False
+    return ((cp - HANGUL_SBASE) % HANGUL_TCOUNT) == 0
+
+
+def is_hangul_l(cp: int) -> bool:
+    return HANGUL_LBASE <= cp < (HANGUL_LBASE + HANGUL_LCOUNT)
+
+
+def is_hangul_v(cp: int) -> bool:
+    return HANGUL_VBASE <= cp < (HANGUL_VBASE + HANGUL_VCOUNT)
+
+
+def is_hangul_t(cp: int) -> bool:
+    return (HANGUL_TBASE + 1) <= cp < (HANGUL_TBASE + HANGUL_TCOUNT)
+
+
+def hangul_decomposition(cp: int) -> Optional[List[int]]:
+    if not is_hangul_syllable(cp):
+        return None
+    sindex = cp - HANGUL_SBASE
+    lpart = HANGUL_LBASE + (sindex // HANGUL_NCOUNT)
+    vpart = HANGUL_VBASE + ((sindex % HANGUL_NCOUNT) // HANGUL_TCOUNT)
+    tpart = HANGUL_TBASE + (sindex % HANGUL_TCOUNT)
+    if tpart == HANGUL_TBASE:
+        return [lpart, vpart]
+    return [lpart, vpart, tpart]
+
+
+def expand_decomposition(
+    cp: int,
+    decomp_kind: Dict[int, int],
+    raw_decomp: Dict[int, List[int]],
+    compatibility: bool,
+    cache: Dict[Tuple[int, bool], List[int]],
+) -> List[int]:
+    key = (cp, compatibility)
+    if key in cache:
+        return cache[key]
+
+    if is_hangul_syllable(cp):
+        mapping = hangul_decomposition(cp)
+        assert mapping is not None
+        result: List[int] = []
+        for item in mapping:
+            result.extend(expand_decomposition(item, decomp_kind, raw_decomp, compatibility, cache))
+        cache[key] = result
+        return result
+
+    kind = decomp_kind.get(cp, 0)
+    if kind == 0:
+        cache[key] = [cp]
+        return cache[key]
+    if (kind == 2) and (not compatibility):
+        cache[key] = [cp]
+        return cache[key]
+
+    mapping = raw_decomp.get(cp, [])
+    if not mapping:
+        cache[key] = [cp]
+        return cache[key]
+
+    result = []
+    for item in mapping:
+        result.extend(expand_decomposition(item, decomp_kind, raw_decomp, compatibility, cache))
+    cache[key] = result
+    return result
+
+
+def build_decomposition_tables(
+    records: Dict[int, CodepointData],
+    raw_decomp: Dict[int, List[int]],
+) -> Tuple[List[Tuple[int, int, int]], List[Tuple[int, int, int]], Dict[int, List[int]]]:
+    decomp_kind: Dict[int, int] = {}
+    for cp, rec in records.items():
+        decomposition = rec.decomposition.strip()
+        if not decomposition:
+            continue
+        decomp_kind[cp] = 2 if decomposition.startswith("<") else 1
+
+    canon_cache: Dict[Tuple[int, bool], List[int]] = {}
+    compat_cache: Dict[Tuple[int, bool], List[int]] = {}
+    canonical_map: Dict[int, List[int]] = {}
+    effective_map: Dict[int, List[int]] = {}
+
+    for cp in range(0x110000):
+        canonical = expand_decomposition(cp, decomp_kind, raw_decomp, False, canon_cache)
+        compatibility = expand_decomposition(cp, decomp_kind, raw_decomp, True, compat_cache)
+        if canonical != [cp]:
+            canonical_map[cp] = canonical
+            effective_map[cp] = canonical
+        if decomp_kind.get(cp, 0) == 2 and compatibility != [cp]:
+            effective_map[cp] = compatibility
+
+    def build_ranges(lo_cp: int, hi_cp: int) -> List[Tuple[int, int, int]]:
+        ranges: List[Tuple[int, int, int]] = []
+        current_lo = lo_cp
+        current_kind = 0
+
+        def cp_kind(value: int) -> int:
+            if decomp_kind.get(value, 0) == 2:
+                return 2
+            if value in canonical_map:
+                return 1
+            return 0
+
+        current_kind = cp_kind(lo_cp)
+        for cp in range(lo_cp + 1, hi_cp + 1):
+            kind = cp_kind(cp)
+            if kind != current_kind:
+                ranges.append((current_lo, cp - 1, current_kind))
+                current_lo = cp
+                current_kind = kind
+        ranges.append((current_lo, hi_cp, current_kind))
+        return ranges
+
+    bmp_ranges = build_ranges(0, 0xFFFF)
+    smp_ranges = build_ranges(0x10000, 0x10FFFF)
+    return bmp_ranges, smp_ranges, effective_map
+
+
+def build_ccc_tables(records: Dict[int, CodepointData]) -> Tuple[List[List[int]], List[Tuple[int, int, int]]]:
+    bmp_table = [[0] * 256 for _ in range(256)]
+    smp_ranges: List[Tuple[int, int, int]] = []
+
+    for cp in range(0x10000):
+        rec = records.get(cp)
+        if rec is None:
+            continue
+        bmp_table[(cp >> 8) & 0xFF][cp & 0xFF] = rec.combining
+
+    range_start = 0x10000
+    current_ccc = records.get(range_start).combining if range_start in records else 0
+    for cp in range(0x10001, 0x10FFFF + 1):
+        ccc = records.get(cp).combining if cp in records else 0
+        if ccc != current_ccc:
+            smp_ranges.append((range_start, cp - 1, current_ccc))
+            range_start = cp
+            current_ccc = ccc
+    smp_ranges.append((range_start, 0x10FFFF, current_ccc))
+    return bmp_table, smp_ranges
+
+
+def build_normalization_property_sets(derived_norm_text: str) -> Set[int]:
+    composition_exclusions: Set[int] = set()
+
+    for lo, hi, value in parse_ranges(derived_norm_text):
+        prop = value
+        if prop == "Full_Composition_Exclusion":
+            for cp in range(lo, hi + 1):
+                composition_exclusions.add(cp)
+    return composition_exclusions
+
+
+def build_composition_table(
+    records: Dict[int, CodepointData],
+    raw_decomp: Dict[int, List[int]],
+    composition_exclusions: Set[int],
+) -> List[Tuple[int, int, int]]:
+    entries: List[Tuple[int, int, int]] = []
+    seen: Set[Tuple[int, int]] = set()
+
+    for cp, rec in records.items():
+        if cp in composition_exclusions:
+            continue
+        if rec.decomposition.startswith("<"):
+            continue
+        mapping = raw_decomp.get(cp)
+        if mapping is None:
+            continue
+        if len(mapping) != 2:
+            continue
+        first_rec = records.get(mapping[0])
+        if (first_rec is not None) and (first_rec.combining != 0):
+            continue
+        pair = (mapping[0], mapping[1])
+        if pair in seen:
+            continue
+        seen.add(pair)
+        entries.append((pair[0], pair[1], cp))
+
+    entries.sort()
+    return entries
+
+
 # ─── Pascal code generation ────────────────────────────────────────
 
 def pascal_stage2_table(table: List[List[int]], name: str, elem_type: str = "Byte") -> str:
@@ -490,6 +717,44 @@ def pascal_full_case_fold(full_map: Dict[int, List[int]], name: str = "FULL_CASE
     return "\n".join(lines)
 
 
+def pascal_decomp_map(entries: Dict[int, List[int]], name: str) -> str:
+    if not entries:
+        zero_map = ", ".join("0" for _ in range(MAX_DECOMP_MAP_LEN))
+        return (
+            f"  {name}: array[0..0] of TDecompEntry = ("
+            f" (Cp: 0; Len: 0; Map: ({zero_map})) );"
+        )
+
+    items = sorted(entries.items())
+    lines = [f"  {name}: array[0..{len(items)-1}] of TDecompEntry = ("]
+    for idx, (cp, mapping) in enumerate(items):
+        if len(mapping) > MAX_DECOMP_MAP_LEN:
+            raise ValueError(f"Decomposition for U+{cp:04X} exceeds MAX_DECOMP_MAP_LEN={MAX_DECOMP_MAP_LEN}")
+        padded = mapping + [0] * (MAX_DECOMP_MAP_LEN - len(mapping))
+        map_str = ", ".join(f"${value:04X}" for value in padded)
+        sep = "," if idx < len(items) - 1 else ""
+        lines.append(f"    (Cp: ${cp:06X}; Len: {len(mapping)}; Map: ({map_str})){sep}")
+    lines.append("  );")
+    return "\n".join(lines)
+
+
+def pascal_compose_map(entries: List[Tuple[int, int, int]], name: str) -> str:
+    if not entries:
+        return (
+            f"  {name}: array[0..0] of TComposeEntry = ("
+            f" (Starter: 0; Combining: 0; ResultCp: 0) );"
+        )
+
+    lines = [f"  {name}: array[0..{len(entries)-1}] of TComposeEntry = ("]
+    for idx, (starter, combining, result_cp) in enumerate(entries):
+        sep = "," if idx < len(entries) - 1 else ""
+        lines.append(
+            f"    (Starter: ${starter:06X}; Combining: ${combining:06X}; ResultCp: ${result_cp:06X}){sep}"
+        )
+    lines.append("  );")
+    return "\n".join(lines)
+
+
 # ─── Main ──────────────────────────────────────────────────────────
 
 def main():
@@ -508,18 +773,25 @@ def main():
     derived_text = download_ucd(args.version, "DerivedCoreProperties.txt")
     casefold_text = download_ucd(args.version, "CaseFolding.txt")
     emoji_text = download_ucd(args.version, "emoji/emoji-data.txt")
+    derived_norm_text = download_ucd(args.version, "DerivedNormalizationProps.txt")
+    normalization_test_text = download_ucd(args.version, "NormalizationTest.txt")
 
     # Optional but useful
     try:
         proplist_text = download_ucd(args.version, "PropList.txt")
     except urllib.error.HTTPError:
         proplist_text = ""
+    try:
+        normalization_corrections_text = download_ucd(args.version, "NormalizationCorrections.txt")
+    except urllib.error.HTTPError:
+        normalization_corrections_text = ""
 
     # ── Step 2: Parse ──
     print("Step 2/5: Parsing UCD data...", file=sys.stderr)
     records = parse_unicode_data(unidata_text)
     records = parse_simple_case_maps(records, unidata_text)
     folds = parse_case_folding(casefold_text)
+    raw_decomposition = parse_decomposition(records)
     properties = build_property_ranges(derived_text, proplist_text, emoji_text)
 
     # ── Step 3: Build tables ──
@@ -532,6 +804,10 @@ def main():
     simple_title, smp_title = build_simple_case_map(records, "title")
 
     fold_simple, fold_full = build_case_fold_table(folds)
+    decomp_bmp_ranges, decomp_smp_ranges, decomp_effective_map = build_decomposition_tables(records, raw_decomposition)
+    ccc_bmp_table, ccc_smp_ranges = build_ccc_tables(records)
+    composition_exclusions = build_normalization_property_sets(derived_norm_text)
+    compose_entries = build_composition_table(records, raw_decomposition, composition_exclusions)
 
     # ── Step 4: Generate main data .inc ──
     print("Step 4/5: Writing Pascal .inc files...", file=sys.stderr)
@@ -598,11 +874,55 @@ const
   CASE_FOLD_FULL_COUNT = {len(fold_full)};
 """
 
+    decomp_bmp_map = {cp: mapping for cp, mapping in decomp_effective_map.items() if cp <= 0xFFFF}
+    decomp_smp_map = {cp: mapping for cp, mapping in decomp_effective_map.items() if cp > 0xFFFF}
+
+    normalize_output = f"""// {{Auto-generated by gen_unicode_data.py — Unicode {args.version}}}
+// Unicode normalization data from UnicodeData.txt and DerivedNormalizationProps.txt.
+
+type
+  TDecompMap = array[0..{MAX_DECOMP_MAP_LEN - 1}] of TUnicodeCodepoint;
+
+  TDecompEntry = record
+    Cp: TUnicodeCodepoint;
+    Len: Byte;
+    Map: TDecompMap;
+  end;
+
+  TComposeEntry = record
+    Starter: TUnicodeCodepoint;
+    Combining: TUnicodeCodepoint;
+    ResultCp: TUnicodeCodepoint;
+  end;
+
+const
+  DECOMP_BMP_RANGES_COUNT = {len(decomp_bmp_ranges)};
+{pascal_ranges_list(decomp_bmp_ranges, "DECOMP_BMP_RANGES")}
+
+  DECOMP_BMP_MAP_COUNT = {len(decomp_bmp_map)};
+{pascal_decomp_map(decomp_bmp_map, "DECOMP_BMP_MAP")}
+
+  DECOMP_SMP_RANGES_COUNT = {len(decomp_smp_ranges)};
+{pascal_ranges_list(decomp_smp_ranges, "DECOMP_SMP_RANGES")}
+
+  DECOMP_SMP_MAP_COUNT = {len(decomp_smp_map)};
+{pascal_decomp_map(decomp_smp_map, "DECOMP_SMP_MAP")}
+
+{pascal_stage2_table(ccc_bmp_table, "CCC_TABLE", "Byte")}
+
+  CCC_SMP_RANGES_COUNT = {len(ccc_smp_ranges)};
+{pascal_ranges_list(ccc_smp_ranges, "CCC_SMP_RANGES")}
+
+  COMPOSE_TABLE_COUNT = {len(compose_entries)};
+{pascal_compose_map(compose_entries, "COMPOSE_TABLE")}
+"""
+
     # ── Write files ──
     files = {
         "nextpas.core.text.unicode.data.inc": cat_output,
         "nextpas.core.text.unicode.props.inc": prop_output,
         "nextpas.core.text.unicode.casefold.inc": fold_output,
+        "nextpas.core.text.unicode.normalize.inc": normalize_output,
     }
 
     for fname, fcontent in files.items():
@@ -623,6 +943,15 @@ const
     print(f"  Lower case deltas (BMP): {len(simple_lower)}", file=sys.stderr)
     print(f"  Case fold simple deltas: {len(fold_simple)}", file=sys.stderr)
     print(f"  Case fold full entries: {len(fold_full)}", file=sys.stderr)
+    print(f"  Decomposition ranges (BMP): {len(decomp_bmp_ranges)}", file=sys.stderr)
+    print(f"  Decomposition map entries (BMP): {len(decomp_bmp_map)}", file=sys.stderr)
+    print(f"  Decomposition ranges (SMP): {len(decomp_smp_ranges)}", file=sys.stderr)
+    print(f"  Decomposition map entries (SMP): {len(decomp_smp_map)}", file=sys.stderr)
+    print(f"  Composition exclusions: {len(composition_exclusions)}", file=sys.stderr)
+    print(f"  Composition entries: {len(compose_entries)}", file=sys.stderr)
+    print(f"  CCC SMP ranges: {len(ccc_smp_ranges)}", file=sys.stderr)
+    print(f"  NormalizationTest data rows: {count_data_lines(normalization_test_text)}", file=sys.stderr)
+    print(f"  NormalizationCorrections rows: {count_data_lines(normalization_corrections_text)}", file=sys.stderr)
     for prop in BINARY_PROPS:
         count = len(properties.get(prop, []))
         if count > 0:

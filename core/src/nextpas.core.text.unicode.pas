@@ -7,7 +7,8 @@ interface
 uses
   nextpas.core.text.unicode.base,
   nextpas.core.text.unicode.props,
-  nextpas.core.text.unicode.&case;
+  nextpas.core.text.unicode.&case,
+  nextpas.core.text.unicode.normalize;
 
 type
   TUnicodeCodepoint = nextpas.core.text.unicode.base.TUnicodeCodepoint;
@@ -47,6 +48,12 @@ function UTF8ToUpper(const AValue: string): string; inline;
 function UTF8ToLower(const AValue: string): string; inline;
 function UTF8CaseFold(const AValue: string): string; inline;
 function UTF8CaseFoldSimple(const AValue: string): string; inline;
+function NFD(const s: string): string; inline;
+function NFC(const s: string): string; inline;
+function NFKD(const s: string): string; inline;
+function NFKC(const s: string): string; inline;
+function IsNormalizedNFD(const s: string): Boolean; inline;
+function IsNormalizedNFC(const s: string): Boolean; inline;
 
 implementation
 
@@ -163,6 +170,36 @@ end;
 function UTF8CaseFoldSimple(const AValue: string): string;
 begin
   Result := nextpas.core.text.unicode.&case.UTF8CaseFoldSimple(AValue);
+end;
+
+function NFD(const s: string): string;
+begin
+  Result := nextpas.core.text.unicode.normalize.NFD(s);
+end;
+
+function NFC(const s: string): string;
+begin
+  Result := nextpas.core.text.unicode.normalize.NFC(s);
+end;
+
+function NFKD(const s: string): string;
+begin
+  Result := nextpas.core.text.unicode.normalize.NFKD(s);
+end;
+
+function NFKC(const s: string): string;
+begin
+  Result := nextpas.core.text.unicode.normalize.NFKC(s);
+end;
+
+function IsNormalizedNFD(const s: string): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFD(s);
+end;
+
+function IsNormalizedNFC(const s: string): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFC(s);
 end;
 
 end.
