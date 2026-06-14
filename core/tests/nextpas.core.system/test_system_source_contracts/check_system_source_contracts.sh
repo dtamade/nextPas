@@ -354,6 +354,9 @@ type ExceptClass
 type EConvertError
 type EAssertionFailed
 function Format
+function SameText
+function IntToStr
+function Trim
 EOF
 )"
   require_facade_surface_allowlist "sysutils facade" "$actual" "$expected"
@@ -1307,11 +1310,8 @@ reject_token "src/nextpas.core.system.sysutils.pas" "ExtractFileName"
 reject_token "src/nextpas.core.system.sysutils.pas" "IncludeTrailingPathDelimiter"
 reject_token "src/nextpas.core.system.sysutils.pas" "ExcludeTrailingPathDelimiter"
 reject_token "src/nextpas.core.system.sysutils.pas" "GetEnvironmentVariable"
-reject_token "src/nextpas.core.system.sysutils.pas" "Trim"
-reject_token "src/nextpas.core.system.sysutils.pas" "SameText"
 reject_token "src/nextpas.core.system.sysutils.pas" "LowerCase"
 reject_token "src/nextpas.core.system.sysutils.pas" "UpperCase"
-reject_token "src/nextpas.core.system.sysutils.pas" "IntToStr"
 reject_token "src/nextpas.core.system.sysutils.pas" "StrToInt"
 reject_token "src/nextpas.core.system.sysutils.pas" "Now"
 reject_token "src/nextpas.core.system.sysutils.pas" "FormatDateTime"
