@@ -410,21 +410,24 @@ begin
   Result := -1;
 end;
 
+procedure AssignPlatformHandle(out AHandle: TPlatformFileHandle; const AFd: Int32);
+begin
+  {$IFDEF NEXTPAS_WINDOWS}
+  AHandle.Value := Pointer(PtrUInt(AFd));
+  {$ELSE}
+  AHandle.Value := AFd;
+  {$ENDIF}
+end;
+
 function platform_fs_mktemp_handle(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
   APathBuf: PAnsiChar; APathBufLen: Int32; out AHandle: TPlatformFileHandle): Int32;
 var
   LFd: Int32;
 begin
-  AHandle := Default(TPlatformFileHandle);
+  AHandle := PLATFORM_FILE_INVALID_HANDLE;
   Result := platform_fs_mktemp(APrefix, ASuffix, APathBuf, APathBufLen, LFd);
   if Result = 0 then
-  begin
-    {$IFDEF NEXTPAS_WINDOWS}
-    AHandle.Value := PtrUInt(LFd);
-    {$ELSE}
-    AHandle.Value := LFd;
-    {$ENDIF}
-  end;
+    AssignPlatformHandle(AHandle, LFd);
 end;
 
 function platform_fs_read_file(const APath: PAnsiChar;
