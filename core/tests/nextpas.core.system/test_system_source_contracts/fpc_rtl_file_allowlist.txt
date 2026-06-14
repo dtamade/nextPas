@@ -12,6 +12,7 @@ SysUtils|nextpas.core.mem.allocator.mimalloc.pas
 SysUtils|nextpas.core.mem.pool.fixed.pas
 SysUtils|nextpas.core.platform.error.pas
 SysUtils|nextpas.core.tls.asn1.pas
+Classes|nextpas.core.tls.asn1.pas
 SysUtils|nextpas.core.tls.backend.selector.pas
 SysUtils|nextpas.core.tls.base.pas
 SysUtils|nextpas.core.tls.capability.diff.pas
@@ -249,3 +250,8 @@ Windows|nextpas.core.tls.winssl.lib.pas
 Windows|nextpas.core.tls.winssl.session.pas
 Windows|nextpas.core.tls.winssl.utils.pas
 #
+SysUtils|nextpas.core.tls.base64.pas
+SysUtils|nextpas.core.tls.exceptions.pas
+Classes|nextpas.core.io.stream_adapter.pas
+SysUtils|nextpas.core.io.stream_adapter.pas
+SysUtils|nextpas.core.tls.openssl.api.pas
