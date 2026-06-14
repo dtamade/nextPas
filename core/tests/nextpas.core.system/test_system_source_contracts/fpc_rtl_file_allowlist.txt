@@ -255,3 +255,15 @@ SysUtils|nextpas.core.tls.exceptions.pas
 Classes|nextpas.core.io.stream_adapter.pas
 SysUtils|nextpas.core.io.stream_adapter.pas
 SysUtils|nextpas.core.tls.openssl.api.pas
+SysUtils|nextpas.core.tls.cert.verify.cache.pas
+SysUtils|nextpas.core.tls.mbedtls.native_handle.pas
+SysUtils|nextpas.core.tls.openssl.native_handle.pas
+SysUtils|nextpas.core.tls.result.utils.pas
+SysUtils|nextpas.core.tls.tls12.chacha20record.pas
+SysUtils|nextpas.core.tls.tls13.clienthello.parser.pas
+SysUtils|nextpas.core.tls.verify.custom.pas
+SysUtils|nextpas.core.tls.wolfssl.native_handle.pas
+Classes|nextpas.core.tls.logging.pas
+Classes|nextpas.core.tls.mbedtls.certificate.pas
+Classes|nextpas.core.tls.wolfssl.certificate.pas
+Classes|nextpas.core.tls.x509.pas
