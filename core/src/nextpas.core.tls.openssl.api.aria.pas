@@ -4,8 +4,7 @@ unit nextpas.core.tls.openssl.api.aria;
 
 interface
 
-uses
-  Classes, SysUtils, nextpas.core.tls.openssl.base;
+uses Classes, nextpas.core.tls.openssl.base;
 
 type
   // ARIA types
@@ -126,8 +125,7 @@ function ARIADecryptCBC(const Key: TBytes; KeyBits: Integer; const IV, Input: TB
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.utils;
+uses nextpas.core.tls.openssl.api.utils;
 
 procedure LoadARIAFunctions(AHandle: TLibHandle);
 begin

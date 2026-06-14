@@ -4,11 +4,7 @@ unit nextpas.core.tls.openssl.api.sm;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.loader;
+uses Classes, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
 
 const
   // SM2 curve NID

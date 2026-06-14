@@ -4,12 +4,7 @@ unit nextpas.core.tls.openssl.api.ecdh;
 
 interface
 
-uses
-  SysUtils, DynLibs, ctypes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.bn,
-  nextpas.core.tls.openssl.api.ec,
-  nextpas.core.tls.openssl.loader;
+uses DynLibs, ctypes, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.ec, nextpas.core.tls.openssl.loader;
 
 const
   { ECDH flags }
@@ -87,8 +82,7 @@ function ECDH_SetCofactorMode(AKey: PEC_KEY; AUseCofactor: Boolean): Boolean;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.core;
+uses nextpas.core.tls.openssl.api.core;
 
 const
   { ECDH function bindings for batch loading }

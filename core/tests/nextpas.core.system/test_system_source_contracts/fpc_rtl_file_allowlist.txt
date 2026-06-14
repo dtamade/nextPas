@@ -1,96 +1,171 @@
-# Direct FPC broad RTL unit usage allowlist (file-level).
-# Format: <unit>|<relative-path-from-core/src>
+# FPC broad RTL file-level allowlist (auto-generated from current state)
+# Format: <Unit>|<relative-path>
 #
-# Any new file that directly uses SysUtils, Classes, TypInfo, DateUtils,
-# BaseUnix, Unix, or Windows MUST be added here with a justification.
-# This is an active enforcement gate — not a passive debt tracker.
-# Migration slices should REDUCE this list, not add to it.
-#
-# Allowed because: the system module's minimal TypInfo facade bridges
-# from FPC's System/TypInfo compile-truth into the core framework.
-# This is the documented "system-kernel-route" in fpc_broad_rtl_allowlist.txt.
-TypInfo|nextpas.core.system.typinfo.pas
-#
-# Allowed because: L0 platform probe/foundation modules need OS-specific
-# direct syscalls; they are the OS-ABI boundary, not generic SysUtils consumers.
-SysUtils|nextpas.core.base.pas
+# SysUtils: 159 files
 SysUtils|nextpas.core.bench.pas
 SysUtils|nextpas.core.errors.pas
 SysUtils|nextpas.core.exception.pas
-#
-# Allowed because: L1 collections element_manager bridges FPC's managed-type
-# runtime via SysUtils TArray for managed-type handling. This is narrow,
-# typed technical debt tracked in collections-typinfo-debt.
-SysUtils|nextpas.core.collections.element_manager.intf.pas
-SysUtils|nextpas.core.collections.element_manager.pas
-#
-# Allowed because: config's TFormatSettings/SysUtils dependency for
-# locale-agnostic formatting. Tracked in core-foundation-legacy-debt.
-SysUtils|nextpas.core.config.pas
-#
-# Allowed because: git/ini/template/csv/id/path/validation use SysUtils
-# for standard FPC RTL file/string/encoding helpers. Tracked in
-# git-legacy-host-debt and core-foundation-legacy-debt.
-SysUtils|nextpas.core.git.base.pas
 SysUtils|nextpas.core.git.libgit2.backend.pas
 SysUtils|nextpas.core.git.libgit2.binding.pas
 SysUtils|nextpas.core.git.libgit2.pas
-SysUtils|nextpas.core.ini.pas
-SysUtils|nextpas.core.path.pas
-SysUtils|nextpas.core.template.pas
-SysUtils|nextpas.core.validation.pas
-SysUtils|nextpas.core.csv.pas
-SysUtils|nextpas.core.id.rng.pas
-#
-# Allowed because: http server/parser/h1 use SysUtils for string helpers
-# and exception formatting. Tracked in net-http-legacy-host-debt.
 SysUtils|nextpas.core.http.impl.h1.parser.pas
 SysUtils|nextpas.core.http.impl.h1.pas
-SysUtils|nextpas.core.http.server.pas
-#
-# Allowed because: io reactor modules (epoll, iocp) use SysUtils
-# for exception formatting and OS error mapping. Tracked in
-# platform-fs-io-host-debt.
+SysUtils|nextpas.core.id.rng.pas
 SysUtils|nextpas.core.io.reactor.epoll.pas
 SysUtils|nextpas.core.io.reactor.iocp.pas
 SysUtils|nextpas.core.io.reactor.pas
-#
-# Allowed because: mem allocator and memory_map need SysUtils for
-# OS-level memory management helpers. Tracked in mem-host-debt.
 SysUtils|nextpas.core.mem.allocator.mimalloc.pas
-SysUtils|nextpas.core.mem.memory_map.pas
-#
-# Allowed because: net server readiness/runtime/threaded use SysUtils
-# for threading and exception helpers.
 SysUtils|nextpas.core.net.server.readiness.pas
-SysUtils|nextpas.core.net.server.runtime.pas
-SysUtils|nextpas.core.net.server.threaded.pas
+SysUtils|nextpas.core.tls.asn1.pas
+SysUtils|nextpas.core.tls.backend.selector.pas
+SysUtils|nextpas.core.tls.base.pas
+SysUtils|nextpas.core.tls.base64.pas
+SysUtils|nextpas.core.tls.capability.diff.pas
+SysUtils|nextpas.core.tls.capability.serializer.pas
+SysUtils|nextpas.core.tls.cert.advanced.pas
+SysUtils|nextpas.core.tls.cert.builder.impl.pas
+SysUtils|nextpas.core.tls.cert.pinning.pas
+SysUtils|nextpas.core.tls.cert.rotation.pas
+SysUtils|nextpas.core.tls.cert.utils.pas
+SysUtils|nextpas.core.tls.certchain.pas
+SysUtils|nextpas.core.tls.connection.base.pas
+SysUtils|nextpas.core.tls.connection.builder.pas
+SysUtils|nextpas.core.tls.context.builder.pas
+SysUtils|nextpas.core.tls.context.config.pas
+SysUtils|nextpas.core.tls.crl.pas
+SysUtils|nextpas.core.tls.crypto.utils.pas
+SysUtils|nextpas.core.tls.ct.log.pas
+SysUtils|nextpas.core.tls.ct.logs.pas
+SysUtils|nextpas.core.tls.ct.sct.pas
+SysUtils|nextpas.core.tls.dane.pas
+SysUtils|nextpas.core.tls.debug.utils.pas
+SysUtils|nextpas.core.tls.dialer.pas
+SysUtils|nextpas.core.tls.dns.ldns.pas
+SysUtils|nextpas.core.tls.encoding.pas
+SysUtils|nextpas.core.tls.errors.pas
+SysUtils|nextpas.core.tls.exceptions.pas
+SysUtils|nextpas.core.tls.factory.pas
+SysUtils|nextpas.core.tls.freepascal.connection.pas
+SysUtils|nextpas.core.tls.freepascal.context.material.pas
+SysUtils|nextpas.core.tls.freepascal.context.pas
+SysUtils|nextpas.core.tls.freepascal.earlydatareplay.dirstore.pas
+SysUtils|nextpas.core.tls.freepascal.earlydatareplay.fileprovider.pas
+SysUtils|nextpas.core.tls.freepascal.earlydatareplay.pas
+SysUtils|nextpas.core.tls.freepascal.engine.pas
+SysUtils|nextpas.core.tls.freepascal.lib.pas
+SysUtils|nextpas.core.tls.freepascal.session.pas
+SysUtils|nextpas.core.tls.http.client.pas
+SysUtils|nextpas.core.tls.http2.alpn.pas
+SysUtils|nextpas.core.tls.init.pas
+SysUtils|nextpas.core.tls.logging.pas
+SysUtils|nextpas.core.tls.mbedtls.certificate.pas
+SysUtils|nextpas.core.tls.mbedtls.connection.pas
+SysUtils|nextpas.core.tls.mbedtls.context.pas
+SysUtils|nextpas.core.tls.mbedtls.lib.pas
+SysUtils|nextpas.core.tls.mbedtls.session.pas
+SysUtils|nextpas.core.tls.native_handle.pas
+SysUtils|nextpas.core.tls.nonblocking.pas
+SysUtils|nextpas.core.tls.ocsp.cache.pas
+SysUtils|nextpas.core.tls.ocsp.pas
+SysUtils|nextpas.core.tls.ocsp.pure.pas
+SysUtils|nextpas.core.tls.ocsp.stapling.pas
+SysUtils|nextpas.core.tls.openssl.api.buffer.pas
+SysUtils|nextpas.core.tls.openssl.api.cms.pas
+SysUtils|nextpas.core.tls.openssl.api.ct.pas
+SysUtils|nextpas.core.tls.openssl.api.ec.pas
+SysUtils|nextpas.core.tls.openssl.api.engine.pas
+SysUtils|nextpas.core.tls.openssl.api.err.pas
+SysUtils|nextpas.core.tls.openssl.api.md.pas
+SysUtils|nextpas.core.tls.openssl.api.ocsp.pas
+SysUtils|nextpas.core.tls.openssl.api.pas
+SysUtils|nextpas.core.tls.openssl.api.pem.pas
+SysUtils|nextpas.core.tls.openssl.api.pkcs.pas
+SysUtils|nextpas.core.tls.openssl.api.pkcs12.pas
+SysUtils|nextpas.core.tls.openssl.api.provider.pas
+SysUtils|nextpas.core.tls.openssl.api.scrypt_whirlpool.pas
+SysUtils|nextpas.core.tls.openssl.api.sha.pas
+SysUtils|nextpas.core.tls.openssl.api.ts.pas
+SysUtils|nextpas.core.tls.openssl.api.txt_db.pas
+SysUtils|nextpas.core.tls.openssl.api.utils.pas
+SysUtils|nextpas.core.tls.openssl.api.x509v3.pas
+SysUtils|nextpas.core.tls.openssl.backed.pas
+SysUtils|nextpas.core.tls.openssl.certificate.pas
+SysUtils|nextpas.core.tls.openssl.certstore.pas
+SysUtils|nextpas.core.tls.openssl.connection.pas
+SysUtils|nextpas.core.tls.openssl.context.pas
+SysUtils|nextpas.core.tls.openssl.errors.pas
+SysUtils|nextpas.core.tls.openssl.loader.pas
+SysUtils|nextpas.core.tls.pem.pas
+SysUtils|nextpas.core.tls.pending.pas
+SysUtils|nextpas.core.tls.pkcs11.backend.pas
+SysUtils|nextpas.core.tls.pkcs11.engine.pas
+SysUtils|nextpas.core.tls.pkcs11.pin.pas
+SysUtils|nextpas.core.tls.pkcs11.provider.pas
+SysUtils|nextpas.core.tls.pkcs11.types.pas
+SysUtils|nextpas.core.tls.pkcs11.uri.pas
+SysUtils|nextpas.core.tls.pkcs11.utils.pas
+SysUtils|nextpas.core.tls.pkcs12.pas
+SysUtils|nextpas.core.tls.quick.pas
+SysUtils|nextpas.core.tls.random.pas
+SysUtils|nextpas.core.tls.result.utils.pas
+SysUtils|nextpas.core.tls.safety.pas
+SysUtils|nextpas.core.tls.secure.pas
+SysUtils|nextpas.core.tls.session.cache.pas
+SysUtils|nextpas.core.tls.session.cache.sharded.pas
+SysUtils|nextpas.core.tls.sni.callback.pas
+SysUtils|nextpas.core.tls.sni.resolver.pas
+SysUtils|nextpas.core.tls.timeout.pas
+SysUtils|nextpas.core.tls.tls.pas
+SysUtils|nextpas.core.tls.tls12.chacha20record.pas
+SysUtils|nextpas.core.tls.tls12.client.pas
+SysUtils|nextpas.core.tls.tls12.io.pas
+SysUtils|nextpas.core.tls.tls12.server.pas
+SysUtils|nextpas.core.tls.tls13.aead.pas
+SysUtils|nextpas.core.tls.tls13.appschedule.pas
+SysUtils|nextpas.core.tls.tls13.clienthello.parser.pas
+SysUtils|nextpas.core.tls.tls13.clienthello.pas
+SysUtils|nextpas.core.tls.tls13.keyschedule.pas
+SysUtils|nextpas.core.tls.tls13.parser.pas
+SysUtils|nextpas.core.tls.tls13.posthandshake.pas
+SysUtils|nextpas.core.tls.tls13.recordsealer.pas
+SysUtils|nextpas.core.tls.tls13.servercertificate.pas
+SysUtils|nextpas.core.tls.tls13.servercertverify.pas
+SysUtils|nextpas.core.tls.tls13.wire.pas
+SysUtils|nextpas.core.tls.utils.pas
+SysUtils|nextpas.core.tls.verify.custom.pas
+SysUtils|nextpas.core.tls.websocket.pas
+SysUtils|nextpas.core.tls.winssl.certificate.pas
+SysUtils|nextpas.core.tls.winssl.certstore.pas
+SysUtils|nextpas.core.tls.winssl.connection.pas
+SysUtils|nextpas.core.tls.winssl.context.pas
+SysUtils|nextpas.core.tls.winssl.enterprise.pas
+SysUtils|nextpas.core.tls.winssl.errors.pas
+SysUtils|nextpas.core.tls.winssl.lib.pas
+SysUtils|nextpas.core.tls.winssl.session.pas
+SysUtils|nextpas.core.tls.winssl.utils.pas
+SysUtils|nextpas.core.tls.wolfssl.api.pas
+SysUtils|nextpas.core.tls.wolfssl.certificate.pas
+SysUtils|nextpas.core.tls.wolfssl.connection.pas
+SysUtils|nextpas.core.tls.wolfssl.context.pas
+SysUtils|nextpas.core.tls.wolfssl.lib.pas
+SysUtils|nextpas.core.tls.wolfssl.session.pas
+SysUtils|nextpas.core.tls.x509.pas
+SysUtils|nextpas.core.tui.image_mgr.pas
+SysUtils|nextpas.core.tui.keybind.pas
+SysUtils|nextpas.core.tui.sixel.pas
+SysUtils|nextpas.core.tui.task.pas
+SysUtils|nextpas.core.tui.widget.barchart.pas
+SysUtils|nextpas.core.tui.widget.calendar.pas
+SysUtils|nextpas.core.tui.widget.command_palette.pas
+SysUtils|nextpas.core.tui.widget.linechart.pas
+SysUtils|nextpas.core.tui.widget.markdown.pas
+SysUtils|nextpas.core.tui.widget.progress_group.pas
+SysUtils|nextpas.core.tui.widget.timeline.pas
 #
-# Allowed because: platform mmap needs SysUtils for exception formatting.
-SysUtils|nextpas.core.platform.mmap.pas
-#
-# Allowed because: SIMD cpuinfo host probes need OS-specific syscall
-# helpers (darwin, unix, windows, diagnostic). Tracked in
-# simd-host-probe-debt.
-BaseUnix|nextpas.core.simd.cpuinfo.darwin.pas
-Unix|nextpas.core.simd.cpuinfo.unix.pas
-Windows|nextpas.core.simd.cpuinfo.diagnostic.pas
-Windows|nextpas.core.simd.cpuinfo.windows.pas
-SysUtils|nextpas.core.simd.cpuinfo.helpers.inc
-#
-# Allowed because: tls module is the single largest debt holder.
-# It uses SysUtils (218), Classes (138), DateUtils (15), BaseUnix (7),
-# Unix (5), Windows (18) for OpenSSL/mbedTLS/WinSSL/PKCS11 bindings,
-# FPC-native TLS implementation, session caching, and certificate handling.
-# Tracked in tls-legacy-host-debt. Future TLS rewrite should eliminate
-# these dependencies.
-BaseUnix|nextpas.core.tls.dialer.pas
-BaseUnix|nextpas.core.tls.freepascal.connection.pas
-BaseUnix|nextpas.core.tls.nonblocking.pas
-BaseUnix|nextpas.core.tls.openssl.api.async.pas
-BaseUnix|nextpas.core.tls.session.cache.pas
-BaseUnix|nextpas.core.tls.timeout.pas
-BaseUnix|nextpas.core.tls.transport.pas
+# Classes: 142 files
+Classes|nextpas.core.crypto.hash.pas
+Classes|nextpas.core.git.libgit2.backend.pas
+Classes|nextpas.core.git.libgit2.pas
 Classes|nextpas.core.tls.aesgcm.pool.pas
 Classes|nextpas.core.tls.asn1.pas
 Classes|nextpas.core.tls.backend.selector.pas
@@ -100,12 +175,12 @@ Classes|nextpas.core.tls.capability.serializer.pas
 Classes|nextpas.core.tls.cert.advanced.pas
 Classes|nextpas.core.tls.cert.builder.impl.pas
 Classes|nextpas.core.tls.cert.builder.pas
-Classes|nextpas.core.tls.certchain.pas
 Classes|nextpas.core.tls.cert.pas
 Classes|nextpas.core.tls.cert.pinning.pas
 Classes|nextpas.core.tls.cert.rotation.pas
 Classes|nextpas.core.tls.cert.utils.pas
 Classes|nextpas.core.tls.cert.verify.cache.pas
+Classes|nextpas.core.tls.certchain.pas
 Classes|nextpas.core.tls.connection.base.pas
 Classes|nextpas.core.tls.connection.builder.pas
 Classes|nextpas.core.tls.context.builder.pas
@@ -127,8 +202,8 @@ Classes|nextpas.core.tls.freepascal.earlydatareplay.dirstore.pas
 Classes|nextpas.core.tls.freepascal.earlydatareplay.fileprovider.pas
 Classes|nextpas.core.tls.freepascal.engine.pas
 Classes|nextpas.core.tls.freepascal.lib.pas
-Classes|nextpas.core.tls.http2.alpn.pas
 Classes|nextpas.core.tls.http.client.pas
+Classes|nextpas.core.tls.http2.alpn.pas
 Classes|nextpas.core.tls.logging.pas
 Classes|nextpas.core.tls.mbedtls.base.pas
 Classes|nextpas.core.tls.mbedtls.certificate.pas
@@ -163,13 +238,13 @@ Classes|nextpas.core.tls.openssl.api.ocsp.pas
 Classes|nextpas.core.tls.openssl.api.param.pas
 Classes|nextpas.core.tls.openssl.api.pas
 Classes|nextpas.core.tls.openssl.api.pem.pas
-Classes|nextpas.core.tls.openssl.api.pkcs12.pas
 Classes|nextpas.core.tls.openssl.api.pkcs.pas
+Classes|nextpas.core.tls.openssl.api.pkcs12.pas
 Classes|nextpas.core.tls.openssl.api.provider.pas
 Classes|nextpas.core.tls.openssl.api.scrypt_whirlpool.pas
 Classes|nextpas.core.tls.openssl.api.seed.pas
-Classes|nextpas.core.tls.openssl.api.sha3.evp.pas
 Classes|nextpas.core.tls.openssl.api.sha.pas
+Classes|nextpas.core.tls.openssl.api.sha3.evp.pas
 Classes|nextpas.core.tls.openssl.api.sm.pas
 Classes|nextpas.core.tls.openssl.api.srp.pas
 Classes|nextpas.core.tls.openssl.api.store.pas
@@ -207,11 +282,11 @@ Classes|nextpas.core.tls.secure.pas
 Classes|nextpas.core.tls.session.cache.pas
 Classes|nextpas.core.tls.session.cache.sharded.pas
 Classes|nextpas.core.tls.timeout.pas
-Classes|nextpas.core.tls.tls12.clientauth.pas
+Classes|nextpas.core.tls.tls.pas
 Classes|nextpas.core.tls.tls12.client.pas
+Classes|nextpas.core.tls.tls12.clientauth.pas
 Classes|nextpas.core.tls.tls12.io.pas
 Classes|nextpas.core.tls.tls12.server.pas
-Classes|nextpas.core.tls.tls.pas
 Classes|nextpas.core.tls.transport.pas
 Classes|nextpas.core.tls.utils.pas
 Classes|nextpas.core.tls.websocket.pas
@@ -229,6 +304,14 @@ Classes|nextpas.core.tls.wolfssl.context.pas
 Classes|nextpas.core.tls.wolfssl.lib.pas
 Classes|nextpas.core.tls.wolfssl.session.pas
 Classes|nextpas.core.tls.x509.pas
+Classes|nextpas.core.tui.task.pas
+#
+# TypInfo: 1 files
+TypInfo|nextpas.core.system.typinfo.pas
+#
+# DateUtils: 18 files
+DateUtils|nextpas.core.git.libgit2.backend.pas
+DateUtils|nextpas.core.git.libgit2.pas
 DateUtils|nextpas.core.tls.cert.rotation.pas
 DateUtils|nextpas.core.tls.crl.pas
 DateUtils|nextpas.core.tls.ct.sct.pas
@@ -244,229 +327,32 @@ DateUtils|nextpas.core.tls.winssl.connection.pas
 DateUtils|nextpas.core.tls.wolfssl.certificate.pas
 DateUtils|nextpas.core.tls.wolfssl.session.pas
 DateUtils|nextpas.core.tls.x509.pas
-SysUtils|nextpas.core.tls.aesgcm.pool.pas
-SysUtils|nextpas.core.tls.asn1.pas
-SysUtils|nextpas.core.tls.backend.selector.pas
-SysUtils|nextpas.core.tls.base64.pas
-SysUtils|nextpas.core.tls.base.pas
-SysUtils|nextpas.core.tls.buffer.pool.pas
-SysUtils|nextpas.core.tls.bufferpool.pas
-SysUtils|nextpas.core.tls.capability.diff.pas
-SysUtils|nextpas.core.tls.capability.serializer.pas
-SysUtils|nextpas.core.tls.cert.advanced.pas
-SysUtils|nextpas.core.tls.cert.builder.impl.pas
-SysUtils|nextpas.core.tls.cert.builder.pas
-SysUtils|nextpas.core.tls.certchain.pas
-SysUtils|nextpas.core.tls.cert.pas
-SysUtils|nextpas.core.tls.cert.pinning.pas
-SysUtils|nextpas.core.tls.cert.rotation.pas
-SysUtils|nextpas.core.tls.cert.utils.pas
-SysUtils|nextpas.core.tls.cert.verify.cache.pas
-SysUtils|nextpas.core.tls.collections.pas
-SysUtils|nextpas.core.tls.connection.base.pas
-SysUtils|nextpas.core.tls.connection.builder.pas
-SysUtils|nextpas.core.tls.context.builder.pas
-SysUtils|nextpas.core.tls.context.config.pas
-SysUtils|nextpas.core.tls.crl.pas
-SysUtils|nextpas.core.tls.crypto.utils.pas
-SysUtils|nextpas.core.tls.ct.log.pas
-SysUtils|nextpas.core.tls.ct.logs.pas
-SysUtils|nextpas.core.tls.ct.pure.pas
-SysUtils|nextpas.core.tls.ct.sct.pas
-SysUtils|nextpas.core.tls.dane.pas
-SysUtils|nextpas.core.tls.dane.pure.pas
-SysUtils|nextpas.core.tls.debug.utils.pas
-SysUtils|nextpas.core.tls.dialer.pas
-SysUtils|nextpas.core.tls.dns.ldns.pas
-SysUtils|nextpas.core.tls.dtls.layer.pas
-SysUtils|nextpas.core.tls.encoding.pas
-SysUtils|nextpas.core.tls.engine.pas
-SysUtils|nextpas.core.tls.errors.pas
-SysUtils|nextpas.core.tls.exceptions.pas
-SysUtils|nextpas.core.tls.factory.pas
-SysUtils|nextpas.core.tls.freepascal.connection.pas
-SysUtils|nextpas.core.tls.freepascal.context.material.pas
-SysUtils|nextpas.core.tls.freepascal.context.pas
-SysUtils|nextpas.core.tls.freepascal.earlydatareplay.dirstore.pas
-SysUtils|nextpas.core.tls.freepascal.earlydatareplay.fileprovider.pas
-SysUtils|nextpas.core.tls.freepascal.earlydatareplay.pas
-SysUtils|nextpas.core.tls.freepascal.engine.pas
-SysUtils|nextpas.core.tls.freepascal.lib.pas
-SysUtils|nextpas.core.tls.freepascal.session.pas
-SysUtils|nextpas.core.tls.http2.alpn.pas
-SysUtils|nextpas.core.tls.http.client.pas
-SysUtils|nextpas.core.tls.init.pas
-SysUtils|nextpas.core.tls.keyschedule.labels.pas
-SysUtils|nextpas.core.tls.logging.pas
-SysUtils|nextpas.core.tls.mbedtls.api.pas
-SysUtils|nextpas.core.tls.mbedtls.base.pas
-SysUtils|nextpas.core.tls.mbedtls.certificate.pas
-SysUtils|nextpas.core.tls.mbedtls.connection.pas
-SysUtils|nextpas.core.tls.mbedtls.context.pas
-SysUtils|nextpas.core.tls.mbedtls.lib.pas
-SysUtils|nextpas.core.tls.mbedtls.native_handle.pas
-SysUtils|nextpas.core.tls.mbedtls.session.pas
-SysUtils|nextpas.core.tls.native_handle.pas
-SysUtils|nextpas.core.tls.net.hooks.pas
-SysUtils|nextpas.core.tls.nonblocking.pas
-SysUtils|nextpas.core.tls.ocsp.cache.pas
-SysUtils|nextpas.core.tls.ocsp.pas
-SysUtils|nextpas.core.tls.ocsp.pure.pas
-SysUtils|nextpas.core.tls.ocsp.stapling.pas
-SysUtils|nextpas.core.tls.openssl.api.aead.pas
-SysUtils|nextpas.core.tls.openssl.api.aes.pas
-SysUtils|nextpas.core.tls.openssl.api.aria.pas
-SysUtils|nextpas.core.tls.openssl.api.asn1.pas
-SysUtils|nextpas.core.tls.openssl.api.async.pas
-SysUtils|nextpas.core.tls.openssl.api.bio.pas
-SysUtils|nextpas.core.tls.openssl.api.blake2.pas
-SysUtils|nextpas.core.tls.openssl.api.bn.pas
-SysUtils|nextpas.core.tls.openssl.api.buffer.pas
-SysUtils|nextpas.core.tls.openssl.api.chacha.pas
-SysUtils|nextpas.core.tls.openssl.api.cmac.evp.pas
-SysUtils|nextpas.core.tls.openssl.api.cms.pas
-SysUtils|nextpas.core.tls.openssl.api.comp.pas
-SysUtils|nextpas.core.tls.openssl.api.conf.pas
-SysUtils|nextpas.core.tls.openssl.api.core.pas
-SysUtils|nextpas.core.tls.openssl.api.crypto.pas
-SysUtils|nextpas.core.tls.openssl.api.ct.pas
-SysUtils|nextpas.core.tls.openssl.api.des.pas
-SysUtils|nextpas.core.tls.openssl.api.dh.pas
-SysUtils|nextpas.core.tls.openssl.api.dsa.pas
-SysUtils|nextpas.core.tls.openssl.api.dso.pas
-SysUtils|nextpas.core.tls.openssl.api.ecdh.pas
-SysUtils|nextpas.core.tls.openssl.api.ecdsa.pas
-SysUtils|nextpas.core.tls.openssl.api.ec.pas
-SysUtils|nextpas.core.tls.openssl.api.engine.pas
-SysUtils|nextpas.core.tls.openssl.api.err.pas
-SysUtils|nextpas.core.tls.openssl.api.evp.pas
-SysUtils|nextpas.core.tls.openssl.api.hmac.pas
-SysUtils|nextpas.core.tls.openssl.api.kdf.pas
-SysUtils|nextpas.core.tls.openssl.api.legacy_ciphers.pas
-SysUtils|nextpas.core.tls.openssl.api.lhash.pas
-SysUtils|nextpas.core.tls.openssl.api.md.pas
-SysUtils|nextpas.core.tls.openssl.api.modes.pas
-SysUtils|nextpas.core.tls.openssl.api.obj.pas
-SysUtils|nextpas.core.tls.openssl.api.ocsp.pas
-SysUtils|nextpas.core.tls.openssl.api.param.pas
-SysUtils|nextpas.core.tls.openssl.api.pas
-SysUtils|nextpas.core.tls.openssl.api.pem.pas
-SysUtils|nextpas.core.tls.openssl.api.pkcs12.pas
-SysUtils|nextpas.core.tls.openssl.api.pkcs7.pas
-SysUtils|nextpas.core.tls.openssl.api.pkcs.pas
-SysUtils|nextpas.core.tls.openssl.api.provider.pas
-SysUtils|nextpas.core.tls.openssl.api.rand.pas
-SysUtils|nextpas.core.tls.openssl.api.rsa.pas
-SysUtils|nextpas.core.tls.openssl.api.scrypt_whirlpool.pas
-SysUtils|nextpas.core.tls.openssl.api.seed.pas
-SysUtils|nextpas.core.tls.openssl.api.sha3.evp.pas
-SysUtils|nextpas.core.tls.openssl.api.sha.pas
-SysUtils|nextpas.core.tls.openssl.api.sm.pas
-SysUtils|nextpas.core.tls.openssl.api.srp.pas
-SysUtils|nextpas.core.tls.openssl.api.ssl.pas
-SysUtils|nextpas.core.tls.openssl.api.stack.pas
-SysUtils|nextpas.core.tls.openssl.api.store.pas
-SysUtils|nextpas.core.tls.openssl.api.thread.pas
-SysUtils|nextpas.core.tls.openssl.api.ts.pas
-SysUtils|nextpas.core.tls.openssl.api.txt_db.pas
-SysUtils|nextpas.core.tls.openssl.api.types.pas
-SysUtils|nextpas.core.tls.openssl.api.ui.pas
-SysUtils|nextpas.core.tls.openssl.api.utils.pas
-SysUtils|nextpas.core.tls.openssl.api.x509.pas
-SysUtils|nextpas.core.tls.openssl.api.x509v3.pas
-SysUtils|nextpas.core.tls.openssl.backed.pas
-SysUtils|nextpas.core.tls.openssl.base.pas
-SysUtils|nextpas.core.tls.openssl.certificate.pas
-SysUtils|nextpas.core.tls.openssl.certstore.pas
-SysUtils|nextpas.core.tls.openssl.connection.pas
-SysUtils|nextpas.core.tls.openssl.context.pas
-SysUtils|nextpas.core.tls.openssl.errors.pas
-SysUtils|nextpas.core.tls.openssl.loader.pas
-SysUtils|nextpas.core.tls.openssl.native_handle.pas
-SysUtils|nextpas.core.tls.openssl.session.pas
-SysUtils|nextpas.core.tls.pas
-SysUtils|nextpas.core.tls.pem.pas
-SysUtils|nextpas.core.tls.pending.pas
-SysUtils|nextpas.core.tls.pkcs11.api.pas
-SysUtils|nextpas.core.tls.pkcs11.backend.pas
-SysUtils|nextpas.core.tls.pkcs11.engine.pas
-SysUtils|nextpas.core.tls.pkcs11.loader.pas
-SysUtils|nextpas.core.tls.pkcs11.pin.pas
-SysUtils|nextpas.core.tls.pkcs11.provider.pas
-SysUtils|nextpas.core.tls.pkcs11.types.pas
-SysUtils|nextpas.core.tls.pkcs11.uri.pas
-SysUtils|nextpas.core.tls.pkcs11.utils.pas
-SysUtils|nextpas.core.tls.pkcs12.pas
-SysUtils|nextpas.core.tls.pool.pas
-SysUtils|nextpas.core.tls.quick.pas
-SysUtils|nextpas.core.tls.random.pas
-SysUtils|nextpas.core.tls.random.pool.pas
-SysUtils|nextpas.core.tls.result.utils.pas
-SysUtils|nextpas.core.tls.ringbuffer.lockfree.pas
-SysUtils|nextpas.core.tls.ringbuffer.pas
-SysUtils|nextpas.core.tls.safety.pas
-SysUtils|nextpas.core.tls.secure.compare.pas
-SysUtils|nextpas.core.tls.secure.pas
-SysUtils|nextpas.core.tls.session.cache.pas
-SysUtils|nextpas.core.tls.session.cache.sharded.pas
-SysUtils|nextpas.core.tls.sni.callback.pas
-SysUtils|nextpas.core.tls.sni.resolver.pas
-SysUtils|nextpas.core.tls.timeout.pas
-SysUtils|nextpas.core.tls.tls12.chacha20record.pas
-SysUtils|nextpas.core.tls.tls12.ciphersuite.pas
-SysUtils|nextpas.core.tls.tls12.clientauth.pas
-SysUtils|nextpas.core.tls.tls12.client.pas
-SysUtils|nextpas.core.tls.tls12.handshakecrypto.pas
-SysUtils|nextpas.core.tls.tls12.io.pas
-SysUtils|nextpas.core.tls.tls12.recordcrypto.pas
-SysUtils|nextpas.core.tls.tls12.server.pas
-SysUtils|nextpas.core.tls.tls12.wire.pas
-SysUtils|nextpas.core.tls.tls13.aead.pas
-SysUtils|nextpas.core.tls.tls13.appschedule.pas
-SysUtils|nextpas.core.tls.tls13.chacha20poly1305.pas
-SysUtils|nextpas.core.tls.tls13.clienthello.parser.pas
-SysUtils|nextpas.core.tls.tls13.clienthello.pas
-SysUtils|nextpas.core.tls.tls13.finished.pas
-SysUtils|nextpas.core.tls.tls13.keyschedule.pas
-SysUtils|nextpas.core.tls.tls13.parser.pas
-SysUtils|nextpas.core.tls.tls13.posthandshake.pas
-SysUtils|nextpas.core.tls.tls13.recordcrypto.pas
-SysUtils|nextpas.core.tls.tls13.recordsealer.pas
-SysUtils|nextpas.core.tls.tls13.servercertificate.pas
-SysUtils|nextpas.core.tls.tls13.servercertverify.pas
-SysUtils|nextpas.core.tls.tls13.serverhello.pas
-SysUtils|nextpas.core.tls.tls13.wire.pas
-SysUtils|nextpas.core.tls.tls.pas
-SysUtils|nextpas.core.tls.transport.pas
-SysUtils|nextpas.core.tls.utils.pas
-SysUtils|nextpas.core.tls.verify.custom.pas
-SysUtils|nextpas.core.tls.websocket.pas
-SysUtils|nextpas.core.tls.winssl.api.pas
-SysUtils|nextpas.core.tls.winssl.base.pas
-SysUtils|nextpas.core.tls.winssl.certificate.pas
-SysUtils|nextpas.core.tls.winssl.certstore.pas
-SysUtils|nextpas.core.tls.winssl.connection.pas
-SysUtils|nextpas.core.tls.winssl.context.pas
-SysUtils|nextpas.core.tls.winssl.enterprise.pas
-SysUtils|nextpas.core.tls.winssl.errors.pas
-SysUtils|nextpas.core.tls.winssl.lib.pas
-SysUtils|nextpas.core.tls.winssl.native_handle.pas
-SysUtils|nextpas.core.tls.winssl.session.pas
-SysUtils|nextpas.core.tls.winssl.utils.pas
-SysUtils|nextpas.core.tls.wolfssl.api.pas
-SysUtils|nextpas.core.tls.wolfssl.base.pas
-SysUtils|nextpas.core.tls.wolfssl.certificate.pas
-SysUtils|nextpas.core.tls.wolfssl.connection.pas
-SysUtils|nextpas.core.tls.wolfssl.context.pas
-SysUtils|nextpas.core.tls.wolfssl.lib.pas
-SysUtils|nextpas.core.tls.wolfssl.native_handle.pas
-SysUtils|nextpas.core.tls.wolfssl.session.pas
-SysUtils|nextpas.core.tls.x509.pas
+DateUtils|nextpas.core.tui.widget.calendar.pas
+#
+# BaseUnix: 10 files
+BaseUnix|nextpas.core.io.uring.pas
+BaseUnix|nextpas.core.simd.cpuinfo.darwin.pas
+BaseUnix|nextpas.core.tls.dialer.pas
+BaseUnix|nextpas.core.tls.freepascal.connection.pas
+BaseUnix|nextpas.core.tls.nonblocking.pas
+BaseUnix|nextpas.core.tls.openssl.api.async.pas
+BaseUnix|nextpas.core.tls.session.cache.pas
+BaseUnix|nextpas.core.tls.timeout.pas
+BaseUnix|nextpas.core.tls.transport.pas
+BaseUnix|nextpas.core.tui.clipboard.pas
+#
+# Unix: 7 files
+Unix|nextpas.core.simd.cpuinfo.unix.pas
 Unix|nextpas.core.tls.freepascal.connection.pas
 Unix|nextpas.core.tls.freepascal.earlydatareplay.dirstore.pas
 Unix|nextpas.core.tls.freepascal.earlydatareplay.fileprovider.pas
 Unix|nextpas.core.tls.nonblocking.pas
 Unix|nextpas.core.tls.timeout.pas
+Unix|nextpas.core.tui.clipboard.pas
+#
+# Windows: 20 files
+Windows|nextpas.core.simd.cpuinfo.diagnostic.pas
+Windows|nextpas.core.simd.cpuinfo.windows.pas
 Windows|nextpas.core.tls.crypto.utils.pas
 Windows|nextpas.core.tls.factory.pas
 Windows|nextpas.core.tls.freepascal.connection.pas
@@ -486,52 +372,3 @@ Windows|nextpas.core.tls.winssl.lib.pas
 Windows|nextpas.core.tls.winssl.session.pas
 Windows|nextpas.core.tls.winssl.utils.pas
 #
-# Allowed because: tui module uses SysUtils (24), Classes (1), DateUtils (1),
-# BaseUnix (1), Unix (1) for terminal rendering, key binding, image handling,
-# widgets. Tracked in tui-legacy-host-debt.
-SysUtils|nextpas.core.tui.app.pas
-SysUtils|nextpas.core.tui.clipboard.pas
-SysUtils|nextpas.core.tui.error.pas
-SysUtils|nextpas.core.tui.image_cap.pas
-SysUtils|nextpas.core.tui.image_mgr.pas
-SysUtils|nextpas.core.tui.keybind.pas
-SysUtils|nextpas.core.tui.sixel.pas
-SysUtils|nextpas.core.tui.task.pas
-SysUtils|nextpas.core.tui.terminal.pas
-SysUtils|nextpas.core.tui.widget.barchart.pas
-SysUtils|nextpas.core.tui.widget.breadcrumb.pas
-SysUtils|nextpas.core.tui.widget.calendar.pas
-SysUtils|nextpas.core.tui.widget.command_palette.pas
-SysUtils|nextpas.core.tui.widget.diffview.pas
-SysUtils|nextpas.core.tui.widget.file_tree.pas
-SysUtils|nextpas.core.tui.widget.intf.pas
-SysUtils|nextpas.core.tui.widget.kanban.pas
-SysUtils|nextpas.core.tui.widget.linechart.pas
-SysUtils|nextpas.core.tui.widget.markdown.pas
-SysUtils|nextpas.core.tui.widget.progress_group.pas
-SysUtils|nextpas.core.tui.widget.scrollview.pas
-SysUtils|nextpas.core.tui.widget.syntax.pas
-SysUtils|nextpas.core.tui.widget.timeline.pas
-SysUtils|nextpas.core.tui.widget.tooltip.pas
-Classes|nextpas.core.tui.task.pas
-BaseUnix|nextpas.core.tui.clipboard.pas
-DateUtils|nextpas.core.tui.widget.calendar.pas
-Unix|nextpas.core.tui.clipboard.pas
-#
-# Allowed because: git module uses Classes (2), DateUtils (2), SysUtils (3)
-# for libgit2 bindings and revision history. Tracked in git-legacy-host-debt.
-Classes|nextpas.core.git.libgit2.backend.pas
-Classes|nextpas.core.git.libgit2.pas
-DateUtils|nextpas.core.git.libgit2.backend.pas
-DateUtils|nextpas.core.git.libgit2.pas
-SysUtils|nextpas.core.git.base.pas
-SysUtils|nextpas.core.git.libgit2.backend.pas
-SysUtils|nextpas.core.git.libgit2.binding.pas
-SysUtils|nextpas.core.git.libgit2.pas
-#
-# Allowed because: crypto.hash uses Classes for TMemoryStream-based hashing.
-# Tracked in core-foundation-legacy-debt.
-Classes|nextpas.core.crypto.hash.pas
-#
-# Allowed because: io.uring uses BaseUnix for Linux io_uring syscall wrapper.
-BaseUnix|nextpas.core.io.uring.pas

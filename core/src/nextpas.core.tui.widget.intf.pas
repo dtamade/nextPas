@@ -23,10 +23,7 @@ unit nextpas.core.tui.widget.intf;
 
 interface
 
-uses
-  SysUtils,
-  nextpas.core.tui.base,
-  nextpas.core.tui.buffer;
+uses nextpas.core.tui.base, nextpas.core.tui.buffer;
 
 type
   {**

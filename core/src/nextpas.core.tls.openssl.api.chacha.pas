@@ -4,13 +4,7 @@ unit nextpas.core.tls.openssl.api.chacha;
 
 interface
 
-uses
-  nextpas.core.tls.base,
-  nextpas.core.tls.exceptions,
-  SysUtils,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.loader;
 
 const
   CHACHA20_KEY_SIZE = 32;
@@ -106,8 +100,7 @@ function Poly1305MAC(const Key: TBytes; const Message: TBytes): TBytes;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.api.consts;
+uses nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.api.consts;
 
 function LoadChaChaFunctions: Boolean;
 var

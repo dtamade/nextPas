@@ -12,10 +12,7 @@ unit nextpas.core.tls.openssl.api.evp;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader;
+uses Classes, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
 
 type
   // EVP structures
@@ -884,8 +881,7 @@ function EVP_PKEY_CTX_set_rsa_padding(ctx: PEVP_PKEY_CTX; pad: Integer): Integer
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api;
+uses nextpas.core.tls.openssl.api;
 
 // Runtime storage avoids platform-specific regressions in const procvar binding tables.
 var

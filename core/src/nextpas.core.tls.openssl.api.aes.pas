@@ -12,12 +12,7 @@ unit nextpas.core.tls.openssl.api.aes;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.consts,
-  nextpas.core.tls.openssl.loader;
+uses Classes, nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
 
 const
   AES_MAXNR = 14;
@@ -125,8 +120,7 @@ function AESDecryptCTR(const Data: TBytes; const Key: TBytes; const IV: TBytes):
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api;
+uses nextpas.core.tls.openssl.api;
 
 const
   { AES 函数绑定数组 - 用于批量加载 }

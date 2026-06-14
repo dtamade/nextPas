@@ -4,8 +4,6 @@ unit nextpas.core.tls.transport;
 
 interface
 
-uses
-  SysUtils;
 
 type
   TSSLTransportResult = (
@@ -59,10 +57,7 @@ type
 
 implementation
 
-uses
-  {$IFDEF UNIX}BaseUnix, Sockets,{$ENDIF}
-  {$IFDEF WINDOWS}WinSock2,{$ENDIF}
-  Classes;
+uses BaseUnix, Sockets, WinSock2, Classes;
 
 constructor TSSLMemoryTransport.Create(ACapacity: Integer);
 begin

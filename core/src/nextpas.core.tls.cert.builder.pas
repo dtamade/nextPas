@@ -15,10 +15,7 @@ unit nextpas.core.tls.cert.builder;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
-  nextpas.core.tls.safety;
+uses Classes, nextpas.core.tls.base, nextpas.core.tls.safety;
 
 type
   { Forward declarations }
@@ -189,8 +186,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.tls.cert.builder.impl;
+uses nextpas.core.tls.cert.builder.impl;
 
 class function TCertificateBuilder.Create: ICertificateBuilder;
 begin

@@ -10,16 +10,7 @@ unit nextpas.core.tls.openssl.session;
 
 interface
 
-uses
-  SysUtils, ctypes,
-  nextpas.core.tls.base,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.ssl,
-  nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.consts,
-  nextpas.core.tls.openssl.native_handle,
-  nextpas.core.tls.openssl.certificate;
+uses ctypes, nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.ssl, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.native_handle, nextpas.core.tls.openssl.certificate;
 
 const
   HexDigits: array[0..15] of Char = '0123456789ABCDEF';

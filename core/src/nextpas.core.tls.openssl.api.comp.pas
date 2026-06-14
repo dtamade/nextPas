@@ -8,11 +8,7 @@ unit nextpas.core.tls.openssl.api.comp;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.bio;
+uses Classes, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bio;
 
 const
   // 压缩方法 NID
@@ -196,9 +192,7 @@ function IsCompressionSupported(Method: PCOMP_METHOD): Boolean;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
 
 procedure LoadCOMPFunctions;
 begin

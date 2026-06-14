@@ -27,8 +27,7 @@ unit nextpas.core.tls.random.pool;
 
 interface
 
-uses
-  SysUtils, Classes, SyncObjs;
+uses Classes, SyncObjs;
 
 const
   { 默认配置 }
@@ -130,8 +129,7 @@ function PooledRandomBytes(ABuffer: PByte; ACount: Integer): Boolean;
 
 implementation
 
-uses
-  nextpas.core.tls.random;  // 使用底层随机数生成器
+uses nextpas.core.tls.random;
 
 var
   GGlobalPool: TRandomPool = nil;

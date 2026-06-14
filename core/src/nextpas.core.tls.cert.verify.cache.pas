@@ -25,10 +25,7 @@ unit nextpas.core.tls.cert.verify.cache;
 
 interface
 
-uses
-  SysUtils, Classes, SyncObjs,
-  nextpas.core.time,
-  nextpas.core.tls.openssl.base;
+uses Classes, SyncObjs, nextpas.core.time, nextpas.core.tls.openssl.base;
 
 type
   { 验证结果 }
@@ -88,12 +85,7 @@ function GetGlobalCertVerifyCache: TCertVerifyCache;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.loader;
 
 var
   GlobalCache: TCertVerifyCache = nil;

@@ -4,10 +4,7 @@ unit nextpas.core.tls.openssl.api.asn1;
 
 interface
 
-uses
-  SysUtils, Classes, dynlibs,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader;
+uses Classes, dynlibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
 
 type
   // ASN.1 类型定义

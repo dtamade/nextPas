@@ -11,12 +11,7 @@ unit nextpas.core.tls.openssl.api.param;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader,
-  nextpas.core.tls.openssl.api.bn,
-  nextpas.core.tls.openssl.api.consts;
+uses Classes, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.consts;
 
 const
   { OSSL_PARAM data types }
@@ -222,8 +217,7 @@ function SetParamValue(Params: POSSL_PARAM; const Key: string; const Value: stri
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.utils;
+uses nextpas.core.tls.openssl.api.utils;
 
 const
   { Function bindings for batch loading }

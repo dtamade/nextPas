@@ -4,9 +4,7 @@ unit nextpas.core.tls.engine;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base;
+uses Classes, nextpas.core.tls.base;
 
 type
   TSSLEngineAction = (

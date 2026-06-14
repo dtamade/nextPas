@@ -4,11 +4,7 @@ unit nextpas.core.tls.openssl.api.dh;
 
 interface
 
-uses
-  SysUtils, DynLibs, ctypes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.bn,
-  nextpas.core.tls.openssl.loader;
+uses DynLibs, ctypes, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.loader;
 
 const
   { DH flags }
@@ -218,8 +214,7 @@ procedure UnloadOpenSSLDH;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.core;
+uses nextpas.core.tls.openssl.api.core;
 
 const
   { DH function bindings for batch loading }

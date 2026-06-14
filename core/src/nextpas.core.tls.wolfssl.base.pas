@@ -20,9 +20,7 @@ unit nextpas.core.tls.wolfssl.base;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base;
+uses Classes, nextpas.core.tls.base;
 
 const
   { WolfSSL 库文件名 }

@@ -17,15 +17,7 @@ unit nextpas.core.tls;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
-  nextpas.core.tls.exceptions,
-  nextpas.core.tls.tls,
-  nextpas.core.tls.dialer,
-  nextpas.core.tls.quick,
-  nextpas.core.tls.context.builder,
-  nextpas.core.tls.connection.builder;
+uses Classes, nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.tls, nextpas.core.tls.dialer, nextpas.core.tls.quick, nextpas.core.tls.context.builder, nextpas.core.tls.connection.builder;
 
 type
   // Primary API (rustls-aligned)
@@ -44,8 +36,7 @@ function TryTLSDial(const AHost: string; APort: Word;
 
 implementation
 
-uses
-  nextpas.core.tls.freepascal.lib;
+uses nextpas.core.tls.freepascal.lib;
 
 var
   GDefaultDialer: TSSLDialer = nil;

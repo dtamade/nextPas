@@ -17,8 +17,7 @@ unit nextpas.core.tls.pkcs11.api;
 
 interface
 
-uses
-  SysUtils, Classes, DynLibs;
+uses Classes, DynLibs;
 
 const
   // PKCS#11 version

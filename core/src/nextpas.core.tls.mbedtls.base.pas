@@ -21,9 +21,7 @@ unit nextpas.core.tls.mbedtls.base;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base;
+uses Classes, nextpas.core.tls.base;
 
 const
   { MbedTLS 库文件名 - 分为三个库 }

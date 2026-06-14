@@ -60,34 +60,7 @@ function platform_shm_close(var AMap: TPlatformMappedFile): Int32;
 
 implementation
 
-uses
-  SysUtils,
-  nextpas.core.platform.files,
-  nextpas.core.platform.files.base
-{$IFDEF NEXTPAS_UNIX}
-  , nextpas.core.platform.posix.base
-  , nextpas.core.platform.posix.ffi
-  {$IFDEF NEXTPAS_LINUX}
-  , nextpas.core.platform.linux.base
-  {$ENDIF}
-  {$IFDEF NEXTPAS_ANDROID}
-  , nextpas.core.platform.android.base
-  {$ENDIF}
-  {$IFDEF NEXTPAS_MACOS}
-  , nextpas.core.platform.darwin.base
-  {$ENDIF}
-  {$IFDEF NEXTPAS_FREEBSD}
-  , nextpas.core.platform.freebsd.base
-  {$ENDIF}
-  {$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_ANDROID) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD)}
-  , nextpas.core.platform.unix.base
-  {$ENDIF}
-{$ENDIF}
-{$IFDEF NEXTPAS_WINDOWS}
-  , nextpas.core.platform.windows.base
-  , nextpas.core.platform.windows.ffi
-{$ENDIF}
-  ;
+uses nextpas.core.platform.files, nextpas.core.platform.files.base, nextpas.core.platform.posix.base, nextpas.core.platform.posix.ffi, nextpas.core.platform.linux.base, nextpas.core.platform.android.base, nextpas.core.platform.darwin.base, nextpas.core.platform.freebsd.base, nextpas.core.platform.unix.base, nextpas.core.platform.windows.base, nextpas.core.platform.windows.ffi;
 
 {$IFDEF NEXTPAS_WINDOWS}
 { Local W-variant declarations not present in ffi.pas }

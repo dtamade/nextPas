@@ -4,8 +4,7 @@ unit nextpas.core.tls.openssl.api.legacy_ciphers;
 
 interface
 
-uses
-  Classes, SysUtils, nextpas.core.tls.openssl.base;
+uses Classes, nextpas.core.tls.openssl.base;
 
 type
   // RC2 types
@@ -354,8 +353,7 @@ procedure UnloadLegacyCiphersFunctions;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.utils;
+uses nextpas.core.tls.openssl.api.utils;
 
 procedure LoadLegacyCiphersFunctions(AHandle: TLibHandle);
 begin

@@ -12,12 +12,7 @@ unit nextpas.core.tls.openssl.api.des;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.consts,
-  nextpas.core.tls.openssl.loader;
+uses Classes, nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
 
 const
   DES_ENCRYPT = 1;
@@ -202,8 +197,7 @@ function DES3Decrypt(const Data: TBytes; const Key1, Key2, Key3: TBytes): TBytes
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api;
+uses nextpas.core.tls.openssl.api;
 
 const
   { DES function bindings for batch loading }

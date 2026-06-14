@@ -5,12 +5,7 @@ unit nextpas.core.tls.aesgcm.pool;
 
 interface
 
-uses
-  SysUtils, Classes, SyncObjs,
-  nextpas.core.time,
-  nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.rand,
-  nextpas.core.tls.exceptions;
+uses Classes, SyncObjs, nextpas.core.time, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.rand, nextpas.core.tls.exceptions;
 
 const
   // GCM 标准 IV 长度：12 字节（96 位）

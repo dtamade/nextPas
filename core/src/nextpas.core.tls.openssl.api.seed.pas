@@ -4,8 +4,7 @@ unit nextpas.core.tls.openssl.api.seed;
 
 interface
 
-uses
-  Classes, SysUtils, nextpas.core.tls.openssl.base;
+uses Classes, nextpas.core.tls.openssl.base;
 
 type
   // SEED types
@@ -68,8 +67,7 @@ function SEEDDecryptCBC(const Key, IV, Input: TBytes): TBytes;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.utils;
+uses nextpas.core.tls.openssl.api.utils;
 
 procedure LoadSEEDFunctions(AHandle: TLibHandle);
 begin

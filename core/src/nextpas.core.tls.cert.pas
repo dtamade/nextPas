@@ -12,9 +12,7 @@ unit nextpas.core.tls.cert;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.cert.builder;
+uses Classes, nextpas.core.tls.cert.builder;
 
 type
   { High-level certificate facade - scenario-based API }
@@ -38,10 +36,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.tls.cert.utils,
-  nextpas.core.tls.cert.builder.impl,
-  nextpas.core.tls.safety;
+uses nextpas.core.tls.cert.utils, nextpas.core.tls.cert.builder.impl, nextpas.core.tls.safety;
 
 { TCertificate }
 

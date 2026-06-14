@@ -4,10 +4,7 @@ unit nextpas.core.tls.openssl.api.conf;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.core;
+uses Classes, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.core;
 
 type
   // Opaque types
@@ -119,8 +116,7 @@ procedure UnloadOpenSSLConf;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.loader;
 
 function NCONF_get_number(conf: PCONF; const group: PAnsiChar; const name: PAnsiChar): LongInt;
 var

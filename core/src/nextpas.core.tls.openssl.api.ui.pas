@@ -8,10 +8,7 @@ unit nextpas.core.tls.openssl.api.ui;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.base;
+uses Classes, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base;
 
 const
   // UI 字符串类型
@@ -251,9 +248,7 @@ function CreateConsoleUI: PUI_METHOD;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
 
 var
   SimplePasswordUIMethod: PUI_METHOD = nil;

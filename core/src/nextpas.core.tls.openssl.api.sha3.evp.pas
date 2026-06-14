@@ -15,11 +15,7 @@ unit nextpas.core.tls.openssl.api.sha3.evp;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.evp;
+uses Classes, nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp;
 
 const
   SHA3_224_DIGEST_LENGTH = 28;
@@ -64,8 +60,7 @@ function IsEVPSHA3Available: Boolean;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api;
+uses nextpas.core.tls.openssl.api;
 
 { TSHA3EVPContext }
 

@@ -12,9 +12,7 @@ unit nextpas.core.tls.secure.compare;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.crypto.constant_time;
+uses Classes, nextpas.core.crypto.constant_time;
 
 function SecureCompare(const A, B: TBytes): Boolean;
 function SecureCompareStrings(const A, B: string): Boolean;

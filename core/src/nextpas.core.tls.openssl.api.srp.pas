@@ -11,12 +11,7 @@ unit nextpas.core.tls.openssl.api.srp;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader,
-  nextpas.core.tls.openssl.api.bn,
-  nextpas.core.tls.openssl.api.consts;
+uses Classes, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.consts;
 
 type
   { SRP types }
@@ -135,9 +130,7 @@ function SRPGenerateVerifier(const Username, Password: string; out Salt, Verifie
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.utils,
-  nextpas.core.tls.openssl.api.crypto;
+uses nextpas.core.tls.openssl.api.utils, nextpas.core.tls.openssl.api.crypto;
 
 const
   { SRP function bindings for batch loading }

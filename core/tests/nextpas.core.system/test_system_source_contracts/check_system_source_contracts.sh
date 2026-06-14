@@ -1368,17 +1368,51 @@ require_no_new_fpc_rtl_debt() {
   local fail_count=0
   local file unit_name
 
+  # Scan ALL nextpas.core.*.pas files for monitored units
+  local all_found
+  all_found="$(mktemp)"
+
+  awk '
+    function trim(s) { gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", s); return s }
+    function emit_units(file, line, parts, i, unit) {
+      gsub(/\{[^}]*\}/, "", line)
+      sub(/\/\/.*/, "", line)
+      gsub(/^[ \t]*uses[ \t]*/, "", line)
+      split(line, parts, /[,;]/)
+      for (i in parts) {
+        unit = trim(parts[i])
+        if (unit != "" && unit !~ /^\$/) {
+          print file "|" unit
+        }
+      }
+    }
+    /^[ \t]*uses[ \t]*/ {
+      in_uses = 1
+      emit_units(FILENAME, $0)
+      if ($0 ~ /;/) in_uses = 0
+      next
+    }
+    in_uses {
+      emit_units(FILENAME, $0)
+      if ($0 ~ /;/) in_uses = 0
+    }
+  ' "$CORE_ROOT"/src/nextpas.core.*.pas 2>/dev/null | sort -u > "$all_found"
+
   while IFS='|' read -r file unit_name; do
     case "$unit_name" in
       SysUtils|Classes|TypInfo|DateUtils|BaseUnix|Unix|Windows)
         local basename="${file##*/}"
         if ! grep -qF "$unit_name|$basename" "$allowlist" 2>/dev/null; then
-          echo "[FAIL] FPC RTL debt: ${file#$CORE_ROOT/src/} uses $unit_name but not in fpc_rtl_file_allowlist.txt" >&2
+          local rel="${file#$CORE_ROOT/src/}"
+          echo "[FAIL] FPC RTL debt: $rel uses $unit_name but not in fpc_rtl_file_allowlist.txt" >&2
+          echo "  To allow: add [$unit_name|$basename] to the allowlist with a comment" >&2
           fail_count=$((fail_count + 1))
         fi
         ;;
     esac
-  done < "$tmp_found"
+  done < "$all_found"
+
+  rm -f "$all_found"
 
   if [ "$fail_count" -gt 0 ]; then
     fail "FPC broad RTL file-level enforcement gate rejected $fail_count new debt entries"

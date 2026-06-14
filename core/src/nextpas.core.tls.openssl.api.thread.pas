@@ -11,13 +11,7 @@ unit nextpas.core.tls.openssl.api.thread;
 
 interface
 
-uses
-  SysUtils, Classes,
-  {$IFDEF WINDOWS}Windows,{$ENDIF}
-  {$IFDEF UNIX}cthreads,{$ENDIF}
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.consts,
-  nextpas.core.tls.openssl.loader;
+uses Classes, Windows, cthreads, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
 
 type
   { Thread types }
@@ -136,8 +130,7 @@ function AtomicDecrement(var Value: TOpenSSLInt; Lock: PCRYPTO_RWLOCK = nil): TO
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.utils;
+uses nextpas.core.tls.openssl.api.utils;
 
 const
   { Function bindings for batch loading }

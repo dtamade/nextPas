@@ -8,12 +8,7 @@ unit nextpas.core.tls.openssl.api.kdf;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.hmac;
+uses Classes, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.hmac;
 
 const
   // KDF 算法 NID
@@ -270,9 +265,7 @@ function GenerateSalt(Len: Integer = PKCS5_SALT_LEN): TBytes;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.rand,
-  nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.api.rand, nextpas.core.tls.openssl.loader;
 
 procedure LoadKDFFunctions;
 begin

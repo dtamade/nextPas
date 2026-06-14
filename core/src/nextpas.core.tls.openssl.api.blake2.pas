@@ -12,12 +12,7 @@ unit nextpas.core.tls.openssl.api.blake2;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.consts,
-  nextpas.core.tls.openssl.loader;
+uses Classes, nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
 
 const
   BLAKE2B_BLOCKBYTES = 128;
@@ -148,8 +143,7 @@ function BLAKE2sMAC(const Data: TBytes; const Key: TBytes; OutLen: Integer): TBy
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api;
+uses nextpas.core.tls.openssl.api;
 
 const
   { BLAKE2 函数绑定数组 }

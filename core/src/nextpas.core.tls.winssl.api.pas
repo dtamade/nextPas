@@ -17,8 +17,7 @@ unit nextpas.core.tls.winssl.api;
 
 interface
 
-uses
-  Windows, SysUtils, nextpas.core.tls.winssl.base;
+uses Windows, nextpas.core.tls.winssl.base;
 
 // ============================================================================
 // Secur32.dll - Security Support Provider Interface (SSPI)

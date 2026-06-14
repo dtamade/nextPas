@@ -7,10 +7,7 @@ unit nextpas.core.tui.widget.syntax;
 
 interface
 
-uses
-  nextpas.core.tui.style,
-  nextpas.core.tui.color,
-  nextpas.core.tui.modifier;
+uses nextpas.core.tui.style, nextpas.core.tui.color, nextpas.core.tui.modifier;
 
 type
   TTokenKind = (tkNormal, tkKeyword, tkString, tkComment, tkNumber, tkDirective, tkSymbol);
@@ -91,8 +88,6 @@ function IsPascalKeywordP(P: PAnsiChar; Len: Integer): Boolean;
 
 implementation
 
-uses
-  SysUtils;
 
 { Zero-allocation keyword hash table.
   128 slots, open addressing with linear probing (max probe = 2).
