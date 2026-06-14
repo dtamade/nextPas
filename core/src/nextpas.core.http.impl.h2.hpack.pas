@@ -12,6 +12,7 @@ unit nextpas.core.http.impl.h2.hpack;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.http.impl.h2.hpack.table;
 
 const
@@ -99,11 +100,32 @@ function HPackLookup(AStaticCount: SizeInt;
   const ADynamic: THPackDynamicTable; AIndex: SizeInt;
   out AName, AValue: AnsiString): Boolean;
 
+{** Quick name hash for dynamic table lookups. djb2 mod 256. }
+function H2NameHash(const AName: AnsiString): Byte;
+
 implementation
 
 uses
   SysUtils,
   nextpas.core.http.impl.h2.hpack.huffman;
+
+{ Precomputed static table name hashes for fast lookup }
+var
+  FStaticHashes: array[1..HPACK_STATIC_TABLE_COUNT] of Byte;
+  FStaticHashesBuilt: Boolean = False;
+
+{ Hash function for dynamic table lookups. djb2 variant mod 256. }
+function H2NameHash(const AName: AnsiString): Byte;
+var
+  LI: SizeInt;
+  LHash: UInt32;
+begin
+  if AName = '' then Exit(0);
+  LHash := 5381;
+  for LI := 1 to Length(AName) do
+    LHash := ((LHash shl 5) + LHash) + UInt32(Byte(AName[LI]));
+  Result := Byte(LHash xor (LHash shr 8));
+end;
 
 { === HPackLookup === }
 
@@ -252,9 +274,19 @@ end;
 function TryFindStaticFull(const AName, AValue: AnsiString; out AIndex: SizeInt): Boolean;
 var
   LIndex: SizeInt;
+  LNameHash: Byte;
 begin
+  if not FStaticHashesBuilt then
+  begin
+    for LIndex := 1 to HPACK_STATIC_TABLE_COUNT do
+      FStaticHashes[LIndex] := H2NameHash(string(HPACK_STATIC_TABLE[LIndex].Name));
+    FStaticHashesBuilt := True;
+  end;
+  LNameHash := H2NameHash(AName);
   for LIndex := 1 to HPACK_STATIC_TABLE_COUNT do
   begin
+    if (FStaticHashes[LIndex] <> LNameHash) then
+      Continue;
     if AnsiStringEqualsPtr(AName, HPACK_STATIC_TABLE[LIndex].Name,
       HPACK_STATIC_TABLE[LIndex].NameLen) and
       (HPACK_STATIC_TABLE[LIndex].Value <> nil) and
@@ -272,9 +304,19 @@ end;
 function TryFindStaticName(const AName: AnsiString; out AIndex: SizeInt): Boolean;
 var
   LIndex: SizeInt;
+  LNameHash: Byte;
 begin
+  if not FStaticHashesBuilt then
+  begin
+    for LIndex := 1 to HPACK_STATIC_TABLE_COUNT do
+      FStaticHashes[LIndex] := H2NameHash(string(HPACK_STATIC_TABLE[LIndex].Name));
+    FStaticHashesBuilt := True;
+  end;
+  LNameHash := H2NameHash(AName);
   for LIndex := 1 to HPACK_STATIC_TABLE_COUNT do
   begin
+    if FStaticHashes[LIndex] <> LNameHash then
+      Continue;
     if AnsiStringEqualsPtr(AName, HPACK_STATIC_TABLE[LIndex].Name,
       HPACK_STATIC_TABLE[LIndex].NameLen) then
     begin
@@ -289,16 +331,24 @@ end;
 function TryFindDynamicFull(const ADynamicTable: THPackDynamicTable;
   const AName, AValue: AnsiString; out AIndex: SizeInt): Boolean;
 var
-  LDynamicIndex: SizeInt;
-  LName: AnsiString;
-  LValue: AnsiString;
+  LLogical: SizeInt;
+  LRaw: SizeInt;
+  LHash: Byte;
+  LCount: SizeInt;
+  LEntriesLen: SizeInt;
 begin
-  for LDynamicIndex := ADynamicTable.FCount - 1 downto 0 do
+  LHash := H2NameHash(AName);
+  LCount := ADynamicTable.FCount;
+  LEntriesLen := Length(ADynamicTable.FEntries);
+  { Scan newest-first: logical 0 = newest, logical Count-1 = oldest }
+  for LLogical := 0 to LCount - 1 do
   begin
-    if ADynamicTable.Get(LDynamicIndex, LName, LValue) and
-      (LName = AName) and (LValue = AValue) then
+    LRaw := (ADynamicTable.FTail - 1 - LLogical + LEntriesLen) mod LEntriesLen;
+    if (H2NameHash(ADynamicTable.FEntries[LRaw].Name) = LHash) and
+       (ADynamicTable.FEntries[LRaw].Name = AName) and
+       (ADynamicTable.FEntries[LRaw].Value = AValue) then
     begin
-      AIndex := HPACK_STATIC_TABLE_COUNT + 1 + LDynamicIndex;
+      AIndex := HPACK_STATIC_TABLE_COUNT + 1 + LLogical;
       Exit(True);
     end;
   end;
@@ -309,15 +359,23 @@ end;
 function TryFindDynamicName(const ADynamicTable: THPackDynamicTable;
   const AName: AnsiString; out AIndex: SizeInt): Boolean;
 var
-  LDynamicIndex: SizeInt;
-  LName: AnsiString;
-  LValue: AnsiString;
+  LLogical: SizeInt;
+  LRaw: SizeInt;
+  LHash: Byte;
+  LCount: SizeInt;
+  LEntriesLen: SizeInt;
 begin
-  for LDynamicIndex := ADynamicTable.FCount - 1 downto 0 do
+  LHash := H2NameHash(AName);
+  LCount := ADynamicTable.FCount;
+  LEntriesLen := Length(ADynamicTable.FEntries);
+  { Scan newest-first: logical 0 = newest, logical Count-1 = oldest }
+  for LLogical := 0 to LCount - 1 do
   begin
-    if ADynamicTable.Get(LDynamicIndex, LName, LValue) and (LName = AName) then
+    LRaw := (ADynamicTable.FTail - 1 - LLogical + LEntriesLen) mod LEntriesLen;
+    if (H2NameHash(ADynamicTable.FEntries[LRaw].Name) = LHash) and
+       (ADynamicTable.FEntries[LRaw].Name = AName) then
     begin
-      AIndex := HPACK_STATIC_TABLE_COUNT + 1 + LDynamicIndex;
+      AIndex := HPACK_STATIC_TABLE_COUNT + 1 + LLogical;
       Exit(True);
     end;
   end;
