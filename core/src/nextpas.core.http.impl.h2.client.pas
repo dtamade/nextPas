@@ -769,7 +769,7 @@ begin
   end;
   FlushPendingConnectionWindowUpdate;
   if AResponse.Reset then
-    raise EHttpError.Create('HTTP/2 stream reset while sending request body: ' +
+    raise EHttpError.Create('HTTP/2 stream ' + IntToStr(AStreamID) + ' reset while sending request body: ' +
       H2ErrorCodeName(AResponse.ResetCode));
 end;
 
@@ -1180,7 +1180,7 @@ var
   LBody: IReader;
 begin
   if AResponse.Reset then
-    raise EHttpError.Create('HTTP/2 stream reset: ' +
+    raise EHttpError.Create('HTTP/2 stream ' + IntToStr(AResponse.StreamID) + ' reset: ' +
       H2ErrorCodeName(AResponse.ResetCode));
   if AResponse.StatusCode = 0 then
     raise EHttpError.Create('HTTP/2 response missing status');

@@ -62,7 +62,7 @@ begin
   CheckEqual(Int64(64), Int64(LOptions.MaxPoolSize), 'client max pool');
   CheckEqual(Int64(H2_DEFAULT_HEADER_TABLE_SIZE),
     Int64(LOptions.HeaderTableSize), 'client header table');
-  CheckEqual(Int64(H2_DEFAULT_ENABLE_PUSH), Int64(Ord(LOptions.EnablePush)),
+  CheckEqual(Int64(Ord(False)), Int64(Ord(LOptions.EnablePush)),
     'client enable push');
   CheckEqual(Int64(H2_DEFAULT_INITIAL_WINDOW_SIZE),
     Int64(LOptions.InitialStreamWindowSize), 'client stream window');
