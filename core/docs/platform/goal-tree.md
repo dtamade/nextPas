@@ -62,7 +62,7 @@ is `wine-runtime-smoke` (not `focused-runtime` and not `ci-matrix`).
 | platform.mmap | `tests/nextpas.core.platform.mmap/test_platform_mmap_wine/` | 7 | 0 leak | file-backed mmap (CreateFileMappingA path encoding) |
 | platform.random | `tests/nextpas.core.platform.random/test_platform_random_wine/` | 4 | 0 leak | — |
 | platform.socket | `tests/nextpas.core.platform.socket/test_platform_socket_wine/` | 4 | 0 leak | — |
-| io.reactor.iocp | `tests/nextpas.core.io.uring/test_reactor_iocp_wine/` | 3 | 0 leak | AsyncAccept/AsyncConnect not covered (needs AcceptEx + ConnectEx flow) |
+| io.reactor.iocp | `tests/nextpas.core.io.uring/test_reactor_iocp_wine/` | 4 | 0 leak | — |
 
 Not covered by Wine runtime smoke: platform.signal, platform.console, platform.args
 (no Wine runtime test needed — signal uses SetConsoleCtrlHandler which is

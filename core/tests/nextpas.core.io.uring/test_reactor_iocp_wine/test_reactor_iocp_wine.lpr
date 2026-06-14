@@ -338,9 +338,7 @@ begin
   T.Run('create/close', @TestIocpCreateClose);
   T.Run('AsyncSend', @TestIocpAsyncSend);
   T.Run('AsyncRecv', @TestIocpAsyncRecv);
-  { AcceptEx lifecycle test excluded — Wine 10.0 WSASocketW + AcceptEx
-    returns ERROR_INVALID_PARAMETER (87) on WSASend/WSARecv, but sync send
-    works. Likely a Wine limitation. Enable when real Windows CI exists. }
+  T.Run('AcceptEx+Send', @TestIocpAcceptSend);
   {$ELSE}
   T.Run('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}

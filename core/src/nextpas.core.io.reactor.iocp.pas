@@ -546,16 +546,19 @@ begin
   if not IsValid then
     Exit(False);
 
-  { Create accepting socket with overlapped flag }
-  LAcceptSock := WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP,
-    nil, 0, WSA_FLAG_OVERLAPPED);
+  { Create accepting socket — use socket() instead of WSASocketW for
+    best Wine compatibility. Winsock 2 socket() creates overlapped-capable
+    sockets by default. }
+  LAcceptSock := winsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if LAcceptSock = TSocket(PtrUInt(-1)) then
   begin
     LError := WSAGetLastError;
     Exit(IocpFail(ACallback, AContext, 0, LError));
   end;
 
-  { Associate accepting socket with IOCP }
+  { Associate accepting socket with IOCP and track it so subsequent
+    IocpEnsureAssociatedHandle skips the redundant CreateIoCompletionPort
+    call (Wine returns ERROR_INVALID_PARAMETER on double association). }
   if CreateIoCompletionPort(HANDLE(LAcceptSock), HANDLE(FPort), 0,
      FMaxEvents) = nil then
   begin
@@ -563,6 +566,7 @@ begin
     LError := GetLastError;
     Exit(IocpFail(ACallback, AContext, 0, LError));
   end;
+  IocpRememberAssociatedHandle(Self, HANDLE(LAcceptSock));
 
   { Ensure the listening socket is also associated with the IOCP port.
     AcceptEx completion is posted through the listening socket, not the
