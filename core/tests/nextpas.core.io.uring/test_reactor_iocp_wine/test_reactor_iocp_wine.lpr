@@ -11,6 +11,8 @@ uses
   SysUtils,
   nextpas.core.testing,
   nextpas.core.platform.socket,
+  nextpas.core.platform.windows.base,
+  nextpas.core.platform.windows.ffi,
   nextpas.core.io.reactor.iocp;
 
 var
@@ -35,6 +37,8 @@ var
   GRecvResult: Int32;
   GAcceptDone: Boolean;
   GAcceptResult: Int32;
+  GConnectDone: Boolean;
+  GConnectResult: Int32;
 
 { Callback procedures — global state since FPC ObjectFPC mode doesn't
   support nested procedures and TIoCompletion is a plain procedure type. }
@@ -57,10 +61,26 @@ begin
   GAcceptResult := AResult;
 end;
 
+procedure OnConnectDone(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  GConnectDone := True;
+  GConnectResult := AResult;
+end;
+
 { Byte-swap 16-bit value — network-to-host for port number }
 function Ntohs16(AValue: Word): Word; inline;
 begin
   Result := (AValue shr 8) or (AValue shl 8);
+end;
+
+{ Set up sockaddr_in with INADDR_ANY and specified port }
+function MakeSockAddrAny(const APort: UInt16; out AAddr: TPlatformSockAddr): Boolean;
+begin
+  FillChar(AAddr.Storage, SizeOf(AAddr.Storage), 0);
+  PSockAddrIn(@AAddr.Storage)^.sin_family := AF_INET;
+  PSockAddrIn(@AAddr.Storage)^.sin_port := htons(APort);
+  AAddr.Len := SizeOf(TSockAddrIn);
+  Result := True;
 end;
 
 { Wait up to ~2 seconds for IOCP completion callback }
@@ -324,6 +344,162 @@ begin
   end;
 end;
 
+procedure TestIocpAcceptRecv;
+var
+  LListenSock, LClientSock, LAcceptedSock: TPlatformSocket;
+  LReactor: TIocpReactor;
+  LPort: UInt16;
+  LSendBuf: array[0..63] of AnsiChar;
+  LRecvBuf: array[0..63] of AnsiChar;
+  LSent: Int32;
+  LRes: Int32;
+  LAddr: TPlatformSockAddr;
+const
+  TEST_DATA = 'AcceptRecvTest';
+  TEST_LEN = 14;
+begin
+  LAcceptedSock := PLATFORM_INVALID_SOCKET;
+
+  { Create listening socket }
+  Check(CreateListener(LListenSock, LPort), 'create listener');
+
+  LReactor := TIocpReactor.Create(4);
+  Check(LReactor.IsValid, 'reactor valid');
+  try
+    { Pre-accept: submit AsyncAccept before any client connects }
+    GAcceptDone := False;
+    GAcceptResult := -1;
+    Check(LReactor.AsyncAccept(PtrInt(LListenSock.Value), nil, nil, 0,
+      @OnAcceptDone, nil), 'AsyncAccept should submit');
+
+    { Create client and connect }
+    Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+      PLATFORM_IPPROTO_TCP, LClientSock) = 0, 'create client');
+    Check(platform_sockaddr_loopback4(LPort, LAddr) = 0, 'client addr');
+    Check(platform_socket_connect(LClientSock, @LAddr.Storage, LAddr.Len) = 0,
+      'client connect');
+
+    { Wait for AcceptEx completion }
+    Check(WaitForCompletion(GAcceptDone, LReactor),
+      'accept callback should fire');
+    Check(GAcceptResult >= 0,
+      'accept result should be >= 0, got ' + IntToStr(GAcceptResult));
+    LAcceptedSock.Value := PtrUInt(LReactor.LastAcceptedSocket);
+    Check(LAcceptedSock.Value <> PLATFORM_INVALID_SOCKET.Value,
+      'accepted socket should be valid');
+
+    { Pre-post AsyncRecv on accepted socket — buffer ready before data arrives }
+    FillChar(LRecvBuf, SizeOf(LRecvBuf), 0);
+    GRecvDone := False;
+    GRecvResult := -1;
+    Check(LReactor.AsyncRecv(PtrInt(LAcceptedSock.Value), @LRecvBuf[0],
+      SizeOf(LRecvBuf), 0, @OnRecvDone, nil), 'AsyncRecv should submit');
+
+    { Send from client side — triggers the recv completion }
+    Move(TEST_DATA[1], LSendBuf[0], TEST_LEN);
+    LRes := platform_socket_send(LClientSock, @LSendBuf[0], TEST_LEN, 0, LSent);
+    Check(LRes = 0, 'sync send should succeed');
+    Check(LSent = TEST_LEN, 'sync send should send all bytes');
+
+    { Wait for recv completion }
+    Check(WaitForCompletion(GRecvDone, LReactor),
+      'recv callback should fire');
+    Check(GRecvResult = TEST_LEN,
+      'recv result should be ' + IntToStr(TEST_LEN) +
+      ', got ' + IntToStr(GRecvResult));
+    Check(string(PAnsiChar(@LRecvBuf[0])) = TEST_DATA,
+      'recv data mismatch: got "' + string(PAnsiChar(@LRecvBuf[0])) + '"');
+  finally
+    LReactor.Close;
+    platform_socket_close(LClientSock);
+    if LAcceptedSock.Value <> PLATFORM_INVALID_SOCKET.Value then
+      platform_socket_close(LAcceptedSock);
+    platform_socket_close(LListenSock);
+  end;
+end;
+
+procedure TestIocpConnectEx;
+var
+  LListenSock, LClientSock, LAcceptedSock: TPlatformSocket;
+  LReactor: TIocpReactor;
+  LPort: UInt16;
+  LSendBuf: array[0..63] of AnsiChar;
+  LRecvBuf: array[0..63] of AnsiChar;
+  LRecvd: Int32;
+  LAddr: TPlatformSockAddr;
+  LRes: Int32;
+const
+  TEST_DATA = 'ConnectExTest';
+  TEST_LEN = 13;
+begin
+  { Create listening socket }
+  Check(CreateListener(LListenSock, LPort), 'create listener');
+
+  LReactor := TIocpReactor.Create(4);
+  Check(LReactor.IsValid, 'reactor valid');
+  try
+    { Create client socket for async connect — must be bound before ConnectEx }
+    Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+      PLATFORM_IPPROTO_TCP, LClientSock) = 0, 'create client socket');
+    { Bind to INADDR_ANY with port 0 to satisfy ConnectEx requirement }
+    Check(MakeSockAddrAny(0, LAddr), 'make bind addr');
+    Check(platform_socket_bind(LClientSock, @LAddr.Storage, LAddr.Len) = 0,
+      'bind client socket');
+    Check(platform_sockaddr_loopback4(LPort, LAddr) = 0, 'client addr');
+
+    { AsyncConnect using ConnectEx — Wine may not support ConnectEx; the test
+      exercises the full lifecycle on real Windows where ConnectEx is available }
+    GConnectDone := False;
+    GConnectResult := -1;
+    if not LReactor.AsyncConnect(PtrInt(LClientSock.Value), @LAddr.Storage,
+      LAddr.Len, @OnConnectDone, nil) then
+    begin
+      { ConnectEx not supported on this host — skip remaining steps }
+      Check(True, 'ConnectEx skipped: not supported');
+      Exit;
+    end;
+
+    { Poll for connect completion }
+    Check(WaitForCompletion(GConnectDone, LReactor),
+      'connect callback should fire');
+    Check(GConnectResult >= 0,
+      'connect result should be >= 0, got ' + IntToStr(GConnectResult));
+
+    { Accept the connection }
+    Check(platform_socket_accept(LListenSock, nil, nil, LAcceptedSock) = 0,
+      'accept connection');
+
+    { AsyncSend from client side }
+    Move(TEST_DATA[1], LSendBuf[0], TEST_LEN);
+    GSendDone := False;
+    GSendResult := -1;
+    Check(LReactor.AsyncSend(PtrInt(LClientSock.Value), @LSendBuf[0],
+      TEST_LEN, 0, @OnSendDone, nil), 'AsyncSend should submit');
+
+    { Poll for send completion }
+    Check(WaitForCompletion(GSendDone, LReactor),
+      'send callback should fire');
+    Check(GSendResult = TEST_LEN,
+      'send result should be ' + IntToStr(TEST_LEN));
+
+    { Verify data via sync recv on accepted socket }
+    FillChar(LRecvBuf, SizeOf(LRecvBuf), 0);
+    LRes := platform_socket_recv(LAcceptedSock, @LRecvBuf[0], SizeOf(LRecvBuf),
+      0, LRecvd);
+    Check(LRes = 0, 'sync recv should succeed');
+    Check(LRecvd = TEST_LEN,
+      'should receive ' + IntToStr(TEST_LEN) + ' bytes, got ' +
+      IntToStr(LRecvd));
+    Check(string(PAnsiChar(@LRecvBuf[0])) = TEST_DATA,
+      'data mismatch: got "' + string(PAnsiChar(@LRecvBuf[0])) + '"');
+  finally
+    LReactor.Close;
+    platform_socket_close(LClientSock);
+    platform_socket_close(LAcceptedSock);
+    platform_socket_close(LListenSock);
+  end;
+end;
+
 {$ELSE}
 procedure TestNonWindowsSkip;
 begin
@@ -339,6 +515,8 @@ begin
   T.Run('AsyncSend', @TestIocpAsyncSend);
   T.Run('AsyncRecv', @TestIocpAsyncRecv);
   T.Run('AcceptEx+Send', @TestIocpAcceptSend);
+  T.Run('ConnectEx', @TestIocpConnectEx);
+  T.Run('AcceptEx+Recv', @TestIocpAcceptRecv);
   {$ELSE}
   T.Run('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}

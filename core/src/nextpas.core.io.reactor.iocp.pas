@@ -31,11 +31,13 @@ type
     FAssociatedHead: Pointer;
     FNextUserData: UInt64;
     FLastAcceptSocket: PtrInt;
+    FLastConnectSocket: PtrInt;
   public
     class function Create(AMaxEvents: UInt32 = 64): TIocpReactor; static;
     procedure Close;
     function IsValid: Boolean; inline;
     function LastAcceptedSocket: PtrInt; inline;
+    function LastConnectedSocket: PtrInt; inline;
 
     function AsyncRead(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
@@ -72,6 +74,7 @@ const
   WSAID_CONNECTEX: TGUID = '{25a3ac90-4c1d-11d1-82b9-00c04fb98a36}';
   WSA_FLAG_OVERLAPPED = $01;
   SO_UPDATE_ACCEPT_CONTEXT = $700B;
+  SO_UPDATE_CONNECT_CONTEXT = $7010;
   SOL_WINSOCK = $FFFF;  { SOL_SOCKET on Windows }
 
 type
@@ -89,6 +92,7 @@ var
   _AcceptEx: TAcceptExFn;
   _ConnectEx: TConnectExFn;
   _WinsockExtLoaded: Boolean;
+  _ConnectExAvailable: Boolean;
 
 type
   PIocpPendingOp = ^TIocpPendingOp;
@@ -190,22 +194,22 @@ procedure IocpLoadWinsockExt;
 var
   L: TSocket;
   LB: DWORD;
-  LAcceptOk, LConnectOk: Boolean;
 begin
   if _WinsockExtLoaded then Exit;
   L := winsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if L = TSocket(PtrUInt(-1)) then Exit;
   try
-    LAcceptOk := WSAIoctl(L, SIO_GET_EXTENSION_FUNCTION_POINTER,
+    WSAIoctl(L, SIO_GET_EXTENSION_FUNCTION_POINTER,
       @WSAID_ACCEPTEX, SizeOf(WSAID_ACCEPTEX),
-      @_AcceptEx, SizeOf(_AcceptEx), @LB, nil, nil) = 0;
-    LConnectOk := WSAIoctl(L, SIO_GET_EXTENSION_FUNCTION_POINTER,
+      @_AcceptEx, SizeOf(_AcceptEx), @LB, nil, nil);
+    WSAIoctl(L, SIO_GET_EXTENSION_FUNCTION_POINTER,
       @WSAID_CONNECTEX, SizeOf(WSAID_CONNECTEX),
-      @_ConnectEx, SizeOf(_ConnectEx), @LB, nil, nil) = 0;
+      @_ConnectEx, SizeOf(_ConnectEx), @LB, nil, nil);
   finally
     closesocket(L);
   end;
-  _WinsockExtLoaded := LAcceptOk or LConnectOk;
+  _WinsockExtLoaded := True;
+  _ConnectExAvailable := (_ConnectEx <> nil);
 end;
 
 
@@ -458,6 +462,15 @@ begin
       FreeMem(LOp^.WSABuf.buf);
       LOp^.WSABuf.buf := nil;
     end;
+  end
+  else if LOp^.Kind = opConnect then
+  begin
+    AReactor.FLastConnectSocket := PtrInt(LOp^.Handle);
+    { SO_UPDATE_CONNECT_CONTEXT required so socket can be used with other Winsock
+      extension functions. Pass nil to query the context (setsockopt with nil
+      retrieves the context). }
+    winsock_setsockopt(TSocket(PtrUInt(LOp^.Handle)), SOL_SOCKET,
+      SO_UPDATE_CONNECT_CONTEXT, nil, 0);
   end;
 
   IocpUnlinkOp(AReactor, LOp);
@@ -506,6 +519,11 @@ end;
 function TIocpReactor.LastAcceptedSocket: PtrInt;
 begin
   Result := FLastAcceptSocket;
+end;
+
+function TIocpReactor.LastConnectedSocket: PtrInt;
+begin
+  Result := FLastConnectSocket;
 end;
 
 function TIocpReactor.AsyncRead(AFd: PtrInt; ABuf: Pointer; ALen: UInt32;
@@ -620,7 +638,7 @@ var
   LOk: BOOL;
 begin
   IocpLoadWinsockExt;
-  if _ConnectEx = nil then
+  if not _ConnectExAvailable then
     Exit(IocpUnsupportedAsync);
 
   if (AAddr = nil) or (AAddrLen = 0) then
