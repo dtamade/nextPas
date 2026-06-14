@@ -531,22 +531,66 @@ var
   LIndex: SizeInt;
   LNameIndex: SizeInt;
   LName, LValue: AnsiString;
+  LBuf: TBytes;
+  LPos: SizeInt;
+
+  procedure WriteInt(AValue: UInt32; APrefixBits: Byte; APrefixMask: Byte);
+  var
+    LPrefixMask: UInt32;
+  begin
+    LPrefixMask := (UInt32(1) shl APrefixBits) - 1;
+    if LPos + 5 > Length(LBuf) then SetLength(LBuf, LPos + 64);
+    if AValue < LPrefixMask then
+    begin
+      LBuf[LPos] := Byte(APrefixMask or Byte(AValue)); Inc(LPos);
+    end
+    else
+    begin
+      LBuf[LPos] := Byte(APrefixMask or Byte(LPrefixMask)); Inc(LPos);
+      Dec(AValue, LPrefixMask);
+      while AValue >= 128 do
+      begin
+        LBuf[LPos] := Byte(AValue and $7F) or $80; Inc(LPos);
+        AValue := AValue shr 7;
+      end;
+      LBuf[LPos] := Byte(AValue); Inc(LPos);
+    end;
+  end;
+
+  procedure WriteHuffStr(const AStr: AnsiString);
+  var
+    LEncoded: AnsiString;
+    LLen: SizeInt;
+  begin
+    LEncoded := H2HuffmanEncode(AStr);
+    LLen := Length(LEncoded);
+    WriteInt(UInt32(LLen), 7, $80);
+    if LLen > 0 then
+    begin
+      if LPos + LLen > Length(LBuf) then SetLength(LBuf, LPos + LLen + 64);
+      Move(LEncoded[1], LBuf[LPos], LLen);
+      Inc(LPos, LLen);
+    end;
+  end;
+
 begin
-  Result := '';
+  SetLength(LBuf, 128);
+  LPos := 0;
+
   if FHasPendingTableSizeUpdate then
   begin
-    EncodeInteger(Result, FPendingTableSizeUpdate, 5, $20);
+    WriteInt(FPendingTableSizeUpdate, 5, $20);
     FHasPendingTableSizeUpdate := False;
   end;
+
   for I := 0 to High(AHeaders) do
   begin
     LName := AHeaders[I].Name;
     LValue := AHeaders[I].Value;
 
-    { Fast path: MRU cache check }
     if MRUFind(LName, LValue, LIndex) then
     begin
-      EncodeInteger(Result, UInt32(LIndex), 7, $80);
+      WriteInt(UInt32(LIndex), 7, $80);
       Continue;
     end;
 
@@ -554,27 +598,28 @@ begin
       TryFindDynamicFull(FDynamicTable, LName, LValue, LIndex) then
     begin
       MRUAdd(LName, LValue, LIndex);
-      EncodeInteger(Result, UInt32(LIndex), 7, $80);
+      WriteInt(UInt32(LIndex), 7, $80);
       Continue;
     end;
 
     if not TryFindStaticName(LName, LNameIndex) then
       TryFindDynamicName(FDynamicTable, LName, LNameIndex);
 
-    { Literal Header Field with Incremental Indexing }
     if LNameIndex > 0 then
-      EncodeInteger(Result, UInt32(LNameIndex), 6, $40)
+      WriteInt(UInt32(LNameIndex), 6, $40)
     else
     begin
-      EncodeInteger(Result, 0, 6, $40);
-      EncodeString(Result, LName, True);
+      WriteInt(0, 6, $40);
+      WriteHuffStr(LName);
     end;
-    EncodeString(Result, LValue, True);
-    { Add to dynamic table }
+    WriteHuffStr(LValue);
     FDynamicTable.Add(LName, LValue);
-    { Clear MRU cache since dynamic table state changed }
     FillChar(FMRUCache, SizeOf(FMRUCache), 0);
   end;
+
+  SetLength(Result, LPos);
+  if LPos > 0 then
+    Move(LBuf[0], Result[1], LPos);
 end;
 
 procedure THPackEncoder.SetDynamicTableSize(ASize: UInt32);
