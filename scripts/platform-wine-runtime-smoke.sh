@@ -33,18 +33,8 @@ echo "Core root: $CORE_ROOT"
 echo ""
 
 WINE_TESTS=(
-  "tests/nextpas.core.platform.time/test_platform_time_wine"
-  "tests/nextpas.core.platform.memory/test_platform_memory_wine"
-  "tests/nextpas.core.platform.sync/test_platform_sync_wine"
-  "tests/nextpas.core.platform.thread/test_platform_thread_wine"
-  "tests/nextpas.core.platform.io/test_platform_io_wine"
-  "tests/nextpas.core.platform.process/test_platform_process_wine"
-  "tests/nextpas.core.platform.files/test_platform_files_wine"
-  "tests/nextpas.core.platform.fs/test_platform_fs_wine"
-  "tests/nextpas.core.platform.path/test_platform_path_wine"
-  "tests/nextpas.core.platform.env/test_platform_env_wine"
-  "tests/nextpas.core.platform.mmap/test_platform_mmap_wine"
-  "tests/nextpas.core.platform.random/test_platform_random_wine"
+  $(find "$CORE_ROOT/tests" -name Makefile -path '*_wine/*' \
+    | sed "s|$CORE_ROOT/||; s|/Makefile$||" | sort)
 )
 
 TOTAL=0
