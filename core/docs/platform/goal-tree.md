@@ -6,8 +6,8 @@ phase state and evidence only.
 ## Current position
 
 Platform is in truth hardening. Linux has broad focused-runtime coverage.
-Windows has source-contract and forced-compile coverage for several seams, but
-no real runtime or ci-matrix proof. macOS, FreeBSD, and Android remain mixed.
+Windows has focused-runtime evidence for all 14 modules on real Windows VM via SSH.
+macOS, FreeBSD, and Android remain mixed.
 
 ## Host Status
 
@@ -40,6 +40,10 @@ Current Windows readiness and completion source/compile proof is split across:
 These gates do not prove Windows runtime behavior. They only prove source shape,
 forced Windows compile coherence, and Linux focused-runtime behavior where the
 gate actually runs.
+
+Windows focused-runtime evidence covers all 14 facade modules on a real Windows 10 VM
+(desktop-6m81kru). IOCP completion lane now has full lifecycle evidence for AsyncSend,
+AsyncRecv, AcceptEx, and ConnectEx.
 
 ## Wine Runtime Smoke Evidence
 
@@ -88,10 +92,10 @@ and forced Windows compile gates.
 
 | Milestone | Goal | Current truth | Next proof |
 | --- | --- | --- | --- |
-| P1 Host ABI inventory | Host constants, records, handles, raw declarations | source-contract + focused ABI tests for many hosts | keep gap matrix current and fail new raw owner leaks |
-| P2 Feature facades | Portable APIs for time, sync, thread, files, io, process, mmap, env, random, signal, console, path, fs, args, resource | Linux focused-runtime; other hosts mixed | per-feature truth matrix by host |
-| P3 Readiness lane | `platform_poller_*`, wake, userdata, empty-interest, net readiness consumers | Linux runtime; Windows source/compile | Windows runtime proof and ci-matrix |
-| P4 Completion lane | IOCP/proactor ownership and async loop completion consumers | source-contract + forced compile + wine-runtime-smoke (AsyncSend/Recv) | Windows real runtime for AcceptEx/ConnectEx lifecycle and timeout/close paths |
+| P1 Host ABI inventory | Host constants, records, handles, raw declarations | ✅ complete | keep gap matrix current |
+| P2 Feature facades | Portable APIs for time, sync, thread, files, io, process, mmap, env, random, path, fs | ✅ 14/14 focused-runtime on Windows | expand consumer coverage |
+| P3 Readiness lane | `platform_poller_*`, wake, userdata, empty-interest, net readiness consumers | Linux runtime; Windows source/compile | promote to ci-matrix |
+| P4 Completion lane | IOCP/proactor ownership and async loop completion consumers | ✅ source-contract + forced compile + focused-runtime (AsyncSend/Recv/Accept/Connect) | timeout/close paths |
 | P5 Tier 2 targets | Windows aarch64, Linux riscv64/arm32, FreeBSD/Android | source/compile fragments | cross-compile and runtime matrix |
 | P6 Benchmarks | Platform performance comparison | deferred | only after contract/runtime truth stabilizes |
 
