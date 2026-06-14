@@ -480,7 +480,7 @@ var
   LBytes: TBytes;
 begin
   LBytes := ReadBytes(ALength);
-  Result := AnsiString(TEncoding.UTF8.GetString(LBytes));
+  Result := AnsiString(nextpas.core.text.conv.UTF8BytesToString(LBytes));
 end;
 
 procedure TSSLMemoryStream.WriteByte(AValue: Byte);
@@ -508,7 +508,7 @@ procedure TSSLMemoryStream.WriteString(const AStr: string);
 var
   LBytes: TBytes;
 begin
-  LBytes := TEncoding.UTF8.GetBytes(UnicodeString(AStr));
+  LBytes := nextpas.core.text.conv.StringToUTF8Bytes(AStr));
   WriteBytes(LBytes);
 end;
 

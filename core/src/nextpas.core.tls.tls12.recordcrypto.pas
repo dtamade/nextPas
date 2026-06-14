@@ -4,8 +4,6 @@ unit nextpas.core.tls.tls12.recordcrypto;
 
 interface
 
-uses
-  SysUtils;
 
 function TLS12GCMEncryptRecord(
   const AKey: TBytes;
@@ -29,8 +27,7 @@ function TLS12GCMDecryptRecord(
 
 implementation
 
-uses
-  nextpas.core.crypto.aesgcm;
+uses nextpas.core.crypto.aesgcm;
 
 const
   TLS12_VERSION_MAJOR = 3;

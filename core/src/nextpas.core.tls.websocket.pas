@@ -112,7 +112,7 @@ function TWebSocketConnection.SendText(const AText: string): Boolean;
 var
   LData, LFrame: TBytes;
 begin
-  LData := TEncoding.UTF8.GetBytes(AText);
+  LData := nextpas.core.text.conv.StringToUTF8Bytes(AText);
   LFrame := BuildFrame(wsOpText, LData, FIsClient);
   FStream.WriteBuffer(LFrame[0], Length(LFrame));
   Result := True;
@@ -224,7 +224,7 @@ var
   LExpected: string;
   LHash: TBytes;
 begin
-  LHash := SHA1(TEncoding.ASCII.GetBytes(AKey + WS_GUID));
+  LHash := SHA1(nextpas.core.text.conv.StringToASCIIBytes(AKey + WS_GUID));
   LExpected := TBase64Utils.Encode(LHash);
   Result := Pos(LExpected, AResponse) > 0;
 end;

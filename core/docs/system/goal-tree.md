@@ -201,8 +201,19 @@ behavior. Focus: close documentation gaps, fill test coverage, define self-hosti
 2. **Leak-sensitive gap documented**: Managed interface array has HIR contract coverage, heaptrc evidence still needed.
 3. **Contract audit**: All 19 contracts consistent across 3 documentation files.
 4. **Self-hosting readiness**: 5 gates with owner assignment, acceptance criteria, and current status.
+5. **SysUtils facade expanded**: `SameText`, `IntToStr`, and `Trim` added to `nextpas.core.system.sysutils`, matching pre-existing tests (6/6 pass).
+6. **FPC RTL enforcement gate**: File-level allowlist (`fpc_rtl_file_allowlist.txt`) prevents new SysUtils/Classes/TypInfo/DateUtils/BaseUnix/Unix/Windows debt from entering `core/src/nextpas.core.*.pas`.
 
-### S6.4 Self-Hosting Readiness Gates
+**Debt Landscape Summary** (as of 2026-06-14):
 
-- [ ] Create `self-hosting-readiness.md` with RTTI drift detection strategy, unit lifecycle implementation path, per-gate owner assignment.
-- [ ] Update `goal-tree.md` with S6 completion status.
+| Unit | Files | Largest holder |
+|------|-------|---------------|
+| SysUtils | 272 | tls (~200) |
+| Classes | 142 | tls (~138) |
+| DateUtils | 18 | tls (~15) |
+| TypInfo | 1 | system-kernel-route |
+| BaseUnix | 10 | tls (~7) |
+| Unix | 7 | tls (~5) |
+| Windows | 20 | tls (~18) |
+
+Future migration slices should reduce counts in `fpc_rtl_file_allowlist.txt`, not add new entries.

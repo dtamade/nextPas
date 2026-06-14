@@ -13,9 +13,7 @@ unit nextpas.core.tls.net.hooks;
 
 interface
 
-uses
-  SysUtils,
-  nextpas.core.tls.base;
+uses nextpas.core.tls.base;
 
 type
   { Thread-local HTTP hooks bundle }

@@ -4,13 +4,7 @@ unit nextpas.core.net.server.runtime;
 
 interface
 
-uses
-  nextpas.core.net.intf,
-  nextpas.core.net.server.base,
-  nextpas.core.net.server.intf,
-  nextpas.core.sync.intf,
-  nextpas.core.platform.io.base,
-  nextpas.core.time.deadline;
+uses nextpas.core.net.intf, nextpas.core.net.server.base, nextpas.core.net.server.intf, nextpas.core.sync.intf, nextpas.core.platform.io.base, nextpas.core.time.deadline;
 
 type
   TTcpServerPollSessionTarget = class;
@@ -146,12 +140,7 @@ procedure CloseServerOwnedTcpConn(const AConn: ITcpStream);
 
 implementation
 
-uses
-  SysUtils,
-  nextpas.core.errors,
-  nextpas.core.sync.mutex,
-  nextpas.core.thread,
-  nextpas.core.time.base;
+uses nextpas.core.errors, nextpas.core.sync.mutex, nextpas.core.thread, nextpas.core.time.base;
 
 type
   TTcpServerWorkTask = class(TInterfacedObject)

@@ -25,9 +25,7 @@ unit nextpas.core.tls.mbedtls.api;
 
 interface
 
-uses
-  SysUtils, dynlibs,
-  nextpas.core.tls.mbedtls.base;
+uses dynlibs, nextpas.core.tls.mbedtls.base;
 
 type
   { BIO 回调类型 - MbedTLS 特有 }

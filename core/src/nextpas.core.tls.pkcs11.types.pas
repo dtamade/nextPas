@@ -20,9 +20,7 @@ unit nextpas.core.tls.pkcs11.types;
 
 interface
 
-uses
-  SysUtils, Classes, Generics.Collections,
-  nextpas.core.tls.pkcs11.api;
+uses SysUtils, Generics.Collections, nextpas.core.tls.pkcs11.api;
 
 type
   { TPKCS11URI - RFC 7512 PKCS#11 URI representation
@@ -218,8 +216,7 @@ type
 
 implementation
 
-uses
-  StrUtils;
+uses StrUtils;
 
 function HexCharToNibble(AChar: Char; out ANibble: Byte): Boolean;
 begin

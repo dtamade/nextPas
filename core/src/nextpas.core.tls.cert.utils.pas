@@ -1816,9 +1816,9 @@ begin
   end;
   
   if AFromFormat = cfPEM then
-    Result := PEMToDER(AnsiString(TEncoding.ASCII.GetString(AInput)))
+    Result := PEMToDER(AnsiString(nextpas.core.text.conv.ASCIIBytesToString(AInput)))
   else
-    Result := TEncoding.ASCII.GetBytes(UnicodeString(DERToPEM(AInput)));
+    Result := nextpas.core.text.conv.StringToASCIIBytes(DERToPEM(AInput)));
 end;
 
 class function TCertificateUtils.PEMToDER(const APEM: string): TBytes;
@@ -1944,7 +1944,7 @@ begin
     SetLength(LBytes, LStream.Size);
     if LStream.Size > 0 then
       LStream.Read(LBytes[0], LStream.Size);
-    Result := AnsiString(TEncoding.UTF8.GetString(LBytes));
+    Result := AnsiString(nextpas.core.text.conv.UTF8BytesToString(LBytes));
   finally
     LStream.Free;
   end;
@@ -1959,7 +1959,7 @@ begin
   try
     LStream := TFileStream.Create(AFileName, fmCreate);
     try
-      LBytes := TEncoding.UTF8.GetBytes(UnicodeString(ACertPEM));
+      LBytes := nextpas.core.text.conv.StringToUTF8Bytes(ACertPEM));
       if Length(LBytes) > 0 then
         LStream.Write(LBytes[0], Length(LBytes));
       Result := True;

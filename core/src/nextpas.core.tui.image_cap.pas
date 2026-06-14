@@ -30,8 +30,6 @@ function DetectImageProtocol: TImageProtocol;
 
 implementation
 
-uses
-  SysUtils;
 
 function DetectImageProtocolFromHints(const ATerm, ATermProgram,
   ATermFeatures, AKittyWindowId: AnsiString): TImageProtocol;

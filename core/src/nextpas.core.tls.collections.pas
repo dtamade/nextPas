@@ -19,8 +19,6 @@ unit nextpas.core.tls.collections;
 
 interface
 
-uses
-  SysUtils;
 
 type
   {**

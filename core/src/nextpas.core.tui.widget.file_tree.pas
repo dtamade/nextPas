@@ -7,15 +7,7 @@ unit nextpas.core.tui.widget.file_tree;
 
 interface
 
-uses
-  nextpas.core.tui.base,
-  nextpas.core.tui.color,
-  nextpas.core.tui.modifier,
-  nextpas.core.tui.style,
-  nextpas.core.tui.cell,
-  nextpas.core.tui.buffer,
-  nextpas.core.tui.widget.block,
-  nextpas.core.tui.widget.intf;
+uses nextpas.core.tui.base, nextpas.core.tui.color, nextpas.core.tui.modifier, nextpas.core.tui.style, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.widget.block, nextpas.core.tui.widget.intf;
 
 type
   TFileNode = record
@@ -74,8 +66,6 @@ type
 
 implementation
 
-uses
-  SysUtils;
 
 { TFileTreeState }
 

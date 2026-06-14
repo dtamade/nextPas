@@ -23,23 +23,7 @@ unit nextpas.core.tls.pkcs11.provider;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.pkcs11.types,
-  nextpas.core.tls.pkcs11.api,
-  nextpas.core.tls.pkcs11.backend,
-  nextpas.core.tls.pkcs11.uri,
-  nextpas.core.tls.openssl.api.types,
-  nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.provider,
-  nextpas.core.tls.openssl.api.store,
-  nextpas.core.tls.openssl.api.ui;
-
-type
-  { TProviderBackend - OpenSSL 3.x Provider-based PKCS#11 backend }
-  TProviderBackend = class(TBasePKCS11Backend)
-  private
-    FProvider: POSSL_PROVIDER;
+uses nextpas.core.tls.pkcs11.types, nextpas.core.tls.pkcs11.api, nextpas.core.tls.pkcs11.backend, nextpas.core.tls.pkcs11.uri, nextpas.core.tls.openssl.api.types, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.provider, nextpas.core.tls.openssl.api.store, nextpas.core.tls.openssl.api.ui, nextpas.core.text.conv; type TProviderBackend = class(TBasePKCS11Backend) private FProvider: POSSL_PROVIDER;
     FProviderLoaded: Boolean;
     
     { Load pkcs11 provider }
@@ -69,12 +53,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.x509;
-
-{ TProviderBackend }
-
-constructor TProviderBackend.Create;
+uses nextpas.core.tls.openssl.api.x509, nextpas.core.text.conv; constructor TProviderBackend.Create;
 begin
   inherited Create;
   FProvider := nil;

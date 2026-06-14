@@ -4,11 +4,7 @@ unit nextpas.core.tls.openssl.api.rand;
 
 interface
 
-uses
-  SysUtils, DynLibs, ctypes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.loader;
+uses DynLibs, ctypes, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.loader;
 
 type
   { RAND types }

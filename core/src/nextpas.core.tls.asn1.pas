@@ -579,15 +579,15 @@ begin
 
   case FTag.TagNumber of
     ASN1_TAG_UTF8STRING:
-      Result := AnsiString(TEncoding.UTF8.GetString(FRawData));
+      Result := AnsiString(nextpas.core.text.conv.UTF8BytesToString(FRawData));
     ASN1_TAG_BMPSTRING:
-      Result := AnsiString(TEncoding.BigEndianUnicode.GetString(FRawData));
+      Result := AnsiString(nextpas.core.text.conv.BigEndianUnicodeBytesToString(FRawData));
     ASN1_TAG_UNIVERSALSTRING:
       // 4字节 Unicode - 简化处理
-      Result := AnsiString(TEncoding.UTF8.GetString(FRawData));
+      Result := AnsiString(nextpas.core.text.conv.UTF8BytesToString(FRawData));
     else
       // PrintableString, IA5String, VisibleString 等使用 ASCII
-      Result := AnsiString(TEncoding.ASCII.GetString(FRawData));
+      Result := AnsiString(nextpas.core.text.conv.ASCIIBytesToString(FRawData));
   end;
 end;
 
@@ -604,7 +604,7 @@ var
   S: string;
   Year, Month, Day, Hour, Min, Sec: Word;
 begin
-  S := AnsiString(TEncoding.ASCII.GetString(FRawData));
+  S := AnsiString(nextpas.core.text.conv.ASCIIBytesToString(FRawData));
 
   if FTag.TagNumber = ASN1_TAG_UTCTIME then
   begin
@@ -1269,7 +1269,7 @@ procedure TASN1Writer.WriteUTF8String(const AValue: string);
 var
   Data: TBytes;
 begin
-  Data := TEncoding.UTF8.GetBytes(UnicodeString(AValue));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(AValue));
   WriteTag(ASN1_TAG_UTF8STRING);
   WriteLength(Length(Data));
   WriteBytes(Data);
@@ -1279,7 +1279,7 @@ procedure TASN1Writer.WritePrintableString(const AValue: string);
 var
   Data: TBytes;
 begin
-  Data := TEncoding.ASCII.GetBytes(UnicodeString(AValue));
+  Data := nextpas.core.text.conv.StringToASCIIBytes(AValue));
   WriteTag(ASN1_TAG_PRINTABLESTRING);
   WriteLength(Length(Data));
   WriteBytes(Data);
@@ -1289,7 +1289,7 @@ procedure TASN1Writer.WriteIA5String(const AValue: string);
 var
   Data: TBytes;
 begin
-  Data := TEncoding.ASCII.GetBytes(UnicodeString(AValue));
+  Data := nextpas.core.text.conv.StringToASCIIBytes(AValue));
   WriteTag(ASN1_TAG_IA5STRING);
   WriteLength(Length(Data));
   WriteBytes(Data);
@@ -1306,7 +1306,7 @@ begin
 
   // UTCTime: YYMMDDhhmmssZ
   TimeStr := Format('%.2d%.2d%.2d%.2d%.2d%.2dZ', [Y mod 100, M, D, H, Mi, S]);
-  Data := TEncoding.ASCII.GetBytes(UnicodeString(TimeStr));
+  Data := nextpas.core.text.conv.StringToASCIIBytes(TimeStr));
 
   WriteTag(ASN1_TAG_UTCTIME);
   WriteLength(Length(Data));
@@ -1324,7 +1324,7 @@ begin
 
   // GeneralizedTime: YYYYMMDDhhmmssZ
   TimeStr := Format('%.4d%.2d%.2d%.2d%.2d%.2dZ', [Y, M, D, H, Mi, S]);
-  Data := TEncoding.ASCII.GetBytes(UnicodeString(TimeStr));
+  Data := nextpas.core.text.conv.StringToASCIIBytes(TimeStr));
 
   WriteTag(ASN1_TAG_GENERALIZEDTIME);
   WriteLength(Length(Data));

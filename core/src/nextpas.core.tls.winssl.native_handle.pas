@@ -5,11 +5,7 @@ unit nextpas.core.tls.winssl.native_handle;
 
 interface
 
-uses
-  SysUtils,
-  nextpas.core.tls.base,
-  nextpas.core.tls.errors,
-  nextpas.core.tls.exceptions;
+uses nextpas.core.tls.base, nextpas.core.tls.errors, nextpas.core.tls.exceptions;
 
 {**
  * WinSSL 原生句柄辅助函数

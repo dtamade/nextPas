@@ -4,11 +4,7 @@ unit nextpas.core.tls.openssl.api.ssl;
 
 interface
 
-uses
-  SysUtils, DynLibs, ctypes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.consts,
-  nextpas.core.tls.openssl.loader;
+uses DynLibs, ctypes, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
 
 type
   { SSL Version and Protocol Functions }
@@ -324,8 +320,7 @@ function SSL_CTX_set_tlsext_status_arg_impl(ctx: PSSL_CTX; arg: Pointer): clong;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.core;
+uses nextpas.core.tls.openssl.api.core;
 
 procedure ClearSSLFunctions;
 begin

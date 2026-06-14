@@ -24,11 +24,7 @@ unit nextpas.core.tls.mbedtls.lib;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
-  nextpas.core.tls.mbedtls.base,
-  nextpas.core.tls.mbedtls.api;
+uses SysUtils, nextpas.core.tls.base, nextpas.core.tls.mbedtls.base, nextpas.core.tls.mbedtls.api;
 
 type
   { TMbedTLSLibrary - MbedTLS 库管理类 }
@@ -115,13 +111,7 @@ procedure UnregisterMbedTLSBackend;
 
 implementation
 
-uses
-  nextpas.core.tls.context.config,
-  nextpas.core.tls.errors,
-  nextpas.core.tls.exceptions,
-  nextpas.core.tls.factory,
-  nextpas.core.tls.mbedtls.context,
-  nextpas.core.tls.mbedtls.certificate;
+uses nextpas.core.tls.context.config, nextpas.core.tls.errors, nextpas.core.tls.exceptions, nextpas.core.tls.factory, nextpas.core.tls.mbedtls.context, nextpas.core.tls.mbedtls.certificate;
 
 var
   GSkipFinalizeOnDestroy: Boolean = False;

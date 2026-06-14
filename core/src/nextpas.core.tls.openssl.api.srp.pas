@@ -11,16 +11,7 @@ unit nextpas.core.tls.openssl.api.srp;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader,
-  nextpas.core.tls.openssl.api.bn,
-  nextpas.core.tls.openssl.api.consts;
-
-type
-  { SRP types }
-  SRP_gN_cache = record end;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.consts; type SRP_gN_cache = record end;
   PSRP_gN_cache = ^SRP_gN_cache;
   
   SRP_user_pwd = record end;
@@ -135,13 +126,7 @@ function SRPGenerateVerifier(const Username, Password: string; out Salt, Verifie
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.utils,
-  nextpas.core.tls.openssl.api.crypto;
-
-const
-  { SRP function bindings for batch loading }
-  SRP_FUNCTION_COUNT = 28;
+uses nextpas.core.tls.openssl.api.utils, nextpas.core.tls.openssl.api.crypto; const SRP_FUNCTION_COUNT = 28;
   SRPFunctionBindings: array[0..SRP_FUNCTION_COUNT - 1] of TFunctionBinding = (
     { Calculation functions }
     (Name: 'SRP_Calc_server_key';     FuncPtr: @SRP_Calc_server_key;     Required: False),

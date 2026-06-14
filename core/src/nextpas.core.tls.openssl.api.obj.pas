@@ -4,10 +4,7 @@ unit nextpas.core.tls.openssl.api.obj;
 
 interface
 
-uses
-  SysUtils,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.asn1;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.asn1;
 
 type
   // OBJ 类型定义
@@ -154,8 +151,7 @@ procedure UnloadOBJModule;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.loader;
 
 const
   { OBJ 模块函数绑定表 }

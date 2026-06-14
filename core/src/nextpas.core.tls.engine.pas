@@ -4,20 +4,7 @@ unit nextpas.core.tls.engine;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base;
-
-type
-  TSSLEngineAction = (
-    eaNone,
-    eaNeedMoreInput,
-    eaHasCiphertext,
-    eaHasPlaintext,
-    eaHandshakeComplete,
-    eaClosed,
-    eaError
-  );
+uses nextpas.core.tls.base; type TSSLEngineAction = ( eaNone, eaNeedMoreInput, eaHasCiphertext, eaHasPlaintext, eaHandshakeComplete, eaClosed, eaError );
 
   TSSLEngineRole = (
     erClient,

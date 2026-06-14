@@ -4,9 +4,7 @@ unit nextpas.core.tls.openssl.api.x509;
 
 interface
 
-uses
-  SysUtils, DynLibs, ctypes,
-  nextpas.core.tls.openssl.base;
+uses DynLibs, ctypes, nextpas.core.tls.openssl.base;
 
 type
   { X509 Certificate Functions }
@@ -577,9 +575,7 @@ procedure UnloadOpenSSLX509;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.core,  // For shared library handles
-  nextpas.core.tls.openssl.loader;    // For TOpenSSLLoader
+uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
 
 procedure LoadOpenSSLX509;
 var

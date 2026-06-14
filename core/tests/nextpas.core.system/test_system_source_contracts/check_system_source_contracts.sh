@@ -354,6 +354,9 @@ type ExceptClass
 type EConvertError
 type EAssertionFailed
 function Format
+function SameText
+function IntToStr
+function Trim
 EOF
 )"
   require_facade_surface_allowlist "sysutils facade" "$actual" "$expected"
@@ -1307,11 +1310,8 @@ reject_token "src/nextpas.core.system.sysutils.pas" "ExtractFileName"
 reject_token "src/nextpas.core.system.sysutils.pas" "IncludeTrailingPathDelimiter"
 reject_token "src/nextpas.core.system.sysutils.pas" "ExcludeTrailingPathDelimiter"
 reject_token "src/nextpas.core.system.sysutils.pas" "GetEnvironmentVariable"
-reject_token "src/nextpas.core.system.sysutils.pas" "Trim"
-reject_token "src/nextpas.core.system.sysutils.pas" "SameText"
 reject_token "src/nextpas.core.system.sysutils.pas" "LowerCase"
 reject_token "src/nextpas.core.system.sysutils.pas" "UpperCase"
-reject_token "src/nextpas.core.system.sysutils.pas" "IntToStr"
 reject_token "src/nextpas.core.system.sysutils.pas" "StrToInt"
 reject_token "src/nextpas.core.system.sysutils.pas" "Now"
 reject_token "src/nextpas.core.system.sysutils.pas" "FormatDateTime"
@@ -1360,5 +1360,65 @@ while IFS='|' read -r file unit_name; do
       ;;
   esac
 done < "$tmp_found"
+
+
+# === FPC broad RTL file-level enforcement gate ===
+require_no_new_fpc_rtl_debt() {
+  local allowlist="$CORE_ROOT/tests/nextpas.core.system/test_system_source_contracts/fpc_rtl_file_allowlist.txt"
+  local fail_count=0
+  local file unit_name
+
+  # Scan ALL nextpas.core.*.pas files for monitored units
+  local all_found
+  all_found="$(mktemp)"
+
+  awk '
+    function trim(s) { gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", s); return s }
+    function emit_units(file, line, parts, i, unit) {
+      gsub(/\{[^}]*\}/, "", line)
+      sub(/\/\/.*/, "", line)
+      gsub(/^[ \t]*uses[ \t]*/, "", line)
+      split(line, parts, /[,;]/)
+      for (i in parts) {
+        unit = trim(parts[i])
+        if (unit != "" && unit !~ /^\$/) {
+          print file "|" unit
+        }
+      }
+    }
+    /^[ \t]*uses[ \t]*/ {
+      in_uses = 1
+      emit_units(FILENAME, $0)
+      if ($0 ~ /;/) in_uses = 0
+      next
+    }
+    in_uses {
+      emit_units(FILENAME, $0)
+      if ($0 ~ /;/) in_uses = 0
+    }
+  ' "$CORE_ROOT"/src/nextpas.core.*.pas 2>/dev/null | sort -u > "$all_found"
+
+  while IFS='|' read -r file unit_name; do
+    case "$unit_name" in
+      SysUtils|Classes|TypInfo|DateUtils|BaseUnix|Unix|Windows)
+        local basename="${file##*/}"
+        if ! grep -qF "$unit_name|$basename" "$allowlist" 2>/dev/null; then
+          local rel="${file#$CORE_ROOT/src/}"
+          echo "[FAIL] FPC RTL debt: $rel uses $unit_name but not in fpc_rtl_file_allowlist.txt" >&2
+          echo "  To allow: add [$unit_name|$basename] to the allowlist with a comment" >&2
+          fail_count=$((fail_count + 1))
+        fi
+        ;;
+    esac
+  done < "$all_found"
+
+  rm -f "$all_found"
+
+  if [ "$fail_count" -gt 0 ]; then
+    fail "FPC broad RTL file-level enforcement gate rejected $fail_count new debt entries"
+  fi
+}
+
+require_no_new_fpc_rtl_debt
 
 echo "[PASS] nextpas.core.system source contracts"

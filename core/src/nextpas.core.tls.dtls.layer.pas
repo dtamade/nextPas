@@ -4,8 +4,6 @@ unit nextpas.core.tls.dtls.layer;
 
 interface
 
-uses
-  SysUtils;
 
 const
   DTLS_CONTENT_TYPE_CHANGE_CIPHER_SPEC = 20;
@@ -69,8 +67,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.time;
+uses nextpas.core.time;
 
 constructor TDTLSRecordLayer.Create(AMTU: Integer);
 begin

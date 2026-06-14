@@ -8,13 +8,7 @@ unit nextpas.core.tls.openssl.api.store;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.ui;
+uses Classes, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.ui;
 
 const
   // STORE 对象类型
@@ -308,9 +302,7 @@ function StoreObjectTypeToString(ObjType: Integer): string;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
 
 procedure LoadSTOREFunctions;
 begin

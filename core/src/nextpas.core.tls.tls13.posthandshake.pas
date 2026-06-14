@@ -13,8 +13,7 @@ unit nextpas.core.tls.tls13.posthandshake;
 
 interface
 
-uses
-  SysUtils;
+uses nextpas.core.text.conv;
 
 type
   TTLS13NewSessionTicket = record
@@ -68,8 +67,7 @@ function TryParseTLS13KeyUpdate(
 
 implementation
 
-uses
-  nextpas.core.tls.tls13.wire;
+uses nextpas.core.tls.tls13.wire, nextpas.core.text.conv;
 
 function ReadUInt32BE(const AData: TBytes; AOffset: Integer): Cardinal;
 begin

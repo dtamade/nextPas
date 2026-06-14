@@ -9,23 +9,14 @@ unit nextpas.core.net.server.threaded;
 
 interface
 
-uses
-  nextpas.core.net.base,
-  nextpas.core.net.intf,
-  nextpas.core.net.server.base,
-  nextpas.core.net.server.intf;
+uses nextpas.core.net.base, nextpas.core.net.intf, nextpas.core.net.server.base, nextpas.core.net.server.intf;
 
 function NewTcpThreadedServer(
   const AOptions: TTcpServerOptions): ITcpServer;
 
 implementation
 
-uses
-  SysUtils,
-  nextpas.core.errors,
-  nextpas.core.net.tcp,
-  nextpas.core.net.server.runtime,
-  nextpas.core.platform.thread;
+uses nextpas.core.errors, nextpas.core.net.tcp, nextpas.core.net.server.runtime, nextpas.core.platform.thread;
 
 type
   PConnContext = ^TConnContext;

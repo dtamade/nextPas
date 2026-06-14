@@ -7,15 +7,7 @@ unit nextpas.core.tui.widget.scrollview;
 
 interface
 
-uses
-  nextpas.core.tui.base,
-  nextpas.core.tui.color,
-  nextpas.core.tui.modifier,
-  nextpas.core.tui.style,
-  nextpas.core.tui.cell,
-  nextpas.core.tui.buffer,
-  nextpas.core.tui.widget.intf,
-  nextpas.core.tui.widget.block;
+uses nextpas.core.tui.base, nextpas.core.tui.color, nextpas.core.tui.modifier, nextpas.core.tui.style, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.widget.intf, nextpas.core.tui.widget.block;
 
 type
   TScrollViewState = record
@@ -67,8 +59,6 @@ type
 
 implementation
 
-uses
-  SysUtils;
 
 { TScrollViewState }
 

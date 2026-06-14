@@ -811,7 +811,7 @@ begin
   if Length(FPrivateKeyData) = 0 then
     Exit;
 
-  LPEMText := TEncoding.UTF8.GetString(FPrivateKeyData);
+  LPEMText := nextpas.core.text.conv.UTF8BytesToString(FPrivateKeyData);
   LReader := TPEMReader.Create;
   try
     LReader.LoadFromString(LPEMText);
