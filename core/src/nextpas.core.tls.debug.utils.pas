@@ -558,7 +558,7 @@ end;
 
 destructor TSSLStringBuilder.Destroy;
 begin
-  
+
   inherited;
 end;
 

@@ -32,7 +32,7 @@ type
     cvoRequireEVCert        // 要求EV证书
   );
   TChainVerifyOptions = set of TChainVerifyOption;
-  
+
   { 证书链验证结果 }
   TChainVerifyResult = record
     IsValid: Boolean;
@@ -45,7 +45,7 @@ type
     RevocationStatus: Cardinal;
     Warnings: TStringArray;
   end;
-  
+
   {**
    * ISSLCertificateChainVerifier - 证书链验证器接口
    * @stable 1.0
@@ -54,43 +54,43 @@ type
    *}
   ISSLCertificateChainVerifier = interface
     ['{A8B3C4D5-E6F7-4829-9ABC-DEF012345678}']
-    
+
     // 设置选项
     procedure SetOptions(AOptions: TChainVerifyOptions);
     function GetOptions: TChainVerifyOptions;
-    
+
     // 设置信任的根证书存储
     procedure SetTrustedStore(AStore: ISSLCertificateStore);
     function GetTrustedStore: ISSLCertificateStore;
-    
+
     // 设置中间证书存储
     procedure SetIntermediateStore(AStore: ISSLCertificateStore);
     function GetIntermediateStore: ISSLCertificateStore;
-    
+
     // 设置CRL存储
     procedure SetCRLStore(const ACRLs: TStringArray);
     function GetCRLStore: TStringArray;
-    
+
     // 验证单个证书
-    function VerifyCertificate(ACert: ISSLCertificate; 
+    function VerifyCertificate(ACert: ISSLCertificate;
                               const AHostname: string = ''): TChainVerifyResult;
-    
+
     // 验证证书链
     function VerifyChain(const AChain: TSSLCertificateArray;
                         const AHostname: string = ''): TChainVerifyResult;
-    
+
     // 构建证书链（从叶证书开始）
     function BuildChain(ALeafCert: ISSLCertificate;
                       out AChain: TSSLCertificateArray): Boolean;
-    
+
     // 检查特定的验证项
     function CheckCertificateTime(ACert: ISSLCertificate): Boolean;
-    function CheckCertificateSignature(ACert: ISSLCertificate; 
+    function CheckCertificateSignature(ACert: ISSLCertificate;
                                       AIssuer: ISSLCertificate): Boolean;
     function CheckCertificateKeyUsage(ACert: ISSLCertificate;
                                     AIsCA: Boolean): Boolean;
     function CheckCertificateRevocation(ACert: ISSLCertificate): Boolean;
-    function CheckHostname(ACert: ISSLCertificate; 
+    function CheckHostname(ACert: ISSLCertificate;
                           const AHostname: string): Boolean;
   end;
 
@@ -103,7 +103,7 @@ type
     FCRLStore: TStringArray;
     FLastRevocationStatus: Cardinal;
     FLastRevocationError: string;
-    
+
     function FindIssuer(ACert: ISSLCertificate): ISSLCertificate;
     function IsRootCertificate(ACert: ISSLCertificate): Boolean;
     function IsSelfSigned(ACert: ISSLCertificate): Boolean;
@@ -115,29 +115,29 @@ type
   public
     constructor Create;
     destructor Destroy; override;
-    
+
     // ISSLCertificateChainVerifier implementation
     procedure SetOptions(AOptions: TChainVerifyOptions);
     function GetOptions: TChainVerifyOptions;
-    
+
     procedure SetTrustedStore(AStore: ISSLCertificateStore);
     function GetTrustedStore: ISSLCertificateStore;
-    
+
     procedure SetIntermediateStore(AStore: ISSLCertificateStore);
     function GetIntermediateStore: ISSLCertificateStore;
-    
+
     procedure SetCRLStore(const ACRLs: TStringArray);
     function GetCRLStore: TStringArray;
-    
+
     function VerifyCertificate(ACert: ISSLCertificate;
                               const AHostname: string = ''): TChainVerifyResult;
-    
+
     function VerifyChain(const AChain: TSSLCertificateArray;
                         const AHostname: string = ''): TChainVerifyResult;
-    
+
     function BuildChain(ALeafCert: ISSLCertificate;
                       out AChain: TSSLCertificateArray): Boolean;
-    
+
     function CheckCertificateTime(ACert: ISSLCertificate): Boolean;
     function CheckCertificateSignature(ACert: ISSLCertificate;
                                       AIssuer: ISSLCertificate): Boolean;
@@ -157,7 +157,7 @@ const
     cvoCheckCAConstraints,
     cvoCheckHostname
   ];
-  
+
   StrictChainVerifyOptions: TChainVerifyOptions = [
     cvoCheckTime,
     cvoCheckSignature,
@@ -236,12 +236,12 @@ var
   IssuerName: string;
 begin
   Result := nil;
-  
+
   if ACert = nil then
     Exit;
-    
+
   IssuerName := ACert.GetIssuer;
-  
+
   // 先在信任的根证书中查找
   if Assigned(FTrustedStore) then
   begin
@@ -249,7 +249,7 @@ begin
     if Result <> nil then
       Exit;
   end;
-  
+
   // 再在中间证书中查找
   if Assigned(FIntermediateStore) then
   begin
@@ -260,10 +260,10 @@ end;
 function TSSLCertificateChainVerifier.IsRootCertificate(ACert: ISSLCertificate): Boolean;
 begin
   Result := False;
-  
+
   if (ACert = nil) or (FTrustedStore = nil) then
     Exit;
-    
+
   // 检查是否在信任的根证书存储中
   Result := FTrustedStore.Contains(ACert);
 end;
@@ -271,10 +271,10 @@ end;
 function TSSLCertificateChainVerifier.IsSelfSigned(ACert: ISSLCertificate): Boolean;
 begin
   Result := False;
-  
+
   if ACert = nil then
     Exit;
-    
+
   // 自签名证书的 Subject 和 Issuer 相同
   Result := ACert.GetSubject = ACert.GetIssuer;
 end;
@@ -326,19 +326,19 @@ var
   i: Integer;
 begin
   Result := False;
-  
+
   // 精确匹配
   if SameText(ACertName, AHostname) then
   begin
     Result := True;
     Exit;
   end;
-  
+
   // 通配符匹配
   if (Pos('*.', ACertName) = 1) then
   begin
     try
-      
+
       // 域名级数必须相同
       if Length(CertParts) = Length(HostParts) then
       begin
@@ -412,13 +412,13 @@ var
   CurrentTime: TDateTime;
 begin
   Result := False;
-  
+
   if ACert = nil then
     Exit;
-    
+
   Info := ACert.GetInfo;
   CurrentTime := DateTimeUtcNow;
-  
+
   // 检查证书是否在有效期内
   Result := (CurrentTime >= Info.NotBefore) and (CurrentTime <= Info.NotAfter);
 end;
@@ -475,15 +475,15 @@ var
   Info: TSSLCertificateInfo;
 begin
   Result := True;
-  
+
   if ACert = nil then
   begin
     Result := False;
     Exit;
   end;
-  
+
   Info := ACert.GetInfo;
-  
+
   if AIsCA then
   begin
     // CA证书必须有 keyCertSign 权限
@@ -692,10 +692,10 @@ var
 begin
   Result := False;
   SetLength(AChain, 0);
-  
+
   if ALeafCert = nil then
     Exit;
-    
+
   ChainList := TInterfaceList.Create;
   try
     CurrentCert := ALeafCert;
@@ -769,17 +769,17 @@ begin
   Result.SelfSigned := False;
   Result.HostnameMatch := True;
   Result.RevocationStatus := 0;
-  
+
   FLastRevocationStatus := 0;
   FLastRevocationError := '';
-  
+
   if Length(AChain) = 0 then
   begin
     Result.IsValid := False;
     Result.ErrorMessage := 'Empty certificate chain';
     Exit;
   end;
-  
+
   // 检查主机名（只检查叶证书）
   if (cvoCheckHostname in FOptions) and (AHostname <> '') then
   begin
@@ -791,12 +791,12 @@ begin
       Exit;
     end;
   end;
-  
+
   // 验证证书链
   for i := 0 to High(AChain) do
   begin
     CurrentCert := AChain[i];
-    
+
     // 检查时间有效性
     if cvoCheckTime in FOptions then
     begin
@@ -807,7 +807,7 @@ begin
         Exit;
       end;
     end;
-    
+
     // 检查密钥用途
     if cvoCheckKeyUsage in FOptions then
     begin
@@ -831,7 +831,7 @@ begin
         Exit;
       end;
     end;
-    
+
     // 检查吊销状态
     if cvoCheckRevocation in FOptions then
     begin
@@ -851,7 +851,7 @@ begin
         Exit;
       end;
     end;
-    
+
     // 验证签名（除了根证书）
     if (cvoCheckSignature in FOptions) and (i < High(AChain)) then
     begin
@@ -864,20 +864,20 @@ begin
       end;
     end;
   end;
-  
+
   // 检查根证书
   if High(AChain) >= 0 then
   begin
     Result.SelfSigned := IsSelfSigned(AChain[High(AChain)]);
     Result.TrustedRoot := IsRootCertificate(AChain[High(AChain)]);
-    
+
     if not Result.TrustedRoot and not (cvoAllowSelfSigned in FOptions) then
     begin
       Result.IsValid := False;
       Result.ErrorMessage := 'Untrusted root certificate';
     end;
   end;
-  
+
   // 验证路径长度约束
   if (cvoCheckCAConstraints in FOptions) and not ValidatePathLength(AChain) then
   begin

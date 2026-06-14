@@ -432,9 +432,9 @@ begin
 
   AHasEnvelope := True;
   SetString(LText, PAnsiChar(@AData[0]), Length(AData));
-  
+
   try
-    
+
     if LData.Values['magic'] <> MBEDTLS_SESSION_SERIALIZATION_MAGIC then
       Exit;
 
