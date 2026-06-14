@@ -95,7 +95,7 @@ and forced Windows compile gates.
 | P1 Host ABI inventory | Host constants, records, handles, raw declarations | ✅ complete | keep gap matrix current |
 | P2 Feature facades | Portable APIs for time, sync, thread, files, io, process, mmap, env, random, path, fs | ✅ 14/14 focused-runtime on Windows | expand consumer coverage |
 | P3 Readiness lane | `platform_poller_*`, wake, userdata, empty-interest, net readiness consumers | Linux runtime; Windows source/compile | promote to ci-matrix |
-| P4 Completion lane | IOCP/proactor ownership and async loop completion consumers | ✅ source-contract + forced compile + focused-runtime (AsyncSend/Recv/Accept/Connect) | timeout/close paths |
+| P4 Completion lane | IOCP/proactor ownership and async loop completion consumers | ✅ focused-runtime (AsyncSend/Recv/Accept/Connect + close/timeout drain) | promote to ci-matrix |
 | P5 Tier 2 targets | Windows aarch64, Linux riscv64/arm32, FreeBSD/Android | source/compile fragments | cross-compile and runtime matrix |
 | P6 Benchmarks | Platform performance comparison | deferred | only after contract/runtime truth stabilizes |
 
