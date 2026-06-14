@@ -4,9 +4,13 @@ unit nextpas.core.tls.openssl.base;
 
 interface
 
-uses ctypes;
-
 type
+  // C type aliases (was ctypes, now using FPC built-in types)
+  clong  = PtrInt;
+  cint   = LongInt;
+  cuint  = LongWord;
+  culong = PtrUInt;
+
   // Basic C types mapping
   time_t = clong;
   Ptime_t = ^time_t;

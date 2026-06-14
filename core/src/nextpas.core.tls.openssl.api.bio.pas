@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.bio;
 
 interface
 
-uses DynLibs, ctypes, nextpas.core.tls.openssl.base;
+uses DynLibs, nextpas.core.tls.openssl.base;
 
 const
   BIO_FLAGS_BASE64_NO_NL = $100;

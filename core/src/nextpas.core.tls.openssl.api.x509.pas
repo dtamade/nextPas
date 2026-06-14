@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.x509;
 
 interface
 
-uses DynLibs, ctypes, nextpas.core.tls.openssl.base;
+uses DynLibs, nextpas.core.tls.openssl.base;
 
 type
   { X509 Certificate Functions }
