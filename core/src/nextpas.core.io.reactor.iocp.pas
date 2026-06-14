@@ -96,6 +96,7 @@ type
     Overlapped: OVERLAPPED;
     Kind: TIocpOpKind;
     Handle: HANDLE;
+    ListenHandle: HANDLE;   { listening socket for AcceptEx SO_UPDATE_ACCEPT_CONTEXT }
     WSABuf: WSABUF;
     SocketFlags: DWORD;
     Callback: TIoCompletion;
@@ -434,6 +435,7 @@ function IocpDispatchCompletion(var AReactor: TIocpReactor; ABytes: DWORD;
 var
   LOp: PIocpPendingOp;
   LResult: Int32;
+  LSock: TSocket;
 begin
   if AOverlapped = nil then
     Exit(False);
@@ -447,8 +449,10 @@ begin
   if LOp^.Kind = opAccept then
   begin
     AReactor.FLastAcceptSocket := PtrInt(LOp^.Handle);
+    { SO_UPDATE_ACCEPT_CONTEXT requires the listening socket as optval }
+    LSock := TSocket(PtrUInt(LOp^.ListenHandle));
     winsock_setsockopt(TSocket(PtrUInt(LOp^.Handle)), SOL_WINSOCK,
-      SO_UPDATE_ACCEPT_CONTEXT, nil, 0);
+      SO_UPDATE_ACCEPT_CONTEXT, @LSock, SizeOf(TSocket));
     if LOp^.WSABuf.buf <> nil then
     begin
       FreeMem(LOp^.WSABuf.buf);
@@ -551,12 +555,21 @@ begin
     Exit(IocpFail(ACallback, AContext, 0, LError));
   end;
 
-  { Associate with IOCP }
+  { Associate accepting socket with IOCP }
   if CreateIoCompletionPort(HANDLE(LAcceptSock), HANDLE(FPort), 0,
      FMaxEvents) = nil then
   begin
     closesocket(LAcceptSock);
     LError := GetLastError;
+    Exit(IocpFail(ACallback, AContext, 0, LError));
+  end;
+
+  { Ensure the listening socket is also associated with the IOCP port.
+    AcceptEx completion is posted through the listening socket, not the
+    accepting socket. }
+  if not IocpEnsureAssociatedHandle(Self, IocpHandleFromFd(AFd), LError) then
+  begin
+    closesocket(LAcceptSock);
     Exit(IocpFail(ACallback, AContext, 0, LError));
   end;
 
@@ -570,6 +583,7 @@ begin
 
   LOp := IocpAllocOp(Self, opAccept, HANDLE(LAcceptSock),
     ACallback, AContext);
+  LOp^.ListenHandle := IocpHandleFromFd(AFd);
   LOp^.WSABuf.buf := LAddrBuf;
   LOp^.WSABuf.len := ADDR_BUF_SIZE;
 
