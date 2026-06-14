@@ -480,3 +480,14 @@
   `missing-owned-string-return-runtime:sema.c6h4-owned-string-return-deferred-consumer`；
   GREEN 后 focused runtime smoke 中 `llvm_string_arg_owned_writeln_concat` 通过
   LLVM verify/llc/link/run，exit 42。
+- 2026-06-13 C6-H17：owned string return 的 class string field store 收尾：
+  在 GREEN-2A 基础上完成 GREEN-2B + GREEN-3。contract 侧新增三类锁定：
+  1) class string field 后跟 Integer/interface 的 metadata layout，固定
+  `$idx` / `$size` / `$intf_offset`；
+  2) 同一 string field 连续 overwrite 时，第二次 store 前必须 release 旧 owner；
+  3) object free 路径必须调用 `np_object_string_cleanup_<Class>`，并在 helper 中
+  逐个 string field release owner 后清空 ptr/len/owner/alloc 四个 slot。
+  runtime smoke 侧补两条证据：Pascal 端到端 `Box.Text := MakeTextA(); Box.Note := ...;
+  Box.Text := MakeTextC(); Box.Free;` 通过 LLVM verify/llc/link/run，exit 42；
+  直接 IR probe `np_object_string_cleanup_TStringPair` 证明 cleanup 后两个 string field
+  的 ptr/len/owner/alloc 均归零，再经 `np_object_free_release` 释放对象，exit 42。

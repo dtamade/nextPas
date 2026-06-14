@@ -454,8 +454,6 @@ end;
 
 procedure AssertDeferredConsumersFailClosed;
 begin
-  RequireAnalyzeDeferredError(FieldOwnedArgumentSource,
-    'field-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(VarParamOwnedArgumentSource,
     'var-param-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(OutParamOwnedArgumentSource,
@@ -466,6 +464,24 @@ begin
     'interface-owned-string-temp-consumer-must-fail-closed');
   RequireAnalyzeDeferredError(ExternalOwnedArgumentSource,
     'external-owned-string-temp-consumer-must-fail-closed');
+end;
+
+procedure AssertFieldOwnedConsumerNowSupported;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(FieldOwnedArgumentSource);
+  try
+    if Model = nil then
+      Fail('field-owned-string-temp-consumer-model-nil');
+    if not SameText(Model.Status, 'ready') then
+      Fail('field-owned-string-temp-consumer-must-pass-sema');
+    if not FindFirstNodeByKind(Model, 'field-store-str-owned-runtime', Node) then
+      Fail('missing-field-owned-string-store-node');
+  finally
+    Model.Free;
+  end;
 end;
 
 procedure AssertDirectArgumentTempOwnershipNodes;
@@ -1013,6 +1029,7 @@ begin
   AssertWriteLnArgumentTempOwnershipNodes;
   AssertConcatTempOwnershipNodes;
   AssertCompareTempOwnershipNodes;
+  AssertFieldOwnedConsumerNowSupported;
   AssertDeferredConsumersFailClosed;
   WriteLn('hir-string-call-argument-ownership-contract-status=pass');
 end.

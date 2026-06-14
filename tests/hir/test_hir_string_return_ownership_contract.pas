@@ -179,6 +179,59 @@ const
     'begin' + LineEnding +
     'end.';
 
+  OverwriteFieldOwnedReturnConsumerSource =
+    'program test;' + LineEnding +
+    'type TStringBox = class' + LineEnding +
+    '  Text: string;' + LineEnding +
+    'end;' + LineEnding +
+    'function MakeTextA: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeTextA := ''first'';' + LineEnding +
+    'end;' + LineEnding +
+    'function MakeTextB: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  MakeTextB := ''second'';' + LineEnding +
+    'end;' + LineEnding +
+    'var Box: TStringBox;' + LineEnding +
+    'begin' + LineEnding +
+    '  Box := TStringBox.Create;' + LineEnding +
+    '  Box.Text := MakeTextA();' + LineEnding +
+    '  Box.Text := MakeTextB();' + LineEnding +
+    '  Box.Free;' + LineEnding +
+    'end.';
+
+  LayoutAfterStringFieldSource =
+    'program test;' + LineEnding +
+    'type ITextHolder = interface' + LineEnding +
+    '  procedure Touch;' + LineEnding +
+    'end;' + LineEnding +
+    'type TStringLayoutBox = class(TInterfacedObject, ITextHolder)' + LineEnding +
+    '  Text: string;' + LineEnding +
+    '  Count: Integer;' + LineEnding +
+    '  procedure Touch;' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TStringLayoutBox.Touch;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var Holder: ITextHolder;' + LineEnding +
+    'begin' + LineEnding +
+    '  Holder := TStringLayoutBox.Create;' + LineEnding +
+    'end.';
+
+  ObjectFreeStringCleanupSource =
+    'program test;' + LineEnding +
+    'type TStringPair = class' + LineEnding +
+    '  Text: string;' + LineEnding +
+    '  Note: string;' + LineEnding +
+    '  Count: Integer;' + LineEnding +
+    'end;' + LineEnding +
+    'procedure FreeBox(Box: TStringPair);' + LineEnding +
+    'begin' + LineEnding +
+    '  Box.Free;' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    'end.';
+
   // H17: record field owned string store (still fail-closed)
   RecordFieldOwnedReturnConsumerSource =
     'program test;' + LineEnding +
@@ -427,6 +480,60 @@ begin
       Inc(Result);
 end;
 
+function FindAfter(const ANeedle, AText: string; AStart: LongInt): LongInt;
+var
+  Offset: LongInt;
+begin
+  if AStart < 1 then
+    AStart := 1;
+  Offset := Pos(ANeedle, Copy(AText, AStart, MaxInt));
+  if Offset = 0 then
+    Exit(0);
+  Result := AStart + Offset - 1;
+end;
+
+function ExtractDefinitionSlice(const AText, AHeaderNeedle: string): string;
+var
+  StartPos, EndPos: LongInt;
+begin
+  Result := '';
+  StartPos := Pos(AHeaderNeedle, AText);
+  if StartPos = 0 then
+    Exit;
+  EndPos := FindAfter(LineEnding + '}', AText, StartPos);
+  if EndPos = 0 then
+    Exit;
+  Result := Copy(AText, StartPos, EndPos - StartPos + Length(LineEnding + '}'));
+end;
+
+function CountSubstring(const AText, ANeedle: string): LongInt;
+var
+  SearchPos, MatchPos: LongInt;
+begin
+  Result := 0;
+  SearchPos := 1;
+  while SearchPos <= Length(AText) do
+  begin
+    MatchPos := FindAfter(ANeedle, AText, SearchPos);
+    if MatchPos = 0 then
+      Exit;
+    Inc(Result);
+    SearchPos := MatchPos + Length(ANeedle);
+  end;
+end;
+
+procedure RequireConst(const AModel: TSemanticModel; const AName: string;
+  AExpected: Int64);
+var
+  Actual: Int64;
+begin
+  if not AModel.LookupConstValue(AName, Actual) then
+    Fail('missing-const:' + AName);
+  if Actual <> AExpected then
+    Fail('const-mismatch:' + AName + ':' + IntToStr(Actual) +
+      ':expected:' + IntToStr(AExpected));
+end;
+
 procedure AssertDirectOwnedReturnContract;
 var
   Model: TSemanticModel;
@@ -670,6 +777,8 @@ var
   Model: TSemanticModel;
   Node: TTypedHirNode;
   LlvmText: string;
+  StartSlice, CleanupSlice: string;
+  SecondCallPos, OverwriteReleasePos, CleanupCallPos: LongInt;
 begin
   // H17: class field owned string store should now pass sema
   Model := BuildModel(ClassFieldOwnedReturnConsumerSource);
@@ -705,6 +814,122 @@ begin
   finally
     Model.Free;
   end;
+
+  Model := BuildModel(OverwriteFieldOwnedReturnConsumerSource);
+  try
+    if Model = nil then
+      Fail('overwrite-field-owned-store-model-nil');
+    if not SameText(Model.Status, 'ready') then
+      Fail('overwrite-field-owned-store-must-pass-sema');
+    LlvmText := EmitLlvm(Model);
+    StartSlice := ExtractDefinitionSlice(LlvmText, 'define i64 @_start() {');
+    if StartSlice = '' then
+      Fail('missing-overwrite-start-function');
+    SecondCallPos := FindAfter(
+      ' = call {ptr, i64, ptr, i64} @MakeTextB(', StartSlice, 1);
+    if SecondCallPos = 0 then
+      Fail('missing-second-owned-string-return-call');
+    OverwriteReleasePos := FindAfter('call void @np_string_release(',
+      StartSlice, SecondCallPos);
+    if OverwriteReleasePos = 0 then
+      Fail('missing-overwrite-release-after-second-call');
+    CleanupCallPos := FindAfter(
+      'call void @np_object_string_cleanup_TStringBox(ptr ',
+      StartSlice, OverwriteReleasePos);
+    if CleanupCallPos = 0 then
+      Fail('missing-object-free-cleanup-after-overwrite');
+    if OverwriteReleasePos >= CleanupCallPos then
+      Fail('overwrite-release-must-precede-object-free-cleanup');
+
+    CleanupSlice := ExtractDefinitionSlice(LlvmText,
+      'define internal void @np_object_string_cleanup_TStringBox(ptr %');
+    if CleanupSlice = '' then
+      Fail('missing-overwrite-cleanup-helper');
+    if CountSubstring(CleanupSlice, 'call void @np_string_release(') <> 1 then
+      Fail('single-string-cleanup-helper-must-release-exactly-once');
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure AssertStringFieldLayoutMetadataContract;
+var
+  Model: TSemanticModel;
+begin
+  Model := BuildModel(LayoutAfterStringFieldSource);
+  try
+    if Model = nil then
+      Fail('layout-after-string-field-model-nil');
+    RequireConst(Model, 'TStringLayoutBox.Text$idx', 1);
+    RequireConst(Model, 'TStringLayoutBox.Count$idx', 5);
+    RequireConst(Model, 'TStringLayoutBox$intf_offset_ITextHolder', 48);
+    RequireConst(Model, 'TStringLayoutBox$size', 56);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure AssertObjectFreeStringCleanupContract;
+var
+  Model: TSemanticModel;
+  LlvmText, HelperSlice, FreeSlice: string;
+  CleanupCallPos, ReleaseCallPos: LongInt;
+  FirstReleasePos, FirstZeroStartPos, SecondReleasePos, SecondZeroStartPos: LongInt;
+  FirstZeroSlice, SecondZeroSlice: string;
+begin
+  Model := BuildModel(ObjectFreeStringCleanupSource);
+  try
+    if Model = nil then
+      Fail('object-free-string-cleanup-model-nil');
+    LlvmText := EmitLlvm(Model);
+    HelperSlice := ExtractDefinitionSlice(LlvmText,
+      'define internal void @np_object_string_cleanup_TStringPair(ptr %');
+    if HelperSlice = '' then
+      Fail('missing-object-free-string-cleanup-helper');
+    if CountSubstring(HelperSlice, 'call void @np_string_release(') <> 2 then
+      Fail('string-cleanup-helper-must-release-each-string-field-owner');
+    FirstReleasePos := FindAfter('call void @np_string_release(',
+      HelperSlice, 1);
+    FirstZeroStartPos := FindAfter('inttoptr i64 0 to ptr',
+      HelperSlice, FirstReleasePos);
+    SecondReleasePos := FindAfter('call void @np_string_release(',
+      HelperSlice, FirstZeroStartPos);
+    SecondZeroStartPos := FindAfter('inttoptr i64 0 to ptr',
+      HelperSlice, SecondReleasePos);
+    if (FirstReleasePos = 0) or (FirstZeroStartPos = 0) or
+      (SecondReleasePos = 0) or (SecondZeroStartPos = 0) then
+      Fail('string-cleanup-helper-must-zero-slots-after-each-release');
+    FirstZeroSlice := Copy(HelperSlice, FirstZeroStartPos,
+      SecondReleasePos - FirstZeroStartPos);
+    SecondZeroSlice := Copy(HelperSlice, SecondZeroStartPos, MaxInt);
+    if (CountSubstring(FirstZeroSlice, 'store ptr ') < 2) or
+      (CountSubstring(FirstZeroSlice, 'store i64 ') < 2) then
+      Fail('first-string-field-must-clear-all-four-slots');
+    if (CountSubstring(SecondZeroSlice, 'store ptr ') < 2) or
+      (CountSubstring(SecondZeroSlice, 'store i64 ') < 2) then
+      Fail('second-string-field-must-clear-all-four-slots');
+    RequireContains(HelperSlice, 'add i64 7, 0',
+      'missing-note-owner-slot-walk');
+    RequireContains(HelperSlice, 'add i64 3, 0',
+      'missing-text-owner-slot-walk');
+
+    FreeSlice := ExtractDefinitionSlice(LlvmText, 'define i64 @FreeBox(');
+    if FreeSlice = '' then
+      Fail('missing-freebox-function');
+    CleanupCallPos := FindAfter(
+      'call void @np_object_string_cleanup_TStringPair(ptr ',
+      FreeSlice, 1);
+    if CleanupCallPos = 0 then
+      Fail('missing-freebox-string-cleanup-call');
+    ReleaseCallPos := FindAfter('call void @np_object_free_release(ptr ',
+      FreeSlice, CleanupCallPos);
+    if ReleaseCallPos = 0 then
+      Fail('missing-freebox-heap-release-call');
+    if CleanupCallPos >= ReleaseCallPos then
+      Fail('string-cleanup-must-precede-heap-release');
+  finally
+    Model.Free;
+  end;
 end;
 
 begin
@@ -715,5 +940,7 @@ begin
   AssertDeferredBoundariesPreserved;
   AssertDeferredOwnedReturnConsumersFailClosed;
   AssertClassFieldOwnedStoreContract; // H17: new test
+  AssertStringFieldLayoutMetadataContract;
+  AssertObjectFreeStringCleanupContract;
   WriteLn('hir-string-return-ownership-contract-status=pass');
 end.
