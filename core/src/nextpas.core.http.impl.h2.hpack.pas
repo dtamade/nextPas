@@ -710,19 +710,31 @@ begin
 end;
 
 function THPackDecoder.DecodeString(const ABlock: AnsiString; var APos: SizeInt;
-  out AStr: AnsiString): Boolean;
+  out AStr: AnsiString): Boolean; inline;
 var
   LByte: Byte;
   LLen: UInt32;
   LHuffman: Boolean;
   LBuf: array[0..255] of AnsiChar;
-  LOutLen: SizeInt;
+  LOutLen, LShift: SizeInt;
 begin
   Result := False;
   if APos > Length(ABlock) then Exit;
   LByte := Byte(ABlock[APos]);
   LHuffman := (LByte and $80) <> 0;
-  DecodeInteger(ABlock, APos, 7, LLen);
+  { Inline 7-bit integer: reads byte once instead of DecodeInteger re-reading }
+  LLen := LByte and $7F;
+  Inc(APos);
+  if LLen = $7F then
+  begin
+    LShift := 0;
+    repeat
+      LByte := Byte(ABlock[APos]);
+      Inc(APos);
+      LLen := LLen + ((LByte and $7F) shl LShift);
+      Inc(LShift, 7);
+    until (LByte and $80) = 0;
+  end;
   if APos + SizeInt(LLen) - 1 > Length(ABlock) then Exit;
   if LHuffman then
   begin
@@ -744,11 +756,7 @@ var
   LByte: Byte;
   LIndex: UInt32;
   LHeaderCount: SizeInt;
-  LDStrByte: Byte;
-  LDStrLen: UInt32;
-  LDStrHuff: Boolean;
-  LDStrBuf: array[0..511] of AnsiChar;
-  LDStrOutLen: SizeInt;
+
 begin
   Result := False;
   LPos := 1;
@@ -785,35 +793,15 @@ begin
           AHeaders[LHeaderCount].Name) then Exit;
       end;
       begin
-          LDStrByte := Byte(ABlock[LPos]);
-          LDStrHuff := (LDStrByte and $80) <> 0;
-          DecodeInteger(ABlock, LPos, 7, LDStrLen);
-          if LDStrHuff then
-          begin
-            if not H2HuffmanDecodeBuf(@ABlock[LPos], SizeInt(LDStrLen), LDStrBuf, SizeOf(LDStrBuf), LDStrOutLen) then
-              Exit;
-            SetString(AHeaders[LHeaderCount].Value, LDStrBuf, LDStrOutLen);
-          end
-          else
-            SetString(AHeaders[LHeaderCount].Value, @ABlock[LPos], LDStrLen);
-          Inc(LPos, LDStrLen);
+          if not DecodeString(ABlock, LPos,
+          AHeaders[LHeaderCount].Value) then Exit;
         end;
           if LIndex = 0 then
       begin
         AHeaders[LHeaderCount].Name := AHeaders[LHeaderCount].Value;
         begin
-          LDStrByte := Byte(ABlock[LPos]);
-          LDStrHuff := (LDStrByte and $80) <> 0;
-          DecodeInteger(ABlock, LPos, 7, LDStrLen);
-          if LDStrHuff then
-          begin
-            if not H2HuffmanDecodeBuf(@ABlock[LPos], SizeInt(LDStrLen), LDStrBuf, SizeOf(LDStrBuf), LDStrOutLen) then
-              Exit;
-            SetString(AHeaders[LHeaderCount].Value, LDStrBuf, LDStrOutLen);
-          end
-          else
-            SetString(AHeaders[LHeaderCount].Value, @ABlock[LPos], LDStrLen);
-          Inc(LPos, LDStrLen);
+          if not DecodeString(ABlock, LPos,
+          AHeaders[LHeaderCount].Value) then Exit;
         end;
         end;
       if FDynamicTable.Capacity > 0 then
@@ -835,35 +823,15 @@ begin
           AHeaders[LHeaderCount].Name) then Exit;
       end;
       begin
-          LDStrByte := Byte(ABlock[LPos]);
-          LDStrHuff := (LDStrByte and $80) <> 0;
-          DecodeInteger(ABlock, LPos, 7, LDStrLen);
-          if LDStrHuff then
-          begin
-            if not H2HuffmanDecodeBuf(@ABlock[LPos], SizeInt(LDStrLen), LDStrBuf, SizeOf(LDStrBuf), LDStrOutLen) then
-              Exit;
-            SetString(AHeaders[LHeaderCount].Value, LDStrBuf, LDStrOutLen);
-          end
-          else
-            SetString(AHeaders[LHeaderCount].Value, @ABlock[LPos], LDStrLen);
-          Inc(LPos, LDStrLen);
+          if not DecodeString(ABlock, LPos,
+          AHeaders[LHeaderCount].Value) then Exit;
         end;
           if LIndex = 0 then
       begin
         AHeaders[LHeaderCount].Name := AHeaders[LHeaderCount].Value;
         begin
-          LDStrByte := Byte(ABlock[LPos]);
-          LDStrHuff := (LDStrByte and $80) <> 0;
-          DecodeInteger(ABlock, LPos, 7, LDStrLen);
-          if LDStrHuff then
-          begin
-            if not H2HuffmanDecodeBuf(@ABlock[LPos], SizeInt(LDStrLen), LDStrBuf, SizeOf(LDStrBuf), LDStrOutLen) then
-              Exit;
-            SetString(AHeaders[LHeaderCount].Value, LDStrBuf, LDStrOutLen);
-          end
-          else
-            SetString(AHeaders[LHeaderCount].Value, @ABlock[LPos], LDStrLen);
-          Inc(LPos, LDStrLen);
+          if not DecodeString(ABlock, LPos,
+          AHeaders[LHeaderCount].Value) then Exit;
         end;
         end;
       Inc(LHeaderCount);
@@ -883,35 +851,15 @@ begin
           AHeaders[LHeaderCount].Name) then Exit;
       end;
       begin
-          LDStrByte := Byte(ABlock[LPos]);
-          LDStrHuff := (LDStrByte and $80) <> 0;
-          DecodeInteger(ABlock, LPos, 7, LDStrLen);
-          if LDStrHuff then
-          begin
-            if not H2HuffmanDecodeBuf(@ABlock[LPos], SizeInt(LDStrLen), LDStrBuf, SizeOf(LDStrBuf), LDStrOutLen) then
-              Exit;
-            SetString(AHeaders[LHeaderCount].Value, LDStrBuf, LDStrOutLen);
-          end
-          else
-            SetString(AHeaders[LHeaderCount].Value, @ABlock[LPos], LDStrLen);
-          Inc(LPos, LDStrLen);
+          if not DecodeString(ABlock, LPos,
+          AHeaders[LHeaderCount].Value) then Exit;
         end;
           if LIndex = 0 then
       begin
         AHeaders[LHeaderCount].Name := AHeaders[LHeaderCount].Value;
         begin
-          LDStrByte := Byte(ABlock[LPos]);
-          LDStrHuff := (LDStrByte and $80) <> 0;
-          DecodeInteger(ABlock, LPos, 7, LDStrLen);
-          if LDStrHuff then
-          begin
-            if not H2HuffmanDecodeBuf(@ABlock[LPos], SizeInt(LDStrLen), LDStrBuf, SizeOf(LDStrBuf), LDStrOutLen) then
-              Exit;
-            SetString(AHeaders[LHeaderCount].Value, LDStrBuf, LDStrOutLen);
-          end
-          else
-            SetString(AHeaders[LHeaderCount].Value, @ABlock[LPos], LDStrLen);
-          Inc(LPos, LDStrLen);
+          if not DecodeString(ABlock, LPos,
+          AHeaders[LHeaderCount].Value) then Exit;
         end;
         end;
       Inc(LHeaderCount);
