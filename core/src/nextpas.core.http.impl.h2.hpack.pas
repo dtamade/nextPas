@@ -56,6 +56,14 @@ type
     FDynamicTable: THPackDynamicTable;
     FHasPendingTableSizeUpdate: Boolean;
     FPendingTableSizeUpdate: UInt32;
+    FMRUCache: array[0..7] of record
+      NameHash: UInt32;
+      ValueHash: UInt32;
+      Index: SizeInt;
+    end;
+    procedure MRUAdd(const AName, AValue: AnsiString; AIndex: SizeInt);
+    function MRUFind(const AName, AValue: AnsiString;
+      var AIndex: SizeInt): Boolean;
     procedure EncodeInteger(var AOut: AnsiString; AValue: UInt32;
       APrefixBits: Byte; APrefixMask: Byte);
     procedure EncodeHuffman(var AOut: AnsiString; const AStr: AnsiString);
@@ -125,6 +133,16 @@ begin
   for LI := 1 to Length(AName) do
     LHash := ((LHash shl 5) + LHash) + UInt32(Byte(AName[LI]));
   Result := Byte(LHash xor (LHash shr 8));
+end;
+
+{ FNV-1a 32-bit hash for MRU cache }
+function H2FNV1a(const AStr: AnsiString): UInt32;
+var
+  LI: SizeInt;
+begin
+  Result := 2166136261;
+  for LI := 1 to Length(AStr) do
+    Result := (Result xor UInt32(Byte(AStr[LI]))) * 16777619;
 end;
 
 { === HPackLookup === }
@@ -384,10 +402,44 @@ begin
 end;
 
 procedure THPackEncoder.Init(ADynamicTableSize: SizeInt);
+var
+  LI: SizeInt;
 begin
   FDynamicTable.Init(ADynamicTableSize);
   FHasPendingTableSizeUpdate := False;
   FPendingTableSizeUpdate := UInt32(ADynamicTableSize);
+  for LI := 0 to 7 do
+    FMRUCache[LI].Index := 0;
+end;
+
+{ MRU cache for recently encoded headers }
+procedure THPackEncoder.MRUAdd(const AName, AValue: AnsiString; AIndex: SizeInt);
+var
+  LSlot: SizeInt;
+  LNameHash, LValueHash: UInt32;
+begin
+  if AIndex <= HPACK_STATIC_TABLE_COUNT then Exit;
+  LNameHash := H2FNV1a(AName);
+  LValueHash := H2FNV1a(AValue);
+  LSlot := (LNameHash xor LValueHash) and 7;
+  FMRUCache[LSlot].NameHash := LNameHash;
+  FMRUCache[LSlot].ValueHash := LValueHash;
+  FMRUCache[LSlot].Index := AIndex;
+end;
+
+function THPackEncoder.MRUFind(const AName, AValue: AnsiString;
+  var AIndex: SizeInt): Boolean;
+var
+  LSlot: SizeInt;
+  LNameHash, LValueHash: UInt32;
+begin
+  LNameHash := H2FNV1a(AName);
+  LValueHash := H2FNV1a(AValue);
+  LSlot := (LNameHash xor LValueHash) and 7;
+  Result := (FMRUCache[LSlot].Index > 0) and
+    (FMRUCache[LSlot].NameHash = LNameHash) and
+    (FMRUCache[LSlot].ValueHash = LValueHash);
+  if Result then AIndex := FMRUCache[LSlot].Index;
 end;
 
 procedure THPackEncoder.EncodeInteger(var AOut: AnsiString; AValue: UInt32;
@@ -491,9 +543,17 @@ begin
     LName := AHeaders[I].Name;
     LValue := AHeaders[I].Value;
 
+    { Fast path: MRU cache check }
+    if MRUFind(LName, LValue, LIndex) then
+    begin
+      EncodeInteger(Result, UInt32(LIndex), 7, $80);
+      Continue;
+    end;
+
     if TryFindStaticFull(LName, LValue, LIndex) or
       TryFindDynamicFull(FDynamicTable, LName, LValue, LIndex) then
     begin
+      MRUAdd(LName, LValue, LIndex);
       EncodeInteger(Result, UInt32(LIndex), 7, $80);
       Continue;
     end;
@@ -512,6 +572,8 @@ begin
     EncodeString(Result, LValue, True);
     { Add to dynamic table }
     FDynamicTable.Add(LName, LValue);
+    { Clear MRU cache since dynamic table state changed }
+    FillChar(FMRUCache, SizeOf(FMRUCache), 0);
   end;
 end;
 
