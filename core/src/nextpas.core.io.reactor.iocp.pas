@@ -27,7 +27,8 @@ type
     FMaxEvents: UInt32;
     FRunning: Int32;
     FPendingHead: Pointer;
-    FPendingCount: UInt32;
+    FPendingCount: Int32;
+    FPendingDone: Int32;
     FAssociatedHead: Pointer;
     FNextUserData: UInt64;
     FLastAcceptSocket: PtrInt;
@@ -76,6 +77,8 @@ const
   SO_UPDATE_ACCEPT_CONTEXT = $700B;
   SO_UPDATE_CONNECT_CONTEXT = $7010;
   SOL_WINSOCK = $FFFF;  { SOL_SOCKET on Windows }
+  IOCP_CLOSE_PENDING_POLL_MS = 10;
+  IOCP_CLOSE_PENDING_TIMEOUT_MS = 5000;
 
 type
   TAcceptExFn = function(sListenSocket, sAcceptSocket: TSocket;
@@ -114,6 +117,9 @@ type
     Handle: HANDLE;
     Next: PIocpAssociatedHandle;
   end;
+
+function IocpDispatchCompletion(var AReactor: TIocpReactor; ABytes: DWORD;
+  ASucceeded: Boolean; AOverlapped: LPOVERLAPPED): Boolean; forward;
 
 function IocpHandleFromFd(AFd: PtrInt): HANDLE; inline;
 begin
@@ -154,12 +160,14 @@ begin
   Result^.UserData := AReactor.FNextUserData;
   Result^.Next := PIocpPendingOp(AReactor.FPendingHead);
   AReactor.FPendingHead := Result;
-  Inc(AReactor.FPendingCount);
+  AtomicStore32(AReactor.FPendingDone, 0, moRelease);
+  AtomicFetchAdd32(AReactor.FPendingCount, 1, moAcqRel);
 end;
 
 procedure IocpUnlinkOp(var AReactor: TIocpReactor; AOp: PIocpPendingOp);
 var
   LCurrent, LPrevious: PIocpPendingOp;
+  LPendingCount: Int32;
 begin
   LPrevious := nil;
   LCurrent := PIocpPendingOp(AReactor.FPendingHead);
@@ -171,8 +179,9 @@ begin
         AReactor.FPendingHead := LCurrent^.Next
       else
         LPrevious^.Next := LCurrent^.Next;
-      if AReactor.FPendingCount > 0 then
-        Dec(AReactor.FPendingCount);
+      LPendingCount := AtomicFetchSub32(AReactor.FPendingCount, 1, moAcqRel) - 1;
+      if LPendingCount = 0 then
+        AtomicStore32(AReactor.FPendingDone, 1, moRelease);
       Exit;
     end;
     LPrevious := LCurrent;
@@ -180,16 +189,64 @@ begin
   end;
 end;
 
-procedure IocpFreeOp(var AReactor: TIocpReactor; AOp: PIocpPendingOp);
+procedure IocpFreeOp(var AReactor: TIocpReactor; AOp: PIocpPendingOp;
+  AUnlink: Boolean = True);
 begin
   if AOp = nil then
     Exit;
-  IocpUnlinkOp(AReactor, AOp);
+  if AUnlink then
+    IocpUnlinkOp(AReactor, AOp);
   AOp^.Callback := nil;
   AOp^.Context := nil;
   AOp^.Next := nil;
   Dispose(AOp);
 end;
+
+procedure IocpCancelPendingOps(var AReactor: TIocpReactor);
+var
+  LOp: PIocpPendingOp;
+begin
+  LOp := PIocpPendingOp(AReactor.FPendingHead);
+  while LOp <> nil do
+  begin
+    CancelIoEx(LOp^.Handle, @LOp^.Overlapped);
+    LOp := LOp^.Next;
+  end;
+end;
+
+function IocpWaitForPendingOps(var AReactor: TIocpReactor; APort: HANDLE;
+  ATimeoutMs: DWORD): Boolean;
+var
+  LWaitedMs: DWORD;
+  LBytes: DWORD;
+  LKey: ULONG_PTR;
+  LOverlapped: LPOVERLAPPED;
+  LOk: BOOL;
+begin
+  if AtomicLoad32(AReactor.FPendingCount, moAcquire) = 0 then
+    Exit(True);
+
+  LWaitedMs := 0;
+  while LWaitedMs < ATimeoutMs do
+  begin
+    if AtomicLoad32(AReactor.FPendingDone, moAcquire) <> 0 then
+      Exit(True);
+    if AtomicLoad32(AReactor.FPendingCount, moAcquire) = 0 then
+      Exit(True);
+
+    LBytes := 0;
+    LKey := 0;
+    LOverlapped := nil;
+    LOk := GetQueuedCompletionStatus(APort, @LBytes, @LKey, @LOverlapped,
+      IOCP_CLOSE_PENDING_POLL_MS);
+    if LOverlapped <> nil then
+      IocpDispatchCompletion(AReactor, LBytes, LOk, LOverlapped);
+    Inc(LWaitedMs, IOCP_CLOSE_PENDING_POLL_MS);
+  end;
+
+  Result := AtomicLoad32(AReactor.FPendingCount, moAcquire) = 0;
+end;
+
 procedure IocpLoadWinsockExt;
 var
   L: TSocket;
@@ -219,35 +276,30 @@ var
   LCallback: TIoCompletion;
   LContext: Pointer;
   LUserData: UInt64;
-  LDone: DWORD;
-  LFlags: DWORD;
   LHasException: Boolean;
   LExceptionMessage: string;
 begin
   LOp := PIocpPendingOp(AReactor.FPendingHead);
   AReactor.FPendingHead := nil;
-  AReactor.FPendingCount := 0;
+  AtomicStore32(AReactor.FPendingCount, 0, moRelease);
+  AtomicStore32(AReactor.FPendingDone, 1, moRelease);
   LHasException := False;
   LExceptionMessage := '';
   while LOp <> nil do
   begin
     LNext := LOp^.Next;
-    LDone := 0;
-    LFlags := 0;
     CancelIoEx(LOp^.Handle, @LOp^.Overlapped);
-    case LOp^.Kind of
-      opSend, opRecv:
-        begin
-          LFlags := LOp^.SocketFlags;
-          WSAGetOverlappedResult(TSocket(PtrUInt(LOp^.Handle)), @LOp^.Overlapped, @LDone, True, @LFlags);
-        end;
-    else
-      GetOverlappedResult(LOp^.Handle, @LOp^.Overlapped, @LDone, True);
-    end;
     LCallback := LOp^.Callback;
     LContext := LOp^.Context;
     LUserData := LOp^.UserData;
     try
+      if (LOp^.Kind = opAccept) and (LOp^.WSABuf.buf <> nil) then
+      begin
+        FreeMem(LOp^.WSABuf.buf);
+        LOp^.WSABuf.buf := nil;
+      end;
+      if LOp^.Kind = opAccept then
+        closesocket(TSocket(PtrUInt(LOp^.Handle)));
       try
         if Assigned(LCallback) then
           LCallback(LUserData, -Int32(AError), LContext);
@@ -386,6 +438,7 @@ begin
     Exit(True);
 
   LUserData := LOp^.UserData;
+  IocpUnlinkOp(AReactor, LOp);
   IocpFreeOp(AReactor, LOp);
   Result := IocpFail(ACallback, AContext, LUserData, LError);
 end;
@@ -430,6 +483,7 @@ begin
     Exit(True);
 
   LUserData := LOp^.UserData;
+  IocpUnlinkOp(AReactor, LOp);
   IocpFreeOp(AReactor, LOp);
   Result := IocpFail(ACallback, AContext, LUserData, LError);
 end;
@@ -478,7 +532,7 @@ begin
     if Assigned(LOp^.Callback) then
       LOp^.Callback(LOp^.UserData, LResult, LOp^.Context);
   finally
-    IocpFreeOp(AReactor, LOp);
+    IocpFreeOp(AReactor, LOp, False);
   end;
   Result := True;
 end;
@@ -488,6 +542,7 @@ begin
   FillChar(Result, SizeOf(Result), 0);
   Result.FMaxEvents := AMaxEvents;
   AtomicStore32(Result.FRunning, 0, moRelease);
+  AtomicStore32(Result.FPendingDone, 1, moRelease);
   Result.FPort := PtrUInt(CreateIoCompletionPort(HANDLE(INVALID_HANDLE_VALUE),
     nil, 0, AMaxEvents));
 end;
@@ -503,6 +558,11 @@ begin
   FPort := 0;
   FMaxEvents := 0;
   try
+    if AtomicLoad32(FPendingCount, moAcquire) > 0 then
+    begin
+      IocpCancelPendingOps(Self);
+      IocpWaitForPendingOps(Self, HANDLE(LPort), IOCP_CLOSE_PENDING_TIMEOUT_MS);
+    end;
     IocpReleasePendingOps(Self, ERROR_OPERATION_ABORTED);
   finally
     IocpReleaseAssociatedHandles(Self);
@@ -623,6 +683,7 @@ begin
   { AcceptEx failed synchronously — cleanup }
   FreeMem(LAddrBuf);
   LUserData := LOp^.UserData;
+  IocpUnlinkOp(Self, LOp);
   IocpFreeOp(Self, LOp);
   closesocket(LAcceptSock);
   Result := IocpFail(ACallback, AContext, LUserData, LError);
@@ -664,6 +725,7 @@ begin
     Exit(True);
 
   LUserData := LOp^.UserData;
+  IocpUnlinkOp(Self, LOp);
   IocpFreeOp(Self, LOp);
   Result := IocpFail(ACallback, AContext, LUserData, LError);
 end;
@@ -719,7 +781,7 @@ end;
 
 function TIocpReactor.HasPending: Boolean;
 begin
-  Result := FPendingCount > 0;
+  Result := AtomicLoad32(FPendingCount, moAcquire) > 0;
 end;
 
 function TIocpReactor.PollOne: Boolean;

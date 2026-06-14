@@ -222,6 +222,48 @@ begin
   end;
 end;
 
+procedure TestIocpCloseWithPending;
+var
+  LListenSock, LAcceptSock, LClientSock: TPlatformSocket;
+  LReactor: TIocpReactor;
+  LRecvBuf: array[0..63] of AnsiChar;
+begin
+  Check(CreateConnectedPair(LListenSock, LAcceptSock, LClientSock),
+    'connected pair');
+
+  LReactor := TIocpReactor.Create(4);
+  Check(LReactor.IsValid, 'reactor valid');
+  try
+    FillChar(LRecvBuf, SizeOf(LRecvBuf), 0);
+    GRecvDone := False;
+    GRecvResult := -1;
+    Check(LReactor.AsyncRecv(PtrInt(LAcceptSock.Value), @LRecvBuf[0],
+      SizeOf(LRecvBuf), 0, @OnRecvDone, nil), 'AsyncRecv should submit');
+    Check(LReactor.HasPending, 'pending recv should mark reactor pending');
+
+    { Close immediately after submission. The contract here is that Close
+      returns and releases owned pending state without hanging. }
+    LReactor.Close;
+    Check(not LReactor.IsValid, 'reactor should be invalid after close');
+    Check(not LReactor.HasPending, 'close should clear pending recv state');
+  finally
+    platform_socket_close(LClientSock);
+    platform_socket_close(LAcceptSock);
+    platform_socket_close(LListenSock);
+  end;
+end;
+
+procedure TestIocpPollTimeout;
+var
+  LReactor: TIocpReactor;
+begin
+  LReactor := TIocpReactor.Create(4);
+  Check(LReactor.IsValid, 'reactor valid');
+  Check(not LReactor.HasPending, 'idle reactor should not report pending');
+  Check(not LReactor.PollOne, 'idle PollOne should return immediately');
+  LReactor.Close;
+end;
+
 procedure TestIocpAsyncRecv;
 var
   LListenSock, LAcceptSock, LClientSock: TPlatformSocket;
@@ -434,6 +476,7 @@ const
 begin
   { Create listening socket }
   Check(CreateListener(LListenSock, LPort), 'create listener');
+  LAcceptedSock := PLATFORM_INVALID_SOCKET;
 
   LReactor := TIocpReactor.Create(4);
   Check(LReactor.IsValid, 'reactor valid');
@@ -495,7 +538,8 @@ begin
   finally
     LReactor.Close;
     platform_socket_close(LClientSock);
-    platform_socket_close(LAcceptedSock);
+    if LAcceptedSock.Value <> PLATFORM_INVALID_SOCKET.Value then
+      platform_socket_close(LAcceptedSock);
     platform_socket_close(LListenSock);
   end;
 end;
@@ -513,6 +557,8 @@ begin
   {$IFDEF NEXTPAS_WINDOWS}
   T.Run('create/close', @TestIocpCreateClose);
   T.Run('AsyncSend', @TestIocpAsyncSend);
+  T.Run('Close with pending recv', @TestIocpCloseWithPending);
+  T.Run('Poll timeout', @TestIocpPollTimeout);
   T.Run('AsyncRecv', @TestIocpAsyncRecv);
   T.Run('AcceptEx+Send', @TestIocpAcceptSend);
   T.Run('ConnectEx', @TestIocpConnectEx);
