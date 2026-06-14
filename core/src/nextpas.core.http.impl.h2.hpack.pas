@@ -293,7 +293,7 @@ var
   LName: AnsiString;
   LValue: AnsiString;
 begin
-  for LDynamicIndex := 0 to ADynamicTable.Count - 1 do
+  for LDynamicIndex := ADynamicTable.FCount - 1 downto 0 do
   begin
     if ADynamicTable.Get(LDynamicIndex, LName, LValue) and
       (LName = AName) and (LValue = AValue) then
@@ -313,7 +313,7 @@ var
   LName: AnsiString;
   LValue: AnsiString;
 begin
-  for LDynamicIndex := 0 to ADynamicTable.Count - 1 do
+  for LDynamicIndex := ADynamicTable.FCount - 1 downto 0 do
   begin
     if ADynamicTable.Get(LDynamicIndex, LName, LValue) and (LName = AName) then
     begin
@@ -337,27 +337,33 @@ procedure THPackEncoder.EncodeInteger(var AOut: AnsiString; AValue: UInt32;
 var
   LPrefixMask: UInt32;
   LIdx: SizeInt;
+  LBuf: array[0..4] of AnsiChar;
+  LBufLen: SizeInt;
 begin
   LPrefixMask := (UInt32(1) shl APrefixBits) - 1;
-  LIdx := Length(AOut);
-  SetLength(AOut, LIdx + 1);
+  LBufLen := 0;
   if AValue < LPrefixMask then
-    AOut[LIdx + 1] := AnsiChar(APrefixMask or Byte(AValue))
+  begin
+    LBuf[0] := AnsiChar(APrefixMask or Byte(AValue));
+    LBufLen := 1;
+  end
   else
   begin
-    AOut[LIdx + 1] := AnsiChar(APrefixMask or Byte(LPrefixMask));
+    LBuf[0] := AnsiChar(APrefixMask or Byte(LPrefixMask));
+    LBufLen := 1;
     Dec(AValue, LPrefixMask);
     while AValue >= 128 do
     begin
-      LIdx := Length(AOut);
-      SetLength(AOut, LIdx + 1);
-      AOut[LIdx + 1] := AnsiChar(Byte(AValue and $7F) or $80);
+      LBuf[LBufLen] := AnsiChar(Byte(AValue and $7F) or $80);
+      Inc(LBufLen);
       AValue := AValue shr 7;
     end;
-    LIdx := Length(AOut);
-    SetLength(AOut, LIdx + 1);
-    AOut[LIdx + 1] := AnsiChar(Byte(AValue));
+    LBuf[LBufLen] := AnsiChar(Byte(AValue));
+    Inc(LBufLen);
   end;
+  LIdx := Length(AOut);
+  SetLength(AOut, LIdx + LBufLen);
+  Move(LBuf[0], AOut[LIdx + 1], LBufLen);
 end;
 
 procedure THPackEncoder.EncodeHuffman(var AOut: AnsiString; const AStr: AnsiString);
