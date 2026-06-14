@@ -7,6 +7,8 @@ uses
   nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.collections,
+  nextpas.core.collections.base,
+  nextpas.core.collections.arr.intf,
   nextpas.core.collections.vec.intf,
   nextpas.core.collections.vec,
   nextpas.core.collections.vecdeque,
@@ -29,6 +31,8 @@ uses
 type
   TStrVec = specialize TVec<string>;
   IStrVec = specialize IVec<string>;
+  IStrArray = specialize IArray<string>;
+  TStringDynArray = specialize TGenericArray<string>;
   TStrDeque = specialize TVecDeque<string>;
   IStrQueue = specialize IQueue<string>;
   IStrStack = specialize IStack<string>;
@@ -101,6 +105,47 @@ begin
   finally
     LV.Free;
   end;
+end;
+
+procedure TestArrayStringManagedTypeInfoConsumerContract;
+var
+  LA: IStrArray;
+  LReadBack: TStringDynArray;
+begin
+  LA := specialize MakeArr<string>(['a', 'b', 'c', 'd']);
+
+  LA.Resize(6);
+  CheckEqual('', LA.Get(4), 'TArray string managed TypeInfo consumer contract initializes slot 4');
+  CheckEqual('', LA.Get(5), 'TArray string managed TypeInfo consumer contract initializes slot 5');
+
+  LA.Overwrite(3, ['x', 'y']);
+  CheckEqual('x', LA.Get(3), 'Overwrite should copy managed value 3 through public array facade');
+  CheckEqual('y', LA.Get(4), 'Overwrite should copy managed value 4 through public array facade');
+
+  LA.Copy(0, 1, 4);
+  CheckEqual('a', LA.Get(0), 'Copy overlap should preserve source slot');
+  CheckEqual('a', LA.Get(1), 'Copy overlap should copy value 0 to value 1');
+  CheckEqual('b', LA.Get(2), 'Copy overlap should copy value 1 to value 2');
+  CheckEqual('c', LA.Get(3), 'Copy overlap should copy value 2 to value 3');
+  CheckEqual('x', LA.Get(4), 'Copy overlap should copy value 3 to value 4');
+  CheckEqual('', LA.Get(5), 'Copy overlap should not touch value 5');
+
+  LA.Read(0, LReadBack, 6);
+  CheckEqual(Int64(6), Int64(Length(LReadBack)), 'Read should resize managed destination array');
+  CheckEqual('a', LReadBack[0], 'Read should copy managed slot 0');
+  CheckEqual('a', LReadBack[1], 'Read should copy managed slot 1');
+  CheckEqual('b', LReadBack[2], 'Read should copy managed slot 2');
+  CheckEqual('c', LReadBack[3], 'Read should copy managed slot 3');
+  CheckEqual('x', LReadBack[4], 'Read should copy managed slot 4');
+  CheckEqual('', LReadBack[5], 'Read should copy managed slot 5');
+
+  LA.Resize(2);
+  CheckEqual(Int64(2), Int64(LA.GetCount), 'Resize shrink should update count');
+  CheckEqual('a', LA.Get(0), 'Resize shrink should preserve managed slot 0');
+  CheckEqual('a', LA.Get(1), 'Resize shrink should preserve managed slot 1');
+
+  LA.Clear;
+  CheckEqual(Int64(0), Int64(LA.GetCount), 'Clear should finalize managed slots and empty the array');
 end;
 
 procedure TestDequeStringPushPop;
@@ -369,6 +414,7 @@ begin
   T.Run('Vec string push/pop/drain', @TestVecStringPushPopDrain);
   T.Run('Vec string insert/remove', @TestVecStringInsertRemove);
   T.Run('Vec string splice/retain', @TestVecStringSpliceRetain);
+  T.Run('TArray string managed TypeInfo consumer contract', @TestArrayStringManagedTypeInfoConsumerContract);
   T.Run('Deque string push/pop/insert/remove', @TestDequeStringPushPop);
   T.Run('Queue string FIFO', @TestQueueString);
   T.Run('Stack string LIFO', @TestStackString);

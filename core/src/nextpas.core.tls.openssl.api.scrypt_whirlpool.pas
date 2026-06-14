@@ -5,8 +5,7 @@ unit nextpas.core.tls.openssl.api.scrypt_whirlpool;
 
 interface
 
-uses
-  Classes, SysUtils, nextpas.core.tls.openssl.base;
+uses SysUtils, nextpas.core.tls.openssl.base;
 
 type
   // WHIRLPOOL types
@@ -65,8 +64,7 @@ function WhirlpoolHashString(const S: string): string;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.utils;
+uses nextpas.core.tls.openssl.api.utils;
 
 procedure LoadScryptWhirlpoolFunctions(AHandle: TLibHandle);
 type
@@ -152,7 +150,7 @@ var
   UStr: UnicodeString;
 begin
   UStr := UnicodeString(S);
-  Data := TEncoding.UTF8.GetBytes(UStr);
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(UStr);
   Hash := WhirlpoolHash(Data);
   HexStr := '';
   for I := 0 to High(Hash) do

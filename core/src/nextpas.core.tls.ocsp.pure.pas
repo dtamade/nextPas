@@ -4,8 +4,6 @@ unit nextpas.core.tls.ocsp.pure;
 
 interface
 
-uses
-  SysUtils;
 
 type
   TOCSPCertStatus = (ocsGood = 0, ocsRevoked = 1, ocsUnknown = 2);
@@ -35,8 +33,7 @@ function IsOCSPResponseFresh(const AResponse: TOCSPBasicResponse): Boolean;
 
 implementation
 
-uses
-  DateUtils, nextpas.core.time, nextpas.core.tls.asn1;
+uses DateUtils, nextpas.core.time, nextpas.core.tls.asn1;
 
 function TryParseOCSPResponse(const AData: TBytes; out AResponse: TOCSPBasicResponse;
   out AError: string): Boolean;

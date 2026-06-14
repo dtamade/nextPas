@@ -12,15 +12,7 @@ unit nextpas.core.tls.pkcs11.loader;
 
 interface
 
-uses
-  SysUtils, Classes, DynLibs,
-  nextpas.core.tls.pkcs11.api;
-
-type
-  { TPKCS11Loader }
-  TPKCS11Loader = class
-  private
-    FLibHandle: TLibHandle;
+uses DynLibs, nextpas.core.tls.pkcs11.api; type TPKCS11Loader = class private FLibHandle: TLibHandle;
     FLibraryPath: string;
     FFunctionList: CK_FUNCTION_LIST_PTR;
     FInitialized: Boolean;

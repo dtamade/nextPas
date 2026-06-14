@@ -16,7 +16,7 @@ uses
 
 {**
  * Securely zero memory to prevent sensitive data from remaining
- * in memory after use. Uses platform-specific secure zeroing if available.
+ * in memory after use. Uses explicit zeroing followed by a barrier.
  * 
  * This function ensures the compiler cannot optimize away the zeroing operation.
  * 
@@ -42,7 +42,7 @@ procedure SecureZeroString(var Str: AnsiString);
 implementation
 
 uses
-  nextpas.core.platform.memory;
+  nextpas.core.platform.secure;
 
 procedure SecureZeroMemory(Buffer: Pointer; Size: NativeUInt);
 begin

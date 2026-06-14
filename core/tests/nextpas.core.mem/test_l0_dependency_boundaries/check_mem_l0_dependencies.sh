@@ -8,20 +8,6 @@ FORBIDDEN_UNITS=(
   "nextpas.core.sync"
   "nextpas.core.sync.mutex"
   "nextpas.core.platform.time"
-  "nextpas.core.platform.posix.base"
-  "nextpas.core.platform.posix.ffi"
-  "nextpas.core.platform.linux.base"
-  "nextpas.core.platform.linux.ffi"
-  "nextpas.core.platform.darwin.base"
-  "nextpas.core.platform.darwin.ffi"
-  "nextpas.core.platform.android.base"
-  "nextpas.core.platform.android.ffi"
-  "nextpas.core.platform.freebsd.base"
-  "nextpas.core.platform.freebsd.ffi"
-  "nextpas.core.platform.unix.base"
-  "nextpas.core.platform.unix.ffi"
-  "nextpas.core.platform.windows.base"
-  "nextpas.core.platform.windows.ffi"
   "nextpas.core.time.cpu"
   "nextpas.core.text.conv"
   "nextpas.core.fs.util"
@@ -31,7 +17,8 @@ FORBIDDEN_UNITS=(
   "SyncObjs"
 )
 
-KNOWN_DEBT=()
+KNOWN_DEBT=(
+)
 
 is_forbidden_unit() {
   local unit="$1"

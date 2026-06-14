@@ -513,6 +513,27 @@ begin
     'Windows dir_close must not ignore FindClose failure');
 end;
 
+procedure TestAndroidDirectoryEnumerationSourceContract;
+var
+  LSource: string;
+  LAndroidDirRead: string;
+  LAndroidBase: string;
+begin
+  LSource := LowerCase(LoadSourceText('../../../src/nextpas.core.platform.files.pas'));
+  LAndroidBase := LowerCase(LoadSourceText('../../../src/nextpas.core.platform.android.base.pas'));
+  LAndroidDirRead := SourceSlice(LSource,
+    'function platform_dir_read(var ahandle: tplatformdirhandle; out aentry: tplatformdirentry): int32;' +
+      LineEnding + '{$if defined(nextpas_linux) or defined(nextpas_android)}',
+    'function platform_dir_close(var ahandle: tplatformdirhandle): int32;');
+
+  CheckContains(LAndroidBase, 'android_syscall_getdents64',
+    'Android base must own getdents64 syscall number');
+  CheckContains(LAndroidDirRead, 'android_syscall_getdents64',
+    'Android dir_read must call host-owned getdents64 syscall number');
+  CheckAbsent(LAndroidDirRead, 'result := -1;' + LineEnding + '  exit;',
+    'Android dir_read must not keep explicit unsupported stub');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.files');
   T.Run('open/create/close', @TestOpenCreateClose);
@@ -542,5 +563,7 @@ begin
   T.Run('chmod', @TestChmod);
   T.Run('truncate_path', @TestTruncatePath);
   T.Run('directory close contract', @TestDirectoryCloseContract);
+  T.Run('Android directory enumeration source contract',
+    @TestAndroidDirectoryEnumerationSourceContract);
   T.Summary;
 end.

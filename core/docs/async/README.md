@@ -1,16 +1,44 @@
 # nextpas.core.async
 
-Production-quality single-threaded async event loop for FreePascal.
+Single-threaded async event loop for FreePascal with cross-platform backend support.
+
+## Truth Matrix
+
+### linux runtime truth
+- io_uring backend (Linux 5.1+) via `TIoReactor`
+- epoll fallback (Linux 2.6+) via `TEpollReactor`
+- Runtime auto-detection: probes io_uring at `TPoller.Create` time; falls back to epoll on ENOSYS
+- 18 timeout tests in `test_async_timeout` verify the race mechanism, `TTimeoutCtx` lifecycle, and heaptrc enforcement
+
+### windows compile truth
+- `TPoller` defines `pbIocp` in the backend enum on Windows, but `TIocpReactor` is currently a stub that raises `ENetworkError`
+- `nextpas.core.io.reactor.iocp.pas` contains the IOCP function declarations (`CreateIoCompletionPort`, `GetQueuedCompletionStatus`, `PostQueuedCompletionStatus`, `CancelIoEx`) with `external 'kernel32.dll'`
+- Backend model: `pbIocp` is classified as `pbmCompletionQueue` (completion-based, not readiness-based)
+- **source-contract + forced compile only**: tests exist (`test_async_windows_compile_gate`, `test_poller_windows_compile_gate`) that verify the Windows source compiles, but there are no runtime tests
+- **not windows runtime ready** — no Windows runner has proven runtime correctness on an actual Windows host
+- **platform wake is not the iocp owner** — Windows platform wake (or its future replacement) is owned by the platform poller seam, not by the IOCP completion port; IOCP and platform wake are separate plumbing paths
+
+### macOS/FreeBSD truth
+- Poller backend enum does **not** have a `pbKqueue` entry — no `pbkqueue` backend
+- `nextpas.core.platform.io.base.pas` defines a `TKqueueReactor` but the poller does not wire it in
+- macOS/FreeBSD currently gets `pbUnsupported` when the poller fails to detect io_uring
+- `pbUnsupported` documents the `pbunsupported` fallback for any host that is not Linux with io_uring or epoll
+- Pure idle loops on unsupported backends will simply wait on platform wake without I/O polling
+
+### Backend Model Classification
+- `pbiouring` and `pbiocp` are `pbmCompletionQueue` — these backends signal completion when an operation finishes, not readiness
+- `pbepoll` is `pbmReadiness` — epoll signals when a fd is ready to read/write, not when an operation completes
+- `pbUnsupported` documents the absence of a usable backend
 
 ## Features
 
 - io_uring backend (Linux 5.1+) with epoll fallback (Linux 2.6+)
 - Runtime backend detection (automatic best selection)
 - Timer heap (min-heap, O(log n) schedule/cancel)
-- I/O with deadline (timeout race mechanism)
-- Cross-thread wake (eventfd + Post)
+- I/O with deadline (timeout race mechanism with atomic CAS)
+- Cross-thread wake (platform poller wake + Post queue)
 - Task state machine (idle/pending/completed/failed/timedout/cancelled)
-- Zero memory leaks (31+ tests across 3 suites verify)
+- Zero memory leaks (`test_async_timeout` enforces heaptrc on the timeout race mechanism)
 
 ## Quick Start
 
@@ -45,8 +73,8 @@ end.
 | Method | Description |
 |--------|-------------|
 | `Create(AQueueDepth)` | Create loop with I/O queue depth (default 64) |
-| `Close` | Release all resources (poller, eventfd, mutex) |
-| `IsValid` | Returns True if poller and eventfd are initialized |
+| `Close` | Release all resources (poller, wake poller, mutex) — aborts pending I/O with -ECANCELED |
+| `IsValid` | Returns True if all three owned resources are initialized: poller, wake poller, and pending queue mutex |
 | `Run` | Run loop until `Stop` is called |
 | `RunOnce` | Process one batch of events then return |
 | `Poll` | Non-blocking: fire timers + poll I/O + drain pending |
@@ -83,13 +111,14 @@ end.
 Timeout methods use a race mechanism: a timer and the I/O operation run concurrently.
 If the timer fires first, the callback receives `AResult = -110` (ETIMEDOUT).
 If I/O completes first, the timer is cancelled automatically.
+The mechanism uses atomically-reference-counted `TTimeoutCtx` to ensure exactly one callback fires.
 
 ### Cross-Thread Communication
 
 | Method | Description |
 |--------|-------------|
 | `Post(ACallback, AContext)` | Enqueue callback from any thread (thread-safe) |
-| `Wake` | Wake the loop from sleep (thread-safe) |
+| `Wake` | Wake the loop from sleep through the platform poller wake seam (thread-safe) |
 
 ### TTimerHeap (low-level)
 
@@ -133,18 +162,18 @@ type
     +----+----+----------+
     |         |          |
 +---v---+ +---v----+ +---v------+
-| TPoller| |TTimerHeap| | eventfd  |
-| (I/O)  | | (timers) | | (wake)   |
+| TPoller| |TTimerHeap| | platform |
+| (I/O)  | | (timers) | | wake    |
 +---------+ +----------+ +----------+
     |
-    +--- io_uring (TIoReactor)
+    +--- io_uring (TIoReactor) — pbmCompletionQueue
     |
-    +--- epoll (TEpollReactor)
+    +--- epoll (TEpollReactor) — pbmReadiness
 ```
 
 - **TPoller**: Unified I/O backend that dispatches to io_uring or epoll based on runtime detection.
 - **TTimerHeap**: Min-heap with tombstone cancellation. Entries are recycled via a free-list.
-- **eventfd + PendingQueue**: Cross-thread wake mechanism. `Post` appends to a mutex-protected queue and writes to eventfd. The loop drains the queue on each iteration.
+- **Platform wake**: Cross-thread wake via the platform poller wake seam. `Post` appends to a mutex-protected queue and wakes the loop. The loop drains the queue on each iteration.
 
 ## Backend Selection
 
@@ -155,9 +184,10 @@ At `TPoller.Create` time, the runtime probes for io_uring support:
 3. Otherwise, fall back to epoll
 
 This means:
-- Linux 5.1+ with io_uring: uses `TIoReactor` (io_uring)
-- Linux 2.6+ without io_uring: uses `TEpollReactor` (epoll)
-- The application code is identical regardless of backend
+- Linux 5.1+ with io_uring: uses `TIoReactor` (io_uring) — `pbmCompletionQueue`
+- Linux 2.6+ without io_uring: uses `TEpollReactor` (epoll) — `pbmReadiness`
+- macOS/FreeBSD: returns `pbUnsupported` — no functional I/O backend
+- Windows: compile-only `pbIocp` stub — `pbmCompletionQueue`
 
 Check the active backend at runtime:
 ```pascal
@@ -189,17 +219,20 @@ end;
 
 `Run` implements a busy-poll-then-sleep loop:
 
-1. Drain eventfd + pending callbacks
+1. Drain pending callbacks from cross-thread queue
 2. Fire expired timers
 3. Flush + poll I/O (non-blocking)
 4. If any work was done, loop immediately (step 1)
-5. If idle, sleep on eventfd via `poll()` with timeout capped at 10ms
+5. If idle, sleep on platform poller wake until either a wake signal arrives or a timer expires
 
-This ensures low latency when busy and low CPU usage when idle.
+The wake timeout:
+- With no pending I/O (pure idle): may sleep indefinitely on platform wake — `pure idle waits may block indefinitely`
+- With pending I/O: the wait is capped so the loop can service I/O completion callbacks — `pending i/o caps wake-only waits`
 
 ## Known Limitations
 
 - **Timeout is notify-only**: the timer fires the callback with ETIMEDOUT but does not cancel the kernel I/O operation. The I/O will still complete eventually (and be discarded).
-- **kqueue/IOCP backends are stubs**: only Linux is fully implemented.
+- **No kqueue backend**: the poller backend enum and platform io base define no kqueue variant for the async module's use. no `pbkqueue` backend.
+- **IOCP is compile-only**: `pbIocp` exists in the backend enum and the reactor stub compiles, but no runtime verification has been done on Windows.
 - **No WhenAll/WhenAny combinators**: tasks must be composed manually via callbacks.
 - **No file descriptor lifecycle management**: the caller is responsible for opening/closing fds.

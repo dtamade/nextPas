@@ -194,6 +194,12 @@ begin
     'posix.ffi must not keep host-specific pthread condattr clock binding');
   CheckTokenPresent(LSource, 'function pthread_mutex_timedlock',
     'posix.ffi must declare pthread_mutex_timedlock where FPC pthread sources prove the ABI');
+  CheckTokenPresent(LSource, 'procedure explicit_bzero',
+    'posix.ffi must declare POSIX explicit_bzero as a raw libc binding');
+  CheckTokenPresent(LSource, 'external ''c'' name ''explicit_bzero''',
+    'posix.ffi explicit_bzero binding must name the raw libc symbol');
+  CheckTokenAbsent(LSource, 'platform_posix_secure_zero',
+    'posix.ffi must not expose secure-zero helper logic');
 end;
 
 begin

@@ -4,8 +4,7 @@ unit nextpas.core.tls.http2.alpn;
 
 interface
 
-uses
-  SysUtils, Classes, nextpas.core.tls.base;
+uses SysUtils, nextpas.core.tls.base;
 
 const
   HTTP2_ALPN_PROTOCOL = 'h2';
@@ -37,8 +36,7 @@ function GetHTTP2ALPNProtocols: TStringArray;
 
 implementation
 
-uses
-  DateUtils;
+uses DateUtils;
 
 function GetHTTP2ALPNProtocols: TStringArray;
 begin

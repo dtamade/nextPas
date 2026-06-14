@@ -5,15 +5,7 @@ unit nextpas.core.tls.freepascal.engine;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
-  nextpas.core.tls.engine;
-
-type
-  TFreePascalEngine = class(TInterfacedObject, ISSLEngine)
-  private
-    FContext: ISSLContext;
+uses nextpas.core.tls.base, nextpas.core.tls.engine; type TFreePascalEngine = class(TInterfacedObject, ISSLEngine) private FContext: ISSLContext;
     FRole: TSSLEngineRole;
     FConnection: ISSLConnection;
     FClientConnection: ISSLClientConnection;
@@ -61,10 +53,7 @@ function CreateFreePascalEngine(AContext: ISSLContext; ARole: TSSLEngineRole; AS
 
 implementation
 
-uses
-  nextpas.core.tls.freepascal.connection;
-
-constructor TFreePascalEngine.Create(AContext: ISSLContext; ARole: TSSLEngineRole; ASocket: THandle);
+uses nextpas.core.tls.freepascal.connection; constructor TFreePascalEngine.Create(AContext: ISSLContext; ARole: TSSLEngineRole; ASocket: THandle);
 begin
   inherited Create;
   FContext := AContext;

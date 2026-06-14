@@ -18,7 +18,7 @@ unit nextpas.core.tls.wolfssl.session;
 interface
 
 uses
-  SysUtils, Classes, DateUtils, ctypes,
+  SysUtils,DateUtils, ctypes,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.wolfssl.base,
@@ -84,7 +84,8 @@ type
 implementation
 
 uses
-  nextpas.core.tls.wolfssl.certificate;
+  nextpas.core.text.strings,
+    nextpas.core.tls.wolfssl.certificate;
 
 const
   WOLFSSL_SESSION_SERIALIZATION_MAGIC = 'fafafa-wolfssl-session-v1';
@@ -299,10 +300,8 @@ begin
       Result := LOwned;
       LOwned := nil;
     finally
-      LOwned.Free;
     end;
   finally
-    LTemp.Free;
   end;
 end;
 
@@ -345,30 +344,27 @@ end;
 function TWolfSSLSession.BuildSerializedSessionData(
   const ANativeData: TBytes): TBytes;
 var
-  LData: TStringList;
+  LData: TStringArray;
   LCreatedUnix: Int64;
 begin
   SetLength(Result, 0);
   if Length(ANativeData) = 0 then
     Exit;
-
-  LData := TStringList.Create;
   try
     if FCreationTime > 0 then
       LCreatedUnix := DateTimeToUnix(FCreationTime)
     else
       LCreatedUnix := 0;
 
-    LData.Values['magic'] := WOLFSSL_SESSION_SERIALIZATION_MAGIC;
-    LData.Values['id'] := FSessionID;
-    LData.Values['created_unix'] := IntToStr(LCreatedUnix);
-    LData.Values['timeout'] := IntToStr(FTimeout);
-    LData.Values['protocol'] := IntToStr(Ord(FProtocolVersion));
-    LData.Values['cipher'] := FCipherName;
-    LData.Values['native_hex'] := BytesToHexString(ANativeData);
+    StringPairsGet(LPairs, 'magic') := WOLFSSL_SESSION_SERIALIZATION_MAGIC;
+    StringPairsGet(LPairs, 'id') := FSessionID;
+    StringPairsGet(LPairs, 'created_unix') := IntToStr(LCreatedUnix);
+    StringPairsGet(LPairs, 'timeout') := IntToStr(FTimeout);
+    StringPairsGet(LPairs, 'protocol') := IntToStr(Ord(FProtocolVersion));
+    StringPairsGet(LPairs, 'cipher') := FCipherName;
+    StringPairsGet(LPairs, 'native_hex') := BytesToHexString(ANativeData);
     Result := BytesOf(UTF8String(LData.Text));
   finally
-    LData.Free;
   end;
 end;
 
@@ -378,7 +374,7 @@ function TWolfSSLSession.TryLoadSerializedSessionData(const AData: TBytes;
   out AProtocolVersion: TSSLProtocolVersion; out ACipherName: string;
   out AHasEnvelope: Boolean): Boolean;
 var
-  LData: TStringList;
+  LData: TStringArray;
   LText: RawByteString;
   LCreatedUnix: Int64;
   LProtocolOrdinal: Integer;
@@ -404,26 +400,25 @@ begin
 
   AHasEnvelope := True;
   SetString(LText, PAnsiChar(@AData[0]), Length(AData));
-  LData := TStringList.Create;
   try
     LData.Text := string(UTF8String(LText));
-    if LData.Values['magic'] <> WOLFSSL_SESSION_SERIALIZATION_MAGIC then
+    if StringPairsGet(LPairs, 'magic') <> WOLFSSL_SESSION_SERIALIZATION_MAGIC then
       Exit;
 
-    ASessionID := LData.Values['id'];
+    ASessionID := StringPairsGet(LPairs, 'id');
     if ASessionID = '' then
       Exit;
-    if not TryStrToInt64(LData.Values['created_unix'], LCreatedUnix) then
+    if not TryStrToInt64(StringPairsGet(LPairs, 'created_unix'), LCreatedUnix) then
       Exit;
-    if not TryStrToInt(LData.Values['timeout'], ATimeout) then
+    if not TryStrToInt(StringPairsGet(LPairs, 'timeout'), ATimeout) then
       Exit;
-    if not TryStrToInt(LData.Values['protocol'], LProtocolOrdinal) then
+    if not TryStrToInt(StringPairsGet(LPairs, 'protocol'), LProtocolOrdinal) then
       Exit;
     if (LProtocolOrdinal < Ord(Low(TSSLProtocolVersion))) or
        (LProtocolOrdinal > Ord(High(TSSLProtocolVersion))) then
       Exit;
 
-    LNativeHex := LData.Values['native_hex'];
+    LNativeHex := StringPairsGet(LPairs, 'native_hex');
     if not TryHexStringToBytes(LNativeHex, ANativeData) then
       Exit;
     if Length(ANativeData) = 0 then
@@ -434,10 +429,9 @@ begin
     else
       ACreationTime := 0;
     AProtocolVersion := TSSLProtocolVersion(LProtocolOrdinal);
-    ACipherName := LData.Values['cipher'];
+    ACipherName := StringPairsGet(LPairs, 'cipher');
     Result := True;
   finally
-    LData.Free;
   end;
 end;
 
@@ -688,7 +682,6 @@ begin
     Result := LClone;
     LClone := nil;
   finally
-    LClone.Free;
   end;
 end;
 

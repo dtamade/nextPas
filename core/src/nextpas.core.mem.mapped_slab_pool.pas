@@ -640,6 +640,7 @@ var
   LRequiredSize: UInt64;
   LTotalPages: UInt32;
   LFileHandle: TPlatformFileHandle;
+  LStat: TPlatformFileStat;
 begin
   Result := False;
   Close;
@@ -647,7 +648,7 @@ begin
   FMemoryMap := TMemoryMap.Create;
   try
     // 尝试打开现有文件
-    if MappedSlabPoolFileExists(aFileName) then
+    if platform_file_stat(PAnsiChar(aFileName), LStat) = 0 then
     begin
       if not FMemoryMap.OpenFile(aFileName, mmaReadWrite) then
       begin
@@ -711,11 +712,13 @@ begin
 end;
 
 function TMappedSlabPool.OpenFile(const aFileName: string): Boolean;
+var
+  LStat: TPlatformFileStat;
 begin
   Result := False;
   Close;
 
-  if not MappedSlabPoolFileExists(aFileName) then Exit;
+  if platform_file_stat(PAnsiChar(aFileName), LStat) <> 0 then Exit;
 
   FMemoryMap := TMemoryMap.Create;
   try
@@ -1176,21 +1179,23 @@ end;
 procedure TMappedSlabPoolManager.InitializePools(aMode: TMappedSlabPoolMode);
 var
   LIndex: Integer;
+  LIdxStr: string;
   LFileName, LSharedName: string;
 begin
   for LIndex := 0 to High(FPools) do
   begin
     FPools[LIndex] := TMappedSlabPool.Create;
+    Str(LIndex, LIdxStr);
 
     case aMode of
       mspFile:
       begin
-        LFileName := FBasePath + MappedSlabPoolIndexedName('slab_pool_', LIndex, '.dat');
+        LFileName := FBasePath + 'slab_pool_' + LIdxStr + '.dat';
         FPools[LIndex].CreateFile(LFileName, FPoolSizes[LIndex]);
       end;
       mspShared:
       begin
-        LSharedName := FSharedPrefix + MappedSlabPoolIndexedName('SlabPool_', LIndex, '');
+        LSharedName := FSharedPrefix + 'SlabPool_' + LIdxStr;
         FPools[LIndex].CreateShared(LSharedName, FPoolSizes[LIndex]);
       end;
       mspAnonymous:

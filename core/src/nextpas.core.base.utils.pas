@@ -10,6 +10,7 @@ procedure SafeFree(var AObj); inline;
 
 {** 内存操作（System 内建的包装，确保接口一致） *}
 procedure ZeroMem(ADst: Pointer; ASize: SizeUInt); inline;
+procedure FillMem(ADst: Pointer; ASize: SizeUInt; AValue: Byte); inline;
 procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt); inline;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean; inline;
 
@@ -49,6 +50,15 @@ begin
   if ADst = nil then
     raise EArgumentNil.Create('ZeroMem: destination is nil');
   FillChar(ADst^, ASize, 0);
+end;
+
+procedure FillMem(ADst: Pointer; ASize: SizeUInt; AValue: Byte);
+begin
+  if ASize = 0 then
+    Exit;
+  if ADst = nil then
+    raise EArgumentNil.Create('FillMem: destination is nil');
+  FillChar(ADst^, ASize, AValue);
 end;
 
 procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt);

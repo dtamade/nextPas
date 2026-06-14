@@ -28,26 +28,49 @@ Current S3 stance:
 - No callable `RaiseException` facade is exposed by `nextpas.core.system`.
 - No new exception class is introduced for system lifecycle work.
 - The runtime-fault contract name is `np.system.runtime_fault`.
+- Exception helper contracts map HIR intrinsics to LLVM helpers:
+
+| Contract | Meaning | HIR intrinsic | LLVM helper |
+| --- | --- | --- | --- |
+| `np.system.exception_try_push` | push an exception frame onto the stack | `try-begin-runtime` / `try-end-runtime` | `@np_try_push` |
+| `np.system.exception_try_pop` | pop an exception frame from the stack | `finally-end-runtime` / `except-end-runtime` | `@np_try_pop` |
+| `np.system.exception_raise` | raise an exception through the current frame | `raise-runtime` | `@np_raise` |
+| `np.system.exception_finally_end` | complete a finally block and resume exception propagation | `finally-end-runtime` | `@np_finally_end` |
+| `np.system.exception_except_end` | complete an except block and resume normal flow | `except-end-runtime` | `@np_except_end` |
+
+- Current LLVM exception lowering may use backend-private exception helpers
+  such as `@np_try_push`, `@np_try_pop`, `@np_finally_end`,
+  `@np_except_end`, and `@np_raise`. These helper names are LLVM/backend
+  evidence only, not public ABI, not public Pascal facade, not final unwind ABI,
+  and not exception taxonomy owned by system.
+- Source-contract checks verify helper existence in `np_hir_llvm_emitter.pas`
+  and contract documentation in `lifecycle-contracts.md`.
+- HIR exception tests may use those helpers to prove try/finally/except/raise
+  lowering shape. They do not prove final exception object layout, unwinder
+  strategy, diagnostics, or public taxonomy behavior.
 
 ## RTTI And TypeInfo Boundary
 
-RTTI and TypeInfo need compiler-owned truth before runtime can expose stable data. S3 records the boundary
-only; it does not freeze record layouts, binary metadata, or a TypInfo facade.
+RTTI and TypeInfo need compiler-owned truth before runtime can expose stable data. This boundary states:
+minimal TypInfo facade is live, but S3 still does not freeze RTTI metadata layout, binary metadata, or
+broader reflection APIs.
 
 Rules:
 
 - Symbol/type identity, layout and generic/specialization facts are compiler-owned.
 - Runtime may consume emitted metadata, but it must not re-infer language semantics.
 - `TypeInfo` availability must be explicit in compiler output; missing RTTI must fail deterministically.
-- Future TypInfo compatibility facade work belongs to S4+ and requires separate API tests.
+- Broader TypInfo reflection compatibility work belongs to S4+ and requires separate API tests.
+- The `np.system.*` names in this document are contract vocabulary only, not public Pascal facade.
 
 Current S3 stance:
 
-- `nextpas.core.system.typinfo` is live only as the S4 seven-symbol bridge.
-- The live facade does not freeze metadata ABI, property tables, method tables,
-  or string-based reflection helpers.
-- `RTTI` / `TypeInfo` metadata semantics remain compiler/runtime-owned until
-  source-backed metadata exists.
+- `nextpas.core.system.typinfo` is live as a minimal facade for `PTypeInfo`, `TTypeKind`, kind aliases
+  and `InitializeArray` / `FinalizeArray` / `CopyArray`.
+- No RTTI helper symbol name is frozen beyond the minimal live TypInfo surface and this boundary document.
+- Broader RTTI metadata and property reflection remain future compiler/runtime work; `TypeInfo` /
+  `GetTypeKind` stay compiler/System compile-truth, with the minimal facade only naming identity/kind and
+  managed-array helper surface.
 
 ## Process Lifecycle
 

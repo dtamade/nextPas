@@ -4,8 +4,7 @@ unit nextpas.core.tls.openssl.base;
 
 interface
 
-uses
-  SysUtils, ctypes;
+uses ctypes;
 
 type
   // Basic C types mapping

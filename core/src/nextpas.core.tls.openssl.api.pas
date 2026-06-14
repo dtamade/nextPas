@@ -4,14 +4,7 @@ unit nextpas.core.tls.openssl.api;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.exceptions,
-  nextpas.core.tls.openssl.loader;
-
-const
-  {$IFDEF MSWINDOWS}
-  OPENSSL_LIB = 'libssl-3-x64.dll';
+uses nextpas.core.tls.exceptions, nextpas.core.tls.openssl.loader, nextpas.core.text.conv; const OPENSSL_LIB = 'libssl-3-x64.dll';
   CRYPTO_LIB = 'libcrypto-3-x64.dll';
   {$ELSE}
   OPENSSL_LIB = 'libssl.so';

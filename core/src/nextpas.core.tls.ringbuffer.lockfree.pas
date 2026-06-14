@@ -19,8 +19,7 @@ unit nextpas.core.tls.ringbuffer.lockfree;
 
 interface
 
-uses
-  SysUtils, nextpas.core.tls.base;
+uses nextpas.core.tls.base;
 
 type
   { Cache line size for padding - typically 64 bytes on modern CPUs }

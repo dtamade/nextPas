@@ -60,34 +60,13 @@ function platform_shm_close(var AMap: TPlatformMappedFile): Int32;
 
 implementation
 
-uses
-  SysUtils,
-  nextpas.core.platform.files,
-  nextpas.core.platform.files.base
-{$IFDEF NEXTPAS_UNIX}
-  , nextpas.core.platform.posix.base
-  , nextpas.core.platform.posix.ffi
-  {$IFDEF NEXTPAS_LINUX}
-  , nextpas.core.platform.linux.base
-  {$ENDIF}
-  {$IFDEF NEXTPAS_ANDROID}
-  , nextpas.core.platform.android.base
-  {$ENDIF}
-  {$IFDEF NEXTPAS_MACOS}
-  , nextpas.core.platform.darwin.base
-  {$ENDIF}
-  {$IFDEF NEXTPAS_FREEBSD}
-  , nextpas.core.platform.freebsd.base
-  {$ENDIF}
-  {$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_ANDROID) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD)}
-  , nextpas.core.platform.unix.base
-  {$ENDIF}
-{$ENDIF}
+uses nextpas.core.platform.files, nextpas.core.platform.files.base, nextpas.core.platform.posix.base, nextpas.core.platform.posix.ffi, nextpas.core.platform.linux.base, nextpas.core.platform.android.base, nextpas.core.platform.darwin.base, nextpas.core.platform.freebsd.base, nextpas.core.platform.unix.base, nextpas.core.platform.windows.base, nextpas.core.platform.windows.ffi;
+
 {$IFDEF NEXTPAS_WINDOWS}
-  , nextpas.core.platform.windows.base
-  , nextpas.core.platform.windows.ffi
+{ Local W-variant declarations not present in ffi.pas }
+function CreateFileMappingW(hFile: HANDLE; lpAttributes: LPSECURITY_ATTRIBUTES; flProtect: DWORD; dwMaximumSizeHigh: DWORD; dwMaximumSizeLow: DWORD; lpName: LPCWSTR): HANDLE; stdcall; external 'kernel32' name 'CreateFileMappingW';
+function OpenFileMappingW(dwDesiredAccess: DWORD; bInheritHandle: BOOL; lpName: LPCWSTR): HANDLE; stdcall; external 'kernel32' name 'OpenFileMappingW';
 {$ENDIF}
-  ;
 
 const
   PLATFORM_MMAP_EBADF = 9;
@@ -353,12 +332,12 @@ begin
   end;
 end;
 
-function WindowsSharedName(const AName: string): string;
+function WindowsSharedName(const AName: string): UnicodeString;
 begin
   if Pos('\', AName) = 0 then
-    Result := 'Local\' + AName
+    Result := 'Local\' + UnicodeString(AName)
   else
-    Result := AName;
+    Result := UnicodeString(AName);
 end;
 {$ENDIF}
 
@@ -422,7 +401,7 @@ begin
   end;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
-  AMap.MapHandle := PtrInt(CreateFileMappingA(LFile.Value, nil,
+  AMap.MapHandle := PtrInt(CreateFileMappingW(LFile.Value, nil,
     WindowsProtection(AAccess), UInt64High(LMapSize), UInt64Low(LMapSize), nil));
   if AMap.MapHandle = 0 then
   begin
@@ -470,7 +449,7 @@ begin
   end;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
-  AMap.MapHandle := PtrInt(CreateFileMappingA(HANDLE(PtrUInt(INVALID_HANDLE_VALUE)),
+  AMap.MapHandle := PtrInt(CreateFileMappingW(HANDLE(PtrUInt(INVALID_HANDLE_VALUE)),
     nil, WindowsProtection(AAccess), UInt64High(ASize), UInt64Low(ASize), nil));
   if AMap.MapHandle = 0 then
     Exit(Int32(GetLastError));
@@ -656,7 +635,7 @@ var
   LErr: Int32;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
-  LWinName: string;
+  LWinName: UnicodeString;
 {$ENDIF}
 begin
   ResetMap(AMap);
@@ -708,9 +687,9 @@ begin
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
   LWinName := WindowsSharedName(LName);
-  AMap.MapHandle := PtrInt(CreateFileMappingA(HANDLE(PtrUInt(INVALID_HANDLE_VALUE)),
+  AMap.MapHandle := PtrInt(CreateFileMappingW(HANDLE(PtrUInt(INVALID_HANDLE_VALUE)),
     nil, WindowsSharedProtection(AAccess), UInt64High(ASize), UInt64Low(ASize),
-    PAnsiChar(LWinName)));
+    PWideChar(LWinName)));
   if AMap.MapHandle = 0 then
   begin
     Result := Int32(GetLastError);
@@ -734,7 +713,7 @@ begin
   AMap.Flags := [pmfShared];
   AMap.IsOpen := True;
   AMap.IsSharedMemory := True;
-  AMap.SharedName := LWinName;
+  AMap.SharedName := string(LWinName);
   Result := 0;
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
@@ -755,7 +734,7 @@ var
   LErr: Int32;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
-  LWinName: string;
+  LWinName: UnicodeString;
   LMemInfo: MEMORY_BASIC_INFORMATION;
 {$ENDIF}
 begin
@@ -806,11 +785,11 @@ begin
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
   LWinName := WindowsSharedName(LName);
-  AMap.MapHandle := PtrInt(OpenFileMappingA(WindowsMapAccess(AAccess), False,
-    PAnsiChar(LWinName)));
+  AMap.MapHandle := PtrInt(OpenFileMappingW(WindowsMapAccess(AAccess), False,
+    PWideChar(LWinName)));
   if AMap.MapHandle = 0 then
   begin
-    AMap.MapHandle := PtrInt(OpenFileMappingA(FILE_MAP_READ, False, PAnsiChar(LWinName)));
+    AMap.MapHandle := PtrInt(OpenFileMappingW(FILE_MAP_READ, False, PWideChar(LWinName)));
     if AMap.MapHandle = 0 then
     begin
       Result := Int32(GetLastError);
@@ -844,7 +823,7 @@ begin
   AMap.IsOpen := True;
   AMap.IsSharedMemory := True;
   AMap.IsCreator := False;
-  AMap.SharedName := LWinName;
+  AMap.SharedName := string(LWinName);
   Result := 0;
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}

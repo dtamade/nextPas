@@ -4,11 +4,7 @@ unit nextpas.core.tls.openssl.api.stack;
 
 interface
 
-uses
-  nextpas.core.tls.exceptions,
-  SysUtils,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.exceptions, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
 
 type
   // Stack comparison function

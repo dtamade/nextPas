@@ -4,12 +4,7 @@ unit nextpas.core.tls.openssl.api.rsa;
 
 interface
 
-uses
-  SysUtils, DynLibs, ctypes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader,
-  nextpas.core.tls.openssl.api.bn,
-  nextpas.core.tls.openssl.api.core;
+uses DynLibs, ctypes, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.core;
 
 const
   { RSA Padding modes }

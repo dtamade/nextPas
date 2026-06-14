@@ -5,8 +5,7 @@ unit nextpas.core.io.reactor.iocp;
 {$IFDEF NEXTPAS_WINDOWS}
 interface
 
-uses
-  nextpas.core.platform.windows.base;
+uses nextpas.core.platform.windows.base;
 
 type
   TIoCompletion = procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);
@@ -30,10 +29,12 @@ type
     FPendingCount: UInt32;
     FAssociatedHead: Pointer;
     FNextUserData: UInt64;
+    FLastAcceptSocket: PtrInt;
   public
     class function Create(AMaxEvents: UInt32 = 64): TIocpReactor; static;
     procedure Close;
     function IsValid: Boolean; inline;
+    function LastAcceptedSocket: PtrInt; inline;
 
     function AsyncRead(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
@@ -60,10 +61,30 @@ type
 
 implementation
 
-uses
-  SysUtils,
-  nextpas.core.atomic,
-  nextpas.core.platform.windows.ffi;
+uses nextpas.core.atomic, nextpas.core.platform.windows.ffi;
+
+const
+  WSAID_ACCEPTEX: TGUID = '{b5367df1-cbac-11cf-95ca-00805f48a192}';
+  WSAID_CONNECTEX: TGUID = '{25a3ac90-4c1d-11d1-82b9-00c04fb98a36}';
+  WSA_FLAG_OVERLAPPED = $01;
+  SO_UPDATE_ACCEPT_CONTEXT = $700B;
+  SOL_WINSOCK = $FFFF;  { SOL_SOCKET on Windows }
+
+type
+  TAcceptExFn = function(sListenSocket, sAcceptSocket: TSocket;
+    lpOutputBuffer: Pointer; dwReceiveDataLength, dwLocalAddressLength,
+    dwRemoteAddressLength: DWORD; lpdwBytesReceived: LPDWORD;
+    lpOverlapped: LPOVERLAPPED): BOOL; stdcall;
+
+  TConnectExFn = function(s: TSocket; name: Pointer; namelen: LongInt;
+    lpSendBuffer: Pointer; dwSendDataLength: DWORD;
+    lpdwBytesSent: LPDWORD;
+    lpOverlapped: LPOVERLAPPED): BOOL; stdcall;
+
+var
+  _AcceptEx: TAcceptExFn;
+  _ConnectEx: TConnectExFn;
+  _WinsockExtLoaded: Boolean;
 
 type
   PIocpPendingOp = ^TIocpPendingOp;
@@ -159,6 +180,27 @@ begin
   AOp^.Next := nil;
   Dispose(AOp);
 end;
+procedure IocpLoadWinsockExt;
+var
+  L: TSocket;
+  LB: DWORD;
+begin
+  if _WinsockExtLoaded then Exit;
+  L := winsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if L = TSocket(PtrUInt(-1)) then Exit;
+  try
+    WSAIoctl(L, SIO_GET_EXTENSION_FUNCTION_POINTER,
+      @WSAID_ACCEPTEX, SizeOf(WSAID_ACCEPTEX),
+      @_AcceptEx, SizeOf(_AcceptEx), @LB, nil, nil);
+    WSAIoctl(L, SIO_GET_EXTENSION_FUNCTION_POINTER,
+      @WSAID_CONNECTEX, SizeOf(WSAID_CONNECTEX),
+      @_ConnectEx, SizeOf(_ConnectEx), @LB, nil, nil);
+  finally
+    closesocket(L);
+  end;
+  _WinsockExtLoaded := True;
+end;
+
 
 procedure IocpReleasePendingOps(var AReactor: TIocpReactor; AError: DWORD);
 var
@@ -338,7 +380,7 @@ begin
 end;
 
 function IocpSubmitSocketOp(var AReactor: TIocpReactor; AKind: TIocpOpKind;
-  AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+  AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: UInt32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var
   LHandle: HANDLE;
@@ -357,7 +399,7 @@ begin
   LOp := IocpAllocOp(AReactor, AKind, LHandle, ACallback, AContext);
   LOp^.WSABuf.buf := PAnsiChar(ABuf);
   LOp^.WSABuf.len := ALen;
-  LOp^.SocketFlags := DWORD(AFlags);
+  LOp^.SocketFlags := AFlags;
   case AKind of
     opSend:
       LResult := WSASend(TSocket(PtrUInt(LHandle)), @LOp^.WSABuf, 1, nil,
@@ -395,6 +437,18 @@ begin
     LResult := Int32(ABytes)
   else
     LResult := -Int32(GetLastError);
+
+  if LOp^.Kind = opAccept then
+  begin
+    AReactor.FLastAcceptSocket := PtrInt(LOp^.Handle);
+    winsock_setsockopt(TSocket(PtrUInt(LOp^.Handle)), SOL_WINSOCK,
+      SO_UPDATE_ACCEPT_CONTEXT, nil, 0);
+    if LOp^.WSABuf.buf <> nil then
+    begin
+      FreeMem(LOp^.WSABuf.buf);
+      LOp^.WSABuf.buf := nil;
+    end;
+  end;
 
   IocpUnlinkOp(AReactor, LOp);
   try
@@ -437,6 +491,11 @@ begin
   Result := FPort <> 0;
 end;
 
+function TIocpReactor.LastAcceptedSocket: PtrInt;
+begin
+  Result := FLastAcceptSocket;
+end;
+
 function TIocpReactor.AsyncRead(AFd: PtrInt; ABuf: Pointer; ALen: UInt32;
   AOffset: Int64; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
@@ -458,14 +517,111 @@ end;
 function TIocpReactor.AsyncAccept(AFd: PtrInt; AAddr: Pointer;
   AAddrLen: Pointer; AFlags: Int32; ACallback: TIoCompletion;
   AContext: Pointer): Boolean;
+const
+  ADDR_BUF_SIZE = 64;  { 2 * (sizeof(sockaddr_in) + 16) }
+var
+  LAcceptSock: TSocket;
+  LOp: PIocpPendingOp;
+  LAddrBuf: Pointer;
+  LBytesRecvd: DWORD;
+  LError: DWORD;
+  LUserData: UInt64;
+  LOk: BOOL;
 begin
-  Result := IocpUnsupportedAsync;
+  IocpLoadWinsockExt;
+  if _AcceptEx = nil then
+    Exit(IocpUnsupportedAsync);
+  if not IsValid then
+    Exit(False);
+
+  { Create accepting socket with overlapped flag }
+  LAcceptSock := WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP,
+    nil, 0, WSA_FLAG_OVERLAPPED);
+  if LAcceptSock = TSocket(PtrUInt(-1)) then
+  begin
+    LError := WSAGetLastError;
+    Exit(IocpFail(ACallback, AContext, 0, LError));
+  end;
+
+  { Associate with IOCP }
+  if CreateIoCompletionPort(HANDLE(LAcceptSock), HANDLE(FPort), 0,
+     FMaxEvents) = nil then
+  begin
+    closesocket(LAcceptSock);
+    LError := GetLastError;
+    Exit(IocpFail(ACallback, AContext, 0, LError));
+  end;
+
+  { Allocate address buffer }
+  GetMem(LAddrBuf, ADDR_BUF_SIZE);
+  if LAddrBuf = nil then
+  begin
+    closesocket(LAcceptSock);
+    Exit(IocpFail(ACallback, AContext, 0, ERROR_NOT_ENOUGH_MEMORY));
+  end;
+
+  LOp := IocpAllocOp(Self, opAccept, HANDLE(LAcceptSock),
+    ACallback, AContext);
+  LOp^.WSABuf.buf := LAddrBuf;
+  LOp^.WSABuf.len := ADDR_BUF_SIZE;
+
+  LOk := _AcceptEx(TSocket(AFd), LAcceptSock, LAddrBuf, 0,
+    ADDR_BUF_SIZE div 2, ADDR_BUF_SIZE div 2,
+    @LBytesRecvd, @LOp^.Overlapped);
+
+  if LOk then
+    Exit(True);
+
+  LError := WSAGetLastError;
+  if LError = ERROR_IO_PENDING then
+    Exit(True);
+
+  { AcceptEx failed synchronously — cleanup }
+  FreeMem(LAddrBuf);
+  LUserData := LOp^.UserData;
+  IocpFreeOp(Self, LOp);
+  closesocket(LAcceptSock);
+  Result := IocpFail(ACallback, AContext, LUserData, LError);
 end;
 
 function TIocpReactor.AsyncConnect(AFd: PtrInt; AAddr: Pointer;
   AAddrLen: UInt32; ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var
+  LHandle: HANDLE;
+  LOp: PIocpPendingOp;
+  LError: DWORD;
+  LUserData: UInt64;
+  LOk: BOOL;
 begin
-  Result := IocpUnsupportedAsync;
+  IocpLoadWinsockExt;
+  if _ConnectEx = nil then
+    Exit(IocpUnsupportedAsync);
+
+  if (AAddr = nil) or (AAddrLen = 0) then
+    Exit(IocpFail(ACallback, AContext, 0, ERROR_INVALID_PARAMETER));
+  if Self.FPort = 0 then
+  begin
+    SetLastError(ERROR_INVALID_HANDLE);
+    Exit(False);
+  end;
+
+  LHandle := IocpHandleFromFd(AFd);
+  if not IocpEnsureAssociatedHandle(Self, LHandle, LError) then
+    Exit(IocpFail(ACallback, AContext, 0, LError));
+
+  LOp := IocpAllocOp(Self, opConnect, LHandle, ACallback, AContext);
+  LOk := _ConnectEx(TSocket(AFd), AAddr, AAddrLen, nil, 0, nil, @LOp^.Overlapped);
+
+  if LOk then
+    Exit(True);
+
+  LError := GetLastError;
+  if LError = ERROR_IO_PENDING then
+    Exit(True);
+
+  LUserData := LOp^.UserData;
+  IocpFreeOp(Self, LOp);
+  Result := IocpFail(ACallback, AContext, LUserData, LError);
 end;
 
 function TIocpReactor.AsyncSend(AFd: PtrInt; ABuf: Pointer; ALen: UInt32;
@@ -473,7 +629,7 @@ function TIocpReactor.AsyncSend(AFd: PtrInt; ABuf: Pointer; ALen: UInt32;
 begin
   if not IsValid then
     Exit(False);
-  Result := IocpSubmitSocketOp(Self, opSend, AFd, ABuf, ALen, AFlags,
+  Result := IocpSubmitSocketOp(Self, opSend, AFd, ABuf, ALen, UInt32(AFlags),
     ACallback, AContext);
 end;
 
@@ -482,14 +638,29 @@ function TIocpReactor.AsyncRecv(AFd: PtrInt; ABuf: Pointer; ALen: UInt32;
 begin
   if not IsValid then
     Exit(False);
-  Result := IocpSubmitSocketOp(Self, opRecv, AFd, ABuf, ALen, AFlags,
+  Result := IocpSubmitSocketOp(Self, opRecv, AFd, ABuf, ALen, UInt32(AFlags),
     ACallback, AContext);
 end;
 
 function TIocpReactor.AsyncClose(AFd: PtrInt;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var
+  LHandle: HANDLE;
+  LError: DWORD;
 begin
-  Result := IocpUnsupportedAsync;
+  LHandle := IocpHandleFromFd(AFd);
+  if LHandle = nil then
+    Exit(IocpFail(ACallback, AContext, 0, ERROR_INVALID_HANDLE));
+
+  CancelIoEx(LHandle, nil);
+  if closesocket(TSocket(AFd)) = 0 then
+    LError := 0
+  else
+    LError := WSAGetLastError;
+
+  if Assigned(ACallback) then
+    ACallback(0, -Int32(LError), AContext);
+  Result := True;
 end;
 
 function TIocpReactor.Poll: Int32;

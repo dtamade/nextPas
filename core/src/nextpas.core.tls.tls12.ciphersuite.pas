@@ -4,8 +4,6 @@ unit nextpas.core.tls.tls12.ciphersuite;
 
 interface
 
-uses
-  SysUtils;
 
 type
   TTLS12CipherSuiteList = array of Word;
@@ -35,8 +33,7 @@ function TLS12CipherSuiteMACKeyLen(AID: Word): Integer;
 
 implementation
 
-uses
-  nextpas.core.tls.tls12.wire;
+uses nextpas.core.tls.tls12.wire;
 
 const
   SUITE_COUNT = 8;

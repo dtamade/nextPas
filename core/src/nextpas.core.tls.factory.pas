@@ -39,12 +39,7 @@ unit nextpas.core.tls.factory;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
-  nextpas.core.tls.exceptions,  // 新增：类型化异常
-  nextpas.core.tls.logging,
-  nextpas.core.tls.collections; // P0: 可替换的 Map 接口
+uses SysUtils, nextpas.core.tls.base, nextpas.core.tls.exceptions, // 新增：类型化异常 nextpas.core.tls.logging, nextpas.core.tls.collections; // P0: 可替换的 Map 接口;
 
 type
   {** SSL库类类型 (用于内部注册) *}
@@ -334,19 +329,7 @@ type
 
 implementation
 
-uses
-  {$IFDEF WINDOWS}
-  Windows,
-  {$ENDIF}
-  nextpas.core.crypto.hash,
-  nextpas.core.tls.errors,
-  nextpas.core.tls.random,
-  nextpas.core.tls.freepascal.context.material,
-  nextpas.core.tls.openssl.loader,
-  nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.sha,
-  nextpas.core.tls.openssl.api.sha3.evp,
-  nextpas.core.tls.openssl.api.blake2;
+uses Windows, nextpas.core.crypto.hash, nextpas.core.tls.errors, nextpas.core.tls.random, nextpas.core.tls.freepascal.context.material, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.sha, nextpas.core.tls.openssl.api.sha3.evp, nextpas.core.tls.openssl.api.blake2;
 
 var
   GFactoryLock: TRTLCriticalSection;  // 工厂类的全局锁

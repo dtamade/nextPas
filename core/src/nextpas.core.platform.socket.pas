@@ -55,6 +55,11 @@ type
   {$ENDIF}
   end;
 
+  TPlatformSockAddr = packed record
+    Storage: array[0..127] of Byte;
+    Len: Int32;
+  end;
+
 const
   PLATFORM_INVALID_SOCKET: TPlatformSocket = (
   {$IFDEF NEXTPAS_WINDOWS}
@@ -99,6 +104,16 @@ function platform_socket_set_nonblocking(const ASocket: TPlatformSocket;
 function platform_socket_set_timeout(const ASocket: TPlatformSocket;
   const AOptName: Int32; const AMs: UInt32): Int32;
 function platform_socket_error_would_block(const AError: Int32): Boolean;
+
+{ Sockaddr helpers (from net layer merge) }
+function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
+  out AResult: TPlatformSockAddr): Int32;
+function platform_sockaddr_loopback4(APort: UInt16;
+  out AResult: TPlatformSockAddr): Int32;
+
+{ Byte-order helpers }
+function platform_htons(AHost: UInt16): UInt16; inline;
+function platform_htonl(AHost: UInt32): UInt32; inline;
 
 implementation
 
@@ -331,6 +346,41 @@ end;
 function platform_socket_error_would_block(const AError: Int32): Boolean;
 begin
   Result := (AError = ESysEAGAIN) or (AError = ESysEWOULDBLOCK);
+end;
+
+{ --- sockaddr helpers --- }
+
+function platform_htons(AHost: UInt16): UInt16; inline;
+begin
+  Result := ((AHost and $FF) shl 8) or ((AHost shr 8) and $FF);
+end;
+
+function platform_htonl(AHost: UInt32): UInt32; inline;
+begin
+  Result := ((AHost and $FF) shl 24) or
+            ((AHost and $FF00) shl 8) or
+            ((AHost shr 8) and $FF00) or
+            ((AHost shr 24) and $FF);
+end;
+
+function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
+  out AResult: TPlatformSockAddr): Int32;
+var
+  LAddr: ^sockaddr_in;
+begin
+  FillChar(AResult, SizeOf(AResult), 0);
+  LAddr := @AResult.Storage;
+  LAddr^.sin_family := AF_INET;
+  LAddr^.sin_port := platform_htons(APort);
+  LAddr^.sin_addr.s_addr := AAddr;
+  AResult.Len := SizeOf(sockaddr_in);
+  Result := 0;
+end;
+
+function platform_sockaddr_loopback4(APort: UInt16;
+  out AResult: TPlatformSockAddr): Int32;
+begin
+  Result := platform_sockaddr_ipv4(APort, platform_htonl($7F000001), AResult);
 end;
 
 {$ENDIF}
@@ -586,6 +636,41 @@ begin
   Result := AError = WSAEWOULDBLOCK;
 end;
 
+{ --- sockaddr helpers --- }
+
+function platform_htons(AHost: UInt16): UInt16; inline;
+begin
+  Result := ((AHost and $FF) shl 8) or ((AHost shr 8) and $FF);
+end;
+
+function platform_htonl(AHost: UInt32): UInt32; inline;
+begin
+  Result := ((AHost and $FF) shl 24) or
+            ((AHost and $FF00) shl 8) or
+            ((AHost shr 8) and $FF00) or
+            ((AHost shr 24) and $FF);
+end;
+
+function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
+  out AResult: TPlatformSockAddr): Int32;
+var
+  LAddr: ^sockaddr_in;
+begin
+  FillChar(AResult, SizeOf(AResult), 0);
+  LAddr := @AResult.Storage;
+  LAddr^.sin_family := AF_INET;
+  LAddr^.sin_port := htons(APort);
+  LAddr^.sin_addr.s_addr := AAddr;
+  AResult.Len := SizeOf(sockaddr_in);
+  Result := 0;
+end;
+
+function platform_sockaddr_loopback4(APort: UInt16;
+  out AResult: TPlatformSockAddr): Int32;
+begin
+  Result := platform_sockaddr_ipv4(APort, htonl($7F000001), AResult);
+end;
+
 var
   GWsaData: array[0..511] of Byte;
 
@@ -614,6 +699,10 @@ function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32)
 function platform_socket_set_nonblocking(const ASocket: TPlatformSocket; const ANonBlock: Boolean): Int32; begin Result := -1; end;
 function platform_socket_set_timeout(const ASocket: TPlatformSocket; const AOptName: Int32; const AMs: UInt32): Int32; begin Result := -1; end;
 function platform_socket_error_would_block(const AError: Int32): Boolean; begin Result := False; end;
+function platform_htons(AHost: UInt16): UInt16; begin Result := AHost; end;
+function platform_htonl(AHost: UInt32): UInt32; begin Result := AHost; end;
+function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
+function platform_sockaddr_loopback4(APort: UInt16; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
 {$ENDIF}
 
 end.

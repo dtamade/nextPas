@@ -37,7 +37,7 @@ unit nextpas.core.tls.x509;
 interface
 
 uses
-  SysUtils, Classes, DateUtils,
+  SysUtils,DateUtils,
   nextpas.core.tls.asn1;
 
 type
@@ -282,7 +282,8 @@ type
 implementation
 
 uses
-  nextpas.core.time;
+  nextpas.core.text.strings,
+    nextpas.core.time;
 
 // ========================================================================
 // Base64 解码辅助函数 (必须在使用前声明)
@@ -518,10 +519,8 @@ begin
     try
       ParseFromASN1(Root);
     finally
-      Root.Free;
     end;
   finally
-    Reader.Free;
   end;
 end;
 
@@ -533,7 +532,7 @@ var
   DERData: TBytes;
   I: Integer;
   Line: string;
-  Lines: TStringList;
+  Lines: TStringArray;
 begin
   StartMarker := '-----BEGIN CERTIFICATE-----';
   EndMarker := '-----END CERTIFICATE-----';
@@ -551,18 +550,16 @@ begin
     EndPos - StartPos - Length(StartMarker));
 
   // 移除空白字符
-  Lines := TStringList.Create;
   try
     Lines.Text := Base64Data;
     Base64Data := '';
-    for I := 0 to Lines.Count - 1 do
+    for I := 0 to Length(Lines) - 1 do
     begin
       Line := Trim(Lines[I]);
       if Line <> '' then
         Base64Data := Base64Data + Line;
     end;
   finally
-    Lines.Free;
   end;
 
   // Base64 解码
@@ -579,7 +576,6 @@ begin
   try
     LoadFromStream(Stream);
   finally
-    Stream.Free;
   end;
 end;
 
@@ -601,7 +597,7 @@ begin
       LoadFromDER(Data)
     else if (FirstByte = Ord('-')) or (FirstByte = Ord('M')) then
       // PEM 格式 (以 "-----" 或 "M" (Base64) 开头)
-      LoadFromPEM(AnsiString(TEncoding.ASCII.GetString(Data)))
+      LoadFromPEM(AnsiString(nextpas.core.text.conv.ASCIIBytesToString(Data)))
     else
       raise EX509ParseException.Create('Unknown certificate format');
   end;
@@ -847,9 +843,7 @@ begin
                 (FPublicKeyInfo.RSAModulus[0] = 0) then
                 FPublicKeyInfo.KeySize := FPublicKeyInfo.KeySize - 8;
             end;
-            RSAKey.Free;
           finally
-            Reader.Free;
           end;
         end;
       end;
@@ -973,9 +967,7 @@ begin
                 if (BitValue and $01) <> 0 then Include(FKeyUsage, kuEncipherOnly);
               end;
             end;
-            Node.Free;
           finally
-            Reader.Free;
           end;
         end;
       end;
@@ -999,9 +991,7 @@ begin
                 FBasicConstraints.PathLenConstraint := Node.GetChild(1).AsInteger;
               end;
             end;
-            Node.Free;
           finally
-            Reader.Free;
           end;
         end;
       end;
@@ -1064,9 +1054,7 @@ begin
                 end;
               end;
             end;
-            Node.Free;
           finally
-            Reader.Free;
           end;
         end;
       end;
@@ -1080,9 +1068,7 @@ begin
             Node := Reader.Parse;
             if (Node <> nil) and Node.IsOctetString then
               FSubjectKeyIdentifier := Node.AsOctetString;
-            Node.Free;
           finally
-            Reader.Free;
           end;
         end;
       end;
@@ -1099,9 +1085,7 @@ begin
               if (Node.ChildCount > 0) and Node.GetChild(0).IsContextTag(0) then
                 FAuthorityKeyIdentifier := Node.GetChild(0).RawData;
             end;
-            Node.Free;
           finally
-            Reader.Free;
           end;
         end;
       end;
@@ -1130,9 +1114,7 @@ begin
                 end;
               end;
             end;
-            Node.Free;
           finally
-            Reader.Free;
           end;
         end;
       end;
@@ -1231,7 +1213,6 @@ begin
 
     Result := SB.ToString;
   finally
-    SB.Free;
   end;
 end;
 

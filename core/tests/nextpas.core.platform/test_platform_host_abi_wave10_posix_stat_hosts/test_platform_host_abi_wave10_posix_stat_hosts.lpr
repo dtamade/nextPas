@@ -123,6 +123,10 @@ begin
     'docs must include Android stat syscall route evidence');
   CheckTokenPresent(ADoc, 'rtl/linux/bunxsysc.inc',
     'docs must include Android lstat syscall route evidence');
+  CheckTokenPresent(ADoc, 'android_syscall_getdents64',
+    'docs must include Android getdents64 syscall route evidence');
+  CheckTokenPresent(ADoc, 'directory enumeration',
+    'docs must include Android directory enumeration evidence');
   CheckTokenPresent(ADoc, 'generic unix remains deferred',
     'docs must keep generic Unix stat deferred');
 end;
@@ -249,6 +253,8 @@ begin
     'android.base must own Android newfstatat syscall number');
   CheckTokenPresent(LAndroidBase, 'android_syscall_fstat',
     'android.base must own Android fstat syscall number');
+  CheckTokenPresent(LAndroidBase, 'android_syscall_getdents64',
+    'android.base must own Android getdents64 syscall number');
 
   CheckTokenPresent(LAndroidFfi, 'function syscall',
     'android.ffi must own Android syscall binding');
@@ -258,6 +264,8 @@ begin
     'android.ffi must not expose Android newfstatat helper');
   CheckTokenAbsent(LAndroidFfi, 'function android_fstat',
     'android.ffi must not expose Android fstat helper');
+  CheckTokenAbsent(LAndroidFfi, 'function android_getdents64',
+    'android.ffi must not expose Android getdents64 helper');
   CheckTokenAbsent(LAndroidFfi, 'function android_stat_path',
     'android.ffi must not expose Android stat path helper');
   CheckTokenAbsent(LAndroidFfi, 'function android_lstat_path',

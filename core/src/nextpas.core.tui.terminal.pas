@@ -20,21 +20,7 @@ unit nextpas.core.tui.terminal;
 
 interface
 
-uses
-  SysUtils,
-  nextpas.core.tui.base,
-  nextpas.core.tui.cap.base,
-  nextpas.core.tui.error,
-  nextpas.core.tui.cell,
-  nextpas.core.tui.buffer,
-  nextpas.core.tui.overlay,
-  nextpas.core.tui.event,
-  nextpas.core.tui.input,
-  nextpas.core.tui.interaction,
-  nextpas.core.tui.image_cap,
-  nextpas.core.tui.backend.ansi,
-  nextpas.core.platform.console,
-  nextpas.core.platform.signal;
+uses nextpas.core.tui.base, nextpas.core.tui.cap.base, nextpas.core.tui.error, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.overlay, nextpas.core.tui.event, nextpas.core.tui.input, nextpas.core.tui.interaction, nextpas.core.tui.image_cap, nextpas.core.tui.backend.ansi, nextpas.core.platform.console, nextpas.core.platform.signal;
 
 const
   STDIN_FD  = 0;

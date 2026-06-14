@@ -78,6 +78,9 @@ function StringsGlob(const AArr: TStringArray; const APattern: string): TStringA
 function StringsRepeat(const AValue: string; ACount: SizeUInt): TStringArray;
 function StringsChunk(const AArr: TStringArray; ASize: SizeUInt): TStringChunks;
 
+{ Split utilities }
+function StringsSplit(const AStr: string; ASep: Char; ARemoveEmpty: Boolean = False): TStringArray;
+
 implementation
 
 uses
@@ -569,6 +572,53 @@ begin
       Result[I][J] := AArr[LStart + J];
     Inc(LStart, LRemain);
   end;
+end;
+
+{== Split ==}
+
+function StringsSplit(const AStr: string; ASep: Char; ARemoveEmpty: Boolean): TStringArray;
+var
+  I, LSegStart, LSegCount, LLen: Integer;
+begin
+  Result := nil;
+  LLen := Length(AStr);
+  if LLen = 0 then
+  begin
+    if not ARemoveEmpty then
+    begin
+      SetLength(Result, 1);
+      Result[0] := '';
+    end;
+    Exit;
+  end;
+  // First pass: count segments
+  LSegCount := 1;
+  for I := 1 to LLen do
+    if AStr[I] = ASep then
+      Inc(LSegCount);
+  // Second pass: fill
+  SetLength(Result, LSegCount);
+  LSegStart := 1;
+  LSegCount := 0;
+  for I := 1 to LLen do
+    if AStr[I] = ASep then
+    begin
+      if (I > LSegStart) or not ARemoveEmpty then
+      begin
+        SetString(Result[LSegCount], PChar(@AStr[LSegStart]), I - LSegStart);
+        Inc(LSegCount);
+      end;
+      LSegStart := I + 1;
+    end;
+  // Last segment
+  if (LLen >= LSegStart) or not ARemoveEmpty then
+  begin
+    SetString(Result[LSegCount], PChar(@AStr[LSegStart]), LLen - LSegStart + 1);
+    Inc(LSegCount);
+  end;
+  // Trim if remove-empty shrank the array
+  if LSegCount < Length(Result) then
+    SetLength(Result, LSegCount);
 end;
 
 end.

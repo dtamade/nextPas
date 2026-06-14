@@ -30,7 +30,7 @@ unit nextpas.core.tls.pem;
 interface
 
 uses
-  SysUtils, Classes;
+  SysUtils;
 
 type
   // ========================================================================
@@ -66,7 +66,7 @@ type
     BlockType: TPEMType;
     TypeString: string;       // 原始类型字符串 (如 "CERTIFICATE")
     Data: TBytes;             // 解码后的 DER 数据
-    Headers: TStringList;     // 可选的头部字段 (如 Proc-Type, DEK-Info)
+    Headers: TStringArray;     // 可选的头部字段 (如 Proc-Type, DEK-Info)
 
     procedure Clear;
     function IsEncrypted: Boolean;
@@ -85,7 +85,7 @@ type
     function FindNextBlock(var APos: Integer; out AStartMarker, AEndMarker: string;
       out ATypeStr: string): Boolean;
     function ExtractBlockContent(const AStartMarker, AEndMarker: string;
-      var APos: Integer; out AHeaders: TStringList): string;
+      var APos: Integer; out AHeaders: TStringArray): string;
     class function DecodeBase64(const AInput: string): TBytes; static;
     class function GetPEMType(const ATypeStr: string): TPEMType; static;
   public
@@ -154,6 +154,10 @@ function StringToPEMType(const ATypeStr: string): TPEMType;
 
 implementation
 
+uses
+  nextpas.core.text.strings;
+
+
 // ========================================================================
 // TPEMBlock
 // ========================================================================
@@ -164,7 +168,6 @@ begin
   TypeString := '';
   SetLength(Data, 0);
   if Headers <> nil then
-    Headers.Free;
   Headers := nil;
 end;
 
@@ -177,7 +180,7 @@ begin
     Exit;
 
   // 检查是否有 Proc-Type 头部
-  for I := 0 to Headers.Count - 1 do
+  for I := 0 to Length(Headers) - 1 do
   begin
     if Pos('Proc-Type:', Headers[I]) = 1 then
     begin
@@ -242,17 +245,16 @@ begin
 end;
 
 function TPEMReader.ExtractBlockContent(const AStartMarker, AEndMarker: string;
-  var APos: Integer; out AHeaders: TStringList): string;
+  var APos: Integer; out AHeaders: TStringArray): string;
 var
   ContentStart, ContentEnd: Integer;
-  Lines: TStringList;
+  Lines: TStringArray;
   I: Integer;
   Line: string;
   InHeaders: Boolean;
   HeaderEnded: Boolean;
 begin
   Result := '';
-  AHeaders := TStringList.Create;
 
   // 找到内容开始位置 (紧跟在 BEGIN 标记之后)
   ContentStart := Pos(AStartMarker, Copy(FText, APos, Length(FText)));
@@ -267,20 +269,19 @@ begin
   ContentEnd := ContentStart + ContentEnd - 1;
 
   // 提取并处理内容
-  Lines := TStringList.Create;
   try
     Lines.Text := Copy(FText, ContentStart, ContentEnd - ContentStart);
     InHeaders := True;
     HeaderEnded := False;
 
-    for I := 0 to Lines.Count - 1 do
+    for I := 0 to Length(Lines) - 1 do
     begin
       Line := Trim(Lines[I]);
 
       if Line = '' then
       begin
         // 空行分隔头部和内容
-        if InHeaders and (AHeaders.Count > 0) then
+        if InHeaders and (Length(AHeaders) > 0) then
         begin
           InHeaders := False;
           HeaderEnded := True;
@@ -304,7 +305,6 @@ begin
       end;
     end;
   finally
-    Lines.Free;
   end;
 
   // 更新位置到 END 标记之后
@@ -442,7 +442,7 @@ var
   Pos: Integer;
   StartMarker, EndMarker, TypeStr: string;
   Content: string;
-  Headers: TStringList;
+  Headers: TStringArray;
   Block: TPEMBlock;
   I: Integer;
 begin
@@ -477,7 +477,6 @@ begin
   try
     LoadFromStream(Stream);
   finally
-    Stream.Free;
   end;
 end;
 
@@ -490,7 +489,7 @@ begin
   if AStream.Size > 0 then
   begin
     AStream.ReadBuffer(Data[0], AStream.Size);
-    LoadFromString(AnsiString(TEncoding.UTF8.GetString(Data)));
+    LoadFromString(AnsiString(nextpas.core.text.conv.UTF8BytesToString(Data)));
   end;
 end;
 
@@ -708,13 +707,12 @@ var
   Stream: TFileStream;
   Data: TBytes;
 begin
-  Data := TEncoding.UTF8.GetBytes(UnicodeString(APEMText));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(APEMText));
   Stream := TFileStream.Create(AFileName, fmCreate);
   try
     if Length(Data) > 0 then
       Stream.WriteBuffer(Data[0], Length(Data));
   finally
-    Stream.Free;
   end;
 end;
 
@@ -733,7 +731,7 @@ begin
   end;
 
   // 检查是否以 "-----BEGIN" 开头
-  S := AnsiString(TEncoding.ASCII.GetString(Copy(AData, 0, 11)));
+  S := AnsiString(nextpas.core.text.conv.ASCIIBytesToString(Copy(AData, 0, 11)));
   Result := (S = '-----BEGIN ');
 end;
 

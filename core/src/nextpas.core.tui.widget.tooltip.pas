@@ -7,16 +7,7 @@ unit nextpas.core.tui.widget.tooltip;
 
 interface
 
-uses
-  nextpas.core.tui.base,
-  nextpas.core.tui.color,
-  nextpas.core.tui.modifier,
-  nextpas.core.tui.style,
-  nextpas.core.tui.cell,
-  nextpas.core.tui.buffer,
-  nextpas.core.tui.widget.block,
-  nextpas.core.tui.borders,
-  nextpas.core.tui.widget.intf;
+uses nextpas.core.tui.base, nextpas.core.tui.color, nextpas.core.tui.modifier, nextpas.core.tui.style, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.widget.block, nextpas.core.tui.borders, nextpas.core.tui.widget.intf;
 
 type
   TTooltipPosition = (ttpAbove, ttpBelow, ttpLeft, ttpRight);
@@ -53,8 +44,7 @@ type
 
 implementation
 
-uses
-  SysUtils, nextpas.core.text.width;
+uses nextpas.core.text.width;
 
 class function TTooltip.New(const AText: AnsiString): ITooltip;
 var LSelf: TTooltip;

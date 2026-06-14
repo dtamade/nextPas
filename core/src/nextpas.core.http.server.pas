@@ -9,12 +9,7 @@ unit nextpas.core.http.server;
 
 interface
 
-uses
-  nextpas.core.net.base,
-  nextpas.core.net.intf,
-  nextpas.core.net.server,
-  nextpas.core.http.base,
-  nextpas.core.http.intf;
+uses nextpas.core.net.base, nextpas.core.net.intf, nextpas.core.net.server, nextpas.core.http.base, nextpas.core.http.intf;
 
 type
   THttpServerOptions = nextpas.core.http.base.THttpServerOptions;
@@ -49,10 +44,7 @@ function NewHttpServer(const AHandler: IHttpHandler;
 
 implementation
 
-uses
-  SysUtils,
-  nextpas.core.errors,
-  nextpas.core.http.impl.registry;
+uses nextpas.core.errors, nextpas.core.http.impl.registry;
 
 type
   THttpConnHandler = class(TInterfacedObject, ITcpServerHandler,

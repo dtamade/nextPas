@@ -5,7 +5,6 @@ unit np_semantic_analyzer;
 {$UNITPATH ../diagnostics}
 {$UNITPATH ../frontend}
 {$UNITPATH ../syntax}
-{$UNITPATH ../../core/src}
 
 interface
 
@@ -60,16 +59,10 @@ type
     FContinueLabels: array of string;
     FRuntimeVarNames: array of string;
     FRuntimeStrVarNames: array of string;
-    FOwnedRuntimeStrVarNames: array of string;
-    FBorrowedRuntimeStrVarNames: array of string;
-    FOwnedStringReturnFuncNames: array of string;
-    FPendingStringTempNames: array of string;
-    FPendingStringTempSources: array of string;
     FRuntimeArrVarNames: array of string;
     FBorrowedRuntimeArrVarNames: array of string;
     FCurrentMethodClass: string;
     FCurrentRetVarName: string;
-    FCurrentOwnedStringReturn: Boolean;
     FClassVarNames: array of string;
     FClassVarTypes: array of string;
     FRecordVarNames: array of string;
@@ -83,12 +76,6 @@ type
     FImportedUnitOwners: array of string;
     procedure RegisterRuntimeVar(const AName: string);
     procedure RegisterRuntimeStrVar(const AName: string);
-    procedure RegisterOwnedRuntimeStrVar(const AName: string);
-    procedure RegisterBorrowedRuntimeStrVar(const AName: string);
-    procedure RegisterOwnedStringReturnFunc(const AName: string);
-    procedure ClearPendingStringTempReleases;
-    procedure QueuePendingStringTempRelease(const ATempName, ASourceName: string);
-    procedure EmitPendingStringTempReleases;
     procedure RegisterRuntimeArrVar(const AName: string);
     procedure RegisterBorrowedRuntimeArrVar(const AName: string);
     procedure RegisterClassVar(const AName, AClassName: string);
@@ -100,46 +87,17 @@ type
       const AOwnerUnitId: string);
     function IsRuntimeVar(const AName: string): Boolean;
     function IsRuntimeStrVar(const AName: string): Boolean;
-    function IsOwnedRuntimeStrVar(const AName: string): Boolean;
-    function IsBorrowedRuntimeStrVar(const AName: string): Boolean;
-    function IsOwnedStringReturnFunc(const AName: string): Boolean;
-    function IsRootOwnedStringReturnCandidate(const AEntry: TProcedureBodyEntry;
-      const AIsStrReturn: Boolean): Boolean;
-    function DeclReturnsString(const ADecl: TGreenNode): Boolean;
-    function DeclaresStringLocal(const ADecl: TGreenNode;
-      const AName: string): Boolean;
-    function StringReturnFunctionNameFromNode(const ANode: TGreenNode;
-      out AName: string): Boolean;
-    function FunctionCallReturnsString(const ANode: TGreenNode): Boolean;
-    function MemberCallReturnsString(const ANode: TGreenNode): Boolean;
-    function AssignmentOwnsStringReturn(const ANode: TGreenNode;
-      const AEntry: TProcedureBodyEntry): Boolean;
-    function AssignmentOwnsTopLevelStringReturn(const ANode: TGreenNode): Boolean;
-    function CallArgumentOwnsStringReturn(
-      const ACallNode, AArgNode: TGreenNode; AArgPosition: LongInt;
-      out AFuncName: string): Boolean;
-    function DirectOwnedStringReturnAssignmentNode(const ANode: TGreenNode): Boolean;
-    function IsSupportedOwnedStringReturnArgument(
-      const ACallNode, AArgNode: TGreenNode; AArgPosition: LongInt): Boolean;
-    function LengthArgumentOwnsStringReturn(
-      const ANode: TGreenNode; out AFuncName: string): Boolean;
-    function IsSupportedOwnedStringReturnLengthArgument(
-      const ANode: TGreenNode; out AFuncName: string): Boolean;
-    function EmitOwnedStringLengthTemp(const ANode: TGreenNode;
-      out ABlob: string): Boolean;
-    function NodeConsumesOwnedStringReturnDeferred(const ANode: TGreenNode;
-      const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
-    procedure ScanOwnedStringReturnConsumers(const ANode: TGreenNode;
-      const AEntry: TProcedureBodyEntry; var AChanged: Boolean);
-    procedure ScanTopLevelOwnedStringReturnConsumers(const ANode: TGreenNode;
-      var AChanged: Boolean);
-    procedure CheckDeferredOwnedStringReturnConsumers(const ANode: TGreenNode);
-    procedure PreRegisterOwnedStringReturnConsumers;
     function IsRuntimeArrVar(const AName: string): Boolean;
     function IsBorrowedRuntimeArrVar(const AName: string): Boolean;
     function IsStaticRuntimeArrVar(const AName: string): Boolean;
     function DynArrayElemSizeOfVar(const AName: string): Int64;
-    procedure EmitOwnedStringCleanupNodes(const AExceptName: string = '');
+    function DynArrayElemTypeOfVar(const AName: string): string;
+    function DynArrayElemTypeIsManagedString(const AName: string): Boolean;
+    function DynArrayElemTypeIsManagedInterface(const AName: string): Boolean;
+    function DynArrayElemTypeNeedsManagedContract(const AName: string): Boolean;
+    procedure EnsureRuntimeContractNode(const AContractName: string);
+    procedure MarkDynArraySetLengthContract(const AName: string);
+    procedure MarkDynArrayFiniContract(const AName: string);
     procedure EmitOwnedDynArrayCleanupNodes;
     function IsRecordVar(const AName: string): Boolean;
     function IsVarParam(const AName: string): Boolean;
@@ -152,8 +110,6 @@ type
       const ADestVar: string): string;
     function EncodeStrCallArgs(const ACallNode: TGreenNode;
       const ADestVar: string): string;
-    function EncodeCallStatementArgs(
-      const ACallName: string; const ACallNode, ADeclNode: TGreenNode): string;
     function NewBlockLabel(const APrefix: string): string;
     procedure EmitBlockLabel(const ALabel: string);
     procedure EmitGotoLabel(const ALabel: string);
@@ -252,7 +208,6 @@ type
       const ATypeName, AFieldName: string): Int64;
     function TypeMetaVmtSlot(const ATypeName, AMethodName: string): Int64;
     function TypeMetaRetPtr(const ATypeName, AMethodName: string): Boolean;
-    function TypeMetaRetStr(const ATypeName, AMethodName: string): Boolean;
     function TypeMetaParentClass(const ATypeName: string): string;
     function NextClassAncestorName(const ATypeName: string): string;
     function TypeMetaVmtCount(const ATypeName: string): Int64;
@@ -515,7 +470,7 @@ type
 implementation
 
 uses
-  SysUtils, nextpas.core.system.contracts;
+  SysUtils;
 
 type
   TStringArray = array of string;
@@ -578,18 +533,6 @@ end;
 
 function DecodePascalStringLiteral(const AText: string): string; forward;
 
-function ParamNameIsByRef(const AName: string): Boolean;
-begin
-  Result := (Pos('var:', AName) = 1) or (Pos('out:', AName) = 1);
-end;
-
-function StripParamModifier(const AName: string): string;
-begin
-  Result := AName;
-  if ParamNameIsByRef(AName) then
-    Result := Copy(AName, 5, Length(AName));
-end;
-
 constructor TSemanticAnalyzer.Create(
   const ARootAst: TAstFacade;
   const AUnitGraph: TUnitGraph;
@@ -651,51 +594,6 @@ begin
   FRuntimeStrVarNames[NextIndex] := AName;
 end;
 
-procedure TSemanticAnalyzer.RegisterOwnedRuntimeStrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
-begin
-  if AName = '' then
-    Exit;
-  for Idx := 0 to Length(FOwnedRuntimeStrVarNames) - 1 do
-    if SameText(FOwnedRuntimeStrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FOwnedRuntimeStrVarNames);
-  SetLength(FOwnedRuntimeStrVarNames, NextIndex + 1);
-  FOwnedRuntimeStrVarNames[NextIndex] := AName;
-end;
-
-procedure TSemanticAnalyzer.RegisterBorrowedRuntimeStrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
-begin
-  if AName = '' then
-    Exit;
-  for Idx := 0 to Length(FBorrowedRuntimeStrVarNames) - 1 do
-    if SameText(FBorrowedRuntimeStrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FBorrowedRuntimeStrVarNames);
-  SetLength(FBorrowedRuntimeStrVarNames, NextIndex + 1);
-  FBorrowedRuntimeStrVarNames[NextIndex] := AName;
-end;
-
-procedure TSemanticAnalyzer.RegisterOwnedStringReturnFunc(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
-begin
-  if AName = '' then
-    Exit;
-  for Idx := 0 to Length(FOwnedStringReturnFuncNames) - 1 do
-    if SameText(FOwnedStringReturnFuncNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FOwnedStringReturnFuncNames);
-  SetLength(FOwnedStringReturnFuncNames, NextIndex + 1);
-  FOwnedStringReturnFuncNames[NextIndex] := AName;
-end;
-
 function TSemanticAnalyzer.IsRuntimeStrVar(const AName: string): Boolean;
 var
   Idx: LongInt;
@@ -704,602 +602,6 @@ begin
     if SameText(FRuntimeStrVarNames[Idx], AName) then
       Exit(True);
   Result := False;
-end;
-
-function TSemanticAnalyzer.IsOwnedRuntimeStrVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
-begin
-  for Idx := 0 to Length(FOwnedRuntimeStrVarNames) - 1 do
-    if SameText(FOwnedRuntimeStrVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
-end;
-
-function TSemanticAnalyzer.IsBorrowedRuntimeStrVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
-begin
-  for Idx := 0 to Length(FBorrowedRuntimeStrVarNames) - 1 do
-    if SameText(FBorrowedRuntimeStrVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
-end;
-
-function TSemanticAnalyzer.IsOwnedStringReturnFunc(const AName: string): Boolean;
-var
-  Idx: LongInt;
-begin
-  for Idx := 0 to Length(FOwnedStringReturnFuncNames) - 1 do
-    if SameText(FOwnedStringReturnFuncNames[Idx], AName) then
-      Exit(True);
-  Result := False;
-end;
-
-procedure TSemanticAnalyzer.ClearPendingStringTempReleases;
-begin
-  SetLength(FPendingStringTempNames, 0);
-  SetLength(FPendingStringTempSources, 0);
-end;
-
-procedure TSemanticAnalyzer.QueuePendingStringTempRelease(
-  const ATempName, ASourceName: string);
-var
-  NextIndex: SizeInt;
-begin
-  if (ATempName = '') or (ASourceName = '') then
-    Exit;
-  NextIndex := Length(FPendingStringTempNames);
-  SetLength(FPendingStringTempNames, NextIndex + 1);
-  SetLength(FPendingStringTempSources, NextIndex + 1);
-  FPendingStringTempNames[NextIndex] := ATempName;
-  FPendingStringTempSources[NextIndex] := ASourceName;
-end;
-
-procedure TSemanticAnalyzer.EmitPendingStringTempReleases;
-var
-  I: LongInt;
-begin
-  for I := High(FPendingStringTempNames) downto 0 do
-    FModel.AddTypedHirNode('string-temp-release-runtime',
-      FPendingStringTempSources[I], 0, 0, FPendingStringTempNames[I]);
-  ClearPendingStringTempReleases;
-end;
-
-function TSemanticAnalyzer.IsRootOwnedStringReturnCandidate(
-  const AEntry: TProcedureBodyEntry; const AIsStrReturn: Boolean): Boolean;
-begin
-  Result := AIsStrReturn and (AEntry.Body <> nil) and
-    (AEntry.Decl <> nil) and (AEntry.Decl.NodeKind = gnkFunctionDecl) and
-    (Pos('.', AEntry.Name) = 0) and
-    SameText(AEntry.OwnerUnitId, NormalizeUnitIdentity(FUnitGraph.RootName));
-end;
-
-function TSemanticAnalyzer.DeclReturnsString(const ADecl: TGreenNode): Boolean;
-var
-  I: LongInt;
-  Child: TGreenNode;
-begin
-  Result := False;
-  if ADecl = nil then
-    Exit;
-  for I := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(I);
-    if (Child <> nil) and (Child.NodeKind = gnkIdentifier) and
-      (SameText(Child.Text, 'String') or SameText(Child.Text, 'AnsiString')) then
-      Exit(True);
-  end;
-end;
-
-function TSemanticAnalyzer.DeclaresStringLocal(const ADecl: TGreenNode;
-  const AName: string): Boolean;
-var
-  I, J: LongInt;
-  Child, Decl, TypeChild: TGreenNode;
-begin
-  Result := False;
-  if (ADecl = nil) or (AName = '') then
-    Exit;
-  for I := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(I);
-    if (Child = nil) or (Child.NodeKind <> gnkVarSection) then
-      Continue;
-    for J := 0 to Child.ChildCount - 1 do
-    begin
-      Decl := Child.ChildAt(J);
-      if (Decl = nil) or (Decl.NodeKind <> gnkVarDecl) or
-        (not SameText(Decl.Text, AName)) or (Decl.ChildCount = 0) then
-        Continue;
-      TypeChild := Decl.ChildAt(0);
-      if (TypeChild <> nil) and
-        (SameText(TypeChild.Text, 'String') or
-         SameText(TypeChild.Text, 'AnsiString')) then
-        Exit(True);
-    end;
-  end;
-end;
-
-function TSemanticAnalyzer.StringReturnFunctionNameFromNode(
-  const ANode: TGreenNode; out AName: string): Boolean;
-var
-  BodyNode, DeclNode: TGreenNode;
-begin
-  AName := '';
-  Result := False;
-  if ANode = nil then
-    Exit;
-  if ANode.NodeKind = gnkIdentifier then
-    AName := ANode.Text
-  else if (ANode.NodeKind = gnkFunctionCall) then
-    AName := ANode.Text;
-  if AName = '' then
-    Exit;
-  if (not LookupProcedureBody(AName, BodyNode, DeclNode)) or
-    (not DeclReturnsString(DeclNode)) then
-    Exit;
-  Result := True;
-end;
-
-function TSemanticAnalyzer.FunctionCallReturnsString(
-  const ANode: TGreenNode): Boolean;
-var
-  BodyNode, DeclNode: TGreenNode;
-  SymbolId, TypeId: LongInt;
-  TypeName: string;
-begin
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.Text = '') then
-    Exit;
-  if LookupProcedureBody(ANode.Text, BodyNode, DeclNode) then
-    Exit(DeclReturnsString(DeclNode));
-  SymbolId := FModel.LookupSymbol(ANode.Text, FCurrentScopeId);
-  if SymbolId <= 0 then
-    SymbolId := FModel.FindSymbolByName(ANode.Text);
-  if SymbolId <= 0 then
-    Exit;
-  TypeId := FModel.SymbolTypeId(SymbolId);
-  if (TypeId <= 0) or (TypeId > FModel.TypeCount) then
-    Exit;
-  TypeName := FModel.TypeAt(TypeId - 1).Name;
-  Result := SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString');
-end;
-
-function TSemanticAnalyzer.MemberCallReturnsString(
-  const ANode: TGreenNode): Boolean;
-var
-  CalleeNode, ReceiverNode, MemberNode: TGreenNode;
-  ReceiverTypeName: string;
-  ReceiverSymbolId, ReceiverTypeId: LongInt;
-begin
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount < 1) then
-    Exit;
-  CalleeNode := ANode.ChildAt(0);
-  if (CalleeNode = nil) or (CalleeNode.NodeKind <> gnkDotAccess) or
-    (CalleeNode.ChildCount < 2) then
-    Exit;
-  ReceiverNode := CalleeNode.ChildAt(0);
-  MemberNode := CalleeNode.ChildAt(1);
-  if (ReceiverNode = nil) or (MemberNode = nil) or
-    (ReceiverNode.NodeKind <> gnkIdentifier) or
-    (MemberNode.NodeKind <> gnkIdentifier) then
-    Exit;
-  if SameText(ReceiverNode.Text, 'Self') and (FCurrentMethodClass <> '') then
-    ReceiverTypeName := FCurrentMethodClass
-  else
-    ReceiverTypeName := LookupClassVar(ReceiverNode.Text);
-  if ReceiverTypeName = '' then
-  begin
-    ReceiverSymbolId := FModel.FindSymbolByName(ReceiverNode.Text);
-    if ReceiverSymbolId > 0 then
-    begin
-      ReceiverTypeId := FModel.SymbolTypeId(ReceiverSymbolId);
-      if (ReceiverTypeId > 0) and (ReceiverTypeId <= FModel.TypeCount) then
-        ReceiverTypeName := FModel.TypeAt(ReceiverTypeId - 1).Name;
-    end;
-  end;
-  Result := (ReceiverTypeName <> '') and
-    TypeMetaRetStr(ReceiverTypeName, MemberNode.Text);
-end;
-
-function TSemanticAnalyzer.AssignmentOwnsStringReturn(const ANode: TGreenNode;
-  const AEntry: TProcedureBodyEntry): Boolean;
-var
-  DestNode, SourceNode: TGreenNode;
-  DestName, FuncName, RetName: string;
-begin
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkAssignmentStatement) or
-    (ANode.ChildCount < 2) then
-    Exit;
-  DestNode := ANode.ChildAt(0);
-  SourceNode := ANode.ChildAt(1);
-  if (DestNode = nil) or (DestNode.NodeKind <> gnkIdentifier) or
-    (not StringReturnFunctionNameFromNode(SourceNode, FuncName)) then
-    Exit;
-  if HasOverload(FuncName) then
-    Exit;
-  if not IsRootOwnedStringReturnCandidate(AEntry, DeclReturnsString(AEntry.Decl)) then
-    Exit;
-  DestName := DestNode.Text;
-  if SameText(DestName, 'Result') then
-    DestName := AEntry.Name;
-  RetName := AEntry.Name;
-  if Pos('.', RetName) > 0 then
-    RetName := Copy(RetName, Pos('.', RetName) + 1, Length(RetName));
-  Result := SameText(DestName, RetName) or DeclaresStringLocal(AEntry.Decl, DestName);
-end;
-
-function TSemanticAnalyzer.AssignmentOwnsTopLevelStringReturn(
-  const ANode: TGreenNode): Boolean;
-var
-  DestNode, SourceNode: TGreenNode;
-  DestName, FuncName: string;
-begin
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkAssignmentStatement) or
-    (ANode.ChildCount < 2) then
-    Exit;
-  DestNode := ANode.ChildAt(0);
-  SourceNode := ANode.ChildAt(1);
-  if (DestNode = nil) or (DestNode.NodeKind <> gnkIdentifier) or
-    (not StringReturnFunctionNameFromNode(SourceNode, FuncName)) then
-    Exit;
-  if HasOverload(FuncName) then
-    Exit;
-  DestName := DestNode.Text;
-  Result := IsRuntimeStrVar(DestName);
-end;
-
-function TSemanticAnalyzer.CallArgumentOwnsStringReturn(
-  const ACallNode, AArgNode: TGreenNode; AArgPosition: LongInt;
-  out AFuncName: string): Boolean;
-var
-  BodyNode, DeclNode, FuncNode: TGreenNode;
-begin
-  AFuncName := '';
-  Result := False;
-  if (ACallNode = nil) or (AArgNode = nil) or
-    (ACallNode.NodeKind <> gnkFunctionCall) or
-    (AArgNode.NodeKind <> gnkFunctionCall) then
-    Exit;
-  if (ACallNode.Text = '') or HasOverload(ACallNode.Text) then
-    Exit;
-  if not LookupProcedureBody(ACallNode.Text, BodyNode, DeclNode) then
-    Exit;
-  if IsVarParamAtPosition(DeclNode, AArgPosition) then
-    Exit;
-  if not StringReturnFunctionNameFromNode(AArgNode, AFuncName) then
-    Exit;
-  if HasOverload(AFuncName) then
-    Exit;
-  FuncNode := nil;
-  if AArgNode.ChildCount > 0 then
-    FuncNode := AArgNode.ChildAt(0);
-  Result := (FuncNode <> nil) and (FuncNode.NodeKind = gnkIdentifier) and
-    SameText(FuncNode.Text, AFuncName);
-end;
-
-function TSemanticAnalyzer.DirectOwnedStringReturnAssignmentNode(
-  const ANode: TGreenNode): Boolean;
-var
-  SourceName: string;
-begin
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkAssignmentStatement) or
-    (ANode.ChildCount < 2) then
-    Exit;
-  if not StringReturnFunctionNameFromNode(ANode.ChildAt(1), SourceName) then
-    Exit;
-  Result := IsOwnedStringReturnFunc(SourceName);
-end;
-
-function TSemanticAnalyzer.IsSupportedOwnedStringReturnArgument(
-  const ACallNode, AArgNode: TGreenNode; AArgPosition: LongInt): Boolean;
-var
-  SourceName: string;
-begin
-  Result := CallArgumentOwnsStringReturn(
-    ACallNode, AArgNode, AArgPosition, SourceName) and
-    IsOwnedStringReturnFunc(SourceName);
-end;
-
-function TSemanticAnalyzer.LengthArgumentOwnsStringReturn(
-  const ANode: TGreenNode; out AFuncName: string): Boolean;
-var
-  CalleeNode, ArgNode: TGreenNode;
-begin
-  AFuncName := '';
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount < 2) then
-    Exit;
-  CalleeNode := ANode.ChildAt(0);
-  ArgNode := ANode.ChildAt(1);
-  if (CalleeNode = nil) or (ArgNode = nil) or
-    (CalleeNode.NodeKind <> gnkIdentifier) or
-    (not SameText(CalleeNode.Text, 'Length')) then
-    Exit;
-  if (ArgNode.NodeKind <> gnkFunctionCall) or
-    (ArgNode.ChildCount < 1) or (ArgNode.ChildAt(0) = nil) or
-    (ArgNode.ChildAt(0).NodeKind <> gnkIdentifier) then
-    Exit;
-  if not StringReturnFunctionNameFromNode(ArgNode, AFuncName) then
-    Exit;
-  Result := not HasOverload(AFuncName);
-end;
-
-function TSemanticAnalyzer.IsSupportedOwnedStringReturnLengthArgument(
-  const ANode: TGreenNode; out AFuncName: string): Boolean;
-begin
-  Result := LengthArgumentOwnsStringReturn(ANode, AFuncName) and
-    IsOwnedStringReturnFunc(AFuncName);
-end;
-
-function TSemanticAnalyzer.EmitOwnedStringLengthTemp(const ANode: TGreenNode;
-  out ABlob: string): Boolean;
-var
-  SourceName, TempName: string;
-begin
-  ABlob := '';
-  Result := False;
-  if not IsSupportedOwnedStringReturnLengthArgument(ANode, SourceName) then
-    Exit;
-  Inc(FBlockLabelCounter);
-  TempName := '$str_len_tmp_' + IntToStr(FBlockLabelCounter);
-  RegisterRuntimeVar(TempName);
-  RegisterRuntimeStrVar(TempName);
-  FModel.AddTypedHirNode('var-decl-str-owned-runtime', TempName, 0, 0,
-    TempName);
-  FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
-    TempName + #9 + 'callee ' + SourceName + #9 +
-    'ptr len owner alloc_size');
-  FModel.AddTypedHirNode('string-temp-length-runtime', SourceName, 0, 0,
-    'strvar ' + TempName + #10);
-  FModel.AddTypedHirNode('string-temp-release-runtime', SourceName, 0, 0,
-    TempName);
-  ABlob := 'var ' + TempName + '$len' + #10;
-  Result := True;
-end;
-
-function TSemanticAnalyzer.NodeConsumesOwnedStringReturnDeferred(
-  const ANode: TGreenNode;
-  const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
-var
-  I: LongInt;
-  BodyNode, Child, DeclNode: TGreenNode;
-  SourceName: string;
-begin
-  Result := False;
-  if ANode = nil then
-    Exit;
-
-  if (ANode.NodeKind = gnkProcedureDecl) or
-    (ANode.NodeKind = gnkFunctionDecl) then
-    Exit;
-
-  if DirectOwnedStringReturnAssignmentNode(ANode) then
-  begin
-    if ANode.ChildCount >= 2 then
-    begin
-      for I := 0 to ANode.ChildAt(1).ChildCount - 1 do
-      begin
-        if (ANode.ChildAt(1).NodeKind = gnkFunctionCall) and (I = 0) then
-          Continue;
-        if (ANode.ChildAt(1).NodeKind = gnkFunctionCall) and
-          IsSupportedOwnedStringReturnArgument(ANode.ChildAt(1),
-            ANode.ChildAt(1).ChildAt(I), I - 1) then
-          Continue;
-        if NodeConsumesOwnedStringReturnDeferred(
-          ANode.ChildAt(1).ChildAt(I), False) then
-          Exit(True);
-      end;
-    end;
-    Exit(False);
-  end;
-
-  if ANode.NodeKind = gnkAssignmentStatement then
-  begin
-    if ANode.ChildCount >= 2 then
-      Exit(NodeConsumesOwnedStringReturnDeferred(
-        ANode.ChildAt(1), AInsideDirectOwnedAssignmentRhs));
-    Exit(False);
-  end;
-
-  if (ANode.NodeKind = gnkFunctionCall) and
-    LookupProcedureBody(ANode.Text, BodyNode, DeclNode) and
-    (not FunctionCallReturnsString(ANode)) then
-  begin
-    for I := 1 to ANode.ChildCount - 1 do
-    begin
-      Child := ANode.ChildAt(I);
-      if Child = nil then
-        Continue;
-      if IsSupportedOwnedStringReturnArgument(ANode, Child, I - 1) then
-        Continue;
-      if NodeConsumesOwnedStringReturnDeferred(
-        Child, AInsideDirectOwnedAssignmentRhs) then
-        Exit(True);
-    end;
-    Exit(False);
-  end;
-
-  if IsSupportedOwnedStringReturnLengthArgument(ANode, SourceName) then
-    Exit(False);
-
-  if StringReturnFunctionNameFromNode(ANode, SourceName) and
-    IsOwnedStringReturnFunc(SourceName) and
-    (not AInsideDirectOwnedAssignmentRhs) then
-    Exit(True);
-  if MemberCallReturnsString(ANode) and
-    (not AInsideDirectOwnedAssignmentRhs) then
-    Exit(True);
-  if FunctionCallReturnsString(ANode) and
-    (not AInsideDirectOwnedAssignmentRhs) then
-    Exit(True);
-  if DirectOwnedStringReturnAssignmentNode(ANode) and
-    StringReturnFunctionNameFromNode(ANode.ChildAt(1), SourceName) and
-    HasOverload(SourceName) then
-    Exit(True);
-
-  for I := 0 to ANode.ChildCount - 1 do
-  begin
-    Child := ANode.ChildAt(I);
-    if NodeConsumesOwnedStringReturnDeferred(
-      Child, AInsideDirectOwnedAssignmentRhs) then
-      Exit(True);
-  end;
-end;
-
-procedure TSemanticAnalyzer.ScanOwnedStringReturnConsumers(
-  const ANode: TGreenNode; const AEntry: TProcedureBodyEntry;
-  var AChanged: Boolean);
-var
-  I, J: LongInt;
-  Child: TGreenNode;
-  FuncName: string;
-begin
-  if ANode = nil then
-    Exit;
-  if AssignmentOwnsStringReturn(ANode, AEntry) and
-    StringReturnFunctionNameFromNode(ANode.ChildAt(1), FuncName) and
-    (not IsOwnedStringReturnFunc(FuncName)) then
-  begin
-    RegisterOwnedStringReturnFunc(FuncName);
-    AChanged := True;
-  end;
-  if ANode.NodeKind = gnkFunctionCall then
-  begin
-    for J := 1 to ANode.ChildCount - 1 do
-      if CallArgumentOwnsStringReturn(
-        ANode, ANode.ChildAt(J), J - 1, FuncName) and
-        (not IsOwnedStringReturnFunc(FuncName)) then
-      begin
-        RegisterOwnedStringReturnFunc(FuncName);
-        AChanged := True;
-      end;
-    if LengthArgumentOwnsStringReturn(ANode, FuncName) and
-      (not IsOwnedStringReturnFunc(FuncName)) then
-    begin
-      RegisterOwnedStringReturnFunc(FuncName);
-      AChanged := True;
-    end;
-  end;
-  for I := 0 to ANode.ChildCount - 1 do
-  begin
-    Child := ANode.ChildAt(I);
-    if (Child <> nil) and
-      ((Child.NodeKind = gnkProcedureDecl) or
-       (Child.NodeKind = gnkFunctionDecl)) then
-      Continue;
-    ScanOwnedStringReturnConsumers(Child, AEntry, AChanged);
-  end;
-end;
-
-procedure TSemanticAnalyzer.ScanTopLevelOwnedStringReturnConsumers(
-  const ANode: TGreenNode; var AChanged: Boolean);
-var
-  I, J: LongInt;
-  Child: TGreenNode;
-  FuncName: string;
-begin
-  if ANode = nil then
-    Exit;
-  if AssignmentOwnsTopLevelStringReturn(ANode) and
-    StringReturnFunctionNameFromNode(ANode.ChildAt(1), FuncName) and
-    (not IsOwnedStringReturnFunc(FuncName)) then
-  begin
-    RegisterOwnedStringReturnFunc(FuncName);
-    AChanged := True;
-  end;
-  if ANode.NodeKind = gnkFunctionCall then
-  begin
-    for J := 1 to ANode.ChildCount - 1 do
-      if CallArgumentOwnsStringReturn(
-        ANode, ANode.ChildAt(J), J - 1, FuncName) and
-        (not IsOwnedStringReturnFunc(FuncName)) then
-      begin
-        RegisterOwnedStringReturnFunc(FuncName);
-        AChanged := True;
-      end;
-    if LengthArgumentOwnsStringReturn(ANode, FuncName) and
-      (not IsOwnedStringReturnFunc(FuncName)) then
-    begin
-      RegisterOwnedStringReturnFunc(FuncName);
-      AChanged := True;
-    end;
-  end;
-  for I := 0 to ANode.ChildCount - 1 do
-  begin
-    Child := ANode.ChildAt(I);
-    if (Child <> nil) and
-      ((Child.NodeKind = gnkProcedureDecl) or
-       (Child.NodeKind = gnkFunctionDecl)) then
-      Continue;
-    ScanTopLevelOwnedStringReturnConsumers(Child, AChanged);
-  end;
-end;
-
-procedure TSemanticAnalyzer.CheckDeferredOwnedStringReturnConsumers(
-  const ANode: TGreenNode);
-begin
-  if ANode = nil then
-    Exit;
-  if NodeConsumesOwnedStringReturnDeferred(ANode, False) then
-  begin
-    EmitSemaError(
-      'sema.c6h4-owned-string-return-deferred-consumer',
-      'C6-H4 supports direct owned string return assignment only',
-      ANode.ByteOffset);
-    Exit;
-  end;
-end;
-
-procedure TSemanticAnalyzer.PreRegisterOwnedStringReturnConsumers;
-var
-  I: LongInt;
-  Changed: Boolean;
-  Entry: TProcedureBodyEntry;
-  RootNode: TGreenNode;
-begin
-  repeat
-    Changed := False;
-    if (FRootAst <> nil) and FRootAst.IsValid then
-    begin
-      RootNode := FRootAst.RootNode;
-      if RootNode <> nil then
-        ScanTopLevelOwnedStringReturnConsumers(RootNode, Changed);
-    end;
-    for I := 0 to Length(FProcedureBodies) - 1 do
-    begin
-      Entry := FProcedureBodies[I];
-      if (Entry.Body = nil) or (Entry.Decl = nil) or (Pos('<', Entry.Name) > 0) then
-        Continue;
-      ScanOwnedStringReturnConsumers(Entry.Body, Entry, Changed);
-    end;
-  until not Changed;
-  if (FRootAst <> nil) and FRootAst.IsValid then
-  begin
-    RootNode := FRootAst.RootNode;
-    if RootNode <> nil then
-      CheckDeferredOwnedStringReturnConsumers(RootNode);
-  end;
-  if not FDiagnostics.HasErrors then
-  begin
-    for I := 0 to Length(FProcedureBodies) - 1 do
-    begin
-      Entry := FProcedureBodies[I];
-      if (Entry.Body = nil) or (Entry.Decl = nil) or (Pos('<', Entry.Name) > 0) then
-        Continue;
-      CheckDeferredOwnedStringReturnConsumers(Entry.Body);
-      if FDiagnostics.HasErrors then
-        Exit;
-    end;
-  end;
 end;
 
 procedure TSemanticAnalyzer.RegisterRuntimeArrVar(const AName: string);
@@ -1363,25 +665,77 @@ begin
     Result := 8;
 end;
 
-procedure TSemanticAnalyzer.EmitOwnedStringCleanupNodes(const AExceptName: string);
+function TSemanticAnalyzer.DynArrayElemTypeOfVar(const AName: string): string;
+begin
+  if not FModel.LookupStringConstValue(AName + '$arr_elem_type', Result) then
+    Result := '';
+end;
+
+function TSemanticAnalyzer.DynArrayElemTypeIsManagedString(
+  const AName: string): Boolean;
+var
+  ElemTypeName: string;
+begin
+  ElemTypeName := DynArrayElemTypeOfVar(AName);
+  Result :=
+    SameText(ElemTypeName, 'String') or
+    SameText(ElemTypeName, 'AnsiString') or
+    SameText(ElemTypeName, 'ShortString') or
+    SameText(ElemTypeName, 'WideString') or
+    SameText(ElemTypeName, 'UnicodeString');
+end;
+
+function TSemanticAnalyzer.DynArrayElemTypeIsManagedInterface(
+  const AName: string): Boolean;
+var
+  ElemTypeName: string;
+begin
+  ElemTypeName := DynArrayElemTypeOfVar(AName);
+  Result := (ElemTypeName <> '') and TypeMetaIsInterface(ElemTypeName);
+end;
+
+function TSemanticAnalyzer.DynArrayElemTypeNeedsManagedContract(
+  const AName: string): Boolean;
+begin
+  Result := DynArrayElemTypeIsManagedString(AName) or
+    DynArrayElemTypeIsManagedInterface(AName);
+end;
+
+procedure TSemanticAnalyzer.EnsureRuntimeContractNode(
+  const AContractName: string);
 var
   I: LongInt;
-  VarName: string;
+  Node: TTypedHirNode;
 begin
-  for I := 0 to Length(FOwnedRuntimeStrVarNames) - 1 do
+  if AContractName = '' then
+    Exit;
+  for I := 0 to FModel.TypedHirNodeCount - 1 do
   begin
-    VarName := FOwnedRuntimeStrVarNames[I];
-    if (VarName = '') or IsBorrowedRuntimeStrVar(VarName) or
-      SameText(VarName, AExceptName) then
-      Continue;
-    FModel.AddTypedHirNode(
-      'string-cleanup-runtime',
-      VarName,
-      0,
-      0,
-      VarName
-    );
+    Node := FModel.TypedHirNodeAt(I);
+    if (Node.Kind = 'runtime-contract') and
+      SameText(Node.DisplayName, AContractName) then
+      Exit;
   end;
+  FModel.AddRuntimeContract(AContractName);
+  FModel.AddTypedHirNode('runtime-contract', AContractName, 0, 0, '');
+end;
+
+procedure TSemanticAnalyzer.MarkDynArraySetLengthContract(const AName: string);
+begin
+  if not DynArrayElemTypeNeedsManagedContract(AName) then
+    Exit;
+  EnsureRuntimeContractNode('np.system.dynarray_set_length');
+end;
+
+procedure TSemanticAnalyzer.MarkDynArrayFiniContract(const AName: string);
+begin
+  if not DynArrayElemTypeNeedsManagedContract(AName) then
+    Exit;
+  EnsureRuntimeContractNode('np.system.dynarray_fini');
+  if DynArrayElemTypeIsManagedString(AName) then
+    EnsureRuntimeContractNode('np.system.string_fini');
+  if DynArrayElemTypeIsManagedInterface(AName) then
+    EnsureRuntimeContractNode('np.system.interface_release');
 end;
 
 procedure TSemanticAnalyzer.EmitOwnedDynArrayCleanupNodes;
@@ -1395,6 +749,7 @@ begin
     if (VarName = '') or IsBorrowedRuntimeArrVar(VarName) or
       IsStaticRuntimeArrVar(VarName) then
       Continue;
+    MarkDynArrayFiniContract(VarName);
     FModel.AddTypedHirNode(
       'dynarray-cleanup-runtime',
       VarName,
@@ -1526,7 +881,8 @@ begin
           Continue;
         if ParamIdx = APosition then
         begin
-          Result := ParamNameIsByRef(ParamChild.Text);
+          Result := (Length(ParamChild.Text) > 4) and
+            (Copy(ParamChild.Text, 1, 4) = 'var:');
           Exit;
         end;
         Inc(ParamIdx);
@@ -1673,13 +1029,12 @@ function TSemanticAnalyzer.EncodeStrCallArgs(const ACallNode: TGreenNode;
 var
   ArgIndex: LongInt;
   ArgNode: TGreenNode;
-  Blob, LitValue, SourceName, TempName: string;
+  Blob, LitValue: string;
 begin
   Result := '';
   ArgIndex := 0;
   if ACallNode.NodeKind = gnkFunctionCall then
     ArgIndex := 1;
-  ClearPendingStringTempReleases;
   while ArgIndex < ACallNode.ChildCount do
   begin
     ArgNode := ACallNode.ChildAt(ArgIndex);
@@ -1690,23 +1045,6 @@ begin
     end;
     if (ArgNode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ArgNode.Text) then
       Blob := 'strvar ' + ArgNode.Text + #10
-    else if IsSupportedOwnedStringReturnArgument(ACallNode, ArgNode,
-      ArgIndex - 1) and StringReturnFunctionNameFromNode(ArgNode, SourceName) then
-    begin
-      Inc(FBlockLabelCounter);
-      TempName := '$str_arg_tmp_' + IntToStr(FBlockLabelCounter);
-      RegisterRuntimeVar(TempName);
-      RegisterRuntimeStrVar(TempName);
-      FModel.AddTypedHirNode('var-decl-str-owned-runtime', TempName,
-        0, 0, TempName);
-      FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName,
-        0, 0, TempName + #9 + 'callee ' + SourceName + #9 +
-        'ptr len owner alloc_size');
-      FModel.AddTypedHirNode('string-temp-borrow-arg-runtime',
-        ACallNode.Text, 0, 0, 'strvar ' + TempName + #10);
-      QueuePendingStringTempRelease(TempName, SourceName);
-      Blob := 'strvar ' + TempName + #10;
-    end
     else if ArgNode.NodeKind = gnkStringLiteral then
     begin
       LitValue := DecodePascalStringLiteral(ArgNode.Text);
@@ -1728,59 +1066,6 @@ begin
         Result := Blob;
     end;
     Inc(ArgIndex);
-  end;
-end;
-
-function TSemanticAnalyzer.EncodeCallStatementArgs(
-  const ACallName: string; const ACallNode, ADeclNode: TGreenNode): string;
-var
-  ArgIndex, ParamIndex: LongInt;
-  ArgNode: TGreenNode;
-  Decoded, SourceName, TempName: string;
-begin
-  Result := ACallName;
-  ClearPendingStringTempReleases;
-  if ACallNode = nil then
-    Exit;
-  if ACallNode.NodeKind = gnkFunctionCall then
-    ArgIndex := 1
-  else
-    ArgIndex := 0;
-  ParamIndex := 0;
-  while ArgIndex < ACallNode.ChildCount do
-  begin
-    ArgNode := ACallNode.ChildAt(ArgIndex);
-    if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
-      IsVarParamAtPosition(ADeclNode, ParamIndex) and
-      IsRuntimeVar(ArgNode.Text) then
-      Result := Result + #9 + 'varref ' + ArgNode.Text + #10
-    else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
-      IsRuntimeStrVar(ArgNode.Text) then
-      Result := Result + #9 + 'strvar ' + ArgNode.Text + #10
-    else if (ArgNode <> nil) and IsSupportedOwnedStringReturnArgument(
-      ACallNode, ArgNode, ParamIndex) and
-      StringReturnFunctionNameFromNode(ArgNode, SourceName) then
-    begin
-      Inc(FBlockLabelCounter);
-      TempName := '$str_arg_tmp_' + IntToStr(FBlockLabelCounter);
-      RegisterRuntimeVar(TempName);
-      RegisterRuntimeStrVar(TempName);
-      FModel.AddTypedHirNode('var-decl-str-owned-runtime', TempName,
-        0, 0, TempName);
-      FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName,
-        0, 0, TempName + #9 + 'callee ' + SourceName + #9 +
-        'ptr len owner alloc_size');
-      FModel.AddTypedHirNode('string-temp-borrow-arg-runtime',
-        ACallName, 0, 0, 'strvar ' + TempName + #10);
-      QueuePendingStringTempRelease(TempName, SourceName);
-      Result := Result + #9 + 'strvar ' + TempName + #10;
-    end
-    else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkStringLiteral) then
-      Result := Result + #9 + 'strlit ' + ArgNode.Text + #10
-    else if (ArgNode <> nil) and EncodeRuntimeIntExprFold(ArgNode, Decoded) then
-      Result := Result + #9 + Decoded;
-    Inc(ArgIndex);
-    Inc(ParamIndex);
   end;
 end;
 
@@ -3106,13 +2391,6 @@ function TSemanticAnalyzer.TypeMetaRetPtr(
 var V: Int64;
 begin
   Result := FModel.LookupConstValue(ATypeName + '$ret_ptr_' + AMethodName, V);
-end;
-
-function TSemanticAnalyzer.TypeMetaRetStr(
-  const ATypeName, AMethodName: string): Boolean;
-var V: Int64;
-begin
-  Result := FModel.LookupConstValue(ATypeName + '$ret_str_' + AMethodName, V);
 end;
 
 function TSemanticAnalyzer.TypeMetaParentClass(const ATypeName: string): string;
@@ -5064,19 +4342,24 @@ begin
 end;
 
 procedure TSemanticAnalyzer.SeedRuntimeContracts;
-  procedure AddRuntimeContract(const AContractName: string);
-  begin
-    FModel.AddRuntimeContract(AContractName);
-    FModel.AddTypedHirNode('runtime-contract', AContractName, 0, 0, '');
-  end;
+const
+  RuntimeContracts: array[0..1] of string = (
+    'np.system.process_init',
+    'np.system.process_fini'
+  );
+var
+  Index: LongInt;
 begin
   if (FRootAst.RootKindName <> 'program') and
     (FRootAst.RootKindName <> 'library') and
     (FRootAst.RootKindName <> 'package') then
     Exit;
 
-  AddRuntimeContract(NPSYSTEM_PROCESS_INIT);
-  AddRuntimeContract(NPSYSTEM_PROCESS_FINI);
+  for Index := Low(RuntimeContracts) to High(RuntimeContracts) do
+  begin
+    FModel.AddRuntimeContract(RuntimeContracts[Index]);
+    FModel.AddTypedHirNode('runtime-contract', RuntimeContracts[Index], 0, 0, '');
+  end;
 end;
 
 procedure TSemanticAnalyzer.SeedForeignProcedureBindings;
@@ -5173,8 +4456,6 @@ begin
     Exit;
   SeedRuntimeContracts;
   SeedRuntimeVarDecls;
-  if FNoFold then
-    PreRegisterOwnedStringReturnConsumers;
   if FNoFold then
     PreRegisterFunctionReturnTypes;
   FGenericWorkCount := 0;
@@ -5705,8 +4986,6 @@ begin
           FModel.SetSymbolParamCount(SymbolId, Symbol.ParamCount);
           FModel.SetSymbolMinParamCount(SymbolId, Symbol.MinParamCount);
           FModel.SetSymbolParamSignature(SymbolId, Symbol.ParamSignature);
-          if TypeMetaRetStr(ParentIntfName, MethShort) then
-            FModel.AddConstValue(IntfName + '$ret_str_' + MethShort, 1);
         end;
       end;
     end;
@@ -5727,8 +5006,6 @@ begin
         FModel.SetSymbolParamCount(SymbolId, CountDeclParams(Child));
         FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(Child));
         FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(Child));
-        if DeclReturnsString(Child) then
-          FModel.AddConstValue(IntfName + '$ret_str_' + NameNode.Text, 1);
       end;
     end;
   end;
@@ -7719,8 +6996,6 @@ begin
   ABlob := '';
   if ANode = nil then
     Exit(False);
-  if EmitOwnedStringLengthTemp(ANode, ABlob) then
-    Exit(True);
   if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'nil') then
   begin
     ABlob := 'null' + #10;
@@ -7745,15 +7020,6 @@ begin
   if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'False') then
   begin
     ABlob := 'int 0' + #10;
-    Exit(True);
-  end;
-  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
-    (ANode.ChildAt(0) <> nil) and
-    SameText(ANode.ChildAt(0).Text, 'Length') and
-    (ANode.ChildAt(1) <> nil) and
-    (ANode.ChildAt(1).NodeKind = gnkStringLiteral) then
-  begin
-    ABlob := 'strlit ' + ANode.ChildAt(1).Text + #10 + 'strlen' + #10;
     Exit(True);
   end;
   if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
@@ -9087,7 +8353,7 @@ begin
       if (ParamNode = nil) or (ParamNode.NodeKind <> gnkParameterDecl) then
         Continue;
       Inc(ParamIndex);
-      IsVarByRef := ParamNameIsByRef(ParamNode.Text);
+      IsVarByRef := Pos('var:', ParamNode.Text) = 1;
       if ParamNode.ChildCount <= 0 then
       begin
         if IsVarByRef then
@@ -10067,13 +9333,6 @@ begin
     (CallNode.ChildCount >= 1) and (CallNode.ChildAt(0) <> nil) and
     (CallNode.ChildAt(0).NodeKind = gnkFunctionCall) then
     CallNode := CallNode.ChildAt(0);
-
-  if (CallNode.NodeKind = gnkFunctionCall) and
-    (SameText(CallNode.Text, 'Length') or
-     ((CallNode.ChildCount >= 1) and (CallNode.ChildAt(0) <> nil) and
-      (CallNode.ChildAt(0).NodeKind = gnkIdentifier) and
-      SameText(CallNode.ChildAt(0).Text, 'Length'))) then
-    Exit(False);
 
   if ANode.NodeKind = gnkIntegerLiteral then
   begin
@@ -11108,16 +10367,8 @@ begin
     if (Child.NodeKind = gnkExitStatement) and FNoFold then
     begin
       EmitOwnedDynArrayCleanupNodes;
-      EmitOwnedStringCleanupNodes(FCurrentRetVarName);
       if (FCurrentRetVarName <> '') and IsRuntimeStrVar(FCurrentRetVarName) then
-      begin
-        if FCurrentOwnedStringReturn then
-          FModel.AddTypedHirNode('ret-str-owned-runtime', FCurrentRetVarName,
-            0, 0, FCurrentRetVarName)
-        else
-          FModel.AddTypedHirNode('ret-str-runtime', FCurrentRetVarName, 0, 0,
-            FCurrentRetVarName);
-      end
+        FModel.AddTypedHirNode('ret-str-runtime', FCurrentRetVarName, 0, 0, FCurrentRetVarName)
       else if FCurrentRetVarName <> '' then
       begin
         NodeId := FModel.AddTypedHirNode('ret-runtime', FCurrentRetVarName, 0, 0,
@@ -11233,73 +10484,6 @@ begin
               );
             Continue;
           end;
-        end;
-        if FNoFold and
-          (Child.ChildAt(0).ChildAt(0) <> nil) and
-          (Child.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
-          (Child.ChildAt(0).ChildAt(1) <> nil) and
-          (Child.ChildAt(0).ChildAt(1).NodeKind = gnkIdentifier) and
-          (LookupClassVar(Child.ChildAt(0).ChildAt(0).Text) <> '') and
-          TypeMetaFieldIsStr(
-            LookupClassVar(Child.ChildAt(0).ChildAt(0).Text),
-            Child.ChildAt(0).ChildAt(1).Text) then
-        begin
-          Value := TypeMetaFieldIndex(
-            LookupClassVar(Child.ChildAt(0).ChildAt(0).Text),
-            Child.ChildAt(0).ChildAt(1).Text);
-          Arg := nil;
-          if Child.ChildCount >= 2 then
-            Arg := Child.ChildAt(1);
-          if Arg <> nil then
-          begin
-            if Arg.NodeKind = gnkStringLiteral then
-              FModel.AddTypedHirNode(
-                'field-store-str-runtime', Decoded, 0, 0,
-                Child.ChildAt(0).ChildAt(0).Text + #9 +
-                IntToStr(Value) + #9 + 'lit ' +
-                DecodePascalStringLiteral(Arg.Text)
-              )
-            else if EvaluateStringConstant(Arg, StringValue) then
-              FModel.AddTypedHirNode(
-                'field-store-str-runtime', Decoded, 0, 0,
-                Child.ChildAt(0).ChildAt(0).Text + #9 +
-                IntToStr(Value) + #9 + 'lit ' + StringValue
-              )
-            else if (Arg.NodeKind = gnkIdentifier) and
-              IsRuntimeStrVar(Arg.Text) then
-              FModel.AddTypedHirNode(
-                'field-store-str-runtime', Decoded, 0, 0,
-                Child.ChildAt(0).ChildAt(0).Text + #9 +
-                IntToStr(Value) + #9 + 'var ' + Arg.Text
-              )
-            else if (Arg.NodeKind = gnkDotAccess) and
-              (Arg.ChildCount >= 2) and (Arg.ChildAt(0) <> nil) and
-              (Arg.ChildAt(1) <> nil) and
-              (Arg.ChildAt(0).NodeKind = gnkIdentifier) and
-              (Arg.ChildAt(1).NodeKind = gnkIdentifier) and
-              (LookupClassVar(Arg.ChildAt(0).Text) <> '') and
-              TypeMetaFieldIsStr(LookupClassVar(Arg.ChildAt(0).Text),
-                Arg.ChildAt(1).Text) then
-            begin
-              Inc(FBlockLabelCounter);
-              FuncName := '$str_field_tmp_' + IntToStr(FBlockLabelCounter);
-              RegisterRuntimeVar(FuncName);
-              RegisterRuntimeStrVar(FuncName);
-              FModel.AddTypedHirNode('var-decl-str-runtime', FuncName,
-                0, 0, FuncName);
-              FModel.AddTypedHirNode('assign-str-field-load-runtime',
-                FuncName, 0, 0,
-                FuncName + #9 + Arg.ChildAt(0).Text + #9 +
-                IntToStr(TypeMetaFieldIndex(
-                  LookupClassVar(Arg.ChildAt(0).Text), Arg.ChildAt(1).Text)));
-              FModel.AddTypedHirNode(
-                'field-store-str-runtime', Decoded, 0, 0,
-                Child.ChildAt(0).ChildAt(0).Text + #9 +
-                IntToStr(Value) + #9 + 'var ' + FuncName
-              );
-            end;
-          end;
-          Continue;
         end;
       end;
       if FNoFold and (Child.ChildCount >= 1) and
@@ -11567,54 +10751,29 @@ begin
           if (Arg.NodeKind = gnkStringLiteral) then
           begin
             StringValue := DecodePascalStringLiteral(Arg.Text);
-            if FCurrentOwnedStringReturn and SameText(Decoded, FCurrentRetVarName) then
-              FModel.AddTypedHirNode(
-                'assign-str-literal-runtime', Decoded, 0, 0, StringValue)
-            else
-              FModel.AddTypedHirNode(
-                'assign-str-runtime', StringValue, 0, 0, Decoded
-              );
+            FModel.AddTypedHirNode(
+              'assign-str-runtime', StringValue, 0, 0, Decoded
+            );
           end
           else if EvaluateStringConstant(Arg, StringValue) then
-          begin
-            if FCurrentOwnedStringReturn and SameText(Decoded, FCurrentRetVarName) then
-              FModel.AddTypedHirNode(
-                'assign-str-literal-runtime', Decoded, 0, 0, StringValue)
-            else
-              FModel.AddTypedHirNode(
-                'assign-str-runtime', StringValue, 0, 0, Decoded
-              );
-          end
+            FModel.AddTypedHirNode(
+              'assign-str-runtime', StringValue, 0, 0, Decoded
+            )
           else if (Arg.NodeKind = gnkIdentifier) and
             IsRuntimeStrVar(Arg.Text) and
             not LookupProcedureBody(Arg.Text, BranchNode, DeclNode) then
-          begin
-            if FCurrentOwnedStringReturn and SameText(Decoded, FCurrentRetVarName) and
-              IsOwnedRuntimeStrVar(Arg.Text) then
-              FModel.AddTypedHirNode(
-                'assign-str-move-to-result-runtime', Decoded, 0, 0, Arg.Text)
-            else
-              FModel.AddTypedHirNode(
-                'assign-str-copy-runtime', Arg.Text, 0, 0, Decoded
-              );
-          end
+            FModel.AddTypedHirNode(
+              'assign-str-copy-runtime', Arg.Text, 0, 0, Decoded
+            )
           else if (Arg.NodeKind = gnkFunctionCall) and
             (Arg.ChildCount >= 2) and (Arg.ChildAt(0) <> nil) and
             SameText(Arg.ChildAt(0).Text, 'IntToStr') then
           begin
             if EncodeRuntimeIntExprFold(Arg.ChildAt(1), Operand) then
-            begin
-              if IsOwnedRuntimeStrVar(Decoded) then
-                FModel.AddTypedHirNode(
-                  'int-to-str-owned-runtime', Decoded, 0, 0,
-                  Decoded + #9 + Operand
-                )
-              else
-                FModel.AddTypedHirNode(
-                  'int-to-str-runtime', Decoded, 0, 0,
-                  Decoded + #9 + Operand
-                );
-            end;
+              FModel.AddTypedHirNode(
+                'int-to-str-runtime', Decoded, 0, 0,
+                Decoded + #9 + Operand
+              );
           end
           else if (Arg.NodeKind = gnkFunctionCall) and
             (Arg.ChildCount >= 4) and (Arg.ChildAt(0) <> nil) and
@@ -11642,43 +10801,19 @@ begin
           end
           else if (Arg.NodeKind = gnkIdentifier) and
             LookupProcedureBody(Arg.Text, BranchNode, DeclNode) and
-            IsOwnedStringReturnFunc(Arg.Text) then
-          begin
-            FModel.AddTypedHirNode(
-              'assign-str-owned-call-runtime', Decoded, 0, 0,
-              Decoded + #9 + 'callee ' + Arg.Text
-            );
-          end
-          else if (Arg.NodeKind = gnkIdentifier) and
-            LookupProcedureBody(Arg.Text, BranchNode, DeclNode) and
             IsRuntimeStrVar(Arg.Text) then
-          begin
             FModel.AddTypedHirNode(
-              'assign-str-call-runtime', Decoded, 0, 0,
-              Decoded + #9 + 'callee ' + Arg.Text
-            );
-          end
-          else if (Arg.NodeKind = gnkFunctionCall) and
-            LookupProcedureBody(Arg.Text, BranchNode, DeclNode) and
-            IsOwnedStringReturnFunc(Arg.Text) then
-          begin
-            Operand := EncodeStrCallArgs(Arg, Decoded);
-            FModel.AddTypedHirNode(
-              'assign-str-owned-call-runtime', Decoded, 0, 0,
-              Decoded + #9 + 'callee ' + Arg.Text + #9 + Operand
-            );
-            EmitPendingStringTempReleases;
-          end
+              'assign-str-call-runtime', Arg.Text, 0, 0, Decoded
+            )
           else if (Arg.NodeKind = gnkFunctionCall) and
             LookupProcedureBody(Arg.Text, BranchNode, DeclNode) and
             IsRuntimeStrVar(Arg.Text) then
           begin
             Operand := EncodeStrCallArgs(Arg, Decoded);
             FModel.AddTypedHirNode(
-              'assign-str-call-runtime', Decoded, 0, 0,
-              Decoded + #9 + 'callee ' + Arg.Text + #9 + Operand
+              'assign-str-call-runtime', Arg.Text, 0, 0,
+              Decoded + #9 + Operand
             );
-            EmitPendingStringTempReleases;
           end
           else if (Arg.NodeKind = gnkDotAccess) and
             (Arg.ChildCount >= 2) and
@@ -11718,21 +10853,11 @@ begin
             begin
               Operand := EmitStrConcatOperand(Arg.ChildAt(1), Decoded);
               if Operand <> '' then
-              begin
-                if IsOwnedRuntimeStrVar(Decoded) then
-                  FModel.AddTypedHirNode(
-                    'assign-str-owned-concat-runtime',
-                    Decoded,
-                    0, 0,
-                    StringValue + #9 + Operand
-                  )
-                else
-                  FModel.AddTypedHirNode(
-                    'assign-str-concat-runtime',
-                    StringValue + #9 + Operand,
-                    0, 0, Decoded
-                  );
-              end;
+                FModel.AddTypedHirNode(
+                  'assign-str-concat-runtime',
+                  StringValue + #9 + Operand,
+                  0, 0, Decoded
+                );
             end;
           end;
         end
@@ -11953,7 +11078,6 @@ begin
           if EncodeRuntimeIntExprFold(Arg, Operand) then
           begin
             EmitOwnedDynArrayCleanupNodes;
-            EmitOwnedStringCleanupNodes;
             NodeId := FModel.AddTypedHirNode(
               'halt-call-runtime', 'Halt', 0, 0, Operand);
             if BuildRuntimeScalarHirExpr(Arg, ExprId) then
@@ -11968,7 +11092,6 @@ begin
             Operand := IntToStr(Value);
         end;
         EmitOwnedDynArrayCleanupNodes;
-        EmitOwnedStringCleanupNodes;
         FModel.AddTypedHirNode('halt-call', 'Halt', 0, 0, Operand);
         FCurrentBlockTerminated := True;
         Continue;
@@ -12172,11 +11295,14 @@ begin
             (not IsStaticRuntimeArrVar(RhsNode.Text)) then
           begin
             if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), Operand) then
+            begin
+              MarkDynArraySetLengthContract(RhsNode.Text);
               FModel.AddTypedHirNode(
                 'setlength-arr-runtime', RhsNode.Text, 0, 0,
                 RhsNode.Text + #9 + Operand + #9 +
                 IntToStr(DynArrayElemSizeOfVar(RhsNode.Text))
               );
+            end;
           end
           else if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) and
             (FCurrentMethodClass <> '') and
@@ -12415,7 +11541,7 @@ begin
             DestroyFuncName := FuncName;
           FModel.AddTypedHirNode(
             'object-free-runtime',
-            NPSYSTEM_OBJECT_FREE,
+            'np.system.object_free',
             0,
             0,
             'var ' + ReceiverName + #10 +
@@ -12581,10 +11707,59 @@ begin
         else
           Operand := Child.Text;
         if Arg <> nil then
-          Operand := EncodeCallStatementArgs(Operand, Arg, DeclNode);
+        begin
+          if Arg.NodeKind = gnkFunctionCall then
+            ArgIndex := 1
+          else
+            ArgIndex := 0;
+          DotPos := 0;
+          while ArgIndex < Arg.ChildCount do
+          begin
+            RhsNode := Arg.ChildAt(ArgIndex);
+            if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) and
+              IsVarParamAtPosition(DeclNode, DotPos) and
+              IsRuntimeVar(RhsNode.Text) then
+              Operand := Operand + #9 + 'varref ' + RhsNode.Text + #10
+            else if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) and
+              IsRuntimeStrVar(RhsNode.Text) then
+              Operand := Operand + #9 + 'strvar ' + RhsNode.Text + #10
+            else if (RhsNode <> nil) and (RhsNode.NodeKind = gnkStringLiteral) then
+              Operand := Operand + #9 + 'strlit ' + RhsNode.Text + #10
+            else if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
+              Operand := Operand + #9 + Decoded;
+            Inc(ArgIndex);
+            Inc(DotPos);
+          end;
+          if DeclNode <> nil then
+          begin
+            K := 0;
+            for ArgIndex := 0 to DeclNode.ChildCount - 1 do
+            begin
+              if (DeclNode.ChildAt(ArgIndex) = nil) or
+                (DeclNode.ChildAt(ArgIndex).NodeKind <> gnkParameterList) then
+                Continue;
+              for K := 0 to DeclNode.ChildAt(ArgIndex).ChildCount - 1 do
+              begin
+                RhsNode := DeclNode.ChildAt(ArgIndex).ChildAt(K);
+                if (RhsNode = nil) or (RhsNode.NodeKind <> gnkParameterDecl) then
+                  Continue;
+                Dec(DotPos);
+                if DotPos < 0 then
+                begin
+                  if RhsNode.ChildCount > 1 then
+                  begin
+                    if EncodeRuntimeIntExprFold(RhsNode.ChildAt(
+                      RhsNode.ChildCount - 1), Decoded) then
+                      Operand := Operand + #9 + Decoded;
+                  end;
+                end;
+              end;
+              Break;
+            end;
+          end;
+        end;
         NodeId := FModel.AddTypedHirNode('call-runtime', Child.Text, 0, 0, Operand);
         AttachStatementCallExpr(NodeId, Child);
-        EmitPendingStringTempReleases;
         Continue;
       end;
     end;
@@ -13061,9 +12236,8 @@ begin
         if IsStr then
         begin
           RegisterRuntimeStrVar(Decl.Text);
-          RegisterOwnedRuntimeStrVar(Decl.Text);
           FModel.AddTypedHirNode(
-            'var-decl-str-owned-runtime', Decl.Text, 0, 0, Decl.Text
+            'var-decl-str-runtime', Decl.Text, 0, 0, Decl.Text
           );
         end
         else if ArrayTypeNode <> nil then
@@ -13148,7 +12322,6 @@ begin
   if FNoFold and not FCurrentBlockTerminated then
   begin
     EmitOwnedDynArrayCleanupNodes;
-    EmitOwnedStringCleanupNodes;
     FModel.AddTypedHirNode('halt-call-runtime', 'Halt', 0, 0, 'int 0' + #10);
     FCurrentBlockTerminated := True;
   end;
@@ -13203,7 +12376,6 @@ var
   SavedTerminated: Boolean;
   ParamTypes, RetVarName, EffName, ArrOperand: string;
   IsStrParam, IsStrReturn, IsPtrReturn, IsVarP, IsRecReturn: Boolean;
-  OwnedStringReturn: Boolean;
   PtrReturnClass: string;
   Folded, Value: Int64;
   WorkQueue: array of LongInt;
@@ -13244,8 +12416,6 @@ begin
     SetLength(FRuntimeArrVarNames, 0);
     SetLength(FBorrowedRuntimeArrVarNames, 0);
     SetLength(FRuntimeStrVarNames, 0);
-    SetLength(FOwnedRuntimeStrVarNames, 0);
-    SetLength(FBorrowedRuntimeStrVarNames, 0);
     SetLength(FClassVarNames, 0);
     SetLength(FClassVarTypes, 0);
     SetLength(FRecordVarNames, 0);
@@ -13261,7 +12431,6 @@ begin
     IsStrReturn := False;
     IsPtrReturn := False;
     IsRecReturn := False;
-    OwnedStringReturn := False;
     PtrReturnClass := '';
     if Entry.Decl <> nil then
     begin
@@ -13279,9 +12448,10 @@ begin
             begin
               ParamTypes := ParamTypes;
               RetVarName := ParamChild.Text;
-              IsVarP := ParamNameIsByRef(RetVarName);
+              IsVarP := (Length(RetVarName) > 4) and
+                (Copy(RetVarName, 1, 4) = 'var:');
               if IsVarP then
-                RetVarName := StripParamModifier(RetVarName);
+                RetVarName := Copy(RetVarName, 5, Length(RetVarName));
               RegisterRuntimeVar(RetVarName);
               if IsVarP then
                 RegisterVarParam(RetVarName);
@@ -13295,7 +12465,6 @@ begin
                 begin
                   IsStrParam := True;
                   RegisterRuntimeStrVar(RetVarName);
-                  RegisterBorrowedRuntimeStrVar(RetVarName);
                 end
                 else if (TypeChild <> nil) and
                   ((TypeChild.NodeKind = gnkArrayType) or
@@ -13373,8 +12542,6 @@ begin
     end;
     if IsPtrReturn and (Pos('.', Entry.Name) = 0) then
       RegisterPtrReturnFunc(Entry.Name, PtrReturnClass);
-    OwnedStringReturn := IsRootOwnedStringReturnCandidate(Entry, IsStrReturn) and
-      IsOwnedStringReturnFunc(EffName);
     if Pos('.', Entry.Name) > 0 then
     begin
       FCurrentMethodClass := Copy(Entry.Name, 1, Pos('.', Entry.Name) - 1);
@@ -13389,9 +12556,6 @@ begin
           IntToStr(ParamCount + 1) + ':p' + ParamTypes);
       RegisterRuntimeVar('self');
     end
-    else if IsStrReturn and OwnedStringReturn then
-      FModel.AddTypedHirNode('function-body-begin', EffName, 0, 0,
-        IntToStr(ParamCount) + ':' + ParamTypes + ':so')
     else if IsStrReturn then
       FModel.AddTypedHirNode('function-body-begin', EffName, 0, 0,
         IntToStr(ParamCount) + ':' + ParamTypes + ':s')
@@ -13424,10 +12588,11 @@ begin
             if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
             begin
               RetVarName := ParamChild.Text;
-              if ParamNameIsByRef(RetVarName) then
-                RetVarName := StripParamModifier(RetVarName);
+              if (Length(RetVarName) > 4) and
+                (Copy(RetVarName, 1, 4) = 'var:') then
+                RetVarName := Copy(RetVarName, 5, Length(RetVarName));
               if IsRuntimeStrVar(RetVarName) then
-                FModel.AddTypedHirNode('var-decl-str-borrowed-runtime', RetVarName,
+                FModel.AddTypedHirNode('var-decl-str-runtime', RetVarName,
                   0, 0, RetVarName)
               else if IsRuntimeArrVar(RetVarName) then
               begin
@@ -13464,19 +12629,11 @@ begin
       FCurrentRetVarName := RetVarName
     else
       FCurrentRetVarName := '';
-    FCurrentOwnedStringReturn := OwnedStringReturn;
     if IsStrReturn then
-    begin
       RegisterRuntimeStrVar(RetVarName);
-      if OwnedStringReturn then
-        RegisterOwnedRuntimeStrVar(RetVarName);
-    end;
     if IsRecReturn then
       RegisterRecordVar(RetVarName, PtrReturnClass);
-    if IsStrReturn and OwnedStringReturn then
-      FModel.AddTypedHirNode('var-decl-str-owned-runtime', RetVarName, 0, 0,
-        RetVarName)
-    else if IsStrReturn then
+    if IsStrReturn then
       FModel.AddTypedHirNode('var-decl-str-runtime', RetVarName, 0, 0, RetVarName)
     else if IsPtrReturn then
       FModel.AddTypedHirNode('var-decl-ptr-runtime', RetVarName, 0, 0, RetVarName)
@@ -13517,9 +12674,8 @@ begin
                SameText(Decl.ChildAt(0).Text, 'AnsiString')) then
             begin
               RegisterRuntimeStrVar(Decl.Text);
-              RegisterOwnedRuntimeStrVar(Decl.Text);
               FModel.AddTypedHirNode(
-                'var-decl-str-owned-runtime', Decl.Text, 0, 0, Decl.Text);
+                'var-decl-str-runtime', Decl.Text, 0, 0, Decl.Text);
             end
             else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
               (Length(Decl.ChildAt(0).Text) > 1) and
@@ -13542,11 +12698,7 @@ begin
     if not FCurrentBlockTerminated then
     begin
       EmitOwnedDynArrayCleanupNodes;
-      EmitOwnedStringCleanupNodes(RetVarName);
-      if IsStrReturn and OwnedStringReturn then
-        FModel.AddTypedHirNode('ret-str-owned-runtime', RetVarName, 0, 0,
-          RetVarName)
-      else if IsStrReturn then
+      if IsStrReturn then
         FModel.AddTypedHirNode('ret-str-runtime', RetVarName, 0, 0, RetVarName)
       else
       begin
@@ -13559,7 +12711,6 @@ begin
     FCurrentBlockTerminated := SavedTerminated;
     FCurrentMethodClass := '';
     FCurrentRetVarName := '';
-    FCurrentOwnedStringReturn := False;
   end;
 end;
 

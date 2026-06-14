@@ -31,8 +31,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 repo_root="$(git worktree list --porcelain | awk '
-  /^worktree / && root == "" { root = substr($0, 10) }
-  END { print root }
+  /^worktree / && !found { print substr($0, 10); found = 1 }
 ')"
 
 if [[ -z "$repo_root" ]]; then

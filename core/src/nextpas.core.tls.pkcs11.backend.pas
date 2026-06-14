@@ -24,12 +24,7 @@ unit nextpas.core.tls.pkcs11.backend;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.pkcs11.types,
-  nextpas.core.tls.pkcs11.api,
-  nextpas.core.tls.openssl.api.types,
-  nextpas.core.tls.openssl.api.evp;
+uses SysUtils, nextpas.core.tls.pkcs11.types, nextpas.core.tls.pkcs11.api, nextpas.core.tls.openssl.api.types, nextpas.core.tls.openssl.api.evp;
 
 type
   { IPKCS11Backend - Abstract interface for PKCS#11 key loading }
@@ -133,12 +128,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.provider,
-  nextpas.core.tls.openssl.api.engine,
-  nextpas.core.tls.openssl.api.store,
-  nextpas.core.tls.pkcs11.provider,
-  nextpas.core.tls.pkcs11.engine;
+uses nextpas.core.tls.openssl.api.provider, nextpas.core.tls.openssl.api.engine, nextpas.core.tls.openssl.api.store, nextpas.core.tls.pkcs11.provider, nextpas.core.tls.pkcs11.engine;
 
 { TPKCS11BackendFactory }
 

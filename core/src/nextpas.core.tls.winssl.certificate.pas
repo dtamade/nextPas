@@ -18,8 +18,7 @@ unit nextpas.core.tls.winssl.certificate;
 interface
 
 uses
-  Windows, SysUtils, Classes,
-  nextpas.core.tls.base,
+  Windows, SysUtils,nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api,
   nextpas.core.tls.winssl.utils,
@@ -108,7 +107,8 @@ function CreateWinSSLCertificateFromContext(ACertContext: PCCERT_CONTEXT; AOwnsC
 implementation
 
 uses
-  nextpas.core.time,
+  nextpas.core.text.strings,
+    nextpas.core.time,
   nextpas.core.tls.asn1,
   nextpas.core.tls.x509,
   nextpas.core.crypto.hash;
@@ -428,7 +428,6 @@ begin
     try
       Result := LoadFromStream(FileStream);
     finally
-      FileStream.Free;
     end;
   except
     Result := False;
@@ -548,7 +547,6 @@ begin
     try
       Result := SaveToStream(FileStream);
     finally
-      FileStream.Free;
     end;
   except
     Result := False;
@@ -668,7 +666,6 @@ begin
       Result.KeyUsage := X509KeyUsageToBitfield(LParser.KeyUsage);
       Result.SubjectAltNames := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
     finally
-      LParser.Free;
     end;
   end
   else
@@ -1089,7 +1086,7 @@ var
 
   function MatchWildcard(const APattern, AHostname: string): Boolean;
   var
-    PatternParts, HostParts: TStringList;
+    PatternParts, HostParts: TStringArray;
     j: Integer;
   begin
     Result := False;
@@ -1104,21 +1101,14 @@ var
     // 通配符匹配 (*.example.com)
     if (Pos('*.', APattern) = 1) then
     begin
-      PatternParts := TStringList.Create;
-      HostParts := TStringList.Create;
       try
-        PatternParts.Delimiter := '.';
-        PatternParts.DelimitedText := APattern;
-
-        HostParts.Delimiter := '.';
-        HostParts.DelimitedText := AHostname;
 
         // 域名级数必须相同
-        if PatternParts.Count = HostParts.Count then
+        if Length(PatternParts) = Length(HostParts) then
         begin
           Result := True;
           // 从第二级开始比较（跳过通配符）
-          for j := 1 to PatternParts.Count - 1 do
+          for j := 1 to Length(PatternParts) - 1 do
           begin
             if not SameText(PatternParts[j], HostParts[j]) then
             begin
@@ -1128,8 +1118,6 @@ var
           end;
         end;
       finally
-        PatternParts.Free;
-        HostParts.Free;
       end;
     end;
   end;
@@ -1382,7 +1370,6 @@ begin
       end;
     end;
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1417,7 +1404,6 @@ begin
       Result := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
       Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -1531,7 +1517,6 @@ begin
       Result := X509KeyUsageToStrings(LParser.KeyUsage);
       Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -1624,7 +1609,6 @@ begin
       Result := X509ExtKeyUsageToStrings(LParser.ExtKeyUsage);
       Exit;
     finally
-      LParser.Free;
     end;
   end;
 

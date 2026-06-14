@@ -12,11 +12,7 @@ unit nextpas.core.tls.openssl.api.ec;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader;
+uses SysUtils, nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
 
 type
   // EC structures
@@ -338,8 +334,7 @@ function EC_GROUP_get_curve_name_string(const group: PEC_GROUP): string;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api;
+uses nextpas.core.tls.openssl.api;
 
 const
   { EC Function Bindings - 批量加载函数绑定定义 }

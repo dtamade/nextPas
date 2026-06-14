@@ -4,8 +4,7 @@ unit nextpas.core.mem.memory_map;
 
 interface
 
-uses
-  nextpas.core.platform.mmap;
+uses nextpas.core.platform.mmap;
 
 type
   TMemoryMapAccess = (
@@ -106,8 +105,6 @@ type
 
 implementation
 
-uses
-  SysUtils;
 
 { TMemoryMap }
 
