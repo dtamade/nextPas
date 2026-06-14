@@ -439,8 +439,11 @@ begin
   end;
   LBase := ABase;
   LExp := AExponent;
+  // Low(Int64) cannot be negated (overflow), handle via division path
   if LExp < 0 then
   begin
+    if LExp = Low(Int64) then
+      Exit(1.0 / (IntPower(LBase, -LExp - 1) * LBase));
     LBase := 1.0 / LBase;
     LExp := -LExp;
   end;
@@ -460,11 +463,31 @@ begin
 end;
 
 function Ldexp(const AX: Double; AExp: Integer): Double;
+var
+  LPow: Double;
+  LE: Integer;
 begin
   if AExp = 0 then
     Exit(AX);
-  // O(1) implementation using exp(n * ln2) instead of O(|n|) loop
-  Result := AX * System.Exp(AExp * 0.69314718055994530942);
+  LPow := 1.0;
+  LE := AExp;
+  if LE < 0 then
+  begin
+    while LE < 0 do
+    begin
+      LPow := LPow / 2.0;
+      Inc(LE);
+    end;
+  end
+  else
+  begin
+    while LE > 0 do
+    begin
+      LPow := LPow * 2.0;
+      Dec(LE);
+    end;
+  end;
+  Result := AX * LPow;
 end;
 
 function Ldexp(const AX: Single; AExp: Integer): Single;
