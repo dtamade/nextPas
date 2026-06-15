@@ -14,9 +14,68 @@
 | P0.3 worktree prune & archive | `fix-mktemp` 元数据 prune；3 个 tag 已打 `archive/core-math` / `archive/core-mem` / `archive/core-mem-l0-debt`；对应本地 branch 删除；`origin/codex/core-math` 保留 | tag 列表 + `git branch -D` 输出 |
 | P0-post hygiene | `make hygiene` → `build-hygiene=pass` | 0.25s 完成 |
 | P0-push | `git push origin main` → `3f855b283..78f637b48 main -> main` | main 与 origin/main 零偏差 |
-| P0-post tidy | `.cursor/` 加入 `.gitignore`（避免 IDE-local mcp.json 与 auto-generated rules 误提交） | 本 commit 同步 |
+| P0-post tidy | `.cursor/` 加入 `.gitignore`（避免 IDE-local mcp.json 与 auto-generated rules 误提交） | `a9b7e3327` |
+| P1.x core lane review #1 | core-platform lane review 文档落盘并 push | `4af1ebdf6` |
+| P0.5 stale dirty 处理 | 在 P1.x 中途发现未预期 dirty（leading-comma 风格 reformat + host owner uses），来源未知；按 trailing-comma baseline checkout 恢复，host owner 设计意图保留在 handoff doc 里 | 见 §P0.5 |
 
-P0 期间未消费的 question：本来 P0.1 + P0.2 + P0.3 是一次性 ask_question 三题，用户每次只回答一题；接手者按顺序拆分推进、逐题完成。后续工作流仍按"一次单题/单批授权"节奏。
+P0 期间未消费的 question：本来 P0.1 + P0.2 + P0.3 是一次性 ask_question 三题，用户每次只回答一题；接手者按顺序拆分推进、逐题完成。
+
+2026-06-15 中段用户授权升级为"全权负责"，后续动作不再每个都等单独 ask_question，但仍保留：（a）任何破坏性 git 操作前要在 takeover plan 留下决策记录；（b）继续对外发布的 commit 必须有 commit message 说明设计动机；（c）任何来源不明的 dirty 一律先停下来评估再处理。
+
+## P0.5 Unknown Stale Dirty Discovery（2026-06-15）
+
+### 现象
+
+在 P1.x core-platform review 期间发现 main 工作树有 dirty:
+`core/src/nextpas.core.platform.error.pas`（来源不明）。
+
+形态：把整个 `implementation uses` 块改为 **leading comma 风格**
+（每行以 `,` 开头），同时包含 host owner uses（`linux/darwin/freebsd.base`）。
+
+```diff
+-  nextpas.core.platform.sync.base,
++  nextpas.core.platform.sync.base
+   {$IFDEF NEXTPAS_UNIX}
+-  nextpas.core.platform.posix.base,
++  , nextpas.core.platform.posix.base
+   ...
++  {$IFDEF NEXTPAS_LINUX}
++  , nextpas.core.platform.linux.base
++  {$ENDIF}
++  {$IFDEF NEXTPAS_MACOS}
++  , nextpas.core.platform.darwin.base
++  {$ENDIF}
++  ...
+```
+
+### 判定
+
+- **不是接手者修改**：本会话未触碰过该文件除 `git checkout --`（恢复 clean）以外的操作
+- **不是已 commit 的 P0.x 内容**：P0.1 dirty 已 checkout 恢复，P0.2 merge / P0.3 prune /
+  P0-add / P0-post tidy / P1.x review commit 都未修改该文件
+- **不是 origin 上的 commit**：origin 落后部分（10 commit）全是 TLS 模块，没动 platform.error
+- **可能来源**：用户授权前残留的 IDE auto-format / 同时运行的另一个 AI agent /
+  pre-save hook。用户在本轮回复 "目前就剩你一个人在做"，所以另一个 AI agent 来源已排除
+
+### 决策
+
+**checkout 恢复 main baseline（trailing-comma 风格）**，理由：
+
+1. 来源不明，没有 commit author 可追溯
+2. main 上的 trailing-comma 风格是 baseline；leading-comma reformat 是激进变化，没有
+   设计依据（`core/docs/design-conventions.md` §13 未明确禁止 leading comma，但例子均为
+   trailing comma）
+3. host owner 设计意图已经在 `2026-06-15-platform-error-host-owner-handoff.md` 完整记录，
+   不会丢失
+4. lane owner 最终决定 platform.error 的风格归宿；接手者不在 main 上引入未审查的风格变化
+
+### 影响
+
+- ✅ main 工作树 clean
+- ✅ host owner 设计意图保留在 handoff doc，由 core-platform lane 决定何时何形态吸收
+- ✅ 没有引入未审查的代码风格变化
+- ❌ leading-comma reformat 的设计灵感（如果有人想推动它）必须由 lane owner 在 lane 内
+  重新提出
 
 ## 目的
 
