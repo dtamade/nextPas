@@ -1,8 +1,22 @@
 # nextPas Workmap Takeover Plan
 
-- 状态：采用中
+- 状态：P0 已全部完成 + push origin；进入 P1/P2 待用户调度
 - 日期：2026-06-15
 - 范围：新接手 AI 同事的工作地图、治理债清理、并行 lane 推进顺序
+
+## P0 收尾日志（2026-06-15）
+
+| 动作 | 结果 | commit / 证据 |
+|---|---|---|
+| P0.1 dirty 迁移 | `core/src/nextpas.core.platform.error.pas` patch 归档为 `docs/plans/support/2026-06-15-platform-error-host-owner-handoff.md`；main 上 checkout 恢复 clean | handoff doc 已落盘 |
+| P0-add 治理 commit | 4 个治理文档（takeover plan + status board + handoff + plans/README 入口）落 main | `ed4322d4f docs(plans): add 2026-06-15 takeover plan and refreshed status board` |
+| P0.2 main vs origin sync | `git fetch origin` + `git merge --no-ff origin/main`：30+ TLS 文件 + core-system PR + CLAUDE.md 合并入 main，零冲突 | `78f637b48 merge: integrate origin/main TLS migration + core-system PR` |
+| P0.3 worktree prune & archive | `fix-mktemp` 元数据 prune；3 个 tag 已打 `archive/core-math` / `archive/core-mem` / `archive/core-mem-l0-debt`；对应本地 branch 删除；`origin/codex/core-math` 保留 | tag 列表 + `git branch -D` 输出 |
+| P0-post hygiene | `make hygiene` → `build-hygiene=pass` | 0.25s 完成 |
+| P0-push | `git push origin main` → `3f855b283..78f637b48 main -> main` | main 与 origin/main 零偏差 |
+| P0-post tidy | `.cursor/` 加入 `.gitignore`（避免 IDE-local mcp.json 与 auto-generated rules 误提交） | 本 commit 同步 |
+
+P0 期间未消费的 question：本来 P0.1 + P0.2 + P0.3 是一次性 ask_question 三题，用户每次只回答一题；接手者按顺序拆分推进、逐题完成。后续工作流仍按"一次单题/单批授权"节奏。
 
 ## 目的
 
