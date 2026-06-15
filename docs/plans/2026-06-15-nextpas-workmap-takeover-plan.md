@@ -17,6 +17,8 @@
 | P0-post tidy | `.cursor/` 加入 `.gitignore`（避免 IDE-local mcp.json 与 auto-generated rules 误提交） | `a9b7e3327` |
 | P1.x core lane review #1 | core-platform lane review 文档落盘并 push | `4af1ebdf6` |
 | P0.5 stale dirty 处理 | 在 P1.x 中途发现未预期 dirty（leading-comma 风格 reformat + host owner uses），来源未知；按 trailing-comma baseline checkout 恢复，host owner 设计意图保留在 handoff doc 里 | 见 §P0.5 |
+| P0.5-follow-up handoff 吸收 | main 上后续出现 `cb1e278c0 fix(platform): repair error.pas uses list + ESysE* imports`（dtamade + Cursor Agent），完整修复了 leading-comma + host owner uses（与归档 handoff 设计意图一致）。Co-authored 揭示当时有第二个 agent 在 lane 之外做工作；并非"只剩一个人在做"，但工作已经主动 landing | `cb1e278c0` |
+| D landed slice 1：core-text-unicode | 完整 landing 流程：cherry-pick 5 个 lane commit 到 `landing/core-text-unicode-20260615` → focused gate（8/8 PASS, 0 unfreed） → `make landing-check`（hygiene + path check + diff --check + focused + hygiene 全过） → ff-only merge 到 main → push origin → 清理候选分支 + 给 lane HEAD 打 archive tag | `5c2f97a99` ... `23ad99bac`（5 个 commit） |
 
 P0 期间未消费的 question：本来 P0.1 + P0.2 + P0.3 是一次性 ask_question 三题，用户每次只回答一题；接手者按顺序拆分推进、逐题完成。
 
