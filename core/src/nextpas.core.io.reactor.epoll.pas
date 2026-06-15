@@ -268,7 +268,8 @@ begin
 
     opSend:
     begin
-      LRes := send(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len, FOps[AIdx].Flags);
+      LRes := send(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len,
+        FOps[AIdx].Flags or MSG_NOSIGNAL);
       RemoveFd(FOps[AIdx].Fd);
       if Assigned(FOps[AIdx].Callback) then
         FOps[AIdx].Callback(UInt64(AIdx), Int32(LRes), FOps[AIdx].Context);

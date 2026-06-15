@@ -252,6 +252,24 @@ begin
   Result := False;
 end;
 
+function FindRstStreamError(const AFrames: array of TH2Frame;
+  const ACount: SizeInt; const AStreamID: UInt32;
+  out AErrorCode: UInt32): Boolean;
+var
+  LI: SizeInt;
+begin
+  AErrorCode := H2_ERR_NO_ERROR;
+  for LI := 0 to ACount - 1 do
+    if (AFrames[LI].Header.FrameType = H2_FRAME_RST_STREAM) and
+       (AFrames[LI].Header.StreamID = AStreamID) then
+    begin
+      Check(H2DecodeRstStream(AFrames[LI].Payload, AErrorCode),
+        'RST_STREAM payload decodes');
+      Exit(True);
+    end;
+  Result := False;
+end;
+
 function HasFrameType(const AFrames: array of TH2Frame; const ACount: SizeInt;
   const AFrameType: Byte): Boolean;
 var
@@ -632,6 +650,149 @@ begin
     LHandlerRef := nil;
     LHandler := nil;
   end;
+end;
+
+procedure CheckMalformedRequestResetsStream(
+  const AHeaders: array of THPackHeader; const AMessage: string);
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        EncodeHeaders(AHeaders));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      CheckEqual(Int64(0), Int64(LHandler.CallCount),
+        AMessage + ' does not reach handler');
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(FindRstStreamError(LFrames, LFrameCount, 1, LErrorCode),
+        AMessage + ' emits RST_STREAM');
+      CheckEqual(Int64(H2_ERR_PROTOCOL_ERROR), Int64(LErrorCode),
+        AMessage + ' uses PROTOCOL_ERROR');
+      Check(not HasFrameType(LFrames, LFrameCount, H2_FRAME_GOAWAY),
+        AMessage + ' stays stream scoped');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunMissingPathPseudoHeaderResetsStream;
+var
+  LHeaders: array[0..2] of THPackHeader;
+begin
+  LHeaders[0].Name := ':method';
+  LHeaders[0].Value := 'GET';
+  LHeaders[1].Name := ':scheme';
+  LHeaders[1].Value := 'https';
+  LHeaders[2].Name := ':authority';
+  LHeaders[2].Value := 'example.com';
+  CheckMalformedRequestResetsStream(LHeaders, 'missing :path');
+end;
+
+procedure TestRunMissingAuthorityAndHostResetsStream;
+var
+  LHeaders: array[0..2] of THPackHeader;
+begin
+  LHeaders[0].Name := ':method';
+  LHeaders[0].Value := 'GET';
+  LHeaders[1].Name := ':scheme';
+  LHeaders[1].Value := 'https';
+  LHeaders[2].Name := ':path';
+  LHeaders[2].Value := '/no-authority';
+  CheckMalformedRequestResetsStream(LHeaders, 'missing :authority and host');
+end;
+
+procedure TestRunPseudoHeaderAfterRegularHeaderResetsStream;
+var
+  LHeaders: array[0..4] of THPackHeader;
+begin
+  LHeaders[0].Name := ':method';
+  LHeaders[0].Value := 'GET';
+  LHeaders[1].Name := 'x-before-pseudo';
+  LHeaders[1].Value := '1';
+  LHeaders[2].Name := ':scheme';
+  LHeaders[2].Value := 'https';
+  LHeaders[3].Name := ':authority';
+  LHeaders[3].Value := 'example.com';
+  LHeaders[4].Name := ':path';
+  LHeaders[4].Value := '/late-pseudo';
+  CheckMalformedRequestResetsStream(LHeaders, 'pseudo header after regular header');
+end;
+
+procedure TestRunDuplicatePseudoHeaderResetsStream;
+var
+  LHeaders: array[0..4] of THPackHeader;
+begin
+  LHeaders[0].Name := ':method';
+  LHeaders[0].Value := 'GET';
+  LHeaders[1].Name := ':method';
+  LHeaders[1].Value := 'POST';
+  LHeaders[2].Name := ':scheme';
+  LHeaders[2].Value := 'https';
+  LHeaders[3].Name := ':authority';
+  LHeaders[3].Value := 'example.com';
+  LHeaders[4].Name := ':path';
+  LHeaders[4].Value := '/duplicate-method';
+  CheckMalformedRequestResetsStream(LHeaders, 'duplicate pseudo header');
+end;
+
+procedure TestRunConnectionSpecificHeaderResetsStream;
+var
+  LHeaders: array[0..4] of THPackHeader;
+begin
+  LHeaders[0].Name := ':method';
+  LHeaders[0].Value := 'GET';
+  LHeaders[1].Name := ':scheme';
+  LHeaders[1].Value := 'https';
+  LHeaders[2].Name := ':authority';
+  LHeaders[2].Value := 'example.com';
+  LHeaders[3].Name := ':path';
+  LHeaders[3].Value := '/forbidden-connection';
+  LHeaders[4].Name := 'connection';
+  LHeaders[4].Value := 'close';
+  CheckMalformedRequestResetsStream(LHeaders, 'connection header');
+end;
+
+procedure TestRunNonTrailersTeHeaderResetsStream;
+var
+  LHeaders: array[0..4] of THPackHeader;
+begin
+  LHeaders[0].Name := ':method';
+  LHeaders[0].Value := 'GET';
+  LHeaders[1].Name := ':scheme';
+  LHeaders[1].Value := 'https';
+  LHeaders[2].Name := ':authority';
+  LHeaders[2].Value := 'example.com';
+  LHeaders[3].Name := ':path';
+  LHeaders[3].Value := '/forbidden-te';
+  LHeaders[4].Name := 'te';
+  LHeaders[4].Value := 'gzip';
+  CheckMalformedRequestResetsStream(LHeaders, 'non-trailers TE header');
 end;
 
 procedure TestRunDataEndStreamTriggersHandlerAndFlowControlUpdate;
@@ -1132,6 +1293,30 @@ begin
     'HandleData maps DATA stream 0 to connection-level PROTOCOL_ERROR');
 end;
 
+procedure TestSendResponseBodyAvoidsIntermediateBufferCopySourceContract;
+var
+  LSource: string;
+  LSendPos: SizeInt;
+  LClosePos: SizeInt;
+  LSendBlock: string;
+begin
+  LSource := ReadSourceFile(ResolveSourcePath(H2_SESSION_SOURCE_PATH_FROM_TEST,
+    H2_SESSION_SOURCE_PATH_FROM_ROOT));
+  LSendPos := Pos('procedure TH2ServerSession.SendResponseBody', LSource);
+  Check(LSendPos > 0, 'SendResponseBody implementation is present');
+  LClosePos := Pos('procedure TH2ServerSession.CloseStreamIfTerminal', LSource);
+  Check(LClosePos > LSendPos, 'CloseStreamIfTerminal source follows SendResponseBody');
+  if (LSendPos <= 0) or (LClosePos <= LSendPos) then
+    Exit;
+  LSendBlock := Copy(LSource, LSendPos, LClosePos - LSendPos);
+  Check(Pos('LBuffer: array of Byte;', LSendBlock) = 0,
+    'SendResponseBody avoids intermediate byte buffer allocation');
+  Check(Pos('Move(LBuffer[0], LPayload[1], LRead);', LSendBlock) = 0,
+    'SendResponseBody avoids buffer-to-payload copy');
+  Check(Pos('ABody.Read(LPayload[1], LChunkSize)', LSendBlock) > 0,
+    'SendResponseBody reads directly into payload buffer');
+end;
+
 procedure TestRunPushPromiseSendsGoaway;
 var
   LHandler: TCollectingHandler;
@@ -1330,6 +1515,18 @@ begin
       @TestInitialSettingsUsesConnectionStream);
     Run('Run handshake and simple request response',
       @TestRunHandshakeAndSimpleRequestResponse);
+    Run('Run missing :path pseudo header resets stream',
+      @TestRunMissingPathPseudoHeaderResetsStream);
+    Run('Run missing :authority and host resets stream',
+      @TestRunMissingAuthorityAndHostResetsStream);
+    Run('Run pseudo header after regular header resets stream',
+      @TestRunPseudoHeaderAfterRegularHeaderResetsStream);
+    Run('Run duplicate pseudo header resets stream',
+      @TestRunDuplicatePseudoHeaderResetsStream);
+    Run('Run connection specific header resets stream',
+      @TestRunConnectionSpecificHeaderResetsStream);
+    Run('Run non-trailers TE header resets stream',
+      @TestRunNonTrailersTeHeaderResetsStream);
     Run('Run DATA END_STREAM triggers handler and flow control update',
       @TestRunDataEndStreamTriggersHandlerAndFlowControlUpdate);
     Run('Run DATA over MaxBodySize returns 413 without handler',
@@ -1348,6 +1545,8 @@ begin
       @TestRunDataOnClosedStreamRestoresConnectionWindow);
     Run('HandleData connection stream source contract',
       @TestHandleDataConnectionStreamSourceContract);
+    Run('SendResponseBody avoids intermediate buffer copy source contract',
+      @TestSendResponseBodyAvoidsIntermediateBufferCopySourceContract);
     Run('Run client PUSH_PROMISE sends GOAWAY',
       @TestRunPushPromiseSendsGoaway);
     Run('Run trailing HEADERS complete request without overwriting headers',

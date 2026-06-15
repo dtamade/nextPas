@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.errors,
-  nextpas.core.net.server.base;
+  nextpas.core.net.server.base,
+  nextpas.core.tls.base;
 
 type
   THttpVersion = (hvHttp10, hvHttp11, hvHttp2, hvHttp3);
@@ -43,7 +44,13 @@ type
     MaxRedirects: Int32;
     MaxPoolSize: Int32;
     FollowRedirects: Boolean;
+    Version: THttpVersion;
+    UseRegistryVersion: Boolean;
+    TLSContext: ISSLContext;
     class function Default: THttpClientOptions; static;
+    function WithVersion(const AVersion: THttpVersion): THttpClientOptions;
+    function EffectiveVersion(
+      const ADefaultVersion: THttpVersion): THttpVersion;
   end;
 
   THttpServerOptions = record
@@ -53,7 +60,13 @@ type
     IdleTimeout: Int64;
     MaxHeaderSize: Int32;
     MaxBodySize: Int64;
+    Version: THttpVersion;
+    UseRegistryVersion: Boolean;
+    TLSContext: ISSLContext;
     class function Default: THttpServerOptions; static;
+    function WithVersion(const AVersion: THttpVersion): THttpServerOptions;
+    function EffectiveVersion(
+      const ADefaultVersion: THttpVersion): THttpVersion;
   end;
 
 const
@@ -444,6 +457,26 @@ begin
   Result.MaxRedirects := 10;
   Result.MaxPoolSize := 64;
   Result.FollowRedirects := True;
+  Result.Version := hvHttp11;
+  Result.UseRegistryVersion := True;
+  Result.TLSContext := nil;
+end;
+
+function THttpClientOptions.WithVersion(
+  const AVersion: THttpVersion): THttpClientOptions;
+begin
+  Result := Self;
+  Result.Version := AVersion;
+  Result.UseRegistryVersion := False;
+end;
+
+function THttpClientOptions.EffectiveVersion(
+  const ADefaultVersion: THttpVersion): THttpVersion;
+begin
+  if UseRegistryVersion then
+    Result := ADefaultVersion
+  else
+    Result := Version;
 end;
 
 { THttpServerOptions }
@@ -456,6 +489,26 @@ begin
   Result.IdleTimeout := 30000;
   Result.MaxHeaderSize := 8192;
   Result.MaxBodySize := 4194304;
+  Result.Version := hvHttp11;
+  Result.UseRegistryVersion := True;
+  Result.TLSContext := nil;
+end;
+
+function THttpServerOptions.WithVersion(
+  const AVersion: THttpVersion): THttpServerOptions;
+begin
+  Result := Self;
+  Result.Version := AVersion;
+  Result.UseRegistryVersion := False;
+end;
+
+function THttpServerOptions.EffectiveVersion(
+  const ADefaultVersion: THttpVersion): THttpVersion;
+begin
+  if UseRegistryVersion then
+    Result := ADefaultVersion
+  else
+    Result := Version;
 end;
 
 end.

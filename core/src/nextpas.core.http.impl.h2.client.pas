@@ -19,9 +19,19 @@ uses
   nextpas.core.http.intf,
   nextpas.core.http.impl.h2.frame,
   nextpas.core.http.impl.h2.hpack,
-  nextpas.core.http.impl.h2.types;
+  nextpas.core.http.impl.h2.types,
+  nextpas.core.tls.base;
 
 type
+  TH2ClientResponseBodyReader = class(TInterfacedObject, IReader)
+  private
+    FData: nextpas.core.base.TBytes;
+    FPosition: SizeInt;
+  public
+    constructor Create(const AData: nextpas.core.base.TBytes);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
   TH2ClientConnectionState = (
     h2ccsConnecting,
     h2ccsActive,
@@ -158,16 +168,21 @@ type
     TH2PoolEntry = record
       Host: string;
       Port: UInt16;
+      Secure: Boolean;
       Conn: TH2ClientConnection;
     end;
   private
     FOptions: TH2ClientTransportOptions;
+    FDefaultTLSContext: ISSLContext;
     FPool: array of TH2PoolEntry;
     FPoolCount: Int32;
-    function PoolGet(const AHost: string; const APort: UInt16): TH2ClientConnection;
+    function PoolGet(const AHost: string; const APort: UInt16;
+      const ASecure: Boolean): TH2ClientConnection;
     procedure PoolPut(const AHost: string; const APort: UInt16;
+      const ASecure: Boolean;
       const AConn: TH2ClientConnection);
     procedure PoolClear;
+    function SecureClientContext: ISSLContext;
   public
     constructor Create(const AOptions: TH2ClientTransportOptions);
     destructor Destroy; override;
@@ -190,11 +205,13 @@ implementation
 uses
   SysUtils,
   nextpas.core.errors,
-  nextpas.core.io.memory,
   nextpas.core.net,
   nextpas.core.time.base,
   nextpas.core.http.headers,
-  nextpas.core.http.message;
+  nextpas.core.http.message,
+  nextpas.core.http.impl.tls.stream,
+  nextpas.core.tls.http2.alpn,
+  nextpas.core.tls.quick;
 
 type
   TH2OwnedHeaders = class(THttpHeaders)
@@ -202,6 +219,35 @@ type
 
 var
   GH2ClientDialFunc: TH2ClientDialFunc = nil;
+
+{ TH2ClientResponseBodyReader }
+
+constructor TH2ClientResponseBodyReader.Create(
+  const AData: nextpas.core.base.TBytes);
+begin
+  inherited Create;
+  FData := AData;
+  FPosition := 0;
+end;
+
+function TH2ClientResponseBodyReader.Read(var ABuf;
+  const ACount: SizeUInt): SizeUInt;
+var
+  LAvailable: SizeUInt;
+begin
+  Result := 0;
+  if (ACount = 0) or (FPosition >= Length(FData)) then
+    Exit;
+  LAvailable := SizeUInt(Length(FData) - FPosition);
+  if ACount < LAvailable then
+    Result := ACount
+  else
+    Result := LAvailable;
+  if Result = 0 then
+    Exit;
+  Move(FData[FPosition], ABuf, Result);
+  Inc(FPosition, SizeInt(Result));
+end;
 
 function MinUInt32(const ALeft, ARight: UInt32): UInt32; inline;
 begin
@@ -216,12 +262,12 @@ begin
   Result := LowerCase(AHost);
 end;
 
-procedure ValidatePlainHttpClientUrlScheme(const AUrl: TUrl);
+procedure ValidateH2ClientUrlScheme(const AUrl: TUrl);
 var
   LScheme: string;
 begin
   LScheme := LowerCase(AUrl.Scheme);
-  if (LScheme <> '') and (LScheme <> 'http') then
+  if (LScheme <> '') and (LScheme <> 'http') and (LScheme <> 'https') then
     raise EHttpError.Create('unsupported HTTP client URL scheme: ' +
       AUrl.Scheme);
 end;
@@ -238,6 +284,15 @@ begin
   for LI := Low(LValues) to High(LValues) do
     if Pos('close', LowerCase(LValues[LI])) > 0 then
       Exit(True);
+end;
+
+function IsH2ForbiddenRequestHeader(const AName: string): Boolean; inline;
+begin
+  Result :=
+    (AName = 'connection') or
+    (AName = 'upgrade') or
+    (AName = 'keep-alive') or
+    (AName = 'proxy-connection');
 end;
 
 function IsRetryableMethod(const AMethod: THttpMethod): Boolean; inline;
@@ -669,6 +724,10 @@ begin
         if AName[1] = ':' then
           Exit;
         if AName = 'host' then
+          Exit;
+        if IsH2ForbiddenRequestHeader(AName) then
+          Exit;
+        if (AName = 'te') and (AValue <> 'trailers') then
           Exit;
         LHeaderList[LHeaderCount].Name := AnsiString(AName);
         LHeaderList[LHeaderCount].Value := AnsiString(AValue);
@@ -1189,7 +1248,7 @@ begin
   if AResponse.StatusCode = 0 then
     raise EHttpError.Create('HTTP/2 response missing status');
   if Length(AResponse.Body) > 0 then
-    LBody := CreateBytesStreamFrom(AResponse.Body) as IReader
+    LBody := TH2ClientResponseBodyReader.Create(AResponse.Body)
   else
     LBody := nil;
   Result := THttpResponse.Create(AResponse.StatusCode, AResponse.Headers, LBody);
@@ -1314,6 +1373,7 @@ begin
   inherited Create;
   AOptions.Validate;
   FOptions := AOptions;
+  FDefaultTLSContext := nil;
   FPoolCount := 0;
 end;
 
@@ -1324,13 +1384,14 @@ begin
 end;
 
 function TH2ClientTransport.PoolGet(const AHost: string;
-  const APort: UInt16): TH2ClientConnection;
+  const APort: UInt16; const ASecure: Boolean): TH2ClientConnection;
 var
   LI: Int32;
 begin
   Result := nil;
   for LI := 0 to FPoolCount - 1 do
-    if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) then
+    if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) and
+       (FPool[LI].Secure = ASecure) then
     begin
       Result := FPool[LI].Conn;
       FPool[LI] := FPool[FPoolCount - 1];
@@ -1348,7 +1409,7 @@ begin
 end;
 
 procedure TH2ClientTransport.PoolPut(const AHost: string; const APort: UInt16;
-  const AConn: TH2ClientConnection);
+  const ASecure: Boolean; const AConn: TH2ClientConnection);
 begin
   if (AConn = nil) or (not AConn.IsReusable) then
   begin
@@ -1369,6 +1430,7 @@ begin
     SetLength(FPool, FPoolCount + 4);
   FPool[FPoolCount].Host := AHost;
   FPool[FPoolCount].Port := APort;
+  FPool[FPoolCount].Secure := ASecure;
   FPool[FPoolCount].Conn := AConn;
   Inc(FPoolCount);
 end;
@@ -1387,12 +1449,24 @@ begin
   FPoolCount := 0;
 end;
 
+function TH2ClientTransport.SecureClientContext: ISSLContext;
+begin
+  if FOptions.TLSContext <> nil then
+    Exit(FOptions.TLSContext);
+  if FDefaultTLSContext = nil then
+    FDefaultTLSContext := TSSLQuick.SecureClient;
+  Result := FDefaultTLSContext;
+end;
+
 function TH2ClientTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
 var
   LUrl: TUrl;
   LHost: string;
   LHostKey: string;
   LPort: UInt16;
+  LSecure: Boolean;
+  LRawConn: ITcpStream;
+  LSelectedALPN: string;
   LConn: TH2ClientConnection;
   LPooled: Boolean;
   LBodyStream: IStream;
@@ -1404,19 +1478,37 @@ begin
   if AReq.Headers = nil then
     raise EArgumentError.Create('h2 client transport requires request headers');
   LUrl := AReq.Url;
-  ValidatePlainHttpClientUrlScheme(LUrl);
+  ValidateH2ClientUrlScheme(LUrl);
   LHost := LUrl.Host;
   if LHost = '' then
     raise EHttpError.Create('HTTP/2 client request requires host');
+  LSecure := LowerCase(LUrl.Scheme) = 'https';
   LPort := LUrl.Port;
   if LPort = 0 then
-    LPort := 80;
+  begin
+    if LSecure then
+      LPort := 443
+    else
+      LPort := 80;
+  end;
   LHostKey := CanonicalPoolHostKey(LHost);
   CaptureRetryBodyPosition(AReq, LBodyStream, LBodyStartPosition);
-  LConn := PoolGet(LHostKey, LPort);
+  LConn := PoolGet(LHostKey, LPort, LSecure);
   LPooled := LConn <> nil;
   if not LPooled then
-    LConn := TH2ClientConnection.Create(H2ClientDial(LHost, LPort), FOptions);
+  begin
+    LRawConn := H2ClientDial(LHost, LPort);
+    if LSecure then
+    begin
+      LRawConn := NewTlsClientTcpStream(LRawConn, SecureClientContext, LHost,
+        HTTP2_ALPN_PROTOCOL);
+      LSelectedALPN := LowerCase(Trim(TlsTcpStreamSelectedALPN(LRawConn)));
+      if LSelectedALPN <> HTTP2_ALPN_PROTOCOL then
+        raise EHttpError.Create(
+          'HTTPS HTTP/2 client requires negotiated ALPN "h2"');
+    end;
+    LConn := TH2ClientConnection.Create(LRawConn, FOptions);
+  end;
   LRequestWriteComplete := False;
   try
     Result := LConn.RoundTrip(AReq);
@@ -1431,7 +1523,17 @@ begin
       if (AReq.Body <> nil) and (AReq.ContentLength > 0) and (LBodyStream = nil) then
         raise;
       RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
-      LConn := TH2ClientConnection.Create(H2ClientDial(LHost, LPort), FOptions);
+      LRawConn := H2ClientDial(LHost, LPort);
+      if LSecure then
+      begin
+        LRawConn := NewTlsClientTcpStream(LRawConn, SecureClientContext, LHost,
+          HTTP2_ALPN_PROTOCOL);
+        LSelectedALPN := LowerCase(Trim(TlsTcpStreamSelectedALPN(LRawConn)));
+        if LSelectedALPN <> HTTP2_ALPN_PROTOCOL then
+          raise EHttpError.Create(
+            'HTTPS HTTP/2 client requires negotiated ALPN "h2"');
+      end;
+      LConn := TH2ClientConnection.Create(LRawConn, FOptions);
       Result := LConn.RoundTrip(AReq);
     end
     else
@@ -1447,7 +1549,7 @@ begin
     LConn.Free;
   end
   else
-    PoolPut(LHostKey, LPort, LConn);
+    PoolPut(LHostKey, LPort, LSecure, LConn);
 end;
 
 procedure TH2ClientTransport.CloseIdleConnections;

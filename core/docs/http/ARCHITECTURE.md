@@ -3,9 +3,10 @@
 ## 概述
 
 HTTP 模块是 L3 框架层的核心模块，提供 HTTP 服务器和客户端能力。
-采用统一门面 + 协议实现隔离的架构。当前内建 transport 实现为 HTTP/1.1；
-H2 已开始落内部 codec foundation（frame validation、HPACK Huffman、HPACK header block state），
-但还没有内建 H2 transport/session。H3 仍只保留版本枚举、registry / transport seam 与规划。
+采用统一门面 + 协议实现隔离的架构。当前内建实现为 HTTP/1.1。
+H2/H3 仅保留版本枚举、registry / transport seam 与规划。
+H2 已开始落内部 foundation（frame validation、HPACK Huffman、HPACK header block state、
+per-stream state machine），但还没有内建 H2 transport/session。
 这些内部基础不声明内建 H2/H3 protocol implementation。
 
 消费方只需 `uses nextpas.core.http` 即可获得当前 H1 能力；默认版本解析对应用层透明。
@@ -20,9 +21,9 @@ H2/H3 对消费方仍处于未开放阶段。
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，默认 client/server 版本都为 `hvHttp11`。
-- 当前真实源码库存为 29 个 HTTP 单元，测试工程为 26 个；其中 H2 只有
-  frame codec / validation、HPACK Huffman 和 HPACK header-block state 内部基础单元及
-  focused 测试，H2 transport/session 与 H3 仍未进入可用实现。
+- 当前真实源码库存为 32 个 HTTP 单元，测试工程为 30 个；其中 H2 现在已有
+  frame codec / validation、HPACK Huffman、HPACK header-block state、per-stream state machine
+  内部基础单元及 focused 测试，H2 transport/session 与 H3 仍未进入可用实现。
 
 HTTP server runtime 的权威方向已经固定在
 [docs/net/ARCHITECTURE.md](/home/dtamade/projects/nextPas/core/docs/net/ARCHITECTURE.md:1)：
@@ -131,12 +132,13 @@ HTTP server 现在要分三层理解，不能再笼统地说成“线程驱动 H
 ├─────────────────────────────────────────────────────────┤
 │  协议实现层（版本隔离）                                  │
 │  impl.h1: 文本协议、chunked、keep-alive、upgrade       │
-│  impl.h2 (planned): 二进制帧、多路复用、HPACK、ALPN   │
+│  impl.h2: 二进制帧、多路复用、HPACK、TLS/ALPN seam     │
 │  impl.h3 (planned): QUIC 帧、QPACK、0-RTT、Alt-Svc   │
 ├─────────────────────────────────────────────────────────┤
 │  依赖层                                                  │
 │  H1: net (TCP)                                           │
-│  H2 future: net (TCP) + tls (ALPN)                       │
+│  H2: net (TCP) + optional tls (strict ALPN on https)     │
+│      cleartext uses prior knowledge only; no h2c upgrade │
 │  H3 future: quic (独立 L2 sibling 模块)                  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -178,15 +180,18 @@ src/
   nextpas.core.http.impl.h1.writer.pas   ← H1 响应序列化
   nextpas.core.http.impl.h1.chunked.pas  ← chunked writer/helper
 
-  { HTTP/2 内部 codec foundation（不等于 H2 transport/session 已可用） }
+  { HTTP/2 内部 foundation（不等于 H2 transport/session 已可用） }
   nextpas.core.http.impl.h2.frame.pas         ← H2 9-byte frame header、基础 payload codec 与类型级 validation
   nextpas.core.http.impl.h2.hpack.table.pas   ← HPACK static/Huffman 表
   nextpas.core.http.impl.h2.hpack.huffman.pas ← HPACK Huffman encode/decode
   nextpas.core.http.impl.h2.hpack.pas         ← HPACK header-block encode/decode、动态表 size update、non-indexed literal
+  nextpas.core.http.impl.h2.types.pas         ← H2 settings、stream state、flow-control bookkeeping
+  nextpas.core.http.impl.h2.stream.pas        ← H2 per-stream state machine、header/body accumulation、body reader
+  nextpas.core.http.impl.h2.session.pas       ← H2 session startup preface validation seam
 ```
 
-H2/H3 public transport 仍是架构规划；当前 H2 源码只覆盖 HPACK Huffman、
-HPACK header-block state 和 frame codec / validation 内部基础，不对外声明 H2 可用。
+H2/H3 public transport 仍是架构规划；当前 H2 源码只覆盖 frame/HPACK/stream/session foundation，
+不对外声明 H2 可用。
 
 ---
 
@@ -397,6 +402,8 @@ Benchmark：对照 Go `net/http`、Rust std-only comparator，并在需要更真
 ```
 + impl.h2.* transport 家族
 + registry 扩展到 H2 默认解析 / ALPN 接线
++ cleartext H2 = prior knowledge only；TLS H2 = strict ALPN `h2`
++ 不暴露 HTTP/1.1 `Upgrade: h2c` / `HTTP2-Settings` 路径
 ```
 
 依赖：新增 tls

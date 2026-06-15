@@ -1251,7 +1251,6 @@ var
   LChunkSize: UInt32;
   LMaxChunk: UInt32;
   LCapacity: UInt32;
-  LBuffer: array of Byte;
   LRead: SizeUInt;
   LPayload: AnsiString;
   LFlags: Byte;
@@ -1266,12 +1265,12 @@ begin
     if LCapacity = 0 then
       Break;
     LChunkSize := MinUInt32(LMaxChunk, LCapacity);
-    SetLength(LBuffer, LChunkSize);
-    LRead := ABody.Read(LBuffer[0], LChunkSize);
+    SetLength(LPayload, LChunkSize);
+    LRead := ABody.Read(LPayload[1], LChunkSize);
     if LRead = 0 then
       Break;
-    SetLength(LPayload, LRead);
-    Move(LBuffer[0], LPayload[1], LRead);
+    if LRead < Length(LPayload) then
+      SetLength(LPayload, LRead);
     AStream.ReserveSendCapacity(UInt32(LRead));
     if Length(LPayload) = 0 then
       Break;

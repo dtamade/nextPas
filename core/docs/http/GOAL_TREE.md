@@ -23,9 +23,12 @@ This lane is in **G2/G3 active hardening**:
 - G1 stable H1 public surface is largely landed: server/client/router/headers/url/message/middleware/static/websocket all exist and already have substantial focused coverage.
 - G2 correctness and lifecycle proof is well advanced: threaded and Linux `epoll` paths have broad raw-wire/server proof, client redirect/body ownership semantics are materially tighter, and examples have runnable smoke coverage.
 - G3 API and performance isolation is still active: client ergonomics keeps closing real gaps, and H1 performance work is now splitting costs into parser, lazy header, writer, outbound, and full-chain layers.
-- H2/H3 remain non-production claims. H2 now has internal frame codec with
-  type-specific validation, HPACK Huffman, and HPACK header-block foundation slices with dynamic table update and non-indexed literal proof,
-  but no H2 transport/session support is exposed.
+- H2/H3 remain non-production claims. H2 now has internal frame/session/client
+  transport foundations with type-specific validation, HPACK Huffman,
+  header-block encode/decode, per-stream/session bookkeeping, registry version
+  selection, cleartext prior-knowledge transport, and TLS `h2` ALPN transport
+  seam; but it is still an active foundation slice rather than a production
+  claim.
 
 ## Map
 
@@ -171,6 +174,9 @@ Rules:
 - No fake public API should imply that H2/H3 already work.
 - Future H2/H3 work must preserve the same public HTTP contract unless there is a clear, documented reason to expand it.
 - Rust or Go feature parity is not a reason to create empty abstractions.
+- Current H2 transport policy is explicit: `http://` uses cleartext prior
+  knowledge, `https://` requires negotiated ALPN `h2`, and HTTP/1.1
+  `Upgrade: h2c` / `HTTP2-Settings` upgrade is not exposed yet.
 
 The current H2 foundation proof covers RFC 9113 frame header/basic payload
 codec behavior, frame-type-specific validation for stream ids, fixed payload
@@ -178,8 +184,11 @@ lengths, SETTINGS ACK, WINDOW_UPDATE increments, and padding lengths, HPACK
 Huffman encoding/decoding against RFC 7541 Appendix C vectors plus full
 single-byte roundtrips, RFC 7541 C.3/C.4 HPACK request-sequence header-block
 encode/decode vectors with dynamic-table reuse, dynamic table size update
-emission/eviction, oversized update rejection, and without-indexing /
-never-indexed literal decode behavior.
+emission/eviction, oversized update rejection, without-indexing /
+never-indexed literal decode behavior, and an H2 per-stream state-machine seam
+that covers HEADERS/CONTINUATION assembly, HPACK decode to header storage,
+buffered DATA intake, receive-credit release on body reads, reset bookkeeping,
+and stream-local send/receive window transitions.
 The next legitimate H2/H3 step is
 codec/seam quality, not pseudo-support.
 

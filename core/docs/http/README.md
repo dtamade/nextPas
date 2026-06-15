@@ -16,7 +16,7 @@ middleware chaining, and a centralized internal transport registry.
 Facade (nextpas.core.http) — single uses entry point
   Application layer: Request, Response, Headers, Router, Middleware
   Internal registry: default version -> transport factory
-  Protocol layer: impl.h1 (landed), impl.h2 codec foundation (started), impl.h2 transport / impl.h3 (planned)
+  Protocol layer: impl.h1 (landed), impl.h2 foundation (started), impl.h2 transport / impl.h3 (planned)
 ```
 
 Current built-in mapping is `hvHttp10` / `hvHttp11` -> H1, with `hvHttp11`
@@ -259,8 +259,13 @@ public HTTP contract，但通过 foundation 的 completion-aware runtime path �
 ## Cross-Platform
 
 Current transport implementation depends on `nextpas.core.net` (TCP) and
-`nextpas.core.io` (stream interfaces). Future H2/H3 work will extend this with
-TLS/ALPN and QUIC when those protocol families are actually implemented.
+`nextpas.core.io` (stream interfaces). The current H2 slice keeps the public
+HTTP facade stable while adding two transport modes behind the registry seam:
+cleartext H2 uses prior-knowledge preface on `http://`, and TLS H2 uses strict
+ALPN negotiation on `https://`. HTTP/1.1 `Upgrade: h2c` / `HTTP2-Settings`
+upgrade is not exposed yet; cleartext H2 is direct H2 only. Future H3 work will
+extend the transport family with QUIC when that protocol family is actually
+implemented.
 
 ## Benchmarks
 

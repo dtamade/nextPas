@@ -12,7 +12,8 @@ interface
 
 uses
   nextpas.core.http.base,
-  nextpas.core.http.impl.h2.frame;
+  nextpas.core.http.impl.h2.frame,
+  nextpas.core.tls.base;
 
 const
   H2_CONNECTION_STREAM_ID = UInt32(0);
@@ -186,6 +187,7 @@ type
     MaxFrameSize: UInt32;
     MaxHeaderListSize: UInt32;
     PingTimeout: Int64;
+    TLSContext: ISSLContext;
     class function Default: TH2ClientTransportOptions; static;
     procedure Validate;
     function ToSettings: TH2Settings;
@@ -378,6 +380,7 @@ begin
   Result.MaxFrameSize := H2_DEFAULT_MAX_FRAME_SIZE;
   Result.MaxHeaderListSize := H2_DEFAULT_MAX_HEADER_LIST_SIZE;
   Result.PingTimeout := 5000;
+  Result.TLSContext := nil;
 end;
 
 procedure TH2ClientTransportOptions.Validate;

@@ -38,6 +38,21 @@ begin
   Result := LEncoder.Encode(AHeaders);
 end;
 
+procedure FillMinimalRequestHeaders(var AHeaders: array of THPackHeader;
+  const AMethod: AnsiString = 'GET'; const APath: AnsiString = '/');
+begin
+  if Length(AHeaders) < 4 then
+    raise Exception.Create('request header fixture needs 4 slots');
+  AHeaders[0].Name := ':method';
+  AHeaders[0].Value := AMethod;
+  AHeaders[1].Name := ':path';
+  AHeaders[1].Value := APath;
+  AHeaders[2].Name := ':scheme';
+  AHeaders[2].Value := 'https';
+  AHeaders[3].Name := ':authority';
+  AHeaders[3].Value := 'example.com';
+end;
+
 procedure CollectHeaders(const AHeaders: IHttpHeaders; out ACollected: string);
 var
   LCollected: string;
@@ -95,7 +110,7 @@ var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
   LStream: TH2Stream;
-  LHeaders: array[0..2] of THPackHeader;
+  LHeaders: array[0..5] of THPackHeader;
   LBlock: AnsiString;
   LFirstFragment: AnsiString;
   LSecondFragment: AnsiString;
@@ -106,12 +121,11 @@ begin
   LDecoder.Init;
   LStream := TH2Stream.Create(3, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'POST';
-    LHeaders[1].Name := 'content-type';
-    LHeaders[1].Value := 'application/json';
-    LHeaders[2].Name := 'x-trace';
-    LHeaders[2].Value := 'stream-test';
+    FillMinimalRequestHeaders(LHeaders, 'POST', '/stream-test');
+    LHeaders[4].Name := 'content-type';
+    LHeaders[4].Value := 'application/json';
+    LHeaders[5].Name := 'x-trace';
+    LHeaders[5].Value := 'stream-test';
     LBlock := EncodeHeaders(LHeaders);
     LFirstFragment := Copy(LBlock, 1, 4);
     LSecondFragment := Copy(LBlock, 5, Length(LBlock) - 4);
@@ -127,7 +141,7 @@ begin
     Check(not LStream.EndStreamReceived, 'continuation does not end stream');
     Check(not LStream.IsRequestReady, 'headers only do not make request ready');
     CollectHeaders(LStream.Headers, LCollected);
-    CheckEqual(':method=POST|content-type=application/json|x-trace=stream-test',
+    CheckEqual(':method=POST|:path=/stream-test|:scheme=https|:authority=example.com|content-type=application/json|x-trace=stream-test',
       LCollected, 'assembled headers');
   finally
     LStream.Free;
@@ -139,15 +153,14 @@ var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
   LStream: TH2Stream;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
   LReader: IH2BodyReader;
 begin
   LConnectionFlow.Init(8, 4);
   LDecoder.Init;
   LStream := TH2Stream.Create(5, 8, 4, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'POST';
+    FillMinimalRequestHeaders(LHeaders, 'POST', '/body');
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
 
     LStream.OnData(0, 'AB');
@@ -179,14 +192,13 @@ var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
   LStream: TH2Stream;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
 begin
   LConnectionFlow.Init(8, 8);
   LDecoder.Init;
   LStream := TH2Stream.Create(7, 4, 8, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
 
     Check(LStream.CanWriteData, 'stream initially writable');
@@ -210,14 +222,13 @@ var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
   LStream: TH2Stream;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
 begin
   LConnectionFlow.Init(8, 8);
   LDecoder.Init;
   LStream := TH2Stream.Create(9, 4, 4, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'POST';
+    FillMinimalRequestHeaders(LHeaders, 'POST', '/reset');
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
     LStream.ReserveSendCapacity(2);
     LStream.OnData(0, 'abc');
@@ -289,16 +300,13 @@ var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
   LStream: TH2Stream;
-  LHeaders: array[0..1] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
 begin
   LConnectionFlow.Init(8192, 8192);
   LDecoder.Init;
   LStream := TH2Stream.Create(15, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
-    LHeaders[1].Name := ':path';
-    LHeaders[1].Value := '/';
+    FillMinimalRequestHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
 
     CheckEqual(Int64(Ord(h2ssOpen)), Int64(Ord(LStream.State)),
@@ -314,7 +322,7 @@ procedure TestHeadersWithPriorityFlag;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
   LStream: TH2Stream;
   LPayload: AnsiString;
 begin
@@ -322,8 +330,7 @@ begin
   LDecoder.Init;
   LStream := TH2Stream.Create(17, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LPayload := AnsiChar(#0) + AnsiChar(#0) + AnsiChar(#0) + AnsiChar(#0) + AnsiChar(#0) +
       EncodeHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_PRIORITY,
@@ -340,7 +347,7 @@ procedure TestHeadersWithPaddedFlag;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
   LStream: TH2Stream;
   LBlock: AnsiString;
   LCollected: string;
@@ -349,8 +356,7 @@ begin
   LDecoder.Init;
   LStream := TH2Stream.Create(19, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LBlock := EncodeHeaders(LHeaders);
     LBlock := AnsiChar(#3) + LBlock + 'XXX';
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_PADDED,
@@ -359,7 +365,8 @@ begin
       'padded headers stream is open');
     Check(LStream.Headers <> nil, 'padded headers decoded');
     CollectHeaders(LStream.Headers, LCollected);
-    CheckEqual(':method=GET', LCollected, 'padded headers decoded correctly');
+    CheckEqual(':method=GET|:path=/|:scheme=https|:authority=example.com',
+      LCollected, 'padded headers decoded correctly');
   finally
     LStream.Free;
   end;
@@ -369,7 +376,7 @@ procedure TestHeadersZeroPadding;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
   LStream: TH2Stream;
   LBlock: AnsiString;
   LCollected: string;
@@ -378,14 +385,14 @@ begin
   LDecoder.Init;
   LStream := TH2Stream.Create(21, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LBlock := EncodeHeaders(LHeaders);
     LBlock := AnsiChar(#0) + LBlock;
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_PADDED,
       LBlock);
     CollectHeaders(LStream.Headers, LCollected);
-    CheckEqual(':method=GET', LCollected, 'zero padded headers decoded');
+    CheckEqual(':method=GET|:path=/|:scheme=https|:authority=example.com',
+      LCollected, 'zero padded headers decoded');
   finally
     LStream.Free;
   end;
@@ -396,14 +403,13 @@ var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
   LStream: TH2Stream;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
 begin
   LConnectionFlow.Init(8192, 8192);
   LDecoder.Init;
   LStream := TH2Stream.Create(23, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
     LStream.MarkEndStreamSent;
     Check(not LStream.CanWriteData, 'half-closed local cannot write');
@@ -419,15 +425,14 @@ var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
   LStream: TH2Stream;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
   LPayload: AnsiString;
 begin
   LConnectionFlow.Init(8192, 8192);
   LDecoder.Init;
   LStream := TH2Stream.Create(25, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
     LPayload := AnsiChar(#2) + 'AB' + 'XX';
     LStream.OnData(H2_FLAG_DATA_PADDED, LPayload);
@@ -443,14 +448,13 @@ var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
   LStream: TH2Stream;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
 begin
   LConnectionFlow.Init(8192, 8192);
   LDecoder.Init;
   LStream := TH2Stream.Create(27, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
     LStream.OnData(H2_FLAG_DATA_PADDED, AnsiChar(#0) + 'data');
     CheckEqual('data', string(BytesToAnsiString(LStream.BodyBuffer)),
@@ -466,15 +470,14 @@ procedure TestRstStreamOnOpenStream;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
   LStream: TH2Stream;
 begin
   LConnectionFlow.Init(8192, 8192);
   LDecoder.Init;
   LStream := TH2Stream.Create(29, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
     CheckEqual(Int64(Ord(h2ssOpen)), Int64(Ord(LStream.State)), 'stream is open');
 
@@ -496,7 +499,7 @@ procedure TestMultipleContinuationFragments;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..4] of THPackHeader;
+  LHeaders: array[0..6] of THPackHeader;
   LStream: TH2Stream;
   LBlock: AnsiString;
   LCollected: string;
@@ -506,16 +509,13 @@ begin
   LDecoder.Init;
   LStream := TH2Stream.Create(33, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
-    LHeaders[1].Name := ':path';
-    LHeaders[1].Value := '/test';
-    LHeaders[2].Name := 'x-first';
-    LHeaders[2].Value := '1';
-    LHeaders[3].Name := 'x-second';
-    LHeaders[3].Value := '2';
-    LHeaders[4].Name := 'x-third';
-    LHeaders[4].Value := '3';
+    FillMinimalRequestHeaders(LHeaders, 'GET', '/test');
+    LHeaders[4].Name := 'x-first';
+    LHeaders[4].Value := '1';
+    LHeaders[5].Name := 'x-second';
+    LHeaders[5].Value := '2';
+    LHeaders[6].Name := 'x-third';
+    LHeaders[6].Value := '3';
     LBlock := EncodeHeaders(LHeaders);
 
     LOff := 1;
@@ -528,7 +528,7 @@ begin
 
     Check(not LStream.EndStreamReceived, 'multiple continuation no end stream');
     CollectHeaders(LStream.Headers, LCollected);
-    CheckEqual(':method=GET|:path=/test|x-first=1|x-second=2|x-third=3',
+    CheckEqual(':method=GET|:path=/test|:scheme=https|:authority=example.com|x-first=1|x-second=2|x-third=3',
       LCollected, 'multiple continuations assemble correctly');
   finally
     LStream.Free;
@@ -563,7 +563,7 @@ procedure TestReserveBeyondStreamCapacity;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
   LStream: TH2Stream;
   LBefore: UInt32;
 begin
@@ -571,8 +571,7 @@ begin
   LDecoder.Init;
   LStream := TH2Stream.Create(37, 4, 8, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
     LBefore := LStream.AvailableSendCapacity;
     LStream.ReserveSendCapacity(UInt32(9999));
@@ -587,15 +586,14 @@ procedure TestCommitSendExceedsReserved;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
   LStream: TH2Stream;
 begin
   LConnectionFlow.Init(8192, 8192);
   LDecoder.Init;
   LStream := TH2Stream.Create(39, 1024, 1024, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
     LStream.CommitSend(1);
     Check(LStream.ResetReceived,
@@ -609,7 +607,7 @@ procedure TestReserveAndReleaseThroughReset;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
   LStream: TH2Stream;
   LBefore: UInt32;
 begin
@@ -617,8 +615,7 @@ begin
   LDecoder.Init;
   LStream := TH2Stream.Create(41, 1024, 1024, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
     LBefore := LStream.AvailableSendCapacity;
     LStream.ReserveSendCapacity(100);
@@ -638,7 +635,7 @@ procedure TestBodyReaderEmpty;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
   LStream: TH2Stream;
   LReader: IH2BodyReader;
   LBuf: Byte;
@@ -647,8 +644,7 @@ begin
   LDecoder.Init;
   LStream := TH2Stream.Create(45, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
 
     LReader := LStream.CreateBodyReader;
@@ -665,7 +661,7 @@ procedure TestDiscardUnreadBody;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
   LStream: TH2Stream;
   LReader: IH2BodyReader;
   LRecvBefore: Int64;
@@ -676,8 +672,7 @@ begin
   LDecoder.Init;
   LStream := TH2Stream.Create(47, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
     LStream.OnData(0, 'hello');
 
@@ -698,7 +693,7 @@ procedure TestTrailersStoredSeparately;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..2] of THPackHeader;
+  LHeaders: array[0..4] of THPackHeader;
   LTrailerHeaders: array[0..0] of THPackHeader;
   LStream: TH2Stream;
   LCollected: string;
@@ -708,12 +703,9 @@ begin
   LDecoder.Init;
   LStream := TH2Stream.Create(49, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'POST';
-    LHeaders[1].Name := ':path';
-    LHeaders[1].Value := '/upload';
-    LHeaders[2].Name := 'content-type';
-    LHeaders[2].Value := 'text/plain';
+    FillMinimalRequestHeaders(LHeaders, 'POST', '/upload');
+    LHeaders[4].Name := 'content-type';
+    LHeaders[4].Value := 'text/plain';
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
 
     LTrailerHeaders[0].Name := 'x-trailer';
@@ -724,7 +716,7 @@ begin
     Check(LStream.EndStreamReceived,
       'trailers with END_STREAM marks stream end');
     CollectHeaders(LStream.Headers, LCollected);
-    CheckEqual(':method=POST|:path=/upload|content-type=text/plain',
+    CheckEqual(':method=POST|:path=/upload|:scheme=https|:authority=example.com|content-type=text/plain',
       LCollected, 'original headers not overwritten by trailers');
     if LStream.Trailers <> nil then
     begin
@@ -745,7 +737,7 @@ procedure TestPendingResponseBody;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
   LStream: TH2Stream;
   LBody: IStream;
   LGotBody: IStream;
@@ -754,8 +746,7 @@ begin
   LDecoder.Init;
   LStream := TH2Stream.Create(51, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
 
     Check(not LStream.HasPendingResponseBody,
@@ -781,7 +772,7 @@ procedure TestTakePendingWindowUpdate;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
   LStream: TH2Stream;
   LReader: IH2BodyReader;
   LBuf: Byte;
@@ -790,8 +781,7 @@ begin
   LDecoder.Init;
   LStream := TH2Stream.Create(53, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
 
     LStream.OnData(0, 'ABCD');
@@ -812,7 +802,7 @@ procedure TestApplyPeerInitialWindowSize;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
   LStream: TH2Stream;
   LBefore: UInt32;
 begin
@@ -820,8 +810,7 @@ begin
   LDecoder.Init;
   LStream := TH2Stream.Create(55, 1024, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
 
     LBefore := LStream.AvailableSendCapacity;
@@ -839,15 +828,14 @@ procedure TestCanWriteDataReflectsState;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
   LStream: TH2Stream;
 begin
   LConnectionFlow.Init(8192, 8192);
   LDecoder.Init;
   LStream := TH2Stream.Create(57, 1024, 1024, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS, EncodeHeaders(LHeaders));
 
     Check(LStream.CanWriteData, 'open stream can write data');
@@ -884,15 +872,14 @@ procedure TestStreamID;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..0] of THPackHeader;
+  LHeaders: array[0..3] of THPackHeader;
   LStream: TH2Stream;
 begin
   LConnectionFlow.Init(8192, 8192);
   LDecoder.Init;
   LStream := TH2Stream.Create(61, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
+    FillMinimalRequestHeaders(LHeaders);
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM,
       EncodeHeaders(LHeaders));
     CheckEqual(UInt32(61), LStream.StreamID, 'correct stream ID');
@@ -927,19 +914,18 @@ procedure TestEmptyHeadersBlock;
 var
   LConnectionFlow: TH2ConnectionFlowControl;
   LDecoder: THPackDecoder;
-  LHeaders: array[0..0] of THPackHeader;
   LStream: TH2Stream;
 begin
   LConnectionFlow.Init(8192, 8192);
   LDecoder.Init;
   LStream := TH2Stream.Create(65, 4096, 4096, LConnectionFlow, LDecoder);
   try
-    LHeaders[0].Name := ':method';
-    LHeaders[0].Value := 'GET';
     LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, '');
-    Check(LStream.IsRequestReady,
-      'empty headers block still marks request ready');
-    Check(LStream.Headers <> nil, 'empty headers block creates non-nil headers');
+    Check(LStream.ResetReceived, 'empty headers block resets stream');
+    CheckEqual(Int64(H2_ERR_PROTOCOL_ERROR), Int64(LStream.ResetCode),
+      'empty headers block uses protocol error');
+    Check(not LStream.IsRequestReady,
+      'empty headers block does not mark request ready');
   finally
     LStream.Free;
   end;

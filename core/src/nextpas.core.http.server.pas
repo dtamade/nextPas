@@ -165,7 +165,8 @@ begin
   if ATransport <> nil then
     FTransport := ATransport
   else
-    FTransport := ResolveDefaultServerTransport(AOptions);
+    FTransport := ResolveServerTransport(
+      AOptions.EffectiveVersion(GetDefaultServerVersion), AOptions);
   LTcpOptions := TTcpServerOptions.Default;
   LTcpOptions.Backend := AOptions.Backend;
   FTcpServer := NewTcpServer(LTcpOptions);

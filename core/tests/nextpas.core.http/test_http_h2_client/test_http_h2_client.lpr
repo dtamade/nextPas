@@ -3,7 +3,7 @@ program test_http_h2_client;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.io.base,
@@ -14,13 +14,24 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
+  nextpas.core.http.middleware,
   nextpas.core.http.message,
   nextpas.core.http.impl.h2.frame,
   nextpas.core.http.impl.h2.hpack,
   nextpas.core.http.impl.h2.types,
   nextpas.core.http.impl.h2.client,
+  nextpas.core.http.impl.h2.tls,
+  nextpas.core.http.impl.tls.stream,
   nextpas.core.http.impl.registry,
-  nextpas.core.testing;
+  nextpas.core.testing,
+  nextpas.core.tls.base,
+  nextpas.core.tls.connection.base;
+
+const
+  H2_CLIENT_SOURCE_PATH_FROM_TEST =
+    '../../../src/nextpas.core.http.impl.h2.client.pas';
+  H2_CLIENT_SOURCE_PATH_FROM_ROOT =
+    'core/src/nextpas.core.http.impl.h2.client.pas';
 
 type
   TFakeTcpStream = class(TInterfacedObject, ITcpStream)
@@ -55,15 +66,151 @@ type
     property MaxWriteChunk: SizeUInt read FMaxWriteChunk write FMaxWriteChunk;
   end;
 
+  IMockTLSProbe = interface
+    ['{E71E35E7-5428-4C5B-8DFA-4D617274F6F1}']
+    function GetObservedServerName: string;
+    function GetObservedALPN: string;
+    function GetSelectedALPN: string;
+    function GetCallLog: string;
+  end;
+
+  TMockTLSConnection = class(TBaseSSLConnection, ISSLClientConnection,
+    ISSLClientALPNConnection, IMockTLSProbe)
+  private
+    FTransport: TStream;
+    FSelectedALPN: string;
+    FObservedALPN: string;
+    FServerName: string;
+    FCallLog: string;
+    procedure AppendCall(const AName: string);
+  protected
+    function DoRead(var ABuffer; ACount: Integer): Integer; override;
+    function DoWrite(const ABuffer; ACount: Integer): Integer; override;
+    function DoConnect: Boolean; override;
+    function DoAccept: Boolean; override;
+    function DoHandshakeInternal: TSSLHandshakeState; override;
+    function DoShutdown: Boolean; override;
+    procedure DoClose; override;
+    function DoRenegotiate: Boolean; override;
+    function DoGetError(ARet: Integer): TSSLErrorCode; override;
+    function DoWantRead: Boolean; override;
+    function DoWantWrite: Boolean; override;
+    function DoGetProtocolVersion: TSSLProtocolVersion; override;
+    function DoGetCipherName: string; override;
+    function DoGetPeerCertificate: ISSLCertificate; override;
+    function DoGetPeerCertificateChain: TSSLCertificateArray; override;
+    function DoGetVerifyResult: Integer; override;
+    function DoGetVerifyResultString: string; override;
+    function DoGetSession: ISSLSession; override;
+    procedure DoSetSession(ASession: ISSLSession); override;
+    function DoIsSessionReused: Boolean; override;
+    function DoGetSelectedALPNProtocol: string; override;
+    function DoGetState: string; override;
+    function DoGetNativeHandle: Pointer; override;
+  public
+    constructor Create(AContext: ISSLContext; ATransport: TStream;
+      const ASelectedALPN: string); reintroduce;
+    procedure SetServerName(const AServerName: string);
+    function GetServerName: string;
+    procedure SetALPNProtocols(const AProtocols: string);
+    function GetALPNProtocols: string;
+    function GetObservedServerName: string;
+    function GetObservedALPN: string;
+    function GetSelectedALPN: string;
+    function GetCallLog: string;
+  end;
+
+  TMockTLSContext = class(TInterfacedObject, ISSLContext)
+  private
+    FContextType: TSSLContextType;
+    FSelectedALPN: string;
+    FConfiguredALPN: string;
+    FLastProbe: IMockTLSProbe;
+  public
+    constructor Create(AContextType: TSSLContextType;
+      const ASelectedALPN: string);
+    function GetLastProbe: IMockTLSProbe;
+    procedure ClearLastProbe;
+    function GetContextType: TSSLContextType;
+    procedure SetProtocolVersions(AVersions: TSSLProtocolVersions);
+    function GetProtocolVersions: TSSLProtocolVersions;
+    procedure SetPreferredVersion(AVersion: TSSLProtocolVersion);
+    function GetPreferredVersion: TSSLProtocolVersion;
+    procedure LoadCertificate(const AFileName: string); overload;
+    procedure LoadCertificate(AStream: TStream); overload;
+    procedure LoadCertificate(ACert: ISSLCertificate); overload;
+    procedure LoadPrivateKey(const AFileName: string;
+      const APassword: string = ''); overload;
+    procedure LoadPrivateKey(AStream: TStream;
+      const APassword: string = ''); overload;
+    procedure LoadCertificatePEM(const APEM: string);
+    procedure LoadPrivateKeyPEM(const APEM: string;
+      const APassword: string = '');
+    procedure LoadCAFile(const AFileName: string);
+    procedure LoadCAPath(const APath: string);
+    procedure SetCertificateStore(AStore: ISSLCertificateStore);
+    procedure SetVerifyMode(AMode: TSSLVerifyModes);
+    function GetVerifyMode: TSSLVerifyModes;
+    procedure SetVerifyDepth(ADepth: Integer);
+    function GetVerifyDepth: Integer;
+    procedure SetVerifyCallback(ACallback: TSSLVerifyCallback);
+    procedure SetCipherList(const ACipherList: string);
+    function GetCipherList: string;
+    procedure SetCipherSuites(const ACipherSuites: string);
+    function GetCipherSuites: string;
+    procedure SetSessionCacheMode(AEnabled: Boolean);
+    function GetSessionCacheMode: Boolean;
+    procedure SetSessionTimeout(ATimeout: Integer);
+    function GetSessionTimeout: Integer;
+    procedure SetSessionCacheSize(ASize: Integer);
+    function GetSessionCacheSize: Integer;
+    procedure SetOptions(const AOptions: TSSLOptions);
+    function GetOptions: TSSLOptions;
+    procedure SetServerName(const AServerName: string);
+    function GetServerName: string;
+    procedure SetALPNProtocols(const AProtocols: string);
+    function GetALPNProtocols: string;
+    procedure SetCertVerifyFlags(AFlags: TSSLCertVerifyFlags);
+    function GetCertVerifyFlags: TSSLCertVerifyFlags;
+    procedure SetPasswordCallback(ACallback: TSSLPasswordCallback);
+    procedure SetInfoCallback(ACallback: TSSLInfoCallback);
+    procedure AddCertificatePin(const AHash: TBytes; APinType: Integer;
+      const ADescription: string; AIsBackup: Boolean = False);
+    procedure AddCertificatePinBase64(const ABase64Hash: string;
+      APinType: Integer; const ADescription: string;
+      AIsBackup: Boolean = False);
+    procedure SetCertificatePinningEnabled(AEnabled: Boolean);
+    function GetCertificatePinningEnabled: Boolean;
+    procedure ClearCertificatePins;
+    function CreateConnection(ASocket: THandle): ISSLConnection; overload;
+    function CreateConnection(AStream: TStream): ISSLConnection; overload;
+    function IsValid: Boolean;
+  end;
+
+  TMockTlsServerTransport = class(TInterfacedObject, IHttpServerTransport)
+  private
+    FServeConnCalled: Boolean;
+    FSeenALPN: string;
+  public
+    function ServeConn(const AConn: ITcpStream;
+      const AHandler: IHttpHandler): TTcpServerConnOwnership;
+    property ServeConnCalled: Boolean read FServeConnCalled;
+    property SeenALPN: string read FSeenALPN;
+  end;
+
 var
   T: TTestRunner;
   GDialQueue: array of ITcpStream;
   GDialCount: SizeInt;
   GDialIndex: SizeInt;
+  GLastDialHost: string;
+  GLastDialPort: UInt16;
 
 function TestDial(const AHost: string; const APort: UInt16): ITcpStream;
 begin
   Check(GDialIndex < GDialCount, 'dial queue has connection');
+  GLastDialHost := AHost;
+  GLastDialPort := APort;
   Result := GDialQueue[GDialIndex];
   Inc(GDialIndex);
 end;
@@ -77,6 +224,8 @@ begin
   GDialQueue := nil;
   GDialCount := 0;
   GDialIndex := 0;
+  GLastDialHost := '';
+  GLastDialPort := 0;
 end;
 
 procedure QueueDialConn(const AConn: ITcpStream);
@@ -85,6 +234,34 @@ begin
     SetLength(GDialQueue, GDialCount + 4);
   GDialQueue[GDialCount] := AConn;
   Inc(GDialCount);
+end;
+
+function ReadSourceFile(const APath: string): string;
+var
+  LFile: Text;
+  LLine: string;
+begin
+  Result := '';
+  Assign(LFile, APath);
+  Reset(LFile);
+  try
+    while not Eof(LFile) do
+    begin
+      ReadLn(LFile, LLine);
+      Result := Result + LLine + #10;
+    end;
+  finally
+    Close(LFile);
+  end;
+end;
+
+function ResolveSourcePath(const APathFromTest, APathFromRoot: string): string;
+begin
+  if FileExists(APathFromTest) then
+    Exit(APathFromTest);
+  if FileExists(APathFromRoot) then
+    Exit(APathFromRoot);
+  Result := APathFromTest;
 end;
 
 function HexNibble(const ACh: Char): Byte;
@@ -399,6 +576,449 @@ begin
   Result := FWrittenData;
 end;
 
+{ TMockTLSConnection }
+
+constructor TMockTLSConnection.Create(AContext: ISSLContext;
+  ATransport: TStream; const ASelectedALPN: string);
+begin
+  inherited Create(AContext);
+  FTransport := ATransport;
+  FSelectedALPN := ASelectedALPN;
+  FObservedALPN := '';
+  FServerName := '';
+  FCallLog := '';
+end;
+
+procedure TMockTLSConnection.AppendCall(const AName: string);
+begin
+  if FCallLog <> '' then
+    FCallLog := FCallLog + '>';
+  FCallLog := FCallLog + AName;
+end;
+
+function TMockTLSConnection.DoRead(var ABuffer; ACount: Integer): Integer;
+begin
+  if (FTransport = nil) or (ACount <= 0) then
+    Exit(0);
+  Result := FTransport.Read(ABuffer, ACount);
+end;
+
+function TMockTLSConnection.DoWrite(const ABuffer; ACount: Integer): Integer;
+begin
+  if (FTransport = nil) or (ACount <= 0) then
+    Exit(0);
+  Result := FTransport.Write(ABuffer, ACount);
+end;
+
+function TMockTLSConnection.DoConnect: Boolean;
+begin
+  AppendCall('connect');
+  Result := True;
+end;
+
+function TMockTLSConnection.DoAccept: Boolean;
+begin
+  AppendCall('accept');
+  Result := True;
+end;
+
+function TMockTLSConnection.DoHandshakeInternal: TSSLHandshakeState;
+begin
+  Result := sslHsCompleted;
+end;
+
+function TMockTLSConnection.DoShutdown: Boolean;
+begin
+  Result := True;
+end;
+
+procedure TMockTLSConnection.DoClose;
+begin
+  FreeAndNil(FTransport);
+end;
+
+function TMockTLSConnection.DoRenegotiate: Boolean;
+begin
+  Result := False;
+end;
+
+function TMockTLSConnection.DoGetError(ARet: Integer): TSSLErrorCode;
+begin
+  Result := sslErrNone;
+end;
+
+function TMockTLSConnection.DoWantRead: Boolean;
+begin
+  Result := False;
+end;
+
+function TMockTLSConnection.DoWantWrite: Boolean;
+begin
+  Result := False;
+end;
+
+function TMockTLSConnection.DoGetProtocolVersion: TSSLProtocolVersion;
+begin
+  Result := sslProtocolTLS13;
+end;
+
+function TMockTLSConnection.DoGetCipherName: string;
+begin
+  Result := 'MOCK-TLS';
+end;
+
+function TMockTLSConnection.DoGetPeerCertificate: ISSLCertificate;
+begin
+  Result := nil;
+end;
+
+function TMockTLSConnection.DoGetPeerCertificateChain: TSSLCertificateArray;
+begin
+  Result := nil;
+end;
+
+function TMockTLSConnection.DoGetVerifyResult: Integer;
+begin
+  Result := 0;
+end;
+
+function TMockTLSConnection.DoGetVerifyResultString: string;
+begin
+  Result := 'OK';
+end;
+
+function TMockTLSConnection.DoGetSession: ISSLSession;
+begin
+  Result := nil;
+end;
+
+procedure TMockTLSConnection.DoSetSession(ASession: ISSLSession);
+begin
+end;
+
+function TMockTLSConnection.DoIsSessionReused: Boolean;
+begin
+  Result := False;
+end;
+
+function TMockTLSConnection.DoGetSelectedALPNProtocol: string;
+begin
+  Result := FSelectedALPN;
+end;
+
+function TMockTLSConnection.DoGetState: string;
+begin
+  Result := 'MOCK';
+end;
+
+function TMockTLSConnection.DoGetNativeHandle: Pointer;
+begin
+  Result := nil;
+end;
+
+procedure TMockTLSConnection.SetServerName(const AServerName: string);
+begin
+  FServerName := AServerName;
+  AppendCall('servername');
+end;
+
+function TMockTLSConnection.GetServerName: string;
+begin
+  Result := FServerName;
+end;
+
+procedure TMockTLSConnection.SetALPNProtocols(const AProtocols: string);
+begin
+  FObservedALPN := AProtocols;
+  AppendCall('alpn');
+end;
+
+function TMockTLSConnection.GetALPNProtocols: string;
+begin
+  Result := FObservedALPN;
+end;
+
+function TMockTLSConnection.GetObservedServerName: string;
+begin
+  Result := FServerName;
+end;
+
+function TMockTLSConnection.GetObservedALPN: string;
+begin
+  Result := FObservedALPN;
+end;
+
+function TMockTLSConnection.GetSelectedALPN: string;
+begin
+  Result := FSelectedALPN;
+end;
+
+function TMockTLSConnection.GetCallLog: string;
+begin
+  Result := FCallLog;
+end;
+
+{ TMockTLSContext }
+
+constructor TMockTLSContext.Create(AContextType: TSSLContextType;
+  const ASelectedALPN: string);
+begin
+  inherited Create;
+  FContextType := AContextType;
+  FSelectedALPN := ASelectedALPN;
+  FConfiguredALPN := '';
+  FLastProbe := nil;
+end;
+
+function TMockTLSContext.GetLastProbe: IMockTLSProbe;
+begin
+  Result := FLastProbe;
+end;
+
+procedure TMockTLSContext.ClearLastProbe;
+begin
+  FLastProbe := nil;
+end;
+
+function TMockTLSContext.GetContextType: TSSLContextType;
+begin
+  Result := FContextType;
+end;
+
+procedure TMockTLSContext.SetProtocolVersions(AVersions: TSSLProtocolVersions);
+begin
+end;
+
+function TMockTLSContext.GetProtocolVersions: TSSLProtocolVersions;
+begin
+  Result := [];
+end;
+
+procedure TMockTLSContext.SetPreferredVersion(AVersion: TSSLProtocolVersion);
+begin
+end;
+
+function TMockTLSContext.GetPreferredVersion: TSSLProtocolVersion;
+begin
+  Result := sslProtocolUnknown;
+end;
+
+procedure TMockTLSContext.LoadCertificate(const AFileName: string);
+begin
+end;
+
+procedure TMockTLSContext.LoadCertificate(AStream: TStream);
+begin
+end;
+
+procedure TMockTLSContext.LoadCertificate(ACert: ISSLCertificate);
+begin
+end;
+
+procedure TMockTLSContext.LoadPrivateKey(const AFileName: string;
+  const APassword: string);
+begin
+end;
+
+procedure TMockTLSContext.LoadPrivateKey(AStream: TStream;
+  const APassword: string);
+begin
+end;
+
+procedure TMockTLSContext.LoadCertificatePEM(const APEM: string);
+begin
+end;
+
+procedure TMockTLSContext.LoadPrivateKeyPEM(const APEM: string;
+  const APassword: string);
+begin
+end;
+
+procedure TMockTLSContext.LoadCAFile(const AFileName: string);
+begin
+end;
+
+procedure TMockTLSContext.LoadCAPath(const APath: string);
+begin
+end;
+
+procedure TMockTLSContext.SetCertificateStore(AStore: ISSLCertificateStore);
+begin
+end;
+
+procedure TMockTLSContext.SetVerifyMode(AMode: TSSLVerifyModes);
+begin
+end;
+
+function TMockTLSContext.GetVerifyMode: TSSLVerifyModes;
+begin
+  Result := [];
+end;
+
+procedure TMockTLSContext.SetVerifyDepth(ADepth: Integer);
+begin
+end;
+
+function TMockTLSContext.GetVerifyDepth: Integer;
+begin
+  Result := 0;
+end;
+
+procedure TMockTLSContext.SetVerifyCallback(ACallback: TSSLVerifyCallback);
+begin
+end;
+
+procedure TMockTLSContext.SetCipherList(const ACipherList: string);
+begin
+end;
+
+function TMockTLSContext.GetCipherList: string;
+begin
+  Result := '';
+end;
+
+procedure TMockTLSContext.SetCipherSuites(const ACipherSuites: string);
+begin
+end;
+
+function TMockTLSContext.GetCipherSuites: string;
+begin
+  Result := '';
+end;
+
+procedure TMockTLSContext.SetSessionCacheMode(AEnabled: Boolean);
+begin
+end;
+
+function TMockTLSContext.GetSessionCacheMode: Boolean;
+begin
+  Result := False;
+end;
+
+procedure TMockTLSContext.SetSessionTimeout(ATimeout: Integer);
+begin
+end;
+
+function TMockTLSContext.GetSessionTimeout: Integer;
+begin
+  Result := 0;
+end;
+
+procedure TMockTLSContext.SetSessionCacheSize(ASize: Integer);
+begin
+end;
+
+function TMockTLSContext.GetSessionCacheSize: Integer;
+begin
+  Result := 0;
+end;
+
+procedure TMockTLSContext.SetOptions(const AOptions: TSSLOptions);
+begin
+end;
+
+function TMockTLSContext.GetOptions: TSSLOptions;
+begin
+  Result := [];
+end;
+
+procedure TMockTLSContext.SetServerName(const AServerName: string);
+begin
+end;
+
+function TMockTLSContext.GetServerName: string;
+begin
+  Result := '';
+end;
+
+procedure TMockTLSContext.SetALPNProtocols(const AProtocols: string);
+begin
+  FConfiguredALPN := AProtocols;
+end;
+
+function TMockTLSContext.GetALPNProtocols: string;
+begin
+  Result := FConfiguredALPN;
+end;
+
+procedure TMockTLSContext.SetCertVerifyFlags(AFlags: TSSLCertVerifyFlags);
+begin
+end;
+
+function TMockTLSContext.GetCertVerifyFlags: TSSLCertVerifyFlags;
+begin
+  Result := [];
+end;
+
+procedure TMockTLSContext.SetPasswordCallback(ACallback: TSSLPasswordCallback);
+begin
+end;
+
+procedure TMockTLSContext.SetInfoCallback(ACallback: TSSLInfoCallback);
+begin
+end;
+
+procedure TMockTLSContext.AddCertificatePin(const AHash: TBytes;
+  APinType: Integer; const ADescription: string; AIsBackup: Boolean);
+begin
+end;
+
+procedure TMockTLSContext.AddCertificatePinBase64(
+  const ABase64Hash: string; APinType: Integer;
+  const ADescription: string; AIsBackup: Boolean);
+begin
+end;
+
+procedure TMockTLSContext.SetCertificatePinningEnabled(AEnabled: Boolean);
+begin
+end;
+
+function TMockTLSContext.GetCertificatePinningEnabled: Boolean;
+begin
+  Result := False;
+end;
+
+procedure TMockTLSContext.ClearCertificatePins;
+begin
+end;
+
+function TMockTLSContext.CreateConnection(ASocket: THandle): ISSLConnection;
+begin
+  Result := nil;
+end;
+
+function TMockTLSContext.CreateConnection(AStream: TStream): ISSLConnection;
+var
+  LConn: TMockTLSConnection;
+begin
+  LConn := TMockTLSConnection.Create(Self, AStream, FSelectedALPN);
+  FLastProbe := LConn as IMockTLSProbe;
+  Result := LConn;
+end;
+
+function TMockTLSContext.IsValid: Boolean;
+begin
+  Result := True;
+end;
+
+{ TMockTlsServerTransport }
+
+function TMockTlsServerTransport.ServeConn(const AConn: ITcpStream;
+  const AHandler: IHttpHandler): TTcpServerConnOwnership;
+var
+  LReq: IHttpRequest;
+begin
+  FServeConnCalled := True;
+  FSeenALPN := TlsTcpStreamSelectedALPN(AConn);
+  if AHandler <> nil then
+  begin
+    LReq := THttpRequest.Create(hmGet, TUrl.Parse('/tls-h2'),
+      hvHttp2, NewHttpHeaders, nil, 0);
+    AHandler.ServeHTTP(LReq, nil);
+  end;
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
 procedure TestHandshakeWritesClientPrefaceAndSettings;
 var
   LConn: TH2ClientConnection;
@@ -511,6 +1131,104 @@ begin
     LConn := nil;
     LStream := nil;
     LBody := nil;
+  end;
+end;
+
+procedure TestRoundTripFiltersConnectionSpecificRequestHeaders;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LHeaders: IHttpHeaders;
+  LFrames: array[0..7] of TH2Frame;
+  LDecodedHeaders: array of THPackHeader;
+  LCount: SizeInt;
+  LRequestIndex: SizeInt;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.Add('connection', 'keep-alive');
+  LHeaders.Add('upgrade', 'websocket');
+  LHeaders.Add('keep-alive', 'timeout=5');
+  LHeaders.Add('proxy-connection', 'keep-alive');
+  LHeaders.Add('te', 'gzip');
+  LHeaders.Add('host', 'spoofed.example');
+  LHeaders.Add('x-keep', 'ok');
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '200', '', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/filter',
+      LHeaders));
+    LResp := nil;
+    DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
+      MaxInt), LFrames, LCount);
+    Check(LCount >= 3, 'request headers were sent');
+    LRequestIndex := 2;
+    if (LCount > 3) and (LFrames[2].Header.FrameType <> H2_FRAME_HEADERS) then
+      LRequestIndex := LCount - 1;
+    SetLength(LDecodedHeaders, Length(LFrames[LRequestIndex].Payload) + 4);
+    DecodeRequestHeaders(LFrames[LRequestIndex].Payload, LDecodedHeaders);
+    CheckEqual('', HeaderValue(LDecodedHeaders, 'connection'),
+      'connection header filtered');
+    CheckEqual('', HeaderValue(LDecodedHeaders, 'upgrade'),
+      'upgrade header filtered');
+    CheckEqual('', HeaderValue(LDecodedHeaders, 'keep-alive'),
+      'keep-alive header filtered');
+    CheckEqual('', HeaderValue(LDecodedHeaders, 'proxy-connection'),
+      'proxy-connection header filtered');
+    CheckEqual('', HeaderValue(LDecodedHeaders, 'te'),
+      'non-trailers TE filtered');
+    CheckEqual('ok', HeaderValue(LDecodedHeaders, 'x-keep'),
+      'ordinary header preserved');
+    CheckEqual('example.com', HeaderValue(LDecodedHeaders, ':authority'),
+      'host header replaced by :authority');
+  finally
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+    LHeaders := nil;
+  end;
+end;
+
+procedure TestRoundTripPreservesTeTrailersHeader;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LHeaders: IHttpHeaders;
+  LFrames: array[0..7] of TH2Frame;
+  LDecodedHeaders: array of THPackHeader;
+  LCount: SizeInt;
+  LRequestIndex: SizeInt;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.Add('te', 'trailers');
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '200', '', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/te-trailers',
+      LHeaders));
+    LResp := nil;
+    DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
+      MaxInt), LFrames, LCount);
+    Check(LCount >= 3, 'request headers were sent');
+    LRequestIndex := 2;
+    if (LCount > 3) and (LFrames[2].Header.FrameType <> H2_FRAME_HEADERS) then
+      LRequestIndex := LCount - 1;
+    SetLength(LDecodedHeaders, Length(LFrames[LRequestIndex].Payload) + 4);
+    DecodeRequestHeaders(LFrames[LRequestIndex].Payload, LDecodedHeaders);
+    CheckEqual('trailers', HeaderValue(LDecodedHeaders, 'te'),
+      'te: trailers preserved');
+  finally
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+    LHeaders := nil;
   end;
 end;
 
@@ -905,12 +1623,205 @@ begin
   end;
 end;
 
+procedure TestHttpsTransportNegotiatesH2ViaALPN;
+var
+  LTransport: IHttpTransport;
+  LOptions: TH2ClientTransportOptions;
+  LContextObj: TMockTLSContext;
+  LContext: ISSLContext;
+  LProbe: IMockTLSProbe;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+begin
+  ResetDialQueue;
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '200', 'secure', []));
+  QueueDialConn(LStream as ITcpStream);
+  SetH2ClientDialFuncForTests(@TestDial);
+  try
+    LContextObj := TMockTLSContext.Create(sslCtxClient, 'h2');
+    LContext := LContextObj;
+    LOptions := TH2ClientTransportOptions.Default;
+    LOptions.TLSContext := LContext;
+    LTransport := NewH2ClientTransport(LOptions);
+    LResp := LTransport.RoundTrip(NewRequest(hmGet,
+      'https://secure.example.com/health'));
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'HTTPS H2 transport returns response');
+    CheckEqual('secure', ReadAllBody(LResp.Body),
+      'HTTPS H2 transport reads response body');
+    CheckEqual('secure.example.com', GLastDialHost,
+      'HTTPS H2 transport dials parsed host');
+    CheckEqual(Int64(443), Int64(GLastDialPort),
+      'HTTPS H2 transport defaults to port 443');
+    Check(Pos(H2_CLIENT_PREFACE, LStream.WrittenData) = 1,
+      'HTTPS H2 transport writes client preface');
+    LProbe := LContextObj.GetLastProbe;
+    Check(LProbe <> nil, 'mock TLS context captured connection probe');
+    CheckEqual('secure.example.com', LProbe.GetObservedServerName,
+      'TLS connector applies SNI host');
+    CheckEqual('h2', LProbe.GetObservedALPN,
+      'TLS connector applies HTTP/2 ALPN');
+    CheckEqual('servername>alpn>connect', LProbe.GetCallLog,
+      'TLS connector applies ALPN before connect');
+  finally
+    ResetH2ClientDialFuncForTests;
+    ResetDialQueue;
+    LContextObj.ClearLastProbe;
+    LTransport := nil;
+    LResp := nil;
+    LContext := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestHttpsTransportRejectsUnexpectedALPN;
+var
+  LTransport: IHttpTransport;
+  LOptions: TH2ClientTransportOptions;
+  LContextObj: TMockTLSContext;
+  LContext: ISSLContext;
+  LProbe: IMockTLSProbe;
+  LStream: TFakeTcpStream;
+  LRaised: Boolean;
+  LReportedALPN: Boolean;
+begin
+  ResetDialQueue;
+  LStream := TFakeTcpStream.Create('');
+  QueueDialConn(LStream as ITcpStream);
+  SetH2ClientDialFuncForTests(@TestDial);
+  try
+    LContextObj := TMockTLSContext.Create(sslCtxClient, 'http/1.1');
+    LContext := LContextObj;
+    LOptions := TH2ClientTransportOptions.Default;
+    LOptions.TLSContext := LContext;
+    LTransport := NewH2ClientTransport(LOptions);
+    LRaised := False;
+    LReportedALPN := False;
+    try
+      LTransport.RoundTrip(NewRequest(hmGet, 'https://secure.example.com/miss'));
+    except
+      on E: EHttpError do
+      begin
+        LRaised := True;
+        LReportedALPN := Pos('alpn', LowerCase(E.Message)) > 0;
+      end;
+    end;
+    Check(LRaised, 'HTTPS H2 transport rejects non-h2 ALPN');
+    Check(LReportedALPN, 'HTTPS H2 transport reports ALPN mismatch');
+    LProbe := LContextObj.GetLastProbe;
+    Check(LProbe <> nil, 'ALPN mismatch still creates TLS probe');
+    CheckEqual('h2', LProbe.GetObservedALPN,
+      'HTTPS H2 transport still offers h2 ALPN');
+  finally
+    ResetH2ClientDialFuncForTests;
+    ResetDialQueue;
+    LContextObj.ClearLastProbe;
+    LTransport := nil;
+    LContext := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestH2TlsServerTransportDispatchesNegotiatedH2;
+var
+  LContextObj: TMockTLSContext;
+  LContext: ISSLContext;
+  LInnerObj: TMockTlsServerTransport;
+  LInner: IHttpServerTransport;
+  LTransport: IHttpServerTransport;
+  LRawConn: ITcpStream;
+  LHandlerCalled: Boolean;
+begin
+  LContextObj := TMockTLSContext.Create(sslCtxServer, 'h2');
+  LContext := LContextObj;
+  LInnerObj := TMockTlsServerTransport.Create;
+  LInner := LInnerObj as IHttpServerTransport;
+  LTransport := NewH2TlsServerTransport(LContext, LInner);
+  LRawConn := TFakeTcpStream.Create('') as ITcpStream;
+  LHandlerCalled := False;
+
+  CheckEqual('h2', LContext.GetALPNProtocols,
+    'H2 TLS server transport configures context ALPN');
+  Check(LTransport.ServeConn(LRawConn,
+    nextpas.core.http.middleware.HandlerFunc(procedure(const AReq: IHttpRequest;
+      const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+    end)) = TCP_SERVER_CONN_OWNERSHIP_SERVER,
+    'H2 TLS server transport keeps server ownership');
+  Check(LInnerObj.ServeConnCalled,
+    'H2 TLS server transport dispatches negotiated connection');
+  CheckEqual('h2', LInnerObj.SeenALPN,
+    'H2 TLS server transport forwards negotiated ALPN');
+  Check(LHandlerCalled, 'H2 TLS server transport preserves handler dispatch');
+  LContextObj.ClearLastProbe;
+end;
+
+procedure TestH2TlsServerTransportRejectsMissingH2ALPN;
+var
+  LContextObj: TMockTLSContext;
+  LContext: ISSLContext;
+  LInnerObj: TMockTlsServerTransport;
+  LInner: IHttpServerTransport;
+  LTransport: IHttpServerTransport;
+  LRawConn: ITcpStream;
+  LRaised: Boolean;
+begin
+  LContextObj := TMockTLSContext.Create(sslCtxServer, 'http/1.1');
+  LContext := LContextObj;
+  LInnerObj := TMockTlsServerTransport.Create;
+  LInner := LInnerObj as IHttpServerTransport;
+  LTransport := NewH2TlsServerTransport(LContext, LInner);
+  LRawConn := TFakeTcpStream.Create('') as ITcpStream;
+
+  LRaised := False;
+  try
+    LTransport.ServeConn(LRawConn,
+      nextpas.core.http.middleware.HandlerFunc(procedure(const AReq: IHttpRequest;
+        const AW: IHttpResponseWriter)
+      begin
+      end));
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'H2 TLS server transport rejects non-h2 ALPN');
+  Check(not LInnerObj.ServeConnCalled,
+    'H2 TLS server transport does not dispatch rejected ALPN');
+  LContextObj.ClearLastProbe;
+end;
+
 procedure TestBuiltinHttp2ClientTransportIsRegistered;
 var
   LTransport: IHttpTransport;
 begin
   LTransport := ResolveClientTransport(hvHttp2, THttpClientOptions.Default);
   Check(LTransport <> nil, 'built-in HTTP/2 client transport resolves');
+end;
+
+procedure TestBuildResponseAvoidsBytesStreamCopySourceContract;
+var
+  LSource: string;
+  LBuildPos: SizeInt;
+  LHandshakePos: SizeInt;
+  LBuildBlock: string;
+begin
+  LSource := ReadSourceFile(ResolveSourcePath(H2_CLIENT_SOURCE_PATH_FROM_TEST,
+    H2_CLIENT_SOURCE_PATH_FROM_ROOT));
+  LBuildPos := Pos('function TH2ClientConnection.BuildResponse', LSource);
+  Check(LBuildPos > 0, 'BuildResponse source block exists');
+  LHandshakePos := Pos('function TH2ClientConnection.Handshake', LSource);
+  Check(LHandshakePos > LBuildPos, 'Handshake source follows BuildResponse');
+  if (LBuildPos <= 0) or (LHandshakePos <= LBuildPos) then
+    Exit;
+  LBuildBlock := Copy(LSource, LBuildPos, LHandshakePos - LBuildPos);
+  Check(Pos('CreateBytesStreamFrom(AResponse.Body)', LBuildBlock) = 0,
+    'BuildResponse avoids CreateBytesStreamFrom body copy');
+  Check(Pos('TH2ClientResponseBodyReader.Create(AResponse.Body)', LBuildBlock) > 0,
+    'BuildResponse uses dedicated H2 response body reader');
 end;
 
 begin
@@ -921,6 +1832,10 @@ begin
     @TestRoundTripGetReadsResponse);
   T.Run('RoundTrip POST writes data frame',
     @TestRoundTripPostWritesDataFrame);
+  T.Run('RoundTrip filters connection-specific request headers',
+    @TestRoundTripFiltersConnectionSpecificRequestHeaders);
+  T.Run('RoundTrip preserves TE trailers header',
+    @TestRoundTripPreservesTeTrailersHeader);
   T.Run('Runtime SETTINGS_INITIAL_WINDOW_SIZE updates active stream',
     @TestRuntimeSettingsInitialWindowSizeUpdatesActiveStream);
   T.Run('Request body reads WINDOW_UPDATE when send window blocked',
@@ -943,6 +1858,16 @@ begin
     @TestTransportReusesPooledConnection);
   T.Run('Transport CloseIdleConnections closes pooled conn',
     @TestTransportCloseIdleConnectionsClosesPooledConn);
+  T.Run('HTTPS transport negotiates h2 via ALPN',
+    @TestHttpsTransportNegotiatesH2ViaALPN);
+  T.Run('HTTPS transport rejects unexpected ALPN',
+    @TestHttpsTransportRejectsUnexpectedALPN);
+  T.Run('H2 TLS server transport dispatches negotiated h2',
+    @TestH2TlsServerTransportDispatchesNegotiatedH2);
+  T.Run('H2 TLS server transport rejects missing h2 ALPN',
+    @TestH2TlsServerTransportRejectsMissingH2ALPN);
+  T.Run('BuildResponse avoids bytes stream copy source contract',
+    @TestBuildResponseAvoidsBytesStreamCopySourceContract);
   T.Run('Built-in HTTP/2 client transport is registered',
     @TestBuiltinHttp2ClientTransportIsRegistered);
   T.Summary;

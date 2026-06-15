@@ -586,7 +586,8 @@ begin
   if ATransport <> nil then
     FTransport := ATransport
   else
-    FTransport := ResolveDefaultClientTransport(AOptions);
+    FTransport := ResolveClientTransport(
+      AOptions.EffectiveVersion(GetDefaultClientVersion), AOptions);
 end;
 
 function THttpClient.DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32;

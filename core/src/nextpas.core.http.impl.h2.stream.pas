@@ -118,6 +118,14 @@ uses
   SysUtils,
   nextpas.core.http.headers;
 
+const
+  H2_FORBIDDEN_CONNECTION_HEADERS: array[0..3] of AnsiString = (
+    'connection',
+    'upgrade',
+    'keep-alive',
+    'proxy-connection'
+  );
+
 type
   TH2BodyReader = class(TInterfacedObject, IH2BodyReader)
   private
@@ -139,6 +147,45 @@ end;
 function HeaderStoreAsConcrete(const AStore: TObject): THttpHeaders; inline;
 begin
   Result := THttpHeaders(AStore);
+end;
+
+function ByteSpanEquals(const ASpan: TH2ByteSpan; const AValue: AnsiString): Boolean;
+var
+  LI: SizeInt;
+begin
+  if ASpan.Len <> Length(AValue) then
+    Exit(False);
+  if ASpan.Len = 0 then
+    Exit(True);
+  if ASpan.Ptr = nil then
+    Exit(False);
+  for LI := 0 to ASpan.Len - 1 do
+    if ASpan.Ptr[LI] <> AValue[LI + 1] then
+      Exit(False);
+  Result := True;
+end;
+
+function ByteSpanToAnsiString(const ASpan: TH2ByteSpan): AnsiString;
+begin
+  if (ASpan.Ptr = nil) or (ASpan.Len <= 0) then
+    Exit('');
+  SetString(Result, ASpan.Ptr, ASpan.Len);
+end;
+
+function IsForbiddenConnectionHeader(const AName: TH2ByteSpan): Boolean;
+var
+  LI: SizeInt;
+begin
+  for LI := Low(H2_FORBIDDEN_CONNECTION_HEADERS) to
+    High(H2_FORBIDDEN_CONNECTION_HEADERS) do
+    if ByteSpanEquals(AName, H2_FORBIDDEN_CONNECTION_HEADERS[LI]) then
+      Exit(True);
+  Result := False;
+end;
+
+function IsValidTeHeaderValue(const AValue: TH2ByteSpan): Boolean;
+begin
+  Result := ByteSpanEquals(AValue, 'trailers');
 end;
 
 { TH2BodyReader }
@@ -241,12 +288,21 @@ procedure TH2Stream.FinalizeHeaders;
 var
   LHeaders: array of THPackHeaderView;
   LIndex: SizeInt;
+  LMethodSeen: Boolean;
+  LSchemeSeen: Boolean;
+  LPathSeen: Boolean;
+  LAuthoritySeen: Boolean;
+  LHostSeen: Boolean;
+  LPseudoSectionClosed: Boolean;
+  LIsPseudo: Boolean;
   LNameStr: AnsiString;
   LTotalLen: SizeInt;
   LValueStr: AnsiString;
   LWritePos: SizeInt;
   LTargetStore: TObject;
+  LIsTrailerSection: Boolean;
 begin
+  LIsTrailerSection := FHeadersDecoded <> nil;
   LTotalLen := 0;
   for LIndex := 0 to High(FHeaderFragments) do
     Inc(LTotalLen, Length(FHeaderFragments[LIndex]));
@@ -269,7 +325,7 @@ begin
     Exit;
   end;
 
-  if FHeadersDecoded = nil then
+  if not LIsTrailerSection then
   begin
     FHeaderStore := THttpHeaders.Create;
     FHeadersDecoded := HeaderStoreAsConcrete(FHeaderStore);
@@ -285,14 +341,104 @@ begin
     LTargetStore := FTrailerStore;
   end;
 
+  LMethodSeen := False;
+  LSchemeSeen := False;
+  LPathSeen := False;
+  LAuthoritySeen := False;
+  LHostSeen := False;
+  LPseudoSectionClosed := False;
   for LIndex := 0 to High(LHeaders) do
   begin
     if LHeaders[LIndex].Name.Ptr = nil then
       Break;
+    LIsPseudo := (LHeaders[LIndex].Name.Len > 0) and
+      (LHeaders[LIndex].Name.Ptr[0] = ':');
+    if not LIsTrailerSection then
+    begin
+      if LIsPseudo then
+      begin
+        if LPseudoSectionClosed then
+        begin
+          InternalReset(H2_ERR_PROTOCOL_ERROR);
+          Exit;
+        end;
+        if ByteSpanEquals(LHeaders[LIndex].Name, ':method') then
+        begin
+          if LMethodSeen then
+          begin
+            InternalReset(H2_ERR_PROTOCOL_ERROR);
+            Exit;
+          end;
+          LMethodSeen := True;
+        end
+        else if ByteSpanEquals(LHeaders[LIndex].Name, ':scheme') then
+        begin
+          if LSchemeSeen then
+          begin
+            InternalReset(H2_ERR_PROTOCOL_ERROR);
+            Exit;
+          end;
+          LSchemeSeen := True;
+        end
+        else if ByteSpanEquals(LHeaders[LIndex].Name, ':path') then
+        begin
+          if LPathSeen then
+          begin
+            InternalReset(H2_ERR_PROTOCOL_ERROR);
+            Exit;
+          end;
+          LPathSeen := True;
+        end
+        else if ByteSpanEquals(LHeaders[LIndex].Name, ':authority') then
+        begin
+          if LAuthoritySeen then
+          begin
+            InternalReset(H2_ERR_PROTOCOL_ERROR);
+            Exit;
+          end;
+          LAuthoritySeen := True;
+        end
+        else
+        begin
+          InternalReset(H2_ERR_PROTOCOL_ERROR);
+          Exit;
+        end;
+      end
+      else
+      begin
+        LPseudoSectionClosed := True;
+        if ByteSpanEquals(LHeaders[LIndex].Name, 'host') then
+          LHostSeen := True
+        else if IsForbiddenConnectionHeader(LHeaders[LIndex].Name) then
+        begin
+          InternalReset(H2_ERR_PROTOCOL_ERROR);
+          Exit;
+        end
+        else if ByteSpanEquals(LHeaders[LIndex].Name, 'te') and
+          (not IsValidTeHeaderValue(LHeaders[LIndex].Value)) then
+        begin
+          InternalReset(H2_ERR_PROTOCOL_ERROR);
+          Exit;
+        end;
+      end;
+    end
+    else if LIsPseudo then
+    begin
+      InternalReset(H2_ERR_PROTOCOL_ERROR);
+      Exit;
+    end;
     SetString(LNameStr, LHeaders[LIndex].Name.Ptr, LHeaders[LIndex].Name.Len);
     SetString(LValueStr, LHeaders[LIndex].Value.Ptr, LHeaders[LIndex].Value.Len);
     HeaderStoreAsConcrete(LTargetStore).AddParsed(string(LNameStr),
       string(LValueStr));
+  end;
+
+  if (not LIsTrailerSection) and
+     ((not LMethodSeen) or (not LSchemeSeen) or (not LPathSeen) or
+      ((not LAuthoritySeen) and (not LHostSeen))) then
+  begin
+    InternalReset(H2_ERR_PROTOCOL_ERROR);
+    Exit;
   end;
 
   FEndHeadersReceived := True;

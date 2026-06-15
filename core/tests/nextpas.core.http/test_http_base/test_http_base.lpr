@@ -358,6 +358,9 @@ begin
   CheckEqual(Int64(30000), LOptions.Timeout, 'default timeout');
   CheckEqual(Int64(10), Int64(LOptions.MaxRedirects), 'default max redirects');
   Check(LOptions.FollowRedirects, 'default follows redirects');
+  Check(LOptions.Version = hvHttp11, 'default client version field');
+  Check(LOptions.UseRegistryVersion, 'default client uses registry version');
+  Check(LOptions.TLSContext = nil, 'default client TLS context is nil');
 end;
 
 procedure TestHttpServerOptionsDefault;
@@ -371,6 +374,25 @@ begin
   CheckEqual(Int64(30000), LOptions.IdleTimeout, 'default idle timeout');
   CheckEqual(Int64(8192), Int64(LOptions.MaxHeaderSize), 'default max header size');
   CheckEqual(Int64(4194304), LOptions.MaxBodySize, 'default max body size');
+  Check(LOptions.Version = hvHttp11, 'default server version field');
+  Check(LOptions.UseRegistryVersion, 'default server uses registry version');
+  Check(LOptions.TLSContext = nil, 'default server TLS context is nil');
+end;
+
+procedure TestHttpOptionsWithVersion;
+var
+  LClientOptions: THttpClientOptions;
+  LServerOptions: THttpServerOptions;
+begin
+  LClientOptions := THttpClientOptions.Default.WithVersion(hvHttp2);
+  Check(LClientOptions.Version = hvHttp2, 'client WithVersion stores explicit version');
+  Check(not LClientOptions.UseRegistryVersion,
+    'client WithVersion disables registry version');
+
+  LServerOptions := THttpServerOptions.Default.WithVersion(hvHttp2);
+  Check(LServerOptions.Version = hvHttp2, 'server WithVersion stores explicit version');
+  Check(not LServerOptions.UseRegistryVersion,
+    'server WithVersion disables registry version');
 end;
 
 begin
@@ -399,5 +421,6 @@ begin
   T.Run('TUrl.ParseRequestTarget empty raises', @TestUrlParseRequestTargetEmptyRaises);
   T.Run('THttpClientOptions.Default', @TestHttpClientOptionsDefault);
   T.Run('THttpServerOptions.Default', @TestHttpServerOptionsDefault);
+  T.Run('HTTP options WithVersion', @TestHttpOptionsWithVersion);
   T.Summary;
 end.

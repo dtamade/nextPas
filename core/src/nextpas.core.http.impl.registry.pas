@@ -50,6 +50,7 @@ uses
   nextpas.core.http.impl.h1,
   nextpas.core.http.impl.h2.client,
   nextpas.core.http.impl.h2.server,
+  nextpas.core.http.impl.h2.tls,
   nextpas.core.http.impl.h2.types;
 
 var
@@ -74,6 +75,7 @@ begin
   LH2Options := TH2ClientTransportOptions.Default;
   LH2Options.Timeout := AOptions.Timeout;
   LH2Options.MaxPoolSize := AOptions.MaxPoolSize;
+  LH2Options.TLSContext := AOptions.TLSContext;
   Result := NewH2ClientTransport(LH2Options);
 end;
 
@@ -82,6 +84,9 @@ function CreateH1ServerTransport(
 var
   LH1Options: TH1ServerTransportOptions;
 begin
+  if AOptions.TLSContext <> nil then
+    raise EHttpError.Create(
+      'TLS HTTP server currently requires HTTP/2 transport selection');
   LH1Options.ReadTimeout := AOptions.ReadTimeout;
   LH1Options.WriteTimeout := AOptions.WriteTimeout;
   LH1Options.IdleTimeout := AOptions.IdleTimeout;
@@ -94,6 +99,7 @@ function CreateH2ServerTransport(
   const AOptions: THttpServerOptions): IHttpServerTransport;
 var
   LH2Options: TH2ServerTransportOptions;
+  LInnerTransport: IHttpServerTransport;
 begin
   LH2Options := TH2ServerTransportOptions.Default;
   LH2Options.ReadTimeout := AOptions.ReadTimeout;
@@ -107,7 +113,11 @@ begin
     LH2Options.MaxBodySize := UInt32(AOptions.MaxBodySize)
   else
     LH2Options.MaxBodySize := 0;
-  Result := NewH2ServerTransport(LH2Options);
+  LInnerTransport := NewH2ServerTransport(LH2Options);
+  if AOptions.TLSContext <> nil then
+    Result := NewH2TlsServerTransport(AOptions.TLSContext, LInnerTransport)
+  else
+    Result := LInnerTransport;
 end;
 
 { Note: must be called before any concurrent HTTP client/server creation. }

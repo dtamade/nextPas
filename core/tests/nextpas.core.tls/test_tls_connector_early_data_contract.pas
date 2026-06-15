@@ -14,6 +14,7 @@ type
     ['{E71E35E7-5428-4C5B-8DFA-4D617274F6F0}']
     function GetObservedCallLog: string;
     function GetObservedServerName: string;
+    function GetObservedALPN: string;
     function GetObservedEarlyDataText: string;
     function GetObservedEarlyDataCalls: Integer;
     function WasSessionApplied: Boolean;
@@ -39,9 +40,11 @@ type
     function Clone: ISSLSession;
   end;
 
-  TMockClientConnection = class(TBaseSSLConnection, ISSLClientConnection, IMockConnectorProbe)
+  TMockClientConnection = class(TBaseSSLConnection, ISSLClientConnection,
+    ISSLClientALPNConnection, IMockConnectorProbe)
   private
     FServerName: string;
+    FObservedALPN: string;
     FCallLog: string;
     FSessionApplied: Boolean;
     procedure AppendCall(const AName: string);
@@ -75,9 +78,12 @@ type
     procedure InheritServerNameWithoutObservation(const AServerName: string);
     procedure SetServerName(const AServerName: string);
     function GetServerName: string;
+    procedure SetALPNProtocols(const AProtocols: string);
+    function GetALPNProtocols: string;
 
     function GetObservedCallLog: string;
     function GetObservedServerName: string;
+    function GetObservedALPN: string;
     function GetObservedEarlyDataText: string; virtual;
     function GetObservedEarlyDataCalls: Integer; virtual;
     function WasSessionApplied: Boolean;
@@ -106,6 +112,7 @@ type
     constructor Create(AContextType: TSSLContextType; ASupportsEarlyData: Boolean);
 
     function GetLastProbe: IMockConnectorProbe;
+    procedure ClearLastProbe;
     function GetContextType: TSSLContextType;
 
     procedure SetProtocolVersions(AVersions: TSSLProtocolVersions);
@@ -278,6 +285,7 @@ constructor TMockClientConnection.Create(AContext: ISSLContext);
 begin
   inherited Create(AContext);
   FServerName := '';
+  FObservedALPN := '';
   FCallLog := '';
   FSessionApplied := False;
 end;
@@ -314,6 +322,22 @@ end;
 function TMockClientConnection.GetObservedServerName: string;
 begin
   Result := FServerName;
+end;
+
+function TMockClientConnection.GetObservedALPN: string;
+begin
+  Result := FObservedALPN;
+end;
+
+procedure TMockClientConnection.SetALPNProtocols(const AProtocols: string);
+begin
+  FObservedALPN := AProtocols;
+  AppendCall('alpn');
+end;
+
+function TMockClientConnection.GetALPNProtocols: string;
+begin
+  Result := FObservedALPN;
 end;
 
 function TMockClientConnection.GetObservedEarlyDataText: string;
@@ -434,7 +458,7 @@ end;
 
 function TMockClientConnection.DoGetSelectedALPNProtocol: string;
 begin
-  Result := '';
+  Result := FObservedALPN;
 end;
 
 function TMockClientConnection.DoGetState: string;
@@ -496,6 +520,11 @@ end;
 function TMockContext.GetLastProbe: IMockConnectorProbe;
 begin
   Result := FLastProbe;
+end;
+
+procedure TMockContext.ClearLastProbe;
+begin
+  FLastProbe := nil;
 end;
 
 function TMockContext.GetContextType: TSSLContextType;
@@ -758,6 +787,8 @@ begin
     CheckEqualsStr('Connector should preserve session -> servername -> earlydata -> connect ordering',
       'session>servername>earlydata>connect', Probe.GetObservedCallLog);
   finally
+    CtxObj.ClearLastProbe;
+    Ctx := nil;
     TLSStream.Free;
     Transport.Free;
   end;
@@ -765,6 +796,7 @@ end;
 
 procedure TestEmptyEarlyDataDoesNotQueuePayload;
 var
+  CtxObj: TMockContext;
   Ctx: ISSLContext;
   Connector: TSSLConnector;
   Transport: TMemoryStream;
@@ -773,7 +805,8 @@ var
 begin
   WriteLn('=== Empty connector early-data payload ===');
 
-  Ctx := TMockContext.Create(sslCtxClient, True);
+  CtxObj := TMockContext.Create(sslCtxClient, True);
+  Ctx := CtxObj;
   Connector := TSSLConnector.FromContext(Ctx)
     .WithSession(TMockSession.Create('connector-empty'))
     .WithEarlyData(nil);
@@ -790,6 +823,8 @@ begin
     CheckEqualsStr('Empty early-data payload should skip the earlydata step',
       'session>servername>connect', Probe.GetObservedCallLog);
   finally
+    CtxObj.ClearLastProbe;
+    Ctx := nil;
     TLSStream.Free;
     Transport.Free;
   end;
@@ -797,6 +832,7 @@ end;
 
 procedure TestUnsupportedEarlyDataTryConnectFailsCleanly;
 var
+  CtxObj: TMockContext;
   Ctx: ISSLContext;
   Connector: TSSLConnector;
   Transport: TMemoryStream;
@@ -805,7 +841,8 @@ var
 begin
   WriteLn('=== Unsupported connector early-data try-connect ===');
 
-  Ctx := TMockContext.Create(sslCtxClient, False);
+  CtxObj := TMockContext.Create(sslCtxClient, False);
+  Ctx := CtxObj;
   Connector := TSSLConnector.FromContext(Ctx)
     .WithSession(TMockSession.Create('connector-unsupported'))
     .WithEarlyData(BytesOf('PING'));
@@ -819,6 +856,8 @@ begin
       'Unsupported connector early-data path should return sslErrUnsupported');
     Check(TLSStream = nil, 'TryConnectStream should not return a stream on early-data setup failure');
   finally
+    CtxObj.ClearLastProbe;
+    Ctx := nil;
     TLSStream.Free;
     Transport.Free;
   end;
@@ -826,6 +865,7 @@ end;
 
 procedure TestUnsupportedEarlyDataConnectRaises;
 var
+  CtxObj: TMockContext;
   Ctx: ISSLContext;
   Connector: TSSLConnector;
   Transport: TMemoryStream;
@@ -833,7 +873,8 @@ var
 begin
   WriteLn('=== Unsupported connector early-data raising path ===');
 
-  Ctx := TMockContext.Create(sslCtxClient, False);
+  CtxObj := TMockContext.Create(sslCtxClient, False);
+  Ctx := CtxObj;
   Connector := TSSLConnector.FromContext(Ctx)
     .WithSession(TMockSession.Create('connector-unsupported-raise'))
     .WithEarlyData(BytesOf('PING'));
@@ -849,6 +890,45 @@ begin
     end;
     Check(Raised, 'ConnectStream should raise connection exception when early-data setup fails');
   finally
+    CtxObj.ClearLastProbe;
+    Ctx := nil;
+    Transport.Free;
+  end;
+end;
+
+procedure TestConnectorAppliesExplicitALPNBeforeConnect;
+var
+  CtxObj: TMockContext;
+  Ctx: ISSLContext;
+  Connector: TSSLConnector;
+  Transport: TMemoryStream;
+  TLSStream: TSSLStream;
+  Probe: IMockConnectorProbe;
+begin
+  WriteLn('=== Connector explicit ALPN ===');
+
+  CtxObj := TMockContext.Create(sslCtxClient, False);
+  Ctx := CtxObj;
+  Connector := TSSLConnector.FromContext(Ctx)
+    .WithALPN('h2,http/1.1');
+
+  Transport := TMemoryStream.Create;
+  TLSStream := nil;
+  try
+    TLSStream := Connector.ConnectStream(Transport, 'alpn.example.com');
+    Check(TLSStream <> nil, 'ConnectStream should succeed with explicit ALPN');
+
+    Probe := TLSStream.Connection as IMockConnectorProbe;
+    CheckEqualsStr('Connector should apply the explicit server name',
+      'alpn.example.com', Probe.GetObservedServerName);
+    CheckEqualsStr('Connector should apply explicit ALPN protocols',
+      'h2,http/1.1', Probe.GetObservedALPN);
+    CheckEqualsStr('Connector should apply servername -> alpn -> connect ordering',
+      'servername>alpn>connect', Probe.GetObservedCallLog);
+  finally
+    CtxObj.ClearLastProbe;
+    Ctx := nil;
+    TLSStream.Free;
     Transport.Free;
   end;
 end;
@@ -860,6 +940,7 @@ begin
   TestEmptyEarlyDataDoesNotQueuePayload;
   TestUnsupportedEarlyDataTryConnectFailsCleanly;
   TestUnsupportedEarlyDataConnectRaises;
+  TestConnectorAppliesExplicitALPNBeforeConnect;
 
   WriteLn('---');
   WriteLn('Passed: ', TestsPassed);

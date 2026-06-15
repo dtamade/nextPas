@@ -174,7 +174,7 @@ function platform_socket_send(const ASocket: TPlatformSocket;
 var
   LResult: ssize_t;
 begin
-  LResult := send(ASocket.Value, ABuf, size_t(ALen), AFlags);
+  LResult := send(ASocket.Value, ABuf, size_t(ALen), AFlags or MSG_NOSIGNAL);
   if LResult < 0 then
   begin
     ASent := 0;
@@ -229,7 +229,8 @@ function platform_socket_sendto(const ASocket: TPlatformSocket;
 var
   LResult: ssize_t;
 begin
-  LResult := sendto(ASocket.Value, ABuf, size_t(ALen), AFlags, AAddr, socklen_t(AAddrLen));
+  LResult := sendto(ASocket.Value, ABuf, size_t(ALen),
+    AFlags or MSG_NOSIGNAL, AAddr, socklen_t(AAddrLen));
   if LResult < 0 then
   begin
     ASent := 0;
