@@ -36,7 +36,7 @@ type
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.tls.exceptions,
   nextpas.core.crypto.hash;
 

@@ -33,7 +33,7 @@ unit nextpas.core.tls.debug.utils;
 interface
 
 uses
-  SysUtils, Math,
+  Math,
   nextpas.core.text.base,
   nextpas.core.text.strings,
   nextpas.core.text.conv,

@@ -5,7 +5,7 @@ unit nextpas.core.tls.openssl.api;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.exception,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.openssl.loader,
   nextpas.core.text.conv;

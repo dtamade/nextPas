@@ -25,7 +25,7 @@ uses
   {$ELSE}
   Sockets,
   {$ENDIF}
-  SysUtils,SyncObjs, DateUtils,
+  nextpas.core.exception, nextpas.core.text.conv, SyncObjs, DateUtils,
   nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,

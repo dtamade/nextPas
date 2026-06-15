@@ -6,7 +6,7 @@ unit nextpas.core.tls.winssl.enterprise;
 interface
 
 uses
-  SysUtils,Windows, Registry,
+  nextpas.core.exception, nextpas.core.text.conv, Windows, Registry,
   nextpas.core.tls.logging,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api;

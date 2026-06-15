@@ -34,7 +34,7 @@ unit nextpas.core.tls.result.utils;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.tls.base,
   nextpas.core.text.conv; type TBooleanFunc = function: Boolean;

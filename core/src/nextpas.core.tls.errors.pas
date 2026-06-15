@@ -15,7 +15,7 @@ unit nextpas.core.tls.errors;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.tls.base;
 
 // ============================================================================

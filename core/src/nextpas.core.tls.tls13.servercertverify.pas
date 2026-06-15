@@ -16,7 +16,8 @@ unit nextpas.core.tls.tls13.servercertverify;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
   nextpas.core.tls.tls13.wire,
   nextpas.core.tls.tls13.clienthello.parser,
   nextpas.core.tls.x509;
