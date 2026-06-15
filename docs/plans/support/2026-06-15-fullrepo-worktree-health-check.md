@@ -54,7 +54,8 @@ outside-worktrees=0（无越界 worktree）。
 - **core-platform**：io.reactor.iocp / platform.fs M + windows/wine 契约 test M + 未跟踪 wine CI matrix 契约目录。
   divergence 最小（18/34），最易 landing。
 - **core-system**：18 个 `nextpas.core.tls.*` M（mbedtls/openssl/wolfssl/pkcs11/...）+ system 契约 allowlist 2 文件 M
-  + typinfo test M + `?? build/.tmp/`。**与 frozen 状态矛盾**，且与 main 刚合并的 TLS 迁移重叠（见高关注点）。
+  + typinfo test M + `?? build/.tmp/`。**与 frozen 状态矛盾** —— 经调查是连贯的"消除 TLS 外部 RTL 依赖"
+  重构（非 main TLS 迁移的重复），详见高关注点。
 
 ### 仅 dirty 文档 / 纯 clean（代码已进 main，治理收口候选）
 
@@ -80,10 +81,17 @@ outside-worktrees=0（无越界 worktree）。
 
 ## 高关注点（提醒 lane owner，commit 前先解决）
 
-- **[高] core-system frozen 却带 18 个 TLS 文件 dirty**：main 已于 `78f637b48` 合并 origin 的 TLS
-  `TStringList->TStringArray` 迁移。本 lane 的 TLS dirty 很可能与之重叠/冲突。owner 需甄别：
-  这是迁移前的本地残留（应 checkout 丢弃或归档），还是迁移之上的新工作（应作为新 slice 解冻处理）。
-  在甄别清楚前不要把这批 TLS dirty 直接 commit。
+- **[高 → 已查明] core-system frozen 却带 18 个 TLS 文件 dirty**：经只读调查，这批 dirty 是
+  **一条连贯的"消除 TLS 模块外部 RTL 依赖"重构**，与 lane HEAD `ebedd750`
+  ("eliminate ctypes dependency from openssl.base + 12 API files") 一脉相承。典型改动：
+  `uses SysUtils` → `nextpas.core.base / .fs / .exception / .text.conv`（并 uses 分行）、
+  `FileExists` → `nextpas.core.fs.Exists`、`StrAlloc/StrPCopy` → 自写 `AllocCString/FreeCString`。
+  **结论：是新工作，不是迁移前残留，也不是 main TLS `TStringList->TStringArray` 迁移的重复**
+  （两者是不同改动）。
+  - 真正问题：(a) lane 标 frozen 但实际 mid-refactor，标签过期；(b) 工作未 commit，有丢失风险；
+    (c) lane 落后 main 36，重构建立在略旧的 TLS base 上。
+  - owner 建议动作：把这批 SysUtils 消除作为一个 lane slice commit（先跑 TLS forced-compile gate），
+    把 lane 重新标为 active，再规划同步到 main（仅落后 36，可控）。**不应丢弃这批 dirty。**
 - **[中] core-http 卫生隐患**：`?? test/` 裸目录、`?? core/tests/nextpas.core.http/Makefile`、
   bench rust 目录可能含非源码产物。commit 前用 `git status` + `make hygiene` 核查，避免误入产物。
 - **[中] core-system `?? build/.tmp/`**：疑似构建临时目录漏进工作树，确认是否已被 `.gitignore` 覆盖。

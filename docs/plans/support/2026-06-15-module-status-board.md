@@ -23,6 +23,24 @@
 下一步重点不是再扫一轮 landing；先处理 `docs/plans/2026-06-15-nextpas-workmap-takeover-plan.md`
 里写出的 P0 治理债（迁 dirty / 同步 main / prune stale / 刷 board），再继续并行 lane 推进。
 
+## 2026-06-15 晚间更新（P0 收尾 + 健康体检）
+
+> 本节为接手 AI 在 P0 完成后追加。下方原始 "Main State" 等小节是 P0 进行中的快照，已被本节与
+> `docs/plans/2026-06-15-nextpas-workmap-takeover-plan.md` 的 P0 收尾日志取代。
+
+- **main 实况**：HEAD `3d1e481f1`，工作树 clean，`make hygiene` pass，领先 origin/main 的未推 commit
+  为本日治理批次（worktrees 治理章节 + 健康体检报告）。原始 "Main State" 的 ahead 19 / behind 10
+  与 dirty `platform.error.pas` 已随 P0.1/P0.2 处理完毕，不再成立。
+- **健康体检**：9 条 active lane 代表性 focused gate 全 green（含 0 unfreed），详见
+  `docs/plans/support/2026-06-15-fullrepo-worktree-health-check.md`。
+- **core-system 标签修正**：下方仍列为 frozen，但实测带 18 个 TLS 文件 dirty，经只读调查是连贯的
+  "消除 TLS 外部 RTL 依赖" 重构（`uses SysUtils`→`nextpas.core.base/.fs/...`、`FileExists`→`fs.Exists`、
+  `StrAlloc/StrPCopy`→自写 helper），**非 main TLS 迁移的重复**。应重新视为 active mid-refactor，
+  由 owner commit 这批 slice（先跑 TLS forced-compile gate）后再规划同步（仅落后 main 36）。
+- **3 条 lane 确认被 main 完全吸收**（`git cherry` / `main..` 取证）：core-net-async-io（clean）、
+  core-process-fs-path-env（仅 3 个未跟踪 plan 文档）、core-text-unicode（5 commit 已 cherry-pick 进 main，
+  仅 1 个未跟踪 plan 文档）。三者为归档候选；破坏性归档（删 worktree/branch + 处理残留文档）待用户确认。
+
 ## Main State
 
 - Branch: `main`
