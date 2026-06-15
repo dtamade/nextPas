@@ -20,7 +20,7 @@ unit nextpas.core.tls.cert.advanced;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.cert.builder,
   nextpas.core.tls.errors,
@@ -280,7 +280,7 @@ begin
         Result.Status := ocspUnknown;
       else
         Result.Status := ocspError;
-        Result.ErrorMessage := 'OCSP check failed with status: ' + IntToStr(LStatus);
+        Result.ErrorMessage := 'OCSP check failed with status: ' + nextpas.core.text.conv.IntToStr(LStatus);
     end;
   except
     on E: Exception do

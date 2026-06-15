@@ -14,7 +14,7 @@ unit nextpas.core.tls.exceptions;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.exception,
   nextpas.core.tls.base,
   nextpas.core.text.conv;
 
