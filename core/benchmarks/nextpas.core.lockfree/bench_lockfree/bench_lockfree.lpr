@@ -7,6 +7,7 @@ uses
   SysUtils,
   nextpas.core.atomic,
   nextpas.core.time.base,
+  nextpas.core.lockfree,
   nextpas.core.lockfree.spsc,
   nextpas.core.lockfree.mpmc,
   nextpas.core.thread.channel,
@@ -16,6 +17,7 @@ uses
 type
   TIntSpsc = specialize TSpscQueue<Integer>;
   TIntMpmc = specialize TMpmcQueue<Integer>;
+  TIntSegQueue = specialize TSegQueue<Integer>;
   TIntChannel = specialize TChannel<Integer>;
 
 const
@@ -139,6 +141,70 @@ begin
   GMpmc.Free;
 end;
 
+{ SegQueue benchmark: 2P + 2C, unbounded }
+
+var
+  GSegQueue: TIntSegQueue;
+  GSegQueueSink: Int64;
+
+function SegQueueProducer(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+begin
+  Result := nil;
+  for LI := 1 to OPS div 2 do
+    GSegQueue.Enqueue(LI);
+end;
+
+function SegQueueConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+  LSink: Int64;
+begin
+  Result := nil;
+  LSink := 0;
+  while GSegQueue.TryDequeue(LV) do
+    LSink := LSink + LV;
+  AtomicFetchAdd64(GSegQueueSink, LSink, moAcqRel);
+end;
+
+procedure BenchSegQueue;
+var
+  LP: array[0..1] of TPlatformThreadHandle;
+  LC: array[0..1] of TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LI: Integer;
+  LV: Integer;
+  LStart: TInstant;
+  LNs: Int64;
+  LCount: Int64;
+begin
+  GSegQueue := TIntSegQueue.Create;
+  GSegQueueSink := 0;
+  LStart := TInstant.Now;
+  for LI := 0 to 1 do
+    platform_thread_create(LC[LI], @SegQueueConsumer, nil);
+  for LI := 0 to 1 do
+    platform_thread_create(LP[LI], @SegQueueProducer, nil);
+  for LI := 0 to 1 do
+    platform_thread_join(LP[LI], LRetVal);
+  LCount := 0;
+  while LCount < OPS do
+  begin
+    if not GSegQueue.TryDequeue(LV) then
+      CpuPause
+    else
+      Inc(LCount);
+  end;
+  for LI := 0 to 1 do
+    platform_thread_join(LC[LI], LRetVal);
+  LNs := LStart.Elapsed.AsNanoseconds;
+  GBenchSink := GBenchSink + AtomicLoad64(GSegQueueSink, moAcquire);
+  WriteLn(Format('  SegQueue 2P+2C 1M     %8.2f ms  %6.1f M ops/sec  %5.1f ns/op',
+    [LNs / 1000000.0, OPS / (LNs / 1000000000.0) / 1000000.0, LNs / Double(OPS)]));
+  GSegQueue.Free;
+end;
+
 { Mutex channel baseline: 1P + 1C }
 
 var
@@ -241,6 +307,7 @@ begin
   WriteLn('  --- Multi-thread (blocking wait) ---');
   BenchSpsc;
   BenchMpmc;
+  BenchSegQueue;
   BenchMutexChannel;
   WriteLn;
   WriteLn('  --- Single-thread (pure Try* hot path) ---');
