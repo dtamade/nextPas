@@ -37,9 +37,15 @@
   "消除 TLS 外部 RTL 依赖" 重构（`uses SysUtils`→`nextpas.core.base/.fs/...`、`FileExists`→`fs.Exists`、
   `StrAlloc/StrPCopy`→自写 helper），**非 main TLS 迁移的重复**。应重新视为 active mid-refactor，
   由 owner commit 这批 slice（先跑 TLS forced-compile gate）后再规划同步（仅落后 main 36）。
-- **3 条 lane 确认被 main 完全吸收**（`git cherry` / `main..` 取证）：core-net-async-io（clean）、
-  core-process-fs-path-env（仅 3 个未跟踪 plan 文档）、core-text-unicode（5 commit 已 cherry-pick 进 main，
-  仅 1 个未跟踪 plan 文档）。三者为归档候选；破坏性归档（删 worktree/branch + 处理残留文档）待用户确认。
+- **3 条 lane 已归档（用户授权后执行）**：core-net-async-io / core-process-fs-path-env /
+  core-text-unicode 经 `git cherry` / `main..` 取证确认代码已被 main 完全吸收。已按
+  archive 流程处理：4 个未跟踪 plan 文档迁到 main `docs/plans/`（commit `4c528da28`）保留可发现性，
+  再打 `archive/<lane>-absorbed-20260615` tag、`git worktree remove`、删 branch。**active 并行面 9→6**。
+  下方这 3 条的 per-lane 小节已失效，以本节为准。
+- **遗留待清理**：`codex/core-text` 分支无对应 worktree（与已删的 `codex/core-text-unicode` 不同），
+  下一轮治理评估是否归档。
+- **当前 active core lane（6）**：core-http、core-config-formats(yaml-allocator)、core-simd、
+  core-atomic、core-platform、core-tui。**mid-refactor**：core-system（见上）。**frozen**：compiler。
 
 ## Main State
 

@@ -1,6 +1,7 @@
 # nextPas Workmap Takeover Plan
 
-- 状态：P0 全部完成；D（landed slice 1: core-text-unicode）已落 main；进入 A（解冻 compiler lane）
+- 状态：P0 全部完成；D landed slice 1 已落 main；2026-06-15 晚间治理收口完成（全仓健康体检 +
+  归档 3 条已吸收 lane，active 9→6）；进入 A（解冻 compiler lane，需先 replay 到当前 main）
 - 日期：2026-06-15
 - 范围：新接手 AI 同事的工作地图、治理债清理、并行 lane 推进顺序
 
@@ -23,6 +24,25 @@
 P0 期间未消费的 question：本来 P0.1 + P0.2 + P0.3 是一次性 ask_question 三题，用户每次只回答一题；接手者按顺序拆分推进、逐题完成。
 
 2026-06-15 中段用户授权升级为"全权负责"，后续动作不再每个都等单独 ask_question，但仍保留：（a）任何破坏性 git 操作前要在 takeover plan 留下决策记录；（b）继续对外发布的 commit 必须有 commit message 说明设计动机；（c）任何来源不明的 dirty 一律先停下来评估再处理。
+
+## 2026-06-15 晚间治理收口（健康体检 + 吸收 lane 归档）
+
+新会话再次确认"全权负责、只剩一人在做"。本轮按"先降结构性债"推进，全程保持 lane 只读，
+未改任何 lane 源码。
+
+| 动作 | 结果 | commit / 证据 |
+|---|---|---|
+| 修复 dirty `docs/worktrees.md` | 来源不明的治理 dirty（lane 命名/main-sync/landing 模板/review/board 节），含 "Main Sync 节奏" 段被复制两份的 bug；去重后作为治理改进提交 | `b70eb7a78` |
+| 全仓 worktree 健康体检 | worktree-audit 全表 + 6 条 dirty lane 组成分析 + 9 条 active lane 代表性 focused gate（全 green, 0 unfreed） | `3d1e481f1` 报告 `docs/plans/support/2026-06-15-fullrepo-worktree-health-check.md` |
+| core-system 高关注点调查 | 18 个 TLS dirty 查明为"消除 TLS 外部 RTL 依赖"重构（新工作，非残留、非 main TLS 迁移重复）；frozen 标签过期 | `ddbcfebd1` 回填报告 + status board |
+| 迁移吸收 lane 的残留 plan 文档 | 4 个未跟踪 plan（process-fs ×3 + text-unicode ×1）迁到 main `docs/plans/` 保留可发现性 | `4c528da28`（2631 行） |
+| 归档 3 条已吸收 lane | core-net-async-io / core-process-fs-path-env / core-text-unicode：`git cherry`/`main..` 取证代码已全进 main → 打 `archive/<lane>-absorbed-20260615` tag → `git worktree remove`（后两者 --force）→ 删 branch（net/process `-d`，text `-D`）。active 9→6 | 3 个 archive tag + worktree/branch 删除输出 |
+
+**破坏性 git 操作决策记录**（满足协议 a）：归档动作经用户"按你建议做"明确授权。每条 lane 先打
+archive tag 保留原 HEAD（net 3238673ac / process 11dbec603 / text 9cc13c071）再删 worktree+branch，
+可完全追溯/重建。残留 plan 文档已先迁 main，零丢失。
+
+**遗留**：`codex/core-text` 分支无 worktree（与已删 `codex/core-text-unicode` 不同），下一轮评估归档。
 
 ## P0.5 Unknown Stale Dirty Discovery（2026-06-15）
 
