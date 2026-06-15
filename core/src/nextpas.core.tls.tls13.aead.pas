@@ -15,7 +15,7 @@ unit nextpas.core.tls.tls13.aead;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.base;
 
 function TLS13AEADIsSupported(ACipherSuite: Word): Boolean;

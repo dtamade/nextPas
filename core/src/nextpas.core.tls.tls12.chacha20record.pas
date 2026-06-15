@@ -5,7 +5,7 @@ unit nextpas.core.tls.tls12.chacha20record;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.exception,
   nextpas.core.base;
 
 function TLS12ChaCha20Poly1305EncryptRecord(
