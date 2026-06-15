@@ -24,7 +24,12 @@ unit nextpas.core.tls.mbedtls.lib;
 
 interface
 
-uses SysUtils, nextpas.core.tls.base, nextpas.core.tls.mbedtls.base, nextpas.core.tls.mbedtls.api;
+uses
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.tls.base,
+  nextpas.core.tls.mbedtls.base,
+  nextpas.core.tls.mbedtls.api;
 
 type
   { TMbedTLSLibrary - MbedTLS 库管理类 }

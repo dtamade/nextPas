@@ -4,7 +4,7 @@ unit nextpas.core.tls.http2.alpn;
 
 interface
 
-uses SysUtils, nextpas.core.tls.base;
+uses nextpas.core.tls.base;
 
 const
   HTTP2_ALPN_PROTOCOL = 'h2';
@@ -36,7 +36,12 @@ function GetHTTP2ALPNProtocols: TStringArray;
 
 implementation
 
-uses DateUtils;
+uses nextpas.core.time;
+
+function SecondsBetween(const ANewer, AOlder: TDateTime): Int64;
+begin
+  Result := Trunc((ANewer - AOlder) * 86400.0);
+end;
 
 function GetHTTP2ALPNProtocols: TStringArray;
 begin
@@ -76,7 +81,7 @@ begin
        (FConnections[I].Connection <> nil) then
     begin
       FConnections[I].InUse := True;
-      FConnections[I].LastUsed := Now;
+      FConnections[I].LastUsed := nextpas.core.time.DateTimeNow;
       Result := FConnections[I].Connection;
       Exit;
     end;
@@ -92,7 +97,7 @@ begin
     if FConnections[I].Connection = AConnection then
     begin
       FConnections[I].InUse := False;
-      FConnections[I].LastUsed := Now;
+      FConnections[I].LastUsed := nextpas.core.time.DateTimeNow;
       Exit;
     end;
   end;
@@ -104,7 +109,7 @@ begin
     SetLength(FConnections, LSlot + 1);
     FConnections[LSlot].Connection := AConnection;
     FConnections[LSlot].InUse := False;
-    FConnections[LSlot].LastUsed := Now;
+    FConnections[LSlot].LastUsed := nextpas.core.time.DateTimeNow;
     FConnections[LSlot].Host := '';
     FConnections[LSlot].Port := 0;
   end;
@@ -115,7 +120,7 @@ var
   I: Integer;
   LNow: TDateTime;
 begin
-  LNow := Now;
+  LNow := nextpas.core.time.DateTimeNow;
   for I := High(FConnections) downto 0 do
   begin
     if (not FConnections[I].InUse) and

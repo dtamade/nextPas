@@ -21,7 +21,12 @@ unit nextpas.core.tls.session.cache.sharded;
 
 interface
 
-uses SysUtils, SyncObjs, fgl, nextpas.core.time, nextpas.core.tls.base;
+uses
+  SyncObjs,
+  fgl,
+  nextpas.core.text.conv,
+  nextpas.core.time,
+  nextpas.core.tls.base;
 
 const
   { 分片数量 - 2的幂次方便于位运算 }

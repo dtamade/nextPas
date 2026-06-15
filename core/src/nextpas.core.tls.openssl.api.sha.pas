@@ -12,7 +12,12 @@ unit nextpas.core.tls.openssl.api.sha;
 
 interface
 
-uses SysUtils, nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader;
+uses
+  nextpas.core.base,
+  nextpas.core.tls.base,
+  nextpas.core.tls.openssl.base,
+  nextpas.core.tls.openssl.api.consts,
+  nextpas.core.tls.openssl.loader;
 
 const
   SHA_DIGEST_LENGTH = 20;

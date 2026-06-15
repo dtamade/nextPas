@@ -4,7 +4,7 @@ unit nextpas.core.tls.mbedtls.native_handle;
 
 interface
 
-uses SysUtils, nextpas.core.tls.base, nextpas.core.tls.errors, nextpas.core.tls.exceptions;
+uses nextpas.core.base.utils, nextpas.core.tls.base, nextpas.core.tls.errors, nextpas.core.tls.exceptions;
 
 {**
  * MbedTLS 原生句柄辅助函数
@@ -37,7 +37,7 @@ begin
       AContextMsg
     );
 
-  if not Supports(AObject, ISSLNativeHandleAccess, NativeAccess) then
+  if not nextpas.core.base.utils.Supports(AObject, ISSLNativeHandleAccess, NativeAccess) then
     raise ESSLException.CreateWithContext(
       'Object does not support native handle access (not a MbedTLS backend)',
       sslErrUnsupported,
@@ -71,7 +71,7 @@ begin
   if AObject = nil then
     Exit;
 
-  if not Supports(AObject, ISSLNativeHandleAccess, NativeAccess) then
+  if not nextpas.core.base.utils.Supports(AObject, ISSLNativeHandleAccess, NativeAccess) then
     Exit;
 
   AHandle := NativeAccess.GetNativeHandle;
