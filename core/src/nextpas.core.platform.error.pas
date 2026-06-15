@@ -23,17 +23,26 @@ procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
 implementation
 
 uses
-  nextpas.core.platform.sync.base,
+  nextpas.core.platform.sync.base
   {$IFDEF NEXTPAS_UNIX}
-  nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi,
+  , nextpas.core.platform.posix.base
+  , nextpas.core.platform.posix.ffi
+  {$ENDIF}
+  {$IFDEF NEXTPAS_LINUX}
+  , nextpas.core.platform.linux.base
+  {$ENDIF}
+  {$IFDEF NEXTPAS_MACOS}
+  , nextpas.core.platform.darwin.base
+  {$ENDIF}
+  {$IFDEF NEXTPAS_FREEBSD}
+  , nextpas.core.platform.freebsd.base
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
-  nextpas.core.platform.windows.base,
-  nextpas.core.platform.windows.ffi,
+  , nextpas.core.platform.windows.base
+  , nextpas.core.platform.windows.ffi
   {$ENDIF}
   {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-  SysUtils,
+  , SysUtils
   {$ENDIF}
   ;
 
