@@ -5,6 +5,7 @@ unit nextpas.core.http.message;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.net.base,
   nextpas.core.http.base,
@@ -75,15 +76,214 @@ type
   end;
 
 { Factory helpers }
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const ANilBody: Pointer): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const ANilBody: Pointer): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const ABodyText: string): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const ABodyText: string): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AContentType, ABodyText: string): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AContentType, ABodyText: string): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const ABodyBytes: TBytes): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const ABodyBytes: TBytes): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload;
 function NewGetRequest(const APath: string): IHttpRequest;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
-  const ABody: IReader): IHttpResponse;
+  const ABody: IReader): IHttpResponse; overload;
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ANilBody: Pointer): IHttpResponse; overload;
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ABodyText: string): IHttpResponse; overload;
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ABodyBytes: TBytes): IHttpResponse; overload;
+function HttpWriteResponseString(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AContentType, ABody: string): SizeUInt;
 
 implementation
 
 uses
+  nextpas.core.errors,
+  nextpas.core.io.memory,
+  nextpas.core.text.conv,
   nextpas.core.http.headers;
+
+function BytesBodyReader(const ABodyBytes: TBytes): IReader;
+var
+  LStream: IStream;
+begin
+  LStream := CreateBytesStreamFrom(ABodyBytes);
+  Result := LStream as IReader;
+end;
+
+function StringBodyReader(const ABodyText: string): IReader;
+var
+  LData: TBytes;
+begin
+  SetLength(LData, Length(ABodyText));
+  if Length(ABodyText) > 0 then
+    Move(ABodyText[1], LData[0], Length(ABodyText));
+  Result := BytesBodyReader(LData);
+end;
+
+function HeadersOrNew(const AHeaders: IHttpHeaders): IHttpHeaders;
+begin
+  if AHeaders <> nil then
+    Result := AHeaders
+  else
+    Result := NewHttpHeaders;
+end;
+
+function NewRequestContentTypeHeaders(const AContentType: string): IHttpHeaders;
+begin
+  if AContentType = '' then
+    Exit(nil);
+  Result := NewHttpHeaders;
+  Result.SetHeader('content-type', AContentType);
+end;
+
+function ParseDeclaredContentLength(const AValue: string): Int64;
+var
+  LI: SizeInt;
+  LDigit: Int64;
+begin
+  if AValue = '' then
+    raise EArgumentError.Create('HTTP request content-length is invalid');
+  Result := 0;
+  for LI := 1 to Length(AValue) do
+  begin
+    if (AValue[LI] < '0') or (AValue[LI] > '9') then
+      raise EArgumentError.Create('HTTP request content-length is invalid');
+    LDigit := Ord(AValue[LI]) - Ord('0');
+    if Result > ((High(Int64) - LDigit) div 10) then
+      raise EArgumentError.Create('HTTP request content-length is too large');
+    Result := (Result * 10) + LDigit;
+  end;
+end;
+
+procedure ValidateRequestBodyHeaders(const AHeaders: IHttpHeaders;
+  const ADeclaredContentLength: Int64);
+var
+  LValues: TStringArray;
+  LHeaderLength: Int64;
+begin
+  if AHeaders = nil then
+    Exit;
+
+  LValues := AHeaders.GetAll('content-length');
+  if AHeaders.Has('transfer-encoding') then
+    raise EArgumentError.Create('HTTP request transfer-encoding is unsupported');
+
+  if Length(LValues) = 0 then
+    Exit;
+  if Length(LValues) <> 1 then
+    raise EArgumentError.Create('HTTP request content-length is duplicated');
+  LHeaderLength := ParseDeclaredContentLength(LValues[0]);
+  if LHeaderLength <> ADeclaredContentLength then
+    raise EArgumentError.Create('HTTP request content-length conflicts with body length');
+end;
+
+procedure ValidateFixedBodyResponseHeaders(const AHeaders: IHttpHeaders;
+  const ABodyLength: Int64);
+var
+  LValues: TStringArray;
+  LHeaderLength: Int64;
+begin
+  if AHeaders = nil then
+    Exit;
+
+  if AHeaders.Has('transfer-encoding') then
+    raise EArgumentError.Create('HTTP response transfer-encoding is unsupported');
+
+  LValues := AHeaders.GetAll('content-length');
+  if Length(LValues) = 0 then
+    Exit;
+  if Length(LValues) <> 1 then
+    raise EArgumentError.Create('HTTP response content-length is duplicated');
+  LHeaderLength := ParseDeclaredContentLength(LValues[0]);
+  if LHeaderLength <> ABodyLength then
+    raise EArgumentError.Create(
+      'HTTP response content-length conflicts with body length');
+end;
+
+function ResponseStatusMustNotHaveBody(const AStatus: THttpStatus): Boolean;
+begin
+  Result := HttpStatusIsInformational(AStatus) or
+    (AStatus = HTTP_STATUS_NO_CONTENT) or
+    (AStatus = HTTP_STATUS_NOT_MODIFIED);
+end;
+
+procedure ValidateFixedBodyResponseStatus(const AStatus: THttpStatus;
+  const ABodyLength: Int64);
+begin
+  if (ABodyLength > 0) and ResponseStatusMustNotHaveBody(AStatus) then
+    raise EHttpError.Create('HTTP response status must not include a body');
+end;
+
+procedure RequireResponseWriter(const AW: IHttpResponseWriter);
+begin
+  if AW = nil then
+    raise EArgumentError.Create('HTTP response writer is nil');
+end;
+
+function WriteAllResponseBodyString(const AW: IHttpResponseWriter;
+  const ABody: string): SizeUInt;
+var
+  LTotal: SizeUInt;
+  LWritten: SizeUInt;
+  LLen: SizeUInt;
+begin
+  LLen := SizeUInt(Length(ABody));
+  LTotal := 0;
+  while LTotal < LLen do
+  begin
+    LWritten := AW.Write(ABody[LTotal + 1], LLen - LTotal);
+    if LWritten = 0 then
+      raise EIOError.Create('HTTP response writer made zero progress');
+    if LWritten > LLen - LTotal then
+      raise EIOError.Create('HTTP response writer over-reported progress');
+    Inc(LTotal, LWritten);
+  end;
+  Result := LTotal;
+end;
 
 { THttpRequest }
 
@@ -98,7 +298,7 @@ begin
   FUrlParsed := True;
   FRequestTargetPartsParsed := True;
   FVersion := AVersion;
-  FHeaders := AHeaders;
+  FHeaders := HeadersOrNew(AHeaders);
   FBody := ABody;
   FContentLength := AContentLength;
 end;
@@ -115,7 +315,7 @@ begin
   FUrlParsed := False;
   FRequestTargetPartsParsed := False;
   FVersion := AVersion;
-  FHeaders := AHeaders;
+  FHeaders := HeadersOrNew(AHeaders);
   FBody := ABody;
   FContentLength := AContentLength;
 end;
@@ -273,7 +473,7 @@ constructor THttpResponse.Create(const AStatusCode: THttpStatus;
 begin
   inherited Create;
   FStatusCode := AStatusCode;
-  FHeaders := AHeaders;
+  FHeaders := HeadersOrNew(AHeaders);
   FBody := ABody;
 end;
 
@@ -299,6 +499,177 @@ begin
   Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, NewHttpHeaders, nil, 0);
 end;
 
+function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl));
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders): IHttpRequest;
+begin
+  ValidateRequestBodyHeaders(AHeaders, 0);
+  Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, HeadersOrNew(AHeaders),
+    nil, 0);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AHeaders, nil, 0);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const ANilBody: Pointer): IHttpRequest;
+begin
+  if ANilBody <> nil then
+    raise EArgumentError.Create(
+      'HTTP nil-body compatibility overload only accepts nil');
+  Result := NewRequest(AMethod, AUrl, TBytes(nil));
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const ANilBody: Pointer): IHttpRequest;
+begin
+  if ANilBody <> nil then
+    raise EArgumentError.Create(
+      'HTTP nil-body compatibility overload only accepts nil');
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), TBytes(nil));
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const ABody: IReader; const AContentLength: Int64): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, AUrl, nil, ABody, AContentLength);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const ABody: IReader; const AContentLength: Int64): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), nil, ABody, AContentLength);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, AUrl,
+    NewRequestContentTypeHeaders(AContentType), ABody, AContentLength);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AContentType, ABody,
+    AContentLength);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest;
+var
+  LHeaders: IHttpHeaders;
+begin
+  if AContentLength < 0 then
+    raise EArgumentError.Create('HTTP request content-length is negative');
+  if (ABody = nil) and (AContentLength > 0) then
+    raise EArgumentError.Create(
+      'HTTP request body is nil but content-length is positive');
+
+  LHeaders := AHeaders;
+  if LHeaders = nil then
+    LHeaders := NewHttpHeaders;
+  ValidateRequestBodyHeaders(LHeaders, AContentLength);
+  if (ABody <> nil) or (AContentLength > 0) then
+    LHeaders.SetHeader('content-length', IntToStr(AContentLength));
+  Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, LHeaders, ABody,
+    AContentLength);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AHeaders, ABody,
+    AContentLength);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const ABodyText: string): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, AUrl, nil, ABodyText);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const ABodyText: string): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), nil, ABodyText);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AContentType, ABodyText: string): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, AUrl,
+    NewRequestContentTypeHeaders(AContentType), ABodyText);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AContentType, ABodyText: string): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AContentType, ABodyText);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, AUrl, AHeaders, StringBodyReader(ABodyText),
+    Int64(Length(ABodyText)));
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AHeaders, ABodyText);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const ABodyBytes: TBytes): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, AUrl, nil, ABodyBytes);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const ABodyBytes: TBytes): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), nil, ABodyBytes);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, AUrl,
+    NewRequestContentTypeHeaders(AContentType), ABodyBytes);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AContentType, ABodyBytes);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, AUrl, AHeaders, BytesBodyReader(ABodyBytes),
+    Int64(Length(ABodyBytes)));
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AHeaders, ABodyBytes);
+end;
+
 function NewGetRequest(const APath: string): IHttpRequest;
 var
   LUrl: TUrl;
@@ -312,6 +683,61 @@ function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABody: IReader): IHttpResponse;
 begin
   Result := THttpResponse.Create(AStatus, AHeaders, ABody);
+end;
+
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ANilBody: Pointer): IHttpResponse;
+begin
+  if ANilBody <> nil then
+    raise EArgumentError.Create(
+      'HTTP nil-body response compatibility overload only accepts nil');
+  Result := THttpResponse.Create(AStatus, AHeaders, nil);
+end;
+
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ABodyText: string): IHttpResponse;
+var
+  LHeaders: IHttpHeaders;
+begin
+  LHeaders := HeadersOrNew(AHeaders);
+  ValidateFixedBodyResponseStatus(AStatus, Int64(Length(ABodyText)));
+  ValidateFixedBodyResponseHeaders(LHeaders, Int64(Length(ABodyText)));
+  LHeaders.SetHeader('content-length', IntToStr(Int64(Length(ABodyText))));
+  Result := THttpResponse.Create(AStatus, LHeaders, StringBodyReader(ABodyText));
+end;
+
+function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
+  const ABodyBytes: TBytes): IHttpResponse;
+var
+  LHeaders: IHttpHeaders;
+begin
+  LHeaders := HeadersOrNew(AHeaders);
+  ValidateFixedBodyResponseStatus(AStatus, Int64(Length(ABodyBytes)));
+  ValidateFixedBodyResponseHeaders(LHeaders, Int64(Length(ABodyBytes)));
+  LHeaders.SetHeader('content-length', IntToStr(Int64(Length(ABodyBytes))));
+  Result := THttpResponse.Create(AStatus, LHeaders, BytesBodyReader(ABodyBytes));
+end;
+
+function HttpWriteResponseString(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AContentType, ABody: string): SizeUInt;
+begin
+  RequireResponseWriter(AW);
+  if HttpStatusIsInformational(AStatus) then
+    raise EHttpError.Create(
+      'HTTP response string helper requires a final response status');
+  if ResponseStatusMustNotHaveBody(AStatus) then
+  begin
+    if ABody <> '' then
+      raise EHttpError.Create('HTTP response status must not include a body');
+    AW.WriteHeader(AStatus);
+    Exit(0);
+  end;
+
+  if AContentType <> '' then
+    AW.GetHeaders.SetHeader('content-type', AContentType);
+  AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(ABody))));
+  AW.WriteHeader(AStatus);
+  Result := WriteAllResponseBodyString(AW, ABody);
 end;
 
 end.

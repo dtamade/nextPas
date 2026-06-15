@@ -1,5 +1,1509 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 h1 parser operation marker slice
+
+- **Status:** completed.
+- Objective:
+  - add stable machine-readable operation markers to the Pascal H1 parser
+    benchmark and the external C llhttp comparator
+  - keep parser benchmark raw output usable for future runner/snapshot tooling
+  - lock this metadata contract in the focused benchmark gate
+- Scope and safety:
+  - touched the Pascal parser benchmark, the external C comparator, the
+    benchmark focused test, HTTP benchmark docs, and this support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP public API, H1
+    parser/runtime behavior, benchmark row math, generated outputs, or
+    source-tree build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `49 total, 47 passed, 2 failed`
+    - failures:
+      `H1 parser benchmark max iterations env`,
+      `C llhttp comparator max iterations env when configured`
+    - missing markers:
+      `operation=http.h1parser`,
+      `operation=http.h1parser.c_llhttp`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_h1parser` now prints `operation=http.h1parser`
+  - `bench_h1parser/compare_c` now prints `operation=http.h1parser.c_llhttp`
+  - existing focused smoke now locks both operation markers while preserving the
+    `bench_max_iters` contract
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `49 total, 49 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `git diff --check`
+    - pass
+  - `make hygiene`
+    - `build-hygiene=pass`
+- Outcome:
+  - parser benchmark raw output now exposes stable tool identity without relying
+    on human-readable titles
+  - this does not claim a new optimization, new parser row, or new Rust/Go
+    comparator coverage
+
+## Session: 2026-06-06 benchmark inventory cleanup slice
+
+- **Status:** completed.
+- Objective:
+  - remove an unmaintained aggregate benchmark entry point from the HTTP
+    benchmark lane
+  - keep the maintained HTTP benchmark surface limited to focused projects with
+    project `Makefile`s and focused smoke coverage
+  - prevent future drift where a top-level Pascal benchmark exists in the HTTP
+    lane without entering the benchmark truth contract
+- Scope and safety:
+  - touched the HTTP benchmark focused test, removed the legacy `bench_http`
+    benchmark file, updated HTTP benchmark docs, and updated this support
+    evidence
+  - did not touch compiler paths, lower-layer modules, HTTP public API, H1
+    runtime behavior, benchmark comparators, or source-tree build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - inventory contract failed at
+      `HTTP top-level Pascal benchmark projects have Makefiles`
+    - failure:
+      `top-level HTTP Pascal benchmark projects missing Makefile: expected "", got "bench_http"`
+- Landed change:
+  - removed `benchmarks/nextpas.core.http/bench_http/bench_http.lpr`
+  - focused test now locks that HTTP top-level Pascal benchmark projects do not
+    contain unowned `.lpr` projects without a project `Makefile`
+  - docs now describe the maintained HTTP benchmark asset set explicitly
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - pending in this iteration after the removal
+- Outcome:
+  - the HTTP benchmark lane no longer advertises a duplicate aggregate Pascal
+    benchmark outside the maintained focused asset set
+  - this does not claim new benchmark numbers, new workloads, or new comparator
+    coverage
+
+## Session: 2026-06-06 comparator scale validation slice
+
+- **Status:** completed.
+- Objective:
+  - make single-implementation benchmark binaries reject non-positive
+    `--requests` / `--threads`
+  - align single-binary scale validation with the comparison runner
+  - prevent typoed manual comparator runs from emitting misleading benchmark rows
+- Scope and safety:
+  - touched nextPas / Go / Rust std-only / Hyper-Tokio comparator sources,
+    benchmark focused test, HTTP benchmark docs, and this support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP public API, server
+    runtime, benchmark workload sets, comparator row schema, generated outputs,
+    or source-tree build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `49 total, 45 passed, 4 failed`
+    - failures:
+      `bench_server rejects invalid scale`,
+      `go server comparator rejects invalid scale`,
+      `rust server comparator rejects invalid scale`,
+      `hyper/tokio server comparator rejects invalid scale`
+    - invalid scale runs still emitted successful benchmark rows
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - nextPas `bench_server` now rejects invalid positive CLI options before any
+    benchmark run
+  - Go / Rust std-only / Hyper-Tokio comparators now emit
+    `invalid --requests` / `invalid --threads` and exit non-zero
+  - focused test locks the absence of `operation=http.server.keepalive` on
+    invalid scale runs
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `49 total, 49 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - single-binary comparator runs can no longer silently turn invalid scale
+    input into a fake-success benchmark row
+  - this does not claim new workloads, new performance results, public API
+    changes, or runtime changes
+
+## Session: 2026-06-06 header benchmark smoke marker slice
+
+- **Status:** completed.
+- Objective:
+  - add a focused smoke for the existing `bench_headers` microbenchmark
+  - make `bench_headers` emit a stable `operation=http.headers` marker
+  - keep header lookup rows usable as isolated performance evidence
+- Scope and safety:
+  - touched the header benchmark, benchmark focused test, HTTP benchmark docs,
+    and this support evidence
+  - did not touch compiler paths, lower-layer modules, public HTTP/header API,
+    `THttpHeaders` implementation, H1 parser/runtime, comparator schemas,
+    generated outputs, or source-tree build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `45 total, 44 passed, 1 failed`
+    - failed at `bench_headers lookup smoke`
+    - missing marker: `operation=http.headers`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_headers` prints `operation=http.headers`
+  - `test_http_benchmarks` now builds `bench_headers` and runs a filtered
+    `Get hit` smoke that locks lowercase and uppercase lookup rows
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `45 total, 45 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - header microbenchmark output is now a stable benchmark asset covered by the
+    HTTP benchmark focused gate
+  - this does not claim a new optimization, new workload, public API change, or
+    cross-language performance ranking
+
+## Session: 2026-06-06 snapshot raw cleanup slice
+
+- **Status:** completed.
+- Objective:
+  - keep server comparison snapshot output as a single durable Markdown artifact
+  - remove the intermediate `${output}.raw` file after embedding it into the
+    snapshot
+  - avoid leaving temporary benchmark output in the build tree after successful
+    snapshot capture
+- Scope and safety:
+  - touched the snapshot helper script, benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP public API, server
+    runtime, H1 parser/runtime, comparator schemas, generated outputs, or
+    source-tree build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 43 passed, 1 failed`
+    - failed at `server comparison snapshot small smoke`
+    - `server comparison snapshot raw temp file should be removed`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `capture_server_comparison_snapshot.sh` now installs an `EXIT` cleanup trap
+    after computing `RAW_OUTPUT`
+  - the trap removes `${OUTPUT_PATH}.raw` after success or early exit
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 44 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - snapshot helper no longer leaves adjacent raw temporary files behind
+  - this does not claim new performance data, new Rust comparator coverage,
+    public API changes, or HTTP runtime changes
+
+## Session: 2026-06-06 http response body release helper slice
+
+- **Status:** completed.
+- Objective:
+  - expose an explicit response body release helper for callers that will not read the body
+  - keep close/drain behavior aligned with redirect/download internal release semantics
+  - keep read-all helpers as consume-only helpers, not implicit close helpers
+- Scope and safety:
+  - touched HTTP client/facade source, client/contract focused tests, HTTP docs,
+    and this support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime, H1
+    parser/runtime, benchmark assets, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - compile failed at missing `HttpReleaseResponseBody`
+    - four call sites reported `Identifier not found "HttpReleaseResponseBody"`
+- Landed change:
+  - added `nextpas.core.http.client.HttpReleaseResponseBody(Resp)`
+  - added facade forwarding helper `nextpas.core.http.HttpReleaseResponseBody`
+  - helper rejects nil response, treats nil body as no-op, closes close-capable
+    bodies, and drains plain `IReader` bodies to EOF
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `59 total, 59 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `35 total, 35 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - callers now have a stable public way to release or discard an unread
+    response body
+  - this does not claim streaming response ownership, charset decoding,
+    close-on-read behavior, redirect policy changes, or H1 transport changes
+
+## Session: 2026-06-06 runner include-hyper marker slice
+
+- **Status:** completed.
+- Objective:
+  - make server comparison raw output/report state whether Hyper/Tokio was
+    requested
+  - avoid inferring runner parameters only from later `rust_hyper` sections
+  - keep row and summary schemas unchanged
+- Scope and safety:
+  - touched the comparison runner, benchmark focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP public API, server
+    runtime, H1 parser/runtime, comparator binaries, generated outputs, or build
+    artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 43 passed, 1 failed`
+    - failed at `server comparison runner include hyper smoke`
+    - missing marker: `include_hyper=1`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `run_server_comparison.sh` comparison header now prints
+    `include_hyper=${INCLUDE_HYPER}`
+  - include-hyper focused smoke checks both stdout and saved report
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 44 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - saved server comparison reports now preserve the include-hyper parameter
+  - this does not claim new comparator workloads or new performance rankings
+
+## Session: 2026-06-06 hyper snapshot cargo metadata slice
+
+- **Status:** completed.
+- Objective:
+  - include Cargo toolchain metadata in server comparison snapshots
+  - include a deterministic hash of the Hyper comparator `Cargo.lock`
+  - keep this as evidence capture, not a dependency or comparator behavior change
+- Scope and safety:
+  - touched snapshot helper script, benchmark focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP public API, server
+    runtime, H1 parser/runtime, Cargo dependencies, generated outputs, or build
+    artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 43 passed, 1 failed`
+    - failed at `server comparison snapshot include hyper smoke`
+    - missing marker: `cargo_version=`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - snapshot helper records `cargo_version=...`
+  - snapshot helper records `hyper_cargo_lock_sha256=...`
+  - both fall back to `unknown` when the tool or lockfile cannot be read
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 44 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - include-hyper snapshots now carry Cargo comparator environment evidence
+  - this does not claim new Hyper workloads, new dependencies, or new
+    cross-language rankings
+
+## Session: 2026-06-06 snapshot workload propagation slice
+
+- **Status:** completed.
+- Objective:
+  - let `capture_server_comparison_snapshot.sh` pass an explicit workload to
+    `run_server_comparison.sh`
+  - record the selected workload in the snapshot environment block
+  - keep default snapshot invocation compatible with the existing `no_url` path
+- Scope and safety:
+  - touched the snapshot helper script, benchmark focused test, HTTP docs, and
+    this support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP public API, server
+    runtime, H1 parser/runtime, comparator output format, generated outputs, or
+    build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 43 passed, 1 failed`
+    - failed at `server comparison snapshot url_path smoke`
+    - failure: `unknown argument: --workload`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added `--workload no_url|url_path|adapter_no_url|response_1k` to snapshot
+    CLI parsing and validation
+  - explicit workload is passed to the comparison runner and written into the
+    command block
+  - snapshot environment now records `workload=<name>`
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 44 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - non-default server comparison workloads can now be captured with environment
+    metadata through the snapshot helper
+  - this does not claim new workloads, new comparator behavior, or new
+    cross-language rankings
+
+## Session: 2026-06-06 comparator workload validation slice
+
+- **Status:** completed.
+- Objective:
+  - make single-implementation benchmark comparators reject invalid workload
+    names
+  - keep comparator workload semantics aligned with `run_server_comparison.sh`
+  - prevent typoed workload runs from silently producing `workload=no_url` rows
+- Scope and safety:
+  - touched benchmark comparator sources, benchmark focused tests, HTTP docs,
+    and this support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP public API,
+    server runtime, H1 parser/runtime, generated outputs, or build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `43 total, 39 passed, 4 failed`
+    - failures:
+      `bench_server rejects invalid workload`,
+      `go server comparator rejects invalid workload`,
+      `rust server comparator rejects invalid workload`,
+      `hyper/tokio server comparator rejects invalid workload`
+    - each failure showed a successful fallback `workload=no_url` row
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - nextPas `bench_http_server` rejects invalid workload with `Halt(2)`
+  - Go comparator rejects invalid workload with `os.Exit(2)`
+  - Rust std-only and Hyper/Tokio comparators reject invalid workload with
+    `std::process::exit(2)`
+  - all four diagnostics include `invalid --workload` and the same valid
+    workload list
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `43 total, 43 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - invalid workload input can no longer produce misleading successful
+    comparator rows
+  - this does not claim new workloads, new public HTTP APIs, or new cross-language
+    performance rankings
+
+## Session: 2026-06-06 http download body release slice
+
+- **Status:** completed.
+- Objective:
+  - make `HttpGetToWriter` release the response body after successful copy
+  - make `HttpGetToWriter` release the response body when destination copy fails
+  - make `HttpGetToWriter` release discarded non-2xx response bodies before
+    raising `EHttpError`
+  - apply the same response release discipline to `HttpGetToFile`
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this support
+    evidence
+  - did not touch compiler paths, lower-layer modules, server runtime, H1
+    transport/parser/runtime, benchmark assets, generated outputs, or build
+    artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `55 total, 52 passed, 3 failed`
+    - failed at `HttpGetToWriter closes body after successful copy`
+    - failed at `HttpGetToWriter closes body when copy fails`
+    - failed at `HttpGetToWriter closes non-2xx body before raising`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - renamed the internal redirect release helper to `ReleaseResponseBody`
+  - kept close-capable body close priority and plain-reader drain fallback
+  - wrapped download helper success and error paths in response-release
+    `finally` blocks
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `55 total, 55 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - download helpers now own and release response bodies they consume or discard
+  - this does not claim response streaming API, charset decoding, body helper
+    close semantics, redirect policy changes, or H1 transport changes
+
+## Session: 2026-06-06 http shortcut body bytes-buffer slice
+
+- **Status:** completed.
+- Objective:
+  - make `IHttpClient.Post` / `Put` / `Patch` share one bytes-buffer body helper
+  - remove Pascal string body materialization from shortcut request construction
+  - keep current buffered `Content-Length` semantics unchanged
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this support
+    evidence
+  - did not touch compiler paths, lower-layer modules, server runtime, H1
+    parser/runtime, benchmark assets, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `52 total, 51 passed, 1 failed`
+    - failed at `Client shortcut bodies use bytes buffer`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal `BufferedBodyRequest`
+  - removed `StrToBytes` and the three duplicated `LBodyBuf: string` reader-drain
+    loops
+  - `Post` / `Put` / `Patch` now read `IReader` with `nextpas.core.io.ReadAll`
+    and build requests through `NewRequest(..., BodyBytes)`
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `52 total, 52 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - shortcut body materialization now uses bytes consistently
+  - this does not claim public shortcut overloads, request builder support,
+    streaming/chunked request bodies, or transport changes
+
+## Session: 2026-06-06 http request bytes body helper slice
+
+- **Status:** completed.
+- Objective:
+  - expose `NewRequest(Method, Url, Headers, BodyBytes)` through
+    `nextpas.core.http.message`
+  - expose the same overloads through facade `nextpas.core.http`
+  - preserve binary request body bytes and generated `Content-Length`
+- Scope and safety:
+  - touched HTTP message/facade source, message/client/contract focused tests,
+    HTTP docs, and this support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime, H1
+    parser/runtime, benchmark assets, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - compile failed because the new `TBytes` body call site resolved against the
+      existing string overload
+    - `Error: Incompatible type for arg no. 4: Got "TBytes", expected "AnsiString"`
+- Landed change:
+  - added `NewRequest(Method, Url, Headers, BodyBytes)` overloads for `TUrl` and
+    URL string
+  - added facade forwarding overloads
+  - added internal `BytesBodyReader`; `StringBodyReader` now reuses that path
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `29 total, 29 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `34 total, 34 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `51 total, 51 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - callers can build binary request bodies without hand-written in-memory
+    readers
+  - this does not claim a request builder, automatic content-type inference,
+    per-request policy, streaming/chunked request bodies, or transport changes
+
+## Session: 2026-06-06 http response body bytes helper slice
+
+- **Status:** completed.
+- Objective:
+  - expose `HttpReadResponseBodyBytes(Resp): TBytes` through
+    `nextpas.core.http.client`
+  - expose the same helper through facade `nextpas.core.http`
+  - keep nil body / nil response semantics aligned with
+    `HttpReadResponseBodyString`
+- Scope and safety:
+  - touched HTTP client/facade source, client/contract focused tests, HTTP
+    docs, and this support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime, H1
+    parser/runtime, benchmark assets, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - compile failed at missing `HttpReadResponseBodyBytes`
+    - `test_http_client.lpr(1096,39) Error: Identifier not found "HttpReadResponseBodyBytes"`
+- Landed change:
+  - added `HttpReadResponseBodyBytes` to `nextpas.core.http.client`
+  - added facade forwarding helper to `nextpas.core.http`
+  - `HttpReadResponseBodyString` now delegates to the bytes helper and converts
+    the returned bytes to a Pascal string
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `50 total, 50 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `34 total, 34 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - callers can consume binary response bodies without hand-written reader
+    loops
+  - this does not claim response streaming API, charset decoding,
+    content-type sniffing, redirect policy, or transport changes
+
+## Session: 2026-06-06 http server options validation slice
+
+- **Status:** completed.
+- Objective:
+  - reject negative `THttpServerOptions.ReadTimeout`
+  - reject negative `THttpServerOptions.WriteTimeout`
+  - reject negative `THttpServerOptions.IdleTimeout`
+  - reject negative `THttpServerOptions.MaxHeaderSize`
+  - reject negative `THttpServerOptions.MaxBodySize`
+- Scope and safety:
+  - touched HTTP server source, contract focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, H1 runtime, benchmark
+    assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `33 total, 32 passed, 1 failed`
+    - failed at `HttpServer options reject negative values`
+    - failure: `negative server read timeout raises EArgumentError`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal `ValidateServerOptions`
+  - default and injected transport server constructors now share
+    construction-time validation
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `33 total, 33 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_server clean test`
+    - `275 total, 275 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - invalid server options now fail before default transport resolution,
+    injected transport use, or TCP server creation
+  - this does not claim zero-value limit changes, foundation runtime changes, or
+    H1 protocol behavior changes
+
+## Session: 2026-06-06 http client options validation slice
+
+- **Status:** completed.
+- Objective:
+  - reject negative `THttpClientOptions.Timeout`
+  - reject negative `THttpClientOptions.MaxRedirects`
+  - keep `0` as the existing explicit no-timeout / zero-redirect budget value
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this support
+    evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `47 total, 46 passed, 1 failed`
+    - failed at `Client options reject negative values`
+    - failure: `negative client timeout raises EArgumentError`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal `ValidateClientOptions`
+  - `THttpClient.Create(Options)` and `THttpClient.Create(Transport, Options)`
+    now share construction-time validation
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `47 total, 47 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - invalid client options now fail before default transport resolution or
+    injected transport use
+  - this does not claim per-request timeout policy, redirect callback, or H1
+    transport behavior changes
+
+## Session: 2026-06-06 http request constructor nil headers slice
+
+- **Status:** completed.
+- Objective:
+  - make direct `THttpRequest` constructors create empty headers when passed nil
+  - keep public helper signatures unchanged
+- Scope and safety:
+  - touched HTTP message source, message focused tests, API coverage, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, client/server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `27 total, 26 passed, 1 failed`
+    - failed at `Request constructors create headers when headers argument is nil`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal `HeadersOrNew`
+  - `THttpRequest.Create`, `CreateFromRequestTarget`, and `THttpResponse.Create`
+    now share nil headers normalization
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `27 total, 27 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - direct concrete request construction no longer propagates nil headers into
+    client/H1 code paths
+  - this does not claim a request builder API or H1 transport rewrite
+
+## Session: 2026-06-06 http response nil headers slice
+
+- **Status:** completed.
+- Objective:
+  - make `NewResponse(Status, nil, Body)` create an empty `IHttpHeaders`
+  - align response helper ergonomics with request helper nil-headers behavior
+- Scope and safety:
+  - touched HTTP message source, message/contract focused tests, HTTP docs, and
+    this support evidence
+  - did not touch compiler paths, lower-layer modules, client/server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `26 total, 25 passed, 1 failed`
+    - failed at `NewResponse with nil headers creates headers`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `THttpResponse.Create` normalizes nil headers to `NewHttpHeaders`
+  - facade source-contract now proves `nextpas.core.http.NewResponse` exposes
+    the same behavior
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `26 total, 26 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `32 total, 32 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - response helper callers can safely read or mutate empty response headers
+    even when they pass nil headers
+  - this does not claim response body ownership changes or a response builder API
+
+## Session: 2026-06-06 http client nil transport response slice
+
+- **Status:** completed.
+- Objective:
+  - make nil `IHttpTransport.RoundTrip` results fail as `EHttpError`
+  - keep this as a transport seam error-boundary slice, not a new public API
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this support
+    evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - injected `TNilResponseTransport` returned nil from `RoundTrip`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `46 total, 45 passed, 1 failed`
+    - failed at `Client Do rejects nil transport response`
+    - failure: `Access violation`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `THttpClient.DoRequest` validates the `RoundTrip` response before redirect
+    handling or status inspection
+  - nil response now raises `EHttpError`
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `46 total, 46 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - custom/future transports now have a stable client facade error boundary for
+    nil response contract violations
+  - this does not claim per-request policy, redirect callback, or transport
+    vtable expansion
+
+## Session: 2026-06-06 http redirect response body error-path proof
+
+- **Status:** completed.
+- Objective:
+  - prove discarded redirect bodies are released on redirect error paths
+  - keep this as a focused contract proof, not a new public redirect policy
+- Scope and safety:
+  - touched HTTP client focused tests, HTTP docs, and this support evidence
+  - production client source ended with the previous slice's release ordering
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - temporary reverse patch removed release in `too many redirects` and missing
+    `Location` branches
+  - the same patch moved normal release after `ResolveRedirectUrl`, exposing the
+    unsupported-scheme error path
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `45 total, 42 passed, 3 failed`
+    - failures:
+      `Client closes redirect response body on too many redirects`,
+      `Client closes redirect response body on missing Location`,
+      `Client closes redirect response body on unsupported scheme`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - test-only source-contract coverage for the three redirect error paths
+  - README/API coverage updated to document discarded-body release on redirect
+    errors
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `45 total, 45 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - discarded redirect bodies now have focused proof for normal follow-up and
+    error paths
+  - this does not claim a redirect callback, cookie jar, or broader timeout API
+
+## Session: 2026-06-06 http redirect response body release slice
+
+- **Status:** completed.
+- Objective:
+  - release intermediate redirect response bodies before issuing follow-up
+    requests
+  - prefer close when the body exposes close semantics; drain plain `IReader`
+    bodies to EOF otherwise
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - close-capable RED used an injected `IHttpTransport`
+  - first response returned `302 Location: /final` with an `IReadCloser` body
+  - second `RoundTrip` checked whether the first body had been closed
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `41 total, 40 passed, 1 failed`
+    - failed at `Client closes redirect response body before follow-up`
+    - expected body closed before follow-up
+    - heaptrc: `0 unfreed memory blocks`
+  - non-closeable RED used a plain `IReader` body and a temporary no-drain
+    implementation
+  - the same focused gate failed at
+    `Client drains redirect response body before follow-up`
+- Landed change:
+  - added internal `ReleaseRedirectResponseBody`
+  - close-capable bodies are closed via `IReadCloser`, `ICloser`, or `IStream`
+  - plain `IReader` bodies are drained to EOF
+  - redirect error branches that discard the response also release the body
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `42/42 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - injected/future streaming transports now get a clear ownership signal when
+    automatic redirect following discards an intermediate response
+  - this does not claim a new public response streaming API, redirect callback,
+    cookie jar, or broader H1 transport redesign
+
+## Session: 2026-06-06 http redirect default-port authority slice
+
+- **Status:** completed.
+- Objective:
+  - preserve caller-specified `Host` when a redirect changes only from omitted
+    port to the scheme default port
+  - keep cross-authority Host stripping intact
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, global URL parser,
+    H1 transport port selection, server runtime, benchmark assets, root
+    planning files, generated outputs, or build artifacts
+- RED:
+  - injected transport returned `302 Location: http://example.test:80/next`
+  - caller request used URL `http://example.test/old` plus
+    `Host: override.test`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `40 total, 39 passed, 1 failed`
+    - failed at
+      `Client redirect preserves custom host header on default-port authority`
+    - expected follow-up Host `override.test`, got ``
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal scheme default-port lookup for `http` and `https`
+  - same-authority Host preservation now compares effective port instead of
+    raw parsed port
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `40/40 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - injected transports now preserve caller Host overrides for
+    `http://host` -> `http://host:80` redirects
+  - this does not claim global URL normalization, H1 transport changes, or
+    redirect policy callbacks
+
+## Session: 2026-06-06 http redirect absolute scheme slice
+
+- **Status:** completed.
+- Objective:
+  - resolve uppercase `HTTP://...` / `HTTPS://...` redirect schemes as
+    absolute HTTP URLs instead of relative targets
+  - reject unsupported absolute `://` schemes before dispatching a follow-up
+    request
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, global URL parser,
+    server runtime, benchmark assets, root planning files, generated outputs,
+    or build artifacts
+- RED:
+  - injected transport returned `302 Location: HTTP://redirect.test/new?from=upper`
+  - current follow-up kept base host `example.test`
+  - same fake transport returned `302 Location: ftp://redirect.test/new`
+  - current client did not raise `EHttpError` and attempted a second round trip
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `39 total, 37 passed, 2 failed`
+    - failed at `Client redirect transport resolves uppercase absolute Location`
+    - failed at `Client redirect rejects unsupported absolute scheme`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal absolute redirect scheme detection
+  - `http` / `https` schemes are matched case-insensitively and normalized to
+    lowercase in the follow-up request URL
+  - unsupported absolute `://` schemes raise `EHttpError` before a follow-up
+    `RoundTrip`
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `39/39 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - injected transports now see `HTTP://redirect.test/...` as
+    `Scheme=http`, `Host=redirect.test`, parsed path/query, and no base-host
+    leakage
+  - this does not claim TLS implementation, global `TUrl.Parse` normalization,
+    H2/H3 support, or a broad redirect policy callback
+
+## Session: 2026-06-06 http redirect Host ownership slice
+
+- **Status:** completed.
+- Objective:
+  - preserve caller-specified `Host` on relative / same-authority redirect
+    follow-up requests
+  - continue dropping `Host` when redirect changes URL authority so the
+    transport derives the wire host from the new target
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - injected transport returned `302 Location: /next`
+  - caller request used URL `http://example.test/old` plus
+    `Host: override.test`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `37 total, 36 passed, 1 failed`
+    - failed at `Client redirect preserves custom host header on relative Location`
+    - expected follow-up Host `override.test`, got ``
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal same-authority check for redirect URL host/port
+  - `RedirectHeadersFor` now deletes `host` only when the redirect changes URL
+    authority
+  - auth/cookie stripping remains on the existing trusted-host rule
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `37/37 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - injected transports now see caller Host overrides on relative redirect
+    follow-up requests
+  - this does not claim cookie jar support, redirect callback policy,
+    default-port authority normalization, or a full request builder API
+
+## Session: 2026-06-06 http redirect header ownership slice
+
+- **Status:** completed.
+- Objective:
+  - preserve caller headers on redirect follow-up requests
+  - strip sensitive auth/cookie headers when redirecting to a different
+    authority
+  - keep bodyless `301` / `302` / `303` follow-ups from carrying stale body
+    framing headers
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build
+    artifacts
+- RED:
+  - same-authority RED used an injected `IHttpTransport` and a caller request
+    with `x-trace`, `authorization`, `www-authenticate`, `cookie`, and `cookie2`
+  - cross-authority RED used `Location: //redirect.test/next`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `36 total, 34 passed, 2 failed`
+    - same-authority failed because follow-up `x-trace` was empty
+    - cross-authority failed because follow-up ordinary `x-trace` was also empty
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `THttpClient.DoRequest` now builds redirect follow-up headers via an
+    internal clone/sanitize helper
+  - same-authority redirects preserve ordinary and sensitive caller headers
+  - cross-authority redirects strip `Authorization`, `WWW-Authenticate`,
+    `Cookie`, and `Cookie2`
+  - bodyless redirects drop `content-length` / `transfer-encoding`; `host` is
+    removed so the H1 transport derives it from the new URL
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `36/36 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - redirect follow-up request objects now carry stable headers into injected
+    transports and future protocol transports
+  - this does not claim cookie jar support, redirect callback policy, or a
+    full request builder API
+
+## Session: 2026-06-06 http 307 seekable body replay slice
+
+- **Status:** completed.
+- Objective:
+  - make `307` / `308` redirects replay seekable request bodies instead of
+    reusing an EOF reader
+  - fail fast for non-empty non-replayable bodies rather than silently sending
+    an empty follow-up request
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - seekable body RED used an injected `IHttpTransport` that reads the first
+    request body, returns `307 Location: /upload-copy`, then reads the follow-up
+    body
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `33 total, 32 passed, 1 failed`
+    - failed at `Client replays seekable body on 307 redirect`
+    - expected follow-up body `payload`, got ``
+    - heaptrc: `0 unfreed memory blocks`
+  - non-replayable body RED used a one-shot `IReader`
+  - with the temporary no-raise implementation, the same focused gate failed at
+    `Client rejects non-replayable body on 307 redirect`
+- Landed change:
+  - `THttpClient.DoRequest` captures the original body stream position before
+    the first transport round trip
+  - `307` / `308` follow-up requests rewind `IStream` bodies to that position
+  - non-empty bodies that cannot be rewound now raise `EHttpError` before a
+    second round trip
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `34/34 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - seekable request bodies created by current in-memory helpers can be replayed
+    across `307` / `308`
+  - generic streaming body replay still needs an explicit future ownership
+    contract; this slice deliberately does not add a broad request builder or
+    `GetBody` callback API
+
+## Session: 2026-06-06 http fragment-only redirect slice
+
+- **Status:** completed.
+- Objective:
+  - make fragment-only redirect `Location` values update only the follow-up
+    request fragment
+  - preserve the original request path/query for injected transports and future
+    protocol transports
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - the transport-visible RED used an injected `IHttpTransport`
+  - first response returned `302 Location: #section`
+  - base request was `http://example.test/dir/old?from=base`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `32 total, 31 passed, 1 failed`
+    - failed at
+      `Client redirect transport preserves query on fragment-only Location`
+    - expected follow-up raw query `from=base`, got ``
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal `HasRedirectQueryDelimiter`
+  - relative redirect resolution now distinguishes fragment-only references
+    from query/path references
+  - fragment-only references preserve base path/query and update fragment
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `32/32 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - injected transports now see `Scheme=http`, `Host=example.test`,
+    `Path=/dir/old`, `RawQuery=from=base`, query param `from=base`, and
+    `Fragment=section`
+  - this does not change H1 wire request-target generation; fragments still
+    stay out of the wire path
+  - this does not claim per-request redirect policy or 307/308 body replay
+    rewindability
+
+## Session: 2026-06-06 http dot-segment redirect slice
+
+- **Status:** completed.
+- Objective:
+  - remove dot segments from merged relative redirect paths
+  - keep URL resolution inside the client redirect layer instead of pushing it
+    down into H1 or future protocol transports
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - the transport-visible RED used an injected `IHttpTransport`
+  - first response returned `302 Location: ../next?from=dot`
+  - base request was `http://example.test/dir/sub/old`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `31 total, 30 passed, 1 failed`
+    - failed at `Client redirect transport normalizes dot-segment Location`
+    - expected follow-up path `/dir/next`, got `/dir/sub/../next`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal `NormalizeRedirectPath`
+  - relative redirects now normalize `.` / `..` segments after base-directory
+    path merge
+  - absolute URL and network-path redirect branches were left unchanged
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `31/31 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - injected transports now see `Scheme=http`, `Host=example.test`,
+    `Path=/dir/next`, `RawQuery=from=dot`, and query param `from=dot`
+  - this does not claim query-only redirects, fragment-only redirects, or
+    absolute/network-path dot-segment normalization
+
+## Session: 2026-06-06 http path-relative redirect slice
+
+- **Status:** completed.
+- Objective:
+  - make path-relative redirect `Location` values merge against the original
+    request directory
+  - make injected transports see a valid absolute request path rather than bare
+    `next`
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - the transport-visible RED used an injected `IHttpTransport`
+  - first response returned `302 Location: next?from=relative-path`
+  - base request was `http://example.test/dir/old`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `30 total, 29 passed, 1 failed`
+    - failed at `Client redirect transport resolves path-relative Location`
+    - expected follow-up path `/dir/next`, got `next`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal `MergeRedirectPath`
+  - absolute-path targets still replace the path directly
+  - path-relative targets merge with the base path directory; no-directory
+    base paths fall back to root-relative `/<target>`
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `30/30 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - injected transports now see `Scheme=http`, `Host=example.test`,
+    `Path=/dir/next`, `RawQuery=from=relative-path`, and query param
+    `from=relative-path`
+  - this does not claim dot-segment normalization, query-only redirects,
+    fragment-only redirects, or per-request redirect policy controls
+
+## Session: 2026-06-06 http network-path redirect slice
+
+- **Status:** completed.
+- Objective:
+  - make network-path redirect `Location` inherit the original request scheme
+  - make injected transports see the redirected authority/path/query instead of
+    the base host or a raw `//host/path` string
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - the transport-visible RED used an injected `IHttpTransport`
+  - first response returned `302 Location: //redirect.test/new?from=network`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `29 total, 28 passed, 1 failed`
+    - failed at `Client redirect transport resolves network-path Location`
+    - expected follow-up host `redirect.test`, got `example.test`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `ResolveRedirectUrl` now recognizes `//...` Location values before the
+    relative-target branch
+  - network-path redirects are parsed as `BaseUrl.Scheme + ':' + Location`
+  - if the base URL has no scheme, the resolver raises `EHttpError` instead of
+    silently generating an invalid authority
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `29/29 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - injected transports now see `Scheme=http`, `Host=redirect.test`,
+    `Path=/new`, `RawQuery=from=network`, and query param `from=network`
+  - this does not claim full RFC relative URL merging, query-only redirects,
+    fragment-only redirects, or per-request redirect policy controls
+
+## Session: 2026-06-06 http relative redirect query slice
+
+- **Status:** completed.
+- Objective:
+  - keep relative redirect query strings out of follow-up request `Url.Path`
+  - make injected transports see parsed `Path` / `RawQuery` after redirect
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - initial live H1 redirect-with-query test passed because the wire
+    request-target was reparsed server-side
+  - the transport-visible RED used an injected `IHttpTransport`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `28 total, 27 passed, 1 failed`
+    - failed at `Client redirect transport sees parsed relative query`
+    - expected follow-up `Path` `/new`, got `/new?from=redirect`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal `ResolveRedirectUrl`
+  - absolute redirect URLs still use `TUrl.Parse`
+  - relative redirect Locations use `TUrl.ParseRequestTarget` before being
+    merged with the base URL authority
+  - follow-up request objects now expose parsed `Path`, `RawQuery`, and
+    `QueryParam` values to injected transports
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `28/28 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - H1 live redirects and transport-injected redirects now agree on relative
+    Location query parsing
+  - this does not claim network-path redirects, full RFC URL resolution, or
+    per-request redirect policy controls
+
+## Session: 2026-06-06 http see-other redirect slice
+
+- **Status:** completed.
+- Objective:
+  - expose `303 See Other` through `http.base` and the facade
+  - make client redirect following treat `303` as replay-as-GET with no body
+- Scope and safety:
+  - touched HTTP base/facade/client source, base/contract/client tests, HTTP
+    docs, and this support evidence
+  - did not touch compiler paths, lower-layer modules, transport/runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_base clean test`
+    - failed to compile at `HTTP_STATUS_SEE_OTHER`:
+      `Identifier not found "HTTP_STATUS_SEE_OTHER"`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - failed to compile at facade `HTTP_STATUS_SEE_OTHER`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - failed to compile at the live `303` redirect test status constant
+- Landed change:
+  - added `HTTP_STATUS_SEE_OTHER = 303`
+  - `HttpStatusText(303)` now returns `See Other`
+  - facade `nextpas.core.http` re-exports `HTTP_STATUS_SEE_OTHER`
+  - `THttpClient.DoRequest` now follows `303` redirects and converts them to
+    bodyless `GET`, matching the existing `301/302` branch
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_base clean test`
+    - `22/22 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `32/32 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `26/26 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - `POST` followed by `303 Location: ...` now lands on a `GET` request with
+    an empty body
+  - this does not claim per-request redirect override, timeout override, or
+    general replayable streaming-body ownership
+
+## Session: 2026-06-06 http request string body helper slice
+
+- **Status:** completed.
+- Objective:
+  - add a small request helper for common string-body client usage
+  - keep ownership explicit: the helper copies the Pascal string into an
+    in-memory reader and publishes `Content-Length`
+- Scope and safety:
+  - touched HTTP message/facade source, message/contract/client tests, HTTP
+    docs, and this support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP transport/runtime,
+    root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - failed to compile at `NewRequest(..., string body)`:
+      `Wrong number of parameters specified for call to "NewRequest"`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - failed to compile at the facade string body helper call
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - failed to compile after the live `IHttpClient.Do_` helper path switched
+      to a string body
+- Landed change:
+  - added `NewRequest(Method, Url, Headers, BodyText)` overloads in
+    `nextpas.core.http.message`
+  - facade `nextpas.core.http` re-exports both `TUrl` and URL string overloads
+  - helper copies the Pascal string into an in-memory `IReader`
+  - helper sets `Content-Length` through the existing custom request contract
+  - helper does not infer or set `Content-Type`
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `25/25 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `32/32 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `25/25 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - simple custom client requests can now be built as
+    `NewRequest(hmPost, 'http://...', Headers, 'payload')`
+  - this does not claim full request-builder, JSON/form helper, or streaming
+    request body ownership semantics
+
+## Session: 2026-06-06 http client nil request error slice
+
+- **Status:** completed.
+- Objective:
+  - make `IHttpClient.Do_(nil)` fail at the public client boundary with a
+    clear argument error
+  - avoid leaking caller mistakes into transport / redirect internals as an
+    access violation
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP API coverage docs,
+    and this support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP transport/runtime,
+    root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `25 total, 24 passed, 1 failed`
+    - failed at `Client Do rejects nil request - Access violation`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `THttpClient.Do_` now raises `EArgumentError` when `AReq = nil`
+  - transport, redirect recursion, helper construction, and `IHttpClient`
+    vtable shape were left unchanged
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `25/25 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - the client public API now has an explicit nil request error contract
+  - this does not claim broader per-request timeout, redirect override, or
+    streaming request body ownership semantics
+
+## Session: 2026-06-06 http response body string helper slice
+
+- **Status:** completed.
+- Objective:
+  - add a small response body helper for common client/example usage
+  - keep body ownership simple: the helper consumes the existing
+    `IHttpResponse.Body` reader and does not change transport or client
+    interfaces
+- Scope and safety:
+  - touched HTTP client/facade source, client/contract tests, client example,
+    HTTP docs, and this support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP transport/runtime,
+    root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - failed to compile at the new helper calls:
+      `Identifier not found "HttpReadResponseBodyString"`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - failed to compile at the facade helper call:
+      `Identifier not found "HttpReadResponseBodyString"`
+- Landed change:
+  - added `HttpReadResponseBodyString(Resp)` in `nextpas.core.http.client`
+  - facade `nextpas.core.http` re-exports the helper through an inline forwarder
+  - nil response raises `EArgumentError`
+  - nil body returns `''`
+  - successful reads consume the current response body reader
+  - `http_get_client` now uses the helper instead of a local bytes-to-string
+    helper plus `ReadAll`
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `24/24 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `32/32 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_examples clean test`
+    - `5/5 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - simple response body reads now have a stable public helper
+  - the module still does not claim charset decoding, response buffering
+    ownership, or a fluent request/response builder
+
+## Session: 2026-06-06 http hyper comparator smoke slice
+
+- **Status:** completed.
+- Objective:
+  - add a real Rust HTTP-stack comparator seam without pretending std-only Rust
+    represents the Rust ecosystem
+  - keep Hyper/Tokio opt-in so default runner smoke remains dependency-light
+- Scope and safety:
+  - touched only HTTP benchmark assets, benchmark focused tests, HTTP docs, and
+    this support evidence
+  - did not touch HTTP runtime, public HTTP API, lower layers, compiler paths,
+    root planning files, generated benchmark output, or build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - first RED: `38 total, 36 passed, 2 failed`
+    - missing `compare_hyper` failed core-root resolution
+    - `run_server_comparison.sh --include-hyper` failed with unknown argument
+    - heaptrc: `0 unfreed memory blocks`
+  - snapshot pass-through RED:
+    - `39 total, 38 passed, 1 failed`
+    - `capture_server_comparison_snapshot.sh --include-hyper` failed with
+      unknown argument
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added `compare_hyper` Cargo project with Hyper HTTP/1.1 server on Tokio
+  - comparator outputs `impl=rust_hyper` and `rust_profile=hyper_tokio`
+  - raw client workload shape stays aligned with the existing std-only
+    comparator: keep-alive, `no_url`, `url_path`, `adapter_no_url`, and
+    `response_1k`
+  - `run_server_comparison.sh --include-hyper` builds/runs Hyper/Tokio and adds
+    `summary_impl=rust_hyper`
+  - `capture_server_comparison_snapshot.sh --include-hyper` passes the flag to
+    the runner and records `include_hyper=1`
+- Debugging note:
+  - initial direct smoke panicked because `TokioTcpListener::from_std` was
+    called outside a Tokio runtime context
+  - fixed by moving listener conversion inside the server thread's
+    `runtime.block_on(async move { ... })`
+- Focused verification:
+  - direct Hyper smoke:
+    - `bench_http_server_hyper --requests 32 --threads 2`
+    - `completed=32`, `impl=rust_hyper`, `rust_profile=hyper_tokio`
+  - optional runner smoke:
+    - `run_server_comparison.sh --requests 8 --threads 1 --include-hyper`
+    - output includes `section=rust_hyper` and `summary_impl=rust_hyper`
+  - benchmark focused gate:
+    - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `39/39 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - benchmark harness now has a real Hyper/Tokio comparator smoke seam
+  - default comparison remains dependency-light; `--include-hyper` is explicit
+  - Rust std-only and Hyper/Tokio rows are machine-distinguishable, so future
+    benchmark reports can avoid overclaiming
+
+## Session: 2026-06-06 http request string URL overload slice
+
+- **Status:** completed.
+- Objective:
+  - make custom `IHttpClient.Do_` request construction accept URL strings
+    directly
+  - keep the existing `TUrl` overloads and helper semantics unchanged
+- Scope and safety:
+  - touched only HTTP message/facade source, message/contract/client tests,
+    HTTP docs, and this support evidence
+  - did not touch HTTP runtime, H1 transport, lower layers, compiler paths,
+    root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - failed to compile at string URL overload calls:
+      `Incompatible type for arg no. 2: Got "Constant String", expected "TUrl"`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - failed to compile at facade string URL overload calls
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - failed to compile after the live `IHttpClient.Do_` helper path was changed
+      to pass a URL string
+- Landed change:
+  - `NewRequest(Method, UrlString)` parses the string with `TUrl.Parse` and
+    delegates to the existing `TUrl` helper
+  - `NewRequest(Method, UrlString, Headers, Body, ContentLength)` delegates to
+    the existing custom helper after parsing
+  - the facade re-exports both overloads
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `24/24 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `31/31 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `21/21 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - custom client requests can now be built as
+    `NewRequest(hmPost, 'http://...', Headers, Body, ContentLength)` without
+    exposing callers to concrete `THttpRequest` or mandatory manual `TUrl.Parse`
+
+## Session: 2026-06-06 http get client example env URL slice
+
+- **Status:** completed.
+- Objective:
+  - make `http_get_client` runnable in smoke tests without relying on the fixed
+    `8080` default
+  - keep CLI URL argument compatibility and avoid HTTP runtime changes
+- Scope and safety:
+  - touched only the client example, HTTP example test harness, HTTP docs, and
+    this support evidence
+  - did not touch HTTP runtime, lower layers, compiler paths, root planning
+    files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_examples clean test`
+    - `5 total, 4 passed, 1 failed`
+    - failed at `get client example uses env URL without fixed port`
+    - client ignored `NEXTPAS_HTTP_GET_URL`, tried default `8080`, and raised
+      `ENetworkError: tcp connect failed (111)`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `http_get_client` URL selection is now argument first,
+    `NEXTPAS_HTTP_GET_URL` second, legacy default last
+  - `test_http_examples` builds `http_get_client`, starts `hello_http_server`
+    on a reserved loopback port, and runs the client via env URL
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_examples clean test`
+    - `5/5 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - all HTTP examples now have runnable smoke coverage, including the client
+    example against a dynamically selected local server port
+
+## Session: 2026-06-06 http rust std comparator label slice
+
+- **Status:** completed.
+- Objective:
+  - prevent current std-only Rust benchmark comparator output from being
+    mistaken for a Rust ecosystem / Hyper/Tokio comparator
+  - keep the existing smoke harness small and dependency-free
+- Scope and safety:
+  - touched only HTTP benchmark comparator/runner, benchmark focused test, HTTP
+    benchmark/API docs, and this support evidence
+  - did not touch HTTP runtime, lower layers, compiler paths, root planning
+    files, generated benchmark outputs, or build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `36 total, 27 passed, 9 failed`
+    - representative failure: `implementation marker missing from output: impl=rust_std`
+    - actual comparator/runner output still used `impl=rust` and `summary_impl=rust`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - Rust std-only comparator now prints `impl=rust_std` and
+    `rust_profile=std_only`
+  - server comparison runner now uses `section=rust_std`, expects
+    `impl=rust_std`, and emits `summary_impl=rust_std`
+  - benchmark tests lock the new markers in direct comparator smoke, runner
+    report, multi-run summary, and snapshot output
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `36/36 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - current benchmark output no longer labels the std-only Rust baseline as
+    generic `rust`
+  - Hyper/Tokio or equivalent async Rust comparator remains an explicit future
+    benchmark truth gap
+
+## Session: 2026-06-06 http API parity request helper slice
+
+- **Status:** completed.
+- Objective:
+  - record a short Go/Rust API parity decision for `nextpas.core.http`
+  - close one real client ergonomics gap without adding a broad builder
+- Scope and safety:
+  - touched HTTP message/facade source, HTTP message/contract/client tests,
+    HTTP docs, and this support evidence only
+  - did not touch compiler paths, non-HTTP modules, root planning files,
+    generated benchmark output, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - failed at missing `NewRequest(..., Headers, Body, ContentLength)` overload
+    - compiler reported `Wrong number of parameters specified for call to "NewRequest"`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - failed at missing facade `NewRequest(..., Headers, Body, ContentLength)` overload
+  - after adding the overload, `test_http_message` negative content-length proof
+    failed as expected:
+    - `22 total, 21 passed, 1 failed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Landed feature commit:
+  - `c386bfc0 feat(http): add request helper overload`
+  - added `NewRequest(Method, Url, Headers, Body, ContentLength)` in
+    `nextpas.core.http.message` and the `nextpas.core.http` facade
+  - nil headers create an empty header set
+  - body or positive length writes `content-length`
+  - negative `ContentLength` raises `EArgumentError`
+  - `test_http_client` proves `IHttpClient.Do_` sends helper-built custom header,
+    content-length, and body to a live server
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `22/22 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `30/30 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `21/21 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `git diff --check`
+    - exit 0
+  - `make hygiene`
+    - `build-hygiene=pass`
+- Outcome:
+  - public request construction now supports custom headers/body without forcing
+    callers onto concrete `THttpRequest`
+  - docs record that full request builder, static range/streaming, WebSocket
+    expansion, fake H2/H3, and Rust ecosystem performance claims remain out of
+    scope for this slice
+
 ## Session: 2026-06-06 http h1 parser metadata span fast path slice
 
 - **Status:** completed.
@@ -240,7 +1744,6 @@
     parsed-header insertion/materialization cost; keep formal cross-language
     benchmark sweep deferred
 
-
 ## Session: 2026-06-06 http h1 parser request metadata cache slice
 
 - **Status:** completed.
@@ -294,7 +1797,6 @@
   - current sub-slice: llhttp adapter request metadata parse-time cache
   - next best batch: fast-path header block finer lazy access; keep benchmark-final
     cross-language sweep deferred
-
 
 ## Session: 2026-06-06 http request path-only projection slice
 
@@ -468,7 +1970,6 @@
   - current sub-slice: request path direct accessor
   - next best batch: isolate remaining full-chain server/runtime cost outside URL projection, likely H1 response writer/request dispatch allocation or poll/thread handoff overhead
 
-
 ## Session: 2026-06-06 http header lookup hot-helper inline slice
 
 - **Status:** completed.
@@ -506,7 +2007,6 @@
   - HTTP roadmap `6/6 Benchmark 与优化`
   - current sub-slice: `THttpHeaders` lookup helper inline
   - next best batch: H1 fast parser source-order contract or targeted request construction/header materialization benchmark row
-
 
 ## Session: 2026-06-05 http h1 server policy-helper inline slice
 
@@ -612,7 +2112,7 @@
     - `26/26 passed`
     - `heaptrc: 0 unfreed memory blocks`
   - `benchmarks/nextpas.core.http/run_server_comparison.sh --requests 8 --threads 1 --workload adapter_no_url --runs 2 --output build/projects/nextpas.core.http/server_comparison/adapter_no_url_completed_smoke.txt`
-    - nextPas/Go/Rust raw rows: `completed=8`
+    - nextPas/Go/Rust std-only raw rows: `completed=8`
     - nextPas raw rows: `nextpas_h1_path=fast`
     - summary rows: `median_completed=8`
 - Outcome:
@@ -9948,3 +11448,1679 @@ Hello from nextPas!
   - review the residual non-equivalent commits on `codex/compiler-truth-audit-main-20260603`
   - decide which ones still belong on the absorb candidate
   - only after that design a safe way to bring absorb back toward the real dirty C8 branch
+
+## Session: 2026-06-07 full-chain direct-root isolation slice
+
+- **Status:** completed.
+- Objective:
+  - split `bench_fullchain`'s smallest keep-alive row into a direct-handler
+    path and a router path
+  - keep the benchmark focused on runtime/socket-plus-handler cost, not a
+    bundled router/non-router mixture
+  - avoid introducing ambiguous substring-filter behavior while adding the new
+    workload
+- Scope and safety:
+  - touched only `bench_fullchain`, the benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 parser/runtime behavior, lower-layer
+    modules, comparator binaries, or generated artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `57 total, 56 passed, 1 failed`
+    - failed at `bench_fullchain direct plaintext smoke`
+    - benchmark printed `No matching full-chain scenarios.`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_fullchain` now wraps the router with an outer handler
+  - `Host: direct` on `GET /` takes a direct fixed-response path before router
+    dispatch
+  - the routed plaintext row now uses `Host: router`, so both small rows keep
+    the same request-target/body shape while differing mainly in router
+    involvement
+  - workload name settled on `direct_root` instead of `direct_plaintext` to
+    avoid substring-filter overlap with `plaintext`
+  - `test_http_benchmarks` now locks both the new `direct_root` smoke and that
+    `NEXTPAS_BENCH_FILTER=plaintext` does not accidentally emit the direct row
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `57 total, 57 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `NEXTPAS_BENCH_MAX_ITERS=1000 NEXTPAS_BENCH_FILTER=direct_root make -C core/benchmarks/nextpas.core.http/bench_fullchain clean run`
+    - `workload=direct_root`
+    - `completed=1000`
+    - `ns/op=37200.9`
+    - `req/s=26881`
+  - `NEXTPAS_BENCH_MAX_ITERS=1000 NEXTPAS_BENCH_FILTER=plaintext make -C core/benchmarks/nextpas.core.http/bench_fullchain clean run`
+    - `workload=plaintext`
+    - `completed=1000`
+    - `ns/op=33733.6`
+    - `req/s=29644`
+- Outcome:
+  - the harness now has a router-free full-chain row alongside the routed
+    plaintext row
+  - the meaningful product of this slice is cost-center separation and filter
+    hygiene, not a single-run performance ranking
+
+## Session: 2026-06-07 router direct-call isolation slice
+
+- **Status:** completed.
+- Objective:
+  - add a same-request/same-handler direct baseline to `bench_router`
+  - isolate pure router dispatch cost from handler invocation cost
+  - keep substring-filter behavior unambiguous while adding the new row
+- Scope and safety:
+  - touched only `bench_router`, the benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 parser/runtime behavior, full-chain
+    workloads, lower-layer modules, comparator binaries, or generated artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `58 total, 57 passed, 1 failed`
+    - failed at `bench_router direct call smoke`
+    - filtered benchmark output contained only the benchmark header and summary;
+      the expected `direct call (same request, no router)` row was missing
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_router` now exposes `direct call (same request, no router)`
+  - the new row reuses the same `NewGetRequest('/health')` shape and the same
+    no-op handler body as the existing `handler dispatch` row, but calls the
+    handler directly without `THttpRouter.ServeHTTP`
+  - `test_http_benchmarks` now locks the new direct-row smoke and both
+    directions of filter disambiguation: routed filter must not emit the direct
+    row, and direct filter must not emit the routed row
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `58 total, 58 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='direct call' make -C core/benchmarks/nextpas.core.http/bench_router clean run`
+    - `direct call (same request, no router)`
+    - `100000 iters`
+    - `3.8 ns/op`
+    - `261107514 ops/s`
+  - `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='handler dispatch' make -C core/benchmarks/nextpas.core.http/bench_router clean run`
+    - `handler dispatch (match + no-op handler)`
+    - `100000 iters`
+    - `264.5 ns/op`
+    - `3781347 ops/s`
+- Outcome:
+  - router dispatch now has a same-request direct baseline rather than only a
+    routed row
+  - this slice sharpens cost attribution: on this machine, the short-GET
+    full-chain budget is still dominated by work outside the narrow direct
+    handler invocation itself
+
+## Session: 2026-06-07 bench_server backend marker and epoll smoke slice
+
+- **Status:** completed.
+- Objective:
+  - expose backend selection explicitly on nextPas `bench_server` rows
+  - allow nextPas-only threaded vs epoll runtime characterization without
+    patching the cross-language comparison runner
+  - keep invalid backend input from silently falling back to the default server
+- Scope and safety:
+  - touched only `bench_server`, the benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 parser/runtime implementation, lower
+    layers, Go/Rust comparators, or comparison-runner workload math
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - multiple nextPas benchmark/report smokes failed on the new backend
+      contract
+    - representative failures:
+      - `bench_server small smoke` missing `backend=threaded`
+      - `bench_server rejects invalid backend` still emitted a successful
+        benchmark row
+      - `bench_server epoll small smoke` missing `backend=epoll`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_server` now accepts `--backend threaded|epoll`
+  - nextPas server rows now emit `backend=<threaded|epoll>`
+  - the benchmark actually threads the parsed backend into
+    `THttpServerOptions.Backend`
+  - `test_http_benchmarks` now locks:
+    - default nextPas benchmark rows expose `backend=threaded`
+    - invalid backend input fails fast with `invalid --backend`
+    - Linux nextPas epoll smoke emits `backend=epoll`
+    - runner/snapshot coverage sees the same nextPas backend marker because
+      those artifacts embed the raw nextPas row
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `60 total, 60 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `core/build/projects/nextpas.core.http/bench_server/bench_http_server --requests 128 --threads 1 --workload no_url --backend threaded`
+    - `backend=threaded`
+    - `completed=128`
+    - `ns/op=41890`
+    - `req/s=23871`
+  - `core/build/projects/nextpas.core.http/bench_server/bench_http_server --requests 128 --threads 1 --workload no_url --backend epoll`
+    - `backend=epoll`
+    - `completed=128`
+    - `ns/op=91425`
+    - `req/s=10937`
+- Outcome:
+  - nextPas-only server benchmark rows now make backend selection explicit
+  - the benchmark harness can now characterize threaded vs epoll runtime
+    behavior without muddying the existing cross-language comparison runner
+
+## Session: 2026-06-07 bench_fullchain backend marker and epoll smoke slice
+
+- **Status:** completed.
+- Objective:
+  - expose backend selection explicitly on nextPas `bench_fullchain` rows
+  - allow single-connection direct-root threaded vs epoll runtime
+    characterization
+  - keep invalid backend input from silently falling back to the default
+    full-chain server
+- Scope and safety:
+  - touched only `bench_fullchain`, the benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 parser/runtime implementation, lower
+    layers, comparator binaries, or server-comparison runner behavior
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `62 total, 58 passed, 4 failed`
+    - representative failures:
+      - `bench_fullchain plaintext smoke` missing `backend=threaded`
+      - `bench_fullchain rejects invalid backend` still emitted a successful
+        benchmark row
+      - `bench_fullchain epoll direct plaintext smoke` missing `backend=epoll`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_fullchain` now accepts `NEXTPAS_BENCH_BACKEND=threaded|epoll`
+  - full-chain rows and benchmark header now emit `backend=<threaded|epoll>`
+  - the benchmark now threads the parsed backend into
+    `THttpServerOptions.Backend`
+  - `test_http_benchmarks` now locks:
+    - default full-chain rows expose `backend=threaded`
+    - invalid backend input fails fast with `invalid NEXTPAS_BENCH_BACKEND`
+    - Linux epoll direct-root smoke emits `backend=epoll`
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `62 total, 62 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `env NEXTPAS_BENCH_MAX_ITERS=128 NEXTPAS_BENCH_FILTER=direct_root NEXTPAS_BENCH_BACKEND=threaded ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `backend=threaded`
+    - `completed=128`
+    - `ns/op=32058.8`
+    - `req/s=31193`
+  - `env NEXTPAS_BENCH_MAX_ITERS=128 NEXTPAS_BENCH_FILTER=direct_root NEXTPAS_BENCH_BACKEND=epoll ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `backend=epoll`
+    - `completed=128`
+    - `ns/op=92845.4`
+    - `req/s=10771`
+- Outcome:
+  - nextPas-only full-chain rows now make backend selection explicit
+  - the harness can now characterize single-connection direct-handler runtime
+    behavior on threaded vs epoll without changing the cross-language runner
+
+## Session: 2026-06-07 server comparison nextPas backend truth slice
+
+- **Status:** completed.
+- Objective:
+  - preserve nextPas backend selection explicitly in saved comparison reports
+    and Markdown snapshots
+  - keep the cross-language runner default shape unchanged unless the caller
+    explicitly requests a nextPas-only backend characterization run
+  - reject invalid `--nextpas-backend` input before any fake benchmark header
+    or snapshot artifact is emitted
+- Scope and safety:
+  - touched only the comparison runner, snapshot helper, benchmark focused
+    test, HTTP benchmark docs, and this support evidence
+  - did not touch public HTTP API, H1 runtime behavior, lower-layer modules,
+    Go/Rust comparator implementations, benchmark workload math, or generated
+    artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `66 total, 60 passed, 6 failed`
+    - representative failures:
+      - `server comparison runner small smoke` missing
+        `nextpas_backend=threaded`
+      - `server comparison runner rejects invalid nextpas backend` still
+        reported `unknown argument: --nextpas-backend`
+      - `server comparison snapshot small smoke` missing
+        `nextpas_backend=threaded`
+      - Linux epoll runner/snapshot smokes could not pass
+        `--nextpas-backend epoll`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `run_server_comparison.sh` now accepts
+    `--nextpas-backend threaded|epoll`
+  - runner raw header now prints `nextpas_backend=<...>`
+  - the backend selector is forwarded only to the nextPas `bench_server` row
+  - `capture_server_comparison_snapshot.sh` accepts the same flag
+  - snapshot environment block now records `nextpas_backend=<...>`
+  - snapshot command rendering keeps the old default-threaded shape and only
+    prints `--nextpas-backend ...` when the caller explicitly selects a
+    non-default backend
+  - `test_http_benchmarks` now locks:
+    - default runner/report/snapshot truth as `nextpas_backend=threaded`
+    - invalid `--nextpas-backend` fail-fast diagnostics
+    - Linux epoll runner/report/snapshot truth as `nextpas_backend=epoll`
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `66 total, 66 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `core/benchmarks/nextpas.core.http/run_server_comparison.sh --requests 8 --threads 1 --nextpas-backend epoll`
+    - header: `nextpas_backend=epoll`
+    - nextPas row: `backend=epoll`
+    - nextPas row: `completed=8`
+    - nextPas row: `ns/op=275431`
+    - nextPas row: `req/s=3630`
+  - `core/benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh --requests 8 --threads 1 --nextpas-backend epoll --output /tmp/core-http-server-comparison-epoll-snapshot.md`
+    - environment block: `nextpas_backend=epoll`
+    - command block:
+      `run_server_comparison.sh --requests 8 --threads 1 --runs 1 --nextpas-backend epoll`
+    - raw nextPas row: `backend=epoll`
+- Outcome:
+  - saved comparison artifacts now preserve nextPas backend truth at the same
+    level as other runner metadata
+  - callers can request a nextPas-only epoll characterization run without
+    patching the harness or losing artifact provenance
+
+## Session: 2026-06-07 server comparison concurrent build lock slice
+
+- **Status:** completed.
+- Objective:
+  - stop concurrent comparison runner/snapshot invocations from corrupting the
+    shared server-comparison build root
+  - keep the fix inside the benchmark harness rather than changing comparator
+    row schemas or public HTTP/runtime behavior
+  - prove the new concurrency seam at least at source-contract level, then
+    recheck with a real concurrent smoke
+- Scope and safety:
+  - touched only the comparison runner, benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 runtime behavior, lower-layer modules,
+    comparator workload math, or saved benchmark row format
+- RED:
+  - fresh focused gate after adding the new source-contract:
+    `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `67 total, 66 passed, 1 failed`
+    - failed at `server comparison runner concurrency lock source contract`
+    - missing runner markers:
+      `COMPARISON_LOCK_DIR=`,
+      `COMPARISON_LOCK_HELD=0`,
+      `acquire_comparison_lock()`,
+      `release_comparison_lock()`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `run_server_comparison.sh` now owns a shared
+    `build/projects/nextpas.core.http/server_comparison/.comparison-lock`
+    directory lock
+  - the lock is acquired before any comparator build or run work starts and is
+    released from the script cleanup path
+  - the `--output` path no longer uses `run_comparison | tee ...`; it now uses
+    process substitution so the runner stays in the current shell and reliably
+    releases the lock
+  - `test_http_benchmarks` now locks the explicit comparison-lock seam in the
+    runner source
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `67 total, 67 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Concurrent smoke evidence:
+  - launched these two commands in parallel on the same worktree:
+    - `core/benchmarks/nextpas.core.http/run_server_comparison.sh --requests 8 --threads 1 --workload url_path --output /tmp/core-http-concurrent-runner-report.txt`
+    - `core/benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh --requests 8 --threads 1 --nextpas-backend epoll --output /tmp/core-http-concurrent-snapshot.md`
+  - observed:
+    - `runner_exit=0`
+    - `snapshot_exit=0`
+    - runner report preserved `nextpas_backend=threaded`
+    - snapshot preserved `nextpas_backend=epoll`
+- Outcome:
+  - comparison report and snapshot capture can now overlap without tripping the
+    shared Go/Rust comparator build outputs
+  - benchmark truth is stricter because concurrent artifact capture no longer
+    depends on toolchain race luck
+
+## Session: 2026-06-07 full-chain direct-1k isolation slice
+
+- **Status:** completed.
+- Objective:
+  - add a no-router 1 KiB fixed-response row to `bench_fullchain`
+  - fill the evidence gap between in-memory 1 KiB writer/outbound benches and
+    the broader multi-connection `bench_server response_1k` workload
+  - keep substring filter semantics unambiguous while adding the new row
+- Scope and safety:
+  - touched only `bench_fullchain`, the benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 parser/runtime behavior, lower-layer
+    modules, comparison runner behavior, comparator binaries, or generated
+    artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `68 total, 67 passed, 1 failed`
+    - failed at `bench_fullchain direct 1k smoke`
+    - benchmark printed `No matching full-chain scenarios.`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_fullchain` now recognizes `Host: direct` + `GET /1k` and returns a
+    fixed 1 KiB body before router dispatch
+  - the new workload is named `direct_1k` to stay distinct from both
+    `direct_root` and `plaintext`
+  - `test_http_benchmarks` now locks:
+    - the new `direct_1k` smoke row
+    - `NEXTPAS_BENCH_FILTER=direct_root` must not accidentally emit
+      `workload=direct_1k`
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `68 total, 68 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `env NEXTPAS_BENCH_MAX_ITERS=128 NEXTPAS_BENCH_FILTER=direct_1k ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `backend=threaded`
+    - `completed=128`
+    - `ns/op=36978.2`
+    - `req/s=27043`
+  - `env NEXTPAS_BENCH_MAX_ITERS=128 NEXTPAS_BENCH_FILTER=direct_1k NEXTPAS_BENCH_BACKEND=epoll ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `backend=epoll`
+    - `completed=128`
+    - `ns/op=75342.2`
+    - `req/s=13273`
+- Outcome:
+  - the harness now has a real-socket, single-connection, no-router 1 KiB row
+    alongside the earlier tiny-body `direct_root` row
+  - this slice sharpens runtime/socket attribution for larger responses; it
+    does not claim a new cross-language result or a stable backend ranking
+
+## Session: 2026-06-07 full-chain response-body-bytes marker slice
+
+- **Status:** completed.
+- Objective:
+  - make `bench_fullchain` report response size as explicit row metadata
+  - align full-chain artifact truth with `bench_server` and the Go/Rust
+    comparator binaries
+  - keep the change limited to benchmark evidence, not runtime or runner behavior
+- Scope and safety:
+  - touched only `bench_fullchain`, the benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 runtime behavior, lower-layer modules,
+    benchmark math, comparison runner behavior, comparator binaries, or
+    generated artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `68 total, 64 passed, 4 failed`
+    - failed at:
+      - `bench_fullchain plaintext smoke`
+      - `bench_fullchain direct plaintext smoke`
+      - `bench_fullchain direct 1k smoke`
+      - `bench_fullchain epoll direct plaintext smoke`
+    - common failure: missing `response_body_bytes=` marker
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_fullchain` now emits `response_body_bytes=<...>` on each benchmark row
+  - current focused rows lock:
+    - `plaintext` -> `response_body_bytes=13`
+    - `direct_root` -> `response_body_bytes=13`
+    - `direct_1k` -> `response_body_bytes=1024`
+    - `epoll direct_root` -> `response_body_bytes=13`
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `68 total, 68 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - full-chain saved artifacts now carry explicit response-size truth instead
+    of leaving consumers to infer body size from workload names
+  - this is metadata-contract tightening only; it does not claim a new
+    optimization or a new throughput result
+
+## Session: 2026-06-07 full-chain H1 path marker slice
+
+- **Status:** completed.
+- Objective:
+  - make `bench_fullchain` expose the current nextPas ingress path explicitly
+  - keep fast-path vs llhttp interpretation visible on saved full-chain rows
+  - add at least one focused body-bearing full-chain smoke instead of locking
+    only no-body rows
+- Scope and safety:
+  - touched only `bench_fullchain`, the benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 runtime behavior, lower-layer modules,
+    benchmark math, comparison runner behavior, comparator binaries, or
+    generated artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `69 total, 64 passed, 5 failed`
+    - failed at:
+      - `bench_fullchain plaintext smoke`
+      - `bench_fullchain direct plaintext smoke`
+      - `bench_fullchain direct 1k smoke`
+      - `bench_fullchain echo 1k smoke`
+      - `bench_fullchain epoll direct plaintext smoke`
+    - common failure: missing `nextpas_h1_path=` marker
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_fullchain` now emits `nextpas_h1_path=<fast|llhttp>` on each row
+  - current focused smokes lock:
+    - `plaintext` -> `fast`
+    - `direct_root` -> `fast`
+    - `direct_1k` -> `fast`
+    - `echo_1k` -> `llhttp`
+    - `epoll direct_root` -> `fast`
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `69 total, 69 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `env NEXTPAS_BENCH_MAX_ITERS=128 NEXTPAS_BENCH_FILTER=echo_1k ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `workload=echo_1k`
+    - `response_body_bytes=1024`
+    - `nextpas_h1_path=llhttp`
+    - `completed=128`
+    - `ns/op=39532.8`
+    - `req/s=25295`
+- Outcome:
+  - full-chain saved rows now state whether they exercised the current fast
+    ingress or the llhttp adapter path
+  - this remains benchmark-truth tightening, not a runtime change or a new
+    cross-language result
+
+## Session: 2026-06-07 full-chain request-body-bytes marker slice
+
+- **Status:** completed.
+- Objective:
+  - make `bench_fullchain` report request size as explicit row metadata
+  - complement the earlier `response_body_bytes` and `nextpas_h1_path` markers
+    on saved full-chain rows
+  - keep the change limited to benchmark evidence, not runtime or runner behavior
+- Scope and safety:
+  - touched only `bench_fullchain`, the benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 runtime behavior, lower-layer modules,
+    benchmark math, comparison runner behavior, comparator binaries, or
+    generated artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `69 total, 64 passed, 5 failed`
+    - failed at:
+      - `bench_fullchain plaintext smoke`
+      - `bench_fullchain direct plaintext smoke`
+      - `bench_fullchain direct 1k smoke`
+      - `bench_fullchain echo 1k smoke`
+      - `bench_fullchain epoll direct plaintext smoke`
+    - common failure: missing `request_body_bytes=` marker
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_fullchain` now emits `request_body_bytes=<...>` on each benchmark row
+  - current focused smokes lock:
+    - `plaintext` -> `request_body_bytes=0`
+    - `direct_root` -> `request_body_bytes=0`
+    - `direct_1k` -> `request_body_bytes=0`
+    - `echo_1k` -> `request_body_bytes=1024`
+    - `epoll direct_root` -> `request_body_bytes=0`
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `69 total, 69 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `env NEXTPAS_BENCH_MAX_ITERS=128 NEXTPAS_BENCH_FILTER=sink_16k ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `workload=sink_16k`
+    - `request_body_bytes=16384`
+    - `response_body_bytes=0`
+    - `nextpas_h1_path=llhttp`
+    - `completed=128`
+    - `ns/op=51255.0`
+    - `req/s=19510`
+- Outcome:
+  - full-chain saved artifacts now carry explicit request-size truth alongside
+    response-size and parser-path metadata
+  - this is metadata-contract tightening only; it does not claim a new
+    optimization or a new throughput result
+
+## Session: 2026-06-07 full-chain sink-16k focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the existing `sink_16k` full-chain row from manual smoke evidence
+    into the focused benchmark gate
+  - lock the request-heavy llhttp path separately from the earlier symmetric
+    `echo_1k` body-bearing row
+  - keep the slice limited to benchmark-truth coverage, not runtime behavior
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch `bench_fullchain` runtime behavior, public HTTP API,
+    lower-layer modules, comparison runner behavior, comparator binaries, or
+    generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `70 total, 70 passed, 0 failed`
+    - new focused row:
+      `bench_fullchain sink 16k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `NEXTPAS_BENCH_FILTER=sink_16k`
+  - the focused smoke locks:
+    - `workload=sink_16k`
+    - `request_body_bytes=16384`
+    - `response_body_bytes=0`
+    - `backend=threaded`
+    - `nextpas_h1_path=llhttp`
+- Outcome:
+  - the request-heavy full-chain llhttp row is now part of the durable focused
+    benchmark contract instead of living only in docs/manual smoke evidence
+  - this is coverage tightening only; it does not claim a new optimization,
+    new row schema, or a backend ranking
+
+## Session: 2026-06-07 full-chain epoll-echo focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote one body-bearing llhttp row onto the epoll backend focused matrix
+  - stop relying on `epoll + direct_root` as the only durable full-chain epoll
+    proof
+  - keep the slice limited to benchmark-truth coverage, not runtime behavior
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch `bench_fullchain` runtime behavior, public HTTP API,
+    lower-layer modules, comparison runner behavior, comparator binaries, or
+    generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `71 total, 71 passed, 0 failed`
+    - new focused row:
+      `bench_fullchain epoll echo 1k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `env NEXTPAS_BENCH_MAX_ITERS=64 NEXTPAS_BENCH_FILTER=echo_1k NEXTPAS_BENCH_BACKEND=epoll ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `workload=echo_1k`
+    - `backend=epoll`
+    - `request_body_bytes=1024`
+    - `response_body_bytes=1024`
+    - `nextpas_h1_path=llhttp`
+    - `completed=64`
+    - `ns/op=107034.3`
+    - `req/s=9343`
+- Landed change:
+  - `test_http_benchmarks` now runs `NEXTPAS_BENCH_FILTER=echo_1k` with
+    `NEXTPAS_BENCH_BACKEND=epoll`
+  - the focused smoke locks:
+    - `workload=echo_1k`
+    - `backend=epoll`
+    - `request_body_bytes=1024`
+    - `response_body_bytes=1024`
+    - `nextpas_h1_path=llhttp`
+- Outcome:
+  - the durable full-chain epoll proof now reaches one body-bearing llhttp row
+    instead of stopping at the fast-path `direct_root` row
+  - this is coverage tightening only; it does not claim a new optimization,
+    a backend ranking, or request-heavy epoll completeness
+
+## Session: 2026-06-07 full-chain param-route focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the existing `param_route` row into the focused benchmark gate
+  - keep URL path plus route-parameter extraction under durable full-chain
+    regression coverage
+  - keep the slice limited to benchmark-truth coverage, not runtime behavior
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch `bench_fullchain` runtime behavior, public HTTP API,
+    lower-layer modules, comparison runner behavior, comparator binaries, or
+    generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `72 total, 72 passed, 0 failed`
+    - new focused row:
+      `bench_fullchain param route smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `env NEXTPAS_BENCH_MAX_ITERS=64 NEXTPAS_BENCH_FILTER=param_route ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `workload=param_route`
+    - `request_body_bytes=0`
+    - `response_body_bytes=10`
+    - `backend=threaded`
+    - `nextpas_h1_path=fast`
+    - `completed=64`
+    - `ns/op=34646.2`
+    - `req/s=28863`
+- Landed change:
+  - `test_http_benchmarks` now runs `NEXTPAS_BENCH_FILTER=param_route`
+  - the focused smoke locks:
+    - `workload=param_route`
+    - `request_body_bytes=0`
+    - `response_body_bytes=10`
+    - `backend=threaded`
+    - `nextpas_h1_path=fast`
+- Outcome:
+  - the full-chain path-params seam is now part of the durable benchmark truth
+    instead of remaining an unlocked workload in the harness inventory
+  - this is coverage tightening only; it does not claim a new optimization,
+    new marker schema, or epoll parity for the same workload
+
+## Session: 2026-06-07 full-chain epoll-sink focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the request-heavy `sink_16k` row onto the epoll backend focused
+    matrix
+  - extend durable epoll proof beyond `direct_root` and the symmetric
+    `echo_1k` llhttp row
+  - keep the slice limited to benchmark-truth coverage, not runtime behavior
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch `bench_fullchain` runtime behavior, public HTTP API,
+    lower-layer modules, comparison runner behavior, comparator binaries, or
+    generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `73 total, 73 passed, 0 failed`
+    - new focused row:
+      `bench_fullchain epoll sink 16k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `env NEXTPAS_BENCH_MAX_ITERS=64 NEXTPAS_BENCH_FILTER=sink_16k NEXTPAS_BENCH_BACKEND=epoll ../../../build/projects/nextpas.core.http/bench_fullchain/bench_fullchain`
+    - `workload=sink_16k`
+    - `backend=epoll`
+    - `request_body_bytes=16384`
+    - `response_body_bytes=0`
+    - `nextpas_h1_path=llhttp`
+    - `completed=64`
+    - `ns/op=131315.0`
+    - `req/s=7615`
+- Landed change:
+  - `test_http_benchmarks` now runs `NEXTPAS_BENCH_FILTER=sink_16k` with
+    `NEXTPAS_BENCH_BACKEND=epoll`
+  - the focused smoke locks:
+    - `workload=sink_16k`
+    - `backend=epoll`
+    - `request_body_bytes=16384`
+    - `response_body_bytes=0`
+    - `nextpas_h1_path=llhttp`
+- Outcome:
+  - the durable epoll full-chain proof now reaches the request-heavy llhttp
+    seam instead of stopping at the fast-path row or the symmetric echo row
+  - this is coverage tightening only; it does not claim a new optimization,
+    a backend ranking, or a runtime fix
+
+## Session: 2026-06-07 snapshot include-hyper response-1k focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the `--include-hyper + --workload response_1k` snapshot combination
+    into the focused benchmark gate
+  - give Hyper/Tokio snapshot evidence a durable non-default workload proof
+  - keep the slice limited to benchmark-truth coverage, not runner/runtime behavior
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch snapshot helper behavior, comparison runner behavior,
+    comparator binaries, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `74 total, 74 passed, 0 failed`
+    - new focused row:
+      `server comparison snapshot include hyper response_1k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload response_1k --include-hyper`
+  - the focused smoke locks:
+    - `workload=response_1k`
+    - command block contains `--workload response_1k --include-hyper`
+    - `cargo_version=`
+    - `hyper_cargo_lock_sha256=`
+    - `rust_hyper` row with `rust_profile=hyper_tokio`
+    - `response_body_bytes=1024`
+- Outcome:
+  - Hyper/Tokio snapshot evidence now has a durable body-bearing workload proof
+    instead of relying only on the default no-body snapshot smoke
+  - this is coverage tightening only; it does not claim a new comparator,
+    a new row schema, or a new performance result
+
+## Session: 2026-06-07 hyper url_path direct comparator focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the direct Hyper/Tokio `url_path` workload into the focused
+    benchmark gate
+  - keep the slice limited to comparator parity evidence, not runner/schema or
+    comparator implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch comparator source, comparison runner behavior, snapshot
+    helper behavior, public HTTP API, lower-layer modules, or generated
+    artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `75 total, 75 passed, 0 failed`
+    - new focused row:
+      `hyper/tokio server comparator url_path small smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `bench_http_server_hyper --requests 32 --threads 2 --workload url_path`
+  - the focused smoke locks:
+    - `workload=url_path`
+    - `impl=rust_hyper`
+    - `rust_profile=hyper_tokio`
+    - `completed=32`
+- Outcome:
+  - the direct Cargo-based Hyper/Tokio comparator now has a durable non-default
+    request-target proof instead of relying only on the default no-URL smoke or
+    the shared runner/snapshot path
+  - this is coverage tightening only; it does not claim a new workload,
+    a new comparator behavior, or a new performance result
+
+## Session: 2026-06-07 runner include-hyper url_path focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the raw runner `--include-hyper + --workload url_path` combination
+    into the focused benchmark gate
+  - keep the slice limited to benchmark-truth parity evidence, not comparator,
+    runner, or snapshot implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch comparator source, runner behavior, snapshot helper behavior,
+    public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `76 total, 76 passed, 0 failed`
+    - new focused row:
+      `server comparison runner include hyper url_path smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `run_server_comparison.sh --requests 8 --threads 1 --workload url_path --include-hyper`
+  - the focused smoke locks:
+    - `include_hyper=1`
+    - `workload=url_path`
+    - `rust_hyper` row with `rust_profile=hyper_tokio`
+    - `summary_impl=rust_hyper`
+- Outcome:
+  - the raw comparison report now has a durable Hyper/Tokio request-target
+    workload proof instead of covering Hyper only on the default no-URL runner
+    smoke
+  - this is coverage tightening only; it does not claim a new runner schema,
+    a new comparator behavior, or a new performance result
+
+## Session: 2026-06-07 full-chain epoll direct-1k focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the `bench_fullchain` `epoll + direct_1k` row into the focused
+    benchmark gate
+  - keep the slice limited to nextPas-only runtime/socket evidence, not server
+    behavior or backend implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch `bench_fullchain` production code, server/runtime behavior,
+    comparison runner behavior, comparator binaries, public HTTP API, lower
+    layers, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `77 total, 77 passed, 0 failed`
+    - new focused row:
+      `bench_fullchain epoll direct 1k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_fullchain` with:
+    `NEXTPAS_BENCH_FILTER=direct_1k NEXTPAS_BENCH_BACKEND=epoll`
+  - the focused smoke locks:
+    - `backend=epoll`
+    - `workload=direct_1k`
+    - `request_body_bytes=0`
+    - `response_body_bytes=1024`
+    - `nextpas_h1_path=fast`
+- Outcome:
+  - the direct 1 KiB full-chain backend split is now durable benchmark truth
+    instead of relying only on the local doc row
+  - this is coverage tightening only; it does not claim a backend ranking or a
+    new runtime optimization
+
+## Session: 2026-06-07 snapshot include-hyper url_path focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the snapshot helper `--include-hyper + --workload url_path`
+    combination into the focused benchmark gate
+  - keep the slice limited to saved-artifact benchmark truth, not runner,
+    snapshot, or comparator implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch comparator source, runner behavior, snapshot helper
+    behavior, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `78 total, 78 passed, 0 failed`
+    - new focused row:
+      `server comparison snapshot include hyper url_path smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload url_path --include-hyper`
+  - the focused smoke locks:
+    - `workload=url_path`
+    - command block contains `--workload url_path --include-hyper`
+    - `cargo_version=`
+    - `hyper_cargo_lock_sha256=`
+    - `rust_hyper` row with `rust_profile=hyper_tokio`
+    - `summary_impl=rust_hyper`
+- Outcome:
+  - Hyper/Tokio now has a durable saved snapshot proof for the request-target
+    workload, closing the direct/runner/snapshot `url_path` chain
+  - this is coverage tightening only; it does not claim a new snapshot schema,
+    a new comparator behavior, or a new performance result
+
+## Session: 2026-06-07 runner include-hyper response-1k focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the raw runner `--include-hyper + --workload response_1k`
+    combination into the focused benchmark gate
+  - keep the slice limited to body-bearing raw-report benchmark truth, not
+    comparator, runner, or snapshot implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch comparator source, runner behavior, snapshot helper
+    behavior, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `79 total, 79 passed, 0 failed`
+    - new focused row:
+      `server comparison runner include hyper response_1k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `run_server_comparison.sh --requests 8 --threads 1 --workload response_1k --include-hyper`
+  - the focused smoke locks:
+    - `include_hyper=1`
+    - `workload=response_1k`
+    - `rust_hyper` row with `rust_profile=hyper_tokio`
+    - `client_read_mode=header_plus_content_length`
+    - `response_body_bytes=1024`
+    - `summary_impl=rust_hyper`
+- Outcome:
+  - the raw comparison report now has a durable body-bearing Hyper/Tokio row
+    proof instead of relying only on the snapshot artifact or the shared direct
+    comparator contract
+  - this is coverage tightening only; it does not claim a new runner schema,
+    a new comparator behavior, or a new performance result
+
+## Session: 2026-06-07 runner epoll url_path focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the raw runner `--nextpas-backend epoll + --workload url_path`
+    combination into the focused benchmark gate
+  - keep the slice limited to nextPas backend evidence on the public
+    request-target comparison seam, not runner or server implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch runner behavior, server/runtime behavior, comparator
+    binaries, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `80 total, 80 passed, 0 failed`
+    - new focused row:
+      `server comparison runner epoll url_path smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `run_server_comparison.sh --requests 8 --threads 1 --workload url_path --nextpas-backend epoll`
+  - the focused smoke locks:
+    - `nextpas_backend=epoll`
+    - `workload=url_path`
+    - nextPas row reports `backend=epoll`
+    - Go and Rust std-only rows stay on the same public `url_path` workload
+- Outcome:
+  - the cross-language request-target raw report now has durable epoll evidence
+    instead of preserving epoll only on the default no-URL comparison
+  - this is coverage tightening only; it does not claim a backend ranking or a
+    new comparison schema
+
+## Session: 2026-06-07 snapshot epoll url_path focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the snapshot helper `--nextpas-backend epoll + --workload url_path`
+    combination into the focused benchmark gate
+  - keep the slice limited to durable saved-artifact backend evidence, not
+    snapshot or server implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch snapshot helper behavior, runner behavior, server/runtime
+    behavior, comparator binaries, public HTTP API, lower-layer modules, or
+    generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `81 total, 81 passed, 0 failed`
+    - new focused row:
+      `server comparison snapshot epoll url_path smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload url_path --nextpas-backend epoll`
+  - the focused smoke locks:
+    - `nextpas_backend=epoll`
+    - `workload=url_path`
+    - command block contains `--workload url_path --nextpas-backend epoll`
+    - nextPas row reports `backend=epoll`
+    - Go and Rust std-only rows stay on the same public `url_path` workload
+- Outcome:
+  - the durable Markdown artifact now preserves epoll backend evidence on the
+    public request-target comparison seam instead of only the default no-URL
+    backend row
+  - this is coverage tightening only; it does not claim a backend ranking or a
+    new snapshot schema
+
+## Session: 2026-06-07 runner epoll response-1k focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the raw runner `--nextpas-backend epoll + --workload response_1k`
+    combination into the focused benchmark gate
+  - keep the slice limited to durable backend evidence on the public
+    body-bearing comparison seam, not runner or server implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch runner behavior, server/runtime behavior, comparator
+    binaries, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `82 total, 82 passed, 0 failed`
+    - new focused row:
+      `server comparison runner epoll response_1k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `run_server_comparison.sh --requests 8 --threads 1 --workload response_1k --nextpas-backend epoll`
+  - the focused smoke locks:
+    - `nextpas_backend=epoll`
+    - `workload=response_1k`
+    - nextPas row reports `backend=epoll`
+    - `client_read_mode=header_plus_content_length`
+    - `response_body_bytes=1024`
+    - Go row still reports `client_read_mode=http_client_body_drain`
+- Outcome:
+  - epoll backend evidence now reaches the public body-bearing raw comparison
+    seam instead of stopping at no-URL or request-target-only rows
+  - this is coverage tightening only; it does not claim a backend ranking or a
+    new comparison schema
+
+## Session: 2026-06-07 snapshot epoll response-1k focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the snapshot helper `--nextpas-backend epoll + --workload response_1k`
+    combination into the focused benchmark gate
+  - keep the slice limited to durable saved-artifact backend evidence on the
+    public body-bearing comparison seam, not snapshot or server implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch snapshot helper behavior, runner behavior, server/runtime
+    behavior, comparator binaries, public HTTP API, lower-layer modules, or
+    generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - first run red because an existing `bench_fullchain epoll sink 16k` smoke
+      transiently exited with `217/EAccessViolation`
+    - rerun green: `83 total, 83 passed, 0 failed`
+    - new focused row:
+      `server comparison snapshot epoll response_1k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload response_1k --nextpas-backend epoll`
+  - the focused smoke locks:
+    - `nextpas_backend=epoll`
+    - `workload=response_1k`
+    - command block contains `--workload response_1k --nextpas-backend epoll`
+    - nextPas row reports `backend=epoll`
+    - `client_read_mode=header_plus_content_length`
+    - `response_body_bytes=1024`
+    - Go row still reports `client_read_mode=http_client_body_drain`
+- Outcome:
+  - the durable Markdown artifact now preserves epoll backend evidence on the
+    public body-bearing comparison seam instead of only the raw runner report
+  - this is coverage tightening only; it does not claim a backend ranking or a
+    new snapshot schema
+
+## Session: 2026-06-07 runner include-hyper epoll response-1k focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the full dual opt-in
+    `--include-hyper + --nextpas-backend epoll + --workload response_1k`
+    runner combination into the focused benchmark gate
+  - keep the slice limited to composition truth for existing benchmark knobs,
+    not runner/comparator/server implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch runner behavior, snapshot behavior, server/runtime behavior,
+    comparator binaries, public HTTP API, lower-layer modules, or generated
+    artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `84 total, 84 passed, 0 failed`
+    - new focused row:
+      `server comparison runner include hyper epoll response_1k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `run_server_comparison.sh --requests 8 --threads 1 --workload response_1k --include-hyper --nextpas-backend epoll`
+  - the focused smoke locks:
+    - `include_hyper=1`
+    - `nextpas_backend=epoll`
+    - `workload=response_1k`
+    - nextPas row reports `backend=epoll`
+    - `rust_hyper` row reports `rust_profile=hyper_tokio`
+    - `client_read_mode=header_plus_content_length`
+    - `response_body_bytes=1024`
+    - `summary_impl=rust_hyper`
+- Outcome:
+  - the public body-bearing comparison now has a durable proof that Hyper/Tokio
+    inclusion and nextPas epoll backend selection compose correctly in one raw
+    report
+  - this is coverage tightening only; it does not claim a new ranking or a new
+    comparison schema
+
+## Session: 2026-06-07 snapshot include-hyper epoll response-1k focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the full dual opt-in
+    `--include-hyper + --nextpas-backend epoll + --workload response_1k`
+    snapshot combination into the focused benchmark gate
+  - keep the slice limited to durable saved-artifact composition truth, not
+    snapshot/runner/comparator/server implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch snapshot behavior, runner behavior, server/runtime behavior,
+    comparator binaries, public HTTP API, lower-layer modules, or generated
+    artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `85 total, 85 passed, 0 failed`
+    - new focused row:
+      `server comparison snapshot include hyper epoll response_1k smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload response_1k --include-hyper --nextpas-backend epoll`
+  - the focused smoke locks:
+    - `include_hyper=1`
+    - `nextpas_backend=epoll`
+    - `workload=response_1k`
+    - command block contains
+      `--workload response_1k --include-hyper --nextpas-backend epoll`
+    - `cargo_version=`
+    - `hyper_cargo_lock_sha256=`
+    - nextPas row reports `backend=epoll`
+    - `rust_hyper` row reports `rust_profile=hyper_tokio`
+    - `client_read_mode=header_plus_content_length`
+    - `response_body_bytes=1024`
+    - `summary_impl=rust_hyper`
+- Outcome:
+  - the durable Markdown artifact now also proves that the Hyper/Tokio
+    comparator and nextPas epoll backend compose correctly on the public
+    body-bearing comparison seam
+  - this is coverage tightening only; it does not claim a new ranking or a new
+    snapshot schema
+
+## Session: 2026-06-07 h1 metadata-cache filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` metadata-cache filter row into the
+    focused benchmark gate
+  - keep the slice limited to parser microbenchmark truth, not parser
+    implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch parser production code, server/runtime behavior, comparison
+    runner behavior, comparator binaries, public HTTP API, lower-layer modules,
+    or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `86 total, 86 passed, 0 failed`
+    - new focused row:
+      `H1 parser benchmark metadata cache filter env`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=request metadata cached`
+  - the focused smoke locks:
+    - `bench_filter=request metadata cached`
+    - `adapter cost: request metadata cached expect+cl`
+    - filtered output does not include
+      `adapter cost: request metadata legacy expect+cl`
+    - filtered output does not include unrelated fast-header rows
+- Outcome:
+  - the parse-time metadata cache row is now a durable standalone microbenchmark
+    instead of only riding along inside the broader `request metadata` filter
+  - this is benchmark-truth tightening only; it does not claim a new parser
+    optimization
+
+## Session: 2026-06-07 h1 fast-headers filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` fast-header single-lookup row into the
+    focused benchmark gate
+  - keep the slice limited to parser microbenchmark truth, not parser
+    implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch parser production code, server/runtime behavior, comparison
+    runner behavior, comparator binaries, public HTTP API, lower-layer modules,
+    or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `87 total, 87 passed, 0 failed`
+    - new focused row:
+      `H1 parser benchmark fast-headers filter env`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=fast headers get host only`
+  - the focused smoke locks:
+    - `bench_filter=fast headers get host only`
+    - `adapter cost: fast headers get host only`
+    - filtered output does not include
+      `adapter cost: fast headers count all`
+    - filtered output does not include
+      `adapter cost: fast headers foreach all`
+    - filtered output does not include unrelated metadata-cache rows
+- Outcome:
+  - the fast lazy-header single-lookup row is now a durable standalone
+    microbenchmark instead of only riding along inside the broader
+    `fast headers` filter group
+  - this is benchmark-truth tightening only; it does not claim a new parser
+    optimization
+
+## Session: 2026-06-07 h1 fast-headers get-all filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` fast-header same-name multi-value lookup
+    row into the focused benchmark gate
+  - keep the slice limited to parser microbenchmark truth, not parser
+    implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch parser production code, server/runtime behavior, comparison
+    runner behavior, comparator binaries, public HTTP API, lower-layer modules,
+    or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `88 total, 88 passed, 0 failed`
+    - new focused row:
+      `H1 parser benchmark fast-headers get-all filter env`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=fast headers get all accept`
+  - the focused smoke locks:
+    - `bench_filter=fast headers get all accept`
+    - `adapter cost: fast headers get all accept`
+    - filtered output does not include
+      `adapter cost: fast headers get host only`
+    - filtered output does not include
+      `adapter cost: fast headers foreach all`
+    - filtered output does not include unrelated metadata-cache rows
+- Outcome:
+  - the fast lazy-header same-name multi-value lookup row is now a durable
+    standalone microbenchmark instead of only riding along inside the broader
+    `fast headers` filter group
+  - this is benchmark-truth tightening only; it does not claim a new parser
+    optimization
+
+## Session: 2026-06-07 h1 fast-headers has filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` fast-header presence-only lookup row
+    into the focused benchmark gate
+  - keep the slice limited to parser microbenchmark truth, not parser
+    implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch parser production code, server/runtime behavior, comparison
+    runner behavior, comparator binaries, public HTTP API, lower-layer modules,
+    or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `89 total, 89 passed, 0 failed`
+    - new focused row:
+      `H1 parser benchmark fast-headers has filter env`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=fast headers has accept`
+  - the focused smoke locks:
+    - `bench_filter=fast headers has accept`
+    - `adapter cost: fast headers has accept`
+    - filtered output does not include
+      `adapter cost: fast headers get host only`
+    - filtered output does not include
+      `adapter cost: fast headers get all accept`
+    - filtered output does not include unrelated metadata-cache rows
+- Outcome:
+  - the fast lazy-header presence-only row is now a durable standalone
+    microbenchmark instead of only riding along inside the broader
+    `fast headers` filter group
+  - this is benchmark-truth tightening only; it does not claim a new parser
+    optimization
+
+## Session: 2026-06-07 h1 fast-headers count filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` fast-header raw count row into the
+    focused benchmark gate
+  - keep the slice limited to parser microbenchmark truth, not parser
+    implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch parser production code, server/runtime behavior, comparison
+    runner behavior, comparator binaries, public HTTP API, lower-layer modules,
+    or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `90 total, 90 passed, 0 failed`
+    - new focused row:
+      `H1 parser benchmark fast-headers count filter env`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=fast headers count all`
+  - the focused smoke locks:
+    - `bench_filter=fast headers count all`
+    - `adapter cost: fast headers count all`
+    - filtered output does not include
+      `adapter cost: fast headers get host only`
+    - filtered output does not include
+      `adapter cost: fast headers foreach all`
+    - filtered output does not include unrelated metadata-cache rows
+- Outcome:
+  - the fast lazy-header raw count row is now a durable standalone
+    microbenchmark instead of only riding along inside the broader
+    `fast headers` filter group
+  - this is benchmark-truth tightening only; it does not claim a new parser
+    optimization
+
+## Session: 2026-06-07 h1 fast-headers foreach filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` fast-header full materialization row
+    into the focused benchmark gate
+  - keep the slice limited to parser microbenchmark truth, not parser
+    implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch parser production code, server/runtime behavior, comparison
+    runner behavior, comparator binaries, public HTTP API, lower-layer modules,
+    or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `91 total, 91 passed, 0 failed`
+    - new focused row:
+      `H1 parser benchmark fast-headers foreach filter env`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=fast headers foreach all`
+  - the focused smoke locks:
+    - `bench_filter=fast headers foreach all`
+    - `adapter cost: fast headers foreach all`
+    - filtered output does not include
+      `adapter cost: fast headers get host only`
+    - filtered output does not include
+      `adapter cost: fast headers get all accept`
+    - filtered output does not include unrelated metadata-cache rows
+- Outcome:
+  - the fast lazy-header full materialization row is now a durable standalone
+    microbenchmark instead of only riding along inside the broader
+    `fast headers` filter group
+  - this is benchmark-truth tightening only; it does not claim a new parser
+    optimization
+
+## Session: 2026-06-07 h1 request-path filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` direct request-path projection row into
+    the focused benchmark gate
+  - keep the slice limited to request-target projection benchmark truth, not
+    request/runtime implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch request production code, parser/runtime behavior, comparator
+    binaries, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `92 total, 92 passed, 0 failed`
+    - new focused row:
+      `H1 parser benchmark request-path filter env`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=request direct Path access`
+  - the focused smoke locks:
+    - `bench_filter=request direct Path access`
+    - `adapter cost: request direct Path access`
+    - filtered output does not include
+      `adapter cost: request lazy Url.Path access`
+    - filtered output does not include
+      `adapter cost: request direct RawQuery access`
+    - filtered output does not include unrelated metadata-cache rows
+- Outcome:
+  - the direct request-path projection row is now a durable standalone
+    microbenchmark instead of only riding along inside the broader
+    `request ` filter group
+  - this is benchmark-truth tightening only; it does not claim a new parser or
+    request optimization
+
+## Session: 2026-06-07 h1 request-rawquery filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` direct request-query projection row
+    into the focused benchmark gate
+  - keep the slice limited to request-target projection benchmark truth, not
+    request/runtime implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch request production code, parser/runtime behavior, comparator
+    binaries, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `93 total, 93 passed, 0 failed`
+    - new focused row:
+      `H1 parser benchmark request-rawquery filter env`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=request direct RawQuery access`
+  - the focused smoke locks:
+    - `bench_filter=request direct RawQuery access`
+    - `adapter cost: request direct RawQuery access`
+    - filtered output does not include
+      `adapter cost: request lazy Url.Path access`
+    - filtered output does not include
+      `adapter cost: request direct Path access`
+    - filtered output does not include unrelated metadata-cache rows
+- Outcome:
+  - the direct request-query projection row is now a durable standalone
+    microbenchmark instead of only riding along inside the broader
+    `request ` filter group
+  - this is benchmark-truth tightening only; it does not claim a new parser or
+    request optimization
+
+## Session: 2026-06-07 h1 request-path+rawquery filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` combined direct request path/query
+    projection row into the focused benchmark gate
+  - keep the slice limited to request-target projection benchmark truth, not
+    request/runtime implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch request production code, parser/runtime behavior, comparator
+    binaries, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `94 total, 94 passed, 0 failed`
+    - new focused row:
+      `H1 parser benchmark request-path+rawquery filter env`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=request direct Path+RawQuery access`
+  - the focused smoke locks:
+    - `bench_filter=request direct Path+RawQuery access`
+    - `adapter cost: request direct Path+RawQuery access`
+    - filtered output does not include
+      `adapter cost: request direct Path access`
+    - filtered output does not include
+      `adapter cost: request direct RawQuery access`
+    - filtered output does not include unrelated metadata-cache rows
+- Outcome:
+  - the combined direct request path/query projection row is now a durable
+    standalone microbenchmark instead of only riding along inside the broader
+    `request ` filter group
+  - this is benchmark-truth tightening only; it does not claim a new parser or
+    request optimization
+
+## Session: 2026-06-07 h1 url-parse request-target filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` request-target-specialized URL parse row
+    into the focused benchmark gate
+  - keep the slice limited to URL parse benchmark truth, not URL/request
+    implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch URL production code, request/runtime behavior, comparator
+    binaries, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `95 total, 95 passed, 0 failed`
+    - new focused row:
+      `H1 parser benchmark url-parse request-target filter env`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=url parse request-target origin-form`
+  - the focused smoke locks:
+    - `bench_filter=url parse request-target origin-form`
+    - `adapter cost: url parse request-target origin-form`
+    - filtered output does not include
+      `adapter cost: url parse generic origin-form`
+    - filtered output does not include
+      `adapter cost: request direct Path access`
+    - filtered output does not include unrelated metadata-cache rows
+- Outcome:
+  - the request-target-specialized URL parse row is now a durable standalone
+    microbenchmark instead of only riding along inside the broader
+    `url parse` filter group
+  - this is benchmark-truth tightening only; it does not claim a new URL or
+    parser optimization
+
+## Session: 2026-06-07 h1 url-parse generic filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` generic origin-form URL parse row into
+    the focused benchmark gate
+  - keep the slice limited to URL parse benchmark truth, not URL/request
+    implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch URL production code, request/runtime behavior, comparator
+    binaries, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `96 total, 96 passed, 0 failed`
+    - new focused row:
+      `H1 parser benchmark url-parse generic filter env`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=url parse generic origin-form`
+  - the focused smoke locks:
+    - `bench_filter=url parse generic origin-form`
+    - `adapter cost: url parse generic origin-form`
+    - filtered output does not include
+      `adapter cost: url parse request-target origin-form`
+    - filtered output does not include
+      `adapter cost: request direct Path access`
+    - filtered output does not include unrelated metadata-cache rows
+- Outcome:
+  - the generic origin-form URL parse row is now a durable standalone
+    microbenchmark instead of only riding along inside the broader
+    `url parse` filter group
+  - this is benchmark-truth tightening only; it does not claim a new URL or
+    parser optimization
+
+## Session: 2026-06-07 h1 header-span-add filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` parser-trusted header-span store row
+    into the focused benchmark gate
+  - reduce repeated benchmark filter smoke boilerplate in the test harness
+  - keep the slice limited to adapter materialization benchmark truth, not
+    parser implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch parser production code, server/runtime behavior, comparator
+    binaries, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - first run:
+    `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - new focused row passed:
+      `H1 parser benchmark header-span-add filter env`
+    - unrelated known transient recurred in
+      `bench_fullchain epoll sink 16k smoke` with exit `217`
+    - heaptrc: `0 unfreed memory blocks`
+  - immediate rerun of the same command:
+    - `97 total, 97 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=header span add 10 headers`
+  - the focused smoke locks:
+    - `bench_filter=header span add 10 headers`
+    - `adapter cost: header span add 10 headers`
+    - filtered output does not include
+      `adapter cost: span append 10 headers`
+    - filtered output does not include
+      `adapter cost: header add 10 headers`
+    - filtered output does not include
+      `adapter cost: body copy 1KB`
+    - filtered output does not include unrelated metadata-cache rows
+- Outcome:
+  - the parser-trusted header-span-to-header-store row is now a durable
+    standalone microbenchmark instead of only riding along inside the broader
+    adapter materialization group
+  - this is benchmark-truth tightening only; it does not claim a new parser
+    optimization
+
+## Session: 2026-06-07 fullchain dispatch-path metadata slice
+
+- **Status:** completed.
+- Objective:
+  - make saved `bench_fullchain` rows explicitly say whether the request was
+    answered by the direct outer handler or by `THttpRouter`
+  - keep the slice limited to benchmark metadata/evidence for runtime/socket
+    attribution, not server runtime changes
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `97 total, 87 passed, 10 failed`
+    - failures were the fullchain rows missing `nextpas_dispatch_path=router`
+      or `nextpas_dispatch_path=direct_handler`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN:
+  - same command:
+    - `97 total, 97 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_fullchain` now emits `nextpas_dispatch_path=direct_handler` for
+    `direct_root` and `direct_1k`
+  - it emits `nextpas_dispatch_path=router` for the routed workloads
+  - `test_http_benchmarks` locks the marker across threaded and epoll
+    fullchain rows through `CheckFullchainBenchmarkOutput`
+- Outcome:
+  - fullchain real-socket rows now carry backend, H1 ingress path, request and
+    response body sizes, and dispatch path as explicit metadata
+  - this supports later runtime/socket attribution without claiming a new
+    throughput result
+
+## Session: 2026-06-07 fullchain direct-dispatch source contract slice
+
+- **Status:** completed.
+- Objective:
+  - prove that `nextpas_dispatch_path=direct_handler` is backed by the
+    benchmark's direct host branch and direct request construction, not just by
+    workload names
+  - keep the slice limited to source-contract evidence
+- Scope and safety:
+  - touched only the benchmark focused test and this support evidence
+  - did not touch `bench_fullchain` runtime code, server behavior, public HTTP
+    API, comparison runners, lower-layer modules, or generated artifacts
+- Verification:
+  - first run:
+    `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - new source-contract row passed:
+      `bench_fullchain direct dispatch source contract`
+    - unrelated known transient recurred in
+      `bench_fullchain epoll sink 16k smoke` with exit `217`
+    - `98 total, 97 passed, 1 failed`
+    - heaptrc: `0 unfreed memory blocks`
+  - immediate rerun of the same command:
+    - `98 total, 98 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - the focused gate now checks that direct workloads use `DIRECT_HOST`, root
+    and `/1k` direct requests, and an early `Exit` before router dispatch
+  - it also checks that `plaintext` is not mapped to `direct_handler`
+
+## Session: 2026-06-07 fullchain server lifecycle source-contract slice
+
+- **Status:** completed.
+- Objective:
+  - make `bench_fullchain` teardown join its server thread before freeing the
+    server
+  - close normal, no-match, and create-failure lifecycle gaps without touching
+    HTTP runtime, public API, comparison runners, lower-layer modules, or
+    generated artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `99 total, 98 passed, 1 failed`
+    - failed at `bench_fullchain server thread lifecycle source contract`
+    - missing create-failure cleanup and main `try/finally StopServer`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN:
+  - same command:
+    - `99 total, 99 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_fullchain` now retains the server thread handle globally
+  - `StopServer` centralizes `Shutdown -> platform_thread_join -> Free`
+  - thread-create failure frees the created server before raising
+  - normal and no-match scenario paths now pass through a `try/finally`
+    guarded `StopServer`
+- Outcome:
+  - full-chain real-socket benchmark rows now have a tighter lifecycle
+    harness: measured rows, no-match diagnostics, and exception paths no
+    longer rely on process exit to clean up the server thread
+  - this is benchmark harness correctness evidence, not a new performance
+    result or HTTP runtime optimization

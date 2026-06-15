@@ -5,6 +5,7 @@ unit nextpas.core.http.intf;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.net.base,
   nextpas.core.net.intf,
@@ -23,12 +24,12 @@ type
 
   IHttpHeaders = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000001}']
-    procedure Set_(const AName, AValue: string);
+    procedure SetHeader(const AName, AValue: string);
     procedure Add(const AName, AValue: string);
     function Get(const AName: string): string;
     function GetAll(const AName: string): TStringArray;
     function Has(const AName: string): Boolean;
-    procedure Del(const AName: string);
+    procedure Remove(const AName: string);
     procedure Clear;
     function Count: Int32;
     procedure ForEach(const ACallback: THeaderIterator);
@@ -129,12 +130,19 @@ type
 
   IHttpClient = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000009}']
-    function Do_(const AReq: IHttpRequest): IHttpResponse;
+    function Send(const AReq: IHttpRequest): IHttpResponse;
+    procedure CloseIdleConnections;
     function Get(const AUrl: string): IHttpResponse;
-    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Delete(const AUrl: string): IHttpResponse;
-    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Head(const AUrl: string): IHttpResponse;
   end;
 
@@ -142,6 +150,11 @@ type
   IHttpTransport = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-40000000000A}']
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+  end;
+
+  IHttpTransportIdleConnections = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-40000000000F}']
+    procedure CloseIdleConnections;
   end;
 
   IHttpServerTransport = interface
@@ -160,6 +173,13 @@ type
     ['{A1B2C3D4-E5F6-7890-ABCD-40000000000E}']
     function NewSession(const AConn: ITcpStream; const AHandler: IHttpHandler;
       const AContext: ITcpServerSessionContext): ITcpServerSession;
+  end;
+
+  IH2StreamControl = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-400000000010}']
+    procedure Reset(const AErrorCode: UInt32);
+    function GetStreamID: UInt32;
+    property StreamID: UInt32 read GetStreamID;
   end;
 
 const

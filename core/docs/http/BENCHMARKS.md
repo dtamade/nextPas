@@ -4,6 +4,24 @@ This page records the current HTTP server benchmark harness and one local
 snapshot. Treat the numbers as evidence for this machine and toolchain, not as
 a permanent ranking across platforms.
 
+The maintained Pascal benchmark assets under `benchmarks/nextpas.core.http/`
+are the focused projects with their own project `Makefile`s and focused smoke
+coverage:
+
+- `bench_server`
+- `bench_router`
+- `bench_headers`
+- `bench_h1writer`
+- `bench_h1outbound`
+- `bench_fullchain`
+- `bench_h1parser`
+
+An older top-level aggregate Pascal benchmark (`bench_http`) was removed on
+2026-06-06 local time. It duplicated router / URL / header microbenchmarks,
+had no project `Makefile`, no stable metadata contract, and no focused gate.
+The maintained benchmark truth now lives only in the focused assets above and
+the Go / Rust comparator projects.
+
 ## Run the Server Comparison
 
 Run the comparison harness:
@@ -18,11 +36,15 @@ Capture a Markdown snapshot with environment metadata:
 
 ```sh
 benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
-  --requests 20000 --threads 4 --runs 3 \
+  --requests 20000 --threads 4 --workload no_url --runs 3 \
   --output build/projects/nextpas.core.http/server_comparison/snapshot.md
 ```
 
-The comparison currently covers three HTTP/1.1 keep-alive hello-world workloads:
+Both server-comparison helpers reject `--output` paths outside
+`build/projects/nextpas.core.http/server_comparison`, so local reports and
+snapshot temp files stay out of source and test trees.
+
+The comparison currently covers four HTTP/1.1 keep-alive hello-world workloads:
 
 - `workload=no_url`: the handler does not read the request URL or query string.
 - `workload=url_path`: the client sends `GET /api/v1/users` and the handler
@@ -36,21 +58,135 @@ The comparison currently covers three HTTP/1.1 keep-alive hello-world workloads:
   1 KiB fixed-length response body. The raw nextPas/Rust clients wait for the
   complete response body, not just a status/header prefix.
 
-It does not cover TLS, request bodies, WebSocket, router/middleware full-chain
-cost, `epoll`, or an async Rust server. The Rust comparator is a std-only
-microbaseline; add a Hyper/Tokio comparator before treating Rust ecosystem
-performance as represented.
+It does not cover TLS, request bodies, WebSocket, or router/middleware
+full-chain cost. `epoll` is available only as a nextPas backend
+characterization via `--nextpas-backend epoll`; Go/Rust comparator rows stay on
+their own runtimes and should not be read as an epoll comparison. The default
+Rust comparator is a std-only microbaseline labeled `impl=rust_std` with
+`rust_profile=std_only`; it is still not a Rust ecosystem benchmark by itself.
+
+To include the optional Cargo-based Hyper/Tokio HTTP/1.1 comparator, pass
+`--include-hyper`:
+
+```sh
+benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url --runs 3 \
+  --include-hyper \
+  --output build/projects/nextpas.core.http/server_comparison/report.txt
+```
+
+The Hyper/Tokio row reports `impl=rust_hyper` and
+`rust_profile=hyper_tokio`, plus `rust_http_stack=hyper_http1` and
+`rust_runtime=tokio_multi_thread` so the Rust ecosystem comparator identity is
+explicit in raw captures. The snapshot helper accepts the same flag and also
+accepts `--workload`; it records `workload=<name>`,
+`cargo_version`, `hyper_cargo_lock_sha256`, and `include_hyper=1` in the
+Markdown environment block:
+
+```sh
+benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
+  --requests 20000 --threads 4 --workload no_url --runs 3 --include-hyper \
+  --output build/projects/nextpas.core.http/server_comparison/snapshot.md
+```
+
+The snapshot helper embeds the raw runner output into the Markdown file and
+then removes the intermediate `${output}.raw` file. Treat the `.md` snapshot as
+the durable artifact; the adjacent `.raw` file is only a temporary capture path.
+Its environment block now also records `requested_threads=...` and
+`effective_threads=...`, so a later thread clamp does not silently erase the
+original command argument from the long-lived snapshot.
+
+This comparator is a benchmark-truth seam, not a final Rust ecosystem ranking:
+it covers a minimal Hyper HTTP/1.1 server on Tokio with the same raw keep-alive
+client workload shape as the std-only comparator.
 
 Use `--runs N` to repeat each implementation after a single build and emit a
 median summary at the end of the raw output. This is the preferred mode for
 fresh local comparison rows because single-shot server results are visibly
 affected by scheduler noise.
 
+The comparison runner also serializes concurrent invocations through a shared
+build-root lock under
+`build/projects/nextpas.core.http/server_comparison/.comparison-lock`. This is
+not a benchmark row feature; it is a harness-truth guard so a saved report and
+an overlapping snapshot do not race while rebuilding the shared Go/Rust
+comparator binaries into the same output directory.
+
 The runner treats incomplete workload execution as a harness failure: every raw
-row must report `iterations=<requests>` and `completed=<requests>`. The median
-summary repeats this guard as `median_completed=<requests>`, and nextPas rows
-also print `nextpas_h1_path=fast` for current no-body HTTP/1.1 workloads so
-fast-path interpretation is explicit.
+row must report `iterations=<requests>` and `completed=<requests>`.
+Raw row `operation` and `workload` markers must match the runner request before
+a row can enter the median summary. The median summary repeats this guard as
+`median_completed=<requests>`, nextPas rows print `nextpas_h1_path=fast` for
+current no-body HTTP/1.1 workloads, and Rust std-only / Hyper rows print
+`rust_profile=std_only` / `rust_profile=hyper_tokio`; Hyper rows additionally
+print `rust_http_stack=hyper_http1` and `rust_runtime=tokio_multi_thread` so
+fast-path and comparator interpretation stay explicit. The raw comparison
+header also prints
+`include_hyper=0|1`, so saved reports do not need to infer whether the optional
+Hyper/Tokio comparator was requested from later sections.
+
+All single-implementation comparator binaries use the same workload allow-list
+as the runner. An explicit invalid `--workload` exits non-zero with an
+`invalid --workload` diagnostic instead of silently falling back to `no_url`.
+`test_http_benchmarks` locks this for nextPas `bench_server`, Go `net/http`,
+Rust std-only, and Hyper/Tokio comparator binaries.
+
+The same focused gate also locks positive scale validation on the single
+implementation binaries: explicit `--requests 0` or `--threads 0` now exits
+non-zero with an `invalid --requests` / `invalid --threads` diagnostic instead
+of silently clamping or falling back to a default run size. This keeps typoed
+manual comparator runs from emitting misleading benchmark rows.
+
+The nextPas `bench_server` binary now also emits `backend=<threaded|epoll>` on
+its raw benchmark rows and accepts an explicit `--backend` selector:
+
+```sh
+build/projects/nextpas.core.http/bench_server/bench_http_server \
+  --requests 128 --threads 1 --workload no_url --backend threaded
+
+build/projects/nextpas.core.http/bench_server/bench_http_server \
+  --requests 128 --threads 1 --workload no_url --backend epoll
+```
+
+This is a nextPas-only runtime characterization seam, not a cross-language
+comparison flag. The server comparison runner and snapshot helper now accept
+`--nextpas-backend threaded|epoll`, record `nextpas_backend=<...>` in the raw
+header / snapshot environment block, and pass the selected backend only to the
+nextPas row:
+
+```sh
+benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url --runs 3 \
+  --nextpas-backend threaded
+
+benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
+  --requests 20000 --threads 4 --workload no_url --runs 3 \
+  --nextpas-backend epoll \
+  --output build/projects/nextpas.core.http/server_comparison/snapshot-epoll.md
+```
+
+The default remains `threaded`, so existing Go/Rust/nextPas comparison commands
+keep the earlier apples-to-apples shape unless a caller explicitly asks for a
+nextPas-only backend characterization run.
+
+Fresh local backend smoke rows from 2026-06-07:
+
+| impl    | backend  | workload | iterations | completed | ns/op | req/s |
+| ------- | -------- | -------- | ---------: | --------: | ----: | ----: |
+| nextPas | threaded | no_url   |        128 |       128 | 41890 | 23871 |
+| nextPas | epoll    | no_url   |        128 |       128 | 91425 | 10937 |
+
+Treat these as local backend smoke, not a stable threaded-vs-epoll ranking.
+The durable conclusion is that benchmark artifacts can now distinguish backend
+selection explicitly and can run a nextPas-only epoll row without patching the
+comparison runner. The raw comparison report and Markdown snapshot now preserve
+the same truth as `nextpas_backend=<threaded|epoll>`.
+
+`bench_fullchain` now follows the same fail-fast benchmark-truth rule for its
+filter path: when `NEXTPAS_BENCH_FILTER` matches no scenario, the benchmark
+prints `No matching full-chain scenarios.` and exits non-zero instead of
+silently succeeding with zero measured rows. This keeps typoed full-chain smoke
+runs from looking like valid benchmark evidence.
 
 ## Local Median Snapshot: 2026-06-05
 
@@ -63,12 +199,12 @@ benchmarks/nextpas.core.http/run_server_comparison.sh \
 
 Each cell is the script's median summary across three runs.
 
-| workload | nextPas ns/op | nextPas req/s | Rust std-only ns/op | Rust std-only req/s | Go `net/http` ns/op | Go `net/http` req/s |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| no_url | 10405 | 96098 | 9051 | 110479 | 47688 | 20969 |
-| adapter_no_url | 12280 | 81433 | 8140 | 122845 | 48857 | 20467 |
-| url_path | 10133 | 98685 | 7391 | 135291 | 47782 | 20928 |
-| response_1k | 9896 | 101044 | 9408 | 106285 | 50560 | 19778 |
+| workload       | nextPas ns/op | nextPas req/s | Rust std-only ns/op | Rust std-only req/s | Go `net/http` ns/op | Go `net/http` req/s |
+| -------------- | ------------: | ------------: | ------------------: | ------------------: | ------------------: | ------------------: |
+| no_url         |         10405 |         96098 |                9051 |              110479 |               47688 |               20969 |
+| adapter_no_url |         12280 |         81433 |                8140 |              122845 |               48857 |               20467 |
+| url_path       |         10133 |         98685 |                7391 |              135291 |               47782 |               20928 |
+| response_1k    |          9896 |        101044 |                9408 |              106285 |               50560 |               19778 |
 
 Interpretation for this host:
 
@@ -108,12 +244,18 @@ summary contained no matching adapter no-url rows
 
 Narrowed breakdown after adding the rows and the fast-gate change:
 
-| row | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| adapter no-url: metadata 3 headers | 2000 | 372.2 | 2686504 |
-| adapter no-url: fast reject + llhttp | 2000 | 2084.3 | 479786 |
-| adapter no-url: llhttp direct only | 2000 | 1494.0 | 669348 |
-| adapter no-url: fast parse only | 2000 | 629.3 | 1589120 |
+| row                                  | iterations |  ns/op |   ops/s |
+| ------------------------------------ | ---------: | -----: | ------: |
+| adapter no-url: metadata 3 headers   |       2000 |  372.2 | 2686504 |
+| adapter no-url: fast reject + llhttp |       2000 | 2084.3 |  479786 |
+| adapter no-url: llhttp direct only   |       2000 | 1494.0 |  669348 |
+| adapter no-url: fast parse only      |       2000 |  629.3 | 1589120 |
+
+Current `bench_h1parser` output names the old `fast reject + llhttp` row as
+`adapter no-url: legacy double parse explicit keep-alive`. The older label is
+kept in historical snapshots only; it measured the legacy double-parse path used
+for explicit HTTP/1.1 keep-alive before that request became fast-path
+compatible.
 
 Focused verification:
 
@@ -134,10 +276,10 @@ heaptrc: 0 unfreed memory blocks
 
 Fresh same-host comparison rows after the change:
 
-| workload | nextPas median ns/op | nextPas median req/s | Rust std-only median ns/op | Go `net/http` median ns/op |
-| --- | ---: | ---: | ---: | ---: |
-| adapter_no_url | 11022 | 90720 | 8843 | 53076 |
-| no_url | 10948 | 91335 | 8935 | 49245 |
+| workload       | nextPas median ns/op | nextPas median req/s | Rust std-only median ns/op | Go `net/http` median ns/op |
+| -------------- | -------------------: | -------------------: | -------------------------: | -------------------------: |
+| adapter_no_url |                11022 |                90720 |                       8843 |                      53076 |
+| no_url         |                10948 |                91335 |                       8935 |                      49245 |
 
 The `adapter_no_url` row improved from the earlier same-day `12280 ns/op` to
 `11022 ns/op`, but the `no_url` row also showed scheduler noise. Do not treat
@@ -189,11 +331,12 @@ slice. It is intentionally not a durable performance ranking.
 
 ## Optimization Evidence: H1 Fast Lazy Header Lookup
 
-On 2026-06-06 local time, `TFastLazyHeaders.Get` and `Has` stopped forcing full
-header-block materialization for single-header lookups. The fast path now scans
-the raw request header block for the first matching field name; `GetAll`,
-`ForEach`, `Count`, `Clone`, and mutation methods still materialize the full
-`THttpHeaders` store to preserve duplicate-order and mutation semantics.
+On 2026-06-06 local time, `TFastLazyHeaders.Get`, `Has`, `Count`, and `GetAll`
+stopped forcing full header-block materialization. The fast path now scans the
+raw request header block for first-value lookup, count-only access, and
+same-name multi-value lookup; `ForEach`, `Clone`, and mutation methods still
+materialize the full `THttpHeaders` store to preserve duplicate-order and
+mutation semantics.
 
 The same focused slice also fixed an empty-header-value fast validation bug:
 `IsValidHeaderValueFast` now accepts `ALen = 0` instead of underflowing the
@@ -208,7 +351,7 @@ heaptrc: 0 unfreed memory blocks
 
 NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
 make -C tests/nextpas.core.http/test_http_benchmarks clean test
-33 total, 33 passed, 0 failed
+50 total, 50 passed, 0 failed
 heaptrc: 0 unfreed memory blocks
 
 make -C tests/nextpas.core.http/test_http_server clean test
@@ -225,14 +368,72 @@ NEXTPAS_BENCH_FILTER='fast headers' \
 make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-| row | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| adapter cost: fast headers get host only | 100000 | 1466.4 | 681947 |
-| adapter cost: fast headers foreach all | 100000 | 4678.8 | 213732 |
+| row                                       | iterations |  ns/op |  ops/s |
+| ----------------------------------------- | ---------: | -----: | -----: |
+| adapter cost: fast headers get host only  |     100000 | 1565.5 | 638773 |
+| adapter cost: fast headers count all      |     100000 | 1783.0 | 560854 |
+| adapter cost: fast headers has accept     |     100000 | 1541.3 | 648818 |
+| adapter cost: fast headers get all accept |     100000 | 2392.2 | 418020 |
+| adapter cost: fast headers foreach all    |     100000 | 4033.6 | 247915 |
 
 This is a nextPas internal materialization-cost split, not a cross-language
-server ranking. It shows the single-header lookup path no longer pays the same
-full materialization cost as whole-header iteration.
+server ranking. It shows the single-header lookup, count-only path, and
+same-name `GetAll` path no longer pay the same full materialization cost as
+whole-header access. The `count all` row isolates raw header-line counting,
+`has accept` isolates raw presence lookup without constructing a temporary
+header value string, `get all accept` isolates raw multi-value lookup for one
+header name, and `foreach all` still measures materialization plus iteration
+callback overhead.
+
+On 2026-06-06 local time, `TFastLazyHeaders.EnsureMaterialized` stopped
+re-entering the public `IHttpHeaders.Add` validation / copy path and now inserts
+the parser-trusted raw header spans into the concrete store. On this same host,
+that reduced the `count all` row from `4617.2 ns/op` to `3823.4 ns/op` and the
+`foreach all` row from `4695.8 ns/op` to `3873.9 ns/op`; `get host only`
+remained an intentionally separate raw lookup row.
+
+The follow-up count-only slice added a raw header-count helper for
+`TFastLazyHeaders.Count`. On the same benchmark shape, `count all` dropped
+again from `3823.4 ns/op` to `1740.7 ns/op`; `foreach all` remains the
+materialization row.
+
+The next same-name lookup slice added `TFastLazyHeaders.GetAllRawValues` and a
+dedicated `get all accept` benchmark row. On this host that row reports
+`2601.8 ns/op`, below the full `foreach all` materialization row at
+`3893.2 ns/op`.
+
+The follow-up presence-only slice added `TFastLazyHeaders.HasRawHeader` and
+moved `TFastLazyHeaders.Has` off `FindRawFirstValue`. On the same benchmark
+shape, `has accept` reports `1541.3 ns/op`, which keeps `Has` closer to the
+single-header lookup path than to the value-materializing `GetAll` /
+materializing `ForEach` rows.
+
+On 2026-06-07 local time, the focused benchmark gate also locked the narrower
+`bench_filter=fast headers get host only` path. This keeps the single-header
+raw lookup row as standalone microbenchmark evidence instead of only proving it
+indirectly through the broader `fast headers` filter group that also includes
+`count all` and `foreach all`.
+
+The same focused gate now also locks the narrower
+`bench_filter=fast headers get all accept` path. This keeps the same-name
+multi-value raw lookup row as standalone microbenchmark evidence instead of
+only proving it indirectly through the broader `fast headers` filter group.
+
+The same focused gate now also locks the narrower
+`bench_filter=fast headers has accept` path. This keeps the presence-only raw
+lookup row as standalone microbenchmark evidence instead of only proving it
+indirectly through the broader `fast headers` filter group.
+
+The same focused gate now also locks the narrower
+`bench_filter=fast headers count all` path. This keeps the raw header-count row
+as standalone microbenchmark evidence instead of only proving it indirectly
+through the broader `fast headers` filter group.
+
+The same focused gate now also locks the narrower
+`bench_filter=fast headers foreach all` path. This keeps the full
+materialization-plus-iteration row as standalone microbenchmark evidence
+instead of only proving it indirectly through the broader `fast headers`
+filter group.
 
 ## Run the Router Dispatch Benchmark
 
@@ -244,16 +445,55 @@ NEXTPAS_BENCH_FILTER='handler dispatch' \
 make -C benchmarks/nextpas.core.http/bench_router clean run
 ```
 
-This row reports `operation=http.router.dispatch` and measures
-`THttpRouter.ServeHTTP` for a static route plus a no-op handler. It reuses one
-request object and does not include socket I/O, H1 parsing, response
-serialization, middleware, or URL/query materialization.
+Run the direct no-router baseline row:
 
-Local focused row from 2026-06-05:
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='direct call' \
+make -C benchmarks/nextpas.core.http/bench_router clean run
+```
 
-| workload | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| handler dispatch (match + no-op handler) | 100000 | 508.1 | 1968021 |
+These rows report `operation=http.router.dispatch`:
+
+- `handler dispatch (match + no-op handler)` measures
+  `THttpRouter.ServeHTTP` for a static route plus a no-op handler. It reuses
+  one request object and does not include socket I/O, H1 parsing, response
+  serialization, middleware, or URL/query materialization.
+- `direct call (same request, no router)` measures the same reused request
+  object and the same no-op handler shape without router lookup or dispatch.
+  The gap between the two rows is the narrowest current benchmark for router
+  dispatch on this hot path.
+
+The filter is still substring-based, so the row names intentionally stay
+disjoint: `NEXTPAS_BENCH_FILTER='handler dispatch'` must not accidentally run
+the direct baseline, and `NEXTPAS_BENCH_FILTER='direct call'` must not
+accidentally run the routed row.
+
+Local focused rows from 2026-06-07:
+
+| workload                                 | iterations | ns/op |     ops/s |
+| ---------------------------------------- | ---------: | ----: | --------: |
+| direct call (same request, no router)    |     100000 |   3.8 | 261107514 |
+| handler dispatch (match + no-op handler) |     100000 | 264.5 |   3781347 |
+
+Treat these as local directional rows, not a permanent microbenchmark ranking.
+The durable conclusion is that router dispatch can now be isolated against a
+same-request/same-handler direct baseline, and that the remaining short-GET
+full-chain cost still lives primarily outside this narrow dispatch slice.
+
+## Run the Header Container Benchmark
+
+Run the focused header lookup row:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='Get hit' \
+make -C benchmarks/nextpas.core.http/bench_headers clean run
+```
+
+This emits `operation=http.headers` and reports both lowercase and uppercase
+lookup rows. Use it to isolate `THttpHeaders.Get` lookup cost without H1
+parsing, router dispatch, response serialization, or socket I/O.
 
 ## Run the H1 Writer Serialization Benchmark
 
@@ -289,6 +529,14 @@ NEXTPAS_BENCH_FILTER='fixed 200 13B' \
 make -C benchmarks/nextpas.core.http/bench_h1writer clean run
 ```
 
+Run the focused writer-plus-outbound row:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='outbound fixed 200 1KB' \
+make -C benchmarks/nextpas.core.http/bench_h1writer clean run
+```
+
 These rows report `operation=http.h1writer.serialize`.
 
 - `headers only 200` measures `TH1ResponseWriter` construction, two header
@@ -302,29 +550,40 @@ These rows report `operation=http.h1writer.serialize`.
   to measure status-line serialization without request parsing or socket I/O.
 - `fixed 200 13B` measures the same setup plus a 13-byte body write into a
   fixed in-memory writer.
+- `outbound fixed 200 1KB` measures `TH1ResponseWriter` writing a fixed 1 KiB
+  body into `IH1OutboundBuffer`, followed by `DrainAllTo` into a fixed
+  in-memory writer. This isolates the response writer plus outbound-drain
+  combination used by the server response path, without adding real socket I/O
+  or scheduler noise.
 
 Neither row includes request parsing, router dispatch, middleware, socket
 drain, or backpressure.
 
 Local focused row from 2026-06-05:
 
-| workload | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| headers only 200 | 100000 | 1247.1 | 801852 |
-| fixed 200 13B | 100000 | 1250.5 | 799680 |
+| workload         | iterations |  ns/op |  ops/s |
+| ---------------- | ---------: | -----: | -----: |
+| headers only 200 |     100000 | 1247.1 | 801852 |
+| fixed 200 13B    |     100000 | 1250.5 | 799680 |
 
 Local focused rows from 2026-06-06 after compact header-block writes:
 
-| workload | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| headers only 200 | 100000 | 1280.4 | 781028 |
-| headers block 200 6 headers | 100000 | 1890.9 | 528835 |
+| workload                    | iterations |  ns/op |  ops/s |
+| --------------------------- | ---------: | -----: | -----: |
+| headers only 200            |     100000 | 1280.4 | 781028 |
+| headers block 200 6 headers |     100000 | 1890.9 | 528835 |
 
 Local focused row from 2026-06-06 after known status-line fast paths:
 
-| workload | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| status lines common errors | 100000 | 1204.8 | 830013 |
+| workload                   | iterations |  ns/op |  ops/s |
+| -------------------------- | ---------: | -----: | -----: |
+| status lines common errors |     100000 | 1204.8 | 830013 |
+
+Local focused row from 2026-06-07 for writer plus outbound drain:
+
+| workload               | iterations |  ns/op |  ops/s |
+| ---------------------- | ---------: | -----: | -----: |
+| outbound fixed 200 1KB |     100000 | 1892.3 | 528470 |
 
 ## Run the H1 Outbound Drain Benchmark
 
@@ -343,9 +602,9 @@ socket I/O, readiness wakeups, write deadlines, or backpressure.
 
 Local focused row from 2026-06-05:
 
-| workload | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| buffer write+drain 1KB | 100000 | 303.0 | 3300665 |
+| workload               | iterations | ns/op |   ops/s |
+| ---------------------- | ---------: | ----: | ------: |
+| buffer write+drain 1KB |     100000 | 303.0 | 3300665 |
 
 Later on 2026-06-05, `TH1OutboundBuffer.PendingBytes`, `IsEmpty`, and
 `Advance` were marked as hot helper `inline` methods, with the implementations
@@ -355,9 +614,35 @@ smoke that locks this shape.
 
 Fresh single-run local row after that slice:
 
-| workload | iterations | ns/op | ops/s |
-| --- | ---: | ---: | ---: |
-| buffer write+drain 1KB | 100000 | 283.1 | 3532176 |
+| workload               | iterations | ns/op |   ops/s |
+| ---------------------- | ---------: | ----: | ------: |
+| buffer write+drain 1KB |     100000 | 283.1 | 3532176 |
+
+On 2026-06-07 local time, the same focused benchmark gained a narrower
+runtime-facing drain row:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100 \
+NEXTPAS_BENCH_FILTER='buffer trydrain runtime 1KB chunk128' \
+make -C benchmarks/nextpas.core.http/bench_h1outbound clean run
+```
+
+This row keeps the same 1 KiB payload but replaces the generic `IWriter` sink
+with a fake `ITcpStreamRuntime` that accepts at most `128` bytes per
+`TryWrite`. It therefore isolates repeated
+`IH1OutboundBuffer.TryDrainTo(runtime)` loop cost without mixing in real
+socket/backend/scheduler noise.
+
+Small focused row from the same host:
+
+| workload                             | iterations | ns/op |   ops/s |
+| ------------------------------------ | ---------: | ----: | ------: |
+| buffer trydrain runtime 1KB chunk128 |        100 | 393.5 | 2541231 |
+
+Treat the pair as an internal split:
+
+- `buffer write+drain 1KB` isolates drain-to-generic-writer cost
+- `buffer trydrain runtime 1KB chunk128` isolates partial runtime drain cost
 
 This row is directional only; keep using repeated or narrowed rows before
 claiming a durable cross-run performance delta.
@@ -417,11 +702,25 @@ benchmark harness. They are intentionally not a durable cross-run ranking.
 
 ## Run the Full-Chain Keep-Alive Benchmark
 
-Run a filtered plaintext full-chain row:
+Run a filtered full-chain row:
 
 ```sh
 NEXTPAS_BENCH_MAX_ITERS=1000 \
 NEXTPAS_BENCH_FILTER=plaintext \
+make -C benchmarks/nextpas.core.http/bench_fullchain clean run
+```
+
+Run the same nextPas-only full-chain row on a specific backend:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=128 \
+NEXTPAS_BENCH_FILTER=direct_root \
+NEXTPAS_BENCH_BACKEND=threaded \
+make -C benchmarks/nextpas.core.http/bench_fullchain clean run
+
+NEXTPAS_BENCH_MAX_ITERS=128 \
+NEXTPAS_BENCH_FILTER=direct_root \
+NEXTPAS_BENCH_BACKEND=epoll \
 make -C benchmarks/nextpas.core.http/bench_fullchain clean run
 ```
 
@@ -430,23 +729,164 @@ connection, sends requests, reads complete responses, and reports stable
 markers:
 
 - `operation=http.fullchain.keepalive`
-- `workload=<plaintext|json|echo_1k|sink_16k|param_route>`
+- `workload=<direct_root|direct_1k|plaintext|json|echo_1k|sink_16k|param_route|middleware_noop>`
+- `request_body_bytes=<0|1024|16384|...>`
+- `response_body_bytes=<13|1024|...>`
+- `response_validation=strict_status_content_length_body_bytes`
+- `backend=<threaded|epoll>`
+- `nextpas_h1_path=<fast|llhttp>`
+- `nextpas_dispatch_path=<direct_handler|router|middleware_router>`
+- `dispatch_validation=observed_handler_hits`
+- `dispatch_failures`
+- `observed_direct_handler_hits=<count>`
+- `observed_router_handler_hits=<count>`
+- `observed_middleware_hits=<count>`
 - `iterations`
 - `completed`
+- `validation_failures`
 - `elapsed_ns`
 - `ns/op`
 - `req/s`
 - `client_read_mode=buffered`
+- `bench_max_iters=<iterations>`
+- `bench_filter=<filter when set>`
+
+Invalid non-empty `NEXTPAS_BENCH_MAX_ITERS` values, including `0`, fail fast
+before any full-chain benchmark row is emitted.
+Any non-zero strict response validation failure is reported as
+`validation_failures=<count>` and exits non-zero after server teardown.
+Any dispatch marker mismatch is reported as `dispatch_failures=<count>` and
+also exits non-zero after server teardown.
+
+The narrowest full-chain workloads now split router dispatch and response size
+from the rest of the keep-alive server path:
+
+- `direct_root` keeps the same `GET /` fixed-response shape but intercepts it
+  in an outer handler before router dispatch.
+- `direct_1k` keeps the same direct outer-handler path and `GET /` request
+  target, but uses a separate direct-only host marker and a fixed 1 KiB body.
+  This isolates large-response runtime/socket cost without reintroducing router
+  dispatch or request-path projection into the `direct_root` baseline.
+- `plaintext` still sends `GET /` through the router path.
+- `middleware_noop` sends `GET /` through `THttpRouter` plus one no-op
+  middleware layer and reports `observed_middleware_hits`.
+
+Each full-chain row now also reports `response_body_bytes=...`, so saved
+single-connection artifacts do not need to infer whether a row was the tiny
+hello-world shape, the direct 1 KiB shape, or another fixed-body workload from
+the workload name alone.
+
+Each full-chain row now also reports `request_body_bytes=...`, so saved
+artifacts do not need to infer whether a row was a no-body GET, a 1 KiB echo,
+or a request-heavy sink workload from the workload name alone. Current no-body
+GET rows report `request_body_bytes=0`, `echo_1k` reports
+`request_body_bytes=1024`, and `sink_16k` reports `request_body_bytes=16384`.
+
+Full-chain rows now also report `nextpas_h1_path=...` for the current nextPas
+ingress choice:
+
+- `direct_root`, `direct_1k`, `plaintext`, `json`, `param_route`, and
+  `middleware_noop` are current no-body HTTP/1.1 GET requests and report
+  `nextpas_h1_path=fast`.
+- `echo_1k` and `sink_16k` are body-bearing requests and report
+  `nextpas_h1_path=llhttp`.
+
+Full-chain rows now also report `nextpas_dispatch_path=...` for the current
+nextPas dispatch shape:
+
+- `direct_root` and `direct_1k` report `direct_handler` because the outer
+  benchmark handler answers them before router dispatch.
+- `plaintext`, `json`, `echo_1k`, `sink_16k`, and `param_route` report
+  `router` because they go through `THttpRouter`.
+- `middleware_noop` reports `middleware_router` because it goes through the
+  benchmark middleware chain before `THttpRouter`.
+
+The dispatch marker is paired with observed handler hit counters from the timed
+measurement window. Direct rows should report direct hits equal to `iterations`
+and router hits `0`; router rows should report the inverse. The middleware row
+should report middleware hits equal to `iterations`. Warmup requests are not
+included in these counters.
+
+The filter is still substring-based, so the direct workload is intentionally
+named `direct_root` rather than `direct_plaintext`; this keeps
+`NEXTPAS_BENCH_FILTER=plaintext` unambiguous.
+
+`NEXTPAS_BENCH_BACKEND` defaults to `threaded`. When set, it must currently be
+`threaded` or `epoll`; invalid values fail fast before the benchmark emits a
+benchmark row. This is a nextPas-only runtime characterization seam, not a
+cross-language comparison flag.
 
 Local focused row from 2026-06-05:
 
-| workload | iterations | completed | elapsed_ns | ns/op | req/s |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| plaintext | 1000 | 1000 | 42132376 | 42132.4 | 23735 |
+| workload  | iterations | completed | elapsed_ns |   ns/op | req/s |
+| --------- | ---------: | --------: | ---------: | ------: | ----: |
+| plaintext |       1000 |      1000 |   42132376 | 42132.4 | 23735 |
 
 The clean build for this row emitted two existing FPC `Note:` lines from
 `nextpas.core.text.format` and the translated llhttp inline call. It emitted no
 FPC `Warning:` lines.
+
+Fresh local smoke rows from 2026-06-07:
+
+| workload    | iterations | completed | elapsed_ns |   ns/op | req/s |
+| ----------- | ---------: | --------: | ---------: | ------: | ----: |
+| direct_root |       1000 |      1000 |   37200928 | 37200.9 | 26881 |
+| plaintext   |       1000 |      1000 |   33733646 | 33733.6 | 29644 |
+
+Treat these as single-run harness proof, not stable ranking evidence. The
+durable conclusion is that `bench_fullchain` can now isolate a no-router
+direct-handler path from the router path without reintroducing filter
+ambiguity.
+
+Fresh local backend smoke rows from 2026-06-07 for `direct_root`:
+
+| backend  | workload    | iterations | completed | elapsed_ns |   ns/op | req/s |
+| -------- | ----------- | ---------: | --------: | ---------: | ------: | ----: |
+| threaded | direct_root |        128 |       128 |    4103527 | 32058.8 | 31193 |
+| epoll    | direct_root |        128 |       128 |   11884206 | 92845.4 | 10771 |
+
+Treat these as local backend smoke, not a stable threaded-vs-epoll ranking.
+The durable conclusion is that `bench_fullchain` now records backend selection
+explicitly and can characterize single-connection direct-handler runtime cost
+on either backend without patching the server comparison runner.
+
+Fresh local backend smoke rows from 2026-06-07 for `direct_1k`:
+
+| backend  | workload  | iterations | completed | elapsed_ns |   ns/op | req/s |
+| -------- | --------- | ---------: | --------: | ---------: | ------: | ----: |
+| threaded | direct_1k |        128 |       128 |    4733204 | 36978.2 | 27043 |
+| epoll    | direct_1k |        128 |       128 |    9643804 | 75342.2 | 13273 |
+
+Treat these as local backend smoke, not a stable threaded-vs-epoll ranking.
+The durable conclusion is narrower: `bench_fullchain` now has a real-socket,
+single-connection, no-router 1 KiB response row that sits between the
+in-memory writer/outbound benches and the broader `bench_server response_1k`
+throughput workload.
+The focused gate now also locks the `epoll` variant directly, so this backend
+split is no longer preserved only as a manual local row in the docs.
+
+Fresh local threaded smoke row from 2026-06-07 for the body-bearing llhttp
+path:
+
+| workload | request_body_bytes | response_body_bytes | nextpas_h1_path | iterations | completed | elapsed_ns |   ns/op | req/s |
+| -------- | -----------------: | ------------------: | --------------- | ---------: | --------: | ---------: | ------: | ----: |
+| echo_1k  |               1024 |                1024 | llhttp          |        128 |       128 |    5060196 | 39532.8 | 25295 |
+| sink_16k |              16384 |                   0 | llhttp          |        128 |       128 |    6560641 | 51255.0 | 19510 |
+
+Treat this as local harness proof, not a stable performance ranking. The
+durable conclusion is that `bench_fullchain` now exposes both the fast-vs-llhttp
+ingress split and the request/response body sizes directly on saved nextPas
+rows instead of leaving either dimension implicit in workload names.
+The focused benchmark gate now locks both body-bearing llhttp shapes:
+`echo_1k` for symmetric request/response bodies, and `sink_16k` for the
+request-heavy / empty-response path.
+The same gate now also locks `epoll + echo_1k`, so epoll backend evidence no
+longer depends only on the earlier `direct_root` fast-path row.
+The focused gate also locks `param_route`, which keeps the full-chain URL path
+plus route-parameter extraction seam under regression coverage.
+It now also locks `epoll + sink_16k`, so epoll evidence covers a request-heavy
+llhttp row instead of stopping at either the fast-path row or the symmetric
+`echo_1k` body-bearing case.
 
 ## Optimization Evidence: Full-Chain Benchmark Buffered Client Read
 
@@ -477,9 +917,9 @@ heaptrc: 0 unfreed memory blocks
 
 Fresh same-host filtered row:
 
-| workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| plaintext | 112063.8 | 42132.4 |
+| workload  | before ns/op | after ns/op |
+| --------- | -----------: | ----------: |
+| plaintext |     112063.8 |     42132.4 |
 
 This is a benchmark harness correction, not a production server code change.
 The row still measures single-connection synchronous ping-pong and should not
@@ -503,11 +943,11 @@ threads=4
 
 Results:
 
-| impl | completed | elapsed_ns | ns/op | req/s |
-| --- | ---: | ---: | ---: | ---: |
-| nextPas | 20000 | 247938762 | 12396 | 80665 |
-| Go `net/http` | 20000 | 981937616 | 49096 | 20367 |
-| Rust std-only | 20000 | 197099848 | 9854 | 101471 |
+| impl          | completed | elapsed_ns | ns/op |  req/s |
+| ------------- | --------: | ---------: | ----: | -----: |
+| nextPas       |     20000 |  247938762 | 12396 |  80665 |
+| Go `net/http` |     20000 |  981937616 | 49096 |  20367 |
+| Rust std-only |     20000 |  197099848 |  9854 | 101471 |
 
 The snapshot build had no FPC `Warning:` or `Note:` lines in the captured raw
 output. Re-run the command above after runtime, compiler, or OS changes before
@@ -535,10 +975,10 @@ heaptrc: 0 unfreed memory blocks
 
 Fresh same-host filtered rows:
 
-| workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| headers only 200 | 1414.6 | 1284.0 |
-| fixed 200 13B | 1389.1 | 1261.1 |
+| workload         | before ns/op | after ns/op |
+| ---------------- | -----------: | ----------: |
+| headers only 200 |       1414.6 |      1284.0 |
+| fixed 200 13B    |       1389.1 |      1261.1 |
 
 The clean `bench_h1writer` build for the `headers only 200` row emitted no FPC
 `Warning:` or `Note:` lines. This optimization deliberately does not change
@@ -579,10 +1019,10 @@ heaptrc: 0 unfreed memory blocks
 Fresh same-host filtered rows compared with the previous committed
 `HTTP_STATUS_OK` status-line fast path:
 
-| workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| headers only 200 | 1284.0 | 1247.1 |
-| fixed 200 13B | 1261.1 | 1250.5 |
+| workload         | before ns/op | after ns/op |
+| ---------------- | -----------: | ----------: |
+| headers only 200 |       1284.0 |      1247.1 |
+| fixed 200 13B    |       1261.1 |      1250.5 |
 
 A simpler string-concatenation implementation was measured and rejected because
 it reduced write calls but regressed these rows. The kept implementation
@@ -633,9 +1073,9 @@ heaptrc: 0 unfreed memory blocks
 
 Fresh same-host filtered rows:
 
-| workload | ns/op | ops/s |
-| --- | ---: | ---: |
-| headers only 200 | 1280.4 | 781028 |
+| workload                    |  ns/op |  ops/s |
+| --------------------------- | -----: | -----: |
+| headers only 200            | 1280.4 | 781028 |
 | headers block 200 6 headers | 1890.9 | 528835 |
 
 This slice keeps the status line separate, preserves exact wire bytes for
@@ -684,8 +1124,8 @@ heaptrc: 0 unfreed memory blocks
 
 Fresh same-host filtered row:
 
-| workload | ns/op | ops/s |
-| --- | ---: | ---: |
+| workload                   |  ns/op |  ops/s |
+| -------------------------- | -----: | -----: |
 | status lines common errors | 1204.8 | 830013 |
 
 The focused writer tests also lock the unknown-status fallback (`599 Unknown`)
@@ -714,11 +1154,11 @@ Server comparison after the fast path:
 command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4
 ```
 
-| impl | completed | elapsed_ns | ns/op | req/s |
-| --- | ---: | ---: | ---: | ---: |
-| nextPas | 50000 | 619882610 | 12397 | 80660 |
-| Go `net/http` | 50000 | 2685471938 | 53709 | 18618 |
-| Rust std-only | 50000 | 503399527 | 10067 | 99324 |
+| impl          | completed | elapsed_ns | ns/op | req/s |
+| ------------- | --------: | ---------: | ----: | ----: |
+| nextPas       |     50000 |  619882610 | 12397 | 80660 |
+| Go `net/http` |     50000 | 2685471938 | 53709 | 18618 |
+| Rust std-only |     50000 |  503399527 | 10067 | 99324 |
 
 The same local 50k/4 comparison before the fast path measured nextPas at
 `14736 ns/op` / `67857 req/s`, so this slice narrows the gap to the Rust
@@ -744,12 +1184,12 @@ Parser microbenchmark:
 command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-| fast workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| simple GET | 856.4 | 754.9 |
-| 10 headers | 3679.0 | 3429.8 |
-| POST 1KB body | 1500.2 | 1374.2 |
-| pipeline 10 reqs | 8685.5 | 7581.2 |
+| fast workload    | before ns/op | after ns/op |
+| ---------------- | -----------: | ----------: |
+| simple GET       |        856.4 |       754.9 |
+| 10 headers       |       3679.0 |      3429.8 |
+| POST 1KB body    |       1500.2 |      1374.2 |
+| pipeline 10 reqs |       8685.5 |      7581.2 |
 
 The same batch also tested a server-side disable-fast-path experiment and
 rejected it: disabling the server fast path reduced the local `bench_server`
@@ -841,12 +1281,12 @@ Parser microbenchmark:
 command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-| fast workload | previous ns/op | after ns/op |
-| --- | ---: | ---: |
-| simple GET | 757.2 | 349.9 |
-| 10 headers | 3554.1 | 1351.5 |
-| POST 1KB body | 1394.2 | 628.9 |
-| pipeline 10 reqs | 7821.6 | 3526.5 |
+| fast workload    | previous ns/op | after ns/op |
+| ---------------- | -------------: | ----------: |
+| simple GET       |          757.2 |       349.9 |
+| 10 headers       |         3554.1 |      1351.5 |
+| POST 1KB body    |         1394.2 |       628.9 |
+| pipeline 10 reqs |         7821.6 |      3526.5 |
 
 The parser rows show the intended materialization win. A same-batch
 `bench_server` sanity row measured `87356 req/s`, which is within the already
@@ -865,15 +1305,15 @@ Header microbenchmark:
 command=make -C benchmarks/nextpas.core.http/bench_headers clean run
 ```
 
-| workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| Set+Get 5 headers | 1235.6 | 924.2 |
-| Set+Get 15 headers | 3233.0 | 2712.2 |
-| Add 15 headers | 2424.4 | 1832.8 |
-| Get miss (3 headers) | 58.1 | 53.9 |
-| Get hit (5 headers, last) | 64.7 | 61.6 |
-| Has (3 headers) | 49.7 | 46.0 |
-| Clone 10 headers | 725.9 | 732.4 |
+| workload                  | before ns/op | after ns/op |
+| ------------------------- | -----------: | ----------: |
+| Set+Get 5 headers         |       1235.6 |       924.2 |
+| Set+Get 15 headers        |       3233.0 |      2712.2 |
+| Add 15 headers            |       2424.4 |      1832.8 |
+| Get miss (3 headers)      |         58.1 |        53.9 |
+| Get hit (5 headers, last) |         64.7 |        61.6 |
+| Has (3 headers)           |         49.7 |        46.0 |
+| Clone 10 headers          |        725.9 |       732.4 |
 
 `Add 15 headers` is the most relevant row for the current H1 parser adapter,
 because parsed header callbacks append entries as they arrive. The change keeps
@@ -893,12 +1333,12 @@ Parser microbenchmark:
 command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-| llhttp workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| simple GET | 1298.0 | 1208.7 |
-| 10 headers | 4704.7 | 3952.9 |
-| POST 1KB body | 2136.6 | 1926.7 |
-| pipeline 10 reqs | 11400.4 | 10668.5 |
+| llhttp workload  | before ns/op | after ns/op |
+| ---------------- | -----------: | ----------: |
+| simple GET       |       1298.0 |      1208.7 |
+| 10 headers       |       4704.7 |      3952.9 |
+| POST 1KB body    |       2136.6 |      1926.7 |
+| pipeline 10 reqs |      11400.4 |     10668.5 |
 
 The benchmark has normal local noise, so these numbers should be treated as a
 directional microbenchmark. The split-callback contract is covered by
@@ -919,16 +1359,16 @@ Header microbenchmark:
 command=make -C benchmarks/nextpas.core.http/bench_headers clean run
 ```
 
-| workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| Set+Get 5 headers | 1404.5 | 928.0 |
-| Set+Get 15 headers | 3420.0 | 2665.6 |
-| Add 15 headers | 2064.0 | 1775.8 |
-| Get miss (3 headers) | 58.8 | 55.6 |
-| Get hit (5 headers, last) | 68.6 | 46.6 |
-| Get hit uppercase (5 headers, last) | 122.8 | 149.7 |
-| Has (3 headers) | 53.3 | 25.1 |
-| Clone 10 headers | 752.3 | 723.9 |
+| workload                            | before ns/op | after ns/op |
+| ----------------------------------- | -----------: | ----------: |
+| Set+Get 5 headers                   |       1404.5 |       928.0 |
+| Set+Get 15 headers                  |       3420.0 |      2665.6 |
+| Add 15 headers                      |       2064.0 |      1775.8 |
+| Get miss (3 headers)                |         58.8 |        55.6 |
+| Get hit (5 headers, last)           |         68.6 |        46.6 |
+| Get hit uppercase (5 headers, last) |        122.8 |       149.7 |
+| Has (3 headers)                     |         53.3 |        25.1 |
+| Clone 10 headers                    |        752.3 |       723.9 |
 
 The uppercase lookup row is intentionally tracked because public header APIs
 remain case-insensitive. This slice trades a slower uppercase fallback for a
@@ -988,9 +1428,9 @@ Header microbenchmark:
 command=make -C benchmarks/nextpas.core.http/bench_headers clean run
 ```
 
-| workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| GetAll miss (5 headers) | 136.9 | 60.6 |
+| workload                | before ns/op | after ns/op |
+| ----------------------- | -----------: | ----------: |
+| GetAll miss (5 headers) |        136.9 |        60.6 |
 
 Parser projection:
 
@@ -998,12 +1438,12 @@ Parser projection:
 command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-| llhttp workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| simple GET | 1203.7 | 1094.1 |
-| 10 headers | 4061.6 | 3905.8 |
-| POST 1KB body | 1922.5 | 1867.3 |
-| pipeline 10 reqs | 10602.0 | 10096.6 |
+| llhttp workload  | before ns/op | after ns/op |
+| ---------------- | -----------: | ----------: |
+| simple GET       |       1203.7 |      1094.1 |
+| 10 headers       |       4061.6 |      3905.8 |
+| POST 1KB body    |       1922.5 |      1867.3 |
+| pipeline 10 reqs |      10602.0 |     10096.6 |
 
 `test_http_headers`, `test_http_h1parser`, and `test_http_h1fast` all passed
 with heaptrc reporting `0 unfreed memory blocks`.
@@ -1019,11 +1459,11 @@ buffers.
 command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-| workload | raw llhttp ns/op | adapter ns/op | adapter/raw |
-| --- | ---: | ---: | ---: |
-| simple GET | 425.3 | 1138.6 | 2.68x |
-| 10 headers | 822.1 | 3813.1 | 4.64x |
-| POST 1KB body | 456.2 | 1853.6 | 4.06x |
+| workload      | raw llhttp ns/op | adapter ns/op | adapter/raw |
+| ------------- | ---------------: | ------------: | ----------: |
+| simple GET    |            425.3 |        1138.6 |       2.68x |
+| 10 headers    |            822.1 |        3813.1 |       4.64x |
+| POST 1KB body |            456.2 |        1853.6 |       4.06x |
 
 The same run showed the current conservative fast path at `843.0 ns/op` for
 simple GET, `3467.6 ns/op` for 10 headers, `1474.5 ns/op` for POST 1KB, and
@@ -1077,12 +1517,12 @@ Local comparator input sizes match `bench_h1parser`: simple GET is 35 bytes,
 Local snapshot with
 `LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp`:
 
-| workload | Pascal raw ns/op | C raw ns/op | Pascal no-op ns/op | C no-op ns/op | nextPas adapter ns/op |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| simple GET | 222.0 | 279.4 | 221.5 | 138.2 | 623.0 |
-| 10 headers | 779.5 | 561.5 | 785.7 | 544.7 | 3341.4 |
-| POST 1KB body | 437.1 | 299.1 | 454.5 | 283.4 | 1429.1 |
-| pipeline 10 reqs | 2203.0 | 1408.2 | 2159.2 | 1401.7 | 6273.4 |
+| workload         | Pascal raw ns/op | C raw ns/op | Pascal no-op ns/op | C no-op ns/op | nextPas adapter ns/op |
+| ---------------- | ---------------: | ----------: | -----------------: | ------------: | --------------------: |
+| simple GET       |            222.0 |       279.4 |              221.5 |         138.2 |                 623.0 |
+| 10 headers       |            779.5 |       561.5 |              785.7 |         544.7 |                3341.4 |
+| POST 1KB body    |            437.1 |       299.1 |              454.5 |         283.4 |                1429.1 |
+| pipeline 10 reqs |           2203.0 |      1408.2 |             2159.2 |        1401.7 |                6273.4 |
 
 The raw simple-GET row is too short and noisy to use as a standalone parity
 claim. The more representative 10-header, POST, pipeline, and no-op callback
@@ -1103,17 +1543,26 @@ stopped using a hard-coded `MAX_ITERS = 1000`. Both runners now default to
 `bench_max_iters=100000`, print the effective value in the summary, and accept
 `NEXTPAS_BENCH_MAX_ITERS` for short smoke runs or heavier formal captures.
 
+The focused benchmark gate also now locks stable operation markers for these two
+parser-facing tools:
+
+- `bench_h1parser` emits `operation=http.h1parser`
+- `bench_h1parser/compare_c` emits `operation=http.h1parser.c_llhttp`
+
+This keeps parser-filtered smoke runs, saved raw output, and future snapshot
+parsers from inferring tool identity from human-readable titles alone.
+
 Focused RED/GREEN:
 
 ```text
 RED: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
   make -C tests/nextpas.core.http/test_http_benchmarks clean test
 H1 parser benchmark max iterations env and C llhttp comparator max iterations env failed:
-bench_max_iters=2000 marker was missing; both still emitted 1000-iter rows.
+operation=http.h1parser / operation=http.h1parser.c_llhttp markers were missing.
 
 GREEN: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
   make -C tests/nextpas.core.http/test_http_benchmarks clean test
-9 total, 9 passed, 0 failed
+49 total, 49 passed, 0 failed
 heaptrc: 0 unfreed memory blocks
 ```
 
@@ -1261,11 +1710,11 @@ command=make -C benchmarks/nextpas.core.http/bench_h1parser run
 ```
 
 | llhttp adapter workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| simple GET | 1101.7 | 641.8 |
-| 10 headers | 3808.5 | 3284.4 |
-| POST 1KB body | 1848.6 | 1457.6 |
-| pipeline 10 reqs | 11253.6 | 6201.2 |
+| ----------------------- | -----------: | ----------: |
+| simple GET              |       1101.7 |       641.8 |
+| 10 headers              |       3808.5 |      3284.4 |
+| POST 1KB body           |       1848.6 |      1457.6 |
+| pipeline 10 reqs        |      11253.6 |      6201.2 |
 
 `test_http_headers`, `test_http_h1parser`, and `test_http_h1fast` all passed
 with heaptrc reporting `0 unfreed memory blocks`. The H1 parser heaptrc
@@ -1292,11 +1741,11 @@ command=make -C benchmarks/nextpas.core.http/bench_h1parser run
 ```
 
 | llhttp adapter workload | previous ns/op | after ns/op |
-| --- | ---: | ---: |
-| simple GET | 641.8 | 644.2 |
-| 10 headers | 3284.4 | 3333.1 |
-| POST 1KB body | 1457.6 | 1404.6 |
-| pipeline 10 reqs | 6201.2 | 6206.8 |
+| ----------------------- | -------------: | ----------: |
+| simple GET              |          641.8 |       644.2 |
+| 10 headers              |         3284.4 |      3333.1 |
+| POST 1KB body           |         1457.6 |      1404.6 |
+| pipeline 10 reqs        |         6201.2 |      6206.8 |
 
 This is a narrow optimization: the body workload improved, while no-body rows
 remain effectively unchanged within local microbenchmark noise. It does not
@@ -1325,20 +1774,20 @@ Confirmation run:
 command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-| workload | ns/op |
-| --- | ---: |
-| raw llhttp simple GET | 232.1 |
-| noop cb simple GET | 221.3 |
-| llhttp adapter simple GET | 617.7 |
-| raw llhttp 10 headers | 823.7 |
-| noop cb 10 headers | 806.1 |
-| llhttp adapter 10 headers | 3380.4 |
-| raw llhttp POST 1KB | 489.4 |
-| noop cb POST 1KB | 454.1 |
-| llhttp adapter POST 1KB | 1401.3 |
+| workload                       |  ns/op |
+| ------------------------------ | -----: |
+| raw llhttp simple GET          |  232.1 |
+| noop cb simple GET             |  221.3 |
+| llhttp adapter simple GET      |  617.7 |
+| raw llhttp 10 headers          |  823.7 |
+| noop cb 10 headers             |  806.1 |
+| llhttp adapter 10 headers      | 3380.4 |
+| raw llhttp POST 1KB            |  489.4 |
+| noop cb POST 1KB               |  454.1 |
+| llhttp adapter POST 1KB        | 1401.3 |
 | raw llhttp pipeline pause-only | 2170.1 |
-| noop cb pipeline | 2163.7 |
-| llhttp adapter pipeline | 6205.7 |
+| noop cb pipeline               | 2163.7 |
+| llhttp adapter pipeline        | 6205.7 |
 
 The simple-GET raw/no-op rows are very short and remain sensitive to local
 microbenchmark noise. The 10-header, POST, and pipeline rows are the useful
@@ -1352,8 +1801,8 @@ translation itself.
 
 ## Optimization Evidence: Header Name Normalization Fast Path
 
-On 2026-06-05 local time, `THttpHeaders.Add` and `Set_` stopped normalizing
-already-lowercase header names after validating them. A new combined scan
+On 2026-06-05 local time, `THttpHeaders.Add` and `SetHeader` stopped
+normalizing already-lowercase header names after validating them. A new combined scan
 validates the name and detects whether uppercase normalization is actually
 needed. Public mixed/uppercase input still canonicalizes to lowercase, and
 invalid name/value rejection remains covered by focused tests.
@@ -1365,11 +1814,11 @@ baseline=make -C benchmarks/nextpas.core.http/bench_headers clean run
 confirmation=make -C benchmarks/nextpas.core.http/bench_headers run
 ```
 
-| workload | before ns/op | after ns/op |
-| --- | ---: | ---: |
-| Set+Get 5 headers | 828.2 | 784.3 |
-| Set+Get 15 headers | 2665.1 | 2516.8 |
-| Add 15 headers | 1783.5 | 1635.8 |
+| workload           | before ns/op | after ns/op |
+| ------------------ | -----------: | ----------: |
+| Set+Get 5 headers  |        828.2 |       784.3 |
+| Set+Get 15 headers |       2665.1 |      2516.8 |
+| Add 15 headers     |       1783.5 |      1635.8 |
 
 Parser projection:
 
@@ -1410,9 +1859,9 @@ baseline=make -C benchmarks/nextpas.core.http/bench_fullchain clean run
 confirmation=make -C benchmarks/nextpas.core.http/bench_fullchain clean run
 ```
 
-| workload | before req/s | after req/s |
-| --- | ---: | ---: |
-| Sink 16KB POST | 5005 | 5488 |
+| workload       | before req/s | after req/s |
+| -------------- | -----------: | ----------: |
+| Sink 16KB POST |         5005 |        5488 |
 
 The full-chain benchmark is intentionally directional and local. Short GET rows
 showed normal scheduler/socket noise in the same runs, so the 16KB sink row is
@@ -1500,6 +1949,13 @@ string `AddParsed` row because it includes the final name/value string copy.
 The full parser still benefits because the direct path removes the intermediate
 `FCurrentField` / `FCurrentValue` string allocation/copy before the final store.
 
+On 2026-06-07 local time, the focused benchmark gate also locked the narrower
+`bench_filter=header span add 10 headers` path. This keeps the parser-trusted
+span-to-header-store row available as standalone evidence instead of only
+appearing inside the broader adapter materialization group. The row remains an
+adapter materialization diagnostic, not a production performance claim by
+itself.
+
 ## Benchmark Tooling: H1 Row Filter and Flag Matrix
 
 On 2026-06-05 local time, `TBenchRunner` and the C llhttp comparator gained a
@@ -1553,6 +2009,24 @@ hand-editing the generated llhttp state machine.
 runner. It writes `results.tsv`, `summary.tsv`, `env.txt`, logs, and optional
 `perf/*.txt` only under
 `build/projects/nextpas.core.http/bench_h1parser/flag_matrix/...`.
+If you override `NEXTPAS_FLAG_MATRIX_OUTPUT_DIR`, it must still stay under
+that `flag_matrix` root. Unsafe overrides now fail fast with `unsafe output
+dir` and a non-zero exit instead of letting the runner become a broader tree
+cleanup tool.
+
+`NEXTPAS_BENCH_FILTER` and `NEXTPAS_C_BENCH_FILTER` use case-insensitive
+substring matching over benchmark row names. For H1 parser, full-chain, and C
+llhttp comparator rows, a no-match exits non-zero. `LLHTTP_ROOT` takes
+precedence; `NEXTPAS_LLHTTP_ROOT` is accepted as a fallback for shared
+test/benchmark environments. Do not commit generated objects, binaries, `.raw`
+captures, flag-matrix outputs, perf logs, or vendored llhttp sources.
+
+Stable `env.txt` markers include `bench_filter=`, `c_bench_filter=`,
+`perf_requested=`, and `perf_usable=`. `results.tsv` columns:
+`variant`, `impl`, `benchmark`, `run`, `iterations`, `ns_per_op`,
+`ops_per_sec`, `flags`. `summary.tsv` columns: `variant`, `impl`,
+`benchmark`, `runs`, `median_iterations`, `median_ns_per_op`,
+`median_ops_per_sec`, `flags`.
 
 ```sh
 LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
@@ -1644,6 +2118,11 @@ adapter cost: request metadata legacy expect+cl ns/op=1321.3
 adapter cost: request metadata cached expect+cl ns/op=6.1
 ```
 
+The focused gate now also locks the narrower
+`bench_filter=request metadata cached` path, so the cached row remains a
+durable standalone microbenchmark instead of only appearing as part of the
+broader legacy-vs-cached pair.
+
 Focused validation:
 
 ```text
@@ -1700,6 +2179,10 @@ adapter no-url: llhttp direct only ns/op=1172.1
 adapter no-url: fast parse only ns/op=646.2
 ```
 
+Current benchmark output has renamed the old `fast reject + llhttp` row to
+`adapter no-url: legacy double parse explicit keep-alive`; this historical smoke
+output keeps the old label for traceability.
+
 The immediate conclusion is that request metadata caching and the follow-up span
 fast path remove measurable per-request policy/dispatch cost without changing
 wire contracts. The broader H1 performance track should continue with
@@ -1726,6 +2209,16 @@ command=NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='url parse' make -C 
 adapter cost: url parse generic origin-form = 276.8 ns/op
 adapter cost: url parse request-target origin-form = 232.0 ns/op
 ```
+
+The focused benchmark gate now also locks the narrower
+`bench_filter=url parse request-target origin-form` path, so the
+request-target-specialized parse row remains durable standalone microbenchmark
+evidence instead of only appearing inside the broader `url parse` filter group.
+
+The focused benchmark gate now also locks the narrower
+`bench_filter=url parse generic origin-form` path, so the generic origin-form
+parse row remains durable standalone microbenchmark evidence instead of only
+appearing inside the broader `url parse` filter group.
 
 Focused validation:
 
@@ -1926,6 +2419,21 @@ ns/op=43622
 req/s=22923
 ```
 
+The focused benchmark gate now also locks the narrower
+`bench_filter=request direct Path access` path, so the direct path-projection
+row remains durable standalone microbenchmark evidence instead of only
+appearing inside the broader `request ` filter group.
+
+The focused benchmark gate now also locks the narrower
+`bench_filter=request direct RawQuery access` path, so the direct query
+projection row remains durable standalone microbenchmark evidence instead of
+only appearing inside the broader `request ` filter group.
+
+The focused benchmark gate now also locks the narrower
+`bench_filter=request direct Path+RawQuery access` path, so the combined direct
+path/query projection row remains durable standalone microbenchmark evidence
+instead of only appearing inside the broader `request ` filter group.
+
 This closes the direct path accessor slow-path gap. The next high-value
 performance slice should move to llhttp adapter metadata caching during parse,
 then fast-path header block lazy materialization, rather than hand-editing the
@@ -1934,9 +2442,10 @@ generated llhttp state machine.
 ## Full-Chain Correlation: No-URL Keep-Alive Workload
 
 On 2026-06-05 local time, the server comparison output gained an explicit
-`workload=no_url` marker across nextPas, Go, and Rust comparator binaries. This
-locks the benchmark interpretation: the current keep-alive comparison measures a
-simple handler that does not read `Req.Url` / query parameters.
+`workload=no_url` marker across nextPas, Go, and Rust std-only comparator
+binaries. This locks the benchmark interpretation: the current keep-alive
+comparison measures a simple handler that does not read `Req.Url` / query
+parameters.
 
 Focused RED/GREEN:
 
@@ -1957,11 +2466,11 @@ Fresh local correlation after lazy request-target projection:
 command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4
 ```
 
-| impl | workload | completed | elapsed_ns | ns/op | req/s |
-| --- | --- | ---: | ---: | ---: | ---: |
-| nextPas | no_url | 50000 | 641366179 | 12827 | 77958 |
-| Go `net/http` | no_url | 50000 | 2649511337 | 52990 | 18871 |
-| Rust std-only | no_url | 50000 | 508013046 | 10160 | 98422 |
+| impl          | workload | completed | elapsed_ns | ns/op | req/s |
+| ------------- | -------- | --------: | ---------: | ----: | ----: |
+| nextPas       | no_url   |     50000 |  641366179 | 12827 | 77958 |
+| Go `net/http` | no_url   |     50000 | 2649511337 | 52990 | 18871 |
+| Rust std-only | no_url   |     50000 |  508013046 | 10160 | 98422 |
 
 The result is directionally useful but not a stable throughput claim. Compared
 with earlier local rows, nextPas remains in the same noise band and still trails
@@ -1974,7 +2483,7 @@ sit outside URL projection.
 
 On 2026-06-05 local time, the server comparison runner gained
 `--workload no_url|url_path|adapter_no_url`, and the nextPas, Go, and Rust
-comparator binaries now accept the same selector. `url_path` sends
+std-only comparator binaries now accept the same selector. `url_path` sends
 `GET /api/v1/users`; nextPas and Go validate the parsed request path, while the
 Rust std-only comparator checks the same path from the one buffered request
 frame before writing its response.
@@ -1999,26 +2508,30 @@ Fresh local correlation:
 command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload url_path
 ```
 
-| impl | workload | completed | elapsed_ns | ns/op | req/s |
-| --- | --- | ---: | ---: | ---: | ---: |
-| nextPas | url_path | 50000 | 628713623 | 12574 | 79527 |
-| Go `net/http` | url_path | 50000 | 2628825324 | 52576 | 19019 |
-| Rust std-only | url_path | 50000 | 441859972 | 8837 | 113158 |
+| impl          | workload | completed | elapsed_ns | ns/op |  req/s |
+| ------------- | -------- | --------: | ---------: | ----: | -----: |
+| nextPas       | url_path |     50000 |  628713623 | 12574 |  79527 |
+| Go `net/http` | url_path |     50000 | 2628825324 | 52576 |  19019 |
+| Rust std-only | url_path |     50000 |  441859972 |  8837 | 113158 |
 
 The `url_path` row keeps nextPas ahead of the Go comparator and still behind the
 Rust std-only comparator. It does not prove that Pascal-translated llhttp is the
 full-chain bottleneck: this request still fits the H1 server fast path, and URL
 projection is paid lazily only when the handler reads `Req.Url.Path`. The next
-useful isolation step is a forced-adapter workload, or a narrower parser
-comparison against C llhttp with hardware counters on a perf-enabled machine.
+useful isolation step is a deliberate adapter-only workload, or a narrower
+parser comparison against C llhttp with hardware counters on a perf-enabled
+machine.
 
-## Full-Chain Correlation: Forced Adapter No-URL Workload
+## Full-Chain Correlation: Explicit Keep-Alive No-URL Workload
 
 On 2026-06-05 local time, `adapter_no_url` was added as a full-chain isolation
 workload. It keeps the request target at `/` and keeps the handler from reading
-the URL, but adds `Connection: keep-alive` to the request. In nextPas this
-forces `TryUseFastRequestParser` to reject the H1 fast path (`HasConnection`)
-and use the llhttp adapter path.
+the URL, but adds `Connection: keep-alive` to the request. The original purpose
+was to expose nextPas' connection-policy gate. Current nextPas treats explicit
+HTTP/1.1 keep-alive as fast-path compatible, so fresh rows must be interpreted
+from the nextPas `nextpas_h1_path=fast` marker rather than as llhttp-adapter
+evidence. The row remains useful as a regression guard against reintroducing the
+old fast-parse-then-llhttp double parse cost for explicit keep-alive.
 
 Focused RED/GREEN:
 
@@ -2041,18 +2554,18 @@ Fresh local correlation:
 command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload adapter_no_url
 ```
 
-| impl | workload | completed | elapsed_ns | ns/op | req/s |
-| --- | --- | ---: | ---: | ---: | ---: |
-| nextPas | adapter_no_url | 50000 | 634287816 | 12685 | 78828 |
-| Go `net/http` | adapter_no_url | 50000 | 2891101718 | 57822 | 17294 |
-| Rust std-only | adapter_no_url | 50000 | 521882998 | 10437 | 95806 |
+| impl          | workload       | completed | elapsed_ns | ns/op | req/s |
+| ------------- | -------------- | --------: | ---------: | ----: | ----: |
+| nextPas       | adapter_no_url |     50000 |  634287816 | 12685 | 78828 |
+| Go `net/http` | adapter_no_url |     50000 | 2891101718 | 57822 | 17294 |
+| Rust std-only | adapter_no_url |     50000 |  521882998 | 10437 | 95806 |
 
-The forced-adapter row keeps nextPas in the same local band as the no-URL and
-URL-path rows, still ahead of Go and behind the Rust std-only comparator. That
-does not erase the raw Pascal-vs-C llhttp gap below, but it shows that the
-current full-chain server gap is not explained by the H1 fast path alone. The
-next useful step is to split adapter materialization, response writer/drain, and
-runtime/socket overhead with narrower benchmarks or profiling.
+The explicit keep-alive row keeps nextPas in the same local band as the no-URL
+and URL-path rows, still ahead of Go and behind the Rust std-only comparator.
+It does not erase the raw Pascal-vs-C llhttp gap below, but current
+`nextpas_h1_path=fast` output means this row no longer isolates the llhttp
+adapter path. The next useful step is to split adapter materialization, response
+writer/drain, and runtime/socket overhead with narrower benchmarks or profiling.
 
 ## Full-Chain Correlation: 1 KiB Response Workload
 
@@ -2061,6 +2574,14 @@ writer/drain and socket throughput beyond the tiny hello-world body. This batch
 also fixed the nextPas raw benchmark client to wait for `header_end + body_len`
 before counting a response as complete. That makes the large-response row
 meaningful and also makes new no-URL rows stricter than older prefix-read rows.
+On 2026-06-07 local time, the direct comparator rows also gained explicit
+response-read metadata: `response_body_bytes=1024` for this workload, plus
+`client_read_mode=header_plus_content_length` for nextPas / Rust std-only /
+Hyper and `client_read_mode=http_client_body_drain` for the Go `net/http`
+comparator. This keeps response-writer/drain discussions honest about how each
+client decides a response is complete.
+For a nextPas-only single-connection no-router counterpart, see the
+`bench_fullchain direct_1k` rows in the full-chain section above.
 
 Focused RED/GREEN:
 
@@ -2083,11 +2604,11 @@ Fresh local correlation:
 command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload response_1k
 ```
 
-| impl | workload | completed | elapsed_ns | ns/op | req/s |
-| --- | --- | ---: | ---: | ---: | ---: |
-| nextPas | response_1k | 50000 | 623561283 | 12471 | 80184 |
-| Go `net/http` | response_1k | 50000 | 2718470762 | 54369 | 18392 |
-| Rust std-only | response_1k | 50000 | 554412389 | 11088 | 90185 |
+| impl          | workload    | completed | elapsed_ns | ns/op | req/s |
+| ------------- | ----------- | --------: | ---------: | ----: | ----: |
+| nextPas       | response_1k |     50000 |  623561283 | 12471 | 80184 |
+| Go `net/http` | response_1k |     50000 | 2718470762 | 54369 | 18392 |
+| Rust std-only | response_1k |     50000 |  554412389 | 11088 | 90185 |
 
 Calibration no-URL row with the same complete-response reader:
 
@@ -2095,11 +2616,11 @@ Calibration no-URL row with the same complete-response reader:
 command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload no_url
 ```
 
-| impl | workload | completed | elapsed_ns | ns/op | req/s |
-| --- | --- | ---: | ---: | ---: | ---: |
-| nextPas | no_url | 50000 | 569950075 | 11399 | 87726 |
-| Go `net/http` | no_url | 50000 | 2740141668 | 54802 | 18247 |
-| Rust std-only | no_url | 50000 | 527895368 | 10557 | 94715 |
+| impl          | workload | completed | elapsed_ns | ns/op | req/s |
+| ------------- | -------- | --------: | ---------: | ----: | ----: |
+| nextPas       | no_url   |     50000 |  569950075 | 11399 | 87726 |
+| Go `net/http` | no_url   |     50000 | 2740141668 | 54802 | 18247 |
+| Rust std-only | no_url   |     50000 |  527895368 | 10557 | 94715 |
 
 This suggests the current 1 KiB response writer/drain path is not the dominant
 gap versus Rust std-only on this machine. nextPas remains close to the Rust
@@ -2111,19 +2632,35 @@ throughput.
 
 On 2026-06-05 local time, `run_server_comparison.sh` and
 `capture_server_comparison_snapshot.sh` gained `--runs N`. The server runner
-now builds nextPas, Go, and Rust once, repeats each implementation `N` times,
-prints `run=...` markers for raw rows, and emits a median summary:
+now builds nextPas, Go, and Rust std-only once, repeats each implementation
+`N` times, prints `run=...` markers for raw rows, and emits a median summary:
 
 ```text
 summary=http.server.keepalive
 summary_impl=go runs=3 median_completed=50000 median_ns/op=55017.0 median_req/s=18176
 summary_impl=nextpas runs=3 median_completed=50000 median_ns/op=11431.0 median_req/s=87476
-summary_impl=rust runs=3 median_completed=50000 median_ns/op=9885.0 median_req/s=101153
+summary_impl=rust_std runs=3 median_completed=50000 median_ns/op=9885.0 median_req/s=101153
 ```
+
+Current summary rows also carry `summary_client_read_mode=...`,
+`summary_response_body_bytes=...`, `summary_rust_profile=...`,
+`summary_rust_http_stack=...`, `summary_rust_runtime=...`,
+`summary_requested_threads=...`, `summary_effective_threads=...`,
+`summary_operation=...`, and `summary_workload=...`, so multi-run median
+reports retain the raw row context needed to compare `response_1k` fairly
+without losing Rust comparator profile, runtime/stack identity,
+thread-clamp truth, or workload identity.
 
 Each raw nextPas row for the current no-body H1 workloads also includes
 `nextpas_h1_path=fast`, which keeps the fast-gate interpretation visible in
 captured reports instead of relying on workload names alone.
+
+On 2026-06-07 local time, the direct nextPas / Go / Rust std-only / Hyper
+comparator rows also gained explicit thread-clamp metadata. They now preserve
+the caller input as `requested_threads=...`, report the actual client
+concurrency as `effective_threads=...`, and keep the legacy `threads=...`
+line aligned with the effective value. This avoids a misleading row when a
+standalone comparator clamps `--threads` down to `--requests`.
 
 Focused RED/GREEN:
 
@@ -2147,10 +2684,58 @@ heaptrc: 0 unfreed memory blocks
 
 Later focused tightening made the same gate require `completed=<requests>` on
 every raw implementation row, `nextpas_h1_path=...` on nextPas rows, and
-`median_completed=<requests>` in stdout/report summaries. A small live smoke
-with `--requests 8 --threads 1 --workload adapter_no_url --runs 2` produced
-`completed=8`, `nextpas_h1_path=fast`, and `median_completed=8` for the
-comparison summary.
+`median_completed=<requests>` in stdout/report summaries. On 2026-06-06, the
+std-only Rust comparator marker was tightened from `impl=rust` to
+`impl=rust_std` and `rust_profile=std_only`, so future reports cannot be read
+as a Hyper/Tokio or broader Rust ecosystem row. A small live smoke with
+`--requests 8 --threads 1 --workload adapter_no_url --runs 2` produced
+`completed=8`, `nextpas_h1_path=fast`, `rust_profile=std_only`, and
+`median_completed=8` for the comparison summary.
+Another focused clamp smoke now runs each direct comparator with
+`--requests 3 --threads 5` and locks
+`requested_threads=5` plus `effective_threads=3`, so saved raw rows cannot
+silently discard the original caller intent.
+The snapshot helper now preserves the same distinction in its own environment
+block and keeps the command block at `--threads 5`, instead of rewriting the
+captured snapshot down to `--threads 3`.
+The focused gate now also locks the `--include-hyper + --workload response_1k`
+snapshot combination, so Hyper/Tokio snapshot evidence is no longer covered
+only on the default no-body workload.
+A direct `bench_http_server_hyper --requests 32 --threads 2 --workload url_path`
+smoke now sits in the focused gate as well, so the Cargo-based comparator has a
+durable non-default request-target proof alongside the shared runner and
+snapshot paths.
+The raw comparison runner also locks `--include-hyper + --workload url_path`,
+so the saved text report now has a durable Hyper/Tokio row proof for the
+request-target workload instead of covering Hyper only on the default no-URL
+runner path.
+The snapshot helper now locks the same `--include-hyper + --workload url_path`
+combination too, so the durable Markdown artifact covers Hyper/Tokio on the
+request-target workload instead of only the default no-URL case or the
+body-bearing `response_1k` path.
+The raw comparison runner now also locks `--include-hyper + --workload response_1k`,
+so the body-bearing saved text report carries the Hyper/Tokio row directly
+instead of leaving that workload covered only by the snapshot artifact or the
+shared direct comparator contract.
+The raw comparison runner now also locks `--nextpas-backend epoll + --workload url_path`,
+so the cross-language request-target report no longer preserves epoll only on
+the default no-URL nextPas row.
+The snapshot helper now locks the same `--nextpas-backend epoll + --workload url_path`
+combination, so the durable Markdown artifact preserves the epoll request-target
+comparison instead of only the default no-URL backend row.
+The raw comparison runner now also locks `--nextpas-backend epoll + --workload response_1k`,
+so epoll backend evidence reaches the public body-bearing comparison seam instead
+of stopping at no-URL or request-target-only rows.
+The snapshot helper now locks the same `--nextpas-backend epoll + --workload response_1k`
+combination, so the durable Markdown artifact also preserves epoll backend
+evidence on the public body-bearing comparison seam.
+The raw comparison runner now also locks the full dual opt-in
+`--include-hyper + --nextpas-backend epoll + --workload response_1k` shape, so
+the body-bearing report proves those two optional axes compose instead of only
+working in separate focused seams.
+The snapshot helper now locks the same dual opt-in body-bearing combination, so
+the durable Markdown artifact also proves that Hyper/Tokio inclusion and nextPas
+epoll backend selection compose correctly in one saved comparison.
 
 Fresh local `no_url` 50k/4 3-run summary:
 
@@ -2249,6 +2834,38 @@ earlier single-shot evidence: Pascal-translated llhttp remains about `1.40x`
 slower than C llhttp on this machine for the narrowed 10-header row. The tool
 improvement matters because future raw-gap work can now compare repeated runs
 before deciding whether generator/codegen changes are warranted.
+
+On 2026-06-07 local time, the same runner also gained an output-root guard for
+`NEXTPAS_FLAG_MATRIX_OUTPUT_DIR`. The script now rejects custom output
+directories outside
+`build/projects/nextpas.core.http/bench_h1parser/flag_matrix/...` before any
+cleanup step runs.
+
+On 2026-06-08 local time, the runner was also hardened against header-only
+evidence artifacts. Each actual Pascal/C variant run must now parse at least
+one benchmark row before `results.tsv` is accepted. The C variant remains an
+explicit skip when `LLHTTP_ROOT` is not configured; otherwise parse failures are
+reported with the variant, run index, and log path.
+
+Focused RED/GREEN:
+
+```text
+RED:
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+53 total, 52 passed, 1 failed
+H1 parser flag matrix rejects unsafe output dir failed:
+H1 parser flag matrix unsafe output dir should fail
+heaptrc: 0 unfreed memory blocks
+
+GREEN:
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+53 total, 53 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
 
 Code inspection points to a generator/codegen track rather than a one-line
 runtime fix:

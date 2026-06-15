@@ -1,5 +1,809 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 comparator scale validation slice
+
+### Goal
+
+收紧 benchmark truth：nextPas `bench_server`、Go comparator、Rust std-only
+comparator 和 Hyper/Tokio comparator 的 `--requests` / `--threads` 参数必须和
+runner 一样拒绝非正值。否则手工 comparator run 可能因为 typo 继续产出看似有效的
+benchmark row，污染性能证据。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 新增四组 invalid scale focused tests，证明
+  `--requests 0` / `--threads 0` 当前会被静默夹到 1 或回落默认值。
+- [x] GREEN：四个单体 comparator 都 fail-fast，输出 `invalid --requests` /
+  `invalid --threads` 并非零退出。
+- [x] 保持本 slice 边界：不修改 runner 参数格式、不改变 valid scale 行为、
+  不新增 workload、不修改 HTTP runtime。
+- [x] 更新 HTTP benchmark docs/support evidence。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
+## Active Session: 2026-06-06 header benchmark smoke marker slice
+
+### Goal
+
+把已有 `bench_headers` microbenchmark 纳入 HTTP benchmark focused gate，并让它输出
+稳定 `operation=http.headers` marker。Header lookup 是 H1 parser / server policy /
+client header handling 的基础热路径；没有 smoke gate 时，历史 header benchmark
+只能作为手工截图，不能证明当前 benchmark asset 仍可运行。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 新增 `bench_headers lookup smoke`，先因缺少
+  `operation=http.headers` marker 失败。
+- [x] GREEN：`bench_headers` 输出 stable operation marker；lookup rows、filter、
+  iteration 行为不变。
+- [x] 保持本 slice 边界：不改 `THttpHeaders` 实现、不改 public header API、不新增
+  benchmark workload、不修改 H1 runtime。
+- [x] 更新 HTTP benchmark docs/support evidence。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
+## Active Session: 2026-06-06 snapshot raw cleanup slice
+
+### Goal
+
+收紧 benchmark snapshot helper 的 artifact hygiene：`capture_server_comparison_snapshot.sh`
+会用 `${output}.raw` 暂存 runner 输出并嵌入 Markdown snapshot，但成功后不应把该
+raw 临时文件留在 build tree。durable evidence 应是 `.md` snapshot；`.raw`
+只是实现细节。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 的 snapshot small smoke 先证明
+  `${snapshot}.raw` 在成功生成 snapshot 后仍残留。
+- [x] GREEN：snapshot helper 为 raw temp file 加 `EXIT` cleanup trap。
+- [x] 保持本 slice 边界：不改变 runner row/schema、不改变 Markdown snapshot
+  environment/raw-output 内容、不修改 comparator 或 HTTP runtime。
+- [x] 更新 HTTP benchmark docs/support evidence。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
+## Active Session: 2026-06-06 http response body release helper slice
+
+### Goal
+
+补齐 client response body ownership ergonomics：调用方通过 `IHttpClient.Get` /
+`Do_` 拿到 `IHttpResponse` 后，如果决定不读取 body，应有稳定 public helper
+显式释放该 body，而不是依赖调用方知道具体 body 是否支持 `IReadCloser` /
+`ICloser` / `IStream`，也不是把 close 行为隐式塞进 read-all helper。
+
+### Checklist
+
+- [x] RED：`test_http_client` 先因缺少 `HttpReleaseResponseBody` 编译失败。
+- [x] RED：`test_http_contract` 要求 facade
+  `nextpas.core.http.HttpReleaseResponseBody` 可调用。
+- [x] GREEN：公开 `nextpas.core.http.client.HttpReleaseResponseBody`，nil response
+  抛 `EArgumentError`，nil body no-op，close-capable body 优先 close，plain
+  `IReader` body drain 到 EOF。
+- [x] facade `nextpas.core.http` 转发同一 helper。
+- [x] 保持本 slice 边界：不改变 `HttpReadResponseBodyString` /
+  `HttpReadResponseBodyBytes` 的只消费语义，不新增 streaming response API，不改
+  H1 transport。
+- [x] 跑 focused gates：`test_http_client`、`test_http_contract`。
+
+## Active Session: 2026-06-06 runner include-hyper marker slice
+
+### Goal
+
+收紧 server comparison raw/report header：`run_server_comparison.sh` 应显式输出
+`include_hyper=0|1`。否则保存下来的 report 只能靠是否出现 `rust_hyper` section
+反推 runner 是否请求了可选 Hyper/Tokio comparator。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 的 include-hyper runner smoke 要求 stdout/report
+  包含 `include_hyper=1`，当前 runner 缺该 marker。
+- [x] GREEN：runner comparison header 输出 `include_hyper=${INCLUDE_HYPER}`。
+- [x] 保持本 slice 边界：不修改 comparator row 格式、不改 summary 解析、不改
+  snapshot helper 或 HTTP runtime。
+- [x] 更新 HTTP benchmark/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
+## Active Session: 2026-06-06 hyper snapshot cargo metadata slice
+
+### Goal
+
+补强 Hyper/Tokio comparator 的 snapshot 环境证据：Markdown snapshot 既然可以包含
+`--include-hyper`，就应记录 Cargo toolchain 和 `compare_hyper/Cargo.lock` 的
+dependency lock hash，而不只记录 `rustc_version`。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 的 include-hyper snapshot smoke 要求
+  `cargo_version=` 与 `hyper_cargo_lock_sha256=`，当前 snapshot 缺这两个 marker。
+- [x] GREEN：snapshot helper 记录 `cargo --version` 与
+  `compare_hyper/Cargo.lock` 的 SHA-256；工具或 lockfile 不可用时记录 `unknown`。
+- [x] 保持本 slice 边界：不修改 Hyper comparator workload、Cargo dependencies、
+  runner 输出格式或 HTTP runtime。
+- [x] 更新 HTTP benchmark/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
+## Active Session: 2026-06-06 snapshot workload propagation slice
+
+### Goal
+
+让 `capture_server_comparison_snapshot.sh` 能显式选择 server comparison workload，
+并把该 workload 写入 Markdown snapshot 的 environment / command / raw output。
+这样 `url_path`、`adapter_no_url`、`response_1k` 的对比证据可以通过 snapshot
+helper 复现，而不再只能手工跑 runner 或默认捕获 `no_url`。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 新增 `server comparison snapshot url_path smoke`，
+  证明 snapshot helper 当前不接受 `--workload url_path`。
+- [x] GREEN：snapshot helper 新增 `--workload` 参数、allow-list validation、
+  runner 透传、environment `workload=` 记录和 command block 记录。
+- [x] 保持本 slice 边界：不新增 workload、不改变 default no-arg snapshot 行为、
+  不修改 comparator 输出格式或 HTTP runtime。
+- [x] 更新 HTTP benchmark/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
+## Active Session: 2026-06-06 comparator workload validation slice
+
+### Goal
+
+收紧 benchmark truth：nextPas `bench_server`、Go `net/http` comparator、Rust
+std-only comparator 与 Hyper/Tokio comparator 的显式 `--workload` 参数必须共享
+runner 的 allow-list。非法 workload 不能静默 fallback 到 `no_url` 并产出看似有效的
+benchmark row，而应非零退出并输出诊断。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 新增四条 invalid workload focused tests，
+  证明四个单体 comparator 当前都会把 `--workload not_a_workload` 静默跑成
+  `workload=no_url`。
+- [x] GREEN：四个 comparator 都改成显式拒绝非法 workload，输出
+  `invalid --workload` 诊断并 `exit 2` / `Halt(2)`。
+- [x] 保持本 slice 边界：不修改 public HTTP API、不改变 runner 参数格式、不新增
+  workload、不修改 H1 server/runtime。
+- [x] 更新 HTTP benchmark/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
+## Active Session: 2026-06-06 http download body release slice
+
+### Goal
+
+收紧 `HttpGetToWriter` / `HttpGetToFile` response body ownership：这些 helper
+代表调用方消费或丢弃 GET response body，因此在 successful copy、copy failure、
+non-2xx rejection 等路径都应释放 close-capable body，并对 plain `IReader` 保留
+drain fallback。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 injected client + close-capable response body
+  证明 `HttpGetToWriter` 在 successful copy / writer failure / non-2xx rejection
+  三条路径上当前没有关闭 body。
+- [x] GREEN：将 redirect body release helper 泛化为 response body release helper，
+  并在 download helper 中用 `finally` 收口成功和异常路径。
+- [x] 保持本 slice 边界：不新增 public API、不改变 response body read helpers、
+  不新增 streaming response API、不修改 H1 transport。
+
+## Active Session: 2026-06-06 http shortcut body bytes-buffer slice
+
+### Goal
+
+收紧 `IHttpClient.Post` / `Put` / `Patch` shortcut 的 request body materialization：
+这些方法仍然需要读取 `IReader` 以生成 `Content-Length`，但不应再把 payload 先塞进
+Pascal string，再用 `StrToBytes` 转回 bytes。三条 shortcut 应共享一个 bytes-buffer
+helper，并复用 `NewRequest(..., BodyBytes)` 的 request construction contract。
+
+### Checklist
+
+- [x] RED：`test_http_client` source-contract 先证明 client shortcut body path
+  缺少 single bytes-buffer helper，并且仍存在 string body buffer 中转。
+- [x] GREEN：新增内部 `BufferedBodyRequest`，用 `nextpas.core.io.ReadAll` 读取
+  `IReader` 为 `TBytes`，再调用 `NewRequest(Method, Url, Headers, BodyBytes)`。
+- [x] 复用既有 live behavior proof：`POST` / `PUT` / `PATCH` shortcut 仍发送
+  content type、content length 和 body。
+- [x] 保持本 slice 边界：不新增 public overload、不修改 `IHttpClient` interface、
+  不改变 streaming request ownership、不改 H1 transport。
+
+## Active Session: 2026-06-06 http request bytes body helper slice
+
+### Goal
+
+补齐 client request body ergonomics：`NewRequest(Method, Url, Headers, BodyBytes)`
+应支持 `TBytes` request body，经 `nextpas.core.http.message` 与 facade
+`nextpas.core.http` 暴露。helper 复制 bytes 到 in-memory reader，发布
+`Content-Length`，保留零字节/高字节 payload；不自动设置 `Content-Type`，也不引入完整
+request builder 或 streaming body ownership API。
+
+### Checklist
+
+- [x] RED：`test_http_message` 先因 `TBytes` body overload 缺失编译失败。
+- [x] GREEN：新增 `BytesBodyReader`，`StringBodyReader` 复用同一 bytes reader
+  路径；`TUrl` 与 URL string overload 都转到既有 request helper contract。
+- [x] facade source-contract：`test_http_contract` 证明
+  `nextpas.core.http.NewRequest(..., BodyBytes)` 可调用并发布 content length。
+- [x] live client proof：`test_http_client` 证明 `IHttpClient.Do_` 会发送 binary
+  request body，server 端能看到零字节与高字节 payload。
+- [x] 保持本 slice 边界：不新增 fluent builder、per-request policy、
+  automatic content-type、streaming/chunked request body 或 transport vtable。
+
+## Active Session: 2026-06-06 http response body bytes helper slice
+
+### Goal
+
+补齐 client response body ergonomics：`HttpReadResponseBodyBytes(Resp)` 应通过
+`nextpas.core.http.client` 与 facade `nextpas.core.http` 暴露，直接消费
+`IHttpResponse.Body` 并返回 `TBytes`。nil body 返回空 bytes；nil response 在
+helper 边界抛 `EArgumentError`。
+
+### Checklist
+
+- [x] RED：`test_http_client` 先因缺少
+  `nextpas.core.http.client.HttpReadResponseBodyBytes` 编译失败。
+- [x] RED：`test_http_contract` 先要求 facade
+  `nextpas.core.http.HttpReadResponseBodyBytes` 可调用。
+- [x] GREEN：新增 client helper，复用 `nextpas.core.io.ReadAll`；string helper
+  复用 bytes helper，避免两套 response body 读循环。
+- [x] 保持本 slice 边界：不新增 response streaming API、charset decoding、
+  content-type sniffing、per-request policy 或 transport vtable。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gates：`test_http_client`、`test_http_contract`。
+
+## Active Session: 2026-06-06 http server options validation slice
+
+### Goal
+
+收紧 `THttpServerOptions` construction contract：negative `ReadTimeout`、
+`WriteTimeout`、`IdleTimeout`、`MaxHeaderSize`、`MaxBodySize` 都应在
+`NewHttpServer(Handler[, Transport], Options)` 边界抛 `EArgumentError`，不能继续
+下沉到 H1 transport 或 TCP foundation。
+
+### Checklist
+
+- [x] RED：`test_http_contract` 证明 negative read timeout 当前没有抛
+  `EArgumentError`。
+- [x] GREEN：新增内部 `ValidateServerOptions`，所有 `THttpServer` constructor
+  路径共享同一校验。
+- [x] 保持本 slice 边界：不改变 zero-value timeout / limit 语义、不修改
+  `nextpas.core.net.server`、不改 H1 runtime。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gates：`test_http_contract`、`test_http_server`。
+
+## Active Session: 2026-06-06 http client options validation slice
+
+### Goal
+
+收紧 `THttpClientOptions` construction contract：negative `Timeout` 与
+negative `MaxRedirects` 都应在 `NewHttpClient([Transport], Options)` 边界抛
+`EArgumentError`。`0` timeout 仍保留为 no deadline，`0` max redirects 仍表示不允许
+任何 follow-up redirect；负数不再默默落到 H1 transport 或 redirect error side effect。
+
+### Checklist
+
+- [x] RED：`test_http_client` 证明 negative timeout 当前没有抛
+  `EArgumentError`。
+- [x] GREEN：新增内部 `ValidateClientOptions`，所有 `THttpClient` constructor
+  路径共享同一校验。
+- [x] 保持本 slice 边界：不新增 per-request policy、不改变 redirect algorithm、
+  不修改 H1 transport。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
+## Active Session: 2026-06-06 http request constructor nil headers slice
+
+### Goal
+
+收紧 concrete request implementation 的 header carrier 语义：
+`THttpRequest.Create` 与 `CreateFromRequestTarget` 直接收到 nil headers 时，也应创建
+空 `IHttpHeaders`。`NewRequest` helper 仍是推荐入口，但 direct constructor 不应把
+nil headers 传播到 client/H1 code path。
+
+### Checklist
+
+- [x] RED：`test_http_message` 证明 direct request constructor 当前不会创建 headers。
+- [x] GREEN：新增内部 `HeadersOrNew`，request/response constructor 共享
+  nil-normalization。
+- [x] 保持本 slice 边界：不新增 public builder、不改变 helper signatures、
+  不修改 H1 transport。
+- [x] 更新 HTTP API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_message`。
+
+## Active Session: 2026-06-06 http response nil headers slice
+
+### Goal
+
+对齐 request/response message helper ergonomics：`NewResponse(Status, nil, Body)`
+应创建空 `IHttpHeaders`，调用方可以安全读取或追加 response headers，而不是拿到
+nil headers 并在 `.Get` / `.SetHeader` 时触发 access violation。
+
+### Checklist
+
+- [x] RED：`test_http_message` 证明 `NewResponse(..., nil, ...)` 当前不会创建
+  response headers。
+- [x] GREEN：`THttpResponse.Create` 将 nil headers 规范化为 `NewHttpHeaders`。
+- [x] facade source-contract：`test_http_contract` 证明 `nextpas.core.http.NewResponse`
+  暴露同一语义。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gates：`test_http_message`、`test_http_contract`。
+
+## Active Session: 2026-06-06 http client nil transport response slice
+
+### Goal
+
+收紧 client transport seam 错误语义：如果 injected/default `IHttpTransport`
+从 `RoundTrip` 返回 nil response，`IHttpClient.Do_` 必须抛 `EHttpError`，
+不能让 nil response 访问穿透成 access violation。
+
+### Checklist
+
+- [x] RED：新增 injected nil-response transport，证明当前 `Do_` 会失败在 access
+  violation，而不是稳定 `EHttpError`。
+- [x] GREEN：`THttpClient.DoRequest` 在 `RoundTrip` 后立即验证 response 非 nil。
+- [x] 保持本 slice 边界：不新增 public API、不改变 redirect policy、不改
+  H1/default transport。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
+## Active Session: 2026-06-06 http redirect response body error-path proof
+
+### Goal
+
+补齐 client redirect body release 的错误路径证据：当 redirect response 因
+`MaxRedirects` 耗尽、缺少 `Location`、或 unsupported absolute scheme 被丢弃并
+抛出 `EHttpError` 时，上一跳 response body 也必须先释放。
+
+### Checklist
+
+- [x] source-contract：复用 injected close-capable redirect body transport，
+  增加 max-redirects / missing-Location / unsupported-scheme 三条 error-path
+  断言。
+- [x] RED：临时移除 error branches 的 release，并把 normal release 移到
+  URL resolve 之后，证明三条新测试会失败。
+- [x] GREEN：恢复上一 slice 的 release 顺序；无需新增 public API 或 transport
+  vtable。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
+## Active Session: 2026-06-06 http redirect response body release slice
+
+### Goal
+
+收紧 client redirect response body ownership：follow redirect 时上一跳
+redirect response 不会返回给调用方，因此 client 必须在进入 follow-up
+`RoundTrip` 前释放上一跳 body。close-capable body 走 close；plain `IReader`
+fallback drain 到 EOF，避免 injected/future streaming transport 在 redirect
+路径上泄漏被丢弃 body 或污染连接复用。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 injected transport 返回 `IReadCloser`
+  redirect body，证明当前第二次 `RoundTrip` 前没有 close。
+- [x] RED：补 non-closeable `IReader` redirect body，并用临时 no-drain
+  实现证明测试会失败在未 drain。
+- [x] GREEN：新增内部 response body release helper；`IReadCloser` /
+  `ICloser` / `IStream` 优先 close，plain `IReader` drain 到 EOF。
+- [x] 保持本 slice 边界：不新增 redirect policy、cookie jar、streaming
+  response public API 或 transport vtable。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
+## Active Session: 2026-06-06 http redirect default-port authority slice
+
+### Goal
+
+收紧 client redirect Host ownership：same-authority 判断应使用 effective
+authority。`http://example.test` 与 `http://example.test:80`、`https://example.test`
+与 `https://example.test:443` 应视为 omitted-port / default-port 等价；
+caller-specified `Host` 不应因为显式默认端口而被误删。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 injected transport 证明
+  `http://example.test/old` + `Location: http://example.test:80/next`
+  当前会删除 caller `Host: override.test`。
+- [x] GREEN：新增内部 default-port/effective-authority helper；same-authority
+  Host 判断比较 lower-case host 与 effective port。
+- [x] 保持本 slice 边界：不修改 H1 transport port selection、不修改
+  `TUrl.Parse`、不扩大 redirect policy。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
+## Active Session: 2026-06-06 http redirect absolute scheme slice
+
+### Goal
+
+收紧 client redirect URL resolution：absolute redirect scheme 应按 URL 语义
+case-insensitive 处理。`HTTP://redirect.test/...` 不能被误当成 relative
+target 并保留 base authority；unsupported absolute scheme（例如 `ftp://...`）
+应在第二次 round trip 前 fail-fast，而不是静默落到 base host。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 injected transport 证明
+  `Location: HTTP://redirect.test/new?from=upper` 当前仍保留
+  `example.test` host。
+- [x] RED：同一 fake transport 证明 `Location: ftp://redirect.test/new`
+  当前不会抛 `EHttpError`，还会进入第二次 round trip。
+- [x] GREEN：新增内部 absolute redirect scheme helper；`http` / `https`
+  case-insensitive 匹配并规范成小写，其他 `://` scheme 抛 `EHttpError`。
+- [x] 保持本 slice 边界：不修改全局 `TUrl.Parse` contract、不新增 redirect
+  policy 或 transport API。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
+## Active Session: 2026-06-06 http redirect Host ownership slice
+
+### Goal
+
+收紧 client redirect header ownership：caller-specified `Host` header 是请求
+authority override，不应在 relative / same-authority redirect 中被无条件删除。
+absolute 或 network-path redirect 一旦改变 URL authority，仍必须删除旧 `Host`，
+让 transport 从新 URL 派生 wire host。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 injected transport 证明
+  `Location: /next` 的 relative redirect 当前会把 caller `Host: override.test`
+  清空。
+- [x] GREEN：新增内部 same-authority 判断；`RedirectHeadersFor` 只在 URL
+  authority 变化时删除 `host`，不复用 auth/cookie 的 trusted-subdomain 规则。
+- [x] 保持本 slice 边界：不新增 redirect policy、cookie jar、request builder
+  或 transport API。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
+## Active Session: 2026-06-06 http redirect header ownership slice
+
+### Goal
+
+收紧 client redirect header ownership：follow-up request 应继承 caller headers，
+same-authority redirect 保留普通 header 与敏感 header；cross-authority redirect
+继续保留普通 header，但剥离 `Authorization`、`WWW-Authenticate`、`Cookie`、
+`Cookie2`。`301` / `302` / `303` 改成 bodyless `GET` 时还必须删除
+`content-length` / `transfer-encoding`，避免 nextPas 的 header-carried
+content length 造成“声明 body 但无 body”的坏请求。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 injected transport 证明 same-authority
+  redirect 当前不会继承 `x-trace` / auth / cookie headers。
+- [x] RED：同一 fake transport 证明 cross-authority redirect 当前连普通
+  `x-trace` header 都会丢失，无法区分普通 header carry-over 与敏感 header
+  stripping。
+- [x] GREEN：新增内部 redirect header clone/sanitize helper；保留普通 header，
+  跨 authority 删除敏感 header，bodyless follow-up 删除 body framing headers。
+- [x] 保持本 slice 边界：不新增 `CheckRedirect`、cookie jar、per-request redirect
+  policy 或 request builder vtable。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
+## Active Session: 2026-06-06 http 307 seekable body replay slice
+
+### Goal
+
+收紧 client redirect body ownership：`307` / `308` 必须在 method-preserving
+redirect 中正确处理 body replay。可 seek 的 `IStream` body 应从第一跳发送前的位置
+rewind 后 replay；非空但不能 replay 的 body 应抛 `EHttpError`，不能静默发送空 body。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 fake transport 消费第一跳 body，返回
+  `307 Location: /upload-copy`，当前第二跳 body 为 `""` 而不是 `payload`。
+- [x] RED：用 one-shot `IReader` 证明非 replayable body 不应进入第二跳；
+  临时 no-raise 实现失败在缺少 `EHttpError`。
+- [x] GREEN：`THttpClient.DoRequest` 在第一跳前捕获 `IStream.Position`，在
+  `307` / `308` follow-up 前 rewind；非空 non-`IStream` body 抛 `EHttpError`。
+- [x] 保持本 slice 边界：不新增 request builder、`GetBody` callback、per-request
+  redirect policy 或跨模块 body ownership API。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
+## Active Session: 2026-06-06 http fragment-only redirect slice
+
+### Goal
+
+收紧 client redirect URL resolution：fragment-only `Location`（例如
+`#section`）只应更新 follow-up request fragment，并保留 base URL 的 path/query。
+显式注入的 `IHttpTransport` 和 future H2/H3 transport 都应看到稳定的
+`Path` / `RawQuery` / `Fragment` parts，而不是把 fragment-only redirect 当成
+“清空 query”的普通空 path target。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 fake transport 返回
+  `302 Location: #section`，base request 为
+  `http://example.test/dir/old?from=base`；当前失败为
+  `expected "from=base", got ""`。
+- [x] GREEN：新增内部 `HasRedirectQueryDelimiter`，让 fragment-only reference
+  保留 base query，同时让 query-only/path references 继续替换或清空 query。
+- [x] 保持既有分支：absolute URL、network-path URL、path-relative URL 和
+  dot-segment normalization 继续沿用各自分支。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
+## Active Session: 2026-06-06 http dot-segment redirect slice
+
+### Goal
+
+收紧 client redirect URL resolution：relative redirect path 合并后必须移除
+`.` / `..` dot segments。例如 base request
+`http://example.test/dir/sub/old` 收到 `Location: ../next?from=dot` 时，
+follow-up transport-visible path 应为 `/dir/next`，而不是
+`/dir/sub/../next`。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 fake transport 返回
+  `302 Location: ../next?from=dot`，当前失败为
+  `expected "/dir/next", got "/dir/sub/../next"`。
+- [x] GREEN：新增内部 `NormalizeRedirectPath`，在 relative `Location`
+  path merge 后移除 dot segments。
+- [x] 保持本 slice 边界：不改变 public API、absolute URL redirect、
+  network-path redirect 或 redirect policy/body ownership。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
+## Active Session: 2026-06-06 http path-relative redirect slice
+
+### Goal
+
+收紧 client redirect URL resolution：path-relative `Location`（例如
+`next?from=relative-path`）必须按 base URL 目录合并成 follow-up path。
+显式注入的 `IHttpTransport` 和 future H2/H3 transport 都应收到
+`/dir/next` 这样的有效 request path，而不是裸 `next`。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 fake transport 返回
+  `302 Location: next?from=relative-path`，base request 为
+  `http://example.test/dir/old`；当前失败为
+  `expected "/dir/next", got "next"`。
+- [x] GREEN：新增内部 `MergeRedirectPath`，path-relative target 使用 base
+  path 最后一个 `/` 作为目录边界合并。
+- [x] 保持既有分支：absolute URL、network-path URL、absolute-path relative URL
+  继续沿用各自分支。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
+## Active Session: 2026-06-06 http network-path redirect slice
+
+### Goal
+
+收紧 client redirect URL resolution：network-path `Location`（例如
+`//redirect.test/new?from=network`）必须继承原请求 scheme，同时替换
+authority 并拆分 path/query。显式注入的 `IHttpTransport` 和 future H2/H3
+transport 都应收到解析后的 URL parts，而不是继续看到 base host。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 fake transport 返回
+  `302 Location: //redirect.test/new?from=network`，第二轮检查 follow-up
+  request 的 `Scheme` / `Host` / `Path` / `RawQuery` / `QueryParam`；
+  当前失败为 `expected "redirect.test", got "example.test"`。
+- [x] GREEN：`ResolveRedirectUrl` 在 relative-target 分支前识别 `//...`，
+  用 base scheme 组成 absolute URL 后交给 `TUrl.Parse`。
+- [x] 防御边界：base scheme 为空时抛 `EHttpError`，避免生成无效 authority。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
+## Active Session: 2026-06-06 http relative redirect query slice
+
+### Goal
+
+收紧 client redirect transport seam：relative `Location` 里带 query 时，
+follow-up request 对象必须把 path/query 拆开，而不是把整串留在 `Url.Path`。
+这保证显式注入的 `IHttpTransport` 以及 future H2/H3 transport 都能看到正确
+`Path` / `RawQuery` contract。
+
+### Checklist
+
+- [x] 审计发现 live H1 wire path 已能正确到达 `/new?from=redirect`，因为 server
+  会重新解析 request-target；但 injected transport seam 仍能暴露 follow-up
+  request 对象的 URL parts 缺口。
+- [x] RED：`test_http_client` 新增 fake transport，第一轮返回
+  `302 Location: /new?from=redirect`，第二轮检查 request `Path` / `RawQuery`；
+  当前失败为 `expected "/new", got "/new?from=redirect"`。
+- [x] GREEN：在 `nextpas.core.http.client` 增加内部 `ResolveRedirectUrl`，absolute
+  URL 继续走 `TUrl.Parse`，relative Location 走 `TUrl.ParseRequestTarget` 后
+  合并到 base URL。
+- [x] 保留 live H1 proof：relative redirect with query 能命中最终 route，并且
+  handler 可见 `Path`、`RawQuery` 与 `QueryParam`。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
+## Active Session: 2026-06-06 http see-other redirect slice
+
+### Goal
+
+收紧 client redirect/error semantics：补齐 `303 See Other` status constant /
+facade visibility，并让 `IHttpClient` 跟随 `303` 时按 Go/Rust 常见 client
+语义把原请求改为 `GET` 且丢弃 body。该 slice 不改 `IHttpClient` vtable、
+transport、timeout 或 per-request redirect option。
+
+### Checklist
+
+- [x] RED：`test_http_base` 先要求 `HTTP_STATUS_SEE_OTHER` 与
+  `HttpStatusText(303) = 'See Other'`，当前编译失败于 status constant 缺失。
+- [x] RED：`test_http_contract` 先通过 facade 读取
+  `nextpas.core.http.HTTP_STATUS_SEE_OTHER`，当前编译失败，证明 facade 未暴露。
+- [x] RED：`test_http_client` 先启动 live server，POST `/submit` 返回 `303`
+  到 `/complete`，期望最终请求为 `GET` 且 body 为空；当前编译失败于 status
+  constant 缺失。
+- [x] GREEN：在 `http.base` / facade 增加 `HTTP_STATUS_SEE_OTHER` 与
+  status text，在 client redirect set 中加入 `303`，并沿用 `301/302` 的
+  replay-as-GET/drop-body 分支。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gates：`test_http_base`、`test_http_contract`、`test_http_client`。
+
+## Active Session: 2026-06-06 http request string body helper slice
+
+### Goal
+
+继续收紧 client request ergonomics：新增
+`NewRequest(Method, Url, Headers, BodyText)` public helper，让调用方可以用
+Pascal string 构造 request body，而不必手写 bytes stream 和 content length。
+该 helper 复制 string 到 in-memory reader，发布 `Content-Length`，但不自动设置
+`Content-Type`。
+
+### Checklist
+
+- [x] RED：`test_http_message` 先调用 string body helper，当前编译失败于
+  `NewRequest` 参数数量不匹配。
+- [x] RED：`test_http_contract` 先通过 `nextpas.core.http` facade 调用 string body
+  helper，当前编译失败，证明 facade 还没有暴露该 public surface。
+- [x] RED：`test_http_client` 把 live `IHttpClient.Do_` helper path 改用 string
+  body overload，当前编译失败，证明缺口会影响真实 client path。
+- [x] GREEN：在 `nextpas.core.http.message` 与 facade 增加 `TUrl` / URL string
+  两个 string body overload；实现只复制 body、复用既有 headers/content-length
+  helper contract。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gates：`test_http_message`、`test_http_contract`、`test_http_client`。
+
+## Active Session: 2026-06-06 http client nil request error slice
+
+### Goal
+
+收紧 `IHttpClient.Do_` 的 public error semantics：nil request 是调用方
+参数错误，必须在 client 入口抛 `EArgumentError`，不能穿透到 transport /
+redirect path 形成 access violation。
+
+### Checklist
+
+- [x] RED：`test_http_client` 新增 `Client Do rejects nil request`，
+  当前失败为 `Access violation`，证明 public 入口缺少 guard。
+- [x] GREEN：只在 `THttpClient.Do_` 增加 nil request guard，不改
+  `IHttpClient` vtable、transport、redirect 或 request helper 语义。
+- [x] 更新 `core/docs/http/API_COVERAGE.md` 与本 support evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
+## Active Session: 2026-06-06 http response body string helper slice
+
+### Goal
+
+继续收紧 client response ergonomics：新增
+`HttpReadResponseBodyString(Resp)` public helper，让常见 client/example
+调用方能把完整 response body 读成 Pascal string，而不再在每个调用点手写
+reader loop 或 `ReadAll` + bytes conversion。该 helper 明确会消费
+`IHttpResponse.Body`；nil body 返回空串，nil response 作为调用错误抛
+`EArgumentError`。
+
+### Checklist
+
+- [x] RED：`test_http_client` 先用 helper 读取 live response body，并锁住
+  nil body / nil response 边界；当前编译失败于 helper 缺失。
+- [x] RED：`test_http_contract` 先通过 `nextpas.core.http` facade 调用 helper；
+  当前编译失败，证明 facade 还没有暴露该 public surface。
+- [x] GREEN：在 `nextpas.core.http.client` 添加 helper，在
+  `nextpas.core.http` facade 添加 inline forwarding helper；不改
+  `IHttpClient` vtable、不改 transport、不引入 response builder。
+- [x] 更新 `http_get_client` example，改用新 helper。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gates：`test_http_client`、`test_http_contract`、
+  `test_http_examples`。
+
+## Active Session: 2026-06-06 http hyper comparator smoke slice
+
+### Goal
+
+继续收紧 benchmark truth：在保留 `rust_std` std-only microbaseline 的同时，
+新增一个可选 Cargo-based Hyper/Tokio HTTP/1.1 server comparator smoke。
+runner 默认仍不强制跑外部依赖；显式 `--include-hyper` 时才纳入
+`impl=rust_hyper` / `rust_profile=hyper_tokio` 行和 median summary。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 先要求 `compare_hyper` Cargo comparator
+  和 runner `--include-hyper`，当前分别失败于目录缺失和 unknown argument。
+- [x] GREEN：新增 `compare_hyper` Cargo project，Hyper/Tokio 负责 server，
+  raw keep-alive client 保持与 std-only comparator 相同 workload shape。
+- [x] GREEN：`run_server_comparison.sh --include-hyper` 可选构建/运行
+  Hyper/Tokio comparator，并把 `summary_impl=rust_hyper` 纳入 summary。
+- [x] RED/GREEN：snapshot helper 先失败于 unknown `--include-hyper`，随后
+  透传该 flag，并在 Markdown environment / command / raw output 中记录。
+- [x] 更新 HTTP benchmark/API docs 与本 support evidence。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
+## Active Session: 2026-06-06 http request string URL overload slice
+
+### Goal
+
+继续收紧 client ergonomics：`NewRequest(Method, Url)` 与
+`NewRequest(Method, Url, Headers, Body, ContentLength)` 除了接受 `TUrl`，
+也接受 URL string。调用方可以直接构造 `IHttpClient.Do_` 请求，不必先手写
+`TUrl.Parse`；解析和 body/header contract 仍复用现有 helper。
+
+### Checklist
+
+- [x] RED：`test_http_message` 先用 string URL overload 构造简单 request
+  与 headers/body request，当前编译失败，错误为 string 参数仍要求 `TUrl`。
+- [x] RED：`test_http_contract` 先通过 facade 调用 string URL overload，
+  当前编译失败，证明门面还没有暴露该 public surface。
+- [x] RED：`test_http_client` 把 live `IHttpClient.Do_` request helper 用例改成
+  string URL overload，当前编译失败，证明 ergonomics 缺口会影响真实 client path。
+- [x] GREEN：在 `nextpas.core.http.message` 与 `nextpas.core.http` facade
+  增加 string URL overload；实现只调用 `TUrl.Parse` 并复用既有 helper contract。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gates：`test_http_message`、`test_http_contract`、`test_http_client`。
+
+## Active Session: 2026-06-06 http get client example env URL slice
+
+### Goal
+
+让 `http_get_client` example 可在 example smoke 中跟随动态保留端口运行：
+无命令行 URL 时先读取 `NEXTPAS_HTTP_GET_URL`，没有环境变量时才回到原
+`127.0.0.1:8080` 示例默认值。
+
+### Checklist
+
+- [x] RED：`test_http_examples` 新增 client smoke，先启动 `http_hello_server`
+  的保留 loopback 端口，再只通过 `NEXTPAS_HTTP_GET_URL` 运行 client；当前
+  client 忽略 env，仍连接 `8080` 并失败。
+- [x] GREEN：只修改 `http_get_client` example，命令行参数优先，其次读取
+  `NEXTPAS_HTTP_GET_URL`，最后才使用旧默认 URL。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_examples`。
+
+## Active Session: 2026-06-06 http rust std comparator label slice
+
+### Goal
+
+收紧 benchmark truth：把当前 Rust std-only server comparator 从泛化
+`impl=rust` 改成机器可读的 `impl=rust_std` / `rust_profile=std_only`，
+让 runner、snapshot 和 focused tests 都明确它不是 Hyper/Tokio 或 Rust 生态代表。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 先要求 Rust comparator / runner / snapshot
+  输出 `impl=rust_std` 与 `rust_profile=std_only`，当前 `impl=rust` 触发失败。
+- [x] GREEN：只修改 `compare_rust/main.rs` 与 `run_server_comparison.sh`，
+  comparator 输出新 marker，runner 的 section / expected impl / summary 统一使用
+  `rust_std`。
+- [x] 更新 HTTP benchmark/API/control 文档，记录 std-only label contract 和
+  Hyper/Tokio 仍是后续缺口。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
+## Active Session: 2026-06-06 http API parity request helper slice
+
+### Goal
+
+完成一轮 HTTP public API 对标审计，并落一个低风险 client ergonomics
+切片：新增 `NewRequest(Method, Url, Headers, Body, ContentLength)` helper，
+让调用方不必直接依赖 concrete `THttpRequest` 就能构造带自定义 headers/body
+的 `IHttpClient.Do_` 请求。
+
+### Checklist
+
+- [x] 只读审计当前 HTTP docs、coverage、benchmark truth 与 public API。
+- [x] 对标 Go `net/http` 与 Rust hyper/tower/reqwest 核心使用面，记录短结论：
+  server lifecycle/router/middleware/static/websocket/H2-H3 boundary 已够稳；
+  client request construction 是真实缺口；Hyper/Tokio comparator 仍是 benchmark truth 缺口。
+- [x] RED：`test_http_message` / `test_http_contract` 先因缺少
+  `NewRequest(..., Headers, Body, ContentLength)` overload 编译失败。
+- [x] RED：负 `ContentLength` 用例先失败，证明 helper 缺少输入校验。
+- [x] GREEN：在 `nextpas.core.http.message` 与 facade 增加 overload；
+  nil headers 创建空 header set，body/positive length 写入 `content-length`，
+  negative length 抛 `EArgumentError`。
+- [x] 在 `test_http_client` 补 live proof：新 helper 构造的 request 经
+  `IHttpClient.Do_` 正确发送 custom header、content-length 与 body。
+- [x] 跑 focused gates：`test_http_message`、`test_http_contract`、`test_http_client`。
+- [x] 跑 `git diff --check` 与 `make hygiene`，并先提交 feature。
+- [x] 更新 `core/docs/http/README.md`、`API_COVERAGE.md` 与本 support evidence，
+  单独提交 docs。
+
 ## Active Session: 2026-06-06 http h1 parser metadata span fast path slice
 
 ### Goal

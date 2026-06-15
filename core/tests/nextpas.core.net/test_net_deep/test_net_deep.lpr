@@ -315,10 +315,10 @@ begin
   try
     LClient.Read(LBuf[0], 32);
   except
-    on E: ENetworkError do
+    on E: ETimeoutError do
       LGot := True;
   end;
-  Check(LGot, 'read timeout raises');
+  Check(LGot, 'read timeout raises ETimeoutError');
   Check(LStart.Elapsed.AsMilliseconds >= 50, 'waited at least 50ms');
   Check(LStart.Elapsed.AsMilliseconds < 2000, 'did not wait too long');
   LClient.Close;
@@ -575,10 +575,10 @@ begin
     for LI := 1 to 10000 do
       LClient.Write(LBuf[0], 65536);
   except
-    on E: ENetworkError do
+    on E: ETimeoutError do
       LGot := True;
   end;
-  Check(LGot, 'write deadline triggers');
+  Check(LGot, 'write deadline raises ETimeoutError');
   LClient.Close;
   LListener.Close;
 end;
@@ -624,12 +624,12 @@ begin
     try
       LClient.Write(LPayload[0], SizeUInt(Length(LPayload)));
     except
-      on ENetworkError do
+      on ETimeoutError do
         LGot := True;
     end;
     LElapsedMs := LStart.Elapsed.AsMilliseconds;
 
-    Check(LGot, 'stalled peer write raises under write deadline');
+    Check(LGot, 'stalled peer write raises ETimeoutError under write deadline');
     Check(LElapsedMs < MAX_ALLOWED_MS,
       'stalled peer write deadline completes before peer close' +
       ' (elapsedMs=' + IntToStr(LElapsedMs) + ')');

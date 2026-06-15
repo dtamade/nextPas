@@ -169,7 +169,7 @@ begin
         until LN = 0;
       end;
       LReply := 'echo:' + IntToStr(Int64(LTotal));
-      AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LReply))));
+      AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LReply))));
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(LReply[1], SizeUInt(Length(LReply)));
     end);
@@ -179,7 +179,7 @@ begin
       LBody: string;
     begin
       LBody := 'ok';
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(LBody[1], 2);
     end);
@@ -1017,6 +1017,20 @@ begin
   end;
 end;
 
+procedure TestHeaderNameSeparatorRejected;
+const
+  REQ = 'GET / HTTP/1.1'#13#10 +
+        'Host: x'#13#10 +
+        'Bad/Name: value'#13#10 +
+        'Connection: close'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    THttpServerOptions.Default,
+    REQ,
+    'HTTP/1.1 400',
+    'separator in header field-name: explicit 400');
+end;
+
 { Test 6: Request line too long (>8KB URL) — server stays safe even if
   request-line bytes trip the same MaxHeaderSize/431 budget path }
 procedure TestRequestLineTooLong;
@@ -1271,6 +1285,19 @@ begin
   end;
 end;
 
+procedure TestDuplicateHost;
+const
+  REQ = 'GET / HTTP/1.1'#13#10 +
+        'Host: first.example'#13#10 +
+        'Host: second.example'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    THttpServerOptions.Default,
+    REQ,
+    'HTTP/1.1 400',
+    'Duplicate Host: explicit 400');
+end;
+
 { Test 11: Request line truncated at EOF }
 procedure TestRequestLineTruncatedAtEof;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -1434,7 +1461,7 @@ begin
     LI: Int32;
   begin
     Inc(LFirstCalls);
-    AW.GetHeaders.Set_('content-length', IntToStr(LBodyLen));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(LBodyLen));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBodyPrefix[1], SizeUInt(Length(LBodyPrefix)));
     for LI := 1 to BODY_CHUNK_COUNT do
@@ -1579,7 +1606,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LReply := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LReply))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LReply))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], SizeUInt(Length(LReply)));
   end);
@@ -1664,7 +1691,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LReply := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LReply))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LReply))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], SizeUInt(Length(LReply)));
   end);
@@ -1749,7 +1776,7 @@ begin
   begin
     LHandlerCalled := True;
     LReply := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], 2);
   end);
@@ -1885,7 +1912,7 @@ begin
   begin
     LHandlerCalled := True;
     LReply := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], 2);
   end);
@@ -1966,7 +1993,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LReply := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LReply))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LReply))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], SizeUInt(Length(LReply)));
   end);
@@ -2013,7 +2040,7 @@ begin
   begin
     LHandlerCalled := True;
     LBody := 'pong';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -2482,6 +2509,26 @@ begin
     'Expect declared oversize early reject');
 end;
 
+procedure TestExpectHugeContentLengthRejectsEarly;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 9223372036854775808'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxBodySize := 1024;
+  RunExpectEarlyRejectSecurityCase(
+    LOpts,
+    REQ,
+    'HTTP/1.1 413 Payload Too Large',
+    'Expect huge Content-Length early reject');
+end;
+
 procedure TestRepeatedExpectHeaderUnsupportedMemberRejectsEarly;
 const
   REQ =
@@ -2733,7 +2780,7 @@ const
     'Host: localhost'#13#10#13#10 +
     'POST /bad HTTP/1.1'#13#10 +
     'Host: localhost'#13#10 +
-    'Content-Length: 1'#13#10 +
+    'Content-Length: 01'#13#10 +
     'Content-Length: 1'#13#10 +
     'Connection: close'#13#10#13#10;
 begin
@@ -3059,7 +3106,7 @@ const
     'Host: localhost'#13#10#13#10 +
     'POST /bad HTTP/1.1'#13#10 +
     'Host: localhost'#13#10 +
-    'Content-Length: 1'#13#10 +
+    'Content-Length: 01'#13#10 +
     'Content-Length: 1'#13#10 +
     'Connection: close'#13#10#13#10;
 begin
@@ -3683,6 +3730,27 @@ begin
     REQ,
     'HTTP/1.1 413 Payload Too Large',
     'epoll Expect declared oversize early reject');
+end;
+
+procedure TestExpectHugeContentLengthRejectsEarlyEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 9223372036854775808'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LOpts.MaxBodySize := 1024;
+  RunExpectEarlyRejectSecurityCase(
+    LOpts,
+    REQ,
+    'HTTP/1.1 413 Payload Too Large',
+    'epoll Expect huge Content-Length early reject');
 end;
 
 procedure TestRepeatedExpectHeaderUnsupportedMemberRejectsEarlyEpollBackend;
@@ -4368,7 +4436,7 @@ begin
     LGotTrailerDecl := AReq.Headers.Get('Trailer');
     LGotTrailerValue := AReq.Headers.Get('X-Test');
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -4379,7 +4447,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -5155,6 +5223,19 @@ begin
     'epoll missing Host: explicit 400');
 end;
 
+procedure TestDuplicateHostEpollBackend;
+const
+  REQ = 'GET / HTTP/1.1'#13#10 +
+        'Host: first.example'#13#10 +
+        'Host: second.example'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll duplicate Host: explicit 400');
+end;
+
 procedure TestRequestLineTruncatedAtEofEpollBackend;
 const REQ = 'GET / HTTP/1.';
 begin
@@ -5762,6 +5843,8 @@ begin
   T.Run('Header field over MaxHeaderSize -> explicit 431',
     @TestHeaderFieldOverMaxHeaderSizeUsesExplicit431);
   T.Run('Null byte in header -> 400', @TestHeaderNullByte);
+  T.Run('Separator in header field-name -> 400',
+    @TestHeaderNameSeparatorRejected);
   T.Run('Request line too long', @TestRequestLineTooLong);
   T.Run('Request-target over MaxHeaderSize -> explicit 431',
     @TestRequestTargetOverMaxHeaderSizeUsesExplicit431);
@@ -5777,6 +5860,7 @@ begin
   T.Run('HTTP/0.9 no version -> 400', @TestHttp09Request);
   T.Run('CRLF injection in path -> 400', @TestCrlfInjection);
   T.Run('Missing Host header -> 400', @TestMissingHost);
+  T.Run('Duplicate Host header -> 400', @TestDuplicateHost);
   T.Run('Request line truncated at EOF -> 400', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
   T.Run('Very long method name -> 400', @TestLongMethodName);
@@ -5835,6 +5919,8 @@ begin
     @TestExpectContinueZeroProgressChunkedBodyIdleTimeout);
   T.Run('Expect declared oversize rejects early without interim 100',
     @TestExpectDeclaredOversizeRejectsEarly);
+  T.Run('Expect huge Content-Length rejects early without interim 100',
+    @TestExpectHugeContentLengthRejectsEarly);
   T.Run('Repeated Expect headers with unsupported member reject early without interim 100',
     @TestRepeatedExpectHeaderUnsupportedMemberRejectsEarly);
   T.Run('Expect zero content-length does not emit interim 100',
@@ -5949,6 +6035,8 @@ begin
     @TestCrlfInjectionEpollBackend);
   T.Run('Missing Host header -> 400 with epoll backend',
     @TestMissingHostEpollBackend);
+  T.Run('Duplicate Host header -> 400 with epoll backend',
+    @TestDuplicateHostEpollBackend);
   T.Run('Request line truncated at EOF -> 400 with epoll backend',
     @TestRequestLineTruncatedAtEofEpollBackend);
   T.Run('Headers truncated at EOF -> 400 with epoll backend',
@@ -6079,6 +6167,8 @@ begin
     @TestExpectContinueZeroProgressChunkedBodyIdleTimeoutEpollBackend);
   T.Run('Expect declared oversize rejects early without interim 100 with epoll backend',
     @TestExpectDeclaredOversizeRejectsEarlyEpollBackend);
+  T.Run('Expect huge Content-Length rejects early without interim 100 with epoll backend',
+    @TestExpectHugeContentLengthRejectsEarlyEpollBackend);
   T.Run('Repeated Expect headers with unsupported member reject early without interim 100 with epoll backend',
     @TestRepeatedExpectHeaderUnsupportedMemberRejectsEarlyEpollBackend);
   T.Run('Expect zero content-length does not emit interim 100 with epoll backend',

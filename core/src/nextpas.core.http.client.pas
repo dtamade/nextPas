@@ -9,6 +9,7 @@ unit nextpas.core.http.client;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.net.intf,
   nextpas.core.http.base,
@@ -16,22 +17,33 @@ uses
 
 type
   THttpClientOptions = nextpas.core.http.base.THttpClientOptions;
+  IHttpTransportIdleConnections = nextpas.core.http.intf.IHttpTransportIdleConnections;
 
   THttpClient = class(TInterfacedObject, IHttpClient)
   private
     FOptions: THttpClientOptions;
     FTransport: IHttpTransport;
-    function DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32): IHttpResponse;
+    function DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32;
+      var ARequestBodyCloseAttempted: Boolean): IHttpResponse;
+    function DoBodyRequest(const AMethod: THttpMethod;
+      const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
   public
     constructor Create(const AOptions: THttpClientOptions); overload;
     constructor Create(const ATransport: IHttpTransport;
       const AOptions: THttpClientOptions); overload;
-    function Do_(const AReq: IHttpRequest): IHttpResponse;
+    function Send(const AReq: IHttpRequest): IHttpResponse;
+    procedure CloseIdleConnections;
     function Get(const AUrl: string): IHttpResponse;
-    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Delete(const AUrl: string): IHttpResponse;
-    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Head(const AUrl: string): IHttpResponse;
   end;
 
@@ -43,11 +55,14 @@ function NewHttpClient(const ATransport: IHttpTransport;
 function HttpGetToWriter(const AClient: IHttpClient; const AUrl: string;
   const ADest: IWriter): Int64;
 function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string): Int64;
+procedure HttpReleaseResponseBody(const AResp: IHttpResponse);
+function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes;
+function HttpReadResponseBodyString(const AResp: IHttpResponse): string;
 
 implementation
 
 uses
-  nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.errors,
   nextpas.core.fs,
   nextpas.core.io,
@@ -56,14 +71,6 @@ uses
   nextpas.core.http.headers,
   nextpas.core.http.message,
   nextpas.core.http.impl.registry;
-
-function StrToBytes(const S: string): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(S));
-  if Length(S) > 0 then
-    Move(S[1], Result[0], Length(S));
-end;
 
 procedure CheckDownloadArgs(const AClient: IHttpClient; const AUrl: string);
 begin
@@ -82,6 +89,487 @@ begin
       IntToStr(Int64(AResp.StatusCode)) + ': ' + AUrl);
 end;
 
+procedure ValidateClientOptions(const AOptions: THttpClientOptions);
+begin
+  if AOptions.Timeout < 0 then
+    raise EArgumentError.Create('HTTP client timeout must not be negative');
+  if AOptions.MaxRedirects < 0 then
+    raise EArgumentError.Create('HTTP client max redirects must not be negative');
+end;
+
+procedure CloseRequestBody(const ABody: IReader);
+var
+  LReadCloser: IReadCloser;
+  LCloser: ICloser;
+  LStream: IStream;
+begin
+  if ABody = nil then
+    Exit;
+  if Supports(ABody, IReadCloser, LReadCloser) then
+  begin
+    LReadCloser.Close;
+    Exit;
+  end;
+  if Supports(ABody, ICloser, LCloser) then
+  begin
+    LCloser.Close;
+    Exit;
+  end;
+  if Supports(ABody, IStream, LStream) then
+    LStream.Close;
+end;
+
+procedure CloseRequestBodyIgnoringErrors(const ABody: IReader);
+begin
+  try
+    CloseRequestBody(ABody);
+  except
+    on E: Exception do ;
+  end;
+end;
+
+function MergeRedirectPath(const ABasePath, ATargetPath: string): string;
+var
+  LI: SizeInt;
+  LSlashPos: SizeInt;
+begin
+  if ATargetPath = '' then
+    Exit(ABasePath);
+  if ATargetPath[1] = '/' then
+    Exit(ATargetPath);
+
+  LSlashPos := 0;
+  for LI := Length(ABasePath) downto 1 do
+    if ABasePath[LI] = '/' then
+    begin
+      LSlashPos := LI;
+      Break;
+    end;
+
+  if LSlashPos > 0 then
+    Result := System.Copy(ABasePath, 1, LSlashPos) + ATargetPath
+  else
+    Result := '/' + ATargetPath;
+end;
+
+function StartsWith(const AValue, APrefix: string): Boolean;
+begin
+  Result := (Length(AValue) >= Length(APrefix)) and
+    (System.Copy(AValue, 1, Length(APrefix)) = APrefix);
+end;
+
+function HasRedirectQueryDelimiter(const ALocation: string): Boolean;
+var
+  LI: SizeInt;
+begin
+  for LI := 1 to Length(ALocation) do
+  begin
+    case ALocation[LI] of
+      '?':
+        Exit(True);
+      '#':
+        Exit(False);
+    end;
+  end;
+  Result := False;
+end;
+
+function RedirectAbsoluteScheme(const ALocation: string): string;
+var
+  LSchemeEnd: SizeInt;
+  LI: SizeInt;
+begin
+  LSchemeEnd := 0;
+  for LI := 1 to Length(ALocation) do
+  begin
+    case ALocation[LI] of
+      ':':
+      begin
+        LSchemeEnd := LI;
+        Break;
+      end;
+      '/', '?', '#':
+        Break;
+    end;
+  end;
+  if LSchemeEnd <= 1 then
+    Exit('');
+  Result := LowerCase(System.Copy(ALocation, 1, LSchemeEnd - 1));
+end;
+
+function RedirectAuthorityPortIsValid(const ALocation: string): Boolean;
+var
+  LAuthorityStart: SizeInt;
+  LAuthorityEnd: SizeInt;
+  LAuthority: string;
+  LAtPos: SizeInt;
+  LColonPos: SizeInt;
+  LBracketPos: SizeInt;
+  LPortStr: string;
+  LPortValue: Int64;
+  LI: SizeInt;
+begin
+  Result := True;
+  LAuthorityStart := Pos('://', ALocation);
+  if LAuthorityStart = 0 then
+    Exit;
+  Inc(LAuthorityStart, 3);
+
+  LAuthorityEnd := Length(ALocation) + 1;
+  for LI := LAuthorityStart to Length(ALocation) do
+    if (ALocation[LI] = '/') or (ALocation[LI] = '?') or
+      (ALocation[LI] = '#') then
+    begin
+      LAuthorityEnd := LI;
+      Break;
+    end;
+
+  LAuthority := System.Copy(ALocation, LAuthorityStart,
+    LAuthorityEnd - LAuthorityStart);
+  if LAuthority = '' then
+    Exit;
+
+  LAtPos := Pos('@', LAuthority);
+  if LAtPos > 0 then
+    Delete(LAuthority, 1, LAtPos);
+  if LAuthority = '' then
+    Exit;
+
+  if LAuthority[1] = '[' then
+  begin
+    LBracketPos := Pos(']', LAuthority);
+    if LBracketPos = 0 then
+    begin
+      Result := False;
+      Exit;
+    end;
+    if LBracketPos = Length(LAuthority) then
+      Exit;
+    if LAuthority[LBracketPos + 1] <> ':' then
+    begin
+      Result := False;
+      Exit;
+    end;
+    LPortStr := System.Copy(LAuthority, LBracketPos + 2,
+      Length(LAuthority) - LBracketPos - 1);
+  end
+  else
+  begin
+    LColonPos := Pos(':', LAuthority);
+    if LColonPos = 0 then
+      Exit;
+    LPortStr := System.Copy(LAuthority, LColonPos + 1,
+      Length(LAuthority) - LColonPos);
+  end;
+
+  Result := (LPortStr <> '') and TryStrToInt64(LPortStr, LPortValue) and
+    (LPortValue >= 0) and (LPortValue <= 65535);
+end;
+
+function ParseRedirectAuthorityUrl(const AUrl, AScheme: string): TUrl;
+begin
+  Result := TUrl.Parse(AUrl);
+  Result.Scheme := AScheme;
+  if Result.Host = '' then
+    raise EHttpError.Create('redirect URL host is empty');
+  if not RedirectAuthorityPortIsValid(AUrl) then
+    raise EHttpError.Create('redirect URL port is invalid');
+end;
+
+function DefaultPortForScheme(const AScheme: string): UInt16;
+var
+  LScheme: string;
+begin
+  LScheme := LowerCase(AScheme);
+  if LScheme = 'http' then
+    Result := 80
+  else if LScheme = 'https' then
+    Result := 443
+  else
+    Result := 0;
+end;
+
+function EffectiveAuthorityPort(const AUrl: TUrl): UInt16;
+begin
+  if AUrl.Port <> 0 then
+    Result := AUrl.Port
+  else
+    Result := DefaultPortForScheme(AUrl.Scheme);
+end;
+
+function IsRedirectSameAuthority(const AInitialUrl, ARedirectUrl: TUrl): Boolean;
+begin
+  Result := (AInitialUrl.Host <> '') and (ARedirectUrl.Host <> '') and
+    (LowerCase(AInitialUrl.Host) = LowerCase(ARedirectUrl.Host)) and
+    (EffectiveAuthorityPort(AInitialUrl) = EffectiveAuthorityPort(ARedirectUrl));
+end;
+
+function IsRedirectSameOrigin(const AInitialUrl, ARedirectUrl: TUrl): Boolean;
+begin
+  Result := IsRedirectSameAuthority(AInitialUrl, ARedirectUrl) and
+    (LowerCase(AInitialUrl.Scheme) = LowerCase(ARedirectUrl.Scheme));
+end;
+
+function MethodForGetStyleRedirect(const AMethod: THttpMethod): THttpMethod;
+begin
+  if AMethod = hmHead then
+    Result := hmHead
+  else
+    Result := hmGet;
+end;
+
+function BufferedBodyRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AContentType: string; const ABody: IReader): IHttpRequest;
+var
+  LHeaders: IHttpHeaders;
+  LBody: TBytes;
+begin
+  LHeaders := NewHttpHeaders;
+  if AContentType <> '' then
+    LHeaders.SetHeader('content-type', AContentType);
+
+  if ABody <> nil then
+  begin
+    try
+      LBody := nextpas.core.io.ReadAll(ABody);
+    except
+      on E: Exception do
+      begin
+        CloseRequestBodyIgnoringErrors(ABody);
+        raise;
+      end;
+    end;
+    CloseRequestBody(ABody);
+  end
+  else
+    LBody := nil;
+
+  Result := NewRequest(AMethod, AUrl, LHeaders, LBody);
+end;
+
+function BufferedBodyRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AContentType, ABody: string): IHttpRequest; overload;
+var
+  LHeaders: IHttpHeaders;
+begin
+  LHeaders := NewHttpHeaders;
+  if AContentType <> '' then
+    LHeaders.SetHeader('content-type', AContentType);
+  Result := NewRequest(AMethod, AUrl, LHeaders, ABody);
+end;
+
+function BufferedBodyRequest(const AMethod: THttpMethod; const AUrl,
+  AContentType: string; const ABody: TBytes): IHttpRequest; overload;
+var
+  LHeaders: IHttpHeaders;
+begin
+  LHeaders := NewHttpHeaders;
+  if AContentType <> '' then
+    LHeaders.SetHeader('content-type', AContentType);
+  Result := NewRequest(AMethod, AUrl, LHeaders, ABody);
+end;
+
+function RedirectHeadersFor(const AReq: IHttpRequest; const AInitialUrl,
+  ARedirectUrl: TUrl; const AIncludeBody: Boolean): IHttpHeaders;
+begin
+  if (AReq <> nil) and (AReq.Headers <> nil) then
+    Result := AReq.Headers.Clone
+  else
+    Result := NewHttpHeaders;
+
+  if not IsRedirectSameAuthority(AInitialUrl, ARedirectUrl) then
+    Result.Remove('host');
+  if not AIncludeBody then
+  begin
+    Result.Remove('content-length');
+    Result.Remove('transfer-encoding');
+  end;
+
+  if not IsRedirectSameOrigin(AInitialUrl, ARedirectUrl) then
+  begin
+    Result.Remove('authorization');
+    Result.Remove('proxy-authorization');
+    Result.Remove('www-authenticate');
+    Result.Remove('cookie');
+    Result.Remove('cookie2');
+  end;
+end;
+
+function CaptureRedirectBodyPosition(const AReq: IHttpRequest;
+  out ABodyStream: IStream; out AStartPosition: Int64): Boolean;
+begin
+  ABodyStream := nil;
+  AStartPosition := 0;
+  if (AReq = nil) or (AReq.Body = nil) then
+    Exit(False);
+  Result := Supports(AReq.Body, IStream, ABodyStream);
+  if Result then
+    AStartPosition := ABodyStream.Position;
+end;
+
+procedure RewindRedirectBody(const AReq: IHttpRequest; const ABodyStream: IStream;
+  const AStartPosition: Int64);
+begin
+  if (AReq.Body = nil) or (AReq.ContentLength = 0) then
+    Exit;
+  if ABodyStream = nil then
+    raise EHttpError.Create('redirect request body is not replayable');
+  ABodyStream.Position := AStartPosition;
+end;
+
+procedure ReleaseResponseBody(const AResp: IHttpResponse);
+var
+  LBody: IReader;
+  LReadCloser: IReadCloser;
+  LCloser: ICloser;
+  LStream: IStream;
+  LBuf: array[0..4095] of Byte;
+begin
+  if (AResp = nil) or (AResp.Body = nil) then
+    Exit;
+  LBody := AResp.Body;
+
+  if Supports(LBody, IReadCloser, LReadCloser) then
+  begin
+    LReadCloser.Close;
+    Exit;
+  end;
+  if Supports(LBody, ICloser, LCloser) then
+  begin
+    LCloser.Close;
+    Exit;
+  end;
+  if Supports(LBody, IStream, LStream) then
+  begin
+    LStream.Close;
+    Exit;
+  end;
+
+  while LBody.Read(LBuf[0], SizeUInt(Length(LBuf))) > 0 do
+    ;
+end;
+
+procedure ReleaseResponseBodyIgnoringErrors(const AResp: IHttpResponse);
+begin
+  try
+    ReleaseResponseBody(AResp);
+  except
+    on E: Exception do ;
+  end;
+end;
+
+procedure RemoveLastPathSegment(var AOutput: string);
+var
+  LI: SizeInt;
+begin
+  for LI := Length(AOutput) downto 1 do
+    if AOutput[LI] = '/' then
+    begin
+      SetLength(AOutput, LI - 1);
+      Exit;
+    end;
+  AOutput := '';
+end;
+
+procedure MoveFirstPathSegment(var AInput, AOutput: string);
+var
+  LI: SizeInt;
+  LSegmentLen: SizeInt;
+begin
+  if AInput = '' then
+    Exit;
+
+  LSegmentLen := Length(AInput);
+  if AInput[1] = '/' then
+  begin
+    for LI := 2 to Length(AInput) do
+      if AInput[LI] = '/' then
+      begin
+        LSegmentLen := LI - 1;
+        Break;
+      end;
+  end
+  else
+  begin
+    for LI := 1 to Length(AInput) do
+      if AInput[LI] = '/' then
+      begin
+        LSegmentLen := LI - 1;
+        Break;
+      end;
+  end;
+
+  AOutput := AOutput + System.Copy(AInput, 1, LSegmentLen);
+  Delete(AInput, 1, LSegmentLen);
+end;
+
+function NormalizeRedirectPath(const APath: string): string;
+var
+  LInput: string;
+begin
+  LInput := APath;
+  Result := '';
+  while LInput <> '' do
+  begin
+    if StartsWith(LInput, '../') then
+      Delete(LInput, 1, 3)
+    else if StartsWith(LInput, './') then
+      Delete(LInput, 1, 2)
+    else if StartsWith(LInput, '/./') then
+      Delete(LInput, 2, 2)
+    else if LInput = '/.' then
+      LInput := '/'
+    else if StartsWith(LInput, '/../') then
+    begin
+      Delete(LInput, 2, 3);
+      RemoveLastPathSegment(Result);
+    end
+    else if LInput = '/..' then
+    begin
+      LInput := '/';
+      RemoveLastPathSegment(Result);
+    end
+    else if (LInput = '.') or (LInput = '..') then
+      LInput := ''
+    else
+      MoveFirstPathSegment(LInput, Result);
+  end;
+end;
+
+function ResolveRedirectUrl(const ABaseUrl: TUrl; const ALocation: string): TUrl;
+var
+  LTarget: TUrl;
+  LHasQueryDelimiter: Boolean;
+  LScheme: string;
+begin
+  LScheme := RedirectAbsoluteScheme(ALocation);
+  if LScheme <> '' then
+  begin
+    if (LScheme <> 'http') and (LScheme <> 'https') then
+      raise EHttpError.Create('unsupported redirect URL scheme: ' + LScheme);
+    Exit(ParseRedirectAuthorityUrl(ALocation, LScheme));
+  end;
+  if (Length(ALocation) >= 2) and (ALocation[1] = '/') and (ALocation[2] = '/') then
+  begin
+    if ABaseUrl.Scheme = '' then
+      raise EHttpError.Create('network-path redirect requires base URL scheme');
+    Exit(ParseRedirectAuthorityUrl(ABaseUrl.Scheme + ':' + ALocation,
+      ABaseUrl.Scheme));
+  end;
+
+  Result := ABaseUrl;
+  LHasQueryDelimiter := HasRedirectQueryDelimiter(ALocation);
+  LTarget := TUrl.ParseRequestTarget(ALocation);
+  if LTarget.Path <> '' then
+  begin
+    Result.Path := NormalizeRedirectPath(MergeRedirectPath(Result.Path, LTarget.Path));
+    Result.RawQuery := LTarget.RawQuery;
+  end
+  else if LHasQueryDelimiter then
+    Result.RawQuery := LTarget.RawQuery;
+  Result.Fragment := LTarget.Fragment;
+end;
+
 { THttpClient }
 
 constructor THttpClient.Create(const AOptions: THttpClientOptions);
@@ -93,62 +581,159 @@ constructor THttpClient.Create(const ATransport: IHttpTransport;
   const AOptions: THttpClientOptions);
 begin
   inherited Create;
+  ValidateClientOptions(AOptions);
   FOptions := AOptions;
   if ATransport <> nil then
     FTransport := ATransport
   else
-    FTransport := ResolveDefaultClientTransport(AOptions);
+    FTransport := ResolveClientTransport(
+      AOptions.EffectiveVersion(GetDefaultClientVersion), AOptions);
 end;
 
-function THttpClient.DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32): IHttpResponse;
+function THttpClient.DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32;
+  var ARequestBodyCloseAttempted: Boolean): IHttpResponse;
 var
   LUrl: TUrl;
   LResp: IHttpResponse;
   LLocation: string;
+  LLocations: TStringArray;
   LNewUrl: TUrl;
   LNewReq: IHttpRequest;
+  LRespHeaders: IHttpHeaders;
+  LNewHeaders: IHttpHeaders;
+  LBodyStream: IStream;
+  LBodyStartPosition: Int64;
 begin
   LUrl := AReq.Url;
+  CaptureRedirectBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LResp := FTransport.RoundTrip(AReq);
+  if LResp = nil then
+    raise EHttpError.Create('HTTP transport returned no response');
 
   // Handle redirects
   if FOptions.FollowRedirects and
-     ((LResp.StatusCode = 301) or (LResp.StatusCode = 302) or
-      (LResp.StatusCode = 307) or (LResp.StatusCode = 308)) then
+     ((LResp.StatusCode = HTTP_STATUS_MOVED_PERMANENTLY) or
+      (LResp.StatusCode = HTTP_STATUS_FOUND) or
+      (LResp.StatusCode = HTTP_STATUS_SEE_OTHER) or
+      (LResp.StatusCode = HTTP_STATUS_TEMPORARY_REDIRECT) or
+      (LResp.StatusCode = HTTP_STATUS_PERMANENT_REDIRECT)) then
   begin
     if ARedirectsLeft <= 0 then
-      raise EHttpError.Create('too many redirects');
-
-    LLocation := LResp.Headers.Get('location');
-    if LLocation = '' then
-      raise EHttpError.Create('redirect with no Location header');
-
-    // Parse new URL (handle relative and absolute)
-    if (Pos('http://', LLocation) = 1) or (Pos('https://', LLocation) = 1) then
-      LNewUrl := TUrl.Parse(LLocation)
-    else
     begin
-      // Relative redirect
-      LNewUrl := LUrl;
-      LNewUrl.Path := LLocation;
-      LNewUrl.RawQuery := '';
+      ReleaseResponseBodyIgnoringErrors(LResp);
+      raise EHttpError.Create('too many redirects');
     end;
 
-    // For 301/302, change method to GET (drop body)
-    if (LResp.StatusCode = 301) or (LResp.StatusCode = 302) then
-      LNewReq := THttpRequest.Create(hmGet, LNewUrl, hvHttp11, NewHttpHeaders, nil, 0)
-    else
-      LNewReq := THttpRequest.Create(AReq.Method, LNewUrl, hvHttp11, NewHttpHeaders, AReq.Body, AReq.ContentLength);
+    LRespHeaders := LResp.Headers;
+    if LRespHeaders = nil then
+    begin
+      ReleaseResponseBodyIgnoringErrors(LResp);
+      raise EHttpError.Create('redirect with no response headers');
+    end;
 
-    Result := DoRequest(LNewReq, ARedirectsLeft - 1);
+    LLocations := LRespHeaders.GetAll('location');
+    if Length(LLocations) > 1 then
+    begin
+      ReleaseResponseBodyIgnoringErrors(LResp);
+      raise EHttpError.Create('redirect with duplicate Location headers');
+    end;
+
+    if Length(LLocations) = 1 then
+      LLocation := LLocations[0]
+    else
+      LLocation := '';
+    if LLocation = '' then
+    begin
+      ReleaseResponseBodyIgnoringErrors(LResp);
+      raise EHttpError.Create('redirect with no Location header');
+    end;
+
+    try
+      LNewUrl := ResolveRedirectUrl(LUrl, LLocation);
+    except
+      ReleaseResponseBodyIgnoringErrors(LResp);
+      raise;
+    end;
+    ReleaseResponseBody(LResp);
+
+    // Go-style 301/302/303 redirects keep HEAD, otherwise replay as GET.
+    if (LResp.StatusCode = HTTP_STATUS_MOVED_PERMANENTLY) or
+       (LResp.StatusCode = HTTP_STATUS_FOUND) or
+       (LResp.StatusCode = HTTP_STATUS_SEE_OTHER) then
+    begin
+      LNewHeaders := RedirectHeadersFor(AReq, LUrl, LNewUrl, False);
+      ARequestBodyCloseAttempted := True;
+      CloseRequestBody(AReq.Body);
+      LNewReq := THttpRequest.Create(MethodForGetStyleRedirect(AReq.Method),
+        LNewUrl, hvHttp11, LNewHeaders, nil, 0);
+    end
+    else
+    begin
+      RewindRedirectBody(AReq, LBodyStream, LBodyStartPosition);
+      LNewHeaders := RedirectHeadersFor(AReq, LUrl, LNewUrl, True);
+      LNewReq := THttpRequest.Create(AReq.Method, LNewUrl, hvHttp11,
+        LNewHeaders, AReq.Body, AReq.ContentLength);
+    end;
+
+    Result := DoRequest(LNewReq, ARedirectsLeft - 1, ARequestBodyCloseAttempted);
   end
   else
     Result := LResp;
 end;
 
-function THttpClient.Do_(const AReq: IHttpRequest): IHttpResponse;
+function THttpClient.DoBodyRequest(const AMethod: THttpMethod;
+  const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
 begin
-  Result := DoRequest(AReq, FOptions.MaxRedirects);
+  LUrl := TUrl.Parse(AUrl);
+  LReq := BufferedBodyRequest(AMethod, LUrl, AContentType, ABody);
+  Result := Send(LReq);
+end;
+
+function THttpClient.Send(const AReq: IHttpRequest): IHttpResponse;
+var
+  LRequestBodyCloseAttempted: Boolean;
+  LResp: IHttpResponse;
+begin
+  if AReq = nil then
+    raise EArgumentError.Create('HTTP request is nil');
+  LRequestBodyCloseAttempted := False;
+  LResp := nil;
+  try
+    LResp := DoRequest(AReq, FOptions.MaxRedirects, LRequestBodyCloseAttempted);
+  except
+    if not LRequestBodyCloseAttempted then
+      try
+        CloseRequestBody(AReq.Body);
+      except
+        // Preserve the transport or redirect error that made cleanup necessary.
+      end;
+    raise;
+  end;
+
+  if not LRequestBodyCloseAttempted then
+    try
+      CloseRequestBody(AReq.Body);
+    except
+      if LResp <> nil then
+        try
+          ReleaseResponseBody(LResp);
+        except
+          // Preserve the request-body close failure that made the response unreachable.
+        end;
+      raise;
+    end;
+  Result := LResp;
+end;
+
+procedure THttpClient.CloseIdleConnections;
+var
+  LIdleTransport: IHttpTransportIdleConnections;
+begin
+  if Supports(FTransport, IHttpTransportIdleConnections, LIdleTransport) then
+    LIdleTransport.CloseIdleConnections;
 end;
 
 function THttpClient.Get(const AUrl: string): IHttpResponse;
@@ -158,88 +743,37 @@ var
 begin
   LUrl := TUrl.Parse(AUrl);
   LReq := THttpRequest.Create(hmGet, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
-  Result := Do_(LReq);
+  Result := Send(LReq);
 end;
 
 function THttpClient.Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-var
-  LUrl: TUrl;
-  LReq: IHttpRequest;
-  LHeaders: IHttpHeaders;
-  LBodyBuf: string;
-  LTmp: array[0..4095] of Byte;
-  LN: SizeUInt;
-  LBodyStream: IStream;
 begin
-  LUrl := TUrl.Parse(AUrl);
-  LHeaders := NewHttpHeaders;
-  LHeaders.Set_('content-type', AContentType);
+  Result := DoBodyRequest(hmPost, AUrl, AContentType, ABody);
+end;
 
-  // Read all body into buffer to determine content-length
-  LBodyBuf := '';
-  if ABody <> nil then
-  begin
-    repeat
-      LN := ABody.Read(LTmp[0], 4096);
-      if LN > 0 then
-      begin
-        SetLength(LBodyBuf, Length(LBodyBuf) + Int32(LN));
-        Move(LTmp[0], LBodyBuf[Length(LBodyBuf) - Int32(LN) + 1], LN);
-      end;
-    until LN = 0;
-  end;
+function THttpClient.Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
+begin
+  Result := Send(BufferedBodyRequest(hmPost, AUrl, AContentType, ABody));
+end;
 
-  LHeaders.Set_('content-length', IntToStr(Int64(Length(LBodyBuf))));
-
-  if LBodyBuf <> '' then
-  begin
-    LBodyStream := CreateBytesStreamFrom(StrToBytes(LBodyBuf));
-    LReq := THttpRequest.Create(hmPost, LUrl, hvHttp11, LHeaders, LBodyStream as IReader, Int64(Length(LBodyBuf)));
-  end
-  else
-    LReq := THttpRequest.Create(hmPost, LUrl, hvHttp11, LHeaders, nil, 0);
-
-  Result := Do_(LReq);
+function THttpClient.Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
+begin
+  Result := Send(BufferedBodyRequest(hmPost, AUrl, AContentType, ABody));
 end;
 
 function THttpClient.Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-var
-  LUrl: TUrl;
-  LReq: IHttpRequest;
-  LHeaders: IHttpHeaders;
-  LBodyBuf: string;
-  LTmp: array[0..4095] of Byte;
-  LN: SizeUInt;
-  LBodyStream: IStream;
 begin
-  LUrl := TUrl.Parse(AUrl);
-  LHeaders := NewHttpHeaders;
-  LHeaders.Set_('content-type', AContentType);
+  Result := DoBodyRequest(hmPut, AUrl, AContentType, ABody);
+end;
 
-  LBodyBuf := '';
-  if ABody <> nil then
-  begin
-    repeat
-      LN := ABody.Read(LTmp[0], 4096);
-      if LN > 0 then
-      begin
-        SetLength(LBodyBuf, Length(LBodyBuf) + Int32(LN));
-        Move(LTmp[0], LBodyBuf[Length(LBodyBuf) - Int32(LN) + 1], LN);
-      end;
-    until LN = 0;
-  end;
+function THttpClient.Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
+begin
+  Result := Send(BufferedBodyRequest(hmPut, AUrl, AContentType, ABody));
+end;
 
-  LHeaders.Set_('content-length', IntToStr(Int64(Length(LBodyBuf))));
-
-  if LBodyBuf <> '' then
-  begin
-    LBodyStream := CreateBytesStreamFrom(StrToBytes(LBodyBuf));
-    LReq := THttpRequest.Create(hmPut, LUrl, hvHttp11, LHeaders, LBodyStream as IReader, Int64(Length(LBodyBuf)));
-  end
-  else
-    LReq := THttpRequest.Create(hmPut, LUrl, hvHttp11, LHeaders, nil, 0);
-
-  Result := Do_(LReq);
+function THttpClient.Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
+begin
+  Result := Send(BufferedBodyRequest(hmPut, AUrl, AContentType, ABody));
 end;
 
 function THttpClient.Delete(const AUrl: string): IHttpResponse;
@@ -249,47 +783,22 @@ var
 begin
   LUrl := TUrl.Parse(AUrl);
   LReq := THttpRequest.Create(hmDelete, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
-  Result := Do_(LReq);
+  Result := Send(LReq);
 end;
 
 function THttpClient.Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-var
-  LUrl: TUrl;
-  LReq: IHttpRequest;
-  LHeaders: IHttpHeaders;
-  LBodyBuf: string;
-  LTmp: array[0..4095] of Byte;
-  LN: SizeUInt;
-  LBodyStream: IStream;
 begin
-  LUrl := TUrl.Parse(AUrl);
-  LHeaders := NewHttpHeaders;
-  LHeaders.Set_('content-type', AContentType);
+  Result := DoBodyRequest(hmPatch, AUrl, AContentType, ABody);
+end;
 
-  LBodyBuf := '';
-  if ABody <> nil then
-  begin
-    repeat
-      LN := ABody.Read(LTmp[0], 4096);
-      if LN > 0 then
-      begin
-        SetLength(LBodyBuf, Length(LBodyBuf) + Int32(LN));
-        Move(LTmp[0], LBodyBuf[Length(LBodyBuf) - Int32(LN) + 1], LN);
-      end;
-    until LN = 0;
-  end;
+function THttpClient.Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
+begin
+  Result := Send(BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody));
+end;
 
-  LHeaders.Set_('content-length', IntToStr(Int64(Length(LBodyBuf))));
-
-  if LBodyBuf <> '' then
-  begin
-    LBodyStream := CreateBytesStreamFrom(StrToBytes(LBodyBuf));
-    LReq := THttpRequest.Create(hmPatch, LUrl, hvHttp11, LHeaders, LBodyStream as IReader, Int64(Length(LBodyBuf)));
-  end
-  else
-    LReq := THttpRequest.Create(hmPatch, LUrl, hvHttp11, LHeaders, nil, 0);
-
-  Result := Do_(LReq);
+function THttpClient.Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
+begin
+  Result := Send(BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody));
 end;
 
 function THttpClient.Head(const AUrl: string): IHttpResponse;
@@ -299,7 +808,7 @@ var
 begin
   LUrl := TUrl.Parse(AUrl);
   LReq := THttpRequest.Create(hmHead, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
-  Result := Do_(LReq);
+  Result := Send(LReq);
 end;
 
 { Factory functions }
@@ -335,10 +844,17 @@ begin
     raise EArgumentError.Create('HTTP download destination writer is nil');
 
   LResp := AClient.Get(AUrl);
-  CheckDownloadResponse(LResp, AUrl);
-  if LResp.Body = nil then
-    Exit(0);
-  Result := nextpas.core.io.Copy(ADest, LResp.Body);
+  try
+    CheckDownloadResponse(LResp, AUrl);
+    if LResp.Body = nil then
+      Result := 0
+    else
+      Result := nextpas.core.io.Copy(ADest, LResp.Body);
+  except
+    ReleaseResponseBodyIgnoringErrors(LResp);
+    raise;
+  end;
+  ReleaseResponseBody(LResp);
 end;
 
 function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string): Int64;
@@ -354,40 +870,84 @@ begin
     raise EArgumentError.Create('HTTP download destination path is empty');
 
   LResp := AClient.Get(AUrl);
-  CheckDownloadResponse(LResp, AUrl);
-
-  LDestDir := nextpas.core.fs.PathDir(ADestPath);
-  if not nextpas.core.fs.MkdirAll(LDestDir) then
-    raise EHttpError.Create('HTTP download could not create directory: ' + LDestDir);
-
-  LTempFile := nextpas.core.fs.TempFile(LDestDir,
-    '.' + nextpas.core.fs.PathBase(ADestPath) + '.tmp.');
-  LTempPath := LTempFile.Name;
-  LCommitted := False;
   try
-    if LResp.Body <> nil then
-      Result := nextpas.core.io.Copy(LTempFile as IWriter, LResp.Body)
-    else
-      Result := 0;
-    LTempFile.Sync;
-    LTempFile.Close;
-    LTempFile := nil;
+    CheckDownloadResponse(LResp, AUrl);
 
-    if not nextpas.core.fs.Rename(LTempPath, ADestPath) then
-      raise EHttpError.Create('HTTP download could not publish file: ' + ADestPath);
-    LCommitted := True;
-  finally
-    if LTempFile <> nil then
-    begin
-      try
-        LTempFile.Close;
-      except
-        on E: Exception do ;
+    LDestDir := nextpas.core.fs.PathDir(ADestPath);
+    if not nextpas.core.fs.MkdirAll(LDestDir) then
+      raise EHttpError.Create('HTTP download could not create directory: ' + LDestDir);
+
+    LTempFile := nextpas.core.fs.TempFile(LDestDir,
+      '.' + nextpas.core.fs.PathBase(ADestPath) + '.tmp.');
+    LTempPath := LTempFile.Name;
+    LCommitted := False;
+    try
+      if LResp.Body <> nil then
+        Result := nextpas.core.io.Copy(LTempFile as IWriter, LResp.Body)
+      else
+        Result := 0;
+      LTempFile.Sync;
+      LTempFile.Close;
+      LTempFile := nil;
+
+      if not nextpas.core.fs.Rename(LTempPath, ADestPath) then
+        raise EHttpError.Create('HTTP download could not publish file: ' + ADestPath);
+      LCommitted := True;
+    finally
+      if LTempFile <> nil then
+      begin
+        try
+          LTempFile.Close;
+        except
+          on E: Exception do ;
+        end;
       end;
+      if (not LCommitted) and (LTempPath <> '') then
+        nextpas.core.fs.Remove(LTempPath);
     end;
-    if (not LCommitted) and (LTempPath <> '') then
-      nextpas.core.fs.Remove(LTempPath);
+  except
+    ReleaseResponseBodyIgnoringErrors(LResp);
+    raise;
   end;
+  ReleaseResponseBody(LResp);
+end;
+
+procedure HttpReleaseResponseBody(const AResp: IHttpResponse);
+begin
+  if AResp = nil then
+    raise EArgumentError.Create('HTTP response is nil');
+  ReleaseResponseBody(AResp);
+end;
+
+function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes;
+var
+  LBody: IReader;
+begin
+  if AResp = nil then
+    raise EArgumentError.Create('HTTP response is nil');
+
+  LBody := AResp.Body;
+  if LBody = nil then
+    Exit;
+
+  try
+    Result := nextpas.core.io.ReadAll(LBody);
+  except
+    ReleaseResponseBodyIgnoringErrors(AResp);
+    raise;
+  end;
+  ReleaseResponseBody(AResp);
+end;
+
+function HttpReadResponseBodyString(const AResp: IHttpResponse): string;
+var
+  LBody: TBytes;
+begin
+  LBody := HttpReadResponseBodyBytes(AResp);
+  Result := '';
+  SetLength(Result, Length(LBody));
+  if Length(LBody) > 0 then
+    Move(LBody[0], Result[1], Length(LBody));
 end;
 
 end.
