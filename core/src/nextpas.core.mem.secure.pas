@@ -16,9 +16,9 @@ uses
 
 {**
  * Securely zero memory to prevent sensitive data from remaining
- * in memory after use. Uses explicit zeroing followed by a barrier.
+ * in memory after use through the platform-owned secure-zero seam.
  * 
- * This function ensures the compiler cannot optimize away the zeroing operation.
+ * This keeps backend selection inside nextpas.core.platform.memory.
  * 
  * @param Buffer Pointer to the buffer to zero
  * @param Size Size of the buffer in bytes
@@ -42,11 +42,11 @@ procedure SecureZeroString(var Str: AnsiString);
 implementation
 
 uses
-  nextpas.core.platform.secure;
+  nextpas.core.platform.memory;
 
 procedure SecureZeroMemory(Buffer: Pointer; Size: NativeUInt);
 begin
-  platform_secure_zero(Buffer, Size);
+  platform_secure_zero_memory(Buffer, Size);
 end;
 
 procedure SecureZeroBytes(var Data: TBytes);

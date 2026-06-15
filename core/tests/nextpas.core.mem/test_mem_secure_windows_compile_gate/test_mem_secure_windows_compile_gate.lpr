@@ -15,7 +15,7 @@ var
 
 begin
   LByte := $A5;
-  platform_secure_zero(@LByte, SizeOf(LByte));
+  platform_secure_zero_memory(@LByte, SizeOf(LByte));
   LByte := $5A;
   SecureZeroMemory(@LByte, SizeOf(LByte));
 end.

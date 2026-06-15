@@ -94,9 +94,7 @@ What is already aligned with the L0 direction:
 - `nextpas.core.mem.pool.fixed` no longer depends on `nextpas.core.text.conv`;
   the debug-only `Format` path was moved behind a narrow `{$IFDEF FAF_MEM_DEBUG}`
   implementation guard.
-- `nextpas.core.mem.secure` no longer uses raw `Windows` or `BaseUnix` units
-  directly; secure zeroing is now expressed through explicit zeroing plus
-  memory/compiler barriers.
+- `nextpas.core.mem.secure` now delegates secure zeroing to `nextpas.core.platform.memory`, so backend truth and future host promotion stay under the platform owner.
 - `mem.blockpool.concurrent`, `mem.pool.fixed.concurrent`, and
   `mem.pool.slab.concurrent` no longer depend on `nextpas.core.sync`; they use
   the local `TMemMutex` helper backed by `nextpas.core.platform.sync`.
@@ -132,25 +130,20 @@ The ownership decision is now explicit:
 
 - `nextpas.core.mem.memory_map` stays in L0 mem for now.
 - `nextpas.core.mem.allocator.memory_map_allocator` stays in L0 mem for now.
-- `mapped_slab_pool` anonymous allocator path stays in L0 mem for now.
+- `nextpas.core.mem.mapped_slab_pool` owns only the anonymous mapping allocator surface.
+- `nextpas.core.io.mapped.slab_pool` is the fixed owner for file-backed and shared-memory slab pools.
+- The mem allocator surface must not grow `CreateFile`, `OpenFile`, `CreateShared`, `OpenShared`, or `nextpas.core.platform.files` dependencies.
 - `mapped_ring_buffer` is future migration surface.
 - `mapped_ring_buffer.sharded` is future migration surface.
-- `mapped_slab_pool` file/shared manager path is future migration surface.
 
-See `docs/mem/mapped-family-ownership-decision.md` for the full decision note.
+See `src/nextpas.core.mem.mapped_slab_pool.pas` and `src/nextpas.core.io.mapped.slab_pool.pas` for the current owner split.
 
 Additional architecture debt that remains:
 
 - `mapped_ring_buffer*` are still present in `mem`, but their preferred
   long-term home is a higher mapped IO owner. Do not treat them as permanent
   L0 surface.
-- `mapped_slab_pool` still mixes anonymous allocator behavior with
-  file-backed/shared-memory manager behavior; that split must be preserved
-  during any future work.
-- `mem.secure` was cleaned by removing direct host-unit uses, not by
-  introducing a dedicated platform-owned secure seam. The current
-  `FillChar` + barrier strategy is honest for L0, but a later slice may
-  still decide to promote this into a minimal platform primitive.
+- `mem.secure` now relies on the `nextpas.core.platform.memory` secure-zero seam; future host upgrades should evolve that owner instead of reintroducing raw imports into `mem`.
 
 ## Follow-Up Route
 
@@ -162,13 +155,11 @@ Priority follow-up work:
    - Status: readiness gates in progress; no unit moved yet
 1. If migration is later approved, relocate `mapped_ring_buffer` and
    `mapped_ring_buffer.sharded` first.
-2. Split `mapped_slab_pool` into allocator surface and file/shared manager
-   surface before moving it.
+2. Keep the `mapped_slab_pool` split stable: anonymous allocator work stays in `mem`, and file/shared lifecycle work stays in `nextpas.core.io.mapped.slab_pool`.
 3. Treat `memory_map` as temporary L0 surface, not permanent stable surface;
    always replay `nextpas.core.io.mapped` before changing `memory_map`
    ownership.
-4. Revisit the `mem.secure` barrier strategy if a later platform slice
-   requires a more explicit secure-memory primitive.
+4. Revisit `nextpas.core.platform.memory` only if a later platform slice promotes a native Windows secure-zero owner.
 5. Keep allocator-manager behavior narrow and explicit: `rtl` already has a
    runtime regression test for installation safety, while optional guarded
    backends such as CRT still need at least compile truth before wider rollout.
