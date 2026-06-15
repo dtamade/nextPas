@@ -321,7 +321,7 @@ begin
     if AllocLargeThresholdPos = 0 then
       Fail('missing-object-free-release-alloc-large-threshold');
     AllocLargeBranchPos := FindAfter(
-      'br i1 %alloc.is.large, label %alloc.large, label %free.scan',
+      'br i1 %alloc.is.large, label %alloc.large, label %alloc.small.normalize',
       LlvmText, AllocLargeThresholdPos);
     if AllocLargeBranchPos = 0 then
       Fail('missing-object-free-release-alloc-large-branch');
@@ -358,6 +358,16 @@ begin
       AllocPreludeLenStorePos);
     if AllocPayloadReturnPos = 0 then
       Fail('missing-object-free-release-alloc-payload-return');
+    if FindAfter(LineEnding + 'alloc.small.normalize:', LlvmText,
+      AllocPayloadReturnPos) = 0 then
+      Fail('missing-object-free-release-alloc-small-normalize-label');
+    if FindAfter('%alloc.too.small = icmp ult i64 %size, 24', LlvmText,
+      AllocPayloadReturnPos) = 0 then
+      Fail('missing-object-free-release-alloc-small-min-check');
+    if FindAfter(
+      '%alloc.size = select i1 %alloc.too.small, i64 24, i64 %size',
+      LlvmText, AllocPayloadReturnPos) = 0 then
+      Fail('missing-object-free-release-alloc-size-normalized');
     AllocFreeHeadLoadPos := Pos(
       '%free.head = load ptr, ptr %free.linkslot', LlvmText);
     if AllocFreeHeadLoadPos = 0 then
@@ -368,7 +378,7 @@ begin
     if AllocFreeSizeLoadPos = 0 then
       Fail('missing-object-free-release-alloc-free-size-load');
     AllocFreeFitCheckPos := FindAfter(
-      '%free.fits = icmp uge i64 %free.size, %size', LlvmText,
+      '%free.fits = icmp uge i64 %free.size, %alloc.size', LlvmText,
       AllocFreeSizeLoadPos);
     if AllocFreeFitCheckPos = 0 then
       Fail('missing-object-free-release-alloc-free-fit-check');
@@ -392,7 +402,7 @@ begin
     if AllocFreeNextLoadPos = 0 then
       Fail('missing-object-free-release-alloc-free-next-load');
     AllocFreeUnlinkSlotInitPos := FindAfter(
-      '%free.linkslot = phi ptr [ @__heap_free, %entry ], [ %free.nextslot, %free.advance ]',
+      '%free.linkslot = phi ptr [ @__heap_free, %alloc.small.normalize ], [ %free.nextslot, %free.advance ]',
       LlvmText, FreeListGlobalPos);
     if AllocFreeUnlinkSlotInitPos = 0 then
       Fail('missing-object-free-release-alloc-free-linkslot-phi');
@@ -452,8 +462,15 @@ begin
       FreeLargeMunmapCallPos);
     if FreeSmallLabelPos = 0 then
       Fail('missing-object-free-release-free-small-label');
+    if FindAfter('%free.too.small = icmp ult i64 %size, 24', LlvmText,
+      FreeSmallLabelPos) = 0 then
+      Fail('missing-object-free-release-free-small-min-check');
+    if FindAfter(
+      '%free.size.normalized = select i1 %free.too.small, i64 24, i64 %size',
+      LlvmText, FreeSmallLabelPos) = 0 then
+      Fail('missing-object-free-release-free-size-normalized');
     FreeEndPos := FindAfter(
-      '%free.end = getelementptr i8, ptr %raw, i64 %size',
+      '%free.end = getelementptr i8, ptr %raw, i64 %free.size.normalized',
       LlvmText, FreeSmallLabelPos);
     if FreeEndPos = 0 then
       Fail('missing-object-free-release-free-end');
@@ -502,7 +519,7 @@ begin
     if CoalesceRawPhiPos = 0 then
       Fail('missing-object-free-release-coalesce-raw-phi');
     CoalesceTotalPhiPos := FindAfter(
-      '%coalesce.total = phi i64 [ %size, %free.push ], [ %coalesce.total, %coalesce.advance ], [ %free.merged.total, %coalesce.merge ], [ %free.prev.merged.total, %coalesce.merge.prev ]',
+      '%coalesce.total = phi i64 [ %free.size.normalized, %free.push ], [ %coalesce.total, %coalesce.advance ], [ %free.merged.total, %coalesce.merge ], [ %free.prev.merged.total, %coalesce.merge.prev ]',
       LlvmText, CoalesceRawPhiPos);
     if CoalesceTotalPhiPos = 0 then
       Fail('missing-object-free-release-coalesce-total-phi');
