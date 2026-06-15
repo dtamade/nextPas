@@ -18,7 +18,7 @@ unit nextpas.core.tls.secure;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.exception, nextpas.core.text.conv, Classes,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.logging,

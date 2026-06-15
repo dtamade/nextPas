@@ -29,7 +29,7 @@ uses
   {$ELSE}
   Sockets,
   {$ENDIF}
-  SysUtils, Classes,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.base.utils, Classes,
   nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.io.util,

@@ -5,7 +5,7 @@ unit nextpas.core.tls.tls12.client;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.base.utils, Classes,
   nextpas.core.tls.base,
   nextpas.core.tls.tls12.ciphersuite,
   nextpas.core.tls.x509;
