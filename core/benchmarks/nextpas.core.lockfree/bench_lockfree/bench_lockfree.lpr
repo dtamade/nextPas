@@ -8,6 +8,7 @@ uses
   nextpas.core.atomic,
   nextpas.core.time.base,
   nextpas.core.lockfree,
+  nextpas.core.lockfree.ebr,
   nextpas.core.lockfree.spsc,
   nextpas.core.lockfree.mpmc,
   nextpas.core.thread.channel,
@@ -18,6 +19,7 @@ type
   TIntSpsc = specialize TSpscQueue<Integer>;
   TIntMpmc = specialize TMpmcQueue<Integer>;
   TIntSegQueue = specialize TSegQueue<Integer>;
+  TIntSpmc = specialize TSpmcQueue<Integer>;
   TIntChannel = specialize TChannel<Integer>;
 
 const
@@ -156,6 +158,9 @@ begin
     GSegQueue.Enqueue(LI);
 end;
 
+var
+  GSegQueueDone: Int32;
+
 function SegQueueConsumer(AArg: Pointer): Pointer; cdecl;
 var
   LV: Integer;
@@ -163,6 +168,13 @@ var
 begin
   Result := nil;
   LSink := 0;
+  while AtomicLoad32(GSegQueueDone, moAcquire) = 0 do
+  begin
+    if GSegQueue.TryDequeue(LV) then
+      LSink := LSink + LV
+    else
+      CpuPause;
+  end;
   while GSegQueue.TryDequeue(LV) do
     LSink := LSink + LV;
   AtomicFetchAdd64(GSegQueueSink, LSink, moAcqRel);
@@ -174,13 +186,12 @@ var
   LC: array[0..1] of TPlatformThreadHandle;
   LRetVal: Pointer;
   LI: Integer;
-  LV: Integer;
   LStart: TInstant;
   LNs: Int64;
-  LCount: Int64;
 begin
   GSegQueue := TIntSegQueue.Create;
   GSegQueueSink := 0;
+  GSegQueueDone := 0;
   LStart := TInstant.Now;
   for LI := 0 to 1 do
     platform_thread_create(LC[LI], @SegQueueConsumer, nil);
@@ -188,14 +199,7 @@ begin
     platform_thread_create(LP[LI], @SegQueueProducer, nil);
   for LI := 0 to 1 do
     platform_thread_join(LP[LI], LRetVal);
-  LCount := 0;
-  while LCount < OPS do
-  begin
-    if not GSegQueue.TryDequeue(LV) then
-      CpuPause
-    else
-      Inc(LCount);
-  end;
+  AtomicStore32(GSegQueueDone, 1, moRelease);
   for LI := 0 to 1 do
     platform_thread_join(LC[LI], LRetVal);
   LNs := LStart.Elapsed.AsNanoseconds;
@@ -203,6 +207,116 @@ begin
   WriteLn(Format('  SegQueue 2P+2C 1M     %8.2f ms  %6.1f M ops/sec  %5.1f ns/op',
     [LNs / 1000000.0, OPS / (LNs / 1000000000.0) / 1000000.0, LNs / Double(OPS)]));
   GSegQueue.Free;
+end;
+
+{ SPMC benchmark: 1P + 2C }
+
+var
+  GSpmc: TIntSpmc;
+  GSpmcSink: Int64;
+
+var
+  GSpmcDone: Int32;
+
+function SpmcProducer(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+begin
+  Result := nil;
+  for LI := 1 to OPS do
+    GSpmc.EnqueueWait(LI);
+end;
+
+function SpmcConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+  LSink: Int64;
+begin
+  Result := nil;
+  LSink := 0;
+  while AtomicLoad32(GSpmcDone, moAcquire) = 0 do
+  begin
+    if GSpmc.TryDequeue(LV) then
+      LSink := LSink + LV
+    else
+      CpuPause;
+  end;
+  while GSpmc.TryDequeue(LV) do
+    LSink := LSink + LV;
+  AtomicFetchAdd64(GSpmcSink, LSink, moAcqRel);
+end;
+
+procedure BenchSpmc;
+var
+  LP: TPlatformThreadHandle;
+  LC: array[0..1] of TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LI: Integer;
+  LStart: TInstant;
+  LNs: Int64;
+begin
+  GSpmc := TIntSpmc.Create(1024);
+  GSpmcSink := 0;
+  GSpmcDone := 0;
+  LStart := TInstant.Now;
+  for LI := 0 to 1 do
+    platform_thread_create(LC[LI], @SpmcConsumer, nil);
+  platform_thread_create(LP, @SpmcProducer, nil);
+  platform_thread_join(LP, LRetVal);
+  AtomicStore32(GSpmcDone, 1, moRelease);
+  for LI := 0 to 1 do
+    platform_thread_join(LC[LI], LRetVal);
+  LNs := LStart.Elapsed.AsNanoseconds;
+  GBenchSink := GBenchSink + AtomicLoad64(GSpmcSink, moAcquire);
+  WriteLn(Format('  SPMC 1P+2C 1M ops    %8.2f ms  %6.1f M ops/sec  %5.1f ns/op',
+    [LNs / 1000000.0, OPS / (LNs / 1000000000.0) / 1000000.0, LNs / Double(OPS)]));
+  GSpmc.Free;
+end;
+
+{ EBR microbenchmark: retire + collect }
+
+procedure BenchEbrRetireCollect;
+const
+  EBR_OPS = 100000;
+var
+  LEbr: TEbrDomain;
+  LI: Integer;
+  LPtr: Pointer;
+  LStart: TInstant;
+  LNs: Int64;
+  LGuard: TEbrGuard;
+begin
+  LEbr := TEbrDomain.Create;
+  LStart := TInstant.Now;
+  for LI := 1 to EBR_OPS do
+  begin
+    LPtr := GetMem(64);
+    LEbr.Retire(LPtr, nil);
+  end;
+  LNs := LStart.Elapsed.AsNanoseconds;
+  WriteLn(Format('  EBR retire 100K       %8.2f ms  %6.1f K ops/sec  %5.1f ns/op',
+    [LNs / 1000000.0, EBR_OPS / (LNs / 1000000000.0) / 1000.0, LNs / Double(EBR_OPS)]));
+
+  LStart := TInstant.Now;
+  for LI := 1 to EBR_OPS div 100 do
+    LEbr.Collect;
+  LNs := LStart.Elapsed.AsNanoseconds;
+  WriteLn(Format('  EBR collect 1K        %8.2f ms  %6.1f K ops/sec  %5.1f ns/op',
+    [LNs / 1000000.0, (EBR_OPS div 100) / (LNs / 1000000000.0) / 1000.0, LNs / Double(EBR_OPS div 100)]));
+
+  LGuard := TEbrGuard.Acquire(LEbr);
+  LStart := TInstant.Now;
+  for LI := 1 to EBR_OPS do
+  begin
+    LGuard.Release;
+    LGuard := TEbrGuard.Acquire(LEbr);
+  end;
+  LNs := LStart.Elapsed.AsNanoseconds;
+  GBenchSink := GBenchSink + 1; // prevent elision
+  WriteLn(Format('  EBR guard acquire 100K %8.2f ms  %6.1f K ops/sec  %5.1f ns/op',
+    [LNs / 1000000.0, EBR_OPS / (LNs / 1000000000.0) / 1000.0, LNs / Double(EBR_OPS)]));
+  LGuard.Release;
+  LEbr.Free;
 end;
 
 { Mutex channel baseline: 1P + 1C }
@@ -308,7 +422,11 @@ begin
   BenchSpsc;
   BenchMpmc;
   BenchSegQueue;
+  BenchSpmc;
   BenchMutexChannel;
+  WriteLn;
+  WriteLn('  --- Reclamation micro ---');
+  BenchEbrRetireCollect;
   WriteLn;
   WriteLn('  --- Single-thread (pure Try* hot path) ---');
   BenchSpscSingleThread;
