@@ -112,7 +112,7 @@ SysUtils|nextpas.core.tls.winssl.certstore.pas
 SysUtils|nextpas.core.tls.winssl.connection.pas
 SysUtils|nextpas.core.tls.winssl.context.pas
 SysUtils|nextpas.core.tls.winssl.enterprise.pas
-SysUtils|nextpas.core.tls.winssl.errors.pas
+# SysUtils|nextpas.core.tls.winssl.errors.pas  <- migrated to time+text.conv
 SysUtils|nextpas.core.tls.winssl.lib.pas
 SysUtils|nextpas.core.tls.winssl.session.pas
 SysUtils|nextpas.core.tls.winssl.utils.pas
