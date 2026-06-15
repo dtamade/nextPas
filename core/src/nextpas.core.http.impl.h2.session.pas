@@ -884,6 +884,13 @@ begin
       FRemoteSettings.InitialWindowSize, FOptions.InitialStreamWindowSize,
       FConnectionFlow, FDecoder);
     FLastPeerStreamID := AFrame.Header.StreamID;
+    if (FLocalSettings.MaxConcurrentStreams > 0) and
+       (FStreams.ActiveCount >= FLocalSettings.MaxConcurrentStreams) then
+    begin
+      QueueRstStream(LStream.StreamID, H2_ERR_REFUSED_STREAM);
+      FStreams.RemoveByIndex(FStreams.ActiveCount - 1);
+      Exit(True);
+    end;
   end;
   if LStreamIndex >= 0 then
     LStream := FStreams.ItemAt(LStreamIndex)
