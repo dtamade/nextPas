@@ -18,7 +18,7 @@ unit nextpas.core.tls.wolfssl.connection;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.text.conv, Classes,
   nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,

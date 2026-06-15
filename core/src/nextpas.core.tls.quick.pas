@@ -19,7 +19,7 @@ unit nextpas.core.tls.quick;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.exception, nextpas.core.text.conv, Classes,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.logging,

@@ -28,7 +28,7 @@ unit nextpas.core.tls.pkcs11.uri;
 interface
 
 uses
-  SysUtils,StrUtils,
+  nextpas.core.exception, nextpas.core.text.conv, StrUtils,
   nextpas.core.tls.pkcs11.types;
 
 type

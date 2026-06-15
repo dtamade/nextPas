@@ -18,7 +18,7 @@ unit nextpas.core.tls.mbedtls.session;
 interface
 
 uses
-  SysUtils, Classes, DateUtils,
+  nextpas.core.exception, nextpas.core.text.conv, Classes, DateUtils,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.base,

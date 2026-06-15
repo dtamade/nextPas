@@ -19,7 +19,7 @@ unit nextpas.core.tls.context.builder;
 interface
 
 uses
-  SysUtils, nextpas.core.text.conv, nextpas.core.tls.base,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.tls.base,
   nextpas.core.tls.safety,
   nextpas.core.tls.pkcs11.types,
   nextpas.core.tls.pkcs11.pin,
