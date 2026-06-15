@@ -222,11 +222,14 @@ begin
   end;
 end;
 
-procedure TestIocpCloseWithPending;
+procedure TestIocpCloseWithPendingSend;
 var
   LListenSock, LAcceptSock, LClientSock: TPlatformSocket;
   LReactor: TIocpReactor;
-  LRecvBuf: array[0..63] of AnsiChar;
+  LSendBuf: array[0..63] of AnsiChar;
+const
+  TEST_DATA = 'ClosePending';
+  TEST_LEN = 12;
 begin
   Check(CreateConnectedPair(LListenSock, LAcceptSock, LClientSock),
     'connected pair');
@@ -234,18 +237,18 @@ begin
   LReactor := TIocpReactor.Create(4);
   Check(LReactor.IsValid, 'reactor valid');
   try
-    FillChar(LRecvBuf, SizeOf(LRecvBuf), 0);
-    GRecvDone := False;
-    GRecvResult := -1;
-    Check(LReactor.AsyncRecv(PtrInt(LAcceptSock.Value), @LRecvBuf[0],
-      SizeOf(LRecvBuf), 0, @OnRecvDone, nil), 'AsyncRecv should submit');
-    Check(LReactor.HasPending, 'pending recv should mark reactor pending');
+    Move(TEST_DATA[1], LSendBuf[0], TEST_LEN);
+    GSendDone := False;
+    GSendResult := -1;
+    Check(LReactor.AsyncSend(PtrInt(LAcceptSock.Value), @LSendBuf[0], TEST_LEN,
+      0, @OnSendDone, nil), 'AsyncSend should submit');
+    Check(LReactor.HasPending, 'pending send should mark reactor pending');
 
     { Close immediately after submission. The contract here is that Close
       returns and releases owned pending state without hanging. }
     LReactor.Close;
     Check(not LReactor.IsValid, 'reactor should be invalid after close');
-    Check(not LReactor.HasPending, 'close should clear pending recv state');
+    Check(not LReactor.HasPending, 'close should clear pending send state');
   finally
     platform_socket_close(LClientSock);
     platform_socket_close(LAcceptSock);
@@ -557,7 +560,7 @@ begin
   {$IFDEF NEXTPAS_WINDOWS}
   T.Run('create/close', @TestIocpCreateClose);
   T.Run('AsyncSend', @TestIocpAsyncSend);
-  T.Run('Close with pending recv', @TestIocpCloseWithPending);
+  T.Run('Close with pending send', @TestIocpCloseWithPendingSend);
   T.Run('Poll timeout', @TestIocpPollTimeout);
   T.Run('AsyncRecv', @TestIocpAsyncRecv);
   T.Run('AcceptEx+Send', @TestIocpAcceptSend);

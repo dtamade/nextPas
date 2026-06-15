@@ -237,8 +237,7 @@ begin
     LBytes := 0;
     LKey := 0;
     LOverlapped := nil;
-    LOk := GetQueuedCompletionStatus(APort, @LBytes, @LKey, @LOverlapped,
-      IOCP_CLOSE_PENDING_POLL_MS);
+    LOk := GetQueuedCompletionStatus(APort, @LBytes, @LKey, @LOverlapped, IOCP_CLOSE_PENDING_POLL_MS);
     if LOverlapped <> nil then
       IocpDispatchCompletion(AReactor, LBytes, LOk, LOverlapped);
     Inc(LWaitedMs, IOCP_CLOSE_PENDING_POLL_MS);
@@ -438,7 +437,6 @@ begin
     Exit(True);
 
   LUserData := LOp^.UserData;
-  IocpUnlinkOp(AReactor, LOp);
   IocpFreeOp(AReactor, LOp);
   Result := IocpFail(ACallback, AContext, LUserData, LError);
 end;
@@ -483,7 +481,6 @@ begin
     Exit(True);
 
   LUserData := LOp^.UserData;
-  IocpUnlinkOp(AReactor, LOp);
   IocpFreeOp(AReactor, LOp);
   Result := IocpFail(ACallback, AContext, LUserData, LError);
 end;
@@ -683,7 +680,6 @@ begin
   { AcceptEx failed synchronously — cleanup }
   FreeMem(LAddrBuf);
   LUserData := LOp^.UserData;
-  IocpUnlinkOp(Self, LOp);
   IocpFreeOp(Self, LOp);
   closesocket(LAcceptSock);
   Result := IocpFail(ACallback, AContext, LUserData, LError);
@@ -725,7 +721,6 @@ begin
     Exit(True);
 
   LUserData := LOp^.UserData;
-  IocpUnlinkOp(Self, LOp);
   IocpFreeOp(Self, LOp);
   Result := IocpFail(ACallback, AContext, LUserData, LError);
 end;
