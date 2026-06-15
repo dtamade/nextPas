@@ -269,6 +269,76 @@ begin
   end;
 end;
 
+procedure TestBidirectionalEndpointsPushAndPopBothDirections;
+var
+  LPath: string;
+  LCreator: TMappedRingBuffer;
+  LOpener: TMappedRingBuffer;
+  LCreatorSend: array[0..1] of UInt32;
+  LOpenerSend: array[0..1] of UInt32;
+  LValue: UInt32;
+  LCreatorReceive: array[0..1] of UInt32;
+  LOpenerReceive: array[0..1] of UInt32;
+begin
+  LPath := MappedRingBufferTestPath;
+  LCreator := nil;
+  LOpener := nil;
+  RemoveMappedRingBufferTestFile(LPath);
+  try
+    LCreator := TMappedRingBuffer.Create;
+    LOpener := TMappedRingBuffer.Create;
+    Check(LCreator.CreateFile(LPath, 2, SizeOf(UInt32), mrbBidirectional),
+      'create bidirectional creator endpoint');
+    Check(LOpener.OpenFile(LPath, mrbBidirectional),
+      'open bidirectional peer endpoint');
+
+    LCreatorSend[0] := 11;
+    LCreatorSend[1] := 12;
+    LOpenerSend[0] := 21;
+    LOpenerSend[1] := 22;
+    CheckEqual(Int64(2), Int64(LCreator.PushBatch(@LCreatorSend[0], 2)),
+      'creator fills send direction');
+    CheckEqual(Int64(2), Int64(LOpener.PushBatch(@LOpenerSend[0], 2)),
+      'opener fills send direction');
+
+    LValue := 0;
+    Check(LCreator.Peek(@LValue), 'creator peeks opener payload');
+    CheckEqual(Int64(21), Int64(LValue), 'creator sees opener first value');
+    Check(LOpener.Peek(@LValue), 'opener peeks creator payload');
+    CheckEqual(Int64(11), Int64(LValue), 'opener sees creator first value');
+
+    Check(LCreator.Pop(@LValue), 'creator pops opener first value');
+    CheckEqual(Int64(21), Int64(LValue), 'creator preserves opener first value');
+    Check(LOpener.Pop(@LValue), 'opener pops creator first value');
+    CheckEqual(Int64(11), Int64(LValue), 'opener preserves creator first value');
+
+    LValue := 13;
+    Check(LCreator.Push(@LValue), 'creator wraps send direction after peer pop');
+    LValue := 23;
+    Check(LOpener.Push(@LValue), 'opener wraps send direction after peer pop');
+
+    FillChar(LCreatorReceive, SizeOf(LCreatorReceive), 0);
+    FillChar(LOpenerReceive, SizeOf(LOpenerReceive), 0);
+    CheckEqual(Int64(2), Int64(LCreator.PopBatch(@LCreatorReceive[0], 2)),
+      'creator drains wrapped opener payload');
+    CheckEqual(Int64(22), Int64(LCreatorReceive[0]), 'creator receives wrapped opener second value');
+    CheckEqual(Int64(23), Int64(LCreatorReceive[1]), 'creator receives wrapped opener third value');
+    CheckEqual(Int64(2), Int64(LOpener.PopBatch(@LOpenerReceive[0], 2)),
+      'opener drains wrapped creator payload');
+    CheckEqual(Int64(12), Int64(LOpenerReceive[0]), 'opener receives wrapped creator second value');
+    CheckEqual(Int64(13), Int64(LOpenerReceive[1]), 'opener receives wrapped creator third value');
+
+    Check(not LCreator.Pop(@LValue), 'creator receive direction is empty after drain');
+    Check(not LOpener.Pop(@LValue), 'opener receive direction is empty after drain');
+    Check(LCreator.IsEmpty, 'creator send direction is empty after peer drain');
+    Check(LOpener.IsEmpty, 'opener send direction is empty after peer drain');
+  finally
+    LOpener.Free;
+    LCreator.Free;
+    CheckMappedRingBufferTestFileRemoved(LPath);
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.mapped_ring_buffer');
   T.Run('rejects invalid file-backed shape', @TestRejectsInvalidFileBackedShape);
@@ -279,5 +349,7 @@ begin
     @TestProducerConsumerBatchStatsAndClearUseSameSequenceSlots);
   T.Run('open producer creator consumer use reverse ring',
     @TestOpenProducerCreatorConsumerUseReverseRing);
+  T.Run('bidirectional endpoints push and pop both directions',
+    @TestBidirectionalEndpointsPushAndPopBothDirections);
   T.Summary;
 end.

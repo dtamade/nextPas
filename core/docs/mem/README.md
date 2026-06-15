@@ -132,36 +132,35 @@ The ownership decision is now explicit:
 - `nextpas.core.mem.allocator.memory_map_allocator` stays in L0 mem for now.
 - `nextpas.core.mem.mapped_slab_pool` owns only the anonymous mapping allocator surface.
 - `nextpas.core.io.mapped.slab_pool` is the fixed owner for file-backed and shared-memory slab pools.
+- `nextpas.core.io.mapped.ring_buffer` and
+  `nextpas.core.io.mapped.ring_buffer.sharded` are the fixed owners for mapped
+  ring buffer behavior.
 - The mem allocator surface must not grow `CreateFile`, `OpenFile`, `CreateShared`, `OpenShared`, or `nextpas.core.platform.files` dependencies.
-- `mapped_ring_buffer` is future migration surface.
-- `mapped_ring_buffer.sharded` is future migration surface.
+- `nextpas.core.mem.mapped_ring_buffer*` are thin deprecated compatibility wrappers only.
 
 See `src/nextpas.core.mem.mapped_slab_pool.pas` and `src/nextpas.core.io.mapped.slab_pool.pas` for the current owner split.
 
 Additional architecture debt that remains:
 
-- `mapped_ring_buffer*` are still present in `mem`, but their preferred
-  long-term home is a higher mapped IO owner. Do not treat them as permanent
-  L0 surface.
+- `nextpas.core.mem.mapped_ring_buffer*` remain in `mem` only as deprecated
+  wrappers. Keep them thin and do not grow new behavior there.
 - `mem.secure` now relies on the `nextpas.core.platform.memory` secure-zero seam; future host upgrades should evolve that owner instead of reintroducing raw imports into `mem`.
 
 ## Follow-Up Route
 
 Priority follow-up work:
 
-0. **mapped_ring_buffer migration readiness** (active):
-   - Target owner: `nextpas.core.io.mapped.ring_buffer`
-   - Compatibility: thin wrapper with deprecation
-   - Status: readiness gates in progress; no unit moved yet
-1. If migration is later approved, relocate `mapped_ring_buffer` and
-   `mapped_ring_buffer.sharded` first.
-2. Keep the `mapped_slab_pool` split stable: anonymous allocator work stays in `mem`, and file/shared lifecycle work stays in `nextpas.core.io.mapped.slab_pool`.
-3. Treat `memory_map` as temporary L0 surface, not permanent stable surface;
+0. **mapped_ring_buffer owner split** (completed):
+   - Owner: `nextpas.core.io.mapped.ring_buffer`
+   - Compatibility: `nextpas.core.mem.mapped_ring_buffer*` stay as thin deprecated wrappers
+   - Status: readiness gates complete and owner move landed
+1. Keep the `mapped_slab_pool` split stable: anonymous allocator work stays in `mem`, and file/shared lifecycle work stays in `nextpas.core.io.mapped.slab_pool`.
+2. Treat `memory_map` as temporary L0 surface, not permanent stable surface;
    always replay `nextpas.core.io.mapped` before changing `memory_map`
    ownership.
-4. Revisit `nextpas.core.platform.memory` only if a later platform slice promotes a native Windows secure-zero owner.
-5. Keep allocator-manager behavior narrow and explicit: `rtl` already has a
+3. Revisit `nextpas.core.platform.memory` only if a later platform slice promotes a native Windows secure-zero owner.
+4. Keep allocator-manager behavior narrow and explicit: `rtl` already has a
    runtime regression test for installation safety, while optional guarded
    backends such as CRT still need at least compile truth before wider rollout.
-6. Keep narrowing public allocator claims so traits, ownership, and fallback
+5. Keep narrowing public allocator claims so traits, ownership, and fallback
    behavior remain verifiable and unsurprising.

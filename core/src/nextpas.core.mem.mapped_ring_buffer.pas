@@ -14,12 +14,12 @@ type
     deprecated 'Use nextpas.core.io.mapped.ring_buffer.TMappedRingBuffer';
 
 const
-  mrbProducer: TMappedRingBufferMode = nextpas.core.io.mapped.ring_buffer.mrbProducer
-    deprecated 'Use nextpas.core.io.mapped.ring_buffer.mrbProducer';
-  mrbConsumer: TMappedRingBufferMode = nextpas.core.io.mapped.ring_buffer.mrbConsumer
-    deprecated 'Use nextpas.core.io.mapped.ring_buffer.mrbConsumer';
-  mrbBidirectional: TMappedRingBufferMode = nextpas.core.io.mapped.ring_buffer.mrbBidirectional
-    deprecated 'Use nextpas.core.io.mapped.ring_buffer.mrbBidirectional';
+  mrbProducer: nextpas.core.io.mapped.ring_buffer.TMappedRingBufferMode =
+    nextpas.core.io.mapped.ring_buffer.mrbProducer;
+  mrbConsumer: nextpas.core.io.mapped.ring_buffer.TMappedRingBufferMode =
+    nextpas.core.io.mapped.ring_buffer.mrbConsumer;
+  mrbBidirectional: nextpas.core.io.mapped.ring_buffer.TMappedRingBufferMode =
+    nextpas.core.io.mapped.ring_buffer.mrbBidirectional;
 
 {$WARNING 'nextpas.core.mem.mapped_ring_buffer is deprecated: use nextpas.core.io.mapped.ring_buffer'}
 
