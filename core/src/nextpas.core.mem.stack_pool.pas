@@ -622,7 +622,6 @@ begin
 
   LScope := FScopes[LLen - 1];
   SetLength(FScopes, LLen - 1);
-  LScope.FPool := nil;
   LScope.Free;
 
   if FPool.Policy.EnableStatistics then
@@ -769,6 +768,13 @@ end;
 
 function TScopedStackPool.AllocAligned(aSize: SizeUInt; aAlignment: SizeUInt): Pointer;
 begin
+  if aSize = 0 then Exit(nil);
+  if aAlignment = 0 then
+    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: aAlignment is 0');
+  if aAlignment < SizeOf(Pointer) then
+    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: aAlignment must be >= pointer size');
+  if (aAlignment and (aAlignment - 1)) <> 0 then
+    raise EInvalidArgument.Create('TScopedStackPool.AllocAligned: aAlignment must be power of two');
   Result := Alloc(aSize, aAlignment);
 end;
 
