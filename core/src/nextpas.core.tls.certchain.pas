@@ -14,7 +14,7 @@ unit nextpas.core.tls.certchain;
 interface
 
 uses
-  Classes, SysUtils, Math,
+  Classes,
   nextpas.core.tls.base, nextpas.core.tls.crl, nextpas.core.tls.x509, nextpas.core.crypto.x509verify;
 
 type
@@ -171,6 +171,7 @@ const
 implementation
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.text.strings,
     nextpas.core.time;
 
@@ -328,7 +329,7 @@ begin
   Result := False;
 
   // 精确匹配
-  if SameText(ACertName, AHostname) then
+  if nextpas.core.text.conv.SameText(ACertName, AHostname) then
   begin
     Result := True;
     Exit;
@@ -346,7 +347,7 @@ begin
         // 从第二级开始比较（跳过通配符）
         for i := 1 to Length(CertParts) - 1 do
         begin
-          if not SameText(CertParts[i], HostParts[i]) then
+          if not nextpas.core.text.conv.SameText(CertParts[i], HostParts[i]) then
           begin
             Result := False;
             Break;
@@ -374,7 +375,7 @@ begin
 
   for i := 0 to Length(RawSANs) - 1 do
   begin
-    Line := Trim(RawSANs[i]);
+    Line := nextpas.core.text.conv.Trim(RawSANs[i]);
     if Line = '' then
       Continue;
 
@@ -383,8 +384,8 @@ begin
       SepPos := Pos(',', Line);
       if SepPos > 0 then
       begin
-        Item := Trim(Copy(Line, 1, SepPos - 1));
-        Line := Trim(Copy(Line, SepPos + 1, MaxInt));
+        Item := nextpas.core.text.conv.Trim(Copy(Line, 1, SepPos - 1));
+        Line := nextpas.core.text.conv.Trim(Copy(Line, SepPos + 1, MaxInt));
       end
       else
       begin
@@ -397,7 +398,7 @@ begin
         // 去掉类似 "DNS:" 这类前缀，只保留主机名部分
         SepPos := Pos(':', Item);
         if SepPos > 0 then
-          Item := Trim(Copy(Item, SepPos + 1, MaxInt));
+          Item := nextpas.core.text.conv.Trim(Copy(Item, SepPos + 1, MaxInt));
 
         if Item <> '' then
           Result.Add(Item);
@@ -514,7 +515,7 @@ begin
   LUsage := ACert.GetExtendedKeyUsage;
   for I := 0 to High(LUsage) do
   begin
-    if SameText(Trim(LUsage[I]), 'serverAuth') then
+    if nextpas.core.text.conv.SameText(nextpas.core.text.conv.Trim(LUsage[I]), 'serverAuth') then
       Exit(True);
   end;
 end;
@@ -569,14 +570,14 @@ begin
       end;
     end;
 
-    LCertificateIssuer := Trim(LCertificate.Issuer.ToString);
+    LCertificateIssuer := nextpas.core.text.conv.Trim(LCertificate.Issuer.ToString);
     LHasApplicableCRL := False;
     LHasUsableCRL := False;
     LLastMaterialError := '';
 
     for LCRLIndex := 0 to Length(FCRLStore) - 1 do
     begin
-      if Trim(FCRLStore[LCRLIndex]) = '' then
+      if nextpas.core.text.conv.Trim(FCRLStore[LCRLIndex]) = '' then
         Continue;
 
       LCRL := TX509CRL.Create;
@@ -586,7 +587,7 @@ begin
         except
           on E: Exception do
           begin
-            LLastMaterialError := Format(
+            LLastMaterialError := nextpas.core.text.conv.Format(
               'Failed to parse configured CRL material #%d: %s',
               [LCRLIndex + 1, E.Message]
             );
@@ -594,7 +595,7 @@ begin
           end;
         end;
 
-        if not SameText(Trim(LCRL.Issuer.ToString), LCertificateIssuer) then
+        if not nextpas.core.text.conv.SameText(nextpas.core.text.conv.Trim(LCRL.Issuer.ToString), LCertificateIssuer) then
           Continue;
 
         LHasApplicableCRL := True;
@@ -678,7 +679,7 @@ begin
     if Pos(',', CN) > 0 then
       CN := Copy(CN, 1, Pos(',', CN) - 1);
 
-    Result := MatchHostname(Trim(CN), AHostname);
+    Result := MatchHostname(nextpas.core.text.conv.Trim(CN), AHostname);
   end;
 end;
 
@@ -803,7 +804,7 @@ begin
       if not CheckCertificateTime(CurrentCert) then
       begin
         Result.IsValid := False;
-        Result.ErrorMessage := Format('Certificate %d expired or not yet valid', [i]);
+        Result.ErrorMessage := nextpas.core.text.conv.Format('Certificate %d expired or not yet valid', [i]);
         Exit;
       end;
     end;
@@ -814,7 +815,7 @@ begin
       if not CheckCertificateKeyUsage(CurrentCert, i > 0) then
       begin
         Result.IsValid := False;
-        Result.ErrorMessage := Format('Invalid key usage for certificate %d', [i]);
+        Result.ErrorMessage := nextpas.core.text.conv.Format('Invalid key usage for certificate %d', [i]);
         Exit;
       end;
     end;
@@ -827,7 +828,7 @@ begin
         if i = 0 then
           Result.ErrorMessage := 'Strict-chain verification requires serverAuth extended key usage on the leaf certificate'
         else
-          Result.ErrorMessage := Format('Invalid extended key usage for certificate %d', [i]);
+          Result.ErrorMessage := nextpas.core.text.conv.Format('Invalid extended key usage for certificate %d', [i]);
         Exit;
       end;
     end;
@@ -840,14 +841,14 @@ begin
         Result.IsValid := False;
         Result.RevocationStatus := FLastRevocationStatus;
         if FLastRevocationStatus = 1 then
-          Result.ErrorMessage := Format('Certificate %d is revoked', [i])
+          Result.ErrorMessage := nextpas.core.text.conv.Format('Certificate %d is revoked', [i])
         else if FLastRevocationError <> '' then
-          Result.ErrorMessage := Format(
+          Result.ErrorMessage := nextpas.core.text.conv.Format(
             'Certificate %d revocation/CRL verification failed: %s',
             [i, FLastRevocationError]
           )
         else
-          Result.ErrorMessage := Format('Certificate %d revocation/CRL status is unavailable', [i]);
+          Result.ErrorMessage := nextpas.core.text.conv.Format('Certificate %d revocation/CRL status is unavailable', [i]);
         Exit;
       end;
     end;
@@ -859,7 +860,7 @@ begin
       if not CheckCertificateSignature(CurrentCert, IssuerCert) then
       begin
         Result.IsValid := False;
-        Result.ErrorMessage := Format('Invalid signature for certificate %d', [i]);
+        Result.ErrorMessage := nextpas.core.text.conv.Format('Invalid signature for certificate %d', [i]);
         Exit;
       end;
     end;

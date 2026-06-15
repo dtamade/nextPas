@@ -37,7 +37,8 @@ unit nextpas.core.tls.crypto.utils;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system,
+  nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.errors,

@@ -181,6 +181,7 @@ Classes|nextpas.core.tls.winssl.context.pas
 Classes|nextpas.core.tls.wolfssl.connection.pas
 Classes|nextpas.core.tls.wolfssl.context.pas
 Classes|nextpas.core.tui.task.pas
+Classes|nextpas.core.system.classes.pas
 #
 # TypInfo: 1 files
 TypInfo|nextpas.core.system.typinfo.pas

@@ -23,8 +23,11 @@ unit nextpas.core.tls.asn1;
 interface
 
 uses
-  SysUtils, Classes, Contnrs,
-  nextpas.core.io.intf;
+  Classes, Contnrs,
+  nextpas.core.base,
+  nextpas.core.io.intf,
+  nextpas.core.exception,
+  nextpas.core.system.classes;
 
 const
   // ========================================================================
@@ -297,9 +300,10 @@ function TagToString(ATag: Byte): string;
 implementation
 
 uses
+  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.io.memory,
   nextpas.core.io.util,
-  nextpas.core.text.conv,
   nextpas.core.text.strings;
 
 
@@ -409,11 +413,11 @@ begin
   if TagClass = asn1Universal then
     Result := TagToString(TagNumber)
   else if TagClass = asn1Context then
-    Result := Format('[%d]', [TagNumber])
+    Result := nextpas.core.text.conv.Format('[%d]', [TagNumber])
   else if TagClass = asn1Application then
-    Result := Format('[APPLICATION %d]', [TagNumber])
+    Result := nextpas.core.text.conv.Format('[APPLICATION %d]', [TagNumber])
   else
-    Result := Format('[PRIVATE %d]', [TagNumber]);
+    Result := nextpas.core.text.conv.Format('[PRIVATE %d]', [TagNumber]);
 
   if Constructed then
     Result := Result + ' CONSTRUCTED';
@@ -681,7 +685,7 @@ begin
   Indent := StringOfChar(' ', AIndent * 2);
 
   Result := Indent + FTag.ToString;
-  Result := Result + Format(' (len=%d)', [FContentLength]);
+  Result := Result + nextpas.core.text.conv.Format(' (len=%d)', [FContentLength]);
 
   // 显示值
   if not FTag.Constructed then
@@ -691,7 +695,7 @@ begin
         if Length(FRawData) <= 8 then
           ValueStr := IntToStr(AsInteger)
         else
-          ValueStr := Format('(big integer, %d bytes)', [Length(FRawData)]);
+          ValueStr := nextpas.core.text.conv.Format('(big integer, %d bytes)', [Length(FRawData)]);
       ASN1_TAG_OID:
         ValueStr := AsOID + ' (' + OIDToName(AsOID) + ')';
       ASN1_TAG_BOOLEAN:
@@ -704,12 +708,12 @@ begin
       ASN1_TAG_VISIBLESTRING, ASN1_TAG_T61STRING, ASN1_TAG_BMPSTRING:
         ValueStr := '"' + AsString + '"';
       ASN1_TAG_BIT_STRING:
-        ValueStr := Format('(%d bytes, unused=%d)', [Length(FRawData)-1, FRawData[0]]);
+        ValueStr := nextpas.core.text.conv.Format('(%d bytes, unused=%d)', [Length(FRawData)-1, FRawData[0]]);
       ASN1_TAG_OCTET_STRING:
-        ValueStr := Format('(%d bytes)', [Length(FRawData)]);
+        ValueStr := nextpas.core.text.conv.Format('(%d bytes)', [Length(FRawData)]);
       else
         if Length(FRawData) > 0 then
-          ValueStr := Format('(%d bytes)', [Length(FRawData)])
+          ValueStr := nextpas.core.text.conv.Format('(%d bytes)', [Length(FRawData)])
         else
           ValueStr := '';
     end;
@@ -1357,7 +1361,7 @@ begin
   DecodeTime(AValue, H, Mi, S, MS);
 
   // UTCTime: YYMMDDhhmmssZ
-  TimeStr := Format('%.2d%.2d%.2d%.2d%.2d%.2dZ', [Y mod 100, M, D, H, Mi, S]);
+  TimeStr := nextpas.core.text.conv.Format('%.2d%.2d%.2d%.2d%.2d%.2dZ', [Y mod 100, M, D, H, Mi, S]);
   Data := StringToASCIIBytes(TimeStr);
 
   WriteTag(ASN1_TAG_UTCTIME);
@@ -1375,7 +1379,7 @@ begin
   DecodeTime(AValue, H, Mi, S, MS);
 
   // GeneralizedTime: YYYYMMDDhhmmssZ
-  TimeStr := Format('%.4d%.2d%.2d%.2d%.2d%.2dZ', [Y, M, D, H, Mi, S]);
+  TimeStr := nextpas.core.text.conv.Format('%.4d%.2d%.2d%.2d%.2d%.2dZ', [Y, M, D, H, Mi, S]);
   Data := StringToASCIIBytes(TimeStr);
 
   WriteTag(ASN1_TAG_GENERALIZEDTIME);
@@ -1624,7 +1628,7 @@ begin
     ASN1_TAG_CHARACTERSTRING: Result := 'CHARACTER STRING';
     ASN1_TAG_BMPSTRING:       Result := 'BMPString';
   else
-    Result := Format('TAG(0x%.2X)', [ATag]);
+    Result := nextpas.core.text.conv.Format('TAG(0x%.2X)', [ATag]);
   end;
 end;
 

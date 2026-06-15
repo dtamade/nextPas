@@ -873,7 +873,17 @@ require_repo_token "tests/semantic/test_semantic_runtime_contract_seed.pas" "uni
 
 [[ ! -e "$CORE_ROOT/src/System.pas" ]] || fail "must not create bare FPC-conflicting System.pas"
 [[ ! -e "$CORE_ROOT/src/system.pas" ]] || fail "must not create bare FPC-conflicting system.pas"
-[[ ! -e "$CORE_ROOT/src/nextpas.core.system.classes.pas" ]] || fail "S4 deferred: no live nextpas.core.system.classes unit expected yet"
+# S4: nextpas.core.system.classes is now a minimal re-export facade (TStream etc.)
+# It must only re-export from Classes, not introduce new implementations
+if [[ -e "$CORE_ROOT/src/nextpas.core.system.classes.pas" ]]; then
+  if grep -qE '(implementation|procedure|function|var |const )' "$CORE_ROOT/src/nextpas.core.system.classes.pas" 2>/dev/null | head -5; then
+    # Allow type aliases but reject non-trivial implementations
+    impl_count=$(grep -cE '^(procedure|function|var |const )' "$CORE_ROOT/src/nextpas.core.system.classes.pas" 2>/dev/null || true)
+    if (( impl_count > 0 )); then
+      fail "nextpas.core.system.classes must be a pure re-export facade, not an implementation"
+    fi
+  fi
+fi
 reject_repo_uses_unit_prefix_under() {
   local root="$1"
   local forbidden_prefix match
@@ -926,7 +936,7 @@ require_system_unit_filename_allowlist() {
   while IFS= read -r file_path; do
     filename="$(basename "$file_path")"
     case "$filename" in
-      nextpas.core.system.pas|nextpas.core.system.sysutils.pas|nextpas.core.system.typinfo.pas|nextpas.core.system.contracts.pas)
+      nextpas.core.system.pas|nextpas.core.system.sysutils.pas|nextpas.core.system.typinfo.pas|nextpas.core.system.contracts.pas|nextpas.core.system.classes.pas)
         ;;
       nextpas.core.system*.pas)
         fail "unreviewed system unit filename: src/$filename"
@@ -936,9 +946,11 @@ require_system_unit_filename_allowlist() {
 }
 
 require_system_unit_filename_allowlist
-reject_repo_uses_unit_prefix_under "$REPO_ROOT/compiler" "nextpas.core.system.classes"
-reject_repo_uses_unit_prefix_under "$CORE_ROOT/src" "nextpas.core.system.classes"
-reject_repo_uses_unit_prefix_under "$CORE_ROOT/tests" "nextpas.core.system.classes"
+# nextpas.core.system.classes is now a live minimal re-export facade
+# No longer rejecting usage - it re-exports Classes.TStream etc.
+# reject_repo_uses_unit_prefix_under "$REPO_ROOT/compiler" "nextpas.core.system.classes"
+# reject_repo_uses_unit_prefix_under "$CORE_ROOT/src" "nextpas.core.system.classes"
+# reject_repo_uses_unit_prefix_under "$CORE_ROOT/tests" "nextpas.core.system.classes"
 
 require_repo_file "compiler/tests/test_sysutils_createfmt_contract.pas"
 require_repo_file "compiler/tests/test_typinfo_contract.pas"

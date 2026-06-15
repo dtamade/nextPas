@@ -16,7 +16,6 @@ unit nextpas.core.tls.backend.selector;
 interface
 
 uses
-  SysUtils,
   nextpas.core.tls.base;
 
 type
