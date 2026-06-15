@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.errors,
   nextpas.core.fs.base,
+  nextpas.core.fs.errors,
   nextpas.core.fs.intf;
 
 type
@@ -27,7 +28,6 @@ procedure FsWalk(const ARoot: string; const AFunc: TWalkFunc);
 implementation
 
 uses
-  nextpas.core.fs.errors,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.platform.fs,
@@ -200,7 +200,12 @@ var
 begin
   LResult := platform_file_lstat(PAnsiChar(APath), LStat);
   if LResult <> 0 then
+  begin
+    { 文件不存在时返回 True，保持与 Pascal Erase/DeleteFile 一致的行为 }
+    if LResult = 2 then  { ENOENT }
+      Exit(True);
     RaiseFsError(LResult, 'lstat', APath);
+  end;
 
   if LStat.FileType = nextpas.core.platform.files.base.ftDirectory then
     LResult := platform_file_rmdir(PAnsiChar(APath))
