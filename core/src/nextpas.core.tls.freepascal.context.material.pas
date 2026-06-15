@@ -14,7 +14,7 @@ unit nextpas.core.tls.freepascal.context.material;
 interface
 
 uses
-  SysUtils,nextpas.core.tls.base,
+  nextpas.core.tls.base,
   nextpas.core.tls.freepascal.session;
 
 type

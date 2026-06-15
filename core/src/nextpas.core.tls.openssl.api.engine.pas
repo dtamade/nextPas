@@ -17,7 +17,7 @@ unit nextpas.core.tls.openssl.api.engine;
 interface
 
 uses
-  SysUtils, Classes,
+   Classes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader;
 

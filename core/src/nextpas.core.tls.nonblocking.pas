@@ -5,7 +5,7 @@ unit nextpas.core.tls.nonblocking;
 interface
 
 uses
-  SysUtils, Classes,
+   Classes,
   nextpas.core.io.base,
   nextpas.core.io.intf;
 

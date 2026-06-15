@@ -20,7 +20,7 @@ unit nextpas.core.tls.ocsp.cache;
 interface
 
 uses
-  SysUtils, SyncObjs, DateUtils, fgl;
+   SyncObjs, DateUtils, fgl;
 
 const
   SHARD_COUNT = 16;  // 分片数量 (2的幂次方,便于位运算)

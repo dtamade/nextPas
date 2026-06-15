@@ -9,7 +9,7 @@ unit nextpas.core.tls.ct.log;
 interface
 
 uses
-  SysUtils, fpjson, jsonparser,
+   fpjson, jsonparser,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.ct,
