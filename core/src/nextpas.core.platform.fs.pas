@@ -36,7 +36,6 @@ const
 function platform_fs_exists(const APath: PAnsiChar): Boolean;
 function platform_fs_is_file(const APath: PAnsiChar): Boolean;
 function platform_fs_is_dir(const APath: PAnsiChar): Boolean;
-function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
 function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
 function platform_fs_temp_dir(ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
@@ -64,11 +63,6 @@ uses
 const
   PLATFORM_FS_SHORT_WRITE_ERROR = -5;
   PLATFORM_FS_SHORT_READ_ERROR = -6;
-{$IFDEF NEXTPAS_WINDOWS}
-  PLATFORM_FS_NOT_DIR_ERROR = 267;
-{$ELSE}
-  PLATFORM_FS_NOT_DIR_ERROR = 20;
-{$ENDIF}
 
 function platform_fs_write_all(const AHandle: TPlatformFileHandle;
   AData: Pointer; ALen: PtrUInt): Int32;
@@ -220,14 +214,8 @@ begin
       begin
         LBuf[I] := #0;
         LR := platform_file_mkdir(@LBuf[0], AMode);
-        if LR <> 0 then
-        begin
-          if platform_fs_is_dir(@LBuf[0]) then
-            LR := 0
-          else
-            LR := PLATFORM_FS_NOT_DIR_ERROR;
-        end;
-        if LR <> 0 then Exit(LR);
+        if (LR <> 0) and (not platform_fs_is_dir(@LBuf[0])) then
+          Exit(LR);
       {$IFDEF NEXTPAS_WINDOWS}
         LBuf[I] := '\';
       {$ELSE}
@@ -260,8 +248,6 @@ begin
     if (LR <> 0) or (LRead = 0) then Break;
     LR := platform_fs_write_all(LDstH, @LBuf[0], LRead);
   until LR <> 0;
-  if LR = 0 then
-    LR := platform_file_sync(LDstH);
   LCloseR := platform_file_close(LDstH);
   if (LR = 0) and (LCloseR <> 0) then
     LR := LCloseR;
@@ -344,88 +330,8 @@ begin
   Result := LR;
 end;
 
-function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
-  APathBuf: PAnsiChar; APathBufLen: Int32; out AFd: Int32): Int32;
-const
-  HEX_CHARS: array[0..15] of AnsiChar = '0123456789abcdef';
-  MAX_ATTEMPTS = 16;
-var
-  LTmpDir: array[0..511] of AnsiChar;
-  LTmpLen, LPrefixLen, LSuffixLen, LPos, I, LAttempt: Int32;
-  LRandBytes: array[0..7] of Byte;
-  LHandle: TPlatformFileHandle;
-begin
-  AFd := -1;
-  if (APathBuf = nil) or (APathBufLen <= 0) then
-    Exit(-1);
-
-  LTmpLen := platform_fs_temp_dir(@LTmpDir[0], SizeOf(LTmpDir));
-  if LTmpLen < 0 then
-    Exit(-1);
-
-  LPrefixLen := 0;
-  if APrefix <> nil then
-    while APrefix[LPrefixLen] <> #0 do Inc(LPrefixLen);
-
-  LSuffixLen := 0;
-  if ASuffix <> nil then
-    while ASuffix[LSuffixLen] <> #0 do Inc(LSuffixLen);
-
-  if LTmpLen + 1 + LPrefixLen + 16 + LSuffixLen + 1 > APathBufLen then
-    Exit(-1);
-
-  for LAttempt := 0 to MAX_ATTEMPTS - 1 do
-  begin
-    LPos := 0;
-    Move(LTmpDir[0], APathBuf[0], LTmpLen);
-    LPos := LTmpLen;
-  {$IFDEF NEXTPAS_WINDOWS}
-    if (LPos > 0) and (APathBuf[LPos-1] <> '\') then
-    begin APathBuf[LPos] := '\'; Inc(LPos); end;
-  {$ELSE}
-    if (LPos > 0) and (APathBuf[LPos-1] <> '/') then
-    begin APathBuf[LPos] := '/'; Inc(LPos); end;
-  {$ENDIF}
-
-    if LPrefixLen > 0 then
-    begin
-      Move(APrefix^, APathBuf[LPos], LPrefixLen);
-      Inc(LPos, LPrefixLen);
-    end;
-
-    if platform_random_bytes(@LRandBytes[0], 8) <> 0 then
-      Exit(-1);
-    for I := 0 to 7 do
-    begin
-      APathBuf[LPos] := HEX_CHARS[(LRandBytes[I] shr 4) and $F];
-      Inc(LPos);
-      APathBuf[LPos] := HEX_CHARS[LRandBytes[I] and $F];
-      Inc(LPos);
-    end;
-
-    if LSuffixLen > 0 then
-    begin
-      Move(ASuffix^, APathBuf[LPos], LSuffixLen);
-      Inc(LPos, LSuffixLen);
-    end;
-    APathBuf[LPos] := #0;
-
-    Result := platform_file_open(APathBuf, fomReadWrite, fcmCreateNew, LHandle);
-    if Result = 0 then
-    begin
-    {$IFDEF NEXTPAS_WINDOWS}
-      AFd := Int32(PtrUInt(LHandle.Value));
-    {$ELSE}
-      AFd := LHandle.Value;
-    {$ENDIF}
-      Exit(0);
-    end;
-  end;
-  Result := -1;
-end;
-
-function platform_fs_mktemp_handle(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
-  APathBuf: PAnsiChar; APathBufLen: Int32; out AHandle: TPlatformFileHandle): Int32;
+function platform_fs_mktemp_impl(APathBuf: PAnsiChar; APathBufLen: Int32;
+  const APrefix, ASuffix: PAnsiChar; out AHandle: TPlatformFileHandle): Int32;
 const
   HEX_CHARS: array[0..15] of AnsiChar = '0123456789abcdef';
   MAX_ATTEMPTS = 16;
@@ -434,7 +340,7 @@ var
   LTmpLen, LPrefixLen, LSuffixLen, LPos, I, LAttempt: Int32;
   LRandBytes: array[0..7] of Byte;
 begin
-  FillChar(AHandle, SizeOf(AHandle), 0);
+  AHandle := PLATFORM_FILE_INVALID_HANDLE;
   if (APathBuf = nil) or (APathBufLen <= 0) then
     Exit(-1);
 
@@ -491,29 +397,32 @@ begin
 
     Result := platform_file_open(APathBuf, fomReadWrite, fcmCreateNew, AHandle);
     if Result = 0 then
-    begin
       Exit(0);
-    end;
   end;
   Result := -1;
 end;
 
-function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
+function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
+  APathBuf: PAnsiChar; APathBufLen: Int32; out AFd: Int32): Int32;
 var
-  LStat: TPlatformFileStat;
+  LHandle: TPlatformFileHandle;
 begin
-  if platform_file_stat(APath, LStat) <> 0 then
-    Exit(False);
-  if LStat.FileType <> ftRegular then
-    Exit(False);
-{$IFDEF NEXTPAS_WINDOWS}
-  { Windows: must have a recognised executable extension; defer to caller
-    PATHEXT enumeration for the final answer. Return False here so that
-    blanket "regular file => executable" never happens. }
-  Result := False;
-{$ELSE}
-  Result := (LStat.Mode and $49) <> 0;
-{$ENDIF}
+  AFd := -1;
+  Result := platform_fs_mktemp_impl(APathBuf, APathBufLen, APrefix, ASuffix, LHandle);
+  if Result = 0 then
+  begin
+  {$IFDEF NEXTPAS_WINDOWS}
+    AFd := Int32(PtrUInt(LHandle.Value));
+  {$ELSE}
+    AFd := LHandle.Value;
+  {$ENDIF}
+  end;
+end;
+
+function platform_fs_mktemp_handle(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
+  APathBuf: PAnsiChar; APathBufLen: Int32; out AHandle: TPlatformFileHandle): Int32;
+begin
+  Result := platform_fs_mktemp_impl(APathBuf, APathBufLen, APrefix, ASuffix, AHandle);
 end;
 
 function platform_fs_read_file(const APath: PAnsiChar;
