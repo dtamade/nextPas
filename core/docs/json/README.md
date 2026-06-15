@@ -71,3 +71,13 @@ Requires type registry from `nextpas.core.reflect`.
 - Object keys must be strings (per RFC 8259)
 - Duplicate keys: last value wins in hash lookup, all preserved in iteration
 - Large integer overflow silently promotes to Double
+
+## Failure and lifetime contract
+
+`TryJsonParse` returns `False` on parse failure and still assigns a diagnostic document.
+
+`TJsonError` exposes `Message`, `Line`, `Column`, and `Offset`.
+
+Malformed string diagnostics point at the offending byte.
+
+Keep the owning `IJsonDocument` alive while any `TJsonValue` is still in use.
