@@ -5,16 +5,21 @@ program test_contracts;
 uses
   SysUtils,
   nextpas.core.base,
-	  nextpas.core.testing,
-	  nextpas.core.mem.intf,
-	  nextpas.core.mem.utils,
-	  nextpas.core.mem.allocator,
-	  nextpas.core.mem.allocator.base,
-	  nextpas.core.mem.allocator.mimalloc,
-	  nextpas.core.mem.alloc,
-	  nextpas.core.mem.error,
-	  nextpas.core.mem.layout,
-	  nextpas.core.mem.adapter;
+  nextpas.core.testing,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.utils,
+  nextpas.core.mem.allocator,
+  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.allocator.mimalloc,
+  nextpas.core.mem.alloc,
+  nextpas.core.mem.error,
+  nextpas.core.mem.layout,
+  nextpas.core.mem.adapter,
+  nextpas.core.mem.aligned;
+
+const
+  MEM_ALIGNED_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.aligned.pas';
+  MEM_ALIGNED_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.aligned.pas';
 
 type
   TByteArray = array[0..5] of Byte;
@@ -45,6 +50,44 @@ var
   GAllocMemCalls: Integer = 0;
   GReallocMemCalls: Integer = 0;
   GFreeMemCalls: Integer = 0;
+
+function ReadSourceText(const APath: string): string;
+var
+  LFile: Text;
+  LLine: string;
+begin
+  Result := '';
+  Assign(LFile, APath);
+  Reset(LFile);
+  try
+    while not Eof(LFile) do
+    begin
+      ReadLn(LFile, LLine);
+      Result := Result + LowerCase(LLine) + #10;
+    end;
+  finally
+    Close(LFile);
+  end;
+end;
+
+function ResolveSourcePath(const APathFromTest, APathFromRoot: string): string;
+begin
+  if FileExists(APathFromTest) then
+    Exit(APathFromTest);
+  if FileExists(APathFromRoot) then
+    Exit(APathFromRoot);
+  Result := APathFromTest;
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
+end;
+
+procedure CheckNotContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
+end;
 
 procedure ResetAllocatorCounters;
 begin
@@ -244,6 +287,60 @@ begin
     if LPtr <> nil then
       LAllocator.FreeAligned(LPtr);
   end;
+end;
+
+procedure TestAlignedCompatShimSmoke;
+var
+  LPtr: Pointer;
+begin
+  LPtr := nextpas.core.mem.aligned.AllocAligned(64, 32);
+  try
+    Check(LPtr <> nil, 'aligned compat shim should allocate');
+    CheckEqual(Int64(0), Int64(PtrUInt(LPtr) mod 32),
+      'aligned compat shim should honor requested alignment');
+    PByte(LPtr)^ := $4D;
+    CheckEqual(Int64($4D), Int64(PByte(LPtr)^),
+      'aligned compat shim should return writable memory');
+  finally
+    nextpas.core.mem.aligned.FreeAligned(LPtr);
+  end;
+end;
+
+procedure TestAlignedCompatShimDelegatesToCanonicalAllocator;
+var
+  LSource: string;
+begin
+  LSource := ReadSourceText(ResolveSourcePath(
+    MEM_ALIGNED_SOURCE_PATH_FROM_TEST,
+    MEM_ALIGNED_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LSource, '{$warning ''nextpas.core.mem.aligned is deprecated',
+    'aligned compat shim should publish a deprecation warning');
+  CheckContains(LSource,
+    'deprecated ''use nextpas.core.mem.default.defaultallocator.allocaligned instead''',
+    'aligned compat alloc surface should be deprecated');
+  CheckContains(LSource,
+    'deprecated ''use nextpas.core.mem.default.defaultallocator.freealigned instead''',
+    'aligned compat free surface should be deprecated');
+  CheckContains(LSource, 'nextpas.core.mem.default',
+    'aligned compat shim should depend on the canonical default allocator');
+  CheckContains(LSource, 'nextpas.core.mem.intf',
+    'aligned compat shim should reference the canonical allocator contract');
+  CheckContains(LSource, 'lallocator := nextpas.core.mem.default.defaultallocator;',
+    'aligned compat shim should obtain the canonical allocator');
+  CheckContains(LSource, 'result := lallocator.allocaligned(asize, aalignment);',
+    'aligned compat alloc should delegate to the canonical allocator');
+  CheckContains(LSource, 'lallocator.freealigned(aptr);',
+    'aligned compat free should delegate to the canonical allocator');
+  CheckNotContains(LSource, '_aligned_malloc',
+    'aligned compat shim should not own a windows allocation path');
+  CheckNotContains(LSource, 'posix_memalign',
+    'aligned compat shim should not own a unix allocation path');
+  CheckNotContains(LSource, 'libc_free',
+    'aligned compat shim should not own a unix free path');
+  CheckNotContains(LSource, 'sysgetmem',
+    'aligned compat shim should not own a raw rtl fallback path');
+  CheckNotContains(LSource, 'sysfreemem',
+    'aligned compat shim should not own a raw rtl free path');
 end;
 
 procedure TestCanonicalAllocatorSurface;
@@ -617,6 +714,9 @@ begin
   T.Run('callback allocator supports allocate interface', @TestCallbackAllocatorSupportsAllocateInterface);
   T.Run('rtl allocator zero init traits and aligned alloc', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
   T.Run('rtl allocator aligned alloc rejects size overflow', @TestRtlAllocatorAlignedAllocRejectsSizeOverflow);
+  T.Run('aligned compat shim smoke', @TestAlignedCompatShimSmoke);
+  T.Run('aligned compat shim delegates to canonical allocator',
+    @TestAlignedCompatShimDelegatesToCanonicalAllocator);
   T.Run('canonical allocator surface', @TestCanonicalAllocatorSurface);
   T.Run('allocator aliases are canonical', @TestAllocatorAliasesAreCanonical);
   T.Run('allocator adapter round trip', @TestAllocatorAdapterRoundTrip);
