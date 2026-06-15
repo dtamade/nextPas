@@ -21,7 +21,8 @@ unit nextpas.core.tls.logging;
 interface
 
 uses
-  SysUtils, Classes, nextpas.core.tls.base;  // P2: TSSLProtocolVersions for shared helpers
+  SysUtils, Classes, nextpas.core.text.conv,
+  nextpas.core.tls.base;  // P2: TSSLProtocolVersions for shared helpers
 
 {$IFDEF USE_SYNCOBJS}
   {$DEFINE HAS_CRITICAL_SECTION}
@@ -258,7 +259,10 @@ var
 begin
   LTimeStr := FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', Now);
   // Format: [Time] [Level] [Category] Message
-  Result := Format('[%s] [%s] [%s] %s', [LTimeStr, LOG_LEVEL_NAMES[ALevel], ACategory, AMessage]);
+  Result := nextpas.core.text.conv.Format(
+    '[%s] [%s] [%s] %s',
+    [LTimeStr, LOG_LEVEL_NAMES[ALevel], ACategory, AMessage]
+  );
 end;
 
 procedure TBaseLogger.Log(ALevel: TSecurityEventLevel; const ACategory, AMessage: string);
@@ -302,7 +306,10 @@ procedure TBaseLogger.LogAudit(const ACategory, AAction, AUser, ADetails: string
 var
   LMsg: string;
 begin
-  LMsg := Format('Action=%s User=%s Details=%s', [AAction, AUser, ADetails]);
+  LMsg := nextpas.core.text.conv.Format(
+    'Action=%s User=%s Details=%s',
+    [AAction, AUser, ADetails]
+  );
   Log(selAudit, ACategory, LMsg);
 end;
 
@@ -389,15 +396,15 @@ begin
   // Delete oldest file if exists
   if FMaxFiles > 0 then
   begin
-    LOldName := FFileName + '.' + IntToStr(FMaxFiles);
+    LOldName := FFileName + '.' + nextpas.core.text.conv.IntToStr(FMaxFiles);
     if FileExists(LOldName) then
       DeleteFile(LOldName);
 
     // Rename existing rotated files
     for I := FMaxFiles - 1 downto 1 do
     begin
-      LOldName := FFileName + '.' + IntToStr(I);
-      LNewName := FFileName + '.' + IntToStr(I + 1);
+      LOldName := FFileName + '.' + nextpas.core.text.conv.IntToStr(I);
+      LNewName := FFileName + '.' + nextpas.core.text.conv.IntToStr(I + 1);
       if FileExists(LOldName) then
         RenameFile(LOldName, LNewName);
     end;
@@ -698,8 +705,10 @@ begin
   try
     LResult.Add('Performance Profile Report');
     LResult.Add(StringOfChar('=', 80));
-    LResult.Add(Format('%-30s %8s %10s %10s %10s %10s',
-      ['Name', 'Count', 'Total(ms)', 'Avg(ms)', 'Min(ms)', 'Max(ms)']));
+    LResult.Add(nextpas.core.text.conv.Format(
+      '%-30s %8s %10s %10s %10s %10s',
+      ['Name', 'Count', 'Total(ms)', 'Avg(ms)', 'Min(ms)', 'Max(ms)']
+    ));
     LResult.Add(StringOfChar('-', 80));
 
     EnterCriticalSection(FLock);
@@ -712,9 +721,11 @@ begin
         else
           LAvg := 0;
 
-        LResult.Add(Format('%-30s %8d %10d %10.2f %10d %10d',
+        LResult.Add(nextpas.core.text.conv.Format(
+          '%-30s %8d %10d %10.2f %10d %10d',
           [LEntry^.Name, LEntry^.Count, LEntry^.TotalTimeMs,
-          LAvg, LEntry^.MinTimeMs, LEntry^.MaxTimeMs]));
+          LAvg, LEntry^.MinTimeMs, LEntry^.MaxTimeMs]
+        ));
       end;
     finally
       LeaveCriticalSection(FLock);

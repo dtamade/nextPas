@@ -19,7 +19,7 @@ unit nextpas.core.tls.context.builder;
 interface
 
 uses
-  SysUtils,nextpas.core.tls.base,
+  SysUtils, nextpas.core.text.conv, nextpas.core.tls.base,
   nextpas.core.tls.safety,
   nextpas.core.tls.pkcs11.types,
   nextpas.core.tls.pkcs11.pin,
@@ -200,7 +200,7 @@ begin
   if AForServer then
     TSecurityLog.Warning(
       'ContextBuilder',
-      Format(
+      nextpas.core.text.conv.Format(
         '%s received WithSNI as deprecated context-level ServerName compatibility on a server context; ' +
         'BuildServer ignores it and server-side connections ignore it.',
         [ACallSite]
@@ -209,7 +209,7 @@ begin
   else
     TSecurityLog.Warning(
       'ContextBuilder',
-      Format(
+      nextpas.core.text.conv.Format(
         '%s received WithSNI as deprecated context-level SNI compatibility on a client context; ' +
         'BuildClient ignores it and new client connections start without inherited ServerName. ' +
         'Prefer per-connection hostname via TSSLConnectionBuilder.WithHostname, ' +
@@ -427,8 +427,8 @@ begin
   if AVerifyMode <> [sslVerifyPeer] then
     Exit(True);
 
-  Result := (Trim(ACAFile) <> '') or
-            (Trim(ACAPath) <> '') or
+  Result := (nextpas.core.text.conv.Trim(ACAFile) <> '') or
+            (nextpas.core.text.conv.Trim(ACAPath) <> '') or
             AUseSystemRoots;
 end;
 
@@ -655,7 +655,7 @@ end;
 
 function UnsupportedBuilderPKCS11PINMethodMessage(AMethod: TPKCS11PINMethod): string;
 begin
-  Result := Format(
+  Result := nextpas.core.text.conv.Format(
     'Context builder does not support PKCS#11 PIN method %s; use UsePKCS11(...) with URI pin-source or WithPKCS11PIN for direct PIN',
     [PKCS11PINMethodToString(AMethod)]
   );
@@ -663,7 +663,7 @@ end;
 
 function MissingBuilderPKCS11PINSourceValueMessage(AMethod: TPKCS11PINMethod): string;
 begin
-  Result := Format(
+  Result := nextpas.core.text.conv.Format(
     'Context builder PKCS#11 PIN method %s requires a non-empty source value',
     [PKCS11PINMethodToString(AMethod)]
   );
@@ -684,7 +684,7 @@ var
   LOrdinal: Integer;
   LValueLower: string;
 begin
-  if TryStrToInt(Trim(AValue), LOrdinal) then
+  if TryStrToInt(nextpas.core.text.conv.Trim(AValue), LOrdinal) then
   begin
     Result := (LOrdinal >= Ord(Low(TSSLLibraryType))) and
               (LOrdinal <= Ord(High(TSSLLibraryType)));
@@ -695,7 +695,7 @@ begin
     Exit;
   end;
 
-  LValueLower := LowerCase(Trim(AValue));
+  LValueLower := LowerCase(nextpas.core.text.conv.Trim(AValue));
 
   if (LValueLower = 'sslautodetect') or (LValueLower = 'autodetect') or (LValueLower = 'auto') then
     ALibraryType := sslAutoDetect
@@ -760,10 +760,10 @@ var
   LOrdinal: Integer;
   LValueLower: string;
 begin
-  if TryStrToInt(Trim(AValue), LOrdinal) then
+  if TryStrToInt(nextpas.core.text.conv.Trim(AValue), LOrdinal) then
     Exit(TryParsePKCS11PINMethodOrdinal(LOrdinal, AMethod));
 
-  LValueLower := LowerCase(Trim(AValue));
+  LValueLower := LowerCase(nextpas.core.text.conv.Trim(AValue));
 
   if (LValueLower = 'pmnone') or (LValueLower = 'none') then
   begin
@@ -805,7 +805,7 @@ end;
 function BuilderClientReplayStoreScopeMessage(
   const AField, ACallSite: string): string;
 begin
-  Result := Format(
+  Result := nextpas.core.text.conv.Format(
     '%s is server-scoped. Client context builders do not install replay stores; remove it from %s.',
     [AField, ACallSite]
   );
@@ -814,7 +814,7 @@ end;
 procedure AddClientReplayStoreScopeValidationErrors(
   const ABuilder: TSSLContextBuilderImpl; var AValidation: TBuildValidationResult);
 begin
-  if Trim(ABuilder.FServerEarlyDataReplayStoreFile) <> '' then
+  if nextpas.core.text.conv.Trim(ABuilder.FServerEarlyDataReplayStoreFile) <> '' then
     AValidation.AddError(
       BuilderClientReplayStoreScopeMessage(
         'server_early_data_replay_store_file',
@@ -822,7 +822,7 @@ begin
       )
     );
 
-  if Trim(ABuilder.FServerEarlyDataReplayStoreDirectory) <> '' then
+  if nextpas.core.text.conv.Trim(ABuilder.FServerEarlyDataReplayStoreDirectory) <> '' then
     AValidation.AddError(
       BuilderClientReplayStoreScopeMessage(
         'server_early_data_replay_store_directory',
@@ -834,7 +834,7 @@ end;
 procedure EnsureClientReplayStoreScope(
   const ABuilder: TSSLContextBuilderImpl; const ACallSite: string);
 begin
-  if Trim(ABuilder.FServerEarlyDataReplayStoreFile) <> '' then
+  if nextpas.core.text.conv.Trim(ABuilder.FServerEarlyDataReplayStoreFile) <> '' then
     raise ESSLConfigurationException.Create(
       BuilderClientReplayStoreScopeMessage(
         'server_early_data_replay_store_file',
@@ -842,7 +842,7 @@ begin
       )
     );
 
-  if Trim(ABuilder.FServerEarlyDataReplayStoreDirectory) <> '' then
+  if nextpas.core.text.conv.Trim(ABuilder.FServerEarlyDataReplayStoreDirectory) <> '' then
     raise ESSLConfigurationException.Create(
       BuilderClientReplayStoreScopeMessage(
         'server_early_data_replay_store_directory',
@@ -1384,8 +1384,8 @@ begin
     LServerOCSPStaplingContext.LoadServerStapledOCSPResponseFile(FServerOCSPStapledResponseFile);
   end;
 
-  if (Trim(FServerEarlyDataReplayStoreFile) <> '') and
-    (Trim(FServerEarlyDataReplayStoreDirectory) <> '') then
+  if (nextpas.core.text.conv.Trim(FServerEarlyDataReplayStoreFile) <> '') and
+    (nextpas.core.text.conv.Trim(FServerEarlyDataReplayStoreDirectory) <> '') then
     raise ESSLException.Create(
       'Configured server_early_data_replay_store_file and ' +
       'server_early_data_replay_store_directory are mutually exclusive; configure not both'
@@ -2153,7 +2153,7 @@ begin
       begin
         if LProtocolStr <> '' then
           LProtocolStr := LProtocolStr + ',';
-        LProtocolStr := LProtocolStr + IntToStr(Ord(LProto));
+        LProtocolStr := LProtocolStr + nextpas.core.text.conv.IntToStr(Ord(LProto));
       end;
     LLines.Add('protocols=' + LProtocolStr);
 
@@ -2164,14 +2164,14 @@ begin
       begin
         if LVerifyStr <> '' then
           LVerifyStr := LVerifyStr + ',';
-        LVerifyStr := LVerifyStr + IntToStr(Ord(LVerifyMode));
+        LVerifyStr := LVerifyStr + nextpas.core.text.conv.IntToStr(Ord(LVerifyMode));
       end;
     LLines.Add('verify_modes=' + LVerifyStr);
     if FVerifyModeExplicit then
       LLines.Add('verify_mode_explicit=true')
     else
       LLines.Add('verify_mode_explicit=false');
-    LLines.Add('verify_depth=' + IntToStr(FVerifyDepth));
+    LLines.Add('verify_depth=' + nextpas.core.text.conv.IntToStr(FVerifyDepth));
     LLines.Add('');
 
     // Certificate configuration
@@ -2194,7 +2194,7 @@ begin
     if IsSerializablePKCS11PINSourceMethod(FPKCS11PINMethod) then
     begin
       LLines.Add('pkcs11_pin=' + FPKCS11PIN);
-      LLines.Add('pkcs11_pin_method=' + IntToStr(Ord(FPKCS11PINMethod)));
+      LLines.Add('pkcs11_pin_method=' + nextpas.core.text.conv.IntToStr(Ord(FPKCS11PINMethod)));
     end;
     LLines.Add('ca_file=' + FCAFile);
     LLines.Add('ca_path=' + FCAPath);
@@ -2220,17 +2220,17 @@ begin
       LLines.Add('session_cache_enabled=true')
     else
       LLines.Add('session_cache_enabled=false');
-    LLines.Add('session_timeout=' + IntToStr(FSessionTimeout));
+    LLines.Add('session_timeout=' + nextpas.core.text.conv.IntToStr(FSessionTimeout));
     if FClientEarlyDataEnabled then
       LLines.Add('client_early_data_enabled=true')
     else
       LLines.Add('client_early_data_enabled=false');
-    LLines.Add('server_early_data_policy=' + IntToStr(Ord(FServerEarlyDataPolicy)));
-    LLines.Add('server_max_early_data_size=' + IntToStr(FServerMaxEarlyDataSize));
+    LLines.Add('server_early_data_policy=' + nextpas.core.text.conv.IntToStr(Ord(FServerEarlyDataPolicy)));
+    LLines.Add('server_max_early_data_size=' + nextpas.core.text.conv.IntToStr(FServerMaxEarlyDataSize));
     LLines.Add('server_early_data_replay_store_file=' + FServerEarlyDataReplayStoreFile);
     LLines.Add('server_early_data_replay_store_directory=' + FServerEarlyDataReplayStoreDirectory);
     if FExplicitBackendSet and (not FAutoSelectBackend) then
-      LLines.Add('explicit_backend=' + IntToStr(Ord(FExplicitBackend)));
+      LLines.Add('explicit_backend=' + nextpas.core.text.conv.IntToStr(Ord(FExplicitBackend)));
     LLines.Add('');
 
     if FAutoSelectBackend then
@@ -2252,7 +2252,7 @@ begin
       begin
         if LOptionsStr <> '' then
           LOptionsStr := LOptionsStr + ',';
-        LOptionsStr := LOptionsStr + IntToStr(Ord(LOption));
+        LOptionsStr := LOptionsStr + nextpas.core.text.conv.IntToStr(Ord(LOption));
       end;
     LLines.Add('[Options]');
     LLines.Add('options=' + LOptionsStr);
@@ -2321,7 +2321,7 @@ begin
 
     for I := 0 to Length(LLines) - 1 do
     begin
-      LLine := Trim(LLines[I]);
+      LLine := nextpas.core.text.conv.Trim(LLines[I]);
 
       // Skip empty lines and section headers
       if (LLine = '') or (LLine[1] = '[') then
@@ -2331,8 +2331,8 @@ begin
       LPos := Pos('=', LLine);
       if LPos > 0 then
       begin
-        LKey := Trim(Copy(LLine, 1, LPos - 1));
-        LValue := Trim(Copy(LLine, LPos + 1, Length(LLine)));
+        LKey := nextpas.core.text.conv.Trim(Copy(LLine, 1, LPos - 1));
+        LValue := nextpas.core.text.conv.Trim(Copy(LLine, LPos + 1, Length(LLine)));
 
         // Parse based on key
         if LKey = 'protocols' then

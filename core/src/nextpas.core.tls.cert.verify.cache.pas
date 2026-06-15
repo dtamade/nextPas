@@ -26,7 +26,6 @@ unit nextpas.core.tls.cert.verify.cache;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   SyncObjs,
   nextpas.core.time,
