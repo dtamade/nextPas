@@ -5,7 +5,7 @@ unit nextpas.core.tls.context.config;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.tls.base;
 
 procedure ValidateContextReplayStoreConfigScope(const AConfig: TSSLConfig;
@@ -56,7 +56,7 @@ begin
   if ContextTypeSupportsServerReplayStore(AContextType) then
     Exit;
 
-  if Trim(AConfig.ServerEarlyDataReplayStoreFile) <> '' then
+  if nextpas.core.text.conv.Trim(AConfig.ServerEarlyDataReplayStoreFile) <> '' then
     raise ESSLConfigurationException.CreateWithContext(
       ReplayStoreClientScopeMessage(
         'server_early_data_replay_store_file',
@@ -68,7 +68,7 @@ begin
       AConfig.LibraryType
     );
 
-  if Trim(AConfig.ServerEarlyDataReplayStoreDirectory) <> '' then
+  if nextpas.core.text.conv.Trim(AConfig.ServerEarlyDataReplayStoreDirectory) <> '' then
     raise ESSLConfigurationException.CreateWithContext(
       ReplayStoreClientScopeMessage(
         'server_early_data_replay_store_directory',
@@ -140,8 +140,8 @@ begin
     (not ContextTypeSupportsServerReplayStore(AContext.GetContextType)) then
     Exit;
 
-  if (Trim(AConfig.ServerEarlyDataReplayStoreFile) <> '') and
-    (Trim(AConfig.ServerEarlyDataReplayStoreDirectory) <> '') then
+  if (nextpas.core.text.conv.Trim(AConfig.ServerEarlyDataReplayStoreFile) <> '') and
+    (nextpas.core.text.conv.Trim(AConfig.ServerEarlyDataReplayStoreDirectory) <> '') then
     raise ESSLConfigurationException.CreateWithContext(
       'Configured server_early_data_replay_store_file and ' +
       'server_early_data_replay_store_directory are mutually exclusive; configure not both',
@@ -151,7 +151,7 @@ begin
       AConfig.LibraryType
     );
 
-  if Trim(AConfig.ServerEarlyDataReplayStoreFile) <> '' then
+  if nextpas.core.text.conv.Trim(AConfig.ServerEarlyDataReplayStoreFile) <> '' then
   begin
     if not Supports(AContext, IFreePascalContextEarlyDataReplayInstaller, LInstaller) then
       raise ESSLConfigurationException.CreateWithContext(
@@ -172,7 +172,7 @@ begin
       );
   end;
 
-  if Trim(AConfig.ServerEarlyDataReplayStoreDirectory) <> '' then
+  if nextpas.core.text.conv.Trim(AConfig.ServerEarlyDataReplayStoreDirectory) <> '' then
   begin
     if not Supports(AContext, IFreePascalContextEarlyDataReplayDirectoryInstaller,
       LDirectoryInstaller) then
