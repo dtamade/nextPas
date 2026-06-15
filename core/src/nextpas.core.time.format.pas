@@ -11,6 +11,7 @@ uses
   nextpas.core.time.offsetdatetime;
 
 function FormatDateTime(const APattern: string; const ADT: TOffsetDateTime): string;
+function FormatDateTime(const APattern: string; const ADT: TDateTime): string;
 function FormatDate(const APattern: string; const ADate: TDate): string;
 function FormatTime(const APattern: string; const ATime: TTimeOfDay): string;
 
@@ -102,6 +103,29 @@ begin
     ADT.GetHour, ADT.GetMinute, ADT.GetSecond, ADT.GetNanosecond,
     Ord(ADT.GetDate.GetDayOfWeek),
     ADT.GetOffset.ToString);
+end;
+
+function FormatDateTime(const APattern: string; const ADT: TDateTime): string;
+var
+  LDays: Int64;
+  LDayNs: Int64;
+  LYear, LMonth, LDay, LHour, LMinute, LSecond: Word;
+begin
+  // TDateTime = days since 1899-12-30 + fractional day
+  LDays := Trunc(ADT);
+  LDayNs := Round(Frac(ADT) * 864000000000.0); // nanoseconds in a day
+
+  // Convert days since 1899-12-30 to Y/M/D
+  // 25569 days from 1899-12-30 to 1970-01-01
+  LDays := LDays - 25569 + 719163; // days since 0001-03-01 (Minguo calendar base)
+  // Simplified: use FPC's DecodeDate to avoid reinventing
+  System.DecodeDate(ADT, LYear, LMonth, LDay);
+  System.DecodeTime(ADT, LHour, LMinute, LSecond, LDayNs);
+
+  Result := DoFormat(APattern,
+    LYear, LMonth, LDay,
+    LHour, LMinute, LSecond, 0,
+    0, '');
 end;
 
 function FormatDate(const APattern: string; const ADate: TDate): string;

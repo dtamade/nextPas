@@ -18,7 +18,8 @@ uses
   nextpas.core.time.sleep,
   nextpas.core.time.timer,
   nextpas.core.time.ticker,
-  nextpas.core.time.period;
+  nextpas.core.time.period,
+  nextpas.core.time.format;
 
 type
   TDuration = nextpas.core.time.base.TDuration;
@@ -48,6 +49,7 @@ function ParseISO8601Time(const AStr: string): nextpas.core.time.timeofday.TTime
 function TryParseISO8601Time(const AStr: string; out ATime: nextpas.core.time.timeofday.TTimeOfDay): Boolean; inline;
 function ParseISO8601DateTime(const AStr: string): nextpas.core.time.datetime.TNaiveDateTime; inline;
 function TryParseISO8601DateTime(const AStr: string; out ADT: nextpas.core.time.datetime.TNaiveDateTime): Boolean; inline;
+function FormatDateTime(const APattern: string; const ADT: TDateTime): string; inline;
 
 implementation
 
@@ -137,6 +139,11 @@ end;
 function TryParseISO8601DateTime(const AStr: string; out ADT: nextpas.core.time.datetime.TNaiveDateTime): Boolean;
 begin
   Result := nextpas.core.time.iso8601.TryParseISO8601DateTime(AStr, ADT);
+end;
+
+function FormatDateTime(const APattern: string; const ADT: TDateTime): string;
+begin
+  Result := nextpas.core.time.format.FormatDateTime(APattern, ADT);
 end;
 
 end.
