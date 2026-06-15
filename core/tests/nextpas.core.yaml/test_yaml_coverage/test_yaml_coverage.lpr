@@ -6,7 +6,9 @@ uses
   SysUtils,
   nextpas.core.testing,
   nextpas.core.text.view,
+  nextpas.core.mem.default,
   nextpas.core.yaml.types,
+  nextpas.core.yaml.parser,
   nextpas.core.yaml.builder,
   nextpas.core.yaml;
 
@@ -57,6 +59,41 @@ begin
   LDoc := YamlParse(LView);
   Check(not LDoc.HasError, 'no error');
   CheckEqual(Int64(42), LDoc.Root.MapGet('x').AsInt, 'x=42');
+end;
+
+procedure TestParserAllocatorSurface;
+var
+  LDoc: TYamlDocument;
+  LInput: string;
+begin
+  YamlDocInitWith(LDoc, DefaultAllocator);
+  Check(LDoc.Nodes <> nil, 'init allocates nodes');
+  Check(LDoc.Anchors <> nil, 'init allocates anchors');
+  CheckEqual(Int64(0), Int64(LDoc.NodeCount), 'init node count');
+  CheckEqual(Int64(0), Int64(LDoc.AnchorCount), 'init anchor count');
+  LDoc.Done;
+  Check(LDoc.Nodes = nil, 'done clears nodes');
+  Check(LDoc.Anchors = nil, 'done clears anchors');
+
+  LInput := '{svc: api, port: 8080}';
+  YamlDocParseWith(LDoc, @LInput[1], Length(LInput), DefaultAllocator);
+  try
+    Check(not LDoc.HasError, 'parse with allocator');
+    Check(LDoc.Nodes <> nil, 'parse keeps node buffer');
+    CheckEqual(Int64(2), Int64(LDoc.Nodes[LDoc.RootIdx].Container.Count), 'root pair count');
+  finally
+    LDoc.Done;
+  end;
+
+  LInput := '[1, 2, 3]';
+  YamlDocParseViewWith(LDoc, TStringView.FromStr(LInput), DefaultAllocator);
+  try
+    Check(not LDoc.HasError, 'parse view with allocator');
+    Check(LDoc.Nodes[LDoc.RootIdx].Kind = ynkSequence, 'root sequence');
+    CheckEqual(Int64(3), Int64(LDoc.Nodes[LDoc.RootIdx].Container.Count), 'sequence len');
+  finally
+    LDoc.Done;
+  end;
 end;
 
 { Real-world YAML scenarios }
@@ -193,6 +230,7 @@ begin
   T.Run('PutFloat', @TestPutFloat);
   T.Run('PutStrView', @TestPutStrView);
   T.Run('Parse TStringView', @TestParseStringView);
+  T.Run('Parser allocator surface', @TestParserAllocatorSurface);
   T.Run('K8s pod spec', @TestK8sPodSpec);
   T.Run('Docker compose', @TestDockerCompose);
   T.Run('GitHub Actions', @TestGitHubActions);

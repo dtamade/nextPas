@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.text.view,
   nextpas.core.text.number,
+  nextpas.core.mem.intf,
   nextpas.core.yaml.types,
   nextpas.core.yaml.scanner;
 
@@ -15,43 +16,106 @@ type
     Name: TStringView;
     NodeIdx: UInt32;
   end;
+  PYamlAnchorEntry = ^TYamlAnchorEntry;
 
   TYamlDocument = record
-    Nodes: array of TYamlNode;
+    FAllocator: IAllocator;
+    Nodes: PYamlNode;
     NodeCount: UInt32;
+    NodeCap: UInt32;
     RootIdx: UInt32;
-    Anchors: array of TYamlAnchorEntry;
+    Anchors: PYamlAnchorEntry;
     AnchorCount: UInt32;
+    AnchorCap: UInt32;
     ParseDepth: Int32;
     Error: TYamlError;
     HasError: Boolean;
+    procedure Init(const AAllocator: IAllocator);
+    procedure Done;
   end;
 
 procedure YamlDocInit(var ADoc: TYamlDocument);
+procedure YamlDocInitWith(var ADoc: TYamlDocument; const AAllocator: IAllocator);
 procedure YamlDocParse(var ADoc: TYamlDocument; const AInput: PAnsiChar; const ALen: SizeUInt);
+procedure YamlDocParseWith(var ADoc: TYamlDocument; const AInput: PAnsiChar; const ALen: SizeUInt;
+  const AAllocator: IAllocator);
 procedure YamlDocParseView(var ADoc: TYamlDocument; const AView: TStringView);
+procedure YamlDocParseViewWith(var ADoc: TYamlDocument; const AView: TStringView;
+  const AAllocator: IAllocator);
 
 implementation
+
+uses
+  nextpas.core.mem.default;
 
 const
   INITIAL_CAPACITY = 64;
 
+procedure TYamlDocument.Init(const AAllocator: IAllocator);
+begin
+  if AAllocator = nil then
+    FAllocator := DefaultAllocator
+  else
+    FAllocator := AAllocator;
+  NodeCap := INITIAL_CAPACITY;
+  Nodes := PYamlNode(FAllocator.Allocate(NodeCap * SizeOf(TYamlNode)));
+  NodeCount := 0;
+  RootIdx := 0;
+  AnchorCap := 16;
+  Anchors := PYamlAnchorEntry(FAllocator.Allocate(AnchorCap * SizeOf(TYamlAnchorEntry)));
+  AnchorCount := 0;
+  ParseDepth := 0;
+  Error.Message := TStringView.Empty;
+  Error.Line := 0;
+  Error.Col := 0;
+  Error.Offset := 0;
+  HasError := False;
+end;
+
+procedure TYamlDocument.Done;
+begin
+  if Nodes <> nil then
+  begin
+    FAllocator.Deallocate(Pointer(Nodes));
+    Nodes := nil;
+  end;
+  NodeCap := 0;
+  NodeCount := 0;
+  if Anchors <> nil then
+  begin
+    FAllocator.Deallocate(Pointer(Anchors));
+    Anchors := nil;
+  end;
+  AnchorCap := 0;
+  AnchorCount := 0;
+  ParseDepth := 0;
+  RootIdx := 0;
+  Error.Message := TStringView.Empty;
+  Error.Line := 0;
+  Error.Col := 0;
+  Error.Offset := 0;
+  HasError := False;
+end;
+
 procedure YamlDocInit(var ADoc: TYamlDocument);
 begin
-  SetLength(ADoc.Nodes, INITIAL_CAPACITY);
-  ADoc.NodeCount := 0;
-  ADoc.RootIdx := 0;
-  SetLength(ADoc.Anchors, 16);
-  ADoc.AnchorCount := 0;
-  ADoc.ParseDepth := 0;
-  ADoc.HasError := False;
+  ADoc.Init(DefaultAllocator);
+end;
+
+procedure YamlDocInitWith(var ADoc: TYamlDocument; const AAllocator: IAllocator);
+begin
+  ADoc.Init(AAllocator);
 end;
 
 function AddNode(var ADoc: TYamlDocument): UInt32;
 begin
   Result := ADoc.NodeCount;
-  if ADoc.NodeCount >= UInt32(Length(ADoc.Nodes)) then
-    SetLength(ADoc.Nodes, Length(ADoc.Nodes) * 2);
+  if ADoc.NodeCount >= ADoc.NodeCap then
+  begin
+    ADoc.NodeCap := ADoc.NodeCap * 2;
+    ADoc.Nodes := PYamlNode(ADoc.FAllocator.Reallocate(Pointer(ADoc.Nodes),
+      ADoc.NodeCap * SizeOf(TYamlNode)));
+  end;
   FillChar(ADoc.Nodes[Result], SizeOf(TYamlNode), 0);
   ADoc.Nodes[Result].Next := YAML_NODE_NONE;
   Inc(ADoc.NodeCount);
@@ -59,8 +123,12 @@ end;
 
 procedure RegisterAnchor(var ADoc: TYamlDocument; const AName: TStringView; ANodeIdx: UInt32);
 begin
-  if ADoc.AnchorCount >= UInt32(Length(ADoc.Anchors)) then
-    SetLength(ADoc.Anchors, Length(ADoc.Anchors) * 2);
+  if ADoc.AnchorCount >= ADoc.AnchorCap then
+  begin
+    ADoc.AnchorCap := ADoc.AnchorCap * 2;
+    ADoc.Anchors := PYamlAnchorEntry(ADoc.FAllocator.Reallocate(Pointer(ADoc.Anchors),
+      ADoc.AnchorCap * SizeOf(TYamlAnchorEntry)));
+  end;
   ADoc.Anchors[ADoc.AnchorCount].Name := AName;
   ADoc.Anchors[ADoc.AnchorCount].NodeIdx := ANodeIdx;
   Inc(ADoc.AnchorCount);
@@ -804,12 +872,13 @@ begin
       ACurToken.Line, ACurToken.Col, ACurToken.Offset);
 end;
 
-procedure YamlDocParse(var ADoc: TYamlDocument; const AInput: PAnsiChar; const ALen: SizeUInt);
+procedure YamlDocParseWith(var ADoc: TYamlDocument; const AInput: PAnsiChar; const ALen: SizeUInt;
+  const AAllocator: IAllocator);
 var
   LScanner: TYamlScanner;
   LTok: TYamlToken;
 begin
-  YamlDocInit(ADoc);
+  ADoc.Init(AAllocator);
   if (AInput = nil) or (ALen = 0) then
   begin
     AddNode(ADoc);
@@ -844,9 +913,20 @@ begin
   end;
 end;
 
+procedure YamlDocParse(var ADoc: TYamlDocument; const AInput: PAnsiChar; const ALen: SizeUInt);
+begin
+  YamlDocParseWith(ADoc, AInput, ALen, DefaultAllocator);
+end;
+
 procedure YamlDocParseView(var ADoc: TYamlDocument; const AView: TStringView);
 begin
   YamlDocParse(ADoc, AView.Data, AView.Len);
+end;
+
+procedure YamlDocParseViewWith(var ADoc: TYamlDocument; const AView: TStringView;
+  const AAllocator: IAllocator);
+begin
+  YamlDocParseWith(ADoc, AView.Data, AView.Len, AAllocator);
 end;
 
 end.

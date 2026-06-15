@@ -36,7 +36,7 @@ function YamlParse(const AInput: TStringView): IYamlDocument; overload;
 function TryYamlParse(const AInput: string; out ADoc: IYamlDocument): Boolean;
 
 { Parse with custom allocator. YAML internals use RTL-managed dynamic arrays;
-  the allocator parameter is stored for future deep-memory integration. }
+  the allocator controls parser document storage. }
 function YamlParseWith(const AInput: string; const AAllocator: IAllocator): IYamlDocument; overload;
 function YamlParseWith(const AInput: TStringView; const AAllocator: IAllocator): IYamlDocument; overload;
 
@@ -56,6 +56,7 @@ type
   public
     constructor Create(const AInput: string; const AAllocator: IAllocator);
     constructor CreateFromView(const AView: TStringView; const AAllocator: IAllocator);
+    destructor Destroy; override;
     function Root: TYamlValue;
     function HasError: Boolean;
     function Error: TYamlError;
@@ -69,9 +70,9 @@ begin
   FInput := AInput;
   FAllocator := AAllocator;
   if Length(FInput) > 0 then
-    YamlDocParse(FDoc, @FInput[1], Length(FInput))
+    YamlDocParseWith(FDoc, @FInput[1], Length(FInput), FAllocator)
   else
-    YamlDocParse(FDoc, nil, 0);
+    YamlDocParseWith(FDoc, nil, 0, FAllocator);
 end;
 
 constructor TYamlDocumentImpl.CreateFromView(const AView: TStringView; const AAllocator: IAllocator);
@@ -80,9 +81,15 @@ begin
   FInput := AView.ToString;
   FAllocator := AAllocator;
   if Length(FInput) > 0 then
-    YamlDocParse(FDoc, @FInput[1], Length(FInput))
+    YamlDocParseWith(FDoc, @FInput[1], Length(FInput), FAllocator)
   else
-    YamlDocParse(FDoc, nil, 0);
+    YamlDocParseWith(FDoc, nil, 0, FAllocator);
+end;
+
+destructor TYamlDocumentImpl.Destroy;
+begin
+  FDoc.Done;
+  inherited;
 end;
 
 function TYamlDocumentImpl.Root: TYamlValue;
