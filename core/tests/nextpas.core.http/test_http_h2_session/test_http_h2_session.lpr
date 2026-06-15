@@ -19,6 +19,7 @@ uses
   nextpas.core.http.impl.h2.frame,
   nextpas.core.http.impl.h2.hpack,
   nextpas.core.http.impl.h2.session,
+  nextpas.core.http.impl.h2.stream,
   nextpas.core.http.impl.h2.types,
   nextpas.core.testing;
 
@@ -1293,6 +1294,60 @@ begin
     'HandleData maps DATA stream 0 to connection-level PROTOCOL_ERROR');
 end;
 
+procedure TestStreamMapFindAndRemoveReturnsDetachedStream;
+var
+  LMap: TH2StreamMap;
+  LConnectionFlow: TH2ConnectionFlowControl;
+  LDecoder: THPackDecoder;
+  LFirst: TH2Stream;
+  LSecond: TH2Stream;
+  LRemoved: TH2Stream;
+begin
+  LMap := TH2StreamMap.Create;
+  try
+    LConnectionFlow.Init(H2_DEFAULT_INITIAL_WINDOW_SIZE);
+    LDecoder.Init;
+    LFirst := LMap.FindOrCreate(1, H2_DEFAULT_INITIAL_WINDOW_SIZE,
+      H2_DEFAULT_INITIAL_WINDOW_SIZE, LConnectionFlow, LDecoder);
+    LSecond := LMap.FindOrCreate(3, H2_DEFAULT_INITIAL_WINDOW_SIZE,
+      H2_DEFAULT_INITIAL_WINDOW_SIZE, LConnectionFlow, LDecoder);
+
+    LRemoved := LMap.FindAndRemove(1);
+    Check(LRemoved = LFirst, 'FindAndRemove returns the matched stream');
+    CheckEqual(Int64(1), Int64(LMap.ActiveCount),
+      'FindAndRemove removes exactly one active stream');
+    Check(LMap.Find(1) = nil, 'FindAndRemove detaches removed stream from map');
+    Check(LMap.ItemAt(0) = LSecond, 'FindAndRemove compacts remaining streams');
+    CheckEqual(Int64(1), Int64(LRemoved.StreamID),
+      'FindAndRemove returns a still-usable detached stream');
+    LRemoved.Free;
+  finally
+    LMap.Free;
+  end;
+end;
+
+procedure TestStreamMapFindAndRemoveSourceContract;
+var
+  LSource: string;
+begin
+  LSource := ReadSourceFile(ResolveSourcePath(H2_SESSION_SOURCE_PATH_FROM_TEST,
+    H2_SESSION_SOURCE_PATH_FROM_ROOT));
+  Check(Pos('procedure RemoveByIndex(const AIndex: SizeInt);', LSource) > 0,
+    'TH2StreamMap declares RemoveByIndex');
+  Check(Pos('function FindAndRemove(const AStreamID: UInt32): TH2Stream;', LSource) > 0,
+    'TH2StreamMap declares FindAndRemove');
+  Check(Pos('procedure TH2StreamMap.RemoveByIndex(const AIndex: SizeInt);', LSource) > 0,
+    'TH2StreamMap implements RemoveByIndex');
+  Check(Pos('function TH2StreamMap.FindAndRemove(const AStreamID: UInt32): TH2Stream;', LSource) > 0,
+    'TH2StreamMap implements FindAndRemove');
+  Check(Pos('RemoveByIndex(LIndex);', LSource) > 0,
+    'FindAndRemove reuses RemoveByIndex extraction path');
+  Check(Pos('FStreams.RemoveByIndex(LStreamIndex);', LSource) > 0,
+    'reset-handling paths remove by known index');
+  Check(Pos('FStreams.FindAndRemove(AFrame.Header.StreamID);', LSource) > 0,
+    'RST_STREAM handling uses FindAndRemove');
+end;
+
 procedure TestSendResponseBodyAvoidsIntermediateBufferCopySourceContract;
 var
   LSource: string;
@@ -1543,6 +1598,10 @@ begin
       @TestRunDataOnConnectionStreamSendsGoaway);
     Run('Run DATA on closed stream restores connection window',
       @TestRunDataOnClosedStreamRestoresConnectionWindow);
+    Run('TH2StreamMap FindAndRemove returns detached stream',
+      @TestStreamMapFindAndRemoveReturnsDetachedStream);
+    Run('TH2StreamMap FindAndRemove source contract',
+      @TestStreamMapFindAndRemoveSourceContract);
     Run('HandleData connection stream source contract',
       @TestHandleDataConnectionStreamSourceContract);
     Run('SendResponseBody avoids intermediate buffer copy source contract',

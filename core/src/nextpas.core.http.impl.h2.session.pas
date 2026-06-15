@@ -43,6 +43,7 @@ type
     FStreams: array of TH2Stream;
     FCount: SizeInt;
     function FindIndex(const AStreamID: UInt32): SizeInt;
+    function ExtractByIndex(const AIndex: SizeInt): TH2Stream;
   public
     destructor Destroy; override;
     function Find(const AStreamID: UInt32): TH2Stream;
@@ -50,6 +51,8 @@ type
       const ASendWindowSize: UInt32; const ARecvWindowSize: UInt32;
       var AConnectionFlow: TH2ConnectionFlowControl;
       var ADecoder: THPackDecoder): TH2Stream;
+    procedure RemoveByIndex(const AIndex: SizeInt);
+    function FindAndRemove(const AStreamID: UInt32): TH2Stream;
     procedure Remove(const AStreamID: UInt32);
     function ActiveCount: SizeInt;
     function AnyPending: Boolean;
@@ -364,6 +367,19 @@ begin
   Result := -1;
 end;
 
+function TH2StreamMap.ExtractByIndex(const AIndex: SizeInt): TH2Stream;
+var
+  LI: SizeInt;
+begin
+  if (AIndex < 0) or (AIndex >= FCount) then
+    Exit(nil);
+  Result := FStreams[AIndex];
+  for LI := AIndex to FCount - 2 do
+    FStreams[LI] := FStreams[LI + 1];
+  Dec(FCount);
+  FStreams[FCount] := nil;
+end;
+
 function TH2StreamMap.Find(const AStreamID: UInt32): TH2Stream;
 var
   LIndex: SizeInt;
@@ -392,19 +408,31 @@ begin
   Inc(FCount);
 end;
 
-procedure TH2StreamMap.Remove(const AStreamID: UInt32);
+procedure TH2StreamMap.RemoveByIndex(const AIndex: SizeInt);
+var
+  LStream: TH2Stream;
+begin
+  LStream := ExtractByIndex(AIndex);
+  if LStream <> nil then
+    LStream.Free;
+end;
+
+function TH2StreamMap.FindAndRemove(const AStreamID: UInt32): TH2Stream;
 var
   LIndex: SizeInt;
-  LI: SizeInt;
 begin
   LIndex := FindIndex(AStreamID);
   if LIndex < 0 then
-    Exit;
-  FStreams[LIndex].Free;
-  for LI := LIndex to FCount - 2 do
-    FStreams[LI] := FStreams[LI + 1];
-  Dec(FCount);
-  FStreams[FCount] := nil;
+    Exit(nil);
+  Result := ExtractByIndex(LIndex);
+end;
+
+procedure TH2StreamMap.Remove(const AStreamID: UInt32);
+var
+  LIndex: SizeInt;
+begin
+  LIndex := FindIndex(AStreamID);
+  RemoveByIndex(LIndex);
 end;
 
 function TH2StreamMap.ActiveCount: SizeInt;
@@ -422,7 +450,7 @@ begin
   while FCount > 0 do
   begin
     FStreams[FCount - 1].Reset(AErrorCode);
-    Remove(FStreams[FCount - 1].StreamID);
+    RemoveByIndex(FCount - 1);
   end;
 end;
 
@@ -841,13 +869,14 @@ end;
 function TH2ServerSession.HandleHeaders(const AFrame: TH2Frame): Boolean;
 var
   LStream: TH2Stream;
+  LStreamIndex: SizeInt;
 begin
   if FGoawayReceived or (FState = h2sesShuttingDown) then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_REFUSED_STREAM, False));
   if (AFrame.Header.StreamID and 1) = 0 then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_PROTOCOL_ERROR, True));
-  LStream := FStreams.Find(AFrame.Header.StreamID);
-  if LStream = nil then
+  LStreamIndex := FStreams.FindIndex(AFrame.Header.StreamID);
+  if LStreamIndex < 0 then
   begin
     if AFrame.Header.StreamID <= FLastPeerStreamID then
       Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED, False));
@@ -856,11 +885,15 @@ begin
       FConnectionFlow, FDecoder);
     FLastPeerStreamID := AFrame.Header.StreamID;
   end;
+  if LStreamIndex >= 0 then
+    LStream := FStreams.ItemAt(LStreamIndex)
+  else
+    LStreamIndex := FStreams.ActiveCount - 1;
   LStream.OnHeaders(AFrame.Header.Flags, AFrame.Payload);
   if LStream.ResetReceived then
   begin
     QueueRstStream(LStream.StreamID, LStream.ResetCode);
-    FStreams.Remove(LStream.StreamID);
+    FStreams.RemoveByIndex(LStreamIndex);
     Exit(True);
   end;
   if (AFrame.Header.Flags and H2_FLAG_HEADERS_END_HEADERS) = 0 then
@@ -876,18 +909,20 @@ end;
 function TH2ServerSession.HandleContinuation(const AFrame: TH2Frame): Boolean;
 var
   LStream: TH2Stream;
+  LStreamIndex: SizeInt;
 begin
   if (FPendingContinuationStreamID = 0) or
      (FPendingContinuationStreamID <> AFrame.Header.StreamID) then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_PROTOCOL_ERROR, True));
-  LStream := FStreams.Find(AFrame.Header.StreamID);
-  if LStream = nil then
+  LStreamIndex := FStreams.FindIndex(AFrame.Header.StreamID);
+  if LStreamIndex < 0 then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED, False));
+  LStream := FStreams.ItemAt(LStreamIndex);
   LStream.OnContinuation(AFrame.Header.Flags, AFrame.Payload);
   if LStream.ResetReceived then
   begin
     QueueRstStream(LStream.StreamID, LStream.ResetCode);
-    FStreams.Remove(LStream.StreamID);
+    FStreams.RemoveByIndex(LStreamIndex);
     Exit(True);
   end;
   if (AFrame.Header.Flags and H2_FLAG_CONTINUATION_END_HEADERS) <> 0 then
@@ -942,24 +977,26 @@ end;
 function TH2ServerSession.HandleData(const AFrame: TH2Frame): Boolean;
 var
   LStream: TH2Stream;
+  LStreamIndex: SizeInt;
 begin
   if FPendingContinuationStreamID <> 0 then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_PROTOCOL_ERROR, True));
   if AFrame.Header.StreamID = 0 then
     Exit(RejectFrame(0, H2_ERR_PROTOCOL_ERROR, True));
-  LStream := FStreams.Find(AFrame.Header.StreamID);
-  if LStream = nil then
+  LStreamIndex := FStreams.FindIndex(AFrame.Header.StreamID);
+  if LStreamIndex < 0 then
   begin
     QueueRstStream(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED);
     if not ConsumeClosedStreamDataConnectionWindow(AFrame) then
       Exit(False);
     Exit(False);
   end;
+  LStream := FStreams.ItemAt(LStreamIndex);
   LStream.OnData(AFrame.Header.Flags, AFrame.Payload);
   if LStream.ResetReceived then
   begin
     QueueRstStream(LStream.StreamID, LStream.ResetCode);
-    FStreams.Remove(LStream.StreamID);
+    FStreams.RemoveByIndex(LStreamIndex);
     Exit(True);
   end;
   ApplyPendingWindowUpdates(LStream);
@@ -972,6 +1009,7 @@ function TH2ServerSession.HandleWindowUpdate(const AFrame: TH2Frame): Boolean;
 var
   LIncrement: UInt32;
   LStream: TH2Stream;
+  LStreamIndex: SizeInt;
 begin
   if not H2DecodeWindowUpdate(AFrame.Payload, LIncrement) then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_FRAME_SIZE_ERROR, True));
@@ -985,14 +1023,15 @@ begin
     ExecuteReadyStreams;
     Exit(True);
   end;
-  LStream := FStreams.Find(AFrame.Header.StreamID);
-  if LStream = nil then
+  LStreamIndex := FStreams.FindIndex(AFrame.Header.StreamID);
+  if LStreamIndex < 0 then
     Exit(True);
+  LStream := FStreams.ItemAt(LStreamIndex);
   LStream.OnWindowUpdate(LIncrement);
   if LStream.ResetReceived then
   begin
     QueueRstStream(LStream.StreamID, LStream.ResetCode);
-    FStreams.Remove(LStream.StreamID);
+    FStreams.RemoveByIndex(LStreamIndex);
     Exit(True);
   end;
   if LStream.RequestHandled then
@@ -1009,12 +1048,13 @@ var
 begin
   if not H2DecodeRstStream(AFrame.Payload, LErrorCode) then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_FRAME_SIZE_ERROR, True));
-  LStream := FStreams.Find(AFrame.Header.StreamID);
+  LStream := FStreams.FindAndRemove(AFrame.Header.StreamID);
   if LStream <> nil then
-  begin
-    LStream.OnRstStream(LErrorCode);
-    FStreams.Remove(AFrame.Header.StreamID);
-  end;
+    try
+      LStream.OnRstStream(LErrorCode);
+    finally
+      LStream.Free;
+    end;
   Result := True;
 end;
 
