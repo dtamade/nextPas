@@ -96,7 +96,7 @@ and forced Windows compile gates.
 | P2 Feature facades | Portable APIs for time, sync, thread, files, io, process, mmap, env, random, path, fs | ✅ 14/14 focused-runtime on Windows | expand consumer coverage |
 | P3 Readiness lane | `platform_poller_*`, wake, userdata, empty-interest, net readiness consumers | Linux runtime; Windows source/compile; Wine CI matrix ✅ | real-Windows CI runner |
 | P4 Completion lane | IOCP/proactor ownership and async loop completion consumers | ✅ focused-runtime (AsyncSend/Recv/Accept/Connect + close/timeout drain) | promote to ci-matrix |
-| P5 Tier 2 targets | Windows aarch64, Linux riscv64/arm32, FreeBSD/Android | source/compile fragments | cross-compile and runtime matrix |
+| P5 Tier 2 targets | Windows aarch64, Linux riscv64/arm32, FreeBSD/Android | riscv64: 13-module compile gate + QEMU runtime smoke (18 tests); aarch64/arm32: documented cross-compiler gap | aarch64/arm32 compile+QEMU when ppcrossa64/ppcrossarm available |
 | P6 Benchmarks | Platform performance comparison | deferred | only after contract/runtime truth stabilizes |
 
 ## Evidence rules

@@ -26,6 +26,15 @@ uses
 {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi
+  {$IFDEF NEXTPAS_LINUX}
+  , nextpas.core.platform.linux.base
+  {$ENDIF}
+  {$IFDEF NEXTPAS_MACOS}
+  , nextpas.core.platform.darwin.base
+  {$ENDIF}
+  {$IFDEF NEXTPAS_FREEBSD}
+  , nextpas.core.platform.freebsd.base
+  {$ENDIF}
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
   nextpas.core.platform.windows.base,
@@ -222,6 +231,7 @@ begin
     ERROR_OPERATION_ABORTED:
       Result := ecInterrupted;
     {$ENDIF}
+    {$IFNDEF NEXTPAS_UNIX}
     PLATFORM_ERR_INVALID:
       Result := ecInvalidArgument;
     PLATFORM_ERR_UNSUPPORTED:
@@ -231,6 +241,7 @@ begin
     PLATFORM_ERR_AGAIN,
     PLATFORM_ERR_BUSY:
       Result := ecWouldBlock;
+    {$ENDIF}
   else
     Result := ecInternal;
   end;
