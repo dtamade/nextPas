@@ -44,6 +44,44 @@ archive tag 保留原 HEAD（net 3238673ac / process 11dbec603 / text 9cc13c071�
 
 **遗留**：`codex/core-text` 分支无 worktree（与已删 `codex/core-text-unicode` 不同），下一轮评估归档。
 
+## 🔴 重大发现：main compiler 被 f590dfd43 事故性回退（2026-06-16）
+
+用户指正"光归档不行，必须正确合并不要堆积"后，接手者去 land compiler lane 的 15 个未 land C6-H17
+commit，cherry-pick 到候选分支后 **rebuild 失败**。深挖根因，确认 **main 上存在一处事故性 compiler 回退**：
+
+### 证据链
+
+- compiler lane（codex/compiler）有 15 个 ahead commit（C6-H17 owned-string field/compare/concat），
+  `git cherry` 显示全部未进 main。
+- cherry-pick 后 rebuild 报 50 错（`FNeedsStringOwnership` not found / `Emit` not found）——
+  H17 依赖的 C6-H3..H16 owned-string **基础设施在 main 上不存在**。
+- `git log -S 'FNeedsStringOwnership: Boolean' main` 定位到删除者 = `f590dfd43`
+  **fix(core-system): sync system module files ... after merge conflict resolution**（作者 dtamade，2026-06-14）。
+- 该 commit stat：`compiler/ir/np_hir_builder.pas -804`、`np_hir_llvm_emitter.pas -271`、
+  `np_hir_types.pas -26`、`np_semantic_analyzer.pas -1117`，**共删 2090 行**，只加 128。
+  一个 core-system 的 merge-resolution commit 没有合理理由删 compiler owned-string 机制。
+- 决定性验证（owned-string 契约测试 `tests/hir/test_hir_string_ownership_contract.pas`）：
+  - **main**：编译通过但运行 `hir-string-ownership-contract-failure=missing-borrowed-param-node`，exit 1 ❌
+  - **lane**：`hir-string-ownership-contract-status=pass`，exit 0 ✅
+- main 仍保留全部 8 个 owned-string HIR 测试文件（仍引用 owned intrinsics）→ **留测试删实现 = 事故，非有意废弃**
+  （有意废弃会连测试一并删/改）。
+
+### 结论
+
+- compiler lane（codex/compiler @ c8225c418）是**正确的 compiler 真相**（C6-H 完整 + H17，测试绿）。
+- main 的 compiler 被 `f590dfd43` 在 core-system S5 合并解冲突时误用 core-system 旧快照覆盖，回退了 owned-string 整条线。
+- "正确合并"不是把 15 个 H17 commit 堆上去（它们依赖被删的基础），而是要**把 main 的 compiler 回归到 lane 状态**，
+  同时保留 `f590dfd43` 里合法的 core-system 契约名改动 + main 的 5 个 system-contract 测试 commit。
+
+### 待用户决策 / 上下文
+
+用户即 `f590dfd43` 作者，可能知道当时是否有意。接手者倾向"事故性回退，需恢复 lane compiler"。
+修复方案（候选分支 + 完整 rebuild/compiler-pass/fail/system-contract 验证 + ff-only，全绿才碰 main）待确认。
+
+### 失败候选分支
+
+`landing/compiler-h17-20260616`（只 cherry-pick 15 H17 的错误路线，rebuild 失败）保留为调查记录，修复路线确定后删除。
+
 ## P0.5 Unknown Stale Dirty Discovery（2026-06-15）
 
 ### 现象
