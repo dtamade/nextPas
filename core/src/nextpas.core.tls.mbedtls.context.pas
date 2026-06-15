@@ -17,7 +17,7 @@ unit nextpas.core.tls.mbedtls.context;
 interface
 
 uses
-  SysUtils, Classes, Base64,
+  SysUtils,Base64,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
@@ -175,7 +175,8 @@ type
 implementation
 
 uses
-  nextpas.core.tls.mbedtls.lib,
+  nextpas.core.text.strings,
+    nextpas.core.tls.mbedtls.lib,
   nextpas.core.tls.mbedtls.certificate,
   nextpas.core.tls.mbedtls.session,
   nextpas.core.tls.mbedtls.connection;
@@ -908,7 +909,7 @@ end;
 
 procedure TMbedTLSContext.SetALPNProtocols(const AProtocols: string);
 var
-  LProtos: TStringList;
+  LProtos: TStringArray;
   I, LRet: Integer;
 begin
   FALPNProtocols := AProtocols;
@@ -924,26 +925,21 @@ begin
   if not Assigned(mbedtls_ssl_conf_alpn_protocols) then Exit;
 
   // 解析逗号分隔的协议列表
-  LProtos := TStringList.Create;
   try
-    LProtos.Delimiter := ',';
-    LProtos.StrictDelimiter := True;
-    LProtos.DelimitedText := Trim(AProtocols);
 
-    if LProtos.Count = 0 then Exit;
+    if Length(LProtos) = 0 then Exit;
 
     // 构建 NULL-terminated 数组 (需要额外一个 nil 结尾)
-    SetLength(FALPNProtocolsArray, LProtos.Count + 1);
-    for I := 0 to LProtos.Count - 1 do
+    SetLength(FALPNProtocolsArray, Length(LProtos) + 1);
+    for I := 0 to Length(LProtos) - 1 do
       FALPNProtocolsArray[I] := StrNew(PAnsiChar(AnsiString(Trim(LProtos[I]))));
-    FALPNProtocolsArray[LProtos.Count] := nil;  // NULL 终止
+    FALPNProtocolsArray[Length(LProtos)] := nil;  // NULL 终止
 
     // 配置到 mbedtls
     LRet := mbedtls_ssl_conf_alpn_protocols(FSSLConfig, @FALPNProtocolsArray[0]);
     if LRet <> 0 then
       raise ESSLException.CreateFmt('Failed to set ALPN protocols: 0x%04X', [-LRet]);
   finally
-    LProtos.Free;
   end;
 end;
 

@@ -11,7 +11,7 @@ unit nextpas.core.tls.capability.serializer;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils,
   nextpas.core.tls.base;
 
 { JSON 序列化 }
@@ -33,7 +33,8 @@ function LoadCapabilitiesFromFile(const AFileName: string): TSSLBackendCapabilit
 implementation
 
 uses
-  StrUtils;
+  StrUtils,
+  nextpas.core.text.strings;
 
 { ============================================================================ }
 { JSON 序列化 }
@@ -168,29 +169,22 @@ end;
 
 function DecodeCipherSet(const AValue: string): TSSLCipherSupport;
 var
-  LParts: TStringList;
-  I: Integer;
+  LParts: TStringArray;
+  LPart: string;
   LOrdinal: Integer;
 begin
   Result := [];
   if Trim(AValue) = '' then
     Exit;
 
-  LParts := TStringList.Create;
-  try
-    LParts.StrictDelimiter := True;
-    LParts.Delimiter := ';';
-    LParts.DelimitedText := AValue;
-    for I := 0 to LParts.Count - 1 do
+    LParts := StringsSplit(AValue, ';', True);
+    for LPart in LParts do
     begin
-      LOrdinal := StrToIntDef(Trim(LParts[I]), -1);
+      LOrdinal := StrToIntDef(Trim(LPart), -1);
       if (LOrdinal >= Ord(Low(TSSLCipher))) and
         (LOrdinal <= Ord(High(TSSLCipher))) then
         Include(Result, TSSLCipher(LOrdinal));
     end;
-  finally
-    LParts.Free;
-  end;
 end;
 
 function EncodeHashSet(const ASet: TSSLHashSupport): string;
@@ -211,29 +205,22 @@ end;
 
 function DecodeHashSet(const AValue: string): TSSLHashSupport;
 var
-  LParts: TStringList;
-  I: Integer;
+  LParts: TStringArray;
+  LPart: string;
   LOrdinal: Integer;
 begin
   Result := [];
   if Trim(AValue) = '' then
     Exit;
 
-  LParts := TStringList.Create;
-  try
-    LParts.StrictDelimiter := True;
-    LParts.Delimiter := ';';
-    LParts.DelimitedText := AValue;
-    for I := 0 to LParts.Count - 1 do
+    LParts := StringsSplit(AValue, ';', True);
+    for LPart in LParts do
     begin
-      LOrdinal := StrToIntDef(Trim(LParts[I]), -1);
+      LOrdinal := StrToIntDef(Trim(LPart), -1);
       if (LOrdinal >= Ord(Low(TSSLHash))) and
         (LOrdinal <= Ord(High(TSSLHash))) then
         Include(Result, TSSLHash(LOrdinal));
     end;
-  finally
-    LParts.Free;
-  end;
 end;
 
 function EncodeKeyExchangeSet(const ASet: TSSLKeyExchangeSupport): string;
@@ -254,29 +241,22 @@ end;
 
 function DecodeKeyExchangeSet(const AValue: string): TSSLKeyExchangeSupport;
 var
-  LParts: TStringList;
-  I: Integer;
+  LParts: TStringArray;
+  LPart: string;
   LOrdinal: Integer;
 begin
   Result := [];
   if Trim(AValue) = '' then
     Exit;
 
-  LParts := TStringList.Create;
-  try
-    LParts.StrictDelimiter := True;
-    LParts.Delimiter := ';';
-    LParts.DelimitedText := AValue;
-    for I := 0 to LParts.Count - 1 do
+    LParts := StringsSplit(AValue, ';', True);
+    for LPart in LParts do
     begin
-      LOrdinal := StrToIntDef(Trim(LParts[I]), -1);
+      LOrdinal := StrToIntDef(Trim(LPart), -1);
       if (LOrdinal >= Ord(Low(TSSLKeyExchange))) and
         (LOrdinal <= Ord(High(TSSLKeyExchange))) then
         Include(Result, TSSLKeyExchange(LOrdinal));
     end;
-  finally
-    LParts.Free;
-  end;
 end;
 
 { 6018 抑制范围含嵌套函数 FeatureSupportLevelToStr 等 — FPC 限制，函数级指令无法缩小到单个 case }
@@ -1069,9 +1049,9 @@ end;
 procedure SaveCapabilitiesToFile(const ACaps: TSSLBackendCapabilities;
                                 const AFileName: string;
                                 const AFormat: string = 'json');
-var
-  SL: TStringList;
   Content: string;
+var
+  F: System.TextFile;
 begin
   if SameText(AFormat, 'json') then
     Content := CapabilitiesToJSON(ACaps, True)
@@ -1080,26 +1060,33 @@ begin
   else
     raise Exception.CreateFmt('Unsupported format: %s', [AFormat]);
 
-  SL := TStringList.Create;
+  System.Assign(F, AFileName);
+  System.Rewrite(F);
   try
-    SL.Text := Content;
-    SL.SaveToFile(AFileName);
+    System.Write(F, Content);
   finally
-    SL.Free;
+    System.Close(F);
   end;
 end;
 
 function LoadCapabilitiesFromFile(const AFileName: string): TSSLBackendCapabilities;
-var
-  SL: TStringList;
   Content: string;
   Ext: string;
 begin
-  SL := TStringList.Create;
+var
+  F: System.File;
+  LFileSize: Integer;
+begin
+  System.Assign(F, AFileName);
+  System.Reset(F, 1);
   try
-    SL.LoadFromFile(AFileName);
-    Content := SL.Text;
-
+    LFileSize := System.FileSize(F);
+    SetLength(Content, LFileSize);
+    if LFileSize > 0 then
+      System.BlockRead(F, Content[1], LFileSize);
+  finally
+    System.Close(F);
+  end;
     Ext := LowerCase(ExtractFileExt(AFileName));
     if Ext = '.json' then
       Result := JSONToCapabilities(Content)
@@ -1107,9 +1094,6 @@ begin
       Result := XMLToCapabilities(Content)
     else
       raise Exception.CreateFmt('Unknown file extension: %s', [Ext]);
-  finally
-    SL.Free;
-  end;
 end;
 
 end.

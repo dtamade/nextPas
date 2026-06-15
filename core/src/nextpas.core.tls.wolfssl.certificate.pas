@@ -17,8 +17,7 @@ unit nextpas.core.tls.wolfssl.certificate;
 interface
 
 uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
+  SysUtils,nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.x509,
@@ -147,7 +146,8 @@ type
 implementation
 
 uses
-  Contnrs, DateUtils,
+  nextpas.core.text.strings,
+    Contnrs, DateUtils,
   nextpas.core.time,
   nextpas.core.tls.utils,
   nextpas.core.crypto.hash,
@@ -335,10 +335,8 @@ begin
         AError
       );
     finally
-      LIssuerParser.Free;
     end;
   finally
-    LCertParser.Free;
   end;
 end;
 
@@ -545,7 +543,6 @@ begin
 
     Result := (APublicKeyAlgorithm <> '') or (ASignatureAlgorithm <> '');
   finally
-    LParser.Free;
   end;
 end;
 
@@ -566,7 +563,6 @@ begin
       Exit;
     end;
   finally
-    LParser.Free;
   end;
 
   if not Assigned(wolfSSL_X509_d2i) then
@@ -607,7 +603,6 @@ begin
       LStream.ReadBuffer(LRawBytes[0], Length(LRawBytes));
     end;
   finally
-    LStream.Free;
   end;
 
   if Length(LRawBytes) > 0 then
@@ -731,7 +726,6 @@ begin
     try
       Result := SaveToStream(LStream);
     finally
-      LStream.Free;
     end;
   except
     Result := False;
@@ -814,7 +808,6 @@ begin
       Result.KeyUsage := X509KeyUsageToBitfield(LParser.KeyUsage);
       Result.SubjectAltNames := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
     finally
-      LParser.Free;
     end;
   end
   else
@@ -840,7 +833,6 @@ begin
       if Result <> '' then
         Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -875,7 +867,6 @@ begin
       if Result <> '' then
         Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -908,7 +899,6 @@ begin
       if Result <> '' then
         Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -933,7 +923,6 @@ begin
       Result := 0;
     end;
   finally
-    LParser.Free;
   end;
 end;
 
@@ -954,7 +943,6 @@ begin
       Result := 0;
     end;
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1150,7 +1138,7 @@ var
 
   function MatchWildcard(const APattern, AHostname: string): Boolean;
   var
-    PatternParts, HostParts: TStringList;
+    PatternParts, HostParts: TStringArray;
     j: Integer;
   begin
     Result := False;
@@ -1165,21 +1153,14 @@ var
     // Wildcard match (*.example.com)
     if (Pos('*.', APattern) = 1) then
     begin
-      PatternParts := TStringList.Create;
-      HostParts := TStringList.Create;
       try
-        PatternParts.Delimiter := '.';
-        PatternParts.DelimitedText := APattern;
-
-        HostParts.Delimiter := '.';
-        HostParts.DelimitedText := AHostname;
 
         // Same label count
-        if PatternParts.Count = HostParts.Count then
+        if Length(PatternParts) = Length(HostParts) then
         begin
           Result := True;
           // Compare from 2nd label (skip wildcard)
-          for j := 1 to PatternParts.Count - 1 do
+          for j := 1 to Length(PatternParts) - 1 do
           begin
             if not SameText(PatternParts[j], HostParts[j]) then
             begin
@@ -1189,8 +1170,6 @@ var
           end;
         end;
       finally
-        PatternParts.Free;
-        HostParts.Free;
       end;
     end;
   end;
@@ -1303,7 +1282,6 @@ begin
   try
     Result := LParser.IsCA;
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1367,7 +1345,6 @@ begin
       end;
     end;
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1382,7 +1359,6 @@ begin
   try
     Result := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1397,7 +1373,6 @@ begin
   try
     Result := X509KeyUsageToStrings(LParser.KeyUsage);
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1412,7 +1387,6 @@ begin
   try
     Result := X509ExtKeyUsageToStrings(LParser.ExtKeyUsage);
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1516,7 +1490,6 @@ begin
     Result := LClone;
     LClone := nil;
   finally
-    LClone.Free;
   end;
 end;
 
@@ -1535,7 +1508,6 @@ end;
 destructor TWolfSSLCertificateStore.Destroy;
 begin
   Clear;
-  FCertificates.Free;
   if FX509Store <> nil then
   begin
     if Assigned(wolfSSL_X509_STORE_free) then
@@ -1574,7 +1546,7 @@ begin
 
     if LTarget <> '' then
     begin
-      for I := 0 to FCertificates.Count - 1 do
+      for I := 0 to Length(FCertificates) - 1 do
       begin
         LExisting := FCertificates[I] as ISSLCertificate;
         if NormalizeWolfCertFingerprint(LExisting.GetFingerprintSHA256) = LTarget then
@@ -1612,7 +1584,7 @@ begin
   if LTarget = '' then
     Exit(False);
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LExisting := FCertificates[I] as ISSLCertificate;
     if NormalizeWolfCertFingerprint(LExisting.GetFingerprintSHA256) = LTarget then
@@ -1627,13 +1599,13 @@ end;
 
 function TWolfSSLCertificateStore.GetCount: Integer;
 begin
-  Result := FCertificates.Count;
+  Result := Length(FCertificates);
 end;
 
 function TWolfSSLCertificateStore.GetCertificate(AIndex: Integer): ISSLCertificate;
 begin
   Result := nil;
-  if (AIndex >= 0) and (AIndex < FCertificates.Count) then
+  if (AIndex >= 0) and (AIndex < Length(FCertificates)) then
     Result := FCertificates[AIndex] as ISSLCertificate;
 end;
 
@@ -1652,7 +1624,6 @@ begin
       Result := True;
     end;
   except
-    LCert.Free;
     raise;
   end;
 end;
@@ -1722,7 +1693,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if Pos(LTarget, NormalizeWolfCertText(LCert.GetSubject)) > 0 then
@@ -1744,7 +1715,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if Pos(LTarget, NormalizeWolfCertText(LCert.GetIssuer)) > 0 then
@@ -1766,7 +1737,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if NormalizeWolfCertSerial(LCert.GetSerialNumber) = LTarget then
@@ -1788,7 +1759,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if NormalizeWolfCertFingerprint(LCert.GetFingerprintSHA256) = LTarget then

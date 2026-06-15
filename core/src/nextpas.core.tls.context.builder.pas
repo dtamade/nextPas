@@ -19,8 +19,7 @@ unit nextpas.core.tls.context.builder;
 interface
 
 uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
+  SysUtils,nextpas.core.tls.base,
   nextpas.core.tls.safety,
   nextpas.core.tls.pkcs11.types,
   nextpas.core.tls.pkcs11.pin,
@@ -185,7 +184,8 @@ type
 implementation
 
 uses
-  nextpas.core.tls.factory,
+  nextpas.core.text.strings,
+    nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.freepascal.context.material,
   nextpas.core.tls.base64,
@@ -1700,7 +1700,7 @@ begin
   if AArray = nil then
     Exit;
 
-  for I := 0 to AArray.Count - 1 do
+  for I := 0 to Length(AArray) - 1 do
     Include(AProtocols, TSSLProtocolVersion(AArray.Integers[I]));
 end;
 
@@ -1712,7 +1712,7 @@ begin
   if AArray = nil then
     Exit;
 
-  for I := 0 to AArray.Count - 1 do
+  for I := 0 to Length(AArray) - 1 do
     Include(ACiphers, TSSLCipher(AArray.Integers[I]));
 end;
 
@@ -1724,7 +1724,7 @@ begin
   if AArray = nil then
     Exit;
 
-  for I := 0 to AArray.Count - 1 do
+  for I := 0 to Length(AArray) - 1 do
     Include(AHashes, TSSLHash(AArray.Integers[I]));
 end;
 
@@ -1737,7 +1737,7 @@ begin
   if AArray = nil then
     Exit;
 
-  for I := 0 to AArray.Count - 1 do
+  for I := 0 to Length(AArray) - 1 do
     Include(AKeyExchanges, TSSLKeyExchange(AArray.Integers[I]));
 end;
 
@@ -1749,7 +1749,7 @@ begin
   if AArray = nil then
     Exit;
 
-  for I := 0 to AArray.Count - 1 do
+  for I := 0 to Length(AArray) - 1 do
     Include(AFeatures, TSSLFeature(AArray.Integers[I]));
 end;
 
@@ -1908,7 +1908,6 @@ begin
 
     Result := LRoot.FormatJSON;
   finally
-    LRoot.Free;
   end;
 end;
 
@@ -1953,7 +1952,7 @@ begin
       begin
         LProtocols := Arrays['protocols'];
         FProtocolVersions := [];
-        for I := 0 to LProtocols.Count - 1 do
+        for I := 0 to Length(LProtocols) - 1 do
           if IsValidProtocolVersionOrdinal(LProtocols.Integers[I]) then
             Include(FProtocolVersions, TSSLProtocolVersion(LProtocols.Integers[I]));
       end;
@@ -1963,7 +1962,7 @@ begin
       begin
         LVerify := Arrays['verify_modes'];
         FVerifyMode := [];
-        for I := 0 to LVerify.Count - 1 do
+        for I := 0 to Length(LVerify) - 1 do
           if IsValidVerifyModeOrdinal(LVerify.Integers[I]) then
             Include(FVerifyMode, TSSLVerifyMode(LVerify.Integers[I]));
       end;
@@ -2084,7 +2083,7 @@ begin
       begin
         LOptions := Arrays['options'];
         FOptions := [];
-        for I := 0 to LOptions.Count - 1 do
+        for I := 0 to Length(LOptions) - 1 do
           if IsValidOptionOrdinal(LOptions.Integers[I]) then
             Include(FOptions, TSSLOption(LOptions.Integers[I]));
       end;
@@ -2130,13 +2129,12 @@ begin
       end;
     end;
   finally
-    LRoot.Free;
   end;
 end;
 
 function TSSLContextBuilderImpl.ExportToINI: string;
 var
-  LLines: TStringList;
+  LLines: TStringArray;
   LBackendRequirements: TJSONObject;
   LProto: TSSLProtocolVersion;
   LVerifyMode: TSSLVerifyMode;
@@ -2144,7 +2142,6 @@ var
   LProtocolStr, LVerifyStr, LOptionsStr: string;
   LDecodedBytes: TBytes;
 begin
-  LLines := TStringList.Create;
   try
     LLines.Add('[SSL Context Configuration]');
     LLines.Add('');
@@ -2245,7 +2242,6 @@ begin
         LLines.Add('backend_requirements=' + LBackendRequirements.AsJSON);
         LLines.Add('');
       finally
-        LBackendRequirements.Free;
       end;
     end;
 
@@ -2284,18 +2280,17 @@ begin
 
     Result := LLines.Text;
   finally
-    LLines.Free;
   end;
 end;
 
 function TSSLContextBuilderImpl.ImportFromINI(const AINI: string): ISSLContextBuilder;
 var
-  LLines: TStringList;
+  LLines: TStringArray;
   LBackendRequirementsData: TJSONData;
   I: Integer;
   LLine, LKey, LValue: string;
   LPos: Integer;
-  LParts: TStringList;
+  LParts: TStringArray;
   LImportedRequirements: TSSLRequirements;
   LImportedExplicitBackend: TSSLLibraryType;
   LImportedPKCS11PINMethod: TPKCS11PINMethod;
@@ -2321,13 +2316,10 @@ begin
   LHasAutoSelectBackend := False;
   LHasVerifyModes := False;
   LAutoSelectBackend := False;
-
-  LLines := TStringList.Create;
-  LParts := TStringList.Create;
   try
     LLines.Text := AINI;
 
-    for I := 0 to LLines.Count - 1 do
+    for I := 0 to Length(LLines) - 1 do
     begin
       LLine := Trim(LLines[I]);
 
@@ -2347,7 +2339,7 @@ begin
         begin
           LParts.CommaText := LValue;
           FProtocolVersions := [];
-          for J := 0 to LParts.Count - 1 do
+          for J := 0 to Length(LParts) - 1 do
             if IsValidProtocolVersionOrdinal(StrToIntDef(LParts[J], -1)) then
               Include(FProtocolVersions, TSSLProtocolVersion(StrToIntDef(LParts[J], 0)));
         end
@@ -2355,7 +2347,7 @@ begin
         begin
           LParts.CommaText := LValue;
           FVerifyMode := [];
-          for J := 0 to LParts.Count - 1 do
+          for J := 0 to Length(LParts) - 1 do
             if IsValidVerifyModeOrdinal(StrToIntDef(LParts[J], -1)) then
               Include(FVerifyMode, TSSLVerifyMode(StrToIntDef(LParts[J], 0)));
           LHasVerifyModes := True;
@@ -2471,7 +2463,6 @@ begin
                 if LBackendRequirementsData is TJSONObject then
                   JSONObjectToRequirements(TJSONObject(LBackendRequirementsData), LImportedRequirements);
               finally
-                LBackendRequirementsData.Free;
               end;
             except
               // Ignore malformed serialized requirement payloads.
@@ -2482,7 +2473,7 @@ begin
         begin
           LParts.CommaText := LValue;
           FOptions := [];
-          for J := 0 to LParts.Count - 1 do
+          for J := 0 to Length(LParts) - 1 do
             if IsValidOptionOrdinal(StrToIntDef(LParts[J], -1)) then
               Include(FOptions, TSSLOption(StrToIntDef(LParts[J], 0)));
         end
@@ -2527,8 +2518,6 @@ begin
         );
     end;
   finally
-    LParts.Free;
-    LLines.Free;
   end;
 end;
 
@@ -2697,10 +2686,10 @@ begin
     if LObj.IndexOfName('protocols') >= 0 then
     begin
       LProtocols := LObj.Arrays['protocols'];
-      if LProtocols.Count > 0 then
+      if Length(LProtocols) > 0 then
       begin
         FProtocolVersions := [];
-        for I := 0 to LProtocols.Count - 1 do
+        for I := 0 to Length(LProtocols) - 1 do
           if IsValidProtocolVersionOrdinal(LProtocols.Integers[I]) then
             Include(FProtocolVersions, TSSLProtocolVersion(LProtocols.Integers[I]));
       end;
@@ -2711,7 +2700,7 @@ begin
     begin
       LVerify := LObj.Arrays['verify_modes'];
       FVerifyMode := [];
-      for I := 0 to LVerify.Count - 1 do
+      for I := 0 to Length(LVerify) - 1 do
         if IsValidVerifyModeOrdinal(LVerify.Integers[I]) then
           Include(FVerifyMode, TSSLVerifyMode(LVerify.Integers[I]));
       LHasVerifyModes := True;
@@ -2847,7 +2836,7 @@ begin
     begin
       LOptions := LObj.Arrays['options'];
       FOptions := [];
-      for I := 0 to LOptions.Count - 1 do
+      for I := 0 to Length(LOptions) - 1 do
         Include(FOptions, TSSLOption(LOptions.Integers[I]));
     end;
 
@@ -2881,7 +2870,6 @@ begin
         );
     end;
   finally
-    LData.Free;
   end;
 end;
 
