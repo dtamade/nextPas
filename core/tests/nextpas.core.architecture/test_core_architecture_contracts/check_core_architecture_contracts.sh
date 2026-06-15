@@ -125,8 +125,8 @@ ALLOWED_L0_TOP_MODULES=(
 KNOWN_L0_DEPENDENCY_DEBT=(
   "src/nextpas.core.mem.allocator.mimalloc.pas|nextpas.core.os.env"
   "src/nextpas.core.mem.allocator.mimalloc.pas|nextpas.core.path"
-  "src/nextpas.core.mem.mapped_ring_buffer.pas|nextpas.core.fs.util"
-  "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|nextpas.core.text.conv"
+  "src/nextpas.core.mem.mapped_ring_buffer.pas|nextpas.core.io.mapped.ring_buffer"
+  "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|nextpas.core.io.mapped.ring_buffer.sharded"
   "src/nextpas.core.simd.cpuinfo.lazy.pas|nextpas.core.os.env"
   "src/nextpas.core.system.sysutils.pas|nextpas.core.text.conv"
 )

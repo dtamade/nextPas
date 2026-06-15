@@ -62,7 +62,6 @@ implementation
 
 uses
   SysUtils,
-  nextpas.core.text.conv,
   nextpas.core.platform.files,
   nextpas.core.platform.files.base
 {$IFDEF NEXTPAS_UNIX}
@@ -274,7 +273,7 @@ begin
   LBase := AName;
   if (LBase <> '') and (LBase[1] = '/') then
     Delete(LBase, 1, 1);
-  LBase := StringReplace(LBase, '/', '_', True);
+  LBase := SysUtils.StringReplace(LBase, '/', '_', [rfReplaceAll]);
 
   if (LDir <> '') and (LDir[Length(LDir)] <> '/') then
     LDir := LDir + '/';

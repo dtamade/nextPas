@@ -121,6 +121,16 @@
       "reason": "known mimalloc path helper debt pending platform-owned loader"
     },
     {
+      "path": "src/nextpas.core.mem.mapped_ring_buffer.pas",
+      "unit": "nextpas.core.io.mapped.ring_buffer",
+      "reason": "deprecated mem wrapper intentionally re-exports the io mapped ring buffer owner"
+    },
+    {
+      "path": "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas",
+      "unit": "nextpas.core.io.mapped.ring_buffer.sharded",
+      "reason": "deprecated mem wrapper intentionally re-exports the io sharded mapped ring buffer owner"
+    },
+    {
       "path": "src/nextpas.core.simd.cpuinfo.lazy.pas",
       "unit": "nextpas.core.os.env",
       "reason": "known SIMD CPUInfo environment override debt"
