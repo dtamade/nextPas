@@ -1,6 +1,6 @@
 # nextPas Workmap Takeover Plan
 
-- 状态：P0 已全部完成 + push origin；进入 P1/P2 待用户调度
+- 状态：P0 全部完成；D（landed slice 1: core-text-unicode）已落 main；进入 A（解冻 compiler lane）
 - 日期：2026-06-15
 - 范围：新接手 AI 同事的工作地图、治理债清理、并行 lane 推进顺序
 
