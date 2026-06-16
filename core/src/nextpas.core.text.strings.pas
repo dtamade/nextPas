@@ -85,7 +85,7 @@ function StringsSplit(const AStr: string; ASep: Char; ARemoveEmpty: Boolean = Fa
 implementation
 
 uses
-  nextpas.core.text.conv,
+  nextpas.core.text.utils,
   nextpas.core.mem.utils;
 
 function StringsContains(const AArr: TStringArray; const AValue: string): Boolean;
@@ -363,8 +363,10 @@ begin
     LSepPos := Pos(ASeparator, LLine);
     if LSepPos > 0 then
     begin
-      Result[LCount].Key := Trim(System.Copy(LLine, 1, LSepPos - 1));
-      Result[LCount].Value := Trim(System.Copy(LLine, LSepPos + 1, Length(LLine) - LSepPos));
+      Result[LCount].Key := nextpas.core.text.utils.Trim(
+        System.Copy(LLine, 1, LSepPos - 1));
+      Result[LCount].Value := nextpas.core.text.utils.Trim(
+        System.Copy(LLine, LSepPos + 1, Length(LLine) - LSepPos));
       Inc(LCount);
     end;
   end;
@@ -402,7 +404,7 @@ var i: SizeInt;
 begin
   SetLength(Result, Length(AArr));
   for i := 0 to High(AArr) do
-    Result[i] := Trim(AArr[i]);
+    Result[i] := nextpas.core.text.utils.Trim(AArr[i]);
 end;
 
 function StringsToUpper(const AArr: TStringArray): TStringArray;
@@ -410,7 +412,7 @@ var i: SizeInt;
 begin
   SetLength(Result, Length(AArr));
   for i := 0 to High(AArr) do
-    Result[i] := UpperCase(AArr[i]);
+    Result[i] := nextpas.core.text.utils.UpperCase(AArr[i]);
 end;
 
 function StringsToLower(const AArr: TStringArray): TStringArray;
@@ -418,7 +420,7 @@ var i: SizeInt;
 begin
   SetLength(Result, Length(AArr));
   for i := 0 to High(AArr) do
-    Result[i] := LowerCase(AArr[i]);
+    Result[i] := nextpas.core.text.utils.LowerCase(AArr[i]);
 end;
 
 function StringsRemoveEmpty(const AArr: TStringArray): TStringArray;

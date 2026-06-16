@@ -19,7 +19,8 @@ function GraphemeNext(const AData: PByte; ALen: SizeUInt): TGraphemeResult;
 implementation
 
 uses
-  nextpas.core.text.width;
+  nextpas.core.text.width,
+  nextpas.core.text.unicode.utils;
 
 type
   TGBCategory = (
@@ -31,11 +32,6 @@ type
     gbRegionalIndicator,
     gbEmojiPresentation
   );
-
-  TCodepointRange = record
-    Lo: UInt32;
-    Hi: UInt32;
-  end;
 
 const
   EMOJI_VARIATION_BASE_RANGES: array[0..69] of TCodepointRange = (
@@ -127,26 +123,6 @@ const
     (Lo: $A8F2; Hi: $A8F7),   { Devanagari extended conjunct letters }
     (Lo: $A8FB; Hi: $A8FB)
   );
-
-function RangeContains(const ARanges: array of TCodepointRange;
-  const ACodePoint: UInt32): Boolean;
-var
-  LLo, LHi, LMid: Integer;
-begin
-  LLo := 0;
-  LHi := High(ARanges);
-  while LLo <= LHi do
-  begin
-    LMid := (LLo + LHi) shr 1;
-    if ACodePoint < ARanges[LMid].Lo then
-      LHi := LMid - 1
-    else if ACodePoint > ARanges[LMid].Hi then
-      LLo := LMid + 1
-    else
-      Exit(True);
-  end;
-  Result := False;
-end;
 
 function IsIndicLinker(ACp: UInt32): Boolean; inline;
 begin

@@ -10,6 +10,15 @@ uses
 var
   T: TTestRunner;
 
+procedure CheckStringArrayEqual(const AExpected, AActual: TStringArray; const AName: string);
+var
+  I: SizeInt;
+begin
+  CheckEqual(Int64(Length(AExpected)), Int64(Length(AActual)), AName + ' length');
+  for I := 0 to High(AExpected) do
+    CheckEqual(AExpected[I], AActual[I], AName + '[' + IntToStr(I) + ']');
+end;
+
 procedure TestContains;
 var A: TStringArray;
 begin
@@ -226,6 +235,81 @@ begin
   CheckEqual('z', K[2], 'keys[2]');
 end;
 
+procedure TestStringsTrimAll;
+var
+  A, B: TStringArray;
+begin
+  A := TStringArray.Create('  alpha  ', '', ' beta', 'gamma ');
+  B := StringsTrimAll(A);
+  CheckStringArrayEqual(TStringArray.Create('alpha', '', 'beta', 'gamma'), B, 'trim all');
+end;
+
+procedure TestStringsToUpper;
+var
+  A, B: TStringArray;
+begin
+  A := TStringArray.Create('hello', 'MiXeD', '');
+  B := StringsToUpper(A);
+  CheckStringArrayEqual(TStringArray.Create('HELLO', 'MIXED', ''), B, 'to upper');
+end;
+
+procedure TestStringsToLower;
+var
+  A, B: TStringArray;
+begin
+  A := TStringArray.Create('WORLD', 'MiXeD', '');
+  B := StringsToLower(A);
+  CheckStringArrayEqual(TStringArray.Create('world', 'mixed', ''), B, 'to lower');
+end;
+
+procedure TestStringsRemoveEmpty;
+var
+  A, B: TStringArray;
+begin
+  A := TStringArray.Create('', 'alpha', '', 'beta', '');
+  B := StringsRemoveEmpty(A);
+  CheckStringArrayEqual(TStringArray.Create('alpha', 'beta'), B, 'remove empty');
+end;
+
+procedure TestStringsRepeat;
+var
+  A: TStringArray;
+begin
+  A := StringsRepeat('na', 3);
+  CheckStringArrayEqual(TStringArray.Create('na', 'na', 'na'), A, 'repeat');
+end;
+
+procedure TestStringsChunk;
+var
+  A: TStringArray;
+  B: TStringChunks;
+begin
+  A := TStringArray.Create('a', 'b', 'c', 'd', 'e');
+
+  B := StringsChunk(A, 2);
+  CheckEqual(Int64(3), Int64(Length(B)), 'chunk count');
+  CheckStringArrayEqual(TStringArray.Create('a', 'b'), B[0], 'chunk[0]');
+  CheckStringArrayEqual(TStringArray.Create('c', 'd'), B[1], 'chunk[1]');
+  CheckStringArrayEqual(TStringArray.Create('e'), B[2], 'chunk[2]');
+
+  B := StringsChunk(A, 0);
+  CheckEqual(Int64(0), Int64(Length(B)), 'chunk zero size');
+end;
+
+procedure TestSplitRemoveEmpty;
+var
+  A: TStringArray;
+begin
+  A := StringsSplit(',alpha,,beta,', ',', False);
+  CheckStringArrayEqual(TStringArray.Create('', 'alpha', '', 'beta', ''), A, 'split char keep empty');
+
+  A := StringsSplit(',alpha,,beta,', ',', True);
+  CheckStringArrayEqual(TStringArray.Create('alpha', 'beta'), A, 'split char remove empty');
+
+  A := StringsSplit('', ',', True);
+  CheckEqual(Int64(0), Int64(Length(A)), 'split empty remove empty');
+end;
+
 procedure TestGlobMatch;
 begin
   Check(GlobMatch('*.txt', 'hello.txt'), '*.txt match');
@@ -274,6 +358,13 @@ begin
   T.Run('StringPairsGet', @TestStringPairsGet);
   T.Run('StringPairsContains', @TestStringPairsContains);
   T.Run('StringPairsKeys', @TestStringPairsKeys);
+  T.Run('StringsTrimAll', @TestStringsTrimAll);
+  T.Run('StringsToUpper', @TestStringsToUpper);
+  T.Run('StringsToLower', @TestStringsToLower);
+  T.Run('StringsRemoveEmpty', @TestStringsRemoveEmpty);
+  T.Run('StringsRepeat', @TestStringsRepeat);
+  T.Run('StringsChunk', @TestStringsChunk);
+  T.Run('Split (remove empty)', @TestSplitRemoveEmpty);
   T.Run('GlobMatch', @TestGlobMatch);
   T.Run('StringsGlob', @TestStringsGlob);
   T.Summary;

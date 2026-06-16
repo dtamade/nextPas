@@ -54,7 +54,8 @@ implementation
 
 uses
   nextpas.core.text.char,
-  nextpas.core.text.number;
+  nextpas.core.text.number,
+  nextpas.core.text.utils;
 
 {== Integer/String conversion — uses System.Str/Val ==}
 
@@ -146,13 +147,24 @@ begin
 end;
 
 function TryStrToInt(const AStr: string; out AValue: Int64): Boolean;
-var LCode: Integer; LTrimmed: string;
+var
+  LStart: SizeInt;
+  LStop: SizeInt;
 begin
-  LTrimmed := AStr;
-  while (Length(LTrimmed) > 0) and (LTrimmed[1] <= ' ') do Delete(LTrimmed, 1, 1);
-  while (Length(LTrimmed) > 0) and (LTrimmed[Length(LTrimmed)] <= ' ') do Delete(LTrimmed, Length(LTrimmed), 1);
-  Val(LTrimmed, AValue, LCode);
-  Result := (LCode = 0);
+  LStart := 1;
+  LStop := Length(AStr);
+  while (LStart <= LStop) and (AStr[LStart] <= ' ') do
+    Inc(LStart);
+  while (LStop >= LStart) and (AStr[LStop] <= ' ') do
+    Dec(LStop);
+
+  if LStart > LStop then
+  begin
+    AValue := 0;
+    Exit(False);
+  end;
+
+  Result := ParseInt64(@AStr[LStart], LStop - LStart + 1, AValue);
 end;
 
 function TryStrToInt(const AStr: string; out AValue: Integer): Boolean;
@@ -187,13 +199,24 @@ begin
 end;
 
 function TryStrToFloat(const AStr: string; out AValue: Double): Boolean;
-var LCode: Integer; LTrimmed: string;
+var
+  LStart: SizeInt;
+  LStop: SizeInt;
 begin
-  LTrimmed := AStr;
-  while (Length(LTrimmed) > 0) and (LTrimmed[1] <= ' ') do Delete(LTrimmed, 1, 1);
-  while (Length(LTrimmed) > 0) and (LTrimmed[Length(LTrimmed)] <= ' ') do Delete(LTrimmed, Length(LTrimmed), 1);
-  Val(LTrimmed, AValue, LCode);
-  Result := (LCode = 0);
+  LStart := 1;
+  LStop := Length(AStr);
+  while (LStart <= LStop) and (AStr[LStart] <= ' ') do
+    Inc(LStart);
+  while (LStop >= LStart) and (AStr[LStop] <= ' ') do
+    Dec(LStop);
+
+  if LStart > LStop then
+  begin
+    AValue := 0.0;
+    Exit(False);
+  end;
+
+  Result := ParseDouble(@AStr[LStart], LStop - LStart + 1, AValue);
 end;
 
 function TryStrToFloat(const AStr: string; out AValue: Single): Boolean;
@@ -373,71 +396,33 @@ end;
 {== String manipulation ==}
 
 function LowerCase(const AStr: string): string;
-var LI: Integer;
 begin
-  Result := AStr;
-  for LI := 1 to Length(Result) do
-    if (Result[LI] >= 'A') and (Result[LI] <= 'Z') then
-      Result[LI] := Chr(Ord(Result[LI]) + 32);
+  Result := nextpas.core.text.utils.LowerCase(AStr);
 end;
 
 function UpperCase(const AStr: string): string;
-var LI: Integer;
 begin
-  Result := AStr;
-  for LI := 1 to Length(Result) do
-    if (Result[LI] >= 'a') and (Result[LI] <= 'z') then
-      Result[LI] := Chr(Ord(Result[LI]) - 32);
+  Result := nextpas.core.text.utils.UpperCase(AStr);
 end;
 
 function Trim(const AStr: string): string;
-var LStart, LEnd: Integer;
 begin
-  LStart := 1;
-  LEnd := Length(AStr);
-  while (LStart <= LEnd) and (AStr[LStart] <= ' ') do Inc(LStart);
-  while (LEnd >= LStart) and (AStr[LEnd] <= ' ') do Dec(LEnd);
-  Result := Copy(AStr, LStart, LEnd - LStart + 1);
+  Result := nextpas.core.text.utils.Trim(AStr);
 end;
 
 function TrimLeft(const AStr: string): string;
-var LStart: Integer;
 begin
-  LStart := 1;
-  while (LStart <= Length(AStr)) and (AStr[LStart] <= ' ') do Inc(LStart);
-  Result := Copy(AStr, LStart, MaxInt);
+  Result := nextpas.core.text.utils.TrimLeft(AStr);
 end;
 
 function TrimRight(const AStr: string): string;
-var LEnd: Integer;
 begin
-  LEnd := Length(AStr);
-  while (LEnd >= 1) and (AStr[LEnd] <= ' ') do Dec(LEnd);
-  Result := Copy(AStr, 1, LEnd);
+  Result := nextpas.core.text.utils.TrimRight(AStr);
 end;
 
 function StringReplace(const AStr, AOld, ANew: string; AAll: Boolean): string;
-var LPos, LStart, LOldLen: Integer;
 begin
-  if AOld = '' then Exit(AStr);
-  Result := '';
-  LOldLen := Length(AOld);
-  LStart := 1;
-  repeat
-    LPos := Pos(AOld, AStr, LStart);
-    if LPos = 0 then
-    begin
-      Result := Result + Copy(AStr, LStart, MaxInt);
-      Break;
-    end;
-    Result := Result + Copy(AStr, LStart, LPos - LStart) + ANew;
-    LStart := LPos + LOldLen;
-    if not AAll then
-    begin
-      Result := Result + Copy(AStr, LStart, MaxInt);
-      Break;
-    end;
-  until LStart > Length(AStr);
+  Result := nextpas.core.text.utils.StringReplace(AStr, AOld, ANew, AAll);
 end;
 
 {== Misc ==}

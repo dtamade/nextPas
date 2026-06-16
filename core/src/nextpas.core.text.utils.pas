@@ -9,6 +9,7 @@ function TrimLeft(const S: string): string;
 function TrimRight(const S: string): string;
 function IsEmpty(const S: string): Boolean; inline;
 function IsBlank(const S: string): Boolean;
+function LowerCase(const S: string): string;
 function UpperCase(const S: string): string;
 function PadLeft(const S: string; AWidth: Integer; APadChar: Char = ' '): string;
 function PadRight(const S: string; AWidth: Integer; APadChar: Char = ' '): string;
@@ -21,8 +22,8 @@ function QuotedStr(const S: string): string;
 implementation
 
 uses
-  nextpas.core.text.char,
-  nextpas.core.text.conv;
+  nextpas.core.text.builder,
+  nextpas.core.text.char;
 
 function Trim(const S: string): string;
 var
@@ -68,6 +69,15 @@ begin
   Result := True;
 end;
 
+function LowerCase(const S: string): string;
+var
+  I: SizeInt;
+begin
+  SetLength(Result, Length(S));
+  for I := 1 to Length(S) do
+    Result[I] := Chr(ToLower(Byte(S[I])));
+end;
+
 function UpperCase(const S: string): string;
 var
   I: SizeInt;
@@ -84,7 +94,7 @@ begin
   LPadLen := AWidth - Length(S);
   if LPadLen <= 0 then
     Exit(S);
-  Result := TextOfChar(APadChar, LPadLen) + S;
+  Result := StringOfChar(APadChar, LPadLen) + S;
 end;
 
 function PadRight(const S: string; AWidth: Integer; APadChar: Char): string;
@@ -94,7 +104,7 @@ begin
   LPadLen := AWidth - Length(S);
   if LPadLen <= 0 then
     Exit(S);
-  Result := S + TextOfChar(APadChar, LPadLen);
+  Result := S + StringOfChar(APadChar, LPadLen);
 end;
 
 function RepeatString(const S: string; ACount: Integer): string;
@@ -120,11 +130,12 @@ end;
 
 function StrToIntDef(const S: string; ADefault: Int64): Int64;
 var
-  V: Int64;
+  LCode: Integer;
+  LTrimmed: string;
 begin
-  if TryStrToInt(S, V) then
-    Result := V
-  else
+  LTrimmed := Trim(S);
+  Val(LTrimmed, Result, LCode);
+  if LCode <> 0 then
     Result := ADefault;
 end;
 
@@ -135,25 +146,42 @@ end;
 
 function StringReplace(const S, OldPattern, NewPattern: string; AReplaceAll: Boolean = True): string;
 var
+  LBuilder: TStringBuilder;
   P, Start: SizeInt;
+  LReserve: SizeUInt;
 begin
-  Result := '';
+  if OldPattern = '' then
+    Exit(S);
+
   Start := 1;
-  repeat
-    P := Pos(OldPattern, S, Start);
-    if P = 0 then
-    begin
-      Result := Result + Copy(S, Start, Length(S) - Start + 1);
-      Break;
-    end;
-    Result := Result + Copy(S, Start, P - Start) + NewPattern;
-    Start := P + Length(OldPattern);
-    if not AReplaceAll then
-    begin
-      Result := Result + Copy(S, Start, Length(S) - Start + 1);
-      Break;
-    end;
-  until False;
+  LReserve := SizeUInt(Length(S));
+  if Length(NewPattern) > Length(OldPattern) then
+    Inc(LReserve, SizeUInt(Length(NewPattern) - Length(OldPattern)));
+  LBuilder.Init(LReserve);
+  try
+    repeat
+      P := Pos(OldPattern, S, Start);
+      if P = 0 then
+      begin
+        if Start <= Length(S) then
+          LBuilder.AppendBytes(@S[Start], Length(S) - Start + 1);
+        Break;
+      end;
+      if P > Start then
+        LBuilder.AppendBytes(@S[Start], P - Start);
+      LBuilder.AppendStr(NewPattern);
+      Start := P + Length(OldPattern);
+      if not AReplaceAll then
+      begin
+        if Start <= Length(S) then
+          LBuilder.AppendBytes(@S[Start], Length(S) - Start + 1);
+        Break;
+      end;
+    until False;
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
 end;
 
 function QuotedStr(const S: string): string;

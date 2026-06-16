@@ -27,11 +27,12 @@ unit nextpas.core.text.width;
 
 interface
 
+uses
+  nextpas.core.text.unicode.utils;
+
 type
   { 码点区间 [Lo, Hi]，用于二分查找宽度表 }
-  TCodepointRange = record
-    Lo, Hi: UInt32;
-  end;
+  TCodepointRange = nextpas.core.text.unicode.utils.TCodepointRange;
 
 {**
  * @desc 返回单个 Unicode 码点的终端列宽。
@@ -193,26 +194,6 @@ const
     (Lo: $E0020; Hi: $E007F),  { Tags }
     (Lo: $E0100; Hi: $E01EF)   { Variation Selectors Supplement }
   );
-
-function RangeContains(const ARanges: array of TCodepointRange;
-  const ACodePoint: UInt32): Boolean;
-var
-  LLo, LHi, LMid: Integer;
-begin
-  LLo := 0;
-  LHi := High(ARanges);
-  while LLo <= LHi do
-  begin
-    LMid := (LLo + LHi) shr 1;
-    if ACodePoint < ARanges[LMid].Lo then
-      LHi := LMid - 1
-    else if ACodePoint > ARanges[LMid].Hi then
-      LLo := LMid + 1
-    else
-      Exit(True);
-  end;
-  Result := False;
-end;
 
 function GraphemeWidthFrom(const AData: PByte; const ALen, AStart: SizeUInt): SizeUInt;
 var

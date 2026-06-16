@@ -21,9 +21,6 @@ function IsNumber(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsPunctuation(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsSymbol(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsSeparator(const ACp: TUnicodeCodepoint): Boolean; inline;
-function CodepointToLower(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
-function CodepointToUpper(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
-function CodepointToTitle(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
 
 implementation
 
@@ -112,35 +109,6 @@ end;
 function ContainsRange2(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange2): Boolean;
 begin
   Result := FindRange2(ACp, ARanges) >= 0;
-end;
-
-function ApplyDelta(const ACp: TUnicodeCodepoint; const ADelta: Int32): TUnicodeCodepoint; inline;
-begin
-  Result := TUnicodeCodepoint(Int64(ACp) + ADelta);
-end;
-
-function ApplySimpleMap(const ACp: TUnicodeCodepoint; const ABmpRanges: array of TCodepointRange2;
-  const ASmpRanges: array of TCodepointRange2): TUnicodeCodepoint;
-var
-  LIdx: Int32;
-begin
-  if ACp > UNICODE_MAX_CODEPOINT then
-    Exit(ACp);
-
-  if ACp <= $FFFF then
-  begin
-    LIdx := FindRange2(ACp, ABmpRanges);
-    if LIdx >= 0 then
-      Exit(ApplyDelta(ACp, ABmpRanges[LIdx].Delta));
-  end
-  else
-  begin
-    LIdx := FindRange2(ACp, ASmpRanges);
-    if LIdx >= 0 then
-      Exit(ApplyDelta(ACp, ASmpRanges[LIdx].Delta));
-  end;
-
-  Result := ACp;
 end;
 
 function HasBinaryProperty(const ACp: TUnicodeCodepoint; const AProperty: TBinaryProperty): Boolean;
@@ -284,27 +252,6 @@ end;
 function IsSeparator(const ACp: TUnicodeCodepoint): Boolean;
 begin
   Result := GetGeneralCategory(ACp) in SEPARATOR_CATEGORIES;
-end;
-
-function CodepointToLower(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
-begin
-  if ACp < 128 then
-    Exit(nextpas.core.text.char.ToLower(Byte(ACp)));
-  Result := ApplySimpleMap(ACp, BMP_LOWER_DELTA, SMP_LOWER_DELTA);
-end;
-
-function CodepointToUpper(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
-begin
-  if ACp < 128 then
-    Exit(nextpas.core.text.char.ToUpper(Byte(ACp)));
-  Result := ApplySimpleMap(ACp, BMP_UPPER_DELTA, SMP_UPPER_DELTA);
-end;
-
-function CodepointToTitle(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
-begin
-  if ACp < 128 then
-    Exit(nextpas.core.text.char.ToUpper(Byte(ACp)));
-  Result := ApplySimpleMap(ACp, BMP_TITLE_DELTA, SMP_TITLE_DELTA);
 end;
 
 end.

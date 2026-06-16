@@ -17,6 +17,9 @@ function IsNormalizedNFC(const s: string): Boolean;
 
 implementation
 
+uses
+  nextpas.core.text.unicode.utils;
+
 {$I nextpas.core.text.unicode.normalize.inc}
 
 const
@@ -44,47 +47,6 @@ type
     function ItemAt(const AIndex: SizeInt): TUnicodeCodepoint;
     property Count: SizeInt read FCount;
   end;
-
-function IsAsciiString(const AValue: string): Boolean;
-var
-  LIdx: SizeInt;
-begin
-  for LIdx := 1 to Length(AValue) do
-    if Ord(AValue[LIdx]) > $7F then
-      Exit(False);
-  Result := True;
-end;
-
-procedure EnsureOutputCapacity(var AValue: string; const ARequired: SizeInt);
-var
-  LCapacity: SizeInt;
-begin
-  if Length(AValue) >= ARequired then
-    Exit;
-
-  LCapacity := Length(AValue);
-  if LCapacity < 32 then
-    LCapacity := 32;
-  while LCapacity < ARequired do
-    LCapacity := LCapacity * 2;
-  SetLength(AValue, LCapacity);
-end;
-
-procedure AppendUtf8Codepoint(var ADst: string; var AUsed: SizeInt; const ACp: TUnicodeCodepoint);
-var
-  LBuf: array[0..3] of Byte;
-  LLen: Byte;
-  LIdx: Byte;
-begin
-  LLen := UTF8Encode(ACp, @LBuf[0]);
-  if LLen = 0 then
-    LLen := UTF8Encode($FFFD, @LBuf[0]);
-
-  EnsureOutputCapacity(ADst, AUsed + LLen);
-  for LIdx := 0 to LLen - 1 do
-    ADst[AUsed + LIdx + 1] := AnsiChar(LBuf[LIdx]);
-  Inc(AUsed, LLen);
-end;
 
 function IsHangulSyllable(const ACp: TUnicodeCodepoint): Boolean; inline;
 begin
