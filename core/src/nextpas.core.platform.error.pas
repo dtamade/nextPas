@@ -26,6 +26,7 @@ procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
 implementation
 
 uses
+{$IFNDEF NEXTPAS_UNIX}
 {$IFDEF NEXTPAS_LINUX}
   nextpas.core.platform.linux.base,
 {$ENDIF}
@@ -34,6 +35,7 @@ uses
 {$ENDIF}
 {$IFDEF NEXTPAS_FREEBSD}
   nextpas.core.platform.freebsd.base,
+{$ENDIF}
 {$ENDIF}
 {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.base,
