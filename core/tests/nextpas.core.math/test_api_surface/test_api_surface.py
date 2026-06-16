@@ -267,6 +267,10 @@ ROOT_FACADE_FORWARD_TARGETS = {
     "easeinbounce": "easing",
     "easeoutbounce": "easing",
     "easeinoutbounce": "easing",
+    "vec3fextend": "vec",
+    "vec4ftruncate": "vec",
+    "vec3dextend": "vec",
+    "vec4dtruncate": "vec",
 }
 REQUIRED_HOST_GATE_RESIDUAL_TRUTH = (
     (
@@ -1410,15 +1414,9 @@ MATH_IMPL_SIMD_ALLOWED_PUBLIC_ROUTINES = {
         "tvec4f",
     ),
     (
-        "simdvec4fmulcomponents",
+        "simdvec4fcomponentmul",
         "function",
         (("const", "tvec4f"), ("const", "tvec4f")),
-        "tvec4f",
-    ),
-    (
-        "simdvec4fscale",
-        "function",
-        (("const", "tvec4f"), ("const", "single")),
         "tvec4f",
     ),
     (
@@ -1434,6 +1432,30 @@ MATH_IMPL_SIMD_ALLOWED_PUBLIC_ROUTINES = {
         "single",
     ),
     (
+        "simdvec4fnormalize",
+        "function",
+        (("const", "tvec4f"),),
+        "tvec4f",
+    ),
+    (
+        "simdvec4fabs",
+        "function",
+        (("const", "tvec4f"),),
+        "tvec4f",
+    ),
+    (
+        "simdvec4fmax",
+        "function",
+        (("const", "tvec4f"), ("const", "tvec4f")),
+        "tvec4f",
+    ),
+    (
+        "simdvec4fmin",
+        "function",
+        (("const", "tvec4f"), ("const", "tvec4f")),
+        "tvec4f",
+    ),
+    (
         "simdvec3fdot",
         "function",
         (("const", "tvec3f"), ("const", "tvec3f")),
@@ -1446,16 +1468,16 @@ MATH_IMPL_SIMD_ALLOWED_PUBLIC_ROUTINES = {
         "tvec3f",
     ),
     (
-        "simdmat4fmulvec4f",
+        "simdvec3fnormalize",
         "function",
-        (("const", "tmat4f"), ("const", "tvec4f")),
-        "tvec4f",
+        (("const", "tvec3f"),),
+        "tvec3f",
     ),
     (
-        "simdquatfrotate",
+        "simdmat4fmul",
         "function",
-        (("const", "tquatf"), ("const", "tvec3f")),
-        "tvec3f",
+        (("const", "tmat4f"), ("const", "tmat4f")),
+        "tmat4f",
     ),
 }
 MATH_IMPL_SIMD_PUBLIC_BACKEND_TYPE_RE = re.compile(
@@ -4995,7 +5017,7 @@ def run_math_impl_simd_public_seam_self_tests() -> None:
         rules = {finding.rule for finding in findings}
         expected_rules = {
             "math-impl-simd-public-simd-interface-use:nextpas.core.simd",
-            "math-impl-simd-unplanned-public-routine:SimdVec4fNormalize",
+            "math-impl-simd-unplanned-public-routine:SimdRawAdd",
             "math-impl-simd-public-simd-type-leak",
         }
         if not expected_rules.issubset(rules):
@@ -5016,13 +5038,16 @@ def run_math_impl_simd_public_seam_self_tests() -> None:
             "function SimdVec4fAdd(const AA, AB: TVec4f): TVec4f;\n"
             "function SimdVec4fSub(const AA, AB: TVec4f): TVec4f;\n"
             "function SimdVec4fComponentMul(const AA, AB: TVec4f): TVec4f;\n"
-            "function SimdVec4fScale(const AValue: TVec4f; const AScalar: Single): TVec4f;\n"
             "function SimdVec4fDot(const AA, AB: TVec4f): Single;\n"
             "function SimdVec4fLength(const AValue: TVec4f): Single;\n"
+            "function SimdVec4fNormalize(const AValue: TVec4f): TVec4f;\n"
+            "function SimdVec4fAbs(const AValue: TVec4f): TVec4f;\n"
+            "function SimdVec4fMax(const AA, AB: TVec4f): TVec4f;\n"
+            "function SimdVec4fMin(const AA, AB: TVec4f): TVec4f;\n"
             "function SimdVec3fDot(const AA, AB: TVec3f): Single;\n"
             "function SimdVec3fCross(const AA, AB: TVec3f): TVec3f;\n"
-            "function SimdMat4fMulVec4f(const AMatrix: TMat4f; const AVector: TVec4f): TVec4f;\n"
-            "function SimdQuatfRotate(const AQuat: TQuatf; const AVector: TVec3f): TVec3f;\n"
+            "function SimdVec3fNormalize(const AValue: TVec3f): TVec3f;\n"
+            "function SimdMat4fMul(const AA, AB: TMat4f): TMat4f;\n"
             "implementation\n"
             "end.\n",
             encoding="utf-8",
