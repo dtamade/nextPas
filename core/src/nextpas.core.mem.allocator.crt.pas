@@ -1,4 +1,4 @@
-unit nextpas.core.mem.allocator.crt_allocator;
+unit nextpas.core.mem.allocator.crt;
 
 {$I nextpas.core.settings.inc}
 

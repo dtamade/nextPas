@@ -16,20 +16,20 @@ interface
 
 uses
   nextpas.core.mem.allocator.base,
-  nextpas.core.mem.allocator.rtl_allocator,
-  nextpas.core.mem.allocator.callback_allocator;
+  nextpas.core.mem.allocator.rtl,
+  nextpas.core.mem.allocator.callback;
 
 type
   IAllocator = nextpas.core.mem.allocator.base.IAllocator;
   TAllocator = nextpas.core.mem.allocator.base.TAllocator;
 
-  TGetMemCallback = nextpas.core.mem.allocator.callback_allocator.TGetMemCallback;
-  TAllocMemCallback = nextpas.core.mem.allocator.callback_allocator.TAllocMemCallback;
-  TReallocMemCallback = nextpas.core.mem.allocator.callback_allocator.TReallocMemCallback;
-  TFreeMemCallback = nextpas.core.mem.allocator.callback_allocator.TFreeMemCallback;
+  TGetMemCallback = nextpas.core.mem.allocator.callback.TGetMemCallback;
+  TAllocMemCallback = nextpas.core.mem.allocator.callback.TAllocMemCallback;
+  TReallocMemCallback = nextpas.core.mem.allocator.callback.TReallocMemCallback;
+  TFreeMemCallback = nextpas.core.mem.allocator.callback.TFreeMemCallback;
 
-  TRtlAllocator = nextpas.core.mem.allocator.rtl_allocator.TRtlAllocator;
-  TCallbackAllocator = nextpas.core.mem.allocator.callback_allocator.TCallbackAllocator;
+  TRtlAllocator = nextpas.core.mem.allocator.rtl.TRtlAllocator;
+  TCallbackAllocator = nextpas.core.mem.allocator.callback.TCallbackAllocator;
 
 function GetRtlAllocator: IAllocator;
 function CreateCallbackAllocator(aGetMem: TGetMemCallback;
@@ -41,13 +41,13 @@ implementation
 
 function GetRtlAllocator: IAllocator;
 begin
-  Result := nextpas.core.mem.allocator.rtl_allocator.GetRtlAllocator;
+  Result := nextpas.core.mem.allocator.rtl.GetRtlAllocator;
 end;
 
 function CreateCallbackAllocator(aGetMem: TGetMemCallback;
   aAllocMem: TAllocMemCallback; aReallocMem: TReallocMemCallback; aFreeMem: TFreeMemCallback): TCallbackAllocator;
 begin
-  Result := nextpas.core.mem.allocator.callback_allocator.CreateCallbackAllocator(aGetMem, aAllocMem, aReallocMem, aFreeMem);
+  Result := nextpas.core.mem.allocator.callback.CreateCallbackAllocator(aGetMem, aAllocMem, aReallocMem, aFreeMem);
 end;
 
 end.

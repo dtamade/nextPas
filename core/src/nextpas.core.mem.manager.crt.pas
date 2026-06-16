@@ -30,7 +30,7 @@ implementation
 
 {$IFDEF NEXTPAS_CORE_CRT_ALLOCATOR}
 uses
-  nextpas.core.mem.allocator.crt_allocator,
+  nextpas.core.mem.allocator.crt,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.mutex;
 

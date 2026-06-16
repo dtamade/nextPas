@@ -1,4 +1,4 @@
-unit nextpas.core.mem.allocator.rtl_allocator;
+unit nextpas.core.mem.allocator.rtl;
 
 {$I nextpas.core.settings.inc}
 
