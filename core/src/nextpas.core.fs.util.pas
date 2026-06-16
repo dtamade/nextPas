@@ -65,7 +65,10 @@ end;
 function FsReadFile(const APath: string): TBytes;
 var
   LSize: Int64;
+  LRead: PtrUInt;
   LResult: Int32;
+  LGrowData: Pointer;
+  LGrowLen: PtrUInt;
 begin
   LResult := platform_fs_file_size(PAnsiChar(APath), LSize);
   if LResult <> 0 then
@@ -76,8 +79,38 @@ begin
     Exit;
   end;
   SetLength(Result, LSize);
+  LRead := 0;
   LResult := platform_fs_read_file_into(PAnsiChar(APath),
-    @Result[0], PtrUInt(LSize));
+    @Result[0], PtrUInt(LSize), LRead);
+  if LResult = 0 then
+  begin
+    if LRead < PtrUInt(LSize) then
+      SetLength(Result, LRead);
+    Exit;
+  end;
+  if LResult = PLATFORM_FS_SHORT_READ_ERROR then
+  begin
+    if LRead < PtrUInt(LSize) then
+    begin
+      SetLength(Result, LRead);
+      Exit;
+    end;
+    LGrowData := nil;
+    LGrowLen := 0;
+    LResult := platform_fs_read_file(PAnsiChar(APath), LGrowData, LGrowLen);
+    try
+      if LResult = 0 then
+      begin
+        SetLength(Result, LGrowLen);
+        if LGrowLen > 0 then
+          Move(LGrowData^, Result[0], LGrowLen);
+        Exit;
+      end;
+    finally
+      if LGrowData <> nil then
+        platform_fs_free_buf(LGrowData);
+    end;
+  end;
   if LResult <> 0 then
     RaiseFsError(LResult, 'read file', APath);
 end;

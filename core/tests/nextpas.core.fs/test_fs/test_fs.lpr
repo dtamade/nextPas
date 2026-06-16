@@ -975,6 +975,31 @@ begin
     'FsFromPlatformHandle documents owned handle transfer');
 end;
 
+procedure TestFsReadFileUsesReadIntoContract;
+var
+  LSource, LImpl, LBody: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.util.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'fs.util read-file contract has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+  LBody := ExtractFunctionBody(LImpl,
+    'function FsReadFile(const APath: string): TBytes;',
+    'procedure FsWriteFile');
+
+  CheckContains(LBody, 'platform_fs_file_size(PAnsiChar(APath), LSize)',
+    'FsReadFile stats file size before allocating');
+  CheckContains(LBody, 'SetLength(Result, LSize)',
+    'FsReadFile preallocates the TBytes result');
+  CheckContains(LBody, 'platform_fs_read_file_into(PAnsiChar(APath),',
+    'FsReadFile reads directly into caller-owned TBytes storage');
+  CheckContains(LBody, 'if LRead < PtrUInt(LSize) then',
+    'FsReadFile trims the result when file shrinks after stat');
+  CheckContains(LBody, 'SetLength(Result, LRead)',
+    'FsReadFile crops the result to actual bytes read');
+end;
+
 procedure TestFsCwdRoundTrip;
 var
   LOldCwd, LNewCwd: string;
@@ -1378,6 +1403,8 @@ begin
     T.Run('TempFile in dir', @TestTempFileInDir);
     T.Run('TempFile system dir typed handle contract',
       @TestTempFileSystemDirUsesTypedHandleContract);
+    T.Run('FsReadFile uses read_into contract',
+      @TestFsReadFileUsesReadIntoContract);
     T.Run('FsGetCwd/FsSetCwd roundtrip', @TestFsCwdRoundTrip);
     T.Run('FsSetCwd invalid path raises mapped fs error',
       @TestFsSetCwdInvalidPathRaisesNotFound);
