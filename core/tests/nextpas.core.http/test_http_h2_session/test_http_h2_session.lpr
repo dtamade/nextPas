@@ -271,6 +271,23 @@ begin
   Result := False;
 end;
 
+function FindSettingsValue(const APayload: AnsiString; const AIdentifier: UInt16;
+  out AValue: UInt32): Boolean;
+var
+  LEntries: TH2SettingEntries;
+  LI: SizeInt;
+begin
+  AValue := 0;
+  Check(H2DecodeSettingsPayload(APayload, LEntries), 'SETTINGS payload decodes');
+  for LI := 0 to High(LEntries) do
+    if LEntries[LI].Identifier = AIdentifier then
+    begin
+      AValue := LEntries[LI].Value;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
 function HasFrameType(const AFrames: array of TH2Frame; const ACount: SizeInt;
   const AFrameType: Byte): Boolean;
 var
@@ -653,6 +670,56 @@ begin
   end;
 end;
 
+procedure TestRunHandshakeAdvertisesMaxHeaderListSizeSetting;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LOptions: TH2ServerTransportOptions;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LSettingValue: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, '');
+    LOptions := TH2ServerTransportOptions.Default;
+    LOptions.MaxHeaderListSize := 512;
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/settings'));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler, LOptions);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      CheckEqual(Int64(H2_FRAME_SETTINGS), Int64(LFrames[0].Header.FrameType),
+        'server handshake begins with SETTINGS');
+      Check(FindSettingsValue(LFrames[0].Payload, H2_SETTINGS_MAX_HEADER_LIST_SIZE,
+        LSettingValue), 'server SETTINGS advertises MAX_HEADER_LIST_SIZE');
+      CheckEqual(Int64(512), Int64(LSettingValue),
+        'server SETTINGS uses configured MAX_HEADER_LIST_SIZE');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
 procedure CheckMalformedRequestResetsStream(
   const AHeaders: array of THPackHeader; const AMessage: string);
 var
@@ -900,6 +967,59 @@ begin
         'oversize H2 request restores stream receive window');
       CheckEqual(Int64(H2_FRAME_WINDOW_UPDATE), Int64(LFrames[4].Header.FrameType),
         'oversize H2 request restores connection receive window');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunHeadersOverMaxHeaderListSizeReturns431WithoutHandler;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LOptions: TH2ServerTransportOptions;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LOptions := TH2ServerTransportOptions.Default;
+    LOptions.MaxHeaderListSize := 128;
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/too-many-headers'));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler, LOptions);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+
+      CheckEqual(Int64(0), Int64(LHandler.CallCount),
+        'oversize H2 request headers do not reach handler');
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      CheckEqual(Int64(H2_FRAME_HEADERS), Int64(LFrames[2].Header.FrameType),
+        'oversize H2 request headers respond with HEADERS');
+      CheckEqual('431', ExtractStatusHeader(LFrames[2].Payload),
+        'oversize H2 request headers respond with 431 status');
+      Check((LFrames[2].Header.Flags and H2_FLAG_HEADERS_END_STREAM) <> 0,
+        'oversize H2 request headers end stream in 431 response');
+      Check(not FindRstStreamError(LFrames, LFrameCount, 1, LErrorCode),
+        'oversize H2 request headers do not emit RST_STREAM');
     finally
       LConnRef := nil;
       LStream := nil;
@@ -1570,6 +1690,8 @@ begin
       @TestInitialSettingsUsesConnectionStream);
     Run('Run handshake and simple request response',
       @TestRunHandshakeAndSimpleRequestResponse);
+    Run('Run handshake advertises MAX_HEADER_LIST_SIZE',
+      @TestRunHandshakeAdvertisesMaxHeaderListSizeSetting);
     Run('Run missing :path pseudo header resets stream',
       @TestRunMissingPathPseudoHeaderResetsStream);
     Run('Run missing :authority and host resets stream',
@@ -1586,6 +1708,8 @@ begin
       @TestRunDataEndStreamTriggersHandlerAndFlowControlUpdate);
     Run('Run DATA over MaxBodySize returns 413 without handler',
       @TestRunDataOverMaxBodySizeReturns413WithoutHandler);
+    Run('Run headers over MaxHeaderListSize returns 431 without handler',
+      @TestRunHeadersOverMaxHeaderListSizeReturns431WithoutHandler);
     Run('Run PING gets ACKed', @TestRunPingGetsAcked);
     Run('Run RST_STREAM cancels pending request',
       @TestRunRstStreamCancelsPendingRequest);

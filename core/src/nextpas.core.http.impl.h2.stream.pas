@@ -18,6 +18,14 @@ uses
   nextpas.core.http.impl.h2.types;
 
 type
+  TH2HeaderFinalizeResult = (
+    h2hfrNone,
+    h2hfrOk,
+    h2hfrCompressionError,
+    h2hfrProtocolError,
+    h2hfrHeaderListTooLarge
+  );
+
   IH2BodyReader = interface(IReader)
     ['{A1B2C3D4-E5F6-7890-ABCD-500000020001}']
     function GetStreamID: UInt32;
@@ -49,9 +57,11 @@ type
     FPendingResponseBody: IStream;
     FConnectionFlow: ^TH2ConnectionFlowControl;
     FDecoder: ^THPackDecoder;
+    FMaxHeaderListSize: UInt32;
+    FLastHeaderFinalizeResult: TH2HeaderFinalizeResult;
     procedure AppendHeaderFragment(const AFragment: AnsiString);
     procedure ClearPendingHeaderBlock;
-    procedure FinalizeHeaders;
+    function FinalizeHeaders: TH2HeaderFinalizeResult;
     procedure AppendBodyData(const APayload: AnsiString);
     procedure ConsumeBodyBytes(const ABytes: UInt32);
     procedure ApplyRemoteOpenState;
@@ -69,7 +79,8 @@ type
     constructor Create(const AStreamID: UInt32;
       const ASendWindowSize: UInt32; const ARecvWindowSize: UInt32;
       var AConnectionFlow: TH2ConnectionFlowControl;
-      var ADecoder: THPackDecoder);
+      var ADecoder: THPackDecoder;
+      const AMaxHeaderListSize: UInt32 = H2_DEFAULT_MAX_HEADER_LIST_SIZE);
     destructor Destroy; override;
 
     procedure Reset(const AErrorCode: UInt32);
@@ -110,6 +121,8 @@ type
     property EndStreamSent: Boolean read FEndStreamSent;
     property ResetReceived: Boolean read FResetReceived;
     property ResetCode: UInt32 read FResetCode;
+    property LastHeaderFinalizeResult: TH2HeaderFinalizeResult
+      read FLastHeaderFinalizeResult;
   end;
 
 implementation
@@ -228,7 +241,7 @@ end;
 constructor TH2Stream.Create(const AStreamID: UInt32;
   const ASendWindowSize: UInt32; const ARecvWindowSize: UInt32;
   var AConnectionFlow: TH2ConnectionFlowControl;
-  var ADecoder: THPackDecoder);
+  var ADecoder: THPackDecoder; const AMaxHeaderListSize: UInt32);
 begin
   inherited Create;
   FStreamID := AStreamID;
@@ -254,6 +267,8 @@ begin
   FPendingStreamWindowUpdate := 0;
   FPendingConnectionWindowUpdate := 0;
   FPendingResponseBody := nil;
+  FMaxHeaderListSize := AMaxHeaderListSize;
+  FLastHeaderFinalizeResult := h2hfrNone;
 end;
 
 destructor TH2Stream.Destroy;
@@ -284,7 +299,7 @@ begin
   FEndHeadersReceived := False;
 end;
 
-procedure TH2Stream.FinalizeHeaders;
+function TH2Stream.FinalizeHeaders: TH2HeaderFinalizeResult;
 var
   LHeaders: array of THPackHeaderView;
   LIndex: SizeInt;
@@ -301,7 +316,9 @@ var
   LWritePos: SizeInt;
   LTargetStore: TObject;
   LIsTrailerSection: Boolean;
+  LHeaderListSize: UInt64;
 begin
+  Result := h2hfrNone;
   LIsTrailerSection := FHeadersDecoded <> nil;
   LTotalLen := 0;
   for LIndex := 0 to High(FHeaderFragments) do
@@ -322,7 +339,7 @@ begin
   if (FDecoder = nil) or not FDecoder^.DecodeView(FHeaderBlock, LHeaders) then
   begin
     InternalReset(H2_ERR_COMPRESSION_ERROR);
-    Exit;
+    Exit(h2hfrCompressionError);
   end;
 
   if not LIsTrailerSection then
@@ -347,6 +364,7 @@ begin
   LAuthoritySeen := False;
   LHostSeen := False;
   LPseudoSectionClosed := False;
+  LHeaderListSize := 0;
   for LIndex := 0 to High(LHeaders) do
   begin
     if LHeaders[LIndex].Name.Ptr = nil then
@@ -360,14 +378,14 @@ begin
         if LPseudoSectionClosed then
         begin
           InternalReset(H2_ERR_PROTOCOL_ERROR);
-          Exit;
+          Exit(h2hfrProtocolError);
         end;
         if ByteSpanEquals(LHeaders[LIndex].Name, ':method') then
         begin
           if LMethodSeen then
           begin
             InternalReset(H2_ERR_PROTOCOL_ERROR);
-            Exit;
+            Exit(h2hfrProtocolError);
           end;
           LMethodSeen := True;
         end
@@ -376,7 +394,7 @@ begin
           if LSchemeSeen then
           begin
             InternalReset(H2_ERR_PROTOCOL_ERROR);
-            Exit;
+            Exit(h2hfrProtocolError);
           end;
           LSchemeSeen := True;
         end
@@ -385,7 +403,7 @@ begin
           if LPathSeen then
           begin
             InternalReset(H2_ERR_PROTOCOL_ERROR);
-            Exit;
+            Exit(h2hfrProtocolError);
           end;
           LPathSeen := True;
         end
@@ -394,14 +412,14 @@ begin
           if LAuthoritySeen then
           begin
             InternalReset(H2_ERR_PROTOCOL_ERROR);
-            Exit;
+            Exit(h2hfrProtocolError);
           end;
           LAuthoritySeen := True;
         end
         else
         begin
           InternalReset(H2_ERR_PROTOCOL_ERROR);
-          Exit;
+          Exit(h2hfrProtocolError);
         end;
       end
       else
@@ -412,21 +430,44 @@ begin
         else if IsForbiddenConnectionHeader(LHeaders[LIndex].Name) then
         begin
           InternalReset(H2_ERR_PROTOCOL_ERROR);
-          Exit;
+          Exit(h2hfrProtocolError);
         end
         else if ByteSpanEquals(LHeaders[LIndex].Name, 'te') and
           (not IsValidTeHeaderValue(LHeaders[LIndex].Value)) then
         begin
           InternalReset(H2_ERR_PROTOCOL_ERROR);
-          Exit;
+          Exit(h2hfrProtocolError);
         end;
       end;
     end
     else if LIsPseudo then
     begin
       InternalReset(H2_ERR_PROTOCOL_ERROR);
-      Exit;
+      Exit(h2hfrProtocolError);
     end;
+
+    if FMaxHeaderListSize > 0 then
+    begin
+      LHeaderListSize := LHeaderListSize + UInt64(LHeaders[LIndex].Name.Len) +
+        UInt64(LHeaders[LIndex].Value.Len) + 32;
+      if LHeaderListSize > UInt64(FMaxHeaderListSize) then
+      begin
+        if not LIsTrailerSection then
+        begin
+          FHeaderStore := nil;
+          FHeadersDecoded := nil;
+        end
+        else
+        begin
+          FTrailerStore := nil;
+          FTrailersDecoded := nil;
+        end;
+        FHeaderFragments := nil;
+        FHeaderBlock := '';
+        Exit(h2hfrHeaderListTooLarge);
+      end;
+    end;
+
     SetString(LNameStr, LHeaders[LIndex].Name.Ptr, LHeaders[LIndex].Name.Len);
     SetString(LValueStr, LHeaders[LIndex].Value.Ptr, LHeaders[LIndex].Value.Len);
     HeaderStoreAsConcrete(LTargetStore).AddParsed(string(LNameStr),
@@ -438,11 +479,13 @@ begin
       ((not LAuthoritySeen) and (not LHostSeen))) then
   begin
     InternalReset(H2_ERR_PROTOCOL_ERROR);
-    Exit;
+    Exit(h2hfrProtocolError);
   end;
 
   FEndHeadersReceived := True;
   FHeaderFragments := nil;
+  FHeaderBlock := '';
+  Result := h2hfrOk;
 end;
 
 procedure TH2Stream.AppendBodyData(const APayload: AnsiString);
@@ -666,12 +709,13 @@ begin
 
   FHeaderBlock := '';
   FHeaderFragments := nil;
+  FLastHeaderFinalizeResult := h2hfrNone;
   AppendHeaderFragment(LFragment);
   FEndHeadersReceived := False;
   ApplyRemoteOpenState;
 
   if (AFlags and H2_FLAG_HEADERS_END_HEADERS) <> 0 then
-    FinalizeHeaders;
+    FLastHeaderFinalizeResult := FinalizeHeaders;
 
   if (AFlags and H2_FLAG_HEADERS_END_STREAM) <> 0 then
     ApplyRemoteEndStream;
@@ -689,7 +733,7 @@ begin
 
   AppendHeaderFragment(APayload);
   if (AFlags and H2_FLAG_CONTINUATION_END_HEADERS) <> 0 then
-    FinalizeHeaders;
+    FLastHeaderFinalizeResult := FinalizeHeaders;
 end;
 
 procedure TH2Stream.OnData(const AFlags: Byte; const APayload: AnsiString);

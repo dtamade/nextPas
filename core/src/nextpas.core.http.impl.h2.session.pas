@@ -50,7 +50,8 @@ type
     function FindOrCreate(const AStreamID: UInt32;
       const ASendWindowSize: UInt32; const ARecvWindowSize: UInt32;
       var AConnectionFlow: TH2ConnectionFlowControl;
-      var ADecoder: THPackDecoder): TH2Stream;
+      var ADecoder: THPackDecoder;
+      const AMaxHeaderListSize: UInt32 = H2_DEFAULT_MAX_HEADER_LIST_SIZE): TH2Stream;
     procedure RemoveByIndex(const AIndex: SizeInt);
     function FindAndRemove(const AStreamID: UInt32): TH2Stream;
     procedure Remove(const AStreamID: UInt32);
@@ -164,6 +165,7 @@ type
     procedure StartGracefulShutdown(const ALastStreamID: UInt32;
       const AErrorCode: UInt32);
     procedure CloseSession;
+    procedure HandleRequestHeaderListTooLarge(const AStream: TH2Stream);
   public
     constructor Create(const AConn: ITcpStream; const AHandler: IHttpHandler;
       const AOptions: TH2ServerTransportOptions);
@@ -393,7 +395,7 @@ end;
 function TH2StreamMap.FindOrCreate(const AStreamID: UInt32;
   const ASendWindowSize: UInt32; const ARecvWindowSize: UInt32;
   var AConnectionFlow: TH2ConnectionFlowControl;
-  var ADecoder: THPackDecoder): TH2Stream;
+  var ADecoder: THPackDecoder; const AMaxHeaderListSize: UInt32): TH2Stream;
 var
   LIndex: SizeInt;
 begin
@@ -403,7 +405,7 @@ begin
   if FCount >= Length(FStreams) then
     SetLength(FStreams, FCount + 8);
   FStreams[FCount] := TH2Stream.Create(AStreamID, ASendWindowSize,
-    ARecvWindowSize, AConnectionFlow, ADecoder);
+    ARecvWindowSize, AConnectionFlow, ADecoder, AMaxHeaderListSize);
   Result := FStreams[FCount];
   Inc(FCount);
 end;
@@ -563,8 +565,12 @@ end;
 procedure TH2ServerSession.QueueSettingsFrame(const ASettings: TH2Settings);
 var
   LEntries: TH2SettingEntries;
+  LEntryCount: SizeInt;
 begin
-  SetLength(LEntries, 5);
+  LEntryCount := 5;
+  if ASettings.MaxHeaderListSize > 0 then
+    Inc(LEntryCount);
+  SetLength(LEntries, LEntryCount);
   LEntries[0].Identifier := H2_SETTINGS_HEADER_TABLE_SIZE;
   LEntries[0].Value := ASettings.HeaderTableSize;
   LEntries[1].Identifier := H2_SETTINGS_ENABLE_PUSH;
@@ -578,6 +584,11 @@ begin
   LEntries[3].Value := ASettings.InitialWindowSize;
   LEntries[4].Identifier := H2_SETTINGS_MAX_FRAME_SIZE;
   LEntries[4].Value := ASettings.MaxFrameSize;
+  if ASettings.MaxHeaderListSize > 0 then
+  begin
+    LEntries[5].Identifier := H2_SETTINGS_MAX_HEADER_LIST_SIZE;
+    LEntries[5].Value := ASettings.MaxHeaderListSize;
+  end;
   QueueFrame(H2_FRAME_SETTINGS, 0, 0, H2EncodeSettingsPayload(LEntries));
 end;
 
@@ -882,7 +893,7 @@ begin
       Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED, False));
     LStream := FStreams.FindOrCreate(AFrame.Header.StreamID,
       FRemoteSettings.InitialWindowSize, FOptions.InitialStreamWindowSize,
-      FConnectionFlow, FDecoder);
+      FConnectionFlow, FDecoder, FLocalSettings.MaxHeaderListSize);
     FLastPeerStreamID := AFrame.Header.StreamID;
     if (FLocalSettings.MaxConcurrentStreams > 0) and
        (FStreams.ActiveCount >= FLocalSettings.MaxConcurrentStreams) then
@@ -901,6 +912,11 @@ begin
   begin
     QueueRstStream(LStream.StreamID, LStream.ResetCode);
     FStreams.RemoveByIndex(LStreamIndex);
+    Exit(True);
+  end;
+  if LStream.LastHeaderFinalizeResult = h2hfrHeaderListTooLarge then
+  begin
+    HandleRequestHeaderListTooLarge(LStream);
     Exit(True);
   end;
   if (AFrame.Header.Flags and H2_FLAG_HEADERS_END_HEADERS) = 0 then
@@ -930,6 +946,11 @@ begin
   begin
     QueueRstStream(LStream.StreamID, LStream.ResetCode);
     FStreams.RemoveByIndex(LStreamIndex);
+    Exit(True);
+  end;
+  if LStream.LastHeaderFinalizeResult = h2hfrHeaderListTooLarge then
+  begin
+    HandleRequestHeaderListTooLarge(LStream);
     Exit(True);
   end;
   if (AFrame.Header.Flags and H2_FLAG_CONTINUATION_END_HEADERS) <> 0 then
@@ -1004,6 +1025,13 @@ begin
   begin
     QueueRstStream(LStream.StreamID, LStream.ResetCode);
     FStreams.RemoveByIndex(LStreamIndex);
+    Exit(True);
+  end;
+  if LStream.RequestHandled then
+  begin
+    LStream.DiscardUnreadBody;
+    ApplyPendingWindowUpdates(LStream);
+    CloseStreamIfTerminal(LStream);
     Exit(True);
   end;
   ApplyPendingWindowUpdates(LStream);
@@ -1159,6 +1187,17 @@ begin
     LHeaders, LBody, Int64(Length(AStream.BodyBuffer)));
   LRequest.SetRemoteNetAddr(FConn.RemoteAddr);
   Result := LRequest;
+end;
+
+procedure TH2ServerSession.HandleRequestHeaderListTooLarge(
+  const AStream: TH2Stream);
+begin
+  if AStream = nil then
+    Exit;
+  AStream.MarkRequestHandled;
+  SendResponseHeaders(AStream, HTTP_STATUS_HEADER_TOO_LARGE, nil, True);
+  ApplyPendingWindowUpdates(AStream);
+  CloseStreamIfTerminal(AStream);
 end;
 
 procedure TH2ServerSession.ExecuteReadyStreams;
