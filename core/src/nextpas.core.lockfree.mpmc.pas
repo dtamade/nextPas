@@ -126,11 +126,14 @@ var
   LPos: Int64;
   LIdx: PtrUInt;
   LSeq, LExpected, LDiff: Int64;
+  LBackoff: Integer;
+  LI: Integer;
 begin
   AtomicFetchAdd32(FActiveEnqueues, 1, moAcqRel);
   try
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
+    LBackoff := 1;
     while True do
     begin
       if AtomicLoad32(FClosed, moAcquire) <> 0 then
@@ -150,6 +153,18 @@ begin
           Result := True;
           Exit;
         end;
+        { CAS failed — another producer won this slot }
+        if LBackoff < 256 then
+        begin
+          LI := LBackoff;
+          repeat
+            CpuPause;
+            Dec(LI);
+          until LI = 0;
+          LBackoff := LBackoff * 2;
+        end
+        else
+          CpuPause;
       end
       else if LDiff < 0 then
         Exit(False)
@@ -166,7 +181,10 @@ var
   LPos: Int64;
   LIdx: PtrUInt;
   LSeq, LExpected, LDiff: Int64;
+  LBackoff: Integer;
+  LI: Integer;
 begin
+  LBackoff := 1;
   while True do
   begin
     LPos := AtomicLoad64(FDequeuePos, moRelaxed);
@@ -185,6 +203,18 @@ begin
         Result := True;
         Exit;
       end;
+      { CAS failed — another consumer won this slot }
+      if LBackoff < 256 then
+      begin
+        LI := LBackoff;
+        repeat
+          CpuPause;
+          Dec(LI);
+        until LI = 0;
+        LBackoff := LBackoff * 2;
+      end
+      else
+        CpuPause;
     end
     else if LDiff < 0 then
       Exit(False)
