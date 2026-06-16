@@ -1775,11 +1775,13 @@ begin
 
   Check(not SourceHas(LSource,
     '支持 HTTP/1.1、HTTP/2、HTTP/3 三个版本'),
-    'architecture docs must not imply built-in H2/H3 implementation');
-  Check(SourceHas(LSource, '当前内建实现为 HTTP/1.1'),
+    'architecture docs must not imply built-in H3 implementation');
+  Check(SourceHas(LSource, 'H1 已完全落地'),
     'architecture docs must state built-in H1 truth');
-  Check(SourceHas(LSource, 'H2/H3 仅保留版本枚举、registry / transport seam 与规划'),
-    'architecture docs must state H2/H3 seam-only truth');
+  Check(SourceHas(LSource, 'H2 已落地完整的 transport 层'),
+    'architecture docs must state H2 transport truth');
+  Check(SourceHas(LSource, 'H3 仅保留版本枚举与 registry seam'),
+    'architecture docs must state H3 seam-only truth');
 
   Check(not SourceHas(LSource, 'procedure Group('),
     'architecture docs must not document nonexistent router Group API');
