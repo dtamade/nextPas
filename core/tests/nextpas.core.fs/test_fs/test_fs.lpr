@@ -775,6 +775,20 @@ begin
     'FsSameFileName delegates name comparison semantics to platform.path');
 end;
 
+procedure TestPathStackBufferConstantContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.path.pas');
+
+  CheckContains(LSource, 'FS_PATH_STACK_BUF_SIZE = 1024;',
+    'fs.path names the stack path buffer constant');
+  CheckContains(LSource, 'array[0..FS_PATH_STACK_BUF_SIZE - 1] of AnsiChar;',
+    'fs.path stack buffers use the named size constant');
+  CheckAbsent(LSource, 'PATH_BUF_SIZE = 1024;',
+    'fs.path no longer uses the old path buffer constant name');
+end;
+
 {$IFDEF NEXTPAS_WINDOWS}
 procedure TestWindowsPathWrapperContract;
 begin
@@ -973,6 +987,25 @@ begin
   CheckContains(LStreamSource,
     'Takes ownership of AHandle; the returned IFile closes it.',
     'FsFromPlatformHandle documents owned handle transfer');
+end;
+
+procedure TestTempFilePathBufferConstantContract;
+var
+  LSource, LImpl, LBody: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.util.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'fs.util temp buffer contract has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+  LBody := ExtractFunctionBody(LImpl,
+    'function FsTempFile(const ADir, APattern: string): IFile;',
+    'procedure FillFileInfo');
+
+  CheckContains(LBody, 'TEMP_FILE_PATH_BUF_SIZE = 1024;',
+    'FsTempFile names the temp path stack buffer constant');
+  CheckContains(LBody, 'array[0..TEMP_FILE_PATH_BUF_SIZE - 1] of AnsiChar;',
+    'FsTempFile stack buffer uses the named size constant');
 end;
 
 procedure TestFsReadFileUsesReadIntoContract;
@@ -1385,6 +1418,8 @@ begin
     T.Run('PathSplit', @TestPathSplit);
     T.Run('Path separator source contract', @TestPathSeparatorSourceContract);
     T.Run('Path delegates platform root contract', @TestPathDelegatesPlatformRootContract);
+    T.Run('Path stack buffer constant contract',
+      @TestPathStackBufferConstantContract);
 {$IFDEF NEXTPAS_WINDOWS}
     T.Run('Windows path wrapper contract', @TestWindowsPathWrapperContract);
 {$ENDIF}
@@ -1403,6 +1438,8 @@ begin
     T.Run('TempFile in dir', @TestTempFileInDir);
     T.Run('TempFile system dir typed handle contract',
       @TestTempFileSystemDirUsesTypedHandleContract);
+    T.Run('TempFile path buffer constant contract',
+      @TestTempFilePathBufferConstantContract);
     T.Run('FsReadFile uses read_into contract',
       @TestFsReadFileUsesReadIntoContract);
     T.Run('FsGetCwd/FsSetCwd roundtrip', @TestFsCwdRoundTrip);

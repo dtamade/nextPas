@@ -30,12 +30,12 @@ function FsSameFileName(const A, B: string): Boolean;
 implementation
 
 const
-  PATH_BUF_SIZE = 1024;
+  FS_PATH_STACK_BUF_SIZE = 1024;
 
 function FsPathJoin(const AParts: array of string): string;
 var
   LI, LNeed: Integer;
-  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LStack: array[0..FS_PATH_STACK_BUF_SIZE - 1] of AnsiChar;
   LHeap: array of AnsiChar;
   LBase: string;
 begin
@@ -46,10 +46,10 @@ begin
   begin
     LBase := Result;
     LNeed := platform_path_join(PAnsiChar(LBase), PAnsiChar(AParts[LI]),
-      @LStack[0], PATH_BUF_SIZE);
+      @LStack[0], FS_PATH_STACK_BUF_SIZE);
     if LNeed < 0 then
       Continue;
-    if LNeed < PATH_BUF_SIZE then
+    if LNeed < FS_PATH_STACK_BUF_SIZE then
       SetString(Result, PAnsiChar(@LStack[0]), LNeed)
     else
     begin
@@ -63,14 +63,15 @@ end;
 
 function FsPathDir(const APath: string): string;
 var
-  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LStack: array[0..FS_PATH_STACK_BUF_SIZE - 1] of AnsiChar;
   LNeed: Int32;
   LHeap: array of AnsiChar;
 begin
-  LNeed := platform_path_dirname(PAnsiChar(APath), @LStack[0], PATH_BUF_SIZE);
+  LNeed := platform_path_dirname(PAnsiChar(APath), @LStack[0],
+    FS_PATH_STACK_BUF_SIZE);
   if LNeed <= 0 then
     Exit('.');
-  if LNeed < PATH_BUF_SIZE then
+  if LNeed < FS_PATH_STACK_BUF_SIZE then
   begin
     SetString(Result, PAnsiChar(@LStack[0]), LNeed);
     Exit;
@@ -82,14 +83,15 @@ end;
 
 function FsPathBase(const APath: string): string;
 var
-  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LStack: array[0..FS_PATH_STACK_BUF_SIZE - 1] of AnsiChar;
   LNeed: Int32;
   LHeap: array of AnsiChar;
 begin
-  LNeed := platform_path_basename(PAnsiChar(APath), @LStack[0], PATH_BUF_SIZE);
+  LNeed := platform_path_basename(PAnsiChar(APath), @LStack[0],
+    FS_PATH_STACK_BUF_SIZE);
   if LNeed <= 0 then
     Exit(APath);
-  if LNeed < PATH_BUF_SIZE then
+  if LNeed < FS_PATH_STACK_BUF_SIZE then
   begin
     SetString(Result, PAnsiChar(@LStack[0]), LNeed);
     Exit;
@@ -107,14 +109,15 @@ end;
 
 function FsPathExt(const APath: string): string;
 var
-  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LStack: array[0..FS_PATH_STACK_BUF_SIZE - 1] of AnsiChar;
   LNeed: Int32;
   LHeap: array of AnsiChar;
 begin
-  LNeed := platform_path_extension(PAnsiChar(APath), @LStack[0], PATH_BUF_SIZE);
+  LNeed := platform_path_extension(PAnsiChar(APath), @LStack[0],
+    FS_PATH_STACK_BUF_SIZE);
   if LNeed <= 0 then
     Exit('');
-  if LNeed < PATH_BUF_SIZE then
+  if LNeed < FS_PATH_STACK_BUF_SIZE then
   begin
     SetString(Result, PAnsiChar(@LStack[0]), LNeed);
     Exit;
@@ -126,16 +129,17 @@ end;
 
 function FsPathClean(const APath: string): string;
 var
-  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LStack: array[0..FS_PATH_STACK_BUF_SIZE - 1] of AnsiChar;
   LNeed: Int32;
   LHeap: array of AnsiChar;
 begin
   if APath = '' then
     Exit('.');
-  LNeed := platform_path_normalize(PAnsiChar(APath), @LStack[0], PATH_BUF_SIZE);
+  LNeed := platform_path_normalize(PAnsiChar(APath), @LStack[0],
+    FS_PATH_STACK_BUF_SIZE);
   if LNeed <= 0 then
     Exit(APath);
-  if LNeed < PATH_BUF_SIZE then
+  if LNeed < FS_PATH_STACK_BUF_SIZE then
   begin
     SetString(Result, PAnsiChar(@LStack[0]), LNeed);
     Exit;
@@ -147,16 +151,17 @@ end;
 
 function FsPathAbs(const APath: string): string;
 var
-  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LStack: array[0..FS_PATH_STACK_BUF_SIZE - 1] of AnsiChar;
   LNeed: Int32;
   LHeap: array of AnsiChar;
   LCwd: string;
 begin
   if APath = '' then Exit('');
-  LNeed := platform_path_resolve(PAnsiChar(APath), @LStack[0], PATH_BUF_SIZE);
+  LNeed := platform_path_resolve(PAnsiChar(APath), @LStack[0],
+    FS_PATH_STACK_BUF_SIZE);
   if LNeed > 0 then
   begin
-    if LNeed < PATH_BUF_SIZE then
+    if LNeed < FS_PATH_STACK_BUF_SIZE then
     begin
       SetString(Result, PAnsiChar(@LStack[0]), LNeed);
       Exit;
@@ -182,15 +187,15 @@ end;
 
 function FsPathRelative(const ABase, ATarget: string): string;
 var
-  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LStack: array[0..FS_PATH_STACK_BUF_SIZE - 1] of AnsiChar;
   LNeed: Int32;
   LHeap: array of AnsiChar;
 begin
   LNeed := platform_path_relative(PAnsiChar(ABase), PAnsiChar(ATarget),
-    @LStack[0], PATH_BUF_SIZE);
+    @LStack[0], FS_PATH_STACK_BUF_SIZE);
   if LNeed < 0 then
     Exit(FsPathClean(ATarget));
-  if LNeed < PATH_BUF_SIZE then
+  if LNeed < FS_PATH_STACK_BUF_SIZE then
   begin
     SetString(Result, PAnsiChar(@LStack[0]), LNeed);
     Exit;
@@ -203,14 +208,15 @@ end;
 
 function FsPathEnsureSep(const APath: string): string;
 var
-  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LStack: array[0..FS_PATH_STACK_BUF_SIZE - 1] of AnsiChar;
   LNeed: Int32;
   LHeap: array of AnsiChar;
 begin
-  LNeed := platform_path_ensure_sep(PAnsiChar(APath), @LStack[0], PATH_BUF_SIZE);
+  LNeed := platform_path_ensure_sep(PAnsiChar(APath), @LStack[0],
+    FS_PATH_STACK_BUF_SIZE);
   if LNeed < 0 then
     Exit(APath);
-  if LNeed < PATH_BUF_SIZE then
+  if LNeed < FS_PATH_STACK_BUF_SIZE then
   begin
     SetString(Result, PAnsiChar(@LStack[0]), LNeed);
     Exit;
@@ -222,14 +228,15 @@ end;
 
 function FsPathTrimSep(const APath: string): string;
 var
-  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LStack: array[0..FS_PATH_STACK_BUF_SIZE - 1] of AnsiChar;
   LNeed: Int32;
   LHeap: array of AnsiChar;
 begin
-  LNeed := platform_path_trim_sep(PAnsiChar(APath), @LStack[0], PATH_BUF_SIZE);
+  LNeed := platform_path_trim_sep(PAnsiChar(APath), @LStack[0],
+    FS_PATH_STACK_BUF_SIZE);
   if LNeed < 0 then
     Exit(APath);
-  if LNeed < PATH_BUF_SIZE then
+  if LNeed < FS_PATH_STACK_BUF_SIZE then
   begin
     SetString(Result, PAnsiChar(@LStack[0]), LNeed);
     Exit;
@@ -241,17 +248,17 @@ end;
 
 function FsPathChangeExt(const APath, ANewExt: string): string;
 var
-  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LStack: array[0..FS_PATH_STACK_BUF_SIZE - 1] of AnsiChar;
   LNeed: Int32;
   LHeap: array of AnsiChar;
 begin
   if APath = '' then
     Exit('');
   LNeed := platform_path_change_ext(PAnsiChar(APath), PAnsiChar(ANewExt),
-    @LStack[0], PATH_BUF_SIZE);
+    @LStack[0], FS_PATH_STACK_BUF_SIZE);
   if LNeed < 0 then
     Exit(APath);
-  if LNeed < PATH_BUF_SIZE then
+  if LNeed < FS_PATH_STACK_BUF_SIZE then
   begin
     SetString(Result, PAnsiChar(@LStack[0]), LNeed);
     Exit;

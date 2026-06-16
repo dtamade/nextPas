@@ -175,8 +175,9 @@ function FsTempFile(const ADir, APattern: string): IFile;
 const
   HEX: array[0..15] of AnsiChar = '0123456789abcdef';
   MAX_ATTEMPTS = 32;
+  TEMP_FILE_PATH_BUF_SIZE = 1024;
 var
-  LPathBuf: array[0..1023] of AnsiChar;
+  LPathBuf: array[0..TEMP_FILE_PATH_BUF_SIZE - 1] of AnsiChar;
   LHandle: TPlatformFileHandle;
   LResult: Int32;
   LPath: string;
