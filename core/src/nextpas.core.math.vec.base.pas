@@ -148,6 +148,54 @@ type
     property Data[const AIndex: Integer]: Double read GetData write SetData; default;
   end;
 
+operator + (constref A, B: TVec2f): TVec2f;
+operator - (constref A, B: TVec2f): TVec2f;
+operator - (constref A: TVec2f): TVec2f;
+operator * (constref A: TVec2f; constref B: Single): TVec2f;
+operator * (constref A: Single; constref B: TVec2f): TVec2f;
+operator / (constref A: TVec2f; constref B: Single): TVec2f;
+operator = (constref A, B: TVec2f): Boolean;
+
+operator + (constref A, B: TVec2d): TVec2d;
+operator - (constref A, B: TVec2d): TVec2d;
+operator - (constref A: TVec2d): TVec2d;
+operator * (constref A: TVec2d; constref B: Double): TVec2d;
+operator * (constref A: Double; constref B: TVec2d): TVec2d;
+operator / (constref A: TVec2d; constref B: Double): TVec2d;
+operator = (constref A, B: TVec2d): Boolean;
+
+operator + (constref A, B: TVec3f): TVec3f;
+operator - (constref A, B: TVec3f): TVec3f;
+operator - (constref A: TVec3f): TVec3f;
+operator * (constref A: TVec3f; constref B: Single): TVec3f;
+operator * (constref A: Single; constref B: TVec3f): TVec3f;
+operator / (constref A: TVec3f; constref B: Single): TVec3f;
+operator = (constref A, B: TVec3f): Boolean;
+
+operator + (constref A, B: TVec3d): TVec3d;
+operator - (constref A, B: TVec3d): TVec3d;
+operator - (constref A: TVec3d): TVec3d;
+operator * (constref A: TVec3d; constref B: Double): TVec3d;
+operator * (constref A: Double; constref B: TVec3d): TVec3d;
+operator / (constref A: TVec3d; constref B: Double): TVec3d;
+operator = (constref A, B: TVec3d): Boolean;
+
+operator + (constref A, B: TVec4f): TVec4f;
+operator - (constref A, B: TVec4f): TVec4f;
+operator - (constref A: TVec4f): TVec4f;
+operator * (constref A: TVec4f; constref B: Single): TVec4f;
+operator * (constref A: Single; constref B: TVec4f): TVec4f;
+operator / (constref A: TVec4f; constref B: Single): TVec4f;
+operator = (constref A, B: TVec4f): Boolean;
+
+operator + (constref A, B: TVec4d): TVec4d;
+operator - (constref A, B: TVec4d): TVec4d;
+operator - (constref A: TVec4d): TVec4d;
+operator * (constref A: TVec4d; constref B: Double): TVec4d;
+operator * (constref A: Double; constref B: TVec4d): TVec4d;
+operator / (constref A: TVec4d; constref B: Double): TVec4d;
+operator = (constref A, B: TVec4d): Boolean;
+
 const
   Vec2fZero: TVec2f = (FData: (0, 0));
   Vec2dZero: TVec2d = (FData: (0, 0));
@@ -162,6 +210,47 @@ uses
   Math;
 
 { TVec2f }
+
+operator + (constref A, B: TVec2f): TVec2f;
+begin
+  Result.FData[0] := A.FData[0] + B.FData[0];
+  Result.FData[1] := A.FData[1] + B.FData[1];
+end;
+
+operator - (constref A, B: TVec2f): TVec2f;
+begin
+  Result.FData[0] := A.FData[0] - B.FData[0];
+  Result.FData[1] := A.FData[1] - B.FData[1];
+end;
+
+operator - (constref A: TVec2f): TVec2f;
+begin
+  Result.FData[0] := -A.FData[0];
+  Result.FData[1] := -A.FData[1];
+end;
+
+operator * (constref A: TVec2f; constref B: Single): TVec2f;
+begin
+  Result.FData[0] := A.FData[0] * B;
+  Result.FData[1] := A.FData[1] * B;
+end;
+
+operator * (constref A: Single; constref B: TVec2f): TVec2f;
+begin
+  Result.FData[0] := A * B.FData[0];
+  Result.FData[1] := A * B.FData[1];
+end;
+
+operator / (constref A: TVec2f; constref B: Single): TVec2f;
+begin
+  Result.FData[0] := A.FData[0] / B;
+  Result.FData[1] := A.FData[1] / B;
+end;
+
+operator = (constref A, B: TVec2f): Boolean;
+begin
+  Result := (A.FData[0] = B.FData[0]) and (A.FData[1] = B.FData[1]);
+end;
 
 constructor TVec2f.Create(const AX, AY: Single);
 begin
@@ -207,6 +296,47 @@ end;
 
 { TVec2d }
 
+operator + (constref A, B: TVec2d): TVec2d;
+begin
+  Result.FData[0] := A.FData[0] + B.FData[0];
+  Result.FData[1] := A.FData[1] + B.FData[1];
+end;
+
+operator - (constref A, B: TVec2d): TVec2d;
+begin
+  Result.FData[0] := A.FData[0] - B.FData[0];
+  Result.FData[1] := A.FData[1] - B.FData[1];
+end;
+
+operator - (constref A: TVec2d): TVec2d;
+begin
+  Result.FData[0] := -A.FData[0];
+  Result.FData[1] := -A.FData[1];
+end;
+
+operator * (constref A: TVec2d; constref B: Double): TVec2d;
+begin
+  Result.FData[0] := A.FData[0] * B;
+  Result.FData[1] := A.FData[1] * B;
+end;
+
+operator * (constref A: Double; constref B: TVec2d): TVec2d;
+begin
+  Result.FData[0] := A * B.FData[0];
+  Result.FData[1] := A * B.FData[1];
+end;
+
+operator / (constref A: TVec2d; constref B: Double): TVec2d;
+begin
+  Result.FData[0] := A.FData[0] / B;
+  Result.FData[1] := A.FData[1] / B;
+end;
+
+operator = (constref A, B: TVec2d): Boolean;
+begin
+  Result := (A.FData[0] = B.FData[0]) and (A.FData[1] = B.FData[1]);
+end;
+
 constructor TVec2d.Create(const AX, AY: Double);
 begin
   FData[0] := AX;
@@ -250,6 +380,53 @@ begin
 end;
 
 { TVec3f }
+
+operator + (constref A, B: TVec3f): TVec3f;
+begin
+  Result.FData[0] := A.FData[0] + B.FData[0];
+  Result.FData[1] := A.FData[1] + B.FData[1];
+  Result.FData[2] := A.FData[2] + B.FData[2];
+end;
+
+operator - (constref A, B: TVec3f): TVec3f;
+begin
+  Result.FData[0] := A.FData[0] - B.FData[0];
+  Result.FData[1] := A.FData[1] - B.FData[1];
+  Result.FData[2] := A.FData[2] - B.FData[2];
+end;
+
+operator - (constref A: TVec3f): TVec3f;
+begin
+  Result.FData[0] := -A.FData[0];
+  Result.FData[1] := -A.FData[1];
+  Result.FData[2] := -A.FData[2];
+end;
+
+operator * (constref A: TVec3f; constref B: Single): TVec3f;
+begin
+  Result.FData[0] := A.FData[0] * B;
+  Result.FData[1] := A.FData[1] * B;
+  Result.FData[2] := A.FData[2] * B;
+end;
+
+operator * (constref A: Single; constref B: TVec3f): TVec3f;
+begin
+  Result.FData[0] := A * B.FData[0];
+  Result.FData[1] := A * B.FData[1];
+  Result.FData[2] := A * B.FData[2];
+end;
+
+operator / (constref A: TVec3f; constref B: Single): TVec3f;
+begin
+  Result.FData[0] := A.FData[0] / B;
+  Result.FData[1] := A.FData[1] / B;
+  Result.FData[2] := A.FData[2] / B;
+end;
+
+operator = (constref A, B: TVec3f): Boolean;
+begin
+  Result := (A.FData[0] = B.FData[0]) and (A.FData[1] = B.FData[1]) and (A.FData[2] = B.FData[2]);
+end;
 
 constructor TVec3f.Create(const AX, AY, AZ: Single);
 begin
@@ -306,6 +483,53 @@ end;
 
 { TVec3d }
 
+operator + (constref A, B: TVec3d): TVec3d;
+begin
+  Result.FData[0] := A.FData[0] + B.FData[0];
+  Result.FData[1] := A.FData[1] + B.FData[1];
+  Result.FData[2] := A.FData[2] + B.FData[2];
+end;
+
+operator - (constref A, B: TVec3d): TVec3d;
+begin
+  Result.FData[0] := A.FData[0] - B.FData[0];
+  Result.FData[1] := A.FData[1] - B.FData[1];
+  Result.FData[2] := A.FData[2] - B.FData[2];
+end;
+
+operator - (constref A: TVec3d): TVec3d;
+begin
+  Result.FData[0] := -A.FData[0];
+  Result.FData[1] := -A.FData[1];
+  Result.FData[2] := -A.FData[2];
+end;
+
+operator * (constref A: TVec3d; constref B: Double): TVec3d;
+begin
+  Result.FData[0] := A.FData[0] * B;
+  Result.FData[1] := A.FData[1] * B;
+  Result.FData[2] := A.FData[2] * B;
+end;
+
+operator * (constref A: Double; constref B: TVec3d): TVec3d;
+begin
+  Result.FData[0] := A * B.FData[0];
+  Result.FData[1] := A * B.FData[1];
+  Result.FData[2] := A * B.FData[2];
+end;
+
+operator / (constref A: TVec3d; constref B: Double): TVec3d;
+begin
+  Result.FData[0] := A.FData[0] / B;
+  Result.FData[1] := A.FData[1] / B;
+  Result.FData[2] := A.FData[2] / B;
+end;
+
+operator = (constref A, B: TVec3d): Boolean;
+begin
+  Result := (A.FData[0] = B.FData[0]) and (A.FData[1] = B.FData[1]) and (A.FData[2] = B.FData[2]);
+end;
+
 constructor TVec3d.Create(const AX, AY, AZ: Double);
 begin
   FData[0] := AX;
@@ -361,6 +585,60 @@ end;
 
 { TVec4f }
 
+operator + (constref A, B: TVec4f): TVec4f;
+begin
+  Result.FData[0] := A.FData[0] + B.FData[0];
+  Result.FData[1] := A.FData[1] + B.FData[1];
+  Result.FData[2] := A.FData[2] + B.FData[2];
+  Result.FData[3] := A.FData[3] + B.FData[3];
+end;
+
+operator - (constref A, B: TVec4f): TVec4f;
+begin
+  Result.FData[0] := A.FData[0] - B.FData[0];
+  Result.FData[1] := A.FData[1] - B.FData[1];
+  Result.FData[2] := A.FData[2] - B.FData[2];
+  Result.FData[3] := A.FData[3] - B.FData[3];
+end;
+
+operator - (constref A: TVec4f): TVec4f;
+begin
+  Result.FData[0] := -A.FData[0];
+  Result.FData[1] := -A.FData[1];
+  Result.FData[2] := -A.FData[2];
+  Result.FData[3] := -A.FData[3];
+end;
+
+operator * (constref A: TVec4f; constref B: Single): TVec4f;
+begin
+  Result.FData[0] := A.FData[0] * B;
+  Result.FData[1] := A.FData[1] * B;
+  Result.FData[2] := A.FData[2] * B;
+  Result.FData[3] := A.FData[3] * B;
+end;
+
+operator * (constref A: Single; constref B: TVec4f): TVec4f;
+begin
+  Result.FData[0] := A * B.FData[0];
+  Result.FData[1] := A * B.FData[1];
+  Result.FData[2] := A * B.FData[2];
+  Result.FData[3] := A * B.FData[3];
+end;
+
+operator / (constref A: TVec4f; constref B: Single): TVec4f;
+begin
+  Result.FData[0] := A.FData[0] / B;
+  Result.FData[1] := A.FData[1] / B;
+  Result.FData[2] := A.FData[2] / B;
+  Result.FData[3] := A.FData[3] / B;
+end;
+
+operator = (constref A, B: TVec4f): Boolean;
+begin
+  Result := (A.FData[0] = B.FData[0]) and (A.FData[1] = B.FData[1])
+         and (A.FData[2] = B.FData[2]) and (A.FData[3] = B.FData[3]);
+end;
+
 constructor TVec4f.Create(const AX, AY, AZ, AW: Single);
 begin
   FData[0] := AX;
@@ -413,6 +691,60 @@ begin
 end;
 
 { TVec4d }
+
+operator + (constref A, B: TVec4d): TVec4d;
+begin
+  Result.FData[0] := A.FData[0] + B.FData[0];
+  Result.FData[1] := A.FData[1] + B.FData[1];
+  Result.FData[2] := A.FData[2] + B.FData[2];
+  Result.FData[3] := A.FData[3] + B.FData[3];
+end;
+
+operator - (constref A, B: TVec4d): TVec4d;
+begin
+  Result.FData[0] := A.FData[0] - B.FData[0];
+  Result.FData[1] := A.FData[1] - B.FData[1];
+  Result.FData[2] := A.FData[2] - B.FData[2];
+  Result.FData[3] := A.FData[3] - B.FData[3];
+end;
+
+operator - (constref A: TVec4d): TVec4d;
+begin
+  Result.FData[0] := -A.FData[0];
+  Result.FData[1] := -A.FData[1];
+  Result.FData[2] := -A.FData[2];
+  Result.FData[3] := -A.FData[3];
+end;
+
+operator * (constref A: TVec4d; constref B: Double): TVec4d;
+begin
+  Result.FData[0] := A.FData[0] * B;
+  Result.FData[1] := A.FData[1] * B;
+  Result.FData[2] := A.FData[2] * B;
+  Result.FData[3] := A.FData[3] * B;
+end;
+
+operator * (constref A: Double; constref B: TVec4d): TVec4d;
+begin
+  Result.FData[0] := A * B.FData[0];
+  Result.FData[1] := A * B.FData[1];
+  Result.FData[2] := A * B.FData[2];
+  Result.FData[3] := A * B.FData[3];
+end;
+
+operator / (constref A: TVec4d; constref B: Double): TVec4d;
+begin
+  Result.FData[0] := A.FData[0] / B;
+  Result.FData[1] := A.FData[1] / B;
+  Result.FData[2] := A.FData[2] / B;
+  Result.FData[3] := A.FData[3] / B;
+end;
+
+operator = (constref A, B: TVec4d): Boolean;
+begin
+  Result := (A.FData[0] = B.FData[0]) and (A.FData[1] = B.FData[1])
+         and (A.FData[2] = B.FData[2]) and (A.FData[3] = B.FData[3]);
+end;
 
 constructor TVec4d.Create(const AX, AY, AZ, AW: Double);
 begin
