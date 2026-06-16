@@ -461,18 +461,11 @@ begin
   Check(FsExists(LChild), 'child remains after failed remove');
 end;
 
-procedure TestRemoveMissingPathRaisesNotFound;
-var
-  LGot: Boolean;
+procedure TestRemoveMissingPathReturnsTrue;
 begin
-  LGot := False;
-  try
-    FsRemove(GTmpDir + '/missing-remove-path');
-  except
-    on E: ENotFoundError do
-      LGot := True;
-  end;
-  Check(LGot, 'FsRemove missing path raises ENotFoundError');
+  { FsRemove returns True for missing paths, matching Pascal Erase/DeleteFile }
+  Check(FsRemove(GTmpDir + '/missing-remove-path'),
+    'FsRemove missing path returns True');
 end;
 
 procedure TestRemoveAllMissingPathRaisesNotFound;
@@ -1734,8 +1727,8 @@ begin
     T.Run('Remove', @TestRemove);
     T.Run('Remove non-empty dir raises invalid operation',
       @TestRemoveNonEmptyDirRaisesInvalidOperation);
-    T.Run('Remove missing path raises not found',
-      @TestRemoveMissingPathRaisesNotFound);
+    T.Run('Remove missing path returns true',
+      @TestRemoveMissingPathReturnsTrue);
     T.Run('RemoveAll missing path raises not found',
       @TestRemoveAllMissingPathRaisesNotFound);
     T.Run('RemoveAll unsafe root guard raises invalid operation',
