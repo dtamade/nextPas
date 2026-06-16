@@ -156,14 +156,17 @@ begin
   Result := LStat.FileType = ftDirectory;
 end;
 
+{$IFDEF NEXTPAS_UNIX}
+function platform_access(path: PAnsiChar; mode: Int32): Int32;
+  cdecl; external 'c' name 'access';
+{$ENDIF}
+
 function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
 begin
 {$IFDEF NEXTPAS_UNIX}
-  Result := access(APath, 1{X_OK}) = 0;
-{$ELSEIF defined(NEXTPAS_WINDOWS)}
-  Result := platform_fs_is_file(APath);
+  Result := platform_access(APath, 1 {X_OK}) = 0;
 {$ELSE}
-  Result := False;
+  Result := platform_fs_is_file(APath);
 {$ENDIF}
 end;
 

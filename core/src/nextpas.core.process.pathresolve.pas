@@ -29,6 +29,9 @@ function ResolveExecutablePath(const AName: string;
 implementation
 
 uses
+  nextpas.core.platform.fs;
+
+uses
   nextpas.core.text.compare,
   nextpas.core.platform.env,
   nextpas.core.platform.fs,
