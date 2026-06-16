@@ -248,11 +248,11 @@ begin
   LBody := ExtractSourceRange(LSource, 'function ttimerheap.cancel(',
     'function ttimerheap.nextdeadline', 'timer heap Cancel implementation');
 
-  CheckSourceOrder(LBody, 'fentries[ahandle.fid].cancelled := true;',
-    'fentries[ahandle.fid].callback := nil;',
+  CheckSourceOrder(LBody, 'fentries[ahandle.id].cancelled := true;',
+    'fentries[ahandle.id].callback := nil;',
     'successful timer cancel clears callback ownership immediately');
-  CheckSourceOrder(LBody, 'fentries[ahandle.fid].cancelled := true;',
-    'fentries[ahandle.fid].context := nil;',
+  CheckSourceOrder(LBody, 'fentries[ahandle.id].cancelled := true;',
+    'fentries[ahandle.id].context := nil;',
     'successful timer cancel clears context ownership immediately');
 end;
 
