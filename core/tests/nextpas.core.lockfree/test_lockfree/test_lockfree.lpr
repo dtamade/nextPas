@@ -2082,6 +2082,70 @@ begin
   end;
 end;
 
+procedure TestEbrNilGuardAcquire;
+var
+  LDomain: TEbrDomain;
+  LNilGuard: TEbrGuard;
+  LRealGuard: TEbrGuard;
+begin
+  LDomain := TEbrDomain.Create;
+  try
+    LNilGuard := TEbrGuard.Acquire(nil);
+    CheckEqual(Int64(0), Int64(LDomain.ActiveCount), 'nil guard must not increment active count');
+    LNilGuard.Release;
+    Check(True, 'nil guard release must not crash');
+    LRealGuard := TEbrGuard.Acquire(LDomain);
+    CheckEqual(Int64(1), Int64(LDomain.ActiveCount), 'real guard must increment active count');
+    LNilGuard.Release;
+    CheckEqual(Int64(1), Int64(LDomain.ActiveCount), 'nil guard double release must not affect real guard');
+    LRealGuard.Release;
+  finally
+    LDomain.Free;
+  end;
+end;
+
+procedure TestEbrMultiGuardRetireCollect;
+var
+  LDomain: TEbrDomain;
+  LGuard1: TEbrGuard;
+  LGuard2: TEbrGuard;
+begin
+  LDomain := TEbrDomain.Create;
+  try
+    GEbrReclaimCount := 0;
+    LGuard1 := TEbrGuard.Acquire(LDomain);
+    LGuard2 := TEbrGuard.Acquire(LDomain);
+    CheckEqual(Int64(2), Int64(LDomain.ActiveCount), 'two active guards');
+    LDomain.Retire(Pointer(1), @EbrTestReclaimProc);
+    LDomain.Retire(Pointer(2), @EbrTestReclaimProc);
+    LDomain.Retire(Pointer(3), @EbrTestReclaimProc);
+    CheckEqual(Int64(3), Int64(LDomain.RetiredCount), 'three retired items');
+    LDomain.Collect;
+    CheckEqual(Int64(0), Int64(GEbrReclaimCount), 'must not reclaim with two guards active');
+    LGuard1.Release;
+    LDomain.Collect;
+    CheckEqual(Int64(0), Int64(GEbrReclaimCount), 'must not reclaim with one guard still active');
+    LGuard2.Release;
+    LDomain.Collect;
+    CheckEqual(Int64(3), Int64(GEbrReclaimCount), 'must reclaim all after all guards released');
+    CheckEqual(Int64(0), Int64(LDomain.RetiredCount), 'retired count must be 0 after full reclaim');
+  finally
+    LDomain.Free;
+  end;
+end;
+
+procedure TestEbrDestroyWithRetired;
+var
+  LDomain: TEbrDomain;
+begin
+  GEbrReclaimCount := 0;
+  LDomain := TEbrDomain.Create;
+  LDomain.Retire(Pointer(10), @EbrTestReclaimProc);
+  LDomain.Retire(Pointer(20), @EbrTestReclaimProc);
+  LDomain.Free;
+  CheckEqual(Int64(2), Int64(GEbrReclaimCount), 'destroy must reclaim all retired items');
+end;
+
 { Multi-thread stress tests }
 
 const
@@ -2393,6 +2457,70 @@ begin
   end;
 end;
 
+var
+  GSegQueueQ: TIntSegQueue;
+
+function SegQueueProducer(AArg: Pointer): Pointer; cdecl;
+var
+  LI, LStart: Integer;
+begin
+  Result := nil;
+  LStart := Integer(PtrUInt(AArg));
+  for LI := LStart to LStart + 249 do
+    GSegQueueQ.Enqueue(LI);
+end;
+
+procedure TestSegQueueMultiProducer;
+var
+  LHandles: array[0..3] of TPlatformThreadHandle;
+  LI, LV: Integer;
+  LSum: Int64;
+  LCount: Integer;
+  LHandleCount: Integer;
+begin
+  GSegQueueQ := TIntSegQueue.Create;
+  LHandleCount := 0;
+  try
+    for LI := 0 to 3 do
+    begin
+      StartThread(LHandles[LI], @SegQueueProducer, Pointer(PtrInt(LI * 250 + 1)), 'SegQueue producer thread');
+      Inc(LHandleCount);
+    end;
+    JoinStartedThreads(LHandles, LHandleCount, 'SegQueue producer thread');
+    LSum := 0;
+    LCount := 0;
+    while GSegQueueQ.TryDequeue(LV) do
+    begin
+      Inc(LSum, Int64(LV));
+      Inc(LCount);
+    end;
+    CheckEqual(Int64(1000), Int64(LCount), 'SegQueue 4P must dequeue all 1000 items');
+    CheckEqual(Int64(500500), LSum, 'SegQueue 4P sum 1+2+...+1000');
+  finally
+    JoinStartedThreads(LHandles, LHandleCount, 'SegQueue producer thread');
+    GSegQueueQ.Free;
+  end;
+end;
+
+procedure TestSegQueueDestroyActiveSegments;
+var
+  LQ: TIntSegQueue;
+  LI, LV: Integer;
+  LCount: Integer;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    for LI := 1 to SEGQUEUE_SEGMENT_CAPACITY * 3 + 5 do
+      LQ.Enqueue(LI);
+    LCount := 0;
+    while LQ.TryDequeue(LV) do
+      Inc(LCount);
+    CheckEqual(SEGQUEUE_SEGMENT_CAPACITY * 3 + 5, LCount, 'SegQueue must drain all items across segments');
+  finally
+    LQ.Free;
+  end;
+end;
+
 procedure TestSpmcBasic;
 var
   LQ: TIntSpmc;
@@ -2574,6 +2702,184 @@ begin
     Check(LElapsedMs < WaitHelperImmediateReturnBudgetMs,
       'SPMC DequeueTimeout on empty must return promptly');
     Check(LQ.IsEmpty, 'SPMC empty-timeout test must leave the queue empty');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestSpmcApproxCount;
+var
+  LQ: TIntSpmc;
+  LV: Integer;
+begin
+  LQ := TIntSpmc.Create(4);
+  try
+    CheckEqual(Int64(0), Int64(LQ.ApproxCount), 'SPMC approx count initial 0');
+    LQ.TryEnqueue(1);
+    LQ.TryEnqueue(2);
+    CheckEqual(Int64(2), Int64(LQ.ApproxCount), 'SPMC approx count after 2 enqueues');
+    LQ.TryDequeue(LV);
+    CheckEqual(Int64(1), Int64(LQ.ApproxCount), 'SPMC approx count after 1 dequeue');
+    while LQ.TryDequeue(LV) do ;
+    CheckEqual(Int64(0), Int64(LQ.ApproxCount), 'SPMC approx count after drain');
+  finally
+    LQ.Free;
+  end;
+end;
+
+var
+  GSpmcEnqWaitQ: TIntSpmc;
+  GSpmcEnqWaitConsumerStarted: Int32;
+  GSpmcEnqWaitConsumerResult: Int32;
+  GSpmcEnqWaitConsumerValue: Integer;
+
+function SpmcEnqWaitConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+begin
+  Result := nil;
+  AtomicStore32(GSpmcEnqWaitConsumerStarted, 1, moRelease);
+  platform_thread_sleep_ns(QueuePublishWakeDelayNs);
+  if GSpmcEnqWaitQ.TryDequeue(LV) then
+  begin
+    GSpmcEnqWaitConsumerValue := LV;
+    AtomicStore32(GSpmcEnqWaitConsumerResult, 1, moRelease);
+  end
+  else
+    AtomicStore32(GSpmcEnqWaitConsumerResult, 0, moRelease);
+end;
+
+procedure TestSpmcEnqueueWaitWake;
+var
+  LQ: TIntSpmc;
+  LConsumer: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LElapsedMs: QWord;
+  LSpin: Integer;
+  LV: Integer;
+  LThreadCreated: Boolean;
+  LJoined: Boolean;
+begin
+  LQ := TIntSpmc.Create(1);
+  LThreadCreated := False;
+  LJoined := False;
+  try
+    Check(LQ.TryEnqueue(1), 'SPMC EnqueueWait fill queue');
+    GSpmcEnqWaitQ := LQ;
+    AtomicStore32(GSpmcEnqWaitConsumerStarted, 0, moRelease);
+    AtomicStore32(GSpmcEnqWaitConsumerResult, -1, moRelease);
+    GSpmcEnqWaitConsumerValue := 0;
+    StartThread(LConsumer, @SpmcEnqWaitConsumer, nil, 'SPMC EnqueueWait consumer thread');
+    LThreadCreated := True;
+
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GSpmcEnqWaitConsumerStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GSpmcEnqWaitConsumerStarted, moAcquire)),
+      'SPMC EnqueueWait consumer must start before producer waits');
+
+    LElapsedMs := GetTickCount64;
+    Check(LQ.EnqueueWait(42), 'SPMC EnqueueWait must succeed after consumer frees space');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+
+    JoinThread(LConsumer, LRetVal, 'SPMC EnqueueWait consumer thread');
+    LJoined := True;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GSpmcEnqWaitConsumerResult, moAcquire)),
+      'SPMC EnqueueWait consumer must have dequeued the original item');
+    CheckEqual(Int64(1), Int64(GSpmcEnqWaitConsumerValue));
+    Check(LElapsedMs < QueuePublishWakeBudgetMs,
+      'SPMC EnqueueWait must publish after space release before the full timeout');
+    Check(LQ.TryDequeue(LV), 'SPMC EnqueueWait woken item must be drainable');
+    CheckEqual(Int64(42), Int64(LV));
+    Check(not LQ.TryDequeue(LV), 'SPMC queue must be empty after draining the EnqueueWait item');
+  finally
+    if LThreadCreated and (not LJoined) then
+      JoinThread(LConsumer, LRetVal, 'SPMC EnqueueWait consumer thread');
+    GSpmcEnqWaitQ := nil;
+    LQ.Free;
+  end;
+end;
+
+var
+  GSpmcDeqWaitQ: TIntSpmc;
+  GSpmcDeqWaitProducerStarted: Int32;
+  GSpmcDeqWaitProducerResult: Int32;
+
+function SpmcDeqWaitProducer(AArg: Pointer): Pointer; cdecl;
+begin
+  Result := nil;
+  AtomicStore32(GSpmcDeqWaitProducerStarted, 1, moRelease);
+  platform_thread_sleep_ns(QueuePublishWakeDelayNs);
+  if GSpmcDeqWaitQ.TryEnqueue(99) then
+    AtomicStore32(GSpmcDeqWaitProducerResult, 1, moRelease)
+  else
+    AtomicStore32(GSpmcDeqWaitProducerResult, 0, moRelease);
+end;
+
+procedure TestSpmcDequeueWaitWake;
+var
+  LQ: TIntSpmc;
+  LProducer: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LElapsedMs: QWord;
+  LSpin: Integer;
+  LV: Integer;
+  LThreadCreated: Boolean;
+  LJoined: Boolean;
+begin
+  LQ := TIntSpmc.Create(4);
+  LThreadCreated := False;
+  LJoined := False;
+  try
+    GSpmcDeqWaitQ := LQ;
+    AtomicStore32(GSpmcDeqWaitProducerStarted, 0, moRelease);
+    AtomicStore32(GSpmcDeqWaitProducerResult, -1, moRelease);
+    StartThread(LProducer, @SpmcDeqWaitProducer, nil, 'SPMC DequeueWait producer thread');
+    LThreadCreated := True;
+
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GSpmcDeqWaitProducerStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GSpmcDeqWaitProducerStarted, moAcquire)),
+      'SPMC DequeueWait producer must start before consumer waits');
+
+    LElapsedMs := GetTickCount64;
+    Check(LQ.DequeueWait(LV), 'SPMC DequeueWait must succeed after producer publishes');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+    CheckEqual(Int64(99), Int64(LV));
+
+    JoinThread(LProducer, LRetVal, 'SPMC DequeueWait producer thread');
+    LJoined := True;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GSpmcDeqWaitProducerResult, moAcquire)),
+      'SPMC DequeueWait background producer must have published');
+    Check(LElapsedMs < QueuePublishWakeBudgetMs,
+      'SPMC DequeueWait must wake after data publish before the full timeout');
+    Check(not LQ.TryDequeue(LV), 'SPMC queue must be empty after DequeueWait consumed the item');
+  finally
+    if LThreadCreated and (not LJoined) then
+      JoinThread(LProducer, LRetVal, 'SPMC DequeueWait producer thread');
+    GSpmcDeqWaitQ := nil;
+    LQ.Free;
+  end;
+end;
+
+procedure TestSpmcDequeueTimeoutOnData;
+var
+  LQ: TIntSpmc;
+  LV: Integer;
+begin
+  LQ := TIntSpmc.Create(4);
+  try
+    Check(LQ.TryEnqueue(77), 'SPMC dequeue-timeout-data seed');
+    Check(LQ.DequeueTimeout(LV, 1000000), 'SPMC DequeueTimeout must return immediately with data');
+    CheckEqual(Int64(77), Int64(LV));
+    Check(not LQ.TryDequeue(LV), 'SPMC queue must be empty after DequeueTimeout consumed');
   finally
     LQ.Free;
   end;
@@ -3963,12 +4269,17 @@ begin
   T.Run('EBR retire and collect', @TestEbrRetireAndCollect);
   T.Run('EBR defers while guard active', @TestEbrDefersWhileGuardActive);
   T.Run('EBR guard leave idempotent', @TestEbrGuardLeaveIdempotent);
+  T.Run('EBR nil guard acquire', @TestEbrNilGuardAcquire);
+  T.Run('EBR multi-guard retire+collect', @TestEbrMultiGuardRetireCollect);
+  T.Run('EBR destroy reclaims retired', @TestEbrDestroyWithRetired);
   T.Run('Stack 4P+4C stress', @TestStackStress);
   T.Run('Deque owner+thief stress', @TestDequeOwnerThief);
   T.Run('SegQueue basic', @TestSegQueueBasic);
   T.Run('SegQueue segment rollover', @TestSegQueueSegmentRollover);
   T.Run('SegQueue empty', @TestSegQueueEmpty);
   T.Run('SegQueue approx count', @TestSegQueueApproxCount);
+  T.Run('SegQueue multi-producer', @TestSegQueueMultiProducer);
+  T.Run('SegQueue destroy active segments', @TestSegQueueDestroyActiveSegments);
   T.Run('SPMC basic', @TestSpmcBasic);
   T.Run('SPMC capacity', @TestSpmcCapacity);
   T.Run('SPMC full/empty', @TestSpmcFullEmpty);
@@ -3976,6 +4287,10 @@ begin
   T.Run('SPMC enqueue timeout on full', @TestSpmcEnqueueTimeoutOnFull);
   T.Run('SPMC enqueue timeout wakes on space', @TestSpmcEnqueueTimeoutOnSpace);
   T.Run('SPMC dequeue timeout on empty', @TestSpmcDequeueTimeoutOnEmpty);
+  T.Run('SPMC approx count', @TestSpmcApproxCount);
+  T.Run('SPMC enqueue wait wakes on space', @TestSpmcEnqueueWaitWake);
+  T.Run('SPMC dequeue wait wakes on data', @TestSpmcDequeueWaitWake);
+  T.Run('SPMC dequeue timeout on data', @TestSpmcDequeueTimeoutOnData);
 
 
   T.Run('SegQueue managed reject', @TestSegQueueManagedReject);
