@@ -139,6 +139,7 @@ procedure TestToUpper;
 begin
   CheckEqual('HELLO', TextToUpper('hello'), 'lower to upper');
   CheckEqual('HELLO123', TextToUpper('Hello123'), 'mixed');
+  CheckEqual('STRASSE', TextToUpper('Stra' + #$C3#$9F + 'e'), 'unicode sharp s upper');
   CheckEqual('', TextToUpper(''), 'empty');
 end;
 
@@ -146,6 +147,7 @@ procedure TestToLower;
 begin
   CheckEqual('hello', TextToLower('HELLO'), 'upper to lower');
   CheckEqual('hello123', TextToLower('Hello123'), 'mixed');
+  CheckEqual(#$CF#$89, TextToLower(#$CE#$A9), 'unicode omega lower');
   CheckEqual('', TextToLower(''), 'empty');
 end;
 
@@ -323,10 +325,10 @@ begin
     'facade replace routed to utils');
   CheckContains(LSource, 'Result := nextpas.core.text.utils.StringReplace(AValue, AOld, ANew, True);',
     'facade replace all routed to utils');
-  CheckContains(LSource, 'Result := nextpas.core.text.utils.UpperCase(AValue);',
-    'facade upper routed to utils');
-  CheckContains(LSource, 'Result := nextpas.core.text.utils.LowerCase(AValue);',
-    'facade lower routed to utils');
+  CheckContains(LSource, 'Result := nextpas.core.text.unicode.UTF8ToUpper(AValue);',
+    'facade upper routed to unicode');
+  CheckContains(LSource, 'Result := nextpas.core.text.unicode.UTF8ToLower(AValue);',
+    'facade lower routed to unicode');
   CheckContains(LSource, 'Result := nextpas.core.text.utils.PadLeft(AValue, AWidth, APadChar);',
     'facade pad left routed to utils');
   CheckContains(LSource, 'Result := nextpas.core.text.utils.PadRight(AValue, AWidth, APadChar);',
@@ -349,8 +351,6 @@ begin
     'facade builder interface routed to builder');
   CheckContains(LSource, 'Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);',
     'facade TextFormat routed to text.format');
-  CheckContains(LSource, 'IStringBuilder = nextpas.core.text.builder.IStringBuilder;',
-    'facade builder interface routed to builder');
   CheckContains(LSource, 'function MakeStringBuilder',
     'facade builder factory declared');
   CheckContains(LSource, 'Result := nextpas.core.text.builder.MakeStringBuilder(AInitialCap);',
@@ -395,6 +395,9 @@ begin
 
   CheckContains(LUtilsSource, 'function LowerCase(const S: string): string;',
     'utils publishes lower case owner');
+  CheckContains(LUtilsSource,
+    '@note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode.',
+    'utils ascii-only note');
   CheckContains(LConvSource, 'Result := nextpas.core.text.utils.Trim(AStr);',
     'conv trim forwards to utils');
   CheckContains(LConvSource, 'Result := nextpas.core.text.utils.TrimLeft(AStr);',
@@ -405,6 +408,9 @@ begin
     'conv upper forwards to utils');
   CheckContains(LConvSource, 'Result := nextpas.core.text.utils.LowerCase(AStr);',
     'conv lower forwards to utils');
+  CheckContains(LConvSource,
+    '@note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode.',
+    'conv ascii-only note');
   CheckContains(LConvSource, 'Result := nextpas.core.text.utils.StringReplace(AStr, AOld, ANew, AAll);',
     'conv replace forwards to utils');
 end;
