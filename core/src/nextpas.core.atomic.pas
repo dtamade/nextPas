@@ -624,10 +624,16 @@ function atomic_fetch_nand(var aObj: Int32; aArg: Int32): Int32; overload; inlin
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function atomic_fetch_max_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64; overload; inline;
 function atomic_fetch_max_64(var aObj: Int64; aArg: Int64): Int64; overload; inline;
+function atomic_fetch_max_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64; overload; inline;
+function atomic_fetch_max_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; inline;
 function atomic_fetch_min_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64; overload; inline;
 function atomic_fetch_min_64(var aObj: Int64; aArg: Int64): Int64; overload; inline;
+function atomic_fetch_min_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64; overload; inline;
+function atomic_fetch_min_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; inline;
 function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64; overload; inline;
 function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64): Int64; overload; inline;
+function atomic_fetch_nand_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64; overload; inline;
+function atomic_fetch_nand_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; inline;
 {$ENDIF}
 
 //┌────────────────────────────────────────────────────────────────────────────┐
@@ -3413,6 +3419,65 @@ function atomic_fetch_max_64(var aObj: Int64; aArg: Int64): Int64;
 begin
   Result := atomic_fetch_max_64(aObj, aArg, mo_seq_cst);
 end;
+
+function atomic_fetch_max_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64;
+var
+  LOld, LNew: UInt64;
+begin
+  AtomicValidateRmwOrder(aOrder);
+
+  {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
+  case aOrder of
+    mo_seq_cst:
+      atomic_seq_cst_fence;
+    mo_release, mo_acq_rel:
+      WriteBarrier;
+  else
+    ;
+  end;
+  {$ENDIF}
+  repeat
+    {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
+    {$PUSH}
+    {$WARN 4055 OFF}
+    LOld := UInt64(_atomic_load_64_x86(PInt64(@aObj)^));
+    {$POP}
+    {$ELSE}
+    LOld := aObj;
+    {$ENDIF}
+    if aArg > LOld then
+      LNew := aArg
+    else
+      LNew := LOld;
+    {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
+    {$PUSH}
+    {$WARN 4055 OFF}
+    if _atomic_cmpxchg_64_x86(PInt64(@aObj)^, PInt64(@LOld)^, PInt64(@LNew)^) then
+      Break;
+    {$POP}
+    {$ELSE}
+    if UInt64(InterlockedCompareExchange64(PInt64(@aObj)^, Int64(LNew), Int64(LOld))) = LOld then
+      Break;
+    {$ENDIF}
+    cpu_pause;
+  until False;
+  Result := LOld;
+  {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
+  case aOrder of
+    mo_seq_cst:
+      atomic_seq_cst_fence;
+    mo_consume, mo_acquire, mo_acq_rel:
+      ReadBarrier;
+  else
+    ;
+  end;
+  {$ENDIF}
+end;
+
+function atomic_fetch_max_64(var aObj: UInt64; aArg: UInt64): UInt64;
+begin
+  Result := atomic_fetch_max_64(aObj, aArg, mo_seq_cst);
+end;
 {$ENDIF}
 
 // ✅ Phase 3: atomic_fetch_min - 返回旧值，存储 min(old, arg)
@@ -3511,6 +3576,65 @@ function atomic_fetch_min_64(var aObj: Int64; aArg: Int64): Int64;
 begin
   Result := atomic_fetch_min_64(aObj, aArg, mo_seq_cst);
 end;
+
+function atomic_fetch_min_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64;
+var
+  LOld, LNew: UInt64;
+begin
+  AtomicValidateRmwOrder(aOrder);
+
+  {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
+  case aOrder of
+    mo_seq_cst:
+      atomic_seq_cst_fence;
+    mo_release, mo_acq_rel:
+      WriteBarrier;
+  else
+    ;
+  end;
+  {$ENDIF}
+  repeat
+    {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
+    {$PUSH}
+    {$WARN 4055 OFF}
+    LOld := UInt64(_atomic_load_64_x86(PInt64(@aObj)^));
+    {$POP}
+    {$ELSE}
+    LOld := aObj;
+    {$ENDIF}
+    if aArg < LOld then
+      LNew := aArg
+    else
+      LNew := LOld;
+    {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
+    {$PUSH}
+    {$WARN 4055 OFF}
+    if _atomic_cmpxchg_64_x86(PInt64(@aObj)^, PInt64(@LOld)^, PInt64(@LNew)^) then
+      Break;
+    {$POP}
+    {$ELSE}
+    if UInt64(InterlockedCompareExchange64(PInt64(@aObj)^, Int64(LNew), Int64(LOld))) = LOld then
+      Break;
+    {$ENDIF}
+    cpu_pause;
+  until False;
+  Result := LOld;
+  {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
+  case aOrder of
+    mo_seq_cst:
+      atomic_seq_cst_fence;
+    mo_consume, mo_acquire, mo_acq_rel:
+      ReadBarrier;
+  else
+    ;
+  end;
+  {$ENDIF}
+end;
+
+function atomic_fetch_min_64(var aObj: UInt64; aArg: UInt64): UInt64;
+begin
+  Result := atomic_fetch_min_64(aObj, aArg, mo_seq_cst);
+end;
 {$ENDIF}
 
 // ✅ Phase 3: atomic_fetch_nand - 返回旧值，存储 NOT(old AND arg)
@@ -3600,6 +3724,62 @@ begin
 end;
 
 function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64): Int64;
+begin
+  Result := atomic_fetch_nand_64(aObj, aArg, mo_seq_cst);
+end;
+
+function atomic_fetch_nand_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64;
+var
+  LOld, LNew: UInt64;
+begin
+  AtomicValidateRmwOrder(aOrder);
+
+  {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
+  case aOrder of
+    mo_seq_cst:
+      atomic_seq_cst_fence;
+    mo_release, mo_acq_rel:
+      WriteBarrier;
+  else
+    ;
+  end;
+  {$ENDIF}
+  repeat
+    {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
+    {$PUSH}
+    {$WARN 4055 OFF}
+    LOld := UInt64(_atomic_load_64_x86(PInt64(@aObj)^));
+    {$POP}
+    {$ELSE}
+    LOld := aObj;
+    {$ENDIF}
+    LNew := not (LOld and aArg);
+    {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
+    {$PUSH}
+    {$WARN 4055 OFF}
+    if _atomic_cmpxchg_64_x86(PInt64(@aObj)^, PInt64(@LOld)^, PInt64(@LNew)^) then
+      Break;
+    {$POP}
+    {$ELSE}
+    if UInt64(InterlockedCompareExchange64(PInt64(@aObj)^, Int64(LNew), Int64(LOld))) = LOld then
+      Break;
+    {$ENDIF}
+    cpu_pause;
+  until False;
+  Result := LOld;
+  {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
+  case aOrder of
+    mo_seq_cst:
+      atomic_seq_cst_fence;
+    mo_consume, mo_acquire, mo_acq_rel:
+      ReadBarrier;
+  else
+    ;
+  end;
+  {$ENDIF}
+end;
+
+function atomic_fetch_nand_64(var aObj: UInt64; aArg: UInt64): UInt64;
 begin
   Result := atomic_fetch_nand_64(aObj, aArg, mo_seq_cst);
 end;
