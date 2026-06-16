@@ -5,6 +5,7 @@ program test_transform;
 uses
   nextpas.core.errors,
   nextpas.core.testing,
+  nextpas.core.math.base,
   nextpas.core.math.scalar,
   nextpas.core.math.vec,
   nextpas.core.math.mat,

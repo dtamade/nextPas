@@ -6,6 +6,7 @@ uses
   SysUtils,
   nextpas.core.errors,
   nextpas.core.testing,
+  nextpas.core.math.base,
   nextpas.core.math.scalar;
 
 {$IF (SizeOf(Extended) > SizeOf(Double)) AND (DEFINED(CPUX86_64) OR DEFINED(CPUX86) OR DEFINED(CPUI386))}
