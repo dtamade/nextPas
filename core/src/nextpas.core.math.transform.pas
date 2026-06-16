@@ -104,13 +104,13 @@ end;
 
 procedure RequirePerspectiveValidFov(const AFovYRad: Single); overload; inline;
 begin
-  if AFovYRad >= Single(nextpas.core.math.scalar.PI_VALUE) then
+  if AFovYRad >= Single(nextpas.core.math.trig.PI_VALUE) then
     raise EArgumentError.Create('Perspective: vertical FOV is invalid');
 end;
 
 procedure RequirePerspectiveValidFov(const AFovYRad: Double); overload; inline;
 begin
-  if AFovYRad >= nextpas.core.math.scalar.PI_VALUE then
+  if AFovYRad >= nextpas.core.math.trig.PI_VALUE then
     raise EArgumentError.Create('Perspective: vertical FOV is invalid');
 end;
 

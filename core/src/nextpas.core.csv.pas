@@ -73,13 +73,18 @@ type
     FUseCRLF: Boolean;
     FComment: AnsiChar;
     FFieldCount: Integer;
+    FAllocator: IAllocator;
   public
     class function Create(ADelimiter: AnsiChar = ',';
       AUseCRLF: Boolean = False; AComment: AnsiChar = #0): TCsvWriter; static;
+    class function CreateWith(const AAllocator: IAllocator;
+      ADelimiter: AnsiChar = ','; AUseCRLF: Boolean = False;
+      AComment: AnsiChar = #0): TCsvWriter; static;
     procedure WriteRow(const AFields: array of string);
     procedure WriteField(const AField: string);
     procedure EndRow;
     function ToString: string;
+    function Allocator: IAllocator;
   end;
 
 function CsvParse(const AInput: string; ADelimiter: AnsiChar = ','): TStringMatrix;
@@ -615,6 +620,23 @@ begin
   Result.FUseCRLF := AUseCRLF;
   Result.FComment := AComment;
   Result.FFieldCount := 0;
+  Result.FAllocator := nil;
+end;
+
+class function TCsvWriter.CreateWith(const AAllocator: IAllocator;
+  ADelimiter: AnsiChar; AUseCRLF: Boolean; AComment: AnsiChar): TCsvWriter;
+begin
+  ValidateCsvDelimiter(ADelimiter, 'TCsvWriter.CreateWith');
+  ValidateCsvCommentMarker(AComment, ADelimiter, 'TCsvWriter.CreateWith');
+  Result.FResult := '';
+  Result.FDelimiter := ADelimiter;
+  Result.FUseCRLF := AUseCRLF;
+  Result.FComment := AComment;
+  Result.FFieldCount := 0;
+  if AAllocator = nil then
+    Result.FAllocator := DefaultAllocator
+  else
+    Result.FAllocator := AAllocator;
 end;
 
 function NeedsQuoting(const AField: string; ADelimiter, AComment: AnsiChar;
@@ -724,6 +746,14 @@ begin
     raise EInvalidOperationError.Create(
       'TCsvWriter.ToString: unfinished row must be ended with EndRow');
   Result := FResult;
+end;
+
+function TCsvWriter.Allocator: IAllocator;
+begin
+  if FAllocator = nil then
+    Result := DefaultAllocator
+  else
+    Result := FAllocator;
 end;
 
 end.

@@ -262,6 +262,209 @@ uses
   nextpas.core.errors,
   nextpas.core.math.impl.scalar;
 
+{ RoundTo - rounds AValue to ADecimals decimal places }
+function RoundTo(const AValue: Double; const ADecimals: Integer): Double;
+var
+  LFactor: Double;
+  i: Integer;
+begin
+  if DoubleIsNaN(AValue) then
+    Exit(DoubleQuietNaN);
+  LFactor := 1.0;
+  if ADecimals >= 0 then
+  begin
+    for i := 1 to ADecimals do
+      LFactor := LFactor * 10.0;
+    Result := System.Round(AValue * LFactor) / LFactor;
+  end
+  else
+  begin
+    for i := 1 to -ADecimals do
+      LFactor := LFactor * 10.0;
+    Result := System.Round(AValue / LFactor) * LFactor;
+  end;
+end;
+
+function RoundTo(const AValue: Single; const ADecimals: Integer): Single;
+begin
+  Result := Single(RoundTo(Double(AValue), ADecimals));
+end;
+
+{ Sum - computes sum of array elements }
+function Sum(const AData: array of Double): Double;
+var
+  i: Integer;
+begin
+  Result := 0.0;
+  for i := 0 to Length(AData) - 1 do
+    Result := Result + AData[i];
+end;
+
+function Sum(const AData: array of Single): Single;
+var
+  i: Integer;
+begin
+  Result := 0.0;
+  for i := 0 to Length(AData) - 1 do
+    Result := Result + AData[i];
+end;
+
+function SumInt(const AData: array of Integer): Int64;
+var
+  i: Integer;
+begin
+  Result := 0;
+  for i := 0 to Length(AData) - 1 do
+    Result := Result + AData[i];
+end;
+
+{ SumsAndSquares - helper for variance computation }
+procedure SumsAndSquares(const AData: array of Double; out ASum, ASumOfSquares: Double);
+var
+  i: Integer;
+  LVal: Double;
+begin
+  ASum := 0.0;
+  ASumOfSquares := 0.0;
+  for i := 0 to Length(AData) - 1 do
+  begin
+    LVal := AData[i];
+    ASum := ASum + LVal;
+    ASumOfSquares := ASumOfSquares + LVal * LVal;
+  end;
+end;
+
+procedure SumsAndSquares(const AData: array of Single; out ASum, ASumOfSquares: Single);
+var
+  i: Integer;
+  LVal: Single;
+begin
+  ASum := 0.0;
+  ASumOfSquares := 0.0;
+  for i := 0 to Length(AData) - 1 do
+  begin
+    LVal := AData[i];
+    ASum := ASum + LVal;
+    ASumOfSquares := ASumOfSquares + LVal * LVal;
+  end;
+end;
+
+{ Mean - arithmetic mean of array elements }
+function Mean(const AData: array of Double): Double;
+var
+  LCount: Integer;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(DoubleQuietNaN);
+  Result := Sum(AData) / LCount;
+end;
+
+function Mean(const AData: array of Single): Single;
+var
+  LCount: Integer;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(SingleQuietNaN);
+  Result := Sum(AData) / LCount;
+end;
+
+{ Variance - sample variance (Bessel-corrected, denominator N-1) }
+function Variance(const AData: array of Double): Double;
+var
+  i, LCount: Integer;
+  LMean, LSumSqDiff: Double;
+begin
+  LCount := Length(AData);
+  if LCount < 2 then
+    Exit(DoubleQuietNaN);
+  LMean := Mean(AData);
+  LSumSqDiff := 0.0;
+  for i := 0 to LCount - 1 do
+    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
+  Result := LSumSqDiff / (LCount - 1);
+end;
+
+function Variance(const AData: array of Single): Single;
+var
+  i, LCount: Integer;
+  LMean, LSumSqDiff: Single;
+begin
+  LCount := Length(AData);
+  if LCount < 2 then
+    Exit(SingleQuietNaN);
+  LMean := Mean(AData);
+  LSumSqDiff := 0.0;
+  for i := 0 to LCount - 1 do
+    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
+  Result := LSumSqDiff / (LCount - 1);
+end;
+
+{ PopnVariance - population variance (denominator N) }
+function PopnVariance(const AData: array of Double): Double;
+var
+  i, LCount: Integer;
+  LMean, LSumSqDiff: Double;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(DoubleQuietNaN);
+  LMean := Mean(AData);
+  LSumSqDiff := 0.0;
+  for i := 0 to LCount - 1 do
+    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
+  Result := LSumSqDiff / LCount;
+end;
+
+function PopnVariance(const AData: array of Single): Single;
+var
+  i, LCount: Integer;
+  LMean, LSumSqDiff: Single;
+begin
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(SingleQuietNaN);
+  LMean := Mean(AData);
+  LSumSqDiff := 0.0;
+  for i := 0 to LCount - 1 do
+    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
+  Result := LSumSqDiff / LCount;
+end;
+
+{ StdDev - sample standard deviation }
+function StdDev(const AData: array of Double): Double;
+begin
+  Result := System.Sqrt(Variance(AData));
+end;
+
+function StdDev(const AData: array of Single): Single;
+begin
+  Result := Single(System.Sqrt(Double(Variance(AData))));
+end;
+
+{ TotalVariance - population variance for total dataset }
+function TotalVariance(const AData: array of Double): Double;
+begin
+  Result := PopnVariance(AData);
+end;
+
+function TotalVariance(const AData: array of Single): Single;
+begin
+  Result := PopnVariance(AData);
+end;
+
+{ PopnStdDev - population standard deviation }
+function PopnStdDev(const AData: array of Double): Double;
+begin
+  Result := System.Sqrt(PopnVariance(AData));
+end;
+
+function PopnStdDev(const AData: array of Single): Single;
+begin
+  Result := Single(System.Sqrt(Double(PopnVariance(AData))));
+end;
+
 {$IF (SizeOf(Extended) > SizeOf(Double)) AND (DEFINED(CPUX86_64) OR DEFINED(CPUX86) OR DEFINED(CPUI386))}
   {$DEFINE NEXTPAS_MATH_EXTENDED_X87_80}
 {$ELSEIF SizeOf(Extended) = SizeOf(Double)}

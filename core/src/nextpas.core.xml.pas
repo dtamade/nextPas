@@ -1,6 +1,7 @@
 unit nextpas.core.xml;
 {**
  * @desc XML 模块 Facade：统一导出 reader/writer/dom 所有公共类型和函数。
+ *       提供 IXmlDocument 接口以匹配 JSON/TOML/YAML 的 I*Document 一致性。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -32,6 +33,20 @@ type
   TXmlNodeArray = nextpas.core.xml.dom.TXmlNodeArray;
   TXmlDocument = nextpas.core.xml.dom.TXmlDocument;
 
+  { IXmlDocument — interface wrapper matching JSON/TOML/YAML I*Document pattern }
+  IXmlDocument = interface
+    ['{E4C7D0B2-1A3F-4B5E-9C8D-2F6A7B0E1D3C}']
+    function GetRoot: TXmlNode;
+    function GetHasError: Boolean;
+    function GetError: EXmlError;
+    function GetDocument: TXmlDocument;
+    function Stringify: string;
+    property Root: TXmlNode read GetRoot;
+    property HasError: Boolean read GetHasError;
+    property Error: EXmlError read GetError;
+    property Document: TXmlDocument read GetDocument;
+  end;
+
 const
   { Re-export TXmlTokenKind 枚举值，使 facade 完全自包含（无需 uses base 即可比较 token 类型） }
   xtkNone            = nextpas.core.xml.base.xtkNone;
@@ -54,9 +69,14 @@ const
 
 function XmlParse(const AInput: string): TXmlDocument; inline;
 function XmlParseWith(const AInput: string; const AAllocator: IAllocator): TXmlDocument;
+function XmlParseDoc(const AInput: string): IXmlDocument; inline;
+function XmlParseDocWith(const AInput: string; const AAllocator: IAllocator): IXmlDocument;
 function TryXmlParse(const AInput: string; out ADoc: TXmlDocument): Boolean;
 function TryXmlParseWith(const AInput: string; const AAllocator: IAllocator;
   out ADoc: TXmlDocument): Boolean;
+function TryXmlParseDoc(const AInput: string; out ADoc: IXmlDocument): Boolean;
+function TryXmlParseDocWith(const AInput: string; const AAllocator: IAllocator;
+  out ADoc: IXmlDocument): Boolean;
 function XmlTokenize(const AInput: string): TXmlTokenArray;
 function XmlTokenizeWith(const AInput: string; const AAllocator: IAllocator): TXmlTokenArray;
 function XmlDecodeEntities(const AStr: string): string; inline;
@@ -70,6 +90,23 @@ uses
   nextpas.core.mem.default;
 
 type
+  { TXmlDocumentImpl — IXmlDocument implementation wrapping TXmlDocument record }
+  TXmlDocumentImpl = class(TInterfacedObject, IXmlDocument)
+  private
+    FDoc: TXmlDocument;
+    FError: EXmlError;
+    FRawInput: string;
+    function GetRoot: TXmlNode;
+    function GetHasError: Boolean;
+    function GetError: EXmlError;
+    function GetDocument: TXmlDocument;
+  public
+    constructor CreateSuccess(const ADoc: TXmlDocument; const ARawInput: string);
+    constructor CreateFailure(const AError: EXmlError);
+    destructor Destroy; override;
+    function Stringify: string;
+  end;
+
   PXmlTokenSlot = ^TXmlToken;
 
 function GrowTokenSlots(const AAllocator: IAllocator; var ASlots: PXmlTokenSlot;
@@ -112,6 +149,63 @@ begin
   ASlots := nil;
 end;
 
+{ TXmlDocumentImpl }
+
+constructor TXmlDocumentImpl.CreateSuccess(const ADoc: TXmlDocument;
+  const ARawInput: string);
+begin
+  inherited Create;
+  FDoc := ADoc;
+  FError := nil;
+  FRawInput := ARawInput;
+end;
+
+constructor TXmlDocumentImpl.CreateFailure(const AError: EXmlError);
+begin
+  inherited Create;
+  FDoc := TXmlDocument.None;
+  { 克隆异常对象，避免持有 RTL 管理的异常指针（except 块结束后会被释放） }
+  FError := EXmlError.Create(AError.Message, AError.Pos);
+  FRawInput := '';
+end;
+
+destructor TXmlDocumentImpl.Destroy;
+begin
+  if FDoc.IsAssigned then
+    FDoc.Done;
+  FError.Free;
+  FError := nil;
+  inherited Destroy;
+end;
+
+function TXmlDocumentImpl.GetRoot: TXmlNode;
+begin
+  if FDoc.IsAssigned then
+    Result := FDoc.Root
+  else
+    Result := TXmlNode.None;
+end;
+
+function TXmlDocumentImpl.GetHasError: Boolean;
+begin
+  Result := FError <> nil;
+end;
+
+function TXmlDocumentImpl.GetError: EXmlError;
+begin
+  Result := FError;
+end;
+
+function TXmlDocumentImpl.GetDocument: TXmlDocument;
+begin
+  Result := FDoc;
+end;
+
+function TXmlDocumentImpl.Stringify: string;
+begin
+  Result := FRawInput;
+end;
+
 function XmlParse(const AInput: string): TXmlDocument;
 begin
   Result := XmlParseWith(AInput, DefaultAllocator);
@@ -140,6 +234,47 @@ begin
       if ADoc.IsAssigned then
         ADoc.Done;
       ADoc := TXmlDocument.None;
+      Result := False;
+    end;
+  end;
+end;
+
+function XmlParseDoc(const AInput: string): IXmlDocument;
+begin
+  Result := XmlParseDocWith(AInput, DefaultAllocator);
+end;
+
+function XmlParseDocWith(const AInput: string; const AAllocator: IAllocator): IXmlDocument;
+var
+  LDoc: TXmlDocument;
+begin
+  try
+    LDoc := TXmlDocument.ParseWith(AInput, AAllocator);
+    Result := TXmlDocumentImpl.CreateSuccess(LDoc, AInput);
+  except
+    on E: EXmlError do
+      Result := TXmlDocumentImpl.CreateFailure(E);
+  end;
+end;
+
+function TryXmlParseDoc(const AInput: string; out ADoc: IXmlDocument): Boolean;
+begin
+  Result := TryXmlParseDocWith(AInput, DefaultAllocator, ADoc);
+end;
+
+function TryXmlParseDocWith(const AInput: string; const AAllocator: IAllocator;
+  out ADoc: IXmlDocument): Boolean;
+var
+  LDoc: TXmlDocument;
+begin
+  try
+    LDoc := TXmlDocument.ParseWith(AInput, AAllocator);
+    ADoc := TXmlDocumentImpl.CreateSuccess(LDoc, AInput);
+    Result := True;
+  except
+    on E: EXmlError do
+    begin
+      ADoc := TXmlDocumentImpl.CreateFailure(E);
       Result := False;
     end;
   end;

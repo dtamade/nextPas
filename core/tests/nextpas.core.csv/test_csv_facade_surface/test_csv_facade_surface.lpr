@@ -51,6 +51,7 @@ end;
 procedure TestFacadeExposesAllocatorSurface;
 var
   LReader: TCsvReader;
+  LWriter: TCsvWriter;
   LRows: TStringMatrix;
 begin
   LReader := TCsvReader.Create('x,y', ',', 0, False, #0, nil);
@@ -65,6 +66,12 @@ begin
   CheckEqual(Int64(2), Int64(Length(LRows)),
     'CsvParseWith row count visible');
   CheckEqual('Pascal', LRows[1][0], 'CsvParseWith field value visible');
+
+  { TCsvWriter.CreateWith allocator surface }
+  LWriter := TCsvWriter.CreateWith(DefaultAllocator);
+  LWriter.WriteRow(['a', 'b']);
+  Check(LWriter.Allocator <> nil, 'writer allocator accessor visible');
+  Check(Pos('a,b', LWriter.ToString) = 1, 'writer CreateWith works');
 end;
 
 begin

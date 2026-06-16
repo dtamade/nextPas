@@ -158,8 +158,38 @@ function StringToPEMType(const ATypeStr: string): TPEMType;
 
 implementation
 
-uses
-  nextpas.core.text.strings;
+function ParseLines(const AText: string): TStringArray;
+var
+  i, LStart, LCount, LLen: SizeInt;
+begin
+  LLen := Length(AText);
+  if LLen = 0 then Exit(nil);
+  LCount := 0;
+  for i := 1 to LLen do
+    if AText[i] = #10 then Inc(LCount);
+  Inc(LCount);
+  SetLength(Result, LCount);
+  LCount := 0;
+  LStart := 1;
+  for i := 1 to LLen do
+  begin
+    if AText[i] = #10 then
+    begin
+      if (i > LStart) and (AText[i - 1] = #13) then
+        Result[LCount] := System.Copy(AText, LStart, i - LStart - 1)
+      else
+        Result[LCount] := System.Copy(AText, LStart, i - LStart);
+      Inc(LCount);
+      LStart := i + 1;
+    end;
+  end;
+  if LStart <= LLen then
+  begin
+    Result[LCount] := System.Copy(AText, LStart, LLen - LStart + 1);
+    Inc(LCount);
+  end;
+  SetLength(Result, LCount);
+end;
 
 
 // ========================================================================
@@ -274,7 +304,7 @@ begin
 
   // 提取并处理内容
   try
-    Lines := nextpas.core.text.strings.StringsParseLines(Copy(FText, ContentStart, ContentEnd - ContentStart));
+    Lines := ParseLines(Copy(FText, ContentStart, ContentEnd - ContentStart));
     InHeaders := True;
     HeaderEnded := False;
 

@@ -112,11 +112,7 @@ begin
     else if LSeq < LPos then
       Exit(False)
     else
-<<<<<<< HEAD
-      Exit(False); // Single producer cannot wait for another producer to free this slot.
-=======
       Exit(False); { Single producer cannot wait for another producer to free this slot }
->>>>>>> main
   end;
 end;
 
