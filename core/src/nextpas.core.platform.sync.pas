@@ -1073,6 +1073,7 @@ end;
 {$ENDIF}
 {$ENDIF}
 {$ENDIF}
+{$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
 
@@ -1259,7 +1260,7 @@ begin
   if _WaitAddressResolved then
     Exit;
   LLib := GetModuleHandleW(L'kernel32');
-  if LLib <> 0 then
+  if LLib <> nil then
   begin
     _WaitOnAddress := TWaitOnAddressFunc(GetProcAddress(LLib, 'WaitOnAddress'));
     _WakeByAddressSingle := TWakeByAddressSingleProc(GetProcAddress(LLib, 'WakeByAddressSingle'));

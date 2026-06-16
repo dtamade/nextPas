@@ -47,6 +47,7 @@ const
 function platform_fs_exists(const APath: PAnsiChar): Boolean;
 function platform_fs_is_file(const APath: PAnsiChar): Boolean;
 function platform_fs_is_dir(const APath: PAnsiChar): Boolean;
+function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
 function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
 function platform_fs_temp_dir(ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
@@ -136,6 +137,20 @@ begin
   if platform_file_stat(APath, LStat) <> 0 then
     Exit(False);
   Result := LStat.FileType = ftDirectory;
+end;
+
+{$IFDEF NEXTPAS_UNIX}
+function platform_access(path: PAnsiChar; mode: Int32): Int32;
+  cdecl; external 'c' name 'access';
+{$ENDIF}
+
+function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
+begin
+{$IFDEF NEXTPAS_UNIX}
+  Result := platform_access(APath, 1 {X_OK}) = 0;
+{$ELSE}
+  Result := platform_fs_is_file(APath);
+{$ENDIF}
 end;
 
 function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
