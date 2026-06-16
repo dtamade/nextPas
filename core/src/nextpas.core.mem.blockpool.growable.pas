@@ -14,9 +14,9 @@ interface
 
 uses
   nextpas.core.math,              // ✅ Math facade (for trunc)
+  nextpas.core.mem.base,
   nextpas.core.mem.blockpool,
   nextpas.core.mem.intf,
-  nextpas.core.mem.layout,
   nextpas.core.mem.error;
 
 type
@@ -134,6 +134,11 @@ implementation
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in pool internals
+
+function IsPowerOfTwo(const AValue: SizeUInt): Boolean; inline;
+begin
+  Result := (AValue <> 0) and ((AValue and (AValue - 1)) = 0);
+end;
 
 class function TGrowingBlockPoolConfig.Default(aBlockSize, aInitialCapacity: SizeUInt): TGrowingBlockPoolConfig;
 begin

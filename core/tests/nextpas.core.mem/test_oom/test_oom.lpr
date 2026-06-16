@@ -7,7 +7,6 @@ uses
   nextpas.core.exception,
   nextpas.core.testing,
   nextpas.core.mem.error,
-  nextpas.core.mem.layout,
   nextpas.core.mem.allocator,
   nextpas.core.mem.blockpool,
   nextpas.core.mem.blockpool.growable,
@@ -97,9 +96,9 @@ begin
   Check(not LCaughtOom, aName + ' is not canonical OOM');
 end;
 
-procedure RaiseAllocResultOom;
+procedure RaiseMemOutOfMemory;
 begin
-  TAllocResult.Err(aeOutOfMemory).ExpectPtr('alloc result');
+  raise nextpas.core.mem.error.EOutOfMemory.Create(aeOutOfMemory, 'alloc result');
 end;
 
 procedure RaiseBlockPoolTotalSizeOverflow;
@@ -212,9 +211,9 @@ begin
   end;
 end;
 
-procedure TestAllocResultOomUsesCanonicalRoot;
+procedure TestMemOutOfMemoryUsesCanonicalRoot;
 begin
-  CheckRaisesCanonicalOutOfMemory(@RaiseAllocResultOom, 'TAllocResult.ExpectPtr');
+  CheckRaisesCanonicalOutOfMemory(@RaiseMemOutOfMemory, 'EOutOfMemory.Create');
 end;
 
 procedure TestBlockPoolOverflowContracts;
@@ -254,7 +253,7 @@ end;
 
 begin
   T := TTestRunner.Create('nextpas.core.mem.oom');
-  T.Run('alloc result OOM uses canonical root', @TestAllocResultOomUsesCanonicalRoot);
+  T.Run('mem OOM uses canonical root', @TestMemOutOfMemoryUsesCanonicalRoot);
   T.Run('blockpool overflow contracts', @TestBlockPoolOverflowContracts);
   T.Run('growable mem OOM uses canonical root', @TestGrowableMemOomUsesCanonicalRoot);
   T.Run('allocator-backed mem OOM uses canonical root', @TestAllocatorBackedMemOomUsesCanonicalRoot);

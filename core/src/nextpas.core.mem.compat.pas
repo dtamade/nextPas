@@ -6,13 +6,12 @@ interface
 
 uses
   nextpas.core.errors,
+  nextpas.core.mem.base,
   nextpas.core.mem.intf,
   nextpas.core.mem.pool.fixed,
   nextpas.core.mem.stack_pool,
   nextpas.core.mem.pool.slab,
-  nextpas.core.mem.blockpool,
-  nextpas.core.mem.layout,
-  nextpas.core.mem.error;
+  nextpas.core.mem.blockpool;
 
 type
   { Compatibility layer for legacy mem pool and adapter surfaces.
@@ -34,8 +33,6 @@ type
   IBlockPoolBatch = nextpas.core.mem.blockpool.IBlockPoolBatch;
   IArena = nextpas.core.mem.blockpool.IArena;
   TArenaMarker = nextpas.core.mem.blockpool.TArenaMarker;
-  TMemLayout = nextpas.core.mem.layout.TMemLayout;
-  TAllocResult = nextpas.core.mem.error.TAllocResult;
 
   IMemPool = interface
     ['{B03C5A4C-89D9-462E-8F01-3A4C3E1B7F0B}']
@@ -150,8 +147,9 @@ type
     FPool: IStackPool;
   public
     constructor Create(aPool: IStackPool);
-    function Alloc(const aLayout: TMemLayout): TAllocResult;
-    function AllocZeroed(const aLayout: TMemLayout): TAllocResult;
+    function Alloc(aSize: SizeUInt): Pointer;
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    function AllocZeroed(aSize: SizeUInt): Pointer;
     function SaveMark: TArenaMarker;
     procedure RestoreToMark(aMark: TArenaMarker);
     procedure Reset;
@@ -446,27 +444,21 @@ begin
   FPool := aPool;
 end;
 
-function TStackPoolToArenaAdapter.Alloc(const aLayout: TMemLayout): TAllocResult;
-var
-  LPtr: Pointer;
+function TStackPoolToArenaAdapter.Alloc(aSize: SizeUInt): Pointer;
 begin
-  if not aLayout.IsValid then
-    Exit(TAllocResult.Err(aeInvalidLayout));
-  if aLayout.IsZeroSized then
-    Exit(TAllocResult.Ok(nil));
-
-  LPtr := FPool.Alloc(aLayout.Size, aLayout.Align);
-  if LPtr = nil then
-    Result := TAllocResult.Err(aeOutOfMemory)
-  else
-    Result := TAllocResult.Ok(LPtr);
+  Result := FPool.Alloc(aSize, MEM_DEFAULT_ALIGN);
 end;
 
-function TStackPoolToArenaAdapter.AllocZeroed(const aLayout: TMemLayout): TAllocResult;
+function TStackPoolToArenaAdapter.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
 begin
-  Result := Alloc(aLayout);
-  if Result.IsOk and (Result.Ptr <> nil) then
-    FillChar(Result.Ptr^, aLayout.Size, 0);
+  Result := FPool.Alloc(aSize, aAlignment);
+end;
+
+function TStackPoolToArenaAdapter.AllocZeroed(aSize: SizeUInt): Pointer;
+begin
+  Result := Alloc(aSize);
+  if Result <> nil then
+    FillChar(Result^, aSize, 0);
 end;
 
 function TStackPoolToArenaAdapter.SaveMark: TArenaMarker;
@@ -506,24 +498,17 @@ begin
 end;
 
 function TArenaToStackPoolAdapter.Alloc(ASize: SizeUInt; AAlignment: SizeUInt): Pointer;
-var
-  LLayout: TMemLayout;
-  LResult: TAllocResult;
 begin
-  LLayout := TMemLayout.Create(ASize, AAlignment);
-  LResult := FArena.Alloc(LLayout);
-  Result := LResult.Unwrap;
+  if (AAlignment = 0) or (AAlignment = MEM_DEFAULT_ALIGN) then
+    Result := FArena.Alloc(ASize)
+  else
+    Result := FArena.AllocAligned(ASize, AAlignment);
 end;
 
 function TArenaToStackPoolAdapter.TryAlloc(out APtr: Pointer; ASize: SizeUInt): Boolean;
-var
-  LLayout: TMemLayout;
-  LResult: TAllocResult;
 begin
-  LLayout := TMemLayout.Create(ASize, SizeOf(Pointer));
-  LResult := FArena.Alloc(LLayout);
-  APtr := LResult.Unwrap;
-  Result := LResult.IsOk;
+  APtr := FArena.Alloc(ASize);
+  Result := APtr <> nil;
 end;
 
 procedure TArenaToStackPoolAdapter.Reset;

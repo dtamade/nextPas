@@ -147,7 +147,6 @@ RAW_HOST_ALLOWLIST=(
   "src/nextpas.core.git.libgit2.ffi.pas|ctypes"
   "src/nextpas.core.io.uring.pas|BaseUnix"
   "src/nextpas.core.mem.allocator.mimalloc.pas|dynlibs"
-  "src/nextpas.core.mem.mimalloc.binding.pas|DynLibs"
   "src/nextpas.core.simd.cpuinfo.darwin.pas|BaseUnix"
   "src/nextpas.core.simd.cpuinfo.darwin.pas|ctypes"
   "src/nextpas.core.simd.cpuinfo.diagnostic.pas|Windows"

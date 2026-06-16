@@ -6,9 +6,9 @@ interface
 
 uses
   nextpas.core.math,              // ✅ Math facade (for trunc)
+  nextpas.core.mem.base,
   nextpas.core.mem.blockpool,
   nextpas.core.mem.intf,
-  nextpas.core.mem.layout,
   nextpas.core.mem.error;
 
 type
@@ -69,12 +69,12 @@ type
    *   Arena := TGrowingArena.Create(Config);
    *   try
    *     // 快速分配多个对象
-   *     Ptr1 := Arena.Alloc(TMemLayout.Create(64, 8)).Ptr;
-   *     Ptr2 := Arena.Alloc(TMemLayout.Create(128, 16)).Ptr;
+   *     Ptr1 := Arena.Alloc(64);
+   *     Ptr2 := Arena.AllocAligned(128, 16);
    *
    *     // 保存标记点
    *     Mark := Arena.SaveMark;
-   *     Ptr3 := Arena.Alloc(TMemLayout.Create(256, 32)).Ptr;
+   *     Ptr3 := Arena.AllocAligned(256, 32);
    *
    *     // 恢复到标记点（释放 Ptr3）
    *     Arena.RestoreToMark(Mark);
@@ -129,7 +129,7 @@ type
   private
     function CurrentUsed: SizeUInt; inline;
     function AlignPtr(aPtr: PByte; aAlign: SizeUInt): PByte; inline;
-    function CalcRequiredMinSize(const aLayout: TMemLayout; out aMinSize: SizeUInt): Boolean;
+    function CalcRequiredMinSize(aSize, aAlignment: SizeUInt; out aMinSize: SizeUInt): Boolean;
     function CalcNextSegmentSize(aMinSize: SizeUInt; out aUpdateGrowthBase: Boolean): SizeUInt;
     function AddSegment(aMinSize: SizeUInt): Boolean;
     procedure FreeSegment(aIndex: SizeInt);
@@ -141,8 +141,9 @@ type
     destructor Destroy; override;
 
     { IArena }
-    function Alloc(const aLayout: TMemLayout): TAllocResult;
-    function AllocZeroed(const aLayout: TMemLayout): TAllocResult;
+    function Alloc(aSize: SizeUInt): Pointer;
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    function AllocZeroed(aSize: SizeUInt): Pointer;
     function SaveMark: TArenaMarker; inline;
     procedure RestoreToMark(aMark: TArenaMarker);
     procedure Reset;
@@ -195,21 +196,21 @@ begin
   Result := FSegments[FActive].StartOffset + FSegments[FActive].Used;
 end;
 
-function TGrowingArena.CalcRequiredMinSize(const aLayout: TMemLayout; out aMinSize: SizeUInt): Boolean;
+function TGrowingArena.CalcRequiredMinSize(aSize, aAlignment: SizeUInt; out aMinSize: SizeUInt): Boolean;
 var
   LAlignPad: SizeUInt;
 begin
   aMinSize := 0;
-  if aLayout.Align <= 1 then
+  if aAlignment <= 1 then
   begin
-    aMinSize := aLayout.Size;
+    aMinSize := aSize;
     Exit(True);
   end;
 
-  LAlignPad := aLayout.Align - 1;
-  if aLayout.Size > (High(SizeUInt) - LAlignPad) then
+  LAlignPad := aAlignment - 1;
+  if aSize > (High(SizeUInt) - LAlignPad) then
     Exit(False);
-  aMinSize := aLayout.Size + LAlignPad;
+  aMinSize := aSize + LAlignPad;
   Result := True;
 end;
 
@@ -510,7 +511,12 @@ begin
   inherited Destroy;
 end;
 
-function TGrowingArena.Alloc(const aLayout: TMemLayout): TAllocResult;
+function TGrowingArena.Alloc(aSize: SizeUInt): Pointer;
+begin
+  Result := AllocAligned(aSize, MEM_DEFAULT_ALIGN);
+end;
+
+function TGrowingArena.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
 var
   LAlign: SizeUInt;
   LPtr: PByte;
@@ -519,20 +525,21 @@ var
   LNewUsed: SizeUInt;
   LMinSegSize: SizeUInt;
 begin
-  if aLayout.Size = 0 then
-    Exit(TAllocResult.Ok(nil));
+  Result := nil;
+  if aSize = 0 then
+    Exit;
 
-  if not aLayout.IsValid then
-    Exit(TAllocResult.Err(aeInvalidLayout));
-  LAlign := aLayout.Align;
+  LAlign := aAlignment;
   if LAlign = 0 then
-    Exit(TAllocResult.Err(aeInvalidLayout));
+    LAlign := MEM_DEFAULT_ALIGN;
+  if (LAlign < MEM_DEFAULT_ALIGN) or ((LAlign and (LAlign - 1)) <> 0) then
+    Exit;
 
-  if not CalcRequiredMinSize(aLayout, LMinSegSize) then
-    Exit(TAllocResult.Err(aeInvalidLayout));
+  if not CalcRequiredMinSize(aSize, LAlign, LMinSegSize) then
+    Exit;
 
   if (FActive < 0) or (FActive > High(FSegments)) then
-    Exit(TAllocResult.Err(aeInternalError));
+    Exit;
 
   while True do
   begin
@@ -540,17 +547,17 @@ begin
 
     LPtr := AlignPtr(LSegPtr^.Base + LSegPtr^.Used, LAlign);
     if LPtr = nil then
-      Exit(TAllocResult.Err(aeInvalidLayout));
+      Exit;
     LOffset := SizeUInt(PtrUInt(LPtr) - PtrUInt(LSegPtr^.Base));
 
-    if (LOffset <= LSegPtr^.Size) and (aLayout.Size <= (LSegPtr^.Size - LOffset)) then
+    if (LOffset <= LSegPtr^.Size) and (aSize <= (LSegPtr^.Size - LOffset)) then
     begin
-      LNewUsed := LOffset + aLayout.Size;
+      LNewUsed := LOffset + aSize;
       LSegPtr^.Used := LNewUsed;
       Inc(FTotalAllocs);
       if CurrentUsed > FPeakUsed then
         FPeakUsed := CurrentUsed;
-      Exit(TAllocResult.Ok(LPtr));
+      Exit(LPtr);
     end;
 
     // Exhaust current segment and move forward.
@@ -562,16 +569,16 @@ begin
     end;
 
     if not AddSegment(LMinSegSize) then
-      Exit(TAllocResult.Err(aeOutOfMemory));
+      Exit;
     Inc(FActive);
   end;
 end;
 
-function TGrowingArena.AllocZeroed(const aLayout: TMemLayout): TAllocResult;
+function TGrowingArena.AllocZeroed(aSize: SizeUInt): Pointer;
 begin
-  Result := Alloc(aLayout);
-  if Result.IsOk and (Result.Ptr <> nil) then
-    FillChar(Result.Ptr^, aLayout.Size, 0);
+  Result := Alloc(aSize);
+  if Result <> nil then
+    FillChar(Result^, aSize, 0);
 end;
 
 function TGrowingArena.SaveMark: TArenaMarker;

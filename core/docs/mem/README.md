@@ -14,15 +14,8 @@ The only canonical public allocator contract is `IAllocator`:
   compatibility aliases to that same contract.
 - `nextpas.core.mem.DefaultAllocator` returns the process-wide default
   allocator facade.
-- `nextpas.core.mem.alloc.IAlloc`, `TAllocResult`, and `TAllocCaps` stay as
-  legacy layout/result compatibility surface for existing callers. They are not
-  the primary allocator API.
-- `nextpas.core.mem.adapter` stays as a legacy bridge between canonical
-  `IAllocator` call sites and compatibility `IAlloc` call sites.
-- `TAllocResult.ExpectPtr` raises canonical `EOutOfMemory` for
-  `aeOutOfMemory`. Capacity exhaustion remains an `EAllocError` with
-  `Error = aeCapacityExhausted` and reports `ecResourceExhausted`; it is not an
-  invalid-pointer leaf.
+- Allocation-specific exceptions stay in `nextpas.core.mem.error`, with
+  canonical OOM behavior owned by `nextpas.core.mem.error.EOutOfMemory`.
 
 The facade unit `nextpas.core.mem` also re-exports the current local record
 types:
@@ -32,6 +25,14 @@ types:
 
 These names are intended to make ownership and lifecycle shape visible in call
 sites without forcing downstream code to migrate all at once.
+
+The class-based arena surface also stays explicit and small:
+
+- `nextpas.core.mem.blockpool.IArena` uses explicit `size/alignment`
+  parameters instead of layout/result compatibility records.
+- `Alloc` and `AllocZeroed` return `Pointer`, and failure returns `nil`.
+- `AllocAligned` is the aligned-allocation escape hatch for arena-backed call
+  sites that need it.
 
 The remaining compatibility and owner shims stay deliberately thin:
 
@@ -54,8 +55,7 @@ module.
 
 The mem tree currently contains four practical families:
 
-- Allocator contracts and adapters: `mem.intf`, `mem.allocator*`, `mem.alloc`,
-  `mem.adapter`
+- Allocator contracts and facades: `mem.intf`, `mem.allocator*`, `mem.default`
 - Local ownership primitives: `mem.arena`, `mem.pool`, `mem.blockpool`
 - Backend allocators: default RTL allocator, memory-map allocator, mimalloc
   bindings, NUMA provider facade
@@ -207,6 +207,5 @@ Still open:
 4. Keep allocator-manager behavior narrow and explicit: `rtl` already has a
    runtime regression test for installation safety, while optional guarded
    backends such as CRT still need at least compile truth before wider rollout.
-5. Keep deprecated compatibility shims thin and keep narrowing public allocator
-   claims so traits, ownership, and fallback behavior remain verifiable and
-   unsurprising.
+5. Keep deprecated compatibility shims thin so traits, ownership, and fallback
+   behavior remain verifiable and unsurprising.

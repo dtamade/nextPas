@@ -138,31 +138,27 @@ begin
   Check(LCaught, 'EAllocError must catch as ENextPasError');
 end;
 
-procedure TestAllocResultOutOfMemoryCatchesAsPublicOutOfMemory;
+procedure TestMemOutOfMemoryCatchesAsPublicOutOfMemory;
 var
-  LAlloc: TAllocResult;
   LCaught: Boolean;
 begin
   LCaught := False;
-  LAlloc := TAllocResult.Err(aeOutOfMemory);
   try
-    LAlloc.ExpectPtr('allocation contract');
+    raise nextpas.core.mem.error.EOutOfMemory.Create(aeOutOfMemory, 'allocation contract');
   except
     on E: nextpas.core.errors.EOutOfMemoryError do
       LCaught := E is nextpas.core.exception.ENextPasError;
   end;
-  Check(LCaught, 'TAllocResult out-of-memory must catch as public OOM root');
+  Check(LCaught, 'mem EOutOfMemory must catch as public OOM root');
 end;
 
-procedure TestAllocOutOfMemoryUsesCanonicalCatchBeforeAllocRoot;
+procedure TestMemOutOfMemoryUsesCanonicalCatchBeforeAllocRoot;
 var
-  LAlloc: TAllocResult;
   LSeen: string;
 begin
   LSeen := '';
-  LAlloc := TAllocResult.Err(aeOutOfMemory);
   try
-    LAlloc.ExpectPtr('allocation contract');
+    raise nextpas.core.mem.error.EOutOfMemory.Create(aeOutOfMemory, 'allocation contract');
   except
     on E: nextpas.core.mem.error.EAllocError do
       LSeen := 'alloc';
@@ -670,8 +666,8 @@ begin
   TestLegacyECoreCatchesCanonicalAliases;
   TestOutOfMemoryCompatibilityCatchesAsPublicRoot;
   TestAllocErrorCatchesAsUnifiedRoot;
-  TestAllocResultOutOfMemoryCatchesAsPublicOutOfMemory;
-  TestAllocOutOfMemoryUsesCanonicalCatchBeforeAllocRoot;
+  TestMemOutOfMemoryCatchesAsPublicOutOfMemory;
+  TestMemOutOfMemoryUsesCanonicalCatchBeforeAllocRoot;
   TestMemOutOfMemoryKeepsConstructorCompatibility;
   TestOutOfMemoryCreateFmtKeepsResourceExhaustedCategory;
   TestRootCreateFmtKeepsExplicitCategory;
