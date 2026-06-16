@@ -4,7 +4,7 @@ program nextpas.core.simd.dispatch_preinit_smoke;
 {$CODEPAGE UTF8}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,
   nextpas.core.simd.cpuinfo,

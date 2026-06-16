@@ -3,7 +3,7 @@ program test_nn_heaptrc;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.simd.nn;
 
 var

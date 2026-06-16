@@ -1434,6 +1434,13 @@ type
   TVecU32x16MulFunc = function(const a, b: TVecU32x16): TVecU32x16;
   TVecU64x8AddFunc = function(const a, b: TVecU64x8): TVecU64x8;
   TVecU8x64MaxFunc = function(const a, b: TVecU8x64): TVecU8x64;
+  TVecF32x4SubFunc = function(const a, b: TVecF32x4): TVecF32x4;
+  TVecF32x4MulFunc = function(const a, b: TVecF32x4): TVecF32x4;
+  TVecF32x4DivFunc = function(const a, b: TVecF32x4): TVecF32x4;
+  TVecF32x4UnaryFunc = function(const a: TVecF32x4): TVecF32x4;
+  TVecF32x4MinMaxFunc = function(const a, b: TVecF32x4): TVecF32x4;
+  TVecF32x4DotFunc = function(const a, b: TVecF32x4): Single;
+  TVecF32x4SplatFunc = function(value: Single): TVecF32x4;
 
 var
   g_FastSimdDispatchPtr: Pointer = nil;
@@ -1442,6 +1449,15 @@ var
   g_FastVecU32x16MulPtr: Pointer = nil;
   g_FastVecU64x8AddPtr: Pointer = nil;
   g_FastVecU8x64MaxPtr: Pointer = nil;
+  g_FastVecF32x4SubPtr: Pointer = nil;
+  g_FastVecF32x4MulPtr: Pointer = nil;
+  g_FastVecF32x4DivPtr: Pointer = nil;
+  g_FastVecF32x4AbsPtr: Pointer = nil;
+  g_FastVecF32x4SqrtPtr: Pointer = nil;
+  g_FastVecF32x4MinPtr: Pointer = nil;
+  g_FastVecF32x4MaxPtr: Pointer = nil;
+  g_FastVecF32x4DotPtr: Pointer = nil;
+  g_FastVecF32x4SplatPtr: Pointer = nil;
 
 procedure RebindSimdFacadeFastPaths;
 var
@@ -1457,6 +1473,15 @@ begin
   atomic_store(g_FastVecU32x16MulPtr, LDataPlane^.VecU32x16MulPtr, mo_release);
   atomic_store(g_FastVecU64x8AddPtr, LDataPlane^.VecU64x8AddPtr, mo_release);
   atomic_store(g_FastVecU8x64MaxPtr, LDataPlane^.VecU8x64MaxPtr, mo_release);
+  atomic_store(g_FastVecF32x4SubPtr, LDataPlane^.VecF32x4SubPtr, mo_release);
+  atomic_store(g_FastVecF32x4MulPtr, LDataPlane^.VecF32x4MulPtr, mo_release);
+  atomic_store(g_FastVecF32x4DivPtr, LDataPlane^.VecF32x4DivPtr, mo_release);
+  atomic_store(g_FastVecF32x4AbsPtr, LDataPlane^.VecF32x4AbsPtr, mo_release);
+  atomic_store(g_FastVecF32x4SqrtPtr, LDataPlane^.VecF32x4SqrtPtr, mo_release);
+  atomic_store(g_FastVecF32x4MinPtr, LDataPlane^.VecF32x4MinPtr, mo_release);
+  atomic_store(g_FastVecF32x4MaxPtr, LDataPlane^.VecF32x4MaxPtr, mo_release);
+  atomic_store(g_FastVecF32x4DotPtr, LDataPlane^.VecF32x4DotPtr, mo_release);
+  atomic_store(g_FastVecF32x4SplatPtr, LDataPlane^.VecF32x4SplatPtr, mo_release);
 end;
 
 procedure InvalidateSimdFacadeFastPaths;
@@ -1467,6 +1492,15 @@ begin
   atomic_store(g_FastVecU32x16MulPtr, nil, mo_release);
   atomic_store(g_FastVecU64x8AddPtr, nil, mo_release);
   atomic_store(g_FastVecU8x64MaxPtr, nil, mo_release);
+  atomic_store(g_FastVecF32x4SubPtr, nil, mo_release);
+  atomic_store(g_FastVecF32x4MulPtr, nil, mo_release);
+  atomic_store(g_FastVecF32x4DivPtr, nil, mo_release);
+  atomic_store(g_FastVecF32x4AbsPtr, nil, mo_release);
+  atomic_store(g_FastVecF32x4SqrtPtr, nil, mo_release);
+  atomic_store(g_FastVecF32x4MinPtr, nil, mo_release);
+  atomic_store(g_FastVecF32x4MaxPtr, nil, mo_release);
+  atomic_store(g_FastVecF32x4DotPtr, nil, mo_release);
+  atomic_store(g_FastVecF32x4SplatPtr, nil, mo_release);
 end;
 
 function LoadSimdFacadeFastPath(var aFastPathPtr: Pointer): Pointer; inline;

@@ -3,7 +3,7 @@ program test_stats_f64;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Math,
+  nextpas.core.text.conv, Math,
   nextpas.core.simd,
   nextpas.core.simd.alloc,
   nextpas.core.simd.stats;

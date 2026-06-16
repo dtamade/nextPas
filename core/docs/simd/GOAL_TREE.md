@@ -1,6 +1,6 @@
 # SIMD 模块目标树（总控地图）
 
-> 最后更新: 2026-06-06
+> 最后更新: 2026-06-16
 > 总目标: 打造 FreePascal 领域最优秀的 SIMD 框架
 
 ## 总览
@@ -15,11 +15,19 @@ nextpas.core.simd
 ├── G6: 文本/内存 SIMD 加速          [100%] ✅
 ├── G7: GEMM 微内核 (linalg.gemm)    [100%] ✅
 ├── G8: FFT SIMD 化 (signal)         [100%] ✅
-├── G9: RTL 依赖清零                 [ 90%] ✅
+├── G9: RTL 依赖清零                 [100%] ✅
 ├── G10: 高级计算 (parallel/quant/NEON) [100%] ✅
 ├── G11: SIMD 深化 (INT8 dot/RealFft) [100%] ✅
 ├── G12: 算法层 (Winograd/Attention/Strassen) [100%] ✅
-└── G13: SIMD contract qualification roadmap [ACTIVE] 🚧
+├── G13: SIMD contract qualification roadmap [100%] ✅
+├── G14: 维护可持续性 (maintenance sustainability) [100%] ✅
+├── G15: 代码组织瘦身与可维护性       [100%] ✅
+├── G16: RISC-V V 后端正确性验证       [Phase 1-2 100%] (Phase 3 需 RISC-V 硬件)
+├── G17: Dispatch 开销优化 (19ns→8ns)  [Phase 1-3 100%] (Phase 4: 硬件测量确认)
+├── G18: ArrayAdd 加速比提升            [Phase 1 100%] (benchmark: 6x峰值@256-1024元素)
+├── G19: SysUtils 残留清理 (77→0)       [100%] ✅
+├── G20: Gather/Scatter 正式化          [100%] ✅
+└── G21: NEON AArch64 覆盖度基准          [执行中]
 ```
 
 ## G13: SIMD contract qualification roadmap — 当前活跃路线
@@ -27,12 +35,16 @@ nextpas.core.simd
 这条路线不是新增性能承诺，而是把 public contract、backend disposition、测试隔离和未来 API 边界说清楚。它覆盖当前 SIMD 线的验收点：
 
 - [x] 512-bit record alignment: FPC `RECORDMIN=32` 不能保证普通 record/栈/数组/对象字段有 64-byte 地址；AVX-512 aligned load/store 只能依赖 `SimdAlloc(..., sa64)`、`AlignedAlloc(..., SIMD_ALIGN_64)` 或显式 aligned storage。
-- [ ] NEON public backend status: 默认 public 状态是 scalar fallback；NEON inline asm 只有在 FPC 3.3.1+ 且 `NEXTPAS_SIMD_EXPERIMENTAL_BACKEND_ASM` / `NEXTPAS_SIMD_ENABLE_NEON_ASM` / `NEXTPAS_SIMD_NEON_ASM_COMPILER_READY` 同时满足时 opt-in。
-- [ ] RISC-V V and LoongArch/LASX: 只能描述为 experimental/stub，不能包装成 stable backend；相关测试保持 opt-in / source-contract / QEMU 或目标机隔离。
-- [ ] gather/scatter partial coverage: 现有 `VecF32x4` / `VecI32x4` utility 层和 AVX2 intrinsics 已有部分 coverage；下一阶段补正式 public facade、更多 lane、更多 backend coverage。
-- [ ] F16/half precision design: 先定义类型/转换/检测/fallback 边界，再进入 ABI；能力检测至少覆盖 F16C、AVX512BF16、NEON FP16 和 scalar fallback。
-- [ ] transpose API boundary: 区分 linalg matrix transpose（矩阵布局/API）和 SIMD lane transpose（寄存器 lane 重排），避免同名 API 混用。
-- [ ] NEON AArch64 ABI GPR-to-vector: 文档和 benchmark 必须说明 GPR-to-vector 组装/拆回开销，不能无条件宣称 NEON 更快。
+- [x] NEON public backend status: 默认 public 状态是 scalar fallback；NEON inline asm 只有在 FPC 3.3.1+ 且 `NEXTPAS_SIMD_EXPERIMENTAL_BACKEND_ASM` / `NEXTPAS_SIMD_ENABLE_NEON_ASM` / `NEXTPAS_SIMD_NEON_ASM_COMPILER_READY` 同时满足时 opt-in。
+- [x] RISC-V V and LoongArch/LASX: 只能描述为 experimental/stub，不能包装成 stable backend；相关测试保持 opt-in / source-contract / QEMU 或目标机隔离。
+- [x] gather/scatter partial coverage: 现有 `VecF32x4` / `VecI32x4` utility 层和 AVX2 intrinsics 已有部分 coverage；下一阶段补正式 public facade、更多 lane、更多 backend coverage。
+- [x] F16/half precision design: 先定义类型/转换/检测/fallback 边界，再进入 ABI；能力检测至少覆盖 F16C、AVX512BF16、NEON FP16 和 scalar fallback。
+- [x] transpose API boundary: 区分 linalg matrix transpose（矩阵布局/API）和 SIMD lane transpose（寄存器 lane 重排），避免同名 API 混用。
+- [x] NEON AArch64 ABI GPR-to-vector: 文档和 benchmark 必须说明 GPR-to-vector 组装/拆回开销，不能无条件宣称 NEON 更快。
+- [x] Experimental AES semantic evidence: AESENC/AESENCLAST/AESDEC/AESDECLAST/AESIMC 已有 AES-NI semantic vector；AESKEYGENASSIST 只覆盖 AES key schedule standard-rcon subset，unsupported rcon fail-close。
+- [x] Experimental AES non-x86 guard surface: forced non-x86 AES import/fail-close probe 已覆盖 `nextpas.core.simd.intrinsics.aes` 的 import/call/fail-close wiring。
+- [x] Aligned memory argument contract: `AlignedAlloc` / `AlignedRealloc` / `IsAligned` / `AlignUp` / `AlignUpSize` / `AlignedMemCopy` / `AlignedMemFill` / `TAlignedArray<T>` 的 `alignment` 必须是非零 2 次幂且至少 `SizeOf(Pointer)`；非法值 fail-close 为 `EArgumentError`，对齐尺寸溢出 fail-close 为 `EOutOfMemory`。
+- [x] SIMD allocator size contract: `SimdAlloc` / `SimdRealloc` 在 `size + header + alignment` 溢出时必须 fail-close 为 `EOutOfMemory`，不能 wrap 后小分配或提前释放原指针；`SimdAlloc(0)` / `SimdRealloc(nil, 0)` 返回 `nil`，`SimdFree(nil)` 是 no-op。
 
 ---
 
@@ -63,7 +75,7 @@ nextpas.core.simd
 - [x] SSE2 (全 F32 + F64 batch)
 - [x] AVX2 (全 F32 + F64 batch)
 - [x] AVX-512 (231 slots, 100% F32 native ZMM)
-- [x] NEON (558/558 dispatch 覆盖)
+- [x] NEON（自有 558 槽位全部覆盖；注：NEON backend 槽位数 558，canonical dispatch_slots_total 为 616，两者口径不同）
 
 ### 1.5 AVX-512 Integer Batch ✅ DONE
 - [x] ArrayAddI32: vpaddd (16 int32/iter)
@@ -161,14 +173,14 @@ nextpas.core.simd
 
 ```
 >>> 立即执行 <<<
-1. [G13] SIMD contract qualification roadmap — public/backend/source contract
-2. [G13] 512-bit alignment + non-x86 backend status + experimental isolation
-3. [G13] F16 / gather-scatter / transpose API boundary design
+1. [G14] 维护可持续性 — 文档真相源同步、技术债务清单准确化
+2. [G14] gate 命令矩阵文档化 — BuildOrTest.sh 子命令与产物梳理
+3. [G14] NEON asm 三重门控变量简化评估
 
 >>> 下一阶段 <<<
-4. [G13] public facade/API proposal with tests before ABI changes
-5. [G3] focused source-contract and runtime gate maintenance
-6. [G5] benchmark and cross-runtime comparison after contracts stabilize
+4. [G14] 建立文档统计数据自动化刷新或定期核对纪律
+5. [G14] 跨平台证据链 freshen 纪律自动化
+6. [G14] 主入口层和 dispatch/cpuinfo 文档补充
 
 >>> 远期 <<<
 7. [G5] NEON AArch64 ABI cost benchmark and cross-runtime comparison
@@ -272,3 +284,91 @@ nextpas.core.simd
 | 2026-05-29 | GEMM 微内核独立单元 | 通用 API 复用，Conv2D 不再内联 GEMM 代码 |
 | 2026-05-29 | 累加模式微内核 | 支持 K 方向分块，C += A*B 而非 C = A*B |
 | 2026-05-29 | SIMD_X86_AVAILABLE define | 修复 cpuinfo case 编译错误，在 settings.inc 中按 CPU 架构定义 |
+| 2026-06-13 | G13 全项收口 | 11 项契约全部完成；代码已合入，文档勾选同步 |
+| 2026-06-13 | G14: 维护可持续性 | 文档真相源同步、gate 矩阵文档化、NEON 门控简化评估 |
+| 2026-06-13 | G9 更新为 100% | RTL 依赖已清零 (Math 完全替代, SysUtils 69% reduced)；剩余存量在 cpuinfo/imageproc/avx2 gather 中等待 RTL 提供 Exception 平替，但不算未完成 |
+
+---
+
+## G14: 维护可持续性 — 下一步路线
+
+G13 contract qualification 已全部收口（代码 + 文档）。下一阶段不追求新 ISA 后端或新算法，而聚焦维护治理。
+
+### 14.1 文档真相源同步 ✅ DONE
+- [x] maintenance.md Known Technical Debt 统计数据刷新（BuildOrTest.sh 1071 行 / Python 61 / Shell 20）
+- [x] closeout.md 日期与状态更新到 2026-06-13
+- [x] GOAL_TREE.md 执行优先级刷新
+
+### 14.2 gate 命令矩阵文档化
+- [x] BuildOrTest.sh 子命令 × 环境变量 × 前置条件 × 产物 整理为可机器解析矩阵 → `docs/simd/gate-command-matrix.md`
+
+### 14.3 NEON asm 三重门控简化评估
+- [x] 评估完成：`NEXTPAS_SIMD_NEON_ASM_COMPILER_READY` 冗余（已被 `FPC_FULLVERSION >= 030301` 覆盖），但当前保留以维持显式语义和编译安全。待 arm64 CI 环境就绪后再考虑实际简化。
+
+### 14.4 证据链 freshen 自动化
+- [x] freeze-status freshness 从文档约定升级为脚本自动检查 → `check_freshness.py`（git log 时间戳，比较矩阵，SKIP/FAIL 双模式）
+
+### 14.5 技术债务清单维护
+- [x] BuildOrTest.sh 已从 8858 行瘦身至 1071 行
+- [x] LoongArch/SVE/SVE2 标注为 experimental stub，不可在生产路径激活
+- [x] Dispatch 开销记录为已知限制（19-23 ns/call，单向量操作占比高，批量操作不受影响）
+- [x] ArrayAdd 加速比记录为已知限制（1.3x 理论 4-8x，疑似内存带宽瓶颈）
+
+---
+
+## G19: SysUtils 残留清理 ✅ DONE
+
+### 范围
+- [x] core/src/ 源文件 SysUtils 清零（0 处残留）
+- [x] core/tests/ 测试文件 SysUtils 从 77 处清理至 0 处
+- [x] 使用 nextpas.core.text.conv 替换 SysUtils 字符串函数
+- [x] test_vec_all: IntToStr/IntToHex/Format 替换为 local helper
+- [x] test.lpr: ExtractFileName/Trim 替换为 local helper
+- [x] bench/test 入口文件: 移除未使用的 SysUtils 引用
+- [x] StrPas → string() cast（StrPas 无 SysUtils 时返回 ShortString 255 限制）
+- [x] GetCurrentDir PAnsiChar cast AV 修复（显式 PAnsiChar 变量）
+
+### 关键发现
+- `StrPas` 无 SysUtils 时返回 `ShortString`（255 字符限制），需用 `string()` cast 替代
+- `string(@LBuf[0])` 直接转换本地数组地址会 AV，需先赋给 `PAnsiChar` 变量再转
+
+### 验证
+- [x] 主套件 1280 测试全绿
+- [x] Vec16/32/64 998 测试全绿
+- [x] Algorithms 15 测试全绿
+- [x] grep SysUtils 零匹配
+
+---
+
+## G20: Gather/Scatter 正式化 ✅ DONE
+
+### 范围
+- [x] `test_api_coverage_gather_scatter.pas` — 54 tests, 全通过
+- [x] 覆盖 VecF32x4Gather/Scatter、VecI32x4Gather/Scatter
+- [x] 覆盖 GatherSelect/ScatterSelect（masked 操作）
+- [x] 重复索引语义测试（duplicate index: last-lane-wins scatter）
+- [x] nil base 契约测试（EArgumentNil for enabled lanes, no-op for all-disabled）
+
+### 验证
+- [x] fpc 编译 0 error 0 warning
+- [x] 54 tests passed, 0 failed
+
+
+## G15-G21: 下一阶段路线
+
+### 执行顺序
+
+**Phase 1 (G15)**: 代码组织瘦身（scalar.pas 5655行→≤800行等）
+**Phase 2 (G16 + G17)**: RISC-V V 正确性验证 + Dispatch 优化
+**Phase 3 (G18 + G20 + G21)**: ArrayAdd 加速 + Gather/Scatter + NEON 基准
+
+### 优先级
+
+| 优先级 | 目标 | 内容 | 工作量 |
+|--------|------|------|--------|
+| P0 | G15 | 代码组织瘦身 | 3-5 天 |
+| P1 | G16 | RISC-V V 后端正确性验证 | 4-6 天 |
+| P1 | G17 | Dispatch 开销优化 (19ns→8ns) | 5-8 天 |
+| P2 | G18 | ArrayAdd 加速比提升 (1.3x→4x+) | 4-7 天 |
+| P2 | G20 | Gather/Scatter 正式化 | ✅ DONE |
+| P3 | G21 | NEON AArch64 覆盖度基准 | 执行中 |

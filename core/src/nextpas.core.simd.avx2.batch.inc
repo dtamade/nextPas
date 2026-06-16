@@ -19,6 +19,8 @@ begin
     mov rcx, pD
     mov r8, aCount
 
+    cmp r8, 4096
+    jae @loop64_setup
     cmp r8, 32
     jb @tail16
 
@@ -41,6 +43,45 @@ begin
     sub r8, 32
     cmp r8, 32
     jae @loop32
+    jmp @tail16
+
+  @loop64_setup:
+    cmp r8, 64
+    jb @tail16
+
+  @loop64:
+    prefetchnta [rax + 256]
+    prefetchnta [rdx + 256]
+    vmovups ymm0, [rax]
+    vaddps  ymm0, ymm0, [rdx]
+    vmovups [rcx], ymm0
+    vmovups ymm1, [rax + 32]
+    vaddps  ymm1, ymm1, [rdx + 32]
+    vmovups [rcx + 32], ymm1
+    vmovups ymm2, [rax + 64]
+    vaddps  ymm2, ymm2, [rdx + 64]
+    vmovups [rcx + 64], ymm2
+    vmovups ymm3, [rax + 96]
+    vaddps  ymm3, ymm3, [rdx + 96]
+    vmovups [rcx + 96], ymm3
+    vmovups ymm4, [rax + 128]
+    vaddps  ymm4, ymm4, [rdx + 128]
+    vmovups [rcx + 128], ymm4
+    vmovups ymm5, [rax + 160]
+    vaddps  ymm5, ymm5, [rdx + 160]
+    vmovups [rcx + 160], ymm5
+    vmovups ymm6, [rax + 192]
+    vaddps  ymm6, ymm6, [rdx + 192]
+    vmovups [rcx + 192], ymm6
+    vmovups ymm7, [rax + 224]
+    vaddps  ymm7, ymm7, [rdx + 224]
+    vmovups [rcx + 224], ymm7
+    add rax, 256
+    add rdx, 256
+    add rcx, 256
+    sub r8, 64
+    cmp r8, 64
+    jae @loop64
 
   @tail16:
     cmp r8, 16
@@ -1849,6 +1890,8 @@ begin
     mov rcx, pD
     mov r8, aCount
 
+    cmp r8, 4096
+    jae @loop32_setup
     cmp r8, 16
     jb @tail4
 
@@ -1871,6 +1914,45 @@ begin
     sub r8, 16
     cmp r8, 16
     jae @loop16
+    jmp @tail4
+
+  @loop32_setup:
+    cmp r8, 32
+    jb @tail4
+
+  @loop32:
+    prefetchnta [rax + 256]
+    prefetchnta [rdx + 256]
+    vmovupd ymm0, [rax]
+    vaddpd ymm0, ymm0, [rdx]
+    vmovupd [rcx], ymm0
+    vmovupd ymm1, [rax + 32]
+    vaddpd ymm1, ymm1, [rdx + 32]
+    vmovupd [rcx + 32], ymm1
+    vmovupd ymm2, [rax + 64]
+    vaddpd ymm2, ymm2, [rdx + 64]
+    vmovupd [rcx + 64], ymm2
+    vmovupd ymm3, [rax + 96]
+    vaddpd ymm3, ymm3, [rdx + 96]
+    vmovupd [rcx + 96], ymm3
+    vmovupd ymm4, [rax + 128]
+    vaddpd ymm4, ymm4, [rdx + 128]
+    vmovupd [rcx + 128], ymm4
+    vmovupd ymm5, [rax + 160]
+    vaddpd ymm5, ymm5, [rdx + 160]
+    vmovupd [rcx + 160], ymm5
+    vmovupd ymm6, [rax + 192]
+    vaddpd ymm6, ymm6, [rdx + 192]
+    vmovupd [rcx + 192], ymm6
+    vmovupd ymm7, [rax + 224]
+    vaddpd ymm7, ymm7, [rdx + 224]
+    vmovupd [rcx + 224], ymm7
+    add rax, 256
+    add rdx, 256
+    add rcx, 256
+    sub r8, 32
+    cmp r8, 32
+    jae @loop32
 
   @tail4:
     cmp r8, 4
@@ -2633,6 +2715,8 @@ begin
     mov rcx, pD
     mov r8, aCount
 
+    cmp r8, 4096
+    jae @loop64_setup
     cmp r8, 32
     jb @tail8
 
@@ -2655,6 +2739,45 @@ begin
     sub r8, 32
     cmp r8, 32
     jae @loop32
+    jmp @tail8
+
+  @loop64_setup:
+    cmp r8, 64
+    jb @tail8
+
+  @loop64:
+    prefetchnta [rax + 256]
+    prefetchnta [rdx + 256]
+    vmovdqu ymm0, [rax]
+    vpaddd ymm0, ymm0, [rdx]
+    vmovdqu [rcx], ymm0
+    vmovdqu ymm1, [rax + 32]
+    vpaddd ymm1, ymm1, [rdx + 32]
+    vmovdqu [rcx + 32], ymm1
+    vmovdqu ymm2, [rax + 64]
+    vpaddd ymm2, ymm2, [rdx + 64]
+    vmovdqu [rcx + 64], ymm2
+    vmovdqu ymm3, [rax + 96]
+    vpaddd ymm3, ymm3, [rdx + 96]
+    vmovdqu [rcx + 96], ymm3
+    vmovdqu ymm4, [rax + 128]
+    vpaddd ymm4, ymm4, [rdx + 128]
+    vmovdqu [rcx + 128], ymm4
+    vmovdqu ymm5, [rax + 160]
+    vpaddd ymm5, ymm5, [rdx + 160]
+    vmovdqu [rcx + 160], ymm5
+    vmovdqu ymm6, [rax + 192]
+    vpaddd ymm6, ymm6, [rdx + 192]
+    vmovdqu [rcx + 192], ymm6
+    vmovdqu ymm7, [rax + 224]
+    vpaddd ymm7, ymm7, [rdx + 224]
+    vmovdqu [rcx + 224], ymm7
+    add rax, 256
+    add rdx, 256
+    add rcx, 256
+    sub r8, 64
+    cmp r8, 64
+    jae @loop64
 
   @tail8:
     cmp r8, 8

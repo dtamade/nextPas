@@ -7,7 +7,7 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  Classes, SysUtils,
+  Classes, nextpas.core.exception,
   fpcunit, consoletestrunner, testregistry,
   nextpas.core.simd.cpuinfo.testcase,
   nextpas.core.simd.cpuinfo.lazy.testcase

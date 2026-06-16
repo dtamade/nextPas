@@ -205,7 +205,9 @@ end;
 
 function X86HasAVX512BackendRequiredFeatures(const aX86: TX86Features): Boolean; inline;
 begin
-  Result := aX86.HasAVX and aX86.HasAVX2 and aX86.HasAVX512F and aX86.HasAVX512BW and
+  // AVX2 is a superset of AVX, so HasAVX2 implies HasAVX.
+  // AVX-512 requires AVX2 + AVX512F + AVX512BW + POPCNT + FMA.
+  Result := aX86.HasAVX2 and aX86.HasAVX512F and aX86.HasAVX512BW and
             aX86.HasPOPCNT and aX86.HasFMA;
 end;
 

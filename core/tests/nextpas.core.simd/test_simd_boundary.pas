@@ -14,7 +14,7 @@ program test_simd_boundary;
  *}
 
 uses
-  SysUtils, Math, nextpas.core.math,
+  nextpas.core.text.conv, Math, nextpas.core.math,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,
   nextpas.core.simd.scalar,

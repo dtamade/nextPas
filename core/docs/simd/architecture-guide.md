@@ -123,7 +123,7 @@ TSimdDispatchTable = record
   Backend: TSimdBackend;
   BackendInfo: TSimdBackendInfo;
 
-  // 558 个函数指针槽位
+  // 616 个函数指针槽位
   AddF32x4: function(const a, b: TVecF32x4): TVecF32x4;
   SubF32x4: function(const a, b: TVecF32x4): TVecF32x4;
   // ... 更多操作

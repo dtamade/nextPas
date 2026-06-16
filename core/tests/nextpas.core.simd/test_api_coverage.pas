@@ -3,7 +3,7 @@ program test_api_coverage;
 {$Q-}{$R-}
 
 uses
-  SysUtils, Math,
+  nextpas.core.text.conv, Math,
   nextpas.core.simd.base,
   nextpas.core.simd;
 

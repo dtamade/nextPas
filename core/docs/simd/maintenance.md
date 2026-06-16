@@ -514,8 +514,9 @@ bash tests/nextpas.core.simd/BuildOrTest.sh gate
 
 | 项目 | 描述 | 影响 |
 |------|------|------|
-| BuildOrTest.sh 膨胀 | 8858 行，含 closeout/rehearsal/gate 等非核心逻辑 | 维护成本高 |
-| 辅助脚本过多 | 41 Python + 32 shell = ~15K 行 | 新人上手困难 |
+| BuildOrTest.sh 多功能承载 | 已从 8858 行瘦身至 1071 行，但仍承载 check/gate/gate-strict/impl-smoke-x86/impl-smoke-nonx86/closeout-host-local/freeze-status 等大量子命令 | 维护者理解成本高 |
+| Historical gate fail-close | `gate`/`gate-strict`/`evidence-linux` 在当前 worktree 中均为 fail-close 占位符；替代路径：`check` + `gate-summary-selfcheck` + `freeze-status-linux` | 新人可能误以为门禁中断 |
+| 辅助脚本数量 | 61 Python + 20 shell（共 81 脚本），分布于合约检查、gate 生成、evidence 验证等 | 新人上手需逐个理解 |
 | ArrayAdd 加速比低 | 1.3x（理论 4-8x），疑似内存带宽瓶颈 | 性能未充分发挥 |
 | Dispatch 开销 | 19-23 ns/call，单向量操作占比高 | 批量操作不受影响 |
-| LoongArch/SVE/SVE2 | 有 intrinsics 源码但无测试和后端集成 | 功能不完整 |
+| LoongArch/SVE/SVE2 | experimental/stub intrinsics only；仅作为 opt-in qualification surface；not stable backend；有源码、有 fail-close guard、有环境变量守卫，但缺 release-grade runtime proof | 不可在生产路径激活；已标注为 experimental stub |

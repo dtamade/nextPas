@@ -4,7 +4,6 @@ program test_sse_raw_leaf_parity;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils, Math,
   nextpas.core.simd.intrinsics.base,
   nextpas.core.simd.intrinsics.sse,
   nextpas.core.simd.memutils;

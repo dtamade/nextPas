@@ -4,6 +4,10 @@
 
 如果你只想看最短版本：
 
+> **2026-06-13 更新：** G13 contract qualification 已全项收口，G14 维护可持续性启动。
+> 模块整体维持 `code-green / cross-ready`，当前聚焦文档真相源同步与维护治理。
+> 详细目标树见 `GOAL_TREE.md`，行动清单见 `checklist.md`。
+
 - 公开 façade 和 dispatch contract 边界可以按 stable surface 理解
 - backend 成熟度并不完全相同，`sbRISCVV` 仍按 experimental / 受限成熟度看待
 - experimental intrinsics 默认入口链已经隔离
@@ -13,7 +17,7 @@
 ## 2026-05-21 当前收口判断
 
 - 代码主线可以按“已收口”理解：
-  - `python3 tests/nextpas.core.simd/check_interface_implementation_completeness.py --strict` 最新结果仍为 `dispatch_slots_total=558`、`P0/P1/P2=0`
+  - `python3 tests/nextpas.core.simd/check_interface_implementation_completeness.py --strict` 最新结果仍为 `dispatch_slots_total=616`（全部 backends canonical 总槽位数）、`P0/P1/P2=0`
   - canonical release `gate` 已 PASS，且 `linux_gate_required_steps_mainline` 与 `linux_qemu_cpuinfo_nonx86_evidence` 都在最新 gate 中为 PASS
   - `FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh freeze-status-linux` 当前仍是 `ready=True / mainline-ready=True`
 - 发布级 closeout 现在也已经回绿：

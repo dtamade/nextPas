@@ -7,7 +7,7 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  SysUtils, Classes, Math,
+  nextpas.core.text.conv, Classes, Math,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch;

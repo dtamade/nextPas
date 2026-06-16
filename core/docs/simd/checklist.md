@@ -2,29 +2,14 @@
 
 这页只回答两件事：现在应该做什么，以及现在不要做什么。
 
-## 当前状态（2026-05-21）
+## 当前状态（2026-06-13）
 
-- 当前 `simd` 不应再按“接口/实现仍未收口”处理。
-- 最新 release 证据说明：
-  - `python3 tests/nextpas.core.simd/check_interface_implementation_completeness.py --strict` 仍为绿，`P0/P1/P2=0`
-  - 最新 `freeze-status` 已是：
-    - `ready=True`
-    - `mainline-ready=True`
-    - `cross-ready=True`
-  - 其中关键 closeout 项都已经 PASS：
-    - `cross_gate_required_steps`
-    - `linux_qemu_cpuinfo_nonx86_evidence`
-    - `windows_preflight_latest`
-    - `windows_evidence_verify`
-    - `windows_sources_not_newer_than_evidence`
-    - `windows_closeout_summary`
-  - 当前 fresh Windows evidence 批次为 `SIMD-20260521-153`，对应 GH run `26230362365`
-- 因此，当前 `HEAD` 更准确的状态应记为：
-  - `code-green / cross-ready`
-  - 到这里不要再把状态写成 `evidence-refresh-required` 或 `RECENT_BILLING_BLOCK`
-- 当前最该记住的操作判断：
-  - 默认不要再重开 closeout blocker 讨论；下一步应回到真实实现 residual、family qualification 或 raw-leaf qualification
-  - 只有当 future `freeze-status` 再次变红时，才回到 evidence refresh 处理链
+- G13 contract qualification 已全项收口（11/11 ✅），代码已合入，文档勾选已同步
+- G14 维护可持续性已启动，当前聚焦：
+  - 文档真相源同步（maintenance.md 统计数据已刷新）
+  - gate 命令矩阵文档化
+  - NEON asm 三重门控简化评估
+- 模块整体维持 `code-green / cross-ready`
 - 当前 public API 覆盖的 gate 判断也已固定：
   - canonical `public-api-coverage` 现在默认按 `strict-thin` 运行
   - future `thin > 0` 会直接让 `gate` / `gate-strict` 变红

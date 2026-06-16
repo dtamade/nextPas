@@ -4,7 +4,7 @@ program bench_static_lane;
 {$INLINE ON}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.simd.base,
   nextpas.core.simd,
   nextpas.core.simd.static.avx2;

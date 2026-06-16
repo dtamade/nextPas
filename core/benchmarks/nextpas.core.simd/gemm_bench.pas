@@ -4,7 +4,8 @@ program gemm_bench;
 {$I nextpas.core.simd.settings.inc}
 
 uses
-  SysUtils, Unix, BaseUnix,
+  Unix, BaseUnix,
+  nextpas.core.text.conv,
   nextpas.core.simd,
   nextpas.core.simd.alloc,
   nextpas.core.simd.linalg,

@@ -7,7 +7,7 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  Classes, SysUtils,
+  Classes,
   fpcunit, testregistry,
   nextpas.core.simd.testcase,
   nextpas.core.simd.memutils.aliases.testcase,
@@ -38,6 +38,7 @@ uses
   nextpas.core.simd.intrinsics.avx2.testcase,
   nextpas.core.simd.concurrent.testcase,  // ✅ Phase 5.4: Concurrent SIMD tests (12 tests)
   nextpas.core.simd.algorithms.testcase,
+  nextpas.core.simd.rvvparity.testcase,
   nextpas.core.simd.bench,
   nextpas.core.simd.base,
   nextpas.core.simd.cpuinfo,
@@ -77,6 +78,17 @@ var
 
 procedure ProcessAllSuites(const aListOnly: Boolean; aTargetSuite: TTestSuite); forward;
 
+function LocalTrim(const AValue: string): string;
+var
+  L, R: Integer;
+begin
+  L := 1;
+  R := Length(AValue);
+  while (L <= R) and (AValue[L] <= ' ') do Inc(L);
+  while (R >= L) and (AValue[R] <= ' ') do Dec(R);
+  Result := Copy(AValue, L, R - L + 1);
+end;
+
 {$IF DEFINED(NEXTPAS_SIMD_TEST_REGISTER_NEON_BACKEND) OR DEFINED(NEXTPAS_SIMD_TEST_REGISTER_RISCVV_BACKEND)}
 procedure RegisterTestOptInBackends;
 begin
@@ -108,8 +120,18 @@ begin
 end;
 
 procedure PrintUsage;
+var
+  LExe: string;
+  i: Integer;
 begin
-  WriteLn('Usage: ', ExtractFileName(ParamStr(0)), ' [options]');
+  LExe := ParamStr(0);
+  for i := Length(LExe) downto 1 do
+    if LExe[i] in ['/', '\'] then
+    begin
+      LExe := Copy(LExe, i + 1, MaxInt);
+      Break;
+    end;
+  WriteLn('Usage: ', LExe, ' [options]');
   WriteLn('Options:');
   WriteLn('  --suite=<TestCaseClass>[,<TestCaseClass>...]   Run only selected suites (repeatable)');
   WriteLn('  --suite <TestCaseClass>                       Same as above');
@@ -145,7 +167,7 @@ begin
 
     for j := 0 to parts.Count - 1 do
     begin
-      s := Trim(parts[j]);
+      s := LocalTrim(parts[j]);
       if s <> '' then
         suiteFilters.Add(s);
     end;
@@ -256,6 +278,7 @@ begin
   HandleSuite('TTestCase_SimdConcurrentFramework', TTestCase_SimdConcurrentFramework, aListOnly, aTargetSuite);
   HandleSuite('TTestCase_SimdConcurrentRegistration', TTestCase_SimdConcurrentRegistration, aListOnly, aTargetSuite);
   HandleSuite('TTestCase_SimdAlgorithms', TTestCase_SimdAlgorithms, aListOnly, aTargetSuite);
+  HandleSuite('TRVVParityTestCase', TRVVParityTestCase, aListOnly, aTargetSuite);
   {$IFDEF CPUX86_64}
   HandleSuite('TTestCase_SSE3Correctness', TTestCase_SSE3Correctness, aListOnly, aTargetSuite);
   {$ENDIF}

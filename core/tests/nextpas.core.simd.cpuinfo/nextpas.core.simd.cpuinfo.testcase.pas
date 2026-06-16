@@ -7,7 +7,11 @@ interface
 
 uses
   fpcunit, testregistry,
-  SysUtils,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.files,
+  nextpas.core.platform.time,
   nextpas.core.simd.base,
   nextpas.core.simd.intrinsics,
   nextpas.core.simd.cpuinfo.base,
@@ -167,8 +171,8 @@ begin
   if LText = '' then
     Exit;
 
-  LText := StringReplace(LText, ' ', '', [rfReplaceAll]);
-  LText := StringReplace(LText, #9, '', [rfReplaceAll]);
+  LText := StringReplace(LText, ' ', '', True);
+  LText := StringReplace(LText, #9, '', True);
   if LText = '' then
     Exit;
 
@@ -262,13 +266,51 @@ begin
       Exit(False);
 end;
 
+function IsLinuxCacheIndexDirectoryNameLocal(const aName: string): Boolean;
+begin
+  Result := (Length(aName) > 5) and (Copy(aName, 1, 5) = 'index');
+end;
+
+function DirectoryExistsLocal(const aPath: string): Boolean;
+var
+  LPathUtf8: AnsiString;
+  LStat: TPlatformFileStat;
+begin
+  LPathUtf8 := AnsiString(aPath);
+  Result := (platform_file_stat(PAnsiChar(LPathUtf8), LStat) = 0) and
+            (LStat.FileType = ftDirectory);
+end;
+
+function DirEntryNameToStringLocal(const aEntry: TPlatformDirEntry): string;
+begin
+  SetString(Result, PAnsiChar(@aEntry.Name[0]), aEntry.NameLen);
+end;
+
+function DirEntryIsDirectoryLocal(const aBasePath: string;
+  const aEntry: TPlatformDirEntry): Boolean;
+var
+  LEntryPath: string;
+begin
+  if aEntry.FileType = ftDirectory then
+    Exit(True);
+  if aEntry.FileType <> ftUnknown then
+    Exit(False);
+
+  LEntryPath := aBasePath + '/' + DirEntryNameToStringLocal(aEntry);
+  Result := DirectoryExistsLocal(LEntryPath);
+end;
+
 function ReadLinuxSysfsCacheSnapshot(out aCache: TCacheInfo): Boolean;
 var
   LCpuBase: string;
   LCpuCacheBase: string;
   LDir: string;
-  LCpuRec: TSearchRec;
-  LIndexRec: TSearchRec;
+  LCpuName: string;
+  LIndexName: string;
+  LCpuDir: TPlatformDirHandle;
+  LIndexDir: TPlatformDirHandle;
+  LCpuEntry: TPlatformDirEntry;
+  LIndexEntry: TPlatformDirEntry;
   LTypeText: string;
   LLevelText: string;
   LSizeText: string;
@@ -277,38 +319,47 @@ var
   LSizeKB: Integer;
   LLineSize: Integer;
   LHasAnyValue: Boolean;
+  LReadStatus: Integer;
 begin
   FillChar(aCache, SizeOf(aCache), 0);
   Result := False;
   LHasAnyValue := False;
   LCpuBase := '/sys/devices/system/cpu';
 
-  if not DirectoryExists(LCpuBase) then
+  if not DirectoryExistsLocal(LCpuBase) then
     Exit;
-  if FindFirst(LCpuBase + '/cpu*', faDirectory, LCpuRec) <> 0 then
+  if platform_dir_open(PAnsiChar(AnsiString(LCpuBase)), LCpuDir) <> 0 then
     Exit;
   try
     repeat
-      if (LCpuRec.Name = '.') or (LCpuRec.Name = '..') then
+      LReadStatus := platform_dir_read(LCpuDir, LCpuEntry);
+      if LReadStatus <> 0 then
+        Break;
+
+      LCpuName := DirEntryNameToStringLocal(LCpuEntry);
+      if not DirEntryIsDirectoryLocal(LCpuBase, LCpuEntry) then
         Continue;
-      if (LCpuRec.Attr and faDirectory) = 0 then
-        Continue;
-      if not IsLinuxCpuDirectoryNameLocal(LCpuRec.Name) then
+      if not IsLinuxCpuDirectoryNameLocal(LCpuName) then
         Continue;
 
-      LCpuCacheBase := LCpuBase + '/' + LCpuRec.Name + '/cache';
-      if not DirectoryExists(LCpuCacheBase) then
+      LCpuCacheBase := LCpuBase + '/' + LCpuName + '/cache';
+      if not DirectoryExistsLocal(LCpuCacheBase) then
         Continue;
-      if FindFirst(LCpuCacheBase + '/index*', faDirectory, LIndexRec) <> 0 then
+      if platform_dir_open(PAnsiChar(AnsiString(LCpuCacheBase)), LIndexDir) <> 0 then
         Continue;
       try
         repeat
-          if (LIndexRec.Name = '.') or (LIndexRec.Name = '..') then
+          LReadStatus := platform_dir_read(LIndexDir, LIndexEntry);
+          if LReadStatus <> 0 then
+            Break;
+
+          LIndexName := DirEntryNameToStringLocal(LIndexEntry);
+          if not DirEntryIsDirectoryLocal(LCpuCacheBase, LIndexEntry) then
             Continue;
-          if (LIndexRec.Attr and faDirectory) = 0 then
+          if not IsLinuxCacheIndexDirectoryNameLocal(LIndexName) then
             Continue;
 
-          LDir := LCpuCacheBase + '/' + LIndexRec.Name;
+          LDir := LCpuCacheBase + '/' + LIndexName;
           LTypeText := LowerCase(ReadFirstLineTrimmedLocal(LDir + '/type'));
           LLevelText := ReadFirstLineTrimmedLocal(LDir + '/level');
           LSizeText := ReadFirstLineTrimmedLocal(LDir + '/size');
@@ -357,13 +408,13 @@ begin
                   aCache.L3KB := LSizeKB;
               end;
           end;
-        until FindNext(LIndexRec) <> 0;
+        until False;
       finally
-        FindClose(LIndexRec);
+        platform_dir_close(LIndexDir);
       end;
-    until FindNext(LCpuRec) <> 0;
+    until False;
   finally
-    FindClose(LCpuRec);
+    platform_dir_close(LCpuDir);
   end;
 
   Result := LHasAnyValue or (aCache.LineSize > 0);
@@ -654,12 +705,12 @@ begin
     cpuInfo := GetCPUInfo;
     
   // 性能测试
-  startTime := GetTickCount64;
+  startTime := platform_monotonic_ns;
   for i := 1 to NUM_CALLS do
     cpuInfo := GetCPUInfo;
-  endTime := GetTickCount64;
+  endTime := platform_monotonic_ns;
   
-  avgTimeNs := ((endTime - startTime) * 1000000.0) / NUM_CALLS;
+  avgTimeNs := (endTime - startTime) / NUM_CALLS;
   
   WriteLn('Average GetCPUInfo time: ', FormatFloat('0.00', avgTimeNs), ' ns');
   
@@ -2471,8 +2522,11 @@ begin
     // 兼容两种语义：抛出 RangeError 或返回不可用描述。
     AssertFalse('Invalid backend should not be available', info.Available);
   except
-    on ERangeError do
-      Exit;
+    on E: Exception do
+      if E.ClassName = 'ERangeError' then
+        Exit
+      else
+        raise;
   end;
 end;
 

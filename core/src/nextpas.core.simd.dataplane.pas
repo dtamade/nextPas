@@ -37,6 +37,15 @@ type
     ToUpperAsciiPtr: Pointer;
     MemReversePtr: Pointer;
     MinMaxBytesPtr: Pointer;
+    VecF32x4SubPtr: Pointer;
+    VecF32x4MulPtr: Pointer;
+    VecF32x4DivPtr: Pointer;
+    VecF32x4AbsPtr: Pointer;
+    VecF32x4SqrtPtr: Pointer;
+    VecF32x4MinPtr: Pointer;
+    VecF32x4MaxPtr: Pointer;
+    VecF32x4DotPtr: Pointer;
+    VecF32x4SplatPtr: Pointer;
   end;
 
 function GetCurrentSimdDataPlane: PSimdDataPlane; inline;
@@ -103,6 +112,15 @@ begin
   aDataPlane^.ToUpperAsciiPtr := Pointer(aDispatch^.ToUpperAscii);
   aDataPlane^.MemReversePtr := Pointer(aDispatch^.MemReverse);
   aDataPlane^.MinMaxBytesPtr := Pointer(aDispatch^.MinMaxBytes);
+  aDataPlane^.VecF32x4SubPtr := Pointer(aDispatch^.SubF32x4);
+  aDataPlane^.VecF32x4MulPtr := Pointer(aDispatch^.MulF32x4);
+  aDataPlane^.VecF32x4DivPtr := Pointer(aDispatch^.DivF32x4);
+  aDataPlane^.VecF32x4AbsPtr := Pointer(aDispatch^.AbsF32x4);
+  aDataPlane^.VecF32x4SqrtPtr := Pointer(aDispatch^.SqrtF32x4);
+  aDataPlane^.VecF32x4MinPtr := Pointer(aDispatch^.MinF32x4);
+  aDataPlane^.VecF32x4MaxPtr := Pointer(aDispatch^.MaxF32x4);
+  aDataPlane^.VecF32x4DotPtr := Pointer(aDispatch^.DotF32x4);
+  aDataPlane^.VecF32x4SplatPtr := Pointer(aDispatch^.SplatF32x4);
 end;
 
 function GetCurrentSimdDataPlane: PSimdDataPlane; inline;

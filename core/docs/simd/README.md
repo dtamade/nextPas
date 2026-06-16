@@ -143,16 +143,20 @@ NEON benchmark 还必须说明 AArch64 ABI GPR-to-vector 成本：部分 16-byte
 
 | 后端 | Dispatch 覆盖 | 当前状态 | 质量评级 |
 |------|---------------|----------|----------|
-| AVX-512 | 187 / 558 | 受构建与验证范围限制 | ⚠️ 受限 |
-| AVX2 | 491 / 558 | 稳定主线 | ✅ 优秀 |
-| NEON | 558 / 558 | 当前机器检查口径下已满覆盖 | ✅ 优秀 |
-| SSE2 | 463 / 558 | 稳定主线 | ✅ 良好 |
-| RISC-V V | 558 / 558 | 当前机器检查口径下已满覆盖，默认仍按 experimental 成熟度看待 | ⚠️ 受限成熟度 |
+| AVX-512 | 187 / 616 | 受构建与验证范围限制 | ⚠️ 受限 |
+| AVX2 | 491 / 616 | 稳定主线 | ✅ 优秀 |
+| NEON | 616 / 616 | 当前机器检查口径下已满覆盖 | ✅ 优秀 |
+| SSE2 | 463 / 616 | 稳定主线 | ✅ 良好 |
+| RISC-V V | 616 / 616 | 当前机器检查口径下已满覆盖，默认仍按 experimental 成熟度看待 | ⚠️ 受限成熟度 |
+
+> 注：以上 `N/616` 中的 616 是 canonical dispatch_slots_total（`check_interface_implementation_completeness.py --strict` 输出）。`Backend/616` 表示该 backend 在全部 616 个槽位中赋值了 N 个。
+
+以下是 IDE 兼容后端 backend 成熟度分类（基于 dispatch 覆盖和当前 evidence 状态）的快速对照表：
 
 **说明**：
 - 这里展示的是当前更有决策价值的 dispatch 覆盖与成熟度，不再使用早期的 ASM 块占比口径。
-- `558 / 558` 表示在 `check_interface_implementation_completeness.py` 的当前机器检查口径下，该 backend 已为全部 dispatch 槽位提供赋值。
-- `sbNEON` 的 `558 / 558` 不代表默认 public 构建启用 NEON asm；默认仍按 scalar fallback，除非满足上面的 asm opt-in 条件。
+- `616 / 616` 表示在 `check_interface_implementation_completeness.py` 的当前机器检查口径下，该 backend 已为全部 dispatch 槽位提供赋值。
+- `sbNEON` 的 `616 / 616` 不代表默认 public 构建启用 NEON asm；默认仍按 scalar fallback，除非满足上面的 asm opt-in 条件。
 - `sbRISCVV` 虽然当前覆盖已补满，但默认成熟度仍受编译器/汇编链路限制约束，不能简单等同于 AVX2/NEON 主线成熟度。
 
 ### 性能基准 (4096 字节, 1M 次迭代)
@@ -478,7 +482,8 @@ AVX2 注意事项
   - POPCNT：BitsetPopCount 快路径
   - UTF‑8：FastPath（ASCII SSE2 + 非 ASCII 回退标量）
   - 搜索：BytesIndexOf（标量 BMH + SSE2/AVX2 快速筛选与否决）
-- 其他架构：ARM NEON 后端有 558/558 dispatch 赋值口径，但默认 public 状态仍是 scalar fallback，NEON asm 需要显式 opt-in；RISC-V V 为实验性
+- 其他架构：ARM NEON 后端有 616/616 dispatch 赋值口径，但默认 public 状态仍是 scalar fallback，NEON asm 需要显式 opt-in；RISC-V V 为实验性
+- `sbNEON` 的 `616 / 616` 不代表默认 public 构建启用 NEON asm；默认仍按 scalar fallback，除非满足上面的 asm opt-in 条件
 
 排障提示
 - 若出现非预期性能/行为：
