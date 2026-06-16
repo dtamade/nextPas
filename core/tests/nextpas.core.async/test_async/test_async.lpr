@@ -11,9 +11,14 @@ uses
   nextpas.core.time.deadline,
   nextpas.core.time.cpu,
   nextpas.core.platform.pipe,
+  nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.socket,
   nextpas.core.async,
-  nextpas.core.io.poller;
+  nextpas.core.io.poller,
+  nextpas.core.net.base,
+  nextpas.core.net.intf,
+  nextpas.core.net.tcp;
 
 var
   T: TTestRunner;
@@ -251,27 +256,27 @@ begin
     'successful timer cancel clears context ownership immediately');
 end;
 
-procedure TestTimerClearClearsOwnerRefsSourceContract;
+procedure TestTimerCloseClearsOwnerRefsSourceContract;
 var
   LSource: string;
   LBody: string;
 begin
   LSource := LoadSourceText('src/nextpas.core.async.timer.pas');
-  LBody := ExtractSourceRange(LSource, 'procedure ttimerheap.clear;',
-    'function ttimerheap.schedule', 'timer heap Clear implementation');
+  LBody := ExtractSourceRange(LSource, 'procedure ttimerheap.close;',
+    'function ttimerheap.schedule', 'timer heap Close implementation');
 
   CheckSourceOrder(LBody, 'for li := 0 to fentrycount - 1 do',
     'setlength(fentries, 0);',
-    'Clear scans live timer entries before releasing storage');
+    'Close scans live timer entries before releasing storage');
   CheckSourceOrder(LBody, 'if fentrycount > 0 then',
     'for li := 0 to fentrycount - 1 do',
-    'Clear guards the UInt32 scan against empty-heap underflow');
+    'Close guards the UInt32 scan against empty-heap underflow');
   CheckSourceOrder(LBody, 'fentries[li].callback := nil;',
     'setlength(fentries, 0);',
-    'Clear releases callback owner references before shrinking entries');
+    'Close releases callback owner references before shrinking entries');
   CheckSourceOrder(LBody, 'fentries[li].context := nil;',
     'setlength(fentries, 0);',
-    'Clear releases context owner references before shrinking entries');
+    'Close releases context owner references before shrinking entries');
 end;
 
 procedure TestTimerNextDeadline;
@@ -964,6 +969,561 @@ begin
   end;
 end;
 
+{ === ScheduleAt: absolute deadline scheduling === }
+
+var
+  GScheduleAtFired: Boolean = False;
+
+procedure ScheduleAtCallback(AContext: Pointer);
+begin
+  GScheduleAtFired := True;
+  if GLoopRef <> nil then
+    GLoopRef^.Stop;
+end;
+
+procedure TestAsyncLoopScheduleAt;
+var
+  LLoop: TAsyncLoop;
+  LDeadline: TDeadline;
+begin
+  GScheduleAtFired := False;
+  LLoop := TAsyncLoop.Create(32);
+  GLoopRef := @LLoop;
+
+  { Schedule at an absolute time ~50ms from now }
+  LDeadline := TDeadline.After(TDuration.FromMilliseconds(50));
+  LLoop.ScheduleAt(LDeadline, @ScheduleAtCallback, nil);
+  { Safety timeout }
+  LLoop.Schedule(TDuration.FromMilliseconds(500), @LoopStopCallback, nil);
+  LLoop.Run;
+
+  Check(GScheduleAtFired, 'ScheduleAt callback fired');
+  GLoopRef := nil;
+  LLoop.Close;
+end;
+
+{ === AsyncRecv/AsyncSend via TCP loopback === }
+
+var
+  GSockIoDone: Boolean = False;
+  GSockIoResult: Int32 = 0;
+
+procedure SocketIoCallback(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  GSockIoDone := True;
+  GSockIoResult := AResult;
+  if GLoopRef <> nil then
+    GLoopRef^.Stop;
+end;
+
+procedure TestAsyncLoopAsyncRecvSend;
+var
+  LLoop: TAsyncLoop;
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LServer: ITcpStream;
+  LSendBuf: array[0..3] of Byte;
+  LRecvBuf: array[0..3] of Byte;
+  LClientFd, LServerFd: PtrInt;
+  LListenerFd: PtrInt;
+begin
+  GSockIoDone := False;
+  GSockIoResult := 0;
+  FillChar(LRecvBuf, SizeOf(LRecvBuf), 0);
+  LSendBuf[0] := $AA; LSendBuf[1] := $BB;
+  LSendBuf[2] := $CC; LSendBuf[3] := $DD;
+
+  { Create TCP loopback pair }
+  LListener := NetTcpListen('127.0.0.1', 0);
+  LClient := NetTcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+  LServer := LListener.Accept;
+
+  { Set client to non-blocking for async send }
+  (LClient as ITcpSocketRuntime).SetBlocking(False);
+  LClientFd := PtrInt((LClient as ITcpSocketRuntime).NativeSocketHandle);
+
+  LLoop := TAsyncLoop.Create(32);
+  GLoopRef := @LLoop;
+
+  { AsyncSend data from client }
+  Check(LLoop.AsyncSend(LClientFd, @LSendBuf[0], 4, 0, @SocketIoCallback, nil),
+    'AsyncSend accepted');
+
+  { Safety timeout }
+  LLoop.Schedule(TDuration.FromMilliseconds(500), @LoopStopCallback, nil);
+  LLoop.Run;
+
+  Check(GSockIoDone, 'send completed');
+  Check(GSockIoResult >= 4, 'sent >= 4 bytes');
+
+  { Now read from server side (blocking is fine) }
+  LServer.Read(LRecvBuf[0], 4);
+  CheckEqual(Int64($AA), Int64(LRecvBuf[0]), 'byte 0');
+  CheckEqual(Int64($BB), Int64(LRecvBuf[1]), 'byte 1');
+  CheckEqual(Int64($CC), Int64(LRecvBuf[2]), 'byte 2');
+  CheckEqual(Int64($DD), Int64(LRecvBuf[3]), 'byte 3');
+
+  GLoopRef := nil;
+  LLoop.Close;
+end;
+
+{ === AsyncRecv via TCP loopback === }
+
+var
+  GRecvDone: Boolean = False;
+  GRecvResult: Int32 = 0;
+
+procedure RecvIoCallback(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  GRecvDone := True;
+  GRecvResult := AResult;
+  if GLoopRef <> nil then
+    GLoopRef^.Stop;
+end;
+
+procedure TestAsyncLoopAsyncRecv;
+var
+  LLoop: TAsyncLoop;
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LServer: ITcpStream;
+  LSendBuf: array[0..3] of Byte;
+  LRecvBuf: array[0..3] of Byte;
+  LServerFd: PtrInt;
+  LSent: SizeUInt;
+begin
+  GRecvDone := False;
+  GRecvResult := 0;
+  FillChar(LRecvBuf, SizeOf(LRecvBuf), 0);
+  LSendBuf[0] := $11; LSendBuf[1] := $22;
+  LSendBuf[2] := $33; LSendBuf[3] := $44;
+
+  LListener := NetTcpListen('127.0.0.1', 0);
+  LClient := NetTcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+  LServer := LListener.Accept;
+
+  { Write data synchronously from client first }
+  LSent := LClient.Write(LSendBuf[0], 4);
+  Check(LSent >= 4, 'wrote 4 bytes synchronously');
+
+  { Set server side to non-blocking for async recv }
+  (LServer as ITcpSocketRuntime).SetBlocking(False);
+  LServerFd := PtrInt((LServer as ITcpSocketRuntime).NativeSocketHandle);
+
+  LLoop := TAsyncLoop.Create(32);
+  GLoopRef := @LLoop;
+
+  { AsyncRecv on server side }
+  Check(LLoop.AsyncRecv(LServerFd, @LRecvBuf[0], 4, 0, @RecvIoCallback, nil),
+    'AsyncRecv accepted');
+  LLoop.Schedule(TDuration.FromMilliseconds(500), @LoopStopCallback, nil);
+  LLoop.Run;
+
+  Check(GRecvDone, 'recv completed');
+  Check(GRecvResult >= 4, 'recv >= 4 bytes');
+  CheckEqual(Int64($11), Int64(LRecvBuf[0]), 'byte 0');
+  CheckEqual(Int64($22), Int64(LRecvBuf[1]), 'byte 1');
+  CheckEqual(Int64($33), Int64(LRecvBuf[2]), 'byte 2');
+  CheckEqual(Int64($44), Int64(LRecvBuf[3]), 'byte 3');
+
+  GLoopRef := nil;
+  LLoop.Close;
+end;
+
+{ === AsyncAccept on TCP listener === }
+
+var
+  GAcceptDone: Boolean = False;
+  GAcceptResult: Int32 = 0;
+
+procedure AcceptCallback(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  GAcceptDone := True;
+  GAcceptResult := AResult;
+  if GLoopRef <> nil then
+    GLoopRef^.Stop;
+end;
+
+procedure TestAsyncLoopAsyncAccept;
+var
+  LLoop: TAsyncLoop;
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LListenerFd: PtrInt;
+  LSa: sockaddr_in;
+  LSaLen: socklen_t;
+  LAcceptedFd: TPlatformSocket;
+begin
+  GAcceptDone := False;
+  GAcceptResult := 0;
+
+  LListener := NetTcpListen('127.0.0.1', 0);
+  (LListener as ITcpSocketRuntime).SetBlocking(False);
+  LListenerFd := PtrInt((LListener as ITcpSocketRuntime).NativeSocketHandle);
+
+  LLoop := TAsyncLoop.Create(32);
+  GLoopRef := @LLoop;
+
+  { Post async accept first }
+  LSaLen := SizeOf(LSa);
+  FillChar(LSa, SizeOf(LSa), 0);
+  Check(LLoop.AsyncAccept(LListenerFd, @LSa, @LSaLen, 0, @AcceptCallback, nil),
+    'AsyncAccept accepted');
+
+  { Connect from client side }
+  LClient := NetTcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+
+  LLoop.Schedule(TDuration.FromMilliseconds(500), @LoopStopCallback, nil);
+  LLoop.Run;
+
+  Check(GAcceptDone, 'accept completed');
+  Check(GAcceptResult >= 0, 'accept result OK (fd >= 0)');
+  { Clean up the accepted fd }
+  if GAcceptResult >= 0 then
+  begin
+    LAcceptedFd.Value := cint(GAcceptResult);
+    platform_socket_close(LAcceptedFd);
+  end;
+
+  GLoopRef := nil;
+  LLoop.Close;
+end;
+
+{ === AsyncRecvTimeout success === }
+
+var
+  GTimeoutIoDone: Boolean = False;
+  GTimeoutIoResult: Int32 = 0;
+
+procedure RecvTimeoutCallback(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  GTimeoutIoDone := True;
+  GTimeoutIoResult := AResult;
+  if GLoopRef <> nil then
+    GLoopRef^.Stop;
+end;
+
+procedure TestAsyncLoopAsyncRecvTimeoutSuccess;
+var
+  LLoop: TAsyncLoop;
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LServer: ITcpStream;
+  LSendBuf: array[0..3] of Byte;
+  LRecvBuf: array[0..3] of Byte;
+  LServerFd: PtrInt;
+  LSent: SizeUInt;
+begin
+  GTimeoutIoDone := False;
+  GTimeoutIoResult := 0;
+  FillChar(LRecvBuf, SizeOf(LRecvBuf), 0);
+  LSendBuf[0] := $DE; LSendBuf[1] := $AD;
+  LSendBuf[2] := $BE; LSendBuf[3] := $EF;
+
+  LListener := NetTcpListen('127.0.0.1', 0);
+  LClient := NetTcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+  LServer := LListener.Accept;
+
+  { Write data synchronously }
+  LSent := LClient.Write(LSendBuf[0], 4);
+  Check(LSent >= 4, 'wrote 4 bytes');
+
+  { Set server non-blocking for async recv }
+  (LServer as ITcpSocketRuntime).SetBlocking(False);
+  LServerFd := PtrInt((LServer as ITcpSocketRuntime).NativeSocketHandle);
+
+  LLoop := TAsyncLoop.Create(32);
+  GLoopRef := @LLoop;
+
+  { AsyncRecvTimeout with generous deadline — should succeed }
+  Check(LLoop.AsyncRecvTimeout(LServerFd, @LRecvBuf[0], 4, 0,
+    TDeadline.After(TDuration.FromSeconds(5)),
+    @RecvTimeoutCallback, nil), 'AsyncRecvTimeout accepted');
+
+  LLoop.Schedule(TDuration.FromMilliseconds(500), @LoopStopCallback, nil);
+  LLoop.Run;
+
+  Check(GTimeoutIoDone, 'recv completed');
+  Check(GTimeoutIoResult >= 4, 'recv >= 4 bytes');
+  CheckEqual(Int64($DE), Int64(LRecvBuf[0]), 'byte 0');
+  CheckEqual(Int64($AD), Int64(LRecvBuf[1]), 'byte 1');
+  CheckEqual(Int64($BE), Int64(LRecvBuf[2]), 'byte 2');
+  CheckEqual(Int64($EF), Int64(LRecvBuf[3]), 'byte 3');
+
+  GLoopRef := nil;
+  LLoop.Close;
+end;
+
+{ === AsyncRecvTimeout expired (no data arrives, deadline passes) === }
+
+procedure TestAsyncLoopAsyncRecvTimeoutExpired;
+var
+  LLoop: TAsyncLoop;
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LServer: ITcpStream;
+  LRecvBuf: array[0..3] of Byte;
+  LServerFd: PtrInt;
+begin
+  GTimeoutIoDone := False;
+  GTimeoutIoResult := 0;
+  FillChar(LRecvBuf, SizeOf(LRecvBuf), 0);
+
+  LListener := NetTcpListen('127.0.0.1', 0);
+  LClient := NetTcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+  LServer := LListener.Accept;
+
+  { Set server non-blocking }
+  (LServer as ITcpSocketRuntime).SetBlocking(False);
+  LServerFd := PtrInt((LServer as ITcpSocketRuntime).NativeSocketHandle);
+
+  LLoop := TAsyncLoop.Create(32);
+  GLoopRef := @LLoop;
+
+  { AsyncRecvTimeout with very short deadline — no data will arrive }
+  Check(LLoop.AsyncRecvTimeout(LServerFd, @LRecvBuf[0], 4, 0,
+    TDeadline.After(TDuration.FromMilliseconds(50)),
+    @RecvTimeoutCallback, nil), 'AsyncRecvTimeout accepted');
+
+  LLoop.Schedule(TDuration.FromMilliseconds(500), @LoopStopCallback, nil);
+  LLoop.Run;
+
+  Check(GTimeoutIoDone, 'timeout callback fired');
+  Check(GTimeoutIoResult < 0, 'result negative = timeout/cancel');
+
+  GLoopRef := nil;
+  LLoop.Close;
+end;
+
+{ === TPoller direct API tests === }
+
+procedure TestPollerDirectCreateAndBackend;
+var
+  LPoller: TPoller;
+  LDetected: TPollerBackend;
+begin
+  LPoller := TPoller.Create(32);
+  Check(LPoller.IsValid, 'poller is valid after create');
+  Check(LPoller.Backend <> pbUnsupported, 'backend is not unsupported');
+  LDetected := PollerDetectBackend;
+  Check(LPoller.Backend = LDetected, 'poller backend matches PollerDetectBackend');
+  { PollerSupportsPositionedFileIO should not crash for any backend }
+  PollerSupportsPositionedFileIO(LPoller.Backend);
+  LPoller.Close;
+end;
+
+{ === Three-form callback tests (design-conventions §8) === }
+
+var
+  GRefCount: Int32 = 0;
+  GMethodCount: Int32 = 0;
+  GRefIoDone: Boolean = False;
+  GMethodIoDone: Boolean = False;
+  GRefIoResult: Int32 = 0;
+  GMethodIoResult: Int32 = 0;
+  GRefTaskDone: Boolean = False;
+  GMethodTaskDone: Boolean = False;
+
+procedure RefCallback(AContext: Pointer);
+begin
+  Inc(GRefCount);
+end;
+
+type
+  TTestMethodContainer = class
+  public
+    FCalled: Boolean;
+    procedure Callback(AContext: Pointer);
+  end;
+
+procedure TTestMethodContainer.Callback(AContext: Pointer);
+begin
+  FCalled := True;
+end;
+
+{ TAsyncLoop PostRef/PostMethod }
+
+procedure TestPostRefCallback;
+var
+  LLoop: TAsyncLoop;
+begin
+  GRefCount := 0;
+  LLoop := TAsyncLoop.Create(32);
+  GLoopRef := @LLoop;
+  LLoop.PostRef(procedure(AContext: Pointer)
+  begin
+    Inc(GRefCount);
+  end, nil);
+  LLoop.Schedule(TDuration.FromMilliseconds(100), @LoopStopCallback, nil);
+  LLoop.Run;
+  CheckEqual(Int64(1), Int64(GRefCount), 'post ref callback fired');
+  GLoopRef := nil;
+  LLoop.Close;
+end;
+
+procedure TestPostMethodCallback;
+var
+  LLoop: TAsyncLoop;
+  LContainer: TTestMethodContainer;
+begin
+  GMethodCount := 0;
+  LContainer := TTestMethodContainer.Create;
+  try
+    LLoop := TAsyncLoop.Create(32);
+    GLoopRef := @LLoop;
+    LLoop.PostMethod(@LContainer.Callback, nil);
+    LLoop.Schedule(TDuration.FromMilliseconds(100), @LoopStopCallback, nil);
+    LLoop.Run;
+    Check(LContainer.FCalled, 'post method callback fired');
+    GLoopRef := nil;
+    LLoop.Close;
+  finally
+    LContainer.Free;
+  end;
+end;
+
+{ TAsyncLoop ScheduleRef/ScheduleMethod }
+
+procedure TestScheduleRefCallback;
+var
+  LLoop: TAsyncLoop;
+begin
+  GRefCount := 0;
+  LLoop := TAsyncLoop.Create(32);
+  GLoopRef := @LLoop;
+  LLoop.ScheduleRef(TDuration.FromMilliseconds(10),
+    procedure(AContext: Pointer)
+    begin
+      Inc(GRefCount);
+    end, nil);
+  LLoop.Schedule(TDuration.FromMilliseconds(100), @LoopStopCallback, nil);
+  LLoop.Run;
+  CheckEqual(Int64(1), Int64(GRefCount), 'schedule ref callback fired');
+  GLoopRef := nil;
+  LLoop.Close;
+end;
+
+procedure TestScheduleMethodCallback;
+var
+  LLoop: TAsyncLoop;
+  LContainer: TTestMethodContainer;
+begin
+  LContainer := TTestMethodContainer.Create;
+  try
+    LLoop := TAsyncLoop.Create(32);
+    GLoopRef := @LLoop;
+    LLoop.ScheduleMethod(TDuration.FromMilliseconds(10),
+      @LContainer.Callback, nil);
+    LLoop.Schedule(TDuration.FromMilliseconds(100), @LoopStopCallback, nil);
+    LLoop.Run;
+    Check(LContainer.FCalled, 'schedule method callback fired');
+    GLoopRef := nil;
+    LLoop.Close;
+  finally
+    LContainer.Free;
+  end;
+end;
+
+{ TAsyncLoop AsyncSleepRef }
+
+procedure TestAsyncSleepRefCallback;
+var
+  LLoop: TAsyncLoop;
+begin
+  GRefCount := 0;
+  LLoop := TAsyncLoop.Create(32);
+  GLoopRef := @LLoop;
+  LLoop.AsyncSleepRef(TDuration.FromMilliseconds(10),
+    procedure(AContext: Pointer)
+    begin
+      Inc(GRefCount);
+    end, nil);
+  LLoop.Schedule(TDuration.FromMilliseconds(100), @LoopStopCallback, nil);
+  LLoop.Run;
+  CheckEqual(Int64(1), Int64(GRefCount), 'async sleep ref callback fired');
+  GLoopRef := nil;
+  LLoop.Close;
+end;
+
+{ TIoCompletion AsyncRecvRef }
+
+procedure TestAsyncRecvRefCallback;
+var
+  LLoop: TAsyncLoop;
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LServer: ITcpStream;
+  LSendBuf: array[0..3] of Byte;
+  LRecvBuf: array[0..3] of Byte;
+  LServerFd: PtrInt;
+begin
+  GRefIoDone := False;
+  GRefIoResult := 0;
+  FillChar(LRecvBuf, SizeOf(LRecvBuf), 0);
+  LSendBuf[0] := $41; LSendBuf[1] := $42;
+  LSendBuf[2] := $43; LSendBuf[3] := $44;
+
+  LListener := NetTcpListen('127.0.0.1', 0);
+  LClient := NetTcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+  LServer := LListener.Accept;
+
+  (LServer as ITcpSocketRuntime).SetBlocking(False);
+  LServerFd := PtrInt((LServer as ITcpSocketRuntime).NativeSocketHandle);
+
+  LLoop := TAsyncLoop.Create(32);
+  GLoopRef := @LLoop;
+
+  LClient.Write(LSendBuf[0], 4);
+
+  Check(LLoop.AsyncRecvRef(LServerFd, @LRecvBuf[0], 4, 0,
+    procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer)
+    begin
+      GRefIoDone := True;
+      GRefIoResult := AResult;
+    end, nil), 'AsyncRecvRef accepted');
+
+  LLoop.Schedule(TDuration.FromMilliseconds(500), @LoopStopCallback, nil);
+  LLoop.Run;
+
+  Check(GRefIoDone, 'ref io callback fired');
+  Check(GRefIoResult > 0, 'ref io result positive');
+
+  GLoopRef := nil;
+  LLoop.Close;
+end;
+
+{ TAsyncTask OnCompleteRef/OnCompleteMethod }
+
+procedure TestOnCompleteRefCallback;
+var
+  LTask: TAsyncTask;
+begin
+  GRefTaskDone := False;
+  LTask := TAsyncTask.Create;
+  LTask.OnCompleteRef(procedure(AContext: Pointer)
+  begin
+    GRefTaskDone := True;
+  end, nil);
+  LTask.Complete(0);
+  Check(GRefTaskDone, 'on complete ref callback fired');
+end;
+
+procedure TestOnCompleteMethodCallback;
+var
+  LTask: TAsyncTask;
+  LContainer: TTestMethodContainer;
+begin
+  LContainer := TTestMethodContainer.Create;
+  try
+    LTask := TAsyncTask.Create;
+    LTask.OnCompleteMethod(@LContainer.Callback, nil);
+    LTask.Complete(0);
+    Check(LContainer.FCalled, 'on complete method callback fired');
+  finally
+    LContainer.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.async');
 
@@ -974,8 +1534,8 @@ begin
   T.Run('TimerCancelAfterFireIsStale', @TestTimerCancelAfterFireIsStale);
   T.Run('TimerCancelClearsOwnerRefsSourceContract',
     @TestTimerCancelClearsOwnerRefsSourceContract);
-  T.Run('TimerClearClearsOwnerRefsSourceContract',
-    @TestTimerClearClearsOwnerRefsSourceContract);
+  T.Run('TimerCloseClearsOwnerRefsSourceContract',
+    @TestTimerCloseClearsOwnerRefsSourceContract);
   T.Run('TimerNextDeadline', @TestTimerNextDeadline);
   T.Run('TimerHandleNone', @TestTimerHandleNone);
   T.Run('AsyncLoopCreate', @TestAsyncLoopCreate);
@@ -1011,6 +1571,23 @@ begin
     @TestAsyncLoopRunStopFromPostStillFiresExpiredTimers);
   T.Run('AsyncLoopRunOnceStopFromPostSkipsIoPoll',
     @TestAsyncLoopRunOnceStopFromPostSkipsIoPoll);
+  T.Run('AsyncLoopScheduleAt', @TestAsyncLoopScheduleAt);
+  T.Run('AsyncLoopAsyncRecvSend', @TestAsyncLoopAsyncRecvSend);
+  T.Run('AsyncLoopAsyncRecv', @TestAsyncLoopAsyncRecv);
+  T.Run('AsyncLoopAsyncAccept', @TestAsyncLoopAsyncAccept);
+  T.Run('AsyncLoopAsyncRecvTimeoutSuccess',
+    @TestAsyncLoopAsyncRecvTimeoutSuccess);
+  T.Run('AsyncLoopAsyncRecvTimeoutExpired',
+    @TestAsyncLoopAsyncRecvTimeoutExpired);
+  T.Run('PollerDirectCreateAndBackend', @TestPollerDirectCreateAndBackend);
+  T.Run('PostRefCallback', @TestPostRefCallback);
+  T.Run('PostMethodCallback', @TestPostMethodCallback);
+  T.Run('ScheduleRefCallback', @TestScheduleRefCallback);
+  T.Run('ScheduleMethodCallback', @TestScheduleMethodCallback);
+  T.Run('AsyncSleepRefCallback', @TestAsyncSleepRefCallback);
+  T.Run('AsyncRecvRefCallback', @TestAsyncRecvRefCallback);
+  T.Run('OnCompleteRefCallback', @TestOnCompleteRefCallback);
+  T.Run('OnCompleteMethodCallback', @TestOnCompleteMethodCallback);
 
   T.Summary;
 end.

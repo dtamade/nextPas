@@ -67,9 +67,13 @@ begin
   GIoDone := True;
   if GLoopRef <> nil then
   begin
-    LHandle := GLoopRef^.Schedule(TDuration.FromMilliseconds(1),
-      @StopLoopCallback, nil);
-    GCloseAbortScheduleAccepted := LHandle.IsValid;
+    try
+      LHandle := GLoopRef^.Schedule(TDuration.FromMilliseconds(1),
+        @StopLoopCallback, nil);
+      GCloseAbortScheduleAccepted := LHandle.IsValid;
+    except
+      GCloseAbortScheduleAccepted := False;
+    end;
   end;
 end;
 
