@@ -249,7 +249,9 @@ begin
 
   close(LErrPipe[1]);
   FillChar(LWire, SizeOf(LWire), 0);
-  LRead := read(LErrPipe[0], @LWire, SizeOf(LWire));
+  repeat
+    LRead := read(LErrPipe[0], @LWire, SizeOf(LWire));
+  until (LRead >= 0) or (platform_get_errno <> ESysEINTR);
   close(LErrPipe[0]);
 
   if LRead = 0 then
@@ -259,7 +261,9 @@ begin
   end
   else
   begin
-    waitpid(LPid, nil, 0);
+    repeat
+      LRead := waitpid(LPid, nil, 0);
+    until (LRead >= 0) or (platform_get_errno <> ESysEINTR);
     AFailStage := TPlatformProcessSpawnStage(LWire.Stage);
     Result := LWire.ErrNo;
   end;
@@ -291,7 +295,9 @@ var
 begin
   FillChar(AResult, SizeOf(AResult), 0);
   LStatus := 0;
-  LRet := waitpid(AProc.Pid, @LStatus, 0);
+  repeat
+    LRet := waitpid(AProc.Pid, @LStatus, 0);
+  until (LRet >= 0) or (platform_get_errno <> ESysEINTR);
   if LRet < 0 then
     Exit(platform_get_errno);
   Result := DecodeStatus(LStatus, AResult);
