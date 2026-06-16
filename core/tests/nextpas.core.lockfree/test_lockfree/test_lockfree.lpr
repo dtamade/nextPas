@@ -2146,6 +2146,157 @@ begin
   CheckEqual(Int64(2), Int64(GEbrReclaimCount), 'destroy must reclaim all retired items');
 end;
 
+{ Hazard Pointer tests }
+
+var
+  GHazardReclaimCount: Int32;
+
+procedure HazardTestReclaimProc(const AData: Pointer; const AUserData: Pointer);
+begin
+  AtomicFetchAdd32(GHazardReclaimCount, 1, moSeqCst);
+end;
+
+procedure TestHazardBasicProtectClear;
+var
+  LDomain: THazardDomain;
+  LTid: PtrUInt;
+begin
+  LDomain := THazardDomain.Create;
+  try
+    LTid := LDomain.RegisterThread;
+    Check(LTid <> 0, 'register thread returns non-zero ID');
+    CheckEqual(Int64(1), Int64(LDomain.ActiveThreads), 'one active thread');
+    LDomain.Protect(LTid, 0, Pointer(42));
+    LDomain.Clear(LTid, 0);
+    LDomain.UnregisterThread(LTid);
+    CheckEqual(Int64(0), Int64(LDomain.ActiveThreads), 'zero active threads after unregister');
+  finally
+    LDomain.Free;
+  end;
+end;
+
+procedure TestHazardRetireAndCollect;
+var
+  LDomain: THazardDomain;
+  LTid: PtrUInt;
+begin
+  LDomain := THazardDomain.Create;
+  try
+    LTid := LDomain.RegisterThread;
+    GHazardReclaimCount := 0;
+    LDomain.Retire(Pointer(1), @HazardTestReclaimProc);
+    LDomain.Retire(Pointer(2), @HazardTestReclaimProc);
+    LDomain.Collect(LTid);
+    CheckEqual(Int64(2), Int64(GHazardReclaimCount), 'both retired items reclaimed');
+    CheckEqual(Int64(0), Int64(LDomain.RetiredCount), 'retired count 0 after collect');
+    LDomain.UnregisterThread(LTid);
+  finally
+    LDomain.Free;
+  end;
+end;
+
+procedure TestHazardProtectedNotReclaimed;
+var
+  LDomain: THazardDomain;
+  LTid: PtrUInt;
+begin
+  LDomain := THazardDomain.Create;
+  try
+    LTid := LDomain.RegisterThread;
+    GHazardReclaimCount := 0;
+    LDomain.Protect(LTid, 0, Pointer(42));
+    LDomain.Retire(Pointer(42), @HazardTestReclaimProc);
+    LDomain.Collect(LTid);
+    CheckEqual(Int64(0), Int64(GHazardReclaimCount), 'protected pointer NOT reclaimed');
+    CheckEqual(Int64(1), Int64(LDomain.RetiredCount), 'protected item still in retired list');
+    LDomain.Clear(LTid, 0);
+    LDomain.Collect(LTid);
+    CheckEqual(Int64(1), Int64(GHazardReclaimCount), 'reclaimed after clear');
+    LDomain.UnregisterThread(LTid);
+  finally
+    LDomain.Free;
+  end;
+end;
+
+procedure TestHazardNilDataRejected;
+var
+  LDomain: THazardDomain;
+  LTid: PtrUInt;
+begin
+  LDomain := THazardDomain.Create;
+  try
+    LTid := LDomain.RegisterThread;
+    GHazardReclaimCount := 0;
+    LDomain.Retire(nil, @HazardTestReclaimProc);
+    LDomain.Collect(LTid);
+    CheckEqual(Int64(0), Int64(GHazardReclaimCount), 'nil data should not be retired');
+    LDomain.UnregisterThread(LTid);
+  finally
+    LDomain.Free;
+  end;
+end;
+
+procedure TestHazardMultipleThreads;
+var
+  LDomain: THazardDomain;
+  LTid1: PtrUInt;
+  LTid2: PtrUInt;
+begin
+  LDomain := THazardDomain.Create;
+  try
+    LTid1 := LDomain.RegisterThread;
+    LTid2 := LDomain.RegisterThread;
+    CheckEqual(Int64(2), Int64(LDomain.ActiveThreads), 'two active threads');
+    GHazardReclaimCount := 0;
+    LDomain.Protect(LTid1, 0, Pointer(100));
+    LDomain.Retire(Pointer(100), @HazardTestReclaimProc);
+    LDomain.Collect(LTid2);
+    CheckEqual(Int64(0), Int64(GHazardReclaimCount), 'protected by thread 1, not reclaimed by thread 2');
+    LDomain.Clear(LTid1, 0);
+    LDomain.Collect(LTid2);
+    CheckEqual(Int64(1), Int64(GHazardReclaimCount), 'reclaimed after both threads clear');
+    LDomain.UnregisterThread(LTid1);
+    LDomain.UnregisterThread(LTid2);
+  finally
+    LDomain.Free;
+  end;
+end;
+
+procedure TestHazardDestroyReclaimsAll;
+var
+  LDomain: THazardDomain;
+  LTid: PtrUInt;
+begin
+  LDomain := THazardDomain.Create;
+  LTid := LDomain.RegisterThread;
+  GHazardReclaimCount := 0;
+  LDomain.Retire(Pointer(1), @HazardTestReclaimProc);
+  LDomain.Retire(Pointer(2), @HazardTestReclaimProc);
+  LDomain.Retire(Pointer(3), @HazardTestReclaimProc);
+  LDomain.UnregisterThread(LTid);
+  LDomain.Free;
+  CheckEqual(Int64(3), Int64(GHazardReclaimCount), 'destroy reclaims all retired items');
+end;
+
+procedure TestHazardBatchCollect;
+var
+  LDomain: THazardDomain;
+  LTid: PtrUInt;
+  LI: Integer;
+begin
+  LDomain := THazardDomain.Create;
+  try
+    LTid := LDomain.RegisterThread;
+    GHazardReclaimCount := 0;
+    for LI := 1 to HAZARD_RETIRE_BATCH + 1 do
+      LDomain.Retire(Pointer(PtrInt(LI)), @HazardTestReclaimProc);
+    Check(GHazardReclaimCount > 0, 'batch threshold triggers automatic collect');
+    LDomain.UnregisterThread(LTid);
+  finally
+    LDomain.Free;
+  end;
+end;
+
 { Multi-thread stress tests }
 
 const
@@ -4272,6 +4423,13 @@ begin
   T.Run('EBR nil guard acquire', @TestEbrNilGuardAcquire);
   T.Run('EBR multi-guard retire+collect', @TestEbrMultiGuardRetireCollect);
   T.Run('EBR destroy reclaims retired', @TestEbrDestroyWithRetired);
+  T.Run('Hazard basic protect/clear', @TestHazardBasicProtectClear);
+  T.Run('Hazard retire and collect', @TestHazardRetireAndCollect);
+  T.Run('Hazard protected not reclaimed', @TestHazardProtectedNotReclaimed);
+  T.Run('Hazard nil data rejected', @TestHazardNilDataRejected);
+  T.Run('Hazard multiple threads', @TestHazardMultipleThreads);
+  T.Run('Hazard destroy reclaims all', @TestHazardDestroyReclaimsAll);
+  T.Run('Hazard batch collect', @TestHazardBatchCollect);
   T.Run('Stack 4P+4C stress', @TestStackStress);
   T.Run('Deque owner+thief stress', @TestDequeOwnerThief);
   T.Run('SegQueue basic', @TestSegQueueBasic);

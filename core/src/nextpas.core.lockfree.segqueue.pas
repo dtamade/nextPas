@@ -12,6 +12,7 @@ uses
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = 32;
+  SEGQUEUE_FREE_POOL_LIMIT = 4;
 
 type
   generic TSegQueueImpl<T> = class
@@ -38,9 +39,11 @@ type
     {$PUSH} {$WARN 05029 OFF}
     FPadDequeue: TCacheLinePad;
     {$POP}
+    FFreePool: PSegment;
+    FFreePoolCount: Integer;
     FEbr: TEbrDomain;
     class procedure SegQueueReclaimSegment(const AData: Pointer; const AUserData: Pointer); static;
-    class function AllocSegment(const AStartIndex: Int64): PSegment; static;
+    function AllocSegment(const AStartIndex: Int64): PSegment;
   public
     {** @desc 创建无界 MPSC 队列（EBR 回收段） }
     constructor Create;
@@ -121,8 +124,20 @@ begin
 end;
 
 class procedure TSegQueueImpl.SegQueueReclaimSegment(const AData: Pointer; const AUserData: Pointer);
+var
+  LSeg: PSegment;
+  LQueue: TSegQueueImpl;
 begin
-  FreeMem(AData);
+  LQueue := TSegQueueImpl(AUserData);
+  LSeg := PSegment(AData);
+  if LQueue.FFreePoolCount < SEGQUEUE_FREE_POOL_LIMIT then
+  begin
+    LSeg^.Next := LQueue.FFreePool;
+    LQueue.FFreePool := LSeg;
+    Inc(LQueue.FFreePoolCount);
+  end
+  else
+    FreeMem(AData);
 end;
 
 procedure TSegQueueImpl.Enqueue(const AValue: T);
