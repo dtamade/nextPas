@@ -33,7 +33,7 @@ end;
 ```
 
 Use `TConfig` when you need a mutable instance, direct `LoadFromXxx` calls,
-`ReplaceFrom`, or `TConfigWatcher`.
+`ReplaceFrom`, or `TConfigWatcher` from `nextpas.core.config.watcher`.
 
 ## Build config snapshots
 
@@ -162,7 +162,8 @@ behavior.
 ### Keep one mutable live config for reloads
 
 Use `BuildConfig` when an application needs a mutable `TConfig` instance that
-stays alive for `TConfigWatcher` or manual updates:
+stays alive for `TConfigWatcher` or manual updates. Add
+`nextpas.core.config.watcher` to the `uses` clause when you use the watcher:
 
 ```pascal
 var
@@ -474,3 +475,31 @@ Use `$${name}` to return a literal `${name}`.
 Interpolation cycles are invalid configuration and raise `EConfigError`.
 Structural APIs such as `Has`, `GetKeys`, `GetSection`, and `Count` stay raw and
 reflect the flat key table.
+
+## Builder and adapter contract
+
+`AddDefault` values are always replayed before explicit sources. Later defaults replace earlier defaults but never outrank non-default sources.
+
+`AddIni`, `AddJson`, `AddYaml`, `AddToml`, `AddFile`, and `AddEnv` replay in call order. Later sources override earlier ones for the same key.
+
+If a later source fails to load or parse, `Build`, `BuildConfig`, and `TryBuild` fail closed instead of falling back to earlier valid sources or publishing a partial snapshot.
+
+JSON, YAML, and TOML sources with empty keys fail closed before any value is stored.
+
+`TryBuild` returns `False`, clears `AConfig`, and reports parse, file-load, interpolation, or required-key failures through `AError`.
+
+If the caller passes an already assigned `AConfig`, `TryBuild` overwrites it with `nil` on failure instead of leaving a stale snapshot in the output slot.
+
+`BuildConfig` uses the same validating builder pipeline as `Build`; malformed sources, interpolation errors, and required-key failures raise `EConfigError` before a mutable `TConfig` is returned.
+
+`ConfigLoad` and `AddFile(...).Build` share the same validating file-source path, so file errors include the failing path.
+
+`ToIni` is lossy-guarded for values the current INI adapter cannot round-trip, while `ToToml` preserves flat keys as literal TOML keys instead of rebuilding tables.
+
+## Reload and failed-load contract
+
+`TryLoadFromFile` returns `False` and leaves the existing config table untouched when file loading or parsing fails.
+
+`TConfigWatcher` reloads through a temporary `TConfig` and only calls `ReplaceFrom` after the new file parses successfully.
+
+`OnReload` fires only after a successful reload. Failed reloads preserve old values and do not fire the callback.

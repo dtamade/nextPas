@@ -9,6 +9,7 @@ interface
 
 uses
   nextpas.core.text.view,
+  nextpas.core.mem.intf,
   nextpas.core.yaml.types,
   nextpas.core.yaml.parser,
   nextpas.core.yaml.value,
@@ -34,20 +35,28 @@ function YamlParse(const AInput: string): IYamlDocument; overload;
 function YamlParse(const AInput: TStringView): IYamlDocument; overload;
 function TryYamlParse(const AInput: string; out ADoc: IYamlDocument): Boolean;
 
+{ Parse with custom allocator. YAML internals use RTL-managed dynamic arrays;
+  the allocator controls parser document storage. }
+function YamlParseWith(const AInput: string; const AAllocator: IAllocator): IYamlDocument; overload;
+function YamlParseWith(const AInput: TStringView; const AAllocator: IAllocator): IYamlDocument; overload;
+
 implementation
 
 uses
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.mem.default;
 
 type
   TYamlDocumentImpl = class(TInterfacedObject, IYamlDocument)
   private
     FDoc: TYamlDocument;
     FInput: string;
+    FAllocator: IAllocator;
     procedure RequireStringifiable(const AOperation: string);
   public
-    constructor Create(const AInput: string);
-    constructor CreateFromView(const AView: TStringView);
+    constructor Create(const AInput: string; const AAllocator: IAllocator);
+    constructor CreateFromView(const AView: TStringView; const AAllocator: IAllocator);
+    destructor Destroy; override;
     function Root: TYamlValue;
     function HasError: Boolean;
     function Error: TYamlError;
@@ -55,44 +64,52 @@ type
     function StringifyPretty(const AIndent: Int32 = 2): string;
   end;
 
-constructor TYamlDocumentImpl.Create(const AInput: string);
+constructor TYamlDocumentImpl.Create(const AInput: string; const AAllocator: IAllocator);
 begin
   inherited Create;
   FInput := AInput;
+  FAllocator := AAllocator;
   if Length(FInput) > 0 then
-    YamlDocParse(FDoc, @FInput[1], Length(FInput))
+    YamlDocParseWith(FDoc, @FInput[1], Length(FInput), FAllocator)
   else
-    YamlDocParse(FDoc, nil, 0);
+    YamlDocParseWith(FDoc, nil, 0, FAllocator);
 end;
 
-constructor TYamlDocumentImpl.CreateFromView(const AView: TStringView);
+constructor TYamlDocumentImpl.CreateFromView(const AView: TStringView; const AAllocator: IAllocator);
 begin
   inherited Create;
   FInput := AView.ToString;
+  FAllocator := AAllocator;
   if Length(FInput) > 0 then
-    YamlDocParse(FDoc, @FInput[1], Length(FInput))
+    YamlDocParseWith(FDoc, @FInput[1], Length(FInput), FAllocator)
   else
-    YamlDocParse(FDoc, nil, 0);
+    YamlDocParseWith(FDoc, nil, 0, FAllocator);
+end;
+
+destructor TYamlDocumentImpl.Destroy;
+begin
+  FDoc.Done;
+  inherited;
 end;
 
 function TYamlDocumentImpl.Root: TYamlValue;
 begin
-  Result := TYamlValue.Create(FDoc, FDoc.RootIdx);
+  Result := TYamlValue.Create(FDoc, FDoc.Root);
 end;
 
 function TYamlDocumentImpl.HasError: Boolean;
 begin
-  Result := FDoc.HasError;
+  Result := FDoc.HasError();
 end;
 
 function TYamlDocumentImpl.Error: TYamlError;
 begin
-  Result := FDoc.Error;
+  Result := FDoc.Error();
 end;
 
 procedure TYamlDocumentImpl.RequireStringifiable(const AOperation: string);
 begin
-  if FDoc.HasError then
+  if FDoc.HasError() then
     raise EInvalidOperationError.Create(
       'TYamlDocument.' + AOperation +
       ': diagnostic document cannot be stringified');
@@ -101,29 +118,39 @@ end;
 function TYamlDocumentImpl.Stringify: string;
 begin
   RequireStringifiable('Stringify');
-  Result := YamlStringify(FDoc, FDoc.RootIdx);
+  Result := YamlStringify(FDoc, FDoc.Root);
 end;
 
 function TYamlDocumentImpl.StringifyPretty(const AIndent: Int32): string;
 begin
   RequireStringifiable('StringifyPretty');
-  Result := YamlStringifyPretty(FDoc, FDoc.RootIdx, AIndent);
+  Result := YamlStringifyPretty(FDoc, FDoc.Root, AIndent);
 end;
 
 function YamlParse(const AInput: string): IYamlDocument;
 begin
-  Result := TYamlDocumentImpl.Create(AInput);
+  Result := TYamlDocumentImpl.Create(AInput, DefaultAllocator);
 end;
 
 function YamlParse(const AInput: TStringView): IYamlDocument;
 begin
-  Result := TYamlDocumentImpl.CreateFromView(AInput);
+  Result := TYamlDocumentImpl.CreateFromView(AInput, DefaultAllocator);
 end;
 
 function TryYamlParse(const AInput: string; out ADoc: IYamlDocument): Boolean;
 begin
   ADoc := YamlParse(AInput);
   Result := not ADoc.HasError;
+end;
+
+function YamlParseWith(const AInput: string; const AAllocator: IAllocator): IYamlDocument;
+begin
+  Result := TYamlDocumentImpl.Create(AInput, AAllocator);
+end;
+
+function YamlParseWith(const AInput: TStringView; const AAllocator: IAllocator): IYamlDocument;
+begin
+  Result := TYamlDocumentImpl.CreateFromView(AInput, AAllocator);
 end;
 
 end.

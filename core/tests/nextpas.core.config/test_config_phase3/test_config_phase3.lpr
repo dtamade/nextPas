@@ -706,7 +706,7 @@ begin
       'TryBuild fails for malformed ini file');
     Check(LCfg = nil, 'TryBuild returns nil config for malformed ini file');
     Check(Pos(LBadIniPath, LError) > 0, 'malformed ini file path included');
-    Check(Pos('INI parse error at line 2, column 3 (offset 10)', LError) > 0,
+    Check(Pos('INI parse error: line 2, column 1: missing closing ]', LError) > 0,
       'ini parser detail included');
 
     LCfg := nil;

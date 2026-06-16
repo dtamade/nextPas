@@ -14,6 +14,58 @@ uses
 var
   T: TTestRunner;
 
+const
+  YAML_BUILDER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.yaml.builder.pas';
+  YAML_BUILDER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.yaml.builder.pas';
+
+function ReadSourceFile(const APath: string): string;
+var
+  LFile: Text;
+  LLine: string;
+begin
+  Result := '';
+  Assign(LFile, APath);
+  Reset(LFile);
+  try
+    while not Eof(LFile) do
+    begin
+      ReadLn(LFile, LLine);
+      Result := Result + LowerCase(LLine) + #10;
+    end;
+  finally
+    Close(LFile);
+  end;
+end;
+
+function ResolveSourcePath(const APathFromTest: string; const APathFromRoot: string): string;
+begin
+  if FileExists(APathFromTest) then
+    Exit(APathFromTest);
+  if FileExists(APathFromRoot) then
+    Exit(APathFromRoot);
+  Result := APathFromTest;
+end;
+
+procedure CheckSourceContains(const ASource, ANeedle, AMessage: string);
+begin
+  Check(Pos(LowerCase(ANeedle), ASource) > 0, AMessage);
+end;
+
+procedure CheckSourceAbsent(const ASource, ANeedle, AMessage: string);
+begin
+  Check(Pos(LowerCase(ANeedle), ASource) = 0, AMessage);
+end;
+
+procedure CheckSourceOrder(const ASource, AFirstNeedle, ASecondNeedle, AMessage: string);
+var
+  LFirstPos: SizeInt;
+  LSecondPos: SizeInt;
+begin
+  LFirstPos := Pos(LowerCase(AFirstNeedle), ASource);
+  LSecondPos := Pos(LowerCase(ASecondNeedle), ASource);
+  Check((LFirstPos > 0) and (LSecondPos > 0) and (LFirstPos < LSecondPos), AMessage);
+end;
+
 procedure TestBuildScalar;
 var
   LB: TYamlBuilder;
@@ -717,6 +769,51 @@ begin
     'rejected container root does not overwrite first root');
 end;
 
+procedure TestBuilderOwnedStringsUseAllocatorStorage;
+var
+  LSource: string;
+begin
+  LSource := ReadSourceFile(ResolveSourcePath(
+    YAML_BUILDER_SOURCE_PATH_FROM_TEST,
+    YAML_BUILDER_SOURCE_PATH_FROM_ROOT));
+  CheckSourceContains(LSource, 'fownedstrings: pstring;',
+    'builder owned strings must use raw pointer slots');
+  CheckSourceContains(LSource, 'fownedcap: sizeuint;',
+    'builder owned strings must track explicit capacity');
+  CheckSourceAbsent(LSource, 'fownedstrings: array of string;',
+    'builder owned strings must not use rtl dynamic arrays');
+  CheckSourceAbsent(LSource, 'setlength(fownedstrings',
+    'builder owned strings must not use setlength');
+  CheckSourceContains(LSource, 'fdoc.allocator.allocate(',
+    'builder init must allocate owned string slots through document allocator');
+  CheckSourceContains(LSource, 'fillchar(fownedstrings^, fownedcap * sizeof(string), 0);',
+    'builder init must zero owned string slots');
+  CheckSourceContains(LSource, 'fdoc.allocator.reallocate(pointer(fownedstrings),',
+    'builder growth must reallocate owned string slots through document allocator');
+  CheckSourceContains(LSource,
+    'fillchar(fownedstrings[loldcap], (fownedcap - loldcap) * sizeof(string), 0);',
+    'builder growth must zero new owned string slots');
+  CheckSourceContains(LSource, 'if fownedcount > 0 then',
+    'builder done must guard zero-count finalization');
+  CheckSourceContains(LSource, 'fownedstrings[li] := '''';',
+    'builder done must finalize retained strings before release');
+  CheckSourceContains(LSource, 'fdoc.allocator.deallocate(pointer(fownedstrings));',
+    'builder done must free owned string slots through document allocator');
+  CheckSourceOrder(LSource, 'fownedstrings[li] := '''';',
+    'fdoc.allocator.deallocate(pointer(fownedstrings));',
+    'builder done must finalize strings before freeing owned slots');
+  CheckSourceContains(LSource, 'fdoc.addnode',
+    'builder must add YAML nodes through TYamlDocument.AddNode');
+  CheckSourceContains(LSource, 'fdoc.setroot(anodeidx);',
+    'builder must set root through TYamlDocument.SetRoot');
+  CheckSourceContains(LSource, 'fdoc.node(acontaineridx)^.container.count',
+    'builder must use node accessor for container count updates');
+  CheckSourceAbsent(LSource, 'function addbuildernode',
+    'free AddBuilderNode helper must be removed');
+  CheckSourceAbsent(LSource, 'fdoc.fallocator',
+    'builder must not reach private allocator field directly');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.yaml.builder');
   T.Run('Build scalar', @TestBuildScalar);
@@ -748,5 +845,7 @@ begin
     @TestBuilderMappingPendingKeyFailsClosed);
   T.Run('Builder second root fails closed',
     @TestBuilderSecondRootFailsClosed);
+  T.Run('Builder owned strings use allocator storage',
+    @TestBuilderOwnedStringsUseAllocatorStorage);
   T.Summary;
 end.

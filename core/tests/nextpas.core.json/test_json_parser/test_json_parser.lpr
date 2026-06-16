@@ -3,6 +3,8 @@ program test_json_parser;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
+  Classes,
   nextpas.core.text.view,
   nextpas.core.text.builder,
   nextpas.core.mem.intf,
@@ -15,6 +17,237 @@ uses
 
 var
   T: TTestRunner;
+
+const
+  JSON_PARSER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.json.parser.pas';
+  JSON_PARSER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.json.parser.pas';
+
+type
+  TFailingReallocateAllocator = class(TInterfacedObject, IAllocator)
+  private
+    FFailOnReallocateCall: SizeUInt;
+    FReallocateCalls: SizeUInt;
+  public
+    constructor Create(const AFailOnReallocateCall: SizeUInt);
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
+    function GetMem(aSize: SizeUInt): Pointer;
+    function AllocMem(aSize: SizeUInt): Pointer;
+    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+    procedure FreeMem(aDst: Pointer);
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(aPtr: Pointer);
+    function Traits: TAllocatorTraits;
+  end;
+
+  TFailingAllocateAllocator = class(TInterfacedObject, IAllocator)
+  private
+    FFailOnAllocateCall: SizeUInt;
+    FAllocateCalls: SizeUInt;
+  public
+    constructor Create(const AFailOnAllocateCall: SizeUInt);
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
+    function GetMem(aSize: SizeUInt): Pointer;
+    function AllocMem(aSize: SizeUInt): Pointer;
+    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+    procedure FreeMem(aDst: Pointer);
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(aPtr: Pointer);
+    function Traits: TAllocatorTraits;
+  end;
+
+constructor TFailingReallocateAllocator.Create(
+  const AFailOnReallocateCall: SizeUInt);
+begin
+  inherited Create;
+  FFailOnReallocateCall := AFailOnReallocateCall;
+  FReallocateCalls := 0;
+end;
+
+function TFailingReallocateAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TFailingReallocateAllocator.Reallocate(const APtr: Pointer;
+  const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TFailingReallocateAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
+end;
+
+function TFailingReallocateAllocator.GetMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Result := System.GetMem(aSize);
+end;
+
+function TFailingReallocateAllocator.AllocMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Result := System.AllocMem(aSize);
+end;
+
+function TFailingReallocateAllocator.ReallocMem(aDst: Pointer;
+  aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+  begin
+    FreeMem(aDst);
+    Exit(nil);
+  end;
+  if aDst = nil then
+    Exit(GetMem(aSize));
+  Inc(FReallocateCalls);
+  if (FFailOnReallocateCall > 0) and
+    (FReallocateCalls = FFailOnReallocateCall) then
+    Exit(nil);
+  Result := System.ReallocMem(aDst, aSize);
+end;
+
+procedure TFailingReallocateAllocator.FreeMem(aDst: Pointer);
+begin
+  if aDst <> nil then
+    System.FreeMem(aDst);
+end;
+
+function TFailingReallocateAllocator.AllocAligned(aSize,
+  aAlignment: SizeUInt): Pointer;
+begin
+  Result := GetMem(aSize);
+end;
+
+procedure TFailingReallocateAllocator.FreeAligned(aPtr: Pointer);
+begin
+  FreeMem(aPtr);
+end;
+
+function TFailingReallocateAllocator.Traits: TAllocatorTraits;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.HasMemSize := False;
+  Result.SupportsAligned := False;
+end;
+
+constructor TFailingAllocateAllocator.Create(
+  const AFailOnAllocateCall: SizeUInt);
+begin
+  inherited Create;
+  FFailOnAllocateCall := AFailOnAllocateCall;
+  FAllocateCalls := 0;
+end;
+
+function TFailingAllocateAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TFailingAllocateAllocator.Reallocate(const APtr: Pointer;
+  const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TFailingAllocateAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
+end;
+
+function TFailingAllocateAllocator.GetMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Inc(FAllocateCalls);
+  if (FFailOnAllocateCall > 0) and (FAllocateCalls = FFailOnAllocateCall) then
+    Exit(nil);
+  Result := System.GetMem(aSize);
+end;
+
+function TFailingAllocateAllocator.AllocMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Inc(FAllocateCalls);
+  if (FFailOnAllocateCall > 0) and (FAllocateCalls = FFailOnAllocateCall) then
+    Exit(nil);
+  Result := System.AllocMem(aSize);
+end;
+
+function TFailingAllocateAllocator.ReallocMem(aDst: Pointer;
+  aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+  begin
+    FreeMem(aDst);
+    Exit(nil);
+  end;
+  if aDst = nil then
+    Exit(GetMem(aSize));
+  Result := System.ReallocMem(aDst, aSize);
+end;
+
+procedure TFailingAllocateAllocator.FreeMem(aDst: Pointer);
+begin
+  if aDst <> nil then
+    System.FreeMem(aDst);
+end;
+
+function TFailingAllocateAllocator.AllocAligned(aSize,
+  aAlignment: SizeUInt): Pointer;
+begin
+  Result := GetMem(aSize);
+end;
+
+procedure TFailingAllocateAllocator.FreeAligned(aPtr: Pointer);
+begin
+  FreeMem(aPtr);
+end;
+
+function TFailingAllocateAllocator.Traits: TAllocatorTraits;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.HasMemSize := False;
+  Result.SupportsAligned := False;
+end;
+
+function ReadSourceFile(const APath: string): string;
+var
+  LText: TStringList;
+begin
+  LText := TStringList.Create;
+  try
+    LText.LoadFromFile(APath);
+    Result := LowerCase(LText.Text);
+  finally
+    LText.Free;
+  end;
+end;
+
+function ResolveSourcePath(const APathFromTest: string;
+  const APathFromRoot: string): string;
+begin
+  if FileExists(APathFromTest) then
+    Exit(APathFromTest);
+  if FileExists(APathFromRoot) then
+    Exit(APathFromRoot);
+  Result := APathFromTest;
+end;
+
+procedure CheckSourceContains(const ASource, ANeedle, AMessage: string);
+begin
+  Check(Pos(LowerCase(ANeedle), ASource) > 0, AMessage);
+end;
 
 function SV(const S: string): TStringView; inline;
 begin
@@ -657,6 +890,162 @@ begin
   Doc.Done;
 end;
 
+function BuildJsonNumberArray(const AItemCount: Integer): string;
+var
+  LI: Integer;
+begin
+  Result := '[';
+  for LI := 0 to AItemCount - 1 do
+  begin
+    if LI > 0 then
+      Result := Result + ',';
+    Result := Result + '0';
+  end;
+  Result := Result + ']';
+end;
+
+function BuildEscapedJsonString(const ARepeatCount: Integer): string;
+var
+  LI: Integer;
+begin
+  Result := '"';
+  for LI := 1 to ARepeatCount do
+    Result := Result + '\n';
+  Result := Result + '"';
+end;
+
+function BuildEscapedJsonStringArray(const AStringCount,
+  ARepeatCount: Integer): string;
+var
+  LI: Integer;
+begin
+  Result := '[';
+  for LI := 1 to AStringCount do
+  begin
+    if LI > 1 then
+      Result := Result + ',';
+    Result := Result + BuildEscapedJsonString(ARepeatCount);
+  end;
+  Result := Result + ']';
+end;
+
+procedure TestNodeGrowthOOMFailsClosed;
+var
+  LAllocatorObj: TFailingReallocateAllocator;
+  LAllocator: IAllocator;
+  Doc: TJsonDocument;
+begin
+  LAllocatorObj := TFailingReallocateAllocator.Create(1);
+  LAllocator := LAllocatorObj as IAllocator;
+  Doc.Init(LAllocator);
+  try
+    Check(not Doc.Parse(SV(BuildJsonNumberArray(80))),
+      'node growth OOM rejects parse');
+    Check(Doc.HasError, 'node growth OOM sets error');
+    CheckEqual('out of memory', Doc.Error.Message.ToString,
+      'node growth OOM message');
+  finally
+    Doc.Done;
+  end;
+end;
+
+procedure TestStringOverflowOOMFailsClosed;
+var
+  LAllocatorObj: TFailingReallocateAllocator;
+  LAllocator: IAllocator;
+  Doc: TJsonDocument;
+begin
+  LAllocatorObj := TFailingReallocateAllocator.Create(1);
+  LAllocator := LAllocatorObj as IAllocator;
+  Doc.Init(LAllocator);
+  try
+    Check(not Doc.Parse(SV(BuildEscapedJsonStringArray(10, 600))),
+      'overflow string OOM rejects parse');
+    Check(Doc.HasError, 'overflow string OOM sets error');
+    CheckEqual('out of memory', Doc.Error.Message.ToString,
+      'overflow string OOM message');
+  finally
+    Doc.Done;
+  end;
+end;
+
+procedure TestParsePreallocationOOMFailsClosed;
+var
+  LAllocatorObj: TFailingReallocateAllocator;
+  LAllocator: IAllocator;
+  Doc: TJsonDocument;
+begin
+  LAllocatorObj := TFailingReallocateAllocator.Create(1);
+  LAllocator := LAllocatorObj as IAllocator;
+  Doc.Init(LAllocator);
+  try
+    Check(Doc.Parse(SV(StringOfChar('a', 200).QuotedString('"'))),
+      'first large parse succeeds');
+    Check(not Doc.Parse(SV(StringOfChar('b', 260).QuotedString('"'))),
+      'second large parse rejects preallocation OOM');
+    Check(Doc.HasError, 'preallocation OOM sets error');
+    CheckEqual('out of memory', Doc.Error.Message.ToString,
+      'preallocation OOM message');
+  finally
+    Doc.Done;
+  end;
+end;
+
+procedure TestInitAllocateOOMSetsError;
+var
+  LAllocatorObj: TFailingAllocateAllocator;
+  LAllocator: IAllocator;
+  Doc: TJsonDocument;
+begin
+  LAllocatorObj := TFailingAllocateAllocator.Create(1);
+  LAllocator := LAllocatorObj as IAllocator;
+  Doc.Init(LAllocator);
+  try
+    Check(Doc.HasError, 'init allocate OOM sets error');
+    CheckEqual('out of memory', Doc.Error.Message.ToString,
+      'init allocate OOM message');
+  finally
+    Doc.Done;
+  end;
+end;
+
+procedure TestParserSourceTracksOOMAndInitGuards;
+var
+  LSource: string;
+begin
+  LSource := ReadSourceFile(ResolveSourcePath(
+    JSON_PARSER_SOURCE_PATH_FROM_TEST,
+    JSON_PARSER_SOURCE_PATH_FROM_ROOT));
+  CheckSourceContains(LSource, 'finited: boolean;',
+    'document tracks initialized state');
+  CheckSourceContains(LSource, 'if not finited then',
+    'done must guard uninited records');
+  CheckSourceContains(LSource, 'lbase := pansichar(fallocator.allocate(ltotalsize));',
+    'init must stage initial combined allocation');
+  CheckSourceContains(LSource, 'if lbase = nil then',
+    'init must guard initial combined allocation');
+  CheckSourceContains(LSource, 'lnewnodes := fallocator.reallocate(fnodes, lnewcap * sizeof(tjsonnode));',
+    'node growth must stage reallocate');
+  CheckSourceContains(LSource, 'lnodesptr := fallocator.allocate(lnewcap * sizeof(tjsonnode));',
+    'combined node growth must stage node allocation');
+  CheckSourceContains(LSource, 'larenaptr := fallocator.allocate(fstrarenacap);',
+    'combined node growth must stage arena allocation');
+  CheckSourceContains(LSource, 'fallocator.deallocate(lnodesptr);',
+    'combined node growth must release staged nodes when arena allocation fails');
+  CheckSourceContains(LSource, 'lnewoverflow := fallocator.reallocate(fstroverflow, lnewcap * sizeof(pointer));',
+    'overflow storage must stage reallocate');
+  CheckSourceContains(LSource, 'lnodesptr := fallocator.allocate(lestimate * sizeof(tjsonnode));',
+    'parse preallocation must stage node allocation');
+  CheckSourceContains(LSource, 'larenaptr := fallocator.allocate(fstrarenacap);',
+    'parse preallocation must stage arena allocation');
+  CheckSourceContains(LSource, 'lnewnodes := fallocator.reallocate(fnodes, lestimate * sizeof(tjsonnode));',
+    'parse preallocation must stage reallocate');
+  CheckSourceContains(LSource, 'lindices := fallocator.allocate(findexcap * sizeof(tjsonobjectindex));',
+    'object index storage must stage allocation');
+  CheckSourceContains(LSource, 'lslots := fallocator.allocate(lcap * sizeof(uint32));',
+    'object hash slots must stage allocation');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.json.parser');
   T.Run('parse null', @TestParseNull);
@@ -694,5 +1083,11 @@ begin
   T.Run('multiple errors', @TestMultipleErrors);
   T.Run('doc reuse', @TestDocReuse);
   T.Run('nested object array', @TestNestedObjectArray);
+  T.Run('node growth OOM fails closed', @TestNodeGrowthOOMFailsClosed);
+  T.Run('string overflow OOM fails closed', @TestStringOverflowOOMFailsClosed);
+  T.Run('parse preallocation OOM fails closed', @TestParsePreallocationOOMFailsClosed);
+  T.Run('init allocate OOM sets error', @TestInitAllocateOOMSetsError);
+  T.Run('parser source tracks OOM and init guards',
+    @TestParserSourceTracksOOMAndInitGuards);
   T.Summary;
 end.

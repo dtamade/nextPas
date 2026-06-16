@@ -40,8 +40,10 @@ type
     FHashBuckets: PUInt32;
     FHashCap: UInt32;
     FHashOwner: UInt32;
+    FInited: Boolean;
+    procedure SetOutOfMemoryError;
     function AddNode: UInt32;
-    procedure AddOwnedBuf(ABuf: Pointer);
+    function AddOwnedBuf(ABuf: Pointer): Boolean;
     procedure BuildHashIndex(ATableIdx: UInt32);
     function HashLookup(ATableIdx: UInt32; const AKey: TStringView; AHash: UInt32): UInt32;
   public
@@ -187,15 +189,18 @@ end;
 { TTomlDocument }
 
 procedure TTomlDocument.Init(const AAllocator: IAllocator);
+var
+  LPtr: Pointer;
 begin
   if AAllocator = nil then
     FAllocator := DefaultAllocator
   else
     FAllocator := AAllocator;
   FNodeCap := INITIAL_NODE_CAP;
-  FNodes := FAllocator.Allocate(FNodeCap * SizeOf(TTomlNode));
+  FNodes := nil;
   FNodeCount := 0;
   FHasError := False;
+  FillChar(FError, SizeOf(FError), 0);
   FOwnedBufs := nil;
   FOwnedCount := 0;
   FOwnedCap := 0;
@@ -203,12 +208,31 @@ begin
   FHashBuckets := nil;
   FHashCap := 0;
   FHashOwner := TOML_NODE_NONE;
+  FInited := True;
+  LPtr := FAllocator.Allocate(FNodeCap * SizeOf(TTomlNode));
+  if LPtr = nil then
+  begin
+    SetOutOfMemoryError;
+    Exit;
+  end;
+  FNodes := PTomlNode(LPtr);
+end;
+
+procedure TTomlDocument.SetOutOfMemoryError;
+begin
+  FError.Message := TStringView.Create(PAnsiChar('out of memory'), 13);
+  FError.Line := 0;
+  FError.Col := 0;
+  FError.Offset := 0;
+  FHasError := True;
 end;
 
 procedure TTomlDocument.Done;
 var
   LI: UInt32;
 begin
+  if not FInited then
+    Exit;
   if FHashBuckets <> nil then
   begin
     FAllocator.Deallocate(FHashBuckets);
@@ -230,35 +254,60 @@ begin
   FNodeCap := 0;
   FOwnedCount := 0;
   FOwnedCap := 0;
+  FHashCap := 0;
+  FHashOwner := TOML_NODE_NONE;
+  FInited := False;
 end;
 
-procedure TTomlDocument.AddOwnedBuf(ABuf: Pointer);
+function TTomlDocument.AddOwnedBuf(ABuf: Pointer): Boolean;
 var
   LNewCap: UInt32;
+  LNewBufs: PPointer;
 begin
+  Result := False;
   if FOwnedBufs = nil then
   begin
     FOwnedCap := INITIAL_OWNED_CAP;
     FOwnedBufs := PPointer(FAllocator.Allocate(FOwnedCap * SizeOf(Pointer)));
+    if FOwnedBufs = nil then
+    begin
+      FOwnedCap := 0;
+      SetOutOfMemoryError;
+      Exit(False);
+    end;
   end
   else if FOwnedCount >= FOwnedCap then
   begin
     LNewCap := FOwnedCap * 2;
-    FOwnedBufs := PPointer(FAllocator.Reallocate(Pointer(FOwnedBufs), LNewCap * SizeOf(Pointer)));
+    LNewBufs := PPointer(FAllocator.Reallocate(Pointer(FOwnedBufs), LNewCap * SizeOf(Pointer)));
+    if LNewBufs = nil then
+    begin
+      SetOutOfMemoryError;
+      Exit(False);
+    end;
+    FOwnedBufs := LNewBufs;
     FOwnedCap := LNewCap;
   end;
   (FOwnedBufs + FOwnedCount)^ := ABuf;
   Inc(FOwnedCount);
+  Result := True;
 end;
 
 function TTomlDocument.AddNode: UInt32;
 var
   LNewCap: UInt32;
+  LNewNodes: PTomlNode;
 begin
   if FNodeCount >= FNodeCap then
   begin
     LNewCap := FNodeCap * 2;
-    FNodes := FAllocator.Reallocate(FNodes, LNewCap * SizeOf(TTomlNode));
+    LNewNodes := FAllocator.Reallocate(FNodes, LNewCap * SizeOf(TTomlNode));
+    if LNewNodes = nil then
+    begin
+      SetOutOfMemoryError;
+      Exit(TOML_NODE_NONE);
+    end;
+    FNodes := LNewNodes;
     FNodeCap := LNewCap;
   end;
   Result := FNodeCount;
@@ -274,6 +323,7 @@ procedure TTomlDocument.BuildHashIndex(ATableIdx: UInt32);
 var
   LCount, LCap, LSlot: UInt32;
   LCur: UInt32;
+  LHashBuckets: PUInt32;
 begin
   LCount := FNodes[ATableIdx].Container.Count;
   LCap := LCount * 2;
@@ -282,9 +332,16 @@ begin
   begin
     FAllocator.Deallocate(FHashBuckets);
     FHashBuckets := nil;
+    FHashCap := 0;
+    FHashOwner := TOML_NODE_NONE;
   end;
   if FHashBuckets = nil then
-    FHashBuckets := FAllocator.Allocate(LCap * SizeOf(UInt32));
+  begin
+    LHashBuckets := FAllocator.Allocate(LCap * SizeOf(UInt32));
+    if LHashBuckets = nil then
+      Exit;
+    FHashBuckets := LHashBuckets;
+  end;
   FHashCap := LCap;
   FillChar(FHashBuckets^, FHashCap * SizeOf(UInt32), $FF);
   FHashOwner := ATableIdx;
@@ -666,6 +723,8 @@ begin
   begin
     LBufLen := LEnd - LStart;
     LBuf := Doc^.FAllocator.Allocate(LBufLen);
+    if LBuf = nil then
+      Exit(SetError('out of memory', 13));
     LBufLen := TomlUnescapeToBuffer(Src + LStart, LEnd - LStart, LBuf, LErr);
     if LErr <> ueNone then
     begin
@@ -674,7 +733,13 @@ begin
     end;
     AStr := TStringView.Create(LBuf, LBufLen);
     AOwned := True;
-    Doc^.AddOwnedBuf(LBuf);
+    if not Doc^.AddOwnedBuf(LBuf) then
+    begin
+      Doc^.FAllocator.Deallocate(LBuf);
+      AOwned := False;
+      AStr := TStringView.Empty;
+      Exit(False);
+    end;
   end
   else
     AStr := TStringView.Create(Src + LStart, LEnd - LStart);
@@ -739,6 +804,8 @@ begin
       end;
       LBufLen := LEnd - LStart;
       LBuf := Doc^.FAllocator.Allocate(LBufLen + 1);
+      if LBuf = nil then
+        Exit(SetError('out of memory', 13));
       LDst := LBuf;
       LI := LStart;
       while LI < LEnd do
@@ -799,7 +866,13 @@ begin
       end;
       AStr := TStringView.Create(LBuf, LBufLen);
       AOwned := True;
-      Doc^.AddOwnedBuf(LBuf);
+      if not Doc^.AddOwnedBuf(LBuf) then
+      begin
+        Doc^.FAllocator.Deallocate(LBuf);
+        AOwned := False;
+        AStr := TStringView.Empty;
+        Exit(False);
+      end;
       Exit(True);
     end;
     if IsTomlForbiddenStringByte(Byte(Src[Pos]), True) then
@@ -843,6 +916,8 @@ begin
       end;
       LBufLen := LEnd - LStart;
       LBuf := Doc^.FAllocator.Allocate(LBufLen + 1);
+      if LBuf = nil then
+        Exit(SetError('out of memory', 13));
       LDst := LBuf;
       LI := LStart;
       while LI < LEnd do
@@ -862,7 +937,12 @@ begin
         end;
       end;
       AStr := TStringView.Create(LBuf, LDst - LBuf);
-      Doc^.AddOwnedBuf(LBuf);
+      if not Doc^.AddOwnedBuf(LBuf) then
+      begin
+        Doc^.FAllocator.Deallocate(LBuf);
+        AStr := TStringView.Empty;
+        Exit(False);
+      end;
       Exit(True);
     end;
     if IsTomlForbiddenStringByte(Byte(Src[Pos]), True) then
@@ -896,6 +976,8 @@ begin
     if not ParseLiteralString(LStr) then Exit(False);
   end;
   ANodeIdx := Doc^.AddNode;
+  if ANodeIdx = TOML_NODE_NONE then
+    Exit(False);
   Doc^.FNodes[ANodeIdx].Kind := tnkString;
   Doc^.FNodes[ANodeIdx].Str := LStr;
   Result := True;
@@ -939,6 +1021,8 @@ begin
   begin
     Inc(Pos, 3); Col := Col + 3;
     ANodeIdx := Doc^.AddNode;
+    if ANodeIdx = TOML_NODE_NONE then
+      Exit(False);
     Doc^.FNodes[ANodeIdx].Kind := tnkFloat;
     if LNeg then
       Doc^.FNodes[ANodeIdx].FloatVal := -1.0/0.0
@@ -950,6 +1034,8 @@ begin
   begin
     Inc(Pos, 3); Col := Col + 3;
     ANodeIdx := Doc^.AddNode;
+    if ANodeIdx = TOML_NODE_NONE then
+      Exit(False);
     Doc^.FNodes[ANodeIdx].Kind := tnkFloat;
     Doc^.FNodes[ANodeIdx].FloatVal := TOML_NAN;
     Exit(True);
@@ -1048,6 +1134,8 @@ begin
     if LUIntVal > UInt64(High(Int64)) then
       Exit(SetError('integer overflow', 16));
     ANodeIdx := Doc^.AddNode;
+    if ANodeIdx = TOML_NODE_NONE then
+      Exit(False);
     Doc^.FNodes[ANodeIdx].Kind := tnkInt;
     Doc^.FNodes[ANodeIdx].IntVal := Int64(LUIntVal);
     Exit(True);
@@ -1122,6 +1210,8 @@ begin
     Exit(SetError('leading zeros not allowed', 25));
 
   ANodeIdx := Doc^.AddNode;
+  if ANodeIdx = TOML_NODE_NONE then
+    Exit(False);
   if LHasDot or LHasExp then
   begin
     if not ParseDouble(@LBuf[0], SizeUInt(LBufLen), LFloatVal) then
@@ -1146,6 +1236,8 @@ begin
   begin
     Inc(Pos, 4); Col := Col + 4;
     ANodeIdx := Doc^.AddNode;
+    if ANodeIdx = TOML_NODE_NONE then
+      Exit(False);
     Doc^.FNodes[ANodeIdx].Kind := tnkBool;
     Doc^.FNodes[ANodeIdx].BoolVal := True;
     Exit(True);
@@ -1155,6 +1247,8 @@ begin
   begin
     Inc(Pos, 5); Col := Col + 5;
     ANodeIdx := Doc^.AddNode;
+    if ANodeIdx = TOML_NODE_NONE then
+      Exit(False);
     Doc^.FNodes[ANodeIdx].Kind := tnkBool;
     Doc^.FNodes[ANodeIdx].BoolVal := False;
     Exit(True);
@@ -1322,6 +1416,8 @@ begin
     LDT.Flags := LDT.Flags or (Byte(Ord(tdkLocalTime)) shl TOML_DT_KIND_SHIFT);
 
   ANodeIdx := Doc^.AddNode;
+  if ANodeIdx = TOML_NODE_NONE then
+    Exit(False);
   Doc^.FNodes[ANodeIdx].Kind := tnkDateTime;
   Doc^.FNodes[ANodeIdx].DT := LDT;
   Result := True;
@@ -1337,6 +1433,8 @@ begin
     Exit(SetError('max nesting depth exceeded', 26));
   Advance; // skip [
   ANodeIdx := Doc^.AddNode;
+  if ANodeIdx = TOML_NODE_NONE then
+    Exit(False);
   Doc^.FNodes[ANodeIdx].Kind := tnkArray;
   Doc^.FNodes[ANodeIdx].Container.FirstChild := TOML_NODE_NONE;
   Doc^.FNodes[ANodeIdx].Container.LastChild := TOML_NODE_NONE;
@@ -1400,6 +1498,8 @@ begin
     Exit(SetError('max nesting depth exceeded', 26));
   Advance; // skip {
   ANodeIdx := Doc^.AddNode;
+  if ANodeIdx = TOML_NODE_NONE then
+    Exit(False);
   Doc^.FNodes[ANodeIdx].Kind := tnkTable;
   Doc^.FNodes[ANodeIdx].Flags := TOML_NODE_FLAG_INLINE;
   Doc^.FNodes[ANodeIdx].Container.FirstChild := TOML_NODE_NONE;
@@ -1526,7 +1626,8 @@ begin
   if Doc^.FNodes[ATableIdx].Container.Count >= HASH_INDEX_THRESHOLD then
   begin
     Result := Doc^.HashLookup(ATableIdx, AKey, LHash);
-    Exit;
+    if Result <> TOML_NODE_NONE then
+      Exit;
   end;
   LCur := Doc^.FNodes[ATableIdx].Container.FirstChild;
   while LCur <> TOML_NODE_NONE do
@@ -1598,6 +1699,8 @@ begin
     Exit(TOML_NODE_NONE);
   end;
   LNewIdx := Doc^.AddNode;
+  if LNewIdx = TOML_NODE_NONE then
+    Exit(TOML_NODE_NONE);
   Doc^.FNodes[LNewIdx].Kind := tnkTable;
   if not AImplicit then
     Doc^.FNodes[LNewIdx].Flags := TOML_NODE_FLAG_EXPLICIT;
@@ -1693,6 +1796,8 @@ begin
     if LArrayIdx = TOML_NODE_NONE then
     begin
       LArrayIdx := Doc^.AddNode;
+      if LArrayIdx = TOML_NODE_NONE then
+        Exit(False);
       Doc^.FNodes[LArrayIdx].Kind := tnkArray;
       Doc^.FNodes[LArrayIdx].Flags := TOML_NODE_FLAG_ARRAY_TABLE;
       Doc^.FNodes[LArrayIdx].Key := LKeys[LKeyCount - 1];
@@ -1709,6 +1814,8 @@ begin
       Exit(SetError('cannot extend value array as array-table', 40));
     // Add new table element to array
     LNewIdx := Doc^.AddNode;
+    if LNewIdx = TOML_NODE_NONE then
+      Exit(False);
     Doc^.FNodes[LNewIdx].Kind := tnkTable;
     Doc^.FNodes[LNewIdx].Container.FirstChild := TOML_NODE_NONE;
     Doc^.FNodes[LNewIdx].Container.LastChild := TOML_NODE_NONE;
@@ -1738,6 +1845,17 @@ var
   LIsArray: Boolean;
   LI: UInt32;
 begin
+  if not FInited then
+  begin
+    SetOutOfMemoryError;
+    Exit(False);
+  end;
+  if FNodes = nil then
+  begin
+    if not FHasError then
+      SetOutOfMemoryError;
+    Exit(False);
+  end;
   // Clean up state from any previous parse
   if FOwnedBufs <> nil then
   begin
@@ -1771,6 +1889,8 @@ begin
 
   // Create root table
   LRootIdx := AddNode;
+  if LRootIdx = TOML_NODE_NONE then
+    Exit(False);
   FNodes[LRootIdx].Kind := tnkTable;
   FNodes[LRootIdx].Key := TStringView.Empty;
   FNodes[LRootIdx].Container.FirstChild := TOML_NODE_NONE;

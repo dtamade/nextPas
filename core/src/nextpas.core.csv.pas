@@ -9,7 +9,8 @@ unit nextpas.core.csv;
 interface
 
 uses
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.mem.intf;
 
 type
   TStringArray = array of string;
@@ -35,6 +36,7 @@ type
     FComment: AnsiChar;
     FHasError: Boolean;
     FError: TCsvError;
+    FAllocator: IAllocator;
     procedure SetError(const AMessage: string);
     procedure SetErrorAt(const AMessage: string; AOffset: SizeUInt);
     procedure SetErrorPosition(var AError: TCsvError; AOffset: SizeUInt);
@@ -47,14 +49,19 @@ type
     function ReadUnquotedField: string;
     function TrimStr(const S: string): string;
   public
+    procedure Init(const AInput: string; ADelimiter: AnsiChar = ',';
+      AFieldsPerRecord: Integer = 0; ATrimSpace: Boolean = False;
+      AComment: AnsiChar = #0; const AAllocator: IAllocator = nil);
+    procedure Done;
     class function Create(const AInput: string; ADelimiter: AnsiChar = ',';
       AFieldsPerRecord: Integer = 0; ATrimSpace: Boolean = False;
-      AComment: AnsiChar = #0): TCsvReader; static;
+      AComment: AnsiChar = #0; const AAllocator: IAllocator = nil): TCsvReader; static;
     function ReadRow(out AFields: TStringArray): Boolean;
     function ReadAll: TStringMatrix;
     function HasError: Boolean;
     function GetError: string;
     function Error: TCsvError;
+    function Allocator: IAllocator;
     property Delimiter: AnsiChar read FDelimiter write SetDelimiter;
   end;
 
@@ -75,7 +82,97 @@ type
     function ToString: string;
   end;
 
+function CsvParse(const AInput: string; ADelimiter: AnsiChar = ','): TStringMatrix;
+function CsvParseWith(const AInput: string; const AAllocator: IAllocator;
+  ADelimiter: AnsiChar = ','): TStringMatrix;
+
 implementation
+
+uses
+  nextpas.core.mem.default;
+
+type
+  PStringSlot = ^string;
+  TStringArraySlot = TStringArray;
+  PStringArraySlot = ^TStringArraySlot;
+
+function GrowStringSlots(const AAllocator: IAllocator; var ASlots: PStringSlot;
+  var ACap: Integer; ANeeded: Integer): Boolean;
+var
+  LNewCap: Integer;
+  LNewPtr: Pointer;
+  LOldCap: Integer;
+begin
+  if ANeeded <= ACap then
+    Exit(True);
+  LOldCap := ACap;
+  if ACap = 0 then
+    LNewCap := 8
+  else
+    LNewCap := ACap;
+  while LNewCap < ANeeded do
+    LNewCap := LNewCap * 2;
+  LNewPtr := AAllocator.Reallocate(Pointer(ASlots),
+    SizeUInt(LNewCap) * SizeOf(string));
+  if LNewPtr = nil then
+    Exit(False);
+  ASlots := PStringSlot(LNewPtr);
+  FillChar(ASlots[LOldCap], (LNewCap - LOldCap) * SizeOf(string), 0);
+  ACap := LNewCap;
+  Result := True;
+end;
+
+procedure ReleaseStringSlots(const AAllocator: IAllocator; var ASlots: PStringSlot;
+  ACount: Integer);
+var
+  LI: Integer;
+begin
+  if ASlots = nil then
+    Exit;
+  for LI := 0 to ACount - 1 do
+    ASlots[LI] := '';
+  AAllocator.Deallocate(Pointer(ASlots));
+  ASlots := nil;
+end;
+
+function GrowRowSlots(const AAllocator: IAllocator; var ASlots: PStringArraySlot;
+  var ACap: Integer; ANeeded: Integer): Boolean;
+var
+  LNewCap: Integer;
+  LNewPtr: Pointer;
+  LOldCap: Integer;
+begin
+  if ANeeded <= ACap then
+    Exit(True);
+  LOldCap := ACap;
+  if ACap = 0 then
+    LNewCap := 8
+  else
+    LNewCap := ACap;
+  while LNewCap < ANeeded do
+    LNewCap := LNewCap * 2;
+  LNewPtr := AAllocator.Reallocate(Pointer(ASlots),
+    SizeUInt(LNewCap) * SizeOf(TStringArray));
+  if LNewPtr = nil then
+    Exit(False);
+  ASlots := PStringArraySlot(LNewPtr);
+  FillChar(ASlots[LOldCap], (LNewCap - LOldCap) * SizeOf(TStringArray), 0);
+  ACap := LNewCap;
+  Result := True;
+end;
+
+procedure ReleaseRowSlots(const AAllocator: IAllocator; var ASlots: PStringArraySlot;
+  ACount: Integer);
+var
+  LI: Integer;
+begin
+  if ASlots = nil then
+    Exit;
+  for LI := 0 to ACount - 1 do
+    SetLength(ASlots[LI], 0);
+  AAllocator.Deallocate(Pointer(ASlots));
+  ASlots := nil;
+end;
 
 procedure ValidateCsvDelimiter(ADelimiter: AnsiChar; const AContext: string);
 begin
@@ -100,24 +197,55 @@ end;
 
 { ===== TCsvReader ===== }
 
-class function TCsvReader.Create(const AInput: string; ADelimiter: AnsiChar;
-  AFieldsPerRecord: Integer; ATrimSpace: Boolean; AComment: AnsiChar): TCsvReader;
+procedure TCsvReader.Init(const AInput: string; ADelimiter: AnsiChar;
+  AFieldsPerRecord: Integer; ATrimSpace: Boolean; AComment: AnsiChar;
+  const AAllocator: IAllocator);
 begin
   ValidateCsvDelimiter(ADelimiter, 'TCsvReader.Create');
   ValidateCsvCommentMarker(AComment, ADelimiter, 'TCsvReader.Create');
-  Result.FInput := AInput;
-  Result.FData := PAnsiChar(Result.FInput);
-  Result.FLen := Length(AInput);
-  Result.FPos := 0;
-  Result.FDelimiter := ADelimiter;
-  Result.FFieldsPerRecord := AFieldsPerRecord;
-  Result.FTrimSpace := ATrimSpace;
-  Result.FComment := AComment;
-  Result.FHasError := False;
-  Result.FError.Message := '';
-  Result.FError.Offset := 0;
-  Result.FError.Line := 1;
-  Result.FError.Column := 1;
+  if AAllocator = nil then
+    FAllocator := DefaultAllocator
+  else
+    FAllocator := AAllocator;
+  FInput := AInput;
+  FData := PAnsiChar(FInput);
+  FLen := Length(AInput);
+  FPos := 0;
+  FDelimiter := ADelimiter;
+  FFieldsPerRecord := AFieldsPerRecord;
+  FTrimSpace := ATrimSpace;
+  FComment := AComment;
+  FHasError := False;
+  FError.Message := '';
+  FError.Offset := 0;
+  FError.Line := 1;
+  FError.Column := 1;
+end;
+
+procedure TCsvReader.Done;
+begin
+  FInput := '';
+  FData := nil;
+  FLen := 0;
+  FPos := 0;
+  FDelimiter := ',';
+  FFieldsPerRecord := 0;
+  FTrimSpace := False;
+  FComment := #0;
+  FHasError := False;
+  FError.Message := '';
+  FError.Offset := 0;
+  FError.Line := 1;
+  FError.Column := 1;
+  FAllocator := nil;
+end;
+
+class function TCsvReader.Create(const AInput: string; ADelimiter: AnsiChar;
+  AFieldsPerRecord: Integer; ATrimSpace: Boolean; AComment: AnsiChar;
+  const AAllocator: IAllocator): TCsvReader;
+begin
+  Result.Init(AInput, ADelimiter, AFieldsPerRecord, ATrimSpace, AComment,
+    AAllocator);
 end;
 
 function TCsvReader.PeekChar: AnsiChar;
@@ -288,22 +416,27 @@ end;
 function TCsvReader.ReadRow(out AFields: TStringArray): Boolean;
 var
   LCount: Integer;
+  LCap: Integer;
   LField: string;
   LWasQuoted: Boolean;
   LRecordEndOffset: SizeUInt;
+  LFieldsBuf: PStringSlot;
+  LI: Integer;
 begin
   Result := False;
   SetLength(AFields, 0);
-  if FHasError then
-    Exit;
-
-  SkipIgnoredLines;
-  if AtEnd then
-    Exit;
-
+  LFieldsBuf := nil;
   LCount := 0;
+  LCap := 0;
+  try
+    if FHasError then
+      Exit;
 
-  repeat
+    SkipIgnoredLines;
+    if AtEnd then
+      Exit;
+
+    repeat
     { Parse one field }
     LWasQuoted := False;
     { TrimSpace also permits leading spaces or tabs before an opening quote. }
@@ -339,9 +472,13 @@ begin
       LField := TrimStr(LField);
 
     { Append to result }
+    if not GrowStringSlots(FAllocator, LFieldsBuf, LCap, LCount + 1) then
+    begin
+      SetError('out of memory');
+      Exit(False);
+    end;
+    LFieldsBuf[LCount] := LField;
     Inc(LCount);
-    SetLength(AFields, LCount);
-    AFields[LCount - 1] := LField;
 
     { Check what follows }
     if AtEnd then
@@ -353,58 +490,93 @@ begin
       { If delimiter is at end of input, add empty trailing field and stop }
       if AtEnd then
       begin
+        if not GrowStringSlots(FAllocator, LFieldsBuf, LCap, LCount + 1) then
+        begin
+          SetError('out of memory');
+          Exit(False);
+        end;
+        LFieldsBuf[LCount] := '';
         Inc(LCount);
-        SetLength(AFields, LCount);
-        if FTrimSpace then
-          AFields[LCount - 1] := ''
-        else
-          AFields[LCount - 1] := '';
         Break;
       end;
       { If delimiter is followed by newline, add empty trailing field and stop }
       if (PeekChar = #13) or (PeekChar = #10) then
       begin
+        if not GrowStringSlots(FAllocator, LFieldsBuf, LCap, LCount + 1) then
+        begin
+          SetError('out of memory');
+          Exit(False);
+        end;
+        LFieldsBuf[LCount] := '';
         Inc(LCount);
-        SetLength(AFields, LCount);
-        AFields[LCount - 1] := '';
         Break;
       end;
     end
     else
       Break; { end of row (newline or end) }
-  until False;
+    until False;
 
-  LRecordEndOffset := FPos;
+    LRecordEndOffset := FPos;
 
-  { Consume line ending }
-  if (not AtEnd) and (PeekChar = #13) then
-    Inc(FPos);
-  if (not AtEnd) and (PeekChar = #10) then
-    Inc(FPos);
+    { Consume line ending }
+    if (not AtEnd) and (PeekChar = #13) then
+      Inc(FPos);
+    if (not AtEnd) and (PeekChar = #10) then
+      Inc(FPos);
 
-  { FieldsPerRecord check }
-  if FFieldsPerRecord = 0 then
-    FFieldsPerRecord := LCount
-  else if (FFieldsPerRecord > 0) and (LCount <> FFieldsPerRecord) then
-    SetErrorAt('Wrong number of fields', LRecordEndOffset);
+    { FieldsPerRecord check }
+    if FFieldsPerRecord = 0 then
+      FFieldsPerRecord := LCount
+    else if (FFieldsPerRecord > 0) and (LCount <> FFieldsPerRecord) then
+      SetErrorAt('Wrong number of fields', LRecordEndOffset);
 
-  Result := True;
+    SetLength(AFields, LCount);
+    for LI := 0 to LCount - 1 do
+    begin
+      AFields[LI] := LFieldsBuf[LI];
+      LFieldsBuf[LI] := '';
+    end;
+    Result := True;
+  finally
+    ReleaseStringSlots(FAllocator, LFieldsBuf, LCount);
+  end;
 end;
 
 function TCsvReader.ReadAll: TStringMatrix;
 var
   LRow: TStringArray;
   LCount: Integer;
+  LCap: Integer;
+  LI: Integer;
+  LRows: PStringArraySlot;
 begin
   Result := nil;
+  LRows := nil;
   LCount := 0;
-  while ReadRow(LRow) do
-  begin
-    if FHasError then
-      Break;
-    Inc(LCount);
+  LCap := 0;
+  try
+    while ReadRow(LRow) do
+    begin
+      if FHasError then
+        Break;
+      if not GrowRowSlots(FAllocator, LRows, LCap, LCount + 1) then
+      begin
+        SetLength(LRow, 0);
+        SetError('out of memory');
+        Break;
+      end;
+      LRows[LCount] := LRow;
+      SetLength(LRow, 0);
+      Inc(LCount);
+    end;
     SetLength(Result, LCount);
-    Result[LCount - 1] := LRow;
+    for LI := 0 to LCount - 1 do
+    begin
+      Result[LI] := LRows[LI];
+      SetLength(LRows[LI], 0);
+    end;
+  finally
+    ReleaseRowSlots(FAllocator, LRows, LCount);
   end;
 end;
 
@@ -421,6 +593,14 @@ end;
 function TCsvReader.Error: TCsvError;
 begin
   Result := FError;
+end;
+
+function TCsvReader.Allocator: IAllocator;
+begin
+  if FAllocator = nil then
+    Result := DefaultAllocator
+  else
+    Result := FAllocator;
 end;
 
 { ===== TCsvWriter ===== }
@@ -516,6 +696,26 @@ begin
   else
     FResult := FResult + #10;
   FFieldCount := 0;
+end;
+
+function CsvParse(const AInput: string; ADelimiter: AnsiChar): TStringMatrix;
+begin
+  Result := CsvParseWith(AInput, DefaultAllocator, ADelimiter);
+end;
+
+function CsvParseWith(const AInput: string; const AAllocator: IAllocator;
+  ADelimiter: AnsiChar): TStringMatrix;
+var
+  LReader: TCsvReader;
+  LError: TCsvError;
+begin
+  LReader := TCsvReader.Create(AInput, ADelimiter, 0, False, #0, AAllocator);
+  Result := LReader.ReadAll;
+  if LReader.HasError then
+  begin
+    LError := LReader.Error;
+    raise EParseError.Create('CSV parse error: ' + LError.Message);
+  end;
 end;
 
 function TCsvWriter.ToString: string;

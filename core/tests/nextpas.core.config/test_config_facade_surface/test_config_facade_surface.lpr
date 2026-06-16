@@ -17,6 +17,12 @@ begin
     AName + '_' + IntToStr(GetProcessID) + AExt]);
 end;
 
+procedure RemoveIfExists(const APath: string);
+begin
+  if Exists(APath) then
+    Remove(APath);
+end;
+
 procedure TestFacadeExposesBuilderSurface;
 var
   LBuilder: IConfigBuilder;
@@ -92,7 +98,7 @@ var
   LRaised: Boolean;
 begin
   LPath := FacadeTempPath('test_nextpas_config_facade_missing', '.ini');
-  Remove(LPath);
+  RemoveIfExists(LPath);
 
   LRaised := False;
   try
@@ -137,7 +143,7 @@ var
   LMutable: TConfig;
 begin
   LPath := FacadeTempPath('test_nextpas_config_facade_surface', '.json');
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath,
     '{"server":{"host":"file-host","port":8081},"debug":true}');
   try
@@ -163,7 +169,7 @@ begin
       LMutable.Free;
     end;
   finally
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
 end;
 

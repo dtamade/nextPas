@@ -124,3 +124,11 @@ suite output as fresh proof for the touched surface.
 - `nextpas.core.text.escape` — TUnescapeError type
 - `nextpas.core.mem.intf` — IAllocator
 - `nextpas.core.mem.default` — DefaultAllocator (facade only)
+
+## Failure and lifetime contract
+
+`TryTomlParse` returns `False` on parse failure and still assigns a diagnostic document.
+
+`TTomlError` exposes `Message`, `Line`, `Col`, and `Offset`.
+
+Keep the owning `ITomlDocument` alive while any `TTomlValue` is still in use.

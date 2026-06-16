@@ -27,7 +27,7 @@ begin
 
   LDoc := XmlParse('<root><name>demo</name></root>');
   try
-    Check(LDoc.Root <> nil, 'dom parse via facade succeeds');
+    Check(LDoc.Root.IsAssigned, 'dom parse via facade succeeds');
     Check(LDoc.Root.Kind = xnkElement, 'dom node kind constants visible');
     Check(LDoc.Root.FindChild('name').Text = 'demo', 'dom helpers visible');
   finally

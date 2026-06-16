@@ -10,7 +10,8 @@ interface
 
 uses
   nextpas.core.text.conv,
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.mem.intf;
 
 type
   TStringArray = array of string;
@@ -19,24 +20,35 @@ type
     Key: string;
     Value: string;
   end;
+  PTIniEntry = ^TIniEntry;
 
   TIniSection = record
     Name: string;
-    Entries: array of TIniEntry;
+    Entries: PTIniEntry;
     EntryCount: Integer;
+    EntryCap: Integer;
   end;
+  PTIniSection = ^TIniSection;
 
   TIniFile = class
   private
-    FSections: array of TIniSection;
+    FSections: PTIniSection;
     FSectionCount: Integer;
+    FSectionCap: Integer;
+    FAllocator: IAllocator;
+    procedure ClearSection(var ASection: TIniSection);
+    procedure ClearSections;
+    procedure EnsureSectionCapacity(ANeeded: Integer);
+    procedure EnsureEntryCapacity(var ASection: TIniSection; ANeeded: Integer);
+    procedure MoveSection(var ADest, ASrc: TIniSection);
+    procedure ResetState;
     function FindSection(const ASection: string): Integer;
     function FindOrCreateSection(const ASection: string): Integer;
     function FindKey(ASectionIdx: Integer; const AKey: string): Integer;
     procedure ParseLine(const ALine: string; var ACurrentSection: Integer);
     function CaseInsensitiveEqual(const A, B: string): Boolean;
   public
-    constructor Create;
+    constructor Create(const AAllocator: IAllocator = nil);
     destructor Destroy; override;
     procedure LoadFromFile(const AFileName: string);
     procedure LoadFromString(const AContent: string);
@@ -58,24 +70,133 @@ type
     procedure DeleteSection(const ASection: string);
     function GetSections: TStringArray;
     function GetKeys(const ASection: string): TStringArray;
+    function Allocator: IAllocator;
   end;
+
+function IniParse(const AContent: string): TIniFile;
+function IniParseWith(const AContent: string; const AAllocator: IAllocator): TIniFile;
 
 implementation
 
+uses
+  nextpas.core.mem.default;
+
 { TIniFile }
 
-constructor TIniFile.Create;
+constructor TIniFile.Create(const AAllocator: IAllocator);
 begin
   inherited Create;
+  if AAllocator = nil then
+    FAllocator := DefaultAllocator
+  else
+    FAllocator := AAllocator;
   FSectionCount := 0;
-  SetLength(FSections, 0);
+  FSectionCap := 0;
+  FSections := nil;
   FindOrCreateSection('');
 end;
 
 destructor TIniFile.Destroy;
 begin
-  FSections := nil;
+  ClearSections;
+  FAllocator := nil;
   inherited Destroy;
+end;
+
+procedure TIniFile.ClearSection(var ASection: TIniSection);
+var
+  I: Integer;
+begin
+  for I := 0 to ASection.EntryCount - 1 do
+  begin
+    ASection.Entries[I].Key := '';
+    ASection.Entries[I].Value := '';
+  end;
+  if ASection.Entries <> nil then
+    FAllocator.Deallocate(Pointer(ASection.Entries));
+  ASection.Entries := nil;
+  ASection.EntryCount := 0;
+  ASection.EntryCap := 0;
+  ASection.Name := '';
+end;
+
+procedure TIniFile.ClearSections;
+var
+  I: Integer;
+begin
+  for I := 0 to FSectionCount - 1 do
+    ClearSection(FSections[I]);
+  if FSections <> nil then
+    FAllocator.Deallocate(Pointer(FSections));
+  FSections := nil;
+  FSectionCount := 0;
+  FSectionCap := 0;
+end;
+
+procedure TIniFile.EnsureSectionCapacity(ANeeded: Integer);
+var
+  LNewCap: Integer;
+  LNewPtr: Pointer;
+  LOldCap: Integer;
+begin
+  if ANeeded <= FSectionCap then
+    Exit;
+  LOldCap := FSectionCap;
+  if FSectionCap = 0 then
+    LNewCap := 8
+  else
+    LNewCap := FSectionCap;
+  while LNewCap < ANeeded do
+    LNewCap := LNewCap * 2;
+  LNewPtr := FAllocator.Reallocate(Pointer(FSections),
+    SizeUInt(LNewCap) * SizeOf(TIniSection));
+  if LNewPtr = nil then
+    raise EResourceExhaustedError.Create('TIniFile: out of memory');
+  FSections := PTIniSection(LNewPtr);
+  FillChar(FSections[LOldCap], (LNewCap - LOldCap) * SizeOf(TIniSection), 0);
+  FSectionCap := LNewCap;
+end;
+
+procedure TIniFile.EnsureEntryCapacity(var ASection: TIniSection; ANeeded: Integer);
+var
+  LNewCap: Integer;
+  LNewPtr: Pointer;
+  LOldCap: Integer;
+begin
+  if ANeeded <= ASection.EntryCap then
+    Exit;
+  LOldCap := ASection.EntryCap;
+  if ASection.EntryCap = 0 then
+    LNewCap := 8
+  else
+    LNewCap := ASection.EntryCap;
+  while LNewCap < ANeeded do
+    LNewCap := LNewCap * 2;
+  LNewPtr := FAllocator.Reallocate(Pointer(ASection.Entries),
+    SizeUInt(LNewCap) * SizeOf(TIniEntry));
+  if LNewPtr = nil then
+    raise EResourceExhaustedError.Create('TIniFile: out of memory');
+  ASection.Entries := PTIniEntry(LNewPtr);
+  FillChar(ASection.Entries[LOldCap], (LNewCap - LOldCap) * SizeOf(TIniEntry), 0);
+  ASection.EntryCap := LNewCap;
+end;
+
+procedure TIniFile.MoveSection(var ADest, ASrc: TIniSection);
+begin
+  ADest.Name := ASrc.Name;
+  ASrc.Name := '';
+  ADest.Entries := ASrc.Entries;
+  ASrc.Entries := nil;
+  ADest.EntryCount := ASrc.EntryCount;
+  ASrc.EntryCount := 0;
+  ADest.EntryCap := ASrc.EntryCap;
+  ASrc.EntryCap := 0;
+end;
+
+procedure TIniFile.ResetState;
+begin
+  ClearSections;
+  FindOrCreateSection('');
 end;
 
 function TIniFile.CaseInsensitiveEqual(const A, B: string): Boolean;
@@ -98,11 +219,11 @@ begin
   Result := FindSection(ASection);
   if Result >= 0 then
     Exit;
-  if FSectionCount >= Length(FSections) then
-    SetLength(FSections, FSectionCount + 8);
+  EnsureSectionCapacity(FSectionCount + 1);
   FSections[FSectionCount].Name := ASection;
   FSections[FSectionCount].EntryCount := 0;
-  SetLength(FSections[FSectionCount].Entries, 0);
+  FSections[FSectionCount].Entries := nil;
+  FSections[FSectionCount].EntryCap := 0;
   Result := FSectionCount;
   Inc(FSectionCount);
 end;
@@ -157,8 +278,7 @@ begin
           Entries[LKeyIdx].Value := LValue
         else
         begin
-          if EntryCount >= Length(Entries) then
-            SetLength(Entries, EntryCount + 8);
+          EnsureEntryCapacity(FSections[ACurrentSection], EntryCount + 1);
           Entries[EntryCount].Key := LKey;
           Entries[EntryCount].Value := LValue;
           Inc(EntryCount);
@@ -175,9 +295,7 @@ var
   LLine: string;
 begin
   { Reset state }
-  FSectionCount := 0;
-  SetLength(FSections, 0);
-  FindOrCreateSection('');
+  ResetState;
   LCurrentSection := 0;
 
   LLen := Length(AContent);
@@ -185,12 +303,11 @@ begin
   LPos := 1;
   while LPos <= LLen do
   begin
-    if AContent[LPos] = #10 then
+    if (AContent[LPos] = #10) or (AContent[LPos] = #13) then
     begin
-      if (LPos > LStart) and (AContent[LPos - 1] = #13) then
-        LLine := Copy(AContent, LStart, LPos - LStart - 1)
-      else
-        LLine := Copy(AContent, LStart, LPos - LStart);
+      LLine := Copy(AContent, LStart, LPos - LStart);
+      if (AContent[LPos] = #13) and (LPos < LLen) and (AContent[LPos + 1] = #10) then
+        Inc(LPos);
       ParseLine(LLine, LCurrentSection);
       LStart := LPos + 1;
     end;
@@ -230,12 +347,11 @@ begin
   LLineNo := 1;
   while LPos <= LLen do
   begin
-    if AContent[LPos] = #10 then
+    if (AContent[LPos] = #10) or (AContent[LPos] = #13) then
     begin
-      if (LPos > LStart) and (AContent[LPos - 1] = #13) then
-        LLine := Copy(AContent, LStart, LPos - LStart - 1)
-      else
-        LLine := Copy(AContent, LStart, LPos - LStart);
+      LLine := Copy(AContent, LStart, LPos - LStart);
+      if (AContent[LPos] = #13) and (LPos < LLen) and (AContent[LPos + 1] = #10) then
+        Inc(LPos);
       if not ValidateLine(LLine, LLineNo) then
         Exit(False);
       Inc(LLineNo);
@@ -541,8 +657,7 @@ begin
   begin
     with FSections[LSIdx] do
     begin
-      if EntryCount >= Length(Entries) then
-        SetLength(Entries, EntryCount + 8);
+      EnsureEntryCapacity(FSections[LSIdx], EntryCount + 1);
       Entries[EntryCount].Key := AKey;
       Entries[EntryCount].Value := AValue;
       Inc(EntryCount);
@@ -605,12 +720,10 @@ begin
   LSIdx := FindSection(ASection);
   if LSIdx < 0 then
     Exit;
+  ClearSection(FSections[LSIdx]);
   for I := LSIdx to FSectionCount - 2 do
-    FSections[I] := FSections[I + 1];
+    MoveSection(FSections[I], FSections[I + 1]);
   Dec(FSectionCount);
-  FSections[FSectionCount].Name := '';
-  FSections[FSectionCount].EntryCount := 0;
-  FSections[FSectionCount].Entries := nil;
 end;
 
 function TIniFile.GetSections: TStringArray;
@@ -645,6 +758,30 @@ begin
   SetLength(Result, FSections[LSIdx].EntryCount);
   for I := 0 to FSections[LSIdx].EntryCount - 1 do
     Result[I] := FSections[LSIdx].Entries[I].Key;
+end;
+
+function TIniFile.Allocator: IAllocator;
+begin
+  if FAllocator = nil then
+    Result := DefaultAllocator
+  else
+    Result := FAllocator;
+end;
+
+function IniParse(const AContent: string): TIniFile;
+begin
+  Result := IniParseWith(AContent, DefaultAllocator);
+end;
+
+function IniParseWith(const AContent: string; const AAllocator: IAllocator): TIniFile;
+begin
+  Result := TIniFile.Create(AAllocator);
+  try
+    Result.LoadFromString(AContent);
+  except
+    Result.Free;
+    raise;
+  end;
 end;
 
 end.

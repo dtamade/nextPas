@@ -189,8 +189,10 @@ begin
     FDoc^.EnsureObjectIndex(FIdx);
     LKeyIdx := FDoc^.LookupObjectIndex(FIdx, AKey);
     if LKeyIdx <> JSON_NODE_NONE then
+    begin
       Result.FIdx := FDoc^.Node(LKeyIdx)^.Next;
-    Exit;
+      Exit;
+    end;
   end;
   LCur := LNode^.Container.FirstChild;
   while LCur <> JSON_NODE_NONE do

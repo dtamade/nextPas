@@ -161,12 +161,12 @@ var
   LI: UInt32;
 begin
   if AIdx = YAML_NODE_NONE then begin AW.AppendStr('null'); Exit; end;
-  LNode := @ADoc.Nodes[AIdx];
+  LNode := ADoc.Node(AIdx);
   case LNode^.Kind of
     ynkNull, ynkBool, ynkInt, ynkFloat, ynkString:
       WriteScalar(AW, LNode);
     ynkAlias:
-      if LNode^.AliasTarget < ADoc.NodeCount then
+      if LNode^.AliasTarget < ADoc.NodeCount() then
         StringifyFlow(ADoc, LNode^.AliasTarget, AW)
       else
         AW.AppendStr('null');
@@ -178,7 +178,7 @@ begin
       begin
         if LI > 1 then AW.AppendStr(', ');
         StringifyFlow(ADoc, LCur, AW);
-        LCur := ADoc.Nodes[LCur].Next;
+        LCur := ADoc.Node(LCur)^.Next;
       end;
       AW.AppendChar(']');
     end;
@@ -191,9 +191,9 @@ begin
         if LI > 1 then AW.AppendStr(', ');
         StringifyFlow(ADoc, LCur, AW);
         AW.AppendStr(': ');
-        LCur := ADoc.Nodes[LCur].Next;
+        LCur := ADoc.Node(LCur)^.Next;
         StringifyFlow(ADoc, LCur, AW);
-        LCur := ADoc.Nodes[LCur].Next;
+        LCur := ADoc.Node(LCur)^.Next;
       end;
       AW.AppendChar('}');
     end;
@@ -231,12 +231,12 @@ var
   LI: UInt32;
 begin
   if AIdx = YAML_NODE_NONE then begin AW.AppendStr('null'); Exit; end;
-  LNode := @ADoc.Nodes[AIdx];
+  LNode := ADoc.Node(AIdx);
   case LNode^.Kind of
     ynkNull, ynkBool, ynkInt, ynkFloat, ynkString:
       WriteScalar(AW, LNode);
     ynkAlias:
-      if LNode^.AliasTarget < ADoc.NodeCount then
+      if LNode^.AliasTarget < ADoc.NodeCount() then
         StringifyBlock(ADoc, LNode^.AliasTarget, AW, ADepth, AIndent)
       else
         AW.AppendStr('null');
@@ -253,8 +253,8 @@ begin
         if LI > 1 then
           WriteIndent(AW, ADepth, AIndent);
         AW.AppendStr('- ');
-        if (ADoc.Nodes[LCur].Kind = ynkMapping) or
-           (ADoc.Nodes[LCur].Kind = ynkSequence) then
+        if (ADoc.Node(LCur)^.Kind = ynkMapping) or
+           (ADoc.Node(LCur)^.Kind = ynkSequence) then
         begin
           AW.AppendChar(#10);
           WriteIndent(AW, ADepth + 1, AIndent);
@@ -264,7 +264,7 @@ begin
           StringifyBlock(ADoc, LCur, AW, ADepth + 1, AIndent);
         if LI < LNode^.Container.Count then
           AW.AppendChar(#10);
-        LCur := ADoc.Nodes[LCur].Next;
+        LCur := ADoc.Node(LCur)^.Next;
       end;
     end;
     ynkMapping:
@@ -280,18 +280,18 @@ begin
         if LI > 1 then
           WriteIndent(AW, ADepth, AIndent);
         // Key
-        WriteScalar(AW, @ADoc.Nodes[LCur]);
+        WriteScalar(AW, ADoc.Node(LCur));
         AW.AppendStr(': ');
-        LCur := ADoc.Nodes[LCur].Next;
+        LCur := ADoc.Node(LCur)^.Next;
         // Value
-        if (ADoc.Nodes[LCur].Kind = ynkMapping) or
-           (ADoc.Nodes[LCur].Kind = ynkSequence) then
+        if (ADoc.Node(LCur)^.Kind = ynkMapping) or
+           (ADoc.Node(LCur)^.Kind = ynkSequence) then
           StringifyFlow(ADoc, LCur, AW)
         else
           StringifyBlock(ADoc, LCur, AW, ADepth + 1, AIndent);
         if LI < LNode^.Container.Count then
           AW.AppendChar(#10);
-        LCur := ADoc.Nodes[LCur].Next;
+        LCur := ADoc.Node(LCur)^.Next;
       end;
     end;
   end;

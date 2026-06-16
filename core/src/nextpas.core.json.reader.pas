@@ -91,17 +91,27 @@ var
   LEnd: PtrInt;
   LStringOffset: SizeUInt;
   LRaw: TStringView;
+  LControlChar: Boolean;
 begin
   LStringOffset := Offset;
   LEnd := JsonFindStringEnd(FInput.Data + 1, FInput.Len - 1);
-  if LEnd < 0 then
+  if LEnd = -1 then
   begin
     SetError(PAnsiChar('unterminated string'), 19, FOrigLen);
     Exit(False);
   end;
+  LControlChar := LEnd < -1;
+  if LControlChar then
+    LEnd := -(LEnd + 2);
   LRaw := TStringView.Create(FInput.Data + 1, SizeUInt(LEnd));
   if not ValidateStringToken(LRaw, LStringOffset + 1) then
     Exit(False);
+  if LControlChar then
+  begin
+    SetError(PAnsiChar('control char in string'), 22,
+      LStringOffset + 1 + SizeUInt(LEnd));
+    Exit(False);
+  end;
   AStr := LRaw;
   FInput.Advance(SizeUInt(LEnd) + 2);
   Result := True;
