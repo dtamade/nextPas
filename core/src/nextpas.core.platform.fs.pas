@@ -49,6 +49,8 @@ function platform_fs_write_atomic(const APath: PAnsiChar;
   AData: Pointer; ALen: PtrUInt): Int32;
 function platform_fs_read_file(const APath: PAnsiChar;
   out AData: Pointer; out ALen: PtrUInt): Int32;
+function platform_fs_read_file_into(const APath: PAnsiChar;
+  AData: Pointer; ALen: PtrUInt): Int32;
 procedure platform_fs_free_buf(AData: Pointer);
 function platform_fs_walk(const ARoot: PAnsiChar;
   ACallback: TPlatformWalkCallback; AUserData: Pointer;
@@ -481,6 +483,26 @@ begin
   PAnsiChar(AData)[LRead] := #0;
   ALen := LRead;
   Result := 0;
+end;
+
+function platform_fs_read_file_into(const APath: PAnsiChar;
+  AData: Pointer; ALen: PtrUInt): Int32;
+var
+  LH: TPlatformFileHandle;
+  LRead: PtrUInt;
+  LR, LCloseR: Int32;
+begin
+  if (AData = nil) or (ALen = 0) then
+    Exit(-1);
+  LR := platform_file_open(APath, fomReadOnly, fcmOpenExisting, LH);
+  if LR <> 0 then Exit(LR);
+  LR := platform_fs_read_all(LH, AData, ALen, LRead);
+  LCloseR := platform_file_close(LH);
+  if (LR = 0) and (LCloseR <> 0) then
+    LR := LCloseR;
+  if (LR = 0) and (LRead < ALen) then
+    LR := PLATFORM_FS_SHORT_READ_ERROR;
+  Result := LR;
 end;
 
 procedure platform_fs_free_buf(AData: Pointer);

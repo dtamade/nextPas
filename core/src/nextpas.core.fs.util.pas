@@ -64,20 +64,22 @@ end;
 
 function FsReadFile(const APath: string): TBytes;
 var
-  LData: Pointer;
-  LLen: PtrUInt;
+  LSize: Int64;
   LResult: Int32;
 begin
-  LResult := platform_fs_read_file(PAnsiChar(APath), LData, LLen);
+  LResult := platform_fs_file_size(PAnsiChar(APath), LSize);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'read file size', APath);
+  if LSize = 0 then
+  begin
+    Result := nil;
+    Exit;
+  end;
+  SetLength(Result, LSize);
+  LResult := platform_fs_read_file_into(PAnsiChar(APath),
+    @Result[0], PtrUInt(LSize));
   if LResult <> 0 then
     RaiseFsError(LResult, 'read file', APath);
-  try
-    SetLength(Result, LLen);
-    if LLen > 0 then
-      Move(LData^, Result[0], LLen);
-  finally
-    platform_fs_free_buf(LData);
-  end;
 end;
 
 procedure FsWriteFile(const APath: string; const AData: TBytes;
