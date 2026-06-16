@@ -140,7 +140,7 @@ begin
   Result := AtomicLoad32(FRetiredCount, moRelaxed);
 end;
 
-class function TEbrGuard.Acquire(ADomain: TEbrDomain): TEbrGuard;
+class function TEbrGuard.Acquire(const ADomain: TEbrDomain): TEbrGuard;
 begin
   Result.FDomain := ADomain;
   Result.FActive := False;

@@ -38,7 +38,7 @@ type
     {** @desc 创建无界 MPSC 队列（EBR 回收段） }
     constructor Create;
     destructor Destroy; override;
-    {** @desc 阻塞入队；自动扩展段链表 }
+    {** @desc 无界入队；段不足时自动扩展 }
     procedure Enqueue(const AValue: T);
     {** @desc 非阻塞出队；队列空时返回 False }
     function TryDequeue(out AValue: T): Boolean;
