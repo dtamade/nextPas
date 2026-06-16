@@ -6,6 +6,7 @@ unit nextpas.core.tls.base64;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.exception;
 
 type

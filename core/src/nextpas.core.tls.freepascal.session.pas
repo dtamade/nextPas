@@ -9,7 +9,7 @@ unit nextpas.core.tls.freepascal.session;
 
 interface
 
-uses DateUtils, nextpas.core.time, nextpas.core.tls.base;
+uses DateUtils, SysUtils, nextpas.core.base, nextpas.core.time, nextpas.core.tls.base;
 
 type
   IFreePascalResumptionSession = interface

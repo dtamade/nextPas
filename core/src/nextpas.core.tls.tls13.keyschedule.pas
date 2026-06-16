@@ -10,6 +10,7 @@ unit nextpas.core.tls.tls13.keyschedule;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.tls.tls13.wire;
 

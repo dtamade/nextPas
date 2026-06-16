@@ -39,7 +39,13 @@ unit nextpas.core.tls.factory;
 
 interface
 
-uses nextpas.core.text.conv, nextpas.core.tls.base, nextpas.core.tls.exceptions, // 新增：类型化异常 nextpas.core.tls.logging, nextpas.core.tls.collections; // P0: 可替换的 Map 接口;
+uses
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.tls.base,
+  nextpas.core.tls.exceptions, // 新增：类型化异常
+  nextpas.core.tls.logging,
+  nextpas.core.tls.collections; // P0: 可替换的 Map 接口
 
 type
   {** SSL库类类型 (用于内部注册) *}

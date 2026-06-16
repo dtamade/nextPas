@@ -19,6 +19,7 @@ SysUtils|nextpas.core.tls.freepascal.earlydatareplay.dirstore.pas
 SysUtils|nextpas.core.tls.freepascal.earlydatareplay.fileprovider.pas
 SysUtils|nextpas.core.tls.freepascal.earlydatareplay.pas
 SysUtils|nextpas.core.tls.freepascal.lib.pas
+SysUtils|nextpas.core.tls.freepascal.session.pas
 SysUtils|nextpas.core.tls.logging.pas
 SysUtils|nextpas.core.tls.mbedtls.certificate.pas
 SysUtils|nextpas.core.tls.mbedtls.context.pas
@@ -28,6 +29,7 @@ SysUtils|nextpas.core.tls.openssl.connection.pas
 SysUtils|nextpas.core.tls.openssl.context.pas
 SysUtils|nextpas.core.tls.openssl.loader.pas
 SysUtils|nextpas.core.tls.random.pas
+SysUtils|nextpas.core.tls.secure.pas
 SysUtils|nextpas.core.tls.session.cache.pas
 SysUtils|nextpas.core.tls.winssl.certificate.pas
 SysUtils|nextpas.core.tls.winssl.certstore.pas

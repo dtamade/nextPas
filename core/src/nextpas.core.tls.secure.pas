@@ -18,7 +18,7 @@ unit nextpas.core.tls.secure;
 interface
 
 uses
-  nextpas.core.exception, nextpas.core.text.conv, Classes,
+  nextpas.core.exception, nextpas.core.text.conv, SysUtils, Classes,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.logging,
@@ -477,7 +477,7 @@ type
 
   TSecureKeyStoreImpl = class(TInterfacedObject, ISecureKeyStore)
   private
-    FKeys: TStringArray;
+    FKeys: TStringList;
     FLocked: Boolean;
     FMasterPassword: TSecureString;
 
