@@ -6,6 +6,7 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.testing,
+  nextpas.core.mem.compat,
   nextpas.core.mem.intf,
   nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
@@ -20,6 +21,18 @@ uses
 const
   MEM_ALIGNED_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.aligned.pas';
   MEM_ALIGNED_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.aligned.pas';
+  MEM_COMPAT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.compat.pas';
+  MEM_COMPAT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.compat.pas';
+  MEM_INTERFACES_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.interfaces.pas';
+  MEM_INTERFACES_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.interfaces.pas';
+  MEM_ADAPTERS_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.adapters.pas';
+  MEM_ADAPTERS_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.adapters.pas';
+  MEM_POOL_ADAPTER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.pool.adapter.pas';
+  MEM_POOL_ADAPTER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.pool.adapter.pas';
+  MEM_MEM_POOL_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.mem_pool.pas';
+  MEM_MEM_POOL_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.mem_pool.pas';
+  MEM_STATS_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.stats.pas';
+  MEM_STATS_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.stats.pas';
 
 type
   TByteArray = array[0..5] of Byte;
@@ -341,6 +354,104 @@ begin
     'aligned compat shim should not own a raw rtl fallback path');
   CheckNotContains(LSource, 'sysfreemem',
     'aligned compat shim should not own a raw rtl free path');
+end;
+
+procedure TestMemCompatFacadeExportsLegacyPoolSurface;
+var
+  LPool: nextpas.core.mem.compat.TMemPool;
+  LCompatPool: nextpas.core.mem.compat.IMemPool;
+  LPtr: Pointer;
+begin
+  LPool := nextpas.core.mem.compat.TMemPool.Create(32, 2);
+  try
+    LCompatPool := nextpas.core.mem.compat.TMemPoolAdapter.Create(LPool);
+    LPtr := LCompatPool.Alloc;
+    try
+      Check(LPtr <> nil, 'mem.compat should export the legacy mem-pool adapter surface');
+      Check(nextpas.core.mem.compat.WrapAsBlockPool(LCompatPool) <> nil,
+        'mem.compat should export pool bridge helpers');
+    finally
+      LCompatPool.Free(LPtr);
+    end;
+  finally
+    LPool.Free;
+  end;
+end;
+
+procedure TestMemCompatFacadeSourceContracts;
+var
+  LCompatSource: string;
+  LInterfacesSource: string;
+  LAdaptersSource: string;
+  LPoolAdapterSource: string;
+  LMemPoolSource: string;
+  LStatsSource: string;
+begin
+  LCompatSource := ReadSourceText(ResolveSourcePath(
+    MEM_COMPAT_SOURCE_PATH_FROM_TEST,
+    MEM_COMPAT_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LCompatSource, 'compatibility layer',
+    'mem.compat should document that it is a compatibility layer');
+  CheckContains(LCompatSource, 'new code',
+    'mem.compat should tell new code to stay on canonical units');
+  CheckContains(LCompatSource, 'nextpas.core.mem.intf',
+    'mem.compat should depend on the canonical allocator contract');
+  CheckContains(LCompatSource, 'nextpas.core.mem.pool.fixed',
+    'mem.compat should depend on the canonical fixed-pool implementation');
+  CheckContains(LCompatSource, 'nextpas.core.mem.stack_pool',
+    'mem.compat should depend on the canonical stack-pool implementation');
+  CheckContains(LCompatSource, 'nextpas.core.mem.pool.slab',
+    'mem.compat should depend on the canonical slab-pool implementation');
+  CheckContains(LCompatSource, 'nextpas.core.mem.blockpool',
+    'mem.compat should depend on the canonical block-pool contract');
+  CheckNotContains(LCompatSource, 'nextpas.core.mem.interfaces',
+    'mem.compat must not depend on the deprecated interfaces shim');
+  CheckNotContains(LCompatSource, 'nextpas.core.mem.adapters',
+    'mem.compat must not depend on the deprecated adapters shim');
+  CheckNotContains(LCompatSource, 'nextpas.core.mem.pool.adapter',
+    'mem.compat must not depend on the deprecated pool adapter shim');
+  CheckNotContains(LCompatSource, 'nextpas.core.mem.mem_pool',
+    'mem.compat must not depend on the deprecated mem_pool shim');
+
+  LInterfacesSource := ReadSourceText(ResolveSourcePath(
+    MEM_INTERFACES_SOURCE_PATH_FROM_TEST,
+    MEM_INTERFACES_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LInterfacesSource, '{$warning ''nextpas.core.mem.interfaces is deprecated',
+    'mem.interfaces should publish a deprecation warning');
+  CheckContains(LInterfacesSource, 'nextpas.core.mem.compat',
+    'mem.interfaces should forward to mem.compat');
+
+  LAdaptersSource := ReadSourceText(ResolveSourcePath(
+    MEM_ADAPTERS_SOURCE_PATH_FROM_TEST,
+    MEM_ADAPTERS_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LAdaptersSource, '{$warning ''nextpas.core.mem.adapters is deprecated',
+    'mem.adapters should publish a deprecation warning');
+  CheckContains(LAdaptersSource, 'nextpas.core.mem.compat',
+    'mem.adapters should forward to mem.compat');
+
+  LPoolAdapterSource := ReadSourceText(ResolveSourcePath(
+    MEM_POOL_ADAPTER_SOURCE_PATH_FROM_TEST,
+    MEM_POOL_ADAPTER_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LPoolAdapterSource, '{$warning ''nextpas.core.mem.pool.adapter is deprecated',
+    'mem.pool.adapter should publish a deprecation warning');
+  CheckContains(LPoolAdapterSource, 'nextpas.core.mem.compat',
+    'mem.pool.adapter should forward to mem.compat');
+
+  LMemPoolSource := ReadSourceText(ResolveSourcePath(
+    MEM_MEM_POOL_SOURCE_PATH_FROM_TEST,
+    MEM_MEM_POOL_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LMemPoolSource, '{$warning ''nextpas.core.mem.mem_pool is deprecated',
+    'mem.mem_pool should publish a deprecation warning');
+  CheckContains(LMemPoolSource, 'nextpas.core.mem.compat',
+    'mem.mem_pool should forward to mem.compat');
+
+  LStatsSource := ReadSourceText(ResolveSourcePath(
+    MEM_STATS_SOURCE_PATH_FROM_TEST,
+    MEM_STATS_SOURCE_PATH_FROM_ROOT));
+  CheckNotContains(LStatsSource, 'nextpas.core.mem.mem_pool',
+    'mem.stats should not depend on the deprecated mem.mem_pool shim');
+  CheckContains(LStatsSource, 'nextpas.core.mem.pool.fixed',
+    'mem.stats should use the canonical fixed-pool implementation');
 end;
 
 procedure TestCanonicalAllocatorSurface;
@@ -717,6 +828,8 @@ begin
   T.Run('aligned compat shim smoke', @TestAlignedCompatShimSmoke);
   T.Run('aligned compat shim delegates to canonical allocator',
     @TestAlignedCompatShimDelegatesToCanonicalAllocator);
+  T.Run('mem.compat exports legacy pool surface', @TestMemCompatFacadeExportsLegacyPoolSurface);
+  T.Run('mem.compat source contracts', @TestMemCompatFacadeSourceContracts);
   T.Run('canonical allocator surface', @TestCanonicalAllocatorSurface);
   T.Run('allocator aliases are canonical', @TestAllocatorAliasesAreCanonical);
   T.Run('allocator adapter round trip', @TestAllocatorAdapterRoundTrip);
