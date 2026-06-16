@@ -29,6 +29,22 @@ type
     function Normalize: TVec2f;
     {** Return the dot product with another vector }
     function Dot(const AOther: TVec2f): Single;
+    {** Return the 2D cross product (signed area of the parallelogram) }
+    function Cross2D(const AOther: TVec2f): Single;
+    {** Return a vector with the same direction but scaled to the given length }
+    function AdjustToLength(const ALength: Single): TVec2f;
+    {** Return a vector with the per-component maximum of self and AOther }
+    function Max(const AOther: TVec2f): TVec2f;
+    {** Return a vector with the per-component minimum of self and AOther }
+    function Min(const AOther: TVec2f): TVec2f;
+    {** Return a vector with the absolute value of each component }
+    function Abs: TVec2f;
+    {** Check whether all components are exactly zero }
+    function IsZero: Boolean;
+    {** Check approximate equality within the given epsilon tolerance }
+    function Equals(const AOther: TVec2f; const AEpsilon: Single): Boolean;
+    {** Check exact bitwise equality (no tolerance) }
+    function PerfectlyEquals(const AOther: TVec2f): Boolean;
     property X: Single read GetX write SetX;
     property Y: Single read GetY write SetY;
     property Data[const AIndex: Integer]: Single read GetData write SetData; default;
@@ -55,6 +71,22 @@ type
     function Normalize: TVec2d;
     {** Return the dot product with another vector }
     function Dot(const AOther: TVec2d): Double;
+    {** Return the 2D cross product (signed area of the parallelogram) }
+    function Cross2D(const AOther: TVec2d): Double;
+    {** Return a vector with the same direction but scaled to the given length }
+    function AdjustToLength(const ALength: Double): TVec2d;
+    {** Return a vector with the per-component maximum of self and AOther }
+    function Max(const AOther: TVec2d): TVec2d;
+    {** Return a vector with the per-component minimum of self and AOther }
+    function Min(const AOther: TVec2d): TVec2d;
+    {** Return a vector with the absolute value of each component }
+    function Abs: TVec2d;
+    {** Check whether all components are exactly zero }
+    function IsZero: Boolean;
+    {** Check approximate equality within the given epsilon tolerance }
+    function Equals(const AOther: TVec2d; const AEpsilon: Double): Boolean;
+    {** Check exact bitwise equality (no tolerance) }
+    function PerfectlyEquals(const AOther: TVec2d): Boolean;
     property X: Double read GetX write SetX;
     property Y: Double read GetY write SetY;
     property Data[const AIndex: Integer]: Double read GetData write SetData; default;
@@ -85,6 +117,22 @@ type
     function Dot(const AOther: TVec3f): Single;
     {** Return the cross product with another 3D vector }
     function Cross(const AOther: TVec3f): TVec3f;
+    {** Return a vector with the same direction but scaled to the given length }
+    function AdjustToLength(const ALength: Single): TVec3f;
+    {** Return a vector with the per-component maximum of self and AOther }
+    function Max(const AOther: TVec3f): TVec3f;
+    {** Return a vector with the per-component minimum of self and AOther }
+    function Min(const AOther: TVec3f): TVec3f;
+    {** Return a vector with the absolute value of each component }
+    function Abs: TVec3f;
+    {** Check whether all components are exactly zero }
+    function IsZero: Boolean;
+    {** Check approximate equality within the given epsilon tolerance }
+    function Equals(const AOther: TVec3f; const AEpsilon: Single): Boolean;
+    {** Check exact bitwise equality (no tolerance) }
+    function PerfectlyEquals(const AOther: TVec3f): Boolean;
+    {** Return the arithmetic mean of self and AOther }
+    function Average(const AOther: TVec3f): TVec3f;
     property X: Single read GetX write SetX;
     property Y: Single read GetY write SetY;
     property Z: Single read GetZ write SetZ;
@@ -116,6 +164,22 @@ type
     function Dot(const AOther: TVec3d): Double;
     {** Return the cross product with another 3D vector }
     function Cross(const AOther: TVec3d): TVec3d;
+    {** Return a vector with the same direction but scaled to the given length }
+    function AdjustToLength(const ALength: Double): TVec3d;
+    {** Return a vector with the per-component maximum of self and AOther }
+    function Max(const AOther: TVec3d): TVec3d;
+    {** Return a vector with the per-component minimum of self and AOther }
+    function Min(const AOther: TVec3d): TVec3d;
+    {** Return a vector with the absolute value of each component }
+    function Abs: TVec3d;
+    {** Check whether all components are exactly zero }
+    function IsZero: Boolean;
+    {** Check approximate equality within the given epsilon tolerance }
+    function Equals(const AOther: TVec3d; const AEpsilon: Double): Boolean;
+    {** Check exact bitwise equality (no tolerance) }
+    function PerfectlyEquals(const AOther: TVec3d): Boolean;
+    {** Return the arithmetic mean of self and AOther }
+    function Average(const AOther: TVec3d): TVec3d;
     property X: Double read GetX write SetX;
     property Y: Double read GetY write SetY;
     property Z: Double read GetZ write SetZ;
@@ -147,6 +211,22 @@ type
     function Normalize: TVec4f;
     {** Return the dot product with another vector }
     function Dot(const AOther: TVec4f): Single;
+    {** Return a vector with the same direction but scaled to the given length }
+    function AdjustToLength(const ALength: Single): TVec4f;
+    {** Return a vector with the per-component maximum of self and AOther }
+    function Max(const AOther: TVec4f): TVec4f;
+    {** Return a vector with the per-component minimum of self and AOther }
+    function Min(const AOther: TVec4f): TVec4f;
+    {** Return a vector with the absolute value of each component }
+    function Abs: TVec4f;
+    {** Check whether all components are exactly zero }
+    function IsZero: Boolean;
+    {** Check approximate equality within the given epsilon tolerance }
+    function Equals(const AOther: TVec4f; const AEpsilon: Single): Boolean;
+    {** Check exact bitwise equality (no tolerance) }
+    function PerfectlyEquals(const AOther: TVec4f): Boolean;
+    {** Perform perspective divide and return the 3D position (X/W, Y/W, Z/W) }
+    function ToPosition: TVec3f;
     property X: Single read GetX write SetX;
     property Y: Single read GetY write SetY;
     property Z: Single read GetZ write SetZ;
@@ -179,6 +259,22 @@ type
     function Normalize: TVec4d;
     {** Return the dot product with another vector }
     function Dot(const AOther: TVec4d): Double;
+    {** Return a vector with the same direction but scaled to the given length }
+    function AdjustToLength(const ALength: Double): TVec4d;
+    {** Return a vector with the per-component maximum of self and AOther }
+    function Max(const AOther: TVec4d): TVec4d;
+    {** Return a vector with the per-component minimum of self and AOther }
+    function Min(const AOther: TVec4d): TVec4d;
+    {** Return a vector with the absolute value of each component }
+    function Abs: TVec4d;
+    {** Check whether all components are exactly zero }
+    function IsZero: Boolean;
+    {** Check approximate equality within the given epsilon tolerance }
+    function Equals(const AOther: TVec4d; const AEpsilon: Double): Boolean;
+    {** Check exact bitwise equality (no tolerance) }
+    function PerfectlyEquals(const AOther: TVec4d): Boolean;
+    {** Perform perspective divide and return the 3D position (X/W, Y/W, Z/W) }
+    function ToPosition: TVec3d;
     property X: Double read GetX write SetX;
     property Y: Double read GetY write SetY;
     property Z: Double read GetZ write SetZ;
@@ -339,6 +435,54 @@ begin
   Result := FData[0] * AOther.FData[0] + FData[1] * AOther.FData[1];
 end;
 
+function TVec2f.Cross2D(const AOther: TVec2f): Single;
+begin
+  Result := FData[0] * AOther.FData[1] - FData[1] * AOther.FData[0];
+end;
+
+function TVec2f.AdjustToLength(const ALength: Single): TVec2f;
+var
+  LNorm: TVec2f;
+begin
+  LNorm := Normalize;
+  Result.FData[0] := LNorm.FData[0] * ALength;
+  Result.FData[1] := LNorm.FData[1] * ALength;
+end;
+
+function TVec2f.Max(const AOther: TVec2f): TVec2f;
+begin
+  Result.FData[0] := Math.Max(FData[0], AOther.FData[0]);
+  Result.FData[1] := Math.Max(FData[1], AOther.FData[1]);
+end;
+
+function TVec2f.Min(const AOther: TVec2f): TVec2f;
+begin
+  Result.FData[0] := Math.Min(FData[0], AOther.FData[0]);
+  Result.FData[1] := Math.Min(FData[1], AOther.FData[1]);
+end;
+
+function TVec2f.Abs: TVec2f;
+begin
+  Result.FData[0] := System.Abs(FData[0]);
+  Result.FData[1] := System.Abs(FData[1]);
+end;
+
+function TVec2f.IsZero: Boolean;
+begin
+  Result := (FData[0] = 0.0) and (FData[1] = 0.0);
+end;
+
+function TVec2f.Equals(const AOther: TVec2f; const AEpsilon: Single): Boolean;
+begin
+  Result := (System.Abs(FData[0] - AOther.FData[0]) < AEpsilon)
+        and (System.Abs(FData[1] - AOther.FData[1]) < AEpsilon);
+end;
+
+function TVec2f.PerfectlyEquals(const AOther: TVec2f): Boolean;
+begin
+  Result := (FData[0] = AOther.FData[0]) and (FData[1] = AOther.FData[1]);
+end;
+
 { TVec2d }
 
 operator + (constref A, B: TVec2d): TVec2d;
@@ -422,6 +566,54 @@ end;
 function TVec2d.Dot(const AOther: TVec2d): Double;
 begin
   Result := FData[0] * AOther.FData[0] + FData[1] * AOther.FData[1];
+end;
+
+function TVec2d.Cross2D(const AOther: TVec2d): Double;
+begin
+  Result := FData[0] * AOther.FData[1] - FData[1] * AOther.FData[0];
+end;
+
+function TVec2d.AdjustToLength(const ALength: Double): TVec2d;
+var
+  LNorm: TVec2d;
+begin
+  LNorm := Normalize;
+  Result.FData[0] := LNorm.FData[0] * ALength;
+  Result.FData[1] := LNorm.FData[1] * ALength;
+end;
+
+function TVec2d.Max(const AOther: TVec2d): TVec2d;
+begin
+  Result.FData[0] := Math.Max(FData[0], AOther.FData[0]);
+  Result.FData[1] := Math.Max(FData[1], AOther.FData[1]);
+end;
+
+function TVec2d.Min(const AOther: TVec2d): TVec2d;
+begin
+  Result.FData[0] := Math.Min(FData[0], AOther.FData[0]);
+  Result.FData[1] := Math.Min(FData[1], AOther.FData[1]);
+end;
+
+function TVec2d.Abs: TVec2d;
+begin
+  Result.FData[0] := System.Abs(FData[0]);
+  Result.FData[1] := System.Abs(FData[1]);
+end;
+
+function TVec2d.IsZero: Boolean;
+begin
+  Result := (FData[0] = 0.0) and (FData[1] = 0.0);
+end;
+
+function TVec2d.Equals(const AOther: TVec2d; const AEpsilon: Double): Boolean;
+begin
+  Result := (System.Abs(FData[0] - AOther.FData[0]) < AEpsilon)
+        and (System.Abs(FData[1] - AOther.FData[1]) < AEpsilon);
+end;
+
+function TVec2d.PerfectlyEquals(const AOther: TVec2d): Boolean;
+begin
+  Result := (FData[0] = AOther.FData[0]) and (FData[1] = AOther.FData[1]);
 end;
 
 { TVec3f }
@@ -526,6 +718,62 @@ begin
   Result.FData[2] := FData[0] * AOther.FData[1] - FData[1] * AOther.FData[0];
 end;
 
+function TVec3f.AdjustToLength(const ALength: Single): TVec3f;
+var
+  LNorm: TVec3f;
+begin
+  LNorm := Normalize;
+  Result.FData[0] := LNorm.FData[0] * ALength;
+  Result.FData[1] := LNorm.FData[1] * ALength;
+  Result.FData[2] := LNorm.FData[2] * ALength;
+end;
+
+function TVec3f.Max(const AOther: TVec3f): TVec3f;
+begin
+  Result.FData[0] := Math.Max(FData[0], AOther.FData[0]);
+  Result.FData[1] := Math.Max(FData[1], AOther.FData[1]);
+  Result.FData[2] := Math.Max(FData[2], AOther.FData[2]);
+end;
+
+function TVec3f.Min(const AOther: TVec3f): TVec3f;
+begin
+  Result.FData[0] := Math.Min(FData[0], AOther.FData[0]);
+  Result.FData[1] := Math.Min(FData[1], AOther.FData[1]);
+  Result.FData[2] := Math.Min(FData[2], AOther.FData[2]);
+end;
+
+function TVec3f.Abs: TVec3f;
+begin
+  Result.FData[0] := System.Abs(FData[0]);
+  Result.FData[1] := System.Abs(FData[1]);
+  Result.FData[2] := System.Abs(FData[2]);
+end;
+
+function TVec3f.IsZero: Boolean;
+begin
+  Result := (FData[0] = 0.0) and (FData[1] = 0.0) and (FData[2] = 0.0);
+end;
+
+function TVec3f.Equals(const AOther: TVec3f; const AEpsilon: Single): Boolean;
+begin
+  Result := (System.Abs(FData[0] - AOther.FData[0]) < AEpsilon)
+        and (System.Abs(FData[1] - AOther.FData[1]) < AEpsilon)
+        and (System.Abs(FData[2] - AOther.FData[2]) < AEpsilon);
+end;
+
+function TVec3f.PerfectlyEquals(const AOther: TVec3f): Boolean;
+begin
+  Result := (FData[0] = AOther.FData[0]) and (FData[1] = AOther.FData[1])
+        and (FData[2] = AOther.FData[2]);
+end;
+
+function TVec3f.Average(const AOther: TVec3f): TVec3f;
+begin
+  Result.FData[0] := (FData[0] + AOther.FData[0]) * 0.5;
+  Result.FData[1] := (FData[1] + AOther.FData[1]) * 0.5;
+  Result.FData[2] := (FData[2] + AOther.FData[2]) * 0.5;
+end;
+
 { TVec3d }
 
 operator + (constref A, B: TVec3d): TVec3d;
@@ -626,6 +874,62 @@ begin
   Result.FData[0] := FData[1] * AOther.FData[2] - FData[2] * AOther.FData[1];
   Result.FData[1] := FData[2] * AOther.FData[0] - FData[0] * AOther.FData[2];
   Result.FData[2] := FData[0] * AOther.FData[1] - FData[1] * AOther.FData[0];
+end;
+
+function TVec3d.AdjustToLength(const ALength: Double): TVec3d;
+var
+  LNorm: TVec3d;
+begin
+  LNorm := Normalize;
+  Result.FData[0] := LNorm.FData[0] * ALength;
+  Result.FData[1] := LNorm.FData[1] * ALength;
+  Result.FData[2] := LNorm.FData[2] * ALength;
+end;
+
+function TVec3d.Max(const AOther: TVec3d): TVec3d;
+begin
+  Result.FData[0] := Math.Max(FData[0], AOther.FData[0]);
+  Result.FData[1] := Math.Max(FData[1], AOther.FData[1]);
+  Result.FData[2] := Math.Max(FData[2], AOther.FData[2]);
+end;
+
+function TVec3d.Min(const AOther: TVec3d): TVec3d;
+begin
+  Result.FData[0] := Math.Min(FData[0], AOther.FData[0]);
+  Result.FData[1] := Math.Min(FData[1], AOther.FData[1]);
+  Result.FData[2] := Math.Min(FData[2], AOther.FData[2]);
+end;
+
+function TVec3d.Abs: TVec3d;
+begin
+  Result.FData[0] := System.Abs(FData[0]);
+  Result.FData[1] := System.Abs(FData[1]);
+  Result.FData[2] := System.Abs(FData[2]);
+end;
+
+function TVec3d.IsZero: Boolean;
+begin
+  Result := (FData[0] = 0.0) and (FData[1] = 0.0) and (FData[2] = 0.0);
+end;
+
+function TVec3d.Equals(const AOther: TVec3d; const AEpsilon: Double): Boolean;
+begin
+  Result := (System.Abs(FData[0] - AOther.FData[0]) < AEpsilon)
+        and (System.Abs(FData[1] - AOther.FData[1]) < AEpsilon)
+        and (System.Abs(FData[2] - AOther.FData[2]) < AEpsilon);
+end;
+
+function TVec3d.PerfectlyEquals(const AOther: TVec3d): Boolean;
+begin
+  Result := (FData[0] = AOther.FData[0]) and (FData[1] = AOther.FData[1])
+        and (FData[2] = AOther.FData[2]);
+end;
+
+function TVec3d.Average(const AOther: TVec3d): TVec3d;
+begin
+  Result.FData[0] := (FData[0] + AOther.FData[0]) * 0.5;
+  Result.FData[1] := (FData[1] + AOther.FData[1]) * 0.5;
+  Result.FData[2] := (FData[2] + AOther.FData[2]) * 0.5;
 end;
 
 { TVec4f }
@@ -735,6 +1039,68 @@ begin
           + FData[2] * AOther.FData[2] + FData[3] * AOther.FData[3];
 end;
 
+function TVec4f.AdjustToLength(const ALength: Single): TVec4f;
+var
+  LNorm: TVec4f;
+begin
+  LNorm := Normalize;
+  Result.FData[0] := LNorm.FData[0] * ALength;
+  Result.FData[1] := LNorm.FData[1] * ALength;
+  Result.FData[2] := LNorm.FData[2] * ALength;
+  Result.FData[3] := LNorm.FData[3] * ALength;
+end;
+
+function TVec4f.Max(const AOther: TVec4f): TVec4f;
+begin
+  Result.FData[0] := Math.Max(FData[0], AOther.FData[0]);
+  Result.FData[1] := Math.Max(FData[1], AOther.FData[1]);
+  Result.FData[2] := Math.Max(FData[2], AOther.FData[2]);
+  Result.FData[3] := Math.Max(FData[3], AOther.FData[3]);
+end;
+
+function TVec4f.Min(const AOther: TVec4f): TVec4f;
+begin
+  Result.FData[0] := Math.Min(FData[0], AOther.FData[0]);
+  Result.FData[1] := Math.Min(FData[1], AOther.FData[1]);
+  Result.FData[2] := Math.Min(FData[2], AOther.FData[2]);
+  Result.FData[3] := Math.Min(FData[3], AOther.FData[3]);
+end;
+
+function TVec4f.Abs: TVec4f;
+begin
+  Result.FData[0] := System.Abs(FData[0]);
+  Result.FData[1] := System.Abs(FData[1]);
+  Result.FData[2] := System.Abs(FData[2]);
+  Result.FData[3] := System.Abs(FData[3]);
+end;
+
+function TVec4f.IsZero: Boolean;
+begin
+  Result := (FData[0] = 0.0) and (FData[1] = 0.0)
+        and (FData[2] = 0.0) and (FData[3] = 0.0);
+end;
+
+function TVec4f.Equals(const AOther: TVec4f; const AEpsilon: Single): Boolean;
+begin
+  Result := (System.Abs(FData[0] - AOther.FData[0]) < AEpsilon)
+        and (System.Abs(FData[1] - AOther.FData[1]) < AEpsilon)
+        and (System.Abs(FData[2] - AOther.FData[2]) < AEpsilon)
+        and (System.Abs(FData[3] - AOther.FData[3]) < AEpsilon);
+end;
+
+function TVec4f.PerfectlyEquals(const AOther: TVec4f): Boolean;
+begin
+  Result := (FData[0] = AOther.FData[0]) and (FData[1] = AOther.FData[1])
+        and (FData[2] = AOther.FData[2]) and (FData[3] = AOther.FData[3]);
+end;
+
+function TVec4f.ToPosition: TVec3f;
+begin
+  Result.FData[0] := FData[0] / FData[3];
+  Result.FData[1] := FData[1] / FData[3];
+  Result.FData[2] := FData[2] / FData[3];
+end;
+
 { TVec4d }
 
 operator + (constref A, B: TVec4d): TVec4d;
@@ -840,6 +1206,68 @@ function TVec4d.Dot(const AOther: TVec4d): Double;
 begin
   Result := FData[0] * AOther.FData[0] + FData[1] * AOther.FData[1]
           + FData[2] * AOther.FData[2] + FData[3] * AOther.FData[3];
+end;
+
+function TVec4d.AdjustToLength(const ALength: Double): TVec4d;
+var
+  LNorm: TVec4d;
+begin
+  LNorm := Normalize;
+  Result.FData[0] := LNorm.FData[0] * ALength;
+  Result.FData[1] := LNorm.FData[1] * ALength;
+  Result.FData[2] := LNorm.FData[2] * ALength;
+  Result.FData[3] := LNorm.FData[3] * ALength;
+end;
+
+function TVec4d.Max(const AOther: TVec4d): TVec4d;
+begin
+  Result.FData[0] := Math.Max(FData[0], AOther.FData[0]);
+  Result.FData[1] := Math.Max(FData[1], AOther.FData[1]);
+  Result.FData[2] := Math.Max(FData[2], AOther.FData[2]);
+  Result.FData[3] := Math.Max(FData[3], AOther.FData[3]);
+end;
+
+function TVec4d.Min(const AOther: TVec4d): TVec4d;
+begin
+  Result.FData[0] := Math.Min(FData[0], AOther.FData[0]);
+  Result.FData[1] := Math.Min(FData[1], AOther.FData[1]);
+  Result.FData[2] := Math.Min(FData[2], AOther.FData[2]);
+  Result.FData[3] := Math.Min(FData[3], AOther.FData[3]);
+end;
+
+function TVec4d.Abs: TVec4d;
+begin
+  Result.FData[0] := System.Abs(FData[0]);
+  Result.FData[1] := System.Abs(FData[1]);
+  Result.FData[2] := System.Abs(FData[2]);
+  Result.FData[3] := System.Abs(FData[3]);
+end;
+
+function TVec4d.IsZero: Boolean;
+begin
+  Result := (FData[0] = 0.0) and (FData[1] = 0.0)
+        and (FData[2] = 0.0) and (FData[3] = 0.0);
+end;
+
+function TVec4d.Equals(const AOther: TVec4d; const AEpsilon: Double): Boolean;
+begin
+  Result := (System.Abs(FData[0] - AOther.FData[0]) < AEpsilon)
+        and (System.Abs(FData[1] - AOther.FData[1]) < AEpsilon)
+        and (System.Abs(FData[2] - AOther.FData[2]) < AEpsilon)
+        and (System.Abs(FData[3] - AOther.FData[3]) < AEpsilon);
+end;
+
+function TVec4d.PerfectlyEquals(const AOther: TVec4d): Boolean;
+begin
+  Result := (FData[0] = AOther.FData[0]) and (FData[1] = AOther.FData[1])
+        and (FData[2] = AOther.FData[2]) and (FData[3] = AOther.FData[3]);
+end;
+
+function TVec4d.ToPosition: TVec3d;
+begin
+  Result.FData[0] := FData[0] / FData[3];
+  Result.FData[1] := FData[1] / FData[3];
+  Result.FData[2] := FData[2] / FData[3];
 end;
 
 end.
