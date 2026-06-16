@@ -56,6 +56,10 @@ type
     function FetchMin(AValue: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;
     function FetchNand(AMask: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;
 
+    // CAS-loop helper - 返回是否成功 (observed 被写入 aObj 的当前值)
+    function UpdateIfEqual(AExpected: Int32; ADesired: Int32; out AObserved: Int32;
+      AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
+
     // 便利方法 - 返回新值
     function Increment(AOrder: memory_order_t = mo_seq_cst): Int32; inline;
     function Decrement(AOrder: memory_order_t = mo_seq_cst): Int32; inline;
@@ -95,6 +99,9 @@ type
     function FetchAnd(AMask: UInt32; AOrder: memory_order_t = mo_seq_cst): UInt32; inline;
     function FetchOr(AMask: UInt32; AOrder: memory_order_t = mo_seq_cst): UInt32; inline;
     function FetchXor(AMask: UInt32; AOrder: memory_order_t = mo_seq_cst): UInt32; inline;
+
+    function UpdateIfEqual(AExpected: UInt32; ADesired: UInt32; out AObserved: UInt32;
+      AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
 
     function Increment(AOrder: memory_order_t = mo_seq_cst): UInt32; inline;
     function Decrement(AOrder: memory_order_t = mo_seq_cst): UInt32; inline;
@@ -140,8 +147,15 @@ type
     function FetchMin(AValue: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;
     function FetchNand(AMask: Int64; AOrder: memory_order_t = mo_seq_cst): Int64; inline;
 
+    function UpdateIfEqual(AExpected: Int64; ADesired: Int64; out AObserved: Int64;
+      AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
+
     function Increment(AOrder: memory_order_t = mo_seq_cst): Int64; inline;
     function Decrement(AOrder: memory_order_t = mo_seq_cst): Int64; inline;
+
+    function Wait(AExpected: Int64; const ATimeoutNs: Int64 = -1): Int32; inline;
+    procedure NotifyOne; inline;
+    procedure NotifyAll; inline;
 
     function GetMut: PInt64; inline;
     function IntoInner: Int64; inline;
@@ -182,6 +196,13 @@ type
 
     function Increment(AOrder: memory_order_t = mo_seq_cst): UInt64; inline;
     function Decrement(AOrder: memory_order_t = mo_seq_cst): UInt64; inline;
+
+    function UpdateIfEqual(AExpected: UInt64; ADesired: UInt64; out AObserved: UInt64;
+      AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
+
+    function Wait(AExpected: UInt64; const ATimeoutNs: Int64 = -1): Int32; inline;
+    procedure NotifyOne; inline;
+    procedure NotifyAll; inline;
 
     function GetMut: PUInt64; inline;
     function IntoInner: UInt64; inline;
@@ -331,6 +352,9 @@ type
     function FetchOr(AMask: PtrInt; AOrder: memory_order_t = mo_seq_cst): PtrInt; inline;
     function FetchXor(AMask: PtrInt; AOrder: memory_order_t = mo_seq_cst): PtrInt; inline;
 
+    function UpdateIfEqual(AExpected: PtrInt; ADesired: PtrInt; out AObserved: PtrInt;
+      AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
+
     function Increment(AOrder: memory_order_t = mo_seq_cst): PtrInt; inline;
     function Decrement(AOrder: memory_order_t = mo_seq_cst): PtrInt; inline;
 
@@ -368,6 +392,9 @@ type
     function FetchAnd(AMask: PtrUInt; AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
     function FetchOr(AMask: PtrUInt; AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
     function FetchXor(AMask: PtrUInt; AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
+
+    function UpdateIfEqual(AExpected: PtrUInt; ADesired: PtrUInt; out AObserved: PtrUInt;
+      AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
 
     function Increment(AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
     function Decrement(AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
@@ -752,6 +779,11 @@ begin
   Result := atomic_fetch_nand(FValue, AMask, AOrder);
 end;
 
+function TAtomicInt32.UpdateIfEqual(AExpected: Int32; ADesired: Int32; out AObserved: Int32; AOrder: memory_order_t): Boolean;
+begin
+  Result := atomic_update_if_equal(FValue, AExpected, ADesired, AObserved, AOrder);
+end;
+
 function TAtomicInt32.Increment(AOrder: memory_order_t): Int32;
 begin
   Result := _int32_inc_result(FetchAdd(1, AOrder));
@@ -844,6 +876,12 @@ end;
 function TAtomicUInt32.FetchXor(AMask: UInt32; AOrder: memory_order_t): UInt32;
 begin
   Result := atomic_fetch_xor(FValue, AMask, AOrder);
+end;
+
+function TAtomicUInt32.UpdateIfEqual(AExpected: UInt32; ADesired: UInt32; out AObserved: UInt32;
+  AOrder: memory_order_t): Boolean;
+begin
+  Result := atomic_update_if_equal(FValue, AExpected, ADesired, AObserved, AOrder);
 end;
 
 function TAtomicUInt32.Increment(AOrder: memory_order_t): UInt32;
@@ -956,6 +994,12 @@ begin
   Result := atomic_fetch_nand_64(FValue, AMask, AOrder);
 end;
 
+function TAtomicInt64.UpdateIfEqual(AExpected: Int64; ADesired: Int64; out AObserved: Int64;
+  AOrder: memory_order_t): Boolean;
+begin
+  Result := atomic_update_if_equal_64(FValue, AExpected, ADesired, AObserved, AOrder);
+end;
+
 function TAtomicInt64.Increment(AOrder: memory_order_t): Int64;
 begin
   Result := _int64_inc_result(FetchAdd(1, AOrder));
@@ -974,6 +1018,21 @@ end;
 function TAtomicInt64.IntoInner: Int64;
 begin
   Result := FValue;
+end;
+
+function TAtomicInt64.Wait(AExpected: Int64; const ATimeoutNs: Int64): Int32;
+begin
+  Result := atomic_wait(FValue, AExpected, ATimeoutNs);
+end;
+
+procedure TAtomicInt64.NotifyOne;
+begin
+  atomic_notify_one(FValue);
+end;
+
+procedure TAtomicInt64.NotifyAll;
+begin
+  atomic_notify_all(FValue);
 end;
 
 { TAtomicUInt64 }
@@ -1060,6 +1119,12 @@ begin
   Result := _uint64_dec_result(FetchSub(1, AOrder));
 end;
 
+function TAtomicUInt64.UpdateIfEqual(AExpected: UInt64; ADesired: UInt64; out AObserved: UInt64;
+  AOrder: memory_order_t): Boolean;
+begin
+  Result := atomic_update_if_equal_64(FValue, AExpected, ADesired, AObserved, AOrder);
+end;
+
 function TAtomicUInt64.GetMut: PUInt64;
 begin
   Result := @FValue;
@@ -1068,6 +1133,21 @@ end;
 function TAtomicUInt64.IntoInner: UInt64;
 begin
   Result := FValue;
+end;
+
+function TAtomicUInt64.Wait(AExpected: UInt64; const ATimeoutNs: Int64): Int32;
+begin
+  Result := atomic_wait(FValue, AExpected, ATimeoutNs);
+end;
+
+procedure TAtomicUInt64.NotifyOne;
+begin
+  atomic_notify_one(FValue);
+end;
+
+procedure TAtomicUInt64.NotifyAll;
+begin
+  atomic_notify_all(FValue);
 end;
 {$ENDIF}
 
@@ -1345,6 +1425,16 @@ begin
   {$ENDIF}
 end;
 
+function TAtomicISize.UpdateIfEqual(AExpected: PtrInt; ADesired: PtrInt; out AObserved: PtrInt;
+  AOrder: memory_order_t): Boolean;
+begin
+  {$IF SIZEOF(PtrInt) = 4}
+  Result := atomic_update_if_equal(PInt32(@FValue)^, Int32(AExpected), Int32(ADesired), PInt32(@AObserved)^, AOrder);
+  {$ELSE}
+  Result := atomic_update_if_equal_64(PInt64(@FValue)^, Int64(AExpected), Int64(ADesired), PInt64(@AObserved)^, AOrder);
+  {$ENDIF}
+end;
+
 function TAtomicISize.Increment(AOrder: memory_order_t): PtrInt;
 begin
   Result := _ptrint_inc_result(FetchAdd(1, AOrder));
@@ -1502,6 +1592,16 @@ begin
   Result := PtrUInt(atomic_fetch_xor(PUInt32(@FValue)^, UInt32(AMask), AOrder));
   {$ELSE}
   Result := PtrUInt(atomic_fetch_xor_64(PUInt64(@FValue)^, UInt64(AMask), AOrder));
+  {$ENDIF}
+end;
+
+function TAtomicUSize.UpdateIfEqual(AExpected: PtrUInt; ADesired: PtrUInt; out AObserved: PtrUInt;
+  AOrder: memory_order_t): Boolean;
+begin
+  {$IF SIZEOF(PtrUInt) = 4}
+  Result := atomic_update_if_equal(PUInt32(@FValue)^, UInt32(AExpected), UInt32(ADesired), PUInt32(@AObserved)^, AOrder);
+  {$ELSE}
+  Result := atomic_update_if_equal_64(PUInt64(@FValue)^, UInt64(AExpected), UInt64(ADesired), PUInt64(@AObserved)^, AOrder);
   {$ENDIF}
 end;
 

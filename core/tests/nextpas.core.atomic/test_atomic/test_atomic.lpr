@@ -333,6 +333,7 @@ end;
 procedure TestAtomicSourceContracts;
 const
   AtomicSourcePath = '../../../src/nextpas.core.atomic.pas';
+  PlatformSyncSourcePath = '../../../src/nextpas.core.platform.sync.pas';
   AtomicCoreSourcePath = '../../../src/nextpas.core.atomic.core.pas';
   AtomicTypesSourcePath = '../../../src/nextpas.core.atomic.types.pas';
   AtomicCompatSourcePath = '../../../src/nextpas.core.atomic.compat.pas';
@@ -352,6 +353,7 @@ const
   AtomicDirectTypesPtrTestPath = 'test_atomic_direct_types_ptr.pas';
 var
   LAtomicSource: string;
+  LPlatformSyncSource: string;
   LAtomicCoreSource: string;
   LAtomicTypesSource: string;
   LAtomicCompatSource: string;
@@ -395,6 +397,7 @@ var
   LTypesInt64IncrementSection: string;
   LTypesInt64DecrementSection: string;
   LTypesUInt64FetchSection: string;
+  LTypesUInt64UpdateIfEqualSection: string;
   LTypesISizeLockFreeSection: string;
   LTypesUSizeLockFreeSection: string;
   LTypesISizeFetchSection: string;
@@ -458,6 +461,7 @@ var
   LAtomicWaitSection: string;
   LAtomicNotifyOneSection: string;
   LAtomicNotifyAllSection: string;
+  LPlatformWaitAddress64WindowsSection: string;
   LCompatFacadeTestSection: string;
   LCompatAliasTestSection: string;
   LTypedInt64ContractSection: string;
@@ -494,6 +498,7 @@ var
   LSingleOrderCasMatrixSection: string;
 begin
   LAtomicSource := ReadUtf8TextFile(AtomicSourcePath);
+  LPlatformSyncSource := ReadUtf8TextFile(PlatformSyncSourcePath);
   LAtomicCoreSource := ReadUtf8TextFile(AtomicCoreSourcePath);
   LAtomicTypesSource := ReadUtf8TextFile(AtomicTypesSourcePath);
   LAtomicCompatSource := ReadUtf8TextFile(AtomicCompatSourcePath);
@@ -601,6 +606,9 @@ begin
   LTypesUInt64FetchSection := ExtractImplementationSection(LAtomicTypesSource,
     'function TAtomicUInt64.FetchAdd(ADelta: UInt64; AOrder: memory_order_t): UInt64;',
     'function TAtomicUInt64.Increment(AOrder: memory_order_t): UInt64;');
+  LTypesUInt64UpdateIfEqualSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicUInt64.UpdateIfEqual(AExpected: UInt64; ADesired: UInt64; out AObserved: UInt64;',
+    'function TAtomicUInt64.GetMut: PUInt64;');
   LTypesISizeLockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
     'class function TAtomicISize.is_lock_free: Boolean;',
     'function TAtomicISize.Load(AOrder: memory_order_t): PtrInt;');
@@ -804,6 +812,11 @@ begin
   LAtomicNotifyAllSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_notify_all(var aObj: Int32): Int32;',
     'function atomic_notify_all(var aObj: UInt32): Int32;');
+  LPlatformWaitAddress64WindowsSection := ExtractImplementationSection(LPlatformSyncSource,
+    'function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const ATimeoutNs: Int64): Int32;' + LineEnding +
+    'var' + LineEnding +
+    '  LExpected: Int64;',
+    'function platform_wake_address_one64(AAddr: PInt64): Int32;');
   LCompatFacadeTestSection := ExtractSection(LAtomicTestSource,
     'procedure TestAtomicCompatFacade;' + LineEnding +
     'var',
@@ -1620,6 +1633,12 @@ begin
     'atomic README must document the wait/notify surface');
   CheckContains(LAtomicDocsReadme, 'platform_wait_address32',
     'atomic README must disclose the current 32-bit wait-address seam');
+  CheckContains(LAtomicDocsReadme, 'platform_wait_address64',
+    'atomic README must disclose the 64-bit wait-address seam');
+  CheckContains(LAtomicDocsReadme, 'Linux futex has no native 64-bit compare wait',
+    'atomic README must document Linux futex 64-bit wait limitation');
+  CheckContains(LAtomicDocsReadme, 'fallback `notify_one` can wake an unrelated address in the same bucket',
+    'atomic README must document fallback notify_one collision predicate-loop requirement');
   CheckContains(LAtomicDocsReadme,
     '`atomic_flag_t` and `TAtomicFlag` model C++ `atomic_flag`: `test_and_set` returns the previous set state, `clear` resets the flag, and `test` observes without modifying.',
     'atomic README must document atomic_flag operation semantics');
@@ -2088,6 +2107,8 @@ begin
     'typed Int32 FetchOr must delegate to the Int32 atomic root');
   CheckContains(LTypesInt32FetchSection, 'atomic_fetch_xor(FValue, AMask, AOrder);',
     'typed Int32 FetchXor must delegate to the Int32 atomic root');
+  CheckContains(LTypesInt32FetchSection, 'atomic_update_if_equal(FValue, AExpected, ADesired, AObserved, AOrder);',
+    'typed Int32 UpdateIfEqual must delegate to the 32-bit update-if-equal helper');
   CheckContains(LAtomicTypesSource, 'function FetchMax(AValue: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;',
     'typed Int32 must declare FetchMax in the public record surface');
   CheckContains(LAtomicTypesSource, 'function FetchMin(AValue: Int32; AOrder: memory_order_t = mo_seq_cst): Int32; inline;',
@@ -2110,6 +2131,8 @@ begin
     'typed UInt32 FetchOr must delegate to the UInt32 atomic root');
   CheckContains(LTypesUInt32FetchSection, 'atomic_fetch_xor(FValue, AMask, AOrder);',
     'typed UInt32 FetchXor must delegate to the UInt32 atomic root');
+  CheckContains(LTypesUInt32FetchSection, 'atomic_update_if_equal(FValue, AExpected, ADesired, AObserved, AOrder);',
+    'typed UInt32 UpdateIfEqual must delegate to the 32-bit update-if-equal helper');
   CheckNotContains(LTypesUInt32FetchSection, 'FetchMax',
     'typed UInt32 must not expose signed FetchMax until root unsigned max semantics land');
   CheckNotContains(LTypesUInt32FetchSection, 'FetchMin',
@@ -2146,6 +2169,8 @@ begin
     'typed Int64 FetchMin must delegate to the signed Int64 atomic root');
   CheckContains(LTypesInt64FetchSection, 'atomic_fetch_nand_64(FValue, AMask, AOrder);',
     'typed Int64 FetchNand must delegate to the signed Int64 atomic root');
+  CheckContains(LTypesInt64FetchSection, 'atomic_update_if_equal_64(FValue, AExpected, ADesired, AObserved, AOrder);',
+    'typed Int64 UpdateIfEqual must delegate to the 64-bit update-if-equal helper');
   CheckContains(LTypesUInt64FetchSection, 'atomic_fetch_add_64(FValue, ADelta, AOrder);',
     'typed UInt64 FetchAdd must delegate to the UInt64 atomic root');
   CheckContains(LTypesUInt64FetchSection, 'atomic_fetch_sub_64(FValue, ADelta, AOrder);',
@@ -2156,6 +2181,9 @@ begin
     'typed UInt64 FetchOr must delegate to the UInt64 atomic root');
   CheckContains(LTypesUInt64FetchSection, 'atomic_fetch_xor_64(FValue, AMask, AOrder);',
     'typed UInt64 FetchXor must delegate to the UInt64 atomic root');
+  CheckContains(LTypesUInt64UpdateIfEqualSection,
+    'atomic_update_if_equal_64(FValue, AExpected, ADesired, AObserved, AOrder);',
+    'typed UInt64 UpdateIfEqual must delegate to the 64-bit update-if-equal helper');
   CheckNotContains(LTypesUInt64FetchSection, 'FetchMax',
     'typed UInt64 must not expose signed FetchMax until root unsigned max semantics land');
   CheckNotContains(LTypesUInt64FetchSection, 'FetchMin',
@@ -2280,6 +2308,7 @@ begin
     '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}' + LineEnding +
     '  T.Run(''typed atomic int64/uint64 contract'', @TestAtomicInt64UInt64Contract);' + LineEnding +
     '  T.Run(''typed atomic int64/uint64 fetch contract'', @TestAtomicInt64UInt64FetchContract);' + LineEnding +
+    '  T.Run(''typed atomic update-if-equal contract'', @TestAtomicUpdateIfEqualContract);' + LineEnding +
     '  {$ENDIF}',
     'typed Int64/UInt64 runner registration must match the production 64-bit API gate');
   CheckContains(LTypesISizeLockFreeSection, 'atomic_is_lock_free_ptr',
@@ -2310,6 +2339,12 @@ begin
     'typed ISize FetchXor must keep the 32-bit pointer-width delegation path');
   CheckContains(LTypesISizeFetchSection, 'atomic_fetch_xor_64(PInt64(@FValue)^, Int64(AMask), AOrder));',
     'typed ISize FetchXor must keep the 64-bit pointer-width delegation path');
+  CheckContains(LTypesISizeFetchSection,
+    'atomic_update_if_equal(PInt32(@FValue)^, Int32(AExpected), Int32(ADesired), PInt32(@AObserved)^, AOrder);',
+    'typed ISize UpdateIfEqual must keep the 32-bit pointer-width delegation path');
+  CheckContains(LTypesISizeFetchSection,
+    'atomic_update_if_equal_64(PInt64(@FValue)^, Int64(AExpected), Int64(ADesired), PInt64(@AObserved)^, AOrder);',
+    'typed ISize UpdateIfEqual must keep the 64-bit pointer-width delegation path');
   CheckContains(LTypesUSizeFetchSection, 'atomic_fetch_add(PUInt32(@FValue)^, UInt32(ADelta), AOrder));',
     'typed USize FetchAdd must keep the 32-bit pointer-width delegation path');
   CheckContains(LTypesUSizeFetchSection, 'atomic_fetch_add_64(PUInt64(@FValue)^, UInt64(ADelta), AOrder));',
@@ -2330,6 +2365,12 @@ begin
     'typed USize FetchXor must keep the 32-bit pointer-width delegation path');
   CheckContains(LTypesUSizeFetchSection, 'atomic_fetch_xor_64(PUInt64(@FValue)^, UInt64(AMask), AOrder));',
     'typed USize FetchXor must keep the 64-bit pointer-width delegation path');
+  CheckContains(LTypesUSizeFetchSection,
+    'atomic_update_if_equal(PUInt32(@FValue)^, UInt32(AExpected), UInt32(ADesired), PUInt32(@AObserved)^, AOrder);',
+    'typed USize UpdateIfEqual must keep the 32-bit pointer-width delegation path');
+  CheckContains(LTypesUSizeFetchSection,
+    'atomic_update_if_equal_64(PUInt64(@FValue)^, UInt64(AExpected), UInt64(ADesired), PUInt64(@AObserved)^, AOrder);',
+    'typed USize UpdateIfEqual must keep the 64-bit pointer-width delegation path');
   CheckContains(LTypesRefCountLockFreeSection, 'atomic_is_lock_free_ptr',
     'typed refcount lock-free query must delegate to pointer-sized runtime truth');
   CheckNotContains(LTypesRefCountLockFreeSection, 'Result := True',
@@ -2569,6 +2610,15 @@ begin
     'atomic_notify_one must delegate to platform wake-one primitive');
   CheckContains(LAtomicNotifyAllSection, 'platform_wake_address_all',
     'atomic_notify_all must delegate to platform wake-all primitive');
+  CheckContains(LPlatformSyncSource,
+    'function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const ATimeoutNs: Int64): Int32;',
+    'platform.sync must declare the 64-bit wait-address primitive');
+  CheckContains(LPlatformSyncSource, 'function platform_posix_wait_address_fallback64(',
+    'platform.sync must keep the POSIX 64-bit wait-address fallback');
+  CheckContains(LPlatformWaitAddress64WindowsSection, 'WaitOnAddress(',
+    'Windows 64-bit wait-address path must use native WaitOnAddress');
+  CheckContains(LPlatformWaitAddress64WindowsSection, 'SizeOf(LExpected)',
+    'Windows 64-bit WaitOnAddress path must compare the full expected value size');
   CheckContains(LAtomicFlagTestAndSetSection, 'atomic_exchange(PInt32(@aFlag)^, 1, mo_seq_cst)',
     'atomic_flag_test_and_set must set and return the previous flag state');
   CheckContains(LAtomicFlagTestSection, 'atomic_load(PInt32(@aFlag)^, mo_seq_cst)',
@@ -3329,6 +3379,29 @@ begin
     'TAtomicUInt64.FetchXor should return the previous value');
   CheckEqual(Int64($0FF000F00FF000F0), Int64(LAtomicUInt64.Load(mo_acquire)),
     'TAtomicUInt64.FetchXor should publish the XOR result');
+end;
+{$ENDIF}
+
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+procedure TestAtomicUpdateIfEqualContract;
+var
+  LInt32: TAtomicInt32;
+  LInt64: TAtomicInt64;
+  LObs32: Int32;
+  LObs64: Int64;
+begin
+  LInt32 := TAtomicInt32.Create(10);
+  Check(LInt32.UpdateIfEqual(10, 20, LObs32), 'UpdateIfEqual(10->20) should succeed');
+  CheckEqual(Int64(10), Int64(LObs32), 'observed should be old value 10');
+  CheckEqual(Int64(20), Int64(LInt32.Load), 'value should be 20');
+  Check(not LInt32.UpdateIfEqual(10, 30, LObs32), 'UpdateIfEqual(10->30) should fail after value changed');
+  CheckEqual(Int64(20), Int64(LObs32), 'observed should be 20');
+  CheckEqual(Int64(20), Int64(LInt32.Load), 'value should still be 20');
+
+  LInt64 := TAtomicInt64.Create(100);
+  Check(LInt64.UpdateIfEqual(100, 200, LObs64), 'UpdateIfEqual(100->200) for int64 should succeed');
+  CheckEqual(Int64(100), LObs64);
+  CheckEqual(Int64(200), LInt64.Load);
 end;
 {$ENDIF}
 
@@ -6339,6 +6412,175 @@ begin
     'atomic_notify_one should succeed on supported platforms');
 end;
 
+function AtomicWaitInt64Until(var AValue: Int64; const ADesired: Int64;
+  const AWaitTimeoutNs: Int64; const AMaxWaits: Integer): Int32;
+var
+  LAttempt: Integer;
+  LObserved: Int64;
+  LRet: Int32;
+begin
+  Result := PLATFORM_ERR_TIMEOUT;
+  for LAttempt := 1 to AMaxWaits do
+  begin
+    LObserved := atomic_load_64(AValue, mo_seq_cst);
+    if LObserved = ADesired then
+      Exit(0);
+
+    LRet := atomic_wait(AValue, LObserved, AWaitTimeoutNs);
+    if (LRet <> 0) and (LRet <> PLATFORM_ERR_AGAIN) and
+      (LRet <> PLATFORM_ERR_TIMEOUT) then
+      Exit(LRet);
+  end;
+
+  if atomic_load_64(AValue, mo_seq_cst) = ADesired then
+    Result := 0;
+end;
+
+procedure TestAtomicWaitNotify64SurfaceAndBehavior;
+const
+  PingPongIterations = 1000;
+  PingPongWaitTimeoutNs = 1000000;
+  PingPongMaxWaits = 2000;
+var
+  LValue64: Int64;
+  LValueU64: UInt64;
+  LRet: Int32;
+  LExpected: Int64;
+  LExpectedU64: UInt64;
+  LTurn: Int64;
+  LStarted: Int32;
+  LWorkerRet: Int32;
+  LWorkerIteration: Int32;
+  LMainRet: Int32;
+  LThread: TThread;
+  LSpin: Integer;
+  LI: Integer;
+begin
+  LValue64 := 7;
+  LRet := atomic_wait(LValue64, 9, 1000000);
+  CheckEqual(Int64(PLATFORM_ERR_AGAIN), Int64(LRet),
+    'atomic_wait(int64) must return AGAIN on value mismatch');
+
+  LValue64 := 11;
+  LRet := atomic_wait(LValue64, 11, 0);
+  CheckEqual(Int64(PLATFORM_ERR_TIMEOUT), Int64(LRet),
+    'atomic_wait(int64) timeout=0 must report TIMEOUT when still equal');
+
+  LValue64 := 42;
+  LExpected := 99;
+  LRet := atomic_wait(LValue64, LExpected, 1000000);
+  CheckEqual(Int64(PLATFORM_ERR_AGAIN), Int64(LRet),
+    'atomic_wait(int64) must return AGAIN when value differs from expected');
+
+  LValueU64 := UInt64($800000000000002A);
+  LExpectedU64 := UInt64($8000000000000063);
+  LRet := atomic_wait(LValueU64, LExpectedU64, 1000000);
+  CheckEqual(Int64(PLATFORM_ERR_AGAIN), Int64(LRet),
+    'atomic_wait(uint64) must return AGAIN when value differs from expected');
+
+  LValue64 := 42;
+  LRet := atomic_notify_one(LValue64);
+  CheckEqual(Int64(0), Int64(LRet),
+    'atomic_notify_one(int64) should succeed on supported platforms');
+
+  LValue64 := 42;
+  LRet := atomic_notify_all(LValue64);
+  CheckEqual(Int64(0), Int64(LRet),
+    'atomic_notify_all(int64) should succeed on supported platforms');
+
+  LValueU64 := UInt64($800000000000002A);
+  LRet := atomic_notify_all(LValueU64);
+  CheckEqual(Int64(0), Int64(LRet),
+    'atomic_notify_all(uint64) should succeed on supported platforms');
+
+  LTurn := 0;
+  LStarted := 0;
+  LWorkerRet := 0;
+  LWorkerIteration := 0;
+  LMainRet := 0;
+
+  LThread := TThread.CreateAnonymousThread(procedure
+    var
+      LJ: Integer;
+      LLocalRet: Int32;
+    begin
+      atomic_store(LStarted, 1, mo_seq_cst);
+      for LJ := 1 to PingPongIterations do
+      begin
+        LLocalRet := AtomicWaitInt64Until(LTurn, Int64(LJ * 2 - 1),
+          PingPongWaitTimeoutNs, PingPongMaxWaits);
+        if LLocalRet <> 0 then
+        begin
+          atomic_store(LWorkerIteration, LJ, mo_seq_cst);
+          atomic_store(LWorkerRet, LLocalRet, mo_seq_cst);
+          atomic_notify_all(LTurn);
+          Exit;
+        end;
+
+        atomic_store_64(LTurn, Int64(LJ * 2), mo_seq_cst);
+        LLocalRet := atomic_notify_one(LTurn);
+        if LLocalRet <> 0 then
+        begin
+          atomic_store(LWorkerIteration, LJ, mo_seq_cst);
+          atomic_store(LWorkerRet, LLocalRet, mo_seq_cst);
+          atomic_notify_all(LTurn);
+          Exit;
+        end;
+      end;
+    end);
+  LThread.FreeOnTerminate := False;
+
+  try
+    LThread.Start;
+    for LSpin := 1 to 1000 do
+    begin
+      if atomic_load(LStarted, mo_seq_cst) = 1 then
+        Break;
+      Sleep(1);
+    end;
+
+    if atomic_load(LStarted, mo_seq_cst) <> 1 then
+      LMainRet := PLATFORM_ERR_TIMEOUT
+    else
+    begin
+      for LI := 1 to PingPongIterations do
+      begin
+        atomic_store_64(LTurn, Int64(LI * 2 - 1), mo_seq_cst);
+        LMainRet := atomic_notify_one(LTurn);
+        if LMainRet <> 0 then
+          Break;
+
+        LMainRet := AtomicWaitInt64Until(LTurn, Int64(LI * 2),
+          PingPongWaitTimeoutNs, PingPongMaxWaits);
+        if LMainRet <> 0 then
+          Break;
+
+        if atomic_load(LWorkerRet, mo_seq_cst) <> 0 then
+          Break;
+      end;
+    end;
+  finally
+    if LMainRet <> 0 then
+    begin
+      atomic_store_64(LTurn, -1, mo_seq_cst);
+      atomic_notify_all(LTurn);
+    end;
+    LThread.WaitFor;
+    LThread.Free;
+  end;
+
+  CheckEqual(Int64(1), Int64(atomic_load(LStarted, mo_seq_cst)),
+    '64-bit ping-pong worker must start');
+  CheckEqual(Int64(0), Int64(LMainRet),
+    '64-bit ping-pong main side must not lose wakes');
+  CheckEqual(Int64(0), Int64(atomic_load(LWorkerRet, mo_seq_cst)),
+    '64-bit ping-pong worker side must not lose wakes');
+  CheckEqual(Int64(0), Int64(atomic_load(LWorkerIteration, mo_seq_cst)),
+    '64-bit ping-pong worker must not stop mid-iteration');
+  CheckEqual(Int64(PingPongIterations * 2), atomic_load_64(LTurn, mo_seq_cst),
+    '64-bit ping-pong must complete all turns');
+end;
+
 procedure TestAtomicRefCountContract;
 var
   LRef: TAtomicRefCount;
@@ -6687,6 +6929,7 @@ begin
   {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
   T.Run('typed atomic int64/uint64 contract', @TestAtomicInt64UInt64Contract);
   T.Run('typed atomic int64/uint64 fetch contract', @TestAtomicInt64UInt64FetchContract);
+  T.Run('typed atomic update-if-equal contract', @TestAtomicUpdateIfEqualContract);
   {$ENDIF}
   T.Run('typed atomic unsigned wrap contract', @TestAtomicUnsignedWrapContract);
   T.Run('typed atomic signed wrap contract', @TestAtomicSignedWrapContract);
@@ -6709,6 +6952,7 @@ begin
   T.Run('tagged pointer update contracts', @TestAtomicTaggedPointerUpdateContracts);
   T.Run('tagged pointer rejects out-of-range x86_64 pointer', @TestAtomicTaggedPointerRejectsOutOfRangeX8664Pointer);
   T.Run('atomic wait/notify API', @TestAtomicWaitNotifySurfaceAndBehavior);
+  T.Run('atomic wait/notify 64-bit API', @TestAtomicWaitNotify64SurfaceAndBehavior);
   T.Run('atomic refcount contract', @TestAtomicRefCountContract);
   T.Run('atomic refcount concurrent borrow contract', @TestAtomicRefCountConcurrentBorrowContract);
   T.Run('atomic refcount terminal race contract', @TestAtomicRefCountTerminalRaceContract);

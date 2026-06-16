@@ -11,6 +11,8 @@ type
   TIntMpsc = specialize TMpscQueue<Integer>;
   TIntStack = specialize TLockFreeStack<Integer>;
   TIntDeque = specialize TWorkStealingDeque<Integer>;
+  TIntSegQueue = specialize TSegQueue<Integer>;
+  TIntSpmc = specialize TSpmcQueue<Integer>;
 
 var
   GSpsc: TIntSpsc;
@@ -18,6 +20,8 @@ var
   GMpsc: TIntMpsc;
   GStack: TIntStack;
   GDeque: TIntDeque;
+  GSegQueue: TIntSegQueue;
+  GSpmc: TIntSpmc;
   GValue: Integer;
   GInput: array[0..1] of Integer;
   GOutput: array[0..1] of Integer;
@@ -142,10 +146,51 @@ begin
   end;
 end;
 
+procedure TouchSegQueueFacade;
+begin
+  GSegQueue := TIntSegQueue.Create;
+  try
+    GSegQueue.Enqueue(1);
+    if GSegQueue.TryDequeue(GValue) then
+      GValue := GValue + 1;
+    GCount := GCount + GSegQueue.ApproxCount;
+    if GSegQueue.IsEmpty then
+      GValue := GValue + 1;
+  finally
+    GSegQueue.Free;
+  end;
+end;
+
+procedure TouchSpmcFacade;
+begin
+  GSpmc := TIntSpmc.Create(2);
+  try
+    if GSpmc.TryEnqueue(1) then
+      GValue := 1;
+    if GSpmc.TryDequeue(GValue) then
+      GValue := GValue + 1;
+    if GSpmc.EnqueueWait(2) then
+      GValue := GValue + 1;
+    if GSpmc.DequeueWait(GValue) then
+      GValue := GValue + 1;
+    if GSpmc.EnqueueTimeout(3, 0) then
+      GValue := GValue + 1;
+    if GSpmc.DequeueTimeout(GValue, 0) then
+      GValue := GValue + 1;
+    GCount := GCount + GSpmc.Capacity + GSpmc.ApproxCount;
+    if GSpmc.IsEmpty or GSpmc.IsFull then
+      GValue := GValue + 1;
+  finally
+    GSpmc.Free;
+  end;
+end;
+
 begin
   TouchSpscFacade;
   TouchMpmcFacade;
   TouchMpscFacade;
   TouchStackFacade;
   TouchDequeFacade;
+  TouchSegQueueFacade;
+  TouchSpmcFacade;
 end.

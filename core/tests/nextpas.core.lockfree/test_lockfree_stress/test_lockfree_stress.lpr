@@ -8,11 +8,13 @@ uses
   nextpas.core.testing,
   nextpas.core.errors,
   nextpas.core.atomic,
+  nextpas.core.lockfree,
   nextpas.core.lockfree.spsc,
   nextpas.core.lockfree.mpmc,
   nextpas.core.lockfree.stack,
   nextpas.core.lockfree.mpsc,
   nextpas.core.lockfree.deque,
+  nextpas.core.lockfree.spmc,
   nextpas.core.platform.thread;
 
 type
@@ -21,6 +23,8 @@ type
   TIntStack = specialize TLockFreeStack<Integer>;
   TIntMpsc = specialize TMpscQueue<Integer>;
   TIntDeque = specialize TWorkStealingDeque<Integer>;
+  TIntSegQueue = specialize TSegQueue<Integer>;
+  TIntSpmc = specialize TSpmcQueue<Integer>;
 
 var
   T: TTestRunner;
@@ -1434,6 +1438,178 @@ begin
 end;
 
 { ============================================================ }
+{ TEST 8: SegQueue MPMC Stress                                 }
+{ 4P + 4C, 80K messages, exactly-once verification             }
+{ ============================================================ }
+
+const
+  SEGQUEUE_STRESS_PRODUCERS = 4;
+  SEGQUEUE_STRESS_CONSUMERS = 4;
+  SEGQUEUE_STRESS_PER_PRODUCER = 20000;
+  SEGQUEUE_STRESS_TOTAL = SEGQUEUE_STRESS_PRODUCERS * SEGQUEUE_STRESS_PER_PRODUCER;
+
+var
+  GSegQueueStressQ: TIntSegQueue;
+  GSegQueueStressConsumed: array[0..SEGQUEUE_STRESS_TOTAL - 1] of Int32;
+  GSegQueueStressConsumeCount: Int64;
+  GSegQueueStressOutOfRangeCount: Int64;
+
+function SegQueueStressProducer(AArg: Pointer): Pointer; cdecl;
+var
+  LBase: Integer;
+  LI: Integer;
+begin
+  Result := nil;
+  LBase := Integer(PtrUInt(AArg)) * SEGQUEUE_STRESS_PER_PRODUCER;
+  for LI := 0 to SEGQUEUE_STRESS_PER_PRODUCER - 1 do
+    GSegQueueStressQ.Enqueue(LBase + LI);
+end;
+
+function SegQueueStressConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+begin
+  Result := nil;
+  while AtomicLoad64(GSegQueueStressConsumeCount, moAcquire) < SEGQUEUE_STRESS_TOTAL do
+  begin
+    if GSegQueueStressQ.TryDequeue(LV) then
+    begin
+      if (LV >= 0) and (LV < SEGQUEUE_STRESS_TOTAL) then
+        AtomicFetchAdd32(GSegQueueStressConsumed[LV], 1, moRelaxed)
+      else
+        AtomicFetchAdd64(GSegQueueStressOutOfRangeCount, 1, moRelaxed);
+      AtomicFetchAdd64(GSegQueueStressConsumeCount, 1, moRelaxed);
+    end
+    else
+      CpuPause;
+  end;
+end;
+
+procedure TestSegQueueMultiThread;
+var
+  LProducers: array[0..SEGQUEUE_STRESS_PRODUCERS - 1] of TPlatformThreadHandle;
+  LConsumers: array[0..SEGQUEUE_STRESS_CONSUMERS - 1] of TPlatformThreadHandle;
+  LI: Integer;
+  LDups: Integer;
+  LMissing: Integer;
+  LProducerCount: Integer;
+  LConsumerCount: Integer;
+begin
+  GSegQueueStressQ := TIntSegQueue.Create;
+  GSegQueueStressConsumeCount := 0;
+  GSegQueueStressOutOfRangeCount := 0;
+  LProducerCount := 0;
+  LConsumerCount := 0;
+  for LI := 0 to SEGQUEUE_STRESS_TOTAL - 1 do
+    GSegQueueStressConsumed[LI] := 0;
+  try
+    for LI := 0 to SEGQUEUE_STRESS_CONSUMERS - 1 do
+    begin
+      StartThread(LConsumers[LI], @SegQueueStressConsumer, nil, 'SegQueue stress consumer thread');
+      Inc(LConsumerCount);
+    end;
+    for LI := 0 to SEGQUEUE_STRESS_PRODUCERS - 1 do
+    begin
+      StartThread(LProducers[LI], @SegQueueStressProducer, Pointer(PtrInt(LI)), 'SegQueue stress producer thread');
+      Inc(LProducerCount);
+    end;
+
+    JoinStartedThreads(LProducers, LProducerCount, 'producer thread');
+    JoinStartedThreads(LConsumers, LConsumerCount, 'consumer thread');
+
+    CheckEqual(Int64(SEGQUEUE_STRESS_TOTAL), GSegQueueStressConsumeCount, 'total consumed = 80000');
+    CheckEqual(Int64(0), GSegQueueStressOutOfRangeCount, 'no out-of-range messages');
+    LDups := 0;
+    LMissing := 0;
+    for LI := 0 to SEGQUEUE_STRESS_TOTAL - 1 do
+    begin
+      if AtomicLoad32(GSegQueueStressConsumed[LI], moRelaxed) = 0 then
+        Inc(LMissing)
+      else if AtomicLoad32(GSegQueueStressConsumed[LI], moRelaxed) > 1 then
+        Inc(LDups);
+    end;
+    CheckEqual(Int64(0), Int64(LMissing), 'no missing messages');
+    CheckEqual(Int64(0), Int64(LDups), 'no duplicate messages');
+  finally
+    JoinStartedThreads(LProducers, LProducerCount, 'producer thread');
+    JoinStartedThreads(LConsumers, LConsumerCount, 'consumer thread');
+    GSegQueueStressQ.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 9: SPMC 1P+4C Contention                                 }
+{ 1 producer enqueues 1000 items, 4 consumers dequeue          }
+{ Verify: exactly-once delivery, correct sum                   }
+{ ============================================================ }
+
+var
+  GSpmcQ: TIntSpmc;
+  GSpmcSum: Int64;
+  GSpmcConsumeCount: Int64;
+
+function SpmcProducer(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+begin
+  Result := nil;
+  for LI := 1 to 1000 do
+    GSpmcQ.EnqueueWait(LI);
+end;
+
+function SpmcConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+begin
+  Result := nil;
+  while AtomicLoad64(GSpmcConsumeCount, moAcquire) < 1000 do
+  begin
+    if GSpmcQ.TryDequeue(LV) then
+    begin
+      InterlockedExchangeAdd64(GSpmcSum, Int64(LV));
+      AtomicFetchAdd64(GSpmcConsumeCount, 1, moRelaxed);
+    end
+    else
+      CpuPause;
+  end;
+end;
+
+procedure TestSpmcContention;
+var
+  LProducers: array[0..0] of TPlatformThreadHandle;
+  LConsumers: array[0..3] of TPlatformThreadHandle;
+  LI: Integer;
+  LExpected: Int64;
+  LProducerCount: Integer;
+  LConsumerCount: Integer;
+begin
+  GSpmcQ := TIntSpmc.Create(64);
+  GSpmcSum := 0;
+  GSpmcConsumeCount := 0;
+  LProducerCount := 0;
+  LConsumerCount := 0;
+  try
+    for LI := 0 to 3 do
+    begin
+      StartThread(LConsumers[LI], @SpmcConsumer, nil, 'SPMC consumer thread');
+      Inc(LConsumerCount);
+    end;
+    StartThread(LProducers[0], @SpmcProducer, nil, 'SPMC producer thread');
+    Inc(LProducerCount);
+    JoinStartedThreads(LProducers, LProducerCount, 'producer thread');
+    while AtomicLoad64(GSpmcConsumeCount, moAcquire) < 1000 do
+      platform_thread_sleep_ns(1000000);
+    LExpected := Int64(1000) * 1001 div 2;
+    CheckEqual(Int64(1000), AtomicLoad64(GSpmcConsumeCount, moAcquire), 'SPMC 1P+4C consume count');
+    CheckEqual(LExpected, GSpmcSum, 'SPMC 1P+4C sum');
+  finally
+    JoinStartedThreads(LConsumers, LConsumerCount, 'consumer thread');
+    GSpmcQ.Free;
+  end;
+end;
+
+
+{ ============================================================ }
 { Main                                                         }
 { ============================================================ }
 
@@ -1450,5 +1626,8 @@ begin
   T.Run('MPMC close races active producers', @TestMpmcCloseRacesActiveProducers);
   T.Run('MPMC close races active producers timeout', @TestMpmcCloseRacesActiveProducersTimeout);
   T.Run('Stack exhaustion + recovery (4T, cap=8)', @TestStackExhaustion);
+  T.Run('SPMC 1P+4C contention', @TestSpmcContention);
+
+  T.Run('SegQueue 4P+4C exactly-once (80K)', @TestSegQueueMultiThread);
   T.Summary;
 end.

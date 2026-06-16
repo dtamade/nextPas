@@ -10,6 +10,7 @@ uses
   nextpas.core.atomic,
   nextpas.core.lockfree,
   nextpas.core.lockfree.wait,
+  nextpas.core.lockfree.ebr,
   nextpas.core.platform.thread;
 
 type
@@ -18,6 +19,8 @@ type
   TIntStack = specialize TLockFreeStack<Integer>;
   TIntMpsc = specialize TMpscQueue<Integer>;
   TIntDeque = specialize TWorkStealingDeque<Integer>;
+  TIntSegQueue = specialize TSegQueue<Integer>;
+  TIntSpmc = specialize TSpmcQueue<Integer>;
 
 const
   CloseWakePendingProbeNs = 50000000;
@@ -2012,6 +2015,73 @@ begin
   LD.Free;
 end;
 
+{ EBR reclamation tests }
+
+var
+  GEbrReclaimCount: Int32;
+
+procedure EbrTestReclaimProc(AData: Pointer; AUserData: Pointer);
+begin
+  AtomicFetchAdd32(GEbrReclaimCount, 1, moSeqCst);
+end;
+
+procedure TestEbrRetireAndCollect;
+var
+  LDomain: TEbrDomain;
+begin
+  LDomain := TEbrDomain.Create;
+  try
+    GEbrReclaimCount := 0;
+    LDomain.Retire(Pointer(1), @EbrTestReclaimProc);
+    LDomain.Retire(Pointer(2), @EbrTestReclaimProc);
+    CheckEqual(Int64(2), Int64(LDomain.RetiredCount), 'retired count should be 2');
+    LDomain.Collect;
+    CheckEqual(Int64(2), Int64(GEbrReclaimCount), 'both retirements should be reclaimed');
+    CheckEqual(Int64(0), Int64(LDomain.RetiredCount), 'retired count should be 0 after collect');
+  finally
+    LDomain.Free;
+  end;
+end;
+
+procedure TestEbrDefersWhileGuardActive;
+var
+  LDomain: TEbrDomain;
+  LGuard: TEbrGuard;
+begin
+  LDomain := TEbrDomain.Create;
+  try
+    GEbrReclaimCount := 0;
+    LGuard := TEbrGuard.Acquire(LDomain);
+    LDomain.Retire(Pointer(1), @EbrTestReclaimProc);
+    LDomain.Collect;
+    CheckEqual(Int64(0), Int64(GEbrReclaimCount), 'should NOT reclaim while guard active');
+    CheckEqual(Int64(1), Int64(LDomain.RetiredCount), 'retired count stays 1');
+    LGuard.Release;
+    LDomain.Collect;
+    CheckEqual(Int64(1), Int64(GEbrReclaimCount), 'should reclaim after guard released');
+  finally
+    LDomain.Free;
+  end;
+end;
+
+procedure TestEbrGuardLeaveIdempotent;
+var
+  LDomain: TEbrDomain;
+  LGuard: TEbrGuard;
+begin
+  LDomain := TEbrDomain.Create;
+  try
+    LGuard := TEbrGuard.Acquire(LDomain);
+    CheckEqual(Int64(1), Int64(LDomain.ActiveCount), 'should be active after acquire');
+    LGuard.Release;
+    CheckEqual(Int64(0), Int64(LDomain.ActiveCount), 'should be inactive after release');
+    LGuard.Release;
+    CheckEqual(Int64(0), Int64(LDomain.ActiveCount), 'double release should be idempotent');
+  finally
+    LDomain.Free;
+  end;
+end;
+
 { Multi-thread stress tests }
 
 const
@@ -2170,6 +2240,7 @@ type
   TStrMpsc = specialize TMpscQueue<AnsiString>;
   TStrStack = specialize TLockFreeStack<AnsiString>;
   TStrDeque = specialize TWorkStealingDeque<AnsiString>;
+  TStrSegQueue = specialize TSegQueue<AnsiString>;
 var
   LGot: Boolean;
 begin
@@ -2217,6 +2288,191 @@ begin
       LGot := True;
   end;
   Check(LGot, 'deque managed type rejected');
+
+  LGot := False;
+  try
+    TStrSegQueue.Create;
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'SegQueue managed type rejected');
+end;
+
+procedure TestSegQueueBasic;
+var
+  LQ: TIntSegQueue;
+  LI: Integer;
+  LV: Integer;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    Check(LQ.IsEmpty, 'empty initially');
+    CheckEqual(Int64(0), Int64(LQ.ApproxCount), 'count 0 initially');
+    Check(not LQ.TryDequeue(LV), 'empty TryDequeue returns false');
+
+    for LI := 1 to 100 do
+      LQ.Enqueue(LI);
+
+    Check(not LQ.IsEmpty, 'not empty after enqueue');
+    CheckEqual(Int64(100), Int64(LQ.ApproxCount), 'count 100');
+
+    for LI := 1 to 100 do
+    begin
+      Check(LQ.TryDequeue(LV), 'dequeue ' + IntToStr(LI));
+      CheckEqual(Int64(LI), Int64(LV), 'FIFO order at ' + IntToStr(LI));
+    end;
+
+    Check(LQ.IsEmpty, 'empty after drain');
+    Check(not LQ.TryDequeue(LV), 'empty after drain TryDequeue');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestSegQueueSegmentRollover;
+var
+  LQ: TIntSegQueue;
+  LI: Integer;
+  LV: Integer;
+  LCount: Integer;
+begin
+  LCount := SEGQUEUE_SEGMENT_CAPACITY * 4 + 3;
+  LQ := TIntSegQueue.Create;
+  try
+    for LI := 1 to LCount do
+      LQ.Enqueue(LI);
+
+    CheckEqual(Int64(LCount), Int64(LQ.ApproxCount), 'count after multi-segment enqueue');
+
+    for LI := 1 to LCount do
+    begin
+      Check(LQ.TryDequeue(LV), 'dequeue ' + IntToStr(LI) + ' of ' + IntToStr(LCount));
+      CheckEqual(Int64(LI), Int64(LV), 'FIFO across segments at ' + IntToStr(LI));
+    end;
+
+    Check(LQ.IsEmpty, 'empty after multi-segment drain');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestSegQueueEmpty;
+var
+  LQ: TIntSegQueue;
+  LV: Integer;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    Check(not LQ.TryDequeue(LV), 'empty TryDequeue returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestSegQueueApproxCount;
+var
+  LQ: TIntSegQueue;
+  LI: Integer;
+  LV: Integer;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    for LI := 1 to 50 do
+      LQ.Enqueue(LI);
+    CheckEqual(Int64(50), Int64(LQ.ApproxCount), 'count 50');
+
+    for LI := 1 to 25 do
+      LQ.TryDequeue(LV);
+    CheckEqual(Int64(25), Int64(LQ.ApproxCount), 'count 25 after dequeue');
+
+    while LQ.TryDequeue(LV) do ;
+    CheckEqual(Int64(0), Int64(LQ.ApproxCount), 'count 0 after drain');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestSpmcBasic;
+var
+  LQ: TIntSpmc;
+  LV: Integer;
+begin
+  LQ := TIntSpmc.Create(4);
+  Check(LQ.TryEnqueue(10), 'enq 1');
+  Check(LQ.TryEnqueue(20), 'enq 2');
+  Check(LQ.TryEnqueue(30), 'enq 3');
+  Check(LQ.TryDequeue(LV), 'deq 1');
+  CheckEqual(Int64(10), Int64(LV));
+  Check(LQ.TryDequeue(LV), 'deq 2');
+  CheckEqual(Int64(20), Int64(LV));
+  Check(LQ.TryDequeue(LV), 'deq 3');
+  CheckEqual(Int64(30), Int64(LV));
+  Check(not LQ.TryDequeue(LV), 'empty');
+  LQ.Free;
+end;
+
+procedure TestSpmcCapacity;
+var
+  LQ: TIntSpmc;
+begin
+  LQ := TIntSpmc.Create(5);
+  CheckEqual(Int64(8), Int64(LQ.Capacity), 'capacity rounds to pow2');
+  LQ.Free;
+end;
+
+procedure TestSpmcFullEmpty;
+var
+  LQ: TIntSpmc;
+  LV: Integer;
+begin
+  LQ := TIntSpmc.Create(2);
+  Check(LQ.IsEmpty, 'initially empty');
+  Check(not LQ.IsFull, 'initially not full');
+  Check(LQ.TryEnqueue(1), 'enq 1');
+  Check(LQ.TryEnqueue(2), 'enq 2');
+  Check(LQ.TryDequeue(LV), 'deq 1');
+  CheckEqual(Int64(1), Int64(LV));
+  Check(LQ.TryDequeue(LV), 'deq 2');
+  CheckEqual(Int64(2), Int64(LV));
+  Check(LQ.IsEmpty, 'empty after drain');
+  LQ.Free;
+end;
+
+procedure TestSpmcWrapAround;
+var
+  LQ: TIntSpmc;
+  LI: Integer;
+  LV: Integer;
+begin
+  LQ := TIntSpmc.Create(2);
+  try
+    for LI := 1 to 16 do
+    begin
+      Check(LQ.TryEnqueue(LI), 'SPMC wrap enqueue ' + IntToStr(LI));
+      Check(LQ.TryDequeue(LV), 'SPMC wrap dequeue ' + IntToStr(LI));
+      CheckEqual(Int64(LI), Int64(LV), 'SPMC wrap order ' + IntToStr(LI));
+    end;
+    Check(LQ.IsEmpty, 'SPMC wrap leaves queue empty');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestSegQueueManagedReject;
+var
+  LStrQ: specialize TSegQueue<AnsiString>;
+  LGot: Boolean;
+begin
+  LGot := False;
+  try
+    LStrQ := specialize TSegQueue<AnsiString>.Create;
+    LStrQ.Free;
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'SegQueue managed type rejected');
 end;
 
 procedure TestLockFreeSourceContracts;
@@ -2524,6 +2780,10 @@ begin
     'lockfree facade forced compile fixture must touch stack/deque push signatures');
   CheckContains(LFacadeForcedCompileSource, 'TrySteal(',
     'lockfree facade forced compile fixture must touch deque steal signatures');
+  CheckContains(LFacadeForcedCompileSource, 'specialize TSegQueue<Integer>',
+    'lockfree facade forced compile fixture must touch the SegQueue public wrapper');
+  CheckContains(LFacadeForcedCompileSource, 'specialize TSpmcQueue<Integer>',
+    'lockfree facade forced compile fixture must touch the SPMC public wrapper');
   CheckNotContains(LFacadeForcedCompileSource, 'TSpscQueueImpl',
     'lockfree facade forced compile fixture must not rely on the SPSC implementation type');
   CheckNotContains(LFacadeForcedCompileSource, 'TMpmcQueueImpl',
@@ -2534,6 +2794,10 @@ begin
     'lockfree facade forced compile fixture must not rely on the stack implementation type');
   CheckNotContains(LFacadeForcedCompileSource, 'TWorkStealingDequeImpl',
     'lockfree facade forced compile fixture must not rely on the deque implementation type');
+  CheckNotContains(LFacadeForcedCompileSource, 'TSegQueueImpl',
+    'lockfree facade forced compile fixture must not rely on the SegQueue implementation type');
+  CheckNotContains(LFacadeForcedCompileSource, 'TSpmcQueueImpl',
+    'lockfree facade forced compile fixture must not rely on the SPMC implementation type');
   CheckNotContains(LFacadeForcedCompileSource, 'nextpas.core.lockfree.base',
     'lockfree facade forced compile fixture must not import lockfree base helpers directly');
   CheckNotContains(LFacadeForcedCompileSource, 'nextpas.core.lockfree.wait',
@@ -2548,9 +2812,19 @@ begin
     'lockfree facade forced compile fixture must not import the stack implementation unit');
   CheckNotContains(LFacadeForcedCompileSource, 'nextpas.core.lockfree.deque',
     'lockfree facade forced compile fixture must not import the deque implementation unit');
+  CheckNotContains(LFacadeForcedCompileSource, 'nextpas.core.lockfree.ebr',
+    'lockfree facade forced compile fixture must not import the EBR implementation unit');
+  CheckNotContains(LFacadeForcedCompileSource, 'nextpas.core.lockfree.segqueue',
+    'lockfree facade forced compile fixture must not import the SegQueue implementation unit');
+  CheckNotContains(LFacadeForcedCompileSource, 'nextpas.core.lockfree.spmc',
+    'lockfree facade forced compile fixture must not import the SPMC implementation unit');
   CheckContains(LDocsReadme,
-    '`nextpas.core.lockfree` facade exposes `TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`',
-    'lockfree README must document the facade re-export surface');
+    '`nextpas.core.lockfree` facade exposes `TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`,',
+    'lockfree README must document the facade re-export surface including SegQueue and SPMC');
+  CheckContains(LDocsReadme, 'TSegQueue<T>',
+    'lockfree README must document SegQueue in the facade re-export surface');
+  CheckContains(LDocsReadme, 'TSpmcQueue<T>',
+    'lockfree README must document SPMC queue in the facade re-export surface');
   CheckContains(LDocsReadme,
     '`TLockFreeStack<T>`, and `TWorkStealingDeque<T>`',
     'lockfree README must document the facade stack/deque surface');
@@ -2605,12 +2879,22 @@ begin
   CheckContains(LLockFreeSource,
     'generic TWorkStealingDeque<T> = class(specialize TWorkStealingDequeImpl<T>)',
     'lockfree facade must explicitly expose the work-stealing deque type');
+  CheckContains(LLockFreeSource,
+    'generic TSegQueue<T> = class(specialize TSegQueueImpl<T>)',
+    'lockfree facade must explicitly expose the SegQueue type');
+  CheckContains(LLockFreeSource,
+    'generic TSpmcQueue<T> = class(specialize TSpmcQueueImpl<T>)',
+    'lockfree facade must explicitly expose the SPMC queue type');
   CheckContains(LDocsReadme, '`TSpscQueue<T>`',
     'lockfree README must document SPSC queue ownership');
   CheckContains(LDocsReadme, '`TMpmcQueue<T>`',
     'lockfree README must document MPMC queue ownership');
   CheckContains(LDocsReadme, '`TMpscQueue<T>`',
     'lockfree README must document MPSC queue ownership');
+  CheckContains(LDocsReadme, '`TSegQueue<T>`',
+    'lockfree README must document SegQueue ownership');
+  CheckContains(LDocsReadme, '`TSpmcQueue<T>`',
+    'lockfree README must document SPMC queue ownership');
   CheckContains(LDocsReadme, '`TLockFreeStack<T>`',
     'lockfree README must document stack ownership');
   CheckContains(LDocsReadme, '`TWorkStealingDeque<T>`',
@@ -2623,6 +2907,9 @@ begin
   CheckContains(LDocsReadme,
     '`TMpmcQueue<T>` permits multiple concurrent producers and consumers; `Close` may race with producers. Enqueue calls admitted before observing the closed flag may still publish at their normal per-item linearization point; calls that observe `Close` fail, and consumers only treat closed-empty as terminal after no admitted producer can still publish.',
     'lockfree README must document the MPMC caller-role and active-producer close contract');
+  CheckContains(LDocsReadme,
+    '`TSpmcQueue<T>` permits exactly one producer and multiple concurrent consumers',
+    'lockfree README must document the SPMC caller-role contract');
   CheckContains(LDocsReadme,
     '`TSpscQueue<T>.EnqueueBatch` returns 0 after `Close` and must not publish new items.',
     'lockfree README must document SPSC batch close semantics');
@@ -2676,6 +2963,12 @@ begin
     'lockfree README must document the deque caller-role contract');
   CheckContains(LDocsReadme, 'Linearization points',
     'lockfree README must name linearization points');
+  CheckContains(LDocsReadme,
+    '`TSpmcQueue<T>.TryEnqueue`',
+    'lockfree README must document SPMC linearization points');
+  CheckContains(LDocsReadme,
+    '`TSpmcQueue<T>.TryDequeue`',
+    'lockfree README must document SPMC dequeue linearization point');
   CheckContains(LDocsReadme, 'ABA',
     'lockfree README must document ABA boundaries');
   CheckContains(LDocsReadme, 'Memory reclamation',
@@ -3160,9 +3453,9 @@ begin
   CheckContains(LCoreGoalTree,
     '| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | source-contract / focused runtime / stress:',
     'goal tree must report lockfree by evidence level instead of broad completion wording');
-  CheckContains(LCoreGoalTree, 'lockfree stress 10/10',
+  CheckContains(LCoreGoalTree, 'lockfree stress 12/12',
     'goal tree evidence header must report the current lockfree stress count');
-  CheckNotContains(LCoreGoalTree, 'lockfree stress 9/9',
+  CheckNotContains(LCoreGoalTree, 'lockfree stress 11/11',
     'goal tree evidence header must not keep stale lockfree stress count');
   CheckNotContains(LCoreGoalTree,
     '| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | ✅ 完成/强化中',
@@ -3547,8 +3840,22 @@ begin
   T.Run('MPSC timeout wakes on publish', @TestMpscDequeueTimeoutWakesOnPublish);
   T.Run('MPSC dequeue timeout', @TestMpscDequeueTimeout);
   T.Run('Deque capacity', @TestDequeCapacity);
+  T.Run('EBR retire and collect', @TestEbrRetireAndCollect);
+  T.Run('EBR defers while guard active', @TestEbrDefersWhileGuardActive);
+  T.Run('EBR guard leave idempotent', @TestEbrGuardLeaveIdempotent);
   T.Run('Stack 4P+4C stress', @TestStackStress);
   T.Run('Deque owner+thief stress', @TestDequeOwnerThief);
+  T.Run('SegQueue basic', @TestSegQueueBasic);
+  T.Run('SegQueue segment rollover', @TestSegQueueSegmentRollover);
+  T.Run('SegQueue empty', @TestSegQueueEmpty);
+  T.Run('SegQueue approx count', @TestSegQueueApproxCount);
+  T.Run('SPMC basic', @TestSpmcBasic);
+  T.Run('SPMC capacity', @TestSpmcCapacity);
+  T.Run('SPMC full/empty', @TestSpmcFullEmpty);
+  T.Run('SPMC wrap-around', @TestSpmcWrapAround);
+
+
+  T.Run('SegQueue managed reject', @TestSegQueueManagedReject);
   T.Run('Managed type reject', @TestManagedTypeReject);
   T.Run('Source contracts', @TestLockFreeSourceContracts);
 

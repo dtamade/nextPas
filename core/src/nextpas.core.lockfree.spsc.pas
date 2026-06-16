@@ -18,13 +18,13 @@ type
     FTailCache: Int64;
     FSpaceEpoch: Int32;
     FSpaceWaiters: Int32;
-    FPadProducer: array[0..3] of Int64;
+    FPadProducer: TCacheLinePad;
     // Consumer-owned fields (cache line 2)
     FHead: Int64;
     FHeadCache: Int64;
     FDataEpoch: Int32;
     FDataWaiters: Int32;
-    FPadConsumer: array[0..3] of Int64;
+    FPadConsumer: TCacheLinePad;
     // Shared (published) fields (cache line 3)
     FTailPublished: Int64;
     FHeadPublished: Int64;

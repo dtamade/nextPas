@@ -1,0 +1,253 @@
+# nextpas.core.lockfree
+
+`nextpas.core.lockfree` 提供 nextpas.core 内部可复用的 lock-free-oriented / non-blocking fast-path
+数据结构。当前模块优先服务 runtime/framework 内部热路径，而不是公开宣称完整替代 Rust std、
+Go std 或 C++ std 的并发容器；lock-free progress claim 只适用于目标平台底层 atomic 操作本身
+也是 lock-free 的路径。
+所有结构只接受 unmanaged element type；`string`、interface、dynamic array 等 managed 类型会被拒绝。
+`TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`, `TLockFreeStack<T>`, and `TWorkStealingDeque<T>` reject managed element types at construction time with `EArgumentError`.
+
+## 模块分层
+
+当前 live source set 由这些单元组成：
+
+| 单元                             | 职责                                                                                               |
+| -------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `nextpas.core.lockfree.base`     | 公共容量 helper 与自旋参数。                                                                       |
+| `nextpas.core.lockfree.wait`     | 数据/空间等待 helper，复用 atomic wait-address 平台 seam。                                         |
+| `nextpas.core.lockfree.spsc`     | `TSpscQueue<T>`，有界 single-producer/single-consumer ring queue。                                 |
+| `nextpas.core.lockfree.mpmc`     | `TMpmcQueue<T>`，有界 multi-producer/multi-consumer ring queue。                                   |
+| `nextpas.core.lockfree.mpsc`     | `TMpscQueue<T>`，无界 multi-producer/single-consumer linked queue。                                |
+| `nextpas.core.lockfree.stack`    | `TLockFreeStack<T>`，有界 stack，内部使用 tagged index 约束 ABA-sensitive top/free-list 复用风险。 |
+| `nextpas.core.lockfree.deque`    | `TWorkStealingDeque<T>`，有界 single-owner push/pop + multi-thief steal deque。                    |
+| `nextpas.core.lockfree.ebr`      | `TEbrDomain` + `TEbrGuard`，保守 epoch-based reclamation 域。                                      |
+| `nextpas.core.lockfree.segqueue` | `TSegQueue<T>`，无界 multi-producer/multi-consumer segment queue，基于 EBR 回收旧 segment。        |
+| `nextpas.core.lockfree.spmc`     | `TSpmcQueue<T>`，有界 single-producer/multi-consumer ring queue。                                  |
+| `nextpas.core.lockfree`          | 聚合 facade。                                                                                      |
+
+`nextpas.core.lockfree` facade exposes `TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`,
+`TLockFreeStack<T>`, `TWorkStealingDeque<T>`, `TSegQueue<T>`, and `TSpmcQueue<T>` so consumers
+can use the public lockfree surface without importing implementation submodules directly.
+
+The facade and submodule public names are wrapper classes over shared `*Impl<T>` implementation
+bases. Keep variables and parameters on one public boundary; the wrappers are source-compatible
+constructors, not Pascal type aliases.
+
+## API 边界
+
+`TSpscQueue<T>` 只有一个 producer 和一个 consumer 可以并发使用。`TryEnqueue` / `TryDequeue`
+是非阻塞操作；`EnqueueWait` / `DequeueWait` 通过 wait-address seam 阻塞；timeout 版本使用纳秒超时。
+batch API 是连续单元素操作的批量便利方法，不表示整个 batch 具有一个共同线性化点。
+`TSpscQueue<T>.EnqueueBatch` / `DequeueBatch` publish or consume only the prefix that currently fits or is available, capped by the caller-provided array/count, and return that partial count instead of waiting for the remainder.
+`TSpscQueue<T>.EnqueueBatch` returns 0 after `Close` and must not publish new items.
+
+`TMpmcQueue<T>` 支持多个 producer 和多个 consumer。队列是固定容量 ring，构造时把容量提升到
+power-of-two。`Close` 会阻止观察到 closed flag 的 `TryEnqueue` 成功并唤醒等待者；已经进入
+admitted enqueue 区间的 producer 仍可在自己的 per-item linearization point 发布元素，consumer 会等到
+closed、当前为空且没有 admitted producer 仍可能发布时才把 closed-empty 视为终止状态。
+`TMpmcQueue<T>.EnqueueBatch` / `DequeueBatch` are convenience loops over consecutive `TryEnqueue` / `TryDequeue` calls: they return the successful prefix so far when the next single-item operation would fail, instead of waiting for the remainder or promising a shared batch linearization point.
+`TMpmcQueue<T>.EnqueueBatch` returns 0 when it observes `Close` before publishing any item; under concurrent `Close`, it returns the prefix already published by its underlying `TryEnqueue` calls.
+`TMpmcQueue<T>` accepts requested capacity 1; its per-slot sequence token uses separate empty/full states so a single-slot queue still distinguishes full from empty.
+
+`TMpscQueue<T>` 是多 producer、单 consumer 队列。`Enqueue` 是过程，不返回 close 结果；`Close`
+只作为 consumer 等待唤醒和终止信号。调用方必须让 producer 协作停止、join producer，并 drain
+队列后再销毁对象。
+
+`TSegQueue<T>` 是基于 segmented linked ring 的无界 MPMC queue。`Enqueue` 在当前 tail segment
+没有后继时按 segment 粒度扩展存储；`TryDequeue` 只在对应 slot 的 sequence 已发布时返回成功。
+`ApproxCount` / `IsEmpty` 是当前 enqueue/dequeue position 的 snapshot helper，不承诺在竞争下提供
+共同线性化视图。
+
+`TLockFreeStack<T>` 是固定容量 stack。push/pop 会先从内部 free-list 取得或归还 slot，因此不是
+无界栈，也不动态分配节点。
+`TLockFreeStack<T>` capacity is limited to `High(Int32)` because tagged heads pack a 32-bit slot index
+with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
+`TLockFreeStack<T>` is a fixed-capacity stack: `TryPush` returns `False` when no free slot remains, and `IsEmpty` / `ApproxCount` are snapshot helpers over the current top-linked list rather than linearization guarantees under contention.
+
+`TWorkStealingDeque<T>` 是 work-stealing deque：owner 线程执行 `TryPush` / `TryPop`，thief
+线程只执行 `TrySteal`。当前实现没有 close/wait surface。
+`TWorkStealingDeque<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound, `TryPush` returns `False` when the deque is full, and `ApproxCount` / `IsEmpty` are snapshot helpers over current top/bottom counters rather than multi-thread linearization guarantees.
+`TSpmcQueue<T>` 是单 producer、多 consumer 有界队列。`TryEnqueue` 是非阻塞操作；`TryDequeue` 多消费者间
+竞争 CAS；`EnqueueWait` / `DequeueWait` 通过 wait-address seam 阻塞；timeout 版本使用纳秒超时。
+`TSpmcQueue<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound.
+
+固定容量结构会拒绝 0 容量。`TSpscQueue<T>`、`TMpmcQueue<T>`、`TSpmcQueue<T>` 和
+`TWorkStealingDeque<T>` 会把容量提升到 power-of-two；超过最大可表示 power-of-two 的容量会被拒绝，
+而不是溢出后继续构造。
+
+## Thread safety contract
+
+`TSpscQueue<T>` permits exactly one producer-side caller and exactly one consumer-side caller; multiple producers or multiple consumers on the same queue are outside the contract.
+`TMpmcQueue<T>` permits multiple concurrent producers and consumers; `Close` may race with producers. Enqueue calls admitted before observing the closed flag may still publish at their normal per-item linearization point; calls that observe `Close` fail, and consumers only treat closed-empty as terminal after no admitted producer can still publish.
+`TMpscQueue<T>` permits multiple producers and exactly one consumer; `Enqueue` does not observe `Close`, so callers must stop and join producers before destroy.
+`TSegQueue<T>` permits multiple concurrent producers and consumers; segment retirement is internal and readers observe only FIFO dequeue success/failure.
+`TLockFreeStack<T>` permits multiple concurrent `TryPush` / `TryPop` callers over its fixed slot pool; capacity bounds and unmanaged element restrictions still apply.
+`TWorkStealingDeque<T>` permits exactly one owner thread for `TryPush` / `TryPop` and multiple thief threads for `TrySteal`; owner methods are not multi-owner safe.
+`TSpmcQueue<T>` permits exactly one producer and multiple concurrent consumers; CAS-protected dequeue positions ensure exactly-once delivery under contention.
+
+## Linearization points
+
+- `TSpscQueue<T>.TryEnqueue`：写入 slot 后，对 `FTailPublished` 的 release store 发布元素。
+- `TSpscQueue<T>.TryDequeue`：读取 slot 后，对 `FHeadPublished` 的 release store 发布空间。
+- `TMpmcQueue<T>.TryEnqueue`：成功 CAS `FEnqueuePos` 后取得 slot，随后对 slot `Sequence` 的
+  release store 发布元素。
+- `TMpmcQueue<T>.TryDequeue`：成功 CAS `FDequeuePos` 后取得 slot，随后对 slot `Sequence` 的
+  release store 回收空间。
+- `TMpscQueue<T>.Enqueue`：对 `FHead` 的 exchange 取得前驱节点，随后 release store 到前驱
+  `Next` 发布节点。
+- `TMpscQueue<T>.TryDequeue`：单 consumer 推进 `FTail` 并取得节点值；当队列处于 stub 修复路径时，
+  当前实现依赖 producer 已通过 `Next` 发布节点。
+- `TSegQueue<T>.Enqueue`：递增 `FEnqueuePos` 取得逻辑位置后，写入 slot 并通过该 slot `Sequence`
+  的 release store 发布元素。
+- `TSegQueue<T>.TryDequeue`：成功推进 `FDequeuePos` 后取得当前 slot 值；head segment 前移后通过 EBR
+  retire 回收旧 segment。
+- `TLockFreeStack<T>.TryPush`：free-list CAS 取得 slot，top CAS 发布该 slot。
+- `TLockFreeStack<T>.TryPop`：top CAS 取得 slot，读取并清空 value 后，free-list CAS 归还 slot。
+- `TWorkStealingDeque<T>.TryPush`：owner 写入 buffer 后，对 `FBottom` 的 release store 发布元素。
+- `TWorkStealingDeque<T>.TryPop`：owner 递减 `FBottom`；最后一个元素需要 top CAS 与 thief 仲裁。
+- `TWorkStealingDeque<T>.TrySteal`：成功 CAS `FTop` 取得元素。
+- `TSpmcQueue<T>.TryEnqueue`：成功 CAS `FEnqueuePos` 后取得 slot，随后对 slot `Sequence` 的 release
+  store 发布元素。
+- `TSpmcQueue<T>.TryDequeue`：成功 CAS `FDequeuePos` 后取得 slot，随后对 slot `Sequence` 的 release
+  store 回收空间。
+
+`TWorkStealingDeque<T>` last-item owner/thief arbitration uses `seq_cst` ordering on `FTop` / `FBottom` loads, bottom store, and top CAS so the single remaining item is won exactly once.
+
+这些点是 source-contract 和当前实现说明，不是跨平台 runtime proof。
+
+## ABA
+
+`TLockFreeStack<T>` 把 32-bit index 和 32-bit tag 打包到 64-bit head 中。`FTop` 和 `FFreeHead`
+都使用 tagged index，降低固定 slot 被快速 pop/push 后复用导致的 ABA 风险。
+
+`TMpmcQueue<T>` 使用 per-slot sequence token 区分 ring slot 的生命周期；token 同时编码 position
+和 empty/full state，是 ring queue 的发布/回收 token。
+
+`TWorkStealingDeque<T>` 使用 monotonic `FTop` / `FBottom` counter 和最后元素 CAS 仲裁。当前没有
+hazard pointer 或 epoch reclamation，因为 deque 存储是固定数组。
+
+## Memory reclamation
+
+`TSpscQueue<T>`、`TMpmcQueue<T>`、`TSpmcQueue<T>`、`TLockFreeStack<T>` 和
+`TWorkStealingDeque<T>` 都使用固定数组或固定 slot。它们不在 hot path 动态分配节点，并要求 `T`
+为 unmanaged type。
+
+`TMpscQueue<T>` 使用 `New` / `Dispose` 管理链表节点。该结构只有一个 consumer，因此 consumer 可以在
+成功 dequeue 后释放旧 tail 节点。模块当前没有 hazard pointer、epoch reclamation 或 reference
+count reclamation；安全边界依赖 single-consumer contract，以及销毁前 producer 已停止。
+
+`TSegQueue<T>` 使用 EBR 保护 segment 链表。head segment 前移后，旧 segment 通过 `TEbrDomain.Retire`
+延迟回收，因此 callers 只应通过 public queue surface 访问节点，不得缓存内部 segment 指针。
+
+## Close/Destroy discipline
+
+`TSpscQueue<T>` 和 `TMpmcQueue<T>` 的 `Close` 会设置 closed flag 并唤醒 data/space waiters。close 后
+producer 侧等待操作应返回失败，consumer 侧可继续 drain 已发布元素。
+`Close` is not a lifetime barrier: callers must keep the queue object alive until all producer and consumer calls have returned, then join/quiesce those threads before `Free`.
+`TSpscQueue<T>.Close` wakes already-blocked `EnqueueWait` / `DequeueWait` calls so a closed queue stops waiting even without a timeout.
+`TSpscQueue<T>.Close` wakes already-blocked `EnqueueTimeout` / `DequeueTimeout` calls so a closed queue stops waiting promptly instead of sleeping until the full timeout.
+`TMpmcQueue<T>.Close` wakes already-blocked `EnqueueWait` / `DequeueWait` calls so blocked producers and consumers stop waiting even without a timeout.
+`TMpmcQueue<T>.Close` wakes already-blocked `EnqueueTimeout` / `DequeueTimeout` calls so blocked producers and consumers stop waiting promptly instead of sleeping until the full timeout.
+
+`TMpscQueue<T>` 的 `Close` 不会让 `Enqueue` 自动失败。它只唤醒等待中的 consumer，并让
+`DequeueWait` / `DequeueTimeout` 在当前无元素时返回失败。销毁前必须满足：
+`TMpscQueue<T>.Close` wakes already-blocked `DequeueWait` consumers so a closed-empty queue stops waiting even without a timeout.
+`TMpscQueue<T>.Close` wakes already-blocked `DequeueTimeout` consumers so a closed-empty queue stops waiting promptly.
+
+1. 已调用 `Close`。
+2. producer 已停止并 join。
+3. consumer 已 drain 队列。
+
+debug build 中 `TMpscQueue.Destroy` 保留 close-before-destroy 和 drained-before-destroy assert，用来冻结这条纪律。
+
+## Atomic dependency
+
+lockfree 模块依赖 `nextpas.core.atomic` 的以下契约：
+
+- `AtomicLoad32/64`、`AtomicStore32/64`、`AtomicCompareExchange64` 和 `AtomicExchange64` 的
+  acquire/release/acq_rel/seq_cst 语义。
+- Pointer-sized `atomic_load` / `atomic_store` / `atomic_exchange` for `TMpscQueue<T>` node links;
+  node pointers must not be widened through legacy `AtomicLoad64` / `AtomicStore64` / `AtomicExchange64` casts.
+- `CpuPause` 作为自旋提示。
+- `atomic_wait` / `atomic_notify_*` 背后的 `platform_wait_address32`、
+  `platform_wake_address_one` 和 `platform_wake_address_all` seam。
+- EBR guard/retire path used by `TSegQueue<T>` for segment lifetime and deferred reclamation.
+
+`nextpas.core.lockfree.wait` 只等待 32-bit epoch 地址。不要在 lockfree 层自行扩展 64-bit 或 pointer
+wait；如果要扩展，先设计 atomic/platform wait-address contract，再补 consumer gate。
+Wait helpers receive the caller-observed epoch and only block while the epoch is unchanged. This closes the
+notify-between-retry-and-wait window: if a producer or consumer advances the epoch before the platform wait,
+the helper returns instead of sleeping on the new epoch.
+
+## 验证
+
+普通 lockfree 切片至少运行：
+
+```bash
+make hygiene
+make -C core/tests/nextpas.core.lockfree/test_lockfree clean test-forced-compile
+make -C core/tests/nextpas.core.lockfree/test_lockfree clean test
+make -C core/tests/nextpas.core.lockfree/test_lockfree clean test-debug
+make -C core/tests/nextpas.core.lockfree/test_lockfree_stress clean test
+git diff --check
+git status --short --branch
+```
+
+`test_lockfree` 包含 API 行为、close/timeout、managed type guard 和 source-contract 覆盖。
+`test-forced-compile` 是 public facade-only host compile gate，不是 runtime 或 stress 证明。
+`test_lockfree` also covers local Linux x86_64 timeout runtime checks for
+SPSC producer-published data (`DequeueTimeout`), SPSC consumer-released space (`EnqueueTimeout`),
+MPMC producer-published data (`DequeueTimeout`), MPMC consumer-released space (`EnqueueTimeout`),
+and MPSC producer-published data (`DequeueTimeout`).
+`test-debug` 用 `-dDEBUG` 编译 focused gate，用来执行 `TMpscQueue<T>.Destroy` 的
+close-before-destroy assert，防止测试代码绕过 MPSC producer-stop / drain 纪律。
+`test_lockfree_stress` 覆盖本地 Linux x86_64 上的多线程压力场景。没有目标机 runtime gate 时，只能声称
+source-contract 或本机 Linux x86_64 runtime 证据，不能宣称其他平台已实机验证。
+这些 stress 输出是 focused evidence，不是 production soak、fairness 或跨平台 runtime proof。
+
+## Benchmark
+
+当前 benchmark 入口是：
+
+```bash
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree clean run
+```
+
+Pascal benchmark 源码位于
+`core/benchmarks/nextpas.core.lockfree/bench_lockfree/bench_lockfree.lpr`。它覆盖：
+
+- `TSpscQueue<T>` 的 1 producer + 1 consumer blocking wait 路径。
+- `TMpmcQueue<T>` 的 2 producer + 2 consumer blocking wait 路径。
+- `nextpas.core.thread.channel` mutex channel 的 1 producer + 1 consumer 对照基线。
+- `TSpscQueue<T>` 和 `TMpmcQueue<T>` 的 single-thread `Try*` hot path。
+
+benchmark 使用 `OPS=1000000`、容量 `1024`，Makefile 默认编译参数是 `-MObjFPC -Sh -O2`。
+运行输出会先打印 `platform/compiler flags/input size/baseline` envelope，再打印各场景的
+ms、M ops/sec 和 ns/op。
+Pascal benchmark keeps consumed values in a printed sink to reduce optimizer-elision risk.
+Pascal benchmark hot paths should not add extra per-item progress atomics that Rust/Go/C++ comparison sources do not pay; keep only scenario-result sink accumulation and synchronization required by the queue contract itself.
+External Rust/Go/C++ comparison sources should follow the same consumed-value sink discipline.
+External Rust/Go/C++ comparison sources should follow the same logical input ranges as the Pascal benchmark: SPSC/mutex/1T use 1..OPS, and bounded MPMC uses two producers each sending 1..OPS div 2.
+
+`compare_rust/main.rs` 是外部 Rust comparison source，用于后续手动对照。Rust std nearest equivalents: `std::sync::mpsc` for 1P+1C, `Mutex + Condvar + VecDeque` for bounded 2P+2C approximation, and `Mutex<VecDeque>` for the 1T baseline.
+`compare_go/main.go` 是外部 Go comparison source。Go std nearest equivalents: buffered `chan uint64` for 1P+1C and 2P+2C, and same-goroutine buffered channel send/receive for the 1T baseline.
+`compare_cpp/main.cpp` 是外部 C++ comparison source。C++ std nearest equivalents: `std::queue<uint64_t>` guarded by `std::mutex` and `std::condition_variable` for bounded 1P+1C and 2P+2C, and the same guarded queue for the 1T baseline.
+当前 Pascal benchmark 不会自动编译或运行 Rust、Go 或 C++ 程序；除非同一机器、同一轮次实际运行并记录外部输出，否则不能把它当作 Rust、Go 或 C++ runtime baseline 证据。
+
+当前推荐的对照入口是 `bench_lockfree` Makefile：
+
+```bash
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-rust-compare
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-go-compare
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-cpp-compare
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare
+```
+
+这些 target 最终会在 `core/build/projects/nextpas.core.lockfree/bench_lockfree/...` 下产出并运行：
+
+- Rust：`rustc -C opt-level=3 compare_rust/main.rs -o $(RUST_COMPARE_BIN)`
+- Go：`go build -o $(GO_COMPARE_BIN) compare_go/main.go`
+- C++：`g++ -std=c++17 -O2 -pthread compare_cpp/main.cpp -o $(CPP_COMPARE_BIN)`
+
+性能结论必须带上平台、编译参数、输入规模、benchmark 输出和 baseline 说明。没有这些证据时，不应写入
+性能胜过 Rust/Go/C++ 标准库的结论。

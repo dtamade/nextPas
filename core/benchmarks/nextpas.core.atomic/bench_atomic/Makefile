@@ -3,15 +3,15 @@ RUSTC ?= rustc
 GO ?= go
 CXX ?= g++
 CORE_ROOT := ../../..
-BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.lockfree/bench_lockfree
-PROGRAM := bench_lockfree
+BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.atomic/bench_atomic
+PROGRAM := bench_atomic
 SOURCE := $(PROGRAM).lpr
 RUST_COMPARE_DIR := $(BUILD_DIR)/compare_rust
-RUST_COMPARE_BIN := $(RUST_COMPARE_DIR)/bench_lockfree_rust
+RUST_COMPARE_BIN := $(RUST_COMPARE_DIR)/bench_atomic_rust
 GO_COMPARE_DIR := $(BUILD_DIR)/compare_go
-GO_COMPARE_BIN := $(GO_COMPARE_DIR)/bench_lockfree_go
+GO_COMPARE_BIN := $(GO_COMPARE_DIR)/bench_atomic_go
 CPP_COMPARE_DIR := $(BUILD_DIR)/compare_cpp
-CPP_COMPARE_BIN := $(CPP_COMPARE_DIR)/bench_lockfree_cpp
+CPP_COMPARE_BIN := $(CPP_COMPARE_DIR)/bench_atomic_cpp
 FPC_FLAGS ?= -MObjFPC -Sh -O2
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
@@ -40,7 +40,7 @@ run-go-compare: build-go-compare
 
 build-cpp-compare:
 	@mkdir -p $(CPP_COMPARE_DIR)
-	$(CXX) -std=c++17 -O2 -pthread compare_cpp/main.cpp -o $(CPP_COMPARE_BIN)
+	$(CXX) -std=c++17 -O2 compare_cpp/main.cpp -o $(CPP_COMPARE_BIN)
 
 run-cpp-compare: build-cpp-compare
 	$(CPP_COMPARE_BIN)
