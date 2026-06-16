@@ -471,23 +471,38 @@ begin
 end;
 
 function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult): Int32;
-var LExitCode: DWORD;
+var
+  LExitCode: DWORD;
 begin
   FillChar(AResult, SizeOf(AResult), 0);
-  if WaitForSingleObject(HANDLE(AProc.ProcessHandle), $FFFFFFFF) <> 0 then Exit(Int32(GetLastError));
-  LExitCode := 0; if not GetExitCodeProcess(HANDLE(AProc.ProcessHandle), @LExitCode) then Exit(Int32(GetLastError));
-  AResult.Status := psExited; AResult.ExitCode := Int32(LExitCode); CloseHandle(HANDLE(AProc.ProcessHandle)); Result := 0;
+  if WaitForSingleObject(HANDLE(AProc.ProcessHandle), $FFFFFFFF) <> 0 then
+    Exit(Int32(GetLastError));
+  LExitCode := 0;
+  if not GetExitCodeProcess(HANDLE(AProc.ProcessHandle), @LExitCode) then
+    Exit(Int32(GetLastError));
+  AResult.Status := psExited;
+  AResult.ExitCode := Int32(LExitCode);
+  Result := 0;
 end;
 
 function platform_process_try_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult): Int32;
-var LExitCode, LWait: DWORD;
+var
+  LExitCode, LWait: DWORD;
 begin
   FillChar(AResult, SizeOf(AResult), 0);
   LWait := WaitForSingleObject(HANDLE(AProc.ProcessHandle), 0);
-  if LWait = $00000102 then begin AResult.Status := psRunning; Exit(0); end;
-  if LWait <> 0 then Exit(Int32(GetLastError));
-  LExitCode := 0; GetExitCodeProcess(HANDLE(AProc.ProcessHandle), @LExitCode);
-  AResult.Status := psExited; AResult.ExitCode := Int32(LExitCode); CloseHandle(HANDLE(AProc.ProcessHandle)); Result := 0;
+  if LWait = $00000102 then
+  begin
+    AResult.Status := psRunning;
+    Exit(0);
+  end;
+  if LWait <> 0 then
+    Exit(Int32(GetLastError));
+  LExitCode := 0;
+  GetExitCodeProcess(HANDLE(AProc.ProcessHandle), @LExitCode);
+  AResult.Status := psExited;
+  AResult.ExitCode := Int32(LExitCode);
+  Result := 0;
 end;
 
 procedure platform_process_detach(var AProc: TPlatformProcess);

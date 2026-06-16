@@ -148,6 +148,8 @@ begin
           platform_process_try_wait(FProc, LResult);
       end;
   end;
+  if not FDetached then
+    platform_process_detach(FProc);
   try
     CloseWriterBestEffort(FStdinWriter);
   except
