@@ -5,10 +5,14 @@ program test_fs_glob;
 uses
   SysUtils,
   nextpas.core.testing,
+  nextpas.core.fs.dir,
+  nextpas.core.fs.path,
+  nextpas.core.fs.util,
   nextpas.core.fs.glob;
 
 var
   T: TTestRunner;
+  GTmpDir: string;
 
 { T1: * matches anything — *.pas matches test.pas }
 
@@ -267,59 +271,189 @@ begin
     '** should match a/b/c');
 end;
 
+{ === FsGlob file system tests === }
+
+procedure SetupTmpDir;
 begin
-  T := TTestRunner.Create('nextpas.core.fs.glob');
+  GTmpDir := '/tmp/nextpas_fs_glob_test_' + IntToStr(GetProcessID);
+  FsMkdirAll(GTmpDir);
+end;
 
-  T.Run('StarBasic: *.pas matches test.pas',
-    @TestGlob_StarBasic);
-  T.Run('StarNoCrossSep: *.pas does not match dir/test.pas',
-    @TestGlob_StarNoCrossSep);
-  T.Run('QuestionSingle: ?.txt matches a.txt',
-    @TestGlob_QuestionSingle);
-  T.Run('QuestionNoEmpty: ?.txt does not match .txt',
-    @TestGlob_QuestionNoEmpty);
-  T.Run('CharClass: [abc].txt matches a/b/c, not d',
-    @TestGlob_CharClass);
-  T.Run('Range: [a-z].txt matches m.txt',
-    @TestGlob_Range);
-  T.Run('NegateCaret: [^abc].txt negation',
-    @TestGlob_NegateCaret);
-  T.Run('NegateBang: [!abc].txt negation',
-    @TestGlob_NegateBang);
-  T.Run('DoubleStarRecursive: **/test.pas matches deep paths',
-    @TestGlob_DoubleStarRecursive);
-  T.Run('DoubleStarMiddle: src/**/*.pas matches recursive .pas',
-    @TestGlob_DoubleStarMiddle);
-  T.Run('DoubleStarInMiddle: a/**/b.txt matches a/x/y/b.txt',
-    @TestGlob_DoubleStarInMiddle);
-  T.Run('EmptyPattern: empty only matches empty',
-    @TestGlob_EmptyPattern);
-  T.Run('ExactMatch: test.pas matches test.pas',
-    @TestGlob_ExactMatch);
-  T.Run('CaseSensitive: *.PAS does not match test.pas',
-    @TestGlob_CaseSensitive);
-  T.Run('MultipleStars: *.* matches test.pas',
-    @TestGlob_MultipleStars);
-  T.Run('DoubleStarVsSingle: ** crosses separators, * does not',
-    @TestGlob_DoubleStarVsSingle);
-  T.Run('LiteralBrackets: test[1].txt matches literal',
-    @TestGlob_LiteralBrackets);
-  T.Run('EmptyCharClass: [] matches nothing',
-    @TestGlob_EmptyCharClass);
-  T.Run('PathWildcard: src/*/test.pas path matching',
-    @TestGlob_PathWildcard);
-  T.Run('StarMatchesEmpty: * matches empty string',
-    @TestGlob_StarMatchesEmpty);
-  T.Run('QuestionNoCrossSep: ? does not match separator',
-    @TestGlob_QuestionNoCrossSep);
-  T.Run('MixedPattern: a?b*[0-9].txt compound pattern',
-    @TestGlob_MixedPattern);
-  T.Run('NegateRange: [^a-z] negation with range',
-    @TestGlob_NegateRange);
-  T.Run('DoubleStarTrailingSep: **/b.txt matching',
-    @TestGlob_DoubleStarTrailingSep);
-  T.Run('OnlyDoubleStar: ** matches everything',
-    @TestGlob_OnlyDoubleStar);
+procedure CleanupTmpDir;
+begin
+  FsRemoveAll(GTmpDir);
+end;
 
-  T.Summary;
+{ FG1: FsGlob matches all .txt files }
+
+procedure TestFsGlob_TxtFiles;
+var
+  LResults: TStringArray;
+begin
+  FsMkdir(GTmpDir + '/fg1');
+  FsWriteFile(GTmpDir + '/fg1/a.txt', TBytes.Create(1));
+  FsWriteFile(GTmpDir + '/fg1/b.txt', TBytes.Create(2));
+  FsWriteFile(GTmpDir + '/fg1/c.pas', TBytes.Create(3));
+
+  LResults := FsGlob(GTmpDir + '/fg1', '*.txt');
+  CheckEqual(Int64(2), Int64(Length(LResults)),
+    '*.txt should match 2 files');
+  Check(LResults[0] <> '', 'result[0] not empty');
+  Check(LResults[1] <> '', 'result[1] not empty');
+end;
+
+{ FG2: FsGlob recursive **/*.pas }
+
+procedure TestFsGlob_RecursivePas;
+var
+  LResults: TStringArray;
+begin
+  FsMkdirAll(GTmpDir + '/fg2/sub/deep');
+  FsWriteFile(GTmpDir + '/fg2/top.pas', TBytes.Create(1));
+  FsWriteFile(GTmpDir + '/fg2/sub/mid.pas', TBytes.Create(2));
+  FsWriteFile(GTmpDir + '/fg2/sub/deep/deep.pas', TBytes.Create(3));
+  FsWriteFile(GTmpDir + '/fg2/sub/deep/data.txt', TBytes.Create(4));
+
+  LResults := FsGlob(GTmpDir + '/fg2', '**/*.pas');
+  CheckEqual(Int64(3), Int64(Length(LResults)),
+    '**/*.pas should match 3 .pas files recursively');
+end;
+
+{ FG3: FsGlob wildcard in path middle }
+
+procedure TestFsGlob_PathMiddleWildcard;
+var
+  LResults: TStringArray;
+begin
+  FsMkdirAll(GTmpDir + '/fg3/a');
+  FsMkdirAll(GTmpDir + '/fg3/b');
+  FsWriteFile(GTmpDir + '/fg3/a/data.txt', TBytes.Create(1));
+  FsWriteFile(GTmpDir + '/fg3/b/data.txt', TBytes.Create(2));
+  FsWriteFile(GTmpDir + '/fg3/b/other.pas', TBytes.Create(3));
+
+  LResults := FsGlob(GTmpDir + '/fg3', '*/data.txt');
+  CheckEqual(Int64(2), Int64(Length(LResults)),
+    '*/data.txt should match data.txt in each subdir');
+end;
+
+{ FG4: FsGlob empty directory returns empty }
+
+procedure TestFsGlob_EmptyDir;
+var
+  LResults: TStringArray;
+begin
+  FsMkdir(GTmpDir + '/fg4');
+
+  LResults := FsGlob(GTmpDir + '/fg4', '*.txt');
+  CheckEqual(Int64(0), Int64(Length(LResults)),
+    'empty dir should return empty array');
+end;
+
+{ FG5: FsGlob no match returns empty }
+
+procedure TestFsGlob_NoMatch;
+var
+  LResults: TStringArray;
+begin
+  FsMkdir(GTmpDir + '/fg5');
+  FsWriteFile(GTmpDir + '/fg5/readme.md', TBytes.Create(1));
+
+  LResults := FsGlob(GTmpDir + '/fg5', '*.xyz');
+  CheckEqual(Int64(0), Int64(Length(LResults)),
+    'no match should return empty array');
+end;
+
+{ FG6: FsGlob results are sorted }
+
+procedure TestFsGlob_Sorted;
+var
+  LResults: TStringArray;
+  LI: Integer;
+begin
+  FsMkdir(GTmpDir + '/fg6');
+  FsWriteFile(GTmpDir + '/fg6/z.txt', TBytes.Create(1));
+  FsWriteFile(GTmpDir + '/fg6/a.txt', TBytes.Create(2));
+  FsWriteFile(GTmpDir + '/fg6/m.txt', TBytes.Create(3));
+
+  LResults := FsGlob(GTmpDir + '/fg6', '*.txt');
+  CheckEqual(Int64(3), Int64(Length(LResults)),
+    '*.txt should match 3 files');
+  for LI := 1 to High(LResults) do
+    Check(LResults[LI - 1] <= LResults[LI],
+      'results must be sorted: ' + LResults[LI-1] + ' <= ' + LResults[LI]);
+end;
+
+begin
+  SetupTmpDir;
+  try
+    T := TTestRunner.Create('nextpas.core.fs.glob');
+
+    T.Run('StarBasic: *.pas matches test.pas',
+      @TestGlob_StarBasic);
+    T.Run('StarNoCrossSep: *.pas does not match dir/test.pas',
+      @TestGlob_StarNoCrossSep);
+    T.Run('QuestionSingle: ?.txt matches a.txt',
+      @TestGlob_QuestionSingle);
+    T.Run('QuestionNoEmpty: ?.txt does not match .txt',
+      @TestGlob_QuestionNoEmpty);
+    T.Run('CharClass: [abc].txt matches a/b/c, not d',
+      @TestGlob_CharClass);
+    T.Run('Range: [a-z].txt matches m.txt',
+      @TestGlob_Range);
+    T.Run('NegateCaret: [^abc].txt negation',
+      @TestGlob_NegateCaret);
+    T.Run('NegateBang: [!abc].txt negation',
+      @TestGlob_NegateBang);
+    T.Run('DoubleStarRecursive: **/test.pas matches deep paths',
+      @TestGlob_DoubleStarRecursive);
+    T.Run('DoubleStarMiddle: src/**/*.pas matches recursive .pas',
+      @TestGlob_DoubleStarMiddle);
+    T.Run('DoubleStarInMiddle: a/**/b.txt matches a/x/y/b.txt',
+      @TestGlob_DoubleStarInMiddle);
+    T.Run('EmptyPattern: empty only matches empty',
+      @TestGlob_EmptyPattern);
+    T.Run('ExactMatch: test.pas matches test.pas',
+      @TestGlob_ExactMatch);
+    T.Run('CaseSensitive: *.PAS does not match test.pas',
+      @TestGlob_CaseSensitive);
+    T.Run('MultipleStars: *.* matches test.pas',
+      @TestGlob_MultipleStars);
+    T.Run('DoubleStarVsSingle: ** crosses separators, * does not',
+      @TestGlob_DoubleStarVsSingle);
+    T.Run('LiteralBrackets: test[1].txt matches literal',
+      @TestGlob_LiteralBrackets);
+    T.Run('EmptyCharClass: [] matches nothing',
+      @TestGlob_EmptyCharClass);
+    T.Run('PathWildcard: src/*/test.pas path matching',
+      @TestGlob_PathWildcard);
+    T.Run('StarMatchesEmpty: * matches empty string',
+      @TestGlob_StarMatchesEmpty);
+    T.Run('QuestionNoCrossSep: ? does not match separator',
+      @TestGlob_QuestionNoCrossSep);
+    T.Run('MixedPattern: a?b*[0-9].txt compound pattern',
+      @TestGlob_MixedPattern);
+    T.Run('NegateRange: [^a-z] negation with range',
+      @TestGlob_NegateRange);
+    T.Run('DoubleStarTrailingSep: **/b.txt matching',
+      @TestGlob_DoubleStarTrailingSep);
+    T.Run('OnlyDoubleStar: ** matches everything',
+      @TestGlob_OnlyDoubleStar);
+
+    T.Run('FsGlob_TxtFiles: *.txt matches all .txt files',
+      @TestFsGlob_TxtFiles);
+    T.Run('FsGlob_RecursivePas: **/*.pas recursive match',
+      @TestFsGlob_RecursivePas);
+    T.Run('FsGlob_PathMiddleWildcard: */data.txt path match',
+      @TestFsGlob_PathMiddleWildcard);
+    T.Run('FsGlob_EmptyDir: empty directory returns empty',
+      @TestFsGlob_EmptyDir);
+    T.Run('FsGlob_NoMatch: no match returns empty',
+      @TestFsGlob_NoMatch);
+    T.Run('FsGlob_Sorted: results are sorted',
+      @TestFsGlob_Sorted);
+
+    T.Summary;
+  finally
+    CleanupTmpDir;
+  end;
 end.
