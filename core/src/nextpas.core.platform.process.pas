@@ -22,6 +22,7 @@ function platform_process_wait(const AProc: TPlatformProcess;
 function platform_process_try_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult): Int32;
 procedure platform_process_detach(var AProc: TPlatformProcess);
+function platform_process_signal(const AProc: TPlatformProcess; ASignal: Int32): Int32;
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
 function platform_process_create_pipe(out AReadHandle, AWriteHandle: PtrInt): Int32;
@@ -320,12 +321,17 @@ begin
   FillChar(AProc, SizeOf(AProc), 0);
 end;
 
-function platform_process_kill(const AProc: TPlatformProcess): Int32;
+function platform_process_signal(const AProc: TPlatformProcess; ASignal: Int32): Int32;
 begin
-  if kill(AProc.Pid, 9) = 0 then
+  if kill(AProc.Pid, ASignal) = 0 then
     Result := 0
   else
     Result := platform_get_errno;
+end;
+
+function platform_process_kill(const AProc: TPlatformProcess): Int32;
+begin
+  Result := platform_process_signal(AProc, 9);
 end;
 
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
@@ -407,7 +413,8 @@ end;
 uses
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi,
-  nextpas.core.platform.windows.utf16;
+  nextpas.core.platform.windows.utf16,
+  nextpas.core.platform.error;
 
 function CreateWindowsProcess(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; const ACwd: PAnsiChar; AInheritHandles: Boolean;
@@ -513,8 +520,23 @@ begin
   AProc.ThreadHandle := 0;
 end;
 
+function platform_process_signal(const AProc: TPlatformProcess; ASignal: Int32): Int32;
+begin
+  if ASignal = 9 then
+  begin
+    if TerminateProcess(HANDLE(AProc.ProcessHandle), 1) then
+      Result := 0
+    else
+      Result := Int32(GetLastError);
+  end
+  else
+    Result := PLATFORM_ERR_UNSUPPORTED;
+end;
+
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
-begin if TerminateProcess(HANDLE(AProc.ProcessHandle), 1) then Result := 0 else Result := Int32(GetLastError); end;
+begin
+  Result := platform_process_signal(AProc, 9);
+end;
 
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
 begin Result := Int32(AProc.Pid); end;
@@ -708,6 +730,8 @@ function platform_process_try_wait(const AProc: TPlatformProcess; out AResult: T
 begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
 procedure platform_process_detach(var AProc: TPlatformProcess);
 begin FillChar(AProc, SizeOf(AProc), 0); end;
+function platform_process_signal(const AProc: TPlatformProcess; ASignal: Int32): Int32;
+begin Result := -1; end;
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
 begin Result := -1; end;
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
