@@ -64,70 +64,132 @@ const
   PermDirDefault = nextpas.core.fs.base.PermDirDefault;
 
 { File operations }
+{** @desc 以指定模式打开文件，返回 IFile 接口 *}
 function Open(const APath: string; const AMode: TFileMode): IFile; inline;
+{** @desc 创建新文件（已存在则截断），返回 IFile 接口 *}
 function Create(const APath: string;
   const APerm: TFilePermission = PermDefault): IFile; inline;
 
 { Convenience }
+{** @desc 读取文件全部内容为字节数组 *}
 function ReadFile(const APath: string): TBytes; inline;
+{** @desc 读取文件全部内容为 UTF-8 字符串 *}
 function ReadFileText(const APath: string): string; inline;
+{** @desc 读取文件按行分割为字符串数组 *}
 function ReadFileLines(const APath: string): TStringArray; inline;
+{** @desc 将字节数组写入文件 *}
 procedure WriteFile(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault); inline;
+{** @desc 将 UTF-8 字符串写入文件 *}
 procedure WriteFileText(const APath: string; const AText: string;
   const APerm: TFilePermission = PermDefault); inline;
+{** @desc 将字符串数组按行写入文件，自动追加换行符 *}
 procedure WriteFileLines(const APath: string; const ALines: TStringArray;
   const APerm: TFilePermission = PermDefault);
+{** @desc 追加字节数组到文件末尾 *}
 procedure AppendFile(const APath: string; const AData: TBytes); inline;
+{** @desc 追加 UTF-8 字符串到文件末尾 *}
 procedure AppendFileText(const APath: string; const AText: string);
+{** @desc 追加一行文本到文件末尾，自动追加换行符 *}
 procedure AppendFileLine(const APath: string; const ALine: string); inline;
+{** @desc 打开文件并返回按行扫描的 IScanner 接口 *}
 function ScanFileLines(const APath: string): IScanner;
+{** @desc 内存映射文件并返回按行迭代的 IMappedLines 接口 *}
 function MapFileLines(const APath: string): IMappedLines; inline;
+{**
+ * @desc 原子写入：先写临时文件再 rename，保证写入完整性
+ *
+ * @note 中途崩溃不会产生半写文件
+ *}
 procedure WriteAtomic(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault); inline;
+{** @desc 复制文件，返回写入的字节数 *}
 function CopyFile(const ASrc, ADst: string): Int64; inline;
+{**
+ * @desc 在指定目录创建临时文件，返回 IFile 接口
+ *
+ * @params
+ *   ADir      目标目录
+ *   APattern  文件名模式（包含 XXXXXX 将被随机字符替换）
+ *}
 function TempFile(const ADir, APattern: string): IFile; inline;
+{** @desc 获取文件状态信息（跟随符号链接） *}
 function Stat(const APath: string): TFileInfo; inline;
+{** @desc 获取文件状态信息（不跟随符号链接） *}
 function Lstat(const APath: string): TFileInfo; inline;
+{** @desc 检查路径是否存在 *}
 function Exists(const APath: string): Boolean; inline;
+{** @desc 检查路径是否为目录 *}
 function IsDir(const APath: string): Boolean; inline;
+{** @desc 检查路径是否为普通文件 *}
 function IsFile(const APath: string): Boolean; inline;
+{** @desc 返回文件大小（字节） *}
 function FileSize(const APath: string): Int64; inline;
+{** @desc 设置文件权限 *}
 procedure Chmod(const APath: string; const APerm: TFilePermission); inline;
+{** @desc 截断文件到指定大小 *}
 procedure Truncate(const APath: string; const ASize: Int64); inline;
+{** @desc 创建符号链接 *}
 procedure Symlink(const ATarget, ALinkPath: string); inline;
+{** @desc 读取符号链接的目标路径 *}
 function Readlink(const APath: string): string; inline;
 
 { Directory operations }
+{** @desc 创建单级目录 *}
 function Mkdir(const APath: string;
   const APerm: TFilePermission = PermDirDefault): Boolean; inline;
+{** @desc 递归创建目录（类似 mkdir -p） *}
 function MkdirAll(const APath: string;
   const APerm: TFilePermission = PermDirDefault): Boolean; inline;
+{** @desc 删除文件或空目录 *}
 function Remove(const APath: string): Boolean; inline;
+{** @desc 递归删除路径（类似 rm -rf） *}
 function RemoveAll(const APath: string): Boolean; inline;
+{** @desc 重命名/移动文件或目录 *}
 function Rename(const AOld, ANew: string): Boolean; inline;
+{** @desc 读取目录内容，返回 TDirEntryArray *}
 function ReadDir(const APath: string): TDirEntryArray; inline;
+{** @desc 打开目录，返回 IDirIterator 迭代器 *}
 function OpenDir(const APath: string): IDirIterator; inline;
+{** @desc 递归遍历目录树，对每个条目调用回调函数 *}
 procedure Walk(const ARoot: string; const AFunc: TWalkFunc); inline;
 
 { Path operations }
+{** @desc 连接多个路径片段 *}
 function PathJoin(const AParts: array of string): string; inline;
+{** @desc 返回路径的目录部分 *}
 function PathDir(const APath: string): string; inline;
+{** @desc 返回路径的文件名部分（含扩展名） *}
 function PathBase(const APath: string): string; inline;
+{** @desc 分离路径为目录和文件名两部分 *}
 procedure PathSplit(const APath: string; out ADir, ABase: string); inline;
+{** @desc 返回文件扩展名（含点号） *}
 function PathExt(const APath: string): string; inline;
+{** @desc 规范化路径（解析 . 和 ..，去除多余分隔符） *}
 function PathClean(const APath: string): string; inline;
+{** @desc 将相对路径转为绝对路径 *}
 function PathAbs(const APath: string): string; inline;
+{** @desc 判断路径是否为绝对路径 *}
 function PathIsAbs(const APath: string): Boolean; inline;
+{** @desc 计算从 ABase 到 ATarget 的相对路径 *}
 function PathRelative(const ABase, ATarget: string): string; inline;
+{** @desc 确保路径末尾有路径分隔符 *}
 function PathEnsureSep(const APath: string): string; inline;
+{** @desc 去除路径末尾的路径分隔符 *}
 function PathTrimSep(const APath: string): string; inline;
+{** @desc 替换文件扩展名 *}
 function PathChangeExt(const APath, ANewExt: string): string; inline;
+{** @desc 返回去除扩展名后的路径 *}
 function PathWithoutExt(const APath: string): string; inline;
+{** @desc 平台无关的文件名比较 *}
 function SameFileName(const A, B: string): Boolean; inline;
+{** @desc 获取当前工作目录 *}
 function GetCwd: string; inline;
+{** @desc 设置当前工作目录 *}
 procedure SetCwd(const APath: string); inline;
+{** @desc 获取环境变量，不存在返回空字符串 *}
 function GetEnv(const AName: string): string; inline;
+{** @desc 获取系统临时目录路径（末尾带分隔符） *}
 function GetTempDir: string;
 
 implementation

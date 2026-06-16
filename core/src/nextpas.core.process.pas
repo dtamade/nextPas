@@ -21,10 +21,32 @@ type
   IChild = nextpas.core.process.child.IChild;
   ICommand = nextpas.core.process.command.ICommand;
 
+{**
+ * @desc 创建命令构建器，通过链式调用配置子进程参数
+ *
+ * @params
+ *   APath  可执行文件路径
+ *}
 function Command(const APath: string): ICommand; inline;
+{**
+ * @desc 同步执行子进程并等待完成，返回输出
+ *
+ * @params
+ *   APath  可执行文件路径
+ *   AArgs  命令行参数
+ *}
 function Run(const APath: string; const AArgs: array of string): TProcessOutput;
+{**
+ * @desc 在指定工作目录中同步执行子进程
+ *
+ * @params
+ *   APath  可执行文件路径
+ *   AArgs  命令行参数
+ *   ADir   工作目录
+ *}
 function RunIn(const APath: string; const AArgs: array of string;
   const ADir: string): TProcessOutput;
+{** @desc 执行子进程并返回 stdout 文本 *}
 function Capture(const APath: string; const AArgs: array of string): string;
 
 implementation

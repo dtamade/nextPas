@@ -16,14 +16,39 @@ interface
 uses
   nextpas.core.text.base;
 
+{** @desc 返回所有环境变量，格式为 "NAME=VALUE" 字符串数组 *}
 function EnvironmentVariables: TStringArray;
+{** @desc 获取环境变量值，不存在返回空字符串 *}
 function GetEnvironmentVariable(const AName: string): string;
+{** @desc 获取环境变量值（GetEnvironmentVariable 的简写） *}
 function GetEnv(const AName: string): string; inline;
+{**
+ * @desc 尝试获取环境变量值
+ *
+ * @params
+ *   AName   环境变量名
+ *   AValue  输出值
+ *
+ * @return 存在返回 true，不存在返回 false
+ *}
 function TryGetEnv(const AName: string; out AValue: string): Boolean;
+{** @desc 检查环境变量是否存在 *}
 function HasEnv(const AName: string): Boolean;
+{** @desc 返回环境变量名是否区分大小写 *}
 function EnvironmentVariableNamesCaseSensitive: Boolean; inline;
+{** @desc 设置环境变量 *}
 procedure SetEnv(const AName, AValue: string);
+{** @desc 删除环境变量 *}
 procedure UnsetEnv(const AName: string);
+{**
+ * @desc 展开字符串中的环境变量引用
+ *
+ * @params
+ *   AValue  包含 $VAR 或 ${VAR} 引用的字符串
+ *
+ * @note 支持 $NAME 和 ${NAME} 两种语法
+ * @note 未定义的变量展开为空字符串
+ *}
 function ExpandEnv(const AValue: string): string;
 
 implementation
