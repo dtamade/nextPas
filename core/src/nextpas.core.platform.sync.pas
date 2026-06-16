@@ -1240,6 +1240,10 @@ end;
 
 { WaitOnAddress lazy-load support for Wine compatibility }
 
+const
+  KERNEL32_NAME: array[0..8] of WideChar = (
+    'k','e','r','n','e','l','3','2',#0);
+
 type
   TWaitOnAddressFunc = function(Address: Pointer; CompareAddress: Pointer;
     AddressSize: PtrUInt; dwMilliseconds: DWORD): BOOL; stdcall;
@@ -1258,7 +1262,7 @@ var
 begin
   if _WaitAddressResolved then
     Exit;
-  LLib := GetModuleHandleW('kernel32');
+  LLib := GetModuleHandleW(@KERNEL32_NAME);
   if LLib <> nil then
   begin
     _WaitOnAddress := TWaitOnAddressFunc(GetProcAddress(LLib, 'WaitOnAddress'));
@@ -1303,50 +1307,6 @@ begin
 end;
 
 function platform_sync_windows_wake_address_all(AAddr: PInt32): Int32; inline;
-begin
-  ResolveWaitAddress;
-  if _WakeByAddressAll = nil then
-    Exit(PLATFORM_ERR_UNSUPPORTED);
-
-  _WakeByAddressAll(AAddr);
-  Result := 0;
-end;
-
-function platform_sync_windows_wait_address_i64(
-  AAddr: PInt64;
-  const AExpected: Int64;
-  const ATimeoutNs: Int64): Int32; inline;
-var
-  LExpected: Int64;
-begin
-  ResolveWaitAddress;
-  if _WaitOnAddress = nil then
-    Exit(PLATFORM_ERR_UNSUPPORTED);
-
-  LExpected := AExpected;
-  if _WaitOnAddress(
-    AAddr,
-    @LExpected,
-    SizeOf(LExpected),
-    platform_sync_windows_timeout_ns_to_ms(ATimeoutNs)) then
-    Result := 0
-  else
-    Result := platform_sync_windows_timeout_result(
-      platform_sync_windows_last_error_i32,
-      PLATFORM_ERR_TIMEOUT);
-end;
-
-function platform_sync_windows_wake_address_one64(AAddr: PInt64): Int32; inline;
-begin
-  ResolveWaitAddress;
-  if _WakeByAddressSingle = nil then
-    Exit(PLATFORM_ERR_UNSUPPORTED);
-
-  _WakeByAddressSingle(AAddr);
-  Result := 0;
-end;
-
-function platform_sync_windows_wake_address_all64(AAddr: PInt64): Int32; inline;
 begin
   ResolveWaitAddress;
   if _WakeByAddressAll = nil then
@@ -1492,14 +1452,25 @@ begin
   Result := platform_sync_windows_wake_address_all(AAddr);
 end;
 
-{ 64-bit address-wait (Windows: lazy-loaded WaitOnAddress with 8-byte value) }
+{ 64-bit address-wait (Windows: native WaitOnAddress with 8-byte value) }
 function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const ATimeoutNs: Int64): Int32;
+var
+  LExpected: Int64;
 begin
   Result := platform_sync_validate_wait_address64(AAddr, AExpected);
   if Result <> 0 then
     Exit;
-
-  Result := platform_sync_windows_wait_address_i64(AAddr, AExpected, ATimeoutNs);
+  LExpected := AExpected;
+  if WaitOnAddress(
+    AAddr,
+    @LExpected,
+    SizeOf(LExpected),
+    platform_sync_windows_timeout_ns_to_ms(ATimeoutNs)) then
+    Result := 0
+  else
+    Result := platform_sync_windows_timeout_result(
+      platform_sync_windows_last_error_i32,
+      PLATFORM_ERR_TIMEOUT);
 end;
 
 function platform_wake_address_one64(AAddr: PInt64): Int32;
@@ -1507,8 +1478,8 @@ begin
   Result := platform_sync_validate_address64(AAddr);
   if Result <> 0 then
     Exit;
-
-  Result := platform_sync_windows_wake_address_one64(AAddr);
+  WakeByAddressSingle(AAddr);
+  Result := 0;
 end;
 
 function platform_wake_address_all64(AAddr: PInt64): Int32;
@@ -1516,8 +1487,8 @@ begin
   Result := platform_sync_validate_address64(AAddr);
   if Result <> 0 then
     Exit;
-
-  Result := platform_sync_windows_wake_address_all64(AAddr);
+  WakeByAddressAll(AAddr);
+  Result := 0;
 end;
 
 {$ENDIF}
