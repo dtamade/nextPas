@@ -5,10 +5,111 @@ program test_csv;
 uses
   nextpas.core.csv,
   nextpas.core.errors,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.testing;
 
 var
   T: TTestRunner;
+
+type
+  TFailingReallocateAllocator = class(TInterfacedObject, IAllocator)
+  private
+    FFailOnReallocateCall: SizeUInt;
+    FReallocateCalls: SizeUInt;
+  public
+    constructor Create(const AFailOnReallocateCall: SizeUInt);
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
+    function GetMem(aSize: SizeUInt): Pointer;
+    function AllocMem(aSize: SizeUInt): Pointer;
+    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+    procedure FreeMem(aDst: Pointer);
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(aPtr: Pointer);
+    function Traits: TAllocatorTraits;
+  end;
+
+constructor TFailingReallocateAllocator.Create(
+  const AFailOnReallocateCall: SizeUInt);
+begin
+  inherited Create;
+  FFailOnReallocateCall := AFailOnReallocateCall;
+  FReallocateCalls := 0;
+end;
+
+function TFailingReallocateAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TFailingReallocateAllocator.Reallocate(const APtr: Pointer;
+  const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TFailingReallocateAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
+end;
+
+function TFailingReallocateAllocator.GetMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Result := System.GetMem(aSize);
+end;
+
+function TFailingReallocateAllocator.AllocMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Result := System.AllocMem(aSize);
+end;
+
+function TFailingReallocateAllocator.ReallocMem(aDst: Pointer;
+  aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+  begin
+    FreeMem(aDst);
+    Exit(nil);
+  end;
+  if aDst = nil then
+    Exit(GetMem(aSize));
+  Inc(FReallocateCalls);
+  if (FFailOnReallocateCall > 0) and
+    (FReallocateCalls = FFailOnReallocateCall) then
+    Exit(nil);
+  Result := System.ReallocMem(aDst, aSize);
+end;
+
+procedure TFailingReallocateAllocator.FreeMem(aDst: Pointer);
+begin
+  if aDst <> nil then
+    System.FreeMem(aDst);
+end;
+
+function TFailingReallocateAllocator.AllocAligned(aSize,
+  aAlignment: SizeUInt): Pointer;
+begin
+  Result := GetMem(aSize);
+end;
+
+procedure TFailingReallocateAllocator.FreeAligned(aPtr: Pointer);
+begin
+  FreeMem(aPtr);
+end;
+
+function TFailingReallocateAllocator.Traits: TAllocatorTraits;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.HasMemSize := False;
+  Result.SupportsAligned := False;
+end;
 
 { === Reader Tests === }
 
@@ -989,6 +1090,34 @@ begin
   Check(LRaised, 'delimiter/comment collision fails before parsing');
 end;
 
+procedure TestCreateNilAllocatorUsesDefault;
+var
+  R: TCsvReader;
+  Fields: TStringArray;
+begin
+  R := TCsvReader.Create('x,y', ',', 0, False, #0, nil);
+  Check(R.Allocator <> nil, 'nil allocator falls back to default');
+  Check(R.ReadRow(Fields), 'row readable with default allocator');
+  CheckEqual('x', Fields[0], 'field 0');
+  CheckEqual('y', Fields[1], 'field 1');
+end;
+
+procedure TestReadRowReallocateFailureSetsError;
+var
+  R: TCsvReader;
+  Fields: TStringArray;
+  LAllocatorObj: TFailingReallocateAllocator;
+  LAllocator: IAllocator;
+begin
+  LAllocatorObj := TFailingReallocateAllocator.Create(1);
+  LAllocator := LAllocatorObj as IAllocator;
+  R := TCsvReader.Create('a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t',
+    ',', 0, False, #0, LAllocator);
+  Check(not R.ReadRow(Fields), 'oom row read fails');
+  Check(R.HasError, 'oom sets error');
+  CheckEqual('out of memory', R.GetError, 'oom error text');
+end;
+
 { === Main === }
 
 begin
@@ -1088,6 +1217,10 @@ begin
     @TestReaderCreateRejectsInvalidCommentMarker);
   T.Run('Comment.DelimiterCollision',
     @TestReaderCommentCollisionIsRejectedBeforeParsing);
+  T.Run('Allocator.NilFallsBackToDefault',
+    @TestCreateNilAllocatorUsesDefault);
+  T.Run('Allocator.ReadRowReallocateFailureSetsError',
+    @TestReadRowReallocateFailureSetsError);
 
   { Combined tests }
   T.Run('Comment+TrimSpace', @TestCommentPlusTrimSpace);

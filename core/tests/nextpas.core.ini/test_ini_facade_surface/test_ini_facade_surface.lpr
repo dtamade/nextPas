@@ -5,6 +5,7 @@ program test_ini_facade_surface;
 uses
   SysUtils,
   nextpas.core.ini,
+  nextpas.core.mem.default,
   nextpas.core.testing;
 
 var
@@ -72,11 +73,41 @@ begin
   end;
 end;
 
+procedure TestFacadeExposesAllocatorSurface;
+var
+  Ini: TIniFile;
+begin
+  Ini := TIniFile.Create(nil);
+  try
+    Check(Ini.Allocator <> nil, 'allocator accessor visible');
+  finally
+    Ini.Free;
+  end;
+
+  Ini := IniParse('[app]' + #10 + 'name=nextpas');
+  try
+    CheckEqual('nextpas', Ini.ReadString('app', 'name', ''),
+      'IniParse surface visible');
+  finally
+    Ini.Free;
+  end;
+
+  Ini := IniParseWith('[server]' + #10 + 'port=8080', DefaultAllocator);
+  try
+    CheckEqual(Int64(8080), Ini.ReadInteger('server', 'port', 0),
+      'IniParseWith surface visible');
+  finally
+    Ini.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.ini (facade surface)');
   T.Run('facade exposes core surface', @TestFacadeExposesCoreSurface);
   T.Run('facade exposes write surface', @TestFacadeExposesWriteSurface);
   T.Run('facade exposes delete surface', @TestFacadeExposesDeleteSurface);
+  T.Run('facade exposes allocator surface',
+    @TestFacadeExposesAllocatorSurface);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

@@ -8,6 +8,7 @@ program test_xml;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.mem.default,
   nextpas.core.testing,
   nextpas.core.xml;
 
@@ -22,7 +23,7 @@ var
 begin
   LDoc := XmlParse('<root>hello</root>');
   try
-    Check(LDoc.Root <> nil, 'root not nil');
+    Check(LDoc.Root.IsAssigned, 'root not nil');
     CheckEqual('root', LDoc.Root.Name.Local, 'root name');
     CheckEqual('hello', LDoc.Root.Text, 'root text');
   finally
@@ -41,7 +42,7 @@ begin
     CheckEqual('v', LDoc.Root.GetAttr('attr'), 'root attr');
     CheckEqual(Int64(1), Int64(LDoc.Root.ChildCount), 'child count');
     LChild := LDoc.Root.FindChild('b');
-    Check(LChild <> nil, 'child found');
+    Check(LChild.IsAssigned, 'child found');
     CheckEqual('inner', LChild.Text, 'child text');
   finally
     LDoc.Free;
@@ -54,7 +55,7 @@ var
 begin
   Check(TryXmlParse('<root><item>ok</item></root>', LDoc), 'try parse success');
   try
-    Check(LDoc <> nil, 'doc assigned');
+    Check(LDoc.IsAssigned, 'doc assigned');
     CheckEqual('root', LDoc.Root.Name.Local, 'root name');
     CheckEqual('ok', LDoc.Root.FindChild('item').Text, 'item text');
   finally
@@ -66,9 +67,9 @@ procedure TestTryXmlParseFailureReturnsNil;
 var
   LDoc: TXmlDocument;
 begin
-  LDoc := nil;
+  LDoc := TXmlDocument.None;
   Check(not TryXmlParse('<root><unclosed>', LDoc), 'try parse failure');
-  Check(LDoc = nil, 'doc remains nil on failure');
+  Check(not LDoc.IsAssigned, 'doc remains nil on failure');
 end;
 
 { === XmlTokenize（转发 TXmlReader 流式 token） === }
@@ -108,6 +109,25 @@ begin
       LFound := True;
     end;
   Check(LFound, 'text token present');
+end;
+
+procedure TestXmlAllocatorSurface;
+var
+  LDoc: TXmlDocument;
+  LToks: TXmlTokenArray;
+begin
+  LDoc := XmlParseWith('<root><item>ok</item></root>', DefaultAllocator);
+  try
+    Check(LDoc.Allocator <> nil, 'allocator accessor visible');
+    Check(LDoc.Root.IsAssigned, 'root node assigned');
+    CheckEqual('ok', LDoc.Root.FindChild('item').Text, 'XmlParseWith works');
+  finally
+    LDoc.Done;
+  end;
+
+  LToks := XmlTokenizeWith('<root/>', DefaultAllocator);
+  CheckEqual(Int64(1), Int64(Length(LToks)), 'XmlTokenizeWith token count');
+  Check(LToks[0].Kind = xtkEmptyElement, 'XmlTokenizeWith kind');
 end;
 
 { === XmlDecodeEntities === }
@@ -155,7 +175,7 @@ begin
   { 声明与 DTD 不进入 DOM，根仍为 root }
   LDoc := XmlParse('<?xml version="1.0"?><!DOCTYPE root><root/>');
   try
-    Check(LDoc.Root <> nil, 'root present despite decl/doctype');
+    Check(LDoc.Root.IsAssigned, 'root present despite decl/doctype');
     CheckEqual('root', LDoc.Root.Name.Local, 'root name after decl/doctype');
   finally
     LDoc.Free;
@@ -168,7 +188,7 @@ var
 begin
   LDoc := XmlParse('  ' + #10 + '<root/>' + #10 + '  ');
   try
-    Check(LDoc.Root <> nil, 'root present with surrounding whitespace');
+    Check(LDoc.Root.IsAssigned, 'root present with surrounding whitespace');
     CheckEqual('root', LDoc.Root.Name.Local, 'root name with surrounding whitespace');
   finally
     LDoc.Free;
@@ -181,7 +201,7 @@ var
 begin
   LDoc := XmlParse('<?xml version="1.0"?><!--pre--><!DOCTYPE root><root/><?tail data?>');
   try
-    Check(LDoc.Root <> nil, 'root present with pre-root doctype');
+    Check(LDoc.Root.IsAssigned, 'root present with pre-root doctype');
     CheckEqual('root', LDoc.Root.Name.Local, 'root name with pre-root doctype');
   finally
     LDoc.Free;
@@ -304,7 +324,7 @@ procedure TestXmlRejectsInvalidCommentPayload;
     LDoc: TXmlDocument;
   begin
     LRaised := False;
-    LDoc := nil;
+    LDoc := TXmlDocument.None;
     try
       try
         XmlTokenize(AXml);
@@ -322,7 +342,7 @@ procedure TestXmlRejectsInvalidCommentPayload;
 
       Check(not TryXmlParse(AXml, LDoc),
         ALabel + ' TryXmlParse rejects invalid comment payload');
-      Check(LDoc = nil, ALabel + ' TryXmlParse keeps nil doc');
+      Check(not LDoc.IsAssigned, ALabel + ' TryXmlParse keeps nil doc');
     finally
       LDoc.Free;
     end;
@@ -343,7 +363,7 @@ procedure TestXmlRejectsInvalidDocumentStructure;
     LDoc: TXmlDocument;
   begin
     LRaised := False;
-    LDoc := nil;
+    LDoc := TXmlDocument.None;
     try
       try
         LDoc := XmlParse(AXml);
@@ -382,16 +402,16 @@ begin
     'Multiple root elements',
     'multiple root elements');
 
-  LDoc := nil;
+  LDoc := TXmlDocument.None;
   Check(not TryXmlParse('hello<root/>', LDoc),
     'TryXmlParse rejects leading document text');
-  Check(LDoc = nil, 'TryXmlParse keeps nil doc for leading document text');
+  Check(not LDoc.IsAssigned, 'TryXmlParse keeps nil doc for leading document text');
   Check(not TryXmlParse('<root/>tail', LDoc),
     'TryXmlParse rejects trailing document text');
-  Check(LDoc = nil, 'TryXmlParse keeps nil doc for trailing document text');
+  Check(not LDoc.IsAssigned, 'TryXmlParse keeps nil doc for trailing document text');
   Check(not TryXmlParse('<a/><b/>', LDoc),
     'TryXmlParse rejects multiple root elements');
-  Check(LDoc = nil, 'TryXmlParse keeps nil doc for multiple root elements');
+  Check(not LDoc.IsAssigned, 'TryXmlParse keeps nil doc for multiple root elements');
 end;
 
 procedure TestXmlRejectsMisplacedDoctype;
@@ -401,7 +421,7 @@ procedure TestXmlRejectsMisplacedDoctype;
     LDoc: TXmlDocument;
   begin
     LRaised := False;
-    LDoc := nil;
+    LDoc := TXmlDocument.None;
     try
       try
         LDoc := XmlParse(AXml);
@@ -436,13 +456,13 @@ begin
     'DOCTYPE must appear before the root element',
     'in-content doctype');
 
-  LDoc := nil;
+  LDoc := TXmlDocument.None;
   Check(not TryXmlParse('<!DOCTYPE root><!DOCTYPE root><root/>', LDoc),
     'TryXmlParse rejects duplicate doctype');
-  Check(LDoc = nil, 'TryXmlParse keeps nil doc for duplicate doctype');
+  Check(not LDoc.IsAssigned, 'TryXmlParse keeps nil doc for duplicate doctype');
   Check(not TryXmlParse('<root/><!DOCTYPE root>', LDoc),
     'TryXmlParse rejects post-root doctype');
-  Check(LDoc = nil, 'TryXmlParse keeps nil doc for post-root doctype');
+  Check(not LDoc.IsAssigned, 'TryXmlParse keeps nil doc for post-root doctype');
 end;
 
 procedure TestXmlRejectsMissingRootElement;
@@ -452,7 +472,7 @@ procedure TestXmlRejectsMissingRootElement;
     LDoc: TXmlDocument;
   begin
     LRaised := False;
-    LDoc := nil;
+    LDoc := TXmlDocument.None;
     try
       try
         LDoc := XmlParse(AXml);
@@ -491,13 +511,13 @@ begin
     'Document must contain a root element',
     'doctype only');
 
-  LDoc := nil;
+  LDoc := TXmlDocument.None;
   Check(not TryXmlParse('<?xml version="1.0"?>', LDoc),
     'TryXmlParse rejects xml declaration without root');
-  Check(LDoc = nil, 'TryXmlParse keeps nil doc for xml declaration without root');
+  Check(not LDoc.IsAssigned, 'TryXmlParse keeps nil doc for xml declaration without root');
   Check(not TryXmlParse('<!DOCTYPE root>', LDoc),
     'TryXmlParse rejects doctype without root');
-  Check(LDoc = nil, 'TryXmlParse keeps nil doc for doctype without root');
+  Check(not LDoc.IsAssigned, 'TryXmlParse keeps nil doc for doctype without root');
 end;
 
 procedure TestXmlTokenizeRejectsInvalidNames;
@@ -540,7 +560,7 @@ procedure TestXmlRejectsMisplacedXmlDecl;
     LDoc: TXmlDocument;
   begin
     LRaised := False;
-    LDoc := nil;
+    LDoc := TXmlDocument.None;
     try
       try
         if AUseParse then
@@ -583,7 +603,7 @@ procedure TestXmlRejectsInvalidXmlDeclAttributes;
     LDoc: TXmlDocument;
   begin
     LRaised := False;
-    LDoc := nil;
+    LDoc := TXmlDocument.None;
     try
       try
         if AUseParse then
@@ -644,10 +664,10 @@ begin
   end;
   Check(LRaised, 'XmlTokenize rejects duplicate attributes');
 
-  LDoc := nil;
+  LDoc := TXmlDocument.None;
   Check(not TryXmlParse('<r a="1" a="2"/>', LDoc),
     'TryXmlParse rejects duplicate attributes');
-  Check(LDoc = nil, 'TryXmlParse keeps nil doc for duplicate attributes');
+  Check(not LDoc.IsAssigned, 'TryXmlParse keeps nil doc for duplicate attributes');
 
   LRaised := False;
   try
@@ -679,12 +699,12 @@ begin
   end;
   Check(LRaised, 'XmlTokenize rejects duplicate expanded attributes');
 
-  LDoc := nil;
+  LDoc := TXmlDocument.None;
   Check(not TryXmlParse(
     '<r xmlns:p="urn:x" xmlns:q="urn:x" p:a="1" q:a="2"/>',
     LDoc),
     'TryXmlParse rejects duplicate expanded attributes');
-  Check(LDoc = nil,
+  Check(not LDoc.IsAssigned,
     'TryXmlParse keeps nil doc for duplicate expanded attributes');
 
   LRaised := False;
@@ -729,10 +749,10 @@ begin
   end;
   Check(LRaised, 'XmlTokenize rejects raw less-than in attribute value');
 
-  LDoc := nil;
+  LDoc := TXmlDocument.None;
   Check(not TryXmlParse('<r a="raw<bad"/>', LDoc),
     'TryXmlParse rejects raw less-than in attribute value');
-  Check(LDoc = nil,
+  Check(not LDoc.IsAssigned,
     'TryXmlParse keeps nil doc for raw less-than in attribute value');
 
   LRaised := False;
@@ -771,13 +791,13 @@ begin
   CheckEqual(Int64(4), Int64(Length(LToks[0].Attributes)),
     'distinct namespace attributes and declarations are retained');
 
-  LDoc := nil;
+  LDoc := TXmlDocument.None;
   Check(TryXmlParse(
     '<r p:a="1" q:a="2" xmlns:p="urn:p" xmlns:q="urn:q"/>',
     LDoc),
     'TryXmlParse allows same local attributes in distinct namespaces');
   try
-    Check(LDoc <> nil,
+    Check(LDoc.IsAssigned,
       'TryXmlParse returns doc for distinct namespace attributes');
   finally
     LDoc.Free;
@@ -786,7 +806,7 @@ begin
   LDoc := XmlParse(
     '<r a="1" p:a="2" xmlns="urn:x" xmlns:p="urn:x"/>');
   try
-    Check(LDoc.Root <> nil,
+    Check(LDoc.Root.IsAssigned,
       'XmlParse allows unprefixed attr beside same-URI prefixed attr');
     CheckEqual('1', LDoc.Root.GetAttr('a'),
       'unprefixed attribute remains visible by local name');
@@ -809,6 +829,7 @@ begin
   T.Run('XmlTokenizeBasic', @TestXmlTokenizeBasic);
   T.Run('XmlTokenizeEmpty', @TestXmlTokenizeEmpty);
   T.Run('XmlTokenizeText', @TestXmlTokenizeText);
+  T.Run('XmlAllocatorSurface', @TestXmlAllocatorSurface);
   T.Run('XmlDecodeEntities', @TestXmlDecodeEntities);
   T.Run('XmlDecodeNumeric', @TestXmlDecodeNumeric);
   T.Run('XmlEncodeText', @TestXmlEncodeText);
