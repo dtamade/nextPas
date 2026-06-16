@@ -290,10 +290,10 @@ begin
     'function PathJoin(const ABase, AChild: string): string;',
     'function PathJoin3');
 
-  CheckContains(LBody, 'PLATFORM_PATH_SEP',
-    'PathJoin fallback uses platform separator');
-  CheckAbsent(LBody, 'ABase + ''/'' + AChild',
-    'PathJoin fallback does not hard-code Unix separator');
+  CheckContains(LBody, 'FsPathJoin',
+    'PathJoin delegates to FsPathJoin');
+  CheckAbsent(LBody, 'platform_path_join',
+    'PathJoin does not call platform_path_join directly');
 end;
 
 procedure TestPathDelegatesPlatformRootContract;
@@ -306,14 +306,14 @@ begin
   Check(LImplPos > 0, 'path unit has implementation section');
   LImpl := Copy(LSource, LImplPos, Length(LSource));
 
-  CheckContains(LImpl, 'platform_path_join',
-    'PathJoin delegates root semantics to platform.path');
-  CheckContains(LImpl, 'platform_path_dirname',
-    'PathDir delegates root semantics to platform.path');
-  CheckContains(LImpl, 'platform_path_is_absolute',
-    'PathIsAbsolute delegates root semantics to platform.path');
-  CheckContains(LImpl, 'platform_path_normalize',
-    'PathNormalize delegates root semantics to platform.path');
+  CheckContains(LImpl, 'FsPathJoin',
+    'PathJoin delegates to fs.path');
+  CheckContains(LImpl, 'FsPathDir',
+    'PathDir delegates to fs.path');
+  CheckContains(LImpl, 'FsPathIsAbs',
+    'PathIsAbsolute delegates to fs.path');
+  CheckContains(LImpl, 'FsPathClean',
+    'PathNormalize delegates to fs.path');
 end;
 
 {$IFDEF NEXTPAS_WINDOWS}
