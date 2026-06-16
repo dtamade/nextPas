@@ -1138,6 +1138,19 @@ begin
 end;
 {$ENDIF}
 
+procedure TestFsWalkDelegatesToPlatformWalker;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.dir.pas');
+  CheckContains(LSource, 'platform_fs_walk(PAnsiChar(ARoot), @FsWalkPlatformCallback,',
+    'FsWalk delegates traversal to platform_fs_walk');
+  CheckAbsent(LSource, 'procedure DoWalk(',
+    'FsWalk no longer embeds recursive Pascal traversal');
+  CheckAbsent(LSource, 'MAX_WALK_DEPTH = 256',
+    'FsWalk depth truth comes from platform walk owner');
+end;
+
 begin
   SetupTmpDir;
   try
@@ -1228,6 +1241,8 @@ begin
     T.Run('FsGetEnv uses os.env owner contract',
       @TestFsGetEnvUsesOsEnvOwnerContract);
     T.Run('Lstat', @TestLstat);
+    T.Run('FsWalk delegates to platform walker',
+      @TestFsWalkDelegatesToPlatformWalker);
 {$IFDEF NEXTPAS_UNIX}
     T.Run('RemoveAll symlink root', @TestRemoveAllSymlinkRoot);
     T.Run('Walk opendir error callback', @TestWalkOpenDirErrorGoesToCallback);
