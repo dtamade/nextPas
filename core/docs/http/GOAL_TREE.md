@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-06-12
+> Last updated: 2026-06-16
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -17,18 +17,14 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 
 ## Current Position
 
-This lane is in **G2/G3 active hardening**:
+This lane is in **G2/G3/G4 active hardening**:
 
 - G0 control and module discipline already exist in `AGENTS.md`, `core/AGENTS.md`, and `core/docs/design-conventions.md`.
 - G1 stable H1 public surface is largely landed: server/client/router/headers/url/message/middleware/static/websocket all exist and already have substantial focused coverage.
 - G2 correctness and lifecycle proof is well advanced: threaded and Linux `epoll` paths have broad raw-wire/server proof, client redirect/body ownership semantics are materially tighter, and examples have runnable smoke coverage.
 - G3 API and performance isolation is still active: client ergonomics keeps closing real gaps, and H1 performance work is now splitting costs into parser, lazy header, writer, outbound, and full-chain layers.
-- H2/H3 remain non-production claims. H2 now has internal frame/session/client
-  transport foundations with type-specific validation, HPACK Huffman,
-  header-block encode/decode, per-stream/session bookkeeping, registry version
-  selection, cleartext prior-knowledge transport, and TLS `h2` ALPN transport
-  seam; but it is still an active foundation slice rather than a production
-  claim.
+- G4 H2 transport is now landed: server session + client transport + TLS ALPN + connection pool + RFC 9113 compliance are all implemented with 181 focused tests. H2 is production-transport-ready, not just a foundation slice. Remaining work is test coverage hardening (client -33, frame -17, hpack -15 tests vs plan) and documentation alignment. Session test hardening complete (55 tests, MaxConcurrentStreams check-order bug fixed).
+- H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
 
 ## Map
 
@@ -38,7 +34,7 @@ nextpas.core.http
 ├── G1: Stable public H1 surface                                 [mostly landed]
 ├── G2: Correctness, safety, lifecycle, and ownership proof      [advanced]
 ├── G3: API ergonomics and performance isolation                 [active]
-├── G4: Protocol evolution seams (H2/H3 codec + registry + transport) [foundation started]
+├── G4: Protocol evolution seams (H2/H3 codec + registry + transport) [H2 transport landed, test hardening]
 ├── G5: Static/WebSocket graduation gates                        [helper-level stable]
 └── G6: Cross-language benchmark truth and long-run positioning  [ongoing, not final]
 ```
@@ -169,28 +165,36 @@ H2/H3 are important, but honesty matters more than placeholders.
 
 Rules:
 
-- H2/H3 may land only as codec foundations, registry contracts, transport seams,
-  or architecture truth until real transport/session implementations exist.
-- No fake public API should imply that H2/H3 already work.
-- Future H2/H3 work must preserve the same public HTTP contract unless there is a clear, documented reason to expand it.
+- No fake public API should imply that H3 already works.
+- Future H3 work must preserve the same public HTTP contract unless there is a clear, documented reason to expand it.
 - Rust or Go feature parity is not a reason to create empty abstractions.
 - Current H2 transport policy is explicit: `http://` uses cleartext prior
   knowledge, `https://` requires negotiated ALPN `h2`, and HTTP/1.1
-  `Upgrade: h2c` / `HTTP2-Settings` upgrade is not exposed yet.
+  `Upgrade: h2c` / `HTTP2-Settings` upgrade is not exposed.
 
-The current H2 foundation proof covers RFC 9113 frame header/basic payload
-codec behavior, frame-type-specific validation for stream ids, fixed payload
-lengths, SETTINGS ACK, WINDOW_UPDATE increments, and padding lengths, HPACK
-Huffman encoding/decoding against RFC 7541 Appendix C vectors plus full
-single-byte roundtrips, RFC 7541 C.3/C.4 HPACK request-sequence header-block
-encode/decode vectors with dynamic-table reuse, dynamic table size update
-emission/eviction, oversized update rejection, without-indexing /
-never-indexed literal decode behavior, and an H2 per-stream state-machine seam
-that covers HEADERS/CONTINUATION assembly, HPACK decode to header storage,
-buffered DATA intake, receive-credit release on body reads, reset bookkeeping,
-and stream-local send/receive window transitions.
-The next legitimate H2/H3 step is
-codec/seam quality, not pseudo-support.
+H2 transport has landed as a complete implementation covering:
+
+- **Frame codec** (RFC 9113): all 10 frame types, 13 error codes, frame validation, padded payload handling
+- **HPACK** (RFC 7541): encoder/decoder, dynamic table with MRU cache, Huffman codec with 4-bit nibble decode, DecodeView zero-refcount path
+- **Stream state machine**: 7-state machine, HEADERS/CONTINUATION assembly, trailer handling (pseudo-header/hop-by-hop forbidden), MaxHeaderListSize enforcement
+- **Server session**: client preface validation, SETTINGS handshake, frame dispatch, per-stream request execution, MaxConcurrentStreams enforcement, GOAWAY with split last-stream tracking, poll-driven execution (ITcpServerPollDrivenSession)
+- **Client transport**: synchronous RoundTrip, connection pool (MaxPoolSize-governed), stale pooled connection retry, server push rejection, PING/GOAWAY handling
+- **TLS integration**: ALPN `h2` negotiation, SNI, session factory seam
+- **RFC 9113 compliance**: HPACK table-size rules, MaxHeaderListSize (431/ENHANCE_YOUR_CALM), trailer section, GOAWAY last-stream tracking, MaxConcurrentStreams (REFUSED_STREAM)
+- **Tests**: 181 focused tests across 7 suites + Go/Rust HPACK benchmark comparators
+
+Design exclusions (by design, not gaps):
+- h2c Upgrade path (cleartext H2 uses prior knowledge only)
+- Server push (ENABLE_PUSH=0, PUSH_PROMISE → GOAWAY)
+- CONNECT / WebSocket over H2 (future work)
+- PRIORITY frame priority scheduling (parse, ignore — RFC permits)
+
+Remaining H2 hardening:
+- Test coverage vs h2-test-coverage-plan.md targets (client -33, frame -17, hpack -15); session gap closed
+- Real TLS runtime proof (currently mock-based)
+- Documentation alignment (this document and ARCHITECTURE.md)
+
+H3 is blocked on the QUIC module. Only `nextpas.core.tls.quic.crypto.pas` (QUIC v1 crypto primitives) exists; no QPACK/HTTP3 frame/stream source code.
 
 ## Static And WebSocket Graduation Criteria
 

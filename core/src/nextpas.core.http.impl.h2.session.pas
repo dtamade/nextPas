@@ -893,17 +893,16 @@ begin
   begin
     if AFrame.Header.StreamID <= FLastSeenPeerStreamID then
       Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED, False));
+    if (FLocalSettings.MaxConcurrentStreams > 0) and
+       (FStreams.ActiveCount >= FLocalSettings.MaxConcurrentStreams) then
+    begin
+      QueueRstStream(AFrame.Header.StreamID, H2_ERR_REFUSED_STREAM);
+      Exit(True);
+    end;
     LStream := FStreams.FindOrCreate(AFrame.Header.StreamID,
       FRemoteSettings.InitialWindowSize, FOptions.InitialStreamWindowSize,
       FConnectionFlow, FDecoder, FLocalSettings.MaxHeaderListSize);
     FLastSeenPeerStreamID := AFrame.Header.StreamID;
-    if (FLocalSettings.MaxConcurrentStreams > 0) and
-       (FStreams.ActiveCount >= FLocalSettings.MaxConcurrentStreams) then
-    begin
-      QueueRstStream(LStream.StreamID, H2_ERR_REFUSED_STREAM);
-      FStreams.RemoveByIndex(FStreams.ActiveCount - 1);
-      Exit(True);
-    end;
   end;
   if LStreamIndex >= 0 then
     LStream := FStreams.ItemAt(LStreamIndex)

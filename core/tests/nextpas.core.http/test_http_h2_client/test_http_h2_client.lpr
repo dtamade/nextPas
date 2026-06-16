@@ -205,6 +205,7 @@ var
   GDialIndex: SizeInt;
   GLastDialHost: string;
   GLastDialPort: UInt16;
+  GH2ClientSourceCache: string;
 
 function TestDial(const AHost: string; const APort: UInt16): ITcpStream;
 begin
@@ -264,6 +265,30 @@ begin
   Result := APathFromTest;
 end;
 
+function H2ClientSourceText: string;
+begin
+  if GH2ClientSourceCache = '' then
+    GH2ClientSourceCache := ReadSourceFile(ResolveSourcePath(
+      H2_CLIENT_SOURCE_PATH_FROM_TEST, H2_CLIENT_SOURCE_PATH_FROM_ROOT));
+  Result := GH2ClientSourceCache;
+end;
+
+function ExtractSourceBlock(const AStartMarker, AEndMarker: string): string;
+var
+  LSource: string;
+  LStartPos: SizeInt;
+  LEndPos: SizeInt;
+begin
+  LSource := H2ClientSourceText;
+  LStartPos := Pos(AStartMarker, LSource);
+  Check(LStartPos > 0, AStartMarker + ' source block exists');
+  LEndPos := Pos(AEndMarker, LSource);
+  Check(LEndPos > LStartPos, AEndMarker + ' source follows ' + AStartMarker);
+  if (LStartPos <= 0) or (LEndPos <= LStartPos) then
+    Exit('');
+  Result := Copy(LSource, LStartPos, LEndPos - LStartPos);
+end;
+
 function HexNibble(const ACh: Char): Byte;
 begin
   case ACh of
@@ -293,6 +318,12 @@ begin
     Inc(LOut);
     Inc(LI, 2);
   end;
+end;
+
+function PackHeader(const AName, AValue: AnsiString): THPackHeader;
+begin
+  Result.Name := AName;
+  Result.Value := AValue;
 end;
 
 function EncodeHeaders(const AHeaders: array of THPackHeader): AnsiString;
@@ -346,6 +377,30 @@ begin
   if ABody <> '' then
     Result := Result + H2EncodeFrame(H2_FRAME_DATA, H2_FLAG_DATA_END_STREAM,
       AStreamID, ABody);
+end;
+
+function ComposeHeadersFrame(const AStreamID: UInt32; const AFlags: Byte;
+  const AHeaders: array of THPackHeader): AnsiString;
+begin
+  Result := H2EncodeFrame(H2_FRAME_HEADERS, AFlags, AStreamID,
+    EncodeHeaders(AHeaders));
+end;
+
+function ComposeDataFrame(const AStreamID: UInt32; const AFlags: Byte;
+  const APayload: AnsiString): AnsiString;
+begin
+  Result := H2EncodeFrame(H2_FRAME_DATA, AFlags, AStreamID, APayload);
+end;
+
+function ComposePriorityPayload(const ADependencyStreamID: UInt32;
+  const AWeight: Byte): AnsiString;
+begin
+  SetLength(Result, 5);
+  Result[1] := AnsiChar(Byte((ADependencyStreamID shr 24) and $7F));
+  Result[2] := AnsiChar(Byte(ADependencyStreamID shr 16));
+  Result[3] := AnsiChar(Byte(ADependencyStreamID shr 8));
+  Result[4] := AnsiChar(Byte(ADependencyStreamID));
+  Result[5] := AnsiChar(AWeight);
 end;
 
 function ComposePushPromisePayload(const APromisedStreamID: UInt32): AnsiString;
@@ -454,6 +509,19 @@ var
 begin
   LDecoder.Init;
   Check(LDecoder.Decode(APayload, AHeaders), 'request header block decodes');
+end;
+
+function FindFrameIndex(const AFrames: array of TH2Frame;
+  const ACount: SizeInt; const AFrameType: Byte;
+  const AStreamID: UInt32): SizeInt;
+var
+  LI: SizeInt;
+begin
+  for LI := 0 to ACount - 1 do
+    if (AFrames[LI].Header.FrameType = AFrameType) and
+       (AFrames[LI].Header.StreamID = AStreamID) then
+      Exit(LI);
+  Result := -1;
 end;
 
 { TFakeTcpStream }
@@ -1794,6 +1862,511 @@ begin
   LContextObj.ClearLastProbe;
 end;
 
+procedure TestHandshakeFailsWithoutServerSettings;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+begin
+  LStream := TFakeTcpStream.Create(
+    H2EncodeFrame(H2_FRAME_PING, 0, 0, H2EncodePing($0102030405060708)));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    CheckEqual(False, LConn.Handshake,
+      'handshake returns false when server closes before SETTINGS');
+    CheckEqual(Int64(Ord(h2ccsClosed)), Int64(Ord(LConn.State)),
+      'connection closes when server never sends SETTINGS');
+  finally
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestHandshakeFailsOnSettingsAckFirst;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+begin
+  LStream := TFakeTcpStream.Create(
+    H2EncodeFrame(H2_FRAME_SETTINGS, H2_FLAG_SETTINGS_ACK, 0, ''));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    CheckEqual(False, LConn.Handshake,
+      'handshake returns false when first server SETTINGS is ack-only');
+  finally
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestRoundTripOnClosedConnectionThrows;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LRaised: Boolean;
+begin
+  LStream := TFakeTcpStream.Create(ComposeServerHandshake);
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LConn.Close;
+    LRaised := False;
+    try
+      LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/closed'));
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+    Check(LRaised, 'round trip on closed connection raises');
+  finally
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestGoawayWithActiveStreamCompletesCurrentRequest;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    H2EncodeFrame(H2_FRAME_GOAWAY, 0, 0, H2EncodeGoaway(1, H2_ERR_NO_ERROR, '')) +
+    ComposeResponse(1, '200', 'ok', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/drain'));
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'goaway still allows in-flight stream response');
+    CheckEqual('ok', ReadAllBody(LResp.Body),
+      'goaway still delivers in-flight stream body');
+    CheckEqual(False, LConn.IsReusable,
+      'goaway after active stream marks connection not reusable');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestMultipleGoawayWithDecreasingLastStreamAccepted;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    H2EncodeFrame(H2_FRAME_GOAWAY, 0, 0, H2EncodeGoaway(3, H2_ERR_NO_ERROR, '')) +
+    H2EncodeFrame(H2_FRAME_GOAWAY, 0, 0, H2EncodeGoaway(1, H2_ERR_NO_ERROR, '')) +
+    ComposeResponse(1, '200', 'ok', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/two-goaway'));
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'decreasing GOAWAY last-stream still permits active response');
+    CheckEqual('ok', ReadAllBody(LResp.Body),
+      'decreasing GOAWAY still preserves response body');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestGoawayAfterGracefulDrainMarksNotReusable;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '200', '', []) +
+    H2EncodeFrame(H2_FRAME_GOAWAY, 0, 0, H2EncodeGoaway(0, H2_ERR_NO_ERROR, '')));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/graceful'));
+    LResp := nil;
+    CheckEqual(False, LConn.IsReusable,
+      'graceful drain GOAWAY marks connection not reusable');
+  finally
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestHeadOnlyResponseReadsEmptyBody;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeHeadersFrame(1,
+      H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM,
+      [PackHeader(':status', '200')]));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmHead, 'http://example.com/head'));
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'HEAD response status');
+    CheckEqual('', ReadAllBody(LResp.Body), 'HEAD response body is empty');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestMultipleDataFramesDeliverConcatenatedBody;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeHeadersFrame(1, H2_FLAG_HEADERS_END_HEADERS,
+      [PackHeader(':status', '200')]) +
+    ComposeDataFrame(1, 0, 'hel') +
+    ComposeDataFrame(1, H2_FLAG_DATA_END_STREAM, 'lo'));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/multi'));
+    CheckEqual('hello', ReadAllBody(LResp.Body),
+      'response body concatenates multiple DATA frames');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestPaddedDataDeliversUnpaddedBody;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LPayload: AnsiString;
+begin
+  LPayload := AnsiChar(#3) + 'hello' + 'xyz';
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeHeadersFrame(1, H2_FLAG_HEADERS_END_HEADERS,
+      [PackHeader(':status', '200')]) +
+    ComposeDataFrame(1, H2_FLAG_DATA_PADDED or H2_FLAG_DATA_END_STREAM,
+      LPayload));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/padded-data'));
+    CheckEqual('hello', ReadAllBody(LResp.Body),
+      'padded DATA strips trailing padding');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestPaddedHeadersParsesCorrectly;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LHeaderBlock: AnsiString;
+begin
+  LHeaderBlock := ComposeResponseHeaders('200', []);
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    H2EncodeFrame(H2_FRAME_HEADERS,
+      H2_FLAG_HEADERS_PADDED or H2_FLAG_HEADERS_END_HEADERS or
+      H2_FLAG_HEADERS_END_STREAM, 1, AnsiChar(#2) + LHeaderBlock + 'zz'));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/padded-headers'));
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'padded HEADERS decode response status');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestContinuationReassemblesResponseHeaders;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LHeaderBlock: AnsiString;
+  LSplit: SizeInt;
+begin
+  LHeaderBlock := ComposeResponseHeaders('200',
+    [PackHeader('x-part', 'assembled')]);
+  LSplit := Length(LHeaderBlock) div 2;
+  if LSplit < 1 then
+    LSplit := 1;
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    H2EncodeFrame(H2_FRAME_HEADERS, 0, 1, Copy(LHeaderBlock, 1, LSplit)) +
+    H2EncodeFrame(H2_FRAME_CONTINUATION,
+      H2_FLAG_CONTINUATION_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+      Copy(LHeaderBlock, LSplit + 1, MaxInt)));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/continuation'));
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'HEADERS plus CONTINUATION decodes status');
+    CheckEqual('assembled', LResp.Headers.Get('x-part'),
+      'HEADERS plus CONTINUATION preserves header value');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestServerRstStreamWithCancelMarksResponseReset;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LRaised: Boolean;
+  LReportedCancel: Boolean;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    H2EncodeFrame(H2_FRAME_RST_STREAM, 0, 1, H2EncodeRstStream(H2_ERR_CANCEL)));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LRaised := False;
+    LReportedCancel := False;
+    try
+      LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/rst-cancel'));
+    except
+      on E: Exception do
+      begin
+        LRaised := True;
+        LReportedCancel := Pos('CANCEL', UpperCase(E.Message)) > 0;
+      end;
+    end;
+    Check(LRaised, 'RST_STREAM CANCEL aborts response');
+    Check(LReportedCancel, 'RST_STREAM CANCEL propagates reset code');
+  finally
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestServerRstStreamWithNoErrorAbortsResponse;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LRaised: Boolean;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeHeadersFrame(1,
+      H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM,
+      [PackHeader(':status', '200')]) +
+    H2EncodeFrame(H2_FRAME_RST_STREAM, 0, 1, H2EncodeRstStream(H2_ERR_NO_ERROR)));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LRaised := False;
+    try
+      LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/rst-no-error'));
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+    Check(LRaised,
+      'RST_STREAM NO_ERROR after response still aborts (client treats all RST as error)');
+  finally
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestServerRstStreamPropagatesErrorCode;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LRaised: Boolean;
+  LReportedCode: Boolean;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    H2EncodeFrame(H2_FRAME_RST_STREAM, 0, 1,
+      H2EncodeRstStream(H2_ERR_ENHANCE_YOUR_CALM)));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LRaised := False;
+    LReportedCode := False;
+    try
+      LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/rst-calm'));
+    except
+      on E: Exception do
+      begin
+        LRaised := True;
+        LReportedCode := Pos('ENHANCE_YOUR_CALM', UpperCase(E.Message)) > 0;
+      end;
+    end;
+    Check(LRaised, 'RST_STREAM ENHANCE_YOUR_CALM aborts response');
+    Check(LReportedCode, 'RST_STREAM error exposes error code name');
+  finally
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestInvalidSettingsPayloadFailsConnection;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LRaised: Boolean;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    H2EncodeFrame(H2_FRAME_SETTINGS, 0, 0, 'garbage'));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LRaised := False;
+    try
+      LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/bad-settings'));
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+    Check(LRaised, 'invalid SETTINGS payload fails round trip');
+  finally
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestWindowUpdateZeroIncrementFailsConnection;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LRaised: Boolean;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    H2EncodeFrame(H2_FRAME_WINDOW_UPDATE, 0, 1, H2EncodeWindowUpdate(0)));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LRaised := False;
+    try
+      LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/bad-window-update'));
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+    Check(LRaised, 'zero increment WINDOW_UPDATE fails connection');
+  finally
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestWindowUpdateOnUnknownStreamIgnored;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    H2EncodeFrame(H2_FRAME_WINDOW_UPDATE, 0, 99, H2EncodeWindowUpdate(10)) +
+    ComposeResponse(1, '200', 'ok', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/unknown-window'));
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'WINDOW_UPDATE on unknown stream does not break current request');
+    CheckEqual('ok', ReadAllBody(LResp.Body),
+      'WINDOW_UPDATE on unknown stream leaves response intact');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestConnectionWindowUpdateIncreasesSendWindow;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LBody: IStream;
+  LOptions: TH2ClientTransportOptions;
+  LFrames: array[0..31] of TH2Frame;
+  LCount: SizeInt;
+  LFirstDataIndex: SizeInt;
+  LSecondDataIndex: SizeInt;
+begin
+  LOptions := TH2ClientTransportOptions.Default;
+  LOptions.InitialConnectionWindowSize := 2;
+  LBody := CreateBytesStreamFrom([Byte('a'), Byte('b'), Byte('c'), Byte('d')]);
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    H2EncodeFrame(H2_FRAME_WINDOW_UPDATE, 0, 0, H2EncodeWindowUpdate(2)) +
+    ComposeResponse(1, '200', '', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream, LOptions);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmPost,
+      'http://example.com/conn-window', NewHttpHeaders, LBody as IReader, 4));
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'connection WINDOW_UPDATE response status');
+    DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
+      MaxInt), LFrames, LCount);
+    LFirstDataIndex := FindFrameIndex(LFrames, LCount, H2_FRAME_DATA, 1);
+    Check(LFirstDataIndex >= 0, 'first DATA frame exists');
+    LSecondDataIndex := -1;
+    if LFirstDataIndex >= 0 then
+      LSecondDataIndex := FindFrameIndex(Slice(LFrames, LCount), LCount, H2_FRAME_DATA, 1);
+  finally
+    LResp := nil;
+    LConn.Free;
+    LConn := nil;
+    LStream := nil;
+    LBody := nil;
+  end;
+end;
+
 procedure TestBuiltinHttp2ClientTransportIsRegistered;
 var
   LTransport: IHttpTransport;
@@ -1870,5 +2443,41 @@ begin
     @TestBuildResponseAvoidsBytesStreamCopySourceContract);
   T.Run('Built-in HTTP/2 client transport is registered',
     @TestBuiltinHttp2ClientTransportIsRegistered);
+  T.Run('Handshake fails without initial server SETTINGS',
+    @TestHandshakeFailsWithoutServerSettings);
+  T.Run('Handshake fails on initial SETTINGS ACK',
+    @TestHandshakeFailsOnSettingsAckFirst);
+  T.Run('Server RST_STREAM CANCEL marks response reset',
+    @TestServerRstStreamWithCancelMarksResponseReset);
+  T.Run('Server RST_STREAM NO_ERROR aborts response',
+    @TestServerRstStreamWithNoErrorAbortsResponse);
+  T.Run('Server RST_STREAM propagates error code',
+    @TestServerRstStreamPropagatesErrorCode);
+  T.Run('Invalid SETTINGS payload fails connection',
+    @TestInvalidSettingsPayloadFailsConnection);
+  T.Run('WINDOW_UPDATE zero increment fails connection',
+    @TestWindowUpdateZeroIncrementFailsConnection);
+  T.Run('WINDOW_UPDATE on unknown stream is ignored',
+    @TestWindowUpdateOnUnknownStreamIgnored);
+  T.Run('Connection WINDOW_UPDATE increases send window',
+    @TestConnectionWindowUpdateIncreasesSendWindow);
+  T.Run('GOAWAY with active stream completes current request',
+    @TestGoawayWithActiveStreamCompletesCurrentRequest);
+  T.Run('Multiple GOAWAY with decreasing last stream is accepted',
+    @TestMultipleGoawayWithDecreasingLastStreamAccepted);
+  T.Run('GOAWAY after graceful drain marks not reusable',
+    @TestGoawayAfterGracefulDrainMarksNotReusable);
+  T.Run('RoundTrip on closed connection throws',
+    @TestRoundTripOnClosedConnectionThrows);
+  T.Run('HEAD-only response reads empty body',
+    @TestHeadOnlyResponseReadsEmptyBody);
+  T.Run('Multiple DATA frames deliver concatenated body',
+    @TestMultipleDataFramesDeliverConcatenatedBody);
+  T.Run('Padded DATA delivers unpadded body',
+    @TestPaddedDataDeliversUnpaddedBody);
+  T.Run('Padded HEADERS parses correctly',
+    @TestPaddedHeadersParsesCorrectly);
+  T.Run('CONTINUATION reassembles response headers',
+    @TestContinuationReassemblesResponseHeaders);
   T.Summary;
 end.

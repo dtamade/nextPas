@@ -3,16 +3,15 @@
 ## 概述
 
 HTTP 模块是 L3 框架层的核心模块，提供 HTTP 服务器和客户端能力。
-采用统一门面 + 协议实现隔离的架构。当前内建实现为 HTTP/1.1。
-H2/H3 仅保留版本枚举、registry / transport seam 与规划。
-H2 已开始落内部 foundation（frame validation、HPACK Huffman、HPACK header block state、
-per-stream state machine），但还没有内建 H2 transport/session。
-这些内部基础不声明内建 H2/H3 protocol implementation。
+采用统一门面 + 协议实现隔离的架构。
+H1 已完全落地（H1 transport + llhttp parser + SIMD fast path + epoll/threaded poll-driven session）。
+H2 已落地完整的 transport 层（server session + client transport + TLS ALPN + 连接池 + RFC 9113 合规），
+可通过 `hvHttp2` 版本注册使用。H3 仅保留版本枚举与 registry seam，等待 QUIC 模块就绪。
 
-消费方只需 `uses nextpas.core.http` 即可获得当前 H1 能力；默认版本解析对应用层透明。
-H2/H3 对消费方仍处于未开放阶段。
+消费方只需 `uses nextpas.core.http` 即可获得当前 H1/H2 能力；默认版本解析对应用层透明。
+`hvHttp2` 已注册到内建 registry：`http://` 使用 cleartext prior knowledge，`https://` 强制 ALPN `h2`。
 
-## 当前落地状态（2026-06-12）
+## 当前落地状态（2026-06-16）
 
 - `nextpas.core.http.impl.h1.pas` 已落地，作为默认 H1 transport owner。
 - `nextpas.core.http.impl.registry.pas` 已落地，统一负责默认版本到 transport factory 的解析。
@@ -20,10 +19,21 @@ H2/H3 对消费方仍处于未开放阶段。
 - `nextpas.core.http.client.pas` / `nextpas.core.http.server.pas` 现在主要承担编排骨架职责：client 负责重定向/便捷请求构造，server 是建立在 `nextpas.core.net.server` 之上的 HTTP facade。
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
-- 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，默认 client/server 版本都为 `hvHttp11`。
-- 当前真实源码库存为 32 个 HTTP 单元，测试工程为 30 个；其中 H2 现在已有
-  frame codec / validation、HPACK Huffman、HPACK header-block state、per-stream state machine
-  内部基础单元及 focused 测试，H2 transport/session 与 H3 仍未进入可用实现。
+- 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，`hvHttp2` -> H2 transport；默认 client/server 版本为 `hvHttp11`。
+- 当前真实源码库存为 38 个 HTTP 单元，测试工程为 31 个（18 个纳入 Makefile 门禁）。
+- **H2 transport 已完整落地**：
+  - server session (`h2.session.pas`, 1534 行)：client preface 验证、SETTINGS 握手、frame dispatch、
+    per-stream request execution、response encoding、flow control、poll-driven execution（实现 `ITcpServerSession` + `ITcpServerPollDrivenSession`）
+  - client transport (`h2.client.pas`, 1569 行)：client preface/SETTINGS handshake、同步 RoundTrip、
+    连接池（MaxPoolSize governed）、stale pooled connection retry、GOAWAY/PING 处理
+  - TLS wrapper (`h2.tls.pas`)：ALPN `h2` 协商、session factory 传递
+  - TLS stream (`impl.tls.stream.pas`)：`TTlsTcpStream`（`ITcpStream` + `ISSLStream`）
+  - RFC 9113 合规：HPACK table-size rules、MaxHeaderListSize enforcement、trailer handling、GOAWAY last-stream tracking、MaxConcurrentStreams enforcement
+  - 性能：HPACK MRU cache、4-bit nibble Huffman decode、DecodeView zero-refcount path、TH2StreamMap RemoveByIndex
+  - 163 个 H2 focused tests 覆盖 frame/hpack/types/stream/session/client
+  - 跨语言 benchmark：HPACK encode/decode/frame 对照 Go 和 Rust
+- **H3 仍未进入实现**：仅有 `nextpas.core.tls.quic.crypto.pas`（QUIC v1 crypto primitives），
+  无 QPACK/HTTP3 frame/stream 源码。H3 阻塞于 QUIC 独立模块。
 
 HTTP server runtime 的权威方向已经固定在
 [docs/net/ARCHITECTURE.md](/home/dtamade/projects/nextPas/core/docs/net/ARCHITECTURE.md:1)：
@@ -180,18 +190,24 @@ src/
   nextpas.core.http.impl.h1.writer.pas   ← H1 响应序列化
   nextpas.core.http.impl.h1.chunked.pas  ← chunked writer/helper
 
-  { HTTP/2 内部 foundation（不等于 H2 transport/session 已可用） }
-  nextpas.core.http.impl.h2.frame.pas         ← H2 9-byte frame header、基础 payload codec 与类型级 validation
-  nextpas.core.http.impl.h2.hpack.table.pas   ← HPACK static/Huffman 表
-  nextpas.core.http.impl.h2.hpack.huffman.pas ← HPACK Huffman encode/decode
-  nextpas.core.http.impl.h2.hpack.pas         ← HPACK header-block encode/decode、动态表 size update、non-indexed literal
-  nextpas.core.http.impl.h2.types.pas         ← H2 settings、stream state、flow-control bookkeeping
-  nextpas.core.http.impl.h2.stream.pas        ← H2 per-stream state machine、header/body accumulation、body reader
-  nextpas.core.http.impl.h2.session.pas       ← H2 session startup preface validation seam
+  { HTTP/2 完整实现（frame/HPACK/stream/session/client/TLS） }
+  nextpas.core.http.impl.h2.frame.pas         ← H2 9-byte frame header、10 种帧类型 codec、frame validation（RFC 9113）
+  nextpas.core.http.impl.h2.hpack.table.pas   ← HPACK static/Huffman 表（编译期常量）
+  nextpas.core.http.impl.h2.hpack.huffman.pas ← HPACK Huffman encode/decode（4-bit nibble + raw pointer API）
+  nextpas.core.http.impl.h2.hpack.pas         ← HPACK encoder/decoder、dynamic table、MRU cache、DecodeView
+  nextpas.core.http.impl.h2.types.pas         ← H2 settings、7-state stream machine、flow-control bookkeeping
+  nextpas.core.http.impl.h2.stream.pas        ← H2 per-stream state machine、header/body accumulation、trailer、body reader
+  nextpas.core.http.impl.h2.session.pas       ← H2 server session（preface、SETTINGS、frame dispatch、poll-driven）
+  nextpas.core.http.impl.h2.client.pas        ← H2 client transport（RoundTrip、连接池、GOAWAY、stale retry）
+  nextpas.core.http.impl.h2.server.pas        ← H2 server transport factory（IHttpServerSessionFactory）
+  nextpas.core.http.impl.h2.tls.pas           ← H2 TLS wrapper（ALPN h2 协商 + session factory）
+
+  { TLS 集成 }
+  nextpas.core.http.impl.tls.stream.pas       ← TLS TCP stream（ITcpStream + ISSLStream + ALPN）
+  nextpas.core.tls.http2.alpn.pas             ← H2 ALPN 协议常量 + SSLConnectionPool
 ```
 
-H2/H3 public transport 仍是架构规划；当前 H2 源码只覆盖 frame/HPACK/stream/session foundation，
-不对外声明 H2 可用。
+H3 仍未进入实现（仅有 QUIC crypto primitives）。H2 已完整落地并注册到 registry。
 
 ---
 
@@ -352,9 +368,9 @@ http.middleware ← http.intf
 http.server     ← http.base, http.intf, net.base, net.intf, net.server, impl.registry
 http.client     ← http.base, http.intf, io, text, impl.registry
 
-impl.registry   ← http.base, http.intf, impl.h1
+impl.registry   ← http.base, http.intf, impl.h1, impl.h2.server, impl.h2.client, impl.h2.tls
 impl.h1.*       ← http.base, http.intf, net, io, text
-impl.h2.*       ← planned: http.intf, net, tls, io, collections
+impl.h2.*       ← http.base, http.intf, net, tls, io, text
 impl.h3.*       ← planned: http.intf, quic, io, collections
 ```
 
@@ -381,7 +397,7 @@ llhttp 优势：
 
 ## 演进路线
 
-### Phase 1: HTTP/1.1（当前目标）
+### Phase 1: HTTP/1.1（已完成）
 
 ```
 http.base + http.intf + http.headers + http.url
@@ -397,17 +413,26 @@ Benchmark：对照 Go `net/http`、Rust std-only comparator，并在需要更真
 生态对照时追加可选 Hyper/Tokio comparator；当前不把任何单一 comparator row
 表述成完整 Rust 生态结论
 
-### Phase 2: HTTP/2
+### Phase 2: HTTP/2（已完成）
 
 ```
-+ impl.h2.* transport 家族
++ impl.h2.frame / hpack / hpack.table / hpack.huffman — codec foundation
++ impl.h2.types / stream — per-stream state machine + flow control
++ impl.h2.session — server session（preface、SETTINGS、frame dispatch、poll-driven）
++ impl.h2.client — client transport（RoundTrip、连接池、GOAWAY、stale retry）
++ impl.h2.server — server transport factory
++ impl.h2.tls — TLS ALPN wrapper
++ impl.tls.stream — TLS TCP stream wrapper
++ tls.http2.alpn — ALPN 协议常量
 + registry 扩展到 H2 默认解析 / ALPN 接线
 + cleartext H2 = prior knowledge only；TLS H2 = strict ALPN `h2`
 + 不暴露 HTTP/1.1 `Upgrade: h2c` / `HTTP2-Settings` 路径
++ RFC 9113 合规：HPACK table-size rules、MaxHeaderListSize、trailer handling、GOAWAY tracking、MaxConcurrentStreams
 ```
 
-依赖：新增 tls
-触发条件：TLS 模块就绪后
+依赖：tls
+测试：163 个 H2 focused tests（frame/hpack/types/stream/session/client）+ Go/Rust benchmark 对照
+状态：transport 已完整落地，h2-test-coverage-plan.md 目标仍有缺口（client -33、session -18、frame -17、hpack -15）
 
 ### Phase 3: HTTP/3
 
