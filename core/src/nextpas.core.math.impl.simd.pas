@@ -15,9 +15,15 @@ function SimdVec4fMulComponents(const AA, AB: TVec4f): TVec4f; inline;
 function SimdVec4fScale(const AValue: TVec4f; const AScalar: Single): TVec4f; inline;
 function SimdVec4fDot(const AA, AB: TVec4f): Single; inline;
 function SimdVec4fLength(const AValue: TVec4f): Single; inline;
+function SimdVec4fNormalize(const AValue: TVec4f): TVec4f; inline;
+function SimdVec4fAbs(const AValue: TVec4f): TVec4f; inline;
+function SimdVec4fMax(const AA, AB: TVec4f): TVec4f; inline;
+function SimdVec4fMin(const AA, AB: TVec4f): TVec4f; inline;
 function SimdVec3fDot(const AA, AB: TVec3f): Single; inline;
 function SimdVec3fCross(const AA, AB: TVec3f): TVec3f; inline;
+function SimdVec3fNormalize(const AValue: TVec3f): TVec3f; inline;
 function SimdMat4fMulVec4f(const AMatrix: TMat4f; const AVector: TVec4f): TVec4f; inline;
+function SimdMat4fMul(const AA, AB: TMat4f): TMat4f; inline;
 function SimdQuatfRotate(const AQuat: TQuatf; const AVector: TVec3f): TVec3f; inline;
 
 implementation
@@ -40,6 +46,11 @@ end;
 function QuatfVectorToSimd(const AQuat: TQuatf): TVecF32x4; inline;
 begin
   Result := VecF32x4Make(AQuat.X, AQuat.Y, AQuat.Z, 0.0);
+end;
+
+function QuatfToSimd(const AQuat: TQuatf): TVecF32x4; inline;
+begin
+  Result := VecF32x4Make(AQuat.X, AQuat.Y, AQuat.Z, AQuat.W);
 end;
 
 function Mat4fColumnToSimd(const AMatrix: TMat4f; const AColumn: TMat4f.TIndex): TVecF32x4; inline;
@@ -116,6 +127,26 @@ begin
   Result := AValue.Length;
 end;
 
+function SimdVec4fNormalize(const AValue: TVec4f): TVec4f;
+begin
+  Result := SimdToVec4f(VecF32x4Normalize(Vec4fToSimd(AValue)));
+end;
+
+function SimdVec4fAbs(const AValue: TVec4f): TVec4f;
+begin
+  Result := SimdToVec4f(VecF32x4Abs(Vec4fToSimd(AValue)));
+end;
+
+function SimdVec4fMax(const AA, AB: TVec4f): TVec4f;
+begin
+  Result := SimdToVec4f(VecF32x4Max(Vec4fToSimd(AA), Vec4fToSimd(AB)));
+end;
+
+function SimdVec4fMin(const AA, AB: TVec4f): TVec4f;
+begin
+  Result := SimdToVec4f(VecF32x4Min(Vec4fToSimd(AA), Vec4fToSimd(AB)));
+end;
+
 function SimdVec3fDot(const AA, AB: TVec3f): Single;
 begin
   Result := TVec3f.Dot(AA, AB);
@@ -124,6 +155,11 @@ end;
 function SimdVec3fCross(const AA, AB: TVec3f): TVec3f;
 begin
   Result := TVec3f.Cross(AA, AB);
+end;
+
+function SimdVec3fNormalize(const AValue: TVec3f): TVec3f;
+begin
+  Result := SimdToVec3f(VecF32x3Normalize(Vec3fToSimd(AValue)));
 end;
 
 function SimdMat4fMulVec4f(const AMatrix: TMat4f; const AVector: TVec4f): TVec4f;
@@ -138,6 +174,35 @@ begin
   LResult := VecF32x4Add(LResult,
     VecF32x4Mul(Mat4fColumnToSimd(AMatrix, 3), VecF32x4Splat(AVector.W)));
   Result := SimdToVec4f(LResult);
+end;
+
+function SimdMat4fMul(const AA, AB: TMat4f): TMat4f;
+var
+  LC: TMat4f.TIndex;
+  LCol0: TVecF32x4;
+  LCol1: TVecF32x4;
+  LCol2: TVecF32x4;
+  LCol3: TVecF32x4;
+  LResult: TVecF32x4;
+begin
+  LCol0 := Mat4fColumnToSimd(AA, 0);
+  LCol1 := Mat4fColumnToSimd(AA, 1);
+  LCol2 := Mat4fColumnToSimd(AA, 2);
+  LCol3 := Mat4fColumnToSimd(AA, 3);
+  for LC := 0 to 3 do
+  begin
+    LResult := VecF32x4Mul(LCol0, VecF32x4Splat(AB.Data[LC, 0]));
+    LResult := VecF32x4Add(LResult,
+      VecF32x4Mul(LCol1, VecF32x4Splat(AB.Data[LC, 1])));
+    LResult := VecF32x4Add(LResult,
+      VecF32x4Mul(LCol2, VecF32x4Splat(AB.Data[LC, 2])));
+    LResult := VecF32x4Add(LResult,
+      VecF32x4Mul(LCol3, VecF32x4Splat(AB.Data[LC, 3])));
+    Result.Data[LC, 0] := VecF32x4Extract(LResult, 0);
+    Result.Data[LC, 1] := VecF32x4Extract(LResult, 1);
+    Result.Data[LC, 2] := VecF32x4Extract(LResult, 2);
+    Result.Data[LC, 3] := VecF32x4Extract(LResult, 3);
+  end;
 end;
 
 function SimdQuatfRotate(const AQuat: TQuatf; const AVector: TVec3f): TVec3f;
