@@ -6,7 +6,7 @@ unit nextpas.core.simd.api_coverage.support;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   Math,
   nextpas.core.simd.base;
 

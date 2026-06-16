@@ -4,7 +4,7 @@ program test_api_coverage_core_vectors;
 {$Q-}{$R-}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   Math,
   nextpas.core.simd.base,
   nextpas.core.simd,

@@ -3,7 +3,7 @@ program test_linalg_f64;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.simd,
   nextpas.core.simd.alloc,
   nextpas.core.simd.arrays.typed,

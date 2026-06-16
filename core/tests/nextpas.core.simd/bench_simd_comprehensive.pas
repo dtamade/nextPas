@@ -4,7 +4,7 @@ program bench_simd_comprehensive;
 
 uses
   {$IFDEF UNIX}cthreads, Unix,{$ENDIF}
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,

@@ -7,14 +7,13 @@ interface
 
 uses
   Math,
-  SysUtils,
-  Math,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
   fpcunit, testregistry,
   nextpas.core.simd,
   nextpas.core.simd.fixturehelpers,
   nextpas.core.simd.testcase,
   nextpas.core.simd.base,
-  nextpas.core.simd,
   nextpas.core.simd.dispatch,
   nextpas.core.simd.direct,
   nextpas.core.simd.scalar;
@@ -76,6 +75,14 @@ uses
 function DirectBackendName(const aBackend: TSimdBackend): string;
 begin
   Result := GetBackendInfo(aBackend).Name;
+end;
+
+function BoolToTrueFalse(const AValue: Boolean): string; inline;
+begin
+  if AValue then
+    Result := 'True'
+  else
+    Result := 'False';
 end;
 
 type
@@ -296,18 +303,18 @@ end;
 function DescribeDirectDispatchSyntheticSnapshot(aDispatchTable: PSimdDispatchTable): string;
 begin
   Result :=
-    'Add=' + BoolToStr(Pointer(aDispatchTable^.AddF32x4) = Pointer(@DirectDispatchSyntheticAddA), True) + '/' +
-      BoolToStr(Pointer(aDispatchTable^.AddF32x4) = Pointer(@DirectDispatchSyntheticAddB), True) +
-    ', ReduceAdd=' + BoolToStr(Pointer(aDispatchTable^.ReduceAddF32x4) = Pointer(@DirectDispatchSyntheticReduceAddA), True) + '/' +
-      BoolToStr(Pointer(aDispatchTable^.ReduceAddF32x4) = Pointer(@DirectDispatchSyntheticReduceAddB), True) +
-    ', MemEqual=' + BoolToStr(Pointer(aDispatchTable^.MemEqual) = Pointer(@DirectDispatchSyntheticMemEqualA), True) + '/' +
-      BoolToStr(Pointer(aDispatchTable^.MemEqual) = Pointer(@DirectDispatchSyntheticMemEqualB), True) +
-    ', SumBytes=' + BoolToStr(Pointer(aDispatchTable^.SumBytes) = Pointer(@DirectDispatchSyntheticSumBytesA), True) + '/' +
-      BoolToStr(Pointer(aDispatchTable^.SumBytes) = Pointer(@DirectDispatchSyntheticSumBytesB), True) +
-    ', CountByte=' + BoolToStr(Pointer(aDispatchTable^.CountByte) = Pointer(@DirectDispatchSyntheticCountByteA), True) + '/' +
-      BoolToStr(Pointer(aDispatchTable^.CountByte) = Pointer(@DirectDispatchSyntheticCountByteB), True) +
-    ', BitsetPopCount=' + BoolToStr(Pointer(aDispatchTable^.BitsetPopCount) = Pointer(@DirectDispatchSyntheticBitsetPopCountA), True) + '/' +
-      BoolToStr(Pointer(aDispatchTable^.BitsetPopCount) = Pointer(@DirectDispatchSyntheticBitsetPopCountB), True);
+    'Add=' + BoolToTrueFalse(Pointer(aDispatchTable^.AddF32x4) = Pointer(@DirectDispatchSyntheticAddA)) + '/' +
+      BoolToTrueFalse(Pointer(aDispatchTable^.AddF32x4) = Pointer(@DirectDispatchSyntheticAddB)) +
+    ', ReduceAdd=' + BoolToTrueFalse(Pointer(aDispatchTable^.ReduceAddF32x4) = Pointer(@DirectDispatchSyntheticReduceAddA)) + '/' +
+      BoolToTrueFalse(Pointer(aDispatchTable^.ReduceAddF32x4) = Pointer(@DirectDispatchSyntheticReduceAddB)) +
+    ', MemEqual=' + BoolToTrueFalse(Pointer(aDispatchTable^.MemEqual) = Pointer(@DirectDispatchSyntheticMemEqualA)) + '/' +
+      BoolToTrueFalse(Pointer(aDispatchTable^.MemEqual) = Pointer(@DirectDispatchSyntheticMemEqualB)) +
+    ', SumBytes=' + BoolToTrueFalse(Pointer(aDispatchTable^.SumBytes) = Pointer(@DirectDispatchSyntheticSumBytesA)) + '/' +
+      BoolToTrueFalse(Pointer(aDispatchTable^.SumBytes) = Pointer(@DirectDispatchSyntheticSumBytesB)) +
+    ', CountByte=' + BoolToTrueFalse(Pointer(aDispatchTable^.CountByte) = Pointer(@DirectDispatchSyntheticCountByteA)) + '/' +
+      BoolToTrueFalse(Pointer(aDispatchTable^.CountByte) = Pointer(@DirectDispatchSyntheticCountByteB)) +
+    ', BitsetPopCount=' + BoolToTrueFalse(Pointer(aDispatchTable^.BitsetPopCount) = Pointer(@DirectDispatchSyntheticBitsetPopCountA)) + '/' +
+      BoolToTrueFalse(Pointer(aDispatchTable^.BitsetPopCount) = Pointer(@DirectDispatchSyntheticBitsetPopCountB));
 end;
 
 constructor TDirectDispatchMutationWorker.Create(aIterations, aWriterPhase: Integer;
@@ -425,12 +432,12 @@ begin
           Format('direct dispatch synthetic snapshot mixed at iter %d: ' +
             'Add=%s/%s ReduceAdd=%s/%s MemEqual=%s/%s SumBytes=%s/%s CountByte=%s/%s BitsetPopCount=%s/%s',
             [LIndex,
-             BoolToStr(LAddIsA, True), BoolToStr(LAddIsB, True),
-             BoolToStr(LReduceAddIsA, True), BoolToStr(LReduceAddIsB, True),
-             BoolToStr(LMemEqualIsA, True), BoolToStr(LMemEqualIsB, True),
-             BoolToStr(LSumBytesIsA, True), BoolToStr(LSumBytesIsB, True),
-             BoolToStr(LCountByteIsA, True), BoolToStr(LCountByteIsB, True),
-             BoolToStr(LBitsetPopCountIsA, True), BoolToStr(LBitsetPopCountIsB, True)]);
+             BoolToTrueFalse(LAddIsA), BoolToTrueFalse(LAddIsB),
+             BoolToTrueFalse(LReduceAddIsA), BoolToTrueFalse(LReduceAddIsB),
+             BoolToTrueFalse(LMemEqualIsA), BoolToTrueFalse(LMemEqualIsB),
+             BoolToTrueFalse(LSumBytesIsA), BoolToTrueFalse(LSumBytesIsB),
+             BoolToTrueFalse(LCountByteIsA), BoolToTrueFalse(LCountByteIsB),
+             BoolToTrueFalse(LBitsetPopCountIsA), BoolToTrueFalse(LBitsetPopCountIsB)]);
         Exit;
       end;
     end;

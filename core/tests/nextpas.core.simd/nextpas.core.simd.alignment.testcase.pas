@@ -6,7 +6,7 @@ unit nextpas.core.simd.alignment.testcase;
 interface
 
 uses
-  Classes, SysUtils, fpcunit, testregistry,
+  Classes, nextpas.core.text.conv, fpcunit, testregistry,
   nextpas.core.simd,
   nextpas.core.simd.base;
 

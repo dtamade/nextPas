@@ -44,7 +44,9 @@ unit nextpas.core.simd.dispatchapi.testcase;
 interface
 
 uses
-  Classes, SysUtils, Math, nextpas.core.math, fpcunit, testregistry,
+  Classes, Math, nextpas.core.math, nextpas.core.path, nextpas.core.text.conv,
+  nextpas.core.platform.files, nextpas.core.platform.files.base,
+  nextpas.core.platform.path, nextpas.core.system.sysutils, fpcunit, testregistry,
   nextpas.core.simd,
   nextpas.core.simd.testcase,
   nextpas.core.simd.base,
@@ -360,6 +362,89 @@ var
   GDispatchHookRegisterRestoreResetEnabled: Boolean = False;
   GDispatchHookRegisterRestoreResetStage: Integer = 0;
   GSimdRepoRootCache: string = '';
+
+const
+  DISPATCHAPI_PATH_BUF_SIZE = 1024;
+  DISPATCHAPI_CWD_BUF_SIZE = 4096;
+
+function IncludeTrailingPathDelimiter(const aPath: string): string; inline;
+begin
+  Result := aPath;
+  if (Result <> '') and
+    (Result[Length(Result)] <> PLATFORM_PATH_SEP) and
+    (Result[Length(Result)] <> PLATFORM_PATH_ALT_SEP) then
+    Result := Result + PLATFORM_PATH_SEP;
+end;
+
+function GetCurrentDir: string; inline;
+var
+  LBuf: array[0..DISPATCHAPI_CWD_BUF_SIZE - 1] of AnsiChar;
+  LP: PAnsiChar;
+begin
+  if platform_file_getcwd(@LBuf[0], SizeOf(LBuf)) <> nil then
+  begin
+    LP := @LBuf[0];
+    Result := AnsiString(LP);
+  end
+  else
+    Result := '.';
+end;
+
+function ExpandFileName(const aPath: string): string;
+var
+  LStack: array[0..DISPATCHAPI_PATH_BUF_SIZE - 1] of AnsiChar;
+  LHeap: array of AnsiChar;
+  LNeed: Int32;
+begin
+  if aPath = '' then
+    Exit('');
+
+  LNeed := platform_path_resolve(PAnsiChar(aPath), @LStack[0],
+    DISPATCHAPI_PATH_BUF_SIZE);
+  if LNeed > 0 then
+  begin
+    if LNeed < DISPATCHAPI_PATH_BUF_SIZE then
+      SetString(Result, PAnsiChar(@LStack[0]), LNeed)
+    else
+    begin
+      SetLength(LHeap, LNeed + 1);
+      platform_path_resolve(PAnsiChar(aPath), @LHeap[0], Length(LHeap));
+      SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
+    end;
+    Exit;
+  end;
+
+  if PathIsAbsolute(aPath) then
+    Result := PathNormalize(aPath)
+  else
+    Result := PathNormalize(IncludeTrailingPathDelimiter(GetCurrentDir) + aPath);
+end;
+
+function FileExists(const aPath: string): Boolean; inline;
+var
+  LStat: TPlatformFileStat;
+begin
+  Result := (platform_file_stat(PAnsiChar(aPath), LStat) = 0) and
+    (LStat.FileType = ftRegular);
+end;
+
+function DirectoryExists(const aPath: string): Boolean; inline;
+var
+  LStat: TPlatformFileStat;
+begin
+  Result := (platform_file_stat(PAnsiChar(aPath), LStat) = 0) and
+    (LStat.FileType = ftDirectory);
+end;
+
+function ExtractFilePath(const aPath: string): string; inline;
+begin
+  Result := nextpas.core.path.ExtractFilePath(aPath);
+end;
+
+function TrimLeft(const aValue: string): string; inline;
+begin
+  Result := nextpas.core.text.conv.TrimLeft(aValue);
+end;
 
 function DirectoryLooksLikeSimdRepoRoot(const aDir: string): Boolean;
 var
@@ -4489,9 +4574,9 @@ begin
     AssertNotNull('Public ABI backend description pointer should not be nil for unregistered backend=' + DispatchApiBackendName(LBackend),
       Pointer(LDescriptionPtr));
     AssertEquals('Dispatch/public ABI backend name should stay aligned for unregistered backend=' + DispatchApiBackendName(LBackend),
-      LInfo.Name, string(StrPas(LNamePtr)));
+      LInfo.Name, string(LNamePtr));
     AssertEquals('Dispatch/public ABI backend description should stay aligned for unregistered backend=' + DispatchApiBackendName(LBackend),
-      LInfo.Description, string(StrPas(LDescriptionPtr)));
+      LInfo.Description, string(LDescriptionPtr));
   end;
 
   AssertTrue('At least one unregistered backend should exist for metadata coverage',
@@ -4680,9 +4765,9 @@ begin
     AssertEquals('Current backend info description should stay aligned with canonical backend info after re-register',
       LCanonicalInfo.Description, LCurrentInfo.Description);
     AssertEquals('Current backend info name should stay aligned with public ABI text getter after re-register',
-      LCurrentInfo.Name, string(StrPas(LNamePtr)));
+      LCurrentInfo.Name, string(LNamePtr));
     AssertEquals('Current backend info description should stay aligned with public ABI text getter after re-register',
-      LCurrentInfo.Description, string(StrPas(LDescriptionPtr)));
+      LCurrentInfo.Description, string(LDescriptionPtr));
   finally
     RegisterBackend(LBackend, LOriginalTable);
   end;

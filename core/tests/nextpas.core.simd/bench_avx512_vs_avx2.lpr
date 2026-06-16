@@ -4,7 +4,6 @@ program bench_avx512_vs_avx2;
 {$CODEPAGE UTF8}
 
 uses
-  SysUtils,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,

@@ -299,7 +299,8 @@ def check_no_stale_interface_completeness_snapshots(a_errors: list[str]) -> None
         "tests/nextpas.core.simd/docs/simd_completeness_matrix.md",
         "tests/nextpas.core.simd/docs/simd_release_candidate_checklist.md",
     ]
-    l_patterns = [
+    # Anti-pattern: any of these 558 forms means a stale snapshot
+    l_stale_patterns = [
         r"\bdispatch(?:_slots_total)?\s*=\s*558\b",
         r"\bdispatch slots total[：:]\s*`?558`?",
         r"\bdispatch_slots_total:\s*`?558`?",
@@ -307,17 +308,28 @@ def check_no_stale_interface_completeness_snapshots(a_errors: list[str]) -> None
         r"\b558\s*/\s*558\b",
         r"\b558/558\b",
     ]
+    # Canonical check: at least one document must reference the current 616 value
+    l_canonical_pattern = r"\bdispatch_slots_total\s*(?:=|\:)\s*`?616`?"
 
     for l_rel in l_files:
         l_text = read_text(l_rel)
-        for l_pattern in l_patterns:
-            l_match = re.search(l_pattern, l_text, re.IGNORECASE)
+        # 1. Fail-close stale 558 references
+        for l_stale in l_stale_patterns:
+            l_match = re.search(l_stale, l_text, re.IGNORECASE)
             if l_match:
                 a_errors.append(
                     f"{l_rel}: stale interface completeness snapshot ({l_match.group(0)!r}); "
                     "refresh from check_interface_implementation_completeness.py --strict"
                 )
                 break
+
+        # 2. Verify canonical 616 is present somewhere (not all files need it)
+        if l_rel == "docs/simd/closeout.md":
+            if not re.search(l_canonical_pattern, l_text, re.IGNORECASE):
+                a_errors.append(
+                    f"{l_rel}: missing canonical dispatch_slots_total=616 reference; "
+                    "must reference the current canonical slot count"
+                )
 
 
 def check_no_missing_legacy_simd_archive_refs(a_errors: list[str]) -> None:

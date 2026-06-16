@@ -4,7 +4,7 @@ program test_micro_ops;
 {$I nextpas.core.simd.settings.inc}
 
 uses
-  SysUtils, Unix, BaseUnix,
+  nextpas.core.text.conv, Unix, BaseUnix,
   nextpas.core.simd.base,
   nextpas.core.simd.vec16;
 

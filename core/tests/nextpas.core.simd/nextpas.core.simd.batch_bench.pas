@@ -10,7 +10,7 @@ uses
   {$IFDEF WINDOWS}
   Windows,
   {$ENDIF}
-  SysUtils, Math,
+  nextpas.core.text.conv, Math,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.scalar,

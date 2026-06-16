@@ -6,7 +6,8 @@ unit nextpas.core.simd.imageproc.testcase;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
   fpcunit,
   testregistry,
   nextpas.core.errors,

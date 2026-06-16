@@ -3,7 +3,7 @@ program test_conv2d_pool2d;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Math,
+  nextpas.core.text.conv, Math,
   nextpas.core.simd.nn;
 
 var

@@ -4,7 +4,7 @@ program test_quantize;
 {$I nextpas.core.simd.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.simd.alloc,
   nextpas.core.simd.nn.quantize;
 

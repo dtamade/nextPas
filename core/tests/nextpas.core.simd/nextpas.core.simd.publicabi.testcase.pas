@@ -40,7 +40,7 @@ unit nextpas.core.simd.publicabi.testcase;
 interface
 
 uses
-  SysUtils, fpcunit, testregistry,
+  nextpas.core.exception, nextpas.core.text.conv, fpcunit, testregistry,
   nextpas.core.simd,
   nextpas.core.simd.fixturehelpers,
   nextpas.core.simd.testcase,
@@ -1215,21 +1215,21 @@ begin
   AssertNotNull(aContext + ': backend name pointer should not be nil', Pointer(LNamePtr));
   AssertNotNull(aContext + ': backend description pointer should not be nil', Pointer(LDescriptionPtr));
   AssertEquals(aContext + ': facade current backend info name should align with public ABI text getter',
-    LFrameworkInfo.Name, string(StrPas(LNamePtr)));
+    LFrameworkInfo.Name, string(LNamePtr));
   AssertEquals(aContext + ': facade current backend info description should align with public ABI text getter',
-    LFrameworkInfo.Description, string(StrPas(LDescriptionPtr)));
+    LFrameworkInfo.Description, string(LDescriptionPtr));
   AssertEquals(aContext + ': canonical runtime current backend info name should align with public ABI text getter',
-    LRuntimeInfo.Name, string(StrPas(LNamePtr)));
+    LRuntimeInfo.Name, string(LNamePtr));
   AssertEquals(aContext + ': canonical runtime current backend info description should align with public ABI text getter',
-    LRuntimeInfo.Description, string(StrPas(LDescriptionPtr)));
+    LRuntimeInfo.Description, string(LDescriptionPtr));
   AssertEquals(aContext + ': facade runtime snapshot backend info name should align with public ABI text getter',
-    LFrameworkSnapshot.CurrentBackendInfo.Name, string(StrPas(LNamePtr)));
+    LFrameworkSnapshot.CurrentBackendInfo.Name, string(LNamePtr));
   AssertEquals(aContext + ': facade runtime snapshot backend info description should align with public ABI text getter',
-    LFrameworkSnapshot.CurrentBackendInfo.Description, string(StrPas(LDescriptionPtr)));
+    LFrameworkSnapshot.CurrentBackendInfo.Description, string(LDescriptionPtr));
   AssertEquals(aContext + ': canonical runtime snapshot backend info name should align with public ABI text getter',
-    LRuntimeSnapshot.CurrentBackendInfo.Name, string(StrPas(LNamePtr)));
+    LRuntimeSnapshot.CurrentBackendInfo.Name, string(LNamePtr));
   AssertEquals(aContext + ': canonical runtime snapshot backend info description should align with public ABI text getter',
-    LRuntimeSnapshot.CurrentBackendInfo.Description, string(StrPas(LDescriptionPtr)));
+    LRuntimeSnapshot.CurrentBackendInfo.Description, string(LDescriptionPtr));
 
   LDispatchableBackends := GetDispatchableBackendList;
   LFoundExpectedBackend := False;
@@ -1906,9 +1906,9 @@ begin
     AssertNotNull('Updated backend name pointer should not be nil', Pointer(LNamePtr));
     AssertNotNull('Updated backend description pointer should not be nil', Pointer(LDescriptionPtr));
     AssertEquals('Public ABI backend name getter should refresh after RegisterBackend',
-      'MutatedBackendName', string(StrPas(LNamePtr)));
+      'MutatedBackendName', string(LNamePtr));
     AssertEquals('Public ABI backend description getter should refresh after RegisterBackend',
-      'Mutated backend description for public ABI refresh', string(StrPas(LDescriptionPtr)));
+      'Mutated backend description for public ABI refresh', string(LDescriptionPtr));
   finally
     RegisterBackend(LBackend, LOriginalTable);
   end;
@@ -1965,8 +1965,8 @@ var
       Pointer(LNamePtrHistory[aIndex]));
     AssertNotNull('Backend description pointer should not be nil in pointer lifetime history capture',
       Pointer(LDescriptionPtrHistory[aIndex]));
-    LNameSnapshotHistory[aIndex] := AnsiString(StrPas(LNamePtrHistory[aIndex]));
-    LDescriptionSnapshotHistory[aIndex] := AnsiString(StrPas(LDescriptionPtrHistory[aIndex]));
+    LNameSnapshotHistory[aIndex] := AnsiString(string(LNamePtrHistory[aIndex]));
+    LDescriptionSnapshotHistory[aIndex] := AnsiString(string(LDescriptionPtrHistory[aIndex]));
     AssertEquals('Captured backend name should match the just-registered text',
       string(aExpectedName), string(LNameSnapshotHistory[aIndex]));
     AssertEquals('Captured backend description should match the just-registered text',
@@ -1981,10 +1981,10 @@ var
     begin
       AssertEquals('Previously returned backend name pointer should remain process-lifetime valid after ' + aContext +
         ' history_index=' + IntToStr(LHistoryIndex),
-        string(LNameSnapshotHistory[LHistoryIndex]), string(StrPas(LNamePtrHistory[LHistoryIndex])));
+        string(LNameSnapshotHistory[LHistoryIndex]), string(LNamePtrHistory[LHistoryIndex]));
       AssertEquals('Previously returned backend description pointer should remain process-lifetime valid after ' + aContext +
         ' history_index=' + IntToStr(LHistoryIndex),
-        string(LDescriptionSnapshotHistory[LHistoryIndex]), string(StrPas(LDescriptionPtrHistory[LHistoryIndex])));
+        string(LDescriptionSnapshotHistory[LHistoryIndex]), string(LDescriptionPtrHistory[LHistoryIndex]));
     end;
   end;
 
@@ -2053,10 +2053,10 @@ begin
         BuildChurnDescriptionText(LIndex));
       AssertEquals('Current churned backend name should be visible through the latest getter at churn_index=' +
         IntToStr(LIndex),
-        string(BuildChurnNameText(LIndex)), string(StrPas(GetSimdBackendNamePtr(LBackend))));
+        string(BuildChurnNameText(LIndex)), string(GetSimdBackendNamePtr(LBackend)));
       AssertEquals('Current churned backend description should be visible through the latest getter at churn_index=' +
         IntToStr(LIndex),
-        string(BuildChurnDescriptionText(LIndex)), string(StrPas(GetSimdBackendDescriptionPtr(LBackend))));
+        string(BuildChurnDescriptionText(LIndex)), string(GetSimdBackendDescriptionPtr(LBackend)));
       if (LIndex and 31) = 31 then
         AssertHistoryStillValid(REFRESH_COUNT, 're-register churn ' + IntToStr(LIndex));
     end;
@@ -2848,9 +2848,9 @@ var
     AssertNotNull(aContext + ': backend name pointer should not be nil', Pointer(LNamePtr));
     AssertNotNull(aContext + ': backend description pointer should not be nil', Pointer(LDescriptionPtr));
     AssertEquals(aContext + ': current backend info name should stay aligned with public ABI text getter',
-      LCurrentInfo.Name, string(StrPas(LNamePtr)));
+      LCurrentInfo.Name, string(LNamePtr));
     AssertEquals(aContext + ': current backend info description should stay aligned with public ABI text getter',
-      LCurrentInfo.Description, string(StrPas(LDescriptionPtr)));
+      LCurrentInfo.Description, string(LDescriptionPtr));
 
     LFoundCurrent := False;
     for LListIndex := 0 to High(LDispatchableBackends) do
