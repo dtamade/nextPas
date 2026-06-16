@@ -18,6 +18,9 @@ function platform_env_enumerate(ACallback: TPlatformEnvEnumerateCallback;
   AData: Pointer): Int32;
 function platform_env_names_case_sensitive: Boolean;
 
+{ Convenience: returns env var value as string, '' if not found }
+function platform_env_get_str(const AName: AnsiString): AnsiString;
+
 implementation
 
 {$IFDEF NEXTPAS_UNIX}
@@ -263,6 +266,22 @@ begin
 {$ELSE}
   Result := True;
 {$ENDIF}
+end;
+
+function platform_env_get_str(const AName: AnsiString): AnsiString;
+var
+  LBuf: array[0..4095] of AnsiChar;
+  LLen: Int32;
+  LRet: Int32;
+begin
+  Result := '';
+  if Length(AName) = 0 then Exit;
+  LRet := platform_env_get(@AName[1], @LBuf[0], SizeOf(LBuf), LLen);
+  if (LRet = 0) and (LLen > 0) then
+  begin
+    SetLength(Result, LLen);
+    Move(LBuf[0], Result[1], LLen);
+  end;
 end;
 
 end.
