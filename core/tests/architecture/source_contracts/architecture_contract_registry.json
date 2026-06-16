@@ -137,11 +137,6 @@
     },
     {
       "path": "src/nextpas.core.system.sysutils.pas",
-      "unit": "nextpas.core.text.compare",
-      "reason": "temporary system compatibility facade text dependency"
-    },
-    {
-      "path": "src/nextpas.core.system.sysutils.pas",
       "unit": "nextpas.core.text.conv",
       "reason": "temporary system compatibility facade text dependency"
     }
