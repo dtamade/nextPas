@@ -29,6 +29,9 @@ VM_HOST="${WIN_HOST:-192.168.122.208}"
 VM_DIR='C:\Users\dtamade\Desktop\win-rt'
 SSH_KEY="${WIN_SSH_KEY:-/tmp/win-setup/id_rsa}"
 CORE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+LOG_DIR="${SCRIPT_DIR}/../build"
+mkdir -p "$LOG_DIR"
 
 # ── Module discovery ────────────────────────────────────────────────
 
@@ -53,11 +56,19 @@ list_real_modules() {
 #   - _windows_real with only `build` target: use `make build` (already cross-compiles)
 build_module() {
     local DIR="$1"
+    local MOD_NAME
+    MOD_NAME=$(basename "$DIR")
+    local LOG_FILE="$LOG_DIR/${MOD_NAME}_build.log"
     if grep -q '^wine-build:' "$DIR/Makefile" 2>/dev/null; then
-        make -C "$DIR" wine-build 2>/dev/null | grep -q 'Linking'
+        make -C "$DIR" wine-build >"$LOG_FILE" 2>&1
     else
-        make -C "$DIR" build 2>/dev/null | grep -q 'Linking'
+        make -C "$DIR" build >"$LOG_FILE" 2>&1
     fi
+    if [ $? -ne 0 ]; then
+        echo "BUILD FAIL: $MOD_NAME (see $LOG_FILE)"
+        return 1
+    fi
+    grep -q 'Linking' "$LOG_FILE"
 }
 
 # Locate the built .exe for a module.
