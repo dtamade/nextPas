@@ -136,6 +136,8 @@ Scalar helpers:
 `UInt32` overflow helpers report `High(UInt32)+1` and `High(UInt32)*2` as overflow; `High(UInt32)-1+1` and zero-times-high multiplication in either order return `False` without divide-by-zero.
 `GCD` and `LCM` normalize signs and return non-negative `Int64` results; representable `Low(Int64)`/`High(Int64)` boundary cases succeed, zero LCM returns `0` before overflow checks, and unrepresentable results raise `EArgumentError`.
 
+Statistical helpers: `Sum`, `SumInt`, `Mean`, `Variance`, `PopnVariance`, `StdDev`, `PopnStdDev`, `TotalVariance`.
+
 Trig helpers:
 
 - Trig: `Sin`, `Cos`, `Tan`, `ArcSin`, `ArcCos`, `ArcTan`, `ArcTan2`

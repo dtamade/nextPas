@@ -116,6 +116,22 @@ function Fmod(const AX, AY: Single): Single; overload; inline;
 function Fmod(const AX, AY: Extended): Extended; overload; inline;
 {$ENDIF}
 
+function Sum(const AData: array of Double): Double; overload; inline;
+function Sum(const AData: array of Single): Single; overload; inline;
+function SumInt(const AData: array of Integer): Int64; inline;
+function Mean(const AData: array of Double): Double; overload; inline;
+function Mean(const AData: array of Single): Single; overload; inline;
+function Variance(const AData: array of Double): Double; overload; inline;
+function Variance(const AData: array of Single): Single; overload; inline;
+function PopnVariance(const AData: array of Double): Double; overload; inline;
+function PopnVariance(const AData: array of Single): Single; overload; inline;
+function StdDev(const AData: array of Double): Double; overload; inline;
+function StdDev(const AData: array of Single): Single; overload; inline;
+function PopnStdDev(const AData: array of Double): Double; overload; inline;
+function PopnStdDev(const AData: array of Single): Single; overload; inline;
+function TotalVariance(const AData: array of Double): Double; overload; inline;
+function TotalVariance(const AData: array of Single): Single; overload; inline;
+
 function Sin(const AX: Double): Double; overload; inline;
 function Sin(const AX: Single): Single; overload; inline;
 function Cos(const AX: Double): Double; overload; inline;
@@ -510,6 +526,81 @@ begin
   Result := nextpas.core.math.scalar.Fmod(AX, AY);
 end;
 {$ENDIF}
+
+function Sum(const AData: array of Double): Double;
+begin
+  Result := nextpas.core.math.scalar.Sum(AData);
+end;
+
+function Sum(const AData: array of Single): Single;
+begin
+  Result := nextpas.core.math.scalar.Sum(AData);
+end;
+
+function SumInt(const AData: array of Integer): Int64;
+begin
+  Result := nextpas.core.math.scalar.SumInt(AData);
+end;
+
+function Mean(const AData: array of Double): Double;
+begin
+  Result := nextpas.core.math.scalar.Mean(AData);
+end;
+
+function Mean(const AData: array of Single): Single;
+begin
+  Result := nextpas.core.math.scalar.Mean(AData);
+end;
+
+function Variance(const AData: array of Double): Double;
+begin
+  Result := nextpas.core.math.scalar.Variance(AData);
+end;
+
+function Variance(const AData: array of Single): Single;
+begin
+  Result := nextpas.core.math.scalar.Variance(AData);
+end;
+
+function PopnVariance(const AData: array of Double): Double;
+begin
+  Result := nextpas.core.math.scalar.PopnVariance(AData);
+end;
+
+function PopnVariance(const AData: array of Single): Single;
+begin
+  Result := nextpas.core.math.scalar.PopnVariance(AData);
+end;
+
+function StdDev(const AData: array of Double): Double;
+begin
+  Result := nextpas.core.math.scalar.StdDev(AData);
+end;
+
+function StdDev(const AData: array of Single): Single;
+begin
+  Result := nextpas.core.math.scalar.StdDev(AData);
+end;
+
+function PopnStdDev(const AData: array of Double): Double;
+begin
+  Result := nextpas.core.math.scalar.PopnStdDev(AData);
+end;
+
+function PopnStdDev(const AData: array of Single): Single;
+begin
+  Result := nextpas.core.math.scalar.PopnStdDev(AData);
+end;
+
+function TotalVariance(const AData: array of Double): Double;
+begin
+  Result := nextpas.core.math.scalar.TotalVariance(AData);
+end;
+
+function TotalVariance(const AData: array of Single): Single;
+begin
+  Result := nextpas.core.math.scalar.TotalVariance(AData);
+end;
 
 function Sin(const AX: Single): Single;
 begin
