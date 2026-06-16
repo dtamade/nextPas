@@ -217,6 +217,7 @@ var
   LBlock: LPWSTR;
   LCur: PWideChar;
   LUtf8: AnsiString;
+  LEntryLen: Integer;
 begin
   if not Assigned(ACallback) then
     Exit(Int32(ERROR_INVALID_PARAMETER));
@@ -232,7 +233,12 @@ begin
         Exit(Int32(ERROR_INVALID_DATA));
       if not ACallback(PAnsiChar(LUtf8), AData) then
         Break;
-      Inc(LCur, Length(UnicodeString(LCur)) + 1);
+      { Advance past this entry: compute WideChar length inline to avoid
+        temporary UnicodeString allocation per iteration. }
+      LEntryLen := 0;
+      while LCur[LEntryLen] <> #0 do
+        Inc(LEntryLen);
+      Inc(LCur, LEntryLen + 1);
     end;
     Result := 0;
   finally
