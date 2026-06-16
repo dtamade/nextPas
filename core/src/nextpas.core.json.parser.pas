@@ -85,24 +85,36 @@ begin
   LNodeSize := FNodeCap * SizeOf(TJsonNode);
   FStrArenaCap := INITIAL_ARENA_CAP;
   LTotalSize := LNodeSize + FStrArenaCap;
-  LBase := FAllocator.Allocate(LTotalSize);
-  FNodes := PJsonNode(LBase);
-  FStrArena := LBase + LNodeSize;
+  FNodes := nil;
+  FStrArena := nil;
   FNodeCount := 0;
   FStrArenaUsed := 0;
   FStrOverflowCap := 0;
   FStrOverflow := nil;
   FStrOverflowCount := 0;
+  FInput := TStringView.Create(nil, 0);
+  FillChar(FError, SizeOf(FError), 0);
   FHasError := False;
   FIndices := nil;
   FIndexCap := 0;
   FCombinedAlloc := True;
   FInited := True;
+  LBase := PAnsiChar(FAllocator.Allocate(LTotalSize));
+  if LBase = nil then
+  begin
+    SetOutOfMemoryError;
+    Exit;
+  end;
+  FNodes := PJsonNode(LBase);
+  FStrArena := LBase + LNodeSize;
 end;
 
 procedure TJsonDocument.SetOutOfMemoryError;
 begin
   FError.Message := TStringView.Create(PAnsiChar('out of memory'), 13);
+  FError.Offset := 0;
+  FError.Line := 0;
+  FError.Column := 0;
   FHasError := True;
 end;
 
@@ -164,21 +176,33 @@ function TJsonDocument.AddNode: UInt32;
 var
   LNewCap: UInt32;
   LNewNodes: PJsonNode;
-  LNewArena: PAnsiChar;
+  LNodesPtr: PJsonNode;
+  LArenaPtr: PAnsiChar;
 begin
   if FNodeCount >= FNodeCap then
   begin
     LNewCap := FNodeCap * 2;
     if FCombinedAlloc then
     begin
-      LNewNodes := FAllocator.Allocate(LNewCap * SizeOf(TJsonNode));
-      Move(FNodes^, LNewNodes^, FNodeCap * SizeOf(TJsonNode));
-      LNewArena := FAllocator.Allocate(FStrArenaCap);
+      LNodesPtr := FAllocator.Allocate(LNewCap * SizeOf(TJsonNode));
+      if LNodesPtr = nil then
+      begin
+        SetOutOfMemoryError;
+        Exit(JSON_NODE_NONE);
+      end;
+      Move(FNodes^, LNodesPtr^, FNodeCap * SizeOf(TJsonNode));
+      LArenaPtr := FAllocator.Allocate(FStrArenaCap);
+      if LArenaPtr = nil then
+      begin
+        FAllocator.Deallocate(LNodesPtr);
+        SetOutOfMemoryError;
+        Exit(JSON_NODE_NONE);
+      end;
       if FStrArenaUsed > 0 then
-        Move(FStrArena^, LNewArena^, FStrArenaUsed);
+        Move(FStrArena^, LArenaPtr^, FStrArenaUsed);
       FAllocator.Deallocate(FNodes);
-      FNodes := LNewNodes;
-      FStrArena := LNewArena;
+      FNodes := LNodesPtr;
+      FStrArena := LArenaPtr;
       FCombinedAlloc := False;
     end
     else
@@ -787,7 +811,20 @@ var
   LBase: PAnsiChar;
   LTrailingOffset: SizeUInt;
   LNewNodes: PJsonNode;
+  LNodesPtr: PJsonNode;
+  LArenaPtr: PAnsiChar;
 begin
+  if not FInited then
+  begin
+    SetOutOfMemoryError;
+    Exit(False);
+  end;
+  if FNodes = nil then
+  begin
+    if not FHasError then
+      SetOutOfMemoryError;
+    Exit(False);
+  end;
   FInput := AInput;
   FNodeCount := 0;
   FHasError := False;
@@ -820,9 +857,22 @@ begin
     if FCombinedAlloc then
     begin
       LBase := PAnsiChar(FNodes);
-      FNodes := FAllocator.Allocate(LEstimate * SizeOf(TJsonNode));
-      FStrArena := FAllocator.Allocate(FStrArenaCap);
+      LNodesPtr := FAllocator.Allocate(LEstimate * SizeOf(TJsonNode));
+      if LNodesPtr = nil then
+      begin
+        SetOutOfMemoryError;
+        Exit(False);
+      end;
+      LArenaPtr := FAllocator.Allocate(FStrArenaCap);
+      if LArenaPtr = nil then
+      begin
+        FAllocator.Deallocate(LNodesPtr);
+        SetOutOfMemoryError;
+        Exit(False);
+      end;
       FAllocator.Deallocate(LBase);
+      FNodes := LNodesPtr;
+      FStrArena := LArenaPtr;
       FCombinedAlloc := False;
     end
     else
@@ -902,12 +952,17 @@ var
   LExistingKeyIdx: UInt32;
   LH: UInt32;
   LIdx: PJsonObjectIndex;
+  LIndices: PJsonObjectIndex;
+  LSlots: PUInt32;
 begin
   if FIndices = nil then
   begin
     FIndexCap := FNodeCount;
-    FIndices := FAllocator.Allocate(FIndexCap * SizeOf(TJsonObjectIndex));
-    FillChar(FIndices^, FIndexCap * SizeOf(TJsonObjectIndex), 0);
+    LIndices := FAllocator.Allocate(FIndexCap * SizeOf(TJsonObjectIndex));
+    if LIndices = nil then
+      Exit;
+    FillChar(LIndices^, FIndexCap * SizeOf(TJsonObjectIndex), 0);
+    FIndices := LIndices;
   end;
   if AObjectIdx >= FIndexCap then Exit;
   LIdx := @FIndices[AObjectIdx];
@@ -916,8 +971,11 @@ begin
   LNode := @FNodes[AObjectIdx];
   LCap := NextPow2(LNode^.Container.Count * 2);
   if LCap < 8 then LCap := 8;
+  LSlots := FAllocator.Allocate(LCap * SizeOf(UInt32));
+  if LSlots = nil then
+    Exit;
   LIdx^.Mask := LCap - 1;
-  LIdx^.Slots := FAllocator.Allocate(LCap * SizeOf(UInt32));
+  LIdx^.Slots := LSlots;
   FillChar(LIdx^.Slots^, LCap * SizeOf(UInt32), $FF);
 
   LCur := LNode^.Container.FirstChild;

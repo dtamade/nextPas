@@ -40,6 +40,24 @@ type
     function Traits: TAllocatorTraits;
   end;
 
+  TFailingAllocateAllocator = class(TInterfacedObject, IAllocator)
+  private
+    FFailOnAllocateCall: SizeUInt;
+    FAllocateCalls: SizeUInt;
+  public
+    constructor Create(const AFailOnAllocateCall: SizeUInt);
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
+    function GetMem(aSize: SizeUInt): Pointer;
+    function AllocMem(aSize: SizeUInt): Pointer;
+    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+    procedure FreeMem(aDst: Pointer);
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(aPtr: Pointer);
+    function Traits: TAllocatorTraits;
+  end;
+
   TCountingAllocator = class(TInterfacedObject, IAllocator)
   private
     FAllocations: SizeUInt;
@@ -128,6 +146,86 @@ begin
 end;
 
 function TFailingReallocateAllocator.Traits: TAllocatorTraits;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.HasMemSize := False;
+  Result.SupportsAligned := False;
+end;
+
+constructor TFailingAllocateAllocator.Create(const AFailOnAllocateCall: SizeUInt);
+begin
+  inherited Create;
+  FFailOnAllocateCall := AFailOnAllocateCall;
+  FAllocateCalls := 0;
+end;
+
+function TFailingAllocateAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TFailingAllocateAllocator.Reallocate(const APtr: Pointer;
+  const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TFailingAllocateAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
+end;
+
+function TFailingAllocateAllocator.GetMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Inc(FAllocateCalls);
+  if (FFailOnAllocateCall > 0) and (FAllocateCalls = FFailOnAllocateCall) then
+    Exit(nil);
+  Result := System.GetMem(aSize);
+end;
+
+function TFailingAllocateAllocator.AllocMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Inc(FAllocateCalls);
+  if (FFailOnAllocateCall > 0) and (FAllocateCalls = FFailOnAllocateCall) then
+    Exit(nil);
+  Result := System.AllocMem(aSize);
+end;
+
+function TFailingAllocateAllocator.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+  begin
+    FreeMem(aDst);
+    Exit(nil);
+  end;
+  if aDst = nil then
+    Exit(GetMem(aSize));
+  Result := System.ReallocMem(aDst, aSize);
+end;
+
+procedure TFailingAllocateAllocator.FreeMem(aDst: Pointer);
+begin
+  if aDst <> nil then
+    System.FreeMem(aDst);
+end;
+
+function TFailingAllocateAllocator.AllocAligned(aSize,
+  aAlignment: SizeUInt): Pointer;
+begin
+  Result := GetMem(aSize);
+end;
+
+procedure TFailingAllocateAllocator.FreeAligned(aPtr: Pointer);
+begin
+  FreeMem(aPtr);
+end;
+
+function TFailingAllocateAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
@@ -357,6 +455,12 @@ begin
     'node growth must guard nil reallocate');
   CheckSourceContains(LSource, 'lnewptr := fallocator.reallocate(pointer(fanchors),',
     'anchor growth must stage reallocate result');
+  CheckSourceContains(LSource, 'lptr := fallocator.allocate(fnodecap * sizeof(tyamlnode));',
+    'init must stage node allocation');
+  CheckSourceContains(LSource, 'lptr := fallocator.allocate(fanchorcap * sizeof(tyamlanchorentry));',
+    'init must stage anchor allocation');
+  CheckSourceContains(LSource, 'fallocator.deallocate(pointer(fnodes));',
+    'init must release staged nodes when anchor allocation fails');
   CheckSourceContains(LSource, 'if adoc.fnodes <> nil then',
     'parse with allocator must clean an existing document first');
   CheckSourceContains(LSource, 'adoc.done;',
@@ -426,6 +530,24 @@ begin
     Check(LDoc.HasError(), 'anchor growth OOM sets error');
     CheckEqual('out of memory', LDoc.Error().Message.ToString,
       'anchor growth OOM message');
+  finally
+    LDoc.Done;
+  end;
+end;
+
+procedure TestParserInitAllocateOOMFailsClosed;
+var
+  LAllocatorObj: TFailingAllocateAllocator;
+  LAllocator: IAllocator;
+  LDoc: TYamlDocument;
+begin
+  LAllocatorObj := TFailingAllocateAllocator.Create(1);
+  LAllocator := LAllocatorObj as IAllocator;
+  YamlDocInitWith(LDoc, LAllocator);
+  try
+    Check(LDoc.HasError(), 'init node allocate OOM sets error');
+    CheckEqual('out of memory', LDoc.Error().Message.ToString,
+      'init node allocate OOM message');
   finally
     LDoc.Done;
   end;
@@ -600,6 +722,8 @@ begin
     @TestParserNodeGrowthOOMFailsClosed);
   T.Run('Parser anchor growth OOM fails closed',
     @TestParserAnchorGrowthOOMFailsClosed);
+  T.Run('Parser init allocate OOM fails closed',
+    @TestParserInitAllocateOOMFailsClosed);
   T.Run('Parser reparse releases prior document',
     @TestParserReparseReleasesPriorDocument);
   T.Run('K8s pod spec', @TestK8sPodSpec);

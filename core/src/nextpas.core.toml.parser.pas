@@ -189,15 +189,18 @@ end;
 { TTomlDocument }
 
 procedure TTomlDocument.Init(const AAllocator: IAllocator);
+var
+  LPtr: Pointer;
 begin
   if AAllocator = nil then
     FAllocator := DefaultAllocator
   else
     FAllocator := AAllocator;
   FNodeCap := INITIAL_NODE_CAP;
-  FNodes := FAllocator.Allocate(FNodeCap * SizeOf(TTomlNode));
+  FNodes := nil;
   FNodeCount := 0;
   FHasError := False;
+  FillChar(FError, SizeOf(FError), 0);
   FOwnedBufs := nil;
   FOwnedCount := 0;
   FOwnedCap := 0;
@@ -206,6 +209,13 @@ begin
   FHashCap := 0;
   FHashOwner := TOML_NODE_NONE;
   FInited := True;
+  LPtr := FAllocator.Allocate(FNodeCap * SizeOf(TTomlNode));
+  if LPtr = nil then
+  begin
+    SetOutOfMemoryError;
+    Exit;
+  end;
+  FNodes := PTomlNode(LPtr);
 end;
 
 procedure TTomlDocument.SetOutOfMemoryError;
@@ -313,6 +323,7 @@ procedure TTomlDocument.BuildHashIndex(ATableIdx: UInt32);
 var
   LCount, LCap, LSlot: UInt32;
   LCur: UInt32;
+  LHashBuckets: PUInt32;
 begin
   LCount := FNodes[ATableIdx].Container.Count;
   LCap := LCount * 2;
@@ -321,9 +332,16 @@ begin
   begin
     FAllocator.Deallocate(FHashBuckets);
     FHashBuckets := nil;
+    FHashCap := 0;
+    FHashOwner := TOML_NODE_NONE;
   end;
   if FHashBuckets = nil then
-    FHashBuckets := FAllocator.Allocate(LCap * SizeOf(UInt32));
+  begin
+    LHashBuckets := FAllocator.Allocate(LCap * SizeOf(UInt32));
+    if LHashBuckets = nil then
+      Exit;
+    FHashBuckets := LHashBuckets;
+  end;
   FHashCap := LCap;
   FillChar(FHashBuckets^, FHashCap * SizeOf(UInt32), $FF);
   FHashOwner := ATableIdx;
@@ -705,6 +723,8 @@ begin
   begin
     LBufLen := LEnd - LStart;
     LBuf := Doc^.FAllocator.Allocate(LBufLen);
+    if LBuf = nil then
+      Exit(SetError('out of memory', 13));
     LBufLen := TomlUnescapeToBuffer(Src + LStart, LEnd - LStart, LBuf, LErr);
     if LErr <> ueNone then
     begin
@@ -784,6 +804,8 @@ begin
       end;
       LBufLen := LEnd - LStart;
       LBuf := Doc^.FAllocator.Allocate(LBufLen + 1);
+      if LBuf = nil then
+        Exit(SetError('out of memory', 13));
       LDst := LBuf;
       LI := LStart;
       while LI < LEnd do
@@ -894,6 +916,8 @@ begin
       end;
       LBufLen := LEnd - LStart;
       LBuf := Doc^.FAllocator.Allocate(LBufLen + 1);
+      if LBuf = nil then
+        Exit(SetError('out of memory', 13));
       LDst := LBuf;
       LI := LStart;
       while LI < LEnd do
@@ -1602,7 +1626,8 @@ begin
   if Doc^.FNodes[ATableIdx].Container.Count >= HASH_INDEX_THRESHOLD then
   begin
     Result := Doc^.HashLookup(ATableIdx, AKey, LHash);
-    Exit;
+    if Result <> TOML_NODE_NONE then
+      Exit;
   end;
   LCur := Doc^.FNodes[ATableIdx].Container.FirstChild;
   while LCur <> TOML_NODE_NONE do
@@ -1820,6 +1845,17 @@ var
   LIsArray: Boolean;
   LI: UInt32;
 begin
+  if not FInited then
+  begin
+    SetOutOfMemoryError;
+    Exit(False);
+  end;
+  if FNodes = nil then
+  begin
+    if not FHasError then
+      SetOutOfMemoryError;
+    Exit(False);
+  end;
   // Clean up state from any previous parse
   if FOwnedBufs <> nil then
   begin

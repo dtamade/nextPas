@@ -70,17 +70,19 @@ const
   YAML_DOCUMENT_INIT_MAGIC = QWord($59414D4C444F4331);
 
 procedure TYamlDocument.Init(const AAllocator: IAllocator);
+var
+  LPtr: Pointer;
 begin
   if AAllocator = nil then
     FAllocator := DefaultAllocator
   else
     FAllocator := AAllocator;
   FNodeCap := INITIAL_CAPACITY;
-  FNodes := PYamlNode(FAllocator.Allocate(FNodeCap * SizeOf(TYamlNode)));
+  FNodes := nil;
   FNodeCount := 0;
   FRootIdx := 0;
   FAnchorCap := 16;
-  FAnchors := PYamlAnchorEntry(FAllocator.Allocate(FAnchorCap * SizeOf(TYamlAnchorEntry)));
+  FAnchors := nil;
   FAnchorCount := 0;
   FParseDepth := 0;
   FError.Message := TStringView.Empty;
@@ -89,6 +91,23 @@ begin
   FError.Offset := 0;
   FHasError := False;
   FInitMagic := YAML_DOCUMENT_INIT_MAGIC;
+  LPtr := FAllocator.Allocate(FNodeCap * SizeOf(TYamlNode));
+  if LPtr = nil then
+  begin
+    SetError('out of memory', 0, 0, 0);
+    Exit;
+  end;
+  FNodes := PYamlNode(LPtr);
+
+  LPtr := FAllocator.Allocate(FAnchorCap * SizeOf(TYamlAnchorEntry));
+  if LPtr = nil then
+  begin
+    FAllocator.Deallocate(Pointer(FNodes));
+    FNodes := nil;
+    SetError('out of memory', 0, 0, 0);
+    Exit;
+  end;
+  FAnchors := PYamlAnchorEntry(LPtr);
 end;
 
 procedure TYamlDocument.Done;
@@ -1041,6 +1060,8 @@ var
 begin
   PrepareYamlDocumentForParse(ADoc);
   ADoc.Init(AAllocator);
+  if ADoc.FHasError then
+    Exit;
   if (AInput = nil) or (ALen = 0) then
   begin
     ADoc.FRootIdx := ADoc.AddNode;
