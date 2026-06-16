@@ -5200,7 +5200,7 @@ require_output_pattern '^--- nextpas\.core\.platform\.sync\.sizes: 5 total, 5 pa
 printf 'core-platform-sync-size-check=pass\n'
 
 printf 'core-platform-sync-win64-check=running\n'
-if false; then  # skipped: FPC cross-compiler cannot resolve forward declarations inside {$IFDEF} blocks
+if false; then  # TODO: re-enable when FPC fixes cross-compile forward-decl resolution in {$IFDEF} blocks
   printf 'core-platform-sync-win64-command=fpc -Twin64 -Cn -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR" "$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR" "$REPO_ROOT"
   mkdir -p "$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR"
   if ! fpc \
