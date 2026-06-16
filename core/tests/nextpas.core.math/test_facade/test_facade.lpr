@@ -213,8 +213,7 @@ var
 begin
   V := TVec3f.Create(1.0, 2.0, 3.0);
   CheckNear(14.0, V.LengthSqr, 'facade exposes TVec3f');
-  CheckNear(1.0, TVec3f.Cross(TVec3f.Create(1.0, 0.0, 0.0),
-    TVec3f.Create(0.0, 1.0, 0.0)).Z, 'facade exposes TVec3f.Cross');
+  CheckNear(1.0, TVec3f.Create(1.0, 0.0, 0.0).Cross(TVec3f.Create(0.0, 1.0, 0.0)).Z, 'facade exposes TVec3f.Cross');
   M := TMat4f.Identity;
   CheckNear(1.0, (M * TVec4f.Create(1.0, 0.0, 0.0, 1.0)).X, 'facade exposes TMat4f');
   Q := TQuatf.Identity;
@@ -235,7 +234,7 @@ var
 begin
   A3f := TVec3f.Create(Single(-2.0), Single(4.0), Single(8.0));
   B3f := TVec3f.Create(Single(6.0), Single(-4.0), Single(0.0));
-  L3f := TVec3f.Lerp(A3f, B3f, Single(0.25));
+  L3f := A3f.Lerp(B3f, Single(0.25));
   CheckNear(nextpas.core.math.Lerp(A3f.X, B3f.X, Single(0.25)), L3f.X,
     'facade TVec3f Lerp scalar parity X');
   CheckNear(nextpas.core.math.Lerp(A3f.Y, B3f.Y, Single(0.25)), L3f.Y,
@@ -245,7 +244,7 @@ begin
 
   A4d := TVec4d.Create(-4.0, 2.0, 8.0, -10.0);
   B4d := TVec4d.Create(12.0, -6.0, 0.0, 14.0);
-  L4d := TVec4d.Lerp(A4d, B4d, 1.0);
+  L4d := A4d.Lerp(B4d, 1.0);
   CheckNear(nextpas.core.math.Lerp(A4d.X, B4d.X, 1.0), L4d.X,
     'facade TVec4d Lerp scalar parity t=1 X');
   CheckNear(nextpas.core.math.Lerp(A4d.Y, B4d.Y, 1.0), L4d.Y,
@@ -526,11 +525,11 @@ begin
     V2fC := V2fC * Single(2.0);
     V2fC := Single(2.0) * V2fC;
     V2fC := V2fC / Single(2.0);
-    V2fC := TVec2f.MulComponents(V2fA, V2fC);
-    V2fC := TVec2f.DivComponents(V2fC, TVec2f.Create(Single(1.0), Single(1.0)));
-    F := TVec2f.Dot(V2fA, V2fC) + V2fC.LengthSqr + V2fC.Length;
-    V2fC := TVec2f.Lerp(V2fA, V2fC, Single(0.5)).Normalize;
-    B := TVec2f.Equals(V2fC, V2fC, Single(0.0));
+    V2fC := V2fA.ComponentMul(V2fC);
+    V2fC := V2fC.ComponentDiv(TVec2f.Create(Single(1.0), Single(1.0)));
+    F := V2fA.Dot(V2fC) + V2fC.LengthSqr + V2fC.Length;
+    V2fC := V2fA.Lerp(V2fC, Single(0.5)).Normalize;
+    B := V2fC.Equals(V2fC, Single(0.0));
 
     V3fA := TVec3f.Create(Single(1.0), Single(2.0), Single(3.0));
     V3fB := TVec3f.Zero;
@@ -540,12 +539,12 @@ begin
     V3fC := V3fC * Single(2.0);
     V3fC := Single(2.0) * V3fC;
     V3fC := V3fC / Single(2.0);
-    V3fC := TVec3f.MulComponents(V3fA, V3fC);
-    V3fC := TVec3f.DivComponents(V3fC, TVec3f.Create(Single(1.0), Single(1.0), Single(1.0)));
-    F := F + TVec3f.Dot(V3fA, V3fC) + V3fC.LengthSqr + V3fC.Length;
-    V3fC := TVec3f.Cross(V3fA, V3fC);
-    V3fC := TVec3f.Lerp(V3fA, V3fC, Single(0.5)).Normalize;
-    B := B or TVec3f.Equals(V3fC, V3fC, Single(0.0));
+    V3fC := V3fA.ComponentMul(V3fC);
+    V3fC := V3fC.ComponentDiv(TVec3f.Create(Single(1.0), Single(1.0), Single(1.0)));
+    F := F + V3fA.Dot(V3fC) + V3fC.LengthSqr + V3fC.Length;
+    V3fC := V3fA.Cross(V3fC);
+    V3fC := V3fA.Lerp(V3fC, Single(0.5)).Normalize;
+    B := B or V3fC.Equals(V3fC, Single(0.0));
 
     V4fA := TVec4f.Create(Single(1.0), Single(2.0), Single(3.0), Single(4.0));
     V4fB := TVec4f.Zero;
@@ -555,12 +554,11 @@ begin
     V4fC := V4fC * Single(2.0);
     V4fC := Single(2.0) * V4fC;
     V4fC := V4fC / Single(2.0);
-    V4fC := TVec4f.MulComponents(V4fA, V4fC);
-    V4fC := TVec4f.DivComponents(V4fC,
-      TVec4f.Create(Single(1.0), Single(1.0), Single(1.0), Single(1.0)));
-    F := F + TVec4f.Dot(V4fA, V4fC) + V4fC.LengthSqr + V4fC.Length;
-    V4fC := TVec4f.Lerp(V4fA, V4fC, Single(0.5)).Normalize;
-    B := B or TVec4f.Equals(V4fC, V4fC, Single(0.0));
+    V4fC := V4fA.ComponentMul(V4fC);
+    V4fC := V4fC.ComponentDiv(TVec4f.Create(Single(1.0), Single(1.0), Single(1.0), Single(1.0)));
+    F := F + V4fA.Dot(V4fC) + V4fC.LengthSqr + V4fC.Length;
+    V4fC := V4fA.Lerp(V4fC, Single(0.5)).Normalize;
+    B := B or V4fC.Equals(V4fC, Single(0.0));
 
     V2dA := TVec2d.Create(1.0, 2.0);
     V2dB := TVec2d.Zero;
@@ -570,11 +568,11 @@ begin
     V2dC := V2dC * 2.0;
     V2dC := 2.0 * V2dC;
     V2dC := V2dC / 2.0;
-    V2dC := TVec2d.MulComponents(V2dA, V2dC);
-    V2dC := TVec2d.DivComponents(V2dC, TVec2d.Create(1.0, 1.0));
-    D := TVec2d.Dot(V2dA, V2dC) + V2dC.LengthSqr + V2dC.Length;
-    V2dC := TVec2d.Lerp(V2dA, V2dC, 0.5).Normalize;
-    B := B or TVec2d.Equals(V2dC, V2dC, 0.0);
+    V2dC := V2dA.ComponentMul(V2dC);
+    V2dC := V2dC.ComponentDiv(TVec2d.Create(1.0, 1.0));
+    D := V2dA.Dot(V2dC) + V2dC.LengthSqr + V2dC.Length;
+    V2dC := V2dA.Lerp(V2dC, 0.5).Normalize;
+    B := B or V2dC.Equals(V2dC, 0.0);
 
     V3dA := TVec3d.Create(1.0, 2.0, 3.0);
     V3dB := TVec3d.Zero;
@@ -584,12 +582,12 @@ begin
     V3dC := V3dC * 2.0;
     V3dC := 2.0 * V3dC;
     V3dC := V3dC / 2.0;
-    V3dC := TVec3d.MulComponents(V3dA, V3dC);
-    V3dC := TVec3d.DivComponents(V3dC, TVec3d.Create(1.0, 1.0, 1.0));
-    D := D + TVec3d.Dot(V3dA, V3dC) + V3dC.LengthSqr + V3dC.Length;
-    V3dC := TVec3d.Cross(V3dA, V3dC);
-    V3dC := TVec3d.Lerp(V3dA, V3dC, 0.5).Normalize;
-    B := B or TVec3d.Equals(V3dC, V3dC, 0.0);
+    V3dC := V3dA.ComponentMul(V3dC);
+    V3dC := V3dC.ComponentDiv(TVec3d.Create(1.0, 1.0, 1.0));
+    D := D + V3dA.Dot(V3dC) + V3dC.LengthSqr + V3dC.Length;
+    V3dC := V3dA.Cross(V3dC);
+    V3dC := V3dA.Lerp(V3dC, 0.5).Normalize;
+    B := B or V3dC.Equals(V3dC, 0.0);
 
     V4dA := TVec4d.Create(1.0, 2.0, 3.0, 4.0);
     V4dB := TVec4d.Zero;
@@ -599,11 +597,11 @@ begin
     V4dC := V4dC * 2.0;
     V4dC := 2.0 * V4dC;
     V4dC := V4dC / 2.0;
-    V4dC := TVec4d.MulComponents(V4dA, V4dC);
-    V4dC := TVec4d.DivComponents(V4dC, TVec4d.Create(1.0, 1.0, 1.0, 1.0));
-    D := D + TVec4d.Dot(V4dA, V4dC) + V4dC.LengthSqr + V4dC.Length;
-    V4dC := TVec4d.Lerp(V4dA, V4dC, 0.5).Normalize;
-    B := B or TVec4d.Equals(V4dC, V4dC, 0.0);
+    V4dC := V4dA.ComponentMul(V4dC);
+    V4dC := V4dC.ComponentDiv(TVec4d.Create(1.0, 1.0, 1.0, 1.0));
+    D := D + V4dA.Dot(V4dC) + V4dC.LengthSqr + V4dC.Length;
+    V4dC := V4dA.Lerp(V4dC, 0.5).Normalize;
+    B := B or V4dC.Equals(V4dC, 0.0);
 
     M3fA := TMat3f.Create(V3fA, V3fB, V3fC);
     M3fB := TMat3f.Identity + TMat3f.Zero;

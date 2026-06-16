@@ -238,14 +238,14 @@ begin
   RequireFinite(ATarget, 'LookAt: target must be finite');
   RequireFinite(AUp, 'LookAt: up vector must be finite');
   Forward := (ATarget - AEye).Normalize;
-  if TVec3f.Equals(Forward, TVec3f.Zero, Single(0.0)) then
+  if Forward.Equals(TVec3f.Zero, Single(0.0)) then
     raise EArgumentError.Create('LookAt: eye and target must differ');
 
-  Right := TVec3f.Cross(Forward, AUp).Normalize;
-  if TVec3f.Equals(Right, TVec3f.Zero, Single(0.0)) then
+  Right := Forward.Cross(AUp).Normalize;
+  if Right.Equals(TVec3f.Zero, Single(0.0)) then
     raise EArgumentError.Create('LookAt: up vector must not be parallel to forward');
 
-  RealUp := TVec3f.Cross(Right, Forward);
+  RealUp := Right.Cross(Forward);
   Result := TMat4f.Zero;
   Result[0, 0] := Right.X;
   Result[1, 0] := Right.Y;
@@ -256,9 +256,9 @@ begin
   Result[0, 2] := -Forward.X;
   Result[1, 2] := -Forward.Y;
   Result[2, 2] := -Forward.Z;
-  Result[3, 0] := -TVec3f.Dot(Right, AEye);
-  Result[3, 1] := -TVec3f.Dot(RealUp, AEye);
-  Result[3, 2] := TVec3f.Dot(Forward, AEye);
+  Result[3, 0] := -Right.Dot(AEye);
+  Result[3, 1] := -RealUp.Dot(AEye);
+  Result[3, 2] := Forward.Dot(AEye);
   Result[3, 3] := 1.0;
 end;
 
@@ -272,14 +272,14 @@ begin
   RequireFinite(ATarget, 'LookAt: target must be finite');
   RequireFinite(AUp, 'LookAt: up vector must be finite');
   Forward := (ATarget - AEye).Normalize;
-  if TVec3d.Equals(Forward, TVec3d.Zero, 0.0) then
+  if Forward.Equals(TVec3d.Zero, 0.0) then
     raise EArgumentError.Create('LookAt: eye and target must differ');
 
-  Right := TVec3d.Cross(Forward, AUp).Normalize;
-  if TVec3d.Equals(Right, TVec3d.Zero, 0.0) then
+  Right := Forward.Cross(AUp).Normalize;
+  if Right.Equals(TVec3d.Zero, 0.0) then
     raise EArgumentError.Create('LookAt: up vector must not be parallel to forward');
 
-  RealUp := TVec3d.Cross(Right, Forward);
+  RealUp := Right.Cross(Forward);
   Result := TMat4d.Zero;
   Result[0, 0] := Right.X;
   Result[1, 0] := Right.Y;
@@ -290,9 +290,9 @@ begin
   Result[0, 2] := -Forward.X;
   Result[1, 2] := -Forward.Y;
   Result[2, 2] := -Forward.Z;
-  Result[3, 0] := -TVec3d.Dot(Right, AEye);
-  Result[3, 1] := -TVec3d.Dot(RealUp, AEye);
-  Result[3, 2] := TVec3d.Dot(Forward, AEye);
+  Result[3, 0] := -Right.Dot(AEye);
+  Result[3, 1] := -RealUp.Dot(AEye);
+  Result[3, 2] := Forward.Dot(AEye);
   Result[3, 3] := 1.0;
 end;
 

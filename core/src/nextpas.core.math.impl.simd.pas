@@ -11,7 +11,7 @@ uses
 
 function SimdVec4fAdd(const AA, AB: TVec4f): TVec4f; inline;
 function SimdVec4fSub(const AA, AB: TVec4f): TVec4f; inline;
-function SimdVec4fMulComponents(const AA, AB: TVec4f): TVec4f; inline;
+function SimdVec4fComponentMul(const AA, AB: TVec4f): TVec4f; inline;
 function SimdVec4fScale(const AValue: TVec4f; const AScalar: Single): TVec4f; inline;
 function SimdVec4fDot(const AA, AB: TVec4f): Single; inline;
 function SimdVec4fLength(const AValue: TVec4f): Single; inline;
@@ -107,7 +107,7 @@ begin
   Result := SimdToVec4f(VecF32x4Sub(Vec4fToSimd(AA), Vec4fToSimd(AB)));
 end;
 
-function SimdVec4fMulComponents(const AA, AB: TVec4f): TVec4f;
+function SimdVec4fComponentMul(const AA, AB: TVec4f): TVec4f;
 begin
   Result := SimdToVec4f(VecF32x4Mul(Vec4fToSimd(AA), Vec4fToSimd(AB)));
 end;
@@ -119,7 +119,7 @@ end;
 
 function SimdVec4fDot(const AA, AB: TVec4f): Single;
 begin
-  Result := TVec4f.Dot(AA, AB);
+  Result := AA.Dot(AB);
 end;
 
 function SimdVec4fLength(const AValue: TVec4f): Single;
@@ -149,12 +149,12 @@ end;
 
 function SimdVec3fDot(const AA, AB: TVec3f): Single;
 begin
-  Result := TVec3f.Dot(AA, AB);
+  Result := AA.Dot(AB);
 end;
 
 function SimdVec3fCross(const AA, AB: TVec3f): TVec3f;
 begin
-  Result := TVec3f.Cross(AA, AB);
+  Result := AA.Cross(AB);
 end;
 
 function SimdVec3fNormalize(const AValue: TVec3f): TVec3f;

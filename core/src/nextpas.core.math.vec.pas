@@ -74,7 +74,6 @@ type
     function RejectFrom(const ADirection: TVec3f): TVec3f; inline;
     function TryNormalize: TVec3f; inline;
     function IsNormalized: Boolean; inline;
-    function Extend(const AW: Single): TVec4f; inline;
     function LengthSqr: Single; inline;
     function Length: Single; inline;
     function Normalize: TVec3f; inline;
@@ -115,7 +114,6 @@ type
     function RejectFrom(const ADirection: TVec4f): TVec4f; inline;
     function TryNormalize: TVec4f; inline;
     function IsNormalized: Boolean; inline;
-    function Truncate: TVec3f; inline;
     function LengthSqr: Single; inline;
     function Length: Single; inline;
     function Normalize: TVec4f; inline;
@@ -198,7 +196,6 @@ type
     function RejectFrom(const ADirection: TVec3d): TVec3d; inline;
     function TryNormalize: TVec3d; inline;
     function IsNormalized: Boolean; inline;
-    function Extend(const AW: Double): TVec4d; inline;
     function LengthSqr: Double; inline;
     function Length: Double; inline;
     function Normalize: TVec3d; inline;
@@ -239,7 +236,6 @@ type
     function RejectFrom(const ADirection: TVec4d): TVec4d; inline;
     function TryNormalize: TVec4d; inline;
     function IsNormalized: Boolean; inline;
-    function Truncate: TVec3d; inline;
     function LengthSqr: Double; inline;
     function Length: Double; inline;
     function Normalize: TVec4d; inline;
@@ -252,6 +248,11 @@ type
         0: (X, Y, Z, W: Double);
         1: (Data: array[TIndex] of Double);
   end;
+
+function Vec3fExtend(const AVec: TVec3f; const AW: Single): TVec4f; inline;
+function Vec4fTruncate(const AVec: TVec4f): TVec3f; inline;
+function Vec3dExtend(const AVec: TVec3d; const AW: Double): TVec4d; inline;
+function Vec4dTruncate(const AVec: TVec4d): TVec3d; inline;
 
 implementation
 
@@ -1560,9 +1561,9 @@ begin
   Result := SingleEquals(LengthSqr, 1.0, Single(0.00001));
 end;
 
-function TVec3f.Extend(const AW: Single): TVec4f;
+function Vec3fExtend(const AVec: TVec3f; const AW: Single): TVec4f;
 begin
-  Result := TVec4f.Create(X, Y, Z, AW);
+  Result := TVec4f.Create(AVec.X, AVec.Y, AVec.Z, AW);
 end;
 
 function TVec3f.AdjustToLength(const ALength: Single): TVec3f;
@@ -1756,9 +1757,9 @@ begin
   Result := SingleEquals(LengthSqr, 1.0, Single(0.00001));
 end;
 
-function TVec4f.Truncate: TVec3f;
+function Vec4fTruncate(const AVec: TVec4f): TVec3f;
 begin
-  Result := TVec3f.Create(X, Y, Z);
+  Result := TVec3f.Create(AVec.X, AVec.Y, AVec.Z);
 end;
 
 function TVec4f.ToPosition: TVec3f;
@@ -2127,9 +2128,9 @@ begin
   Result := DoubleEquals(LengthSqr, 1.0, 0.00001);
 end;
 
-function TVec3d.Extend(const AW: Double): TVec4d;
+function Vec3dExtend(const AVec: TVec3d; const AW: Double): TVec4d;
 begin
-  Result := TVec4d.Create(X, Y, Z, AW);
+  Result := TVec4d.Create(AVec.X, AVec.Y, AVec.Z, AW);
 end;
 
 function TVec3d.AdjustToLength(const ALength: Double): TVec3d;
@@ -2323,9 +2324,9 @@ begin
   Result := DoubleEquals(LengthSqr, 1.0, 0.00001);
 end;
 
-function TVec4d.Truncate: TVec3d;
+function Vec4dTruncate(const AVec: TVec4d): TVec3d;
 begin
-  Result := TVec3d.Create(X, Y, Z);
+  Result := TVec3d.Create(AVec.X, AVec.Y, AVec.Z);
 end;
 
 function TVec4d.ToPosition: TVec3d;
