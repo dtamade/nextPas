@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-06-12
+> Last updated: 2026-06-16
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -23,7 +23,7 @@ This lane is in **G2/G3/G4 active hardening**:
 - G1 stable H1 public surface is largely landed: server/client/router/headers/url/message/middleware/static/websocket all exist and already have substantial focused coverage.
 - G2 correctness and lifecycle proof is well advanced: threaded and Linux `epoll` paths have broad raw-wire/server proof, client redirect/body ownership semantics are materially tighter, and examples have runnable smoke coverage.
 - G3 API and performance isolation is still active: client ergonomics keeps closing real gaps, and H1 performance work is now splitting costs into parser, lazy header, writer, outbound, and full-chain layers.
-- G4 H2 transport is now landed: server session + client transport + TLS ALPN + connection pool + RFC 9113 compliance are all implemented with 163 focused tests. H2 is production-transport-ready, not just a foundation slice. Remaining work is test coverage hardening (client -33, session -18 tests vs plan) and documentation alignment.
+- G4 H2 transport is now landed: server session + client transport + TLS ALPN + connection pool + RFC 9113 compliance are all implemented with 181 focused tests. H2 is production-transport-ready, not just a foundation slice. Remaining work is test coverage hardening (client -33, frame -17, hpack -15 tests vs plan) and documentation alignment. Session test hardening complete (55 tests, MaxConcurrentStreams check-order bug fixed).
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
 
 ## Map
@@ -181,7 +181,7 @@ H2 transport has landed as a complete implementation covering:
 - **Client transport**: synchronous RoundTrip, connection pool (MaxPoolSize-governed), stale pooled connection retry, server push rejection, PING/GOAWAY handling
 - **TLS integration**: ALPN `h2` negotiation, SNI, session factory seam
 - **RFC 9113 compliance**: HPACK table-size rules, MaxHeaderListSize (431/ENHANCE_YOUR_CALM), trailer section, GOAWAY last-stream tracking, MaxConcurrentStreams (REFUSED_STREAM)
-- **Tests**: 163 focused tests across 7 suites + Go/Rust HPACK benchmark comparators
+- **Tests**: 181 focused tests across 7 suites + Go/Rust HPACK benchmark comparators
 
 Design exclusions (by design, not gaps):
 - h2c Upgrade path (cleartext H2 uses prior knowledge only)
@@ -190,7 +190,7 @@ Design exclusions (by design, not gaps):
 - PRIORITY frame priority scheduling (parse, ignore — RFC permits)
 
 Remaining H2 hardening:
-- Test coverage vs h2-test-coverage-plan.md targets (client -33, session -18, frame -17, hpack -15)
+- Test coverage vs h2-test-coverage-plan.md targets (client -33, frame -17, hpack -15); session gap closed
 - Real TLS runtime proof (currently mock-based)
 - Documentation alignment (this document and ARCHITECTURE.md)
 
