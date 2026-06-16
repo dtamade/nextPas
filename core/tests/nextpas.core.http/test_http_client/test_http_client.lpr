@@ -142,6 +142,7 @@ type
     function GetRawQuery: string;
     function GetVersion: THttpVersion;
     function GetHeaders: IHttpHeaders;
+    function GetTrailers: IHttpHeaders;
     function GetBody: IReader;
     function GetContentLength: Int64;
     function GetRemoteAddr: string;
@@ -1368,6 +1369,11 @@ begin
 end;
 
 function TNilHeadersRequest.GetHeaders: IHttpHeaders;
+begin
+  Result := nil;
+end;
+
+function TNilHeadersRequest.GetTrailers: IHttpHeaders;
 begin
   Result := nil;
 end;
