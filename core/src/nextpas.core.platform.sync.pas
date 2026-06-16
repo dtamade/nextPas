@@ -1240,10 +1240,6 @@ end;
 
 { WaitOnAddress lazy-load support for Wine compatibility }
 
-const
-  KERNEL32_NAME: array[0..8] of WideChar = (
-    'k','e','r','n','e','l','3','2',#0);
-
 type
   TWaitOnAddressFunc = function(Address: Pointer; CompareAddress: Pointer;
     AddressSize: PtrUInt; dwMilliseconds: DWORD): BOOL; stdcall;
@@ -1262,8 +1258,8 @@ var
 begin
   if _WaitAddressResolved then
     Exit;
-  LLib := GetModuleHandleW(@KERNEL32_NAME);
-  if LLib <> nil then
+  LLib := GetModuleHandleW(L'kernel32');
+  if LLib <> 0 then
   begin
     _WaitOnAddress := TWaitOnAddressFunc(GetProcAddress(LLib, 'WaitOnAddress'));
     _WakeByAddressSingle := TWakeByAddressSingleProc(GetProcAddress(LLib, 'WakeByAddressSingle'));
@@ -1460,11 +1456,8 @@ begin
   Result := platform_sync_validate_wait_address64(AAddr, AExpected);
   if Result <> 0 then
     Exit;
-  ResolveWaitAddress;
-  if _WaitOnAddress = nil then
-    Exit(PLATFORM_ERR_UNSUPPORTED);
   LExpected := AExpected;
-  if _WaitOnAddress(
+  if WaitOnAddress(
     AAddr,
     @LExpected,
     SizeOf(LExpected),
@@ -1481,10 +1474,7 @@ begin
   Result := platform_sync_validate_address64(AAddr);
   if Result <> 0 then
     Exit;
-  ResolveWaitAddress;
-  if _WakeByAddressSingle = nil then
-    Exit(PLATFORM_ERR_UNSUPPORTED);
-  _WakeByAddressSingle(AAddr);
+  WakeByAddressSingle(AAddr);
   Result := 0;
 end;
 
@@ -1493,10 +1483,7 @@ begin
   Result := platform_sync_validate_address64(AAddr);
   if Result <> 0 then
     Exit;
-  ResolveWaitAddress;
-  if _WakeByAddressAll = nil then
-    Exit(PLATFORM_ERR_UNSUPPORTED);
-  _WakeByAddressAll(AAddr);
+  WakeByAddressAll(AAddr);
   Result := 0;
 end;
 

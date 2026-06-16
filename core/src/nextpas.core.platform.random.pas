@@ -28,17 +28,6 @@ uses
 uses
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi;
-
-const
-  BCRYPT_USE_SYSTEM_PREFERRED_RNG = 2;
-
-type
-  TBCryptGenRandomFunc = function(hAlgorithm: Pointer;
-    pbBuffer: PByte; cbBuffer: DWORD; dwFlags: DWORD): LongInt; stdcall;
-
-var
-  _BCryptGenRandom: TBCryptGenRandomFunc = nil;
-  _BCryptResolved: Boolean = False;
 {$ENDIF}
 
 function platform_random_check_request(ABuf: Pointer; ALen: PtrUInt; out AResult: Int32): Boolean; inline;
@@ -104,18 +93,6 @@ end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
-procedure ResolveBCryptGenRandom;
-var
-  LLib: HMODULE;
-begin
-  if _BCryptResolved then
-    Exit;
-  LLib := LoadLibraryW('bcrypt.dll');
-  if LLib <> nil then
-    _BCryptGenRandom := TBCryptGenRandomFunc(GetProcAddress(LLib, 'BCryptGenRandom'));
-  _BCryptResolved := True;
-end;
-
 function platform_random_bytes(ABuf: Pointer; ALen: PtrUInt): Int32;
 var
   LCheck: Int32;
@@ -124,29 +101,6 @@ var
 begin
   if platform_random_check_request(ABuf, ALen, LCheck) then
     Exit(LCheck);
-  ResolveBCryptGenRandom;
-  if Assigned(_BCryptGenRandom) then
-  begin
-    { BCryptGenRandom accepts up to ULONG per call }
-    LDone := 0;
-    while LDone < ALen do
-    begin
-      if ALen - LDone > PtrUInt(High(DWORD)) then
-        LChunk := High(DWORD)
-      else
-        LChunk := DWORD(ALen - LDone);
-      if _BCryptGenRandom(nil, PByte(PtrUInt(ABuf) + LDone),
-        LChunk, BCRYPT_USE_SYSTEM_PREFERRED_RNG) <> 0 then
-      begin
-        { BCryptGenRandom failed — fall back to RtlGenRandom }
-        Break;
-      end;
-      Inc(LDone, PtrUInt(LChunk));
-    end;
-    if LDone >= ALen then
-      Exit(0);
-  end;
-  { RtlGenRandom fallback }
   LDone := 0;
   while LDone < ALen do
   begin
