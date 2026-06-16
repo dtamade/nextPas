@@ -85,6 +85,9 @@ uses
 {$IFDEF NEXTPAS_UNIX}
   , nextpas.core.platform.posix.base
   , nextpas.core.platform.posix.ffi
+  {$IFDEF NEXTPAS_LINUX}
+  , nextpas.core.platform.linux.ffi
+  {$ENDIF}
 {$ENDIF}
   ;
 
@@ -274,9 +277,15 @@ end;
 function platform_fs_copy_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
 var
   LSrcH, LDstH: TPlatformFileHandle;
+  LR, LCloseR: Int32;
+{$IFDEF NEXTPAS_LINUX}
+  LStat: TPlatformFileStat;
+  LCopied: ssize_t;
+  LPos: Int64;
+{$ELSE}
   LBuf: array[0..PLATFORM_FS_COPY_BUFFER_SIZE - 1] of Byte;
   LRead: PtrUInt;
-  LR, LCloseR: Int32;
+{$ENDIF}
 begin
   LR := platform_file_open(ASrc, fomReadOnly, fcmOpenExisting, LSrcH);
   if LR <> 0 then Exit(LR);
@@ -286,11 +295,38 @@ begin
     platform_file_close(LSrcH);
     Exit(LR);
   end;
+{$IFDEF NEXTPAS_LINUX}
+  { Try copy_file_range: kernel-side copy, zero userspace buffer }
+  LR := platform_file_fstat(LSrcH, LStat);
+  if (LR = 0) and (LStat.Size > 0) then
+  begin
+    LCopied := copy_file_range(LSrcH.Value, nil, LDstH.Value, nil,
+      size_t(LStat.Size), 0);
+    if LCopied < 0 then
+      LR := platform_get_errno
+    else if LCopied < ssize_t(LStat.Size) then
+      LR := -1 { partial copy — fall through to error path }
+    else
+      LR := 0;
+  end;
+  if LR <> 0 then
+  begin
+    { copy_file_range failed (cross-FS, etc.) — retry with sendfile }
+    platform_file_seek(LSrcH, 0, fsoBegin, LPos);
+    platform_file_seek(LDstH, 0, fsoBegin, LPos);
+    LCopied := sendfile(LDstH.Value, LSrcH.Value, nil, size_t(LStat.Size));
+    if LCopied < 0 then
+      LR := platform_get_errno
+    else
+      LR := 0;
+  end;
+{$ELSE}
   repeat
     LR := platform_file_read(LSrcH, @LBuf[0], SizeOf(LBuf), LRead);
     if (LR <> 0) or (LRead = 0) then Break;
     LR := platform_fs_write_all(LDstH, @LBuf[0], LRead);
   until LR <> 0;
+{$ENDIF}
   LCloseR := platform_file_close(LDstH);
   if (LR = 0) and (LCloseR <> 0) then
     LR := LCloseR;
