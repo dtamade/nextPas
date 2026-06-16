@@ -35,11 +35,16 @@ type
     class procedure SegQueueReclaimSegment(AData: Pointer; AUserData: Pointer); static;
     class function AllocSegment(const AStartIndex: Int64): PSegment; static;
   public
+    {** @desc 创建无界 MPSC 队列（EBR 回收段） }
     constructor Create;
     destructor Destroy; override;
+    {** @desc 阻塞入队；自动扩展段链表 }
     procedure Enqueue(const AValue: T);
+    {** @desc 非阻塞出队；队列空时返回 False }
     function TryDequeue(out AValue: T): Boolean;
+    {** @desc 近似空判断 }
     function IsEmpty: Boolean;
+    {** @desc 近似计数 }
     function ApproxCount: PtrUInt;
   end;
 
