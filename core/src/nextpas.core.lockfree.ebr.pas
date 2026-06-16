@@ -9,9 +9,11 @@ uses
   nextpas.core.atomic;
 
 type
+  {** @desc EBR 回调类型：回收时调用 }
   TLockFreeReclaimProc = procedure(const AData: Pointer; const AUserData: Pointer);
 
   PEbrRetiredNode = ^TEbrRetiredNode;
+  {** @desc EBR 退休节点 }
   TEbrRetiredNode = record
     Next: PEbrRetiredNode;
     Data: Pointer;
@@ -19,6 +21,7 @@ type
     UserData: Pointer;
   end;
 
+  {** @desc Epoch-Based Reclamation 域（保守单次检查设计） }
   TEbrDomain = class
   private
     FRetired: PEbrRetiredNode;
@@ -27,20 +30,29 @@ type
   public
     constructor Create;
     destructor Destroy; override;
+    {** @desc 进入临界区（ActiveCount+1） }
     procedure Enter;
+    {** @desc 离开临界区（ActiveCount-1） }
     procedure Leave;
+    {** @desc 退休指针；Collect 时若无活跃者则回收 }
     procedure Retire(const AData: Pointer; const AReclaim: TLockFreeReclaimProc; const AUserData: Pointer = nil);
+    {** @desc 尝试回收所有退休项（ActiveCount=0 时生效） }
     procedure Collect;
+    {** @desc 当前活跃临界区数 }
     function ActiveCount: PtrUInt;
+    {** @desc 当前退休待回收数 }
     function RetiredCount: PtrUInt;
   end;
 
+  {** @desc EBR 哨兵守卫（RAII 自动 Leave） }
   TEbrGuard = record
   private
     FDomain: TEbrDomain;
     FActive: Boolean;
   public
+    {** @desc 获取守卫并进入临界区（ADomain=nil 时为 no-op） }
     class function Acquire(const ADomain: TEbrDomain): TEbrGuard; static;
+    {** @desc 释放守卫并离开临界区（重复调用安全） }
     procedure Release;
   end;
 
@@ -103,7 +115,7 @@ var
 begin
   if AtomicLoad32(FActiveCount, moAcquire) <> 0 then
     Exit;
-  LList := PEbrRetiredNode(AtomicExchangePtr(PPointer(@FRetired)^, nil, moAcqRel));
+  LList := PEbrRetiredNode(atomic_exchange(PPointer(@FRetired)^, nil, moAcqRel));
   if LList = nil then
     Exit;
   LNode := LList;
@@ -128,7 +140,7 @@ begin
   Result := AtomicLoad32(FRetiredCount, moRelaxed);
 end;
 
-class function TEbrGuard.Acquire(const ADomain: TEbrDomain): TEbrGuard;
+class function TEbrGuard.Acquire(ADomain: TEbrDomain): TEbrGuard;
 begin
   Result.FDomain := ADomain;
   Result.FActive := False;

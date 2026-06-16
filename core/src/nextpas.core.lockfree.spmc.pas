@@ -29,16 +29,27 @@ type
     FDataEpoch: Int32;
     FDataWaiters: Int32;
   public
+    {** @desc 创建 SPMC 环形队列（容量向上取 2 的幂） }
     constructor Create(const ACapacity: PtrUInt);
+    {** @desc 非阻塞入队；队列满时立即返回 False }
     function TryEnqueue(const AValue: T): Boolean;
+    {** @desc 阻塞入队；队列满时等待直到有空间 }
     function EnqueueWait(const AValue: T): Boolean;
+    {** @desc 带超时入队；超时返回 False }
     function EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
+    {** @desc 非阻塞出队；队列空时立即返回 False }
     function TryDequeue(out AValue: T): Boolean;
+    {** @desc 阻塞出队；队列空时等待直到有数据 }
     function DequeueWait(out AValue: T): Boolean;
+    {** @desc 带超时出队；超时返回 False }
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+    {** @desc 近似空判断（快照，非线性化） }
     function IsEmpty: Boolean;
+    {** @desc 近似满判断（快照，非线性化） }
     function IsFull: Boolean;
+    {** @desc 近似计数（快照，非线性化） }
     function ApproxCount: PtrUInt;
+    {** @desc 队列实际容量（2 的幂） }
     function Capacity: PtrUInt;
   end;
 
