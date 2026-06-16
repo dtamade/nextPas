@@ -5,7 +5,6 @@
 
 procedure SSE2ArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var
-  i: SizeUInt;
   pS1, pS2, pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
@@ -13,58 +12,81 @@ begin
   pS1 := aSrc1;
   pS2 := aSrc2;
   pD := aDst;
-  i := 0;
 
-  // 主循环: 2x 展开, 每次处理 8 个 float (2 x 128-bit)
-  while i + 8 <= aCount do
-  begin
-    asm
-      mov    rax, pS1
-      mov    rdx, pS2
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2          // i * sizeof(Single)
-      movups xmm0, [rax + r8]
-      movups xmm1, [rdx + r8]
-      addps  xmm0, xmm1
-      movups [rcx + r8], xmm0
-      movups xmm2, [rax + r8 + 16]
-      movups xmm3, [rdx + r8 + 16]
-      addps  xmm2, xmm3
-      movups [rcx + r8 + 16], xmm2
-    end;
-    Inc(i, 8);
-  end;
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
 
-  // 4-float 块处理
-  if i + 4 <= aCount then
-  begin
-    asm
-      mov    rax, pS1
-      mov    rdx, pS2
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      movups xmm1, [rdx + r8]
-      addps  xmm0, xmm1
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
+    cmp r8, 16
+    jb @tail8
 
-  // 标量尾部
-  while i < aCount do
-  begin
-    pD[i] := pS1[i] + pS2[i];
-    Inc(i);
+  @loop16:
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    addps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    addps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    addps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    addps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movups [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    addss xmm0, [rdx]
+    movss [rcx], xmm0
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 procedure SSE2ArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var
-  i: SizeUInt;
   pS1, pS2, pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
@@ -72,55 +94,81 @@ begin
   pS1 := aSrc1;
   pS2 := aSrc2;
   pD := aDst;
-  i := 0;
 
-  while i + 8 <= aCount do
-  begin
-    asm
-      mov    rax, pS1
-      mov    rdx, pS2
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      movups xmm1, [rdx + r8]
-      mulps  xmm0, xmm1
-      movups [rcx + r8], xmm0
-      movups xmm2, [rax + r8 + 16]
-      movups xmm3, [rdx + r8 + 16]
-      mulps  xmm2, xmm3
-      movups [rcx + r8 + 16], xmm2
-    end;
-    Inc(i, 8);
-  end;
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
 
-  if i + 4 <= aCount then
-  begin
-    asm
-      mov    rax, pS1
-      mov    rdx, pS2
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      movups xmm1, [rdx + r8]
-      mulps  xmm0, xmm1
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
+    cmp r8, 16
+    jb @tail8
 
-  while i < aCount do
-  begin
-    pD[i] := pS1[i] * pS2[i];
-    Inc(i);
+  @loop16:
+    movups xmm0, [rax]
+    mulps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    mulps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    mulps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    mulps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    mulps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    mulps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    mulps xmm0, [rdx]
+    movups [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    mulss xmm0, [rdx]
+    movss [rcx], xmm0
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 procedure SSE2ArrayMulScalarF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single);
 var
-  i: SizeUInt;
   pS, pD: PSingle;
   LScalar: Single;
 begin
@@ -129,55 +177,78 @@ begin
   pS := aSrc;
   pD := aDst;
   LScalar := aScalar;
-  i := 0;
 
-  while i + 8 <= aCount do
-  begin
-    asm
-      mov    rax, pS
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      // 广播标量到 xmm4
-      movss  xmm4, LScalar
-      shufps xmm4, xmm4, 0
-      movups xmm0, [rax + r8]
-      mulps  xmm0, xmm4
-      movups [rcx + r8], xmm0
-      movups xmm1, [rax + r8 + 16]
-      mulps  xmm1, xmm4
-      movups [rcx + r8 + 16], xmm1
-    end;
-    Inc(i, 8);
-  end;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    movss xmm7, [LScalar]
+    shufps xmm7, xmm7, 0
 
-  if i + 4 <= aCount then
-  begin
-    asm
-      mov    rax, pS
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movss  xmm4, LScalar
-      shufps xmm4, xmm4, 0
-      movups xmm0, [rax + r8]
-      mulps  xmm0, xmm4
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
+    cmp r8, 16
+    jb @tail8
 
-  while i < aCount do
-  begin
-    pD[i] := pS[i] * LScalar;
-    Inc(i);
+  @loop16:
+    movups xmm0, [rax]
+    mulps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    mulps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    mulps xmm2, xmm7
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    mulps xmm3, xmm7
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    mulps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    mulps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    mulps xmm0, xmm7
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    mulss xmm0, xmm7
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 procedure SSE2ArrayAddScalarF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single);
 var
-  i: SizeUInt;
   pS, pD: PSingle;
   LScalar: Single;
 begin
@@ -186,54 +257,78 @@ begin
   pS := aSrc;
   pD := aDst;
   LScalar := aScalar;
-  i := 0;
 
-  while i + 8 <= aCount do
-  begin
-    asm
-      mov    rax, pS
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movss  xmm4, LScalar
-      shufps xmm4, xmm4, 0
-      movups xmm0, [rax + r8]
-      addps  xmm0, xmm4
-      movups [rcx + r8], xmm0
-      movups xmm1, [rax + r8 + 16]
-      addps  xmm1, xmm4
-      movups [rcx + r8 + 16], xmm1
-    end;
-    Inc(i, 8);
-  end;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    movss xmm7, [LScalar]
+    shufps xmm7, xmm7, 0
 
-  if i + 4 <= aCount then
-  begin
-    asm
-      mov    rax, pS
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movss  xmm4, LScalar
-      shufps xmm4, xmm4, 0
-      movups xmm0, [rax + r8]
-      addps  xmm0, xmm4
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
+    cmp r8, 16
+    jb @tail8
 
-  while i < aCount do
-  begin
-    pD[i] := pS[i] + LScalar;
-    Inc(i);
+  @loop16:
+    movups xmm0, [rax]
+    addps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    addps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    addps xmm2, xmm7
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    addps xmm3, xmm7
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    addps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    addps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    addps xmm0, xmm7
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    addss xmm0, xmm7
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 procedure SSE2ArrayClampF32(aSrc, aDst: PSingle; aCount: SizeUInt; aMin, aMax: Single);
 var
-  i: SizeUInt;
   pS, pD: PSingle;
   LMin, LMax: Single;
 begin
@@ -243,66 +338,88 @@ begin
   pD := aDst;
   LMin := aMin;
   LMax := aMax;
-  i := 0;
 
-  while i + 8 <= aCount do
-  begin
-    asm
-      mov    rax, pS
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movss  xmm4, LMin
-      shufps xmm4, xmm4, 0
-      movss  xmm5, LMax
-      shufps xmm5, xmm5, 0
-      movups xmm0, [rax + r8]
-      maxps  xmm0, xmm4
-      minps  xmm0, xmm5
-      movups [rcx + r8], xmm0
-      movups xmm1, [rax + r8 + 16]
-      maxps  xmm1, xmm4
-      minps  xmm1, xmm5
-      movups [rcx + r8 + 16], xmm1
-    end;
-    Inc(i, 8);
-  end;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    movss xmm6, [LMin]
+    shufps xmm6, xmm6, 0
+    movss xmm7, [LMax]
+    shufps xmm7, xmm7, 0
 
-  if i + 4 <= aCount then
-  begin
-    asm
-      mov    rax, pS
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movss  xmm4, LMin
-      shufps xmm4, xmm4, 0
-      movss  xmm5, LMax
-      shufps xmm5, xmm5, 0
-      movups xmm0, [rax + r8]
-      maxps  xmm0, xmm4
-      minps  xmm0, xmm5
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
+    cmp r8, 16
+    jb @tail8
 
-  while i < aCount do
-  begin
-    if pS[i] < LMin then
-      pD[i] := LMin
-    else if pS[i] > LMax then
-      pD[i] := LMax
-    else
-      pD[i] := pS[i];
-    Inc(i);
+  @loop16:
+    movups xmm0, [rax]
+    maxps xmm0, xmm6
+    minps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    maxps xmm1, xmm6
+    minps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    maxps xmm2, xmm6
+    minps xmm2, xmm7
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    maxps xmm3, xmm6
+    minps xmm3, xmm7
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    maxps xmm0, xmm6
+    minps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    maxps xmm1, xmm6
+    minps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    maxps xmm0, xmm6
+    minps xmm0, xmm7
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    maxss xmm0, xmm6
+    minss xmm0, xmm7
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 procedure SSE2ArrayFmaF32(aA, aB, aC, aDst: PSingle; aCount: SizeUInt);
 var
-  i: SizeUInt;
   pA, pB, pC, pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
@@ -311,38 +428,94 @@ begin
   pB := aB;
   pC := aC;
   pD := aDst;
-  i := 0;
 
-  while i + 4 <= aCount do
-  begin
-    asm
-      mov    rax, pA
-      mov    rdx, pB
-      mov    rcx, pC
-      mov    r9, pD
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      movups xmm1, [rdx + r8]
-      mulps  xmm0, xmm1
-      movups xmm2, [rcx + r8]
-      addps  xmm0, xmm2
-      movups [r9 + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
+  asm
+    mov rax, pA
+    mov rdx, pB
+    mov rcx, pC
+    mov r9, pD
+    mov r8, aCount
 
-  while i < aCount do
-  begin
-    pD[i] := pA[i] * pB[i] + pC[i];
-    Inc(i);
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movups xmm0, [rax]
+    mulps xmm0, [rdx]
+    addps xmm0, [rcx]
+    movups [r9], xmm0
+    movups xmm1, [rax + 16]
+    mulps xmm1, [rdx + 16]
+    addps xmm1, [rcx + 16]
+    movups [r9 + 16], xmm1
+    movups xmm2, [rax + 32]
+    mulps xmm2, [rdx + 32]
+    addps xmm2, [rcx + 32]
+    movups [r9 + 32], xmm2
+    movups xmm3, [rax + 48]
+    mulps xmm3, [rdx + 48]
+    addps xmm3, [rcx + 48]
+    movups [r9 + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    add r9, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    mulps xmm0, [rdx]
+    addps xmm0, [rcx]
+    movups [r9], xmm0
+    movups xmm1, [rax + 16]
+    mulps xmm1, [rdx + 16]
+    addps xmm1, [rcx + 16]
+    movups [r9 + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    add r9, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    mulps xmm0, [rdx]
+    addps xmm0, [rcx]
+    movups [r9], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    add r9, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    mulss xmm0, [rdx]
+    addss xmm0, [rcx]
+    movss [r9], xmm0
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    add r9, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 procedure SSE2ArrayAxpyF32(aAlpha: Single; aX, aY, aDst: PSingle; aCount: SizeUInt);
 var
-  i: SizeUInt;
   pX, pY, pD: PSingle;
   LAlpha: Single;
 begin
@@ -352,239 +525,269 @@ begin
   pY := aY;
   pD := aDst;
   LAlpha := aAlpha;
-  i := 0;
 
-  // dst[i] = alpha * x[i] + y[i]
-  while i + 8 <= aCount do
-  begin
-    asm
-      mov    rax, pX
-      mov    rdx, pY
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      // 广播 alpha
-      movss  xmm5, LAlpha
-      shufps xmm5, xmm5, 0
-      // 第一组: alpha * x + y
-      movups xmm0, [rax + r8]
-      mulps  xmm0, xmm5
-      movups xmm1, [rdx + r8]
-      addps  xmm0, xmm1
-      movups [rcx + r8], xmm0
-      // 第二组
-      movups xmm2, [rax + r8 + 16]
-      mulps  xmm2, xmm5
-      movups xmm3, [rdx + r8 + 16]
-      addps  xmm2, xmm3
-      movups [rcx + r8 + 16], xmm2
-    end;
-    Inc(i, 8);
-  end;
+  asm
+    mov rax, pX
+    mov rdx, pY
+    mov rcx, pD
+    mov r8, aCount
+    movss xmm7, [LAlpha]
+    shufps xmm7, xmm7, 0
 
-  if i + 4 <= aCount then
-  begin
-    asm
-      mov    rax, pX
-      mov    rdx, pY
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movss  xmm5, LAlpha
-      shufps xmm5, xmm5, 0
-      movups xmm0, [rax + r8]
-      mulps  xmm0, xmm5
-      movups xmm1, [rdx + r8]
-      addps  xmm0, xmm1
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
+    cmp r8, 16
+    jb @tail8
 
-  while i < aCount do
-  begin
-    pD[i] := LAlpha * pX[i] + pY[i];
-    Inc(i);
+  @loop16:
+    movups xmm0, [rax]
+    mulps xmm0, xmm7
+    addps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    mulps xmm1, xmm7
+    addps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    mulps xmm2, xmm7
+    addps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    mulps xmm3, xmm7
+    addps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    mulps xmm0, xmm7
+    addps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    mulps xmm1, xmm7
+    addps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    mulps xmm0, xmm7
+    addps xmm0, [rdx]
+    movups [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    mulss xmm0, xmm7
+    addss xmm0, [rdx]
+    movss [rcx], xmm0
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 function SSE2ReduceSumF32(aSrc: PSingle; aCount: SizeUInt): Single;
 var
-  i: SizeUInt;
   pS: PSingle;
-  acc0, acc1: Single;
+  LResult: Single;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then begin Result := 0; Exit; end;
   pS := aSrc;
-  i := 0;
-  acc0 := 0;
-  acc1 := 0;
+  LResult := 0;
 
-  // 主循环: 2 个累加器减少依赖链延迟, 每次处理 8 个 float
-  if aCount >= 8 then
-  begin
-    asm
-      mov    rax, pS
-      mov    r8, i
-      mov    r9, aCount
-      xorps  xmm6, xmm6     // acc0 = 0
-      xorps  xmm7, xmm7     // acc1 = 0
+  asm
+    mov rax, pS
+    mov r8, aCount
+    xorps xmm0, xmm0
+    xorps xmm1, xmm1
+    xorps xmm2, xmm2
+    xorps xmm3, xmm3
 
-    @loop8:
-      lea    rcx, [r8 + 8]
-      cmp    rcx, r9
-      ja     @done8
-      mov    rdx, r8
-      shl    rdx, 2
-      movups xmm0, [rax + rdx]
-      addps  xmm6, xmm0
-      movups xmm1, [rax + rdx + 16]
-      addps  xmm7, xmm1
-      add    r8, 8
-      jmp    @loop8
+    cmp r8, 16
+    jb @tail8
 
-    @done8:
-      // 合并两个累加器
-      addps  xmm6, xmm7
-      // 水平求和 xmm6
-      movaps xmm0, xmm6
-      shufps xmm0, xmm0, $4E
-      addps  xmm6, xmm0
-      movaps xmm0, xmm6
-      shufps xmm0, xmm0, $B1
-      addss  xmm6, xmm0
-      movss  acc0, xmm6
-      mov    i, r8
-    end;
+  @loop16:
+    movups xmm4, [rax]
+    addps xmm0, xmm4
+    movups xmm5, [rax + 16]
+    addps xmm1, xmm5
+    movups xmm6, [rax + 32]
+    addps xmm2, xmm6
+    movups xmm7, [rax + 48]
+    addps xmm3, xmm7
+    add rax, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm4, [rax]
+    addps xmm0, xmm4
+    movups xmm5, [rax + 16]
+    addps xmm1, xmm5
+    add rax, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @reduce
+    movups xmm4, [rax]
+    addps xmm0, xmm4
+    add rax, 16
+    sub r8, 4
+
+  @reduce:
+    addps xmm0, xmm1
+    addps xmm2, xmm3
+    addps xmm0, xmm2
+    movaps xmm1, xmm0
+    shufps xmm1, xmm1, $4E
+    addps xmm0, xmm1
+    movaps xmm1, xmm0
+    shufps xmm1, xmm1, $B1
+    addss xmm0, xmm1
+    movss LResult, xmm0
+
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm1, [rax]
+    addss xmm0, xmm1
+    movss LResult, xmm0
+    add rax, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
 
-  // 4-float 块处理
-  if i + 4 <= aCount then
-  begin
-    asm
-      mov    rax, pS
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      movaps xmm1, xmm0
-      shufps xmm1, xmm1, $4E
-      addps  xmm0, xmm1
-      movaps xmm1, xmm0
-      shufps xmm1, xmm1, $B1
-      addss  xmm0, xmm1
-      movss  acc1, xmm0
-    end;
-    Inc(i, 4);
-  end;
-
-  Result := acc0 + acc1;
-
-  // 标量尾部
-  while i < aCount do
-  begin
-    Result := Result + pS[i];
-    Inc(i);
-  end;
+  Result := LResult;
   {$POP}
 end;
 
 function SSE2ReduceDotF32(aSrc1, aSrc2: PSingle; aCount: SizeUInt): Single;
 var
-  i: SizeUInt;
   pS1, pS2: PSingle;
-  acc0, acc1: Single;
+  LResult: Single;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then begin Result := 0; Exit; end;
   pS1 := aSrc1;
   pS2 := aSrc2;
-  i := 0;
-  acc0 := 0;
-  acc1 := 0;
+  LResult := 0;
 
-  // 主循环: 2 个累加器, 每次处理 8 个 float
-  if aCount >= 8 then
-  begin
-    asm
-      mov    rax, pS1
-      mov    rdx, pS2
-      mov    r8, i
-      mov    r9, aCount
-      xorps  xmm6, xmm6     // acc0 = 0
-      xorps  xmm7, xmm7     // acc1 = 0
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov r8, aCount
+    xorps xmm0, xmm0
+    xorps xmm1, xmm1
+    xorps xmm2, xmm2
+    xorps xmm3, xmm3
 
-    @loop8:
-      lea    rcx, [r8 + 8]
-      cmp    rcx, r9
-      ja     @done8
-      mov    r10, r8
-      shl    r10, 2
-      // 第一组: src1 * src2, 累加到 acc0
-      movups xmm0, [rax + r10]
-      movups xmm1, [rdx + r10]
-      mulps  xmm0, xmm1
-      addps  xmm6, xmm0
-      // 第二组: 累加到 acc1
-      movups xmm2, [rax + r10 + 16]
-      movups xmm3, [rdx + r10 + 16]
-      mulps  xmm2, xmm3
-      addps  xmm7, xmm2
-      add    r8, 8
-      jmp    @loop8
+    cmp r8, 16
+    jb @tail8
 
-    @done8:
-      // 合并两个累加器
-      addps  xmm6, xmm7
-      // 水平求和
-      movaps xmm0, xmm6
-      shufps xmm0, xmm0, $4E
-      addps  xmm6, xmm0
-      movaps xmm0, xmm6
-      shufps xmm0, xmm0, $B1
-      addss  xmm6, xmm0
-      movss  acc0, xmm6
-      mov    i, r8
-    end;
+  @loop16:
+    movups xmm4, [rax]
+    mulps xmm4, [rdx]
+    addps xmm0, xmm4
+    movups xmm5, [rax + 16]
+    mulps xmm5, [rdx + 16]
+    addps xmm1, xmm5
+    movups xmm6, [rax + 32]
+    mulps xmm6, [rdx + 32]
+    addps xmm2, xmm6
+    movups xmm7, [rax + 48]
+    mulps xmm7, [rdx + 48]
+    addps xmm3, xmm7
+    add rax, 64
+    add rdx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm4, [rax]
+    mulps xmm4, [rdx]
+    addps xmm0, xmm4
+    movups xmm5, [rax + 16]
+    mulps xmm5, [rdx + 16]
+    addps xmm1, xmm5
+    add rax, 32
+    add rdx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @reduce
+    movups xmm4, [rax]
+    mulps xmm4, [rdx]
+    addps xmm0, xmm4
+    add rax, 16
+    add rdx, 16
+    sub r8, 4
+
+  @reduce:
+    addps xmm0, xmm1
+    addps xmm2, xmm3
+    addps xmm0, xmm2
+    movaps xmm1, xmm0
+    shufps xmm1, xmm1, $4E
+    addps xmm0, xmm1
+    movaps xmm1, xmm0
+    shufps xmm1, xmm1, $B1
+    addss xmm0, xmm1
+    movss LResult, xmm0
+
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm1, [rax]
+    mulss xmm1, [rdx]
+    addss xmm0, xmm1
+    movss LResult, xmm0
+    add rax, 4
+    add rdx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
 
-  // 4-float 块处理
-  if i + 4 <= aCount then
-  begin
-    asm
-      mov    rax, pS1
-      mov    rdx, pS2
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      movups xmm1, [rdx + r8]
-      mulps  xmm0, xmm1
-      movaps xmm1, xmm0
-      shufps xmm1, xmm1, $4E
-      addps  xmm0, xmm1
-      movaps xmm1, xmm0
-      shufps xmm1, xmm1, $B1
-      addss  xmm0, xmm1
-      movss  acc1, xmm0
-    end;
-    Inc(i, 4);
-  end;
-
-  Result := acc0 + acc1;
-
-  // 标量尾部
-  while i < aCount do
-  begin
-    Result := Result + pS1[i] * pS2[i];
-    Inc(i);
-  end;
+  Result := LResult;
   {$POP}
 end;
 
 procedure SSE2ArraySubF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var
-  i: SizeUInt;
   pS1, pS2, pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
@@ -592,55 +795,81 @@ begin
   pS1 := aSrc1;
   pS2 := aSrc2;
   pD := aDst;
-  i := 0;
 
-  while i + 8 <= aCount do
-  begin
-    asm
-      mov    rax, pS1
-      mov    rdx, pS2
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      movups xmm1, [rdx + r8]
-      subps  xmm0, xmm1
-      movups [rcx + r8], xmm0
-      movups xmm2, [rax + r8 + 16]
-      movups xmm3, [rdx + r8 + 16]
-      subps  xmm2, xmm3
-      movups [rcx + r8 + 16], xmm2
-    end;
-    Inc(i, 8);
-  end;
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
 
-  if i + 4 <= aCount then
-  begin
-    asm
-      mov    rax, pS1
-      mov    rdx, pS2
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      movups xmm1, [rdx + r8]
-      subps  xmm0, xmm1
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
+    cmp r8, 16
+    jb @tail8
 
-  while i < aCount do
-  begin
-    pD[i] := pS1[i] - pS2[i];
-    Inc(i);
+  @loop16:
+    movups xmm0, [rax]
+    subps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    subps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    subps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    subps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    subps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    subps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    subps xmm0, [rdx]
+    movups [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    subss xmm0, [rdx]
+    movss [rcx], xmm0
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 procedure SSE2ArrayDivF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var
-  i: SizeUInt;
   pS1, pS2, pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
@@ -648,284 +877,475 @@ begin
   pS1 := aSrc1;
   pS2 := aSrc2;
   pD := aDst;
-  i := 0;
 
-  while i + 8 <= aCount do
-  begin
-    asm
-      mov    rax, pS1
-      mov    rdx, pS2
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      movups xmm1, [rdx + r8]
-      divps  xmm0, xmm1
-      movups [rcx + r8], xmm0
-      movups xmm2, [rax + r8 + 16]
-      movups xmm3, [rdx + r8 + 16]
-      divps  xmm2, xmm3
-      movups [rcx + r8 + 16], xmm2
-    end;
-    Inc(i, 8);
-  end;
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
 
-  if i + 4 <= aCount then
-  begin
-    asm
-      mov    rax, pS1
-      mov    rdx, pS2
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      movups xmm1, [rdx + r8]
-      divps  xmm0, xmm1
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
+    cmp r8, 16
+    jb @tail8
 
-  while i < aCount do
-  begin
-    pD[i] := pS1[i] / pS2[i];
-    Inc(i);
+  @loop16:
+    movups xmm0, [rax]
+    divps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    divps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    divps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    divps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    divps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    divps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    divps xmm0, [rdx]
+    movups [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    divss xmm0, [rdx]
+    movss [rcx], xmm0
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 procedure SSE2ArrayAbsF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var
-  i: SizeUInt;
   pS, pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
   pS := aSrc;
   pD := aDst;
-  i := 0;
 
-  while i + 8 <= aCount do
-  begin
-    asm
-      mov    rax, pS
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      // sign-mask: 0x7FFFFFFF in all lanes
-      mov    r9d, $7FFFFFFF
-      movd   xmm7, r9d
-      pshufd xmm7, xmm7, 0
-      movups xmm0, [rax + r8]
-      andps  xmm0, xmm7
-      movups [rcx + r8], xmm0
-      movups xmm1, [rax + r8 + 16]
-      andps  xmm1, xmm7
-      movups [rcx + r8 + 16], xmm1
-    end;
-    Inc(i, 8);
-  end;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    mov r9d, $7FFFFFFF
+    movd xmm7, r9d
+    pshufd xmm7, xmm7, 0
 
-  if i + 4 <= aCount then
-  begin
-    asm
-      mov    rax, pS
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      mov    r9d, $7FFFFFFF
-      movd   xmm7, r9d
-      pshufd xmm7, xmm7, 0
-      movups xmm0, [rax + r8]
-      andps  xmm0, xmm7
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
+    cmp r8, 16
+    jb @tail8
 
-  while i < aCount do
-  begin
-    PLongWord(@pD[i])^ := PLongWord(@pS[i])^ and $7FFFFFFF;
-    Inc(i);
+  @loop16:
+    movups xmm0, [rax]
+    andps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    andps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    andps xmm2, xmm7
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    andps xmm3, xmm7
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    andps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    andps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    andps xmm0, xmm7
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    andps xmm0, xmm7
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 procedure SSE2ArrayNegF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var
-  i: SizeUInt;
   pS, pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
   pS := aSrc;
   pD := aDst;
-  i := 0;
 
-  while i + 8 <= aCount do
-  begin
-    asm
-      mov    rax, pS
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      mov    r9d, $80000000
-      movd   xmm7, r9d
-      pshufd xmm7, xmm7, 0
-      movups xmm0, [rax + r8]
-      xorps  xmm0, xmm7
-      movups [rcx + r8], xmm0
-      movups xmm1, [rax + r8 + 16]
-      xorps  xmm1, xmm7
-      movups [rcx + r8 + 16], xmm1
-    end;
-    Inc(i, 8);
-  end;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    mov r9d, $80000000
+    movd xmm7, r9d
+    pshufd xmm7, xmm7, 0
 
-  if i + 4 <= aCount then
-  begin
-    asm
-      mov    rax, pS
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      mov    r9d, $80000000
-      movd   xmm7, r9d
-      pshufd xmm7, xmm7, 0
-      movups xmm0, [rax + r8]
-      xorps  xmm0, xmm7
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
+    cmp r8, 16
+    jb @tail8
 
-  while i < aCount do
-  begin
-    PLongWord(@pD[i])^ := PLongWord(@pS[i])^ xor $80000000;
-    Inc(i);
+  @loop16:
+    movups xmm0, [rax]
+    xorps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    xorps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    xorps xmm2, xmm7
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    xorps xmm3, xmm7
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    xorps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    xorps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    xorps xmm0, xmm7
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    xorps xmm0, xmm7
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 procedure SSE2ArraySqrtF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var
-  i: SizeUInt;
   pS, pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
   pS := aSrc;
   pD := aDst;
-  i := 0;
 
-  while i + 8 <= aCount do
-  begin
-    asm
-      mov    rax, pS
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      sqrtps xmm0, xmm0
-      movups [rcx + r8], xmm0
-      movups xmm1, [rax + r8 + 16]
-      sqrtps xmm1, xmm1
-      movups [rcx + r8 + 16], xmm1
-    end;
-    Inc(i, 8);
-  end;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
 
-  if i + 4 <= aCount then
-  begin
-    asm
-      mov    rax, pS
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      sqrtps xmm0, xmm0
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
+    cmp r8, 16
+    jb @tail8
 
-  while i < aCount do
-  begin
-    pD[i] := Sqrt(pS[i]);
-    Inc(i);
+  @loop16:
+    movups xmm0, [rax]
+    sqrtps xmm0, xmm0
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    sqrtps xmm1, xmm1
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    sqrtps xmm2, xmm2
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    sqrtps xmm3, xmm3
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    sqrtps xmm0, xmm0
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    sqrtps xmm1, xmm1
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    sqrtps xmm0, xmm0
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    sqrtss xmm0, xmm0
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 procedure SSE2ArrayRcpF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var
-  i: SizeUInt;
   pS, pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
   pS := aSrc;
   pD := aDst;
-  i := 0;
 
-  while i + 4 <= aCount do
-  begin
-    asm
-      mov    rax, pS
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      rcpps  xmm0, xmm0
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    mov r9d, $3F800000
+    movd xmm7, r9d
+    pshufd xmm7, xmm7, 0
 
-  while i < aCount do
-  begin
-    pD[i] := 1.0 / pS[i];
-    Inc(i);
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movups xmm0, [rax]
+    rcpps xmm0, xmm0
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    rcpps xmm1, xmm1
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    rcpps xmm2, xmm2
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    rcpps xmm3, xmm3
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    rcpps xmm0, xmm0
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    rcpps xmm1, xmm1
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    rcpps xmm0, xmm0
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movaps xmm0, xmm7
+    divss xmm0, [rax]
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 procedure SSE2ArrayRsqrtF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var
-  i: SizeUInt;
   pS, pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
   pS := aSrc;
   pD := aDst;
-  i := 0;
 
-  while i + 4 <= aCount do
-  begin
-    asm
-      mov    rax, pS
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      rsqrtps xmm0, xmm0
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    mov r9d, $3F800000
+    movd xmm7, r9d
+    pshufd xmm7, xmm7, 0
 
-  while i < aCount do
-  begin
-    pD[i] := 1.0 / Sqrt(pS[i]);
-    Inc(i);
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movups xmm0, [rax]
+    rsqrtps xmm0, xmm0
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    rsqrtps xmm1, xmm1
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    rsqrtps xmm2, xmm2
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    rsqrtps xmm3, xmm3
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    rsqrtps xmm0, xmm0
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    rsqrtps xmm1, xmm1
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    rsqrtps xmm0, xmm0
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    sqrtss xmm0, xmm0
+    movaps xmm1, xmm7
+    divss xmm1, xmm0
+    movss [rcx], xmm1
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 procedure SSE2ArrayMinF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var
-  i: SizeUInt;
   pS1, pS2, pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
@@ -933,58 +1353,81 @@ begin
   pS1 := aSrc1;
   pS2 := aSrc2;
   pD := aDst;
-  i := 0;
 
-  while i + 8 <= aCount do
-  begin
-    asm
-      mov    rax, pS1
-      mov    rdx, pS2
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      movups xmm1, [rdx + r8]
-      minps  xmm0, xmm1
-      movups [rcx + r8], xmm0
-      movups xmm2, [rax + r8 + 16]
-      movups xmm3, [rdx + r8 + 16]
-      minps  xmm2, xmm3
-      movups [rcx + r8 + 16], xmm2
-    end;
-    Inc(i, 8);
-  end;
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
 
-  if i + 4 <= aCount then
-  begin
-    asm
-      mov    rax, pS1
-      mov    rdx, pS2
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      movups xmm1, [rdx + r8]
-      minps  xmm0, xmm1
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
+    cmp r8, 16
+    jb @tail8
 
-  while i < aCount do
-  begin
-    if pS1[i] <= pS2[i] then
-      pD[i] := pS1[i]
-    else
-      pD[i] := pS2[i];
-    Inc(i);
+  @loop16:
+    movups xmm0, [rax]
+    minps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    minps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    minps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    minps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    minps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    minps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    minps xmm0, [rdx]
+    movups [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    minss xmm0, [rdx]
+    movss [rcx], xmm0
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 procedure SSE2ArrayMaxF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var
-  i: SizeUInt;
   pS1, pS2, pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
@@ -992,51 +1435,75 @@ begin
   pS1 := aSrc1;
   pS2 := aSrc2;
   pD := aDst;
-  i := 0;
 
-  while i + 8 <= aCount do
-  begin
-    asm
-      mov    rax, pS1
-      mov    rdx, pS2
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      movups xmm1, [rdx + r8]
-      maxps  xmm0, xmm1
-      movups [rcx + r8], xmm0
-      movups xmm2, [rax + r8 + 16]
-      movups xmm3, [rdx + r8 + 16]
-      maxps  xmm2, xmm3
-      movups [rcx + r8 + 16], xmm2
-    end;
-    Inc(i, 8);
-  end;
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
 
-  if i + 4 <= aCount then
-  begin
-    asm
-      mov    rax, pS1
-      mov    rdx, pS2
-      mov    rcx, pD
-      mov    r8, i
-      shl    r8, 2
-      movups xmm0, [rax + r8]
-      movups xmm1, [rdx + r8]
-      maxps  xmm0, xmm1
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
+    cmp r8, 16
+    jb @tail8
 
-  while i < aCount do
-  begin
-    if pS1[i] >= pS2[i] then
-      pD[i] := pS1[i]
-    else
-      pD[i] := pS2[i];
-    Inc(i);
+  @loop16:
+    movups xmm0, [rax]
+    maxps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    maxps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    maxps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    maxps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    maxps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    maxps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    maxps xmm0, [rdx]
+    movups [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    maxss xmm0, [rdx]
+    movss [rcx], xmm0
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
@@ -1291,36 +1758,158 @@ end;
 // ============================================================================
 
 procedure SSE2ArrayAddI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
-var i: SizeUInt; pS1, pS2, pD: PInt32;
+var pS1, pS2, pD: PInt32;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
-  pS1 := aSrc1; pS2 := aSrc2; pD := aDst; i := 0;
-  while i + 4 <= aCount do begin
-    asm
-      mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, i; shl r8, 2
-      movdqu xmm0, [rax + r8]; paddd xmm0, [rdx + r8]; movdqu [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movdqu xmm0, [rax]
+    paddd xmm0, [rdx]
+    movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]
+    paddd xmm1, [rdx + 16]
+    movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]
+    paddd xmm2, [rdx + 32]
+    movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]
+    paddd xmm3, [rdx + 48]
+    movdqu [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movdqu xmm0, [rax]
+    paddd xmm0, [rdx]
+    movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]
+    paddd xmm1, [rdx + 16]
+    movdqu [rcx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movdqu xmm0, [rax]
+    paddd xmm0, [rdx]
+    movdqu [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    mov r9d, [rax]
+    add r9d, [rdx]
+    mov [rcx], r9d
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
-  while i < aCount do begin pD[i] := pS1[i] + pS2[i]; Inc(i); end;
   {$POP}
 end;
 
 procedure SSE2ArraySubI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
-var i: SizeUInt; pS1, pS2, pD: PInt32;
+var pS1, pS2, pD: PInt32;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
-  pS1 := aSrc1; pS2 := aSrc2; pD := aDst; i := 0;
-  while i + 4 <= aCount do begin
-    asm
-      mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, i; shl r8, 2
-      movdqu xmm0, [rax + r8]; psubd xmm0, [rdx + r8]; movdqu [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movdqu xmm0, [rax]
+    psubd xmm0, [rdx]
+    movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]
+    psubd xmm1, [rdx + 16]
+    movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]
+    psubd xmm2, [rdx + 32]
+    movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]
+    psubd xmm3, [rdx + 48]
+    movdqu [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movdqu xmm0, [rax]
+    psubd xmm0, [rdx]
+    movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]
+    psubd xmm1, [rdx + 16]
+    movdqu [rcx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movdqu xmm0, [rax]
+    psubd xmm0, [rdx]
+    movdqu [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    mov r9d, [rax]
+    sub r9d, [rdx]
+    mov [rcx], r9d
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
-  while i < aCount do begin pD[i] := pS1[i] - pS2[i]; Inc(i); end;
   {$POP}
 end;
 
@@ -1342,89 +1931,388 @@ begin
 end;
 
 procedure SSE2ArrayAndI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
-var i: SizeUInt; pS1, pS2, pD: PInt32;
+var pS1, pS2, pD: PInt32;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
-  pS1 := aSrc1; pS2 := aSrc2; pD := aDst; i := 0;
-  while i + 4 <= aCount do begin
-    asm
-      mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, i; shl r8, 2
-      movdqu xmm0, [rax + r8]; pand xmm0, [rdx + r8]; movdqu [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movdqu xmm0, [rax]
+    pand xmm0, [rdx]
+    movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]
+    pand xmm1, [rdx + 16]
+    movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]
+    pand xmm2, [rdx + 32]
+    movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]
+    pand xmm3, [rdx + 48]
+    movdqu [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movdqu xmm0, [rax]
+    pand xmm0, [rdx]
+    movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]
+    pand xmm1, [rdx + 16]
+    movdqu [rcx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movdqu xmm0, [rax]
+    pand xmm0, [rdx]
+    movdqu [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    mov r9d, [rax]
+    and r9d, [rdx]
+    mov [rcx], r9d
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
-  while i < aCount do begin pD[i] := pS1[i] and pS2[i]; Inc(i); end;
   {$POP}
 end;
 
 procedure SSE2ArrayOrI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
-var i: SizeUInt; pS1, pS2, pD: PInt32;
+var pS1, pS2, pD: PInt32;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
-  pS1 := aSrc1; pS2 := aSrc2; pD := aDst; i := 0;
-  while i + 4 <= aCount do begin
-    asm
-      mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, i; shl r8, 2
-      movdqu xmm0, [rax + r8]; por xmm0, [rdx + r8]; movdqu [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movdqu xmm0, [rax]
+    por xmm0, [rdx]
+    movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]
+    por xmm1, [rdx + 16]
+    movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]
+    por xmm2, [rdx + 32]
+    movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]
+    por xmm3, [rdx + 48]
+    movdqu [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movdqu xmm0, [rax]
+    por xmm0, [rdx]
+    movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]
+    por xmm1, [rdx + 16]
+    movdqu [rcx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movdqu xmm0, [rax]
+    por xmm0, [rdx]
+    movdqu [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    mov r9d, [rax]
+    or r9d, [rdx]
+    mov [rcx], r9d
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
-  while i < aCount do begin pD[i] := pS1[i] or pS2[i]; Inc(i); end;
   {$POP}
 end;
 
 procedure SSE2ArrayXorI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
-var i: SizeUInt; pS1, pS2, pD: PInt32;
+var pS1, pS2, pD: PInt32;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
-  pS1 := aSrc1; pS2 := aSrc2; pD := aDst; i := 0;
-  while i + 4 <= aCount do begin
-    asm
-      mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, i; shl r8, 2
-      movdqu xmm0, [rax + r8]; pxor xmm0, [rdx + r8]; movdqu [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movdqu xmm0, [rax]
+    pxor xmm0, [rdx]
+    movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]
+    pxor xmm1, [rdx + 16]
+    movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]
+    pxor xmm2, [rdx + 32]
+    movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]
+    pxor xmm3, [rdx + 48]
+    movdqu [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movdqu xmm0, [rax]
+    pxor xmm0, [rdx]
+    movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]
+    pxor xmm1, [rdx + 16]
+    movdqu [rcx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movdqu xmm0, [rax]
+    pxor xmm0, [rdx]
+    movdqu [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    mov r9d, [rax]
+    xor r9d, [rdx]
+    mov [rcx], r9d
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
-  while i < aCount do begin pD[i] := pS1[i] xor pS2[i]; Inc(i); end;
   {$POP}
 end;
 
 procedure SSE2ArrayShlI32(aSrc, aDst: PInt32; aCount: SizeUInt; aShift: Integer);
-var i: SizeUInt; pS, pD: PInt32;
+var pS, pD: PInt32;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
-  pS := aSrc; pD := aDst; i := 0;
-  while i + 4 <= aCount do begin
-    asm
-      mov rax, pS; mov rdx, pD; mov r8, i; shl r8, 2
-      movd xmm7, aShift
-      movdqu xmm0, [rax + r8]; pslld xmm0, xmm7; movdqu [rdx + r8], xmm0
-    end;
-    Inc(i, 4);
+  pS := aSrc; pD := aDst;
+  asm
+    mov rax, pS
+    mov rdx, pD
+    mov r8, aCount
+    mov r10d, aShift
+    movd xmm7, r10d
+
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movdqu xmm0, [rax]
+    pslld xmm0, xmm7
+    movdqu [rdx], xmm0
+    movdqu xmm1, [rax + 16]
+    pslld xmm1, xmm7
+    movdqu [rdx + 16], xmm1
+    movdqu xmm2, [rax + 32]
+    pslld xmm2, xmm7
+    movdqu [rdx + 32], xmm2
+    movdqu xmm3, [rax + 48]
+    pslld xmm3, xmm7
+    movdqu [rdx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movdqu xmm0, [rax]
+    pslld xmm0, xmm7
+    movdqu [rdx], xmm0
+    movdqu xmm1, [rax + 16]
+    pslld xmm1, xmm7
+    movdqu [rdx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movdqu xmm0, [rax]
+    pslld xmm0, xmm7
+    movdqu [rdx], xmm0
+    add rax, 16
+    add rdx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    mov r9d, [rax]
+    mov ecx, r10d
+    shl r9d, cl
+    mov [rdx], r9d
+    add rax, 4
+    add rdx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
-  while i < aCount do begin pD[i] := pS[i] shl aShift; Inc(i); end;
   {$POP}
 end;
 
 procedure SSE2ArrayShrI32(aSrc, aDst: PInt32; aCount: SizeUInt; aShift: Integer);
-var i: SizeUInt; pS, pD: PInt32;
+var pS, pD: PInt32;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
-  pS := aSrc; pD := aDst; i := 0;
-  while i + 4 <= aCount do begin
-    asm
-      mov rax, pS; mov rdx, pD; mov r8, i; shl r8, 2
-      movd xmm7, aShift
-      movdqu xmm0, [rax + r8]; psrad xmm0, xmm7; movdqu [rdx + r8], xmm0
-    end;
-    Inc(i, 4);
+  pS := aSrc; pD := aDst;
+  asm
+    mov rax, pS
+    mov rdx, pD
+    mov r8, aCount
+    mov r10d, aShift
+    movd xmm7, r10d
+
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movdqu xmm0, [rax]
+    psrad xmm0, xmm7
+    movdqu [rdx], xmm0
+    movdqu xmm1, [rax + 16]
+    psrad xmm1, xmm7
+    movdqu [rdx + 16], xmm1
+    movdqu xmm2, [rax + 32]
+    psrad xmm2, xmm7
+    movdqu [rdx + 32], xmm2
+    movdqu xmm3, [rax + 48]
+    psrad xmm3, xmm7
+    movdqu [rdx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movdqu xmm0, [rax]
+    psrad xmm0, xmm7
+    movdqu [rdx], xmm0
+    movdqu xmm1, [rax + 16]
+    psrad xmm1, xmm7
+    movdqu [rdx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movdqu xmm0, [rax]
+    psrad xmm0, xmm7
+    movdqu [rdx], xmm0
+    add rax, 16
+    add rdx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    mov r9d, [rax]
+    mov ecx, r10d
+    sar r9d, cl
+    mov [rdx], r9d
+    add rax, 4
+    add rdx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
-  while i < aCount do begin pD[i] := SarLongint(pS[i], aShift); Inc(i); end;
   {$POP}
 end;
 
@@ -1434,36 +2322,146 @@ end;
 // ============================================================================
 
 procedure SSE2ArrayF32toI32(aSrc: PSingle; aDst: PInt32; aCount: SizeUInt);
-var i: SizeUInt; pS: PSingle; pD: PInt32;
+var pS: PSingle; pD: PInt32;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
-  pS := aSrc; pD := aDst; i := 0;
-  while i + 4 <= aCount do begin
-    asm
-      mov rax, pS; mov rcx, pD; mov r8, i; shl r8, 2
-      movups xmm0, [rax + r8]; cvtps2dq xmm0, xmm0; movdqu [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
+  pS := aSrc; pD := aDst;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movups xmm0, [rax]
+    cvtps2dq xmm0, xmm0
+    movdqu [rcx], xmm0
+    movups xmm1, [rax + 16]
+    cvtps2dq xmm1, xmm1
+    movdqu [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    cvtps2dq xmm2, xmm2
+    movdqu [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    cvtps2dq xmm3, xmm3
+    movdqu [rcx + 48], xmm3
+    add rax, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    cvtps2dq xmm0, xmm0
+    movdqu [rcx], xmm0
+    movups xmm1, [rax + 16]
+    cvtps2dq xmm1, xmm1
+    movdqu [rcx + 16], xmm1
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    cvtps2dq xmm0, xmm0
+    movdqu [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    cvtss2si r9d, [rax]
+    mov [rcx], r9d
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
-  while i < aCount do begin pD[i] := Round(pS[i]); Inc(i); end;
   {$POP}
 end;
 
 procedure SSE2ArrayI32toF32(aSrc: PInt32; aDst: PSingle; aCount: SizeUInt);
-var i: SizeUInt; pS: PInt32; pD: PSingle;
+var pS: PInt32; pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
-  pS := aSrc; pD := aDst; i := 0;
-  while i + 4 <= aCount do begin
-    asm
-      mov rax, pS; mov rcx, pD; mov r8, i; shl r8, 2
-      movdqu xmm0, [rax + r8]; cvtdq2ps xmm0, xmm0; movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
+  pS := aSrc; pD := aDst;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movdqu xmm0, [rax]
+    cvtdq2ps xmm0, xmm0
+    movups [rcx], xmm0
+    movdqu xmm1, [rax + 16]
+    cvtdq2ps xmm1, xmm1
+    movups [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]
+    cvtdq2ps xmm2, xmm2
+    movups [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]
+    cvtdq2ps xmm3, xmm3
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movdqu xmm0, [rax]
+    cvtdq2ps xmm0, xmm0
+    movups [rcx], xmm0
+    movdqu xmm1, [rax + 16]
+    cvtdq2ps xmm1, xmm1
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movdqu xmm0, [rax]
+    cvtdq2ps xmm0, xmm0
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    cvtsi2ss xmm0, [rax]
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
-  while i < aCount do begin pD[i] := Single(pS[i]); Inc(i); end;
   {$POP}
 end;
 
@@ -1677,91 +2675,336 @@ end;
 // ============================================================================
 
 procedure SSE2ArrayPackSatI32toI16(aSrc: PInt32; aDst: PInt16; aCount: SizeUInt);
-var i: SizeUInt; pS: PInt32; pD: PInt16;
+var pS: PInt32; pD: PInt16;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
-  pS := aSrc; pD := aDst; i := 0;
-  while i + 8 <= aCount do begin
-    asm
-      mov rax, pS; mov rcx, pD; mov r8, i; shl r8, 2
-      movdqu xmm0, [rax + r8]
-      movdqu xmm1, [rax + r8 + 16]
-      packssdw xmm0, xmm1
-      mov r8, i; shl r8, 1
-      movdqu [rcx + r8], xmm0
-    end;
-    Inc(i, 8);
-  end;
-  while i < aCount do begin
-    if pS[i] > 32767 then pD[i] := 32767
-    else if pS[i] < -32768 then pD[i] := -32768
-    else pD[i] := Int16(pS[i]);
-    Inc(i);
+  pS := aSrc; pD := aDst;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movdqu xmm0, [rax]
+    movdqu xmm1, [rax + 16]
+    packssdw xmm0, xmm1
+    movdqu [rcx], xmm0
+    movdqu xmm2, [rax + 32]
+    movdqu xmm3, [rax + 48]
+    packssdw xmm2, xmm3
+    movdqu [rcx + 16], xmm2
+    add rax, 64
+    add rcx, 32
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movdqu xmm0, [rax]
+    movdqu xmm1, [rax + 16]
+    packssdw xmm0, xmm1
+    movdqu [rcx], xmm0
+    add rax, 32
+    add rcx, 16
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movdqu xmm0, [rax]
+    packssdw xmm0, xmm0
+    movq [rcx], xmm0
+    add rax, 16
+    add rcx, 8
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    mov r9d, [rax]
+    cmp r9d, 32767
+    jle @check_min
+    mov r10d, 32767
+    mov [rcx], r10w
+    jmp @next_scalar
+  @check_min:
+    cmp r9d, -32768
+    jge @store_value
+    mov r10d, -32768
+    mov [rcx], r10w
+    jmp @next_scalar
+  @store_value:
+    mov [rcx], r9w
+  @next_scalar:
+    add rax, 4
+    add rcx, 2
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 procedure SSE2ArrayRcpRefineF32(aSrc, aDst: PSingle; aCount: SizeUInt);
-var i: SizeUInt; pS, pD: PSingle;
+var pS, pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
-  pS := aSrc; pD := aDst; i := 0;
-  while i + 4 <= aCount do begin
-    asm
-      mov rax, pS; mov rcx, pD; mov r8, i; shl r8, 2
-      // 2.0 constant
-      mov r9d, $40000000
-      movd xmm7, r9d
-      pshufd xmm7, xmm7, 0
-      // y0 = rcpps(x)
-      movups xmm0, [rax + r8]
-      rcpps xmm1, xmm0
-      // y1 = y0 * (2 - x*y0)
-      movaps xmm2, xmm0
-      mulps xmm2, xmm1       // x*y0
-      subps xmm7, xmm2       // 2 - x*y0
-      mulps xmm1, xmm7       // y0 * (2 - x*y0)
-      movups [rcx + r8], xmm1
-    end;
-    Inc(i, 4);
+  pS := aSrc; pD := aDst;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    mov r9d, $40000000
+    movd xmm6, r9d
+    pshufd xmm6, xmm6, 0
+    mov r9d, $3F800000
+    movd xmm7, r9d
+    pshufd xmm7, xmm7, 0
+
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movups xmm0, [rax]
+    rcpps xmm1, xmm0
+    movaps xmm2, xmm6
+    movaps xmm3, xmm0
+    mulps xmm3, xmm1
+    subps xmm2, xmm3
+    mulps xmm1, xmm2
+    movups [rcx], xmm1
+
+    movups xmm0, [rax + 16]
+    rcpps xmm1, xmm0
+    movaps xmm2, xmm6
+    movaps xmm3, xmm0
+    mulps xmm3, xmm1
+    subps xmm2, xmm3
+    mulps xmm1, xmm2
+    movups [rcx + 16], xmm1
+
+    movups xmm0, [rax + 32]
+    rcpps xmm1, xmm0
+    movaps xmm2, xmm6
+    movaps xmm3, xmm0
+    mulps xmm3, xmm1
+    subps xmm2, xmm3
+    mulps xmm1, xmm2
+    movups [rcx + 32], xmm1
+
+    movups xmm0, [rax + 48]
+    rcpps xmm1, xmm0
+    movaps xmm2, xmm6
+    movaps xmm3, xmm0
+    mulps xmm3, xmm1
+    subps xmm2, xmm3
+    mulps xmm1, xmm2
+    movups [rcx + 48], xmm1
+
+    add rax, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    rcpps xmm1, xmm0
+    movaps xmm2, xmm6
+    movaps xmm3, xmm0
+    mulps xmm3, xmm1
+    subps xmm2, xmm3
+    mulps xmm1, xmm2
+    movups [rcx], xmm1
+    movups xmm0, [rax + 16]
+    rcpps xmm1, xmm0
+    movaps xmm2, xmm6
+    movaps xmm3, xmm0
+    mulps xmm3, xmm1
+    subps xmm2, xmm3
+    mulps xmm1, xmm2
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    rcpps xmm1, xmm0
+    movaps xmm2, xmm6
+    movaps xmm3, xmm0
+    mulps xmm3, xmm1
+    subps xmm2, xmm3
+    mulps xmm1, xmm2
+    movups [rcx], xmm1
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movaps xmm0, xmm7
+    divss xmm0, [rax]
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
-  while i < aCount do begin pD[i] := 1.0 / pS[i]; Inc(i); end;
   {$POP}
 end;
 
 procedure SSE2ArrayRsqrtRefineF32(aSrc, aDst: PSingle; aCount: SizeUInt);
-var i: SizeUInt; pS, pD: PSingle;
+var pS, pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
-  pS := aSrc; pD := aDst; i := 0;
-  while i + 4 <= aCount do begin
-    asm
-      mov rax, pS; mov rcx, pD; mov r8, i; shl r8, 2
-      // constants: 0.5 and 3.0
-      mov r9d, $3F000000
-      movd xmm6, r9d
-      pshufd xmm6, xmm6, 0   // 0.5
-      mov r9d, $40400000
-      movd xmm7, r9d
-      pshufd xmm7, xmm7, 0   // 3.0
-      // y0 = rsqrtps(x)
-      movups xmm0, [rax + r8]
-      rsqrtps xmm1, xmm0
-      // y1 = 0.5 * y0 * (3 - x*y0*y0)
-      movaps xmm2, xmm1
-      mulps xmm2, xmm2       // y0²
-      mulps xmm2, xmm0       // x*y0²
-      subps xmm7, xmm2       // 3 - x*y0²
-      mulps xmm1, xmm7       // y0*(3-x*y0²)
-      mulps xmm1, xmm6       // *0.5
-      movups [rcx + r8], xmm1
-    end;
-    Inc(i, 4);
+  pS := aSrc; pD := aDst;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    mov r9d, $3F800000
+    movd xmm5, r9d
+    pshufd xmm5, xmm5, 0
+    mov r9d, $3F000000
+    movd xmm6, r9d
+    pshufd xmm6, xmm6, 0
+    mov r9d, $40400000
+    movd xmm7, r9d
+    pshufd xmm7, xmm7, 0
+
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movups xmm0, [rax]
+    rsqrtps xmm1, xmm0
+    movaps xmm2, xmm1
+    mulps xmm2, xmm2
+    mulps xmm2, xmm0
+    movaps xmm3, xmm7
+    subps xmm3, xmm2
+    mulps xmm1, xmm3
+    mulps xmm1, xmm6
+    movups [rcx], xmm1
+
+    movups xmm0, [rax + 16]
+    rsqrtps xmm1, xmm0
+    movaps xmm2, xmm1
+    mulps xmm2, xmm2
+    mulps xmm2, xmm0
+    movaps xmm3, xmm7
+    subps xmm3, xmm2
+    mulps xmm1, xmm3
+    mulps xmm1, xmm6
+    movups [rcx + 16], xmm1
+
+    movups xmm0, [rax + 32]
+    rsqrtps xmm1, xmm0
+    movaps xmm2, xmm1
+    mulps xmm2, xmm2
+    mulps xmm2, xmm0
+    movaps xmm3, xmm7
+    subps xmm3, xmm2
+    mulps xmm1, xmm3
+    mulps xmm1, xmm6
+    movups [rcx + 32], xmm1
+
+    movups xmm0, [rax + 48]
+    rsqrtps xmm1, xmm0
+    movaps xmm2, xmm1
+    mulps xmm2, xmm2
+    mulps xmm2, xmm0
+    movaps xmm3, xmm7
+    subps xmm3, xmm2
+    mulps xmm1, xmm3
+    mulps xmm1, xmm6
+    movups [rcx + 48], xmm1
+
+    add rax, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    rsqrtps xmm1, xmm0
+    movaps xmm2, xmm1
+    mulps xmm2, xmm2
+    mulps xmm2, xmm0
+    movaps xmm3, xmm7
+    subps xmm3, xmm2
+    mulps xmm1, xmm3
+    mulps xmm1, xmm6
+    movups [rcx], xmm1
+    movups xmm0, [rax + 16]
+    rsqrtps xmm1, xmm0
+    movaps xmm2, xmm1
+    mulps xmm2, xmm2
+    mulps xmm2, xmm0
+    movaps xmm3, xmm7
+    subps xmm3, xmm2
+    mulps xmm1, xmm3
+    mulps xmm1, xmm6
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    rsqrtps xmm1, xmm0
+    movaps xmm2, xmm1
+    mulps xmm2, xmm2
+    mulps xmm2, xmm0
+    movaps xmm3, xmm7
+    subps xmm3, xmm2
+    mulps xmm1, xmm3
+    mulps xmm1, xmm6
+    movups [rcx], xmm1
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    sqrtss xmm0, xmm0
+    movaps xmm1, xmm5
+    divss xmm1, xmm0
+    movss [rcx], xmm1
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
-  while i < aCount do begin pD[i] := 1.0 / System.Sqrt(pS[i]); Inc(i); end;
   {$POP}
 end;
 
@@ -2458,91 +3701,335 @@ end;
 // ============================================================================
 
 procedure SSE2ArrayLinearF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScale, aBias: Single);
-var i: SizeUInt; pS, pD: PSingle; LScale, LBias: Single;
+var pS, pD: PSingle; LScale, LBias: Single;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
-  pS := aSrc; pD := aDst; LScale := aScale; LBias := aBias; i := 0;
-  while i + 4 <= aCount do begin
-    asm
-      mov rax, pS; mov rcx, pD; mov r8, i; shl r8, 2
-      movss xmm6, [LScale]; shufps xmm6, xmm6, 0
-      movss xmm7, [LBias]; shufps xmm7, xmm7, 0
-      movups xmm0, [rax + r8]
-      mulps xmm0, xmm6
-      addps xmm0, xmm7
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
+  pS := aSrc; pD := aDst; LScale := aScale; LBias := aBias;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    movss xmm6, [LScale]
+    shufps xmm6, xmm6, 0
+    movss xmm7, [LBias]
+    shufps xmm7, xmm7, 0
+
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movups xmm0, [rax]
+    mulps xmm0, xmm6
+    addps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    mulps xmm1, xmm6
+    addps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    mulps xmm2, xmm6
+    addps xmm2, xmm7
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    mulps xmm3, xmm6
+    addps xmm3, xmm7
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    mulps xmm0, xmm6
+    addps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    mulps xmm1, xmm6
+    addps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    mulps xmm0, xmm6
+    addps xmm0, xmm7
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    mulss xmm0, xmm6
+    addss xmm0, xmm7
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
-  while i < aCount do begin pD[i] := pS[i] * LScale + LBias; Inc(i); end;
   {$POP}
 end;
 
 procedure SSE2ArrayAbsDiffF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
-var i: SizeUInt; pS1, pS2, pD: PSingle;
+var pS1, pS2, pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
-  pS1 := aSrc1; pS2 := aSrc2; pD := aDst; i := 0;
-  while i + 4 <= aCount do begin
-    asm
-      mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, i; shl r8, 2
-      mov r9d, $7FFFFFFF; movd xmm7, r9d; pshufd xmm7, xmm7, 0
-      movups xmm0, [rax + r8]
-      movups xmm1, [rdx + r8]
-      subps xmm0, xmm1
-      andps xmm0, xmm7
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
+    mov r9d, $7FFFFFFF
+    movd xmm7, r9d
+    pshufd xmm7, xmm7, 0
+
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movups xmm0, [rax]
+    subps xmm0, [rdx]
+    andps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    subps xmm1, [rdx + 16]
+    andps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    subps xmm2, [rdx + 32]
+    andps xmm2, xmm7
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    subps xmm3, [rdx + 48]
+    andps xmm3, xmm7
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    subps xmm0, [rdx]
+    andps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    subps xmm1, [rdx + 16]
+    andps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    subps xmm0, [rdx]
+    andps xmm0, xmm7
+    movups [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    subss xmm0, [rdx]
+    andps xmm0, xmm7
+    movss [rcx], xmm0
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
-  while i < aCount do begin pD[i] := System.Abs(pS1[i] - pS2[i]); Inc(i); end;
   {$POP}
 end;
 
 procedure SSE2ArrayReLUF32(aSrc, aDst: PSingle; aCount: SizeUInt);
-var i: SizeUInt; pS, pD: PSingle;
+var pS, pD: PSingle;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
-  pS := aSrc; pD := aDst; i := 0;
-  while i + 4 <= aCount do begin
-    asm
-      mov rax, pS; mov rcx, pD; mov r8, i; shl r8, 2
-      xorps xmm7, xmm7
-      movups xmm0, [rax + r8]
-      maxps xmm0, xmm7
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
-  end;
-  while i < aCount do begin
-    if pS[i] > 0 then pD[i] := pS[i] else pD[i] := 0;
-    Inc(i);
+  pS := aSrc; pD := aDst;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    xorps xmm7, xmm7
+
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movups xmm0, [rax]
+    maxps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    maxps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    maxps xmm2, xmm7
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    maxps xmm3, xmm7
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    maxps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    maxps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    maxps xmm0, xmm7
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    maxss xmm0, xmm7
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
   {$POP}
 end;
 
 procedure SSE2ArrayNormF32(aSrc, aDst: PSingle; aCount: SizeUInt; aMean, aInvStd: Single);
-var i: SizeUInt; pS, pD: PSingle; LMean, LInvStd: Single;
+var pS, pD: PSingle; LMean, LInvStd: Single;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
-  pS := aSrc; pD := aDst; LMean := aMean; LInvStd := aInvStd; i := 0;
-  while i + 4 <= aCount do begin
-    asm
-      mov rax, pS; mov rcx, pD; mov r8, i; shl r8, 2
-      movss xmm6, [LMean]; shufps xmm6, xmm6, 0
-      movss xmm7, [LInvStd]; shufps xmm7, xmm7, 0
-      movups xmm0, [rax + r8]
-      subps xmm0, xmm6
-      mulps xmm0, xmm7
-      movups [rcx + r8], xmm0
-    end;
-    Inc(i, 4);
+  pS := aSrc; pD := aDst; LMean := aMean; LInvStd := aInvStd;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    movss xmm6, [LMean]
+    shufps xmm6, xmm6, 0
+    movss xmm7, [LInvStd]
+    shufps xmm7, xmm7, 0
+
+    cmp r8, 16
+    jb @tail8
+
+  @loop16:
+    movups xmm0, [rax]
+    subps xmm0, xmm6
+    mulps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    subps xmm1, xmm6
+    mulps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    subps xmm2, xmm6
+    mulps xmm2, xmm7
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    subps xmm3, xmm6
+    mulps xmm3, xmm7
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    subps xmm0, xmm6
+    mulps xmm0, xmm7
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    subps xmm1, xmm6
+    mulps xmm1, xmm7
+    movups [rcx + 16], xmm1
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    subps xmm0, xmm6
+    mulps xmm0, xmm7
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    subss xmm0, xmm6
+    mulss xmm0, xmm7
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
   end;
-  while i < aCount do begin pD[i] := (pS[i] - LMean) * LInvStd; Inc(i); end;
   {$POP}
 end;
 

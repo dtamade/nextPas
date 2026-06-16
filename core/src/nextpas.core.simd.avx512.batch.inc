@@ -21,6 +21,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vmovups zmm0, [rax]
     vaddps zmm0, zmm0, [rdx]
     vmovups [rcx], zmm0
@@ -90,6 +91,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vmovups zmm0, [rax]
     vsubps zmm0, zmm0, [rdx]
     vmovups [rcx], zmm0
@@ -159,6 +161,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vmovups zmm0, [rax]
     vmulps zmm0, zmm0, [rdx]
     vmovups [rcx], zmm0
@@ -228,6 +231,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vmovups zmm0, [rax]
     vdivps zmm0, zmm0, [rdx]
     vmovups [rcx], zmm0
@@ -671,6 +675,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vmovups zmm0, [rax]
     vfmadd213ps zmm0, zmm6, zmm7
     vmovups [rcx], zmm0
@@ -1145,6 +1150,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vmovups zmm0, [rax]
     vfmadd213ps zmm0, zmm6, zmm7
     vmaxps zmm0, zmm0, zmm5
@@ -1223,6 +1229,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vmovups zmm0, [rax]
     vaddps zmm0, zmm0, zmm7
     vmovups [rcx], zmm0
@@ -1291,6 +1298,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vmovups zmm0, [rax]
     vmulps zmm0, zmm0, zmm7
     vmovups [rcx], zmm0
@@ -1360,6 +1368,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vmovups zmm0, [rax]
     vmaxps zmm0, zmm0, zmm6
     vminps zmm0, zmm0, zmm7
@@ -1489,6 +1498,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vmovups zmm0, [rdx]
     vfmadd231ps zmm0, zmm7, [rax]
     vmovups [rcx], zmm0
@@ -1566,6 +1576,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vaddps zmm0, zmm0, [rax]
     vaddps zmm1, zmm1, [rax + 64]
     vaddps zmm2, zmm2, [rax + 128]
@@ -1638,6 +1649,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vmovups zmm4, [rax]
     vfmadd231ps zmm0, zmm4, [rdx]
     vmovups zmm5, [rax + 64]
@@ -1718,6 +1730,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vminps zmm0, zmm0, [rax]
     vminps zmm1, zmm1, [rax + 64]
     vminps zmm2, zmm2, [rax + 128]
@@ -1791,6 +1804,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vmaxps zmm0, zmm0, [rax]
     vmaxps zmm1, zmm1, [rax + 64]
     vmaxps zmm2, zmm2, [rax + 128]
@@ -1864,6 +1878,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vmovups zmm0, [rax]
     vminps zmm0, zmm0, [rdx]
     vmovups [rcx], zmm0
@@ -1933,6 +1948,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vmovups zmm0, [rax]
     vmaxps zmm0, zmm0, [rdx]
     vmovups [rcx], zmm0
@@ -2871,6 +2887,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vmovups zmm0, [rax]
     vrcp14ps zmm0, zmm0
     vmovups [rcx], zmm0
@@ -2938,6 +2955,7 @@ begin
     jb @tail16
 
   @loop64:
+    prefetcht0 [rax + 256]
     vmovups zmm0, [rax]
     vrsqrt14ps zmm0, zmm0
     vmovups [rcx], zmm0
