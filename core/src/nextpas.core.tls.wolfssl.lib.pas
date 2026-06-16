@@ -21,7 +21,8 @@ unit nextpas.core.tls.wolfssl.lib;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.wolfssl.base,
   nextpas.core.tls.wolfssl.api;
@@ -102,13 +103,7 @@ procedure UnregisterWolfSSLBackend;
 
 implementation
 
-uses
-  nextpas.core.tls.context.config,
-  nextpas.core.tls.errors,
-  nextpas.core.tls.exceptions,
-  nextpas.core.tls.factory,
-  nextpas.core.tls.wolfssl.context,
-  nextpas.core.tls.wolfssl.certificate;
+uses nextpas.core.tls.context.config, nextpas.core.tls.errors, nextpas.core.tls.exceptions, nextpas.core.tls.factory, nextpas.core.tls.wolfssl.context, nextpas.core.tls.wolfssl.certificate;
 
 var
   GSkipFinalizeOnDestroy: Boolean = False;

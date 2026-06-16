@@ -59,6 +59,7 @@ type
     FImageProtocol: TImageProtocol;
     function IndexOfPos(AX, AY: Integer): Integer; inline;
     procedure MarkRowDirty(ARow: Integer); inline;
+    procedure NormalizeWideGlyphBoundaries;
     procedure ClearWideOverlapCell(AX, AY: Integer); inline;
     procedure PrepareWriteSpan(AX, AY, AWidth: Integer); inline;
   public
@@ -74,7 +75,7 @@ type
     { 按坐标读写。(AX,AY) 在 Area 外返回 nil。 }
     function CellAt(AX, AY: Integer): PCell;
 
-    { 从 (AX,AY) 起写 UTF-8 / ASCII 串，受右边界与可选 AMaxWidth（列）约束。
+    { 从 (AX,AY) 起写 UTF-8 / ASCII 串，受左右边界与可选 AMaxWidth（列）约束。
       样式经 CellApplyStyle 应用到每个写入 cell。返回实际写入列数。 }
     function SetString(AX, AY: Integer; const AStr: AnsiString;
       const AStyle: TStyle): Integer;
@@ -210,6 +211,48 @@ begin
     FDirtyRows := FDirtyRows or (QWord(1) shl ARow);
 end;
 
+procedure TBuffer.NormalizeWideGlyphBoundaries;
+var
+  LRow, LCol, LWidth, LIndex: Integer;
+  LCell, LNext, LPrev: PCell;
+begin
+  LWidth := FArea.Width;
+  if (LWidth <= 0) or (FArea.Height <= 0) then
+    Exit;
+
+  for LRow := 0 to FArea.Height - 1 do
+  begin
+    for LCol := 0 to LWidth - 1 do
+    begin
+      LIndex := (LRow * LWidth) + LCol;
+      LCell := @FContent[LIndex];
+
+      if LCell^.Skip and (LCell^.Width = 0) then
+      begin
+        if LCol = 0 then
+          CellReset(LCell^)
+        else
+        begin
+          LPrev := @FContent[LIndex - 1];
+          if (LPrev^.Width <> 2) or LPrev^.Skip then
+            CellReset(LCell^);
+        end;
+      end
+      else if (LCell^.Width = 2) and (not LCell^.Skip) then
+      begin
+        if LCol + 1 >= LWidth then
+          CellReset(LCell^)
+        else
+        begin
+          LNext := @FContent[LIndex + 1];
+          if (not LNext^.Skip) or (LNext^.Width <> 0) then
+            CellReset(LCell^);
+        end;
+      end;
+    end;
+  end;
+end;
+
 procedure TBuffer.ClearWideOverlapCell(AX, AY: Integer);
 var
   LCell, LPeer: PCell;
@@ -266,125 +309,59 @@ end;
 
 function TBuffer.SetStringN(AX, AY: Integer; const AStr: AnsiString;
   AMaxWidth: Integer; const AStyle: TStyle): Integer;
-var
-  LRight, LRemaining, LI, LCursor, LGLen: Integer;
-  LCP: PCell;
-  LAdv: TGraphemeAdvance;
-  LAscii: Boolean;
-  LByte: Byte;
 begin
-  Result := 0;
-  if (AY < FArea.Y) or (AY >= FArea.Y + FArea.Height) then Exit;
-  if AX >= FArea.X + FArea.Width then Exit;
-  if AX < FArea.X then AX := FArea.X;
-  MarkRowDirty(AY - FArea.Y);
-
-  LRight := FArea.X + FArea.Width;
-  LRemaining := LRight - AX;
-  if LRemaining > AMaxWidth then LRemaining := AMaxWidth;
-  if LRemaining <= 0 then Exit;
-  LGLen := System.Length(AStr);
-  if LGLen = 0 then Exit;
-
-  { 热 ASCII 路径——多数 UI 串（状态栏、英文）为纯 ASCII，保留字节循环。 }
-  LAscii := True;
-  for LI := 1 to LGLen do
-    if Byte(AStr[LI]) >= $80 then
-    begin
-      LAscii := False;
-      Break;
-    end;
-
-  LCursor := AX;
-  if LAscii then
-  begin
-    for LI := 1 to LGLen do
-    begin
-      if LRemaining = 0 then Break;
-      LByte := Byte(AStr[LI]);
-      if LByte < 32 then Continue;        { 丢弃控制字符（ratatui 对齐） }
-      PrepareWriteSpan(LCursor, AY, 1);
-      LCP := @FContent[IndexOfPos(LCursor, AY)];
-      CellSetSymbolAscii(LCP^, AStr[LI]);
-      CellApplyStyle(LCP^, AStyle);
-      Inc(LCursor);
-      Inc(Result);
-      Dec(LRemaining);
-    end;
-    Exit;
-  end;
-
-  { UTF-8 grapheme 路径。逐码点解码。宽度 2 簇占两个 cell：前导 cell 携带
-    glyph 字节且 Width=2；尾随 cell 重置为 CELL_EMPTY、Width=0、Skip=True，
-    使 diff/render 层留空。 }
-  LI := 0;
-  while LI < LGLen do
-  begin
-    if LRemaining = 0 then Break;
-    LAdv := GraphemeAt(AStr[1], LGLen, LI);
-
-    if LAdv.Width = 0 then
-    begin
-      Inc(LI, LAdv.ByteLen);
-      Continue;
-    end;
-
-    if LAdv.Width > LRemaining then Break;   { 宽字形空间不足 }
-
-    PrepareWriteSpan(LCursor, AY, LAdv.Width);
-    LCP := @FContent[IndexOfPos(LCursor, AY)];
-    CellSetSymbolBytes(LCP^, PByte(@AStr[1])[LI], LAdv.ByteLen, LAdv.Width);
-    CellApplyStyle(LCP^, AStyle);
-
-    if LAdv.Width = 2 then
-    begin
-      LCP := @FContent[IndexOfPos(LCursor + 1, AY)];
-      CellReset(LCP^);
-      LCP^.Width := 0;
-      LCP^.Skip := True;
-    end;
-
-    Inc(LCursor, LAdv.Width);
-    Inc(Result, LAdv.Width);
-    Dec(LRemaining, LAdv.Width);
-    Inc(LI, LAdv.ByteLen);
-  end;
+  Result := SetStringP(AX, AY, PAnsiChar(AStr), System.Length(AStr), AMaxWidth, AStyle);
 end;
 
 function TBuffer.SetStringP(AX, AY: Integer; AStr: PAnsiChar; ALen, AMaxWidth: Integer;
   const AStyle: TStyle): Integer;
 var
-  LRight, LRemaining, LI, LCursor: Integer;
+  LLeft, LRight, LRemaining, LHidden, LVisibleTail, LI, LCursor, LX: Integer;
   LCP: PCell;
   LByte: Byte;
   LAdv: TGraphemeAdvance;
   LAscii: Boolean;
 begin
   Result := 0;
+  LLeft := Integer(FArea.X);
+  LRight := LLeft + Integer(FArea.Width);
+
   if (AY < FArea.Y) or (AY >= FArea.Y + FArea.Height) then Exit;
-  if AX >= FArea.X + FArea.Width then Exit;
-  if AX < FArea.X then AX := FArea.X;
+  if AX >= LRight then Exit;
+  if (AStr = nil) or (ALen <= 0) or (AMaxWidth <= 0) then Exit;
+
+  LCursor := AX;
+  LHidden := 0;
+  if LCursor < LLeft then
+  begin
+    LHidden := LLeft - LCursor;
+    LCursor := LLeft;
+  end;
+
   MarkRowDirty(AY - FArea.Y);
-  LRight := FArea.X + FArea.Width;
-  LRemaining := LRight - AX;
+  LRemaining := LRight - LCursor;
   if LRemaining > AMaxWidth then LRemaining := AMaxWidth;
-  if (LRemaining <= 0) or (ALen <= 0) then Exit;
+  if LRemaining <= 0 then Exit;
 
   LAscii := True;
   for LI := 0 to ALen - 1 do
     if Byte(AStr[LI]) >= $80 then begin LAscii := False; Break; end;
 
-  LCursor := AX;
   if LAscii then
   begin
     for LI := 0 to ALen - 1 do
     begin
-      if LRemaining = 0 then Break;
       LByte := Byte(AStr[LI]);
       if LByte < 32 then Continue;
+      if LHidden > 0 then
+      begin
+        Dec(LHidden);
+        Continue;
+      end;
+      if LRemaining = 0 then Break;
       PrepareWriteSpan(LCursor, AY, 1);
       LCP := @FContent[IndexOfPos(LCursor, AY)];
-      CellSetSymbolAscii(LCP^, AStr[LI]);
+      CellSetSymbolAscii(LCP^, AnsiChar(LByte));
       CellApplyStyle(LCP^, AStyle);
       Inc(LCursor);
       Inc(Result);
@@ -396,9 +373,35 @@ begin
   LI := 0;
   while LI < ALen do
   begin
-    if LRemaining = 0 then Break;
     LAdv := GraphemeAt(AStr^, ALen, LI);
     if LAdv.Width = 0 then begin Inc(LI, LAdv.ByteLen); Continue; end;
+    if LHidden > 0 then
+    begin
+      if LAdv.Width <= LHidden then
+      begin
+        Dec(LHidden, LAdv.Width);
+        Inc(LI, LAdv.ByteLen);
+        Continue;
+      end;
+
+      LVisibleTail := LAdv.Width - LHidden;
+      if LVisibleTail > LRemaining then
+        LVisibleTail := LRemaining;
+      PrepareWriteSpan(LCursor, AY, LVisibleTail);
+      for LX := LCursor to LCursor + LVisibleTail - 1 do
+      begin
+        LCP := @FContent[IndexOfPos(LX, AY)];
+        CellReset(LCP^);
+      end;
+      Inc(LCursor, LVisibleTail);
+      Inc(Result, LVisibleTail);
+      Dec(LRemaining, LVisibleTail);
+      LHidden := 0;
+      Inc(LI, LAdv.ByteLen);
+      Continue;
+    end;
+
+    if LRemaining = 0 then Break;
     if LAdv.Width > LRemaining then Break;
     PrepareWriteSpan(LCursor, AY, LAdv.Width);
     LCP := @FContent[IndexOfPos(LCursor, AY)];
@@ -454,6 +457,7 @@ begin
     MarkRowDirty(LY - FArea.Y);
     for LX := LClip.Left to LClip.Right - 1 do
     begin
+      PrepareWriteSpan(LX, LY, 1);
       LCP := @FContent[IndexOfPos(LX, LY)];
       LCP^ := LCell;
     end;
@@ -473,6 +477,7 @@ begin
     MarkRowDirty(LY - FArea.Y);
     for LX := LClip.Left to LClip.Right - 1 do
     begin
+      PrepareWriteSpan(LX, LY, 1);
       LCP := @FContent[IndexOfPos(LX, LY)];
       LCP^ := CELL_EMPTY;
     end;
@@ -529,12 +534,45 @@ begin
       LSrc := @LOld[(LY - LOldArea.Y) * LOldArea.Width + (LX - LOldArea.X)];
       FContent[(LY - ANewArea.Y) * ANewArea.Width + (LX - ANewArea.X)] := LSrc^;
     end;
+  NormalizeWideGlyphBoundaries;
   FDirtyRows := QWord(-1);
+end;
+
+function BuildFullRedrawDiff(const ANext: TBuffer; var APatches: TDiffEntries): Integer;
+var
+  LTotal, LI, LOutCount, LW: Integer;
+  LPosX, LPosY: Word;
+begin
+  LTotal := System.Length(ANext.FContent);
+  LOutCount := 0;
+  LPosX := ANext.FArea.X;
+  LPosY := ANext.FArea.Y;
+  LW := ANext.FArea.Width;
+
+  for LI := 0 to LTotal - 1 do
+  begin
+    if not ANext.FContent[LI].Skip then
+    begin
+      APatches[LOutCount].X := LPosX;
+      APatches[LOutCount].Y := LPosY;
+      APatches[LOutCount].Cell := ANext.FContent[LI];
+      Inc(LOutCount);
+    end;
+
+    Inc(LPosX);
+    if LPosX >= ANext.FArea.X + LW then
+    begin
+      LPosX := ANext.FArea.X;
+      Inc(LPosY);
+    end;
+  end;
+
+  Result := LOutCount;
 end;
 
 procedure TBuffer.Diff(const ANext: TBuffer; out APatches: TDiffEntries);
 var
-  LTotal, LI, LOutCount, LAffectedWidth: Integer;
+  LTotal, LOutCount, LAffectedWidth: Integer;
   LToSkip, LInvalidated: Integer;
   LPrev, LCurr: PCell;
   LPrevBase, LCurrBase: PCell;
@@ -550,26 +588,12 @@ begin
     Exit;
   end;
 
-  if (ANext.FArea.Width <> FArea.Width) or
-     (ANext.FArea.Height <> FArea.Height) then
+  if not RectEquals(ANext.FArea, FArea) then
   begin
     LTotal := System.Length(ANext.FContent);
     SetLength(APatches, LTotal);
-    LPosX := ANext.FArea.X;
-    LPosY := ANext.FArea.Y;
-    LW := ANext.FArea.Width;
-    for LI := 0 to LTotal - 1 do
-    begin
-      APatches[LI].X := LPosX;
-      APatches[LI].Y := LPosY;
-      APatches[LI].Cell := ANext.FContent[LI];
-      Inc(LPosX);
-      if LPosX >= ANext.FArea.X + LW then
-      begin
-        LPosX := ANext.FArea.X;
-        Inc(LPosY);
-      end;
-    end;
+    LOutCount := BuildFullRedrawDiff(ANext, APatches);
+    SetLength(APatches, LOutCount);
     Exit;
   end;
 
@@ -653,32 +677,15 @@ begin
   end;
 
   LTotal := System.Length(FContent);
-  if (ANext.FArea.Width <> FArea.Width) or
-     (ANext.FArea.Height <> FArea.Height) then
+  if not RectEquals(ANext.FArea, FArea) then
     LTotal := System.Length(ANext.FContent);
 
   if System.Length(APatches) < LTotal then
     SetLength(APatches, LTotal);
 
-  if (ANext.FArea.Width <> FArea.Width) or
-     (ANext.FArea.Height <> FArea.Height) then
+  if not RectEquals(ANext.FArea, FArea) then
   begin
-    LPosX := ANext.FArea.X;
-    LPosY := ANext.FArea.Y;
-    LW := ANext.FArea.Width;
-    for LCol := 0 to LTotal - 1 do
-    begin
-      APatches[LCol].X := LPosX;
-      APatches[LCol].Y := LPosY;
-      APatches[LCol].Cell := ANext.FContent[LCol];
-      Inc(LPosX);
-      if LPosX >= ANext.FArea.X + LW then
-      begin
-        LPosX := ANext.FArea.X;
-        Inc(LPosY);
-      end;
-    end;
-    Result := LTotal;
+    Result := BuildFullRedrawDiff(ANext, APatches);
     Exit;
   end;
 

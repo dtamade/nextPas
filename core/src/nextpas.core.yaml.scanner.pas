@@ -42,6 +42,7 @@ type
     function ScanPlainScalar: TYamlToken;
     function ScanSingleQuotedScalar: TYamlToken;
     function ScanDoubleQuotedScalar: TYamlToken;
+    function IsDoubleQuotedEscape(ACh: Byte): Boolean;
     function ScanAnchorOrAlias: TYamlToken;
     function ScanBlockScalar: TYamlToken;
     procedure SetError(const AMsg: string);
@@ -200,6 +201,7 @@ begin
   Result.Style := yssPlain;
   Result.Line := FLine;
   Result.Col := FCol;
+  Result.Offset := FPos;
 end;
 
 procedure TYamlScanner.SetError(const AMsg: string);
@@ -249,6 +251,19 @@ begin
   Result.Kind := ytkError;
 end;
 
+function TYamlScanner.IsDoubleQuotedEscape(ACh: Byte): Boolean;
+begin
+  case ACh of
+    Byte('0'), Byte('a'), Byte('b'), Byte('t'), Byte('n'), Byte('v'),
+    Byte('f'), Byte('r'), Byte('e'), Byte(' '), Byte(9), Byte('"'), Byte('\'),
+    Byte('/'), Byte('N'), Byte('_'), Byte('L'), Byte('P'), Byte('x'),
+    Byte('u'), Byte('U'):
+      Result := True;
+  else
+    Result := False;
+  end;
+end;
+
 function TYamlScanner.ScanDoubleQuotedScalar: TYamlToken;
 var
   LStart: SizeUInt;
@@ -260,7 +275,15 @@ begin
   while not AtEnd do
   begin
     if Peek = Byte('\') then
+    begin
+      if (FPos + 1 >= FLen) or not IsDoubleQuotedEscape(PeekAt(1)) then
+      begin
+        SetError('invalid escape in double-quoted scalar');
+        Result.Kind := ytkError;
+        Exit;
+      end;
       AdvanceN(2)
+    end
     else if Peek = Byte('"') then
     begin
       Result.Value := TStringView.Create(@FData[LStart], FPos - LStart);
@@ -561,6 +584,21 @@ begin
       end
       else
         Result := ScanPlainScalar;
+    end;
+    Byte('%'):
+    begin
+      if LCol = 0 then
+      begin
+        SetError('YAML directives are not supported');
+        Result := MakeToken(ytkError);
+      end
+      else
+        Result := ScanPlainScalar;
+    end;
+    Byte('!'):
+    begin
+      SetError('YAML tags are not supported');
+      Result := MakeToken(ytkError);
     end;
     Byte(''''):
       Result := ScanSingleQuotedScalar;

@@ -1,5 +1,19 @@
 # Mem L0 Dependency Boundary
 
+## Current status
+
+- `Ready`: commit `22efa6ae` (`fix(mem): harden l0 boundary helper surface`)
+  is accepted as a landing-candidate slice for `mem`.
+- This slice must land through a clean landing worktree with path-limited replay
+  or cherry-pick. Raw merge of `codex/core-mem` is not allowed.
+- `core/src/nextpas.core.os.env.pas` is allowed in this slice as the minimal
+  cross-module blocker fix for `memory_map` Windows compile truth.
+- This does not mark the `mem` lane complete, and it does not prove the L0
+  boundary is clean.
+- The `mem` lane remains active. The next boundary decision starts as
+  `Needs Review` in
+  `core/docs/plans/2026-06-06-mem-memory-map-shared-memory-owner-boundary-review.md`.
+
 ## Current position
 
 `mem` is an L0 module, so its supported surface should not depend on L1/L2

@@ -104,6 +104,14 @@ begin
   Teardown;
 end;
 
+procedure TestSgrBgReset;
+begin
+  Setup;
+  AnsiSgrBg(B, ResetColor);
+  CheckEqual(#27'[49m', BufStr, 'bg reset');
+  Teardown;
+end;
+
 procedure TestSgrFgRgb;
 begin
   Setup;
@@ -117,6 +125,20 @@ begin
   Setup;
   AnsiSgrFg(B, ResetColor);
   CheckEqual(#27'[39m', BufStr, 'fg reset');
+  Teardown;
+end;
+
+procedure TestSgrUnderlineColor;
+begin
+  Setup;
+  AnsiSgrUl(B, TUI_BLUE);
+  CheckEqual(#27'[58;5;4m', BufStr, 'underline indexed blue');
+  B.Clear;
+  AnsiSgrUl(B, RgbColor(10, 20, 30));
+  CheckEqual(#27'[58;2;10;20;30m', BufStr, 'underline rgb');
+  B.Clear;
+  AnsiSgrUl(B, ResetColor);
+  CheckEqual(#27'[59m', BufStr, 'underline reset');
   Teardown;
 end;
 
@@ -142,6 +164,19 @@ begin
   Teardown;
 end;
 
+procedure TestSgrModifierClearDeduplicatesSharedCodes;
+begin
+  Setup;
+  AnsiSgrModifierClear(B, [mbBold, mbDim]);
+  CheckEqual(#27'[22m', BufStr,
+    'clear bold+dim emits shared SGR 22 once');
+  B.Clear;
+  AnsiSgrModifierClear(B, [mbSlowBlink, mbRapidBlink]);
+  CheckEqual(#27'[25m', BufStr,
+    'clear slow+rapid blink emits shared SGR 25 once');
+  Teardown;
+end;
+
 procedure TestMouseTracking;
 begin
   Setup;
@@ -163,10 +198,13 @@ begin
   T.Run('sgr reset', @TestSgrReset);
   T.Run('sgr fg indexed', @TestSgrFgIndexed);
   T.Run('sgr bg indexed', @TestSgrBgIndexed);
+  T.Run('sgr bg reset', @TestSgrBgReset);
   T.Run('sgr fg rgb', @TestSgrFgRgb);
   T.Run('sgr fg reset', @TestSgrFgReset);
+  T.Run('sgr underline color', @TestSgrUnderlineColor);
   T.Run('sgr modifier add', @TestSgrModifierAdd);
   T.Run('sgr modifier clear', @TestSgrModifierClear);
+  T.Run('sgr modifier clear deduplicates shared codes', @TestSgrModifierClearDeduplicatesSharedCodes);
   T.Run('mouse tracking', @TestMouseTracking);
   T.Summary;
   if not T.AllPassed then

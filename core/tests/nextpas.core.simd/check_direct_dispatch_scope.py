@@ -19,7 +19,6 @@ SCAN_GLOBS = (
 )
 ALLOWED_FILES = {
     "src/nextpas.core.simd.algorithms.pas",
-    "src/nextpas.core.simd.api.pas",
     "src/nextpas.core.simd.arrays.pas",
     "src/nextpas.core.simd.direct.pas",
     "src/nextpas.core.simd.ops.pas",

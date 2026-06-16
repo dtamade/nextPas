@@ -11,6 +11,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from simd_public_api_sources import (
+    render_public_api_interface_files,
+    resolve_public_api_interface_files,
+)
+
 
 DECL_RE = re.compile(
     r"^\s*(?P<kind>function|procedure)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\b",
@@ -212,7 +217,9 @@ def render_markdown(
     l_lines.append(f"- Scalar-only slots (no non-scalar backend binding): `{len(a_impl_cov.scalar_only_slots)}`")
     l_lines.append("")
     l_lines.append("## Method")
-    l_lines.append("- Source of truth: interface declarations in `src/nextpas.core.simd.pas` and `src/nextpas.core.simd.api.pas`.")
+    l_lines.append(
+        f"- Source of truth: interface declarations in {render_public_api_interface_files()}."
+    )
     l_lines.append("- Coverage clue: token presence in `tests/nextpas.core.simd/**/*.pas` (heuristic, not proof of semantic coverage).")
     l_lines.append("- Matching rule: `max(exact token refs, normalized refs)` where normalized means lower-case + remove underscores.")
     l_lines.append("- Backlog rule: declarations with zero test-token references are marked `[ ]`.")
@@ -270,10 +277,7 @@ def main() -> int:
     l_args = l_parser.parse_args()
 
     l_repo_root = Path(__file__).resolve().parents[2]
-    l_sources = [
-        l_repo_root / "src" / "nextpas.core.simd.pas",
-        l_repo_root / "src" / "nextpas.core.simd.api.pas",
-    ]
+    l_sources = resolve_public_api_interface_files(l_repo_root)
 
     l_tests_text = load_tests_text(l_repo_root)
     l_exact_counter, l_normalized_counter = build_test_counters(l_tests_text)

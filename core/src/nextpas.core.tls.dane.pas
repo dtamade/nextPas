@@ -20,8 +20,7 @@ unit nextpas.core.tls.dane;
 
 interface
 
-uses
-  Classes, SysUtils, nextpas.core.tls.base, nextpas.core.tls.openssl.base;
+uses nextpas.core.text.conv, nextpas.core.tls.base, nextpas.core.tls.openssl.base;
 
 type
   {**
@@ -196,16 +195,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.errors,
-  nextpas.core.tls.exceptions,
-  nextpas.core.tls.logging,
-  nextpas.core.tls.encoding,
-  nextpas.core.tls.dns.ldns;
+uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.errors, nextpas.core.tls.exceptions, nextpas.core.tls.logging, nextpas.core.tls.encoding, nextpas.core.tls.dns.ldns;
 
 { TDANEValidator }
 

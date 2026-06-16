@@ -99,6 +99,13 @@ begin
   Result := FBuf;
 end;
 
+function BytesSlice(const AValue: string; const AStart, ACount: SizeInt): string;
+begin
+  SetLength(Result, ACount);
+  if ACount > 0 then
+    Move(AValue[AStart], Result[1], ACount);
+end;
+
 constructor TShortWriter.Create(const AMaxPerCall: SizeUInt);
 begin
   inherited Create;
@@ -247,8 +254,14 @@ begin
     Exit(tsiorWouldBlock);
   end;
 
+  if (ACount = 0) or (FMaxPerWrite = 0) then
+  begin
+    AWritten := 0;
+    Exit(tsiorOk);
+  end;
+
   AWritten := ACount;
-  if (FMaxPerWrite > 0) and (AWritten > FMaxPerWrite) then
+  if AWritten > FMaxPerWrite then
     AWritten := FMaxPerWrite;
   if AWritten > 0 then
   begin
@@ -356,6 +369,65 @@ begin
   Check(Pos('hel', LOut) > 0, 'first payload present');
   Check(Pos('lo', LOut) > Pos('hel', LOut), 'second payload follows first');
   Check(Pos('0'#13#10#13#10, LOut) > 0, 'final chunk written');
+  LRW.Free;
+end;
+
+procedure TestContentLengthWritePreservesBinaryBodyBytes;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LBody: string;
+  LOut: string;
+  LBodyStart: SizeInt;
+  LWritten: SizeUInt;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LBody := #0#1#$7F#$80#$FF#13#10#0;
+  LRW.GetHeaders.Set_('Content-Length', '8');
+  LWritten := LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  LRW.Flush;
+  LOut := LW.GetOutput;
+  LBodyStart := Pos(#13#10#13#10, LOut) + 4;
+
+  CheckEqual(Int64(8), Int64(LWritten),
+    'fixed-length binary body reports full byte count');
+  Check(Pos('content-length: 8'#13#10, LOut) > 0,
+    'fixed-length binary response has content-length');
+  CheckEqual(Int64(8), Int64(Length(LOut) - LBodyStart + 1),
+    'fixed-length binary response body length');
+  CheckEqual(LBody, BytesSlice(LOut, LBodyStart, Length(LBody)),
+    'fixed-length writer preserves binary body bytes');
+  LRW.Free;
+end;
+
+procedure TestChunkedWritePreservesBinaryBodyBytes;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LBody: string;
+  LOut: string;
+  LChunkStart: SizeInt;
+  LWritten: SizeUInt;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LBody := #0#1#$7F#$80#$FF#13#10#0;
+  LWritten := LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  LRW.Flush;
+  LOut := LW.GetOutput;
+  LChunkStart := Pos('8'#13#10, LOut) + 3;
+
+  CheckEqual(Int64(8), Int64(LWritten),
+    'chunked binary body reports full byte count');
+  Check(Pos('transfer-encoding: chunked'#13#10, LOut) > 0,
+    'chunked binary response has transfer-encoding');
+  Check(Pos('8'#13#10, LOut) > 0, 'chunked binary response writes chunk size');
+  CheckEqual(LBody, BytesSlice(LOut, LChunkStart, Length(LBody)),
+    'chunked writer preserves binary body bytes');
+  CheckEqual(#13#10'0'#13#10#13#10,
+    BytesSlice(LOut, LChunkStart + Length(LBody), 7),
+    'chunked binary response preserves terminal framing after body');
   LRW.Free;
 end;
 
@@ -490,6 +562,106 @@ begin
   LRW.Free;
 end;
 
+procedure TestWriteHeaderRejectsContentLengthTransferEncodingConflict;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LRaised: Boolean;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.Set_('Content-Length', '5');
+    LRW.GetHeaders.Set_('Transfer-Encoding', 'chunked');
+    LRaised := False;
+    try
+      LRW.WriteHeader(HTTP_STATUS_OK);
+    except
+      on E: EHttpError do
+        LRaised := True;
+    end;
+
+    Check(LRaised,
+      'response writer rejects content-length plus transfer-encoding');
+    Check(not LRW.HasCommitted,
+      'conflicting response framing fails before commit');
+    CheckEqual('', LW.GetOutput,
+      'conflicting response framing emits no wire bytes');
+  finally
+    LRW.Free;
+  end;
+end;
+
+procedure TestWriteHeaderRejectsDuplicateContentLength;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LRaised: Boolean;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.Add('Content-Length', '5');
+    LRW.GetHeaders.Add('content-length', '5');
+    LRaised := False;
+    try
+      LRW.WriteHeader(HTTP_STATUS_OK);
+    except
+      on E: EHttpError do
+        LRaised := True;
+    end;
+
+    Check(LRaised, 'response writer rejects duplicate content-length');
+    Check(not LRW.HasCommitted,
+      'duplicate content-length fails before commit');
+    CheckEqual('', LW.GetOutput,
+      'duplicate content-length emits no wire bytes');
+  finally
+    LRW.Free;
+  end;
+end;
+
+procedure CheckWriteHeaderRejectsContentLengthValue(const AValue,
+  ALabel: string);
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LRaised: Boolean;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.Set_('Content-Length', AValue);
+    LRaised := False;
+    try
+      LRW.WriteHeader(HTTP_STATUS_OK);
+    except
+      on E: EHttpError do
+        LRaised := True;
+    end;
+
+    Check(LRaised, ALabel);
+    Check(not LRW.HasCommitted, ALabel + ' fails before commit');
+    CheckEqual('', LW.GetOutput, ALabel + ' emits no wire bytes');
+  finally
+    LRW.Free;
+  end;
+end;
+
+procedure TestWriteHeaderRejectsInvalidContentLength;
+begin
+  CheckWriteHeaderRejectsContentLengthValue('',
+    'empty response content-length is rejected');
+  CheckWriteHeaderRejectsContentLengthValue('5x',
+    'non-numeric response content-length is rejected');
+end;
+
+procedure TestWriteHeaderRejectsOversizedContentLength;
+begin
+  CheckWriteHeaderRejectsContentLengthValue('9223372036854775808',
+    'oversized response content-length is rejected');
+end;
+
 procedure TestNoContentResponseDoesNotInjectChunkedEncoding;
 var
   LW: TBytesWriter;
@@ -540,17 +712,20 @@ var
 begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
-  LRW.WriteHeader(HTTP_STATUS_CONTINUE);
-  LRW.Flush;
-  LOut := LW.GetOutput;
-  Check(Pos('HTTP/1.1 100 Continue'#13#10, LOut) = 1, 'status 100 written');
-  Check(Pos('transfer-encoding: chunked', LOut) = 0,
-    '100 does not inject chunked header');
-  Check(Pos('content-length:', LOut) = 0,
-    '100 does not force content-length');
-  Check(Pos('0'#13#10#13#10, LOut) = 0,
-    '100 does not write final chunk');
-  LRW.Free;
+  try
+    LRW.WriteHeader(HTTP_STATUS_CONTINUE);
+    LOut := LW.GetOutput;
+    Check(Pos('HTTP/1.1 100 Continue'#13#10, LOut) = 1,
+      'status 100 written');
+    Check(Pos('transfer-encoding: chunked', LOut) = 0,
+      '100 does not inject chunked header');
+    Check(Pos('content-length:', LOut) = 0,
+      '100 does not force content-length');
+    Check(Pos('0'#13#10#13#10, LOut) = 0,
+      '100 does not write final chunk');
+  finally
+    LRW.Free;
+  end;
 end;
 
 procedure TestNonSwitchingInformationalAllowsFinalResponse;
@@ -741,6 +916,29 @@ begin
   LRW.Flush; { should not crash }
   Check(True, 'flush no-op ok');
   LRW.Free;
+end;
+
+procedure TestFlushWithoutPriorWriteCommitsDefaultResponse;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.Flush;
+    LOut := LW.GetOutput;
+    Check(LRW.HasCommitted, 'flush commits default response');
+    Check(Pos('HTTP/1.1 200 OK'#13#10, LOut) = 1,
+      'flush writes default status');
+    Check(Pos('transfer-encoding: chunked'#13#10, LOut) > 0,
+      'flush writes default chunked header');
+    Check(Pos('0'#13#10#13#10, LOut) > 0,
+      'flush finalizes empty default chunked body');
+  finally
+    LRW.Free;
+  end;
 end;
 
 procedure TestHijackWithoutConnectionRaises;
@@ -972,6 +1170,74 @@ begin
   LRW.Free;
 end;
 
+procedure TestContentLengthBodyRejectsWritePastDeclaredLength;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LBody: string;
+  LExtra: string;
+  LBefore: string;
+  LRaised: Boolean;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.Set_('Content-Length', '5');
+    LBody := 'hello';
+    CheckEqual(Int64(5), Int64(LRW.Write(LBody[1], SizeUInt(Length(LBody)))),
+      'declared content-length body write succeeds');
+    LBefore := LW.GetOutput;
+
+    LExtra := '!';
+    LRaised := False;
+    try
+      LRW.Write(LExtra[1], SizeUInt(Length(LExtra)));
+    except
+      on E: EHttpError do
+        LRaised := True;
+    end;
+
+    Check(LRaised, 'content-length writer rejects body beyond declared length');
+    CheckEqual(LBefore, LW.GetOutput,
+      'content-length overrun does not append extra wire bytes');
+  finally
+    LRW.Free;
+  end;
+end;
+
+procedure TestContentLengthFlushRejectsShortDeclaredBody;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LBody: string;
+  LBefore: string;
+  LRaised: Boolean;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.Set_('Content-Length', '5');
+    LBody := 'hell';
+    CheckEqual(Int64(4), Int64(LRW.Write(LBody[1], SizeUInt(Length(LBody)))),
+      'short content-length body prefix writes');
+    LBefore := LW.GetOutput;
+
+    LRaised := False;
+    try
+      LRW.Flush;
+    except
+      on E: EHttpError do
+        LRaised := True;
+    end;
+
+    Check(LRaised, 'content-length writer rejects flush before declared body is complete');
+    CheckEqual(LBefore, LW.GetOutput,
+      'short content-length flush does not append framing bytes');
+  finally
+    LRW.Free;
+  end;
+end;
+
 procedure TestChunkedBodyWithShortWriterWritesCompleteChunk;
 var
   LW: TShortWriter;
@@ -1072,6 +1338,43 @@ begin
   end;
 end;
 
+procedure TestOutboundBufferTryDrainRejectsOkZeroProgress;
+var
+  LBuffer: IH1OutboundBuffer;
+  LRuntime: TMockDrainStreamRuntime;
+  LRuntimeIntf: ITcpStreamRuntime;
+  LData: string;
+  LWritten: SizeUInt;
+  LRaised: Boolean;
+begin
+  LBuffer := NewH1OutboundBuffer;
+  LData := 'hello';
+  LBuffer.Write(LData[1], SizeUInt(Length(LData)));
+
+  LRuntime := TMockDrainStreamRuntime.Create(0, 0);
+  LRuntimeIntf := LRuntime as ITcpStreamRuntime;
+  try
+    LWritten := SizeUInt(High(SizeUInt));
+    LRaised := False;
+    try
+      LBuffer.TryDrainTo(LRuntimeIntf, LWritten);
+    except
+      on E: EIOError do
+        LRaised := True;
+    end;
+
+    Check(LRaised, 'ok zero-progress runtime write is rejected');
+    CheckEqual(Int64(0), Int64(LWritten),
+      'zero-progress runtime reports no bytes written');
+    CheckEqual(Int64(Length(LData)), Int64(LBuffer.PendingBytes),
+      'zero-progress runtime does not drop pending bytes');
+    CheckEqual('', LRuntime.GetOutput,
+      'zero-progress runtime does not append output bytes');
+  finally
+    LRuntimeIntf := nil;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.impl.h1.writer');
   T.Run('WriteHeader writes status line', @TestWriteHeaderStatusLine);
@@ -1080,6 +1383,10 @@ begin
   T.Run('Write auto-calls WriteHeader(200)', @TestWriteAutoCallsWriteHeader200);
   T.Run('Multiple Write preserves body order under chunked encoding',
     @TestMultipleWritePreservesBodyOrder);
+  T.Run('Content-Length write preserves binary body bytes',
+    @TestContentLengthWritePreservesBinaryBodyBytes);
+  T.Run('Chunked write preserves binary body bytes',
+    @TestChunkedWritePreservesBinaryBodyBytes);
   T.Run('Custom status 404', @TestCustomStatus404);
   T.Run('Multiple headers written correctly', @TestMultipleHeadersWritten);
   T.Run('WriteHeader only called once', @TestWriteHeaderOnlyOnce);
@@ -1087,6 +1394,14 @@ begin
   T.Run('Preset Transfer-Encoding is preserved', @TestPresetTransferEncodingPreserved);
   T.Run('Flush with Content-Length does not write final chunk',
     @TestFlushWithContentLengthDoesNotWriteFinalChunk);
+  T.Run('WriteHeader rejects content-length transfer-encoding conflict',
+    @TestWriteHeaderRejectsContentLengthTransferEncodingConflict);
+  T.Run('WriteHeader rejects duplicate content-length',
+    @TestWriteHeaderRejectsDuplicateContentLength);
+  T.Run('WriteHeader rejects invalid content-length',
+    @TestWriteHeaderRejectsInvalidContentLength);
+  T.Run('WriteHeader rejects oversized content-length',
+    @TestWriteHeaderRejectsOversizedContentLength);
   T.Run('204 response does not inject chunked encoding',
     @TestNoContentResponseDoesNotInjectChunkedEncoding);
   T.Run('304 response does not inject chunked encoding',
@@ -1107,6 +1422,8 @@ begin
     @TestSuppressBodyPreservesExplicitContentLength);
   T.Run('Write after chunked flush raises', @TestWriteAfterChunkedFlushRaises);
   T.Run('Flush no-op without IFlusher', @TestFlushNoOpWithoutFlusher);
+  T.Run('Flush without prior write commits default response',
+    @TestFlushWithoutPriorWriteCommitsDefaultResponse);
   T.Run('Hijack without connection raises', @TestHijackWithoutConnectionRaises);
   T.Run('Hijack returns connection and marks writer', @TestHijackReturnsConnectionAndMarksWriter);
   T.Run('WriteHeader with short writer still writes full headers',
@@ -1123,11 +1440,17 @@ begin
     @TestLargeHeaderBlockFallsBackAndPreservesWireBytes);
   T.Run('Content-Length body with short writer writes all bytes',
     @TestContentLengthBodyWithShortWriterWritesAllBytes);
+  T.Run('Content-Length body rejects writes past declared length',
+    @TestContentLengthBodyRejectsWritePastDeclaredLength);
+  T.Run('Content-Length flush rejects short declared body',
+    @TestContentLengthFlushRejectsShortDeclaredBody);
   T.Run('Chunked body with short writer writes complete chunk',
     @TestChunkedBodyWithShortWriterWritesCompleteChunk);
   T.Run('Outbound buffer drains all bytes through short writer',
     @TestOutboundBufferDrainAllHandlesShortWriter);
   T.Run('Outbound buffer resumable drain survives would-block',
     @TestOutboundBufferTryDrainResumesAfterWouldBlock);
+  T.Run('Outbound buffer rejects ok zero-progress runtime writes',
+    @TestOutboundBufferTryDrainRejectsOkZeroProgress);
   T.Summary;
 end.

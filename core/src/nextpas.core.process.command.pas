@@ -93,23 +93,76 @@ uses
   nextpas.core.process.pipe,
   nextpas.core.platform.process,
   nextpas.core.platform.process.base,
-  nextpas.core.platform.posix.ffi,
-  nextpas.core.platform.posix.base,
+  nextpas.core.os.env,
+  nextpas.core.text.compare,
   nextpas.core.process.pathresolve;
 
 { TCommand }
 
+function ContainsNul(const AValue: string): Boolean;
+var
+  I: Integer;
+begin
+  for I := 1 to Length(AValue) do
+    if AValue[I] = #0 then
+      Exit(True);
+  Result := False;
+end;
+
+procedure ValidateNoNul(const AValue, AField: string);
+begin
+  if ContainsNul(AValue) then
+    raise EProcessError.Create(AField + ' must not contain NUL');
+end;
+
+procedure ValidatePath(const APath: string);
+begin
+  if APath = '' then
+    raise EProcessError.Create('command path must not be empty');
+  ValidateNoNul(APath, 'command path');
+end;
+
+procedure ValidateEnvKey(const AKey: string);
+begin
+  if AKey = '' then
+    raise EProcessError.Create('environment variable name must not be empty');
+  if Pos('=', AKey) > 0 then
+    raise EProcessError.Create('environment variable name must not contain "="');
+  ValidateNoNul(AKey, 'environment variable name');
+end;
+
+procedure ValidateEnvValue(const AValue: string);
+begin
+  ValidateNoNul(AValue, 'environment variable value');
+end;
+
+procedure ValidateEnvPair(const APair: string);
+var
+  P: Integer;
+begin
+  ValidateNoNul(APair, 'environment variable pair');
+  P := Pos('=', APair);
+  if P <= 1 then
+    raise EProcessError.Create('environment variable pair must be KEY=VALUE');
+end;
+
 procedure EnvPut(var AItems: TStringArray; const AKey, AValue: string);
 var
   I, P: Integer;
+  LKey: string;
 begin
   for I := 0 to High(AItems) do
   begin
     P := Pos('=', AItems[I]);
-    if (P > 0) and (Copy(AItems[I], 1, P - 1) = AKey) then
+    if P > 0 then
     begin
-      AItems[I] := AKey + '=' + AValue;
-      Exit;
+      LKey := Copy(AItems[I], 1, P - 1);
+      if (EnvironmentVariableNamesCaseSensitive and (LKey = AKey)) or
+        ((not EnvironmentVariableNamesCaseSensitive) and TextEqualI(LKey, AKey)) then
+      begin
+        AItems[I] := AKey + '=' + AValue;
+        Exit;
+      end;
     end;
   end;
   SetLength(AItems, Length(AItems) + 1);
@@ -119,8 +172,7 @@ end;
 function BuildFinalEnv(const AMode: TProcessEnvMode;
   const AExplicit: TStringArray): TStringArray;
 var
-  I, P, LCount: Integer;
-  LCur: PPAnsiChar;
+  I, P: Integer;
 begin
   case AMode of
     pemInherit:
@@ -133,16 +185,7 @@ begin
     end;
     pemOverlay:
     begin
-      { Snapshot parent environment }
-      LCur := environ;
-      LCount := 0;
-      if LCur <> nil then
-        while LCur[LCount] <> nil do
-          Inc(LCount);
-      SetLength(Result, LCount);
-      for I := 0 to LCount - 1 do
-        Result[I] := string(LCur[I]);
-      { Apply overlays }
+      Result := EnvironmentVariables;
       for I := 0 to High(AExplicit) do
       begin
         P := Pos('=', AExplicit[I]);
@@ -157,6 +200,7 @@ end;
 constructor TCommand.Create(const APath: string);
 begin
   inherited Create;
+  ValidatePath(APath);
   FPath := APath;
   FArgs := nil;
   FWorkDir := '';
@@ -175,6 +219,7 @@ end;
 
 function TCommand.Arg(const AValue: string): ICommand;
 begin
+  ValidateNoNul(AValue, 'command argument');
   SetLength(FArgs, Length(FArgs) + 1);
   FArgs[High(FArgs)] := AValue;
   Result := Self;
@@ -187,12 +232,16 @@ begin
   LBase := Length(FArgs);
   SetLength(FArgs, LBase + Length(AValues));
   for I := 0 to High(AValues) do
+  begin
+    ValidateNoNul(AValues[I], 'command argument');
     FArgs[LBase + I] := AValues[I];
+  end;
   Result := Self;
 end;
 
 function TCommand.Dir(const AWorkDir: string): ICommand;
 begin
+  ValidateNoNul(AWorkDir, 'working directory');
   FWorkDir := AWorkDir;
   Result := Self;
 end;
@@ -204,12 +253,17 @@ begin
   FEnvMode := pemReplace;
   SetLength(FEnvPairs, Length(AEnvPairs));
   for I := 0 to High(AEnvPairs) do
+  begin
+    ValidateEnvPair(AEnvPairs[I]);
     FEnvPairs[I] := AEnvPairs[I];
+  end;
   Result := Self;
 end;
 
 function TCommand.EnvAdd(const AKey, AValue: string): ICommand;
 begin
+  ValidateEnvKey(AKey);
+  ValidateEnvValue(AValue);
   if FEnvMode = pemInherit then
     FEnvMode := pemOverlay;
   SetLength(FEnvPairs, Length(FEnvPairs) + 1);
@@ -245,18 +299,20 @@ var
   LStdinW: IWriter;
   LStdoutR: IReader;
   LStderrR: IReader;
-  LStdinPipe, LStdoutPipe, LStderrPipe: array[0..1] of Int32;
+  LStdinPipe, LStdoutPipe, LStderrPipe: array[0..1] of PtrInt;
   LChildStdin, LChildStdout, LChildStderr: PtrInt;
-  LDevNull: Int32;
+  LDevNull: PtrInt;
   LFinalEnv: TStringArray;
   LFailStage: TPlatformProcessSpawnStage;
   LResolvedPath: string;
+  LCleanFds: array[0..8] of PtrInt;
+  LCleanCount, LCleanIdx: Integer;
 begin
-  { Resolve path: search PATH if using custom env and name has no '/' }
-  if (FEnvMode <> pemInherit) and (Pos('/', FPath) = 0) then
+  { Resolve path: search PATH if using custom env and name has no directory part }
+  if (FEnvMode <> pemInherit) and (not CommandPathHasDirectoryPart(FPath)) then
   begin
     LFinalEnv := BuildFinalEnv(FEnvMode, FEnvPairs);
-    LResolvedPath := ResolveExecutablePath(FPath, LFinalEnv);
+    LResolvedPath := ResolveExecutablePath(FPath, LFinalEnv, FWorkDir);
   end
   else
     LResolvedPath := FPath;
@@ -299,43 +355,40 @@ begin
   try
     if FStdinMode = stPiped then
     begin
-      if pipe(@LStdinPipe[0]) <> 0 then
+      if platform_process_create_pipe(LStdinPipe[0], LStdinPipe[1]) <> 0 then
         raise EProcessError.Create('Failed to create stdin pipe');
       LChildStdin := LStdinPipe[0];
     end
     else if FStdinMode = stNull then
     begin
-      LDevNull := nextpas.core.platform.posix.ffi.open(PAnsiChar('/dev/null'), 0, 0);
-      if LDevNull < 0 then
-        raise EProcessError.Create('Failed to open /dev/null for stdin');
+      if platform_process_open_null(False, LDevNull) <> 0 then
+        raise EProcessError.Create('Failed to open null stdin');
       LChildStdin := LDevNull;
     end;
 
     if FStdoutMode = stPiped then
     begin
-      if pipe(@LStdoutPipe[0]) <> 0 then
+      if platform_process_create_pipe(LStdoutPipe[0], LStdoutPipe[1]) <> 0 then
         raise EProcessError.Create('Failed to create stdout pipe');
       LChildStdout := LStdoutPipe[1];
     end
     else if FStdoutMode = stNull then
     begin
-      LDevNull := nextpas.core.platform.posix.ffi.open(PAnsiChar('/dev/null'), 1, 0);
-      if LDevNull < 0 then
-        raise EProcessError.Create('Failed to open /dev/null for stdout');
+      if platform_process_open_null(True, LDevNull) <> 0 then
+        raise EProcessError.Create('Failed to open null stdout');
       LChildStdout := LDevNull;
     end;
 
     if FStderrMode = stPiped then
     begin
-      if pipe(@LStderrPipe[0]) <> 0 then
+      if platform_process_create_pipe(LStderrPipe[0], LStderrPipe[1]) <> 0 then
         raise EProcessError.Create('Failed to create stderr pipe');
       LChildStderr := LStderrPipe[1];
     end
     else if FStderrMode = stNull then
     begin
-      LDevNull := nextpas.core.platform.posix.ffi.open(PAnsiChar('/dev/null'), 1, 0);
-      if LDevNull < 0 then
-        raise EProcessError.Create('Failed to open /dev/null for stderr');
+      if platform_process_open_null(True, LDevNull) <> 0 then
+        raise EProcessError.Create('Failed to open null stderr');
       LChildStderr := LDevNull;
     end;
 
@@ -356,29 +409,39 @@ begin
       end;
 
   except
-    { Clean up all created fds on failure }
-    if LStdinPipe[0] >= 0 then nextpas.core.platform.posix.ffi.close(LStdinPipe[0]);
-    if LStdinPipe[1] >= 0 then nextpas.core.platform.posix.ffi.close(LStdinPipe[1]);
-    if LStdoutPipe[0] >= 0 then nextpas.core.platform.posix.ffi.close(LStdoutPipe[0]);
-    if LStdoutPipe[1] >= 0 then nextpas.core.platform.posix.ffi.close(LStdoutPipe[1]);
-    if LStderrPipe[0] >= 0 then nextpas.core.platform.posix.ffi.close(LStderrPipe[0]);
-    if LStderrPipe[1] >= 0 then nextpas.core.platform.posix.ffi.close(LStderrPipe[1]);
+    { Collect all open fds and close them in a single pass.
+      platform_process_close_handle sets handle to -1 after closing,
+      so duplicate entries are safe. }
+    LCleanCount := 0;
+    { Pipe pairs }
+    if LStdinPipe[0] >= 0 then begin LCleanFds[LCleanCount] := LStdinPipe[0]; Inc(LCleanCount); end;
+    if LStdinPipe[1] >= 0 then begin LCleanFds[LCleanCount] := LStdinPipe[1]; Inc(LCleanCount); end;
+    if LStdoutPipe[0] >= 0 then begin LCleanFds[LCleanCount] := LStdoutPipe[0]; Inc(LCleanCount); end;
+    if LStdoutPipe[1] >= 0 then begin LCleanFds[LCleanCount] := LStdoutPipe[1]; Inc(LCleanCount); end;
+    if LStderrPipe[0] >= 0 then begin LCleanFds[LCleanCount] := LStderrPipe[0]; Inc(LCleanCount); end;
+    if LStderrPipe[1] >= 0 then begin LCleanFds[LCleanCount] := LStderrPipe[1]; Inc(LCleanCount); end;
+    { Null fds — only collected if not already in a pipe pair }
+    if (FStdinMode = stNull) and (LChildStdin >= 0) then begin LCleanFds[LCleanCount] := LChildStdin; Inc(LCleanCount); end;
+    if (FStdoutMode = stNull) and (LChildStdout >= 0) then begin LCleanFds[LCleanCount] := LChildStdout; Inc(LCleanCount); end;
+    if (FStderrMode = stNull) and (LChildStderr >= 0) then begin LCleanFds[LCleanCount] := LChildStderr; Inc(LCleanCount); end;
+    for LCleanIdx := 0 to LCleanCount - 1 do
+      platform_process_close_handle(LCleanFds[LCleanIdx]);
     raise;
   end;
 
   { Close child-side fds in parent }
   if (FStdinMode = stPiped) then
-    nextpas.core.platform.posix.ffi.close(LStdinPipe[0]);
+    platform_process_close_handle(LStdinPipe[0]);
   if (FStdoutMode = stPiped) then
-    nextpas.core.platform.posix.ffi.close(LStdoutPipe[1]);
+    platform_process_close_handle(LStdoutPipe[1]);
   if (FStderrMode = stPiped) then
-    nextpas.core.platform.posix.ffi.close(LStderrPipe[1]);
+    platform_process_close_handle(LStderrPipe[1]);
   if (FStdinMode = stNull) and (LChildStdin >= 0) then
-    nextpas.core.platform.posix.ffi.close(LChildStdin);
+    platform_process_close_handle(LChildStdin);
   if (FStdoutMode = stNull) and (LChildStdout >= 0) then
-    nextpas.core.platform.posix.ffi.close(LChildStdout);
+    platform_process_close_handle(LChildStdout);
   if (FStderrMode = stNull) and (LChildStderr >= 0) then
-    nextpas.core.platform.posix.ffi.close(LChildStderr);
+    platform_process_close_handle(LChildStderr);
 
   { Create pipe wrappers }
   if FStdinMode = stPiped then
@@ -391,26 +454,6 @@ begin
   Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR, FTimeout);
 end;
 
-function ReadAllFromReader(const AReader: IReader): string;
-var
-  LBuf: array[0..65535] of Byte;
-  LRead: SizeUInt;
-  LTotal: Integer;
-begin
-  Result := '';
-  if AReader = nil then Exit;
-  LTotal := 0;
-  repeat
-    LRead := AReader.Read(LBuf[0], 65536);
-    if LRead > 0 then
-    begin
-      SetLength(Result, LTotal + Integer(LRead));
-      Move(LBuf[0], Result[LTotal + 1], LRead);
-      Inc(LTotal, Integer(LRead));
-    end;
-  until LRead = 0;
-end;
-
 function TCommand.Timeout(const ADuration: TDuration): ICommand;
 begin
   FTimeout := ADuration;
@@ -421,7 +464,6 @@ function TCommand.Output: TProcessOutput;
 var
   LChild: IChild;
   LSavedStdout, LSavedStderr: TStdio;
-  LWait: TProcessOutput;
 begin
   LSavedStdout := FStdoutMode;
   LSavedStderr := FStderrMode;
@@ -429,17 +471,7 @@ begin
   FStderrMode := stPiped;
   try
     LChild := Spawn;
-    if FTimeout.IsZero then
-      Result := LChild.WaitWithOutput
-    else
-    begin
-      { With timeout: Wait first (may kill), then drain pipes }
-      LWait := LChild.Wait;
-      Result.StdOut := ReadAllFromReader(LChild.TakeStdout);
-      Result.StdErr := ReadAllFromReader(LChild.TakeStderr);
-      Result.ExitCode := LWait.ExitCode;
-      Result.Status := LWait.Status;
-    end;
+    Result := LChild.WaitWithOutput;
   finally
     FStdoutMode := LSavedStdout;
     FStderrMode := LSavedStderr;

@@ -61,8 +61,10 @@ type
   TPipeReader = class(TInterfacedObject, IReader, IPipeReader)
   private
     FState: IPipeState;
+    FClosed: Boolean;
   public
     constructor Create(const AState: IPipeState);
+    destructor Destroy; override;
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Close;
   end;
@@ -70,8 +72,10 @@ type
   TPipeWriter = class(TInterfacedObject, IWriter, IPipeWriter)
   private
     FState: IPipeState;
+    FClosed: Boolean;
   public
     constructor Create(const AState: IPipeState);
+    destructor Destroy; override;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Close;
   end;
@@ -111,8 +115,12 @@ begin
   LDst := @ABuf;
   FMutex.Acquire;
   try
-    while (FCount = 0) and (not FWriterClosed) do
+    if FReaderClosed then
+      raise EIOError.Create('read from closed pipe reader');
+    while (FCount = 0) and (not FWriterClosed) and (not FReaderClosed) do
       FNotEmpty.Wait(FMutex);
+    if FReaderClosed then
+      raise EIOError.Create('read from closed pipe reader');
     if (FCount = 0) and FWriterClosed then
       Exit(0);
     if ACount < FCount then
@@ -149,6 +157,8 @@ begin
   try
     while LRemaining > 0 do
     begin
+      if FWriterClosed then
+        raise EIOError.Create('write to closed pipe writer');
       while (FCount = FCap) and (not FReaderClosed) do
         FNotFull.Wait(FMutex);
       if FReaderClosed then
@@ -194,6 +204,7 @@ begin
   try
     FReaderClosed := True;
     FNotFull.Broadcast;
+    FNotEmpty.Broadcast;
   finally
     FMutex.Release;
   end;
@@ -205,15 +216,27 @@ constructor TPipeReader.Create(const AState: IPipeState);
 begin
   inherited Create;
   FState := AState;
+  FClosed := False;
+end;
+
+destructor TPipeReader.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TPipeReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 begin
+  if FClosed then
+    raise EIOError.Create('read from closed pipe reader');
   Result := FState.DoRead(ABuf, ACount);
 end;
 
 procedure TPipeReader.Close;
 begin
+  if FClosed then
+    Exit;
+  FClosed := True;
   FState.CloseReader;
 end;
 
@@ -223,15 +246,27 @@ constructor TPipeWriter.Create(const AState: IPipeState);
 begin
   inherited Create;
   FState := AState;
+  FClosed := False;
+end;
+
+destructor TPipeWriter.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TPipeWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
+  if FClosed then
+    raise EIOError.Create('write to closed pipe writer');
   Result := FState.DoWrite(ABuf, ACount);
 end;
 
 procedure TPipeWriter.Close;
 begin
+  if FClosed then
+    Exit;
+  FClosed := True;
   FState.CloseWriter;
 end;
 

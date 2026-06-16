@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.text.base,
-  nextpas.core.io.intf;
+  nextpas.core.io.intf,
+  nextpas.core.errors;
 
 type
   ILineWriter = interface(IWriter)
@@ -23,6 +24,10 @@ procedure IoWriteLines(const AWriter: IWriter; const ALines: TStringArray);
 
 implementation
 
+uses
+  nextpas.core.base.utils,
+  nextpas.core.io.util;
+
 type
   TLineWriter = class(TInterfacedObject, IWriter, ILineWriter)
   private
@@ -38,6 +43,8 @@ type
 constructor TLineWriter.Create(const AInner: IWriter; const ALineSep: string);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentError.Create('TLineWriter: inner writer is nil');
   FInner := AInner;
   FLineSep := ALineSep;
 end;
@@ -49,16 +56,16 @@ end;
 
 procedure TLineWriter.WriteLine(const ALine: string);
 begin
-  if Length(ALine) > 0 then
-    FInner.Write(ALine[1], Length(ALine));
-  if Length(FLineSep) > 0 then
-    FInner.Write(FLineSep[1], Length(FLineSep));
+  nextpas.core.io.util.IoWriteString(FInner, ALine);
+  nextpas.core.io.util.IoWriteString(FInner, FLineSep);
 end;
 
 procedure TLineWriter.Flush;
+var
+  LFlusher: IFlusher;
 begin
-  // If inner supports flush (IFlusher), call it
-  // For now, no-op — buffered writer handles this
+  if Supports(FInner, IFlusher, LFlusher) then
+    LFlusher.Flush;
 end;
 
 function CreateLineWriter(const AWriter: IWriter;
@@ -68,12 +75,9 @@ begin
 end;
 
 procedure IoWriteLine(const AWriter: IWriter; const ALine: string);
-const
-  LF: AnsiChar = #10;
 begin
-  if Length(ALine) > 0 then
-    AWriter.Write(ALine[1], Length(ALine));
-  AWriter.Write(LF, 1);
+  nextpas.core.io.util.IoWriteString(AWriter, ALine);
+  nextpas.core.io.util.IoWriteString(AWriter, #10);
 end;
 
 procedure IoWriteLines(const AWriter: IWriter; const ALines: TStringArray);

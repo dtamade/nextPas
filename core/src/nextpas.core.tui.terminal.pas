@@ -20,21 +20,7 @@ unit nextpas.core.tui.terminal;
 
 interface
 
-uses
-  SysUtils,
-  nextpas.core.tui.base,
-  nextpas.core.tui.cap.base,
-  nextpas.core.tui.error,
-  nextpas.core.tui.cell,
-  nextpas.core.tui.buffer,
-  nextpas.core.tui.overlay,
-  nextpas.core.tui.event,
-  nextpas.core.tui.input,
-  nextpas.core.tui.interaction,
-  nextpas.core.tui.image_cap,
-  nextpas.core.tui.backend.ansi,
-  nextpas.core.platform.console,
-  nextpas.core.platform.signal;
+uses nextpas.core.tui.base, nextpas.core.tui.cap.base, nextpas.core.tui.error, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.overlay, nextpas.core.tui.event, nextpas.core.tui.input, nextpas.core.tui.interaction, nextpas.core.tui.image_cap, nextpas.core.tui.backend.ansi, nextpas.core.platform.console, nextpas.core.platform.signal;
 
 const
   STDIN_FD  = 0;
@@ -462,6 +448,8 @@ end;
 function TTerminal.BeginFrame: TFrame;
 begin
   EnsureFrameRuntime('BeginFrame');
+  if FFrameActive then
+    raise ETuiBackend.Create('TTerminal.BeginFrame called with an active frame');
   FCurr.Reset;
   FCurr.ImageProtocol := ImageProtocol;
   FOverlay.Clear;
@@ -737,7 +725,8 @@ begin
       begin
         FLastMousePos.X := AEv.Mouse.X;
         FLastMousePos.Y := AEv.Mouse.Y;
-        if (AEv.Mouse.Kind = mkUp) and FCapture.Active then
+        if (AEv.Mouse.Kind = mkUp) and FCapture.Active and
+           (AEv.Mouse.Button = FCapture.Button) then
         begin
           if FSession.IsActive then FSession.Commit;
           FCapture.Release;

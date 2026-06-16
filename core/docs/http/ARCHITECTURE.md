@@ -3,11 +3,16 @@
 ## 概述
 
 HTTP 模块是 L3 框架层的核心模块，提供 HTTP 服务器和客户端能力。
-采用统一门面 + 协议实现隔离的架构，支持 HTTP/1.1、HTTP/2、HTTP/3 三个版本。
+采用统一门面 + 协议实现隔离的架构。当前内建实现为 HTTP/1.1。
+H2/H3 仅保留版本枚举、registry / transport seam 与规划。
+H2 已开始落内部 foundation（frame validation、HPACK Huffman、HPACK header block state、
+per-stream state machine），但还没有内建 H2 transport/session。
+这些内部基础不声明内建 H2/H3 protocol implementation。
 
-消费方只需 `uses nextpas.core.http` 即可获得完整能力；当前默认版本解析对应用层透明，但 H2/H3 仍处于规划阶段。
+消费方只需 `uses nextpas.core.http` 即可获得当前 H1 能力；默认版本解析对应用层透明。
+H2/H3 对消费方仍处于未开放阶段。
 
-## 当前落地状态（2026-06-04）
+## 当前落地状态（2026-06-12）
 
 - `nextpas.core.http.impl.h1.pas` 已落地，作为默认 H1 transport owner。
 - `nextpas.core.http.impl.registry.pas` 已落地，统一负责默认版本到 transport factory 的解析。
@@ -16,7 +21,9 @@ HTTP 模块是 L3 框架层的核心模块，提供 HTTP 服务器和客户端�
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，默认 client/server 版本都为 `hvHttp11`。
-- 当前真实源码库存为 24 个 HTTP 单元，测试工程为 21 个；H2/H3 仍未进入实现。
+- 当前真实源码库存为 32 个 HTTP 单元，测试工程为 30 个；其中 H2 现在已有
+  frame codec / validation、HPACK Huffman、HPACK header-block state、per-stream state machine
+  内部基础单元及 focused 测试，H2 transport/session 与 H3 仍未进入可用实现。
 
 HTTP server runtime 的权威方向已经固定在
 [docs/net/ARCHITECTURE.md](/home/dtamade/projects/nextPas/core/docs/net/ARCHITECTURE.md:1)：
@@ -76,7 +83,7 @@ HTTP server 现在要分三层理解，不能再笼统地说成“线程驱动 H
   handler 先把响应写入 internal outbound buffer，
   `TH1ServerConnectionState` 再在 handler 返回后统一 drain 到 socket。
 - H1 server ingress 现在也有一条保守 fast path：
-  对完整 HTTP/1.1、Host 存在、无 `Connection` / `Expect` /
+  对完整 HTTP/1.1、恰好一个非空 `Host`、无 `Connection` / `Expect` /
   `Transfer-Encoding`、且无 request body 的普通请求，先用
   `nextpas.core.http.impl.h1.fast.FastParseRequest` 构造请求 snapshot；
   其他请求一律回退 llhttp adapter，继续沿用既有 malformed framing、
@@ -125,12 +132,14 @@ HTTP server 现在要分三层理解，不能再笼统地说成“线程驱动 H
 ├─────────────────────────────────────────────────────────┤
 │  协议实现层（版本隔离）                                  │
 │  impl.h1: 文本协议、chunked、keep-alive、upgrade       │
-│  impl.h2: 二进制帧、多路复用、HPACK、流控、ALPN        │
-│  impl.h3: QUIC 帧、QPACK、0-RTT、Alt-Svc             │
+│  impl.h2: 二进制帧、多路复用、HPACK、TLS/ALPN seam     │
+│  impl.h3 (planned): QUIC 帧、QPACK、0-RTT、Alt-Svc   │
 ├─────────────────────────────────────────────────────────┤
 │  依赖层                                                  │
-│  H1/H2: net (TCP) + tls (ALPN)                          │
-│  H3: quic (独立 L2 sibling 模块)                        │
+│  H1: net (TCP)                                           │
+│  H2: net (TCP) + optional tls (strict ALPN on https)     │
+│      cleartext uses prior knowledge only; no h2c upgrade │
+│  H3 future: quic (独立 L2 sibling 模块)                  │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -170,9 +179,19 @@ src/
   nextpas.core.http.impl.h1.outbound.pas ← H1 internal outbound queue/drain helper
   nextpas.core.http.impl.h1.writer.pas   ← H1 响应序列化
   nextpas.core.http.impl.h1.chunked.pas  ← chunked writer/helper
+
+  { HTTP/2 内部 foundation（不等于 H2 transport/session 已可用） }
+  nextpas.core.http.impl.h2.frame.pas         ← H2 9-byte frame header、基础 payload codec 与类型级 validation
+  nextpas.core.http.impl.h2.hpack.table.pas   ← HPACK static/Huffman 表
+  nextpas.core.http.impl.h2.hpack.huffman.pas ← HPACK Huffman encode/decode
+  nextpas.core.http.impl.h2.hpack.pas         ← HPACK header-block encode/decode、动态表 size update、non-indexed literal
+  nextpas.core.http.impl.h2.types.pas         ← H2 settings、stream state、flow-control bookkeeping
+  nextpas.core.http.impl.h2.stream.pas        ← H2 per-stream state machine、header/body accumulation、body reader
+  nextpas.core.http.impl.h2.session.pas       ← H2 session startup preface validation seam
 ```
 
-H2/H3 相关单元目前仍是架构规划，不属于当前源码库存。
+H2/H3 public transport 仍是架构规划；当前 H2 源码只覆盖 frame/HPACK/stream/session foundation，
+不对外声明 H2 可用。
 
 ---
 
@@ -188,70 +207,80 @@ type
 
   TUrl = record
     Scheme: string;
+    UserInfo: string;
     Host: string;
     Port: UInt16;
     Path: string;
-    Query: string;
+    RawQuery: string;
     Fragment: string;
     class function Parse(const ARaw: string): TUrl; static;
+    class function ParseRequestTarget(const ARaw: string): TUrl; static;
     function ToString: string;
+    function HostPort: string;
   end;
 ```
 
 ### 统一接口 (http.intf)
 
+这是 current API snapshot，不是完整 reference；完整签名以 `src/nextpas.core.http.intf.pas` 为准。
+
 ```pascal
 type
-  { 跨版本共享 }
   IHttpHeaders = interface
-    procedure Set_(const AName, AValue: string);
+    procedure SetHeader(const AName, AValue: string);
+    procedure Add(const AName, AValue: string);
     function Get(const AName: string): string;
+    function GetAll(const AName: string): TStringArray;
     function Has(const AName: string): Boolean;
-    procedure Del(const AName: string);
+    procedure Remove(const AName: string);
+    procedure Clear;
     function Count: Int32;
+    procedure ForEach(const ACallback: THeaderIterator);
+    function Clone: IHttpHeaders;
   end;
 
   IHttpRequest = interface
-    function Method: THttpMethod;
-    function Url: TUrl;
-    function Version: THttpVersion;
-    function Headers: IHttpHeaders;
-    function Body: IReader;
-    function ContentLength: Int64;
-  end;
-
-  IHttpResponse = interface
-    function StatusCode: THttpStatus;
-    function Headers: IHttpHeaders;
-    function Body: IReader;
+    { handler/router hot path should prefer Path / RawQuery over full Url materialization. }
+    property Method: THttpMethod read GetMethod;
+    property Url: TUrl read GetUrl;
+    property Version: THttpVersion read GetVersion;
+    property Path: string read GetPath;
+    property RawQuery: string read GetRawQuery;
+    property Headers: IHttpHeaders read GetHeaders;
+    property Body: IReader read GetBody;
+    property ContentLength: Int64 read GetContentLength;
+    property RemoteAddr: string read GetRemoteAddr;
+    function PathParam(const AName: string): string;
+    function QueryParam(const AName: string): string;
   end;
 
   IHttpResponseWriter = interface
     procedure WriteHeader(const AStatus: THttpStatus);
-    function Headers: IHttpHeaders;
+    function GetHeaders: IHttpHeaders;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Flush;
+    property Headers: IHttpHeaders read GetHeaders;
   end;
 
-  { Handler — §8 三种回调形式 }
   THttpHandlerFunc = reference to procedure(const AReq: IHttpRequest; const AResp: IHttpResponseWriter);
-
-  IHttpHandler = interface
-    procedure ServeHTTP(const AReq: IHttpRequest; const AResp: IHttpResponseWriter);
-  end;
-
-  IHttpMiddleware = interface
-    function Wrap(const ANext: IHttpHandler): IHttpHandler;
-  end;
+  THttpHandlerMethod = procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) of object;
+  THttpHandlerProc = procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
 
   { Router }
   IHttpRouter = interface(IHttpHandler)
     procedure Handle(const AMethod: THttpMethod; const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Get(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Head(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Post(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Put(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Delete(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Patch(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Options(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Connect(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Trace(const APattern: string; const AHandler: THttpHandlerFunc);
     procedure Use(const AMiddleware: IHttpMiddleware);
-    procedure Group(const APrefix: string; const ASetup: THttpHandlerFunc);
   end;
 
-  { Server }
   IHttpServer = interface
     procedure ListenAndServe(const AAddr: string; const APort: UInt16);
     procedure Shutdown;
@@ -259,14 +288,14 @@ type
     function IsRunning: Boolean;
   end;
 
-  { Client }
   IHttpClient = interface
-    function Do_(const AReq: IHttpRequest): IHttpResponse;
+    function Send(const AReq: IHttpRequest): IHttpResponse;
+    procedure CloseIdleConnections;
     function Get(const AUrl: string): IHttpResponse;
     function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    { Put/Delete/Patch/Head and string/TBytes body overloads are also available. }
   end;
 
-  { Transport — 协议实现层接口 }
   IHttpTransport = interface
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
   end;
@@ -274,6 +303,16 @@ type
   IHttpServerTransport = interface
     function ServeConn(const AConn: ITcpStream;
       const AHandler: IHttpHandler): TTcpServerConnOwnership;
+  end;
+
+  IHttpServerSessionFactory = interface
+    function NewSession(const AConn: ITcpStream;
+      const AHandler: IHttpHandler): ITcpServerSession;
+  end;
+
+  IHttpServerSessionFactoryWithContext = interface
+    function NewSession(const AConn: ITcpStream; const AHandler: IHttpHandler;
+      const AContext: ITcpServerSessionContext): ITcpServerSession;
   end;
 ```
 
@@ -303,8 +342,8 @@ type
 ## 依赖关系
 
 ```
-http.base       ← errors
-http.intf       ← http.base, io.intf, net.intf
+http.base       ← errors, net.server.base
+http.intf       ← base, http.base, io.intf, net.base, net.intf, net.server.base/intf
 http.headers    ← http.base, text, collections
 http.url        ← http.base, text
 http.message    ← http.intf, http.headers, io
@@ -315,8 +354,8 @@ http.client     ← http.base, http.intf, io, text, impl.registry
 
 impl.registry   ← http.base, http.intf, impl.h1
 impl.h1.*       ← http.base, http.intf, net, io, text
-impl.h2.*       ← http.intf, net, tls, io, collections
-impl.h3.*       ← http.intf, quic, io, collections
+impl.h2.*       ← planned: http.intf, net, tls, io, collections
+impl.h3.*       ← planned: http.intf, quic, io, collections
 ```
 
 ---
@@ -328,7 +367,8 @@ impl.h3.*       ← http.intf, quic, io, collections
 - 用 c2pas888 项目翻译 llhttp C 源码为 Pascal
 - 修正为 nextpas 框架风格（命名规范、异常处理）
 - 放入 `nextpas.core.http.impl.h1.parser.pas`
-- 对外通过 `IHttpServerTransport` 接口暴露
+- 通过 H1 transport、`IHttpServerTransport` 兼容入口，以及
+  `IHttpServerSessionFactory*` evented runtime seam 被 server/client 消费
 
 llhttp 优势：
 
@@ -353,13 +393,17 @@ http.base + http.intf + http.headers + http.url
 
 依赖：net, net.server, io, text, time
 测试：完整接口覆盖 + echo server + client round-trip + router dispatch + registry default resolution
-Benchmark：对照 Go net/http、Rust actix-web 的 hello-world QPS
+Benchmark：对照 Go `net/http`、Rust std-only comparator，并在需要更真实 Rust
+生态对照时追加可选 Hyper/Tokio comparator；当前不把任何单一 comparator row
+表述成完整 Rust 生态结论
 
 ### Phase 2: HTTP/2
 
 ```
 + impl.h2.* transport 家族
 + registry 扩展到 H2 默认解析 / ALPN 接线
++ cleartext H2 = prior knowledge only；TLS H2 = strict ALPN `h2`
++ 不暴露 HTTP/1.1 `Upgrade: h2c` / `HTTP2-Settings` 路径
 ```
 
 依赖：新增 tls

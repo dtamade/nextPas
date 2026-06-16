@@ -54,20 +54,22 @@ var
   LIdx: UInt32;
   LDepth: Int32;
 begin
-  if (FDoc = nil) or (FIdx >= FDoc^.NodeCount) then
+  if (FDoc = nil) or (FIdx >= FDoc^.NodeCount()) then
   begin
     Result := nil;
     Exit;
   end;
   LIdx := FIdx;
   LDepth := 0;
-  while (LIdx < FDoc^.NodeCount) and (FDoc^.Nodes[LIdx].Kind = ynkAlias) and (LDepth < 64) do
+  while (LIdx < FDoc^.NodeCount()) and
+    (FDoc^.Node(LIdx)^.Kind = ynkAlias) and
+    (LDepth < YAML_ALIAS_RESOLUTION_DEPTH_LIMIT) do
   begin
-    LIdx := FDoc^.Nodes[LIdx].AliasTarget;
+    LIdx := FDoc^.Node(LIdx)^.AliasTarget;
     Inc(LDepth);
   end;
-  if LIdx < FDoc^.NodeCount then
-    Result := @FDoc^.Nodes[LIdx]
+  if LIdx < FDoc^.NodeCount() then
+    Result := FDoc^.Node(LIdx)
   else
     Result := nil;
 end;
@@ -182,7 +184,7 @@ begin
   for LI := 1 to AIndex do
   begin
     if LCur = YAML_NODE_NONE then begin Result.FDoc := FDoc; Result.FIdx := YAML_NODE_NONE; Exit; end;
-    LCur := FDoc^.Nodes[LCur].Next;
+    LCur := FDoc^.Node(LCur)^.Next;
   end;
   Result := TYamlValue.Create(FDoc^, LCur);
 end;
@@ -214,14 +216,14 @@ begin
   LCur := LN^.Container.FirstChild;
   for LI := 0 to LN^.Container.Count - 1 do
   begin
-    LKeyNode := @FDoc^.Nodes[LCur];
+    LKeyNode := FDoc^.Node(LCur);
     if (LKeyNode^.Kind = ynkString) and LKeyNode^.Str.Equals(AKey) then
     begin
       Result := TYamlValue.Create(FDoc^, LKeyNode^.Next);
       Exit;
     end;
     if LKeyNode^.Next = YAML_NODE_NONE then Break;
-    LCur := FDoc^.Nodes[LKeyNode^.Next].Next;
+    LCur := FDoc^.Node(LKeyNode^.Next)^.Next;
   end;
   Result.FDoc := FDoc;
   Result.FIdx := YAML_NODE_NONE;
@@ -258,12 +260,12 @@ begin
   for LI := 1 to AIndex do
   begin
     if LCur = YAML_NODE_NONE then Exit(TStringView.Empty);
-    LCur := FDoc^.Nodes[LCur].Next;
+    LCur := FDoc^.Node(LCur)^.Next;
     if LCur = YAML_NODE_NONE then Exit(TStringView.Empty);
-    LCur := FDoc^.Nodes[LCur].Next;
+    LCur := FDoc^.Node(LCur)^.Next;
   end;
   if LCur = YAML_NODE_NONE then Exit(TStringView.Empty);
-  Result := FDoc^.Nodes[LCur].Str;
+  Result := FDoc^.Node(LCur)^.Str;
 end;
 
 function TYamlValue.MapValueAt(AIndex: UInt32): TYamlValue;
@@ -283,12 +285,12 @@ begin
   for LI := 1 to AIndex do
   begin
     if LCur = YAML_NODE_NONE then begin Result.FDoc := FDoc; Result.FIdx := YAML_NODE_NONE; Exit; end;
-    LCur := FDoc^.Nodes[LCur].Next;
+    LCur := FDoc^.Node(LCur)^.Next;
     if LCur = YAML_NODE_NONE then begin Result.FDoc := FDoc; Result.FIdx := YAML_NODE_NONE; Exit; end;
-    LCur := FDoc^.Nodes[LCur].Next;
+    LCur := FDoc^.Node(LCur)^.Next;
   end;
   if LCur = YAML_NODE_NONE then begin Result.FDoc := FDoc; Result.FIdx := YAML_NODE_NONE; Exit; end;
-  Result := TYamlValue.Create(FDoc^, FDoc^.Nodes[LCur].Next);
+  Result := TYamlValue.Create(FDoc^, FDoc^.Node(LCur)^.Next);
 end;
 
 end.

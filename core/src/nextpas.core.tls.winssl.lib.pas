@@ -18,13 +18,11 @@ unit nextpas.core.tls.winssl.lib;
 interface
 
 uses
-  Windows, SysUtils, Classes,
+  Windows,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
-  nextpas.core.tls.exceptions,
-  // nextpas.core.tls.factory 移到 implementation 以避免循环依赖
-  nextpas.core.tls.winssl.base,
-  nextpas.core.tls.winssl.api,
-  nextpas.core.tls.winssl.utils;
+  nextpas.core.tls.exceptions, // nextpas.core.tls.factory 移到 implementation 以避免循环依赖 nextpas.core.tls.winssl.base, nextpas.core.tls.winssl.api, nextpas.core.tls.winssl.utils;
 
 type
   { TWinSSLLibrary - Windows Schannel 库管理类 }
@@ -116,13 +114,7 @@ procedure UnregisterWinSSLBackend;
 
 implementation
 
-uses
-  nextpas.core.tls.winssl.context,
-  nextpas.core.tls.winssl.certificate,
-  nextpas.core.tls.winssl.certstore,
-  nextpas.core.tls.context.config,
-  nextpas.core.tls.errors,   // P0 后端语义统一：引入统一的错误抛出函数
-  nextpas.core.tls.factory;  // 在 implementation 中导入以调用 RegisterLibrary
+uses nextpas.core.tls.winssl.context, nextpas.core.tls.winssl.certificate, nextpas.core.tls.winssl.certstore, nextpas.core.tls.context.config, nextpas.core.tls.errors, // P0 后端语义统一：引入统一的错误抛出函数 nextpas.core.tls.factory; // 在 implementation 中导入以调用 RegisterLibrary;
 
 // ============================================================================
 // 全局工厂函数

@@ -5,6 +5,7 @@ program test_encoding_deep;
 uses
   SysUtils,
   nextpas.core.testing,
+  nextpas.core.base,
   nextpas.core.encoding,
   nextpas.core.encoding.base;
 
@@ -38,6 +39,17 @@ begin
   for LI := 0 to High(A) do
     if A[LI] <> B[LI] then Exit(False);
   Result := True;
+end;
+
+procedure ExpectConvertError(const AProc: TProc; const AMessage: string);
+begin
+  try
+    AProc();
+    Fail(AMessage);
+  except
+    on E: EConvertError do
+      ;
+  end;
 end;
 
 { ===== Base64 RFC 4648 Test Vectors ===== }
@@ -152,6 +164,88 @@ begin
   Check(LGotException, 'should raise on invalid char');
 end;
 
+procedure TestBase64InvalidSingleSextet;
+begin
+  ExpectConvertError(
+    procedure
+    begin
+      Base64Decode('A');
+    end,
+    'single base64 sextet should raise'
+  );
+  ExpectConvertError(
+    procedure
+    begin
+      Base64UrlDecode('A');
+    end,
+    'single base64url sextet should raise'
+  );
+end;
+
+procedure TestBase64InvalidPaddingPlacement;
+begin
+  ExpectConvertError(
+    procedure
+    begin
+      Base64Decode('====');
+    end,
+    'padding-only base64 should raise'
+  );
+  ExpectConvertError(
+    procedure
+    begin
+      Base64Decode('A===');
+    end,
+    'three padding bytes should raise'
+  );
+  ExpectConvertError(
+    procedure
+    begin
+      Base64Decode('AAAA====');
+    end,
+    'padding after complete quartet should raise'
+  );
+  ExpectConvertError(
+    procedure
+    begin
+      Base64UrlDecode('A===');
+    end,
+    'base64url malformed padding should raise'
+  );
+end;
+
+procedure TestBase64NonZeroPadBitsRejected;
+begin
+  ExpectConvertError(
+    procedure
+    begin
+      Base64Decode('Zh==');
+    end,
+    'base64 one-byte decode should reject non-zero pad bits'
+  );
+  ExpectConvertError(
+    procedure
+    begin
+      Base64Decode('Zm9=');
+    end,
+    'base64 two-byte decode should reject non-zero pad bits'
+  );
+  ExpectConvertError(
+    procedure
+    begin
+      Base64UrlDecode('Zh');
+    end,
+    'base64url one-byte decode should reject non-zero pad bits'
+  );
+  ExpectConvertError(
+    procedure
+    begin
+      Base64UrlDecode('Zm9');
+    end,
+    'base64url two-byte decode should reject non-zero pad bits'
+  );
+end;
+
 { ===== Base64 URL-safe ===== }
 
 procedure TestBase64UrlNoPadding;
@@ -262,6 +356,25 @@ begin
   Check(LDec[5] = $FF, 'mixed case byte 5');
 end;
 
+procedure TestHexInvalidCase;
+var
+  LData: TBytes;
+  LInvalidCase: THexCase;
+  LInvalidCaseOrd: Integer;
+begin
+  SetLength(LData, 1);
+  LData[0] := $AB;
+  LInvalidCaseOrd := Ord(High(THexCase)) + 1;
+  LInvalidCase := THexCase(LInvalidCaseOrd);
+  ExpectConvertError(
+    procedure
+    begin
+      HexEncode(LData, LInvalidCase);
+    end,
+    'invalid hex case should raise'
+  );
+end;
+
 { ===== URL Encoding ===== }
 
 procedure TestUrlEmpty;
@@ -313,6 +426,39 @@ begin
   { UTF-8 for Chinese chars }
   CheckEqual('%E4%BD%A0%E5%A5%BD', UrlEncode(#$E4#$BD#$A0#$E5#$A5#$BD));
   CheckEqual(#$E4#$BD#$A0#$E5#$A5#$BD, UrlDecode('%E4%BD%A0%E5%A5%BD'));
+end;
+
+procedure TestUrlDecodeRejectsMalformedUTF8PercentBytes;
+begin
+  CheckEqual(#$E4#$BD#$A0#$E5#$A5#$BD, UrlDecode('%E4%BD%A0%E5%A5%BD'));
+  ExpectConvertError(
+    procedure
+    begin
+      UrlDecode('%C0%80');
+    end,
+    'overlong UTF-8 percent bytes should raise'
+  );
+  ExpectConvertError(
+    procedure
+    begin
+      UrlDecode('%80');
+    end,
+    'lone continuation percent byte should raise'
+  );
+  ExpectConvertError(
+    procedure
+    begin
+      UrlDecode('%E2%82');
+    end,
+    'truncated UTF-8 percent sequence should raise'
+  );
+  ExpectConvertError(
+    procedure
+    begin
+      UrlDecode('%ED%A0%80');
+    end,
+    'surrogate UTF-8 percent bytes should raise'
+  );
 end;
 
 procedure TestUrlAlreadyEncoded;
@@ -465,6 +611,77 @@ begin
   Check(LGotException, 'empty varint should raise');
 end;
 
+procedure TestVarintNonCanonicalEncoding;
+var LData: TBytes;
+begin
+  SetLength(LData, 2);
+  LData[0] := $80;
+  LData[1] := $00;
+  ExpectConvertError(
+    procedure
+    var LRead: Integer;
+    begin
+      VarintDecode(LData, LRead);
+    end,
+    'overlong zero varint should raise'
+  );
+
+  LData[0] := $81;
+  LData[1] := $00;
+  ExpectConvertError(
+    procedure
+    var LRead: Integer;
+    begin
+      SignedVarintDecode(LData, LRead);
+    end,
+    'overlong signed varint should raise'
+  );
+end;
+
+procedure TestVarintMalformedLeavesBytesReadZero;
+  procedure ExpectVarintDecodeFailsWithZeroRead(const AData: TBytes;
+    const ASigned: Boolean; const AMessage: string);
+  var
+    LRead: Integer;
+    LGotException: Boolean;
+  begin
+    LRead := 123;
+    LGotException := False;
+    try
+      if ASigned then
+        SignedVarintDecode(AData, LRead)
+      else
+        VarintDecode(AData, LRead);
+    except
+      on E: EConvertError do
+        LGotException := True;
+    end;
+    Check(LGotException, AMessage + ' should raise');
+    CheckEqual(Int64(0), Int64(LRead), AMessage + ' should leave bytes-read at zero');
+  end;
+var
+  LData: TBytes;
+begin
+  SetLength(LData, 1);
+  LData[0] := $80;
+  ExpectVarintDecodeFailsWithZeroRead(LData, False, 'truncated varint');
+
+  SetLength(LData, 2);
+  LData[0] := $80;
+  LData[1] := $00;
+  ExpectVarintDecodeFailsWithZeroRead(LData, False, 'non-canonical varint');
+
+  SetLength(LData, 11);
+  FillByte(LData[0], Length(LData), $80);
+  LData[10] := $01;
+  ExpectVarintDecodeFailsWithZeroRead(LData, False, 'overflow varint');
+
+  SetLength(LData, 2);
+  LData[0] := $81;
+  LData[1] := $00;
+  ExpectVarintDecodeFailsWithZeroRead(LData, True, 'non-canonical signed varint');
+end;
+
 procedure TestSignedVarintZigZag;
 var LData: TBytes;
     LRead: Integer;
@@ -508,6 +725,9 @@ begin
   T.Run('Base64 padding 2 bytes', @TestBase64PaddingTwoBytes);
   T.Run('Base64 large round-trip', @TestBase64LargeRoundTrip);
   T.Run('Base64 invalid char', @TestBase64InvalidChar);
+  T.Run('Base64 invalid single sextet', @TestBase64InvalidSingleSextet);
+  T.Run('Base64 invalid padding placement', @TestBase64InvalidPaddingPlacement);
+  T.Run('Base64 non-zero pad bits rejected', @TestBase64NonZeroPadBitsRejected);
 
   { Base64 URL-safe }
   T.Run('Base64URL no padding', @TestBase64UrlNoPadding);
@@ -521,6 +741,7 @@ begin
   T.Run('Hex odd length', @TestHexOddLength);
   T.Run('Hex invalid chars', @TestHexInvalidChars);
   T.Run('Hex mixed case', @TestHexMixedCase);
+  T.Run('Hex invalid case', @TestHexInvalidCase);
 
   { URL }
   T.Run('URL empty', @TestUrlEmpty);
@@ -529,6 +750,7 @@ begin
   T.Run('URL special chars', @TestUrlSpecialChars);
   T.Run('URL round-trip', @TestUrlRoundTrip);
   T.Run('URL UTF-8 bytes', @TestUrlUTF8Bytes);
+  T.Run('URL malformed UTF-8 percent bytes', @TestUrlDecodeRejectsMalformedUTF8PercentBytes);
   T.Run('URL already encoded', @TestUrlAlreadyEncoded);
   T.Run('URL truncated percent', @TestUrlTruncatedPercent);
   T.Run('URL invalid percent hex', @TestUrlInvalidPercentHex);
@@ -542,8 +764,9 @@ begin
   T.Run('Varint protobuf 300', @TestVarintProtobufVector300);
   T.Run('Varint overflow', @TestVarintOverflow);
   T.Run('Varint empty input', @TestVarintEmptyInput);
+  T.Run('Varint non-canonical encoding', @TestVarintNonCanonicalEncoding);
+  T.Run('Varint malformed leaves bytes-read zero', @TestVarintMalformedLeavesBytesReadZero);
   T.Run('Signed varint zigzag', @TestSignedVarintZigZag);
 
   T.Summary;
 end.
-

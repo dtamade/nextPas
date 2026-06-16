@@ -13,7 +13,7 @@ unit nextpas.core.tls.openssl.api.sha;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.base,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
@@ -193,8 +193,7 @@ function SHA512HashString(const S: string): string;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api;
+uses nextpas.core.tls.openssl.api;
 
 const
   { SHA 函数绑定数组 - 用于批量加载 }
@@ -351,7 +350,7 @@ function SHA1HashString(const S: string): string;
 var
   Data: TBytes;
 begin
-  Data := TEncoding.UTF8.GetBytes(UnicodeString(S));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(S));
   Result := BytesToHex(SHA1Hash(Data));
 end;
 
@@ -359,7 +358,7 @@ function SHA256HashString(const S: string): string;
 var
   Data: TBytes;
 begin
-  Data := TEncoding.UTF8.GetBytes(UnicodeString(S));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(S));
   Result := BytesToHex(SHA256Hash(Data));
 end;
 
@@ -367,7 +366,7 @@ function SHA384HashString(const S: string): string;
 var
   Data: TBytes;
 begin
-  Data := TEncoding.UTF8.GetBytes(UnicodeString(S));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(S));
   Result := BytesToHex(SHA384Hash(Data));
 end;
 
@@ -375,7 +374,7 @@ function SHA512HashString(const S: string): string;
 var
   Data: TBytes;
 begin
-  Data := TEncoding.UTF8.GetBytes(UnicodeString(S));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(S));
   Result := BytesToHex(SHA512Hash(Data));
 end;
 

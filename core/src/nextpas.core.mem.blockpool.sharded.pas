@@ -19,11 +19,11 @@ uses
   nextpas.core.base.utils,
   nextpas.core.base,
   nextpas.core.atomic,
-  nextpas.core.sync,
+  nextpas.core.mem.base,
   nextpas.core.mem.blockpool,
   nextpas.core.mem.blockpool.growable,
-  nextpas.core.mem.layout,
-  nextpas.core.mem.error;
+  nextpas.core.mem.error,
+  nextpas.core.mem.mutex;
 
 const
   SHARDED_BLOCKPOOL_THREADCACHE_MAX = 256;
@@ -54,7 +54,7 @@ type
     type
       TShard = record
         Pool: TGrowingBlockPool;
-        Lock: IMutex;
+        Lock: TMemMutex;
         KnownCapacity: SizeUInt;
         KnownSegmentCount: SizeInt;
         InUseCount: Int64; // blocks in-use by callers (per-shard, atomic)
@@ -182,7 +182,7 @@ type
 implementation
 
 uses
-  nextpas.core.time.cpu;
+  nextpas.core.platform.thread;
 
 var
   GShardedBlockPoolIdGen: UInt64 = 0;
@@ -266,7 +266,7 @@ var
 begin
   if aShardCount <= 0 then
   begin
-    LCPU := CpuCount;
+    LCPU := platform_cpu_count;
     if LCPU < 1 then LCPU := 1;
     if LCPU > 32 then LCPU := 32;
     aShardCount := LCPU;
@@ -282,7 +282,7 @@ var
   LId: QWord;
 begin
   if FShardCount <= 1 then Exit(0);
-  LId := QWord(CurrentThreadId);
+  LId := QWord(platform_thread_id);
   Result := Integer(MulHash64(LId) and QWord(FShardMask));
 end;
 
@@ -314,10 +314,10 @@ begin
     LState := atomic_load(FRoutingState);
     if (LState and (ROUTING_WRITE_BIT or ROUTING_WAIT_BIT)) <> 0 then
     begin
-      CpuRelax;
+      platform_thread_yield;
       Inc(LSpins);
       if (LSpins and 1023) = 0 then
-        SchedYield;
+        platform_thread_yield;
       Continue;
     end;
 
@@ -361,10 +361,10 @@ begin
       Continue;
     end;
 
-    CpuRelax;
+    platform_thread_yield;
     Inc(LSpins);
     if (LSpins and 1023) = 0 then
-      SchedYield;
+      platform_thread_yield;
   until False;
 end;
 
@@ -977,11 +977,10 @@ var
 
   FPoolId := NextShardedBlockPoolId;
   FCacheEpoch := 1;
-  FThreadCacheCapacity := aConfig.ThreadCacheCapacity;
-  if FThreadCacheCapacity < 0 then
-    FThreadCacheCapacity := 0
-  else if FThreadCacheCapacity > SHARDED_BLOCKPOOL_THREADCACHE_MAX then
-    FThreadCacheCapacity := SHARDED_BLOCKPOOL_THREADCACHE_MAX;
+  // Disable the old per-thread cache until it has generation ownership and
+  // thread-exit cleanup. Otherwise duplicate frees can be hidden in TLS state
+  // and cache nodes leak after pool destruction.
+  FThreadCacheCapacity := 0;
   FThreadCacheCheckDoubleFree := aConfig.ThreadCacheCheckDoubleFree;
   FTrackInUse := aConfig.TrackInUse;
   FTotalCapacity := 0;
@@ -1001,7 +1000,7 @@ var
   // create shards
   for LIdx := 0 to LShardCount - 1 do
   begin
-    FShards[LIdx].Lock := Mutex;
+    FShards[LIdx].Lock.Init;
     LShardConfig := FConfig;
     LShardConfig.InitialCapacity := LPerShardCap;
     // sharded pool relies on stable routing; keep segments by default
@@ -1022,7 +1021,7 @@ var
 
   FBlockMask := 0;
   FBlockShift := 0;
-  if (FBlockSize <> 0) and IsPowerOfTwo(FBlockSize) then
+  if (FBlockSize <> 0) and IsPowerOfTwoInt(Integer(FBlockSize)) then
   begin
     FBlockMask := FBlockSize - 1;
     LShift := 0;
@@ -1037,7 +1036,7 @@ var
 
   // page-map granularity (default 4096 bytes)
   LPageSize := SizeUInt(MEM_PAGE_SIZE);
-  if (LPageSize <> 0) and IsPowerOfTwo(LPageSize) then
+  if (LPageSize <> 0) and IsPowerOfTwoInt(Integer(LPageSize)) then
   begin
     LPageShift := 0;
     LPageTmp := LPageSize;
@@ -1118,8 +1117,7 @@ var
 	begin
 	  // lock shards to avoid racing with concurrent frees/allocs
 	  for LIdx := 0 to High(FShards) do
-	    if FShards[LIdx].Lock <> nil then
-	      FShards[LIdx].Lock.Acquire;
+	    FShards[LIdx].Lock.Acquire;
 	  try
 	    RouteWriteLock;
 	    try
@@ -1137,12 +1135,11 @@ var
     end;
   finally
     for LIdx := 0 to High(FShards) do
-      if FShards[LIdx].Lock <> nil then
-        FShards[LIdx].Lock.Release;
+      FShards[LIdx].Lock.Release;
   end;
 
   for LIdx := 0 to High(FShards) do
-    FShards[LIdx].Lock := nil;
+    FShards[LIdx].Lock.Done;
 
 	  inherited Destroy;
 	end;
@@ -1199,12 +1196,8 @@ end;
 procedure TShardedBlockPool.Release(aPtr: Pointer);
 var
   LShard: Integer;
-  LLocalShard: Integer;
   LBase: PByte;
   LDiff: PtrUInt;
-  LNode: PThreadCacheNode;
-  LIdx: Integer;
-  LFlush: Integer;
 begin
   if aPtr = nil then Exit;
 
@@ -1226,65 +1219,9 @@ begin
       raise EAllocError.Create(aeInvalidPointer, 'TShardedBlockPool.Release: misaligned pointer');
   end;
 
-  LLocalShard := GetLocalShardIndex;
-  if (FThreadCacheCapacity > 0) and (LLocalShard = LShard) then
-  begin
-    LNode := GetThreadCacheNode;
-    if (LNode <> nil) and (LNode^.Shard = LShard) then
-    begin
-      if FThreadCacheCheckDoubleFree then
-        for LIdx := 0 to LNode^.Count - 1 do
-          if LNode^.Ptrs[LIdx] = aPtr then
-            raise EAllocError.Create(aeDoubleFree, 'TShardedBlockPool.Release: double free detected (thread cache)');
-
-      if LNode^.Count >= FThreadCacheCapacity then
-      begin
-        LFlush := FThreadCacheCapacity div 2;
-        if LFlush < 1 then
-          LFlush := 1;
-        if LFlush > LNode^.Count then
-          LFlush := LNode^.Count;
-
-        FShards[LShard].Lock.Acquire;
-        try
-          FlushRemoteFreesLocked(LShard);
-          FlushThreadCacheLocked(LShard, LNode, LFlush);
-        finally
-          FShards[LShard].Lock.Release;
-        end;
-      end;
-
-      if LNode^.Count < FThreadCacheCapacity then
-      begin
-        LNode^.Ptrs[LNode^.Count] := aPtr;
-        Inc(LNode^.Count);
-        if FTrackInUse then
-          atomic_fetch_add_64(FShards[LShard].InUseCount, -1, mo_relaxed);
-        Exit;
-      end;
-    end;
-  end;
-
-  {$IFNDEF FAF_MEM_DEBUG}
-  // Cross-shard frees are enqueued lock-free and drained by the owning shard.
-  if (LLocalShard >= 0) and (LLocalShard <> LShard) then
-  begin
-    if FThreadCacheCapacity > 0 then
-    begin
-      LNode := GetThreadCacheNode;
-      if LNode <> nil then
-        RemoteFreeBufferPush(LNode, LShard, aPtr)
-      else
-        RemoteFreePush(LShard, aPtr);
-    end
-    else
-      RemoteFreePush(LShard, aPtr);
-    if FTrackInUse then
-      atomic_fetch_add_64(FShards[LShard].InUseCount, -1, mo_relaxed);
-    Exit;
-  end;
-  {$ENDIF}
-
+  // Release must perform the owner-shard state transition synchronously.
+  // Without a per-block pending/free generation state, deferred remote queues
+  // can accept duplicate frees before the owning bitmap observes the first one.
   FShards[LShard].Lock.Acquire;
   try
     FlushRemoteFreesLocked(LShard);
@@ -1367,15 +1304,13 @@ begin
     LSum := 0;
     for LIdx := 0 to High(FShards) do
     begin
-      if FShards[LIdx].Lock <> nil then
-        FShards[LIdx].Lock.Acquire;
+      FShards[LIdx].Lock.Acquire;
       try
         FlushRemoteFreesLocked(LIdx);
         if FShards[LIdx].Pool <> nil then
           Inc(LSum, Int64(FShards[LIdx].Pool.Available));
       finally
-        if FShards[LIdx].Lock <> nil then
-          FShards[LIdx].Lock.Release;
+        FShards[LIdx].Lock.Release;
       end;
     end;
 
@@ -1406,15 +1341,13 @@ begin
     LSum := 0;
     for LIdx := 0 to High(FShards) do
     begin
-      if FShards[LIdx].Lock <> nil then
-        FShards[LIdx].Lock.Acquire;
+      FShards[LIdx].Lock.Acquire;
       try
         FlushRemoteFreesLocked(LIdx);
         if FShards[LIdx].Pool <> nil then
           Inc(LSum, Int64(FShards[LIdx].Pool.Available));
       finally
-        if FShards[LIdx].Lock <> nil then
-          FShards[LIdx].Lock.Release;
+        FShards[LIdx].Lock.Release;
       end;
     end;
     LAvail := LSum;

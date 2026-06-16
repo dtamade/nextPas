@@ -3,6 +3,7 @@ program test_toml_writer;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.errors,
   nextpas.core.text.view,
   nextpas.core.text.builder,
   nextpas.core.toml.base,
@@ -11,6 +12,24 @@ uses
 
 var
   T: TTestRunner;
+
+procedure CheckRawPathRejected(var W: TTomlWriter; const AFormattedPath: string;
+  const AMessage: string; const AArrayTable: Boolean);
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    if AArrayTable then
+      W.BeginArrayTableRaw(AFormattedPath)
+    else
+      W.BeginTableRaw(AFormattedPath);
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, AMessage);
+end;
 
 procedure TestSimpleKeyValue;
 var B: TStringBuilder; W: TTomlWriter;
@@ -69,6 +88,99 @@ begin
   B.Done;
 end;
 
+procedure TestBeginTableRawRejectsInvalidPath;
+var
+  B: TStringBuilder;
+  W: TTomlWriter;
+begin
+  B.Init(256); W.Init(B);
+  try
+    W.Key('before'); W.Int(1);
+    CheckRawPathRejected(W, '', 'BeginTableRaw rejects empty path', False);
+    CheckRawPathRejected(W, 'server' + #10 + 'bad',
+      'BeginTableRaw rejects newline', False);
+    CheckRawPathRejected(W, 'server]bad',
+      'BeginTableRaw rejects closing bracket', False);
+    CheckRawPathRejected(W, '"server]bad',
+      'BeginTableRaw rejects unterminated quoted key with closing bracket',
+      False);
+    CheckRawPathRejected(W, 'server' + #1 + 'bad',
+      'BeginTableRaw rejects control char', False);
+    CheckRawPathRejected(W, 'server' + #127 + 'bad',
+      'BeginTableRaw rejects DEL control char', False);
+    W.BeginTableRaw('server.valid');
+    W.Key('after'); W.Bool(True);
+    CheckEqual('before = 1' + #10 + '[server.valid]' + #10 +
+      'after = true' + #10, B.ToString,
+      'rejected BeginTableRaw leaves writer usable');
+  finally
+    B.Done;
+  end;
+end;
+
+procedure TestBeginTableRawAllowsClosingBracketInsideQuotedKey;
+var
+  B: TStringBuilder;
+  W: TTomlWriter;
+begin
+  B.Init(256); W.Init(B);
+  try
+    W.BeginTableRaw('"server]name".valid');
+    W.Key('after'); W.Bool(True);
+    CheckEqual('["server]name".valid]' + #10 + 'after = true' + #10,
+      B.ToString, 'BeginTableRaw allows closing bracket inside quoted key');
+  finally
+    B.Done;
+  end;
+end;
+
+procedure TestBeginArrayTableRawRejectsInvalidPath;
+var
+  B: TStringBuilder;
+  W: TTomlWriter;
+begin
+  B.Init(256); W.Init(B);
+  try
+    W.Key('before'); W.Int(1);
+    CheckRawPathRejected(W, '', 'BeginArrayTableRaw rejects empty path', True);
+    CheckRawPathRejected(W, 'products' + #10 + 'bad',
+      'BeginArrayTableRaw rejects newline', True);
+    CheckRawPathRejected(W, 'products]bad',
+      'BeginArrayTableRaw rejects closing bracket', True);
+    CheckRawPathRejected(W, '''products]bad',
+      'BeginArrayTableRaw rejects unterminated quoted key with closing bracket',
+      True);
+    CheckRawPathRejected(W, 'products' + #1 + 'bad',
+      'BeginArrayTableRaw rejects control char', True);
+    CheckRawPathRejected(W, 'products' + #127 + 'bad',
+      'BeginArrayTableRaw rejects DEL control char', True);
+    W.BeginArrayTableRaw('products.valid');
+    W.Key('after'); W.Str('ok');
+    CheckEqual('before = 1' + #10 + '[[products.valid]]' + #10 +
+      'after = "ok"' + #10, B.ToString,
+      'rejected BeginArrayTableRaw leaves writer usable');
+  finally
+    B.Done;
+  end;
+end;
+
+procedure TestBeginArrayTableRawAllowsClosingBracketInsideQuotedKey;
+var
+  B: TStringBuilder;
+  W: TTomlWriter;
+begin
+  B.Init(256); W.Init(B);
+  try
+    W.BeginArrayTableRaw('"product]name".valid');
+    W.Key('after'); W.Str('ok');
+    CheckEqual('[["product]name".valid]]' + #10 + 'after = "ok"' + #10,
+      B.ToString,
+      'BeginArrayTableRaw allows closing bracket inside quoted key');
+  finally
+    B.Done;
+  end;
+end;
+
 procedure TestInlineTable;
 var B: TStringBuilder; W: TTomlWriter;
 begin
@@ -122,6 +234,17 @@ begin
   B.Done;
 end;
 
+procedure TestMultilineComment;
+var B: TStringBuilder; W: TTomlWriter;
+begin
+  B.Init(128); W.Init(B);
+  W.Comment('first' + #10 + 'second' + #13#10 + 'third');
+  W.Key('x'); W.Int(1);
+  CheckEqual('# first' + #10 + '# second' + #10 + '# third' + #10 +
+    'x = 1' + #10, B.ToString, 'multiline comment');
+  B.Done;
+end;
+
 procedure TestDateTimeOffset;
 var B: TStringBuilder; W: TTomlWriter;
 begin
@@ -146,6 +269,15 @@ begin
   B.Init(64); W.Init(B);
   W.Key('d'); W.DateTime(TomlDate(2024, 1, 15));
   CheckEqual('d = 2024-01-15' + #10, B.ToString, 'local date');
+  B.Done;
+end;
+
+procedure TestLocalDatePadsYear;
+var B: TStringBuilder; W: TTomlWriter;
+begin
+  B.Init(64); W.Init(B);
+  W.Key('d'); W.DateTime(TomlDate(9, 1, 2));
+  CheckEqual('d = 0009-01-02' + #10, B.ToString, 'local date pads year');
   B.Done;
 end;
 
@@ -232,6 +364,224 @@ begin
   B.Done;
 end;
 
+procedure TestEndArrayRejectsUnmatchedContainer;
+var
+  B: TStringBuilder;
+  W: TTomlWriter;
+  LRaised: Boolean;
+begin
+  B.Init(64); W.Init(B);
+  try
+    W.Key('name'); W.Str('Alice');
+    LRaised := False;
+    try
+      W.EndArray;
+    except
+      on E: EInvalidOperationError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'unmatched EndArray raises EInvalidOperationError');
+    CheckEqual('name = "Alice"' + #10, B.ToString,
+      'unmatched EndArray leaves output unchanged');
+  finally
+    B.Done;
+  end;
+end;
+
+procedure TestEndInlineTableRejectsUnmatchedContainer;
+var
+  B: TStringBuilder;
+  W: TTomlWriter;
+  LRaised: Boolean;
+begin
+  B.Init(64); W.Init(B);
+  try
+    W.Key('name'); W.Str('Alice');
+    LRaised := False;
+    try
+      W.EndInlineTable;
+    except
+      on E: EInvalidOperationError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'unmatched EndInlineTable raises EInvalidOperationError');
+    CheckEqual('name = "Alice"' + #10, B.ToString,
+      'unmatched EndInlineTable leaves output unchanged');
+  finally
+    B.Done;
+  end;
+end;
+
+procedure TestMismatchedInlineContainerEndIsRejected;
+var
+  B: TStringBuilder;
+  W: TTomlWriter;
+  LRaised: Boolean;
+begin
+  B.Init(64); W.Init(B);
+  try
+    W.Key('point');
+    W.BeginInlineTable;
+    LRaised := False;
+    try
+      W.EndArray;
+    except
+      on E: EInvalidOperationError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'EndArray rejects open inline table');
+    W.Key('x'); W.Int(1);
+    W.EndInlineTable;
+    CheckEqual('point = { x = 1 }' + #10, B.ToString,
+      'mismatched end leaves inline table usable');
+  finally
+    B.Done;
+  end;
+end;
+
+procedure TestKeyInsideArrayIsRejected;
+var
+  B: TStringBuilder;
+  W: TTomlWriter;
+  LRaised: Boolean;
+begin
+  B.Init(64); W.Init(B);
+  try
+    W.Key('items');
+    W.BeginArray;
+    W.Int(1);
+    LRaised := False;
+    try
+      W.Key('bad');
+    except
+      on E: EInvalidOperationError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'Key inside array raises EInvalidOperationError');
+    W.Int(2);
+    W.EndArray;
+    CheckEqual('items = [1, 2]' + #10, B.ToString,
+      'rejected array key leaves array usable');
+  finally
+    B.Done;
+  end;
+end;
+
+procedure TestKeyStringViewInsideArrayIsRejected;
+var
+  B: TStringBuilder;
+  W: TTomlWriter;
+  LKey: TStringView;
+  LRaised: Boolean;
+begin
+  B.Init(64); W.Init(B);
+  try
+    W.Key('items');
+    W.BeginArray;
+    W.Str('ok');
+    LKey := TStringView.Create(PAnsiChar('bad'), 3);
+    LRaised := False;
+    try
+      W.Key(LKey);
+    except
+      on E: EInvalidOperationError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'Key(TStringView) inside array raises EInvalidOperationError');
+    W.Str('still-ok');
+    W.EndArray;
+    CheckEqual('items = ["ok", "still-ok"]' + #10, B.ToString,
+      'rejected array TStringView key leaves array usable');
+  finally
+    B.Done;
+  end;
+end;
+
+procedure TestTableHeaderInsideArrayIsRejected;
+var
+  B: TStringBuilder;
+  W: TTomlWriter;
+  LRaised: Boolean;
+begin
+  B.Init(64); W.Init(B);
+  try
+    W.Key('items');
+    W.BeginArray;
+    W.Int(1);
+    LRaised := False;
+    try
+      W.BeginTable('bad');
+    except
+      on E: EInvalidOperationError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'BeginTable inside array raises EInvalidOperationError');
+    W.Int(2);
+    W.EndArray;
+    CheckEqual('items = [1, 2]' + #10, B.ToString,
+      'rejected table header leaves array usable');
+  finally
+    B.Done;
+  end;
+end;
+
+procedure TestArrayTableHeaderInsideArrayIsRejected;
+var
+  B: TStringBuilder;
+  W: TTomlWriter;
+  LRaised: Boolean;
+begin
+  B.Init(64); W.Init(B);
+  try
+    W.Key('items');
+    W.BeginArray;
+    W.Int(1);
+    LRaised := False;
+    try
+      W.BeginArrayTable('bad');
+    except
+      on E: EInvalidOperationError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'BeginArrayTable inside array raises EInvalidOperationError');
+    W.Int(2);
+    W.EndArray;
+    CheckEqual('items = [1, 2]' + #10, B.ToString,
+      'rejected array table header leaves array usable');
+  finally
+    B.Done;
+  end;
+end;
+
+procedure TestInlineContainerStackOverflowIsRejected;
+var
+  B: TStringBuilder;
+  W: TTomlWriter;
+  LI: Int32;
+  LRaised: Boolean;
+begin
+  B.Init(1024); W.Init(B);
+  try
+    W.Key('nested');
+    for LI := 1 to 128 do
+      W.BeginArray;
+    LRaised := False;
+    try
+      W.BeginArray;
+    except
+      on E: EResourceExhaustedError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'inline container overflow raises EResourceExhaustedError');
+    for LI := 1 to 128 do
+      W.EndArray;
+    CheckEqual('nested = ' + StringOfChar('[', 128) + StringOfChar(']', 128) + #10,
+      B.ToString, 'overflow leaves existing stack balanced');
+  finally
+    B.Done;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml.writer');
   T.Run('simple key-value', @TestSimpleKeyValue);
@@ -240,14 +590,24 @@ begin
   T.Run('bool', @TestBool);
   T.Run('table header', @TestTableHeader);
   T.Run('array table header', @TestArrayTableHeader);
+  T.Run('BeginTableRaw invalid path rejected',
+    @TestBeginTableRawRejectsInvalidPath);
+  T.Run('BeginTableRaw quoted closing bracket allowed',
+    @TestBeginTableRawAllowsClosingBracketInsideQuotedKey);
+  T.Run('BeginArrayTableRaw invalid path rejected',
+    @TestBeginArrayTableRawRejectsInvalidPath);
+  T.Run('BeginArrayTableRaw quoted closing bracket allowed',
+    @TestBeginArrayTableRawAllowsClosingBracketInsideQuotedKey);
   T.Run('inline table', @TestInlineTable);
   T.Run('array', @TestArray);
   T.Run('escaped string', @TestEscapedString);
   T.Run('quoted key', @TestQuotedKey);
   T.Run('comment', @TestComment);
+  T.Run('multiline comment', @TestMultilineComment);
   T.Run('datetime offset Z', @TestDateTimeOffset);
   T.Run('datetime +09:00', @TestDateTimePositiveOffset);
   T.Run('local date', @TestLocalDate);
+  T.Run('local date pads year', @TestLocalDatePadsYear);
   T.Run('local time', @TestLocalTime);
   T.Run('newline', @TestNewline);
   T.Run('key TStringView', @TestKeyStringView);
@@ -255,6 +615,17 @@ begin
   T.Run('nested array', @TestNestedArray);
   T.Run('pretty array', @TestPrettyArray);
   T.Run('pretty nested array', @TestPrettyNestedArray);
+  T.Run('unmatched EndArray rejected', @TestEndArrayRejectsUnmatchedContainer);
+  T.Run('unmatched EndInlineTable rejected', @TestEndInlineTableRejectsUnmatchedContainer);
+  T.Run('mismatched inline container end rejected', @TestMismatchedInlineContainerEndIsRejected);
+  T.Run('Key inside array rejected', @TestKeyInsideArrayIsRejected);
+  T.Run('Key TStringView inside array rejected',
+    @TestKeyStringViewInsideArrayIsRejected);
+  T.Run('table header inside array rejected',
+    @TestTableHeaderInsideArrayIsRejected);
+  T.Run('array table header inside array rejected',
+    @TestArrayTableHeaderInsideArrayIsRejected);
+  T.Run('inline container stack overflow rejected', @TestInlineContainerStackOverflowIsRejected);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

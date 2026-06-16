@@ -25,7 +25,9 @@ uses
   {$ELSE}
   Sockets,
   {$ENDIF}
-  SysUtils, Classes, SyncObjs, DateUtils,
+  nextpas.core.exception, nextpas.core.text.conv, SyncObjs, DateUtils,
+  nextpas.core.io.intf,
+  nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
   nextpas.core.tls.connection.base,
   nextpas.core.tls.exceptions,
@@ -94,7 +96,7 @@ type
   { TWinSSLSessionManager - 会话缓存管理器 }
   TWinSSLSessionManager = class
   private
-    FSessions: TStringList;
+    FSessions: TStringArray;
     FLock: TCriticalSection;
     FMaxSessions: Integer;
   public
@@ -113,7 +115,7 @@ type
     ISSLNativeHandleAccess)
   private
     FSocket: THandle;
-    FStream: TStream;
+    FStream: IStream;
     FCtxtHandle: CtxtHandle;
     FHandshakeState: TSSLHandshakeState;
     FServerName: string;
@@ -212,6 +214,7 @@ type
   public
     constructor Create(AContext: ISSLContext; ASocket: THandle); overload;
     constructor Create(AContext: ISSLContext; AStream: TStream); overload;
+    constructor Create(AContext: ISSLContext; AStream: IStream); overload;
     destructor Destroy; override;
 
     { ISSLClientConnection }
@@ -229,7 +232,8 @@ type
 implementation
 
 uses
-  nextpas.core.tls.winssl.lib;
+  nextpas.core.text.strings,
+    nextpas.core.tls.winssl.lib;
 
 function NormalizeWinSSLCertificateLinkText(const AValue: string): string;
 begin
@@ -305,27 +309,24 @@ function TWinSSLSession.BuildSerializedSessionData: TBytes;
 const
   WINSSL_SESSION_SERIALIZATION_MAGIC = 'fafafa-winssl-session-v1';
 var
-  LData: TStringList;
+  LData: TStringArray;
 begin
   SetLength(Result, 0);
   if FID = '' then
     Exit;
-
-  LData := TStringList.Create;
   try
-    LData.Values['magic'] := WINSSL_SESSION_SERIALIZATION_MAGIC;
-    LData.Values['id'] := FID;
-    LData.Values['created_unix'] := IntToStr(DateTimeToUnix(FCreationTime));
-    LData.Values['timeout'] := IntToStr(FTimeout);
-    LData.Values['protocol'] := IntToStr(Ord(FProtocolVersion));
-    LData.Values['cipher'] := FCipherName;
+    StringPairsGet(LPairs, 'magic') := WINSSL_SESSION_SERIALIZATION_MAGIC;
+    StringPairsGet(LPairs, 'id') := FID;
+    StringPairsGet(LPairs, 'created_unix') := IntToStr(DateTimeToUnix(FCreationTime));
+    StringPairsGet(LPairs, 'timeout') := IntToStr(FTimeout);
+    StringPairsGet(LPairs, 'protocol') := IntToStr(Ord(FProtocolVersion));
+    StringPairsGet(LPairs, 'cipher') := FCipherName;
     if FIsResumed then
-      LData.Values['resumed'] := '1'
+      StringPairsGet(LPairs, 'resumed') := '1'
     else
-      LData.Values['resumed'] := '0';
+      StringPairsGet(LPairs, 'resumed') := '0';
     Result := BytesOf(UTF8String(LData.Text));
   finally
-    LData.Free;
   end;
 end;
 
@@ -333,7 +334,7 @@ function TWinSSLSession.TryLoadSerializedSessionData(const AData: TBytes): Boole
 const
   WINSSL_SESSION_SERIALIZATION_MAGIC = 'fafafa-winssl-session-v1';
 var
-  LData: TStringList;
+  LData: TStringArray;
   LText: RawByteString;
   LID: string;
   LCipher: string;
@@ -347,28 +348,27 @@ begin
     Exit;
 
   SetString(LText, PAnsiChar(@AData[0]), Length(AData));
-  LData := TStringList.Create;
   try
     LData.Text := string(UTF8String(LText));
-    if LData.Values['magic'] <> WINSSL_SESSION_SERIALIZATION_MAGIC then
+    if StringPairsGet(LPairs, 'magic') <> WINSSL_SESSION_SERIALIZATION_MAGIC then
       Exit;
 
-    LID := LData.Values['id'];
+    LID := StringPairsGet(LPairs, 'id');
     if LID = '' then
       Exit;
 
-    if not TryStrToInt64(LData.Values['created_unix'], LCreatedUnix) then
+    if not TryStrToInt64(StringPairsGet(LPairs, 'created_unix'), LCreatedUnix) then
       Exit;
-    if not TryStrToInt(LData.Values['timeout'], LTimeout) then
+    if not TryStrToInt(StringPairsGet(LPairs, 'timeout'), LTimeout) then
       Exit;
-    if not TryStrToInt(LData.Values['protocol'], LProtocolOrdinal) then
+    if not TryStrToInt(StringPairsGet(LPairs, 'protocol'), LProtocolOrdinal) then
       Exit;
     if (LProtocolOrdinal < Ord(Low(TSSLProtocolVersion))) or
        (LProtocolOrdinal > Ord(High(TSSLProtocolVersion))) then
       Exit;
 
-    LCipher := LData.Values['cipher'];
-    LResumed := LData.Values['resumed'];
+    LCipher := StringPairsGet(LPairs, 'cipher');
+    LResumed := StringPairsGet(LPairs, 'resumed');
     if (LResumed <> '0') and (LResumed <> '1') then
       Exit;
 
@@ -381,7 +381,6 @@ begin
     FSessionData := Copy(AData);
     Result := True;
   finally
-    LData.Free;
   end;
 end;
 
@@ -494,7 +493,6 @@ end;
 constructor TWinSSLSessionManager.Create;
 begin
   inherited Create;
-  FSessions := TStringList.Create;
   FSessions.Duplicates := dupIgnore;
   FSessions.Sorted := False;
   FLock := TCriticalSection.Create;
@@ -505,13 +503,11 @@ destructor TWinSSLSessionManager.Destroy;
 var
   i: Integer;
 begin
-  for i := 0 to FSessions.Count - 1 do
+  for i := 0 to Length(FSessions) - 1 do
   begin
     if FSessions.Objects[i] <> nil then
       ISSLSession(Pointer(FSessions.Objects[i]))._Release;
   end;
-  FSessions.Free;
-  FLock.Free;
   inherited Destroy;
 end;
 
@@ -534,7 +530,7 @@ begin
 
     FSessions.AddObject(AID, TObject(Pointer(ASession)));
 
-    while FSessions.Count > FMaxSessions do
+    while Length(FSessions) > FMaxSessions do
     begin
       if FSessions.Objects[0] <> nil then
         ISSLSession(Pointer(FSessions.Objects[0]))._Release;
@@ -594,7 +590,7 @@ var
 begin
   FLock.Enter;
   try
-    for i := FSessions.Count - 1 downto 0 do
+    for i := Length(FSessions) - 1 downto 0 do
     begin
       if not ISSLSession(Pointer(FSessions.Objects[i])).IsValid then
       begin
@@ -643,6 +639,11 @@ begin
 end;
 
 constructor TWinSSLConnection.Create(AContext: ISSLContext; AStream: TStream);
+begin
+  Create(AContext, WrapTStream(AStream, False));
+end;
+
+constructor TWinSSLConnection.Create(AContext: ISSLContext; AStream: IStream);
 begin
   inherited Create(AContext);
   FSocket := INVALID_HANDLE_VALUE;
@@ -797,7 +798,7 @@ end;
 
 function TWinSSLConnection.BuildALPNBuffer(const AProtocols: string; out ABuffer: TBytes): Boolean;
 var
-  LProtocols: TStringList;
+  LProtocols: TStringArray;
   LTotalSize, LListSize, LOffset, I: Integer;
   LProtoLen: Byte;
 begin
@@ -806,18 +807,13 @@ begin
 
   if AProtocols = '' then
     Exit;
-
-  LProtocols := TStringList.Create;
   try
-    LProtocols.Delimiter := ',';
-    LProtocols.StrictDelimiter := True;
-    LProtocols.DelimitedText := AProtocols;
 
-    if LProtocols.Count = 0 then
+    if Length(LProtocols) = 0 then
       Exit;
 
     LListSize := 0;
-    for I := 0 to LProtocols.Count - 1 do
+    for I := 0 to Length(LProtocols) - 1 do
     begin
       if Length(LProtocols[I]) > 255 then
         Continue;
@@ -842,7 +838,7 @@ begin
     PWord(@ABuffer[LOffset])^ := Word(LListSize);
     Inc(LOffset, 2);
 
-    for I := 0 to LProtocols.Count - 1 do
+    for I := 0 to Length(LProtocols) - 1 do
     begin
       if Length(LProtocols[I]) > 255 then
         Continue;
@@ -858,7 +854,6 @@ begin
 
     Result := True;
   finally
-    LProtocols.Free;
   end;
 end;
 

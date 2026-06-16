@@ -57,6 +57,9 @@
 - 当前活动主计划：
   `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md`
   其中已经包含“用编译器路线图看当前批次”的正式映射表。
+- 当前接手治理计划：
+  `docs/plans/2026-06-15-nextpas-workmap-takeover-plan.md`
+  负责新接手 AI 的工作地图、治理债清理与并行 lane 推进顺序。
 - packages 推进计划：
   `docs/plans/2026-03-21-nextpas-phase1-packages-plan.md`
 - 迭代推进工作模式：

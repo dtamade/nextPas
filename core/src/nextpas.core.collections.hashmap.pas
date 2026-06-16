@@ -7,9 +7,9 @@ unit nextpas.core.collections.hashmap;
 interface
 
 uses
-  TypInfo,
+  nextpas.core.system.typinfo,
   nextpas.core.base,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
   nextpas.core.collections.base,
   nextpas.core.collections.hashmap.base,
   nextpas.core.collections.hashmap.intf;
@@ -685,10 +685,9 @@ begin
 end;
 
 function THashMap.Add(const AKey: K; const AValue: V): Boolean;
-var h: UInt32; idx, firstTomb: SizeUInt; start: SizeUInt; st: Byte;
+var h: UInt32; idx, firstTomb, insertIdx: SizeUInt; start: SizeUInt; st, insertState: Byte;
 begin
   if FCapacity = 0 then InitCapacity(4);
-  if FUsed >= FMaxLoad then Rehash(FCapacity shl 1);
   h := KeyHash(AKey);
   idx := h and FMask; start := idx; firstTomb := SizeUInt(-1);
   while True do
@@ -698,17 +697,21 @@ begin
     begin
       if firstTomb <> SizeUInt(-1) then
       begin
-        idx := firstTomb;
-        st := Ord(bsTombstone); // 复用墓碑：不增加 FUsed
+        insertIdx := firstTomb;
+        insertState := Ord(bsTombstone); // 复用墓碑：不增加 FUsed
+      end
+      else
+      begin
+        if FUsed >= FMaxLoad then
+        begin
+          Rehash(FCapacity shl 1);
+          Result := Add(AKey, AValue);
+          Exit;
+        end;
+        insertIdx := idx;
+        insertState := Ord(bsEmpty);
       end;
-      (FBuckets + idx)^.State := Ord(bsOccupied);
-      (FBuckets + idx)^.Hash := h;
-      (FBuckets + idx)^.Key := AKey;
-      (FBuckets + idx)^.Value := AValue;
-      Inc(FCount);
-      if st = Ord(bsEmpty) then
-        Inc(FUsed);
-      Exit(True);
+      Break;
     end
     else if st = Ord(bsTombstone) then
     begin
@@ -721,15 +724,32 @@ begin
     end;
     idx := (idx + 1) and FMask;
     if idx = start then
-      raise EInvalidOperation.Create('THashMap.Add: map is full');
+    begin
+      if firstTomb <> SizeUInt(-1) then
+      begin
+        insertIdx := firstTomb;
+        insertState := Ord(bsTombstone);
+        Break;
+      end;
+      Rehash(FCapacity shl 1);
+      Result := Add(AKey, AValue);
+      Exit;
+    end;
   end;
+  (FBuckets + insertIdx)^.State := Ord(bsOccupied);
+  (FBuckets + insertIdx)^.Hash := h;
+  (FBuckets + insertIdx)^.Key := AKey;
+  (FBuckets + insertIdx)^.Value := AValue;
+  Inc(FCount);
+  if insertState = Ord(bsEmpty) then
+    Inc(FUsed);
+  Result := True;
 end;
 
 function THashMap.AddOrAssign(const AKey: K; const AValue: V): Boolean;
-var h: UInt32; idx, firstTomb: SizeUInt; start: SizeUInt; st: Byte;
+var h: UInt32; idx, firstTomb, insertIdx: SizeUInt; start: SizeUInt; st, insertState: Byte;
 begin
   if FCapacity = 0 then InitCapacity(4);
-  if FUsed >= FMaxLoad then Rehash(FCapacity shl 1);
   h := KeyHash(AKey);
   idx := h and FMask; start := idx; firstTomb := SizeUInt(-1);
   while True do
@@ -739,17 +759,21 @@ begin
     begin
       if firstTomb <> SizeUInt(-1) then
       begin
-        idx := firstTomb;
-        st := Ord(bsTombstone);
+        insertIdx := firstTomb;
+        insertState := Ord(bsTombstone);
+      end
+      else
+      begin
+        if FUsed >= FMaxLoad then
+        begin
+          Rehash(FCapacity shl 1);
+          Result := AddOrAssign(AKey, AValue);
+          Exit;
+        end;
+        insertIdx := idx;
+        insertState := Ord(bsEmpty);
       end;
-      (FBuckets + idx)^.State := Ord(bsOccupied);
-      (FBuckets + idx)^.Hash := h;
-      (FBuckets + idx)^.Key := AKey;
-      (FBuckets + idx)^.Value := AValue;
-      Inc(FCount);
-      if st = Ord(bsEmpty) then
-        Inc(FUsed);
-      Exit(True);
+      Break;
     end
     else if st = Ord(bsTombstone) then
     begin
@@ -759,16 +783,33 @@ begin
     begin
       if ((FBuckets + idx)^.Hash = h) and KeysEqual((FBuckets + idx)^.Key, AKey) then
       begin
-        // 覆盖旧值（先 Finalize 再赋值，避免泄漏）
-        Finalize((FBuckets + idx)^.Value);
+        // Managed assignment releases the old value and also handles self-alias.
         (FBuckets + idx)^.Value := AValue;
         Exit(False);
       end;
     end;
     idx := (idx + 1) and FMask;
     if idx = start then
-      raise EInvalidOperation.Create('THashMap.AddOrAssign: map is full');
-end;
+    begin
+      if firstTomb <> SizeUInt(-1) then
+      begin
+        insertIdx := firstTomb;
+        insertState := Ord(bsTombstone);
+        Break;
+      end;
+      Rehash(FCapacity shl 1);
+      Result := AddOrAssign(AKey, AValue);
+      Exit;
+    end;
+  end;
+  (FBuckets + insertIdx)^.State := Ord(bsOccupied);
+  (FBuckets + insertIdx)^.Hash := h;
+  (FBuckets + insertIdx)^.Key := AKey;
+  (FBuckets + insertIdx)^.Value := AValue;
+  Inc(FCount);
+  if insertState = Ord(bsEmpty) then
+    Inc(FUsed);
+  Result := True;
 end;
 
 function THashMap.Remove(const AKey: K): Boolean;

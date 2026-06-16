@@ -137,8 +137,12 @@ begin
   if PendingBytes = 0 then
     Exit(tsiorOk);
   Result := ARuntime.TryWrite(FBuf[FReadPos], PendingBytes, AWritten);
-  if (Result = tsiorOk) and (AWritten > 0) then
+  if Result = tsiorOk then
+  begin
+    if AWritten = 0 then
+      RaiseDrainFailure;
     Advance(AWritten);
+  end;
 end;
 
 procedure TH1OutboundBuffer.Reset;

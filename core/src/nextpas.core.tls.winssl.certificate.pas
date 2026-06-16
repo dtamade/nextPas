@@ -19,6 +19,9 @@ interface
 
 uses
   Windows, SysUtils, Classes,
+  nextpas.core.base.utils,
+  nextpas.core.fs,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api,
@@ -108,6 +111,8 @@ function CreateWinSSLCertificateFromContext(ACertContext: PCCERT_CONTEXT; AOwnsC
 implementation
 
 uses
+  nextpas.core.text.conv,
+  nextpas.core.text.strings,
   nextpas.core.time,
   nextpas.core.tls.asn1,
   nextpas.core.tls.x509,
@@ -144,7 +149,7 @@ begin
     AParser.LoadFromDER(LDER);
     Result := True;
   except
-    FreeAndNil(AParser);
+    nextpas.core.base.utils.FreeAndNil(AParser);
     Result := False;
   end;
 end;
@@ -318,7 +323,7 @@ end;
 
 function FormatHexError(const AValue: DWORD): string;
 begin
-  Result := '0x' + IntToHex(AValue, 8);
+  Result := '0x' + nextpas.core.text.conv.IntToHex(AValue, 8);
 end;
 
 function AlgorithmOIDToDisplayName(AOID: LPCSTR): string;
@@ -376,7 +381,7 @@ begin
   begin
     if i > 0 then
       Result := Result + ':';
-    Result := Result + IntToHex(p^, 2);
+    Result := Result + nextpas.core.text.conv.IntToHex(p^, 2);
     Inc(p);
   end;
 end;
@@ -428,7 +433,6 @@ begin
     try
       Result := LoadFromStream(FileStream);
     finally
-      FileStream.Free;
     end;
   except
     Result := False;
@@ -548,7 +552,6 @@ begin
     try
       Result := SaveToStream(FileStream);
     finally
-      FileStream.Free;
     end;
   except
     Result := False;
@@ -668,7 +671,6 @@ begin
       Result.KeyUsage := X509KeyUsageToBitfield(LParser.KeyUsage);
       Result.SubjectAltNames := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
     finally
-      LParser.Free;
     end;
   end
   else
@@ -722,7 +724,7 @@ begin
   begin
     if i < Integer(CertInfo^.SerialNumber.cbData) - 1 then
       Result := Result + ':';
-    Result := Result + IntToHex(PByte(CertInfo^.SerialNumber.pbData)[i], 2);
+    Result := Result + nextpas.core.text.conv.IntToHex(PByte(CertInfo^.SerialNumber.pbData)[i], 2);
   end;
 end;
 
@@ -1089,7 +1091,7 @@ var
 
   function MatchWildcard(const APattern, AHostname: string): Boolean;
   var
-    PatternParts, HostParts: TStringList;
+    PatternParts, HostParts: TStringArray;
     j: Integer;
   begin
     Result := False;
@@ -1104,21 +1106,14 @@ var
     // 通配符匹配 (*.example.com)
     if (Pos('*.', APattern) = 1) then
     begin
-      PatternParts := TStringList.Create;
-      HostParts := TStringList.Create;
       try
-        PatternParts.Delimiter := '.';
-        PatternParts.DelimitedText := APattern;
-
-        HostParts.Delimiter := '.';
-        HostParts.DelimitedText := AHostname;
 
         // 域名级数必须相同
-        if PatternParts.Count = HostParts.Count then
+        if Length(PatternParts) = Length(HostParts) then
         begin
           Result := True;
           // 从第二级开始比较（跳过通配符）
-          for j := 1 to PatternParts.Count - 1 do
+          for j := 1 to Length(PatternParts) - 1 do
           begin
             if not SameText(PatternParts[j], HostParts[j]) then
             begin
@@ -1128,8 +1123,6 @@ var
           end;
         end;
       finally
-        PatternParts.Free;
-        HostParts.Free;
       end;
     end;
   end;
@@ -1320,7 +1313,7 @@ begin
     Exit;
   end;
 
-  Result := Trunc(ExpiryDate - Now);
+  Result := Trunc(ExpiryDate - nextpas.core.time.DateTimeNow);
 end;
 
 function TWinSSLCertificate.GetSubjectCN: string;
@@ -1382,7 +1375,6 @@ begin
       end;
     end;
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1417,7 +1409,6 @@ begin
       Result := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
       Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -1478,7 +1469,7 @@ begin
           begin
             Addr4 := AltName^.IPAddress.pbData;
             if Addr4 <> nil then
-              AddToResult(Format('%d.%d.%d.%d', [Addr4[0], Addr4[1], Addr4[2], Addr4[3]]));
+              AddToResult(nextpas.core.text.conv.Format('%d.%d.%d.%d', [Addr4[0], Addr4[1], Addr4[2], Addr4[3]]));
           end
           else if AltName^.IPAddress.cbData = 16 then
           begin
@@ -1491,7 +1482,7 @@ begin
                 SegValue := (Word(Addr6[k * 2]) shl 8) or Word(Addr6[k * 2 + 1]);
                 if k > 0 then
                   IpStr := IpStr + ':';
-                IpStr := IpStr + IntToHex(SegValue, 1);
+                IpStr := IpStr + nextpas.core.text.conv.IntToHex(SegValue, 1);
               end;
               if IpStr <> '' then
                 AddToResult(IpStr);
@@ -1531,7 +1522,6 @@ begin
       Result := X509KeyUsageToStrings(LParser.KeyUsage);
       Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -1624,7 +1614,6 @@ begin
       Result := X509ExtKeyUsageToStrings(LParser.ExtKeyUsage);
       Exit;
     finally
-      LParser.Free;
     end;
   end;
 

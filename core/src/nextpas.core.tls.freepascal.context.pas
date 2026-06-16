@@ -12,7 +12,12 @@ unit nextpas.core.tls.freepascal.context;
 interface
 
 uses
-  SysUtils, Classes, Base64, DateUtils,
+  Base64, SysUtils, Classes,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
+  nextpas.core.io.intf,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.io.util,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.logging,
@@ -92,10 +97,12 @@ type
     FPrivateKeyData: TBytes;
     FCAFile: string;
     FCAPath: string;
-    FCRLMaterial: TStringList;
+    FCRLMaterial: TStringArray;
     FServerStapledOCSPResponse: TBytes;
 
     function ReadStreamToBytes(AStream: TStream): TBytes;
+    function ReadIStreamToBytes(const AStream: IStream; AMaxSize: Int64;
+      const AContext: string): TBytes;
     function TicketKey(const ATicket: TBytes): string;
     procedure RefreshConfiguredCipherSuites12;
     procedure RefreshConfiguredCipherSuites13;
@@ -193,7 +200,7 @@ type
     procedure ClearCRLMaterial;
     procedure AddCRLPEM(const APEM: string);
     procedure AddCRLFile(const AFileName: string);
-    function BuildCRLStore: TStringList;
+    function BuildCRLStore: TStringArray;
     procedure ClearServerStapledOCSPResponse;
     procedure SetServerStapledOCSPResponse(const AResponseDER: TBytes);
     procedure LoadServerStapledOCSPResponseFile(const AFileName: string);
@@ -219,6 +226,7 @@ type
 implementation
 
 uses
+  nextpas.core.text.strings,
   nextpas.core.tls.exceptions,
   nextpas.core.mem.secure,
   nextpas.core.tls.utils,
@@ -286,31 +294,28 @@ begin
   SetLength(FCertificateData, 0);
   SetLength(FPrivateKeyData, 0);
   SetLength(FServerStapledOCSPResponse, 0);
-  FCRLMaterial := TStringList.Create;
 end;
 
 destructor TFreePascalContext.Destroy;
 begin
   SecureZeroBytes(FPrivateKeyData);
   DoneCriticalSection(FResumptionLock);
-  FCRLMaterial.Free;
   inherited Destroy;
 end;
 
 function TFreePascalContext.ReadStreamToBytes(AStream: TStream): TBytes;
-var
-  LSize: Int64;
 begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
+  Result := ReadIStreamToBytes(WrapTStream(AStream, False), High(Int64), 'AStream');
+end;
 
-  LSize := AStream.Size - AStream.Position;
-  if LSize < 0 then
-    LSize := 0;
-
-  SetLength(Result, LSize);
-  if LSize > 0 then
-    AStream.ReadBuffer(Result[0], LSize);
+function TFreePascalContext.ReadIStreamToBytes(const AStream: IStream;
+  AMaxSize: Int64; const AContext: string): TBytes;
+begin
+  if AStream = nil then
+    RaiseInvalidParameter(AContext);
+  Result := IoReadAllLimited(AStream, AMaxSize);
 end;
 
 function TFreePascalContext.TicketKey(const ATicket: TBytes): string;
@@ -590,9 +595,9 @@ begin
   if AFileName = '' then
     RaiseInvalidParameter('AFileName');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      Format('Certificate file not found: %s', [AFileName]),
+      nextpas.core.text.conv.Format('Certificate file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TFreePascalContext.LoadCertificate',
       0,
@@ -610,19 +615,17 @@ begin
     FCertificateData := ReadStreamToBytes(LStream);
     FCertificateFile := AFileName;
   finally
-    LStream.Free;
   end;
 end;
 
 procedure TFreePascalContext.LoadCertificate(AStream: TStream);
+var
+  LTransport: IStream;
 begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
-  if AStream.Size - AStream.Position > MAX_CERTIFICATE_SIZE then
-    raise ESSLInvalidArgument.CreateFmt(
-      'Certificate stream exceeds maximum allowed size (%d > %d bytes)',
-      [AStream.Size - AStream.Position, MAX_CERTIFICATE_SIZE]);
-  FCertificateData := ReadStreamToBytes(AStream);
+  LTransport := WrapTStream(AStream, False);
+  FCertificateData := ReadIStreamToBytes(LTransport, MAX_CERTIFICATE_SIZE, 'AStream');
 end;
 
 procedure TFreePascalContext.LoadCertificate(ACert: ISSLCertificate);
@@ -640,9 +643,9 @@ begin
   if AFileName = '' then
     RaiseInvalidParameter('AFileName');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      Format('Private key file not found: %s', [AFileName]),
+      nextpas.core.text.conv.Format('Private key file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TFreePascalContext.LoadPrivateKey',
       0,
@@ -668,14 +671,13 @@ begin
 end;
 
 procedure TFreePascalContext.LoadPrivateKey(AStream: TStream; const APassword: string);
+var
+  LTransport: IStream;
 begin
   if AStream = nil then
     RaiseInvalidParameter('AStream');
-  if AStream.Size - AStream.Position > MAX_PRIVATE_KEY_SIZE then
-    raise ESSLInvalidArgument.CreateFmt(
-      'Private key stream exceeds maximum allowed size (%d > %d bytes)',
-      [AStream.Size - AStream.Position, MAX_PRIVATE_KEY_SIZE]);
-  FPrivateKeyData := ReadStreamToBytes(AStream);
+  LTransport := WrapTStream(AStream, False);
+  FPrivateKeyData := ReadIStreamToBytes(LTransport, MAX_PRIVATE_KEY_SIZE, 'AStream');
   if APassword <> '' then
     DecryptPrivateKeyData(APassword, 'TFreePascalContext.LoadPrivateKey(AStream)');
 end;
@@ -722,9 +724,9 @@ begin
   if AFileName = '' then
     RaiseInvalidParameter('AFileName');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      Format('CA file not found: %s', [AFileName]),
+      nextpas.core.text.conv.Format('CA file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TFreePascalContext.LoadCAFile',
       0,
@@ -742,9 +744,9 @@ end;
 
 procedure TFreePascalContext.LoadCAPath(const APath: string);
 begin
-  if not DirectoryExists(APath) then
+  if not nextpas.core.fs.IsDir(APath) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      Format('CA path not found: %s', [APath]),
+      nextpas.core.text.conv.Format('CA path not found: %s', [APath]),
       sslErrLoadFailed,
       'TFreePascalContext.LoadCAPath',
       0,
@@ -811,7 +813,7 @@ begin
   if Length(FPrivateKeyData) = 0 then
     Exit;
 
-  LPEMText := TEncoding.UTF8.GetString(FPrivateKeyData);
+  LPEMText := nextpas.core.text.conv.UTF8BytesToString(FPrivateKeyData);
   LReader := TPEMReader.Create;
   try
     LReader.LoadFromString(LPEMText);
@@ -833,7 +835,7 @@ begin
     else if LBlock.IsEncrypted and (LBlock.Headers <> nil) then
     begin
       LDEKInfo := '';
-      for I := 0 to LBlock.Headers.Count - 1 do
+      for I := 0 to LBlock.Length(Headers) - 1 do
       begin
         if Pos('DEK-Info:', LBlock.Headers[I]) = 1 then
         begin
@@ -869,7 +871,6 @@ begin
         'Private key does not appear to be encrypted, but a password was provided',
         sslErrLoadFailed, AMethodName, 0, sslFreePascal);
   finally
-    LReader.Free;
   end;
 end;
 
@@ -877,7 +878,7 @@ procedure TFreePascalContext.RejectUnsupportedCallbackAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    Format('%s is not published by the current FreePascal backend runtime. ' +
+    nextpas.core.text.conv.Format('%s is not published by the current FreePascal backend runtime. ' +
       'The FreePascal backend currently publishes verify callback wiring; password/info callback kinds remain unsupported.',
       [AFeature]),
     sslErrUnsupported,
@@ -1183,8 +1184,11 @@ begin
 end;
 
 function TFreePascalContext.CreateConnection(AStream: TStream): ISSLConnection;
+var
+  LTransport: IStream;
 begin
-  Result := TFreePascalConnection.Create(Self as ISSLContext, AStream);
+  LTransport := WrapTStream(AStream, False);
+  Result := TFreePascalConnection.Create(Self as ISSLContext, LTransport);
 end;
 
 function TFreePascalContext.IsValid: Boolean;
@@ -1286,32 +1290,27 @@ end;
 
 procedure TFreePascalContext.AddCRLFile(const AFileName: string);
 var
-  LCRLText: TStringList;
+  LCRLText: TStringArray;
 begin
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      Format('CRL file not found: %s', [AFileName]),
+      nextpas.core.text.conv.Format('CRL file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TFreePascalContext.AddCRLFile',
       0,
       sslFreePascal
     );
-
-  LCRLText := TStringList.Create;
   try
     LCRLText.LoadFromFile(AFileName);
     AddCRLPEM(LCRLText.Text);
   finally
-    LCRLText.Free;
   end;
 end;
 
-function TFreePascalContext.BuildCRLStore: TStringList;
+function TFreePascalContext.BuildCRLStore: TStringArray;
 begin
-  if (FCRLMaterial = nil) or (FCRLMaterial.Count = 0) then
+  if (FCRLMaterial = nil) or (Length(FCRLMaterial) = 0) then
     Exit(nil);
-
-  Result := TStringList.Create;
   Result.Assign(FCRLMaterial);
 end;
 
@@ -1336,9 +1335,9 @@ var
   LStream: TFileStream;
   LSize: Int64;
 begin
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      Format('Server stapled OCSP response file not found: %s', [AFileName]),
+      nextpas.core.text.conv.Format('Server stapled OCSP response file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TFreePascalContext.LoadServerStapledOCSPResponseFile',
       0,
@@ -1355,13 +1354,12 @@ begin
       );
     if LSize > MAX_OCSP_RESPONSE_SIZE then
       raise ESSLInvalidArgument.Create(
-        Format('OCSP response file too large (%d bytes, max %d)',
+        nextpas.core.text.conv.Format('OCSP response file too large (%d bytes, max %d)',
           [LSize, MAX_OCSP_RESPONSE_SIZE]),
         sslErrInvalidParam
       );
     SetServerStapledOCSPResponse(ReadStreamToBytes(LStream));
   finally
-    LStream.Free;
   end;
 end;
 

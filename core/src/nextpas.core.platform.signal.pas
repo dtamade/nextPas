@@ -41,14 +41,12 @@ implementation
 {$IFDEF NEXTPAS_LINUX}
 uses
   nextpas.core.platform.posix.base,
+  nextpas.core.platform.linux.base,
   nextpas.core.platform.linux.ffi;
 
 const
-  SA_RESTART  = $10000000;
-  SA_SIGINFO  = $00000004;
-  SIG_DFL     = Pointer(0);
-  SIG_BLOCK   = 0;
-  SIG_UNBLOCK = 1;
+  { signal.inc exposes SIG_DFL as an integer; sigaction.sa_handler needs a pointer. }
+  SIG_DFL_PTR = Pointer(0);
 
 type
   TLibcSigSet = record
@@ -110,7 +108,7 @@ var
   LAct: TLibcSigAction;
 begin
   FillChar(LAct, SizeOf(LAct), 0);
-  LAct.sa_handler := SIG_DFL;
+  LAct.sa_handler := SIG_DFL_PTR;
   LAct.sa_flags := 0;
   SigSetEmpty(LAct.sa_mask);
   if sigaction(ASignal, @LAct, nil) <> 0 then
@@ -149,9 +147,6 @@ uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.darwin.base,
   nextpas.core.platform.darwin.ffi;
-
-const
-  SA_RESTART = $0002;
 
 function platform_signal_set(ASignal: Int32;
   AHandler: TPlatformSignalHandler): Int32;
@@ -197,7 +192,7 @@ var
 begin
   FillChar(LSet, SizeOf(LSet), 0);
   LSet.Words[0] := UInt32(1) shl (ASignal - 1);
-  if sigprocmask(1{SIG_BLOCK}, @LSet, nil) <> 0 then
+  if sigprocmask(SIG_BLOCK, @LSet, nil) <> 0 then
     Result := platform_get_errno
   else
     Result := 0;
@@ -209,7 +204,7 @@ var
 begin
   FillChar(LSet, SizeOf(LSet), 0);
   LSet.Words[0] := UInt32(1) shl (ASignal - 1);
-  if sigprocmask(2{SIG_UNBLOCK}, @LSet, nil) <> 0 then
+  if sigprocmask(SIG_UNBLOCK, @LSet, nil) <> 0 then
     Result := platform_get_errno
   else
     Result := 0;
@@ -221,9 +216,6 @@ uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.freebsd.base,
   nextpas.core.platform.freebsd.ffi;
-
-const
-  SA_RESTART = $0002;
 
 function platform_signal_set(ASignal: Int32;
   AHandler: TPlatformSignalHandler): Int32;
@@ -272,7 +264,7 @@ begin
   LIdx := (ASignal - 1) div 32;
   LBit := (ASignal - 1) mod 32;
   LSet.Words[LIdx] := Int32(1 shl LBit);
-  if sigprocmask(1{SIG_BLOCK}, @LSet, nil) <> 0 then
+  if sigprocmask(SIG_BLOCK, @LSet, nil) <> 0 then
     Result := platform_get_errno
   else
     Result := 0;
@@ -287,7 +279,7 @@ begin
   LIdx := (ASignal - 1) div 32;
   LBit := (ASignal - 1) mod 32;
   LSet.Words[LIdx] := Int32(1 shl LBit);
-  if sigprocmask(2{SIG_UNBLOCK}, @LSet, nil) <> 0 then
+  if sigprocmask(SIG_UNBLOCK, @LSet, nil) <> 0 then
     Result := platform_get_errno
   else
     Result := 0;

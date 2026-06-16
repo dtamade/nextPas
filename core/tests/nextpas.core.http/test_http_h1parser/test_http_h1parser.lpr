@@ -31,6 +31,23 @@ begin
   until LN = 0;
 end;
 
+function ReadTextFile(const APath: string): string;
+var
+  F: file;
+  LSize: Int64;
+begin
+  Assign(F, APath);
+  Reset(F, 1);
+  try
+    LSize := FileSize(F);
+    SetLength(Result, Int32(LSize));
+    if LSize > 0 then
+      BlockRead(F, Result[1], Int32(LSize));
+  finally
+    Close(F);
+  end;
+end;
+
 procedure TestSimpleGet;
 var
   LP: IH1Parser;
@@ -518,6 +535,7 @@ procedure TestChunkedRequestInvalidChunkSize;
 var
   LP: IH1Parser;
   LReq: string;
+  LConsumed: SizeUInt;
 begin
   LP := NewH1RequestParser;
   LReq := 'POST /upload HTTP/1.1'#13#10 +
@@ -525,9 +543,11 @@ begin
           'Transfer-Encoding: chunked'#13#10#13#10 +
           'Z'#13#10'hello'#13#10 +
           '0'#13#10#13#10;
-  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
   Check(LP.HasError, 'invalid chunk size raises parser error');
   Check(not LP.IsComplete, 'invalid chunk size is not complete');
+  CheckEqual(SizeUInt(Pos('Z', LReq) - 1), LConsumed,
+    'invalid chunk size returns bytes consumed before error');
 end;
 
 procedure TestChunkedRequestMalformedChunkExtension;
@@ -817,6 +837,51 @@ begin
     'chunked then content-length mentions conflicting framing');
 end;
 
+procedure CheckMalformedFramingConsumesThroughHeaders(const AName,
+  AHeaders, ATail: string; const AExpectedKind: TH1ParserErrorKind);
+var
+  LP: IH1Parser;
+  LReqHead: string;
+  LReq: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReqHead := 'POST /upload HTTP/1.1'#13#10 +
+              'Host: localhost'#13#10 +
+              AHeaders +
+              #13#10;
+  LReq := LReqHead + ATail;
+
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+
+  Check(LP.HasError, AName + ': parser reports error');
+  Check(not LP.IsComplete, AName + ': parser is not complete');
+  Check(LP.ErrorKind = AExpectedKind, AName + ': error kind');
+  CheckEqual(SizeUInt(Length(LReqHead)), LConsumed,
+    AName + ': consumes only through offending headers');
+end;
+
+procedure TestAdapterFramingErrorConsumedOffsets;
+begin
+  CheckMalformedFramingConsumesThroughHeaders(
+    'unsupported transfer coding before chunked',
+    'Transfer-Encoding: gzip, chunked'#13#10,
+    '5'#13#10'hello'#13#10'0'#13#10#13#10 +
+    'GET /next HTTP/1.1'#13#10'Host: localhost'#13#10#13#10,
+    pekUnsupportedTransferCoding);
+  CheckMalformedFramingConsumesThroughHeaders(
+    'unsupported non-chunked transfer coding',
+    'Transfer-Encoding: gzip'#13#10,
+    'GET /next HTTP/1.1'#13#10'Host: localhost'#13#10#13#10,
+    pekUnsupportedTransferCoding);
+  CheckMalformedFramingConsumesThroughHeaders(
+    'chunked must be final transfer coding',
+    'Transfer-Encoding: chunked, gzip'#13#10,
+    '5'#13#10'hello'#13#10'0'#13#10#13#10 +
+    'GET /next HTTP/1.1'#13#10'Host: localhost'#13#10#13#10,
+    pekMalformed);
+end;
+
 procedure TestChunkedRequestUnsupportedTransferCodingBeforeChunked;
 var
   LP: IH1Parser;
@@ -836,6 +901,25 @@ begin
     'unsupported transfer coding before chunked is not complete');
   Check(LP.ErrorKind = pekUnsupportedTransferCoding,
     'unsupported transfer coding before chunked reports unsupported coding kind');
+end;
+
+procedure TestRequestUnsupportedNonChunkedTransferCoding;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: gzip'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'non-chunked request transfer coding reports parser error');
+  Check(not LP.IsComplete,
+    'non-chunked request transfer coding is not complete');
+  Check(LP.ErrorKind = pekUnsupportedTransferCoding,
+    'non-chunked request transfer coding reports unsupported coding kind');
 end;
 
 procedure TestChunkedRequestChunkedMustBeFinalTransferCoding;
@@ -936,6 +1020,12 @@ begin
     LP.Finish;
   Check(LP.HasError, 'invalid trailer field reports parser error');
   Check(not LP.IsComplete, 'invalid trailer field is not complete');
+  CheckEqual(Int64(0), LP.GetBodySize,
+    'invalid trailer field does not publish partial body size');
+  CheckEqual('', LP.GetBody,
+    'invalid trailer field does not publish partial body bytes');
+  Check(LP.NewBodyReader = nil,
+    'invalid trailer field does not publish partial body reader');
 end;
 
 procedure TestChunkedRequestTruncatedTrailerAtEof;
@@ -1954,6 +2044,41 @@ begin
   CheckEqual('hello', LP.GetBody, 'first pipelined request preserves body');
 end;
 
+procedure TestCompletedParserExecuteIsTerminalUntilReset;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LReq2: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length: 5'#13#10#13#10 +
+           'hello';
+  LReq2 := 'GET /after-complete HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10#13#10;
+
+  LConsumed := LP.Execute(PAnsiChar(LReq1), Length(LReq1));
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed,
+    'terminal-complete: initial execute consumes complete request');
+  Check(not LP.HasError, 'terminal-complete: initial request has no parser error');
+  Check(LP.IsComplete, 'terminal-complete: initial request completes');
+
+  LConsumed := LP.Execute(PAnsiChar(LReq2), Length(LReq2));
+
+  CheckEqual(SizeUInt(0), LConsumed,
+    'terminal-complete: follow-up execute consumes nothing until reset');
+  Check(not LP.HasError, 'terminal-complete: follow-up execute keeps no error');
+  Check(LP.IsComplete, 'terminal-complete: follow-up execute stays complete');
+  Check(LP.GetMethod = hmPost,
+    'terminal-complete: follow-up execute preserves first method');
+  CheckEqual('/upload', LP.GetUrl,
+    'terminal-complete: follow-up execute preserves first url');
+  CheckEqual('hello', LP.GetBody,
+    'terminal-complete: follow-up execute preserves first body');
+end;
+
 procedure TestRequestLineTruncatedAtEof;
 var
   LP: IH1Parser;
@@ -1993,6 +2118,96 @@ begin
   LP.Execute(PAnsiChar(LReq), Length(LReq));
   Check(not LP.IsComplete, 'should not be complete');
   Check(not LP.HasError, 'no error on partial');
+end;
+
+procedure TestNilZeroLengthInputIsNoop;
+var
+  LP: IH1Parser;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LConsumed := LP.Execute(nil, 0);
+  CheckEqual(SizeUInt(0), LConsumed, 'nil zero-length input consumes nothing');
+  Check(not LP.HasError, 'nil zero-length input is not an error');
+  Check(not LP.IsComplete, 'nil zero-length input does not complete');
+  Check(LP.ErrorKind = pekNone, 'nil zero-length input keeps no error kind');
+end;
+
+procedure TestNilPositiveLengthInputReportsMalformed;
+var
+  LP: IH1Parser;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LConsumed := LP.Execute(nil, 1);
+  CheckEqual(SizeUInt(0), LConsumed,
+    'nil positive-length input consumes nothing');
+  Check(LP.HasError, 'nil positive-length input reports parser error');
+  Check(not LP.IsComplete, 'nil positive-length input is not complete');
+  Check(LP.ErrorKind = pekMalformed,
+    'nil positive-length input reports malformed input');
+  Check(LP.ErrorMessage <> '',
+    'nil positive-length input reports a non-empty error message');
+end;
+
+procedure TestParserErrorStateIsTerminalAcrossExecuteAndFinish;
+var
+  LP: IH1Parser;
+  LReq: string;
+  LConsumed: SizeUInt;
+  LKind: TH1ParserErrorKind;
+  LMessage: string;
+  LBodySize: Int64;
+begin
+  LP := NewH1RequestParser;
+  LP.Execute(nil, 1);
+  Check(LP.HasError, 'terminal-error: parser reports initial error');
+  Check(not LP.IsComplete, 'terminal-error: parser is initially incomplete');
+
+  LKind := LP.ErrorKind;
+  LMessage := LP.ErrorMessage;
+  LBodySize := LP.GetBodySize;
+  Check(LMessage <> '', 'terminal-error: parser reports initial error message');
+
+  LReq := 'GET /after-error HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10#13#10;
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+
+  CheckEqual(Int64(0), Int64(LConsumed),
+    'terminal-error: follow-up execute consumes nothing');
+  Check(LP.HasError, 'terminal-error: follow-up execute keeps error');
+  Check(not LP.IsComplete, 'terminal-error: follow-up execute stays incomplete');
+  Check(LP.ErrorKind = LKind, 'terminal-error: execute keeps error kind');
+  CheckEqual(LMessage, LP.ErrorMessage,
+    'terminal-error: execute keeps error message');
+  CheckEqual(LBodySize, LP.GetBodySize,
+    'terminal-error: execute keeps body size');
+
+  LP.Finish;
+
+  Check(LP.HasError, 'terminal-error: finish keeps error');
+  Check(not LP.IsComplete, 'terminal-error: finish stays incomplete');
+  Check(LP.ErrorKind = LKind, 'terminal-error: finish keeps error kind');
+  CheckEqual(LMessage, LP.ErrorMessage,
+    'terminal-error: finish keeps error message');
+  CheckEqual(LBodySize, LP.GetBodySize,
+    'terminal-error: finish keeps body size');
+end;
+
+procedure TestParserFinishShortCircuitsExistingErrorSourceContract;
+var
+  LSource: string;
+  LFinishBlock: string;
+  LCallPos: SizeInt;
+begin
+  LSource := ReadTextFile('../../../src/nextpas.core.http.impl.h1.parser.pas');
+  LCallPos := Pos('procedure TH1Parser.Finish;', LSource);
+  Check(LCallPos > 0, 'finish source contract finds TH1Parser.Finish');
+  LFinishBlock := Copy(LSource, LCallPos, 512);
+  LCallPos := Pos('llhttp_finish(@FParser)', LFinishBlock);
+  Check(LCallPos > 0, 'finish source contract finds llhttp_finish call');
+  Check(Pos('FError', Copy(LFinishBlock, 1, LCallPos - 1)) > 0,
+    'finish source contract checks FError before llhttp_finish');
 end;
 
 procedure TestResetAndReparse;
@@ -2139,8 +2354,12 @@ begin
   T.Run('Chunked request missing chunk-data CRLF', @TestChunkedRequestMissingChunkDataCrLf);
   T.Run('Chunked request content-length conflict', @TestChunkedRequestContentLengthConflict);
   T.Run('Chunked request content-length conflict reverse order', @TestChunkedRequestContentLengthConflictReverseOrder);
+  T.Run('Adapter framing errors consume through headers',
+    @TestAdapterFramingErrorConsumedOffsets);
   T.Run('Chunked request unsupported transfer coding before chunked',
     @TestChunkedRequestUnsupportedTransferCodingBeforeChunked);
+  T.Run('Request unsupported non-chunked transfer coding',
+    @TestRequestUnsupportedNonChunkedTransferCoding);
   T.Run('Chunked request chunked must be final transfer coding',
     @TestChunkedRequestChunkedMustBeFinalTransferCoding);
   T.Run('Chunked request trailer does not pollute headers', @TestChunkedRequestTrailerDoesNotPolluteHeaders);
@@ -2202,9 +2421,18 @@ begin
   T.Run('Chunked pipelined next request does not pollute current request', @TestChunkedPipelinedNextRequestDoesNotPolluteCurrentRequest);
   T.Run('Upgrade request completes without parser error', @TestUpgradeRequestCompletesWithoutParserError);
   T.Run('Pipelined next request does not pollute current request', @TestPipelinedNextRequestDoesNotPolluteCurrentRequest);
+  T.Run('Completed parser execute is terminal until reset',
+    @TestCompletedParserExecuteIsTerminalUntilReset);
   T.Run('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF', @TestHeadersTruncatedAtEof);
   T.Run('Incomplete input', @TestIncompleteInput);
+  T.Run('Nil zero-length input is noop', @TestNilZeroLengthInputIsNoop);
+  T.Run('Nil positive-length input reports malformed',
+    @TestNilPositiveLengthInputReportsMalformed);
+  T.Run('Parser error state is terminal across execute and finish',
+    @TestParserErrorStateIsTerminalAcrossExecuteAndFinish);
+  T.Run('Parser finish short-circuits existing error source contract',
+    @TestParserFinishShortCircuitsExistingErrorSourceContract);
   T.Run('Reset and reparse', @TestResetAndReparse);
   T.Run('Request with query', @TestRequestWithQuery);
   T.Run('Multiple headers same name', @TestMultipleHeadersSameName);

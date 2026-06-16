@@ -3,11 +3,35 @@ program test_template;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.template;
 
 var
   T: TTestRunner;
+
+procedure ExpectParseError(const AProc: TProc; const AMessage: string);
+begin
+  try
+    AProc();
+    Fail(AMessage);
+  except
+    on E: EParseError do
+      ;
+  end;
+end;
+
+procedure ExpectArgumentError(const AProc: TProc; const AMessage: string);
+begin
+  try
+    AProc();
+    Fail(AMessage);
+  except
+    on E: EArgumentError do
+      ;
+  end;
+end;
 
 procedure Test_SimpleVar;
 var
@@ -100,6 +124,18 @@ begin
   CheckEqual('', TemplateRender('{{range .Items}}[{{.}}]{{end}}', LCtx));
 end;
 
+procedure Test_RangeRestoresDotScope;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('.', 'root');
+  LCtx.SetList('Rows', ['r1', 'r2']);
+  LCtx.SetList('Cells', ['c1']);
+  CheckEqual('root|[r1:(c1)/r1][r2:(c1)/r2]|root',
+    TemplateRender('{{.}}|{{range .Rows}}[{{.}}:{{range .Cells}}({{.}}){{end}}/{{.}}]{{end}}|{{.}}', LCtx));
+end;
+
 procedure Test_FilterUpper;
 var
   LCtx: TTemplateContext;
@@ -160,6 +196,30 @@ begin
   LCtx := TTemplateContext.Create;
   LCtx.SetVar('Name', '  hello  ');
   CheckEqual('HELLO', TemplateRender('{{.Name | trim | upper}}', LCtx));
+end;
+
+procedure Test_MalformedPipeRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Name', 'Alice');
+
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{.Name |}}', LCtx);
+    end,
+    'empty trailing pipe filter should raise parse error'
+  );
+
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{.Name || upper}}', LCtx);
+    end,
+    'empty middle pipe filter should raise parse error'
+  );
 end;
 
 procedure Test_UndefinedVar;
@@ -338,6 +398,19 @@ begin
   CheckEqual(Int64(0), Int64(Length(LList)), 'missing list empty');
 end;
 
+procedure Test_GetList_ReturnsSnapshot;
+var
+  LCtx: TTemplateContext;
+  LList: TStringArray;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetList('Items', ['a', 'b']);
+  LList := LCtx.GetList('Items');
+  LList[0] := 'z';
+  CheckEqual('ab', TemplateRender('{{range .Items}}{{.}}{{end}}', LCtx),
+    'GetList must not expose mutable context storage');
+end;
+
 procedure Test_SetInt_GetVar;
 var
   LCtx: TTemplateContext;
@@ -454,6 +527,20 @@ begin
   CheckEqual('World!', TemplateRender('{{.Name | exclaim}}', LCtx));
 end;
 
+procedure Test_RegisterFuncRejectsNil;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  ExpectArgumentError(
+    procedure
+    begin
+      LCtx.RegisterFunc('bad', nil);
+    end,
+    'nil template function should be rejected at registration'
+  );
+end;
+
 function ReverseFunc(const AValue: string): string;
 var
   LI, LLen: Integer;
@@ -474,6 +561,41 @@ begin
   CheckEqual('OLLEH', TemplateRender('{{.Name | reverse | upper}}', LCtx));
 end;
 
+var
+  GSkipSideEffectCount: Integer = 0;
+
+function CountSideEffectFunc(const AValue: string): string;
+begin
+  Inc(GSkipSideEffectCount);
+  Result := AValue;
+end;
+
+procedure Test_SkippedElseDoesNotCallFunc;
+var
+  LCtx: TTemplateContext;
+begin
+  GSkipSideEffectCount := 0;
+  LCtx := TTemplateContext.Create;
+  LCtx.SetBool('Show', True);
+  LCtx.SetVar('Name', 'hidden');
+  LCtx.RegisterFunc('countSideEffect', @CountSideEffectFunc);
+
+  CheckEqual('ok',
+    TemplateRender('{{if .Show}}ok{{else}}{{.Name | countSideEffect}}{{end}}', LCtx));
+  CheckEqual(Int64(0), Int64(GSkipSideEffectCount), 'skipped else must not call custom function');
+end;
+
+procedure Test_EmptyRangeDoesNotDefineTemplate;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetList('Items', []);
+
+  CheckEqual('',
+    TemplateRender('{{range .Items}}{{define "hidden"}}leaked{{end}}{{end}}{{template "hidden"}}', LCtx));
+end;
+
 procedure Test_VarAssign;
 var
   LCtx: TTemplateContext;
@@ -490,6 +612,85 @@ begin
   LCtx := TTemplateContext.Create;
   LCtx.SetVar('Name', 'alice');
   CheckEqual('ALICE', TemplateRender('{{$u := .Name | upper}}{{$u}}', LCtx));
+end;
+
+procedure Test_LocalAssignDoesNotEscapeBlocks;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetBool('Show', True);
+  LCtx.SetVar('Name', 'Alice');
+
+  CheckEqual('in=Alice;out=',
+    TemplateRender('{{if .Show}}{{$x := .Name}}in={{$x}}{{end}};out={{$x}}', LCtx),
+    'local assignment inside if must not escape block');
+
+  LCtx.SetList('Items', ['a', 'b']);
+  CheckEqual('[a][b];after=',
+    TemplateRender('{{range .Items}}{{$item := .}}[{{$item}}]{{end}};after={{$item}}', LCtx),
+    'local assignment inside range must not escape range');
+end;
+
+procedure Test_MalformedVarAssignRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Name', 'Alice');
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{$ := .Name}}', LCtx);
+    end,
+    'empty local name should raise parse error'
+  );
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{$x :=}}', LCtx);
+    end,
+    'empty local assignment expression should raise parse error'
+  );
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{$x = .Name}}', LCtx);
+    end,
+    'single equals local assignment should raise parse error'
+  );
+end;
+
+procedure Test_SkippedMalformedVarAssignRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetBool('Show', True);
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{if .Show}}ok{{else}}{{$x :=}}{{end}}', LCtx);
+    end,
+    'malformed local assignment in skipped branch should raise parse error'
+  );
+end;
+
+procedure Test_SkippedMalformedPipeRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetBool('Show', True);
+  LCtx.SetVar('Name', 'hidden');
+
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{if .Show}}ok{{else}}{{.Name |}}{{end}}', LCtx);
+    end,
+    'malformed pipe in skipped branch should raise parse error'
+  );
 end;
 
 procedure Test_CompareElse;
@@ -513,6 +714,22 @@ begin
     TemplateRender('{{define "greeting"}}Hello {{.Name}}{{end}}{{template "greeting"}}', LCtx));
 end;
 
+procedure Test_InlineDefineDoesNotMutateContext;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.Define('slot', 'old');
+
+  CheckEqual('new',
+    TemplateRender('{{define "slot"}}new{{end}}{{template "slot"}}', LCtx),
+    'inline define remains usable during render');
+  CheckEqual('old', LCtx.GetDefine('slot'),
+    'inline define must not overwrite caller context');
+  CheckEqual('old', TemplateRender('{{template "slot"}}', LCtx),
+    'later render sees caller-owned define');
+end;
+
 procedure Test_WithScope;
 var
   LCtx: TTemplateContext;
@@ -533,6 +750,298 @@ begin
     TemplateRender('before-{{template "nonexistent"}}after', LCtx));
 end;
 
+procedure Test_MalformedDefineNameRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{define}}bad{{end}}', LCtx);
+    end,
+    'define without quoted name should raise parse error'
+  );
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{define foo "bad"}}bad{{end}}', LCtx);
+    end,
+    'define with non-leading quoted name should raise parse error'
+  );
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{define ""}}bad{{end}}', LCtx);
+    end,
+    'define with empty name should raise parse error'
+  );
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{define "bad}}bad{{end}}', LCtx);
+    end,
+    'define with unterminated quoted name should raise parse error'
+  );
+end;
+
+procedure Test_MalformedTemplateNameRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.Define('greeting', 'Hello');
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{template}}', LCtx);
+    end,
+    'template without quoted name should raise parse error'
+  );
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{template "greeting" extra}}', LCtx);
+    end,
+    'template with trailing tokens should raise parse error'
+  );
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{template ""}}', LCtx);
+    end,
+    'template with empty name should raise parse error'
+  );
+end;
+
+procedure Test_SkippedMalformedTemplateNameRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetBool('Show', True);
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{if .Show}}ok{{else}}{{template}}{{end}}', LCtx);
+    end,
+    'malformed template in skipped branch should raise parse error'
+  );
+end;
+
+procedure Test_MalformedIfActionRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{if}}bad{{end}}', LCtx);
+    end,
+    'if without expression should raise parse error'
+  );
+end;
+
+procedure Test_SkippedMalformedIfActionRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetBool('Show', True);
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{if .Show}}ok{{else}}{{if}}bad{{end}}{{end}}', LCtx);
+    end,
+    'malformed if in skipped branch should raise parse error'
+  );
+end;
+
+procedure Test_MalformedIfCompareRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{if eq}}bad{{end}}', LCtx);
+    end,
+    'if comparison without operands should raise parse error'
+  );
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{if eq .Show}}bad{{end}}', LCtx);
+    end,
+    'if comparison without right operand should raise parse error'
+  );
+end;
+
+procedure Test_SkippedMalformedIfCompareRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetBool('Show', True);
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{if .Show}}ok{{else}}{{if eq}}bad{{end}}{{end}}', LCtx);
+    end,
+    'malformed if comparison in skipped branch should raise parse error'
+  );
+end;
+
+procedure Test_MalformedRangeActionRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{range}}bad{{end}}', LCtx);
+    end,
+    'range without expression should raise parse error'
+  );
+end;
+
+procedure Test_SkippedMalformedRangeActionRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetBool('Show', True);
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{if .Show}}ok{{else}}{{range}}bad{{end}}{{end}}', LCtx);
+    end,
+    'malformed range in skipped branch should raise parse error'
+  );
+end;
+
+procedure Test_MalformedWithActionRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{with}}bad{{end}}', LCtx);
+    end,
+    'with without expression should raise parse error'
+  );
+end;
+
+procedure Test_MalformedStopActionRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetBool('Show', True);
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{if .Show}}yes{{end extra}}', LCtx);
+    end,
+    'end with trailing expression should raise parse error'
+  );
+
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{if .Show}}yes{{else extra}}no{{end}}', LCtx);
+    end,
+    'else with trailing expression should raise parse error'
+  );
+end;
+
+procedure Test_SkippedMalformedStopActionRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetBool('Show', False);
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{if .Show}}yes{{else extra}}no{{end}}', LCtx);
+    end,
+    'skipped else with trailing expression should raise parse error'
+  );
+
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{if .Show}}yes{{end extra}}', LCtx);
+    end,
+    'skipped end with trailing expression should raise parse error'
+  );
+end;
+
+procedure Test_SkippedMalformedWithActionRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetBool('Show', True);
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{if .Show}}ok{{else}}{{with}}bad{{end}}{{end}}', LCtx);
+    end,
+    'malformed with in skipped branch should raise parse error'
+  );
+end;
+
+procedure Test_UnclosedIfRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetBool('Show', True);
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('{{if .Show}}yes', LCtx);
+    end,
+    'unclosed if block should raise parse error'
+  );
+end;
+
+procedure Test_UnexpectedEndRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('before{{end}}after', LCtx);
+    end,
+    'top-level end should raise parse error'
+  );
+end;
+
+procedure Test_UnclosedActionRaisesParseError;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Name', 'World');
+  ExpectParseError(
+    procedure
+    begin
+      TemplateRender('hello {{.Name', LCtx);
+    end,
+    'unclosed template action should raise parse error'
+  );
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.template');
   T.Run('SimpleVar', @Test_SimpleVar);
@@ -545,6 +1054,7 @@ begin
   T.Run('IfElseFalse', @Test_IfElseFalse);
   T.Run('RangeBasic', @Test_RangeBasic);
   T.Run('RangeEmpty', @Test_RangeEmpty);
+  T.Run('RangeRestoresDotScope', @Test_RangeRestoresDotScope);
   T.Run('FilterUpper', @Test_FilterUpper);
   T.Run('FilterLower', @Test_FilterLower);
   T.Run('FilterTrim', @Test_FilterTrim);
@@ -552,6 +1062,7 @@ begin
   T.Run('FilterDefault_HasValue', @Test_FilterDefault_HasValue);
   T.Run('FilterLen', @Test_FilterLen);
   T.Run('FilterChain', @Test_FilterChain);
+  T.Run('MalformedPipeRaisesParseError', @Test_MalformedPipeRaisesParseError);
   T.Run('UndefinedVar', @Test_UndefinedVar);
   T.Run('EscapedBraces', @Test_EscapedBraces);
   T.Run('EmptyTemplate', @Test_EmptyTemplate);
@@ -570,6 +1081,7 @@ begin
   T.Run('GetBool_Missing', @Test_GetBool_Missing);
   T.Run('GetList_Existing', @Test_GetList_Existing);
   T.Run('GetList_Missing', @Test_GetList_Missing);
+  T.Run('GetList_ReturnsSnapshot', @Test_GetList_ReturnsSnapshot);
   T.Run('SetInt_GetVar', @Test_SetInt_GetVar);
   { New feature tests }
   T.Run('NestedField', @Test_NestedField);
@@ -583,14 +1095,38 @@ begin
   T.Run('CompareGe_Greater', @Test_CompareGe_Greater);
   T.Run('CompareLe_Less', @Test_CompareLe_Less);
   T.Run('CustomFunc', @Test_CustomFunc);
+  T.Run('RegisterFuncRejectsNil', @Test_RegisterFuncRejectsNil);
   T.Run('CustomFunc_Chain', @Test_CustomFunc_Chain);
+  T.Run('SkippedElseDoesNotCallFunc', @Test_SkippedElseDoesNotCallFunc);
+  T.Run('EmptyRangeDoesNotDefineTemplate', @Test_EmptyRangeDoesNotDefineTemplate);
   T.Run('VarAssign', @Test_VarAssign);
   T.Run('VarAssign_WithFilter', @Test_VarAssign_WithFilter);
+  T.Run('LocalAssignDoesNotEscapeBlocks', @Test_LocalAssignDoesNotEscapeBlocks);
+  T.Run('MalformedVarAssignRaisesParseError', @Test_MalformedVarAssignRaisesParseError);
+  T.Run('SkippedMalformedVarAssignRaisesParseError', @Test_SkippedMalformedVarAssignRaisesParseError);
+  T.Run('SkippedMalformedPipeRaisesParseError', @Test_SkippedMalformedPipeRaisesParseError);
   T.Run('CompareElse', @Test_CompareElse);
   { Define/Template/With tests }
   T.Run('DefineAndTemplate', @Test_DefineAndTemplate);
+  T.Run('InlineDefineDoesNotMutateContext', @Test_InlineDefineDoesNotMutateContext);
   T.Run('WithScope', @Test_WithScope);
   T.Run('TemplateMissing', @Test_TemplateMissing);
+  T.Run('MalformedDefineNameRaisesParseError', @Test_MalformedDefineNameRaisesParseError);
+  T.Run('MalformedTemplateNameRaisesParseError', @Test_MalformedTemplateNameRaisesParseError);
+  T.Run('SkippedMalformedTemplateNameRaisesParseError', @Test_SkippedMalformedTemplateNameRaisesParseError);
+  T.Run('MalformedIfActionRaisesParseError', @Test_MalformedIfActionRaisesParseError);
+  T.Run('SkippedMalformedIfActionRaisesParseError', @Test_SkippedMalformedIfActionRaisesParseError);
+  T.Run('MalformedIfCompareRaisesParseError', @Test_MalformedIfCompareRaisesParseError);
+  T.Run('SkippedMalformedIfCompareRaisesParseError', @Test_SkippedMalformedIfCompareRaisesParseError);
+  T.Run('MalformedRangeActionRaisesParseError', @Test_MalformedRangeActionRaisesParseError);
+  T.Run('SkippedMalformedRangeActionRaisesParseError', @Test_SkippedMalformedRangeActionRaisesParseError);
+  T.Run('MalformedWithActionRaisesParseError', @Test_MalformedWithActionRaisesParseError);
+  T.Run('MalformedStopActionRaisesParseError', @Test_MalformedStopActionRaisesParseError);
+  T.Run('SkippedMalformedStopActionRaisesParseError', @Test_SkippedMalformedStopActionRaisesParseError);
+  T.Run('SkippedMalformedWithActionRaisesParseError', @Test_SkippedMalformedWithActionRaisesParseError);
+  T.Run('UnclosedIfRaisesParseError', @Test_UnclosedIfRaisesParseError);
+  T.Run('UnexpectedEndRaisesParseError', @Test_UnexpectedEndRaisesParseError);
+  T.Run('UnclosedActionRaisesParseError', @Test_UnclosedActionRaisesParseError);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

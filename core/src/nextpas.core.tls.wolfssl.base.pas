@@ -20,12 +20,9 @@ unit nextpas.core.tls.wolfssl.base;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base;
+uses nextpas.core.tls.base;
 
 const
-  { WolfSSL 库文件名 }
   {$IFDEF WINDOWS}
   WOLFSSL_LIB_NAME = 'wolfssl.dll';
   {$ENDIF}

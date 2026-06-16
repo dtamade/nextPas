@@ -33,7 +33,10 @@ unit nextpas.core.tls.debug.utils;
 interface
 
 uses
-  SysUtils, Classes, Math,
+  Math,
+  nextpas.core.text.base,
+  nextpas.core.text.strings,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions;
 
@@ -76,15 +79,27 @@ type
   {**
    * TSSLMemoryStream - 带位置跟踪和调试功能的内存流
    *
-   * 扩展 TMemoryStream，提供便捷的二进制读写方法和十六进制转储。
+   * 使用内部字节缓冲，提供便捷的二进制读写方法和十六进制转储。
    * 用于 SSL/TLS 消息的调试和解析。
    *}
-  TSSLMemoryStream = class(TMemoryStream)
+  TSSLMemoryStream = class
   private
     FName: string;
     FDebug: Boolean;
+    FData: TBytes;
+    FSize: Integer;
+    FPosition: Integer;
+    procedure EnsureReadable(ACount: Integer; const AContext: string);
+    procedure EnsureWritableCapacity(ACount: Integer);
+    function GetSize: Integer;
+    procedure SetSize(AValue: Integer);
+    function GetPosition: Integer;
+    procedure SetPosition(AValue: Integer);
   public
     constructor Create(const AName: string = ''; ADebug: Boolean = False);
+    function Read(var ABuffer; ACount: Integer): Integer;
+    function Write(const ABuffer; ACount: Integer): Integer;
+    procedure Clear;
 
     { 二进制读取 }
     function ReadByte: Byte;
@@ -107,6 +122,8 @@ type
 
     property Name: string read FName write FName;
     property Debug: Boolean read FDebug write FDebug;
+    property Size: Integer read GetSize write SetSize;
+    property Position: Integer read GetPosition write SetPosition;
   end;
 
   {**
@@ -116,7 +133,7 @@ type
    *}
   TSSLStringBuilder = class
   private
-    FBuffer: TStringList;
+    FBuffer: TStringArray;
     FIndentLevel: Integer;
     FIndentStr: string;
   public
@@ -425,53 +442,152 @@ end;
 
 constructor TSSLMemoryStream.Create(const AName: string; ADebug: Boolean);
 begin
-  inherited Create;
   FName := AName;
   FDebug := ADebug;
+  FData := nil;
+  FSize := 0;
+  FPosition := 0;
+end;
+
+procedure TSSLMemoryStream.EnsureReadable(ACount: Integer; const AContext: string);
+begin
+  if (ACount < 0) or (FPosition < 0) or (FPosition + ACount > FSize) then
+    raise ESSLResourceException.CreateWithContext(
+      Format('Failed to read %d bytes from stream', [ACount]),
+      sslErrInvalidData,
+      AContext
+    );
+end;
+
+procedure TSSLMemoryStream.EnsureWritableCapacity(ACount: Integer);
+var
+  LRequired: Integer;
+  LCapacity: Integer;
+begin
+  if ACount < 0 then
+    raise ESSLInvalidArgument.CreateWithContext(
+      Format('Write count %d must be >= 0', [ACount]),
+      sslErrInvalidParam,
+      'TSSLMemoryStream.EnsureWritableCapacity'
+    );
+
+  LRequired := FPosition + ACount;
+  if LRequired <= Length(FData) then
+    Exit;
+
+  LCapacity := Length(FData);
+  if LCapacity = 0 then
+    LCapacity := 16;
+  while LCapacity < LRequired do
+    LCapacity := LCapacity * 2;
+  SetLength(FData, LCapacity);
+end;
+
+function TSSLMemoryStream.GetSize: Integer;
+begin
+  Result := FSize;
+end;
+
+procedure TSSLMemoryStream.SetSize(AValue: Integer);
+begin
+  if AValue < 0 then
+    raise ESSLInvalidArgument.CreateWithContext(
+      Format('Size %d must be >= 0', [AValue]),
+      sslErrInvalidParam,
+      'TSSLMemoryStream.SetSize'
+    );
+
+  if AValue > Length(FData) then
+    SetLength(FData, AValue);
+  FSize := AValue;
+  if FPosition > FSize then
+    FPosition := FSize;
+end;
+
+function TSSLMemoryStream.GetPosition: Integer;
+begin
+  Result := FPosition;
+end;
+
+procedure TSSLMemoryStream.SetPosition(AValue: Integer);
+begin
+  if (AValue < 0) or (AValue > FSize) then
+    raise ESSLInvalidArgument.CreateWithContext(
+      Format('Position %d out of range [0..%d]', [AValue, FSize]),
+      sslErrInvalidParam,
+      'TSSLMemoryStream.SetPosition'
+    );
+  FPosition := AValue;
+end;
+
+function TSSLMemoryStream.Read(var ABuffer; ACount: Integer): Integer;
+begin
+  if ACount <= 0 then
+    Exit(0);
+  if FPosition >= FSize then
+    Exit(0);
+  Result := FSize - FPosition;
+  if Result > ACount then
+    Result := ACount;
+  Move(FData[FPosition], ABuffer, Result);
+  Inc(FPosition, Result);
+end;
+
+function TSSLMemoryStream.Write(const ABuffer; ACount: Integer): Integer;
+begin
+  if ACount <= 0 then
+    Exit(0);
+  EnsureWritableCapacity(ACount);
+  Move(ABuffer, FData[FPosition], ACount);
+  Inc(FPosition, ACount);
+  if FPosition > FSize then
+    FSize := FPosition;
+  Result := ACount;
+end;
+
+procedure TSSLMemoryStream.Clear;
+begin
+  FData := nil;
+  FSize := 0;
+  FPosition := 0;
 end;
 
 function TSSLMemoryStream.ReadByte: Byte;
 begin
-  if Read(Result, 1) <> 1 then
-    raise ESSLResourceException.CreateWithContext(
-      'Failed to read byte from stream',
-      sslErrInvalidData,
-      'TSSLMemoryStream.ReadByte'
-    );
+  EnsureReadable(1, 'TSSLMemoryStream.ReadByte');
+  Result := FData[FPosition];
+  Inc(FPosition);
 end;
 
 function TSSLMemoryStream.ReadWord: Word;
 begin
-  if Read(Result, 2) <> 2 then
-    raise ESSLResourceException.CreateWithContext(
-      'Failed to read word from stream',
-      sslErrInvalidData,
-      'TSSLMemoryStream.ReadWord'
-    );
+  EnsureReadable(2, 'TSSLMemoryStream.ReadWord');
+  Move(FData[FPosition], Result, SizeOf(Result));
+  Inc(FPosition, SizeOf(Result));
 end;
 
 function TSSLMemoryStream.ReadDWord: DWord;
 begin
-  if Read(Result, 4) <> 4 then
-    raise ESSLResourceException.CreateWithContext(
-      'Failed to read dword from stream',
-      sslErrInvalidData,
-      'TSSLMemoryStream.ReadDWord'
-    );
+  EnsureReadable(4, 'TSSLMemoryStream.ReadDWord');
+  Move(FData[FPosition], Result, SizeOf(Result));
+  Inc(FPosition, SizeOf(Result));
 end;
 
 function TSSLMemoryStream.ReadBytes(ACount: Integer): TBytes;
 begin
   Result := nil;
+  if ACount < 0 then
+    raise ESSLInvalidArgument.CreateWithContext(
+      Format('Read count %d must be >= 0', [ACount]),
+      sslErrInvalidParam,
+      'TSSLMemoryStream.ReadBytes'
+    );
   SetLength(Result, ACount);
   if ACount > 0 then
   begin
-    if Read(Result[0], ACount) <> ACount then
-      raise ESSLResourceException.CreateWithContext(
-        Format('Failed to read %d bytes from stream', [ACount]),
-        sslErrInvalidData,
-        'TSSLMemoryStream.ReadBytes'
-      );
+    EnsureReadable(ACount, 'TSSLMemoryStream.ReadBytes');
+    Move(FData[FPosition], Result[0], ACount);
+    Inc(FPosition, ACount);
   end;
 end;
 
@@ -480,22 +596,22 @@ var
   LBytes: TBytes;
 begin
   LBytes := ReadBytes(ALength);
-  Result := AnsiString(TEncoding.UTF8.GetString(LBytes));
+  Result := UTF8BytesToString(LBytes);
 end;
 
 procedure TSSLMemoryStream.WriteByte(AValue: Byte);
 begin
-  Write(AValue, 1);
+  Write(AValue, SizeOf(AValue));
 end;
 
 procedure TSSLMemoryStream.WriteWord(AValue: Word);
 begin
-  Write(AValue, 2);
+  Write(AValue, SizeOf(AValue));
 end;
 
 procedure TSSLMemoryStream.WriteDWord(AValue: DWord);
 begin
-  Write(AValue, 4);
+  Write(AValue, SizeOf(AValue));
 end;
 
 procedure TSSLMemoryStream.WriteBytes(const ABytes: TBytes);
@@ -508,13 +624,13 @@ procedure TSSLMemoryStream.WriteString(const AStr: string);
 var
   LBytes: TBytes;
 begin
-  LBytes := TEncoding.UTF8.GetBytes(UnicodeString(AStr));
+  LBytes := StringToUTF8Bytes(AStr);
   WriteBytes(LBytes);
 end;
 
 function TSSLMemoryStream.PeekByte: Byte;
 var
-  LOldPos: Int64;
+  LOldPos: Integer;
 begin
   LOldPos := Position;
   try
@@ -531,7 +647,7 @@ end;
 
 function TSSLMemoryStream.GetHexDump: string;
 var
-  LOldPos: Int64;
+  LOldPos: Integer;
   LBytes: TBytes;
 begin
   LOldPos := Position;
@@ -551,23 +667,23 @@ end;
 constructor TSSLStringBuilder.Create;
 begin
   inherited;
-  FBuffer := TStringList.Create;
+  FBuffer := nil;
   FIndentLevel := 0;
   FIndentStr := '  ';
 end;
 
 destructor TSSLStringBuilder.Destroy;
 begin
-  FBuffer.Free;
+
   inherited;
 end;
 
 procedure TSSLStringBuilder.Append(const AStr: string);
 begin
-  if FBuffer.Count = 0 then
+  if Length(FBuffer) = 0 then
     FBuffer.Add('');
 
-  FBuffer[FBuffer.Count - 1] := FBuffer[FBuffer.Count - 1] + AStr;
+  FBuffer[Length(FBuffer) - 1] := FBuffer[Length(FBuffer) - 1] + AStr;
 end;
 
 procedure TSSLStringBuilder.AppendLine(const AStr: string);
@@ -605,13 +721,13 @@ end;
 
 procedure TSSLStringBuilder.Clear;
 begin
-  FBuffer.Clear;
+  FBuffer := nil;
   FIndentLevel := 0;
 end;
 
 function TSSLStringBuilder.ToString: string;
 begin
-  Result := FBuffer.Text;
+  Result := StringsJoin(FBuffer, sLineBreak);
 end;
 
 { TSSLBitSet }

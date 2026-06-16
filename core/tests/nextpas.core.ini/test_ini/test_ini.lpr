@@ -6,11 +6,112 @@ uses
   SysUtils,
   nextpas.core.text.conv,
   nextpas.core.errors,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.ini,
   nextpas.core.testing;
 
 var
   T: TTestRunner;
+
+type
+  TFailingReallocateAllocator = class(TInterfacedObject, IAllocator)
+  private
+    FFailOnReallocateCall: SizeUInt;
+    FReallocateCalls: SizeUInt;
+  public
+    constructor Create(const AFailOnReallocateCall: SizeUInt);
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
+    function GetMem(aSize: SizeUInt): Pointer;
+    function AllocMem(aSize: SizeUInt): Pointer;
+    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+    procedure FreeMem(aDst: Pointer);
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(aPtr: Pointer);
+    function Traits: TAllocatorTraits;
+  end;
+
+constructor TFailingReallocateAllocator.Create(
+  const AFailOnReallocateCall: SizeUInt);
+begin
+  inherited Create;
+  FFailOnReallocateCall := AFailOnReallocateCall;
+  FReallocateCalls := 0;
+end;
+
+function TFailingReallocateAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TFailingReallocateAllocator.Reallocate(const APtr: Pointer;
+  const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TFailingReallocateAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
+end;
+
+function TFailingReallocateAllocator.GetMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Result := System.GetMem(aSize);
+end;
+
+function TFailingReallocateAllocator.AllocMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Result := System.AllocMem(aSize);
+end;
+
+function TFailingReallocateAllocator.ReallocMem(aDst: Pointer;
+  aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+  begin
+    FreeMem(aDst);
+    Exit(nil);
+  end;
+  if aDst = nil then
+    Exit(GetMem(aSize));
+  Inc(FReallocateCalls);
+  if (FFailOnReallocateCall > 0) and
+    (FReallocateCalls = FFailOnReallocateCall) then
+    Exit(nil);
+  Result := System.ReallocMem(aDst, aSize);
+end;
+
+procedure TFailingReallocateAllocator.FreeMem(aDst: Pointer);
+begin
+  if aDst <> nil then
+    System.FreeMem(aDst);
+end;
+
+function TFailingReallocateAllocator.AllocAligned(aSize,
+  aAlignment: SizeUInt): Pointer;
+begin
+  Result := GetMem(aSize);
+end;
+
+procedure TFailingReallocateAllocator.FreeAligned(aPtr: Pointer);
+begin
+  FreeMem(aPtr);
+end;
+
+function TFailingReallocateAllocator.Traits: TAllocatorTraits;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.HasMemSize := False;
+  Result.SupportsAligned := False;
+end;
 
 { === Basic Read/Write Tests === }
 
@@ -582,6 +683,53 @@ begin
   DeleteFile(LPath);
 end;
 
+procedure TestCreateNilAllocatorUsesDefault;
+var
+  Ini: TIniFile;
+begin
+  Ini := TIniFile.Create(nil);
+  try
+    Check(Ini.Allocator <> nil, 'nil allocator falls back to default');
+    Ini.LoadFromString('[app]' + #10 + 'name=nextpas');
+    CheckEqual('nextpas', Ini.ReadString('app', 'name', ''),
+      'load with default allocator works');
+  finally
+    Ini.Free;
+  end;
+end;
+
+procedure TestLoadFromStringReallocateFailureRaises;
+var
+  Ini: TIniFile;
+  LRaised: Boolean;
+  LAllocatorObj: TFailingReallocateAllocator;
+  LAllocator: IAllocator;
+begin
+  LAllocatorObj := TFailingReallocateAllocator.Create(1);
+  LAllocator := LAllocatorObj as IAllocator;
+  Ini := TIniFile.Create(LAllocator);
+  try
+    LRaised := False;
+    try
+      Ini.LoadFromString('[s1]' + #10 + 'k=v' + #10 +
+        '[s2]' + #10 + 'k=v' + #10 +
+        '[s3]' + #10 + 'k=v' + #10 +
+        '[s4]' + #10 + 'k=v' + #10 +
+        '[s5]' + #10 + 'k=v' + #10 +
+        '[s6]' + #10 + 'k=v' + #10 +
+        '[s7]' + #10 + 'k=v' + #10 +
+        '[s8]' + #10 + 'k=v' + #10 +
+        '[s9]' + #10 + 'k=v');
+    except
+      on E: EResourceExhaustedError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'section reallocate failure raises resource exhausted');
+  finally
+    Ini.Free;
+  end;
+end;
+
 { === Main === }
 
 begin
@@ -616,5 +764,9 @@ begin
   T.Run('Delete non-existent', @TestDeleteNonExistent);
   T.Run('SaveToFile + LoadFromFile roundtrip', @TestSaveAndLoadFromFile);
   T.Run('SaveToFile format', @TestSaveToFileFormat);
+  T.Run('Allocator nil falls back to default',
+    @TestCreateNilAllocatorUsesDefault);
+  T.Run('LoadFromString reallocate failure raises',
+    @TestLoadFromStringReallocateFailureRaises);
   T.Summary;
 end.

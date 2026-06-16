@@ -126,6 +126,25 @@ begin
   finally LBuf.Free; end;
 end;
 
+procedure TestTableEmptyRowsClearState;
+var LT: ITable; LBuf: TBuffer; LState: TTableState;
+begin
+  LT := TTable.New([TTableColumn.Make('X', LengthConstraint(5))])
+    .WithRows([]);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 4));
+  LState := TTableState.Empty;
+  LState.Offset := 3;
+  LState.Selected := 2;
+  LState.HasSelection := True;
+  try
+    LT.RenderStateful(TRect.Make(0, 0, 10, 4), LBuf, LState);
+    CheckEqual(Int64(0), Int64(LState.Offset),
+      'empty table rows reset stale offset');
+    Check(not LState.HasSelection,
+      'empty table rows clear stale selection');
+  finally LBuf.Free; end;
+end;
+
 procedure TestTableColumnAlignment;
 var LColumn: TTableColumn; LAlign: TContentAlign;
 begin
@@ -169,6 +188,7 @@ begin
   T.Run('canvas draw dot', @TestCanvasDrawDot);
   T.Run('table with data', @TestTableWithData);
   T.Run('table selection', @TestTableSelection);
+  T.Run('table empty rows clear state', @TestTableEmptyRowsClearState);
   T.Run('table column alignment', @TestTableColumnAlignment);
   T.Run('input render', @TestInputRender);
   T.Run('input cursor', @TestInputCursor);

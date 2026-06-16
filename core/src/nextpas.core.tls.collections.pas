@@ -20,7 +20,7 @@ unit nextpas.core.tls.collections;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 type
   {**

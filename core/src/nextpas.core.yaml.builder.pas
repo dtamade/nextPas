@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.text.view,
+  nextpas.core.errors,
   nextpas.core.yaml.types,
   nextpas.core.yaml.parser,
   nextpas.core.yaml.writer;
@@ -15,11 +16,22 @@ type
   private
     FDoc: TYamlDocument;
     FStack: array[0..31] of UInt32;
+    FMapPendingKey: array[0..31] of Boolean;
     FStackTop: Int32;
-    FOwnedStrings: array of string;
+    FOwnedStrings: PString;
     FOwnedCount: SizeUInt;
+    FOwnedCap: SizeUInt;
     function CurrentContainer: UInt32; inline;
+    function CurrentContainerKind: TYamlNodeKind; inline;
+    procedure EnsureContainerStackHasRoom;
+    procedure RequireOpenContainer(
+      const AKind: TYamlNodeKind;
+      const AMessage: string);
+    procedure RequireNoPendingMappingKey;
+    procedure RequireCanAppendValue;
+    procedure FinishAppendedValue(AContainerIdx: UInt32);
     procedure AppendToContainer(ANodeIdx: UInt32);
+    procedure PushContainerUnchecked(ANodeIdx: UInt32);
     function RetainString(const AValue: string): TStringView;
   public
     procedure Init;
@@ -45,16 +57,32 @@ procedure TYamlBuilder.Init;
 begin
   YamlDocInit(FDoc);
   FStackTop := -1;
-  SetLength(FOwnedStrings, 16);
+  FOwnedCap := 16;
+  FOwnedStrings := PString(FDoc.Allocator.Allocate(FOwnedCap * SizeOf(string)));
+  if FOwnedStrings = nil then
+  begin
+    FDoc.Done;
+    raise EOutOfMemoryError.Create('out of memory');
+  end;
+  FillChar(FOwnedStrings^, FOwnedCap * SizeOf(string), 0);
   FOwnedCount := 0;
 end;
 
 procedure TYamlBuilder.Done;
+var
+  LI: SizeUInt;
 begin
-  SetLength(FDoc.Nodes, 0);
-  SetLength(FDoc.Anchors, 0);
-  SetLength(FOwnedStrings, 0);
+  if FOwnedStrings <> nil then
+  begin
+    if FOwnedCount > 0 then
+      for LI := 0 to FOwnedCount - 1 do
+        FOwnedStrings[LI] := '';
+    FDoc.Allocator.Deallocate(Pointer(FOwnedStrings));
+    FOwnedStrings := nil;
+  end;
   FOwnedCount := 0;
+  FOwnedCap := 0;
+  FDoc.Done;
 end;
 
 function TYamlBuilder.CurrentContainer: UInt32;
@@ -63,6 +91,46 @@ begin
     Result := FStack[FStackTop]
   else
     Result := YAML_NODE_NONE;
+end;
+
+function TYamlBuilder.CurrentContainerKind: TYamlNodeKind;
+var
+  LContainer: UInt32;
+begin
+  LContainer := CurrentContainer;
+  if LContainer = YAML_NODE_NONE then
+    Result := ynkNull
+  else
+    Result := FDoc.Node(LContainer)^.Kind;
+end;
+
+procedure TYamlBuilder.RequireNoPendingMappingKey;
+begin
+  if (FStackTop >= 0) and FMapPendingKey[FStackTop] then
+    raise EInvalidOperationError.Create('YAML builder mapping key has no value');
+end;
+
+procedure TYamlBuilder.RequireCanAppendValue;
+begin
+  if CurrentContainer = YAML_NODE_NONE then
+  begin
+    if FDoc.NodeCount() > 0 then
+      raise EInvalidOperationError.Create('YAML builder root value is already set');
+    Exit;
+  end;
+  if CurrentContainerKind <> ynkMapping then
+    Exit;
+  if not FMapPendingKey[FStackTop] then
+    raise EInvalidOperationError.Create('YAML builder mapping value has no key');
+end;
+
+procedure TYamlBuilder.FinishAppendedValue(AContainerIdx: UInt32);
+begin
+  if AContainerIdx = YAML_NODE_NONE then
+    Exit;
+  Inc(FDoc.Node(AContainerIdx)^.Container.Count);
+  if FDoc.Node(AContainerIdx)^.Kind = ynkMapping then
+    FMapPendingKey[FStackTop] := False;
 end;
 
 procedure TYamlBuilder.AppendToContainer(ANodeIdx: UInt32);
@@ -74,186 +142,227 @@ begin
   LContainer := CurrentContainer;
   if LContainer = YAML_NODE_NONE then
   begin
-    FDoc.RootIdx := ANodeIdx;
+    FDoc.SetRoot(ANodeIdx);
     Exit;
   end;
-  LNode := @FDoc.Nodes[LContainer];
+  LNode := FDoc.Node(LContainer);
   if LNode^.Container.FirstChild = YAML_NODE_NONE then
     LNode^.Container.FirstChild := ANodeIdx
   else
   begin
     LCur := LNode^.Container.FirstChild;
-    while FDoc.Nodes[LCur].Next <> YAML_NODE_NONE do
-      LCur := FDoc.Nodes[LCur].Next;
-    FDoc.Nodes[LCur].Next := ANodeIdx;
+    while FDoc.Node(LCur)^.Next <> YAML_NODE_NONE do
+      LCur := FDoc.Node(LCur)^.Next;
+    FDoc.Node(LCur)^.Next := ANodeIdx;
   end;
+end;
+
+procedure TYamlBuilder.EnsureContainerStackHasRoom;
+begin
+  if FStackTop >= High(FStack) then
+    raise EInvalidOperationError.Create('YAML builder nesting too deep');
+end;
+
+procedure TYamlBuilder.RequireOpenContainer(
+  const AKind: TYamlNodeKind;
+  const AMessage: string);
+var
+  LContainer: UInt32;
+begin
+  LContainer := CurrentContainer;
+  if (LContainer = YAML_NODE_NONE) or
+     (FDoc.Node(LContainer)^.Kind <> AKind) then
+    raise EInvalidOperationError.Create(AMessage);
+end;
+
+procedure TYamlBuilder.PushContainerUnchecked(ANodeIdx: UInt32);
+begin
+  Inc(FStackTop);
+  FStack[FStackTop] := ANodeIdx;
+  FMapPendingKey[FStackTop] := False;
 end;
 
 function TYamlBuilder.RetainString(const AValue: string): TStringView;
 var
   LIndex: SizeUInt;
-  LCapacity: SizeUInt;
+  LOldCap: SizeUInt;
+  LNewPtr: Pointer;
 begin
   LIndex := FOwnedCount;
-  LCapacity := SizeUInt(Length(FOwnedStrings));
-  if LIndex >= LCapacity then
+  if LIndex >= FOwnedCap then
   begin
-    if LCapacity = 0 then
-      SetLength(FOwnedStrings, 16)
+    LOldCap := FOwnedCap;
+    if FOwnedCap = 0 then
+      FOwnedCap := 16
     else
-      SetLength(FOwnedStrings, LCapacity * 2);
+      FOwnedCap := FOwnedCap * 2;
+    LNewPtr := FDoc.Allocator.Reallocate(Pointer(FOwnedStrings),
+      FOwnedCap * SizeOf(string));
+    if LNewPtr = nil then
+      raise EOutOfMemoryError.Create('out of memory');
+    FOwnedStrings := PString(LNewPtr);
+    FillChar(FOwnedStrings[LOldCap], (FOwnedCap - LOldCap) * SizeOf(string), 0);
   end;
   FOwnedStrings[LIndex] := AValue;
   Inc(FOwnedCount);
   Result := TStringView.FromStr(FOwnedStrings[LIndex]);
 end;
 
-function AddBuilderNode(var ADoc: TYamlDocument): UInt32;
-begin
-  Result := ADoc.NodeCount;
-  if ADoc.NodeCount >= UInt32(Length(ADoc.Nodes)) then
-    SetLength(ADoc.Nodes, Length(ADoc.Nodes) * 2);
-  FillChar(ADoc.Nodes[Result], SizeOf(TYamlNode), 0);
-  ADoc.Nodes[Result].Next := YAML_NODE_NONE;
-  Inc(ADoc.NodeCount);
-end;
-
 procedure TYamlBuilder.PutNull;
 var LIdx, LCont: UInt32;
 begin
-  LIdx := AddBuilderNode(FDoc);
-  FDoc.Nodes[LIdx].Kind := ynkNull;
+  RequireCanAppendValue;
+  LIdx := FDoc.AddNode;
+  if LIdx = YAML_NODE_NONE then
+    raise EOutOfMemoryError.Create('out of memory');
+  FDoc.Node(LIdx)^.Kind := ynkNull;
   AppendToContainer(LIdx);
   LCont := CurrentContainer;
-  if LCont <> YAML_NODE_NONE then
-    Inc(FDoc.Nodes[LCont].Container.Count);
+  FinishAppendedValue(LCont);
 end;
 
 procedure TYamlBuilder.PutBool(const AValue: Boolean);
 var LIdx, LCont: UInt32;
 begin
-  LIdx := AddBuilderNode(FDoc);
-  FDoc.Nodes[LIdx].Kind := ynkBool;
-  FDoc.Nodes[LIdx].BoolVal := AValue;
+  RequireCanAppendValue;
+  LIdx := FDoc.AddNode;
+  if LIdx = YAML_NODE_NONE then
+    raise EOutOfMemoryError.Create('out of memory');
+  FDoc.Node(LIdx)^.Kind := ynkBool;
+  FDoc.Node(LIdx)^.BoolVal := AValue;
   AppendToContainer(LIdx);
   LCont := CurrentContainer;
-  if LCont <> YAML_NODE_NONE then
-    Inc(FDoc.Nodes[LCont].Container.Count);
+  FinishAppendedValue(LCont);
 end;
 
 procedure TYamlBuilder.PutInt(const AValue: Int64);
 var LIdx, LCont: UInt32;
 begin
-  LIdx := AddBuilderNode(FDoc);
-  FDoc.Nodes[LIdx].Kind := ynkInt;
-  FDoc.Nodes[LIdx].IntVal := AValue;
+  RequireCanAppendValue;
+  LIdx := FDoc.AddNode;
+  if LIdx = YAML_NODE_NONE then
+    raise EOutOfMemoryError.Create('out of memory');
+  FDoc.Node(LIdx)^.Kind := ynkInt;
+  FDoc.Node(LIdx)^.IntVal := AValue;
   AppendToContainer(LIdx);
   LCont := CurrentContainer;
-  if LCont <> YAML_NODE_NONE then
-    Inc(FDoc.Nodes[LCont].Container.Count);
+  FinishAppendedValue(LCont);
 end;
 
 procedure TYamlBuilder.PutFloat(const AValue: Double);
 var LIdx, LCont: UInt32;
 begin
-  LIdx := AddBuilderNode(FDoc);
-  FDoc.Nodes[LIdx].Kind := ynkFloat;
-  FDoc.Nodes[LIdx].RealVal := AValue;
+  RequireCanAppendValue;
+  LIdx := FDoc.AddNode;
+  if LIdx = YAML_NODE_NONE then
+    raise EOutOfMemoryError.Create('out of memory');
+  FDoc.Node(LIdx)^.Kind := ynkFloat;
+  FDoc.Node(LIdx)^.RealVal := AValue;
   AppendToContainer(LIdx);
   LCont := CurrentContainer;
-  if LCont <> YAML_NODE_NONE then
-    Inc(FDoc.Nodes[LCont].Container.Count);
+  FinishAppendedValue(LCont);
 end;
 
 procedure TYamlBuilder.PutStr(const AValue: string);
 var LIdx, LCont: UInt32;
 begin
-  LIdx := AddBuilderNode(FDoc);
-  FDoc.Nodes[LIdx].Kind := ynkString;
-  FDoc.Nodes[LIdx].Str := RetainString(AValue);
+  RequireCanAppendValue;
+  LIdx := FDoc.AddNode;
+  if LIdx = YAML_NODE_NONE then
+    raise EOutOfMemoryError.Create('out of memory');
+  FDoc.Node(LIdx)^.Kind := ynkString;
+  FDoc.Node(LIdx)^.Str := RetainString(AValue);
   AppendToContainer(LIdx);
   LCont := CurrentContainer;
-  if LCont <> YAML_NODE_NONE then
-    Inc(FDoc.Nodes[LCont].Container.Count);
+  FinishAppendedValue(LCont);
 end;
 
 procedure TYamlBuilder.PutStrView(const AValue: TStringView);
 var LIdx, LCont: UInt32;
 begin
-  LIdx := AddBuilderNode(FDoc);
-  FDoc.Nodes[LIdx].Kind := ynkString;
-  FDoc.Nodes[LIdx].Str := RetainString(AValue.ToString);
+  RequireCanAppendValue;
+  LIdx := FDoc.AddNode;
+  if LIdx = YAML_NODE_NONE then
+    raise EOutOfMemoryError.Create('out of memory');
+  FDoc.Node(LIdx)^.Kind := ynkString;
+  FDoc.Node(LIdx)^.Str := RetainString(AValue.ToString);
   AppendToContainer(LIdx);
   LCont := CurrentContainer;
-  if LCont <> YAML_NODE_NONE then
-    Inc(FDoc.Nodes[LCont].Container.Count);
+  FinishAppendedValue(LCont);
 end;
 
 procedure TYamlBuilder.BeginSeq;
 var LIdx, LCont: UInt32;
 begin
+  RequireCanAppendValue;
+  EnsureContainerStackHasRoom;
   LCont := CurrentContainer;
-  LIdx := AddBuilderNode(FDoc);
-  FDoc.Nodes[LIdx].Kind := ynkSequence;
-  FDoc.Nodes[LIdx].Container.FirstChild := YAML_NODE_NONE;
-  FDoc.Nodes[LIdx].Container.Count := 0;
+  LIdx := FDoc.AddNode;
+  if LIdx = YAML_NODE_NONE then
+    raise EOutOfMemoryError.Create('out of memory');
+  FDoc.Node(LIdx)^.Kind := ynkSequence;
+  FDoc.Node(LIdx)^.Container.FirstChild := YAML_NODE_NONE;
+  FDoc.Node(LIdx)^.Container.Count := 0;
   AppendToContainer(LIdx);
-  if LCont <> YAML_NODE_NONE then
-    Inc(FDoc.Nodes[LCont].Container.Count);
-  if FStackTop < 31 then
-  begin
-    Inc(FStackTop);
-    FStack[FStackTop] := LIdx;
-  end;
+  FinishAppendedValue(LCont);
+  PushContainerUnchecked(LIdx);
 end;
 
 procedure TYamlBuilder.EndSeq;
 begin
-  if FStackTop >= 0 then
-    Dec(FStackTop);
+  RequireOpenContainer(ynkSequence, 'YAML builder sequence is not open');
+  RequireNoPendingMappingKey;
+  Dec(FStackTop);
 end;
 
 procedure TYamlBuilder.BeginMap;
 var LIdx, LCont: UInt32;
 begin
+  RequireCanAppendValue;
+  EnsureContainerStackHasRoom;
   LCont := CurrentContainer;
-  LIdx := AddBuilderNode(FDoc);
-  FDoc.Nodes[LIdx].Kind := ynkMapping;
-  FDoc.Nodes[LIdx].Container.FirstChild := YAML_NODE_NONE;
-  FDoc.Nodes[LIdx].Container.Count := 0;
+  LIdx := FDoc.AddNode;
+  if LIdx = YAML_NODE_NONE then
+    raise EOutOfMemoryError.Create('out of memory');
+  FDoc.Node(LIdx)^.Kind := ynkMapping;
+  FDoc.Node(LIdx)^.Container.FirstChild := YAML_NODE_NONE;
+  FDoc.Node(LIdx)^.Container.Count := 0;
   AppendToContainer(LIdx);
-  if LCont <> YAML_NODE_NONE then
-    Inc(FDoc.Nodes[LCont].Container.Count);
-  if FStackTop < 31 then
-  begin
-    Inc(FStackTop);
-    FStack[FStackTop] := LIdx;
-  end;
+  FinishAppendedValue(LCont);
+  PushContainerUnchecked(LIdx);
 end;
 
 procedure TYamlBuilder.EndMap;
 begin
-  if FStackTop >= 0 then
-    Dec(FStackTop);
+  RequireOpenContainer(ynkMapping, 'YAML builder mapping is not open');
+  RequireNoPendingMappingKey;
+  Dec(FStackTop);
 end;
 
 procedure TYamlBuilder.PutKey(const AKey: string);
 var LIdx: UInt32;
 begin
-  LIdx := AddBuilderNode(FDoc);
-  FDoc.Nodes[LIdx].Kind := ynkString;
-  FDoc.Nodes[LIdx].Str := RetainString(AKey);
+  RequireOpenContainer(ynkMapping, 'YAML builder mapping is not open');
+  RequireNoPendingMappingKey;
+  LIdx := FDoc.AddNode;
+  if LIdx = YAML_NODE_NONE then
+    raise EOutOfMemoryError.Create('out of memory');
+  FDoc.Node(LIdx)^.Kind := ynkString;
+  FDoc.Node(LIdx)^.Str := RetainString(AKey);
   AppendToContainer(LIdx);
+  FMapPendingKey[FStackTop] := True;
 end;
 
 function TYamlBuilder.Stringify: string;
 begin
-  Result := YamlStringify(FDoc, FDoc.RootIdx);
+  RequireNoPendingMappingKey;
+  Result := YamlStringify(FDoc, FDoc.Root);
 end;
 
 function TYamlBuilder.StringifyPretty(const AIndent: Int32): string;
 begin
-  Result := YamlStringifyPretty(FDoc, FDoc.RootIdx, AIndent);
+  RequireNoPendingMappingKey;
+  Result := YamlStringifyPretty(FDoc, FDoc.Root, AIndent);
 end;
 
 end.

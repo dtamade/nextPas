@@ -30,11 +30,11 @@ unit nextpas.core.collections.forward_list;
 interface
 
 uses
-  nextpas.core.base.utils, typinfo,
+  nextpas.core.base.utils, nextpas.core.system.typinfo,
   nextpas.core.base,
   {$HINTS OFF}nextpas.core.math,{$HINTS ON}
   nextpas.core.mem.utils,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
   nextpas.core.collections.forward_list.intf,
@@ -87,6 +87,7 @@ type
   private
     function  CreateNode(const aData: T; aNext: PSingleNode): PSingleNode; inline;
     procedure DestroyNode(aNode: PSingleNode); inline;
+    procedure RefreshLastNode;
 
   { 迭代器回调 }
 { 参见迭代器最佳实践：docs/Iterator_BestPractices.md }
@@ -325,6 +326,19 @@ begin
   FNodeManager.DestroySingleNode(aNode);
 end;
 
+procedure TForwardList.RefreshLastNode;
+var
+  LCurrent: PSingleNode;
+begin
+  FLast := nil;
+  LCurrent := FHead;
+  while LCurrent <> nil do
+  begin
+    FLast := LCurrent;
+    LCurrent := PSingleNode(LCurrent^.Next);
+  end;
+end;
+
 { TForwardList<T> - 优化的迭代器回调 }
 
 function TForwardList.DoIterGetCurrent(aIter: PPtrIter): Pointer;
@@ -424,18 +438,7 @@ begin
   LCurrent := FHead;
   while LCurrent <> nil do
   begin
-    if FElementManager.IsManagedType then
-    begin
-      // 先对托管类型执行反初始化，避免直接清零导致泄漏
-      FElementManager.FinalizeManagedElements(@LCurrent^.Data, 1);
-      // 反初始化后将存储清零以保证一致性
-      FillChar(LCurrent^.Data, FElementSizeCache, 0);
-    end
-    else
-    begin
-      // 非托管类型直接清零
-      FillChar(LCurrent^.Data, FElementSizeCache, 0);
-    end;
+    GetElementManager.ZeroElements(@LCurrent^.Data, 1);
     LCurrent := PNode(LCurrent^.Next);
   end;
 end;
@@ -1269,23 +1272,27 @@ begin
   end;
   {$ENDIF}
 
-  // before_begin: erase head
+  // before_begin: erase [head, aLast)
   if (aPosition.PtrIter.Data = nil) and (not aPosition.PtrIter.Started) then
   begin
-    if FHead = nil then
-    begin
-      Result.Init(aPosition.PtrIter);
-      Result.PtrIter.Data := nil;
-      Exit;
-    end;
     LCurrentNode := FHead;
-    FHead := PSingleNode(LCurrentNode^.Next);
-    if FHead = nil then FLast := nil;
-    DestroyNode(LCurrentNode);
-    Dec(FCount);
+    LEraseCount := 0;
+    while (LCurrentNode <> nil) and
+      ((aLast.PtrIter.Data = nil) or (LCurrentNode <> PSingleNode(aLast.PtrIter.Data))) do
+    begin
+      LNextNode := PSingleNode(LCurrentNode^.GetNext);
+      DestroyNode(LCurrentNode);
+      Inc(LEraseCount);
+      LCurrentNode := LNextNode;
+    end;
+
+    FHead := LCurrentNode;
+    if FHead = nil then
+      FLast := nil;
+    Dec(FCount, LEraseCount);
 
     Result.Init(aPosition.PtrIter);
-    Result.PtrIter.Data := FHead; // iterator to element after erased head
+    Result.PtrIter.Data := LCurrentNode;
     Exit;
   end;
 
@@ -2194,10 +2201,6 @@ begin
 end;
 
 procedure TForwardList.Merge(var aOther: TForwardList; aCompare: TCompareFunc; aData: Pointer);
-var
-  LDummy: TSingleNode;
-  LCurrent: PSingleNode;
-  LOtherCurrent: PSingleNode;
 begin
   if aOther = Self then
     raise EInvalidOperation.Create('TForwardList.Merge: self-merge is not supported');
@@ -2207,68 +2210,8 @@ begin
   if aOther.FCount = 0 then
     Exit;
 
-  if FCount = 0 then
-  begin
-    FHead := aOther.FHead;
-    FCount := aOther.FCount;
-    FLast := aOther.FLast;
-    aOther.FHead := nil;
-    aOther.FLast := nil;
-    aOther.FCount := 0;
-    Exit;
-  end;
-
-  LDummy.Next := nil;
-  LCurrent := @LDummy;
-  LOtherCurrent := aOther.FHead;
-
-  while (FHead <> nil) and (LOtherCurrent <> nil) do
-  begin
-    if (aCompare <> nil) then
-    begin
-      if aCompare(FHead^.Data, LOtherCurrent^.Data, aData) <= 0 then
-      begin
-        LCurrent^.Next := FHead;
-        FHead := PNode(FHead^.Next);
-      end
-      else
-      begin
-        LCurrent^.Next := LOtherCurrent;
-        LOtherCurrent := PNode(LOtherCurrent^.Next);
-      end;
-    end
-    else
-    begin
-      if FInternalComparer(FHead^.Data, LOtherCurrent^.Data) <= 0 then
-      begin
-        LCurrent^.Next := FHead;
-        FHead := PNode(FHead^.Next);
-      end
-      else
-      begin
-        LCurrent^.Next := LOtherCurrent;
-        LOtherCurrent := PNode(LOtherCurrent^.Next);
-      end;
-    end;
-    LCurrent := PNode(LCurrent^.Next);
-  end;
-
-  if FHead <> nil then
-    LCurrent^.Next := FHead
-  else
-    LCurrent^.Next := LOtherCurrent;
-
-  // update tail pointer FLast after merging
-  while PNode(LCurrent^.Next) <> nil do
-    LCurrent := PNode(LCurrent^.Next);
-
-  FHead := PNode(LDummy.Next);
-  FLast := LCurrent;
-  FCount += aOther.FCount;
-
-  aOther.FHead := nil;
-  aOther.FLast := nil;
-  aOther.FCount := 0;
+  MergeCopy(aOther, aCompare, aData);
+  aOther.Clear;
   {$IFDEF DEBUG}
   if not DebugValidateTail then
     raise EInvariantViolation.Create('TForwardList.Merge(func): tail invariant broken (self)');
@@ -2276,10 +2219,6 @@ begin
 end;
 
 procedure TForwardList.Merge(var aOther: TForwardList; aCompare: TCompareMethod; aData: Pointer);
-var
-  LDummy: TNode;
-  LCurrent: PNode;
-  LOtherCurrent: PNode;
 begin
   if aOther = Self then
     raise EInvalidOperation.Create('TForwardList.Merge: self-merge is not supported');
@@ -2289,54 +2228,8 @@ begin
   if aOther.FCount = 0 then
     Exit;
 
-  if FCount = 0 then
-  begin
-    FHead := aOther.FHead;
-    FCount := aOther.FCount;
-    FLast := aOther.FLast;
-    aOther.FHead := nil;
-    aOther.FLast := nil;
-    aOther.FCount := 0;
-    Exit;
-  end;
-
-  LDummy.Next := nil;
-  LCurrent := @LDummy;
-  LOtherCurrent := aOther.FHead;
-
-  while (FHead <> nil) and (LOtherCurrent <> nil) do
-  begin
-    if aCompare(FHead^.Data, LOtherCurrent^.Data, aData) <= 0 then
-    begin
-      LCurrent^.Next := FHead;
-      FHead := PNode(FHead^.Next);
-    end
-    else
-    begin
-      LCurrent^.Next := LOtherCurrent;
-      LOtherCurrent := PNode(LOtherCurrent^.Next);
-    end;
-    LCurrent := PNode(LCurrent^.Next);
-  end;
-
-  // 连接剩余部分
-  if FHead <> nil then
-    LCurrent^.Next := FHead
-  else
-    LCurrent^.Next := LOtherCurrent;
-
-  // 更新尾指针
-  while PNode(LCurrent^.Next) <> nil do
-    LCurrent := PNode(LCurrent^.Next);
-
-  FHead := PNode(LDummy.Next);
-  FLast := LCurrent;
-  FCount += aOther.FCount;
-
-  // 清空源链表
-  aOther.FHead := nil;
-  aOther.FLast := nil;
-  aOther.FCount := 0;
+  MergeCopy(aOther, aCompare, aData);
+  aOther.Clear;
   {$IFDEF DEBUG}
   if not DebugValidateTail then
     raise EInvariantViolation.Create('TForwardList.Merge(method): tail invariant broken (self)');
@@ -2390,11 +2283,7 @@ end;
       // LTmp 现在是逆序，反转为最终顺序
       LTmp.DoReverse;
 
-      // 用 LTmp 替换 Self 内容
-      Clear;
-      // 偷 LTmp 的节点（同 allocator）
-      FHead := LTmp.FHead; FLast := LTmp.FLast; FCount := LTmp.FCount;
-      LTmp.FHead := nil; LTmp.FLast := nil; LTmp.FCount := 0;
+      Assign(LTmp);
     finally
       LTmp.Free;
     end;
@@ -2428,9 +2317,7 @@ end;
 
       LTmp.DoReverse;
 
-      Clear;
-      FHead := LTmp.FHead; FLast := LTmp.FLast; FCount := LTmp.FCount;
-      LTmp.FHead := nil; LTmp.FLast := nil; LTmp.FCount := 0;
+      Assign(LTmp);
     finally
       LTmp.Free;
     end;
@@ -2465,9 +2352,7 @@ end;
 
       LTmp.DoReverse;
 
-      Clear;
-      FHead := LTmp.FHead; FLast := LTmp.FLast; FCount := LTmp.FCount;
-      LTmp.FHead := nil; LTmp.FLast := nil; LTmp.FCount := 0;
+      Assign(LTmp);
     finally
       LTmp.Free;
     end;
@@ -2476,10 +2361,6 @@ end;
 
 {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 procedure TForwardList.Merge(var aOther: TForwardList; aCompare: TCompareRefFunc);
-var
-  LDummy: TNode;
-  LCurrent: PNode;
-  LOtherCurrent: PNode;
 begin
   if aOther = Self then
     raise EInvalidOperation.Create('TForwardList.Merge: self-merge is not supported');
@@ -2489,54 +2370,8 @@ begin
   if aOther.FCount = 0 then
     Exit;
 
-  if FCount = 0 then
-  begin
-    FHead := aOther.FHead;
-    FCount := aOther.FCount;
-    FLast := aOther.FLast;
-    aOther.FHead := nil;
-    aOther.FLast := nil;
-    aOther.FCount := 0;
-    Exit;
-  end;
-
-  LDummy.Next := nil;
-  LCurrent := @LDummy;
-  LOtherCurrent := aOther.FHead;
-
-  while (FHead <> nil) and (LOtherCurrent <> nil) do
-  begin
-    if aCompare(FHead^.Data, LOtherCurrent^.Data) <= 0 then
-    begin
-      LCurrent^.Next := FHead;
-      FHead := PNode(FHead^.Next);
-    end
-    else
-    begin
-      LCurrent^.Next := LOtherCurrent;
-      LOtherCurrent := PNode(LOtherCurrent^.Next);
-    end;
-    LCurrent := PNode(LCurrent^.Next);
-  end;
-
-  // 连接剩余部分
-  if FHead <> nil then
-    LCurrent^.Next := FHead
-  else
-    LCurrent^.Next := LOtherCurrent;
-
-  // 更新尾指针
-  while PNode(LCurrent^.Next) <> nil do
-    LCurrent := PNode(LCurrent^.Next);
-
-  FHead := PNode(LDummy.Next);
-  FLast := LCurrent;
-  FCount += aOther.FCount;
-
-  // 清空源链表
-  aOther.FHead := nil;
-  aOther.FLast := nil;
-  aOther.FCount := 0;
+  MergeCopy(aOther, aCompare);
+  aOther.Clear;
   {$IFDEF DEBUG}
   if not DebugValidateTail then
     raise EInvariantViolation.Create('TForwardList.Merge(ref): tail invariant broken (self)');
@@ -2546,7 +2381,7 @@ end;
 
 procedure TForwardList.Splice(aPosition: TIter; var aOther: TForwardList);
 var
-  LTail, LPosNode: PNode;
+  LPosNode, LCopyHead, LCopyTail, LNewNode, LOtherNode, LDestroyNode, LNextDestroy: PNode;
 begin
   // 归属与自拼接校验
   if aPosition.PtrIter.Owner <> Self then
@@ -2561,47 +2396,54 @@ begin
   if aOther.FCount = 0 then
     Exit;
 
-  // 预先找到 aOther 的尾部（只遍历一次）
-  LTail := aOther.FHead;
-  if LTail <> nil then
-  begin
-    while LTail^.Next <> nil do
-      LTail := PNode(LTail^.Next);
+  if (aPosition.PtrIter.Data = nil) and (aPosition.PtrIter.Started) then
+    raise EInvalidArgument.Create('TForwardList.Splice: Invalid iterator position (end)');
+
+  LCopyHead := nil;
+  LCopyTail := nil;
+  try
+    LOtherNode := aOther.FHead;
+    while LOtherNode <> nil do
+    begin
+      LNewNode := CreateNode(LOtherNode^.Data, nil);
+      if LCopyHead = nil then
+        LCopyHead := LNewNode
+      else
+        LCopyTail^.Next := LNewNode;
+      LCopyTail := LNewNode;
+      LOtherNode := PNode(LOtherNode^.Next);
+    end;
+  except
+    LDestroyNode := LCopyHead;
+    while LDestroyNode <> nil do
+    begin
+      LNextDestroy := PNode(LDestroyNode^.Next);
+      DestroyNode(LDestroyNode);
+      LDestroyNode := LNextDestroy;
+    end;
+    raise;
   end;
 
   if (aPosition.PtrIter.Data = nil) and (not aPosition.PtrIter.Started) then
   begin
     // before_begin: splice entire other to head
-    if FHead = nil then
-    begin
-      FHead := aOther.FHead;
-    end
-    else
-    begin
-      LTail^.Next := FHead;
-      FHead := aOther.FHead;
-    end;
-  end
-  else if (aPosition.PtrIter.Data = nil) and (aPosition.PtrIter.Started) then
-  begin
-    raise EInvalidArgument.Create('TForwardList.Splice: Invalid iterator position (end)');
+    LCopyTail^.Next := FHead;
+    FHead := LCopyHead;
   end
   else
   begin
     // 插入到指定位置之后
     LPosNode := PNode(aPosition.PtrIter.Data);
-    LTail^.Next := LPosNode^.Next;
-    LPosNode^.Next := aOther.FHead;
+    LCopyTail^.Next := LPosNode^.Next;
+    LPosNode^.Next := LCopyHead;
   end;
 
   FCount += aOther.FCount;
   // 若插到尾部或本就是空表，则更新 FLast
-  if (LTail^.Next = nil) then FLast := LTail;
+  if LCopyTail^.Next = nil then FLast := LCopyTail;
 
   // 清空源链表
-  aOther.FHead := nil;
-  aOther.FLast := nil;
-  aOther.FCount := 0;
+  aOther.Clear;
   {$IFDEF DEBUG}
   if not DebugValidateTail then
     raise EInvariantViolation.Create('TForwardList.Splice(all): tail invariant broken');
@@ -2610,7 +2452,7 @@ end;
 
 procedure TForwardList.Splice(aPosition: TIter; var aOther: TForwardList; aFirst: TIter);
 var
-  LBefore, LFirstNode, LPrev, LPosNode: PNode;
+  LBefore, LFirstNode, LNewNode, LPosNode: PNode;
 begin
   // 归属与自拼接校验
   if aPosition.PtrIter.Owner <> Self then
@@ -2622,6 +2464,8 @@ begin
     raise EInvalidOperation.Create('TForwardList.Splice: self-splice is not supported');
   if (TCollection(aFirst.PtrIter.Owner) <> aOther) and (aFirst.PtrIter.Data <> nil) then
     raise EInvalidArgument.Create('TForwardList.Splice: aFirst does not belong to source list');
+  if (aPosition.PtrIter.Data = nil) and (aPosition.PtrIter.Started) then
+    raise EInvalidArgument.Create('TForwardList.Splice(single): Invalid iterator position (end)');
 
   // 语义：移动 aFirst 之后的单个元素（splice_after 单个）
   if aOther.FCount = 0 then
@@ -2643,38 +2487,32 @@ begin
   if LFirstNode = nil then
     Exit; // aFirst 指向最后一个元素，无可移动元素
 
+  LNewNode := CreateNode(LFirstNode^.Data, nil);
+
   // 从 aOther 中移除 LFirstNode
   if aOther.FHead = LFirstNode then
     aOther.FHead := PNode(LFirstNode^.Next)
-  else
-  begin
-    LPrev := aOther.FHead;
-    while (LPrev <> nil) and (LPrev^.Next <> LFirstNode) do
-      LPrev := PNode(LPrev^.Next);
-    if LPrev <> nil then
-      LPrev^.Next := LFirstNode^.Next;
-  end;
+  else if LBefore <> nil then
+    LBefore^.Next := LFirstNode^.Next;
 
   Dec(aOther.FCount);
+  aOther.RefreshLastNode;
+  aOther.DestroyNode(LFirstNode);
 
   // 插入到当前链表 aPosition 之后
   if (aPosition.PtrIter.Data = nil) and (not aPosition.PtrIter.Started) then
   begin
     // before_begin: insert single node at head
-    LFirstNode^.Next := FHead;
-    FHead := LFirstNode;
+    LNewNode^.Next := FHead;
+    FHead := LNewNode;
     if FCount = 0 then FLast := FHead;
-  end
-  else if (aPosition.PtrIter.Data = nil) and (aPosition.PtrIter.Started) then
-  begin
-    raise EInvalidArgument.Create('TForwardList.Splice(single): Invalid iterator position (end)');
   end
   else
   begin
     LPosNode := PNode(aPosition.PtrIter.Data);
-    LFirstNode^.Next := LPosNode^.Next;
-    LPosNode^.Next := LFirstNode;
-    if LFirstNode^.Next = nil then FLast := LFirstNode;
+    LNewNode^.Next := LPosNode^.Next;
+    LPosNode^.Next := LNewNode;
+    if LNewNode^.Next = nil then FLast := LNewNode;
   end;
 
   Inc(FCount);
@@ -2686,8 +2524,22 @@ end;
 
 procedure TForwardList.Splice(aPosition: TIter; var aOther: TForwardList; aFirst, aLast: TIter);
 var
-  LPosNode, LMoveHead, LMoveTail, LPrev, LCur: PSingleNode;
+  LPosNode, LMoveHead, LMoveTail, LPrev, LCur, LAfterMove: PSingleNode;
+  LCopyHead, LCopyTail, LNewNode, LDestroyNode, LNextDestroy: PSingleNode;
   LMoveCount: SizeUInt;
+
+  procedure FreeCopiedRange;
+  begin
+    LDestroyNode := LCopyHead;
+    while LDestroyNode <> nil do
+    begin
+      LNextDestroy := PSingleNode(LDestroyNode^.Next);
+      DestroyNode(LDestroyNode);
+      LDestroyNode := LNextDestroy;
+    end;
+    LCopyHead := nil;
+    LCopyTail := nil;
+  end;
 begin
   // 归属与自拼接校验
   // 分配器一致性检查：不同分配器下禁止偷节点
@@ -2706,6 +2558,8 @@ begin
     raise EInvalidArgument.Create('TForwardList.Splice: aFirst does not belong to source list');
   if (aLast.PtrIter.Data <> nil) and (TCollection(aLast.PtrIter.Owner) <> aOther) then
     raise EInvalidArgument.Create('TForwardList.Splice: aLast does not belong to source list');
+  if (aPosition.PtrIter.Data = nil) and (aPosition.PtrIter.Started) then
+    raise EInvalidArgument.Create('TForwardList.Splice(range): Invalid iterator position (end)');
 
   // 计算区间头
   if aFirst.PtrIter.Data = nil then
@@ -2748,16 +2602,48 @@ begin
     if LMoveTail = nil then Exit; // 空范围（aFirst==aLast）
   end;
 
+  LAfterMove := PSingleNode(LMoveTail^.Next);
+  LCopyHead := nil;
+  LCopyTail := nil;
+  try
+    LCur := LMoveHead;
+    while LCur <> LAfterMove do
+    begin
+      LNewNode := CreateNode(LCur^.Data, nil);
+      if LCopyHead = nil then
+        LCopyHead := LNewNode
+      else
+        LCopyTail^.Next := LNewNode;
+      LCopyTail := LNewNode;
+      LCur := PSingleNode(LCur^.Next);
+    end;
+  except
+    FreeCopiedRange;
+    raise;
+  end;
+
   // 从源链表断开 [LMoveHead, LMoveTail]
   if aOther.FHead = LMoveHead then
-    aOther.FHead := PSingleNode(LMoveTail^.Next)
+    aOther.FHead := LAfterMove
   else
   begin
     LPrev := aOther.FHead;
     while (LPrev <> nil) and (LPrev^.Next <> LMoveHead) do
       LPrev := PSingleNode(LPrev^.Next);
-    if LPrev = nil then Exit;
-    LPrev^.Next := PSingleNode(LMoveTail^.Next);
+    if LPrev = nil then
+    begin
+      FreeCopiedRange;
+      raise EInvalidArgument.Create('TForwardList.Splice(range): aFirst is not reachable from source list');
+    end;
+    LPrev^.Next := LAfterMove;
+  end;
+
+  LDestroyNode := LMoveHead;
+  while LDestroyNode <> LAfterMove do
+  begin
+    LNextDestroy := PSingleNode(LDestroyNode^.Next);
+    aOther.DestroyNode(LDestroyNode);
+    LDestroyNode := LNextDestroy;
   end;
 
   // 插入到目标 aPosition 之后
@@ -2765,24 +2651,21 @@ begin
   if (aPosition.PtrIter.Data = nil) and (not aPosition.PtrIter.Started) then
   begin
     // before_begin: splice range at head
-    LMoveTail^.Next := FHead;
-    FHead := LMoveHead;
-    if FCount = 0 then FLast := LMoveTail;
-  end
-  else if (aPosition.PtrIter.Data = nil) and (aPosition.PtrIter.Started) then
-  begin
-    raise EInvalidArgument.Create('TForwardList.Splice(range): Invalid iterator position (end)');
+    LCopyTail^.Next := FHead;
+    FHead := LCopyHead;
+    if FCount = 0 then FLast := LCopyTail;
   end
   else
   begin
-    LMoveTail^.Next := LPosNode^.Next;
-    LPosNode^.Next := LMoveHead;
-    if LMoveTail^.Next = nil then FLast := LMoveTail;
+    LCopyTail^.Next := LPosNode^.Next;
+    LPosNode^.Next := LCopyHead;
+    if LCopyTail^.Next = nil then FLast := LCopyTail;
   end;
 
   // 更新计数
   Inc(FCount, LMoveCount);
   Dec(aOther.FCount, LMoveCount);
+  aOther.RefreshLastNode;
   {$IFDEF DEBUG}
   if not DebugValidateTail then
     raise EInvariantViolation.Create('TForwardList.Splice(range): tail invariant broken');

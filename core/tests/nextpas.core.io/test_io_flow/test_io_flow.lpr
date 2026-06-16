@@ -5,9 +5,11 @@ program test_io_flow;
 uses
   SysUtils, nextpas.core.fs,
   nextpas.core.testing,
+  nextpas.core.errors,
   nextpas.core.text.view,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
+  nextpas.core.io.buffer,
   nextpas.core.io.scanner,
   nextpas.core.io.linewriter,
   nextpas.core.io.collect,
@@ -16,6 +18,66 @@ uses
 
 var
   T: TTestRunner;
+
+type
+  TZeroProgressWriter = class(TInterfacedObject, IWriter)
+  private
+    FCalls: Int32;
+    FZeroOnCall: Int32;
+  public
+    constructor Create(const AZeroOnCall: Int32);
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    property Calls: Int32 read FCalls;
+  end;
+
+  TPartialForwardingWriter = class(TInterfacedObject, IWriter)
+  private
+    FInner: IWriter;
+    FMaxWrite: SizeUInt;
+    FCalls: Int32;
+  public
+    constructor Create(const AInner: IWriter; const AMaxWrite: SizeUInt);
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    property Calls: Int32 read FCalls;
+  end;
+
+constructor TZeroProgressWriter.Create(const AZeroOnCall: Int32);
+begin
+  inherited Create;
+  FCalls := 0;
+  FZeroOnCall := AZeroOnCall;
+end;
+
+function TZeroProgressWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Inc(FCalls);
+  if FCalls >= FZeroOnCall then
+    Exit(0);
+  Result := ACount;
+end;
+
+constructor TPartialForwardingWriter.Create(const AInner: IWriter;
+  const AMaxWrite: SizeUInt);
+begin
+  inherited Create;
+  FInner := AInner;
+  FMaxWrite := AMaxWrite;
+  FCalls := 0;
+end;
+
+function TPartialForwardingWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LCount: SizeUInt;
+begin
+  Inc(FCalls);
+  if (ACount = 0) or (FMaxWrite = 0) then
+    Exit(0);
+  if ACount < FMaxWrite then
+    LCount := ACount
+  else
+    LCount := FMaxWrite;
+  Result := FInner.Write(ABuf, LCount);
+end;
 
 { === LineWriter Tests === }
 
@@ -47,6 +109,87 @@ begin
   Check(LBuf.Size = 1, 'empty line = just newline');
 end;
 
+procedure TestLineWriterRetriesPartialWriter;
+var
+  LBuf: IStream;
+  LPartialObj: TPartialForwardingWriter;
+  LPartial: IWriter;
+  LW: ILineWriter;
+  LData: TBytes;
+begin
+  LBuf := CreateBytesStream;
+  LPartialObj := TPartialForwardingWriter.Create(LBuf as IWriter, 2);
+  LPartial := LPartialObj;
+  LW := CreateLineWriter(LPartial);
+
+  LW.WriteLine('hello');
+
+  CheckEqual(Int64(4), Int64(LPartialObj.Calls),
+    'LineWriter retries body writes and writes newline');
+  CheckEqual(Int64(6), LBuf.Size, 'LineWriter wrote full line');
+  LBuf.Seek(0, soBeginning);
+  SetLength(LData, LBuf.Size);
+  (LBuf as IReader).Read(LData[0], Length(LData));
+  Check((LData[0] = Ord('h')) and (LData[4] = Ord('o')) and
+    (LData[5] = 10), 'LineWriter content correct');
+end;
+
+procedure TestLineWriterZeroProgressRaises;
+var
+  LZeroObj: TZeroProgressWriter;
+  LZero: IWriter;
+  LW: ILineWriter;
+  LRaised: Boolean;
+begin
+  LZeroObj := TZeroProgressWriter.Create(1);
+  LZero := LZeroObj;
+  LW := CreateLineWriter(LZero);
+
+  LRaised := False;
+  try
+    LW.WriteLine('abc');
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'LineWriter zero-progress write raises EIOError');
+  CheckEqual(Int64(1), Int64(LZeroObj.Calls), 'LineWriter attempted one write');
+end;
+
+procedure TestLineWriterFlushForwardsInnerFlusher;
+var
+  LBuf: IStream;
+  LBuffered: IWriter;
+  LW: ILineWriter;
+begin
+  LBuf := CreateBytesStream;
+  LBuffered := CreateBufferedWriter(LBuf as IWriter, 32);
+  LW := CreateLineWriter(LBuffered);
+
+  LW.WriteLine('hello');
+  CheckEqual(Int64(0), LBuf.Size, 'buffered inner writer holds data before flush');
+
+  LW.Flush;
+
+  CheckEqual(Int64(6), LBuf.Size, 'LineWriter.Flush forwards to inner flusher');
+end;
+
+procedure TestLineWriterNilInner;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    CreateLineWriter(IWriter(nil));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'LineWriter nil inner writer raises EArgumentError');
+end;
+
 procedure TestIoWriteLines;
 var
   LBuf: IStream;
@@ -54,6 +197,44 @@ begin
   LBuf := CreateBytesStream;
   IoWriteLines(LBuf as IWriter, TStringArray.Create('a', 'b', 'c'));
   Check(LBuf.Size = 6, '3 lines a\nb\nc\n = 6 bytes');
+end;
+
+procedure TestIoWriteLineRetriesPartialWriter;
+var
+  LBuf: IStream;
+  LPartialObj: TPartialForwardingWriter;
+  LPartial: IWriter;
+begin
+  LBuf := CreateBytesStream;
+  LPartialObj := TPartialForwardingWriter.Create(LBuf as IWriter, 2);
+  LPartial := LPartialObj;
+
+  IoWriteLine(LPartial, 'hello');
+
+  CheckEqual(Int64(4), Int64(LPartialObj.Calls),
+    'IoWriteLine retries body writes and writes newline');
+  CheckEqual(Int64(6), LBuf.Size, 'IoWriteLine wrote full line');
+end;
+
+procedure TestIoWriteLineZeroProgressRaises;
+var
+  LZeroObj: TZeroProgressWriter;
+  LZero: IWriter;
+  LRaised: Boolean;
+begin
+  LZeroObj := TZeroProgressWriter.Create(1);
+  LZero := LZeroObj;
+
+  LRaised := False;
+  try
+    IoWriteLine(LZero, 'abc');
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'IoWriteLine zero-progress write raises EIOError');
+  CheckEqual(Int64(1), Int64(LZeroObj.Calls), 'IoWriteLine attempted one write');
 end;
 
 { === Collect Tests === }
@@ -227,7 +408,18 @@ begin
   T := TTestRunner.Create('nextpas.core.io.flow');
   T.Run('LineWriter basic', @TestLineWriterBasic);
   T.Run('LineWriter empty', @TestLineWriterEmpty);
+  T.Run('LineWriter retries partial writer',
+    @TestLineWriterRetriesPartialWriter);
+  T.Run('LineWriter zero-progress raises',
+    @TestLineWriterZeroProgressRaises);
+  T.Run('LineWriter flush forwards inner flusher',
+    @TestLineWriterFlushForwardsInnerFlusher);
+  T.Run('LineWriter nil inner', @TestLineWriterNilInner);
   T.Run('IoWriteLines', @TestIoWriteLines);
+  T.Run('IoWriteLine retries partial writer',
+    @TestIoWriteLineRetriesPartialWriter);
+  T.Run('IoWriteLine zero-progress raises',
+    @TestIoWriteLineZeroProgressRaises);
   T.Run('CollectLines basic', @TestCollectLinesBasic);
   T.Run('CollectLines empty', @TestCollectLinesEmpty);
   T.Run('CollectLinesFrom', @TestCollectLinesFrom);

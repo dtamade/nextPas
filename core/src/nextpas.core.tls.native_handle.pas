@@ -33,7 +33,7 @@ unit nextpas.core.tls.native_handle;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions;
 

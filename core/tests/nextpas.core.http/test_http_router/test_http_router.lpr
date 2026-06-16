@@ -450,6 +450,50 @@ begin
   end;
 end;
 
+procedure TestNilHandlerRaises;
+var
+  LRouter: THttpRouter;
+  LHandler: THttpHandlerFunc;
+  LCaught: Boolean;
+begin
+  LRouter := THttpRouter.Create;
+  try
+    LHandler := nil;
+    LCaught := False;
+    try
+      LRouter.Handle(hmGet, '/nil', LHandler);
+    except
+      on E: EHttpError do
+        LCaught := True;
+    end;
+    Check(LCaught, 'nil route handler raises EHttpError');
+  finally
+    LRouter.Free;
+  end;
+end;
+
+procedure TestNilMiddlewareRaises;
+var
+  LRouter: THttpRouter;
+  LMiddleware: IHttpMiddleware;
+  LCaught: Boolean;
+begin
+  LRouter := THttpRouter.Create;
+  try
+    LMiddleware := nil;
+    LCaught := False;
+    try
+      LRouter.Use(LMiddleware);
+    except
+      on E: EHttpError do
+        LCaught := True;
+    end;
+    Check(LCaught, 'nil router middleware raises EHttpError');
+  finally
+    LRouter.Free;
+  end;
+end;
+
 procedure TestWildcardMustBeLast;
 var
   LRouter: THttpRouter;
@@ -680,6 +724,63 @@ begin
   end;
 end;
 
+procedure TestHeadFallsBackToGetRoute;
+var
+  LRouter: THttpRouter;
+  LReq: IHttpRequest;
+  LUrl: TUrl;
+  LWriter: IHttpResponseWriter;
+begin
+  ResetState;
+  LRouter := THttpRouter.Create;
+  try
+    LRouter.Get('/headable', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      CheckEqual(Int64(Ord(hmHead)), Int64(Ord(AReq.Method)),
+        'HEAD fallback preserves request method');
+      GHandlerCalled := 'get-headable';
+    end);
+
+    LUrl := TUrl.Parse('/headable');
+    LReq := THttpRequest.Create(hmHead, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
+    LWriter := TMockResponseWriter.Create;
+    LRouter.ServeHTTP(LReq, LWriter);
+    CheckEqual('get-headable', GHandlerCalled, 'HEAD should use GET route');
+  finally
+    LRouter.Free;
+  end;
+end;
+
+procedure TestExplicitHeadRouteWinsOverGetFallback;
+var
+  LRouter: THttpRouter;
+  LReq: IHttpRequest;
+  LUrl: TUrl;
+  LWriter: IHttpResponseWriter;
+begin
+  ResetState;
+  LRouter := THttpRouter.Create;
+  try
+    LRouter.Get('/headable', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      GHandlerCalled := 'get-headable';
+    end);
+    LRouter.Head('/headable', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      GHandlerCalled := 'head-headable';
+    end);
+
+    LUrl := TUrl.Parse('/headable');
+    LReq := THttpRequest.Create(hmHead, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
+    LWriter := TMockResponseWriter.Create;
+    LRouter.ServeHTTP(LReq, LWriter);
+    CheckEqual('head-headable', GHandlerCalled,
+      'explicit HEAD route should win over GET fallback');
+  finally
+    LRouter.Free;
+  end;
+end;
+
 procedure Test405ListsAllMethods;
 var
   LRouter: THttpRouter;
@@ -704,6 +805,7 @@ begin
     CheckEqual(Int64(405), Int64(LWriter.GetStatus), '405 status');
     LAllow := LWriter.GetHeaders.Get('allow');
     Check(Pos('GET', LAllow) > 0, '405 Allow contains GET');
+    Check(Pos('HEAD', LAllow) > 0, '405 Allow contains implicit HEAD');
     Check(Pos('POST', LAllow) > 0, '405 Allow contains POST');
   finally
     LRouter.Free;
@@ -723,6 +825,8 @@ begin
   T.Run('Trailing slash', @TestTrailingSlash);
   T.Run('Duplicate route raises', @TestDuplicateRouteRaises);
   T.Run('Empty pattern raises', @TestEmptyPatternRaises);
+  T.Run('Nil handler raises', @TestNilHandlerRaises);
+  T.Run('Nil middleware raises', @TestNilMiddlewareRaises);
   T.Run('Wildcard must be last', @TestWildcardMustBeLast);
   T.Run('Deep static route', @TestDeepStaticRoute);
   T.Run('100 static routes', @Test100StaticRoutes);
@@ -732,6 +836,9 @@ begin
   T.Run('Double slash no match', @TestDoubleSlashNoMatch);
   T.Run('Multiple wildcards raises', @TestMultipleWildcardsRaises);
   T.Run('ServeHTTP integration', @TestServeHTTPIntegration);
+  T.Run('HEAD falls back to GET route', @TestHeadFallsBackToGetRoute);
+  T.Run('explicit HEAD route wins over GET fallback',
+    @TestExplicitHeadRouteWinsOverGetFallback);
   T.Run('405 lists all methods', @Test405ListsAllMethods);
   T.Summary;
 end.

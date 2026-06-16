@@ -6,8 +6,8 @@ interface
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.sync,
-  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.mutex,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.mem.pool.slab;
 
@@ -25,7 +25,7 @@ type
   TSlabPoolConcurrent = class(TInterfacedObject, IMemoryPool, IAllocator)
   private
     FInner: TSlabPool;
-    FLock: IMutex;
+    FLock: TMemMutex;
   public
     constructor Create(aCapacity: SizeUInt; aAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
     constructor Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aAllocator: IAllocator = nil); overload;
@@ -73,28 +73,26 @@ implementation
 constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; aAllocator: IAllocator; aMinShift: SizeUInt);
 begin
   inherited Create;
-  FLock := Mutex;
+  FLock.Init;
   FInner := TSlabPool.Create(aCapacity, aAllocator, aMinShift);
 end;
 
 constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aAllocator: IAllocator);
 begin
   inherited Create;
-  FLock := Mutex;
+  FLock.Init;
   FInner := TSlabPool.Create(aCapacity, aConfig, aAllocator);
 end;
 
 destructor TSlabPoolConcurrent.Destroy;
 begin
-  if FLock <> nil then
-    FLock.Acquire;
+  FLock.Acquire;
   try
     FreeAndNil(FInner);
   finally
-    if FLock <> nil then
-      FLock.Release;
+    FLock.Release;
   end;
-  FLock := nil;
+  FLock.Done;
   inherited Destroy;
 end;
 

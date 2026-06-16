@@ -551,22 +551,37 @@ begin
   CheckEqual('a,b,c', parts[0], 'split 0 value');
 end;
 
+procedure ExpectTemplateError(const ARegex: TRegex; const ATemplate, ACase: string);
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    ARegex.ReplaceAllExpand('hello', ATemplate);
+  except
+    on E: ERegexError do
+      LRaised := True;
+  end;
+  Check(LRaised, ACase);
+end;
+
 procedure TestMalformedTemplate;
-var R: TRegex; s: string;
+var R, RNoMatch: TRegex; s: string;
 begin
   R := TRegex.Compile('(\w+)');
+  RNoMatch := TRegex.Compile('nomatch');
 
   // $ at end of template
-  s := R.ReplaceAllExpand('hello', 'x$');
-  CheckEqual('x$', s, '$ at end preserved');
+  ExpectTemplateError(R, 'x$', '$ at end rejected');
+  ExpectTemplateError(RNoMatch, 'x$', 'no-match $ at end rejected');
 
   // ${ without }
-  s := R.ReplaceAllExpand('hello', '${broken');
-  CheckEqual('${broken', s, '${ without } preserved');
+  ExpectTemplateError(R, '${broken', '${ without } rejected');
+  ExpectTemplateError(RNoMatch, '${broken', 'no-match ${ without } rejected');
 
   // ${} empty name
-  s := R.ReplaceAllExpand('hello', '${}');
-  CheckEqual('', s, '${} empty name');
+  ExpectTemplateError(R, '${}', '${} empty name rejected');
+  ExpectTemplateError(RNoMatch, '${}', 'no-match ${} empty name rejected');
 
   // unknown group name
   s := R.ReplaceAllExpand('hello', '${nonexist}');
@@ -655,6 +670,12 @@ begin
   Check(not TRegex.TryCompile('[abc', R, err), 'unclosed char class');
   Check(Pos('unclosed character class', err) > 0, 'unclosed char class msg');
 
+  Check(not TRegex.TryCompile('[]', R, err), 'empty char class');
+  Check(Pos('empty character class', err) > 0, 'empty char class msg');
+
+  Check(not TRegex.TryCompile('[z-a]', R, err), 'invalid char class range');
+  Check(Pos('invalid character range', err) > 0, 'invalid char class range msg');
+
   // Unclosed quantifier
   Check(not TRegex.TryCompile('a{', R, err), 'unclosed quantifier');
   Check(Pos('unclosed quantifier', err) > 0, 'unclosed quantifier msg');
@@ -662,9 +683,24 @@ begin
   Check(not TRegex.TryCompile('a{3', R, err), 'unclosed quantifier no }');
   Check(Pos('unclosed quantifier', err) > 0, 'unclosed quantifier no } msg');
 
+  Check(not TRegex.TryCompile('a{}', R, err), 'empty quantifier min');
+  Check(Pos('quantifier', err) > 0, 'empty quantifier min msg');
+
+  Check(not TRegex.TryCompile('a{,2}', R, err), 'missing quantifier min');
+  Check(Pos('quantifier', err) > 0, 'missing quantifier min msg');
+
+  Check(not TRegex.TryCompile('a{,}', R, err), 'missing quantifier min open max');
+  Check(Pos('quantifier', err) > 0, 'missing quantifier min open max msg');
+
   // min > max in quantifier
   Check(not TRegex.TryCompile('a{3,2}', R, err), 'min > max');
   Check(Pos('min exceeds max', err) > 0, 'min > max msg');
+
+  Check(not TRegex.TryCompile('a{999999999999999999999}', R, err), 'overflowed quantifier min');
+  Check((Pos('quantifier', err) > 0) or (Pos('limit', err) > 0), 'overflowed quantifier min msg');
+
+  Check(not TRegex.TryCompile('a{1,999999999999999999999}', R, err), 'overflowed quantifier max');
+  Check((Pos('quantifier', err) > 0) or (Pos('limit', err) > 0), 'overflowed quantifier max msg');
 
   // Unmatched closing paren
   Check(not TRegex.TryCompile(')', R, err), 'unmatched )');
@@ -682,6 +718,21 @@ begin
 
   Check(not TRegex.TryCompile('?a', R, err), '? at start');
   Check(Pos('quantifier without preceding atom', err) > 0, '? at start msg');
+
+  Check(not TRegex.TryCompile('{3}', R, err), 'range quantifier at start');
+  Check(Pos('quantifier', err) > 0, 'range quantifier at start msg');
+
+  Check(not TRegex.TryCompile('a{2}{3}', R, err), 'stacked range quantifier');
+  Check(Pos('quantifier', err) > 0, 'stacked range quantifier msg');
+
+  Check(not TRegex.TryCompile('a*{2}', R, err), 'range quantifier after star');
+  Check(Pos('quantifier', err) > 0, 'range quantifier after star msg');
+
+  Check(not TRegex.TryCompile('(?Pname>a)', R, err), 'named group missing angle');
+  Check(Pos('named group', err) > 0, 'named group missing angle msg');
+
+  Check(not TRegex.TryCompile('(?P<>a)', R, err), 'empty named group');
+  Check(Pos('named group', err) > 0, 'empty named group msg');
 
   // Unicode properties rejected
   Check(not TRegex.TryCompile('\p{L}', R, err), '\p{L}');
@@ -752,6 +803,40 @@ begin
   Check(R.IsMatch('HELLO'), 'ci anchored upper');
   Check(R.IsMatch('hello'), 'ci anchored lower');
   Check(not R.IsMatch('HELLO!'), 'ci anchored miss');
+end;
+
+procedure TestRegexFlagsPublicContract;
+var
+  R: TRegex;
+  M: TMatch;
+  MA: TMatchArray;
+  LInput: string;
+begin
+  LInput := 'alpha' + #10 + 'beta';
+
+  R := TRegex.Compile('a.b');
+  Check(not R.IsMatch('a' + #10 + 'b'), 'default dot excludes LF');
+  R := TRegex.Compile('a.b', [rfDotAll]);
+  Check(R.IsMatch('a' + #10 + 'b'), 'rfDotAll lets dot match LF');
+
+  R := TRegex.Compile('^beta');
+  Check(not R.IsMatch(LInput), 'default ^ matches only input start');
+  R := TRegex.Compile('^beta', [rfMultiLine]);
+  M := R.Find(LInput);
+  Check(M.Found, 'rfMultiLine ^ finds second line');
+  CheckEqual(Int64(6), Int64(M.Start), 'rfMultiLine ^ match start');
+  CheckEqual('beta', M.Value(LInput), 'rfMultiLine ^ match value');
+
+  R := TRegex.Compile('alpha$');
+  Check(not R.IsMatch(LInput), 'default $ matches only input end');
+  R := TRegex.Compile('alpha$', [rfMultiLine]);
+  Check(R.IsMatch(LInput), 'rfMultiLine $ matches before LF');
+
+  R := TRegex.Compile('^.', [rfMultiLine]);
+  MA := R.FindAll(LInput);
+  CheckEqual(Int64(2), Int64(Length(MA)), 'rfMultiLine FindAll line starts');
+  CheckEqual('a', MA[0].Value(LInput), 'rfMultiLine first line start');
+  CheckEqual('b', MA[1].Value(LInput), 'rfMultiLine second line start');
 end;
 
 { --- Greedy vs Non-Greedy --- }
@@ -1083,6 +1168,19 @@ begin
   R := TRegex.Compile('[\d\s]+');
   Check(R.IsFullMatch('123 456'), 'class shorthand');
   Check(not R.IsFullMatch('abc'), 'class shorthand miss');
+
+  // Negated shorthand escapes in class: [\D\W\S]
+  R := TRegex.Compile('^[\D]$');
+  Check(R.IsFullMatch('a'), 'class \D matches non-digit');
+  Check(not R.IsFullMatch('5'), 'class \D rejects digit');
+
+  R := TRegex.Compile('^[\W]$');
+  Check(R.IsFullMatch(' '), 'class \W matches non-word');
+  Check(not R.IsFullMatch('x'), 'class \W rejects word');
+
+  R := TRegex.Compile('^[\S]$');
+  Check(R.IsFullMatch('x'), 'class \S matches non-space');
+  Check(not R.IsFullMatch(' '), 'class \S rejects space');
 
   // Pipe in class: [a|b] — | is literal
   R := TRegex.Compile('[a|b]');
@@ -1451,6 +1549,31 @@ begin
   R := TRegex.Compile('\d+');
   s := R.ReplaceFirstFunc('a1b2c3', @StarReplace);
   CheckEqual('a*b2c3', s, 'func first only');
+end;
+
+procedure ExpectReplaceFuncNilCallbackError(const ACase: string; AUseAll: Boolean);
+var
+  R: TRegex;
+  LRaised: Boolean;
+begin
+  R := TRegex.Compile('\d+');
+  LRaised := False;
+  try
+    if AUseAll then
+      R.ReplaceAllFunc('a1b2', nil)
+    else
+      R.ReplaceFirstFunc('a1b2', nil);
+  except
+    on E: ERegexError do
+      LRaised := True;
+  end;
+  Check(LRaised, ACase);
+end;
+
+procedure TestReplaceFuncNilCallback;
+begin
+  ExpectReplaceFuncNilCallbackError('ReplaceFirstFunc nil callback rejected', False);
+  ExpectReplaceFuncNilCallbackError('ReplaceAllFunc nil callback rejected', True);
 end;
 
 { === NEW TEST PROCEDURES === }
@@ -4085,6 +4208,18 @@ begin
   CheckEqual(Int64(1), Int64(LCount), 'single char single match');
 end;
 
+procedure TestFindIterKeepsProgramSnapshot;
+var R: TRegex; LIter: TRegexIter; LMatch: TMatch; LInput: string;
+begin
+  LInput := 'a1';
+  R := TRegex.Compile('\d+');
+  LIter := R.FindIter(LInput);
+  R := TRegex.Compile('[a-z]+');
+  Check(LIter.Next(LMatch), 'iterator still finds original digit match');
+  CheckEqual('1', LMatch.Value(LInput), 'iterator keeps original program');
+  Check(not LIter.Next(LMatch), 'iterator has one original match');
+end;
+
 procedure TestSubexpNames;
 var R: TRegex; LNames: TStringArray;
 begin
@@ -4244,6 +4379,7 @@ begin
   T.Run('Compile limits', @TestCompileLimits);
   T.Run('Malformed patterns', @TestMalformedPatterns);
   T.Run('Case insensitive', @TestCaseInsensitive);
+  T.Run('Regex flags public contract', @TestRegexFlagsPublicContract);
   { --- New comprehensive tests --- }
   T.Run('Greedy vs Non-Greedy', @TestGreedyVsNonGreedy);
   T.Run('Capture edge cases', @TestCaptureEdgeCases);
@@ -4257,6 +4393,7 @@ begin
   T.Run('Performance regression', @TestPerformanceRegression);
   T.Run('QuoteMeta thorough', @TestQuoteMetaThorough);
   T.Run('ReplaceFunc edge cases', @TestReplaceFuncEdgeCases);
+  T.Run('ReplaceFunc nil callback', @TestReplaceFuncNilCallback);
   { --- 13 new test areas --- }
   T.Run('Multiple captures', @TestMultipleCaptures);
   T.Run('Overlapping patterns', @TestOverlappingPatterns);
@@ -4330,6 +4467,7 @@ begin
   T.Run('P4: FindIter empty', @TestFindIterEmpty);
   T.Run('P4: FindIter zero-len', @TestFindIterZeroLen);
   T.Run('P4: FindIter single', @TestFindIterSingle);
+  T.Run('P4: FindIter program snapshot', @TestFindIterKeepsProgramSnapshot);
   T.Run('P4: SubexpNames', @TestSubexpNames);
   T.Run('P4: SubexpNames empty', @TestSubexpNamesEmpty);
   T.Run('P4: Longest match', @TestLongestMatch);

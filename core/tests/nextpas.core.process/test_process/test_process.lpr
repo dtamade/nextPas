@@ -16,6 +16,59 @@ uses
 var
   LPassed, LFailed: Integer;
 
+procedure Check(const AName: string; ACondition: Boolean); forward;
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LSourcePath: string;
+  LLines: TStringList;
+begin
+  LSourcePath := ExpandFileName('../../../' + ARelativePath);
+  Check('Source exists — ' + ARelativePath, FileExists(LSourcePath));
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(LSourcePath);
+    Result := LLines.Text;
+  finally
+    LLines.Free;
+  end;
+end;
+
+function ExtractMethodBody(const ASource, AStartToken, ANextToken: string): string;
+var
+  LStart, LNext: Integer;
+begin
+  Result := '';
+  LStart := Pos(AStartToken, ASource);
+  if LStart = 0 then
+    Exit;
+  LNext := Pos(ANextToken, Copy(ASource, LStart + Length(AStartToken),
+    Length(ASource)));
+  if LNext = 0 then
+    Exit(Copy(ASource, LStart, Length(ASource)));
+  Result := Copy(ASource, LStart, Length(AStartToken) + LNext - 1);
+end;
+
+procedure CheckContains(const AName, ASource, AToken: string);
+begin
+  Check(AName, Pos(AToken, ASource) > 0);
+end;
+
+procedure CheckAbsent(const AName, ASource, AToken: string);
+begin
+  Check(AName, Pos(AToken, ASource) = 0);
+end;
+
+procedure CheckTokenBefore(const AName, ASource, AFirstToken,
+  ASecondToken: string);
+var
+  LFirst, LSecond: Integer;
+begin
+  LFirst := Pos(AFirstToken, ASource);
+  LSecond := Pos(ASecondToken, ASource);
+  Check(AName, (LFirst > 0) and (LSecond > 0) and (LFirst < LSecond));
+end;
+
 procedure Check(const AName: string; ACondition: Boolean);
 begin
   if ACondition then
@@ -109,6 +162,25 @@ begin
   Check('Spawn wait — exit 0', LOut.ExitCode = 0);
 end;
 
+procedure TestSpawnWaitIsRepeatable;
+var
+  LChild: IChild;
+  LFirst, LSecond: TProcessOutput;
+  LDone: Boolean;
+begin
+  LChild := Command('/bin/true').Spawn;
+  LFirst := LChild.Wait;
+  LSecond := LChild.Wait;
+  Check('Wait repeat — first exited', LFirst.Status = psExited);
+  Check('Wait repeat — second preserves status', LSecond.Status = LFirst.Status);
+  Check('Wait repeat — second preserves exit code', LSecond.ExitCode = LFirst.ExitCode);
+
+  LDone := LChild.TryWait(LSecond);
+  Check('TryWait after Wait — done', LDone);
+  Check('TryWait after Wait — preserves status', LSecond.Status = LFirst.Status);
+  Check('TryWait after Wait — preserves exit code', LSecond.ExitCode = LFirst.ExitCode);
+end;
+
 procedure TestSpawnTryWait;
 var
   LChild: IChild;
@@ -166,6 +238,255 @@ begin
   end
   else
     Check('Detach — child completed work', False);
+end;
+
+procedure TestDetachedLifecycleGuards;
+var
+  LSource, LMethod: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.process.child.pas');
+  CheckContains('Detached guard — helper exists', LSource,
+    'procedure TChild.EnsureAttached');
+  CheckContains('Detached guard — helper checks state', LSource,
+    'if FDetached then');
+  CheckContains('Detached guard — helper raises process error', LSource,
+    'raise EProcessError.Create(''process child is detached'')');
+
+  LMethod := ExtractMethodBody(LSource, 'function TChild.Wait: TProcessOutput;',
+    'function TChild.TryWait');
+  CheckTokenBefore('Detached guard — Wait checks before platform wait', LMethod,
+    'EnsureAttached;', 'platform_process_wait');
+
+  LMethod := ExtractMethodBody(LSource,
+    'function TChild.TryWait(out AOutput: TProcessOutput): Boolean;',
+    'procedure TChild.Detach;');
+  CheckTokenBefore('Detached guard — TryWait checks before platform wait',
+    LMethod, 'EnsureAttached;', 'platform_process_try_wait');
+
+  LMethod := ExtractMethodBody(LSource, 'procedure TChild.Kill;',
+    'function TChild.Pid');
+  CheckTokenBefore('Detached guard — Kill checks before platform kill', LMethod,
+    'EnsureAttached;', 'platform_process_kill');
+
+  LMethod := ExtractMethodBody(LSource,
+    'function TChild.WaitWithOutput: TProcessOutput;',
+    'function TChild.FinishWaitResult');
+  CheckTokenBefore('Detached guard — WaitWithOutput checks before platform wait',
+    LMethod, 'EnsureAttached;', 'platform_process_try_wait');
+end;
+
+procedure TestChildPlatformErrorSourceContract;
+var
+  LSource, LMethod: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.process.child.pas');
+  CheckContains('Process platform error helper — private declaration exists',
+    LSource, 'procedure RaiseProcessPlatformError(const AOp: string; ACode: Int32);');
+  CheckContains('Process platform error helper — implementation exists',
+    LSource, 'procedure TChild.RaiseProcessPlatformError(const AOp: string; ACode: Int32);');
+  CheckContains('Process platform error helper — uses platform error message',
+    LSource, 'platform_error_message(ACode, @LBuf[0], SizeOf(LBuf))');
+  CheckContains('Process platform error helper — raises EProcessError',
+    LSource, 'raise EProcessError.Create(LMsg, ACode);');
+
+  LMethod := ExtractMethodBody(LSource, 'function TChild.Wait: TProcessOutput;',
+    'function TChild.TryWait');
+  CheckContains('Wait — platform wait result stored', LMethod,
+    'LErr := platform_process_wait(FProc, LResult);');
+  CheckContains('Wait — platform wait error propagated', LMethod,
+    'RaiseProcessPlatformError(''platform_process_wait'', LErr);');
+  CheckContains('Wait timeout — platform try_wait result stored', LMethod,
+    'LErr := platform_process_try_wait(FProc, LResult);');
+  CheckContains('Wait timeout — try_wait error propagated', LMethod,
+    'RaiseProcessPlatformError(''platform_process_try_wait'', LErr);');
+  CheckContains('Wait timeout — platform kill result stored', LMethod,
+    'LErr := platform_process_kill(FProc);');
+  CheckContains('Wait timeout — kill error propagated', LMethod,
+    'RaiseProcessPlatformError(''platform_process_kill'', LErr);');
+
+  LMethod := ExtractMethodBody(LSource,
+    'function TChild.TryWait(out AOutput: TProcessOutput): Boolean;',
+    'procedure TChild.Detach;');
+  CheckContains('TryWait — platform try_wait result stored', LMethod,
+    'LErr := platform_process_try_wait(FProc, LResult);');
+  CheckContains('TryWait — platform error propagated', LMethod,
+    'RaiseProcessPlatformError(''platform_process_try_wait'', LErr);');
+
+  LMethod := ExtractMethodBody(LSource, 'procedure TChild.Kill;',
+    'function TChild.Pid');
+  CheckContains('Kill — platform kill result stored', LMethod,
+    'LErr := platform_process_kill(FProc);');
+  CheckContains('Kill — platform error propagated', LMethod,
+    'RaiseProcessPlatformError(''platform_process_kill'', LErr);');
+
+  LMethod := ExtractMethodBody(LSource, 'destructor TChild.Destroy;',
+    'function TChild.Wait: TProcessOutput;');
+  CheckAbsent('Destroy — does not call public Kill', LMethod, 'Kill;');
+  CheckAbsent('Destroy — does not call public Wait', LMethod, 'Wait;');
+end;
+
+procedure TestWaitTimeoutSleepOwnerSourceContract;
+var
+  LSource, LMethod: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.process.child.pas');
+  LMethod := ExtractMethodBody(LSource, 'function TChild.Wait: TProcessOutput;',
+    'function TChild.TryWait');
+
+  CheckContains('Wait timeout sleep — process child uses platform thread seam',
+    LSource, 'nextpas.core.platform.thread');
+  CheckContains('Wait timeout sleep — timeout loop uses platform sleep',
+    LMethod, 'platform_thread_sleep_ns(10000000)');
+  CheckAbsent('Wait timeout sleep — timeout loop avoids raw nanosleep',
+    LMethod, 'nanosleep');
+  CheckAbsent('Wait timeout sleep — timeout loop avoids raw TTimeSpec',
+    LMethod, 'TTimeSpec');
+end;
+
+procedure TestWaitWithOutputDrainSourceContract;
+var
+  LSource, LMethod: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.process.child.pas');
+  CheckContains('WaitWithOutput drain — keeps process.pipe seam', LSource,
+    'nextpas.core.process.pipe');
+  CheckAbsent('WaitWithOutput drain — no direct POSIX base import', LSource,
+    'nextpas.core.platform.posix.base');
+  CheckAbsent('WaitWithOutput drain — no direct POSIX ffi import', LSource,
+    'nextpas.core.platform.posix.ffi');
+  CheckAbsent('WaitWithOutput drain — no concrete stdin writer cast', LSource,
+    '(FStdinWriter as TPipeWriter).Close');
+
+  LMethod := ExtractMethodBody(LSource,
+    'function TChild.WaitWithOutput: TProcessOutput;',
+    'function TChild.FinishWaitResult');
+  CheckContains('WaitWithOutput drain — uses DrainPipePair seam', LMethod,
+    'DrainPipePair(');
+  CheckAbsent('WaitWithOutput drain — no raw poll loop', LMethod,
+    'poll(@LFds[0]');
+  CheckAbsent('WaitWithOutput drain — no raw stdout read', LMethod,
+    'read(LStdoutFd');
+  CheckAbsent('WaitWithOutput drain — no raw stderr read', LMethod,
+    'read(LStderrFd');
+end;
+
+procedure TestPathResolverSourceContract;
+var
+  LResolver, LCommand, LSpawnMethod: string;
+begin
+  LResolver := LoadSourceText('src/nextpas.core.process.pathresolve.pas');
+  LCommand := LoadSourceText('src/nextpas.core.process.command.pas');
+
+  CheckContains('Path resolver — directory helper exists', LResolver,
+    'function CommandPathHasDirectoryPart');
+  CheckContains('Path resolver — Windows separator handled', LResolver,
+    'Pos(''\'', AName)');
+  CheckContains('Path resolver — Windows drive path handled', LResolver,
+    '(Length(AName) >= 2) and (AName[2] = '':'')');
+  CheckContains('Path resolver — PATH name helper exists', LResolver,
+    'function IsPathEnvPair');
+  CheckContains('Path resolver — PATHEXT name helper exists', LResolver,
+    'function IsPathExtEnvPair');
+  CheckContains('Path resolver — PATH name follows env owner case contract',
+    LResolver, 'platform_env_names_case_sensitive');
+  CheckContains('Path resolver — PATHEXT follows env owner case contract',
+    LResolver, 'platform_env_names_case_sensitive');
+  CheckContains('Path resolver — case-insensitive env name fallback', LResolver,
+    'TextStartsWithI(AValue, PATH_ENV_PREFIX)');
+  CheckContains('Path resolver — case-sensitive env name fallback', LResolver,
+    'TextStartsWith(AValue, PATH_ENV_PREFIX)');
+  CheckContains('Path resolver — Windows PATHEXT case-insensitive fallback',
+    LResolver, 'TextStartsWithI(AValue, PATHEXT_ENV_PREFIX)');
+  CheckContains('Path resolver — Windows PATHEXT case-sensitive fallback',
+    LResolver, 'TextStartsWith(AValue, PATHEXT_ENV_PREFIX)');
+  CheckContains('Path resolver — Windows path list separator', LResolver,
+    'PROCESS_PATH_LIST_SEP = '';''');
+  CheckContains('Path resolver — Unix path list separator', LResolver,
+    'PROCESS_PATH_LIST_SEP = '':''');
+  CheckContains('Path resolver — PATHEXT split uses Windows path list separator',
+    LResolver, 'PROCESS_PATH_EXT_SEP = '';''');
+  CheckContains('Path resolver — replacement env has no implicit PATH fallback',
+    LResolver, 'Result := '''';');
+  CheckContains('Path resolver — Windows appends PATHEXT candidates',
+    LResolver, 'AppendWindowsPathExtCandidate');
+  CheckAbsent('Path resolver — no bare slash-only directory check', LResolver,
+    'if Pos(''/'', AName) > 0 then');
+  CheckContains('Path resolver — ResolveExecutablePath uses helper', LResolver,
+    'if CommandPathHasDirectoryPart(AName) then');
+  CheckContains('Path resolver — uses platform executable facade', LResolver,
+    'platform_fs_is_executable');
+  CheckAbsent('Path resolver — no direct POSIX FFI import', LResolver,
+    'nextpas.core.platform.posix.ffi');
+  CheckAbsent('Path resolver — no direct POSIX access call', LResolver,
+    'access(PAnsiChar');
+
+  LSpawnMethod := ExtractMethodBody(LCommand, 'function TCommand.Spawn: IChild;',
+    'function TCommand.Output');
+  CheckContains('Command spawn — uses shared path helper', LSpawnMethod,
+    'CommandPathHasDirectoryPart(FPath)');
+  CheckAbsent('Command spawn — no slash-only path check', LSpawnMethod,
+    'Pos(''/'', FPath)');
+  CheckContains('Env overlay — uses env owner case contract', LCommand,
+    'EnvironmentVariableNamesCaseSensitive');
+  CheckContains('Env overlay — case-insensitive final key match', LCommand,
+    'TextEqualI');
+end;
+
+procedure TestCommandSpawnPlatformHelperSourceContract;
+var
+  LProcessSource, LCommandSource, LSpawnMethod: string;
+begin
+  LProcessSource := LoadSourceText('src/nextpas.core.platform.process.pas');
+  CheckContains('Platform process helpers — create pipe declared',
+    LProcessSource,
+    'function platform_process_create_pipe(out AReadHandle, AWriteHandle: PtrInt): Int32;');
+  CheckContains('Platform process helpers — open null declared',
+    LProcessSource,
+    'function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrInt): Int32;');
+  CheckContains('Platform process helpers — close handle declared',
+    LProcessSource,
+    'function platform_process_close_handle(var AHandle: PtrInt): Int32;');
+
+  LCommandSource := LoadSourceText('src/nextpas.core.process.command.pas');
+  CheckAbsent('Command spawn helpers — no direct POSIX base import',
+    LCommandSource, 'nextpas.core.platform.posix.base');
+  CheckAbsent('Command spawn helpers — no direct POSIX ffi import',
+    LCommandSource, 'nextpas.core.platform.posix.ffi');
+
+  LSpawnMethod := ExtractMethodBody(LCommandSource,
+    'function TCommand.Spawn: IChild;',
+    'function TCommand.Timeout');
+  CheckContains('Command spawn helpers — uses platform pipe helper',
+    LSpawnMethod, 'platform_process_create_pipe');
+  CheckContains('Command spawn helpers — uses platform null helper',
+    LSpawnMethod, 'platform_process_open_null');
+  CheckContains('Command spawn helpers — uses platform close helper',
+    LSpawnMethod, 'platform_process_close_handle');
+  CheckAbsent('Command spawn helpers — no raw pipe syscall', LSpawnMethod,
+    'pipe(@');
+  CheckAbsent('Command spawn helpers — no raw dev-null path', LSpawnMethod,
+    '/dev/null');
+  CheckAbsent('Command spawn helpers — no raw POSIX close', LSpawnMethod,
+    'nextpas.core.platform.posix.ffi.close');
+end;
+
+procedure TestProcessEnvSnapshotSourceContract;
+var
+  LSource, LBody: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.process.command.pas');
+  LBody := ExtractMethodBody(LSource,
+    'function BuildFinalEnv(const AMode: TProcessEnvMode;',
+    'constructor TCommand.Create');
+
+  CheckContains('Env snapshot — uses os.env owner', LSource,
+    'nextpas.core.os.env');
+  CheckContains('Env snapshot — delegates parent snapshot', LBody,
+    'EnvironmentVariables');
+  CheckAbsent('Env snapshot — no direct POSIX env pointer', LBody,
+    'PPAnsiChar');
+  CheckAbsent('Env snapshot — no direct POSIX environ read', LBody,
+    'LCur := environ');
 end;
 
 procedure TestSpawnStdinPipe;
@@ -331,6 +652,7 @@ procedure TestWaitWithOutputDualPipe;
 var
   LChild: IChild;
   LStdin: IWriter;
+  LCloser: IWriteCloser;
   LOut: TProcessOutput;
   LData: string;
 begin
@@ -343,7 +665,9 @@ begin
   LStdin := LChild.TakeStdin;
   LData := 'dual pipe test';
   LStdin.Write(LData[1], Length(LData));
-  (LStdin as TPipeWriter).Close;
+  LCloser := LStdin as IWriteCloser;
+  LCloser.Close;
+  LCloser := nil;
   LStdin := nil;
   LOut := LChild.WaitWithOutput;
   Check('Dual pipe — stdout', Pos('dual pipe test', LOut.StdOut) > 0);
@@ -356,6 +680,64 @@ var LOut: TProcessOutput;
 begin
   LOut := TCommand.New('/bin/echo').Arg('single').Output;
   Check('Arg single — output', Pos('single', LOut.StdOut) > 0);
+end;
+
+procedure ExpectProcessError(const AName: string; const AProc: TProcedure);
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    AProc;
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  Check(AName, LRaised);
+end;
+
+procedure TestCommandValidation;
+begin
+  ExpectProcessError('Validation — empty command path raises',
+    procedure
+    begin
+      TCommand.New('').Status;
+    end);
+  ExpectProcessError('Validation — command path with NUL raises',
+    procedure
+    begin
+      TCommand.New('/bin/echo' + #0 + 'tail').Status;
+    end);
+  ExpectProcessError('Validation — arg with NUL raises',
+    procedure
+    begin
+      TCommand.New('/bin/echo').Arg('bad' + #0 + 'arg').Status;
+    end);
+  ExpectProcessError('Validation — cwd with NUL raises',
+    procedure
+    begin
+      TCommand.New('/bin/true').Dir('/tmp' + #0 + 'tail').Status;
+    end);
+  ExpectProcessError('Validation — Env empty key raises',
+    procedure
+    begin
+      TCommand.New('/usr/bin/env').Env(['=bad']).Status;
+    end);
+  ExpectProcessError('Validation — Env pair without equals raises',
+    procedure
+    begin
+      TCommand.New('/usr/bin/env').Env(['BAD_PAIR']).Status;
+    end);
+  ExpectProcessError('Validation — EnvAdd empty key raises',
+    procedure
+    begin
+      TCommand.New('/usr/bin/env').EnvAdd('', 'value').Status;
+    end);
+  ExpectProcessError('Validation — EnvAdd key with equals raises',
+    procedure
+    begin
+      TCommand.New('/usr/bin/env').EnvAdd('BAD=KEY', 'value').Status;
+    end);
 end;
 
 
@@ -383,6 +765,59 @@ begin
       LRaised := True;
   end;
   Check('Chdir fail — raises EProcessError', LRaised);
+end;
+
+function OpenFdCount: Integer;
+var
+  LSearch: TSearchRec;
+begin
+  Result := 0;
+  if FindFirst('/proc/self/fd/*', faAnyFile, LSearch) = 0 then
+  begin
+    repeat
+      if (LSearch.Name <> '.') and (LSearch.Name <> '..') then
+        Inc(Result);
+    until FindNext(LSearch) <> 0;
+    FindClose(LSearch);
+  end
+  else
+    Result := -1;
+end;
+
+procedure ExpectProcessErrorNoFdLeak(const AName: string; const AProc: TProcedure);
+var
+  LBefore, LAfter: Integer;
+begin
+  LBefore := OpenFdCount;
+  ExpectProcessError(AName + ' — raises EProcessError', AProc);
+  LAfter := OpenFdCount;
+  if (LBefore >= 0) and (LAfter >= 0) then
+    Check(AName + ' — parent fd count returns to baseline', LAfter = LBefore)
+  else
+    Check(AName + ' — /proc/self/fd unavailable', True);
+end;
+
+procedure TestSpawnNullStdioFailureDoesNotLeakParentFds;
+begin
+  ExpectProcessErrorNoFdLeak('stNull exec fail cleanup',
+    procedure
+    begin
+      TCommand.New('/nonexistent_binary_xyz_123')
+        .Stdin(stNull)
+        .Stdout(stNull)
+        .Stderr(stNull)
+        .Spawn;
+    end);
+  ExpectProcessErrorNoFdLeak('stNull chdir fail cleanup',
+    procedure
+    begin
+      TCommand.New('/bin/true')
+        .Dir('/nonexistent_dir_xyz')
+        .Stdin(stNull)
+        .Stdout(stNull)
+        .Stderr(stNull)
+        .Spawn;
+    end);
 end;
 
 procedure TestEnvAddInheritsPath;
@@ -479,6 +914,54 @@ begin
     Pos('envadd-path-final-view', LOut.StdOut) > 0);
 end;
 
+procedure TestEnvReplaceRelativePathSearchUsesCommandDir;
+var
+  LTempRoot, LToolDir, LToolName, LToolPath: string;
+  LFile: TextFile;
+  LOut: TProcessOutput;
+  LRaised: Boolean;
+begin
+  LToolName := 'nextpas_process_dir_path_tool';
+  LTempRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-process-dir-path-' + IntToStr(GetProcessID);
+  LToolDir := IncludeTrailingPathDelimiter(LTempRoot) + 'tools';
+  LToolPath := IncludeTrailingPathDelimiter(LToolDir) + LToolName;
+  if DirectoryExists(LTempRoot) then
+    RemoveDir(LTempRoot);
+  ForceDirectories(LToolDir);
+  try
+    AssignFile(LFile, LToolPath);
+    Rewrite(LFile);
+    WriteLn(LFile, '#!/bin/sh');
+    WriteLn(LFile, 'printf dir-path-resolved');
+    CloseFile(LFile);
+    nextpas.core.platform.posix.ffi.chmod(PAnsiChar(LToolPath), &755);
+
+    LRaised := False;
+    try
+      LOut := TCommand.New(LToolName)
+        .Dir(LTempRoot)
+        .Env(['PATH=tools'])
+        .Output;
+    except
+      on E: EProcessError do
+        LRaised := True;
+    end;
+
+    Check('Env replace + Dir relative PATH — no spawn error', not LRaised);
+    if not LRaised then
+      Check('Env replace + Dir relative PATH — resolved from command dir',
+        Pos('dir-path-resolved', LOut.StdOut) > 0);
+  finally
+    if FileExists(LToolPath) then
+      DeleteFile(LToolPath);
+    if DirectoryExists(LToolDir) then
+      RemoveDir(LToolDir);
+    if DirectoryExists(LTempRoot) then
+      RemoveDir(LTempRoot);
+  end;
+end;
+
 
 procedure TestTimeout;
 var LOut: TProcessOutput; LStart: TInstant;
@@ -490,6 +973,20 @@ begin
     .Output;
   Check('Timeout — killed (signaled)', LOut.Status = psSignaled);
   Check('Timeout — elapsed < 2s', LStart.Elapsed.AsMilliseconds < 2000);
+end;
+
+procedure TestTimeoutOutputDrainsBeforeWait;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/sh')
+    .Args(['-c', 'yes process-timeout-drain | head -n 20000; printf done-marker'])
+    .Timeout(TDuration.FromSeconds(5))
+    .Output;
+  Check('Timeout output drain — process exits normally', LOut.Status = psExited);
+  Check('Timeout output drain — exit 0', LOut.ExitCode = 0);
+  Check('Timeout output drain — captures tail marker',
+    Pos('done-marker', LOut.StdOut) > 0);
 end;
 
 
@@ -509,20 +1006,31 @@ begin
   TestCommandDir;
   TestCommandStatus;
   TestSpawnAndWait;
+  TestSpawnWaitIsRepeatable;
   TestSpawnTryWait;
   TestSpawnKill;
   TestSpawnDetach;
+  TestDetachedLifecycleGuards;
+  TestChildPlatformErrorSourceContract;
+  TestWaitTimeoutSleepOwnerSourceContract;
+  TestWaitWithOutputDrainSourceContract;
+  TestPathResolverSourceContract;
+  TestCommandSpawnPlatformHelperSourceContract;
+  TestProcessEnvSnapshotSourceContract;
   TestSpawnStdinPipe;
   TestSpawnStdoutReader;
   TestCommandEnv;
   TestSpawnError;
   TestSpawnExecFailRaisesException;
   TestSpawnChdirFailRaisesException;
+  TestSpawnNullStdioFailureDoesNotLeakParentFds;
   TestEnvAddInheritsPath;
   TestEnvReplaceWithPathSearch;
   TestEnvReplaceSkipsNonExecutablePathShadow;
   TestEnvAddDuplicatePathUsesFinalResolvedView;
+  TestEnvReplaceRelativePathSearchUsesCommandDir;
   TestTimeout;
+  TestTimeoutOutputDrainsBeforeWait;
   TestEnvAdd;
   TestStdinNull;
   TestStdoutNull;
@@ -533,6 +1041,7 @@ begin
   TestTakeStderr;
   TestWaitWithOutputDualPipe;
   TestArgSingle;
+  TestCommandValidation;
 
   WriteLn('');
   WriteLn('--- ', LPassed, ' passed, ', LFailed, ' failed ---');

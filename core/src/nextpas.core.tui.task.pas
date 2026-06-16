@@ -2,8 +2,7 @@ unit nextpas.core.tui.task;
 {$I nextpas.core.settings.inc}
 
 interface
-uses
-  SysUtils{$IF FPC_FULLVERSION >= 30300}, Classes{$ENDIF};
+uses Classes;
 const
   TASK_QUEUE_CAPACITY = 32;
   MAX_CONCURRENT_TASKS = 8;
@@ -498,6 +497,11 @@ var
   Ctx: TTaskContext;
 {$ENDIF}
 begin
+  if not Assigned(Spec.Func) then
+  begin
+    Result := 0;
+    Exit;
+  end;
   Id := TTaskId(InterlockedIncrement(FNextId));
   ParamCopy := nil;
   if (Spec.Param <> nil) and (Spec.ParamSize > 0) then

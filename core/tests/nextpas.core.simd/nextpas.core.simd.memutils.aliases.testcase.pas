@@ -10,21 +10,38 @@ interface
 
 uses
   Classes, SysUtils, fpcunit, testregistry,
+  nextpas.core.errors,
   nextpas.core.simd,
   nextpas.core.simd.alloc,
   nextpas.core.simd.memutils;
 
 type
+  TTestProc = reference to procedure;
+
   // Aligned 内存工具测试（memutils）
   TTestCase_Memutils = class(TTestCase)
+  private
+    procedure ExpectArgumentError(const AName: string; const AProc: TTestProc);
+    procedure ExpectOutOfMemory(const AName: string; const AProc: TTestProc);
   published
     procedure Test_AlignedAlloc_AlignedAndWritable;
     procedure Test_AlignedAlloc_64ByteAlignedAndWritable;
+    procedure Test_AlignedAlloc_InvalidAlignment_FailClose;
+    procedure Test_AlignedAlloc_ZeroSize_ReturnsNil;
     procedure Test_TAlignedArray_64ByteAligned;
+    procedure Test_TAlignedArray_InvalidAlignment_FailClose;
     procedure Test_SimdAlloc_Sa64_64ByteAlignedAndWritable;
+    procedure Test_SimdAlloc_ZeroSizeAndNilFree_Semantics;
+    procedure Test_SimdAlloc_SizeOverflow_FailClose;
+    procedure Test_SimdRealloc_SizeOverflow_FailClose;
     procedure Test_AlignedRealloc_Grow_PreservesPrefix;
     procedure Test_AlignedRealloc_Shrink_PreservesPrefix;
     procedure Test_AlignedRealloc_NilAndZero_Semantics;
+    procedure Test_AlignedRealloc_InvalidAlignment_FailClose;
+    procedure Test_AlignmentUtilities_InvalidAlignment_FailClose;
+    procedure Test_AlignUp_Overflow_FailClose;
+    procedure Test_AlignUpSize_Overflow_FailClose;
+    procedure Test_AlignedMemOps_InvalidAlignment_FailClose;
   end;
 
   // Rust 风格类型别名测试
@@ -60,6 +77,34 @@ type
 implementation
 
 { TTestCase_Memutils }
+
+procedure TTestCase_Memutils.ExpectArgumentError(const AName: string; const AProc: TTestProc);
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    AProc();
+  except
+    on EArgumentError do
+      LRaised := True;
+  end;
+  AssertTrue(AName + ' should raise EArgumentError', LRaised);
+end;
+
+procedure TTestCase_Memutils.ExpectOutOfMemory(const AName: string; const AProc: TTestProc);
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    AProc();
+  except
+    on EOutOfMemory do
+      LRaised := True;
+  end;
+  AssertTrue(AName + ' should raise EOutOfMemory', LRaised);
+end;
 
 procedure TTestCase_Memutils.Test_AlignedAlloc_AlignedAndWritable;
 var
@@ -100,6 +145,31 @@ begin
   end;
 end;
 
+procedure TTestCase_Memutils.Test_AlignedAlloc_InvalidAlignment_FailClose;
+begin
+  ExpectArgumentError('AlignedAlloc alignment=0',
+    procedure
+    begin
+      AlignedAlloc(16, 0);
+    end);
+  ExpectArgumentError('AlignedAlloc alignment=24',
+    procedure
+    begin
+      AlignedAlloc(16, 24);
+    end);
+  ExpectArgumentError('AlignedAlloc alignment below pointer size',
+    procedure
+    begin
+      AlignedAlloc(16, SizeOf(Pointer) shr 1);
+    end);
+end;
+
+procedure TTestCase_Memutils.Test_AlignedAlloc_ZeroSize_ReturnsNil;
+begin
+  AssertTrue('AlignedAlloc(0, valid alignment) should return nil',
+    AlignedAlloc(0, SIMD_ALIGN_16) = nil);
+end;
+
 procedure TTestCase_Memutils.Test_TAlignedArray_64ByteAligned;
 type
   TByteAlignedArray = specialize TAlignedArray<Byte>;
@@ -124,6 +194,24 @@ begin
   end;
 end;
 
+procedure TTestCase_Memutils.Test_TAlignedArray_InvalidAlignment_FailClose;
+type
+  TByteAlignedArray = specialize TAlignedArray<Byte>;
+begin
+  ExpectArgumentError('TAlignedArray.Create alignment=0',
+    procedure
+    begin
+      TByteAlignedArray.Create(4, 0);
+    end);
+  ExpectArgumentError('TAlignedArray.FromPointer alignment=24',
+    procedure
+    var
+      LStorage: array[0..15] of Byte;
+    begin
+      TByteAlignedArray.FromPointer(@LStorage[0], Length(LStorage), 24);
+    end);
+end;
+
 procedure TTestCase_Memutils.Test_SimdAlloc_Sa64_64ByteAlignedAndWritable;
 var
   LPtr: PByte;
@@ -142,6 +230,74 @@ begin
   finally
     SimdFree(LPtr);
   end;
+end;
+
+procedure TTestCase_Memutils.Test_SimdAlloc_ZeroSizeAndNilFree_Semantics;
+begin
+  AssertTrue('SimdAlloc(0) should return nil', SimdAlloc(0, sa16) = nil);
+  AssertTrue('SimdRealloc(nil, 0) should return nil', SimdRealloc(nil, 0, sa64) = nil);
+  SimdFree(nil);
+end;
+
+procedure TTestCase_Memutils.Test_SimdAlloc_SizeOverflow_FailClose;
+begin
+  ExpectOutOfMemory('SimdAlloc(saAuto) size overflow',
+    procedure
+    begin
+      SimdAlloc(High(SizeUInt), saAuto);
+    end);
+  ExpectOutOfMemory('SimdAlloc(sa16) size overflow',
+    procedure
+    begin
+      SimdAlloc(High(SizeUInt), sa16);
+    end);
+  ExpectOutOfMemory('SimdAlloc(sa32) size overflow',
+    procedure
+    begin
+      SimdAlloc(High(SizeUInt), sa32);
+    end);
+  ExpectOutOfMemory('SimdAlloc(sa64) size overflow',
+    procedure
+    begin
+      SimdAlloc(High(SizeUInt), sa64);
+    end);
+end;
+
+procedure TTestCase_Memutils.Test_SimdRealloc_SizeOverflow_FailClose;
+  procedure ExpectOverflowPreservesPointer(const AName: string; const AAlignment: TSimdAlignment);
+  var
+    LPtr, LResultPtr: PByte;
+    LRaised: Boolean;
+  begin
+    LPtr := PByte(SimdAlloc(16, sa16));
+    LResultPtr := nil;
+    try
+      LPtr[0] := 77;
+      LRaised := False;
+      try
+        LResultPtr := PByte(SimdRealloc(LPtr, High(SizeUInt), AAlignment));
+      except
+        on EOutOfMemory do
+          LRaised := True;
+      end;
+      if not LRaised then
+      begin
+        if LResultPtr <> nil then
+          SimdFree(LResultPtr);
+        LPtr := nil; // Legacy behavior may already have freed the pointer.
+      end;
+      AssertTrue(AName + ' should raise EOutOfMemory', LRaised);
+      AssertEquals(AName + ' must not free original pointer first', Byte(77), LPtr[0]);
+    finally
+      if LPtr <> nil then
+        SimdFree(LPtr);
+    end;
+  end;
+begin
+  ExpectOverflowPreservesPointer('SimdRealloc(saAuto) size overflow', saAuto);
+  ExpectOverflowPreservesPointer('SimdRealloc(sa16) size overflow', sa16);
+  ExpectOverflowPreservesPointer('SimdRealloc(sa32) size overflow', sa32);
+  ExpectOverflowPreservesPointer('SimdRealloc(sa64) size overflow', sa64);
 end;
 
 procedure TTestCase_Memutils.Test_AlignedRealloc_Grow_PreservesPrefix;
@@ -219,6 +375,99 @@ begin
     if LPtr <> nil then
       AlignedFree(LPtr);
   end;
+end;
+
+procedure TTestCase_Memutils.Test_AlignedRealloc_InvalidAlignment_FailClose;
+var
+  LPtr: PByte;
+  LRaised: Boolean;
+begin
+  ExpectArgumentError('AlignedRealloc(nil, N, alignment=0)',
+    procedure
+    begin
+      AlignedRealloc(nil, 16, 0);
+    end);
+
+  LPtr := AlignedAlloc(16, SIMD_ALIGN_16);
+  try
+    LPtr[0] := 123;
+    LRaised := False;
+    try
+      AlignedRealloc(LPtr, 0, 24);
+    except
+      on EArgumentError do
+        LRaised := True;
+    end;
+    if not LRaised then
+      LPtr := nil; // Legacy behavior may already have freed the pointer.
+    AssertTrue('AlignedRealloc(p, 0, invalid alignment) should raise EArgumentError', LRaised);
+    AssertEquals('Invalid realloc must not free original pointer first', Byte(123), LPtr[0]);
+  finally
+    if LPtr <> nil then
+      AlignedFree(LPtr);
+  end;
+end;
+
+procedure TTestCase_Memutils.Test_AlignmentUtilities_InvalidAlignment_FailClose;
+var
+  LStorage: array[0..31] of Byte;
+begin
+  ExpectArgumentError('IsAligned alignment=0',
+    procedure
+    begin
+      IsAligned(@LStorage[0], 0);
+    end);
+  ExpectArgumentError('AlignUp alignment=24',
+    procedure
+    begin
+      AlignUp(@LStorage[0], 24);
+    end);
+  ExpectArgumentError('AlignUpSize alignment below pointer size',
+    procedure
+    begin
+      AlignUpSize(16, SizeOf(Pointer) shr 1);
+    end);
+end;
+
+procedure TTestCase_Memutils.Test_AlignUp_Overflow_FailClose;
+begin
+  ExpectOutOfMemory('AlignUp pointer overflow',
+    procedure
+    begin
+      AlignUp(Pointer(High(NativeUInt)), SIMD_ALIGN_16);
+    end);
+end;
+
+procedure TTestCase_Memutils.Test_AlignUpSize_Overflow_FailClose;
+var
+  LSize: NativeUInt;
+begin
+  LSize := High(NativeUInt);
+  ExpectOutOfMemory('AlignUpSize overflow',
+    procedure
+    begin
+      AlignUpSize(LSize, SIMD_ALIGN_16);
+    end);
+end;
+
+procedure TTestCase_Memutils.Test_AlignedMemOps_InvalidAlignment_FailClose;
+var
+  LSrc: array[0..15] of Byte;
+  LDst: array[0..15] of Byte;
+begin
+  FillChar(LSrc, SizeOf(LSrc), 42);
+  FillChar(LDst, SizeOf(LDst), 0);
+
+  ExpectArgumentError('AlignedMemCopy alignment=0',
+    procedure
+    begin
+      AlignedMemCopy(@LSrc[0], @LDst[0], SizeOf(LSrc), 0);
+    end);
+  ExpectArgumentError('AlignedMemFill alignment=24',
+    procedure
+    begin
+      AlignedMemFill(@LDst[0], SizeOf(LDst), 17, 24);
+    end);
 end;
 
 { TTestCase_RustStyleAliases }

@@ -21,7 +21,7 @@ unit nextpas.core.tls.winssl.utils;
 interface
 
 uses
-  Windows, SysUtils, 
+  Windows, nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.base;
 

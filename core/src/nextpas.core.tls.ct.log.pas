@@ -9,7 +9,7 @@ unit nextpas.core.tls.ct.log;
 interface
 
 uses
-  SysUtils, Classes, fpjson, jsonparser,
+   fpjson, jsonparser,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.ct,
@@ -79,6 +79,11 @@ function Base64Decode(const Input: string): TBytes;
 implementation
 
 uses
+  nextpas.core.fs.base,
+  nextpas.core.fs.intf,
+  nextpas.core.fs.stream,
+  nextpas.core.io,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.net.hooks,
   nextpas.core.tls.openssl.api.core,
@@ -344,24 +349,19 @@ end;
 
 function TCTLogClient.LoadFromFile(const FileName: string): Boolean;
 var
-  FileStream: TFileStream;
+  FileStream: IStream;
   JSONData: string;
+  JSONBytes: TBytes;
 begin
   Result := False;
   
   if not FileExists(FileName) then Exit;
   
   try
-    FileStream := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
-    try
-      SetLength(JSONData, FileStream.Size);
-      if FileStream.Size > 0 then
-        FileStream.ReadBuffer(JSONData[1], FileStream.Size);
-      
-      Result := LoadFromJSON(JSONData);
-    finally
-      FileStream.Free;
-    end;
+    FileStream := FsOpen(FileName, [fmRead]);
+    JSONBytes := ReadAll(FileStream);
+    JSONData := UTF8BytesToString(JSONBytes);
+    Result := LoadFromJSON(JSONData);
   except
     Result := False;
   end;
@@ -369,12 +369,13 @@ end;
 
 function TCTLogClient.SaveToFile(const FileName: string): Boolean;
 var
-  FileStream: TFileStream;
+  FileStream: IFile;
   JSON: TJSONObject;
   LogsArray: TJSONArray;
   LogObj: TJSONObject;
   I: Integer;
   JSONStr: string;
+  JSONBytes: TBytes;
 begin
   Result := False;
   
@@ -403,16 +404,12 @@ begin
       JSON.Add('timestamp', DateTimeToStr(Now));
       
       JSONStr := JSON.AsJSON;
+      JSONBytes := StringToUTF8Bytes(JSONStr);
       
-      // 写入文件
-      FileStream := TFileStream.Create(FileName, fmCreate);
-      try
-        if Length(JSONStr) > 0 then
-          FileStream.WriteBuffer(JSONStr[1], Length(JSONStr));
-        Result := True;
-      finally
-        FileStream.Free;
-      end;
+      FileStream := FsCreate(FileName);
+      if Length(JSONBytes) > 0 then
+        FileStream.Write(JSONBytes[0], Length(JSONBytes));
+      Result := True;
     finally
       JSON.Free;
     end;

@@ -28,6 +28,8 @@ type
   ENotSupportedError = nextpas.core.exception.ENotSupportedError;
   ETimeoutError = nextpas.core.exception.ETimeoutError;
   ECancelledError = nextpas.core.exception.ECancelledError;
+  EInterruptedError = nextpas.core.exception.EInterruptedError;
+  EWouldBlockError = nextpas.core.exception.EWouldBlockError;
   EPermissionError = nextpas.core.exception.EPermissionError;
   ENotFoundError = nextpas.core.exception.ENotFoundError;
   EAlreadyExistsError = nextpas.core.exception.EAlreadyExistsError;
@@ -59,6 +61,13 @@ const
   ecParse = nextpas.core.exception.ecParse;
   ecInternal = nextpas.core.exception.ecInternal;
 
+function ErrorCategoryToString(const ACategory: TErrorCategory): string; inline;
+
 implementation
+
+function ErrorCategoryToString(const ACategory: TErrorCategory): string;
+begin
+  Result := nextpas.core.exception.ErrorCategoryToString(ACategory);
+end;
 
 end.

@@ -28,6 +28,7 @@ unix:
 	@printf 'simulated-host-compile-target=unix status=pass\n'
 
 test: darwin android freebsd unix
+	@printf 'simulated-host-compile-truth=forced-compile\n'
 	@printf 'simulated-host-compile-matrix-status=pass\n'
 
 clean:

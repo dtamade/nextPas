@@ -23,6 +23,13 @@ function getppid: pid_t; cdecl; external 'c' name 'getppid';
 function mmap(addr: Pointer; len: PtrUInt; prot: Int32; flags: Int32; fd: Int32; ofs: Int64): Pointer; cdecl; external 'c' name 'mmap';
 function munmap(addr: Pointer; len: PtrUInt): Int32; cdecl; external 'c' name 'munmap';
 function mprotect(addr: Pointer; len: PtrUInt; prot: Int32): Int32; cdecl; external 'c' name 'mprotect';
+{$IFDEF NEXTPAS_LINUX}
+function shm_open(name: PAnsiChar; oflag: cint; mode: mode_t): cint; cdecl; external 'rt' name 'shm_open';
+function shm_unlink(name: PAnsiChar): cint; cdecl; external 'rt' name 'shm_unlink';
+{$ELSE}
+function shm_open(name: PAnsiChar; oflag: cint; mode: mode_t): cint; cdecl; external 'c' name 'shm_open';
+function shm_unlink(name: PAnsiChar): cint; cdecl; external 'c' name 'shm_unlink';
+{$ENDIF}
 function open(path: PAnsiChar; flags: Int32; mode: TPlatformFileModeArg): TPlatformFileDescriptor; cdecl; external 'c' name 'open';
 function close(fd: TPlatformFileDescriptor): Int32; cdecl; external 'c' name 'close';
 function read(fd: TPlatformFileDescriptor; buf: Pointer; count: size_t): ssize_t; cdecl; external 'c' name 'read';
@@ -160,6 +167,9 @@ function mlock(addr: Pointer; length: size_t): cint; cdecl; external 'c' name 'm
 function munlock(addr: Pointer; length: size_t): cint; cdecl; external 'c' name 'munlock';
 function getrlimit(resource: cint; rlim: Pointer): cint; cdecl; external 'c' name 'getrlimit';
 function setrlimit(resource: cint; rlim: Pointer): cint; cdecl; external 'c' name 'setrlimit';
+function posix_memalign(memptr: PPointer; alignment: size_t; size: size_t): cint; cdecl; external 'c' name 'posix_memalign';
+procedure explicit_bzero(s: Pointer; n: size_t); cdecl; external 'c' name 'explicit_bzero';
+procedure free(ptr: Pointer); cdecl; external 'c' name 'free';
 
 {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
 function fpstat(path: PAnsiChar; buf: Pointer): cint; cdecl; external 'c' name 'stat';

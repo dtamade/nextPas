@@ -4,27 +4,14 @@ unit nextpas.core.net.server.readiness;
 
 interface
 
-uses
-  nextpas.core.net.base,
-  nextpas.core.net.intf,
-  nextpas.core.net.server.base,
-  nextpas.core.net.server.intf;
+uses nextpas.core.net.base, nextpas.core.net.intf, nextpas.core.net.server.base, nextpas.core.net.server.intf, nextpas.core.text.conv;
 
 function NewTcpReadinessServer(
   const AOptions: TTcpServerOptions): ITcpServer;
 
 implementation
 
-uses
-  SysUtils,
-  nextpas.core.errors,
-  nextpas.core.thread,
-  nextpas.core.time.base,
-  nextpas.core.time.deadline,
-  nextpas.core.platform.io.base,
-  nextpas.core.platform.io,
-  nextpas.core.net.tcp,
-  nextpas.core.net.server.runtime;
+uses nextpas.core.errors, nextpas.core.thread, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.platform.io.base, nextpas.core.platform.io, nextpas.core.net.tcp, nextpas.core.net.server.runtime, nextpas.core.text.conv;
 
 type
   TTcpReadinessServer = class;
@@ -60,6 +47,7 @@ type
     FCompletionQueue: TTcpServerPollCompletionQueue;
     FTargetRegistry: TTcpServerPollTargetRegistry;
     procedure EnsureRuntimeContext;
+    procedure ReleaseRuntimeContext;
     function CreateSessionContext: TTcpServerPollSessionContext;
     procedure RegisterPollTarget(const ATarget: TTcpServerPollSessionTarget);
     procedure UnregisterPollTarget(const ATarget: TTcpServerPollSessionTarget);
@@ -72,11 +60,13 @@ type
     function TryRegisterPollDrivenSession(const AConn: ITcpStream;
       const ASession: ITcpServerSession;
       const AContext: TTcpServerPollSessionContext): Boolean;
-    procedure EnqueueCompletion(const ATarget: TTcpServerPollSessionTarget;
+    procedure EnqueueCompletion(const ATicket: ITcpServerPollTargetTicket;
       const ACompletion: ITcpServerWorkCompletion;
       const AOutcome: TTcpServerWorkOutcome;
       const AOwnership: TTcpServerConnOwnership);
+    function IsTargetRegistered(const ATarget: TTcpServerPollSessionTarget): Boolean;
     procedure DrainPendingCompletions;
+    procedure ReleaseRegisteredPollTargets;
     procedure WakeReactor;
     procedure HandlePollTarget(const ATarget: TTcpServerPollSessionTarget;
       const AEvents: TPlatformPollEvents);
@@ -170,6 +160,18 @@ begin
   end;
 end;
 
+procedure TTcpReadinessServer.ReleaseRuntimeContext;
+begin
+  if FWorkerHandoff <> nil then
+    FWorkerHandoff.Shutdown;
+  DrainPendingCompletions;
+  FWorkerHandoff := nil;
+  FCompletionQueue.Clear;
+  if FConnWorkers <> nil then
+    FConnWorkers.Shutdown;
+  FConnWorkers := nil;
+end;
+
 function TTcpReadinessServer.CreateSessionContext: TTcpServerPollSessionContext;
 begin
   Result := TTcpServerPollSessionContext.Create(FWorkerHandoff,
@@ -253,7 +255,14 @@ begin
 
   LPollContext := CreateSessionContext;
   LContext := LPollContext;
-  if TryCreateTcpServerSession(AHandler, AConn, LContext, LSession) then
+  try
+    if not TryCreateTcpServerSession(AHandler, AConn, LContext, LSession) then
+      LSession := nil;
+  except
+    CloseServerOwnedTcpConn(AConn);
+    Exit;
+  end;
+  if LSession <> nil then
   begin
     if TryRegisterPollDrivenSession(AConn, LSession, LPollContext) then
       Exit;
@@ -284,11 +293,14 @@ function TTcpReadinessServer.TryRegisterPollDrivenSession(
 var
   LTarget: TTcpServerPollSessionTarget;
   LErr: Int32;
+  LAddedToPoller: Boolean;
 begin
   Result := False;
-  if not TryCreateTcpServerPollSessionTarget(AConn, ASession, LTarget) then
-    Exit(False);
+  LTarget := nil;
+  LAddedToPoller := False;
   try
+    if not TryCreateTcpServerPollSessionTarget(AConn, ASession, LTarget) then
+      Exit(False);
     if LTarget.CurrentEvents <> [] then
     begin
       LErr := platform_poller_add(FPoller, LTarget.SocketHandle,
@@ -296,29 +308,51 @@ begin
       if LErr <> 0 then
         raise ENetworkError.Create('tcp readiness poller add conn failed (' +
           IntToStr(LErr) + ')');
+      LAddedToPoller := True;
     end;
     AContext.BindTarget(LTarget);
     RegisterPollTarget(LTarget);
     Result := True;
   except
-    LTarget.Free;
+    if LTarget <> nil then
+    begin
+      if LAddedToPoller then
+      begin
+        LErr := platform_poller_remove(FPoller, LTarget.SocketHandle);
+        if LErr <> 0 then
+        begin
+          RegisterPollTarget(LTarget);
+          LTarget := nil;
+        end;
+      end;
+      if LTarget <> nil then
+        LTarget.Free;
+    end;
+    CloseServerOwnedTcpConn(AConn);
     raise;
   end;
 end;
 
 procedure TTcpReadinessServer.EnqueueCompletion(
-  const ATarget: TTcpServerPollSessionTarget;
+  const ATicket: ITcpServerPollTargetTicket;
   const ACompletion: ITcpServerWorkCompletion;
   const AOutcome: TTcpServerWorkOutcome;
   const AOwnership: TTcpServerConnOwnership);
 begin
-  FCompletionQueue.Enqueue(ATarget, ACompletion, AOutcome, AOwnership);
+  FCompletionQueue.Enqueue(ATicket, ACompletion, AOutcome, AOwnership);
+end;
+
+function TTcpReadinessServer.IsTargetRegistered(
+  const ATarget: TTcpServerPollSessionTarget): Boolean;
+begin
+  Result := FTargetRegistry.ContainsTarget(ATarget);
 end;
 
 procedure TTcpReadinessServer.DrainPendingCompletions;
 var
   LItems: TTcpServerPollPendingCompletionArray;
   LI: SizeUInt;
+  LTarget: TTcpServerPollSessionTarget;
 begin
   LItems := FCompletionQueue.Drain;
   if Length(LItems) = 0 then
@@ -329,8 +363,33 @@ begin
       LItems[LI].Completion.Complete(LItems[LI].Outcome, LItems[LI].Ownership);
     except
     end;
-    if LItems[LI].Target <> nil then
-      HandlePollTarget(LItems[LI].Target, []);
+    LTarget := nil;
+    if (LItems[LI].TargetTicket <> nil) and
+      LItems[LI].TargetTicket.ResolveTarget(LTarget) and
+      (LTarget <> nil) and IsTargetRegistered(LTarget) then
+      HandlePollTarget(LTarget, []);
+  end;
+end;
+
+procedure TTcpReadinessServer.ReleaseRegisteredPollTargets;
+var
+  LTargets: TTcpServerPollSessionTargetArray;
+  LI: SizeUInt;
+begin
+  LTargets := FTargetRegistry.Drain;
+  if Length(LTargets) = 0 then
+    Exit;
+  for LI := 0 to SizeUInt(Length(LTargets)) - 1 do
+  begin
+    if LTargets[LI] = nil then
+      Continue;
+    try
+      if LTargets[LI].CurrentEvents <> [] then
+        platform_poller_remove(FPoller, LTargets[LI].SocketHandle);
+    except
+    end;
+    CloseServerOwnedTcpConn(LTargets[LI].Connection);
+    LTargets[LI].Free;
   end;
 end;
 
@@ -348,17 +407,37 @@ var
   LNextEvents: TPlatformPollEvents;
   LOwnership: TTcpServerConnOwnership;
   LErr: Int32;
+  LSocketHandle: PtrUInt;
+  LHasSocketHandle: Boolean;
+  LCallbackCompleted: Boolean;
 begin
   LOwnership := tscoServer;
+  LSocketHandle := 0;
+  LHasSocketHandle := False;
+  LCallbackCompleted := False;
   try
+    if ATarget.CurrentEvents <> [] then
+    begin
+      LSocketHandle := ATarget.SocketHandle;
+      LHasSocketHandle := True;
+    end;
     LResult := ATarget.HandleEvents(AEvents, LNextEvents, LOwnership);
+    LCallbackCompleted := True;
     if LResult = tsprDone then
     begin
       if ATarget.CurrentEvents <> [] then
-        platform_poller_remove(FPoller, ATarget.SocketHandle);
+      begin
+        LErr := platform_poller_remove(FPoller, LSocketHandle);
+        if LErr <> 0 then
+          raise ENetworkError.Create('tcp readiness poller remove conn failed (' +
+            IntToStr(LErr) + ')');
+        ATarget.SetCurrentEvents([]);
+      end;
       UnregisterPollTarget(ATarget);
       if LOwnership = tscoServer then
         CloseServerOwnedTcpConn(ATarget.Connection);
+      if LOwnership = tscoHandler then
+        ATarget.RestoreBlocking;
       ATarget.Free;
       Exit;
     end;
@@ -369,7 +448,7 @@ begin
       begin
         if ATarget.CurrentEvents <> [] then
         begin
-          LErr := platform_poller_remove(FPoller, ATarget.SocketHandle);
+          LErr := platform_poller_remove(FPoller, LSocketHandle);
           if LErr <> 0 then
             raise ENetworkError.Create('tcp readiness poller remove conn failed (' +
               IntToStr(LErr) + ')');
@@ -395,7 +474,14 @@ begin
     end;
   except
     if ATarget.CurrentEvents <> [] then
-      platform_poller_remove(FPoller, ATarget.SocketHandle);
+    begin
+      if not LHasSocketHandle then
+        Exit;
+      LErr := platform_poller_remove(FPoller, LSocketHandle);
+      if (LErr <> 0) and LCallbackCompleted then
+        Exit;
+      ATarget.SetCurrentEvents([]);
+    end;
     UnregisterPollTarget(ATarget);
     CloseServerOwnedTcpConn(ATarget.Connection);
     ATarget.Free;
@@ -430,11 +516,15 @@ var
   LErr: Int32;
   LI: Int32;
   LTarget: TTcpServerPollSessionTarget;
+  LSetupComplete: Boolean;
+  LRuntimeContextReady: Boolean;
 begin
   if AHandler = nil then
     raise EArgumentError.Create('tcp server handler must not be nil');
 
+  LRuntimeContextReady := False;
   EnsureRuntimeContext;
+  LRuntimeContextReady := True;
   try
     FListener := NetTcpListen(AAddr, APort);
     if not Supports(FListener, ITcpListenerRuntime, FListenerRuntime) then
@@ -449,20 +539,33 @@ begin
         IntToStr(LErr) + ')');
     FPollerReady := True;
 
-    LErr := platform_poller_enable_wake(FPoller, WAKE_USERDATA);
-    if LErr <> 0 then
-      raise ENetworkError.Create('tcp readiness poller wake enable failed (' +
-        IntToStr(LErr) + ')');
+    LSetupComplete := False;
+    try
+      LErr := platform_poller_enable_wake(FPoller, WAKE_USERDATA);
+      if LErr <> 0 then
+        raise ENetworkError.Create('tcp readiness poller wake enable failed (' +
+          IntToStr(LErr) + ')');
 
-    LErr := platform_poller_add(FPoller,
-      FListenerSocketRuntime.NativeSocketHandle,
-      [peReadable], nil);
-    if LErr <> 0 then
-      raise ENetworkError.Create('tcp readiness poller add failed (' +
-        IntToStr(LErr) + ')');
+      LErr := platform_poller_add(FPoller,
+        FListenerSocketRuntime.NativeSocketHandle,
+        [peReadable], nil);
+      if LErr <> 0 then
+        raise ENetworkError.Create('tcp readiness poller add failed (' +
+          IntToStr(LErr) + ')');
+      LSetupComplete := True;
+    finally
+      if (not LSetupComplete) and FPollerReady then
+      begin
+        platform_poller_close(FPoller);
+        FPollerReady := False;
+        ReleaseRuntimeContext;
+        LRuntimeContextReady := False;
+      end;
+    end;
 
     FRunning := True;
     try
+      LRuntimeContextReady := False;
       while FRunning do
       begin
         LTimeoutMs := ComputePollTimeoutMs;
@@ -496,28 +599,24 @@ begin
             Continue;
           end;
           LTarget := TTcpServerPollSessionTarget(LEntries[LI].UserData);
-          HandlePollTarget(LTarget, LEntries[LI].REvents);
+          if IsTargetRegistered(LTarget) then
+            HandlePollTarget(LTarget, LEntries[LI].REvents);
         end;
         HandleExpiredPollTargets;
       end;
     finally
       FRunning := False;
-      if FWorkerHandoff <> nil then
-        FWorkerHandoff.Shutdown;
-      DrainPendingCompletions;
-      FWorkerHandoff := nil;
-      FCompletionQueue.Clear;
-      FTargetRegistry.Clear;
+      ReleaseRuntimeContext;
+      ReleaseRegisteredPollTargets;
       if FPollerReady then
       begin
         platform_poller_close(FPoller);
         FPollerReady := False;
       end;
-      if FConnWorkers <> nil then
-        FConnWorkers.Shutdown;
     end;
   finally
-    FConnWorkers := nil;
+    if LRuntimeContextReady then
+      ReleaseRuntimeContext;
     FListenerSocketRuntime := nil;
     FListenerRuntime := nil;
     FListener := nil;

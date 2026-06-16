@@ -132,6 +132,8 @@ end;
 function TAllocator.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
 var
   LRaw: Pointer;
+  LAlignMask: SizeUInt;
+  LExtra: SizeUInt;
   LNeeded: SizeUInt;
   LHeaderPtr: PPointer;
 begin
@@ -139,7 +141,13 @@ begin
   if (aAlignment < SizeOf(Pointer)) or (not IsPowerOfTwo(aAlignment)) then
     ContractsRequire(False, 'AllocAligned: alignment must be power of two and >= pointer size');
   // Over-allocate and store the original pointer just before the aligned block
-  LNeeded := aSize + aAlignment - 1 + SizeOf(Pointer);
+  LAlignMask := aAlignment - 1;
+  LExtra := LAlignMask + SizeOf(Pointer);
+  if LExtra < LAlignMask then
+    Exit(nil);
+  LNeeded := aSize + LExtra;
+  if LNeeded < aSize then
+    Exit(nil);
   LRaw := GetMem(LNeeded);
   if LRaw = nil then Exit(nil);
   Result := AlignUpPtr(Pointer(PtrUInt(LRaw) + SizeOf(Pointer)), aAlignment);

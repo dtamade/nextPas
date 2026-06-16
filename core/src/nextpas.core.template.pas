@@ -81,6 +81,9 @@ function TemplateRender(const ATemplate: string; const ACtx: TTemplateContext): 
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 { ============================================================================ }
 { Internal string helpers                                                       }
 { ============================================================================ }
@@ -380,6 +383,89 @@ end;
 type
   TStopReason = (srNone, srElse, srEnd);
 
+procedure RaiseTemplateParseError(const AMessage: string);
+begin
+  raise EParseError.Create(AMessage);
+end;
+
+procedure RequireActionExpr(const AExpr, AAction: string);
+begin
+  if TrimInternal(AExpr) = '' then
+    RaiseTemplateParseError('malformed ' + AAction + ' action');
+end;
+
+procedure RequireStopAction(const AExpr, AAction: string);
+begin
+  if TrimInternal(AExpr) <> '' then
+    RaiseTemplateParseError('malformed ' + AAction + ' action');
+end;
+
+procedure RequireBoolExpr(const AExpr, AAction: string);
+var
+  LExpr, LToken, LRest, LLeft, LRight: string;
+  LI: Integer;
+begin
+  LExpr := TrimInternal(AExpr);
+  if LExpr = '' then
+    RaiseTemplateParseError('malformed ' + AAction + ' action');
+
+  LI := 1;
+  while (LI <= Length(LExpr)) and (LExpr[LI] > ' ') do
+    Inc(LI);
+  LToken := Copy(LExpr, 1, LI - 1);
+  if not IsCompareOp(LToken) then
+    Exit;
+
+  LRest := TrimInternal(Copy(LExpr, LI + 1, Length(LExpr) - LI));
+  LI := 1;
+  while (LI <= Length(LRest)) and (LRest[LI] > ' ') do
+    Inc(LI);
+  LLeft := Copy(LRest, 1, LI - 1);
+  if LI <= Length(LRest) then
+    LRight := TrimInternal(Copy(LRest, LI + 1, Length(LRest) - LI))
+  else
+    LRight := '';
+  if (LLeft = '') or (LRight = '') then
+    RaiseTemplateParseError('malformed ' + AAction + ' action');
+end;
+
+procedure RequireExpressionSyntax(const AExpr, AAction: string);
+var
+  LExpr: string;
+  LStart, LI: Integer;
+begin
+  LExpr := TrimInternal(AExpr);
+  if LExpr = '' then
+    RaiseTemplateParseError('malformed ' + AAction + ' action');
+
+  LStart := 1;
+  for LI := 1 to Length(LExpr) do
+  begin
+    if LExpr[LI] = '|' then
+    begin
+      if TrimInternal(Copy(LExpr, LStart, LI - LStart)) = '' then
+        RaiseTemplateParseError('malformed ' + AAction + ' action');
+      LStart := LI + 1;
+    end;
+  end;
+  if TrimInternal(Copy(LExpr, LStart, Length(LExpr) - LStart + 1)) = '' then
+    RaiseTemplateParseError('malformed ' + AAction + ' action');
+end;
+
+procedure RequireBlockClosed(const AStop: TStopReason; const ABlockName: string);
+begin
+  if AStop <> srEnd then
+    RaiseTemplateParseError('unclosed ' + ABlockName + ' block');
+end;
+
+procedure RejectTopLevelStop(const AStop: TStopReason);
+begin
+  if AStop = srElse then
+    RaiseTemplateParseError('unexpected else');
+  if AStop = srEnd then
+    RaiseTemplateParseError('unexpected end');
+end;
+
 function RenderSegment(const ASrc: string; var APos: Integer;
   const ACtx: TTemplateContext;
   var ALocals: TTemplateVarArray; var ALocalCount: Integer;
@@ -413,7 +499,7 @@ begin
         end;
         Inc(LClose);
       end;
-      Exit(False);
+      RaiseTemplateParseError('unclosed template action');
     end;
     Inc(ATagStart);
   end;
@@ -455,30 +541,148 @@ begin
   AExpr := TrimInternal(Copy(AContent, LI + 1, Length(AContent) - LI));
 end;
 
-procedure SkipBlock(const ASrc: string; var APos: Integer);
+procedure ParseLocalAction(const AContent: string; out AName, AExpr: string; out AAssign: Boolean);
 var
-  LStop: TStopReason;
-  LLocals: TTemplateVarArray;
-  LLocalCount: Integer;
+  LContent, LRest: string;
+  LI, LAssignPos, LPipePos: Integer;
 begin
-  LLocalCount := 0;
-  SetLength(LLocals, 0);
-  RenderSegment(ASrc, APos, Default(TTemplateContext), LLocals, LLocalCount, LStop);
+  LContent := TrimInternal(AContent);
+  AName := '';
+  AExpr := '';
+  AAssign := False;
+
+  if (LContent = '') or (LContent[1] <> '$') then
+    Exit;
+
+  LAssignPos := Pos(':=', LContent);
+  LPipePos := Pos('|', LContent);
+  if (LAssignPos > 0) and ((LPipePos = 0) or (LAssignPos < LPipePos)) then
+  begin
+    AAssign := True;
+    AName := TrimInternal(Copy(LContent, 2, LAssignPos - 2));
+    AExpr := TrimInternal(Copy(LContent, LAssignPos + 2, Length(LContent) - LAssignPos - 1));
+    if (AName = '') or (AExpr = '') then
+      RaiseTemplateParseError('malformed variable assignment action');
+    Exit;
+  end;
+
+  LI := 2;
+  while (LI <= Length(LContent)) and (LContent[LI] > ' ') and
+        (LContent[LI] <> '|') do
+    Inc(LI);
+
+  AName := Copy(LContent, 2, LI - 2);
+  LRest := TrimInternal(Copy(LContent, LI, Length(LContent) - LI + 1));
+  if (AName = '') or ((LRest <> '') and (LRest[1] <> '|')) then
+    RaiseTemplateParseError('malformed variable assignment action');
+
+  AExpr := LContent;
+end;
+
+function ExtractQuotedName(const AExpr, AAction: string): string; forward;
+
+procedure SkipBlock(const ASrc: string; var APos: Integer; out AStop: TStopReason);
+var
+  LLen: Integer;
+  LTagStart, LTagEnd: Integer;
+  LContent, LKeyword, LExpr: string;
+  LLocalName, LLocalExpr: string;
+  LLocalAssign: Boolean;
+  LBlocks: array of string;
+  LBlockCount: Integer;
+
+  procedure PushBlock(const AName: string);
+  begin
+    if LBlockCount >= Length(LBlocks) then
+      SetLength(LBlocks, LBlockCount + 8);
+    LBlocks[LBlockCount] := AName;
+    Inc(LBlockCount);
+  end;
+
+  function TopBlock: string;
+  begin
+    if LBlockCount = 0 then
+      Result := ''
+    else
+      Result := LBlocks[LBlockCount - 1];
+  end;
+begin
+  LLen := Length(ASrc);
+  LBlockCount := 0;
+  SetLength(LBlocks, 0);
+  AStop := srNone;
+
+  while APos <= LLen do
+  begin
+    if not FindNextTag(ASrc, APos, LTagStart, LTagEnd, LContent) then
+    begin
+      APos := LLen + 1;
+      Exit;
+    end;
+
+    APos := LTagEnd;
+    LContent := TrimInternal(LContent);
+    LKeyword := ExtractKeyword(LContent, LExpr);
+
+    if (LKeyword = 'define') or (LKeyword = 'template') then
+      ExtractQuotedName(LExpr, LKeyword);
+    if LKeyword = 'if' then
+      RequireBoolExpr(LExpr, LKeyword)
+    else if (LKeyword = 'range') or (LKeyword = 'with') then
+      RequireActionExpr(LExpr, LKeyword);
+    if (LContent <> '') and (LContent[1] = '$') then
+      ParseLocalAction(LContent, LLocalName, LLocalExpr, LLocalAssign);
+
+    if (LKeyword = 'if') or (LKeyword = 'range') or
+       (LKeyword = 'with') or (LKeyword = 'define') then
+      PushBlock(LKeyword)
+    else if LKeyword = 'else' then
+    begin
+      RequireStopAction(LExpr, 'else');
+      if LBlockCount = 0 then
+      begin
+        AStop := srElse;
+        Exit;
+      end;
+      if TopBlock <> 'if' then
+        RaiseTemplateParseError('unexpected else');
+    end
+    else if LKeyword = 'end' then
+    begin
+      RequireStopAction(LExpr, 'end');
+      if LBlockCount = 0 then
+      begin
+        AStop := srEnd;
+        Exit;
+      end;
+      Dec(LBlockCount);
+    end
+    else if LContent <> '' then
+      RequireExpressionSyntax(LContent, 'expression');
+  end;
 end;
 
 { Extract a quoted name from expression like "name" }
-function ExtractQuotedName(const AExpr: string): string;
+function ExtractQuotedName(const AExpr, AAction: string): string;
 var
-  LStart, LEnd: Integer;
+  LExpr: string;
+  LEnd: Integer;
 begin
-  Result := '';
-  LStart := Pos('"', AExpr);
-  if LStart = 0 then Exit;
-  LEnd := LStart + 1;
-  while (LEnd <= Length(AExpr)) and (AExpr[LEnd] <> '"') do
+  LExpr := TrimInternal(AExpr);
+  if (LExpr = '') or (LExpr[1] <> '"') then
+    RaiseTemplateParseError('malformed ' + AAction + ' name');
+
+  LEnd := 2;
+  while (LEnd <= Length(LExpr)) and (LExpr[LEnd] <> '"') do
     Inc(LEnd);
-  if LEnd <= Length(AExpr) then
-    Result := Copy(AExpr, LStart + 1, LEnd - LStart - 1);
+  if LEnd > Length(LExpr) then
+    RaiseTemplateParseError('malformed ' + AAction + ' name');
+
+  Result := Copy(LExpr, 2, LEnd - 2);
+  if Result = '' then
+    RaiseTemplateParseError('malformed ' + AAction + ' name');
+  if TrimInternal(Copy(LExpr, LEnd + 1, Length(LExpr) - LEnd)) <> '' then
+    RaiseTemplateParseError('malformed ' + AAction + ' name');
 end;
 
 function RenderSegment(const ASrc: string; var APos: Integer;
@@ -494,9 +698,21 @@ var
   LI, LSavePos: Integer;
   LInnerStop: TStopReason;
   LVarName, LVarExpr: string;
-  LAssignPos: Integer;
+  LVarAssign: Boolean;
   LDefName, LDefBody: string;
-  LWithVar, LSavedPrefix: string;
+  LWithVar, LSavedPrefix, LSavedDot: string;
+
+  function RenderScopedSegment: string;
+  var
+    LSavedLocalCount: Integer;
+  begin
+    LSavedLocalCount := ALocalCount;
+    try
+      Result := RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+    finally
+      ALocalCount := LSavedLocalCount;
+    end;
+  end;
 begin
   LLen := Length(ASrc);
   LResult := '';
@@ -523,82 +739,64 @@ begin
     { Stop words }
     if LKeyword = 'end' then
     begin
+      RequireStopAction(LExpr, 'end');
       AStop := srEnd;
       Exit(LResult);
     end;
     if LKeyword = 'else' then
     begin
+      RequireStopAction(LExpr, 'else');
       AStop := srElse;
       Exit(LResult);
     end;
 
-    { define "name" — collect body until {{end}} }
+    { define "name": collect body until end }
     if LKeyword = 'define' then
     begin
-      LDefName := ExtractQuotedName(LExpr);
-      LDefBody := RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+      LDefName := ExtractQuotedName(LExpr, 'define');
+      LDefBody := RenderScopedSegment;
+      RequireBlockClosed(LInnerStop, 'define');
       TTemplateContext(ACtx).Define(LDefName, LDefBody);
       Continue;
     end;
 
-    { template "name" — insert defined block }
+    { template "name": insert defined block }
     if LKeyword = 'template' then
     begin
-      LDefName := ExtractQuotedName(LExpr);
+      LDefName := ExtractQuotedName(LExpr, 'template');
       LResult := LResult + ACtx.GetDefine(LDefName);
       Continue;
     end;
 
-    { with .Var — set prefix for inner block }
+    { with .Var: set prefix for inner block }
     if LKeyword = 'with' then
     begin
+      RequireActionExpr(LExpr, 'with');
       LWithVar := StripDot(TrimInternal(LExpr));
       LSavedPrefix := TTemplateContext(ACtx).FPrefix;
       if LSavedPrefix <> '' then
         TTemplateContext(ACtx).SetPrefix(LSavedPrefix + '.' + LWithVar)
       else
         TTemplateContext(ACtx).SetPrefix(LWithVar);
-      LResult := LResult + RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
-      TTemplateContext(ACtx).SetPrefix(LSavedPrefix);
+      try
+        LResult := LResult + RenderScopedSegment;
+        RequireBlockClosed(LInnerStop, 'with');
+      finally
+        TTemplateContext(ACtx).SetPrefix(LSavedPrefix);
+      end;
       Continue;
     end;
 
-    { Variable assignment: {{$name := expr}} }
-    if (Length(LKeyword) > 1) and (LKeyword[1] = '$') then
+    { Local variable action }
+    if (LContent <> '') and (LContent[1] = '$') then
     begin
-      { Check for := }
-      LAssignPos := Pos(':=', LExpr);
-      if LAssignPos = 0 then
+      ParseLocalAction(LContent, LVarName, LVarExpr, LVarAssign);
+      if not LVarAssign then
       begin
-        { Check if the keyword itself contains := }
-        LAssignPos := Pos(':=', LContent);
-        if LAssignPos > 0 then
-        begin
-          LVarName := TrimInternal(Copy(LContent, 2, LAssignPos - 2));
-          LVarExpr := TrimInternal(Copy(LContent, LAssignPos + 2, Length(LContent) - LAssignPos - 1));
-        end
-        else
-        begin
-          { Just a variable reference {{$name}} }
-          LVarName := Copy(LKeyword, 2, Length(LKeyword) - 1);
-          LResult := LResult + '';
-          for LI := ALocalCount - 1 downto 0 do
-            if ALocals[LI].Name = LVarName then
-            begin
-              LResult := LResult + ALocals[LI].Value;
-              Break;
-            end;
-          Continue;
-        end;
-      end
-      else
-      begin
-        { {{$name := expr}} — keyword is $name, expr starts with ":= ..." }
-        LVarName := Copy(LKeyword, 2, Length(LKeyword) - 1);
-        LVarExpr := TrimInternal(Copy(LExpr, 3, Length(LExpr) - 2));
+        LResult := LResult + EvalExpr(LVarExpr, ACtx, ALocals, ALocalCount);
+        Continue;
       end;
 
-      { Evaluate the expression }
       if ALocalCount >= Length(ALocals) then
         SetLength(ALocals, ALocalCount + 8);
       ALocals[ALocalCount].Name := LVarName;
@@ -610,40 +808,61 @@ begin
     { if/else/end }
     if LKeyword = 'if' then
     begin
+      RequireBoolExpr(LExpr, 'if');
       if EvalBool(LExpr, ACtx, ALocals, ALocalCount) then
       begin
-        LResult := LResult + RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+        LResult := LResult + RenderScopedSegment;
         if LInnerStop = srElse then
-          RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+        begin
+          SkipBlock(ASrc, APos, LInnerStop);
+          RequireBlockClosed(LInnerStop, 'if');
+        end
+        else
+          RequireBlockClosed(LInnerStop, 'if');
       end
       else
       begin
-        RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+        SkipBlock(ASrc, APos, LInnerStop);
         if LInnerStop = srElse then
-          LResult := LResult + RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+        begin
+          LResult := LResult + RenderScopedSegment;
+          RequireBlockClosed(LInnerStop, 'if');
+        end
+        else
+          RequireBlockClosed(LInnerStop, 'if');
       end;
     end
     { range }
     else if LKeyword = 'range' then
     begin
+      RequireActionExpr(LExpr, 'range');
       LItems := ACtx.GetList(StripDot(LExpr));
       LSavePos := APos;
       if Length(LItems) = 0 then
-        RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop)
+      begin
+        SkipBlock(ASrc, APos, LInnerStop);
+        RequireBlockClosed(LInnerStop, 'range');
+      end
       else
       begin
         for LI := 0 to High(LItems) do
         begin
           APos := LSavePos;
+          LSavedDot := ACtx.GetVar('.');
           TTemplateContext(ACtx).SetVar('.', LItems[LI]);
-          LResult := LResult + RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+          try
+            LResult := LResult + RenderScopedSegment;
+            RequireBlockClosed(LInnerStop, 'range');
+          finally
+            TTemplateContext(ACtx).SetVar('.', LSavedDot);
+          end;
         end;
-        TTemplateContext(ACtx).SetVar('.', '');
       end;
     end
     else
     begin
       { Variable/expression with pipes }
+      RequireExpressionSyntax(LContent, 'expression');
       LResult := LResult + EvalExpr(LContent, ACtx, ALocals, ALocalCount);
     end;
   end;
@@ -654,6 +873,40 @@ end;
 { ============================================================================ }
 { TTemplateContext                                                               }
 { ============================================================================ }
+
+function CloneTemplateContext(const ACtx: TTemplateContext): TTemplateContext;
+var
+  LI, LJ: Integer;
+begin
+  Result := TTemplateContext.Create;
+
+  Result.FVarCount := ACtx.FVarCount;
+  SetLength(Result.FVars, ACtx.FVarCount);
+  for LI := 0 to ACtx.FVarCount - 1 do
+    Result.FVars[LI] := ACtx.FVars[LI];
+
+  Result.FListCount := ACtx.FListCount;
+  SetLength(Result.FLists, ACtx.FListCount);
+  for LI := 0 to ACtx.FListCount - 1 do
+  begin
+    Result.FLists[LI].Name := ACtx.FLists[LI].Name;
+    SetLength(Result.FLists[LI].Items, Length(ACtx.FLists[LI].Items));
+    for LJ := 0 to High(ACtx.FLists[LI].Items) do
+      Result.FLists[LI].Items[LJ] := ACtx.FLists[LI].Items[LJ];
+  end;
+
+  Result.FFuncCount := ACtx.FFuncCount;
+  SetLength(Result.FFuncs, ACtx.FFuncCount);
+  for LI := 0 to ACtx.FFuncCount - 1 do
+    Result.FFuncs[LI] := ACtx.FFuncs[LI];
+
+  Result.FDefineCount := ACtx.FDefineCount;
+  SetLength(Result.FDefines, ACtx.FDefineCount);
+  for LI := 0 to ACtx.FDefineCount - 1 do
+    Result.FDefines[LI] := ACtx.FDefines[LI];
+
+  Result.FPrefix := ACtx.FPrefix;
+end;
 
 class function TTemplateContext.Create: TTemplateContext;
 begin
@@ -721,6 +974,8 @@ end;
 
 procedure TTemplateContext.RegisterFunc(const AName: string; AFunc: TTemplateFunc);
 begin
+  if not Assigned(AFunc) then
+    raise EArgumentError.Create('TTemplateContext.RegisterFunc: function must not be nil');
   if FFuncCount >= Length(FFuncs) then
     SetLength(FFuncs, FFuncCount + 4);
   FFuncs[FFuncCount].Name := AName;
@@ -789,12 +1044,17 @@ end;
 
 function TTemplateContext.GetList(const AName: string): TStringArray;
 var
-  LI: Integer;
+  LI, LJ: Integer;
 begin
+  Result := nil;
   for LI := 0 to FListCount - 1 do
     if FLists[LI].Name = AName then
-      Exit(FLists[LI].Items);
-  Result := nil;
+    begin
+      SetLength(Result, Length(FLists[LI].Items));
+      for LJ := 0 to High(FLists[LI].Items) do
+        Result[LJ] := FLists[LI].Items[LJ];
+      Exit;
+    end;
 end;
 
 { ============================================================================ }
@@ -808,15 +1068,18 @@ end;
 
 function TTemplate.Render(const ACtx: TTemplateContext): string;
 var
+  LCtx: TTemplateContext;
   LPos: Integer;
   LStop: TStopReason;
   LLocals: TTemplateVarArray;
   LLocalCount: Integer;
 begin
+  LCtx := CloneTemplateContext(ACtx);
   LPos := 1;
   LLocalCount := 0;
   SetLength(LLocals, 0);
-  Result := RenderSegment(FSource, LPos, ACtx, LLocals, LLocalCount, LStop);
+  Result := RenderSegment(FSource, LPos, LCtx, LLocals, LLocalCount, LStop);
+  RejectTopLevelStop(LStop);
 end;
 
 function TTemplate.RenderWith(const AVars: array of TTemplateVar): string;

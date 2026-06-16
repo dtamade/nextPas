@@ -18,8 +18,7 @@ unit nextpas.core.tls.winssl.certstore;
 interface
 
 uses
-  Windows, SysUtils, Classes,
-  nextpas.core.tls.base,
+  Windows, SysUtils, Classes, nextpas.core.fs, nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api,
   nextpas.core.tls.winssl.native_handle,
@@ -80,7 +79,7 @@ type
 
     { 额外的辅助方法（不在接口中） }
     function OpenSystemStore(const AStoreName: string): Boolean;
-    function GetSystemStoreNames: TStringList;
+    function GetSystemStoreNames: TStringArray;
   end;
 
 { 工厂函数 }
@@ -98,7 +97,8 @@ const
 implementation
 
 uses
-  nextpas.core.tls.secure.compare;  // Phase 3.3 P1: 使用独立的常量时间比较模块
+  nextpas.core.text.strings,
+    nextpas.core.tls.secure.compare;  // Phase 3.3 P1: 使用独立的常量时间比较模块
                                // 修复: 原来使用 nextpas.core.tls.secure 导致间接依赖 OpenSSL
                                // 现在使用不依赖 OpenSSL 的独立模块
 
@@ -120,7 +120,6 @@ begin
     Result := Store
   else
   begin
-    Store.Free;
     Result := nil;
   end;
 end;
@@ -156,7 +155,6 @@ end;
 destructor TWinSSLCertificateStore.Destroy;
 begin
   ClearCache;
-  FCertificates.Free;
 
   if FOwnsHandle and (FStoreHandle <> nil) then
     CertCloseStore(FStoreHandle, 0);
@@ -172,7 +170,7 @@ procedure TWinSSLCertificateStore.ClearCache;
 var
   i: Integer;
 begin
-  for i := 0 to FCertificates.Count - 1 do
+  for i := 0 to Length(FCertificates) - 1 do
     ISSLCertificate(FCertificates[i])._Release;
   FCertificates.Clear;
 end;
@@ -513,7 +511,7 @@ var
 begin
   Result := False;
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     Exit;
 
   // 创建证书对象并加载文件
@@ -535,16 +533,16 @@ begin
   Result := False;
   LoadedCount := 0;
 
-  if not DirectoryExists(APath) then
+  if not nextpas.core.fs.IsDir(APath) then
     Exit;
 
   // 搜索路径中的证书文件
-  if FindFirst(IncludeTrailingPathDelimiter(APath) + '*.cer', faAnyFile, SearchRec) = 0 then
+  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.cer', faAnyFile, SearchRec) = 0 then
   begin
     repeat
       if (SearchRec.Attr and faDirectory) = 0 then
       begin
-        FilePath := IncludeTrailingPathDelimiter(APath) + SearchRec.Name;
+        FilePath := nextpas.core.fs.PathEnsureSep(APath) + SearchRec.Name;
         if LoadFromFile(FilePath) then
           Inc(LoadedCount);
       end;
@@ -553,12 +551,12 @@ begin
   end;
 
   // 也搜索 .pem 和 .crt 文件
-  if FindFirst(IncludeTrailingPathDelimiter(APath) + '*.pem', faAnyFile, SearchRec) = 0 then
+  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.pem', faAnyFile, SearchRec) = 0 then
   begin
     repeat
       if (SearchRec.Attr and faDirectory) = 0 then
       begin
-        FilePath := IncludeTrailingPathDelimiter(APath) + SearchRec.Name;
+        FilePath := nextpas.core.fs.PathEnsureSep(APath) + SearchRec.Name;
         if LoadFromFile(FilePath) then
           Inc(LoadedCount);
       end;
@@ -566,12 +564,12 @@ begin
     FindClose(SearchRec);
   end;
 
-  if FindFirst(IncludeTrailingPathDelimiter(APath) + '*.crt', faAnyFile, SearchRec) = 0 then
+  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.crt', faAnyFile, SearchRec) = 0 then
   begin
     repeat
       if (SearchRec.Attr and faDirectory) = 0 then
       begin
-        FilePath := IncludeTrailingPathDelimiter(APath) + SearchRec.Name;
+        FilePath := nextpas.core.fs.PathEnsureSep(APath) + SearchRec.Name;
         if LoadFromFile(FilePath) then
           Inc(LoadedCount);
       end;
@@ -594,12 +592,12 @@ end;
 
 function TWinSSLCertificateStore.GetCount: Integer;
 begin
-  Result := FCertificates.Count;
+  Result := Length(FCertificates);
 end;
 
 function TWinSSLCertificateStore.GetCertificate(AIndex: Integer): ISSLCertificate;
 begin
-  if (AIndex >= 0) and (AIndex < FCertificates.Count) then
+  if (AIndex >= 0) and (AIndex < Length(FCertificates)) then
     Result := ISSLCertificate(FCertificates[AIndex])
   else
     Result := nil;
@@ -609,8 +607,8 @@ function TWinSSLCertificateStore.GetAllCertificates: TSSLCertificateArray;
 var
   i: Integer;
 begin
-  SetLength(Result, FCertificates.Count);
-  for i := 0 to FCertificates.Count - 1 do
+  SetLength(Result, Length(FCertificates));
+  for i := 0 to Length(FCertificates) - 1 do
     Result[i] := ISSLCertificate(FCertificates[i]);
 end;
 
@@ -636,7 +634,7 @@ begin
 
   // 基于缓存证书对象做归一化匹配，避免 WinSSL lane
   // 继续停留在 backend-native 的未归一化字符串搜索语义上。
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     LCandidate := NormalizeCertificateStoreDN(GetCertificateStoreDNText(Cert, False));
@@ -644,7 +642,7 @@ begin
       Exit(Cert);
   end;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     LCandidate := NormalizeCertificateStoreDN(GetCertificateStoreDNText(Cert, False));
@@ -669,7 +667,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     LCandidate := NormalizeCertificateStoreDN(GetCertificateStoreDNText(Cert, True));
@@ -677,7 +675,7 @@ begin
       Exit(Cert);
   end;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     LCandidate := NormalizeCertificateStoreDN(GetCertificateStoreDNText(Cert, True));
@@ -697,7 +695,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     if NormalizeCertificateStoreHex(Cert.GetSerialNumber) = LTarget then
@@ -720,7 +718,7 @@ begin
   if SearchFP = '' then
     Exit;
   
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     Cert := ISSLCertificate(FCertificates[I]);
     
@@ -825,9 +823,8 @@ begin
   Result := Open(AStoreName, False);
 end;
 
-function TWinSSLCertificateStore.GetSystemStoreNames: TStringList;
+function TWinSSLCertificateStore.GetSystemStoreNames: TStringArray;
 begin
-  Result := TStringList.Create;
 
   // 添加常见的系统存储
   Result.Add(SSL_STORE_ROOT);

@@ -3,6 +3,7 @@ program test_platform_files;
 {$I nextpas.core.settings.inc}
 
 uses
+  Classes,
   SysUtils,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
@@ -15,6 +16,42 @@ var
 const
   TEST_PATH = '/tmp/nextpas_test_platform_file.tmp';
   TEST_DATA = 'Hello, nextPas platform.files!';
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LLines: TStringList;
+begin
+  Check(FileExists(ARelativePath), 'source file exists: ' + ARelativePath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(ARelativePath);
+    Result := LLines.Text;
+  finally
+    LLines.Free;
+  end;
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) > 0, AMessage + ': ' + AToken);
+end;
+
+procedure CheckAbsent(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) = 0, AMessage + ': ' + AToken);
+end;
+
+function SourceSlice(const ASource, AStartToken, AEndToken: string): string;
+var
+  LStart, LEnd: SizeInt;
+begin
+  LStart := Pos(AStartToken, ASource);
+  Check(LStart > 0, 'source slice start exists: ' + AStartToken);
+  LEnd := Pos(AEndToken, Copy(ASource, LStart + Length(AStartToken),
+    Length(ASource)));
+  Check(LEnd > 0, 'source slice end exists: ' + AEndToken);
+  Result := Copy(ASource, LStart, Length(AStartToken) + LEnd - 1);
+end;
 
 procedure TestOpenCreateClose;
 var
@@ -286,6 +323,59 @@ begin
   platform_file_unlink(TARGET);
 end;
 
+procedure TestSymlinkReadlinkSmallBufferReturnsRequiredLength;
+var
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  LBuf: array[0..3] of AnsiChar;
+  LLen: Int32;
+const
+  TARGET = '/tmp/nextpas_readlink_small_target.txt';
+  LINK = '/tmp/nextpas_readlink_small_link.txt';
+begin
+  platform_file_unlink(LINK);
+  platform_file_unlink(TARGET);
+  platform_file_open(TARGET, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('abc'), 3, LWritten);
+  platform_file_close(H);
+  Check(platform_file_symlink(TARGET, LINK) = 0, 'small readlink symlink create');
+  FillChar(LBuf, SizeOf(LBuf), Ord('?'));
+  Check(platform_file_readlink(LINK, @LBuf[0], SizeOf(LBuf), LLen) = 0,
+    'small readlink succeeds');
+  Check(LLen = Length(TARGET), 'small readlink returns required target length');
+  Check(LBuf[0] = '/', 'small readlink preserves first byte');
+  Check(LBuf[SizeOf(LBuf) - 1] = #0, 'small readlink is NUL terminated');
+  platform_file_unlink(LINK);
+  platform_file_unlink(TARGET);
+end;
+
+procedure TestSymlinkReadlinkOneByteBufferReturnsRequiredLength;
+var
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  LBuf: array[0..0] of AnsiChar;
+  LLen: Int32;
+const
+  TARGET = '/tmp/nextpas_readlink_one_byte_target.txt';
+  LINK = '/tmp/nextpas_readlink_one_byte_link.txt';
+begin
+  platform_file_unlink(LINK);
+  platform_file_unlink(TARGET);
+  platform_file_open(TARGET, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('abc'), 3, LWritten);
+  platform_file_close(H);
+  Check(platform_file_symlink(TARGET, LINK) = 0,
+    'one-byte readlink symlink create');
+  FillChar(LBuf, SizeOf(LBuf), Ord('?'));
+  Check(platform_file_readlink(LINK, @LBuf[0], SizeOf(LBuf), LLen) = 0,
+    'one-byte readlink succeeds');
+  Check(LLen = Length(TARGET),
+    'one-byte readlink returns required target length');
+  Check(LBuf[0] = #0, 'one-byte readlink is NUL terminated');
+  platform_file_unlink(LINK);
+  platform_file_unlink(TARGET);
+end;
+
 procedure TestOpenEx;
 var
   H: TPlatformFileHandle;
@@ -397,6 +487,53 @@ begin
   platform_file_unlink(PATH);
 end;
 
+procedure TestDirectoryCloseContract;
+var
+  LSource: string;
+  LWindowsClose: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.files.pas');
+  LWindowsClose := SourceSlice(LSource,
+    'AHandle.FindHandle := FindFirstFileW',
+    '{$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}');
+  LWindowsClose := SourceSlice(LWindowsClose,
+    'function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;',
+    '{$ENDIF}');
+
+  CheckContains(LWindowsClose, 'if FindClose(AHandle.FindHandle) then',
+    'Windows dir_close must check FindClose return value');
+  CheckContains(LWindowsClose, 'Result := Int32(GetLastError)',
+    'Windows dir_close must surface FindClose failure');
+  CheckContains(LWindowsClose, 'AHandle.FindHandle := HANDLE(PtrInt(-1))',
+    'Windows dir_close must invalidate the handle after close attempt');
+  CheckAbsent(LWindowsClose, 'FindClose(AHandle.FindHandle);' + LineEnding +
+    '    AHandle.FindHandle := HANDLE(PtrInt(-1));' + LineEnding +
+    '  end;' + LineEnding +
+    '  Result := 0;',
+    'Windows dir_close must not ignore FindClose failure');
+end;
+
+procedure TestAndroidDirectoryEnumerationSourceContract;
+var
+  LSource: string;
+  LAndroidDirRead: string;
+  LAndroidBase: string;
+begin
+  LSource := LowerCase(LoadSourceText('../../../src/nextpas.core.platform.files.pas'));
+  LAndroidBase := LowerCase(LoadSourceText('../../../src/nextpas.core.platform.android.base.pas'));
+  LAndroidDirRead := SourceSlice(LSource,
+    'function platform_dir_read(var ahandle: tplatformdirhandle; out aentry: tplatformdirentry): int32;' +
+      LineEnding + '{$if defined(nextpas_linux) or defined(nextpas_android)}',
+    'function platform_dir_close(var ahandle: tplatformdirhandle): int32;');
+
+  CheckContains(LAndroidBase, 'android_syscall_getdents64',
+    'Android base must own getdents64 syscall number');
+  CheckContains(LAndroidDirRead, 'android_syscall_getdents64',
+    'Android dir_read must call host-owned getdents64 syscall number');
+  CheckAbsent(LAndroidDirRead, 'result := -1;' + LineEnding + '  exit;',
+    'Android dir_read must not keep explicit unsupported stub');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.files');
   T.Run('open/create/close', @TestOpenCreateClose);
@@ -416,12 +553,17 @@ begin
   T.Run('file lock exclusive', @TestLockExclusive);
   T.Run('file trylock conflict', @TestTrylockConflict);
   T.Run('symlink/readlink', @TestSymlinkReadlink);
+  T.Run('symlink/readlink small buffer',
+    @TestSymlinkReadlinkSmallBufferReturnsRequiredLength);
+  T.Run('symlink/readlink one-byte buffer',
+    @TestSymlinkReadlinkOneByteBufferReturnsRequiredLength);
   T.Run('open_ex append', @TestOpenEx);
   T.Run('pread/pwrite', @TestPreadPwrite);
   T.Run('fstat', @TestFstat);
   T.Run('chmod', @TestChmod);
   T.Run('truncate_path', @TestTruncatePath);
-  T.Summary;
-end.
+  T.Run('directory close contract', @TestDirectoryCloseContract);
+  T.Run('Android directory enumeration source contract',
+    @TestAndroidDirectoryEnumerationSourceContract);
   T.Summary;
 end.

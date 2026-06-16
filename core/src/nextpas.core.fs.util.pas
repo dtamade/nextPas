@@ -15,6 +15,7 @@ function FsReadFileText(const APath: string): string;
 function FsReadFileLines(const APath: string): TStringArray;
 procedure FsWriteFile(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault);
+procedure FsAppendFile(const APath: string; const AData: TBytes);
 procedure FsWriteAtomic(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault);
 function FsCopyFile(const ASrc, ADst: string): Int64;
@@ -36,32 +37,85 @@ function FsGetEnv(const AName: string): string;
 implementation
 
 uses
-  {$IFDEF UNIX}BaseUnix,{$ENDIF}
   nextpas.core.text.conv,
+  nextpas.core.text.utf8,
   nextpas.core.errors,
   nextpas.core.fs.errors,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.platform.fs,
+  nextpas.core.platform.path,
   nextpas.core.platform.random,
   nextpas.core.fs.stream;
 
+procedure WriteAllOrRaise(const AFile: IFile; const ABuf; const ACount: SizeUInt;
+  const AOp: string);
+var
+  LTotal, LWritten: SizeUInt;
+begin
+  LTotal := 0;
+  while LTotal < ACount do
+  begin
+    LWritten := AFile.Write(PByte(@ABuf)[LTotal], ACount - LTotal);
+    if LWritten = 0 then
+      raise EIOError.Create(AOp + ': write returned 0');
+    Inc(LTotal, LWritten);
+  end;
+end;
+
 function FsReadFile(const APath: string): TBytes;
 var
-  LData: Pointer;
-  LLen: PtrUInt;
+  LSize: Int64;
+  LRead: PtrUInt;
   LResult: Int32;
+  LGrowData: Pointer;
+  LGrowLen: PtrUInt;
 begin
-  LResult := platform_fs_read_file(PAnsiChar(APath), LData, LLen);
+  LResult := platform_fs_file_size(PAnsiChar(APath), LSize);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'read file size', APath);
+  if LSize = 0 then
+  begin
+    Result := nil;
+    Exit;
+  end;
+  if (SizeOf(PtrUInt) < 8) and (LSize > Int64(High(PtrUInt))) then
+    raise EIOError.Create('file too large for address space: ' + APath);
+  SetLength(Result, LSize);
+  LRead := 0;
+  LResult := platform_fs_read_file_into(PAnsiChar(APath),
+    @Result[0], PtrUInt(LSize), LRead);
+  if LResult = 0 then
+  begin
+    if LRead < PtrUInt(LSize) then
+      SetLength(Result, LRead);
+    Exit;
+  end;
+  if LResult = PLATFORM_FS_SHORT_READ_ERROR then
+  begin
+    if LRead < PtrUInt(LSize) then
+    begin
+      SetLength(Result, LRead);
+      Exit;
+    end;
+    LGrowData := nil;
+    LGrowLen := 0;
+    LResult := platform_fs_read_file(PAnsiChar(APath), LGrowData, LGrowLen);
+    try
+      if LResult = 0 then
+      begin
+        SetLength(Result, LGrowLen);
+        if LGrowLen > 0 then
+          Move(LGrowData^, Result[0], LGrowLen);
+        Exit;
+      end;
+    finally
+      if LGrowData <> nil then
+        platform_fs_free_buf(LGrowData);
+    end;
+  end;
   if LResult <> 0 then
     RaiseFsError(LResult, 'read file', APath);
-  try
-    SetLength(Result, LLen);
-    if LLen > 0 then
-      Move(LData^, Result[0], LLen);
-  finally
-    platform_fs_free_buf(LData);
-  end;
 end;
 
 procedure FsWriteFile(const APath: string; const AData: TBytes;
@@ -71,7 +125,17 @@ var
 begin
   LFile := FsOpenFile(APath, [fmWrite, fmCreate, fmTruncate], APerm);
   if Length(AData) > 0 then
-    LFile.Write(AData[0], SizeUInt(Length(AData)));
+    WriteAllOrRaise(LFile, AData[0], SizeUInt(Length(AData)), 'write file');
+  LFile.Close;
+end;
+
+procedure FsAppendFile(const APath: string; const AData: TBytes);
+var
+  LFile: IFile;
+begin
+  LFile := FsOpenFile(APath, [fmWrite, fmAppend, fmCreate], PermDefault);
+  if Length(AData) > 0 then
+    WriteAllOrRaise(LFile, AData[0], SizeUInt(Length(AData)), 'append file');
   LFile.Close;
 end;
 
@@ -99,41 +163,25 @@ end;
 
 function FsCopyFile(const ASrc, ADst: string): Int64;
 var
-  LSrcFile, LDstFile: IFile;
-  LBuf: array[0..32767] of Byte;
-  LRead, LWritten, LTotal: SizeUInt;
   LStat: TFileInfo;
+  LResult: Int32;
 begin
-  LSrcFile := FsOpen(ASrc, [fmRead]);
   LStat := FsStat(ASrc);
-  LDstFile := FsOpenFile(ADst, [fmWrite, fmCreate, fmTruncate], LStat.Permission);
-  Result := 0;
-  repeat
-    LRead := LSrcFile.Read(LBuf[0], SizeOf(LBuf));
-    if LRead = 0 then
-      Break;
-    LTotal := 0;
-    while LTotal < LRead do
-    begin
-      LWritten := LDstFile.Write(LBuf[LTotal], LRead - LTotal);
-      if LWritten = 0 then
-        raise EIOError.Create('copy: write returned 0');
-      Inc(LTotal, LWritten);
-    end;
-    Inc(Result, Int64(LRead));
-  until False;
-  LDstFile.Sync;
-  LDstFile.Close;
-  LSrcFile.Close;
+  LResult := platform_fs_copy_file(PAnsiChar(ASrc), PAnsiChar(ADst));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'copy', ASrc);
+  FsChmod(ADst, LStat.Permission);
+  Result := LStat.Size;
 end;
 
 function FsTempFile(const ADir, APattern: string): IFile;
 const
   HEX: array[0..15] of AnsiChar = '0123456789abcdef';
   MAX_ATTEMPTS = 32;
+  TEMP_FILE_PATH_BUF_SIZE = 1024;
 var
-  LPathBuf: array[0..1023] of AnsiChar;
-  LFd: Int32;
+  LPathBuf: array[0..TEMP_FILE_PATH_BUF_SIZE - 1] of AnsiChar;
+  LHandle: TPlatformFileHandle;
   LResult: Int32;
   LPath: string;
   LRand: array[0..7] of Byte;
@@ -143,12 +191,12 @@ begin
   { Empty ADir: defer to platform temp-dir helper (system temp). }
   if ADir = '' then
   begin
-    LResult := platform_fs_mktemp(PAnsiChar(APattern), PAnsiChar(''),
-      @LPathBuf[0], SizeOf(LPathBuf), LFd);
+    LResult := platform_fs_mktemp_handle(PAnsiChar(APattern), PAnsiChar(''),
+      @LPathBuf[0], SizeOf(LPathBuf), LHandle);
     if LResult <> 0 then
       raise EIOError.Create('mktemp failed (' + IntToStr(LResult) + ')');
     LPath := StrPas(@LPathBuf[0]);
-    Result := FsFromHandle(LFd, LPath);
+    Result := FsFromPlatformHandle(LHandle, LPath);
     Exit;
   end;
 
@@ -163,7 +211,7 @@ begin
       LHex[LI * 2 + 1] := Char(HEX[(LRand[LI] shr 4) and $F]);
       LHex[LI * 2 + 2] := Char(HEX[LRand[LI] and $F]);
     end;
-    LPath := ADir + '/' + APattern + LHex;
+    LPath := ADir + PLATFORM_PATH_SEP + APattern + LHex;
     try
       Result := FsOpenFile(LPath, [fmRead, fmWrite, fmCreate, fmExclusive], PermDefault);
       Exit;
@@ -275,34 +323,55 @@ end;
 function FsReadlink(const APath: string): string;
 const
   BUF_SIZE = 1024;
+  MAX_READLINK_BUF_SIZE = 65536;
 var
   LStack: array[0..BUF_SIZE - 1] of AnsiChar;
   LLen: Int32;
   LResult: Int32;
   LHeap: array of AnsiChar;
+  LBufLen: Int32;
 begin
   LResult := platform_file_readlink(PAnsiChar(APath), @LStack[0], BUF_SIZE, LLen);
   if LResult <> 0 then
     RaiseFsError(LResult, 'readlink', APath);
-  if LLen < BUF_SIZE then
+  if LLen < BUF_SIZE - 1 then
   begin
     SetString(Result, PAnsiChar(@LStack[0]), LLen);
     Exit;
   end;
-  SetLength(LHeap, LLen + 1);
-  LResult := platform_file_readlink(PAnsiChar(APath), @LHeap[0], Length(LHeap), LLen);
-  if LResult <> 0 then
-    RaiseFsError(LResult, 'readlink', APath);
-  SetString(Result, PAnsiChar(@LHeap[0]), LLen);
+
+  LBufLen := BUF_SIZE * 2;
+  repeat
+    if LBufLen > MAX_READLINK_BUF_SIZE then
+      raise EIOError.Create('readlink target too long: ' + APath);
+    SetLength(LHeap, LBufLen);
+    LResult := platform_file_readlink(PAnsiChar(APath), @LHeap[0], LBufLen, LLen);
+    if LResult <> 0 then
+      RaiseFsError(LResult, 'readlink', APath);
+    if LLen < LBufLen - 1 then
+    begin
+      SetString(Result, PAnsiChar(@LHeap[0]), LLen);
+      Exit;
+    end;
+    LBufLen := LBufLen * 2;
+  until False;
 end;
 
 function FsReadFileText(const APath: string): string;
 var
   Bytes: TBytes;
+  LOffset, LLen: SizeInt;
 begin
   Bytes := FsReadFile(APath);
-  if Length(Bytes) > 0 then
-    SetString(Result, PAnsiChar(@Bytes[0]), Length(Bytes))
+  LOffset := 0;
+  if (Length(Bytes) >= 3) and (Bytes[0] = $EF) and
+    (Bytes[1] = $BB) and (Bytes[2] = $BF) then
+    LOffset := 3;
+  LLen := Length(Bytes) - LOffset;
+  if (LLen > 0) and (not UTF8IsValid(@Bytes[LOffset], SizeUInt(LLen))) then
+    raise EConvertError.Create('read file: invalid UTF-8: ' + APath);
+  if LLen > 0 then
+    SetString(Result, PAnsiChar(@Bytes[LOffset]), LLen)
   else
     Result := '';
 end;
@@ -347,24 +416,46 @@ begin
 end;
 
 function FsGetCwd: string;
+const
+  CWD_STACK_BUF_SIZE = 1024;
+  CWD_MAX_BUF_SIZE = 65536;
+var
+  LStack: array[0..CWD_STACK_BUF_SIZE - 1] of AnsiChar;
+  LHeap: array of AnsiChar;
+  LBufSize: SizeInt;
 begin
-  GetDir(0, Result);
+  if platform_file_getcwd(@LStack[0], CWD_STACK_BUF_SIZE) <> nil then
+  begin
+    Result := StrPas(@LStack[0]);
+    Exit;
+  end;
+
+  LBufSize := CWD_STACK_BUF_SIZE * 2;
+  repeat
+    if LBufSize > CWD_MAX_BUF_SIZE then
+      raise EIOError.Create('getcwd path too long');
+    SetLength(LHeap, LBufSize);
+    if platform_file_getcwd(@LHeap[0], PtrUInt(LBufSize)) <> nil then
+    begin
+      Result := StrPas(@LHeap[0]);
+      Exit;
+    end;
+    LBufSize := LBufSize * 2;
+  until False;
 end;
 
 procedure FsSetCwd(const APath: string);
+var
+  LResult: Int32;
 begin
-  ChDir(APath);
+  LResult := platform_file_chdir(PAnsiChar(APath));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'chdir', APath);
 end;
 
 function FsGetEnv(const AName: string): string;
-var P: PChar;
 begin
-  {$IFDEF UNIX}
-  P := BaseUnix.fpGetEnv(PChar(AName));
-  if P <> nil then Result := P else Result := '';
-  {$ELSE}
   Result := nextpas.core.os.env.GetEnvironmentVariable(AName);
-  {$ENDIF}
 end;
 
 end.

@@ -1865,7 +1865,7 @@ var
   TypeNode, DefaultExpr: TGreenNode;
   I: LongInt;
   Child: TGreenNode;
-  HasVarModifier: Boolean;
+  ParamModifier: string;
 begin
   if (ACursor >= ALexer.TokenCount) or
     (CurrentToken(ALexer, ACursor).Kind <> tkLParen) then
@@ -1880,12 +1880,14 @@ begin
   while (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind <> tkRParen) do
   begin
-    HasVarModifier := False;
+    ParamModifier := '';
     if CurrentToken(ALexer, ACursor).Kind in
       [tkVarKeyword, tkConstKeyword, tkOutKeyword] then
     begin
       if CurrentToken(ALexer, ACursor).Kind = tkVarKeyword then
-        HasVarModifier := True;
+        ParamModifier := 'var:'
+      else if CurrentToken(ALexer, ACursor).Kind = tkOutKeyword then
+        ParamModifier := 'out:';
       Inc(ACursor);
     end;
 
@@ -1900,9 +1902,9 @@ begin
     while True do
     begin
       NameToken := CurrentToken(ALexer, ACursor);
-      if HasVarModifier then
+      if ParamModifier <> '' then
         Decl := TGreenNode.Create(gnkParameterDecl, NameToken.ByteOffset, 0,
-          'var:' + NameToken.Lexeme)
+          ParamModifier + NameToken.Lexeme)
       else
         Decl := TGreenNode.Create(gnkParameterDecl, NameToken.ByteOffset, 0,
           NameToken.Lexeme);

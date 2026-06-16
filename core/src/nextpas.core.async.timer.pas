@@ -34,6 +34,7 @@ type
     function IsBefore(A, B: UInt32): Boolean; inline;
     procedure SwapHeap(A, B: UInt32); inline;
     function AllocEntry: UInt32;
+    procedure RecycleEntry(AIdx: UInt32);
   public
     class function Create: TTimerHeap; static;
     procedure Clear;
@@ -169,8 +170,30 @@ begin
   end;
 end;
 
-procedure TTimerHeap.Clear;
+procedure TTimerHeap.RecycleEntry(AIdx: UInt32);
 begin
+  FEntries[AIdx].Callback := nil;
+  FEntries[AIdx].Context := nil;
+  FEntries[AIdx].Gen := FNextGen;
+  Inc(FNextGen);
+  if FNextGen = 0 then
+    FNextGen := 1;
+  FEntries[AIdx].NextFree := FFreeHead;
+  FFreeHead := Int32(AIdx);
+end;
+
+procedure TTimerHeap.Clear;
+var
+  LI: UInt32;
+begin
+  if FEntryCount > 0 then
+  begin
+    for LI := 0 to FEntryCount - 1 do
+    begin
+      FEntries[LI].Callback := nil;
+      FEntries[LI].Context := nil;
+    end;
+  end;
   SetLength(FEntries, 0);
   SetLength(FHeap, 0);
   FHeapCount := 0;
@@ -221,6 +244,8 @@ begin
   if FEntries[AHandle.FId].Cancelled then
     Exit(False);
   FEntries[AHandle.FId].Cancelled := True;
+  FEntries[AHandle.FId].Callback := nil;
+  FEntries[AHandle.FId].Context := nil;
   Result := True;
 end;
 
@@ -239,8 +264,7 @@ begin
       FHeap[0] := FHeap[FHeapCount];
       SiftDown(0);
     end;
-    FEntries[LI].NextFree := FFreeHead;
-    FFreeHead := Int32(LI);
+    RecycleEntry(LI);
   end;
   if FHeapCount = 0 then
     Result := TDeadline.Infinite
@@ -267,8 +291,7 @@ begin
         FHeap[0] := FHeap[FHeapCount];
         SiftDown(0);
       end;
-      FEntries[LIdx].NextFree := FFreeHead;
-      FFreeHead := Int32(LIdx);
+      RecycleEntry(LIdx);
       Continue;
     end;
     { Check if expired }
@@ -283,8 +306,7 @@ begin
       FHeap[0] := FHeap[FHeapCount];
       SiftDown(0);
     end;
-    FEntries[LIdx].NextFree := FFreeHead;
-    FFreeHead := Int32(LIdx);
+    RecycleEntry(LIdx);
     if Assigned(LCb) then
       LCb(LCtx);
     Inc(Result);

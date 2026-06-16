@@ -54,6 +54,11 @@ type
     FWaited: Boolean;
     FDetached: Boolean;
     FTimeout: TDuration;
+    FLastOutput: TProcessOutput;
+    procedure EnsureAttached;
+    procedure RaiseProcessPlatformError(const AOp: string; ACode: Int32);
+    function FinishWaitResult(const AResult: TPlatformProcessResult;
+      const AStdOut, AStdErr: string): TProcessOutput;
   public
     constructor Create(const AProc: TPlatformProcess;
       const AStdin: IWriter; const AStdout: IReader; const AStderr: IReader;
@@ -73,32 +78,25 @@ type
 implementation
 
 uses
+  nextpas.core.base.utils,
+  nextpas.core.platform.error,
   nextpas.core.platform.process,
-  nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi,
-  nextpas.core.process.pipe;
+  nextpas.core.platform.thread,
+  nextpas.core.process.pipe,
+  nextpas.core.text.conv;
 
-const
-  READ_BUF_SIZE = 65536;
-
-function ReadAll(const AReader: IReader): string;
+procedure CloseWriterBestEffort(var AWriter: IWriter);
 var
-  LBuf: array[0..READ_BUF_SIZE - 1] of Byte;
-  LRead: SizeUInt;
-  LTotal: Integer;
+  LCloser: IWriteCloser;
 begin
-  Result := '';
-  if AReader = nil then Exit;
-  LTotal := 0;
-  repeat
-    LRead := AReader.Read(LBuf[0], READ_BUF_SIZE);
-    if LRead > 0 then
-    begin
-      SetLength(Result, LTotal + Integer(LRead));
-      Move(LBuf[0], Result[LTotal + 1], LRead);
-      Inc(LTotal, Integer(LRead));
-    end;
-  until LRead = 0;
+  if AWriter = nil then
+    Exit;
+  try
+    if nextpas.core.base.utils.Supports(AWriter, IWriteCloser, LCloser) then
+      LCloser.Close;
+  finally
+    AWriter := nil;
+  end;
 end;
 
 { TChild }
@@ -115,20 +113,65 @@ begin
   FWaited := False;
   FDetached := False;
   FTimeout := ATimeout;
+  FillChar(FLastOutput, SizeOf(FLastOutput), 0);
+end;
+
+procedure TChild.EnsureAttached;
+begin
+  if FDetached then
+    raise EProcessError.Create('process child is detached');
+end;
+
+procedure TChild.RaiseProcessPlatformError(const AOp: string; ACode: Int32);
+var
+  LBuf: array[0..255] of AnsiChar;
+  LMsg: string;
+begin
+  LMsg := AOp + ' failed (' + IntToStr(ACode) + ')';
+  if platform_error_message(ACode, @LBuf[0], SizeOf(LBuf)) > 0 then
+    LMsg := LMsg + ': ' + string(PAnsiChar(@LBuf[0]));
+  raise EProcessError.Create(LMsg, ACode);
 end;
 
 destructor TChild.Destroy;
+const
+  DESTROY_TIMEOUT_NS = 5000000000; { 5 seconds }
 var
   LResult: TPlatformProcessResult;
+  LDeadline: TInstant;
 begin
   if (not FWaited) and (not FDetached) then
   begin
-    Kill;
-    platform_process_wait(FProc, LResult);
+    if platform_process_try_wait(FProc, LResult) = 0 then
+      if LResult.Status = nextpas.core.platform.process.base.psRunning then
+      begin
+        if platform_process_kill(FProc) = 0 then
+        begin
+          LDeadline := TInstant.Now.Add(TDuration.FromNanoseconds(DESTROY_TIMEOUT_NS));
+          repeat
+            if platform_process_try_wait(FProc, LResult) <> 0 then
+              Break;
+            if LResult.Status <> nextpas.core.platform.process.base.psRunning then
+              Break;
+            if TInstant.Now.DurationSince(LDeadline).IsPositive then
+            begin
+              { Timeout: abandon child to avoid blocking destructor }
+              Break;
+            end;
+            platform_thread_sleep_ns(10000000);
+          until False;
+        end
+        else
+          platform_process_try_wait(FProc, LResult);
+      end;
   end;
-  if FStdinWriter <> nil then
-    (FStdinWriter as TPipeWriter).Close;
-  FStdinWriter := nil;
+  if not FDetached then
+    platform_process_detach(FProc);
+  try
+    CloseWriterBestEffort(FStdinWriter);
+  except
+    { destructor cleanup is best effort }
+  end;
   FStdoutReader := nil;
   FStderrReader := nil;
   inherited;
@@ -138,70 +181,76 @@ function TChild.Wait: TProcessOutput;
 var
   LResult: TPlatformProcessResult;
   LDeadline: TInstant;
-  LTs: TTimeSpec;
+  LErr: Int32;
 begin
+  if FWaited then
+    Exit(FLastOutput);
+  EnsureAttached;
+
   Result.ExitCode := 0;
   Result.Status := nextpas.core.process.base.psUnknown;
   Result.StdOut := '';
   Result.StdErr := '';
-  if FStdinWriter <> nil then
-    (FStdinWriter as TPipeWriter).Close;
-  FStdinWriter := nil;
+  CloseWriterBestEffort(FStdinWriter);
   if FTimeout.IsZero then
-    platform_process_wait(FProc, LResult)
+  begin
+    LErr := platform_process_wait(FProc, LResult);
+    if LErr <> 0 then
+      RaiseProcessPlatformError('platform_process_wait', LErr);
+  end
   else
   begin
     LDeadline := TInstant.Now.Add(FTimeout);
     repeat
-      platform_process_try_wait(FProc, LResult);
+      LErr := platform_process_try_wait(FProc, LResult);
+      if LErr <> 0 then
+        RaiseProcessPlatformError('platform_process_try_wait', LErr);
       if LResult.Status <> nextpas.core.platform.process.base.psRunning then
         Break;
       if TInstant.Now.DurationSince(LDeadline).IsPositive then
       begin
-        platform_process_kill(FProc);
-        platform_process_wait(FProc, LResult);
+        LErr := platform_process_kill(FProc);
+        if LErr <> 0 then
+          RaiseProcessPlatformError('platform_process_kill', LErr);
+        LErr := platform_process_wait(FProc, LResult);
+        if LErr <> 0 then
+          RaiseProcessPlatformError('platform_process_wait', LErr);
         Break;
       end;
-      LTs.tv_sec := 0;
-      LTs.tv_nsec := 10000000;
-      nanosleep(@LTs, nil);
+      platform_thread_sleep_ns(10000000);
     until False;
   end;
-  FWaited := True;
-  Result.ExitCode := LResult.ExitCode;
-  case LResult.Status of
-    psExited: Result.Status := nextpas.core.process.base.psExited;
-    psSignaled: Result.Status := nextpas.core.process.base.psSignaled;
-    psRunning: Result.Status := nextpas.core.process.base.psRunning;
-  else
-    Result.Status := nextpas.core.process.base.psUnknown;
-  end;
+  Result := FinishWaitResult(LResult, '', '');
 end;
 
 function TChild.TryWait(out AOutput: TProcessOutput): Boolean;
 var
   LResult: TPlatformProcessResult;
+  LErr: Int32;
 begin
-  FillChar(AOutput, SizeOf(AOutput), 0);
-  platform_process_try_wait(FProc, LResult);
+  if FWaited then
+  begin
+    AOutput := FLastOutput;
+    Exit(True);
+  end;
+  EnsureAttached;
+
+  AOutput.ExitCode := 0;
+  AOutput.Status := nextpas.core.process.base.psUnknown;
+  AOutput.StdOut := '';
+  AOutput.StdErr := '';
+  LErr := platform_process_try_wait(FProc, LResult);
+  if LErr <> 0 then
+    RaiseProcessPlatformError('platform_process_try_wait', LErr);
   if LResult.Status = nextpas.core.platform.process.base.psRunning then
     Exit(False);
-  FWaited := True;
-  AOutput.ExitCode := LResult.ExitCode;
-  case LResult.Status of
-    psExited: AOutput.Status := nextpas.core.process.base.psExited;
-    psSignaled: AOutput.Status := nextpas.core.process.base.psSignaled;
-  else
-    AOutput.Status := nextpas.core.process.base.psUnknown;
-  end;
+  AOutput := FinishWaitResult(LResult, '', '');
   Result := True;
 end;
 
 procedure TChild.Detach;
 begin
-  if FStdinWriter <> nil then
-    (FStdinWriter as TPipeWriter).Close;
-  FStdinWriter := nil;
+  CloseWriterBestEffort(FStdinWriter);
   FStdoutReader := nil;
   FStderrReader := nil;
   platform_process_detach(FProc);
@@ -209,9 +258,14 @@ begin
 end;
 
 procedure TChild.Kill;
+var
+  LErr: Int32;
 begin
   if FWaited then Exit;
-  platform_process_kill(FProc);
+  EnsureAttached;
+  LErr := platform_process_kill(FProc);
+  if LErr <> 0 then
+    RaiseProcessPlatformError('platform_process_kill', LErr);
 end;
 
 function TChild.Pid: Integer;
@@ -238,124 +292,117 @@ begin
 end;
 
 function TChild.WaitWithOutput: TProcessOutput;
+const
+  DRAIN_TIMEOUT_NS = 5000000000; { 5 seconds after process exit }
 var
   LWait: TProcessOutput;
-  LFds: array[0..1] of TPollFd;
-  LNFds: Integer;
-  LBuf: array[0..65535] of Byte;
-  LRead: ssize_t;
-  LOutTotal, LErrTotal: Integer;
-  LOutCap, LErrCap: Integer;
-  LStdoutFd, LStderrFd: PtrInt;
-  LPollResult: Integer;
+  LProcessResult: TPlatformProcessResult;
+  LHaveProcessResult: Boolean;
+  LDeadline, LDrainDeadline: TInstant;
+  LErr: Int32;
+  LStdoutClosed, LStderrClosed: Boolean;
 begin
-  if FStdinWriter <> nil then
-    (FStdinWriter as TPipeWriter).Close;
-  FStdinWriter := nil;
+  if FWaited then
+    Exit(FLastOutput);
+  EnsureAttached;
+
+  CloseWriterBestEffort(FStdinWriter);
   Result.StdOut := '';
   Result.StdErr := '';
-  LOutTotal := 0;
-  LErrTotal := 0;
-  LOutCap := 0;
-  LErrCap := 0;
+  LHaveProcessResult := False;
+  LStdoutClosed := FStdoutReader = nil;
+  LStderrClosed := FStderrReader = nil;
+  FillChar(LProcessResult, SizeOf(LProcessResult), 0);
+  FillChar(LDrainDeadline, SizeOf(LDrainDeadline), 0);
+  if not FTimeout.IsZero then
+    LDeadline := TInstant.Now.Add(FTimeout);
 
-  LStdoutFd := -1;
-  LStderrFd := -1;
-  if (FStdoutReader <> nil) and (FStdoutReader is TPipeReader) then
-    LStdoutFd := TPipeReader(FStdoutReader as TObject).Fd;
-  if (FStderrReader <> nil) and (FStderrReader is TPipeReader) then
-    LStderrFd := TPipeReader(FStderrReader as TObject).Fd;
+  repeat
+    DrainPipePair(FStdoutReader, FStderrReader, 10, Result.StdOut, Result.StdErr,
+      LStdoutClosed, LStderrClosed);
+    if FTimeout.IsZero then
+    begin
+      if LStdoutClosed and LStderrClosed then
+        Break;
+      Continue;
+    end;
 
-  if (LStdoutFd >= 0) and (LStderrFd >= 0) then
+    if not LHaveProcessResult then
+    begin
+      LErr := platform_process_try_wait(FProc, LProcessResult);
+      if LErr <> 0 then
+        RaiseProcessPlatformError('platform_process_try_wait', LErr);
+      if LProcessResult.Status <> nextpas.core.platform.process.base.psRunning then
+      begin
+        LHaveProcessResult := True;
+        LDrainDeadline := TInstant.Now.Add(TDuration.FromNanoseconds(DRAIN_TIMEOUT_NS));
+      end
+      else if TInstant.Now.DurationSince(LDeadline).IsPositive then
+      begin
+        LErr := platform_process_kill(FProc);
+        if LErr <> 0 then
+          RaiseProcessPlatformError('platform_process_kill', LErr);
+        LErr := platform_process_wait(FProc, LProcessResult);
+        if LErr <> 0 then
+          RaiseProcessPlatformError('platform_process_wait', LErr);
+        LHaveProcessResult := True;
+        LDrainDeadline := TInstant.Now.Add(TDuration.FromNanoseconds(DRAIN_TIMEOUT_NS));
+      end;
+    end;
+
+    if LHaveProcessResult and LStdoutClosed and LStderrClosed then
+      Break;
+    { Force-close pipes if drain takes too long after process exit }
+    if LHaveProcessResult and TInstant.Now.DurationSince(LDrainDeadline).IsPositive then
+    begin
+      FStdoutReader := nil;
+      FStderrReader := nil;
+      LStdoutClosed := True;
+      LStderrClosed := True;
+      Break;
+    end;
+    if not LHaveProcessResult then
+      platform_thread_sleep_ns(10000000);
+  until False;
+
+  if (not FTimeout.IsZero) and (not LHaveProcessResult) then
   begin
-    repeat
-      LNFds := 0;
-      if LStdoutFd >= 0 then
-      begin
-        LFds[LNFds].fd := LStdoutFd;
-        LFds[LNFds].events := POLLIN;
-        LFds[LNFds].revents := 0;
-        Inc(LNFds);
-      end;
-      if LStderrFd >= 0 then
-      begin
-        LFds[LNFds].fd := LStderrFd;
-        LFds[LNFds].events := POLLIN;
-        LFds[LNFds].revents := 0;
-        Inc(LNFds);
-      end;
-      if LNFds = 0 then Break;
-
-      LPollResult := poll(@LFds[0], LNFds, -1);
-      if LPollResult <= 0 then Break;
-
-      if (LStdoutFd >= 0) and ((LFds[0].revents and (POLLIN or POLLHUP)) <> 0) then
-      begin
-        LRead := read(LStdoutFd, @LBuf[0], SizeOf(LBuf));
-        if LRead > 0 then
-        begin
-          if LOutTotal + LRead > LOutCap then
-          begin
-            LOutCap := (LOutTotal + LRead) * 2;
-            SetLength(Result.StdOut, LOutCap);
-          end;
-          Move(LBuf[0], Result.StdOut[LOutTotal + 1], LRead);
-          Inc(LOutTotal, LRead);
-        end
-        else
-          LStdoutFd := -1;
-      end;
-
-      if (LStderrFd >= 0) then
-      begin
-        if (LNFds = 2) and ((LFds[1].revents and (POLLIN or POLLHUP)) <> 0) then
-        begin
-          LRead := read(LStderrFd, @LBuf[0], SizeOf(LBuf));
-          if LRead > 0 then
-          begin
-            if LErrTotal + LRead > LErrCap then
-            begin
-              LErrCap := (LErrTotal + LRead) * 2;
-              SetLength(Result.StdErr, LErrCap);
-            end;
-            Move(LBuf[0], Result.StdErr[LErrTotal + 1], LRead);
-            Inc(LErrTotal, LRead);
-          end
-          else
-            LStderrFd := -1;
-        end
-        else if (LNFds = 1) and ((LFds[0].revents and (POLLIN or POLLHUP)) <> 0) then
-        begin
-          LRead := read(LStderrFd, @LBuf[0], SizeOf(LBuf));
-          if LRead > 0 then
-          begin
-            if LErrTotal + LRead > LErrCap then
-            begin
-              LErrCap := (LErrTotal + LRead) * 2;
-              SetLength(Result.StdErr, LErrCap);
-            end;
-            Move(LBuf[0], Result.StdErr[LErrTotal + 1], LRead);
-            Inc(LErrTotal, LRead);
-          end
-          else
-            LStderrFd := -1;
-        end;
-      end;
-    until (LStdoutFd < 0) and (LStderrFd < 0);
-    SetLength(Result.StdOut, LOutTotal);
-    SetLength(Result.StdErr, LErrTotal);
-  end
-  else
-  begin
-    Result.StdOut := ReadAll(FStdoutReader);
-    Result.StdErr := ReadAll(FStderrReader);
+    LErr := platform_process_wait(FProc, LProcessResult);
+    if LErr <> 0 then
+      RaiseProcessPlatformError('platform_process_wait', LErr);
+    LHaveProcessResult := True;
   end;
 
   FStdoutReader := nil;
   FStderrReader := nil;
-  LWait := Wait;
-  Result.ExitCode := LWait.ExitCode;
-  Result.Status := LWait.Status;
+  if LHaveProcessResult then
+    Result := FinishWaitResult(LProcessResult, Result.StdOut, Result.StdErr)
+  else
+  begin
+    LWait := Wait;
+    Result.ExitCode := LWait.ExitCode;
+    Result.Status := LWait.Status;
+    FLastOutput.StdOut := Result.StdOut;
+    FLastOutput.StdErr := Result.StdErr;
+    Result := FLastOutput;
+  end;
+end;
+
+function TChild.FinishWaitResult(const AResult: TPlatformProcessResult;
+  const AStdOut, AStdErr: string): TProcessOutput;
+begin
+  Result.ExitCode := AResult.ExitCode;
+  Result.StdOut := AStdOut;
+  Result.StdErr := AStdErr;
+  case AResult.Status of
+    psExited: Result.Status := nextpas.core.process.base.psExited;
+    psSignaled: Result.Status := nextpas.core.process.base.psSignaled;
+    psRunning: Result.Status := nextpas.core.process.base.psRunning;
+  else
+    Result.Status := nextpas.core.process.base.psUnknown;
+  end;
+  FLastOutput := Result;
+  FWaited := True;
 end;
 
 end.

@@ -33,6 +33,36 @@ type
   IDirIterator = nextpas.core.fs.intf.IDirIterator;
   TWalkFunc = nextpas.core.fs.dir.TWalkFunc;
 
+const
+  fmRead = nextpas.core.fs.base.fmRead;
+  fmWrite = nextpas.core.fs.base.fmWrite;
+  fmAppend = nextpas.core.fs.base.fmAppend;
+  fmCreate = nextpas.core.fs.base.fmCreate;
+  fmTruncate = nextpas.core.fs.base.fmTruncate;
+  fmExclusive = nextpas.core.fs.base.fmExclusive;
+  fmSync = nextpas.core.fs.base.fmSync;
+
+  ftRegular = nextpas.core.fs.base.ftRegular;
+  ftDirectory = nextpas.core.fs.base.ftDirectory;
+  ftSymlink = nextpas.core.fs.base.ftSymlink;
+  ftCharDevice = nextpas.core.fs.base.ftCharDevice;
+  ftBlockDevice = nextpas.core.fs.base.ftBlockDevice;
+  ftFifo = nextpas.core.fs.base.ftFifo;
+  ftSocket = nextpas.core.fs.base.ftSocket;
+  ftUnknown = nextpas.core.fs.base.ftUnknown;
+
+  PermOwnerRead = nextpas.core.fs.base.PermOwnerRead;
+  PermOwnerWrite = nextpas.core.fs.base.PermOwnerWrite;
+  PermOwnerExec = nextpas.core.fs.base.PermOwnerExec;
+  PermGroupRead = nextpas.core.fs.base.PermGroupRead;
+  PermGroupWrite = nextpas.core.fs.base.PermGroupWrite;
+  PermGroupExec = nextpas.core.fs.base.PermGroupExec;
+  PermOtherRead = nextpas.core.fs.base.PermOtherRead;
+  PermOtherWrite = nextpas.core.fs.base.PermOtherWrite;
+  PermOtherExec = nextpas.core.fs.base.PermOtherExec;
+  PermDefault = nextpas.core.fs.base.PermDefault;
+  PermDirDefault = nextpas.core.fs.base.PermDirDefault;
+
 { File operations }
 function Open(const APath: string; const AMode: TFileMode): IFile; inline;
 function Create(const APath: string;
@@ -48,11 +78,11 @@ procedure WriteFileText(const APath: string; const AText: string;
   const APerm: TFilePermission = PermDefault); inline;
 procedure WriteFileLines(const APath: string; const ALines: TStringArray;
   const APerm: TFilePermission = PermDefault);
-procedure AppendFile(const APath: string; const AData: TBytes);
+procedure AppendFile(const APath: string; const AData: TBytes); inline;
 procedure AppendFileText(const APath: string; const AText: string);
-procedure AppendFileLine(const APath: string; const ALine: string);
+procedure AppendFileLine(const APath: string; const ALine: string); inline;
 function ScanFileLines(const APath: string): IScanner;
-function MapFileLines(const APath: string): IMappedLines;
+function MapFileLines(const APath: string): IMappedLines; inline;
 procedure WriteAtomic(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault); inline;
 function CopyFile(const ASrc, ADst: string): Int64; inline;
@@ -76,28 +106,41 @@ function MkdirAll(const APath: string;
 function Remove(const APath: string): Boolean; inline;
 function RemoveAll(const APath: string): Boolean; inline;
 function Rename(const AOld, ANew: string): Boolean; inline;
-function ReadDir(const APath: string): TDirEntryArray;
+function ReadDir(const APath: string): TDirEntryArray; inline;
 function OpenDir(const APath: string): IDirIterator; inline;
 procedure Walk(const ARoot: string; const AFunc: TWalkFunc); inline;
 
 { Path operations }
-function PathJoin(const AParts: array of string): string;
+function PathJoin(const AParts: array of string): string; inline;
 function PathDir(const APath: string): string; inline;
 function PathBase(const APath: string): string; inline;
+procedure PathSplit(const APath: string; out ADir, ABase: string); inline;
 function PathExt(const APath: string): string; inline;
 function PathClean(const APath: string): string; inline;
 function PathAbs(const APath: string): string; inline;
 function PathIsAbs(const APath: string): Boolean; inline;
+function PathRelative(const ABase, ATarget: string): string; inline;
 function PathEnsureSep(const APath: string): string; inline;
 function PathTrimSep(const APath: string): string; inline;
 function PathChangeExt(const APath, ANewExt: string): string; inline;
 function PathWithoutExt(const APath: string): string; inline;
+function SameFileName(const A, B: string): Boolean; inline;
 function GetCwd: string; inline;
 procedure SetCwd(const APath: string); inline;
 function GetEnv(const AName: string): string; inline;
 function GetTempDir: string;
 
 implementation
+
+function Utf8TextToBytes(const AText: string): TBytes;
+var
+  LLen: SizeInt;
+begin
+  LLen := Length(AText);
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(AText[1], Result[0], LLen);
+end;
 
 function Open(const APath: string; const AMode: TFileMode): IFile;
 begin
@@ -132,28 +175,24 @@ end;
 
 procedure WriteFileText(const APath: string; const AText: string;
   const APerm: TFilePermission);
-var
-  LData: TBytes;
 begin
-  if Length(AText) > 0 then
-  begin
-    SetLength(LData, Length(AText));
-    Move(PAnsiChar(AText)^, LData[0], Length(AText));
-    nextpas.core.fs.util.FsWriteFile(APath, LData, APerm);
-  end
-  else
-    nextpas.core.fs.util.FsWriteFile(APath, nil, APerm);
+  nextpas.core.fs.util.FsWriteFile(APath, Utf8TextToBytes(AText), APerm);
 end;
 
 procedure WriteFileLines(const APath: string; const ALines: TStringArray;
   const APerm: TFilePermission);
 var
-  LData: TBytes;
+  LData, LLineBytes: TBytes;
   LTotal, LPos, LLen, LI: SizeInt;
+  LNewline: TBytes;
 begin
   LTotal := 0;
   for LI := 0 to Length(ALines) - 1 do
+{$IFDEF NEXTPAS_WINDOWS}
+    Inc(LTotal, Length(ALines[LI]) + 2);
+{$ELSE}
     Inc(LTotal, Length(ALines[LI]) + 1);
+{$ENDIF}
   if LTotal = 0 then
   begin
     nextpas.core.fs.util.FsWriteFile(APath, nil, APerm);
@@ -161,45 +200,46 @@ begin
   end;
   SetLength(LData, LTotal);
   LPos := 0;
+{$IFDEF NEXTPAS_WINDOWS}
+  LNewline := TBytes.Create(13, 10);
+{$ELSE}
+  LNewline := TBytes.Create(10);
+{$ENDIF}
   for LI := 0 to Length(ALines) - 1 do
   begin
-    LLen := Length(ALines[LI]);
+    LLineBytes := Utf8TextToBytes(ALines[LI]);
+    LLen := Length(LLineBytes);
     if LLen > 0 then
     begin
-      Move(ALines[LI][1], LData[LPos], LLen);
+      Move(LLineBytes[0], LData[LPos], LLen);
       Inc(LPos, LLen);
     end;
-    LData[LPos] := 10;
-    Inc(LPos);
+    Move(LNewline[0], LData[LPos], Length(LNewline));
+    Inc(LPos, Length(LNewline));
   end;
   nextpas.core.fs.util.FsWriteFile(APath, LData, APerm);
 end;
 
 procedure AppendFile(const APath: string; const AData: TBytes);
-var
-  LFile: IFile;
 begin
-  LFile := FsOpenFile(APath, [fmWrite, fmAppend, fmCreate], PermDefault);
-  if Length(AData) > 0 then
-    LFile.Write(AData[0], Length(AData));
+  nextpas.core.fs.util.FsAppendFile(APath, AData);
 end;
 
 procedure AppendFileText(const APath: string; const AText: string);
-var
-  LData: TBytes;
 begin
-  if Length(AText) > 0 then
-  begin
-    SetLength(LData, Length(AText));
-    Move(PAnsiChar(AText)^, LData[0], Length(AText));
-    AppendFile(APath, LData);
-  end;
+  AppendFile(APath, Utf8TextToBytes(AText));
 end;
 
 procedure AppendFileLine(const APath: string; const ALine: string);
+{$IFDEF NEXTPAS_WINDOWS}
+begin
+  AppendFileText(APath, ALine + #13#10);
+end;
+{$ELSE}
 begin
   AppendFileText(APath, ALine + #10);
 end;
+{$ENDIF}
 
 function ScanFileLines(const APath: string): IScanner;
 var
@@ -335,6 +375,11 @@ begin
   Result := nextpas.core.fs.path.FsPathBase(APath);
 end;
 
+procedure PathSplit(const APath: string; out ADir, ABase: string);
+begin
+  nextpas.core.fs.path.FsPathSplit(APath, ADir, ABase);
+end;
+
 function PathExt(const APath: string): string;
 begin
   Result := nextpas.core.fs.path.FsPathExt(APath);
@@ -355,6 +400,11 @@ begin
   Result := nextpas.core.fs.path.FsPathIsAbs(APath);
 end;
 
+function PathRelative(const ABase, ATarget: string): string;
+begin
+  Result := nextpas.core.fs.path.FsPathRelative(ABase, ATarget);
+end;
+
 function PathEnsureSep(const APath: string): string;
 begin
   Result := nextpas.core.fs.path.FsPathEnsureSep(APath);
@@ -373,6 +423,11 @@ end;
 function PathWithoutExt(const APath: string): string;
 begin
   Result := nextpas.core.fs.path.FsPathWithoutExt(APath);
+end;
+
+function SameFileName(const A, B: string): Boolean;
+begin
+  Result := nextpas.core.fs.path.FsSameFileName(A, B);
 end;
 
 function GetCwd: string;

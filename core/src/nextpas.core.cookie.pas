@@ -307,9 +307,9 @@ begin
   for I := 0 to High(ACookies) do
   begin
     if not IsValidCookieName(ACookies[I].Name) then
-      raise Exception.Create('Invalid cookie name: ' + ACookies[I].Name);
+      raise EArgumentError.Create('Invalid cookie name: ' + ACookies[I].Name);
     if not IsValidCookieValue(ACookies[I].Value) then
-      raise Exception.Create('Invalid cookie value for: ' + ACookies[I].Name);
+      raise EArgumentError.Create('Invalid cookie value for: ' + ACookies[I].Name);
     if I > 0 then
       Result := Result + '; ';
     Result := Result + ACookies[I].Name + '=' + ACookies[I].Value;
@@ -321,9 +321,9 @@ var
   LAge: string;
 begin
   if not IsValidCookieName(ACookie.Name) then
-    raise Exception.Create('Invalid cookie name: ' + ACookie.Name);
+    raise EArgumentError.Create('Invalid cookie name: ' + ACookie.Name);
   if not IsValidCookieValue(ACookie.Value) then
-    raise Exception.Create('Invalid cookie value for: ' + ACookie.Name);
+    raise EArgumentError.Create('Invalid cookie value for: ' + ACookie.Name);
   Result := ACookie.Name + '=' + ACookie.Value;
   if ACookie.Path <> '' then
     Result := Result + '; Path=' + ACookie.Path;

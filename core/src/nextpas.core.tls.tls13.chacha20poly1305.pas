@@ -16,7 +16,7 @@ unit nextpas.core.tls.tls13.chacha20poly1305;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 function TryChaCha20Poly1305Encrypt(
   const AKey, ANonce, AAAD, APlaintext: TBytes;
@@ -40,8 +40,7 @@ function TryChaCha20Poly1305DecryptCombined(
 
 implementation
 
-uses
-  nextpas.core.crypto.constant_time;
+uses nextpas.core.crypto.constant_time;
 
 const
   CHACHA20_KEY_SIZE = 32;

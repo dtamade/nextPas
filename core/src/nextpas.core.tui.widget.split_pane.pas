@@ -15,7 +15,8 @@ uses
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.widget.intf,
-  nextpas.core.tui.event;
+  nextpas.core.tui.event,
+  nextpas.core.tui.interaction;
 
 type
   TSplitDirection = (sdHorizontal, sdVertical);
@@ -212,17 +213,22 @@ function TSplitPane.HandleMouse(const AArea: TRect; const M: TMouseEvent;
   var AState: TSplitPaneState): Boolean;
 var
   Total, Pos: Integer;
+  Pane1, Pane2, Divider: TRect;
 begin
   Result := False;
 
   case M.Kind of
     mkDown:
     begin
+      if M.Button <> mbLeft then Exit;
+      if not Split(AArea, AState, Pane1, Pane2, Divider) then Exit;
+      if not HitTestEvent(Divider, M) then Exit;
       AState.Dragging := True;
       Result := True;
     end;
     mkUp:
     begin
+      if not AState.Dragging then Exit;
       AState.Dragging := False;
       Result := True;
     end;

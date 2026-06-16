@@ -18,6 +18,7 @@ function SimdAllocAlignment: NativeUInt;
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch;
 
@@ -43,6 +44,26 @@ begin
   Result := GetDefaultAlignment;
 end;
 
+function ResolveAlignment(const AAlignment: TSimdAlignment): NativeUInt; inline;
+begin
+  if AAlignment = saAuto then
+    Result := GetDefaultAlignment
+  else
+    Result := NativeUInt(AAlignment);
+end;
+
+function ComputeRawAllocationSize(const ASize, AAlignment: SizeUInt): SizeUInt; inline;
+const
+  CHeaderSize = SizeUInt(SizeOf(TAllocHeader));
+begin
+  if (ASize > High(SizeUInt) - CHeaderSize) or
+    (ASize + CHeaderSize > High(SizeUInt) - AAlignment) then
+    raise EOutOfMemory.CreateFmt(
+      'SIMD allocation size overflow: size=%d, alignment=%d',
+      [ASize, AAlignment]);
+  Result := ASize + CHeaderSize + AAlignment;
+end;
+
 function SimdAlloc(aSize: SizeUInt; aAlignment: TSimdAlignment = saAuto): Pointer;
 var
   LAlign: NativeUInt;
@@ -52,12 +73,8 @@ var
 begin
   if aSize = 0 then Exit(nil);
 
-  if aAlignment = saAuto then
-    LAlign := GetDefaultAlignment
-  else
-    LAlign := NativeUInt(aAlignment);
-
-  LRawSize := aSize + LAlign + SizeOf(TAllocHeader);
+  LAlign := ResolveAlignment(aAlignment);
+  LRawSize := ComputeRawAllocationSize(aSize, LAlign);
   GetMem(LRaw, LRawSize);
 
   LAligned := Pointer((PtrUInt(LRaw) + SizeOf(TAllocHeader) + LAlign - 1) and not (PtrUInt(LAlign) - 1));

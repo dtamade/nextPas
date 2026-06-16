@@ -94,6 +94,7 @@ type
     FError: Boolean;
     FErrorMsg: string;
     FErrorKind: TH1ParserErrorKind;
+    FHeaderCompleteUserError: Boolean;
     FTrailerBytes: Int64;
     FRequestMetadata: TH1RequestMetadata;
     FPendingRequestMetadata: TH1RequestMetadata;
@@ -119,6 +120,10 @@ type
       const AValueLen: SizeUInt);
     procedure EnsureBodyCapacity(const ARequired: SizeUInt);
     function SnapshotBody: TBytes;
+    function ConsumedUntilErrorPosition(const ABuf: PAnsiChar;
+      const ALen: SizeUInt): SizeUInt;
+    function ConsumedThroughHeaderBoundaryAfterErrorPosition(
+      const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
     procedure MaterializeCurrentHeaderSpans;
     procedure ClearCurrentHeaderSpans;
     procedure ClearRequestMetadataCache;
@@ -574,6 +579,7 @@ begin
       LSelf.FMethod := hmGet;
     end;
     Result := LSelf.BuildRequestMetadata(p0);
+    LSelf.FHeaderCompleteUserError := Result = HPE_USER;
     if Result <> 0 then
       Exit;
   end
@@ -661,21 +667,29 @@ end;
 function TH1Parser.Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
 var
   LErrno: TLlhttpErrnoT;
-  LErrorPos: PAnsiChar;
 begin
+  if FError then
+    Exit(0);
+
+  if FComplete then
+    Exit(0);
+
+  if (ABuf = nil) and (ALen > 0) then
+  begin
+    FError := True;
+    FComplete := False;
+    FErrorKind := pekMalformed;
+    FErrorMsg := 'HTTP parser input buffer is nil with positive length';
+    Exit(0);
+  end;
+
   LErrno := llhttp_execute(@FParser, ABuf, ALen);
   MaterializeCurrentHeaderSpans;
   if (LErrno = HPE_PAUSED) and FComplete then
   begin
     FError := False;
     FErrorMsg := '';
-    LErrorPos := llhttp_get_error_pos(@FParser);
-    if (LErrorPos <> nil) and
-       (PtrUInt(LErrorPos) >= PtrUInt(ABuf)) and
-       (PtrUInt(LErrorPos) <= PtrUInt(ABuf) + ALen) then
-      Result := SizeUInt(PtrUInt(LErrorPos) - PtrUInt(ABuf))
-    else
-      Result := ALen;
+    Result := ConsumedUntilErrorPosition(ABuf, ALen);
     Exit;
   end;
   if (LErrno = HPE_PAUSED_UPGRADE) and (llhttp_get_upgrade(@FParser) <> 0) then
@@ -683,13 +697,7 @@ begin
     FComplete := True;
     FError := False;
     FErrorMsg := '';
-    LErrorPos := llhttp_get_error_pos(@FParser);
-    if (LErrorPos <> nil) and
-       (PtrUInt(LErrorPos) >= PtrUInt(ABuf)) and
-       (PtrUInt(LErrorPos) <= PtrUInt(ABuf) + ALen) then
-      Result := SizeUInt(PtrUInt(LErrorPos) - PtrUInt(ABuf))
-    else
-      Result := ALen;
+    Result := ConsumedUntilErrorPosition(ABuf, ALen);
     Exit;
   end;
   if LErrno <> HPE_OK then
@@ -699,17 +707,64 @@ begin
     if FErrorKind = pekNone then
       FErrorKind := pekMalformed;
     FErrorMsg := string(AnsiString(llhttp_get_error_reason(@FParser)));
-    Result := 0;
+    if (LErrno = HPE_USER) and FHeaderCompleteUserError then
+      Result := ConsumedThroughHeaderBoundaryAfterErrorPosition(ABuf, ALen)
+    else if (FParserType = ptRequest) and
+      (LErrno = HPE_INVALID_TRANSFER_ENCODING) then
+      Result := ConsumedThroughHeaderBoundaryAfterErrorPosition(ABuf, ALen)
+    else
+      Result := ConsumedUntilErrorPosition(ABuf, ALen);
   end
   else
     Result := ALen;
+end;
+
+function TH1Parser.ConsumedUntilErrorPosition(const ABuf: PAnsiChar;
+  const ALen: SizeUInt): SizeUInt;
+var
+  LErrorPos: PAnsiChar;
+  LBase: PtrUInt;
+  LPos: PtrUInt;
+begin
+  Result := ALen;
+  if ABuf = nil then
+    Exit;
+  LErrorPos := llhttp_get_error_pos(@FParser);
+  if LErrorPos = nil then
+    Exit;
+
+  LBase := PtrUInt(ABuf);
+  LPos := PtrUInt(LErrorPos);
+  if (LPos >= LBase) and (LPos <= LBase + ALen) then
+    Result := SizeUInt(LPos - LBase);
+end;
+
+function TH1Parser.ConsumedThroughHeaderBoundaryAfterErrorPosition(
+  const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
+var
+  LI: SizeUInt;
+begin
+  Result := ConsumedUntilErrorPosition(ABuf, ALen);
+  if ABuf = nil then
+    Exit;
+  if Result >= ALen then
+    Exit;
+
+  LI := Result;
+  while LI + 3 < ALen do
+  begin
+    if (ABuf[LI] = #13) and (ABuf[LI + 1] = #10) and
+       (ABuf[LI + 2] = #13) and (ABuf[LI + 3] = #10) then
+      Exit(LI + 4);
+    Inc(LI);
+  end;
 end;
 
 procedure TH1Parser.Finish;
 var
   LErrno: TLlhttpErrnoT;
 begin
-  if FComplete then Exit;
+  if FComplete or FError then Exit;
   LErrno := llhttp_finish(@FParser);
   if (LErrno = HPE_OK) or (FComplete) then
     { on_message_complete was called by llhttp_finish }
@@ -789,16 +844,22 @@ end;
 
 function TH1Parser.GetBody: string;
 begin
+  if FError then
+    Exit('');
   Result := BytesToString(FBody, FBodySize);
 end;
 
 function TH1Parser.GetBodySize: Int64;
 begin
+  if FError then
+    Exit(0);
   Result := Int64(FBodySize);
 end;
 
 function TH1Parser.NewBodyReader: IReader;
 begin
+  if FError then
+    Exit(nil);
   if FBodySize = 0 then
     Exit(nil);
   Result := TSharedBytesReader.Create(SnapshotBody);
@@ -903,7 +964,10 @@ begin
           Exit(RejectWithUserError(UNSUPPORTED_REQUEST_TRANSFER_CODING_REASON,
             pekUnsupportedTransferCoding, AParser));
         end;
-      end;
+      end
+      else
+        Exit(RejectWithUserError(UNSUPPORTED_REQUEST_TRANSFER_CODING_REASON,
+          pekUnsupportedTransferCoding, AParser));
     end;
   end;
   FRequestMetadata := FPendingRequestMetadata;
@@ -1049,6 +1113,7 @@ begin
   FError := False;
   FErrorMsg := '';
   FErrorKind := pekNone;
+  FHeaderCompleteUserError := False;
   FTrailerBytes := 0;
   ClearRequestMetadataCache;
   ClearCurrentHeaderSpans;

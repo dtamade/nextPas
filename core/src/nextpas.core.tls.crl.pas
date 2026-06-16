@@ -19,7 +19,8 @@ unit nextpas.core.tls.crl;
 interface
 
 uses
-  SysUtils, Classes, DateUtils,
+  DateUtils,
+  nextpas.core.text.base,
   nextpas.core.tls.asn1, nextpas.core.tls.x509;
 
 type
@@ -112,7 +113,7 @@ type
 
 // 从证书中提取 CRL 分发点 URL
 function GetCRLURLFromCertificate(ACert: TX509Certificate): string;
-function GetCRLURLsFromCertificate(ACert: TX509Certificate): TStringArray;
+function GetCRLURLsFromCertificate(ACert: TX509Certificate): nextpas.core.text.base.TStringArray;
 
 // 比较序列号
 function CompareSerialNumber(const A, B: TBytes): Boolean;
@@ -127,6 +128,12 @@ function CRLRevokeReasonToString(AReason: TCRLRevokeReason): string;
 implementation
 
 uses
+  nextpas.core.fs.base,
+  nextpas.core.fs.stream,
+  nextpas.core.io.intf,
+  nextpas.core.io.util,
+  nextpas.core.text.conv,
+  nextpas.core.text.strings,
   nextpas.core.time;
 
 // ========================================================================
@@ -165,6 +172,7 @@ end;
 
 destructor TX509CRL.Destroy;
 begin
+  FRawData := nil;
   inherited Destroy;
 end;
 
@@ -185,13 +193,9 @@ begin
     Root := Reader.Parse;
     if Root = nil then
       raise Exception.Create('Invalid CRL: failed to parse DER data');
-
-    try
-      ParseCRL(Root);
-    finally
-      Root.Free;
-    end;
+    ParseCRL(Root);
   finally
+    Root.Free;
     Reader.Free;
   end;
 end;
@@ -224,27 +228,18 @@ end;
 
 procedure TX509CRL.LoadFromFile(const AFileName: string);
 var
-  Stream: TFileStream;
+  Stream: IStream;
   Data: TBytes;
 begin
-  Stream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
-  try
-    SetLength(Data, Stream.Size);
-    if Stream.Size > 0 then
-    begin
-      Stream.ReadBuffer(Data[0], Stream.Size);
+  Stream := FsOpen(AFileName, [fmRead]);
+  Data := IoReadAll(Stream);
+  if Length(Data) = 0 then
+    Exit;
 
-      // 检测格式
-      if (Length(Data) > 0) and (Data[0] = $30) then
-        // DER 格式
-        LoadFromDER(Data)
-      else
-        // 假设是 PEM 格式
-        LoadFromPEM(AnsiString(TEncoding.UTF8.GetString(Data)));
-    end;
-  finally
-    Stream.Free;
-  end;
+  if Data[0] = $30 then
+    LoadFromDER(Data)
+  else
+    LoadFromPEM(UTF8BytesToString(Data));
 end;
 
 procedure TX509CRL.ParseCRL(ARoot: TASN1Node);
@@ -451,9 +446,7 @@ begin
           AEntry.HasReason := True;
         end;
         if ValueRoot <> nil then
-          ValueRoot.Free;
       finally
-        ValueReader.Free;
       end;
     end
     else if ExtOID = OID_INVALIDITY_DATE then
@@ -466,10 +459,8 @@ begin
         begin
           AEntry.InvalidityDate := ValueRoot.AsDateTime;
           AEntry.HasInvalidityDate := True;
-          ValueRoot.Free;
         end;
       finally
-        ValueReader.Free;
       end;
     end;
   end;
@@ -609,7 +600,7 @@ end;
 
 function GetCRLURLFromCertificate(ACert: TX509Certificate): string;
 var
-  URLs: TStringArray;
+  URLs: nextpas.core.text.base.TStringArray;
 begin
   URLs := GetCRLURLsFromCertificate(ACert);
   if Length(URLs) > 0 then
@@ -618,16 +609,15 @@ begin
     Result := '';
 end;
 
-function GetCRLURLsFromCertificate(ACert: TX509Certificate): TStringArray;
+function GetCRLURLsFromCertificate(ACert: TX509Certificate): nextpas.core.text.base.TStringArray;
 var
   I, J: Integer;
   Ext: TX509Extension;
   Reader: TASN1Reader;
   Node, DPNode, DPNameNode, NameNode, URINode: TASN1Node;
-  URLList: TStringList;
+  URLList: nextpas.core.text.base.TStringArray;
 begin
   SetLength(Result, 0);
-  URLList := TStringList.Create;
   try
     // 查找 CRL Distribution Points 扩展
     for I := 0 to High(ACert.Extensions) do
@@ -688,20 +678,17 @@ begin
               end;
             end;
           finally
-            Node.Free;
           end;
         finally
-          Reader.Free;
         end;
       end;
     end;
 
     // 转换为数组
-    SetLength(Result, URLList.Count);
-    for I := 0 to URLList.Count - 1 do
+    SetLength(Result, Length(URLList));
+    for I := 0 to Length(URLList) - 1 do
       Result[I] := URLList[I];
   finally
-    URLList.Free;
   end;
 end;
 

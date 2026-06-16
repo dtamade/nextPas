@@ -21,12 +21,9 @@ unit nextpas.core.tls.mbedtls.base;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.base;
+uses nextpas.core.tls.base;
 
 const
-  { MbedTLS 库文件名 - 分为三个库 }
   {$IFDEF WINDOWS}
   MBEDTLS_LIB_NAME = 'mbedtls.dll';
   MBEDCRYPTO_LIB_NAME = 'mbedcrypto.dll';

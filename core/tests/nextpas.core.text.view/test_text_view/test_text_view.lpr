@@ -4,10 +4,22 @@ program test_text_view;
 
 uses
   nextpas.core.text.view,
+  nextpas.core.base,
   nextpas.core.testing;
 
 var
   T: TTestRunner;
+
+procedure CheckInvalidViewCreateRaises(const AMessage: string);
+begin
+  try
+    TStringView.Create(nil, 1);
+    Fail(AMessage + ': expected EInvalidArgument');
+  except
+    on E: EInvalidArgument do
+      ;
+  end;
+end;
 
 procedure TestCreateAndBasic;
 var
@@ -21,6 +33,28 @@ begin
   V := TStringView.Empty;
   Check(V.IsEmpty, 'empty');
   CheckEqual(Int64(0), Int64(V.Len), 'len=0');
+end;
+
+procedure TestRejectNilDataWithNonZeroLength;
+var
+  V: TStringView;
+  S: TByteSpan;
+begin
+  V := TStringView.Create(nil, 0);
+  Check(V.IsEmpty, 'nil+zero create is empty');
+  CheckInvalidViewCreateRaises('nil+nonzero create');
+
+  S := TByteSpan.Create(nil, 0);
+  V := TStringView.FromSpan(S);
+  Check(V.IsEmpty, 'nil+zero span is empty');
+
+  try
+    S := TByteSpan.Create(nil, 1);
+    Fail('nil+nonzero span create: expected EArgumentNil');
+  except
+    on E: EArgumentNil do
+      ;
+  end;
 end;
 
 procedure TestFromStr;
@@ -48,6 +82,16 @@ begin
 
   S := V.Slice(10, 1);
   Check(S.IsEmpty, 'slice past end');
+end;
+
+procedure TestSliceClampsOverflowedLength;
+var
+  V, S: TStringView;
+begin
+  V := TStringView.Create(PAnsiChar('abcdef'), 6);
+  S := V.Slice(1, High(SizeUInt));
+  CheckEqual(Int64(5), Int64(S.Len), 'overflowed length clamps to remaining bytes');
+  Check(S.Data[0] = 'b', 'clamped slice starts at offset');
 end;
 
 procedure TestLeftRight;
@@ -136,6 +180,17 @@ begin
   CheckEqual(Int64(0), Int64(V.IndexOfStr(N)), 'empty needle');
 end;
 
+procedure TestStringIndexOfHelpers;
+begin
+  CheckEqual(Int64(2), Int64(IndexOfStr('hello', 'llo')), 'substring index');
+  CheckEqual(Int64(0), Int64(IndexOfStr('hello', '')), 'empty substring');
+  CheckEqual(Int64(-1), Int64(IndexOfStr('hello', 'xyz')), 'missing substring');
+
+  CheckEqual(Int64(3), Int64(LastIndexOfStr('abcabc', 'abc')), 'last substring');
+  CheckEqual(Int64(0), Int64(LastIndexOfStr('abcdef', 'abc')), 'only substring');
+  CheckEqual(Int64(-1), Int64(LastIndexOfStr('hello', '')), 'empty last substring');
+end;
+
 procedure TestAdvanceCursor;
 var
   V: TStringView;
@@ -221,8 +276,10 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.text.view');
   T.Run('create and basic', @TestCreateAndBasic);
+  T.Run('reject nil data with non-zero length', @TestRejectNilDataWithNonZeroLength);
   T.Run('from string', @TestFromStr);
   T.Run('slice', @TestSlice);
+  T.Run('slice clamps overflowed length', @TestSliceClampsOverflowedLength);
   T.Run('left/right', @TestLeftRight);
   T.Run('trim', @TestTrim);
   T.Run('equals', @TestEquals);
@@ -230,6 +287,7 @@ begin
   T.Run('starts/ends with', @TestStartsEndsWith);
   T.Run('indexOf char', @TestIndexOf);
   T.Run('indexOf string', @TestIndexOfStr);
+  T.Run('string index helpers', @TestStringIndexOfHelpers);
   T.Run('advance cursor', @TestAdvanceCursor);
   T.Run('toString', @TestToString);
   T.Run('countChar', @TestCountChar);

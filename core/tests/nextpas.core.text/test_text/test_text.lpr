@@ -5,7 +5,8 @@ program test_text;
 uses
   SysUtils,
   nextpas.core.testing,
-  nextpas.core.text;
+  nextpas.core.text,
+  nextpas.core.text.utils;
 
 var
   T: TTestRunner;
@@ -197,6 +198,32 @@ begin
   CheckEqual(Int64($1F600), Int64(TextUTF8CodePointAt(#$F0#$9F#$98#$80, 0)), 'emoji U+1F600');
 end;
 
+procedure TestUTF8MalformedConsumesOneByte;
+var
+  LValue: string;
+begin
+  LValue := #$80 + 'ABC';
+  CheckEqual(Int64(4), Int64(TextUTF8Length(LValue)), 'invalid continuation byte counts as one replacement codepoint');
+  CheckEqual(Int64($FFFD), Int64(TextUTF8CodePointAt(LValue, 0)), 'invalid byte returns replacement codepoint');
+  CheckEqual(Int64(Ord('A')), Int64(TextUTF8CodePointAt(LValue, 1)), 'valid byte after invalid stays addressable');
+
+  LValue := #$E2#$82 + 'Z';
+  CheckEqual(Int64(3), Int64(TextUTF8Length(LValue)), 'truncated sequence consumes one byte at a time');
+  CheckEqual(Int64($FFFD), Int64(TextUTF8CodePointAt(LValue, 0)), 'truncated lead returns replacement');
+  CheckEqual(Int64($FFFD), Int64(TextUTF8CodePointAt(LValue, 1)), 'trailing continuation returns replacement');
+  CheckEqual(Int64(Ord('Z')), Int64(TextUTF8CodePointAt(LValue, 2)), 'ASCII after truncated sequence stays addressable');
+end;
+
+procedure TestUtilsSurface;
+begin
+  CheckEqual('hello', nextpas.core.text.utils.Trim('  hello  '), 'utils trim');
+  CheckEqual('000hi', nextpas.core.text.utils.PadLeft('hi', 5, '0'), 'utils pad left');
+  CheckEqual('hi000', nextpas.core.text.utils.PadRight('hi', 5, '0'), 'utils pad right');
+  CheckEqual('abab', nextpas.core.text.utils.RepeatString('ab', 2), 'utils repeat');
+  Check(nextpas.core.text.utils.IsEmpty(''), 'utils empty');
+  Check(nextpas.core.text.utils.IsBlank(#9' '#10), 'utils blank');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.text');
   T.Run('Trim', @TestTrim);
@@ -220,5 +247,7 @@ begin
   T.Run('IsBlank', @TestIsBlank);
   T.Run('UTF8Length', @TestUTF8Length);
   T.Run('UTF8CodePointAt', @TestUTF8CodePointAt);
+  T.Run('UTF8 malformed consumes one byte', @TestUTF8MalformedConsumesOneByte);
+  T.Run('Utils surface', @TestUtilsSurface);
   T.Summary;
 end.

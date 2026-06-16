@@ -9,21 +9,21 @@ unit nextpas.core.tls.cert.utils;
 {**
  * Unit: nextpas.core.tls.cert.utils
  * Purpose: 企业级证书工具类
- * 
+ *
  * Features:
  * - 自签名证书生成（RSA/ECDSA）
  * - 证书信息提取和验证
  * - 证书链验证
  * - PEM/DER格式转换
  * - 证书指纹计算
- * 
+ *
  * Thread Safety: 所有类方法线程安全
- * 
+ *
  * Dependencies:
  *   - OpenSSL 1.1.1+ or 3.0+
  *   - nextpas.core.tls.exceptions
  *   - nextpas.core.crypto.utils (for fingerprint)
- * 
+ *
  * @author fafafa.ssl team
  * @version 2.0.0
  * @since 2025-11-26
@@ -33,6 +33,7 @@ interface
 
 uses
   SysUtils, Classes,
+  nextpas.core.fs,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
@@ -52,15 +53,15 @@ const
   DEFAULT_CERT_VALID_DAYS = 365;
   DEFAULT_RSA_KEY_BITS = 2048;
   DEFAULT_EC_CURVE = 'prime256v1';
-  
+
   // 证书版本
   X509_VERSION_1 = 0;
   X509_VERSION_2 = 1;
   X509_VERSION_3 = 2;  // X509v3 = 2
-  
+
   // RSA指数
   RSA_EXPONENT_F4 = 65537;
-  
+
   // 序列号
   DEFAULT_SERIAL_NUMBER = 1;
 
@@ -71,7 +72,7 @@ type
    * - cfDER: DER格式（二进制）
    *}
   TCertFormat = (cfPEM, cfDER);
-  
+
   {**
    * 密钥类型枚举
    * - ktRSA: RSA非对称加密
@@ -79,7 +80,7 @@ type
    * - ktEd25519: Edwards曲线数字签名
    *}
   TKeyType = (ktRSA, ktECDSA, ktEd25519);
-  
+
   { 证书信息 }
   TCertInfo = record
     Subject: string;           // 主题
@@ -90,12 +91,12 @@ type
     PublicKeyType: string;     // 公钥类型
     PublicKeyBits: Integer;    // 公钥位数
     SignatureAlgorithm: string;// 签名算法
-    SubjectAltNames: TStringList; // SAN (备用名称)
+    SubjectAltNames: TStringArray; // SAN (备用名称)
     KeyUsage: string;          // 密钥用途
     IsCA: Boolean;             // 是否CA证书
     Version: Integer;          // 证书版本
   end;
-  
+
   { 证书生成选项 }
   TCertGenOptions = record
     CommonName: string;        // 通用名称 (CN)
@@ -110,7 +111,7 @@ type
     KeyType: TKeyType;         // 密钥类型
     KeyBits: Integer;          // RSA密钥位数 (2048/4096)
     ECCurve: string;           // EC曲线名称 (prime256v1/secp384r1)
-    SubjectAltNames: TStringList; // 备用名称
+    SubjectAltNames: TStringArray; // 备用名称
     IsCA: Boolean;             // 是否CA证书
     SerialNumber: Int64;       // 序列号 (0=自动生成)
     OCSPResponderURL: string;  // 可选：写入 AIA 的 OCSP Responder URL（http/https）
@@ -118,11 +119,11 @@ type
 
   {**
    * 企业级证书工具类
-   * 
+   *
    * 提供完整的证书操作功能，所有方法都是类方法（静态）。
-   * 
+   *
    * Thread Safety: 所有方法线程安全
-   * 
+   *
    * @example
    * <code>
    *   var LCert, LKey: string;
@@ -135,7 +136,7 @@ type
   TCertificateUtils = class
   private
     class procedure EnsureInitialized; static;
-    
+
     class function X509NameToString(AName: PX509_NAME): string; static;
     class function ASN1TimeToDateTime(ATime: Pointer): TDateTime; static;
     class function GenerateRSAKey(ABits: Integer): PEVP_PKEY; static;
@@ -147,7 +148,7 @@ type
   public
     { 创建默认生成选项 }
     class function DefaultGenOptions: TCertGenOptions;
-    
+
     { 生成自签名证书
       返回: PEM格式的证书和私钥 (Cert + Key)
       异常: 生成失败时抛出异常 }
@@ -155,7 +156,7 @@ type
       const AOptions: TCertGenOptions;
       out ACertPEM, AKeyPEM: string
     ): Boolean;
-    
+
     { 简化版：生成自签名证书
       参数: CN, 组织, 有效天数
       返回: PEM格式的证书和私钥 }
@@ -164,7 +165,7 @@ type
       AValidDays: Integer;
       out ACertPEM, AKeyPEM: string
     ): Boolean;
-    
+
     { 生成由CA签名的证书
       参数: 选项, CA证书PEM, CA私钥PEM
       返回: PEM格式的新证书和私钥 }
@@ -173,7 +174,7 @@ type
       const ACA_CertPEM, ACA_KeyPEM: string;
       out ACertPEM, AKeyPEM: string
     ): Boolean;
-    
+
     { 验证证书链
       参数: 证书PEM, CA证书路径
       返回: 验证是否成功 }
@@ -181,15 +182,15 @@ type
       const ACertPEM: string;
       const ACAPath: string = ''
     ): Boolean;
-    
+
     { X509_NAME比较 }
     class function CompareX509Names(const AName1, AName2: string; ACaseInsensitive: Boolean = True): Boolean; static;
-    
+
     { 提取证书信息
       参数: 证书PEM
       返回: 证书详细信息 }
     class function GetInfo(const ACertPEM: string): TCertInfo;
-    
+
     { 格式转换: PEM <-> DER
       参数: 输入数据, 源格式, 目标格式
       返回: 转换后的数据 }
@@ -197,22 +198,22 @@ type
       const AInput: TBytes;
       AFromFormat, AToFormat: TCertFormat
     ): TBytes;
-    
+
     { PEM转DER }
     class function PEMToDER(const APEM: string): TBytes;
-    
+
     { DER转PEM }
     class function DERToPEM(const ADER: TBytes): string;
-    
+
     { 从文件加载证书 }
     class function LoadFromFile(const AFileName: string): string;
-    
+
     { 保存证书到文件 }
     class function SaveToFile(const AFileName, ACertPEM: string): Boolean;
-    
+
     { 验证证书有效期 }
     class function IsValid(const ACertPEM: string): Boolean;
-    
+
     { 获取证书指纹 (SHA256) }
     class function GetFingerprint(const ACertPEM: string): string;
 
@@ -286,6 +287,8 @@ type
 implementation
 
 uses
+  nextpas.core.text.conv,
+  nextpas.core.text.strings,
   nextpas.core.time,
   nextpas.core.tls.openssl.api.asn1,
   nextpas.core.tls.openssl.api.x509v3,
@@ -420,7 +423,7 @@ end;
 
 {**
  * 生成RSA密钥对
- * 
+ *
  * @param ABits 密钥位数（2048/4096）
  * @return EVP_PKEY指针
  * @raises ESSLCertError 生成失败
@@ -431,16 +434,16 @@ var
   LExp: PBIGNUM;
 begin
   Result := nil;
-  
+
   EnsureInitialized;
-  
+
   // 验证参数
   if (ABits < 1024) or (ABits > 8192) then
     RaiseInvalidParameter('RSA key size (valid range: 1024-8192)');
 
   if not Assigned(RSA_new) then
     raise ESSLCertError.Create('Required RSA key allocation helper is unavailable');
-  
+
   LKey := RSA_new();
   if LKey = nil then
     raise ESSLCertError.Create('Failed to create RSA key structure');
@@ -451,7 +454,7 @@ begin
     LKey := nil;
     raise ESSLCertError.Create('Required RSA exponent allocation helper is unavailable');
   end;
-  
+
   LExp := BN_new();
   if LExp = nil then
   begin
@@ -459,7 +462,7 @@ begin
     LKey := nil;
     raise ESSLCertError.Create('Failed to create BIGNUM for exponent');
   end;
-  
+
   try
     if not Assigned(BN_set_word) then
     begin
@@ -476,7 +479,7 @@ begin
       LKey := nil;
       raise ESSLCertError.Create('Required RSA key-generation helper is unavailable');
     end;
-    
+
     if RSA_generate_key_ex(LKey, ABits, LExp, nil) <> 1 then
     begin
       RSA_free(LKey);
@@ -493,7 +496,7 @@ begin
       LKey := nil;
       raise ESSLCertError.Create('Required EVP key container allocation helper is unavailable');
     end;
-    
+
     Result := EVP_PKEY_new();
     if Result = nil then
     begin
@@ -510,7 +513,7 @@ begin
       LKey := nil;
       raise ESSLCertError.Create('Required EVP key ownership-transfer helper is unavailable');
     end;
-    
+
     if EVP_PKEY_assign(Result, EVP_PKEY_RSA, LKey) <> 1 then
     begin
       EVP_PKEY_free(Result);
@@ -538,7 +541,7 @@ end;
 
 {**
  * 生成椭圆曲线密钥对
- * 
+ *
  * @param ACurve 曲线名称（如'prime256v1', 'secp384r1'）
  * @return EVP_PKEY指针
  * @raises ESSLInvalidArgument 无效的曲线名称
@@ -550,16 +553,16 @@ var
   LNID: Integer;
 begin
   Result := nil;
-  
+
   EnsureInitialized;
-  
+
   // 验证参数
   if ACurve = '' then
     RaiseInvalidParameter('EC curve name');
 
   if not Assigned(OBJ_txt2nid) then
     raise ESSLCertError.Create('Required EC curve lookup helper is unavailable');
-  
+
   // 获取曲线NID
   LNID := OBJ_txt2nid(PAnsiChar(AnsiString(ACurve)));
   if LNID = NID_undef then
@@ -567,11 +570,11 @@ begin
 
   if not Assigned(EC_KEY_new_by_curve_name) then
     raise ESSLCertError.Create('Required EC key allocation helper is unavailable');
-  
+
   LKey := EC_KEY_new_by_curve_name(LNID);
   if LKey = nil then
     raise ESSLCertError.CreateFmt('Failed to create EC key for curve %s', [ACurve]);
-  
+
   try
     if not Assigned(EC_KEY_generate_key) then
       raise ESSLCertError.Create('Required EC key-generation helper is unavailable');
@@ -758,7 +761,7 @@ end;
 
 {**
  * 添加X509名称条目
- * 
+ *
  * @param AName X509_NAME指针
  * @param AKey 字段名（如'CN', 'O', 'C'）
  * @param AValue 字段值
@@ -766,7 +769,7 @@ end;
  * @raises ESSLCertError 添加失败
  *}
 class function TCertificateUtils.AddNameEntry(
-  AName: PX509_NAME; 
+  AName: PX509_NAME;
   const AKey, AValue: string
 ): Boolean;
 begin
@@ -775,7 +778,7 @@ begin
 
   if not Assigned(X509_NAME_add_entry_by_txt) then
     raise ESSLCertError.Create('Required X509 subject-name entry helper is unavailable');
-  
+
   Result := X509_NAME_add_entry_by_txt(
     AName,
     PAnsiChar(AnsiString(AKey)),
@@ -783,7 +786,7 @@ begin
     PByte(PAnsiChar(AnsiString(AValue))),
     -1, -1, 0
   ) = 1;
-  
+
   if not Result then
     raise ESSLCertError.CreateFmt(
       'Failed to add X509 name entry %s=%s',
@@ -793,17 +796,17 @@ end;
 
 {**
  * 生成自签名证书
- * 
+ *
  * 创建X.509v3自签名证书，用于HTTPS服务器、客户端认证等场景。
  * 证书和私钥均以PEM格式输出。
- * 
+ *
  * @param AOptions 证书生成选项（使用DefaultGenOptions获取默认值）
  * @param ACertPEM 输出：PEM格式证书
  * @param AKeyPEM 输出：PEM格式私钥
- * 
+ *
  * @raises ESSLInvalidArgument 参数无效
  * @raises ESSLCertError 证书生成失败
- * 
+ *
  * @example
  * <code>
  *   var LCert, LKey: string;
@@ -836,28 +839,28 @@ begin
   Result := False;
   ACertPEM := '';
   AKeyPEM := '';
-  
+
   EnsureInitialized;
   LHadBIOFreeAtEntry := Assigned(BIO_free);
   LHadX509FreeAtEntry := Assigned(X509_free);
   LHadEVPPKeyFreeAtEntry := Assigned(EVP_PKEY_free);
-  
+
   // 验证参数
   if AOptions.CommonName = '' then
     RaiseInvalidParameter('CommonName');
   if AOptions.ValidDays <= 0 then
     RaiseInvalidParameter('ValidDays (must be positive)');
-  
+
   // 生成密钥
   case AOptions.KeyType of
     ktRSA: LKey := GenerateRSAKey(AOptions.KeyBits);
     ktECDSA: LKey := GenerateECKey(AOptions.ECCurve);
     ktEd25519: LKey := GenerateEd25519Key;
   end;
-  
+
   if LKey = nil then
     raise ESSLCertError.Create('Failed to generate private key');
-  
+
   try
     // 创建证书
     if not Assigned(X509_new) then
@@ -866,14 +869,14 @@ begin
     LCert := X509_new();
     if LCert = nil then
       raise ESSLCertError.Create('Failed to create X509 certificate');
-    
+
     try
       // 设置版本 (X509v3)
       if not Assigned(X509_set_version) then
         raise ESSLCertError.Create('Required X509 certificate version helper is unavailable');
 
       X509_set_version(LCert, X509_VERSION_3);
-      
+
       // 设置序列号
       if not Assigned(X509_get_serialNumber) then
         raise ESSLCertError.Create('Required X509 certificate serial helper is unavailable');
@@ -886,7 +889,7 @@ begin
         ASN1_INTEGER_set(LSerial, AOptions.SerialNumber)
       else
         ASN1_INTEGER_set(LSerial, DEFAULT_SERIAL_NUMBER);
-      
+
       // 设置有效期
       if not Assigned(X509_get_notBefore) then
         raise ESSLCertError.Create('Required X509 certificate validity-start helper is unavailable');
@@ -900,25 +903,25 @@ begin
 
       if not Assigned(X509_gmtime_adj) then
         raise ESSLCertError.Create('Required X509 certificate validity adjustment helper is unavailable');
-      
+
       // 支持自定义起始时间
       if AOptions.NotBefore > 0 then
-        X509_gmtime_adj(LNotBefore, Trunc((AOptions.NotBefore - Now) * 24 * 60 * 60))
+        X509_gmtime_adj(LNotBefore, Trunc((AOptions.NotBefore - nextpas.core.time.DateTimeNow) * 24 * 60 * 60))
       else
         X509_gmtime_adj(LNotBefore, 0);  // 使用当前时间
-        
+
       // 支持自定义结束时间
       if AOptions.NotAfter > 0 then
-        X509_gmtime_adj(LNotAfter, Trunc((AOptions.NotAfter - Now) * 24 * 60 * 60))
+        X509_gmtime_adj(LNotAfter, Trunc((AOptions.NotAfter - nextpas.core.time.DateTimeNow) * 24 * 60 * 60))
       else
         X509_gmtime_adj(LNotAfter, Int64(AOptions.ValidDays) * 24 * 60 * 60);
-      
+
       // 设置公钥
       if not Assigned(X509_set_pubkey) then
         raise ESSLCertError.Create('Required X509 certificate public-key attach helper is unavailable');
 
       X509_set_pubkey(LCert, LKey);
-      
+
       // 设置主题名称
       if not Assigned(X509_get_subject_name) then
         raise ESSLCertError.Create('Required X509 certificate subject-name helper is unavailable');
@@ -935,13 +938,13 @@ begin
       if AOptions.OrganizationalUnit <> '' then
         AddNameEntry(LName, 'OU', AOptions.OrganizationalUnit);
       AddNameEntry(LName, 'CN', AOptions.CommonName);
-      
+
       // 自签名：颁发者=主题
       if not Assigned(X509_set_issuer_name) then
         raise ESSLCertError.Create('Required X509 certificate issuer-name helper is unavailable');
 
       X509_set_issuer_name(LCert, LName);
-      
+
       // Add extensions
       // Basic Constraints
       if AOptions.IsCA then
@@ -951,7 +954,7 @@ begin
       end
       else
         AddExtension(LCert, LCert, NID_basic_constraints, 'CA:FALSE');
-        
+
       // Key Usage
       if AOptions.IsCA then
       begin
@@ -960,15 +963,15 @@ begin
       end
       else
         AddExtension(LCert, LCert, NID_key_usage, 'digitalSignature,keyEncipherment');
-        
+
       // Subject Key Identifier
       AddExtension(LCert, LCert, NID_subject_key_identifier, 'hash');
-      
+
       // Authority Key Identifier
       AddExtension(LCert, LCert, NID_authority_key_identifier, 'keyid:always');
 
       // Subject Alternative Names
-      if (AOptions.SubjectAltNames <> nil) and (AOptions.SubjectAltNames.Count > 0) then
+      if (AOptions.SubjectAltNames <> nil) and (AOptions.Length(SubjectAltNames) > 0) then
       begin
         // Force comma delimiter without quotes
         AOptions.SubjectAltNames.Delimiter := ',';
@@ -990,7 +993,7 @@ begin
       // 签名
       if not SignCertificateWithKey(LCert, LKey) then
         raise ESSLCertError.Create('Failed to sign certificate');
-      
+
       // 导出证书为PEM
       if not HasCertificatePEMWriteBIOHelpers then
         raise ESSLCertError.Create('Required certificate PEM export helpers are unavailable');
@@ -1005,7 +1008,7 @@ begin
       LBIO := BIO_new(LBIOMethod);
       if LBIO = nil then
         raise ESSLCertError.Create('Failed to create BIO for certificate export');
-      
+
       try
         if not Assigned(PEM_write_bio_X509) then
           raise ESSLCertError.Create('Required certificate PEM export write helper is unavailable');
@@ -1026,7 +1029,7 @@ begin
           raise ESSLCertError.Create('Required certificate PEM export BIO cleanup helper is unavailable');
         BIO_free(LBIO);
       end;
-      
+
       // 导出私钥为PEM
       if not HasPrivateKeyPEMWriteBIOHelpers then
         raise ESSLCertError.Create('Required private key PEM export helpers are unavailable');
@@ -1041,7 +1044,7 @@ begin
       LBIO := BIO_new(LBIOMethod);
       if LBIO = nil then
         raise ESSLCertError.Create('Failed to create BIO for key export');
-      
+
       try
         if not Assigned(PEM_write_bio_PrivateKey) then
           raise ESSLCertError.Create('Required private key PEM export write helper is unavailable');
@@ -1061,9 +1064,9 @@ begin
         else if not (LHadBIOFreeAtEntry and (ACertPEM <> '') and (AKeyPEM <> '')) then
           raise ESSLCertError.Create('Required private key PEM export BIO cleanup helper is unavailable');
       end;
-      
+
       Result := (ACertPEM <> '') and (AKeyPEM <> '');
-      
+
     finally
       if Assigned(X509_free) then
         X509_free(LCert)
@@ -1116,18 +1119,18 @@ begin
   Result := False;
   ACertPEM := '';
   AKeyPEM := '';
-  
+
   EnsureInitialized;
   LHadBIOFreeAtEntry := Assigned(BIO_free);
   LHadX509FreeAtEntry := Assigned(X509_free);
   LHadEVPPKeyFreeAtEntry := Assigned(EVP_PKEY_free);
-  
+
   // 1. 加载CA证书和私钥
   if not HasCertificatePEMReadBIOHelpers then
     raise ESSLCertError.Create('Required CA certificate PEM load helpers are unavailable');
 
   LBIO := BIO_new_mem_buf(PAnsiChar(AnsiString(ACA_CertPEM)), Length(ACA_CertPEM));
-  if LBIO = nil then 
+  if LBIO = nil then
     raise ESSLCertError.Create('Failed to create BIO for CA cert');
   try
     if not Assigned(PEM_read_bio_X509) then
@@ -1139,15 +1142,15 @@ begin
       raise ESSLCertError.Create('Required CA certificate BIO cleanup helper is unavailable');
     BIO_free(LBIO);
   end;
-  if LCACert = nil then 
+  if LCACert = nil then
     raise ESSLCertError.Create('Failed to parse CA certificate');
-  
+
   try
     if not HasPrivateKeyPEMReadBIOHelpers then
       raise ESSLCertError.Create('Required CA private key PEM load helpers are unavailable');
 
     LBIO := BIO_new_mem_buf(PAnsiChar(AnsiString(ACA_KeyPEM)), Length(ACA_KeyPEM));
-    if LBIO = nil then 
+    if LBIO = nil then
       raise ESSLCertError.Create('Failed to create BIO for CA key');
     try
       if not Assigned(PEM_read_bio_PrivateKey) then
@@ -1159,9 +1162,9 @@ begin
         raise ESSLCertError.Create('Required CA private-key BIO cleanup helper is unavailable');
       BIO_free(LBIO);
     end;
-    if LCAKey = nil then 
+    if LCAKey = nil then
       raise ESSLCertError.Create('Failed to parse CA private key');
-    
+
     try
       // 2. 生成新密钥对
       case AOptions.KeyType of
@@ -1169,18 +1172,18 @@ begin
         ktECDSA: LKey := GenerateECKey(AOptions.ECCurve);
         ktEd25519: LKey := GenerateEd25519Key;
       end;
-      if LKey = nil then 
+      if LKey = nil then
         raise ESSLCertError.Create('Failed to generate key pair');
-      
+
       try
         // 3. 创建新证书
         if not Assigned(X509_new) then
           raise ESSLCertError.Create('Required leaf certificate allocation helper is unavailable');
 
         LCert := X509_new();
-        if LCert = nil then 
+        if LCert = nil then
           raise ESSLCertError.Create('Failed to create X509 structure');
-        
+
         try
           if not Assigned(X509_set_version) then
             raise ESSLCertError.Create('Required leaf certificate version helper is unavailable');
@@ -1189,7 +1192,7 @@ begin
 
           if not Assigned(X509_get_serialNumber) then
             raise ESSLCertError.Create('Required leaf certificate serial helper is unavailable');
-          
+
           LSerial := X509_get_serialNumber(LCert);
           if not Assigned(ASN1_INTEGER_set) then
             raise ESSLCertError.Create('Required leaf certificate serial setter is unavailable');
@@ -1198,7 +1201,7 @@ begin
             ASN1_INTEGER_set(LSerial, AOptions.SerialNumber)
           else
             ASN1_INTEGER_set(LSerial, DEFAULT_SERIAL_NUMBER + Random(10000)); // 简单随机
-            
+
           if not Assigned(X509_get_notBefore) then
             raise ESSLCertError.Create('Required leaf certificate validity-start helper is unavailable');
 
@@ -1211,19 +1214,19 @@ begin
             raise ESSLCertError.Create('Required leaf certificate validity-adjustment helper is unavailable');
 
           if AOptions.NotBefore > 0 then
-            X509_gmtime_adj(LNotBefore, Trunc((AOptions.NotBefore - Now) * 24 * 60 * 60))
+            X509_gmtime_adj(LNotBefore, Trunc((AOptions.NotBefore - nextpas.core.time.DateTimeNow) * 24 * 60 * 60))
           else
             X509_gmtime_adj(LNotBefore, 0);
 
           if AOptions.NotAfter > 0 then
-            X509_gmtime_adj(LNotAfter, Trunc((AOptions.NotAfter - Now) * 24 * 60 * 60))
+            X509_gmtime_adj(LNotAfter, Trunc((AOptions.NotAfter - nextpas.core.time.DateTimeNow) * 24 * 60 * 60))
           else
             X509_gmtime_adj(LNotAfter, Int64(AOptions.ValidDays) * 24 * 60 * 60);
           if not Assigned(X509_set_pubkey) then
             raise ESSLCertError.Create('Required leaf certificate public-key attach helper is unavailable');
-          
+
           X509_set_pubkey(LCert, LKey);
-          
+
           // 设置主题
           if not Assigned(X509_get_subject_name) then
             raise ESSLCertError.Create('Required leaf certificate subject-name helper is unavailable');
@@ -1235,7 +1238,7 @@ begin
           if AOptions.Organization <> '' then AddNameEntry(LName, 'O', AOptions.Organization);
           if AOptions.OrganizationalUnit <> '' then AddNameEntry(LName, 'OU', AOptions.OrganizationalUnit);
           AddNameEntry(LName, 'CN', AOptions.CommonName);
-          
+
           // 设置颁发者（从CA证书获取）
           if not Assigned(X509_get_subject_name) then
             raise ESSLCertError.Create('Required CA certificate subject-name helper is unavailable');
@@ -1245,28 +1248,28 @@ begin
             raise ESSLCertError.Create('Required issuer-name setter helper is unavailable');
 
           X509_set_issuer_name(LCert, LCAName);
-          
+
           // 添加扩展
           // Basic Constraints
           if AOptions.IsCA then
             AddExtension(LCert, LCACert, NID_basic_constraints, 'critical,CA:TRUE')
           else
             AddExtension(LCert, LCACert, NID_basic_constraints, 'CA:FALSE');
-            
+
           // Key Usage
           if AOptions.IsCA then
             AddExtension(LCert, LCACert, NID_key_usage, 'critical,keyCertSign,cRLSign')
           else
             AddExtension(LCert, LCACert, NID_key_usage, 'digitalSignature,keyEncipherment');
-            
+
           // Subject Key Identifier
           AddExtension(LCert, LCACert, NID_subject_key_identifier, 'hash');
-          
+
           // Authority Key Identifier
           AddExtension(LCert, LCACert, NID_authority_key_identifier, 'keyid:always,issuer');
-          
+
           // Subject Alternative Names
-          if (AOptions.SubjectAltNames <> nil) and (AOptions.SubjectAltNames.Count > 0) then
+          if (AOptions.SubjectAltNames <> nil) and (AOptions.Length(SubjectAltNames) > 0) then
             AddExtension(LCert, LCACert, NID_subject_alt_name, AOptions.SubjectAltNames.DelimitedText);
 
           // Authority Information Access (OCSP)
@@ -1281,7 +1284,7 @@ begin
           // 4. 使用CA私钥签名
           if not SignCertificateWithKey(LCert, LCAKey) then
             raise ESSLCertError.Create('Failed to sign certificate with CA key');
-            
+
           // 5. 导出
           if not HasCertificatePEMWriteBIOHelpers then
             raise ESSLCertError.Create('Required certificate PEM export helpers are unavailable');
@@ -1317,7 +1320,7 @@ begin
               raise ESSLCertError.Create('Required certificate PEM export BIO cleanup helper is unavailable');
             BIO_free(LBIO);
           end;
-          
+
           if not HasPrivateKeyPEMWriteBIOHelpers then
             raise ESSLCertError.Create('Required private key PEM export helpers are unavailable');
 
@@ -1353,9 +1356,9 @@ begin
             else if not (LHadBIOFreeAtEntry and (ACertPEM <> '') and (AKeyPEM <> '')) then
               raise ESSLCertError.Create('Required private key PEM export BIO cleanup helper is unavailable');
           end;
-          
+
           Result := (ACertPEM <> '') and (AKeyPEM <> '');
-          
+
         finally
           if Assigned(X509_free) then
             X509_free(LCert)
@@ -1392,10 +1395,10 @@ begin
   if AName = nil then Exit;
   if not Assigned(BIO_s_mem) then Exit;
   if not Assigned(BIO_new) then Exit;
-  
+
   LBIO := BIO_new(BIO_s_mem());
   if LBIO = nil then Exit;
-  
+
   try
     if not Assigned(X509_NAME_print_ex) then Exit;
     X509_NAME_print_ex(LBIO, AName, 0, 0);
@@ -1433,8 +1436,8 @@ var
   LKeyUsageFlags: Cardinal;
 begin
   FillChar(Result, SizeOf(Result), 0);
-  Result.SubjectAltNames := TStringList.Create;
-  
+  Result.SubjectAltNames
+
   if not TOpenSSLLoader.IsModuleLoaded(osmCore) then
     LoadOpenSSLCore();
 
@@ -1455,14 +1458,14 @@ begin
 
   if not HasCertificatePEMReadBIOHelpers then
     Exit;
-  
+
   LBIO := BIO_new_mem_buf(PAnsiChar(AnsiString(ACertPEM)), Length(ACertPEM));
   if LBIO = nil then Exit;
-  
+
   try
     LCert := PEM_read_bio_X509(LBIO, nil, nil, nil);
     if LCert = nil then Exit;
-    
+
     try
       if not Assigned(X509_get_subject_name) then
         Exit;
@@ -1634,7 +1637,7 @@ begin
       end
       else
         ;// WriteLn('Debug: X509_get_ext_d2i not assigned or stack not loaded');
-      
+
     finally
       if Assigned(X509_free) then
         X509_free(LCert);
@@ -1665,17 +1668,17 @@ begin
   Result := False;
   LCert := nil;
   LInterStore := nil;
-  
+
   EnsureInitialized;
-  
+
   // 1. 加载叶证书 (第一个证书)
   LCert := TSSLFactory.CreateCertificate;
   if not LCert.LoadFromPEM(ACertPEM) then
     Exit;
-    
+
   // 2. 创建验证器
   LVerifier := TSSLCertificateChainVerifier.Create;
-  
+
   // 3. 尝试加载中间证书（如果有）
   if not HasCertificatePEMReadBIOHelpers then
     Exit;
@@ -1697,7 +1700,7 @@ begin
 
     if not HasCertificatePEMReadBIOHelpers then
       Exit;
-      
+
     // 读取剩余的证书作为中间证书
     while True do
     begin
@@ -1706,7 +1709,7 @@ begin
 
       LX509 := PEM_read_bio_X509(LBIO, nil, nil, nil);
       if LX509 = nil then Break;
-      
+
       LAbortIntermediateLoop := False;
       try
         // 将 PX509 转换为 PEM 字符串
@@ -1755,32 +1758,32 @@ begin
       if LAbortIntermediateLoop then
         Exit;
     end;
-    
+
     // 如果找到了中间证书，设置到验证器
     if LInterStore <> nil then
       LVerifier.SetIntermediateStore(LInterStore);
-      
+
   finally
     if Assigned(BIO_free) then
       BIO_free(LBIO);
   end;
-  
+
   // 4. 加载CA证书（如果提供）
   if ACAPath <> '' then
   begin
     try
       LStore := TSSLFactory.CreateCertificateStore;
-      if DirectoryExists(ACAPath) then
+      if nextpas.core.fs.IsDir(ACAPath) then
       begin
         if not LStore.LoadFromPath(ACAPath) then
           ; // 忽略部分加载错误
       end
-      else if FileExists(ACAPath) then
+      else if nextpas.core.fs.IsFile(ACAPath) then
       begin
         if not LStore.LoadFromFile(ACAPath) then
           ;
       end;
-      
+
       // 设置信任存储
       if LStore.GetCount > 0 then
         LVerifier.SetTrustedStore(LStore);
@@ -1794,10 +1797,10 @@ begin
       end;
     end;
   end;
-  
+
   // 5. 执行验证
   LVerifier.SetOptions(DefaultChainVerifyOptions);
-  
+
   LResult := LVerifier.VerifyCertificate(LCert);
   Result := LResult.IsValid;
 end;
@@ -1808,17 +1811,17 @@ class function TCertificateUtils.ConvertFormat(
 ): TBytes;
 begin
   SetLength(Result, 0);
-  
+
   if AFromFormat = AToFormat then
   begin
     Result := Copy(AInput);
     Exit;
   end;
-  
+
   if AFromFormat = cfPEM then
-    Result := PEMToDER(AnsiString(TEncoding.ASCII.GetString(AInput)))
+    Result := PEMToDER(AnsiString(nextpas.core.text.conv.ASCIIBytesToString(AInput)))
   else
-    Result := TEncoding.ASCII.GetBytes(UnicodeString(DERToPEM(AInput)));
+    Result := nextpas.core.text.conv.StringToASCIIBytes(DERToPEM(AInput)));
 end;
 
 class function TCertificateUtils.PEMToDER(const APEM: string): TBytes;
@@ -1829,30 +1832,30 @@ var
   LDERLen: Integer;
 begin
   SetLength(Result, 0);
-  
+
   if APEM = '' then
     Exit;
-  
+
   EnsureInitialized;
 
   if not HasCertificatePEMReadBIOHelpers then
     Exit;
-  
+
   // 从PEM字符串加载证书
   LBIO := BIO_new_mem_buf(PAnsiChar(AnsiString(APEM)), Length(APEM));
   if LBIO = nil then Exit;
-  
+
   try
     LCert := PEM_read_bio_X509(LBIO, nil, nil, nil);
     if LCert = nil then Exit;
-    
+
     try
       if not Assigned(i2d_X509) then
         Exit;
 
       // 转换为DER格式 (两阶段：先获取长度，再转换)
       LDERLen := i2d_X509(LCert, nil);  // 第一阶段：获取需要的buffer大小
-      
+
       if LDERLen > 0 then
       begin
         SetLength(Result, LDERLen);
@@ -1881,10 +1884,10 @@ var
   LDERPtr: PByte;
 begin
   Result := '';
-  
+
   if Length(ADER) = 0 then
     Exit;
-  
+
   EnsureInitialized;
 
   if not HasCertificatePEMWriteBIOHelpers then
@@ -1892,12 +1895,12 @@ begin
 
   if not Assigned(d2i_X509) then
     Exit;
-  
+
   // 从DER字节加载证书
   LDERPtr := @ADER[0];
   LCert := d2i_X509(nil, @LDERPtr, Length(ADER));
   if LCert = nil then Exit;
-  
+
   try
     // 写入PEM格式
     if not Assigned(BIO_s_mem) then
@@ -1909,7 +1912,7 @@ begin
 
     LBIO := BIO_new(LBIOMethod);
     if LBIO = nil then Exit;
-    
+
     try
       if not Assigned(PEM_write_bio_X509) then
         Exit;
@@ -1937,16 +1940,15 @@ var
   LBytes: TBytes;
 begin
   Result := '';
-  if not FileExists(AFileName) then Exit;
-  
+  if not nextpas.core.fs.IsFile(AFileName) then Exit;
+
   LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
   try
     SetLength(LBytes, LStream.Size);
     if LStream.Size > 0 then
       LStream.Read(LBytes[0], LStream.Size);
-    Result := AnsiString(TEncoding.UTF8.GetString(LBytes));
+    Result := AnsiString(nextpas.core.text.conv.UTF8BytesToString(LBytes));
   finally
-    LStream.Free;
   end;
 end;
 
@@ -1959,12 +1961,11 @@ begin
   try
     LStream := TFileStream.Create(AFileName, fmCreate);
     try
-      LBytes := TEncoding.UTF8.GetBytes(UnicodeString(ACertPEM));
+      LBytes := nextpas.core.text.conv.StringToUTF8Bytes(ACertPEM));
       if Length(LBytes) > 0 then
         LStream.Write(LBytes[0], Length(LBytes));
       Result := True;
     finally
-      LStream.Free;
     end;
   except
     Result := False;
@@ -1988,9 +1989,9 @@ end;
 
 {**
  * 计算证书指纹（SHA-256）
- * 
+ *
  * 证书指纹是证书的唯一标识，用于验证证书真实性
- * 
+ *
  * @param ACertPEM PEM格式证书
  * @return 64字符十六进制指纹字符串（小写）
  * @raises ESSLCertError 计算失败
@@ -2004,24 +2005,24 @@ var
   I: Integer;
 begin
   Result := '';
-  
+
   EnsureInitialized;
-  
+
   if ACertPEM = '' then
     RaiseInvalidParameter('Certificate PEM');
 
   if not HasCertificatePEMReadBIOHelpers then
     raise ESSLCertError.Create('Required certificate PEM BIO helpers are unavailable');
-  
+
   LBIO := BIO_new_mem_buf(PAnsiChar(AnsiString(ACertPEM)), Length(ACertPEM));
   if LBIO = nil then
     raise ESSLCertError.Create('Failed to create BIO for certificate');
-  
+
   try
     LCert := PEM_read_bio_X509(LBIO, nil, nil, nil);
     if LCert = nil then
       raise ESSLCertError.Create('Failed to parse certificate PEM');
-    
+
     try
       if not Assigned(X509_digest) then
         raise ESSLCertError.Create('Required certificate fingerprint digest helper is unavailable');
@@ -2032,11 +2033,11 @@ begin
       LLen := 32;
       if X509_digest(LCert, EVP_sha256(), @LHash[0], @LLen) <> 1 then
         raise ESSLCertError.Create('Failed to calculate certificate fingerprint');
-      
+
       // 转换为十六进制字符串
       for I := 0 to 31 do
-        Result := Result + LowerCase(IntToHex(LHash[I], 2));
-        
+        Result := Result + LowerCase(nextpas.core.text.conv.IntToHex(LHash[I], 2));
+
     finally
       if Assigned(X509_free) then
         X509_free(LCert);
@@ -2053,9 +2054,9 @@ class function TCertificateUtils.CompareX509Names(
 ): Boolean;
 var
   LName1, LName2: string;
-  LComponents1, LComponents2: TStringList;
+  LComponents1, LComponents2: TStringArray;
   i: Integer;
-  
+
   function NormalizeDN(const ADN: string): string;
   var
     s: string;
@@ -2065,14 +2066,14 @@ var
     s := StringReplace(s, '= ', '=', [rfReplaceAll]);
     s := StringReplace(s, ' =', '=', [rfReplaceAll]);
     s := StringReplace(s, ', ', ',', [rfReplaceAll]);
-    
+
     if ACaseInsensitive then
       Result := LowerCase(s)
     else
       Result := s;
   end;
-  
-  procedure ParseDN(const ADN: string; AList: TStringList);
+
+  procedure ParseDN(const ADN: string; AList: TStringArray);
   var
     Components: TStringArray;
     j: Integer;
@@ -2080,41 +2081,38 @@ var
     AList.Clear;
     AList.Sorted := True;
     AList.Duplicates := dupIgnore;
-    
+
     Components := ADN.Split([',']);
     for j := 0 to Length(Components) - 1 do
       AList.Add(Trim(Components[j]));
   end;
-  
+
 begin
   Result := False;
-  
+
   if AName1 = AName2 then
   begin
     Result := True;
     Exit;
   end;
-  
+
   LName1 := NormalizeDN(AName1);
   LName2 := NormalizeDN(AName2);
-  
+
   if LName1 = LName2 then
   begin
     Result := True;
     Exit;
   end;
-  
-  LComponents1 := TStringList.Create;
-  LComponents2 := TStringList.Create;
   try
     ParseDN(LName1, LComponents1);
     ParseDN(LName2, LComponents2);
-    
-    if LComponents1.Count <> LComponents2.Count then
+
+    if Length(LComponents1) <> Length(LComponents2) then
       Exit;
-      
+
     Result := True;
-    for i := 0 to LComponents1.Count - 1 do
+    for i := 0 to Length(LComponents1) - 1 do
     begin
       if LComponents1[i] <> LComponents2[i] then
       begin
@@ -2123,8 +2121,6 @@ begin
       end;
     end;
   finally
-    LComponents1.Free;
-    LComponents2.Free;
   end;
 end;
 
@@ -2184,7 +2180,7 @@ begin
     Result := True;
   except
     FillChar(AInfo, SizeOf(AInfo), 0);
-    AInfo.SubjectAltNames := TStringList.Create;
+    AInfo.SubjectAltNames
     Result := False;
   end;
 end;

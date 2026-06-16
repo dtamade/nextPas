@@ -32,7 +32,7 @@ unit nextpas.core.mem.blockpool;
 interface
 
 uses
-  nextpas.core.mem.layout,
+  nextpas.core.mem.base,
   nextpas.core.mem.error;
 
 const
@@ -93,8 +93,9 @@ type
    *}
   IArena = interface
     [GUID_IARENA]
-    function Alloc(const aLayout: TMemLayout): TAllocResult;
-    function AllocZeroed(const aLayout: TMemLayout): TAllocResult;
+    function Alloc(aSize: SizeUInt): Pointer;
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    function AllocZeroed(aSize: SizeUInt): Pointer;
     function SaveMark: TArenaMarker;
     procedure RestoreToMark(aMark: TArenaMarker);
     procedure Reset;
@@ -211,8 +212,9 @@ type
     destructor Destroy; override;
 
     { 核心 API - 全部 inline }
-    function Alloc(const aLayout: TMemLayout): TAllocResult; inline;
-    function AllocZeroed(const aLayout: TMemLayout): TAllocResult; inline;
+    function Alloc(aSize: SizeUInt): Pointer; inline;
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer; inline;
+    function AllocZeroed(aSize: SizeUInt): Pointer; inline;
     function SaveMark: TArenaMarker; inline;
     procedure RestoreToMark(aMark: TArenaMarker); inline;
     procedure Reset; inline;
@@ -255,8 +257,9 @@ type
     FTotalSize: SizeUInt;
   public
     constructor Create(aTotalSize: SizeUInt); virtual;
-    function Alloc(const aLayout: TMemLayout): TAllocResult; virtual; abstract;
-    function AllocZeroed(const aLayout: TMemLayout): TAllocResult; virtual;
+    function Alloc(aSize: SizeUInt): Pointer; virtual;
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer; virtual; abstract;
+    function AllocZeroed(aSize: SizeUInt): Pointer; virtual;
     function SaveMark: TArenaMarker; virtual; abstract;
     procedure RestoreToMark(aMark: TArenaMarker); virtual; abstract;
     procedure Reset; virtual; abstract;
@@ -269,6 +272,29 @@ implementation
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in pool internals
+
+function IsPowerOfTwo(const AValue: SizeUInt): Boolean; inline;
+begin
+  Result := (AValue <> 0) and ((AValue and (AValue - 1)) = 0);
+end;
+
+function NextPowerOfTwo(const AValue: SizeUInt): SizeUInt; inline;
+begin
+  Result := 1;
+  while Result < AValue do
+    Result := Result shl 1;
+end;
+
+function NormalizeArenaAlignment(const AAlignment: SizeUInt): SizeUInt; inline;
+begin
+  if AAlignment = 0 then
+    Exit(MEM_DEFAULT_ALIGN);
+  if not IsPowerOfTwo(AAlignment) then
+    Exit(0);
+  if AAlignment < MEM_DEFAULT_ALIGN then
+    Exit(MEM_DEFAULT_ALIGN);
+  Result := AAlignment;
+end;
 
 { ============================================================================ }
 { TBlockPool }
@@ -419,7 +445,7 @@ begin
   // 计算总大小并检查溢出
   LTotalSize := LActualBlockSize * aCapacity;
   if (LActualBlockSize <> 0) and ((LTotalSize div LActualBlockSize) <> aCapacity) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TBlockPool: total size overflow');
+    raise EAllocError.Create(aeInvalidLayout, 'TBlockPool: total size overflow');
   FTotalSize := LTotalSize;
 
   // 分配内存（over-allocate 用于对齐）
@@ -710,7 +736,12 @@ begin
   inherited Destroy;
 end;
 
-function TFixedArena.Alloc(const aLayout: TMemLayout): TAllocResult;
+function TFixedArena.Alloc(aSize: SizeUInt): Pointer;
+begin
+  Result := AllocAligned(aSize, MEM_DEFAULT_ALIGN);
+end;
+
+function TFixedArena.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
 var
   LAlign: SizeUInt;
   LMask: SizeUInt;
@@ -720,19 +751,13 @@ var
   LNewUsed: SizeUInt;
   LPtr: PByte;
 begin
-  // 快速路径：零大小
-  if aLayout.Size = 0 then
-  begin
-    Result := TAllocResult.Ok(nil);
+  Result := nil;
+  if aSize = 0 then
     Exit;
-  end;
 
-  if not aLayout.IsValid then
-    Exit(TAllocResult.Err(aeInvalidLayout));
-
-  LAlign := aLayout.Align;
+  LAlign := NormalizeArenaAlignment(aAlignment);
   if LAlign = 0 then
-    Exit(TAllocResult.Err(aeInvalidLayout));
+    Exit;
 
   // 对齐当前指针（按绝对地址对齐，支持任意 power-of-two 对齐）
   if LAlign <= 1 then
@@ -742,7 +767,7 @@ begin
     LMask := LAlign - 1;
     LCurU := PtrUInt(FCurrent);
     if PtrUInt(LMask) > (High(PtrUInt) - LCurU) then
-      Exit(TAllocResult.Err(aeInvalidLayout));
+      Exit;
     LAlignedU := (LCurU + PtrUInt(LMask)) and not PtrUInt(LMask);
     LPtr := PByte(LAlignedU);
   end;
@@ -750,13 +775,10 @@ begin
   LAlignedOffset := SizeUInt(PtrUInt(LPtr) - PtrUInt(FMemory));
 
   // 边界检查
-  if (LAlignedOffset > FTotalSize) or (aLayout.Size > (FTotalSize - LAlignedOffset)) then
-  begin
-    Result := TAllocResult.Err(aeOutOfMemory);
+  if (LAlignedOffset > FTotalSize) or (aSize > (FTotalSize - LAlignedOffset)) then
     Exit;
-  end;
 
-  LNewUsed := LAlignedOffset + aLayout.Size;
+  LNewUsed := LAlignedOffset + aSize;
   FCurrent := FMemory + LNewUsed;
   Inc(FTotalAllocs);
 
@@ -764,14 +786,14 @@ begin
   if LNewUsed > FPeakUsed then
     FPeakUsed := LNewUsed;
 
-  Result := TAllocResult.Ok(LPtr);
+  Result := LPtr;
 end;
 
-function TFixedArena.AllocZeroed(const aLayout: TMemLayout): TAllocResult;
+function TFixedArena.AllocZeroed(aSize: SizeUInt): Pointer;
 begin
-  Result := Alloc(aLayout);
-  if Result.IsOk and (Result.Ptr <> nil) then
-    FillChar(Result.Ptr^, aLayout.Size, 0);
+  Result := Alloc(aSize);
+  if Result <> nil then
+    FillChar(Result^, aSize, 0);
 end;
 
 function TFixedArena.AllocFast(aSize: SizeUInt): Pointer;
@@ -891,11 +913,16 @@ begin
   FTotalSize := aTotalSize;
 end;
 
-function TArenaBase.AllocZeroed(const aLayout: TMemLayout): TAllocResult;
+function TArenaBase.Alloc(aSize: SizeUInt): Pointer;
 begin
-  Result := Alloc(aLayout);
-  if Result.IsOk and (Result.Ptr <> nil) then
-    FillChar(Result.Ptr^, aLayout.Size, 0);
+  Result := AllocAligned(aSize, MEM_DEFAULT_ALIGN);
+end;
+
+function TArenaBase.AllocZeroed(aSize: SizeUInt): Pointer;
+begin
+  Result := Alloc(aSize);
+  if Result <> nil then
+    FillChar(Result^, aSize, 0);
 end;
 
 function TArenaBase.TotalSize: SizeUInt;

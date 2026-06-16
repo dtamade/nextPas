@@ -277,7 +277,12 @@ begin
 
   MaxRows := Inner.Height - HeaderH;
   if MaxRows <= 0 then Exit;
-  if NRows = 0 then Exit;
+  if NRows = 0 then
+  begin
+    AState.Offset := 0;
+    AState.ClearSelection;
+    Exit;
+  end;
 
   if AState.HasSelection then
   begin

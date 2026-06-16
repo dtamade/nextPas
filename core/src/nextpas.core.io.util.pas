@@ -13,6 +13,8 @@ function IoCopy(const ADst: IWriter; const ASrc: IReader): Int64;
 function IoCopyN(const ADst: IWriter; const ASrc: IReader; const AN: Int64): Int64;
 function IoReadAll(const ASrc: IReader): TBytes;
 procedure IoReadFull(const ASrc: IReader; var ABuf; const ACount: SizeUInt);
+procedure IoWriteAll(const ADst: IWriter; const ABuf; const ACount: SizeUInt); overload;
+procedure IoWriteAll(const ADst: IStream; const ABuf; const ACount: SizeUInt); overload;
 function IoLimitReader(const AInner: IReader; const ALimit: Int64): IReader;
 function IoTeeReader(const AInner: IReader; const AWriter: IWriter): IReader;
 function IoMultiReader(const AReaders: array of IReader): IReader;
@@ -33,6 +35,46 @@ uses
 
 const
   COPY_BUF_SIZE = 32768;
+
+procedure WriteAll(const AWriter: IWriter; const ABuf; const ACount: SizeUInt;
+  const AContext: string);
+var
+  LBuf: PByte;
+  LTotal, LWritten: SizeUInt;
+begin
+  LBuf := @ABuf;
+  LTotal := 0;
+  while LTotal < ACount do
+  begin
+    LWritten := AWriter.Write(LBuf[LTotal], ACount - LTotal);
+    if LWritten = 0 then
+      raise EIOError.Create(AContext + ': write returned 0');
+    Inc(LTotal, LWritten);
+  end;
+end;
+
+procedure IoWriteAll(const ADst: IWriter; const ABuf; const ACount: SizeUInt); overload;
+begin
+  WriteAll(ADst, ABuf, ACount, 'IoWriteAll');
+end;
+
+procedure IoWriteAll(const ADst: IStream; const ABuf; const ACount: SizeUInt); overload;
+var
+  LBuf: PByte;
+  LTotal, LWritten: SizeUInt;
+begin
+  if ADst = nil then
+    raise EIOError.Create('IoWriteAll: destination stream is nil');
+  LBuf := @ABuf;
+  LTotal := 0;
+  while LTotal < ACount do
+  begin
+    LWritten := ADst.Write(LBuf[LTotal], ACount - LTotal);
+    if LWritten = 0 then
+      raise EIOError.Create('IoWriteAll: write returned 0');
+    Inc(LTotal, LWritten);
+  end;
+end;
 
 { IoCopy }
 
@@ -82,7 +124,7 @@ begin
       LToRead := SizeUInt(LRemaining);
     LRead := ASrc.Read(LBuf[0], LToRead);
     if LRead = 0 then
-      Break;
+      raise EIOError.Create('IoCopyN: unexpected EOF');
     LTotal := 0;
     while LTotal < LRead do
     begin
@@ -160,6 +202,8 @@ type
 constructor TLimitReader.Create(const AInner: IReader; const ALimit: Int64);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentError.Create('TLimitReader: inner reader is nil');
   FInner := AInner;
   FRemaining := ALimit;
 end;
@@ -198,21 +242,19 @@ type
 constructor TTeeReader.Create(const AInner: IReader; const AWriter: IWriter);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentError.Create('TTeeReader: inner reader is nil');
+  if AWriter = nil then
+    raise EArgumentError.Create('TTeeReader: writer is nil');
   FInner := AInner;
   FWriter := AWriter;
 end;
 
 function TTeeReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
-var
-  LWritten: SizeUInt;
 begin
   Result := FInner.Read(ABuf, ACount);
   if Result > 0 then
-  begin
-    LWritten := FWriter.Write(ABuf, Result);
-    if LWritten < Result then
-      Result := LWritten;
-  end;
+    WriteAll(FWriter, ABuf, Result, 'TeeReader');
 end;
 
 function IoTeeReader(const AInner: IReader; const AWriter: IWriter): IReader;
@@ -238,6 +280,9 @@ var
 begin
   inherited Create;
   SetLength(FReaders, Length(AReaders));
+  for LI := 0 to High(AReaders) do
+    if AReaders[LI] = nil then
+      raise EArgumentError.Create('TMultiReader: inner reader is nil');
   for LI := 0 to High(AReaders) do
     FReaders[LI] := AReaders[LI];
   FIndex := 0;
@@ -278,21 +323,19 @@ begin
   inherited Create;
   SetLength(FWriters, Length(AWriters));
   for LI := 0 to High(AWriters) do
+    if AWriters[LI] = nil then
+      raise EArgumentError.Create('TMultiWriter: inner writer is nil');
+  for LI := 0 to High(AWriters) do
     FWriters[LI] := AWriters[LI];
 end;
 
 function TMultiWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LI: Integer;
-  LWritten: SizeUInt;
 begin
-  Result := ACount;
   for LI := 0 to High(FWriters) do
-  begin
-    LWritten := FWriters[LI].Write(ABuf, ACount);
-    if LWritten < Result then
-      Result := LWritten;
-  end;
+    WriteAll(FWriters[LI], ABuf, ACount, 'MultiWriter');
+  Result := ACount;
 end;
 
 function IoMultiWriter(const AWriters: array of IWriter): IWriter;
@@ -315,6 +358,8 @@ type
 constructor TNopCloser.Create(const AInner: IReader);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentError.Create('TNopCloser: inner reader is nil');
   FInner := AInner;
 end;
 
@@ -419,7 +464,8 @@ function IoWriteString(const ADst: IWriter; const AStr: string): SizeUInt;
 begin
   if Length(AStr) = 0 then
     Exit(0);
-  Result := ADst.Write(AStr[1], SizeUInt(Length(AStr)));
+  Result := SizeUInt(Length(AStr));
+  WriteAll(ADst, AStr[1], Result, 'IoWriteString');
 end;
 
 { TSectionReader }
@@ -439,6 +485,8 @@ type
 constructor TSectionReader.Create(const AInner: IReaderAt; const AOffset, ALimit: Int64);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentError.Create('TSectionReader: inner reader is nil');
   FInner := AInner;
   FOffset := AOffset;
   FLimit := ALimit;

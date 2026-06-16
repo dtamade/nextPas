@@ -6,7 +6,7 @@ interface
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.sync,
+  nextpas.core.mem.mutex,
   nextpas.core.mem.pool.base,      // IPool
   nextpas.core.mem.pool.fixed,     // TFixedPool
   nextpas.core.mem.allocator;      // IAllocator + GetRtlAllocator
@@ -20,7 +20,7 @@ type
   TFixedPoolConcurrent = class(TInterfacedObject, IPool)
   private
     FInner: TFixedPool;
-    FLock: IMutex;
+    FLock: TMemMutex;
   private
     function GetBlockSize: SizeUInt; inline;
     function GetCapacity: Integer; inline;
@@ -56,28 +56,26 @@ implementation
 constructor TFixedPoolConcurrent.Create(aBlockSize: SizeUInt; aCapacity: Integer; aAlignment: SizeUInt; aAllocator: IAllocator);
 begin
   inherited Create;
-  FLock := Mutex;
+  FLock.Init;
   FInner := TFixedPool.Create(aBlockSize, aCapacity, aAlignment, aAllocator);
 end;
 
 constructor TFixedPoolConcurrent.Create(const aConfig: TFixedPoolConfig);
 begin
   inherited Create;
-  FLock := Mutex;
+  FLock.Init;
   FInner := TFixedPool.Create(aConfig);
 end;
 
 destructor TFixedPoolConcurrent.Destroy;
 begin
-  if FLock <> nil then
-    FLock.Acquire;
+  FLock.Acquire;
   try
     FreeAndNil(FInner);
   finally
-    if FLock <> nil then
-      FLock.Release;
+    FLock.Release;
   end;
-  FLock := nil;
+  FLock.Done;
   inherited Destroy;
 end;
 

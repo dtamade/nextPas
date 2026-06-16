@@ -90,7 +90,7 @@ procedure TSwissTableI32I32.FreeTable;
 begin
   if FCtrl = nil then Exit;
   if FAllocator <> nil then FAllocator.Deallocate(FCtrl) else FreeMem(FCtrl);
-  FCtrl := nil; FSlots := nil; FAllocator := nil;
+  FCtrl := nil; FSlots := nil;
 end;
 
 procedure TSwissTableI32I32.GrowAndRehash;

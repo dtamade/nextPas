@@ -57,7 +57,11 @@ const
   CURRENT_CPU: TCPUArch = cpuUnknown;
   {$ENDIF}
 
+  {$IF DEFINED(FPC_BIG_ENDIAN)}
+  CURRENT_ENDIAN: TEndianness = endBig;
+  {$ELSE}
   CURRENT_ENDIAN: TEndianness = endLittle;
+  {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
   PLATFORM_PATH_DELIM = '\';

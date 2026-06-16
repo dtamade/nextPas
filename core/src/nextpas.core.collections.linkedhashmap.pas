@@ -8,7 +8,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
   nextpas.core.collections.base,
   nextpas.core.collections.hashmap.base,
   nextpas.core.collections.hashmap.intf,
@@ -48,6 +48,7 @@ type
     procedure UnlinkNode(aNode: PNode);
     function AllocateNode(const aKey: K; const aValue: V): PNode;
     procedure FreeNode(aNode: PNode);
+    procedure SyncNodeEntry(aNode: PNode; const aEntry: TEntryType);
     function DoIterGetCurrent(aIter: PPtrIter): Pointer;
     function DoIterMoveNext(aIter: PPtrIter): Boolean;
 
@@ -109,6 +110,8 @@ type
     function IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; override;
     procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
     procedure AppendToUnchecked(const aDst: TCollection); override;
+    procedure DoReplace(aProxy: TEqualsProxyMethod; const aElement, aNewElement: TEntryType; aEquals, aData: Pointer); override;
+    procedure DoReplaceIf(aProxy: TPredicateProxyMethod; const aNewElement: TEntryType; aPredicate, aData: Pointer); override;
     procedure DoZero; override;
     procedure DoReverse; override;
 
@@ -171,6 +174,44 @@ begin
     Finalize(aNode^);  // Finalize managed fields
     Self.FAllocator.FreeMem(aNode);
   end;
+end;
+
+procedure TLinkedHashMap.SyncNodeEntry(aNode: PNode; const aEntry: TEntryType);
+var
+  LExistingOldNode: PNode;
+  LExistingNewNode: PNode;
+  LHasNewNode: Boolean;
+begin
+  if aNode = nil then
+    Exit;
+
+  if not FMap.ContainsKey(aNode^.Pair.Key) then
+    raise EInvalidOperation.Create('TLinkedHashMap.SyncNodeEntry: backing map is missing node key');
+
+  if (not FNodeMap.TryGetValue(aNode^.Pair.Key, LExistingOldNode)) or (LExistingOldNode <> aNode) then
+    raise EInvalidOperation.Create('TLinkedHashMap.SyncNodeEntry: backing node map is missing node key');
+
+  LHasNewNode := FNodeMap.TryGetValue(aEntry.Key, LExistingNewNode);
+  if LHasNewNode and (LExistingNewNode <> aNode) then
+    raise EInvalidOperation.Create('TLinkedHashMap.SyncNodeEntry: replacement key conflicts with another entry');
+
+  if (not LHasNewNode) and FMap.ContainsKey(aEntry.Key) then
+    raise EInvalidOperation.Create('TLinkedHashMap.SyncNodeEntry: replacement key conflicts with backing map');
+
+  if LHasNewNode then
+  begin
+    aNode^.Pair.Value := aEntry.Value;
+    FMap.AddOrAssign(aEntry.Key, aEntry.Value);
+    Exit;
+  end;
+
+  FMap.Remove(aNode^.Pair.Key);
+  FNodeMap.Remove(aNode^.Pair.Key);
+  aNode^.Pair.Key := aEntry.Key;
+  aNode^.Pair.Value := aEntry.Value;
+
+  FMap.Add(aEntry.Key, aEntry.Value);
+  FNodeMap.Add(aEntry.Key, aNode);
 end;
 
 procedure TLinkedHashMap.LinkNode(aNode: PNode);
@@ -444,6 +485,40 @@ begin
       aDst.AppendUnchecked(@LCurrent^.Pair, 1);
       LCurrent := PNode(LCurrent^.Next);
     end;
+  end;
+end;
+
+procedure TLinkedHashMap.DoReplace(aProxy: TEqualsProxyMethod; const aElement, aNewElement: TEntryType; aEquals, aData: Pointer);
+var
+  LCurrent, LNext: PNode;
+  LEntry: TEntryType;
+begin
+  LCurrent := FHead;
+  while LCurrent <> nil do
+  begin
+    LNext := PNode(LCurrent^.Next);
+    LEntry.Key := LCurrent^.Pair.Key;
+    LEntry.Value := LCurrent^.Pair.Value;
+    if aProxy(aEquals, aElement, LEntry, aData) then
+      SyncNodeEntry(LCurrent, aNewElement);
+    LCurrent := LNext;
+  end;
+end;
+
+procedure TLinkedHashMap.DoReplaceIf(aProxy: TPredicateProxyMethod; const aNewElement: TEntryType; aPredicate, aData: Pointer);
+var
+  LCurrent, LNext: PNode;
+  LEntry: TEntryType;
+begin
+  LCurrent := FHead;
+  while LCurrent <> nil do
+  begin
+    LNext := PNode(LCurrent^.Next);
+    LEntry.Key := LCurrent^.Pair.Key;
+    LEntry.Value := LCurrent^.Pair.Value;
+    if aProxy(aPredicate, LEntry, aData) then
+      SyncNodeEntry(LCurrent, aNewElement);
+    LCurrent := LNext;
   end;
 end;
 

@@ -308,6 +308,58 @@ begin
   end;
 end;
 
+function HashToZero(const AKey: Integer): UInt32;
+begin
+  Result := 0;
+end;
+
+procedure TestMaxLoadUpdateDoesNotGrow;
+var
+  LMap: TIntIntMap;
+  LCapacity: SizeUInt;
+begin
+  LMap := TIntIntMap.Create(1, @HashToZero);
+  try
+    LMap.Put(1, 10);
+    LMap.Put(2, 20);
+    LMap.Put(3, 30);
+    LCapacity := LMap.GetCapacity;
+
+    Check(not LMap.Add(2, 200), 'Add existing returns false');
+    CheckEqual(Int64(LCapacity), Int64(LMap.GetCapacity), 'Add existing does not grow at max load');
+    CheckEqual(Int64(20), Int64(LMap.Get(2)), 'Add existing keeps value');
+
+    Check(not LMap.AddOrAssign(3, 300), 'AddOrAssign existing returns false');
+    CheckEqual(Int64(LCapacity), Int64(LMap.GetCapacity), 'AddOrAssign existing does not grow at max load');
+    CheckEqual(Int64(300), Int64(LMap.Get(3)), 'AddOrAssign existing updates value');
+    CheckEqual(Int64(3), Int64(LMap.GetCount), 'count unchanged');
+  finally
+    LMap.Free;
+  end;
+end;
+
+procedure TestMaxLoadTombstoneReuseDoesNotGrow;
+var
+  LMap: TIntIntMap;
+  LCapacity: SizeUInt;
+begin
+  LMap := TIntIntMap.Create(1, @HashToZero);
+  try
+    LMap.Put(1, 10);
+    LMap.Put(2, 20);
+    LMap.Put(3, 30);
+    LCapacity := LMap.GetCapacity;
+
+    Check(LMap.Remove(2), 'removed key leaves tombstone');
+    Check(LMap.Add(4, 40), 'Add reuses tombstone');
+    CheckEqual(Int64(LCapacity), Int64(LMap.GetCapacity), 'Add reusing tombstone does not grow at max load');
+    CheckEqual(Int64(3), Int64(LMap.GetCount), 'count after tombstone reuse');
+    CheckEqual(Int64(40), Int64(LMap.Get(4)), 'tombstone reused value');
+  finally
+    LMap.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.hashmap');
   T.Run('Put/Get', @TestPutGet);
@@ -329,5 +381,7 @@ begin
   T.Run('GetOrInsertWith', @TestGetOrInsertWith);
   T.Run('ModifyOrInsert', @TestModifyOrInsert);
   T.Run('Retain', @TestRetain);
+  T.Run('Max-load update does not grow', @TestMaxLoadUpdateDoesNotGrow);
+  T.Run('Max-load tombstone reuse does not grow', @TestMaxLoadTombstoneReuseDoesNotGrow);
   T.Summary;
 end.

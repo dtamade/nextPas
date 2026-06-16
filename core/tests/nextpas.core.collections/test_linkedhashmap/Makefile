@@ -4,7 +4,7 @@ BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.collections/test_linkedhas
 PROGRAM := test_linkedhashmap
 SOURCE := $(PROGRAM).lpr
 FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -gh
-FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
+FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src -Fu$(CORE_ROOT)/tests/shared
 
 .PHONY: build run test clean
 

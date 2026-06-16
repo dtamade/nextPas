@@ -4,12 +4,37 @@ program test_text_conv;
 
 uses
   SysUtils,
+  nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.text.conv,
   nextpas.core.text.format;
 
 var
   T: TTestRunner;
+
+procedure ExpectInvalidFormat(const AFmt: string; const AArgs: array of const;
+  const AMessage: string);
+begin
+  try
+    TextFormat(AFmt, AArgs);
+    Fail(AMessage);
+  except
+    on E: EInvalidArgument do
+      ;
+  end;
+end;
+
+procedure ExpectFormatOverflow(const AFmt: string; const AArgs: array of const;
+  const AMessage: string);
+begin
+  try
+    TextFormat(AFmt, AArgs);
+    Fail(AMessage);
+  except
+    on E: EOverflow do
+      ;
+  end;
+end;
 
 { conv tests }
 
@@ -112,6 +137,13 @@ begin
   CheckEqual('00000', TextOfChar('0', 5));
 end;
 
+procedure TestStringReplace;
+begin
+  CheckEqual('hXllo', StringReplace('hello', 'e', 'X', False), 'replace first');
+  CheckEqual('XbXbX', StringReplace('ababa', 'a', 'X', True), 'replace all');
+  CheckEqual('hello', StringReplace('hello', '', 'X', True), 'empty needle');
+end;
+
 { format tests }
 
 procedure TestFormatBasic;
@@ -153,6 +185,22 @@ begin
   CheckEqual('hello world 42', TextFormat('%s %s %d', ['hello', 'world', 42]));
 end;
 
+procedure TestFormatRejectsMalformedInput;
+begin
+  ExpectInvalidFormat('%', [], 'dangling percent must raise');
+  ExpectInvalidFormat('%5', [], 'width without conversion must raise');
+  ExpectInvalidFormat('%.', [], 'precision without conversion must raise');
+  ExpectInvalidFormat('%q', [1], 'unsupported conversion must raise');
+  ExpectInvalidFormat('%d %d', [1], 'missing argument must raise');
+  ExpectInvalidFormat('%d', ['not-int'], 'wrong argument type must raise');
+end;
+
+procedure TestFormatRejectsUnboundedWidthAndPrecision;
+begin
+  ExpectFormatOverflow('%1048577s', ['x'], 'unbounded width must raise');
+  ExpectFormatOverflow('%.1025f', [1.0], 'unbounded precision must raise');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.text.conv+format');
 
@@ -165,12 +213,15 @@ begin
   T.Run('FloatToStr', @TestFloatToStr);
   T.Run('TryStrToFloat', @TestTryStrToFloat);
   T.Run('TextOfChar', @TestTextOfChar);
+  T.Run('StringReplace', @TestStringReplace);
 
   T.Run('Format basic', @TestFormatBasic);
   T.Run('Format hex', @TestFormatHex);
   T.Run('Format width', @TestFormatWidth);
   T.Run('Format float', @TestFormatFloat);
   T.Run('Format multi-arg', @TestFormatMultiArg);
+  T.Run('Format rejects malformed input', @TestFormatRejectsMalformedInput);
+  T.Run('Format rejects unbounded width and precision', @TestFormatRejectsUnboundedWidthAndPrecision);
 
   T.Summary;
 end.

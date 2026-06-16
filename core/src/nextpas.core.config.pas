@@ -82,6 +82,8 @@ type
     Value: string;
   end;
 
+  TConfigEntryArray = array of TConfigEntry;
+
   TConfig = class
   private
     FLock: IRWLock;
@@ -180,70 +182,39 @@ type
     function GetSection(const APrefix: string): TStringArray;
     property Count: Integer read GetCount;
   end;
-  TConfigReloadEvent = procedure(ASender: TConfig) of object;
-
 function ConfigBuilder: IConfigBuilder;
 function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig;
 
-type
-  TConfigWatcher = class
-  private
-    FConfig: TConfig;
-    FFilePath: string;
-    FFormat: TConfigFormat;
-    FWatcher: TPlatformWatcher;
-    FLastMtime: Int64;
-    FLastSize: Int64;
-    FOnReload: TConfigReloadEvent;
-    FActive: Boolean;
-    function GetFileMtime: Int64;
-    function GetFileStat(out AMtime, ASize: Int64): Boolean;
-    procedure DoReload;
-  public
-    constructor Create(AConfig: TConfig; const AFilePath: string; AFormat: TConfigFormat);
-    destructor Destroy; override;
-    function CheckReload: Boolean;
-    property OnReload: TConfigReloadEvent read FOnReload write FOnReload;
-  end;
+function IsSupportedConfigFormat(AFormat: TConfigFormat): Boolean;
+procedure AddString(var AItems: TStringArray; var ACount: Integer;
+  const AValue: string);
+function FindEntryIndexInSnapshot(const AEntries: TConfigEntryArray;
+  const ACount: Integer; const AKey: string): Integer;
+procedure RequireConfigKey(const AKey: string);
+procedure RequireConfigEnvPrefix(const APrefix: string);
+procedure RequireConfigFilePath(const APath: string);
+function TryParseArrayIndex(const AValue: string; out AIndex: Int64): Boolean;
+function NextConfigPathSegment(const AKey: string; var APos: Integer;
+  out ASegment: string): Boolean;
+function DisplayConfigPath(const APath: string): string;
+procedure RequireHierarchicalConfigPath(const AKey: string);
 
 implementation
 
 uses
+  nextpas.core.base,
+  nextpas.core.config.builder,
+  nextpas.core.config.env,
+  nextpas.core.config.export,
+  nextpas.core.config.flatten,
+  nextpas.core.config.watcher,
   nextpas.core.fs,
   nextpas.core.hash.wyhash,
-  nextpas.core.json.writer,
-  nextpas.core.platform.files,
-  nextpas.core.platform.files.base,
-  nextpas.core.text.builder,
   nextpas.core.text.number,
-  nextpas.core.yaml.builder,
   nextpas.core.yaml,
-  nextpas.core.yaml.value,
-  nextpas.core.yaml.types,
-  nextpas.core.toml,
-  nextpas.core.toml.writer,
-  nextpas.core.toml.value,
-  nextpas.core.toml.base;
+  nextpas.core.toml;
 
 type
-  TConfigEntryArray = array of TConfigEntry;
-  TConfigSourceKind = (
-    cskIni,
-    cskJson,
-    cskYaml,
-    cskToml,
-    cskEnv,
-    cskFile
-  );
-
-  TConfigSource = record
-    Kind: TConfigSourceKind;
-    Value: string;
-    Format: TConfigFormat;
-  end;
-
-  TConfigSourceArray = array of TConfigSource;
-
   TIndexedConfigValue = record
     Index: Int64;
     Value: string;
@@ -251,107 +222,13 @@ type
 
   TIndexedConfigValueArray = array of TIndexedConfigValue;
 
-  TConfigExportNode = class;
-
-  TConfigJsonChild = record
-    Name: string;
-    Node: TConfigExportNode;
-  end;
-
-  TConfigExportNode = class
-  private
-    FHasScalar: Boolean;
-    FScalarValue: string;
-    FChildren: array of TConfigJsonChild;
-    FChildCount: Integer;
-    function FindChildIndex(const AName: string): Integer;
-    function RequireChild(const AName: string): TConfigExportNode;
-    function IsDenseArray(out ACount: Integer): Boolean;
-  public
-    destructor Destroy; override;
-    procedure SetScalar(const AValue: string);
-    procedure AddPath(const AKey, AValue: string);
-    procedure WriteJson(var AWriter: TJsonWriter; const APath: string);
-    procedure BuildYaml(var ABuilder: TYamlBuilder; const APath: string);
-  end;
-
-  TOwnedConfig = class(TInterfacedObject, IConfig)
-  private
-    FConfig: TConfig;
-    function GetCount: Integer;
-  public
-    constructor Create(AConfig: TConfig);
-    destructor Destroy; override;
-    function GetString(const AKey: string; const ADefault: string = ''): string;
-    function GetRawString(const AKey: string; const ADefault: string = ''): string;
-    function GetStringArray(const AKey: string): TStringArray;
-    function GetRawStringArray(const AKey: string): TStringArray;
-    function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
-    function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
-    function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
-    function GetStringRequired(const AKey: string): string;
-    function GetIntRequired(const AKey: string): Int64;
-    function GetBoolRequired(const AKey: string): Boolean;
-    function GetFloatRequired(const AKey: string): Double;
-    procedure Require(const AKeys: array of string);
-    function Has(const AKey: string): Boolean;
-    function GetKeys: TStringArray;
-    function GetSection(const APrefix: string): TStringArray;
-    function ToIni: string;
-    function ToJson: string;
-    function ToYaml: string;
-    function ToToml: string;
-  end;
-
-  TConfigBuilderImpl = class(TInterfacedObject, IConfigBuilder)
-  private
-    FDefaults: TConfigEntryArray;
-    FDefaultCount: Integer;
-    FSources: TConfigSourceArray;
-    FSourceCount: Integer;
-    FRequiredKeys: TStringArray;
-    FRequiredCount: Integer;
-    function DefaultIndexOf(const AKey: string): Integer;
-    procedure StoreDefault(const AKey, AValue: string);
-    procedure StoreSource(const AKind: TConfigSourceKind; const AValue: string;
-      AFormat: TConfigFormat);
-    procedure StoreRequiredKey(const AKey: string);
-    procedure ApplyDefaults(ACfg: TConfig);
-    procedure ApplySource(ACfg: TConfig; const ASource: TConfigSource);
-    procedure ApplyRequiredKeys(ACfg: TConfig);
-    function BuildFreshConfig: TConfig;
-  public
-    function AddDefault(const AKey, AValue: string): IConfigBuilder;
-    function AddIni(const AContent: string): IConfigBuilder;
-    function AddJson(const AContent: string): IConfigBuilder;
-    function AddYaml(const AContent: string): IConfigBuilder;
-    function AddToml(const AContent: string): IConfigBuilder;
-    function AddEnv(const APrefix: string): IConfigBuilder;
-    function AddFile(const APath: string; AFormat: TConfigFormat): IConfigBuilder;
-    function RequireKeys(const AKeys: array of string): IConfigBuilder;
-    function Build: IConfig;
-    function BuildConfig: TConfig;
-    function TryBuild(out AConfig: IConfig; out AError: string): Boolean;
-  end;
-
 {$IFDEF NEXTPAS_UNIX}
 var
   environ: PPAnsiChar; cvar; external;
 {$ENDIF}
 
-{ DOM 展平 helper —— 把 JSON/YAML/TOML 嵌套结构递归展平成扁平 dot-path。
-  嵌套对象/表 → server.host；数组/序列 → tags.0、servers.0.host（.NET IConfiguration 模型）。
-  注意（扁平模型固有约束）：
-  - 字面含点的键与真实层级会撞 key，例如 dotted a.b 与 nested a/b 都展平成 a.b；后写覆盖先写。
-  - 递归深度 = 配置嵌套深度，由底层 DOM 解析器自身的深度上限先行约束。 }
-
-function JoinKey(const APrefix, AKey: string): string;
-begin
-  if APrefix = '' then
-    Result := AKey
-  else
-    Result := APrefix + '.' + AKey;
-end;
+const
+  ConfigFilePathEmptyError = 'config file path must not be empty';
 
 function GetSectionSuffix(const AKey, APrefix: string; out ASuffix: string): Boolean;
 var
@@ -471,6 +348,18 @@ begin
     raise EConfigError.Create('config section prefix must not be empty');
 end;
 
+procedure RequireConfigEnvPrefix(const APrefix: string);
+begin
+  if APrefix = '' then
+    raise EConfigError.Create('config env prefix must not be empty');
+end;
+
+procedure RequireConfigFilePath(const APath: string);
+begin
+  if APath = '' then
+    raise EConfigError.Create(ConfigFilePathEmptyError);
+end;
+
 function KeyMatchesSection(const AKey, APrefix: string): Boolean;
 var
   LLowerKey: string;
@@ -510,17 +399,6 @@ begin
   Inc(ACount);
 end;
 
-procedure AddConfigSource(var AItems: TConfigSourceArray; var ACount: Integer;
-  const AKind: TConfigSourceKind; const AValue: string; AFormat: TConfigFormat);
-begin
-  if ACount >= Length(AItems) then
-    SetLength(AItems, ACount + 8);
-  AItems[ACount].Kind := AKind;
-  AItems[ACount].Value := AValue;
-  AItems[ACount].Format := AFormat;
-  Inc(ACount);
-end;
-
 function IsSupportedConfigFormat(AFormat: TConfigFormat): Boolean;
 begin
   Result := (Ord(AFormat) >= Ord(Low(TConfigFormat))) and
@@ -533,6 +411,8 @@ var
 begin
   AIndex := 0;
   if AValue = '' then
+    Exit(False);
+  if (Length(AValue) > 1) and (AValue[1] = '0') then
     Exit(False);
   for LI := 1 to Length(AValue) do
     if (AValue[LI] < '0') or (AValue[LI] > '9') then
@@ -1003,339 +883,12 @@ begin
     Result := APath;
 end;
 
-{ TConfigExportNode }
-
-destructor TConfigExportNode.Destroy;
-var
-  LI: Integer;
+procedure RequireHierarchicalConfigPath(const AKey: string);
 begin
-  for LI := 0 to FChildCount - 1 do
-    FChildren[LI].Node.Free;
-  FChildren := nil;
-  inherited Destroy;
-end;
-
-function TConfigExportNode.FindChildIndex(const AName: string): Integer;
-var
-  LI: Integer;
-  LLower: string;
-begin
-  LLower := LowerCase(AName);
-  for LI := 0 to FChildCount - 1 do
-    if LowerCase(FChildren[LI].Name) = LLower then
-      Exit(LI);
-  Result := -1;
-end;
-
-function TConfigExportNode.RequireChild(const AName: string): TConfigExportNode;
-var
-  LIdx: Integer;
-begin
-  LIdx := FindChildIndex(AName);
-  if LIdx >= 0 then
-    Exit(FChildren[LIdx].Node);
-
-  if FChildCount >= Length(FChildren) then
-    SetLength(FChildren, FChildCount + 8);
-
-  FChildren[FChildCount].Name := AName;
-  FChildren[FChildCount].Node := TConfigExportNode.Create;
-  Result := FChildren[FChildCount].Node;
-  Inc(FChildCount);
-end;
-
-function TConfigExportNode.IsDenseArray(out ACount: Integer): Boolean;
-var
-  LI: Integer;
-  LIdx: Int64;
-  LMax: Int64;
-begin
-  ACount := 0;
-  if FChildCount = 0 then
-    Exit(False);
-
-  LMax := -1;
-  for LI := 0 to FChildCount - 1 do
-  begin
-    if not TryParseArrayIndex(FChildren[LI].Name, LIdx) then
-      Exit(False);
-    if LIdx > LMax then
-      LMax := LIdx;
-  end;
-
-  if LMax <> FChildCount - 1 then
-    Exit(False);
-
-  for LI := 0 to FChildCount - 1 do
-    if FindChildIndex(IntToStr(LI)) < 0 then
-      Exit(False);
-
-  ACount := FChildCount;
-  Result := True;
-end;
-
-procedure TConfigExportNode.SetScalar(const AValue: string);
-begin
-  FHasScalar := True;
-  FScalarValue := AValue;
-end;
-
-procedure TConfigExportNode.AddPath(const AKey, AValue: string);
-var
-  LNode: TConfigExportNode;
-  LPos: Integer;
-  LSegment: string;
-begin
-  LNode := Self;
-  LPos := 1;
-  while NextConfigPathSegment(AKey, LPos, LSegment) do
-  begin
-    if LPos > Length(AKey) then
-    begin
-      LNode.RequireChild(LSegment).SetScalar(AValue);
-      Exit;
-    end;
-    LNode := LNode.RequireChild(LSegment);
-  end;
-end;
-
-procedure TConfigExportNode.WriteJson(var AWriter: TJsonWriter; const APath: string);
-var
-  LI: Integer;
-  LCount: Integer;
-  LChildPath: string;
-begin
-  if FHasScalar then
-  begin
-    if FChildCount > 0 then
-      raise EConfigError.Create('config export conflict at "' +
-        DisplayConfigPath(APath) + '": scalar and subtree cannot both be represented as a hierarchical config');
-    AWriter.Str(FScalarValue);
-    Exit;
-  end;
-
-  if IsDenseArray(LCount) then
-  begin
-    AWriter.BeginArray;
-    for LI := 0 to LCount - 1 do
-      FChildren[FindChildIndex(IntToStr(LI))].Node.WriteJson(AWriter,
-        JoinKey(APath, IntToStr(LI)));
-    AWriter.EndArray;
-    Exit;
-  end;
-
-  AWriter.BeginObject;
-  for LI := 0 to FChildCount - 1 do
-  begin
-    AWriter.Key(FChildren[LI].Name);
-    LChildPath := JoinKey(APath, FChildren[LI].Name);
-    FChildren[LI].Node.WriteJson(AWriter, LChildPath);
-  end;
-  AWriter.EndObject;
-end;
-
-procedure TConfigExportNode.BuildYaml(var ABuilder: TYamlBuilder; const APath: string);
-var
-  LI: Integer;
-  LCount: Integer;
-begin
-  if FHasScalar then
-  begin
-    if FChildCount > 0 then
-      raise EConfigError.Create('config export conflict at "' +
-        DisplayConfigPath(APath) + '": scalar and subtree cannot both be represented as a hierarchical config');
-    ABuilder.PutStr(FScalarValue);
-    Exit;
-  end;
-
-  if IsDenseArray(LCount) then
-  begin
-    ABuilder.BeginSeq;
-    for LI := 0 to LCount - 1 do
-      FChildren[FindChildIndex(IntToStr(LI))].Node.BuildYaml(ABuilder,
-        JoinKey(APath, IntToStr(LI)));
-    ABuilder.EndSeq;
-    Exit;
-  end;
-
-  ABuilder.BeginMap;
-  for LI := 0 to FChildCount - 1 do
-  begin
-    ABuilder.PutKey(FChildren[LI].Name);
-    FChildren[LI].Node.BuildYaml(ABuilder, JoinKey(APath, FChildren[LI].Name));
-  end;
-  ABuilder.EndMap;
-end;
-
-function ConfigEntriesToJson(const AEntries: TConfigEntryArray;
-  const ACount: Integer): string;
-var
-  LRoot: TConfigExportNode;
-  LBuilder: TStringBuilder;
-  LWriter: TJsonWriter;
-  LI: Integer;
-begin
-  LRoot := TConfigExportNode.Create;
-  try
-    for LI := 0 to ACount - 1 do
-      LRoot.AddPath(AEntries[LI].Key, AEntries[LI].Value);
-
-    LBuilder.Init(ACount * 32 + 2);
-    try
-      LWriter.Init(LBuilder);
-      LRoot.WriteJson(LWriter, '');
-      Result := LBuilder.ToString;
-    finally
-      LBuilder.Done;
-    end;
-  finally
-    LRoot.Free;
-  end;
-end;
-
-function ConfigEntriesToYaml(const AEntries: TConfigEntryArray;
-  const ACount: Integer): string;
-var
-  LRoot: TConfigExportNode;
-  LBuilder: TYamlBuilder;
-  LI: Integer;
-begin
-  LRoot := TConfigExportNode.Create;
-  try
-    for LI := 0 to ACount - 1 do
-      LRoot.AddPath(AEntries[LI].Key, AEntries[LI].Value);
-
-    LBuilder.Init;
-    try
-      LRoot.BuildYaml(LBuilder, '');
-      Result := LBuilder.Stringify;
-    finally
-      LBuilder.Done;
-    end;
-  finally
-    LRoot.Free;
-  end;
-end;
-
-function ConfigEntriesToToml(const AEntries: TConfigEntryArray;
-  const ACount: Integer): string;
-var
-  LBuilder: TStringBuilder;
-  LWriter: TTomlWriter;
-  LI: Integer;
-begin
-  LBuilder.Init(256);
-  try
-    LWriter.Init(LBuilder);
-    for LI := 0 to ACount - 1 do
-    begin
-      LWriter.Key(AEntries[LI].Key);
-      LWriter.Str(AEntries[LI].Value);
-    end;
-    Result := LBuilder.ToString;
-  finally
-    LBuilder.Done;
-  end;
-end;
-
-function ContainsIniLineBreak(const AValue: string): Boolean;
-var
-  LI: Integer;
-begin
-  for LI := 1 to Length(AValue) do
-    if (AValue[LI] = #10) or (AValue[LI] = #13) then
-      Exit(True);
-  Result := False;
-end;
-
-function HasIniTrimmedEdgeWhitespace(const AValue: string): Boolean;
-begin
-  Result := (AValue <> '') and
-    (((AValue[1] = ' ') or (AValue[1] = #9)) or
-     ((AValue[Length(AValue)] = ' ') or (AValue[Length(AValue)] = #9)));
-end;
-
-function IsIniSectionNameRepresentable(const ASection: string): Boolean;
-begin
-  Result := (ASection <> '') and
-    (not ContainsIniLineBreak(ASection)) and
-    (not HasIniTrimmedEdgeWhitespace(ASection)) and
-    (Pos(']', ASection) = 0);
-end;
-
-function IsIniKeyNameRepresentable(const AKey: string): Boolean;
-begin
-  Result := (AKey <> '') and
-    (not ContainsIniLineBreak(AKey)) and
-    (not HasIniTrimmedEdgeWhitespace(AKey)) and
-    (Pos('=', AKey) = 0) and
-    (AKey[1] <> '[') and
-    (AKey[1] <> ';') and
-    (AKey[1] <> '#');
-end;
-
-function TryMapConfigKeyToIniPath(const AConfigKey: string; out ASection,
-  AKey: string): Boolean;
-var
-  LDotPos: Integer;
-  LSection: string;
-  LKey: string;
-begin
-  for LDotPos := Length(AConfigKey) downto 1 do
-    if AConfigKey[LDotPos] = '.' then
-    begin
-      LSection := Copy(AConfigKey, 1, LDotPos - 1);
-      LKey := Copy(AConfigKey, LDotPos + 1,
-        Length(AConfigKey) - LDotPos);
-      if IsIniSectionNameRepresentable(LSection) and
-         IsIniKeyNameRepresentable(LKey) then
-      begin
-        ASection := LSection;
-        AKey := LKey;
-        Exit(True);
-      end;
-    end;
-
-  if IsIniKeyNameRepresentable(AConfigKey) then
-  begin
-    ASection := '';
-    AKey := AConfigKey;
-    Exit(True);
-  end;
-
-  ASection := '';
-  AKey := '';
-  Result := False;
-end;
-
-function ConfigEntriesToIni(const AEntries: TConfigEntryArray;
-  const ACount: Integer): string;
-var
-  LIni: TIniFile;
-  LI: Integer;
-  LSection: string;
-  LKey: string;
-begin
-  LIni := TIniFile.Create;
-  try
-    for LI := 0 to ACount - 1 do
-    begin
-      if ContainsIniLineBreak(AEntries[LI].Value) then
-        raise EConfigError.Create('config key "' + AEntries[LI].Key +
-          '" cannot be exported to ini: value contains line breaks');
-      if (AEntries[LI].Value <> '') and
-         ((AEntries[LI].Value[1] = ' ') or (AEntries[LI].Value[1] = #9)) then
-        raise EConfigError.Create('config key "' + AEntries[LI].Key +
-          '" cannot be exported to ini: value has leading whitespace');
-      if not TryMapConfigKeyToIniPath(AEntries[LI].Key, LSection, LKey) then
-        raise EConfigError.Create('config key "' + AEntries[LI].Key +
-          '" cannot be exported to ini: key is not representable');
-      LIni.WriteString(LSection, LKey, AEntries[LI].Value);
-    end;
-    Result := LIni.ToString;
-  finally
-    LIni.Free;
-  end;
+  if (AKey = '') or (AKey[1] = '.') or
+    (AKey[Length(AKey)] = '.') or (Pos('..', AKey) > 0) then
+    raise EConfigError.Create('config key "' + AKey +
+      '" cannot be exported as hierarchical config: empty path segment is not representable');
 end;
 
 function FindPlaceholderEnd(const AValue: string; const AStart: Integer): Integer;
@@ -1563,372 +1116,6 @@ begin
       Result := Result + AValue[LI];
       Inc(LI);
     end;
-  end;
-end;
-
-function PadZero(const AValue: Int64; const AWidth: Integer): string;
-begin
-  Result := IntToStr(AValue);
-  while Length(Result) < AWidth do
-    Result := '0' + Result;
-end;
-
-{ TOML datetime → ISO 8601 文本（忠实渲染，供类型 getter 还原）}
-function TomlDateTimeToStr(const ADT: TTomlDateTime): string;
-var
-  LAbs, LH, LM: Integer;
-  LFrac: string;
-  LLen: Integer;
-begin
-  Result := '';
-  if ADT.HasDate then
-    Result := PadZero(ADT.Year, 4) + '-' + PadZero(ADT.Month, 2) + '-' + PadZero(ADT.Day, 2);
-  if ADT.HasTime then
-  begin
-    if Result <> '' then
-      Result := Result + 'T';
-    Result := Result + PadZero(ADT.Hour, 2) + ':' + PadZero(ADT.Minute, 2) + ':' +
-      PadZero(ADT.Second, 2);
-    if ADT.Nanosecond > 0 then
-    begin
-      LFrac := PadZero(ADT.Nanosecond, 9);
-      LLen := Length(LFrac);
-      while (LLen > 1) and (LFrac[LLen] = '0') do
-        Dec(LLen);
-      Result := Result + '.' + Copy(LFrac, 1, LLen);
-    end;
-  end;
-  if ADT.HasOffset then
-  begin
-    if ADT.OffsetMinutes = 0 then
-      Result := Result + 'Z'
-    else
-    begin
-      LAbs := Abs(Integer(ADT.OffsetMinutes));
-      LH := LAbs div 60;
-      LM := LAbs mod 60;
-      if ADT.OffsetMinutes >= 0 then
-        Result := Result + '+'
-      else
-        Result := Result + '-';
-      Result := Result + PadZero(LH, 2) + ':' + PadZero(LM, 2);
-    end;
-  end;
-end;
-
-{ 标量忠实渲染 —— int/float/bool/null 转成可被类型 getter 还原的文本 }
-
-function RenderJsonScalar(const ANode: TJsonValue): string;
-begin
-  case ANode.Kind of
-    jnkString: Result := ANode.AsStr.ToString;
-    jnkInt:    Result := IntToStr(ANode.AsInt);
-    jnkReal:   Result := FloatToStr(ANode.AsFloat);
-    jnkBool:   if ANode.AsBool then Result := 'true' else Result := 'false';
-  else
-    Result := '';  { jnkNull / 其它 }
-  end;
-end;
-
-function RenderYamlScalar(const ANode: TYamlValue): string;
-begin
-  case ANode.Kind of
-    ynkString: Result := ANode.AsStr.ToString;
-    ynkInt:    Result := IntToStr(ANode.AsInt);
-    ynkFloat:  Result := FloatToStr(ANode.AsFloat);
-    ynkBool:   if ANode.AsBool then Result := 'true' else Result := 'false';
-  else
-    Result := '';  { ynkNull / ynkAlias / 其它 }
-  end;
-end;
-
-function RenderTomlScalar(const ANode: TTomlValue): string;
-begin
-  case ANode.Kind of
-    tnkString:   Result := ANode.AsStr.ToString;
-    tnkInt:      Result := IntToStr(ANode.AsInt);
-    tnkFloat:    Result := FloatToStr(ANode.AsFloat);
-    tnkBool:     if ANode.AsBool then Result := 'true' else Result := 'false';
-    tnkDateTime: Result := TomlDateTimeToStr(ANode.AsDateTime);
-  else
-    Result := '';
-  end;
-end;
-
-{ 递归展平 —— while + UInt32 计数，空容器零下溢 }
-
-procedure FlattenJsonNode(ACfg: TConfig; const APrefix: string; const ANode: TJsonValue);
-var
-  LI, LCount: UInt32;
-begin
-  case ANode.Kind of
-    jnkObject:
-      begin
-        LCount := ANode.ObjectLen;
-        LI := 0;
-        while LI < LCount do
-        begin
-          FlattenJsonNode(ACfg, JoinKey(APrefix, ANode.ObjectKeyAt(LI).ToString),
-            ANode.ObjectValueAt(LI));
-          Inc(LI);
-        end;
-      end;
-    jnkArray:
-      begin
-        LCount := ANode.ArrayLen;
-        LI := 0;
-        while LI < LCount do
-        begin
-          FlattenJsonNode(ACfg, JoinKey(APrefix, UIntToStr(LI)), ANode.ArrayGet(LI));
-          Inc(LI);
-        end;
-      end;
-  else
-    ACfg.SetValueUnlocked(APrefix, RenderJsonScalar(ANode));
-  end;
-end;
-
-procedure FlattenYamlNode(ACfg: TConfig; const APrefix: string; const ANode: TYamlValue);
-var
-  LI, LCount: UInt32;
-begin
-  if ANode.IsMap then
-  begin
-    LCount := ANode.MapLen;
-    LI := 0;
-    while LI < LCount do
-    begin
-      FlattenYamlNode(ACfg, JoinKey(APrefix, ANode.MapKeyAt(LI).ToString),
-        ANode.MapValueAt(LI));
-      Inc(LI);
-    end;
-  end
-  else if ANode.IsSeq then
-  begin
-    LCount := ANode.SeqLen;
-    LI := 0;
-    while LI < LCount do
-    begin
-      FlattenYamlNode(ACfg, JoinKey(APrefix, UIntToStr(LI)), ANode.SeqGet(LI));
-      Inc(LI);
-    end;
-  end
-  else
-    ACfg.SetValueUnlocked(APrefix, RenderYamlScalar(ANode));
-end;
-
-procedure FlattenTomlNode(ACfg: TConfig; const APrefix: string; const ANode: TTomlValue);
-var
-  LI, LCount: UInt32;
-begin
-  if ANode.IsTable then
-  begin
-    LCount := ANode.TableLen;
-    LI := 0;
-    while LI < LCount do
-    begin
-      FlattenTomlNode(ACfg, JoinKey(APrefix, ANode.TableKeyAt(LI).ToString),
-        ANode.TableValueAt(LI));
-      Inc(LI);
-    end;
-  end
-  else if ANode.IsArray then
-  begin
-    LCount := ANode.ArrayLen;
-    LI := 0;
-    while LI < LCount do
-    begin
-      FlattenTomlNode(ACfg, JoinKey(APrefix, UIntToStr(LI)), ANode.ArrayGet(LI));
-      Inc(LI);
-    end;
-  end
-  else
-    ACfg.SetValueUnlocked(APrefix, RenderTomlScalar(ANode));
-end;
-
-{ TConfig }
-
-procedure JsonOffsetToLineColumn(const AContent: string; const AOffset: SizeUInt;
-  out ALine, AColumn: UInt32);
-var
-  LI: Integer;
-  LMax: Integer;
-begin
-  ALine := 1;
-  AColumn := 1;
-  LMax := Length(AContent);
-  LI := 1;
-  while (LI <= LMax) and (SizeUInt(LI - 1) < AOffset) do
-  begin
-    if AContent[LI] = #10 then
-    begin
-      Inc(ALine);
-      AColumn := 1;
-    end
-    else
-      Inc(AColumn);
-    Inc(LI);
-  end;
-end;
-
-function FormatJsonLoadError(const AContent: string; const AError: TJsonError): string;
-var
-  LLine: UInt32;
-  LColumn: UInt32;
-begin
-  Result := AError.Message.ToString;
-  if Result = '' then
-    Result := 'parse error';
-  JsonOffsetToLineColumn(AContent, AError.Offset, LLine, LColumn);
-  Result := 'JSON parse error at line ' + UIntToStr(LLine) + ', column ' +
-    UIntToStr(LColumn) + ' (offset ' + UIntToStr(AError.Offset) + '): ' + Result;
-end;
-
-function FormatYamlLoadError(const AError: TYamlError): string;
-begin
-  Result := AError.Message.ToString;
-  if Result = '' then
-    Result := 'parse error';
-  Result := 'YAML parse error at line ' + UIntToStr(AError.Line) +
-    ', column ' + UIntToStr(AError.Col) + ': ' + Result;
-end;
-
-function FormatTomlLoadError(const AError: TTomlError): string;
-begin
-  Result := AError.Message.ToString;
-  if Result = '' then
-    Result := 'parse error';
-  Result := 'TOML parse error at line ' + UIntToStr(AError.Line) +
-    ', column ' + UIntToStr(AError.Col) + ': ' + Result;
-end;
-
-function FormatConfigFileLoadError(const APath, AMessage: string): string;
-begin
-  Result := 'Config file load error: ' + APath;
-  if AMessage <> '' then
-    Result := Result + ': ' + AMessage;
-end;
-
-procedure LoadConfigTextByFormat(ACfg: TConfig; const AContent: string;
-  AFormat: TConfigFormat);
-begin
-  if not IsSupportedConfigFormat(AFormat) then
-    raise EConfigError.Create('unsupported config format');
-  case AFormat of
-    cfIni: ACfg.LoadFromIni(AContent);
-    cfJson: ACfg.LoadFromJson(AContent);
-    cfYaml: ACfg.LoadFromYaml(AContent);
-    cfToml: ACfg.LoadFromToml(AContent);
-  end;
-end;
-
-procedure LoadConfigFileByFormat(ACfg: TConfig; const APath: string;
-  AFormat: TConfigFormat);
-var
-  LContent: string;
-begin
-  if not IsSupportedConfigFormat(AFormat) then
-    raise EConfigError.Create(FormatConfigFileLoadError(APath,
-      'unsupported config format'));
-
-  try
-    LContent := ReadFileText(APath);
-    try
-      LoadConfigTextByFormat(ACfg, LContent, AFormat);
-    except
-      on E: Exception do
-        raise EConfigError.Create(FormatConfigFileLoadError(APath, E.Message));
-    end;
-  except
-    on E: EConfigError do
-      raise;
-    on E: Exception do
-      raise EConfigError.Create(FormatConfigFileLoadError(APath, E.Message));
-  end;
-end;
-
-procedure LoadConfigFromIniFile(ACfg: TConfig; AIni: TIniFile);
-var
-  LSections: nextpas.core.ini.TStringArray;
-  LKeys: nextpas.core.ini.TStringArray;
-  LI, LJ: Integer;
-  LSection, LKey, LFullKey, LValue: string;
-begin
-  LSections := AIni.GetSections;
-
-  ACfg.FLock.AcquireWrite;
-  try
-    { Global section (no section header) }
-    LKeys := AIni.GetKeys('');
-    for LI := 0 to Length(LKeys) - 1 do
-    begin
-      LValue := AIni.ReadString('', LKeys[LI], '');
-      ACfg.SetValueUnlocked(LKeys[LI], LValue);
-    end;
-    { Named sections: section.key }
-    for LI := 0 to Length(LSections) - 1 do
-    begin
-      LSection := LSections[LI];
-      LKeys := AIni.GetKeys(LSection);
-      for LJ := 0 to Length(LKeys) - 1 do
-      begin
-        LKey := LKeys[LJ];
-        LFullKey := LSection + '.' + LKey;
-        LValue := AIni.ReadString(LSection, LKey, '');
-        ACfg.SetValueUnlocked(LFullKey, LValue);
-      end;
-    end;
-  finally
-    ACfg.FLock.ReleaseWrite;
-  end;
-end;
-
-procedure LoadConfigFromJsonDocument(ACfg: TConfig; const ADoc: IJsonDocument);
-var
-  LRoot: TJsonValue;
-begin
-  LRoot := ADoc.Root;
-
-  ACfg.FLock.AcquireWrite;
-  try
-    { 顶层容器（object/array）递归展平，顶层键不加前缀（JoinKey('',k)=k）。
-      顶层裸标量无键可映射，按 .NET IConfiguration 语义忽略。 }
-    if LRoot.IsObject or LRoot.IsArray then
-      FlattenJsonNode(ACfg, '', LRoot);
-  finally
-    ACfg.FLock.ReleaseWrite;
-  end;
-end;
-
-procedure LoadConfigFromYamlDocument(ACfg: TConfig; const ADoc: IYamlDocument);
-var
-  LRoot: TYamlValue;
-begin
-  LRoot := ADoc.Root;
-
-  ACfg.FLock.AcquireWrite;
-  try
-    { 顶层 mapping/sequence 递归展平；顶层裸标量按语义忽略。 }
-    if LRoot.IsMap or LRoot.IsSeq then
-      FlattenYamlNode(ACfg, '', LRoot);
-  finally
-    ACfg.FLock.ReleaseWrite;
-  end;
-end;
-
-procedure LoadConfigFromTomlDocument(ACfg: TConfig; const ADoc: ITomlDocument);
-var
-  LRoot: TTomlValue;
-begin
-  LRoot := ADoc.Root;
-
-  ACfg.FLock.AcquireWrite;
-  try
-    { TOML 顶层恒为 table；递归展平嵌套表/数组（含内联表、dotted key、array-of-tables）。 }
-    if LRoot.IsTable then
-      FlattenTomlNode(ACfg, '', LRoot);
-  finally
-    ACfg.FLock.ReleaseWrite;
   end;
 end;
 
@@ -2423,7 +1610,10 @@ begin
   try
     try
       if not LIni.TryLoadFromString(AContent, AError) then
+      begin
+        AError := FormatIniLoadError(AError);
         Exit(False);
+      end;
       LoadConfigFromIniFile(Self, LIni);
       AError := '';
       Result := True;
@@ -2510,15 +1700,39 @@ end;
 
 function TConfig.TryLoadFromFile(const APath: string; AFormat: TConfigFormat;
   out AError: string): Boolean;
+var
+  LContent: string;
 begin
   AError := '';
+  if APath = '' then
+  begin
+    AError := ConfigFilePathEmptyError;
+    Exit(False);
+  end;
+  if not IsSupportedConfigFormat(AFormat) then
+  begin
+    AError := FormatConfigFileLoadError(APath, 'unsupported config format');
+    Exit(False);
+  end;
+
   try
-    LoadConfigFileByFormat(Self, APath, AFormat);
-    Result := True;
+    LContent := ReadFileText(APath);
   except
     on E: Exception do
     begin
-      AError := E.Message;
+      AError := FormatConfigFileLoadError(APath, E.Message);
+      Exit(False);
+    end;
+  end;
+
+  try
+    Result := TryLoadConfigTextByFormat(Self, LContent, AFormat, AError);
+    if not Result then
+      AError := FormatConfigFileLoadError(APath, AError);
+  except
+    on E: Exception do
+    begin
+      AError := FormatConfigFileLoadError(APath, E.Message);
       Result := False;
     end;
   end;
@@ -2542,11 +1756,12 @@ end;
 procedure TConfig.LoadFromEnv(const APrefix: string);
 var
   LPtr: PPAnsiChar;
+  LEnvBase: PAnsiChar;
+  LEnvCursor: PAnsiChar;
   LEntry, LName, LValue, LKey: string;
   LEqPos: Integer;
-  LPrefixLen: Integer;
 begin
-  LPrefixLen := Length(APrefix);
+  RequireConfigEnvPrefix(APrefix);
   FLock.AcquireWrite;
   try
   {$IFDEF NEXTPAS_UNIX}
@@ -2560,51 +1775,29 @@ begin
     begin
       LName := Copy(LEntry, 1, LEqPos - 1);
       LValue := Copy(LEntry, LEqPos + 1, Length(LEntry) - LEqPos);
-      if (LPrefixLen = 0) or
-         ((Length(LName) > LPrefixLen) and
-          (Copy(LName, 1, LPrefixLen) = APrefix)) then
-      begin
-        if LPrefixLen > 0 then
-          LKey := LowerCase(Copy(LName, LPrefixLen + 1, Length(LName) - LPrefixLen))
-        else
-          LKey := LowerCase(LName);
+      if TryConfigEnvNameToKey(LName, APrefix, LKey) then
         SetValueUnlocked(LKey, LValue);
-      end;
     end;
     Inc(LPtr);
   end;
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
-  { Windows: use GetEnvironmentStrings API — simplified: iterate known prefix }
-  { For now, use envp from RTL }
-  var LEnvBlock: PAnsiChar;
-  LEnvBlock := GetEnvironmentStringsA;
-  if LEnvBlock <> nil then
+  LEnvBase := GetEnvironmentStringsA;
+  if LEnvBase <> nil then
   begin
-    LPtr := PPAnsiChar(@LEnvBlock);
-    while LEnvBlock^ <> #0 do
+    LEnvCursor := LEnvBase;
+    while NextConfigWindowsEnvBlockEntry(LEnvCursor, LEntry) do
     begin
-      LEntry := string(LEnvBlock);
       LEqPos := Pos('=', LEntry);
-      if LEqPos > 1 then
+      if LEqPos > 0 then
       begin
         LName := Copy(LEntry, 1, LEqPos - 1);
         LValue := Copy(LEntry, LEqPos + 1, Length(LEntry) - LEqPos);
-        if (LPrefixLen = 0) or
-           ((Length(LName) > LPrefixLen) and
-            (Copy(LName, 1, LPrefixLen) = APrefix)) then
-        begin
-          if LPrefixLen > 0 then
-            LKey := LowerCase(Copy(LName, LPrefixLen + 1, Length(LName) - LPrefixLen))
-          else
-            LKey := LowerCase(LName);
+        if TryConfigEnvNameToKey(LName, APrefix, LKey) then
           SetValueUnlocked(LKey, LValue);
-        end;
       end;
-      while LEnvBlock^ <> #0 do Inc(LEnvBlock);
-      Inc(LEnvBlock);
     end;
-    FreeEnvironmentStringsA(LEnvBlock);
+    FreeEnvironmentStringsA(LEnvBase);
   end;
   {$ENDIF}
   finally
@@ -2614,6 +1807,7 @@ end;
 
 procedure TConfig.SetDefault(const AKey, AValue: string);
 begin
+  RequireConfigKey(AKey);
   FLock.AcquireWrite;
   try
     if FindIndex(AKey) < 0 then
@@ -2675,12 +1869,12 @@ end;
 
 procedure TConfig.SaveToIni(const APath: string);
 begin
-  WriteFileText(APath, ToIni);
+  ConfigWriteAtomicText(APath, ToIni);
 end;
 
 procedure TConfig.SaveToJson(const APath: string);
 begin
-  WriteFileText(APath, ToJson);
+  ConfigWriteAtomicText(APath, ToJson);
 end;
 
 function TConfig.ToYaml: string;
@@ -2694,7 +1888,7 @@ end;
 
 procedure TConfig.SaveToYaml(const APath: string);
 begin
-  WriteFileText(APath, ToYaml);
+  ConfigWriteAtomicText(APath, ToYaml);
 end;
 
 function TConfig.ToToml: string;
@@ -2708,7 +1902,7 @@ end;
 
 procedure TConfig.SaveToToml(const APath: string);
 begin
-  WriteFileText(APath, ToToml);
+  ConfigWriteAtomicText(APath, ToToml);
 end;
 
 function TConfig.GetString(const AKey: string; const ADefault: string): string;
@@ -2717,6 +1911,7 @@ var
   LIdx: Integer;
   LStack: TStringArray;
 begin
+  RequireConfigKey(AKey);
   LFound := False;
   FLock.AcquireRead;
   try
@@ -2762,6 +1957,7 @@ function TConfig.GetRawString(const AKey: string; const ADefault: string): strin
 var
   LIdx: Integer;
 begin
+  RequireConfigKey(AKey);
   FLock.AcquireRead;
   try
     LIdx := FindIndexCached(AKey);
@@ -2782,6 +1978,8 @@ var
   LStack: TStringArray;
   LAllLiteral: Boolean;
 begin
+  if AKey <> '' then
+    RequireConfigKey(AKey);
   Result := nil;
   LLowerKey := LowerCase(AKey);
   FLock.AcquireRead;
@@ -2832,6 +2030,8 @@ var
   LLowerKey: string;
   LAllLiteral: Boolean;
 begin
+  if AKey <> '' then
+    RequireConfigKey(AKey);
   Result := nil;
   LLowerKey := LowerCase(AKey);
   FLock.AcquireRead;
@@ -2862,6 +2062,7 @@ var
   LVal: Int64;
   LText: string;
 begin
+  RequireConfigKey(AKey);
   LResolved := False;
   FLock.AcquireRead;
   try
@@ -2889,6 +2090,7 @@ var
   LResolved: Boolean;
   LText: string;
 begin
+  RequireConfigKey(AKey);
   LResolved := False;
   FLock.AcquireRead;
   try
@@ -2917,6 +2119,7 @@ var
   LVal: Double;
   LText: string;
 begin
+  RequireConfigKey(AKey);
   LResolved := False;
   FLock.AcquireRead;
   try
@@ -2943,6 +2146,7 @@ var
   LIdx: Integer;
   LResolved: Boolean;
 begin
+  RequireConfigKey(AKey);
   LResolved := False;
   FLock.AcquireRead;
   try
@@ -2967,6 +2171,7 @@ var
   LResolved: Boolean;
   LText: string;
 begin
+  RequireConfigKey(AKey);
   LResolved := False;
   FLock.AcquireRead;
   try
@@ -2994,6 +2199,7 @@ var
   LResolved: Boolean;
   LText: string;
 begin
+  RequireConfigKey(AKey);
   LResolved := False;
   FLock.AcquireRead;
   try
@@ -3021,6 +2227,7 @@ var
   LResolved: Boolean;
   LText: string;
 begin
+  RequireConfigKey(AKey);
   LResolved := False;
   FLock.AcquireRead;
   try
@@ -3094,6 +2301,7 @@ end;
 
 function TConfig.Has(const AKey: string): Boolean;
 begin
+  RequireConfigKey(AKey);
   FLock.AcquireRead;
   try
     Result := FindIndexCached(AKey) >= 0;
@@ -3148,398 +2356,16 @@ begin
   end;
 end;
 
-{ TOwnedConfig }
-
-constructor TOwnedConfig.Create(AConfig: TConfig);
-begin
-  inherited Create;
-  FConfig := AConfig;
-end;
-
-destructor TOwnedConfig.Destroy;
-begin
-  if FConfig <> nil then
-    FConfig.Free;
-  inherited Destroy;
-end;
-
-function TOwnedConfig.GetCount: Integer;
-begin
-  Result := FConfig.Count;
-end;
-
-function TOwnedConfig.GetString(const AKey: string; const ADefault: string): string;
-begin
-  Result := FConfig.GetString(AKey, ADefault);
-end;
-
-function TOwnedConfig.GetRawString(const AKey: string; const ADefault: string): string;
-begin
-  Result := FConfig.GetRawString(AKey, ADefault);
-end;
-
-function TOwnedConfig.GetStringArray(const AKey: string): TStringArray;
-begin
-  Result := FConfig.GetStringArray(AKey);
-end;
-
-function TOwnedConfig.GetRawStringArray(const AKey: string): TStringArray;
-begin
-  Result := FConfig.GetRawStringArray(AKey);
-end;
-
-function TOwnedConfig.GetInt(const AKey: string; ADefault: Int64): Int64;
-begin
-  Result := FConfig.GetInt(AKey, ADefault);
-end;
-
-function TOwnedConfig.GetBool(const AKey: string; ADefault: Boolean): Boolean;
-begin
-  Result := FConfig.GetBool(AKey, ADefault);
-end;
-
-function TOwnedConfig.GetFloat(const AKey: string; ADefault: Double): Double;
-begin
-  Result := FConfig.GetFloat(AKey, ADefault);
-end;
-
-function TOwnedConfig.GetStringRequired(const AKey: string): string;
-begin
-  Result := FConfig.GetStringRequired(AKey);
-end;
-
-function TOwnedConfig.GetIntRequired(const AKey: string): Int64;
-begin
-  Result := FConfig.GetIntRequired(AKey);
-end;
-
-function TOwnedConfig.GetBoolRequired(const AKey: string): Boolean;
-begin
-  Result := FConfig.GetBoolRequired(AKey);
-end;
-
-function TOwnedConfig.GetFloatRequired(const AKey: string): Double;
-begin
-  Result := FConfig.GetFloatRequired(AKey);
-end;
-
-procedure TOwnedConfig.Require(const AKeys: array of string);
-begin
-  FConfig.Require(AKeys);
-end;
-
-function TOwnedConfig.Has(const AKey: string): Boolean;
-begin
-  Result := FConfig.Has(AKey);
-end;
-
-function TOwnedConfig.GetKeys: TStringArray;
-begin
-  Result := FConfig.GetKeys;
-end;
-
-function TOwnedConfig.GetSection(const APrefix: string): TStringArray;
-begin
-  Result := FConfig.GetSection(APrefix);
-end;
-
-function TOwnedConfig.ToJson: string;
-begin
-  Result := FConfig.ToJson;
-end;
-
-function TOwnedConfig.ToIni: string;
-begin
-  Result := FConfig.ToIni;
-end;
-
-function TOwnedConfig.ToYaml: string;
-begin
-  Result := FConfig.ToYaml;
-end;
-
-function TOwnedConfig.ToToml: string;
-begin
-  Result := FConfig.ToToml;
-end;
-
-{ TConfigBuilderImpl }
-
-function TConfigBuilderImpl.DefaultIndexOf(const AKey: string): Integer;
-begin
-  Result := FindEntryIndexInSnapshot(FDefaults, FDefaultCount, AKey);
-end;
-
-procedure TConfigBuilderImpl.StoreDefault(const AKey, AValue: string);
-var
-  LIndex: Integer;
-begin
-  LIndex := DefaultIndexOf(AKey);
-  if LIndex >= 0 then
-    FDefaults[LIndex].Value := AValue
-  else
-  begin
-    if FDefaultCount >= Length(FDefaults) then
-      SetLength(FDefaults, FDefaultCount + 8);
-    FDefaults[FDefaultCount].Key := AKey;
-    FDefaults[FDefaultCount].Value := AValue;
-    Inc(FDefaultCount);
-  end;
-end;
-
-procedure TConfigBuilderImpl.StoreSource(const AKind: TConfigSourceKind;
-  const AValue: string; AFormat: TConfigFormat);
-begin
-  AddConfigSource(FSources, FSourceCount, AKind, AValue, AFormat);
-end;
-
-procedure TConfigBuilderImpl.StoreRequiredKey(const AKey: string);
-begin
-  AddString(FRequiredKeys, FRequiredCount, AKey);
-end;
-
-procedure TConfigBuilderImpl.ApplyDefaults(ACfg: TConfig);
-var
-  LI: Integer;
-begin
-  for LI := 0 to FDefaultCount - 1 do
-    ACfg.SetDefault(FDefaults[LI].Key, FDefaults[LI].Value);
-end;
-
-procedure TConfigBuilderImpl.ApplySource(ACfg: TConfig; const ASource: TConfigSource);
-begin
-  case ASource.Kind of
-    cskIni:
-      ACfg.LoadFromIni(ASource.Value);
-    cskJson:
-      ACfg.LoadFromJson(ASource.Value);
-    cskYaml:
-      ACfg.LoadFromYaml(ASource.Value);
-    cskToml:
-      ACfg.LoadFromToml(ASource.Value);
-    cskEnv:
-      ACfg.LoadFromEnv(ASource.Value);
-    cskFile:
-      LoadConfigFileByFormat(ACfg, ASource.Value, ASource.Format);
-  end;
-end;
-
-procedure TConfigBuilderImpl.ApplyRequiredKeys(ACfg: TConfig);
-var
-  LI: Integer;
-begin
-  for LI := 0 to FRequiredCount - 1 do
-    ACfg.GetStringRequired(FRequiredKeys[LI]);
-end;
-
-function TConfigBuilderImpl.BuildFreshConfig: TConfig;
-var
-  LI: Integer;
-begin
-  Result := TConfig.Create;
-  try
-    ApplyDefaults(Result);
-    for LI := 0 to FSourceCount - 1 do
-      ApplySource(Result, FSources[LI]);
-    ApplyRequiredKeys(Result);
-  except
-    Result.Free;
-    raise;
-  end;
-end;
-
-function TConfigBuilderImpl.AddDefault(const AKey, AValue: string): IConfigBuilder;
-begin
-  StoreDefault(AKey, AValue);
-  Result := Self;
-end;
-
-function TConfigBuilderImpl.AddIni(const AContent: string): IConfigBuilder;
-begin
-  StoreSource(cskIni, AContent, cfIni);
-  Result := Self;
-end;
-
-function TConfigBuilderImpl.AddJson(const AContent: string): IConfigBuilder;
-begin
-  StoreSource(cskJson, AContent, cfJson);
-  Result := Self;
-end;
-
-function TConfigBuilderImpl.AddYaml(const AContent: string): IConfigBuilder;
-begin
-  StoreSource(cskYaml, AContent, cfYaml);
-  Result := Self;
-end;
-
-function TConfigBuilderImpl.AddToml(const AContent: string): IConfigBuilder;
-begin
-  StoreSource(cskToml, AContent, cfToml);
-  Result := Self;
-end;
-
-function TConfigBuilderImpl.AddEnv(const APrefix: string): IConfigBuilder;
-begin
-  StoreSource(cskEnv, APrefix, cfIni);
-  Result := Self;
-end;
-
-function TConfigBuilderImpl.AddFile(const APath: string;
-  AFormat: TConfigFormat): IConfigBuilder;
-begin
-  StoreSource(cskFile, APath, AFormat);
-  Result := Self;
-end;
-
-function TConfigBuilderImpl.RequireKeys(const AKeys: array of string): IConfigBuilder;
-var
-  LI: Integer;
-begin
-  for LI := 0 to Length(AKeys) - 1 do
-    StoreRequiredKey(AKeys[LI]);
-  Result := Self;
-end;
-
-function TConfigBuilderImpl.Build: IConfig;
-begin
-  Result := TOwnedConfig.Create(BuildFreshConfig);
-end;
-
-function TConfigBuilderImpl.BuildConfig: TConfig;
-begin
-  Result := BuildFreshConfig;
-end;
-
-function TConfigBuilderImpl.TryBuild(out AConfig: IConfig; out AError: string): Boolean;
-begin
-  AConfig := nil;
-  AError := '';
-  try
-    AConfig := Build;
-    Result := True;
-  except
-    on E: EConfigError do
-    begin
-      AConfig := nil;
-      AError := E.Message;
-      Result := False;
-    end;
-  end;
-end;
+{ Config facade factories }
 
 function ConfigBuilder: IConfigBuilder;
 begin
-  Result := TConfigBuilderImpl.Create;
+  Result := nextpas.core.config.builder.ConfigBuilder;
 end;
 
 function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig;
 begin
-  Result := ConfigBuilder.AddFile(APath, AFormat).Build;
-end;
-
-{ TConfigWatcher }
-
-constructor TConfigWatcher.Create(AConfig: TConfig; const AFilePath: string;
-  AFormat: TConfigFormat);
-var
-  LCanStat: Boolean;
-begin
-  inherited Create;
-  if AConfig = nil then
-    raise ENextPasError.Create('TConfigWatcher requires a config instance');
-  if AFilePath = '' then
-    raise ENextPasError.Create('TConfigWatcher requires a file path');
-
-  FConfig := AConfig;
-  FFilePath := AFilePath;
-  FFormat := AFormat;
-  FLastMtime := -1;
-  FLastSize := -1;
-  FillChar(FWatcher, SizeOf(FWatcher), 0);
-
-  LCanStat := GetFileStat(FLastMtime, FLastSize);
-  FActive := LCanStat and (platform_watch_create(FWatcher) = 0);
-  if FActive then
-  begin
-    FActive := platform_watch_add(FWatcher, PAnsiChar(FFilePath)) >= 0;
-    if not FActive then
-      platform_watch_close(FWatcher);
-  end;
-end;
-
-destructor TConfigWatcher.Destroy;
-begin
-  if FActive then
-    platform_watch_close(FWatcher);
-  inherited Destroy;
-end;
-
-function TConfigWatcher.GetFileMtime: Int64;
-var
-  LSize: Int64;
-begin
-  if not GetFileStat(Result, LSize) then
-    Result := -1;
-end;
-
-function TConfigWatcher.GetFileStat(out AMtime, ASize: Int64): Boolean;
-var
-  LStat: TPlatformFileStat;
-begin
-  Result := platform_file_stat(PAnsiChar(FFilePath), LStat) = 0;
-  if Result then
-  begin
-    AMtime := LStat.ModTime;
-    ASize := LStat.Size;
-  end
-  else
-  begin
-    AMtime := -1;
-    ASize := -1;
-  end;
-end;
-
-procedure TConfigWatcher.DoReload;
-var
-  LContent: string;
-  LConfig: TConfig;
-begin
-  LContent := ReadFileText(FFilePath);
-  LConfig := TConfig.Create;
-  try
-    case FFormat of
-      cfIni: LConfig.LoadFromIni(LContent);
-      cfJson: LConfig.LoadFromJson(LContent);
-      cfYaml: LConfig.LoadFromYaml(LContent);
-      cfToml: LConfig.LoadFromToml(LContent);
-    end;
-    FConfig.ReplaceFrom(LConfig);
-  finally
-    LConfig.Free;
-  end;
-end;
-
-function TConfigWatcher.CheckReload: Boolean;
-var
-  LEvent: TPlatformWatchEvent;
-  LMtime: Int64;
-  LSize: Int64;
-begin
-  Result := False;
-  if FActive then
-    platform_watch_poll(FWatcher, LEvent, 0);
-
-  if not GetFileStat(LMtime, LSize) then
-    Exit;
-  if (LMtime = FLastMtime) and (LSize = FLastSize) then
-    Exit;
-
-  DoReload;
-  FLastMtime := LMtime;
-  FLastSize := LSize;
-  if Assigned(FOnReload) then
-    FOnReload(FConfig);
-  Result := True;
+  Result := nextpas.core.config.builder.ConfigLoad(APath, AFormat);
 end;
 
 end.

@@ -49,6 +49,9 @@ type
     function ToSpan: TByteSpan; inline;
   end;
 
+function IndexOfStr(const AValue, ASubStr: string): PtrInt;
+function LastIndexOfStr(const AValue, ASubStr: string): PtrInt;
+
 implementation
 
 uses
@@ -58,6 +61,8 @@ uses
 
 class function TStringView.Create(const AData: PAnsiChar; const ALen: SizeUInt): TStringView;
 begin
+  if (ALen > 0) and (AData = nil) then
+    raise EInvalidArgument.Create('TStringView.Create: non-empty view has nil data');
   Result.FData := AData;
   Result.FLen := ALen;
 end;
@@ -70,8 +75,7 @@ end;
 
 class function TStringView.FromSpan(const ASpan: TByteSpan): TStringView;
 begin
-  Result.FData := PAnsiChar(ASpan.Data);
-  Result.FLen := ASpan.Len;
+  Result := Create(PAnsiChar(ASpan.Data), ASpan.Len);
 end;
 
 class function TStringView.Empty: TStringView;
@@ -86,6 +90,8 @@ begin
 end;
 
 function TStringView.Slice(const AOffset, ALength: SizeUInt): TStringView;
+var
+  LRemaining: SizeUInt;
 begin
   if AOffset >= FLen then
   begin
@@ -94,8 +100,9 @@ begin
     Exit;
   end;
   Result.FData := FData + AOffset;
-  if AOffset + ALength > FLen then
-    Result.FLen := FLen - AOffset
+  LRemaining := FLen - AOffset;
+  if ALength > LRemaining then
+    Result.FLen := LRemaining
   else
     Result.FLen := ALength;
 end;
@@ -381,6 +388,31 @@ end;
 function TStringView.ToSpan: TByteSpan;
 begin
   Result := TByteSpan.Create(PByte(FData), FLen);
+end;
+
+function IndexOfStr(const AValue, ASubStr: string): PtrInt;
+begin
+  Result := TStringView.FromStr(AValue).IndexOfStr(TStringView.FromStr(ASubStr));
+end;
+
+function LastIndexOfStr(const AValue, ASubStr: string): PtrInt;
+var
+  LValue: TStringView;
+  LNeedle: TStringView;
+  I: PtrInt;
+begin
+  LValue := TStringView.FromStr(AValue);
+  LNeedle := TStringView.FromStr(ASubStr);
+
+  if (LNeedle.Len = 0) or (LNeedle.Len > LValue.Len) then
+    Exit(-1);
+  if LNeedle.Len = 1 then
+    Exit(LValue.LastIndexOf(LNeedle.Data[0]));
+
+  for I := PtrInt(LValue.Len - LNeedle.Len) downto 0 do
+    if LValue.Slice(SizeUInt(I), LNeedle.Len).Equals(LNeedle) then
+      Exit(I);
+  Result := -1;
 end;
 
 end.

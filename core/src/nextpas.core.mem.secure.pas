@@ -16,9 +16,9 @@ uses
 
 {**
  * Securely zero memory to prevent sensitive data from remaining
- * in memory after use. Uses platform-specific secure zeroing if available.
+ * in memory after use through the platform-owned secure-zero seam.
  * 
- * This function ensures the compiler cannot optimize away the zeroing operation.
+ * This keeps backend selection inside nextpas.core.platform.memory.
  * 
  * @param Buffer Pointer to the buffer to zero
  * @param Size Size of the buffer in bytes
@@ -42,66 +42,11 @@ procedure SecureZeroString(var Str: AnsiString);
 implementation
 
 uses
-  {$IFDEF WINDOWS}
-  Windows
-  {$ELSE}
-  BaseUnix
-  {$ENDIF};
+  nextpas.core.platform.memory;
 
 procedure SecureZeroMemory(Buffer: Pointer; Size: NativeUInt);
-{$IFDEF WINDOWS}
-var
-  RtlSecureZeroMemory: procedure(Dest: Pointer; Length: NativeUInt); stdcall;
-  hNtdll: THandle;
-{$ENDIF}
 begin
-  if (Buffer = nil) or (Size = 0) then
-    Exit;
-
-  {$IFDEF WINDOWS}
-  // Prefer RtlSecureZeroMemory from ntdll.dll when available.
-  hNtdll := GetModuleHandle('ntdll.dll');
-  if hNtdll <> 0 then
-  begin
-    Pointer(RtlSecureZeroMemory) := GetProcAddress(hNtdll, 'RtlSecureZeroMemory');
-    if Assigned(RtlSecureZeroMemory) then
-    begin
-      RtlSecureZeroMemory(Buffer, Size);
-      Exit;
-    end;
-  end;
-
-  // Fallback: Fill and use an interlocked op as a barrier to discourage optimization.
-  FillChar(Buffer^, Size, 0);
-  InterlockedExchange(PLongInt(Buffer)^, PLongInt(Buffer)^);
-  {$ELSE}
-  // For Unix/Linux: Fill with zeros and add memory barrier
-  FillChar(Buffer^, Size, 0);
-
-  // Memory barrier to prevent compiler optimization
-  // This ensures the FillChar isn't optimized away
-  {$IFDEF CPUX86_64}
-  asm
-    mfence
-  end;
-  {$ENDIF}
-  {$IFDEF CPUI386}
-  asm
-    lock
-    addl $0, (%esp)
-  end;
-  {$ENDIF}
-  {$IFDEF CPUARM}
-  asm
-    dmb
-  end;
-  {$ENDIF}
-  {$IFDEF CPUAARCH64}
-  asm
-    dmb sy
-  end;
-  {$ENDIF}
-  {$ENDIF}
+  platform_secure_zero_memory(Buffer, Size);
 end;
 
 procedure SecureZeroBytes(var Data: TBytes);

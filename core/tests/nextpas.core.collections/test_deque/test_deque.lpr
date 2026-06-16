@@ -291,6 +291,95 @@ begin
   end;
 end;
 
+procedure TestReadOverwriteRangeOverflowPreservesContents;
+var
+  LD: TIntVecDeque;
+  LBuf: array[0..1] of Integer;
+  LRaised: Boolean;
+begin
+  LD := TIntVecDeque.Create;
+  try
+    LD.PushBack(10);
+    LD.PushBack(20);
+    LBuf[0] := 99;
+    LBuf[1] := 100;
+
+    LRaised := False;
+    try
+      LD.Read(High(SizeUInt), @LBuf[0], 2);
+    except
+      on E: EOutOfRange do
+        LRaised := True;
+    end;
+    Check(LRaised, 'overflowing read range should raise EOutOfRange');
+
+    LRaised := False;
+    try
+      LD.Overwrite(High(SizeUInt), @LBuf[0], 2);
+    except
+      on E: EOutOfRange do
+        LRaised := True;
+    end;
+    Check(LRaised, 'overflowing overwrite range should raise EOutOfRange');
+
+    CheckEqual(Int64(2), Int64(LD.Count), 'count preserved');
+    CheckEqual(Int64(10), Int64(LD.Get(0)), 'first element preserved');
+    CheckEqual(Int64(20), Int64(LD.Get(1)), 'second element preserved');
+  finally
+    LD.Free;
+  end;
+end;
+
+procedure TestDrainRangeHalfOpenAndBounds;
+var
+  LD: TIntVecDeque;
+  LIter: TIntVecDeque.TDrainIter;
+  LRaised: Boolean;
+begin
+  LD := TIntVecDeque.Create;
+  try
+    LD.PushBack(10);
+    LD.PushBack(20);
+    LD.PushBack(30);
+    LD.PushBack(40);
+
+    LIter := LD.DrainRange(1, 3);
+    Check(LIter.MoveNext, 'first drained element exists');
+    CheckEqual(Int64(20), Int64(LIter.Current), 'first drained value');
+    Check(LIter.MoveNext, 'second drained element exists');
+    CheckEqual(Int64(30), Int64(LIter.Current), 'second drained value');
+    Check(not LIter.MoveNext, 'half-open range drains exactly two elements');
+
+    CheckEqual(Int64(2), Int64(LD.Count), 'count after drain range');
+    CheckEqual(Int64(10), Int64(LD.Get(0)), 'front remains');
+    CheckEqual(Int64(40), Int64(LD.Get(1)), 'tail remains');
+
+    LRaised := False;
+    try
+      LD.DrainRange(2, 1);
+    except
+      on E: EOutOfRange do
+        LRaised := True;
+    end;
+    Check(LRaised, 'reversed drain range should raise EOutOfRange');
+
+    LRaised := False;
+    try
+      LD.DrainRange(0, 3);
+    except
+      on E: EOutOfRange do
+        LRaised := True;
+    end;
+    Check(LRaised, 'over-end drain range should raise EOutOfRange');
+
+    CheckEqual(Int64(2), Int64(LD.Count), 'count preserved after failed drains');
+    CheckEqual(Int64(10), Int64(LD.Get(0)), 'front preserved after failed drains');
+    CheckEqual(Int64(40), Int64(LD.Get(1)), 'tail preserved after failed drains');
+  finally
+    LD.Free;
+  end;
+end;
+
 procedure TestInsertThenPushBackIntegrity;
 var
   LD: TIntVecDeque;
@@ -555,6 +644,8 @@ begin
   T.Run('AppendFrom self range copies snapshot', @TestAppendFromSelfRangeCopiesSnapshot);
   T.Run('InsertFrom self pointer copies snapshot', @TestInsertFromSelfPointerCopiesSnapshot);
   T.Run('AppendFrom range overflow raises', @TestAppendFromRangeOverflowRaises);
+  T.Run('Read/Overwrite range overflow preserves contents', @TestReadOverwriteRangeOverflowPreservesContents);
+  T.Run('DrainRange half-open and bounds', @TestDrainRangeHalfOpenAndBounds);
   T.Run('Insert then PushBack integrity', @TestInsertThenPushBackIntegrity);
   T.Run('RemoveAt then PushBack integrity', @TestRemoveAtThenPushBackIntegrity);
   T.Run('SwapRemoveAt then PushBack', @TestSwapRemoveAtThenPushBack);

@@ -5,7 +5,7 @@ unit nextpas.core.tls.openssl.api.err;
 interface
 
 uses
-  SysUtils, DynLibs,
+  nextpas.core.text.conv, DynLibs,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,

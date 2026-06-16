@@ -5,16 +5,53 @@ program test_list;
 uses
   SysUtils,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
+  nextpas.core.mem.intf,
+  failing_allocator,
   nextpas.core.collections,
   nextpas.core.collections.base,
+  nextpas.core.collections.list,
   nextpas.core.collections.list.intf;
 
 type
   IIntList = specialize IList<Integer>;
+  TIntList = specialize TList<Integer>;
+  TManagedRecord = record
+    Initialized: Boolean;
+    Id: Int32;
+    class operator Initialize(var ARecord: TManagedRecord);
+    class operator Finalize(var ARecord: TManagedRecord);
+  end;
+  TManagedRecordList = specialize TList<TManagedRecord>;
 
 var
   T: TTestRunner;
+  GManagedRecordAlive: Int32 = 0;
+  GManagedRecordBadFinalize: Int32 = 0;
+
+class operator TManagedRecord.Initialize(var ARecord: TManagedRecord);
+begin
+  ARecord.Initialized := True;
+  ARecord.Id := 0;
+  Inc(GManagedRecordAlive);
+end;
+
+class operator TManagedRecord.Finalize(var ARecord: TManagedRecord);
+begin
+  if not ARecord.Initialized then
+    Inc(GManagedRecordBadFinalize)
+  else
+  begin
+    ARecord.Initialized := False;
+    Dec(GManagedRecordAlive);
+  end;
+end;
+
+function MakeManagedRecord(AId: Int32): TManagedRecord;
+begin
+  Result.Id := AId;
+end;
 
 procedure TestPushFrontPopFront;
 var
@@ -133,6 +170,32 @@ begin
   CheckEqual('hello', LVal, 'string value');
 end;
 
+procedure TestManagedZeroReinitializesSlots;
+var
+  LL: TManagedRecordList;
+begin
+  GManagedRecordAlive := 0;
+  GManagedRecordBadFinalize := 0;
+  LL := TManagedRecordList.Create;
+  try
+    LL.PushBack(MakeManagedRecord(10));
+    LL.PushBack(MakeManagedRecord(20));
+    CheckEqual(Int64(2), Int64(GManagedRecordAlive), 'records alive after push');
+
+    LL.Zero;
+    CheckEqual(Int64(2), Int64(GManagedRecordAlive), 'zero reinitializes managed slots');
+    CheckEqual(Int64(0), Int64(GManagedRecordBadFinalize), 'zero does not finalize uninitialized slots');
+
+    LL.Clear;
+    CheckEqual(Int64(0), Int64(GManagedRecordAlive), 'clear releases zeroed records once');
+    CheckEqual(Int64(0), Int64(GManagedRecordBadFinalize), 'clear does not double-finalize zeroed records');
+  finally
+    LL.Free;
+  end;
+  CheckEqual(Int64(0), Int64(GManagedRecordAlive), 'records released after list free');
+  CheckEqual(Int64(0), Int64(GManagedRecordBadFinalize), 'no bad finalize after list free');
+end;
+
 procedure TestTryLoadFromTryAppend;
 var
   LL: IIntList;
@@ -153,6 +216,78 @@ begin
   CheckEqual(Int64(5), Int64(LL.GetCount), 'appended count');
 end;
 
+procedure TestSerializeNilPositiveCountRaises;
+var
+  LL: TIntList;
+  LRaised: Boolean;
+begin
+  LL := TIntList.Create;
+  try
+    LL.PushBack(10);
+
+    LRaised := False;
+    try
+      LL.SerializeToArrayBuffer(nil, 1);
+    except
+      on E: EArgumentNil do
+        LRaised := True;
+    end;
+    Check(LRaised, 'serialize nil destination raises');
+  finally
+    LL.Free;
+  end;
+end;
+
+procedure TestSerializeCountPastEndRaises;
+var
+  LL: TIntList;
+  LOut: Integer;
+  LRaised: Boolean;
+begin
+  LL := TIntList.Create;
+  try
+    LL.PushBack(10);
+    LRaised := False;
+    try
+      LL.SerializeToArrayBuffer(@LOut, 2);
+    except
+      on E: EOutOfRange do
+        LRaised := True;
+    end;
+    Check(LRaised, 'serialize count past end raises');
+  finally
+    LL.Free;
+  end;
+end;
+
+procedure TestPushBackBlockRegistryAllocationFailureIsAtomic;
+var
+  LL: TIntList;
+  LAllocator: IAllocator;
+  LAlloc: TFailingAllocatorSnapshot;
+  LCaught: Boolean;
+begin
+  LAllocator := MakeFailingAllocator(2);
+  LL := TIntList.Create(LAllocator);
+  try
+    LCaught := False;
+    try
+      LL.PushBack(10);
+    except
+      on E: EOutOfMemoryError do
+        LCaught := True;
+    end;
+
+    Check(LCaught, 'node block registry allocation failure raises canonical OOM');
+    CheckEqual(Int64(0), Int64(LL.GetCount), 'failed push keeps count unchanged');
+    LAlloc := FailingAllocatorSnapshot;
+    CheckEqual(Int64(2), Int64(LAlloc.GetMemCalls), 'failure happened on second GetMem');
+    CheckEqual(Int64(1), Int64(LAlloc.FreeMemCalls), 'allocated node block released after registry failure');
+  finally
+    LL.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.list');
   T.Run('PushFront/PopFront', @TestPushFrontPopFront);
@@ -163,6 +298,10 @@ begin
   T.Run('Mixed Push/Pop', @TestMixedPushPop);
   T.Run('Clear', @TestClear);
   T.Run('String type (leak check)', @TestStringType);
+  T.Run('Managed Zero reinitializes slots', @TestManagedZeroReinitializesSlots);
   T.Run('TryLoadFrom/TryAppend', @TestTryLoadFromTryAppend);
+  T.Run('SerializeToArrayBuffer nil positive count raises', @TestSerializeNilPositiveCountRaises);
+  T.Run('SerializeToArrayBuffer count past end raises', @TestSerializeCountPastEndRaises);
+  T.Run('PushBack block registry allocation failure is atomic', @TestPushBackBlockRegistryAllocationFailureIsAtomic);
   T.Summary;
 end.

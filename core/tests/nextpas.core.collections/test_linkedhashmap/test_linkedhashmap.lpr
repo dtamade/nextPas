@@ -4,15 +4,20 @@ program test_linkedhashmap;
 
 uses
   SysUtils,
+  leak_tracker,
   nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.collections,
+  nextpas.core.collections.base,
   nextpas.core.collections.linkedhashmap.intf,
   nextpas.core.collections.linkedhashmap;
 
 type
   IIntStrMap = specialize ILinkedHashMap<Integer, string>;
   TIntStrMap = specialize TLinkedHashMap<Integer, string>;
+  TIntStrEntry = specialize TMapEntry<Integer, string>;
+  TIntTrackedMap = specialize TLinkedHashMap<Integer, ITracked>;
+  TIntTrackedEntry = specialize TMapEntry<Integer, ITracked>;
 
 var
   T: TTestRunner;
@@ -146,6 +151,96 @@ begin
   Check(LRaised, 'checked get missing raises');
 end;
 
+function KeepEntryWithKeyOne(const AEntry: TIntTrackedEntry; AData: Pointer): Boolean;
+begin
+  Result := AEntry.Key = 1;
+end;
+
+function EntryEqualsKeyAndValue(const ALeft, ARight: TIntStrEntry; AData: Pointer): Boolean;
+begin
+  Result := (ALeft.Key = ARight.Key) and (ALeft.Value = ARight.Value);
+end;
+
+procedure TestInheritedReplaceKeepsBackingMapInSync;
+var
+  LM: TIntStrMap;
+  LOldEntry: TIntStrEntry;
+  LNewEntry: TIntStrEntry;
+  LPair: specialize TPair<Integer, string>;
+  LValue: string;
+begin
+  LM := TIntStrMap.Create;
+  try
+    LM.Put(1, 'one');
+    LM.Put(2, 'two');
+
+    LOldEntry.Key := 1;
+    LOldEntry.Value := 'one';
+    LNewEntry.Key := 1;
+    LNewEntry.Value := 'ONE';
+    LM.Replace(LOldEntry, LNewEntry, @EntryEqualsKeyAndValue, nil);
+
+    Check(LM.TryGetValue(1, LValue), 'replace backing map still finds key 1');
+    CheckEqual('ONE', LValue, 'replace updates backing map value');
+
+    Check(LM.TryGetFirst(LPair), 'replace linked node still has first pair');
+    CheckEqual('ONE', LPair.Value, 'replace updates linked node value');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure RunInheritedReplaceIfManagedScenario(ASnap: TLeakSnapshot);
+var
+  LM: TIntTrackedMap;
+  LEntry: TIntTrackedEntry;
+  LPair: specialize TPair<Integer, ITracked>;
+  LValue: ITracked;
+begin
+  LM := TIntTrackedMap.Create;
+  try
+    LValue := MakeTracked(10);
+    LM.Put(1, LValue);
+    LValue := nil;
+
+    LValue := MakeTracked(30);
+    LM.Put(2, LValue);
+    LValue := nil;
+
+    LEntry.Key := 1;
+    LEntry.Value := MakeTracked(20);
+    LM.ReplaceIf(LEntry, @KeepEntryWithKeyOne, nil);
+    LEntry.Value := nil;
+
+    Check(LM.TryGetValue(1, LValue), 'replaceif backing map still finds key 1');
+    CheckEqual(Int64(20), Int64(LValue.GetId), 'replaceif updates backing map value');
+    LValue := nil;
+
+    Check(LM.TryGetFirst(LPair), 'replaceif linked node still has first pair');
+    CheckEqual(Int64(20), Int64(LPair.Value.GetId), 'replaceif updates linked node value');
+    LPair.Value := nil;
+
+    LM.Retain(@KeepEntryWithKeyOne, nil);
+    CheckEqual(Int64(1), Int64(GTrackedAlive - ASnap), 'retain releases removed and replaced values');
+
+    LM.Clear;
+    LEntry := Default(TIntTrackedEntry);
+    LPair := Default(specialize TPair<Integer, ITracked>);
+    LValue := nil;
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestInheritedReplaceIfKeepsBackingMapInSync;
+var
+  Snap: TLeakSnapshot;
+begin
+  Snap := SnapTake;
+  RunInheritedReplaceIfManagedScenario(Snap);
+  SnapAssert(Snap, 'LinkedHashMap inherited ReplaceIf keeps backing map in sync');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.linkedhashmap');
   T.Run('Put and Get', @TestPutAndGet);
@@ -157,5 +252,7 @@ begin
   T.Run('AddOrAssign', @TestAddOrAssign);
   T.Run('Clear', @TestClear);
   T.Run('Checked Get', @TestCheckedGet);
+  T.Run('Inherited Replace keeps backing map in sync', @TestInheritedReplaceKeepsBackingMapInSync);
+  T.Run('Inherited ReplaceIf keeps backing map in sync', @TestInheritedReplaceIfKeepsBackingMapInSync);
   T.Summary;
 end.

@@ -11,7 +11,7 @@ unit nextpas.core.tls.freepascal.earlydatareplay.fileprovider;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils, Classes, nextpas.core.fs,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.context.material,
   nextpas.core.tls.freepascal.earlydatareplay,
@@ -149,14 +149,14 @@ function TFreePascalFileEarlyDataReplayStore.FileExistsAt(
   const AFileName: string
 ): Boolean;
 begin
-  Result := (AFileName <> '') and FileExists(AFileName);
+  Result := (AFileName <> '') and nextpas.core.fs.IsFile(AFileName);
 end;
 
 function TFreePascalFileEarlyDataReplayStore.DeleteFileAt(
   const AFileName: string
 ): Boolean;
 begin
-  Result := (AFileName <> '') and DeleteFile(AFileName);
+  Result := (AFileName <> '') and nextpas.core.fs.Remove(AFileName);
 end;
 
 function TFreePascalFileEarlyDataReplayStore.RenameFileAt(
@@ -165,7 +165,7 @@ function TFreePascalFileEarlyDataReplayStore.RenameFileAt(
 ): Boolean;
 begin
   Result := (ASourceFileName <> '') and (ADestFileName <> '') and
-    RenameFile(ASourceFileName, ADestFileName);
+    nextpas.core.fs.Rename(ASourceFileName, ADestFileName);
 end;
 
 function TFreePascalFileEarlyDataReplayStore.OpenReadFileStream(
@@ -217,7 +217,7 @@ begin
     Exit;
 
   LDir := ExtractFileDir(LLockFileName);
-  if (LDir <> '') and (not ForceDirectories(LDir)) then
+  if (LDir <> '') and (not nextpas.core.fs.MkdirAll(LDir)) then
     Exit;
 
   for LAttempt := 1 to 2 do
@@ -378,7 +378,7 @@ begin
     Exit;
 
   LDir := ExtractFileDir(FFileName);
-  if (LDir <> '') and (not ForceDirectories(LDir)) then
+  if (LDir <> '') and (not nextpas.core.fs.MkdirAll(LDir)) then
     Exit;
 
   LTempFileName := GetTempFileName;

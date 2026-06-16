@@ -139,6 +139,23 @@ count reclamation；安全边界依赖 single-consumer contract，以及销毁�
 `TSegQueue<T>` 使用 EBR 保护 segment 链表。head segment 前移后，旧 segment 通过 `TEbrDomain.Retire`
 延迟回收，因此 callers 只应通过 public queue surface 访问节点，不得缓存内部 segment 指针。
 
+### EBR Collect 安全约束
+
+`TEbrDomain.Collect` 在回收前检查 `FActiveCount == 0`，但此检查与实际回收之间存在时间窗口：
+另一个线程可能在此窗口内 `Enter`（增加 FActiveCount）并 `Retire` 新节点。
+
+当前设计在以下条件下安全：
+
+1. **Retire 前已从公开 root set unlink**：被 retire 的 segment 从 `FHead` 链表中移除后，新进入者
+   只能从当前 `FHead` 开始遍历，无法获取已 unlink 的旧 segment。
+2. **Guard 先于 retire 建立**：`TSegQueue<T>.TryDequeue` 先 `Enter`（获取 guard），再操作 segment，
+   确保 retire 的节点在 guard 存在期间不会被回收。
+3. **Caller 不得缓存内部指针**：只通过 queue public API 访问数据，不持有 segment 指针跨操作。
+
+**扩展警告**：如果未来将 EBR 推广到 "retired node 对未来进入者仍可达" 的结构，必须实现完整
+epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-check + 无 epoch 推进）仅适用于
+"retire 前已从 root set unlink" 的场景。
+
 ## Close/Destroy discipline
 
 `TSpscQueue<T>` 和 `TMpmcQueue<T>` 的 `Close` 会设置 closed flag 并唤醒 data/space waiters。close 后

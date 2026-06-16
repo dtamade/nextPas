@@ -11,6 +11,9 @@ function WyHashStr32(const S: AnsiString; ASeed: UInt64 = 0): UInt32; inline;
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 const
   WY_P0 = UInt64($a0761d6478bd642f);
   WY_P1 = UInt64($e7037ed1a0b428db);
@@ -33,12 +36,24 @@ end;
 
 function WyR8(p: PByte): UInt64; inline;
 begin
-  Result := PUInt64(p)^;
+  Result :=
+    UInt64(p[0]) or
+    (UInt64(p[1]) shl 8) or
+    (UInt64(p[2]) shl 16) or
+    (UInt64(p[3]) shl 24) or
+    (UInt64(p[4]) shl 32) or
+    (UInt64(p[5]) shl 40) or
+    (UInt64(p[6]) shl 48) or
+    (UInt64(p[7]) shl 56);
 end;
 
 function WyR4(p: PByte): UInt64; inline;
 begin
-  Result := PUInt32(p)^;
+  Result :=
+    UInt64(p[0]) or
+    (UInt64(p[1]) shl 8) or
+    (UInt64(p[2]) shl 16) or
+    (UInt64(p[3]) shl 24);
 end;
 
 function WyR3(p: PByte; k: SizeUInt): UInt64; inline;
@@ -49,10 +64,13 @@ end;
 function WyHash(const AData: Pointer; ALen: SizeUInt; ASeed: UInt64): UInt64;
 var
   p: PByte;
-  a, b, seed: UInt64;
+  a, b, seed, see1, see2: UInt64;
   i: SizeUInt;
 begin
   {$PUSH}{$Q-}{$R-}
+  if (ALen > 0) and (AData = nil) then
+    raise EArgumentError.Create('WyHash: AData is nil with ALen > 0');
+
   p := PByte(AData);
   seed := ASeed xor WY_P0;
 
@@ -74,10 +92,10 @@ begin
       b := 0;
     end;
   end
-  else if ALen <= 48 then
+  else if ALen < 48 then
   begin
     i := 0;
-    while i + 16 <= ALen do
+    while i + 16 < ALen do
     begin
       seed := WyMix(WyR8(p + i) xor WY_P1, WyR8(p + i + 8) xor seed);
       Inc(i, 16);
@@ -87,15 +105,18 @@ begin
   end
   else
   begin
+    see1 := seed;
+    see2 := seed;
     i := 0;
     while i + 48 <= ALen do
     begin
       seed := WyMix(WyR8(p + i) xor WY_P1, WyR8(p + i + 8) xor seed);
-      seed := WyMix(WyR8(p + i + 16) xor WY_P2, WyR8(p + i + 24) xor seed);
-      seed := WyMix(WyR8(p + i + 32) xor WY_P3, WyR8(p + i + 40) xor seed);
+      see1 := WyMix(WyR8(p + i + 16) xor WY_P2, WyR8(p + i + 24) xor see1);
+      see2 := WyMix(WyR8(p + i + 32) xor WY_P3, WyR8(p + i + 40) xor see2);
       Inc(i, 48);
     end;
-    while i + 16 <= ALen do
+    seed := seed xor see1 xor see2;
+    while i + 16 < ALen do
     begin
       seed := WyMix(WyR8(p + i) xor WY_P1, WyR8(p + i + 8) xor seed);
       Inc(i, 16);
@@ -111,7 +132,7 @@ end;
 function WyHashStr(const S: AnsiString; ASeed: UInt64): UInt64;
 begin
   if Length(S) = 0 then
-    Result := WyMix(ASeed xor WY_P0, WY_P1)
+    Result := WyHash(nil, 0, ASeed)
   else
     Result := WyHash(@S[1], SizeUInt(Length(S)), ASeed);
 end;

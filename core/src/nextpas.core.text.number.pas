@@ -138,7 +138,9 @@ function ParseUInt64(const AData: PAnsiChar; const ALen: SizeUInt;
 var
   I: SizeUInt;
   D: Int32;
-  LPrev: UInt64;
+const
+  MAX_DIV_10 = High(UInt64) div 10;
+  MAX_MOD_10 = High(UInt64) mod 10;
 begin
   AValue := 0;
   if ALen = 0 then
@@ -146,12 +148,18 @@ begin
   for I := 0 to ALen - 1 do
   begin
     if not IsDigit(Byte(AData[I])) then
+    begin
+      AValue := 0;
       Exit(False);
+    end;
     D := Byte(AData[I]) - Ord('0');
-    LPrev := AValue;
-    AValue := AValue * 10 + UInt64(D);
-    if AValue < LPrev then
+    if (AValue > MAX_DIV_10) or
+       ((AValue = MAX_DIV_10) and (UInt64(D) > MAX_MOD_10)) then
+    begin
+      AValue := 0;
       Exit(False);
+    end;
+    AValue := AValue * 10 + UInt64(D);
   end;
   Result := True;
 end;
@@ -293,14 +301,74 @@ function ParseDoubleFallback(const AData: PAnsiChar; const ALen: SizeUInt;
 var
   LBuf: array[0..1023] of AnsiChar;
   LCode: Integer;
-  LActualLen: SizeUInt;
+  LValue: Double;
 begin
-  LActualLen := ALen;
-  if LActualLen > 1023 then LActualLen := 1023;
-  Move(AData^, LBuf[0], LActualLen);
-  LBuf[LActualLen] := #0;
-  Val(PAnsiChar(@LBuf[0]), AValue, LCode);
-  Result := LCode = 0;
+  AValue := 0.0;
+  if ALen > 1023 then
+    Exit(False);
+  Move(AData^, LBuf[0], ALen);
+  LBuf[ALen] := #0;
+  try
+    Val(PAnsiChar(@LBuf[0]), LValue, LCode);
+  except
+    Exit(False);
+  end;
+  if (LCode <> 0) or DoubleIsInf(LValue) or DoubleIsNaN(LValue) then
+    Exit(False);
+  AValue := LValue;
+  Result := True;
+end;
+
+function UInt64DecimalDigits(const AValue: UInt64): Int32; inline;
+var
+  LValue: UInt64;
+begin
+  Result := 1;
+  LValue := AValue;
+  while LValue >= 10 do
+  begin
+    LValue := LValue div 10;
+    Inc(Result);
+  end;
+end;
+
+function DecimalMagnitudeOverflowsDouble(const AMant: UInt64;
+  const AExp10: Int32): Boolean;
+const
+  MAX_DOUBLE_SCI_EXP10 = 308;
+  MAX_DOUBLE_SIG17 = UInt64(17976931348623157);
+var
+  LDigits: Int32;
+  LSciExp: Int32;
+  LSig: UInt64;
+  LTrimmedNonZero: Boolean;
+begin
+  if AMant = 0 then
+    Exit(False);
+
+  LDigits := UInt64DecimalDigits(AMant);
+  LSciExp := AExp10 + LDigits - 1;
+  if LSciExp > MAX_DOUBLE_SCI_EXP10 then
+    Exit(True);
+  if LSciExp < MAX_DOUBLE_SCI_EXP10 then
+    Exit(False);
+
+  LSig := AMant;
+  LTrimmedNonZero := False;
+  while LDigits > 17 do
+  begin
+    LTrimmedNonZero := LTrimmedNonZero or ((LSig mod 10) <> 0);
+    LSig := LSig div 10;
+    Dec(LDigits);
+  end;
+  while LDigits < 17 do
+  begin
+    LSig := LSig * 10;
+    Inc(LDigits);
+  end;
+
+  Result := (LSig > MAX_DOUBLE_SIG17) or
+    ((LSig = MAX_DOUBLE_SIG17) and LTrimmedNonZero);
 end;
 
 function ParseDouble(const AData: PAnsiChar; const ALen: SizeUInt;
@@ -312,7 +380,8 @@ var
   LExp: Int32;
   LExpNeg: Boolean;
   LExpVal: Int32;
-  LHasDot: Boolean;
+  LHasExpDigit: Boolean;
+  LHasFracDigit: Boolean;
   LFracDigits: Int32;
 begin
   AValue := 0.0;
@@ -332,13 +401,13 @@ begin
   if LPos >= ALen then
     Exit(False);
 
-  if (ALen - LPos >= 3) and (AData[LPos] = 'N') and
+  if (ALen - LPos = 3) and (AData[LPos] = 'N') and
      (AData[LPos+1] = 'a') and (AData[LPos+2] = 'N') then
   begin
     AValue := 0.0 / 0.0;
     Exit(True);
   end;
-  if (ALen - LPos >= 8) and (AData[LPos] = 'I') and (AData[LPos+1] = 'n') and
+  if (ALen - LPos = 8) and (AData[LPos] = 'I') and (AData[LPos+1] = 'n') and
      (AData[LPos+2] = 'f') and (AData[LPos+3] = 'i') and (AData[LPos+4] = 'n') and
      (AData[LPos+5] = 'i') and (AData[LPos+6] = 't') and (AData[LPos+7] = 'y') then
   begin
@@ -350,7 +419,7 @@ begin
   end;
 
   LMant := 0;
-  LHasDot := False;
+  LHasFracDigit := False;
   LFracDigits := 0;
 
   if not IsDigit(Byte(AData[LPos])) then
@@ -367,10 +436,10 @@ begin
 
   if (LPos < ALen) and (AData[LPos] = '.') then
   begin
-    LHasDot := True;
     Inc(LPos);
     while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
     begin
+      LHasFracDigit := True;
       if LMant < UInt64(1844674407370955161) then
       begin
         LMant := LMant * 10 + UInt64(Byte(AData[LPos]) - Ord('0'));
@@ -378,6 +447,8 @@ begin
       end;
       Inc(LPos);
     end;
+    if not LHasFracDigit then
+      Exit(False);
   end;
 
   LExpVal := 0;
@@ -390,18 +461,27 @@ begin
       if AData[LPos] = '-' then begin LExpNeg := True; Inc(LPos); end
       else if AData[LPos] = '+' then Inc(LPos);
     end;
+    LHasExpDigit := False;
     while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
     begin
+      LHasExpDigit := True;
       LExpVal := LExpVal * 10 + (Byte(AData[LPos]) - Ord('0'));
       if LExpVal > 999 then
         Exit(False);
       Inc(LPos);
     end;
+    if not LHasExpDigit then
+      Exit(False);
     if LExpNeg then
       LExpVal := -LExpVal;
   end;
 
   LExp := LExpVal - LFracDigits;
+  if DecimalMagnitudeOverflowsDouble(LMant, LExp) then
+  begin
+    AValue := 0.0;
+    Exit(False);
+  end;
 
   if LPos <> ALen then
     Exit(False);

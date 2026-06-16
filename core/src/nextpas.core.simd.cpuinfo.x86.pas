@@ -121,6 +121,33 @@ begin
 end;
 
 // Backward-compat wrappers
+function CurrentX86GenericUsableFeatures(constref aX86: TX86Features): TGenericFeatureSet; inline;
+var
+  LEAX: DWord;
+  LEBX: DWord;
+  LECX: DWord;
+  LEDX: DWord;
+  LOSXSAVE: Boolean;
+  LXCR0: UInt64;
+begin
+  LEAX := 0;
+  LEBX := 0;
+  LECX := 0;
+  LEDX := 0;
+  LOSXSAVE := False;
+  LXCR0 := 0;
+
+  if HasCPUID then
+  begin
+    CPUID(1, LEAX, LEBX, LECX, LEDX);
+    LOSXSAVE := (LECX and (1 shl 27)) <> 0;
+    if LOSXSAVE then
+      LXCR0 := ReadXCR0;
+  end;
+
+  Result := X86GenericUsableFeatures(aX86, LOSXSAVE, LXCR0);
+end;
+
 function HasSSE: Boolean; inline;
 var F: TX86Features;
 begin
@@ -136,17 +163,23 @@ begin
 end;
 
 function HasAVX: Boolean; inline;
-var F: TX86Features;
+var
+  F: TX86Features;
+  LUsable: TGenericFeatureSet;
 begin
   F := DetectX86Features;
-  Result := F.HasAVX;
+  LUsable := CurrentX86GenericUsableFeatures(F);
+  Result := F.HasAVX and (gfSimd256 in LUsable);
 end;
 
 function HasAVX2: Boolean; inline;
-var F: TX86Features;
+var
+  F: TX86Features;
+  LUsable: TGenericFeatureSet;
 begin
   F := DetectX86Features;
-  Result := F.HasAVX2;
+  LUsable := CurrentX86GenericUsableFeatures(F);
+  Result := F.HasAVX2 and (gfSimd256 in LUsable);
 end;
 
 function GetVendorString: string; inline;

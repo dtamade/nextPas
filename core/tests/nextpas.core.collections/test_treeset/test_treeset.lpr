@@ -4,18 +4,29 @@ program test_treeset;
 
 uses
   SysUtils,
+  Classes,
   nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.collections,
+  nextpas.core.collections.tree_set,
   nextpas.core.collections.tree_set.intf,
   nextpas.core.collections.linkedhashset.intf;
 
 type
   IIntTreeSet = specialize ITreeSet<Integer>;
   IIntLinkedHashSet = specialize ILinkedHashSet<Integer>;
+  TInspectableIntTreeSet = class(specialize TTreeSet<Integer>)
+  public
+    procedure CopyToBuffer(aDst: Pointer; aCount: SizeUInt);
+  end;
 
 var
   T: TTestRunner;
+
+procedure TInspectableIntTreeSet.CopyToBuffer(aDst: Pointer; aCount: SizeUInt);
+begin
+  SerializeToArrayBuffer(aDst, aCount);
+end;
 
 procedure TestTreeSetBasic;
 var
@@ -170,6 +181,89 @@ begin
   CheckEqual(Int64(1), Int64(LSet.Count), 'usable after clear');
 end;
 
+procedure TestTreeSetRemoveAllThenFreeReleasesPoolBlocks;
+var
+  LSet: IIntTreeSet;
+  i: Integer;
+begin
+  LSet := specialize MakeTreeSet<Integer>;
+  for i := 0 to 599 do
+    LSet.Add(i);
+  for i := 0 to 599 do
+    Check(LSet.Remove(i), 'remove inserted item');
+  CheckEqual(Int64(0), Int64(LSet.Count), 'count after remove all');
+  LSet := nil;
+end;
+
+procedure TestRBTreeClearReleasesPoolWhenRootEmpty;
+const
+  SourcePath = '../../../src/nextpas.core.collections.tree.rb.pas';
+var
+  Source: TStringList;
+begin
+  Source := TStringList.Create;
+  try
+    Source.LoadFromFile(SourcePath);
+    Check(Pos('if FRoot = @FSentinel then Exit;', Source.Text) = 0,
+      'RBTree Clear must release pool blocks even when root is empty');
+  finally
+    Source.Free;
+  end;
+end;
+
+procedure TestTreeSetSerializeRespectsCount;
+var
+  LSet: TInspectableIntTreeSet;
+  LOut: array[0..1] of Integer;
+begin
+  LSet := TInspectableIntTreeSet.Create;
+  try
+    LSet.Add(10);
+    LSet.Add(20);
+    LOut[0] := -1;
+    LOut[1] := -1;
+
+    LSet.CopyToBuffer(@LOut[0], 1);
+
+    CheckEqual(Int64(10), Int64(LOut[0]), 'serialized first item');
+    CheckEqual(Int64(-1), Int64(LOut[1]), 'serialize count should not write past request');
+  finally
+    LSet.Free;
+  end;
+end;
+
+procedure TestTreeSetSerializeErrors;
+var
+  LSet: TInspectableIntTreeSet;
+  LOut: Integer;
+  LRaised: Boolean;
+begin
+  LSet := TInspectableIntTreeSet.Create;
+  try
+    LSet.Add(10);
+
+    LRaised := False;
+    try
+      LSet.CopyToBuffer(nil, 1);
+    except
+      on E: EArgumentNil do
+        LRaised := True;
+    end;
+    Check(LRaised, 'serialize nil destination raises');
+
+    LRaised := False;
+    try
+      LSet.CopyToBuffer(@LOut, 2);
+    except
+      on E: EOutOfRange do
+        LRaised := True;
+    end;
+    Check(LRaised, 'serialize count past end raises');
+  finally
+    LSet.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.treeset');
   T.Run('TreeSet basic add/contains', @TestTreeSetBasic);
@@ -177,6 +271,10 @@ begin
   T.Run('TreeSet Min/Max', @TestTreeSetMinMax);
   T.Run('TreeSet empty boundary', @TestTreeSetEmptyBoundary);
   T.Run('TreeSet clear', @TestTreeSetClear);
+  T.Run('TreeSet remove all then free releases pool blocks', @TestTreeSetRemoveAllThenFreeReleasesPoolBlocks);
+  T.Run('RBTree Clear releases pool when root empty', @TestRBTreeClearReleasesPoolWhenRootEmpty);
+  T.Run('TreeSet SerializeToArrayBuffer respects count', @TestTreeSetSerializeRespectsCount);
+  T.Run('TreeSet SerializeToArrayBuffer errors', @TestTreeSetSerializeErrors);
   T.Run('TreeSet LowerBound/UpperBound', @TestTreeSetBounds);
   T.Run('TreeSet Union', @TestTreeSetUnion);
   T.Run('TreeSet Intersect', @TestTreeSetIntersect);

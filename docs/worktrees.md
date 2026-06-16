@@ -49,6 +49,23 @@ API、性能或架构质量，必须修正依赖模块或底座 contract，可�
 net、async、mem、base 等底层接口不顺、语义错误或性能路径不合理，应通过受控跨模块修改推动底层收敛，
 而不是在高层长期保留 workaround。最终 landing 时由验证和设计说明来判断哪套方案更合理。
 
+### Lane 命名一致性
+
+Lane 的 worktree 目录名、branch 名和实际责任范围必须保持一致：
+
+- worktree 目录推荐：`.worktrees/<module-or-line>`，例如 `core-http`、`core-platform`、`compiler`。
+- branch 推荐：`codex/<module-or-line>`，与目录同名。
+- 实际责任范围必须能由名字直接判断：`core-net-async-io` 只做 net + async + io 三模块的协同；
+  `core-config-formats` 不应该长期做 yaml-allocator 改造之外的工作；
+  `core-text-unicode` 不应该顺手做 strutils。
+- 如果一个 lane 实际工作范围在多 slice 间漂移到名字之外，必须做以下之一：
+  1. 在 `Ready` 报告里说明这是受控跨模块修改，并附 design reason；
+  2. 把超范围的 commit 拆出 cherry-pick 到独立 landing 候选分支；
+  3. 用 `archive/<lane>-pre-rename-YYYYMMDD` tag 后归档旧 lane，重新开命名一致的新 lane。
+
+历史上已经命名错位的 lane（例如 branch `codex/yaml-allocator` 实际承载 TOML audit）应在下一次
+自然 landing 节点修正，不要继续累积。
+
 ## 创建模块 Worktree
 
 使用项目脚本：
@@ -94,9 +111,11 @@ claude
 scripts/worktree-audit.sh
 ```
 
-审计会列出每个 linked worktree、所在分支、是否 dirty，以及是否位于项目本地
-`.worktrees/` 目录内。任何非 `main` 的 linked worktree 如果不在 `.worktrees/`
-下，都属于规范违规。
+审计会列出每个 linked worktree、所在分支、是否 dirty、是否位于项目本地
+`.worktrees/` 目录内，以及相对默认基线分支（优先 `main`，否则 `master`）的
+`ahead` / `behind` 计数。任何非 `main` 的 linked worktree 如果不在 `.worktrees/`
+下，都属于规范违规；任何准备进入 landing 的分支如果 `behind` 不是 `0`，必须先
+基于当前主线 rebase、merge 或 replay，并重新跑 focused verification。
 
 以下场景必须先跑审计：
 
@@ -170,18 +189,182 @@ make hygiene
 <当前任务无关的 active 模块、dirty worktree、生成物、控制文件等>
 ```
 
+## Main Sync 节奏
+
+Lane 长期偏离 main 会让 raw merge debt 累积，最终 landing 成本越来越高。约束：
+
+- Lane 落后 main 超过 **50 commit** 时必须停下来评估同步策略，不要继续叠新 slice。
+- Lane 落后 main 超过 **100 commit** 时算 sync debt，必须在下一次 `Ready` 报告里说明计划
+  （rebase / merge / 等下次 landing 时一并处理 / archive 后重开新 lane）。
+- Lane 自己执行 `git merge main` 是 **临时手段**，每次 merge 会留下一个 merge commit 把
+  上游真相拉进 lane，但同时让 lane HEAD 不再是 main 的简单后裔，后续 ff-only landing 变难。
+  优先选择 cherry-pick 到 landing 候选分支（见下节），避免 lane 内 merge debt 累积。
+- 主动 sync 是 lane owner 自己的工作；接手 AI 或其他评审者不要替别人 sync 别人的 lane，
+  除非 lane owner 不在或已经明确授权。
+
+历史 lane 落后 main 100+ commit 的（例如 `core-tui` 148、`core-net-async-io` 104）必须在
+下一次自然 landing 前先评估 sync 策略，不要再叠多 slice 强行推。
+
 ## Landing 纪律
 
 worktree 位置正确不代表分支可以合并。
+
+## Focused Gate Matrix
+
+模块负责人报告 `Ready` 时，先用最窄的 focused gate 证明改动表面，再按改动性质补充
+source/compile/runtime/CI evidence。不要用单个绿色命令替代所有 truth 分类。
+
+常用 truth 分类：
+
+- `source-contract`：读取源码、文档或配置，冻结 owner boundary、导出符号、路径规则、
+  CI workflow 或文档约定；它证明文本契约，没有证明可执行 runtime 行为。
+- `forced-compile`：面向 Windows、POSIX、Darwin、Android 或 no-FPC-units 的编译门。
+  它证明目标表面可编译或 API/ABI 声明一致，不等于目标机器 runtime 已跑过。
+- `runtime`：在当前 host 上执行测试、示例或 benchmark。涉及 public API、资源所有权、
+  内存、句柄、socket、进程或线程生命周期时，报告里要列出 heaptrc / no-leak 或等价证据。
+- `CI truth`：证明 CI 调的是同一套 Makefile gate 和命名，不绕过本地验证面。CI truth
+  不能替代模块 focused gate；它只证明自动化入口没有漂移。
+
+默认 focused gate matrix：
+
+| lane | first focused evidence | extra evidence to name in `Ready` |
+| --- | --- | --- |
+| platform | `make focused FOCUS=core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix` | affected host/source-contract gates, forced-compile gates, and any runtime gate that actually ran |
+| compiler | not the default focused gate; use `bash build/verify_local.sh` only as a verify exception after the narrow compiler fixture or smoke command is named | targeted compiler fixture, toolchain failure truth, or smoke command that proves the changed compiler surface |
+| mem | `make focused FOCUS=core/tests/nextpas.core.mem/test_memory_map_compile_gate` | allocator/runtime gate plus heaptrc/no-leak proof when ownership, allocation, or mapping behavior changes |
+| system | `make focused FOCUS=core/tests/nextpas.core.system/test_system_source_contracts` | source-contract result plus any runtime or forced-compile gate for changed `system.*` units |
+| config | `make focused FOCUS=core/tests/nextpas.core.config/test_config` | format-specific export/import gate when INI, TOML, YAML, examples, or mutation semantics change |
+| http | `make focused FOCUS=core/tests/nextpas.core.http/test_http_client` | parser/writer/router/server/runtime gate matching the touched HTTP surface |
+
+也可以用 `make lane-focused LANE=<platform|mem|system|config|http>` 读取当前默认矩阵并执行
+对应的根目录 `make focused FOCUS=...`。这个入口会打印 `lane`、`truth`、`focus` 和
+`command` 字段，适合模块负责人放进 `Ready` evidence。它是 local/reporting helper；
+CI 目前仍跑 `make test-tooling` 和 `make verify`，不要把 `lane-focused` 当成 CI matrix。
+需要审计矩阵漂移时，用 `scripts/lane-focused.sh --list` 打印 tab-separated
+`lane` / `truth` / `focus` 清单，再和本节矩阵比对。
+
+如果某个模块的最佳 gate 不是根目录 `make focused FOCUS=...`，例如 compiler 目前没有
+默认 focused gate、或模块 Makefile 暴露专用目标，报告里必须把例外写清楚，并列出实际命令。
+缺少可用 focused gate 时，不要把 slice 说成可落地；先补 gate，或用 `Needs Review`
+让总控决定是否拆出 tooling slice。
+
+当前有少数 `core/tests` Makefile 的 `test` 目标只打印 `SKIP`，这些不能作为 runtime evidence：
+
+- `core/tests/nextpas.core.hash/test_hash`：`SKIP`，等待迁移到 `nextpas.core.crypto.hash` API。
+- `core/tests/nextpas.core.hash/test_hash_audit`：`SKIP`，等待迁移到 `nextpas.core.crypto.hash` API。
+- `core/tests/nextpas.core.tls/unit`：`SKIP`，复杂多文件套件仍需手工拆 gate。
+- `core/tests/nextpas.core.simd.cpuinfo`：`SKIP`，真实 focused gate 是
+  `make -C core/tests/nextpas.core.simd cpuinfo-focused`。
+
+如果 `Ready` 报告触及这些路径，必须把它们列为占位例外，并补充真实可执行 gate、
+source-contract、forced-compile 或 `Needs Review` 说明。
 
 任何分支进入主线前必须满足：
 
 1. worktree 是干净的。
 2. 改动路径属于预期模块或治理线。
-3. 已在 landing candidate 上基于当前 `main` rebase、merge 或 replay。
-4. 已运行改动表面的 focused verification。
-5. 只用 `ff-only` 或等价的已审查 landing commit 进入主线。
-6. 分支完全吸收后，清理对应临时 worktree。
+3. `scripts/worktree-audit.sh` 显示 landing candidate 相对当前 `main` 的 `behind` 为 `0`。
+4. 已在 landing candidate 上基于当前 `main` rebase、merge 或 replay。
+5. 已运行改动表面的 focused verification。
+6. 只用 `ff-only` 或等价的已审查 landing commit 进入主线。
+7. 分支完全吸收后，清理对应临时 worktree。
+
+推荐先用只读 landing evidence gate 固化这些事实：
+
+```bash
+make landing-check \
+  BASE_REF=main \
+  ALLOW_PATHS="scripts tests/tooling docs/worktrees.md" \
+  FOCUS=core/tests/<module>/<gate>
+```
+
+也可以用 `LANE` 从 focused gate matrix 推导 `FOCUS`：
+
+```bash
+make landing-check \
+  BASE_REF=main \
+  ALLOW_PATHS="docs/worktrees.md tests/tooling" \
+  LANE=system
+```
+
+如果同时设置 `FOCUS` 和 `LANE`，`FOCUS` 优先。`LANE` 只是 local/reporting helper，
+用于减少常见模块 lane 的 evidence 命令分叉；它不改变 `ALLOW_PATHS`、不批准 landing、
+不替代 diff review，也不会变成 CI matrix。
+
+`ALLOW_PATHS` 是允许带入候选分支的路径前缀清单；多个前缀用空格分隔。
+如果当前 slice 没有对应的 core focused gate，可以省略 `FOCUS`，但 `Ready` 或
+landing 报告必须说明用了哪些替代 verification。
+对于 `.github/` CI slice，省略 `FOCUS` 时必须跑 `make test-tooling`。
+对于 `scripts/`、`tests/tooling/` 或 `docs/worktrees.md` 这类 tooling / landing 文档 slice，省略 `FOCUS` 时也必须跑 `make test-tooling`，并在 `Ready` 报告中列出该证据。
+
+需要先清 landing 队列时，可用 `scripts/landing-queue-classifier.sh --base <BASE_REF> --allow-path <prefix>...`
+快速区分 `absorbed`、`stale`、`behind-main`、`path-unsafe` 和 `dirty-generated-artifacts`。
+它只做 triage，不替代 `make landing-check`。
+
+`make landing-check` 会运行：
+
+1. `make hygiene`。
+2. `scripts/landing-candidate-check.sh --base <BASE_REF> --allow-path <prefix>...`。
+3. `git diff --check <BASE_REF>...HEAD`。
+4. 如果设置了 `FOCUS`，再运行根目录 `make focused FOCUS=<gate>`；如果没有 `FOCUS`
+   但设置了 `LANE`，先解析 lane matrix，再运行解析出的 focused gate。
+5. 最后再运行一次 `make hygiene`。
+
+`scripts/landing-candidate-check.sh` 只读取当前 worktree 状态并打印证据：branch、
+worktree、HEAD、base、ahead、behind、allowed paths、changed files 和
+historical changed files。它会在 dirty、detached、`behind != 0`、worktree 不在仓库根或
+`.worktrees/`、最终 diff 改动路径超出 `ALLOW_PATHS`，或 `base..HEAD` 的候选提交历史曾经触碰
+`ALLOW_PATHS` 外路径时失败。即使禁止路径后来被 revert，也不能作为 ff-only landing history
+进入主线。该 helper 不会 rebase、merge、cherry-pick、replay 或修改分支。
+如果候选分支落后但所有 ahead commit 已被 `base` 等价吸收，会打印
+`landing-candidate=absorbed` 和 `candidate-action=drop-from-queue`；否则落后候选会打印
+`landing-candidate=stale` 和 `candidate-action=replay-on-latest-base` 后失败。
+
+这个 gate 只是 landing evidence，不是合并批准。它不能替代 diff review、模块 focused
+verification、heaptrc/no-leak 证据、source/compile/runtime truth 分类，也不能授权 raw merge
+长期 lane 到 `main`。
+
+### Landing 候选分支模板
+
+当 lane HEAD 准备进入 main 时，**优先用 cherry-pick 到候选分支**而非在 lane 自身上做 ff-only：
+
+```bash
+# 1. 从当前 main 创建候选分支
+git checkout -b landing/<lane>-YYYYMMDD main
+
+# 2. cherry-pick lane 上要 land 的 commit（按时间正序）
+git cherry-pick <oldest-commit> <...> <newest-commit>
+
+# 3. 验证候选分支
+make landing-check \
+  BASE_REF=main \
+  ALLOW_PATHS="<lane changed paths>" \
+  FOCUS=core/tests/<module>/<gate>
+
+# 4. ff-only merge 到 main + push
+git checkout main
+git merge --ff-only landing/<lane>-YYYYMMDD
+git push origin main
+
+# 5. 清理候选分支 + 给 lane HEAD 打 archive tag（保险）
+git branch -d landing/<lane>-YYYYMMDD
+git tag archive/<lane>-landed-YYYYMMDD <lane-head-sha>
+```
+
+为什么选 cherry-pick + 候选分支而不是 lane 自身 ff merge：
+
+- Lane 通常落后 main 多个 commit + 自身有 cross-lane merge / 实验性 commit。直接从 lane
+  HEAD ff merge 会污染 main 历史。
+- 候选分支是一次性的，cherry-pick 后只携带"真正想 land"的 commit，每个 commit 可以独立
+  review 和回滚。
+- `ALLOW_PATHS` 要精确列出 cherry-pick 触及的每个文件（不是宽前缀），因为 prefix 匹配按
+  完整路径组件，例如 `core/src/nextpas.core.text.` 不匹配 `core/src/nextpas.core.text.compare.pas`。
+  可用 `git diff --name-only main..HEAD | tr '\n' ' '` 一键拼。
+- 候选分支命名 `landing/<lane>-YYYYMMDD` 与 lane 分支区分清晰。
+
+lane HEAD 打 archive tag 是 landing 之后的安全网：
+- lane 的 SHA 跟 cherry-picked SHA 不同，archive tag 保留原始 lane HEAD 以备追溯
+- 不强制删除 lane worktree / branch；由 lane owner 决定继续推进还是 archive
 
 成功 landing 后清理：
 
@@ -212,6 +395,8 @@ cherry-pick 或 path-limited replay。除非明确授权，最终 mainline integ
 
 `Ready` 汇报必须包含分支、worktree 路径、`HEAD`、改动文件清单、不能带入主线的文件、
 focused verification 证据和 merge 建议。
+`scripts/report-envelope-check.sh --status <Ready|Blocked|Landed> <report.md>` 可用于本地检查这些
+汇报 envelope 的必填字段；它只做文本契约检查，不替代验证命令或 landing review。
 
 如果包含受控跨模块修改，`Ready` 还必须包含：
 
@@ -222,6 +407,42 @@ focused verification 证据和 merge 建议。
 
 不要把根目录 `task_plan.md`、`findings.md`、`progress.md` 当作常规模块状态带进
 `main`。需要长期保存的记录，写到 `docs/plans/` 或对应模块的文档目录。
+
+## Lane Review 评审纪律
+
+接手 AI、新加入开发者或其他非 lane owner 对 active lane 做评审时，必须保持只读边界：
+
+- ❌ 不动 lane 代码（不写、不删、不重排）
+- ❌ 不在 lane 内创建 / 修改 `task_plan.md`、`findings.md`、`progress.md` 或 lane 自己的 docs
+- ✅ 可以 read-only 看 lane 源码、测试、配置、docs
+- ✅ 可以跑 lane 的 focused gate 验证（不修改任何文件，只编译运行）
+- ✅ 可以写 review 报告，但放到主仓 `docs/plans/support/YYYY-MM-DD-<lane>-lane-review.md`
+  而不是 lane 内
+- ✅ Review 必须明示 "初步意见、最终由 lane owner 判断"，并指出 lane owner 可以反驳的渠道
+
+Review 文档应至少包含：lane 概况、goal-tree 当前位置、dirty 改动评审、推荐 lane 下一步、
+评审纪律说明。如果发现跨模块改动、host portability 问题或其他设计风险，必须显式列为
+"高关注点"，提醒 lane owner 在 commit 前先解决。
+
+集中多个 lane 评审时，可以用 `docs/plans/support/YYYY-MM-DD-multi-lane-quick-review.md`
+合并文档；但每个 lane 至少有独立小节，不要把多个 lane 评审压缩到一段。
+
+## Status Board 刷新节奏
+
+`docs/plans/support/YYYY-MM-DD-module-status-board.md` 是当前仓库 worktree / 分支 / lane
+真实状态的快照，配合 `scripts/worktree-audit.sh` 一起读。它有强烈过期风险：
+
+- 推荐刷新频率：**每完成一轮 landing、或每周一次**，由总控或接手 AI 主动维护
+- 旧版 board 不删除，保留为历史记录；新版加入 `docs/plans/README.md` 当前入口列表
+- 刷新动作应基于 `git worktree list --porcelain` + 每个 worktree 的 `git log -3 +
+  git status --short` 取证，不要凭记忆或旧 board 推断
+- 如果 status board 已超过 2 周未刷新，下一次评审前必须先做新 board，否则评审结论
+  容易基于错误事实
+- Status board 应同时反映 `archive/*` tag 状态（哪些 lane 已 landed / archived /
+  仍 active）
+
+接手 AI 在做大动作前（例如 P0/P1 推进），必须先核对 status board 是否反映当前真实状态；
+如果不一致，先刷新 board 再继续。
 
 ## 禁止事项
 

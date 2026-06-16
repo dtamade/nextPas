@@ -67,9 +67,67 @@ begin
   end;
 end;
 
+procedure TestExtAppTaskSurface;
+var
+  LApp: TApp;
+  LTaskId: TTaskId;
+  LTaskStatus: TTaskStatus;
+  LTaskResult: TTaskResult;
+  LCompletion: TCompletionSlot;
+  LLoading: TLoadingGroup;
+begin
+  LApp := TApp.Create;
+  try
+    LTaskId := 1;
+    LTaskStatus := tsQueued;
+    LTaskResult := Default(TTaskResult);
+    LTaskResult.Status := tsCompleted;
+    LCompletion.Id := LTaskId;
+    LCompletion.Result := LTaskResult;
+    LLoading := TLoadingGroup.Empty;
+    LLoading.Start(0, LCompletion.Id, 100);
+    LLoading.Update([LCompletion], 1);
+
+    Check(LApp.Tasks <> nil, 'ext facade exposes app task manager slot');
+    CheckEqual(Int64(Ord(tsQueued)), Int64(Ord(LTaskStatus)),
+      'ext facade exposes task status constants');
+    CheckEqual(Int64(Ord(lpSuccess)), Int64(Ord(LLoading.GetPhase(0))),
+      'ext facade exposes loading group contract');
+  finally
+    LApp.Free;
+  end;
+end;
+
+procedure TestExtFacadeExposesTuiExceptions;
+var
+  LBackend: ETuiBackend;
+  LTui: ETui;
+  LCaught: Boolean;
+begin
+  LBackend := ETuiBackend.Create('ext facade backend');
+  try
+    LTui := LBackend;
+    Check(LTui is ETuiBackend,
+      'ext facade exposes ETuiBackend as an ETui subtype');
+  finally
+    LBackend.Free;
+  end;
+
+  LCaught := False;
+  try
+    raise ETuiBackend.Create('ext facade catch');
+  except
+    on E: ETui do
+      LCaught := E is ETuiBackend;
+  end;
+  Check(LCaught, 'ext facade lets app code catch backend failures as ETui');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.tui.ext_facade');
   T.Run('ext surface', @TestExtSurface);
+  T.Run('ext app task surface', @TestExtAppTaskSurface);
+  T.Run('ext facade exposes tui exceptions', @TestExtFacadeExposesTuiExceptions);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

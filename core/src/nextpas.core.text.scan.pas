@@ -20,6 +20,9 @@ function ScanFindNotInRange(const AData: PAnsiChar; const ALen: SizeUInt;
   const ALo, AHi: Byte): PtrInt;
 function ScanSkipWhitespace(const AData: PAnsiChar; const ALen: SizeUInt): SizeUInt;
 function ScanJsonNumber(const AData: PAnsiChar; const ALen: SizeUInt): SizeUInt;
+function ScanIsJsonNumberToken(const AData: PAnsiChar; const ALen: SizeUInt): Boolean;
+function ScanJsonNumberHasIncompleteExponent(const AData: PAnsiChar;
+  const ALen: SizeUInt): Boolean;
 function ScanFindSubstring(const AData: PAnsiChar; const ADataLen: SizeUInt;
   const ANeedle: PAnsiChar; const ANeedleLen: SizeUInt): PtrInt;
 function ScanFindSubstringCI(const AData: PAnsiChar; const ADataLen: SizeUInt;
@@ -167,11 +170,14 @@ begin
   LPos := 0;
   while LPos + VecWidth <= ALen do
   begin
-    LWsMask := VecCmpGtU(@AData[LPos], $20);
-    if LWsMask = TVecMask(0) then
+    LWsMask := VecCmpEq(@AData[LPos], Ord(' ')) or
+               VecCmpEq(@AData[LPos], 9) or
+               VecCmpEq(@AData[LPos], 10) or
+               VecCmpEq(@AData[LPos], 13);
+    if LWsMask = TVecMask(not TVecMask(0)) then
       Inc(LPos, VecWidth)
     else
-      Exit(LPos + SizeUInt(VecCtz(LWsMask)));
+      Exit(LPos + SizeUInt(VecCtz(not LWsMask and TVecMask(not TVecMask(0)))));
   end;
   while LPos < ALen do
   begin
@@ -254,6 +260,78 @@ begin
     end;
   end;
   Result := LPos;
+end;
+
+function ScanIsJsonNumberToken(const AData: PAnsiChar; const ALen: SizeUInt): Boolean;
+var
+  LPos: SizeUInt;
+begin
+  if ALen = 0 then
+    Exit(False);
+
+  LPos := 0;
+  if AData[LPos] = '-' then
+  begin
+    Inc(LPos);
+    if LPos >= ALen then
+      Exit(False);
+  end;
+
+  if AData[LPos] = '0' then
+  begin
+    Inc(LPos);
+    if (LPos < ALen) and IsDigit(Byte(AData[LPos])) then
+      Exit(False);
+  end
+  else
+  begin
+    if not IsDigit(Byte(AData[LPos])) then
+      Exit(False);
+    while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
+      Inc(LPos);
+  end;
+
+  if (LPos < ALen) and (AData[LPos] = '.') then
+  begin
+    Inc(LPos);
+    if (LPos >= ALen) or not IsDigit(Byte(AData[LPos])) then
+      Exit(False);
+    while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
+      Inc(LPos);
+  end;
+
+  if (LPos < ALen) and
+     ((AData[LPos] = 'e') or (AData[LPos] = 'E')) then
+  begin
+    Inc(LPos);
+    if (LPos < ALen) and
+       ((AData[LPos] = '+') or (AData[LPos] = '-')) then
+      Inc(LPos);
+    if (LPos >= ALen) or not IsDigit(Byte(AData[LPos])) then
+      Exit(False);
+    while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
+      Inc(LPos);
+  end;
+
+  Result := LPos = ALen;
+end;
+
+function ScanJsonNumberHasIncompleteExponent(const AData: PAnsiChar;
+  const ALen: SizeUInt): Boolean;
+var
+  LPos: SizeUInt;
+begin
+  if ALen = 0 then
+    Exit(False);
+  LPos := ALen;
+  if (AData[LPos - 1] = '+') or (AData[LPos - 1] = '-') then
+  begin
+    if LPos < 2 then
+      Exit(False);
+    Dec(LPos);
+  end;
+  Result := (LPos > 0) and
+    ((AData[LPos - 1] = 'e') or (AData[LPos - 1] = 'E'));
 end;
 
 function ScanFindSubstring(const AData: PAnsiChar; const ADataLen: SizeUInt;
@@ -365,14 +443,27 @@ begin
   Result := -1;
 end;
 
+function ASCIIToLower(const ACh: Byte): Byte; inline;
+begin
+  Result := ACh;
+  if (Result >= Ord('A')) and (Result <= Ord('Z')) then
+    Inc(Result, 32);
+end;
+
+function ASCIIToUpper(const ACh: Byte): Byte; inline;
+begin
+  Result := ACh;
+  if (Result >= Ord('a')) and (Result <= Ord('z')) then
+    Dec(Result, 32);
+end;
+
 function CIMatch(const AData, ANeedle: PAnsiChar; ALen: SizeUInt): Boolean; inline;
-var K: SizeUInt; LCh: Byte;
+var K: SizeUInt;
 begin
   for K := 0 to ALen - 1 do
   begin
-    LCh := Byte(AData[K]);
-    if (LCh >= Ord('A')) and (LCh <= Ord('Z')) then LCh := LCh + 32;
-    if LCh <> Byte(ANeedle[K]) then Exit(False);
+    if ASCIIToLower(Byte(AData[K])) <> ASCIIToLower(Byte(ANeedle[K])) then
+      Exit(False);
   end;
   Result := True;
 end;
@@ -390,12 +481,10 @@ begin
   if ANeedleLen = 0 then Exit(0);
   if ANeedleLen > ADataLen then Exit(-1);
 
-  LFirstLo := Byte(ANeedle[0]);
-  LFirstHi := LFirstLo;
-  if (LFirstLo >= Ord('a')) and (LFirstLo <= Ord('z')) then LFirstHi := LFirstLo - 32;
-  LLastLo := Byte(ANeedle[ANeedleLen - 1]);
-  LLastHi := LLastLo;
-  if (LLastLo >= Ord('a')) and (LLastLo <= Ord('z')) then LLastHi := LLastLo - 32;
+  LFirstLo := ASCIIToLower(Byte(ANeedle[0]));
+  LFirstHi := ASCIIToUpper(Byte(ANeedle[0]));
+  LLastLo := ASCIIToLower(Byte(ANeedle[ANeedleLen - 1]));
+  LLastHi := ASCIIToUpper(Byte(ANeedle[ANeedleLen - 1]));
   LSearchLen := ADataLen - ANeedleLen + 1;
 
   LPos := 0;
@@ -429,13 +518,19 @@ end;
 function ScanMatchLiteral(const AData: PAnsiChar; const ALen: SizeUInt;
   const AExpected: PAnsiChar; const AExpectedLen: Byte): Boolean;
 var
-  I: Byte;
+  I: SizeUInt;
 begin
+  if AExpectedLen = 0 then
+    Exit(True);
   if ALen < AExpectedLen then
     Exit(False);
-  for I := 0 to AExpectedLen - 1 do
+  I := 0;
+  while I < AExpectedLen do
+  begin
     if AData[I] <> AExpected[I] then
       Exit(False);
+    Inc(I);
+  end;
   Result := True;
 end;
 

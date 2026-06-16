@@ -11,7 +11,8 @@ uses
   nextpas.core.collections.intf,
   nextpas.core.collections.tree_set.intf,
   nextpas.core.collections.tree.rb,
-  nextpas.core.mem.allocator;
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default;
 
 type
   generic TTreeSet<T> = class(specialize TGenericCollection<T>, specialize ITreeSet<T>)
@@ -141,15 +142,24 @@ procedure TTreeSet.SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt);
 var
   LIter: TPtrIter;
   PE, P: ^T;
+  LCopied: SizeUInt;
 begin
   PE := aDst;
-  if PE = nil then Exit;
+  if aCount = 0 then
+    Exit;
+  if PE = nil then
+    raise EArgumentNil.Create('TTreeSet.SerializeToArrayBuffer: aDst is nil');
+  if aCount > GetCount then
+    raise EOutOfRange.Create('TTreeSet.SerializeToArrayBuffer: aCount out of range');
+
   LIter := PtrIter;
-  while LIter.MoveNext do
+  LCopied := 0;
+  while LIter.MoveNext and (LCopied < aCount) do
   begin
     P := LIter.GetCurrent;
     PE^ := P^;
     Inc(PE);
+    Inc(LCopied);
   end;
 end;
 
@@ -200,7 +210,7 @@ end;
 
 constructor TTreeSet.Create;
 begin
-  Create(GetRtlAllocator(), nil);
+  Create(DefaultAllocator(), nil);
 end;
 
 constructor TTreeSet.Create(aAllocator: IAllocator);

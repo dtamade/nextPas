@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.collections.base,
   nextpas.core.collections.stack.intf,
   nextpas.core.collections.vec;
@@ -53,7 +54,7 @@ begin
   if aAllocator <> nil then
     FVec := TInternalVec.Create(aAllocator)
   else
-    FVec := TInternalVec.Create(GetRtlAllocator);
+    FVec := TInternalVec.Create(DefaultAllocator);
 end;
 
 destructor TStack.Destroy;

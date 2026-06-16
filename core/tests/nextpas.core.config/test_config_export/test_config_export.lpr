@@ -144,6 +144,36 @@ begin
   end;
 end;
 
+procedure CheckToJsonRejectsEmptyPathSegment(const AKey: string);
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString(AKey, 'secret');
+
+    LRaised := False;
+    try
+      LCfg.ToJson;
+    except
+      on E: EConfigError do
+        LRaised := Pos(AKey, E.Message) > 0;
+    end;
+    CheckEqual(True, LRaised,
+      'empty path segment raises EConfigError for ' + AKey);
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestToJsonRejectsEmptyPathSegments;
+begin
+  CheckToJsonRejectsEmptyPathSegment('.hidden');
+  CheckToJsonRejectsEmptyPathSegment('name.');
+  CheckToJsonRejectsEmptyPathSegment('a..b');
+end;
+
 procedure TestSaveToJsonWritesFile;
 var
   LCfg: TConfig;
@@ -172,6 +202,41 @@ begin
   end;
 end;
 
+procedure TestSaveToJsonPreservesExistingFileOnExportFailure;
+var
+  LCfg: TConfig;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := TempJsonPath('nextpas_config_export_fail_closed.json');
+  Remove(LPath);
+  WriteFileText(LPath, '{"keep":"old"}');
+
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('db', 'root');
+    LCfg.SetString('db.host', 'localhost');
+
+    LRaised := False;
+    try
+      LCfg.SaveToJson(LPath);
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('db', E.Message) > 0,
+          'json save failure names conflicting key');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'json save raises on export conflict');
+    CheckEqual('{"keep":"old"}', ReadFileText(LPath),
+      'json save failure preserves existing file');
+  finally
+    LCfg.Free;
+    Remove(LPath);
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.config.export');
   T.Run('Export.ToJsonBuildsNestedObjectsAndArrays',
@@ -186,7 +251,11 @@ begin
     @TestToJsonRoundTripsCanonicalStringValues);
   T.Run('Export.ToJsonRejectsScalarSubtreeConflict',
     @TestToJsonRejectsScalarSubtreeConflict);
+  T.Run('Export.ToJsonRejectsEmptyPathSegments',
+    @TestToJsonRejectsEmptyPathSegments);
   T.Run('Export.SaveToJsonWritesFile',
     @TestSaveToJsonWritesFile);
+  T.Run('Export.SaveToJsonPreservesExistingFileOnExportFailure',
+    @TestSaveToJsonPreservesExistingFileOnExportFailure);
   T.Summary;
 end.

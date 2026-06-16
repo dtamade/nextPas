@@ -28,7 +28,7 @@ unit nextpas.core.tls.utils;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.base64,
@@ -45,7 +45,7 @@ type
     class function DERToPEM(const ADER: TBytes; const AType: string = 'CERTIFICATE'): string;
     class function ExtractPEMBlock(const APEM: string; const AType: string = 'CERTIFICATE'): string;
     class function FormatCertificateSubject(const ASubject: string): string;
-    class function ParseDistinguishedName(const ADN: string): TStringList;
+    class function ParseDistinguishedName(const ADN: string): TSSLStringArray;
 
     // 网络工具
     class function IsIPAddress(const AStr: string): Boolean;
@@ -71,30 +71,12 @@ const
   PEM_PUBLIC_KEY = 'PUBLIC KEY';
   PEM_CERTIFICATE_REQUEST = 'CERTIFICATE REQUEST';
 
-// 辅助函数
-
-{ 将 TStrings 转换为 TSSLStringArray - Phase 3.2 统一实现 }
-function StringsToArray(AStrings: TStrings): TSSLStringArray;
-
 implementation
 
 uses
+  nextpas.core.text.strings,
   Math,
   nextpas.core.tls.errors;
-
-{ StringsToArray - Phase 3.2 统一实现 }
-function StringsToArray(AStrings: TStrings): TSSLStringArray;
-var
-  I: Integer;
-begin
-  SetLength(Result, 0);
-  if (AStrings = nil) or (AStrings.Count = 0) then
-    Exit;
-
-  SetLength(Result, AStrings.Count);
-  for I := 0 to AStrings.Count - 1 do
-    Result[I] := Trim(AStrings[I]);
-end;
 
 
 { TSSLUtils }
@@ -114,76 +96,58 @@ end;
 
 class function TSSLUtils.PEMToDER(const APEM: string): TBytes;
 var
-  LLines: TStringList;
+  LLines: TStringArray;
   I: Integer;
   LInBlock: Boolean;
   LBase64: string;
 begin
   Result := nil;
-  SetLength(Result, 0);
-  
-  LLines := TStringList.Create;
-  try
-    LLines.Text := APEM;
-    LInBlock := False;
-    LBase64 := '';
-    
-    for I := 0 to LLines.Count - 1 do
+  LLines := StringsParseLines(APEM);
+  LInBlock := False;
+  LBase64 := '';
+
+  for I := 0 to Length(LLines) - 1 do
+  begin
+    if Pos(PEM_BEGIN_MARKER, LLines[I]) > 0 then
     begin
-      if Pos(PEM_BEGIN_MARKER, LLines[I]) > 0 then
-      begin
-        LInBlock := True;
-        Continue;
-      end;
-      
-      if Pos(PEM_END_MARKER, LLines[I]) > 0 then
-      begin
-        LInBlock := False;
-        Break;
-      end;
-      
-      if LInBlock then
-        LBase64 := LBase64 + Trim(LLines[I]);
+      LInBlock := True;
+      Continue;
     end;
-    
-    if LBase64 <> '' then
-      Result := TBase64Utils.Decode(LBase64);
-  finally
-    LLines.Free;
+
+    if Pos(PEM_END_MARKER, LLines[I]) > 0 then
+      Break;
+
+    if LInBlock then
+      LBase64 := LBase64 + Trim(LLines[I]);
   end;
+
+  if LBase64 <> '' then
+    Result := TBase64Utils.Decode(LBase64);
 end;
 
 class function TSSLUtils.DERToPEM(const ADER: TBytes; const AType: string): string;
 var
   LBase64: string;
-  LLines: TStringList;
+  LLines: TStringArray;
   I: Integer;
 begin
   Result := '';
-  
   if Length(ADER) = 0 then
     Exit;
 
   LBase64 := TBase64Utils.Encode(ADER);
-  
-  LLines := TStringList.Create;
-  try
-    LLines.Add(PEM_BEGIN_MARKER + AType + '-----');
-    
-    // 每64个字符换行
-    I := 1;
-    while I <= Length(LBase64) do
-    begin
-      LLines.Add(Copy(LBase64, I, 64));
-      Inc(I, 64);
-    end;
-    
-    LLines.Add(PEM_END_MARKER + AType + '-----');
-    
-    Result := LLines.Text;
-  finally
-    LLines.Free;
+  SetLength(LLines, 0);
+  LLines.Add(PEM_BEGIN_MARKER + AType + '-----');
+
+  I := 1;
+  while I <= Length(LBase64) do
+  begin
+    LLines.Add(Copy(LBase64, I, 64));
+    Inc(I, 64);
   end;
+
+  LLines.Add(PEM_END_MARKER + AType + '-----');
+  Result := StringsJoin(LLines, LineEnding) + LineEnding;
 end;
 
 class function TSSLUtils.ExtractPEMBlock(const APEM: string; const AType: string): string;
@@ -211,36 +175,35 @@ end;
 
 class function TSSLUtils.FormatCertificateSubject(const ASubject: string): string;
 var
-  LParts: TStringList;
-  I: Integer;
-begin
-  LParts := ParseDistinguishedName(ASubject);
-  try
-    Result := '';
-    for I := 0 to LParts.Count - 1 do
-    begin
-      if Result <> '' then
-        Result := Result + ', ';
-      Result := Result + LParts[I];
-    end;
-  finally
-    LParts.Free;
-  end;
-end;
-
-class function TSSLUtils.ParseDistinguishedName(const ADN: string): TStringList;
-var
   LParts: TStringArray;
   I: Integer;
 begin
-  Result := TStringList.Create;
-  
-  // 简单解析，实际应该更复杂
+  LParts := ParseDistinguishedName(ASubject);
+  Result := '';
+  for I := 0 to Length(LParts) - 1 do
+  begin
+    if Result <> '' then
+      Result := Result + ', ';
+    Result := Result + LParts[I];
+  end;
+end;
+
+class function TSSLUtils.ParseDistinguishedName(const ADN: string): TSSLStringArray;
+var
+  LParts: TStringArray;
+  I, LCount: Integer;
+begin
+  SetLength(Result, 0);
   LParts := ADN.Split([',', '/']);
+  LCount := 0;
   for I := 0 to High(LParts) do
   begin
     if Trim(LParts[I]) <> '' then
-      Result.Add(Trim(LParts[I]));
+    begin
+      SetLength(Result, LCount + 1);
+      Result[LCount] := Trim(LParts[I]);
+      Inc(LCount);
+    end;
   end;
 end;
 
@@ -395,7 +358,6 @@ begin
     
     Result := LSB.ToString;
   finally
-    LSB.Free;
   end;
 end;
 

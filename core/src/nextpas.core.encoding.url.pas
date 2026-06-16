@@ -12,6 +12,9 @@ function UrlDecode(const AEncoded: string): string;
 
 implementation
 
+uses
+  nextpas.core.text.utf8;
+
 function IsUnreserved(const ACh: Byte): Boolean; inline;
 begin
   case Chr(ACh) of
@@ -103,6 +106,9 @@ begin
   end;
 
   SetLength(Result, LJ - 1);
+  if (Length(Result) > 0) and
+     (not UTF8IsValid(PByte(PAnsiChar(Result)), Length(Result))) then
+    raise EConvertError.Create('UrlDecode: invalid UTF-8');
 end;
 
 end.

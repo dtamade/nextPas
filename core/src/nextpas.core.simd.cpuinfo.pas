@@ -96,7 +96,8 @@ uses
   nextpas.core.platform.files,
   {$ENDIF}
   {$IFDEF SIMD_X86_AVAILABLE}
-  nextpas.core.simd.cpuinfo.x86
+  nextpas.core.simd.cpuinfo.x86,
+  nextpas.core.simd.cpuinfo.x86.base
     {$IF DEFINED(SIMD_ARM_AVAILABLE) OR DEFINED(SIMD_RISCV_AVAILABLE) OR DEFINED(SIMD_LOONGARCH_AVAILABLE)}
     ,
     {$ENDIF}
@@ -132,28 +133,6 @@ var
   G_CPUInfo: TCPUInfo;
   // Initialization state: 0=uninitialized, 1=initializing, 2=initialized
   G_InitState: Int32 = 0;
-
-function X86_XCR0_EnablesAVX: Boolean; inline;
-begin
-  {$IFDEF SIMD_X86_AVAILABLE}
-  Result := ((G_CPUInfo.XCR0 and (UInt64(1) shl 1)) <> 0) {XMM}
-            and ((G_CPUInfo.XCR0 and (UInt64(1) shl 2)) <> 0); {YMM}
-  {$ELSE}
-  Result := False;
-  {$ENDIF}
-end;
-
-function X86_XCR0_EnablesAVX512: Boolean; inline;
-begin
-  {$IFDEF SIMD_X86_AVAILABLE}
-  Result := X86_XCR0_EnablesAVX and
-            ((G_CPUInfo.XCR0 and (UInt64(1) shl 5)) <> 0) and {opmask}
-            ((G_CPUInfo.XCR0 and (UInt64(1) shl 6)) <> 0) and {ZMM_Hi256}
-            ((G_CPUInfo.XCR0 and (UInt64(1) shl 7)) <> 0);   {Hi16_ZMM}
-  {$ELSE}
-  Result := False;
-  {$ENDIF}
-end;
 
 {$IFDEF SIMD_X86_AVAILABLE}
 function DetectX86Architecture: TCPUArch;
@@ -492,19 +471,8 @@ begin
     {$IFDEF SIMD_X86_AVAILABLE}
     caX86:
       begin
-        if G_CPUInfo.X86.HasSSE2 then Include(G_CPUInfo.GenericRaw, gfSimd128);
-        if G_CPUInfo.X86.HasAVX or G_CPUInfo.X86.HasAVX2 then Include(G_CPUInfo.GenericRaw, gfSimd256);
-        if G_CPUInfo.X86.HasAVX512F then Include(G_CPUInfo.GenericRaw, gfSimd512);
-        if G_CPUInfo.X86.HasAES then Include(G_CPUInfo.GenericRaw, gfAES);
-        if G_CPUInfo.X86.HasFMA then Include(G_CPUInfo.GenericRaw, gfFMA);
-        if G_CPUInfo.X86.HasSHA then Include(G_CPUInfo.GenericRaw, gfSHA);
-        // OS usable checks
-        if G_CPUInfo.X86.HasSSE2 then Include(G_CPUInfo.GenericUsable, gfSimd128);
-        if (G_CPUInfo.X86.HasAVX or G_CPUInfo.X86.HasAVX2) and (nextpas.core.simd.cpuinfo.x86.IsAVXSupportedByOS) and X86_XCR0_EnablesAVX then Include(G_CPUInfo.GenericUsable, gfSimd256);
-        if G_CPUInfo.X86.HasAVX512F and (nextpas.core.simd.cpuinfo.x86.IsAVXSupportedByOS) and X86_XCR0_EnablesAVX512 then Include(G_CPUInfo.GenericUsable, gfSimd512);
-        if G_CPUInfo.X86.HasAES then Include(G_CPUInfo.GenericUsable, gfAES);
-        if G_CPUInfo.X86.HasFMA and (nextpas.core.simd.cpuinfo.x86.IsAVXSupportedByOS) and X86_XCR0_EnablesAVX then Include(G_CPUInfo.GenericUsable, gfFMA);
-        if G_CPUInfo.X86.HasSHA then Include(G_CPUInfo.GenericUsable, gfSHA);
+        G_CPUInfo.GenericRaw := X86GenericRawFeatures(G_CPUInfo.X86);
+        G_CPUInfo.GenericUsable := X86GenericUsableFeatures(G_CPUInfo.X86, G_CPUInfo.OSXSAVE, G_CPUInfo.XCR0);
       end;
     {$ENDIF}
     {$IFDEF SIMD_ARM_AVAILABLE}

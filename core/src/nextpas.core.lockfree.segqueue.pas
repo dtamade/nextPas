@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.errors,
   nextpas.core.atomic,
+  nextpas.core.lockfree.base,
   nextpas.core.lockfree.ebr;
 
 const
@@ -30,7 +31,13 @@ type
     FHead: PSegment;
     FTail: PSegment;
     FEnqueuePos: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadEnqueue: TCacheLinePad;
+    {$POP}
     FDequeuePos: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadDequeue: TCacheLinePad;
+    {$POP}
     FEbr: TEbrDomain;
     class procedure SegQueueReclaimSegment(const AData: Pointer; const AUserData: Pointer); static;
     class function AllocSegment(const AStartIndex: Int64): PSegment; static;
@@ -53,10 +60,22 @@ type
 
 implementation
 
-class function TSegQueueImpl.AllocSegment(const AStartIndex: Int64): PSegment;
+function TSegQueueImpl.AllocSegment(const AStartIndex: Int64): PSegment;
 var
   LI: Integer;
 begin
+  Result := nil;
+  if (FFreePool <> nil) and (FFreePoolCount > 0) then
+  begin
+    Result := FFreePool;
+    FFreePool := Result^.Next;
+    Dec(FFreePoolCount);
+    Result^.Next := nil;
+    Result^.StartIndex := AStartIndex;
+    for LI := 0 to SEGQUEUE_SEGMENT_CAPACITY - 1 do
+      Result^.Slots[LI].Sequence := AStartIndex + LI;
+    Exit;
+  end;
   Result := GetMem(SizeOf(TSegment));
   FillChar(Result^, SizeOf(TSegment), 0);
   Result^.StartIndex := AStartIndex;
@@ -74,6 +93,8 @@ begin
   FTail := FHead;
   FEnqueuePos := 0;
   FDequeuePos := 0;
+  FFreePool := nil;
+  FFreePoolCount := 0;
 end;
 
 destructor TSegQueueImpl.Destroy;
@@ -82,6 +103,13 @@ var
   LNext: PSegment;
 begin
   LSeg := FHead;
+  while LSeg <> nil do
+  begin
+    LNext := LSeg^.Next;
+    FreeMem(LSeg);
+    LSeg := LNext;
+  end;
+  LSeg := FFreePool;
   while LSeg <> nil do
   begin
     LNext := LSeg^.Next;
@@ -167,7 +195,7 @@ begin
         if AtomicCompareExchangePtr(Pointer(FHead), LOldHead, LNext, moAcqRel) = LOldHead then
         begin
           AtomicCompareExchangePtr(Pointer(FTail), LOldHead, LNext, moRelease);
-          FEbr.Retire(LOldHead, @SegQueueReclaimSegment);
+          FEbr.Retire(LOldHead, @SegQueueReclaimSegment, Self);
           LSeg := LNext;
         end
         else

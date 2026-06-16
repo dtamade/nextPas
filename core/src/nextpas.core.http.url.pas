@@ -16,6 +16,8 @@ type
 
 function UrlEncode(const AStr: string): string;
 function UrlDecode(const AStr: string): string;
+function UrlDecodeQuery(const AStr: string): string;
+function UrlDecodePath(const AStr: string): string;
 function ParseQueryString(const AQuery: string): TQueryParams;
 function EncodeQueryString(const AParams: TQueryParams): string;
 function QueryParamValue(const AParams: TQueryParams; const AName: string): string;
@@ -75,7 +77,7 @@ begin
   SetLength(Result, LJ - 1);
 end;
 
-function UrlDecode(const AStr: string): string;
+function UrlDecodeImpl(const AStr: string; const APlusToSpace: Boolean): string;
 var
   LI, LJ, LLen: SizeInt;
   LHi, LLo: Integer;
@@ -98,7 +100,7 @@ begin
       Result[LJ] := Char((LHi shl 4) or LLo);
       Inc(LI, 3);
     end
-    else if AStr[LI] = '+' then
+    else if APlusToSpace and (AStr[LI] = '+') then
     begin
       Result[LJ] := ' ';
       Inc(LI);
@@ -111,6 +113,28 @@ begin
     Inc(LJ);
   end;
   SetLength(Result, LJ - 1);
+end;
+
+{ UrlDecode: backward-compatible wrapper. Treats '+' as space
+  (application/x-www-form-urlencoded behavior). Use UrlDecodePath
+  for percent-decoding URL path segments where '+' is literal. }
+function UrlDecode(const AStr: string): string;
+begin
+  Result := UrlDecodeImpl(AStr, True);
+end;
+
+{ UrlDecodeQuery: decodes percent-encoded query-string values.
+  '+' is interpreted as space per HTML form encoding convention. }
+function UrlDecodeQuery(const AStr: string): string;
+begin
+  Result := UrlDecodeImpl(AStr, True);
+end;
+
+{ UrlDecodePath: decodes percent-encoded URL path segments.
+  '+' is treated as a literal character per RFC 3986. }
+function UrlDecodePath(const AStr: string): string;
+begin
+  Result := UrlDecodeImpl(AStr, False);
 end;
 
 function ParseQueryString(const AQuery: string): TQueryParams;
@@ -143,12 +167,12 @@ begin
         LEqPos := Pos('=', LPair);
         if LEqPos > 0 then
         begin
-          Result[LCount].Name := UrlDecode(Copy(LPair, 1, LEqPos - 1));
-          Result[LCount].Value := UrlDecode(Copy(LPair, LEqPos + 1, Length(LPair) - LEqPos));
+          Result[LCount].Name := UrlDecodeQuery(Copy(LPair, 1, LEqPos - 1));
+          Result[LCount].Value := UrlDecodeQuery(Copy(LPair, LEqPos + 1, Length(LPair) - LEqPos));
         end
         else
         begin
-          Result[LCount].Name := UrlDecode(LPair);
+          Result[LCount].Name := UrlDecodeQuery(LPair);
           Result[LCount].Value := '';
         end;
         Inc(LCount);

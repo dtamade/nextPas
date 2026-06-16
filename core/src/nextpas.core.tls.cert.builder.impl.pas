@@ -17,7 +17,7 @@ unit nextpas.core.tls.cert.builder.impl;
 interface
 
 uses
-  SysUtils, Classes,
+  Classes,
   nextpas.core.tls.base,
   nextpas.core.tls.safety,
   nextpas.core.tls.exceptions,
@@ -31,14 +31,14 @@ uses
 
 type
   { Internal implementation classes }
-  
+
   TCertificateImpl = class(TInterfacedObject, ICertificate, ICertificateEx)
   private
     FPEM: string;
     FX509: Pointer;  // PX509
     FOwnsHandle: Boolean;
     FInfo: TCertInfo;
-    
+
     procedure LoadInfo;
     procedure EnsureHandle;
     procedure EnsurePEM;
@@ -46,7 +46,7 @@ type
     constructor Create(const APEM: string);
     constructor CreateFromHandle(AHandle: Pointer; AOwnsHandle: Boolean = True);
     destructor Destroy; override;
-    
+
     // ICertificate
     function GetSubject: string;
     function GetIssuer: string;
@@ -60,7 +60,7 @@ type
     function ToPEM: string;
     function ToDER: TBytes;
     procedure SaveToFile(const AFile: string);
-    
+
     // ICertificateEx
     function GetX509Handle: Pointer;
   end;
@@ -70,18 +70,18 @@ type
     FPEM: string;
     FEVPKey: Pointer;  // PEVP_PKEY
     FOwnsHandle: Boolean;
-    
+
     procedure EnsureHandle;
     procedure EnsurePEM;
   public
     constructor Create(const APEM: string);
     constructor CreateFromHandle(AHandle: Pointer; AOwnsHandle: Boolean = True);
     destructor Destroy; override;
-    
+
     // IPrivateKey
     function ToPEM: string;
     procedure SaveToFile(const AFile: string);
-    
+
     // IPrivateKeyEx
     function GetEVP_PKEYHandle: Pointer;
   end;
@@ -92,7 +92,7 @@ type
     FPrivateKey: IPrivateKey;
   public
     constructor Create(const ACertPEM, AKeyPEM: string);
-    
+
     // IKeyPairWithCertificate
     function GetCertificate: ICertificate;
     function GetPrivateKey: IPrivateKey;
@@ -106,7 +106,7 @@ type
   public
     constructor Create;
     destructor Destroy; override;
-    
+
     // ICertificateBuilder - Subject
     function WithCommonName(const AName: string): ICertificateBuilder;
     function WithOrganization(const AOrg: string): ICertificateBuilder;
@@ -114,28 +114,28 @@ type
     function WithCountry(const ACountry: string): ICertificateBuilder;
     function WithState(const AState: string): ICertificateBuilder;
     function WithLocality(const ALocality: string): ICertificateBuilder;
-    
+
     // Validity
     function ValidFor(ADays: Integer): ICertificateBuilder;
     function ValidFrom(AStart: TDateTime): ICertificateBuilder;
     function ValidUntil(AEnd: TDateTime): ICertificateBuilder;
-    
+
     // Keys
     function WithRSAKey(ABits: Integer = 2048): ICertificateBuilder; overload;
     function WithRSAKey(const ASize: TKeySize): ICertificateBuilder; overload;
     function WithECDSAKey(const ACurve: string = 'prime256v1'): ICertificateBuilder; overload;
     function WithECDSAKey(ACurve: TEllipticCurve): ICertificateBuilder; overload;
     function WithEd25519Key: ICertificateBuilder;
-    
+
     // Extensions
     function AddSubjectAltName(const ASAN: string): ICertificateBuilder;
     function AsCA: ICertificateBuilder;
     function AsServerCert: ICertificateBuilder;
     function AsClientCert: ICertificateBuilder;
-    
+
     // Serial
     function WithSerialNumber(ASerial: Int64): ICertificateBuilder;
-    
+
     // Signing
     function SelfSigned: IKeyPairWithCertificate;
     function SignedBy(const ACA: ICertificate; const AKey: IPrivateKey): IKeyPairWithCertificate;
@@ -144,7 +144,8 @@ type
 implementation
 
 uses
-  nextpas.core.time;
+  nextpas.core.text.strings,
+    nextpas.core.time;
 
 function CertificateECDSACurveToToken(ACurve: TEllipticCurve): string;
 begin
@@ -227,11 +228,11 @@ destructor TCertificateImpl.Destroy;
 begin
   if Assigned(FInfo.SubjectAltNames) then
     FInfo.SubjectAltNames.Free;
-    
+
   // Free OpenSSL handle if we own it
   if FOwnsHandle and Assigned(FX509) then
     X509_free(FX509);
-    
+
   inherited;
 end;
 
@@ -240,17 +241,17 @@ var
   LBio: PBIO;
 begin
   if Assigned(FX509) then Exit;  // Already have handle
-  
+
   if FPEM = '' then
     raise ESSLException.Create('No PEM data available');
 
   RequireCertificatePEMLoadHelpers;
-  
+
   // Convert PEM to X509 handle
   LBio := BIO_new_mem_buf(PAnsiChar(FPEM), Length(FPEM));
   if not Assigned(LBio) then
     raise ESSLException.Create('Failed to create BIO');
-    
+
   try
     FX509 := PEM_read_bio_X509(LBio, nil, nil, nil);
     if not Assigned(FX509) then
@@ -268,21 +269,21 @@ var
   LDataLen: Integer;
 begin
   if FPEM <> '' then Exit;  // Already have PEM
-  
+
   if not Assigned(FX509) then
     raise ESSLException.Create('No X509 handle available');
 
   RequireCertificatePEMSaveHelpers;
-  
+
   // Convert X509 handle to PEM
   LBio := BIO_new(BIO_s_mem());
   if not Assigned(LBio) then
     raise ESSLException.Create('Failed to create BIO');
-    
+
   try
     if PEM_write_bio_X509(LBio, FX509) <> 1 then
       raise ESSLException.Create('Failed to write X509 to PEM');
-      
+
     LDataLen := BIO_get_mem_data(LBio, @LDataPtr);
     if (LDataLen > 0) and Assigned(LDataPtr) then
       SetString(FPEM, LDataPtr, LDataLen);
@@ -328,8 +329,8 @@ begin
   SetLength(Result, 0);
   if Assigned(FInfo.SubjectAltNames) then
   begin
-    SetLength(Result, FInfo.SubjectAltNames.Count);
-    for I := 0 to FInfo.SubjectAltNames.Count - 1 do
+    SetLength(Result, FInfo.Length(SubjectAltNames));
+    for I := 0 to FInfo.Length(SubjectAltNames) - 1 do
       Result[I] := FInfo.SubjectAltNames[I];
   end;
 end;
@@ -401,16 +402,16 @@ var
   LBio: PBIO;
 begin
   if Assigned(FEVPKey) then Exit;
-  
+
   if FPEM = '' then
     raise ESSLException.Create('No PEM data available');
 
   RequirePrivateKeyPEMLoadHelpers;
-  
+
   LBio := BIO_new_mem_buf(PAnsiChar(FPEM), Length(FPEM));
   if not Assigned(LBio) then
     raise ESSLException.Create('Failed to create BIO');
-    
+
   try
     FEVPKey := PEM_read_bio_PrivateKey(LBio, nil, nil, nil);
     if not Assigned(FEVPKey) then
@@ -428,20 +429,20 @@ var
   LDataLen: Integer;
 begin
   if FPEM <> '' then Exit;
-  
+
   if not Assigned(FEVPKey) then
     raise ESSLException.Create('No EVP_PKEY handle available');
 
   RequirePrivateKeyPEMSaveHelpers;
-  
+
   LBio := BIO_new(BIO_s_mem());
   if not Assigned(LBio) then
     raise ESSLException.Create('Failed to create BIO');
-    
+
   try
     if PEM_write_bio_PrivateKey(LBio, FEVPKey, nil, nil, 0, nil, nil) <> 1 then
       raise ESSLException.Create('Failed to write EVP_PKEY to PEM');
-      
+
     LDataLen := BIO_get_mem_data(LBio, @LDataPtr);
     if (LDataLen > 0) and Assigned(LDataPtr) then
       SetString(FPEM, LDataPtr, LDataLen);
@@ -601,7 +602,7 @@ end;
 function TCertificateBuilderImpl.AddSubjectAltName(const ASAN: string): ICertificateBuilder;
 begin
   if not Assigned(FOptions.SubjectAltNames) then
-    FOptions.SubjectAltNames := TStringList.Create;
+    FOptions.SubjectAltNames
   FOptions.SubjectAltNames.Add(ASAN);
   Result := Self;
 end;
@@ -618,7 +619,7 @@ begin
   // Set appropriate KeyUsage for server certificates:
   // - digitalSignature: For TLS handshake signatures
   // - keyEncipherment: For RSA key exchange
-  // - keyAgreement: For ECDHE key exchange  
+  // - keyAgreement: For ECDHE key exchange
   // ExtendedKeyUsage: serverAuth (OID 1.3.6.1.5.5.7.3.1)
   // These will be applied during certificate generation in TCertificateUtils
   Result := Self;
@@ -647,11 +648,11 @@ var
 begin
   if not TCertificateUtils.GenerateSelfSigned(FOptions, LCertPEM, LKeyPEM) then
     raise ESSLException.Create('Failed to generate self-signed certificate');
-    
+
   Result := TKeyPairWithCertificateImpl.Create(LCertPEM, LKeyPEM);
 end;
 
-function TCertificateBuilderImpl.SignedBy(const ACA: ICertificate; 
+function TCertificateBuilderImpl.SignedBy(const ACA: ICertificate;
   const AKey: IPrivateKey): IKeyPairWithCertificate;
 var
   LCertPEM, LKeyPEM: string;
@@ -659,10 +660,10 @@ var
 begin
   LCAPEM := ACA.ToPEM;
   LCAKeyPEM := AKey.ToPEM;
-  
+
   if not TCertificateUtils.GenerateSigned(FOptions, LCAPEM, LCAKeyPEM, LCertPEM, LKeyPEM) then
     raise ESSLException.Create('Failed to generate CA-signed certificate');
-    
+
   Result := TKeyPairWithCertificateImpl.Create(LCertPEM, LKeyPEM);
 end;
 

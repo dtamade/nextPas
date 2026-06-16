@@ -3,7 +3,7 @@ program nextpas_test_harness_runner;
 {$mode objfpc}{$H+}
 
 uses
-  Classes, Process, SysUtils, snapshot_support;
+  BaseUnix, Classes, Process, SysUtils, snapshot_support;
 
 type
   THarnessGroup = (
@@ -23,6 +23,8 @@ const
   ExitSuccessCode = 0;
   ExitFailureCode = 1;
   BaselineTargetName = 'linux-x86_64';
+  LinuxX8664DefaultInterpreter = '/lib/ld64.so.1';
+  LinuxX8664FallbackLoader = '/lib64/ld-linux-x86-64.so.2';
   HarnessTempRoot = 'build/harness/work';
   DefaultStage0Executable = 'build/stage0-bootstrap/nextpas';
   HostCompilerExecutable = 'fpc';
@@ -618,6 +620,53 @@ begin
   end;
 end;
 
+function HostPathIsExecutable(const APath: string): Boolean;
+begin
+  Result := (APath <> '') and (FpAccess(PChar(APath), X_OK) = 0);
+end;
+
+function ShouldUseLinuxX8664LoaderFallback: Boolean;
+begin
+  Result :=
+    (BaselineTargetName = 'linux-x86_64') and
+    (not FileExists(LinuxX8664DefaultInterpreter)) and
+    HostPathIsExecutable(LinuxX8664FallbackLoader);
+end;
+
+function RunTargetArtifactCapture(
+  const AArtifactPath: string;
+  const AWorkingDirectory: string;
+  const AParameters: TStrings;
+  out AOutput: string
+): LongInt;
+var
+  LoaderParameters: TStringList;
+  Index: Integer;
+begin
+  if not ShouldUseLinuxX8664LoaderFallback then
+    Exit(RunProcessCapture(
+      ExpandFileName(AArtifactPath),
+      AWorkingDirectory,
+      AParameters,
+      AOutput
+    ));
+
+  LoaderParameters := TStringList.Create;
+  try
+    LoaderParameters.Add(ExpandFileName(AArtifactPath));
+    for Index := 0 to AParameters.Count - 1 do
+      LoaderParameters.Add(AParameters[Index]);
+    Result := RunProcessCapture(
+      LinuxX8664FallbackLoader,
+      AWorkingDirectory,
+      LoaderParameters,
+      AOutput
+    );
+  finally
+    LoaderParameters.Free;
+  end;
+end;
+
 function ExtractProjectionValue(
   const AOutput: string;
   const APrefix: string
@@ -1034,8 +1083,8 @@ begin
             Params.Clear;
             AExecution.RunOutputPath := FixtureRunOutputPath(AGroup, AFixturePath);
             try
-              AExecution.ExitCode := RunProcessCapture(
-                ExpandFileName(ArtifactPath),
+              AExecution.ExitCode := RunTargetArtifactCapture(
+                ArtifactPath,
                 '',
                 Params,
                 RunOutput
@@ -1200,8 +1249,8 @@ begin
             Params.Clear;
             AExecution.RunOutputPath := FixtureRunOutputPath(AGroup, AFixturePath);
             try
-              AExecution.ExitCode := RunProcessCapture(
-                ExpandFileName(ArtifactPath),
+              AExecution.ExitCode := RunTargetArtifactCapture(
+                ArtifactPath,
                 '',
                 Params,
                 RunOutput
@@ -1277,8 +1326,8 @@ begin
             Params.Clear;
             AExecution.RunOutputPath := FixtureRunOutputPath(AGroup, AFixturePath);
             try
-              AExecution.ExitCode := RunProcessCapture(
-                ExpandFileName(ArtifactPath),
+              AExecution.ExitCode := RunTargetArtifactCapture(
+                ArtifactPath,
                 '',
                 Params,
                 RunOutput
@@ -1354,8 +1403,8 @@ begin
             Params.Clear;
             AExecution.RunOutputPath := FixtureRunOutputPath(AGroup, AFixturePath);
             try
-              AExecution.ExitCode := RunProcessCapture(
-                ExpandFileName(ArtifactPath),
+              AExecution.ExitCode := RunTargetArtifactCapture(
+                ArtifactPath,
                 '',
                 Params,
                 RunOutput

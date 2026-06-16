@@ -130,13 +130,12 @@ run_one_from_test_binary() {
 
   LBuildLog="${OUT_DIR}/simd_test_binary.build.log"
   LRunLog="${OUT_DIR}/simd_test_binary.run.log"
-  LBinary="${OUTPUT_ROOT}/bin2/nextpas.core.simd.test"
+  LBinary="${ROOT_DIR}/build/bin/nextpas.core.simd.test"
 
   echo "[BENCH] >>> ${aName}" | tee -a "${RUNNER_LOG}"
 
   (
-    cd "${ROOT_DIR}"
-    SIMD_OUTPUT_ROOT="${OUTPUT_ROOT}" bash tests/nextpas.core.simd/BuildOrTest.sh build
+    make -C "${SCRIPT_DIR}" bench-build FPC="${FPC_BIN}"
   ) >"${LBuildLog}" 2>&1 || LBuildRc=$?
   LBuildRc="${LBuildRc:-0}"
 
@@ -195,6 +194,64 @@ append_benchmark_excerpt() {
       }
     }
   ' "${aRunLog}" || true
+}
+
+benchmark_report_name() {
+  local aSource="$1"
+
+  case "${aSource}" in
+    bench_avx512_vs_avx2.lpr)
+      echo "AVX512_vs_AVX2_Benchmark_Report.md"
+      ;;
+    bench_neon_vs_scalar.lpr)
+      echo "NEON_vs_Scalar_Benchmark_Report.md"
+      ;;
+    bench_riscvv_vs_scalar.lpr)
+      echo "RISCVV_vs_Scalar_Benchmark_Report.md"
+      ;;
+    *)
+      echo ""
+      ;;
+  esac
+}
+
+append_markdown_heading_excerpt() {
+  local aReportPath="$1"
+  local aHeading="$2"
+
+  if [[ ! -f "${aReportPath}" ]]; then
+    return 0
+  fi
+
+  awk -v heading="${aHeading}" '
+    $0 == heading {
+      capture = 1
+    }
+    capture {
+      if ($0 != heading && /^### /) {
+        exit
+      }
+      print
+    }
+  ' "${aReportPath}" || true
+}
+
+append_report_summary_extras() {
+  local aName="$1"
+  local aReportPath="$2"
+
+  if [[ ! -f "${aReportPath}" ]]; then
+    return 0
+  fi
+
+  echo "- Markdown report: ${aReportPath}"
+
+  case "${aName}" in
+    NEON_vs_Scalar)
+      echo "- Caveat carry-forward: AArch64 ABI caveat; measured workload only; not a blanket claim that NEON is always faster than scalar fallback."
+      append_markdown_heading_excerpt "${aReportPath}" "### AArch64 ABI caveat"
+      ;;
+  esac
 }
 
 declare -a TARGETS
@@ -269,6 +326,10 @@ fi
         echo "- Build log: ${OUT_DIR}/${LBase}.build.log"
         echo "- Run log: ${OUT_DIR}/${LBase}.run.log"
         append_benchmark_excerpt "${OUT_DIR}/${LBase}.run.log"
+        LReportName="$(benchmark_report_name "${LSource}")"
+        if [[ -n "${LReportName}" ]]; then
+          append_report_summary_extras "${LName}" "${OUT_DIR}/${LReportName}"
+        fi
       else
         echo "- SKIP: host arch ${HOST_ARCH} not in ${LHostRegex}"
       fi

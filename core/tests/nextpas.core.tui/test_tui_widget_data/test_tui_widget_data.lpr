@@ -17,6 +17,20 @@ uses
   nextpas.core.testing;
 var T: TTestRunner;
 
+procedure CheckOutsideAreaEmpty(LBuf: TBuffer; const AArea: TRect; const AMessage: AnsiString);
+var
+  LX, LY: Integer;
+  LCell: PCell;
+begin
+  for LY := LBuf.Area.Y to LBuf.Area.Y + LBuf.Area.Height - 1 do
+    for LX := LBuf.Area.X to LBuf.Area.X + LBuf.Area.Width - 1 do
+      if not AArea.Contains(PositionMake(LX, LY)) then
+      begin
+        LCell := LBuf.CellAt(LX, LY);
+        Check(CellEquals(LCell^, CELL_EMPTY), AMessage);
+      end;
+end;
+
 { === TLineChart === }
 procedure TestLineChartRender;
 var LC: IWidget; LBuf: TBuffer;
@@ -58,6 +72,23 @@ begin
     PG.Render(TRect.Make(0, 0, 40, 3), LBuf);
     LRow := LBuf.RowAsString(0);
     Check(Pos('Task A', LRow) > 0, 'label A visible');
+  finally LBuf.Free; end;
+end;
+
+procedure TestProgressGroupTinyAreaDoesNotWriteOutsideCallerArea;
+var
+  PG: IWidget;
+  LBuf: TBuffer;
+begin
+  PG := TProgressGroup.New([
+    TProgressItem.Make('LongTask', 0.75),
+    TProgressItem.Make('Second', 0.30)
+  ]) as IWidget;
+  LBuf := TBuffer.CreateFilled(TRect.Make(0, 0, 12, 3), CELL_EMPTY);
+  try
+    PG.Render(TRect.Make(0, 0, 1, 1), LBuf);
+    CheckOutsideAreaEmpty(LBuf, TRect.Make(0, 0, 1, 1),
+      'progress group keeps caller area boundary');
   finally LBuf.Free; end;
 end;
 
@@ -132,6 +163,7 @@ begin
   T.Run('linechart render', @TestLineChartRender);
   T.Run('linechart multi-series', @TestLineChartMultiSeries);
   T.Run('progress_group render', @TestProgressGroupRender);
+  T.Run('progress_group tiny area clipping', @TestProgressGroupTinyAreaDoesNotWriteOutsideCallerArea);
   T.Run('timeline render', @TestTimelineRender);
   T.Run('calendar render', @TestCalendarRender);
   T.Run('breadcrumb render', @TestBreadcrumbRender);

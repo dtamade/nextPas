@@ -13,7 +13,9 @@ uses
 // - 默认公开入口最常用的 128-bit 运算符现在已回收到
 //   nextpas.core.simd.base，以便 `uses nextpas.core.simd;` 直接生效。
 // - 本单元保留更宽向量和兼容层所需的运算符重载实现。
-// - 通过 dispatch 系统自动选择最佳 SIMD 后端
+// - 运行时通过 dispatch table 路由到当前 active backend；x86_64 会在
+//   Scalar/SSE2/AVX2/AVX-512 等可派发候选中选择，AArch64 default scalar fallback
+//   仍是默认 public 行为，NEON asm opt-in 需显式启用
 // =============================================================
 
 // TVecI64x2 运算符 (P1.3)

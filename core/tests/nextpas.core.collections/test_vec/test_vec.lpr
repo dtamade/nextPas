@@ -9,13 +9,21 @@ uses
   nextpas.core.testing,
   nextpas.core.collections,
   nextpas.core.collections.vec.intf,
-  nextpas.core.collections.vec;
+  nextpas.core.collections.vec,
+  leak_tracker;
 
 type
   IIntVec = specialize IVec<Integer>;
   TIntVec = specialize TVec<Integer>;
   IStrVec = specialize IVec<string>;
   TStrVec = specialize TVec<string>;
+  ITrackedVec = specialize IVec<ITracked>;
+  TTrackedVec = specialize TVec<ITracked>;
+
+function IsTrackedIdEven(const V: ITracked; Data: Pointer): Boolean;
+begin
+  Result := (V <> nil) and ((V.GetId mod 2) = 0);
+end;
 
 function IsEven(const V: Integer; Data: Pointer): Boolean;
 begin
@@ -203,6 +211,106 @@ begin
   CheckEqual(Int64(2), Int64(LV.Count));
   CheckEqual('hello', LV[0]);
   CheckEqual('world', LV[1]);
+end;
+
+procedure TestManagedReturnValuesOutliveVecRemoval;
+  procedure RunScenario;
+  var
+    LV: TTrackedVec;
+    LPop, LRemoved, LSwapRemoved, LTryRemoved, LTrySwapRemoved: ITracked;
+  begin
+    LV := TTrackedVec.Create;
+    try
+      LV.Push(MakeTracked(1));
+      LV.Push(MakeTracked(2));
+      LV.Push(MakeTracked(3));
+      LV.Push(MakeTracked(4));
+      LV.Push(MakeTracked(5));
+
+      LPop := LV.Pop;
+      CheckEqual(Int64(5), Int64(LPop.GetId), 'pop result remains alive');
+
+      LRemoved := LV.RemoveAt(1);
+      CheckEqual(Int64(2), Int64(LRemoved.GetId), 'remove result remains alive');
+
+      LSwapRemoved := LV.SwapRemoveAt(1);
+      CheckEqual(Int64(3), Int64(LSwapRemoved.GetId), 'swap-remove result remains alive');
+
+      Check(LV.TryRemoveAt(0, LTryRemoved), 'try remove succeeds');
+      CheckEqual(Int64(1), Int64(LTryRemoved.GetId), 'try remove result remains alive');
+
+      Check(LV.TrySwapRemoveAt(0, LTrySwapRemoved), 'try swap remove succeeds');
+      CheckEqual(Int64(4), Int64(LTrySwapRemoved.GetId), 'try swap remove result remains alive');
+
+      CheckEqual(Int64(0), Int64(LV.Count), 'source vector empty after removals');
+      LV.Free;
+      LV := nil;
+
+      CheckEqual(Int64(5), Int64(LPop.GetId), 'pop output survives vector free');
+      CheckEqual(Int64(2), Int64(LRemoved.GetId), 'remove output survives vector free');
+      CheckEqual(Int64(3), Int64(LSwapRemoved.GetId), 'swap-remove output survives vector free');
+      CheckEqual(Int64(1), Int64(LTryRemoved.GetId), 'try remove output survives vector free');
+      CheckEqual(Int64(4), Int64(LTrySwapRemoved.GetId), 'try swap remove output survives vector free');
+    finally
+      if LV <> nil then
+        LV.Free;
+    end;
+  end;
+var
+  LSnap: TLeakSnapshot;
+begin
+  LSnap := SnapTake;
+  RunScenario;
+  SnapAssert(LSnap, 'vec managed removal outputs');
+end;
+
+procedure TestManagedDrainSplitRetainOwnership;
+  procedure RunScenario;
+  var
+    LV: TTrackedVec;
+    LDrained, LSplit: ITrackedVec;
+  begin
+    LV := TTrackedVec.Create;
+    try
+      LV.Push(MakeTracked(1));
+      LV.Push(MakeTracked(2));
+      LV.Push(MakeTracked(3));
+      LV.Push(MakeTracked(4));
+      LV.Push(MakeTracked(5));
+
+      LDrained := LV.Drain(1, 2);
+      CheckEqual(Int64(2), Int64(LDrained.Count), 'drained count');
+      CheckEqual(Int64(2), Int64(LDrained.Get(0).GetId), 'drained first survives source resize');
+      CheckEqual(Int64(3), Int64(LDrained.Get(1).GetId), 'drained second survives source resize');
+      CheckEqual(Int64(3), Int64(LV.Count), 'source count after drain');
+
+      LSplit := LV.SplitOff(1);
+      CheckEqual(Int64(1), Int64(LV.Count), 'left count after split');
+      CheckEqual(Int64(2), Int64(LSplit.Count), 'split count');
+      CheckEqual(Int64(4), Int64(LSplit.Get(0).GetId), 'split first survives source truncation');
+      CheckEqual(Int64(5), Int64(LSplit.Get(1).GetId), 'split second survives source truncation');
+
+      LV.Push(MakeTracked(6));
+      LV.Push(MakeTracked(7));
+      LV.Retain(@IsTrackedIdEven, nil);
+      CheckEqual(Int64(1), Int64(LV.Count), 'retain keeps one even element');
+      CheckEqual(Int64(6), Int64(LV.Get(0).GetId), 'retained element remains alive');
+
+      LV.Free;
+      LV := nil;
+      CheckEqual(Int64(2), Int64(LDrained.Get(0).GetId), 'drained output survives source free');
+      CheckEqual(Int64(4), Int64(LSplit.Get(0).GetId), 'split output survives source free');
+    finally
+      if LV <> nil then
+        LV.Free;
+    end;
+  end;
+var
+  LSnap: TLeakSnapshot;
+begin
+  LSnap := SnapTake;
+  RunScenario;
+  SnapAssert(LSnap, 'vec managed drain split retain');
 end;
 
 procedure TestClear;
@@ -817,6 +925,23 @@ begin
   end;
 end;
 
+procedure TestSliceViewClampsOverflowingCount;
+var
+  LV: TIntVec;
+  LSpan: TIntVec.TSpan;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([10, 20, 30]);
+    LSpan := LV.SliceView(1, High(SizeUInt));
+    CheckEqual(Int64(2), Int64(LSpan.Count), 'overflowing count should clamp to remaining elements');
+    CheckEqual(Int64(20), Int64(LSpan.Get(0)), 'first visible element');
+    CheckEqual(Int64(30), Int64(LSpan.Get(1)), 'last visible element');
+  finally
+    LV.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.vec');
   T.Run('Create', @TestCreate);
@@ -832,6 +957,8 @@ begin
   T.Run('Reserve failure raises OOM', @TestReserveFailureRaisesOutOfMemory);
   T.Run('ReserveExact failure raises OOM', @TestReserveExactFailureRaisesOutOfMemory);
   T.Run('String type', @TestString);
+  T.Run('Managed removal outputs outlive source slots', @TestManagedReturnValuesOutliveVecRemoval);
+  T.Run('Managed drain split retain ownership', @TestManagedDrainSplitRetainOwnership);
   T.Run('Clear', @TestClear);
   T.Run('Auto free (interface)', @TestAutoFree);
   T.Run('Push', @TestPush);
@@ -868,5 +995,6 @@ begin
   T.Run('Push(Pointer, Count) bulk', @TestPushPointerBulk);
   T.Run('Insert(Index, Pointer, Count) bulk', @TestInsertPointerBulk);
   T.Run('Delete(Index, Count) multi', @TestDeleteMulti);
+  T.Run('SliceView clamps overflowing count', @TestSliceViewClampsOverflowingCount);
   T.Summary;
 end.

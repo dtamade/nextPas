@@ -151,6 +151,18 @@ type
     wProcessorRevision: UInt16;
   end;
 
+  MEMORY_BASIC_INFORMATION = record
+    BaseAddress: Pointer;
+    AllocationBase: Pointer;
+    AllocationProtect: DWORD;
+    PartitionId: WORD;
+    RegionSize: PtrUInt;
+    State: DWORD;
+    Protect: DWORD;
+    Type_: DWORD;
+  end;
+  PMEMORY_BASIC_INFORMATION = ^MEMORY_BASIC_INFORMATION;
+
   TWinThreadStartRoutine = function(lpThreadParameter: Pointer): DWORD; stdcall;
   PPlatformWindowsThreadState = ^TPlatformWindowsThreadState;
   TPlatformWindowsThreadState = record

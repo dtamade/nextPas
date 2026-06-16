@@ -19,8 +19,7 @@ unit nextpas.core.tls.context.builder;
 interface
 
 uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.tls.base,
   nextpas.core.tls.safety,
   nextpas.core.tls.pkcs11.types,
   nextpas.core.tls.pkcs11.pin,
@@ -185,7 +184,8 @@ type
 implementation
 
 uses
-  nextpas.core.tls.factory,
+  nextpas.core.text.strings,
+    nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.freepascal.context.material,
   nextpas.core.tls.base64,
@@ -200,7 +200,7 @@ begin
   if AForServer then
     TSecurityLog.Warning(
       'ContextBuilder',
-      Format(
+      nextpas.core.text.conv.Format(
         '%s received WithSNI as deprecated context-level ServerName compatibility on a server context; ' +
         'BuildServer ignores it and server-side connections ignore it.',
         [ACallSite]
@@ -209,7 +209,7 @@ begin
   else
     TSecurityLog.Warning(
       'ContextBuilder',
-      Format(
+      nextpas.core.text.conv.Format(
         '%s received WithSNI as deprecated context-level SNI compatibility on a client context; ' +
         'BuildClient ignores it and new client connections start without inherited ServerName. ' +
         'Prefer per-connection hostname via TSSLConnectionBuilder.WithHostname, ' +
@@ -427,8 +427,8 @@ begin
   if AVerifyMode <> [sslVerifyPeer] then
     Exit(True);
 
-  Result := (Trim(ACAFile) <> '') or
-            (Trim(ACAPath) <> '') or
+  Result := (nextpas.core.text.conv.Trim(ACAFile) <> '') or
+            (nextpas.core.text.conv.Trim(ACAPath) <> '') or
             AUseSystemRoots;
 end;
 
@@ -655,7 +655,7 @@ end;
 
 function UnsupportedBuilderPKCS11PINMethodMessage(AMethod: TPKCS11PINMethod): string;
 begin
-  Result := Format(
+  Result := nextpas.core.text.conv.Format(
     'Context builder does not support PKCS#11 PIN method %s; use UsePKCS11(...) with URI pin-source or WithPKCS11PIN for direct PIN',
     [PKCS11PINMethodToString(AMethod)]
   );
@@ -663,7 +663,7 @@ end;
 
 function MissingBuilderPKCS11PINSourceValueMessage(AMethod: TPKCS11PINMethod): string;
 begin
-  Result := Format(
+  Result := nextpas.core.text.conv.Format(
     'Context builder PKCS#11 PIN method %s requires a non-empty source value',
     [PKCS11PINMethodToString(AMethod)]
   );
@@ -684,7 +684,7 @@ var
   LOrdinal: Integer;
   LValueLower: string;
 begin
-  if TryStrToInt(Trim(AValue), LOrdinal) then
+  if TryStrToInt(nextpas.core.text.conv.Trim(AValue), LOrdinal) then
   begin
     Result := (LOrdinal >= Ord(Low(TSSLLibraryType))) and
               (LOrdinal <= Ord(High(TSSLLibraryType)));
@@ -695,7 +695,7 @@ begin
     Exit;
   end;
 
-  LValueLower := LowerCase(Trim(AValue));
+  LValueLower := LowerCase(nextpas.core.text.conv.Trim(AValue));
 
   if (LValueLower = 'sslautodetect') or (LValueLower = 'autodetect') or (LValueLower = 'auto') then
     ALibraryType := sslAutoDetect
@@ -760,10 +760,10 @@ var
   LOrdinal: Integer;
   LValueLower: string;
 begin
-  if TryStrToInt(Trim(AValue), LOrdinal) then
+  if TryStrToInt(nextpas.core.text.conv.Trim(AValue), LOrdinal) then
     Exit(TryParsePKCS11PINMethodOrdinal(LOrdinal, AMethod));
 
-  LValueLower := LowerCase(Trim(AValue));
+  LValueLower := LowerCase(nextpas.core.text.conv.Trim(AValue));
 
   if (LValueLower = 'pmnone') or (LValueLower = 'none') then
   begin
@@ -805,7 +805,7 @@ end;
 function BuilderClientReplayStoreScopeMessage(
   const AField, ACallSite: string): string;
 begin
-  Result := Format(
+  Result := nextpas.core.text.conv.Format(
     '%s is server-scoped. Client context builders do not install replay stores; remove it from %s.',
     [AField, ACallSite]
   );
@@ -814,7 +814,7 @@ end;
 procedure AddClientReplayStoreScopeValidationErrors(
   const ABuilder: TSSLContextBuilderImpl; var AValidation: TBuildValidationResult);
 begin
-  if Trim(ABuilder.FServerEarlyDataReplayStoreFile) <> '' then
+  if nextpas.core.text.conv.Trim(ABuilder.FServerEarlyDataReplayStoreFile) <> '' then
     AValidation.AddError(
       BuilderClientReplayStoreScopeMessage(
         'server_early_data_replay_store_file',
@@ -822,7 +822,7 @@ begin
       )
     );
 
-  if Trim(ABuilder.FServerEarlyDataReplayStoreDirectory) <> '' then
+  if nextpas.core.text.conv.Trim(ABuilder.FServerEarlyDataReplayStoreDirectory) <> '' then
     AValidation.AddError(
       BuilderClientReplayStoreScopeMessage(
         'server_early_data_replay_store_directory',
@@ -834,7 +834,7 @@ end;
 procedure EnsureClientReplayStoreScope(
   const ABuilder: TSSLContextBuilderImpl; const ACallSite: string);
 begin
-  if Trim(ABuilder.FServerEarlyDataReplayStoreFile) <> '' then
+  if nextpas.core.text.conv.Trim(ABuilder.FServerEarlyDataReplayStoreFile) <> '' then
     raise ESSLConfigurationException.Create(
       BuilderClientReplayStoreScopeMessage(
         'server_early_data_replay_store_file',
@@ -842,7 +842,7 @@ begin
       )
     );
 
-  if Trim(ABuilder.FServerEarlyDataReplayStoreDirectory) <> '' then
+  if nextpas.core.text.conv.Trim(ABuilder.FServerEarlyDataReplayStoreDirectory) <> '' then
     raise ESSLConfigurationException.Create(
       BuilderClientReplayStoreScopeMessage(
         'server_early_data_replay_store_directory',
@@ -1384,8 +1384,8 @@ begin
     LServerOCSPStaplingContext.LoadServerStapledOCSPResponseFile(FServerOCSPStapledResponseFile);
   end;
 
-  if (Trim(FServerEarlyDataReplayStoreFile) <> '') and
-    (Trim(FServerEarlyDataReplayStoreDirectory) <> '') then
+  if (nextpas.core.text.conv.Trim(FServerEarlyDataReplayStoreFile) <> '') and
+    (nextpas.core.text.conv.Trim(FServerEarlyDataReplayStoreDirectory) <> '') then
     raise ESSLException.Create(
       'Configured server_early_data_replay_store_file and ' +
       'server_early_data_replay_store_directory are mutually exclusive; configure not both'
@@ -1700,7 +1700,7 @@ begin
   if AArray = nil then
     Exit;
 
-  for I := 0 to AArray.Count - 1 do
+  for I := 0 to Length(AArray) - 1 do
     Include(AProtocols, TSSLProtocolVersion(AArray.Integers[I]));
 end;
 
@@ -1712,7 +1712,7 @@ begin
   if AArray = nil then
     Exit;
 
-  for I := 0 to AArray.Count - 1 do
+  for I := 0 to Length(AArray) - 1 do
     Include(ACiphers, TSSLCipher(AArray.Integers[I]));
 end;
 
@@ -1724,7 +1724,7 @@ begin
   if AArray = nil then
     Exit;
 
-  for I := 0 to AArray.Count - 1 do
+  for I := 0 to Length(AArray) - 1 do
     Include(AHashes, TSSLHash(AArray.Integers[I]));
 end;
 
@@ -1737,7 +1737,7 @@ begin
   if AArray = nil then
     Exit;
 
-  for I := 0 to AArray.Count - 1 do
+  for I := 0 to Length(AArray) - 1 do
     Include(AKeyExchanges, TSSLKeyExchange(AArray.Integers[I]));
 end;
 
@@ -1749,7 +1749,7 @@ begin
   if AArray = nil then
     Exit;
 
-  for I := 0 to AArray.Count - 1 do
+  for I := 0 to Length(AArray) - 1 do
     Include(AFeatures, TSSLFeature(AArray.Integers[I]));
 end;
 
@@ -1908,7 +1908,6 @@ begin
 
     Result := LRoot.FormatJSON;
   finally
-    LRoot.Free;
   end;
 end;
 
@@ -1953,7 +1952,7 @@ begin
       begin
         LProtocols := Arrays['protocols'];
         FProtocolVersions := [];
-        for I := 0 to LProtocols.Count - 1 do
+        for I := 0 to Length(LProtocols) - 1 do
           if IsValidProtocolVersionOrdinal(LProtocols.Integers[I]) then
             Include(FProtocolVersions, TSSLProtocolVersion(LProtocols.Integers[I]));
       end;
@@ -1963,7 +1962,7 @@ begin
       begin
         LVerify := Arrays['verify_modes'];
         FVerifyMode := [];
-        for I := 0 to LVerify.Count - 1 do
+        for I := 0 to Length(LVerify) - 1 do
           if IsValidVerifyModeOrdinal(LVerify.Integers[I]) then
             Include(FVerifyMode, TSSLVerifyMode(LVerify.Integers[I]));
       end;
@@ -2084,7 +2083,7 @@ begin
       begin
         LOptions := Arrays['options'];
         FOptions := [];
-        for I := 0 to LOptions.Count - 1 do
+        for I := 0 to Length(LOptions) - 1 do
           if IsValidOptionOrdinal(LOptions.Integers[I]) then
             Include(FOptions, TSSLOption(LOptions.Integers[I]));
       end;
@@ -2130,13 +2129,12 @@ begin
       end;
     end;
   finally
-    LRoot.Free;
   end;
 end;
 
 function TSSLContextBuilderImpl.ExportToINI: string;
 var
-  LLines: TStringList;
+  LLines: TStringArray;
   LBackendRequirements: TJSONObject;
   LProto: TSSLProtocolVersion;
   LVerifyMode: TSSLVerifyMode;
@@ -2144,7 +2142,6 @@ var
   LProtocolStr, LVerifyStr, LOptionsStr: string;
   LDecodedBytes: TBytes;
 begin
-  LLines := TStringList.Create;
   try
     LLines.Add('[SSL Context Configuration]');
     LLines.Add('');
@@ -2156,7 +2153,7 @@ begin
       begin
         if LProtocolStr <> '' then
           LProtocolStr := LProtocolStr + ',';
-        LProtocolStr := LProtocolStr + IntToStr(Ord(LProto));
+        LProtocolStr := LProtocolStr + nextpas.core.text.conv.IntToStr(Ord(LProto));
       end;
     LLines.Add('protocols=' + LProtocolStr);
 
@@ -2167,14 +2164,14 @@ begin
       begin
         if LVerifyStr <> '' then
           LVerifyStr := LVerifyStr + ',';
-        LVerifyStr := LVerifyStr + IntToStr(Ord(LVerifyMode));
+        LVerifyStr := LVerifyStr + nextpas.core.text.conv.IntToStr(Ord(LVerifyMode));
       end;
     LLines.Add('verify_modes=' + LVerifyStr);
     if FVerifyModeExplicit then
       LLines.Add('verify_mode_explicit=true')
     else
       LLines.Add('verify_mode_explicit=false');
-    LLines.Add('verify_depth=' + IntToStr(FVerifyDepth));
+    LLines.Add('verify_depth=' + nextpas.core.text.conv.IntToStr(FVerifyDepth));
     LLines.Add('');
 
     // Certificate configuration
@@ -2197,7 +2194,7 @@ begin
     if IsSerializablePKCS11PINSourceMethod(FPKCS11PINMethod) then
     begin
       LLines.Add('pkcs11_pin=' + FPKCS11PIN);
-      LLines.Add('pkcs11_pin_method=' + IntToStr(Ord(FPKCS11PINMethod)));
+      LLines.Add('pkcs11_pin_method=' + nextpas.core.text.conv.IntToStr(Ord(FPKCS11PINMethod)));
     end;
     LLines.Add('ca_file=' + FCAFile);
     LLines.Add('ca_path=' + FCAPath);
@@ -2223,17 +2220,17 @@ begin
       LLines.Add('session_cache_enabled=true')
     else
       LLines.Add('session_cache_enabled=false');
-    LLines.Add('session_timeout=' + IntToStr(FSessionTimeout));
+    LLines.Add('session_timeout=' + nextpas.core.text.conv.IntToStr(FSessionTimeout));
     if FClientEarlyDataEnabled then
       LLines.Add('client_early_data_enabled=true')
     else
       LLines.Add('client_early_data_enabled=false');
-    LLines.Add('server_early_data_policy=' + IntToStr(Ord(FServerEarlyDataPolicy)));
-    LLines.Add('server_max_early_data_size=' + IntToStr(FServerMaxEarlyDataSize));
+    LLines.Add('server_early_data_policy=' + nextpas.core.text.conv.IntToStr(Ord(FServerEarlyDataPolicy)));
+    LLines.Add('server_max_early_data_size=' + nextpas.core.text.conv.IntToStr(FServerMaxEarlyDataSize));
     LLines.Add('server_early_data_replay_store_file=' + FServerEarlyDataReplayStoreFile);
     LLines.Add('server_early_data_replay_store_directory=' + FServerEarlyDataReplayStoreDirectory);
     if FExplicitBackendSet and (not FAutoSelectBackend) then
-      LLines.Add('explicit_backend=' + IntToStr(Ord(FExplicitBackend)));
+      LLines.Add('explicit_backend=' + nextpas.core.text.conv.IntToStr(Ord(FExplicitBackend)));
     LLines.Add('');
 
     if FAutoSelectBackend then
@@ -2245,7 +2242,6 @@ begin
         LLines.Add('backend_requirements=' + LBackendRequirements.AsJSON);
         LLines.Add('');
       finally
-        LBackendRequirements.Free;
       end;
     end;
 
@@ -2256,7 +2252,7 @@ begin
       begin
         if LOptionsStr <> '' then
           LOptionsStr := LOptionsStr + ',';
-        LOptionsStr := LOptionsStr + IntToStr(Ord(LOption));
+        LOptionsStr := LOptionsStr + nextpas.core.text.conv.IntToStr(Ord(LOption));
       end;
     LLines.Add('[Options]');
     LLines.Add('options=' + LOptionsStr);
@@ -2284,18 +2280,17 @@ begin
 
     Result := LLines.Text;
   finally
-    LLines.Free;
   end;
 end;
 
 function TSSLContextBuilderImpl.ImportFromINI(const AINI: string): ISSLContextBuilder;
 var
-  LLines: TStringList;
+  LLines: TStringArray;
   LBackendRequirementsData: TJSONData;
   I: Integer;
   LLine, LKey, LValue: string;
   LPos: Integer;
-  LParts: TStringList;
+  LParts: TStringArray;
   LImportedRequirements: TSSLRequirements;
   LImportedExplicitBackend: TSSLLibraryType;
   LImportedPKCS11PINMethod: TPKCS11PINMethod;
@@ -2321,15 +2316,12 @@ begin
   LHasAutoSelectBackend := False;
   LHasVerifyModes := False;
   LAutoSelectBackend := False;
-
-  LLines := TStringList.Create;
-  LParts := TStringList.Create;
   try
     LLines.Text := AINI;
 
-    for I := 0 to LLines.Count - 1 do
+    for I := 0 to Length(LLines) - 1 do
     begin
-      LLine := Trim(LLines[I]);
+      LLine := nextpas.core.text.conv.Trim(LLines[I]);
 
       // Skip empty lines and section headers
       if (LLine = '') or (LLine[1] = '[') then
@@ -2339,15 +2331,15 @@ begin
       LPos := Pos('=', LLine);
       if LPos > 0 then
       begin
-        LKey := Trim(Copy(LLine, 1, LPos - 1));
-        LValue := Trim(Copy(LLine, LPos + 1, Length(LLine)));
+        LKey := nextpas.core.text.conv.Trim(Copy(LLine, 1, LPos - 1));
+        LValue := nextpas.core.text.conv.Trim(Copy(LLine, LPos + 1, Length(LLine)));
 
         // Parse based on key
         if LKey = 'protocols' then
         begin
           LParts.CommaText := LValue;
           FProtocolVersions := [];
-          for J := 0 to LParts.Count - 1 do
+          for J := 0 to Length(LParts) - 1 do
             if IsValidProtocolVersionOrdinal(StrToIntDef(LParts[J], -1)) then
               Include(FProtocolVersions, TSSLProtocolVersion(StrToIntDef(LParts[J], 0)));
         end
@@ -2355,7 +2347,7 @@ begin
         begin
           LParts.CommaText := LValue;
           FVerifyMode := [];
-          for J := 0 to LParts.Count - 1 do
+          for J := 0 to Length(LParts) - 1 do
             if IsValidVerifyModeOrdinal(StrToIntDef(LParts[J], -1)) then
               Include(FVerifyMode, TSSLVerifyMode(StrToIntDef(LParts[J], 0)));
           LHasVerifyModes := True;
@@ -2471,7 +2463,6 @@ begin
                 if LBackendRequirementsData is TJSONObject then
                   JSONObjectToRequirements(TJSONObject(LBackendRequirementsData), LImportedRequirements);
               finally
-                LBackendRequirementsData.Free;
               end;
             except
               // Ignore malformed serialized requirement payloads.
@@ -2482,7 +2473,7 @@ begin
         begin
           LParts.CommaText := LValue;
           FOptions := [];
-          for J := 0 to LParts.Count - 1 do
+          for J := 0 to Length(LParts) - 1 do
             if IsValidOptionOrdinal(StrToIntDef(LParts[J], -1)) then
               Include(FOptions, TSSLOption(StrToIntDef(LParts[J], 0)));
         end
@@ -2527,8 +2518,6 @@ begin
         );
     end;
   finally
-    LParts.Free;
-    LLines.Free;
   end;
 end;
 
@@ -2697,10 +2686,10 @@ begin
     if LObj.IndexOfName('protocols') >= 0 then
     begin
       LProtocols := LObj.Arrays['protocols'];
-      if LProtocols.Count > 0 then
+      if Length(LProtocols) > 0 then
       begin
         FProtocolVersions := [];
-        for I := 0 to LProtocols.Count - 1 do
+        for I := 0 to Length(LProtocols) - 1 do
           if IsValidProtocolVersionOrdinal(LProtocols.Integers[I]) then
             Include(FProtocolVersions, TSSLProtocolVersion(LProtocols.Integers[I]));
       end;
@@ -2711,7 +2700,7 @@ begin
     begin
       LVerify := LObj.Arrays['verify_modes'];
       FVerifyMode := [];
-      for I := 0 to LVerify.Count - 1 do
+      for I := 0 to Length(LVerify) - 1 do
         if IsValidVerifyModeOrdinal(LVerify.Integers[I]) then
           Include(FVerifyMode, TSSLVerifyMode(LVerify.Integers[I]));
       LHasVerifyModes := True;
@@ -2847,7 +2836,7 @@ begin
     begin
       LOptions := LObj.Arrays['options'];
       FOptions := [];
-      for I := 0 to LOptions.Count - 1 do
+      for I := 0 to Length(LOptions) - 1 do
         Include(FOptions, TSSLOption(LOptions.Integers[I]));
     end;
 
@@ -2881,7 +2870,6 @@ begin
         );
     end;
   finally
-    LData.Free;
   end;
 end;
 

@@ -9,10 +9,7 @@ unit nextpas.core.tls.freepascal.session;
 
 interface
 
-uses
-  SysUtils, DateUtils,
-  nextpas.core.time,
-  nextpas.core.tls.base;
+uses DateUtils, SysUtils, nextpas.core.base, nextpas.core.time, nextpas.core.tls.base;
 
 type
   IFreePascalResumptionSession = interface
@@ -163,8 +160,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.tls.tls13.wire;
+uses nextpas.core.tls.tls13.wire;
 
 const
   FREEPASCAL_SESSION_MAGIC: array[0..3] of Byte = ($46, $50, $53, $31); // FPS1

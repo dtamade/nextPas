@@ -31,7 +31,7 @@ type
     FCount: SizeUInt;   // 元素数量
     FElemSize: SizeUInt;// 元素大小（字节）
   public
-    class function FromPointer(aPtr: Pointer; aCount, aElemSize: SizeUInt): TReadOnlySpan; static; inline;
+    class function FromPointer(aPtr: Pointer; aCount, aElemSize: SizeUInt): TReadOnlySpan; static;
     function  Count: SizeUInt; inline;
     function  IsEmpty: Boolean; inline;
     function  Get(aIndex: SizeUInt): T; inline;
@@ -76,6 +76,13 @@ implementation
 
 class function TReadOnlySpan.FromPointer(aPtr: Pointer; aCount, aElemSize: SizeUInt): TReadOnlySpan;
 begin
+  if aCount > 0 then
+  begin
+    if aPtr = nil then
+      raise nextpas.core.base.EArgumentNil.Create('Span.FromPointer: pointer is nil');
+    if aElemSize = 0 then
+      raise nextpas.core.base.EInvalidArgument.Create('Span.FromPointer: element size is zero');
+  end;
   Result.FPtr := aPtr;
   Result.FCount := aCount;
   Result.FElemSize := aElemSize;
@@ -121,7 +128,7 @@ var
 begin
   if aCount = 0 then Exit(FromPointer(nil, 0, FElemSize));
   LMax := FCount;
-  if (aIndex >= LMax) or (aIndex + aCount > LMax) then
+  if (aIndex >= LMax) or (aCount > LMax - aIndex) then
     raise nextpas.core.base.EOutOfRange.Create('Span.SubSpan: range out of bounds');
   Result := FromPointer(Pointer(PByte(FPtr) + aIndex * FElemSize), aCount, FElemSize);
 end;
@@ -130,6 +137,8 @@ end;
 
 class function TReadOnlySpan2.FromTwo(constref A, B: TReadOnlySpan2.TSpan): TReadOnlySpan2;
 begin
+  if A.Count > High(SizeUInt) - B.Count then
+    raise nextpas.core.base.EOutOfRange.Create('Span2.FromTwo: aggregate count overflow');
   Result.FA := A;
   Result.FB := B;
 end;
@@ -214,13 +223,13 @@ var
   A1, B1: TSpan;
 begin
   if aCount = 0 then Exit(FromTwo(TSpan.FromPointer(nil,0,FA.FElemSize), TSpan.FromPointer(nil,0,FA.FElemSize)));
-  if aIndex + aCount > Count then
+  if (aIndex >= Count) or (aCount > Count - aIndex) then
     raise nextpas.core.base.EOutOfRange.Create('Span2.SubSpan: range out of bounds');
   LA := FA.Count;
   if aIndex < LA then
   begin
     // 起点在 A 段
-    if aIndex + aCount <= LA then
+    if aCount <= LA - aIndex then
     begin
       // 完全落在 A
       A1 := FA.SubSpan(aIndex, aCount);

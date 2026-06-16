@@ -1,3 +1,14 @@
+{**
+ * nextpas.core.platform.files - 底层文件 I/O 操作
+ *
+ * 职责：文件描述符级操作（open/close/read/write/seek/stat/dir）
+ * 层次：fd 级操作，不包含路径遍历或目录树操作
+ *
+ * 与 fs.pas 的关系：
+ *   - files.pas = 底层 fd 操作（open/close/read/write/stat/dir）
+ *   - fs.pas = 高层文件系统操作（exists/is_file/mkdir_p/copy_file/walk）
+ *   - fs.pas 依赖 files.pas
+ *}
 unit nextpas.core.platform.files;
 
 {$I nextpas.core.settings.inc}
@@ -63,6 +74,10 @@ uses
   , nextpas.core.platform.freebsd.base
   , nextpas.core.platform.freebsd.ffi
 {$ENDIF}
+{$IFDEF NEXTPAS_ANDROID}
+  , nextpas.core.platform.android.base
+  , nextpas.core.platform.android.ffi
+{$ENDIF}
   ;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
@@ -101,6 +116,7 @@ begin
     LFlags := LFlags or O_APPEND;
   if ASync then
     LFlags := LFlags or O_SYNC;
+  LFlags := LFlags or O_CLOEXEC;
   AHandle.Value := open(APath, LFlags, APerm);
   if AHandle.Value < 0 then
     Result := platform_get_errno
@@ -231,7 +247,21 @@ begin
     Result := platform_get_errno;
 end;
 
-{$IFDEF NEXTPAS_LINUX}
+function ClassifyDirEntryDType(ADType: Byte): TPlatformFileType;
+begin
+  case ADType of
+    PLATFORM_DT_REG:  Result := ftRegular;
+    PLATFORM_DT_DIR:  Result := ftDirectory;
+    PLATFORM_DT_LNK:  Result := ftSymlink;
+    PLATFORM_DT_CHR:  Result := ftCharDevice;
+    PLATFORM_DT_BLK:  Result := ftBlockDevice;
+    PLATFORM_DT_FIFO: Result := ftFifo;
+    PLATFORM_DT_SOCK: Result := ftSocket;
+  else
+    Result := ftUnknown;
+  end;
+end;
+
 procedure ClassifyStatType(var AStat: TPlatformFileStat);
 begin
   case AStat.Mode and S_IFMT of
@@ -246,22 +276,6 @@ begin
     AStat.FileType := ftUnknown;
   end;
 end;
-{$ELSE}
-procedure ClassifyStatType(var AStat: TPlatformFileStat);
-begin
-  case AStat.Mode and S_IFMT of
-    S_IFREG:  AStat.FileType := ftRegular;
-    S_IFDIR:  AStat.FileType := ftDirectory;
-    S_IFLNK:  AStat.FileType := ftSymlink;
-    S_IFCHR:  AStat.FileType := ftCharDevice;
-    S_IFBLK:  AStat.FileType := ftBlockDevice;
-    S_IFIFO:  AStat.FileType := ftFifo;
-    S_IFSOCK: AStat.FileType := ftSocket;
-  else
-    AStat.FileType := ftUnknown;
-  end;
-end;
-{$ENDIF}
 
 {$IFDEF NEXTPAS_LINUX}
 procedure FillPlatformStat(const LStat: TPlatformLinuxStat; out AStat: TPlatformFileStat);
@@ -314,15 +328,37 @@ begin
   ClassifyStatType(AStat);
 end;
 {$ENDIF}
+{$IFDEF NEXTPAS_ANDROID}
+procedure FillPlatformStat(const LStat: TPlatformAndroidStat; out AStat: TPlatformFileStat);
+begin
+  FillChar(AStat, SizeOf(AStat), 0);
+  AStat.Size := LStat.st_size;
+  AStat.Mode := LStat.st_mode;
+  AStat.Uid := LStat.st_uid;
+  AStat.Gid := LStat.st_gid;
+  AStat.NLink := UInt32(LStat.st_nlink);
+  AStat.Dev := LStat.st_dev;
+  AStat.Ino := LStat.st_ino;
+  AStat.ModTime := Int64(LStat.st_mtime) * 1000000000 + Int64(LStat.st_mtime_nsec);
+  AStat.AccessTime := Int64(LStat.st_atime) * 1000000000 + Int64(LStat.st_atime_nsec);
+  AStat.CreateTime := Int64(LStat.st_ctime) * 1000000000 + Int64(LStat.st_ctime_nsec);
+  ClassifyStatType(AStat);
+end;
+{$ENDIF}
 
 function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
 var
   LStat: {$IFDEF NEXTPAS_LINUX}TPlatformLinuxStat{$ENDIF}
          {$IFDEF NEXTPAS_MACOS}TDarwinStat{$ENDIF}
-         {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF};
+         {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF}
+         {$IFDEF NEXTPAS_ANDROID}TPlatformAndroidStat{$ENDIF};
 begin
 {$IFDEF NEXTPAS_LINUX}
   if fstatat(AT_FDCWD, APath, LStat, 0) <> 0 then
+    Exit(platform_get_errno);
+{$ELSEIF defined(NEXTPAS_ANDROID)}
+  if syscall(ANDROID_SYSCALL_NEWFSTATAT, PtrUInt(PLATFORM_ANDROID_AT_FDCWD),
+    PtrUInt(APath), PtrUInt(@LStat), 0, 0, 0) <> 0 then
     Exit(platform_get_errno);
 {$ELSE}
   if fpstat(APath, @LStat) <> 0 then
@@ -336,10 +372,16 @@ function platform_file_lstat(const APath: PAnsiChar; out AStat: TPlatformFileSta
 var
   LStat: {$IFDEF NEXTPAS_LINUX}TPlatformLinuxStat{$ENDIF}
          {$IFDEF NEXTPAS_MACOS}TDarwinStat{$ENDIF}
-         {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF};
+         {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF}
+         {$IFDEF NEXTPAS_ANDROID}TPlatformAndroidStat{$ENDIF};
 begin
 {$IFDEF NEXTPAS_LINUX}
   if fstatat(AT_FDCWD, APath, LStat, AT_SYMLINK_NOFOLLOW) <> 0 then
+    Exit(platform_get_errno);
+{$ELSEIF defined(NEXTPAS_ANDROID)}
+  if syscall(ANDROID_SYSCALL_NEWFSTATAT, PtrUInt(PLATFORM_ANDROID_AT_FDCWD),
+    PtrUInt(APath), PtrUInt(@LStat),
+    PtrUInt(PLATFORM_ANDROID_AT_SYMLINK_NOFOLLOW), 0, 0) <> 0 then
     Exit(platform_get_errno);
 {$ELSE}
   if fplstat(APath, @LStat) <> 0 then
@@ -353,10 +395,15 @@ function platform_file_fstat(const AHandle: TPlatformFileHandle; out AStat: TPla
 var
   LStat: {$IFDEF NEXTPAS_LINUX}TPlatformLinuxStat{$ENDIF}
          {$IFDEF NEXTPAS_MACOS}TDarwinStat{$ENDIF}
-         {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF};
+         {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF}
+         {$IFDEF NEXTPAS_ANDROID}TPlatformAndroidStat{$ENDIF};
 begin
 {$IFDEF NEXTPAS_LINUX}
   if __fxstat(1, AHandle.Value, LStat) <> 0 then
+    Exit(platform_get_errno);
+{$ELSEIF defined(NEXTPAS_ANDROID)}
+  if syscall(ANDROID_SYSCALL_FSTAT, PtrUInt(AHandle.Value),
+    PtrUInt(@LStat), 0, 0, 0, 0) <> 0 then
     Exit(platform_get_errno);
 {$ELSE}
   if fpfstat(AHandle.Value, @LStat) <> 0 then
@@ -473,16 +520,34 @@ end;
 
 function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Int32;
 var
+  LStat: TPlatformFileStat;
   LResult: PtrInt;
+  LCopyLen: Int32;
 begin
   ALen := 0;
   if (ABuf = nil) or (ABufLen <= 0) then
     Exit(-1);
-  LResult := readlink(APath, ABuf, ABufLen - 1);
+  Result := platform_file_lstat(APath, LStat);
+  if Result <> 0 then
+    Exit;
+  if LStat.Size < 0 then
+    Exit(-1);
+  if LStat.Size > High(Int32) then
+    Exit(-1);
+  ALen := Int32(LStat.Size);
+  LCopyLen := ALen;
+  if LCopyLen >= ABufLen then
+    LCopyLen := ABufLen - 1;
+  if LCopyLen <= 0 then
+  begin
+    ABuf[0] := #0;
+    Result := 0;
+    Exit;
+  end;
+  LResult := readlink(APath, ABuf, LCopyLen);
   if LResult < 0 then
     Exit(platform_get_errno);
   ABuf[LResult] := #0;
-  ALen := Int32(LResult);
   Result := 0;
 end;
 
@@ -497,7 +562,7 @@ begin
 end;
 
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
-{$IFDEF NEXTPAS_LINUX}
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID)}
 type
   PDirent64 = ^TDirent64;
   TDirent64 = packed record
@@ -549,12 +614,18 @@ var
 {$ENDIF}
 begin
   FillChar(AEntry, SizeOf(AEntry), 0);
-{$IFDEF NEXTPAS_LINUX}
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID)}
   while True do
   begin
     if AHandle.Pos >= AHandle.Len then
     begin
+{$IFDEF NEXTPAS_ANDROID}
+      AHandle.Len := Int32(syscall(ANDROID_SYSCALL_GETDENTS64,
+        PtrUInt(AHandle.Fd), PtrUInt(@AHandle.Buf[0]), SizeOf(AHandle.Buf),
+        0, 0, 0));
+{$ELSE}
       AHandle.Len := Int32(getdents64(AHandle.Fd, @AHandle.Buf[0], SizeOf(AHandle.Buf)));
+{$ENDIF}
       if AHandle.Len <= 0 then
       begin
         if AHandle.Len = 0 then
@@ -581,17 +652,7 @@ begin
     AEntry.Name[LNameLen] := #0;
     AEntry.NameLen := LNameLen;
     AEntry.Ino := LDent^.d_ino;
-    case LDent^.d_type of
-      8:  AEntry.FileType := ftRegular;
-      4:  AEntry.FileType := ftDirectory;
-      10: AEntry.FileType := ftSymlink;
-      2:  AEntry.FileType := ftCharDevice;
-      6:  AEntry.FileType := ftBlockDevice;
-      1:  AEntry.FileType := ftFifo;
-      12: AEntry.FileType := ftSocket;
-    else
-      AEntry.FileType := ftUnknown;
-    end;
+    AEntry.FileType := ClassifyDirEntryDType(LDent^.d_type);
     Result := 0;
     Exit;
   end;
@@ -627,17 +688,7 @@ begin
     AEntry.Name[LNameLen] := #0;
     AEntry.NameLen := LNameLen;
     AEntry.Ino := LDent^.d_ino;
-    case LDent^.d_type of
-      8:  AEntry.FileType := ftRegular;
-      4:  AEntry.FileType := ftDirectory;
-      10: AEntry.FileType := ftSymlink;
-      2:  AEntry.FileType := ftCharDevice;
-      6:  AEntry.FileType := ftBlockDevice;
-      1:  AEntry.FileType := ftFifo;
-      12: AEntry.FileType := ftSocket;
-    else
-      AEntry.FileType := ftUnknown;
-    end;
+    AEntry.FileType := ClassifyDirEntryDType(LDent^.d_type);
     Result := 0;
     Exit;
   end;
@@ -672,17 +723,7 @@ begin
     AEntry.Name[LNameLen] := #0;
     AEntry.NameLen := LNameLen;
     AEntry.Ino := LDent^.d_fileno;
-    case LDent^.d_type of
-      8:  AEntry.FileType := ftRegular;
-      4:  AEntry.FileType := ftDirectory;
-      10: AEntry.FileType := ftSymlink;
-      2:  AEntry.FileType := ftCharDevice;
-      6:  AEntry.FileType := ftBlockDevice;
-      1:  AEntry.FileType := ftFifo;
-      12: AEntry.FileType := ftSocket;
-    else
-      AEntry.FileType := ftUnknown;
-    end;
+    AEntry.FileType := ClassifyDirEntryDType(LDent^.d_type);
     Result := 0;
     Exit;
   end;
@@ -693,12 +734,14 @@ function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;
 begin
   if AHandle.Fd >= 0 then
   begin
-    close(AHandle.Fd);
+    if close(AHandle.Fd) = 0 then
+      Result := 0
+    else
+      Result := platform_get_errno;
     AHandle.Fd := -1;
-    Result := 0;
   end
   else
-    Result := platform_get_errno;
+    Result := 9;
 end;
 {$ENDIF}
 
@@ -1222,10 +1265,14 @@ function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;
 begin
   if AHandle.FindHandle <> HANDLE(PtrInt(-1)) then
   begin
-    FindClose(AHandle.FindHandle);
+    if FindClose(AHandle.FindHandle) then
+      Result := 0
+    else
+      Result := Int32(GetLastError);
     AHandle.FindHandle := HANDLE(PtrInt(-1));
-  end;
-  Result := 0;
+  end
+  else
+    Result := Int32(ERROR_INVALID_HANDLE);
 end;
 {$ENDIF}
 

@@ -32,14 +32,7 @@ Copyright: (c) 2025 fafafaStudio. All rights reserved.
 
 interface
 
-  uses
-    sysutils,
-    typinfo,
-    nextpas.core.base,
-    nextpas.core.math,
-    nextpas.core.mem.utils,
-    nextpas.core.mem.allocator,
-    nextpas.core.collections.element_manager.intf;
+uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.math, nextpas.core.mem.utils, nextpas.core.mem.intf, nextpas.core.mem.default, nextpas.core.collections.element_manager.intf;
 
   type
 
@@ -108,7 +101,7 @@ end;
 
 constructor TElementManager.Create;
 begin
-  Create(nextpas.core.mem.allocator.GetRtlAllocator);
+  Create(DefaultAllocator);
 end;
 
 function TElementManager.GeTAllocator: IAllocator;
@@ -223,12 +216,11 @@ end;
 
 procedure TElementManager.CopyElementsUncheckedInternal(aSrc, aDst: PElement; aElementCount: SizeUInt);
 var
-  LPSrcTail:        ^T;
-  LPDstTail:        ^T;
-  LIsReverse:       boolean;
-  LOverlapCount:    SizeUInt;
-  LNonOverlapCount: SizeUInt;
+  I: SizeUInt;
 begin
+  if aElementCount = 0 then
+    exit;
+
   { 非托管类型,直接拷贝 }
   if not FIsManagedType then
   begin
@@ -236,48 +228,18 @@ begin
     exit;
   end;
 
-  { 托管类型 }
-  LPSrcTail  := aSrc + aElementCount;
-  LPDstTail  := aDst + aElementCount ;
-  LIsReverse := (aSrc > aDst);
-
-  if LIsReverse then
-    LOverlapCount := LPDstTail - aSrc
-    else
-    LOverlapCount := LPSrcTail - aDst;
-
-  LNonOverlapCount := aElementCount - LOverlapCount;
-
-  { 小重叠 直接拷贝两手 }
-  if LNonOverlapCount >= LOverlapCount then
+  if aSrc > aDst then
   begin
-    if LIsReverse then
-    begin
-      CopyArray(aDst, aSrc, FElementTypeInfo, LOverlapCount);
-      CopyArray(aDst + LOverlapCount, aSrc + LOverlapCount, FElementTypeInfo, LNonOverlapCount);
-    end
-    else
-    begin
-      CopyArray(LPDstTail - LOverlapCount, LPSrcTail - LOverlapCount, FElementTypeInfo, LOverlapCount);
-      CopyArray(aDst, aSrc, FElementTypeInfo, LNonOverlapCount);
-    end;
+    for I := 0 to aElementCount - 1 do
+      aDst[I] := aSrc[I];
   end
   else
   begin
-    { 大重叠 }
-    if LIsReverse then
+    I := aElementCount;
+    while I > 0 do
     begin
-      FinalizeManagedElementsUnchecked(aDst, LOverlapCount);
-      nextpas.core.mem.utils.CopyUnChecked(aSrc, aDst, LOverlapCount * FElementSize);
-      nextpas.core.mem.utils.Zero(LPDstTail - LNonOverlapCount, LNonOverlapCount * FElementSize);
-      CopyArray(LPDstTail - LNonOverlapCount, LPSrcTail - LNonOverlapCount, FElementTypeInfo, LNonOverlapCount);
-    end
-    else
-    begin
-      FinalizeManagedElementsUnchecked(LPDstTail - LNonOverlapCount, LNonOverlapCount);
-      nextpas.core.mem.utils.CopyUnChecked(aSrc + LNonOverlapCount, aDst + LNonOverlapCount, LOverlapCount * FElementSize);
-      nextpas.core.mem.utils.Zero(aDst, LNonOverlapCount * FElementSize);
-      CopyArray(aDst, aSrc, FElementTypeInfo, LNonOverlapCount);
+      Dec(I);
+      aDst[I] := aSrc[I];
     end;
   end;
 end;
@@ -322,6 +284,9 @@ begin
   { 分配 }
   if aDst = nil then
   begin
+    if aElementCount <> 0 then
+      raise EInvalidOperation.Create('TElementManager.ReallocElements: nil pointer with nonzero old count');
+
     if aNewElementCount > 0 then
       Result := AllocElements(aNewElementCount)
     else
@@ -477,7 +442,10 @@ begin
     raise EArgumentNil.Create('TElementManager.ZeroElements: aDst is nil');
 
   if FIsManagedType then
-    FinalizeManagedElementsUnchecked(aDst, aElementCount)
+  begin
+    FinalizeManagedElementsUnchecked(aDst, aElementCount);
+    InitializeElementsUnchecked(aDst, aElementCount);
+  end
   else
   begin
     case FElementSize of

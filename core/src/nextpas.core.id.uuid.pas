@@ -21,6 +21,7 @@ type
     class function Nil_: TUuid; static;
     class function Max: TUuid; static;
     class function FromBytes(const ABytes: array of Byte): TUuid; static;
+    procedure ToBytes(out ABytes: array of Byte);
     function ToString: string;
     function ToStringNoDash: string;
     function ToURN: string;
@@ -43,10 +44,15 @@ function UuidIsValid(const AStr: string): Boolean;
 implementation
 
 uses
+  nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.id.rng,
   nextpas.core.platform.time,
   nextpas.core.hash.intf,
   nextpas.core.hash.sha1;
+
+const
+  UUID_V7_MAX_TIMESTAMP_MS = UInt64($FFFFFFFFFFFF);
 
 const
   HEX_CHARS: array[0..15] of Char = '0123456789abcdef';
@@ -60,6 +66,14 @@ begin
   else
     Result := -1;
   end;
+end;
+
+function LoadLe32(const ABytes: array of Byte; const AOffset: Integer): UInt32;
+begin
+  Result := UInt32(ABytes[AOffset]) or
+            (UInt32(ABytes[AOffset + 1]) shl 8) or
+            (UInt32(ABytes[AOffset + 2]) shl 16) or
+            (UInt32(ABytes[AOffset + 3]) shl 24);
 end;
 
 procedure FormatUuid(const ABytes: array of Byte; var ADst: string);
@@ -106,6 +120,8 @@ end;
 
 class function TUuid.NewV7At(const ATimestampMs: UInt64): TUuid;
 begin
+  if ATimestampMs > UUID_V7_MAX_TIMESTAMP_MS then
+    raise EOutOfRange.Create('TUuid.NewV7At: timestamp must fit 48 bits');
   Result.FBytes[0] := Byte(ATimestampMs shr 40);
   Result.FBytes[1] := Byte(ATimestampMs shr 32);
   Result.FBytes[2] := Byte(ATimestampMs shr 24);
@@ -134,24 +150,35 @@ end;
 
 class function TUuid.FromBytes(const ABytes: array of Byte): TUuid;
 var
-  LI, LLen: Integer;
+  LI: Integer;
 begin
+  if Length(ABytes) <> 16 then
+    raise EOutOfRange.Create('TUuid.FromBytes: length must be 16 bytes');
   FillChar(Result.FBytes, 16, 0);
-  LLen := Length(ABytes);
-  if LLen > 16 then LLen := 16;
-  for LI := 0 to LLen - 1 do
+  for LI := 0 to 15 do
     Result.FBytes[LI] := ABytes[LI];
+end;
+
+procedure TUuid.ToBytes(out ABytes: array of Byte);
+var
+  LI: Integer;
+begin
+  if Length(ABytes) <> 16 then
+    raise EOutOfRange.Create('TUuid.ToBytes: length must be 16 bytes');
+  for LI := 0 to 15 do
+    ABytes[LI] := FBytes[LI];
 end;
 
 class function TUuid.TryParse(const AStr: string; out AUuid: TUuid): Boolean;
 var
   LI, LJ, LHi, LLo: Int32;
+  LDecoded: TUuid;
 begin
   Result := False;
   if Length(AStr) <> UUID_LENGTH then Exit;
   if (AStr[9] <> '-') or (AStr[14] <> '-') or
      (AStr[19] <> '-') or (AStr[24] <> '-') then Exit;
-  FillChar(AUuid.FBytes, 16, 0);
+  FillChar(LDecoded.FBytes, 16, 0);
   LJ := 0;
   LI := 1;
   while LI <= UUID_LENGTH do
@@ -162,17 +189,19 @@ begin
     LLo := HexVal(AStr[LI + 1]);
     if (LHi < 0) or (LLo < 0) then Exit;
     if LJ > 15 then Exit;
-    AUuid.FBytes[LJ] := Byte((LHi shl 4) or LLo);
+    LDecoded.FBytes[LJ] := Byte((LHi shl 4) or LLo);
     Inc(LJ);
     Inc(LI, 2);
   end;
-  Result := (LJ = 16);
+  if LJ <> 16 then Exit;
+  AUuid := LDecoded;
+  Result := True;
 end;
 
 class function TUuid.Parse(const AStr: string): TUuid;
 begin
   if not TryParse(AStr, Result) then
-    FillChar(Result.FBytes, 16, 0);
+    raise EParseError.Create('TUuid.Parse: invalid UUID string');
 end;
 
 class function TUuid.Nil_: TUuid;
@@ -254,10 +283,10 @@ end;
 function TUuid.Hash: UInt32;
 var LA, LB, LC, LD: UInt32;
 begin
-  Move(FBytes[0], LA, 4);
-  Move(FBytes[4], LB, 4);
-  Move(FBytes[8], LC, 4);
-  Move(FBytes[12], LD, 4);
+  LA := LoadLe32(FBytes, 0);
+  LB := LoadLe32(FBytes, 4);
+  LC := LoadLe32(FBytes, 8);
+  LD := LoadLe32(FBytes, 12);
   Result := LA xor LB xor LC xor LD;
 end;
 

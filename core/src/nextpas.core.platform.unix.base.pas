@@ -56,6 +56,7 @@ type
 const
   CLOCK_REALTIME = Int32(0);
   CLOCK_MONOTONIC = Int32(1);
+  _SC_PAGESIZE = Int32(-1);
   _SC_NPROCESSORS_ONLN = Int32(-1);
   PTHREAD_TIMEOUT_CLOCK_ID = CLOCK_MONOTONIC;
   PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1;
@@ -78,16 +79,8 @@ const
   WNOHANG = Int32(1);
   WUNTRACED = Int32(2);
 
-  SIGHUP = Int32(1);
-  SIGINT = Int32(2);
-  SIGKILL = Int32(9);
-  SIGTERM = Int32(15);
-  SIGCHLD = Int32(17);
-  SA_SIGINFO = Int32(4);
-  SA_RESTART = Int32($10000000);
-  SIG_BLOCK = Int32(0);
-  SIG_UNBLOCK = Int32(1);
-  SIG_SETMASK = Int32(2);
+  { Signal numbers, signal-handler sentinels, and sigprocmask actions are
+    host-specific. Each platform base unit defines them in its signal.inc. }
 
   RTLD_LAZY = Int32(1);
   RTLD_NOW = Int32(2);

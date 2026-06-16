@@ -95,6 +95,26 @@ begin
   end;
 end;
 
+procedure ValidatePadding(const AEncoded: string; const ALen, APad: Integer);
+var
+  LI: Integer;
+begin
+  if APad = 0 then
+  begin
+    for LI := 1 to ALen do
+      if AEncoded[LI] = '=' then
+        raise EConvertError.Create('Invalid base64 padding');
+    Exit;
+  end;
+
+  if (ALen < 4) or ((ALen mod 4) <> 0) then
+    raise EConvertError.Create('Invalid base64 padding');
+
+  for LI := 1 to ALen - APad do
+    if AEncoded[LI] = '=' then
+      raise EConvertError.Create('Invalid base64 padding');
+end;
+
 function DoDecode(const AEncoded: string; const ATable: array of ShortInt): TBytes;
 var
   LLen, LPad, LOutLen, LJ: Integer;
@@ -113,9 +133,13 @@ begin
     Exit;
   end;
 
+  if (LLen mod 4) = 1 then
+    raise EConvertError.Create('Invalid base64 length');
+
   LPad := 0;
   if (LLen >= 1) and (AEncoded[LLen] = '=') then Inc(LPad);
   if (LLen >= 2) and (AEncoded[LLen - 1] = '=') then Inc(LPad);
+  ValidatePadding(AEncoded, LLen, LPad);
 
   LOutLen := (LLen * 3) div 4 - LPad;
   SetLength(Result, LOutLen);
@@ -166,6 +190,8 @@ begin
     end;
     Inc(LI);
   end;
+  if (LBits > 0) and ((LAccum and ((UInt32(1) shl LBits) - 1)) <> 0) then
+    raise EConvertError.Create('Invalid base64 padding bits');
 end;
 
 function Base64Encode(const AData: TBytes): string;

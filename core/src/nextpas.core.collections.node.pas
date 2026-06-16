@@ -7,11 +7,11 @@ unit nextpas.core.collections.node;
 interface
 
 uses
-  typinfo,
+  nextpas.core.system.typinfo,
   nextpas.core.base,
   {$HINTS OFF}nextpas.core.math,{$HINTS ON}
   {$HINTS OFF}nextpas.core.mem.utils,{$HINTS ON}
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
   nextpas.core.collections.base,
   nextpas.core.collections.element_manager;
 
@@ -586,13 +586,7 @@ end;
 
 procedure TSingleLinkedNode.Clear;
 begin
-  // 优化版本：只有在必要时才清空数据
-  {$IFDEF DEBUG}
   Data := Default(T);
-  {$ELSE}
-  // 在发布版本中，只清空指针以避免不必要的开销
-  // 数据会在下次使用时被覆盖
-  {$ENDIF}
   Next := nil;
 end;
 
@@ -625,12 +619,7 @@ end;
 
 procedure TDoubleLinkedNode.Clear;
 begin
-  // 优化版本：只有在必要时才清空数据
-  {$IFDEF DEBUG}
   Data := Default(T);
-  {$ELSE}
-  // 在发布版本中，只清空指针以避免不必要的开销
-  {$ENDIF}
   Prev := nil;
   Next := nil;
 end;
@@ -707,12 +696,7 @@ end;
 
 procedure TTreeNode.Clear;
 begin
-  // 优化版本：只有在必要时才清空数据
-  {$IFDEF DEBUG}
   Data := Default(T);
-  {$ELSE}
-  // 在发布版本中，只清空指针以避免不必要的开销
-  {$ENDIF}
   Parent := nil;
   FirstChild := nil;
   NextSibling := nil;
@@ -825,23 +809,46 @@ const
   BLOCK_SIZE = 256;
 var
   LBlock: Pointer;
-  LNew: PPointer;
+  LBlockSize: SizeUInt;
+  LNew, LOldBlocks: PPointer;
+  LNewBlockCount: SizeUInt;
 begin
   if PtrUInt(FSinglePoolNext) >= PtrUInt(FSinglePoolEnd) then
   begin
-    LBlock := FAllocator.GetMem(BLOCK_SIZE * SizeOf(TSingleNode));
-    FillChar(LBlock^, BLOCK_SIZE * SizeOf(TSingleNode), 0);
-    Inc(FSinglePoolBlockCount);
-    LNew := PPointer(FAllocator.GetMem(FSinglePoolBlockCount * SizeOf(Pointer)));
-    if FSinglePoolBlocks <> nil then
-    begin
-      Move(FSinglePoolBlocks^, LNew^, (FSinglePoolBlockCount - 1) * SizeOf(Pointer));
-      FAllocator.FreeMem(FSinglePoolBlocks);
+    LBlockSize := BLOCK_SIZE * SizeOf(TSingleNode);
+    LBlock := FAllocator.GetMem(LBlockSize);
+    if LBlock = nil then
+      raise EOutOfMemory.Create('TNodeManager.AllocateSingleNode: failed to allocate node block');
+
+    LNew := nil;
+    try
+      FillChar(LBlock^, LBlockSize, 0);
+      LNewBlockCount := FSinglePoolBlockCount + 1;
+      LNew := PPointer(FAllocator.GetMem(LNewBlockCount * SizeOf(Pointer)));
+      if LNew = nil then
+        raise EOutOfMemory.Create('TNodeManager.AllocateSingleNode: failed to allocate block registry');
+
+      if FSinglePoolBlocks <> nil then
+        Move(FSinglePoolBlocks^, LNew^, FSinglePoolBlockCount * SizeOf(Pointer));
+      PPointer(PtrUInt(LNew) + FSinglePoolBlockCount * SizeOf(Pointer))^ := LBlock;
+
+      LOldBlocks := FSinglePoolBlocks;
+      FSinglePoolBlocks := LNew;
+      FSinglePoolBlockCount := LNewBlockCount;
+      LNew := nil;
+      if LOldBlocks <> nil then
+        FAllocator.FreeMem(LOldBlocks);
+
+      FSinglePoolNext := LBlock;
+      FSinglePoolEnd := LBlock + LBlockSize;
+      LBlock := nil;
+    except
+      if LNew <> nil then
+        FAllocator.FreeMem(LNew);
+      if LBlock <> nil then
+        FAllocator.FreeMem(LBlock);
+      raise;
     end;
-    FSinglePoolBlocks := LNew;
-    PPointer(PtrUInt(LNew) + (FSinglePoolBlockCount - 1) * SizeOf(Pointer))^ := LBlock;
-    FSinglePoolNext := LBlock;
-    FSinglePoolEnd := LBlock + BLOCK_SIZE * SizeOf(TSingleNode);
   end;
   Result := PSingleNode(FSinglePoolNext);
   FSinglePoolNext := FSinglePoolNext + SizeOf(TSingleNode);
@@ -856,23 +863,46 @@ const
   BLOCK_SIZE = 256;
 var
   LBlock: Pointer;
-  LNew: PPointer;
+  LBlockSize: SizeUInt;
+  LNew, LOldBlocks: PPointer;
+  LNewBlockCount: SizeUInt;
 begin
   if PtrUInt(FDoublePoolNext) >= PtrUInt(FDoublePoolEnd) then
   begin
-    LBlock := FAllocator.GetMem(BLOCK_SIZE * SizeOf(TDoubleNode));
-    FillChar(LBlock^, BLOCK_SIZE * SizeOf(TDoubleNode), 0);
-    Inc(FDoublePoolBlockCount);
-    LNew := PPointer(FAllocator.GetMem(FDoublePoolBlockCount * SizeOf(Pointer)));
-    if FDoublePoolBlocks <> nil then
-    begin
-      Move(FDoublePoolBlocks^, LNew^, (FDoublePoolBlockCount - 1) * SizeOf(Pointer));
-      FAllocator.FreeMem(FDoublePoolBlocks);
+    LBlockSize := BLOCK_SIZE * SizeOf(TDoubleNode);
+    LBlock := FAllocator.GetMem(LBlockSize);
+    if LBlock = nil then
+      raise EOutOfMemory.Create('TNodeManager.AllocateDoubleNode: failed to allocate node block');
+
+    LNew := nil;
+    try
+      FillChar(LBlock^, LBlockSize, 0);
+      LNewBlockCount := FDoublePoolBlockCount + 1;
+      LNew := PPointer(FAllocator.GetMem(LNewBlockCount * SizeOf(Pointer)));
+      if LNew = nil then
+        raise EOutOfMemory.Create('TNodeManager.AllocateDoubleNode: failed to allocate block registry');
+
+      if FDoublePoolBlocks <> nil then
+        Move(FDoublePoolBlocks^, LNew^, FDoublePoolBlockCount * SizeOf(Pointer));
+      PPointer(PtrUInt(LNew) + FDoublePoolBlockCount * SizeOf(Pointer))^ := LBlock;
+
+      LOldBlocks := FDoublePoolBlocks;
+      FDoublePoolBlocks := LNew;
+      FDoublePoolBlockCount := LNewBlockCount;
+      LNew := nil;
+      if LOldBlocks <> nil then
+        FAllocator.FreeMem(LOldBlocks);
+
+      FDoublePoolNext := LBlock;
+      FDoublePoolEnd := LBlock + LBlockSize;
+      LBlock := nil;
+    except
+      if LNew <> nil then
+        FAllocator.FreeMem(LNew);
+      if LBlock <> nil then
+        FAllocator.FreeMem(LBlock);
+      raise;
     end;
-    FDoublePoolBlocks := LNew;
-    PPointer(PtrUInt(LNew) + (FDoublePoolBlockCount - 1) * SizeOf(Pointer))^ := LBlock;
-    FDoublePoolNext := LBlock;
-    FDoublePoolEnd := LBlock + BLOCK_SIZE * SizeOf(TDoubleNode);
   end;
   Result := PDoubleNode(FDoublePoolNext);
   FDoublePoolNext := FDoublePoolNext + SizeOf(TDoubleNode);

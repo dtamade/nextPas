@@ -3,11 +3,58 @@ program test_platform_env;
 {$I nextpas.core.settings.inc}
 
 uses
+  Classes,
+  SysUtils,
   nextpas.core.platform.env,
   nextpas.core.testing;
 
 var
   T: TTestRunner;
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LLines: TStringList;
+begin
+  Check(FileExists(ARelativePath), 'source file exists: ' + ARelativePath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(ARelativePath);
+    Result := LLines.Text;
+  finally
+    LLines.Free;
+  end;
+end;
+
+function ExtractFunctionBody(const ASource, AStartToken,
+  ANextToken: string): string;
+var
+  LStart, LNext: Integer;
+begin
+  Result := '';
+  LStart := Pos(AStartToken, ASource);
+  if LStart = 0 then
+    Exit;
+  LNext := Pos(ANextToken, Copy(ASource, LStart + Length(AStartToken),
+    Length(ASource)));
+  if LNext = 0 then
+    Exit(Copy(ASource, LStart, Length(ASource)));
+  Result := Copy(ASource, LStart, Length(AStartToken) + LNext - 1);
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) > 0, AMessage + ': ' + AToken);
+end;
+
+procedure CheckTokenBefore(const ASource, AFirstToken, ASecondToken,
+  AMessage: string);
+var
+  LFirst, LSecond: Integer;
+begin
+  LFirst := Pos(AFirstToken, ASource);
+  LSecond := Pos(ASecondToken, ASource);
+  Check((LFirst > 0) and (LSecond > 0) and (LFirst < LSecond), AMessage);
+end;
 
 procedure TestGetPath;
 var
@@ -131,6 +178,84 @@ begin
   platform_env_unset('NEXTPAS_TEST_OW');
 end;
 
+procedure TestInvalidNames;
+var
+  Len: Int32;
+begin
+  Check(platform_env_get(nil, nil, 0, Len) <> 0, 'nil get name rejected');
+  Check(platform_env_get('', nil, 0, Len) <> 0, 'empty get name rejected');
+  Check(platform_env_get('NEXTPAS_BAD=NAME', nil, 0, Len) <> 0, 'equals get name rejected');
+
+  Check(platform_env_set(nil, 'value') <> 0, 'nil set name rejected');
+  Check(platform_env_set('', 'value') <> 0, 'empty set name rejected');
+  Check(platform_env_set('NEXTPAS_BAD=NAME', 'value') <> 0, 'equals set name rejected');
+  Check(platform_env_set('NEXTPAS_TEST_NIL_VALUE', nil) <> 0,
+    'nil set value rejected');
+
+  Check(platform_env_unset(nil) <> 0, 'nil unset name rejected');
+  Check(platform_env_unset('') <> 0, 'empty unset name rejected');
+  Check(platform_env_unset('NEXTPAS_BAD=NAME') <> 0, 'equals unset name rejected');
+
+  Check(not platform_env_exists(nil), 'nil exists name rejected');
+  Check(not platform_env_exists(''), 'empty exists name rejected');
+  Check(not platform_env_exists('NEXTPAS_BAD=NAME'), 'equals exists name rejected');
+end;
+
+procedure TestWindowsExistsClearsLastErrorSourceContract;
+var
+  LSource, LWindowsBranch, LBody: string;
+  LWindowsPos, LBodyPos: Integer;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.env.pas');
+  LWindowsPos := Pos('if not platform_windows_utf8_to_wide_checked(AName, LName) then',
+    LSource);
+  Check(LWindowsPos > 0, 'windows env implementation exists');
+  LWindowsBranch := Copy(LSource, LWindowsPos, Length(LSource));
+  LBodyPos := Pos('function platform_env_exists(const AName: PAnsiChar): Boolean;',
+    LWindowsBranch);
+  Check(LBodyPos > 0, 'windows exists implementation exists');
+  LWindowsBranch := Copy(LWindowsBranch, LBodyPos, Length(LWindowsBranch));
+  LBody := ExtractFunctionBody(LWindowsBranch,
+    'function platform_env_exists(const AName: PAnsiChar): Boolean;',
+    '{$ENDIF}');
+
+  CheckContains(LBody, 'SetLastError(ERROR_SUCCESS)',
+    'windows exists clears stale last-error before zero-length query');
+  CheckTokenBefore(LBody, 'SetLastError(ERROR_SUCCESS)',
+    'GetEnvironmentVariableW(PWideChar(LName), nil, 0)',
+    'windows exists clears last-error before GetEnvironmentVariableW');
+end;
+
+procedure TestWindowsGetClearsLastErrorSourceContract;
+var
+  LSource, LWindowsBranch, LBody: string;
+  LWindowsPos, LBodyPos: Integer;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.env.pas');
+  LWindowsPos := Pos('{$IFDEF NEXTPAS_WINDOWS}' + LineEnding +
+    'function platform_env_get(const AName: PAnsiChar;',
+    LSource);
+  Check(LWindowsPos > 0, 'windows env implementation exists');
+  LWindowsBranch := Copy(LSource, LWindowsPos, Length(LSource));
+  LBodyPos := Pos('function platform_env_get(const AName: PAnsiChar;',
+    LWindowsBranch);
+  Check(LBodyPos > 0, 'windows get implementation exists');
+  LWindowsBranch := Copy(LWindowsBranch, LBodyPos, Length(LWindowsBranch));
+  LBody := ExtractFunctionBody(LWindowsBranch,
+    'function platform_env_get(const AName: PAnsiChar;',
+    'function platform_env_set');
+
+  CheckTokenBefore(LBody, 'SetLastError(ERROR_SUCCESS)',
+    'GetEnvironmentVariableW(PWideChar(LName), nil, 0)',
+    'windows get clears last-error before length probe');
+  CheckContains(LBody, 'if (LResult = 0) and (GetLastError <> ERROR_SUCCESS) then',
+    'windows get treats zero-length value as success');
+  CheckContains(LBody, 'LLastError := GetLastError',
+    'windows get stores last-error after second read');
+  CheckContains(LBody, 'if (LResult = 0) and (LLastError <> ERROR_SUCCESS) then',
+    'windows get treats zero-length second read as success');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.env');
   T.Run('get PATH', @TestGetPath);
@@ -144,5 +269,10 @@ begin
   T.Run('long value (1000 chars)', @TestLongValue);
   T.Run('special characters', @TestSpecialChars);
   T.Run('overwrite existing', @TestOverwrite);
+  T.Run('invalid names', @TestInvalidNames);
+  T.Run('windows exists clears last-error source contract',
+    @TestWindowsExistsClearsLastErrorSourceContract);
+  T.Run('windows get clears last-error source contract',
+    @TestWindowsGetClearsLastErrorSourceContract);
   T.Summary;
 end.

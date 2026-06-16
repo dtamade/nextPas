@@ -1,14 +1,16 @@
 # Atomic/Lockfree 下一阶段工作清单
 
-> 创建: 2026-06-16 | 状态: 🚧 Phase 1 执行中
+> 创建: 2026-06-16 | 状态: 🚧 Phase 1 完成，Phase 2 待启动
 
-## Phase 1: 基准对照体系 (当前)
+## Phase 1: 基准对照体系 ✅ 完成
 
-- [ ] Task 1.1: 创建自动化基准对比脚本
-- [ ] Task 1.2: 补全 SPMC/EBR 基准场景
-- [ ] Task 1.3: 运行完整对比并生成报告
+- [x] Task 1.1: 自动化基准对比（Pascal/Go/C++ 已运行）
+- [x] Task 1.2: SPMC/EBR 基准场景
+- [x] Task 1.3: 性能对比报告 `benchmark-comparison-2026-06-16.md`
 
-## Phase 2: 性能优化
+**结论**: Pascal SPSC 达 C++ 87.6%，MPMC 达 94.2%。SegQueue/SPMC 为独有优势。
+
+## Phase 2: 性能优化 (待启动)
 
 - [ ] Task 2.1: 消除 SPMC 双次通知冗余
 - [ ] Task 2.2: 批量操作 SIMD 加速
@@ -23,6 +25,6 @@
 
 ## Phase 4: 文档与推广
 
-- [ ] Task 4.1: 性能对比报告
-- [ ] Task 4.2: API 参考手册
+- [ ] Task 4.1: API 参考手册
+- [ ] Task 4.2: 性能调优指南
 - [ ] Task 4.3: 选型决策树

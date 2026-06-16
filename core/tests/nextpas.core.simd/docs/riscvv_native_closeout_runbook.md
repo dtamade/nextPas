@@ -1,139 +1,66 @@
 # RISCVV Native Closeout Runbook
 
-更新时间：2026-05-21
+更新时间：2026-06-07
 
-这份 runbook 只解决一件事：当你需要 fresh `riscvv` native evidence 时，如何从当前 repo 的 operator helper 走到可消费的 artifact，而不是在 dirty worktree、未推送 ref、或未就绪 runner 上反复空转。
+这份 runbook 只记录当前 worktree 的 live truth：当你需要 fresh `riscvv` native evidence 时，哪些入口现在能用，哪些 historical helper 名字不要再信。
 
 ## 适用边界
 
-- 当前 repo 已提供：
+- 当前 repo 当前不提供：
   - `BuildOrTest.sh native-evidence-via-gh`
   - `BuildOrTest.sh native-evidence-via-gh-clean`
   - `BuildOrTest.sh riscvv-runner-registration`
   - `BuildOrTest.sh riscvv-runner-host-preflight`
   - `BuildOrTest.sh riscvv-runner-3cmd`
   - `BuildOrTest.sh release-evidence`
-- 当前 repo 不提供：
-  - `riscv64` runner binary / service
-  - repo-ops 侧的最终 runner 实现
-  - 把 token 写进任何 repo-tracked 文件的能力
+- 历史 runbook / manifest 里提到的 GH dispatch / clean-worktree / runner-registration helper 在当前 worktree 并未恢复。
+- 当前 repo 仍然提供并支持：
+  - `collect_nonx86_native_evidence.sh riscvv`
+  - `BuildOrTest.sh import-nonx86-native-evidence /path/to/native-evidence-drop`
+  - `BuildOrTest.sh verify-nonx86-native-evidence`
+  - `BuildOrTest.sh closeout-host-local-from-import /path/to/native-evidence-drop`
 
-## 最短路径
+## 当前可用路径
 
-先打印 3-command 摘要：
-
-```bash
-FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh riscvv-runner-3cmd
-```
-
-如果你直接要开始执行，按下面顺序：
+### 1. 在真实 riscv64 host 采集 native evidence
 
 ```bash
-SIMD_RISCVV_RUNNER_TOKEN_FILE=/tmp/fafafa-simd-riscvv-runner.token \
-FAFAFA_BUILD_MODE=Release \
-bash tests/nextpas.core.simd/BuildOrTest.sh riscvv-runner-registration
-
-FAFAFA_BUILD_MODE=Release \
-bash tests/nextpas.core.simd/BuildOrTest.sh riscvv-runner-host-preflight
-
-FAFAFA_BUILD_MODE=Release \
-bash tests/nextpas.core.simd/BuildOrTest.sh native-evidence-via-gh-clean riscvv
-
-FAFAFA_BUILD_MODE=Release \
-bash tests/nextpas.core.simd/BuildOrTest.sh release-evidence
+FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/collect_nonx86_native_evidence.sh riscvv
 ```
 
-## 阶段 1：Repo-side 准备 registration token
+这一步必须在真实 `riscv64` host 上执行；`x86_64` worktree、Wine、QEMU wrapper 或 historical GH helper 名字都不能替代 native host。
 
-推荐命令：
+### 2. 把 artifact 拷回当前 worktree 并导入
 
 ```bash
-SIMD_RISCVV_RUNNER_TOKEN_FILE=/tmp/fafafa-simd-riscvv-runner.token \
-FAFAFA_BUILD_MODE=Release \
-bash tests/nextpas.core.simd/BuildOrTest.sh riscvv-runner-registration
+bash tests/nextpas.core.simd/BuildOrTest.sh import-nonx86-native-evidence /path/to/native-evidence-drop
 ```
 
-它会做的事：
+这条入口会把最新 `native-evidence-riscvv-*` 目录导入到 `tests/nextpas.core.simd/fixtures/native-evidence`，然后立刻执行 verifier。
 
-- 解析当前 repo slug
-- 调用 `actions/runners/registration-token`
-- 固定建议标签为 `self-hosted,Linux,riscv64`
-- 可选把 token 安全落到 repo 外路径
-
-它不会做的事：
-
-- 安装 runner
-- 启动 runner
-- 把 token 写进 repo 内文件
-
-## 阶段 2：真实 riscv64 host preflight
-
-在目标 host 上执行：
+如果你只想 verify 当前目录里的归档，而不做导入，也可以直接跑：
 
 ```bash
-FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh riscvv-runner-host-preflight
+bash tests/nextpas.core.simd/BuildOrTest.sh verify-nonx86-native-evidence
 ```
 
-当前 preflight 会 fail-close 检查：
-
-- `uname -m` 必须真实为 `riscv64`
-- 必需命令：`bash`、`sudo`、`curl`、`tar`、`git`
-- `sudo -n true` 必须可用
-- GitHub 与 FPC snapshot URL 必须可达
-
-如果这里都没通过，不要继续 dispatch workflow。
-
-## 阶段 3：采集 fresh native evidence
-
-当 repo-visible `self-hosted,Linux,riscv64` runner 已就绪后，优先使用 clean-worktree 入口：
+### 3. 在当前 worktree 做 host-local closeout
 
 ```bash
-FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh native-evidence-via-gh-clean riscvv
+bash tests/nextpas.core.simd/BuildOrTest.sh closeout-host-local-from-import /path/to/native-evidence-drop
 ```
 
-这条路径的意义：
+这条入口会先导入 external native evidence，再复用当前存在的 host-local closeout 链。
 
-- 当前 closeout worktree 可以继续保持 dirty
-- helper 会基于当前已推送 ref 创建临时 clean worktree
-- 然后复用现有 `native-evidence-via-gh` dispatch / poll / download / verify 合同
-- artifact 最终仍然写回当前 worktree 的 `tests/nextpas.core.simd/logs/`
+## 不要做的事
 
-如果你已经有可信的 GH run id，也可以复用：
+- 不要再执行 `native-evidence-via-gh` / `native-evidence-via-gh-clean` / `riscvv-runner-*` / `release-evidence`；这些名字在当前 worktree 只应该被理解成 historical notes。
+- 不要把 dirty `x86_64` worktree 当成 `riscv64` native runner。
+- 不要手工 `cp` 到 `fixtures/native-evidence` 后跳过 verifier；导入链已经负责目录命名、summary timestamp 和 synthetic marker 的 fail-close。
 
-```bash
-FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh native-evidence-via-gh riscvv <run-id>
-```
+## 什么时候需要重链路
 
-## 常见 fail-close 场景
+- 你改了 non-x86 helper/source contract，需要 fresh `riscvv` artifact
+- 你拿到的是新的 external native evidence，需要重新导入并收口 host-local closeout
 
-- `Refuse dispatch: local worktree has uncommitted changes.`
-  - 用 `native-evidence-via-gh-clean`，或者先提交并推送。
-- `Refuse dispatch: remote ref does not match local HEAD.`
-  - 先把当前 SIMD 改动推到远端，再重试。
-- `Refuse clean-worktree dispatch: remote ref is missing or not a branch.`
-  - 当前 ref 还没推送，或不是可 dispatch 的远端分支。
-- `No matching self-hosted runner available for labels: self-hosted, Linux, riscv64`
-  - repo-visible runner 还没真正在线，或标签不对。
-
-## 阶段 4：回写 machine-readable bundle
-
-fresh artifact 落地后，不要靠手工读目录判断 closeout 状态。直接重导 bundle：
-
-```bash
-FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh release-evidence
-```
-
-预期变化：
-
-- `release_evidence.json` 会重新扫描 `native-evidence-*` / `native-evidence-gh/*`
-- 若 `riscvv` artifact 已 fresh 落地，`external_blockers` 会同步收敛
-- `release_ready` 仍只跟随 `freeze_status.freeze_ready`
-
-## 什么时候才需要再跑重链路
-
-下面两种情况再去重跑 `gate-strict` / `freeze-status`：
-
-1. 本轮改动触碰了 closeout 主合同
-2. 你需要把 gate/freeze/bundle 的时间线重新对齐
-
-否则，补了 fresh RISCVV native artifact 之后，优先先做 `release-evidence`，不要无意义重跑整条门禁链。
+除此之外，不要因为旧 runbook 里还提到 GH helper 名字，就误以为当前 repo 还有一条可用的 GH dispatch 主线。

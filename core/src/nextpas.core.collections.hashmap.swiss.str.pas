@@ -36,6 +36,7 @@ type
     procedure FreeTable;
     procedure GrowAndRehash;
     procedure SetCtrl(AIndex: SizeUInt; AValue: Byte); inline;
+    function FindInsertSlot(AHash: UInt32; out AWasEmpty: Boolean): SizeUInt;
     class function HashStr(const S: string): UInt32; static; inline;
 
   public
@@ -115,7 +116,31 @@ begin
     end;
   if FAllocator <> nil then FAllocator.Deallocate(FSlots) else FreeMem(FSlots);
   if FAllocator <> nil then FAllocator.Deallocate(FCtrl) else FreeMem(FCtrl);
-  FCtrl := nil; FSlots := nil; FAllocator := nil;
+  FCtrl := nil; FSlots := nil;
+end;
+
+function TSwissTableStr.FindInsertSlot(AHash: UInt32; out AWasEmpty: Boolean): SizeUInt;
+var
+  LGroupIdx, LProbeOfs: SizeUInt;
+  LFreeMask, LEmptyMask: TMask16;
+  LBit: Integer;
+begin
+  LGroupIdx := (AHash shr 7) and (FGroupCount - 1);
+  LProbeOfs := 0;
+  while True do
+  begin
+    LEmptyMask := Vec16CmpEq(@FCtrl[LGroupIdx * GROUP_SIZE], CTRL_EMPTY);
+    LFreeMask := LEmptyMask or Vec16CmpEq(@FCtrl[LGroupIdx * GROUP_SIZE], CTRL_DELETED);
+    if LFreeMask <> 0 then
+    begin
+      LBit := Vec16Ctz(LFreeMask);
+      AWasEmpty := (LEmptyMask and (TMask16(1) shl LBit)) <> 0;
+      Result := LGroupIdx * GROUP_SIZE + SizeUInt(LBit);
+      Exit;
+    end;
+    Inc(LProbeOfs);
+    LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
+  end;
 end;
 
 procedure TSwissTableStr.GrowAndRehash;
@@ -123,9 +148,8 @@ var
   LOldCtrl: PByte; LOldSlots: PSlot;
   LOldCap, i, LIdx: SizeUInt;
   LNewCap: SizeUInt;
-  Lh: UInt32; Lh2: Byte;
-  LGroupIdx, LProbeOfs: SizeUInt;
-  LMask: TMask16;
+  Lh: UInt32;
+  LWasEmpty: Boolean;
 begin
   LOldCtrl := FCtrl; LOldSlots := FSlots; LOldCap := FCapacity;
   if FCapacity = 0 then LNewCap := 16 else LNewCap := FCapacity * 2;
@@ -137,23 +161,12 @@ begin
       if LOldCtrl[i] < $80 then
       begin
         Lh := HashStr(LOldSlots[i].Key);
-        Lh2 := Lh and $7F;
-        LGroupIdx := (Lh shr 7) and (FGroupCount - 1);
-        LProbeOfs := 0;
-        while True do
-        begin
-          LMask := Vec16CmpGtU(@FCtrl[LGroupIdx * GROUP_SIZE], $7F);
-          if LMask <> 0 then
-          begin
-            LIdx := LGroupIdx * GROUP_SIZE + SizeUInt(Vec16Ctz(LMask));
-            SetCtrl(LIdx, Lh2);
-            Move(LOldSlots[i], FSlots[LIdx], SizeOf(TSlot));
-            Inc(FCount); Dec(FGrowthLeft);
-            Break;
-          end;
-          Inc(LProbeOfs);
-          LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
-        end;
+        LIdx := FindInsertSlot(Lh, LWasEmpty);
+        SetCtrl(LIdx, Lh and $7F);
+        Move(LOldSlots[i], FSlots[LIdx], SizeOf(TSlot));
+        Inc(FCount);
+        if LWasEmpty then
+          Dec(FGrowthLeft);
       end;
     if FAllocator <> nil then FAllocator.Deallocate(LOldSlots) else FreeMem(LOldSlots); if FAllocator <> nil then FAllocator.Deallocate(LOldCtrl) else FreeMem(LOldCtrl);
   end;
@@ -242,13 +255,16 @@ procedure TSwissTableStr.Put(const AKey: string; const AValue: V);
 var
   Lh: UInt32; Lh2: Byte;
   LGroupIdx, LProbeOfs, Li, LBase, LInsertIdx: SizeUInt;
-  LMask, LEmptyMask: TMask16;
+  LMask, LFreeMask, LEmptyMask: TMask16;
+  LFoundInsert, LInsertWasEmpty: Boolean;
 begin
-  if FGrowthLeft = 0 then GrowAndRehash;
+  if FCapacity = 0 then GrowAndRehash;
   Lh := HashStr(AKey);
   Lh2 := Lh and $7F;
   LGroupIdx := (Lh shr 7) and (FGroupCount - 1);
   LProbeOfs := 0;
+  LFoundInsert := False;
+  LInsertIdx := 0;
   while True do
   begin
     LBase := LGroupIdx * GROUP_SIZE;
@@ -258,24 +274,45 @@ begin
       Li := LBase + SizeUInt(Vec16Ctz(LMask));
       if FSlots[Li].Key = AKey then
       begin
-        if System.IsManagedType(V) then Finalize(FSlots[Li].Value);
         FSlots[Li].Value := AValue;
         Exit;
       end;
       LMask := LMask and (LMask - 1);
     end;
-    if LEmptyMask <> 0 then
+
+    LFreeMask := LEmptyMask or Vec16CmpEq(@FCtrl[LBase], CTRL_DELETED);
+    if LFreeMask <> 0 then
     begin
-      LInsertIdx := LBase + SizeUInt(Vec16Ctz(LEmptyMask));
-      SetCtrl(LInsertIdx, Lh2);
-      FSlots[LInsertIdx].Key := AKey;
-      FSlots[LInsertIdx].Value := AValue;
-      Inc(FCount); Dec(FGrowthLeft);
-      Exit;
+      if LEmptyMask <> 0 then
+      begin
+        if not LFoundInsert then
+          LInsertIdx := LBase + SizeUInt(Vec16Ctz(LEmptyMask));
+        Break;
+      end;
+      if not LFoundInsert then
+      begin
+        LInsertIdx := LBase + SizeUInt(Vec16Ctz(LFreeMask));
+        LFoundInsert := True;
+      end;
     end;
     Inc(LProbeOfs);
     LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
   end;
+
+  LInsertWasEmpty := FCtrl[LInsertIdx] = CTRL_EMPTY;
+  if LInsertWasEmpty and (FGrowthLeft = 0) then
+  begin
+    GrowAndRehash;
+    Put(AKey, AValue);
+    Exit;
+  end;
+
+  SetCtrl(LInsertIdx, Lh2);
+  FSlots[LInsertIdx].Key := AKey;
+  FSlots[LInsertIdx].Value := AValue;
+  Inc(FCount);
+  if LInsertWasEmpty then
+    Dec(FGrowthLeft);
 end;
 
 function TSwissTableStr.Get(const AKey: string): V;
@@ -307,7 +344,13 @@ begin
         Finalize(FSlots[Li].Key);
         if System.IsManagedType(V) then Finalize(FSlots[Li].Value);
         FillChar(FSlots[Li], SizeOf(TSlot), 0);
-        SetCtrl(Li, CTRL_DELETED);
+        if LEmptyMask <> 0 then
+        begin
+          SetCtrl(Li, CTRL_EMPTY);
+          Inc(FGrowthLeft);
+        end
+        else
+          SetCtrl(Li, CTRL_DELETED);
         Dec(FCount); Exit(True);
       end;
       LMask := LMask and (LMask - 1);

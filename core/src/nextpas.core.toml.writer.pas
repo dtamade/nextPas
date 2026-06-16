@@ -28,11 +28,18 @@ type
     FNeedNewline: Boolean;
     FIndent: Int32;
     FPretty: Boolean;
-    FFirstStack: array[0..127] of Boolean;
-    FIsArrayStack: array[0..127] of Boolean;
+    FFirstStack: array[0..128] of Boolean;
+    FIsArrayStack: array[0..128] of Boolean;
     procedure WriteEscapedStr(const AValue: PAnsiChar; ALen: SizeUInt);
     procedure WriteBareOrQuotedKey(const AKey: PAnsiChar; ALen: SizeUInt);
     procedure WriteDottedPath(const APath: PAnsiChar; ALen: SizeUInt);
+    procedure RequireInlineStackCapacity;
+    procedure RequireInlineContainer(const AOperation: string;
+      const AExpectedIsArray: Boolean);
+    procedure RequireDocumentScope(const AOperation: string);
+    procedure RequireRawTablePath(const AOperation, AFormattedPath: string);
+    procedure RequireKeyTarget;
+    procedure PushInlineContainer(const AIsArray: Boolean);
     procedure PrepareValue;
     procedure WriteIndent;
   public
@@ -61,7 +68,11 @@ type
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.text.number;
+
+const
+  TOML_WRITER_MAX_INLINE_DEPTH = 128;
 
 function IsBareKeyStr(const AData: PAnsiChar; ALen: SizeUInt): Boolean;
 var
@@ -173,6 +184,108 @@ begin
   WriteBareOrQuotedKey(APath + LStart, LI - LStart);
 end;
 
+procedure TTomlWriter.RequireInlineStackCapacity;
+begin
+  if FInlineDepth >= TOML_WRITER_MAX_INLINE_DEPTH then
+    raise EResourceExhaustedError.Create(
+      'TTomlWriter: inline container stack limit exceeded');
+end;
+
+procedure TTomlWriter.RequireInlineContainer(const AOperation: string;
+  const AExpectedIsArray: Boolean);
+begin
+  if FInlineDepth <= 0 then
+    raise EInvalidOperationError.Create(
+      'TTomlWriter.' + AOperation + ': no inline container is open');
+  if FIsArrayStack[FInlineDepth] <> AExpectedIsArray then
+    raise EInvalidOperationError.Create(
+      'TTomlWriter.' + AOperation + ': mismatched inline container end');
+end;
+
+procedure TTomlWriter.RequireDocumentScope(const AOperation: string);
+begin
+  if FInlineDepth > 0 then
+    raise EInvalidOperationError.Create(
+      'TTomlWriter.' + AOperation +
+      ': table headers are not valid inside inline containers');
+end;
+
+procedure TTomlWriter.RequireRawTablePath(const AOperation,
+  AFormattedPath: string);
+var
+  LI: Integer;
+  LCh: Byte;
+  LInBasicKey: Boolean;
+  LInLiteralKey: Boolean;
+  LEscaped: Boolean;
+begin
+  if AFormattedPath = '' then
+    raise EInvalidOperationError.Create(
+      'TTomlWriter.' + AOperation + ': raw table path must not be empty');
+  LInBasicKey := False;
+  LInLiteralKey := False;
+  LEscaped := False;
+  for LI := 1 to Length(AFormattedPath) do
+  begin
+    LCh := Byte(AFormattedPath[LI]);
+    if (LCh < 32) or (LCh = 127) then
+      raise EInvalidOperationError.Create(
+        'TTomlWriter.' + AOperation +
+        ': raw table path contains an invalid header character');
+
+    if LInBasicKey then
+    begin
+      if LEscaped then
+      begin
+        LEscaped := False;
+        Continue;
+      end;
+      if LCh = Ord('\') then
+      begin
+        LEscaped := True;
+        Continue;
+      end;
+      if LCh = Ord('"') then
+        LInBasicKey := False;
+      Continue;
+    end;
+
+    if LInLiteralKey then
+    begin
+      if LCh = Ord('''') then
+        LInLiteralKey := False;
+      Continue;
+    end;
+
+    if LCh = Ord('"') then
+      LInBasicKey := True
+    else if LCh = Ord('''') then
+      LInLiteralKey := True
+    else if LCh = Ord(']') then
+      raise EInvalidOperationError.Create(
+        'TTomlWriter.' + AOperation +
+        ': raw table path contains an invalid header character');
+  end;
+  if LInBasicKey or LInLiteralKey or LEscaped then
+    raise EInvalidOperationError.Create(
+      'TTomlWriter.' + AOperation +
+      ': raw table path contains an invalid header character');
+end;
+
+procedure TTomlWriter.RequireKeyTarget;
+begin
+  if (FInlineDepth > 0) and FIsArrayStack[FInlineDepth] then
+    raise EInvalidOperationError.Create(
+      'TTomlWriter.Key: key assignment is not valid inside arrays');
+end;
+
+procedure TTomlWriter.PushInlineContainer(const AIsArray: Boolean);
+begin
+  Inc(FInlineDepth);
+  FIsArrayStack[FInlineDepth] := AIsArray;
+  FFirstStack[FInlineDepth] := True;
+end;
+
 procedure TTomlWriter.PrepareValue;
 begin
   if (FInlineDepth > 0) and FIsArrayStack[FInlineDepth] then
@@ -199,6 +312,7 @@ end;
 
 procedure TTomlWriter.BeginTable(const AKey: string);
 begin
+  RequireDocumentScope('BeginTable');
   if FNeedNewline then FBuilder^.AppendChar(#10);
   FBuilder^.AppendChar('[');
   WriteDottedPath(PAnsiChar(AKey), SizeUInt(Length(AKey)));
@@ -209,6 +323,7 @@ end;
 
 procedure TTomlWriter.BeginArrayTable(const AKey: string);
 begin
+  RequireDocumentScope('BeginArrayTable');
   if FNeedNewline then FBuilder^.AppendChar(#10);
   FBuilder^.AppendBytes('[[', 2);
   WriteDottedPath(PAnsiChar(AKey), SizeUInt(Length(AKey)));
@@ -219,6 +334,8 @@ end;
 
 procedure TTomlWriter.BeginTableRaw(const AFormattedPath: string);
 begin
+  RequireDocumentScope('BeginTableRaw');
+  RequireRawTablePath('BeginTableRaw', AFormattedPath);
   if FNeedNewline then FBuilder^.AppendChar(#10);
   FBuilder^.AppendChar('[');
   FBuilder^.AppendStr(AFormattedPath);
@@ -229,6 +346,8 @@ end;
 
 procedure TTomlWriter.BeginArrayTableRaw(const AFormattedPath: string);
 begin
+  RequireDocumentScope('BeginArrayTableRaw');
+  RequireRawTablePath('BeginArrayTableRaw', AFormattedPath);
   if FNeedNewline then FBuilder^.AppendChar(#10);
   FBuilder^.AppendBytes('[[', 2);
   FBuilder^.AppendStr(AFormattedPath);
@@ -239,6 +358,7 @@ end;
 
 procedure TTomlWriter.Key(const AKey: string);
 begin
+  RequireKeyTarget;
   if FInlineDepth > 0 then
   begin
     if not FFirstStack[FInlineDepth] then
@@ -251,6 +371,7 @@ end;
 
 procedure TTomlWriter.Key(const AKey: TStringView);
 begin
+  RequireKeyTarget;
   if FInlineDepth > 0 then
   begin
     if not FFirstStack[FInlineDepth] then
@@ -334,6 +455,9 @@ begin
   PrepareValue;
   if AValue.HasDate then
   begin
+    if AValue.Year < 1000 then FBuilder^.AppendChar('0');
+    if AValue.Year < 100 then FBuilder^.AppendChar('0');
+    if AValue.Year < 10 then FBuilder^.AppendChar('0');
     FBuilder^.AppendInt(AValue.Year);
     FBuilder^.AppendChar('-');
     if AValue.Month < 10 then FBuilder^.AppendChar('0');
@@ -399,16 +523,15 @@ end;
 
 procedure TTomlWriter.BeginInlineTable;
 begin
+  RequireInlineStackCapacity;
   PrepareValue;
   FBuilder^.AppendBytes('{ ', 2);
-  Inc(FInlineDepth);
-  if FInlineDepth > 127 then FInlineDepth := 127;
-  FIsArrayStack[FInlineDepth] := False;
-  FFirstStack[FInlineDepth] := True;
+  PushInlineContainer(False);
 end;
 
 procedure TTomlWriter.EndInlineTable;
 begin
+  RequireInlineContainer('EndInlineTable', False);
   FBuilder^.AppendBytes(' }', 2);
   Dec(FInlineDepth);
   if FInlineDepth = 0 then FBuilder^.AppendChar(#10);
@@ -416,16 +539,15 @@ end;
 
 procedure TTomlWriter.BeginArray;
 begin
+  RequireInlineStackCapacity;
   PrepareValue;
   FBuilder^.AppendChar('[');
-  Inc(FInlineDepth);
-  if FInlineDepth > 127 then FInlineDepth := 127;
-  FIsArrayStack[FInlineDepth] := True;
-  FFirstStack[FInlineDepth] := True;
+  PushInlineContainer(True);
 end;
 
 procedure TTomlWriter.EndArray;
 begin
+  RequireInlineContainer('EndArray', True);
   Dec(FInlineDepth);
   if FPretty then
   begin
@@ -437,10 +559,39 @@ begin
 end;
 
 procedure TTomlWriter.Comment(const AText: string);
+var
+  LStart, LPos, LLen, LLineLen: Integer;
 begin
-  FBuilder^.AppendBytes('# ', 2);
-  FBuilder^.AppendStr(AText);
-  FBuilder^.AppendChar(#10);
+  LLen := Length(AText);
+  if LLen = 0 then
+  begin
+    FBuilder^.AppendBytes('# ', 2);
+    FBuilder^.AppendChar(#10);
+    Exit;
+  end;
+
+  LStart := 1;
+  while LStart <= LLen do
+  begin
+    LPos := LStart;
+    while (LPos <= LLen) and (AText[LPos] <> #10) and (AText[LPos] <> #13) do
+      Inc(LPos);
+
+    FBuilder^.AppendBytes('# ', 2);
+    if LPos > LStart then
+    begin
+      LLineLen := LPos - LStart;
+      FBuilder^.AppendBytes(PAnsiChar(AText) + LStart - 1,
+        SizeUInt(LLineLen));
+    end;
+    FBuilder^.AppendChar(#10);
+
+    if LPos > LLen then
+      Break;
+    if (AText[LPos] = #13) and (LPos < LLen) and (AText[LPos + 1] = #10) then
+      Inc(LPos);
+    LStart := LPos + 1;
+  end;
 end;
 
 procedure TTomlWriter.Newline;

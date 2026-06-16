@@ -13,7 +13,7 @@ unit nextpas.core.tls.openssl.api.md;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.base,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
@@ -147,8 +147,7 @@ function RIPEMD160HashString(const S: string): string;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api;
+uses nextpas.core.tls.openssl.api;
 
 const
   { Function bindings for batch loading }
@@ -282,7 +281,7 @@ function MD4HashString(const S: string): string;
 var
   Data: TBytes;
 begin
-  Data := TEncoding.UTF8.GetBytes(UnicodeString(S));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(S));
   Result := BytesToHex(MD4Hash(Data));
 end;
 
@@ -290,7 +289,7 @@ function MD5HashString(const S: string): string;
 var
   Data: TBytes;
 begin
-  Data := TEncoding.UTF8.GetBytes(UnicodeString(S));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(S));
   Result := BytesToHex(MD5Hash(Data));
 end;
 
@@ -298,7 +297,7 @@ function MDC2HashString(const S: string): string;
 var
   Data: TBytes;
 begin
-  Data := TEncoding.UTF8.GetBytes(UnicodeString(S));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(S));
   Result := BytesToHex(MDC2Hash(Data));
 end;
 
@@ -306,7 +305,7 @@ function RIPEMD160HashString(const S: string): string;
 var
   Data: TBytes;
 begin
-  Data := TEncoding.UTF8.GetBytes(UnicodeString(S));
+  Data := nextpas.core.text.conv.StringToUTF8Bytes(S));
   Result := BytesToHex(RIPEMD160Hash(Data));
 end;
 

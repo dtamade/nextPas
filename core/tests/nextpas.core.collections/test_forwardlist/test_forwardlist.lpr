@@ -5,7 +5,11 @@ program test_forwardlist;
 uses
   SysUtils,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
+  nextpas.core.mem.intf,
+  failing_allocator,
+  leak_tracker,
   nextpas.core.collections,
   nextpas.core.collections.base,
   nextpas.core.collections.forward_list.intf,
@@ -15,6 +19,9 @@ type
   IIntFList = specialize IForwardList<Integer>;
   TIntFList = specialize TForwardList<Integer>;
   TIntIter = specialize TIter<Integer>;
+  TIntArray = specialize TGenericArray<Integer>;
+  TTrackedFList = specialize TForwardList<ITracked>;
+  TTrackedIter = specialize TIter<ITracked>;
 
 function IsEven(const V: Integer; Data: Pointer): Boolean;
 begin
@@ -24,6 +31,17 @@ end;
 function EqualsInt(const L, R: Integer; Data: Pointer): Boolean;
 begin
   Result := L = R;
+end;
+
+procedure CheckListValues(AList: TIntFList; const AExpected: array of Integer; const AMessage: string);
+var
+  LItems: TIntArray;
+  I: Integer;
+begin
+  LItems := AList.ToArray;
+  CheckEqual(Int64(Length(AExpected)), Int64(Length(LItems)), AMessage + ' length');
+  for I := Low(AExpected) to High(AExpected) do
+    CheckEqual(Int64(AExpected[I]), Int64(LItems[I]), AMessage + ' item ' + IntToStr(I));
 end;
 
 var
@@ -204,6 +222,55 @@ begin
   end;
 end;
 
+procedure TestEraseAfterBeforeBeginToEndRemovesWholeList;
+var
+  LL: TIntFList;
+  LIter: TIntIter;
+begin
+  LL := TIntFList.Create;
+  try
+    LL.PushFront(4);
+    LL.PushFront(3);
+    LL.PushFront(2);
+    LL.PushFront(1);
+
+    LIter := LL.EraseAfter(LL.BeforeBegin, LL.CEnd);
+    CheckEqual(Int64(0), Int64(LL.GetCount), 'erase before_begin..end removes all nodes');
+    Check(not LIter.MoveNext, 'erase before_begin..end returns end iterator');
+  finally
+    LL.Free;
+  end;
+end;
+
+procedure TestEraseAfterBeforeBeginToEndReleasesManagedItems;
+var
+  LL: TTrackedFList;
+  LIter: TTrackedIter;
+  LTracked: ITracked;
+  LSnap: TLeakSnapshot;
+  I: Integer;
+begin
+  LSnap := SnapTake;
+  LL := TTrackedFList.Create;
+  try
+    for I := 1 to 4 do
+    begin
+      LTracked := MakeTracked(I);
+      LL.PushFront(LTracked);
+      LTracked := nil;
+    end;
+
+    CheckEqual(Int64(4), Int64(GTrackedAlive - LSnap), 'tracked refs held by forward_list before erase');
+    LIter := LL.EraseAfter(LL.BeforeBegin, LL.CEnd);
+    CheckEqual(Int64(0), Int64(LL.GetCount), 'tracked erase before_begin..end removes all nodes');
+    Check(not LIter.MoveNext, 'tracked erase before_begin..end returns end iterator');
+    SnapAssert(LSnap, 'ForwardList EraseAfter before_begin..end releases managed items');
+  finally
+    LL.Free;
+  end;
+  SnapAssert(LSnap, 'ForwardList EraseAfter before_begin..end after free');
+end;
+
 procedure TestTryLoadFromTryAppend;
 var
   LL: TIntFList;
@@ -229,6 +296,180 @@ begin
   end;
 end;
 
+procedure TestSpliceSingleTailKeepsSourceAppendIsolated;
+var
+  Dst, Src: TIntFList;
+  Pos, BeforeTail: TIntIter;
+  NewValue: Integer;
+begin
+  Dst := TIntFList.Create;
+  Src := TIntFList.Create;
+  try
+    Dst.PushFront(10);
+
+    Src.PushFront(3);
+    Src.PushFront(2);
+    Src.PushFront(1);
+
+    Pos := Dst.BeforeBegin;
+    BeforeTail := Src.Find(2);
+    CheckEqual(Int64(2), Int64(BeforeTail.Current), 'find node before source tail');
+
+    Dst.Splice(Pos, Src, BeforeTail);
+    CheckEqual(Int64(2), Int64(Src.GetCount), 'source count after moving tail');
+    CheckEqual(Int64(2), Int64(Dst.GetCount), 'destination count after moving tail');
+
+    NewValue := 4;
+    Check(Src.TryAppend(@NewValue, 1), 'append to source after tail splice');
+    CheckEqual(Int64(3), Int64(Src.GetCount), 'source count after append');
+    CheckEqual(Int64(2), Int64(Dst.GetCount), 'destination count remains isolated');
+    CheckEqual(Int64(4), Int64(Src.ToArray[2]), 'source append stays in source');
+    CheckEqual(Int64(10), Int64(Dst.ToArray[1]), 'destination tail remains original');
+  finally
+    Src.Free;
+    Dst.Free;
+  end;
+end;
+
+procedure TestSpliceRangeTailKeepsSourceAppendIsolated;
+var
+  Dst, Src: TIntFList;
+  Pos, FirstMoved, EndIter: TIntIter;
+  NewValue: Integer;
+begin
+  Dst := TIntFList.Create;
+  Src := TIntFList.Create;
+  try
+    Dst.PushFront(10);
+
+    Src.PushFront(4);
+    Src.PushFront(3);
+    Src.PushFront(2);
+    Src.PushFront(1);
+
+    Pos := Dst.BeforeBegin;
+    FirstMoved := Src.Find(3);
+    CheckEqual(Int64(3), Int64(FirstMoved.Current), 'find source tail range head');
+    EndIter := Src.CEnd;
+
+    Dst.Splice(Pos, Src, FirstMoved, EndIter);
+    CheckEqual(Int64(2), Int64(Src.GetCount), 'source count after moving tail range');
+    CheckEqual(Int64(3), Int64(Dst.GetCount), 'destination count after moving tail range');
+
+    NewValue := 5;
+    Check(Src.TryAppend(@NewValue, 1), 'append to source after tail range splice');
+    CheckEqual(Int64(3), Int64(Src.GetCount), 'source count after range append');
+    CheckEqual(Int64(3), Int64(Dst.GetCount), 'destination count remains isolated after range append');
+    CheckEqual(Int64(5), Int64(Src.ToArray[2]), 'source range append stays in source');
+    CheckEqual(Int64(10), Int64(Dst.ToArray[2]), 'destination range tail remains original');
+  finally
+    Src.Free;
+    Dst.Free;
+  end;
+end;
+
+procedure TestSpliceAllKeepsDestinationAfterSourceFree;
+var
+  Dst, Src: TIntFList;
+  Pos: TIntIter;
+begin
+  Dst := TIntFList.Create;
+  Src := TIntFList.Create;
+  try
+    Dst.PushFront(10);
+    Src.PushFront(2);
+    Src.PushFront(1);
+
+    Pos := Dst.BeforeBegin;
+    Dst.Splice(Pos, Src);
+    CheckEqual(Int64(0), Int64(Src.GetCount), 'source count after splice all');
+    CheckListValues(Dst, [1, 2, 10], 'destination after splice all');
+
+    Src.Free;
+    Src := nil;
+    CheckListValues(Dst, [1, 2, 10], 'destination after splice source free');
+  finally
+    Src.Free;
+    Dst.Free;
+  end;
+end;
+
+procedure TestMergeKeepsDestinationAfterSourceFree;
+var
+  Dst, Src: TIntFList;
+begin
+  Dst := TIntFList.Create;
+  Src := TIntFList.Create;
+  try
+    Dst.PushFront(3);
+    Dst.PushFront(1);
+    Src.PushFront(4);
+    Src.PushFront(2);
+
+    Dst.Merge(Src);
+    CheckEqual(Int64(0), Int64(Src.GetCount), 'source count after merge');
+    CheckListValues(Dst, [1, 2, 3, 4], 'destination after merge');
+
+    Src.Free;
+    Src := nil;
+    CheckListValues(Dst, [1, 2, 3, 4], 'destination after merge source free');
+  finally
+    Src.Free;
+    Dst.Free;
+  end;
+end;
+
+procedure TestMergeCopyKeepsDestinationAfterTempFree;
+var
+  Dst, Src: TIntFList;
+begin
+  Dst := TIntFList.Create;
+  Src := TIntFList.Create;
+  try
+    Dst.PushFront(3);
+    Dst.PushFront(1);
+    Src.PushFront(4);
+    Src.PushFront(2);
+
+    Dst.MergeCopy(Src);
+    CheckListValues(Src, [2, 4], 'source after merge copy');
+    CheckListValues(Dst, [1, 2, 3, 4], 'destination after merge copy');
+  finally
+    Src.Free;
+    Dst.Free;
+  end;
+end;
+
+procedure TestPushFrontBlockRegistryAllocationFailureIsAtomic;
+var
+  LL: TIntFList;
+  LAllocator: IAllocator;
+  LAlloc: TFailingAllocatorSnapshot;
+  LValue: Integer;
+  LCaught: Boolean;
+begin
+  LAllocator := MakeFailingAllocator(2);
+  LL := TIntFList.Create(LAllocator);
+  try
+    LCaught := False;
+    try
+      LL.PushFront(42);
+    except
+      on E: EOutOfMemoryError do
+        LCaught := True;
+    end;
+
+    Check(LCaught, 'node block registry allocation failure raises canonical OOM');
+    CheckEqual(Int64(0), Int64(LL.GetCount), 'failed push keeps count unchanged');
+    Check(not LL.TryFront(LValue), 'failed push leaves list empty');
+    LAlloc := FailingAllocatorSnapshot;
+    CheckEqual(Int64(2), Int64(LAlloc.GetMemCalls), 'failure happened on second GetMem');
+    CheckEqual(Int64(1), Int64(LAlloc.FreeMemCalls), 'allocated node block released after registry failure');
+  finally
+    LL.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.forwardlist');
   T.Run('PushFront/PopFront', @TestPushFrontPopFront);
@@ -243,6 +484,14 @@ begin
   T.Run('Find', @TestFind);
   T.Run('FindIf', @TestFindIf);
   T.Run('InsertAfter/EraseAfter', @TestInsertAfterEraseAfter);
+  T.Run('EraseAfter before_begin to end removes whole list', @TestEraseAfterBeforeBeginToEndRemovesWholeList);
+  T.Run('EraseAfter before_begin to end releases managed items', @TestEraseAfterBeforeBeginToEndReleasesManagedItems);
   T.Run('TryLoadFrom/TryAppend', @TestTryLoadFromTryAppend);
+  T.Run('Splice single tail keeps source append isolated', @TestSpliceSingleTailKeepsSourceAppendIsolated);
+  T.Run('Splice range tail keeps source append isolated', @TestSpliceRangeTailKeepsSourceAppendIsolated);
+  T.Run('Splice all keeps destination after source free', @TestSpliceAllKeepsDestinationAfterSourceFree);
+  T.Run('Merge keeps destination after source free', @TestMergeKeepsDestinationAfterSourceFree);
+  T.Run('MergeCopy keeps destination after temp free', @TestMergeCopyKeepsDestinationAfterTempFree);
+  T.Run('PushFront block registry allocation failure is atomic', @TestPushFrontBlockRegistryAllocationFailureIsAtomic);
   T.Summary;
 end.

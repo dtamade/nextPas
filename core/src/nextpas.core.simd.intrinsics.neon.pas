@@ -8,6 +8,9 @@ unit nextpas.core.simd.intrinsics.neon;
   === nextpas.core.simd.intrinsics.neon ===
   Stub ARM NEON intrinsics surface for isolated experimental bring-up.
   NEON is ARM's 128-bit SIMD extension.
+  ISA qualification only: this raw leaf documents NEON capability shape for
+  opt-in experiments, not a stable public backend.
+  It is only qualified on arm-class targets whose cpuinfo reports NEON.
   Highlights:
   - 128-bit vector registers (q0-q15)
   - 64-bit vector registers (d0-d31)

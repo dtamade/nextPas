@@ -15,7 +15,8 @@ uses
   nextpas.core.base,
   nextpas.core.math,
   nextpas.core.mem.utils,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
   nextpas.core.collections.arr.base,
@@ -225,7 +226,11 @@ generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: 
 // ==== HashMap / HashSet (OA default) ====
 {$IFNDEF NEXTPAS_COLLECTIONS_DISABLE_HASH}
   generic function MakeHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
+  generic function MakeHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>;
+    aEquals: specialize TKeyEqualsFunc<K>; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
   generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
+  generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>;
+    aEquals: specialize TKeyEqualsFunc<K>; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
   generic function MakeHashSet<K>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashSet<K>;
 {$ENDIF}
 
@@ -407,7 +412,7 @@ generic function MakeVecDeque<T>: specialize IDeque<T>;
 var
   LDeque: specialize TVecDeque<T>;
 begin
-  LDeque := specialize TVecDeque<T>.Create(GetRtlAllocator());
+  LDeque := specialize TVecDeque<T>.Create(DefaultAllocator());
   Result := LDeque;
 end;
 
@@ -460,7 +465,7 @@ generic function MakeForwardList<T>(const aSrcCollection: TCollection; aAllocato
 var LI: specialize IForwardList<T>;
 begin
   if aAllocator <> nil then LI := specialize TForwardList<T>.Create(aSrcCollection, aAllocator, aData)
-  else LI := specialize TForwardList<T>.Create(aSrcCollection, GetRtlAllocator(), aData);
+  else LI := specialize TForwardList<T>.Create(aSrcCollection, DefaultAllocator(), aData);
   Result := LI;
 end;
 
@@ -468,7 +473,7 @@ generic function MakeForwardList<T>(const aSrc: array of T; aAllocator: IAllocat
 var LI: specialize IForwardList<T>;
 begin
   if aAllocator <> nil then LI := specialize TForwardList<T>.Create(aSrc, aAllocator, aData)
-  else LI := specialize TForwardList<T>.Create(aSrc, GetRtlAllocator(), aData);
+  else LI := specialize TForwardList<T>.Create(aSrc, DefaultAllocator(), aData);
   Result := LI;
 end;
 
@@ -476,7 +481,7 @@ generic function MakeForwardList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAll
 var LI: specialize IForwardList<T>;
 begin
   if aAllocator <> nil then LI := specialize TForwardList<T>.Create(aSrc, aElementCount, aAllocator, aData)
-  else LI := specialize TForwardList<T>.Create(aSrc, aElementCount, GetRtlAllocator(), aData);
+  else LI := specialize TForwardList<T>.Create(aSrc, aElementCount, DefaultAllocator(), aData);
   Result := LI;
 end;
 
@@ -573,7 +578,7 @@ begin
       Exit(specialize TVecDeque<T>.Create(aSrcCollection, aAllocator, aData));
   end
   else
-    Exit(specialize TVecDeque<T>.Create(aSrcCollection, GetRtlAllocator(), aData));
+    Exit(specialize TVecDeque<T>.Create(aSrcCollection, DefaultAllocator(), aData));
 end;
 
 generic function MakeDeque<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator; aGrowStrategy: TGrowthStrategy; aData: Pointer): specialize IDeque<T>;
@@ -586,7 +591,7 @@ begin
       Exit(specialize TVecDeque<T>.Create(aSrc, aElementCount, aAllocator, aData));
   end
   else
-    Exit(specialize TVecDeque<T>.Create(aSrc, aElementCount, GetRtlAllocator(), aData));
+    Exit(specialize TVecDeque<T>.Create(aSrc, aElementCount, DefaultAllocator(), aData));
 end;
 
 // Queue factories (delegate to Deque)
@@ -644,7 +649,7 @@ begin
       Exit(specialize TVecDeque<T>.Create(aSrcCollection, aAllocator, aData));
   end
   else
-    Exit(specialize TVecDeque<T>.Create(aSrcCollection, GetRtlAllocator(), aData));
+    Exit(specialize TVecDeque<T>.Create(aSrcCollection, DefaultAllocator(), aData));
 end;
 
 generic function MakeQueue<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator; aGrowStrategy: TGrowthStrategy; aData: Pointer): specialize IQueue<T>;
@@ -658,7 +663,7 @@ begin
       Exit(specialize TVecDeque<T>.Create(aSrc, aElementCount, aAllocator, aData));
   end
   else
-    Exit(specialize TVecDeque<T>.Create(aSrc, aElementCount, GetRtlAllocator(), aData));
+    Exit(specialize TVecDeque<T>.Create(aSrc, aElementCount, DefaultAllocator(), aData));
 end;
 
 // Stack factories (based on TStack)
@@ -736,7 +741,7 @@ generic function MakeList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator:
 var LObj: specialize TList<T>;
 begin
   if aAllocator <> nil then LObj := specialize TList<T>.Create(aSrc, aElementCount, aAllocator, aData)
-  else LObj := specialize TList<T>.Create(aSrc, aElementCount, GetRtlAllocator(), aData);
+  else LObj := specialize TList<T>.Create(aSrc, aElementCount, DefaultAllocator(), aData);
   Result := LObj;
 end;
 
@@ -805,9 +810,21 @@ begin
   Result := specialize TSwissHashMap<K,V>.Create(aCapacity, nil, nil, aAllocator);
 end;
 
+generic function MakeHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>;
+  aEquals: specialize TKeyEqualsFunc<K>; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
+begin
+  Result := specialize TSwissHashMap<K,V>.Create(aCapacity, aHash, aEquals, aAllocator);
+end;
+
 generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
 begin
   Result := specialize TSwissHashMap<K,V>.Create(aCapacity, nil, nil, aAllocator);
+end;
+
+generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>;
+  aEquals: specialize TKeyEqualsFunc<K>; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
+begin
+  Result := specialize TSwissHashMap<K,V>.Create(aCapacity, aHash, aEquals, aAllocator);
 end;
 
 generic function MakeHashSet<K>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashSet<K>;

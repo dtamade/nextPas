@@ -58,6 +58,9 @@ type
     FIsInline: Boolean;          // 是否使用内联存储
 
     function GetDataPtr: PT; inline;
+    procedure ClearInlineElements(aCount: SizeUInt);
+    procedure ClearInlineElement(aIndex: SizeUInt);
+    procedure ClearHeapElement(aIndex: SizeUInt);
     procedure SpillToHeap;
     procedure GrowHeap;
 
@@ -133,6 +136,29 @@ begin
     Result := @FHeap[0];
 end;
 
+procedure TSmallVec.ClearInlineElements(aCount: SizeUInt);
+var
+  i: SizeUInt;
+begin
+  if (aCount = 0) or not System.IsManagedType(T) then
+    Exit;
+
+  for i := 0 to aCount - 1 do
+    FInline[i] := Default(T);
+end;
+
+procedure TSmallVec.ClearInlineElement(aIndex: SizeUInt);
+begin
+  if System.IsManagedType(T) then
+    FInline[aIndex] := Default(T);
+end;
+
+procedure TSmallVec.ClearHeapElement(aIndex: SizeUInt);
+begin
+  if System.IsManagedType(T) then
+    FHeap[aIndex] := Default(T);
+end;
+
 procedure TSmallVec.SpillToHeap;
 var
   LNewCapacity: SizeUInt;
@@ -150,6 +176,7 @@ begin
   // 复制内联数据到堆
   for i := 0 to FCount - 1 do
     FHeap[i] := FInline[i];
+  ClearInlineElements(FCount);
 
   // 切换到堆模式
   FIsInline := False;
@@ -179,7 +206,9 @@ end;
 
 procedure TSmallVec.Done;
 begin
-  if not FIsInline then
+  if FIsInline then
+    ClearInlineElements(FCount)
+  else
   begin
     SetLength(FHeap, 0);
     FHeap := nil;
@@ -192,7 +221,9 @@ end;
 procedure TSmallVec.Clear;
 begin
   // 释放堆内存，回到内联状态
-  if not FIsInline then
+  if FIsInline then
+    ClearInlineElements(FCount)
+  else
   begin
     SetLength(FHeap, 0);
     FHeap := nil;
@@ -243,9 +274,15 @@ begin
 
   Dec(FCount);
   if FIsInline then
-    aValue := FInline[FCount]
+  begin
+    aValue := FInline[FCount];
+    ClearInlineElement(FCount);
+  end
   else
+  begin
     aValue := FHeap[FCount];
+    ClearHeapElement(FCount);
+  end;
 
   Result := True;
 end;

@@ -22,6 +22,9 @@ const
   PATH_SEP = ':';
 {$ENDIF}
 
+type
+  TAnsiCharArray = array of AnsiChar;
+
 function IsExecutable(const APath: PAnsiChar): Boolean;
 begin
 {$IFDEF NEXTPAS_UNIX}
@@ -31,11 +34,46 @@ begin
 {$ENDIF}
 end;
 
+function LoadPathEnv(out APath: TAnsiCharArray; out APathLen: Int32): Boolean;
+begin
+  Result := False;
+  repeat
+    if platform_env_get('PATH', nil, 0, APathLen) <> 0 then
+      Exit;
+    if APathLen <= 0 then
+      Exit;
+    SetLength(APath, APathLen + 1);
+    if platform_env_get('PATH', @APath[0], Length(APath), APathLen) <> 0 then
+      Exit;
+  until APathLen < Length(APath);
+  Result := True;
+end;
+
+function CopyFoundPath(const APath: PAnsiChar; ABuf: PAnsiChar;
+  ABufLen: Int32): Int32;
+var
+  LCopyLen: Int32;
+begin
+  Result := 0;
+  while APath[Result] <> #0 do
+    Inc(Result);
+
+  if (ABuf = nil) or (ABufLen <= 0) then
+    Exit;
+
+  LCopyLen := Result;
+  if LCopyLen >= ABufLen then
+    LCopyLen := ABufLen - 1;
+  if LCopyLen > 0 then
+    Move(APath^, ABuf^, LCopyLen);
+  ABuf[LCopyLen] := #0;
+end;
+
 function platform_which(const AName: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 var
-  LPathBuf: array[0..4095] of AnsiChar;
   LCandidate: array[0..1023] of AnsiChar;
+  LPathBuf: array of AnsiChar;
   LPathLen, I, LStart, LDirLen, LNameLen: Int32;
 begin
   if (AName = nil) or (AName[0] = #0) then
@@ -47,16 +85,11 @@ begin
   if platform_path_is_absolute(AName) then
   begin
     if IsExecutable(AName) then
-    begin
-      if LNameLen >= ABufLen then LNameLen := ABufLen - 1;
-      Move(AName^, ABuf^, LNameLen);
-      ABuf[LNameLen] := #0;
-      Exit(LNameLen);
-    end;
+      Exit(CopyFoundPath(AName, ABuf, ABufLen));
     Exit(-1);
   end;
 
-  if platform_env_get('PATH', @LPathBuf[0], 4096, LPathLen) <> 0 then
+  if not LoadPathEnv(LPathBuf, LPathLen) then
     Exit(-1);
 
   I := 0;
@@ -76,14 +109,7 @@ begin
     LPathBuf[LStart + LDirLen] := PATH_SEP; // restore
 
     if IsExecutable(@LCandidate[0]) then
-    begin
-      LDirLen := 0;
-      while LCandidate[LDirLen] <> #0 do Inc(LDirLen);
-      if LDirLen >= ABufLen then LDirLen := ABufLen - 1;
-      Move(LCandidate[0], ABuf^, LDirLen);
-      ABuf[LDirLen] := #0;
-      Exit(LDirLen);
-    end;
+      Exit(CopyFoundPath(@LCandidate[0], ABuf, ABufLen));
   end;
 
   if ABuf <> nil then ABuf[0] := #0;

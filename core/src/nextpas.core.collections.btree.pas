@@ -5,7 +5,7 @@ unit nextpas.core.collections.btree;
 interface
 
 uses
-  TypInfo,
+  nextpas.core.system.typinfo,
   nextpas.core.base,
   nextpas.core.collections.base,
   nextpas.core.collections.btree.intf;
@@ -60,6 +60,8 @@ type
     procedure FreeNode(ANode: PNode);
     procedure FreeNodeRecursive(ANode: PNode);
     function SearchNode(ANode: PNode; const AKey: K; out AIndex: Int32): Boolean;
+    function CompareKeys(const A, B: K): SizeInt;
+    procedure ClearEntryRange(ANode: PNode; AFirstIndex, ACount: Int32);
     procedure SplitChild(AParent: PNode; AChildIndex: Int32);
     procedure InsertNonFull(ANode: PNode; const AKey: K; const AValue: V);
     function FindPredecessor(ANode: PNode): PNode;
@@ -174,13 +176,8 @@ begin
 end;
 
 procedure TBTreeMap.FreeNode(ANode: PNode);
-var i: Int32;
 begin
   if ANode = nil then Exit;
-  if System.IsManagedType(K) then
-    for i := 0 to ANode^.Count - 1 do Finalize(ANode^.Keys[i]);
-  if System.IsManagedType(V) then
-    for i := 0 to ANode^.Count - 1 do Finalize(ANode^.Values[i]);
   Dispose(ANode);
 end;
 
@@ -196,35 +193,44 @@ end;
 
 { Search }
 
+function TBTreeMap.CompareKeys(const A, B: K): SizeInt;
+begin
+  if Assigned(FCompare) then
+    Exit(FCompare(A, B, FCompareData));
+  Result := Int32(PInt32(@A)^ > PInt32(@B)^) - Int32(PInt32(@A)^ < PInt32(@B)^);
+end;
+
 function TBTreeMap.SearchNode(ANode: PNode; const AKey: K; out AIndex: Int32): Boolean;
-var lo, hi, mid, cmp: Int32;
+var
+  lo, hi, mid: Int32;
+  cmp: SizeInt;
 begin
   lo := 0; hi := ANode^.Count - 1;
-  if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+  while lo <= hi do
   begin
-    while lo <= hi do
-    begin
-      mid := (lo + hi) shr 1;
-      if PInt32(@AKey)^ = PInt32(@ANode^.Keys[mid])^ then
-        begin AIndex := mid; Exit(True); end;
-      if PInt32(@AKey)^ < PInt32(@ANode^.Keys[mid])^ then
-        hi := mid - 1
-      else
-        lo := mid + 1;
-    end;
-  end
-  else
-  begin
-    while lo <= hi do
-    begin
-      mid := (lo + hi) shr 1;
-      cmp := FCompare(AKey, ANode^.Keys[mid], FCompareData);
-      if cmp = 0 then begin AIndex := mid; Exit(True); end;
-      if cmp < 0 then hi := mid - 1 else lo := mid + 1;
-    end;
+    mid := (lo + hi) shr 1;
+    cmp := CompareKeys(AKey, ANode^.Keys[mid]);
+    if cmp = 0 then begin AIndex := mid; Exit(True); end;
+    if cmp < 0 then hi := mid - 1 else lo := mid + 1;
   end;
   AIndex := lo;
   Result := False;
+end;
+
+procedure TBTreeMap.ClearEntryRange(ANode: PNode; AFirstIndex, ACount: Int32);
+var
+  i: Int32;
+begin
+  if (ANode = nil) or (ACount <= 0) then
+    Exit;
+
+  if System.IsManagedType(K) then
+    for i := AFirstIndex to AFirstIndex + ACount - 1 do
+      ANode^.Keys[i] := Default(K);
+
+  if System.IsManagedType(V) then
+    for i := AFirstIndex to AFirstIndex + ACount - 1 do
+      ANode^.Values[i] := Default(V);
 end;
 
 { Public API }
@@ -340,6 +346,7 @@ begin
   Inc(AParent^.Count);
 
   // Update LFull.Size (lost the right half + mid key)
+  ClearEntryRange(LFull, LMidIdx, LFull^.Count - LMidIdx);
   LFull^.Count := LMidIdx;
   LFull^.Size := LFull^.Size - LNew^.Size - 1;
 end;
@@ -348,29 +355,18 @@ end;
 
 procedure TBTreeMap.InsertNonFull(ANode: PNode; const AKey: K; const AValue: V);
 var
-  i, cmp: Int32;
+  i: Int32;
+  cmp: SizeInt;
 begin
   i := ANode^.Count - 1;
 
   if ANode^.IsLeaf then
   begin
-    if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+    while (i >= 0) and (CompareKeys(AKey, ANode^.Keys[i]) < 0) do
     begin
-      while (i >= 0) and (PInt32(@AKey)^ < PInt32(@ANode^.Keys[i])^) do
-      begin
-        ANode^.Keys[i + 1] := ANode^.Keys[i];
-        ANode^.Values[i + 1] := ANode^.Values[i];
-        Dec(i);
-      end;
-    end
-    else
-    begin
-      while (i >= 0) and (FCompare(AKey, ANode^.Keys[i], FCompareData) < 0) do
-      begin
-        ANode^.Keys[i + 1] := ANode^.Keys[i];
-        ANode^.Values[i + 1] := ANode^.Values[i];
-        Dec(i);
-      end;
+      ANode^.Keys[i + 1] := ANode^.Keys[i];
+      ANode^.Values[i + 1] := ANode^.Values[i];
+      Dec(i);
     end;
     ANode^.Keys[i + 1] := AKey;
     ANode^.Values[i + 1] := AValue;
@@ -380,41 +376,19 @@ begin
   end
   else
   begin
-    if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
-    begin
-      while (i >= 0) and (PInt32(@AKey)^ < PInt32(@ANode^.Keys[i])^) do
-        Dec(i);
-    end
-    else
-    begin
-      while (i >= 0) and (FCompare(AKey, ANode^.Keys[i], FCompareData) < 0) do
-        Dec(i);
-    end;
+    while (i >= 0) and (CompareKeys(AKey, ANode^.Keys[i]) < 0) do
+      Dec(i);
     Inc(i);
     if ANode^.Children[i]^.Count = BTREE_MAX_KEYS then
     begin
       SplitChild(ANode, i);
-      if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+      cmp := CompareKeys(AKey, ANode^.Keys[i]);
+      if cmp = 0 then
       begin
-        if PInt32(@AKey)^ = PInt32(@ANode^.Keys[i])^ then
-        begin
-          if System.IsManagedType(V) then Finalize(ANode^.Values[i]);
-          ANode^.Values[i] := AValue;
-          Exit;
-        end;
-        if PInt32(@AKey)^ > PInt32(@ANode^.Keys[i])^ then Inc(i);
-      end
-      else
-      begin
-        cmp := FCompare(AKey, ANode^.Keys[i], FCompareData);
-        if cmp = 0 then
-        begin
-          if System.IsManagedType(V) then Finalize(ANode^.Values[i]);
-          ANode^.Values[i] := AValue;
-          Exit;
-        end;
-        if cmp > 0 then Inc(i);
+        ANode^.Values[i] := AValue;
+        Exit;
       end;
+      if cmp > 0 then Inc(i);
     end;
     Inc(ANode^.Size);
     InsertNonFull(ANode^.Children[i], AKey, AValue);
@@ -444,7 +418,6 @@ begin
   begin
     if SearchNode(LNode, AKey, LIdx) then
     begin
-      if System.IsManagedType(V) then Finalize(LNode^.Values[LIdx]);
       LNode^.Values[LIdx] := AValue;
       Exit;
     end;
@@ -467,12 +440,13 @@ end;
 { Remove — simplified: mark as not implemented for now }
 
 function TBTreeMap.Remove(const AKey: K): Boolean;
-var LOld: PNode; LOldCount: SizeUInt;
+var
+  LOld: PNode;
+  LOldCount: SizeUInt;
 begin
   if FRoot = nil then Exit(False);
   LOldCount := FCount;
   RemoveFromNode(FRoot, AKey);
-  if FCount = LOldCount then Exit(False);
   FSizeDirty := True;
   if (FRoot <> nil) and (FRoot^.Count = 0) then
   begin
@@ -489,7 +463,7 @@ begin
       FreeNode(LOld);
     end;
   end;
-  Result := True;
+  Result := FCount <> LOldCount;
 end;
 
 procedure TBTreeMap.RemoveFromNode(ANode: PNode; const AKey: K);
@@ -518,16 +492,14 @@ end;
 procedure TBTreeMap.RemoveFromLeaf(ANode: PNode; AIndex: Int32);
 var i: Int32;
 begin
-  if System.IsManagedType(K) then Finalize(ANode^.Keys[AIndex]);
-  if System.IsManagedType(V) then Finalize(ANode^.Values[AIndex]);
   for i := AIndex to ANode^.Count - 2 do
   begin
     ANode^.Keys[i] := ANode^.Keys[i + 1];
     ANode^.Values[i] := ANode^.Values[i + 1];
   end;
   Dec(ANode^.Count);
-  if System.IsManagedType(K) then begin Finalize(ANode^.Keys[ANode^.Count]); FillChar(ANode^.Keys[ANode^.Count], SizeOf(K), 0); end;
-  if System.IsManagedType(V) then begin Finalize(ANode^.Values[ANode^.Count]); FillChar(ANode^.Values[ANode^.Count], SizeOf(V), 0); end;
+  if System.IsManagedType(K) then ANode^.Keys[ANode^.Count] := Default(K);
+  if System.IsManagedType(V) then ANode^.Values[ANode^.Count] := Default(V);
   Dec(FCount);
 end;
 
@@ -560,6 +532,7 @@ end;
 
 procedure TBTreeMap.Fill(ANode: PNode; AIndex: Int32);
 begin
+  FSizeDirty := True;
   if (AIndex > 0) and (ANode^.Children[AIndex - 1]^.Count >= BTREE_ORDER) then
     BorrowFromPrev(ANode, AIndex)
   else if (AIndex < ANode^.Count) and (ANode^.Children[AIndex + 1]^.Count >= BTREE_ORDER) then
@@ -600,8 +573,8 @@ begin
 
   Inc(LChild^.Count);
   Dec(LSibling^.Count);
-  if System.IsManagedType(K) then begin Finalize(LSibling^.Keys[LSibling^.Count]); FillChar(LSibling^.Keys[LSibling^.Count], SizeOf(K), 0); end;
-  if System.IsManagedType(V) then begin Finalize(LSibling^.Values[LSibling^.Count]); FillChar(LSibling^.Values[LSibling^.Count], SizeOf(V), 0); end;
+  if System.IsManagedType(K) then LSibling^.Keys[LSibling^.Count] := Default(K);
+  if System.IsManagedType(V) then LSibling^.Values[LSibling^.Count] := Default(V);
 end;
 
 procedure TBTreeMap.BorrowFromNext(ANode: PNode; AIndex: Int32);
@@ -637,8 +610,8 @@ begin
 
   Inc(LChild^.Count);
   Dec(LSibling^.Count);
-  if System.IsManagedType(K) then begin Finalize(LSibling^.Keys[LSibling^.Count]); FillChar(LSibling^.Keys[LSibling^.Count], SizeOf(K), 0); end;
-  if System.IsManagedType(V) then begin Finalize(LSibling^.Values[LSibling^.Count]); FillChar(LSibling^.Values[LSibling^.Count], SizeOf(V), 0); end;
+  if System.IsManagedType(K) then LSibling^.Keys[LSibling^.Count] := Default(K);
+  if System.IsManagedType(V) then LSibling^.Values[LSibling^.Count] := Default(V);
 end;
 
 procedure TBTreeMap.MergeChildren(ANode: PNode; AIndex: Int32);
@@ -671,8 +644,8 @@ begin
   for i := AIndex + 1 to ANode^.Count - 1 do
     ANode^.Children[i] := ANode^.Children[i + 1];
   Dec(ANode^.Count);
-  if System.IsManagedType(K) then begin Finalize(ANode^.Keys[ANode^.Count]); FillChar(ANode^.Keys[ANode^.Count], SizeOf(K), 0); end;
-  if System.IsManagedType(V) then begin Finalize(ANode^.Values[ANode^.Count]); FillChar(ANode^.Values[ANode^.Count], SizeOf(V), 0); end;
+  if System.IsManagedType(K) then ANode^.Keys[ANode^.Count] := Default(K);
+  if System.IsManagedType(V) then ANode^.Values[ANode^.Count] := Default(V);
 
   FreeNode(LRight);
 end;
@@ -781,12 +754,7 @@ begin
     SearchNode(LNode, AKey, LIdx);
     if (LIdx < LNode^.Count) then
     begin
-      if Assigned(FCompare) then
-      begin
-        if FCompare(AKey, LNode^.Keys[LIdx], FCompareData) = 0 then
-          Inc(LIdx);
-      end
-      else if PInt32(@AKey)^ = PInt32(@LNode^.Keys[LIdx])^ then
+      if CompareKeys(AKey, LNode^.Keys[LIdx]) = 0 then
         Inc(LIdx);
     end;
     if LIdx < LNode^.Count then
@@ -861,8 +829,11 @@ begin
     if SearchNode(LNode, AKey, LIdx) then
     begin
       if not LNode^.IsLeaf then
+      begin
         for i := 0 to LIdx - 1 do
           Result := Result + LNode^.Children[i]^.Size;
+        Result := Result + LNode^.Children[LIdx]^.Size;
+      end;
       Result := Result + SizeUInt(LIdx);
       Exit;
     end;
@@ -956,23 +927,14 @@ end;
 procedure TBTreeMap.RangeTraverse(ANode: PNode; const ALo, AHi: K;
   ACallback: TForEachCallback; AData: Pointer);
 var i: Int32;
-
-  function CmpKey(const A, B: K): Int32; inline;
-  begin
-    if Assigned(FCompare) then
-      Result := FCompare(A, B, FCompareData)
-    else
-      Result := Int32(PInt32(@A)^ > PInt32(@B)^) - Int32(PInt32(@A)^ < PInt32(@B)^);
-  end;
-
 begin
   if ANode = nil then Exit;
   if ANode^.IsLeaf then
   begin
     for i := 0 to ANode^.Count - 1 do
     begin
-      if CmpKey(ANode^.Keys[i], ALo) < 0 then Continue;
-      if CmpKey(ANode^.Keys[i], AHi) > 0 then Exit;
+      if CompareKeys(ANode^.Keys[i], ALo) < 0 then Continue;
+      if CompareKeys(ANode^.Keys[i], AHi) > 0 then Exit;
       ACallback(ANode^.Keys[i], ANode^.Values[i], AData);
     end;
   end
@@ -980,13 +942,13 @@ begin
   begin
     for i := 0 to ANode^.Count - 1 do
     begin
-      if CmpKey(ANode^.Keys[i], ALo) >= 0 then
+      if CompareKeys(ANode^.Keys[i], ALo) >= 0 then
         RangeTraverse(ANode^.Children[i], ALo, AHi, ACallback, AData);
-      if CmpKey(ANode^.Keys[i], ALo) < 0 then Continue;
-      if CmpKey(ANode^.Keys[i], AHi) > 0 then Exit;
+      if CompareKeys(ANode^.Keys[i], ALo) < 0 then Continue;
+      if CompareKeys(ANode^.Keys[i], AHi) > 0 then Exit;
       ACallback(ANode^.Keys[i], ANode^.Values[i], AData);
     end;
-    if CmpKey(ANode^.Keys[ANode^.Count - 1], AHi) <= 0 then
+    if CompareKeys(ANode^.Keys[ANode^.Count - 1], AHi) <= 0 then
       RangeTraverse(ANode^.Children[ANode^.Count], ALo, AHi, ACallback, AData);
   end;
 end;
@@ -1008,7 +970,13 @@ end;
 procedure TBTreeMap.PutSorted(const AKeys: array of K; const AValues: array of V; ACount: SizeUInt);
 var i: SizeUInt;
 begin
+  if (ACount > SizeUInt(Length(AKeys))) or (ACount > SizeUInt(Length(AValues))) then
+    raise EInvalidArgument.Create('TBTreeMap.PutSorted: count exceeds input length');
+
   Clear;
+  if ACount = 0 then
+    Exit;
+
   for i := 0 to ACount - 1 do
     Put(AKeys[i], AValues[i]);
 end;
@@ -1016,6 +984,7 @@ end;
 function TBTreeMap.GetKeys: TKeyArray;
 var E: TEntry; i: SizeUInt;
 begin
+  Result := nil;
   SetLength(Result, FCount);
   i := 0;
   for E in Self do
@@ -1028,6 +997,7 @@ end;
 function TBTreeMap.GetValues: TValueArray;
 var E: TEntry; i: SizeUInt;
 begin
+  Result := nil;
   SetLength(Result, FCount);
   i := 0;
   for E in Self do
@@ -1256,6 +1226,7 @@ end;
 function TBTreeSet.ToArray: TItemArray;
 var E: TInner.TEntry; i: SizeUInt;
 begin
+  Result := nil;
   SetLength(Result, FInner.Count);
   i := 0;
   for E in FInner do

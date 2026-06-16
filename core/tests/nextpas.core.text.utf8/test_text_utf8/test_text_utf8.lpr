@@ -71,6 +71,25 @@ begin
   CheckEqual(Int64(0), Int64(D.ByteLen), 'surrogate U+D800');
 end;
 
+procedure TestNilNonzeroSpan;
+var
+  D: TUTF8DecodeResult;
+  Iter: TUTF8Iterator;
+  CP: UInt32;
+begin
+  D := UTF8Decode(nil, 1);
+  CheckEqual(Int64(0), Int64(D.ByteLen), 'nil decode fails closed');
+  CheckEqual(Int64(0), Int64(D.CodePoint), 'nil decode codepoint = 0');
+  Check(not UTF8IsValid(nil, 1), 'nil span is not valid UTF-8');
+  CheckEqual(Int64(0), Int64(UTF8CodePointCount(nil, 1)), 'nil span has no codepoints');
+
+  Iter.Init(nil, 1);
+  Check(not Iter.HasNext, 'nil iterator has no next');
+  CheckEqual(Int64(0), Int64(Iter.Remaining), 'nil iterator remaining = 0');
+  Check(not Iter.Next(CP), 'nil iterator does not decode');
+  CheckEqual(Int64(0), Int64(CP), 'nil iterator codepoint = 0');
+end;
+
 procedure TestEncode;
 var
   Buf: array[0..5] of Byte;
@@ -99,6 +118,12 @@ begin
   CheckEqual(Int64(0), Int64(N), 'out of range rejected');
 end;
 
+procedure TestEncodeNilDestinationFailsClosed;
+begin
+  CheckEqual(Int64(0), Int64(UTF8Encode($41, nil)), 'nil destination rejects ASCII');
+  CheckEqual(Int64(0), Int64(UTF8Encode($1F600, nil)), 'nil destination rejects emoji');
+end;
+
 procedure TestIsValid;
 const
   VALID: array[0..5] of Byte = ($48, $65, $6C, $6C, $6F, $21);
@@ -114,9 +139,28 @@ procedure TestCodePointCount;
 const
   ASCII: array[0..4] of Byte = ($48, $65, $6C, $6C, $6F);
   MIXED: array[0..7] of Byte = ($48, $C3, $A9, $6C, $6C, $C3, $B6, $21);
+  ISOLATED_CONT: array[0..1] of Byte = ($80, $41);
+  TRUNCATED_THREE: array[0..2] of Byte = ($E2, $82, $5A);
 begin
   CheckEqual(Int64(5), Int64(UTF8CodePointCount(@ASCII[0], 5)), 'ASCII 5 cp');
   CheckEqual(Int64(6), Int64(UTF8CodePointCount(@MIXED[0], 8)), 'mixed 6 cp');
+  CheckEqual(Int64(2), Int64(UTF8CodePointCount(@ISOLATED_CONT[0], 2)),
+    'isolated continuation counts as replacement plus ASCII');
+  CheckEqual(Int64(3), Int64(UTF8CodePointCount(@TRUNCATED_THREE[0], 3)),
+    'truncated sequence consumes one replacement byte at a time');
+end;
+
+procedure TestStringWrappers;
+var
+  LValue: string;
+begin
+  CheckEqual(Int64(5), Int64(UTF8Length('hello')), 'string ASCII length');
+  CheckEqual(Int64($4E2D), Int64(UTF8CodePointAt(#$E4#$B8#$AD, 0)), 'string CJK codepoint');
+
+  LValue := #$80 + 'A';
+  CheckEqual(Int64(2), Int64(UTF8Length(LValue)), 'invalid byte still counts once');
+  CheckEqual(Int64($FFFD), Int64(UTF8CodePointAt(LValue, 0)), 'invalid byte wrapper returns replacement');
+  CheckEqual(Int64(Ord('A')), Int64(UTF8CodePointAt(LValue, 1)), 'wrapper keeps following ASCII addressable');
 end;
 
 procedure TestIterator;
@@ -165,9 +209,12 @@ begin
   T.Run('decode 3-byte', @TestDecode3Byte);
   T.Run('decode 4-byte', @TestDecode4Byte);
   T.Run('decode invalid', @TestDecodeInvalid);
+  T.Run('nil nonzero span', @TestNilNonzeroSpan);
   T.Run('encode', @TestEncode);
+  T.Run('encode nil destination fails closed', @TestEncodeNilDestinationFailsClosed);
   T.Run('isValid', @TestIsValid);
   T.Run('codepoint count', @TestCodePointCount);
+  T.Run('string wrappers', @TestStringWrappers);
   T.Run('iterator', @TestIterator);
   T.Run('iterator invalid', @TestIteratorInvalid);
   T.Run('byte length', @TestByteLength);

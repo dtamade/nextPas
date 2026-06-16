@@ -9,7 +9,8 @@ uses
   nextpas.core.base,
   nextpas.core.math,
   nextpas.core.mem.utils,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
   nextpas.core.collections.arr.intf,
@@ -110,6 +111,7 @@ type
     function  GetTailIndex: SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  IsFull: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  IsValidIndex(aIndex: SizeUInt): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  IsRangeInBounds(aIndex, aCount: SizeUInt): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  IsEmpty: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  RequireAddCount(aBase, aAdditional: SizeUInt; const aCallerName: string): SizeUInt;
     procedure EnsureCapacity(aRequiredCapacity: SizeUInt);
@@ -960,6 +962,11 @@ begin
   Result := aIndex < FCount;
 end;
 
+function TVecDeque.IsRangeInBounds(aIndex, aCount: SizeUInt): Boolean;
+begin
+  Result := (aCount = 0) or ((aIndex <= FCount) and (aCount <= FCount - aIndex));
+end;
+
 function TVecDeque.RequireAddCount(aBase, aAdditional: SizeUInt; const aCallerName: string): SizeUInt;
 begin
   if IsAddOverflow(aBase, aAdditional) then
@@ -1447,7 +1454,7 @@ end;
 
 constructor TVecDeque.Create(aCapacity: SizeUInt);
 begin
-  Create(aCapacity, GetRtlAllocator(), GetDefaultGrowStrategy, nil);
+  Create(aCapacity, DefaultAllocator(), GetDefaultGrowStrategy, nil);
 end;
 
 constructor TVecDeque.Create(aCapacity: SizeUInt; aAllocator: IAllocator);
@@ -1559,8 +1566,7 @@ procedure TVecDeque.SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt);
 var
   LPtr1, LPtr2: PElement;
   LLen1, LLen2: SizeUInt;
-  LDstPtr: PByte;
-  LElementSize: SizeUInt;
+  LDstPtr: PElement;
 begin
   if aDst = nil then
     raise EArgumentNil.Create('TVecDeque.SerializeToArrayBuffer: aDst is nil');
@@ -1568,18 +1574,12 @@ begin
     raise EOutOfRange.Create('TVecDeque.SerializeToArrayBuffer: aCount > Count');
   if aCount = 0 then Exit;
 
-  LDstPtr := PByte(aDst);
-  LElementSize := GetElementSize;
-
-  // 使用统一的两段切片拆分
+  LDstPtr := PElement(aDst);
   GetTwoSlices(0, aCount, LPtr1, LLen1, LPtr2, LLen2);
   if LLen1 > 0 then
-  begin
-    Move(LPtr1^, LDstPtr^, LLen1 * LElementSize);
-    Inc(LDstPtr, LLen1 * LElementSize);
-  end;
+    FElementManager.CopyElementsUnchecked(LPtr1, LDstPtr, LLen1);
   if LLen2 > 0 then
-    Move(LPtr2^, LDstPtr^, LLen2 * LElementSize);
+    FElementManager.CopyElementsUnchecked(LPtr2, LDstPtr + LLen1, LLen2);
 end;
 
 procedure TVecDeque.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
@@ -1756,9 +1756,7 @@ procedure TVecDeque.MakeContiguous(out aPtr: PElement; out aLen: SizeUInt);
 var
   P1, P2: PElement;
   L1, L2: SizeUInt;
-  LElementSize: SizeUInt;
   Tmp: TInternalArray;
-  LDst: PByte;
 begin
   aPtr := nil; aLen := 0;
   if FCount = 0 then Exit;
@@ -1773,18 +1771,25 @@ begin
 
   // 逻辑跨环：整理为连续。策略：用临时数组转存两段，线性覆写回 0..Count-1
   GetTwoSlices(P1, L1, P2, L2);
-  LElementSize := GetElementSize;
 
   // ✅ 优化：使用携带分配器，只分配实际需要的大小
   Tmp := TInternalArray.Create(FBuffer.GetAllocator);
   try
     Tmp.Resize(FCount);  // ✅ 只分配 FCount 而不是 FBuffer.GetCount
-    LDst := PByte(Tmp.GetPtr(0));
-    if L1 > 0 then begin Move(P1^, LDst^, L1 * LElementSize); Inc(LDst, L1 * LElementSize); end;
-    if L2 > 0 then begin Move(P2^, LDst^, L2 * LElementSize); end;
+    if L1 > 0 then
+      Tmp.OverwriteUnchecked(0, P1, L1);
+    if L2 > 0 then
+      Tmp.OverwriteUnchecked(L1, P2, L2);
 
     // 线性覆写回主缓冲的前 Count 段
     FBuffer.Overwrite(0, Tmp, FCount);
+
+    if GetIsManagedType then
+    begin
+      if FCount < FBuffer.GetCount then
+        FElementManager.ZeroElements(FBuffer.GetPtrUnchecked(FCount),
+          FBuffer.GetCount - FCount);
+    end;
 
     // 修正头尾指针，形成连续 [0..Count)
     FHead := 0;
@@ -1856,10 +1861,7 @@ end;
 
 procedure TVecDeque.Resize(aNewSize: SizeUInt);
 begin
-  if aNewSize > FBuffer.GetCount then
-    EnsureCapacity(aNewSize);
-  FCount := aNewSize;
-  FTail := WrapAdd(FHead, FCount);
+  ResizeExact(aNewSize);
 end;
 
 procedure TVecDeque.Ensure(aIndex: SizeUInt);
@@ -1870,7 +1872,7 @@ end;
 
 procedure TVecDeque.Overwrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 begin
-  if aIndex + aCount > FCount then
+  if not IsRangeInBounds(aIndex, aCount) then
     raise EOutOfRange.CreateFmt('TVecDeque.Overwrite: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
   OverwriteUnchecked(aIndex, aSrc, aCount);
@@ -1894,7 +1896,7 @@ begin
   if LStartPhysical <= LEndPhysical then
   begin
     // 情况1：要覆写的范围是连续的
-    Move(LSrcPtr^, FBuffer.GetPtrUnchecked(LStartPhysical)^, aCount * LElementSize);
+    FBuffer.OverwriteUnchecked(LStartPhysical, LSrcPtr, aCount);
   end
   else
   begin
@@ -1903,12 +1905,12 @@ begin
     LSecondPartSize := aCount - LFirstPartSize;           // 从缓冲区开头的剩余部分
 
     // 覆写第一段：从起始位置到缓冲区末尾
-    Move(LSrcPtr^, FBuffer.GetPtrUnchecked(LStartPhysical)^, LFirstPartSize * LElementSize);
+    FBuffer.OverwriteUnchecked(LStartPhysical, LSrcPtr, LFirstPartSize);
     Inc(LSrcPtr, LFirstPartSize * LElementSize);
 
     // 覆写第二段：从缓冲区开头
     if LSecondPartSize > 0 then
-      Move(LSrcPtr^, FBuffer.GetPtrUnchecked(0)^, LSecondPartSize * LElementSize);
+      FBuffer.OverwriteUnchecked(0, LSrcPtr, LSecondPartSize);
   end;
 end;
 
@@ -1936,7 +1938,7 @@ begin
     raise EArgumentNil.Create('TVecDeque.Overwrite: aSrc is nil');
 
   // 由于环形缓冲区的复杂性，我们使用逐个元素复制
-  if aIndex + aSrc.GetCount > FCount then
+  if not IsRangeInBounds(aIndex, aSrc.GetCount) then
     raise EOutOfRange.CreateFmt('TVecDeque.Overwrite: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aSrc.GetCount - 1, FCount - 1]);
 
@@ -1976,7 +1978,7 @@ end;
 
 procedure TVecDeque.Read(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
 begin
-  if aIndex + aCount > FCount then
+  if not IsRangeInBounds(aIndex, aCount) then
     raise EOutOfRange.CreateFmt('TVecDeque.Read: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
   ReadUnchecked(aIndex, aDst, aCount);
@@ -1984,40 +1986,24 @@ end;
 
 procedure TVecDeque.ReadUnchecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
 var
-  LStartPhysical, LEndPhysical: SizeUInt;
-  LFirstPartSize, LSecondPartSize: SizeUInt;
-  LDstPtr: PByte;
-  LElementSize: SizeUInt;
+  LDstPtr: PElement;
+  LPtr1, LPtr2: PElement;
+  LLen1, LLen2: SizeUInt;
 begin
   if (aDst = nil) or (aCount = 0) then
     Exit;
 
-  LElementSize := GetElementSize;
-  LDstPtr := PByte(aDst);
-  // 利用 GetTwoSlices 拆分区间，简化拷贝分支
-
-
-  // 手动两段计算以避免引入本地临时 PElement 变量类型声明改动过大
-  LStartPhysical := GetPhysicalIndex(aIndex);
-  LEndPhysical := GetPhysicalIndex(aIndex + aCount - 1);
-  if LStartPhysical <= LEndPhysical then
-  begin
-    Move(FBuffer.GetPtrUnchecked(LStartPhysical)^, LDstPtr^, aCount * LElementSize);
-  end
-  else
-  begin
-    LFirstPartSize := FBuffer.GetCount - LStartPhysical;
-    LSecondPartSize := aCount - LFirstPartSize;
-    Move(FBuffer.GetPtrUnchecked(LStartPhysical)^, LDstPtr^, LFirstPartSize * LElementSize);
-    Inc(LDstPtr, LFirstPartSize * LElementSize);
-    if LSecondPartSize > 0 then
-      Move(FBuffer.GetPtrUnchecked(0)^, LDstPtr^, LSecondPartSize * LElementSize);
-  end;
+  LDstPtr := PElement(aDst);
+  GetTwoSlices(aIndex, aCount, LPtr1, LLen1, LPtr2, LLen2);
+  if LLen1 > 0 then
+    FElementManager.CopyElementsUnchecked(LPtr1, LDstPtr, LLen1);
+  if LLen2 > 0 then
+    FElementManager.CopyElementsUnchecked(LPtr2, LDstPtr + LLen1, LLen2);
 end;
 
 procedure TVecDeque.Read(aIndex: SizeUInt; var aDst: TCollection; aCount: SizeUInt);
 begin
-  if aIndex + aCount > FCount then
+  if not IsRangeInBounds(aIndex, aCount) then
     raise EOutOfRange.CreateFmt('TVecDeque.Read: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
   ReadUnchecked(aIndex, aDst, aCount);
@@ -4320,11 +4306,7 @@ end;
 
 procedure TVecDeque.Read(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt);
 begin
-  // 边界检查
-  if aIndex >= GetCount then
-    raise EOutOfRange.CreateFmt('TVecDeque.Read: index %d out of range [0..%d]', [aIndex, GetCount - 1]);
-
-  if aIndex + aCount > GetCount then
+  if not IsRangeInBounds(aIndex, aCount) then
     raise EOutOfRange.CreateFmt('TVecDeque.Read: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, GetCount - 1]);
 
@@ -6684,7 +6666,7 @@ end;
 function TVecDeque.TryPop(aPtr: Pointer; aCount: SizeUInt): Boolean;
 var
   i: SizeUInt;
-  LPtr: PByte;
+  LPtr: PElement;
   LPhysicalIndex: SizeUInt;
 begin
   { 尝试从后端弹出指定数量的元素到指针 }
@@ -6700,18 +6682,19 @@ begin
     Exit;
   end;
 
-  // 复制元素到指针 - 进一步减少 GetPhysicalIndex 调用：一次起算 + 每次 WrapAdd
-  LPtr := PByte(aPtr);
+  LPtr := PElement(aPtr);
   LPhysicalIndex := GetPhysicalIndex(FCount - aCount);
   for i := 0 to aCount - 1 do
   begin
-    Move(FBuffer.GetPtrUnchecked(LPhysicalIndex)^, LPtr^, SizeOf(T));
-    Inc(LPtr, SizeOf(T));
+    LPtr^ := FBuffer.GetUnchecked(LPhysicalIndex);
+    Inc(LPtr);
     LPhysicalIndex := WrapAdd(LPhysicalIndex, 1);
   end;
 
-  // 移除元素
+  if GetIsManagedType then
+    ZeroUnchecked(FCount - aCount, aCount);
   Dec(FCount, aCount);
+  SyncCountAndTail;
   Result := True;
 end;
 
@@ -6744,8 +6727,10 @@ begin
     LPhysicalIndex := WrapAdd(LPhysicalIndex, 1);
   end;
 
-  // 移除元素
+  if GetIsManagedType then
+    ZeroUnchecked(FCount - aCount, aCount);
   Dec(FCount, aCount);
+  SyncCountAndTail;
   Result := True;
 end;
 
@@ -6759,16 +6744,15 @@ begin
   end;
 
   aElement := FBuffer.GetUnchecked(GetPhysicalIndex(FCount - 1));
+  if GetIsManagedType then
+    ZeroUnchecked(FCount - 1, 1);
   Dec(FCount);
+  SyncCountAndTail;
   Result := True;
 end;
 
 // TryPeek 系列方法实现
 function TVecDeque.TryPeekCopy(aPtr: Pointer; aCount: SizeUInt): Boolean;
-var
-  i: SizeUInt;
-  LPtr: PByte;
-  LPhysicalIndex: SizeUInt;
 begin
   { 尝试查看后端指定数量的元素并复制到指针 }
   if (aPtr = nil) or (aCount = 0) then
@@ -6783,16 +6767,7 @@ begin
     Exit;
   end;
 
-  // 复制元素到指针 - 进一步减少 GetPhysicalIndex 调用：一次起算 + 每次 WrapAdd
-  LPtr := PByte(aPtr);
-  LPhysicalIndex := GetPhysicalIndex(FCount - aCount);
-  for i := 0 to aCount - 1 do
-  begin
-    Move(FBuffer.GetPtrUnchecked(LPhysicalIndex)^, LPtr^, SizeOf(T));
-    Inc(LPtr, SizeOf(T));
-    LPhysicalIndex := WrapAdd(LPhysicalIndex, 1);
-  end;
-
+  ReadUnchecked(FCount - aCount, aPtr, aCount);
   Result := True;
 end;
 
@@ -7005,8 +6980,7 @@ procedure TVecDeque.RemoveCopyAt(aIndex: SizeUInt; aPtr: Pointer; aCount: SizeUI
 var
   LPtr1, LPtr2: PElement;
   LLen1, LLen2: SizeUInt;
-  LDstPtr: PByte;
-  LElementSize: SizeUInt;
+  LDstPtr: PElement;
 begin
   if aPtr = nil then
     raise EArgumentNil.Create('TVecDeque.RemoveCopyAt: aPtr is nil');
@@ -7018,17 +6992,15 @@ begin
 
   // ✅ 优化：使用双切片批量复制，避免逐个元素操作
   GetTwoSlices(aIndex, aCount, LPtr1, LLen1, LPtr2, LLen2);
-  LElementSize := GetElementSize;
-  LDstPtr := PByte(aPtr);
+  LDstPtr := PElement(aPtr);
 
-  // 批量内存复制 - O(1) 或 O(log n)
   if LLen1 > 0 then
   begin
-    Move(LPtr1^, LDstPtr^, LLen1 * LElementSize);
-    Inc(LDstPtr, LLen1 * LElementSize);
+    FElementManager.CopyElementsUnchecked(LPtr1, LDstPtr, LLen1);
+    Inc(LDstPtr, LLen1);
   end;
   if LLen2 > 0 then
-    Move(LPtr2^, LDstPtr^, LLen2 * LElementSize);
+    FElementManager.CopyElementsUnchecked(LPtr2, LDstPtr, LLen2);
 
   // 删除该范围（保持顺序）
   Delete(aIndex, aCount);
@@ -7127,7 +7099,7 @@ end;
 procedure TVecDeque.SwapRemoveCopyAt(aIndex: SizeUInt; aPtr: Pointer; aCount: SizeUInt);
 var
   i: SizeUInt;
-  LPtr: PByte;
+  LPtr: PElement;
   LPhysicalIndex: SizeUInt;
 begin
   if aPtr = nil then
@@ -7138,12 +7110,12 @@ begin
       [aIndex, aIndex + aCount - 1, FCount - 1]);
 
   // 先拷贝
-  LPtr := PByte(aPtr);
+  LPtr := PElement(aPtr);
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    Move(FBuffer.GetPtrUnchecked(LPhysicalIndex)^, LPtr^, SizeOf(T));
-    Inc(LPtr, SizeOf(T));
+    FElementManager.CopyElementsUnchecked(FBuffer.GetPtrUnchecked(LPhysicalIndex), LPtr, 1);
+    Inc(LPtr);
   end;
 
   // 再用尾部填补（不保持顺序）
@@ -8787,7 +8759,12 @@ var
   LDrained: IVecT;
 begin
   // 半开区间 [aStart, aEnd) 转换为 (start, count) 格式
-  if aEnd <= aStart then
+  if aEnd < aStart then
+    raise EOutOfRange.Create('TVecDeque.DrainRange: end before start');
+  if (aStart > FCount) or (aEnd > FCount) then
+    raise EOutOfRange.Create('TVecDeque.DrainRange: range out of bounds');
+
+  if aEnd = aStart then
     LCount := 0
   else
     LCount := aEnd - aStart;

@@ -26,6 +26,9 @@ type
   {$IFDEF NEXTPAS_LINUX}
     EpollFd: Int32;
     WakeFd: Int32;
+    Entries: Pointer;
+    Count: Int32;
+    Capacity: Int32;
   {$ELSEIF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
     KqueueFd: Int32;
     WakeReadFd: Int32;

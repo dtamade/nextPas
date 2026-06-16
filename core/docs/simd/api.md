@@ -79,6 +79,7 @@ AVX2DivF32x8(a, b)
 ```
 
 如果你只是正常使用模块，请优先查 `Vec*` / `Mask*` / `Mem*` / `Utf8*` / `Ascii*` 这些公开 façade，而不是从后端私有符号开始读。
+`nextpas.core.simd.static.avx2` 是显式 opt-in 的 static diagnostic surface，不是默认 façade、runtime dispatch 或 public ABI wrapper；导入即要求 usable AVX2。
 
 ## 安全要求
 

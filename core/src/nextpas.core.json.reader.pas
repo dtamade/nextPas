@@ -11,6 +11,7 @@ uses
 type
   TJsonReader = record
   private
+    FOriginalInput: TStringView;
     FInput: TStringView;
     FOrigLen: SizeUInt;
     FTokenKind: TJsonTokenKind;
@@ -21,8 +22,12 @@ type
     FError: TJsonError;
     FDepth: Int32;
     procedure SkipWS; inline;
+    procedure SetError(const AMsg: PAnsiChar; ALen: SizeUInt; AOffset: SizeUInt);
+    function HasTokenBoundary(const AConsumed: SizeUInt): Boolean;
     function ReadString(out AStr: TStringView): Boolean;
     function ReadNumber: Boolean;
+    function ValidateStringToken(const AStr: TStringView;
+      AContentOffset: SizeUInt): Boolean;
   public
     procedure Init(const AInput: TStringView);
     function Next: Boolean;
@@ -39,17 +44,19 @@ implementation
 
 uses
   nextpas.core.text.scan,
+  nextpas.core.text.char,
   nextpas.core.text.escape,
-  nextpas.core.text.number,
-  nextpas.core.text.char;
+  nextpas.core.text.number;
 
 procedure TJsonReader.Init(const AInput: TStringView);
 begin
+  FOriginalInput := AInput;
   FInput := AInput;
   FOrigLen := AInput.Len;
   FTokenKind := jtkNone;
   FDepth := 0;
-  FError.Offset := 0;
+  FError.Message := TStringView.Create(nil, 0);
+  JsonErrorSetPosition(FError, FOriginalInput, 0);
 end;
 
 procedure TJsonReader.SkipWS;
@@ -61,20 +68,72 @@ begin
     FInput.Advance(LSkipped);
 end;
 
+procedure TJsonReader.SetError(const AMsg: PAnsiChar; ALen: SizeUInt; AOffset: SizeUInt);
+begin
+  FError.Message := TStringView.Create(AMsg, ALen);
+  JsonErrorSetPosition(FError, FOriginalInput, AOffset);
+end;
+
+function TJsonReader.HasTokenBoundary(const AConsumed: SizeUInt): Boolean;
+var
+  LCh: Byte;
+begin
+  if AConsumed >= FInput.Len then
+    Exit(True);
+  LCh := Byte(FInput.Data[AConsumed]);
+  Result := IsWhitespace(LCh) or
+    (LCh = Ord(',')) or (LCh = Ord(':')) or
+    (LCh = Ord(']')) or (LCh = Ord('}'));
+end;
+
 function TJsonReader.ReadString(out AStr: TStringView): Boolean;
 var
   LEnd: PtrInt;
+  LStringOffset: SizeUInt;
+  LRaw: TStringView;
+  LControlChar: Boolean;
 begin
+  LStringOffset := Offset;
   LEnd := JsonFindStringEnd(FInput.Data + 1, FInput.Len - 1);
-  if LEnd < 0 then
+  if LEnd = -1 then
   begin
-    FError.Message := TStringView.Create(PAnsiChar('unterminated string'), 19);
-    FError.Offset := FInput.Len;
+    SetError(PAnsiChar('unterminated string'), 19, FOrigLen);
     Exit(False);
   end;
-  AStr := TStringView.Create(FInput.Data + 1, SizeUInt(LEnd));
+  LControlChar := LEnd < -1;
+  if LControlChar then
+    LEnd := -(LEnd + 2);
+  LRaw := TStringView.Create(FInput.Data + 1, SizeUInt(LEnd));
+  if not ValidateStringToken(LRaw, LStringOffset + 1) then
+    Exit(False);
+  if LControlChar then
+  begin
+    SetError(PAnsiChar('control char in string'), 22,
+      LStringOffset + 1 + SizeUInt(LEnd));
+    Exit(False);
+  end;
+  AStr := LRaw;
   FInput.Advance(SizeUInt(LEnd) + 2);
   Result := True;
+end;
+
+function TJsonReader.ValidateStringToken(const AStr: TStringView;
+  AContentOffset: SizeUInt): Boolean;
+var
+  LError: TJsonStringValidationError;
+  LErrorOffset: SizeUInt;
+begin
+  if JsonValidateStringToken(AStr.Data, AStr.Len, LError, LErrorOffset) then
+    Exit(True);
+  case LError of
+    jsveControlChar:
+      SetError(PAnsiChar('control char in string'), 22,
+        AContentOffset + LErrorOffset);
+  else
+    SetError(PAnsiChar('invalid escape sequence'), 23,
+      AContentOffset + LErrorOffset);
+  end;
+  Result := False;
 end;
 
 function TJsonReader.ReadNumber: Boolean;
@@ -87,10 +146,24 @@ begin
   LNumLen := ScanJsonNumber(FInput.Data, FInput.Len);
   if LNumLen = 0 then
   begin
-    FError.Message := TStringView.Create(PAnsiChar('invalid number'), 14);
+    SetError(PAnsiChar('invalid number'), 14, Offset);
     Exit(False);
   end;
   LNumView := FInput.Left(LNumLen);
+  if not ScanIsJsonNumberToken(LNumView.Data, LNumView.Len) then
+  begin
+    if (LNumLen < FInput.Len) and HasTokenBoundary(LNumLen) and
+      ScanJsonNumberHasIncompleteExponent(LNumView.Data, LNumView.Len) then
+      SetError(PAnsiChar('invalid number'), 14, Offset + LNumLen)
+    else
+      SetError(PAnsiChar('invalid number'), 14, Offset);
+    Exit(False);
+  end;
+  if not HasTokenBoundary(LNumLen) then
+  begin
+    SetError(PAnsiChar('invalid number'), 14, Offset);
+    Exit(False);
+  end;
   LHasDot := False;
   LHasExp := False;
   for I := 0 to LNumLen - 1 do
@@ -102,7 +175,7 @@ begin
   begin
     if not ParseDouble(LNumView.Data, LNumView.Len, FTokenFloat) then
     begin
-      FError.Message := TStringView.Create(PAnsiChar('invalid float'), 13);
+      SetError(PAnsiChar('number overflow'), 15, Offset);
       Exit(False);
     end;
     FTokenKind := jtkFloat;
@@ -111,12 +184,8 @@ begin
   begin
     if not ParseInt64(LNumView.Data, LNumView.Len, FTokenInt) then
     begin
-      if not ParseDouble(LNumView.Data, LNumView.Len, FTokenFloat) then
-      begin
-        FError.Message := TStringView.Create(PAnsiChar('number overflow'), 15);
-        Exit(False);
-      end;
-      FTokenKind := jtkFloat;
+      SetError(PAnsiChar('number overflow'), 15, Offset);
+      Exit(False);
     end
     else
       FTokenKind := jtkInt;
@@ -147,7 +216,7 @@ LAgain:
       if FDepth >= 512 then
       begin
         FTokenKind := jtkError;
-        FError.Message := TStringView.Create(PAnsiChar('max depth exceeded'), 18);
+        SetError(PAnsiChar('max depth exceeded'), 18, Offset);
         Exit(False);
       end;
       FTokenKind := jtkBeginObject;
@@ -165,7 +234,7 @@ LAgain:
       if FDepth >= 512 then
       begin
         FTokenKind := jtkError;
-        FError.Message := TStringView.Create(PAnsiChar('max depth exceeded'), 18);
+        SetError(PAnsiChar('max depth exceeded'), 18, Offset);
         Exit(False);
       end;
       FTokenKind := jtkBeginArray;
@@ -194,7 +263,8 @@ LAgain:
     end;
     Ord('t'):
     begin
-      if ScanMatchLiteral(FInput.Data, FInput.Len, PAnsiChar('true'), 4) then
+      if ScanMatchLiteral(FInput.Data, FInput.Len, PAnsiChar('true'), 4) and
+        HasTokenBoundary(4) then
       begin
         FTokenKind := jtkBool;
         FTokenBool := True;
@@ -203,13 +273,14 @@ LAgain:
       else
       begin
         FTokenKind := jtkError;
-        FError.Message := TStringView.Create(PAnsiChar('invalid literal'), 15);
+        SetError(PAnsiChar('invalid literal'), 15, Offset);
         Exit(False);
       end;
     end;
     Ord('f'):
     begin
-      if ScanMatchLiteral(FInput.Data, FInput.Len, PAnsiChar('false'), 5) then
+      if ScanMatchLiteral(FInput.Data, FInput.Len, PAnsiChar('false'), 5) and
+        HasTokenBoundary(5) then
       begin
         FTokenKind := jtkBool;
         FTokenBool := False;
@@ -218,13 +289,14 @@ LAgain:
       else
       begin
         FTokenKind := jtkError;
-        FError.Message := TStringView.Create(PAnsiChar('invalid literal'), 15);
+        SetError(PAnsiChar('invalid literal'), 15, Offset);
         Exit(False);
       end;
     end;
     Ord('n'):
     begin
-      if ScanMatchLiteral(FInput.Data, FInput.Len, PAnsiChar('null'), 4) then
+      if ScanMatchLiteral(FInput.Data, FInput.Len, PAnsiChar('null'), 4) and
+        HasTokenBoundary(4) then
       begin
         FTokenKind := jtkNull;
         FInput.Advance(4);
@@ -232,7 +304,7 @@ LAgain:
       else
       begin
         FTokenKind := jtkError;
-        FError.Message := TStringView.Create(PAnsiChar('invalid literal'), 15);
+        SetError(PAnsiChar('invalid literal'), 15, Offset);
         Exit(False);
       end;
     end;
@@ -246,7 +318,7 @@ LAgain:
     end;
   else
     FTokenKind := jtkError;
-    FError.Message := TStringView.Create(PAnsiChar('unexpected character'), 20);
+    SetError(PAnsiChar('unexpected character'), 20, Offset);
     Exit(False);
   end;
   Result := True;

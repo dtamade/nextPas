@@ -5,11 +5,12 @@ unit nextpas.core.collections.base;
 interface
 
 uses
-  typinfo,variants,
+  nextpas.core.system.typinfo, variants,
   nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.math,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.collections.element_manager.intf;
 
 // Suppress unused parameter hints - growth strategies and IsOverlap have intentionally unused params
@@ -1188,7 +1189,7 @@ end;
 
 constructor TCollection.Create;
 begin
-  Create(GetRtlAllocator());
+  Create(DefaultAllocator());
 end;
 
 constructor TCollection.Create(aAllocator: IAllocator);
@@ -1202,7 +1203,7 @@ begin
   FData := aData;
 
   if aAllocator = nil then
-    FAllocator := GetRtlAllocator()
+    FAllocator := DefaultAllocator()
   else
     FAllocator := aAllocator;
 end;
@@ -1231,7 +1232,7 @@ end;
 
 constructor TCollection.Create(aSrc: Pointer; aElementCount: SizeUInt);
 begin
-  Create(aSrc, aElementCount, GetRtlAllocator(), nil);
+  Create(aSrc, aElementCount, DefaultAllocator(), nil);
 end;
 
 constructor TCollection.Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator);
@@ -2128,7 +2129,7 @@ end;
 
 constructor TGenericCollection.Create(const aSrc: array of T);
 begin
-  Create(aSrc, GetRtlAllocator(), nil);
+  Create(aSrc, DefaultAllocator(), nil);
 end;
 
 constructor TGenericCollection.Create(const aSrc: array of T; aAllocator: IAllocator);

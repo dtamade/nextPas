@@ -4,12 +4,16 @@ unit nextpas.core.text.conv;
 
 interface
 
+uses
+  nextpas.core.base;
+
 function IntToStr(const AValue: Int64): string; inline;
 function UIntToStr(const AValue: UInt64): string; inline;
 function FloatToStr(const AValue: Double): string; inline;
 function FloatToStrF(const AValue: Double; ADecimals: Integer): string;
 function FormatFloat(const AFmt: string; const AValue: Double): string;
 function BoolToStr(const AValue: Boolean): string; inline;
+function BoolToStr(const AValue: Boolean; const ATrueStr, AFalseStr: string): string; inline;
 
 function StrToInt(const AStr: string): Int64; inline;
 function StrToIntDef(const AStr: string; const ADefault: Int64): Int64; inline;
@@ -35,6 +39,13 @@ function TextOfChar(const ACh: Char; const ACount: Integer): string; inline;
 function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
 function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean;
 function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean;
+
+{== Encoding — byte<->string conversions ==}
+function UTF8BytesToString(const AData: TBytes): string;
+function StringToUTF8Bytes(const AStr: string): TBytes;
+function ASCIIBytesToString(const AData: TBytes): string;
+function StringToASCIIBytes(const AStr: string): TBytes;
+function BigEndianUnicodeBytesToString(const AData: TBytes): string;
 
 implementation
 
@@ -97,6 +108,11 @@ end;
 function BoolToStr(const AValue: Boolean): string;
 begin
   if AValue then Result := 'true' else Result := 'false';
+end;
+
+function BoolToStr(const AValue: Boolean; const ATrueStr, AFalseStr: string): string;
+begin
+  if AValue then Result := ATrueStr else Result := AFalseStr;
 end;
 
 {== String to number ==}
@@ -452,6 +468,63 @@ var LCode: Integer;
 begin
   Val(AStr, AValue, LCode);
   Result := LCode = 0;
+end;
+
+{== Encoding — byte<->string conversions ==}
+
+function UTF8BytesToString(const AData: TBytes): string;
+var
+  LUTF8: UTF8String;
+begin
+  Result := '';
+  if Length(AData) = 0 then
+    Exit;
+  SetLength(LUTF8, Length(AData));
+  Move(AData[0], LUTF8[1], Length(AData));
+  Result := string(LUTF8);
+end;
+
+function StringToUTF8Bytes(const AStr: string): TBytes;
+var
+  LUTF8: UTF8String;
+  LLen: SizeInt;
+begin
+  Result := nil;
+  LUTF8 := UTF8Encode(AStr);
+  LLen := Length(LUTF8);
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(LUTF8[1], Result[0], LLen);
+end;
+
+function ASCIIBytesToString(const AData: TBytes): string;
+begin
+  Result := '';
+  SetLength(Result, Length(AData));
+  if Length(AData) > 0 then
+    Move(AData[0], Result[1], Length(AData));
+end;
+
+function StringToASCIIBytes(const AStr: string): TBytes;
+begin
+  Result := nil;
+  SetLength(Result, Length(AStr));
+  if Length(AStr) > 0 then
+    Move(AStr[1], Result[0], Length(AStr));
+end;
+
+function BigEndianUnicodeBytesToString(const AData: TBytes): string;
+var
+  I, LCount: SizeInt;
+  LWChars: array of WideChar;
+begin
+  Result := '';
+  LCount := Length(AData) div 2;
+  if LCount = 0 then Exit;
+  SetLength(LWChars, LCount);
+  for I := 0 to LCount - 1 do
+    LWChars[I] := WideChar((UInt16(AData[I * 2]) shl 8) or AData[I * 2 + 1]);
+  SetString(Result, PWideChar(LWChars), LCount);
 end;
 
 end.

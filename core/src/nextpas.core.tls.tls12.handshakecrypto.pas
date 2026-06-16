@@ -4,8 +4,6 @@ unit nextpas.core.tls.tls12.handshakecrypto;
 
 interface
 
-uses
-  SysUtils;
 
 type
   TTLS12KeyBlock = record
@@ -75,8 +73,7 @@ function TLS12ComputeFinished_SHA384(
 
 implementation
 
-uses
-  nextpas.core.crypto.tls12prf;
+uses nextpas.core.crypto.tls12prf;
 
 function TLS12ComputeMasterSecret_SHA256(
   const APreMasterSecret: TBytes;

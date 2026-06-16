@@ -4,15 +4,7 @@ unit nextpas.core.tui.app;
 
 interface
 
-uses
-  SysUtils,
-  nextpas.core.tui.base,
-  nextpas.core.tui.event,
-  nextpas.core.tui.terminal,
-  nextpas.core.tui.app.screen,
-  nextpas.core.tui.focus,
-  nextpas.core.tui.frame_budget,
-  nextpas.core.tui.task;
+uses nextpas.core.tui.base, nextpas.core.tui.event, nextpas.core.tui.terminal, nextpas.core.tui.app.screen, nextpas.core.tui.focus, nextpas.core.tui.frame_budget, nextpas.core.tui.task;
 
 type
   TApp = class;
@@ -95,8 +87,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.platform.console, nextpas.core.platform.signal, nextpas.core.platform.time;
+uses nextpas.core.platform.console, nextpas.core.platform.signal, nextpas.core.platform.time, nextpas.core.tui.error;
 
 constructor TApp.Create;
 begin
@@ -264,10 +255,7 @@ var
   LCompletions: array[0..TASK_QUEUE_CAPACITY - 1] of TCompletionSlot;
 begin
   if not DoEnterTui then
-  begin
-    WriteLn(StdErr, 'ftui: not a terminal');
-    Halt(1);
-  end;
+    raise ETuiBackend.Create('TApp.Run: failed to enter TUI terminal mode');
   try
     FShouldQuit := False;
     FTickCount := 0;
@@ -295,13 +283,16 @@ begin
       if FUseBudget then FBudget.BeginFrame;
       if FUseFocus then FFocus.BeginFrame;
       Frame := DoBeginFrame;
-      if Assigned(FOnRender) then
-        FOnRender(Self, Frame)
-      else
-        Render(Frame);
-      ConsumeScreenQuitRequest;
-      DoEndFrame(Frame);
-      if FUseBudget then FBudget.EndFrame;
+      try
+        if Assigned(FOnRender) then
+          FOnRender(Self, Frame)
+        else
+          Render(Frame);
+        ConsumeScreenQuitRequest;
+      finally
+        DoEndFrame(Frame);
+        if FUseBudget then FBudget.EndFrame;
+      end;
       if FShouldQuit then
         Continue;
       Ev := DoPollEvent;
@@ -311,7 +302,10 @@ begin
         Continue;
       end;
       if Ev.Kind = evNone then
-        DispatchTick
+      begin
+        DispatchTick;
+        ConsumeScreenQuitRequest;
+      end
       else
       begin
         if IsQuitEvent(Ev) then

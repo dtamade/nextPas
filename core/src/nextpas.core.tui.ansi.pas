@@ -41,6 +41,7 @@ procedure AnsiDisableAlternateScroll(var B: TStringBuilder);
 procedure AnsiSgrReset(var B: TStringBuilder); inline;
 procedure AnsiSgrFg(var B: TStringBuilder; const AColor: TColor);
 procedure AnsiSgrBg(var B: TStringBuilder; const AColor: TColor);
+procedure AnsiSgrUl(var B: TStringBuilder; const AColor: TColor);
 procedure AnsiSgrModifierAdd(var B: TStringBuilder; AModifier: TModifier);
 procedure AnsiSgrModifierClear(var B: TStringBuilder; AModifier: TModifier);
 
@@ -281,6 +282,38 @@ begin
   end;
 end;
 
+procedure AnsiSgrUl(var B: TStringBuilder; const AColor: TColor);
+begin
+  case AColor.Kind of
+    ckUnset: ;
+    ckReset:
+      begin
+        { SGR 59 = default underline color }
+        B.AppendByte(27); B.AppendChar('[');
+        B.AppendChar('5'); B.AppendChar('9');
+        B.AppendChar('m');
+      end;
+    ckIndexed:
+      begin
+        B.AppendByte(27); B.AppendChar('[');
+        B.AppendChar('5'); B.AppendChar('8');
+        B.AppendChar(';'); B.AppendChar('5'); B.AppendChar(';');
+        B.AppendUInt(AColor.Index);
+        B.AppendChar('m');
+      end;
+    ckRgb:
+      begin
+        B.AppendByte(27); B.AppendChar('[');
+        B.AppendChar('5'); B.AppendChar('8');
+        B.AppendChar(';'); B.AppendChar('2'); B.AppendChar(';');
+        B.AppendUInt(AColor.R); B.AppendChar(';');
+        B.AppendUInt(AColor.G); B.AppendChar(';');
+        B.AppendUInt(AColor.B);
+        B.AppendChar('m');
+      end;
+  end;
+end;
+
 { ratatui modifier bit -> SGR set 参数 (bold=1, dim=2, italic=3, ...) }
 function SgrSet(ABit: TModifierBit): Byte; inline;
 begin
@@ -313,6 +346,13 @@ begin
   end;
 end;
 
+procedure EmitSgrCode(var B: TStringBuilder; ACode: Byte); inline;
+begin
+  B.AppendByte(27); B.AppendChar('[');
+  B.AppendUInt(ACode);
+  B.AppendChar('m');
+end;
+
 procedure AnsiSgrModifierAdd(var B: TStringBuilder; AModifier: TModifier);
 var
   LBit: TModifierBit;
@@ -322,9 +362,7 @@ begin
     if LBit in AModifier then
     begin
       LCode := SgrSet(LBit);
-      B.AppendByte(27); B.AppendChar('[');
-      B.AppendUInt(LCode);
-      B.AppendChar('m');
+      EmitSgrCode(B, LCode);
     end;
 end;
 
@@ -332,14 +370,18 @@ procedure AnsiSgrModifierClear(var B: TStringBuilder; AModifier: TModifier);
 var
   LBit: TModifierBit;
   LCode: Byte;
+  LEmitted: array[Byte] of Boolean;
 begin
+  FillChar(LEmitted, SizeOf(LEmitted), 0);
   for LBit := Low(TModifierBit) to High(TModifierBit) do
     if LBit in AModifier then
     begin
       LCode := SgrClear(LBit);
-      B.AppendByte(27); B.AppendChar('[');
-      B.AppendUInt(LCode);
-      B.AppendChar('m');
+      if not LEmitted[LCode] then
+      begin
+        EmitSgrCode(B, LCode);
+        LEmitted[LCode] := True;
+      end;
     end;
 end;
 

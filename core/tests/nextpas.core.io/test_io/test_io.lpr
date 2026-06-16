@@ -18,6 +18,30 @@ uses
 var
   T: TTestRunner;
 
+procedure IgnoreReader(const AReader: IReader);
+begin
+  if AReader = nil then
+    Exit;
+end;
+
+procedure IgnoreWriter(const AWriter: IWriter);
+begin
+  if AWriter = nil then
+    Exit;
+end;
+
+procedure IgnoreReadCloser(const ACloser: IReadCloser);
+begin
+  if ACloser = nil then
+    Exit;
+end;
+
+procedure IgnoreScanner(const AScanner: IScanner);
+begin
+  if AScanner = nil then
+    Exit;
+end;
+
 type
   TZeroProgressWriter = class(TInterfacedObject, IWriter)
   private
@@ -29,6 +53,17 @@ type
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     property Calls: Int32 read FCalls;
     property BytesAcceptedBeforeZero: SizeUInt read FBytesAcceptedBeforeZero;
+  end;
+
+  TPartialForwardingWriter = class(TInterfacedObject, IWriter)
+  private
+    FInner: IWriter;
+    FMaxWrite: SizeUInt;
+    FCalls: Int32;
+  public
+    constructor Create(const AInner: IWriter; const AMaxWrite: SizeUInt);
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    property Calls: Int32 read FCalls;
   end;
 
 constructor TZeroProgressWriter.Create(const AZeroOnCall: Int32);
@@ -46,6 +81,28 @@ begin
     Exit(0);
   Inc(FBytesAcceptedBeforeZero, ACount);
   Result := ACount;
+end;
+
+constructor TPartialForwardingWriter.Create(const AInner: IWriter; const AMaxWrite: SizeUInt);
+begin
+  inherited Create;
+  FInner := AInner;
+  FMaxWrite := AMaxWrite;
+  FCalls := 0;
+end;
+
+function TPartialForwardingWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LCount: SizeUInt;
+begin
+  Inc(FCalls);
+  if (ACount = 0) or (FMaxWrite = 0) then
+    Exit(0);
+  if ACount < FMaxWrite then
+    LCount := ACount
+  else
+    LCount := FMaxWrite;
+  Result := FInner.Write(ABuf, LCount);
 end;
 
 { BytesStream tests }
@@ -137,6 +194,127 @@ begin
   LS.Write(LBuf, 1);
   LS.Close;
   CheckEqual(Int64(0), LS.Size, 'closed size=0');
+end;
+
+procedure TestStreamPostCloseOperationGuards;
+var
+  LS: IStream;
+  LByteReader: IByteReader;
+  LByteWriter: IByteWriter;
+  LBuf: Byte;
+  LReaderAt: IReaderAt;
+  LRaised: Boolean;
+  LStringWriter: IStringWriter;
+  LWriterAt: IWriterAt;
+begin
+  LS := BytesStream(16);
+  LBuf := $2A;
+  LS.Write(LBuf, 1);
+  LReaderAt := LS as IReaderAt;
+  LWriterAt := LS as IWriterAt;
+  LByteReader := LS as IByteReader;
+  LByteWriter := LS as IByteWriter;
+  LStringWriter := LS as IStringWriter;
+  LS.Close;
+
+  LRaised := False;
+  try
+    LS.Read(LBuf, 1);
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'read after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LS.Read(LBuf, 0);
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'zero-length read after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LS.Write(LBuf, 1);
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'write after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LS.Write(LBuf, 0);
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'zero-length write after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LS.Seek(0, soBeginning);
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'seek after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LS.Position := 0;
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'position set after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LReaderAt.ReadAt(LBuf, 1, 0);
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'ReadAt after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LWriterAt.WriteAt(LBuf, 1, 0);
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'WriteAt after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LByteReader.ReadByte;
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'ReadByte after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LByteWriter.WriteByte($7B);
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'WriteByte after BytesStream close raises EIOError');
+
+  LRaised := False;
+  try
+    LStringWriter.WriteString('x');
+  except
+    on E: EIOError do
+      LRaised := Pos('closed', E.Message) > 0;
+  end;
+  Check(LRaised, 'WriteString after BytesStream close raises EIOError');
 end;
 
 { BufferedReader tests }
@@ -310,6 +488,32 @@ begin
   CheckEqual(Int64(50), LDst.Size);
 end;
 
+procedure TestCopyNShortSourceRaises;
+var
+  LSrc, LDst: IStream;
+  LData: array[0..2] of Byte;
+  LRaised: Boolean;
+begin
+  LSrc := BytesStream(8);
+  LData[0] := 1;
+  LData[1] := 2;
+  LData[2] := 3;
+  LSrc.Write(LData[0], 3);
+  LSrc.Seek(0, soBeginning);
+  LDst := BytesStream(8);
+
+  LRaised := False;
+  try
+    nextpas.core.io.CopyN(LDst as IWriter, LSrc, 5);
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'CopyN short source raises EIOError');
+  CheckEqual(Int64(3), LDst.Size, 'CopyN preserves bytes copied before EOF');
+end;
+
 { Util: ReadAll }
 
 procedure TestReadAll;
@@ -386,6 +590,20 @@ begin
   CheckEqual(Byte(4), LBuf[4]);
 end;
 
+procedure TestLimitReaderNilInner;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    IgnoreReader(nextpas.core.io.LimitReader(IReader(nil), 5));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'LimitReader nil inner raises EArgumentError');
+end;
+
 { Util: TeeReader }
 
 procedure TestTeeReader;
@@ -404,6 +622,98 @@ begin
   LR := nextpas.core.io.TeeReader(LSrc, LTap as IWriter);
   LR.Read(LBuf[0], 5);
   CheckEqual(Int64(5), LTap.Size, 'tee captured');
+end;
+
+procedure TestTeeReaderRetriesPartialTapWrite;
+var
+  LSrc, LTap: IStream;
+  LTapObj: TPartialForwardingWriter;
+  LTapWriter: IWriter;
+  LR: IReader;
+  LData: array[0..4] of Byte;
+  LBuf: array[0..4] of Byte;
+  LTapBuf: array[0..4] of Byte;
+  LI: Integer;
+  LN: SizeUInt;
+begin
+  LSrc := BytesStream(16);
+  for LI := 0 to 4 do
+    LData[LI] := Byte(LI + 20);
+  LSrc.Write(LData[0], 5);
+  LSrc.Seek(0, soBeginning);
+  LTap := BytesStream(16);
+  LTapObj := TPartialForwardingWriter.Create(LTap as IWriter, 2);
+  LTapWriter := LTapObj;
+  LR := nextpas.core.io.TeeReader(LSrc, LTapWriter);
+
+  LN := LR.Read(LBuf[0], 5);
+
+  CheckEqual(SizeUInt(5), LN, 'tee returns full source read count');
+  CheckEqual(Int64(3), Int64(LTapObj.Calls), 'tee retries partial tap writes');
+  CheckEqual(Int64(5), LTap.Size, 'tee captured full read');
+  LTap.Seek(0, soBeginning);
+  LTap.Read(LTapBuf[0], 5);
+  for LI := 0 to 4 do
+    CheckEqual(LData[LI], LTapBuf[LI], 'tap byte');
+end;
+
+procedure TestTeeReaderZeroProgressTapRaises;
+var
+  LSrc: IStream;
+  LTapObj: TZeroProgressWriter;
+  LTapWriter: IWriter;
+  LR: IReader;
+  LData: array[0..2] of Byte;
+  LBuf: array[0..2] of Byte;
+  LRaised: Boolean;
+begin
+  LSrc := BytesStreamFrom(TBytes.Create($01, $02, $03));
+  LTapObj := TZeroProgressWriter.Create(1);
+  LTapWriter := LTapObj;
+  LR := nextpas.core.io.TeeReader(LSrc, LTapWriter);
+
+  LRaised := False;
+  try
+    LR.Read(LBuf[0], 3);
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'zero-progress tee tap raises EIOError');
+  CheckEqual(Int64(1), Int64(LTapObj.Calls), 'tee attempted tap write once');
+end;
+
+procedure TestTeeReaderNilInner;
+var
+  LRaised: Boolean;
+  LWriter: IWriter;
+begin
+  LWriter := nextpas.core.io.Discard;
+  LRaised := False;
+  try
+    IgnoreReader(nextpas.core.io.TeeReader(IReader(nil), LWriter));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'TeeReader nil reader raises EArgumentError');
+end;
+
+procedure TestTeeReaderNilWriter;
+var
+  LRaised: Boolean;
+  LSource: IStream;
+begin
+  LSource := BytesStreamFrom(TBytes.Create($01));
+  LRaised := False;
+  try
+    IgnoreReader(nextpas.core.io.TeeReader(LSource as IReader, IWriter(nil)));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'TeeReader nil writer raises EArgumentError');
 end;
 
 { Util: MultiReader }
@@ -428,6 +738,22 @@ begin
   CheckEqual(SizeUInt(0), LN, 'EOF');
 end;
 
+procedure TestMultiReaderNilInner;
+var
+  LRaised: Boolean;
+  LSource: IStream;
+begin
+  LSource := BytesStreamFrom(TBytes.Create($01));
+  LRaised := False;
+  try
+    IgnoreReader(nextpas.core.io.MultiReader([LSource as IReader, IReader(nil)]));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'MultiReader nil inner raises EArgumentError');
+end;
+
 { Util: MultiWriter }
 
 procedure TestMultiWriter;
@@ -443,6 +769,89 @@ begin
   LW.Write(LData[0], 3);
   CheckEqual(Int64(3), LS1.Size, 'writer1');
   CheckEqual(Int64(3), LS2.Size, 'writer2');
+end;
+
+procedure TestMultiWriterRetriesEachWriterToFullPayload;
+var
+  LS1, LS2: IStream;
+  LW1Obj, LW2Obj: TPartialForwardingWriter;
+  LW1, LW2, LW: IWriter;
+  LData: array[0..4] of Byte;
+  LBuf1, LBuf2: array[0..4] of Byte;
+  LI: Integer;
+  LN: SizeUInt;
+begin
+  for LI := 0 to 4 do
+    LData[LI] := Byte($A0 + LI);
+  LS1 := BytesStream(16);
+  LS2 := BytesStream(16);
+  LW1Obj := TPartialForwardingWriter.Create(LS1 as IWriter, 2);
+  LW2Obj := TPartialForwardingWriter.Create(LS2 as IWriter, 3);
+  LW1 := LW1Obj;
+  LW2 := LW2Obj;
+  LW := nextpas.core.io.MultiWriter([LW1, LW2]);
+
+  LN := LW.Write(LData[0], 5);
+
+  CheckEqual(SizeUInt(5), LN, 'multiwriter returns full count');
+  CheckEqual(Int64(3), Int64(LW1Obj.Calls), 'writer1 retried to full payload');
+  CheckEqual(Int64(2), Int64(LW2Obj.Calls), 'writer2 retried to full payload');
+  CheckEqual(Int64(5), LS1.Size, 'writer1 full size');
+  CheckEqual(Int64(5), LS2.Size, 'writer2 full size');
+  LS1.Seek(0, soBeginning);
+  LS2.Seek(0, soBeginning);
+  LS1.Read(LBuf1[0], 5);
+  LS2.Read(LBuf2[0], 5);
+  for LI := 0 to 4 do
+  begin
+    CheckEqual(LData[LI], LBuf1[LI], 'writer1 byte');
+    CheckEqual(LData[LI], LBuf2[LI], 'writer2 byte');
+  end;
+end;
+
+procedure TestMultiWriterZeroProgressRaises;
+var
+  LS1: IStream;
+  LZeroObj: TZeroProgressWriter;
+  LZero: IWriter;
+  LW: IWriter;
+  LData: array[0..2] of Byte;
+  LRaised: Boolean;
+begin
+  LData[0] := $A1;
+  LData[1] := $B2;
+  LData[2] := $C3;
+  LS1 := BytesStream(16);
+  LZeroObj := TZeroProgressWriter.Create(1);
+  LZero := LZeroObj;
+  LW := nextpas.core.io.MultiWriter([LS1 as IWriter, LZero]);
+
+  LRaised := False;
+  try
+    LW.Write(LData[0], 3);
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'zero-progress multiwriter raises EIOError');
+  CheckEqual(Int64(1), Int64(LZeroObj.Calls), 'zero writer attempted once');
+end;
+
+procedure TestMultiWriterNilInner;
+var
+  LDest: IStream;
+  LRaised: Boolean;
+begin
+  LDest := BytesStream(16);
+  LRaised := False;
+  try
+    IgnoreWriter(nextpas.core.io.MultiWriter([LDest as IWriter, IWriter(nil)]));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'MultiWriter nil inner raises EArgumentError');
 end;
 
 { Util: Discard + NullReader }
@@ -480,6 +889,20 @@ begin
   CheckEqual(Byte(7), LBuf[0]);
 end;
 
+procedure TestNopCloserNilInner;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    IgnoreReadCloser(nextpas.core.io.NopCloser(IReader(nil)));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'NopCloser nil inner raises EArgumentError');
+end;
+
 { Util: WriteString }
 
 procedure TestWriteString;
@@ -495,6 +918,50 @@ begin
   LS.Read(LBuf[0], 5);
   CheckEqual(Byte(Ord('h')), LBuf[0]);
   CheckEqual(Byte(Ord('o')), LBuf[4]);
+end;
+
+procedure TestWriteStringRetriesPartialWriter;
+var
+  LS: IStream;
+  LWObj: TPartialForwardingWriter;
+  LW: IWriter;
+  LN: SizeUInt;
+  LBuf: array[0..4] of Byte;
+begin
+  LS := BytesStream(16);
+  LWObj := TPartialForwardingWriter.Create(LS as IWriter, 2);
+  LW := LWObj;
+
+  LN := nextpas.core.io.WriteString(LW, 'hello');
+
+  CheckEqual(SizeUInt(5), LN, 'WriteString returns full byte count');
+  CheckEqual(Int64(3), Int64(LWObj.Calls), 'WriteString retries partial writes');
+  CheckEqual(Int64(5), LS.Size, 'WriteString wrote full string');
+  LS.Seek(0, soBeginning);
+  LS.Read(LBuf[0], 5);
+  CheckEqual(Byte(Ord('h')), LBuf[0]);
+  CheckEqual(Byte(Ord('o')), LBuf[4]);
+end;
+
+procedure TestWriteStringZeroProgressRaises;
+var
+  LWObj: TZeroProgressWriter;
+  LW: IWriter;
+  LRaised: Boolean;
+begin
+  LWObj := TZeroProgressWriter.Create(1);
+  LW := LWObj;
+
+  LRaised := False;
+  try
+    nextpas.core.io.WriteString(LW, 'abc');
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'zero-progress WriteString raises EIOError');
+  CheckEqual(Int64(1), Int64(LWObj.Calls), 'WriteString attempted one write');
 end;
 
 { Util: ReadAtLeast }
@@ -561,6 +1028,77 @@ begin
   LR.Read(LBuf, 1);
   CheckEqual(SizeUInt(0), LR.Read(LBuf, 1), 'EOF after writer close');
   LR.Close;
+end;
+
+procedure TestPipeWriteAfterWriterCloseRaises;
+var
+  LR: IPipeReader;
+  LW: IPipeWriter;
+  LBuf: Byte;
+  LRaised: Boolean;
+begin
+  CreatePipe(LR, LW);
+  LBuf := $2A;
+  LW.Close;
+
+  LRaised := False;
+  try
+    LW.Write(LBuf, 1);
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'write after writer close raises EIOError');
+  CheckEqual(SizeUInt(0), LR.Read(LBuf, 1), 'closed writer did not enqueue data');
+  LR.Close;
+end;
+
+procedure TestPipeReadAfterReaderCloseRaises;
+var
+  LR: IPipeReader;
+  LW: IPipeWriter;
+  LBuf: Byte;
+  LRaised: Boolean;
+begin
+  CreatePipe(LR, LW);
+  LBuf := $41;
+  CheckEqual(SizeUInt(1), LW.Write(LBuf, 1), 'pipe write before reader close');
+  LR.Close;
+
+  LRaised := False;
+  try
+    LR.Read(LBuf, 1);
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'read after reader close raises EIOError');
+  LW.Close;
+end;
+
+procedure TestPipeReaderReleaseClosesEndpoint;
+var
+  LR: IPipeReader;
+  LW: IPipeWriter;
+  LBuf: Byte;
+  LRaised: Boolean;
+begin
+  CreatePipe(LR, LW);
+  LR := nil;
+  LBuf := $42;
+
+  LRaised := False;
+  try
+    LW.Write(LBuf, 1);
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'releasing reader closes pipe endpoint');
+  LW.Close;
 end;
 
 { New interface tests }
@@ -659,6 +1197,20 @@ begin
   CheckEqual(SizeUInt(0), LR.Read(LBuf[0], 10), 'EOF');
 end;
 
+procedure TestSectionReaderNilInner;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    IgnoreReader(nextpas.core.io.SectionReader(IReaderAt(nil), 0, 1));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'SectionReader nil inner raises EArgumentError');
+end;
+
 procedure TestUnreadByteThenRead;
 var
   LS: IStream;
@@ -696,6 +1248,61 @@ begin
   CheckEqual(Byte(10), LBS.ReadByte, 'unread byte preserved');
 end;
 
+procedure TestUnreadByteAfterEOFRaises;
+var
+  LS: IStream;
+  LR: IReader;
+  LBS: IByteScanner;
+  LRaised: Boolean;
+begin
+  LS := BytesStreamFrom(TBytes.Create(10));
+  LR := CreateBufferedReader(LS, 16);
+  LBS := LR as IByteScanner;
+  CheckEqual(Byte(10), LBS.ReadByte, 'first byte');
+
+  LRaised := False;
+  try
+    LBS.ReadByte;
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ReadByte at EOF raises');
+
+  LRaised := False;
+  try
+    LBS.UnreadByte;
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'UnreadByte after EOF raises');
+end;
+
+procedure TestUnreadByteAfterBulkReadRaises;
+var
+  LS: IStream;
+  LR: IReader;
+  LBS: IByteScanner;
+  LBuf: array[0..1] of Byte;
+  LRaised: Boolean;
+begin
+  LS := BytesStreamFrom(TBytes.Create(10, 20, 30));
+  LR := CreateBufferedReader(LS, 16);
+  LBS := LR as IByteScanner;
+  CheckEqual(Byte(10), LBS.ReadByte, 'first byte');
+  CheckEqual(SizeUInt(2), LR.Read(LBuf[0], 2), 'bulk read consumes next bytes');
+
+  LRaised := False;
+  try
+    LBS.UnreadByte;
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'UnreadByte after bulk Read raises');
+end;
+
 procedure TestBufReaderZeroSize;
 var
   LS: IStream;
@@ -712,6 +1319,20 @@ begin
   Check(LGotException, 'zero buf size raises');
 end;
 
+procedure TestBufReaderNilInner;
+var
+  LGotException: Boolean;
+begin
+  LGotException := False;
+  try
+    CreateBufferedReader(IReader(nil), 16);
+  except
+    on E: EArgumentError do
+      LGotException := True;
+  end;
+  Check(LGotException, 'nil inner reader raises');
+end;
+
 procedure TestBufWriterZeroSize;
 var
   LS: IStream;
@@ -726,6 +1347,20 @@ begin
       LGotException := True;
   end;
   Check(LGotException, 'zero buf size raises');
+end;
+
+procedure TestBufWriterNilInner;
+var
+  LGotException: Boolean;
+begin
+  LGotException := False;
+  try
+    CreateBufferedWriter(IWriter(nil), 16);
+  except
+    on E: EArgumentError do
+      LGotException := True;
+  end;
+  Check(LGotException, 'nil inner writer raises');
 end;
 
 procedure TestReadAtLeastMinGtCount;
@@ -844,6 +1479,20 @@ begin
   Check(not LScan.Scan, 'done');
 end;
 
+procedure TestScannerNilInner;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    IgnoreScanner(CreateScanner(IReader(nil), nil));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'Scanner nil inner raises EArgumentError');
+end;
+
 procedure TestByteWriterStream;
 var
   LS: IStream;
@@ -870,6 +1519,8 @@ begin
   T.Run('Stream grow', @TestStreamGrow);
   T.Run('Stream from data', @TestStreamFromData);
   T.Run('Stream close', @TestStreamClose);
+  T.Run('Stream post-close operation guards',
+    @TestStreamPostCloseOperationGuards);
 
   T.Run('BufReader small', @TestBufReaderSmall);
   T.Run('BufReader large', @TestBufReaderLarge);
@@ -880,28 +1531,55 @@ begin
 
   T.Run('Copy', @TestCopy);
   T.Run('CopyN', @TestCopyN);
+  T.Run('CopyN short source raises', @TestCopyNShortSourceRaises);
   T.Run('ReadAll', @TestReadAll);
   T.Run('ReadFull', @TestReadFull);
   T.Run('ReadFull short', @TestReadFullShort);
   T.Run('LimitReader', @TestLimitReader);
+  T.Run('LimitReader nil inner', @TestLimitReaderNilInner);
   T.Run('TeeReader', @TestTeeReader);
+  T.Run('TeeReader retries partial tap write', @TestTeeReaderRetriesPartialTapWrite);
+  T.Run('TeeReader zero-progress tap raises', @TestTeeReaderZeroProgressTapRaises);
+  T.Run('TeeReader nil inner', @TestTeeReaderNilInner);
+  T.Run('TeeReader nil writer', @TestTeeReaderNilWriter);
   T.Run('MultiReader', @TestMultiReader);
+  T.Run('MultiReader nil inner', @TestMultiReaderNilInner);
   T.Run('MultiWriter', @TestMultiWriter);
+  T.Run('MultiWriter retries each writer to full payload',
+    @TestMultiWriterRetriesEachWriterToFullPayload);
+  T.Run('MultiWriter zero-progress raises', @TestMultiWriterZeroProgressRaises);
+  T.Run('MultiWriter nil inner', @TestMultiWriterNilInner);
   T.Run('Discard', @TestDiscard);
   T.Run('NullReader', @TestNullReader);
   T.Run('NopCloser', @TestNopCloser);
+  T.Run('NopCloser nil inner', @TestNopCloserNilInner);
   T.Run('WriteString', @TestWriteString);
+  T.Run('WriteString retries partial writer',
+    @TestWriteStringRetriesPartialWriter);
+  T.Run('WriteString zero-progress raises',
+    @TestWriteStringZeroProgressRaises);
   T.Run('ReadAtLeast', @TestReadAtLeast);
   T.Run('CopyBuffer', @TestCopyBuffer);
 
   T.Run('UnreadByte then Read', @TestUnreadByteThenRead);
   T.Run('Read zero after UnreadByte', @TestReadZeroAfterUnread);
+  T.Run('UnreadByte after EOF raises', @TestUnreadByteAfterEOFRaises);
+  T.Run('UnreadByte after bulk read raises',
+    @TestUnreadByteAfterBulkReadRaises);
   T.Run('BufReader zero size', @TestBufReaderZeroSize);
+  T.Run('BufReader nil inner', @TestBufReaderNilInner);
   T.Run('BufWriter zero size', @TestBufWriterZeroSize);
+  T.Run('BufWriter nil inner', @TestBufWriterNilInner);
   T.Run('ReadAtLeast min>count', @TestReadAtLeastMinGtCount);
 
   T.Run('Pipe basic', @TestPipeBasic);
   T.Run('Pipe close writer EOF', @TestPipeCloseWriterEOF);
+  T.Run('Pipe write after writer close raises',
+    @TestPipeWriteAfterWriterCloseRaises);
+  T.Run('Pipe read after reader close raises',
+    @TestPipeReadAfterReaderCloseRaises);
+  T.Run('Pipe reader release closes endpoint',
+    @TestPipeReaderReleaseClosesEndpoint);
   T.Run('Pipe large data', @TestPipeLargeData);
 
   T.Run('ReaderAt', @TestReaderAt);
@@ -910,12 +1588,14 @@ begin
   T.Run('ByteScanner', @TestByteScanner);
   T.Run('StringWriter', @TestStringWriter);
   T.Run('SectionReader', @TestSectionReader);
+  T.Run('SectionReader nil inner', @TestSectionReaderNilInner);
 
   T.Run('Scanner lines', @TestScannerLines);
   T.Run('Scanner CRLF', @TestScannerCRLF);
   T.Run('Scanner no trailing newline', @TestScannerNoTrailingNewline);
   T.Run('Scanner empty', @TestScannerEmpty);
   T.Run('Scanner empty lines', @TestScannerEmptyLines);
+  T.Run('Scanner nil inner', @TestScannerNilInner);
   T.Run('ByteWriter stream', @TestByteWriterStream);
 
   T.Summary;

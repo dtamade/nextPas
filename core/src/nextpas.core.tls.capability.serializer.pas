@@ -11,7 +11,7 @@ unit nextpas.core.tls.capability.serializer;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.text.conv,
   nextpas.core.tls.base;
 
 { JSON 序列化 }
@@ -33,7 +33,7 @@ function LoadCapabilitiesFromFile(const AFileName: string): TSSLBackendCapabilit
 implementation
 
 uses
-  StrUtils;
+  nextpas.core.text.strings;
 
 { ============================================================================ }
 { JSON 序列化 }
@@ -161,36 +161,29 @@ begin
     begin
       if Result <> '' then
         Result := Result + ';';
-      Result := Result + IntToStr(Ord(LCipher));
+      Result := Result + nextpas.core.text.conv.IntToStr(Ord(LCipher));
     end;
   end;
 end;
 
 function DecodeCipherSet(const AValue: string): TSSLCipherSupport;
 var
-  LParts: TStringList;
-  I: Integer;
+  LParts: TStringArray;
+  LPart: string;
   LOrdinal: Integer;
 begin
   Result := [];
-  if Trim(AValue) = '' then
+  if nextpas.core.text.conv.Trim(AValue) = '' then
     Exit;
 
-  LParts := TStringList.Create;
-  try
-    LParts.StrictDelimiter := True;
-    LParts.Delimiter := ';';
-    LParts.DelimitedText := AValue;
-    for I := 0 to LParts.Count - 1 do
+    LParts := StringsSplit(AValue, ';', True);
+    for LPart in LParts do
     begin
-      LOrdinal := StrToIntDef(Trim(LParts[I]), -1);
+      LOrdinal := nextpas.core.text.conv.StrToIntDef(nextpas.core.text.conv.Trim(LPart), -1);
       if (LOrdinal >= Ord(Low(TSSLCipher))) and
         (LOrdinal <= Ord(High(TSSLCipher))) then
         Include(Result, TSSLCipher(LOrdinal));
     end;
-  finally
-    LParts.Free;
-  end;
 end;
 
 function EncodeHashSet(const ASet: TSSLHashSupport): string;
@@ -204,36 +197,29 @@ begin
     begin
       if Result <> '' then
         Result := Result + ';';
-      Result := Result + IntToStr(Ord(LHash));
+      Result := Result + nextpas.core.text.conv.IntToStr(Ord(LHash));
     end;
   end;
 end;
 
 function DecodeHashSet(const AValue: string): TSSLHashSupport;
 var
-  LParts: TStringList;
-  I: Integer;
+  LParts: TStringArray;
+  LPart: string;
   LOrdinal: Integer;
 begin
   Result := [];
-  if Trim(AValue) = '' then
+  if nextpas.core.text.conv.Trim(AValue) = '' then
     Exit;
 
-  LParts := TStringList.Create;
-  try
-    LParts.StrictDelimiter := True;
-    LParts.Delimiter := ';';
-    LParts.DelimitedText := AValue;
-    for I := 0 to LParts.Count - 1 do
+    LParts := StringsSplit(AValue, ';', True);
+    for LPart in LParts do
     begin
-      LOrdinal := StrToIntDef(Trim(LParts[I]), -1);
+      LOrdinal := nextpas.core.text.conv.StrToIntDef(nextpas.core.text.conv.Trim(LPart), -1);
       if (LOrdinal >= Ord(Low(TSSLHash))) and
         (LOrdinal <= Ord(High(TSSLHash))) then
         Include(Result, TSSLHash(LOrdinal));
     end;
-  finally
-    LParts.Free;
-  end;
 end;
 
 function EncodeKeyExchangeSet(const ASet: TSSLKeyExchangeSupport): string;
@@ -247,36 +233,29 @@ begin
     begin
       if Result <> '' then
         Result := Result + ';';
-      Result := Result + IntToStr(Ord(LKex));
+      Result := Result + nextpas.core.text.conv.IntToStr(Ord(LKex));
     end;
   end;
 end;
 
 function DecodeKeyExchangeSet(const AValue: string): TSSLKeyExchangeSupport;
 var
-  LParts: TStringList;
-  I: Integer;
+  LParts: TStringArray;
+  LPart: string;
   LOrdinal: Integer;
 begin
   Result := [];
-  if Trim(AValue) = '' then
+  if nextpas.core.text.conv.Trim(AValue) = '' then
     Exit;
 
-  LParts := TStringList.Create;
-  try
-    LParts.StrictDelimiter := True;
-    LParts.Delimiter := ';';
-    LParts.DelimitedText := AValue;
-    for I := 0 to LParts.Count - 1 do
+    LParts := StringsSplit(AValue, ';', True);
+    for LPart in LParts do
     begin
-      LOrdinal := StrToIntDef(Trim(LParts[I]), -1);
+      LOrdinal := nextpas.core.text.conv.StrToIntDef(nextpas.core.text.conv.Trim(LPart), -1);
       if (LOrdinal >= Ord(Low(TSSLKeyExchange))) and
         (LOrdinal <= Ord(High(TSSLKeyExchange))) then
         Include(Result, TSSLKeyExchange(LOrdinal));
     end;
-  finally
-    LParts.Free;
-  end;
 end;
 
 { 6018 抑制范围含嵌套函数 FeatureSupportLevelToStr 等 — FPC 限制，函数级指令无法缩小到单个 case }
@@ -335,12 +314,12 @@ begin
   Result := Result + AddField('supportsECDHE', BoolToJSONStr(LCaps.SupportsECDHE));
   Result := Result + AddField('supportsChaChaPoly', BoolToJSONStr(LCaps.SupportsChaChaPoly));
   Result := Result + AddField('supportsPEMPrivateKey', BoolToJSONStr(LCaps.SupportsPEMPrivateKey));
-  Result := Result + AddField('minTLSVersion', IntToStr(Ord(LCaps.MinTLSVersion)));
-  Result := Result + AddField('maxTLSVersion', IntToStr(Ord(LCaps.MaxTLSVersion)));
+  Result := Result + AddField('minTLSVersion', nextpas.core.text.conv.IntToStr(Ord(LCaps.MinTLSVersion)));
+  Result := Result + AddField('maxTLSVersion', nextpas.core.text.conv.IntToStr(Ord(LCaps.MaxTLSVersion)));
 
   // v1.2.0 字段
-  Result := Result + AddField('backendType', IntToStr(Ord(LCaps.BackendType)));
-  Result := Result + AddField('backendImplType', IntToStr(Ord(LCaps.BackendImplType)));
+  Result := Result + AddField('backendType', nextpas.core.text.conv.IntToStr(Ord(LCaps.BackendType)));
+  Result := Result + AddField('backendImplType', nextpas.core.text.conv.IntToStr(Ord(LCaps.BackendImplType)));
   Result := Result + AddField('backendVersion', '"' + EscapeJSON(LCaps.BackendVersion) + '"');
   Result := Result + AddField('supportsDTLS', BoolToJSONStr(LCaps.SupportsDTLS));
 
@@ -391,7 +370,7 @@ begin
   Result := Result + AddField('supportsCallbacks', BoolToJSONStr(LCaps.SupportsCallbacks));
 
   // 兼容性
-  Result := Result + AddField('compatibilityLevel', IntToStr(LCaps.CompatibilityLevel));
+  Result := Result + AddField('compatibilityLevel', nextpas.core.text.conv.IntToStr(LCaps.CompatibilityLevel));
   Result := Result + AddField('knownIssues', '"' + EscapeJSON(LCaps.KnownIssues) + '"', True);
 
   Result := Result + '}';
@@ -538,7 +517,7 @@ var
     while (LPos <= Length(AJSON)) and not (AJSON[LPos] in [',', '}', #10, #13]) do
       Inc(LPos);
 
-    AOutValue := Trim(Copy(AJSON, LStart, LPos - LStart));
+    AOutValue := nextpas.core.text.conv.Trim(Copy(AJSON, LStart, LPos - LStart));
     Result := AOutValue <> '';
   end;
 
@@ -570,15 +549,15 @@ begin
   if ExtractJSONValue('supportsPEMPrivateKey', LValue, LIsString) then
     Result.SupportsPEMPrivateKey := JSONStrToBool(LValue);
   if ExtractJSONValue('minTLSVersion', LValue, LIsString) then
-    Result.MinTLSVersion := IntToProtocolVersion(StrToIntDef(LValue, Ord(sslProtocolUnknown)));
+    Result.MinTLSVersion := IntToProtocolVersion(nextpas.core.text.conv.StrToIntDef(LValue, Ord(sslProtocolUnknown)));
   if ExtractJSONValue('maxTLSVersion', LValue, LIsString) then
-    Result.MaxTLSVersion := IntToProtocolVersion(StrToIntDef(LValue, Ord(sslProtocolUnknown)));
+    Result.MaxTLSVersion := IntToProtocolVersion(nextpas.core.text.conv.StrToIntDef(LValue, Ord(sslProtocolUnknown)));
 
   // v1.2.0 字段
   if ExtractJSONValue('backendType', LValue, LIsString) then
-    Result.BackendType := IntToLibraryType(StrToIntDef(LValue, Ord(sslAutoDetect)));
+    Result.BackendType := IntToLibraryType(nextpas.core.text.conv.StrToIntDef(LValue, Ord(sslAutoDetect)));
   if ExtractJSONValue('backendImplType', LValue, LIsString) then
-    Result.BackendImplType := IntToBackendImplType(StrToIntDef(LValue, Ord(sslImplNative)));
+    Result.BackendImplType := IntToBackendImplType(nextpas.core.text.conv.StrToIntDef(LValue, Ord(sslImplNative)));
   if ExtractJSONValue('backendVersion', LValue, LIsString) then
     Result.BackendVersion := LValue;
   if ExtractJSONValue('supportsDTLS', LValue, LIsString) then
@@ -673,7 +652,7 @@ begin
 
   // 兼容性
   if ExtractJSONValue('compatibilityLevel', LValue, LIsString) then
-    Result.CompatibilityLevel := StrToIntDef(LValue, 0);
+    Result.CompatibilityLevel := nextpas.core.text.conv.StrToIntDef(LValue, 0);
   if ExtractJSONValue('knownIssues', LValue, LIsString) then
     Result.KnownIssues := LValue;
 
@@ -768,12 +747,12 @@ begin
   Result := Result + AddElement('supportsECDHE', BoolToStr(LCaps.SupportsECDHE, True));
   Result := Result + AddElement('supportsChaChaPoly', BoolToStr(LCaps.SupportsChaChaPoly, True));
   Result := Result + AddElement('supportsPEMPrivateKey', BoolToStr(LCaps.SupportsPEMPrivateKey, True));
-  Result := Result + AddElement('minTLSVersion', IntToStr(Ord(LCaps.MinTLSVersion)));
-  Result := Result + AddElement('maxTLSVersion', IntToStr(Ord(LCaps.MaxTLSVersion)));
+  Result := Result + AddElement('minTLSVersion', nextpas.core.text.conv.IntToStr(Ord(LCaps.MinTLSVersion)));
+  Result := Result + AddElement('maxTLSVersion', nextpas.core.text.conv.IntToStr(Ord(LCaps.MaxTLSVersion)));
 
   // v1.2.0 字段
-  Result := Result + AddElement('backendType', IntToStr(Ord(LCaps.BackendType)));
-  Result := Result + AddElement('backendImplType', IntToStr(Ord(LCaps.BackendImplType)));
+  Result := Result + AddElement('backendType', nextpas.core.text.conv.IntToStr(Ord(LCaps.BackendType)));
+  Result := Result + AddElement('backendImplType', nextpas.core.text.conv.IntToStr(Ord(LCaps.BackendImplType)));
   Result := Result + AddElement('backendVersion', XMLEscape(LCaps.BackendVersion));
   Result := Result + AddElement('supportsDTLS', BoolToStr(LCaps.SupportsDTLS, True));
 
@@ -824,7 +803,7 @@ begin
   Result := Result + AddElement('supportsCallbacks', BoolToStr(LCaps.SupportsCallbacks, True));
 
   // 兼容性
-  Result := Result + AddElement('compatibilityLevel', IntToStr(LCaps.CompatibilityLevel));
+  Result := Result + AddElement('compatibilityLevel', nextpas.core.text.conv.IntToStr(LCaps.CompatibilityLevel));
   Result := Result + AddElement('knownIssues', XMLEscape(LCaps.KnownIssues));
 
   Result := Result + '</SSLBackendCapabilities>';
@@ -928,128 +907,128 @@ begin
 
   // v1.1.0 字段
   if ExtractXMLValue('supportsTLS13', LValue) then
-    Result.SupportsTLS13 := JSONStrToBool(Trim(LValue));
+    Result.SupportsTLS13 := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportsALPN', LValue) then
-    Result.SupportsALPN := JSONStrToBool(Trim(LValue));
+    Result.SupportsALPN := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportsSNI', LValue) then
-    Result.SupportsSNI := JSONStrToBool(Trim(LValue));
+    Result.SupportsSNI := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportsOCSPStapling', LValue) then
-    Result.SupportsOCSPStapling := JSONStrToBool(Trim(LValue));
+    Result.SupportsOCSPStapling := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportsCertificateTransparency', LValue) then
-    Result.SupportsCertificateTransparency := JSONStrToBool(Trim(LValue));
+    Result.SupportsCertificateTransparency := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportsSessionTickets', LValue) then
-    Result.SupportsSessionTickets := JSONStrToBool(Trim(LValue));
+    Result.SupportsSessionTickets := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportsECDHE', LValue) then
-    Result.SupportsECDHE := JSONStrToBool(Trim(LValue));
+    Result.SupportsECDHE := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportsChaChaPoly', LValue) then
-    Result.SupportsChaChaPoly := JSONStrToBool(Trim(LValue));
+    Result.SupportsChaChaPoly := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportsPEMPrivateKey', LValue) then
-    Result.SupportsPEMPrivateKey := JSONStrToBool(Trim(LValue));
+    Result.SupportsPEMPrivateKey := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('minTLSVersion', LValue) then
-    Result.MinTLSVersion := IntToProtocolVersion(StrToIntDef(Trim(LValue), Ord(sslProtocolUnknown)));
+    Result.MinTLSVersion := IntToProtocolVersion(nextpas.core.text.conv.StrToIntDef(nextpas.core.text.conv.Trim(LValue), Ord(sslProtocolUnknown)));
   if ExtractXMLValue('maxTLSVersion', LValue) then
-    Result.MaxTLSVersion := IntToProtocolVersion(StrToIntDef(Trim(LValue), Ord(sslProtocolUnknown)));
+    Result.MaxTLSVersion := IntToProtocolVersion(nextpas.core.text.conv.StrToIntDef(nextpas.core.text.conv.Trim(LValue), Ord(sslProtocolUnknown)));
 
   // v1.2.0 字段
   if ExtractXMLValue('backendType', LValue) then
-    Result.BackendType := IntToLibraryType(StrToIntDef(Trim(LValue), Ord(sslAutoDetect)));
+    Result.BackendType := IntToLibraryType(nextpas.core.text.conv.StrToIntDef(nextpas.core.text.conv.Trim(LValue), Ord(sslAutoDetect)));
   if ExtractXMLValue('backendImplType', LValue) then
-    Result.BackendImplType := IntToBackendImplType(StrToIntDef(Trim(LValue), Ord(sslImplNative)));
+    Result.BackendImplType := IntToBackendImplType(nextpas.core.text.conv.StrToIntDef(nextpas.core.text.conv.Trim(LValue), Ord(sslImplNative)));
   if ExtractXMLValue('backendVersion', LValue) then
     Result.BackendVersion := LValue;
   if ExtractXMLValue('supportsDTLS', LValue) then
-    Result.SupportsDTLS := JSONStrToBool(Trim(LValue));
+    Result.SupportsDTLS := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
 
   // 功能支持级别
   if ExtractXMLValue('sniSupport', LValue) then
   begin
-    Result.SNISupport := StrToFeatureSupportLevel(Trim(LValue));
+    Result.SNISupport := StrToFeatureSupportLevel(nextpas.core.text.conv.Trim(LValue));
     LHasSNISupport := True;
   end;
   if ExtractXMLValue('alpnSupport', LValue) then
   begin
-    Result.ALPNSupport := StrToFeatureSupportLevel(Trim(LValue));
+    Result.ALPNSupport := StrToFeatureSupportLevel(nextpas.core.text.conv.Trim(LValue));
     LHasALPNSupport := True;
   end;
   if ExtractXMLValue('ocspStaplingSupport', LValue) then
   begin
-    Result.OCSPStaplingSupport := StrToFeatureSupportLevel(Trim(LValue));
+    Result.OCSPStaplingSupport := StrToFeatureSupportLevel(nextpas.core.text.conv.Trim(LValue));
     LHasOCSPStaplingSupport := True;
   end;
   if ExtractXMLValue('certTransparencySupport', LValue) then
   begin
-    Result.CertTransparencySupport := StrToFeatureSupportLevel(Trim(LValue));
+    Result.CertTransparencySupport := StrToFeatureSupportLevel(nextpas.core.text.conv.Trim(LValue));
     LHasCertTransparencySupport := True;
   end;
   if ExtractXMLValue('sessionTicketsSupport', LValue) then
   begin
-    Result.SessionTicketsSupport := StrToFeatureSupportLevel(Trim(LValue));
+    Result.SessionTicketsSupport := StrToFeatureSupportLevel(nextpas.core.text.conv.Trim(LValue));
     LHasSessionTicketsSupport := True;
   end;
   if ExtractXMLValue('sessionCacheSupport', LValue) then
-    Result.SessionCacheSupport := StrToFeatureSupportLevel(Trim(LValue));
+    Result.SessionCacheSupport := StrToFeatureSupportLevel(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('zeroRTTSupport', LValue) then
-    Result.ZeroRTTSupport := StrToFeatureSupportLevel(Trim(LValue));
+    Result.ZeroRTTSupport := StrToFeatureSupportLevel(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('earlyDataSupport', LValue) then
-    Result.EarlyDataSupport := StrToFeatureSupportLevel(Trim(LValue));
+    Result.EarlyDataSupport := StrToFeatureSupportLevel(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('renegotiationSupport', LValue) then
-    Result.RenegotiationSupport := StrToFeatureSupportLevel(Trim(LValue));
+    Result.RenegotiationSupport := StrToFeatureSupportLevel(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('postHandshakeAuthSupport', LValue) then
-    Result.PostHandshakeAuthSupport := StrToFeatureSupportLevel(Trim(LValue));
+    Result.PostHandshakeAuthSupport := StrToFeatureSupportLevel(nextpas.core.text.conv.Trim(LValue));
 
   // 算法支持
   if ExtractXMLValue('supportedCiphers', LValue) then
-    Result.SupportedCiphers := DecodeCipherSet(Trim(LValue));
+    Result.SupportedCiphers := DecodeCipherSet(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportedHashes', LValue) then
-    Result.SupportedHashes := DecodeHashSet(Trim(LValue));
+    Result.SupportedHashes := DecodeHashSet(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportedKeyExchanges', LValue) then
-    Result.SupportedKeyExchanges := DecodeKeyExchangeSet(Trim(LValue));
+    Result.SupportedKeyExchanges := DecodeKeyExchangeSet(nextpas.core.text.conv.Trim(LValue));
 
   // 性能特性
   if ExtractXMLValue('hasHardwareAcceleration', LValue) then
-    Result.HasHardwareAcceleration := JSONStrToBool(Trim(LValue));
+    Result.HasHardwareAcceleration := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('hasSIMDOptimization', LValue) then
-    Result.HasSIMDOptimization := JSONStrToBool(Trim(LValue));
+    Result.HasSIMDOptimization := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('hasAssemblyOptimization', LValue) then
-    Result.HasAssemblyOptimization := JSONStrToBool(Trim(LValue));
+    Result.HasAssemblyOptimization := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
 
   // 平台特性
   if ExtractXMLValue('requiresExternalLibrary', LValue) then
-    Result.RequiresExternalLibrary := JSONStrToBool(Trim(LValue));
+    Result.RequiresExternalLibrary := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportsSystemCertStore', LValue) then
-    Result.SupportsSystemCertStore := JSONStrToBool(Trim(LValue));
+    Result.SupportsSystemCertStore := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportsPKCS11', LValue) then
-    Result.SupportsPKCS11 := JSONStrToBool(Trim(LValue));
+    Result.SupportsPKCS11 := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportsTPM', LValue) then
-    Result.SupportsTPM := JSONStrToBool(Trim(LValue));
+    Result.SupportsTPM := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
 
   // 安全特性
   if ExtractXMLValue('hasConstantTimeOperations', LValue) then
-    Result.HasConstantTimeOperations := JSONStrToBool(Trim(LValue));
+    Result.HasConstantTimeOperations := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportsFIPSMode', LValue) then
-    Result.SupportsFIPSMode := JSONStrToBool(Trim(LValue));
+    Result.SupportsFIPSMode := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('hasSecureMemoryWipe', LValue) then
-    Result.HasSecureMemoryWipe := JSONStrToBool(Trim(LValue));
+    Result.HasSecureMemoryWipe := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
 
   // 证书和密钥支持
   if ExtractXMLValue('supportsDERPrivateKey', LValue) then
-    Result.SupportsDERPrivateKey := JSONStrToBool(Trim(LValue));
+    Result.SupportsDERPrivateKey := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportsPKCS8PrivateKey', LValue) then
-    Result.SupportsPKCS8PrivateKey := JSONStrToBool(Trim(LValue));
+    Result.SupportsPKCS8PrivateKey := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportsPKCS12', LValue) then
-    Result.SupportsPKCS12 := JSONStrToBool(Trim(LValue));
+    Result.SupportsPKCS12 := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportsPasswordProtectedKeys', LValue) then
-    Result.SupportsPasswordProtectedKeys := JSONStrToBool(Trim(LValue));
+    Result.SupportsPasswordProtectedKeys := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
 
   // 扩展性
   if ExtractXMLValue('supportsCustomCipherSuites', LValue) then
-    Result.SupportsCustomCipherSuites := JSONStrToBool(Trim(LValue));
+    Result.SupportsCustomCipherSuites := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
   if ExtractXMLValue('supportsCallbacks', LValue) then
-    Result.SupportsCallbacks := JSONStrToBool(Trim(LValue));
+    Result.SupportsCallbacks := JSONStrToBool(nextpas.core.text.conv.Trim(LValue));
 
   // 兼容性
   if ExtractXMLValue('compatibilityLevel', LValue) then
-    Result.CompatibilityLevel := StrToIntDef(Trim(LValue), 0);
+    Result.CompatibilityLevel := nextpas.core.text.conv.StrToIntDef(nextpas.core.text.conv.Trim(LValue), 0);
   if ExtractXMLValue('knownIssues', LValue) then
     Result.KnownIssues := LValue;
 
@@ -1069,9 +1048,9 @@ end;
 procedure SaveCapabilitiesToFile(const ACaps: TSSLBackendCapabilities;
                                 const AFileName: string;
                                 const AFormat: string = 'json');
-var
-  SL: TStringList;
   Content: string;
+var
+  F: System.TextFile;
 begin
   if SameText(AFormat, 'json') then
     Content := CapabilitiesToJSON(ACaps, True)
@@ -1080,26 +1059,33 @@ begin
   else
     raise Exception.CreateFmt('Unsupported format: %s', [AFormat]);
 
-  SL := TStringList.Create;
+  System.Assign(F, AFileName);
+  System.Rewrite(F);
   try
-    SL.Text := Content;
-    SL.SaveToFile(AFileName);
+    System.Write(F, Content);
   finally
-    SL.Free;
+    System.Close(F);
   end;
 end;
 
 function LoadCapabilitiesFromFile(const AFileName: string): TSSLBackendCapabilities;
-var
-  SL: TStringList;
   Content: string;
   Ext: string;
 begin
-  SL := TStringList.Create;
+var
+  F: System.File;
+  LFileSize: Integer;
+begin
+  System.Assign(F, AFileName);
+  System.Reset(F, 1);
   try
-    SL.LoadFromFile(AFileName);
-    Content := SL.Text;
-
+    LFileSize := System.FileSize(F);
+    SetLength(Content, LFileSize);
+    if LFileSize > 0 then
+      System.BlockRead(F, Content[1], LFileSize);
+  finally
+    System.Close(F);
+  end;
     Ext := LowerCase(ExtractFileExt(AFileName));
     if Ext = '.json' then
       Result := JSONToCapabilities(Content)
@@ -1107,9 +1093,6 @@ begin
       Result := XMLToCapabilities(Content)
     else
       raise Exception.CreateFmt('Unknown file extension: %s', [Ext]);
-  finally
-    SL.Free;
-  end;
 end;
 
 end.

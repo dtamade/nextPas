@@ -13,8 +13,8 @@ type
 
 var
   T: TTestRunner;
-  GPool: TMappedSlabPool = nil;
-  GOtherPool: TMappedSlabPool = nil;
+  GPool: TMappedSlabAllocator = nil;
+  GOtherPool: TMappedSlabAllocator = nil;
   GPtr: Pointer = nil;
   GExternalPtr: Pointer = nil;
   GStackByte: Byte = 0;
@@ -74,9 +74,8 @@ var
   LAllocs, LFrees, LFailed: UInt64;
   LUsedPages, LTotalPages: UInt32;
 begin
-  GPool := TMappedSlabPool.Create;
+  GPool := TMappedSlabAllocator.CreateAnonymous(4096, 4096, 256);
   try
-    Check(GPool.CreateAnonymous(4096, 4096, 256), 'create anonymous pool');
     Check(GPool.IsValid, 'pool should be valid');
     GPool.GetStats(LAllocs, LFrees, LFailed, LUsedPages, LTotalPages);
     CheckEqual(Int64(0), Int64(LAllocs), 'initial alloc count');
@@ -94,9 +93,8 @@ var
   LAllocs, LFrees, LFailed: UInt64;
   LUsedPages, LTotalPages: UInt32;
 begin
-  GPool := TMappedSlabPool.Create;
+  GPool := TMappedSlabAllocator.CreateAnonymous(4096, 4096, 256);
   try
-    Check(GPool.CreateAnonymous(4096, 4096, 256), 'create anonymous pool');
     LP1 := GPool.Alloc(64);
     Check(LP1 <> nil, 'first allocation');
     GPool.FreeBlock(LP1);
@@ -116,9 +114,8 @@ procedure TestMixedSizeAllocationsDoNotOverlap;
 var
   LP1, LP2, LP3: Pointer;
 begin
-  GPool := TMappedSlabPool.Create;
+  GPool := TMappedSlabAllocator.CreateAnonymous(16384, 4096, 2048);
   try
-    Check(GPool.CreateAnonymous(16384, 4096, 2048), 'create anonymous pool');
     LP1 := GPool.Alloc(1024);
     LP2 := GPool.Alloc(2048);
     LP3 := GPool.Alloc(2048);
@@ -134,9 +131,8 @@ end;
 
 procedure TestInvalidAndDoubleFree;
 begin
-  GPool := TMappedSlabPool.Create;
+  GPool := TMappedSlabAllocator.CreateAnonymous(4096, 4096, 256);
   try
-    Check(GPool.CreateAnonymous(4096, 4096, 256), 'create anonymous pool');
     GPtr := GPool.Alloc(64);
     Check(GPtr <> nil, 'allocation');
     GPool.FreeBlock(GPtr);
@@ -160,11 +156,9 @@ end;
 
 procedure TestCrossPoolFree;
 begin
-  GPool := TMappedSlabPool.Create;
-  GOtherPool := TMappedSlabPool.Create;
+  GPool := TMappedSlabAllocator.CreateAnonymous(4096, 4096, 256);
+  GOtherPool := TMappedSlabAllocator.CreateAnonymous(4096, 4096, 256);
   try
-    Check(GPool.CreateAnonymous(4096, 4096, 256), 'create pool A');
-    Check(GOtherPool.CreateAnonymous(4096, 4096, 256), 'create pool B');
     GPtr := GPool.Alloc(64);
     Check(GPtr <> nil, 'allocation from pool A');
     CheckRaisesAllocError(@RaiseCrossPoolFree, aeInvalidPointer, 'cross-pool free');
@@ -180,9 +174,8 @@ end;
 
 procedure TestResetInvalidatesOldPointers;
 begin
-  GPool := TMappedSlabPool.Create;
+  GPool := TMappedSlabAllocator.CreateAnonymous(4096, 4096, 256);
   try
-    Check(GPool.CreateAnonymous(4096, 4096, 256), 'create anonymous pool');
     GPtr := GPool.Alloc(64);
     Check(GPtr <> nil, 'allocation');
     GPool.Reset;

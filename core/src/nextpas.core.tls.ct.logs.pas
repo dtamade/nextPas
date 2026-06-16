@@ -4,8 +4,7 @@ unit nextpas.core.tls.ct.logs;
 
 interface
 
-uses
-  SysUtils;
+// No FPC RTL dependencies - using pure nextPas framework
 
 type
   TCTLogEntry = record

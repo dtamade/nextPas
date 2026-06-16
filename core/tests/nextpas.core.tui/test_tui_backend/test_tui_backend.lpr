@@ -161,6 +161,28 @@ begin
   end;
 end;
 
+procedure TestAnsiBackendFlushFailureRetainsPendingOutput;
+var
+  LBE: TAnsiBackend;
+  LBefore: AnsiString;
+  LBeforeLen: Integer;
+begin
+  LBE := TAnsiBackend.Create(-1);
+  try
+    LBE.HideCursor;
+    LBefore := PendingString(LBE);
+    LBeforeLen := LBE.PendingLength;
+    Check(LBeforeLen > 0, 'pending after hide cursor');
+    Check(not LBE.Flush, 'flush fails for invalid fd');
+    CheckEqual(Int64(LBeforeLen), Int64(LBE.PendingLength),
+      'pending length retained after failed flush');
+    CheckEqual(LBefore, PendingString(LBE),
+      'pending bytes retained after failed flush');
+  finally
+    LBE.Free;
+  end;
+end;
+
 procedure TestAnsiBackendDrawPatchesOutput;
 var
   LBE: TAnsiBackend;
@@ -307,6 +329,32 @@ begin
   end;
 end;
 
+procedure TestAnsiBackendDrawPatchesAppliesUnderlineColor;
+var
+  LBE: TAnsiBackend;
+  LPatches: TDiffEntries;
+begin
+  LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
+  SetLength(LPatches, 2);
+  try
+    LPatches[0].X := 0;
+    LPatches[0].Y := 0;
+    LPatches[0].Cell := StyledCell('A',
+      StyleDefault.WithUnderline(TUI_BLUE).WithModifier([mbUnderlined]));
+    LPatches[1].X := 1;
+    LPatches[1].Y := 0;
+    LPatches[1].Cell := StyledCell('B',
+      StyleDefault.WithUnderline(ResetColor).WithModifier([mbUnderlined]));
+
+    LBE.DrawPatchesN(LPatches, 2);
+    CheckEqual(#27'[1;1H'#27'[0m'#27'[58;5;4m'#27'[4mA' +
+      #27'[0m'#27'[4mB', PendingString(LBE),
+      'underline color is emitted and reset by sgr reset before default color cell');
+  finally
+    LBE.Free;
+  end;
+end;
+
 procedure TestAnsiBackendDrawPatchesWideGlyphAdvancesCursor;
 var
   LBE: TAnsiBackend;
@@ -338,6 +386,8 @@ begin
   T.Run('test backend wide glyph cursor parity',
     @TestTestBackendWideGlyphCursorParity);
   T.Run('ansi backend flush', @TestAnsiBackendFlush);
+  T.Run('ansi backend flush failure retains pending output',
+    @TestAnsiBackendFlushFailureRetainsPendingOutput);
   T.Run('ansi backend draw patches output', @TestAnsiBackendDrawPatchesOutput);
   T.Run('ansi backend enter alternate click tracking',
     @TestAnsiBackendEnterAlternateClickTracking);
@@ -351,6 +401,8 @@ begin
     @TestAnsiBackendDrawPatchesResetsStyleForDefaultCell);
   T.Run('ansi backend draw patches reapplies style on change',
     @TestAnsiBackendDrawPatchesReappliesStyleOnStyleChange);
+  T.Run('ansi backend draw patches applies underline color',
+    @TestAnsiBackendDrawPatchesAppliesUnderlineColor);
   T.Run('ansi backend draw patches wide glyph advances cursor',
     @TestAnsiBackendDrawPatchesWideGlyphAdvancesCursor);
   T.Summary;

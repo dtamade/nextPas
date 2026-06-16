@@ -110,6 +110,24 @@ begin
   finally LBuf.Free; end;
 end;
 
+procedure TestSelectOpenKeepsHighlightVisible;
+var LS: ISelect; LBuf: TBuffer; LSt: TSelectState;
+begin
+  LS := TSelect.New(['One', 'Two', 'Three', 'Four'])
+    .WithMaxDropHeight(2);
+  LSt := TSelectState.Empty;
+  LSt.Toggle;
+  LSt.HighlightIdx := 3;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 4));
+  try
+    LS.RenderStateful(TRect.Make(0, 0, 20, 4), LBuf, LSt);
+    Check(Pos('Three', LBuf.RowAsString(1)) > 0,
+      'select scrolls dropdown window before highlighted item');
+    Check(Pos('Four', LBuf.RowAsString(2)) > 0,
+      'select keeps highlighted item visible within max drop height');
+  finally LBuf.Free; end;
+end;
+
 { === TCheckbox === }
 
 procedure TestCheckboxUnchecked;
@@ -189,6 +207,25 @@ begin
   finally LBuf.Free; end;
 end;
 
+procedure TestCommandPaletteTinyViewportStaysClipped;
+var
+  LP: ICommandPalette;
+  LBuf: TBuffer;
+  LSt: TCommandPaletteState;
+begin
+  LP := TCommandPalette.New([
+    TCommandItem.Make('Open File', 'Open a file')
+  ]);
+  LSt := TCommandPaletteState.Empty;
+  LSt.Open;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 8, 5));
+  try
+    LP.RenderStateful(TRect.Make(0, 0, 7, 4), LBuf, LSt);
+    Check(Pos('S', LBuf.RowAsString(3)) = 0,
+      'tiny command palette does not leak input content into border-only area');
+  finally LBuf.Free; end;
+end;
+
 { === TScrollView === }
 
 procedure TestScrollViewRender;
@@ -227,12 +264,15 @@ begin
   T.Run('editor render', @TestEditorRender);
   T.Run('select new', @TestSelectNew);
   T.Run('select open', @TestSelectOpen);
+  T.Run('select open keeps highlight visible', @TestSelectOpenKeepsHighlightVisible);
   T.Run('checkbox unchecked', @TestCheckboxUnchecked);
   T.Run('checkbox checked', @TestCheckboxChecked);
   T.Run('checkbox toggle', @TestCheckboxToggle);
   T.Run('radio group render', @TestRadioGroupRender);
   T.Run('radio group select', @TestRadioGroupSelect);
   T.Run('command palette render', @TestCommandPaletteRender);
+  T.Run('command palette tiny viewport stays clipped',
+    @TestCommandPaletteTinyViewportStaysClipped);
   T.Run('scrollview render', @TestScrollViewRender);
   T.Run('scrollview state', @TestScrollViewState);
   T.Summary;

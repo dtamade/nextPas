@@ -10,6 +10,7 @@ uses
 
 type
   TUnescapeError = (ueNone, ueInvalidEscape, ueInvalidUnicode, ueTruncated);
+  TJsonStringValidationError = (jsveNone, jsveInvalidEscape, jsveControlChar);
 
 function JsonEscapeToBuffer(const ASrc: PAnsiChar; const ALen: SizeUInt;
   const ADst: PAnsiChar): SizeUInt;
@@ -17,6 +18,9 @@ procedure JsonEscapeToBuilder(const ASrc: TStringView; var ADst: TStringBuilder)
 function JsonUnescapeToBuffer(const ASrc: PAnsiChar; const ALen: SizeUInt;
   const ADst: PAnsiChar; out AError: TUnescapeError): SizeUInt;
 function JsonFindStringEnd(const ASrc: PAnsiChar; const ALen: SizeUInt): PtrInt;
+
+function JsonValidateStringToken(const ASrc: PAnsiChar; const ALen: SizeUInt;
+  out AError: TJsonStringValidationError; out AErrorOffset: SizeUInt): Boolean;
 
 implementation
 
@@ -149,6 +153,14 @@ begin
   end;
 end;
 
+{
+  JsonFindStringEnd: 找到 JSON 字符串的终止引号位置。
+
+  返回值：
+    >= 0  : 终止引号相对于 ASrc 的偏移
+    = -1  : 字符串未终止（到达末尾都没有找到引号）
+    < -1  : 发现控制字符（byte < $20）；控制字符位置 = -(Result + 2)
+}
 function JsonFindStringEnd(const ASrc: PAnsiChar; const ALen: SizeUInt): PtrInt;
 var
   LPos: SizeUInt;
@@ -159,12 +171,15 @@ begin
   while LPos + VecWidth <= ALen do
   begin
     LCombined := VecCmpEq(@ASrc[LPos], Ord('"')) or
-                 VecCmpEq(@ASrc[LPos], Ord('\'));
+                 VecCmpEq(@ASrc[LPos], Ord('\')) or
+                 VecCmpLtU(@ASrc[LPos], $20);
     if LCombined = TVecMask(0) then
       Inc(LPos, VecWidth)
     else
     begin
       LFirst := VecCtz(LCombined);
+      if Byte(ASrc[LPos + SizeUInt(LFirst)]) < $20 then
+        Exit(-PtrInt(LPos + SizeUInt(LFirst)) - 2);
       if ASrc[LPos + SizeUInt(LFirst)] = '"' then
         Exit(PtrInt(LPos) + LFirst);
       Inc(LPos, SizeUInt(LFirst) + 2);
@@ -172,7 +187,9 @@ begin
   end;
   while LPos < ALen do
   begin
-    if ASrc[LPos] = '\' then
+    if Byte(ASrc[LPos]) < $20 then
+      Exit(-PtrInt(LPos) - 2)
+    else if ASrc[LPos] = '\' then
       Inc(LPos, 2)
     else if ASrc[LPos] = '"' then
       Exit(PtrInt(LPos))
@@ -215,7 +232,8 @@ begin
   LOut := 0;
   while LPos + VecWidth <= ALen do
   begin
-    LMask := VecCmpEq(@ASrc[LPos], Ord('\'));
+    LMask := VecCmpEq(@ASrc[LPos], Ord('\')) or
+             VecCmpLtU(@ASrc[LPos], $20);
     if LMask = TVecMask(0) then
     begin
       Move(ASrc[LPos], ADst[LOut], VecWidth);
@@ -230,6 +248,11 @@ begin
         Move(ASrc[LPos], ADst[LOut], LFirst);
         Inc(LPos, SizeUInt(LFirst));
         Inc(LOut, SizeUInt(LFirst));
+      end;
+      if Byte(ASrc[LPos]) < $20 then
+      begin
+        AError := ueInvalidEscape;
+        Exit(LOut);
       end;
       Inc(LPos);
       if LPos >= ALen then
@@ -308,6 +331,11 @@ begin
     LCh := Byte(ASrc[LPos]);
     if LCh <> Ord('\') then
     begin
+      if LCh < $20 then
+      begin
+        AError := ueInvalidEscape;
+        Exit(LOut);
+      end;
       ADst[LOut] := AnsiChar(LCh);
       Inc(LOut);
       Inc(LPos);
@@ -385,6 +413,88 @@ begin
     end;
   end;
   Result := LOut;
+end;
+
+function JsonValidateStringToken(const ASrc: PAnsiChar; const ALen: SizeUInt;
+  out AError: TJsonStringValidationError; out AErrorOffset: SizeUInt): Boolean;
+var
+  LPos: SizeUInt;
+  LCh: Byte;
+  LHi, LLo: UInt32;
+begin
+  AError := jsveNone;
+  AErrorOffset := 0;
+  LPos := 0;
+  while LPos < ALen do
+  begin
+    LCh := Byte(ASrc[LPos]);
+    if LCh < $20 then
+    begin
+      AError := jsveControlChar;
+      AErrorOffset := LPos;
+      Exit(False);
+    end;
+    if LCh <> Ord('\') then
+    begin
+      Inc(LPos);
+      Continue;
+    end;
+
+    AErrorOffset := LPos;
+    Inc(LPos);
+    if LPos >= ALen then
+    begin
+      AError := jsveInvalidEscape;
+      Exit(False);
+    end;
+    LCh := Byte(ASrc[LPos]);
+    Inc(LPos);
+    case LCh of
+      Ord('"'), Ord('\'), Ord('/'), Ord('b'), Ord('f'), Ord('n'), Ord('r'), Ord('t'):
+        ;
+      Ord('u'):
+      begin
+        if LPos + 4 > ALen then
+        begin
+          AError := jsveInvalidEscape;
+          Exit(False);
+        end;
+        LHi := UInt32(EscapeParseHex4(ASrc, ALen, LPos));
+        if Int32(LHi) < 0 then
+        begin
+          AError := jsveInvalidEscape;
+          Exit(False);
+        end;
+        Inc(LPos, 4);
+        if (LHi >= $D800) and (LHi <= $DBFF) then
+        begin
+          if (LPos + 6 > ALen) or (ASrc[LPos] <> '\') or
+            (ASrc[LPos + 1] <> 'u') then
+          begin
+            AError := jsveInvalidEscape;
+            Exit(False);
+          end;
+          Inc(LPos, 2);
+          LLo := UInt32(EscapeParseHex4(ASrc, ALen, LPos));
+          if (Int32(LLo) < 0) or (LLo < $DC00) or (LLo > $DFFF) then
+          begin
+            AError := jsveInvalidEscape;
+            Exit(False);
+          end;
+          Inc(LPos, 4);
+        end
+        else if (LHi >= $DC00) and (LHi <= $DFFF) then
+        begin
+          AError := jsveInvalidEscape;
+          Exit(False);
+        end;
+      end;
+    else
+      AError := jsveInvalidEscape;
+      Exit(False);
+    end;
+  end;
+  Result := True;
 end;
 
 end.

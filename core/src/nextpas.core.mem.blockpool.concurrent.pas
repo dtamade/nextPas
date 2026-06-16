@@ -5,9 +5,9 @@ unit nextpas.core.mem.blockpool.concurrent;
 interface
 
 uses
-  nextpas.core.sync,
+  nextpas.core.base.utils,
   nextpas.core.mem.blockpool,
-  nextpas.core.mem.layout,
+  nextpas.core.mem.mutex,
   nextpas.core.mem.error;
 
 type
@@ -19,7 +19,7 @@ type
   TBlockPoolConcurrent = class(TInterfacedObject, IBlockPool, IBlockPoolBatch)
   private
     FInner: IBlockPool;
-    FLock: IMutex;
+    FLock: TMemMutex;
   public
     constructor Create(aInner: IBlockPool); overload;
     constructor Create(aBlockSize, aCapacity: SizeUInt; aAlignment: SizeUInt = DEFAULT_ALIGNMENT); overload;
@@ -50,15 +50,16 @@ type
   TArenaConcurrent = class(TInterfacedObject, IArena)
   private
     FInner: IArena;
-    FLock: IMutex;
+    FLock: TMemMutex;
   public
     constructor Create(aInner: IArena); overload;
     constructor Create(aTotalSize: SizeUInt); overload;
     destructor Destroy; override;
 
     { IArena }
-    function Alloc(const aLayout: TMemLayout): TAllocResult;
-    function AllocZeroed(const aLayout: TMemLayout): TAllocResult;
+    function Alloc(aSize: SizeUInt): Pointer;
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    function AllocZeroed(aSize: SizeUInt): Pointer;
     function SaveMark: TArenaMarker;
     procedure RestoreToMark(aMark: TArenaMarker);
     procedure Reset;
@@ -78,7 +79,7 @@ begin
   inherited Create;
   if aInner = nil then
     raise EAllocError.Create(aeInvalidLayout, 'TBlockPoolConcurrent: inner pool cannot be nil');
-  FLock := Mutex;
+  FLock.Init;
   FInner := aInner;
 end;
 
@@ -89,15 +90,13 @@ end;
 
 destructor TBlockPoolConcurrent.Destroy;
 begin
-  if FLock <> nil then
-    FLock.Acquire;
+  FLock.Acquire;
   try
     FInner := nil;
   finally
-    if FLock <> nil then
-      FLock.Release;
+    FLock.Release;
   end;
-  FLock := nil;
+  FLock.Done;
   inherited Destroy;
 end;
 
@@ -131,6 +130,8 @@ begin
   if aCount <= 0 then Exit(0);
   FLock.Acquire;
   try
+    if aCount > Length(aPtrs) then
+      aCount := Length(aPtrs);
     if Supports(FInner, IBlockPoolBatch, LBatch) then
       Exit(LBatch.AcquireN(aPtrs, aCount));
     for LIdx := 0 to aCount - 1 do
@@ -156,6 +157,8 @@ begin
   if aCount <= 0 then Exit;
   FLock.Acquire;
   try
+    if aCount > Length(aPtrs) then
+      aCount := Length(aPtrs);
     if Supports(FInner, IBlockPoolBatch, LBatch) then
     begin
       LBatch.ReleaseN(aPtrs, aCount);
@@ -219,7 +222,7 @@ begin
   inherited Create;
   if aInner = nil then
     raise EAllocError.Create(aeInvalidLayout, 'TArenaConcurrent: inner arena cannot be nil');
-  FLock := Mutex;
+  FLock.Init;
   FInner := aInner;
 end;
 
@@ -230,33 +233,41 @@ end;
 
 destructor TArenaConcurrent.Destroy;
 begin
-  if FLock <> nil then
-    FLock.Acquire;
+  FLock.Acquire;
   try
     FInner := nil;
   finally
-    if FLock <> nil then
-      FLock.Release;
+    FLock.Release;
   end;
-  FLock := nil;
+  FLock.Done;
   inherited Destroy;
 end;
 
-function TArenaConcurrent.Alloc(const aLayout: TMemLayout): TAllocResult;
+function TArenaConcurrent.Alloc(aSize: SizeUInt): Pointer;
 begin
   FLock.Acquire;
   try
-    Result := FInner.Alloc(aLayout);
+    Result := FInner.Alloc(aSize);
   finally
     FLock.Release;
   end;
 end;
 
-function TArenaConcurrent.AllocZeroed(const aLayout: TMemLayout): TAllocResult;
+function TArenaConcurrent.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
 begin
   FLock.Acquire;
   try
-    Result := FInner.AllocZeroed(aLayout);
+    Result := FInner.AllocAligned(aSize, aAlignment);
+  finally
+    FLock.Release;
+  end;
+end;
+
+function TArenaConcurrent.AllocZeroed(aSize: SizeUInt): Pointer;
+begin
+  FLock.Acquire;
+  try
+    Result := FInner.AllocZeroed(aSize);
   finally
     FLock.Release;
   end;

@@ -1,8 +1,11 @@
 FPC ?= fpc
+SHELL := /bin/bash
+.SHELLFLAGS := -o pipefail -c
 CORE_ROOT := ../../..
 BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.id/test_id
 PROGRAM := test_id
 SOURCE := $(PROGRAM).lpr
+RUN_OUTPUT := $(BUILD_DIR)/$(PROGRAM)_output.txt
 FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -gh
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
@@ -13,8 +16,8 @@ build:
 	$(FPC) $(FPC_FLAGS) $(SOURCE)
 
 run: build
-	$(BUILD_DIR)/$(PROGRAM) 2>&1 | tee /tmp/test_id_output.txt
-	@grep -q "0 unfreed memory blocks" /tmp/test_id_output.txt || (echo "LEAK DETECTED"; exit 1)
+	$(BUILD_DIR)/$(PROGRAM) 2>&1 | tee $(RUN_OUTPUT)
+	@grep -Eq '^[[:space:]]*0[[:space:]]+unfreed[[:space:]]+memory[[:space:]]+blocks([[:space:]:]|$$)' $(RUN_OUTPUT) || (echo "LEAK DETECTED"; exit 1)
 
 test: run
 

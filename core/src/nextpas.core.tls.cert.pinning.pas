@@ -30,11 +30,12 @@ unit nextpas.core.tls.cert.pinning;
 interface
 
 uses
-  Classes, SysUtils, nextpas.core.tls.base,
+  nextpas.core.text.conv,
+  nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.evp, 
+  nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.errors, nextpas.core.tls.exceptions, nextpas.core.tls.logging;
 
 type
@@ -214,7 +215,9 @@ type
 implementation
 
 uses
-  nextpas.core.tls.utils, nextpas.core.tls.encoding, Base64;
+  nextpas.core.encoding.base64,
+  nextpas.core.tls.utils,
+  nextpas.core.tls.encoding;
 
 { TCertificatePin }
 
@@ -222,8 +225,6 @@ class function TCertificatePin.FromBase64(const ABase64Hash: string;
   AType: TPinType; const ADescription: string; AIsBackup: Boolean): TCertificatePin;
 var
   DecodedBytes: TBytes;
-  Stream: TStringStream;
-  Decoder: TBase64DecodingStream;
 begin
   Result.PinType := AType;
   Result.Description := ADescription;
@@ -231,39 +232,23 @@ begin
   Result.AddedDate := Now;
   Result.ExpiryDate := 0;  // Never expires by default
 
-  // Decode Base64 hash
-  Stream := TStringStream.Create(ABase64Hash);
-  try
-    Decoder := TBase64DecodingStream.Create(Stream);
-    try
-      SetLength(DecodedBytes, 32);  // SHA-256 = 32 bytes
-      Decoder.Read(DecodedBytes[0], 32);
-      Move(DecodedBytes[0], Result.Hash[0], 32);
-    finally
-      Decoder.Free;
-    end;
-  finally
-    Stream.Free;
-  end;
+  DecodedBytes := nextpas.core.encoding.base64.Base64Decode(ABase64Hash);
+  if Length(DecodedBytes) <> SizeOf(Result.Hash) then
+    raise ESSLInvalidArgument.Create(
+      nextpas.core.text.conv.Format('Pin hash must decode to %d bytes, got %d',
+        [SizeOf(Result.Hash), Length(DecodedBytes)])
+    );
+
+  Move(DecodedBytes[0], Result.Hash[0], SizeOf(Result.Hash));
 end;
 
 function TCertificatePin.ToBase64: string;
 var
-  Stream: TStringStream;
-  Encoder: TBase64EncodingStream;
+  LBytes: TBytes;
 begin
-  Stream := TStringStream.Create('');
-  try
-    Encoder := TBase64EncodingStream.Create(Stream);
-    try
-      Encoder.Write(Hash[0], 32);
-    finally
-      Encoder.Free;
-    end;
-    Result := Stream.DataString;
-  finally
-    Stream.Free;
-  end;
+  SetLength(LBytes, SizeOf(Hash));
+  Move(Hash[0], LBytes[0], SizeOf(Hash));
+  Result := nextpas.core.encoding.base64.Base64Encode(LBytes);
 end;
 
 function TCertificatePin.IsValid: Boolean;
@@ -441,7 +426,7 @@ begin
     BackupStr := 'no';
   
   TSecurityLog.Info('CertPinning',
-    Format('Added %s pin: %s (backup: %s)',
+    nextpas.core.text.conv.Format('Added %s pin: %s (backup: %s)',
       [PinTypeStr, ADescription, BackupStr]));
 end;
 
@@ -503,7 +488,7 @@ begin
           ConstantTimeCompare(CertHash, Slice(Pin.Hash, 32)) then
         begin
           TSecurityLog.Info('CertPinning',
-            Format('Certificate matched pin: %s', [Pin.Description]));
+            nextpas.core.text.conv.Format('Certificate matched pin: %s', [Pin.Description]));
           Result := True;
           Exit;
         end;
@@ -513,7 +498,7 @@ begin
           ConstantTimeCompare(PubKeyHash, Slice(Pin.Hash, 32)) then
         begin
           TSecurityLog.Info('CertPinning',
-            Format('Public key matched pin: %s', [Pin.Description]));
+            nextpas.core.text.conv.Format('Public key matched pin: %s', [Pin.Description]));
           Result := True;
           Exit;
         end;
@@ -548,7 +533,7 @@ begin
   end;
 
   TSecurityLog.Warning('CertPinning',
-    Format('No certificate in chain (length %d) matched any pin', [Length(AChain)]));
+    nextpas.core.text.conv.Format('No certificate in chain (length %d) matched any pin', [Length(AChain)]));
 end;
 
 function TPinValidator.GetValidPinCount: Integer;
@@ -567,7 +552,7 @@ begin
 
   if not Result then
     TSecurityLog.Warning('CertPinning',
-      Format('Insecure pin configuration: %d valid pins (minimum: %d)',
+      nextpas.core.text.conv.Format('Insecure pin configuration: %d valid pins (minimum: %d)',
         [GetValidPinCount, FMinimumPins]));
 end;
 
@@ -583,7 +568,7 @@ var
   Pin: TCertificatePin;
   PinTypeStr, BackupStr, ValidStr: string;
 begin
-  Result := Format('Pin Validator: %d pins configured, %d valid' + LineEnding,
+  Result := nextpas.core.text.conv.Format('Pin Validator: %d pins configured, %d valid' + LineEnding,
     [Length(FPins), GetValidPinCount]);
 
   for i := 0 to High(FPins) do
@@ -605,7 +590,7 @@ begin
     else
       ValidStr := 'no';
     
-    Result := Result + Format('  [%d] %s: %s (type: %s, backup: %s, valid: %s)' + LineEnding,
+    Result := Result + nextpas.core.text.conv.Format('  [%d] %s: %s (type: %s, backup: %s, valid: %s)' + LineEnding,
       [i, Pin.Description, Pin.ToBase64, PinTypeStr, BackupStr, ValidStr]);
   end;
 end;

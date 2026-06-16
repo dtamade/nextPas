@@ -30,7 +30,7 @@ type
     FBufLen: SizeUInt;
     FLastByte: Byte;
     FHasLast: Boolean;
-    FHasRead: Boolean;
+    FCanUnread: Boolean;
   public
     constructor Create(const AInner: IReader; const ABufSize: SizeUInt);
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -69,6 +69,8 @@ end;
 constructor TBufferedReader.Create(const AInner: IReader; const ABufSize: SizeUInt);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentError.Create('TBufferedReader: inner reader is nil');
   if ABufSize = 0 then
     raise EArgumentError.Create('TBufferedReader: buffer size must be > 0');
   FInner := AInner;
@@ -76,7 +78,7 @@ begin
   FBufPos := 0;
   FBufLen := 0;
   FHasLast := False;
-  FHasRead := False;
+  FCanUnread := False;
 end;
 
 function TBufferedReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -86,6 +88,8 @@ var
 begin
   if ACount = 0 then
     Exit(0);
+
+  FCanUnread := False;
 
   LDst := @ABuf;
   LRemaining := ACount;
@@ -147,22 +151,24 @@ begin
   begin
     Result := FLastByte;
     FHasLast := False;
+    FCanUnread := True;
     Exit;
   end;
   LN := Read(Result, 1);
   if LN = 0 then
     raise EIOError.Create('TBufferedReader.ReadByte: EOF');
   FLastByte := Result;
-  FHasRead := True;
+  FCanUnread := True;
 end;
 
 procedure TBufferedReader.UnreadByte;
 begin
   if FHasLast then
     raise EInvalidOperationError.Create('TBufferedReader.UnreadByte: already unread');
-  if not FHasRead then
+  if not FCanUnread then
     raise EInvalidOperationError.Create('TBufferedReader.UnreadByte: no prior ReadByte');
   FHasLast := True;
+  FCanUnread := False;
 end;
 
 { TBufferedWriter }
@@ -170,6 +176,8 @@ end;
 constructor TBufferedWriter.Create(const AInner: IWriter; const ABufSize: SizeUInt);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentError.Create('TBufferedWriter: inner writer is nil');
   if ABufSize = 0 then
     raise EArgumentError.Create('TBufferedWriter: buffer size must be > 0');
   FInner := AInner;

@@ -3,16 +3,8 @@ program http_get_client;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.base,
-  nextpas.core.http,
-  nextpas.core.io;
-
-function BytesToString(const ABytes: TBytes): string;
-begin
-  SetLength(Result, Length(ABytes));
-  if Length(ABytes) > 0 then
-    Move(ABytes[0], Result[1], Length(ABytes));
-end;
+  SysUtils,
+  nextpas.core.http;
 
 procedure PrintHeaders(const AHeaders: IHttpHeaders);
 begin
@@ -33,7 +25,11 @@ begin
   if ParamCount >= 1 then
     LUrl := ParamStr(1)
   else
-    LUrl := 'http://127.0.0.1:8080/hello/world?page=1';
+  begin
+    LUrl := Trim(GetEnvironmentVariable('NEXTPAS_HTTP_GET_URL'));
+    if LUrl = '' then
+      LUrl := 'http://127.0.0.1:8080/hello/world?page=1';
+  end;
 
   LClient := NewHttpClient;
   LResp := LClient.Get(LUrl);
@@ -43,10 +39,7 @@ begin
   WriteLn('status-text=', HttpStatusText(LResp.StatusCode));
   WriteLn('headers:');
   PrintHeaders(LResp.Headers);
-  if LResp.Body <> nil then
-    LBody := BytesToString(ReadAll(LResp.Body))
-  else
-    LBody := '';
+  LBody := HttpReadResponseBodyString(LResp);
   WriteLn('body:');
   WriteLn(LBody);
 end.

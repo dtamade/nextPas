@@ -105,7 +105,7 @@ begin FThumbStyle := S; Result := Self; end;
 function TScrollbar.ThumbStart(ATrackHeight: Integer): Integer;
 begin
   if FTotalItems <= FVisibleItems then Exit(0);
-  Result := (FScrollOffset * (ATrackHeight - ThumbSize(ATrackHeight)))
+  Result := (Clamped * (ATrackHeight - ThumbSize(ATrackHeight)))
     div (FTotalItems - FVisibleItems);
   if Result < 0 then Result := 0;
 end;

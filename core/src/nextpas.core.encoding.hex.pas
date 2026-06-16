@@ -42,7 +42,7 @@ end;
 
 function HexEncode(const AData: TBytes; const ACase: THexCase): string;
 var
-  LI, LJ, LLen: Integer;
+  LI, LLen: Integer;
   LP: PByte;
   LD: PChar;
   LTable: PChar;
@@ -55,9 +55,11 @@ begin
   LP := @AData[0];
   LD := @Result[1];
 
-  case ACase of
-    hcLower: LTable := @HEX_LOWER[0];
-    hcUpper: LTable := @HEX_UPPER[0];
+  case Ord(ACase) of
+    Ord(hcLower): LTable := @HEX_LOWER[0];
+    Ord(hcUpper): LTable := @HEX_UPPER[0];
+  else
+    raise EConvertError.Create('Invalid hex case');
   end;
 
   LI := 0;

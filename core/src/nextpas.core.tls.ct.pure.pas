@@ -4,8 +4,7 @@ unit nextpas.core.tls.ct.pure;
 
 interface
 
-uses
-  SysUtils, nextpas.core.tls.x509, nextpas.core.tls.ct.logs;
+uses nextpas.core.tls.x509, nextpas.core.tls.ct.logs;
 
 type
   TSCTVerifyResult = (sctValid, sctInvalidSignature, sctExpired, sctUnknownLog);
@@ -39,8 +38,7 @@ function VerifySCTListWithLogs(const ASCTListData: TBytes;
 
 implementation
 
-uses
-  nextpas.core.crypto.hash, nextpas.core.crypto.ecdsa, nextpas.core.crypto.ed25519;
+uses nextpas.core.crypto.hash, nextpas.core.crypto.ecdsa, nextpas.core.crypto.ed25519;
 
 function TryParseSingleSCT(const AData: TBytes; AOffset: Integer;
   out ASCT: TSignedCertificateTimestamp; out ABytesConsumed: Integer): Boolean;

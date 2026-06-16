@@ -9,8 +9,13 @@ function TextFormat(const AFmt: string; const AArgs: array of const): string;
 implementation
 
 uses
+  nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.text.builder;
+
+const
+  MAX_FORMAT_WIDTH = 1048576;
+  MAX_FORMAT_PRECISION = 1024;
 
 function TextFormat(const AFmt: string; const AArgs: array of const): string;
 var
@@ -20,6 +25,30 @@ var
   LZeroPad: Boolean;
   LCh: Char;
   LSb: TStringBuilder;
+
+  procedure RaiseInvalidFormat(const AMessage: string);
+  begin
+    raise EInvalidArgument.Create('TextFormat: ' + AMessage);
+  end;
+
+  procedure RaiseFormatOverflow(const AMessage: string);
+  begin
+    raise EOverflow.Create('TextFormat: ' + AMessage);
+  end;
+
+  procedure AppendCheckedDigit(var AValue: Integer; const ADigit, ALimit: Integer;
+    const AName: string);
+  begin
+    if AValue > (ALimit - ADigit) div 10 then
+      RaiseFormatOverflow(AName + ' exceeds supported limit');
+    AValue := AValue * 10 + ADigit;
+  end;
+
+  procedure RequireArg(const AIdx: Integer);
+  begin
+    if AIdx > High(AArgs) then
+      RaiseInvalidFormat('missing format argument');
+  end;
 
   procedure SbAppendPadded(const AStr: string);
   var LPad: Integer; LPadCh: Char;
@@ -121,46 +150,60 @@ var
 
   function GetArgInt(const AIdx: Integer): Int64;
   begin
-    Result := 0;
-    if AIdx > High(AArgs) then Exit;
+    RequireArg(AIdx);
     case AArgs[AIdx].VType of
       vtInteger: Result := AArgs[AIdx].VInteger;
       vtInt64: Result := AArgs[AIdx].VInt64^;
-      vtQWord: Result := Int64(AArgs[AIdx].VQWord^);
+      vtQWord:
+      begin
+        if AArgs[AIdx].VQWord^ > UInt64(High(Int64)) then
+          RaiseFormatOverflow('unsigned value exceeds Int64');
+        Result := Int64(AArgs[AIdx].VQWord^);
+      end;
+    else
+      RaiseInvalidFormat('argument type does not match %d');
     end;
   end;
 
   function GetArgUInt(const AIdx: Integer): UInt64;
   begin
-    Result := 0;
-    if AIdx > High(AArgs) then Exit;
+    RequireArg(AIdx);
     case AArgs[AIdx].VType of
       vtInteger: Result := UInt64(AArgs[AIdx].VInteger);
       vtInt64: Result := UInt64(AArgs[AIdx].VInt64^);
       vtQWord: Result := AArgs[AIdx].VQWord^;
+    else
+      RaiseInvalidFormat('argument type does not match unsigned conversion');
     end;
   end;
 
   function GetArgStr(const AIdx: Integer): string;
   begin
-    Result := '';
-    if AIdx > High(AArgs) then Exit;
+    RequireArg(AIdx);
     case AArgs[AIdx].VType of
       vtString: Result := AArgs[AIdx].VString^;
       vtAnsiString: Result := AnsiString(AArgs[AIdx].VAnsiString);
       vtChar: Result := AArgs[AIdx].VChar;
-      vtPChar: Result := AArgs[AIdx].VPChar;
+      vtPChar:
+        if AArgs[AIdx].VPChar = nil then
+          Result := ''
+        else
+          Result := AArgs[AIdx].VPChar;
+    else
+      RaiseInvalidFormat('argument type does not match %s');
     end;
   end;
 
   function GetArgFloat(const AIdx: Integer): Double;
   begin
-    Result := 0.0;
-    if AIdx > High(AArgs) then Exit;
+    RequireArg(AIdx);
     case AArgs[AIdx].VType of
       vtExtended: Result := AArgs[AIdx].VExtended^;
       vtInteger: Result := AArgs[AIdx].VInteger;
       vtInt64: Result := AArgs[AIdx].VInt64^;
+      vtQWord: Result := AArgs[AIdx].VQWord^;
+    else
+      RaiseInvalidFormat('argument type does not match %f');
     end;
   end;
 
@@ -181,7 +224,8 @@ begin
         Continue;
       end;
       Inc(LIdx);
-      if LIdx > LLen then Break;
+      if LIdx > LLen then
+        RaiseInvalidFormat('dangling percent');
       if AFmt[LIdx] = '%' then
       begin
         LSb.AppendChar('%');
@@ -204,7 +248,8 @@ begin
       end;
       while (LIdx <= LLen) and (AFmt[LIdx] >= '0') and (AFmt[LIdx] <= '9') do
       begin
-        LWidth := LWidth * 10 + (Ord(AFmt[LIdx]) - Ord('0'));
+        AppendCheckedDigit(LWidth, Ord(AFmt[LIdx]) - Ord('0'),
+          MAX_FORMAT_WIDTH, 'width');
         Inc(LIdx);
       end;
       if (LIdx <= LLen) and (AFmt[LIdx] = '.') then
@@ -213,11 +258,13 @@ begin
         LPrec := 0;
         while (LIdx <= LLen) and (AFmt[LIdx] >= '0') and (AFmt[LIdx] <= '9') do
         begin
-          LPrec := LPrec * 10 + (Ord(AFmt[LIdx]) - Ord('0'));
+          AppendCheckedDigit(LPrec, Ord(AFmt[LIdx]) - Ord('0'),
+            MAX_FORMAT_PRECISION, 'precision');
           Inc(LIdx);
         end;
       end;
-      if LIdx > LLen then Break;
+      if LIdx > LLen then
+        RaiseInvalidFormat('missing conversion specifier');
       case AFmt[LIdx] of
         'd': begin
           SbAppendPadded(FormatInt(GetArgInt(LArgIdx)));
@@ -244,6 +291,8 @@ begin
           SbAppendPadded(FormatFloat(GetArgFloat(LArgIdx), LPrec));
           Inc(LArgIdx);
         end;
+      else
+        RaiseInvalidFormat('unsupported conversion specifier');
       end;
       Inc(LIdx);
     end;

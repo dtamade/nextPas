@@ -8,12 +8,7 @@ unit nextpas.core.tls.openssl.api.ct;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.evp;
+uses nextpas.core.text.conv, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.evp;
 
 const
   // CT 日志条目类型
@@ -295,9 +290,7 @@ function X509_get_SCT_LIST(x: PX509): PSCT_LIST;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
 
 procedure LoadCTFunctions;
 begin

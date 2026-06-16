@@ -28,7 +28,7 @@ type
 
   TRegexIter = record
   private
-    FProgram: PRegexProgram;
+    FProgram: TRegexProgram;
     FInput: string;
     FPos: SizeUInt;
     FDone: Boolean;
@@ -370,6 +370,8 @@ end;
 function TRegex.ReplaceFirstFunc(const AInput: string; AFunc: TReplaceFunc): string;
 var LMatch: TMatch;
 begin
+  if not Assigned(AFunc) then
+    raise ERegexError.Create('nil replacement callback');
   LMatch := Find(AInput);
   if not LMatch.Found then Exit(AInput);
   Result := Copy(AInput, 1, LMatch.Start) + AFunc(AInput, LMatch) +
@@ -382,6 +384,8 @@ var
   i: SizeInt;
   LPos: SizeUInt;
 begin
+  if not Assigned(AFunc) then
+    raise ERegexError.Create('nil replacement callback');
   LMatches := FindAll(AInput);
   if Length(LMatches) = 0 then Exit(AInput);
 
@@ -402,6 +406,40 @@ var
   i: SizeInt;
   LPos: SizeUInt;
 
+  procedure ValidateTemplate;
+  var
+    j: SizeInt;
+    LTplLen: SizeInt;
+  begin
+    LTplLen := Length(ATemplate);
+    j := 1;
+    while j <= LTplLen do
+    begin
+      if ATemplate[j] <> '$' then
+      begin
+        Inc(j);
+        Continue;
+      end;
+
+      if j >= LTplLen then
+        raise ERegexError.Create('malformed replacement template');
+      Inc(j);
+
+      if ATemplate[j] = '{' then
+      begin
+        Inc(j);
+        if (j > LTplLen) or (ATemplate[j] = '}') then
+          raise ERegexError.Create('malformed replacement template');
+        while (j <= LTplLen) and (ATemplate[j] <> '}') do
+          Inc(j);
+        if (j > LTplLen) or (ATemplate[j] <> '}') then
+          raise ERegexError.Create('malformed replacement template');
+      end;
+
+      Inc(j);
+    end;
+  end;
+
   function ExpandTemplate(const AMatch: TMatch): string;
   var
     j: SizeInt;
@@ -414,8 +452,10 @@ var
     j := 1;
     while j <= LTplLen do
     begin
-      if (ATemplate[j] = '$') and (j < LTplLen) then
+      if ATemplate[j] = '$' then
       begin
+        if j >= LTplLen then
+          raise ERegexError.Create('malformed replacement template');
         Inc(j);
         if ATemplate[j] = '$' then
         begin
@@ -443,15 +483,14 @@ var
             LName := LName + ATemplate[j];
             Inc(j);
           end;
-          if (j <= LTplLen) and (ATemplate[j] = '}') then
-          begin
-            Inc(j);
-            LIdx := GroupIndexByName(LName);
-            if (LIdx >= 0) and (LIdx < Length(AMatch.Groups)) and AMatch.Groups[LIdx].Found then
-              Result := Result + AMatch.Groups[LIdx].Value(AInput);
-          end
-          else
-            Result := Result + '${' + LName;
+          if (j > LTplLen) or (ATemplate[j] <> '}') then
+            raise ERegexError.Create('malformed replacement template');
+          if LName = '' then
+            raise ERegexError.Create('malformed replacement template');
+          Inc(j);
+          LIdx := GroupIndexByName(LName);
+          if (LIdx >= 0) and (LIdx < Length(AMatch.Groups)) and AMatch.Groups[LIdx].Found then
+            Result := Result + AMatch.Groups[LIdx].Value(AInput);
         end
         else
         begin
@@ -468,6 +507,7 @@ var
   end;
 
 begin
+  ValidateTemplate;
   LMatches := FindAll(AInput);
   if Length(LMatches) = 0 then Exit(AInput);
 
@@ -548,7 +588,7 @@ end;
 
 function TRegex.FindIter(const AInput: string): TRegexIter;
 begin
-  Result.FProgram := @FProgram;
+  Result.FProgram := FProgram;
   Result.FInput := AInput;
   Result.FPos := 0;
   Result.FDone := not FValid;
@@ -574,7 +614,7 @@ begin
     Exit(False);
   end;
   LLen := SizeUInt(Length(FInput));
-  if not NfaSearch(FProgram^, PAnsiChar(FInput), LLen, False, FPos, AMatch) then
+  if not NfaSearch(FProgram, PAnsiChar(FInput), LLen, False, FPos, AMatch) then
   begin
     AMatch.Start := -1; AMatch.Len := 0; AMatch.Groups := nil;
     FDone := True;

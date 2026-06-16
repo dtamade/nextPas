@@ -48,12 +48,14 @@
 - gfSHA：x86(SHA ext) / ARM(Crypto)
 - gfFMA：x86(FMA3)
 
-注意（x86 OS 门槛）：
+注意（x86 OS/usable 门槛）：
 
 - AVX 可用：需 OSXSAVE = 1 且 XCR0[1:0] = 11b（XMM & YMM 上下文）
+- AVX2 可用：在 AVX 可用基础上还需要 raw AVX2
 - AVX-512 可用：还需 XCR0[7:5] = 111b（ZMM 上下文）
 
-本库已在 x86 实现中纳入上述门槛，`HasFeature/HasX86` 返回“可用”视图。
+本库已在 x86 实现中纳入上述门槛，`HasFeature/HasX86/HasAVX2` 返回“可用”视图。
+显式 static AVX/AVX2 执行入口也必须使用 `HasAVX2` / usable view，不得用 `GenericRaw` 或 raw `X86.HasAVX2`。
 
 ## API 参考
 

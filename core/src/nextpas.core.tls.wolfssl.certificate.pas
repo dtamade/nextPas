@@ -18,6 +18,8 @@ interface
 
 uses
   SysUtils, Classes,
+  nextpas.core.base.utils,
+  nextpas.core.fs,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
@@ -147,7 +149,10 @@ type
 implementation
 
 uses
-  Contnrs, DateUtils,
+  Contnrs,
+  DateUtils,
+  nextpas.core.text.conv,
+  nextpas.core.text.strings,
   nextpas.core.time,
   nextpas.core.tls.utils,
   nextpas.core.crypto.hash,
@@ -223,7 +228,7 @@ begin
     on E: Exception do
     begin
       AError := 'Failed to parse certificate DER: ' + E.Message;
-      FreeAndNil(AParser);
+      nextpas.core.base.utils.FreeAndNil(AParser);
       Result := False;
     end;
   end;
@@ -335,10 +340,8 @@ begin
         AError
       );
     finally
-      LIssuerParser.Free;
     end;
   finally
-    LCertParser.Free;
   end;
 end;
 
@@ -517,7 +520,7 @@ begin
     end;
     Result := True;
   except
-    FreeAndNil(AParser);
+    nextpas.core.base.utils.FreeAndNil(AParser);
     Result := False;
   end;
 end;
@@ -545,7 +548,6 @@ begin
 
     Result := (APublicKeyAlgorithm <> '') or (ASignatureAlgorithm <> '');
   finally
-    LParser.Free;
   end;
 end;
 
@@ -566,7 +568,6 @@ begin
       Exit;
     end;
   finally
-    LParser.Free;
   end;
 
   if not Assigned(wolfSSL_X509_d2i) then
@@ -595,7 +596,7 @@ var
   LStream: TFileStream;
 begin
   Result := False;
-  if not FileExists(AFileName) then Exit;
+  if not nextpas.core.fs.IsFile(AFileName) then Exit;
   ResetLoadedState;
 
   SetLength(LRawBytes, 0);
@@ -607,7 +608,6 @@ begin
       LStream.ReadBuffer(LRawBytes[0], Length(LRawBytes));
     end;
   finally
-    LStream.Free;
   end;
 
   if Length(LRawBytes) > 0 then
@@ -731,7 +731,6 @@ begin
     try
       Result := SaveToStream(LStream);
     finally
-      LStream.Free;
     end;
   except
     Result := False;
@@ -814,7 +813,6 @@ begin
       Result.KeyUsage := X509KeyUsageToBitfield(LParser.KeyUsage);
       Result.SubjectAltNames := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
     finally
-      LParser.Free;
     end;
   end
   else
@@ -840,7 +838,6 @@ begin
       if Result <> '' then
         Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -875,7 +872,6 @@ begin
       if Result <> '' then
         Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -908,7 +904,6 @@ begin
       if Result <> '' then
         Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -933,7 +928,6 @@ begin
       Result := 0;
     end;
   finally
-    LParser.Free;
   end;
 end;
 
@@ -954,7 +948,6 @@ begin
       Result := 0;
     end;
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1052,7 +1045,7 @@ begin
       AResult.ErrorCode := 4;
       AResult.ChainStatus := 1;
       AResult.ErrorMessage := 'Certificate chain contains a nil entry';
-      AResult.DetailedInfo := Format('WolfSSL VerifyEx encountered a nil chain entry at index %d', [I]);
+      AResult.DetailedInfo := nextpas.core.text.conv.Format('WolfSSL VerifyEx encountered a nil chain entry at index %d', [I]);
       Exit;
     end;
 
@@ -1065,7 +1058,7 @@ begin
         AResult.ErrorCode := 5;
         AResult.ChainStatus := 1;
         AResult.ErrorMessage := 'Certificate validity window is unavailable';
-        AResult.DetailedInfo := Format('WolfSSL VerifyEx requires validity metadata for chain entry %d', [I]);
+        AResult.DetailedInfo := nextpas.core.text.conv.Format('WolfSSL VerifyEx requires validity metadata for chain entry %d', [I]);
         Exit;
       end;
       if LCurrentTime < LNotBefore then
@@ -1073,7 +1066,7 @@ begin
         AResult.ErrorCode := 6;
         AResult.ChainStatus := 1;
         AResult.ErrorMessage := 'Certificate is not yet valid';
-        AResult.DetailedInfo := Format('WolfSSL VerifyEx rejected chain entry %d because notBefore is in the future', [I]);
+        AResult.DetailedInfo := nextpas.core.text.conv.Format('WolfSSL VerifyEx rejected chain entry %d because notBefore is in the future', [I]);
         Exit;
       end;
       if LCurrentTime > LNotAfter then
@@ -1081,7 +1074,7 @@ begin
         AResult.ErrorCode := 7;
         AResult.ChainStatus := 1;
         AResult.ErrorMessage := 'Certificate is expired';
-        AResult.DetailedInfo := Format('WolfSSL VerifyEx rejected chain entry %d because notAfter is in the past', [I]);
+        AResult.DetailedInfo := nextpas.core.text.conv.Format('WolfSSL VerifyEx rejected chain entry %d because notAfter is in the past', [I]);
         Exit;
       end;
     end;
@@ -1150,7 +1143,7 @@ var
 
   function MatchWildcard(const APattern, AHostname: string): Boolean;
   var
-    PatternParts, HostParts: TStringList;
+    PatternParts, HostParts: TStringArray;
     j: Integer;
   begin
     Result := False;
@@ -1165,21 +1158,14 @@ var
     // Wildcard match (*.example.com)
     if (Pos('*.', APattern) = 1) then
     begin
-      PatternParts := TStringList.Create;
-      HostParts := TStringList.Create;
       try
-        PatternParts.Delimiter := '.';
-        PatternParts.DelimitedText := APattern;
-
-        HostParts.Delimiter := '.';
-        HostParts.DelimitedText := AHostname;
 
         // Same label count
-        if PatternParts.Count = HostParts.Count then
+        if Length(PatternParts) = Length(HostParts) then
         begin
           Result := True;
           // Compare from 2nd label (skip wildcard)
-          for j := 1 to PatternParts.Count - 1 do
+          for j := 1 to Length(PatternParts) - 1 do
           begin
             if not SameText(PatternParts[j], HostParts[j]) then
             begin
@@ -1189,8 +1175,6 @@ var
           end;
         end;
       finally
-        PatternParts.Free;
-        HostParts.Free;
       end;
     end;
   end;
@@ -1303,7 +1287,6 @@ begin
   try
     Result := LParser.IsCA;
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1318,7 +1301,7 @@ begin
     Exit;
   end;
 
-  Result := DaysBetween(Now, LNotAfter);
+  Result := DaysBetween(nextpas.core.time.DateTimeNow, LNotAfter);
   if IsExpired then
     Result := -Result;
 end;
@@ -1367,7 +1350,6 @@ begin
       end;
     end;
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1382,7 +1364,6 @@ begin
   try
     Result := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1397,7 +1378,6 @@ begin
   try
     Result := X509KeyUsageToStrings(LParser.KeyUsage);
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1412,7 +1392,6 @@ begin
   try
     Result := X509ExtKeyUsageToStrings(LParser.ExtKeyUsage);
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1516,7 +1495,6 @@ begin
     Result := LClone;
     LClone := nil;
   finally
-    LClone.Free;
   end;
 end;
 
@@ -1535,7 +1513,6 @@ end;
 destructor TWolfSSLCertificateStore.Destroy;
 begin
   Clear;
-  FCertificates.Free;
   if FX509Store <> nil then
   begin
     if Assigned(wolfSSL_X509_STORE_free) then
@@ -1574,7 +1551,7 @@ begin
 
     if LTarget <> '' then
     begin
-      for I := 0 to FCertificates.Count - 1 do
+      for I := 0 to Length(FCertificates) - 1 do
       begin
         LExisting := FCertificates[I] as ISSLCertificate;
         if NormalizeWolfCertFingerprint(LExisting.GetFingerprintSHA256) = LTarget then
@@ -1612,7 +1589,7 @@ begin
   if LTarget = '' then
     Exit(False);
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LExisting := FCertificates[I] as ISSLCertificate;
     if NormalizeWolfCertFingerprint(LExisting.GetFingerprintSHA256) = LTarget then
@@ -1627,13 +1604,13 @@ end;
 
 function TWolfSSLCertificateStore.GetCount: Integer;
 begin
-  Result := FCertificates.Count;
+  Result := Length(FCertificates);
 end;
 
 function TWolfSSLCertificateStore.GetCertificate(AIndex: Integer): ISSLCertificate;
 begin
   Result := nil;
-  if (AIndex >= 0) and (AIndex < FCertificates.Count) then
+  if (AIndex >= 0) and (AIndex < Length(FCertificates)) then
     Result := FCertificates[AIndex] as ISSLCertificate;
 end;
 
@@ -1642,7 +1619,7 @@ var
   LCert: TWolfSSLCertificate;
 begin
   Result := False;
-  if not FileExists(AFileName) then Exit;
+  if not nextpas.core.fs.IsFile(AFileName) then Exit;
 
   LCert := TWolfSSLCertificate.Create;
   try
@@ -1652,7 +1629,6 @@ begin
       Result := True;
     end;
   except
-    LCert.Free;
     raise;
   end;
 end;
@@ -1663,14 +1639,14 @@ var
   LCount: Integer;
 begin
   Result := False;
-  if not DirectoryExists(APath) then Exit;
+  if not nextpas.core.fs.IsDir(APath) then Exit;
 
   LCount := 0;
-  if FindFirst(IncludeTrailingPathDelimiter(APath) + '*.pem', faAnyFile, LSearchRec) = 0 then
+  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.pem', faAnyFile, LSearchRec) = 0 then
   begin
     try
       repeat
-        if LoadFromFile(IncludeTrailingPathDelimiter(APath) + LSearchRec.Name) then
+        if LoadFromFile(nextpas.core.fs.PathEnsureSep(APath) + LSearchRec.Name) then
           Inc(LCount);
       until FindNext(LSearchRec) <> 0;
     finally
@@ -1679,11 +1655,11 @@ begin
   end;
 
   // 也加载 .crt 文件
-  if FindFirst(IncludeTrailingPathDelimiter(APath) + '*.crt', faAnyFile, LSearchRec) = 0 then
+  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*.crt', faAnyFile, LSearchRec) = 0 then
   begin
     try
       repeat
-        if LoadFromFile(IncludeTrailingPathDelimiter(APath) + LSearchRec.Name) then
+        if LoadFromFile(nextpas.core.fs.PathEnsureSep(APath) + LSearchRec.Name) then
           Inc(LCount);
       until FindNext(LSearchRec) <> 0;
     finally
@@ -1699,14 +1675,14 @@ begin
   Result := False;
   {$IFDEF LINUX}
   // Linux 系统 CA 路径
-  if DirectoryExists('/etc/ssl/certs') then
+  if nextpas.core.fs.IsDir('/etc/ssl/certs') then
     Result := LoadFromPath('/etc/ssl/certs')
-  else if DirectoryExists('/etc/pki/tls/certs') then
+  else if nextpas.core.fs.IsDir('/etc/pki/tls/certs') then
     Result := LoadFromPath('/etc/pki/tls/certs');
   {$ENDIF}
   {$IFDEF DARWIN}
   // macOS 系统 CA
-  if FileExists('/etc/ssl/cert.pem') then
+  if nextpas.core.fs.IsFile('/etc/ssl/cert.pem') then
     Result := LoadFromFile('/etc/ssl/cert.pem');
   {$ENDIF}
 end;
@@ -1722,7 +1698,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if Pos(LTarget, NormalizeWolfCertText(LCert.GetSubject)) > 0 then
@@ -1744,7 +1720,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if Pos(LTarget, NormalizeWolfCertText(LCert.GetIssuer)) > 0 then
@@ -1766,7 +1742,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if NormalizeWolfCertSerial(LCert.GetSerialNumber) = LTarget then
@@ -1788,7 +1764,7 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LCert := FCertificates[I] as ISSLCertificate;
     if NormalizeWolfCertFingerprint(LCert.GetFingerprintSHA256) = LTarget then

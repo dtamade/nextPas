@@ -9,6 +9,7 @@ program test_http_smoke;
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
   nextpas.core.testing,
+  nextpas.core.io.intf,
   nextpas.core.text.conv,
   nextpas.core.http,
   nextpas.core.http.base,
@@ -111,7 +112,7 @@ begin
     var LB: string;
     begin
       LB := 'Hello';
-      AW.GetHeaders.Set_('content-length', '5');
+      AW.GetHeaders.SetHeader('content-length', '5');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(LB[1], 5);
     end),
@@ -146,7 +147,7 @@ begin
   begin
     LGotCT := AReq.Headers.Get('content-type');
     LB := 'created';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
     AW.WriteHeader(HTTP_STATUS_CREATED);
     AW.Write(LB[1], SizeUInt(Length(LB)));
   end);
@@ -156,7 +157,7 @@ begin
     LResp := LClient.Post(
       MakeUrl(LPort, '/api/data'),
       'application/json',
-      nil);
+      IReader(nil));
     CheckEqual(Int64(201), Int64(LResp.StatusCode), 'status 201');
     CheckEqual('application/json', LGotCT, 'content-type received');
   finally
@@ -181,7 +182,7 @@ begin
   var LB: string;
   begin
     LB := 'user=' + AReq.PathParam('id');
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], SizeUInt(Length(LB)));
   end);
@@ -212,15 +213,15 @@ begin
   LRouter := NewRouter;
   LRouter.Handle(hmGet, '/old', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    AW.GetHeaders.Set_('location', '/new');
-    AW.GetHeaders.Set_('content-length', '0');
+    AW.GetHeaders.SetHeader('location', '/new');
+    AW.GetHeaders.SetHeader('content-length', '0');
     AW.WriteHeader(THttpStatus(301));
   end);
   LRouter.Handle(hmGet, '/new', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   var LB: string;
   begin
     LB := 'final';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LB[1], SizeUInt(Length(LB)));
   end);
@@ -281,7 +282,7 @@ begin
     var LB: string;
     begin
       LB := 'pong';
-      AW.GetHeaders.Set_('content-length', '4');
+      AW.GetHeaders.SetHeader('content-length', '4');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(LB[1], 4);
     end),
@@ -317,7 +318,7 @@ begin
     HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
       platform_thread_sleep_ns(2000000000); { 2s }
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(PAnsiChar('ok')^, 2);
     end),

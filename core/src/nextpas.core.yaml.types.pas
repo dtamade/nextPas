@@ -76,6 +76,7 @@ type
     Style: TYamlScalarStyle;
     Line: UInt32;
     Col: UInt32;
+    Offset: SizeUInt;
   end;
 
   TYamlError = record
@@ -86,6 +87,7 @@ type
   end;
 
 const
+  YAML_ALIAS_RESOLUTION_DEPTH_LIMIT = 64;
   YAML_NODE_NONE = UInt32($FFFFFFFF);
 
 implementation

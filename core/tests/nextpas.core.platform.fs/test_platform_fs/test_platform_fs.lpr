@@ -3,6 +3,8 @@ program test_platform_fs;
 {$I nextpas.core.settings.inc}
 
 uses
+  Classes,
+  SysUtils,
   nextpas.core.platform.fs,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
@@ -10,6 +12,51 @@ uses
 
 var
   T: TTestRunner;
+
+procedure AssignPlatformHandle(var AHandle: TPlatformFileHandle; const AFd: Int32);
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  AHandle.Value := Pointer(PtrUInt(AFd));
+{$ELSE}
+  AHandle.Value := AFd;
+{$ENDIF}
+end;
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LLines: TStringList;
+begin
+  Check(FileExists(ARelativePath), 'source file exists: ' + ARelativePath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(ARelativePath);
+    Result := LLines.Text;
+  finally
+    LLines.Free;
+  end;
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) > 0, AMessage + ': ' + AToken);
+end;
+
+procedure CheckAbsent(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) = 0, AMessage + ': ' + AToken);
+end;
+
+function SourceSlice(const ASource, AStartToken, AEndToken: string): string;
+var
+  LStart, LEnd: SizeInt;
+begin
+  LStart := Pos(AStartToken, ASource);
+  Check(LStart > 0, 'source slice start exists: ' + AStartToken);
+  LEnd := Pos(AEndToken, Copy(ASource, LStart + Length(AStartToken),
+    Length(ASource)));
+  Check(LEnd > 0, 'source slice end exists: ' + AEndToken);
+  Result := Copy(ASource, LStart, Length(AStartToken) + LEnd - 1);
+end;
 
 procedure TestExistsFile;
 var
@@ -84,7 +131,7 @@ begin
   Check(R = 0, 'mktemp succeeds');
   Check(Fd >= 0, 'fd is valid');
   Check(platform_fs_exists(@Path[0]), 'temp file exists');
-  H.Value := Fd;
+  AssignPlatformHandle(H, Fd);
   platform_file_close(H);
   platform_file_unlink(@Path[0]);
 end;
@@ -109,8 +156,8 @@ begin
   end;
   if Path1[I] <> Path2[I] then Same := False;
   Check(not Same, 'paths are unique');
-  H.Value := Fd1; platform_file_close(H);
-  H.Value := Fd2; platform_file_close(H);
+  AssignPlatformHandle(H, Fd1); platform_file_close(H);
+  AssignPlatformHandle(H, Fd2); platform_file_close(H);
   platform_file_unlink(@Path1[0]);
   platform_file_unlink(@Path2[0]);
 end;
@@ -174,6 +221,104 @@ begin
   platform_file_unlink(PATH);
 end;
 
+procedure TestReadFileInto;
+var
+  H: TPlatformFileHandle;
+  W, Len: PtrUInt;
+  Buf: array[0..31] of AnsiChar;
+const
+  PATH = '/tmp/nextpas_read_into_test.dat';
+  DATA = 'read me now';
+begin
+  platform_file_unlink(PATH);
+  platform_file_open(PATH, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar(DATA), 11, W);
+  platform_file_close(H);
+
+  FillChar(Buf, SizeOf(Buf), 0);
+  Len := 0;
+  Check(platform_fs_read_file_into(PATH, @Buf[0], SizeOf(Buf), Len) = 0,
+    'read_file_into ok');
+  Check(Len = 11, 'read_file_into len');
+  Check(Buf[0] = 'r', 'read_file_into first byte');
+  Check(Buf[10] = 'w', 'read_file_into last byte');
+
+  platform_file_unlink(PATH);
+end;
+
+procedure TestFileIoContract;
+var
+  LSource: string;
+  LAtomicSource: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.fs.pas');
+  LAtomicSource := SourceSlice(LSource,
+    'function platform_fs_write_atomic',
+    'function platform_fs_mktemp');
+  CheckContains(LSource, 'function platform_fs_write_all',
+    'platform.fs must centralize full-write retry');
+  CheckContains(LSource, 'PLATFORM_FS_SHORT_WRITE_ERROR',
+    'short writes must map to a non-zero platform error');
+  CheckContains(LSource, 'if LWritten = 0 then',
+    'full-write helper must reject zero-progress writes');
+  CheckContains(LSource, 'Inc(LTotal, LWritten)',
+    'full-write helper must advance after positive short writes');
+  CheckContains(LSource, 'LR := platform_fs_write_all(LDstH, @LBuf[0], LRead)',
+    'copy_file must write each read chunk fully');
+  CheckContains(LSource, 'LCloseR := platform_file_close(LDstH)',
+    'copy_file must check destination close failure');
+  CheckContains(LSource, 'LCloseR := platform_file_close(LSrcH)',
+    'copy_file must check source close failure');
+  CheckContains(LSource, 'if (LR = 0) and (LCloseR <> 0) then',
+    'copy_file must report close failure when copy body succeeds');
+  CheckContains(LSource, 'LR := platform_fs_write_all(LH, AData, ALen)',
+    'write_atomic must write the full payload');
+  CheckContains(LSource, 'LR := platform_file_sync(LH)',
+    'write_atomic must check sync failure');
+  CheckContains(LSource, 'LR := platform_file_close(LH)',
+    'write_atomic must check close failure');
+  CheckContains(LAtomicSource, 'MAX_ATOMIC_TEMP_ATTEMPTS',
+    'write_atomic must bound temp-name collision retries');
+  CheckContains(LAtomicSource, 'if platform_random_bytes(@LRand[0], 6) <> 0 then',
+    'write_atomic must fail closed when random source fails');
+  CheckContains(LAtomicSource, 'fcmCreateNew',
+    'write_atomic must exclusively create temp files');
+  CheckContains(LSource, 'function platform_fs_read_all',
+    'platform.fs must centralize full-read retry');
+  CheckContains(LSource, 'PLATFORM_FS_SHORT_READ_ERROR',
+    'short reads must map to a non-zero platform error');
+  CheckContains(LSource, 'if LChunk = 0 then',
+    'full-read helper must reject zero-progress reads');
+  CheckContains(LSource, 'Inc(ABytesRead, LChunk)',
+    'full-read helper must advance after positive short reads');
+  CheckContains(LSource, 'ABuf: Pointer; ABufCapacity: PtrUInt; out ALen: PtrUInt',
+    'read_file_into exposes caller-owned buffer contract');
+  CheckContains(LSource, 'if LSize > Int64(ABufCapacity) then',
+    'read_file_into rejects undersized caller buffer');
+  CheckContains(LSource, 'ALen := LRead',
+    'read_file_into returns actual bytes read');
+  CheckContains(LSource, 'LR := platform_fs_read_all(LH, AData, PtrUInt(LSize), LRead)',
+    'read_file must read the full stat-sized payload');
+  CheckContains(LSource, 'LCloseR := platform_file_close(LH)',
+    'read_file must check close failure');
+  CheckContains(LSource, 'if (LR = 0) and (LCloseR <> 0) then',
+    'read_file must report close failure when read succeeds');
+  CheckAbsent(LSource, 'until (LR <> 0) or (LWritten < LRead)',
+    'copy_file must not report success after a short write exit');
+  CheckAbsent(LSource, 'platform_file_close(LDstH);' + LineEnding +
+    '  platform_file_close(LSrcH);' + LineEnding +
+    '  Result := LR;',
+    'copy_file must not ignore close failures');
+  CheckAbsent(LSource, 'if (LR <> 0) or (LWritten <> ALen) then',
+    'write_atomic must not depend on one write call for full payload');
+  CheckAbsent(LSource, 'platform_file_sync(LH);' + LineEnding +
+    '  platform_file_close(LH);',
+    'write_atomic must not ignore sync or close failures');
+  CheckAbsent(LSource, 'LR := platform_fs_read_all(LH, AData, PtrUInt(LSize), LRead);' + LineEnding +
+    '  platform_file_close(LH);',
+    'read_file must not ignore close failure after full read');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.fs');
   T.Run('exists file', @TestExistsFile);
@@ -187,5 +332,7 @@ begin
   T.Run('mkdir_p', @TestMkdirP);
   T.Run('copy_file', @TestCopyFile);
   T.Run('write_atomic', @TestWriteAtomic);
+  T.Run('read_file_into', @TestReadFileInto);
+  T.Run('file I/O contract', @TestFileIoContract);
   T.Summary;
 end.

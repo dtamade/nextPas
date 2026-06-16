@@ -23,7 +23,13 @@ type
     FCapacity: PtrUInt;
     FMask: PtrUInt;
     FEnqueuePos: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadEnqueue: TCacheLinePad;
+    {$POP}
     FDequeuePos: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadDequeue: TCacheLinePad;
+    {$POP}
     FSpaceEpoch: Int32;
     FSpaceWaiters: Int32;
     FDataEpoch: Int32;
@@ -106,7 +112,11 @@ begin
     else if LSeq < LPos then
       Exit(False)
     else
+<<<<<<< HEAD
       Exit(False); // Single producer cannot wait for another producer to free this slot.
+=======
+      Exit(False); { Single producer cannot wait for another producer to free this slot }
+>>>>>>> main
   end;
 end;
 
@@ -149,10 +159,7 @@ begin
   begin
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TryEnqueue(AValue) then
-    begin
-      LockFreeWakeAll(@FDataEpoch);
       Exit(True);
-    end;
     LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, -1);
   end;
 end;
@@ -167,10 +174,7 @@ begin
   begin
     LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
     if TryDequeue(AValue) then
-    begin
-      LockFreeWakeAll(@FSpaceEpoch);
       Exit(True);
-    end;
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);
   end;
 end;
@@ -182,10 +186,7 @@ var
   LRemaining: Int64;
 begin
   if TryEnqueue(AValue) then
-  begin
-    LockFreeWakeAll(@FDataEpoch);
     Exit(True);
-  end;
   LStart := TInstant.Now;
   while True do
   begin
@@ -194,10 +195,7 @@ begin
       Exit(TryEnqueue(AValue));
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TryEnqueue(AValue) then
-    begin
-      LockFreeWakeAll(@FDataEpoch);
       Exit(True);
-    end;
     LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LRemaining);
   end;
 end;
@@ -218,10 +216,7 @@ begin
       Exit(TryDequeue(AValue));
     LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
     if TryDequeue(AValue) then
-    begin
-      LockFreeWakeAll(@FSpaceEpoch);
       Exit(True);
-    end;
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);
   end;
 end;

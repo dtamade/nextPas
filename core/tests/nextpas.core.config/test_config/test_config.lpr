@@ -9,6 +9,7 @@ uses
   nextpas.core.os.env,
   nextpas.core.time,
   nextpas.core.config,
+  nextpas.core.config.watcher,
   nextpas.core.testing;
 
 var
@@ -18,14 +19,50 @@ type
   TConfigReloadProbe = class
   private
     FReloaded: Boolean;
+    FCallCount: Integer;
+    FLastSender: TConfig;
+    FObservedHost: string;
+    FObservedPort: Int64;
+    FObservedHasStale: Boolean;
+    FObservedHasFeatureEnabled: Boolean;
+    FObservedFeatureEnabled: Boolean;
   public
     procedure MarkReloaded(ASender: TConfig);
     property Reloaded: Boolean read FReloaded;
+    property CallCount: Integer read FCallCount;
+    property LastSender: TConfig read FLastSender;
+    property ObservedHost: string read FObservedHost;
+    property ObservedPort: Int64 read FObservedPort;
+    property ObservedHasStale: Boolean read FObservedHasStale;
+    property ObservedHasFeatureEnabled: Boolean read FObservedHasFeatureEnabled;
+    property ObservedFeatureEnabled: Boolean read FObservedFeatureEnabled;
   end;
+
+procedure RemoveIfExists(const APath: string);
+begin
+  if Exists(APath) then
+    Remove(APath);
+end;
 
 procedure TConfigReloadProbe.MarkReloaded(ASender: TConfig);
 begin
   FReloaded := ASender <> nil;
+  Inc(FCallCount);
+  FLastSender := ASender;
+  FObservedHost := '';
+  FObservedPort := 0;
+  FObservedHasStale := False;
+  FObservedHasFeatureEnabled := False;
+  FObservedFeatureEnabled := False;
+  if ASender <> nil then
+  begin
+    FObservedHost := ASender.GetString('server.host');
+    FObservedPort := ASender.GetInt('server.port');
+    FObservedHasStale := ASender.Has('stale.value');
+    FObservedHasFeatureEnabled := ASender.Has('feature.enabled');
+    if FObservedHasFeatureEnabled then
+      FObservedFeatureEnabled := ASender.GetBool('feature.enabled');
+  end;
 end;
 
 { === GetString Tests === }
@@ -668,6 +705,172 @@ begin
   end;
 end;
 
+procedure TestReadSurfaceRejectsEmptyKeys;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+  LMessage: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    LRaised := False;
+    LMessage := '';
+    try
+      LCfg.Has('');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        LMessage := E.Message;
+      end;
+    end;
+    CheckEqual(True, LRaised, 'Has rejects empty key');
+    CheckEqual('config key must not be empty', LMessage, 'Has empty key error');
+
+    LRaised := False;
+    LMessage := '';
+    try
+      LCfg.GetString('', 'fallback');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        LMessage := E.Message;
+      end;
+    end;
+    CheckEqual(True, LRaised, 'GetString rejects empty key');
+    CheckEqual('config key must not be empty', LMessage, 'GetString empty key error');
+
+    LRaised := False;
+    LMessage := '';
+    try
+      LCfg.GetRawString('', 'fallback');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        LMessage := E.Message;
+      end;
+    end;
+    CheckEqual(True, LRaised, 'GetRawString rejects empty key');
+    CheckEqual('config key must not be empty', LMessage, 'GetRawString empty key error');
+
+    LRaised := False;
+    LMessage := '';
+    try
+      LCfg.GetInt('', 42);
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        LMessage := E.Message;
+      end;
+    end;
+    CheckEqual(True, LRaised, 'GetInt rejects empty key');
+    CheckEqual('config key must not be empty', LMessage, 'GetInt empty key error');
+
+    LRaised := False;
+    LMessage := '';
+    try
+      LCfg.GetBool('', True);
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        LMessage := E.Message;
+      end;
+    end;
+    CheckEqual(True, LRaised, 'GetBool rejects empty key');
+    CheckEqual('config key must not be empty', LMessage, 'GetBool empty key error');
+
+    LRaised := False;
+    LMessage := '';
+    try
+      LCfg.GetFloat('', 1.5);
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        LMessage := E.Message;
+      end;
+    end;
+    CheckEqual(True, LRaised, 'GetFloat rejects empty key');
+    CheckEqual('config key must not be empty', LMessage, 'GetFloat empty key error');
+
+    LRaised := False;
+    LMessage := '';
+    try
+      LCfg.GetStringRequired('');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        LMessage := E.Message;
+      end;
+    end;
+    CheckEqual(True, LRaised, 'GetStringRequired rejects empty key');
+    CheckEqual('config key must not be empty', LMessage, 'GetStringRequired empty key error');
+
+    LRaised := False;
+    LMessage := '';
+    try
+      LCfg.GetIntRequired('');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        LMessage := E.Message;
+      end;
+    end;
+    CheckEqual(True, LRaised, 'GetIntRequired rejects empty key');
+    CheckEqual('config key must not be empty', LMessage, 'GetIntRequired empty key error');
+
+    LRaised := False;
+    LMessage := '';
+    try
+      LCfg.GetBoolRequired('');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        LMessage := E.Message;
+      end;
+    end;
+    CheckEqual(True, LRaised, 'GetBoolRequired rejects empty key');
+    CheckEqual('config key must not be empty', LMessage, 'GetBoolRequired empty key error');
+
+    LRaised := False;
+    LMessage := '';
+    try
+      LCfg.GetFloatRequired('');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        LMessage := E.Message;
+      end;
+    end;
+    CheckEqual(True, LRaised, 'GetFloatRequired rejects empty key');
+    CheckEqual('config key must not be empty', LMessage, 'GetFloatRequired empty key error');
+
+    LRaised := False;
+    LMessage := '';
+    try
+      LCfg.Require(['']);
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        LMessage := E.Message;
+      end;
+    end;
+    CheckEqual(True, LRaised, 'Require rejects empty key');
+    CheckEqual('config key must not be empty', LMessage, 'Require empty key error');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 { === GetInt Tests === }
 
 procedure TestGetIntBasic;
@@ -986,6 +1189,57 @@ begin
   end;
 end;
 
+procedure TestTryLoadFromIniInvalidReportsPosition;
+var
+  LCfg: TConfig;
+  LError: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('keep', 'value');
+    CheckEqual(False, LCfg.TryLoadFromIni('root=1' + #13#10 + '  [broken' + #10, LError),
+      'TryLoadFromIni invalid section');
+    CheckEqual('INI parse error: line 2, column 1: ' +
+      'missing closing ] in section header', LError,
+      'TryLoadFromIni returns positioned parse error');
+    CheckEqual('value', LCfg.GetString('keep'), 'TryLoadFromIni preserves existing');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestTryLoadFromIniRejectsFlattenedKeyCollision;
+var
+  LCfg: TConfig;
+  LError: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('a.b', 'old');
+    CheckEqual(False, LCfg.TryLoadFromIni(
+      'shadow=new' + #10 +
+      'a.b=literal' + #10 +
+      '[a]' + #10 +
+      'b=nested' + #10, LError), 'TryLoadFromIni rejects flattened collision');
+    Check(Pos('INI', LError) > 0, 'collision error mentions INI');
+    Check(Pos('a.b', LError) > 0, 'collision error mentions flattened key');
+    CheckEqual(False, LCfg.Has('shadow'), 'rejected ini does not write earlier keys');
+    CheckEqual('old', LCfg.GetString('a.b'),
+      'rejected ini does not overwrite existing key');
+
+    CheckEqual(True, LCfg.TryLoadFromIni('db=literal' + #10 +
+      '[db]' + #10 +
+      'host=localhost' + #10, LError),
+      'TryLoadFromIni allows prefix coexistence');
+    CheckEqual('', LError, 'prefix coexistence clears error');
+    CheckEqual('literal', LCfg.GetString('db'), 'prefix scalar remains available');
+    CheckEqual('localhost', LCfg.GetString('db.host'),
+      'prefixed nested key remains available');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 procedure TestTryLoadFromJsonValid;
 var
   LCfg: TConfig;
@@ -1012,6 +1266,51 @@ begin
     CheckEqual(False, LCfg.TryLoadFromJson('{not valid json', LError),
       'TryLoadFromJson invalid');
     Check(LError <> '', 'invalid json returns error');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestTryLoadFromJsonInvalidReportsPositionCRLF;
+var
+  LCfg: TConfig;
+  LError: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('keep', 'value');
+    CheckEqual(False,
+      LCfg.TryLoadFromJson('{"ok":true}' + #13#10 + 'oops', LError),
+      'TryLoadFromJson invalid trailing content after CRLF');
+    CheckEqual('JSON parse error at line 2, column 1 (offset 13): trailing content',
+      LError, 'TryLoadFromJson returns CRLF-aware positioned parse error');
+    CheckEqual('value', LCfg.GetString('keep'),
+      'TryLoadFromJson CRLF failure preserves existing');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestTryLoadFromYamlAndTomlInvalidReportOffset;
+var
+  LCfg: TConfig;
+  LError: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('keep', 'value');
+
+    CheckEqual(False, LCfg.TryLoadYaml('{key: value', LError),
+      'TryLoadYaml invalid');
+    Check(Pos('YAML parse error at line 1, column 12 (offset 11)', LError) > 0,
+      'TryLoadYaml returns positioned parse error with offset');
+    CheckEqual('value', LCfg.GetString('keep'), 'TryLoadYaml preserves existing');
+
+    CheckEqual(False, LCfg.TryLoadToml('key = ', LError),
+      'TryLoadToml invalid');
+    Check(Pos('TOML parse error at line 1, column 7 (offset 6)', LError) > 0,
+      'TryLoadToml returns positioned parse error with offset');
+    CheckEqual('value', LCfg.GetString('keep'), 'TryLoadToml preserves existing');
   finally
     LCfg.Free;
   end;
@@ -1108,6 +1407,33 @@ begin
     end;
   finally
     UnsetEnv('MYAPP_DB_HOST');
+  end;
+end;
+
+procedure TestLoadFromEnvRejectsEmptyPrefix;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+  LMessage: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    LRaised := False;
+    LMessage := '';
+    try
+      LCfg.LoadFromEnv('');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        LMessage := E.Message;
+      end;
+    end;
+    CheckEqual(True, LRaised, 'LoadFromEnv rejects empty prefix');
+    CheckEqual('config env prefix must not be empty', LMessage,
+      'LoadFromEnv empty prefix error');
+  finally
+    LCfg.Free;
   end;
 end;
 
@@ -1420,7 +1746,7 @@ var
   LPath: string;
 begin
   LPath := '/tmp/test_nextpas_config_load_from_file.json';
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath, '{"server":{"host":"file-host","port":8080},"debug":true}');
   LCfg := TConfig.Create;
   try
@@ -1430,7 +1756,47 @@ begin
     CheckEqual(True, LCfg.GetBool('debug'), 'file bool');
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
+  end;
+end;
+
+procedure TestLoadFromFileRejectsEmptyPath;
+var
+  LCfg: TConfig;
+  LError: string;
+  LRaised: Boolean;
+  LMessage: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('keep=value' + #10);
+
+    LRaised := False;
+    LMessage := '';
+    try
+      LCfg.LoadFromFile('', cfJson);
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        LMessage := E.Message;
+      end;
+    end;
+    CheckEqual(True, LRaised, 'LoadFromFile rejects empty file path');
+    CheckEqual('config file path must not be empty', LMessage,
+      'LoadFromFile empty path error message');
+    CheckEqual('value', LCfg.GetString('keep'),
+      'LoadFromFile empty path preserves existing value');
+
+    LError := 'stale';
+    CheckEqual(False, LCfg.TryLoadFromFile('', cfJson, LError),
+      'TryLoadFromFile rejects empty file path');
+    CheckEqual('config file path must not be empty', LError,
+      'TryLoadFromFile empty path error message');
+    CheckEqual('value', LCfg.GetString('keep'),
+      'TryLoadFromFile empty path preserves existing value');
+  finally
+    LCfg.Free;
   end;
 end;
 
@@ -1438,18 +1804,26 @@ procedure TestTryLoadFromFileSuccessAndErrorsPreserveExisting;
 var
   LCfg: TConfig;
   LError: string;
+  LBadJsonPath: string;
   LValidPath: string;
   LMissingPath: string;
   LBadPath: string;
+  LBadIniPath: string;
 begin
+  LBadJsonPath := '/tmp/test_nextpas_config_try_load_bad.json';
   LValidPath := '/tmp/test_nextpas_config_try_load_valid.toml';
   LMissingPath := '/tmp/test_nextpas_config_try_load_missing.toml';
   LBadPath := '/tmp/test_nextpas_config_try_load_bad.toml';
-  Remove(LValidPath);
-  Remove(LMissingPath);
-  Remove(LBadPath);
+  LBadIniPath := '/tmp/test_nextpas_config_try_load_bad.ini';
+  RemoveIfExists(LBadJsonPath);
+  RemoveIfExists(LValidPath);
+  RemoveIfExists(LMissingPath);
+  RemoveIfExists(LBadPath);
+  RemoveIfExists(LBadIniPath);
+  WriteFileText(LBadJsonPath, '{"ok":true}' + #13#10 + 'oops');
   WriteFileText(LValidPath, '[server]' + #10 + 'host = "valid-host"' + #10);
   WriteFileText(LBadPath, 'server = ');
+  WriteFileText(LBadIniPath, 'root=1' + #13#10 + '  [broken' + #10);
   LCfg := TConfig.Create;
   try
     LCfg.LoadFromIni('keep=value' + #10);
@@ -1469,16 +1843,39 @@ begin
       'missing file preserves loaded host');
 
     LError := '';
+    CheckEqual(False, LCfg.TryLoadFromFile(LBadJsonPath, cfJson, LError),
+      'bad json file returns false');
+    CheckEqual('Config file load error: ' + LBadJsonPath +
+      ': JSON parse error at line 2, column 1 (offset 13): trailing content',
+      LError, 'bad json file reports path and CRLF-aware position');
+    CheckEqual('value', LCfg.GetString('keep'), 'bad json file preserves keep');
+    CheckEqual('valid-host', LCfg.GetString('server.host'),
+      'bad json file preserves loaded host');
+
+    LError := '';
     CheckEqual(False, LCfg.TryLoadFromFile(LBadPath, cfToml, LError),
       'bad file returns false');
     Check(Pos(LBadPath, LError) > 0, 'bad file path included');
     CheckEqual('value', LCfg.GetString('keep'), 'bad file preserves keep');
     CheckEqual('valid-host', LCfg.GetString('server.host'),
       'bad file preserves loaded host');
+
+    LError := '';
+    CheckEqual(False, LCfg.TryLoadFromFile(LBadIniPath, cfIni, LError),
+      'bad ini file returns false');
+    CheckEqual('Config file load error: ' + LBadIniPath +
+      ': INI parse error: line 2, column 1: missing closing ] in section header',
+      LError,
+      'bad ini file reports path and position');
+    CheckEqual('value', LCfg.GetString('keep'), 'bad ini file preserves keep');
+    CheckEqual('valid-host', LCfg.GetString('server.host'),
+      'bad ini file preserves loaded host');
   finally
     LCfg.Free;
-    Remove(LValidPath);
-    Remove(LBadPath);
+    RemoveIfExists(LBadJsonPath);
+    RemoveIfExists(LValidPath);
+    RemoveIfExists(LBadPath);
+    RemoveIfExists(LBadIniPath);
   end;
 end;
 
@@ -1494,7 +1891,7 @@ var
   LAttempt: Integer;
 begin
   LPath := '/tmp/test_hotreload_nextpas_config.ini';
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath, '[server]' + #10 + 'host=initial' + #10 + 'port=1000' + #10);
   LCfg := TConfig.Create;
   try
@@ -1528,8 +1925,204 @@ begin
     end;
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
+end;
+
+function ConfigWatcherSuccessFormatName(AFormat: TConfigFormat): string;
+begin
+  case AFormat of
+    cfJson: Result := 'json';
+    cfYaml: Result := 'yaml';
+    cfToml: Result := 'toml';
+  else
+    Result := 'ini';
+  end;
+end;
+
+function ConfigWatcherSuccessPath(AFormat: TConfigFormat): string;
+var
+  LFile: IFile;
+  LName: string;
+  LSeedPath: string;
+begin
+  LName := ConfigWatcherSuccessFormatName(AFormat);
+  LFile := TempFile('', 'test_hotreload_nextpas_config_success_' + LName);
+  LSeedPath := LFile.Name;
+  LFile.Close;
+  Result := LSeedPath + '.' + LName;
+  RemoveIfExists(Result);
+  if not Rename(LSeedPath, Result) then
+  begin
+    RemoveIfExists(LSeedPath);
+    Result := LSeedPath;
+  end;
+end;
+
+function ConfigWatcherSuccessInitialContent(AFormat: TConfigFormat): string;
+var
+  LName: string;
+begin
+  LName := ConfigWatcherSuccessFormatName(AFormat);
+  case AFormat of
+    cfJson:
+      Result := '{"server":{"host":"initial-' + LName + '","port":1000},' +
+        '"stale":{"value":"old-' + LName + '"}}';
+    cfYaml:
+      Result := 'server:' + #10 +
+        '  host: initial-' + LName + #10 +
+        '  port: 1000' + #10 +
+        'stale:' + #10 +
+        '  value: old-' + LName + #10;
+    cfToml:
+      Result := '[server]' + #10 +
+        'host = "initial-' + LName + '"' + #10 +
+        'port = 1000' + #10 +
+        '[stale]' + #10 +
+        'value = "old-' + LName + '"' + #10;
+  else
+    Result := '';
+  end;
+end;
+
+function ConfigWatcherSuccessUpdatedContent(AFormat: TConfigFormat): string;
+var
+  LName: string;
+begin
+  LName := ConfigWatcherSuccessFormatName(AFormat);
+  case AFormat of
+    cfJson:
+      Result := '{"server":{"host":"updated-' + LName + '","port":2000},' +
+        '"feature":{"enabled":true},"padding":"changed-size-' + LName + '"}';
+    cfYaml:
+      Result := 'server:' + #10 +
+        '  host: updated-' + LName + #10 +
+        '  port: 2000' + #10 +
+        'feature:' + #10 +
+        '  enabled: true' + #10 +
+        'padding: changed-size-' + LName + #10;
+    cfToml:
+      Result := '[server]' + #10 +
+        'host = "updated-' + LName + '"' + #10 +
+        'port = 2000' + #10 +
+        '[feature]' + #10 +
+        'enabled = true' + #10 +
+        'padding = "changed-size-' + LName + '"' + #10;
+  else
+    Result := '';
+  end;
+end;
+
+function PollConfigWatcherReload(AWatcher: TConfigWatcher; const APath: string;
+  const AContent: string): Boolean;
+var
+  LAttempt: Integer;
+begin
+  WriteFileText(APath, AContent);
+  Result := False;
+  for LAttempt := 0 to 20 do
+  begin
+    Result := AWatcher.CheckReload;
+    if Result then
+      Break;
+    TSleep.ForDuration(TDuration.FromMilliseconds(20));
+  end;
+end;
+
+procedure AssertConfigWatcherHotReloadSuccess(AFormat: TConfigFormat);
+var
+  LCfg: TConfig;
+  LWatcher: TConfigWatcher;
+  LProbe: TConfigReloadProbe;
+  LPath: string;
+  LName: string;
+  LInitialContent: string;
+  LReloaded: Boolean;
+  LUpdatedContent: string;
+begin
+  LName := ConfigWatcherSuccessFormatName(AFormat);
+  LPath := ConfigWatcherSuccessPath(AFormat);
+  LInitialContent := ConfigWatcherSuccessInitialContent(AFormat);
+  LUpdatedContent := ConfigWatcherSuccessUpdatedContent(AFormat);
+  Check(Length(LInitialContent) <> Length(LUpdatedContent),
+    LName + ' success fixture must change file size');
+  WriteFileText(LPath, LInitialContent);
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromFile(LPath, AFormat);
+    CheckEqual('initial-' + LName, LCfg.GetString('server.host'),
+      LName + ' initial host');
+    CheckEqual(Int64(1000), LCfg.GetInt('server.port'),
+      LName + ' initial port');
+    CheckEqual(True, LCfg.Has('stale.value'), LName + ' initial stale key');
+
+    LProbe := TConfigReloadProbe.Create;
+    LWatcher := TConfigWatcher.Create(LCfg, LPath, AFormat);
+    try
+      LWatcher.OnReload := @LProbe.MarkReloaded;
+
+      CheckEqual(False, LWatcher.CheckReload,
+        LName + ' unchanged file should not reload');
+      CheckEqual(Int64(0), Int64(LProbe.CallCount),
+        LName + ' unchanged file does not fire callback');
+
+      LReloaded := PollConfigWatcherReload(LWatcher, LPath, LUpdatedContent);
+
+      CheckEqual(True, LReloaded, LName + ' modified file should reload');
+      CheckEqual('updated-' + LName, LCfg.GetString('server.host'),
+        LName + ' reloaded host');
+      CheckEqual(Int64(2000), LCfg.GetInt('server.port'),
+        LName + ' reloaded port');
+      CheckEqual(True, LCfg.GetBool('feature.enabled'),
+        LName + ' reloaded feature');
+      CheckEqual(False, LCfg.Has('stale.value'),
+        LName + ' stale key removed by ReplaceFrom');
+      CheckEqual(Int64(4), Int64(LCfg.Count),
+        LName + ' live table replaced');
+
+      CheckEqual(True, LProbe.Reloaded, LName + ' reload callback fired');
+      CheckEqual(Int64(1), Int64(LProbe.CallCount),
+        LName + ' reload callback fires once');
+      CheckEqual(True, LProbe.LastSender = LCfg,
+        LName + ' reload callback receives live config');
+      CheckEqual('updated-' + LName, LProbe.ObservedHost,
+        LName + ' callback observes replaced host');
+      CheckEqual(Int64(2000), LProbe.ObservedPort,
+        LName + ' callback observes replaced port');
+      CheckEqual(False, LProbe.ObservedHasStale,
+        LName + ' callback observes stale key removed');
+      CheckEqual(True, LProbe.ObservedHasFeatureEnabled,
+        LName + ' callback observes feature key');
+      CheckEqual(True, LProbe.ObservedFeatureEnabled,
+        LName + ' callback observes feature value');
+
+      CheckEqual(False, LWatcher.CheckReload,
+        LName + ' stable file should not reload twice');
+      CheckEqual(Int64(1), Int64(LProbe.CallCount),
+        LName + ' stable file does not fire another callback');
+    finally
+      LWatcher.Free;
+      LProbe.Free;
+    end;
+  finally
+    LCfg.Free;
+    RemoveIfExists(LPath);
+  end;
+end;
+
+procedure TestConfigWatcherHotReloadJson;
+begin
+  AssertConfigWatcherHotReloadSuccess(cfJson);
+end;
+
+procedure TestConfigWatcherHotReloadYaml;
+begin
+  AssertConfigWatcherHotReloadSuccess(cfYaml);
+end;
+
+procedure TestConfigWatcherHotReloadToml;
+begin
+  AssertConfigWatcherHotReloadSuccess(cfToml);
 end;
 
 procedure TestConfigWatcherBadJsonRaisesAndPreservesOldConfig;
@@ -1540,7 +2133,7 @@ var
   LRaised: Boolean;
 begin
   LPath := '/tmp/test_hotreload_nextpas_config_bad_json.json';
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath, '{"server":{"host":"initial","port":1000}}');
   LCfg := TConfig.Create;
   try
@@ -1566,7 +2159,53 @@ begin
     end;
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
+  end;
+end;
+
+procedure TestConfigWatcherFailedReloadDoesNotFireCallback;
+var
+  LCfg: TConfig;
+  LWatcher: TConfigWatcher;
+  LProbe: TConfigReloadProbe;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := '/tmp/test_hotreload_nextpas_config_callback_guard.json';
+  RemoveIfExists(LPath);
+  WriteFileText(LPath, '{"server":{"host":"initial","port":1000}}');
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromJson(ReadFileText(LPath));
+    LProbe := TConfigReloadProbe.Create;
+    LWatcher := TConfigWatcher.Create(LCfg, LPath, cfJson);
+    try
+      LWatcher.OnReload := @LProbe.MarkReloaded;
+      TSleep.ForDuration(TDuration.FromMilliseconds(20));
+      WriteFileText(LPath, '{"server":{"host":');
+
+      LRaised := False;
+      try
+        LWatcher.CheckReload;
+      except
+        on E: EConfigError do
+          LRaised := True;
+      end;
+
+      CheckEqual(True, LRaised, 'failed reload raises EConfigError');
+      CheckEqual(False, LProbe.Reloaded,
+        'failed reload does not fire callback');
+      CheckEqual('initial', LCfg.GetString('server.host'),
+        'failed reload keeps old host');
+      CheckEqual(Int64(1000), LCfg.GetInt('server.port'),
+        'failed reload keeps old port');
+    finally
+      LWatcher.Free;
+      LProbe.Free;
+    end;
+  finally
+    LCfg.Free;
+    RemoveIfExists(LPath);
   end;
 end;
 
@@ -1578,7 +2217,7 @@ var
   LRaised: Boolean;
 begin
   LPath := '/tmp/test_hotreload_nextpas_config_bad_yaml.yaml';
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath, 'server:' + #10 + '  host: initial' + #10 + '  port: 1000' + #10);
   LCfg := TConfig.Create;
   try
@@ -1604,7 +2243,7 @@ begin
     end;
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
   end;
 end;
 
@@ -1616,7 +2255,7 @@ var
   LRaised: Boolean;
 begin
   LPath := '/tmp/test_hotreload_nextpas_config_bad_toml.toml';
-  Remove(LPath);
+  RemoveIfExists(LPath);
   WriteFileText(LPath, '[server]' + #10 + 'host = "initial"' + #10 + 'port = 1000' + #10);
   LCfg := TConfig.Create;
   try
@@ -1642,7 +2281,222 @@ begin
     end;
   finally
     LCfg.Free;
-    Remove(LPath);
+    RemoveIfExists(LPath);
+  end;
+end;
+
+procedure TestConfigWatcherAmbiguousJsonRaisesAndPreservesOldConfig;
+var
+  LCfg: TConfig;
+  LWatcher: TConfigWatcher;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := '/tmp/test_hotreload_nextpas_config_ambiguous_json.json';
+  RemoveIfExists(LPath);
+  WriteFileText(LPath, '{"server":{"host":"initial","port":1000}}');
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromJson(ReadFileText(LPath));
+    LWatcher := TConfigWatcher.Create(LCfg, LPath, cfJson);
+    try
+      TSleep.ForDuration(TDuration.FromMilliseconds(20));
+      WriteFileText(LPath,
+        '{' + #10 +
+        '  "server.host": "literal",' + #10 +
+        '  "server": {' + #10 +
+        '    "host": "nested"' + #10 +
+        '  }' + #10 +
+        '}');
+
+      LRaised := False;
+      try
+        LWatcher.CheckReload;
+      except
+        on E: EConfigError do
+        begin
+          LRaised := True;
+          Check(Pos('server.host', E.Message) > 0,
+            'ambiguous json watcher error names key');
+        end;
+      end;
+
+      CheckEqual(True, LRaised, 'ambiguous json watcher reload raises EConfigError');
+      CheckEqual('initial', LCfg.GetString('server.host'), 'old ambiguous json host preserved');
+      CheckEqual(Int64(1000), LCfg.GetInt('server.port'), 'old ambiguous json port preserved');
+    finally
+      LWatcher.Free;
+    end;
+  finally
+    LCfg.Free;
+    RemoveIfExists(LPath);
+  end;
+end;
+
+procedure TestConfigWatcherAmbiguousYamlRaisesAndPreservesOldConfig;
+var
+  LCfg: TConfig;
+  LWatcher: TConfigWatcher;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := '/tmp/test_hotreload_nextpas_config_ambiguous_yaml.yaml';
+  RemoveIfExists(LPath);
+  WriteFileText(LPath, 'server:' + #10 + '  host: initial' + #10 + '  port: 1000' + #10);
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromYaml(ReadFileText(LPath));
+    LWatcher := TConfigWatcher.Create(LCfg, LPath, cfYaml);
+    try
+      TSleep.ForDuration(TDuration.FromMilliseconds(20));
+      WriteFileText(LPath,
+        '"server.host": literal' + #10 +
+        'server:' + #10 +
+        '  host: nested' + #10);
+
+      LRaised := False;
+      try
+        LWatcher.CheckReload;
+      except
+        on E: EConfigError do
+        begin
+          LRaised := True;
+          Check(Pos('server.host', E.Message) > 0,
+            'ambiguous yaml watcher error names key');
+        end;
+      end;
+
+      CheckEqual(True, LRaised, 'ambiguous yaml watcher reload raises EConfigError');
+      CheckEqual('initial', LCfg.GetString('server.host'), 'old ambiguous yaml host preserved');
+      CheckEqual(Int64(1000), LCfg.GetInt('server.port'), 'old ambiguous yaml port preserved');
+    finally
+      LWatcher.Free;
+    end;
+  finally
+    LCfg.Free;
+    RemoveIfExists(LPath);
+  end;
+end;
+
+procedure TestConfigWatcherAmbiguousTomlRaisesAndPreservesOldConfig;
+var
+  LCfg: TConfig;
+  LWatcher: TConfigWatcher;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := '/tmp/test_hotreload_nextpas_config_ambiguous_toml.toml';
+  RemoveIfExists(LPath);
+  WriteFileText(LPath, '[server]' + #10 + 'host = "initial"' + #10 + 'port = 1000' + #10);
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromToml(ReadFileText(LPath));
+    LWatcher := TConfigWatcher.Create(LCfg, LPath, cfToml);
+    try
+      TSleep.ForDuration(TDuration.FromMilliseconds(20));
+      WriteFileText(LPath,
+        '"server.host" = "literal"' + #10 +
+        '[server]' + #10 +
+        'host = "nested"' + #10);
+
+      LRaised := False;
+      try
+        LWatcher.CheckReload;
+      except
+        on E: EConfigError do
+        begin
+          LRaised := True;
+          Check(Pos('server.host', E.Message) > 0,
+            'ambiguous toml watcher error names key');
+        end;
+      end;
+
+      CheckEqual(True, LRaised, 'ambiguous toml watcher reload raises EConfigError');
+      CheckEqual('initial', LCfg.GetString('server.host'), 'old ambiguous toml host preserved');
+      CheckEqual(Int64(1000), LCfg.GetInt('server.port'), 'old ambiguous toml port preserved');
+    finally
+      LWatcher.Free;
+    end;
+  finally
+    LCfg.Free;
+    RemoveIfExists(LPath);
+  end;
+end;
+
+procedure TestConfigWatcherBadIniRaisesAndPreservesOldConfig;
+var
+  LCfg: TConfig;
+  LWatcher: TConfigWatcher;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := '/tmp/test_hotreload_nextpas_config_bad_ini.ini';
+  RemoveIfExists(LPath);
+  WriteFileText(LPath, '[server]' + #10 + 'host=initial' + #10 + 'port=1000' + #10);
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni(ReadFileText(LPath));
+    LWatcher := TConfigWatcher.Create(LCfg, LPath, cfIni);
+    try
+      TSleep.ForDuration(TDuration.FromMilliseconds(20));
+      WriteFileText(LPath, 'root=1' + #13#10 + '  [broken' + #10);
+
+      LRaised := False;
+      try
+        LWatcher.CheckReload;
+      except
+        on E: EConfigError do
+          LRaised := True;
+      end;
+
+      CheckEqual(True, LRaised, 'bad ini watcher reload raises EConfigError');
+      CheckEqual('initial', LCfg.GetString('server.host'), 'old ini host preserved');
+      CheckEqual(Int64(1000), LCfg.GetInt('server.port'), 'old ini port preserved');
+    finally
+      LWatcher.Free;
+    end;
+  finally
+    LCfg.Free;
+    RemoveIfExists(LPath);
+  end;
+end;
+
+procedure TestConfigWatcherMissingFileRaisesAndPreservesOldConfig;
+var
+  LCfg: TConfig;
+  LWatcher: TConfigWatcher;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := '/tmp/test_hotreload_nextpas_config_missing.toml';
+  RemoveIfExists(LPath);
+  WriteFileText(LPath, '[server]' + #10 + 'host = "initial"' + #10 +
+    'port = 1000' + #10);
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromToml(ReadFileText(LPath));
+    LWatcher := TConfigWatcher.Create(LCfg, LPath, cfToml);
+    try
+      TSleep.ForDuration(TDuration.FromMilliseconds(20));
+      RemoveIfExists(LPath);
+
+      LRaised := False;
+      try
+        LWatcher.CheckReload;
+      except
+        on E: EConfigError do
+          LRaised := True;
+      end;
+
+      CheckEqual(True, LRaised, 'missing file watcher reload raises EConfigError');
+      CheckEqual('initial', LCfg.GetString('server.host'), 'old missing-file host preserved');
+      CheckEqual(Int64(1000), LCfg.GetInt('server.port'), 'old missing-file port preserved');
+    finally
+      LWatcher.Free;
+    end;
+  finally
+    LCfg.Free;
+    RemoveIfExists(LPath);
   end;
 end;
 
@@ -1677,6 +2531,7 @@ begin
   T.Run('Required.BoolWhitespaceAndCase', @TestRequiredBoolWhitespaceAndCase);
   T.Run('Required.UnresolvedPlaceholderRaises', @TestRequiredUnresolvedPlaceholderRaises);
   T.Run('Required.WhitespaceRaises', @TestRequiredWhitespaceRaises);
+  T.Run('ReadSurface.RejectsEmptyKeys', @TestReadSurfaceRejectsEmptyKeys);
   T.Run('GetInt.Basic', @TestGetIntBasic);
   T.Run('GetInt.Default', @TestGetIntDefault);
   T.Run('GetInt.Invalid', @TestGetIntInvalid);
@@ -1696,12 +2551,20 @@ begin
   T.Run('LoadFromJson.Basic', @TestLoadFromJsonBasic);
   T.Run('LoadFromJson.Types', @TestLoadFromJsonTypes);
   T.Run('TryLoadFromIni.Valid', @TestTryLoadFromIniValid);
+  T.Run('TryLoadFromIni.InvalidReportsPosition', @TestTryLoadFromIniInvalidReportsPosition);
+  T.Run('TryLoadFromIni.FlattenedKeyCollision',
+    @TestTryLoadFromIniRejectsFlattenedKeyCollision);
   T.Run('TryLoadFromJson.Valid', @TestTryLoadFromJsonValid);
   T.Run('TryLoadFromJson.Invalid', @TestTryLoadFromJsonInvalid);
+  T.Run('TryLoadFromJson.InvalidReportsPositionCRLF',
+    @TestTryLoadFromJsonInvalidReportsPositionCRLF);
+  T.Run('TryLoadFromYamlAndToml.InvalidReportsOffset',
+    @TestTryLoadFromYamlAndTomlInvalidReportOffset);
   T.Run('TryLoad.ShortVariantsInvalid', @TestTryLoadShortVariantsInvalid);
   T.Run('TryLoad.ShortVariantsValid', @TestTryLoadShortVariantsValid);
   T.Run('LoadFromEnv.Basic', @TestLoadFromEnvBasic);
   T.Run('LoadFromEnv.Override', @TestLoadFromEnvOverride);
+  T.Run('LoadFromEnv.RejectsEmptyPrefix', @TestLoadFromEnvRejectsEmptyPrefix);
   T.Run('Has', @TestHas);
   T.Run('Has.CaseInsensitive', @TestHasCaseInsensitive);
   T.Run('GetKeys', @TestGetKeys);
@@ -1719,11 +2582,26 @@ begin
   T.Run('MultiSource.Override', @TestMultiSourceOverride);
   T.Run('ReplaceFrom', @TestReplaceFrom);
   T.Run('LoadFromFile.Basic', @TestLoadFromFileBasic);
+  T.Run('LoadFromFile.RejectsEmptyPath', @TestLoadFromFileRejectsEmptyPath);
   T.Run('TryLoadFromFile.SuccessAndErrorsPreserveExisting',
     @TestTryLoadFromFileSuccessAndErrorsPreserveExisting);
   T.Run('ConfigWatcher.HotReloadIni', @TestConfigWatcherHotReloadIni);
+  T.Run('ConfigWatcher.HotReloadJson', @TestConfigWatcherHotReloadJson);
+  T.Run('ConfigWatcher.HotReloadYaml', @TestConfigWatcherHotReloadYaml);
+  T.Run('ConfigWatcher.HotReloadToml', @TestConfigWatcherHotReloadToml);
   T.Run('ConfigWatcher.BadJsonRaises', @TestConfigWatcherBadJsonRaisesAndPreservesOldConfig);
+  T.Run('ConfigWatcher.FailedReloadDoesNotFireCallback',
+    @TestConfigWatcherFailedReloadDoesNotFireCallback);
   T.Run('ConfigWatcher.BadYamlRaises', @TestConfigWatcherBadYamlRaisesAndPreservesOldConfig);
   T.Run('ConfigWatcher.BadTomlRaises', @TestConfigWatcherBadTomlRaisesAndPreservesOldConfig);
+  T.Run('ConfigWatcher.AmbiguousJsonRaises',
+    @TestConfigWatcherAmbiguousJsonRaisesAndPreservesOldConfig);
+  T.Run('ConfigWatcher.AmbiguousYamlRaises',
+    @TestConfigWatcherAmbiguousYamlRaisesAndPreservesOldConfig);
+  T.Run('ConfigWatcher.AmbiguousTomlRaises',
+    @TestConfigWatcherAmbiguousTomlRaisesAndPreservesOldConfig);
+  T.Run('ConfigWatcher.BadIniRaises', @TestConfigWatcherBadIniRaisesAndPreservesOldConfig);
+  T.Run('ConfigWatcher.MissingFileRaises',
+    @TestConfigWatcherMissingFileRaisesAndPreservesOldConfig);
   T.Summary;
 end.

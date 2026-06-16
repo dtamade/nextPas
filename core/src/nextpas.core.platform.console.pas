@@ -216,27 +216,6 @@ uses
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi;
 
-function platform_console_is_terminal(AFd: Int32): Boolean;
-var
-  LHandle: HANDLE;
-  LMode: DWORD;
-  LStd: DWORD;
-begin
-  case AFd of
-    0: LStd := STD_INPUT_HANDLE;
-    1: LStd := STD_OUTPUT_HANDLE;
-    2: LStd := STD_ERROR_HANDLE;
-  else
-    Exit(False);
-  end;
-  LHandle := GetStdHandle(LStd);
-  if LHandle = HANDLE(PtrInt(-1)) then
-    Exit(False);
-  LMode := 0;
-  Result := GetConsoleMode(LHandle, @LMode) <> 0;
-end;
-
-function platform_console_get_size(out ASize: TPlatformConsoleSize): Int32;
 type
   TConsoleScreenBufferInfo = packed record
     dwSizeX, dwSizeY: Int16;
@@ -245,20 +224,39 @@ type
     srWindowLeft, srWindowTop, srWindowRight, srWindowBottom: Int16;
     dwMaxSizeX, dwMaxSizeY: Int16;
   end;
+
+function WindowsConsoleHandleFromFd(AFd: Int32; out AHandle: HANDLE): Int32;
+var
+  LStd: DWORD;
+begin
+  AHandle := nil;
+  case AFd of
+    0: LStd := STD_INPUT_HANDLE;
+    1: LStd := STD_OUTPUT_HANDLE;
+    2: LStd := STD_ERROR_HANDLE;
+  else
+    Exit(Int32(ERROR_INVALID_HANDLE));
+  end;
+  AHandle := GetStdHandle(LStd);
+  if (AHandle = nil) or (AHandle = HANDLE(INVALID_HANDLE_VALUE)) then
+    Exit(Int32(GetLastError));
+  Result := 0;
+end;
+
+function platform_console_is_terminal(AFd: Int32): Boolean;
 var
   LHandle: HANDLE;
-  LInfo: TConsoleScreenBufferInfo;
+  LMode: DWORD;
 begin
-  ASize.Cols := 0;
-  ASize.Rows := 0;
-  LHandle := GetStdHandle(STD_OUTPUT_HANDLE);
-  if LHandle = HANDLE(PtrInt(-1)) then
-    Exit(Int32(GetLastError));
-  if GetConsoleScreenBufferInfo(LHandle, @LInfo) = 0 then
-    Exit(Int32(GetLastError));
-  ASize.Cols := Int32(LInfo.srWindowRight - LInfo.srWindowLeft + 1);
-  ASize.Rows := Int32(LInfo.srWindowBottom - LInfo.srWindowTop + 1);
-  Result := 0;
+  if WindowsConsoleHandleFromFd(AFd, LHandle) <> 0 then
+    Exit(False);
+  LMode := 0;
+  Result := GetConsoleMode(LHandle, @LMode) <> 0;
+end;
+
+function platform_console_get_size(out ASize: TPlatformConsoleSize): Int32;
+begin
+  Result := platform_console_get_size_fd(1, ASize);
 end;
 
 function platform_console_enable_ansi: Int32;
@@ -284,23 +282,114 @@ begin
 end;
 
 function platform_console_get_size_fd(AFd: Int32; out ASize: TPlatformConsoleSize): Int32;
+var
+  LHandle: HANDLE;
+  LInfo: TConsoleScreenBufferInfo;
 begin
-  { Windows 控制台尺寸不区分 fd，转发到 stdout 版本。 }
-  Result := platform_console_get_size(ASize);
+  ASize.Cols := 0;
+  ASize.Rows := 0;
+  Result := WindowsConsoleHandleFromFd(AFd, LHandle);
+  if Result <> 0 then Exit;
+  if GetConsoleScreenBufferInfo(LHandle, @LInfo) = 0 then
+    Exit(Int32(GetLastError));
+  ASize.Cols := Int32(LInfo.srWindowRight - LInfo.srWindowLeft + 1);
+  ASize.Rows := Int32(LInfo.srWindowBottom - LInfo.srWindowTop + 1);
+  Result := 0;
 end;
 
-{ Windows raw mode / IO / wait：当前阶段提供 stub（Phase 3 优先 Linux，
-  Windows 控制台输入模式将在 Windows backend 阶段补全）。 }
 function platform_console_set_raw(AFd: Int32; out AMode: TPlatformConsoleMode): Int32;
-begin FillChar(AMode, SizeOf(AMode), 0); Result := -1; end;
+var
+  LHandle: HANDLE;
+  LSaved, LRaw: DWORD;
+begin
+  FillChar(AMode, SizeOf(AMode), 0);
+  Result := WindowsConsoleHandleFromFd(AFd, LHandle);
+  if Result <> 0 then Exit;
+  LSaved := 0;
+  if GetConsoleMode(LHandle, @LSaved) = 0 then
+    Exit(Int32(GetLastError));
+  Move(LSaved, AMode.Opaque[0], SizeOf(LSaved));
+  LRaw := LSaved;
+  LRaw := LRaw and not (ENABLE_LINE_INPUT or ENABLE_ECHO_INPUT or
+    ENABLE_PROCESSED_INPUT);
+  LRaw := LRaw or ENABLE_VIRTUAL_TERMINAL_INPUT;
+  if SetConsoleMode(LHandle, LRaw) = 0 then
+    Exit(Int32(GetLastError));
+  Result := 0;
+end;
+
 function platform_console_restore_raw(AFd: Int32; const AMode: TPlatformConsoleMode): Int32;
-begin Result := -1; end;
+var
+  LHandle: HANDLE;
+  LMode: DWORD;
+begin
+  Result := WindowsConsoleHandleFromFd(AFd, LHandle);
+  if Result <> 0 then Exit;
+  Move(AMode.Opaque[0], LMode, SizeOf(LMode));
+  if SetConsoleMode(LHandle, LMode) = 0 then
+    Exit(Int32(GetLastError));
+  Result := 0;
+end;
+
 function platform_console_read(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
-begin Result := -1; end;
+var
+  LHandle: HANDLE;
+  LRead: DWORD;
+begin
+  if ACount <= 0 then Exit(0);
+  if ABuf = nil then Exit(-1);
+  if WindowsConsoleHandleFromFd(AFd, LHandle) <> 0 then Exit(-1);
+  LRead := 0;
+  if ReadFile(LHandle, ABuf, DWORD(ACount), @LRead, nil) = 0 then
+    Exit(-1);
+  Result := Int32(LRead);
+end;
+
 function platform_console_write(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
-begin Result := -1; end;
+var
+  LHandle: HANDLE;
+  LSent, LWritten: Int32;
+  LPtr: PByte;
+  LChunk: DWORD;
+begin
+  if ACount <= 0 then Exit(0);
+  if ABuf = nil then Exit(-1);
+  if WindowsConsoleHandleFromFd(AFd, LHandle) <> 0 then Exit(-1);
+  LPtr := PByte(ABuf);
+  LSent := 0;
+  while LSent < ACount do
+  begin
+    LChunk := 0;
+    if WriteFile(LHandle, @LPtr[LSent], DWORD(ACount - LSent), @LChunk, nil) = 0 then
+      Exit(-1);
+    LWritten := Int32(LChunk);
+    if LWritten <= 0 then Exit(-1);
+    Inc(LSent, LWritten);
+  end;
+  Result := LSent;
+end;
+
 function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int32): TPlatformConsoleWait;
-begin Result := cwError; end;
+var
+  LHandle: HANDLE;
+  LTimeout: DWORD;
+  LWait: DWORD;
+begin
+  if WindowsConsoleHandleFromFd(AFd, LHandle) <> 0 then
+    Exit(cwError);
+  if ATimeoutMs < 0 then
+    LTimeout := INFINITE
+  else
+    LTimeout := DWORD(ATimeoutMs);
+  LWait := WaitForSingleObject(LHandle, LTimeout);
+  case LWait of
+    WAIT_OBJECT_0: Result := cwReadable;
+    WAIT_TIMEOUT: Result := cwTimeout;
+    WAIT_IO_COMPLETION: Result := cwInterrupted;
+  else
+    Result := cwError;
+  end;
+end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}

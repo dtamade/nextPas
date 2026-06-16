@@ -15,8 +15,15 @@ Linux x86_64 上为每次推进配套明确的证据要求与回退条件。
 - 把 Linux x86_64 保持为基线阶段唯一的宿主和目标。
 - 在 nextPas 通过证据赢得更多所有权之前，一直把 FreePascal 视为 `stage0`
   实现工具链。
+- `System` 路线采用 `FPC-compatible source, nextPas-owned semantic authority`：
+  源码应尽量能被 FPC 构建，但对象生命周期、managed lifetime、RTTI、unit lifecycle
+  和 runtime helper 的最终语义以 `np.system.*` contract 为准。
 - 只有当 `harness` 执行层、smoke 路径和架构文档三者一致时才允许升级。
 - 每一次升级都必须保留一个已知可工作的低一级阶段，确保随时可回退。
+
+FPC compatibility is a build vehicle, not the architecture authority. `stage0`
+可以通过 FPC-compatible adapter 运行同一批 System-facing 源码；`stage1+`
+必须逐步把这些语义降到 nextPas-owned contract，而不是继续继承宿主 RTL 的隐式规则。
 
 ## 阶段概览
 

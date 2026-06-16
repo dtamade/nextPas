@@ -13,10 +13,12 @@ uses
   nextpas.core.compress.base,
   nextpas.core.compress.intf,
   nextpas.core.compress.deflate,
-  nextpas.core.compress.gzip,
-  nextpas.core.compress.lz4
+  nextpas.core.compress.gzip
   {$IFDEF NEXTPAS_USE_LZ4_NATIVE}
-  , nextpas.core.compress.lz4.ffi
+  , nextpas.core.compress.lz4.native
+  {$ENDIF}
+  {$IFNDEF NEXTPAS_USE_LZ4_NATIVE}
+  , nextpas.core.compress.lz4
   {$ENDIF}
   ;
 
@@ -28,20 +30,33 @@ type
 function DeflateWriter(const ADst: IWriter;
   const ALevel: TCompressionLevel = clDefault): ICompressWriter; inline;
 function DeflateReader(const ASrc: IReader): IDecompressReader; inline;
+function DeflateReaderWithMaxOutputSize(const ASrc: IReader;
+  const AMaxOutputSize: SizeUInt): IDecompressReader; inline;
 function GzipWriter(const ADst: IWriter;
   const ALevel: TCompressionLevel = clDefault): ICompressWriter; inline;
 function GzipReader(const ASrc: IReader): IDecompressReader; inline;
+function GzipReaderWithMaxOutputSize(const ASrc: IReader;
+  const AMaxOutputSize: SizeUInt): IDecompressReader; inline;
 function DeflateCompress(const AData: TBytes;
   const ALevel: TCompressionLevel = clDefault): TBytes; inline;
 function DeflateDecompress(const AData: TBytes): TBytes; inline;
+function DeflateDecompressWithMaxOutputSize(const AData: TBytes;
+  const AMaxOutputSize: SizeUInt): TBytes; inline;
 function GzipCompress(const AData: TBytes;
   const ALevel: TCompressionLevel = clDefault): TBytes; inline;
 function GzipDecompress(const AData: TBytes): TBytes; inline;
+function GzipDecompressWithMaxOutputSize(const AData: TBytes;
+  const AMaxOutputSize: SizeUInt): TBytes; inline;
 function Lz4Compress(const AData: TBytes): TBytes; inline;
 function Lz4Decompress(const AData: TBytes; const AOriginalSize: Int32): TBytes; inline;
+function Lz4DecompressWithMaxOutputSize(const AData: TBytes;
+  const AOriginalSize: Int32; const AMaxOutputSize: SizeUInt): TBytes; inline;
 function Lz4CompressBound(const AInputSize: SizeUInt): SizeUInt; inline;
 
 implementation
+
+uses
+  nextpas.core.errors;
 
 function DeflateWriter(const ADst: IWriter;
   const ALevel: TCompressionLevel): ICompressWriter;
@@ -52,6 +67,13 @@ end;
 function DeflateReader(const ASrc: IReader): IDecompressReader;
 begin
   Result := nextpas.core.compress.deflate.CreateDeflateReader(ASrc);
+end;
+
+function DeflateReaderWithMaxOutputSize(const ASrc: IReader;
+  const AMaxOutputSize: SizeUInt): IDecompressReader;
+begin
+  Result := nextpas.core.compress.deflate.CreateDeflateReaderWithMaxOutputSize(
+    ASrc, AMaxOutputSize);
 end;
 
 function GzipWriter(const ADst: IWriter;
@@ -65,6 +87,13 @@ begin
   Result := nextpas.core.compress.gzip.CreateGzipReader(ASrc);
 end;
 
+function GzipReaderWithMaxOutputSize(const ASrc: IReader;
+  const AMaxOutputSize: SizeUInt): IDecompressReader;
+begin
+  Result := nextpas.core.compress.gzip.CreateGzipReaderWithMaxOutputSize(
+    ASrc, AMaxOutputSize);
+end;
+
 function DeflateCompress(const AData: TBytes;
   const ALevel: TCompressionLevel): TBytes;
 begin
@@ -74,6 +103,13 @@ end;
 function DeflateDecompress(const AData: TBytes): TBytes;
 begin
   Result := nextpas.core.compress.deflate.DeflateDecompress(AData);
+end;
+
+function DeflateDecompressWithMaxOutputSize(const AData: TBytes;
+  const AMaxOutputSize: SizeUInt): TBytes;
+begin
+  Result := nextpas.core.compress.deflate.DeflateDecompressWithMaxOutputSize(
+    AData, AMaxOutputSize);
 end;
 
 function GzipCompress(const AData: TBytes;
@@ -87,10 +123,17 @@ begin
   Result := nextpas.core.compress.gzip.GzipDecompress(AData);
 end;
 
+function GzipDecompressWithMaxOutputSize(const AData: TBytes;
+  const AMaxOutputSize: SizeUInt): TBytes;
+begin
+  Result := nextpas.core.compress.gzip.GzipDecompressWithMaxOutputSize(AData,
+    AMaxOutputSize);
+end;
+
 function Lz4Compress(const AData: TBytes): TBytes;
 begin
   {$IFDEF NEXTPAS_USE_LZ4_NATIVE}
-  Result := nextpas.core.compress.lz4.ffi.NativeLz4Compress(AData);
+  Result := nextpas.core.compress.lz4.native.NativeLz4Compress(AData);
   {$ELSE}
   Result := nextpas.core.compress.lz4.Lz4Compress(AData);
   {$ENDIF}
@@ -99,16 +142,30 @@ end;
 function Lz4Decompress(const AData: TBytes; const AOriginalSize: Int32): TBytes;
 begin
   {$IFDEF NEXTPAS_USE_LZ4_NATIVE}
-  Result := nextpas.core.compress.lz4.ffi.NativeLz4Decompress(AData, AOriginalSize);
+  Result := nextpas.core.compress.lz4.native.NativeLz4Decompress(AData, AOriginalSize);
   {$ELSE}
   Result := nextpas.core.compress.lz4.Lz4Decompress(AData, AOriginalSize);
   {$ENDIF}
 end;
 
-function Lz4CompressBound(const AInputSize: SizeUInt): SizeUInt;
+function Lz4DecompressWithMaxOutputSize(const AData: TBytes;
+  const AOriginalSize: Int32; const AMaxOutputSize: SizeUInt): TBytes;
 begin
   {$IFDEF NEXTPAS_USE_LZ4_NATIVE}
-  Result := SizeUInt(nextpas.core.compress.lz4.ffi.NativeLz4CompressBound(Int32(AInputSize)));
+  Result := nextpas.core.compress.lz4.native.NativeLz4DecompressWithMaxOutputSize(
+    AData, AOriginalSize, AMaxOutputSize);
+  {$ELSE}
+  Result := nextpas.core.compress.lz4.Lz4DecompressWithMaxOutputSize(AData,
+    AOriginalSize, AMaxOutputSize);
+  {$ENDIF}
+end;
+
+function Lz4CompressBound(const AInputSize: SizeUInt): SizeUInt;
+begin
+  if AInputSize > LZ4_MAX_INPUT_SIZE then
+    raise EIOError.Create('lz4: input size exceeds limit');
+  {$IFDEF NEXTPAS_USE_LZ4_NATIVE}
+  Result := SizeUInt(nextpas.core.compress.lz4.native.NativeLz4CompressBound(Int32(AInputSize)));
   {$ELSE}
   Result := nextpas.core.compress.lz4.Lz4CompressBound(AInputSize);
   {$ENDIF}

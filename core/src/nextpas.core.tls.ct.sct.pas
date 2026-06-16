@@ -9,14 +9,7 @@ unit nextpas.core.tls.ct.sct;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.ct,
-  nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.ssl,
-  nextpas.core.tls.openssl.api.stack;
+uses nextpas.core.text.conv, nextpas.core.time, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.ct, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.ssl, nextpas.core.tls.openssl.api.stack;
 
 type
   // SCT 来源类型
@@ -89,11 +82,7 @@ function FormatSCTTimestamp(Timestamp: UInt64): string;
 
 implementation
 
-uses
-  DateUtils,
-  nextpas.core.tls.ocsp,
-  nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.loader;
+uses DateUtils, nextpas.core.tls.ocsp, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
 
 { TSCTValidator }
 

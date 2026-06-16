@@ -49,6 +49,62 @@ begin
   if (AEpoll and EPOLLRDHUP) <> 0 then Include(Result, peReadHangup);
 end;
 
+type
+  PPlatformPollRegistration = ^TPlatformPollRegistration;
+  TPlatformPollRegistration = record
+    Entry: TPlatformPollEntry;
+  end;
+
+  PPlatformPollRegistrationArray = ^TPlatformPollRegistrationArray;
+  TPlatformPollRegistrationArray =
+    array[0..MaxInt div SizeOf(PPlatformPollRegistration) - 1] of PPlatformPollRegistration;
+
+function LinuxPollEntries(var APoller: TPlatformPoller): PPlatformPollRegistrationArray;
+begin
+  Result := PPlatformPollRegistrationArray(APoller.Entries);
+end;
+
+function LinuxFindPollEntry(var APoller: TPlatformPoller; AFd: PtrUInt): Int32;
+var
+  LEntries: PPlatformPollRegistrationArray;
+  LI: Int32;
+begin
+  LEntries := LinuxPollEntries(APoller);
+  for LI := 0 to APoller.Count - 1 do
+    if (LEntries^[LI] <> nil) and (LEntries^[LI]^.Entry.Fd = AFd) then
+      Exit(LI);
+  Result := -1;
+end;
+
+function LinuxEnsurePollCapacity(var APoller: TPlatformPoller;
+  ACapacity: Int32): Int32;
+var
+  LNewCapacity: Int32;
+  LNewEntries: Pointer;
+  LBytes: SizeUInt;
+begin
+  if ACapacity <= APoller.Capacity then
+    Exit(0);
+  LNewCapacity := APoller.Capacity;
+  if LNewCapacity < 8 then
+    LNewCapacity := 8;
+  while LNewCapacity < ACapacity do
+    LNewCapacity := LNewCapacity * 2;
+  LBytes := SizeUInt(LNewCapacity) * SizeOf(PPlatformPollRegistration);
+  GetMem(LNewEntries, LBytes);
+  if LNewEntries = nil then
+    Exit(ESysENOMEM);
+  FillChar(LNewEntries^, LBytes, 0);
+  if (APoller.Entries <> nil) and (APoller.Count > 0) then
+    Move(APoller.Entries^, LNewEntries^,
+      SizeUInt(APoller.Count) * SizeOf(PPlatformPollRegistration));
+  if APoller.Entries <> nil then
+    FreeMem(APoller.Entries);
+  APoller.Entries := LNewEntries;
+  APoller.Capacity := LNewCapacity;
+  Result := 0;
+end;
+
 function platform_poller_create(out APoller: TPlatformPoller): Int32;
 begin
   FillChar(APoller, SizeOf(APoller), 0);
@@ -62,7 +118,21 @@ begin
 end;
 
 function platform_poller_close(var APoller: TPlatformPoller): Int32;
+var
+  LEntries: PPlatformPollRegistrationArray;
+  LI: Int32;
 begin
+  if APoller.Entries <> nil then
+  begin
+    LEntries := LinuxPollEntries(APoller);
+    for LI := 0 to APoller.Count - 1 do
+      if LEntries^[LI] <> nil then
+        FreeMem(LEntries^[LI]);
+    FreeMem(APoller.Entries);
+    APoller.Entries := nil;
+  end;
+  APoller.Count := 0;
+  APoller.Capacity := 0;
   if APoller.WakeFd >= 0 then
   begin
     close(APoller.WakeFd);
@@ -82,42 +152,87 @@ function platform_poller_add(var APoller: TPlatformPoller; AFd: PtrUInt;
   AEvents: TPlatformPollEvents; AUserData: Pointer): Int32;
 var
   LEv: epoll_event;
+  LEntries: PPlatformPollRegistrationArray;
+  LRegistration: PPlatformPollRegistration;
 begin
+  if LinuxFindPollEntry(APoller, AFd) >= 0 then
+    Exit(ESysEEXIST);
+  Result := LinuxEnsurePollCapacity(APoller, APoller.Count + 1);
+  if Result <> 0 then
+    Exit(Result);
+  LEntries := LinuxPollEntries(APoller);
+  GetMem(LRegistration, SizeOf(TPlatformPollRegistration));
+  if LRegistration = nil then
+    Exit(ESysENOMEM);
+  LRegistration^.Entry.Fd := AFd;
+  LRegistration^.Entry.Events := AEvents;
+  LRegistration^.Entry.REvents := [];
+  LRegistration^.Entry.UserData := AUserData;
   FillChar(LEv, SizeOf(LEv), 0);
   LEv.events := EventsToEpoll(AEvents);
-  LEv.data.ptr := AUserData;
+  LEv.data.ptr := LRegistration;
   if epoll_ctl(APoller.EpollFd, EPOLL_CTL_ADD, Int32(AFd), @LEv) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  begin
+    LEntries^[APoller.Count] := LRegistration;
+    Inc(APoller.Count);
+    Exit(0);
+  end;
+  Result := platform_get_errno;
+  FreeMem(LRegistration);
 end;
 
 function platform_poller_modify(var APoller: TPlatformPoller; AFd: PtrUInt;
   AEvents: TPlatformPollEvents; AUserData: Pointer): Int32;
 var
   LEv: epoll_event;
+  LEntries: PPlatformPollRegistrationArray;
+  LOldEntry: TPlatformPollEntry;
+  LIndex: Int32;
 begin
+  LIndex := LinuxFindPollEntry(APoller, AFd);
+  if LIndex < 0 then
+    Exit(ESysENOENT);
+  LEntries := LinuxPollEntries(APoller);
+  LOldEntry := LEntries^[LIndex]^.Entry;
+  LEntries^[LIndex]^.Entry.Events := AEvents;
+  LEntries^[LIndex]^.Entry.REvents := [];
+  LEntries^[LIndex]^.Entry.UserData := AUserData;
   FillChar(LEv, SizeOf(LEv), 0);
   LEv.events := EventsToEpoll(AEvents);
-  LEv.data.ptr := AUserData;
+  LEv.data.ptr := LEntries^[LIndex];
   if epoll_ctl(APoller.EpollFd, EPOLL_CTL_MOD, Int32(AFd), @LEv) = 0 then
     Result := 0
   else
+  begin
     Result := platform_get_errno;
+    LEntries^[LIndex]^.Entry := LOldEntry;
+  end;
 end;
 
 function platform_poller_remove(var APoller: TPlatformPoller; AFd: PtrUInt): Int32;
+var
+  LIndex: Int32;
+  LEntries: PPlatformPollRegistrationArray;
+  LMoveCount: Int32;
 begin
-  if epoll_ctl(APoller.EpollFd, EPOLL_CTL_DEL, Int32(AFd), nil) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  LIndex := LinuxFindPollEntry(APoller, AFd);
+  if LIndex < 0 then
+    Exit(ESysENOENT);
+  if epoll_ctl(APoller.EpollFd, EPOLL_CTL_DEL, Int32(AFd), nil) <> 0 then
+    Exit(platform_get_errno);
+  LEntries := LinuxPollEntries(APoller);
+  FreeMem(LEntries^[LIndex]);
+  LMoveCount := APoller.Count - LIndex - 1;
+  if LMoveCount > 0 then
+    Move(LEntries^[LIndex + 1], LEntries^[LIndex],
+      SizeUInt(LMoveCount) * SizeOf(PPlatformPollRegistration));
+  Dec(APoller.Count);
+  LEntries^[APoller.Count] := nil;
+  Result := 0;
 end;
 
 function platform_poller_enable_wake(var APoller: TPlatformPoller;
   AUserData: Pointer): Int32;
-var
-  LEv: epoll_event;
 begin
   if APoller.WakeFd >= 0 then
     Exit(0);
@@ -125,13 +240,11 @@ begin
   if APoller.WakeFd < 0 then
     Exit(platform_get_errno);
 
-  FillChar(LEv, SizeOf(LEv), 0);
-  LEv.events := EPOLLIN;
-  LEv.data.ptr := AUserData;
-  if epoll_ctl(APoller.EpollFd, EPOLL_CTL_ADD, APoller.WakeFd, @LEv) = 0 then
+  Result := platform_poller_add(APoller, PtrUInt(APoller.WakeFd),
+    [peReadable], AUserData);
+  if Result = 0 then
     Exit(0);
 
-  Result := platform_get_errno;
   close(APoller.WakeFd);
   APoller.WakeFd := -1;
 end;
@@ -169,6 +282,7 @@ function platform_poller_wait(var APoller: TPlatformPoller;
   out ACount: Int32): Int32;
 var
   LEvents: pepoll_event;
+  LRegistration: PPlatformPollRegistration;
   LN, LI: Int32;
 begin
   ACount := 0;
@@ -182,9 +296,13 @@ begin
       Exit(platform_get_errno);
     for LI := 0 to LN - 1 do
     begin
-      AEntries[LI].Fd := 0;
+      LRegistration := PPlatformPollRegistration(LEvents[LI].data.ptr);
+      if LRegistration = nil then
+        Exit(ESysEINVAL);
+      AEntries[LI].Fd := LRegistration^.Entry.Fd;
+      AEntries[LI].Events := LRegistration^.Entry.Events;
       AEntries[LI].REvents := EpollToEvents(LEvents[LI].events);
-      AEntries[LI].UserData := LEvents[LI].data.ptr;
+      AEntries[LI].UserData := LRegistration^.Entry.UserData;
     end;
     ACount := LN;
     Result := 0;

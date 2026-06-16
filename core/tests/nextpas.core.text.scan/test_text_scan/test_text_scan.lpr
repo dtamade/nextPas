@@ -58,6 +58,26 @@ begin
   CheckEqual(Int64(64), Int64(ScanSkipWhitespace(@Buf[0], 64)), 'all 64 spaces');
 end;
 
+procedure TestSkipWhitespaceRejectsControlBytes;
+var
+  Buf: array[0..63] of AnsiChar;
+begin
+  FillChar(Buf, 64, Ord(' '));
+  Buf[20] := #0;
+  Buf[21] := 'x';
+  CheckEqual(Int64(20), Int64(ScanSkipWhitespace(@Buf[0], 64)), 'NUL is not whitespace');
+
+  FillChar(Buf, 64, Ord(' '));
+  Buf[24] := #1;
+  Buf[25] := 'x';
+  CheckEqual(Int64(24), Int64(ScanSkipWhitespace(@Buf[0], 64)), 'SOH is not whitespace');
+
+  FillChar(Buf, 64, Ord(' '));
+  Buf[28] := #11;
+  Buf[29] := 'x';
+  CheckEqual(Int64(28), Int64(ScanSkipWhitespace(@Buf[0], 64)), 'VT is not whitespace');
+end;
+
 procedure TestJsonNumber;
 begin
   CheckEqual(Int64(3), Int64(ScanJsonNumber(PAnsiChar('123abc'), 6)), 'integer');
@@ -69,6 +89,16 @@ begin
   CheckEqual(Int64(1), Int64(ScanJsonNumber(PAnsiChar('0,'), 2)), 'zero');
 end;
 
+procedure TestJsonNumberInvalidBoundaries;
+begin
+  CheckEqual(Int64(0), Int64(ScanJsonNumber(PAnsiChar('-'), 1)), 'bare minus is not a number');
+  CheckEqual(Int64(0), Int64(ScanJsonNumber(PAnsiChar('-x'), 2)), 'minus without digit is not a number');
+  CheckEqual(Int64(0), Int64(ScanJsonNumber(PAnsiChar('1.'), 2)), 'fraction requires digit');
+  CheckEqual(Int64(0), Int64(ScanJsonNumber(PAnsiChar('1.e2'), 4)), 'fraction rejects missing digit');
+  CheckEqual(Int64(0), Int64(ScanJsonNumber(PAnsiChar('1e+'), 3)), 'exponent requires digit');
+  CheckEqual(Int64(0), Int64(ScanJsonNumber(PAnsiChar('01'), 2)), 'leading zero rejects next digit');
+end;
+
 procedure TestMatchLiteral;
 begin
   Check(ScanMatchLiteral(PAnsiChar('true'), 4, PAnsiChar('true'), 4), 'true');
@@ -76,6 +106,20 @@ begin
   Check(ScanMatchLiteral(PAnsiChar('null'), 4, PAnsiChar('null'), 4), 'null');
   Check(not ScanMatchLiteral(PAnsiChar('tru'), 3, PAnsiChar('true'), 4), 'too short');
   Check(not ScanMatchLiteral(PAnsiChar('True'), 4, PAnsiChar('true'), 4), 'case sensitive');
+end;
+
+procedure TestMatchLiteralEmpty;
+var
+  V: TStringView;
+begin
+  Check(ScanMatchLiteral(nil, 0, nil, 0), 'empty literal matches empty span');
+  Check(ScanMatchLiteral(PAnsiChar('abc'), 3, PAnsiChar(''), 0),
+    'empty literal matches non-empty span');
+
+  V := TStringView.Create(PAnsiChar('abc'), 3);
+  Check(ViewMatchLiteral(V, PAnsiChar(''), 0), 'empty view literal matches');
+  CheckEqual(Int64(3), Int64(V.Len), 'empty view literal does not advance');
+  Check(V.Data[0] = 'a', 'empty view literal keeps data pointer');
 end;
 
 procedure TestViewSkipWhitespace;
@@ -114,6 +158,32 @@ begin
   CheckEqual(Int64(50), Int64(ScanFindByte2(@Buf[0], 64, Ord(':'), Ord(';'))), 'colon at 50');
 end;
 
+procedure TestFindSubstringCIFoldsNeedleCase;
+var
+  LHighBytes, LHighNeedle: array[0..1] of AnsiChar;
+begin
+  CheckEqual(Int64(1),
+    Int64(ScanFindSubstringCI(PAnsiChar('abcDEF'), 6, PAnsiChar('BCD'), 3)),
+    'uppercase needle should match lowercase haystack');
+  CheckEqual(Int64(1),
+    Int64(ScanFindSubstringCI(PAnsiChar('ABCDEF'), 6, PAnsiChar('bCd'), 3)),
+    'mixed-case needle should match uppercase haystack');
+  CheckEqual(Int64(0),
+    Int64(ScanFindSubstringCI(PAnsiChar('A'), 1, PAnsiChar('a'), 1)),
+    'one-character ASCII needle should fold');
+  CheckEqual(Int64(-1),
+    Int64(ScanFindSubstringCI(PAnsiChar('['), 1, PAnsiChar('{'), 1)),
+    'punctuation bytes should not fold');
+
+  LHighBytes[0] := AnsiChar(Chr($C0));
+  LHighBytes[1] := AnsiChar(Chr($00));
+  LHighNeedle[0] := AnsiChar(Chr($E0));
+  LHighNeedle[1] := AnsiChar(Chr($00));
+  CheckEqual(Int64(-1),
+    Int64(ScanFindSubstringCI(@LHighBytes[0], 1, @LHighNeedle[0], 1)),
+    'high bytes should not fold');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.text.scan');
   T.Run('FindByte', @TestFindByte);
@@ -123,10 +193,14 @@ begin
   T.Run('FindNotInRange', @TestFindNotInRange);
   T.Run('SkipWhitespace', @TestSkipWhitespace);
   T.Run('SkipWhitespace long', @TestSkipWhitespaceLong);
+  T.Run('SkipWhitespace rejects control bytes', @TestSkipWhitespaceRejectsControlBytes);
   T.Run('JsonNumber', @TestJsonNumber);
+  T.Run('JsonNumber invalid boundaries', @TestJsonNumberInvalidBoundaries);
   T.Run('MatchLiteral', @TestMatchLiteral);
+  T.Run('MatchLiteral empty', @TestMatchLiteralEmpty);
   T.Run('ViewSkipWhitespace', @TestViewSkipWhitespace);
   T.Run('ViewMatchLiteral', @TestViewMatchLiteral);
   T.Run('FindByte2 long', @TestFindByte2Long);
+  T.Run('FindSubstringCI folds needle case', @TestFindSubstringCIFoldsNeedleCase);
   T.Summary;
 end.

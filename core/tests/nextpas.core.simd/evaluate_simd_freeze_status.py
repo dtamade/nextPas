@@ -1961,18 +1961,16 @@ def main() -> int:
                 preferred_actions.append(WINDOWS_TOOLCHAIN_ACTION)
             preferred_actions.extend(
                 [
-                    "bash tests/nextpas.core.simd/BuildOrTest.sh win-evidence-preflight",
                     f"bash tests/nextpas.core.simd/BuildOrTest.sh win-closeout-3cmd {default_batch_id}",
                 ]
             )
             blocked_actions = {
+                f"bash tests/nextpas.core.simd/BuildOrTest.sh win-closeout-finalize {default_batch_id}",
+                "bash tests/nextpas.core.simd/BuildOrTest.sh win-evidence-preflight",
                 (
                     "FAFAFA_BUILD_MODE=Release "
                     f"bash tests/nextpas.core.simd/BuildOrTest.sh win-evidence-via-gh {default_batch_id}"
                 ),
-                "tests\\nextpas.core.simd\\buildOrTest.bat evidence-win-verify",
-                CROSS_GATE_FAIL_CLOSE_CMD,
-                f"bash tests/nextpas.core.simd/BuildOrTest.sh win-closeout-finalize {default_batch_id}",
             }
             next_actions = [action for action in next_actions if action not in blocked_actions]
         else:
@@ -1981,17 +1979,20 @@ def main() -> int:
                 preferred_actions.append(WINDOWS_TOOLCHAIN_ACTION)
             preferred_actions.extend(
                 [
-                    "bash tests/nextpas.core.simd/BuildOrTest.sh win-evidence-preflight",
-                    (
-                        "FAFAFA_BUILD_MODE=Release "
-                        f"bash tests/nextpas.core.simd/BuildOrTest.sh win-evidence-via-gh {default_batch_id}"
-                    ),
                     "tests\\nextpas.core.simd\\buildOrTest.bat evidence-win-verify",
                     CROSS_GATE_FAIL_CLOSE_CMD,
-                    f"bash tests/nextpas.core.simd/BuildOrTest.sh win-closeout-finalize {default_batch_id}",
                     f"bash tests/nextpas.core.simd/BuildOrTest.sh win-closeout-3cmd {default_batch_id}",
                 ]
             )
+            blocked_actions = {
+                "bash tests/nextpas.core.simd/BuildOrTest.sh win-evidence-preflight",
+                (
+                    "FAFAFA_BUILD_MODE=Release "
+                    f"bash tests/nextpas.core.simd/BuildOrTest.sh win-evidence-via-gh {default_batch_id}"
+                ),
+                f"bash tests/nextpas.core.simd/BuildOrTest.sh win-closeout-finalize {default_batch_id}",
+            }
+            next_actions = [action for action in next_actions if action not in blocked_actions]
         next_actions = preferred_actions + next_actions
         next_actions = [
             action

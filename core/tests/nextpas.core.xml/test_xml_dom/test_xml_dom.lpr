@@ -7,6 +7,7 @@ program test_xml_dom;
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.mem.default,
   nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.xml.base,
@@ -14,6 +15,27 @@ uses
 
 var
   T: TTestRunner;
+
+function NodeFindChildren(const ANode: TXmlNode; const AName: string): TXmlNodeArray;
+var
+  LI: Integer;
+  LChild: TXmlNode;
+  LCount: Integer;
+begin
+  Result := nil;
+  SetLength(Result, ANode.ChildCount);
+  LCount := 0;
+  for LI := 0 to ANode.ChildCount - 1 do
+  begin
+    LChild := ANode.Child(LI);
+    if (LChild.Kind = xnkElement) and (LChild.Name.Local = AName) then
+    begin
+      Result[LCount] := LChild;
+      Inc(LCount);
+    end;
+  end;
+  SetLength(Result, LCount);
+end;
 
 { === Tests === }
 
@@ -23,11 +45,27 @@ var
 begin
   LDoc := TXmlDocument.Parse('<root>hello</root>');
   try
-    Check(LDoc.Root <> nil, 'root not nil');
+    Check(LDoc.Root.IsAssigned, 'root not nil');
     CheckEqual('root', LDoc.Root.Name.Local, 'root name');
     CheckEqual('hello', LDoc.Root.Text, 'root text');
   finally
     LDoc.Free;
+  end;
+end;
+
+procedure TestParseWithAllocator;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.ParseWith('<root><name>demo</name></root>',
+    DefaultAllocator);
+  try
+    Check(LDoc.Allocator <> nil, 'allocator accessor visible');
+    Check(LDoc.Root.IsAssigned, 'root assigned');
+    CheckEqual('demo', LDoc.Root.FindChild('name').Text,
+      'ParseWith preserves DOM helpers');
+  finally
+    LDoc.Done;
   end;
 end;
 
@@ -38,11 +76,11 @@ var
 begin
   LDoc := TXmlDocument.Parse('<a><b>inner</b></a>');
   try
-    Check(LDoc.Root <> nil, 'root');
+    Check(LDoc.Root.IsAssigned, 'root');
     CheckEqual('a', LDoc.Root.Name.Local, 'root name');
     CheckEqual(Int64(1), Int64(LDoc.Root.ChildCount), 'child count');
     LChild := LDoc.Root.FindChild('b');
-    Check(LChild <> nil, 'find b');
+    Check(LChild.IsAssigned, 'find b');
     CheckEqual('inner', LChild.Text, 'b text');
   finally
     LDoc.Free;
@@ -63,6 +101,146 @@ begin
   end;
 end;
 
+procedure TestParseRejectsDuplicateAttributes;
+var
+  LDoc: TXmlDocument;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  LDoc := TXmlDocument.None;
+  try
+    try
+      LDoc := TXmlDocument.Parse('<r a="1" a="2"/>');
+    except
+      on E: EXmlError do
+      begin
+        LRaised := True;
+        Check(Pos('attribute "a" must not appear more than once',
+          E.Message) > 0, 'duplicate attribute error text');
+        CheckEqual(Int64(1), Int64(E.Pos.Line),
+          'duplicate attribute error line');
+        Check(E.Pos.Column > 1, 'duplicate attribute error column');
+      end;
+    end;
+    Check(LRaised, 'DOM parse rejects duplicate attributes');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestParseRejectsDuplicateExpandedAttributes;
+var
+  LDoc: TXmlDocument;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  LDoc := TXmlDocument.None;
+  try
+    try
+      LDoc := TXmlDocument.Parse(
+        '<r xmlns:p="urn:x" xmlns:q="urn:x" p:a="1" q:a="2"/>');
+    except
+      on E: EXmlError do
+      begin
+        LRaised := True;
+        Check(Pos('must not appear more than once', E.Message) > 0,
+          'duplicate expanded attribute error text');
+        CheckEqual(Int64(1), Int64(E.Pos.Line),
+          'duplicate expanded attribute error line');
+        Check(E.Pos.Column > 1, 'duplicate expanded attribute error column');
+      end;
+    end;
+    Check(LRaised, 'DOM parse rejects duplicate expanded attributes');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestParseAllowsDistinctExpandedAttributes;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse(
+    '<r p:a="1" q:a="2" xmlns:p="urn:p" xmlns:q="urn:q"/>');
+  try
+    Check(LDoc.Root.IsAssigned,
+      'DOM parse allows same local attributes in distinct namespaces');
+  finally
+    LDoc.Free;
+  end;
+
+  LDoc := TXmlDocument.Parse(
+    '<r a="1" p:a="2" xmlns="urn:x" xmlns:p="urn:x"/>');
+  try
+    Check(LDoc.Root.IsAssigned,
+      'DOM parse allows default namespace plus prefixed same local attr');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestParseRejectsUnboundNamespacePrefix;
+var
+  LDoc: TXmlDocument;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  LDoc := TXmlDocument.None;
+  try
+    try
+      LDoc := TXmlDocument.Parse('<root bad:attr="x"/>');
+    except
+      on E: EXmlError do
+      begin
+        LRaised := True;
+        Check(Pos('namespace prefix "bad" is not bound', E.Message) > 0,
+          'unbound namespace error text');
+        CheckEqual(Int64(1), Int64(E.Pos.Line),
+          'unbound namespace error line');
+        Check(E.Pos.Column > 1, 'unbound namespace error column');
+      end;
+    end;
+    Check(LRaised, 'DOM parse rejects unbound namespace prefix');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestParseRejectsRawLessThanInAttributeValue;
+var
+  LDoc: TXmlDocument;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  LDoc := TXmlDocument.None;
+  try
+    try
+      LDoc := TXmlDocument.Parse('<root attr="raw<bad"/>');
+    except
+      on E: EXmlError do
+      begin
+        LRaised := True;
+        Check(Pos('attribute value must not contain raw <', E.Message) > 0,
+          'raw less-than attribute error text');
+        CheckEqual(Int64(1), Int64(E.Pos.Line),
+          'raw less-than attribute error line');
+        Check(E.Pos.Column > 1, 'raw less-than attribute error column');
+      end;
+    end;
+    Check(LRaised, 'DOM parse rejects raw less-than in attribute value');
+  finally
+    LDoc.Free;
+  end;
+
+  LDoc := TXmlDocument.Parse('<root attr="safe&lt;value"/>');
+  try
+    CheckEqual('safe<value', LDoc.Root.GetAttr('attr'),
+      'DOM parse keeps escaped less-than attribute valid');
+  finally
+    LDoc.Free;
+  end;
+end;
+
 procedure TestFindChild;
 var
   LDoc: TXmlDocument;
@@ -71,10 +249,10 @@ begin
   LDoc := TXmlDocument.Parse('<r><a>1</a><b>2</b><c>3</c></r>');
   try
     LChild := LDoc.Root.FindChild('b');
-    Check(LChild <> nil, 'find b');
+    Check(LChild.IsAssigned, 'find b');
     CheckEqual('2', LChild.Text, 'b text');
     LChild := LDoc.Root.FindChild('missing');
-    Check(LChild = nil, 'missing is nil');
+    Check(not LChild.IsAssigned, 'missing is nil');
   finally
     LDoc.Free;
   end;
@@ -87,7 +265,7 @@ var
 begin
   LDoc := TXmlDocument.Parse('<r><item>a</item><other/><item>b</item><item>c</item></r>');
   try
-    LItems := LDoc.Root.FindChildren('item');
+    LItems := NodeFindChildren(LDoc.Root, 'item');
     CheckEqual(Int64(3), Int64(Length(LItems)), 'item count');
     CheckEqual('a', LItems[0].Text, 'item 0');
     CheckEqual('b', LItems[1].Text, 'item 1');
@@ -186,10 +364,167 @@ var
 begin
   LDoc := TXmlDocument.Parse('');
   try
-    Check(LDoc.Root = nil, 'empty doc root nil');
+    Check(not LDoc.Root.IsAssigned, 'empty doc root nil');
   finally
     LDoc.Free;
   end;
+end;
+
+procedure TestDocumentWhitespace;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse('  ' + #10 + '<root/>' + #10 + '  ');
+  try
+    Check(LDoc.Root.IsAssigned, 'root present with surrounding whitespace');
+    CheckEqual('root', LDoc.Root.Name.Local, 'root name with surrounding whitespace');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestPreRootDoctype;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse('<?xml version="1.0"?><!--pre--><!DOCTYPE root><root/><?tail data?>');
+  try
+    Check(LDoc.Root.IsAssigned, 'root present with pre-root doctype');
+    CheckEqual('root', LDoc.Root.Name.Local, 'root name with pre-root doctype');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestInvalidDocumentText;
+  procedure ExpectParseError(const AXml, AExpectedFragment, ALabel: string);
+  var
+    LRaised: Boolean;
+    LDoc: TXmlDocument;
+  begin
+    LRaised := False;
+    LDoc := TXmlDocument.None;
+    try
+      try
+        LDoc := TXmlDocument.Parse(AXml);
+      except
+        on E: EXmlError do
+        begin
+          LRaised := True;
+          Check(Pos(AExpectedFragment, E.Message) > 0,
+            ALabel + ' reports the expected error text');
+          CheckEqual(Int64(1), Int64(E.Pos.Line), ALabel + ' error line');
+          Check(E.Pos.Column > 0, ALabel + ' error column recorded');
+        end;
+      end;
+      Check(LRaised, ALabel + ' raises EXmlError');
+    finally
+      LDoc.Free;
+    end;
+  end;
+begin
+  ExpectParseError(
+    'hello<root/>',
+    'Document text outside root element must be whitespace only',
+    'leading document text');
+  ExpectParseError(
+    '<root/>tail',
+    'Document text outside root element must be whitespace only',
+    'trailing document text');
+  ExpectParseError(
+    '<![CDATA[text]]><root/>',
+    'Document text outside root element must be whitespace only',
+    'leading document cdata');
+  ExpectParseError(
+    '<a/><b/>',
+    'Multiple root elements',
+    'multiple root elements');
+end;
+
+procedure TestMisplacedDoctype;
+  procedure ExpectParseError(const AXml, AExpectedFragment, ALabel: string);
+  var
+    LRaised: Boolean;
+    LDoc: TXmlDocument;
+  begin
+    LRaised := False;
+    LDoc := TXmlDocument.None;
+    try
+      try
+        LDoc := TXmlDocument.Parse(AXml);
+      except
+        on E: EXmlError do
+        begin
+          LRaised := True;
+          Check(Pos(AExpectedFragment, E.Message) > 0,
+            ALabel + ' reports the expected error text');
+          CheckEqual(Int64(1), Int64(E.Pos.Line), ALabel + ' error line');
+          Check(E.Pos.Column > 0, ALabel + ' error column recorded');
+        end;
+      end;
+      Check(LRaised, ALabel + ' raises EXmlError');
+    finally
+      LDoc.Free;
+    end;
+  end;
+begin
+  ExpectParseError(
+    '<!DOCTYPE root><!DOCTYPE root><root/>',
+    'DOCTYPE must not appear more than once',
+    'duplicate doctype');
+  ExpectParseError(
+    '<root/><!DOCTYPE root>',
+    'DOCTYPE must appear before the root element',
+    'post-root doctype');
+  ExpectParseError(
+    '<root><!DOCTYPE root></root>',
+    'DOCTYPE must appear before the root element',
+    'in-content doctype');
+end;
+
+procedure TestMissingRootElement;
+  procedure ExpectParseError(const AXml, AExpectedFragment, ALabel: string);
+  var
+    LRaised: Boolean;
+    LDoc: TXmlDocument;
+  begin
+    LRaised := False;
+    LDoc := TXmlDocument.None;
+    try
+      try
+        LDoc := TXmlDocument.Parse(AXml);
+      except
+        on E: EXmlError do
+        begin
+          LRaised := True;
+          Check(Pos(AExpectedFragment, E.Message) > 0,
+            ALabel + ' reports the expected error text');
+          CheckEqual(Int64(1), Int64(E.Pos.Line), ALabel + ' error line');
+          Check(E.Pos.Column > 0, ALabel + ' error column recorded');
+        end;
+      end;
+      Check(LRaised, ALabel + ' raises EXmlError');
+    finally
+      LDoc.Free;
+    end;
+  end;
+begin
+  ExpectParseError(
+    '<?xml version="1.0"?>',
+    'Document must contain a root element',
+    'xml declaration only');
+  ExpectParseError(
+    '<!--comment-->',
+    'Document must contain a root element',
+    'comment only');
+  ExpectParseError(
+    '<?target data?>',
+    'Document must contain a root element',
+    'processing instruction only');
+  ExpectParseError(
+    '<!DOCTYPE root>',
+    'Document must contain a root element',
+    'doctype only');
 end;
 
 procedure TestSelfClosingElement;
@@ -201,7 +536,7 @@ begin
   try
     CheckEqual(Int64(2), Int64(LDoc.Root.ChildCount), 'child count');
     LChild := LDoc.Root.FindChild('br');
-    Check(LChild <> nil, 'br found');
+    Check(LChild.IsAssigned, 'br found');
     CheckEqual(Int64(0), Int64(LChild.ChildCount), 'br no children');
   finally
     LDoc.Free;
@@ -218,15 +553,50 @@ begin
   try
     LFound := False;
     for LI := 0 to LDoc.Root.ChildCount - 1 do
-      if LDoc.Root.Children[LI].Kind = xnkComment then
+      if LDoc.Root.Child(LI).Kind = xnkComment then
       begin
-        CheckEqual(' hello ', LDoc.Root.Children[LI].Value, 'comment value');
+        CheckEqual(' hello ', LDoc.Root.Child(LI).Value, 'comment value');
         LFound := True;
       end;
     Check(LFound, 'comment found');
   finally
     LDoc.Free;
   end;
+end;
+
+procedure TestRejectsInvalidCommentPayload;
+  procedure ExpectParseError(const AXml, AExpectedFragment, ALabel: string);
+  var
+    LRaised: Boolean;
+    LDoc: TXmlDocument;
+  begin
+    LRaised := False;
+    LDoc := TXmlDocument.None;
+    try
+      try
+        LDoc := TXmlDocument.Parse(AXml);
+      except
+        on E: EXmlError do
+        begin
+          LRaised := True;
+          Check(Pos(AExpectedFragment, E.Message) > 0,
+            ALabel + ' reports comment payload error');
+          Check(E.Pos.Line > 0, ALabel + ' error line recorded');
+          Check(E.Pos.Column > 0, ALabel + ' error column recorded');
+        end;
+      end;
+      Check(LRaised, ALabel + ' raises EXmlError');
+    finally
+      LDoc.Free;
+    end;
+  end;
+begin
+  ExpectParseError('<root><!--alpha--omega--></root>',
+    'comment text must not contain "--"',
+    'comment with double hyphen payload');
+  ExpectParseError('<root><!--alpha---></root>',
+    'comment text must not end with "-"',
+    'comment with trailing hyphen payload');
 end;
 
 procedure TestCDataNode;
@@ -239,9 +609,9 @@ begin
   try
     LFound := False;
     for LI := 0 to LDoc.Root.ChildCount - 1 do
-      if LDoc.Root.Children[LI].Kind = xnkCData then
+      if LDoc.Root.Child(LI).Kind = xnkCData then
       begin
-        CheckEqual('raw<>&data', LDoc.Root.Children[LI].Value, 'cdata value');
+        CheckEqual('raw<>&data', LDoc.Root.Child(LI).Value, 'cdata value');
         LFound := True;
       end;
     Check(LFound, 'cdata found');
@@ -260,10 +630,10 @@ begin
   try
     LFound := False;
     for LI := 0 to LDoc.ChildCount - 1 do
-      if LDoc.Children[LI].Kind = xnkPI then
+      if LDoc.Child(LI).Kind = xnkPI then
       begin
-        CheckEqual('target', LDoc.Children[LI].Name.Local, 'pi target');
-        CheckEqual('data', LDoc.Children[LI].Value, 'pi data');
+        CheckEqual('target', LDoc.Child(LI).Name.Local, 'pi target');
+        CheckEqual('data', LDoc.Child(LI).Value, 'pi data');
         LFound := True;
       end;
     Check(LFound, 'pi found');
@@ -299,14 +669,14 @@ begin
     LXml := LXml + '</d' + IntToStr(LI) + '>';
   LDoc := TXmlDocument.Parse(LXml);
   try
-    Check(LDoc.Root <> nil, 'root');
+    Check(LDoc.Root.IsAssigned, 'root');
     CheckEqual('d1', LDoc.Root.Name.Local, 'root name');
     { Navigate to deepest }
     LNode := LDoc.Root;
     for LI := 2 to 20 do
     begin
       LNode := LNode.FindChild('d' + IntToStr(LI));
-      Check(LNode <> nil, 'd' + IntToStr(LI) + ' found');
+      Check(LNode.IsAssigned, 'd' + IntToStr(LI) + ' found');
     end;
     CheckEqual('deep', LNode.Text, 'deep text');
   finally
@@ -327,7 +697,7 @@ begin
   LXml := LXml + '</root>';
   LDoc := TXmlDocument.Parse(LXml);
   try
-    LItems := LDoc.Root.FindChildren('item');
+    LItems := NodeFindChildren(LDoc.Root, 'item');
     CheckEqual(Int64(200), Int64(Length(LItems)), 'item count');
     CheckEqual('1', LItems[0].GetAttr('id'), 'first id');
     CheckEqual('val1', LItems[0].Text, 'first text');
@@ -346,9 +716,11 @@ begin
   LDoc := TXmlDocument.Parse('<a><b>x</b></a>');
   try
     LChild := LDoc.Root.FindChild('b');
-    Check(LChild <> nil, 'b found');
-    Check(LChild.Parent = LDoc.Root, 'parent is root');
-    Check(LDoc.Root.Parent = LDoc, 'root parent is doc');
+    Check(LChild.IsAssigned, 'b found');
+    Check(LChild.Parent.IsAssigned, 'parent assigned');
+    CheckEqual('a', LChild.Parent.Name.Local, 'parent is root');
+    Check(LDoc.Root.Parent.IsAssigned, 'root parent assigned');
+    Check(LDoc.Root.Parent.Kind = xnkDocument, 'root parent is doc');
   finally
     LDoc.Free;
   end;
@@ -375,9 +747,9 @@ begin
   try
     { p has: text("Hello "), element(b), text(" end") }
     CheckEqual(Int64(3), Int64(LDoc.Root.ChildCount), 'child count');
-    Check(LDoc.Root.Children[0].Kind = xnkText, 'text node');
-    Check(LDoc.Root.Children[1].Kind = xnkElement, 'element node');
-    Check(LDoc.Root.Children[2].Kind = xnkText, 'text node 2');
+    Check(LDoc.Root.Child(0).Kind = xnkText, 'text node');
+    Check(LDoc.Root.Child(1).Kind = xnkElement, 'element node');
+    Check(LDoc.Root.Child(2).Kind = xnkText, 'text node 2');
   finally
     LDoc.Free;
   end;
@@ -417,7 +789,7 @@ var
 begin
   LDoc := TXmlDocument.Parse('<empty/>');
   try
-    Check(LDoc.Root <> nil, 'root not nil');
+    Check(LDoc.Root.IsAssigned, 'root not nil');
     CheckEqual('empty', LDoc.Root.Name.Local, 'root name');
     CheckEqual(Int64(0), Int64(LDoc.Root.ChildCount), 'no children');
     CheckEqual('', LDoc.Root.Text, 'empty text');
@@ -502,8 +874,18 @@ end;
 begin
   T := TTestRunner.Create('XML DOM');
   T.Run('ParseSimple', @TestParseSimple);
+  T.Run('ParseWithAllocator', @TestParseWithAllocator);
   T.Run('ParseNested', @TestParseNested);
   T.Run('ParseAttributes', @TestParseAttributes);
+  T.Run('ParseRejectsDuplicateAttributes', @TestParseRejectsDuplicateAttributes);
+  T.Run('ParseRejectsDuplicateExpandedAttributes',
+    @TestParseRejectsDuplicateExpandedAttributes);
+  T.Run('ParseAllowsDistinctExpandedAttributes',
+    @TestParseAllowsDistinctExpandedAttributes);
+  T.Run('ParseRejectsUnboundNamespacePrefix',
+    @TestParseRejectsUnboundNamespacePrefix);
+  T.Run('ParseRejectsRawLessThanInAttributeValue',
+    @TestParseRejectsRawLessThanInAttributeValue);
   T.Run('FindChild', @TestFindChild);
   T.Run('FindChildren', @TestFindChildren);
   T.Run('TextConcat', @TestTextConcat);
@@ -513,8 +895,14 @@ begin
   T.Run('SelectPathNoMatch', @TestSelectPathNoMatch);
   T.Run('SelectPathRootMismatch', @TestSelectPathRootMismatch);
   T.Run('EmptyDocument', @TestEmptyDocument);
+  T.Run('DocumentWhitespace', @TestDocumentWhitespace);
+  T.Run('PreRootDoctype', @TestPreRootDoctype);
+  T.Run('InvalidDocumentText', @TestInvalidDocumentText);
+  T.Run('MisplacedDoctype', @TestMisplacedDoctype);
+  T.Run('MissingRootElement', @TestMissingRootElement);
   T.Run('SelfClosingElement', @TestSelfClosingElement);
   T.Run('CommentNode', @TestCommentNode);
+  T.Run('RejectsInvalidCommentPayload', @TestRejectsInvalidCommentPayload);
   T.Run('CDataNode', @TestCDataNode);
   T.Run('PINode', @TestPINode);
   T.Run('NamespacedAttributes', @TestNamespacedAttributes);

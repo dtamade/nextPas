@@ -11,6 +11,11 @@ type
     procedure Render(AApp: TApp; var AFrame: TFrame);
   end;
 
+  TFullFacadeScreen = class(TScreen)
+  public
+    procedure Render(const AArea: TRect; ABuffer: TBuffer); override;
+  end;
+
 var
   T: TTestRunner;
 
@@ -18,6 +23,11 @@ procedure TFullFacadeRenderHost.Render(AApp: TApp; var AFrame: TFrame);
 begin
   AFrame.Buffer.SetString(0, 0, 'x', StyleDefault);
   AApp.RequestAnimationFrame;
+end;
+
+procedure TFullFacadeScreen.Render(const AArea: TRect; ABuffer: TBuffer);
+begin
+  ABuffer.SetString(AArea.X, AArea.Y, 'screen', StyleDefault);
 end;
 
 procedure TestCoreFacadeTypes;
@@ -205,6 +215,8 @@ end;
 procedure TestFullFacadeCoversExtAndExperimentalSurface;
 var
   LCompatApp: TTuiApp;
+  LCompatScreen: TTuiScreen;
+  LCompatStack: TTuiScreenStack;
   LCompatTheme: TTheme;
   LCompatChatTheme: TChatTheme;
   LCompatPanel: IPanel;
@@ -219,7 +231,12 @@ var
   LCompatClipboardMethod: TClipboardMethod;
 begin
   LCompatApp := TTuiApp.Create;
+  LCompatStack := TTuiScreenStack.Create;
   try
+    LCompatScreen := TFullFacadeScreen.Create;
+    LCompatStack.Push(LCompatScreen);
+    Check(LCompatStack.Top = LCompatScreen, 'full facade exposes app-first screen aliases');
+
     LCompatTheme := TTheme.Dark;
     LCompatChatTheme := ThemeDefaultDark;
     LCompatEdges := PanelEdgesOuter + PanelEdgesInner;
@@ -236,6 +253,7 @@ begin
 
     Check(LCompatApp <> nil, 'full facade exposes TTuiApp compatibility alias');
     Check(SizeOf(TTuiFrame) > 0, 'full facade exposes TTuiFrame compatibility alias');
+    Check(SizeOf(TScreenStack) > 0, 'full facade exposes TScreenStack alias');
     Check(ColorIsSet(LCompatTheme.Primary.Fg), 'full facade exposes stable TTheme record');
     Check(ColorIsSet(LCompatChatTheme.FgPrimary), 'full facade exposes stable chat theme preset');
     Check(LCompatEdge = peInnerV, 'full facade exposes panel edge constants');
@@ -251,7 +269,39 @@ begin
     LCompatProtocol := DetectImageProtocol;
     Check(Ord(LCompatProtocol) >= Ord(ipAuto), 'full facade exposes experimental image helper');
   finally
+    LCompatStack.Free;
     LCompatApp.Free;
+  end;
+end;
+
+procedure TestFullFacadeCoversAppTaskRuntimeSurface;
+var
+  LApp: TApp;
+  LTaskId: TTaskId;
+  LTaskStatus: TTaskStatus;
+  LTaskResult: TTaskResult;
+  LCompletion: TCompletionSlot;
+  LLoading: TLoadingGroup;
+begin
+  LApp := TApp.Create;
+  try
+    LTaskId := 1;
+    LTaskStatus := tsRunning;
+    LTaskResult := Default(TTaskResult);
+    LTaskResult.Status := tsCompleted;
+    LCompletion.Id := LTaskId;
+    LCompletion.Result := LTaskResult;
+    LLoading := TLoadingGroup.Empty;
+    LLoading.Start(0, LCompletion.Id, 100);
+    LLoading.Update([LCompletion], 1);
+
+    Check(LApp.Tasks <> nil, 'full facade exposes app task manager slot');
+    CheckEqual(Int64(Ord(tsRunning)), Int64(Ord(LTaskStatus)),
+      'full facade exposes task status constants');
+    CheckEqual(Int64(Ord(lpSuccess)), Int64(Ord(LLoading.GetPhase(0))),
+      'full facade exposes loading group contract');
+  finally
+    LApp.Free;
   end;
 end;
 
@@ -337,6 +387,31 @@ begin
   end;
 end;
 
+procedure TestFullFacadeExposesTuiExceptions;
+var
+  LBackend: ETuiBackend;
+  LTui: ETui;
+  LCaught: Boolean;
+begin
+  LBackend := ETuiBackend.Create('full facade backend');
+  try
+    LTui := LBackend;
+    Check(LTui is ETuiBackend,
+      'full facade exposes ETuiBackend as an ETui subtype');
+  finally
+    LBackend.Free;
+  end;
+
+  LCaught := False;
+  try
+    raise ETuiBackend.Create('full facade catch');
+  except
+    on E: ETui do
+      LCaught := E is ETuiBackend;
+  end;
+  Check(LCaught, 'full facade lets app code catch backend failures as ETui');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.tui.facade');
   T.Run('core facade types', @TestCoreFacadeTypes);
@@ -344,8 +419,10 @@ begin
   T.Run('facade constants and helpers', @TestFacadeConstantsAndHelpers);
   T.Run('compatibility aliases remain', @TestCompatibilityAliasesRemain);
   T.Run('full facade covers ext and experimental contract', @TestFullFacadeCoversExtAndExperimentalSurface);
+  T.Run('full facade covers app task runtime surface', @TestFullFacadeCoversAppTaskRuntimeSurface);
   T.Run('full facade advanced widget catalog remains usable', @TestFullFacadeAdvancedWidgetCatalogRemainsUsable);
   T.Run('full facade app callback wiring compiles', @TestReadmeQuickStartCompiles);
+  T.Run('full facade exposes tui exceptions', @TestFullFacadeExposesTuiExceptions);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

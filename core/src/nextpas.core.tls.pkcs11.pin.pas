@@ -19,7 +19,8 @@ unit nextpas.core.tls.pkcs11.pin;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
   nextpas.core.tls.pkcs11.types;
 
 type
@@ -76,8 +77,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.tls.pkcs11.api;
+uses nextpas.core.tls.pkcs11.api;
 
 { TPKCS11PINManager }
 

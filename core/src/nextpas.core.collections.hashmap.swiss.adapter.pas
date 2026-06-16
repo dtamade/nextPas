@@ -5,9 +5,9 @@ unit nextpas.core.collections.hashmap.swiss.adapter;
 interface
 
 uses
-  TypInfo,
+  nextpas.core.system.typinfo,
   nextpas.core.base,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
   nextpas.core.collections.hashmap.base,
@@ -221,6 +221,7 @@ end;
 
 procedure TSwissHashMap.Clear;
 begin
+  FIterEntry := Default(TEntry);
   FInner.Clear;
 end;
 

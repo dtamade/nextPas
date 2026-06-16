@@ -19,11 +19,7 @@ unit nextpas.core.tls.connection.base;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.time,
-  nextpas.core.tls.base,
-  nextpas.core.tls.exceptions;
+uses nextpas.core.text.conv, nextpas.core.time, nextpas.core.tls.base, nextpas.core.tls.exceptions;
 
 const
   { 字符串缓冲区大小 }
@@ -332,8 +328,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.tls.tls13.wire;
+uses nextpas.core.tls.tls13.wire;
 
 function ContextTypeSupportsClientConnectionRole(
   AContextType: TSSLContextType): Boolean; inline;

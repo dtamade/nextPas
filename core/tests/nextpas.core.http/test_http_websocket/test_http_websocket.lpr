@@ -4,6 +4,7 @@ program test_http_websocket;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
+  SysUtils,
   nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.text.conv,
@@ -18,15 +19,34 @@ uses
   nextpas.core.http.headers,
   nextpas.core.http.router,
   nextpas.core.http.server,
-  nextpas.core.hash,
-  nextpas.core.hash.base,
-  nextpas.core.encoding,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.platform.thread;
 
 var
   T: TTestRunner;
+
+function ReadTextFile(const APath: string): string;
+var
+  F: file;
+  LSize: Int64;
+begin
+  AssignFile(F, APath);
+  Reset(F, 1);
+  try
+    LSize := FileSize(F);
+    SetLength(Result, LSize);
+    if LSize > 0 then
+      BlockRead(F, Result[1], Int32(LSize));
+  finally
+    CloseFile(F);
+  end;
+end;
+
+function SourceHas(const ASource, AText: string): Boolean;
+begin
+  Result := Pos(AText, ASource) > 0;
+end;
 
 type
   PServerCtx = ^TServerCtx;
@@ -285,19 +305,6 @@ begin
   Result[14] := Chr($78);
 end;
 
-function ComputeExpectedAccept(const AKey: string): string;
-var
-  LConcat: string;
-  LDigest: TSHA1Digest;
-  LBytes: TBytes;
-begin
-  LConcat := AKey + '258EAFA5-E914-47DA-95CA-5AB53DC85B11';
-  LDigest := SHA1Of(LConcat[1], SizeUInt(Length(LConcat)));
-  SetLength(LBytes, SHA1_DIGEST_SIZE);
-  Move(LDigest[0], LBytes[0], SHA1_DIGEST_SIZE);
-  Result := Base64Encode(LBytes);
-end;
-
 function SendRawAndRead(const APort: UInt16; const ARequest: string; AReadLen: Integer): string;
 var
   LConn: ITcpStream;
@@ -334,7 +341,7 @@ var
   LPort: UInt16;
   LHandle: TPlatformThreadHandle;
   LResp: string;
-  LKey, LExpectedAccept: string;
+  LKey: string;
 begin
   LRouter := THttpRouter.Create;
   LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
@@ -355,7 +362,6 @@ begin
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
   try
     LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
-    LExpectedAccept := ComputeExpectedAccept(LKey);
     LResp := SendRawAndRead(LPort,
       'GET /ws HTTP/1.1'#13#10 +
       'Host: localhost'#13#10 +
@@ -365,10 +371,26 @@ begin
       'Sec-WebSocket-Version: 13'#13#10 +
       #13#10, 256);
     Check(Pos('HTTP/1.1 101', LResp) > 0, 'should get 101 status');
-    Check(Pos('Sec-WebSocket-Accept: ' + LExpectedAccept, LResp) > 0, 'should have correct accept key');
+    Check(Pos('Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=', LResp) > 0,
+      'should have RFC 6455 accept key');
   finally
     StopServer(LServer, LHandle);
   end;
+end;
+
+procedure TestWebSocketAcceptGuidSourceContract;
+var
+  LBaseSource: string;
+  LHttpSource: string;
+begin
+  LBaseSource := ReadTextFile('../../../src/nextpas.core.websocket.base.pas');
+  LHttpSource := ReadTextFile('../../../src/nextpas.core.http.websocket.pas');
+  Check(not SourceHas(LBaseSource, '5AB0F964E80E'),
+    'standalone WebSocket base must not use old wrong GUID suffix');
+  Check(not SourceHas(LHttpSource, '5AB53DC85B11'),
+    'HTTP WebSocket helper must not use old wrong GUID suffix');
+  Check(SourceHas(LBaseSource, '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'),
+    'standalone WebSocket base uses RFC 6455 GUID');
 end;
 
 { Test 2: Handshake fails without Upgrade header }
@@ -440,6 +462,146 @@ begin
       'Sec-WebSocket-Version: 13'#13#10 +
       #13#10, 256);
     Check(Pos('HTTP/1.1 400', LResp) > 0, 'should get 400 without Key');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 3b: Handshake fails when Sec-WebSocket-Key is malformed }
+procedure TestHandshakeInvalidKeyRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+
+  procedure AssertRejected(const ACaseName, AKey: string);
+  begin
+    LResp := SendRawAndRead(LPort,
+      'GET /ws HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Upgrade: websocket'#13#10 +
+      'Connection: Upgrade'#13#10 +
+      'Sec-WebSocket-Key: ' + AKey + #13#10 +
+      'Sec-WebSocket-Version: 13'#13#10 +
+      #13#10, 256);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      ACaseName + ': should get 400 for invalid Key');
+    Check(Pos('HTTP/1.1 101', LResp) = 0,
+      ACaseName + ': should not upgrade invalid Key');
+  end;
+
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LWs: IWebSocket;
+  begin
+    try
+      LWs := UpgradeWebSocket(AReq, AW);
+      LWs.Close(1000, 'invalid key accepted');
+    except
+      on E: EHttpError do
+      begin
+        AW.GetHeaders.Set_('content-length', '0');
+        AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
+      end;
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    AssertRejected('invalid-base64', 'not-base64');
+    AssertRejected('short-decoded-nonce', 'aGk=');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 3c: Handshake requires an exact Connection upgrade token }
+procedure TestHandshakeConnectionUpgradeTokenRequired;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LWs: IWebSocket;
+  begin
+    try
+      LWs := UpgradeWebSocket(AReq, AW);
+      LWs.Close(1000, 'invalid connection token accepted');
+    except
+      on E: EHttpError do
+      begin
+        AW.GetHeaders.Set_('content-length', '0');
+        AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
+      end;
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawAndRead(LPort,
+      'GET /ws HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Upgrade: websocket'#13#10 +
+      'Connection: keep-alive, notupgrade'#13#10 +
+      'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='#13#10 +
+      'Sec-WebSocket-Version: 13'#13#10 +
+      #13#10, 256);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'should get 400 without exact Connection upgrade token');
+    Check(Pos('HTTP/1.1 101', LResp) = 0,
+      'should not upgrade substring Connection token');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 3b: Handshake accepts upgrade token split across duplicate Connection headers }
+procedure TestHandshakeAcceptsDuplicateConnectionUpgradeToken;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LKey, LExpectedAccept: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LWs: IWebSocket;
+  begin
+    try
+      LWs := UpgradeWebSocket(AReq, AW);
+      LWs.Close(1000, 'ok');
+    except
+      on E: EHttpError do
+      begin
+        AW.GetHeaders.Set_('content-length', '0');
+        AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
+      end;
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LExpectedAccept := 's3pPLMBiTxaQ9kYGzzhZRbK+xOo=';
+    LResp := SendRawAndRead(LPort,
+      'GET /ws HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Upgrade: websocket'#13#10 +
+      'Connection: keep-alive'#13#10 +
+      'Connection: Upgrade'#13#10 +
+      'Sec-WebSocket-Key: ' + LKey + #13#10 +
+      'Sec-WebSocket-Version: 13'#13#10 +
+      #13#10, 256);
+    Check(Pos('HTTP/1.1 101', LResp) > 0,
+      'duplicate Connection headers should expose upgrade token');
+    Check(Pos('Sec-WebSocket-Accept: ' + LExpectedAccept, LResp) > 0,
+      'duplicate Connection header upgrade should complete handshake');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -2620,8 +2782,15 @@ end;
 begin
   T := TTestRunner.Create('http.websocket');
   T.Run('HandshakeSuccess', @TestHandshakeSuccess);
+  T.Run('WebSocketAcceptGuidSourceContract',
+    @TestWebSocketAcceptGuidSourceContract);
   T.Run('HandshakeNoUpgrade', @TestHandshakeNoUpgrade);
   T.Run('HandshakeNoKey', @TestHandshakeNoKey);
+  T.Run('HandshakeInvalidKeyRejected', @TestHandshakeInvalidKeyRejected);
+  T.Run('HandshakeConnectionUpgradeTokenRequired',
+    @TestHandshakeConnectionUpgradeTokenRequired);
+  T.Run('HandshakeAcceptsDuplicateConnectionUpgradeToken',
+    @TestHandshakeAcceptsDuplicateConnectionUpgradeToken);
   T.Run('TextFrameEcho', @TestTextFrameEcho);
   T.Run('TextFrameEchoCoalescedFirstFrame', @TestTextFrameEchoWithCoalescedFirstFrame);
   T.Run('UpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket',

@@ -11,7 +11,8 @@ unit nextpas.core.tls.freepascal.lib;
 interface
 
 uses
-  SysUtils,
+  SysUtils, nextpas.core.fs,
+  nextpas.core.io.intf,
   nextpas.core.tls.base;
 
 type
@@ -73,6 +74,8 @@ implementation
 
 uses
   Classes,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.io.util,
   nextpas.core.time,
   nextpas.core.tls.context.config,
   nextpas.core.tls.exceptions,
@@ -100,7 +103,7 @@ begin
   Result := False;
   for I := Low(CSystemStorePaths) to High(CSystemStorePaths) do
   begin
-    if DirectoryExists(CSystemStorePaths[I]) then
+    if nextpas.core.fs.IsDir(CSystemStorePaths[I]) then
       Exit(True);
   end;
 end;
@@ -210,19 +213,11 @@ begin
 end;
 
 function TFreePascalCertificate.ReadAllBytes(AStream: TStream): TBytes;
-var
-  LSize: Int64;
 begin
   SetLength(Result, 0);
   if AStream = nil then
     Exit;
-
-  LSize := AStream.Size - AStream.Position;
-  if LSize <= 0 then
-    Exit;
-
-  SetLength(Result, LSize);
-  AStream.ReadBuffer(Result[0], LSize);
+  Result := IoReadAll(WrapTStream(AStream, False));
 end;
 
 function TFreePascalCertificate.HexNormalize(const AValue: string): string;
@@ -364,7 +359,7 @@ var
   LStream: TFileStream;
 begin
   Result := False;
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     Exit;
 
   LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
@@ -798,7 +793,7 @@ function TFreePascalCertificate.GetDaysUntilExpiry: Integer;
 begin
   if FInfo.NotAfter = 0 then
     Exit(0);
-  Result := Trunc(FInfo.NotAfter - Now);
+  Result := Trunc(FInfo.NotAfter - nextpas.core.time.DateTimeNow);
 end;
 
 function TFreePascalCertificate.GetSubjectCN: string;
@@ -1136,7 +1131,7 @@ var
   LCert: ISSLCertificate;
 begin
   Result := False;
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     Exit;
 
   LCert := TFreePascalCertificate.Create;
@@ -1152,7 +1147,7 @@ function TFreePascalCertificateStore.LoadFromPath(const APath: string): Boolean;
     LExt: string;
     I: Integer;
   begin
-    LExt := LowerCase(ExtractFileExt(AFileName));
+    LExt := LowerCase(nextpas.core.fs.PathExt(AFileName));
     if (LExt = '.pem') or (LExt = '.crt') or (LExt = '.cer') or (LExt = '.der') then
       Exit(True);
 
@@ -1175,11 +1170,11 @@ var
   LLoadedCount: Integer;
 begin
   Result := False;
-  if not DirectoryExists(APath) then
+  if not nextpas.core.fs.IsDir(APath) then
     Exit;
 
   LLoadedCount := 0;
-  if FindFirst(IncludeTrailingPathDelimiter(APath) + '*', faAnyFile, LSearch) = 0 then
+  if FindFirst(nextpas.core.fs.PathEnsureSep(APath) + '*', faAnyFile, LSearch) = 0 then
   begin
     repeat
       if (LSearch.Name = '.') or (LSearch.Name = '..') then
@@ -1189,7 +1184,7 @@ begin
       if not IsCertificateCandidateFile(LSearch.Name) then
         Continue;
 
-      LFileName := IncludeTrailingPathDelimiter(APath) + LSearch.Name;
+      LFileName := nextpas.core.fs.PathEnsureSep(APath) + LSearch.Name;
       if LoadFromFile(LFileName) then
         Inc(LLoadedCount);
     until FindNext(LSearch) <> 0;
@@ -1207,7 +1202,7 @@ begin
   Result := False;
   for I := Low(CSystemStorePaths) to High(CSystemStorePaths) do
   begin
-    if not DirectoryExists(CSystemStorePaths[I]) then
+    if not nextpas.core.fs.IsDir(CSystemStorePaths[I]) then
       Continue;
 
     if LoadFromPath(CSystemStorePaths[I]) then

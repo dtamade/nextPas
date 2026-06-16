@@ -12,8 +12,9 @@ unit nextpas.core.collections.skiplist;
 interface
 
 uses
+  nextpas.core.system.typinfo,
   nextpas.core.base,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
   nextpas.core.collections.base,
   nextpas.core.collections.skiplist.base,
   nextpas.core.collections.skiplist.intf;
@@ -47,6 +48,7 @@ type
     function RandomLevel: Integer;
     function CreateNode(aLevel: Integer; const aKey: K; const aValue: V): PNode;
     procedure FreeNode(aNode: PNode);
+    function CompareKeys(const A, B: K): SizeInt;
     function DefaultCompare(const A, B: K): SizeInt;
     function FindNode(const aKey: K; out aUpdate: array of PNode): PNode;
   public
@@ -208,6 +210,7 @@ end;
 destructor TSkipList.Destroy;
 begin
   Clear;
+  Finalize(FHead^);
   Dispose(FHead);
   inherited Destroy;
 end;
@@ -222,6 +225,7 @@ end;
 function TSkipList.CreateNode(aLevel: Integer; const aKey: K; const aValue: V): PNode;
 begin
   New(Result);
+  Initialize(Result^);
   Result^.Key := aKey;
   Result^.Value := aValue;
   Result^.Level := aLevel;
@@ -231,18 +235,92 @@ end;
 
 procedure TSkipList.FreeNode(aNode: PNode);
 begin
-  SetLength(aNode^.Forward, 0);
+  if aNode = nil then
+    Exit;
+  Finalize(aNode^);
   Dispose(aNode);
 end;
 
-function TSkipList.DefaultCompare(const A, B: K): SizeInt;
+function TSkipList.CompareKeys(const A, B: K): SizeInt;
 begin
-  if A < B then
-    Result := -1
-  else if A > B then
-    Result := 1
+  if Assigned(FCompare) then
+    Exit(FCompare(A, B));
+  Result := DefaultCompare(A, B);
+end;
+
+function TSkipList.DefaultCompare(const A, B: K): SizeInt;
+var
+  LTypeInfo: PTypeInfo;
+begin
+  LTypeInfo := TypeInfo(K);
+  if LTypeInfo = nil then
+    raise EInvalidOperation.Create('TSkipList.DefaultCompare: custom comparer required for this key type');
+
+  case LTypeInfo^.Kind of
+    tkBool:
+      Result := compare_bool(PBoolean(@A)^, PBoolean(@B)^);
+    tkChar:
+      Result := compare_char(PChar(@A)^, PChar(@B)^);
+    tkWChar:
+      Result := compare_wchar(PWideChar(@A)^, PWideChar(@B)^);
+    tkInteger:
+      begin
+        if LTypeInfo = TypeInfo(Int8) then
+          Result := compare_i8(PInt8(@A)^, PInt8(@B)^)
+        else if LTypeInfo = TypeInfo(Int16) then
+          Result := compare_i16(PInt16(@A)^, PInt16(@B)^)
+        else if LTypeInfo = TypeInfo(UInt8) then
+          Result := compare_u8(PUInt8(@A)^, PUInt8(@B)^)
+        else if LTypeInfo = TypeInfo(UInt16) then
+          Result := compare_u16(PUInt16(@A)^, PUInt16(@B)^)
+        else if LTypeInfo = TypeInfo(UInt32) then
+          Result := compare_u32(PUInt32(@A)^, PUInt32(@B)^)
+        else
+          Result := compare_i32(PInt32(@A)^, PInt32(@B)^);
+      end;
+    tkEnumeration:
+      case SizeOf(K) of
+        1: Result := compare_u8(PUInt8(@A)^, PUInt8(@B)^);
+        2: Result := compare_u16(PUInt16(@A)^, PUInt16(@B)^);
+        4: Result := compare_u32(PUInt32(@A)^, PUInt32(@B)^);
+      else
+        Result := compare_bin(@A, @B, SizeOf(K));
+      end;
+    tkInt64:
+      if LTypeInfo = TypeInfo(Comp) then
+        Result := compare_comp(PComp(@A)^, PComp(@B)^)
+      else
+        Result := compare_i64(PInt64(@A)^, PInt64(@B)^);
+    tkQWord:
+      Result := compare_u64(PUInt64(@A)^, PUInt64(@B)^);
+    tkFloat:
+      begin
+        if LTypeInfo = TypeInfo(Single) then
+          Result := compare_single(PSingle(@A)^, PSingle(@B)^)
+        else if LTypeInfo = TypeInfo(Double) then
+          Result := compare_double(PDouble(@A)^, PDouble(@B)^)
+        else if LTypeInfo = TypeInfo(Currency) then
+          Result := compare_currency(PCurrency(@A)^, PCurrency(@B)^)
+        else
+          Result := compare_extended(PExtended(@A)^, PExtended(@B)^);
+      end;
+    tkSString:
+      Result := compare_shortstring(PShortString(@A)^, PShortString(@B)^);
+    tkAString, tkLString:
+      Result := compare_ansistring(PAnsiString(@A)^, PAnsiString(@B)^);
+    tkUString:
+      Result := compare_unicodestring(PUnicodeString(@A)^, PUnicodeString(@B)^);
+    tkWString:
+      Result := compare_widestring(PWideString(@A)^, PWideString(@B)^);
+    tkPointer:
+      Result := compare_pointer(PPointer(@A)^, PPointer(@B)^);
+    tkMethod:
+      Result := compare_method(PMethod(@A)^, PMethod(@B)^);
+    tkVariant:
+      Result := compare_variant(PVariant(@A)^, PVariant(@B)^);
   else
-    Result := 0;
+    raise EInvalidOperation.Create('TSkipList.DefaultCompare: custom comparer required for this key type');
+  end;
 end;
 
 function TSkipList.FindNode(const aKey: K; out aUpdate: array of PNode): PNode;
@@ -257,11 +335,7 @@ begin
   begin
     while x^.Forward[i] <> nil do
     begin
-      if Assigned(FCompare) then
-        cmp := FCompare(x^.Forward[i]^.Key, aKey)
-      else
-        cmp := DefaultCompare(x^.Forward[i]^.Key, aKey);
-
+      cmp := CompareKeys(x^.Forward[i]^.Key, aKey);
       if cmp < 0 then
         x := x^.Forward[i]
       else
@@ -285,11 +359,7 @@ begin
   // Check if key exists
   if x <> nil then
   begin
-    if Assigned(FCompare) then
-      cmp := FCompare(x^.Key, aKey)
-    else
-      cmp := DefaultCompare(x^.Key, aKey);
-
+    cmp := CompareKeys(x^.Key, aKey);
     if cmp = 0 then
     begin
       x^.Value := aValue;
@@ -327,11 +397,7 @@ begin
 
   if x <> nil then
   begin
-    if Assigned(FCompare) then
-      cmp := FCompare(x^.Key, aKey)
-    else
-      cmp := DefaultCompare(x^.Key, aKey);
-
+    cmp := CompareKeys(x^.Key, aKey);
     if cmp = 0 then
     begin
       aValue := x^.Value;
@@ -379,11 +445,7 @@ begin
   if x = nil then
     Exit(False);
 
-  if Assigned(FCompare) then
-    cmp := FCompare(x^.Key, aKey)
-  else
-    cmp := DefaultCompare(x^.Key, aKey);
-
+  cmp := CompareKeys(x^.Key, aKey);
   if cmp <> 0 then
     Exit(False);
 
@@ -474,11 +536,7 @@ begin
   cap := 0;
   while x <> nil do
   begin
-    if Assigned(FCompare) then
-      cmp := FCompare(x^.Key, aTo)
-    else
-      cmp := DefaultCompare(x^.Key, aTo);
-
+    cmp := CompareKeys(x^.Key, aTo);
     if cmp > 0 then
       Break;
 

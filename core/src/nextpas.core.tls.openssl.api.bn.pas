@@ -4,11 +4,7 @@ unit nextpas.core.tls.openssl.api.bn;
 
 interface
 
-uses
-  SysUtils, DynLibs,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.loader;
+uses DynLibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
 
 const
   { BN flags }

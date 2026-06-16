@@ -157,7 +157,7 @@ echo   Experimental note: default entry chain isolates experimental intrinsics b
 echo   gate/gate-strict PASS is not blanket release-grade approval for every experimental path.
 echo   gate         Fast/base gate for routine SIMD changes
 echo   gate-strict  Release/closeout gate with perf, repeats, and evidence checks
-echo   closeout-release  Canonical release closeout entry ^(delegates to shell runner^)
+echo   closeout-release  Historical Windows/GH closeout shell surface currently unavailable in this worktree
 echo   cpuinfo-lazy-repeat  Repeat CPUInfo lazy-path verification under release mode
 echo   sse2-structure-check  Structural guard for SSE2 register/include layout
 echo   sse2-contracts  Focused SSE2 moved-surface contract suite
@@ -199,7 +199,7 @@ echo   gate-summary-inject  Inject a sample gate summary into canonical logs
 echo   gate-summary-rollback  Restore the previous gate summary backup
 echo   gate-summary-backups  List available gate-summary backups
 echo   gate-summary-selfcheck  Rehearse gate-summary/freeze-status selfcheck ^(delegates to shell runner^)
-echo   release-evidence  Aggregate existing gate/freeze/native evidence into release_evidence.json ^(delegates to shell runner^)
+echo   release-evidence  Historical shell helper surface currently unavailable in this worktree
 echo   historical-closeout-note-check  Fail-close when historical closeout/freeze plans lose Current HEAD guidance ^(delegates to shell runner^)
 echo   active-closeout-truth-check  Fail-close when active closeout docs drift from current HEAD truth ^(delegates to shell runner^)
 echo   perf-smoke  Run the lightweight backend benchmark smoke
@@ -217,28 +217,28 @@ echo   qemu-nonx86-experimental-asm  Run experimental non-x86 asm sweeps via QEM
 echo   riscvv-opcode-lane  Probe RISCVV opcode-lane contract ^(delegates to shell runner^)
 echo   qemu-experimental-report  Report latest QEMU experimental blockers ^(delegates to shell runner^)
 echo   qemu-experimental-baseline-check  Check latest QEMU experimental baseline ^(delegates to shell runner^)
-echo   evidence-linux  Collect Linux-side release evidence ^(delegates to shell runner^)
+echo   evidence-linux  Historical Linux closeout shell surface currently unavailable in this worktree
 echo   native-evidence  Collect non-x86 native evidence ^(delegates to shell runner^)
-echo   native-evidence-via-gh  Dispatch/download non-x86 native evidence via GitHub Actions ^(delegates to shell runner^)
-echo   native-evidence-via-gh-clean  Reuse a temporary clean worktree for GitHub native-evidence dispatch ^(delegates to shell runner^)
+echo   native-evidence-via-gh  Historical shell helper surface currently unavailable in this worktree
+echo   native-evidence-via-gh-clean  Historical shell helper surface currently unavailable in this worktree
 echo   verify-nonx86-native-evidence  Verify imported non-x86 native evidence ^(delegates to shell runner^)
-echo   riscvv-runner-registration  Prepare repo-side RISCVV runner registration guidance ^(delegates to shell runner^)
-echo   riscvv-runner-host-preflight  Fail-close preflight for a real riscv64 runner host ^(delegates to shell runner^)
-echo   riscvv-runner-3cmd  Print the recommended RISCVV native-evidence bootstrap flow ^(delegates to shell runner^)
+echo   riscvv-runner-registration  Historical shell helper surface currently unavailable in this worktree
+echo   riscvv-runner-host-preflight  Historical shell helper surface currently unavailable in this worktree
+echo   riscvv-runner-3cmd  Historical shell helper surface currently unavailable in this worktree
 echo   restore-nightly-evidence  Restore nightly evidence into canonical logs ^(delegates to shell runner^)
 echo   evidence-win  Windows-only native evidence capture alias
-echo   win-evidence-preflight  Check whether GitHub-hosted Windows evidence can run now ^(delegates to shell runner^)
-echo   win-evidence-via-gh  Dispatch GitHub-hosted Windows evidence collection ^(delegates to shell runner^)
+echo   win-evidence-preflight  Historical Windows/GH closeout shell surface currently unavailable in this worktree
+echo   win-evidence-via-gh  Historical Windows/GH closeout shell surface currently unavailable in this worktree
 echo   verify-win-evidence  Verify Windows evidence log against the batch verifier
 echo   evidence-win-verify  Windows-only alias for verify-win-evidence
-echo   finalize-win-evidence  Low-level finalize helper for split Windows evidence flows
+echo   finalize-win-evidence  Historical Windows/GH closeout shell surface currently unavailable in this worktree
 echo   win-closeout-dryrun  Print Windows closeout dry-run guidance ^(delegates to shell runner^)
-echo   win-closeout-snippets  Print Windows closeout copyable snippets ^(delegates to shell runner^)
+echo   win-closeout-snippets  Historical Windows/GH closeout shell surface currently unavailable in this worktree
 echo   win-closeout-3cmd  Print the recommended Windows closeout command chain
 echo   freeze-status  Evaluate current release freeze readiness ^(delegates to shell runner^)
 echo   freeze-status-linux  Evaluate freeze readiness using Linux-side evidence only ^(delegates to shell runner^)
 echo   freeze-status-rehearsal  Rehearse freeze-status failure shaping ^(delegates to shell runner^)
-echo   win-closeout-finalize  Verify native evidence, backfill cross gate, then finalize
+echo   win-closeout-finalize  Historical Windows/GH closeout shell surface currently unavailable in this worktree
 echo Suggested flow: check -^> targeted suites -^> gate; use gate-strict before release/closeout.
 echo QEMU env: SIMD_QEMU_BUILD_POLICY=always^|if-missing^|skip ^(default: if-missing^)
 echo Isolation env: SIMD_OUTPUT_ROOT=C:\temp\simd-run-123 ^(override bin2/lib2/logs root^)
@@ -370,15 +370,22 @@ echo [GATE-SUMMARY-SELFCHECK] Running: bash %ROOT%BuildOrTest.sh gate-summary-se
 bash "%ROOT%BuildOrTest.sh" gate-summary-selfcheck %NORMALIZED_TEST_ARGS%
 exit /b %ERRORLEVEL%
 
-:release_evidence
-where bash >nul 2>nul
-if errorlevel 1 (
-  echo [RELEASE-EVIDENCE] FAILED ^(bash runtime not found; release-evidence requires bash to preserve shell parity^)
-  exit /b 2
-)
+:fail_missing_shell_helper_surface
+set "SURFACE_LABEL=%~1"
+set "SURFACE_ACTION=%~2"
+echo [%SURFACE_LABEL%] FAILED ^(historical shell helper "%SURFACE_ACTION%" is not restored in this worktree^)
+echo [%SURFACE_LABEL%] Use a real riscv64 host instead:
+echo [%SURFACE_LABEL%]   FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/collect_nonx86_native_evidence.sh riscvv
+echo [%SURFACE_LABEL%] Then import archived artifacts:
+echo [%SURFACE_LABEL%]   bash tests/nextpas.core.simd/BuildOrTest.sh import-nonx86-native-evidence ^<native-evidence-drop^>
+echo [%SURFACE_LABEL%] Or import and run host-local closeout in one step:
+echo [%SURFACE_LABEL%]   bash tests/nextpas.core.simd/BuildOrTest.sh closeout-host-local-from-import ^<native-evidence-drop^>
+set "SURFACE_LABEL="
+set "SURFACE_ACTION="
+exit /b 2
 
-echo [RELEASE-EVIDENCE] Running: bash %ROOT%BuildOrTest.sh release-evidence %NORMALIZED_TEST_ARGS%
-bash "%ROOT%BuildOrTest.sh" release-evidence %NORMALIZED_TEST_ARGS%
+:release_evidence
+call :fail_missing_shell_helper_surface RELEASE-EVIDENCE release-evidence
 exit /b %ERRORLEVEL%
 
 :historical_closeout_note_check
@@ -426,25 +433,11 @@ bash "%ROOT%BuildOrTest.sh" native-evidence %NORMALIZED_TEST_ARGS%
 exit /b %ERRORLEVEL%
 
 :native_evidence_via_gh
-where bash >nul 2>nul
-if errorlevel 1 (
-  echo [NATIVE-EVIDENCE-GH] FAILED ^(bash runtime not found; native-evidence-via-gh requires Git Bash / WSL as the canonical entrypoint^)
-  exit /b 2
-)
-
-echo [NATIVE-EVIDENCE-GH] Running: bash %ROOT%BuildOrTest.sh native-evidence-via-gh %NORMALIZED_TEST_ARGS%
-bash "%ROOT%BuildOrTest.sh" native-evidence-via-gh %NORMALIZED_TEST_ARGS%
+call :fail_missing_shell_helper_surface NATIVE-EVIDENCE-GH native-evidence-via-gh
 exit /b %ERRORLEVEL%
 
 :native_evidence_via_gh_clean
-where bash >nul 2>nul
-if errorlevel 1 (
-  echo [NATIVE-EVIDENCE-GH-CLEAN] FAILED ^(bash runtime not found; native-evidence-via-gh-clean requires Git Bash / WSL as the canonical entrypoint^)
-  exit /b 2
-)
-
-echo [NATIVE-EVIDENCE-GH-CLEAN] Running: bash %ROOT%BuildOrTest.sh native-evidence-via-gh-clean %NORMALIZED_TEST_ARGS%
-bash "%ROOT%BuildOrTest.sh" native-evidence-via-gh-clean %NORMALIZED_TEST_ARGS%
+call :fail_missing_shell_helper_surface NATIVE-EVIDENCE-GH-CLEAN native-evidence-via-gh-clean
 exit /b %ERRORLEVEL%
 
 :verify_nonx86_native_evidence
@@ -459,36 +452,15 @@ bash "%ROOT%BuildOrTest.sh" verify-nonx86-native-evidence %NORMALIZED_TEST_ARGS%
 exit /b %ERRORLEVEL%
 
 :riscvv_runner_registration
-where bash >nul 2>nul
-if errorlevel 1 (
-  echo [RISCVV-RUNNER] FAILED ^(bash runtime not found; riscvv-runner-registration requires Git Bash / WSL as the canonical entrypoint^)
-  exit /b 2
-)
-
-echo [RISCVV-RUNNER] Running: bash %ROOT%BuildOrTest.sh riscvv-runner-registration %NORMALIZED_TEST_ARGS%
-bash "%ROOT%BuildOrTest.sh" riscvv-runner-registration %NORMALIZED_TEST_ARGS%
+call :fail_missing_shell_helper_surface RISCVV-RUNNER riscvv-runner-registration
 exit /b %ERRORLEVEL%
 
 :riscvv_runner_host_preflight
-where bash >nul 2>nul
-if errorlevel 1 (
-  echo [RISCVV-RUNNER] FAILED ^(bash runtime not found; riscvv-runner-host-preflight requires Git Bash / WSL as the canonical entrypoint^)
-  exit /b 2
-)
-
-echo [RISCVV-RUNNER] Running: bash %ROOT%BuildOrTest.sh riscvv-runner-host-preflight %NORMALIZED_TEST_ARGS%
-bash "%ROOT%BuildOrTest.sh" riscvv-runner-host-preflight %NORMALIZED_TEST_ARGS%
+call :fail_missing_shell_helper_surface RISCVV-RUNNER riscvv-runner-host-preflight
 exit /b %ERRORLEVEL%
 
 :riscvv_runner_3cmd
-where bash >nul 2>nul
-if errorlevel 1 (
-  echo [RISCVV-RUNNER] FAILED ^(bash runtime not found; riscvv-runner-3cmd requires Git Bash / WSL as the canonical entrypoint^)
-  exit /b 2
-)
-
-echo [RISCVV-RUNNER] Running: bash %ROOT%BuildOrTest.sh riscvv-runner-3cmd %NORMALIZED_TEST_ARGS%
-bash "%ROOT%BuildOrTest.sh" riscvv-runner-3cmd %NORMALIZED_TEST_ARGS%
+call :fail_missing_shell_helper_surface RISCVV-RUNNER riscvv-runner-3cmd
 exit /b %ERRORLEVEL%
 
 :restore_nightly_evidence
@@ -583,7 +555,7 @@ if /I not "%OUTPUT_ROOT%"=="%ROOT%" (
   if exist "%OUTPUT_ROOT%\bin" rmdir /s /q "%OUTPUT_ROOT%\bin"
   if exist "%OUTPUT_ROOT%\lib" rmdir /s /q "%OUTPUT_ROOT%\lib"
   if exist "%OUTPUT_ROOT%\cpuinfo" rmdir /s /q "%OUTPUT_ROOT%\cpuinfo"
-  if exist "%OUTPUT_ROOT%\cpuinfo.x86" rmdir /s /q "%OUTPUT_ROOT%\cpuinfo.x86"
+  if exist "%OUTPUT_ROOT%\cpuinfo.global" rmdir /s /q "%OUTPUT_ROOT%\cpuinfo.global"
   if exist "%OUTPUT_ROOT%\intrinsics.experimental" rmdir /s /q "%OUTPUT_ROOT%\intrinsics.experimental"
   if exist "%OUTPUT_ROOT%\publicabi" rmdir /s /q "%OUTPUT_ROOT%\publicabi"
   if exist "%OUTPUT_ROOT%\run_all" rmdir /s /q "%OUTPUT_ROOT%\run_all"
@@ -1212,7 +1184,7 @@ if not exist "%PUBLICABI_RUNNER%" (
 if "%TESTS_ROOT%"=="" set "TESTS_ROOT=%ROOT%.."
 set "PUBLICABI_OUTPUT_ROOT="
 if /I "%OUTPUT_ROOT%"=="%ROOT%" (
-  set "PUBLICABI_OUTPUT_ROOT=%TESTS_ROOT%\nextpas.core.simd.publicabi"
+  set "PUBLICABI_OUTPUT_ROOT=%ROOT%..\..\build\tests\nextpas.core.simd.publicabi"
 ) else (
   set "PUBLICABI_OUTPUT_ROOT=%OUTPUT_ROOT%\publicabi"
 )
@@ -1285,12 +1257,17 @@ echo [PARITY] OK
 exit /b 0
 
 :coverage
+set "COVERAGE_LAYOUT_SCRIPT=%ROOT%check_intrinsics_coverage_layout_contract.py"
 set "COVERAGE_SCRIPT=%ROOT%check_intrinsics_coverage.py"
 set "COVERAGE_ARGS="
 if "%SIMD_COVERAGE_JSON_FILE%"=="" set "SIMD_COVERAGE_JSON_FILE=%LOG_DIR%\intrinsics_coverage.json"
 if /I "%SIMD_COVERAGE_STRICT_EXTRA%"=="1" set "COVERAGE_ARGS=%COVERAGE_ARGS% --strict-extra"
 if /I "%SIMD_COVERAGE_REQUIRE_AVX2%"=="1" set "COVERAGE_ARGS=%COVERAGE_ARGS% --require-avx2"
 if /I "%SIMD_COVERAGE_REQUIRE_EXPERIMENTAL%"=="1" set "COVERAGE_ARGS=%COVERAGE_ARGS% --require-experimental"
+if not exist "%COVERAGE_LAYOUT_SCRIPT%" (
+  echo [COVERAGE-LAYOUT] Missing checker: %COVERAGE_LAYOUT_SCRIPT%
+  exit /b 2
+)
 if not exist "%COVERAGE_SCRIPT%" (
   echo [COVERAGE] Missing checker: %COVERAGE_SCRIPT%
   exit /b 2
@@ -1298,6 +1275,9 @@ if not exist "%COVERAGE_SCRIPT%" (
 
 where py >nul 2>nul
 if not errorlevel 1 (
+  echo [COVERAGE-LAYOUT] Running: py -3 %COVERAGE_LAYOUT_SCRIPT% --summary-line
+  py -3 "%COVERAGE_LAYOUT_SCRIPT%" --summary-line
+  if errorlevel 1 exit /b %ERRORLEVEL%
   echo [COVERAGE] Running: py -3 %COVERAGE_SCRIPT% %COVERAGE_ARGS% --summary-line --json-file "%SIMD_COVERAGE_JSON_FILE%"
   py -3 "%COVERAGE_SCRIPT%" %COVERAGE_ARGS% --summary-line --json-file "%SIMD_COVERAGE_JSON_FILE%"
   exit /b %ERRORLEVEL%
@@ -1305,6 +1285,9 @@ if not errorlevel 1 (
 
 where python >nul 2>nul
 if not errorlevel 1 (
+  echo [COVERAGE-LAYOUT] Running: python %COVERAGE_LAYOUT_SCRIPT% --summary-line
+  python "%COVERAGE_LAYOUT_SCRIPT%" --summary-line
+  if errorlevel 1 exit /b %ERRORLEVEL%
   echo [COVERAGE] Running: python %COVERAGE_SCRIPT% %COVERAGE_ARGS% --summary-line --json-file "%SIMD_COVERAGE_JSON_FILE%"
   python "%COVERAGE_SCRIPT%" %COVERAGE_ARGS% --summary-line --json-file "%SIMD_COVERAGE_JSON_FILE%"
   exit /b %ERRORLEVEL%
@@ -2395,22 +2378,22 @@ if /I "%SIMD_GATE_CPUINFO_LAZY_REPEAT%"=="0" (
 
 echo [GATE] 5/6 CPUInfo x86 suites
 if /I "%OUTPUT_ROOT%"=="%ROOT%" (
-  set "CPUINFO_X86_OUTPUT_ROOT=%TESTS_ROOT%\nextpas.core.simd.cpuinfo.x86"
+  set "CPUINFO_X86_OUTPUT_ROOT=%ROOT%..\..\build\tests\nextpas.core.simd.cpuinfo.global"
 ) else (
-  set "CPUINFO_X86_OUTPUT_ROOT=%OUTPUT_ROOT%\cpuinfo.x86"
+  set "CPUINFO_X86_OUTPUT_ROOT=%OUTPUT_ROOT%\cpuinfo.global"
 )
 set "SIMD_OUTPUT_ROOT=%CPUINFO_X86_OUTPUT_ROOT%"
-call "%TESTS_ROOT%\nextpas.core.simd.cpuinfo.x86\buildOrTest.bat" test --list-suites
+call "%TESTS_ROOT%\nextpas.core.simd.cpuinfo\buildOrTest.bat" test --list-suites
 if errorlevel 1 exit /b 1
 set "SIMD_OUTPUT_ROOT=%CPUINFO_X86_OUTPUT_ROOT%"
-call "%TESTS_ROOT%\nextpas.core.simd.cpuinfo.x86\buildOrTest.bat" test --suite=TTestCase_Global
+call "%TESTS_ROOT%\nextpas.core.simd.cpuinfo\buildOrTest.bat" test --suite=TTestCase_Global
 if errorlevel 1 exit /b 1
 set "SIMD_OUTPUT_ROOT=%OUTPUT_ROOT%"
 
 echo [GATE] 6/6 Filtered run_all check chain
 set "STOP_ON_FAIL=1"
 set "RUN_ACTION=check"
-call "%TESTS_ROOT%\run_all_tests.bat" =nextpas.core.simd =nextpas.core.simd.cpuinfo =nextpas.core.simd.cpuinfo.x86 =nextpas.core.simd.intrinsics.sse =nextpas.core.simd.intrinsics.mmx
+call "%TESTS_ROOT%\run_all_tests.bat" =nextpas.core.simd =nextpas.core.simd.cpuinfo =nextpas.core.simd.intrinsics.sse =nextpas.core.simd.intrinsics.mmx
 if errorlevel 1 exit /b 1
 
 if /I "%SIMD_GATE_CONCURRENT_REPEAT%"=="0" (
@@ -2540,18 +2523,13 @@ call "%EVIDENCE_SCRIPT%"
 exit /b %ERRORLEVEL%
 
 :win_evidence_preflight
-set "PREFLIGHT_SCRIPT=%ROOT%preflight_windows_b07_evidence_gh.sh"
-if not exist "%PREFLIGHT_SCRIPT%" (
-  echo [PREFLIGHT] Missing script: %PREFLIGHT_SCRIPT%
-  exit /b 2
-)
 where bash >nul 2>nul
 if errorlevel 1 (
   echo [PREFLIGHT] Missing bash ^(require Git Bash / WSL^)
   exit /b 2
 )
-echo [PREFLIGHT] Running: bash %PREFLIGHT_SCRIPT% %NORMALIZED_TEST_ARGS%
-bash "%PREFLIGHT_SCRIPT%" %NORMALIZED_TEST_ARGS%
+echo [PREFLIGHT] Running: bash %ROOT%BuildOrTest.sh win-evidence-preflight %NORMALIZED_TEST_ARGS%
+bash "%ROOT%BuildOrTest.sh" win-evidence-preflight %NORMALIZED_TEST_ARGS%
 exit /b %ERRORLEVEL%
 
 :verify_win_evidence
@@ -2590,83 +2568,34 @@ if "%VERIFY_ARGS%"=="" (
 exit /b %ERRORLEVEL%
 
 :finalize_win_evidence
-set "FINALIZE_SCRIPT=%ROOT%finalize_windows_b07_closeout.sh"
-if not exist "%FINALIZE_SCRIPT%" (
-  echo [CLOSEOUT] Missing finalize script: %FINALIZE_SCRIPT%
-  exit /b 2
-)
 where bash >nul 2>nul
 if errorlevel 1 (
   echo [CLOSEOUT] Missing bash ^(require Git Bash / WSL^)
   exit /b 2
 )
-echo [CLOSEOUT] Running: bash %FINALIZE_SCRIPT% %NORMALIZED_TEST_ARGS%
-bash "%FINALIZE_SCRIPT%" %NORMALIZED_TEST_ARGS%
+echo [CLOSEOUT] Running: bash %ROOT%BuildOrTest.sh finalize-win-evidence %NORMALIZED_TEST_ARGS%
+bash "%ROOT%BuildOrTest.sh" finalize-win-evidence %NORMALIZED_TEST_ARGS%
 exit /b %ERRORLEVEL%
 
 :win_closeout_3cmd
-set "BATCH_ID="
-for /f "tokens=1" %%A in ("%NORMALIZED_TEST_ARGS%") do set "BATCH_ID=%%A"
-if "%BATCH_ID%"=="" set "BATCH_ID=SIMD-YYYYMMDD-152"
-set "PREFLIGHT_JSON=%ROOT%logs\win_preflight_latest.json"
-if exist "%PREFLIGHT_JSON%" (
-  findstr /c:"\"code\": \"RECENT_BILLING_BLOCK\"" "%PREFLIGHT_JSON%" >nul 2>nul
-  if not errorlevel 1 (
-    echo [CLOSEOUT] WARN latest preflight is RECENT_BILLING_BLOCK
-    echo.
-    echo    Current local win-evidence-preflight is blocked by GitHub Billing/quota.
-    echo    Restore GitHub Billing/quota or switch to a real Windows runner before step 1.
-    echo.
-  )
-)
-echo [CLOSEOUT] Windows evidence closeout: recommended command chain
-echo.
-echo Preferred canonical entry ^(Git Bash / WSL^):
-echo    FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh closeout-release %BATCH_ID%
-echo.
-echo 0^) Preflight GH blockage ^(Git Bash / WSL, recommended^)
-echo    bash tests/nextpas.core.simd/BuildOrTest.sh win-evidence-preflight
-echo.
-echo 1^) Collect and verify evidence ^(PowerShell/CMD^)
-echo    Requirement: native Windows lazbuild.exe / Windows wrapper only ^(do not use Wine/cmd as a fake Windows runner^)
-echo    Example override: set LAZBUILD=C:\Lazarus\lazbuild.exe
-echo    tests\nextpas.core.simd\buildOrTest.bat evidence-win-verify
-echo.
-echo 2^) Backfill cross gate with fail-close ^(Git Bash / WSL^)
-echo    SIMD_GATE_REQUIRE_WINDOWS_EVIDENCE=1 bash tests/nextpas.core.simd/BuildOrTest.sh gate
-echo.
-echo 3^) One-shot closeout ^(Git Bash / WSL^)
-echo    bash tests/nextpas.core.simd/BuildOrTest.sh win-closeout-finalize %BATCH_ID%
-echo.
-echo 4^) Confirm freeze status ^(Git Bash / WSL^)
-echo    bash tests/nextpas.core.simd/BuildOrTest.sh freeze-status
-echo.
-echo Notes:
-echo    Step 3 runs finalize ^> freeze-status ^> apply, and apply is blocked unless freeze_ready=true.
-echo    If step 0 returns RECENT_BILLING_BLOCK, fix GitHub Billing/quota first.
-echo    LAZBUILD for step 1 must resolve to a native Windows .exe/.bat/.cmd, not a Wine-visible Linux ELF under Z:\opt\...
-echo    Current local Wine probes also did not yield a working host-side Unix bridge ^(`where bash` / `start /unix`^); do not treat them as a substitute for native Windows LAZBUILD.
-exit /b 0
-
-:win_closeout_finalize
-set "RUNNER_SCRIPT=%ROOT%run_windows_b07_closeout_finalize.sh"
-if not exist "%RUNNER_SCRIPT%" (
-  echo [CLOSEOUT] Missing runner: %RUNNER_SCRIPT%
+where bash >nul 2>nul
+if errorlevel 1 (
+  echo [WIN-CLOSEOUT-3CMD] FAILED ^(bash runtime not found; win-closeout-3cmd requires bash to preserve shell parity^)
   exit /b 2
 )
+
+echo [WIN-CLOSEOUT-3CMD] Running: bash %ROOT%BuildOrTest.sh win-closeout-3cmd %NORMALIZED_TEST_ARGS%
+bash "%ROOT%BuildOrTest.sh" win-closeout-3cmd %NORMALIZED_TEST_ARGS%
+exit /b %ERRORLEVEL%
+
+:win_closeout_finalize
 where bash >nul 2>nul
 if errorlevel 1 (
   echo [CLOSEOUT] Missing bash ^(require Git Bash / WSL^)
   exit /b 2
 )
-call "%ROOT%buildOrTest.bat" evidence-win-verify
-if errorlevel 1 exit /b 1
-set "SIMD_GATE_REQUIRE_WINDOWS_EVIDENCE=1"
-echo [CLOSEOUT] Backfill cross gate ^(SIMD_GATE_REQUIRE_WINDOWS_EVIDENCE=1^)
-bash "%ROOT%BuildOrTest.sh" gate
-if errorlevel 1 exit /b 1
-echo [CLOSEOUT] Running: bash %RUNNER_SCRIPT% %NORMALIZED_TEST_ARGS%
-bash "%RUNNER_SCRIPT%" %NORMALIZED_TEST_ARGS%
+echo [CLOSEOUT] Running: bash %ROOT%BuildOrTest.sh win-closeout-finalize %NORMALIZED_TEST_ARGS%
+bash "%ROOT%BuildOrTest.sh" win-closeout-finalize %NORMALIZED_TEST_ARGS%
 exit /b %ERRORLEVEL%
 
 :gate_summary_sample

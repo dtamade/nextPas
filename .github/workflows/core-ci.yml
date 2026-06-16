@@ -3,9 +3,9 @@ name: Core CI
 on:
   push:
     branches: [main]
-    paths: ['core/**']
+    paths: ['core/**', '.github/workflows/core-ci.yml']
   pull_request:
-    paths: ['core/**']
+    paths: ['core/**', '.github/workflows/core-ci.yml']
   workflow_dispatch:
 
 defaults:
@@ -52,10 +52,13 @@ jobs:
         run: fpc -iV
 
       - name: Run all tests
-        run: make test
+        run: make -C .. core-ci-test
 
-      - name: Run TUI benchmark smoke
-        run: FPC=fpc benchmarks/nextpas.core.tui/run_all.sh
+      - name: Install wine for Windows cross-runtime smoke
+        run: sudo apt-get install -y wine
+
+      - name: Run Wine runtime smoke (not real Windows evidence)
+        run: make wine-smoke
 
   test-macos:
     runs-on: macos-14
@@ -110,28 +113,41 @@ jobs:
           fpc -vt -Fu$(pwd)/src -Fi$(pwd)/src tests/nextpas.core.platform/test_platform_ctypes_abi/test_platform_ctypes_abi.lpr -FE/tmp 2>&1 | tail -5 || true
 
       - name: Run tests (best-effort)
+        run: make -C .. core-ci-best-effort-test CORE_CI_HOST=macOS
+
+  test-windows-runtime:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FPC and make
+        shell: pwsh
         run: |
-          TOTAL=0; PASSED=0; SKIPPED=0; FIRST_FAIL=""
-          while IFS= read -r mk; do
-            dir=$(dirname "$mk")
-            TOTAL=$((TOTAL + 1))
-            if make -C "$dir" test 2>&1 | tail -5 | grep -q "passed"; then
-              PASSED=$((PASSED + 1))
-              echo "PASS: $dir"
-            else
-              SKIPPED=$((SKIPPED + 1))
-              if [ -z "$FIRST_FAIL" ]; then
-                FIRST_FAIL="$dir"
-                echo "SKIP: $dir (first failure details below)"
-                make -C "$dir" test 2>&1 | tail -20
-              else
-                echo "SKIP: $dir"
-              fi
-            fi
-          done < <(find tests -mindepth 2 -name Makefile | sort)
-          echo ""
-          echo "=== macOS: $PASSED passed, $SKIPPED skipped, $TOTAL total ==="
-          if [ $PASSED -eq 0 ]; then exit 1; fi
+          choco install -y freepascal make
+          $ChocolateyProfile = Join-Path $env:ChocolateyInstall 'helpers\chocolateyProfile.psm1'
+          if (Test-Path $ChocolateyProfile) {
+            Import-Module $ChocolateyProfile
+            Update-SessionEnvironment
+          }
+          foreach ($Tool in @('fpc', 'make')) {
+            $Command = Get-Command $Tool -ErrorAction SilentlyContinue
+            if (-not $Command) {
+              throw "$Tool was not installed into PATH"
+            }
+            Add-Content -Path $env:GITHUB_PATH -Value (Split-Path $Command.Source)
+          }
+
+      - name: Verify FPC
+        shell: pwsh
+        run: |
+          fpc -iV
+          make --version
+
+      - name: Run Windows runtime smoke
+        shell: pwsh
+        run: |
+          Write-Output "truth=real-windows-runtime-ci"
+          make -C tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke clean test
 
   test-freebsd:
     runs-on: ubuntu-latest
@@ -147,18 +163,4 @@ jobs:
           run: |
             sudo pkg install -y fpc
             fpc -iV
-            cd core
-            TOTAL=0; PASSED=0; SKIPPED=0
-            for mk in $(find tests -mindepth 2 -name Makefile | sort); do
-              dir=$(dirname "$mk")
-              TOTAL=$((TOTAL + 1))
-              if make -C "$dir" test >/dev/null 2>&1; then
-                PASSED=$((PASSED + 1))
-                echo "PASS: $dir"
-              else
-                SKIPPED=$((SKIPPED + 1))
-                echo "SKIP: $dir"
-              fi
-            done
-            echo ""
-            echo "=== FreeBSD: $PASSED passed, $SKIPPED skipped, $TOTAL total ==="
+            make -C "$GITHUB_WORKSPACE" core-ci-best-effort-test CORE_CI_HOST=FreeBSD

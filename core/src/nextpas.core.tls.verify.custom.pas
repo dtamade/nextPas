@@ -5,7 +5,7 @@ unit nextpas.core.tls.verify.custom;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.tls.base;
 
 type
@@ -36,6 +36,7 @@ type
 implementation
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.tls.exceptions,
   nextpas.core.crypto.hash;
 
@@ -48,7 +49,7 @@ begin
   FAllowIfNoPins := False;
 end;
 
-procedure TSSLPinningVerifier.AddPin(const ASHA256Hash: TBytes);
+procedure TSSLPinningVerifier.AddPin(const ASHA256Hash: nextpas.core.base.TBytes);
 var
   LIdx: Integer;
 begin

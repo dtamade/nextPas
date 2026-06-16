@@ -4,15 +4,27 @@ program test_managed_stress;
 
 uses
   SysUtils,
+  Classes,
   leak_tracker,
+  nextpas.core.collections.base,
   nextpas.core.collections.vec,
   nextpas.core.collections.vecdeque,
+  nextpas.core.collections.smallvec,
   nextpas.core.collections.hashmap,
+  nextpas.core.collections.hashmap.swiss,
+  nextpas.core.collections.hashmap.swiss.adapter,
+  nextpas.core.collections.hashmap.swiss.str,
+  nextpas.core.collections.hashmap.swiss.i32,
+  nextpas.core.collections.hashmap.swiss.i32i32,
   nextpas.core.collections.btree,
+  nextpas.core.collections.tree_set,
   nextpas.core.collections.lrucache,
   nextpas.core.collections.skiplist,
   nextpas.core.collections.circularbuffer,
-  nextpas.core.collections.linkedhashmap;
+  nextpas.core.collections.linkedhashmap,
+  nextpas.core.collections.priorityqueue,
+  nextpas.core.collections.iterators,
+  nextpas.core.mem.intf;
 
 var
   GPass: Integer;
@@ -21,6 +33,120 @@ procedure Pass(const AName: string);
 begin
   WriteLn('  PASS: ', AName);
   Inc(GPass);
+end;
+
+type
+  TCountingAllocator = class(TInterfacedObject, IAllocator)
+  private
+    FAllocCount: SizeUInt;
+    FDeallocCount: SizeUInt;
+  public
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
+    function GetMem(aSize: SizeUInt): Pointer;
+    function AllocMem(aSize: SizeUInt): Pointer;
+    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+    procedure FreeMem(aDst: Pointer);
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(aPtr: Pointer);
+    function Traits: TAllocatorTraits;
+
+    property AllocCount: SizeUInt read FAllocCount;
+    property DeallocCount: SizeUInt read FDeallocCount;
+  end;
+
+function TCountingAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TCountingAllocator.Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TCountingAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
+end;
+
+function TCountingAllocator.GetMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Inc(FAllocCount);
+  Result := System.GetMem(aSize);
+end;
+
+function TCountingAllocator.AllocMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Inc(FAllocCount);
+  Result := System.AllocMem(aSize);
+end;
+
+function TCountingAllocator.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+  begin
+    FreeMem(aDst);
+    Exit(nil);
+  end;
+  if aDst = nil then
+    Exit(GetMem(aSize));
+  Inc(FAllocCount);
+  Result := System.ReallocMem(aDst, aSize);
+end;
+
+procedure TCountingAllocator.FreeMem(aDst: Pointer);
+begin
+  if aDst = nil then
+    Exit;
+  Inc(FDeallocCount);
+  System.FreeMem(aDst);
+end;
+
+function TCountingAllocator.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+begin
+  Result := GetMem(aSize);
+end;
+
+procedure TCountingAllocator.FreeAligned(aPtr: Pointer);
+begin
+  FreeMem(aPtr);
+end;
+
+function TCountingAllocator.Traits: TAllocatorTraits;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.HasMemSize := False;
+  Result.SupportsAligned := False;
+end;
+
+function LoadCollectionsSource(const AFileName: string): string;
+var
+  LPath: string;
+  LText: TStringList;
+begin
+  LPath := '../../../src/' + AFileName;
+  if not FileExists(LPath) then
+    LPath := 'core/src/' + AFileName;
+  if not FileExists(LPath) then
+  begin
+    WriteLn('FAIL: source contract file not found: ', AFileName);
+    Halt(1);
+  end;
+
+  LText := TStringList.Create;
+  try
+    LText.LoadFromFile(LPath);
+    Result := LText.Text;
+  finally
+    LText.Free;
+  end;
 end;
 
 procedure TestVecPushClear;
@@ -49,6 +175,92 @@ begin
   finally V.Free; end;
   SnapAssert(Snap, 'Vec push 100 + pop all');
   Pass('Vec push 100 + pop all');
+end;
+
+procedure TestSmallVecManagedInlineClearReleasesSlots;
+type TSmallVecT = specialize TSmallVec<ITracked, 4>;
+var
+  SV: TSmallVecT;
+  i: Integer;
+  Snap: TLeakSnapshot;
+  t: ITracked;
+begin
+  Snap := SnapTake;
+  SV.Init;
+  for i := 1 to 4 do
+  begin
+    t := MakeTracked(i);
+    SV.Push(t);
+    t := nil;
+  end;
+
+  SV.Clear;
+  SnapAssert(Snap, 'SmallVec managed inline clear');
+
+  SV.Done;
+  SnapAssert(Snap, 'SmallVec managed inline clear + done');
+  Pass('SmallVec managed inline clear releases slots');
+end;
+
+procedure TestSmallVecManagedInlinePopReleasesSlot;
+type TSmallVecT = specialize TSmallVec<ITracked, 4>;
+var
+  SV: TSmallVecT;
+  Snap: TLeakSnapshot;
+  t, popped: ITracked;
+begin
+  Snap := SnapTake;
+  SV.Init;
+  t := MakeTracked(10);
+  SV.Push(t);
+  t := nil;
+
+  if not SV.Pop(popped) then
+  begin
+    WriteLn('FAIL: SmallVec managed Pop returned false');
+    Halt(1);
+  end;
+
+  if (popped = nil) or (popped.GetId <> 10) then
+  begin
+    WriteLn('FAIL: SmallVec managed Pop returned wrong item');
+    Halt(1);
+  end;
+
+  popped := nil;
+  SnapAssert(Snap, 'SmallVec managed inline pop');
+
+  SV.Done;
+  SnapAssert(Snap, 'SmallVec managed inline pop + done');
+  Pass('SmallVec managed inline pop releases slot');
+end;
+
+procedure TestSmallVecManagedSpillDoneReleasesInlineCopies;
+type TSmallVecT = specialize TSmallVec<ITracked, 2>;
+var
+  SV: TSmallVecT;
+  i: Integer;
+  Snap: TLeakSnapshot;
+  t: ITracked;
+begin
+  Snap := SnapTake;
+  SV.Init;
+  for i := 1 to 3 do
+  begin
+    t := MakeTracked(20 + i);
+    SV.Push(t);
+    t := nil;
+  end;
+
+  if SV.IsInline then
+  begin
+    WriteLn('FAIL: SmallVec managed spill did not switch to heap');
+    Halt(1);
+  end;
+
+  SV.Done;
+  SnapAssert(Snap, 'SmallVec managed spill + done');
+  Pass('SmallVec managed spill done releases inline copies');
 end;
 
 procedure TestVecDequePushPopClear;
@@ -82,6 +294,562 @@ begin
   Pass('VecDeque wrap + resize');
 end;
 
+function KeepTrackedOddId(const AValue: ITracked; aData: Pointer): Boolean;
+begin
+  Result := (AValue <> nil) and ((AValue.GetId mod 2) <> 0);
+end;
+
+procedure TestVecDequeManagedResizeAndRetainReleaseSlots;
+type TDequeT = specialize TVecDeque<ITracked>;
+var
+  D: TDequeT;
+  i: Integer;
+  Snap: TLeakSnapshot;
+  t, kept0, kept1: ITracked;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    for i := 1 to 5 do
+    begin
+      t := MakeTracked(i);
+      D.PushBack(t);
+      t := nil;
+    end;
+
+    D.Resize(2);
+    if GTrackedAlive <> Snap + 2 then
+    begin
+      WriteLn('FAIL: VecDeque managed Resize shrink should release discarded refs');
+      Halt(1);
+    end;
+
+    D.Resize(4);
+    if GTrackedAlive <> Snap + 2 then
+    begin
+      WriteLn('FAIL: VecDeque managed Resize grow should default-initialize new slots');
+      Halt(1);
+    end;
+    if (D.Get(2) <> nil) or (D.Get(3) <> nil) then
+    begin
+      WriteLn('FAIL: VecDeque managed Resize grow exposed non-default slots');
+      Halt(1);
+    end;
+
+    t := MakeTracked(6);
+    D.Put(2, t);
+    t := nil;
+    t := MakeTracked(7);
+    D.Put(3, t);
+    t := nil;
+
+    D.Retain(@KeepTrackedOddId, nil);
+    if GTrackedAlive <> Snap + 2 then
+    begin
+      WriteLn('FAIL: VecDeque managed Retain should release filtered refs');
+      Halt(1);
+    end;
+    kept0 := D.Get(0);
+    kept1 := D.Get(1);
+    if (D.Count <> 2) or (kept0.GetId <> 1) or (kept1.GetId <> 7) then
+    begin
+      WriteLn('FAIL: VecDeque managed Retain kept unexpected items');
+      Halt(1);
+    end;
+    kept0 := nil;
+    kept1 := nil;
+
+    D.Clear;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed Resize/Retain releases slots');
+  Pass('VecDeque managed Resize/Retain releases slots');
+end;
+
+procedure TestVecDequeManagedTryPopPointerOwnsRefsAndSyncsTail;
+type TDequeT = specialize TVecDeque<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, outItem, backItem: ITracked;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    t := MakeTracked(1); D.PushBack(t); t := nil;
+    t := MakeTracked(2); D.PushBack(t); t := nil;
+    t := MakeTracked(3); D.PushBack(t); t := nil;
+
+    if not D.TryPop(@outItem, 1) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPop(pointer) returned false');
+      Halt(1);
+    end;
+
+    if (outItem = nil) or (outItem.GetId <> 3) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPop(pointer) returned wrong item');
+      Halt(1);
+    end;
+
+    t := MakeTracked(4);
+    D.PushBack(t);
+    t := nil;
+
+    backItem := D.Back;
+    if (backItem = nil) or (backItem.GetId <> 4) then
+    begin
+      WriteLn('FAIL: VecDeque PushBack after TryPop(pointer) did not sync tail');
+      Halt(1);
+    end;
+    backItem := nil;
+
+    outItem := nil;
+    D.Clear;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed TryPop(pointer) owns refs and syncs tail');
+  Pass('VecDeque managed TryPop(pointer) owns refs and syncs tail');
+end;
+
+procedure TestVecDequeManagedTryPopArrayOwnsRefsAndSyncsTail;
+type
+  TDequeT = specialize TVecDeque<ITracked>;
+  TTrackedArray = specialize TGenericArray<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, backItem: ITracked;
+  outItems: TTrackedArray;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    t := MakeTracked(10); D.PushBack(t); t := nil;
+    t := MakeTracked(11); D.PushBack(t); t := nil;
+    t := MakeTracked(12); D.PushBack(t); t := nil;
+    t := MakeTracked(13); D.PushBack(t); t := nil;
+
+    if not D.TryPop(outItems, 2) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPop(array) returned false');
+      Halt(1);
+    end;
+
+    if (Length(outItems) <> 2) or
+       (outItems[0] = nil) or (outItems[0].GetId <> 12) or
+       (outItems[1] = nil) or (outItems[1].GetId <> 13) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPop(array) returned wrong items');
+      Halt(1);
+    end;
+
+    t := MakeTracked(14);
+    D.PushBack(t);
+    t := nil;
+
+    backItem := D.Back;
+    if (backItem = nil) or (backItem.GetId <> 14) then
+    begin
+      WriteLn('FAIL: VecDeque PushBack after TryPop(array) did not sync tail');
+      Halt(1);
+    end;
+    backItem := nil;
+
+    outItems := nil;
+    D.Clear;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed TryPop(array) owns refs and syncs tail');
+  Pass('VecDeque managed TryPop(array) owns refs and syncs tail');
+end;
+
+procedure TestVecDequeManagedTryPopElementOwnsRefsAndSyncsTail;
+type TDequeT = specialize TVecDeque<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, outItem, backItem: ITracked;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    t := MakeTracked(20); D.PushBack(t); t := nil;
+    t := MakeTracked(21); D.PushBack(t); t := nil;
+    t := MakeTracked(22); D.PushBack(t); t := nil;
+
+    if not D.TryPop(outItem) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPop(element) returned false');
+      Halt(1);
+    end;
+
+    if (outItem = nil) or (outItem.GetId <> 22) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPop(element) returned wrong item');
+      Halt(1);
+    end;
+
+    t := MakeTracked(23);
+    D.PushBack(t);
+    t := nil;
+
+    backItem := D.Back;
+    if (backItem = nil) or (backItem.GetId <> 23) then
+    begin
+      WriteLn('FAIL: VecDeque PushBack after TryPop(element) did not sync tail');
+      Halt(1);
+    end;
+    backItem := nil;
+
+    outItem := nil;
+    D.Clear;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed TryPop(element) owns refs and syncs tail');
+  Pass('VecDeque managed TryPop(element) owns refs and syncs tail');
+end;
+
+procedure TestVecDequeManagedPointerReadOwnsRefsAfterClear;
+type TDequeT = specialize TVecDeque<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, outItem: ITracked;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    t := MakeTracked(30); D.PushBack(t); t := nil;
+    t := MakeTracked(31); D.PushBack(t); t := nil;
+
+    D.Read(1, @outItem, 1);
+
+    if (outItem = nil) or (outItem.GetId <> 31) then
+    begin
+      WriteLn('FAIL: VecDeque managed Read(pointer) returned wrong item');
+      Halt(1);
+    end;
+
+    D.Clear;
+
+    if (outItem = nil) or (outItem.GetId <> 31) then
+    begin
+      WriteLn('FAIL: VecDeque managed Read(pointer) output did not own ref after clear');
+      Halt(1);
+    end;
+
+    outItem := nil;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed Read(pointer) owns refs after clear');
+  Pass('VecDeque managed Read(pointer) owns refs after clear');
+end;
+
+procedure TestVecDequeManagedWritePointerReleasesOverwrittenRef;
+type TDequeT = specialize TVecDeque<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  oldItem: ITracked;
+
+  procedure WriteReplacement;
+  var
+    newItem: ITracked;
+  begin
+    newItem := MakeTracked(36);
+    D.WriteExact(0, @newItem, 1);
+
+    if GTrackedAlive <> Snap + 1 then
+    begin
+      WriteLn('FAIL: VecDeque managed WriteExact(pointer) did not release overwritten ref');
+      Halt(1);
+    end;
+
+    newItem := nil;
+  end;
+
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    oldItem := MakeTracked(35);
+    D.PushBack(oldItem);
+    oldItem := nil;
+
+    WriteReplacement;
+    if GTrackedAlive <> Snap + 1 then
+    begin
+      WriteLn('FAIL: VecDeque managed WriteExact(pointer) output did not own ref after local clear');
+      Halt(1);
+    end;
+
+    D.Clear;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed WriteExact(pointer) releases overwritten ref');
+  Pass('VecDeque managed WriteExact(pointer) releases overwritten ref');
+end;
+
+procedure TestVecDequeManagedTryPeekCopyOwnsRefsAfterClear;
+type TDequeT = specialize TVecDeque<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, outItem: ITracked;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    t := MakeTracked(40); D.PushBack(t); t := nil;
+    t := MakeTracked(41); D.PushBack(t); t := nil;
+
+    if not D.TryPeekCopy(@outItem, 1) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPeekCopy(pointer) returned false');
+      Halt(1);
+    end;
+
+    if (outItem = nil) or (outItem.GetId <> 41) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPeekCopy(pointer) returned wrong item');
+      Halt(1);
+    end;
+
+    D.Clear;
+
+    if (outItem = nil) or (outItem.GetId <> 41) then
+    begin
+      WriteLn('FAIL: VecDeque managed TryPeekCopy(pointer) output did not own ref after clear');
+      Halt(1);
+    end;
+
+    outItem := nil;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed TryPeekCopy(pointer) owns refs after clear');
+  Pass('VecDeque managed TryPeekCopy(pointer) owns refs after clear');
+end;
+
+procedure TestVecDequeManagedRemoveCopyAtOwnsRefsAfterClear;
+type TDequeT = specialize TVecDeque<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, outItem: ITracked;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    t := MakeTracked(50); D.PushBack(t); t := nil;
+    t := MakeTracked(51); D.PushBack(t); t := nil;
+    t := MakeTracked(52); D.PushBack(t); t := nil;
+
+    D.RemoveCopyAt(1, @outItem);
+
+    if (outItem = nil) or (outItem.GetId <> 51) then
+    begin
+      WriteLn('FAIL: VecDeque managed RemoveCopyAt(pointer) returned wrong item');
+      Halt(1);
+    end;
+
+    D.Clear;
+
+    if (outItem = nil) or (outItem.GetId <> 51) then
+    begin
+      WriteLn('FAIL: VecDeque managed RemoveCopyAt(pointer) output did not own ref after clear');
+      Halt(1);
+    end;
+
+    outItem := nil;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed RemoveCopyAt(pointer) owns refs after clear');
+  Pass('VecDeque managed RemoveCopyAt(pointer) owns refs after clear');
+end;
+
+procedure TestVecDequeManagedSwapRemoveCopyAtOwnsRefsAfterClear;
+type TDequeT = specialize TVecDeque<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, outItem: ITracked;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    t := MakeTracked(60); D.PushBack(t); t := nil;
+    t := MakeTracked(61); D.PushBack(t); t := nil;
+    t := MakeTracked(62); D.PushBack(t); t := nil;
+
+    D.SwapRemoveCopyAt(1, @outItem);
+
+    if (outItem = nil) or (outItem.GetId <> 61) then
+    begin
+      WriteLn('FAIL: VecDeque managed SwapRemoveCopyAt(pointer) returned wrong item');
+      Halt(1);
+    end;
+
+    D.Clear;
+
+    if (outItem = nil) or (outItem.GetId <> 61) then
+    begin
+      WriteLn('FAIL: VecDeque managed SwapRemoveCopyAt(pointer) output did not own ref after clear');
+      Halt(1);
+    end;
+
+    outItem := nil;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed SwapRemoveCopyAt(pointer) owns refs after clear');
+  Pass('VecDeque managed SwapRemoveCopyAt(pointer) owns refs after clear');
+end;
+
+procedure TestVecDequeManagedToArrayOwnsRefsAfterClear;
+type
+  TDequeT = specialize TVecDeque<ITracked>;
+  TTrackedArray = specialize TGenericArray<ITracked>;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, tmp: ITracked;
+  Items: TTrackedArray;
+  i: Integer;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    for i := 1 to 64 do
+    begin
+      t := MakeTracked(700 + i);
+      D.PushBack(t);
+      t := nil;
+    end;
+    for i := 1 to 48 do
+    begin
+      tmp := D.PopFront;
+      tmp := nil;
+    end;
+    for i := 65 to 80 do
+    begin
+      t := MakeTracked(700 + i);
+      D.PushBack(t);
+      t := nil;
+    end;
+
+    Items := D.ToArray;
+    if Length(Items) <> 32 then
+    begin
+      WriteLn('FAIL: VecDeque managed ToArray length expected=32 actual=',
+        Length(Items));
+      Halt(1);
+    end;
+
+    D.Clear;
+
+    if GTrackedAlive <> Snap + Length(Items) then
+    begin
+      WriteLn('FAIL: VecDeque managed ToArray output did not own refs after clear');
+      Halt(1);
+    end;
+
+    if (Items[0] = nil) or (Items[0].GetId <> 749) or
+       (Items[15] = nil) or (Items[15].GetId <> 764) or
+       (Items[16] = nil) or (Items[16].GetId <> 765) or
+       (Items[31] = nil) or (Items[31].GetId <> 780) then
+    begin
+      WriteLn('FAIL: VecDeque managed ToArray returned wrong wrapped order');
+      Halt(1);
+    end;
+
+    Items := nil;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed ToArray owns refs after clear');
+  Pass('VecDeque managed ToArray owns refs after clear');
+end;
+
+procedure TestVecDequeManagedPeekRangeContiguousAfterWrapKeepsRefs;
+type
+  TDequeT = specialize TVecDeque<ITracked>;
+  PTracked = ^ITracked;
+var
+  D: TDequeT;
+  Snap: TLeakSnapshot;
+  t, tmp: ITracked;
+  P: PTracked;
+  LCapacity, LCount: SizeUInt;
+  i: Integer;
+begin
+  Snap := SnapTake;
+  D := TDequeT.Create;
+  try
+    LCapacity := D.Capacity;
+    for i := 1 to Integer(LCapacity) do
+    begin
+      t := MakeTracked(900 + i);
+      D.PushBack(t);
+      t := nil;
+    end;
+    for i := 1 to 2 do
+    begin
+      tmp := D.PopFront;
+      tmp := nil;
+    end;
+    for i := Integer(LCapacity) + 1 to Integer(LCapacity) + 2 do
+    begin
+      t := MakeTracked(900 + i);
+      D.PushBack(t);
+      t := nil;
+    end;
+
+    LCount := D.Count;
+    if D.PeekRange(LCount) <> nil then
+    begin
+      WriteLn('FAIL: VecDeque managed PeekRangeContiguous test did not wrap');
+      Halt(1);
+    end;
+
+    P := PTracked(D.PeekRangeContiguous(LCount));
+    if P = nil then
+    begin
+      WriteLn('FAIL: VecDeque managed PeekRangeContiguous returned nil');
+      Halt(1);
+    end;
+
+    if GTrackedAlive <> Snap + LCount then
+    begin
+      WriteLn('FAIL: VecDeque managed PeekRangeContiguous changed live count');
+      Halt(1);
+    end;
+
+    if (P[0] = nil) or (P[0].GetId <> 903) or
+       (P[LCount - 3] = nil) or (P[LCount - 3].GetId <> 900 + Integer(LCapacity)) or
+       (P[LCount - 2] = nil) or (P[LCount - 2].GetId <> 901 + Integer(LCapacity)) or
+       (P[LCount - 1] = nil) or (P[LCount - 1].GetId <> 902 + Integer(LCapacity)) then
+    begin
+      WriteLn('FAIL: VecDeque managed PeekRangeContiguous returned wrong order');
+      Halt(1);
+    end;
+
+    D.Clear;
+  finally
+    D.Free;
+  end;
+  SnapAssert(Snap, 'VecDeque managed PeekRangeContiguous after wrap keeps refs');
+  Pass('VecDeque managed PeekRangeContiguous after wrap keeps refs');
+end;
+
 procedure TestHashMapRehash;
 type TMapT = specialize THashMap<Int32, ITracked>;
 var M: TMapT; i: Integer; Snap: TLeakSnapshot; t: ITracked;
@@ -109,6 +877,581 @@ begin
   finally M.Free; end;
   SnapAssert(Snap, 'HashMap overwrite 100');
   Pass('HashMap overwrite stress');
+end;
+
+procedure TestHashMapManagedSelfAliasOverwriteKeepsValue;
+type
+  TMapT = specialize THashMap<Int32, ITracked>;
+  TEntry = TMapT.TEntry;
+  PEntry = ^TEntry;
+var
+  M: TMapT;
+  Snap: TLeakSnapshot;
+  t, v: ITracked;
+  Iter: TPtrIter;
+  Entry: PEntry;
+begin
+  Snap := SnapTake;
+  M := TMapT.Create;
+  try
+    t := MakeTracked(4242);
+    M.Put(1, t);
+    t := nil;
+
+    Iter := M.PtrIter;
+    if not Iter.MoveNext then
+    begin
+      WriteLn('FAIL: HashMap self-alias overwrite iterator was empty');
+      Halt(1);
+    end;
+    Entry := PEntry(Iter.GetCurrent);
+
+    M.AddOrAssign(1, Entry^.Value);
+    if not M.TryGetValue(1, v) then
+    begin
+      WriteLn('FAIL: HashMap self-alias overwrite lost key');
+      Halt(1);
+    end;
+    if (v = nil) or (v.GetId <> 4242) then
+    begin
+      WriteLn('FAIL: HashMap self-alias overwrite did not keep value');
+      Halt(1);
+    end;
+
+    v := nil;
+    M.Clear;
+  finally
+    M.Free;
+  end;
+  SnapAssert(Snap, 'HashMap managed self-alias overwrite keeps value');
+  Pass('HashMap managed self-alias overwrite keeps value');
+end;
+
+function TrackedHash(const AKey: ITracked): UInt32;
+var Id: UInt32;
+begin
+  if AKey = nil then
+    Exit(0);
+  Id := UInt32(AKey.GetId);
+  Id := (Id xor (Id shr 16)) * UInt32($7feb352d);
+  Id := (Id xor (Id shr 15)) * UInt32($846ca68b);
+  Result := Id xor (Id shr 16);
+end;
+
+function TrackedEquals(const L, R: ITracked): Boolean;
+begin
+  if L = nil then
+    Exit(R = nil);
+  if R = nil then
+    Exit(False);
+  Result := L.GetId = R.GetId;
+end;
+
+function KeepTrackedOddKeys(const AKey: ITracked; const AValue: ITracked): Boolean;
+begin
+  Result := (AKey.GetId mod 2) = 1;
+end;
+
+var
+  GSwissDrainVisits: Int32;
+  GSwissDrainFailVisits: Int32;
+  GSwissDrainFirstKeyId: Int32;
+
+procedure CountSwissDrainVisit(const AKey: ITracked; const AValue: ITracked);
+begin
+  Inc(GSwissDrainVisits);
+end;
+
+procedure FailOnSecondSwissDrainVisit(const AKey: ITracked; const AValue: ITracked);
+begin
+  Inc(GSwissDrainFailVisits);
+  if GSwissDrainFailVisits = 1 then
+    GSwissDrainFirstKeyId := AKey.GetId
+  else
+    raise EInvalidOperation.Create('forced SwissTable Drain callback failure');
+end;
+
+procedure TestSwissTableManagedKeyValueLifecycle;
+type TSwissT = specialize TSwissTable<ITracked, ITracked>;
+var
+  M: TSwissT;
+  Snap: TLeakSnapshot;
+  i: Integer;
+  k, v: ITracked;
+begin
+  Snap := SnapTake;
+  M := TSwissT.Create(0, @TrackedHash, @TrackedEquals);
+  try
+    for i := 1 to 512 do
+    begin
+      k := MakeTracked(i);
+      v := MakeTracked(i + 10000);
+      M.Put(k, v);
+      k := nil;
+      v := nil;
+    end;
+
+    for i := 1 to 512 do
+    begin
+      k := MakeTracked(i);
+      v := MakeTracked(i + 20000);
+      M.AddOrAssign(k, v);
+      k := nil;
+      v := nil;
+    end;
+
+    for i := 1 to 128 do
+    begin
+      k := MakeTracked(i * 2);
+      M.Remove(k);
+      k := nil;
+    end;
+
+    M.Retain(@KeepTrackedOddKeys);
+    M.ShrinkToFit;
+    GSwissDrainVisits := 0;
+    M.Drain(@CountSwissDrainVisit);
+    if GSwissDrainVisits <> 256 then
+    begin
+      WriteLn('FAIL: SwissTable drain visit count expected=256 actual=', GSwissDrainVisits);
+      Halt(1);
+    end;
+
+    for i := 1 to 64 do
+    begin
+      k := MakeTracked(i);
+      v := MakeTracked(i + 30000);
+      M.Put(k, v);
+      k := nil;
+      v := nil;
+    end;
+    M.Clear;
+  finally
+    M.Free;
+  end;
+  SnapAssert(Snap, 'SwissTable managed key/value lifecycle');
+  Pass('SwissTable managed key/value lifecycle');
+end;
+
+procedure TestSwissTableDrainExceptionKeepsPartialStateConsistent;
+type TSwissT = specialize TSwissTable<ITracked, ITracked>;
+const
+  CItemCount = 4;
+var
+  Snap: TLeakSnapshot;
+
+  procedure RunScenario;
+  var
+    M: TSwissT;
+    I: Integer;
+    K, V: ITracked;
+    Raised: Boolean;
+  begin
+    M := TSwissT.Create(0, @TrackedHash, @TrackedEquals);
+    try
+      for I := 1 to CItemCount do
+      begin
+        K := MakeTracked(I);
+        V := MakeTracked(I + 100);
+        M.Put(K, V);
+        K := nil;
+        V := nil;
+      end;
+
+      GSwissDrainFailVisits := 0;
+      GSwissDrainFirstKeyId := 0;
+      Raised := False;
+      try
+        M.Drain(@FailOnSecondSwissDrainVisit);
+      except
+        on E: EInvalidOperation do
+          Raised := True;
+      end;
+      if not Raised then
+      begin
+        WriteLn('FAIL: SwissTable Drain exception test expected callback failure');
+        Halt(1);
+      end;
+      if GSwissDrainFailVisits <> 2 then
+      begin
+        WriteLn('FAIL: SwissTable Drain exception visit count expected=2 actual=', GSwissDrainFailVisits);
+        Halt(1);
+      end;
+      if M.Count <> CItemCount - 1 then
+      begin
+        WriteLn('FAIL: SwissTable Drain exception count expected=', CItemCount - 1, ' actual=', M.Count);
+        Halt(1);
+      end;
+
+      for I := 1 to CItemCount do
+      begin
+        K := MakeTracked(I);
+        V := nil;
+        if I = GSwissDrainFirstKeyId then
+        begin
+          if M.TryGetValue(K, V) then
+          begin
+            WriteLn('FAIL: SwissTable Drain exception kept first drained key=', I);
+            Halt(1);
+          end;
+        end
+        else
+        begin
+          if not M.TryGetValue(K, V) then
+          begin
+            WriteLn('FAIL: SwissTable Drain exception lost undrained key=', I);
+            Halt(1);
+          end;
+          if (V = nil) or (V.GetId <> I + 100) then
+          begin
+            WriteLn('FAIL: SwissTable Drain exception wrong value for key=', I);
+            Halt(1);
+          end;
+        end;
+        K := nil;
+        V := nil;
+      end;
+
+      K := MakeTracked(GSwissDrainFirstKeyId);
+      V := MakeTracked(GSwissDrainFirstKeyId + 200);
+      M.Put(K, V);
+      K := nil;
+      V := nil;
+      if M.Count <> CItemCount then
+      begin
+        WriteLn('FAIL: SwissTable Drain exception reinsert count expected=', CItemCount, ' actual=', M.Count);
+        Halt(1);
+      end;
+
+      M.Clear;
+    finally
+      M.Free;
+    end;
+  end;
+
+begin
+  Snap := SnapTake;
+  RunScenario;
+  SnapAssert(Snap, 'SwissTable Drain callback exception keeps partial state consistent');
+  Pass('SwissTable Drain callback exception keeps partial state consistent');
+end;
+
+procedure TestSwissTableManagedSelfAliasOverwriteKeepsValue;
+type TSwissT = specialize TSwissTable<ITracked, ITracked>;
+var
+  M: TSwissT;
+  Snap: TLeakSnapshot;
+  k, lookupKey, v: ITracked;
+  Iter: TSwissT.TPtrEnumerator;
+  Slot: TSwissT.PSlot;
+begin
+  Snap := SnapTake;
+  M := TSwissT.Create(0, @TrackedHash, @TrackedEquals);
+  try
+    k := MakeTracked(5151);
+    v := MakeTracked(6161);
+    M.Put(k, v);
+    k := nil;
+    v := nil;
+
+    Iter := M.GetPtrEnumerator;
+    if not Iter.MoveNext then
+    begin
+      WriteLn('FAIL: SwissTable self-alias overwrite iterator was empty');
+      Halt(1);
+    end;
+    Slot := Iter.Current;
+
+    lookupKey := MakeTracked(5151);
+    M.AddOrAssign(lookupKey, Slot^.Value);
+    lookupKey := nil;
+
+    lookupKey := MakeTracked(5151);
+    if not M.TryGetValue(lookupKey, v) then
+    begin
+      WriteLn('FAIL: SwissTable self-alias overwrite lost key');
+      Halt(1);
+    end;
+    lookupKey := nil;
+    if (v = nil) or (v.GetId <> 6161) then
+    begin
+      WriteLn('FAIL: SwissTable self-alias overwrite did not keep value');
+      Halt(1);
+    end;
+
+    v := nil;
+    M.Clear;
+  finally
+    M.Free;
+  end;
+  SnapAssert(Snap, 'SwissTable managed self-alias overwrite keeps value');
+  Pass('SwissTable managed self-alias overwrite keeps value');
+end;
+
+procedure TestSwissHashMapAdapterPtrIterClearReleasesCachedEntry;
+type
+  TMap = specialize TSwissHashMap<Int32, ITracked>;
+  TEntry = TMap.TEntry;
+  PEntry = ^TEntry;
+var
+  M: TMap;
+  Iter: TPtrIter;
+  Entry: PEntry;
+  Snap: TLeakSnapshot;
+  Value: ITracked;
+begin
+  Snap := SnapTake;
+  M := TMap.Create;
+  try
+    Value := MakeTracked(7701);
+    M.Put(1, Value);
+    Value := nil;
+
+    Iter := M.PtrIter;
+    if not Iter.MoveNext then
+    begin
+      WriteLn('FAIL: SwissHashMap adapter PtrIter should yield cached entry');
+      Halt(1);
+    end;
+
+    Entry := PEntry(Iter.GetCurrent);
+    if (Entry = nil) or (Entry^.Value = nil) or (Entry^.Value.GetId <> 7701) then
+    begin
+      WriteLn('FAIL: SwissHashMap adapter PtrIter returned wrong cached value');
+      Halt(1);
+    end;
+
+    M.Clear;
+    SnapAssert(Snap, 'SwissHashMap adapter PtrIter Clear releases cached entry');
+  finally
+    M.Free;
+  end;
+  SnapAssert(Snap, 'SwissHashMap adapter PtrIter Clear releases cached entry + free');
+  Pass('SwissHashMap adapter PtrIter Clear releases cached entry');
+end;
+
+procedure TestSwissTableStrManagedOverwriteUsesManagedAssignment;
+var
+  Source: string;
+begin
+  Source := LoadCollectionsSource('nextpas.core.collections.hashmap.swiss.str.pas');
+  Source := StringReplace(Source, #13#10, #10, [rfReplaceAll]);
+  if Pos('if FSlots[Li].Key = AKey then' + #10 +
+    '      begin' + #10 +
+    '        if System.IsManagedType(V) then Finalize(FSlots[Li].Value);' + #10 +
+    '        FSlots[Li].Value := AValue;', Source) <> 0 then
+  begin
+    WriteLn('FAIL: SwissTableStr managed overwrite manually finalizes slot value');
+    Halt(1);
+  end;
+  Pass('SwissTableStr managed overwrite uses managed assignment');
+end;
+
+procedure TestSwissTableStrClearKeepsCustomAllocator;
+type TStrTrackedSwiss = specialize TSwissTableStr<ITracked>;
+var
+  M: TStrTrackedSwiss;
+  AllocatorObj: TCountingAllocator;
+  Allocator: IAllocator;
+  Snap: TLeakSnapshot;
+  BeforeSecondPutAllocCount: SizeUInt;
+  BeforeSecondClearDeallocCount: SizeUInt;
+  t: ITracked;
+begin
+  Snap := SnapTake;
+  AllocatorObj := TCountingAllocator.Create;
+  Allocator := AllocatorObj as IAllocator;
+  M := TStrTrackedSwiss.CreateWith(16, Allocator);
+  try
+    t := MakeTracked(7101);
+    M.Put('first', t);
+    t := nil;
+    M.Clear;
+    if AllocatorObj.DeallocCount <> AllocatorObj.AllocCount then
+    begin
+      WriteLn('FAIL: SwissTableStr Clear did not release first table through custom allocator');
+      Halt(1);
+    end;
+
+    BeforeSecondPutAllocCount := AllocatorObj.AllocCount;
+    t := MakeTracked(7102);
+    M.Put('second', t);
+    t := nil;
+
+    if AllocatorObj.AllocCount <= BeforeSecondPutAllocCount then
+    begin
+      WriteLn('FAIL: SwissTableStr Clear lost custom allocator before reuse');
+      Halt(1);
+    end;
+
+    BeforeSecondClearDeallocCount := AllocatorObj.DeallocCount;
+    M.Clear;
+    if AllocatorObj.DeallocCount <= BeforeSecondClearDeallocCount then
+    begin
+      WriteLn('FAIL: SwissTableStr second Clear did not release through custom allocator');
+      Halt(1);
+    end;
+    if AllocatorObj.DeallocCount <> AllocatorObj.AllocCount then
+    begin
+      WriteLn('FAIL: SwissTableStr Clear allocator release count mismatch');
+      Halt(1);
+    end;
+  finally
+    M.Free;
+  end;
+  Allocator := nil;
+  SnapAssert(Snap, 'SwissTableStr Clear keeps custom allocator');
+  Pass('SwissTableStr Clear keeps custom allocator');
+end;
+
+procedure TestSwissTableI32ManagedOverwriteUsesManagedAssignment;
+var
+  Source: string;
+begin
+  Source := LoadCollectionsSource('nextpas.core.collections.hashmap.swiss.i32.pas');
+  Source := StringReplace(Source, #13#10, #10, [rfReplaceAll]);
+  if Pos('if FSlots[Li].Key = AKey then' + #10 +
+    '      begin' + #10 +
+    '        if System.IsManagedType(V) then Finalize(FSlots[Li].Value);' + #10 +
+    '        FSlots[Li].Value := AValue;', Source) <> 0 then
+  begin
+    WriteLn('FAIL: SwissTableI32 managed overwrite manually finalizes slot value');
+    Halt(1);
+  end;
+  Pass('SwissTableI32 managed overwrite uses managed assignment');
+end;
+
+procedure TestSwissTableI32ManagedTombstoneReuseAvoidsGrowth;
+type
+  TI32TrackedSwiss = specialize TSwissTableI32<ITracked>;
+const
+  INITIAL_CAPACITY = 16;
+  INSERT_COUNT = 28;
+  REMOVE_COUNT = 14;
+var
+  Snap: TLeakSnapshot;
+
+  procedure RunScenario;
+  var
+    M: TI32TrackedSwiss;
+    InitialCapacity: SizeUInt;
+    i: Integer;
+    t: ITracked;
+  begin
+    M := TI32TrackedSwiss.Create(INITIAL_CAPACITY);
+    try
+      for i := 1 to INSERT_COUNT do
+      begin
+        t := MakeTracked(7200 + i);
+        M.Put(i, t);
+        t := nil;
+      end;
+
+      InitialCapacity := M.Capacity;
+      if InitialCapacity = 0 then
+      begin
+        WriteLn('FAIL: SwissTableI32 tombstone reuse test expected allocated table');
+        Halt(1);
+      end;
+
+      for i := 1 to REMOVE_COUNT do
+        if not M.Remove(i) then
+        begin
+          WriteLn('FAIL: SwissTableI32 tombstone reuse remove missed key=', i);
+          Halt(1);
+        end;
+
+      for i := 1 to REMOVE_COUNT do
+      begin
+        t := MakeTracked(8200 + i);
+        M.Put(i, t);
+        t := nil;
+      end;
+
+      if M.Capacity <> InitialCapacity then
+      begin
+        WriteLn('FAIL: SwissTableI32 tombstone reuse grew capacity from ', InitialCapacity, ' to ', M.Capacity);
+        Halt(1);
+      end;
+      if M.Count <> INSERT_COUNT then
+      begin
+        WriteLn('FAIL: SwissTableI32 tombstone reuse count expected=', INSERT_COUNT, ' actual=', M.Count);
+        Halt(1);
+      end;
+      for i := 1 to REMOVE_COUNT do
+      begin
+        if not M.TryGetValue(i, t) then
+        begin
+          WriteLn('FAIL: SwissTableI32 tombstone reuse lost reinserted key=', i);
+          Halt(1);
+        end;
+        if (t = nil) or (t.GetId <> 8200 + i) then
+        begin
+          WriteLn('FAIL: SwissTableI32 tombstone reuse value mismatch key=', i);
+          Halt(1);
+        end;
+        t := nil;
+      end;
+
+      t := nil;
+      M.Clear;
+    finally
+      M.Free;
+    end;
+  end;
+
+begin
+  Snap := SnapTake;
+  RunScenario;
+  SnapAssert(Snap, 'SwissTableI32 managed tombstone reuse avoids growth');
+  Pass('SwissTableI32 managed tombstone reuse avoids growth');
+end;
+
+procedure TestSwissTableI32I32ClearKeepsCustomAllocator;
+var
+  M: TSwissTableI32I32;
+  AllocatorObj: TCountingAllocator;
+  Allocator: IAllocator;
+  BeforeSecondPutAllocCount: SizeUInt;
+  BeforeSecondClearDeallocCount: SizeUInt;
+begin
+  AllocatorObj := TCountingAllocator.Create;
+  Allocator := AllocatorObj as IAllocator;
+  M := TSwissTableI32I32.CreateWith(16, Allocator);
+  try
+    M.Put(1, 10);
+    M.Clear;
+    if AllocatorObj.DeallocCount <> AllocatorObj.AllocCount then
+    begin
+      WriteLn('FAIL: SwissTableI32I32 Clear did not release first table through custom allocator');
+      Halt(1);
+    end;
+
+    BeforeSecondPutAllocCount := AllocatorObj.AllocCount;
+    M.Put(2, 20);
+    if AllocatorObj.AllocCount <= BeforeSecondPutAllocCount then
+    begin
+      WriteLn('FAIL: SwissTableI32I32 Clear lost custom allocator before reuse');
+      Halt(1);
+    end;
+
+    BeforeSecondClearDeallocCount := AllocatorObj.DeallocCount;
+    M.Clear;
+    if AllocatorObj.DeallocCount <= BeforeSecondClearDeallocCount then
+    begin
+      WriteLn('FAIL: SwissTableI32I32 second Clear did not release through custom allocator');
+      Halt(1);
+    end;
+    if AllocatorObj.DeallocCount <> AllocatorObj.AllocCount then
+    begin
+      WriteLn('FAIL: SwissTableI32I32 Clear allocator release count mismatch');
+      Halt(1);
+    end;
+  finally
+    M.Free;
+  end;
+  Allocator := nil;
+  Pass('SwissTableI32I32 Clear keeps custom allocator');
 end;
 
 function BTreeCmpInt(const A, B: Int32; aData: Pointer): SizeInt;
@@ -174,6 +1517,71 @@ begin
   Pass('CircularBuffer overwrite stress');
 end;
 
+procedure TestCircularBufferManagedTryPopReuseKeepsOutputRef;
+type TCBufT = specialize TCircularBuffer<ITracked>;
+var
+  B: TCBufT;
+  Snap: TLeakSnapshot;
+  t, Popped: ITracked;
+begin
+  Snap := SnapTake;
+  B := TCBufT.Create(1, True);
+  try
+    t := MakeTracked(1001);
+    B.Push(t);
+    t := nil;
+
+    if not B.TryPop(Popped) then
+    begin
+      WriteLn('FAIL: CircularBuffer managed TryPop returned false');
+      Halt(1);
+    end;
+
+    if (Popped = nil) or (Popped.GetId <> 1001) then
+    begin
+      WriteLn('FAIL: CircularBuffer managed TryPop returned wrong item');
+      Halt(1);
+    end;
+
+    t := MakeTracked(1002);
+    B.Push(t);
+    t := nil;
+    B.Clear;
+
+    if (Popped = nil) or (Popped.GetId <> 1001) then
+    begin
+      WriteLn('FAIL: CircularBuffer managed TryPop output did not own ref after slot reuse');
+      Halt(1);
+    end;
+
+    Popped := nil;
+  finally
+    B.Free;
+  end;
+  SnapAssert(Snap, 'CircularBuffer managed TryPop reuse keeps output ref');
+  Pass('CircularBuffer managed TryPop reuse keeps output ref');
+end;
+
+procedure TestCircularBufferManagedSlotsStayInitialized;
+const
+  SourcePath = '../../../src/nextpas.core.collections.circularbuffer.pas';
+var
+  Source: TStringList;
+begin
+  Source := TStringList.Create;
+  try
+    Source.LoadFromFile(SourcePath);
+    if Pos('FinalizeManagedElementsUnchecked(@FBuffer', Source.Text) <> 0 then
+    begin
+      WriteLn('FAIL: CircularBuffer managed slots must be released with typed defaults, not raw finalization');
+      Halt(1);
+    end;
+  finally
+    Source.Free;
+  end;
+  Pass('CircularBuffer managed slots stay initialized');
+end;
+
 procedure TestLinkedHashMapClear;
 type TLHMapT = specialize TLinkedHashMap<Int32, ITracked>;
 var M: TLHMapT; i: Integer; Snap: TLeakSnapshot; t: ITracked;
@@ -188,20 +1596,291 @@ begin
   Pass('LinkedHashMap clear stress');
 end;
 
+function CompareTrackedAsc(const A, B: ITracked; aData: Pointer): SizeInt;
+begin
+  if A.GetId < B.GetId then
+    Result := -1
+  else if A.GetId > B.GetId then
+    Result := 1
+  else
+    Result := 0;
+end;
+
+procedure TestPriorityQueueManagedToArrayOwnsRefsAfterClear;
+type
+  TPQT = specialize TPriorityQueue<ITracked>;
+  TTrackedArray = specialize TGenericArray<ITracked>;
+var
+  Q: TPQT;
+  Snap: TLeakSnapshot;
+  t: ITracked;
+  Items: TTrackedArray;
+begin
+  Snap := SnapTake;
+  Q := TPQT.Create(@CompareTrackedAsc);
+  try
+    t := MakeTracked(810); Q.Push(t); t := nil;
+    t := MakeTracked(811); Q.Push(t); t := nil;
+    t := MakeTracked(812); Q.Push(t); t := nil;
+
+    Items := Q.ToArray;
+    if Length(Items) <> 3 then
+    begin
+      WriteLn('FAIL: PriorityQueue managed ToArray length expected=3 actual=',
+        Length(Items));
+      Halt(1);
+    end;
+
+    Q.Clear;
+
+    if (Items[0] = nil) or (Items[0].GetId <> 810) then
+    begin
+      WriteLn('FAIL: PriorityQueue managed ToArray output did not own refs after clear');
+      Halt(1);
+    end;
+
+    Items := nil;
+  finally
+    Q.Free;
+  end;
+  SnapAssert(Snap, 'PriorityQueue managed ToArray owns refs after clear');
+  Pass('PriorityQueue managed ToArray owns refs after clear');
+end;
+
+procedure TestPriorityQueueManagedClearReleasesSlots;
+type
+  TPQT = specialize TPriorityQueue<ITracked>;
+var
+  Q: TPQT;
+  Snap: TLeakSnapshot;
+  t: ITracked;
+  i: Integer;
+begin
+  Snap := SnapTake;
+  Q := TPQT.Create(@CompareTrackedAsc);
+  try
+    for i := 1 to 64 do
+    begin
+      t := MakeTracked(820 + i);
+      Q.Push(t);
+      t := nil;
+    end;
+
+    Q.Clear;
+    SnapAssert(Snap, 'PriorityQueue managed Clear releases slots');
+  finally
+    Q.Free;
+  end;
+  SnapAssert(Snap, 'PriorityQueue managed Clear releases slots + free');
+  Pass('PriorityQueue managed Clear releases slots');
+end;
+
+procedure TestPriorityQueueManagedSlotsStayInitialized;
+const
+  SourcePath = '../../../src/nextpas.core.collections.priorityqueue.pas';
+var
+  Source: TStringList;
+begin
+  Source := TStringList.Create;
+  try
+    Source.LoadFromFile(SourcePath);
+    if Pos('Finalize(FItems[', Source.Text) <> 0 then
+    begin
+      WriteLn('FAIL: PriorityQueue managed slots must use typed defaults, not raw finalization');
+      Halt(1);
+    end;
+    if Pos('FItems[i] := Default(T)', Source.Text) = 0 then
+    begin
+      WriteLn('FAIL: PriorityQueue managed slots must be released with typed defaults');
+      Halt(1);
+    end;
+  finally
+    Source.Free;
+  end;
+  Pass('PriorityQueue managed slots stay initialized');
+end;
+
+procedure TestTreeSetManagedRemoveAllReleasesPoolOnFree;
+type
+  TTreeSetT = specialize TTreeSet<ITracked>;
+  TTrackedArray = specialize TGenericArray<ITracked>;
+var
+  Snap: TLeakSnapshot;
+
+  procedure RunScenario;
+  var
+    S: TTreeSetT;
+    Items: TTrackedArray;
+    i: Integer;
+  begin
+    S := TTreeSetT.Create;
+    try
+      SetLength(Items, 600);
+      for i := 1 to 600 do
+      begin
+        Items[i - 1] := MakeTracked(9000 + i);
+        S.Add(Items[i - 1]);
+      end;
+
+      for i := 1 to 600 do
+      begin
+        if not S.Remove(Items[i - 1]) then
+        begin
+          WriteLn('FAIL: TreeSet managed remove-all missed item ', i);
+          Halt(1);
+        end;
+      end;
+
+      if S.Count <> 0 then
+      begin
+        WriteLn('FAIL: TreeSet managed remove-all count expected=0 actual=', S.Count);
+        Halt(1);
+      end;
+
+      Items := nil;
+    finally
+      S.Free;
+    end;
+  end;
+
+begin
+  Snap := SnapTake;
+  RunScenario;
+  SnapAssert(Snap, 'TreeSet managed remove-all releases pool on free');
+  Pass('TreeSet managed remove-all releases pool on free');
+end;
+
+function MapIntToTracked(const AValue: Integer; aData: Pointer): ITracked;
+begin
+  Result := MakeTracked(AValue);
+end;
+
+procedure TestMapIterManagedReinitReleasesCurrent;
+type
+  TIntVec = specialize TVec<Integer>;
+  TTrackedMapIter = specialize TMapIter<Integer, ITracked>;
+var
+  V: TIntVec;
+  Iter: TTrackedMapIter;
+  Snap: TLeakSnapshot;
+  Current: ITracked;
+begin
+  Snap := SnapTake;
+  V := TIntVec.Create;
+  try
+    V.Push(1);
+    Iter.Init(V.Iter, @MapIntToTracked, nil);
+    if not Iter.MoveNext then
+    begin
+      WriteLn('FAIL: MapIter should yield first item');
+      Halt(1);
+    end;
+
+    Current := Iter.Current;
+    if Current.GetId <> 1 then
+    begin
+      WriteLn('FAIL: MapIter returned unexpected id');
+      Halt(1);
+    end;
+    Current := nil;
+
+    Iter.Init(V.Iter, @MapIntToTracked, nil);
+  finally
+    V.Free;
+  end;
+  SnapAssert(Snap, 'MapIter managed reinit releases current');
+  Pass('MapIter managed reinit releases current');
+end;
+
+procedure TestChainIterManagedReinitReleasesCurrent;
+type
+  TTrackedVec = specialize TVec<ITracked>;
+  TTrackedChainIter = specialize TChainIter<ITracked>;
+var
+  First, Second: TTrackedVec;
+  Iter: TTrackedChainIter;
+  Snap: TLeakSnapshot;
+  Current, Tracked: ITracked;
+begin
+  Snap := SnapTake;
+  First := TTrackedVec.Create;
+  Second := TTrackedVec.Create;
+  try
+    Tracked := MakeTracked(21);
+    First.Push(Tracked);
+    Tracked := nil;
+
+    Iter.Init(First.Iter, Second.Iter);
+    if not Iter.MoveNext then
+    begin
+      WriteLn('FAIL: ChainIter should yield first item');
+      Halt(1);
+    end;
+
+    Current := Iter.Current;
+    if Current.GetId <> 21 then
+    begin
+      WriteLn('FAIL: ChainIter returned unexpected id');
+      Halt(1);
+    end;
+    Current := nil;
+
+    First.Clear;
+    Iter.Init(First.Iter, Second.Iter);
+  finally
+    Second.Free;
+    First.Free;
+  end;
+  SnapAssert(Snap, 'ChainIter managed reinit releases current');
+  Pass('ChainIter managed reinit releases current');
+end;
+
 begin
   GPass := 0;
   WriteLn('=== Managed Type Stress Tests ===');
   TestVecPushClear;
   TestVecPopAll;
+  TestSmallVecManagedInlineClearReleasesSlots;
+  TestSmallVecManagedInlinePopReleasesSlot;
+  TestSmallVecManagedSpillDoneReleasesInlineCopies;
   TestVecDequePushPopClear;
   TestVecDequeWrapResize;
+  TestVecDequeManagedResizeAndRetainReleaseSlots;
+  TestVecDequeManagedTryPopPointerOwnsRefsAndSyncsTail;
+  TestVecDequeManagedTryPopArrayOwnsRefsAndSyncsTail;
+  TestVecDequeManagedTryPopElementOwnsRefsAndSyncsTail;
+  TestVecDequeManagedPointerReadOwnsRefsAfterClear;
+  TestVecDequeManagedWritePointerReleasesOverwrittenRef;
+  TestVecDequeManagedTryPeekCopyOwnsRefsAfterClear;
+  TestVecDequeManagedRemoveCopyAtOwnsRefsAfterClear;
+  TestVecDequeManagedSwapRemoveCopyAtOwnsRefsAfterClear;
+  TestVecDequeManagedToArrayOwnsRefsAfterClear;
+  TestVecDequeManagedPeekRangeContiguousAfterWrapKeepsRefs;
   TestHashMapRehash;
   TestHashMapOverwrite;
+  TestHashMapManagedSelfAliasOverwriteKeepsValue;
+  TestSwissTableManagedKeyValueLifecycle;
+  TestSwissTableDrainExceptionKeepsPartialStateConsistent;
+  TestSwissTableManagedSelfAliasOverwriteKeepsValue;
+  TestSwissHashMapAdapterPtrIterClearReleasesCachedEntry;
+  TestSwissTableStrManagedOverwriteUsesManagedAssignment;
+  TestSwissTableStrClearKeepsCustomAllocator;
+  TestSwissTableI32ManagedOverwriteUsesManagedAssignment;
+  TestSwissTableI32ManagedTombstoneReuseAvoidsGrowth;
+  TestSwissTableI32I32ClearKeepsCustomAllocator;
   TestBTreeRemoveMerge;
   TestLruCacheEvict;
   TestSkipListRemove;
   TestCircularBufferOverwrite;
+  TestCircularBufferManagedTryPopReuseKeepsOutputRef;
+  TestCircularBufferManagedSlotsStayInitialized;
   TestLinkedHashMapClear;
+  TestPriorityQueueManagedToArrayOwnsRefsAfterClear;
+  TestPriorityQueueManagedClearReleasesSlots;
+  TestPriorityQueueManagedSlotsStayInitialized;
+  TestTreeSetManagedRemoveAllReleasesPoolOnFree;
+  TestMapIterManagedReinitReleasesCurrent;
+  TestChainIterManagedReinitReleasesCurrent;
   WriteLn(Format('--- %d passed ---', [GPass]));
   WriteLn('ALL PASS');
 end.

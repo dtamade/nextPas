@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -20,27 +21,48 @@ const workloadAdapterNoUrl = "adapter_no_url"
 const workloadResponse1K = "response_1k"
 const responseBodyLen = "13"
 const responseBody1KLen = "1024"
+const validWorkloadsText = "no_url, url_path, adapter_no_url, or response_1k"
+const clientReadMode = "http_client_body_drain"
 
-func parseOptions() (int, int, string) {
+func isValidWorkload(value string) bool {
+	return value == workloadNoUrl ||
+		value == workloadUrlPath ||
+		value == workloadAdapterNoUrl ||
+		value == workloadResponse1K
+}
+
+func rejectInvalidWorkload(value string) {
+	fmt.Fprintf(os.Stderr, "invalid --workload: %s; expected one of: %s\n", value, validWorkloadsText)
+	os.Exit(2)
+}
+
+func rejectInvalidPositiveOption(name string, value int) {
+	fmt.Fprintf(os.Stderr, "invalid %s: %d; expected positive integer\n", name, value)
+	os.Exit(2)
+}
+
+func parseOptions() (int, int, int, string) {
 	requests := flag.Int("requests", 20000, "total requests")
 	threads := flag.Int("threads", 4, "concurrent keep-alive clients")
 	workload := flag.String("workload", workloadNoUrl, "workload: no_url, url_path, adapter_no_url, or response_1k")
 	flag.Parse()
 
 	if *requests < 1 {
-		*requests = 1
+		rejectInvalidPositiveOption("--requests", *requests)
 	}
 	if *threads < 1 {
-		*threads = 1
+		rejectInvalidPositiveOption("--threads", *threads)
 	}
-	if *threads > *requests {
-		*threads = *requests
+	requestedThreads := *threads
+	effectiveThreads := requestedThreads
+	if effectiveThreads > *requests {
+		effectiveThreads = *requests
 	}
-	if *workload != workloadUrlPath && *workload != workloadAdapterNoUrl && *workload != workloadResponse1K {
-		*workload = workloadNoUrl
+	if !isValidWorkload(*workload) {
+		rejectInvalidWorkload(*workload)
 	}
 
-	return *requests, *threads, *workload
+	return *requests, requestedThreads, effectiveThreads, *workload
 }
 
 func requestsForThread(index, totalRequests, threads int) int {
@@ -89,10 +111,15 @@ func runClient(url string, requests int, workload string, completed *int64, wg *
 	}
 }
 
-func printResults(requests, threads int, workload string, completed int64, elapsed time.Duration) {
+func printResults(requests, requestedThreads, effectiveThreads int, workload string, completed int64, elapsed time.Duration) {
 	elapsedNs := elapsed.Nanoseconds()
 	nsPerOp := int64(0)
 	reqPerSec := int64(0)
+	responseBodyBytes := responseBodyLen
+
+	if workload == workloadResponse1K {
+		responseBodyBytes = responseBody1KLen
+	}
 
 	if completed > 0 {
 		nsPerOp = elapsedNs / completed
@@ -104,8 +131,12 @@ func printResults(requests, threads int, workload string, completed int64, elaps
 	fmt.Println("operation=http.server.keepalive")
 	fmt.Println("workload=" + workload)
 	fmt.Println("impl=go")
+	fmt.Println("client_read_mode=" + clientReadMode)
+	fmt.Println("response_body_bytes=" + responseBodyBytes)
 	fmt.Printf("iterations=%d\n", requests)
-	fmt.Printf("threads=%d\n", threads)
+	fmt.Printf("requested_threads=%d\n", requestedThreads)
+	fmt.Printf("effective_threads=%d\n", effectiveThreads)
+	fmt.Printf("threads=%d\n", effectiveThreads)
 	fmt.Printf("completed=%d\n", completed)
 	fmt.Printf("elapsed_ns=%d\n", elapsedNs)
 	fmt.Printf("ns/op=%d\n", nsPerOp)
@@ -113,7 +144,7 @@ func printResults(requests, threads int, workload string, completed int64, elaps
 }
 
 func main() {
-	requests, threads, workload := parseOptions()
+	requests, requestedThreads, effectiveThreads, workload := parseOptions()
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -156,9 +187,9 @@ func main() {
 	var wg sync.WaitGroup
 
 	start := time.Now()
-	for i := 0; i < threads; i++ {
+	for i := 0; i < effectiveThreads; i++ {
 		wg.Add(1)
-		go runClient(url, requestsForThread(i, requests, threads), workload, &completed, &wg)
+		go runClient(url, requestsForThread(i, requests, effectiveThreads), workload, &completed, &wg)
 	}
 	wg.Wait()
 	elapsed := time.Since(start)
@@ -167,5 +198,5 @@ func main() {
 	_ = server.Shutdown(ctx)
 	cancel()
 
-	printResults(requests, threads, workload, completed, elapsed)
+	printResults(requests, requestedThreads, effectiveThreads, workload, completed, elapsed)
 }

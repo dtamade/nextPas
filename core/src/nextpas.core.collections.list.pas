@@ -28,11 +28,11 @@ unit nextpas.core.collections.list;
 interface
 
 uses
-  typinfo,
+  nextpas.core.system.typinfo,
   nextpas.core.base,
   nextpas.core.math,
   nextpas.core.mem.utils,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
   nextpas.core.collections.list.intf,
@@ -306,8 +306,12 @@ var
   LDstArray: ^T;
   LI: SizeUInt;
 begin
-  if (aDst = nil) or (aCount = 0) then
+  if aCount = 0 then
     Exit;
+  if aDst = nil then
+    raise EArgumentNil.Create('TList.SerializeToArrayBuffer: aDst is nil');
+  if aCount > FCount then
+    raise EOutOfRange.Create('TList.SerializeToArrayBuffer: aCount out of range');
 
   LDstArray := aDst;
   LCurrent := FHead;
@@ -630,13 +634,10 @@ procedure TList.DoZero;
 var
   LCurrent: PDoubleNode;
 begin
-  // 将所有元素设置为零值
   LCurrent := FHead;
   while LCurrent <> nil do
   begin
-    if System.IsManagedType(T) then
-      Finalize(LCurrent^.Data);
-    FillChar(LCurrent^.Data, SizeOf(T), 0);
+    GetElementManager.ZeroElements(@LCurrent^.Data, 1);
     LCurrent := PDoubleNode(LCurrent^.GetNext);
   end;
 end;

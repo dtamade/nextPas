@@ -18,8 +18,9 @@ unit nextpas.core.text.width;
  *（拉丁/西里尔/希伯来/阿拉伯/天城文/孟加拉/泰/老挝/谚文连接等）的代表性
  * 区间，非完整 Unicode Mn/Me 全集。
  *
- * @note 热路径：StringDisplayWidth 对纯 ASCII 输入走 SIMD/标量快路径，直接
- *       返回字节数；含多字节序列时回退到 grapheme cluster 解码。
+ * @note 热路径：StringDisplayWidth 对纯 ASCII 输入走 SIMD/标量快路径，
+ *       按 CodepointWidth 的控制字符契约计宽；含多字节序列时回退到
+ *       grapheme cluster 解码。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -45,7 +46,7 @@ function CodepointWidth(const ACodePoint: UInt32): Byte; inline;
  *   AData  UTF-8 字节起始指针
  *   ALen   字节长度
  * @return 总列宽（非 ASCII 路径按 grapheme cluster 计宽）
- * @note 纯 ASCII 输入走 SIMD 快路径返回 ALen；非法字节按宽度 1 计。
+ * @note 纯 ASCII 输入走 SIMD 快路径；非法字节按宽度 1 计。
  *}
 function StringDisplayWidth(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 
@@ -137,7 +138,7 @@ const
 
 { 零宽表 - 组合标记 Mn/Me 与零宽控制字符的代表性区间（Unicode 15.1）。
   按 Lo 升序排列。覆盖常见组合附标、变体选择符、ZWJ/ZWNJ 等。 }
-  ZERO_WIDTH_RANGES: array[0..44] of TCodepointRange = (
+  ZERO_WIDTH_RANGES: array[0..52] of TCodepointRange = (
     (Lo: $0300; Hi: $036F),    { Combining Diacritical Marks }
     (Lo: $0483; Hi: $0489),    { Cyrillic combining }
     (Lo: $0591; Hi: $05BD),    { Hebrew points }
@@ -145,16 +146,23 @@ const
     (Lo: $05C1; Hi: $05C2),
     (Lo: $05C4; Hi: $05C5),
     (Lo: $05C7; Hi: $05C7),
+    (Lo: $0600; Hi: $0605),    { Arabic prepend marks }
     (Lo: $0610; Hi: $061A),    { Arabic marks }
     (Lo: $064B; Hi: $065F),
     (Lo: $0670; Hi: $0670),
     (Lo: $06D6; Hi: $06DC),
+    (Lo: $06DD; Hi: $06DD),    { Arabic end of ayah prepend }
     (Lo: $06DF; Hi: $06E4),
     (Lo: $06E7; Hi: $06E8),
     (Lo: $06EA; Hi: $06ED),
+    (Lo: $070F; Hi: $070F),    { Syriac abbreviation mark prepend }
     (Lo: $0711; Hi: $0711),    { Syriac }
     (Lo: $0730; Hi: $074A),
     (Lo: $07A6; Hi: $07B0),    { Thaana }
+    (Lo: $07EB; Hi: $07F3),    { NKo combining marks }
+    (Lo: $07FD; Hi: $07FD),    { NKo dantayalan }
+    (Lo: $0890; Hi: $0891),    { Arabic honorific sign prepend }
+    (Lo: $08E2; Hi: $08E2),    { Arabic disputed end of ayah prepend }
     (Lo: $0900; Hi: $0902),    { Devanagari Mn (excl. 0903 Mc) }
     (Lo: $093A; Hi: $093A),
     (Lo: $093C; Hi: $093C),
@@ -182,6 +190,7 @@ const
     (Lo: $FE20; Hi: $FE2F),    { Combining Half Marks }
     (Lo: $FEFF; Hi: $FEFF),    { ZWNBSP / BOM }
     (Lo: $1E000; Hi: $1E02A),  { Glagolitic Supplement combining }
+    (Lo: $E0020; Hi: $E007F),  { Tags }
     (Lo: $E0100; Hi: $E01EF)   { Variation Selectors Supplement }
   );
 
@@ -228,6 +237,26 @@ begin
     Result := AAsciiPrefixLen - 1;
 end;
 
+function IsAsciiControl(const AByte: Byte): Boolean; inline;
+begin
+  Result := (AByte < 32) or (AByte = $7F);
+end;
+
+function AsciiDisplayWidth(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+var
+  LPos: SizeUInt;
+begin
+  if ALen = 0 then
+    Exit(0);
+  if AData = nil then
+    Exit(0);
+
+  Result := ALen;
+  for LPos := 0 to ALen - 1 do
+    if IsAsciiControl(AData[LPos]) then
+      Dec(Result);
+end;
+
 function CodepointWidth(const ACodePoint: UInt32): Byte;
 begin
   { 控制字符 C0/C1 -> 0 列 }
@@ -258,6 +287,8 @@ var
   {$endif}
 begin
   if ALen = 0 then
+    Exit(0);
+  if AData = nil then
     Exit(0);
 
   {$ifdef CPUX86_64}
@@ -306,20 +337,20 @@ begin
   while (LPos < ALen) and (AData[LPos] < $80) do
     Inc(LPos);
   if LPos = ALen then
-    Exit(ALen);
+    Exit(AsciiDisplayWidth(AData, ALen));
 
   LPos := GraphemeFallbackStart(LPos);
-  Result := LPos + GraphemeWidthFrom(AData, ALen, LPos);
+  Result := AsciiDisplayWidth(AData, LPos) + GraphemeWidthFrom(AData, ALen, LPos);
   {$else}
   { 非 x86_64 标量路径 }
   LPos := 0;
   while (LPos < ALen) and (AData[LPos] < $80) do
     Inc(LPos);
   if LPos = ALen then
-    Exit(ALen);
+    Exit(AsciiDisplayWidth(AData, ALen));
 
   LPos := GraphemeFallbackStart(LPos);
-  Result := LPos + GraphemeWidthFrom(AData, ALen, LPos);
+  Result := AsciiDisplayWidth(AData, LPos) + GraphemeWidthFrom(AData, ALen, LPos);
   {$endif}
 end;
 

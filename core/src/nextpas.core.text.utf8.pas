@@ -27,6 +27,8 @@ function UTF8IsValid(const AData: PByte; const ALen: SizeUInt): Boolean;
 function UTF8Decode(const AData: PByte; const ALen: SizeUInt): TUTF8DecodeResult;
 function UTF8Encode(const ACodePoint: UInt32; const ADst: PByte): Byte;
 function UTF8CodePointCount(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+function UTF8Length(const AValue: string): SizeUInt;
+function UTF8CodePointAt(const AValue: string; const AIndex: Integer): UInt32;
 function UTF8ByteLength(const ALeadByte: Byte): Byte; inline;
 
 implementation
@@ -41,6 +43,9 @@ var
   LPos: SizeUInt;
   LDec: TUTF8DecodeResult;
 begin
+  if (ALen > 0) and (AData = nil) then
+    Exit(False);
+
   LPos := 0;
   while LPos < ALen do
   begin
@@ -72,7 +77,7 @@ var
 begin
   Result.CodePoint := 0;
   Result.ByteLen := 0;
-  if ALen = 0 then
+  if (ALen = 0) or (AData = nil) then
     Exit;
   B := AData[0];
   if B < $80 then
@@ -118,6 +123,8 @@ end;
 
 function UTF8Encode(const ACodePoint: UInt32; const ADst: PByte): Byte;
 begin
+  if ADst = nil then
+    Exit(0);
   if ACodePoint < $80 then
   begin
     ADst[0] := Byte(ACodePoint);
@@ -156,6 +163,8 @@ var
 begin
   if ALen = 0 then
     Exit(True);
+  if AData = nil then
+    Exit(False);
   LDispatch := GetDispatchTable;
   if (LDispatch <> nil) and Assigned(LDispatch^.Utf8Validate) then
     Result := LDispatch^.Utf8Validate(AData, ALen)
@@ -166,28 +175,55 @@ end;
 function UTF8CodePointCount(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 var
   LPos: SizeUInt;
+  LDec: TUTF8DecodeResult;
 begin
   Result := 0;
-  if ALen = 0 then
+  if (ALen = 0) or (AData = nil) then
     Exit;
   LPos := 0;
-  while LPos + 16 <= ALen do
-  begin
-    Inc(Result, 16 - Vec16Popcnt(Vec16CmpRange(@AData[LPos], $80, $BF)));
-    Inc(LPos, 16);
-  end;
   while LPos < ALen do
   begin
-    if (AData[LPos] and $C0) <> $80 then
-      Inc(Result);
-    Inc(LPos);
+    LDec := UTF8Decode(@AData[LPos], ALen - LPos);
+    Inc(Result);
+    if LDec.ByteLen = 0 then
+      Inc(LPos)
+    else
+      Inc(LPos, LDec.ByteLen);
   end;
+end;
+
+function UTF8Length(const AValue: string): SizeUInt;
+begin
+  Result := UTF8CodePointCount(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue)));
+end;
+
+function UTF8CodePointAt(const AValue: string; const AIndex: Integer): UInt32;
+var
+  LIter: TUTF8Iterator;
+  LCurrent: Integer;
+begin
+  Result := 0;
+  if AIndex < 0 then
+    Exit;
+
+  LIter.Init(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue)));
+  LCurrent := 0;
+  while LIter.Next(Result) do
+  begin
+    if LCurrent = AIndex then
+      Exit;
+    Inc(LCurrent);
+  end;
+  Result := 0;
 end;
 
 procedure TUTF8Iterator.Init(const AData: PByte; const ALen: SizeUInt);
 begin
   FData := AData;
-  FLen := ALen;
+  if (ALen > 0) and (AData = nil) then
+    FLen := 0
+  else
+    FLen := ALen;
   FPos := 0;
 end;
 
@@ -210,6 +246,13 @@ function TUTF8Iterator.Next(out ACodePoint: UInt32): Boolean;
 var
   LDec: TUTF8DecodeResult;
 begin
+  if FData = nil then
+  begin
+    FPos := FLen;
+    ACodePoint := 0;
+    Exit(False);
+  end;
+
   if FPos >= FLen then
   begin
     ACodePoint := 0;

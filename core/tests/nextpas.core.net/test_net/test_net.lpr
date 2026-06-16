@@ -4,7 +4,9 @@ program test_net;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
+  Classes,
   SysUtils,
+  StrUtils,
   nextpas.core.testing,
   nextpas.core.errors,
   nextpas.core.io.intf,
@@ -24,6 +26,53 @@ var
 const
   NONBLOCKING_WAIT_SPINS = 200;
   NONBLOCKING_WAIT_NS = 1000000;
+
+function ReadTextFile(const APath: string): string;
+var
+  LText: TStringList;
+begin
+  LText := TStringList.Create;
+  try
+    LText.LoadFromFile(APath);
+    Result := LowerCase(LText.Text);
+  finally
+    LText.Free;
+  end;
+end;
+
+function ExtractSourceRange(const ASource, AStartNeedle, AEndNeedle,
+  AMessage: string): string;
+var
+  LStart: SizeInt;
+  LEnd: SizeInt;
+begin
+  LStart := Pos(AStartNeedle, ASource);
+  Check(LStart > 0, AMessage + ' start marker');
+  LEnd := PosEx(AEndNeedle, ASource, LStart + Length(AStartNeedle));
+  Check(LEnd > LStart, AMessage + ' end marker');
+  Result := Copy(ASource, LStart, LEnd - LStart);
+end;
+
+procedure CheckSourceContains(const ASource, ANeedle, AMessage: string);
+begin
+  Check(Pos(ANeedle, ASource) > 0, AMessage);
+end;
+
+procedure TestTcpStreamWriteZeroProgressSourceContract;
+var
+  LSource: string;
+  LBody: string;
+begin
+  LSource := ReadTextFile('../../../src/nextpas.core.net.tcp.pas');
+  LBody := ExtractSourceRange(LSource, 'function ttcpstream.write',
+    'function ttcpstream.seek', 'TTcpStream.Write implementation');
+  Check(Pos('if lsent = 0 then' + LineEnding + '      break;', LBody) = 0,
+    'blocking Write must not silently short-write on zero progress');
+  CheckSourceContains(LBody, 'if lsent = 0 then',
+    'blocking Write keeps an explicit zero-progress guard');
+  CheckSourceContains(LBody, 'tcp write failed (zero progress)',
+    'blocking Write raises a dedicated zero-progress error');
+end;
 
 { TCP echo test — uses port 0 (OS assigns) }
 
@@ -126,6 +175,37 @@ begin
   LN := LS.RecvFrom(LBuf[0], 32, LFrom);
   CheckEqual(SizeUInt(4), LN, 'udp recv 4');
   CheckEqual(Byte(Ord('p')), LBuf[0]);
+  LS.Close;
+end;
+
+procedure TestUdpPostCloseGuards;
+var
+  LS: IUdpSocket;
+  LBuf: array[0..31] of Byte;
+  LFrom: TNetAddress;
+  LRaised: Boolean;
+begin
+  LS := UdpBind('127.0.0.1', 0);
+  LS.Close;
+
+  LRaised := False;
+  try
+    LS.SendTo(PAnsiChar('x')^, 1, TNetAddress.Create('127.0.0.1', LS.LocalAddr.Port));
+  except
+    on E: ENetworkError do
+      LRaised := Pos('after close', E.Message) > 0;
+  end;
+  Check(LRaised, 'udp sendto after close raises closed-state ENetworkError');
+
+  LRaised := False;
+  try
+    LS.RecvFrom(LBuf[0], SizeOf(LBuf), LFrom);
+  except
+    on E: ENetworkError do
+      LRaised := Pos('after close', E.Message) > 0;
+  end;
+  Check(LRaised, 'udp recvfrom after close raises closed-state ENetworkError');
+
   LS.Close;
 end;
 
@@ -506,11 +586,171 @@ begin
   end;
 end;
 
+procedure TestTcpStreamPostCloseRuntimeGuards;
+var
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LAccepted: ITcpStream;
+  LRuntime: nextpas.core.net.ITcpStreamRuntime;
+  LBuf: array[0..7] of Byte;
+  LRead: SizeUInt;
+  LWritten: SizeUInt;
+  LResult: nextpas.core.net.TTcpStreamIOResult;
+  LRaised: Boolean;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  try
+    LClient := TcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+    LAccepted := LListener.Accept;
+    try
+      Check(Supports(LClient, ITcpStreamRuntime, LRuntime),
+        'client stream exposes runtime I/O before close');
+      LClient.Close;
+
+      LRaised := False;
+      try
+        LClient.Read(LBuf[0], 0);
+      except
+        on ENetworkError do
+          LRaised := True;
+      end;
+      Check(LRaised, 'zero-length read after stream close raises ENetworkError');
+
+      LRaised := False;
+      try
+        LClient.Write(PAnsiChar('')^, 0);
+      except
+        on ENetworkError do
+          LRaised := True;
+      end;
+      Check(LRaised, 'zero-length write after stream close raises ENetworkError');
+
+      LRead := 123;
+      LResult := LRuntime.TryRead(LBuf[0], SizeOf(LBuf), LRead);
+      CheckEqual(Int64(Ord(tsiorClosed)), Int64(Ord(LResult)),
+        'runtime try-read reports closed after stream close');
+      CheckEqual(Int64(0), Int64(LRead),
+        'runtime try-read reports zero bytes after stream close');
+
+      LRead := 123;
+      LResult := LRuntime.TryRead(LBuf[0], 0, LRead);
+      CheckEqual(Int64(Ord(tsiorClosed)), Int64(Ord(LResult)),
+        'runtime zero-length try-read reports closed after stream close');
+      CheckEqual(Int64(0), Int64(LRead),
+        'runtime zero-length try-read reports zero bytes after stream close');
+
+      LWritten := 123;
+      LResult := LRuntime.TryWrite(PAnsiChar('x')^, 1, LWritten);
+      CheckEqual(Int64(Ord(tsiorClosed)), Int64(Ord(LResult)),
+        'runtime try-write reports closed after stream close');
+      CheckEqual(Int64(0), Int64(LWritten),
+        'runtime try-write reports zero bytes after stream close');
+
+      LWritten := 123;
+      LResult := LRuntime.TryWrite(PAnsiChar('')^, 0, LWritten);
+      CheckEqual(Int64(Ord(tsiorClosed)), Int64(Ord(LResult)),
+        'runtime zero-length try-write reports closed after stream close');
+      CheckEqual(Int64(0), Int64(LWritten),
+        'runtime zero-length try-write reports zero bytes after stream close');
+
+      LRaised := False;
+      try
+        LClient.Shutdown;
+      except
+        on ENetworkError do
+          LRaised := True;
+      end;
+      Check(LRaised, 'shutdown after stream close raises ENetworkError');
+
+      LRaised := False;
+      try
+        LClient.SetNoDelay(True);
+      except
+        on ENetworkError do
+          LRaised := True;
+      end;
+      Check(LRaised, 'SetNoDelay after stream close raises ENetworkError');
+
+      LRaised := False;
+      try
+        LClient.SetKeepAlive(True);
+      except
+        on ENetworkError do
+          LRaised := True;
+      end;
+      Check(LRaised, 'SetKeepAlive after stream close raises ENetworkError');
+
+      LClient.Close;
+    finally
+      LAccepted.Close;
+      LClient.Close;
+    end;
+  finally
+    LListener.Close;
+  end;
+end;
+
+procedure TestTcpListenerPostCloseRuntimeGuards;
+var
+  LListener: ITcpListener;
+  LRuntime: nextpas.core.net.ITcpListenerRuntime;
+  LAccepted: ITcpStream;
+  LRaised: Boolean;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  Check(Supports(LListener, ITcpListenerRuntime, LRuntime),
+    'listener exposes runtime accept before close');
+  LListener.Close;
+
+  LRaised := False;
+  try
+    LListener.Accept;
+  except
+    on ENetworkError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'accept after listener close raises ENetworkError');
+
+  LRaised := False;
+  try
+    LRuntime.NativeSocketHandle;
+  except
+    on ENetworkError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'native handle after listener close raises ENetworkError');
+
+  LRaised := False;
+  try
+    LRuntime.SetBlocking(False);
+  except
+    on ENetworkError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'set blocking after listener close raises ENetworkError');
+
+  LAccepted := nil;
+  LRaised := False;
+  try
+    LRuntime.TryAccept(LAccepted);
+  except
+    on ENetworkError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'try-accept after listener close raises ENetworkError');
+  Check(LAccepted = nil, 'try-accept after listener close does not return conn');
+
+  LListener.Close;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.net');
+  T.Run('TCP stream write zero-progress source contract',
+    @TestTcpStreamWriteZeroProgressSourceContract);
   T.Run('TCP echo', @TestTcpEcho);
   T.Run('TCP large data', @TestTcpLargeData);
   T.Run('UDP send/recv', @TestUdpSendRecv);
+  T.Run('UDP post-close guards', @TestUdpPostCloseGuards);
   T.Run('Resolve', @TestResolve);
   T.Run('Resolve DNS', @TestResolveDNS);
   T.Run('NetAddress', @TestNetAddress);
@@ -529,5 +769,9 @@ begin
     @TestTcpListenerRuntimeTryAccept);
   T.Run('TCP stream try-read and try-write support nonblocking runtime I/O',
     @TestTcpStreamRuntimeTryReadAndTryWrite);
+  T.Run('TCP stream post-close runtime guards',
+    @TestTcpStreamPostCloseRuntimeGuards);
+  T.Run('TCP listener post-close runtime guards',
+    @TestTcpListenerPostCloseRuntimeGuards);
   T.Summary;
 end.

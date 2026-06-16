@@ -48,8 +48,8 @@ end;
 procedure WritePlainText(const AW: IHttpResponseWriter; const AStatus: THttpStatus;
   const ABody: string);
 begin
-  AW.GetHeaders.Set_('content-type', 'text/plain; charset=utf-8');
-  AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(ABody))));
+  AW.GetHeaders.SetHeader('content-type', 'text/plain; charset=utf-8');
+  AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(ABody))));
   AW.WriteHeader(AStatus);
   if ABody <> '' then
     AW.Write(ABody[1], SizeUInt(Length(ABody)));

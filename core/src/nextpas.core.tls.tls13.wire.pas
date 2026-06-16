@@ -12,7 +12,8 @@ unit nextpas.core.tls.tls13.wire;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.tls.errors;
 
 const

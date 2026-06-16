@@ -231,6 +231,367 @@ begin
   end;
 end;
 
+procedure TestTomlAmbiguousLiteralKeyVsTableRaises;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('a.b', 'old');
+    LRaised := False;
+    try
+      LCfg.LoadFromToml(
+        '"a.b" = "literal"' + #10 +
+        '[a]' + #10 +
+        'b = "nested"' + #10);
+      Fail('ambiguous TOML literal key and table path must be rejected');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('a.b', E.Message) > 0, 'ambiguous toml error names key');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'ambiguous TOML literal key/table raises');
+    CheckEqual('old', LCfg.GetString('a.b'), 'failed TOML load preserves old value');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestTomlAmbiguousLiteralKeyVsDottedKeyRaises;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LRaised := False;
+    try
+      LCfg.LoadFromToml(
+        '"a.b" = "literal"' + #10 +
+        'a.b = "nested"' + #10);
+      Fail('ambiguous TOML literal key and dotted key must be rejected');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('a.b', E.Message) > 0, 'ambiguous dotted error names key');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'ambiguous TOML literal key/dotted key raises');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestTomlTryLoadAmbiguousReturnsFalse;
+var
+  LCfg: TConfig;
+  LError: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('a.b', 'old');
+    LError := '';
+    CheckEqual(False,
+      LCfg.TryLoadFromToml(
+        '"a.b" = "literal"' + #10 +
+        '[a]' + #10 +
+        'b = "nested"' + #10,
+        LError),
+      'TryLoadFromToml rejects ambiguous TOML source');
+    Check(Pos('a.b', LError) > 0, 'TryLoadFromToml error names key');
+    CheckEqual('old', LCfg.GetString('a.b'), 'failed TryLoadFromToml preserves old value');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestJsonAmbiguousLiteralKeyVsNestedPathRaises;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('keep', 'old');
+    LRaised := False;
+    try
+      LCfg.LoadFromJson(
+        '{' + #10 +
+        '  "shadow": "new",' + #10 +
+        '  "a.b": "literal",' + #10 +
+        '  "a": {' + #10 +
+        '    "b": "nested"' + #10 +
+        '  }' + #10 +
+        '}');
+      Fail('ambiguous JSON dotted key and nested path must be rejected');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('a.b', E.Message) > 0, 'ambiguous json error names key');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'ambiguous JSON dotted key/nested path raises');
+    CheckEqual('old', LCfg.GetString('keep'), 'failed JSON load preserves old value');
+    CheckEqual(False, LCfg.Has('shadow'), 'failed JSON load does not partially apply new keys');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestJsonTryLoadAmbiguousReturnsFalse;
+var
+  LCfg: TConfig;
+  LError: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('keep', 'old');
+    LError := '';
+    CheckEqual(False,
+      LCfg.TryLoadFromJson(
+        '{' + #10 +
+        '  "shadow": "new",' + #10 +
+        '  "a.b": "literal",' + #10 +
+        '  "a": {' + #10 +
+        '    "b": "nested"' + #10 +
+        '  }' + #10 +
+        '}',
+        LError),
+      'TryLoadFromJson rejects ambiguous source');
+    Check(Pos('a.b', LError) > 0, 'TryLoadFromJson error names key');
+    CheckEqual('old', LCfg.GetString('keep'), 'failed TryLoadFromJson preserves old value');
+    CheckEqual(False, LCfg.Has('shadow'), 'failed TryLoadFromJson does not partially apply new keys');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestYamlAmbiguousLiteralKeyVsNestedPathRaises;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('keep', 'old');
+    LRaised := False;
+    try
+      LCfg.LoadFromYaml(
+        'shadow: new' + #10 +
+        '"a.b": literal' + #10 +
+        'a:' + #10 +
+        '  b: nested' + #10);
+      Fail('ambiguous YAML dotted key and nested path must be rejected');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('a.b', E.Message) > 0, 'ambiguous yaml error names key');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'ambiguous YAML dotted key/nested path raises');
+    CheckEqual('old', LCfg.GetString('keep'), 'failed YAML load preserves old value');
+    CheckEqual(False, LCfg.Has('shadow'), 'failed YAML load does not partially apply new keys');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestYamlTryLoadAmbiguousReturnsFalse;
+var
+  LCfg: TConfig;
+  LError: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('keep', 'old');
+    LError := '';
+    CheckEqual(False,
+      LCfg.TryLoadFromYaml(
+        'shadow: new' + #10 +
+        '"a.b": literal' + #10 +
+        'a:' + #10 +
+        '  b: nested' + #10,
+        LError),
+      'TryLoadFromYaml rejects ambiguous source');
+    Check(Pos('a.b', LError) > 0, 'TryLoadFromYaml error names key');
+    CheckEqual('old', LCfg.GetString('keep'), 'failed TryLoadFromYaml preserves old value');
+    CheckEqual(False, LCfg.Has('shadow'), 'failed TryLoadFromYaml does not partially apply new keys');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestJsonEmptyTopLevelKeyRaises;
+var
+  LCfg: TConfig;
+  LError: string;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('keep', 'old');
+    LRaised := False;
+    try
+      LCfg.LoadFromJson(
+        '{' + #10 +
+        '  "shadow": "new",' + #10 +
+        '  "": "bad"' + #10 +
+        '}');
+      Fail('JSON empty top-level key must be rejected');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('JSON', E.Message) > 0, 'empty json key error names format');
+        Check(Pos('empty', E.Message) > 0, 'empty json key error names empty key');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'empty JSON key raises');
+    CheckEqual('old', LCfg.GetString('keep'), 'failed JSON empty-key load preserves old value');
+    CheckEqual(False, LCfg.Has('shadow'), 'failed JSON empty-key load does not partially apply new keys');
+
+    LError := '';
+    CheckEqual(False, LCfg.TryLoadFromJson('{"shadow":"new","":"bad"}', LError),
+      'TryLoadFromJson rejects empty top-level key');
+    Check(Pos('JSON', LError) > 0, 'TryLoadFromJson empty key error names format');
+    Check(Pos('empty', LError) > 0, 'TryLoadFromJson empty key error names empty key');
+    CheckEqual('old', LCfg.GetString('keep'), 'failed TryLoadFromJson empty-key load preserves old value');
+    CheckEqual(False, LCfg.Has('shadow'), 'failed TryLoadFromJson empty-key load does not partially apply new keys');
+
+    LError := '';
+    CheckEqual(False,
+      LCfg.TryLoadFromJson('{"shadow":"new","":{"nested":"bad"}}', LError),
+      'TryLoadFromJson rejects empty top-level container key');
+    Check(Pos('empty', LError) > 0, 'TryLoadFromJson empty container key error');
+    CheckEqual(False, LCfg.Has('nested'), 'failed empty JSON container does not flatten into root');
+
+    LError := '';
+    CheckEqual(False,
+      LCfg.TryLoadFromJson('{"server":{"":"bad"}}', LError),
+      'TryLoadFromJson rejects nested empty key segment');
+    Check(Pos('empty', LError) > 0, 'TryLoadFromJson nested empty key error');
+    CheckEqual(False, LCfg.Has('server.'), 'failed nested empty JSON key does not publish trailing-dot key');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestYamlEmptyTopLevelKeyRaises;
+var
+  LCfg: TConfig;
+  LError: string;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('keep', 'old');
+    LRaised := False;
+    try
+      LCfg.LoadFromYaml(
+        'shadow: new' + #10 +
+        '"": bad' + #10);
+      Fail('YAML empty top-level key must be rejected');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('YAML', E.Message) > 0, 'empty yaml key error names format');
+        Check(Pos('empty', E.Message) > 0, 'empty yaml key error names empty key');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'empty YAML key raises');
+    CheckEqual('old', LCfg.GetString('keep'), 'failed YAML empty-key load preserves old value');
+    CheckEqual(False, LCfg.Has('shadow'), 'failed YAML empty-key load does not partially apply new keys');
+
+    LError := '';
+    CheckEqual(False,
+      LCfg.TryLoadFromYaml('shadow: new' + #10 + '"": bad' + #10, LError),
+      'TryLoadFromYaml rejects empty top-level key');
+    Check(Pos('YAML', LError) > 0, 'TryLoadFromYaml empty key error names format');
+    Check(Pos('empty', LError) > 0, 'TryLoadFromYaml empty key error names empty key');
+    CheckEqual('old', LCfg.GetString('keep'), 'failed TryLoadFromYaml empty-key load preserves old value');
+    CheckEqual(False, LCfg.Has('shadow'), 'failed TryLoadFromYaml empty-key load does not partially apply new keys');
+
+    LError := '';
+    CheckEqual(False,
+      LCfg.TryLoadFromYaml('shadow: new' + #10 + '"":' + #10 +
+        '  nested: bad' + #10, LError),
+      'TryLoadFromYaml rejects empty top-level container key');
+    Check(Pos('empty', LError) > 0, 'TryLoadFromYaml empty container key error');
+    CheckEqual(False, LCfg.Has('nested'), 'failed empty YAML container does not flatten into root');
+
+    LError := '';
+    CheckEqual(False,
+      LCfg.TryLoadFromYaml('server:' + #10 + '  "": bad' + #10, LError),
+      'TryLoadFromYaml rejects nested empty key segment');
+    Check(Pos('empty', LError) > 0, 'TryLoadFromYaml nested empty key error');
+    CheckEqual(False, LCfg.Has('server.'), 'failed nested empty YAML key does not publish trailing-dot key');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestTomlEmptyTopLevelKeyRaises;
+var
+  LCfg: TConfig;
+  LError: string;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('keep', 'old');
+    LRaised := False;
+    try
+      LCfg.LoadFromToml(
+        'shadow = "new"' + #10 +
+        '"" = "bad"' + #10);
+      Fail('TOML empty top-level key must be rejected');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('TOML', E.Message) > 0, 'empty toml key error names format');
+        Check(Pos('empty', E.Message) > 0, 'empty toml key error names empty key');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'empty TOML key raises');
+    CheckEqual('old', LCfg.GetString('keep'), 'failed TOML empty-key load preserves old value');
+    CheckEqual(False, LCfg.Has('shadow'), 'failed TOML empty-key load does not partially apply new keys');
+
+    LError := '';
+    CheckEqual(False,
+      LCfg.TryLoadFromToml('shadow = "new"' + #10 + '"" = "bad"' + #10, LError),
+      'TryLoadFromToml rejects empty top-level key');
+    Check(Pos('TOML', LError) > 0, 'TryLoadFromToml empty key error names format');
+    Check(Pos('empty', LError) > 0, 'TryLoadFromToml empty key error names empty key');
+    CheckEqual('old', LCfg.GetString('keep'), 'failed TryLoadFromToml empty-key load preserves old value');
+    CheckEqual(False, LCfg.Has('shadow'), 'failed TryLoadFromToml empty-key load does not partially apply new keys');
+
+    LError := '';
+    CheckEqual(False,
+      LCfg.TryLoadFromToml('shadow = "new"' + #10 +
+        '"" = { nested = "bad" }' + #10, LError),
+      'TryLoadFromToml rejects empty top-level container key');
+    Check(Pos('empty', LError) > 0, 'TryLoadFromToml empty container key error');
+    CheckEqual(False, LCfg.Has('nested'), 'failed empty TOML container does not flatten into root');
+
+    LError := '';
+    CheckEqual(False,
+      LCfg.TryLoadFromToml('server = { "" = "bad" }' + #10, LError),
+      'TryLoadFromToml rejects nested empty key segment');
+    Check(Pos('empty', LError) > 0, 'TryLoadFromToml nested empty key error');
+    CheckEqual(False, LCfg.Has('server.'), 'failed nested empty TOML key does not publish trailing-dot key');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 procedure TestTomlArrayOfTables;
 var
   LCfg: TConfig;
@@ -267,6 +628,38 @@ begin
     CheckEqual('yaml_host', LCfg.GetString('server.host'), 'yaml overrides nested');
     LCfg.LoadFromToml('[server]' + #10 + 'host = "toml_host"' + #10);
     CheckEqual('toml_host', LCfg.GetString('server.host'), 'toml overrides nested');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestCrossSourceFlattenOverrideAfterSameSourceCollisionGuard;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromJson('{"a.b":"json_literal","keep":"json_keep"}');
+    CheckEqual('json_literal', LCfg.GetString('a.b'),
+      'json literal dotted key loads');
+    CheckEqual('json_keep', LCfg.GetString('keep'),
+      'unrelated json key loads');
+
+    LCfg.LoadFromYaml('a:' + #10 + '  b: yaml_nested' + #10);
+    CheckEqual('yaml_nested', LCfg.GetString('a.b'),
+      'later yaml nested path overrides earlier json literal key');
+    CheckEqual('json_keep', LCfg.GetString('keep'),
+      'later yaml load preserves unrelated keys');
+    CheckEqual(Int64(2), Int64(LCfg.Count),
+      'cross-source override keeps overridden and unrelated keys');
+
+    LCfg.LoadFromToml('"a.b" = "toml_literal"' + #10);
+    CheckEqual('toml_literal', LCfg.GetString('a.b'),
+      'later toml literal key overrides same flattened key');
+    CheckEqual('json_keep', LCfg.GetString('keep'),
+      'later toml load preserves unrelated keys');
+    CheckEqual(Int64(2), Int64(LCfg.Count),
+      'toml override keeps overridden and unrelated keys');
   finally
     LCfg.Free;
   end;
@@ -457,6 +850,39 @@ begin
   end;
 end;
 
+procedure TestGetStringArrayIgnoresNonCanonicalNumericSegments;
+var
+  LCfg: TConfig;
+  LItems: TStringArray;
+  LKeys: TStringArray;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetDefault('tags.0', 'zero');
+    LCfg.SetDefault('tags.01', 'literal-leading-zero');
+    LCfg.SetDefault('tags.2', 'two');
+
+    LItems := LCfg.GetStringArray('tags');
+    CheckEqual(Int64(2), Int64(Length(LItems)),
+      'leading-zero segment is not an array index');
+    CheckEqual('zero', LItems[0], 'index 0 included');
+    CheckEqual('two', LItems[1], 'index 2 included');
+
+    LItems := LCfg.GetRawStringArray('tags');
+    CheckEqual(Int64(2), Int64(Length(LItems)),
+      'raw array ignores leading-zero segment');
+    CheckEqual('zero', LItems[0], 'raw index 0 included');
+    CheckEqual('two', LItems[1], 'raw index 2 included');
+
+    LKeys := LCfg.GetSection('tags');
+    CheckEqual(Int64(3), Int64(Length(LKeys)),
+      'leading-zero segment remains a section child');
+    CheckEqual('01', LKeys[1], 'section preserves literal leading-zero child');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 procedure TestGetStringArrayIgnoresObjectArrayItems;
 var
   LCfg: TConfig;
@@ -488,6 +914,11 @@ begin
     CheckEqual(Int64(2), Int64(Length(LItems)), 'root array count');
     CheckEqual('x', LItems[0], 'root array 0');
     CheckEqual('y', LItems[1], 'root array 1');
+
+    LItems := LCfg.GetRawStringArray('');
+    CheckEqual(Int64(2), Int64(Length(LItems)), 'raw root array count');
+    CheckEqual('x', LItems[0], 'raw root array 0');
+    CheckEqual('y', LItems[1], 'raw root array 1');
 
     LItems := LCfg.GetStringArray('missing');
     CheckEqual(Int64(0), Int64(Length(LItems)), 'missing array empty');
@@ -591,8 +1022,27 @@ begin
   T.Run('Toml.Array', @TestTomlArray);
   T.Run('Toml.InlineTable', @TestTomlInlineTable);
   T.Run('Toml.DottedKey', @TestTomlDottedKey);
+  T.Run('Toml.AmbiguousLiteralKeyVsTableRaises',
+    @TestTomlAmbiguousLiteralKeyVsTableRaises);
+  T.Run('Toml.AmbiguousLiteralKeyVsDottedKeyRaises',
+    @TestTomlAmbiguousLiteralKeyVsDottedKeyRaises);
+  T.Run('Toml.TryLoadAmbiguousReturnsFalse',
+    @TestTomlTryLoadAmbiguousReturnsFalse);
+  T.Run('Json.AmbiguousLiteralKeyVsNestedPathRaises',
+    @TestJsonAmbiguousLiteralKeyVsNestedPathRaises);
+  T.Run('Json.TryLoadAmbiguousReturnsFalse',
+    @TestJsonTryLoadAmbiguousReturnsFalse);
+  T.Run('Yaml.AmbiguousLiteralKeyVsNestedPathRaises',
+    @TestYamlAmbiguousLiteralKeyVsNestedPathRaises);
+  T.Run('Yaml.TryLoadAmbiguousReturnsFalse',
+    @TestYamlTryLoadAmbiguousReturnsFalse);
+  T.Run('Json.EmptyTopLevelKeyRaises', @TestJsonEmptyTopLevelKeyRaises);
+  T.Run('Yaml.EmptyTopLevelKeyRaises', @TestYamlEmptyTopLevelKeyRaises);
+  T.Run('Toml.EmptyTopLevelKeyRaises', @TestTomlEmptyTopLevelKeyRaises);
   T.Run('Toml.ArrayOfTables', @TestTomlArrayOfTables);
   T.Run('CrossFormat.NestedOverride', @TestCrossFormatNestedOverride);
+  T.Run('CrossFormat.CrossSourceFlattenOverrideAfterCollisionGuard',
+    @TestCrossSourceFlattenOverrideAfterSameSourceCollisionGuard);
   T.Run('Reload.Nested', @TestReloadNested);
   T.Run('Json.TopLevelArray', @TestJsonTopLevelArray);
   T.Run('Json.TopLevelScalar', @TestJsonTopLevelScalar);
@@ -603,6 +1053,8 @@ begin
   T.Run('GetSection.MissingAndCaseInsensitive', @TestGetSectionMissingAndCaseInsensitive);
   T.Run('GetStringArray.Basic', @TestGetStringArrayBasic);
   T.Run('GetStringArray.SparseNumericOrder', @TestGetStringArraySortsNumericIndexesAndSkipsHoles);
+  T.Run('GetStringArray.IgnoresNonCanonicalNumericSegments',
+    @TestGetStringArrayIgnoresNonCanonicalNumericSegments);
   T.Run('GetStringArray.IgnoresObjectArrayItems', @TestGetStringArrayIgnoresObjectArrayItems);
   T.Run('GetStringArray.TopLevelArrayAndMissing', @TestGetStringArrayTopLevelArrayAndMissing);
   T.Run('Malformed.LoadRaisesConfigError', @TestMalformedLoadRaisesConfigError);

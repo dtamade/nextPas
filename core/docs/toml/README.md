@@ -64,11 +64,15 @@ src/nextpas.core.toml.pas           — ITomlDocument facade + TomlParse/Stringi
 - Floats: decimal, exponent, `inf`, `nan`
 - Booleans: `true`, `false`
 - DateTime: offset (`Z`, `+HH:MM`), local datetime, local date, local time
+- Writer output uses fixed-width TOML date/time fields, including four-digit
+  years for local dates and datetimes.
 - Arrays with trailing comma support
 - Inline tables (sealed — cannot be extended externally)
 - Standard tables `[table]` with dotted keys
 - Array tables `[[array]]`
 - Comments `# ...`
+- Writer comments prefix every physical input line with `# `, so multiline
+  comment text cannot emit active TOML entries on later lines.
 - Strict validation: duplicate keys, leading zeros, underscore placement, datetime ranges
 
 ## Performance
@@ -91,21 +95,25 @@ Key optimizations:
 
 ## Testing
 
-232 tests across 9 suites:
+The current TOML test tree contains 299 test cases across 12 suites:
 
 | Suite | Tests | Coverage |
 |-------|-------|----------|
 | test_toml_base | 17 | Type layout, datetime constructors, flags encoding |
-| test_toml_parser | 32 | All value types, tables, arrays, error detection |
-| test_toml_value | 22 | All accessor methods, for..in, FindByPath, Key, AsString |
-| test_toml_writer | 21 | All serialization methods, pretty-print, nested, path quoting |
-| test_toml_facade | 12 | High-level API, builder all types, allocator |
-| test_toml_compliance | 84 | TOML v1.0/v1.1 + toml-test + Codex review regressions |
-| test_toml_robustness | 23 | Deep nesting, long strings, hash index, malicious input |
+| test_toml_compliance | 95 | TOML v1.0/v1.1 + toml-test + Codex review regressions |
+| test_toml_defensive | 14 | Bounds and defensive parser behavior |
+| test_toml_facade | 18 | High-level API, diagnostics, builder all types, allocator |
 | test_toml_fuzz | 5 | 1700 random/binary/semi-valid inputs |
+| test_toml_parser | 32 | All value types, tables, arrays, error detection |
+| test_toml_property | 14 | Property-style parser and writer invariants |
+| test_toml_robustness | 23 | Deep nesting, long strings, hash index, malicious input |
 | test_toml_roundtrip | 16 | Parse → Stringify → Parse → deep compare |
+| test_toml_stress | 20 | Larger documents and stress scenarios |
+| test_toml_value | 22 | All accessor methods, for..in, FindByPath, Key, AsString |
+| test_toml_writer | 23 | All serialization methods, comments, pretty-print, nested, path quoting |
 
-All suites verified with heaptrc: 0 unfreed memory blocks.
+TOML suites are run with heaptrc by their focused Makefiles. Use the relevant
+suite output as fresh proof for the touched surface.
 
 ## Dependencies
 
@@ -116,3 +124,11 @@ All suites verified with heaptrc: 0 unfreed memory blocks.
 - `nextpas.core.text.escape` — TUnescapeError type
 - `nextpas.core.mem.intf` — IAllocator
 - `nextpas.core.mem.default` — DefaultAllocator (facade only)
+
+## Failure and lifetime contract
+
+`TryTomlParse` returns `False` on parse failure and still assigns a diagnostic document.
+
+`TTomlError` exposes `Message`, `Line`, `Col`, and `Offset`.
+
+Keep the owning `ITomlDocument` alive while any `TTomlValue` is still in use.

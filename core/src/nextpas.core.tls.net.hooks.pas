@@ -14,7 +14,7 @@ unit nextpas.core.tls.net.hooks;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.tls.base;
 
 type
@@ -136,4 +136,3 @@ initialization
   GThreadHTTPHooks := TSSLHTTPHooks.Empty;
 
 end.
-

@@ -9,6 +9,16 @@ uses
 var
   T: TTestRunner;
 
+function HashModuloTen(const AKey: Integer): UInt32;
+begin
+  Result := UInt32(AKey mod 10);
+end;
+
+function EqualModuloTen(const L, R: Integer): Boolean;
+begin
+  Result := (L mod 10) = (R mod 10);
+end;
+
 function CompareInt(const A, B: Integer): SizeInt;
 begin
   if A < B then
@@ -148,9 +158,33 @@ begin
   CheckEqual(Int64(8), Int64(LStrategy.GetGrowSize(4, 5)), 'DoublingGrow should double capacity');
 end;
 
+procedure TestFacadeHashMapFactoriesForwardCallbacks;
+var
+  LValue: Integer;
+begin
+  with specialize MakeHashMap<Integer, Integer>(0, @HashModuloTen, @EqualModuloTen) do
+  begin
+    Put(1, 10);
+    Check(not AddOrAssign(11, 110), 'MakeHashMap callback equal key updates');
+    CheckEqual(Int64(1), Int64(Count), 'MakeHashMap callback count');
+    Check(TryGetValue(21, LValue), 'MakeHashMap callback lookup');
+    CheckEqual(Int64(110), Int64(LValue), 'MakeHashMap callback value');
+  end;
+
+  with specialize MakeSwissHashMap<Integer, Integer>(0, @HashModuloTen, @EqualModuloTen) do
+  begin
+    Put(2, 20);
+    Check(not AddOrAssign(12, 120), 'MakeSwissHashMap callback equal key updates');
+    CheckEqual(Int64(1), Int64(Count), 'MakeSwissHashMap callback count');
+    Check(TryGetValue(22, LValue), 'MakeSwissHashMap callback lookup');
+    CheckEqual(Int64(120), Int64(LValue), 'MakeSwissHashMap callback value');
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.facade');
   T.Run('facade factories return public interfaces', @TestFacadeFactoriesReturnPublicInterfaces);
   T.Run('facade exports growth strategies', @TestFacadeExportsGrowthStrategies);
+  T.Run('facade hash map factories forward callbacks', @TestFacadeHashMapFactoriesForwardCallbacks);
   T.Summary;
 end.

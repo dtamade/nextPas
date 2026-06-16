@@ -1,0 +1,262 @@
+# S4 Compatibility Facade Design
+
+This document records the S4 compatibility boundary for `nextpas.core.system`.
+It now distinguishes minimal live TypInfo and SysUtils facades from the
+still-deferred Classes facade. Both live units are intentionally narrow; they do
+not convert bootstrap RTL pressure into a broad public compatibility API.
+
+## Current Decision Boundary
+
+- `nextpas.core.system.typinfo` has a minimal live unit for the seven-symbol
+  pressure set.
+- `nextpas.core.system.sysutils` has a minimal live exception-formatting,
+  `SameText`, `IntToStr`, and `Trim` unit for `Format`, `SameText`,
+  `IntToStr`, `Trim`, and canonical exception aliases.
+- `nextpas.core.system.classes` remains deferred.
+- Deferred does not mean "undefined"; it means the broad public unit surface is
+  not live yet and is guarded by docs plus source-contract.
+- Any future broad compatibility facade still requires named consumer pressure,
+  focused tests, and controller review.
+
+## Bootstrap RTL Is Not The Same Thing As Core Facade
+
+The repository already contains bootstrap-oriented RTL source-of-truth files:
+
+| Path | Current role | Why it does not automatically become `nextpas.core.system.*` |
+| --- | --- | --- |
+| `rtl/core/sysutils/np_sysutils.pas` | minimal `SysUtils` subset for compiler bootstrap and Stage 2 self-hosting | bootstrap scope is "compiler can build", not "public core API is settled" |
+| `rtl/core/classes/np_classes.pas` | minimal `Classes` subset with `TFileStream` and `TStringList` | current shape is pragmatic bootstrap RTL, not a reviewed owner-boundary facade |
+| `compiler/tests/test_sysutils_createfmt_contract.pas` | proof that compiler bootstrap currently needs `Format`, `Exception.CreateFmt`, and `ExceptClass` behavior | pressure is enough for a minimal exception-formatting facade, but not for path, file, environment, time, or broad string-helper compatibility |
+| compiler semantic and toolchain `SameText` uses | proof that case-insensitive identifier/config comparison is real pressure | pressure is enough for one tiny system-local ASCII `SameText` facade, but not for `CompareText`, case conversion, path, file, environment, or time helpers |
+| compiler/runtime diagnostic `IntToStr` uses | proof that numeric label, counter, and diagnostic conversion is real pressure | pressure is enough for one tiny delegating `IntToStr` facade, but not for parsing, case conversion, path, file, environment, or time helpers |
+| compiler generic parameter token normalization | `compiler/sema/np_semantic_model.pas` uses `SameText(Trim(Copy(Params, ...)), AParamName)` | pressure is enough for one tiny delegating `Trim` facade, but not for case conversion, parsing, path, file, environment, or time helpers |
+| `compiler/tests/test_typinfo_contract.pas` | proof that compiler/runtime contracts already need `PTypeInfo`, `TypeInfo`, `InitializeArray`, `CopyArray`, and `FinalizeArray` | this proves RTTI lifecycle pressure, but also proves ABI/layout truth must stay compiler/runtime-led |
+
+S4 therefore must distinguish two concerns:
+
+1. `plain RTL units needed today for bootstrap/self-hosting`
+2. `nextpas.core.system.* compatibility facades that become public nextPas API`
+
+Those are related, but they are not the same decision.
+
+## `nextpas.core.system.sysutils`
+
+### What current consumers really want
+
+Live evidence today is concentrated in compiler/toolchain/bootstrap code:
+
+- `compiler/toolchain/np_toolchain_runner.pas`
+- `compiler/toolchain/np_toolchain_profiles.pas`
+- `compiler/frontend/np_workspace_model.pas`
+- `compiler/frontend/np_unit_resolver.pas`
+- `compiler/sema/np_semantic_model.pas`
+- `compiler/tests/test_sysutils_createfmt_contract.pas`
+
+The pressure clusters into a few narrow capability families:
+
+| Capability family | Example symbols | Current pressure | Owner stance |
+| --- | --- | --- | --- |
+| exception formatting | `Format`, `Exception.CreateFmt`, `ExceptClass`, `EAssertionFailed` | real bootstrap/compiler pressure | minimal live facade delegates `Format` to `nextpas.core.text.conv` and exception aliases to `nextpas.core.exception` |
+| path normalization | `ExpandFileName`, `ExtractFileDir`, `ExtractFileName`, `IncludeTrailingPathDelimiter`, `ExcludeTrailingPathDelimiter` | real toolchain/workspace pressure | path and filesystem semantics belong to `fs` / platform / process owners |
+| file and environment discovery | `FileExists`, `DirectoryExists`, `ForceDirectories`, `FileSearch`, `GetEnvironmentVariable` | real toolchain pressure | keep implementation ownership outside system |
+| string comparison | `SameText` | real compiler semantic/toolchain pressure | minimal live facade uses system-local ASCII fold; broad string helpers stay deferred |
+| string conversion | `IntToStr` | real compiler/runtime diagnostic pressure | minimal live facade delegates to `nextpas.core.text.conv`; parsing and broad text helpers stay deferred |
+| token normalization | `Trim` | real compiler generic-parameter matching pressure | minimal live facade delegates to `nextpas.core.text.conv`; case conversion and parsing stay deferred |
+| string convenience | `LowerCase`, `UpperCase`, `StrToInt` | real compiler pressure, but mixed parsing/case policy | text/number helpers should stay explicit about owner and behavior |
+| `CompareText` | no focused consumer pressure in this lane | keep deferred | do not unlock just because `SameText` is live |
+| date/time convenience | `Now`, `FormatDateTime` | only incidental pressure today | belongs to time owner, not system |
+
+### Current S4 stance
+
+- A minimal live `nextpas.core.system.sysutils` unit exists.
+- The live unit exposes only `Format`, `SameText`, `IntToStr`, `Trim`, `Exception`,
+  `ExceptClass`, `EConvertError`, and `EAssertionFailed`.
+- Do not create a mirror of FPC `SysUtils`.
+- Do not move filesystem, environment, time, or text ownership into `system`.
+- Any further `system.sysutils` shape must stay tiny and consumer-proven; do not
+  pull broad text, filesystem, environment, or time ownership into system.
+
+### Current live minimum
+
+The live contract is exactly:
+
+- `Format`
+- `SameText`
+- `IntToStr`
+- `Trim`
+- `Exception`
+- `ExceptClass`
+- `EConvertError`
+- `EAssertionFailed`
+
+Anything larger should trigger `Needs Review`, including:
+
+- path normalization entry points;
+- bootstrap-stable string helpers other than the current `SameText`,
+  `IntToStr`, and `Trim` slices;
+- `Now` / `FormatDateTime`;
+- broad file APIs;
+- process control;
+- collection helpers;
+- historical convenience overload sprawl.
+
+## `nextpas.core.system.typinfo`
+
+The detailed minimal pressure audit for this unit lives in
+`typinfo-minimal-pressure.md`. That document narrows the candidate set to
+`PTypeInfo`, `TTypeKind`, `TypeInfo`, `GetTypeKind`, `InitializeArray`,
+`FinalizeArray`, and `CopyArray`.
+
+### What current consumers really want
+
+Live pressure is concentrated around compiler/runtime-managed type truth:
+
+- `compiler/tests/test_typinfo_contract.pas`
+- `core/src/nextpas.core.collections.element_manager.pas`
+- `core/src/nextpas.core.collections.hashmap.swiss.pas`
+- `core/src/nextpas.core.collections.btree.pas`
+- `core/src/nextpas.core.collections.concurrent.hashmap.pas`
+
+The actual symbols in use are much narrower than historical `TypInfo`:
+
+- `PTypeInfo`
+- `TTypeKind`
+- `TypeInfo`
+- `GetTypeKind`
+- `InitializeArray`
+- `FinalizeArray`
+- `CopyArray`
+
+### Why the live unit stays minimal
+
+This is the strongest real S4 pressure, but it is also the highest-risk area:
+
+- `TypInfo` is where compiler-emitted metadata, managed lifetime, and runtime
+  helper ABI truth meet.
+- `core/src/nextpas.core.collections.element_manager.pas` already uses
+  `system.TypeInfo(T)`, `InitializeArray`, `FinalizeArray`, and `CopyArray`;
+  a premature broad facade or host TypInfo mirror would freeze semantics before
+  compiler/runtime metadata is fully specified.
+- `core/src/nextpas.core.collections.hashmap.swiss.pas` depends on
+  `GetTypeKind(K)` for specialization decisions; that is runtime truth, not
+  cosmetic reflection.
+
+### Current S4 stance
+
+- A minimal live `nextpas.core.system.typinfo` unit exists.
+- The live surface is a narrow runtime-truth facade, not string-based
+  reflection sugar.
+- The unit exposes `PTypeInfo`, `TTypeKind`, the kind constants used by live
+  consumers, and the managed-array helper wrappers.
+- `TypeInfo` and `GetTypeKind` remain compiler/System compile-truth symbols;
+  consumers use them unqualified after importing the facade, not as ordinary
+  `nextpas.core.system.typinfo.TypeInfo(...)` wrapper functions.
+- The minimal pressure audit and implementation record live in
+  `../plans/2026-06-07-system-typinfo-minimal-unlock-review.md`.
+- Property reflection, dynamic method lookup, and metadata mutation stay out of
+  scope until a compiler-backed RTTI model exists.
+
+### Current live minimum
+
+The live contract is exactly:
+
+- `PTypeInfo`
+- `TTypeKind`
+- `TypeInfo`
+- `GetTypeKind`
+- `InitializeArray`
+- `FinalizeArray`
+- `CopyArray`
+
+`TTypeKind` includes the aliases required by live collections consumers,
+including ordinal, string, float, variant, method, pointer, interface, and
+dynamic-array kind names. This is kind coverage inside the existing `TTypeKind`
+contract, not a broader reflection API.
+
+Anything larger should trigger `Needs Review`.
+
+## `nextpas.core.system.classes`
+
+### What current consumers really want
+
+Pressure today is mostly bootstrap/tooling/file-handling pressure:
+
+- `compiler/toolchain/np_toolchain_runner.pas` uses `TFileStream`
+- `compiler/toolchain/np_toolchain_profiles.pas` uses `Classes`
+- many TLS and Windows-backed units use `TFileStream` or `TStringList`
+- `rtl/core/classes/np_classes.pas` currently implements `TFileStream`,
+  `TStringList`, and file mode constants
+
+### Why this is not enough for a live facade
+
+`Classes` is historically huge and stateful. Current evidence only supports a
+very small subset:
+
+- `TFileStream`
+- `TStringList`
+- file mode constants such as `fmCreate`, `fmOpenRead`, `fmShareDenyNone`
+
+That does not justify:
+
+- `TComponent`
+- `TPersistent`
+- ownership trees
+- streaming framework compatibility
+- designer/runtime component semantics
+
+### Current S4 stance
+
+- No live `nextpas.core.system.classes` unit yet.
+- Treat current bootstrap `Classes` as proof of narrow subset pressure, not as
+  proof that the full namespace boundary is decided.
+- Any future live facade must keep IO/container ownership explicit.
+
+## Migration Risks
+
+### Risk 1: Freezing bootstrap shortcuts as permanent public API
+
+If S4 simply wraps `rtl/core/sysutils/np_sysutils.pas` and
+`rtl/core/classes/np_classes.pas`, nextPas would hard-freeze bootstrap
+tradeoffs as long-term public core API.
+
+### Risk 2: Losing owner boundaries
+
+If `system.sysutils` absorbs file, environment, time, process, or broad text
+helpers, consumers will stop knowing whether a behavior is owned by `system`,
+`fs`, `platform`, `time`, `io`, or `text`. The current live `Format` helper is
+kept as a delegating exception-formatting seam, not a transfer of text
+ownership.
+
+### Risk 3: Freezing RTTI ABI too early
+
+If `system.typinfo` expands beyond the seven-symbol bridge before
+compiler-emitted metadata contracts are settled, the project will likely lock in
+the wrong `PTypeInfo` / `TTypeKind` / managed-array semantics.
+
+### Risk 4: Recreating historical `Classes` sprawl
+
+If `system.classes` starts from "make FPC code compile", it will quickly become
+the same compatibility junk drawer this lane is explicitly trying to avoid.
+
+## Reopen Criteria
+
+S4 should only reopen as `Needs Review` for broader SysUtils, Classes, or
+broader TypInfo reflection when all of the following are true:
+
+1. A named consumer cannot move forward without a stable `nextpas.core.system.*`
+   namespace path rather than plain bootstrap RTL units.
+2. The exact symbols needed are listed as a minimal surface.
+3. Delegation ownership is explicit for every symbol.
+4. Focused verification exists for the named consumer.
+5. Leak-sensitive or metadata-sensitive gates exist where required.
+
+## Minimum Review Packet For `Needs Review`
+
+If real pressure forces early unlock, the review packet must list:
+
+- consumer file(s)
+- exact API names needed
+- why bootstrap RTL units are insufficient
+- owner boundary for each symbol
+- migration risk if the wrong surface is exposed
+- focused verification gate to prove the minimal surface

@@ -15,7 +15,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.intf,
   nextpas.core.mem.allocator.rtl_allocator,
   nextpas.core.mem.pool;
 
@@ -483,8 +483,11 @@ var
   LPtr: Pointer;
 begin
   Result := 0;
+  if aCount <= 0 then Exit;
   for I := 0 to aCount - 1 do
   begin
+    if I > High(aPtrs) then
+      Break;
     if not Acquire(LPtr) then
       Break;
     aPtrs[I] := LPtr;
@@ -496,8 +499,13 @@ procedure TObjectPool.ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
 var
   I: Integer;
 begin
+  if aCount <= 0 then Exit;
   for I := 0 to aCount - 1 do
+  begin
+    if I > High(aPtrs) then
+      Break;
     Release(aPtrs[I]);
+  end;
 end;
 
 procedure TObjectPool.Reset;

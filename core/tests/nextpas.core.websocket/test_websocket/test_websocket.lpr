@@ -18,7 +18,8 @@ var
 begin
   { RFC 6455 Section 1.3 test vector (verified with Node.js, Python, OpenSSL) }
   LResult := WebSocketAcceptKey('dGhlIHNhbXBsZSBub25jZQ==');
-  CheckEqual('yDmyJ3Ob8kn7PFX6MKmPZAOPjD0=', LResult, 'RFC 6455 accept key');
+  CheckEqual('s3pPLMBiTxaQ9kYGzzhZRbK+xOo=', LResult,
+    'RFC 6455 accept key');
 end;
 
 procedure TestGenerateKey;

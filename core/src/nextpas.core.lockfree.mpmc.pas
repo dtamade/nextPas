@@ -29,12 +29,16 @@ type
     FActiveEnqueues: Int32;
     FSpaceEpoch: Int32;
     FSpaceWaiters: Int32;
+    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
     FPadProducer: TCacheLinePad;
+    {$POP}
     // Consumer-owned fields (cache line 2)
     FDequeuePos: Int64;
     FDataEpoch: Int32;
     FDataWaiters: Int32;
+    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
     FPadConsumer: TCacheLinePad;
+    {$POP}
     // Shared (published) fields (cache line 3)
     FClosed: Int32;
   public

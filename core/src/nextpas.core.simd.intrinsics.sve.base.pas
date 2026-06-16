@@ -1,8 +1,15 @@
 unit nextpas.core.simd.intrinsics.sve.base;
+// Disposition: Experimental Support — shared SVE/SVE2 type records only
 
 
 {$I nextpas.core.settings.inc}
 {$I nextpas.core.simd.settings.inc}
+
+{
+  SVE/SVE2 shared type leaf.
+  This unit carries predicate/vector record shapes for isolated SVE/SVE2
+  intrinsics experiments. It has no runtime primitives and is not a stable public backend.
+}
 
 interface
 

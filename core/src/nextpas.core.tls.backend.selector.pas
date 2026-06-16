@@ -16,7 +16,7 @@ unit nextpas.core.tls.backend.selector;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.base,
   nextpas.core.tls.base;
 
 type
@@ -94,9 +94,6 @@ type
   { TSSLBackendMatchArray - 匹配结果数组 }
   TSSLBackendMatchArray = array of TSSLBackendMatch;
 
-  { TStringArray - 字符串数组类型 }
-  TStringArray = array of string;
-
 { 主要选择函数 }
 
 { SelectBestBackend - 选择最佳后端
@@ -157,6 +154,7 @@ function ValidateRequirements(
 implementation
 
 uses
+  nextpas.core.text.strings,
   nextpas.core.tls.factory;
 
 { 前向声明 }
@@ -291,41 +289,33 @@ function ValidateRequirements(
   out AErrors: TStringArray
 ): Boolean;
 var
-  ErrorList: TStringList;
-  i: Integer;
+  ErrorList: TStringArray;
 begin
-  ErrorList := TStringList.Create;
-  try
-    // 检查协议版本
-    if ARequirements.RequiredProtocols = [] then
-      ErrorList.Add('至少需要指定一个 TLS 协议版本');
+  // 检查协议版本
+  if ARequirements.RequiredProtocols = [] then
+    ErrorList.Add('至少需要指定一个 TLS 协议版本');
 
-    // 检查评分范围
-    if (ARequirements.MinSecurityScore < 0) or
-      (ARequirements.MinSecurityScore > 100) then
-      ErrorList.Add('MinSecurityScore 必须在 0-100 之间');
+  // 检查评分范围
+  if (ARequirements.MinSecurityScore < 0) or
+    (ARequirements.MinSecurityScore > 100) then
+    ErrorList.Add('MinSecurityScore 必须在 0-100 之间');
 
-    if (ARequirements.MinPerformanceScore < 0) or
-      (ARequirements.MinPerformanceScore > 100) then
-      ErrorList.Add('MinPerformanceScore 必须在 0-100 之间');
+  if (ARequirements.MinPerformanceScore < 0) or
+    (ARequirements.MinPerformanceScore > 100) then
+    ErrorList.Add('MinPerformanceScore 必须在 0-100 之间');
 
-    if (ARequirements.MinCompatibilityLevel < 0) or
-      (ARequirements.MinCompatibilityLevel > 100) then
-      ErrorList.Add('MinCompatibilityLevel 必须在 0-100 之间');
+  if (ARequirements.MinCompatibilityLevel < 0) or
+    (ARequirements.MinCompatibilityLevel > 100) then
+    ErrorList.Add('MinCompatibilityLevel 必须在 0-100 之间');
 
-    // 检查不合理的组合
-    if ARequirements.PlatformPreferences.RequirePKCS11 and
-      ARequirements.PlatformPreferences.RequireTPM then
-      ErrorList.Add('PKCS#11 和 TPM 通常不同时需要，请检查需求');
+  // 检查不合理的组合
+  if ARequirements.PlatformPreferences.RequirePKCS11 and
+    ARequirements.PlatformPreferences.RequireTPM then
+    ErrorList.Add('PKCS#11 和 TPM 通常不同时需要，请检查需求');
 
-    // 转换结果
-    SetLength(AErrors, ErrorList.Count);
-    for i := 0 to ErrorList.Count - 1 do
-      AErrors[i] := ErrorList[i];
-
-    Result := (ErrorList.Count = 0);
-  finally
-    ErrorList.Free;
+  // 转换结果
+  AErrors := Copy(ErrorList);
+  Result := (Length(ErrorList) = 0);
   end;
 end;
 
@@ -779,11 +769,9 @@ function GenerateRecommendationReason(
   const AReq: TSSLRequirements
 ): string;
 var
-  Reasons: TStringList;
+  Reasons: TStringArray;
   Caps: TSSLBackendCapabilities;
 begin
-  Reasons := TStringList.Create;
-  try
     Caps := AMatch.Capabilities;
 
     // 根据匹配情况生成原因
@@ -814,13 +802,10 @@ begin
     if Caps.SupportsTLS13 then
       Reasons.Add('支持最新的 TLS 1.3 协议');
 
-    if Reasons.Count = 0 then
+    if Length(Reasons) = 0 then
       Result := '满足基本需求'
     else
-      Result := Reasons.DelimitedText;
-
-  finally
-    Reasons.Free;
+      Result := StringsJoin(Reasons, '; ');
   end;
 end;
 

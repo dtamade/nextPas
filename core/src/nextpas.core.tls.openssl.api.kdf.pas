@@ -8,16 +8,7 @@ unit nextpas.core.tls.openssl.api.kdf;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.hmac;
-
-const
-  // KDF 算法 NID
-  EVP_PKEY_CTRL_TLS_MD = $1000;
+uses nextpas.core.base, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.hmac; const // KDF 算法 NID EVP_PKEY_CTRL_TLS_MD = $1000;
   EVP_PKEY_CTRL_TLS_SECRET = $1001;
   EVP_PKEY_CTRL_TLS_SEED = $1002;
   EVP_PKEY_CTRL_HKDF_MD = $1003;
@@ -270,11 +261,7 @@ function GenerateSalt(Len: Integer = PKCS5_SALT_LEN): TBytes;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.rand,
-  nextpas.core.tls.openssl.loader;
-
-procedure LoadKDFFunctions;
+uses nextpas.core.tls.openssl.api.rand, nextpas.core.tls.openssl.loader; procedure LoadKDFFunctions;
 begin
   if TOpenSSLLoader.IsModuleLoaded(osmKDF) then Exit;
   if GetCryptoLibHandle = 0 then Exit;

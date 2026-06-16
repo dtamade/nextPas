@@ -3,7 +3,10 @@ program test_toml_parser;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
+  Classes,
   nextpas.core.text.view,
+  nextpas.core.mem.intf,
   nextpas.core.mem.default,
   nextpas.core.toml.base,
   nextpas.core.toml.parser,
@@ -11,6 +14,237 @@ uses
 
 var
   T: TTestRunner;
+
+const
+  TOML_PARSER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.toml.parser.pas';
+  TOML_PARSER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.toml.parser.pas';
+
+type
+  TFailingReallocateAllocator = class(TInterfacedObject, IAllocator)
+  private
+    FFailOnReallocateCall: SizeUInt;
+    FReallocateCalls: SizeUInt;
+  public
+    constructor Create(const AFailOnReallocateCall: SizeUInt);
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
+    function GetMem(aSize: SizeUInt): Pointer;
+    function AllocMem(aSize: SizeUInt): Pointer;
+    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+    procedure FreeMem(aDst: Pointer);
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(aPtr: Pointer);
+    function Traits: TAllocatorTraits;
+  end;
+
+  TFailingAllocateAllocator = class(TInterfacedObject, IAllocator)
+  private
+    FFailOnAllocateCall: SizeUInt;
+    FAllocateCalls: SizeUInt;
+  public
+    constructor Create(const AFailOnAllocateCall: SizeUInt);
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
+    function GetMem(aSize: SizeUInt): Pointer;
+    function AllocMem(aSize: SizeUInt): Pointer;
+    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+    procedure FreeMem(aDst: Pointer);
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(aPtr: Pointer);
+    function Traits: TAllocatorTraits;
+  end;
+
+constructor TFailingReallocateAllocator.Create(
+  const AFailOnReallocateCall: SizeUInt);
+begin
+  inherited Create;
+  FFailOnReallocateCall := AFailOnReallocateCall;
+  FReallocateCalls := 0;
+end;
+
+function TFailingReallocateAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TFailingReallocateAllocator.Reallocate(const APtr: Pointer;
+  const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TFailingReallocateAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
+end;
+
+function TFailingReallocateAllocator.GetMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Result := System.GetMem(aSize);
+end;
+
+function TFailingReallocateAllocator.AllocMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Result := System.AllocMem(aSize);
+end;
+
+function TFailingReallocateAllocator.ReallocMem(aDst: Pointer;
+  aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+  begin
+    FreeMem(aDst);
+    Exit(nil);
+  end;
+  if aDst = nil then
+    Exit(GetMem(aSize));
+  Inc(FReallocateCalls);
+  if (FFailOnReallocateCall > 0) and
+    (FReallocateCalls = FFailOnReallocateCall) then
+    Exit(nil);
+  Result := System.ReallocMem(aDst, aSize);
+end;
+
+procedure TFailingReallocateAllocator.FreeMem(aDst: Pointer);
+begin
+  if aDst <> nil then
+    System.FreeMem(aDst);
+end;
+
+function TFailingReallocateAllocator.AllocAligned(aSize,
+  aAlignment: SizeUInt): Pointer;
+begin
+  Result := GetMem(aSize);
+end;
+
+procedure TFailingReallocateAllocator.FreeAligned(aPtr: Pointer);
+begin
+  FreeMem(aPtr);
+end;
+
+function TFailingReallocateAllocator.Traits: TAllocatorTraits;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.HasMemSize := False;
+  Result.SupportsAligned := False;
+end;
+
+constructor TFailingAllocateAllocator.Create(
+  const AFailOnAllocateCall: SizeUInt);
+begin
+  inherited Create;
+  FFailOnAllocateCall := AFailOnAllocateCall;
+  FAllocateCalls := 0;
+end;
+
+function TFailingAllocateAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TFailingAllocateAllocator.Reallocate(const APtr: Pointer;
+  const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TFailingAllocateAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
+end;
+
+function TFailingAllocateAllocator.GetMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Inc(FAllocateCalls);
+  if (FFailOnAllocateCall > 0) and (FAllocateCalls = FFailOnAllocateCall) then
+    Exit(nil);
+  Result := System.GetMem(aSize);
+end;
+
+function TFailingAllocateAllocator.AllocMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Inc(FAllocateCalls);
+  if (FFailOnAllocateCall > 0) and (FAllocateCalls = FFailOnAllocateCall) then
+    Exit(nil);
+  Result := System.AllocMem(aSize);
+end;
+
+function TFailingAllocateAllocator.ReallocMem(aDst: Pointer;
+  aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+  begin
+    FreeMem(aDst);
+    Exit(nil);
+  end;
+  if aDst = nil then
+    Exit(GetMem(aSize));
+  Result := System.ReallocMem(aDst, aSize);
+end;
+
+procedure TFailingAllocateAllocator.FreeMem(aDst: Pointer);
+begin
+  if aDst <> nil then
+    System.FreeMem(aDst);
+end;
+
+function TFailingAllocateAllocator.AllocAligned(aSize,
+  aAlignment: SizeUInt): Pointer;
+begin
+  Result := GetMem(aSize);
+end;
+
+procedure TFailingAllocateAllocator.FreeAligned(aPtr: Pointer);
+begin
+  FreeMem(aPtr);
+end;
+
+function TFailingAllocateAllocator.Traits: TAllocatorTraits;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.HasMemSize := False;
+  Result.SupportsAligned := False;
+end;
+
+function ReadSourceFile(const APath: string): string;
+var
+  LText: TStringList;
+begin
+  LText := TStringList.Create;
+  try
+    LText.LoadFromFile(APath);
+    Result := LowerCase(LText.Text);
+  finally
+    LText.Free;
+  end;
+end;
+
+function ResolveSourcePath(const APathFromTest: string;
+  const APathFromRoot: string): string;
+begin
+  if FileExists(APathFromTest) then
+    Exit(APathFromTest);
+  if FileExists(APathFromRoot) then
+    Exit(APathFromRoot);
+  Result := APathFromTest;
+end;
+
+procedure CheckSourceContains(const ASource, ANeedle, AMessage: string);
+begin
+  Check(Pos(LowerCase(ANeedle), ASource) > 0, AMessage);
+end;
 
 function MustParse(const AToml: string): TTomlDocument;
 begin
@@ -33,6 +267,57 @@ begin
   LDoc.Done;
 end;
 
+function DottedPath(const ACount: Int32): string;
+var
+  LI: Int32;
+begin
+  Result := '';
+  for LI := 1 to ACount do
+  begin
+    if LI > 1 then
+      Result := Result + '.';
+    Result := Result + 'k' + IntToStr(LI);
+  end;
+end;
+
+procedure CheckRejectsWithMessage(const AToml, AExpectedMessage,
+  ACaseName: string);
+var
+  LDoc: TTomlDocument;
+begin
+  LDoc.Init(DefaultAllocator);
+  try
+    Check(not LDoc.Parse(TStringView.FromStr(AToml)),
+      ACaseName + ' rejected');
+    CheckEqual(AExpectedMessage, LDoc.Error.Message.ToString,
+      ACaseName + ' diagnostic');
+  finally
+    LDoc.Done;
+  end;
+end;
+
+procedure CheckRejectsAt(const AToml, AExpectedMessage, ACaseName: string;
+  AExpectedOffset, AExpectedLine, AExpectedCol: Int64);
+var
+  LDoc: TTomlDocument;
+begin
+  LDoc.Init(DefaultAllocator);
+  try
+    Check(not LDoc.Parse(TStringView.FromStr(AToml)),
+      ACaseName + ' rejected');
+    CheckEqual(AExpectedMessage, LDoc.Error.Message.ToString,
+      ACaseName + ' diagnostic');
+    CheckEqual(AExpectedOffset, Int64(LDoc.Error.Offset),
+      ACaseName + ' error offset');
+    CheckEqual(AExpectedLine, Int64(LDoc.Error.Line),
+      ACaseName + ' error line');
+    CheckEqual(AExpectedCol, Int64(LDoc.Error.Col),
+      ACaseName + ' error column');
+  finally
+    LDoc.Done;
+  end;
+end;
+
 procedure TestEmptyInput;
 var
   LDoc: TTomlDocument;
@@ -50,6 +335,21 @@ var
 begin
   LDoc := MustParse('# this is a comment' + #10 + '# another comment' + #10);
   CheckEqual(Int64(0), Int64(LDoc.Node(LDoc.Root)^.Container.Count), 'empty');
+  LDoc.Done;
+end;
+
+procedure TestCommentControlCharacters;
+var
+  LDoc: TTomlDocument;
+begin
+  CheckRejectsAt('key = 1 # bad ' + #1 + #10,
+    'control char in comment', 'inline comment raw C0', 14, 1, 15);
+  CheckRejectsAt('# bad ' + #27 + #10,
+    'control char in comment', 'standalone comment raw C0', 6, 1, 7);
+
+  LDoc := MustParse('# tab' + #9 + 'comment' + #13#10 + 'key = 1 # ok');
+  CheckEqual(Int64(1), Int64(LDoc.Node(LDoc.Root)^.Container.Count),
+    'tab and CRLF comments accepted');
   LDoc.Done;
 end;
 
@@ -272,6 +572,42 @@ begin
   LDoc.Done;
 end;
 
+procedure TestDottedKeyPathDepthBoundary;
+var
+  LDoc: TTomlDocument;
+begin
+  LDoc := MustParse(DottedPath(128) + ' = 1');
+  Check(not LDoc.HasError, '128-segment dotted key accepted');
+  LDoc.Done;
+
+  CheckRejectsWithMessage(DottedPath(129) + ' = 1',
+    'key too deeply nested', '129-segment dotted key');
+end;
+
+procedure TestTablePathDepthBoundary;
+var
+  LDoc: TTomlDocument;
+begin
+  LDoc := MustParse('[' + DottedPath(128) + ']' + #10 + 'value = 1');
+  Check(not LDoc.HasError, '128-segment table path accepted');
+  LDoc.Done;
+
+  CheckRejectsWithMessage('[' + DottedPath(129) + ']' + #10 + 'value = 1',
+    'key too deeply nested', '129-segment table path');
+end;
+
+procedure TestArrayTablePathDepthBoundary;
+var
+  LDoc: TTomlDocument;
+begin
+  LDoc := MustParse('[[' + DottedPath(128) + ']]' + #10 + 'value = 1');
+  Check(not LDoc.HasError, '128-segment array-table path accepted');
+  LDoc.Done;
+
+  CheckRejectsWithMessage('[[' + DottedPath(129) + ']]' + #10 + 'value = 1',
+    'key too deeply nested', '129-segment array-table path');
+end;
+
 procedure TestArray;
 var
   LDoc: TTomlDocument;
@@ -294,6 +630,18 @@ begin
   Check(LDoc.Node(LChild)^.Kind = tnkTable, 'is table');
   CheckEqual(Int64(2), Int64(LDoc.Node(LChild)^.Container.Count), '2 entries');
   LDoc.Done;
+end;
+
+procedure TestInlineTableDottedKeyPathDepthBoundary;
+var
+  LDoc: TTomlDocument;
+begin
+  LDoc := MustParse('root = { ' + DottedPath(128) + ' = 1 }');
+  Check(not LDoc.HasError, '128-segment inline table dotted key accepted');
+  LDoc.Done;
+
+  CheckRejectsWithMessage('root = { ' + DottedPath(129) + ' = 1 }',
+    'key too deeply nested', '129-segment inline table dotted key');
 end;
 
 procedure TestLiteralString;
@@ -319,6 +667,24 @@ begin
   Check(LDoc.Node(LChild)^.Kind = tnkString, 'is string');
   Check(LDoc.Node(LChild)^.Str.Equals(
     TStringView.Create(PAnsiChar('hello' + #10 + 'world'), 11)), 'escaped newline');
+  LDoc.Done;
+end;
+
+procedure TestRawDelControlCharInStrings;
+var
+  LDoc: TTomlDocument;
+begin
+  CheckRejectsAt('msg = "a' + #127 + 'b"', 'control char in string',
+    'basic string raw DEL', 8, 1, 9);
+  CheckRejectsAt('msg = ''a' + #127 + 'b''', 'control char in string',
+    'literal string raw DEL', 8, 1, 9);
+  CheckRejectsAt('msg = """a' + #127 + 'b"""', 'control char in multi-line string',
+    'multi-line basic string raw DEL', 10, 1, 11);
+  CheckRejectsAt('msg = ''''''a' + #127 + 'b''''''',
+    'control char in multi-line literal string',
+    'multi-line literal string raw DEL', 10, 1, 11);
+
+  LDoc := MustParse('tab = "a' + #9 + 'b"' + #10 + 'lit = ''a' + #9 + 'b''');
   LDoc.Done;
 end;
 
@@ -426,10 +792,114 @@ begin
   LDoc.Done;
 end;
 
+function BuildTomlKeyValuePairs(const ACount: Integer): string;
+var
+  LI: Integer;
+begin
+  Result := '';
+  for LI := 0 to ACount - 1 do
+    Result := Result + 'k' + IntToStr(LI) + ' = ' + IntToStr(LI) + #10;
+end;
+
+function BuildTomlEscapedStrings(const ACount: Integer): string;
+var
+  LI: Integer;
+begin
+  Result := '';
+  for LI := 0 to ACount - 1 do
+    Result := Result + 'k' + IntToStr(LI) + ' = "\n"' + #10;
+end;
+
+procedure TestNodeGrowthOOMFailsClosed;
+var
+  LAllocatorObj: TFailingReallocateAllocator;
+  LAllocator: IAllocator;
+  LDoc: TTomlDocument;
+begin
+  LAllocatorObj := TFailingReallocateAllocator.Create(1);
+  LAllocator := LAllocatorObj as IAllocator;
+  LDoc.Init(LAllocator);
+  try
+    Check(not LDoc.Parse(TStringView.FromStr(BuildTomlKeyValuePairs(80))),
+      'node growth OOM rejects parse');
+    Check(LDoc.HasError, 'node growth OOM sets error');
+    CheckEqual('out of memory', LDoc.Error.Message.ToString,
+      'node growth OOM message');
+  finally
+    LDoc.Done;
+  end;
+end;
+
+procedure TestOwnedBufferGrowthOOMFailsClosed;
+var
+  LAllocatorObj: TFailingReallocateAllocator;
+  LAllocator: IAllocator;
+  LDoc: TTomlDocument;
+begin
+  LAllocatorObj := TFailingReallocateAllocator.Create(1);
+  LAllocator := LAllocatorObj as IAllocator;
+  LDoc.Init(LAllocator);
+  try
+    Check(not LDoc.Parse(TStringView.FromStr(BuildTomlEscapedStrings(17))),
+      'owned buffer growth OOM rejects parse');
+    Check(LDoc.HasError, 'owned buffer growth OOM sets error');
+    CheckEqual('out of memory', LDoc.Error.Message.ToString,
+      'owned buffer growth OOM message');
+  finally
+    LDoc.Done;
+  end;
+end;
+
+procedure TestInitAllocateOOMSetsError;
+var
+  LAllocatorObj: TFailingAllocateAllocator;
+  LAllocator: IAllocator;
+  LDoc: TTomlDocument;
+begin
+  LAllocatorObj := TFailingAllocateAllocator.Create(1);
+  LAllocator := LAllocatorObj as IAllocator;
+  LDoc.Init(LAllocator);
+  try
+    Check(LDoc.HasError, 'init allocate OOM sets error');
+    CheckEqual('out of memory', LDoc.Error.Message.ToString,
+      'init allocate OOM message');
+  finally
+    LDoc.Done;
+  end;
+end;
+
+procedure TestParserSourceTracksOOMAndInitGuards;
+var
+  LSource: string;
+begin
+  LSource := ReadSourceFile(ResolveSourcePath(
+    TOML_PARSER_SOURCE_PATH_FROM_TEST,
+    TOML_PARSER_SOURCE_PATH_FROM_ROOT));
+  CheckSourceContains(LSource, 'finited: boolean;',
+    'document tracks initialized state');
+  CheckSourceContains(LSource, 'if not finited then',
+    'done must guard uninited records');
+  CheckSourceContains(LSource, 'lptr := fallocator.allocate(fnodecap * sizeof(ttomlnode));',
+    'init must stage node allocation');
+  CheckSourceContains(LSource, 'if lptr = nil then',
+    'init must guard node allocation');
+  CheckSourceContains(LSource, 'lnewbufs := ppointer(fallocator.reallocate(pointer(fownedbufs), lnewcap * sizeof(pointer)));',
+    'owned buffer growth must stage reallocate');
+  CheckSourceContains(LSource, 'lnewnodes := fallocator.reallocate(fnodes, lnewcap * sizeof(ttomlnode));',
+    'node growth must stage reallocate');
+  CheckSourceContains(LSource, 'lhashbuckets := fallocator.allocate(lcap * sizeof(uint32));',
+    'hash index buckets must stage allocation');
+  CheckSourceContains(LSource, 'lbuf := doc^.fallocator.allocate(lbuflen);',
+    'basic string unescape buffer must stage allocation');
+  CheckSourceContains(LSource, 'lbuf := doc^.fallocator.allocate(lbuflen + 1);',
+    'multi-line string buffers must stage allocation');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml.parser');
   T.Run('empty input', @TestEmptyInput);
   T.Run('comments only', @TestCommentsOnly);
+  T.Run('comment control characters', @TestCommentControlCharacters);
   T.Run('simple string', @TestSimpleString);
   T.Run('simple integer', @TestSimpleInteger);
   T.Run('negative integer', @TestNegativeInteger);
@@ -448,10 +918,19 @@ begin
   T.Run('table', @TestTable);
   T.Run('nested table', @TestNestedTable);
   T.Run('dotted key', @TestDottedKey);
+  T.Run('dotted key path depth boundary',
+    @TestDottedKeyPathDepthBoundary);
+  T.Run('table path depth boundary',
+    @TestTablePathDepthBoundary);
+  T.Run('array table path depth boundary',
+    @TestArrayTablePathDepthBoundary);
   T.Run('array', @TestArray);
   T.Run('inline table', @TestInlineTable);
+  T.Run('inline table dotted key path depth boundary',
+    @TestInlineTableDottedKeyPathDepthBoundary);
   T.Run('literal string', @TestLiteralString);
   T.Run('escaped string', @TestEscapedString);
+  T.Run('raw DEL control char in strings', @TestRawDelControlCharInStrings);
   T.Run('quoted key', @TestQuotedKey);
   T.Run('datetime offset', @TestDateTimeOffset);
   T.Run('local date', @TestLocalDate);
@@ -460,6 +939,12 @@ begin
   T.Run('duplicate key reject', @TestDuplicateKeyReject);
   T.Run('trailing comma array', @TestTrailingCommaArray);
   T.Run('comment after value', @TestCommentAfterValue);
+  T.Run('node growth OOM fails closed', @TestNodeGrowthOOMFailsClosed);
+  T.Run('owned buffer growth OOM fails closed',
+    @TestOwnedBufferGrowthOOMFailsClosed);
+  T.Run('init allocate OOM sets error', @TestInitAllocateOOMSetsError);
+  T.Run('parser source tracks OOM and init guards',
+    @TestParserSourceTracksOOMAndInitGuards);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

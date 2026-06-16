@@ -109,6 +109,32 @@ begin
   Check(not ParseUInt64(PAnsiChar('x'), 1, V), 'non-digit');
 end;
 
+procedure TestParseIntegerOverflow;
+var
+  I: Int64;
+  U: UInt64;
+begin
+  U := 123;
+  Check(not ParseUInt64(PAnsiChar('18446744073709551616'), 20, U), 'uint64 max + 1 rejected');
+  CheckEqual(Int64(0), Int64(U), 'uint64 failed parse resets output');
+
+  U := 123;
+  Check(not ParseUInt64(PAnsiChar('46116860184273879040'), 20, U), 'uint64 wrapped multiply rejected');
+  CheckEqual(Int64(0), Int64(U), 'uint64 wrapped parse resets output');
+
+  I := 123;
+  Check(not ParseInt64(PAnsiChar('9223372036854775808'), 19, I), 'int64 max + 1 rejected');
+  CheckEqual(Int64(0), I, 'positive int64 overflow resets output');
+
+  I := 123;
+  Check(not ParseInt64(PAnsiChar('-9223372036854775809'), 20, I), 'int64 min - 1 rejected');
+  CheckEqual(Int64(0), I, 'negative int64 overflow resets output');
+
+  I := 123;
+  Check(not ParseInt64(PAnsiChar('-46116860184273879040'), 21, I), 'negative wrapped multiply rejected');
+  CheckEqual(Int64(0), I, 'negative wrapped parse resets output');
+end;
+
 procedure TestViewToInt;
 var
   V: TStringView;
@@ -180,6 +206,41 @@ begin
 
   Check(not ParseDouble(PAnsiChar(''), 0, V), 'empty');
   Check(not ParseDouble(PAnsiChar('abc'), 3, V), 'non-number');
+  Check(not ParseDouble(PAnsiChar('1e'), 2, V), 'missing exponent digits');
+  Check(not ParseDouble(PAnsiChar('1e+'), 3, V), 'missing signed exponent digits');
+  Check(not ParseDouble(PAnsiChar('NaNx'), 4, V), 'NaN trailing input');
+  Check(not ParseDouble(PAnsiChar('Infinityx'), 9, V), 'Infinity trailing input');
+end;
+
+procedure TestParseDoubleRejectsFractionWithoutDigits;
+var
+  V: Double;
+begin
+  Check(not ParseDouble(PAnsiChar('1.'), 2, V), 'fraction requires digit after dot');
+  Check(not ParseDouble(PAnsiChar('1.e2'), 4, V), 'exponent after dot still requires fraction digit');
+end;
+
+procedure TestParseDoubleRejectsOverflowFallback;
+var
+  V: Double;
+  S: AnsiString;
+  I: Integer;
+begin
+  V := 123.0;
+  Check(not ParseDouble(PAnsiChar('1e999'), 5, V), 'overflow exponent is rejected');
+  Check(V = 0.0, 'overflow exponent resets output');
+
+  V := 123.0;
+  Check(not ParseDouble(PAnsiChar('9e308'), 5, V), 'overflow finite exponent is rejected');
+  Check(V = 0.0, 'overflow finite exponent resets output');
+
+  SetLength(S, 1100);
+  for I := 1 to Length(S) do
+    S[I] := '9';
+
+  V := 123.0;
+  Check(not ParseDouble(PAnsiChar(S), Length(S), V), 'very long decimal is rejected');
+  Check(V = 0.0, 'very long decimal resets output');
 end;
 
 procedure TestFloatRoundTrip;
@@ -248,11 +309,14 @@ begin
   T.Run('IntToHexBuffer', @TestHexBuffer);
   T.Run('ParseInt64', @TestParseInt64);
   T.Run('ParseUInt64', @TestParseUInt64);
+  T.Run('Parse integer overflow', @TestParseIntegerOverflow);
   T.Run('ViewToInt64', @TestViewToInt);
   T.Run('digit pairs 0-999', @TestDigitPairsCorrectness);
   T.Run('FloatToBuffer', @TestFloatToBuffer);
   T.Run('FloatToJsonBuffer', @TestFloatToJsonBuffer);
   T.Run('ParseDouble', @TestParseDouble);
+  T.Run('ParseDouble rejects empty fraction', @TestParseDoubleRejectsFractionWithoutDigits);
+  T.Run('ParseDouble rejects overflow fallback', @TestParseDoubleRejectsOverflowFallback);
   T.Run('ViewToDouble', @TestViewToDouble);
   T.Run('float round-trip', @TestFloatRoundTrip);
   T.Summary;

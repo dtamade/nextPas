@@ -1,19 +1,7 @@
 program bench_render;
 {$I nextpas.core.settings.inc}
 uses
-  nextpas.core.tui.base,
-  nextpas.core.tui.color,
-  nextpas.core.tui.style,
-  nextpas.core.tui.cell,
-  nextpas.core.tui.buffer,
-  nextpas.core.tui.borders,
-  nextpas.core.tui.layout,
-  nextpas.core.tui.layout.dsl,
-  nextpas.core.tui.text,
-  nextpas.core.tui.widget.block,
-  nextpas.core.tui.widget.paragraph,
-  nextpas.core.tui.widget.list,
-  nextpas.core.tui.widget.gauge,
+  nextpas.core.tui.full,
   nextpas.core.bench;
 
 var

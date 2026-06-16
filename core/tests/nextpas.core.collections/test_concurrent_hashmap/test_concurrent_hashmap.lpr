@@ -11,6 +11,7 @@ uses
 type
   TIntConcMap = specialize TConcurrentHashMap<Integer, Integer>;
   TStrConcMap = specialize TConcurrentHashMap<string, Integer>;
+  TUnicodeConcMap = specialize TConcurrentHashMap<UnicodeString, Integer>;
 
 function HashInt(const A: Integer): UInt32;
 begin
@@ -286,6 +287,43 @@ begin
   finally M.Free; end;
 end;
 
+function RebuildUnicodeKey(AIndex: Integer): UnicodeString;
+var
+  LPrefix: UnicodeString;
+  LSuffix: UnicodeString;
+begin
+  LPrefix := UnicodeString('unicode-key-');
+  LSuffix := UnicodeString(IntToStr(AIndex));
+  Result := Copy(LPrefix + LSuffix + UnicodeString('-payload'), 1,
+    Length(LPrefix) + Length(LSuffix));
+end;
+
+procedure TestDefaultUnicodeStringHashUsesStringContent;
+const
+  ITEM_COUNT = 128;
+var
+  M: TUnicodeConcMap;
+  i, v: Integer;
+  K: UnicodeString;
+begin
+  M := TUnicodeConcMap.Create(nil, nil);
+  try
+    for i := 0 to ITEM_COUNT - 1 do
+    begin
+      K := RebuildUnicodeKey(i);
+      M.Put(K, i * 11);
+    end;
+
+    CheckEqual(Int64(ITEM_COUNT), Int64(M.Count), 'unicode count');
+    for i := 0 to ITEM_COUNT - 1 do
+    begin
+      K := RebuildUnicodeKey(i);
+      Check(M.TryGetValue(K, v), 'rebuilt unicode key lookup');
+      CheckEqual(Int64(i * 11), Int64(v), 'rebuilt unicode key value');
+    end;
+  finally M.Free; end;
+end;
+
 procedure TestReplace;
 var M: TIntConcMap; v: Integer;
 begin
@@ -297,6 +335,37 @@ begin
     CheckEqual(Int64(99), Int64(v), 'replaced value');
     Check(not M.Replace(999, 42), 'replace missing');
     CheckEqual(Int64(1), Int64(M.Count), 'count unchanged');
+  finally M.Free; end;
+end;
+
+function HashModuloTen(const A: Integer): UInt32;
+begin
+  Result := UInt32(A mod 10);
+end;
+
+function EqualModuloTen(const A, B: Integer): Boolean;
+begin
+  Result := (A mod 10) = (B mod 10);
+end;
+
+procedure TestCustomCallbacksForwardedToSegments;
+var
+  M: TIntConcMap;
+  v: Integer;
+begin
+  M := TIntConcMap.Create(@HashModuloTen, @EqualModuloTen);
+  try
+    M.Put(1, 10);
+    M.Put(11, 110);
+    CheckEqual(Int64(1), Int64(M.Count), 'equivalent keys share one slot');
+    Check(M.TryGetValue(21, v), 'lookup with equivalent key');
+    CheckEqual(Int64(110), Int64(v), 'equivalent key sees updated value');
+    Check(not M.PutIfAbsent(31, 310), 'put-if-absent rejects equivalent key');
+    Check(M.Replace(41, 410), 'replace equivalent key');
+    Check(M.TryGetValue(51, v), 'lookup after equivalent replace');
+    CheckEqual(Int64(410), Int64(v), 'equivalent replace value');
+    Check(M.Remove(61), 'remove equivalent key');
+    CheckEqual(Int64(0), Int64(M.Count), 'count after equivalent remove');
   finally M.Free; end;
 end;
 
@@ -312,6 +381,8 @@ begin
   T.Run('IsEmpty', @TestIsEmpty);
   T.Run('Keys', @TestKeys);
   T.Run('Default hash (nil)', @TestDefaultHash);
+  T.Run('Default UnicodeString hash uses string content', @TestDefaultUnicodeStringHashUsesStringContent);
+  T.Run('Custom callbacks forwarded to segments', @TestCustomCallbacksForwardedToSegments);
   T.Run('Clear', @TestClear);
   T.Run('String key', @TestStringKey);
   T.Run('Multi-thread stress (4W+4R)', @TestMultiThreadStress);

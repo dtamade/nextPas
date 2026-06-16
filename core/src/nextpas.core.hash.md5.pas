@@ -13,7 +13,8 @@ uses
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.hash.base,
-  nextpas.core.hash.intf;
+  nextpas.core.hash.intf,
+  nextpas.core.hash.util;
 
 type
   TMD5Hasher = class(TInterfacedObject, IHasher)
@@ -123,6 +124,8 @@ var
   LRemaining, LCopy: SizeUInt;
 begin
   Result := ACount;
+  HashRequireTotalLength(FTotalLen, ACount, 'MD5.Write');
+  HashRequireBuffer(ABuf, ACount, 'MD5.Write');
   LSrc := @ABuf;
   LRemaining := ACount;
   Inc(FTotalLen, ACount);
@@ -163,7 +166,12 @@ var
   LBufLen: SizeUInt;
   LTotalBits: UInt64;
   LDst: PByte;
+  LOutSize: SizeUInt;
 begin
+  LOutSize := DigestOutputSize(MD5_DIGEST_SIZE, ASize);
+  if LOutSize = 0 then Exit;
+  HashRequireBuffer(ADst, LOutSize, 'MD5.Sum');
+
   LA := FA; LB := FB; LC := FC; LD := FD;
   Move(FBuf[0], LBuf[0], FBufLen);
   LBufLen := FBufLen;
@@ -193,14 +201,22 @@ begin
   MD5ProcessBlock(@LBuf[0], LA, LB, LC, LD);
 
   LDst := @ADst;
-  LDst[0] := Byte(LA); LDst[1] := Byte(LA shr 8);
-  LDst[2] := Byte(LA shr 16); LDst[3] := Byte(LA shr 24);
-  LDst[4] := Byte(LB); LDst[5] := Byte(LB shr 8);
-  LDst[6] := Byte(LB shr 16); LDst[7] := Byte(LB shr 24);
-  LDst[8] := Byte(LC); LDst[9] := Byte(LC shr 8);
-  LDst[10] := Byte(LC shr 16); LDst[11] := Byte(LC shr 24);
-  LDst[12] := Byte(LD); LDst[13] := Byte(LD shr 8);
-  LDst[14] := Byte(LD shr 16); LDst[15] := Byte(LD shr 24);
+  WriteDigestByte(LDst, LOutSize, 0, Byte(LA));
+  WriteDigestByte(LDst, LOutSize, 1, Byte(LA shr 8));
+  WriteDigestByte(LDst, LOutSize, 2, Byte(LA shr 16));
+  WriteDigestByte(LDst, LOutSize, 3, Byte(LA shr 24));
+  WriteDigestByte(LDst, LOutSize, 4, Byte(LB));
+  WriteDigestByte(LDst, LOutSize, 5, Byte(LB shr 8));
+  WriteDigestByte(LDst, LOutSize, 6, Byte(LB shr 16));
+  WriteDigestByte(LDst, LOutSize, 7, Byte(LB shr 24));
+  WriteDigestByte(LDst, LOutSize, 8, Byte(LC));
+  WriteDigestByte(LDst, LOutSize, 9, Byte(LC shr 8));
+  WriteDigestByte(LDst, LOutSize, 10, Byte(LC shr 16));
+  WriteDigestByte(LDst, LOutSize, 11, Byte(LC shr 24));
+  WriteDigestByte(LDst, LOutSize, 12, Byte(LD));
+  WriteDigestByte(LDst, LOutSize, 13, Byte(LD shr 8));
+  WriteDigestByte(LDst, LOutSize, 14, Byte(LD shr 16));
+  WriteDigestByte(LDst, LOutSize, 15, Byte(LD shr 24));
 end;
 
 function TMD5Hasher.SumBytes: TBytes;

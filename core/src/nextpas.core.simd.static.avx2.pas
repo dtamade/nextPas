@@ -39,7 +39,7 @@ uses
 
 procedure RequireStaticAVX2Target;
 begin
-  if not GetCPUInfo.X86.HasAVX2 then
+  if not nextpas.core.simd.cpuinfo.HasAVX2 then
     raise Exception.Create('nextpas.core.simd.static.avx2: CPU does not support AVX2');
 end;
 

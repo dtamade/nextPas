@@ -1,18 +1,95 @@
 program test_swisstable;
 
 {$I nextpas.core.settings.inc}
+{$modeswitch advancedrecords}
 
 uses
   SysUtils,
   nextpas.core.testing,
-  nextpas.core.collections.hashmap.swiss;
+  nextpas.core.collections.hashmap.swiss,
+  nextpas.core.collections.hashmap.swiss.str;
 
 type
   TIntSwiss = specialize TSwissTable<Integer, Integer>;
   TStrSwiss = specialize TSwissTable<string, Integer>;
+  TStringKeySwiss = specialize TSwissTableStr<Integer>;
+  TManagedRecord = record
+    Initialized: Boolean;
+    Id: Int32;
+    Payload: string;
+    class operator Initialize(var ARecord: TManagedRecord);
+    class operator Finalize(var ARecord: TManagedRecord);
+  end;
+  TManagedRecordSwiss = specialize TSwissTable<TManagedRecord, TManagedRecord>;
 
 var
   T: TTestRunner;
+  GManagedRecordAlive: Int32 = 0;
+  GManagedRecordBadFinalize: Int32 = 0;
+  GManagedRecordDrainVisits: Int32 = 0;
+
+class operator TManagedRecord.Initialize(var ARecord: TManagedRecord);
+begin
+  ARecord.Initialized := True;
+  ARecord.Id := 0;
+  ARecord.Payload := '';
+  Inc(GManagedRecordAlive);
+end;
+
+class operator TManagedRecord.Finalize(var ARecord: TManagedRecord);
+begin
+  if not ARecord.Initialized then
+    Inc(GManagedRecordBadFinalize)
+  else
+  begin
+    ARecord.Initialized := False;
+    ARecord.Payload := '';
+    Dec(GManagedRecordAlive);
+  end;
+end;
+
+function HashFirstSwissGroup(const AKey: Integer): UInt32;
+begin
+  Result := UInt32(AKey and $7F);
+end;
+
+function EqualInteger(const L, R: Integer): Boolean;
+begin
+  Result := L = R;
+end;
+
+function MakeManagedRecord(AId: Int32): TManagedRecord;
+begin
+  Result.Id := AId;
+  Result.Payload := 'managed-' + IntToStr(AId);
+end;
+
+function HashManagedRecord(const AKey: TManagedRecord): UInt32;
+begin
+  Result := InlineHashMix32(UInt32(AKey.Id));
+end;
+
+function EqualManagedRecord(const L, R: TManagedRecord): Boolean;
+begin
+  Result := L.Id = R.Id;
+end;
+
+function KeepManagedRecordOdd(const AKey: TManagedRecord; const AValue: TManagedRecord): Boolean;
+begin
+  Result := (AKey.Id mod 2) = 1;
+end;
+
+procedure VisitManagedRecord(const AKey: TManagedRecord; const AValue: TManagedRecord);
+begin
+  Inc(GManagedRecordDrainVisits);
+end;
+
+procedure ResetManagedRecordCounters;
+begin
+  GManagedRecordAlive := 0;
+  GManagedRecordBadFinalize := 0;
+  GManagedRecordDrainVisits := 0;
+end;
 
 procedure TestPutGet;
 var M: TIntSwiss; v: Integer;
@@ -77,6 +154,70 @@ begin
   M.Free;
 end;
 
+procedure TestDeletedSlotReuseKeepsStableCapacity;
+var
+  M: TIntSwiss;
+  I: Integer;
+  InitialCapacity: SizeUInt;
+begin
+  M := TIntSwiss.Create(GROUP_SIZE * 4, @HashFirstSwissGroup, @EqualInteger);
+  try
+    for I := 0 to GROUP_SIZE - 1 do
+      M.Put(I, I);
+
+    InitialCapacity := M.Capacity;
+
+    for I := 1 to Integer(InitialCapacity) do
+    begin
+      Check(M.Remove(0), 'remove churn key');
+      M.Put(0, I);
+      CheckEqual(Int64(GROUP_SIZE), Int64(M.Count), 'stable count');
+    end;
+
+    CheckEqual(Int64(InitialCapacity), Int64(M.Capacity),
+      'deleted slot reuse keeps capacity stable');
+  finally
+    M.Free;
+  end;
+end;
+
+procedure TestGrowthBudgetExhaustionReusesBeforeGrow;
+var
+  M: TIntSwiss;
+  I, V: Integer;
+  InitialCapacity, GrowthLimit: SizeUInt;
+begin
+  M := TIntSwiss.Create(GROUP_SIZE * 4, @HashFirstSwissGroup, @EqualInteger);
+  try
+    InitialCapacity := M.Capacity;
+    GrowthLimit := InitialCapacity - InitialCapacity div 8;
+
+    for I := 0 to Integer(GrowthLimit) - 1 do
+      M.Put(I, I);
+
+    CheckEqual(Int64(GrowthLimit), Int64(M.Count), 'growth limit count');
+
+    M.Put(0, -1);
+    CheckEqual(Int64(InitialCapacity), Int64(M.Capacity),
+      'update at growth limit keeps capacity');
+    CheckEqual(Int64(GrowthLimit), Int64(M.Count),
+      'update at growth limit keeps count');
+    Check(M.TryGetValue(0, V), 'get updated key');
+    CheckEqual(Int64(-1), Int64(V), 'updated value');
+
+    Check(M.Remove(0), 'remove full-group key at growth limit');
+    M.Put(0, -2);
+    CheckEqual(Int64(InitialCapacity), Int64(M.Capacity),
+      'deleted slot at growth limit keeps capacity');
+    CheckEqual(Int64(GrowthLimit), Int64(M.Count),
+      'deleted slot at growth limit keeps count');
+    Check(M.TryGetValue(0, V), 'get reused deleted slot key');
+    CheckEqual(Int64(-2), Int64(V), 'reused deleted slot value');
+  finally
+    M.Free;
+  end;
+end;
+
 procedure TestStringKey;
 var M: TStrSwiss; i, v: Integer; ok: Boolean;
 begin
@@ -91,6 +232,41 @@ begin
   M.Remove('key500');
   CheckEqual(Int64(999), Int64(M.Count), 'str count after remove');
   M.Free;
+end;
+
+procedure TestStringSpecializedGrowthBudgetReusesBeforeGrow;
+var
+  M: TStringKeySwiss;
+  I, V: Integer;
+  InitialCapacity, GrowthLimit: SizeUInt;
+begin
+  M := TStringKeySwiss.Create(128);
+  try
+    InitialCapacity := M.Capacity;
+    GrowthLimit := InitialCapacity - InitialCapacity div 8;
+
+    for I := 0 to Integer(GrowthLimit) - 1 do
+      M.Put('key' + IntToStr(I), I);
+
+    CheckEqual(Int64(GrowthLimit), Int64(M.Count), 'string specialized growth limit count');
+
+    M.Put('key0', -1);
+    CheckEqual(Int64(InitialCapacity), Int64(M.Capacity),
+      'string specialized update at growth limit keeps capacity');
+    Check(M.TryGetValue('key0', V), 'string specialized get updated key');
+    CheckEqual(Int64(-1), Int64(V), 'string specialized updated value');
+
+    Check(M.Remove('key0'), 'string specialized remove full table key');
+    M.Put('key0', -2);
+    CheckEqual(Int64(InitialCapacity), Int64(M.Capacity),
+      'string specialized deleted slot at growth limit keeps capacity');
+    CheckEqual(Int64(GrowthLimit), Int64(M.Count),
+      'string specialized deleted slot keeps count');
+    Check(M.TryGetValue('key0', V), 'string specialized get reused key');
+    CheckEqual(Int64(-2), Int64(V), 'string specialized reused value');
+  finally
+    M.Free;
+  end;
 end;
 
 procedure TestClear;
@@ -186,6 +362,44 @@ begin
   M.Free;
 end;
 
+procedure TestManagedRecordSlotCleanup;
+var
+  M: TManagedRecordSwiss;
+  I: Integer;
+begin
+  ResetManagedRecordCounters;
+  M := TManagedRecordSwiss.Create(0, @HashManagedRecord, @EqualManagedRecord);
+  try
+    for I := 0 to 31 do
+      M.Put(MakeManagedRecord(I), MakeManagedRecord(I + 1000));
+
+    Check(M.Remove(MakeManagedRecord(4)), 'managed record remove existing key');
+    Check(not M.Remove(MakeManagedRecord(400)), 'managed record remove missing key');
+    CheckEqual(Int64(0), Int64(GManagedRecordBadFinalize),
+      'managed record remove does not finalize uninitialized slot bytes');
+
+    M.Retain(@KeepManagedRecordOdd);
+    CheckEqual(Int64(0), Int64(GManagedRecordBadFinalize),
+      'managed record retain does not finalize uninitialized slot bytes');
+    CheckEqual(Int64(16), Int64(M.Count), 'managed record retain count');
+
+    GManagedRecordDrainVisits := 0;
+    M.Drain(@VisitManagedRecord);
+    CheckEqual(Int64(16), Int64(GManagedRecordDrainVisits),
+      'managed record drain visits retained items');
+    CheckEqual(Int64(0), Int64(GManagedRecordBadFinalize),
+      'managed record drain does not finalize uninitialized slot bytes');
+    CheckEqual(Int64(0), Int64(M.Count), 'managed record drain empties table');
+  finally
+    M.Free;
+  end;
+
+  CheckEqual(Int64(0), Int64(GManagedRecordAlive),
+    'managed record remove/retain/drain releases all slots');
+  CheckEqual(Int64(0), Int64(GManagedRecordBadFinalize),
+    'managed record remove/retain/drain leaves no bad finalizers');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.swisstable');
   T.Run('Put/Get', @TestPutGet);
@@ -193,12 +407,17 @@ begin
   T.Run('Remove', @TestRemove);
   T.Run('Grow (10000 elements)', @TestGrow);
   T.Run('Remove + Reinsert', @TestRemoveReinsert);
+  T.Run('Deleted slot reuse keeps stable capacity', @TestDeletedSlotReuseKeepsStableCapacity);
+  T.Run('Growth budget exhaustion reuses before grow', @TestGrowthBudgetExhaustionReusesBeforeGrow);
   T.Run('String key', @TestStringKey);
+  T.Run('String specialized growth budget reuses before grow',
+    @TestStringSpecializedGrowthBudgetReusesBeforeGrow);
   T.Run('Clear', @TestClear);
   T.Run('Prealloc', @TestPrealloc);
   T.Run('Retain', @TestRetain);
   T.Run('Drain', @TestDrain);
   T.Run('Reserve', @TestReserve);
   T.Run('ForEach/Enumerator', @TestForEachAndEnumerator);
+  T.Run('Managed record slot cleanup', @TestManagedRecordSlotCleanup);
   T.Summary;
 end.

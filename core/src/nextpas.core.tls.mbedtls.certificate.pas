@@ -18,6 +18,8 @@ interface
 
 uses
   SysUtils, Classes,
+  nextpas.core.base.utils,
+  nextpas.core.fs,
   nextpas.core.tls.base,
   nextpas.core.tls.base64,
   nextpas.core.tls.errors,
@@ -154,7 +156,10 @@ type
 implementation
 
 uses
-  Contnrs, DateUtils,
+  Contnrs,
+  DateUtils,
+  nextpas.core.text.conv,
+  nextpas.core.text.strings,
   nextpas.core.time,
   nextpas.core.tls.utils,
   nextpas.core.crypto.hash;
@@ -431,7 +436,7 @@ begin
     end;
     Result := True;
   except
-    FreeAndNil(AParser);
+    nextpas.core.base.utils.FreeAndNil(AParser);
     Result := False;
   end;
 end;
@@ -459,14 +464,13 @@ begin
 
     Result := (APublicKeyAlgorithm <> '') or (ASignatureAlgorithm <> '');
   finally
-    LParser.Free;
   end;
 end;
 
 function TMbedTLSCertificate.LoadFromFile(const AFileName: string): Boolean;
 begin
   Result := False;
-  if not FileExists(AFileName) then Exit;
+  if not nextpas.core.fs.IsFile(AFileName) then Exit;
   if not Assigned(mbedtls_x509_crt_parse_file) then Exit;
 
   FPEMData := '';
@@ -571,7 +575,6 @@ begin
     try
       Result := SaveToStream(LStream);
     finally
-      LStream.Free;
     end;
   except
     Result := False;
@@ -695,7 +698,6 @@ begin
       Result.KeyUsage := X509KeyUsageToBitfield(LParser.KeyUsage);
       Result.SubjectAltNames := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
     finally
-      LParser.Free;
     end;
   end
   else
@@ -721,7 +723,6 @@ begin
       if Result <> '' then
         Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -756,7 +757,6 @@ begin
       if Result <> '' then
         Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -793,7 +793,6 @@ begin
       if Result <> '' then
         Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -863,7 +862,7 @@ begin
         end;
 
         if (LYear > 0) and (LMonth in [1..12]) and (LDay in [1..31]) then
-          Result := EncodeDate(LYear, LMonth, LDay) + EncodeTime(LHour, LMin, LSec, 0);
+          Result := System.EncodeDate(LYear, LMonth, LDay) + System.EncodeTime(LHour, LMin, LSec, 0);
       except
         Result := 0;
       end;
@@ -889,7 +888,6 @@ begin
       if Result > 0 then
         Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -940,7 +938,6 @@ begin
       if Result > 0 then
         Exit;
     finally
-      LParser.Free;
     end;
   end;
 
@@ -1012,7 +1009,6 @@ begin
       Result := Ord(LParser.Version) + 1;
       Exit;
     finally
-      LParser.Free;
     end;
   end;
 end;
@@ -1147,7 +1143,7 @@ begin
 
     AResult.Success := True;
     if LIgnoredFlags <> 0 then
-      AResult.DetailedInfo := Format(
+      AResult.DetailedInfo := nextpas.core.text.conv.Format(
         'MbedTLS certificate verification passed after applying VerifyEx flag exceptions (native flags=%u, ignored=%u)',
         [LFlags, LIgnoredFlags])
     else
@@ -1171,11 +1167,11 @@ begin
       LErrorMessage := Trim(LErrorMessage + ' (not trusted)');
     AResult.ErrorMessage := LErrorMessage;
     if LIgnoredFlags <> 0 then
-      AResult.DetailedInfo := Format(
+      AResult.DetailedInfo := nextpas.core.text.conv.Format(
         'MbedTLS verification flags: native=%u effective=%u ignored=%u',
         [LFlags, LEffectiveFlags, LIgnoredFlags])
     else
-      AResult.DetailedInfo := Format('MbedTLS verification flags: %u', [LEffectiveFlags]);
+      AResult.DetailedInfo := nextpas.core.text.conv.Format('MbedTLS verification flags: %u', [LEffectiveFlags]);
   end;
 end;
 
@@ -1189,7 +1185,7 @@ var
 
   function MatchWildcard(const APattern, AHostname: string): Boolean;
   var
-    PatternParts, HostParts: TStringList;
+    PatternParts, HostParts: TStringArray;
     j: Integer;
   begin
     Result := False;
@@ -1204,21 +1200,14 @@ var
     // Wildcard match (*.example.com)
     if (Pos('*.', APattern) = 1) then
     begin
-      PatternParts := TStringList.Create;
-      HostParts := TStringList.Create;
       try
-        PatternParts.Delimiter := '.';
-        PatternParts.DelimitedText := APattern;
-
-        HostParts.Delimiter := '.';
-        HostParts.DelimitedText := AHostname;
 
         // Same label count
-        if PatternParts.Count = HostParts.Count then
+        if Length(PatternParts) = Length(HostParts) then
         begin
           Result := True;
           // Compare from 2nd label (skip wildcard)
-          for j := 1 to PatternParts.Count - 1 do
+          for j := 1 to Length(PatternParts) - 1 do
           begin
             if not SameText(PatternParts[j], HostParts[j]) then
             begin
@@ -1228,8 +1217,6 @@ var
           end;
         end;
       finally
-        PatternParts.Free;
-        HostParts.Free;
       end;
     end;
   end;
@@ -1342,7 +1329,6 @@ begin
   try
     Result := LParser.IsCA;
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1357,7 +1343,7 @@ begin
     Exit;
   end;
 
-  Result := DaysBetween(Now, LNotAfter);
+  Result := DaysBetween(nextpas.core.time.DateTimeNow, LNotAfter);
   if IsExpired then
     Result := -Result;
 end;
@@ -1406,7 +1392,6 @@ begin
       end;
     end;
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1421,7 +1406,6 @@ begin
   try
     Result := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1436,7 +1420,6 @@ begin
   try
     Result := X509KeyUsageToStrings(LParser.KeyUsage);
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1451,7 +1434,6 @@ begin
   try
     Result := X509ExtKeyUsageToStrings(LParser.ExtKeyUsage);
   finally
-    LParser.Free;
   end;
 end;
 
@@ -1500,7 +1482,7 @@ begin
   if mbedtls_md(LMdInfo, LDERData, LDERLen, @LHash[0]) = 0 then
   begin
     for I := 0 to 19 do
-      Result := Result + IntToHex(LHash[I], 2);
+      Result := Result + nextpas.core.text.conv.IntToHex(LHash[I], 2);
   end;
 end;
 
@@ -1538,7 +1520,7 @@ begin
   if mbedtls_md(LMdInfo, LDERData, LDERLen, @LHash[0]) = 0 then
   begin
     for I := 0 to 31 do
-      Result := Result + IntToHex(LHash[I], 2);
+      Result := Result + nextpas.core.text.conv.IntToHex(LHash[I], 2);
   end;
 end;
 
@@ -1603,7 +1585,6 @@ begin
     Result := LClone;
     LClone := nil;
   finally
-    LClone.Free;
   end;
 end;
 
@@ -1620,7 +1601,6 @@ end;
 destructor TMbedTLSCertificateStore.Destroy;
 begin
   Clear;
-  FCertificates.Free;
   FreeStore;
   inherited Destroy;
 end;
@@ -1770,7 +1750,7 @@ var
   LCert: TMbedTLSCertificate;
 begin
   Result := False;
-  if not FileExists(AFileName) then Exit;
+  if not nextpas.core.fs.IsFile(AFileName) then Exit;
 
   LCert := TMbedTLSCertificate.Create;
   try
@@ -1780,7 +1760,6 @@ begin
       Result := True;
     end;
   except
-    LCert.Free;
     raise;
   end;
 end;
@@ -1790,7 +1769,7 @@ var
   LCount: Integer;
 begin
   Result := False;
-  if not DirectoryExists(APath) then Exit;
+  if not nextpas.core.fs.IsDir(APath) then Exit;
 
   LCount := 0;
 
@@ -1811,13 +1790,13 @@ function TMbedTLSCertificateStore.LoadSystemStore: Boolean;
 begin
   Result := False;
   {$IFDEF LINUX}
-  if DirectoryExists('/etc/ssl/certs') then
+  if nextpas.core.fs.IsDir('/etc/ssl/certs') then
     Result := LoadFromPath('/etc/ssl/certs')
-  else if DirectoryExists('/etc/pki/tls/certs') then
+  else if nextpas.core.fs.IsDir('/etc/pki/tls/certs') then
     Result := LoadFromPath('/etc/pki/tls/certs');
   {$ENDIF}
   {$IFDEF DARWIN}
-  if FileExists('/etc/ssl/cert.pem') then
+  if nextpas.core.fs.IsFile('/etc/ssl/cert.pem') then
     Result := LoadFromFile('/etc/ssl/cert.pem');
   {$ENDIF}
 end;

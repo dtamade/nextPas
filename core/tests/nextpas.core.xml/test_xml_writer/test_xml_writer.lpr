@@ -105,6 +105,152 @@ begin
   end;
 end;
 
+procedure TestAttributeRejectsInvalidControlChar;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('root');
+    LRaised := False;
+    try
+      LW.Attribute('v', 'bad' + #1 + 'value');
+      Fail('attribute with invalid control char must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'invalid attribute control char raises EArgumentError');
+    LW.EndElement('root');
+    CheckEqual('<root/>', LW.ToString,
+      'invalid attribute control char leaves open element recoverable');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestAttributeRejectsEmptyName;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('root');
+    LRaised := False;
+    try
+      LW.Attribute('', 'x');
+      Fail('attribute with empty name must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'empty attribute name raises EArgumentError');
+    LW.EndElement('root');
+    CheckEqual('<root/>', LW.ToString, 'empty attribute name leaves output valid');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestAttributeOutsideStartTagIgnoresInvalidName;
+var
+  LW: TXmlWriter;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('root');
+    LW.EndElement('root');
+    LW.Attribute('bad name', 'x');
+    CheckEqual('<root/>', LW.ToString,
+      'attribute outside start tag remains a no-op even for invalid name');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestWriterRejectsInvalidQNames;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+
+  procedure ExpectInvalidStartElement(const AName, ALabel: string);
+  begin
+    LW.Clear;
+    LRaised := False;
+    try
+      LW.StartElement(AName);
+      Fail(ALabel + ' must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, ALabel + ' raises EArgumentError');
+    CheckEqual('', LW.ToString, ALabel + ' leaves output unchanged');
+  end;
+
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    ExpectInvalidStartElement('1root', 'digit-start element name');
+    ExpectInvalidStartElement('bad name', 'space-containing element name');
+    ExpectInvalidStartElement('ns:', 'empty-local QName');
+    ExpectInvalidStartElement(':local', 'empty-prefix QName');
+    ExpectInvalidStartElement('a:b:c', 'multi-colon QName');
+
+    LRaised := False;
+    try
+      LW.EmptyElement('bad name');
+      Fail('empty element with invalid QName must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'invalid empty-element QName raises EArgumentError');
+    CheckEqual('', LW.ToString, 'invalid empty-element QName leaves output unchanged');
+
+    LW.StartElement('root');
+    LRaised := False;
+    try
+      LW.StartElement('bad name');
+      Fail('nested start element with invalid QName must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'invalid nested start-element QName raises EArgumentError');
+    CheckEqual('<root', LW.ToString,
+      'invalid nested start-element QName does not flush open start tag');
+
+    LRaised := False;
+    try
+      LW.EmptyElement('bad name');
+      Fail('nested empty element with invalid QName must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'invalid nested empty-element QName raises EArgumentError');
+    CheckEqual('<root', LW.ToString,
+      'invalid nested empty-element QName does not flush open start tag');
+
+    LRaised := False;
+    try
+      LW.Attribute('bad name', 'x');
+      Fail('attribute with invalid QName must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'invalid attribute QName raises EArgumentError');
+    LW.EndElement('root');
+    CheckEqual('<root/>', LW.ToString, 'invalid attribute QName leaves open element recoverable');
+  finally
+    LW.Free;
+  end;
+end;
+
 procedure TestNamespaceDecl;
 var
   LW: TXmlWriter;
@@ -136,6 +282,72 @@ begin
   end;
 end;
 
+procedure TestNamespaceDeclAllowsXmlPrefixBinding;
+var
+  LW: TXmlWriter;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('root');
+    LW.NamespaceDecl('xml', 'http://www.w3.org/XML/1998/namespace');
+    LW.EndElement('root');
+    CheckEqual(
+      '<root xmlns:xml="http://www.w3.org/XML/1998/namespace"/>',
+      LW.ToString,
+      'xml prefix may be declared only with the standard XML namespace');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestNamespaceDeclRejectsInvalidReservedBindings;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+
+  procedure ExpectInvalidNamespaceDecl(
+    const APrefix, AURI, ALabel: string);
+  begin
+    LW.Clear;
+    LW.StartElement('root');
+    LRaised := False;
+    try
+      LW.NamespaceDecl(APrefix, AURI);
+      Fail(ALabel + ' must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, ALabel + ' raises EArgumentError');
+    CheckEqual('<root', LW.ToString,
+      ALabel + ' does not flush or mutate the open start tag');
+    LW.EndElement('root');
+    CheckEqual('<root/>', LW.ToString,
+      ALabel + ' leaves the writer recoverable');
+  end;
+
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    ExpectInvalidNamespaceDecl('xmlns', 'urn:x',
+      'reserved xmlns prefix declaration');
+    ExpectInvalidNamespaceDecl('xml', 'urn:x',
+      'xml prefix bound to a non-standard namespace');
+    ExpectInvalidNamespaceDecl('ns', '',
+      'prefixed namespace undeclaration');
+    ExpectInvalidNamespaceDecl('ns', 'http://www.w3.org/XML/1998/namespace',
+      'non-xml prefix bound to the xml namespace');
+    ExpectInvalidNamespaceDecl('', 'http://www.w3.org/XML/1998/namespace',
+      'xml namespace declared as the default namespace');
+    ExpectInvalidNamespaceDecl('ns', 'http://www.w3.org/2000/xmlns/',
+      'non-xmlns prefix bound to the xmlns namespace');
+    ExpectInvalidNamespaceDecl('', 'http://www.w3.org/2000/xmlns/',
+      'xmlns namespace declared as the default namespace');
+  finally
+    LW.Free;
+  end;
+end;
+
 procedure TestCDataOutput;
 var
   LW: TXmlWriter;
@@ -146,6 +358,22 @@ begin
     LW.CData('<not>&markup');
     LW.EndElement('r');
     CheckEqual('<r><![CDATA[<not>&markup]]></r>', LW.ToString, 'cdata');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestCDataSplitsEmbeddedEndMarker;
+var
+  LW: TXmlWriter;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('r');
+    LW.CData('alpha]]>omega');
+    LW.EndElement('r');
+    CheckEqual('<r><![CDATA[alpha]]]]><![CDATA[>omega]]></r>',
+      LW.ToString, 'cdata splits embedded end marker');
   finally
     LW.Free;
   end;
@@ -164,6 +392,73 @@ begin
   end;
 end;
 
+procedure TestCommentRejectsEmbeddedDoubleDash;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LRaised := False;
+    try
+      LW.Comment('alpha--omega');
+      Fail('comment with embedded -- must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'embedded -- comment raises EArgumentError');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestCommentRejectsTrailingDash;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LRaised := False;
+    try
+      LW.Comment('alpha-');
+      Fail('comment ending with - must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'trailing - comment raises EArgumentError');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestCommentRejectsInvalidControlChar;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('root');
+    LRaised := False;
+    try
+      LW.Comment('bad' + #1 + 'value');
+      Fail('comment with invalid control char must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'invalid comment control char raises EArgumentError');
+    LW.EndElement('root');
+    CheckEqual('<root/>', LW.ToString,
+      'invalid comment control char leaves open element recoverable');
+  finally
+    LW.Free;
+  end;
+end;
+
 procedure TestPIOutput;
 var
   LW: TXmlWriter;
@@ -172,6 +467,65 @@ begin
   try
     LW.PI('target', 'data here');
     CheckEqual('<?target data here?>', LW.ToString, 'pi');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestPISplitsEmbeddedEndMarker;
+var
+  LW: TXmlWriter;
+  LReader: TXmlReader;
+  LTok: TXmlToken;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.PI('target', 'alpha?>omega');
+    CheckEqual('<?target alpha??><?target >omega?>', LW.ToString,
+      'pi splits embedded end marker');
+
+    LReader := TXmlReader.Create(LW.ToString);
+    try
+      Check(LReader.Next(LTok), 'first split pi token');
+      Check(LTok.Kind = xtkProcessingInstr, 'first split pi kind');
+      CheckEqual('target', LTok.Name.Local, 'first split pi target');
+      CheckEqual('alpha?', LTok.Value, 'first split pi value');
+
+      Check(LReader.Next(LTok), 'second split pi token');
+      Check(LTok.Kind = xtkProcessingInstr, 'second split pi kind');
+      CheckEqual('target', LTok.Name.Local, 'second split pi target');
+      CheckEqual('>omega', LTok.Value, 'second split pi value');
+
+      Check(not LReader.Next(LTok), 'split pi writer output exhausted');
+      Check(not LReader.HasError, 'split pi writer output parses cleanly');
+    finally
+      LReader.Free;
+    end;
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestPIRejectsInvalidControlChar;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('root');
+    LRaised := False;
+    try
+      LW.PI('target', 'bad' + #1 + 'value');
+      Fail('PI data with invalid control char must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'invalid PI control char raises EArgumentError');
+    LW.EndElement('root');
+    CheckEqual('<root/>', LW.ToString,
+      'invalid PI control char leaves open element recoverable');
   finally
     LW.Free;
   end;
@@ -190,6 +544,83 @@ begin
   end;
 end;
 
+procedure TestPIRejectsReservedXmlTarget;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LRaised := False;
+    try
+      LW.PI('xml', 'version="1.0"');
+      Fail('reserved xml PI target must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'reserved xml PI target raises EArgumentError');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestPIRejectsEmptyTarget;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LRaised := False;
+    try
+      LW.PI('', 'payload');
+      Fail('empty PI target must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'empty PI target raises EArgumentError');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestPIRejectsInvalidTarget;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LRaised := False;
+    try
+      LW.PI('bad target', 'payload');
+      Fail('PI target with whitespace must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'whitespace PI target raises EArgumentError');
+    CheckEqual('', LW.ToString, 'invalid PI target leaves output unchanged');
+
+    LW.StartElement('root');
+    LRaised := False;
+    try
+      LW.PI('1target', 'payload');
+      Fail('PI target starting with digit must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'digit-start PI target raises EArgumentError');
+    LW.EndElement('root');
+    CheckEqual('<root/>', LW.ToString, 'invalid PI target leaves open element recoverable');
+  finally
+    LW.Free;
+  end;
+end;
+
 procedure TestEmptyElement;
 var
   LW: TXmlWriter;
@@ -198,6 +629,50 @@ begin
   try
     LW.EmptyElement('br');
     CheckEqual('<br/>', LW.ToString, 'empty element');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestStartElementRejectsEmptyName;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LRaised := False;
+    try
+      LW.StartElement('');
+      Fail('start element with empty name must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'empty start element name raises EArgumentError');
+    CheckEqual('', LW.ToString, 'empty start element name leaves output unchanged');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestEmptyElementRejectsEmptyName;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LRaised := False;
+    try
+      LW.EmptyElement('');
+      Fail('empty element with empty name must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'empty element name raises EArgumentError');
+    CheckEqual('', LW.ToString, 'empty element name leaves output unchanged');
   finally
     LW.Free;
   end;
@@ -213,6 +688,49 @@ begin
     LW.Attribute('id', '1');
     LW.EndElement('item');
     CheckEqual('<item id="1"/>', LW.ToString, 'collapse empty');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestEndElementRejectsMismatchedName;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('root');
+    LRaised := False;
+    try
+      LW.EndElement('child');
+      Fail('mismatched closing name must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'mismatched closing name raises EArgumentError');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestEndElementRejectsUnexpectedClose;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LRaised := False;
+    try
+      LW.EndElement('root');
+      Fail('closing without an open element must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'unexpected closing name raises EArgumentError');
   finally
     LW.Free;
   end;
@@ -248,6 +766,162 @@ begin
   end;
 end;
 
+procedure TestXmlDeclWithStandalone;
+var
+  LW: TXmlWriter;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.WriteXmlDecl('1.0', 'UTF-8', 'yes');
+    LW.StartElement('r');
+    LW.EndElement('r');
+    CheckEqual(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><r/>',
+      LW.ToString,
+      'xml decl with standalone yes');
+
+    LW.Clear;
+    LW.WriteXmlDecl('1.0', 'UTF-8', 'no');
+    LW.EmptyElement('r');
+    CheckEqual(
+      '<?xml version="1.0" encoding="UTF-8" standalone="no"?><r/>',
+      LW.ToString,
+      'xml decl with standalone no');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestXmlDeclRejectsLateCall;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('r');
+    LW.EndElement('r');
+    LRaised := False;
+    try
+      LW.WriteXmlDecl;
+      Fail('xml declaration after document output must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'late xml declaration raises EArgumentError');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestXmlDeclRejectsInvalidStandaloneValue;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LRaised := False;
+    try
+      LW.WriteXmlDecl('1.0', 'UTF-8', 'maybe');
+      Fail('xml declaration with invalid standalone value must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'invalid xml declaration standalone raises EArgumentError');
+    CheckEqual('', LW.ToString,
+      'invalid xml declaration standalone leaves output unchanged');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestXmlDeclRejectsEmptyVersion;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LRaised := False;
+    try
+      LW.WriteXmlDecl('', 'UTF-8');
+      Fail('xml declaration with empty version must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'empty xml declaration version raises EArgumentError');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestXmlDeclRejectsInvalidVersionNumber;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LRaised := False;
+    try
+      LW.WriteXmlDecl('1 0', 'UTF-8');
+      Fail('xml declaration with invalid version number must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'invalid xml declaration version raises EArgumentError');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestXmlDeclAllowsOmittedEncoding;
+var
+  LW: TXmlWriter;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.WriteXmlDecl('1.0', '');
+    LW.EmptyElement('r');
+    CheckEqual('<?xml version="1.0"?><r/>', LW.ToString,
+      'xml decl without encoding');
+
+    LW.Clear;
+    LW.WriteXmlDecl('1.0', '', 'yes');
+    LW.EmptyElement('r');
+    CheckEqual('<?xml version="1.0" standalone="yes"?><r/>', LW.ToString,
+      'xml decl without encoding keeps standalone after version');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestXmlDeclRejectsInvalidEncodingName;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LRaised := False;
+    try
+      LW.WriteXmlDecl('1.0', 'UTF 8');
+      Fail('xml declaration with invalid encoding name must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'invalid xml declaration encoding raises EArgumentError');
+  finally
+    LW.Free;
+  end;
+end;
+
 procedure TestTextEscape;
 var
   LW: TXmlWriter;
@@ -258,6 +932,56 @@ begin
     LW.Text('a<b>c&d');
     LW.EndElement('r');
     CheckEqual('<r>a&lt;b&gt;c&amp;d</r>', LW.ToString, 'text escape');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestTextRejectsInvalidControlChar;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('root');
+    LRaised := False;
+    try
+      LW.Text('bad' + #1 + 'value');
+      Fail('text with invalid control char must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'invalid text control char raises EArgumentError');
+    LW.EndElement('root');
+    CheckEqual('<root/>', LW.ToString,
+      'invalid text control char leaves open element recoverable');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestCDataRejectsInvalidControlChar;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('root');
+    LRaised := False;
+    try
+      LW.CData('bad' + #1 + 'value');
+      Fail('CDATA with invalid control char must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'invalid CDATA control char raises EArgumentError');
+    LW.EndElement('root');
+    CheckEqual('<root/>', LW.ToString,
+      'invalid CDATA control char leaves open element recoverable');
   finally
     LW.Free;
   end;
@@ -380,6 +1104,77 @@ begin
   end;
 end;
 
+procedure TestAttributeRejectsDuplicateRawQName;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('root');
+    LW.Attribute('id', '1');
+    LRaised := False;
+    try
+      LW.Attribute('id', '2');
+      Fail('duplicate raw attribute QName must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'duplicate raw attribute QName raises EArgumentError');
+    LW.EndElement('root');
+    CheckEqual('<root id="1"/>', LW.ToString,
+      'rejected duplicate attribute leaves output valid');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestAttributeAllowsSameQNameOnDifferentElements;
+var
+  LW: TXmlWriter;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('a');
+    LW.Attribute('id', '1');
+    LW.StartElement('b');
+    LW.Attribute('id', '2');
+    LW.EndElement('b');
+    LW.EndElement('a');
+    CheckEqual('<a id="1"><b id="2"/></a>', LW.ToString,
+      'same raw attribute QName is scoped to one start tag');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestNamespaceDeclRejectsDuplicateRawQName;
+var
+  LW: TXmlWriter;
+  LRaised: Boolean;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('root');
+    LW.Attribute('xmlns:ns', 'urn:a');
+    LRaised := False;
+    try
+      LW.NamespaceDecl('ns', 'urn:b');
+      Fail('duplicate namespace declaration QName must be rejected');
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'duplicate namespace declaration QName raises EArgumentError');
+    LW.EndElement('root');
+    CheckEqual('<root xmlns:ns="urn:a"/>', LW.ToString,
+      'rejected duplicate namespace declaration leaves output valid');
+  finally
+    LW.Free;
+  end;
+end;
+
 
 { === Additional Coverage Tests === }
 
@@ -474,22 +1269,62 @@ begin
   T.Run('PrettyPrint', @TestPrettyPrint);
   T.Run('PrettyDeepNesting', @TestPrettyDeepNesting);
   T.Run('AttributeEscape', @TestAttributeEscape);
+  T.Run('AttributeRejectsInvalidControlChar',
+    @TestAttributeRejectsInvalidControlChar);
+  T.Run('AttributeRejectsEmptyName', @TestAttributeRejectsEmptyName);
+  T.Run('AttributeOutsideStartTagIgnoresInvalidName',
+    @TestAttributeOutsideStartTagIgnoresInvalidName);
+  T.Run('WriterRejectsInvalidQNames', @TestWriterRejectsInvalidQNames);
   T.Run('NamespaceDecl', @TestNamespaceDecl);
   T.Run('DefaultNamespaceDecl', @TestDefaultNamespaceDecl);
+  T.Run('NamespaceDeclAllowsXmlPrefixBinding',
+    @TestNamespaceDeclAllowsXmlPrefixBinding);
+  T.Run('NamespaceDeclRejectsInvalidReservedBindings',
+    @TestNamespaceDeclRejectsInvalidReservedBindings);
   T.Run('CDataOutput', @TestCDataOutput);
+  T.Run('CDataSplitsEmbeddedEndMarker', @TestCDataSplitsEmbeddedEndMarker);
   T.Run('CommentOutput', @TestCommentOutput);
+  T.Run('CommentRejectsEmbeddedDoubleDash', @TestCommentRejectsEmbeddedDoubleDash);
+  T.Run('CommentRejectsTrailingDash', @TestCommentRejectsTrailingDash);
+  T.Run('CommentRejectsInvalidControlChar',
+    @TestCommentRejectsInvalidControlChar);
   T.Run('PIOutput', @TestPIOutput);
+  T.Run('PISplitsEmbeddedEndMarker', @TestPISplitsEmbeddedEndMarker);
+  T.Run('PIRejectsInvalidControlChar', @TestPIRejectsInvalidControlChar);
   T.Run('PINoData', @TestPINoData);
+  T.Run('PIRejectsReservedXmlTarget', @TestPIRejectsReservedXmlTarget);
+  T.Run('PIRejectsEmptyTarget', @TestPIRejectsEmptyTarget);
+  T.Run('PIRejectsInvalidTarget', @TestPIRejectsInvalidTarget);
   T.Run('EmptyElement', @TestEmptyElement);
+  T.Run('StartElementRejectsEmptyName', @TestStartElementRejectsEmptyName);
+  T.Run('EmptyElementRejectsEmptyName', @TestEmptyElementRejectsEmptyName);
   T.Run('EndElementCollapsesEmpty', @TestEndElementCollapsesEmpty);
+  T.Run('EndElementRejectsMismatchedName', @TestEndElementRejectsMismatchedName);
+  T.Run('EndElementRejectsUnexpectedClose', @TestEndElementRejectsUnexpectedClose);
   T.Run('XmlDecl', @TestXmlDecl);
   T.Run('XmlDeclPretty', @TestXmlDeclPretty);
+  T.Run('XmlDeclWithStandalone', @TestXmlDeclWithStandalone);
+  T.Run('XmlDeclRejectsLateCall', @TestXmlDeclRejectsLateCall);
+  T.Run('XmlDeclRejectsInvalidStandaloneValue',
+    @TestXmlDeclRejectsInvalidStandaloneValue);
+  T.Run('XmlDeclRejectsEmptyVersion', @TestXmlDeclRejectsEmptyVersion);
+  T.Run('XmlDeclRejectsInvalidVersionNumber', @TestXmlDeclRejectsInvalidVersionNumber);
+  T.Run('XmlDeclAllowsOmittedEncoding', @TestXmlDeclAllowsOmittedEncoding);
+  T.Run('XmlDeclRejectsInvalidEncodingName', @TestXmlDeclRejectsInvalidEncodingName);
   T.Run('TextEscape', @TestTextEscape);
+  T.Run('TextRejectsInvalidControlChar', @TestTextRejectsInvalidControlChar);
+  T.Run('CDataRejectsInvalidControlChar', @TestCDataRejectsInvalidControlChar);
   T.Run('PrefixedElement', @TestPrefixedElement);
   T.Run('RawOutput', @TestRawOutput);
   T.Run('Clear', @TestClear);
   T.Run('RoundTrip', @TestRoundTrip);
   T.Run('MultipleAttributes', @TestMultipleAttributes);
+  T.Run('AttributeRejectsDuplicateRawQName',
+    @TestAttributeRejectsDuplicateRawQName);
+  T.Run('AttributeAllowsSameQNameOnDifferentElements',
+    @TestAttributeAllowsSameQNameOnDifferentElements);
+  T.Run('NamespaceDeclRejectsDuplicateRawQName',
+    @TestNamespaceDeclRejectsDuplicateRawQName);
   T.Run('NamespaceDeclMultiple', @TestNamespaceDeclMultiple);
   T.Run('RawUnescaped', @TestRawUnescaped);
   T.Run('ClearResetsCompletely', @TestClearResetsCompletely);

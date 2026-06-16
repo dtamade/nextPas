@@ -4,9 +4,7 @@ unit nextpas.core.tls.openssl.api.bio;
 
 interface
 
-uses
-  SysUtils, DynLibs, ctypes,
-  nextpas.core.tls.openssl.base;
+uses DynLibs, nextpas.core.tls.openssl.base;
 
 const
   BIO_FLAGS_BASE64_NO_NL = $100;
@@ -356,9 +354,7 @@ function BIO_get_mem_data(b: PBIO; pp: PPAnsiChar): Integer; cdecl;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.core,  // For shared library handles
-  nextpas.core.tls.openssl.loader;    // For SetModuleLoaded
+uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
 
 procedure LoadOpenSSLBIO;
 var

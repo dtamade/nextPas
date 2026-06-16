@@ -51,6 +51,25 @@ begin
   CheckEqual('A', CellGlyphAsString(LC), 'glyph string A');
 end;
 
+procedure TestSetSymbolAsciiCanonicalizesReusedCell;
+var
+  LC, LExpected: TCell;
+  LI: Integer;
+begin
+  CellReset(LC);
+  CellReset(LExpected);
+
+  for LI := 1 to TUI_CELL_GLYPH_BYTES - 1 do
+    LC.Glyph.Bytes[LI] := $A5;
+  LC.Skip := True;
+
+  CellSetSymbolAscii(LC, 'A');
+  CellSetSymbolAscii(LExpected, 'A');
+
+  Check(not LC.Skip, 'ascii setter clears stale skip sentinel');
+  Check(CellEquals(LC, LExpected), 'ascii setter clears stale glyph tail');
+end;
+
 procedure TestSetSymbolBytes;
 var
   LC: TCell;
@@ -63,6 +82,27 @@ begin
   CheckEqual(Int64(3), Int64(LC.Glyph.Len), 'len 3');
   CheckEqual(Int64(2), Int64(LC.Width), 'width 2');
   CheckEqual(#$E4#$B8#$AD, CellGlyphAsString(LC), 'glyph string CJK');
+end;
+
+procedure TestSetSymbolBytesCanonicalizesReusedCell;
+var
+  LC, LExpected: TCell;
+  LBuf: array[0..2] of Byte;
+  LI: Integer;
+begin
+  CellReset(LC);
+  CellReset(LExpected);
+
+  for LI := 3 to TUI_CELL_GLYPH_BYTES - 1 do
+    LC.Glyph.Bytes[LI] := $A5;
+  LC.Skip := True;
+
+  LBuf[0] := $E4; LBuf[1] := $B8; LBuf[2] := $AD;
+  CellSetSymbolBytes(LC, LBuf[0], 3, 2);
+  CellSetSymbolBytes(LExpected, LBuf[0], 3, 2);
+
+  Check(not LC.Skip, 'bytes setter clears stale skip sentinel');
+  Check(CellEquals(LC, LExpected), 'bytes setter clears stale glyph tail');
 end;
 
 procedure TestSetSymbolTruncate;
@@ -120,7 +160,9 @@ begin
   T.Run('empty', @TestEmpty);
   T.Run('reset', @TestReset);
   T.Run('set symbol ascii', @TestSetSymbolAscii);
+  T.Run('set symbol ascii canonicalizes reused cell', @TestSetSymbolAsciiCanonicalizesReusedCell);
   T.Run('set symbol bytes', @TestSetSymbolBytes);
+  T.Run('set symbol bytes canonicalizes reused cell', @TestSetSymbolBytesCanonicalizesReusedCell);
   T.Run('set symbol truncate', @TestSetSymbolTruncate);
   T.Run('width zero coerced', @TestSetSymbolWidthZeroCoerced);
   T.Run('apply style', @TestApplyStyle);

@@ -5,12 +5,18 @@ program test_cookie;
 uses
   SysUtils,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.cookie.base,
   nextpas.core.cookie;
 
 var
   T: TTestRunner;
+
+procedure CheckInvalidArgumentCookieError(const ALabel: string; const AError: EArgumentError);
+begin
+  Check(AError.Category = ecInvalidArgument, ALabel + ' category');
+end;
 
 procedure TestParseSimple;
 var
@@ -189,8 +195,11 @@ begin
   try
     BuildCookieHeader(LCookies);
   except
-    on E: Exception do
+    on E: EArgumentError do
+    begin
       LRaised := True;
+      CheckInvalidArgumentCookieError('invalid cookie name', E);
+    end;
   end;
   Check(LRaised, 'BuildCookieHeader rejects CRLF in name');
 end;
@@ -205,8 +214,11 @@ begin
   try
     BuildCookieHeader(LCookies);
   except
-    on E: Exception do
+    on E: EArgumentError do
+    begin
       LRaised := True;
+      CheckInvalidArgumentCookieError('invalid cookie value', E);
+    end;
   end;
   Check(LRaised, 'BuildCookieHeader rejects semicolon in value');
 end;
@@ -223,8 +235,11 @@ begin
   try
     BuildSetCookieHeader(LC);
   except
-    on E: Exception do
+    on E: EArgumentError do
+    begin
       LRaised := True;
+      CheckInvalidArgumentCookieError('invalid set-cookie value', E);
+    end;
   end;
   Check(LRaised, 'BuildSetCookieHeader rejects CRLF injection');
 end;

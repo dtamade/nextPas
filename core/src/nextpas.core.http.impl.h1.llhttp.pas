@@ -288,11 +288,13 @@ type
     data: Pointer;
     _current: Pointer;
     content_length: UInt64;
+    duplicate_content_length: UInt64;
     &type: UInt8;
     method: UInt8;
     http_major: UInt8;
     http_minor: UInt8;
     header_state: UInt8;
+    duplicate_content_length_active: UInt8;
     lenient_flags: UInt16;
     upgrade: UInt8;
     finish: UInt8;
@@ -1390,6 +1392,22 @@ begin
   Result := LongInt(((state^.flags and 32) = 32));
 end;
 
+procedure llhttp__internal__c_begin_content_length_value(
+  State: PTLlhttpInternalT; const ADuplicate: Boolean); cdecl; inline;
+begin
+  if ADuplicate then
+  begin
+    state^.duplicate_content_length := state^.content_length;
+    state^.duplicate_content_length_active := 1;
+    state^.content_length := 0;
+  end
+  else
+  begin
+    state^.duplicate_content_length := 0;
+    state^.duplicate_content_length_active := 0;
+  end;
+end;
+
 function llhttp__internal__c_mul_add_content_length_1(State: PTLlhttpInternalT; P: PByte; Endp: PByte; Match: LongInt): LongInt; cdecl;
 begin
   if (state^.content_length > (QWord(-1) div 10)) then
@@ -1420,6 +1438,16 @@ end;
 
 function llhttp__internal__c_or_flags_17(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
+  if state^.duplicate_content_length_active <> 0 then
+  begin
+    if state^.content_length <> state^.duplicate_content_length then
+    begin
+      Result := 1;
+      Exit;
+    end;
+    state^.duplicate_content_length := 0;
+    state^.duplicate_content_length_active := 0;
+  end;
   state^.flags := state^.flags or 32;
   Result := 0;
 end;
@@ -9908,8 +9936,14 @@ begin
       goto _L_s_n_llhttp__internal__n_header_value_content_length;
   end;
   _L_s_n_llhttp__internal__n_invoke_or_flags_17:
-  llhttp__internal__c_or_flags_17(state, p, endp);
-  goto _L_s_n_llhttp__internal__n_header_value_otherwise;
+  case llhttp__internal__c_or_flags_17(state, p, endp) of
+    0:
+    begin
+      goto _L_s_n_llhttp__internal__n_header_value_otherwise;
+    end;
+    else
+      goto _L_s_n_llhttp__internal__n_error_55;
+  end;
   _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_7:
   begin
     start_23 := state^._span_pos0;
@@ -9938,10 +9972,14 @@ begin
   case llhttp__internal__c_test_flags_2(state, p, endp) of
     0:
     begin
+      llhttp__internal__c_begin_content_length_value(state, False);
       goto _L_s_n_llhttp__internal__n_header_value_content_length;
     end;
     else
-      goto _L_s_n_llhttp__internal__n_error_55;
+    begin
+      llhttp__internal__c_begin_content_length_value(state, True);
+      goto _L_s_n_llhttp__internal__n_header_value_content_length;
+    end;
   end;
   _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_9:
   begin

@@ -6,27 +6,32 @@ interface
 
 {$IFDEF NEXTPAS_LINUX}
 uses
-  nextpas.core.platform.linux.base;
+  nextpas.core.platform.linux.base,
+  nextpas.core.platform.posix.base;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_MACOS}
 uses
-  nextpas.core.platform.darwin.base;
+  nextpas.core.platform.darwin.base,
+  nextpas.core.platform.posix.base;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_ANDROID}
 uses
-  nextpas.core.platform.android.base;
+  nextpas.core.platform.android.base,
+  nextpas.core.platform.posix.base;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_FREEBSD}
 uses
-  nextpas.core.platform.freebsd.base;
+  nextpas.core.platform.freebsd.base,
+  nextpas.core.platform.posix.base;
 {$ENDIF}
 
 {$IF defined(NEXTPAS_UNIX) and not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_ANDROID) and not defined(NEXTPAS_FREEBSD)}
 uses
-  nextpas.core.platform.unix.base;
+  nextpas.core.platform.unix.base,
+  nextpas.core.platform.posix.base;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -59,9 +64,9 @@ type
 
 const
   {$IFDEF NEXTPAS_UNIX}
-  PTHREAD_MUTEX_SIZE   = PTHREAD_MUTEX_SIZE;
-  PTHREAD_RWLOCK_SIZE  = PTHREAD_RWLOCK_SIZE;
-  PTHREAD_CONDVAR_SIZE = PTHREAD_CONDVAR_SIZE;
+  PTHREAD_MUTEX_SIZE   = SizeOf(pthread_mutex_t);
+  PTHREAD_RWLOCK_SIZE  = SizeOf(pthread_rwlock_t);
+  PTHREAD_CONDVAR_SIZE = SizeOf(pthread_cond_t);
   {$ELSEIF defined(NEXTPAS_WINDOWS)}
   PTHREAD_MUTEX_SIZE   = WINDOWS_MUTEX_SIZE;
   PTHREAD_RWLOCK_SIZE  = WINDOWS_RWLOCK_SIZE;
@@ -95,12 +100,6 @@ const
   PLATFORM_MUTEX_NORMAL     = 0;
   PLATFORM_MUTEX_ERRORCHECK = 1;
   PLATFORM_MUTEX_RECURSIVE  = 2;
-
-  PLATFORM_ERR_AGAIN       = 11;
-  PLATFORM_ERR_BUSY        = 16;
-  PLATFORM_ERR_INVALID     = 22;
-  PLATFORM_ERR_UNSUPPORTED = 95;
-  PLATFORM_ERR_TIMEOUT     = 110;
 
 implementation
 

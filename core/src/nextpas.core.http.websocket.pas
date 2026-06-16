@@ -64,14 +64,13 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.hash,
   nextpas.core.hash.base,
   nextpas.core.encoding,
   nextpas.core.text.utf8,
+  nextpas.core.websocket.base,
   nextpas.core.net.intf;
-
-const
-  WS_GUID = '258EAFA5-E914-47DA-95CA-5AB53DC85B11';
 
 type
   TWebSocketImpl = class(TInterfacedObject, IWebSocket)
@@ -121,6 +120,69 @@ begin
       Result[I] := S[I];
 end;
 
+function IsOWS(const ACh: Char): Boolean;
+begin
+  Result := (ACh = ' ') or (ACh = #9);
+end;
+
+function TrimOWS(const S: string): string;
+var
+  LFirst, LLast: Integer;
+begin
+  LFirst := 1;
+  LLast := Length(S);
+  while (LFirst <= LLast) and IsOWS(S[LFirst]) do
+    Inc(LFirst);
+  while (LLast >= LFirst) and IsOWS(S[LLast]) do
+    Dec(LLast);
+  if LFirst > LLast then
+    Exit('');
+  Result := Copy(S, LFirst, LLast - LFirst + 1);
+end;
+
+function LowerTrimOWS(const S: string): string;
+var
+  LFirst, LLast: Integer;
+begin
+  LFirst := 1;
+  LLast := Length(S);
+  while (LFirst <= LLast) and IsOWS(S[LFirst]) do
+    Inc(LFirst);
+  while (LLast >= LFirst) and IsOWS(S[LLast]) do
+    Dec(LLast);
+  if LFirst > LLast then
+    Exit('');
+  Result := LowerCase(Copy(S, LFirst, LLast - LFirst + 1));
+end;
+
+function HeaderValueHasToken(const AValue, AToken: string): Boolean;
+var
+  LStart, LPos: Integer;
+begin
+  Result := False;
+  LStart := 1;
+  while LStart <= Length(AValue) + 1 do
+  begin
+    LPos := LStart;
+    while (LPos <= Length(AValue)) and (AValue[LPos] <> ',') do
+      Inc(LPos);
+    if LowerTrimOWS(Copy(AValue, LStart, LPos - LStart)) = AToken then
+      Exit(True);
+    LStart := LPos + 1;
+  end;
+end;
+
+function HeaderValuesHaveToken(const AValues: TStringArray;
+  const AToken: string): Boolean;
+var
+  LI: SizeInt;
+begin
+  Result := False;
+  for LI := Low(AValues) to High(AValues) do
+    if HeaderValueHasToken(AValues[LI], AToken) then
+      Exit(True);
+end;
+
 function ComputeAcceptKey(const AKey: string): string;
 var
   LConcat: string;
@@ -132,6 +194,21 @@ begin
   SetLength(LBytes, SHA1_DIGEST_SIZE);
   Move(LDigest[0], LBytes[0], SHA1_DIGEST_SIZE);
   Result := Base64Encode(LBytes);
+end;
+
+procedure ValidateHandshakeKey(const AKey: string);
+var
+  LDecoded: TBytes;
+begin
+  try
+    LDecoded := Base64Decode(AKey);
+  except
+    on E: EConvertError do
+      raise EHttpError.Create('Invalid Sec-WebSocket-Key header');
+  end;
+
+  if Length(LDecoded) <> 16 then
+    raise EHttpError.Create('Invalid Sec-WebSocket-Key header');
 end;
 
 function IsValidOpcode(const AOpcode: Byte): Boolean;
@@ -214,23 +291,29 @@ end;
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter;
   const AOptions: TWebSocketOptions): IWebSocket;
 var
-  LUpgrade, LConnection, LKey, LVersion: string;
+  LUpgrade, LKey, LVersion: string;
+  LConnectionValues, LKeyValues: TStringArray;
   LAccept: string;
   LResp: string;
   LHijacker: IHttpHijacker;
   LConn: ITcpStream;
 begin
-  LUpgrade := LowerCase(AReq.Headers.Get('upgrade'));
-  LConnection := LowerCase(AReq.Headers.Get('connection'));
-  LKey := AReq.Headers.Get('sec-websocket-key');
-  LVersion := AReq.Headers.Get('sec-websocket-version');
+  LUpgrade := LowerTrimOWS(AReq.Headers.Get('upgrade'));
+  LConnectionValues := AReq.Headers.GetAll('connection');
+  LKeyValues := AReq.Headers.GetAll('sec-websocket-key');
+  if Length(LKeyValues) = 1 then
+    LKey := TrimOWS(LKeyValues[0])
+  else
+    LKey := '';
+  LVersion := TrimOWS(AReq.Headers.Get('sec-websocket-version'));
 
   if LUpgrade <> 'websocket' then
     raise EHttpError.Create('Missing or invalid Upgrade header');
-  if Pos('upgrade', LConnection) = 0 then
+  if not HeaderValuesHaveToken(LConnectionValues, 'upgrade') then
     raise EHttpError.Create('Missing or invalid Connection header');
   if LKey = '' then
     raise EHttpError.Create('Missing Sec-WebSocket-Key header');
+  ValidateHandshakeKey(LKey);
   if LVersion <> '13' then
     raise EHttpError.Create('Unsupported Sec-WebSocket-Version');
 

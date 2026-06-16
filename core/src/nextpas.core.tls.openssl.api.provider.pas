@@ -5,7 +5,7 @@ unit nextpas.core.tls.openssl.api.provider;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.base,
   nextpas.core.tls.openssl.base;
 
 type
@@ -193,8 +193,7 @@ procedure UnloadProviderModule;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.loader;
 
 const
   { 函数绑定数组 - Provider 模块所有函数 }
@@ -265,7 +264,7 @@ begin
   Result := nil;
   if not Assigned(OSSL_PROVIDER_load) then Exit;
   
-  NameBytes := TEncoding.UTF8.GetBytes(UnicodeString(Name));
+  NameBytes := nextpas.core.text.conv.StringToUTF8Bytes(Name));
   Result := OSSL_PROVIDER_load(LibCtx, PAnsiChar(NameBytes));
 end;
 
@@ -284,7 +283,7 @@ begin
   Result := False;
   if not Assigned(OSSL_PROVIDER_available) then Exit;
   
-  NameBytes := TEncoding.UTF8.GetBytes(UnicodeString(Name));
+  NameBytes := nextpas.core.text.conv.StringToUTF8Bytes(Name));
   Result := OSSL_PROVIDER_available(LibCtx, PAnsiChar(NameBytes)) = 1;
 end;
 
@@ -324,7 +323,7 @@ begin
   Result := False;
   if not Assigned(OSSL_LIB_CTX_load_config) or not Assigned(LibCtx) then Exit;
   
-  FileBytes := TEncoding.UTF8.GetBytes(UnicodeString(ConfigFile));
+  FileBytes := nextpas.core.text.conv.StringToUTF8Bytes(ConfigFile));
   Result := OSSL_LIB_CTX_load_config(LibCtx, PAnsiChar(FileBytes)) = 1;
 end;
 

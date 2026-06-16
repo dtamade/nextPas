@@ -25,7 +25,7 @@ unit nextpas.core.tls.session.cache;
 interface
 
 uses
-  SysUtils, Classes, SyncObjs, fgl,
+  SysUtils, Classes, nextpas.core.fs, SyncObjs, fgl,
   {$IFDEF UNIX}BaseUnix,{$ENDIF}
   nextpas.core.time,
   nextpas.core.tls.base,
@@ -481,7 +481,7 @@ begin
   FLock.Enter;
   try
     try
-      Stream := TFileStream.Create(AFileName, fmCreate);
+      Stream := TFileStream.Create(AFileName, Classes.fmCreate);
       {$IFDEF UNIX}
       FpChmod(AFileName, &600);
       {$ENDIF}
@@ -566,7 +566,7 @@ var
 begin
   Result := False;
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     Exit;
 
   FLock.Enter;

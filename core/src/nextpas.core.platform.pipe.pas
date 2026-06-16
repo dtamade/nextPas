@@ -6,8 +6,8 @@ interface
 
 type
   TPlatformPipe = record
-    ReadFd: Int32;
-    WriteFd: Int32;
+    ReadFd: PtrInt;
+    WriteFd: PtrInt;
   {$IFDEF NEXTPAS_WINDOWS}
     ReadHandle: PtrUInt;
     WriteHandle: PtrUInt;
@@ -18,7 +18,7 @@ function platform_pipe_create(out APipe: TPlatformPipe): Int32;
 function platform_pipe_close_read(var APipe: TPlatformPipe): Int32;
 function platform_pipe_close_write(var APipe: TPlatformPipe): Int32;
 function platform_pipe_close(var APipe: TPlatformPipe): Int32;
-function platform_dup2(AOldFd: Int32; ANewFd: Int32): Int32;
+function platform_dup2(AOldFd: PtrInt; ANewFd: PtrInt): Int32;
 
 implementation
 
@@ -42,7 +42,7 @@ end;
 function platform_pipe_close_read(var APipe: TPlatformPipe): Int32;
 begin
   if APipe.ReadFd < 0 then Exit(9);
-  close(APipe.ReadFd);
+  close(Int32(APipe.ReadFd));
   APipe.ReadFd := -1;
   Result := 0;
 end;
@@ -50,23 +50,23 @@ end;
 function platform_pipe_close_write(var APipe: TPlatformPipe): Int32;
 begin
   if APipe.WriteFd < 0 then Exit(9);
-  close(APipe.WriteFd);
+  close(Int32(APipe.WriteFd));
   APipe.WriteFd := -1;
   Result := 0;
 end;
 
 function platform_pipe_close(var APipe: TPlatformPipe): Int32;
 begin
-  if APipe.ReadFd >= 0 then close(APipe.ReadFd);
-  if APipe.WriteFd >= 0 then close(APipe.WriteFd);
+  if APipe.ReadFd >= 0 then close(Int32(APipe.ReadFd));
+  if APipe.WriteFd >= 0 then close(Int32(APipe.WriteFd));
   APipe.ReadFd := -1;
   APipe.WriteFd := -1;
   Result := 0;
 end;
 
-function platform_dup2(AOldFd: Int32; ANewFd: Int32): Int32;
+function platform_dup2(AOldFd: PtrInt; ANewFd: PtrInt): Int32;
 begin
-  if dup2(AOldFd, ANewFd) < 0 then
+  if dup2(Int32(AOldFd), Int32(ANewFd)) < 0 then
     Result := platform_get_errno
   else
     Result := 0;
@@ -87,8 +87,8 @@ begin
     Exit(Int32(GetLastError));
   APipe.ReadHandle := PtrUInt(LRead);
   APipe.WriteHandle := PtrUInt(LWrite);
-  APipe.ReadFd := Int32(LRead);
-  APipe.WriteFd := Int32(LWrite);
+  APipe.ReadFd := PtrInt(LRead);
+  APipe.WriteFd := PtrInt(LWrite);
   Result := 0;
 end;
 
@@ -121,9 +121,9 @@ begin
   Result := 0;
 end;
 
-function platform_dup2(AOldFd: Int32; ANewFd: Int32): Int32;
+function platform_dup2(AOldFd: PtrInt; ANewFd: PtrInt): Int32;
 begin
-  Result := -1; // not implemented on Windows
+  Result := Int32(ERROR_NOT_SUPPORTED);
 end;
 {$ENDIF}
 
@@ -136,7 +136,7 @@ function platform_pipe_close_write(var APipe: TPlatformPipe): Int32;
 begin Result := -1; end;
 function platform_pipe_close(var APipe: TPlatformPipe): Int32;
 begin Result := -1; end;
-function platform_dup2(AOldFd: Int32; ANewFd: Int32): Int32;
+function platform_dup2(AOldFd: PtrInt; ANewFd: PtrInt): Int32;
 begin Result := -1; end;
 {$ENDIF}
 

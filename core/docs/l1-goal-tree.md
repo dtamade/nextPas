@@ -1,6 +1,10 @@
 # L0 atomic/lockfree 目标树
 
+<<<<<<< HEAD
 > 所属: L0 内核层 | 更新: 2026-06-16
+=======
+> 最后更新: 2026-06-09 | 真相口径: source-contract / focused runtime / forced compile / CI matrix
+>>>>>>> main
 
 ## 北极星
 
@@ -9,7 +13,19 @@
 
 ---
 
+<<<<<<< HEAD
 ## 目标分解
+=======
+| 模块 | 职责 | 状态 |
+|------|------|------|
+| `base` | 核心类型、异常、TByteSpan、契约 | ✅ 完成 |
+| `errors` | 异常层级 (ENextPasError 体系) | ✅ 完成 |
+| `platform` | OS API 封装 (posix/linux/darwin/windows) | ✅ 完成 (Tier 1 全绿) |
+| `mem` | 内存管理 (IAllocator/Pool/Arena/StackPool) | ✅ 完成 |
+| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | ✅ 完成 |
+| `math` | 数学函数 (Min/Max/Clamp/Abs/Pow/Trig) | 🔶 M8 partial: source-contract + Linux focused runtime/heaptrc; Win64 forced compile; macOS/Windows host runtime and CI matrix pending |
+| `simd` | SIMD 抽象 (SSE2/AVX2/NEON, 统一宽度 API) | ✅ 完成 |
+>>>>>>> main
 
 ### C0: 核心原子类型 ✅
 TAtomicInt32/64, TAtomicUInt32/64, TAtomicPtr, TAtomicBool | 45 tests, 0 leaks

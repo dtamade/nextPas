@@ -11,12 +11,7 @@ unit nextpas.core.tls.openssl.api.txt_db;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader,
-  nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.consts;
+uses nextpas.core.fs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.consts;
 
 type
   { TXT_DB types }
@@ -86,8 +81,7 @@ function TXTDBFindRow(db: PTXT_DB; FieldIndex: Integer; const Value: string): PP
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.utils;
+uses nextpas.core.tls.openssl.api.utils;
 
 const
   { TXT_DB function bindings for batch loading }
@@ -133,7 +127,7 @@ var
   bio: PBIO;
 begin
   Result := nil;
-  if not FileExists(FileName) then Exit;
+  if not nextpas.core.fs.Exists(FileName) then Exit;
   if not Assigned(BIO_new_file) or not Assigned(BIO_free) then Exit;
   
   bio := BIO_new_file(PChar(FileName), 'r');
@@ -169,26 +163,46 @@ end;
 function TXTDBAddRow(db: PTXT_DB; const Fields: array of string): Boolean;
 var
   Row: PPChar;
-  i: Integer;
+  I: Integer;
+
+  function AllocCString(const AValue: string): PChar;
+  var
+    LLength: SizeInt;
+  begin
+    LLength := Length(AValue);
+    GetMem(Result, LLength + 1);
+    if LLength > 0 then
+      Move(AValue[1], Result^, LLength);
+    Result[LLength] := #0;
+  end;
+
+  procedure FreeCString(var AValue: PChar);
+  begin
+    if AValue <> nil then
+    begin
+      FreeMem(AValue);
+      AValue := nil;
+    end;
+  end;
 begin
   Result := False;
   if (db = nil) or (Length(Fields) = 0) then Exit;
   
   GetMem(Row, SizeOf(PChar) * Length(Fields));
   try
-    for i := 0 to High(Fields) do
-      Row[i] := StrAlloc(Length(Fields[i]) + 1);
+    for I := 0 to High(Fields) do
+      Row[I] := nil;
       
-    for i := 0 to High(Fields) do
-      StrPCopy(Row[i], Fields[i]);
+    for I := 0 to High(Fields) do
+      Row[I] := AllocCString(Fields[I]);
       
     if Assigned(TXT_DB_insert) then
       Result := TXT_DB_insert(db, Row) = 1;
       
     if not Result then
     begin
-      for i := 0 to High(Fields) do
-        StrDispose(Row[i]);
+      for I := 0 to High(Fields) do
+        FreeCString(Row[I]);
     end;
   finally
     FreeMem(Row);
@@ -198,16 +212,20 @@ end;
 function TXTDBFindRow(db: PTXT_DB; FieldIndex: Integer; const Value: string): PPChar;
 var
   SearchVal: PChar;
+  LLength: SizeInt;
 begin
   Result := nil;
   if (db = nil) or not Assigned(TXT_DB_get_by_index) then Exit;
   
-  SearchVal := StrAlloc(Length(Value) + 1);
+  LLength := Length(Value);
+  GetMem(SearchVal, LLength + 1);
   try
-    StrPCopy(SearchVal, Value);
+    if LLength > 0 then
+      Move(Value[1], SearchVal^, LLength);
+    SearchVal[LLength] := #0;
     Result := TXT_DB_get_by_index(db, FieldIndex, @SearchVal);
   finally
-    StrDispose(SearchVal);
+    FreeMem(SearchVal);
   end;
 end;
 

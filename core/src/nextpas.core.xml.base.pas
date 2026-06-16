@@ -36,20 +36,21 @@ type
   end;
   TXmlAttributeArray = array of TXmlAttribute;
 
+  TXmlPosition = record
+    ByteOffset: SizeUInt;
+    Line: UInt32;
+    Column: UInt32;
+  end;
+
   TXmlToken = record
     Kind: TXmlTokenKind;
     Name: TXmlName;
     Attributes: TXmlAttributeArray;
     Value: string;
     IsSelfClosing: Boolean;
+    Position: TXmlPosition;
   end;
   TXmlTokenArray = array of TXmlToken;
-
-  TXmlPosition = record
-    ByteOffset: SizeUInt;
-    Line: UInt32;
-    Column: UInt32;
-  end;
 
   TXmlNamespace = record
     Prefix: string;

@@ -28,7 +28,7 @@ unit nextpas.core.tls.pkcs11.uri;
 interface
 
 uses
-  SysUtils, Classes, StrUtils,
+  nextpas.core.exception, nextpas.core.text.conv, StrUtils,
   nextpas.core.tls.pkcs11.types;
 
 type
@@ -56,6 +56,10 @@ type
   end;
 
 implementation
+
+uses
+  nextpas.core.text.strings;
+
 
 { TPKCS11URIParser }
 
@@ -202,7 +206,7 @@ class function TPKCS11URIParser.Parse(const AURIString: string): TPKCS11URI;
 var
   URI: string;
   PathPart, QueryPart: string;
-  Attributes: TStringList;
+  Attributes: TStringArray;
   I, SepPos: Integer;
   AttrName, AttrValue: string;
 begin
@@ -228,17 +232,12 @@ begin
     PathPart := URI;
     QueryPart := '';
   end;
-  
-  Attributes := TStringList.Create;
   try
     // Parse path attributes (separated by ';')
     if PathPart <> '' then
-    begin
-      Attributes.Delimiter := ';';
-      Attributes.StrictDelimiter := True;
-      Attributes.DelimitedText := PathPart;
+    begin';
       
-      for I := 0 to Attributes.Count - 1 do
+      for I := 0 to Length(Attributes) - 1 do
       begin
         SepPos := Pos('=', Attributes[I]);
         if SepPos > 0 then
@@ -254,11 +253,8 @@ begin
     if QueryPart <> '' then
     begin
       Attributes.Clear;
-      Attributes.Delimiter := '&';
-      Attributes.StrictDelimiter := True;
-      Attributes.DelimitedText := QueryPart;
       
-      for I := 0 to Attributes.Count - 1 do
+      for I := 0 to Length(Attributes) - 1 do
       begin
         SepPos := Pos('=', Attributes[I]);
         if SepPos > 0 then
@@ -270,16 +266,13 @@ begin
       end;
     end;
   finally
-    Attributes.Free;
   end;
 end;
 
 class function TPKCS11URIParser.Generate(const AURI: TPKCS11URI): string;
 var
-  PathParts, QueryParts: TStringList;
+  PathParts, QueryParts: TStringArray;
 begin
-  PathParts := TStringList.Create;
-  QueryParts := TStringList.Create;
   try
     // Build path attributes
     if AURI.Token <> '' then
@@ -320,21 +313,14 @@ begin
       QueryParts.Add('module-path=' + EncodeURIComponent(AURI.ModulePath));
     
     // Construct URI
-    Result := 'pkcs11:';
-    
-    PathParts.Delimiter := ';';
-    PathParts.StrictDelimiter := True;
+    Result := 'pkcs11:';';
     Result := Result + PathParts.DelimitedText;
     
-    if QueryParts.Count > 0 then
+    if Length(QueryParts) > 0 then
     begin
-      QueryParts.Delimiter := '&';
-      QueryParts.StrictDelimiter := True;
       Result := Result + '?' + QueryParts.DelimitedText;
     end;
   finally
-    PathParts.Free;
-    QueryParts.Free;
   end;
 end;
 

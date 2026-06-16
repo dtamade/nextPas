@@ -4,13 +4,7 @@ unit nextpas.core.tls.openssl.api.seed;
 
 interface
 
-uses
-  Classes, SysUtils, nextpas.core.tls.openssl.base;
-
-type
-  // SEED types
-  SEED_KEY_SCHEDULE = packed record
-    ks: array[0..31] of Cardinal;
+uses nextpas.core.tls.openssl.base; type // SEED types SEED_KEY_SCHEDULE = packed record ks: array[0..31] of Cardinal;
   end;
   PSEED_KEY_SCHEDULE = ^SEED_KEY_SCHEDULE;
   
@@ -68,10 +62,7 @@ function SEEDDecryptCBC(const Key, IV, Input: TBytes): TBytes;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.utils;
-
-procedure LoadSEEDFunctions(AHandle: TLibHandle);
+uses nextpas.core.tls.openssl.api.utils; procedure LoadSEEDFunctions(AHandle: TLibHandle);
 begin
   if AHandle = 0 then Exit;
   

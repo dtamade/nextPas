@@ -41,6 +41,7 @@ type
     FWriteDeadline: TDeadline;
     FLastReadTimeoutMs: UInt32;
     FLastWriteTimeoutMs: UInt32;
+    procedure EnsureOpen(const AOperation: string);
     procedure ApplyReadTimeout;
     procedure ApplyWriteTimeout;
   public
@@ -75,6 +76,7 @@ type
     FSocket: TPlatformSocket;
     FLocal: TNetAddress;
     FClosed: Boolean;
+    procedure EnsureOpen(const AOperation: string);
   public
     constructor Create(const ASocket: TPlatformSocket; const ALocal: TNetAddress);
     destructor Destroy; override;
@@ -144,11 +146,18 @@ begin
   inherited;
 end;
 
+procedure TTcpStream.EnsureOpen(const AOperation: string);
+begin
+  if FClosed then
+    raise ENetworkError.Create('tcp stream ' + AOperation + ' after close');
+end;
+
 function TTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LRecvd: Int32;
   LResult: Int32;
 begin
+  EnsureOpen('read');
   if ACount = 0 then Exit(0);
   ApplyReadTimeout;
   LResult := platform_socket_recv(FSocket, @ABuf, Int32(ACount), 0, LRecvd);
@@ -164,6 +173,7 @@ var
   LPtr: PByte;
   LRemaining: SizeUInt;
 begin
+  EnsureOpen('write');
   if ACount = 0 then Exit(0);
   ApplyWriteTimeout;
   LPtr := @ABuf;
@@ -175,7 +185,7 @@ begin
     if LResult <> 0 then
       raise ENetworkError.Create('tcp write failed (' + IntToStr(LResult) + ')');
     if LSent = 0 then
-      Break;
+      raise ENetworkError.Create('tcp write failed (zero progress)');
     Inc(LPtr, LSent);
     Dec(LRemaining, SizeUInt(LSent));
     Inc(Result, SizeUInt(LSent));
@@ -196,6 +206,7 @@ begin
   begin
     FClosed := True;
     platform_socket_close(FSocket);
+    FSocket := PLATFORM_INVALID_SOCKET;
   end;
 end;
 
@@ -226,6 +237,7 @@ end;
 
 procedure TTcpStream.Shutdown;
 begin
+  EnsureOpen('shutdown');
   platform_socket_shutdown(FSocket, PLATFORM_SHUT_WR);
 end;
 
@@ -233,6 +245,7 @@ procedure TTcpStream.SetNoDelay(const AValue: Boolean);
 var
   LVal: Int32;
 begin
+  EnsureOpen('set nodelay');
   if AValue then LVal := 1 else LVal := 0;
   platform_socket_setsockopt(FSocket, PLATFORM_IPPROTO_TCP, PLATFORM_TCP_NODELAY, @LVal, SizeOf(LVal));
 end;
@@ -241,6 +254,7 @@ procedure TTcpStream.SetKeepAlive(const AValue: Boolean);
 var
   LVal: Int32;
 begin
+  EnsureOpen('set keepalive');
   if AValue then LVal := 1 else LVal := 0;
   platform_socket_setsockopt(FSocket, PLATFORM_SOL_SOCKET, PLATFORM_SO_KEEPALIVE, @LVal, SizeOf(LVal));
 end;
@@ -257,11 +271,13 @@ end;
 
 function TTcpStream.NativeSocketHandle: PtrUInt;
 begin
+  EnsureOpen('native handle');
   Result := PtrUInt(FSocket.Value);
 end;
 
 procedure TTcpStream.SetBlocking(const ABlocking: Boolean);
 begin
+  EnsureOpen('set blocking');
   if platform_socket_set_nonblocking(FSocket, not ABlocking) <> 0 then
     raise ENetworkError.Create('tcp set blocking failed');
 end;
@@ -273,6 +289,8 @@ var
   LResult: Int32;
 begin
   ARead := 0;
+  if FClosed then
+    Exit(tsiorClosed);
   if ACount = 0 then
     Exit(tsiorOk);
   if FReadDeadline.IsExpired then
@@ -298,6 +316,8 @@ var
   LResult: Int32;
 begin
   AWritten := 0;
+  if FClosed then
+    Exit(tsiorClosed);
   if ACount = 0 then
     Exit(tsiorOk);
   if FWriteDeadline.IsExpired then
@@ -385,6 +405,12 @@ begin
   inherited;
 end;
 
+procedure TTcpListener.EnsureOpen(const AOperation: string);
+begin
+  if FClosed then
+    raise ENetworkError.Create('tcp listener ' + AOperation + ' after close');
+end;
+
 function TTcpListener.Accept: ITcpStream;
 var
   LClient: TPlatformSocket;
@@ -393,6 +419,7 @@ var
   LResult: Int32;
   LLocal: TNetAddress;
 begin
+  EnsureOpen('accept');
   LAddrLen := SizeOf(LAddr);
   LResult := platform_socket_accept(FSocket, @LAddr, @LAddrLen, LClient);
   if LResult <> 0 then
@@ -416,16 +443,19 @@ begin
   begin
     FClosed := True;
     platform_socket_close(FSocket);
+    FSocket := PLATFORM_INVALID_SOCKET;
   end;
 end;
 
 function TTcpListener.NativeSocketHandle: PtrUInt;
 begin
+  EnsureOpen('native handle');
   Result := PtrUInt(FSocket.Value);
 end;
 
 procedure TTcpListener.SetBlocking(const ABlocking: Boolean);
 begin
+  EnsureOpen('set blocking');
   if platform_socket_set_nonblocking(FSocket, not ABlocking) <> 0 then
     raise ENetworkError.Create('tcp listener set blocking failed');
 end;
@@ -439,6 +469,7 @@ var
   LLocal: TNetAddress;
 begin
   AConn := nil;
+  EnsureOpen('try accept');
   LAddrLen := SizeOf(LAddr);
   LResult := platform_socket_accept(FSocket, @LAddr, @LAddrLen, LClient);
   if LResult = 0 then

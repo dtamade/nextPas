@@ -7,9 +7,9 @@ unit nextpas.core.collections.priorityqueue;
 interface
 
 uses
-  TypInfo,
+  nextpas.core.system.typinfo,
   nextpas.core.base,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
   nextpas.core.collections.priorityqueue.base,
@@ -229,10 +229,12 @@ procedure TPriorityQueue.Clear;
 var
   i: SizeUInt;
 begin
-  // Finalize managed types
+  if FCount = 0 then
+    Exit;
+
   if IsManagedType then
     for i := 0 to FCount - 1 do
-      Finalize(FItems[i]);
+      FItems[i] := Default(T);
   FCount := 0;
 end;
 
@@ -252,9 +254,12 @@ var i: SizeUInt;
 begin
   if FCount = 0 then Exit;
   if IsManagedType then
+  begin
     for i := 0 to FCount - 1 do
-      Finalize(FItems[i]);
-  FillChar(FItems[0], FCount * SizeOf(T), 0);
+      FItems[i] := Default(T);
+  end
+  else
+    FillChar(FItems[0], FCount * SizeOf(T), 0);
 end;
 
 procedure TPriorityQueue.DoReverse;
@@ -318,16 +323,15 @@ begin
 end;
 
 procedure TPriorityQueue.SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt);
-var
-  LCopyCount: SizeUInt;
 begin
-  if (aDst = nil) or (aCount = 0) then
+  if aCount = 0 then
     Exit;
-  LCopyCount := aCount;
-  if LCopyCount > FCount then
-    LCopyCount := FCount;
-  if LCopyCount > 0 then
-    Move(FItems[0], aDst^, LCopyCount * SizeOf(T));
+  if aDst = nil then
+    raise EArgumentNil.Create('TPriorityQueue.SerializeToArrayBuffer: aDst is nil');
+  if aCount > FCount then
+    raise EOutOfRange.Create('TPriorityQueue.SerializeToArrayBuffer: aCount out of range');
+
+  FElementManager.CopyElementsUnchecked(@FItems[0], aDst, aCount);
 end;
 
 procedure TPriorityQueue.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);

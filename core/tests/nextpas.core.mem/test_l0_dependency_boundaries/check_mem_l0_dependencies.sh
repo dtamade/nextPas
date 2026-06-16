@@ -8,6 +8,7 @@ FORBIDDEN_UNITS=(
   "nextpas.core.sync"
   "nextpas.core.sync.mutex"
   "nextpas.core.platform.time"
+  "nextpas.core.time.cpu"
   "nextpas.core.text.conv"
   "nextpas.core.fs.util"
   "Windows"
@@ -17,29 +18,6 @@ FORBIDDEN_UNITS=(
 )
 
 KNOWN_DEBT=(
-  "src/nextpas.core.mem.allocator.mimalloc.pas|nextpas.core.text.conv"
-  "src/nextpas.core.mem.blockpool.concurrent.pas|nextpas.core.sync"
-  "src/nextpas.core.mem.blockpool.sharded.pas|nextpas.core.sync"
-  "src/nextpas.core.mem.manager.crt.pas|nextpas.core.sync"
-  "src/nextpas.core.mem.manager.rtl.pas|nextpas.core.sync"
-  "src/nextpas.core.mem.manager.rtl.pas|nextpas.core.sync.mutex"
-  "src/nextpas.core.mem.mapped_ring_buffer.pas|nextpas.core.fs.util"
-  "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|SyncObjs"
-  "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|nextpas.core.text.conv"
-  "src/nextpas.core.mem.mapped_slab_pool.pas|nextpas.core.fs.util"
-  "src/nextpas.core.mem.mapped_slab_pool.pas|nextpas.core.text.conv"
-  "src/nextpas.core.mem.memory_map.pas|BaseUnix"
-  "src/nextpas.core.mem.memory_map.pas|Unix"
-  "src/nextpas.core.mem.memory_map.pas|Windows"
-  "src/nextpas.core.mem.memory_map.pas|nextpas.core.fs.util"
-  "src/nextpas.core.mem.memory_map.pas|nextpas.core.text.conv"
-  "src/nextpas.core.mem.pool.fixed.concurrent.pas|nextpas.core.sync"
-  "src/nextpas.core.mem.pool.fixed.pas|nextpas.core.text.conv"
-  "src/nextpas.core.mem.pool.slab.concurrent.pas|nextpas.core.sync"
-  "src/nextpas.core.mem.pool.slab.pas|nextpas.core.platform.time"
-  "src/nextpas.core.mem.pool.slab.sharded.pas|nextpas.core.sync"
-  "src/nextpas.core.mem.secure.pas|BaseUnix"
-  "src/nextpas.core.mem.secure.pas|Windows"
 )
 
 is_forbidden_unit() {

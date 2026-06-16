@@ -235,7 +235,13 @@ function VecF64x8ExtractHi(const a: TVecF64x8): TVecF64x4; inline;
 implementation
 
 uses
-  nextpas.core.simd.mathutil;
+  nextpas.core.simd.mathutil,
+  nextpas.core.contracts;
+
+procedure RequireGatherScatterBaseAssigned(base: Pointer; const apiName: string); inline;
+begin
+  ContractsRequireAssigned(base <> nil, apiName + ' base pointer');
+end;
 
 // === Shuffle/Swizzle 实现 ===
 function MM_SHUFFLE(d, c, b, a: Byte): Byte; inline;
@@ -1383,10 +1389,9 @@ begin
 end;
 
 // === Gather/Scatter 实现 ===
-// ✅ Safety check: Assert for nil pointer (performance-sensitive code)
 function VecF32x4Gather(base: PSingle; const indices: TVecI32x4): TVecF32x4;
 begin
-  Assert(base <> nil, 'VecF32x4Gather: base pointer is nil');
+  RequireGatherScatterBaseAssigned(base, 'VecF32x4Gather');
   Result.f[0] := base[indices.i[0]];
   Result.f[1] := base[indices.i[1]];
   Result.f[2] := base[indices.i[2]];
@@ -1395,7 +1400,7 @@ end;
 
 function VecI32x4Gather(base: PInt32; const indices: TVecI32x4): TVecI32x4;
 begin
-  Assert(base <> nil, 'VecI32x4Gather: base pointer is nil');
+  RequireGatherScatterBaseAssigned(base, 'VecI32x4Gather');
   Result.i[0] := base[indices.i[0]];
   Result.i[1] := base[indices.i[1]];
   Result.i[2] := base[indices.i[2]];
@@ -1404,7 +1409,7 @@ end;
 
 procedure VecF32x4Scatter(base: PSingle; const indices: TVecI32x4; const values: TVecF32x4);
 begin
-  Assert(base <> nil, 'VecF32x4Scatter: base pointer is nil');
+  RequireGatherScatterBaseAssigned(base, 'VecF32x4Scatter');
   base[indices.i[0]] := values.f[0];
   base[indices.i[1]] := values.f[1];
   base[indices.i[2]] := values.f[2];
@@ -1413,7 +1418,7 @@ end;
 
 procedure VecI32x4Scatter(base: PInt32; const indices: TVecI32x4; const values: TVecI32x4);
 begin
-  Assert(base <> nil, 'VecI32x4Scatter: base pointer is nil');
+  RequireGatherScatterBaseAssigned(base, 'VecI32x4Scatter');
   base[indices.i[0]] := values.i[0];
   base[indices.i[1]] := values.i[1];
   base[indices.i[2]] := values.i[2];
@@ -1427,6 +1432,10 @@ end;
 function VecF32x4GatherSelect(base: PSingle; const enable: TMask4; const indices: TVecI32x4; const orVal: TVecF32x4): TVecF32x4;
 var i: Integer;
 begin
+  if enable = 0 then
+    Exit(orVal);
+
+  RequireGatherScatterBaseAssigned(base, 'VecF32x4GatherSelect');
   for i := 0 to 3 do
   begin
     if (enable and (1 shl i)) <> 0 then
@@ -1439,6 +1448,10 @@ end;
 function VecI32x4GatherSelect(base: PInt32; const enable: TMask4; const indices: TVecI32x4; const orVal: TVecI32x4): TVecI32x4;
 var i: Integer;
 begin
+  if enable = 0 then
+    Exit(orVal);
+
+  RequireGatherScatterBaseAssigned(base, 'VecI32x4GatherSelect');
   for i := 0 to 3 do
   begin
     if (enable and (1 shl i)) <> 0 then
@@ -1451,6 +1464,10 @@ end;
 procedure VecF32x4ScatterSelect(base: PSingle; const enable: TMask4; const indices: TVecI32x4; const values: TVecF32x4);
 var i: Integer;
 begin
+  if enable = 0 then
+    Exit;
+
+  RequireGatherScatterBaseAssigned(base, 'VecF32x4ScatterSelect');
   for i := 0 to 3 do
   begin
     if (enable and (1 shl i)) <> 0 then
@@ -1462,6 +1479,10 @@ end;
 procedure VecI32x4ScatterSelect(base: PInt32; const enable: TMask4; const indices: TVecI32x4; const values: TVecI32x4);
 var i: Integer;
 begin
+  if enable = 0 then
+    Exit;
+
+  RequireGatherScatterBaseAssigned(base, 'VecI32x4ScatterSelect');
   for i := 0 to 3 do
   begin
     if (enable and (1 shl i)) <> 0 then

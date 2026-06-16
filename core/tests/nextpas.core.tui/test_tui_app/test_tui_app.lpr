@@ -10,6 +10,7 @@ uses
   nextpas.core.tui.buffer,
   nextpas.core.tui.style,
   nextpas.core.tui.app,
+  nextpas.core.tui.error,
   nextpas.core.tui.terminal,
   nextpas.core.tui.task,
   nextpas.core.tui.app.screen,
@@ -42,6 +43,7 @@ type
     RequestQuitOnEvent: Boolean;
     RequestQuitOnTaskCompletion: Boolean;
     RaiseOnEnter: Boolean;
+    RaiseOnRender: Boolean;
     PushScreenOnTaskCompletion: TScreen;
     FollowUpTasks: TTaskManager;
     FollowUpTaskId: TTaskId;
@@ -69,7 +71,12 @@ type
     FBeginFrameCount: Integer;
     FEndFrameCount: Integer;
     FLeaveCount: Integer;
+    FEnterResult: Boolean;
+    FInitCount: Integer;
+    FDestroyCount: Integer;
   protected
+    procedure OnInit; override;
+    procedure OnDestroy; override;
     function DoEnterTui: Boolean; override;
     procedure DoLeaveTui; override;
     function DoPollEvent: TEvent; override;
@@ -83,6 +90,9 @@ type
     property BeginFrameCount: Integer read FBeginFrameCount;
     property EndFrameCount: Integer read FEndFrameCount;
     property LeaveCount: Integer read FLeaveCount;
+    property EnterResult: Boolean read FEnterResult write FEnterResult;
+    property InitCount: Integer read FInitCount;
+    property DestroyCount: Integer read FDestroyCount;
   end;
 
   TTaskCallbackHost = class
@@ -109,6 +119,13 @@ type
     FollowUpScheduled: Boolean;
     procedure HandleTasks(App: TApp; const Slots: array of TCompletionSlot;
       SlotCount: Integer);
+  end;
+
+  TTickCallbackHost = class
+  public
+    Count: Integer;
+    LastTickCount: Integer;
+    procedure RequestScreenQuit(App: TApp; TickCount: Integer);
   end;
 
 var
@@ -179,6 +196,8 @@ procedure TRecordingScreen.Render(const Area: TRect; Buf: TBuffer);
 begin
   Inc(RenderCount);
   LastArea := Area;
+  if RaiseOnRender then
+    raise Exception.Create(String(Name) + ' render failed');
   if SharedStateObject <> nil then
     AppendLogEntry(RenderedSharedStateLog,
       TSharedStateBox(SharedStateObject).Value);
@@ -289,6 +308,13 @@ begin
     App.Quit;
 end;
 
+procedure TTickCallbackHost.RequestScreenQuit(App: TApp; TickCount: Integer);
+begin
+  Inc(Count);
+  LastTickCount := TickCount;
+  App.Screens.RequestQuit;
+end;
+
 constructor TFakeApp.Create(const AEvents: array of TEvent);
 var
   LIndex: Integer;
@@ -298,6 +324,7 @@ begin
   for LIndex := 0 to High(AEvents) do
     FEvents[LIndex] := AEvents[LIndex];
   FPollIndex := 0;
+  FEnterResult := True;
   FFrameBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 12, 3));
 end;
 
@@ -307,9 +334,19 @@ begin
   inherited;
 end;
 
+procedure TFakeApp.OnInit;
+begin
+  Inc(FInitCount);
+end;
+
+procedure TFakeApp.OnDestroy;
+begin
+  Inc(FDestroyCount);
+end;
+
 function TFakeApp.DoEnterTui: Boolean;
 begin
-  Result := True;
+  Result := FEnterResult;
 end;
 
 procedure TFakeApp.DoLeaveTui;
@@ -379,6 +416,45 @@ begin
     ATasks.Spawn(LSpec);
   CancelledTaskId := ATasks.Spawn(LSpec);
   ATasks.Cancel(CancelledTaskId);
+end;
+
+procedure TestAppRunRaisesBackendExceptionWhenEnterFails;
+var
+  LApp: TFakeApp;
+begin
+  LApp := TFakeApp.Create([]);
+  try
+    LApp.EnterResult := False;
+    try
+      LApp.Run;
+      Fail('enter failure should raise a catchable TUI backend exception');
+    except
+      on E: ETuiBackend do
+      begin
+        Check(Pos('TApp.Run', E.Message) > 0,
+          'enter failure names the app run boundary');
+        Check((Pos('TUI', E.Message) > 0) or (Pos('terminal', E.Message) > 0),
+          'enter failure names the terminal/TUI context');
+      end;
+      on E: Exception do
+        Fail('enter failure should raise ETuiBackend, got ' + E.ClassName);
+    end;
+
+    CheckEqual(Int64(0), Int64(LApp.InitCount),
+      'enter failure does not call app init');
+    CheckEqual(Int64(0), Int64(LApp.DestroyCount),
+      'enter failure does not call app destroy hook');
+    CheckEqual(Int64(0), Int64(LApp.BeginFrameCount),
+      'enter failure does not begin a frame');
+    CheckEqual(Int64(0), Int64(LApp.EndFrameCount),
+      'enter failure does not end a frame');
+    CheckEqual(Int64(0), Int64(LApp.PollCount),
+      'enter failure does not poll events');
+    CheckEqual(Int64(0), Int64(LApp.LeaveCount),
+      'enter failure does not leave a TUI mode that was never entered');
+  finally
+    LApp.Free;
+  end;
 end;
 
 procedure TestAppRendersTopScreenByDefault;
@@ -457,6 +533,41 @@ begin
   end;
 end;
 
+procedure TestAppStopsBeforeNextFrameWhenTickRequestsScreenQuit;
+var
+  LApp: TFakeApp;
+  LScreen: TRecordingScreen;
+  LHost: TTickCallbackHost;
+begin
+  LApp := TFakeApp.Create([
+    NoneEvent
+  ]);
+  LHost := TTickCallbackHost.Create;
+  try
+    LScreen := TRecordingScreen.Create;
+    LApp.Screens.Push(LScreen);
+    LApp.OnTickCb := @LHost.RequestScreenQuit;
+
+    LApp.Run;
+
+    CheckEqual(Int64(1), Int64(LHost.Count),
+      'tick callback requests screen quit once');
+    CheckEqual(Int64(1), Int64(LHost.LastTickCount),
+      'tick callback receives first tick count');
+    CheckEqual(Int64(1), Int64(LScreen.RenderCount),
+      'tick screen quit stops before next frame render');
+    CheckEqual(Int64(1), Int64(LApp.BeginFrameCount),
+      'tick screen quit avoids the next begin frame');
+    CheckEqual(Int64(1), Int64(LApp.EndFrameCount),
+      'tick screen quit avoids the next end frame');
+    CheckEqual(Int64(1), Int64(LApp.PollCount),
+      'tick screen quit stops after the first none-event poll');
+  finally
+    LHost.Free;
+    LApp.Free;
+  end;
+end;
+
 procedure TestScreenStackPushLeavesOldTopAndEntersNewTop;
 var
   LStack: TScreenStack;
@@ -520,6 +631,29 @@ begin
     CheckEqual(Int64(1), Int64(LSecond.LeaveCount), 'popped top leaves once');
     CheckEqual('first.enter>first.leave>second.enter>second.leave>first.enter',
       String(LLog), 'pop resume order is stable');
+    LPopped.Free;
+  finally
+    LStack.Free;
+  end;
+end;
+
+procedure TestScreenStackOwnsScreenStackReference;
+var
+  LStack: TScreenStack;
+  LScreen: TRecordingScreen;
+  LPopped: TScreen;
+begin
+  LStack := TScreenStack.Create;
+  try
+    LScreen := TRecordingScreen.Create;
+    Check(LScreen.Stack = nil, 'new screen starts without stack owner');
+
+    LStack.Push(LScreen);
+    Check(LScreen.Stack = LStack, 'push assigns stack owner');
+
+    LPopped := LStack.Pop;
+    Check(LPopped = LScreen, 'pop returns pushed screen');
+    Check(LScreen.Stack = nil, 'pop clears stack owner');
     LPopped.Free;
   finally
     LStack.Free;
@@ -631,6 +765,43 @@ begin
   finally
     LOtherStack.Free;
     LOwnedStack.Free;
+  end;
+end;
+
+procedure TestAppEndsFrameWhenScreenRenderRaises;
+var
+  LApp: TFakeApp;
+  LScreen: TRecordingScreen;
+begin
+  LApp := TFakeApp.Create([KeyCharEvent(Ord('q'), [kmCtrl])]);
+  try
+    LApp.EnableBudget(16);
+    LScreen := TRecordingScreen.Create;
+    LScreen.Name := 'failing';
+    LScreen.RaiseOnRender := True;
+    LApp.Screens.Push(LScreen);
+
+    try
+      LApp.Run;
+      Fail('render failure should propagate');
+    except
+      on E: Exception do
+        Check(Pos('render failed', E.Message) > 0,
+          'app surfaces screen render failure');
+    end;
+
+    CheckEqual(Int64(1), Int64(LApp.BeginFrameCount),
+      'render failure begins exactly one frame');
+    CheckEqual(Int64(1), Int64(LApp.EndFrameCount),
+      'render failure still ends the active frame');
+    CheckEqual(Int64(1), Int64(LApp.Budget.Stats.FrameCount),
+      'render failure still ends the active budget frame');
+    CheckEqual(Int64(1), Int64(LApp.LeaveCount),
+      'render failure still leaves tui');
+    CheckEqual(Int64(0), Int64(LApp.PollCount),
+      'render failure happens before polling');
+  finally
+    LApp.Free;
   end;
 end;
 
@@ -1452,14 +1623,18 @@ end;
 
 begin
   T := TTestRunner.Create('nextpas.core.tui.app');
+  T.Run('app raises backend exception when enter fails', @TestAppRunRaisesBackendExceptionWhenEnterFails);
   T.Run('app renders top screen by default', @TestAppRendersTopScreenByDefault);
   T.Run('app routes events to top screen by default', @TestAppRoutesEventsToTopScreenByDefault);
   T.Run('app stops when screen requests quit', @TestAppStopsWhenScreenRequestsQuit);
+  T.Run('app stops before next frame when tick requests screen quit', @TestAppStopsBeforeNextFrameWhenTickRequestsScreenQuit);
   T.Run('screen stack push leaves old top and enters new top', @TestScreenStackPushLeavesOldTopAndEntersNewTop);
   T.Run('screen stack pop resumes previous top', @TestScreenStackPopResumesPreviousTop);
+  T.Run('screen stack owns screen stack reference', @TestScreenStackOwnsScreenStackReference);
   T.Run('screen stack replace frees old top', @TestScreenStackReplaceFreesOldTop);
   T.Run('screen stack push rollback restores previous top', @TestScreenStackPushRollbackRestoresPreviousTop);
   T.Run('screen stack rejects nil and owned screens', @TestScreenStackRejectsNilAndOwnedScreens);
+  T.Run('app ends frame when screen render raises', @TestAppEndsFrameWhenScreenRenderRaises);
   T.Run('app routes task completions to top screen by default', @TestAppRoutesTaskCompletionsToTopScreenByDefault);
   T.Run('app routes task completions to callback path', @TestAppRoutesTaskCompletionsToCallbackPath);
   T.Run('app routes cancelled task completion to top screen by default', @TestAppRoutesCancelledTaskCompletionToTopScreenByDefault);

@@ -20,8 +20,10 @@ jobs:
 
       - name: Prepare verification entrypoints
         run: |
-          chmod +x build/verify_local.sh
           chmod +x tests/run_all_tests.sh
 
+      - name: Run tooling gate
+        run: make test-tooling
+
       - name: Run Linux local verification mirror
-        run: ./build/verify_local.sh
+        run: make verify

@@ -5,7 +5,6 @@ unit nextpas.core.mem.pool.fixed;
 interface
 
 uses
-  nextpas.core.text.conv,
   nextpas.core.mem.pool.base,    // IPool (decoupled from facade)
   nextpas.core.mem.allocator,    // IAllocator + GetRtlAllocator
   nextpas.core.mem.error;        // EAllocError, TAllocError
@@ -160,6 +159,11 @@ type
 
 implementation
 
+{$IFDEF FAF_MEM_DEBUG}
+uses
+  SysUtils;
+{$ENDIF}
+
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in pool internals
 
@@ -193,6 +197,14 @@ begin
     PushFreeIndex(LIndex);
   end;
   FAllocatedCount := 0;
+end;
+
+function FixedPoolLeakMessage(aAllocatedCount: Integer): string;
+var
+  LCount: string;
+begin
+  Str(aAllocatedCount, LCount);
+  Result := 'Memory leak: ' + LCount + ' blocks not freed';
 end;
 
 constructor TFixedPool.Create(aBlockSize: SizeUInt; aCapacity: Integer; aAllocator: IAllocator);
@@ -247,7 +259,7 @@ begin
   begin
     LOverflowCheck := FTotalSize div FBlockSize;
     if LOverflowCheck <> SizeUInt(FCapacity) then
-      raise EOutOfMemory.Create(aeOutOfMemory, 'Total size overflow');
+      raise EMemFixedPoolError.Create(aeInvalidLayout, 'Total size overflow');
   end;
 
   // 分配连续 Arena（对齐）
@@ -287,7 +299,7 @@ destructor TFixedPool.Destroy;
 begin
   {$IFDEF FAF_MEM_DEBUG}
   if FAllocatedCount <> 0 then
-    raise EMemFixedPoolError.Create(aeInternalError, Format('Memory leak: %d blocks not freed', [FAllocatedCount]));
+    raise EMemFixedPoolError.Create(aeInternalError, FixedPoolLeakMessage(FAllocatedCount));
   {$ENDIF}
   // ✅ C-3: 移除死代码分支，FRawBuffer 总是被赋值
   if FRawBuffer <> nil then
@@ -404,8 +416,11 @@ var
   LPtr: Pointer;
 begin
   Result := 0;
+  if aCount <= 0 then Exit;
   for LIndex := 0 to aCount-1 do
   begin
+    if LIndex > High(aUnits) then
+      Break;
     LPtr := Alloc;
     if LPtr = nil then Exit;
     aUnits[LIndex] := LPtr;
@@ -422,8 +437,13 @@ procedure TFixedPool.ReleaseN(const aUnits: array of Pointer; aCount: Integer);
 var
   LIndex: Integer;
 begin
+  if aCount <= 0 then Exit;
   for LIndex := 0 to aCount-1 do
+  begin
+    if LIndex > High(aUnits) then
+      Break;
     ReleasePtr(aUnits[LIndex]);
+  end;
 end;
 
 {$POP}

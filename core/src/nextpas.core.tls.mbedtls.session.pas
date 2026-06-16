@@ -18,7 +18,7 @@ unit nextpas.core.tls.mbedtls.session;
 interface
 
 uses
-  SysUtils, Classes, DateUtils,
+  nextpas.core.exception, nextpas.core.text.conv, Classes, DateUtils,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.base,
@@ -86,6 +86,7 @@ type
 implementation
 
 uses
+  nextpas.core.text.strings,
   nextpas.core.tls.mbedtls.certificate;
 
 const
@@ -377,32 +378,27 @@ end;
 
 function TMbedTLSSession.BuildSerializedSessionData(const ANativeData: TBytes): TBytes;
 var
-  LData: TStringList;
   LCreatedUnix: Int64;
 begin
   Result := nil;
   if Length(ANativeData) = 0 then
     Exit;
 
-  LData := TStringList.Create;
-  try
     if FCreationTime > 0 then
       LCreatedUnix := DateTimeToUnix(FCreationTime)
     else
       LCreatedUnix := 0;
 
-    LData.Values['magic'] := MBEDTLS_SESSION_SERIALIZATION_MAGIC;
-    LData.Values['id'] := FSessionID;
-    LData.Values['created_unix'] := IntToStr(LCreatedUnix);
-    LData.Values['timeout'] := IntToStr(FTimeout);
-    LData.Values['protocol'] := IntToStr(Ord(FProtocolVersion));
-    LData.Values['cipher'] := FCipherName;
-    LData.Values['native_hex'] := BytesToHexString(ANativeData);
-    Result := BytesOf(UTF8String(LData.Text));
-  finally
-    LData.Free;
+    Result := BytesOf(UTF8String(
+      'magic=' + MBEDTLS_SESSION_SERIALIZATION_MAGIC + sLineBreak +
+      'id=' + FSessionID + sLineBreak +
+      'created_unix=' + IntToStr(LCreatedUnix) + sLineBreak +
+      'timeout=' + IntToStr(FTimeout) + sLineBreak +
+      'protocol=' + IntToStr(Ord(FProtocolVersion)) + sLineBreak +
+      'cipher=' + FCipherName + sLineBreak +
+      'native_hex=' + BytesToHexString(ANativeData) + sLineBreak
+    ));
   end;
-end;
 
 function TMbedTLSSession.TryLoadSerializedSessionData(const AData: TBytes;
   out ANativeData: TBytes; out ASessionID: string;
@@ -410,12 +406,14 @@ function TMbedTLSSession.TryLoadSerializedSessionData(const AData: TBytes;
   out AProtocolVersion: TSSLProtocolVersion; out ACipherName: string;
   out AHasEnvelope: Boolean): Boolean;
 var
-  LData: TStringList;
+
   LText: RawByteString;
   LCreatedUnix: Int64;
   LProtocolOrdinal: Integer;
   LNativeHex: string;
   LPrefix: RawByteString;
+  LLines: TStringArray;
+  LPairs: TStringPairArray;
 begin
   Result := False;
   AHasEnvelope := False;
@@ -436,26 +434,28 @@ begin
 
   AHasEnvelope := True;
   SetString(LText, PAnsiChar(@AData[0]), Length(AData));
-  LData := TStringList.Create;
+
+  LLines := StringsParseLines(string(LText));
+  LPairs := StringsParseKeyValues(string(LText));
   try
-    LData.Text := string(UTF8String(LText));
-    if LData.Values['magic'] <> MBEDTLS_SESSION_SERIALIZATION_MAGIC then
+
+    if StringPairsGet(LPairs, 'magic') <> MBEDTLS_SESSION_SERIALIZATION_MAGIC then
       Exit;
 
-    ASessionID := LData.Values['id'];
+    ASessionID := StringPairsGet(LPairs, 'id');
     if ASessionID = '' then
       Exit;
-    if not TryStrToInt64(LData.Values['created_unix'], LCreatedUnix) then
+    if not TryStrToInt64(StringPairsGet(LPairs, 'created_unix'), LCreatedUnix) then
       Exit;
-    if not TryStrToInt(LData.Values['timeout'], ATimeout) then
+    if not TryStrToInt(StringPairsGet(LPairs, 'timeout'), ATimeout) then
       Exit;
-    if not TryStrToInt(LData.Values['protocol'], LProtocolOrdinal) then
+    if not TryStrToInt(StringPairsGet(LPairs, 'protocol'), LProtocolOrdinal) then
       Exit;
     if (LProtocolOrdinal < Ord(Low(TSSLProtocolVersion))) or
        (LProtocolOrdinal > Ord(High(TSSLProtocolVersion))) then
       Exit;
 
-    LNativeHex := LData.Values['native_hex'];
+    LNativeHex := StringPairsGet(LPairs, 'native_hex');
     if not TryHexStringToBytes(LNativeHex, ANativeData) then
       Exit;
     if Length(ANativeData) = 0 then
@@ -466,10 +466,11 @@ begin
     else
       ACreationTime := 0;
     AProtocolVersion := TSSLProtocolVersion(LProtocolOrdinal);
-    ACipherName := LData.Values['cipher'];
+    ACipherName := StringPairsGet(LPairs, 'cipher');
     Result := True;
-  finally
-    LData.Free;
+  except
+    on E: Exception do
+      Exit;
   end;
 end;
 

@@ -23,6 +23,8 @@ type
     FData: TBytes;
     FSize: SizeUInt;
     FPosition: SizeUInt;
+    FClosed: Boolean;
+    procedure EnsureOpen(const AOperation: string);
   public
     constructor Create(const AInitialCapacity: SizeUInt);
     constructor CreateFrom(const AData: TBytes);
@@ -58,6 +60,7 @@ begin
   SetLength(FData, AInitialCapacity);
   FSize := 0;
   FPosition := 0;
+  FClosed := False;
 end;
 
 constructor TBytesStream.CreateFrom(const AData: TBytes);
@@ -66,12 +69,21 @@ begin
   FData := Copy(AData);
   FSize := Length(AData);
   FPosition := 0;
+  FClosed := False;
+end;
+
+procedure TBytesStream.EnsureOpen(const AOperation: string);
+begin
+  if FClosed then
+    raise EIOError.Create('TBytesStream.' + AOperation + ': stream is closed');
 end;
 
 function TBytesStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LAvailable: SizeUInt;
 begin
+  EnsureOpen('Read');
+  if ACount = 0 then Exit(0);
   if FPosition >= FSize then Exit(0);
   LAvailable := FSize - FPosition;
   if ACount < LAvailable then
@@ -89,6 +101,7 @@ function TBytesStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LNewSize: SizeUInt;
 begin
+  EnsureOpen('Write');
   if ACount = 0 then
   begin
     Result := 0;
@@ -113,6 +126,7 @@ function TBytesStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): In
 var
   LNewPos: Int64;
 begin
+  EnsureOpen('Seek');
   case AOrigin of
     soBeginning: LNewPos := AOffset;
     soCurrent: LNewPos := Int64(FPosition) + AOffset;
@@ -126,9 +140,13 @@ end;
 
 procedure TBytesStream.Close;
 begin
-  FData := nil;
-  FSize := 0;
-  FPosition := 0;
+  if not FClosed then
+  begin
+    FClosed := True;
+    FData := nil;
+    FSize := 0;
+    FPosition := 0;
+  end;
 end;
 
 function TBytesStream.GetSize: Int64;
@@ -143,6 +161,7 @@ end;
 
 procedure TBytesStream.SetPosition(const AValue: Int64);
 begin
+  EnsureOpen('SetPosition');
   if AValue < 0 then
     raise EArgumentError.Create('TBytesStream.SetPosition: negative position');
   FPosition := SizeUInt(AValue);
@@ -152,6 +171,7 @@ function TBytesStream.ReadAt(var ABuf; const ACount: SizeUInt; const AOffset: In
 var
   LAvail: SizeUInt;
 begin
+  EnsureOpen('ReadAt');
   if AOffset < 0 then
     raise EArgumentError.Create('TBytesStream.ReadAt: negative offset');
   if SizeUInt(AOffset) >= FSize then
@@ -169,6 +189,7 @@ function TBytesStream.WriteAt(const ABuf; const ACount: SizeUInt; const AOffset:
 var
   LEnd: SizeUInt;
 begin
+  EnsureOpen('WriteAt');
   if AOffset < 0 then
     raise EArgumentError.Create('TBytesStream.WriteAt: negative offset');
   if ACount = 0 then
@@ -189,6 +210,7 @@ end;
 
 function TBytesStream.ReadByte: Byte;
 begin
+  EnsureOpen('ReadByte');
   if FPosition >= FSize then
     raise EIOError.Create('TBytesStream.ReadByte: EOF');
   Result := FData[FPosition];
@@ -202,6 +224,7 @@ end;
 
 function TBytesStream.WriteString(const AStr: string): SizeUInt;
 begin
+  EnsureOpen('WriteString');
   if Length(AStr) = 0 then
     Exit(0);
   Result := Write(AStr[1], SizeUInt(Length(AStr)));

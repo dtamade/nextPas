@@ -12,7 +12,8 @@ uses
   nextpas.core.collections.orderedmap.rb.base,
   nextpas.core.collections.orderedmap.rb.intf,
   nextpas.core.collections.element_manager,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.collections.tree.rb;
 
 type
@@ -25,17 +26,24 @@ type
       TRBNode  = TRBCore.PNode;
       TKeyCmp  = specialize TCompareFunc<K>;
       PEntry   = ^TEntry;
+      PRangeIterState = ^TRangeIterState;
+      TRangeIterState = record
+        Node: TRBNode;
+        First: TRBNode;
+        Last: TRBNode;
+      end;
   private
     FTree: TRBCore;
     FKeyCmp: TKeyCmp;
-    // range state（非重入临时字段）
-    FRangeActive: Boolean;
-    FRangeInclusiveRight: Boolean;
-    FRangeL: K;
-    FRangeR: K;
+    FCompareData: Pointer;
+    FRangeIterStates: array of PRangeIterState;
+    FRangeIterStateCount: SizeUInt;
     function IterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     function IterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     function IterMovePrev(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function RangeIterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function RangeIterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function RangeIterMovePrev(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     // keys/values iterator callbacks
     function KeyIterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     function KeyIterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
@@ -45,11 +53,15 @@ type
     function ValIterMovePrev(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 
     function CompareAdapter(const L, R: TEntry; aData: Pointer): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function CompareKeys(const L, R: K): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     procedure FinalizeAdapter(var E: TEntry); {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     function MakeEntry(const AKey: K): TEntry; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function NewRangeIterState(const L, R: K; InclusiveRight: Boolean): PRangeIterState;
+    procedure FreeRangeIterStates;
   public
     constructor Create(aKeyComparer: TKeyCmp); reintroduce; overload;
     constructor Create(aKeyComparer: TKeyCmp; aAllocator: IAllocator); reintroduce; overload;
+    constructor Create(aKeyComparer: TKeyCmp; aAllocator: IAllocator; aCompareData: Pointer); reintroduce; overload;
     destructor Destroy; override;
 
     // 基本操作
@@ -98,6 +110,14 @@ begin
   if Result < 0 then Exit(-1) else if Result > 0 then Exit(1) else Exit(0);
 end;
 
+function TRBTreeMap.CompareKeys(const L, R: K): SizeInt;
+begin
+  if not Assigned(FKeyCmp) then
+    raise EInvalidOperation.Create('TRBTreeMap: key comparer is nil');
+  Result := FKeyCmp(L, R, FCompareData);
+  if Result < 0 then Exit(-1) else if Result > 0 then Exit(1) else Exit(0);
+end;
+
 procedure TRBTreeMap.FinalizeAdapter(var E: TEntry);
 begin
   // 直接对记录进行 Finalize，托管类型自动处理；非托管类型为 no-op
@@ -112,22 +132,89 @@ end;
 
 constructor TRBTreeMap.Create(aKeyComparer: TKeyCmp);
 begin
-  inherited Create(GetRtlAllocator(), nil);
-  FKeyCmp := aKeyComparer;
-  FTree := TRBCore.Create(@CompareAdapter, nil, @FinalizeAdapter);
+  Create(aKeyComparer, DefaultAllocator(), nil);
 end;
 
 constructor TRBTreeMap.Create(aKeyComparer: TKeyCmp; aAllocator: IAllocator);
 begin
+  Create(aKeyComparer, aAllocator, nil);
+end;
+
+constructor TRBTreeMap.Create(aKeyComparer: TKeyCmp; aAllocator: IAllocator; aCompareData: Pointer);
+begin
   inherited Create(aAllocator, nil);
   FKeyCmp := aKeyComparer;
-  FTree := TRBCore.Create(@CompareAdapter, nil, @FinalizeAdapter);
+  FCompareData := aCompareData;
+  FTree := TRBCore.Create(@CompareAdapter, FCompareData, @FinalizeAdapter);
 end;
 
 destructor TRBTreeMap.Destroy;
 begin
+  FreeRangeIterStates;
   FTree.Free;
   inherited Destroy;
+end;
+
+function TRBTreeMap.NewRangeIterState(const L, R: K; InclusiveRight: Boolean): PRangeIterState;
+var
+  LFirst, LLast: TRBNode;
+  E: TEntry;
+  C: SizeInt;
+begin
+  LFirst := nil;
+  LLast := nil;
+
+  if CompareKeys(L, R) <= 0 then
+  begin
+    E := MakeEntry(L);
+    LFirst := FTree.LowerBoundNode(E);
+    if LFirst <> nil then
+    begin
+      C := CompareKeys(LFirst^.Data.Key, R);
+      if (C > 0) or ((C = 0) and (not InclusiveRight)) then
+        LFirst := nil;
+    end;
+
+    if LFirst <> nil then
+    begin
+      E := MakeEntry(R);
+      LLast := FTree.LowerBoundNode(E);
+      if LLast = nil then
+        LLast := FTree.LastNode
+      else if (CompareKeys(LLast^.Data.Key, R) > 0) or
+              ((CompareKeys(LLast^.Data.Key, R) = 0) and (not InclusiveRight)) then
+        LLast := FTree.Predecessor(LLast);
+
+      if (LLast = nil) or (CompareKeys(LLast^.Data.Key, L) < 0) or
+         (CompareKeys(LFirst^.Data.Key, LLast^.Data.Key) > 0) then
+      begin
+        LFirst := nil;
+        LLast := nil;
+      end;
+    end;
+  end;
+
+  New(Result);
+  Result^.Node := nil;
+  Result^.First := LFirst;
+  Result^.Last := LLast;
+  Inc(FRangeIterStateCount);
+  SetLength(FRangeIterStates, FRangeIterStateCount);
+  FRangeIterStates[FRangeIterStateCount - 1] := Result;
+end;
+
+procedure TRBTreeMap.FreeRangeIterStates;
+var
+  I: SizeUInt;
+begin
+  if FRangeIterStateCount = 0 then
+    Exit;
+
+  for I := 0 to FRangeIterStateCount - 1 do
+    if FRangeIterStates[I] <> nil then
+      Dispose(FRangeIterStates[I]);
+  FRangeIterStateCount := 0;
+  SetLength(FRangeIterStates, 0);
 end;
 
 function TRBTreeMap.AddOrAssign(const AKey: K; const AValue: V): Boolean;
@@ -139,7 +226,7 @@ begin
   N := FTree.LowerBoundNode(E);
   if N <> nil then
   begin
-    C := FKeyCmp(N^.Data.Key, AKey, nil);
+    C := CompareKeys(N^.Data.Key, AKey);
     if C = 0 then
     begin
       N^.Data.Value := AValue; // 更新
@@ -157,7 +244,7 @@ begin
   N := FTree.LowerBoundNode(E);
   if N <> nil then
   begin
-    C := FKeyCmp(N^.Data.Key, AKey, nil);
+    C := CompareKeys(N^.Data.Key, AKey);
     if C = 0 then Exit(False);
   end;
   Result := FTree.InsertUnique(E);
@@ -169,7 +256,7 @@ begin
   E := MakeEntry(AKey);
   N := FTree.LowerBoundNode(E);
   if N = nil then Exit(False);
-  C := FKeyCmp(N^.Data.Key, AKey, nil);
+  C := CompareKeys(N^.Data.Key, AKey);
   if C = 0 then begin N^.Data.Value := AValue; Exit(True); end;
   Result := False;
 end;
@@ -180,7 +267,7 @@ begin
   E := MakeEntry(AKey);
   N := FTree.LowerBoundNode(E);
   if N = nil then Exit(False);
-  C := FKeyCmp(N^.Data.Key, AKey, nil);
+  C := CompareKeys(N^.Data.Key, AKey);
   if C <> 0 then Exit(False);
   OutEntry := N^.Data;
   Result := FTree.Remove(N^.Data);
@@ -207,7 +294,7 @@ begin
   E := MakeEntry(AKey);
   N := FTree.LowerBoundNode(E);
   if N = nil then Exit(False);
-  C := FKeyCmp(N^.Data.Key, AKey, nil);
+  C := CompareKeys(N^.Data.Key, AKey);
   if C = 0 then begin AValue := N^.Data.Value; Exit(True); end;
   Result := False;
 end;
@@ -418,83 +505,69 @@ begin
   Result.Init(Self, @IterGetCurrent, @IterMoveNext, @IterMovePrev, nil);
 end;
 
+function TRBTreeMap.RangeIterGetCurrent(aIter: PPtrIter): Pointer;
+var
+  LState: PRangeIterState;
+begin
+  LState := PRangeIterState(aIter^.Data);
+  if (LState = nil) or (LState^.Node = nil) then Exit(nil);
+  Exit(@LState^.Node^.Data);
+end;
+
+function TRBTreeMap.RangeIterMoveNext(aIter: PPtrIter): Boolean;
+var
+  LState: PRangeIterState;
+  N: TRBNode;
+begin
+  LState := PRangeIterState(aIter^.Data);
+  if LState = nil then Exit(False);
+  if not aIter^.Started then
+  begin
+    aIter^.Started := True;
+    LState^.Node := LState^.First;
+    Exit(LState^.Node <> nil);
+  end;
+  N := LState^.Node;
+  if N = nil then Exit(False);
+  if N = LState^.Last then
+  begin
+    LState^.Node := nil;
+    Exit(False);
+  end;
+  N := FTree.Successor(N);
+  LState^.Node := N;
+  Exit(N <> nil);
+end;
+
+function TRBTreeMap.RangeIterMovePrev(aIter: PPtrIter): Boolean;
+var
+  LState: PRangeIterState;
+  N: TRBNode;
+begin
+  LState := PRangeIterState(aIter^.Data);
+  if LState = nil then Exit(False);
+  if not aIter^.Started then
+  begin
+    aIter^.Started := True;
+    LState^.Node := LState^.Last;
+    Exit(LState^.Node <> nil);
+  end;
+  N := LState^.Node;
+  if N = nil then Exit(False);
+  if N = LState^.First then
+  begin
+    LState^.Node := nil;
+    Exit(False);
+  end;
+  N := FTree.Predecessor(N);
+  LState^.Node := N;
+  Exit(N <> nil);
+end;
+
 function TRBTreeMap.IterateRange(const L, R: K; InclusiveRight: Boolean): TPtrIter;
 begin
-  FRangeActive := True;
-  FRangeInclusiveRight := InclusiveRight;
-  FRangeL := L; FRangeR := R;
-  Result.Init(Self,
-    function(aIter: PPtrIter): Pointer
-    var N: TRBNode;
-    begin
-      if not FRangeActive then Exit(nil);
-      N := TRBNode(aIter^.Data);
-      if N = nil then Exit(nil);
-      Exit(@N^.Data);
-    end,
-    function(aIter: PPtrIter): Boolean
-    var N: TRBNode; C: SizeInt; E: TEntry;
-    begin
-      if not FRangeActive then Exit(False);
-      if not aIter^.Started then
-      begin
-        aIter^.Started := True;
-        // empty when L > R
-        if FKeyCmp(FRangeL, FRangeR, nil) > 0 then begin aIter^.Data := nil; Exit(False); end;
-        E := MakeEntry(FRangeL);
-        N := FTree.LowerBoundNode(E);
-        aIter^.Data := N;
-        if N <> nil then
-        begin
-          C := FKeyCmp(N^.Data.Key, FRangeR, nil);
-          if (C > 0) or ((C = 0) and (not FRangeInclusiveRight)) then
-          begin aIter^.Data := nil; Exit(False); end;
-        end;
-        Exit(N <> nil);
-      end;
-      N := TRBNode(aIter^.Data);
-      if N = nil then Exit(False);
-      N := FTree.Successor(N);
-      if N <> nil then
-      begin
-        C := FKeyCmp(N^.Data.Key, FRangeR, nil);
-        if (C > 0) or ((C = 0) and (not FRangeInclusiveRight)) then
-        begin aIter^.Data := nil; Exit(False); end;
-      end;
-      aIter^.Data := N;
-      Exit(N <> nil);
-    end,
-    function(aIter: PPtrIter): Boolean
-    var N: TRBNode; C: SizeInt; E: TEntry;
-    begin
-      if not FRangeActive then Exit(False);
-      if not aIter^.Started then
-      begin
-        aIter^.Started := True;
-        E := MakeEntry(FRangeR);
-        N := FTree.LowerBoundNode(E);
-        if (N = nil) or ((N <> nil) and (FKeyCmp(N^.Data.Key, FRangeR, nil) > 0)) then
-          N := FTree.Predecessor(N);
-        aIter^.Data := N;
-        if N <> nil then
-        begin
-          C := FKeyCmp(N^.Data.Key, FRangeL, nil);
-          if C < 0 then begin aIter^.Data := nil; Exit(False); end;
-        end;
-        Exit(N <> nil);
-      end;
-      N := TRBNode(aIter^.Data);
-      if N = nil then Exit(False);
-      N := FTree.Predecessor(N);
-      if N <> nil then
-      begin
-        C := FKeyCmp(N^.Data.Key, FRangeL, nil);
-        if C < 0 then begin aIter^.Data := nil; Exit(False); end;
-      end;
-      aIter^.Data := N;
-      Exit(N <> nil);
-    end,
-    nil);
+  Result.Init(Self, @RangeIterGetCurrent, @RangeIterMoveNext, @RangeIterMovePrev,
+    NewRangeIterState(L, R, InclusiveRight));
 end;
 
 end.

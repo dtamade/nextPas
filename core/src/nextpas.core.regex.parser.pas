@@ -5,7 +5,6 @@ unit nextpas.core.regex.parser;
 interface
 
 uses
-  nextpas.core.text.conv,
   nextpas.core.regex.base,
   nextpas.core.regex.charclass;
 
@@ -122,12 +121,33 @@ begin
   end;
 end;
 
+procedure AddCharClassEscape(var ABitmap: TCharBitmap; const ACh: Char);
+var
+  LBitmap: TCharBitmap;
+begin
+  case ACh of
+    'd', 'D':
+      CharBitmapInitDigit(LBitmap);
+    'w', 'W':
+      CharBitmapInitWord(LBitmap);
+    's', 'S':
+      CharBitmapInitSpace(LBitmap);
+  else
+    Exit;
+  end;
+
+  if ACh in ['D', 'W', 'S'] then
+    CharBitmapNegate(LBitmap);
+  CharBitmapOr(ABitmap, LBitmap);
+end;
+
 function ParseCharClass(var P: TParser): PAstNode;
-var negated: Boolean; lo, hi: Byte; ch: Char;
+var negated, hasItem: Boolean; lo, hi: Byte; ch: Char;
 begin
   Result := NewNode(P, akCharClass);
   CharBitmapClear(Result^.ClassBitmap);
   negated := False;
+  hasItem := False;
   if Peek(P) = '^' then begin negated := True; Next(P); end;
   Result^.ClassNegated := negated;
 
@@ -138,27 +158,15 @@ begin
     begin
       ch := Next(P);
       case ch of
-        'd': CharBitmapSetRange(Result^.ClassBitmap, Ord('0'), Ord('9'));
-        'w': begin
-          CharBitmapSetRange(Result^.ClassBitmap, Ord('a'), Ord('z'));
-          CharBitmapSetRange(Result^.ClassBitmap, Ord('A'), Ord('Z'));
-          CharBitmapSetRange(Result^.ClassBitmap, Ord('0'), Ord('9'));
-          CharBitmapSet(Result^.ClassBitmap, Ord('_'));
-        end;
-        's': begin
-          CharBitmapSet(Result^.ClassBitmap, 9);
-          CharBitmapSet(Result^.ClassBitmap, 10);
-          CharBitmapSet(Result^.ClassBitmap, 11);
-          CharBitmapSet(Result^.ClassBitmap, 12);
-          CharBitmapSet(Result^.ClassBitmap, 13);
-          CharBitmapSet(Result^.ClassBitmap, 32);
-        end;
+        'd', 'D', 'w', 'W', 's', 'S':
+          AddCharClassEscape(Result^.ClassBitmap, ch);
         'n': CharBitmapSet(Result^.ClassBitmap, 10);
         'r': CharBitmapSet(Result^.ClassBitmap, 13);
         't': CharBitmapSet(Result^.ClassBitmap, 9);
       else
         CharBitmapSet(Result^.ClassBitmap, Ord(ch));
       end;
+      hasItem := True;
       Continue;
     end;
 
@@ -170,24 +178,48 @@ begin
       begin
         CharBitmapSet(Result^.ClassBitmap, lo);
         CharBitmapSet(Result^.ClassBitmap, Ord('-'));
+        hasItem := True;
         Break;
       end;
       hi := Ord(Next(P));
       if lo > hi then
-        raise Exception.Create('invalid character range in regex');
+        raise ERegexCompileError.Create('invalid character range', P.Pos);
       CharBitmapSetRange(Result^.ClassBitmap, lo, hi);
+      hasItem := True;
     end
     else
+    begin
       CharBitmapSet(Result^.ClassBitmap, lo);
+      hasItem := True;
+    end;
   end;
   if Peek(P) = ']' then Next(P)
   else
     raise ERegexCompileError.Create('unclosed character class', P.Pos);
+  if not hasItem then
+    raise ERegexCompileError.Create('empty character class', P.Pos);
 end;
 
 function ParseAtom(var P: TParser): PAstNode; forward;
 function ParseConcat(var P: TParser): PAstNode; forward;
 function ParseAlternate(var P: TParser): PAstNode; forward;
+
+function ParseRepeatValue(const AText: string; const APos: SizeUInt): UInt32;
+var
+  LIndex: SizeInt;
+  LValue: UInt64;
+begin
+  LValue := 0;
+  for LIndex := 1 to Length(AText) do
+  begin
+    if LValue > (MAX_REPEAT_COUNT div 10) then
+      raise ERegexCompileError.Create('repeat count exceeds limit', APos);
+    LValue := (LValue * 10) + UInt64(Ord(AText[LIndex]) - Ord('0'));
+    if LValue > MAX_REPEAT_COUNT then
+      raise ERegexCompileError.Create('repeat count exceeds limit', APos);
+  end;
+  Result := UInt32(LValue);
+end;
 
 function ParseAtom(var P: TParser): PAstNode;
 var ch: Char; LName: string;
@@ -201,7 +233,7 @@ begin
         raise ERegexCompileError.Create('unmatched closing parenthesis', P.Pos);
       Result := nil;
     end;
-    '*', '+', '?':
+    '*', '+', '?', '{':
       raise ERegexCompileError.Create('quantifier without preceding atom', P.Pos);
     '.': begin Next(P); Result := NewNode(P, akAnyChar); end;
     '^': begin Next(P); Result := NewNode(P, akAssert); Result^.AssertKind := akStart; end;
@@ -226,12 +258,21 @@ begin
         else if (Peek(P) = 'P') or (Peek(P) = '<') then
         begin
           // Named group: (?P<name>...) or (?<name>...)
-          if Peek(P) = 'P' then begin Next(P); Next(P); end  // skip P<
-          else Next(P);  // skip <
+          if Peek(P) = 'P' then
+          begin
+            Next(P);
+            if Peek(P) <> '<' then
+              raise ERegexCompileError.Create('malformed named group', P.Pos);
+          end;
+          Next(P);  // skip <
           LName := '';
           while (Peek(P) <> '>') and (Peek(P) <> #0) do
             LName := LName + Next(P);
-          if Peek(P) = '>' then Next(P);
+          if Peek(P) <> '>' then
+            raise ERegexCompileError.Create('unclosed named group', P.Pos);
+          if LName = '' then
+            raise ERegexCompileError.Create('empty named group', P.Pos);
+          Next(P);
           Result := NewNode(P, akCapture);
           Result^.CaptureIndex := P.NumCaptures;
           Result^.CaptureName := LName;
@@ -287,7 +328,13 @@ begin
       Next(P);
       s := '';
       while (Peek(P) >= '0') and (Peek(P) <= '9') do begin s := s + Next(P); end;
-      minV := StrToIntDef(s, 0);
+      if s = '' then
+      begin
+        if Peek(P) = #0 then
+          raise ERegexCompileError.Create('unclosed quantifier', P.Pos);
+        raise ERegexCompileError.Create('missing quantifier minimum', P.Pos);
+      end;
+      minV := ParseRepeatValue(s, P.Pos);
       maxV := minV;
       if Peek(P) = ',' then
       begin
@@ -295,17 +342,13 @@ begin
         s := '';
         while (Peek(P) >= '0') and (Peek(P) <= '9') do begin s := s + Next(P); end;
         if s = '' then maxV := $FFFFFFFF
-        else maxV := StrToIntDef(s, minV);
+        else maxV := ParseRepeatValue(s, P.Pos);
       end;
       if Peek(P) <> '}' then
         raise ERegexCompileError.Create('unclosed quantifier', P.Pos);
       Next(P);
       if (maxV <> $FFFFFFFF) and (minV > maxV) then
         raise ERegexCompileError.Create('quantifier min exceeds max', P.Pos);
-      if minV > MAX_REPEAT_COUNT then
-        raise ERegexCompileError.Create('repeat count exceeds limit', P.Pos);
-      if (maxV <> $FFFFFFFF) and (maxV > MAX_REPEAT_COUNT) then
-        raise ERegexCompileError.Create('repeat count exceeds limit', P.Pos);
       rep := NewNode(P, akRepeat);
       rep^.Left := atom;
       rep^.RepeatKind := rkRange;

@@ -7,7 +7,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.utils,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.collections.base,
   nextpas.core.collections.arr.base,
   nextpas.core.collections.arr.intf;
@@ -596,7 +597,7 @@ type
 implementation
 
 uses
-  TypInfo,
+  nextpas.core.system.typinfo,
   nextpas.core.collections.arr.sort;
 
 procedure MemCopyUnchecked(aSrc, aDst: Pointer; aSize: SizeUInt); inline;
@@ -1210,7 +1211,7 @@ end;
 
 constructor TArray.Create(aCount: SizeUInt);
 begin
-  Create(aCount, GetRtlAllocator(), nil);
+  Create(aCount, DefaultAllocator(), nil);
 end;
 
 constructor TArray.Create(aCount: SizeUInt; aAllocator: IAllocator);

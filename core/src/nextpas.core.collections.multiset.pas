@@ -13,7 +13,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
   nextpas.core.collections.base,
   nextpas.core.collections.multiset.base,
   nextpas.core.collections.multiset.intf,

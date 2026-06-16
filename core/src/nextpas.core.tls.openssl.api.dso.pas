@@ -11,15 +11,7 @@ unit nextpas.core.tls.openssl.api.dso;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.consts,
-  nextpas.core.tls.openssl.loader;
-
-type
-  { DSO types }
-  DSO = record end;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.loader; type DSO = record end;
   PDSO = ^DSO;
   
   DSO_METHOD = record end;
@@ -104,14 +96,7 @@ function DSOSetFlags(dso: PDSO; Flags: TOpenSSLInt): Boolean;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.utils;
-
-const
-  { DSO function bindings for batch loading }
-  DSO_BINDINGS: array[0..22] of TFunctionBinding = (
-    { Basic functions }
-    (Name: 'DSO_new';               FuncPtr: @DSO_new;               Required: True),
+uses nextpas.core.tls.openssl.api.utils; const DSO_BINDINGS: array[0..22] of TFunctionBinding = ( (Name: 'DSO_new'; FuncPtr: @DSO_new; Required: True);
     (Name: 'DSO_free';              FuncPtr: @DSO_free;              Required: True),
     (Name: 'DSO_up_ref';            FuncPtr: @DSO_up_ref;            Required: False),
     (Name: 'DSO_load';              FuncPtr: @DSO_load;              Required: False),

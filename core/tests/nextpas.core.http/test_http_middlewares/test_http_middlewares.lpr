@@ -151,7 +151,7 @@ begin
   LHandler := Chain(
     HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
-      raise Exception.Create('boom');
+      raise Exception.Create('db password=secret');
     end),
     [RecoveryMiddleware]
   );
@@ -160,7 +160,9 @@ begin
   LW := LWObj;
   LHandler.ServeHTTP(LReq, LW);
   CheckEqual(Int64(500), Int64(LWObj.Status), 'recovery returns 500');
-  Check(Pos('boom', LWObj.Body) > 0, 'body contains error message');
+  CheckEqual('Internal Server Error', LWObj.Body, 'recovery returns generic body');
+  Check(Pos('password', LWObj.Body) = 0, 'body does not expose field names');
+  Check(Pos('secret', LWObj.Body) = 0, 'body does not expose secret values');
 end;
 
 procedure TestRecoveryHandlerSucceeds;
@@ -188,7 +190,7 @@ begin
   CheckEqual('ok', LWObj.Body, 'body passes through');
 end;
 
-procedure TestRecoveryPreservesBody;
+procedure TestRecoveryHidesExceptionDetails;
 var
   LHandler: IHttpHandler;
   LWObj: TMockResponseWriter;
@@ -206,7 +208,9 @@ begin
   LWObj := TMockResponseWriter.Create;
   LW := LWObj;
   LHandler.ServeHTTP(LReq, LW);
-  Check(Pos('detailed error info', LWObj.Body) > 0, 'error body has details');
+  CheckEqual(Int64(500), Int64(LWObj.Status), 'recovery returns 500 for detailed error');
+  CheckEqual('Internal Server Error', LWObj.Body, 'recovery hides detailed body');
+  Check(Pos('detailed error info', LWObj.Body) = 0, 'body does not expose exception message');
 end;
 
 { === Logger Tests === }
@@ -461,7 +465,7 @@ begin
   { Recovery }
   T.Run('Recovery: handler raises → 500', @TestRecoveryHandlerRaises);
   T.Run('Recovery: handler succeeds → passthrough', @TestRecoveryHandlerSucceeds);
-  T.Run('Recovery: error body preserved', @TestRecoveryPreservesBody);
+  T.Run('Recovery: exception details hidden', @TestRecoveryHidesExceptionDetails);
   { Logger }
   T.Run('Logger: calls next handler', @TestLoggerCallsNext);
   T.Run('Logger: preserves status', @TestLoggerPreservesStatus);

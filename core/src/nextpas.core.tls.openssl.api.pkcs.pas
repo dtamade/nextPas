@@ -4,13 +4,7 @@ unit nextpas.core.tls.openssl.api.pkcs;
 
 interface
 
-uses
-  SysUtils, Classes, dynlibs,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.consts,
-  nextpas.core.tls.openssl.api.asn1,
-  nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.loader;
+uses dynlibs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.loader;
 
 type
   // PKCS7 类型定义

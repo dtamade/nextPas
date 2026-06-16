@@ -39,12 +39,14 @@ type
     FCount: SizeUInt;
 
     function CreateNode: PNode;
+    procedure ClearNodeValue(aNode: PNode);
     procedure FreeNode(aNode: PNode);
     procedure FreeNodeRecursive(aNode: PNode);
     function FindNode(const aKey: string): PNode;
     procedure CollectKeys(aNode: PNode; const aPrefix: string; var aKeys: TKeyArray; var aIndex: SizeUInt);
     function CountKeysInSubtree(aNode: PNode): SizeUInt;
     function HasChildren(aNode: PNode): Boolean;
+    function SubtreeHasValue(aNode: PNode): Boolean;
     procedure ForEachDFS(aNode: PNode; const aPrefix: string; AProc: TForEachProc);
   public
     constructor Create;
@@ -182,6 +184,20 @@ begin
   Result^.HasValue := False;
 end;
 
+procedure TTrie.ClearNodeValue(aNode: PNode);
+begin
+  if (aNode = nil) or (not aNode^.HasValue) then
+    Exit;
+
+  if System.IsManagedType(V) then
+  begin
+    Finalize(aNode^.Value);
+    Initialize(aNode^.Value);
+  end;
+
+  aNode^.HasValue := False;
+end;
+
 procedure TTrie.FreeNode(aNode: PNode);
 begin
   Dispose(aNode);
@@ -225,6 +241,20 @@ var
 begin
   for i := 0 to TRIE_ALPHABET_LAST_INDEX do
     if aNode^.Children[i] <> nil then
+      Exit(True);
+  Result := False;
+end;
+
+function TTrie.SubtreeHasValue(aNode: PNode): Boolean;
+var
+  i: Integer;
+begin
+  if aNode = nil then
+    Exit(False);
+  if aNode^.HasValue then
+    Exit(True);
+  for i := 0 to TRIE_ALPHABET_LAST_INDEX do
+    if (aNode^.Children[i] <> nil) and SubtreeHasValue(aNode^.Children[i]) then
       Exit(True);
   Result := False;
 end;
@@ -280,6 +310,9 @@ begin
   end;
 
   Result := not node^.HasValue;
+  if not Result then
+    ClearNodeValue(node);
+
   node^.HasValue := True;
   node^.Value := aValue;
 
@@ -337,12 +370,7 @@ begin
   if (node = nil) or (not node^.HasValue) then
     Exit(False);
 
-  if System.IsManagedType(V) then
-  begin
-    Finalize(node^.Value);
-    FillChar(node^.Value, SizeOf(V), 0);
-  end;
-  node^.HasValue := False;
+  ClearNodeValue(node);
   Dec(FCount);
   Result := True;
 
@@ -364,7 +392,7 @@ begin
     end;
   end;
 
-  FRoot^.HasValue := False;
+  ClearNodeValue(FRoot);
   FCount := 0;
 end;
 
@@ -379,8 +407,7 @@ begin
   if node = nil then
     Exit(False);
 
-  // Check if this node has a value or has any children with values
-  Result := node^.HasValue or HasChildren(node);
+  Result := SubtreeHasValue(node);
 end;
 
 function TTrie.KeysWithPrefix(const aPrefix: string): TKeyArray;

@@ -11,7 +11,7 @@ unit nextpas.core.tls.openssl.certstore;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils, Classes, nextpas.core.fs,
   nextpas.core.tls.base,
   nextpas.core.tls.logging,  // P3-8: 添加日志支持
   nextpas.core.tls.openssl.base,
@@ -31,11 +31,11 @@ type
 
     // Phase 2.5: 索引查找表 - O(log n) 替代 O(n) 线性搜索
     // 使用 TStringList (Sorted=True) 实现有序字典
-    FIndexByFingerprint: TStringList;   // SHA256指纹 -> 索引
-    FIndexBySerialNumber: TStringList;  // 序列号 -> 索引
+    FIndexByFingerprint: TStringArray;   // SHA256指纹 -> 索引
+    FIndexBySerialNumber: TStringArray;  // 序列号 -> 索引
     // 缓存提取的属性值，避免重复 X509 解析
-    FSubjectCache: TStringList;  // 与 FCertificates 并行，缓存 Subject
-    FIssuerCache: TStringList;   // 与 FCertificates 并行，缓存 Issuer
+    FSubjectCache: TStringArray;  // 与 FCertificates 并行，缓存 Subject
+    FIssuerCache: TStringArray;   // 与 FCertificates 并行，缓存 Issuer
 
     procedure BuildIndexForCertificate(AIndex: Integer; AX509: PX509);
     procedure ClearIndexes;
@@ -68,7 +68,9 @@ type
 implementation
 
 uses
-  nextpas.core.tls.certchain,
+  nextpas.core.text.conv,
+  nextpas.core.text.strings,
+    nextpas.core.tls.certchain,
   nextpas.core.tls.openssl.api.err,
   nextpas.core.tls.secure;
 
@@ -107,13 +109,13 @@ var
   I: Integer;
   LCert: PX509;
 begin
-  if (ACerts = nil) or (ACerts.Count = 0) then
+  if (ACerts = nil) or (Length(ACerts) = 0) then
     Exit;
 
   if OpenSSLX509_Finalizing or (not Assigned(X509_free)) then
     Exit;
 
-  for I := 0 to ACerts.Count - 1 do
+  for I := 0 to Length(ACerts) - 1 do
   begin
     LCert := PX509(ACerts[I]);
     if LCert = nil then
@@ -124,7 +126,7 @@ begin
     except
       on E: Exception do
         TSecurityLog.Warning('OpenSSL',
-          Format('Exception freeing X509 in cert store list: %s', [E.Message]));
+          nextpas.core.text.conv.Format('Exception freeing X509 in cert store list: %s', [E.Message]));
     end;
   end;
 end;
@@ -176,19 +178,14 @@ begin
   FCertificates := TList.Create;
 
   // Phase 2.5: 初始化索引查找表
-  FIndexByFingerprint := TStringList.Create;
   FIndexByFingerprint.Sorted := True;
   FIndexByFingerprint.Duplicates := dupIgnore;
   FIndexByFingerprint.CaseSensitive := False;
-
-  FIndexBySerialNumber := TStringList.Create;
   FIndexBySerialNumber.Sorted := True;
   FIndexBySerialNumber.Duplicates := dupIgnore;
   FIndexBySerialNumber.CaseSensitive := False;
 
   // 属性缓存（与 FCertificates 并行）
-  FSubjectCache := TStringList.Create;
-  FIssuerCache := TStringList.Create;
 end;
 
 destructor TOpenSSLCertificateStore.Destroy;
@@ -198,13 +195,8 @@ begin
 
   // 清空证书列表
   FCertificates.Clear;
-  FCertificates.Free;
 
   // Phase 2.5: 释放索引查找表
-  FIndexByFingerprint.Free;
-  FIndexBySerialNumber.Free;
-  FSubjectCache.Free;
-  FIssuerCache.Free;
 
   // 释放 X509_STORE（只释放一次！）
   // 注意：如果 OpenSSL 正在卸载，跳过清理以避免崩溃
@@ -217,7 +209,7 @@ begin
       except
         // P3-8: 记录异常而不是静默忽略
         on E: Exception do
-          TSecurityLog.Warning('OpenSSL', Format('Exception in TOpenSSLCertificateStore.Destroy: %s', [E.Message]));
+          TSecurityLog.Warning('OpenSSL', nextpas.core.text.conv.Format('Exception in TOpenSSLCertificateStore.Destroy: %s', [E.Message]));
       end;
     end;
   end;
@@ -265,7 +257,7 @@ begin
   except
     // 索引构建失败不应阻止证书添加
     on E: Exception do
-      TSecurityLog.Warning('OpenSSL', Format('Failed to build index for certificate: %s', [E.Message]));
+      TSecurityLog.Warning('OpenSSL', nextpas.core.text.conv.Format('Failed to build index for certificate: %s', [E.Message]));
   end;
 end;
 
@@ -306,7 +298,7 @@ begin
     if Assigned(X509_up_ref) then
       X509_up_ref(X509);
 
-    CertIndex := FCertificates.Count;
+    CertIndex := Length(FCertificates);
     FCertificates.Add(X509);
     BuildIndexForCertificate(CertIndex, X509);
     Result := True;
@@ -322,7 +314,7 @@ begin
         if Assigned(X509_up_ref) then
           X509_up_ref(X509);
 
-        CertIndex := FCertificates.Count;
+        CertIndex := Length(FCertificates);
         FCertificates.Add(X509);
         BuildIndexForCertificate(CertIndex, X509);
       end;
@@ -334,7 +326,7 @@ begin
         LErrCode := ERR_peek_last_error();
 
       TSecurityLog.Warning('CertStore',
-        Format('X509_STORE_add_cert failed: %s', [GetFriendlyErrorMessage(LErrCode)]));
+        nextpas.core.text.conv.Format('X509_STORE_add_cert failed: %s', [GetFriendlyErrorMessage(LErrCode)]));
     end;
   end;
 
@@ -355,7 +347,7 @@ var
   FP: string;
 begin
   Result := False;
-  if (ACert = nil) or (FCertificates.Count = 0) then
+  if (ACert = nil) or (Length(FCertificates) = 0) then
     Exit;
   
   // 使用指纹进行匹配，避免依赖底层句柄是否复用
@@ -391,7 +383,7 @@ begin
       except
         on E: Exception do
           // Rust-quality: 记录错误而非静默忽略
-          TSecurityLog.Warning('OpenSSL', Format('X509_STORE_free failed in Clear: %s', [E.Message]));
+          TSecurityLog.Warning('OpenSSL', nextpas.core.text.conv.Format('X509_STORE_free failed in Clear: %s', [E.Message]));
       end;
     end;
   end;
@@ -409,7 +401,7 @@ end;
 
 function TOpenSSLCertificateStore.GetCount: Integer;
 begin
-  Result := FCertificates.Count;
+  Result := Length(FCertificates);
 end;
 
 function TOpenSSLCertificateStore.GetCertificate(AIndex: Integer): ISSLCertificate;
@@ -418,7 +410,7 @@ var
 begin
   Result := nil;
   
-  if (AIndex < 0) or (AIndex >= FCertificates.Count) then
+  if (AIndex < 0) or (AIndex >= Length(FCertificates)) then
     Exit;
   
   X509Cert := PX509(FCertificates[AIndex]);
@@ -476,7 +468,7 @@ begin
           begin
             // 保留一份引用用于枚举缓存（原始引用归 FCertificates 所有）
             FCertificates.Add(X509Cert);
-            BuildIndexForCertificate(FCertificates.Count - 1, X509Cert);
+            BuildIndexForCertificate(Length(FCertificates) - 1, X509Cert);
             Inc(AddedCount);
           end
           else if IsDuplicateStoreCertError then
@@ -492,7 +484,7 @@ begin
               LErrCode := ERR_peek_last_error();
 
             TSecurityLog.Warning('CertStore',
-              Format('X509_STORE_add_cert failed while loading "%s": %s',
+              nextpas.core.text.conv.Format('X509_STORE_add_cert failed while loading "%s": %s',
                 [AFileName, GetFriendlyErrorMessage(LErrCode)]));
 
             X509_free(X509Cert);
@@ -528,7 +520,7 @@ begin
   
   try
     // 确保路径有正确的分隔符
-    SearchPath := IncludeTrailingPathDelimiter(APath);
+    SearchPath := nextpas.core.fs.PathEnsureSep(APath);
     
     
     // 扫描目录中的所有 .pem 文件
@@ -602,7 +594,7 @@ begin
         X509_STORE_set_default_paths(FStore);
       except
         on E: Exception do
-          TSecurityLog.Debug('CertStore', Format('X509_STORE_set_default_paths failed: %s', [E.Message]));
+          TSecurityLog.Debug('CertStore', nextpas.core.text.conv.Format('X509_STORE_set_default_paths failed: %s', [E.Message]));
       end;
     end;
   end;
@@ -610,12 +602,12 @@ begin
   // 尝试从已知的系统路径加载
   for I := Low(LinuxCertPaths) to High(LinuxCertPaths) do
   begin
-    if DirectoryExists(LinuxCertPaths[I]) then
+    if nextpas.core.fs.IsDir(LinuxCertPaths[I]) then
     begin
       if LoadFromPath(LinuxCertPaths[I]) then
         LoadedAny := True;
     end
-    else if FileExists(LinuxCertPaths[I]) then
+    else if nextpas.core.fs.IsFile(LinuxCertPaths[I]) then
     begin
       if LoadFromFile(LinuxCertPaths[I]) then
         LoadedAny := True;
@@ -631,14 +623,14 @@ var
   SearchSubject: string;
 begin
   Result := nil;
-  if FSubjectCache.Count = 0 then Exit;
+  if Length(FSubjectCache) = 0 then Exit;
 
   // Phase 2.5: 使用缓存的 Subject 值进行搜索，避免重复 X509 解析
   SearchSubject := NormalizeCertificateStoreDN(ASubject);
   if SearchSubject = '' then
     Exit;
 
-  for I := 0 to FSubjectCache.Count - 1 do
+  for I := 0 to Length(FSubjectCache) - 1 do
   begin
     if FSubjectCache[I] = SearchSubject then
     begin
@@ -647,7 +639,7 @@ begin
     end;
   end;
 
-  for I := 0 to FSubjectCache.Count - 1 do
+  for I := 0 to Length(FSubjectCache) - 1 do
   begin
     // 部分匹配：检查 subject 中是否包含搜索字符串
     if Pos(SearchSubject, FSubjectCache[I]) > 0 then
@@ -664,14 +656,14 @@ var
   SearchIssuer: string;
 begin
   Result := nil;
-  if FIssuerCache.Count = 0 then Exit;
+  if Length(FIssuerCache) = 0 then Exit;
 
   // Phase 2.5: 使用缓存的 Issuer 值进行搜索，避免重复 X509 解析
   SearchIssuer := NormalizeCertificateStoreDN(AIssuer);
   if SearchIssuer = '' then
     Exit;
 
-  for I := 0 to FIssuerCache.Count - 1 do
+  for I := 0 to Length(FIssuerCache) - 1 do
   begin
     if FIssuerCache[I] = SearchIssuer then
     begin
@@ -680,7 +672,7 @@ begin
     end;
   end;
 
-  for I := 0 to FIssuerCache.Count - 1 do
+  for I := 0 to Length(FIssuerCache) - 1 do
   begin
     // 部分匹配：检查 issuer 中是否包含搜索字符串
     if Pos(SearchIssuer, FIssuerCache[I]) > 0 then
@@ -698,7 +690,7 @@ var
   LTarget: string;
 begin
   Result := nil;
-  if FIndexBySerialNumber.Count = 0 then Exit;
+  if Length(FIndexBySerialNumber) = 0 then Exit;
 
   LTarget := NormalizeCertificateStoreHex(ASerialNumber);
   if LTarget = '' then
@@ -709,7 +701,7 @@ begin
   if Idx >= 0 then
   begin
     CertIndex := PtrInt(FIndexBySerialNumber.Objects[Idx]);
-    if (CertIndex >= 0) and (CertIndex < FCertificates.Count) then
+    if (CertIndex >= 0) and (CertIndex < Length(FCertificates)) then
       Result := GetCertificate(CertIndex);
   end;
 end;
@@ -721,7 +713,7 @@ var
   SearchFP: string;
 begin
   Result := nil;
-  if FIndexByFingerprint.Count = 0 then Exit;
+  if Length(FIndexByFingerprint) = 0 then Exit;
 
   // Phase 2.5: O(log n) 索引查找替代 O(n) 线性搜索
   SearchFP := NormalizeCertificateStoreHex(AFingerprint);
@@ -732,7 +724,7 @@ begin
   if Idx >= 0 then
   begin
     CertIndex := PtrInt(FIndexByFingerprint.Objects[Idx]);
-    if (CertIndex >= 0) and (CertIndex < FCertificates.Count) then
+    if (CertIndex >= 0) and (CertIndex < Length(FCertificates)) then
       Result := GetCertificate(CertIndex);
   end;
 end;
@@ -767,7 +759,7 @@ begin
   // 不要把整个 store 都当作 trusted store。
   // 否则 shared verifier 会把 intermediate 也提前当成 trust anchor，
   // 导致本该继续补到 self-signed root 的链在第二跳被截断。
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LStoreCert := GetCertificate(I);
     if LStoreCert = nil then

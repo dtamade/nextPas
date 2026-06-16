@@ -19,13 +19,15 @@ unit nextpas.core.tls.openssl.backed;
 interface
 
 uses
-  SysUtils, Classes, DynLibs,
+  DynLibs,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
-  nextpas.core.tls.errors,            // Rust-quality: Raise helpers
-  nextpas.core.tls.exceptions,        // Rust-quality: Typed exceptions
-  nextpas.core.tls.openssl.errors,    // OpenSSL-specific raise helpers
+  nextpas.core.tls.errors, // Rust-quality: Raise helpers
+  nextpas.core.tls.exceptions, // Rust-quality: Typed exceptions
+  nextpas.core.tls.openssl.errors, // OpenSSL-specific raise helpers
   nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader,    // P0-1.1: 使用统一的加载器
+  nextpas.core.tls.openssl.loader, // P0-1.1: 使用统一的加载器
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.ssl,
   nextpas.core.tls.openssl.api.err,
@@ -139,14 +141,7 @@ procedure UnregisterOpenSSLBackend;
 
 implementation
 
-uses
-  nextpas.core.tls.context.config,
-  nextpas.core.tls.openssl.context,
-  nextpas.core.tls.openssl.certstore,
-  nextpas.core.tls.pkcs11.backend,
-  nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.pem,
-  nextpas.core.tls.factory;
+uses nextpas.core.tls.context.config, nextpas.core.tls.openssl.context, nextpas.core.tls.openssl.certstore, nextpas.core.tls.pkcs11.backend, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.pem, nextpas.core.tls.factory;
 
 // ============================================================================
 // 全局函数 - 库路径配置

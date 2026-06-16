@@ -143,6 +143,7 @@ uses
   {$ENDIF}
   {$IFDEF SIMD_X86_AVAILABLE}
   , nextpas.core.simd.cpuinfo.x86
+  , nextpas.core.simd.cpuinfo.x86.base
   {$ENDIF}
   {$IFDEF SIMD_ARM_AVAILABLE}
   , nextpas.core.simd.cpuinfo.arm
@@ -665,6 +666,7 @@ procedure TLazyCPUInfo.InitX86AVX;
 var
   OldValue: Integer;
   eax, ebx, ecx, edx: DWord;
+  LMaxLeaf: DWord;
 begin
   if FAVXInitialized then Exit;
   
@@ -681,29 +683,35 @@ begin
           try
             FillChar(FX86AVX, SizeOf(FX86AVX), 0);
 
-            // Detect AVX support.
+            LMaxLeaf := 0;
+            ebx := 0;
+            ecx := 0;
+            edx := 0;
+            CPUID(0, LMaxLeaf, ebx, ecx, edx);
+
             eax := 0;
             ebx := 0;
             ecx := 0;
             edx := 0;
-            CPUID(1, eax, ebx, ecx, edx);
-            FX86AVX.HasAVX := (ecx and (1 shl 28)) <> 0;
-            FX86AVX.OSXSAVE := (ecx and (1 shl 27)) <> 0;
-            FX86AVX.HasFMA := (ecx and (1 shl 12)) <> 0;
-            
-            // Detect AVX2.
-            if FX86AVX.HasAVX and FX86AVX.OSXSAVE then
+            if LMaxLeaf >= 1 then
             begin
-              FX86AVX.XCR0 := ReadXCR0;
-              if (FX86AVX.XCR0 and 6) = 6 then  // YMM state enabled
-              begin
-                eax := 0;
-                ebx := 0;
-                ecx := 0;
-                edx := 0;
-                CPUIDEX(7, 0, eax, ebx, ecx, edx);
-                FX86AVX.HasAVX2 := (ebx and (1 shl 5)) <> 0;
-              end;
+              CPUID(1, eax, ebx, ecx, edx);
+              FX86AVX.HasAVX := (ecx and (1 shl 28)) <> 0;
+              FX86AVX.OSXSAVE := (ecx and (1 shl 27)) <> 0;
+              FX86AVX.HasFMA := (ecx and (1 shl 12)) <> 0;
+
+              if FX86AVX.OSXSAVE then
+                FX86AVX.XCR0 := ReadXCR0;
+            end;
+
+            if LMaxLeaf >= 7 then
+            begin
+              eax := 0;
+              ebx := 0;
+              ecx := 0;
+              edx := 0;
+              CPUIDEX(7, 0, eax, ebx, ecx, edx);
+              FX86AVX.HasAVX2 := (ebx and (1 shl 5)) <> 0;
             end;
           except
             FillChar(FX86AVX, SizeOf(FX86AVX), 0);
@@ -731,6 +739,7 @@ procedure TLazyCPUInfo.InitX86AVX512;
 var
   OldValue: Integer;
   eax, ebx, ecx, edx: DWord;
+  LMaxLeaf: DWord;
 begin
   if FAVX512Initialized then Exit;
   
@@ -747,15 +756,18 @@ begin
           try
             FillChar(FX86AVX512, SizeOf(FX86AVX512), 0);
 
-            // Detect AVX-512 only when the OS has enabled the required state.
-            if FX86AVX.OSXSAVE and ((FX86AVX.XCR0 and $E6) = $E6) then
+            LMaxLeaf := 0;
+            ebx := 0;
+            ecx := 0;
+            edx := 0;
+            CPUID(0, LMaxLeaf, ebx, ecx, edx);
+            if LMaxLeaf >= 7 then
             begin
               eax := 0;
               ebx := 0;
               ecx := 0;
               edx := 0;
               CPUIDEX(7, 0, eax, ebx, ecx, edx);
-              
               FX86AVX512.HasAVX512F := (ebx and (1 shl 16)) <> 0;
               FX86AVX512.HasAVX512DQ := (ebx and (1 shl 17)) <> 0;
               FX86AVX512.HasAVX512BW := (ebx and (1 shl 30)) <> 0;
@@ -864,15 +876,21 @@ begin
 end;
 
 function TLazyCPUInfo.GetHasAVX2: Boolean;
+var
+  LUsable: TGenericFeatureSet;
 begin
   InitX86AVX;
-  Result := FX86AVX.HasAVX2;
+  LUsable := X86GenericUsableFeatures(X86Features, FX86AVX.OSXSAVE, FX86AVX.XCR0);
+  Result := FX86AVX.HasAVX2 and (gfSimd256 in LUsable);
 end;
 
 function TLazyCPUInfo.GetHasAVX512F: Boolean;
+var
+  LUsable: TGenericFeatureSet;
 begin
   InitX86AVX512;
-  Result := FX86AVX512.HasAVX512F;
+  LUsable := X86GenericUsableFeatures(X86Features, FX86AVX.OSXSAVE, FX86AVX.XCR0);
+  Result := FX86AVX512.HasAVX512F and (gfSimd512 in LUsable);
 end;
 
 function TLazyCPUInfo.GetX86Features: TX86Features;
@@ -955,28 +973,9 @@ end;
 
 // Compatibility entrypoint implementations
 
-{$IFDEF SIMD_X86_AVAILABLE}
-function X86XCR0EnablesAVXLazy(const aXCR0: UInt64): Boolean; inline;
-begin
-  Result := ((aXCR0 and (UInt64(1) shl 1)) <> 0) and
-            ((aXCR0 and (UInt64(1) shl 2)) <> 0);
-end;
-
-function X86XCR0EnablesAVX512Lazy(const aXCR0: UInt64): Boolean; inline;
-begin
-  Result := X86XCR0EnablesAVXLazy(aXCR0) and
-            ((aXCR0 and (UInt64(1) shl 5)) <> 0) and
-            ((aXCR0 and (UInt64(1) shl 6)) <> 0) and
-            ((aXCR0 and (UInt64(1) shl 7)) <> 0);
-end;
-{$ENDIF}
-
 function GetCPUInfoLazy: TCPUInfo;
 var
   LLazy: TLazyCPUInfo;
-  {$IFDEF SIMD_X86_AVAILABLE}
-  LAVXSupportedByOS: Boolean;
-  {$ENDIF}
 begin
   LLazy := LazyCPUInfo;
   
@@ -995,30 +994,8 @@ begin
   LLazy.InitX86AVX;
   Result.OSXSAVE := LLazy.FX86AVX.OSXSAVE;
   Result.XCR0 := LLazy.FX86AVX.XCR0;
-  LAVXSupportedByOS := nextpas.core.simd.cpuinfo.x86.IsAVXSupportedByOS;
-
-  if Result.X86.HasSSE2 then Include(Result.GenericRaw, gfSimd128);
-  if Result.X86.HasAVX or Result.X86.HasAVX2 then Include(Result.GenericRaw, gfSimd256);
-  if Result.X86.HasAVX512F then Include(Result.GenericRaw, gfSimd512);
-  if Result.X86.HasAES then Include(Result.GenericRaw, gfAES);
-  if Result.X86.HasFMA then Include(Result.GenericRaw, gfFMA);
-  if Result.X86.HasSHA then Include(Result.GenericRaw, gfSHA);
-
-  if Result.X86.HasSSE2 then Include(Result.GenericUsable, gfSimd128);
-  if (Result.X86.HasAVX or Result.X86.HasAVX2) and
-     LAVXSupportedByOS and
-     X86XCR0EnablesAVXLazy(Result.XCR0) then
-    Include(Result.GenericUsable, gfSimd256);
-  if Result.X86.HasAVX512F and
-     LAVXSupportedByOS and
-     X86XCR0EnablesAVX512Lazy(Result.XCR0) then
-    Include(Result.GenericUsable, gfSimd512);
-  if Result.X86.HasAES then Include(Result.GenericUsable, gfAES);
-  if Result.X86.HasFMA and
-     LAVXSupportedByOS and
-     X86XCR0EnablesAVXLazy(Result.XCR0) then
-    Include(Result.GenericUsable, gfFMA);
-  if Result.X86.HasSHA then Include(Result.GenericUsable, gfSHA);
+  Result.GenericRaw := X86GenericRawFeatures(Result.X86);
+  Result.GenericUsable := X86GenericUsableFeatures(Result.X86, Result.OSXSAVE, Result.XCR0);
   {$ENDIF}
 
   {$IFDEF SIMD_ARM_AVAILABLE}

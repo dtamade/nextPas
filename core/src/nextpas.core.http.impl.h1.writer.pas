@@ -23,12 +23,18 @@ type
     FFinalized: Boolean;
     FNoBodyAllowed: Boolean;
     FSuppressBody: Boolean;
+    FHasDeclaredContentLength: Boolean;
+    FDeclaredContentLength: Int64;
+    FContentLengthWritten: Int64;
     procedure WriteStatusLine;
     procedure WriteInformationalHeader(const AStatus: THttpStatus);
     procedure WriteHeaderBlock;
     procedure WriteAllHeaders;
     procedure WriteCRLF;
     procedure WriteStr(const AStr: string);
+    procedure ValidateResponseFramingHeaders;
+    procedure TrackFixedLengthWrite(const ACount: SizeUInt);
+    procedure ValidateFixedLengthComplete;
     function TryWriteKnownStatusLine: Boolean;
     function TryWriteSmallHeaderBlock: Boolean;
     function ResponseMustNotHaveBody: Boolean;
@@ -77,6 +83,26 @@ begin
   end;
 end;
 
+function ParseContentLengthValue(const AValue: string): Int64;
+var
+  LI: SizeInt;
+  LDigit: Int64;
+begin
+  if AValue = '' then
+    raise EHttpError.Create('response content-length is invalid');
+
+  Result := 0;
+  for LI := 1 to Length(AValue) do
+  begin
+    if (AValue[LI] < '0') or (AValue[LI] > '9') then
+      raise EHttpError.Create('response content-length is invalid');
+    LDigit := Ord(AValue[LI]) - Ord('0');
+    if Result > ((High(Int64) - LDigit) div 10) then
+      raise EHttpError.Create('response content-length is too large');
+    Result := (Result * 10) + LDigit;
+  end;
+end;
+
 { TH1ResponseWriter }
 
 constructor TH1ResponseWriter.Create(const AWriter: IWriter);
@@ -102,6 +128,9 @@ begin
   FFinalized := False;
   FNoBodyAllowed := False;
   FSuppressBody := ASuppressBody;
+  FHasDeclaredContentLength := False;
+  FDeclaredContentLength := 0;
+  FContentLengthWritten := 0;
 end;
 
 procedure TH1ResponseWriter.WriteStr(const AStr: string);
@@ -142,6 +171,18 @@ const
   STATUS_NOT_IMPLEMENTED: AnsiString = 'HTTP/1.1 501 Not Implemented'#13#10;
   STATUS_BAD_GATEWAY: AnsiString = 'HTTP/1.1 502 Bad Gateway'#13#10;
   STATUS_SERVICE_UNAVAILABLE: AnsiString = 'HTTP/1.1 503 Service Unavailable'#13#10;
+  STATUS_ACCEPTED: AnsiString = 'HTTP/1.1 202 Accepted'#13#10;
+  STATUS_RESET_CONTENT: AnsiString = 'HTTP/1.1 205 Reset Content'#13#10;
+  STATUS_PARTIAL_CONTENT: AnsiString = 'HTTP/1.1 206 Partial Content'#13#10;
+  STATUS_SEE_OTHER: AnsiString = 'HTTP/1.1 303 See Other'#13#10;
+  STATUS_TEMPORARY_REDIRECT: AnsiString = 'HTTP/1.1 307 Temporary Redirect'#13#10;
+  STATUS_PERMANENT_REDIRECT: AnsiString = 'HTTP/1.1 308 Permanent Redirect'#13#10;
+  STATUS_NOT_ACCEPTABLE: AnsiString = 'HTTP/1.1 406 Not Acceptable'#13#10;
+  STATUS_REQUEST_TIMEOUT: AnsiString = 'HTTP/1.1 408 Request Timeout'#13#10;
+  STATUS_CONFLICT: AnsiString = 'HTTP/1.1 409 Conflict'#13#10;
+  STATUS_GONE: AnsiString = 'HTTP/1.1 410 Gone'#13#10;
+  STATUS_UNPROCESSABLE_ENTITY: AnsiString = 'HTTP/1.1 422 Unprocessable Entity'#13#10;
+  STATUS_TOO_MANY_REQUESTS: AnsiString = 'HTTP/1.1 429 Too Many Requests'#13#10;
 
   procedure WriteLine(const ALine: AnsiString);
   begin
@@ -172,6 +213,18 @@ begin
     HTTP_STATUS_NOT_IMPLEMENTED: WriteLine(STATUS_NOT_IMPLEMENTED);
     HTTP_STATUS_BAD_GATEWAY: WriteLine(STATUS_BAD_GATEWAY);
     HTTP_STATUS_SERVICE_UNAVAILABLE: WriteLine(STATUS_SERVICE_UNAVAILABLE);
+    HTTP_STATUS_ACCEPTED: WriteLine(STATUS_ACCEPTED);
+    HTTP_STATUS_RESET_CONTENT: WriteLine(STATUS_RESET_CONTENT);
+    HTTP_STATUS_PARTIAL_CONTENT: WriteLine(STATUS_PARTIAL_CONTENT);
+    HTTP_STATUS_SEE_OTHER: WriteLine(STATUS_SEE_OTHER);
+    HTTP_STATUS_TEMPORARY_REDIRECT: WriteLine(STATUS_TEMPORARY_REDIRECT);
+    HTTP_STATUS_PERMANENT_REDIRECT: WriteLine(STATUS_PERMANENT_REDIRECT);
+    HTTP_STATUS_NOT_ACCEPTABLE: WriteLine(STATUS_NOT_ACCEPTABLE);
+    HTTP_STATUS_REQUEST_TIMEOUT: WriteLine(STATUS_REQUEST_TIMEOUT);
+    HTTP_STATUS_CONFLICT: WriteLine(STATUS_CONFLICT);
+    HTTP_STATUS_GONE: WriteLine(STATUS_GONE);
+    HTTP_STATUS_UNPROCESSABLE_ENTITY: WriteLine(STATUS_UNPROCESSABLE_ENTITY);
+    HTTP_STATUS_TOO_MANY_REQUESTS: WriteLine(STATUS_TOO_MANY_REQUESTS);
   else
     Result := False;
   end;
@@ -329,6 +382,45 @@ begin
             ((FStatus div 100) = 1);
 end;
 
+procedure TH1ResponseWriter.ValidateResponseFramingHeaders;
+var
+  LContentLengths: TStringArray;
+begin
+  FHasDeclaredContentLength := False;
+  FDeclaredContentLength := 0;
+  FContentLengthWritten := 0;
+  LContentLengths := FHeaders.GetAll('content-length');
+  if Length(LContentLengths) > 1 then
+    raise EHttpError.Create('response content-length is duplicated');
+  if Length(LContentLengths) = 1 then
+  begin
+    FDeclaredContentLength := ParseContentLengthValue(LContentLengths[0]);
+    FHasDeclaredContentLength := True;
+  end;
+  if (Length(LContentLengths) > 0) and FHeaders.Has('transfer-encoding') then
+    raise EHttpError.Create(
+      'response cannot include both content-length and transfer-encoding');
+end;
+
+procedure TH1ResponseWriter.TrackFixedLengthWrite(const ACount: SizeUInt);
+begin
+  if not FHasDeclaredContentLength then
+    Exit;
+  if ACount > SizeUInt(High(Int64)) then
+    raise EHttpError.Create('response body exceeds declared content-length');
+  if Int64(ACount) > FDeclaredContentLength - FContentLengthWritten then
+    raise EHttpError.Create('response body exceeds declared content-length');
+  Inc(FContentLengthWritten, Int64(ACount));
+end;
+
+procedure TH1ResponseWriter.ValidateFixedLengthComplete;
+begin
+  if (not FSuppressBody) and
+     FHasDeclaredContentLength and
+     (FContentLengthWritten <> FDeclaredContentLength) then
+    raise EHttpError.Create('response body shorter than declared content-length');
+end;
+
 procedure TH1ResponseWriter.WriteHeader(const AStatus: THttpStatus);
 begin
   if FHeadersSent then
@@ -340,6 +432,7 @@ begin
   end;
   FStatus := AStatus;
   FNoBodyAllowed := ResponseMustNotHaveBody;
+  ValidateResponseFramingHeaders;
   if (not FNoBodyAllowed) and
      (not FSuppressBody) and
      (not FHeaders.Has('content-length')) and
@@ -372,6 +465,7 @@ begin
     raise EHttpError.Create('response status must not include a body');
   if FSuppressBody then
     Exit(ACount);
+  TrackFixedLengthWrite(ACount);
   if FChunkedWriter <> nil then
     Result := FChunkedWriter.Write(ABuf, ACount)
   else
@@ -385,9 +479,16 @@ procedure TH1ResponseWriter.Flush;
 var
   LFlusher: IFlusher;
 begin
+  if (not FHeadersSent) and (not FHijacked) then
+    WriteHeader(HTTP_STATUS_OK);
   if FChunkedWriter <> nil then
   begin
     (FChunkedWriter as IFlusher).Flush;
+    FFinalized := True;
+  end;
+  if FChunkedWriter = nil then
+  begin
+    ValidateFixedLengthComplete;
     FFinalized := True;
   end;
   if Supports(FWriter, IFlusher, LFlusher) then

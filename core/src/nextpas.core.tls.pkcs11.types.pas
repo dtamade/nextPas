@@ -21,7 +21,10 @@ unit nextpas.core.tls.pkcs11.types;
 interface
 
 uses
-  SysUtils, Classes, Generics.Collections,
+  Generics.Collections,
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
   nextpas.core.tls.pkcs11.api;
 
 type
@@ -218,8 +221,7 @@ type
 
 implementation
 
-uses
-  StrUtils;
+uses StrUtils;
 
 function HexCharToNibble(AChar: Char; out ANibble: Byte): Boolean;
 begin

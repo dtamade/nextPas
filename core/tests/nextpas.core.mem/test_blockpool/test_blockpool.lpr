@@ -5,6 +5,7 @@ program test_blockpool;
 uses
   SysUtils,
   nextpas.core.testing,
+  nextpas.core.mem.error,
   nextpas.core.mem.blockpool;
 
 var
@@ -178,6 +179,38 @@ begin
   end;
 end;
 
+procedure TestRejectsTotalSizeOverflowAsInvalidLayout;
+var
+  Pool: TBlockPool;
+  LRaised: Boolean;
+  LBlockSize: SizeUInt;
+begin
+  Pool := nil;
+  LRaised := False;
+  LBlockSize := High(SizeUInt) - (High(SizeUInt) mod 16);
+  try
+    try
+      Pool := TBlockPool.Create(LBlockSize, 2, 16);
+    except
+      on E: EAllocError do
+      begin
+        LRaised := True;
+        CheckEqual(Int64(Ord(aeInvalidLayout)), Int64(Ord(E.Error)),
+          'total-size overflow error');
+      end;
+      on E: nextpas.core.mem.error.EOutOfMemory do
+      begin
+        LRaised := True;
+        CheckEqual(Int64(Ord(aeInvalidLayout)), Int64(Ord(E.Error)),
+          'total-size overflow error');
+      end;
+    end;
+    Check(LRaised, 'total-size overflow must fail closed');
+  finally
+    Pool.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.blockpool');
   T.Run('basic acquire/release', @TestBasicAcquireRelease);
@@ -189,5 +222,6 @@ begin
   T.Run('statistics', @TestStats);
   T.Run('alignment', @TestAlignment);
   T.Run('invalid pointer release', @TestInvalidRelease);
+  T.Run('rejects total-size overflow as invalid layout', @TestRejectsTotalSizeOverflowAsInvalidLayout);
   T.Summary;
 end.

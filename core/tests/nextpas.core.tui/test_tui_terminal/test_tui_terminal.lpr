@@ -1848,6 +1848,37 @@ begin
   end;
 end;
 
+procedure TestCaptureIgnoresMismatchedRelease;
+var
+  LTerm: TTerminal;
+  LEv: TEvent;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.Capture.Acquire(nil, mbLeft);
+    LTerm.Session.Begin_(nil);
+    Check(LTerm.Capture.Active, 'capture active');
+
+    LTerm.InjectInputBytesForTest([27, Ord('['), Ord('<'),
+      Ord('1'), Ord(';'), Ord('1'), Ord(';'), Ord('1'), Ord('m')]);
+    Check(LTerm.PollQueuedEventForTest(True, LEv), 'middle release parsed');
+    Check(LTerm.Capture.Active, 'mismatched release keeps capture active');
+    Check(LTerm.Capture.Button = mbLeft,
+      'mismatched release keeps original capture button');
+    Check(LTerm.Session.State = ssActive,
+      'mismatched release keeps session active');
+
+    LTerm.InjectInputBytesForTest([27, Ord('['), Ord('<'),
+      Ord('0'), Ord(';'), Ord('1'), Ord(';'), Ord('1'), Ord('m')]);
+    Check(LTerm.PollQueuedEventForTest(True, LEv), 'left release parsed');
+    Check(not LTerm.Capture.Active, 'matching release frees capture');
+    Check(LTerm.Session.State = ssCommitted,
+      'matching release commits session');
+  finally
+    LTerm.Free;
+  end;
+end;
+
 procedure TestRequestQuit;
 var
   LTerm: TTerminal;
@@ -2035,6 +2066,29 @@ begin
   end;
 end;
 
+procedure TestBeginFrameRejectsActiveFrame;
+var
+  LTerm: TTerminal;
+  LFrame: TFrame;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LFrame := LTerm.BeginFrame;
+    Check(LFrame.FrameId <> 0, 'first begin frame returns a valid frame id');
+    try
+      LTerm.BeginFrame;
+      Fail('begin frame rejects active frame: expected ETuiBackend');
+    except
+      on E: ETuiBackend do
+        Check(Pos('active frame', E.Message) > 0,
+          'begin frame rejects active frame: unexpected message "' + E.Message + '"');
+    end;
+  finally
+    LTerm.Free;
+  end;
+end;
+
 procedure TestEndFrameRejectsStaleFrame;
 var
   LTerm: TTerminal;
@@ -2044,11 +2098,10 @@ begin
   try
     LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
     LFrame1 := LTerm.BeginFrame;
-    LFrame2 := LTerm.BeginFrame;
-    CheckEqual(Int64(LFrame1.FrameId + 1), Int64(LFrame2.FrameId),
-      'second begin frame advances frame id');
+    LFrame2 := LFrame1;
+    Inc(LFrame2.FrameId);
     try
-      LTerm.EndFrame(LFrame1);
+      LTerm.EndFrame(LFrame2);
       Fail('end frame rejects stale frame: expected ETuiBackend');
     except
       on E: ETuiBackend do
@@ -2256,6 +2309,8 @@ begin
   T.Run('kitty keyboard alt-codepoint preserves modifier',
     @TestKittyKeyboardAltCodepointPreservesModifier);
   T.Run('capture auto release', @TestCaptureAutoRelease);
+  T.Run('capture ignores mismatched release',
+    @TestCaptureIgnoresMismatchedRelease);
   T.Run('request quit', @TestRequestQuit);
   T.Run('terminal options default matches editor default',
     @TestTerminalOptionsDefaultMatchesEditorDefault);
@@ -2273,6 +2328,8 @@ begin
     @TestBeginFrameRequiresActiveTuiMode);
   T.Run('end frame requires active begin frame',
     @TestEndFrameRequiresActiveBeginFrame);
+  T.Run('begin frame rejects active frame',
+    @TestBeginFrameRejectsActiveFrame);
   T.Run('end frame rejects stale frame',
     @TestEndFrameRejectsStaleFrame);
   T.Run('wezterm capability profile uses kitty compatibility',

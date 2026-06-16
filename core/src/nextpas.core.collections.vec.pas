@@ -18,7 +18,8 @@ uses
   nextpas.core.collections.vec.intf,
   nextpas.core.collections.arr,
   nextpas.core.collections.slice,
-  nextpas.core.mem.allocator;
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default;
 
 function MemIsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; inline;
 
@@ -794,7 +795,7 @@ end;
 { TVec<T> }
 constructor TVec.Create;
 begin
-  Create(VEC_DEFAULT_CAPACITY, GetRtlAllocator(), nil, nil);
+  Create(VEC_DEFAULT_CAPACITY, DefaultAllocator(), nil, nil);
 end;
 
 
@@ -816,7 +817,7 @@ end;
 
 constructor TVec.Create(aCapacity: SizeUInt);
 begin
-  Create(aCapacity, GetRtlAllocator(), nil, nil);
+  Create(aCapacity, DefaultAllocator(), nil, nil);
 end;
 
 constructor TVec.Create(aCapacity: SizeUInt; aAllocator: IAllocator);
@@ -1080,7 +1081,7 @@ end;
 
 function TVec.SliceView(aIndex, aCount: SizeUInt): TSpan;
 var
-  LEnd: SizeUInt;
+  LVisibleCount: SizeUInt;
   LElemSize: SizeUInt;
   LPtr: Pointer;
 begin
@@ -1088,14 +1089,13 @@ begin
   if (aCount = 0) or (aIndex >= FCount) then
     Exit(TSpan.FromPointer(nil, 0, SizeOf(T)));
 
-  // 计算实际可视图长度，避免溢出
-  LEnd := aIndex + aCount;
-  if LEnd > FCount then
-    LEnd := FCount;
+  LVisibleCount := FCount - aIndex;
+  if aCount < LVisibleCount then
+    LVisibleCount := aCount;
 
   LElemSize := GetElementSize;
   LPtr := FBuf.GetPtrUnchecked(aIndex);
-  Result := TSpan.FromPointer(LPtr, LEnd - aIndex, LElemSize);
+  Result := TSpan.FromPointer(LPtr, LVisibleCount, LElemSize);
 end;
 
 procedure TVec.Resize(aNewSize: SizeUInt);

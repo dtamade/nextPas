@@ -22,7 +22,9 @@ unit nextpas.core.tls.session.cache.sharded;
 interface
 
 uses
-  SysUtils, Classes, SyncObjs, fgl,
+  SyncObjs,
+  fgl,
+  nextpas.core.text.conv,
   nextpas.core.time,
   nextpas.core.tls.base;
 

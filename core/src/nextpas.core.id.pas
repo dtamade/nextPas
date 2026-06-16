@@ -32,9 +32,12 @@ const
   UUID_LENGTH = nextpas.core.id.base.UUID_LENGTH;
   ULID_LENGTH = nextpas.core.id.base.ULID_LENGTH;
   NANOID_DEFAULT_LENGTH = nextpas.core.id.base.NANOID_DEFAULT_LENGTH;
+  NANOID_MAX_LENGTH = nextpas.core.id.base.NANOID_MAX_LENGTH;
   NANOID_DEFAULT_ALPHABET = nextpas.core.id.base.NANOID_DEFAULT_ALPHABET;
   SNOWFLAKE_EPOCH_TWITTER = nextpas.core.id.snowflake.SNOWFLAKE_EPOCH_TWITTER;
   SNOWFLAKE_EPOCH_DISCORD = nextpas.core.id.snowflake.SNOWFLAKE_EPOCH_DISCORD;
+  KSUID_STRING_LENGTH = nextpas.core.id.ksuid.KSUID_STRING_LENGTH;
+  XID_STRING_LENGTH = nextpas.core.id.xid.XID_STRING_LENGTH;
 
 function UuidV4: TUuidString; inline;
 function UuidV7: TUuidString; inline;
@@ -44,10 +47,19 @@ function UuidParse(const AStr: string): TUuid; inline;
 function UuidIsValid(const AStr: string): Boolean; inline;
 function Ulid: TUlidString; inline;
 function UlidFromTimestamp(const ATimestampMs: UInt64): TUlidString; inline;
+function UlidIsValid(const AStr: string): Boolean; inline;
+function UlidTimestampMs(const AStr: string): UInt64; inline;
+function UlidTryTimestampMs(const AStr: string; out ATimestampMs: UInt64): Boolean; inline;
 function NanoId: TNanoIdString; inline;
 function NanoIdCustom(const AAlphabet: string; const ASize: Integer): TNanoIdString; inline;
 function KsuidNew: string; inline;
+function KsuidIsValid(const AStr: string): Boolean; inline;
+function KsuidTimestampUnix(const AStr: string): UInt64; inline;
+function KsuidTryTimestampUnix(const AStr: string; out ATimestampUnix: UInt64): Boolean; inline;
 function XidNew: string; inline;
+function XidIsValid(const AStr: string): Boolean; inline;
+function XidTimestamp(const AStr: string): UInt32; inline;
+function XidTryTimestamp(const AStr: string; out ATimestamp: UInt32): Boolean; inline;
 
 implementation
 
@@ -91,6 +103,21 @@ begin
   Result := nextpas.core.id.ulid.UlidFromTimestamp(ATimestampMs);
 end;
 
+function UlidIsValid(const AStr: string): Boolean;
+begin
+  Result := nextpas.core.id.ulid.UlidIsValid(AStr);
+end;
+
+function UlidTimestampMs(const AStr: string): UInt64;
+begin
+  Result := nextpas.core.id.ulid.UlidTimestampMs(AStr);
+end;
+
+function UlidTryTimestampMs(const AStr: string; out ATimestampMs: UInt64): Boolean;
+begin
+  Result := nextpas.core.id.ulid.UlidTryTimestampMs(AStr, ATimestampMs);
+end;
+
 function NanoId: TNanoIdString;
 begin
   Result := nextpas.core.id.nanoid.NanoId;
@@ -106,9 +133,39 @@ begin
   Result := nextpas.core.id.ksuid.KsuidNew;
 end;
 
+function KsuidIsValid(const AStr: string): Boolean;
+begin
+  Result := nextpas.core.id.ksuid.KsuidIsValid(AStr);
+end;
+
+function KsuidTimestampUnix(const AStr: string): UInt64;
+begin
+  Result := nextpas.core.id.ksuid.KsuidTimestampUnix(AStr);
+end;
+
+function KsuidTryTimestampUnix(const AStr: string; out ATimestampUnix: UInt64): Boolean;
+begin
+  Result := nextpas.core.id.ksuid.KsuidTryTimestampUnix(AStr, ATimestampUnix);
+end;
+
 function XidNew: string;
 begin
   Result := nextpas.core.id.xid.XidNew;
+end;
+
+function XidIsValid(const AStr: string): Boolean;
+begin
+  Result := nextpas.core.id.xid.XidIsValid(AStr);
+end;
+
+function XidTimestamp(const AStr: string): UInt32;
+begin
+  Result := nextpas.core.id.xid.XidTimestamp(AStr);
+end;
+
+function XidTryTimestamp(const AStr: string; out ATimestamp: UInt32): Boolean;
+begin
+  Result := nextpas.core.id.xid.XidTryTimestamp(AStr, ATimestamp);
 end;
 
 end.

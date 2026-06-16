@@ -5,7 +5,8 @@ unit nextpas.core.tls.pending;
 interface
 
 uses
-  SysUtils, Classes,
+  Classes,
+  nextpas.core.io.intf,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions;
 
@@ -21,6 +22,8 @@ type
 
     function Poll: TSSLHandshakeStepResult;
     function IsComplete: Boolean;
+    function FinishIStream: IStream;
+    function TryFinishIStream(out AStream: IStream): TSSLOperationResult;
     function FinishStream: TStream;
     function TryFinishStream(out AStream: TStream): TSSLOperationResult;
     procedure Cancel;
@@ -31,6 +34,7 @@ type
 implementation
 
 uses
+  nextpas.core.io.stream_adapter,
   nextpas.core.tls.tls;
 
 constructor TSSLPendingClientConnect.Create(AConnection: ISSLConnection);
@@ -102,20 +106,35 @@ begin
   Result := FCompleted;
 end;
 
-function TSSLPendingClientConnect.FinishStream: TStream;
+function TSSLPendingClientConnect.FinishIStream: IStream;
 begin
   if not FCompleted then
     raise ESSLException.Create('Handshake not complete');
-  Result := TSSLStream.Create(FConnection);
+  Result := WrapTStream(TSSLStream.Create(FConnection), True);
 end;
 
-function TSSLPendingClientConnect.TryFinishStream(out AStream: TStream): TSSLOperationResult;
+function TSSLPendingClientConnect.TryFinishIStream(out AStream: IStream): TSSLOperationResult;
 begin
   AStream := nil;
   if not FCompleted then
     Exit(TSSLOperationResult.Err(sslErrHandshake, 'Handshake not complete'));
-  AStream := TSSLStream.Create(FConnection);
+  AStream := WrapTStream(TSSLStream.Create(FConnection), True);
   Result := TSSLOperationResult.Ok;
+end;
+
+function TSSLPendingClientConnect.FinishStream: TStream;
+begin
+  Result := WrapIStream(FinishIStream);
+end;
+
+function TSSLPendingClientConnect.TryFinishStream(out AStream: TStream): TSSLOperationResult;
+var
+  LIStream: IStream;
+begin
+  AStream := nil;
+  Result := TryFinishIStream(LIStream);
+  if Result.IsOk then
+    AStream := WrapIStream(LIStream);
 end;
 
 procedure TSSLPendingClientConnect.Cancel;

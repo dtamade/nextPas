@@ -39,6 +39,19 @@ begin
   LA.Done;
 end;
 
+procedure TestArenaAllocZeroSize;
+var
+  LA: TLocalArena;
+begin
+  LA.Init(64);
+  try
+    Check(LA.Alloc(0) = nil, 'zero-size alloc should return nil');
+    CheckEqual(Int64(0), Int64(LA.BytesUsed), 'zero-size alloc should not advance offset');
+  finally
+    LA.Done;
+  end;
+end;
+
 procedure TestArenaAllocExhaust;
 var
   LA: TLocalArena;
@@ -50,6 +63,20 @@ begin
   LP := LA.Alloc(1);
   Check(LP = nil, 'should return nil when exhausted');
   LA.Done;
+end;
+
+procedure TestArenaAllocInsufficientCapacity;
+var
+  LA: TLocalArena;
+begin
+  LA.Init(64);
+  try
+    Check(LA.Alloc(48) <> nil, 'initial alloc should succeed');
+    Check(LA.Alloc(17) = nil, 'alloc larger than remaining capacity should fail closed');
+    CheckEqual(Int64(48), Int64(LA.BytesUsed), 'failed alloc should not advance offset');
+  finally
+    LA.Done;
+  end;
 end;
 
 procedure TestArenaAllocAligned;
@@ -67,6 +94,42 @@ begin
   Check(LP <> nil, 'aligned alloc 64');
   Check(SizeUInt(LP) mod 64 = 0, 'should be 64-byte aligned');
   LA.Done;
+end;
+
+procedure TestArenaAllocAlignedRejectsInvalidAlignment;
+var
+  LA: TLocalArena;
+begin
+  LA.Init(256);
+  try
+    Check(LA.AllocAligned(16, 0) = nil, 'zero alignment should return nil');
+    Check(LA.AllocAligned(16, 3) = nil, 'alignment 3 should return nil');
+    Check(LA.AllocAligned(16, 5) = nil, 'alignment 5 should return nil');
+    CheckEqual(Int64(0), Int64(LA.BytesUsed), 'invalid alignment should not advance offset');
+  finally
+    LA.Done;
+  end;
+end;
+
+procedure TestArenaAllocAlignedAcceptsPowerOfTwoAlignment;
+const
+  VALID_ALIGNMENTS: array[0..5] of SizeUInt = (1, 2, 4, 8, 16, 32);
+var
+  LA: TLocalArena;
+  LP: Pointer;
+  I: Integer;
+begin
+  LA.Init(512);
+  try
+    for I := Low(VALID_ALIGNMENTS) to High(VALID_ALIGNMENTS) do
+    begin
+      LP := LA.AllocAligned(8, VALID_ALIGNMENTS[I]);
+      Check(LP <> nil, 'valid alignment should allocate');
+      Check(SizeUInt(LP) mod VALID_ALIGNMENTS[I] = 0, 'pointer should honor requested alignment');
+    end;
+  finally
+    LA.Done;
+  end;
 end;
 
 procedure TestArenaReset;
@@ -171,8 +234,12 @@ begin
   T := TTestRunner.Create('nextpas.core.mem.arena');
   T.Run('Init', @TestArenaInit);
   T.Run('Alloc', @TestArenaAlloc);
+  T.Run('Alloc zero size', @TestArenaAllocZeroSize);
   T.Run('Alloc exhaust', @TestArenaAllocExhaust);
+  T.Run('Alloc insufficient capacity', @TestArenaAllocInsufficientCapacity);
   T.Run('AllocAligned', @TestArenaAllocAligned);
+  T.Run('AllocAligned rejects invalid alignment', @TestArenaAllocAlignedRejectsInvalidAlignment);
+  T.Run('AllocAligned accepts power-of-two alignment', @TestArenaAllocAlignedAcceptsPowerOfTwoAlignment);
   T.Run('Reset', @TestArenaReset);
   T.Run('Mark/Restore', @TestArenaMark);
   T.Run('Mark nested', @TestArenaMarkNested);

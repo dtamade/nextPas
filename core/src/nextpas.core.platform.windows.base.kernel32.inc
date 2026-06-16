@@ -13,6 +13,7 @@ const
   FILE_MAP_WRITE         = $0002;
   FILE_MAP_COPY          = $0001;
   FILE_MAP_EXECUTE       = $0020;
+  FILE_MAP_ALL_ACCESS    = $000F001F;
 
   { Handle flags }
   HANDLE_FLAG_INHERIT    = $00000001;
@@ -95,6 +96,7 @@ const
 
 type
   ULONG_PTR = PtrUInt;
+  PULONG_PTR = ^ULONG_PTR;
   DWORD_PTR = ULONG_PTR;
   SIZE_T_WIN = ULONG_PTR;
   INT_PTR = PtrInt;
@@ -116,6 +118,7 @@ type
     hEvent: HANDLE;
   end;
   LPOVERLAPPED = ^OVERLAPPED;
+  PLPOVERLAPPED = ^LPOVERLAPPED;
 
   TRTLCriticalSection = packed record
     DebugInfo: Pointer;

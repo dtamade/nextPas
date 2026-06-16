@@ -4,14 +4,7 @@ unit nextpas.core.tls.openssl.api.pkcs12;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.pkcs7,
-  nextpas.core.tls.openssl.api.asn1,
-  nextpas.core.tls.openssl.api.bio;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.pkcs7, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio;
 
 type
   // PKCS12 结构体
@@ -235,9 +228,7 @@ procedure UnloadPKCS12Module;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.err,
-  nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.api.err, nextpas.core.tls.openssl.loader;
 
 { PKCS12 函数绑定数组
   runtime storage keeps procvar targets writable across macOS batch-loader runs }
@@ -345,9 +336,9 @@ begin
   Result := nil;
   if not Assigned(PKCS12_create) then Exit;
   
-  PassBytes := TEncoding.UTF8.GetBytes(Password);
+  PassBytes := nextpas.core.text.conv.StringToUTF8Bytes(Password);
   if FriendlyName <> '' then
-    NameBytes := TEncoding.UTF8.GetBytes(FriendlyName)
+    NameBytes := nextpas.core.text.conv.StringToUTF8Bytes(FriendlyName)
   else
     SetLength(NameBytes, 0);
   
@@ -377,7 +368,7 @@ begin
   
   if not Assigned(PKCS12_parse) or not Assigned(P12) then Exit;
   
-  PassBytes := TEncoding.UTF8.GetBytes(Password);
+  PassBytes := nextpas.core.text.conv.StringToUTF8Bytes(Password);
   Result := PKCS12_parse(P12, PAnsiChar(PassBytes), 
     PrivateKey, Certificate, CACerts) = 1;
 end;
@@ -397,7 +388,7 @@ begin
   
   if not Assigned(d2i_PKCS12_bio) or not Assigned(BIO_new_file) then Exit;
   
-  FileNameBytes := TEncoding.UTF8.GetBytes(FileName);
+  FileNameBytes := nextpas.core.text.conv.StringToUTF8Bytes(FileName);
   Bio := BIO_new_file(PAnsiChar(FileNameBytes), 'rb');
   if not Assigned(Bio) then Exit;
   
@@ -435,7 +426,7 @@ begin
   if not Assigned(P12) then Exit;
   
   try
-    FileNameBytes := TEncoding.UTF8.GetBytes(FileName);
+    FileNameBytes := nextpas.core.text.conv.StringToUTF8Bytes(FileName);
     Bio := BIO_new_file(PAnsiChar(FileNameBytes), 'wb');
     if not Assigned(Bio) then Exit;
     

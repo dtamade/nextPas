@@ -3,13 +3,18 @@ program test_fs;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  SysUtils, Classes,
   nextpas.core.testing,
   nextpas.core.errors,
   nextpas.core.io.base,
   nextpas.core.io.intf,
 {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.ffi,
+{$ENDIF}
+{$IFDEF NEXTPAS_LINUX}
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.linux.base,
+  nextpas.core.platform.linux.ffi,
 {$ENDIF}
   nextpas.core.fs.base,
   nextpas.core.fs.intf,
@@ -22,6 +27,96 @@ uses
 var
   T: TTestRunner;
   GTmpDir: string;
+  GWalkErrorSeen: Boolean;
+  GWalkErrorPath: string;
+
+  { FsWalk success-path capture state }
+  GWalkVisited: TStringArray;
+  GWalkFileTypes: array of TFileType;
+  GWalkStopCount: Integer;
+
+function HasVisitedPath(const APath: string): Boolean;
+var
+  I: SizeInt;
+begin
+  for I := 0 to High(GWalkVisited) do
+    if GWalkVisited[I] = APath then
+      Exit(True);
+  Result := False;
+end;
+
+function WalkCaptureCallback(const APath: string; const AInfo: TFileInfo;
+  const AErr: Exception): Boolean;
+var
+  LIndex: SizeInt;
+begin
+  Check(AErr = nil, 'success walk callback should not receive error');
+  LIndex := Length(GWalkVisited);
+  SetLength(GWalkVisited, LIndex + 1);
+  SetLength(GWalkFileTypes, LIndex + 1);
+  GWalkVisited[LIndex] := APath;
+  GWalkFileTypes[LIndex] := AInfo.FileType;
+  Result := True;
+end;
+
+function WalkStopAfterTwoCallback(const APath: string; const AInfo: TFileInfo;
+  const AErr: Exception): Boolean;
+begin
+  Inc(GWalkStopCount);
+  Result := GWalkStopCount < 2;
+end;
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LSourcePath: string;
+  LLines: TStringList;
+begin
+  LSourcePath := ExpandFileName('../../../' + ARelativePath);
+  Check(FileExists(LSourcePath), 'source exists: ' + ARelativePath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(LSourcePath);
+    Result := LLines.Text;
+  finally
+    LLines.Free;
+  end;
+end;
+
+function ExtractFunctionBody(const ASource, AStartToken, ANextToken: string): string;
+var
+  LStart, LNext: Integer;
+begin
+  Result := '';
+  LStart := Pos(AStartToken, ASource);
+  if LStart = 0 then
+    Exit;
+  LNext := Pos(ANextToken, Copy(ASource, LStart + Length(AStartToken),
+    Length(ASource)));
+  if LNext = 0 then
+    Exit(Copy(ASource, LStart, Length(ASource)));
+  Result := Copy(ASource, LStart, Length(AStartToken) + LNext - 1);
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) > 0, AMessage);
+end;
+
+procedure CheckAbsent(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) = 0, AMessage);
+end;
+
+function WalkErrorCallback(const APath: string; const AInfo: TFileInfo;
+  const AErr: Exception): Boolean;
+begin
+  if AErr <> nil then
+  begin
+    GWalkErrorSeen := True;
+    GWalkErrorPath := APath;
+  end;
+  Result := True;
+end;
 
 procedure SetupTmpDir;
 begin
@@ -160,6 +255,107 @@ begin
   CheckEqual(Int64(8), Int64(Length(LRead)), 'dst len');
 end;
 
+{$IFDEF NEXTPAS_LINUX}
+type
+  TLibcSigSet = record
+    Bits: array[0..15] of QWord;
+  end;
+  TLibcSigAction = record
+    sa_handler: Pointer;
+    sa_mask: TLibcSigSet;
+    sa_flags: Int32;
+    sa_restorer: Pointer;
+  end;
+
+function BeginShortWriteRegression(out AOldLimit: TRLimit;
+  out AOldAct: TLibcSigAction): Boolean;
+var
+  LIgnoreAct: TLibcSigAction;
+  LNewLimit: TRLimit;
+begin
+  Result := False;
+  if getrlimit(RLIMIT_FSIZE, @AOldLimit) <> 0 then
+    Exit;
+  if AOldLimit.rlim_max < 4 then
+    Exit;
+
+  FillChar(LIgnoreAct, SizeOf(LIgnoreAct), 0);
+  LIgnoreAct.sa_handler := Pointer(SIG_IGN);
+  Check(sigaction(SIGXFSZ, @LIgnoreAct, @AOldAct) = 0,
+    'ignore SIGXFSZ during short-write regression');
+  LNewLimit := AOldLimit;
+  LNewLimit.rlim_cur := 4;
+  Check(setrlimit(RLIMIT_FSIZE, @LNewLimit) = 0,
+    'lower file-size limit for short-write regression');
+  Result := True;
+end;
+
+procedure EndShortWriteRegression(const AOldLimit: TRLimit;
+  const AOldAct: TLibcSigAction);
+begin
+  Check(setrlimit(RLIMIT_FSIZE, @AOldLimit) = 0,
+    'restore file-size limit');
+  Check(sigaction(SIGXFSZ, @AOldAct, nil) = 0,
+    'restore SIGXFSZ handler');
+end;
+
+procedure TestWriteFileRaisesOnShortWrite;
+var
+  LOldLimit: TRLimit;
+  LOldAct: TLibcSigAction;
+  LData: TBytes;
+  LGot: Boolean;
+begin
+  if not BeginShortWriteRegression(LOldLimit, LOldAct) then
+  begin
+    Check(True, 'RLIMIT_FSIZE unavailable, skip');
+    Exit;
+  end;
+  try
+    LData := TBytes.Create(1, 2, 3, 4, 5, 6, 7, 8,
+      9, 10, 11, 12, 13, 14, 15, 16);
+    LGot := False;
+    try
+      FsWriteFile(GTmpDir + '/short-write.bin', LData);
+    except
+      on E: EIOError do
+        LGot := True;
+    end;
+    Check(LGot, 'FsWriteFile raises EIOError on positive short write');
+  finally
+    EndShortWriteRegression(LOldLimit, LOldAct);
+  end;
+end;
+
+procedure TestAppendFileRaisesOnShortWrite;
+var
+  LOldLimit: TRLimit;
+  LOldAct: TLibcSigAction;
+  LData: TBytes;
+  LGot: Boolean;
+begin
+  if not BeginShortWriteRegression(LOldLimit, LOldAct) then
+  begin
+    Check(True, 'RLIMIT_FSIZE unavailable, skip');
+    Exit;
+  end;
+  try
+    LData := TBytes.Create(1, 2, 3, 4, 5, 6, 7, 8,
+      9, 10, 11, 12, 13, 14, 15, 16);
+    LGot := False;
+    try
+      nextpas.core.fs.AppendFile(GTmpDir + '/short-append.bin', LData);
+    except
+      on E: EIOError do
+        LGot := True;
+    end;
+    Check(LGot, 'AppendFile raises EIOError on positive short write');
+  finally
+    EndShortWriteRegression(LOldLimit, LOldAct);
+  end;
+end;
+{$ENDIF}
+
 procedure TestExists;
 begin
   Check(FsExists(GTmpDir), 'dir exists');
@@ -205,11 +401,113 @@ begin
   Check(FsIsDir(GTmpDir + '/a/b/c'), 'deep dir exists');
 end;
 
+procedure TestMkdirExistingFileRaisesAlreadyExists;
+var
+  LGot: Boolean;
+begin
+  FsWriteFile(GTmpDir + '/mkdir-existing-file.txt', TBytes.Create(1));
+  LGot := False;
+  try
+    FsMkdir(GTmpDir + '/mkdir-existing-file.txt');
+  except
+    on E: EAlreadyExistsError do
+      LGot := True;
+  end;
+  Check(LGot, 'FsMkdir existing regular file raises EAlreadyExistsError');
+end;
+
+procedure TestMkdirAllExistingFileChildRaisesInvalidOperation;
+var
+  LGot: Boolean;
+begin
+  FsWriteFile(GTmpDir + '/mkdirall-file-parent.txt', TBytes.Create(1));
+  LGot := False;
+  try
+    FsMkdirAll(GTmpDir + '/mkdirall-file-parent.txt/child');
+  except
+    on E: EInvalidOperationError do
+      LGot := True;
+  end;
+  Check(LGot, 'FsMkdirAll through regular file raises EInvalidOperationError');
+end;
+
 procedure TestRemove;
 begin
   FsWriteFile(GTmpDir + '/rm.txt', TBytes.Create(1));
   Check(FsRemove(GTmpDir + '/rm.txt'), 'remove file');
   Check(not FsExists(GTmpDir + '/rm.txt'), 'gone');
+end;
+
+procedure TestRemoveNonEmptyDirRaisesInvalidOperation;
+var
+  LDir, LChild: string;
+  LGot: Boolean;
+begin
+  LDir := GTmpDir + '/rm-nonempty';
+  LChild := LDir + '/child.txt';
+  FsMkdir(LDir);
+  FsWriteFile(LChild, TBytes.Create(1));
+  LGot := False;
+  try
+    FsRemove(LDir);
+  except
+    on E: EInvalidOperationError do
+      LGot := True;
+  end;
+  Check(LGot, 'FsRemove non-empty directory raises EInvalidOperationError');
+  Check(FsIsDir(LDir), 'non-empty dir remains after failed remove');
+  Check(FsExists(LChild), 'child remains after failed remove');
+end;
+
+procedure TestRemoveMissingPathRaisesNotFound;
+var
+  LGot: Boolean;
+begin
+  LGot := False;
+  try
+    FsRemove(GTmpDir + '/missing-remove-path');
+  except
+    on E: ENotFoundError do
+      LGot := True;
+  end;
+  Check(LGot, 'FsRemove missing path raises ENotFoundError');
+end;
+
+procedure TestRemoveAllMissingPathRaisesNotFound;
+var
+  LGot: Boolean;
+begin
+  LGot := False;
+  try
+    FsRemoveAll(GTmpDir + '/missing-removeall-path');
+  except
+    on E: ENotFoundError do
+      LGot := True;
+  end;
+  Check(LGot, 'FsRemoveAll missing path raises ENotFoundError');
+end;
+
+procedure TestRemoveAllUnsafeRootGuardRaisesInvalidOperation;
+var
+  LGot: Boolean;
+begin
+  LGot := False;
+  try
+    FsRemoveAll('');
+  except
+    on E: EInvalidOperationError do
+      LGot := True;
+  end;
+  Check(LGot, 'FsRemoveAll empty path raises EInvalidOperationError');
+
+  LGot := False;
+  try
+    FsRemoveAll('/');
+  except
+    on E: EInvalidOperationError do
+      LGot := True;
+  end;
+  Check(LGot, 'FsRemoveAll root path raises EInvalidOperationError');
 end;
 
 procedure TestRemoveAll;
@@ -228,6 +526,33 @@ begin
   Check(FsExists(GTmpDir + '/new.txt'), 'new exists');
 end;
 
+procedure TestRenameMissingSourceRaisesNotFound;
+var
+  LGot: Boolean;
+begin
+  LGot := False;
+  try
+    FsRename(GTmpDir + '/missing-rename-source', GTmpDir + '/rename-dst');
+  except
+    on E: ENotFoundError do
+      LGot := True;
+  end;
+  Check(LGot, 'FsRename missing source raises ENotFoundError');
+end;
+
+procedure TestFsErrorNonEmptyDirSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.errors.pas');
+  CheckContains(LSource, 'ENOTEMPTY_',
+    'POSIX non-empty directory errno is named in fs error mapper');
+  CheckContains(LSource, 'ERR_DIR_NOT_EMPTY',
+    'Windows non-empty directory error is named in fs error mapper');
+  CheckContains(LSource, 'ERROR_DIR_NOT_EMPTY',
+    'Windows non-empty directory mapping stays tied to platform kernel32 constant name');
+end;
+
 procedure TestDirIterator;
 var
   LIter: IDirIterator;
@@ -243,6 +568,55 @@ begin
   LIter.Close;
   CheckEqual(Int64(2), Int64(LCount), '2 entries');
 end;
+
+{$IFDEF NEXTPAS_LINUX}
+function FindDirIteratorFd(const APath: string): Int32;
+var
+  I: Int32;
+  LFdPath: string;
+  LBuf: array[0..1023] of AnsiChar;
+  LLen: nextpas.core.platform.posix.base.ssize_t;
+  LTarget: string;
+begin
+  Result := -1;
+  for I := 3 to 1024 do
+  begin
+    LFdPath := '/proc/self/fd/' + IntToStr(I);
+    FillChar(LBuf, SizeOf(LBuf), 0);
+    LLen := nextpas.core.platform.posix.ffi.readlink(PAnsiChar(LFdPath),
+      @LBuf[0], SizeOf(LBuf) - 1);
+    if LLen <= 0 then
+      Continue;
+    LBuf[LLen] := #0;
+    LTarget := StrPas(@LBuf[0]);
+    if LTarget = APath then
+      Exit(I);
+  end;
+end;
+
+procedure TestDirIteratorCloseReportsPlatformError;
+var
+  LIter: IDirIterator;
+  LFd: Int32;
+  LGot: Boolean;
+begin
+  FsMkdir(GTmpDir + '/iter-close-error');
+  LIter := FsOpenDir(GTmpDir + '/iter-close-error');
+  LFd := FindDirIteratorFd(GTmpDir + '/iter-close-error');
+  Check(LFd >= 0, 'found open dir fd');
+  Check(nextpas.core.platform.posix.ffi.close(LFd) = 0,
+    'external close of dir fd succeeds');
+
+  LGot := False;
+  try
+    LIter.Close;
+  except
+    on E: EIOError do
+      LGot := True;
+  end;
+  Check(LGot, 'DirIterator.Close raises EIOError when platform close fails');
+end;
+{$ENDIF}
 
 { Path tests }
 
@@ -266,6 +640,36 @@ begin
   CheckEqual('.txt', FsPathExt('/home/user/file.txt'), 'ext');
 end;
 
+procedure TestPathExtLongResult;
+var
+  LExt: string;
+  LPath: string;
+begin
+  LExt := '.' + StringOfChar('x', 2048);
+  LPath := 'file' + LExt;
+  CheckEqual(LExt, FsPathExt(LPath), 'long extension preserves content');
+end;
+
+procedure TestPathChangeExtDotfiles;
+begin
+  CheckEqual('.gitignore.bak', FsPathChangeExt('.gitignore', '.bak'),
+    'dotfile without ext appends new ext');
+  CheckEqual('/path/.config.bak', FsPathChangeExt('/path/.config', '.bak'),
+    'path dotfile without ext appends new ext');
+  CheckEqual('.bashrc.old', FsPathChangeExt('.bashrc.bak', '.old'),
+    'dotfile with ext replaces last ext');
+end;
+
+procedure TestPathWithoutExtDotfiles;
+begin
+  CheckEqual('.gitignore', FsPathWithoutExt('.gitignore'),
+    'dotfile without ext is preserved');
+  CheckEqual('/path/.config', FsPathWithoutExt('/path/.config'),
+    'path dotfile without ext is preserved');
+  CheckEqual('.bashrc', FsPathWithoutExt('.bashrc.bak'),
+    'dotfile with ext removes last ext');
+end;
+
 procedure TestPathIsAbs;
 begin
   Check(FsPathIsAbs('/home/user'), 'abs');
@@ -275,6 +679,158 @@ end;
 procedure TestPathCleanEmpty;
 begin
   CheckEqual('.', FsPathClean(''), 'Clean("") = "."');
+end;
+
+procedure TestPathRelative;
+begin
+  CheckEqual('c/d', FsPathRelative('/a/b', '/a/b/c/d'),
+    'relative descendant');
+  CheckEqual('../../d/e', FsPathRelative('/a/b/c', '/a/d/e'),
+    'relative sibling branch');
+  CheckEqual('.', FsPathRelative('/a/b', '/a/b'), 'relative same path');
+  CheckEqual('c', FsPathRelative('a/b', 'a/b/c'), 'relative paths supported');
+end;
+
+procedure TestPathSplit;
+var
+  LDir: string;
+  LBase: string;
+begin
+  FsPathSplit('/home/user/file.txt', LDir, LBase);
+  CheckEqual('/home/user', LDir, 'FsPathSplit dir with file');
+  CheckEqual('file.txt', LBase, 'FsPathSplit base with file');
+
+  FsPathSplit('file.txt', LDir, LBase);
+  CheckEqual('.', LDir, 'FsPathSplit no path dir follows fs path contract');
+  CheckEqual('file.txt', LBase, 'FsPathSplit no path base');
+
+  FsPathSplit('/', LDir, LBase);
+  CheckEqual('/', LDir, 'FsPathSplit root dir');
+  CheckEqual('/', LBase, 'FsPathSplit root base');
+end;
+
+procedure TestPathSeparatorSourceContract;
+var
+  LSource, LImpl, LEnsure, LTrim: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.path.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'path separator contract has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+
+  LEnsure := ExtractFunctionBody(LImpl,
+    'function FsPathEnsureSep(const APath: string): string;',
+    'function FsPathTrimSep');
+  LTrim := ExtractFunctionBody(LImpl,
+    'function FsPathTrimSep(const APath: string): string;',
+    'function FsPathChangeExt');
+
+  CheckAbsent(LSource, 'function IsPathSep',
+    'fs.path no longer owns separator classification');
+  CheckContains(LEnsure, 'platform_path_ensure_sep',
+    'ensure separator uses platform path contract');
+  CheckContains(LTrim, 'platform_path_trim_sep',
+    'trim separator uses platform path contract');
+  CheckAbsent(LTrim, 'IsPathSep(APath[L])',
+    'trim separator no longer owns separator policy');
+end;
+
+procedure TestPathDelegatesPlatformRootContract;
+var
+  LSource, LImpl, LJoin, LDir, LClean, LIsAbs: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.path.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'fs.path root contract has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+
+  LJoin := ExtractFunctionBody(LImpl,
+    'function FsPathJoin(const AParts: array of string): string;',
+    'function FsPathDir');
+  LDir := ExtractFunctionBody(LImpl,
+    'function FsPathDir(const APath: string): string;',
+    'function FsPathBase');
+  LClean := ExtractFunctionBody(LImpl,
+    'function FsPathClean(const APath: string): string;',
+    'function FsPathAbs');
+  LIsAbs := ExtractFunctionBody(LImpl,
+    'function FsPathIsAbs(const APath: string): Boolean;',
+    'function FsPathEnsureSep');
+
+  CheckContains(LJoin, 'platform_path_join',
+    'FsPathJoin delegates root semantics to platform.path');
+  CheckContains(LDir, 'platform_path_dirname',
+    'FsPathDir delegates root semantics to platform.path');
+  CheckContains(LClean, 'platform_path_normalize',
+    'FsPathClean delegates root semantics to platform.path');
+  CheckContains(LIsAbs, 'platform_path_is_absolute',
+    'FsPathIsAbs delegates root semantics to platform.path');
+  CheckContains(LImpl, 'platform_path_relative',
+    'FsPathRelative delegates relative semantics to platform.path');
+  CheckContains(LImpl, 'procedure FsPathSplit',
+    'FsPathSplit is part of fs path implementation');
+  CheckContains(LImpl, 'platform_path_same_file_name',
+    'FsSameFileName delegates name comparison semantics to platform.path');
+end;
+
+procedure TestPathStackBufferConstantContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.path.pas');
+
+  CheckContains(LSource, 'FS_PATH_STACK_BUF_SIZE = 1024;',
+    'fs.path names the stack path buffer constant');
+  CheckContains(LSource, 'array[0..FS_PATH_STACK_BUF_SIZE - 1] of AnsiChar;',
+    'fs.path stack buffers use the named size constant');
+  CheckAbsent(LSource, 'PATH_BUF_SIZE = 1024;',
+    'fs.path no longer uses the old path buffer constant name');
+end;
+
+{$IFDEF NEXTPAS_WINDOWS}
+procedure TestWindowsPathWrapperContract;
+begin
+  Check(FsPathIsAbs('C:\tools'), 'drive absolute is absolute');
+  Check(FsPathIsAbs('\\server\share'), 'UNC share is absolute');
+  Check(not FsPathIsAbs('C:tools'), 'drive-relative path is not absolute');
+  Check(not FsPathIsAbs('\tools'), 'rooted-relative path is not absolute');
+  CheckEqual('C:\', FsPathDir('C:\tools'), 'FsPathDir keeps drive root');
+  CheckEqual('\\server\share', FsPathDir('\\server\share\file.txt'),
+    'FsPathDir keeps UNC share root');
+  CheckEqual('C:\bin', FsPathClean('C:\tools\..\bin'),
+    'FsPathClean keeps drive root');
+  CheckEqual('C:bin', FsPathClean('C:tools\..\bin'),
+    'FsPathClean keeps drive-relative volume');
+  CheckEqual('\bin', FsPathClean('\tools\..\bin'),
+    'FsPathClean keeps rooted-relative root');
+  CheckEqual('C:\base\child', FsPathJoin(['C:\base', '\child']),
+    'FsPathJoin does not treat rooted-relative child as absolute');
+  CheckEqual('C:\', FsPathTrimSep('C:\'), 'FsPathTrimSep preserves drive root');
+  CheckEqual('\\server\share', FsPathTrimSep('\\server\share\'),
+    'FsPathTrimSep preserves UNC share root');
+  Check(FsSameFileName('C:\Tools\App.exe', 'c:\tools\app.EXE'),
+    'FsSameFileName is case-insensitive on Windows');
+  Check(FsSameFileName('C:\Tools\App.exe', 'C:/Tools/App.exe'),
+    'FsSameFileName treats Windows separators equivalently');
+end;
+{$ENDIF}
+
+procedure TestPathEnsureTrimSep;
+begin
+  CheckEqual('/tmp/', FsPathEnsureSep('/tmp'), 'ensure sep appends separator');
+  CheckEqual('/tmp/', FsPathEnsureSep('/tmp/'), 'ensure sep preserves existing separator');
+  CheckEqual('/tmp', FsPathTrimSep('/tmp///'), 'trim sep removes trailing separators');
+  CheckEqual('/', FsPathTrimSep('/'), 'trim sep preserves root');
+end;
+
+procedure TestSameFileName;
+begin
+  Check(FsSameFileName('/tmp/file.txt', '/tmp/file.txt'),
+    'same file exact match');
+  Check(not FsSameFileName('/tmp/File.txt', '/tmp/file.txt'),
+    'same file name is case-sensitive on POSIX');
 end;
 
 procedure TestPathLong;
@@ -305,6 +861,22 @@ begin
       LGot := True;
   end;
   Check(LGot, 'ENotFoundError raised');
+end;
+
+procedure TestCloseInvalidHandleRaises;
+var
+  LF: IFile;
+  LGot: Boolean;
+begin
+  LF := FsFromHandle(-1, 'invalid-close-handle');
+  LGot := False;
+  try
+    LF.Close;
+  except
+    on E: EIOError do
+      LGot := True;
+  end;
+  Check(LGot, 'Close raises EIOError for invalid handle');
 end;
 
 procedure TestAppend;
@@ -390,6 +962,169 @@ begin
   Check(FsExists(LName), 'temp file exists');
 end;
 
+procedure TestTempFileSystemDirUsesTypedHandleContract;
+var
+  LSource, LStreamSource, LImpl, LBody: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.util.pas');
+  LStreamSource := LoadSourceText('src/nextpas.core.fs.stream.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'fs.util temp contract has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+  LBody := ExtractFunctionBody(LImpl,
+    'function FsTempFile(const ADir, APattern: string): IFile;',
+    'procedure FillFileInfo');
+
+  CheckContains(LBody, 'platform_fs_mktemp_handle',
+    'FsTempFile system temp path uses typed platform handle seam');
+  CheckContains(LBody, 'FsFromPlatformHandle',
+    'FsTempFile system temp path wraps typed platform handle directly');
+  CheckAbsent(LBody, 'platform_fs_mktemp(',
+    'FsTempFile system temp path does not use legacy Int32 fd mktemp seam');
+  CheckAbsent(LBody, 'FsFromHandle',
+    'FsTempFile system temp path does not wrap a narrowed Int32 fd');
+  CheckContains(LStreamSource,
+    'Takes ownership of AHandle; the returned IFile closes it.',
+    'FsFromPlatformHandle documents owned handle transfer');
+end;
+
+procedure TestTempFilePathBufferConstantContract;
+var
+  LSource, LImpl, LBody: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.util.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'fs.util temp buffer contract has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+  LBody := ExtractFunctionBody(LImpl,
+    'function FsTempFile(const ADir, APattern: string): IFile;',
+    'procedure FillFileInfo');
+
+  CheckContains(LBody, 'TEMP_FILE_PATH_BUF_SIZE = 1024;',
+    'FsTempFile names the temp path stack buffer constant');
+  CheckContains(LBody, 'array[0..TEMP_FILE_PATH_BUF_SIZE - 1] of AnsiChar;',
+    'FsTempFile stack buffer uses the named size constant');
+end;
+
+procedure TestFsReadFileUsesReadIntoContract;
+var
+  LSource, LImpl, LBody: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.util.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'fs.util read-file contract has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+  LBody := ExtractFunctionBody(LImpl,
+    'function FsReadFile(const APath: string): TBytes;',
+    'procedure FsWriteFile');
+
+  CheckContains(LBody, 'platform_fs_file_size(PAnsiChar(APath), LSize)',
+    'FsReadFile stats file size before allocating');
+  CheckContains(LBody, 'SetLength(Result, LSize)',
+    'FsReadFile preallocates the TBytes result');
+  CheckContains(LBody, 'platform_fs_read_file_into(PAnsiChar(APath),',
+    'FsReadFile reads directly into caller-owned TBytes storage');
+  CheckContains(LBody, 'if LRead < PtrUInt(LSize) then',
+    'FsReadFile trims the result when file shrinks after stat');
+  CheckContains(LBody, 'SetLength(Result, LRead)',
+    'FsReadFile crops the result to actual bytes read');
+end;
+
+procedure TestFsCwdRoundTrip;
+var
+  LOldCwd, LNewCwd: string;
+begin
+  LOldCwd := FsGetCwd;
+  FsMkdirAll(GTmpDir + '/cwd-sub');
+  try
+    FsSetCwd(GTmpDir + '/cwd-sub');
+    LNewCwd := FsGetCwd;
+    CheckEqual(GTmpDir + '/cwd-sub', LNewCwd, 'FsGetCwd reflects FsSetCwd');
+  finally
+    FsSetCwd(LOldCwd);
+  end;
+end;
+
+procedure TestFsSetCwdInvalidPathRaisesNotFound;
+var
+  LGot: Boolean;
+begin
+  LGot := False;
+  try
+    FsSetCwd(GTmpDir + '/missing-cwd-dir');
+  except
+    on E: ENotFoundError do
+      LGot := True;
+  end;
+  Check(LGot, 'FsSetCwd invalid path raises mapped fs error');
+end;
+
+procedure TestFsCwdUsesPlatformOwnerContract;
+var
+  LSource, LImpl, LGetBody, LSetBody: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.util.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'fs.util cwd contract has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+  LGetBody := ExtractFunctionBody(LImpl,
+    'function FsGetCwd: string;',
+    'procedure FsSetCwd');
+  LSetBody := ExtractFunctionBody(LImpl,
+    'procedure FsSetCwd(const APath: string);',
+    'function FsGetEnv');
+
+  CheckContains(LGetBody, 'platform_file_getcwd',
+    'FsGetCwd delegates to platform file owner');
+  CheckContains(LSetBody, 'platform_file_chdir',
+    'FsSetCwd delegates to platform file owner');
+  CheckAbsent(LGetBody, 'GetDir(',
+    'FsGetCwd does not call raw FPC GetDir');
+  CheckAbsent(LSetBody, 'ChDir(',
+    'FsSetCwd does not call raw FPC ChDir');
+end;
+
+procedure TestFsGetEnvInvalidNameRaises;
+var
+  LGot: Boolean;
+begin
+  LGot := False;
+  try
+    FsGetEnv('');
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'FsGetEnv invalid name delegates to os.env validation');
+end;
+
+procedure TestFsGetEnvUsesOsEnvOwnerContract;
+var
+  LSource, LImpl, LBody: string;
+  LImplPos: Integer;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.util.pas');
+  LImplPos := Pos('implementation', LSource);
+  Check(LImplPos > 0, 'fs.util env contract has implementation section');
+  LImpl := Copy(LSource, LImplPos, Length(LSource));
+  LBody := ExtractFunctionBody(LImpl,
+    'function FsGetEnv(const AName: string): string;',
+    'end.');
+
+  CheckContains(LSource, 'nextpas.core.os.env',
+    'fs.util imports os.env owner');
+  CheckContains(LBody, 'GetEnvironmentVariable(AName)',
+    'FsGetEnv delegates value lookup to os.env owner');
+  CheckAbsent(LSource, 'BaseUnix',
+    'fs.util does not import raw FPC BaseUnix env owner');
+  CheckAbsent(LSource, 'fpGetEnv',
+    'fs.util does not call raw FPC fpGetEnv');
+end;
+
 procedure TestLstat;
 begin
   FsWriteFile(GTmpDir + '/lst.txt', TBytes.Create(1, 2));
@@ -398,6 +1133,25 @@ begin
 end;
 
 {$IFDEF NEXTPAS_UNIX}
+procedure TestWalkOpenDirErrorGoesToCallback;
+var
+  LDir: string;
+begin
+  LDir := GTmpDir + '/walk-no-access';
+  FsMkdirAll(LDir);
+  GWalkErrorSeen := False;
+  GWalkErrorPath := '';
+  FsChmod(LDir, 0);
+  try
+    FsWalk(LDir, @WalkErrorCallback);
+  finally
+    FsChmod(LDir, PermDirDefault);
+    FsRemoveAll(LDir);
+  end;
+  Check(GWalkErrorSeen, 'FsWalk opendir error goes to callback');
+  Check(GWalkErrorPath = LDir, 'FsWalk error path is directory');
+end;
+
 procedure TestRemoveAllSymlinkRoot;
 var
   LTarget, LLink: string;
@@ -416,6 +1170,24 @@ begin
   Check(FsExists(LTarget + '/keep.txt'), 'target tree intact');
 end;
 
+procedure TestRemoveSymlinkToDirUnlinksLink;
+var
+  LTarget, LLink: string;
+begin
+  LTarget := GTmpDir + '/rmtarget_single';
+  LLink := GTmpDir + '/rmlink_single';
+  FsMkdir(LTarget);
+  FsWriteFile(LTarget + '/keep.txt', TBytes.Create(99));
+  if nextpas.core.platform.posix.ffi.symlink(PAnsiChar(LTarget), PAnsiChar(LLink)) <> 0 then
+  begin
+    Check(True, 'symlink unsupported, skip');
+    Exit;
+  end;
+  Check(FsRemove(LLink), 'remove symlink-to-dir returns true');
+  Check(not FsExists(LLink), 'symlink-to-dir link removed');
+  Check(FsExists(LTarget + '/keep.txt'), 'symlink-to-dir target tree intact');
+end;
+
 procedure TestSymlinkReadlink;
 var
   LTarget, LLink, LRead: string;
@@ -429,6 +1201,157 @@ begin
   CheckEqual(LTarget, LRead, 'readlink returns target');
   Check(FsLstat(LLink).IsSymlink, 'lstat sees symlink');
   Check(not FsStat(LLink).IsSymlink, 'stat follows link');
+end;
+
+procedure TestSymlinkReadlinkLongTarget;
+var
+  LTarget, LLink, LRead: string;
+begin
+  LTarget := StringOfChar('t', 1500);
+  LLink := GTmpDir + '/symlink-long-target.txt';
+  FsSymlink(LTarget, LLink);
+  LRead := FsReadlink(LLink);
+  CheckEqual(Int64(Length(LTarget)), Int64(Length(LRead)),
+    'readlink long target length');
+  CheckEqual(LTarget, LRead, 'readlink long target content');
+end;
+
+procedure TestReadlinkRegularFileRaisesInvalidOperation;
+var
+  LGot: Boolean;
+begin
+  FsWriteFile(GTmpDir + '/readlink-regular.txt', TBytes.Create(1));
+  LGot := False;
+  try
+    FsReadlink(GTmpDir + '/readlink-regular.txt');
+  except
+    on E: EInvalidOperationError do
+      LGot := True;
+  end;
+  Check(LGot, 'readlink regular file raises invalid operation');
+end;
+{$ENDIF}
+
+procedure TestFsWalkDelegatesToPlatformWalker;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.fs.dir.pas');
+  CheckContains(LSource, 'platform_fs_walk(PAnsiChar(ARoot), @FsWalkPlatformCallback,',
+    'FsWalk delegates traversal to platform_fs_walk');
+  CheckAbsent(LSource, 'procedure DoWalk(',
+    'FsWalk no longer embeds recursive Pascal traversal');
+  CheckAbsent(LSource, 'MAX_WALK_DEPTH = 256',
+    'FsWalk depth truth comes from platform walk owner');
+end;
+
+procedure TestWalkVisitsFilesAndDirectories;
+var
+  LRoot: string;
+  I: SizeInt;
+  LFoundRoot, LFoundChildDir, LFoundDeepFile: Boolean;
+begin
+  LRoot := GTmpDir + '/walk-tree';
+  FsMkdirAll(LRoot + '/a/b');
+  FsWriteFile(LRoot + '/root.txt', TBytes.Create(1));
+  FsWriteFile(LRoot + '/a/child.txt', TBytes.Create(2));
+  FsWriteFile(LRoot + '/a/b/deep.txt', TBytes.Create(3));
+
+  GWalkVisited := nil;
+  GWalkFileTypes := nil;
+  FsWalk(LRoot, @WalkCaptureCallback);
+
+  Check(Length(GWalkVisited) >= 6,
+    'walk visits root + dirs + files (got ' +
+    IntToStr(Length(GWalkVisited)) + ')');
+  Check(GWalkVisited[0] = LRoot, 'walk visits root first');
+
+  LFoundRoot := False;
+  LFoundChildDir := False;
+  LFoundDeepFile := False;
+  for I := 0 to High(GWalkVisited) do
+  begin
+    if GWalkVisited[I] = LRoot then
+      LFoundRoot := True;
+    if GWalkVisited[I] = LRoot + '/a' then
+      LFoundChildDir := True;
+    if GWalkVisited[I] = LRoot + '/a/b/deep.txt' then
+      LFoundDeepFile := True;
+  end;
+  Check(LFoundRoot, 'root directory visited');
+  Check(LFoundChildDir, 'child directory visited');
+  Check(LFoundDeepFile, 'deep file visited');
+end;
+
+procedure TestWalkClassifiesFileTypes;
+var
+  LRoot: string;
+  I: SizeInt;
+  LRegularCount, LDirCount: Integer;
+begin
+  LRoot := GTmpDir + '/walk-types';
+  FsMkdirAll(LRoot + '/sub');
+  FsWriteFile(LRoot + '/file.txt', TBytes.Create(1));
+  FsWriteFile(LRoot + '/sub/nested.txt', TBytes.Create(2));
+
+  GWalkVisited := nil;
+  GWalkFileTypes := nil;
+  FsWalk(LRoot, @WalkCaptureCallback);
+
+  LRegularCount := 0;
+  LDirCount := 0;
+  for I := 0 to High(GWalkFileTypes) do
+  begin
+    if GWalkFileTypes[I] = ftRegular then
+      Inc(LRegularCount);
+    if GWalkFileTypes[I] = ftDirectory then
+      Inc(LDirCount);
+  end;
+  Check(LRegularCount >= 2, 'walk classifies regular files');
+  Check(LDirCount >= 2, 'walk classifies directories');
+end;
+
+procedure TestWalkStopsWhenCallbackReturnsFalse;
+var
+  LRoot: string;
+begin
+  LRoot := GTmpDir + '/walk-stop';
+  FsMkdirAll(LRoot + '/a/b');
+  FsWriteFile(LRoot + '/a/b/file.txt', TBytes.Create(1));
+
+  GWalkStopCount := 0;
+  FsWalk(LRoot, @WalkStopAfterTwoCallback);
+  Check(GWalkStopCount = 2, 'walk stops when callback returns false');
+end;
+
+{$IFDEF NEXTPAS_UNIX}
+procedure TestWalkDoesNotDescendSymlinkDirectory;
+var
+  LRoot, LTarget, LLink: string;
+  I: SizeInt;
+  LFoundInside: Boolean;
+begin
+  LRoot := GTmpDir + '/walk-link-root';
+  LTarget := LRoot + '/target';
+  LLink := LRoot + '/link-target';
+  FsMkdirAll(LTarget);
+  FsWriteFile(LTarget + '/inside.txt', TBytes.Create(1));
+  FsSymlink(LTarget, LLink);
+
+  GWalkVisited := nil;
+  GWalkFileTypes := nil;
+  FsWalk(LRoot, @WalkCaptureCallback);
+
+  Check(HasVisitedPath(LLink), 'symlink entry is visited');
+
+  { The real target/ directory is walked (it is a real dir in the tree).
+    We must verify that the symlink path itself is NOT descended —
+    i.e. no path starting with LLink + '/' appears. }
+  LFoundInside := False;
+  for I := 0 to High(GWalkVisited) do
+    if Copy(GWalkVisited[I], 1, Length(LLink) + 1) = LLink + '/' then
+      LFoundInside := True;
+  Check(not LFoundInside, 'symlink target subtree not descended via symlink path');
 end;
 {$ENDIF}
 
@@ -447,26 +1370,65 @@ begin
     T.Run('ReadFile/WriteFile', @TestReadWriteFile);
     T.Run('WriteAtomic', @TestWriteAtomic);
     T.Run('CopyFile', @TestCopyFile);
+{$IFDEF NEXTPAS_LINUX}
+    T.Run('WriteFile raises on short write', @TestWriteFileRaisesOnShortWrite);
+    T.Run('AppendFile raises on short write', @TestAppendFileRaisesOnShortWrite);
+{$ENDIF}
     T.Run('Exists', @TestExists);
     T.Run('IsFile/IsDir', @TestIsFileIsDir);
     T.Run('FileSize', @TestFileSize);
 
     T.Run('Mkdir + ReadDir', @TestMkdirAndReadDir);
     T.Run('MkdirAll', @TestMkdirAll);
+    T.Run('Mkdir existing file raises already exists',
+      @TestMkdirExistingFileRaisesAlreadyExists);
+    T.Run('MkdirAll existing file child raises invalid operation',
+      @TestMkdirAllExistingFileChildRaisesInvalidOperation);
     T.Run('Remove', @TestRemove);
+    T.Run('Remove non-empty dir raises invalid operation',
+      @TestRemoveNonEmptyDirRaisesInvalidOperation);
+    T.Run('Remove missing path raises not found',
+      @TestRemoveMissingPathRaisesNotFound);
+    T.Run('RemoveAll missing path raises not found',
+      @TestRemoveAllMissingPathRaisesNotFound);
+    T.Run('RemoveAll unsafe root guard raises invalid operation',
+      @TestRemoveAllUnsafeRootGuardRaisesInvalidOperation);
     T.Run('RemoveAll', @TestRemoveAll);
     T.Run('Rename', @TestRename);
+    T.Run('Rename missing source raises not found',
+      @TestRenameMissingSourceRaisesNotFound);
+    T.Run('Fs error non-empty dir source contract',
+      @TestFsErrorNonEmptyDirSourceContract);
     T.Run('DirIterator', @TestDirIterator);
+{$IFDEF NEXTPAS_LINUX}
+    T.Run('DirIterator close reports platform error',
+      @TestDirIteratorCloseReportsPlatformError);
+{$ENDIF}
 
     T.Run('PathJoin', @TestPathJoin);
     T.Run('PathDir', @TestPathDir);
     T.Run('PathBase', @TestPathBase);
     T.Run('PathExt', @TestPathExt);
+    T.Run('PathExt long result', @TestPathExtLongResult);
+    T.Run('PathChangeExt dotfiles', @TestPathChangeExtDotfiles);
+    T.Run('PathWithoutExt dotfiles', @TestPathWithoutExtDotfiles);
     T.Run('PathIsAbs', @TestPathIsAbs);
     T.Run('PathClean empty', @TestPathCleanEmpty);
+    T.Run('PathRelative', @TestPathRelative);
+    T.Run('PathSplit', @TestPathSplit);
+    T.Run('Path separator source contract', @TestPathSeparatorSourceContract);
+    T.Run('Path delegates platform root contract', @TestPathDelegatesPlatformRootContract);
+    T.Run('Path stack buffer constant contract',
+      @TestPathStackBufferConstantContract);
+{$IFDEF NEXTPAS_WINDOWS}
+    T.Run('Windows path wrapper contract', @TestWindowsPathWrapperContract);
+{$ENDIF}
+    T.Run('PathEnsureSep/PathTrimSep', @TestPathEnsureTrimSep);
+    T.Run('SameFileName', @TestSameFileName);
     T.Run('PathJoin long', @TestPathLong);
 
     T.Run('Open not found', @TestOpenNotFound);
+    T.Run('Close invalid handle raises', @TestCloseInvalidHandleRaises);
 
     T.Run('Append', @TestAppend);
     T.Run('Exclusive create', @TestExclusive);
@@ -474,10 +1436,37 @@ begin
     T.Run('Chmod + perm', @TestChmodAndPerm);
     T.Run('Truncate path', @TestTruncatePath);
     T.Run('TempFile in dir', @TestTempFileInDir);
+    T.Run('TempFile system dir typed handle contract',
+      @TestTempFileSystemDirUsesTypedHandleContract);
+    T.Run('TempFile path buffer constant contract',
+      @TestTempFilePathBufferConstantContract);
+    T.Run('FsReadFile uses read_into contract',
+      @TestFsReadFileUsesReadIntoContract);
+    T.Run('FsGetCwd/FsSetCwd roundtrip', @TestFsCwdRoundTrip);
+    T.Run('FsSetCwd invalid path raises mapped fs error',
+      @TestFsSetCwdInvalidPathRaisesNotFound);
+    T.Run('FsGetCwd/FsSetCwd use platform owner contract',
+      @TestFsCwdUsesPlatformOwnerContract);
+    T.Run('FsGetEnv invalid name raises', @TestFsGetEnvInvalidNameRaises);
+    T.Run('FsGetEnv uses os.env owner contract',
+      @TestFsGetEnvUsesOsEnvOwnerContract);
     T.Run('Lstat', @TestLstat);
+    T.Run('FsWalk delegates to platform walker',
+      @TestFsWalkDelegatesToPlatformWalker);
+    T.Run('Walk visits files and directories',
+      @TestWalkVisitsFilesAndDirectories);
+    T.Run('Walk classifies file types', @TestWalkClassifiesFileTypes);
+    T.Run('Walk stops when callback returns false',
+      @TestWalkStopsWhenCallbackReturnsFalse);
 {$IFDEF NEXTPAS_UNIX}
     T.Run('RemoveAll symlink root', @TestRemoveAllSymlinkRoot);
+    T.Run('Walk opendir error callback', @TestWalkOpenDirErrorGoesToCallback);
+    T.Run('Walk does not descend symlink directory',
+      @TestWalkDoesNotDescendSymlinkDirectory);
+    T.Run('Remove symlink-to-dir unlinks link', @TestRemoveSymlinkToDirUnlinksLink);
     T.Run('Symlink + Readlink', @TestSymlinkReadlink);
+    T.Run('Symlink + Readlink long target', @TestSymlinkReadlinkLongTarget);
+    T.Run('Readlink regular file raises invalid operation', @TestReadlinkRegularFileRaisesInvalidOperation);
 {$ENDIF}
 
     T.Summary;

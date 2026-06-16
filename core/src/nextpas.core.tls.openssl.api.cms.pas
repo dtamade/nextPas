@@ -5,7 +5,7 @@ unit nextpas.core.tls.openssl.api.cms;
 interface
 
 uses
-  SysUtils, Classes, dynlibs,
+   Classes, dynlibs,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.consts,

@@ -13,7 +13,11 @@ implementation
 
 uses
   nextpas.core.text.conv,
-  nextpas.core.errors;
+  nextpas.core.errors
+{$IFDEF NEXTPAS_WINDOWS}
+  , nextpas.core.platform.windows.base
+{$ENDIF}
+  ;
 
 {$IFDEF NEXTPAS_WINDOWS}
 const
@@ -22,7 +26,9 @@ const
   ERR_ACCESS_DENIED   = 5;
   ERR_NOT_READY       = 21;
   ERR_FILE_EXISTS     = 80;
+  ERR_DIRECTORY       = 267;
   ERR_ALREADY_EXISTS  = 183;
+  ERR_DIR_NOT_EMPTY   = Int32(ERROR_DIR_NOT_EMPTY);
 {$ELSE}
 const
   EPERM_  = 1;
@@ -31,6 +37,12 @@ const
   EEXIST_ = 17;
   ENOTDIR_ = 20;
   EISDIR_ = 21;
+  EINVAL_ = 22;
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  ENOTEMPTY_ = 66;
+{$ELSE}
+  ENOTEMPTY_ = 39;
+{$ENDIF}
 {$ENDIF}
 
 procedure RaiseFsError(const ACode: Int32; const AOp, APath: string);
@@ -48,6 +60,8 @@ begin
       raise EPermissionError.Create(LMsg);
     ERR_FILE_EXISTS, ERR_ALREADY_EXISTS:
       raise EAlreadyExistsError.Create(LMsg);
+    ERR_DIRECTORY, ERR_DIR_NOT_EMPTY:
+      raise EInvalidOperationError.Create(LMsg);
   else
     raise EIOError.Create(LMsg);
   end;
@@ -59,7 +73,7 @@ begin
       raise EPermissionError.Create(LMsg);
     EEXIST_:
       raise EAlreadyExistsError.Create(LMsg);
-    EISDIR_, ENOTDIR_:
+    EINVAL_, EISDIR_, ENOTDIR_, ENOTEMPTY_:
       raise EInvalidOperationError.Create(LMsg);
   else
     raise EIOError.Create(LMsg);

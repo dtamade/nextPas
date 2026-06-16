@@ -340,6 +340,24 @@ type
     function WorkerHandoff: ITcpServerWorkerHandoff;
   end;
 
+procedure CheckRaisesEArgumentError(const ALabel: string; const AProbe: TProc);
+var
+  LRaised: Boolean;
+  LWrongException: string;
+begin
+  LRaised := False;
+  LWrongException := '';
+  try
+    AProbe();
+  except
+    on E: EArgumentError do
+      LRaised := True;
+    on E: Exception do
+      LWrongException := E.ClassName + ': ' + E.Message;
+  end;
+  Check(LRaised, ALabel + ' raises EArgumentError, got ' + LWrongException);
+end;
+
 constructor TInlineRuntimeTcpStream.Create(const AInput: string);
 begin
   inherited Create;
@@ -1498,6 +1516,36 @@ begin
   end;
 end;
 
+procedure TestEmptyHandlerCommitsDefaultResponse;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/empty', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'GET /empty HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200 OK'#13#10, LResp) = 1,
+      'empty handler commits default 200 response');
+    Check(Pos('transfer-encoding: chunked'#13#10, LResp) > 0,
+      'empty handler default response is framed');
+    Check(Pos('0'#13#10#13#10, LResp) > 0,
+      'empty handler default response finalizes empty body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestSimpleGet200EpollBackend;
 var
@@ -1730,6 +1778,64 @@ begin
   Check(LSession <> nil, 'context-aware h1 session factory returns session');
   Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
     'context-aware h1 session now exposes poll-driven session seam');
+end;
+
+procedure TestH1TransportRejectsNilConnOrHandler;
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactory;
+  LContextFactory: IHttpServerSessionFactoryWithContext;
+  LStreamObj: TZeroProgressTcpStream;
+  LStream: ITcpStream;
+  LHandler: IHttpHandler;
+  LContext: ITcpServerSessionContext;
+  LHandoff: ITcpServerWorkerHandoff;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactory, LFactory),
+    'h1 transport exposes session factory');
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LContextFactory),
+    'h1 transport exposes context-aware session factory');
+
+  LStreamObj := TZeroProgressTcpStream.Create('');
+  LStream := LStreamObj as ITcpStream;
+  LHandler := HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+    end);
+  LHandoff := TMockWorkerHandoff.Create;
+  LContext := TMockSessionContext.Create(LHandoff);
+
+  CheckRaisesEArgumentError('ServeConn nil connection', procedure
+    begin
+      LTransport.ServeConn(nil, LHandler);
+    end);
+  CheckRaisesEArgumentError('ServeConn nil handler', procedure
+    begin
+      LTransport.ServeConn(LStream, nil);
+    end);
+  CheckRaisesEArgumentError('NewSession nil connection', procedure
+    begin
+      LFactory.NewSession(nil, LHandler);
+    end);
+  CheckRaisesEArgumentError('NewSession nil handler', procedure
+    begin
+      LFactory.NewSession(LStream, nil);
+    end);
+  CheckRaisesEArgumentError('context NewSession nil connection', procedure
+    begin
+      LContextFactory.NewSession(nil, LHandler, LContext);
+    end);
+  CheckRaisesEArgumentError('context NewSession nil handler', procedure
+    begin
+      LContextFactory.NewSession(LStream, nil, LContext);
+    end);
+  Check(LContextFactory.NewSession(LStream, LHandler, nil) <> nil,
+    'context NewSession accepts nil context');
 end;
 
 procedure TestH1PollDrivenSessionHandsOffPerCompletedRequest;
@@ -6323,6 +6429,20 @@ const
 begin
   RunExpectContinueMalformedTransferCodingRejectsEarly(False,
     'expect unsupported transfer-coding threaded', REQ,
+    'HTTP/1.1 501 Not Implemented');
+end;
+
+procedure TestExpectContinueNonChunkedTransferCodingRejectsEarly;
+const
+  REQ =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: gzip'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunExpectContinueMalformedTransferCodingRejectsEarly(False,
+    'expect non-chunked transfer-coding threaded', REQ,
     'HTTP/1.1 501 Not Implemented');
 end;
 
@@ -12052,6 +12172,8 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.http.server');
   T.Run('Simple GET 200', @TestSimpleGet200);
+  T.Run('Empty handler commits default response',
+    @TestEmptyHandlerCommitsDefaultResponse);
   {$IFDEF NEXTPAS_LINUX}
   T.Run('Simple GET 200 with epoll backend', @TestSimpleGet200EpollBackend);
   T.Run('Keep-alive: two requests one connection with epoll backend',
@@ -12218,6 +12340,8 @@ begin
     @TestCommittedResponseExceptionDoesNotAppend500);
   T.Run('H1 transport exposes context-aware session factory',
     @TestH1TransportExposesContextSessionFactory);
+  T.Run('H1 transport rejects nil connection or handler',
+    @TestH1TransportRejectsNilConnOrHandler);
   T.Run('H1 poll-driven session hands off per completed request',
     @TestH1PollDrivenSessionHandsOffPerCompletedRequest);
   T.Run('H1 poll-driven session drains response via writable events',
@@ -12409,6 +12533,8 @@ begin
     @TestHeadExpectWithoutDeclaredBodyDoesNotEmitInterim);
   T.Run('Expect: unsupported transfer-coding rejects before interim response',
     @TestExpectContinueUnsupportedTransferCodingRejectsEarly);
+  T.Run('Expect: non-chunked transfer-coding rejects before interim response',
+    @TestExpectContinueNonChunkedTransferCodingRejectsEarly);
   T.Run('Expect: chunked-not-final transfer-coding rejects before interim response',
     @TestExpectContinueChunkedMustBeFinalTransferCodingRejectsEarly);
   T.Run('Expect: declared oversize content-length rejects early',

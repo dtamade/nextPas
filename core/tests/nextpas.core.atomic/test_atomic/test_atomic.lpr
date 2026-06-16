@@ -2078,21 +2078,15 @@ begin
   CheckContains(LFacadePtrWeakCasSection, 'mo_acq_rel: LFailureOrder := mo_acquire;',
     'facade TAtomicPtr weak CAS failure order must not include acq_rel');
   CheckContains(LTypesPtrStrongCasSection,
-    'if AOrder = mo_consume then' + LineEnding +
-    '    LSuccessOrder := mo_acquire',
+    '_cas_success_order(AOrder)',
     'direct atomic.types TAtomicPtr strong CAS must normalize consume to acquire on success path');
   CheckContains(LTypesPtrWeakCasSection,
-    'if AOrder = mo_consume then' + LineEnding +
-    '    LSuccessOrder := mo_acquire',
+    '_cas_success_order(AOrder)',
     'direct atomic.types TAtomicPtr weak CAS must normalize consume to acquire on success path');
-  CheckContains(LTypesPtrStrongCasSection, 'mo_release: LFailureOrder := mo_relaxed;',
-    'direct atomic.types TAtomicPtr strong CAS failure order must not include release');
-  CheckContains(LTypesPtrWeakCasSection, 'mo_release: LFailureOrder := mo_relaxed;',
-    'direct atomic.types TAtomicPtr weak CAS failure order must not include release');
-  CheckContains(LTypesPtrStrongCasSection, 'mo_acq_rel: LFailureOrder := mo_acquire;',
-    'direct atomic.types TAtomicPtr strong CAS failure order must not include acq_rel');
-  CheckContains(LTypesPtrWeakCasSection, 'mo_acq_rel: LFailureOrder := mo_acquire;',
-    'direct atomic.types TAtomicPtr weak CAS failure order must not include acq_rel');
+  CheckContains(LTypesPtrStrongCasSection, '_cas_failure_order(LSuccessOrder)',
+    'direct atomic.types TAtomicPtr strong CAS must derive failure order');
+  CheckContains(LTypesPtrWeakCasSection, '_cas_failure_order(LSuccessOrder)',
+    'direct atomic.types TAtomicPtr weak CAS must derive failure order');
   CheckContains(LTypesPtrStrongCasSection, 'LSuccessOrder, LFailureOrder)',
     'direct atomic.types TAtomicPtr strong CAS must pass derived success/failure orders');
   CheckContains(LTypesPtrWeakCasSection, 'LSuccessOrder, LFailureOrder)',

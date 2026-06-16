@@ -20,7 +20,7 @@ unit nextpas.core.tls.cert.advanced;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.cert.builder,
   nextpas.core.tls.errors,
@@ -136,6 +136,11 @@ function CreateCRLManager: ICRLManager;
 implementation
 
 uses
+  nextpas.core.fs.base,
+  nextpas.core.fs.intf,
+  nextpas.core.fs.stream,
+  nextpas.core.io,
+  nextpas.core.text.conv,
   nextpas.core.tls.cert.builder.impl,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api,
@@ -275,7 +280,7 @@ begin
         Result.Status := ocspUnknown;
       else
         Result.Status := ocspError;
-        Result.ErrorMessage := 'OCSP check failed with status: ' + IntToStr(LStatus);
+        Result.ErrorMessage := 'OCSP check failed with status: ' + nextpas.core.text.conv.IntToStr(LStatus);
     end;
   except
     on E: Exception do
@@ -371,17 +376,14 @@ end;
 
 procedure TCRLManagerImpl.LoadFromFile(const AFile: string);
 var
-  LStream: TFileStream;
+  LStream: IStream;
   LPEM: string;
+  LBytes: TBytes;
 begin
-  LStream := TFileStream.Create(AFile, fmOpenRead);
-  try
-    SetLength(LPEM, LStream.Size);
-    LStream.Read(LPEM[1], LStream.Size);
-    ParseCRL(LPEM);
-  finally
-    LStream.Free;
-  end;
+  LStream := FsOpen(AFile, [fmRead]);
+  LBytes := ReadAll(LStream);
+  LPEM := UTF8BytesToString(LBytes);
+  ParseCRL(LPEM);
 end;
 
 procedure TCRLManagerImpl.LoadFromPEM(const APEM: string);
@@ -485,9 +487,9 @@ begin
   
   // Prepare password and name
   if AOptions.Password <> '' then
-    LPassBytes := TEncoding.UTF8.GetBytes(UnicodeString(AOptions.Password));
+    LPassBytes := nextpas.core.text.conv.StringToUTF8Bytes(AOptions.Password);
   if AOptions.FriendlyName <> '' then
-    LNameBytes := TEncoding.UTF8.GetBytes(UnicodeString(AOptions.FriendlyName));
+    LNameBytes := nextpas.core.text.conv.StringToUTF8Bytes(AOptions.FriendlyName);
   
   // Create PKCS#12 structure
   LP12 := nextpas.core.tls.openssl.api.pkcs12.PKCS12_create(
@@ -539,17 +541,14 @@ class function TPKCS12Manager.CreatePKCS12ToFile(
 ): Boolean;
 var
   LP12: TBytes;
-  LStream: TFileStream;
+  LStream: IFile;
 begin
   LP12 := CreatePKCS12(ACert, AKey, AOptions);
-  
-  LStream := TFileStream.Create(AFile, fmCreate);
-  try
+
+  LStream := FsCreate(AFile);
+  if Length(LP12) > 0 then
     LStream.Write(LP12[0], Length(LP12));
-    Result := True;
-  finally
-    LStream.Free;
-  end;
+  Result := True;
 end;
 
 class function TPKCS12Manager.LoadFromPKCS12(
@@ -586,7 +585,7 @@ begin
     if not Assigned(LP12) then Exit;
     
     try
-      LPassBytes := TEncoding.UTF8.GetBytes(UnicodeString(APassword));
+      LPassBytes := nextpas.core.text.conv.StringToUTF8Bytes(APassword);
       LCertPtr := nil;
       LKeyPtr := nil;
       LCAStack := nil;
@@ -618,17 +617,12 @@ class function TPKCS12Manager.LoadFromPKCS12File(
   out AKey: IPrivateKey
 ): Boolean;
 var
-  LStream: TFileStream;
+  LStream: IStream;
   LData: TBytes;
 begin
-  LStream := TFileStream.Create(AFile, fmOpenRead);
-  try
-    SetLength(LData, LStream.Size);
-    LStream.Read(LData[0], LStream.Size);
-    Result := LoadFromPKCS12(LData, APassword, ACert, AKey);
-  finally
-    LStream.Free;
-  end;
+  LStream := FsOpen(AFile, [fmRead]);
+  LData := ReadAll(LStream);
+  Result := LoadFromPKCS12(LData, APassword, ACert, AKey);
 end;
 
 { Factory functions }

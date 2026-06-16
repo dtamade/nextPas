@@ -4,8 +4,7 @@ unit nextpas.core.tls.openssl.api.utils;
 
 interface
 
-uses
-  Classes, SysUtils;
+uses nextpas.core.text.conv;
 
 { Library handle management }
 function GetLibHandle: HMODULE;
@@ -24,8 +23,7 @@ function GetLastOpenSSLError: string;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.err;
+uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.err;
 
 var
   GLibHandle: HMODULE = 0;

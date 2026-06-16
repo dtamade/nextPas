@@ -7,8 +7,6 @@ uses
   nextpas.core.exception,
   nextpas.core.testing,
   nextpas.core.mem.error,
-  nextpas.core.mem.layout,
-  nextpas.core.mem.alloc,
   nextpas.core.mem.allocator,
   nextpas.core.mem.blockpool,
   nextpas.core.mem.blockpool.growable,
@@ -27,14 +25,6 @@ type
     function DoAllocMem(aSize: SizeUInt): Pointer; override;
     function DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
     procedure DoFreeMem(aDst: Pointer); override;
-  end;
-
-  TFailAlloc = class(TAllocBase)
-  protected
-    function DoAlloc(aSize: SizeUInt; aAlign: SizeUInt): Pointer; override;
-    procedure DoDealloc(aPtr: Pointer; aSize: SizeUInt; aAlign: SizeUInt); override;
-  public
-    constructor Create;
   end;
 
 var
@@ -59,28 +49,9 @@ procedure TFailAllocator.DoFreeMem(aDst: Pointer);
 begin
 end;
 
-constructor TFailAlloc.Create;
-begin
-  inherited Create(TAllocCaps.Default);
-end;
-
-function TFailAlloc.DoAlloc(aSize: SizeUInt; aAlign: SizeUInt): Pointer;
-begin
-  Result := nil;
-end;
-
-procedure TFailAlloc.DoDealloc(aPtr: Pointer; aSize: SizeUInt; aAlign: SizeUInt);
-begin
-end;
-
 function NewFailAllocator: nextpas.core.mem.allocator.IAllocator;
 begin
   Result := TFailAllocator.Create as nextpas.core.mem.allocator.IAllocator;
-end;
-
-function NewFailAlloc: IAlloc;
-begin
-  Result := TFailAlloc.Create as IAlloc;
 end;
 
 procedure CheckRaisesCanonicalOutOfMemory(aProc: TExceptionProc; const aName: string);
@@ -104,9 +75,30 @@ begin
   Check(not LCaughtAlloc, aName + ' is not caught by non-OOM EAllocError');
 end;
 
-procedure RaiseAllocResultOom;
+procedure CheckRaisesAllocError(aProc: TExceptionProc; aExpected: TAllocError; const aName: string);
+var
+  LCaughtExpected: Boolean;
+  LCaughtOom: Boolean;
 begin
-  TAllocResult.Err(aeOutOfMemory).ExpectPtr('alloc result');
+  LCaughtExpected := False;
+  LCaughtOom := False;
+
+  try
+    aProc;
+  except
+    on E: EOutOfMemoryError do
+      LCaughtOom := True;
+    on E: EAllocError do
+      LCaughtExpected := E.Error = aExpected;
+  end;
+
+  Check(LCaughtExpected, aName + ' raises expected allocation error');
+  Check(not LCaughtOom, aName + ' is not canonical OOM');
+end;
+
+procedure RaiseMemOutOfMemory;
+begin
+  raise nextpas.core.mem.error.EOutOfMemory.Create(aeOutOfMemory, 'alloc result');
 end;
 
 procedure RaiseBlockPoolTotalSizeOverflow;
@@ -139,7 +131,7 @@ var
   LPool: TGrowingBlockPool;
 begin
   LConfig := TGrowingBlockPoolConfig.Default(16, 1);
-  LConfig.Allocator := NewFailAlloc;
+  LConfig.Allocator := NewFailAllocator;
   LPool := nil;
   try
     LPool := TGrowingBlockPool.Create(LConfig);
@@ -154,7 +146,7 @@ var
   LArena: TGrowingArena;
 begin
   LConfig := TGrowingArenaConfig.Default(16);
-  LConfig.Allocator := NewFailAlloc;
+  LConfig.Allocator := NewFailAllocator;
   LArena := nil;
   try
     LArena := TGrowingArena.Create(LConfig);
@@ -219,15 +211,15 @@ begin
   end;
 end;
 
-procedure TestAllocResultOomUsesCanonicalRoot;
+procedure TestMemOutOfMemoryUsesCanonicalRoot;
 begin
-  CheckRaisesCanonicalOutOfMemory(@RaiseAllocResultOom, 'TAllocResult.ExpectPtr');
+  CheckRaisesCanonicalOutOfMemory(@RaiseMemOutOfMemory, 'EOutOfMemory.Create');
 end;
 
-procedure TestBlockPoolOomUsesCanonicalRoot;
+procedure TestBlockPoolOverflowContracts;
 begin
-  CheckRaisesCanonicalOutOfMemory(@RaiseBlockPoolTotalSizeOverflow, 'TBlockPool.Create overflow');
-  CheckRaisesCanonicalOutOfMemory(@RaiseBlockPoolArenaAllocationOverflow, 'TArena.Create overflow');
+  CheckRaisesAllocError(@RaiseBlockPoolTotalSizeOverflow, aeInvalidLayout, 'TBlockPool.Create layout overflow');
+  CheckRaisesCanonicalOutOfMemory(@RaiseBlockPoolArenaAllocationOverflow, 'TArena.Create allocation overflow');
 end;
 
 procedure TestGrowableMemOomUsesCanonicalRoot;
@@ -261,8 +253,8 @@ end;
 
 begin
   T := TTestRunner.Create('nextpas.core.mem.oom');
-  T.Run('alloc result OOM uses canonical root', @TestAllocResultOomUsesCanonicalRoot);
-  T.Run('blockpool OOM uses canonical root', @TestBlockPoolOomUsesCanonicalRoot);
+  T.Run('mem OOM uses canonical root', @TestMemOutOfMemoryUsesCanonicalRoot);
+  T.Run('blockpool overflow contracts', @TestBlockPoolOverflowContracts);
   T.Run('growable mem OOM uses canonical root', @TestGrowableMemOomUsesCanonicalRoot);
   T.Run('allocator-backed mem OOM uses canonical root', @TestAllocatorBackedMemOomUsesCanonicalRoot);
   T.Run('non-OOM allocation error remains EAllocError', @TestNonOomAllocErrorRemainsEAllocError);

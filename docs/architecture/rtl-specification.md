@@ -49,6 +49,23 @@ package tooling 和 future IDE 真正收敛成同一套系统，nextPas 必须�
 这套分层的目的，是让 nextPas 的 compiler/toolchain 和 future public RTL 共享同一套基础层，
 而不是前者偷偷长成私有 runtime，后者再长成另一套用户态标准库。
 
+## 让源码兼容和语义权威分离
+
+`System` 相关源码应尽量保持 FPC-compatible source，让创世期可以继续由 FPC 构建
+nextPas compiler/toolchain 和最小 RTL surface。但 FPC compatibility must not become the
+semantic authority：对象生命周期、managed string / dynarray / interface lifetime、RTTI /
+TypeInfo metadata、unit init/fini 和 runtime helper 语义必须由 nextPas-owned contract
+定义。
+
+推荐形态是同一套公开名字后面接两类窄 adapter：
+
+- FPC 构建路径使用 stage0 host adapter，保留能构建、能测试、能回退的 bootstrap 行为。
+- nextPas 编译路径把同一语义降到 `np.system.*`，再由 runtime/backend 映射到真实 helper。
+
+条件编译应该收敛在 adapter 边界，不能扩散到高层 public facade 或 owner 模块。验证也要分开：
+FPC compile gate 证明源码可构建；`np.system.*` source-contract 和 runtime gate 证明 nextPas
+语义没有退回宿主 RTL 习惯。
+
 ## 先把第一批 nextPas-native core RTL 实体落在仓库里
 
 为了避免这条路线再次退回“只有文档和口号”，当前仓库里优先落的第一批 core RTL 实体冻结为：

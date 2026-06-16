@@ -37,7 +37,8 @@ unit nextpas.core.tls.crypto.utils;
 interface
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system,
+  nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.errors,
@@ -1415,7 +1416,7 @@ class function TCryptoUtils.SHA256(const AData: string): TBytes;
 var
   LBytes: TBytes;
 begin
-  LBytes := TEncoding.UTF8.GetBytes(UnicodeString(AData));
+  LBytes := nextpas.core.text.conv.StringToUTF8Bytes(AData));
   Result := SHA256(LBytes);
 end;
 
@@ -1529,7 +1530,7 @@ class function TCryptoUtils.SHA512(const AData: string): TBytes;
 var
   LBytes: TBytes;
 begin
-  LBytes := TEncoding.UTF8.GetBytes(UnicodeString(AData));
+  LBytes := nextpas.core.text.conv.StringToUTF8Bytes(AData));
   Result := SHA512(LBytes);
 end;
 

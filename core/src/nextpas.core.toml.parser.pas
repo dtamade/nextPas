@@ -40,8 +40,10 @@ type
     FHashBuckets: PUInt32;
     FHashCap: UInt32;
     FHashOwner: UInt32;
+    FInited: Boolean;
+    procedure SetOutOfMemoryError;
     function AddNode: UInt32;
-    procedure AddOwnedBuf(ABuf: Pointer);
+    function AddOwnedBuf(ABuf: Pointer): Boolean;
     procedure BuildHashIndex(ATableIdx: UInt32);
     function HashLookup(ATableIdx: UInt32; const AKey: TStringView; AHash: UInt32): UInt32;
   public
@@ -187,15 +189,18 @@ end;
 { TTomlDocument }
 
 procedure TTomlDocument.Init(const AAllocator: IAllocator);
+var
+  LPtr: Pointer;
 begin
   if AAllocator = nil then
     FAllocator := DefaultAllocator
   else
     FAllocator := AAllocator;
   FNodeCap := INITIAL_NODE_CAP;
-  FNodes := FAllocator.Allocate(FNodeCap * SizeOf(TTomlNode));
+  FNodes := nil;
   FNodeCount := 0;
   FHasError := False;
+  FillChar(FError, SizeOf(FError), 0);
   FOwnedBufs := nil;
   FOwnedCount := 0;
   FOwnedCap := 0;
@@ -203,12 +208,31 @@ begin
   FHashBuckets := nil;
   FHashCap := 0;
   FHashOwner := TOML_NODE_NONE;
+  FInited := True;
+  LPtr := FAllocator.Allocate(FNodeCap * SizeOf(TTomlNode));
+  if LPtr = nil then
+  begin
+    SetOutOfMemoryError;
+    Exit;
+  end;
+  FNodes := PTomlNode(LPtr);
+end;
+
+procedure TTomlDocument.SetOutOfMemoryError;
+begin
+  FError.Message := TStringView.Create(PAnsiChar('out of memory'), 13);
+  FError.Line := 0;
+  FError.Col := 0;
+  FError.Offset := 0;
+  FHasError := True;
 end;
 
 procedure TTomlDocument.Done;
 var
   LI: UInt32;
 begin
+  if not FInited then
+    Exit;
   if FHashBuckets <> nil then
   begin
     FAllocator.Deallocate(FHashBuckets);
@@ -230,35 +254,60 @@ begin
   FNodeCap := 0;
   FOwnedCount := 0;
   FOwnedCap := 0;
+  FHashCap := 0;
+  FHashOwner := TOML_NODE_NONE;
+  FInited := False;
 end;
 
-procedure TTomlDocument.AddOwnedBuf(ABuf: Pointer);
+function TTomlDocument.AddOwnedBuf(ABuf: Pointer): Boolean;
 var
   LNewCap: UInt32;
+  LNewBufs: PPointer;
 begin
+  Result := False;
   if FOwnedBufs = nil then
   begin
     FOwnedCap := INITIAL_OWNED_CAP;
     FOwnedBufs := PPointer(FAllocator.Allocate(FOwnedCap * SizeOf(Pointer)));
+    if FOwnedBufs = nil then
+    begin
+      FOwnedCap := 0;
+      SetOutOfMemoryError;
+      Exit(False);
+    end;
   end
   else if FOwnedCount >= FOwnedCap then
   begin
     LNewCap := FOwnedCap * 2;
-    FOwnedBufs := PPointer(FAllocator.Reallocate(Pointer(FOwnedBufs), LNewCap * SizeOf(Pointer)));
+    LNewBufs := PPointer(FAllocator.Reallocate(Pointer(FOwnedBufs), LNewCap * SizeOf(Pointer)));
+    if LNewBufs = nil then
+    begin
+      SetOutOfMemoryError;
+      Exit(False);
+    end;
+    FOwnedBufs := LNewBufs;
     FOwnedCap := LNewCap;
   end;
   (FOwnedBufs + FOwnedCount)^ := ABuf;
   Inc(FOwnedCount);
+  Result := True;
 end;
 
 function TTomlDocument.AddNode: UInt32;
 var
   LNewCap: UInt32;
+  LNewNodes: PTomlNode;
 begin
   if FNodeCount >= FNodeCap then
   begin
     LNewCap := FNodeCap * 2;
-    FNodes := FAllocator.Reallocate(FNodes, LNewCap * SizeOf(TTomlNode));
+    LNewNodes := FAllocator.Reallocate(FNodes, LNewCap * SizeOf(TTomlNode));
+    if LNewNodes = nil then
+    begin
+      SetOutOfMemoryError;
+      Exit(TOML_NODE_NONE);
+    end;
+    FNodes := LNewNodes;
     FNodeCap := LNewCap;
   end;
   Result := FNodeCount;
@@ -274,6 +323,7 @@ procedure TTomlDocument.BuildHashIndex(ATableIdx: UInt32);
 var
   LCount, LCap, LSlot: UInt32;
   LCur: UInt32;
+  LHashBuckets: PUInt32;
 begin
   LCount := FNodes[ATableIdx].Container.Count;
   LCap := LCount * 2;
@@ -282,9 +332,16 @@ begin
   begin
     FAllocator.Deallocate(FHashBuckets);
     FHashBuckets := nil;
+    FHashCap := 0;
+    FHashOwner := TOML_NODE_NONE;
   end;
   if FHashBuckets = nil then
-    FHashBuckets := FAllocator.Allocate(LCap * SizeOf(UInt32));
+  begin
+    LHashBuckets := FAllocator.Allocate(LCap * SizeOf(UInt32));
+    if LHashBuckets = nil then
+      Exit;
+    FHashBuckets := LHashBuckets;
+  end;
   FHashCap := LCap;
   FillChar(FHashBuckets^, FHashCap * SizeOf(UInt32), $FF);
   FHashOwner := ATableIdx;
@@ -374,7 +431,7 @@ type
     procedure Advance; inline;
     procedure AdvanceN(ACount: SizeUInt); inline;
     procedure SkipWhitespaceInline;
-    procedure SkipWhitespaceAndNewlines;
+    function SkipWhitespaceAndNewlines: Boolean;
     function SkipComment: Boolean;
     procedure SkipToNextLine;
     function SetError(const AMsg: PAnsiChar; ALen: SizeUInt): Boolean;
@@ -447,38 +504,56 @@ begin
   Col := Col + UInt32(Pos - LStart);
 end;
 
-procedure TTomlParser.SkipWhitespaceAndNewlines;
+function TTomlParser.SkipWhitespaceAndNewlines: Boolean;
 begin
   while Pos < SrcLen do
   begin
     case Src[Pos] of
       ' ', #9, #13: begin Inc(Pos); Inc(Col); end;
       #10: begin Inc(Pos); Inc(Line); Col := 1; end;
-      '#': SkipComment;
+      '#':
+        if not SkipComment then
+          Exit(False);
     else
-      Exit;
+      Exit(True);
     end;
   end;
+  Result := True;
 end;
 
 function TTomlParser.SkipComment: Boolean;
 var
+  LCh: Byte;
+  LCtrl: PtrInt;
   LRemaining: SizeUInt;
-  LFound: PtrInt;
 begin
   if (Pos < SrcLen) and (Src[Pos] = '#') then
   begin
-    LRemaining := SrcLen - Pos;
-    LFound := ScanFindByte(Src + Pos, LRemaining, Ord(#10));
-    if LFound >= 0 then
+    Advance;
+    while Pos < SrcLen do
     begin
-      Col := Col + UInt32(LFound);
-      Inc(Pos, SizeUInt(LFound));
-    end
-    else
-    begin
-      Col := Col + UInt32(LRemaining);
-      Pos := SrcLen;
+      LRemaining := SrcLen - Pos;
+      LCtrl := ScanFindInRange(Src + Pos, LRemaining, 0, 31);
+      if LCtrl < 0 then
+      begin
+        Col := Col + UInt32(LRemaining);
+        Pos := SrcLen;
+        Break;
+      end;
+      Col := Col + UInt32(LCtrl);
+      Pos := Pos + SizeUInt(LCtrl);
+      LCh := Byte(Src[Pos]);
+      if LCh = Ord(#10) then
+        Break;
+      if LCh = Ord(#13) then
+      begin
+        if (Pos + 1 < SrcLen) and (Src[Pos + 1] = #10) then
+          Break;
+        Exit(SetError('control char in comment', 23));
+      end;
+      if (LCh < 32) and (LCh <> Ord(#9)) then
+        Exit(SetError('control char in comment', 23));
+      Advance;
     end;
   end;
   Result := True;
@@ -508,6 +583,19 @@ begin
     or ((ACh >= Ord('a')) and (ACh <= Ord('z')))
     or ((ACh >= Ord('0')) and (ACh <= Ord('9')))
     or (ACh = Ord('-')) or (ACh = Ord('_'));
+end;
+
+function IsTomlForbiddenStringByte(ACh: Byte; AAllowNewlines: Boolean): Boolean; inline;
+begin
+  if ACh = 127 then
+    Exit(True);
+  if ACh >= 32 then
+    Exit(False);
+  if ACh = Ord(#9) then
+    Exit(False);
+  if AAllowNewlines and ((ACh = Ord(#10)) or (ACh = Ord(#13))) then
+    Exit(False);
+  Result := True;
 end;
 
 function TTomlParser.ParseBareKey(out AKey: TStringView): Boolean;
@@ -576,7 +664,7 @@ var
   LBuf: PAnsiChar;
   LBufLen: SizeUInt;
   LErr: TUnescapeError;
-  LFound, LCtrl: PtrInt;
+  LFound, LCtrl, LDel, LBad: PtrInt;
   LRemaining: SizeUInt;
 begin
   AOwned := False;
@@ -588,18 +676,22 @@ begin
     LRemaining := SrcLen - Pos;
     LFound := ScanFindByte2(Src + Pos, LRemaining, Ord('"'), Ord('\'));
     LCtrl := ScanFindInRange(Src + Pos, LRemaining, 0, 31);
-    if (LCtrl >= 0) and ((LFound < 0) or (LCtrl < LFound)) then
+    LDel := ScanFindByte(Src + Pos, LRemaining, 127);
+    LBad := LCtrl;
+    if (LBad < 0) or ((LDel >= 0) and (LDel < LBad)) then
+      LBad := LDel;
+    if (LBad >= 0) and ((LFound < 0) or (LBad < LFound)) then
     begin
-      if Src[Pos + SizeUInt(LCtrl)] = #9 then
+      if Src[Pos + SizeUInt(LBad)] = #9 then
       begin
-        Inc(Pos, SizeUInt(LCtrl) + 1);
-        Col := Col + UInt32(LCtrl) + 1;
+        Inc(Pos, SizeUInt(LBad) + 1);
+        Col := Col + UInt32(LBad) + 1;
         Continue;
       end
       else
       begin
-        Inc(Pos, SizeUInt(LCtrl));
-        Col := Col + UInt32(LCtrl);
+        Inc(Pos, SizeUInt(LBad));
+        Col := Col + UInt32(LBad);
         Exit(SetError('control char in string', 22));
       end;
     end
@@ -631,15 +723,23 @@ begin
   begin
     LBufLen := LEnd - LStart;
     LBuf := Doc^.FAllocator.Allocate(LBufLen);
+    if LBuf = nil then
+      Exit(SetError('out of memory', 13));
     LBufLen := TomlUnescapeToBuffer(Src + LStart, LEnd - LStart, LBuf, LErr);
     if LErr <> ueNone then
     begin
       Doc^.FAllocator.Deallocate(LBuf);
-      Exit(SetError('invalid escape sequence', 22));
+      Exit(SetError('invalid escape sequence', 23));
     end;
     AStr := TStringView.Create(LBuf, LBufLen);
     AOwned := True;
-    Doc^.AddOwnedBuf(LBuf);
+    if not Doc^.AddOwnedBuf(LBuf) then
+    begin
+      Doc^.FAllocator.Deallocate(LBuf);
+      AOwned := False;
+      AStr := TStringView.Empty;
+      Exit(False);
+    end;
   end
   else
     AStr := TStringView.Create(Src + LStart, LEnd - LStart);
@@ -654,7 +754,7 @@ begin
   LStart := Pos;
   while (Pos < SrcLen) and (Src[Pos] <> '''') do
   begin
-    if (Byte(Src[Pos]) < 32) and (Src[Pos] <> #9) then
+    if IsTomlForbiddenStringByte(Byte(Src[Pos]), False) then
       Exit(SetError('control char in string', 22));
     Inc(Pos);
     Inc(Col);
@@ -704,6 +804,8 @@ begin
       end;
       LBufLen := LEnd - LStart;
       LBuf := Doc^.FAllocator.Allocate(LBufLen + 1);
+      if LBuf = nil then
+        Exit(SetError('out of memory', 13));
       LDst := LBuf;
       LI := LStart;
       while LI < LEnd do
@@ -764,10 +866,16 @@ begin
       end;
       AStr := TStringView.Create(LBuf, LBufLen);
       AOwned := True;
-      Doc^.AddOwnedBuf(LBuf);
+      if not Doc^.AddOwnedBuf(LBuf) then
+      begin
+        Doc^.FAllocator.Deallocate(LBuf);
+        AOwned := False;
+        AStr := TStringView.Empty;
+        Exit(False);
+      end;
       Exit(True);
     end;
-    if (Byte(Src[Pos]) < 32) and (Src[Pos] <> #9) and (Src[Pos] <> #10) and (Src[Pos] <> #13) then
+    if IsTomlForbiddenStringByte(Byte(Src[Pos]), True) then
       Exit(SetError('control char in multi-line string', 33));
     Inc(Pos);
     if Src[Pos-1] = #10 then begin Inc(Line); Col := 1; end else Inc(Col);
@@ -808,6 +916,8 @@ begin
       end;
       LBufLen := LEnd - LStart;
       LBuf := Doc^.FAllocator.Allocate(LBufLen + 1);
+      if LBuf = nil then
+        Exit(SetError('out of memory', 13));
       LDst := LBuf;
       LI := LStart;
       while LI < LEnd do
@@ -827,10 +937,15 @@ begin
         end;
       end;
       AStr := TStringView.Create(LBuf, LDst - LBuf);
-      Doc^.AddOwnedBuf(LBuf);
+      if not Doc^.AddOwnedBuf(LBuf) then
+      begin
+        Doc^.FAllocator.Deallocate(LBuf);
+        AStr := TStringView.Empty;
+        Exit(False);
+      end;
       Exit(True);
     end;
-    if (Byte(Src[Pos]) < 32) and (Src[Pos] <> #9) and (Src[Pos] <> #10) and (Src[Pos] <> #13) then
+    if IsTomlForbiddenStringByte(Byte(Src[Pos]), True) then
       Exit(SetError('control char in multi-line literal string', 41));
     Inc(Pos);
     if Src[Pos-1] = #10 then begin Inc(Line); Col := 1; end else Inc(Col);
@@ -861,6 +976,8 @@ begin
     if not ParseLiteralString(LStr) then Exit(False);
   end;
   ANodeIdx := Doc^.AddNode;
+  if ANodeIdx = TOML_NODE_NONE then
+    Exit(False);
   Doc^.FNodes[ANodeIdx].Kind := tnkString;
   Doc^.FNodes[ANodeIdx].Str := LStr;
   Result := True;
@@ -904,6 +1021,8 @@ begin
   begin
     Inc(Pos, 3); Col := Col + 3;
     ANodeIdx := Doc^.AddNode;
+    if ANodeIdx = TOML_NODE_NONE then
+      Exit(False);
     Doc^.FNodes[ANodeIdx].Kind := tnkFloat;
     if LNeg then
       Doc^.FNodes[ANodeIdx].FloatVal := -1.0/0.0
@@ -915,6 +1034,8 @@ begin
   begin
     Inc(Pos, 3); Col := Col + 3;
     ANodeIdx := Doc^.AddNode;
+    if ANodeIdx = TOML_NODE_NONE then
+      Exit(False);
     Doc^.FNodes[ANodeIdx].Kind := tnkFloat;
     Doc^.FNodes[ANodeIdx].FloatVal := TOML_NAN;
     Exit(True);
@@ -931,7 +1052,7 @@ begin
   end
   else if (Pos <> LStart) and (Pos + 1 < SrcLen) and (Src[Pos] = '0') and
     ((Src[Pos+1] = 'x') or (Src[Pos+1] = 'o') or (Src[Pos+1] = 'b')) then
-    Exit(SetError('sign not allowed with base prefix', 34));
+    Exit(SetError('sign not allowed with base prefix', 33));
 
   // Collect digits into buffer (strip underscores with validation)
   LBufLen := 0;
@@ -1013,6 +1134,8 @@ begin
     if LUIntVal > UInt64(High(Int64)) then
       Exit(SetError('integer overflow', 16));
     ANodeIdx := Doc^.AddNode;
+    if ANodeIdx = TOML_NODE_NONE then
+      Exit(False);
     Doc^.FNodes[ANodeIdx].Kind := tnkInt;
     Doc^.FNodes[ANodeIdx].IntVal := Int64(LUIntVal);
     Exit(True);
@@ -1087,6 +1210,8 @@ begin
     Exit(SetError('leading zeros not allowed', 25));
 
   ANodeIdx := Doc^.AddNode;
+  if ANodeIdx = TOML_NODE_NONE then
+    Exit(False);
   if LHasDot or LHasExp then
   begin
     if not ParseDouble(@LBuf[0], SizeUInt(LBufLen), LFloatVal) then
@@ -1111,6 +1236,8 @@ begin
   begin
     Inc(Pos, 4); Col := Col + 4;
     ANodeIdx := Doc^.AddNode;
+    if ANodeIdx = TOML_NODE_NONE then
+      Exit(False);
     Doc^.FNodes[ANodeIdx].Kind := tnkBool;
     Doc^.FNodes[ANodeIdx].BoolVal := True;
     Exit(True);
@@ -1120,6 +1247,8 @@ begin
   begin
     Inc(Pos, 5); Col := Col + 5;
     ANodeIdx := Doc^.AddNode;
+    if ANodeIdx = TOML_NODE_NONE then
+      Exit(False);
     Doc^.FNodes[ANodeIdx].Kind := tnkBool;
     Doc^.FNodes[ANodeIdx].BoolVal := False;
     Exit(True);
@@ -1197,7 +1326,7 @@ begin
         Inc(LP);
       end;
       if LFracLen = 0 then
-        Exit(SetError('fractional seconds need at least 1 digit', 41));
+        Exit(SetError('fractional seconds need at least 1 digit', 40));
       while LFracLen < 9 do begin LFrac := LFrac * 10; Inc(LFracLen); end;
       LNano := UInt32(LFrac);
     end;
@@ -1287,6 +1416,8 @@ begin
     LDT.Flags := LDT.Flags or (Byte(Ord(tdkLocalTime)) shl TOML_DT_KIND_SHIFT);
 
   ANodeIdx := Doc^.AddNode;
+  if ANodeIdx = TOML_NODE_NONE then
+    Exit(False);
   Doc^.FNodes[ANodeIdx].Kind := tnkDateTime;
   Doc^.FNodes[ANodeIdx].DT := LDT;
   Result := True;
@@ -1302,6 +1433,8 @@ begin
     Exit(SetError('max nesting depth exceeded', 26));
   Advance; // skip [
   ANodeIdx := Doc^.AddNode;
+  if ANodeIdx = TOML_NODE_NONE then
+    Exit(False);
   Doc^.FNodes[ANodeIdx].Kind := tnkArray;
   Doc^.FNodes[ANodeIdx].Container.FirstChild := TOML_NODE_NONE;
   Doc^.FNodes[ANodeIdx].Container.LastChild := TOML_NODE_NONE;
@@ -1310,7 +1443,7 @@ begin
   LCount := 0;
   LPrevIdx := TOML_NODE_NONE;
 
-  SkipWhitespaceAndNewlines;
+  if not SkipWhitespaceAndNewlines then Exit(False);
   if (Pos < SrcLen) and (Src[Pos] = ']') then
   begin
     Advance;
@@ -1320,7 +1453,7 @@ begin
 
   while True do
   begin
-    SkipWhitespaceAndNewlines;
+    if not SkipWhitespaceAndNewlines then Exit(False);
     if not ParseValue(LChildIdx) then Exit(False);
     if LCount = 0 then
       Doc^.FNodes[LArrayIdx].Container.FirstChild := LChildIdx
@@ -1328,11 +1461,11 @@ begin
       Doc^.FNodes[LPrevIdx].Next := LChildIdx;
     LPrevIdx := LChildIdx;
     Inc(LCount);
-    SkipWhitespaceAndNewlines;
+    if not SkipWhitespaceAndNewlines then Exit(False);
     if (Pos < SrcLen) and (Src[Pos] = ',') then
     begin
       Advance;
-      SkipWhitespaceAndNewlines;
+      if not SkipWhitespaceAndNewlines then Exit(False);
       if (Pos < SrcLen) and (Src[Pos] = ']') then
       begin
         Advance;
@@ -1355,7 +1488,7 @@ end;
 function TTomlParser.ParseInlineTable(out ANodeIdx: UInt32): Boolean;
 var
   LTableIdx, LChildIdx, LTarget: UInt32;
-  LKeys: array[0..31] of TStringView;
+  LKeys: array[0..MAX_NESTING_DEPTH - 1] of TStringView;
   LKeyCount: Int32;
   LI: Int32;
   LFirst: Boolean;
@@ -1365,6 +1498,8 @@ begin
     Exit(SetError('max nesting depth exceeded', 26));
   Advance; // skip {
   ANodeIdx := Doc^.AddNode;
+  if ANodeIdx = TOML_NODE_NONE then
+    Exit(False);
   Doc^.FNodes[ANodeIdx].Kind := tnkTable;
   Doc^.FNodes[ANodeIdx].Flags := TOML_NODE_FLAG_INLINE;
   Doc^.FNodes[ANodeIdx].Container.FirstChild := TOML_NODE_NONE;
@@ -1432,7 +1567,7 @@ var
   LI: SizeUInt;
 begin
   if IsEOF then
-    Exit(SetError('unexpected end of input', 22));
+    Exit(SetError('unexpected end of input', 23));
   LCh := Peek;
   case LCh of
     Ord('"'), Ord(''''): Exit(ParseString(ANodeIdx));
@@ -1491,7 +1626,8 @@ begin
   if Doc^.FNodes[ATableIdx].Container.Count >= HASH_INDEX_THRESHOLD then
   begin
     Result := Doc^.HashLookup(ATableIdx, AKey, LHash);
-    Exit;
+    if Result <> TOML_NODE_NONE then
+      Exit;
   end;
   LCur := Doc^.FNodes[ATableIdx].Container.FirstChild;
   while LCur <> TOML_NODE_NONE do
@@ -1563,6 +1699,8 @@ begin
     Exit(TOML_NODE_NONE);
   end;
   LNewIdx := Doc^.AddNode;
+  if LNewIdx = TOML_NODE_NONE then
+    Exit(TOML_NODE_NONE);
   Doc^.FNodes[LNewIdx].Kind := tnkTable;
   if not AImplicit then
     Doc^.FNodes[LNewIdx].Flags := TOML_NODE_FLAG_EXPLICIT;
@@ -1578,7 +1716,7 @@ end;
 
 function TTomlParser.ParseKeyValue(ATableIdx: UInt32): Boolean;
 var
-  LKeys: array[0..31] of TStringView;
+  LKeys: array[0..MAX_NESTING_DEPTH - 1] of TStringView;
   LKeyCount: Int32;
   LValueIdx, LTargetTable: UInt32;
   LI: Int32;
@@ -1616,7 +1754,7 @@ end;
 
 function TTomlParser.ParseTableHeader(out AIsArray: Boolean): Boolean;
 var
-  LKeys: array[0..31] of TStringView;
+  LKeys: array[0..MAX_NESTING_DEPTH - 1] of TStringView;
   LKeyCount: Int32;
   LI: Int32;
   LCurrent, LNewIdx, LArrayIdx: UInt32;
@@ -1658,6 +1796,8 @@ begin
     if LArrayIdx = TOML_NODE_NONE then
     begin
       LArrayIdx := Doc^.AddNode;
+      if LArrayIdx = TOML_NODE_NONE then
+        Exit(False);
       Doc^.FNodes[LArrayIdx].Kind := tnkArray;
       Doc^.FNodes[LArrayIdx].Flags := TOML_NODE_FLAG_ARRAY_TABLE;
       Doc^.FNodes[LArrayIdx].Key := LKeys[LKeyCount - 1];
@@ -1674,6 +1814,8 @@ begin
       Exit(SetError('cannot extend value array as array-table', 40));
     // Add new table element to array
     LNewIdx := Doc^.AddNode;
+    if LNewIdx = TOML_NODE_NONE then
+      Exit(False);
     Doc^.FNodes[LNewIdx].Kind := tnkTable;
     Doc^.FNodes[LNewIdx].Container.FirstChild := TOML_NODE_NONE;
     Doc^.FNodes[LNewIdx].Container.LastChild := TOML_NODE_NONE;
@@ -1703,6 +1845,17 @@ var
   LIsArray: Boolean;
   LI: UInt32;
 begin
+  if not FInited then
+  begin
+    SetOutOfMemoryError;
+    Exit(False);
+  end;
+  if FNodes = nil then
+  begin
+    if not FHasError then
+      SetOutOfMemoryError;
+    Exit(False);
+  end;
   // Clean up state from any previous parse
   if FOwnedBufs <> nil then
   begin
@@ -1736,6 +1889,8 @@ begin
 
   // Create root table
   LRootIdx := AddNode;
+  if LRootIdx = TOML_NODE_NONE then
+    Exit(False);
   FNodes[LRootIdx].Kind := tnkTable;
   FNodes[LRootIdx].Key := TStringView.Empty;
   FNodes[LRootIdx].Container.FirstChild := TOML_NODE_NONE;
@@ -1743,7 +1898,8 @@ begin
   FNodes[LRootIdx].Container.Count := 0;
   LCurrentTable := LRootIdx;
 
-  LP.SkipWhitespaceAndNewlines;
+  if not LP.SkipWhitespaceAndNewlines then
+    Exit(False);
   while not LP.IsEOF do
   begin
     if LP.Peek = Ord('[') then
@@ -1764,13 +1920,17 @@ begin
     end;
     LP.SkipWhitespaceInline;
     if (not LP.IsEOF) and (LP.Peek = Ord('#')) then
-      LP.SkipComment;
+    begin
+      if not LP.SkipComment then
+        Exit(False);
+    end;
     if (not LP.IsEOF) and (LP.Peek <> Ord(#10)) and (LP.Peek <> Ord(#13)) then
     begin
       LP.SetError('expected newline', 16);
       Exit(False);
     end;
-    LP.SkipWhitespaceAndNewlines;
+    if not LP.SkipWhitespaceAndNewlines then
+      Exit(False);
   end;
   Result := True;
 end;

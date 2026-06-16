@@ -22,6 +22,10 @@ interface
 
 uses
   SysUtils, Classes,
+  nextpas.core.base.utils,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.tls.base;  // P2: TSSLProtocolVersions for shared helpers
 
 {$IFDEF USE_SYNCOBJS}
@@ -215,6 +219,10 @@ procedure LogDeprecatedProtocolWarnings(const ABackendName: string; AVersions: T
 
 implementation
 
+uses
+  nextpas.core.text.strings;
+
+
 { P2: 共享辅助函数 - 废弃协议警告 }
 procedure LogDeprecatedProtocolWarnings(const ABackendName: string; AVersions: TSSLProtocolVersions);
 const
@@ -253,9 +261,12 @@ function TBaseLogger.FormatMessage(ALevel: TSecurityEventLevel; const ACategory,
 var
   LTimeStr: string;
 begin
-  LTimeStr := FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', Now);
+  LTimeStr := FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', nextpas.core.time.DateTimeNow);
   // Format: [Time] [Level] [Category] Message
-  Result := Format('[%s] [%s] [%s] %s', [LTimeStr, LOG_LEVEL_NAMES[ALevel], ACategory, AMessage]);
+  Result := nextpas.core.text.conv.Format(
+    '[%s] [%s] [%s] %s',
+    [LTimeStr, LOG_LEVEL_NAMES[ALevel], ACategory, AMessage]
+  );
 end;
 
 procedure TBaseLogger.Log(ALevel: TSecurityEventLevel; const ACategory, AMessage: string);
@@ -299,7 +310,10 @@ procedure TBaseLogger.LogAudit(const ACategory, AAction, AUser, ADetails: string
 var
   LMsg: string;
 begin
-  LMsg := Format('Action=%s User=%s Details=%s', [AAction, AUser, ADetails]);
+  LMsg := nextpas.core.text.conv.Format(
+    'Action=%s User=%s Details=%s',
+    [AAction, AUser, ADetails]
+  );
   Log(selAudit, ACategory, LMsg);
 end;
 
@@ -346,12 +360,12 @@ begin
   InitCriticalSection(FLock);
 
   // Ensure log directory exists
-  LDir := ExtractFilePath(AFileName);
-  if (LDir <> '') and not DirectoryExists(LDir) then
-    ForceDirectories(LDir);
+  LDir := nextpas.core.fs.PathDir(AFileName);
+  if (LDir <> '') and not nextpas.core.fs.IsDir(LDir) then
+    nextpas.core.fs.MkdirAll(LDir);
 
   // Get current file size if exists
-  if FileExists(FFileName) then
+  if nextpas.core.fs.IsFile(FFileName) then
   begin
     try
       with TFileStream.Create(FFileName, fmOpenRead or fmShareDenyWrite) do
@@ -386,22 +400,22 @@ begin
   // Delete oldest file if exists
   if FMaxFiles > 0 then
   begin
-    LOldName := FFileName + '.' + IntToStr(FMaxFiles);
-    if FileExists(LOldName) then
-      DeleteFile(LOldName);
+    LOldName := FFileName + '.' + nextpas.core.text.conv.IntToStr(FMaxFiles);
+    if nextpas.core.fs.IsFile(LOldName) then
+      nextpas.core.fs.Remove(LOldName);
 
     // Rename existing rotated files
     for I := FMaxFiles - 1 downto 1 do
     begin
-      LOldName := FFileName + '.' + IntToStr(I);
-      LNewName := FFileName + '.' + IntToStr(I + 1);
-      if FileExists(LOldName) then
-        RenameFile(LOldName, LNewName);
+      LOldName := FFileName + '.' + nextpas.core.text.conv.IntToStr(I);
+      LNewName := FFileName + '.' + nextpas.core.text.conv.IntToStr(I + 1);
+      if nextpas.core.fs.IsFile(LOldName) then
+        nextpas.core.fs.Rename(LOldName, LNewName);
     end;
 
     // Rename current log file
-    if FileExists(FFileName) then
-      RenameFile(FFileName, FFileName + '.1');
+    if nextpas.core.fs.IsFile(FFileName) then
+      nextpas.core.fs.Rename(FFileName, FFileName + '.1');
   end;
 
   FCurrentSize := 0;
@@ -418,7 +432,7 @@ begin
     CheckRotation;
 
     AssignFile(LFile, FFileName);
-    if FileExists(FFileName) then
+    if nextpas.core.fs.IsFile(FFileName) then
       Append(LFile)
     else
       Rewrite(LFile);
@@ -447,7 +461,6 @@ end;
 destructor TCompositeLogger.Destroy;
 begin
   DoneCriticalSection(FLock);
-  FLoggers.Free;
   inherited;
 end;
 
@@ -606,7 +619,6 @@ end;
 constructor TSSLProfiler.CreateInstance;
 begin
   inherited Create;
-  FEntries := TStringList.Create;
   FEntries.Sorted := True;
   InitCriticalSection(FLock);
 end;
@@ -622,7 +634,6 @@ begin
     if LEntry <> nil then
       Dispose(LEntry);
   end;
-  FEntries.Free;
   DoneCriticalSection(FLock);
   inherited;
 end;
@@ -639,7 +650,7 @@ end;
 
 class procedure TSSLProfiler.FreeProfilerInstance;
 begin
-  FreeAndNil(FInstance);
+  nextpas.core.base.utils.FreeAndNil(FInstance);
 end;
 
 function TSSLProfiler.StartMeasure(const AName: string): Int64;
@@ -693,14 +704,15 @@ var
   I: Integer;
   LEntry: ^TProfileEntry;
   LAvg: Double;
-  LResult: TStringList;
+  LResult: TStringArray;
 begin
-  LResult := TStringList.Create;
   try
     LResult.Add('Performance Profile Report');
     LResult.Add(StringOfChar('=', 80));
-    LResult.Add(Format('%-30s %8s %10s %10s %10s %10s',
-      ['Name', 'Count', 'Total(ms)', 'Avg(ms)', 'Min(ms)', 'Max(ms)']));
+    LResult.Add(nextpas.core.text.conv.Format(
+      '%-30s %8s %10s %10s %10s %10s',
+      ['Name', 'Count', 'Total(ms)', 'Avg(ms)', 'Min(ms)', 'Max(ms)']
+    ));
     LResult.Add(StringOfChar('-', 80));
 
     EnterCriticalSection(FLock);
@@ -713,18 +725,19 @@ begin
         else
           LAvg := 0;
 
-        LResult.Add(Format('%-30s %8d %10d %10.2f %10d %10d',
+        LResult.Add(nextpas.core.text.conv.Format(
+          '%-30s %8d %10d %10.2f %10d %10d',
           [LEntry^.Name, LEntry^.Count, LEntry^.TotalTimeMs,
-          LAvg, LEntry^.MinTimeMs, LEntry^.MaxTimeMs]));
+          LAvg, LEntry^.MinTimeMs, LEntry^.MaxTimeMs]
+        ));
       end;
     finally
       LeaveCriticalSection(FLock);
     end;
 
     LResult.Add(StringOfChar('=', 80));
-    Result := LResult.Text;
+    Result := StringsJoin(LResult, sLineBreak);
   finally
-    LResult.Free;
   end;
 end;
 

@@ -4,6 +4,7 @@ program test_hashset;
 
 uses
   SysUtils,
+  nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.collections.hashset.intf,
   nextpas.core.collections.hashset;
@@ -16,6 +17,36 @@ type
 
 var
   T: TTestRunner;
+
+function FoldAscii(const S: string): string;
+var
+  I: SizeInt;
+begin
+  Result := S;
+  for I := 1 to Length(Result) do
+    if (Result[I] >= 'A') and (Result[I] <= 'Z') then
+      Result[I] := Chr(Ord(Result[I]) + Ord('a') - Ord('A'));
+end;
+
+function HashCaseInsensitive(const S: string): UInt32;
+var
+  I: SizeInt;
+  C: Char;
+begin
+  Result := 2166136261;
+  for I := 1 to Length(S) do
+  begin
+    C := S[I];
+    if (C >= 'A') and (C <= 'Z') then
+      C := Chr(Ord(C) + Ord('a') - Ord('A'));
+    Result := (Result xor Ord(C)) * 16777619;
+  end;
+end;
+
+function EqualsCaseInsensitive(const L, R: string): Boolean;
+begin
+  Result := FoldAscii(L) = FoldAscii(R);
+end;
 
 procedure TestAddContains;
 var
@@ -114,6 +145,107 @@ begin
   Check(True);
 end;
 
+procedure TestSerializeNilPositiveCountRaises;
+var
+  LS: TIntSet;
+  LRaised: Boolean;
+begin
+  LS := TIntSet.Create;
+  try
+    LS.Add(10);
+    LRaised := False;
+    try
+      LS.SerializeToArrayBuffer(nil, 1);
+    except
+      on E: EArgumentNil do
+        LRaised := True;
+    end;
+    Check(LRaised, 'serialize nil destination raises');
+  finally
+    LS.Free;
+  end;
+end;
+
+procedure TestSerializeCountPastEndRaises;
+var
+  LS: TIntSet;
+  LOut: Integer;
+  LRaised: Boolean;
+begin
+  LS := TIntSet.Create;
+  try
+    LS.Add(10);
+    LRaised := False;
+    try
+      LS.SerializeToArrayBuffer(@LOut, 2);
+    except
+      on E: EOutOfRange do
+        LRaised := True;
+    end;
+    Check(LRaised, 'serialize count past end raises');
+  finally
+    LS.Free;
+  end;
+end;
+
+procedure CheckCaseInsensitiveSet(const AName: string; const ASet: TStrSet; const AKey: string; AExpectedCount: SizeUInt);
+begin
+  Check(ASet.Contains(AKey), AName + ' should contain ' + AKey + ' using custom equality');
+  Check(not ASet.Add(FoldAscii(AKey)), AName + ' should reject duplicate under custom equality');
+  CheckEqual(Int64(AExpectedCount), Int64(ASet.Count), AName + ' count after duplicate');
+end;
+
+procedure TestSetAlgebraPreservesCustomEquality;
+var
+  LLeft: TStrSet;
+  LRight: TStrSet;
+  LUnion: TStrSet;
+  LIntersection: TStrSet;
+  LDifference: TStrSet;
+  LSymmetric: TStrSet;
+begin
+  LLeft := TStrSet.Create(0, @HashCaseInsensitive, @EqualsCaseInsensitive);
+  LRight := TStrSet.Create(0, @HashCaseInsensitive, @EqualsCaseInsensitive);
+  try
+    LLeft.Add('Alpha');
+    LLeft.Add('Beta');
+    LRight.Add('alpha');
+    LRight.Add('Gamma');
+
+    LUnion := LLeft.Union(LRight);
+    try
+      CheckCaseInsensitiveSet('union', LUnion, 'ALPHA', 3);
+    finally
+      LUnion.Free;
+    end;
+
+    LIntersection := LLeft.Intersection(LRight);
+    try
+      CheckCaseInsensitiveSet('intersection', LIntersection, 'ALPHA', 1);
+    finally
+      LIntersection.Free;
+    end;
+
+    LDifference := LLeft.Difference(LRight);
+    try
+      CheckCaseInsensitiveSet('difference', LDifference, 'BETA', 1);
+    finally
+      LDifference.Free;
+    end;
+
+    LSymmetric := LLeft.SymmetricDifference(LRight);
+    try
+      CheckCaseInsensitiveSet('symmetric difference', LSymmetric, 'BETA', 2);
+      CheckCaseInsensitiveSet('symmetric difference', LSymmetric, 'GAMMA', 2);
+    finally
+      LSymmetric.Free;
+    end;
+  finally
+    LRight.Free;
+    LLeft.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.hashset');
   T.Run('Add/Contains', @TestAddContains);
@@ -124,5 +256,8 @@ begin
   T.Run('Grow (100 elements)', @TestGrow);
   T.Run('Reserve', @TestReserve);
   T.Run('Auto free (interface)', @TestAutoFree);
+  T.Run('SerializeToArrayBuffer nil positive count raises', @TestSerializeNilPositiveCountRaises);
+  T.Run('SerializeToArrayBuffer count past end raises', @TestSerializeCountPastEndRaises);
+  T.Run('set algebra preserves custom equality', @TestSetAlgebraPreservesCustomEquality);
   T.Summary;
 end.

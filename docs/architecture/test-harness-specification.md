@@ -173,14 +173,23 @@ fixture 相关的 build / run evidence 当前固定输出到：
 - stage0 产物和 host FPC scratch 不再落在 fixture 邻近源码目录
 - source tree 是否“脏”不再反向影响 fixture collection
 
+Linux x86_64 baseline 的 stage0 target artifact 运行路径还必须和本地验证保持一致：
+如果产物请求的 ELF interpreter 是 `/lib/ld64.so.1`，而当前 host 缺少这个 interpreter，
+但 `/lib64/ld-linux-x86-64.so.2` 可执行，runner 可以通过该 loader 显式运行目标产物。
+这条 fallback 只适用于 stage0 生成的 target artifact run；宿主 `fpc`、`stage0`
+驱动本身，以及 `rtl` / `crt` / `regression` 等 host-backed fixture 仍按普通进程直接运行。
+
 ## `harness` 和 `stage0`、本地验证、CI 的关系
 
 - `compiler-pass` 与 `compiler-fail` 当前已经通过 `stage0 build` 进入真实 nextPas 控制面
 - `build/verify_local.sh` 当前必须复用 `./tests/run_all_tests.sh --filter smoke`
-- Linux CI 当前直接复用 `./build/verify_local.sh`
+- Linux CI 当前先运行 `make test-tooling`，再通过 `make verify` 进入本地验证
 
 也就是说，本地验证和 CI 现在都应该建立在同一条 `harness` 结果语义之上，而不是各自维护一套
 只在自己环境里碰巧成立的判断规则。
+
+`make verify` 会在根目录 hygiene gate 后调用 `./build/verify_local.sh`，再做一次 hygiene
+检查。CI 不应直接绕过根目录 Makefile gate 调用 `build/verify_local.sh`。
 
 ## 这里必须诚实保留 host-backed 边界
 

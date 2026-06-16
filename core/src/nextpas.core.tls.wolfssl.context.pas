@@ -19,6 +19,11 @@ interface
 
 uses
   SysUtils, Classes, Base64,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.io.intf,
+  nextpas.core.io.util,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
@@ -85,6 +90,8 @@ type
       const AFeature, AMethodName: string);
     procedure RejectUnsupportedCustomCipherAssignment(
       const AFeature, AMethodName: string);
+    function ReadLimitedStreamBytes(const AStream: IStream; const AMaxSize: Int64;
+      const ASubject: string): TBytes;
 
   public
     constructor Create(ALibrary: ISSLLibrary; AType: TSSLContextType);
@@ -321,6 +328,26 @@ begin
   inherited Destroy;
 end;
 
+function TWolfSSLContext.ReadLimitedStreamBytes(const AStream: IStream;
+  const AMaxSize: Int64; const ASubject: string): TBytes;
+var
+  LReader: IReader;
+begin
+  if AStream = nil then
+    raise ESSLCertError.Create('Stream is nil');
+
+  LReader := IoLimitReader(AStream, AMaxSize + 1);
+  Result := IoReadAll(LReader);
+
+  if Length(Result) = 0 then
+    raise ESSLCertError.Create('Stream is empty');
+  if Length(Result) > AMaxSize then
+    raise ESSLInvalidArgument.CreateFmt(
+      '%s exceeds maximum allowed size (%d > %d bytes)',
+      [ASubject, Length(Result), AMaxSize]
+    );
+end;
+
 function TWolfSSLContext.GetWolfSSLMethod: PWOLFSSL_METHOD;
 begin
   Result := nil;
@@ -494,7 +521,7 @@ begin
   if AFileName = '' then
     raise ESSLInvalidArgument.Create('AFileName must not be empty');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLCertError.CreateFmt('Certificate file not found: %s', [AFileName]);
 
   LSize := GetFileSizeByName(AFileName);
@@ -524,16 +551,11 @@ begin
   if not Assigned(wolfSSL_CTX_use_certificate_buffer) then
     raise ESSLCertError.Create('wolfSSL_CTX_use_certificate_buffer not available');
 
-  // 读取流内容到缓冲区
-  SetLength(LBuffer, AStream.Size - AStream.Position);
-  if Length(LBuffer) = 0 then
-    raise ESSLCertError.Create('Stream is empty');
-  if Length(LBuffer) > MAX_CERTIFICATE_SIZE then
-    raise ESSLInvalidArgument.CreateFmt(
-      'Certificate stream exceeds maximum allowed size (%d > %d bytes)',
-      [Length(LBuffer), MAX_CERTIFICATE_SIZE]);
-
-  AStream.ReadBuffer(LBuffer[0], Length(LBuffer));
+  LBuffer := ReadLimitedStreamBytes(
+    WrapTStream(AStream, False),
+    MAX_CERTIFICATE_SIZE,
+    'Certificate stream'
+  );
 
   // 尝试 PEM 格式
   LRet := wolfSSL_CTX_use_certificate_buffer(FWolfSSLCtx, @LBuffer[0],
@@ -584,7 +606,7 @@ begin
   if AFileName = '' then
     raise ESSLInvalidArgument.Create('AFileName must not be empty');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLCertError.CreateFmt('Private key file not found: %s', [AFileName]);
 
   LSize := GetFileSizeByName(AFileName);
@@ -617,19 +639,14 @@ begin
   if not Assigned(wolfSSL_CTX_use_PrivateKey_buffer) then
     raise ESSLCertError.Create('wolfSSL_CTX_use_PrivateKey_buffer not available');
 
-  // 读取流内容到缓冲区
-  SetLength(LBuffer, AStream.Size - AStream.Position);
-  if Length(LBuffer) = 0 then
-    raise ESSLCertError.Create('Stream is empty');
-  if Length(LBuffer) > MAX_PRIVATE_KEY_SIZE then
-    raise ESSLInvalidArgument.CreateFmt(
-      'Private key stream exceeds maximum allowed size (%d > %d bytes)',
-      [Length(LBuffer), MAX_PRIVATE_KEY_SIZE]);
-
   if APassword <> '' then
     RejectUnsupportedPasswordProtectedKey('TWolfSSLContext.LoadPrivateKey(AStream)');
 
-  AStream.ReadBuffer(LBuffer[0], Length(LBuffer));
+  LBuffer := ReadLimitedStreamBytes(
+    WrapTStream(AStream, False),
+    MAX_PRIVATE_KEY_SIZE,
+    'Private key stream'
+  );
 
   // 尝试 PEM 格式
   LRet := wolfSSL_CTX_use_PrivateKey_buffer(FWolfSSLCtx, @LBuffer[0],
@@ -660,7 +677,7 @@ begin
     raise ESSLCertError.Create('wolfSSL_CTX_use_certificate_buffer not available');
 
   // 转换 PEM 字符串为字节数组
-  LBuffer := TEncoding.UTF8.GetBytes(UnicodeString(APEM));
+  LBuffer := nextpas.core.text.conv.StringToUTF8Bytes(APEM));
 
   LRet := wolfSSL_CTX_use_certificate_buffer(FWolfSSLCtx, @LBuffer[0],
     Length(LBuffer), WOLFSSL_FILETYPE_PEM);
@@ -683,7 +700,7 @@ begin
     raise ESSLCertError.Create('wolfSSL_CTX_use_PrivateKey_buffer not available');
 
   // 转换 PEM 字符串为字节数组
-  LBuffer := TEncoding.UTF8.GetBytes(UnicodeString(APEM));
+  LBuffer := nextpas.core.text.conv.StringToUTF8Bytes(APEM));
 
   if APassword <> '' then
     RejectUnsupportedPasswordProtectedKey('TWolfSSLContext.LoadPrivateKeyPEM');
@@ -704,7 +721,7 @@ begin
   if AFileName = '' then
     raise ESSLInvalidArgument.Create('AFileName must not be empty');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLCertError.CreateFmt('CA file not found: %s', [AFileName]);
 
   LSize := GetFileSizeByName(AFileName);
@@ -724,7 +741,7 @@ procedure TWolfSSLContext.LoadCAPath(const APath: string);
 begin
   RequireValidContext('LoadCAPath');
 
-  if not DirectoryExists(APath) then
+  if not nextpas.core.fs.IsDir(APath) then
     raise ESSLCertError.CreateFmt('CA path not found: %s', [APath]);
 
   if not Assigned(wolfSSL_CTX_load_verify_locations) then
@@ -798,7 +815,7 @@ procedure TWolfSSLContext.RejectUnsupportedCallbackAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    Format('%s is not published by the current WolfSSL backend runtime. ' +
+    nextpas.core.text.conv.Format('%s is not published by the current WolfSSL backend runtime. ' +
       'Check ISSLLibrary.GetCapabilities.SupportsCallbacks before installing a non-nil callback.',
       [AFeature]),
     sslErrUnsupported,
@@ -837,7 +854,7 @@ procedure TWolfSSLContext.RejectUnsupportedCustomCipherAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    Format('%s is not published by the current WolfSSL backend runtime. ' +
+    nextpas.core.text.conv.Format('%s is not published by the current WolfSSL backend runtime. ' +
       'Check ISSLLibrary.GetCapabilities.SupportsCustomCipherSuites before installing a custom non-default cipher override.',
       [AFeature]),
     sslErrUnsupported,
@@ -1012,7 +1029,7 @@ begin
 
   if Length(LHash) <> 32 then
     raise ESSLException.CreateWithContext(
-      Format('Invalid Base64 hash length: expected 32, got %d', [Length(LHash)]),
+      nextpas.core.text.conv.Format('Invalid Base64 hash length: expected 32, got %d', [Length(LHash)]),
       sslErrInvalidParam,
       'TWolfSSLContext.AddCertificatePinBase64'
     );
@@ -1067,6 +1084,7 @@ function TWolfSSLContext.CreateConnection(AStream: TStream): ISSLConnection;
 var
   LExposeEarlyData: Boolean;
   LExposeOCSP: Boolean;
+  LTransport: IStream;
 begin
   RequireValidContext('CreateConnection');
 
@@ -1079,15 +1097,16 @@ begin
 
   LExposeEarlyData := HasEarlyDataCapability;
   LExposeOCSP := HasClientOCSPCapability;
+  LTransport := WrapTStream(AStream, False);
 
   if LExposeEarlyData and LExposeOCSP then
-    Result := nextpas.core.tls.wolfssl.connection.TWolfSSLAdvancedConnection.Create(Self, AStream)
+    Result := nextpas.core.tls.wolfssl.connection.TWolfSSLAdvancedConnection.Create(Self, LTransport)
   else if LExposeEarlyData then
-    Result := nextpas.core.tls.wolfssl.connection.TWolfSSLEarlyDataConnection.Create(Self, AStream)
+    Result := nextpas.core.tls.wolfssl.connection.TWolfSSLEarlyDataConnection.Create(Self, LTransport)
   else if LExposeOCSP then
-    Result := nextpas.core.tls.wolfssl.connection.TWolfSSLOCSPConnection.Create(Self, AStream)
+    Result := nextpas.core.tls.wolfssl.connection.TWolfSSLOCSPConnection.Create(Self, LTransport)
   else
-    Result := nextpas.core.tls.wolfssl.connection.TWolfSSLConnection.Create(Self, AStream);
+    Result := nextpas.core.tls.wolfssl.connection.TWolfSSLConnection.Create(Self, LTransport);
 end;
 
 { 状态查询 }
@@ -1192,7 +1211,7 @@ begin
 
     if LRet <> 1 then
       raise ESSLException.CreateWithContext(
-        Format('wolfSSL_CTX_set_max_early_data failed (policy=%d, return=%d)',
+        nextpas.core.text.conv.Format('wolfSSL_CTX_set_max_early_data failed (policy=%d, return=%d)',
           [Ord(APolicy), LRet]),
         sslErrGeneral,
         'SetServerEarlyDataPolicy'
@@ -1220,7 +1239,7 @@ begin
     LRet := wolfSSL_CTX_set_max_early_data(FWolfSSLCtx, ASize);
     if LRet <> 1 then
       raise ESSLException.CreateWithContext(
-        Format('wolfSSL_CTX_set_max_early_data failed (size=%d, return=%d)',
+        nextpas.core.text.conv.Format('wolfSSL_CTX_set_max_early_data failed (size=%d, return=%d)',
           [ASize, LRet]),
         sslErrGeneral,
         'SetServerMaxEarlyDataSize'
@@ -1267,9 +1286,9 @@ var
 begin
   RequireValidContext('LoadServerStapledOCSPResponseFile');
 
-  if not FileExists(AFileName) then
+  if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLException.CreateWithContext(
-      Format('OCSP response file not found: %s', [AFileName]),
+      nextpas.core.text.conv.Format('OCSP response file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'LoadServerStapledOCSPResponseFile'
     );
@@ -1286,7 +1305,7 @@ begin
 
       if LSize > MAX_OCSP_RESPONSE_SIZE then
         raise ESSLInvalidArgument.Create(
-          Format('OCSP response file too large (%d bytes, max %d)',
+          nextpas.core.text.conv.Format('OCSP response file too large (%d bytes, max %d)',
             [LSize, MAX_OCSP_RESPONSE_SIZE]),
           sslErrInvalidParam
         );
@@ -1303,7 +1322,7 @@ begin
       raise;
     on E: Exception do
       raise ESSLException.CreateWithContext(
-        Format('Failed to load OCSP response file: %s', [E.Message]),
+        nextpas.core.text.conv.Format('Failed to load OCSP response file: %s', [E.Message]),
         sslErrLoadFailed,
         'LoadServerStapledOCSPResponseFile'
       );
