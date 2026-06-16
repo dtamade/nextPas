@@ -75,6 +75,7 @@ type
 
 function IniParse(const AContent: string): TIniFile;
 function IniParseWith(const AContent: string; const AAllocator: IAllocator): TIniFile;
+function IniStringify(const AFile: TIniFile): string; inline;
 
 implementation
 
@@ -782,6 +783,11 @@ begin
     Result.Free;
     raise;
   end;
+end;
+
+function IniStringify(const AFile: TIniFile): string;
+begin
+  Result := AFile.ToString;
 end;
 
 end.
