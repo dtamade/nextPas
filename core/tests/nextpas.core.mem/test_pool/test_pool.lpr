@@ -20,13 +20,11 @@ type
   public
     GetCalls: Integer;
     FreeCalls: Integer;
-    function Allocate(const ASize: SizeUInt): Pointer;
-    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-    procedure Deallocate(const APtr: Pointer);
     function GetMem(aSize: SizeUInt): Pointer;
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
+    function MemSize(aPtr: Pointer): SizeUInt;
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     procedure FreeAligned(aPtr: Pointer);
     function Traits: TAllocatorTraits;
@@ -49,21 +47,6 @@ begin
   end;
 end;
 
-function TFixedPoolRecordingAllocator.Allocate(const ASize: SizeUInt): Pointer;
-begin
-  Result := GetMem(ASize);
-end;
-
-function TFixedPoolRecordingAllocator.Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-begin
-  Result := ReallocMem(APtr, ANewSize);
-end;
-
-procedure TFixedPoolRecordingAllocator.Deallocate(const APtr: Pointer);
-begin
-  FreeMem(APtr);
-end;
-
 function TFixedPoolRecordingAllocator.GetMem(aSize: SizeUInt): Pointer;
 begin
   Inc(GetCalls);
@@ -83,6 +66,11 @@ end;
 procedure TFixedPoolRecordingAllocator.FreeMem(aDst: Pointer);
 begin
   Inc(FreeCalls);
+end;
+
+function TFixedPoolRecordingAllocator.MemSize(aPtr: Pointer): SizeUInt;
+begin
+  Result := 0;
 end;
 
 function TFixedPoolRecordingAllocator.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;

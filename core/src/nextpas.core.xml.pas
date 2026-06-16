@@ -88,7 +88,7 @@ begin
     LNewCap := ACap;
   while LNewCap < ANeeded do
     LNewCap := LNewCap * 2;
-  LNewPtr := AAllocator.Reallocate(Pointer(ASlots),
+  LNewPtr := AAllocator.ReallocMem(Pointer(ASlots),
     SizeUInt(LNewCap) * SizeOf(TXmlToken));
   if LNewPtr = nil then
     Exit(False);
@@ -108,7 +108,7 @@ begin
     Exit;
   for LI := 0 to ACount - 1 do
     Finalize(ASlots[LI]);
-  AAllocator.Deallocate(Pointer(ASlots));
+  AAllocator.FreeMem(Pointer(ASlots));
   ASlots := nil;
 end;
 

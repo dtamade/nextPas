@@ -38,7 +38,7 @@ end;
 
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
 begin
-  Result := AAllocator.Allocate(ASize);
+  Result := AAllocator.GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
@@ -51,7 +51,7 @@ begin
   LTotal := ACount * AElemSize;
   if (LTotal div AElemSize) <> ACount then
     raise EOutOfMemory.Create(aeOutOfMemory, 'AllocArray: size overflow');
-  Result := AAllocator.Allocate(LTotal);
+  Result := AAllocator.GetMem(LTotal);
   if Result <> nil then
     FillChar(Result^, LTotal, 0);
 end;

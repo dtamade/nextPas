@@ -97,13 +97,11 @@ type
     function GetCapacity: SizeUInt;
     function GetUsed: SizeUInt;
 
-    function Allocate(const ASize: SizeUInt): Pointer;
-    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-    procedure Deallocate(const APtr: Pointer);
     function GetMem(aSize: SizeUInt): Pointer;
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
+    function MemSize(aPtr: Pointer): SizeUInt;
 
     // IAllocator aligned allocation (fallback to GetMem with size class alignment)
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
@@ -1563,19 +1561,9 @@ begin
     Result := 0;
 end;
 
-function TFixedSlabPool.Allocate(const ASize: SizeUInt): Pointer;
+function TFixedSlabPool.MemSize(aPtr: Pointer): SizeUInt;
 begin
-  Result := GetMem(ASize);
-end;
-
-function TFixedSlabPool.Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-begin
-  Result := ReallocMem(APtr, ANewSize);
-end;
-
-procedure TFixedSlabPool.Deallocate(const APtr: Pointer);
-begin
-  FreeMem(APtr);
+  Result := MemSizeOf(aPtr);
 end;
 
 function TFixedSlabPool.GetMem(aSize: SizeUInt): Pointer;

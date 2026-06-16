@@ -364,7 +364,7 @@ procedure THashMap.InitCapacity(aCapacity: SizeUInt);
 begin
   if aCapacity < 4 then aCapacity := 4;
   aCapacity := NextPow2(aCapacity);
-  FBuckets := FAllocator.Allocate(aCapacity * SizeOf(TBucket));
+  FBuckets := FAllocator.GetMem(aCapacity * SizeOf(TBucket));
   FillChar(FBuckets^, aCapacity * SizeOf(TBucket), 0);
   FCapacity := aCapacity;
   FMask := aCapacity - 1;
@@ -395,7 +395,7 @@ begin
       Inc(FCount); Inc(FUsed);
     end;
   end;
-  FAllocator.Deallocate(oldBuckets);
+  FAllocator.FreeMem(oldBuckets);
 end;
 
 function THashMap.KeyHash(const AKey: K): UInt32;
@@ -644,7 +644,7 @@ begin
   Clear;
   if FBuckets <> nil then
   begin
-    FAllocator.Deallocate(FBuckets);
+    FAllocator.FreeMem(FBuckets);
     FBuckets := nil;
   end;
   inherited;

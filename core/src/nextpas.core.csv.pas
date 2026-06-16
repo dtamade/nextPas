@@ -112,7 +112,7 @@ begin
     LNewCap := ACap;
   while LNewCap < ANeeded do
     LNewCap := LNewCap * 2;
-  LNewPtr := AAllocator.Reallocate(Pointer(ASlots),
+  LNewPtr := AAllocator.ReallocMem(Pointer(ASlots),
     SizeUInt(LNewCap) * SizeOf(string));
   if LNewPtr = nil then
     Exit(False);
@@ -131,7 +131,7 @@ begin
     Exit;
   for LI := 0 to ACount - 1 do
     ASlots[LI] := '';
-  AAllocator.Deallocate(Pointer(ASlots));
+  AAllocator.FreeMem(Pointer(ASlots));
   ASlots := nil;
 end;
 
@@ -151,7 +151,7 @@ begin
     LNewCap := ACap;
   while LNewCap < ANeeded do
     LNewCap := LNewCap * 2;
-  LNewPtr := AAllocator.Reallocate(Pointer(ASlots),
+  LNewPtr := AAllocator.ReallocMem(Pointer(ASlots),
     SizeUInt(LNewCap) * SizeOf(TStringArray));
   if LNewPtr = nil then
     Exit(False);
@@ -170,7 +170,7 @@ begin
     Exit;
   for LI := 0 to ACount - 1 do
     SetLength(ASlots[LI], 0);
-  AAllocator.Deallocate(Pointer(ASlots));
+  AAllocator.FreeMem(Pointer(ASlots));
   ASlots := nil;
 end;
 

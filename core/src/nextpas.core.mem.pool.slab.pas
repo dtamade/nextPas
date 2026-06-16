@@ -200,9 +200,7 @@ type
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
-    function Allocate(const ASize: SizeUInt): Pointer;
-    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-    procedure Deallocate(const APtr: Pointer);
+    function MemSize(aPtr: Pointer): SizeUInt;
     // 兼容统计
     property TotalAllocs: SizeUInt read FTotalAllocs;
     property TotalFrees : SizeUInt read FTotalFrees;
@@ -1186,19 +1184,9 @@ begin
     raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
 end;
 
-function TSlabPool.Allocate(const ASize: SizeUInt): Pointer;
+function TSlabPool.MemSize(aPtr: Pointer): SizeUInt;
 begin
-  Result := GetMem(ASize);
-end;
-
-function TSlabPool.Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-begin
-  Result := ReallocMem(APtr, ANewSize);
-end;
-
-procedure TSlabPool.Deallocate(const APtr: Pointer);
-begin
-  FreeMem(APtr);
+  Result := MemSizeOf(aPtr);
 end;
 
 procedure TSlabPool.Reset;

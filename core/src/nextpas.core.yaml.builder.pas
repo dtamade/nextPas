@@ -58,7 +58,7 @@ begin
   YamlDocInit(FDoc);
   FStackTop := -1;
   FOwnedCap := 16;
-  FOwnedStrings := PString(FDoc.Allocator.Allocate(FOwnedCap * SizeOf(string)));
+  FOwnedStrings := PString(FDoc.Allocator.GetMem(FOwnedCap * SizeOf(string)));
   if FOwnedStrings = nil then
   begin
     FDoc.Done;
@@ -77,7 +77,7 @@ begin
     if FOwnedCount > 0 then
       for LI := 0 to FOwnedCount - 1 do
         FOwnedStrings[LI] := '';
-    FDoc.Allocator.Deallocate(Pointer(FOwnedStrings));
+    FDoc.Allocator.FreeMem(Pointer(FOwnedStrings));
     FOwnedStrings := nil;
   end;
   FOwnedCount := 0;
@@ -196,7 +196,7 @@ begin
       FOwnedCap := 16
     else
       FOwnedCap := FOwnedCap * 2;
-    LNewPtr := FDoc.Allocator.Reallocate(Pointer(FOwnedStrings),
+    LNewPtr := FDoc.Allocator.ReallocMem(Pointer(FOwnedStrings),
       FOwnedCap * SizeOf(string));
     if LNewPtr = nil then
       raise EOutOfMemoryError.Create('out of memory');

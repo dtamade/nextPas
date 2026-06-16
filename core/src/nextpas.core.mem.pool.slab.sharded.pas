@@ -109,9 +109,7 @@ type
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
-    function Allocate(const ASize: SizeUInt): Pointer;
-    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-    procedure Deallocate(const APtr: Pointer);
+    function MemSize(aPtr: Pointer): SizeUInt;
 
     // IAllocator aligned allocation
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
@@ -893,19 +891,9 @@ begin
   end;
 end;
 
-function TSlabPoolSharded.Allocate(const ASize: SizeUInt): Pointer;
+function TSlabPoolSharded.MemSize(aPtr: Pointer): SizeUInt;
 begin
-  Result := GetMem(ASize);
-end;
-
-function TSlabPoolSharded.Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-begin
-  Result := ReallocMem(APtr, ANewSize);
-end;
-
-procedure TSlabPoolSharded.Deallocate(const APtr: Pointer);
-begin
-  FreeMem(APtr);
+  Result := MemSizeOf(aPtr);
 end;
 
 function TSlabPoolSharded.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;

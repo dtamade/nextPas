@@ -81,8 +81,8 @@ begin
   FSlots := nil;
   if FAllocator <> nil then
   begin
-    FCtrl := FAllocator.Allocate(ACapacity + GROUP_SIZE);
-    FSlots := FAllocator.Allocate(ACapacity * SizeOf(TSlot));
+    FCtrl := FAllocator.GetMem(ACapacity + GROUP_SIZE);
+    FSlots := FAllocator.GetMem(ACapacity * SizeOf(TSlot));
   end
   else
   begin
@@ -110,8 +110,8 @@ begin
         Finalize(FSlots[i].Value);
   if FAllocator <> nil then
   begin
-    FAllocator.Deallocate(FSlots);
-    FAllocator.Deallocate(FCtrl);
+    FAllocator.FreeMem(FSlots);
+    FAllocator.FreeMem(FCtrl);
   end
   else
   begin
@@ -169,8 +169,8 @@ begin
     end;
     if FAllocator <> nil then
     begin
-      FAllocator.Deallocate(LOldSlots);
-      FAllocator.Deallocate(LOldCtrl);
+      FAllocator.FreeMem(LOldSlots);
+      FAllocator.FreeMem(LOldCtrl);
     end
     else
     begin

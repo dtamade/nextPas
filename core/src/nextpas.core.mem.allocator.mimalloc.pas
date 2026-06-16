@@ -25,6 +25,7 @@ type
     function  DoAllocMem(aSize: SizeUInt): Pointer; override;
     function  DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
     procedure DoFreeMem(aDst: Pointer); override;
+    function  DoMemSize(aPtr: Pointer): SizeUInt; override;
   public
     function  Traits: TAllocatorTraits; override;
   end;
@@ -210,6 +211,12 @@ begin
   if not EnsureMimallocLoaded then
     Exit; // free path when library missing: nothing to do
   _mi_free(aDst);
+end;
+
+function TMimallocAllocator.DoMemSize(aPtr: Pointer): SizeUInt;
+begin
+  if not TryGetMimallocUsableSize(aPtr, Result) then
+    Result := 0;
 end;
 
 function TMimallocAllocator.Traits: TAllocatorTraits;

@@ -41,13 +41,11 @@ type
     FAllocCount: SizeUInt;
     FDeallocCount: SizeUInt;
   public
-    function Allocate(const ASize: SizeUInt): Pointer;
-    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-    procedure Deallocate(const APtr: Pointer);
     function GetMem(aSize: SizeUInt): Pointer;
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
+    function MemSize(aPtr: Pointer): SizeUInt;
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     procedure FreeAligned(aPtr: Pointer);
     function Traits: TAllocatorTraits;
@@ -55,21 +53,6 @@ type
     property AllocCount: SizeUInt read FAllocCount;
     property DeallocCount: SizeUInt read FDeallocCount;
   end;
-
-function TCountingAllocator.Allocate(const ASize: SizeUInt): Pointer;
-begin
-  Result := GetMem(ASize);
-end;
-
-function TCountingAllocator.Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-begin
-  Result := ReallocMem(APtr, ANewSize);
-end;
-
-procedure TCountingAllocator.Deallocate(const APtr: Pointer);
-begin
-  FreeMem(APtr);
-end;
 
 function TCountingAllocator.GetMem(aSize: SizeUInt): Pointer;
 begin
@@ -106,6 +89,11 @@ begin
     Exit;
   Inc(FDeallocCount);
   System.FreeMem(aDst);
+end;
+
+function TCountingAllocator.MemSize(aPtr: Pointer): SizeUInt;
+begin
+  Result := 0;
 end;
 
 function TCountingAllocator.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;

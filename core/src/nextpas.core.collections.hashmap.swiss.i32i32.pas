@@ -77,7 +77,7 @@ begin
   LSlotSize := ACapacity * SizeOf(TSwissSlotI32I32);
   LTotal := LCtrlSize + LSlotSize;
   if FAllocator <> nil then
-    FCtrl := FAllocator.Allocate(LTotal)
+    FCtrl := FAllocator.GetMem(LTotal)
   else
     GetMem(FCtrl, LTotal);
   FSlots := PSwissSlotI32I32(FCtrl + LCtrlSize);
@@ -89,7 +89,7 @@ end;
 procedure TSwissTableI32I32.FreeTable;
 begin
   if FCtrl = nil then Exit;
-  if FAllocator <> nil then FAllocator.Deallocate(FCtrl) else FreeMem(FCtrl);
+  if FAllocator <> nil then FAllocator.FreeMem(FCtrl) else FreeMem(FCtrl);
   FCtrl := nil; FSlots := nil;
 end;
 
@@ -130,7 +130,7 @@ begin
           LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
         end;
       end;
-    if FAllocator <> nil then FAllocator.Deallocate(LOldCtrl) else FreeMem(LOldCtrl);
+    if FAllocator <> nil then FAllocator.FreeMem(LOldCtrl) else FreeMem(LOldCtrl);
   end;
 end;
 

@@ -162,7 +162,7 @@ begin
   CheckEqual(Int64(1), Int64(GFreeMemCalls), 'FreeMem(nil) should be a no-op');
 end;
 
-procedure TestCallbackAllocatorSupportsAllocateInterface;
+procedure TestCallbackAllocatorSupportsCanonicalInterface;
 var
   LAllocator: nextpas.core.mem.intf.IAllocator;
   LPtr: Pointer;
@@ -174,18 +174,18 @@ begin
     @CallbackReallocMem,
     @CallbackFreeMem) as nextpas.core.mem.intf.IAllocator;
 
-  LPtr := LAllocator.Allocate(24);
-  Check(LPtr <> nil, 'Allocate should delegate to the compatibility allocator');
-  CheckEqual(Int64(1), Int64(GGetMemCalls), 'Allocate should route through GetMem');
+  LPtr := LAllocator.GetMem(24);
+  Check(LPtr <> nil, 'GetMem should delegate to the compatibility allocator');
+  CheckEqual(Int64(1), Int64(GGetMemCalls), 'GetMem should route through GetMem');
 
   PByte(LPtr)^ := $33;
-  LPtr := LAllocator.Reallocate(LPtr, 48);
-  Check(LPtr <> nil, 'Reallocate should return a pointer');
-  CheckEqual(Int64(1), Int64(GReallocMemCalls), 'Reallocate should route through ReallocMem');
-  CheckEqual(Int64($33), Int64(PByte(LPtr)^), 'Reallocate should preserve the prefix');
+  LPtr := LAllocator.ReallocMem(LPtr, 48);
+  Check(LPtr <> nil, 'ReallocMem should return a pointer');
+  CheckEqual(Int64(1), Int64(GReallocMemCalls), 'ReallocMem should route through ReallocMem');
+  CheckEqual(Int64($33), Int64(PByte(LPtr)^), 'ReallocMem should preserve the prefix');
 
-  LAllocator.Deallocate(LPtr);
-  CheckEqual(Int64(1), Int64(GFreeMemCalls), 'Deallocate should route through FreeMem');
+  LAllocator.FreeMem(LPtr);
+  CheckEqual(Int64(1), Int64(GFreeMemCalls), 'FreeMem should route through FreeMem');
 end;
 
 procedure TestRtlAllocatorZeroInitTraitsAndAlignedAlloc;
@@ -629,7 +629,7 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.mem.contracts');
   T.Run('callback allocator compatibility methods', @TestCallbackAllocatorCompatibilityMethods);
-  T.Run('callback allocator supports allocate interface', @TestCallbackAllocatorSupportsAllocateInterface);
+  T.Run('callback allocator supports canonical interface', @TestCallbackAllocatorSupportsCanonicalInterface);
   T.Run('rtl allocator zero init traits and aligned alloc', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
   T.Run('rtl allocator aligned alloc rejects size overflow', @TestRtlAllocatorAlignedAllocRejectsSizeOverflow);
   T.Run('aligned compat shim smoke', @TestAlignedCompatShimSmoke);

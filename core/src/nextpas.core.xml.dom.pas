@@ -199,7 +199,7 @@ begin
     if FNodeCount > 0 then
       for LI := 0 to FNodeCount - 1 do
         Finalize(FNodes[LI]);
-    FAllocator.Deallocate(Pointer(FNodes));
+    FAllocator.FreeMem(Pointer(FNodes));
     FNodes := nil;
   end;
   if FAttributes <> nil then
@@ -207,7 +207,7 @@ begin
     if FAttrCount > 0 then
       for LI := 0 to FAttrCount - 1 do
         Finalize(FAttributes[LI]);
-    FAllocator.Deallocate(Pointer(FAttributes));
+    FAllocator.FreeMem(Pointer(FAttributes));
     FAttributes := nil;
   end;
   FNodeCount := 0;
@@ -232,7 +232,7 @@ begin
     LNewCap := FNodeCap;
   while LNewCap < ANeeded do
     LNewCap := LNewCap * 2;
-  LNewPtr := FAllocator.Reallocate(Pointer(FNodes),
+  LNewPtr := FAllocator.ReallocMem(Pointer(FNodes),
     LNewCap * SizeOf(TXmlNodeData));
   if LNewPtr = nil then
     raise EResourceExhaustedError.Create('TXmlDocument: out of memory');
@@ -257,7 +257,7 @@ begin
     LNewCap := FAttrCap;
   while LNewCap < ANeeded do
     LNewCap := LNewCap * 2;
-  LNewPtr := FAllocator.Reallocate(Pointer(FAttributes),
+  LNewPtr := FAllocator.ReallocMem(Pointer(FAttributes),
     LNewCap * SizeOf(TXmlAttribute));
   if LNewPtr = nil then
     raise EResourceExhaustedError.Create('TXmlDocument: out of memory');
