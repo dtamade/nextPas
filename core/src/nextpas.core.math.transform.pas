@@ -4,7 +4,7 @@
 }
 unit nextpas.core.math.transform;
 
-{$mode ObjFPC}{$H+}
+{$I nextpas.core.settings.inc}
 
 interface
 
@@ -14,32 +14,50 @@ uses
 
 { === Projection Matrices === }
 
+{** Build an orthographic projection matrix (single-precision) }
 function Ortho(ALeft, ARight, ABottom, ATop, ANear, AFar: Single): TMat4f;
+{** Build an orthographic projection matrix (double-precision) }
 function Ortho(ALeft, ARight, ABottom, ATop, ANear, AFar: Double): TMat4d;
+{** Build a perspective projection matrix from FOV in radians (single-precision) }
 function Perspective(AFOV, AAspect, ANear, AFar: Single): TMat4f;
+{** Build a perspective projection matrix from FOV in radians (double-precision) }
 function Perspective(AFOV, AAspect, ANear, AFar: Double): TMat4d;
 
 { === View Matrices === }
 
+{** Build a right-handed look-at view matrix (single-precision) }
 function LookAt(AEye, ATarget, AUp: TVec3f): TMat4f;
+{** Build a right-handed look-at view matrix (double-precision) }
 function LookAt(AEye, ATarget, AUp: TVec3d): TMat4d;
 
 { === Transform Builders === }
 
+{** Build a translation matrix (single-precision) }
 function Translate(ATranslation: TVec3f): TMat4f;
+{** Build a translation matrix (double-precision) }
 function Translate(ATranslation: TVec3d): TMat4d;
+{** Build a non-uniform scale matrix (single-precision) }
 function Scale(AScale: TVec3f): TMat4f;
+{** Build a non-uniform scale matrix (double-precision) }
 function Scale(AScale: TVec3d): TMat4d;
+{** Build a rotation matrix about the X axis (single-precision, angle in radians) }
 function RotateX(AAngle: Single): TMat4f;
+{** Build a rotation matrix about the X axis (double-precision, angle in radians) }
 function RotateX(AAngle: Double): TMat4d;
+{** Build a rotation matrix about the Y axis (single-precision, angle in radians) }
 function RotateY(AAngle: Single): TMat4f;
+{** Build a rotation matrix about the Y axis (double-precision, angle in radians) }
 function RotateY(AAngle: Double): TMat4d;
+{** Build a rotation matrix about the Z axis (single-precision, angle in radians) }
 function RotateZ(AAngle: Single): TMat4f;
+{** Build a rotation matrix about the Z axis (double-precision, angle in radians) }
 function RotateZ(AAngle: Double): TMat4d;
 
 { === 2D Transforms === }
 
+{** Build a 2D camera transform matrix combining scale, rotation, and translation (single-precision) }
 function Camera2D(AOffset: TVec2f; ARotation, AScale: Single): TMat3f;
+{** Build a 2D camera transform matrix combining scale, rotation, and translation (double-precision) }
 function Camera2D(AOffset: TVec2d; ARotation, AScale: Double): TMat3d;
 
 implementation
@@ -270,15 +288,15 @@ begin
   LSin := Sin(ARotation);
   LCos := Cos(ARotation);
   Result := Mat3fIdentity;
-  // Scale
+  { Scale }
   Result.Data[0, 0] := AScale;
   Result.Data[1, 1] := AScale;
-  // Rotation
+  { Rotation }
   Result.Data[0, 0] := Result.Data[0, 0] * LCos;
   Result.Data[0, 1] := Result.Data[0, 1] * LSin;
   Result.Data[1, 0] := Result.Data[1, 0] * (-LSin);
   Result.Data[1, 1] := Result.Data[1, 1] * LCos;
-  // Translation
+  { Translation }
   Result.Data[2, 0] := -AOffset.X;
   Result.Data[2, 1] := -AOffset.Y;
 end;
@@ -290,15 +308,15 @@ begin
   LSin := Sin(ARotation);
   LCos := Cos(ARotation);
   Result := Mat3dIdentity;
-  // Scale
+  { Scale }
   Result.Data[0, 0] := AScale;
   Result.Data[1, 1] := AScale;
-  // Rotation
+  { Rotation }
   Result.Data[0, 0] := Result.Data[0, 0] * LCos;
   Result.Data[0, 1] := Result.Data[0, 1] * LSin;
   Result.Data[1, 0] := Result.Data[1, 0] * (-LSin);
   Result.Data[1, 1] := Result.Data[1, 1] * LCos;
-  // Translation
+  { Translation }
   Result.Data[2, 0] := -AOffset.X;
   Result.Data[2, 1] := -AOffset.Y;
 end;

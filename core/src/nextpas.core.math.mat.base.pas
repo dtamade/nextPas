@@ -9,65 +9,95 @@ uses
   nextpas.core.math.vec.base;
 
 type
+{ TMat3f - 3x3 single-precision matrix (row-major) }
   TMat3f = record
   private
     FData: array[0..2, 0..2] of Single;
     function GetElement(ARow, ACol: Integer): Single; inline;
     procedure SetElement(ARow, ACol: Integer; AValue: Single); inline;
   public
+    {** Create a 3x3 matrix from 9 row-major elements }
     constructor Create(const A00, A01, A02, A10, A11, A12, A20, A21, A22: Single);
+    {** Return the determinant of the matrix }
     function Determinant: Single; inline;
+    {** Return the transposed matrix }
     function Transpose: TMat3f; inline;
+    {** Return the inverse matrix; zero matrix if singular }
     function Inverse: TMat3f; inline;
     property Data[ARow, ACol: Integer]: Single read GetElement write SetElement; default;
   end;
 
+{ TMat3d - 3x3 double-precision matrix (row-major) }
   TMat3d = record
   private
     FData: array[0..2, 0..2] of Double;
     function GetElement(ARow, ACol: Integer): Double; inline;
     procedure SetElement(ARow, ACol: Integer; AValue: Double); inline;
   public
+    {** Create a 3x3 matrix from 9 row-major elements }
     constructor Create(const A00, A01, A02, A10, A11, A12, A20, A21, A22: Double);
+    {** Return the determinant of the matrix }
     function Determinant: Double; inline;
+    {** Return the transposed matrix }
     function Transpose: TMat3d; inline;
+    {** Return the inverse matrix; zero matrix if singular }
     function Inverse: TMat3d; inline;
     property Data[ARow, ACol: Integer]: Double read GetElement write SetElement; default;
   end;
 
+{ TMat4f - 4x4 single-precision matrix (row-major) }
   TMat4f = record
   private
     FData: array[0..3, 0..3] of Single;
     function GetElement(ARow, ACol: Integer): Single; inline;
     procedure SetElement(ARow, ACol: Integer; AValue: Single); inline;
   public
+    {** Create a 4x4 matrix from 16 row-major elements }
     constructor Create(const A00, A01, A02, A03, A10, A11, A12, A13, A20, A21, A22, A23, A30, A31, A32, A33: Single);
+    {** Return the determinant of the matrix }
     function Determinant: Single; inline;
+    {** Return the transposed matrix }
     function Transpose: TMat4f; inline;
+    {** Return the inverse matrix; zero matrix if singular }
     function Inverse: TMat4f; inline;
     property Data[ARow, ACol: Integer]: Single read GetElement write SetElement; default;
   end;
 
+{ TMat4d - 4x4 double-precision matrix (row-major) }
   TMat4d = record
   private
     FData: array[0..3, 0..3] of Double;
     function GetElement(ARow, ACol: Integer): Double; inline;
     procedure SetElement(ARow, ACol: Integer; AValue: Double); inline;
   public
+    {** Create a 4x4 matrix from 16 row-major elements }
     constructor Create(const A00, A01, A02, A03, A10, A11, A12, A13, A20, A21, A22, A23, A30, A31, A32, A33: Double);
+    {** Return the determinant of the matrix }
     function Determinant: Double; inline;
+    {** Return the transposed matrix }
     function Transpose: TMat4d; inline;
+    {** Return the inverse matrix; zero matrix if singular }
     function Inverse: TMat4d; inline;
     property Data[ARow, ACol: Integer]: Double read GetElement write SetElement; default;
   end;
 
+{ Identity and zero matrix constructors }
+
+{** Return a 3x3 single-precision identity matrix }
 function Mat3fIdentity: TMat3f; inline;
+{** Return a 3x3 double-precision identity matrix }
 function Mat3dIdentity: TMat3d; inline;
+{** Return a 4x4 single-precision identity matrix }
 function Mat4fIdentity: TMat4f; inline;
+{** Return a 4x4 double-precision identity matrix }
 function Mat4dIdentity: TMat4d; inline;
+{** Return a 3x3 single-precision zero matrix }
 function Mat3fZero: TMat3f; inline;
+{** Return a 3x3 double-precision zero matrix }
 function Mat3dZero: TMat3d; inline;
+{** Return a 4x4 single-precision zero matrix }
 function Mat4fZero: TMat4f; inline;
+{** Return a 4x4 double-precision zero matrix }
 function Mat4dZero: TMat4d; inline;
 
 implementation

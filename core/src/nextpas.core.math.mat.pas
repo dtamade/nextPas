@@ -7,9 +7,15 @@ interface
 uses
   nextpas.core.math.mat.base;
 
+{ Matrix constructors }
+
+{** Create a 3x3 single-precision matrix from 9 row-major elements }
 function Mat3f(const A00, A01, A02, A10, A11, A12, A20, A21, A22: Single): TMat3f; inline;
+{** Create a 3x3 double-precision matrix from 9 row-major elements }
 function Mat3d(const A00, A01, A02, A10, A11, A12, A20, A21, A22: Double): TMat3d; inline;
+{** Create a 4x4 single-precision matrix from 16 row-major elements }
 function Mat4f(const A00, A01, A02, A03, A10, A11, A12, A13, A20, A21, A22, A23, A30, A31, A32, A33: Single): TMat4f; inline;
+{** Create a 4x4 double-precision matrix from 16 row-major elements }
 function Mat4d(const A00, A01, A02, A03, A10, A11, A12, A13, A20, A21, A22, A23, A30, A31, A32, A33: Double): TMat4d; inline;
 
 implementation

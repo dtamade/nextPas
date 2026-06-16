@@ -8,6 +8,7 @@ uses
   nextpas.core.math.scalar;
 
 type
+{ TVec2f - 2D single-precision vector }
   TVec2f = record
   private
     FData: array[0..1] of Single;
@@ -18,16 +19,22 @@ type
     function GetData(const AIndex: Integer): Single; inline;
     procedure SetData(const AIndex: Integer; const AValue: Single); inline;
   public
+    {** Create a 2D vector with given X and Y components }
     constructor Create(const AX, AY: Single);
+    {** Return the Euclidean length of the vector }
     function Length: Single;
+    {** Return the squared length (avoids sqrt) }
     function LengthSqr: Single;
+    {** Return a unit-length vector in the same direction; zero vector if degenerate }
     function Normalize: TVec2f;
+    {** Return the dot product with another vector }
     function Dot(const AOther: TVec2f): Single;
     property X: Single read GetX write SetX;
     property Y: Single read GetY write SetY;
     property Data[const AIndex: Integer]: Single read GetData write SetData; default;
   end;
 
+{ TVec2d - 2D double-precision vector }
   TVec2d = record
   private
     FData: array[0..1] of Double;
@@ -38,16 +45,22 @@ type
     function GetData(const AIndex: Integer): Double; inline;
     procedure SetData(const AIndex: Integer; const AValue: Double); inline;
   public
+    {** Create a 2D vector with given X and Y components }
     constructor Create(const AX, AY: Double);
+    {** Return the Euclidean length of the vector }
     function Length: Double;
+    {** Return the squared length (avoids sqrt) }
     function LengthSqr: Double;
+    {** Return a unit-length vector in the same direction; zero vector if degenerate }
     function Normalize: TVec2d;
+    {** Return the dot product with another vector }
     function Dot(const AOther: TVec2d): Double;
     property X: Double read GetX write SetX;
     property Y: Double read GetY write SetY;
     property Data[const AIndex: Integer]: Double read GetData write SetData; default;
   end;
 
+{ TVec3f - 3D single-precision vector }
   TVec3f = record
   private
     FData: array[0..2] of Single;
@@ -60,11 +73,17 @@ type
     function GetData(const AIndex: Integer): Single; inline;
     procedure SetData(const AIndex: Integer; const AValue: Single); inline;
   public
+    {** Create a 3D vector with given X, Y, and Z components }
     constructor Create(const AX, AY, AZ: Single);
+    {** Return the Euclidean length of the vector }
     function Length: Single;
+    {** Return the squared length (avoids sqrt) }
     function LengthSqr: Single;
+    {** Return a unit-length vector in the same direction; zero vector if degenerate }
     function Normalize: TVec3f;
+    {** Return the dot product with another vector }
     function Dot(const AOther: TVec3f): Single;
+    {** Return the cross product with another 3D vector }
     function Cross(const AOther: TVec3f): TVec3f;
     property X: Single read GetX write SetX;
     property Y: Single read GetY write SetY;
@@ -72,6 +91,7 @@ type
     property Data[const AIndex: Integer]: Single read GetData write SetData; default;
   end;
 
+{ TVec3d - 3D double-precision vector }
   TVec3d = record
   private
     FData: array[0..2] of Double;
@@ -84,11 +104,17 @@ type
     function GetData(const AIndex: Integer): Double; inline;
     procedure SetData(const AIndex: Integer; const AValue: Double); inline;
   public
+    {** Create a 3D vector with given X, Y, and Z components }
     constructor Create(const AX, AY, AZ: Double);
+    {** Return the Euclidean length of the vector }
     function Length: Double;
+    {** Return the squared length (avoids sqrt) }
     function LengthSqr: Double;
+    {** Return a unit-length vector in the same direction; zero vector if degenerate }
     function Normalize: TVec3d;
+    {** Return the dot product with another vector }
     function Dot(const AOther: TVec3d): Double;
+    {** Return the cross product with another 3D vector }
     function Cross(const AOther: TVec3d): TVec3d;
     property X: Double read GetX write SetX;
     property Y: Double read GetY write SetY;
@@ -96,6 +122,7 @@ type
     property Data[const AIndex: Integer]: Double read GetData write SetData; default;
   end;
 
+{ TVec4f - 4D single-precision vector }
   TVec4f = record
   private
     FData: array[0..3] of Single;
@@ -110,10 +137,15 @@ type
     function GetData(const AIndex: Integer): Single; inline;
     procedure SetData(const AIndex: Integer; const AValue: Single); inline;
   public
+    {** Create a 4D vector with given X, Y, Z, and W components }
     constructor Create(const AX, AY, AZ, AW: Single);
+    {** Return the Euclidean length of the vector }
     function Length: Single;
+    {** Return the squared length (avoids sqrt) }
     function LengthSqr: Single;
+    {** Return a unit-length vector in the same direction; zero vector if degenerate }
     function Normalize: TVec4f;
+    {** Return the dot product with another vector }
     function Dot(const AOther: TVec4f): Single;
     property X: Single read GetX write SetX;
     property Y: Single read GetY write SetY;
@@ -122,6 +154,7 @@ type
     property Data[const AIndex: Integer]: Single read GetData write SetData; default;
   end;
 
+{ TVec4d - 4D double-precision vector }
   TVec4d = record
   private
     FData: array[0..3] of Double;
@@ -136,10 +169,15 @@ type
     function GetData(const AIndex: Integer): Double; inline;
     procedure SetData(const AIndex: Integer; const AValue: Double); inline;
   public
+    {** Create a 4D vector with given X, Y, Z, and W components }
     constructor Create(const AX, AY, AZ, AW: Double);
+    {** Return the Euclidean length of the vector }
     function Length: Double;
+    {** Return the squared length (avoids sqrt) }
     function LengthSqr: Double;
+    {** Return a unit-length vector in the same direction; zero vector if degenerate }
     function Normalize: TVec4d;
+    {** Return the dot product with another vector }
     function Dot(const AOther: TVec4d): Double;
     property X: Double read GetX write SetX;
     property Y: Double read GetY write SetY;
@@ -148,6 +186,7 @@ type
     property Data[const AIndex: Integer]: Double read GetData write SetData; default;
   end;
 
+{ Arithmetic operators for TVec2f }
 operator + (constref A, B: TVec2f): TVec2f;
 operator - (constref A, B: TVec2f): TVec2f;
 operator - (constref A: TVec2f): TVec2f;
@@ -156,6 +195,7 @@ operator * (constref A: Single; constref B: TVec2f): TVec2f;
 operator / (constref A: TVec2f; constref B: Single): TVec2f;
 operator = (constref A, B: TVec2f): Boolean;
 
+{ Arithmetic operators for TVec2d }
 operator + (constref A, B: TVec2d): TVec2d;
 operator - (constref A, B: TVec2d): TVec2d;
 operator - (constref A: TVec2d): TVec2d;
@@ -164,6 +204,7 @@ operator * (constref A: Double; constref B: TVec2d): TVec2d;
 operator / (constref A: TVec2d; constref B: Double): TVec2d;
 operator = (constref A, B: TVec2d): Boolean;
 
+{ Arithmetic operators for TVec3f }
 operator + (constref A, B: TVec3f): TVec3f;
 operator - (constref A, B: TVec3f): TVec3f;
 operator - (constref A: TVec3f): TVec3f;
@@ -172,6 +213,7 @@ operator * (constref A: Single; constref B: TVec3f): TVec3f;
 operator / (constref A: TVec3f; constref B: Single): TVec3f;
 operator = (constref A, B: TVec3f): Boolean;
 
+{ Arithmetic operators for TVec3d }
 operator + (constref A, B: TVec3d): TVec3d;
 operator - (constref A, B: TVec3d): TVec3d;
 operator - (constref A: TVec3d): TVec3d;
@@ -180,6 +222,7 @@ operator * (constref A: Double; constref B: TVec3d): TVec3d;
 operator / (constref A: TVec3d; constref B: Double): TVec3d;
 operator = (constref A, B: TVec3d): Boolean;
 
+{ Arithmetic operators for TVec4f }
 operator + (constref A, B: TVec4f): TVec4f;
 operator - (constref A, B: TVec4f): TVec4f;
 operator - (constref A: TVec4f): TVec4f;
@@ -188,6 +231,7 @@ operator * (constref A: Single; constref B: TVec4f): TVec4f;
 operator / (constref A: TVec4f; constref B: Single): TVec4f;
 operator = (constref A, B: TVec4f): Boolean;
 
+{ Arithmetic operators for TVec4d }
 operator + (constref A, B: TVec4d): TVec4d;
 operator - (constref A, B: TVec4d): TVec4d;
 operator - (constref A: TVec4d): TVec4d;
@@ -196,6 +240,7 @@ operator * (constref A: Double; constref B: TVec4d): TVec4d;
 operator / (constref A: TVec4d; constref B: Double): TVec4d;
 operator = (constref A, B: TVec4d): Boolean;
 
+{ Zero vector constants }
 const
   Vec2fZero: TVec2f = (FData: (0, 0));
   Vec2dZero: TVec2d = (FData: (0, 0));

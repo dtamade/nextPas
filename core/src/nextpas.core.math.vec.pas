@@ -7,20 +7,39 @@ interface
 uses
   nextpas.core.math.vec.base;
 
+{ Constructors }
+
+{** Create a 2D single-precision vector }
 function Vec2f(const AX, AY: Single): TVec2f; inline;
+{** Create a 2D double-precision vector }
 function Vec2d(const AX, AY: Double): TVec2d; inline;
+{** Create a 3D single-precision vector }
 function Vec3f(const AX, AY, AZ: Single): TVec3f; inline;
+{** Create a 3D double-precision vector }
 function Vec3d(const AX, AY, AZ: Double): TVec3d; inline;
+{** Create a 4D single-precision vector }
 function Vec4f(const AX, AY, AZ, AW: Single): TVec4f; inline;
+{** Create a 4D double-precision vector }
 function Vec4d(const AX, AY, AZ, AW: Double): TVec4d; inline;
 
+{ Zero constructors }
+
+{** Return a zero 2D single-precision vector }
 function Vec2fZero: TVec2f; inline;
+{** Return a zero 2D double-precision vector }
 function Vec2dZero: TVec2d; inline;
+{** Return a zero 3D single-precision vector }
 function Vec3fZero: TVec3f; inline;
+{** Return a zero 3D double-precision vector }
 function Vec3dZero: TVec3d; inline;
+{** Return a zero 4D single-precision vector }
 function Vec4fZero: TVec4f; inline;
+{** Return a zero 4D double-precision vector }
 function Vec4dZero: TVec4d; inline;
 
+{ Distance }
+
+{** Return the Euclidean distance between two vectors }
 function Distance(constref A, B: TVec2f): Single; overload; inline;
 function Distance(constref A, B: TVec2d): Double; overload; inline;
 function Distance(constref A, B: TVec3f): Single; overload; inline;
@@ -28,6 +47,9 @@ function Distance(constref A, B: TVec3d): Double; overload; inline;
 function Distance(constref A, B: TVec4f): Single; overload; inline;
 function Distance(constref A, B: TVec4d): Double; overload; inline;
 
+{ Lerp }
+
+{** Return the linear interpolation between A and B at parameter T in [0,1] }
 function Lerp(constref A, B: TVec2f; const AT: Single): TVec2f; overload; inline;
 function Lerp(constref A, B: TVec2d; const AT: Double): TVec2d; overload; inline;
 function Lerp(constref A, B: TVec3f; const AT: Single): TVec3f; overload; inline;
@@ -35,6 +57,9 @@ function Lerp(constref A, B: TVec3d; const AT: Double): TVec3d; overload; inline
 function Lerp(constref A, B: TVec4f; const AT: Single): TVec4f; overload; inline;
 function Lerp(constref A, B: TVec4d; const AT: Double): TVec4d; overload; inline;
 
+{ Reflect }
+
+{** Reflect an incident vector off a surface with the given normal }
 function Reflect(constref AIncident, ANormal: TVec2f): TVec2f; overload; inline;
 function Reflect(constref AIncident, ANormal: TVec2d): TVec2d; overload; inline;
 function Reflect(constref AIncident, ANormal: TVec3f): TVec3f; overload; inline;
@@ -42,6 +67,9 @@ function Reflect(constref AIncident, ANormal: TVec3d): TVec3d; overload; inline;
 function Reflect(constref AIncident, ANormal: TVec4f): TVec4f; overload; inline;
 function Reflect(constref AIncident, ANormal: TVec4d): TVec4d; overload; inline;
 
+{ Project }
+
+{** Project vector A onto vector B }
 function Project(constref A, B: TVec2f): TVec2f; overload; inline;
 function Project(constref A, B: TVec2d): TVec2d; overload; inline;
 function Project(constref A, B: TVec3f): TVec3f; overload; inline;
@@ -49,6 +77,9 @@ function Project(constref A, B: TVec3d): TVec3d; overload; inline;
 function Project(constref A, B: TVec4f): TVec4f; overload; inline;
 function Project(constref A, B: TVec4d): TVec4d; overload; inline;
 
+{ AngleBetween }
+
+{** Return the angle in radians between two vectors }
 function AngleBetween(constref A, B: TVec2f): Single; overload; inline;
 function AngleBetween(constref A, B: TVec2d): Double; overload; inline;
 function AngleBetween(constref A, B: TVec3f): Single; overload; inline;

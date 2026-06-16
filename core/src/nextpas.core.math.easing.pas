@@ -4,107 +4,170 @@
 }
 unit nextpas.core.math.easing;
 
-{$mode ObjFPC}{$H+}
+{$I nextpas.core.settings.inc}
 
 interface
 
 uses
+  nextpas.core.math.base,
   nextpas.core.math.scalar,
   nextpas.core.math.trig;
 
 { === Linear === }
 
+{** Identity easing: returns AT unchanged (single-precision) }
 function Linear(AT: Single): Single;
+{** Identity easing: returns AT unchanged (double-precision) }
 function Linear(AT: Double): Double;
 
 { === Quadratic === }
 
+{** Quadratic ease-in (single-precision) }
 function QuadIn(AT: Single): Single;
+{** Quadratic ease-in (double-precision) }
 function QuadIn(AT: Double): Double;
+{** Quadratic ease-out (single-precision) }
 function QuadOut(AT: Single): Single;
+{** Quadratic ease-out (double-precision) }
 function QuadOut(AT: Double): Double;
+{** Quadratic ease-in-out (single-precision) }
 function QuadInOut(AT: Single): Single;
+{** Quadratic ease-in-out (double-precision) }
 function QuadInOut(AT: Double): Double;
 
 { === Cubic === }
 
+{** Cubic ease-in (single-precision) }
 function CubicIn(AT: Single): Single;
+{** Cubic ease-in (double-precision) }
 function CubicIn(AT: Double): Double;
+{** Cubic ease-out (single-precision) }
 function CubicOut(AT: Single): Single;
+{** Cubic ease-out (double-precision) }
 function CubicOut(AT: Double): Double;
+{** Cubic ease-in-out (single-precision) }
 function CubicInOut(AT: Single): Single;
+{** Cubic ease-in-out (double-precision) }
 function CubicInOut(AT: Double): Double;
 
 { === Quartic === }
 
+{** Quartic ease-in (single-precision) }
 function QuartIn(AT: Single): Single;
+{** Quartic ease-in (double-precision) }
 function QuartIn(AT: Double): Double;
+{** Quartic ease-out (single-precision) }
 function QuartOut(AT: Single): Single;
+{** Quartic ease-out (double-precision) }
 function QuartOut(AT: Double): Double;
+{** Quartic ease-in-out (single-precision) }
 function QuartInOut(AT: Single): Single;
+{** Quartic ease-in-out (double-precision) }
 function QuartInOut(AT: Double): Double;
 
 { === Quintic === }
 
+{** Quintic ease-in (single-precision) }
 function QuintIn(AT: Single): Single;
+{** Quintic ease-in (double-precision) }
 function QuintIn(AT: Double): Double;
+{** Quintic ease-out (single-precision) }
 function QuintOut(AT: Single): Single;
+{** Quintic ease-out (double-precision) }
 function QuintOut(AT: Double): Double;
+{** Quintic ease-in-out (single-precision) }
 function QuintInOut(AT: Single): Single;
+{** Quintic ease-in-out (double-precision) }
 function QuintInOut(AT: Double): Double;
 
 { === Sine === }
 
+{** Sinusoidal ease-in (single-precision) }
 function SineIn(AT: Single): Single;
+{** Sinusoidal ease-in (double-precision) }
 function SineIn(AT: Double): Double;
+{** Sinusoidal ease-out (single-precision) }
 function SineOut(AT: Single): Single;
+{** Sinusoidal ease-out (double-precision) }
 function SineOut(AT: Double): Double;
+{** Sinusoidal ease-in-out (single-precision) }
 function SineInOut(AT: Single): Single;
+{** Sinusoidal ease-in-out (double-precision) }
 function SineInOut(AT: Double): Double;
 
 { === Exponential === }
 
+{** Exponential ease-in (single-precision) }
 function ExpoIn(AT: Single): Single;
+{** Exponential ease-in (double-precision) }
 function ExpoIn(AT: Double): Double;
+{** Exponential ease-out (single-precision) }
 function ExpoOut(AT: Single): Single;
+{** Exponential ease-out (double-precision) }
 function ExpoOut(AT: Double): Double;
+{** Exponential ease-in-out (single-precision) }
 function ExpoInOut(AT: Single): Single;
+{** Exponential ease-in-out (double-precision) }
 function ExpoInOut(AT: Double): Double;
 
 { === Circular === }
 
+{** Circular ease-in (single-precision) }
 function CircIn(AT: Single): Single;
+{** Circular ease-in (double-precision) }
 function CircIn(AT: Double): Double;
+{** Circular ease-out (single-precision) }
 function CircOut(AT: Single): Single;
+{** Circular ease-out (double-precision) }
 function CircOut(AT: Double): Double;
+{** Circular ease-in-out (single-precision) }
 function CircInOut(AT: Single): Single;
+{** Circular ease-in-out (double-precision) }
 function CircInOut(AT: Double): Double;
 
 { === Elastic === }
 
+{** Elastic ease-in (single-precision) }
 function ElasticIn(AT: Single): Single;
+{** Elastic ease-in (double-precision) }
 function ElasticIn(AT: Double): Double;
+{** Elastic ease-out (single-precision) }
 function ElasticOut(AT: Single): Single;
+{** Elastic ease-out (double-precision) }
 function ElasticOut(AT: Double): Double;
+{** Elastic ease-in-out (single-precision) }
 function ElasticInOut(AT: Single): Single;
+{** Elastic ease-in-out (double-precision) }
 function ElasticInOut(AT: Double): Double;
 
 { === Back === }
 
+{** Back ease-in with overshoot (single-precision) }
 function BackIn(AT: Single): Single;
+{** Back ease-in with overshoot (double-precision) }
 function BackIn(AT: Double): Double;
+{** Back ease-out with overshoot (single-precision) }
 function BackOut(AT: Single): Single;
+{** Back ease-out with overshoot (double-precision) }
 function BackOut(AT: Double): Double;
+{** Back ease-in-out with overshoot (single-precision) }
 function BackInOut(AT: Single): Single;
+{** Back ease-in-out with overshoot (double-precision) }
 function BackInOut(AT: Double): Double;
 
 { === Bounce === }
 
+{** Bounce ease-in (single-precision) }
 function BounceIn(AT: Single): Single;
+{** Bounce ease-in (double-precision) }
 function BounceIn(AT: Double): Double;
+{** Bounce ease-out (single-precision) }
 function BounceOut(AT: Single): Single;
+{** Bounce ease-out (double-precision) }
 function BounceOut(AT: Double): Double;
+{** Bounce ease-in-out (single-precision) }
 function BounceInOut(AT: Single): Single;
+{** Bounce ease-in-out (double-precision) }
 function BounceInOut(AT: Double): Double;
 
 implementation

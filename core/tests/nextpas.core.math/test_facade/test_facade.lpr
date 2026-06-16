@@ -4,6 +4,7 @@ program test_facade;
 
 uses
   nextpas.core.testing,
+  nextpas.core.math.base,
   nextpas.core.math.scalar,
   nextpas.core.math.vec,
   nextpas.core.math.vec.base,

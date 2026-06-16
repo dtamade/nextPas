@@ -36,6 +36,7 @@ SIMD_MATHUTIL_PATH = "src/nextpas.core.simd.mathutil.pas"
 
 CONSUMER_FACING_UNITS = {
     "nextpas.core.math",
+    "nextpas.core.math.base",
     "nextpas.core.math.scalar",
     "nextpas.core.math.trig",
     "nextpas.core.math.vec",

@@ -4,58 +4,67 @@
 }
 unit nextpas.core.math.random;
 
-{$mode ObjFPC}{$H+}
+{$I nextpas.core.settings.inc}
 
 interface
 
 uses
+  nextpas.core.math.base,
   nextpas.core.math.scalar,
   nextpas.core.math.trig;
 
 type
+  { TRandomState - deterministic PRNG state (LCG-based xorshift) }
   TRandomState = record
-    Seed: UInt64;
-  end;
-
-  TPoint2f = record
-    X, Y: Single;
-  end;
-
-  TPoint3f = record
-    X, Y, Z: Single;
+    FSeed: UInt64;
   end;
 
 { === Initialization === }
 
+{** Create a new random state seeded with the given value }
 function RandomCreate(ASeed: UInt64): TRandomState;
 
 { === Integer Random === }
 
+{** Return a pseudo-random UInt64 value }
 function RandomInt(var AState: TRandomState): UInt64;
+{** Return a pseudo-random Int64 in the range [AMin, AMax] }
 function RandomIntRange(var AState: TRandomState; AMin, AMax: Int64): Int64;
+{** Return a pseudo-random Boolean }
 function RandomBool(var AState: TRandomState): Boolean;
 
 { === Float Random === }
 
+{** Return a pseudo-random Single in [0, 1) }
 function RandomFloat(var AState: TRandomState): Single;
+{** Return a pseudo-random Single in [0, AMax) }
 function RandomFloat(var AState: TRandomState; AMax: Single): Single;
+{** Return a pseudo-random Single in [AMin, AMax) }
 function RandomFloatRange(var AState: TRandomState; AMin, AMax: Single): Single;
+{** Return a pseudo-random Double in [0, 1) }
 function RandomDouble(var AState: TRandomState): Double;
+{** Return a pseudo-random Double in [0, AMax) }
 function RandomDouble(var AState: TRandomState; AMax: Double): Double;
+{** Return a pseudo-random Double in [AMin, AMax) }
 function RandomDoubleRange(var AState: TRandomState; AMin, AMax: Double): Double;
 
 { === Vector Random === }
 
+{** Return a random point on the unit circle (2D) }
 function RandomPointOnCircle(var AState: TRandomState): TPoint2f;
+{** Return a random point on the unit sphere (3D, uniform distribution) }
 function RandomPointOnSphere(var AState: TRandomState): TPoint3f;
 
 { === Distribution === }
 
+{** Return a standard normal (Gaussian) random value via Box-Muller transform }
 function RandomGaussian(var AState: TRandomState): Double;
 
 { === Utility === }
 
+{** Return a random integer in [0, ACount) }
 function RandomChoice(var AState: TRandomState; ACount: Integer): Integer;
+{** Return a weighted random index; probability proportional to AWeights }
 function RandomWeightedChoice(var AState: TRandomState; const AWeights: array of Single): Integer;
 
 implementation
@@ -68,15 +77,15 @@ const
 
 function RandomCreate(ASeed: UInt64): TRandomState;
 begin
-  Result.Seed := ASeed;
+  Result.FSeed := ASeed;
 end;
 
 { === Integer Random === }
 
 function RandomInt(var AState: TRandomState): UInt64;
 begin
-  AState.Seed := AState.Seed * LCG_MULTIPLIER + LCG_INCREMENT;
-  Result := AState.Seed shr 33;
+  AState.FSeed := AState.FSeed * LCG_MULTIPLIER + LCG_INCREMENT;
+  Result := AState.FSeed shr 33;
 end;
 
 function RandomIntRange(var AState: TRandomState; AMin, AMax: Int64): Int64;
