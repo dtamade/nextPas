@@ -33,6 +33,12 @@ const
   MEM_MEM_POOL_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.mem_pool.pas';
   MEM_STATS_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.stats.pas';
   MEM_STATS_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.stats.pas';
+  MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.growable.pas';
+  MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.growable.pas';
+  MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.growable.pas';
+  MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.growable.pas';
+  MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.mimalloc.binding.pas';
+  MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.mimalloc.binding.pas';
 
 type
   TByteArray = array[0..5] of Byte;
@@ -454,6 +460,74 @@ begin
     'mem.stats should use the canonical fixed-pool implementation');
 end;
 
+procedure TestGrowableAllocatorsUseCanonicalAllocatorContract;
+var
+  LArenaSource: string;
+  LBlockPoolSource: string;
+begin
+  LArenaSource := ReadSourceText(ResolveSourcePath(
+    MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_TEST,
+    MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LArenaSource, 'nextpas.core.mem.intf',
+    'growable arena should depend on the canonical allocator contract');
+  CheckNotContains(LArenaSource, 'nextpas.core.mem.alloc',
+    'growable arena should no longer depend on the legacy ialloc contract');
+  CheckContains(LArenaSource, 'allocator: iallocator',
+    'growable arena config should expose iallocator');
+  CheckContains(LArenaSource, 'fallocator: iallocator',
+    'growable arena field should store iallocator');
+  CheckContains(LArenaSource, 'lraw := fallocator.getmem(lallocsize);',
+    'growable arena should allocate segments via iallocator.getmem');
+  CheckContains(LArenaSource, 'fallocator.freemem(lraw)',
+    'growable arena should release segments via iallocator.freemem');
+  CheckNotContains(LArenaSource, 'fallocator.alloc(',
+    'growable arena should not route raw segment allocation through ialloc.alloc');
+  CheckNotContains(LArenaSource, 'fallocator.dealloc(',
+    'growable arena should not route raw segment frees through ialloc.dealloc');
+
+  LBlockPoolSource := ReadSourceText(ResolveSourcePath(
+    MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST,
+    MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LBlockPoolSource, 'nextpas.core.mem.intf',
+    'growable block pool should depend on the canonical allocator contract');
+  CheckNotContains(LBlockPoolSource, 'nextpas.core.mem.alloc',
+    'growable block pool should no longer depend on the legacy ialloc contract');
+  CheckContains(LBlockPoolSource, 'allocator: iallocator',
+    'growable block pool config should expose iallocator');
+  CheckContains(LBlockPoolSource, 'fallocator: iallocator',
+    'growable block pool field should store iallocator');
+  CheckContains(LBlockPoolSource, 'lraw := fallocator.getmem(lallocsize);',
+    'growable block pool should allocate segments via iallocator.getmem');
+  CheckContains(LBlockPoolSource, 'fallocator.freemem(lraw)',
+    'growable block pool should release segments via iallocator.freemem');
+  CheckNotContains(LBlockPoolSource, 'fallocator.alloc(',
+    'growable block pool should not route raw segment allocation through ialloc.alloc');
+  CheckNotContains(LBlockPoolSource, 'fallocator.dealloc(',
+    'growable block pool should not route raw segment frees through ialloc.dealloc');
+end;
+
+procedure TestMimallocBindingMarkedLegacy;
+var
+  LSource: string;
+begin
+  LSource := ReadSourceText(ResolveSourcePath(
+    MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_TEST,
+    MEM_MIMALLOC_BINDING_SOURCE_PATH_FROM_ROOT));
+  CheckContains(LSource,
+    '{$warning ''nextpas.core.mem.mimalloc.binding is deprecated: use nextpas.core.mem.allocator.mimalloc''}',
+    'mimalloc.binding should publish a deprecation warning');
+  CheckContains(LSource,
+    'tmimallocbinding = class(tallocbase) deprecated ''use nextpas.core.mem.allocator.mimalloc instead'';',
+    'mimalloc.binding class surface should be compiler-deprecated');
+  CheckContains(LSource, 'function getmimallocbinding: ialloc;',
+    'mimalloc.binding should keep the legacy singleton declaration');
+  CheckContains(LSource,
+    'deprecated ''use nextpas.core.mem.allocator.mimalloc.getmimallocallocator instead'';',
+    'mimalloc.binding singleton surface should be compiler-deprecated');
+  CheckContains(LSource, 'legacy mimalloc ffi compatibility shim',
+    'mimalloc.binding should identify itself as a legacy compatibility shim');
+end;
+
 procedure TestCanonicalAllocatorSurface;
 var
   LAllocator: nextpas.core.mem.intf.IAllocator;
@@ -830,6 +904,9 @@ begin
     @TestAlignedCompatShimDelegatesToCanonicalAllocator);
   T.Run('mem.compat exports legacy pool surface', @TestMemCompatFacadeExportsLegacyPoolSurface);
   T.Run('mem.compat source contracts', @TestMemCompatFacadeSourceContracts);
+  T.Run('growable allocators use canonical allocator contract',
+    @TestGrowableAllocatorsUseCanonicalAllocatorContract);
+  T.Run('mimalloc.binding is marked legacy', @TestMimallocBindingMarkedLegacy);
   T.Run('canonical allocator surface', @TestCanonicalAllocatorSurface);
   T.Run('allocator aliases are canonical', @TestAllocatorAliasesAreCanonical);
   T.Run('allocator adapter round trip', @TestAllocatorAdapterRoundTrip);

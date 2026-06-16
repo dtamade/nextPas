@@ -7,12 +7,13 @@
     \/_/     \/_/\/_/   \/_/     \/_/\/_/   \/_/     \/_/\/_/  Studio
 
 ```
-# nextpas.core.mem.mimalloc.binding - Mimalloc C Library Binding
+# nextpas.core.mem.mimalloc.binding - Legacy Mimalloc FFI Compatibility Shim
 
 ## Abstract 摘要
 
-FFI binding to Microsoft's mimalloc C library.
-支持静态链接和动态加载两种方式绑定微软 mimalloc C 库的 FFI 接口。
+Legacy mimalloc FFI compatibility shim.
+Prefer nextpas.core.mem.allocator.mimalloc for new code.
+保留此单元仅用于兼容旧 IAlloc 调用点；新代码请优先使用 nextpas.core.mem.allocator.mimalloc。
 
 ## Supported Platforms 支持的平台
 
@@ -68,6 +69,8 @@ unit nextpas.core.mem.mimalloc.binding;
 {$I nextpas.core.settings.inc}
 
 interface
+
+{$WARNING 'nextpas.core.mem.mimalloc.binding is deprecated: use nextpas.core.mem.allocator.mimalloc'}
 
 uses
   nextpas.core.mem.layout,
@@ -244,7 +247,7 @@ type
    *
    * @thread-safety 线程安全（mimalloc 内部处理）
    *}
-  TMimallocBinding = class(TAllocBase)
+  TMimallocBinding = class(TAllocBase) deprecated 'Use nextpas.core.mem.allocator.mimalloc instead';
   private
     FHeap: mi_heap_t;
     FUsePrivateHeap: Boolean;
@@ -280,6 +283,7 @@ type
  * @raises Exception 如果 mimalloc 库不可用
  *}
 function GetMimallocBinding: IAlloc;
+  deprecated 'Use nextpas.core.mem.allocator.mimalloc.GetMimallocAllocator instead';
 
 {**
  * IsMimallocAvailable
@@ -292,6 +296,7 @@ function GetMimallocBinding: IAlloc;
  * @note 此函数不会抛出异常，安全用于检测
  *}
 function IsMimallocAvailable: Boolean;
+  deprecated 'Use nextpas.core.mem.allocator.mimalloc.TryGetMimallocAllocator instead';
 
 {**
  * LoadMimalloc
@@ -302,6 +307,7 @@ function IsMimallocAvailable: Boolean;
  * @return True 如果加载成功
  *}
 function LoadMimalloc: Boolean;
+  deprecated 'Use nextpas.core.mem.allocator.mimalloc.TryGetMimallocAllocator instead';
 
 {**
  * UnloadMimalloc
@@ -310,6 +316,7 @@ function LoadMimalloc: Boolean;
  *       Unload mimalloc library
  *}
 procedure UnloadMimalloc;
+  deprecated 'Use nextpas.core.mem.allocator.mimalloc instead';
 
 implementation
 
