@@ -362,6 +362,15 @@ const
   F_SETFD    = 2;
   FD_CLOEXEC = 1;
   F_GETFD    = 1;
+
+  { Portable POSIX access permission bits for access(2) }
+  POSIX_F_OK = 0;
+  POSIX_X_OK = 1;
+  POSIX_W_OK = 2;
+  POSIX_R_OK = 4;
+
+  { Portable POSIX sysconf names — identical across Linux/macOS/BSD }
+  POSIX_SC_PAGESIZE = 30;
 implementation
 
 uses

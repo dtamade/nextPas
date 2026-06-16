@@ -1240,6 +1240,10 @@ end;
 
 { WaitOnAddress lazy-load support for Wine compatibility }
 
+const
+  KERNEL32_NAME: array[0..8] of WideChar = (
+    'k','e','r','n','e','l','3','2',#0);
+
 type
   TWaitOnAddressFunc = function(Address: Pointer; CompareAddress: Pointer;
     AddressSize: PtrUInt; dwMilliseconds: DWORD): BOOL; stdcall;
@@ -1258,7 +1262,7 @@ var
 begin
   if _WaitAddressResolved then
     Exit;
-  LLib := GetModuleHandleW(L'kernel32');
+  LLib := GetModuleHandleW(@KERNEL32_NAME);
   if LLib <> nil then
   begin
     _WaitOnAddress := TWaitOnAddressFunc(GetProcAddress(LLib, 'WaitOnAddress'));
