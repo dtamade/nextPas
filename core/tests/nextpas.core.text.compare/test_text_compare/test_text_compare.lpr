@@ -118,6 +118,8 @@ procedure TestTextStartsWithIgnoreCase;
 begin
   Check(TextStartsWithI('Prefix-Body', 'prefix'), 'prefix ignore case');
   Check(TextStartsWithI('exact', 'EXACT'), 'exact ignore case');
+  Check(TextStartsWithI(Utf8Of([$03A9, Ord('-'), Ord('x')]), Utf8Of([$03C9])),
+    'unicode prefix ignore case');
   Check(TextStartsWithI('value', ''), 'empty prefix ignore case');
   Check(not TextStartsWithI('', 'x'), 'empty value ignore case');
   Check(not TextStartsWithI('short', 'shorter'), 'prefix longer ignore case');
@@ -138,6 +140,8 @@ procedure TestTextEndsWithIgnoreCase;
 begin
   Check(TextEndsWithI('body-Suffix', 'suffix'), 'suffix ignore case');
   Check(TextEndsWithI('exact', 'EXACT'), 'exact suffix ignore case');
+  Check(TextEndsWithI('x-' + Utf8Of([$03A9]), Utf8Of([$03C9])),
+    'unicode suffix ignore case');
   Check(TextEndsWithI('value', ''), 'empty suffix ignore case');
   Check(not TextEndsWithI('', 'x'), 'empty value suffix ignore case');
   Check(not TextEndsWithI('short', 'longer'), 'suffix longer ignore case');
@@ -160,6 +164,8 @@ begin
   Check(TextContainsI('Alpha Beta Gamma', 'beta'), 'middle substring ignore case');
   Check(TextContainsI('Alpha Beta Gamma', 'ALPHA'), 'prefix substring ignore case');
   Check(TextContainsI('Alpha Beta Gamma', 'gAmMa'), 'suffix substring ignore case');
+  Check(TextContainsI('pre-' + Utf8Of([$03A9]) + '-post', Utf8Of([$03C9])),
+    'unicode substring ignore case');
   Check(TextContainsI('value', ''), 'empty substring ignore case');
   Check(TextContainsI('value', 'VALUE'), 'exact substring ignore case');
   Check(not TextContainsI('value', 'values'), 'substring longer ignore case');

@@ -36,6 +36,66 @@ begin
   end;
 end;
 
+procedure ExpectCompatFormatInvalid(const AFmt: string; const AArgs: array of const;
+  const AMessage: string);
+begin
+  try
+    nextpas.core.text.conv.Format(AFmt, AArgs);
+    Fail(AMessage);
+  except
+    on E: EInvalidArgument do
+      ;
+  end;
+end;
+
+procedure ExpectIntConvertError(const AValue: string; const AMessage: string);
+begin
+  try
+    StrToInt(AValue);
+    Fail(AMessage);
+  except
+    on E: EConvertError do
+      ;
+  end;
+end;
+
+procedure ExpectFloatConvertError(const AValue: string; const AMessage: string);
+begin
+  try
+    StrToFloat(AValue);
+    Fail(AMessage);
+  except
+    on E: EConvertError do
+      ;
+  end;
+end;
+
+function BytesOf(const AValues: array of Byte): TBytes;
+var
+  I: SizeInt;
+begin
+  Result := nil;
+  SetLength(Result, Length(AValues));
+  for I := 0 to High(AValues) do
+    Result[I] := AValues[I];
+end;
+
+procedure CheckBytesEqual(const AExpected, AActual: TBytes;
+  const AMessage: string = '');
+var
+  I: SizeInt;
+  LPrefix: string;
+begin
+  if AMessage <> '' then
+    LPrefix := AMessage + ': '
+  else
+    LPrefix := '';
+  CheckEqual(Int64(Length(AExpected)), Int64(Length(AActual)), LPrefix + 'length');
+  for I := 0 to High(AExpected) do
+    CheckEqual(Int64(AExpected[I]), Int64(AActual[I]),
+      LPrefix + 'byte[' + IntToStr(I) + ']');
+end;
+
 { conv tests }
 
 procedure TestIntToStr;
@@ -159,6 +219,8 @@ begin
   CheckEqual('ff', TextFormat('%x', [255]));
   CheckEqual('FF', TextFormat('%X', [255]));
   CheckEqual('deadbeef', TextFormat('%x', [Int64($DEADBEEF)]));
+  CheckEqual('00ff', TextFormat('%.4x', [255]));
+  CheckEqual('001A', TextFormat('%.4X', [$1A]));
 end;
 
 procedure TestFormatWidth;
@@ -166,6 +228,10 @@ begin
   CheckEqual('042', TextFormat('%03d', [42]));
   CheckEqual('007', TextFormat('%03d', [7]));
   CheckEqual('1234', TextFormat('%02d', [1234]));
+  CheckEqual('0007', TextFormat('%.4d', [7]));
+  CheckEqual('-0007', TextFormat('%.4d', [-7]));
+  CheckEqual('005', TextFormat('%.3u', [5]));
+  CheckEqual('    001A', TextFormat('%8.4X', [$1A]));
   CheckEqual('a   ', TextFormat('%-4s', ['a']));
   CheckEqual('42  ', TextFormat('%-4d', [42]));
   CheckEqual('42  ', TextFormat('%-04d', [42]));
@@ -201,6 +267,116 @@ begin
   ExpectFormatOverflow('%.1025f', [1.0], 'unbounded precision must raise');
 end;
 
+procedure TestCompatFormatMatchesTextFormat;
+begin
+  CheckEqual(TextFormat('%s', ['hello']),
+    nextpas.core.text.conv.Format('%s', ['hello']));
+  CheckEqual(TextFormat('%03d', [42]),
+    nextpas.core.text.conv.Format('%03d', [42]));
+  CheckEqual(TextFormat('%.2f', [3.14]),
+    nextpas.core.text.conv.Format('%.2f', [3.14]));
+end;
+
+procedure TestCompatFormatRejectsMalformedInput;
+begin
+  ExpectCompatFormatInvalid('%', [], 'compat format dangling percent must raise');
+  ExpectCompatFormatInvalid('%5', [], 'compat format missing conversion must raise');
+  ExpectCompatFormatInvalid('%q', [1], 'compat format unsupported conversion must raise');
+  ExpectCompatFormatInvalid('%d %d', [1], 'compat format missing argument must raise');
+  ExpectCompatFormatInvalid('%d', ['not-int'], 'compat format wrong argument type must raise');
+end;
+
+procedure TestBoolToStr;
+begin
+  CheckEqual('True', BoolToStr(True));
+  CheckEqual('False', BoolToStr(False));
+  CheckEqual('yes', BoolToStr(True, 'yes', 'no'));
+  CheckEqual('no', BoolToStr(False, 'yes', 'no'));
+end;
+
+procedure TestStrToIntDef;
+begin
+  CheckEqual(Int64(42), StrToIntDef('42', -1));
+  CheckEqual(Int64(-17), StrToIntDef('-17', 0));
+  CheckEqual(Int64(123), StrToIntDef('not-a-number', 123));
+  CheckEqual(High(Int64), StrToIntDef('9223372036854775807', 0));
+  CheckEqual(Low(Int64), StrToIntDef('-9223372036854775808', 0));
+  CheckEqual(Int64(77), StrToIntDef('9223372036854775808', 77), 'overflow uses default');
+end;
+
+procedure TestStrToInt64Def;
+begin
+  CheckEqual(Int64(64), StrToInt64Def('64', -1));
+  CheckEqual(Int64(-2048), StrToInt64Def('-2048', 0));
+  CheckEqual(Int64(456), StrToInt64Def('invalid', 456));
+  CheckEqual(High(Int64), StrToInt64Def('9223372036854775807', 0));
+  CheckEqual(Low(Int64), StrToInt64Def('-9223372036854775808', 0));
+  CheckEqual(Int64(-9), StrToInt64Def('-9223372036854775809', -9), 'underflow uses default');
+end;
+
+procedure TestStrToIntRaisesConvertError;
+begin
+  CheckEqual(Int64(42), StrToInt('42'));
+  ExpectIntConvertError('not-a-number', 'StrToInt invalid text must raise');
+  ExpectIntConvertError('9223372036854775808', 'StrToInt overflow must raise');
+end;
+
+procedure TestStrToFloatDef;
+begin
+  CheckEqual('3.14', FloatToStr(StrToFloatDef('3.14', 0.5)));
+  CheckEqual('-0.25', FloatToStr(StrToFloatDef('-0.25', 1.0)));
+  CheckEqual('1.5', FloatToStr(StrToFloatDef('not-a-number', 1.5)));
+end;
+
+procedure TestStrToFloatRaisesConvertError;
+begin
+  CheckEqual('3.14', FloatToStr(StrToFloat('3.14')));
+  ExpectFloatConvertError('not-a-number', 'StrToFloat invalid text must raise');
+  ExpectFloatConvertError('1.2.3', 'StrToFloat malformed text must raise');
+end;
+
+procedure TestLowerCase;
+begin
+  CheckEqual('hello', LowerCase('HELLO'));
+  CheckEqual('abc', LowerCase('abc'));
+  CheckEqual('', LowerCase(''));
+  CheckEqual('hello 123!', LowerCase('HeLLo 123!'));
+end;
+
+procedure TestUpperCase;
+begin
+  CheckEqual('HELLO', UpperCase('hello'));
+  CheckEqual('ABC', UpperCase('ABC'));
+  CheckEqual('', UpperCase(''));
+  CheckEqual('HELLO 123!', UpperCase('HeLLo 123!'));
+end;
+
+procedure TestUTF8RoundTrip;
+var
+  LExpected: TBytes;
+  LActual: TBytes;
+  LText: string;
+begin
+  LExpected := BytesOf([$E4, $B8, $AD, $E6, $96, $87, $F0, $9F, $98, $80]);
+  LText := UTF8BytesToString(LExpected);
+  Check(LText <> '', 'decoded UTF-8 text should not be empty');
+  LActual := StringToUTF8Bytes(LText);
+  CheckBytesEqual(LExpected, LActual, 'utf8 round-trip');
+end;
+
+procedure TestASCIIBytesRoundTrip;
+var
+  LText: string;
+begin
+  LText := 'ASCII only 123!?';
+  CheckEqual(LText, ASCIIBytesToString(StringToASCIIBytes(LText)));
+end;
+
+procedure TestBigEndianUnicode;
+begin
+  CheckEqual('Hi', BigEndianUnicodeBytesToString(BytesOf([$00, $48, $00, $69])));
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.text.conv+format');
 
@@ -222,6 +398,19 @@ begin
   T.Run('Format multi-arg', @TestFormatMultiArg);
   T.Run('Format rejects malformed input', @TestFormatRejectsMalformedInput);
   T.Run('Format rejects unbounded width and precision', @TestFormatRejectsUnboundedWidthAndPrecision);
+  T.Run('Compat format matches TextFormat', @TestCompatFormatMatchesTextFormat);
+  T.Run('Compat format rejects malformed input', @TestCompatFormatRejectsMalformedInput);
+  T.Run('BoolToStr', @TestBoolToStr);
+  T.Run('StrToInt raises convert error', @TestStrToIntRaisesConvertError);
+  T.Run('StrToIntDef', @TestStrToIntDef);
+  T.Run('StrToInt64Def', @TestStrToInt64Def);
+  T.Run('StrToFloat raises convert error', @TestStrToFloatRaisesConvertError);
+  T.Run('StrToFloatDef', @TestStrToFloatDef);
+  T.Run('LowerCase', @TestLowerCase);
+  T.Run('UpperCase', @TestUpperCase);
+  T.Run('UTF8 round-trip', @TestUTF8RoundTrip);
+  T.Run('ASCII bytes round-trip', @TestASCIIBytesRoundTrip);
+  T.Run('Big-endian Unicode', @TestBigEndianUnicode);
 
   T.Summary;
 end.
