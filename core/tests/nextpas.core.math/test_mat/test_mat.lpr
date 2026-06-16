@@ -3,11 +3,18 @@ program test_mat;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.math.scalar,
+  nextpas.core.math.vec.base,
   nextpas.core.math.mat.base,
   nextpas.core.math.mat;
 
 var
   GPass, GFail: Integer;
+
+function FloatEq(const A, B: Single): Boolean;
+begin
+  Result := Abs(A - B) < 0.001;
+end;
 
 procedure Check(const AName: string; ACond: Boolean);
 begin
@@ -145,6 +152,55 @@ begin
   Check('Mat4d Identity [1,2]', M[1,2] = 0.0);
 end;
 
+procedure TestMat4fMultiply;
+var
+  A, B, C: TMat4f;
+begin
+  WriteLn('TestMat4fMultiply');
+  { Identity * Identity = Identity }
+  A := Mat4fIdentity;
+  B := Mat4fIdentity;
+  C := A * B;
+  Check('I*I [0,0]', FloatEq(C[0,0], 1.0));
+  Check('I*I [1,1]', FloatEq(C[1,1], 1.0));
+  Check('I*I [0,1]', FloatEq(C[0,1], 0.0));
+
+  { Scale * Translation }
+  A := Mat4fIdentity;
+  A[0,0] := 2.0; A[1,1] := 3.0; A[2,2] := 4.0;
+  B := Mat4fIdentity;
+  B[3,0] := 10.0; B[3,1] := 20.0; B[3,2] := 30.0;
+  C := A * B;
+  Check('Scale*Trans [0,0]', FloatEq(C[0,0], 2.0));
+  Check('Scale*Trans [1,1]', FloatEq(C[1,1], 3.0));
+  Check('Scale*Trans [3,0]', FloatEq(C[3,0], 10.0));
+  Check('Scale*Trans [3,1]', FloatEq(C[3,1], 20.0));
+end;
+
+procedure TestMat4fMulVec;
+var
+  M: TMat4f;
+  V, R: TVec4f;
+begin
+  WriteLn('TestMat4fMulVec');
+  { Identity * v = v }
+  M := Mat4fIdentity;
+  V := TVec4f.Create(1, 2, 3, 1);
+  R := Mat4fMulVec(M, V);
+  Check('I*v.x', FloatEq(R.X, 1.0));
+  Check('I*v.y', FloatEq(R.Y, 2.0));
+  Check('I*v.z', FloatEq(R.Z, 3.0));
+
+  { Scale * v }
+  M := Mat4fIdentity;
+  M[0,0] := 2.0; M[1,1] := 3.0; M[2,2] := 4.0;
+  V := TVec4f.Create(1, 2, 3, 1);
+  R := Mat4fMulVec(M, V);
+  Check('Scale*v.x', FloatEq(R.X, 2.0));
+  Check('Scale*v.y', FloatEq(R.Y, 6.0));
+  Check('Scale*v.z', FloatEq(R.Z, 12.0));
+end;
+
 begin
   GPass := 0;
   GFail := 0;
@@ -161,6 +217,8 @@ begin
   TestMat4fInverse;
   TestMat3dCreateAndIdentity;
   TestMat4dCreateAndIdentity;
+  TestMat4fMultiply;
+  TestMat4fMulVec;
 
   WriteLn;
   WriteLn('=== Results: ', GPass, ' passed, ', GFail, ' failed ===');

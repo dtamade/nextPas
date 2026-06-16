@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.math.scalar,
-  nextpas.core.math.vec.base;
+  nextpas.core.math.vec.base,
+  nextpas.core.math.impl.simd;
 
 type
 { TMat3f - 3x3 single-precision matrix (row-major) }
@@ -99,6 +100,24 @@ function Mat3dZero: TMat3d; inline;
 function Mat4fZero: TMat4f; inline;
 {** Return a 4x4 double-precision zero matrix }
 function Mat4dZero: TMat4d; inline;
+
+{ Matrix multiply operators }
+
+{** Multiply two 4x4 single-precision matrices (SIMD-accelerated) }
+operator * (constref A, B: TMat4f): TMat4f;
+{** Multiply two 4x4 double-precision matrices }
+operator * (constref A, B: TMat4d): TMat4d;
+{** Multiply two 3x3 single-precision matrices }
+operator * (constref A, B: TMat3f): TMat3f;
+{** Multiply two 3x3 double-precision matrices }
+operator * (constref A, B: TMat3d): TMat3d;
+
+{ Matrix-vector multiply }
+
+{** Multiply a 4x4 single-precision matrix by a 4D vector (SIMD-accelerated) }
+function Mat4fMulVec(const AM: TMat4f; const AV: TVec4f): TVec4f;
+{** Multiply a 4x4 double-precision matrix by a 4D vector }
+function Mat4dMulVec(const AM: TMat4d; const AV: TVec4d): TVec4d;
 
 implementation
 
@@ -434,6 +453,74 @@ begin
   Result.FData[3,1] := (FData[0,0] * C3 - FData[0,1] * C1 + FData[0,2] * C0) * LDet;
   Result.FData[3,2] := (-FData[3,0] * S3 + FData[3,1] * S1 - FData[3,2] * S0) * LDet;
   Result.FData[3,3] := (FData[2,0] * S3 - FData[2,1] * S1 + FData[2,2] * S0) * LDet;
+end;
+
+{ === Matrix multiply operators === }
+
+operator * (constref A, B: TMat4f): TMat4f;
+begin
+  SimdMat4fMul(@A.FData[0, 0], @B.FData[0, 0], @Result.FData[0, 0]);
+end;
+
+operator * (constref A, B: TMat4d): TMat4d;
+var
+  LRow, LCol, LK: Integer;
+begin
+  for LRow := 0 to 3 do
+    for LCol := 0 to 3 do
+    begin
+      Result.FData[LRow, LCol] := 0;
+      for LK := 0 to 3 do
+        Result.FData[LRow, LCol] := Result.FData[LRow, LCol]
+          + A.FData[LRow, LK] * B.FData[LK, LCol];
+    end;
+end;
+
+operator * (constref A, B: TMat3f): TMat3f;
+var
+  LRow, LCol, LK: Integer;
+begin
+  for LRow := 0 to 2 do
+    for LCol := 0 to 2 do
+    begin
+      Result.FData[LRow, LCol] := 0;
+      for LK := 0 to 2 do
+        Result.FData[LRow, LCol] := Result.FData[LRow, LCol]
+          + A.FData[LRow, LK] * B.FData[LK, LCol];
+    end;
+end;
+
+operator * (constref A, B: TMat3d): TMat3d;
+var
+  LRow, LCol, LK: Integer;
+begin
+  for LRow := 0 to 2 do
+    for LCol := 0 to 2 do
+    begin
+      Result.FData[LRow, LCol] := 0;
+      for LK := 0 to 2 do
+        Result.FData[LRow, LCol] := Result.FData[LRow, LCol]
+          + A.FData[LRow, LK] * B.FData[LK, LCol];
+    end;
+end;
+
+{ === Matrix-vector multiply === }
+
+function Mat4fMulVec(const AM: TMat4f; const AV: TVec4f): TVec4f;
+var
+  LOX, LOY, LOZ, LOW: Single;
+begin
+  SimdMat4fMulVec4f(@AM.FData[0, 0], AV.X, AV.Y, AV.Z, AV.W, LOX, LOY, LOZ, LOW);
+  Result := TVec4f.Create(LOX, LOY, LOZ, LOW);
+end;
+
+function Mat4dMulVec(const AM: TMat4d; const AV: TVec4d): TVec4d;
+begin
+  Result := TVec4d.Create(
+    AM.FData[0, 0] * AV.X + AM.FData[0, 1] * AV.Y + AM.FData[0, 2] * AV.Z + AM.FData[0, 3] * AV.W,
+    AM.FData[1, 0] * AV.X + AM.FData[1, 1] * AV.Y + AM.FData[1, 2] * AV.Z + AM.FData[1, 3] * AV.W,
+    AM.FData[2, 0] * AV.X + AM.FData[2, 1] * AV.Y + AM.FData[2, 2] * AV.Z + AM.FData[2, 3] * AV.W,
+    AM.FData[3, 0] * AV.X + AM.FData[3, 1] * AV.Y + AM.FData[3, 2] * AV.Z + AM.FData[3, 3] * AV.W);
 end;
 
 end.
