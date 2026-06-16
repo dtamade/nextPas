@@ -29,7 +29,7 @@ type
     function Length: Single; inline;
     function Dot(constref AOther: TQuatf): Single; inline;
     function ToMat4f: TMat4f; inline;
-    function RotateVec(const AV: TVec3f): TVec3f; inline;
+    function RotateVec(const AV: TVec3f): TVec3f;
     property X: Single read GetX write SetX;
     property Y: Single read GetY write SetY;
     property Z: Single read GetZ write SetZ;
@@ -55,7 +55,7 @@ type
     function Length: Double; inline;
     function Dot(constref AOther: TQuatd): Double; inline;
     function ToMat4d: TMat4d; inline;
-    function RotateVec(const AV: TVec3d): TVec3d; inline;
+    function RotateVec(const AV: TVec3d): TVec3d;
     property X: Double read GetX write SetX;
     property Y: Double read GetY write SetY;
     property Z: Double read GetZ write SetZ;
@@ -185,12 +185,7 @@ begin
 end;
 
 function TQuatf.RotateVec(const AV: TVec3f): TVec3f;
-var
-  LQv: TQuatf;
-  LQc: TQuatf;
 begin
-  LQv := Create(AV.X, AV.Y, AV.Z, 0);
-  LQc := Conjugate;
   // q * v * q^-1
   // For unit quaternion, q^-1 = conjugate
   Result := TVec3f.Create(
@@ -308,12 +303,7 @@ begin
 end;
 
 function TQuatd.RotateVec(const AV: TVec3d): TVec3d;
-var
-  LQv: TQuatd;
-  LQc: TQuatd;
 begin
-  LQv := Create(AV.X, AV.Y, AV.Z, 0);
-  LQc := Conjugate;
   // q * v * q^-1
   // For unit quaternion, q^-1 = conjugate
   Result := TVec3d.Create(
