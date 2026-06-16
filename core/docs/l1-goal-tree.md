@@ -46,9 +46,9 @@ TLockFreeChannel<T> (Go channel 语义) | TLockFreeHashMap<TKey,TValue> (分片�
 | 套件 | 测试数 | 泄漏 |
 |------|--------|------|
 | test_atomic | 45 | 0 |
-| test_lockfree | 70 | 0 |
+| test_lockfree | 83 | 0 |
 | test_lockfree_stress | 13 | 0 |
-| **总计** | **128** | **0** |
+| **总计** | **141** | **0** |
 
 ## 性能目标
 
