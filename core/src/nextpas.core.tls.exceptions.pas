@@ -13,7 +13,10 @@ unit nextpas.core.tls.exceptions;
 
 interface
 
-uses nextpas.core.tls.base; // 引入 TSSLErrorCode 等类型定义, nextpas.core.text.conv;
+uses
+  nextpas.core.exception,
+  nextpas.core.tls.base,
+  nextpas.core.text.conv;
 
 type
   {**
