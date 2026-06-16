@@ -78,13 +78,11 @@ type
     destructor Destroy; override;
 
     // IAllocator
-    function Allocate(const ASize: SizeUInt): Pointer;
-    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-    procedure Deallocate(const APtr: Pointer);
     function GetMem(aSize: SizeUInt): Pointer;
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
+    function MemSize(aPtr: Pointer): SizeUInt;
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     procedure FreeAligned(aPtr: Pointer);
     function Traits: TAllocatorTraits;
@@ -319,21 +317,6 @@ begin
   Result := FPool.Available;
 end;
 
-function TPoolAllocator.Allocate(const ASize: SizeUInt): Pointer;
-begin
-  Result := GetMem(ASize);
-end;
-
-function TPoolAllocator.Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-begin
-  Result := ReallocMem(APtr, ANewSize);
-end;
-
-procedure TPoolAllocator.Deallocate(const APtr: Pointer);
-begin
-  FreeMem(APtr);
-end;
-
 function TPoolAllocator.GetMem(aSize: SizeUInt): Pointer;
 begin
   if aSize = 0 then
@@ -441,6 +424,11 @@ begin
     FFallback.FreeAligned(aDst)
   else
     FFallback.FreeMem(aDst);
+end;
+
+function TPoolAllocator.MemSize(aPtr: Pointer): SizeUInt;
+begin
+  Result := GetMemSize(aPtr);
 end;
 
 function TPoolAllocator.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;

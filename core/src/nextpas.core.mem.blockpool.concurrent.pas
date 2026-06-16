@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.base.utils,
+  nextpas.core.mem.base,
   nextpas.core.mem.blockpool,
   nextpas.core.mem.mutex,
   nextpas.core.mem.error;
@@ -228,7 +229,7 @@ end;
 
 constructor TArenaConcurrent.Create(aTotalSize: SizeUInt);
 begin
-  Create(TArena.Create(aTotalSize));
+  Create(TFixedArena.Create(aTotalSize));
 end;
 
 destructor TArenaConcurrent.Destroy;

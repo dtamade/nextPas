@@ -114,7 +114,7 @@ begin
     ASection.Entries[I].Value := '';
   end;
   if ASection.Entries <> nil then
-    FAllocator.Deallocate(Pointer(ASection.Entries));
+    FAllocator.FreeMem(Pointer(ASection.Entries));
   ASection.Entries := nil;
   ASection.EntryCount := 0;
   ASection.EntryCap := 0;
@@ -128,7 +128,7 @@ begin
   for I := 0 to FSectionCount - 1 do
     ClearSection(FSections[I]);
   if FSections <> nil then
-    FAllocator.Deallocate(Pointer(FSections));
+    FAllocator.FreeMem(Pointer(FSections));
   FSections := nil;
   FSectionCount := 0;
   FSectionCap := 0;
@@ -149,7 +149,7 @@ begin
     LNewCap := FSectionCap;
   while LNewCap < ANeeded do
     LNewCap := LNewCap * 2;
-  LNewPtr := FAllocator.Reallocate(Pointer(FSections),
+  LNewPtr := FAllocator.ReallocMem(Pointer(FSections),
     SizeUInt(LNewCap) * SizeOf(TIniSection));
   if LNewPtr = nil then
     raise EResourceExhaustedError.Create('TIniFile: out of memory');
@@ -173,7 +173,7 @@ begin
     LNewCap := ASection.EntryCap;
   while LNewCap < ANeeded do
     LNewCap := LNewCap * 2;
-  LNewPtr := FAllocator.Reallocate(Pointer(ASection.Entries),
+  LNewPtr := FAllocator.ReallocMem(Pointer(ASection.Entries),
     SizeUInt(LNewCap) * SizeOf(TIniEntry));
   if LNewPtr = nil then
     raise EResourceExhaustedError.Create('TIniFile: out of memory');

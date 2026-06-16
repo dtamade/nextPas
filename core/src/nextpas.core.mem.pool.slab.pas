@@ -10,6 +10,7 @@ interface
 uses
   nextpas.core.errors,
   nextpas.core.base,
+  nextpas.core.mem.base,
   nextpas.core.mem.allocator,
   nextpas.core.mem.intf,
   nextpas.core.mem.pool.memory_pool,
@@ -199,9 +200,7 @@ type
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
-    function Allocate(const ASize: SizeUInt): Pointer;
-    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-    procedure Deallocate(const APtr: Pointer);
+    function MemSize(aPtr: Pointer): SizeUInt;
     // 兼容统计
     property TotalAllocs: SizeUInt read FTotalAllocs;
     property TotalFrees : SizeUInt read FTotalFrees;
@@ -246,11 +245,6 @@ function TSlabPool.IsOversize(const aSize: SizeUInt): Boolean; inline;
 begin
   // 兼容字段：仅用于“硬限制”单次分配的最大尺寸
   Result := (aSize <> 0) and (FConfig.MaxAllocSize > 0) and (aSize > FConfig.MaxAllocSize);
-end;
-
-function IsPowerOfTwoSize(aValue: SizeUInt): Boolean; inline;
-begin
-  Result := (aValue <> 0) and ((aValue and (aValue - 1)) = 0);
 end;
 
 function AlignUpPtrLocal(aPtr: Pointer; aAlignment: SizeUInt): Pointer; inline;
@@ -377,7 +371,7 @@ var
 begin
   if aNewCapacity < HASH_MIN_CAP then
     aNewCapacity := HASH_MIN_CAP;
-  if not IsPowerOfTwoSize(aNewCapacity) then
+  if not IsPowerOfTwo(aNewCapacity) then
     aNewCapacity := NextPow2(aNewCapacity);
 
   LOldCap := SizeUInt(Length(FFbKeys));
@@ -639,7 +633,7 @@ begin
     LAlign := 16;
   if LAlign < SizeOf(Pointer) then
     LAlign := SizeOf(Pointer);
-  if not IsPowerOfTwoSize(LAlign) then
+  if not IsPowerOfTwo(LAlign) then
     raise EInvalidArgument.Create('TSlabPool.AllocFallback: aAlignment must be power of two and >= pointer size');
 
   // over-allocate for alignment; raw pointer is tracked out-of-band
@@ -1190,19 +1184,9 @@ begin
     raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
 end;
 
-function TSlabPool.Allocate(const ASize: SizeUInt): Pointer;
+function TSlabPool.MemSize(aPtr: Pointer): SizeUInt;
 begin
-  Result := GetMem(ASize);
-end;
-
-function TSlabPool.Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-begin
-  Result := ReallocMem(APtr, ANewSize);
-end;
-
-procedure TSlabPool.Deallocate(const APtr: Pointer);
-begin
-  FreeMem(APtr);
+  Result := MemSizeOf(aPtr);
 end;
 
 procedure TSlabPool.Reset;
@@ -1264,7 +1248,7 @@ begin
 
   if aAlignment < SizeOf(Pointer) then
     aAlignment := SizeOf(Pointer);
-  if not IsPowerOfTwoSize(aAlignment) then
+  if not IsPowerOfTwo(aAlignment) then
     raise EInvalidArgument.Create('TSlabPool.AllocAligned: aAlignment must be power of two and >= pointer size');
 
   if ShouldUseFallback(aSize) then

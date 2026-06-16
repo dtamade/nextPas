@@ -5,6 +5,7 @@ unit nextpas.core.mem.allocator.base;
 interface
 
 uses
+  nextpas.core.mem.base,
   nextpas.core.mem.intf,
   nextpas.core.contracts
   {$IFDEF NEXTPAS_CORE_STRICT_NULL_FREE}
@@ -27,14 +28,13 @@ type
     function DoAllocMem(aSize: SizeUInt): Pointer; virtual; abstract;
     function DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; virtual; abstract;
     procedure DoFreeMem(aDst: Pointer); virtual; abstract;
+    function DoMemSize(aPtr: Pointer): SizeUInt; virtual;
   public
-    function  Allocate(const ASize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
-    function  Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
-    procedure Deallocate(const APtr: Pointer); {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
     function  GetMem(aSize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
     function  AllocMem(aSize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
     function  ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
     procedure FreeMem(aDst: Pointer); {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
+    function  MemSize(aPtr: Pointer): SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
     // 对齐分配（默认回退实现，子类可覆盖为原生对齐）
     function  AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     procedure FreeAligned(aPtr: Pointer);
@@ -46,11 +46,6 @@ implementation
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in aligned alloc helpers
-
-function IsPowerOfTwo(x: SizeUInt): Boolean; inline;
-begin
-  Result := (x <> 0) and ((x and (x - 1)) = 0);
-end;
 
 function AlignUpPtr(P: Pointer; AAlignment: SizeUInt): Pointer; inline;
 var
@@ -74,19 +69,16 @@ begin
   Result.SupportsAligned := False;
 end;
 
-function TAllocator.Allocate(const ASize: SizeUInt): Pointer;
+function TAllocator.DoMemSize(aPtr: Pointer): SizeUInt;
 begin
-  Result := GetMem(ASize);
+  Result := 0;
 end;
 
-function TAllocator.Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+function TAllocator.MemSize(aPtr: Pointer): SizeUInt;
 begin
-  Result := ReallocMem(APtr, ANewSize);
-end;
-
-procedure TAllocator.Deallocate(const APtr: Pointer);
-begin
-  FreeMem(APtr);
+  if aPtr = nil then
+    Exit(0);
+  Result := DoMemSize(aPtr);
 end;
 
 function TAllocator.GetMem(aSize: SizeUInt): Pointer;

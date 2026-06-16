@@ -99,7 +99,7 @@ begin
   FIndexCap := 0;
   FCombinedAlloc := True;
   FInited := True;
-  LBase := PAnsiChar(FAllocator.Allocate(LTotalSize));
+  LBase := PAnsiChar(FAllocator.GetMem(LTotalSize));
   if LBase = nil then
   begin
     SetOutOfMemoryError;
@@ -128,25 +128,25 @@ begin
   begin
     for I := 0 to FIndexCap - 1 do
       if FIndices[I].Slots <> nil then
-        FAllocator.Deallocate(FIndices[I].Slots);
-    FAllocator.Deallocate(FIndices);
+        FAllocator.FreeMem(FIndices[I].Slots);
+    FAllocator.FreeMem(FIndices);
     FIndices := nil;
     FIndexCap := 0;
   end;
   if (FStrOverflow <> nil) and (FStrOverflowCount > 0) then
   begin
     for I := 0 to FStrOverflowCount - 1 do
-      FAllocator.Deallocate(PPointer(PByte(FStrOverflow) + I * SizeOf(Pointer))^);
+      FAllocator.FreeMem(PPointer(PByte(FStrOverflow) + I * SizeOf(Pointer))^);
   end;
   if FStrOverflow <> nil then
   begin
-    FAllocator.Deallocate(FStrOverflow);
+    FAllocator.FreeMem(FStrOverflow);
     FStrOverflow := nil;
   end;
   if FCombinedAlloc then
   begin
     if FNodes <> nil then
-      FAllocator.Deallocate(FNodes);
+      FAllocator.FreeMem(FNodes);
     FNodes := nil;
     FStrArena := nil;
   end
@@ -154,12 +154,12 @@ begin
   begin
     if FStrArena <> nil then
     begin
-      FAllocator.Deallocate(FStrArena);
+      FAllocator.FreeMem(FStrArena);
       FStrArena := nil;
     end;
     if FNodes <> nil then
     begin
-      FAllocator.Deallocate(FNodes);
+      FAllocator.FreeMem(FNodes);
       FNodes := nil;
     end;
   end;
@@ -184,30 +184,30 @@ begin
     LNewCap := FNodeCap * 2;
     if FCombinedAlloc then
     begin
-      LNodesPtr := FAllocator.Allocate(LNewCap * SizeOf(TJsonNode));
+      LNodesPtr := FAllocator.GetMem(LNewCap * SizeOf(TJsonNode));
       if LNodesPtr = nil then
       begin
         SetOutOfMemoryError;
         Exit(JSON_NODE_NONE);
       end;
       Move(FNodes^, LNodesPtr^, FNodeCap * SizeOf(TJsonNode));
-      LArenaPtr := FAllocator.Allocate(FStrArenaCap);
+      LArenaPtr := FAllocator.GetMem(FStrArenaCap);
       if LArenaPtr = nil then
       begin
-        FAllocator.Deallocate(LNodesPtr);
+        FAllocator.FreeMem(LNodesPtr);
         SetOutOfMemoryError;
         Exit(JSON_NODE_NONE);
       end;
       if FStrArenaUsed > 0 then
         Move(FStrArena^, LArenaPtr^, FStrArenaUsed);
-      FAllocator.Deallocate(FNodes);
+      FAllocator.FreeMem(FNodes);
       FNodes := LNodesPtr;
       FStrArena := LArenaPtr;
       FCombinedAlloc := False;
     end
     else
     begin
-      LNewNodes := FAllocator.Reallocate(FNodes, LNewCap * SizeOf(TJsonNode));
+      LNewNodes := FAllocator.ReallocMem(FNodes, LNewCap * SizeOf(TJsonNode));
       if LNewNodes = nil then
       begin
         SetOutOfMemoryError;
@@ -234,17 +234,17 @@ begin
     Inc(FStrArenaUsed, UInt32(ASize));
     Exit;
   end;
-  Result := FAllocator.Allocate(ASize);
+  Result := FAllocator.GetMem(ASize);
   if FStrOverflowCount >= FStrOverflowCap then
   begin
     if FStrOverflowCap = 0 then
       LNewCap := 8
     else
       LNewCap := FStrOverflowCap * 2;
-    LNewOverflow := FAllocator.Reallocate(FStrOverflow, LNewCap * SizeOf(Pointer));
+    LNewOverflow := FAllocator.ReallocMem(FStrOverflow, LNewCap * SizeOf(Pointer));
     if LNewOverflow = nil then
     begin
-      FAllocator.Deallocate(Result);
+      FAllocator.FreeMem(Result);
       Result := nil;
       SetOutOfMemoryError;
       Exit;
@@ -836,10 +836,10 @@ begin
     for I := 0 to FIndexCap - 1 do
       if FIndices[I].Slots <> nil then
       begin
-        FAllocator.Deallocate(FIndices[I].Slots);
+        FAllocator.FreeMem(FIndices[I].Slots);
         FIndices[I].Slots := nil;
       end;
-    FAllocator.Deallocate(FIndices);
+    FAllocator.FreeMem(FIndices);
     FIndices := nil;
     FIndexCap := 0;
   end;
@@ -847,7 +847,7 @@ begin
   if (FStrOverflow <> nil) and (FStrOverflowCount > 0) then
   begin
     for I := 0 to FStrOverflowCount - 1 do
-      FAllocator.Deallocate(PPointer(PByte(FStrOverflow) + I * SizeOf(Pointer))^);
+      FAllocator.FreeMem(PPointer(PByte(FStrOverflow) + I * SizeOf(Pointer))^);
     FStrOverflowCount := 0;
   end;
   FStrArenaUsed := 0;
@@ -857,27 +857,27 @@ begin
     if FCombinedAlloc then
     begin
       LBase := PAnsiChar(FNodes);
-      LNodesPtr := FAllocator.Allocate(LEstimate * SizeOf(TJsonNode));
+      LNodesPtr := FAllocator.GetMem(LEstimate * SizeOf(TJsonNode));
       if LNodesPtr = nil then
       begin
         SetOutOfMemoryError;
         Exit(False);
       end;
-      LArenaPtr := FAllocator.Allocate(FStrArenaCap);
+      LArenaPtr := FAllocator.GetMem(FStrArenaCap);
       if LArenaPtr = nil then
       begin
-        FAllocator.Deallocate(LNodesPtr);
+        FAllocator.FreeMem(LNodesPtr);
         SetOutOfMemoryError;
         Exit(False);
       end;
-      FAllocator.Deallocate(LBase);
+      FAllocator.FreeMem(LBase);
       FNodes := LNodesPtr;
       FStrArena := LArenaPtr;
       FCombinedAlloc := False;
     end
     else
     begin
-      LNewNodes := FAllocator.Reallocate(FNodes, LEstimate * SizeOf(TJsonNode));
+      LNewNodes := FAllocator.ReallocMem(FNodes, LEstimate * SizeOf(TJsonNode));
       if LNewNodes = nil then
       begin
         SetOutOfMemoryError;
@@ -958,7 +958,7 @@ begin
   if FIndices = nil then
   begin
     FIndexCap := FNodeCount;
-    LIndices := FAllocator.Allocate(FIndexCap * SizeOf(TJsonObjectIndex));
+    LIndices := FAllocator.GetMem(FIndexCap * SizeOf(TJsonObjectIndex));
     if LIndices = nil then
       Exit;
     FillChar(LIndices^, FIndexCap * SizeOf(TJsonObjectIndex), 0);
@@ -971,7 +971,7 @@ begin
   LNode := @FNodes[AObjectIdx];
   LCap := NextPow2(LNode^.Container.Count * 2);
   if LCap < 8 then LCap := 8;
-  LSlots := FAllocator.Allocate(LCap * SizeOf(UInt32));
+  LSlots := FAllocator.GetMem(LCap * SizeOf(UInt32));
   if LSlots = nil then
     Exit;
   LIdx^.Mask := LCap - 1;

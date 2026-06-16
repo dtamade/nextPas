@@ -23,12 +23,12 @@ interface
 
 uses
   nextpas.core.mem.allocator.base,
-  nextpas.core.mem.allocator.rtl_allocator,
-  nextpas.core.mem.allocator.callback_allocator,
-  nextpas.core.mem.allocator.memory_map_allocator,
+  nextpas.core.mem.allocator.rtl,
+  nextpas.core.mem.allocator.callback,
+  nextpas.core.mem.allocator.mmap,
   nextpas.core.mem.allocator.mimalloc
   {$IFDEF NEXTPAS_CORE_CRT_ALLOCATOR}
-  ,nextpas.core.mem.allocator.crt_allocator
+  ,nextpas.core.mem.allocator.crt
   {$ENDIF}
   ;
 
@@ -38,18 +38,18 @@ type
   TAllocator = nextpas.core.mem.allocator.base.TAllocator;
 
   // 回调类型重导出（从 callback_allocator 单元）
-  TGetMemCallback     = nextpas.core.mem.allocator.callback_allocator.TGetMemCallback;
-  TAllocMemCallback   = nextpas.core.mem.allocator.callback_allocator.TAllocMemCallback;
-  TReallocMemCallback = nextpas.core.mem.allocator.callback_allocator.TReallocMemCallback;
-  TFreeMemCallback    = nextpas.core.mem.allocator.callback_allocator.TFreeMemCallback;
+  TGetMemCallback     = nextpas.core.mem.allocator.callback.TGetMemCallback;
+  TAllocMemCallback   = nextpas.core.mem.allocator.callback.TAllocMemCallback;
+  TReallocMemCallback = nextpas.core.mem.allocator.callback.TReallocMemCallback;
+  TFreeMemCallback    = nextpas.core.mem.allocator.callback.TFreeMemCallback;
 
   // 具体分配器类型重导出
-  TRtlAllocator = nextpas.core.mem.allocator.rtl_allocator.TRtlAllocator;
+  TRtlAllocator = nextpas.core.mem.allocator.rtl.TRtlAllocator;
   {$IFDEF NEXTPAS_CORE_CRT_ALLOCATOR}
-  TCrtAllocator = nextpas.core.mem.allocator.crt_allocator.TCrtAllocator;
+  TCrtAllocator = nextpas.core.mem.allocator.crt.TCrtAllocator;
   {$ENDIF}
-  TCallbackAllocator = nextpas.core.mem.allocator.callback_allocator.TCallbackAllocator;
-  TMemoryMapAllocator = nextpas.core.mem.allocator.memory_map_allocator.TMemoryMapAllocator;
+  TCallbackAllocator = nextpas.core.mem.allocator.callback.TCallbackAllocator;
+  TMemoryMapAllocator = nextpas.core.mem.allocator.mmap.TMemoryMapAllocator;
 
   // 获取/工厂函数声明（门面转发）
   function GetRtlAllocator: IAllocator;
@@ -68,7 +68,7 @@ implementation
 
 function GetRtlAllocator: IAllocator;
 begin
-  Result := nextpas.core.mem.allocator.rtl_allocator.GetRtlAllocator;
+  Result := nextpas.core.mem.allocator.rtl.GetRtlAllocator;
 end;
 
 function GetMimallocAllocator: IAllocator; inline;
@@ -83,13 +83,13 @@ end;
 
 function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): IAllocator;
 begin
-  Result := nextpas.core.mem.allocator.memory_map_allocator.CreateAnonymousMemoryMapAllocator(aReservationSize);
+  Result := nextpas.core.mem.allocator.mmap.CreateAnonymousMemoryMapAllocator(aReservationSize);
 end;
 
 {$IFDEF NEXTPAS_CORE_CRT_ALLOCATOR}
 function GetCrtAllocator: IAllocator;
 begin
-  Result := nextpas.core.mem.allocator.crt_allocator.GetCrtAllocator;
+  Result := nextpas.core.mem.allocator.crt.GetCrtAllocator;
 end;
 {$ENDIF}
 
@@ -97,7 +97,7 @@ end;
 function CreateCallbackAllocator(aGetMem: TGetMemCallback;
   aAllocMem: TAllocMemCallback; aReallocMem: TReallocMemCallback; aFreeMem: TFreeMemCallback): TCallbackAllocator;
 begin
-  Result := nextpas.core.mem.allocator.callback_allocator.CreateCallbackAllocator(aGetMem, aAllocMem, aReallocMem, aFreeMem);
+  Result := nextpas.core.mem.allocator.callback.CreateCallbackAllocator(aGetMem, aAllocMem, aReallocMem, aFreeMem);
 end;
 
 end.

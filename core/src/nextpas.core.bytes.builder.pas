@@ -99,7 +99,7 @@ begin
   inherited Create;
   FAllocator := AAllocator;
   if AInitialCapacity > 0 then
-    FPtr := FAllocator.Allocate(AInitialCapacity)
+    FPtr := FAllocator.GetMem(AInitialCapacity)
   else
     FPtr := nil;
   FLen := 0;
@@ -110,7 +110,7 @@ destructor TBytesBuilderImpl.Destroy;
 begin
   if FPtr <> nil then
   begin
-    FAllocator.Deallocate(FPtr);
+    FAllocator.FreeMem(FPtr);
     FPtr := nil;
   end;
   inherited;
@@ -135,7 +135,7 @@ begin
       Break;
     end;
   end;
-  FPtr := FAllocator.Reallocate(FPtr, LNewCap);
+  FPtr := FAllocator.ReallocMem(FPtr, LNewCap);
   FCap := LNewCap;
 end;
 

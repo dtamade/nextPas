@@ -84,8 +84,8 @@ begin
   FSlots := nil;
   if FAllocator <> nil then
   begin
-    FCtrl := FAllocator.Allocate(ACapacity + GROUP_SIZE);
-    FSlots := FAllocator.Allocate(ACapacity * SizeOf(TSlot));
+    FCtrl := FAllocator.GetMem(ACapacity + GROUP_SIZE);
+    FSlots := FAllocator.GetMem(ACapacity * SizeOf(TSlot));
   end
   else
   begin
@@ -114,8 +114,8 @@ begin
       if System.IsManagedType(V) then
         Finalize(FSlots[i].Value);
     end;
-  if FAllocator <> nil then FAllocator.Deallocate(FSlots) else FreeMem(FSlots);
-  if FAllocator <> nil then FAllocator.Deallocate(FCtrl) else FreeMem(FCtrl);
+  if FAllocator <> nil then FAllocator.FreeMem(FSlots) else FreeMem(FSlots);
+  if FAllocator <> nil then FAllocator.FreeMem(FCtrl) else FreeMem(FCtrl);
   FCtrl := nil; FSlots := nil;
 end;
 
@@ -168,7 +168,7 @@ begin
         if LWasEmpty then
           Dec(FGrowthLeft);
       end;
-    if FAllocator <> nil then FAllocator.Deallocate(LOldSlots) else FreeMem(LOldSlots); if FAllocator <> nil then FAllocator.Deallocate(LOldCtrl) else FreeMem(LOldCtrl);
+    if FAllocator <> nil then FAllocator.FreeMem(LOldSlots) else FreeMem(LOldSlots); if FAllocator <> nil then FAllocator.FreeMem(LOldCtrl) else FreeMem(LOldCtrl);
   end;
 end;
 

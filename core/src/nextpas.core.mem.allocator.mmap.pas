@@ -1,4 +1,4 @@
-unit nextpas.core.mem.allocator.memory_map_allocator;
+unit nextpas.core.mem.allocator.mmap;
 
 {$I nextpas.core.settings.inc}
 

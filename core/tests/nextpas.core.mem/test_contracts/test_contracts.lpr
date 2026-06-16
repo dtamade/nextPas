@@ -5,7 +5,6 @@ program test_contracts;
 uses
   SysUtils,
   nextpas.core.testing,
-  nextpas.core.mem.compat,
   nextpas.core.mem.intf,
   nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
@@ -22,8 +21,6 @@ const
   MEM_BLOCKPOOL_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.pas';
   MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.concurrent.pas';
   MEM_BLOCKPOOL_CONCURRENT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.blockpool.concurrent.pas';
-  MEM_COMPAT_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.compat.pas';
-  MEM_COMPAT_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.compat.pas';
   MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.arena.growable.pas';
   MEM_ARENA_GROWABLE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.arena.growable.pas';
   MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.blockpool.growable.pas';
@@ -162,7 +159,7 @@ begin
   CheckEqual(Int64(1), Int64(GFreeMemCalls), 'FreeMem(nil) should be a no-op');
 end;
 
-procedure TestCallbackAllocatorSupportsAllocateInterface;
+procedure TestCallbackAllocatorSupportsCanonicalInterface;
 var
   LAllocator: nextpas.core.mem.intf.IAllocator;
   LPtr: Pointer;
@@ -174,18 +171,18 @@ begin
     @CallbackReallocMem,
     @CallbackFreeMem) as nextpas.core.mem.intf.IAllocator;
 
-  LPtr := LAllocator.Allocate(24);
-  Check(LPtr <> nil, 'Allocate should delegate to the compatibility allocator');
-  CheckEqual(Int64(1), Int64(GGetMemCalls), 'Allocate should route through GetMem');
+  LPtr := LAllocator.GetMem(24);
+  Check(LPtr <> nil, 'GetMem should delegate to the compatibility allocator');
+  CheckEqual(Int64(1), Int64(GGetMemCalls), 'GetMem should route through GetMem');
 
   PByte(LPtr)^ := $33;
-  LPtr := LAllocator.Reallocate(LPtr, 48);
-  Check(LPtr <> nil, 'Reallocate should return a pointer');
-  CheckEqual(Int64(1), Int64(GReallocMemCalls), 'Reallocate should route through ReallocMem');
-  CheckEqual(Int64($33), Int64(PByte(LPtr)^), 'Reallocate should preserve the prefix');
+  LPtr := LAllocator.ReallocMem(LPtr, 48);
+  Check(LPtr <> nil, 'ReallocMem should return a pointer');
+  CheckEqual(Int64(1), Int64(GReallocMemCalls), 'ReallocMem should route through ReallocMem');
+  CheckEqual(Int64($33), Int64(PByte(LPtr)^), 'ReallocMem should preserve the prefix');
 
-  LAllocator.Deallocate(LPtr);
-  CheckEqual(Int64(1), Int64(GFreeMemCalls), 'Deallocate should route through FreeMem');
+  LAllocator.FreeMem(LPtr);
+  CheckEqual(Int64(1), Int64(GFreeMemCalls), 'FreeMem should route through FreeMem');
 end;
 
 procedure TestRtlAllocatorZeroInitTraitsAndAlignedAlloc;
@@ -287,93 +284,6 @@ begin
     'aligned compat shim should not own a raw rtl fallback path');
   CheckNotContains(LSource, 'sysfreemem',
     'aligned compat shim should not own a raw rtl free path');
-end;
-
-procedure TestMemCompatFacadeExportsLegacyPoolSurface;
-var
-  LPool: nextpas.core.mem.compat.TMemPool;
-  LCompatPool: nextpas.core.mem.compat.IMemPool;
-  LPtr: Pointer;
-begin
-  LPool := nextpas.core.mem.compat.TMemPool.Create(32, 2);
-  try
-    LCompatPool := nextpas.core.mem.compat.TMemPoolAdapter.Create(LPool);
-    LPtr := LCompatPool.Alloc;
-    try
-      Check(LPtr <> nil, 'mem.compat should export the legacy mem-pool adapter surface');
-      Check(nextpas.core.mem.compat.WrapAsBlockPool(LCompatPool) <> nil,
-        'mem.compat should export pool bridge helpers');
-    finally
-      LCompatPool.Free(LPtr);
-    end;
-  finally
-    LPool.Free;
-  end;
-end;
-
-procedure TestMemCompatArenaBridgeRuntime;
-var
-  LPool: nextpas.core.mem.compat.TStackPool;
-  LStackView: nextpas.core.mem.compat.IStackPool;
-  LArena: nextpas.core.mem.compat.IArena;
-  LPtr: Pointer;
-  I: Integer;
-begin
-  LPool := nextpas.core.mem.compat.TStackPool.Create(256);
-  try
-    LStackView := nextpas.core.mem.compat.TStackPoolAdapter.Create(LPool);
-    LArena := nextpas.core.mem.compat.WrapAsArena(LStackView);
-    Check(LArena <> nil, 'mem.compat should expose WrapAsArena');
-
-    LPtr := LArena.AllocAligned(32, 32);
-    Check(LPtr <> nil, 'arena bridge should allocate aligned memory');
-    CheckEqual(Int64(0), Int64(PtrUInt(LPtr) mod 32), 'arena bridge should honor explicit alignment');
-
-    LPtr := LArena.AllocZeroed(16);
-    Check(LPtr <> nil, 'arena bridge should allocate zeroed memory');
-    for I := 0 to 15 do
-      CheckEqual(Int64(0), Int64(PByte(LPtr)[I]), 'arena bridge zeroed memory');
-
-    LStackView := nextpas.core.mem.compat.WrapAsStackPool(LArena);
-    Check(LStackView <> nil, 'mem.compat should expose WrapAsStackPool');
-    LPtr := LStackView.Alloc(24, 8);
-    Check(LPtr <> nil, 'stack-pool bridge should allocate');
-  finally
-    LPool.Free;
-  end;
-end;
-
-procedure TestMemCompatSourceContracts;
-var
-  LCompatSource: string;
-begin
-  LCompatSource := ReadSourceText(ResolveSourcePath(
-    MEM_COMPAT_SOURCE_PATH_FROM_TEST,
-    MEM_COMPAT_SOURCE_PATH_FROM_ROOT));
-  CheckContains(LCompatSource, 'compatibility layer',
-    'mem.compat should document that it is a compatibility layer');
-  CheckContains(LCompatSource, 'new code',
-    'mem.compat should tell new code to stay on canonical units');
-  CheckContains(LCompatSource, 'nextpas.core.mem.intf',
-    'mem.compat should depend on the canonical allocator contract');
-  CheckContains(LCompatSource, 'nextpas.core.mem.pool.fixed',
-    'mem.compat should depend on the canonical fixed-pool implementation');
-  CheckContains(LCompatSource, 'nextpas.core.mem.stack_pool',
-    'mem.compat should depend on the canonical stack-pool implementation');
-  CheckContains(LCompatSource, 'nextpas.core.mem.pool.slab',
-    'mem.compat should depend on the canonical slab-pool implementation');
-  CheckContains(LCompatSource, 'nextpas.core.mem.blockpool',
-    'mem.compat should depend on the canonical block-pool contract');
-  CheckNotContains(LCompatSource, 'nextpas.core.mem.layout',
-    'mem.compat must not depend on the removed layout unit');
-  CheckNotContains(LCompatSource, 'tmemlayout =',
-    'mem.compat must not re-export TMemLayout');
-  CheckNotContains(LCompatSource, 'tallocresult =',
-    'mem.compat must not re-export TAllocResult');
-  CheckContains(LCompatSource, 'function alloc(asize: sizeuint): pointer;',
-    'mem.compat arena bridge should expose explicit-size allocation');
-  CheckContains(LCompatSource, 'function allocaligned(asize, aalignment: sizeuint): pointer;',
-    'mem.compat arena bridge should expose explicit aligned allocation');
 end;
 
 procedure TestGrowableAllocatorsUseCanonicalAllocatorContract;
@@ -629,15 +539,12 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.mem.contracts');
   T.Run('callback allocator compatibility methods', @TestCallbackAllocatorCompatibilityMethods);
-  T.Run('callback allocator supports allocate interface', @TestCallbackAllocatorSupportsAllocateInterface);
+  T.Run('callback allocator supports canonical interface', @TestCallbackAllocatorSupportsCanonicalInterface);
   T.Run('rtl allocator zero init traits and aligned alloc', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
   T.Run('rtl allocator aligned alloc rejects size overflow', @TestRtlAllocatorAlignedAllocRejectsSizeOverflow);
   T.Run('aligned compat shim smoke', @TestAlignedCompatShimSmoke);
   T.Run('aligned compat shim delegates to canonical allocator',
     @TestAlignedCompatShimDelegatesToCanonicalAllocator);
-  T.Run('mem.compat exports legacy pool surface', @TestMemCompatFacadeExportsLegacyPoolSurface);
-  T.Run('mem.compat arena bridge runtime', @TestMemCompatArenaBridgeRuntime);
-  T.Run('mem.compat source contracts', @TestMemCompatSourceContracts);
   T.Run('growable allocators use canonical allocator contract',
     @TestGrowableAllocatorsUseCanonicalAllocatorContract);
   T.Run('arena units use explicit arena api', @TestArenaUnitsUseExplicitArenaApi);

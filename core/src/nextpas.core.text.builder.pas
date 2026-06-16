@@ -203,7 +203,7 @@ begin
     LNewCap := LNewCap * 2;
   end;
   if FAllocator <> nil then
-    FBuf := FAllocator.Reallocate(FBuf, LNewCap)
+    FBuf := FAllocator.ReallocMem(FBuf, LNewCap)
   else
     ReallocMem(FBuf, LNewCap);
   if (LNewCap > 0) and (FBuf = nil) then
@@ -230,7 +230,7 @@ begin
   if FCap > 0 then
   begin
     if FAllocator <> nil then
-      FBuf := FAllocator.Allocate(FCap)
+      FBuf := FAllocator.GetMem(FCap)
     else
       GetMem(FBuf, FCap);
   end
@@ -243,7 +243,7 @@ begin
   if FBuf <> nil then
   begin
     if FAllocator <> nil then
-      FAllocator.Deallocate(FBuf)
+      FAllocator.FreeMem(FBuf)
     else
       FreeMem(FBuf);
     FBuf := nil;

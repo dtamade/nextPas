@@ -10,6 +10,7 @@ interface
 uses
   nextpas.core.base.utils,
   nextpas.core.base,
+  nextpas.core.mem.base,
   nextpas.core.mem.allocator,
   nextpas.core.mem.intf,
   nextpas.core.mem.mutex,
@@ -66,8 +67,6 @@ type
     FFbCount: SizeUInt;            // live entries
     FFbFill: SizeUInt;             // live + tombstones
   private
-    function IsPowerOfTwoInt(aValue: Integer): Boolean; inline;
-    function NextPow2Int(aValue: Integer): Integer; inline;
     function NormalizeShardCount(aShardCount: Integer): Integer;
     function ChooseShardIndex: Integer; inline;
     function PageKeyOf(aPtr: Pointer): PtrUInt; inline;
@@ -110,9 +109,7 @@ type
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
-    function Allocate(const ASize: SizeUInt): Pointer;
-    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-    procedure Deallocate(const APtr: Pointer);
+    function MemSize(aPtr: Pointer): SizeUInt;
 
     // IAllocator aligned allocation
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
@@ -145,39 +142,12 @@ begin
 end;
 {$pop}
 
-function IsPowerOfTwoSize(aValue: SizeUInt): Boolean; inline;
-begin
-  Result := (aValue <> 0) and ((aValue and (aValue - 1)) = 0);
-end;
-
 function NextPow2Size(const aValue: SizeUInt): SizeUInt; inline;
-var
-  LResult: SizeUInt;
 begin
-  if aValue <= 1 then Exit(1);
-  LResult := 1;
-  while LResult < aValue do
-    LResult := LResult shl 1;
-  Result := LResult;
+  Result := NextPowerOfTwo(aValue);
 end;
 
 { TSlabPoolSharded }
-
-function TSlabPoolSharded.IsPowerOfTwoInt(aValue: Integer): Boolean; inline;
-begin
-  Result := (aValue > 0) and ((aValue and (aValue - 1)) = 0);
-end;
-
-function TSlabPoolSharded.NextPow2Int(aValue: Integer): Integer; inline;
-var
-  LResult: Integer;
-begin
-  if aValue <= 1 then Exit(1);
-  LResult := 1;
-  while LResult < aValue do
-    LResult := LResult shl 1;
-  Result := LResult;
-end;
 
 function TSlabPoolSharded.NormalizeShardCount(aShardCount: Integer): Integer;
 var
@@ -191,8 +161,8 @@ begin
     aShardCount := LCPU;
   end;
 
-  if not IsPowerOfTwoInt(aShardCount) then
-    aShardCount := NextPow2Int(aShardCount);
+  if not IsPowerOfTwo(SizeUInt(aShardCount)) then
+    aShardCount := Integer(NextPowerOfTwo(SizeUInt(aShardCount)));
   if aShardCount < 1 then aShardCount := 1;
   Result := aShardCount;
 end;
@@ -389,7 +359,7 @@ var
 begin
   if aNewCapacity < HASH_MIN_CAP then
     aNewCapacity := HASH_MIN_CAP;
-  if not IsPowerOfTwoSize(aNewCapacity) then
+  if not IsPowerOfTwo(aNewCapacity) then
     aNewCapacity := NextPow2Size(aNewCapacity);
 
   LOldCap := FFbMask + 1;
@@ -921,19 +891,9 @@ begin
   end;
 end;
 
-function TSlabPoolSharded.Allocate(const ASize: SizeUInt): Pointer;
+function TSlabPoolSharded.MemSize(aPtr: Pointer): SizeUInt;
 begin
-  Result := GetMem(ASize);
-end;
-
-function TSlabPoolSharded.Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-begin
-  Result := ReallocMem(APtr, ANewSize);
-end;
-
-procedure TSlabPoolSharded.Deallocate(const APtr: Pointer);
-begin
-  FreeMem(APtr);
+  Result := MemSizeOf(aPtr);
 end;
 
 function TSlabPoolSharded.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
@@ -945,7 +905,7 @@ begin
   if aSize = 0 then Exit(nil);
   if aAlignment < SizeOf(Pointer) then
     aAlignment := SizeOf(Pointer);
-  if not IsPowerOfTwoSize(aAlignment) then
+  if not IsPowerOfTwo(aAlignment) then
     raise EInvalidArgument.Create('TSlabPoolSharded.AllocAligned: aAlignment must be power of two and >= pointer size');
 
   LShard := ChooseShardIndex;

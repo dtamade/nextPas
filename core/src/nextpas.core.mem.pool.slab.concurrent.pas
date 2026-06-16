@@ -43,9 +43,7 @@ type
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
-    function Allocate(const ASize: SizeUInt): Pointer;
-    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-    procedure Deallocate(const APtr: Pointer);
+    function MemSize(aPtr: Pointer): SizeUInt;
     // IAllocator aligned allocation
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     procedure FreeAligned(aPtr: Pointer);
@@ -196,19 +194,14 @@ begin
   end;
 end;
 
-function TSlabPoolConcurrent.Allocate(const ASize: SizeUInt): Pointer;
+function TSlabPoolConcurrent.MemSize(aPtr: Pointer): SizeUInt;
 begin
-  Result := GetMem(ASize);
-end;
-
-function TSlabPoolConcurrent.Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-begin
-  Result := ReallocMem(APtr, ANewSize);
-end;
-
-procedure TSlabPoolConcurrent.Deallocate(const APtr: Pointer);
-begin
-  FreeMem(APtr);
+  FLock.Acquire;
+  try
+    Result := FInner.MemSize(aPtr);
+  finally
+    FLock.Release;
+  end;
 end;
 
 function TSlabPoolConcurrent.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;

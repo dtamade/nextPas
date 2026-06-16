@@ -209,7 +209,7 @@ begin
   FHashCap := 0;
   FHashOwner := TOML_NODE_NONE;
   FInited := True;
-  LPtr := FAllocator.Allocate(FNodeCap * SizeOf(TTomlNode));
+  LPtr := FAllocator.GetMem(FNodeCap * SizeOf(TTomlNode));
   if LPtr = nil then
   begin
     SetOutOfMemoryError;
@@ -235,19 +235,19 @@ begin
     Exit;
   if FHashBuckets <> nil then
   begin
-    FAllocator.Deallocate(FHashBuckets);
+    FAllocator.FreeMem(FHashBuckets);
     FHashBuckets := nil;
   end;
   if FOwnedBufs <> nil then
   begin
     for LI := 0 to FOwnedCount - 1 do
-      FAllocator.Deallocate((FOwnedBufs + LI)^);
-    FAllocator.Deallocate(Pointer(FOwnedBufs));
+      FAllocator.FreeMem((FOwnedBufs + LI)^);
+    FAllocator.FreeMem(Pointer(FOwnedBufs));
     FOwnedBufs := nil;
   end;
   if FNodes <> nil then
   begin
-    FAllocator.Deallocate(FNodes);
+    FAllocator.FreeMem(FNodes);
     FNodes := nil;
   end;
   FNodeCount := 0;
@@ -268,7 +268,7 @@ begin
   if FOwnedBufs = nil then
   begin
     FOwnedCap := INITIAL_OWNED_CAP;
-    FOwnedBufs := PPointer(FAllocator.Allocate(FOwnedCap * SizeOf(Pointer)));
+    FOwnedBufs := PPointer(FAllocator.GetMem(FOwnedCap * SizeOf(Pointer)));
     if FOwnedBufs = nil then
     begin
       FOwnedCap := 0;
@@ -279,7 +279,7 @@ begin
   else if FOwnedCount >= FOwnedCap then
   begin
     LNewCap := FOwnedCap * 2;
-    LNewBufs := PPointer(FAllocator.Reallocate(Pointer(FOwnedBufs), LNewCap * SizeOf(Pointer)));
+    LNewBufs := PPointer(FAllocator.ReallocMem(Pointer(FOwnedBufs), LNewCap * SizeOf(Pointer)));
     if LNewBufs = nil then
     begin
       SetOutOfMemoryError;
@@ -301,7 +301,7 @@ begin
   if FNodeCount >= FNodeCap then
   begin
     LNewCap := FNodeCap * 2;
-    LNewNodes := FAllocator.Reallocate(FNodes, LNewCap * SizeOf(TTomlNode));
+    LNewNodes := FAllocator.ReallocMem(FNodes, LNewCap * SizeOf(TTomlNode));
     if LNewNodes = nil then
     begin
       SetOutOfMemoryError;
@@ -330,14 +330,14 @@ begin
   if LCap < 64 then LCap := 64;
   if (FHashBuckets <> nil) and (FHashCap < LCap) then
   begin
-    FAllocator.Deallocate(FHashBuckets);
+    FAllocator.FreeMem(FHashBuckets);
     FHashBuckets := nil;
     FHashCap := 0;
     FHashOwner := TOML_NODE_NONE;
   end;
   if FHashBuckets = nil then
   begin
-    LHashBuckets := FAllocator.Allocate(LCap * SizeOf(UInt32));
+    LHashBuckets := FAllocator.GetMem(LCap * SizeOf(UInt32));
     if LHashBuckets = nil then
       Exit;
     FHashBuckets := LHashBuckets;
@@ -722,20 +722,20 @@ begin
   if LHasEscape then
   begin
     LBufLen := LEnd - LStart;
-    LBuf := Doc^.FAllocator.Allocate(LBufLen);
+    LBuf := Doc^.FAllocator.GetMem(LBufLen);
     if LBuf = nil then
       Exit(SetError('out of memory', 13));
     LBufLen := TomlUnescapeToBuffer(Src + LStart, LEnd - LStart, LBuf, LErr);
     if LErr <> ueNone then
     begin
-      Doc^.FAllocator.Deallocate(LBuf);
+      Doc^.FAllocator.FreeMem(LBuf);
       Exit(SetError('invalid escape sequence', 23));
     end;
     AStr := TStringView.Create(LBuf, LBufLen);
     AOwned := True;
     if not Doc^.AddOwnedBuf(LBuf) then
     begin
-      Doc^.FAllocator.Deallocate(LBuf);
+      Doc^.FAllocator.FreeMem(LBuf);
       AOwned := False;
       AStr := TStringView.Empty;
       Exit(False);
@@ -803,7 +803,7 @@ begin
         AdvanceN(3);
       end;
       LBufLen := LEnd - LStart;
-      LBuf := Doc^.FAllocator.Allocate(LBufLen + 1);
+      LBuf := Doc^.FAllocator.GetMem(LBufLen + 1);
       if LBuf = nil then
         Exit(SetError('out of memory', 13));
       LDst := LBuf;
@@ -861,14 +861,14 @@ begin
       LBufLen := TomlUnescapeToBuffer(LBuf, LBufLen, LBuf, LErr);
       if LErr <> ueNone then
       begin
-        Doc^.FAllocator.Deallocate(LBuf);
+        Doc^.FAllocator.FreeMem(LBuf);
         Exit(SetError('invalid escape in multi-line string', 35));
       end;
       AStr := TStringView.Create(LBuf, LBufLen);
       AOwned := True;
       if not Doc^.AddOwnedBuf(LBuf) then
       begin
-        Doc^.FAllocator.Deallocate(LBuf);
+        Doc^.FAllocator.FreeMem(LBuf);
         AOwned := False;
         AStr := TStringView.Empty;
         Exit(False);
@@ -915,7 +915,7 @@ begin
         AdvanceN(3);
       end;
       LBufLen := LEnd - LStart;
-      LBuf := Doc^.FAllocator.Allocate(LBufLen + 1);
+      LBuf := Doc^.FAllocator.GetMem(LBufLen + 1);
       if LBuf = nil then
         Exit(SetError('out of memory', 13));
       LDst := LBuf;
@@ -939,7 +939,7 @@ begin
       AStr := TStringView.Create(LBuf, LDst - LBuf);
       if not Doc^.AddOwnedBuf(LBuf) then
       begin
-        Doc^.FAllocator.Deallocate(LBuf);
+        Doc^.FAllocator.FreeMem(LBuf);
         AStr := TStringView.Empty;
         Exit(False);
       end;
@@ -1860,15 +1860,15 @@ begin
   if FOwnedBufs <> nil then
   begin
     for LI := 0 to FOwnedCount - 1 do
-      FAllocator.Deallocate((FOwnedBufs + LI)^);
-    FAllocator.Deallocate(Pointer(FOwnedBufs));
+      FAllocator.FreeMem((FOwnedBufs + LI)^);
+    FAllocator.FreeMem(Pointer(FOwnedBufs));
     FOwnedBufs := nil;
     FOwnedCount := 0;
     FOwnedCap := 0;
   end;
   if FHashBuckets <> nil then
   begin
-    FAllocator.Deallocate(FHashBuckets);
+    FAllocator.FreeMem(FHashBuckets);
     FHashBuckets := nil;
     FHashCap := 0;
     FHashOwner := TOML_NODE_NONE;

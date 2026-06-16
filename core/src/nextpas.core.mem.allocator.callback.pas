@@ -1,4 +1,4 @@
-unit nextpas.core.mem.allocator.callback_allocator;
+unit nextpas.core.mem.allocator.callback;
 
 {$I nextpas.core.settings.inc}
 

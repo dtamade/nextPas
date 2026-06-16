@@ -29,13 +29,11 @@ type
     FReallocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnReallocateCall: SizeUInt);
-    function Allocate(const ASize: SizeUInt): Pointer;
-    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-    procedure Deallocate(const APtr: Pointer);
     function GetMem(aSize: SizeUInt): Pointer;
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
+    function MemSize(aPtr: Pointer): SizeUInt;
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     procedure FreeAligned(aPtr: Pointer);
     function Traits: TAllocatorTraits;
@@ -47,13 +45,11 @@ type
     FAllocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnAllocateCall: SizeUInt);
-    function Allocate(const ASize: SizeUInt): Pointer;
-    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-    procedure Deallocate(const APtr: Pointer);
     function GetMem(aSize: SizeUInt): Pointer;
     function AllocMem(aSize: SizeUInt): Pointer;
     function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
     procedure FreeMem(aDst: Pointer);
+    function MemSize(aPtr: Pointer): SizeUInt;
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     procedure FreeAligned(aPtr: Pointer);
     function Traits: TAllocatorTraits;
@@ -65,22 +61,6 @@ begin
   inherited Create;
   FFailOnReallocateCall := AFailOnReallocateCall;
   FReallocateCalls := 0;
-end;
-
-function TFailingReallocateAllocator.Allocate(const ASize: SizeUInt): Pointer;
-begin
-  Result := GetMem(ASize);
-end;
-
-function TFailingReallocateAllocator.Reallocate(const APtr: Pointer;
-  const ANewSize: SizeUInt): Pointer;
-begin
-  Result := ReallocMem(APtr, ANewSize);
-end;
-
-procedure TFailingReallocateAllocator.Deallocate(const APtr: Pointer);
-begin
-  FreeMem(APtr);
 end;
 
 function TFailingReallocateAllocator.GetMem(aSize: SizeUInt): Pointer;
@@ -120,6 +100,11 @@ begin
     System.FreeMem(aDst);
 end;
 
+function TFailingReallocateAllocator.MemSize(aPtr: Pointer): SizeUInt;
+begin
+  Result := 0;
+end;
+
 function TFailingReallocateAllocator.AllocAligned(aSize,
   aAlignment: SizeUInt): Pointer;
 begin
@@ -145,22 +130,6 @@ begin
   inherited Create;
   FFailOnAllocateCall := AFailOnAllocateCall;
   FAllocateCalls := 0;
-end;
-
-function TFailingAllocateAllocator.Allocate(const ASize: SizeUInt): Pointer;
-begin
-  Result := GetMem(ASize);
-end;
-
-function TFailingAllocateAllocator.Reallocate(const APtr: Pointer;
-  const ANewSize: SizeUInt): Pointer;
-begin
-  Result := ReallocMem(APtr, ANewSize);
-end;
-
-procedure TFailingAllocateAllocator.Deallocate(const APtr: Pointer);
-begin
-  FreeMem(APtr);
 end;
 
 function TFailingAllocateAllocator.GetMem(aSize: SizeUInt): Pointer;
@@ -200,6 +169,11 @@ procedure TFailingAllocateAllocator.FreeMem(aDst: Pointer);
 begin
   if aDst <> nil then
     System.FreeMem(aDst);
+end;
+
+function TFailingAllocateAllocator.MemSize(aPtr: Pointer): SizeUInt;
+begin
+  Result := 0;
 end;
 
 function TFailingAllocateAllocator.AllocAligned(aSize,
@@ -1020,29 +994,29 @@ begin
     'document tracks initialized state');
   CheckSourceContains(LSource, 'if not finited then',
     'done must guard uninited records');
-  CheckSourceContains(LSource, 'lbase := pansichar(fallocator.allocate(ltotalsize));',
+  CheckSourceContains(LSource, 'lbase := pansichar(fallocator.getmem(ltotalsize));',
     'init must stage initial combined allocation');
   CheckSourceContains(LSource, 'if lbase = nil then',
     'init must guard initial combined allocation');
-  CheckSourceContains(LSource, 'lnewnodes := fallocator.reallocate(fnodes, lnewcap * sizeof(tjsonnode));',
+  CheckSourceContains(LSource, 'lnewnodes := fallocator.reallocmem(fnodes, lnewcap * sizeof(tjsonnode));',
     'node growth must stage reallocate');
-  CheckSourceContains(LSource, 'lnodesptr := fallocator.allocate(lnewcap * sizeof(tjsonnode));',
+  CheckSourceContains(LSource, 'lnodesptr := fallocator.getmem(lnewcap * sizeof(tjsonnode));',
     'combined node growth must stage node allocation');
-  CheckSourceContains(LSource, 'larenaptr := fallocator.allocate(fstrarenacap);',
+  CheckSourceContains(LSource, 'larenaptr := fallocator.getmem(fstrarenacap);',
     'combined node growth must stage arena allocation');
-  CheckSourceContains(LSource, 'fallocator.deallocate(lnodesptr);',
+  CheckSourceContains(LSource, 'fallocator.freemem(lnodesptr);',
     'combined node growth must release staged nodes when arena allocation fails');
-  CheckSourceContains(LSource, 'lnewoverflow := fallocator.reallocate(fstroverflow, lnewcap * sizeof(pointer));',
+  CheckSourceContains(LSource, 'lnewoverflow := fallocator.reallocmem(fstroverflow, lnewcap * sizeof(pointer));',
     'overflow storage must stage reallocate');
-  CheckSourceContains(LSource, 'lnodesptr := fallocator.allocate(lestimate * sizeof(tjsonnode));',
+  CheckSourceContains(LSource, 'lnodesptr := fallocator.getmem(lestimate * sizeof(tjsonnode));',
     'parse preallocation must stage node allocation');
-  CheckSourceContains(LSource, 'larenaptr := fallocator.allocate(fstrarenacap);',
+  CheckSourceContains(LSource, 'larenaptr := fallocator.getmem(fstrarenacap);',
     'parse preallocation must stage arena allocation');
-  CheckSourceContains(LSource, 'lnewnodes := fallocator.reallocate(fnodes, lestimate * sizeof(tjsonnode));',
+  CheckSourceContains(LSource, 'lnewnodes := fallocator.reallocmem(fnodes, lestimate * sizeof(tjsonnode));',
     'parse preallocation must stage reallocate');
-  CheckSourceContains(LSource, 'lindices := fallocator.allocate(findexcap * sizeof(tjsonobjectindex));',
+  CheckSourceContains(LSource, 'lindices := fallocator.getmem(findexcap * sizeof(tjsonobjectindex));',
     'object index storage must stage allocation');
-  CheckSourceContains(LSource, 'lslots := fallocator.allocate(lcap * sizeof(uint32));',
+  CheckSourceContains(LSource, 'lslots := fallocator.getmem(lcap * sizeof(uint32));',
     'object hash slots must stage allocation');
 end;
 

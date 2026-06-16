@@ -20,6 +20,7 @@ type
     function DoAllocMem(aSize: SizeUInt): Pointer; override;
     function DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; override;
     procedure DoFreeMem(aDst: Pointer); override;
+    function DoMemSize(aPtr: Pointer): SizeUInt; override;
   public
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     procedure FreeAligned(aPtr: Pointer);
@@ -58,6 +59,13 @@ end;
 procedure TMimallocAllocator.DoFreeMem(aDst: Pointer);
 begin
   mi_free(aDst);
+end;
+
+function TMimallocAllocator.DoMemSize(aPtr: Pointer): SizeUInt;
+begin
+  if aPtr = nil then
+    Exit(0);
+  Result := mi_malloc_usable_size(aPtr);
 end;
 
 function TMimallocAllocator.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;

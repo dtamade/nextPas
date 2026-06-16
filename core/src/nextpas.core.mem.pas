@@ -13,6 +13,7 @@ uses
   nextpas.core.mem.error,
   nextpas.core.mem.default,
   nextpas.core.mem.arena,
+  nextpas.core.mem.blockpool,
   nextpas.core.mem.pool;
 
 type
@@ -20,7 +21,7 @@ type
   TArenaMarker = nextpas.core.mem.base.TArenaMarker;
   IAllocator = nextpas.core.mem.intf.IAllocator;
   TLocalArena = nextpas.core.mem.arena.TLocalArena;
-  TArena = nextpas.core.mem.arena.TArena;
+  TArena = nextpas.core.mem.blockpool.TFixedArena;
   TLocalBlockPool = nextpas.core.mem.pool.TLocalBlockPool;
   TPool = nextpas.core.mem.pool.TPool;
 
@@ -38,7 +39,7 @@ end;
 
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
 begin
-  Result := AAllocator.Allocate(ASize);
+  Result := AAllocator.GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
@@ -51,7 +52,7 @@ begin
   LTotal := ACount * AElemSize;
   if (LTotal div AElemSize) <> ACount then
     raise EOutOfMemory.Create(aeOutOfMemory, 'AllocArray: size overflow');
-  Result := AAllocator.Allocate(LTotal);
+  Result := AAllocator.GetMem(LTotal);
   if Result <> nil then
     FillChar(Result^, LTotal, 0);
 end;

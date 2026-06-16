@@ -135,11 +135,6 @@ implementation
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in pool internals
 
-function IsPowerOfTwo(const AValue: SizeUInt): Boolean; inline;
-begin
-  Result := (AValue <> 0) and ((AValue and (AValue - 1)) = 0);
-end;
-
 class function TGrowingBlockPoolConfig.Default(aBlockSize, aInitialCapacity: SizeUInt): TGrowingBlockPoolConfig;
 begin
   Result.BlockSize := aBlockSize;
@@ -683,35 +678,13 @@ begin
 end;
 
 function TGrowingBlockPool.AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer;
-var
-  LIdx: Integer;
-  LPtr: Pointer;
 begin
-  Result := 0;
-  if aCount <= 0 then Exit(0);
-  for LIdx := 0 to aCount - 1 do
-  begin
-    if LIdx > High(aPtrs) then
-      Break;
-    LPtr := Acquire;
-    if LPtr = nil then
-      Break;
-    aPtrs[LIdx] := LPtr;
-    Inc(Result);
-  end;
+  Result := DefaultAcquireN(@Acquire, aPtrs, aCount);
 end;
 
 procedure TGrowingBlockPool.ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
-var
-  LIdx: Integer;
 begin
-  if aCount <= 0 then Exit;
-  for LIdx := 0 to aCount - 1 do
-  begin
-    if LIdx > High(aPtrs) then
-      Break;
-    Release(aPtrs[LIdx]);
-  end;
+  DefaultReleaseN(@Release, aPtrs, aCount);
 end;
 
 procedure TGrowingBlockPool.Release(aPtr: Pointer);

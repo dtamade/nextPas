@@ -11,15 +11,18 @@ uses
 var
   T: TTestRunner;
 
-procedure TestArenaInit;
+procedure TestArenaCreate;
 var
   LA: TLocalArena;
 begin
-  LA.Init(1024);
-  CheckEqual(Int64(1024), Int64(LA.Capacity), 'capacity');
-  CheckEqual(Int64(0), Int64(LA.BytesUsed), 'bytes used');
-  CheckEqual(Int64(1024), Int64(LA.BytesRemaining), 'bytes remaining');
-  LA.Done;
+  LA := TLocalArena.Create(1024);
+  try
+    CheckEqual(Int64(1024), Int64(LA.TotalSize), 'total size');
+    CheckEqual(Int64(0), Int64(LA.UsedSize), 'used size');
+    CheckEqual(Int64(1024), Int64(LA.RemainingSize), 'remaining size');
+  finally
+    LA.Free;
+  end;
 end;
 
 procedure TestArenaAlloc;
@@ -27,28 +30,31 @@ var
   LA: TLocalArena;
   LP1, LP2: Pointer;
 begin
-  LA.Init(256);
-  LP1 := LA.Alloc(64);
-  Check(LP1 <> nil, 'first alloc');
-  CheckEqual(Int64(64), Int64(LA.BytesUsed));
+  LA := TLocalArena.Create(256);
+  try
+    LP1 := LA.Alloc(64);
+    Check(LP1 <> nil, 'first alloc');
+    CheckEqual(Int64(64), Int64(LA.UsedSize));
 
-  LP2 := LA.Alloc(64);
-  Check(LP2 <> nil, 'second alloc');
-  Check(LP2 <> LP1, 'different pointers');
-  CheckEqual(Int64(128), Int64(LA.BytesUsed));
-  LA.Done;
+    LP2 := LA.Alloc(64);
+    Check(LP2 <> nil, 'second alloc');
+    Check(LP2 <> LP1, 'different pointers');
+    CheckEqual(Int64(128), Int64(LA.UsedSize));
+  finally
+    LA.Free;
+  end;
 end;
 
 procedure TestArenaAllocZeroSize;
 var
   LA: TLocalArena;
 begin
-  LA.Init(64);
+  LA := TLocalArena.Create(64);
   try
     Check(LA.Alloc(0) = nil, 'zero-size alloc should return nil');
-    CheckEqual(Int64(0), Int64(LA.BytesUsed), 'zero-size alloc should not advance offset');
+    CheckEqual(Int64(0), Int64(LA.UsedSize), 'zero-size alloc should not advance offset');
   finally
-    LA.Done;
+    LA.Free;
   end;
 end;
 
@@ -57,25 +63,28 @@ var
   LA: TLocalArena;
   LP: Pointer;
 begin
-  LA.Init(100);
-  LP := LA.Alloc(100);
-  Check(LP <> nil, 'exact fit');
-  LP := LA.Alloc(1);
-  Check(LP = nil, 'should return nil when exhausted');
-  LA.Done;
+  LA := TLocalArena.Create(100);
+  try
+    LP := LA.Alloc(100);
+    Check(LP <> nil, 'exact fit');
+    LP := LA.Alloc(1);
+    Check(LP = nil, 'should return nil when exhausted');
+  finally
+    LA.Free;
+  end;
 end;
 
 procedure TestArenaAllocInsufficientCapacity;
 var
   LA: TLocalArena;
 begin
-  LA.Init(64);
+  LA := TLocalArena.Create(64);
   try
     Check(LA.Alloc(48) <> nil, 'initial alloc should succeed');
     Check(LA.Alloc(17) = nil, 'alloc larger than remaining capacity should fail closed');
-    CheckEqual(Int64(48), Int64(LA.BytesUsed), 'failed alloc should not advance offset');
+    CheckEqual(Int64(48), Int64(LA.UsedSize), 'failed alloc should not advance offset');
   finally
-    LA.Done;
+    LA.Free;
   end;
 end;
 
@@ -84,30 +93,33 @@ var
   LA: TLocalArena;
   LP: Pointer;
 begin
-  LA.Init(1024);
-  LA.Alloc(1);
-  LP := LA.AllocAligned(64, 16);
-  Check(LP <> nil, 'aligned alloc');
-  Check(SizeUInt(LP) mod 16 = 0, 'should be 16-byte aligned');
+  LA := TLocalArena.Create(1024);
+  try
+    LA.Alloc(1);
+    LP := LA.AllocAligned(64, 16);
+    Check(LP <> nil, 'aligned alloc');
+    Check(SizeUInt(LP) mod 16 = 0, 'should be 16-byte aligned');
 
-  LP := LA.AllocAligned(32, 64);
-  Check(LP <> nil, 'aligned alloc 64');
-  Check(SizeUInt(LP) mod 64 = 0, 'should be 64-byte aligned');
-  LA.Done;
+    LP := LA.AllocAligned(32, 64);
+    Check(LP <> nil, 'aligned alloc 64');
+    Check(SizeUInt(LP) mod 64 = 0, 'should be 64-byte aligned');
+  finally
+    LA.Free;
+  end;
 end;
 
 procedure TestArenaAllocAlignedRejectsInvalidAlignment;
 var
   LA: TLocalArena;
 begin
-  LA.Init(256);
+  LA := TLocalArena.Create(256);
   try
     Check(LA.AllocAligned(16, 0) = nil, 'zero alignment should return nil');
     Check(LA.AllocAligned(16, 3) = nil, 'alignment 3 should return nil');
     Check(LA.AllocAligned(16, 5) = nil, 'alignment 5 should return nil');
-    CheckEqual(Int64(0), Int64(LA.BytesUsed), 'invalid alignment should not advance offset');
+    CheckEqual(Int64(0), Int64(LA.UsedSize), 'invalid alignment should not advance offset');
   finally
-    LA.Done;
+    LA.Free;
   end;
 end;
 
@@ -119,7 +131,7 @@ var
   LP: Pointer;
   I: Integer;
 begin
-  LA.Init(512);
+  LA := TLocalArena.Create(512);
   try
     for I := Low(VALID_ALIGNMENTS) to High(VALID_ALIGNMENTS) do
     begin
@@ -128,7 +140,7 @@ begin
       Check(SizeUInt(LP) mod VALID_ALIGNMENTS[I] = 0, 'pointer should honor requested alignment');
     end;
   finally
-    LA.Done;
+    LA.Free;
   end;
 end;
 
@@ -136,17 +148,20 @@ procedure TestArenaReset;
 var
   LA: TLocalArena;
 begin
-  LA.Init(256);
-  LA.Alloc(100);
-  LA.Alloc(50);
-  CheckEqual(Int64(150), Int64(LA.BytesUsed));
+  LA := TLocalArena.Create(256);
+  try
+    LA.Alloc(100);
+    LA.Alloc(50);
+    CheckEqual(Int64(150), Int64(LA.UsedSize));
 
-  LA.Reset;
-  CheckEqual(Int64(0), Int64(LA.BytesUsed), 'reset clears');
-  CheckEqual(Int64(256), Int64(LA.BytesRemaining));
+    LA.Reset;
+    CheckEqual(Int64(0), Int64(LA.UsedSize), 'reset clears');
+    CheckEqual(Int64(256), Int64(LA.RemainingSize));
 
-  Check(LA.Alloc(256) <> nil, 'can reuse after reset');
-  LA.Done;
+    Check(LA.Alloc(256) <> nil, 'can reuse after reset');
+  finally
+    LA.Free;
+  end;
 end;
 
 procedure TestArenaMark;
@@ -155,20 +170,23 @@ var
   LMark: TArenaMarker;
   LP: Pointer;
 begin
-  LA.Init(256);
-  LA.Alloc(32);
-  LMark := LA.Mark;
-  CheckEqual(Int64(32), Int64(LMark));
+  LA := TLocalArena.Create(256);
+  try
+    LA.Alloc(32);
+    LMark := LA.SaveMark;
+    CheckEqual(Int64(32), Int64(LMark));
 
-  LA.Alloc(64);
-  CheckEqual(Int64(96), Int64(LA.BytesUsed));
+    LA.Alloc(64);
+    CheckEqual(Int64(96), Int64(LA.UsedSize));
 
-  LA.Restore(LMark);
-  CheckEqual(Int64(32), Int64(LA.BytesUsed), 'restored to mark');
+    LA.RestoreToMark(LMark);
+    CheckEqual(Int64(32), Int64(LA.UsedSize), 'restored to mark');
 
-  LP := LA.Alloc(64);
-  Check(LP <> nil, 'can alloc after restore');
-  LA.Done;
+    LP := LA.Alloc(64);
+    Check(LP <> nil, 'can alloc after restore');
+  finally
+    LA.Free;
+  end;
 end;
 
 procedure TestArenaMarkNested;
@@ -176,22 +194,25 @@ var
   LA: TLocalArena;
   LMark1, LMark2: TArenaMarker;
 begin
-  LA.Init(256);
-  LA.Alloc(10);
-  LMark1 := LA.Mark;
+  LA := TLocalArena.Create(256);
+  try
+    LA.Alloc(10);
+    LMark1 := LA.SaveMark;
 
-  LA.Alloc(20);
-  LMark2 := LA.Mark;
+    LA.Alloc(20);
+    LMark2 := LA.SaveMark;
 
-  LA.Alloc(30);
-  CheckEqual(Int64(60), Int64(LA.BytesUsed));
+    LA.Alloc(30);
+    CheckEqual(Int64(60), Int64(LA.UsedSize));
 
-  LA.Restore(LMark2);
-  CheckEqual(Int64(30), Int64(LA.BytesUsed));
+    LA.RestoreToMark(LMark2);
+    CheckEqual(Int64(30), Int64(LA.UsedSize));
 
-  LA.Restore(LMark1);
-  CheckEqual(Int64(10), Int64(LA.BytesUsed));
-  LA.Done;
+    LA.RestoreToMark(LMark1);
+    CheckEqual(Int64(10), Int64(LA.UsedSize));
+  finally
+    LA.Free;
+  end;
 end;
 
 procedure TestArenaWriteRead;
@@ -199,40 +220,49 @@ var
   LA: TLocalArena;
   LP: PInteger;
 begin
-  LA.Init(256);
-  LP := PInteger(LA.Alloc(SizeOf(Integer)));
-  Check(LP <> nil);
-  LP^ := 12345;
-  Check(LP^ = 12345, 'write/read through arena pointer');
-  LA.Done;
+  LA := TLocalArena.Create(256);
+  try
+    LP := PInteger(LA.Alloc(SizeOf(Integer)));
+    Check(LP <> nil);
+    LP^ := 12345;
+    Check(LP^ = 12345, 'write/read through arena pointer');
+  finally
+    LA.Free;
+  end;
 end;
 
-procedure TestArenaDone;
+procedure TestArenaZeroed;
+var
+  LA: TLocalArena;
+  LP: PByte;
+  I: Integer;
+begin
+  LA := TLocalArena.Create(256);
+  try
+    LP := PByte(LA.AllocZeroed(64));
+    Check(LP <> nil, 'zeroed alloc should succeed');
+    for I := 0 to 63 do
+      Check(LP[I] = 0, 'zeroed memory at byte ' + IntToStr(I));
+  finally
+    LA.Free;
+  end;
+end;
+
+procedure TestArenaClassAlias;
 var
   LA: TLocalArena;
 begin
-  LA.Init(1024);
-  LA.Alloc(512);
-  LA.Done;
-  CheckEqual(Int64(0), Int64(LA.BytesUsed), 'done clears state');
-  CheckEqual(Int64(0), Int64(LA.Capacity), 'done clears capacity');
-end;
-
-procedure TestArenaLegacyAlias;
-var
-  LA: TArena;
-begin
-  LA.Init(64);
+  LA := TLocalArena.Create(64);
   try
-    Check(LA.Alloc(8) <> nil, 'legacy TArena alias remains usable');
+    Check(LA.Alloc(8) <> nil, 'TLocalArena class works correctly');
   finally
-    LA.Done;
+    LA.Free;
   end;
 end;
 
 begin
   T := TTestRunner.Create('nextpas.core.mem.arena');
-  T.Run('Init', @TestArenaInit);
+  T.Run('Create', @TestArenaCreate);
   T.Run('Alloc', @TestArenaAlloc);
   T.Run('Alloc zero size', @TestArenaAllocZeroSize);
   T.Run('Alloc exhaust', @TestArenaAllocExhaust);
@@ -244,7 +274,7 @@ begin
   T.Run('Mark/Restore', @TestArenaMark);
   T.Run('Mark nested', @TestArenaMarkNested);
   T.Run('Write/Read', @TestArenaWriteRead);
-  T.Run('Done', @TestArenaDone);
-  T.Run('legacy TArena alias', @TestArenaLegacyAlias);
+  T.Run('AllocZeroed', @TestArenaZeroed);
+  T.Run('TLocalArena class', @TestArenaClassAlias);
   T.Summary;
 end.

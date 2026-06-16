@@ -33,6 +33,7 @@ interface
 
 uses
   nextpas.core.mem.base,
+  nextpas.core.mem.pool.base,
   nextpas.core.mem.error;
 
 const
@@ -44,9 +45,6 @@ const
 
   {** IArena 接口 GUID *}
   GUID_IARENA = '{C905F1B3-4D6E-5A0C-BF78-8E9D0C102345}';
-
-  {** 默认对齐 *}
-  DEFAULT_ALIGNMENT = 16;
 
 type
   {**
@@ -77,13 +75,6 @@ type
     function AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer; // returns acquired count
     procedure ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
   end;
-
-  {**
-   * TArenaMarker
-   *
-   * @desc Arena 位置标记
-   *}
-  TArenaMarker = type SizeUInt;
 
   {**
    * IArena
@@ -233,8 +224,6 @@ type
     property TotalAllocCount: QWord read FTotalAllocs;
   end;
 
-  TArena = TFixedArena;
-
   { 向后兼容的基类（已废弃，仅用于接口兼容） }
   TBlockPoolBase = class(TInterfacedObject, IBlockPool)
   protected
@@ -272,18 +261,6 @@ implementation
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in pool internals
-
-function IsPowerOfTwo(const AValue: SizeUInt): Boolean; inline;
-begin
-  Result := (AValue <> 0) and ((AValue and (AValue - 1)) = 0);
-end;
-
-function NextPowerOfTwo(const AValue: SizeUInt): SizeUInt; inline;
-begin
-  Result := 1;
-  while Result < AValue do
-    Result := Result shl 1;
-end;
 
 function NormalizeArenaAlignment(const AAlignment: SizeUInt): SizeUInt; inline;
 begin
@@ -542,35 +519,13 @@ begin
 end;
 
 function TBlockPool.AcquireN(out aPtrs: array of Pointer; aCount: Integer): Integer;
-var
-  LIdx: Integer;
-  LPtr: Pointer;
 begin
-  Result := 0;
-  if aCount <= 0 then Exit(0);
-  for LIdx := 0 to aCount - 1 do
-  begin
-    if LIdx > High(aPtrs) then
-      Break;
-    LPtr := Acquire;
-    if LPtr = nil then
-      Break;
-    aPtrs[LIdx] := LPtr;
-    Inc(Result);
-  end;
+  Result := DefaultAcquireN(@Acquire, aPtrs, aCount);
 end;
 
 procedure TBlockPool.ReleaseN(const aPtrs: array of Pointer; aCount: Integer);
-var
-  LIdx: Integer;
 begin
-  if aCount <= 0 then Exit;
-  for LIdx := 0 to aCount - 1 do
-  begin
-    if LIdx > High(aPtrs) then
-      Break;
-    Release(aPtrs[LIdx]);
-  end;
+  DefaultReleaseN(@Release, aPtrs, aCount);
 end;
 
 procedure TBlockPool.Release(aPtr: Pointer);
