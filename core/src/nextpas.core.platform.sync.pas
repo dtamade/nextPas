@@ -1460,8 +1460,11 @@ begin
   Result := platform_sync_validate_wait_address64(AAddr, AExpected);
   if Result <> 0 then
     Exit;
+  ResolveWaitAddress;
+  if _WaitOnAddress = nil then
+    Exit(PLATFORM_ERR_UNSUPPORTED);
   LExpected := AExpected;
-  if WaitOnAddress(
+  if _WaitOnAddress(
     AAddr,
     @LExpected,
     SizeOf(LExpected),
@@ -1478,7 +1481,10 @@ begin
   Result := platform_sync_validate_address64(AAddr);
   if Result <> 0 then
     Exit;
-  WakeByAddressSingle(AAddr);
+  ResolveWaitAddress;
+  if _WakeByAddressSingle = nil then
+    Exit(PLATFORM_ERR_UNSUPPORTED);
+  _WakeByAddressSingle(AAddr);
   Result := 0;
 end;
 
@@ -1487,7 +1493,10 @@ begin
   Result := platform_sync_validate_address64(AAddr);
   if Result <> 0 then
     Exit;
-  WakeByAddressAll(AAddr);
+  ResolveWaitAddress;
+  if _WakeByAddressAll = nil then
+    Exit(PLATFORM_ERR_UNSUPPORTED);
+  _WakeByAddressAll(AAddr);
   Result := 0;
 end;
 
