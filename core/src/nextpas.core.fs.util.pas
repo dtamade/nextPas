@@ -44,6 +44,7 @@ uses
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.platform.fs,
+  nextpas.core.platform.path,
   nextpas.core.platform.random,
   nextpas.core.fs.stream;
 
@@ -208,7 +209,7 @@ begin
       LHex[LI * 2 + 1] := Char(HEX[(LRand[LI] shr 4) and $F]);
       LHex[LI * 2 + 2] := Char(HEX[LRand[LI] and $F]);
     end;
-    LPath := ADir + '/' + APattern + LHex;
+    LPath := ADir + PLATFORM_PATH_SEP + APattern + LHex;
     try
       Result := FsOpenFile(LPath, [fmRead, fmWrite, fmCreate, fmExclusive], PermDefault);
       Exit;
