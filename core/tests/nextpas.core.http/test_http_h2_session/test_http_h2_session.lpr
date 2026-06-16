@@ -68,6 +68,7 @@ type
     FSeenPath: string;
     FSeenBody: string;
     FSeenHeaders: IHttpHeaders;
+    FSeenTrailers: IHttpHeaders;
     FCallCount: Int32;
     FResponseStatus: THttpStatus;
     FResponseHeaders: array of record
@@ -84,6 +85,7 @@ type
     property SeenPath: string read FSeenPath;
     property SeenBody: string read FSeenBody;
     property SeenHeaders: IHttpHeaders read FSeenHeaders;
+    property SeenTrailers: IHttpHeaders read FSeenTrailers;
     property CallCount: Int32 read FCallCount;
   end;
 
@@ -235,22 +237,31 @@ begin
   end;
 end;
 
-function FindGoawayError(const AFrames: array of TH2Frame;
-  const ACount: SizeInt; out AErrorCode: UInt32): Boolean;
+function FindGoawayDetails(const AFrames: array of TH2Frame;
+  const ACount: SizeInt; out ALastStreamID: UInt32;
+  out AErrorCode: UInt32): Boolean;
 var
   LI: SizeInt;
-  LLastStreamID: UInt32;
   LDebugData: AnsiString;
 begin
+  ALastStreamID := 0;
   AErrorCode := H2_ERR_NO_ERROR;
   for LI := 0 to ACount - 1 do
     if AFrames[LI].Header.FrameType = H2_FRAME_GOAWAY then
     begin
-      Check(H2DecodeGoaway(AFrames[LI].Payload, LLastStreamID, AErrorCode,
+      Check(H2DecodeGoaway(AFrames[LI].Payload, ALastStreamID, AErrorCode,
         LDebugData), 'GOAWAY payload decodes');
       Exit(True);
     end;
   Result := False;
+end;
+
+function FindGoawayError(const AFrames: array of TH2Frame;
+  const ACount: SizeInt; out AErrorCode: UInt32): Boolean;
+var
+  LLastStreamID: UInt32;
+begin
+  Result := FindGoawayDetails(AFrames, ACount, LLastStreamID, AErrorCode);
 end;
 
 function FindRstStreamError(const AFrames: array of TH2Frame;
@@ -266,6 +277,23 @@ begin
     begin
       Check(H2DecodeRstStream(AFrames[LI].Payload, AErrorCode),
         'RST_STREAM payload decodes');
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+function FindSettingsValue(const APayload: AnsiString; const AIdentifier: UInt16;
+  out AValue: UInt32): Boolean;
+var
+  LEntries: TH2SettingEntries;
+  LI: SizeInt;
+begin
+  AValue := 0;
+  Check(H2DecodeSettingsPayload(APayload, LEntries), 'SETTINGS payload decodes');
+  for LI := 0 to High(LEntries) do
+    if LEntries[LI].Identifier = AIdentifier then
+    begin
+      AValue := LEntries[LI].Value;
       Exit(True);
     end;
   Result := False;
@@ -457,6 +485,7 @@ begin
   FSeenPath := '';
   FSeenBody := '';
   FSeenHeaders := nil;
+  FSeenTrailers := nil;
   FCallCount := 0;
   FResponseStatus := HTTP_STATUS_OK;
   FResponseBody := '';
@@ -493,6 +522,10 @@ begin
     FSeenHeaders := AReq.Headers.Clone
   else
     FSeenHeaders := nil;
+  if AReq.Trailers <> nil then
+    FSeenTrailers := AReq.Trailers.Clone
+  else
+    FSeenTrailers := nil;
   for LI := 0 to High(FResponseHeaders) do
     AW.GetHeaders.SetHeader(FResponseHeaders[LI].Name,
       FResponseHeaders[LI].Value);
@@ -643,6 +676,56 @@ begin
       CheckEqual('world', string(LFrames[3].Payload), 'response body encoded');
       Check((LFrames[3].Header.Flags and H2_FLAG_DATA_END_STREAM) <> 0,
         'response DATA ends stream');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunHandshakeAdvertisesMaxHeaderListSizeSetting;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LOptions: TH2ServerTransportOptions;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LSettingValue: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, '');
+    LOptions := TH2ServerTransportOptions.Default;
+    LOptions.MaxHeaderListSize := 512;
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/settings'));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler, LOptions);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      CheckEqual(Int64(H2_FRAME_SETTINGS), Int64(LFrames[0].Header.FrameType),
+        'server handshake begins with SETTINGS');
+      Check(FindSettingsValue(LFrames[0].Payload, H2_SETTINGS_MAX_HEADER_LIST_SIZE,
+        LSettingValue), 'server SETTINGS advertises MAX_HEADER_LIST_SIZE');
+      CheckEqual(Int64(512), Int64(LSettingValue),
+        'server SETTINGS uses configured MAX_HEADER_LIST_SIZE');
     finally
       LConnRef := nil;
       LStream := nil;
@@ -910,6 +993,59 @@ begin
   end;
 end;
 
+procedure TestRunHeadersOverMaxHeaderListSizeReturns431WithoutHandler;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LOptions: TH2ServerTransportOptions;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..7] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LOptions := TH2ServerTransportOptions.Default;
+    LOptions.MaxHeaderListSize := 128;
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/too-many-headers'));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler, LOptions);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+
+      CheckEqual(Int64(0), Int64(LHandler.CallCount),
+        'oversize H2 request headers do not reach handler');
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      CheckEqual(Int64(H2_FRAME_HEADERS), Int64(LFrames[2].Header.FrameType),
+        'oversize H2 request headers respond with HEADERS');
+      CheckEqual('431', ExtractStatusHeader(LFrames[2].Payload),
+        'oversize H2 request headers respond with 431 status');
+      Check((LFrames[2].Header.Flags and H2_FLAG_HEADERS_END_STREAM) <> 0,
+        'oversize H2 request headers end stream in 431 response');
+      Check(not FindRstStreamError(LFrames, LFrameCount, 1, LErrorCode),
+        'oversize H2 request headers do not emit RST_STREAM');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
 procedure TestRunPingGetsAcked;
 var
   LHandler: TCollectingHandler;
@@ -1023,6 +1159,104 @@ begin
       end;
       CheckEqual(Int64(0), Int64(LHandler.CallCount),
         'GOAWAY stops accepting new requests');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunGoawayRejectsNonZeroLastStreamIDWithoutLocalStreams;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..5] of TH2Frame;
+  LFrameCount: SizeInt;
+  LLastStreamID: UInt32;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_GOAWAY, 0, 0,
+        H2EncodeGoaway(2, H2_ERR_NO_ERROR, ''));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(FindGoawayDetails(LFrames, LFrameCount, LLastStreamID, LErrorCode),
+        'server replies with GOAWAY for invalid peer GOAWAY');
+      CheckEqual(Int64(0), Int64(LLastStreamID),
+        'invalid peer GOAWAY preserves zero last seen peer stream id');
+      CheckEqual(Int64(H2_ERR_PROTOCOL_ERROR), Int64(LErrorCode),
+        'invalid peer GOAWAY maps to PROTOCOL_ERROR');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+procedure TestRunPeerGoawayDoesNotOverwriteLastSeenPeerStreamID;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..9] of TH2Frame;
+  LFrameCount: SizeInt;
+  LLastStreamID: UInt32;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LHandler.SetResponse(HTTP_STATUS_OK, '');
+    LWire := ComposePrefaceHandshake +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, 1,
+        ComposeRequestHeaders('GET', '/before-goaway')) +
+      H2EncodeFrame(H2_FRAME_GOAWAY, 0, 0,
+        H2EncodeGoaway(0, H2_ERR_NO_ERROR, '')) +
+      H2EncodeFrame(H2_FRAME_PUSH_PROMISE, H2_FLAG_PUSH_PROMISE_END_HEADERS, 1,
+        ComposePushPromisePayload(2));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(FindGoawayDetails(LFrames, LFrameCount, LLastStreamID, LErrorCode),
+        'server emits GOAWAY after protocol error following peer GOAWAY');
+      CheckEqual(Int64(1), Int64(LLastStreamID),
+        'peer GOAWAY does not overwrite last seen peer stream id');
+      CheckEqual(Int64(H2_ERR_PROTOCOL_ERROR), Int64(LErrorCode),
+        'protocol error after peer GOAWAY still uses PROTOCOL_ERROR');
     finally
       LConnRef := nil;
       LStream := nil;
@@ -1294,6 +1528,31 @@ begin
     'HandleData maps DATA stream 0 to connection-level PROTOCOL_ERROR');
 end;
 
+procedure TestHandleGoawayUsesSeparatePeerAndLocalStreamTrackingSourceContract;
+var
+  LSource: string;
+  LHandleGoawayPos: SizeInt;
+  LHandleGoawayBlock: string;
+begin
+  LSource := ReadSourceFile(ResolveSourcePath(H2_SESSION_SOURCE_PATH_FROM_TEST,
+    H2_SESSION_SOURCE_PATH_FROM_ROOT));
+  Check(Pos('FLastSeenPeerStreamID: UInt32;', LSource) > 0,
+    'session tracks last seen peer stream id separately');
+  Check(Pos('FPeerGoawayLastLocalStreamID: UInt32;', LSource) > 0,
+    'session tracks peer GOAWAY last local stream id separately');
+  LHandleGoawayPos := Pos('function TH2ServerSession.HandleGoaway', LSource);
+  Check(LHandleGoawayPos > 0, 'HandleGoaway implementation is present');
+  LHandleGoawayBlock := Copy(LSource, LHandleGoawayPos, 900);
+  Check(Pos('LLastStreamID > FLastLocalStreamID', LHandleGoawayBlock) > 0,
+    'HandleGoaway rejects LastStreamID beyond locally initiated streams');
+  Check(Pos('LLastStreamID > FPeerGoawayLastLocalStreamID', LHandleGoawayBlock) > 0,
+    'HandleGoaway requires peer GOAWAY LastStreamID to be non-increasing');
+  Check(Pos('FPeerGoawayLastLocalStreamID := LLastStreamID', LHandleGoawayBlock) > 0,
+    'HandleGoaway records peer GOAWAY last local stream id');
+  Check(Pos('FLastSeenPeerStreamID := LLastStreamID', LHandleGoawayBlock) = 0,
+    'HandleGoaway no longer overwrites last seen peer stream id');
+end;
+
 procedure TestStreamMapFindAndRemoveReturnsDetachedStream;
 var
   LMap: TH2StreamMap;
@@ -1430,6 +1689,7 @@ var
   LFrames: array[0..7] of TH2Frame;
   LFrameCount: SizeInt;
   LRequestValues: TStringArray;
+  LTrailerValues: TStringArray;
 begin
   LHandler := TCollectingHandler.Create;
   LHandlerRef := LHandler as IHttpHandler;
@@ -1468,6 +1728,17 @@ begin
         'request header value is preserved');
       CheckEqual(False, LHandler.SeenHeaders.Has('x-trailer'),
         'trailers are not exposed as request headers');
+      Check(LHandler.SeenTrailers <> nil, 'handler sees request trailers');
+      LTrailerValues := LHandler.SeenTrailers.GetAll('x-request');
+      CheckEqual(Int64(1), Int64(Length(LTrailerValues)),
+        'handler sees original trailer x-request value');
+      CheckEqual('trailer', LTrailerValues[0],
+        'request trailers keep trailer-scoped x-request value');
+      LTrailerValues := LHandler.SeenTrailers.GetAll('x-trailer');
+      CheckEqual(Int64(1), Int64(Length(LTrailerValues)),
+        'handler sees trailer-only header');
+      CheckEqual('done', LTrailerValues[0],
+        'request trailers preserve trailer-only header');
 
       DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
       CheckEqual(Int64(H2_FRAME_HEADERS), Int64(LFrames[2].Header.FrameType),
@@ -1570,6 +1841,8 @@ begin
       @TestInitialSettingsUsesConnectionStream);
     Run('Run handshake and simple request response',
       @TestRunHandshakeAndSimpleRequestResponse);
+    Run('Run handshake advertises MAX_HEADER_LIST_SIZE',
+      @TestRunHandshakeAdvertisesMaxHeaderListSizeSetting);
     Run('Run missing :path pseudo header resets stream',
       @TestRunMissingPathPseudoHeaderResetsStream);
     Run('Run missing :authority and host resets stream',
@@ -1586,10 +1859,16 @@ begin
       @TestRunDataEndStreamTriggersHandlerAndFlowControlUpdate);
     Run('Run DATA over MaxBodySize returns 413 without handler',
       @TestRunDataOverMaxBodySizeReturns413WithoutHandler);
+    Run('Run headers over MaxHeaderListSize returns 431 without handler',
+      @TestRunHeadersOverMaxHeaderListSizeReturns431WithoutHandler);
     Run('Run PING gets ACKed', @TestRunPingGetsAcked);
     Run('Run RST_STREAM cancels pending request',
       @TestRunRstStreamCancelsPendingRequest);
     Run('Run GOAWAY stops new streams', @TestRunGoawayStopsNewStreams);
+    Run('Run GOAWAY rejects non-zero LastStreamID without local streams',
+      @TestRunGoawayRejectsNonZeroLastStreamIDWithoutLocalStreams);
+    Run('Run peer GOAWAY does not overwrite last seen peer stream id',
+      @TestRunPeerGoawayDoesNotOverwriteLastSeenPeerStreamID);
     Run('Advance polls readable then writable',
       @TestAdvancePollsReadableThenWritable);
     Run('Run unknown extension frame is ignored',
@@ -1604,6 +1883,8 @@ begin
       @TestStreamMapFindAndRemoveSourceContract);
     Run('HandleData connection stream source contract',
       @TestHandleDataConnectionStreamSourceContract);
+    Run('HandleGoaway split tracking source contract',
+      @TestHandleGoawayUsesSeparatePeerAndLocalStreamTrackingSourceContract);
     Run('SendResponseBody avoids intermediate buffer copy source contract',
       @TestSendResponseBodyAvoidsIntermediateBufferCopySourceContract);
     Run('Run client PUSH_PROMISE sends GOAWAY',

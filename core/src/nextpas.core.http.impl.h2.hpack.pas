@@ -101,6 +101,8 @@ type
     FScratchBuf: TBytes;
     FScratchPos: SizeInt;
     procedure EnsureScratchCapacity(AMinCapacity: SizeInt);
+    function TryDecodeInteger(const ABlock: AnsiString; var APos: SizeInt;
+      APrefixBits: Byte; out AValue: UInt32): Boolean;
     procedure DecodeInteger(const ABlock: AnsiString; var APos: SizeInt;
       APrefixBits: Byte; out AValue: UInt32);
   public
@@ -755,34 +757,49 @@ begin
   SetLength(FScratchBuf, LCapacity);
 end;
 
-procedure THPackDecoder.DecodeInteger(const ABlock: AnsiString; var APos: SizeInt;
-  APrefixBits: Byte; out AValue: UInt32);
+function THPackDecoder.TryDecodeInteger(const ABlock: AnsiString;
+  var APos: SizeInt; APrefixBits: Byte; out AValue: UInt32): Boolean;
 var
   LPrefixMask: UInt32;
   LByte: Byte;
   LShift: Byte;
+  LChunk: UInt32;
 begin
+  Result := False;
+  AValue := 0;
   LPrefixMask := (UInt32(1) shl APrefixBits) - 1;
   if APos > Length(ABlock) then
-  begin
-    AValue := 0;
     Exit;
-  end;
+
   LByte := Byte(ABlock[APos]);
   Inc(APos);
   AValue := LByte and LPrefixMask;
   if AValue < LPrefixMask then
-    Exit;
-  { Multi-byte integer }
+    Exit(True);
+
   LShift := 0;
   repeat
     if APos > Length(ABlock) then
       Exit;
     LByte := Byte(ABlock[APos]);
     Inc(APos);
-    AValue := AValue + ((LByte and $7F) shl LShift);
+    LChunk := UInt32(LByte and $7F);
+    if LShift > 28 then
+      Exit;
+    if LChunk > ((High(UInt32) - AValue) shr LShift) then
+      Exit;
+    AValue := AValue + (LChunk shl LShift);
+    if (LByte and $80) = 0 then
+      Exit(True);
     Inc(LShift, 7);
-  until (LByte and $80) = 0;
+  until False;
+end;
+
+procedure THPackDecoder.DecodeInteger(const ABlock: AnsiString; var APos: SizeInt;
+  APrefixBits: Byte; out AValue: UInt32);
+begin
+  if not TryDecodeInteger(ABlock, APos, APrefixBits, AValue) then
+    AValue := 0;
 end;
 
 function THPackDecoder.DecodeString(const ABlock: AnsiString; var APos: SizeInt;
@@ -840,6 +857,7 @@ var
   LAddDynamic: Boolean;
   LAddName: AnsiString;
   LAddValue: AnsiString;
+  LSeenHeaderRep: Boolean;
 begin
   Result := False;
   HPackEnsureStaticBuilt;
@@ -850,6 +868,7 @@ begin
 
   LPos := 1;
   LHeaderCount := 0;
+  LSeenHeaderRep := False;
   while LPos <= LBlockLen do
   begin
     if LHeaderCount > High(AHeaders) then
@@ -886,29 +905,20 @@ begin
       AHeaders[LHeaderCount].Name := LNameSpan;
       AHeaders[LHeaderCount].Value := LValueSpan;
       Inc(LHeaderCount);
+      LSeenHeaderRep := True;
       Continue;
     end;
 
     if (LByte and $E0) = $20 then
     begin
       { Dynamic Table Size Update (001xxxxx) }
-      LIndex := LByte and $1F;
-      Inc(LPos);
-      if LIndex = $1F then
-      begin
-        LShift := 0;
-        repeat
-          if LPos > LBlockLen then
-            Exit;
-          LByte := Byte(ABlock[LPos]);
-          Inc(LPos);
-          LIndex := LIndex + (UInt32(LByte and $7F) shl LShift);
-          Inc(LShift, 7);
-        until (LByte and $80) = 0;
-      end;
+      if LSeenHeaderRep then
+        Exit;
+      if not TryDecodeInteger(ABlock, LPos, 5, LIndex) then
+        Exit;
       if LIndex > FMaxDynamicTableSize then
         Exit;
-      FDynamicTable.Resize(LIndex);
+      FDynamicTable.Resize(SizeInt(LIndex));
       Continue;
     end;
 
@@ -1061,6 +1071,7 @@ begin
       FDynamicTable.Add(LAddName, LAddValue);
     end;
     Inc(LHeaderCount);
+    LSeenHeaderRep := True;
   end;
 
   Result := True;
@@ -1074,11 +1085,13 @@ var
   LByte: Byte;
   LIndex: UInt32;
   LHeaderCount: SizeInt;
+  LSeenHeaderRep: Boolean;
 
 begin
   Result := False;
   LPos := 1;
   LHeaderCount := 0;
+  LSeenHeaderRep := False;
   while LPos <= Length(ABlock) do
   begin
     LByte := Byte(ABlock[LPos]);
@@ -1095,6 +1108,7 @@ begin
       else if not FDynamicTable.Get(LIndex - HPACK_STATIC_TABLE_COUNT - 1,
         AHeaders[LHeaderCount].Name, AHeaders[LHeaderCount].Value) then Exit;
       Inc(LHeaderCount);
+      LSeenHeaderRep := True;
     end
     else if (LByte and $C0) = $40 then
     begin
@@ -1125,6 +1139,7 @@ begin
       if FDynamicTable.Capacity > 0 then
         FDynamicTable.Add(AHeaders[LHeaderCount].Name, AHeaders[LHeaderCount].Value);
       Inc(LHeaderCount);
+      LSeenHeaderRep := True;
     end
     else if (LByte and $F0) = $00 then
     begin
@@ -1153,6 +1168,7 @@ begin
         end;
         end;
       Inc(LHeaderCount);
+      LSeenHeaderRep := True;
     end
     else if (LByte and $F0) = $10 then
     begin
@@ -1181,13 +1197,17 @@ begin
         end;
         end;
       Inc(LHeaderCount);
+      LSeenHeaderRep := True;
     end
     else if (LByte and $E0) = $20 then
     begin
       { Dynamic Table Size Update (001xxxxx) }
-      DecodeInteger(ABlock, LPos, 5, LIndex);
+      if LSeenHeaderRep then
+        Exit;
+      if not TryDecodeInteger(ABlock, LPos, 5, LIndex) then
+        Exit;
       if LIndex > FMaxDynamicTableSize then Exit;
-      FDynamicTable.Resize(LIndex);
+      FDynamicTable.Resize(SizeInt(LIndex));
     end
     else
       Exit;

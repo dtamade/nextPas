@@ -50,7 +50,8 @@ type
     function FindOrCreate(const AStreamID: UInt32;
       const ASendWindowSize: UInt32; const ARecvWindowSize: UInt32;
       var AConnectionFlow: TH2ConnectionFlowControl;
-      var ADecoder: THPackDecoder): TH2Stream;
+      var ADecoder: THPackDecoder;
+      const AMaxHeaderListSize: UInt32 = H2_DEFAULT_MAX_HEADER_LIST_SIZE): TH2Stream;
     procedure RemoveByIndex(const AIndex: SizeInt);
     function FindAndRemove(const AStreamID: UInt32): TH2Stream;
     procedure Remove(const AStreamID: UInt32);
@@ -97,8 +98,9 @@ type
     FPeerSettingsAcked: Boolean;
     FGoawayReceived: Boolean;
     FGoawaySent: Boolean;
-    FLastPeerStreamID: UInt32;
+    FLastSeenPeerStreamID: UInt32;
     FLastLocalStreamID: UInt32;
+    FPeerGoawayLastLocalStreamID: UInt32;
     FPendingContinuationStreamID: UInt32;
     FShutdownErrorCode: UInt32;
     FReadDeadline: TDeadline;
@@ -164,6 +166,7 @@ type
     procedure StartGracefulShutdown(const ALastStreamID: UInt32;
       const AErrorCode: UInt32);
     procedure CloseSession;
+    procedure HandleRequestHeaderListTooLarge(const AStream: TH2Stream);
   public
     constructor Create(const AConn: ITcpStream; const AHandler: IHttpHandler;
       const AOptions: TH2ServerTransportOptions);
@@ -393,7 +396,7 @@ end;
 function TH2StreamMap.FindOrCreate(const AStreamID: UInt32;
   const ASendWindowSize: UInt32; const ARecvWindowSize: UInt32;
   var AConnectionFlow: TH2ConnectionFlowControl;
-  var ADecoder: THPackDecoder): TH2Stream;
+  var ADecoder: THPackDecoder; const AMaxHeaderListSize: UInt32): TH2Stream;
 var
   LIndex: SizeInt;
 begin
@@ -403,7 +406,7 @@ begin
   if FCount >= Length(FStreams) then
     SetLength(FStreams, FCount + 8);
   FStreams[FCount] := TH2Stream.Create(AStreamID, ASendWindowSize,
-    ARecvWindowSize, AConnectionFlow, ADecoder);
+    ARecvWindowSize, AConnectionFlow, ADecoder, AMaxHeaderListSize);
   Result := FStreams[FCount];
   Inc(FCount);
 end;
@@ -499,8 +502,9 @@ begin
   FPeerSettingsAcked := False;
   FGoawayReceived := False;
   FGoawaySent := False;
-  FLastPeerStreamID := 0;
+  FLastSeenPeerStreamID := 0;
   FLastLocalStreamID := 0;
+  FPeerGoawayLastLocalStreamID := 0;
   FPendingContinuationStreamID := 0;
   FShutdownErrorCode := H2_ERR_NO_ERROR;
   FReadDeadline := TDeadline.Infinite;
@@ -563,8 +567,12 @@ end;
 procedure TH2ServerSession.QueueSettingsFrame(const ASettings: TH2Settings);
 var
   LEntries: TH2SettingEntries;
+  LEntryCount: SizeInt;
 begin
-  SetLength(LEntries, 5);
+  LEntryCount := 5;
+  if ASettings.MaxHeaderListSize > 0 then
+    Inc(LEntryCount);
+  SetLength(LEntries, LEntryCount);
   LEntries[0].Identifier := H2_SETTINGS_HEADER_TABLE_SIZE;
   LEntries[0].Value := ASettings.HeaderTableSize;
   LEntries[1].Identifier := H2_SETTINGS_ENABLE_PUSH;
@@ -578,6 +586,11 @@ begin
   LEntries[3].Value := ASettings.InitialWindowSize;
   LEntries[4].Identifier := H2_SETTINGS_MAX_FRAME_SIZE;
   LEntries[4].Value := ASettings.MaxFrameSize;
+  if ASettings.MaxHeaderListSize > 0 then
+  begin
+    LEntries[5].Identifier := H2_SETTINGS_MAX_HEADER_LIST_SIZE;
+    LEntries[5].Value := ASettings.MaxHeaderListSize;
+  end;
   QueueFrame(H2_FRAME_SETTINGS, 0, 0, H2EncodeSettingsPayload(LEntries));
 end;
 
@@ -771,7 +784,7 @@ begin
   begin
     if not H2ValidateFrame(LFrame, FRemoteSettings.MaxFrameSize, LErrorCode) then
     begin
-      QueueGoaway(FLastPeerStreamID, LErrorCode);
+      QueueGoaway(FLastSeenPeerStreamID, LErrorCode);
       FShutdownErrorCode := LErrorCode;
       FState := h2sesClosed;
       Exit(False);
@@ -878,12 +891,12 @@ begin
   LStreamIndex := FStreams.FindIndex(AFrame.Header.StreamID);
   if LStreamIndex < 0 then
   begin
-    if AFrame.Header.StreamID <= FLastPeerStreamID then
+    if AFrame.Header.StreamID <= FLastSeenPeerStreamID then
       Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED, False));
     LStream := FStreams.FindOrCreate(AFrame.Header.StreamID,
       FRemoteSettings.InitialWindowSize, FOptions.InitialStreamWindowSize,
-      FConnectionFlow, FDecoder);
-    FLastPeerStreamID := AFrame.Header.StreamID;
+      FConnectionFlow, FDecoder, FLocalSettings.MaxHeaderListSize);
+    FLastSeenPeerStreamID := AFrame.Header.StreamID;
     if (FLocalSettings.MaxConcurrentStreams > 0) and
        (FStreams.ActiveCount >= FLocalSettings.MaxConcurrentStreams) then
     begin
@@ -901,6 +914,11 @@ begin
   begin
     QueueRstStream(LStream.StreamID, LStream.ResetCode);
     FStreams.RemoveByIndex(LStreamIndex);
+    Exit(True);
+  end;
+  if LStream.LastHeaderFinalizeResult = h2hfrHeaderListTooLarge then
+  begin
+    HandleRequestHeaderListTooLarge(LStream);
     Exit(True);
   end;
   if (AFrame.Header.Flags and H2_FLAG_HEADERS_END_HEADERS) = 0 then
@@ -930,6 +948,11 @@ begin
   begin
     QueueRstStream(LStream.StreamID, LStream.ResetCode);
     FStreams.RemoveByIndex(LStreamIndex);
+    Exit(True);
+  end;
+  if LStream.LastHeaderFinalizeResult = h2hfrHeaderListTooLarge then
+  begin
+    HandleRequestHeaderListTooLarge(LStream);
     Exit(True);
   end;
   if (AFrame.Header.Flags and H2_FLAG_CONTINUATION_END_HEADERS) <> 0 then
@@ -1004,6 +1027,13 @@ begin
   begin
     QueueRstStream(LStream.StreamID, LStream.ResetCode);
     FStreams.RemoveByIndex(LStreamIndex);
+    Exit(True);
+  end;
+  if LStream.RequestHandled then
+  begin
+    LStream.DiscardUnreadBody;
+    ApplyPendingWindowUpdates(LStream);
+    CloseStreamIfTerminal(LStream);
     Exit(True);
   end;
   ApplyPendingWindowUpdates(LStream);
@@ -1084,8 +1114,12 @@ var
 begin
   if not H2DecodeGoaway(AFrame.Payload, LLastStreamID, LErrorCode, LDebugData) then
     Exit(RejectFrame(0, H2_ERR_FRAME_SIZE_ERROR, True));
+  if LLastStreamID > FLastLocalStreamID then
+    Exit(RejectFrame(0, H2_ERR_PROTOCOL_ERROR, True));
+  if FGoawayReceived and (LLastStreamID > FPeerGoawayLastLocalStreamID) then
+    Exit(RejectFrame(0, H2_ERR_PROTOCOL_ERROR, True));
   FGoawayReceived := True;
-  FLastPeerStreamID := LLastStreamID;
+  FPeerGoawayLastLocalStreamID := LLastStreamID;
   FShutdownErrorCode := LErrorCode;
   FState := h2sesShuttingDown;
   Result := True;
@@ -1096,7 +1130,7 @@ function TH2ServerSession.RejectFrame(const AStreamID: UInt32;
 begin
   if AConnectionLevel then
   begin
-    QueueGoaway(FLastPeerStreamID, AErrorCode);
+    QueueGoaway(FLastSeenPeerStreamID, AErrorCode);
     FShutdownErrorCode := AErrorCode;
     FState := h2sesClosed;
   end
@@ -1157,8 +1191,21 @@ begin
     LHeaders.SetHeader('x-forwarded-proto', LScheme);
   LRequest := THttpRequest.CreateFromRequestTarget(LMethod, LPath, hvHttp2,
     LHeaders, LBody, Int64(Length(AStream.BodyBuffer)));
+  if AStream.Trailers <> nil then
+    LRequest.SetTrailers(AStream.Trailers.Clone);
   LRequest.SetRemoteNetAddr(FConn.RemoteAddr);
   Result := LRequest;
+end;
+
+procedure TH2ServerSession.HandleRequestHeaderListTooLarge(
+  const AStream: TH2Stream);
+begin
+  if AStream = nil then
+    Exit;
+  AStream.MarkRequestHandled;
+  SendResponseHeaders(AStream, HTTP_STATUS_HEADER_TOO_LARGE, nil, True);
+  ApplyPendingWindowUpdates(AStream);
+  CloseStreamIfTerminal(AStream);
 end;
 
 procedure TH2ServerSession.ExecuteReadyStreams;
@@ -1386,7 +1433,7 @@ begin
     if (FState = h2sesShuttingDown) and (FStreams.ActiveCount = 0) then
     begin
       if not FGoawaySent then
-        StartGracefulShutdown(FLastPeerStreamID, FShutdownErrorCode);
+        StartGracefulShutdown(FLastSeenPeerStreamID, FShutdownErrorCode);
       if not DrainWriteBuffer then
         Break;
       Break;
@@ -1461,7 +1508,7 @@ begin
   if (FState = h2sesShuttingDown) and (FStreams.ActiveCount = 0) then
   begin
     if not FGoawaySent then
-      StartGracefulShutdown(FLastPeerStreamID, FShutdownErrorCode);
+      StartGracefulShutdown(FLastSeenPeerStreamID, FShutdownErrorCode);
     if FWriteBuffer <> '' then
     begin
       ANextEvents := [peWritable];
