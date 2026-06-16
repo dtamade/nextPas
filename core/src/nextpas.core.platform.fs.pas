@@ -1,3 +1,14 @@
+{**
+ * nextpas.core.platform.fs - 高层文件系统操作
+ *
+ * 职责：文件系统级操作（exists/is_file/mkdir_p/copy_file/write_atomic/read_file/walk）
+ * 层次：路径级操作，依赖 files.pas 的底层 fd 操作
+ *
+ * 与 files.pas 的关系：
+ *   - files.pas = 底层 fd 操作（open/close/read/write/stat/dir）
+ *   - fs.pas = 高层文件系统操作（exists/is_file/mkdir_p/copy_file/walk）
+ *   - fs.pas 依赖 files.pas
+ *}
 unit nextpas.core.platform.fs;
 
 {$I nextpas.core.settings.inc}

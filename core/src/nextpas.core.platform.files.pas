@@ -1,3 +1,14 @@
+{**
+ * nextpas.core.platform.files - 底层文件 I/O 操作
+ *
+ * 职责：文件描述符级操作（open/close/read/write/seek/stat/dir）
+ * 层次：fd 级操作，不包含路径遍历或目录树操作
+ *
+ * 与 fs.pas 的关系：
+ *   - files.pas = 底层 fd 操作（open/close/read/write/stat/dir）
+ *   - fs.pas = 高层文件系统操作（exists/is_file/mkdir_p/copy_file/walk）
+ *   - fs.pas 依赖 files.pas
+ *}
 unit nextpas.core.platform.files;
 
 {$I nextpas.core.settings.inc}

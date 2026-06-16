@@ -150,6 +150,29 @@ begin
 end;
 {$ENDIF}
 
+{**
+ * @desc 将平台错误码映射到通用错误分类
+ *
+ * POSIX 路径：使用 ESysE* 常量（来自 linux.base/darwin.base/freebsd.base 的 .errno.inc）
+ *   - ESysENOENT = 文件不存在
+ *   - ESysEACCES/EPERM = 权限不足
+ *   - ESysEADDRINUSE = 地址已占用
+ *   - ESysENETUNREACH/EHOSTUNREACH/ENOTCONN = 网络不可达
+ *   - ESysENOMEM/ENOSPC = 资源耗尽
+ *   - ESysEINVAL = 无效参数
+ *   - ESysEOPNOTSUPP = 操作不支持
+ *   - ESysETIMEDOUT = 超时
+ *   - ESysEAGAIN/EBUSY = 可重试/资源忙
+ *   - ESysEIO = I/O 错误
+ *   - ESysEPIPE/ECONNABORTED/ECONNRESET/ECONNREFUSED = 连接错误
+ *   - ESysEINTR = 被中断
+ *
+ * Windows 路径：使用 ERROR_* 和 WSAE* 常量（来自 windows.base）
+ *   - ERROR_FILE_NOT_FOUND/PATH_NOT_FOUND 等 = 文件不存在
+ *   - ERROR_ACCESS_DENIED = 权限不足
+ *
+ * PLATFORM_ERR_* 路径：非 Unix/Windows 平台的 fallback 映射
+ *}
 function platform_error_category(ACode: Int32): TErrorCategory;
 begin
   case ACode of
