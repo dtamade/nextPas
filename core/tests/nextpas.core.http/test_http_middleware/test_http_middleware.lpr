@@ -318,7 +318,7 @@ destructor THeaderWrapHandler.Destroy;
 begin FNext := nil; inherited Destroy; end;
 procedure THeaderWrapHandler.ServeHTTP(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
 begin
-  AW.GetHeaders.Set_(FName, FValue);
+  AW.GetHeaders.SetHeader(FName, FValue);
   FNext.ServeHTTP(AReq, AW);
 end;
 

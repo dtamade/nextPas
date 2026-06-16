@@ -29,8 +29,7 @@ type
 
 implementation
 
-uses
-  SysUtils{$IFDEF UNIX}, BaseUnix, Unix{$ENDIF};
+uses BaseUnix, Unix;
 
 // ---------- Base64 encoder (self-contained) ----------
 

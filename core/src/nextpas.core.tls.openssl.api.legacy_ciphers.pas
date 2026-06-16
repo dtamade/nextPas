@@ -4,13 +4,7 @@ unit nextpas.core.tls.openssl.api.legacy_ciphers;
 
 interface
 
-uses
-  Classes, SysUtils, nextpas.core.tls.openssl.base;
-
-type
-  // RC2 types
-  RC2_KEY = packed record
-    data: array[0..63] of Cardinal;
+uses nextpas.core.tls.openssl.base; type // RC2 types RC2_KEY = packed record data: array[0..63] of Cardinal;
   end;
   PRC2_KEY = ^RC2_KEY;
   
@@ -354,10 +348,7 @@ procedure UnloadLegacyCiphersFunctions;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.utils;
-
-procedure LoadLegacyCiphersFunctions(AHandle: TLibHandle);
+uses nextpas.core.tls.openssl.api.utils; procedure LoadLegacyCiphersFunctions(AHandle: TLibHandle);
 begin
   if AHandle = 0 then Exit;
   

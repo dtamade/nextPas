@@ -114,8 +114,8 @@ function TWorkStealingDequeImpl.IsEmpty: Boolean;
 var
   LTop, LBottom: Int64;
 begin
-  LTop := AtomicLoad64(FTop, moSeqCst);
-  LBottom := AtomicLoad64(FBottom, moSeqCst);
+  LTop := AtomicLoad64(FTop, moAcquire);
+  LBottom := AtomicLoad64(FBottom, moAcquire);
   Result := LTop >= LBottom;
 end;
 
@@ -123,8 +123,8 @@ function TWorkStealingDequeImpl.ApproxCount: PtrUInt;
 var
   LTop, LBottom: Int64;
 begin
-  LTop := AtomicLoad64(FTop, moSeqCst);
-  LBottom := AtomicLoad64(FBottom, moSeqCst);
+  LTop := AtomicLoad64(FTop, moAcquire);
+  LBottom := AtomicLoad64(FBottom, moAcquire);
   if LBottom > LTop then
     Result := PtrUInt(LBottom - LTop)
   else

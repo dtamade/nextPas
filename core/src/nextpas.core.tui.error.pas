@@ -15,9 +15,7 @@ unit nextpas.core.tui.error;
 
 interface
 
-uses
-  SysUtils,
-  nextpas.core.exception;
+uses nextpas.core.exception;
 
 type
   { TUI 模块异常基类 }

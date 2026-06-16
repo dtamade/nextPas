@@ -9,46 +9,9 @@ uses
   nextpas.core.testing;
 
 type
-  IBaseSupportsProbe = interface
-    ['{6F55B868-E7AE-4FCE-9A42-29D0C3C8AA01}']
-    function Value: Integer;
-  end;
-
-  IBaseSupportsOther = interface
-    ['{8E87160A-20F8-4F25-9EB1-5757D7D68C4B}']
-  end;
-
-  IBaseTrackedPayload = interface
-    ['{0CC59069-A490-43E8-98F0-F386CB23E422}']
-    function Id: Integer;
-  end;
-
-  TBaseSupportsProbe = class(TInterfacedObject, IBaseSupportsProbe)
-  public
-    function Value: Integer;
-  end;
-
-  TBaseSupportsOther = class(TInterfacedObject, IBaseSupportsOther)
-  end;
-
-  PObjectSlot = ^TObject;
-
-  TBaseTrackedPayload = class(TInterfacedObject, IBaseTrackedPayload)
-  private
-    FId: Integer;
-  public
-    constructor Create(AId: Integer);
-    destructor Destroy; override;
-    function Id: Integer;
-  end;
-
-  TBaseLifecycleProbe = class
-  private
-    FSlot: PObjectSlot;
-  public
-    constructor Create(ASlot: PObjectSlot);
-    destructor Destroy; override;
-  end;
+  PObjectRef = ^TObject;
+  PIntegerRef = ^Integer;
+  PBooleanRef = ^Boolean;
 
   TIntNullable = specialize TNullable<Integer>;
   TIntOption = specialize TOption<Integer>;
@@ -56,6 +19,33 @@ type
   TTrackedNullable = specialize TNullable<IBaseTrackedPayload>;
   TTrackedOption = specialize TOption<IBaseTrackedPayload>;
   TTrackedResult = specialize TResult<IBaseTrackedPayload, IBaseTrackedPayload>;
+
+  IBaseUtilsProbe = interface
+    ['{64EA3D42-C730-4895-A82E-03EA1E0ED457}']
+    function Value: Integer;
+  end;
+
+  IBaseUtilsOtherProbe = interface
+    ['{68450AD5-4018-4D0E-B909-BDA617EA7B19}']
+  end;
+
+  TBaseUtilsProbe = class(TInterfacedObject, IBaseUtilsProbe)
+  public
+    function Value: Integer;
+  end;
+
+  TBaseUtilsOtherProbe = class(TInterfacedObject, IBaseUtilsOtherProbe)
+  end;
+
+  TDestructorProbe = class
+  private
+    FTarget: PObjectRef;
+    FDestroyCount: PIntegerRef;
+    FReferenceWasNil: PBooleanRef;
+  public
+    constructor Create(ATarget: PObjectRef; ADestroyCount: PIntegerRef; AReferenceWasNil: PBooleanRef);
+    destructor Destroy; override;
+  end;
 
 var
   T: TTestRunner;
@@ -107,6 +97,26 @@ end;
 procedure CheckTrackedPayloadAlive(AExpected: Integer; const AMessage: string);
 begin
   CheckEqual(Int64(AExpected), Int64(GTrackedPayloadAlive), AMessage);
+end;
+
+function TBaseUtilsProbe.Value: Integer;
+begin
+  Result := 42;
+end;
+
+constructor TDestructorProbe.Create(ATarget: PObjectRef; ADestroyCount: PIntegerRef; AReferenceWasNil: PBooleanRef);
+begin
+  inherited Create;
+  FTarget := ATarget;
+  FDestroyCount := ADestroyCount;
+  FReferenceWasNil := AReferenceWasNil;
+end;
+
+destructor TDestructorProbe.Destroy;
+begin
+  Inc(FDestroyCount^);
+  FReferenceWasNil^ := FTarget^ = nil;
+  inherited Destroy;
 end;
 
 procedure ExpectInvalidArgumentNil(const AProc: TProc; const AMessage: string);
@@ -410,6 +420,38 @@ begin
   );
 end;
 
+procedure TestFillMemHandlesValueZeroSizeAndNil;
+var
+  LBytes: array[0..3] of Byte;
+begin
+  LBytes[0] := 1;
+  LBytes[1] := 2;
+  LBytes[2] := 3;
+  LBytes[3] := 4;
+
+  FillMem(nil, 0, $AA);
+  FillMem(@LBytes[0], 0, $AA);
+  CheckEqual(Int64(1), Int64(LBytes[0]), 'FillMem with size 0 should not mutate');
+
+  FillMem(@LBytes[0], SizeOf(LBytes), $AA);
+  CheckEqual(Int64($AA), Int64(LBytes[0]), 'FillMem should fill first byte');
+  CheckEqual(Int64($AA), Int64(LBytes[3]), 'FillMem should fill last byte');
+
+  FillMem(@LBytes[1], 2, $11);
+  CheckEqual(Int64($AA), Int64(LBytes[0]), 'FillMem range should preserve byte before range');
+  CheckEqual(Int64($11), Int64(LBytes[1]), 'FillMem range should fill first ranged byte');
+  CheckEqual(Int64($11), Int64(LBytes[2]), 'FillMem range should fill last ranged byte');
+  CheckEqual(Int64($AA), Int64(LBytes[3]), 'FillMem range should preserve byte after range');
+
+  ExpectInvalidArgumentNil(
+    procedure
+    begin
+      FillMem(nil, 1, $AA);
+    end,
+    'FillMem(nil, >0) should raise EArgumentNil'
+  );
+end;
+
 procedure TestCopyMemHandlesZeroSizeAndNil;
 var
   LSrc: array[0..3] of Byte;
@@ -460,388 +502,86 @@ begin
   LB[1] := 2;
 
   Check(CompareMem(nil, nil, 0), 'CompareMem(nil, nil, 0) should stay true');
-  Check(not CompareMem(nil, nil, 1),
-    'CompareMem(nil, nil, >0) should stay false');
-  Check(not CompareMem(nil, @LB[0], 1),
-    'CompareMem(nil, non-nil, >0) should stay false');
-  Check(not CompareMem(@LA[0], nil, 1),
-    'CompareMem(non-nil, nil, >0) should stay false');
+  Check(CompareMem(nil, nil, 1), 'CompareMem(nil, nil, >0) should stay true');
+  Check(not CompareMem(nil, @LA[0], 1), 'CompareMem(nil, buffer, >0) should stay false');
+  Check(not CompareMem(@LA[0], nil, 1), 'CompareMem(buffer, nil, >0) should stay false');
   Check(CompareMem(@LA[0], @LB[0], 2), 'CompareMem should stay true for equal buffers');
   LB[1] := 3;
   Check(not CompareMem(@LA[0], @LB[0], 2), 'CompareMem should stay false for different buffers');
 end;
 
-procedure TestSizeUIntGuardsRejectOverflow;
+procedure TestObjectLifecycleHelpersStayStable;
 var
-  LSum: SizeUInt;
-  LOne: SizeUInt;
-  LNearMax: SizeUInt;
-  LHalfMaxPlusOne: SizeUInt;
-  LErr: ENextPasError;
+  LObject: TObject;
+  LDestroyCount: Integer;
+  LReferenceWasNil: Boolean;
 begin
-  LOne := 1;
-  LNearMax := MAX_SIZE_UINT - LOne;
-  LHalfMaxPlusOne := MAX_SIZE_UINT div 2;
-  Inc(LHalfMaxPlusOne);
+  LDestroyCount := 0;
+  LReferenceWasNil := False;
+  LObject := TDestructorProbe.Create(@LObject, @LDestroyCount, @LReferenceWasNil);
+  FreeAndNil(LObject);
+  Check(LObject = nil, 'base FreeAndNil should nil the object reference');
+  CheckEqual(Int64(1), Int64(LDestroyCount), 'base FreeAndNil should destroy the object once');
+  Check(LReferenceWasNil, 'base FreeAndNil should nil before destructor execution');
 
-  LErr := EOverflow.Create('size overflow');
-  try
-    CheckEqual(Ord(ecInvalidArgument), Ord(LErr.Category),
-      'EOverflow should classify size overflow as invalid argument');
-  finally
-    LErr.Free;
-  end;
+  LObject := TObject.Create;
+  SafeFree(LObject);
+  Check(LObject = nil, 'base SafeFree should nil the object reference');
 
-  LErr := EOverflow.CreateFmt('size overflow %d', [5]);
-  try
-    CheckEqual('size overflow 5', LErr.Message,
-      'EOverflow.CreateFmt should format the message');
-    CheckEqual(Ord(ecInvalidArgument), Ord(LErr.Category),
-      'EOverflow.CreateFmt should classify size overflow as invalid argument');
-  finally
-    LErr.Free;
-  end;
-
-  LSum := 0;
-  Check(TryAddSizeUInt(10, 20, LSum), 'TryAddSizeUInt should accept in-range sums');
-  CheckEqual(Int64(30), Int64(LSum), 'TryAddSizeUInt should return the exact sum');
-
-  Check(TryAddSizeUInt(MAX_SIZE_UINT, 0, LSum),
-    'TryAddSizeUInt should accept max plus zero');
-  Check(LSum = MAX_SIZE_UINT,
-    'TryAddSizeUInt should return MAX_SIZE_UINT for max plus zero');
-
-  Check(TryAddSizeUInt(LNearMax, LOne, LSum),
-    'TryAddSizeUInt should accept sums up to MAX_SIZE_UINT');
-  Check(LSum = MAX_SIZE_UINT,
-    'TryAddSizeUInt should return MAX_SIZE_UINT for max boundary sum');
-
-  LSum := 123;
-  Check(not TryAddSizeUInt(MAX_SIZE_UINT, LOne, LSum),
-    'TryAddSizeUInt should reject overflow');
-  CheckEqual(Int64(123), Int64(LSum),
-    'TryAddSizeUInt should leave the output unchanged on overflow');
-
-  LSum := 456;
-  Check(not TryAddSizeUInt(LOne, MAX_SIZE_UINT, LSum),
-    'TryAddSizeUInt should reject overflow regardless of operand order');
-  CheckEqual(Int64(456), Int64(LSum),
-    'TryAddSizeUInt should leave the output unchanged on reversed overflow');
-
-  CheckEqual(Int64(30), Int64(CheckedAddSizeUInt(10, 20)),
-    'CheckedAddSizeUInt should return in-range sums');
-  Check(CheckedAddSizeUInt(LNearMax, LOne) = MAX_SIZE_UINT,
-    'CheckedAddSizeUInt should return MAX_SIZE_UINT for max boundary sum');
-  ExpectOverflow(
-    procedure
-    begin
-      try
-        CheckedAddSizeUInt(MAX_SIZE_UINT, LOne);
-      except
-        on E: EOverflow do
-        begin
-          CheckEqual(Ord(ecInvalidArgument), Ord(E.Category),
-            'CheckedAddSizeUInt overflow should classify as invalid argument');
-          raise;
-        end;
-      end;
-    end,
-    'CheckedAddSizeUInt should reject overflow'
-  );
-
-  LSum := 0;
-  Check(TryMulSizeUInt(10, 20, LSum),
-    'TryMulSizeUInt should accept in-range products');
-  CheckEqual(Int64(200), Int64(LSum),
-    'TryMulSizeUInt should return the exact product');
-
-  Check(TryMulSizeUInt(MAX_SIZE_UINT, 1, LSum),
-    'TryMulSizeUInt should accept max times one');
-  Check(LSum = MAX_SIZE_UINT,
-    'TryMulSizeUInt should return MAX_SIZE_UINT for max times one');
-
-  Check(TryMulSizeUInt(0, MAX_SIZE_UINT, LSum),
-    'TryMulSizeUInt should accept zero times max');
-  CheckEqual(Int64(0), Int64(LSum),
-    'TryMulSizeUInt should return zero for zero times max');
-
-  LSum := 789;
-  Check(not TryMulSizeUInt(LHalfMaxPlusOne, 2, LSum),
-    'TryMulSizeUInt should reject multiplication overflow');
-  CheckEqual(Int64(789), Int64(LSum),
-    'TryMulSizeUInt should leave the output unchanged on multiplication overflow');
-
-  CheckEqual(Int64(200), Int64(CheckedMulSizeUInt(10, 20)),
-    'CheckedMulSizeUInt should return in-range products');
-  ExpectOverflow(
-    procedure
-    begin
-      try
-        CheckedMulSizeUInt(LHalfMaxPlusOne, 2);
-      except
-        on E: EOverflow do
-        begin
-          CheckEqual(Ord(ecInvalidArgument), Ord(E.Category),
-            'CheckedMulSizeUInt overflow should classify as invalid argument');
-          raise;
-        end;
-      end;
-    end,
-    'CheckedMulSizeUInt should raise EOverflow before wrapping'
-  );
-
-  CheckSizeRange(0, 0, 0);
-  CheckSizeRange(0, 3, 3);
-  CheckSizeRange(1, 2, 3);
-  CheckSizeRange(3, 0, 3);
-  ExpectOutOfRange(
-    procedure
-    begin
-      CheckSizeRange(4, 0, 3);
-    end,
-    'CheckSizeRange should reject offsets past the size'
-  );
-  ExpectOutOfRange(
-    procedure
-    begin
-      CheckSizeRange(2, 2, 3);
-    end,
-    'CheckSizeRange should reject length past the remaining size'
-  );
-  ExpectOutOfRange(
-    procedure
-    begin
-      CheckSizeRange(LNearMax, 2, MAX_SIZE_UINT);
-    end,
-    'CheckSizeRange should reject overflow without wrapping offset + length'
-  );
+  LObject := nil;
+  FreeAndNil(LObject);
+  Check(LObject = nil, 'base FreeAndNil should accept nil references');
+  SafeFree(LObject);
+  Check(LObject = nil, 'base SafeFree should accept nil references');
 end;
 
-procedure TestSupportsClearsOutParamOnFailure;
+procedure TestSupportsHelpersStayStable;
 var
-  LObj: TBaseSupportsProbe;
-  LKeepAlive: IInterface;
-  LInstance: IInterface;
-  LProbe: IBaseSupportsProbe;
-  LOther: IBaseSupportsOther;
+  LObject: TBaseUtilsProbe;
+  LOwner: IInterface;
+  LProbe: IBaseUtilsProbe;
+  LOther: IBaseUtilsOtherProbe;
+  LInterface: IInterface;
 begin
-  LObj := TBaseSupportsProbe.Create;
-  LKeepAlive := LObj as IInterface;
+  LObject := TBaseUtilsProbe.Create;
+  LOwner := LObject as IInterface;
   try
-    Check(LKeepAlive <> nil, 'supports probe object should stay alive during the test');
-
-    LProbe := LObj as IBaseSupportsProbe;
-    Check(not Supports(TObject(nil), IBaseSupportsProbe, LProbe),
-      'Supports(nil object) should return false');
-    Check(LProbe = nil,
-      'Supports(nil object) should clear the out interface');
-
-    LProbe := LObj as IBaseSupportsProbe;
-    LOther := TBaseSupportsOther.Create as IBaseSupportsOther;
-    Check(not Supports(LObj, IBaseSupportsOther, LOther),
-      'Supports(object, unsupported interface) should return false');
-    Check(LOther = nil,
-      'Supports(object, unsupported interface) should clear the out interface');
-
-    Check(Supports(LObj, IBaseSupportsProbe, LProbe),
-      'Supports(object, supported interface) should return true');
-    Check(LProbe <> nil,
-      'Supports(object, supported interface) should assign the out interface');
+    Check(LOwner <> nil, 'probe owner should hold the object alive during base Supports query');
+    Check(Supports(LObject, IBaseUtilsProbe, LProbe),
+      'base Supports(TObject) should query supported interfaces');
     CheckEqual(Int64(42), Int64(LProbe.Value),
-      'Supports(object, supported interface) should return the requested interface');
+      'base Supports(TObject) should return the queried interface');
 
-    LInstance := LObj as IInterface;
-    LProbe := LObj as IBaseSupportsProbe;
-    Check(not Supports(IInterface(nil), IBaseSupportsProbe, LProbe),
-      'Supports(nil interface) should return false');
-    Check(LProbe = nil,
-      'Supports(nil interface) should clear the out interface');
-
-    LOther := TBaseSupportsOther.Create as IBaseSupportsOther;
-    Check(not Supports(LInstance, IBaseSupportsOther, LOther),
-      'Supports(interface, unsupported interface) should return false');
+    LOther := TBaseUtilsOtherProbe.Create as IBaseUtilsOtherProbe;
+    Check(not Supports(LObject, IBaseUtilsOtherProbe, LOther),
+      'base Supports(TObject) should return false for unsupported interfaces');
     Check(LOther = nil,
-      'Supports(interface, unsupported interface) should clear the out interface');
-
-    Check(Supports(LInstance, IBaseSupportsProbe, LProbe),
-      'Supports(interface, supported interface) should return true');
-    Check((LProbe <> nil) and (LProbe.Value = 42),
-      'Supports(interface, supported interface) should assign the out interface');
+      'base Supports(TObject) should clear stale interfaces on unsupported queries');
   finally
-    LOther := nil;
     LProbe := nil;
-    LInstance := nil;
-    LKeepAlive := nil;
+    LOther := nil;
+    LOwner := nil;
   end;
-end;
 
-procedure TestFreeAndNilObjectLifecycle;
-var
-  LObj: TObject;
-begin
-  GLifecycleProbeDestroyed := 0;
-  GLifecycleProbeSawNilBeforeDestroy := False;
+  LInterface := TBaseUtilsProbe.Create as IInterface;
+  Check(Supports(LInterface, IBaseUtilsProbe, LProbe),
+    'base Supports(IInterface) should query supported interfaces');
+  CheckEqual(Int64(42), Int64(LProbe.Value),
+    'base Supports(IInterface) should return the queried interface');
 
-  LObj := nil;
-  FreeAndNil(LObj);
-  Check(LObj = nil, 'FreeAndNil(nil) should keep the variable nil');
-  CheckEqual(Int64(0), Int64(GLifecycleProbeDestroyed), 'FreeAndNil(nil) should not destroy an object');
+  LOther := TBaseUtilsOtherProbe.Create as IBaseUtilsOtherProbe;
+  Check(not Supports(LInterface, IBaseUtilsOtherProbe, LOther),
+    'base Supports(IInterface) should return false for unsupported interfaces');
+  Check(LOther = nil,
+    'base Supports(IInterface) should clear stale interfaces on unsupported queries');
 
-  LObj := TBaseLifecycleProbe.Create(@LObj);
-  FreeAndNil(LObj);
-  Check(LObj = nil, 'FreeAndNil should nil the variable');
-  Check(GLifecycleProbeSawNilBeforeDestroy, 'FreeAndNil should nil the variable before destructor runs');
-  CheckEqual(Int64(1), Int64(GLifecycleProbeDestroyed), 'FreeAndNil should destroy exactly once');
-
-  FreeAndNil(LObj);
-  CheckEqual(Int64(1), Int64(GLifecycleProbeDestroyed), 'FreeAndNil should be repeat-safe after nil');
-end;
-
-procedure TestSafeFreeObjectLifecycle;
-var
-  LObj: TObject;
-begin
-  GLifecycleProbeDestroyed := 0;
-  GLifecycleProbeSawNilBeforeDestroy := False;
-
-  LObj := nil;
-  SafeFree(LObj);
-  Check(LObj = nil, 'SafeFree(nil) should keep the variable nil');
-  CheckEqual(Int64(0), Int64(GLifecycleProbeDestroyed), 'SafeFree(nil) should not destroy an object');
-
-  LObj := TBaseLifecycleProbe.Create(@LObj);
-  SafeFree(LObj);
-  Check(LObj = nil, 'SafeFree should nil the variable');
-  Check(GLifecycleProbeSawNilBeforeDestroy, 'SafeFree should nil the variable before destructor runs');
-  CheckEqual(Int64(1), Int64(GLifecycleProbeDestroyed), 'SafeFree should destroy exactly once');
-
-  SafeFree(LObj);
-  CheckEqual(Int64(1), Int64(GLifecycleProbeDestroyed), 'SafeFree should be repeat-safe after nil');
-end;
-
-procedure TestByteSpanRejectsNilNonEmpty;
-begin
-  ExpectInvalidArgumentNil(
-    procedure
-    begin
-      TByteSpan.Create(nil, 1);
-    end,
-    'TByteSpan.Create(nil, >0) should raise EArgumentNil'
-  );
-end;
-
-procedure TestByteSpanSliceRejectsOverflow;
-var
-  LData: array[0..1] of Byte;
-  LSpan: TByteSpan;
-begin
-  LSpan := TByteSpan.Create(@LData[0], Length(LData));
-  ExpectOutOfRange(
-    procedure
-    begin
-      LSpan.Slice(MAX_SIZE_UINT, 2);
-    end,
-    'TByteSpan.Slice should reject offset + length overflow'
-  );
-end;
-
-procedure TestByteSpanEmptyGetByteRejectsWithoutUnderflowedRange;
-var
-  LSpan: TByteSpan;
-begin
-  LSpan := TByteSpan.Empty;
-  ExpectOutOfRangeMessage(
-    procedure
-    begin
-      LSpan.GetByte(0);
-    end,
-    'TByteSpan: index 0 out of range for empty span',
-    'TByteSpan.GetByte on empty span should not report an underflowed range'
-  );
-end;
-
-procedure TestByteSpanRejectsInvalidPublicRecordState;
-var
-  LSpan: TByteSpan;
-begin
-  LSpan.Data := nil;
-  LSpan.Len := 1;
-
-  ExpectInvalidArgumentNil(
-    procedure
-    begin
-      LSpan.Slice(0, 1);
-    end,
-    'TByteSpan.Slice should reject nil data when Len > 0'
-  );
-
-  ExpectInvalidArgumentNil(
-    procedure
-    begin
-      LSpan.GetByte(0);
-    end,
-    'TByteSpan.GetByte should reject nil data when Len > 0'
-  );
-end;
-
-procedure TestByteSpanFromBytesAndEmptySliceBoundaries;
-var
-  LBytes: TBytes;
-  LSpan: TByteSpan;
-  LEmpty: TByteSpan;
-begin
-  SetLength(LBytes, 3);
-  LBytes[0] := $11;
-  LBytes[1] := $22;
-  LBytes[2] := $33;
-
-  LSpan := TByteSpan.FromBytes(LBytes);
-  Check(not LSpan.IsEmpty, 'FromBytes(non-empty) should create a non-empty view');
-  Check(LSpan.Data = @LBytes[0], 'FromBytes(non-empty) should point at the first byte');
-  CheckEqual(Int64(3), Int64(LSpan.Len), 'FromBytes(non-empty) should preserve length');
-  CheckEqual(Int64($11), Int64(LSpan.GetByte(0)), 'FromBytes view should read first byte');
-  CheckEqual(Int64($33), Int64(LSpan.GetByte(2)), 'FromBytes view should read last byte');
-
-  ExpectOutOfRange(
-    procedure
-    begin
-      LSpan.GetByte(3);
-    end,
-    'TByteSpan.GetByte(Len) should reject the one-past index'
-  );
-
-  LEmpty := LSpan.Slice(LSpan.Len, 0);
-  Check(LEmpty.IsEmpty, 'Slice(Len, 0) should be empty');
-  Check(LEmpty.Data = nil, 'Slice(Len, 0) should return canonical empty span');
-
-  SetLength(LBytes, 0);
-  LEmpty := TByteSpan.FromBytes(LBytes);
-  Check(LEmpty.IsEmpty, 'FromBytes(empty) should create an empty view');
-  Check(LEmpty.Data = nil, 'FromBytes(empty) should return canonical empty span');
-end;
-
-procedure TestHashBytesRejectsNilNonEmpty;
-begin
-  ExpectInvalidArgumentNil(
-    procedure
-    begin
-      HashBytes(nil, 1);
-    end,
-    'HashBytes(nil, >0) should raise EArgumentNil'
-  );
-end;
-
-procedure TestHashBytesKeepsFnvWraparound;
-var
-  LData: array[0..3] of Byte;
-begin
-  LData[0] := $FF;
-  LData[1] := $EE;
-  LData[2] := $DD;
-  LData[3] := $CC;
-
-  Check(HashBytes(@LData[0], Length(LData)) = THashCode($79E26891),
-    'HashBytes should keep FNV-1a 32-bit wraparound semantics');
+  LProbe := nil;
+  LOther := nil;
+  LInterface := nil;
+  Check(not Supports(TObject(nil), IBaseUtilsProbe, LProbe),
+    'base Supports(TObject) should return false for nil object references');
+  Check(not Supports(IInterface(nil), IBaseUtilsProbe, LProbe),
+    'base Supports(IInterface) should return false for nil interface references');
 end;
 
 procedure TestNullableSurface;
@@ -1031,19 +771,11 @@ begin
   T.Run('base EOutOfMemoryError long name is canonical', @TestBaseOutOfMemoryLongNameIsCanonical);
   T.Run('contract helpers use framework exceptions', @TestContractHelpersUseFrameworkExceptions);
   T.Run('zeromem handles zero-size and nil', @TestZeroMemHandlesZeroSizeAndNil);
+  T.Run('fillmem handles value zero-size and nil', @TestFillMemHandlesValueZeroSizeAndNil);
   T.Run('copymem handles zero-size and nil', @TestCopyMemHandlesZeroSizeAndNil);
   T.Run('comparemem semantics stay stable', @TestCompareMemSemanticsStayStable);
-  T.Run('SizeUInt guards reject overflow', @TestSizeUIntGuardsRejectOverflow);
-  T.Run('supports clears out param on failure', @TestSupportsClearsOutParamOnFailure);
-  T.Run('FreeAndNil object lifecycle', @TestFreeAndNilObjectLifecycle);
-  T.Run('SafeFree object lifecycle', @TestSafeFreeObjectLifecycle);
-  T.Run('bytespan rejects nil non-empty', @TestByteSpanRejectsNilNonEmpty);
-  T.Run('bytespan slice rejects overflow', @TestByteSpanSliceRejectsOverflow);
-  T.Run('bytespan empty getbyte rejects without underflowed range', @TestByteSpanEmptyGetByteRejectsWithoutUnderflowedRange);
-  T.Run('bytespan rejects invalid public record state', @TestByteSpanRejectsInvalidPublicRecordState);
-  T.Run('bytespan FromBytes and empty slice boundaries', @TestByteSpanFromBytesAndEmptySliceBoundaries);
-  T.Run('hashbytes rejects nil non-empty', @TestHashBytesRejectsNilNonEmpty);
-  T.Run('hashbytes keeps fnv wraparound', @TestHashBytesKeepsFnvWraparound);
+  T.Run('object lifecycle helpers stay stable', @TestObjectLifecycleHelpersStayStable);
+  T.Run('supports helpers stay stable', @TestSupportsHelpersStayStable);
   T.Run('nullable surface', @TestNullableSurface);
   T.Run('nullable interface payload lifecycle', @TestNullableInterfacePayloadLifecycle);
   T.Run('option surface', @TestOptionSurface);

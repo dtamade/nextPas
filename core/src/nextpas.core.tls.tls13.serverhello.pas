@@ -13,9 +13,7 @@ unit nextpas.core.tls.tls13.serverhello;
 
 interface
 
-uses
-  SysUtils,
-  nextpas.core.tls.tls13.wire;
+uses nextpas.core.tls.tls13.wire;
 
 function BuildTLS13ServerHelloHandshake(
   const ALegacySessionID: TBytes;
@@ -47,9 +45,7 @@ function BuildTLS13ServerHelloRecordWithSelectedPSK(
 
 implementation
 
-uses
-  nextpas.core.tls.errors,
-  nextpas.core.tls.random;
+uses nextpas.core.tls.errors, nextpas.core.tls.random;
 
 function BuildExtensionHeader(AType: Word; const AData: TBytes): TBytes;
 begin

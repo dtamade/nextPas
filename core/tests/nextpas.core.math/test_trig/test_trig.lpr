@@ -2,6 +2,8 @@ program test_trig;
 {$I nextpas.core.settings.inc}
 uses
   SysUtils,
+  nextpas.core.math.base,
+  nextpas.core.math.scalar,
   nextpas.core.math.trig;
 var
   GPass: Integer = 0;

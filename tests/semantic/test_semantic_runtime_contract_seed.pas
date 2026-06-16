@@ -68,23 +68,57 @@ begin
   for Index := 0 to AModel.TypedHirNodeCount - 1 do
   begin
     Node := AModel.TypedHirNodeAt(Index);
-    if (Node.Kind = 'runtime-contract') and
-      SameText(Node.DisplayName, AContractName) then
+    if (Node.Kind = 'runtime-contract') and (Node.DisplayName = AContractName) then
       Inc(Result);
   end;
+end;
+
+function RuntimeContractNodeAt(const AModel: TSemanticModel;
+  const AContractIndex: LongInt): TTypedHirNode;
+var
+  Index: LongInt;
+  Seen: LongInt;
+begin
+  Seen := 0;
+  for Index := 0 to AModel.TypedHirNodeCount - 1 do
+  begin
+    Result := AModel.TypedHirNodeAt(Index);
+    if Result.Kind = 'runtime-contract' then
+    begin
+      if Seen = AContractIndex then
+        Exit;
+      Inc(Seen);
+    end;
+  end;
+
+  Result.HirNodeId := 0;
+  Result.Kind := '';
+  Result.DisplayName := '';
+  Result.SymbolId := 0;
+  Result.TypeId := 0;
+  Result.Operand := '';
+  Result.ExprId := 0;
+  Result.TargetExprId := 0;
 end;
 
 procedure AssertRuntimeContractAt(const AModel: TSemanticModel;
   const AIndex: LongInt; const AExpectedName: string);
 var
   Contract: TRuntimeContract;
+  Node: TTypedHirNode;
 begin
   Contract := AModel.RuntimeContractAt(AIndex);
   if Contract.ContractId <> AIndex + 1 then
     Fail('runtime-contract-id-mismatch:' + IntToStr(AIndex));
-  if not SameText(Contract.Name, AExpectedName) then
+  if Contract.Name <> AExpectedName then
     Fail('runtime-contract-name-mismatch:' + IntToStr(AIndex) + ':' +
       Contract.Name);
+  Node := RuntimeContractNodeAt(AModel, AIndex);
+  if Node.Kind <> 'runtime-contract' then
+    Fail('runtime-contract-node-order-missing:' + IntToStr(AIndex));
+  if Node.DisplayName <> Contract.Name then
+    Fail('runtime-contract-node-order-mismatch:' + IntToStr(AIndex) + ':' +
+      Node.DisplayName);
   if RuntimeContractNodeCount(AModel, AExpectedName) <> 1 then
     Fail('runtime-contract-node-count-mismatch:' + AExpectedName);
 end;

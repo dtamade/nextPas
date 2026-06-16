@@ -5,8 +5,6 @@ unit nextpas.core.tls.base64;
 
 interface
 
-uses
-  SysUtils;
 
 type
   EBase64Error = class(Exception);

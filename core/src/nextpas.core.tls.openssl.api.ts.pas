@@ -8,17 +8,7 @@ unit nextpas.core.tls.openssl.api.ts;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.asn1,
-  nextpas.core.tls.openssl.api.obj,
-  nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.bn,
-  nextpas.core.tls.openssl.api.rand;
+uses SysUtils, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.obj, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.api.rand;
 
 const
   // TS 消息类型
@@ -448,9 +438,7 @@ function GetTimestampTime(Response: PTS_RESP): TDateTime;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
 
 procedure LoadTSFunctions;
 begin

@@ -31,7 +31,7 @@ type
     class function ValidateNameAndNeedsNormalize(const AName: string): Boolean; static;
     class procedure ValidateValue(const AValue: string); static;
   public
-    procedure Set_(const AName, AValue: string);
+    procedure SetHeader(const AName, AValue: string);
     procedure Add(const AName, AValue: string);
     // Trusted parser path: name/value syntax has already been validated.
     procedure AddParsed(const AName, AValue: string);
@@ -40,7 +40,7 @@ type
     function Get(const AName: string): string;
     function GetAll(const AName: string): TStringArray;
     function Has(const AName: string): Boolean;
-    procedure Del(const AName: string);
+    procedure Remove(const AName: string);
     procedure Clear;
     function Count: Int32;
     procedure ForEach(const ACallback: THeaderIterator);
@@ -48,8 +48,41 @@ type
   end;
 
 function NewHttpHeaders: IHttpHeaders;
+function IsHttpHeaderNameChar(const AChar: AnsiChar): Boolean;
+procedure SetBasicAuth(const AHeaders: IHttpHeaders;
+  const AUsername, APassword: string);
+procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string);
 
 implementation
+
+uses
+  nextpas.core.base,
+  nextpas.core.errors,
+  nextpas.core.encoding;
+
+function HeaderBytes(const AValue: string): TBytes;
+begin
+  Result := nil;
+  SetLength(Result, Length(AValue));
+  if AValue <> '' then
+    Move(AValue[1], Result[0], Length(AValue));
+end;
+
+function IsHttpHeaderNameChar(const AChar: AnsiChar): Boolean;
+begin
+  Result :=
+    ((AChar >= 'A') and (AChar <= 'Z')) or
+    ((AChar >= 'a') and (AChar <= 'z')) or
+    ((AChar >= '0') and (AChar <= '9')) or
+    (AChar in ['!', '#', '$', '%', '&', '''', '*', '+', '-', '.', '^',
+      '_', '`', '|', '~']);
+end;
+
+procedure RequireHeaders(const AHeaders: IHttpHeaders);
+begin
+  if AHeaders = nil then
+    raise EArgumentError.Create('HTTP headers are nil');
+end;
 
 { THttpHeaders }
 
@@ -146,7 +179,7 @@ begin
   Result := False;
   for LI := 1 to Length(AName) do
   begin
-    if (Ord(AName[LI]) < 33) or (Ord(AName[LI]) > 126) or (AName[LI] = ':') then
+    if not IsHttpHeaderNameChar(AnsiChar(AName[LI])) then
       raise EHttpError.Create('invalid header name character');
     if (AName[LI] >= 'A') and (AName[LI] <= 'Z') then
       Result := True;
@@ -158,8 +191,9 @@ var
   LI: SizeInt;
 begin
   for LI := 1 to Length(AValue) do
-    if (AValue[LI] = #13) or (AValue[LI] = #10) or (AValue[LI] = #0) then
-      raise EHttpError.Create('invalid header value: contains CR/LF/NUL');
+    if (((AValue[LI] < #32) and (AValue[LI] <> #9)) or
+        (AValue[LI] = #127)) then
+      raise EHttpError.Create('invalid header value character');
 end;
 
 function THttpHeaders.FindFirst(const AName: string): Int32; inline;
@@ -181,7 +215,7 @@ begin
   Result := -1;
 end;
 
-procedure THttpHeaders.Set_(const AName, AValue: string);
+procedure THttpHeaders.SetHeader(const AName, AValue: string);
 var
   LNorm: string;
   LI, LDst: Int32;
@@ -267,6 +301,7 @@ function THttpHeaders.Get(const AName: string): string;
 var
   LIdx: Int32;
 begin
+  ValidateNameAndNeedsNormalize(AName);
   LIdx := FindFirst(AName);
   if LIdx >= 0 then
     Result := FEntries[LIdx].Value
@@ -283,6 +318,7 @@ begin
   Result := nil;
   LCount := 0;
   LUseNormalized := False;
+  ValidateNameAndNeedsNormalize(AName);
 
   for LI := 0 to FCount - 1 do
     if FEntries[LI].Name = AName then
@@ -319,15 +355,19 @@ end;
 
 function THttpHeaders.Has(const AName: string): Boolean;
 begin
+  ValidateNameAndNeedsNormalize(AName);
   Result := FindFirst(AName) >= 0;
 end;
 
-procedure THttpHeaders.Del(const AName: string);
+procedure THttpHeaders.Remove(const AName: string);
 var
   LNorm: string;
   LI, LDst: Int32;
 begin
-  LNorm := NormalizeIfNeeded(AName);
+  if ValidateNameAndNeedsNormalize(AName) then
+    LNorm := Normalize(AName)
+  else
+    LNorm := AName;
   LDst := 0;
   for LI := 0 to FCount - 1 do
   begin
@@ -357,6 +397,9 @@ procedure THttpHeaders.ForEach(const ACallback: THeaderIterator);
 var
   LI: Int32;
 begin
+  if ACallback = nil then
+    raise EArgumentError.Create('HTTP header iterator is nil');
+
   for LI := 0 to FCount - 1 do
     ACallback(FEntries[LI].Name, FEntries[LI].Value);
 end;
@@ -379,6 +422,20 @@ end;
 function NewHttpHeaders: IHttpHeaders;
 begin
   Result := THttpHeaders.Create;
+end;
+
+procedure SetBasicAuth(const AHeaders: IHttpHeaders;
+  const AUsername, APassword: string);
+begin
+  RequireHeaders(AHeaders);
+  AHeaders.SetHeader('authorization', 'Basic ' +
+    Base64Encode(HeaderBytes(AUsername + ':' + APassword)));
+end;
+
+procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string);
+begin
+  RequireHeaders(AHeaders);
+  AHeaders.SetHeader('authorization', 'Bearer ' + AToken);
 end;
 
 end.

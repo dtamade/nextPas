@@ -1,11 +1,8 @@
 { Linux ARM (EABI) syscall numbers - ported from FPC rtl/linux/arm/sysnr.inc }
 
- **********************************************************************}
-
-
-{
-* This file contains the system call numbers.
-}
+{ **********************************************************************
+  This file contains the system call numbers.
+  ********************************************************************** }
 
 Const
 {$ifdef FPC_ABI_EABI}

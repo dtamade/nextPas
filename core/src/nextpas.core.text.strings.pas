@@ -47,6 +47,7 @@ function StringsIndexOf(const AArr: TStringArray; const AValue: string): SizeInt
 function StringsLastIndexOf(const AArr: TStringArray; const AValue: string): SizeInt;
 procedure StringsSort(var AArr: TStringArray);
 procedure StringsReverse(var AArr: TStringArray);
+function StringsSplit(const AValue, ADelimiter: string): TStringArray;
 function StringsJoin(const AArr: TStringArray; const ASep: string): string;
 function StringsFilter(const AArr: TStringArray; APredicate: TStringPredicate): TStringArray;
 function StringsMap(const AArr: TStringArray; AMapper: TStringMapper): TStringArray;
@@ -77,6 +78,9 @@ function StringsGlob(const AArr: TStringArray; const APattern: string): TStringA
 { Additional utilities }
 function StringsRepeat(const AValue: string; ACount: SizeUInt): TStringArray;
 function StringsChunk(const AArr: TStringArray; ASize: SizeUInt): TStringChunks;
+
+{ Split utilities }
+function StringsSplit(const AStr: string; ASep: Char; ARemoveEmpty: Boolean = False): TStringArray;
 
 implementation
 
@@ -144,6 +148,45 @@ begin
     tmp := AArr[i]; AArr[i] := AArr[j]; AArr[j] := tmp;
     Inc(i); Dec(j);
   end;
+end;
+
+function StringsSplit(const AValue, ADelimiter: string): TStringArray;
+var
+  LPos: SizeInt;
+  LStart: SizeInt;
+  LDelimLen: SizeInt;
+  LCount: SizeInt;
+  LCapacity: SizeInt;
+begin
+  Result := nil;
+  LDelimLen := Length(ADelimiter);
+  if LDelimLen = 0 then
+  begin
+    SetLength(Result, 1);
+    Result[0] := AValue;
+    Exit;
+  end;
+
+  LCount := 0;
+  LCapacity := 0;
+  LStart := 1;
+  repeat
+    LPos := Pos(ADelimiter, AValue, LStart);
+    if LPos = 0 then
+      LPos := Length(AValue) + 1;
+    if LCount >= LCapacity then
+    begin
+      if LCapacity = 0 then
+        LCapacity := 8
+      else
+        LCapacity := LCapacity * 2;
+      SetLength(Result, LCapacity);
+    end;
+    Result[LCount] := System.Copy(AValue, LStart, LPos - LStart);
+    Inc(LCount);
+    LStart := LPos + LDelimLen;
+  until LPos > Length(AValue);
+  SetLength(Result, LCount);
 end;
 
 function StringsJoin(const AArr: TStringArray; const ASep: string): string;
@@ -569,6 +612,53 @@ begin
       Result[I][J] := AArr[LStart + J];
     Inc(LStart, LRemain);
   end;
+end;
+
+{== Split ==}
+
+function StringsSplit(const AStr: string; ASep: Char; ARemoveEmpty: Boolean): TStringArray;
+var
+  I, LSegStart, LSegCount, LLen: Integer;
+begin
+  Result := nil;
+  LLen := Length(AStr);
+  if LLen = 0 then
+  begin
+    if not ARemoveEmpty then
+    begin
+      SetLength(Result, 1);
+      Result[0] := '';
+    end;
+    Exit;
+  end;
+  // First pass: count segments
+  LSegCount := 1;
+  for I := 1 to LLen do
+    if AStr[I] = ASep then
+      Inc(LSegCount);
+  // Second pass: fill
+  SetLength(Result, LSegCount);
+  LSegStart := 1;
+  LSegCount := 0;
+  for I := 1 to LLen do
+    if AStr[I] = ASep then
+    begin
+      if (I > LSegStart) or not ARemoveEmpty then
+      begin
+        SetString(Result[LSegCount], PChar(@AStr[LSegStart]), I - LSegStart);
+        Inc(LSegCount);
+      end;
+      LSegStart := I + 1;
+    end;
+  // Last segment
+  if (LLen >= LSegStart) or not ARemoveEmpty then
+  begin
+    SetString(Result[LSegCount], PChar(@AStr[LSegStart]), LLen - LSegStart + 1);
+    Inc(LSegCount);
+  end;
+  // Trim if remove-empty shrank the array
+  if LSegCount < Length(Result) then
+    SetLength(Result, LSegCount);
 end;
 
 end.

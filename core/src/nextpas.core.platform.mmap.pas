@@ -70,16 +70,13 @@ uses
   {$IFDEF NEXTPAS_LINUX}
   , nextpas.core.platform.linux.base
   {$ENDIF}
-  {$IFDEF NEXTPAS_ANDROID}
-  , nextpas.core.platform.android.base
-  {$ENDIF}
   {$IFDEF NEXTPAS_MACOS}
   , nextpas.core.platform.darwin.base
   {$ENDIF}
   {$IFDEF NEXTPAS_FREEBSD}
   , nextpas.core.platform.freebsd.base
   {$ENDIF}
-  {$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_ANDROID) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD)}
+  {$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD)}
   , nextpas.core.platform.unix.base
   {$ENDIF}
 {$ENDIF}
@@ -276,7 +273,7 @@ begin
   LBase := AName;
   if (LBase <> '') and (LBase[1] = '/') then
     Delete(LBase, 1, 1);
-  LBase := StringReplace(LBase, '/', '_', [rfReplaceAll]);
+  LBase := SysUtils.StringReplace(LBase, '/', '_', [rfReplaceAll]);
 
   if (LDir <> '') and (LDir[Length(LDir)] <> '/') then
     LDir := LDir + '/';
@@ -626,18 +623,6 @@ var
 begin
   GetSystemInfo(LInfo);
   Result := LInfo.dwPageSize;
-end;
-{$ELSEIF DEFINED(NEXTPAS_UNIX)}
-var
-  LPageSize: PtrInt;
-begin
-  LPageSize := 0;
-  if _SC_PAGESIZE >= 0 then
-    LPageSize := sysconf(_SC_PAGESIZE);
-  if LPageSize > 0 then
-    Result := UInt64(LPageSize)
-  else
-    Result := 4096;
 end;
 {$ELSE}
 begin

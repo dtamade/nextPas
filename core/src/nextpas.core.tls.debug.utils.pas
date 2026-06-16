@@ -116,7 +116,7 @@ type
    *}
   TSSLStringBuilder = class
   private
-    FBuffer: TStringList;
+    FBuffer: TStringArray;
     FIndentLevel: Integer;
     FIndentStr: string;
   public
@@ -480,7 +480,7 @@ var
   LBytes: TBytes;
 begin
   LBytes := ReadBytes(ALength);
-  Result := AnsiString(TEncoding.UTF8.GetString(LBytes));
+  Result := AnsiString(nextpas.core.text.conv.UTF8BytesToString(LBytes));
 end;
 
 procedure TSSLMemoryStream.WriteByte(AValue: Byte);
@@ -508,7 +508,7 @@ procedure TSSLMemoryStream.WriteString(const AStr: string);
 var
   LBytes: TBytes;
 begin
-  LBytes := TEncoding.UTF8.GetBytes(UnicodeString(AStr));
+  LBytes := nextpas.core.text.conv.StringToUTF8Bytes(AStr));
   WriteBytes(LBytes);
 end;
 
@@ -551,23 +551,23 @@ end;
 constructor TSSLStringBuilder.Create;
 begin
   inherited;
-  FBuffer := TStringList.Create;
+  FBuffer := nil;
   FIndentLevel := 0;
   FIndentStr := '  ';
 end;
 
 destructor TSSLStringBuilder.Destroy;
 begin
-  FBuffer.Free;
+
   inherited;
 end;
 
 procedure TSSLStringBuilder.Append(const AStr: string);
 begin
-  if FBuffer.Count = 0 then
+  if Length(FBuffer) = 0 then
     FBuffer.Add('');
 
-  FBuffer[FBuffer.Count - 1] := FBuffer[FBuffer.Count - 1] + AStr;
+  FBuffer[Length(FBuffer) - 1] := FBuffer[Length(FBuffer) - 1] + AStr;
 end;
 
 procedure TSSLStringBuilder.AppendLine(const AStr: string);
@@ -611,7 +611,7 @@ end;
 
 function TSSLStringBuilder.ToString: string;
 begin
-  Result := FBuffer.Text;
+  Result := StringsJoin(FBuffer, sLineBreak);
 end;
 
 { TSSLBitSet }

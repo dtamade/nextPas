@@ -84,6 +84,7 @@ begin
   CheckEqual('No Content', HttpStatusText(204), '204');
   CheckEqual('Moved Permanently', HttpStatusText(301), '301');
   CheckEqual('Found', HttpStatusText(302), '302');
+  CheckEqual('See Other', HttpStatusText(HTTP_STATUS_SEE_OTHER), '303');
   CheckEqual('Not Modified', HttpStatusText(304), '304');
   CheckEqual('Bad Request', HttpStatusText(400), '400');
   CheckEqual('Unauthorized', HttpStatusText(401), '401');
@@ -95,6 +96,34 @@ begin
   CheckEqual('Bad Gateway', HttpStatusText(502), '502');
   CheckEqual('Service Unavailable', HttpStatusText(503), '503');
   CheckEqual('Unknown', HttpStatusText(999), '999 unknown');
+end;
+
+procedure TestHttpStatusClassHelpers;
+begin
+  Check(not HttpStatusIsInformational(99), '99 is not informational');
+  Check(HttpStatusIsInformational(100), '100 is informational');
+  Check(HttpStatusIsInformational(199), '199 is informational');
+  Check(not HttpStatusIsInformational(200), '200 is not informational');
+
+  Check(not HttpStatusIsSuccess(199), '199 is not success');
+  Check(HttpStatusIsSuccess(200), '200 is success');
+  Check(HttpStatusIsSuccess(299), '299 is success');
+  Check(not HttpStatusIsSuccess(300), '300 is not success');
+
+  Check(not HttpStatusIsRedirect(299), '299 is not redirect');
+  Check(HttpStatusIsRedirect(300), '300 is redirect');
+  Check(HttpStatusIsRedirect(399), '399 is redirect');
+  Check(not HttpStatusIsRedirect(400), '400 is not redirect');
+
+  Check(not HttpStatusIsClientError(399), '399 is not client error');
+  Check(HttpStatusIsClientError(400), '400 is client error');
+  Check(HttpStatusIsClientError(499), '499 is client error');
+  Check(not HttpStatusIsClientError(500), '500 is not client error');
+
+  Check(not HttpStatusIsServerError(499), '499 is not server error');
+  Check(HttpStatusIsServerError(500), '500 is server error');
+  Check(HttpStatusIsServerError(599), '599 is server error');
+  Check(not HttpStatusIsServerError(600), '600 is not server error');
 end;
 
 procedure TestHttpVersionToStr;
@@ -154,6 +183,28 @@ begin
   CheckEqual('/secure', LUrl.Path, 'path');
 end;
 
+procedure CheckUrlParseRejectsInvalidPort(const AUrl, AContext: string);
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    TUrl.Parse(AUrl);
+  except
+    on E: EHttpError do
+      LCaught := True;
+  end;
+  Check(LCaught, AContext + ' raises EHttpError');
+end;
+
+procedure TestUrlParseInvalidPortRaises;
+begin
+  CheckUrlParseRejectsInvalidPort('http://example.com:notaport/path',
+    'hostname invalid port');
+  CheckUrlParseRejectsInvalidPort('http://[::1]:bad/path',
+    'bracketed IPv6 invalid port');
+end;
+
 procedure TestUrlParseEmptyRaises;
 var
   LCaught: Boolean;
@@ -187,6 +238,12 @@ begin
 
   LUrl := TUrl.Parse('http://example.com/x');
   CheckEqual('example.com', LUrl.HostPort, 'without port');
+
+  LUrl := TUrl.Parse('http://[::1]:9090/x');
+  CheckEqual('[::1]:9090', LUrl.HostPort, 'ipv6 with port');
+
+  LUrl := TUrl.Parse('http://[fe80::1]/x');
+  CheckEqual('[fe80::1]', LUrl.HostPort, 'ipv6 without port');
 end;
 
 procedure TestUrlParseIPv6;
@@ -301,6 +358,9 @@ begin
   CheckEqual(Int64(30000), LOptions.Timeout, 'default timeout');
   CheckEqual(Int64(10), Int64(LOptions.MaxRedirects), 'default max redirects');
   Check(LOptions.FollowRedirects, 'default follows redirects');
+  Check(LOptions.Version = hvHttp11, 'default client version field');
+  Check(LOptions.UseRegistryVersion, 'default client uses registry version');
+  Check(LOptions.TLSContext = nil, 'default client TLS context is nil');
 end;
 
 procedure TestHttpServerOptionsDefault;
@@ -314,6 +374,25 @@ begin
   CheckEqual(Int64(30000), LOptions.IdleTimeout, 'default idle timeout');
   CheckEqual(Int64(8192), Int64(LOptions.MaxHeaderSize), 'default max header size');
   CheckEqual(Int64(4194304), LOptions.MaxBodySize, 'default max body size');
+  Check(LOptions.Version = hvHttp11, 'default server version field');
+  Check(LOptions.UseRegistryVersion, 'default server uses registry version');
+  Check(LOptions.TLSContext = nil, 'default server TLS context is nil');
+end;
+
+procedure TestHttpOptionsWithVersion;
+var
+  LClientOptions: THttpClientOptions;
+  LServerOptions: THttpServerOptions;
+begin
+  LClientOptions := THttpClientOptions.Default.WithVersion(hvHttp2);
+  Check(LClientOptions.Version = hvHttp2, 'client WithVersion stores explicit version');
+  Check(not LClientOptions.UseRegistryVersion,
+    'client WithVersion disables registry version');
+
+  LServerOptions := THttpServerOptions.Default.WithVersion(hvHttp2);
+  Check(LServerOptions.Version = hvHttp2, 'server WithVersion stores explicit version');
+  Check(not LServerOptions.UseRegistryVersion,
+    'server WithVersion disables registry version');
 end;
 
 begin
@@ -322,11 +401,13 @@ begin
   T.Run('HttpStrToMethod', @TestHttpStrToMethod);
   T.Run('EHttpError category', @TestHttpErrorCategory);
   T.Run('HttpStatusText', @TestHttpStatusText);
+  T.Run('HttpStatus class helpers', @TestHttpStatusClassHelpers);
   T.Run('HttpVersionToStr', @TestHttpVersionToStr);
   T.Run('TUrl.Parse full URL', @TestUrlParseFullUrl);
   T.Run('TUrl.Parse with userinfo', @TestUrlParseWithUserInfo);
   T.Run('TUrl.Parse relative path', @TestUrlParseRelativePath);
   T.Run('TUrl.Parse with port', @TestUrlParseWithPort);
+  T.Run('TUrl.Parse invalid port raises', @TestUrlParseInvalidPortRaises);
   T.Run('TUrl.Parse empty raises', @TestUrlParseEmptyRaises);
   T.Run('TUrl.ToString round-trip', @TestUrlToString);
   T.Run('TUrl.HostPort', @TestUrlHostPort);
@@ -340,5 +421,6 @@ begin
   T.Run('TUrl.ParseRequestTarget empty raises', @TestUrlParseRequestTargetEmptyRaises);
   T.Run('THttpClientOptions.Default', @TestHttpClientOptionsDefault);
   T.Run('THttpServerOptions.Default', @TestHttpServerOptionsDefault);
+  T.Run('HTTP options WithVersion', @TestHttpOptionsWithVersion);
   T.Summary;
 end.

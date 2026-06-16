@@ -9,8 +9,6 @@ unit nextpas.core.tls.openssl.api.types;
 
 interface
 
-uses
-  SysUtils;
 
 type
   // OpenSSL opaque types (pointers)

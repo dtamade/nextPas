@@ -87,7 +87,14 @@ The public contract for this live unlock is exactly:
 - `FinalizeArray`
 - `CopyArray`
 
-Anything else is out of scope for the first unlock slice, including:
+The `TTypeKind` part of the contract includes only compiler/System-proven kind
+names required by live consumers and focused tests. Structured kind aliases such
+as `tkInterface`, `tkClass`, `tkClassRef`, `tkSet`, `tkProcVar`, `tkArray`, and
+`tkRecord` remain kind-name coverage inside `TTypeKind`; they do not expose
+metadata layout.
+
+Anything outside this contract is out of scope for the first unlock slice,
+including:
 
 - property reflection;
 - method/property table access;

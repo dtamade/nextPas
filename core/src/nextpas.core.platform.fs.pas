@@ -1,3 +1,14 @@
+{**
+ * nextpas.core.platform.fs - 高层文件系统操作
+ *
+ * 职责：文件系统级操作（exists/is_file/mkdir_p/copy_file/write_atomic/read_file/walk）
+ * 层次：路径级操作，依赖 files.pas 的底层 fd 操作
+ *
+ * 与 files.pas 的关系：
+ *   - files.pas = 底层 fd 操作（open/close/read/write/stat/dir）
+ *   - fs.pas = 高层文件系统操作（exists/is_file/mkdir_p/copy_file/walk）
+ *   - fs.pas 依赖 files.pas
+ *}
 unit nextpas.core.platform.fs;
 
 {$I nextpas.core.settings.inc}
@@ -330,24 +341,8 @@ begin
   Result := LR;
 end;
 
-function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
-  APathBuf: PAnsiChar; APathBufLen: Int32; out AFd: Int32): Int32;
-var
-  LHandle: TPlatformFileHandle;
-begin
-  AFd := -1;
-  Result := platform_fs_mktemp_handle(APrefix, ASuffix, APathBuf, APathBufLen, LHandle);
-  if Result <> 0 then
-    Exit;
-{$IFDEF NEXTPAS_WINDOWS}
-  AFd := Int32(PtrUInt(LHandle.Value));
-{$ELSE}
-  AFd := LHandle.Value;
-{$ENDIF}
-end;
-
-function platform_fs_mktemp_handle(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
-  APathBuf: PAnsiChar; APathBufLen: Int32; out AHandle: TPlatformFileHandle): Int32;
+function platform_fs_mktemp_impl(APathBuf: PAnsiChar; APathBufLen: Int32;
+  const APrefix, ASuffix: PAnsiChar; out AHandle: TPlatformFileHandle): Int32;
 const
   HEX_CHARS: array[0..15] of AnsiChar = '0123456789abcdef';
   MAX_ATTEMPTS = 16;
@@ -416,6 +411,29 @@ begin
       Exit(0);
   end;
   Result := -1;
+end;
+
+function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
+  APathBuf: PAnsiChar; APathBufLen: Int32; out AFd: Int32): Int32;
+var
+  LHandle: TPlatformFileHandle;
+begin
+  AFd := -1;
+  Result := platform_fs_mktemp_impl(APathBuf, APathBufLen, APrefix, ASuffix, LHandle);
+  if Result = 0 then
+  begin
+  {$IFDEF NEXTPAS_WINDOWS}
+    AFd := Int32(PtrUInt(LHandle.Value));
+  {$ELSE}
+    AFd := LHandle.Value;
+  {$ENDIF}
+  end;
+end;
+
+function platform_fs_mktemp_handle(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
+  APathBuf: PAnsiChar; APathBufLen: Int32; out AHandle: TPlatformFileHandle): Int32;
+begin
+  Result := platform_fs_mktemp_impl(APathBuf, APathBufLen, APrefix, ASuffix, AHandle);
 end;
 
 function platform_fs_read_file(const APath: PAnsiChar;

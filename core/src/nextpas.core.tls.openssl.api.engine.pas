@@ -128,7 +128,7 @@ function InitializeEngine(const AEngineID: string): PENGINE;
 function LoadEnginePrivateKey(AEngine: PENGINE; const AKeyID: string): PEVP_PKEY;
 function LoadEnginePublicKey(AEngine: PENGINE; const AKeyID: string): PEVP_PKEY;
 function SetEngineAsDefault(AEngine: PENGINE; AFlags: Cardinal = ENGINE_METHOD_ALL): Boolean;
-function ListAvailableEngines: TStringList;
+function ListAvailableEngines: TStringArray;
 
 implementation
 
@@ -240,11 +240,11 @@ begin
     Result := ENGINE_set_default(AEngine, AFlags) <> 0;
 end;
 
-function ListAvailableEngines: TStringList;
+function ListAvailableEngines: TStringArray;
 var
   Eng: PENGINE;
 begin
-  Result := TStringList.Create;
+  Result := nil;
   if not TOpenSSLLoader.IsModuleLoaded(osmEngine) then
     Exit;
 

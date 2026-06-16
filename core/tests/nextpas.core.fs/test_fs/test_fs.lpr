@@ -27,6 +27,8 @@ uses
 var
   T: TTestRunner;
   GTmpDir: string;
+  GWalkErrorSeen: Boolean;
+  GWalkErrorPath: string;
 
 function LoadSourceText(const ARelativePath: string): string;
 var
@@ -67,6 +69,17 @@ end;
 procedure CheckAbsent(const ASource, AToken, AMessage: string);
 begin
   Check(Pos(AToken, ASource) = 0, AMessage);
+end;
+
+function WalkErrorCallback(const APath: string; const AInfo: TFileInfo;
+  const AErr: Exception): Boolean;
+begin
+  if AErr <> nil then
+  begin
+    GWalkErrorSeen := True;
+    GWalkErrorPath := APath;
+  end;
+  Result := True;
 end;
 
 procedure SetupTmpDir;
@@ -450,6 +463,15 @@ begin
       LGot := True;
   end;
   Check(LGot, 'FsRemoveAll empty path raises EInvalidOperationError');
+
+  LGot := False;
+  try
+    FsRemoveAll('/');
+  except
+    on E: EInvalidOperationError do
+      LGot := True;
+  end;
+  Check(LGot, 'FsRemoveAll root path raises EInvalidOperationError');
 end;
 
 procedure TestRemoveAll;
@@ -1017,6 +1039,25 @@ begin
 end;
 
 {$IFDEF NEXTPAS_UNIX}
+procedure TestWalkOpenDirErrorGoesToCallback;
+var
+  LDir: string;
+begin
+  LDir := GTmpDir + '/walk-no-access';
+  FsMkdirAll(LDir);
+  GWalkErrorSeen := False;
+  GWalkErrorPath := '';
+  FsChmod(LDir, 0);
+  try
+    FsWalk(LDir, @WalkErrorCallback);
+  finally
+    FsChmod(LDir, PermDirDefault);
+    FsRemoveAll(LDir);
+  end;
+  Check(GWalkErrorSeen, 'FsWalk opendir error goes to callback');
+  Check(GWalkErrorPath = LDir, 'FsWalk error path is directory');
+end;
+
 procedure TestRemoveAllSymlinkRoot;
 var
   LTarget, LLink: string;
@@ -1189,6 +1230,7 @@ begin
     T.Run('Lstat', @TestLstat);
 {$IFDEF NEXTPAS_UNIX}
     T.Run('RemoveAll symlink root', @TestRemoveAllSymlinkRoot);
+    T.Run('Walk opendir error callback', @TestWalkOpenDirErrorGoesToCallback);
     T.Run('Remove symlink-to-dir unlinks link', @TestRemoveSymlinkToDirUnlinksLink);
     T.Run('Symlink + Readlink', @TestSymlinkReadlink);
     T.Run('Symlink + Readlink long target', @TestSymlinkReadlinkLongTarget);

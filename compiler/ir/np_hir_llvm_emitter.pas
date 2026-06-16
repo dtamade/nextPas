@@ -103,6 +103,7 @@ uses
 const
   NP_ALLOCATOR_PAGE_SIZE = 4096;
   NP_ALLOCATOR_PRELUDE_SIZE = 16;
+  NP_ALLOCATOR_MIN_SMALL_BLOCK_SIZE = 24;
   NP_ALLOCATOR_LARGE_THRESHOLD = 65536;
   NP_ALLOCATOR_LARGE_MAGIC = '131388245100000016';
 
@@ -622,6 +623,20 @@ begin
             ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' +
             ValueRef(AInstr.Operands[3].ValueId) + ')');
       end
+      else if AInstr.IntrinsicName = 'str_copy_owned' then
+      begin
+        FNeedsAlloc := True;
+        FNeedsFree := True;
+        FNeedsMemcpy := True;
+        FNeedsStringOwnership := True;
+        if Length(AInstr.Operands) >= 4 then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = call {ptr, i64, ptr, i64} @np_str_copy_owned(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[3].ValueId) + ')');
+      end
       else if AInstr.IntrinsicName = 'string_owned_extract_ptr' then
       begin
         if Length(AInstr.Operands) >= 1 then
@@ -1120,7 +1135,8 @@ begin
   FCurrentReturnTypeId := AFunc.ReturnTypeId;
 
   Emit('');
-  if Pos('np_object_dynarray_cleanup_', AFunc.Name) = 1 then
+  if (Pos('np_object_dynarray_cleanup_', AFunc.Name) = 1) or
+    (Pos('np_object_string_cleanup_', AFunc.Name) = 1) then
     Emit('define internal ' + RetStr + ' @' + AFunc.Name +
       '(' + ParamStr + ') {')
   else
@@ -1425,7 +1441,7 @@ begin
   Emit('entry:');
   Emit('  %alloc.is.large = icmp uge i64 %size, ' +
     IntToStr(NP_ALLOCATOR_LARGE_THRESHOLD));
-  Emit('  br i1 %alloc.is.large, label %alloc.large, label %free.scan');
+  Emit('  br i1 %alloc.is.large, label %alloc.large, label %alloc.small.normalize');
   Emit('alloc.large:');
   Emit('  %alloc.large.rawlen = add i64 %size, ' +
     IntToStr(NP_ALLOCATOR_PRELUDE_SIZE));
@@ -1462,14 +1478,20 @@ begin
     IntToStr(NP_ALLOCATOR_PRELUDE_SIZE));
   Emit('  ret ptr %alloc.payload');
   Emit('');
+  Emit('alloc.small.normalize:');
+  Emit('  %alloc.too.small = icmp ult i64 %size, ' +
+    IntToStr(NP_ALLOCATOR_MIN_SMALL_BLOCK_SIZE));
+  Emit('  %alloc.size = select i1 %alloc.too.small, i64 ' +
+    IntToStr(NP_ALLOCATOR_MIN_SMALL_BLOCK_SIZE) + ', i64 %size');
+  Emit('  br label %free.scan');
   Emit('free.scan:');
-  Emit('  %free.linkslot = phi ptr [ @__heap_free, %entry ], [ %free.nextslot, %free.advance ]');
+  Emit('  %free.linkslot = phi ptr [ @__heap_free, %alloc.small.normalize ], [ %free.nextslot, %free.advance ]');
   Emit('  %free.head = load ptr, ptr %free.linkslot');
   Emit('  %free.has = icmp ne ptr %free.head, null');
   Emit('  br i1 %free.has, label %free.check, label %init');
   Emit('free.check:');
   Emit('  %free.size = load i64, ptr %free.head');
-  Emit('  %free.fits = icmp uge i64 %free.size, %size');
+  Emit('  %free.fits = icmp uge i64 %free.size, %alloc.size');
   Emit('  br i1 %free.fits, label %reuse, label %free.advance');
   Emit('free.advance:');
   Emit('  %free.nextslot = getelementptr i8, ptr %free.head, i64 16');
@@ -1490,7 +1512,7 @@ begin
   Emit('  br label %alloc');
   Emit('alloc:');
   Emit('  %base = load ptr, ptr @__heap_cur');
-  Emit('  %next = getelementptr i8, ptr %base, i64 %size');
+  Emit('  %next = getelementptr i8, ptr %base, i64 %alloc.size');
   Emit('  %nexti = ptrtoint ptr %next to i64');
   Emit('  call i64 asm sideeffect "movq $$12, %rax\0Asyscall", "={rax},{rdi},~{rcx},~{r11}"(i64 %nexti)');
   Emit('  store ptr %next, ptr @__heap_cur');
@@ -1607,6 +1629,38 @@ begin
   Emit('  %r3 = insertvalue {ptr, i64, ptr, i64} %r2, ptr %buf, 2');
   Emit('  %r4 = insertvalue {ptr, i64, ptr, i64} %r3, i64 %total, 3');
   Emit('  ret {ptr, i64, ptr, i64} %r4');
+  Emit('}');
+  Emit('');
+  Emit('define internal {ptr, i64, ptr, i64} @np_str_copy_owned(ptr %src_ptr, i64 %src_len, i64 %start, i64 %count) {');
+  Emit('entry:');
+  Emit('  %start.invalid = icmp sle i64 %start, 0');
+  Emit('  %count.invalid = icmp sle i64 %count, 0');
+  Emit('  %start.after = icmp sgt i64 %start, %src_len');
+  Emit('  %empty.a = or i1 %start.invalid, %count.invalid');
+  Emit('  %empty = or i1 %empty.a, %start.after');
+  Emit('  br i1 %empty, label %zero, label %bounds');
+  Emit('bounds:');
+  Emit('  %offset = sub i64 %start, 1');
+  Emit('  %available = sub i64 %src_len, %offset');
+  Emit('  %too.long = icmp sgt i64 %count, %available');
+  Emit('  %copy.len = select i1 %too.long, i64 %available, i64 %count');
+  Emit('  %copy.zero = icmp eq i64 %copy.len, 0');
+  Emit('  br i1 %copy.zero, label %zero, label %alloc');
+  Emit('alloc:');
+  Emit('  %src.slice = getelementptr i8, ptr %src_ptr, i64 %offset');
+  Emit('  %buf = call ptr @np_alloc(i64 %copy.len)');
+  Emit('  call void @np_memcpy(ptr %buf, ptr %src.slice, i64 %copy.len)');
+  Emit('  %r1 = insertvalue {ptr, i64, ptr, i64} undef, ptr %buf, 0');
+  Emit('  %r2 = insertvalue {ptr, i64, ptr, i64} %r1, i64 %copy.len, 1');
+  Emit('  %r3 = insertvalue {ptr, i64, ptr, i64} %r2, ptr %buf, 2');
+  Emit('  %r4 = insertvalue {ptr, i64, ptr, i64} %r3, i64 %copy.len, 3');
+  Emit('  ret {ptr, i64, ptr, i64} %r4');
+  Emit('zero:');
+  Emit('  %z1 = insertvalue {ptr, i64, ptr, i64} undef, ptr null, 0');
+  Emit('  %z2 = insertvalue {ptr, i64, ptr, i64} %z1, i64 0, 1');
+  Emit('  %z3 = insertvalue {ptr, i64, ptr, i64} %z2, ptr null, 2');
+  Emit('  %z4 = insertvalue {ptr, i64, ptr, i64} %z3, i64 0, 3');
+  Emit('  ret {ptr, i64, ptr, i64} %z4');
   Emit('}');
   Emit('');
   Emit('define internal {ptr, i64, ptr, i64} @np_int_to_str_owned(i64 %val) {');
@@ -1849,7 +1903,11 @@ begin
   Emit('  call void @np_allocator_fault(i64 7, i64 %free.large.base.i, i64 %free.large.len)');
   Emit('  unreachable');
   Emit('free.small:');
-  Emit('  %free.end = getelementptr i8, ptr %raw, i64 %size');
+  Emit('  %free.too.small = icmp ult i64 %size, ' +
+    IntToStr(NP_ALLOCATOR_MIN_SMALL_BLOCK_SIZE));
+  Emit('  %free.size.normalized = select i1 %free.too.small, i64 ' +
+    IntToStr(NP_ALLOCATOR_MIN_SMALL_BLOCK_SIZE) + ', i64 %size');
+  Emit('  %free.end = getelementptr i8, ptr %raw, i64 %free.size.normalized');
   Emit('  %free.cur = load ptr, ptr @__heap_cur');
   Emit('  %free.is.top = icmp eq ptr %free.cur, %free.end');
   Emit('  br i1 %free.is.top, label %free.reclaim, label %free.push');
@@ -1862,7 +1920,7 @@ begin
   Emit('  br label %coalesce.scan');
   Emit('coalesce.scan:');
   Emit('  %coalesce.raw = phi ptr [ %raw, %free.push ], [ %coalesce.raw, %coalesce.advance ], [ %coalesce.raw, %coalesce.merge ], [ %coalesce.head, %coalesce.merge.prev ]');
-  Emit('  %coalesce.total = phi i64 [ %size, %free.push ], [ %coalesce.total, %coalesce.advance ], [ %free.merged.total, %coalesce.merge ], [ %free.prev.merged.total, %coalesce.merge.prev ]');
+  Emit('  %coalesce.total = phi i64 [ %free.size.normalized, %free.push ], [ %coalesce.total, %coalesce.advance ], [ %free.merged.total, %coalesce.merge ], [ %free.prev.merged.total, %coalesce.merge.prev ]');
   Emit('  %coalesce.linkslot = phi ptr [ @__heap_free, %free.push ], [ %coalesce.nextslot, %coalesce.advance ], [ @__heap_free, %coalesce.merge ], [ @__heap_free, %coalesce.merge.prev ]');
   Emit('  %coalesce.end = getelementptr i8, ptr %coalesce.raw, i64 %coalesce.total');
   Emit('  %coalesce.head = load ptr, ptr %coalesce.linkslot');

@@ -4,10 +4,7 @@ unit nextpas.core.tls.openssl.api.hmac;
 
 interface
 
-uses
-  SysUtils, DynLibs, ctypes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader;
+uses DynLibs, ctypes, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
 
 const
   { HMAC constants }
@@ -69,10 +66,7 @@ function HMAC_SHA512(const key: Pointer; key_len: Integer; const data: Pointer; 
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.evp;
+uses nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.evp;
 
 const
   { HMAC function bindings for batch loading }

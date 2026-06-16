@@ -7,7 +7,7 @@ uses
   nextpas.core.testing,
   nextpas.core.collections.base,
   nextpas.core.collections.orderedmap.rb,
-  nextpas.core.mem.allocator;
+  nextpas.core.mem.intf;
 
 type
   TIntRBMap = specialize TRBTreeMap<Integer, Integer>;

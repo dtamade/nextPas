@@ -18,13 +18,17 @@ type
     FTailCache: Int64;
     FSpaceEpoch: Int32;
     FSpaceWaiters: Int32;
-    FPadProducer: array[0..3] of Int64;
+    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
+    FPadProducer: TCacheLinePad;
+    {$POP}
     // Consumer-owned fields (cache line 2)
     FHead: Int64;
     FHeadCache: Int64;
     FDataEpoch: Int32;
     FDataWaiters: Int32;
-    FPadConsumer: array[0..3] of Int64;
+    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
+    FPadConsumer: TCacheLinePad;
+    {$POP}
     // Shared (published) fields (cache line 3)
     FTailPublished: Int64;
     FHeadPublished: Int64;
@@ -134,10 +138,7 @@ begin
   begin
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TryEnqueue(AValue) then
-    begin
-      LockFreeWakeAll(@FDataEpoch);
       Exit(True);
-    end;
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
     LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, -1);
@@ -156,10 +157,7 @@ begin
   begin
     LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
     if TryDequeue(AValue) then
-    begin
-      LockFreeWakeAll(@FSpaceEpoch);
       Exit(True);
-    end;
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);
@@ -173,10 +171,7 @@ var
   LRemaining: Int64;
 begin
   if TryEnqueue(AValue) then
-  begin
-    LockFreeWakeAll(@FDataEpoch);
     Exit(True);
-  end;
   LStart := TInstant.Now;
   while True do
   begin
@@ -185,10 +180,7 @@ begin
       Exit(TryEnqueue(AValue));
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TryEnqueue(AValue) then
-    begin
-      LockFreeWakeAll(@FDataEpoch);
       Exit(True);
-    end;
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
     LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LRemaining);
@@ -213,10 +205,7 @@ begin
       Exit(TryDequeue(AValue));
     LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
     if TryDequeue(AValue) then
-    begin
-      LockFreeWakeAll(@FSpaceEpoch);
       Exit(True);
-    end;
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);

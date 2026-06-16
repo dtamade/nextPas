@@ -4,11 +4,7 @@ unit nextpas.core.tls.openssl.api.dsa;
 
 interface
 
-uses
-  SysUtils, DynLibs, ctypes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.bn,
-  nextpas.core.tls.openssl.loader;
+uses DynLibs, ctypes, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.bn, nextpas.core.tls.openssl.loader;
 
 const
   { DSA flags }
@@ -212,8 +208,7 @@ procedure UnloadOpenSSLDSA;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.core;
+uses nextpas.core.tls.openssl.api.core;
 
 const
   { DSA 函数绑定数组 - 用于批量加载 }

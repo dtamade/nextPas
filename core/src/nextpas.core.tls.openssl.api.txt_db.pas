@@ -11,12 +11,7 @@ unit nextpas.core.tls.openssl.api.txt_db;
 
 interface
 
-uses
-  SysUtils, Classes,
-  nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.loader,
-  nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.consts;
+uses SysUtils, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.consts;
 
 type
   { TXT_DB types }
@@ -86,8 +81,7 @@ function TXTDBFindRow(db: PTXT_DB; FieldIndex: Integer; const Value: string): PP
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.utils;
+uses nextpas.core.tls.openssl.api.utils;
 
 const
   { TXT_DB function bindings for batch loading }

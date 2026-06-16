@@ -5,6 +5,7 @@ unit nextpas.core.platform.sync;
 interface
 
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.sync.base;
 
 type
@@ -22,11 +23,11 @@ const
   PLATFORM_MUTEX_NORMAL = nextpas.core.platform.sync.base.PLATFORM_MUTEX_NORMAL;
   PLATFORM_MUTEX_ERRORCHECK = nextpas.core.platform.sync.base.PLATFORM_MUTEX_ERRORCHECK;
   PLATFORM_MUTEX_RECURSIVE = nextpas.core.platform.sync.base.PLATFORM_MUTEX_RECURSIVE;
-  PLATFORM_ERR_AGAIN = nextpas.core.platform.sync.base.PLATFORM_ERR_AGAIN;
-  PLATFORM_ERR_BUSY = nextpas.core.platform.sync.base.PLATFORM_ERR_BUSY;
-  PLATFORM_ERR_INVALID = nextpas.core.platform.sync.base.PLATFORM_ERR_INVALID;
-  PLATFORM_ERR_UNSUPPORTED = nextpas.core.platform.sync.base.PLATFORM_ERR_UNSUPPORTED;
-  PLATFORM_ERR_TIMEOUT = nextpas.core.platform.sync.base.PLATFORM_ERR_TIMEOUT;
+  PLATFORM_ERR_AGAIN = nextpas.core.platform.error.PLATFORM_ERR_AGAIN;
+  PLATFORM_ERR_BUSY = nextpas.core.platform.error.PLATFORM_ERR_BUSY;
+  PLATFORM_ERR_INVALID = nextpas.core.platform.error.PLATFORM_ERR_INVALID;
+  PLATFORM_ERR_UNSUPPORTED = nextpas.core.platform.error.PLATFORM_ERR_UNSUPPORTED;
+  PLATFORM_ERR_TIMEOUT = nextpas.core.platform.error.PLATFORM_ERR_TIMEOUT;
 
 { Mutex }
 function platform_mutex_init(var AMutex: TPlatformMutex; const AKind: Int32 = PLATFORM_MUTEX_ERRORCHECK): Int32;
@@ -57,6 +58,11 @@ function platform_condvar_broadcast(var ACondVar: TPlatformCondVar): Int32;
 function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
 function platform_wake_address_one(AAddr: PInt32): Int32;
 function platform_wake_address_all(AAddr: PInt32): Int32;
+
+{ 64-bit address-wait (bucket-based on Linux/POSIX, native on Windows) }
+function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const ATimeoutNs: Int64): Int32;
+function platform_wake_address_one64(AAddr: PInt64): Int32;
+function platform_wake_address_all64(AAddr: PInt64): Int32;
 
 implementation
 
@@ -100,6 +106,22 @@ end;
 function platform_sync_validate_wait_address(AAddr: PInt32; const AExpected: Int32): Int32; inline;
 begin
   Result := platform_sync_validate_address(AAddr);
+  if Result <> 0 then
+    Exit;
+  if AAddr^ <> AExpected then
+    Result := PLATFORM_ERR_AGAIN;
+end;
+
+function platform_sync_validate_address64(AAddr: PInt64): Int32; inline;
+begin
+  if AAddr = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  Result := 0;
+end;
+
+function platform_sync_validate_wait_address64(AAddr: PInt64; const AExpected: Int64): Int32; inline;
+begin
+  Result := platform_sync_validate_address64(AAddr);
   if Result <> 0 then
     Exit;
   if AAddr^ <> AExpected then
@@ -695,6 +717,173 @@ begin
   end;
 end;
 
+function platform_posix_bucket_index64(AAddr: PInt64): PtrUInt; inline;
+begin
+  Result := (PtrUInt(AAddr) shr 3) and PtrUInt(POSIX_WAIT_BUCKET_COUNT - 1);
+end;
+
+function platform_posix_wait_address_released64(
+  const ABucketGeneration: UInt64;
+  const AWaitGeneration: UInt64;
+  AAddr: PInt64;
+  const AExpected: Int64): Boolean; inline;
+begin
+  Result := (ABucketGeneration <> AWaitGeneration) or (AAddr^ <> AExpected);
+end;
+
+function platform_posix_wait_address_fallback64(
+  AAddr: PInt64;
+  const AExpected: Int64;
+  const ATimeoutNs: Int64): Int32;
+var
+  LBucket: ^TPosixWaitBucket;
+  LDeadline: timespec;
+  LRemainingNs: UInt64;
+  LGeneration: UInt64;
+  LRet: Int32;
+  LLocked: Boolean;
+  LWaiting: Boolean;
+  LDone: Boolean;
+begin
+  Result := platform_sync_validate_wait_address64(AAddr, AExpected);
+  if Result <> 0 then
+    Exit;
+
+  Result := platform_posix_ensure_wait_buckets;
+  if Result <> 0 then
+    Exit;
+
+  LBucket := @GPosixWaitBuckets[platform_posix_bucket_index64(AAddr)];
+  LLocked := False;
+  LWaiting := False;
+  LDone := False;
+
+  Result := platform_mutex_lock(LBucket^.Mutex);
+  if Result <> 0 then
+    Exit;
+  LLocked := True;
+  try
+    if AAddr^ <> AExpected then
+      Result := PLATFORM_ERR_AGAIN
+    else if ATimeoutNs = 0 then
+      Result := PLATFORM_ERR_TIMEOUT
+    else
+    begin
+      Inc(LBucket^.Waiters);
+      LWaiting := True;
+      LGeneration := LBucket^.Generation;
+
+      if ATimeoutNs > 0 then
+      begin
+        Result := platform_posix_map_error(
+          platform_sync_host_pthread_timeout_deadline_after_ns(UInt64(ATimeoutNs), LDeadline));
+        if Result <> 0 then
+          LDone := True;
+      end;
+
+      while (Result = 0) and not LDone do
+      begin
+        if ATimeoutNs < 0 then
+          LRet := platform_condvar_wait(LBucket^.CondVar, LBucket^.Mutex)
+        else
+        begin
+          Result := platform_posix_map_error(
+            platform_sync_host_pthread_timeout_remaining_ns_u64(@LDeadline, LRemainingNs));
+          if Result <> 0 then
+            Break;
+          if LRemainingNs = 0 then
+          begin
+            Result := PLATFORM_ERR_TIMEOUT;
+            Break;
+          end;
+          LRet := platform_posix_condvar_timedwait_abs(
+            LBucket^.CondVar, LBucket^.Mutex, LDeadline);
+        end;
+
+        if LRet = 0 then
+        begin
+          if platform_posix_wait_address_released64(
+            LBucket^.Generation, LGeneration, AAddr, AExpected) then
+            LDone := True;
+        end
+        else if LRet = PLATFORM_ERR_TIMEOUT then
+        begin
+          if platform_posix_wait_address_released64(
+            LBucket^.Generation, LGeneration, AAddr, AExpected) then
+            Result := 0
+          else
+            Result := PLATFORM_ERR_TIMEOUT;
+          LDone := True;
+        end
+        else
+        begin
+          Result := LRet;
+          LDone := True;
+        end;
+      end;
+    end;
+  finally
+    if LWaiting then
+      Dec(LBucket^.Waiters);
+    if LLocked then
+      platform_mutex_unlock(LBucket^.Mutex);
+  end;
+end;
+
+function platform_posix_wake_address_one_fallback64(AAddr: PInt64): Int32;
+var
+  LBucket: ^TPosixWaitBucket;
+begin
+  Result := platform_sync_validate_address64(AAddr);
+  if Result <> 0 then
+    Exit;
+
+  Result := platform_posix_ensure_wait_buckets;
+  if Result <> 0 then
+    Exit;
+
+  LBucket := @GPosixWaitBuckets[platform_posix_bucket_index64(AAddr)];
+  Result := platform_mutex_lock(LBucket^.Mutex);
+  if Result <> 0 then
+    Exit;
+  try
+    Inc(LBucket^.Generation);
+    if LBucket^.Waiters > 0 then
+      Result := platform_condvar_signal(LBucket^.CondVar)
+    else
+      Result := 0;
+  finally
+    platform_mutex_unlock(LBucket^.Mutex);
+  end;
+end;
+
+function platform_posix_wake_address_all_fallback64(AAddr: PInt64): Int32;
+var
+  LBucket: ^TPosixWaitBucket;
+begin
+  Result := platform_sync_validate_address64(AAddr);
+  if Result <> 0 then
+    Exit;
+
+  Result := platform_posix_ensure_wait_buckets;
+  if Result <> 0 then
+    Exit;
+
+  LBucket := @GPosixWaitBuckets[platform_posix_bucket_index64(AAddr)];
+  Result := platform_mutex_lock(LBucket^.Mutex);
+  if Result <> 0 then
+    Exit;
+  try
+    Inc(LBucket^.Generation);
+    if LBucket^.Waiters > 0 then
+      Result := platform_condvar_broadcast(LBucket^.CondVar)
+    else
+      Result := 0;
+  finally
+    platform_mutex_unlock(LBucket^.Mutex);
+  end;
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 {$IFNDEF NEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK}
 { Address-wait (futex on Linux) }
@@ -797,6 +986,22 @@ begin
   else
     Result := platform_posix_map_error(Result);
 end;
+
+{ 64-bit address-wait (Linux: bucket-based, no native 64-bit futex) }
+function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const ATimeoutNs: Int64): Int32;
+begin
+  Result := platform_posix_wait_address_fallback64(AAddr, AExpected, ATimeoutNs);
+end;
+
+function platform_wake_address_one64(AAddr: PInt64): Int32;
+begin
+  Result := platform_posix_wake_address_one_fallback64(AAddr);
+end;
+
+function platform_wake_address_all64(AAddr: PInt64): Int32;
+begin
+  Result := platform_posix_wake_address_all_fallback64(AAddr);
+end;
 {$ENDIF}
 {$ENDIF}
 
@@ -816,6 +1021,22 @@ function platform_wake_address_all(AAddr: PInt32): Int32;
 begin
   Result := platform_posix_wake_address_all_fallback(AAddr);
 end;
+
+{ 64-bit address-wait (non-Linux POSIX: bucket-based) }
+function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const ATimeoutNs: Int64): Int32;
+begin
+  Result := platform_posix_wait_address_fallback64(AAddr, AExpected, ATimeoutNs);
+end;
+
+function platform_wake_address_one64(AAddr: PInt64): Int32;
+begin
+  Result := platform_posix_wake_address_one_fallback64(AAddr);
+end;
+
+function platform_wake_address_all64(AAddr: PInt64): Int32;
+begin
+  Result := platform_posix_wake_address_all_fallback64(AAddr);
+end;
 {$ELSE}
 {$IFDEF NEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK}
 { Address-wait (generic POSIX fallback forced on Linux for verification) }
@@ -832,6 +1053,22 @@ end;
 function platform_wake_address_all(AAddr: PInt32): Int32;
 begin
   Result := platform_posix_wake_address_all_fallback(AAddr);
+end;
+
+{ 64-bit address-wait (forced POSIX fallback) }
+function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const ATimeoutNs: Int64): Int32;
+begin
+  Result := platform_posix_wait_address_fallback64(AAddr, AExpected, ATimeoutNs);
+end;
+
+function platform_wake_address_one64(AAddr: PInt64): Int32;
+begin
+  Result := platform_posix_wake_address_one_fallback64(AAddr);
+end;
+
+function platform_wake_address_all64(AAddr: PInt64): Int32;
+begin
+  Result := platform_posix_wake_address_all_fallback64(AAddr);
 end;
 {$ENDIF}
 {$ENDIF}
@@ -1001,6 +1238,36 @@ begin
   Result := 0;
 end;
 
+{ WaitOnAddress lazy-load support for Wine compatibility }
+
+type
+  TWaitOnAddressFunc = function(Address: Pointer; CompareAddress: Pointer;
+    AddressSize: PtrUInt; dwMilliseconds: DWORD): BOOL; stdcall;
+  TWakeByAddressSingleProc = procedure(Address: Pointer); stdcall;
+  TWakeByAddressAllProc = procedure(Address: Pointer); stdcall;
+
+var
+  _WaitOnAddress: TWaitOnAddressFunc = nil;
+  _WakeByAddressSingle: TWakeByAddressSingleProc = nil;
+  _WakeByAddressAll: TWakeByAddressAllProc = nil;
+  _WaitAddressResolved: Boolean = False;
+
+procedure ResolveWaitAddress;
+var
+  LLib: HMODULE;
+begin
+  if _WaitAddressResolved then
+    Exit;
+  LLib := GetModuleHandleW(L'kernel32');
+  if LLib <> 0 then
+  begin
+    _WaitOnAddress := TWaitOnAddressFunc(GetProcAddress(LLib, 'WaitOnAddress'));
+    _WakeByAddressSingle := TWakeByAddressSingleProc(GetProcAddress(LLib, 'WakeByAddressSingle'));
+    _WakeByAddressAll := TWakeByAddressAllProc(GetProcAddress(LLib, 'WakeByAddressAll'));
+  end;
+  _WaitAddressResolved := True;
+end;
+
 function platform_sync_windows_wait_address_i32(
   AAddr: PInt32;
   const AExpected: Int32;
@@ -1008,8 +1275,12 @@ function platform_sync_windows_wait_address_i32(
 var
   LExpected: Int32;
 begin
+  ResolveWaitAddress;
+  if _WaitOnAddress = nil then
+    Exit(PLATFORM_ERR_UNSUPPORTED);
+
   LExpected := AExpected;
-  if WaitOnAddress(
+  if _WaitOnAddress(
     AAddr,
     @LExpected,
     SizeOf(LExpected),
@@ -1023,13 +1294,21 @@ end;
 
 function platform_sync_windows_wake_address_one(AAddr: PInt32): Int32; inline;
 begin
-  WakeByAddressSingle(AAddr);
+  ResolveWaitAddress;
+  if _WakeByAddressSingle = nil then
+    Exit(PLATFORM_ERR_UNSUPPORTED);
+
+  _WakeByAddressSingle(AAddr);
   Result := 0;
 end;
 
 function platform_sync_windows_wake_address_all(AAddr: PInt32): Int32; inline;
 begin
-  WakeByAddressAll(AAddr);
+  ResolveWaitAddress;
+  if _WakeByAddressAll = nil then
+    Exit(PLATFORM_ERR_UNSUPPORTED);
+
+  _WakeByAddressAll(AAddr);
   Result := 0;
 end;
 
@@ -1037,6 +1316,8 @@ end;
 
 function platform_mutex_init(var AMutex: TPlatformMutex; const AKind: Int32): Int32;
 begin
+  if AKind = PLATFORM_MUTEX_RECURSIVE then
+    Exit(PLATFORM_ERR_UNSUPPORTED);
   FillChar(AMutex, SizeOf(AMutex), 0);
   Result := platform_sync_windows_mutex_init(@AMutex.FOpaque[0]);
 end;
@@ -1167,6 +1448,45 @@ begin
   Result := platform_sync_windows_wake_address_all(AAddr);
 end;
 
+{ 64-bit address-wait (Windows: native WaitOnAddress with 8-byte value) }
+function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const ATimeoutNs: Int64): Int32;
+var
+  LExpected: Int64;
+begin
+  Result := platform_sync_validate_wait_address64(AAddr, AExpected);
+  if Result <> 0 then
+    Exit;
+  LExpected := AExpected;
+  if WaitOnAddress(
+    AAddr,
+    @LExpected,
+    SizeOf(LExpected),
+    platform_sync_windows_timeout_ns_to_ms(ATimeoutNs)) then
+    Result := 0
+  else
+    Result := platform_sync_windows_timeout_result(
+      platform_sync_windows_last_error_i32,
+      PLATFORM_ERR_TIMEOUT);
+end;
+
+function platform_wake_address_one64(AAddr: PInt64): Int32;
+begin
+  Result := platform_sync_validate_address64(AAddr);
+  if Result <> 0 then
+    Exit;
+  WakeByAddressSingle(AAddr);
+  Result := 0;
+end;
+
+function platform_wake_address_all64(AAddr: PInt64): Int32;
+begin
+  Result := platform_sync_validate_address64(AAddr);
+  if Result <> 0 then
+    Exit;
+  WakeByAddressAll(AAddr);
+  Result := 0;
+end;
+
 {$ENDIF}
 
 {$IFNDEF NEXTPAS_UNIX}{$IFNDEF NEXTPAS_WINDOWS}
@@ -1192,6 +1512,9 @@ function platform_condvar_broadcast(var ACondVar: TPlatformCondVar): Int32; begi
 function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_wake_address_one(AAddr: PInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_wake_address_all(AAddr: PInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const ATimeoutNs: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_wake_address_one64(AAddr: PInt64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_wake_address_all64(AAddr: PInt64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}{$ENDIF}
 
 end.

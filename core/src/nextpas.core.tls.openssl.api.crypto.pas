@@ -4,9 +4,7 @@ unit nextpas.core.tls.openssl.api.crypto;
 
 interface
 
-uses
-  SysUtils, DynLibs,
-  nextpas.core.tls.openssl.base;
+uses DynLibs, nextpas.core.tls.openssl.base;
 
 type
   { Memory Management }
@@ -508,9 +506,7 @@ procedure UnloadOpenSSLCrypto;
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.core,  // For shared library handles
-  nextpas.core.tls.openssl.loader;    // For TOpenSSLLoader batch loading
+uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.loader;
 
 const
   { Crypto function bindings for batch loading }

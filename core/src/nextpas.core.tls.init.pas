@@ -9,25 +9,14 @@ unit nextpas.core.tls.init;
   在使用任何SSL/TLS或加密功能前调用 InitializeOpenSSL。
   
   示例：
-    uses nextpas.core.tls.init;
-    
-    begin
-      InitializeOpenSSL;
+uses nextpas.core.tls.init; begin InitializeOpenSSL;
       // 现在可以使用所有功能
     end.
 }
 
 interface
 
-uses
-  nextpas.core.tls.base,
-  nextpas.core.tls.exceptions,
-  SysUtils,
-  nextpas.core.tls.openssl.loader,
-  nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.rand,
-  nextpas.core.tls.openssl.api;
+uses nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.rand, nextpas.core.tls.openssl.api;
 
 { 初始化所有OpenSSL模块
   调用此函数将加载：

@@ -22,13 +22,7 @@ unit nextpas.core.tls.ocsp.stapling;
 
 interface
 
-uses
-  SysUtils, Classes, SyncObjs,
-  nextpas.core.tls.base,
-  nextpas.core.tls.ocsp,
-  nextpas.core.tls.ocsp.cache,
-  nextpas.core.tls.x509,
-  nextpas.core.crypto.hash;
+uses Classes, SyncObjs, nextpas.core.tls.base, nextpas.core.tls.ocsp, nextpas.core.tls.ocsp.cache, nextpas.core.tls.x509, nextpas.core.crypto.hash, nextpas.core.text.conv;
 
 type
   // ========================================================================
@@ -222,10 +216,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.time,
-  nextpas.core.tls.http.client,
-  nextpas.core.crypto.x509verify;
+uses nextpas.core.time, nextpas.core.tls.http.client, nextpas.core.crypto.x509verify, nextpas.core.text.conv;
 
 // ========================================================================
 // TOCSPStaplingConfig

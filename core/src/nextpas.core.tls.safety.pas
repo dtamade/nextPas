@@ -22,8 +22,7 @@ unit nextpas.core.tls.safety;
 
 interface
 
-uses
-  SysUtils, Classes;
+uses SysUtils;
 
 type
   { ==================== Enumerations (Phase 2.4.1) ==================== }

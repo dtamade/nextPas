@@ -25,6 +25,13 @@ const
   SIZE_64 = nextpas.core.base.SIZE_64;
 
 type
+  SizeInt = System.SizeInt;
+  SizeUInt = System.SizeUInt;
+  PtrInt = System.PtrInt;
+  PtrUInt = System.PtrUInt;
+  NativeInt = System.NativeInt;
+  NativeUInt = System.NativeUInt;
+
   TBytes = nextpas.core.base.TBytes;
   TByteSpan = nextpas.core.base.TByteSpan;
   THashCode = nextpas.core.base.THashCode;
@@ -90,6 +97,7 @@ const
 procedure FreeAndNil(var AObj); inline;
 procedure SafeFree(var AObj); inline;
 procedure ZeroMem(ADst: Pointer; ASize: SizeUInt); inline;
+procedure FillMem(ADst: Pointer; ASize: SizeUInt; AValue: Byte); inline;
 procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt); inline;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean; inline;
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean; inline;
@@ -110,6 +118,11 @@ end;
 procedure ZeroMem(ADst: Pointer; ASize: SizeUInt);
 begin
   nextpas.core.base.utils.ZeroMem(ADst, ASize);
+end;
+
+procedure FillMem(ADst: Pointer; ASize: SizeUInt; AValue: Byte);
+begin
+  nextpas.core.base.utils.FillMem(ADst, ASize, AValue);
 end;
 
 procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt);

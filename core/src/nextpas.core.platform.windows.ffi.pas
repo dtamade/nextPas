@@ -29,6 +29,7 @@ function TlsSetValue(dwTlsIndex: DWORD; lpTlsValue: Pointer): BOOL; stdcall; ext
 function TlsGetValue(dwTlsIndex: DWORD): Pointer; stdcall; external 'kernel32' name 'TlsGetValue';
 
 function InterlockedDecrement(var Addend: Int32): Int32; stdcall; external 'kernel32' name 'InterlockedDecrement';
+function InterlockedIncrement(var Addend: Int32): Int32; stdcall; external 'kernel32' name 'InterlockedIncrement';
 
 procedure InitializeSRWLock(SRWLock: Pointer); stdcall; external 'kernel32' name 'InitializeSRWLock';
 procedure AcquireSRWLockExclusive(SRWLock: Pointer); stdcall; external 'kernel32' name 'AcquireSRWLockExclusive';
@@ -48,6 +49,7 @@ procedure WakeByAddressSingle(Address: Pointer); stdcall; external 'kernel32' na
 procedure WakeByAddressAll(Address: Pointer); stdcall; external 'kernel32' name 'WakeByAddressAll';
 function LoadLibraryA(lpLibFileName: PAnsiChar): HMODULE; stdcall; external 'kernel32' name 'LoadLibraryA';
 function LoadLibraryW(lpLibFileName: PWideChar): HMODULE; stdcall; external 'kernel32' name 'LoadLibraryW';
+function GetModuleHandleW(lpModuleName: PWideChar): HMODULE; stdcall; external 'kernel32' name 'GetModuleHandleW';
 function GetProcAddress(hModule: HMODULE; lpProcName: PAnsiChar): FARPROC; stdcall; external 'kernel32' name 'GetProcAddress';
 function FreeLibrary(hLibModule: HMODULE): BOOL; stdcall; external 'kernel32' name 'FreeLibrary';
 function VirtualAlloc(lpAddress: Pointer; dwSize: PtrUInt; flAllocationType: DWORD; flProtect: DWORD): Pointer; stdcall; external 'kernel32' name 'VirtualAlloc';

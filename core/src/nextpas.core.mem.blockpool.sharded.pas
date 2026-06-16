@@ -19,9 +19,9 @@ uses
   nextpas.core.base.utils,
   nextpas.core.base,
   nextpas.core.atomic,
+  nextpas.core.mem.base,
   nextpas.core.mem.blockpool,
   nextpas.core.mem.blockpool.growable,
-  nextpas.core.mem.layout,
   nextpas.core.mem.error,
   nextpas.core.mem.mutex;
 
@@ -1021,7 +1021,7 @@ var
 
   FBlockMask := 0;
   FBlockShift := 0;
-  if (FBlockSize <> 0) and IsPowerOfTwo(FBlockSize) then
+  if (FBlockSize <> 0) and IsPowerOfTwoInt(Integer(FBlockSize)) then
   begin
     FBlockMask := FBlockSize - 1;
     LShift := 0;
@@ -1036,7 +1036,7 @@ var
 
   // page-map granularity (default 4096 bytes)
   LPageSize := SizeUInt(MEM_PAGE_SIZE);
-  if (LPageSize <> 0) and IsPowerOfTwo(LPageSize) then
+  if (LPageSize <> 0) and IsPowerOfTwoInt(Integer(LPageSize)) then
   begin
     LPageShift := 0;
     LPageTmp := LPageSize;

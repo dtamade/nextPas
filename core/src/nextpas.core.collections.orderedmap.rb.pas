@@ -12,7 +12,8 @@ uses
   nextpas.core.collections.orderedmap.rb.base,
   nextpas.core.collections.orderedmap.rb.intf,
   nextpas.core.collections.element_manager,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.collections.tree.rb;
 
 type
@@ -131,7 +132,7 @@ end;
 
 constructor TRBTreeMap.Create(aKeyComparer: TKeyCmp);
 begin
-  Create(aKeyComparer, GetRtlAllocator(), nil);
+  Create(aKeyComparer, DefaultAllocator(), nil);
 end;
 
 constructor TRBTreeMap.Create(aKeyComparer: TKeyCmp; aAllocator: IAllocator);

@@ -4,13 +4,7 @@ unit nextpas.core.tls.openssl.api.aria;
 
 interface
 
-uses
-  Classes, SysUtils, nextpas.core.tls.openssl.base;
-
-type
-  // ARIA types
-  ARIA_KEY = packed record
-    rd_key: array[0..16, 0..3] of Cardinal;
+uses nextpas.core.tls.openssl.base; type // ARIA types ARIA_KEY = packed record rd_key: array[0..16, 0..3] of Cardinal;
     rounds: Integer;
   end;
   PARIA_KEY = ^ARIA_KEY;
@@ -126,10 +120,7 @@ function ARIADecryptCBC(const Key: TBytes; KeyBits: Integer; const IV, Input: TB
 
 implementation
 
-uses
-  nextpas.core.tls.openssl.api.utils;
-
-procedure LoadARIAFunctions(AHandle: TLibHandle);
+uses nextpas.core.tls.openssl.api.utils; procedure LoadARIAFunctions(AHandle: TLibHandle);
 begin
   if AHandle = 0 then Exit;
   

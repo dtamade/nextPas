@@ -27,12 +27,7 @@ unit nextpas.core.tls.random.pool;
 
 interface
 
-uses
-  SysUtils, Classes, SyncObjs;
-
-const
-  { 默认配置 }
-  DEFAULT_POOL_SIZE = 8192;        // 8KB 缓存池大小
+uses SyncObjs; const DEFAULT_POOL_SIZE = 8192; // 8KB 缓存池大小;
   DEFAULT_REFILL_THRESHOLD = 1024; // 当剩余 < 1KB 时重填
   DEFAULT_MAX_REQUEST_SIZE = 4096; // 单次请求最大 4KB（超过则直接生成）
 
@@ -130,11 +125,7 @@ function PooledRandomBytes(ABuffer: PByte; ACount: Integer): Boolean;
 
 implementation
 
-uses
-  nextpas.core.tls.random;  // 使用底层随机数生成器
-
-var
-  GGlobalPool: TRandomPool = nil;
+uses nextpas.core.tls.random; var GGlobalPool: TRandomPool = nil;
   GGlobalPoolLock: TCriticalSection = nil;
 
 { TRandomPoolConfig }

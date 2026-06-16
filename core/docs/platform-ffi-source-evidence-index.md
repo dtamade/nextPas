@@ -24,22 +24,23 @@ Use this document to answer two questions:
 This is not runtime proof. Runtime behavior tests cover the unified public
 contracts in `platform.time`, `platform.sync`, and `platform.thread`. Raw OS
 APIs such as `clock_gettime`, `pthread_*`, Linux `futex`, POSIX `fork`,
-POSIX `read` / `write` / `lseek`, Windows `WaitOnAddress`,
+POSIX `read` / `write` / `lseek`, POSIX `explicit_bzero`,
+Windows `WaitOnAddress`,
 `CreateProcessA/W`, `QueryPerformanceCounter`, and
-`GetSystemTimeAsFileTime` are accepted from FPC source and then guarded only at
-the nextPas integration boundary: owner placement, source-surface checks,
-compile-only gates, route truth, and focused runtime tests of nextPas
-abstractions that consume them.
+`GetSystemTimeAsFileTime` are accepted from FPC source or documented OS/libc
+header fallback and then guarded only at the nextPas integration boundary:
+owner placement, source-surface checks, compile-only gates, route truth, and
+focused runtime tests of nextPas abstractions that consume them.
 
 ## Host Evidence Matrix
 
 | Host | nextPas owner | FPC source evidence | Evidence scope |
 | --- | --- | --- | --- |
-| Linux | `nextpas.core.platform.linux.base` / `nextpas.core.platform.linux.ffi` | `rtl/linux/linux.pp`, `rtl/linux/ptypes.inc`, `rtl/linux/pthread.inc`, `rtl/linux/signal.inc`, `rtl/linux/sysos.inc`, `rtl/linux/ostypes.inc`, `rtl/linux/ossysc.inc`, `rtl/linux/x86_64/sysnr.inc`, and sibling arch `sysnr.inc` files | `CLOCK_REALTIME`, `CLOCK_MONOTONIC`, `clock_gettime`, `clock_getres`, `timespec`, `__errno_location`, `gettid`, `_SC_NPROCESSORS_ONLN`, pthread shapes/functions, `pthread_condattr_setclock`, `pthread_mutex_timedlock`, `syscall_nr_futex`, `FUTEX_WAIT`, `FUTEX_WAKE`, raw POSIX environment declarations, shared POSIX process-control externals, shared POSIX file I/O externals, Linux traditional stat records and libc wrappers, Linux signal-control records/constants and `rt_sigaction` / `rt_sigprocmask` syscall numbers |
-| Android | `nextpas.core.platform.android.base` / `nextpas.core.platform.android.ffi` | `rtl/android/Makefile`, `rtl/android/*/sysnr.inc`, `rtl/android/sysandroid.inc`, `packages/pthreads/src/pthrandroid.inc`, `rtl/linux/signal.inc`, `rtl/linux/ostypes.inc`, `rtl/linux/ossysc.inc`, `rtl/linux/x86_64/stat.inc`, `rtl/linux/aarch64/stat.inc`, and Android Bionic headers when FPC does not expose the libc symbol directly | Android `clock_gettime` / `clock_getres` syscall families, `timespec`, `__errno`, `gettid`, `_SC_NPROCESSORS_ONLN`, pthread lifecycle/TLS/sync declarations, `pthread_mutex_timedlock`, `pthread_condattr_setclock`, raw POSIX environment declarations, shared POSIX process-control externals, shared POSIX file I/O externals, Android traditional stat records plus syscall-backed `newfstatat` / `fstat` constants, and Android signal-control records/constants plus `rt_sigaction` / `rt_sigprocmask` syscall numbers |
-| Darwin | `nextpas.core.platform.darwin.base` / `nextpas.core.platform.darwin.ffi` | `rtl/darwin/ptypes.inc`, `rtl/darwin/pthread.inc`, `rtl/darwin/signal.inc`, `rtl/bsd/sysos.inc`, `rtl/bsd/ostypes.inc`, `rtl/macos/macostp.inc`, `rtl/unix/oscdeclh.inc`, `rtl/unix/initc.pp`, plus Apple Darwin/Mach headers for Mach-only calls | `timespec`, pthread shapes/functions, `__error`, `pthread_threadid_np`, `mach_absolute_time`, `mach_timebase_info`, raw POSIX environment declarations, shared POSIX process-control externals, shared POSIX file I/O externals, Darwin `$INODE64` traditional stat bindings, Darwin signal-control records/constants and libc `sigaction` / `sigprocmask` plus `pthread_sigmask`, and the documented absence of `pthread_mutex_timedlock` / monotonic condattr policy on the current nextPas Darwin path |
-| FreeBSD | `nextpas.core.platform.freebsd.base` / `nextpas.core.platform.freebsd.ffi` | `rtl/freebsd/freebsd.pas`, `rtl/freebsd/ptypes.inc`, `rtl/freebsd/pthread.inc`, `rtl/freebsd/signal.inc`, `rtl/freebsd/sysnr.inc`, `rtl/bsd/sysos.inc`, `rtl/bsd/ostypes.inc`, `rtl/unix/oscdeclh.inc` | `CLOCK_REALTIME`, `CLOCK_MONOTONIC = 4`, `clock_gettime`, `clock_getres`, `timespec`, `__error`, `pthread_getthreadid_np`, pthread lifecycle/TLS/sync declarations, `pthread_mutex_timedlock`, `pthread_condattr_setclock`, raw POSIX environment declarations, shared POSIX process-control externals, shared POSIX file I/O externals, FreeBSD traditional stat bindings, and FreeBSD signal-control records/constants plus libc `sigaction` / `sigprocmask` and `pthread_sigmask` |
-| generic Unix | `nextpas.core.platform.unix.base` / `nextpas.core.platform.unix.ffi` | `rtl/unix/baseunix.pp`, `rtl/unix/unix.pp`, `rtl/unix/oscdeclh.inc`, `rtl/unix/unxdeclh.inc`, `rtl/unix/initc.pp`, `rtl/unix/cthreads.pp`, and the closest proven host-specific FPC source before promoting a fallback into a real host | shared POSIX `clock_gettime`, `clock_getres`, `timespec`, `__errno_location` / `__error` errno families, pthread lifecycle/TLS/sync declarations, `pthread_condattr_setclock` policy, `_SC_NPROCESSORS_ONLN` fallback, raw `pthread_self` native-id fallback, raw POSIX environment declarations, shared POSIX process-control externals, and shared POSIX file I/O externals |
+| Linux | `nextpas.core.platform.linux.base` / `nextpas.core.platform.linux.ffi` | `rtl/linux/linux.pp`, `rtl/linux/ptypes.inc`, `rtl/linux/pthread.inc`, `rtl/linux/signal.inc`, `rtl/linux/sysos.inc`, `rtl/linux/ostypes.inc`, `rtl/linux/ossysc.inc`, `rtl/linux/x86_64/sysnr.inc`, and sibling arch `sysnr.inc` files | `CLOCK_REALTIME`, `CLOCK_MONOTONIC`, `clock_gettime`, `clock_getres`, `timespec`, `__errno_location`, `gettid`, `_SC_NPROCESSORS_ONLN`, pthread shapes/functions, `pthread_condattr_setclock`, `pthread_mutex_timedlock`, `syscall_nr_futex`, `FUTEX_WAIT`, `FUTEX_WAKE`, raw POSIX environment declarations, shared POSIX process-control externals, shared POSIX file I/O externals, shared POSIX `explicit_bzero`, Linux traditional stat records and libc wrappers, Linux signal-control records/constants and `rt_sigaction` / `rt_sigprocmask` syscall numbers |
+| Android | `nextpas.core.platform.android.base` / `nextpas.core.platform.android.ffi` | `rtl/android/Makefile`, `rtl/android/*/sysnr.inc`, `rtl/android/sysandroid.inc`, `packages/pthreads/src/pthrandroid.inc`, `rtl/unix/baseunix.pp`, `rtl/unix/oscdeclh.inc`, `rtl/linux/signal.inc`, `rtl/linux/ostypes.inc`, `rtl/linux/ossysc.inc`, `rtl/linux/x86_64/stat.inc`, `rtl/linux/aarch64/stat.inc`, and Android Bionic headers when FPC does not expose the libc symbol directly | Android `clock_gettime` / `clock_getres` syscall families, `timespec`, `__errno`, `gettid`, `_SC_NPROCESSORS_ONLN`, pthread lifecycle/TLS/sync declarations, `pthread_mutex_timedlock`, `pthread_condattr_setclock`, raw POSIX environment declarations, shared POSIX process-control externals, shared POSIX file I/O and mmap externals, shared POSIX `explicit_bzero`, Android traditional stat records plus syscall-backed `newfstatat` / `fstat` / `getdents64` constants, Android file-open/status constants, Android directory enumeration source proof, and Android signal-control records/constants plus `rt_sigaction` / `rt_sigprocmask` syscall numbers |
+| Darwin | `nextpas.core.platform.darwin.base` / `nextpas.core.platform.darwin.ffi` | `rtl/darwin/ptypes.inc`, `rtl/darwin/pthread.inc`, `rtl/darwin/signal.inc`, `rtl/bsd/sysos.inc`, `rtl/bsd/ostypes.inc`, `rtl/macos/macostp.inc`, `rtl/unix/oscdeclh.inc`, `rtl/unix/initc.pp`, plus Apple Darwin/Mach headers for Mach-only calls | `timespec`, pthread shapes/functions, `__error`, `pthread_threadid_np`, `mach_absolute_time`, `mach_timebase_info`, raw POSIX environment declarations, shared POSIX process-control externals, shared POSIX file I/O externals, shared POSIX `explicit_bzero`, Darwin `$INODE64` traditional stat bindings, Darwin signal-control records/constants and libc `sigaction` / `sigprocmask` plus `pthread_sigmask`, and the documented absence of `pthread_mutex_timedlock` / monotonic condattr policy on the current nextPas Darwin path |
+| FreeBSD | `nextpas.core.platform.freebsd.base` / `nextpas.core.platform.freebsd.ffi` | `rtl/freebsd/freebsd.pas`, `rtl/freebsd/ptypes.inc`, `rtl/freebsd/pthread.inc`, `rtl/freebsd/signal.inc`, `rtl/freebsd/sysnr.inc`, `rtl/bsd/sysos.inc`, `rtl/bsd/ostypes.inc`, `rtl/unix/oscdeclh.inc` | `CLOCK_REALTIME`, `CLOCK_MONOTONIC = 4`, `clock_gettime`, `clock_getres`, `timespec`, `__error`, `pthread_getthreadid_np`, pthread lifecycle/TLS/sync declarations, `pthread_mutex_timedlock`, `pthread_condattr_setclock`, raw POSIX environment declarations, shared POSIX process-control externals, shared POSIX file I/O externals, shared POSIX `explicit_bzero`, FreeBSD traditional stat bindings, and FreeBSD signal-control records/constants plus libc `sigaction` / `sigprocmask` and `pthread_sigmask` |
+| generic Unix | `nextpas.core.platform.unix.base` / `nextpas.core.platform.unix.ffi` | `rtl/unix/baseunix.pp`, `rtl/unix/unix.pp`, `rtl/unix/oscdeclh.inc`, `rtl/unix/unxdeclh.inc`, `rtl/unix/initc.pp`, `rtl/unix/cthreads.pp`, and the closest proven host-specific FPC source before promoting a fallback into a real host | shared POSIX `clock_gettime`, `clock_getres`, `timespec`, `__errno_location` / `__error` errno families, pthread lifecycle/TLS/sync declarations, `pthread_condattr_setclock` policy, `_SC_NPROCESSORS_ONLN` fallback, raw `pthread_self` native-id fallback, raw POSIX environment declarations, shared POSIX process-control externals, shared POSIX file I/O externals, and shared POSIX `explicit_bzero` |
 | Windows | `nextpas.core.platform.windows.base` / `nextpas.core.platform.windows.ffi` | `rtl/win32/windows.pp`, `rtl/win64/windows.pp`, `rtl/win/wininc`, `rtl/win/sysfile.inc`, `rtl/win/sysutils.pp`, `packages/winunits-base`, and Windows OS SDK headers when FPC does not expose newer kernel32 APIs | `FILETIME`, `SYSTEM_INFO`, `PROCESS_INFORMATION`, `STARTUPINFOA/W`, `CreateThread`, `CreateProcessA/W`, `WaitForSingleObject`, `CloseHandle`, `GetCurrentThreadId`, `QueryPerformanceCounter`, `GetSystemTimeAsFileTime`, `TlsAlloc`, `TlsFree`, `TlsSetValue`, `TlsGetValue`, `GetSystemInfo`, `SRWLOCK`, `CONDITION_VARIABLE`, `SleepConditionVariableSRW`, `WaitOnAddress`, `WakeByAddressSingle`, `WakeByAddressAll`, Windows environment entrypoints, Windows process-control entrypoints, Windows file I/O entrypoints |
 
 ## Declaration Evidence Classes
@@ -67,6 +68,26 @@ syscall wrappers, unsupported stubs, or convenience APIs.
 - Future domains such as file, path, environment, and process should add an
   explicit unified platform function layer before introducing wrapper logic; raw
   import waves must not hide that logic inside `.ffi`.
+
+### Platform memory secure-zero: POSIX explicit_bzero
+
+`platform.memory` promotes the POSIX secure-zero backend through the shared
+`nextpas.core.platform.posix.ffi` raw `explicit_bzero` declaration. This keeps
+the raw libc symbol in the host/shared FFI owner and keeps nil/zero-size
+guards, backend truth, and fallback semantics in the unified
+`platform.memory` function layer.
+
+- Linux/glibc evidence comes from system `string.h` and the exported libc
+  symbol `explicit_bzero@@GLIBC_2.25`; musl evidence comes from its `string.h`
+  declaration. Current FPC source exposes older `bzero` declarations but does
+  not expose `explicit_bzero`, so libc headers are the source fallback for this
+  raw symbol.
+- Darwin, FreeBSD, Android, and generic Unix keep this as shared POSIX
+  source/compile evidence until each host receives stronger runtime proof.
+- Windows secure-zero remains deferred. FPC's Windows JEDI source records
+  `SecureZeroMemory` / `RtlSecureZeroMemory` as macro/TODO-shaped evidence, so
+  Windows promotion still needs a separate host-owned dynamic-loading or raw
+  symbol seam before `platform.memory` can claim native Windows runtime truth.
 
 ### Platform Host ABI Completeness Wave 11: POSIX signal-control raw ABI
 
@@ -122,6 +143,31 @@ host-specific layouts; this wave has no public platform.signal contract.
 
 No public platform.signal contract is created in Wave 11.
 
+### Platform resource limits: Linux and Android rlimit public contract
+
+`platform.resource` is a unified public contract for current-process resource
+limits. The promoted slice covers Linux rlimit get/set through host-owned
+`RLIMIT_*`, `TRLimit`, and raw `prlimit64`, plus Android source/compile proof
+through host-owned `RLIMIT_*`, `TPlatformAndroidRLimit`, and shared POSIX
+`getrlimit` / `setrlimit`.
+
+FPC evidence starts in `rtl/linux/ostypes.inc` for `RLIMIT_*` and `TRLimit`,
+`rtl/linux/ossysc.inc` and arch `sysnr.inc` files for syscall route evidence,
+and `rtl/unix/oscdeclh.inc` for the shared POSIX `getrlimit` / `setrlimit`
+declarations.
+
+Android promotion is compile/source evidence only, not Android device runtime
+proof. Local Android NDK evidence comes from `sys/resource.h`, which declares
+`rlim_t`, `getrlimit`, `setrlimit`, and `prlimit64`, and from
+`linux/resource.h` plus `asm-generic/resource.h`, which define `struct rlimit`
+and the Linux-style `RLIMIT_*` values. `nextpas.core.platform.android.base`
+owns `TPlatformAndroidRLimit` and Android `RLIMIT_*` constants; the public
+facade consumes shared POSIX `getrlimit` / `setrlimit`.
+
+Windows has no POSIX rlimit equivalent in the current platform surface, so
+`platform.resource` returns the stable unsupported code instead of inventing a
+lossy mapping.
+
 ### Platform Host ABI Completeness Wave 10: Darwin / FreeBSD / Android traditional stat raw ABI
 
 Wave 10 promotes the Darwin / FreeBSD / Android traditional stat raw ABI from
@@ -150,10 +196,13 @@ generic Unix stat stay deferred; this wave still does not create a public
 - Android host owners now carry `TPlatformAndroidStat`,
   `PPlatformAndroidStat`, `PLATFORM_ANDROID_AT_FDCWD`,
   `PLATFORM_ANDROID_AT_SYMLINK_NOFOLLOW`, `ANDROID_SYSCALL_NEWFSTATAT`,
-  `ANDROID_SYSCALL_FSTAT`, and `android_syscall`. FPC records Android as
-  `generic_linux_syscalls`, so a future unified consumer can route path stat
-  through `newfstatat`, fd stat through `fstat`, and lstat through
-  `newfstatat` with `AT_SYMLINK_NOFOLLOW`.
+  `ANDROID_SYSCALL_FSTAT`, `ANDROID_SYSCALL_GETDENTS64`, Android
+  file-open/status constants, and `android_syscall`. FPC records Android as
+  `generic_linux_syscalls`, so the unified `platform.files` facade routes path
+  stat through `newfstatat`, fd stat through `fstat`, lstat through
+  `newfstatat` with `AT_SYMLINK_NOFOLLOW`, and directory enumeration through
+  `getdents64` with the shared Linux `dirent64` parsing shape. This is
+  compile/source evidence only, not Android device runtime proof.
 - Generic Unix remains deferred because FPC does not define one universal Unix
   `stat` layout or suffix policy that can safely become
   `TPlatformUnixStat`. Shared POSIX `stat`, `lstat`, and `fstat` remain
@@ -435,6 +484,15 @@ because they needed a later, narrower evidence pass. Wave 2 now covers
   `PROT_WRITE`, `PROT_EXEC`, `PROT_NONE`, `MAP_SHARED`, `MAP_PRIVATE`, and
   `MAP_FAILED`; FPC `rtl/unix/oscdeclh.inc` records `fpmmap`, `fpmunmap`, and
   `fpmprotect` as libc bindings for `mmap`, `munmap`, and `mprotect`.
+  Android `platform.mmap` combines that shared POSIX mmap route with the
+  Android-owned `ANDROID_SYSCALL_FSTAT` size path through `platform.files`,
+  guarded locally by the forced Android compile target in `test_platform_mmap`.
+- The unified `platform.files` facade consumes Android-owned open/status
+  constants and Android stat syscall tokens for stat/lstat/fstat. It also
+  routes directory enumeration through Android-owned
+  `ANDROID_SYSCALL_GETDENTS64`, guarded locally by the forced Android compile
+  target in `test_platform_files`. This remains compile/source proof, not
+  Android device runtime proof.
 - POSIX dynamic loader evidence starts in FPC `rtl/unix/dl.pp`, which records
   `RTLD_LAZY`, `RTLD_NOW`, `RTLD_LOCAL`, `RTLD_GLOBAL`, `dlopen`, `dlsym`,
   `dlclose`, and `dlerror`. RTLD constants and the external library owner vary

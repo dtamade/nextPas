@@ -5,6 +5,8 @@ same-payload C llhttp build. It intentionally measures only raw llhttp and
 no-op callback dispatch, not the nextPas `IH1Parser` adapter.
 
 Use llhttp `9.4.1`, matching `nextpas.core.http.impl.h1.llhttp.pas`.
+`LLHTTP_ROOT` takes precedence; `NEXTPAS_LLHTTP_ROOT` is accepted as a fallback
+for shared test/benchmark environments.
 
 ```sh
 make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c \
@@ -26,6 +28,10 @@ NEXTPAS_BENCH_FILTER='C raw llhttp: 10 headers' \
 make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c \
   clean run LLHTTP_ROOT=/path/to/llhttp-9.4.1
 ```
+
+`NEXTPAS_BENCH_FILTER` is a case-insensitive substring over C comparator row
+names. If the filter matches no row, the comparator exits non-zero and prints
+`No matching C llhttp benchmark rows.`.
 
 The parent directory also provides a small flag-matrix runner that writes only
 under `build/projects/nextpas.core.http/bench_h1parser/flag_matrix`:
@@ -50,6 +56,8 @@ Use `--perf` on machines that allow hardware perf events. The runner probes
 `perf stat` first; if perf is blocked by `perf_event_paranoid` or missing
 capabilities, it still runs the timing matrix and records `perf_requested=1`
 and `perf_usable=0` in `env.txt`.
+If `NEXTPAS_FLAG_MATRIX_OUTPUT_DIR` is set, it must stay under the same
+flag-matrix root; unsafe output dirs fail fast with `unsafe output dir`.
 
 Supported `LLHTTP_ROOT` layouts:
 
@@ -62,4 +70,5 @@ diagnostic. It also runs a real comparator smoke when `NEXTPAS_LLHTTP_ROOT`
 points at an llhttp `9.4.1` source tree.
 
 Do not commit generated objects, binaries, or vendored llhttp sources into this
-directory.
+directory. Do not commit `.raw` captures, flag-matrix outputs, perf logs, or
+local llhttp source trees either.

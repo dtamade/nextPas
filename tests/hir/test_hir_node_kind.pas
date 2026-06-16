@@ -51,6 +51,7 @@ begin
   if ParseHirNodeKind('int-to-str-runtime') <> hnkIntToStrRuntime then Fail('int-to-str-runtime');
   if ParseHirNodeKind('int-to-str-owned-runtime') = hnkUnknown then Fail('int-to-str-owned-runtime');
   if ParseHirNodeKind('copy-str-runtime') <> hnkCopyStrRuntime then Fail('copy-str-runtime');
+  if ParseHirNodeKind('copy-str-owned-runtime') <> hnkCopyStrOwnedRuntime then Fail('copy-str-owned-runtime');
   if ParseHirNodeKind('write-int-runtime') <> hnkWriteIntRuntime then Fail('write-int-runtime');
   if ParseHirNodeKind('write-string-runtime') <> hnkWriteStringRuntime then Fail('write-string-runtime');
   if ParseHirNodeKind('write-str-var-runtime') <> hnkWriteStrVarRuntime then Fail('write-str-var-runtime');
@@ -67,6 +68,7 @@ begin
   if ParseHirNodeKind('record-field-store-runtime') <> hnkRecordFieldStoreRuntime then Fail('record-field-store-runtime');
   if ParseHirNodeKind('record-copy-runtime') <> hnkRecordCopyRuntime then Fail('record-copy-runtime');
   if ParseHirNodeKind('field-store-str-runtime') <> hnkFieldStoreStrRuntime then Fail('field-store-str-runtime');
+  if ParseHirNodeKind('field-store-str-owned-runtime') = hnkUnknown then Fail('field-store-str-owned-runtime');
   if ParseHirNodeKind('assign-str-field-load-runtime') <> hnkAssignStrFieldLoadRuntime then Fail('assign-str-field-load-runtime');
   if ParseHirNodeKind('vmt-store-runtime') <> hnkVmtStoreRuntime then Fail('vmt-store-runtime');
 end;

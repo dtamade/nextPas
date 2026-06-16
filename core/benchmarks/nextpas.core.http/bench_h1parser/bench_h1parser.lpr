@@ -14,8 +14,20 @@ uses
   nextpas.core.http.impl.h1.fast,
   nextpas.core.http.impl.h1.llhttp;
 
+type
+  TH1ParserBenchRunner = class(TBenchRunner)
+  private
+    FFilter: string;
+    FMatchedRows: Integer;
+    function ShouldRunRow(const AName: string): Boolean;
+  public
+    constructor Create;
+    procedure Run(const AName: string; AProc: TBenchProc);
+    function HasNoMatchingFilter: Boolean;
+  end;
+
 var
-  B: TBenchRunner;
+  B: TH1ParserBenchRunner;
   GSink: SizeUInt;
   GCallbackSink: SizeUInt;
 
@@ -54,6 +66,34 @@ var
   GBody1K: AnsiString;
   GReqPost1K: AnsiString;
   GPipeline: AnsiString;
+
+{ TH1ParserBenchRunner }
+
+constructor TH1ParserBenchRunner.Create;
+begin
+  inherited Create;
+  FFilter := Trim(GetEnvironmentVariable('NEXTPAS_BENCH_FILTER'));
+  FMatchedRows := 0;
+end;
+
+function TH1ParserBenchRunner.ShouldRunRow(const AName: string): Boolean;
+begin
+  Result := (FFilter = '') or
+    (Pos(LowerCase(FFilter), LowerCase(AName)) > 0);
+end;
+
+procedure TH1ParserBenchRunner.Run(const AName: string; AProc: TBenchProc);
+begin
+  if not ShouldRunRow(AName) then
+    Exit;
+  Inc(FMatchedRows);
+  inherited Run(AName, AProc);
+end;
+
+function TH1ParserBenchRunner.HasNoMatchingFilter: Boolean;
+begin
+  Result := (FFilter <> '') and (FMatchedRows = 0);
+end;
 
 procedure InitData;
 var
@@ -676,16 +716,16 @@ end;
 
 procedure InitBenchMetadataHeaders(const AHeaders: IHttpHeaders);
 begin
-  AHeaders.Set_('host', 'example.com');
-  AHeaders.Set_('connection', 'keep-alive');
-  AHeaders.Set_('expect', '100-continue, fancy');
-  AHeaders.Set_('content-length', '1024');
-  AHeaders.Set_('content-type', 'application/octet-stream');
-  AHeaders.Set_('user-agent', 'nextpas/1.0');
-  AHeaders.Set_('accept', 'application/json');
-  AHeaders.Set_('cache-control', 'no-cache');
-  AHeaders.Set_('x-request-id', 'abc123');
-  AHeaders.Set_('authorization', 'Bearer token123');
+  AHeaders.SetHeader('host', 'example.com');
+  AHeaders.SetHeader('connection', 'keep-alive');
+  AHeaders.SetHeader('expect', '100-continue, fancy');
+  AHeaders.SetHeader('content-length', '1024');
+  AHeaders.SetHeader('content-type', 'application/octet-stream');
+  AHeaders.SetHeader('user-agent', 'nextpas/1.0');
+  AHeaders.SetHeader('accept', 'application/json');
+  AHeaders.SetHeader('cache-control', 'no-cache');
+  AHeaders.SetHeader('x-request-id', 'abc123');
+  AHeaders.SetHeader('authorization', 'Bearer token123');
 end;
 
 procedure BenchAdapterRequestMetadataLegacyExpectCl(aIters: Int64);
@@ -750,9 +790,9 @@ end;
 
 procedure InitBenchAdapterNoUrlHeaders(const AHeaders: IHttpHeaders);
 begin
-  AHeaders.Set_('host', 'localhost');
-  AHeaders.Set_('connection', 'keep-alive');
-  AHeaders.Set_('content-length', '0');
+  AHeaders.SetHeader('host', 'localhost');
+  AHeaders.SetHeader('connection', 'keep-alive');
+  AHeaders.SetHeader('content-length', '0');
 end;
 
 procedure BenchAdapterNoUrlMetadata3Headers(aIters: Int64);
@@ -827,6 +867,60 @@ begin
   GSink := GSink + LScore;
 end;
 
+procedure BenchFastHeadersCountAll(aIters: Int64);
+var
+  LIt: Int64;
+  LResult: TFastParseResult;
+  LScore: SizeUInt;
+begin
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LResult := FastParseRequest(PAnsiChar(REQ_10HEADERS), Length(REQ_10HEADERS));
+    if LResult.Success then
+      LScore := LScore + SizeUInt(LResult.Headers.Count);
+  end;
+  GSink := GSink + LScore;
+end;
+
+procedure BenchFastHeadersHasAccept(aIters: Int64);
+var
+  LIt: Int64;
+  LResult: TFastParseResult;
+  LScore: SizeUInt;
+begin
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LResult := FastParseRequest(PAnsiChar(REQ_10HEADERS), Length(REQ_10HEADERS));
+    if LResult.Success and LResult.Headers.Has('Accept') then
+      Inc(LScore);
+  end;
+  GSink := GSink + LScore;
+end;
+
+procedure BenchFastHeadersGetAllAccept(aIters: Int64);
+var
+  LIt: Int64;
+  LI: SizeInt;
+  LResult: TFastParseResult;
+  LValues: TStringArray;
+  LScore: SizeUInt;
+begin
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LResult := FastParseRequest(PAnsiChar(REQ_10HEADERS), Length(REQ_10HEADERS));
+    if LResult.Success then
+    begin
+      LValues := LResult.Headers.GetAll('Accept');
+      for LI := 0 to High(LValues) do
+        LScore := LScore + SizeUInt(Length(LValues[LI]));
+    end;
+  end;
+  GSink := GSink + LScore;
+end;
+
 procedure BenchFastHeadersForEachAll(aIters: Int64);
 var
   LIt: Int64;
@@ -864,7 +958,7 @@ begin
   GSink := GSink + LScore;
 end;
 
-procedure BenchAdapterNoUrlFastRejectThenLlhttp(aIters: Int64);
+procedure BenchAdapterNoUrlLegacyDoubleParseExplicitKeepAlive(aIters: Int64);
 var
   LIt: Int64;
   LP: IH1Parser;
@@ -931,8 +1025,9 @@ end;
 
 begin
   InitData;
-  B := TBenchRunner.Create;
+  B := TH1ParserBenchRunner.Create;
   WriteLn('=== nextpas.core.http H1 parser benchmark ===');
+  WriteLn('operation=http.h1parser');
   WriteLn('  Simple GET: ', Length(REQ_SIMPLE), ' bytes');
   WriteLn('  10 headers: ', Length(REQ_10HEADERS), ' bytes');
   WriteLn('  POST 1KB:   ', Length(GReqPost1K), ' bytes');
@@ -977,12 +1072,18 @@ begin
     @BenchAdapterRequestMetadataCachedExpectCl);
   B.Run('adapter cost: fast headers get host only',
     @BenchFastHeadersGetHostOnly);
+  B.Run('adapter cost: fast headers count all',
+    @BenchFastHeadersCountAll);
+  B.Run('adapter cost: fast headers has accept',
+    @BenchFastHeadersHasAccept);
+  B.Run('adapter cost: fast headers get all accept',
+    @BenchFastHeadersGetAllAccept);
   B.Run('adapter cost: fast headers foreach all',
     @BenchFastHeadersForEachAll);
   B.Run('adapter no-url: metadata 3 headers',
     @BenchAdapterNoUrlMetadata3Headers);
-  B.Run('adapter no-url: fast reject + llhttp',
-    @BenchAdapterNoUrlFastRejectThenLlhttp);
+  B.Run('adapter no-url: legacy double parse explicit keep-alive',
+    @BenchAdapterNoUrlLegacyDoubleParseExplicitKeepAlive);
   B.Run('adapter no-url: llhttp direct only',
     @BenchParseAdapterNoUrl);
   B.Run('adapter no-url: fast parse only',
@@ -1001,5 +1102,11 @@ begin
   B.Run('fast: pipeline (10 reqs)', @BenchFastParsePipeline10);
   WriteLn;
   B.Summary;
+  if B.HasNoMatchingFilter then
+  begin
+    WriteLn('No matching H1 parser benchmark rows.');
+    B.Free;
+    Halt(1);
+  end;
   B.Free;
 end.

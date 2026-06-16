@@ -3,7 +3,10 @@ program test_http_headers;
 {$I nextpas.core.settings.inc}
 
 uses
+  Classes,
+  SysUtils,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.http.base,
   nextpas.core.http.intf,
@@ -12,12 +15,130 @@ uses
 var
   T: TTestRunner;
 
+function LoadTextFile(const APath: string): string;
+var
+  LText: TStringList;
+begin
+  LText := TStringList.Create;
+  try
+    LText.LoadFromFile(APath);
+    Result := LText.Text;
+  finally
+    LText.Free;
+  end;
+end;
+
+procedure CheckSourceNotContains(const ASource, AFragment, ALabel: string);
+begin
+  Check(Pos(AFragment, ASource) = 0,
+    ALabel + ' unexpectedly contains: ' + AFragment);
+end;
+
+function PathHasFragment(const APath, AFragment: string): Boolean;
+begin
+  Result := Pos(AFragment, APath) > 0;
+end;
+
+function IsHttpHandwrittenSource(const APath: string): Boolean;
+begin
+  Result := not PathHasFragment(APath, '.llhttp.pas');
+end;
+
+procedure CheckSourceFileNotContains(const APath, AFragment, ALabel: string);
+begin
+  CheckSourceNotContains(LoadTextFile(APath), AFragment, ALabel + ': ' + APath);
+end;
+
+procedure CheckSourceTreeNotContains(const ADir, AMask, AFragment, ALabel: string);
+var
+  LSearch: TSearchRec;
+  LPath: string;
+begin
+  if FindFirst(IncludeTrailingPathDelimiter(ADir) + AMask, faAnyFile, LSearch) = 0 then
+  begin
+    try
+      repeat
+        if (LSearch.Attr and faDirectory) = 0 then
+        begin
+          LPath := IncludeTrailingPathDelimiter(ADir) + LSearch.Name;
+          if IsHttpHandwrittenSource(LPath) then
+            CheckSourceFileNotContains(LPath, AFragment, ALabel);
+        end;
+      until FindNext(LSearch) <> 0;
+    finally
+      FindClose(LSearch);
+    end;
+  end;
+
+  if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*', faDirectory, LSearch) = 0 then
+  begin
+    try
+      repeat
+        if ((LSearch.Attr and faDirectory) <> 0) and
+           (LSearch.Name <> '.') and (LSearch.Name <> '..') then
+          CheckSourceTreeNotContains(IncludeTrailingPathDelimiter(ADir) + LSearch.Name,
+            AMask, AFragment, ALabel);
+      until FindNext(LSearch) <> 0;
+    finally
+      FindClose(LSearch);
+    end;
+  end;
+end;
+
+procedure TestHeadersPublicApiDoesNotExposeSetUnderscore;
+var
+  LLegacyName: string;
+begin
+  LLegacyName := 'Set' + '_';
+  CheckSourceNotContains(LoadTextFile('../../../src/nextpas.core.http.intf.pas'),
+    LLegacyName, 'IHttpHeaders public interface');
+  CheckSourceNotContains(LoadTextFile('../../../src/nextpas.core.http.headers.pas'),
+    LLegacyName, 'THttpHeaders public API');
+  CheckSourceNotContains(LoadTextFile('../../../src/nextpas.core.http.impl.h1.fast.pas'),
+    LLegacyName, 'TFastLazyHeaders public API');
+  CheckSourceNotContains(LoadTextFile('../../../docs/http/README.md'),
+    LLegacyName, 'HTTP README');
+  CheckSourceNotContains(LoadTextFile('../../../docs/http/API_COVERAGE.md'),
+    LLegacyName, 'HTTP API coverage');
+  CheckSourceNotContains(LoadTextFile('../../../docs/http/ARCHITECTURE.md'),
+    LLegacyName, 'HTTP architecture');
+end;
+
+procedure TestHttpHandwrittenSourcesDoNotExposeSetUnderscore;
+var
+  LLegacyName: string;
+begin
+  LLegacyName := 'Set' + '_';
+  CheckSourceTreeNotContains('../../../src', 'nextpas.core.http*.pas',
+    LLegacyName, 'HTTP handwritten source');
+  CheckSourceTreeNotContains('../../../tests/nextpas.core.http', '*.lpr',
+    LLegacyName, 'HTTP test source');
+  CheckSourceTreeNotContains('../../../tests/nextpas.core.http', '*.pas',
+    LLegacyName, 'HTTP test support source');
+end;
+
+procedure TestHeadersPublicApiDoesNotExposeDel;
+begin
+  CheckSourceNotContains(LoadTextFile('../../../src/nextpas.core.http.intf.pas'),
+    'procedure Del(', 'IHttpHeaders public interface');
+  CheckSourceNotContains(LoadTextFile('../../../src/nextpas.core.http.headers.pas'),
+    'procedure Del(', 'THttpHeaders public API');
+  CheckSourceNotContains(LoadTextFile('../../../src/nextpas.core.http.impl.h1.fast.pas'),
+    'procedure Del(', 'TFastLazyHeaders public API');
+  CheckSourceNotContains(LoadTextFile('../../../docs/http/README.md'),
+    'Has/Del/', 'HTTP README headers API list');
+  CheckSourceNotContains(LoadTextFile('../../../docs/http/API_COVERAGE.md'),
+    'has/del/', 'HTTP API coverage headers API list');
+  CheckSourceNotContains(LoadTextFile('../../../docs/http/ARCHITECTURE.md'),
+    'procedure Del(', 'HTTP architecture headers API');
+end;
+
 procedure TestSetAndGetBasic;
 var
   LH: IHttpHeaders;
 begin
   LH := NewHttpHeaders;
-  LH.Set_('Content-Type', 'text/html');
+  LH.SetHeader('Content-Type', 'text/html');
   CheckEqual('text/html', LH.Get('Content-Type'), 'set then get');
 end;
 
@@ -26,7 +147,7 @@ var
   LH: IHttpHeaders;
 begin
   LH := NewHttpHeaders;
-  LH.Set_('Content-Type', 'application/json');
+  LH.SetHeader('Content-Type', 'application/json');
   CheckEqual('application/json', LH.Get('content-type'), 'lowercase lookup');
   CheckEqual('application/json', LH.Get('CONTENT-TYPE'), 'uppercase lookup');
   CheckEqual('application/json', LH.Get('Content-type'), 'mixed lookup');
@@ -67,12 +188,12 @@ begin
   LH.Add('X-Custom', 'old1');
   LH.Add('X-Custom', 'old2');
   CheckEqual(Int64(2), Int64(LH.Count), 'before set');
-  LH.Set_('X-Custom', 'new');
+  LH.SetHeader('X-Custom', 'new');
   CheckEqual(Int64(1), Int64(LH.Count), 'after set replaces all');
   CheckEqual('new', LH.Get('X-Custom'), 'new value');
 end;
 
-procedure TestDelRemovesAllValues;
+procedure TestRemoveRemovesAllValues;
 var
   LH: IHttpHeaders;
 begin
@@ -80,9 +201,9 @@ begin
   LH.Add('X-A', 'v1');
   LH.Add('X-A', 'v2');
   LH.Add('X-B', 'v3');
-  CheckEqual(Int64(3), Int64(LH.Count), 'before del');
-  LH.Del('X-A');
-  CheckEqual(Int64(1), Int64(LH.Count), 'after del');
+  CheckEqual(Int64(3), Int64(LH.Count), 'before remove');
+  LH.Remove('X-A');
+  CheckEqual(Int64(1), Int64(LH.Count), 'after remove');
   Check(not LH.Has('X-A'), 'X-A removed');
   Check(LH.Has('X-B'), 'X-B remains');
 end;
@@ -93,7 +214,7 @@ var
 begin
   LH := NewHttpHeaders;
   Check(not LH.Has('X-Missing'), 'missing returns false');
-  LH.Set_('X-Present', 'yes');
+  LH.SetHeader('X-Present', 'yes');
   Check(LH.Has('X-Present'), 'present returns true');
   Check(LH.Has('x-present'), 'case insensitive has');
   Check(LH.Has('X-PRESENT'), 'uppercase has');
@@ -116,14 +237,14 @@ var
   LH, LClone: IHttpHeaders;
 begin
   LH := NewHttpHeaders;
-  LH.Set_('Host', 'example.com');
+  LH.SetHeader('Host', 'example.com');
   LH.Add('Accept', 'text/html');
   LClone := LH.Clone;
   // Verify clone has same data
   CheckEqual('example.com', LClone.Get('Host'), 'clone has host');
   CheckEqual(Int64(2), Int64(LClone.Count), 'clone count');
   // Modify original, clone unaffected
-  LH.Del('Host');
+  LH.Remove('Host');
   CheckEqual('example.com', LClone.Get('Host'), 'clone independent');
   CheckEqual(Int64(2), Int64(LClone.Count), 'clone count unchanged');
 end;
@@ -146,14 +267,14 @@ begin
   CheckEqual(Int64(0), Int64(Length(LAll)), 'missing getall returns empty');
 end;
 
-procedure TestDelNonExistentIsNoOp;
+procedure TestRemoveNonExistentIsNoOp;
 var
   LH: IHttpHeaders;
 begin
   LH := NewHttpHeaders;
-  LH.Set_('X-Keep', 'val');
-  LH.Del('X-Gone');
-  CheckEqual(Int64(1), Int64(LH.Count), 'del non-existent no-op');
+  LH.SetHeader('X-Keep', 'val');
+  LH.Remove('X-Gone');
+  CheckEqual(Int64(1), Int64(LH.Count), 'remove non-existent no-op');
   CheckEqual('val', LH.Get('X-Keep'), 'existing preserved');
 end;
 
@@ -169,11 +290,11 @@ begin
   LH.Add('X-A', 'a2');
   LH.Add('X-C', 'c1');
 
-  LH.Del('X-B');
-  LH.Set_('X-A', 'a3');
+  LH.Remove('X-B');
+  LH.SetHeader('X-A', 'a3');
   LH.Add('X-D', 'd1');
 
-  CheckEqual(Int64(3), Int64(LH.Count), 'count after del/set/add');
+  CheckEqual(Int64(3), Int64(LH.Count), 'count after remove/set/add');
   LAll := LH.GetAll('X-A');
   CheckEqual(Int64(1), Int64(Length(LAll)), 'x-a duplicates collapsed');
   CheckEqual('a3', LAll[0], 'x-a replacement value');
@@ -194,6 +315,58 @@ begin
   Check(not LClone.Has('X-B'), 'clone omits deleted entry');
 end;
 
+procedure TestMixedCaseDuplicatesSetRemoveGetAllPreserveOrder;
+var
+  LH: IHttpHeaders;
+  LAll: TStringArray;
+  LSeen: string;
+begin
+  LH := NewHttpHeaders;
+  LH.Add('X-Trace', 'a');
+  LH.Add('x-trace', 'b');
+  LH.Add('X-Keep', 'k1');
+  LH.Add('X-TRACE', 'c');
+  LH.Add('x-tail', 't1');
+
+  LAll := LH.GetAll('x-TrAcE');
+  CheckEqual(Int64(3), Int64(Length(LAll)),
+    'mixed-case duplicates collapse to one lookup set');
+  CheckEqual('a', LAll[0], 'mixed-case first value keeps insertion order');
+  CheckEqual('b', LAll[1], 'mixed-case second value keeps insertion order');
+  CheckEqual('c', LAll[2], 'mixed-case third value keeps insertion order');
+
+  LH.SetHeader('X-TRACE', 'new');
+
+  CheckEqual(Int64(3), Int64(LH.Count),
+    'set replaces all mixed-case duplicates with one entry');
+  LSeen := '';
+  LH.ForEach(
+    procedure(const AName, AValue: string)
+    begin
+      if LSeen <> '' then
+        LSeen := LSeen + '|';
+      LSeen := LSeen + AName + '=' + AValue;
+    end);
+  CheckEqual('x-trace=new|x-keep=k1|x-tail=t1', LSeen,
+    'set preserves first target position and non-target order');
+
+  LH.Remove('x-TrAcE');
+
+  CheckEqual(Int64(2), Int64(LH.Count),
+    'remove deletes all mixed-case duplicate variants');
+  Check(not LH.Has('X-Trace'), 'removed mixed-case header no longer exists');
+  LSeen := '';
+  LH.ForEach(
+    procedure(const AName, AValue: string)
+    begin
+      if LSeen <> '' then
+        LSeen := LSeen + '|';
+      LSeen := LSeen + AName + '=' + AValue;
+    end);
+  CheckEqual('x-keep=k1|x-tail=t1', LSeen,
+    'remove preserves non-target order');
+end;
+
 procedure TestClearResetsAndAllowsReuse;
 var
   LH: IHttpHeaders;
@@ -203,7 +376,7 @@ begin
   LH := NewHttpHeaders;
   LH.Add('X-A', 'a1');
   LH.Add('X-A', 'a2');
-  LH.Set_('X-B', 'b1');
+  LH.SetHeader('X-B', 'b1');
 
   LH.Clear;
 
@@ -225,7 +398,7 @@ begin
 
   LH.Add('X-C', 'c1');
   LH.Add('X-C', 'c2');
-  LH.Set_('X-D', 'd1');
+  LH.SetHeader('X-D', 'd1');
 
   CheckEqual(Int64(3), Int64(LH.Count), 'reused count');
   LAll := LH.GetAll('X-C');
@@ -324,7 +497,7 @@ begin
   LRaised := False;
   try
     if AUseSet then
-      LH.Set_(AName, AValue)
+      LH.SetHeader(AName, AValue)
     else
       LH.Add(AName, AValue);
   except
@@ -338,30 +511,207 @@ procedure TestValidationRejectsInvalidNamesAndValues;
 begin
   ExpectHeaderError('add rejects empty name', False, '', 'value');
   ExpectHeaderError('set rejects colon in name', True, 'Bad:Name', 'value');
+  ExpectHeaderError('set rejects separator space in name', True,
+    'Bad Name', 'value');
+  ExpectHeaderError('add rejects separator slash in name', False,
+    'Bad/Name', 'value');
+  ExpectHeaderError('set rejects separator semicolon in name', True,
+    'Bad;Name', 'value');
+  ExpectHeaderError('add rejects separator equals in name', False,
+    'Bad=Name', 'value');
+  ExpectHeaderError('set rejects separator paren in name', True,
+    'Bad(Name', 'value');
   ExpectHeaderError('add rejects CR in value', False, 'x-good', 'bad'#13'value');
   ExpectHeaderError('set rejects NUL in value', True, 'x-good', 'bad'#0'value');
+  ExpectHeaderError('set rejects CTL in value', True, 'x-good', 'bad'#1'value');
+  ExpectHeaderError('add rejects DEL in value', False, 'x-good', 'bad'#127'value');
+end;
+
+procedure TestValidationAllowsHorizontalTabInValue;
+var
+  LH: IHttpHeaders;
+begin
+  LH := NewHttpHeaders;
+  LH.SetHeader('X-Tab', 'a'#9'b');
+  LH.Add('X-Tab-Add', 'c'#9'd');
+
+  CheckEqual('a'#9'b', LH.Get('x-tab'), 'set keeps HTAB in header value');
+  CheckEqual('c'#9'd', LH.Get('x-tab-add'), 'add keeps HTAB in header value');
+end;
+
+procedure TestLookupAndRemoveRejectInvalidNames;
+var
+  LH: IHttpHeaders;
+  LAll: TStringArray;
+  LRaised: Boolean;
+begin
+  LH := NewHttpHeaders;
+  LH.SetHeader('X-Keep', 'value');
+
+  LRaised := False;
+  try
+    LH.Get('');
+  except
+    on E: EHttpError do
+      LRaised := E.Message = 'empty header name';
+  end;
+  Check(LRaised, 'get rejects empty name');
+
+  LRaised := False;
+  try
+    LH.Has('Bad Name');
+  except
+    on E: EHttpError do
+      LRaised := E.Message = 'invalid header name character';
+  end;
+  Check(LRaised, 'has rejects separator space in name');
+
+  LRaised := False;
+  try
+    LAll := LH.GetAll('Bad:Name');
+  except
+    on E: EHttpError do
+      LRaised := E.Message = 'invalid header name character';
+  end;
+  Check(LRaised, 'getall rejects colon in name');
+
+  LRaised := False;
+  try
+    LH.Remove('Bad/Name');
+  except
+    on E: EHttpError do
+      LRaised := E.Message = 'invalid header name character';
+  end;
+  Check(LRaised, 'remove rejects separator slash in name');
+
+  CheckEqual('value', LH.Get('X-Keep'),
+    'invalid lookup/remove attempts preserve existing entries');
+  LH.Remove('X-Missing');
+  CheckEqual(Int64(1), Int64(LH.Count),
+    'valid missing remove remains no-op');
+end;
+
+procedure TestValidationAcceptsTCharNames;
+var
+  LH: IHttpHeaders;
+  LName: string;
+begin
+  LH := NewHttpHeaders;
+  LName := 'X-!#$%&''*+-.^_`|~09';
+
+  LH.SetHeader(LName, 'value');
+
+  CheckEqual('value', LH.Get(LName),
+    'valid tchar header field-name remains accepted');
+end;
+
+procedure TestSetBasicAuth;
+var
+  LH: IHttpHeaders;
+begin
+  LH := NewHttpHeaders;
+  LH.SetHeader('authorization', 'Bearer old');
+
+  SetBasicAuth(LH, 'Aladdin', 'open sesame');
+
+  CheckEqual('Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==',
+    LH.Get('Authorization'), 'basic auth header value');
+  CheckEqual(Int64(1), Int64(LH.Count), 'basic auth replaces existing auth');
+end;
+
+procedure TestSetBearerAuth;
+var
+  LH: IHttpHeaders;
+begin
+  LH := NewHttpHeaders;
+
+  SetBearerAuth(LH, 'token-123');
+
+  CheckEqual('Bearer token-123', LH.Get('Authorization'),
+    'bearer auth header value');
+end;
+
+procedure TestAuthHelpersRejectNilHeaders;
+var
+  LH: IHttpHeaders;
+  LRaised: Boolean;
+begin
+  LH := nil;
+  LRaised := False;
+  try
+    SetBearerAuth(LH, 'token');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'bearer helper rejects nil headers');
+
+  LRaised := False;
+  try
+    SetBasicAuth(LH, 'user', 'pass');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'basic helper rejects nil headers');
+end;
+
+procedure TestForEachRejectsNilCallback;
+var
+  LH: IHttpHeaders;
+  LCallback: THeaderIterator;
+  LRaised: Boolean;
+begin
+  LH := NewHttpHeaders;
+  LH.SetHeader('X-Test', 'value');
+  LCallback := nil;
+  LRaised := False;
+  try
+    LH.ForEach(LCallback);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'foreach rejects nil callback');
 end;
 
 begin
   T := TTestRunner.Create('nextpas.core.http.headers');
+  T.Run('Headers public API does not expose Set underscore',
+    @TestHeadersPublicApiDoesNotExposeSetUnderscore);
+  T.Run('HTTP handwritten sources do not expose Set underscore',
+    @TestHttpHandwrittenSourcesDoNotExposeSetUnderscore);
+  T.Run('Headers public API does not expose Del',
+    @TestHeadersPublicApiDoesNotExposeDel);
   T.Run('Set and Get basic', @TestSetAndGetBasic);
   T.Run('Case-insensitive lookup', @TestCaseInsensitiveLookup);
   T.Run('Add multiple values', @TestAddMultipleValues);
   T.Run('GetAll returns all values', @TestGetAllReturnsAllValues);
   T.Run('Set replaces existing', @TestSetReplacesExisting);
-  T.Run('Del removes all values', @TestDelRemovesAllValues);
+  T.Run('Remove removes all values', @TestRemoveRemovesAllValues);
   T.Run('Has returns true/false', @TestHasReturnsTrueFalse);
   T.Run('Count reflects total entries', @TestCountReflectsTotalEntries);
   T.Run('Clone creates independent copy', @TestCloneCreatesIndependentCopy);
   T.Run('Get returns empty for missing', @TestGetReturnEmptyForMissing);
   T.Run('GetAll returns empty for missing', @TestGetAllReturnEmptyForMissing);
-  T.Run('Del non-existent is no-op', @TestDelNonExistentIsNoOp);
+  T.Run('Remove non-existent is no-op', @TestRemoveNonExistentIsNoOp);
   T.Run('Compaction preserves visible order', @TestCompactionPreservesVisibleOrder);
+  T.Run('Mixed-case duplicates preserve Set/Remove/GetAll order',
+    @TestMixedCaseDuplicatesSetRemoveGetAllPreserveOrder);
   T.Run('Clear resets and allows reuse', @TestClearResetsAndAllowsReuse);
   T.Run('Parsed add canonicalizes parser validated headers',
     @TestParsedAddCanonicalizesParserValidatedHeaders);
   T.Run('Parsed span add canonicalizes parser validated headers',
     @TestParsedSpanAddCanonicalizesParserValidatedHeaders);
   T.Run('Validation rejects invalid names and values', @TestValidationRejectsInvalidNamesAndValues);
+  T.Run('Validation allows horizontal tab in value',
+    @TestValidationAllowsHorizontalTabInValue);
+  T.Run('Lookup and remove reject invalid names',
+    @TestLookupAndRemoveRejectInvalidNames);
+  T.Run('Validation accepts tchar names', @TestValidationAcceptsTCharNames);
+  T.Run('SetBasicAuth sets Authorization', @TestSetBasicAuth);
+  T.Run('SetBearerAuth sets Authorization', @TestSetBearerAuth);
+  T.Run('Auth helpers reject nil headers', @TestAuthHelpersRejectNilHeaders);
+  T.Run('ForEach rejects nil callback', @TestForEachRejectsNilCallback);
   T.Summary;
 end.

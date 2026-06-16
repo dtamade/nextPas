@@ -95,6 +95,13 @@ type
   {$ENDIF}
   PPlatformAndroidStat = ^TPlatformAndroidStat;
 
+  rlim_t = culong;
+  TPlatformAndroidRLimit = record
+    rlim_cur: rlim_t;
+    rlim_max: rlim_t;
+  end;
+  PPlatformAndroidRLimit = ^TPlatformAndroidRLimit;
+
   PPlatformPThreadState = ^TPlatformPThreadState;
   TPlatformPThreadState = record
     case Integer of
@@ -139,6 +146,16 @@ const
   SIG_UNBLOCK = Int32(1);
   SIG_SETMASK = Int32(2);
 
+  RLIMIT_CPU = 0;
+  RLIMIT_FSIZE = 1;
+  RLIMIT_DATA = 2;
+  RLIMIT_STACK = 3;
+  RLIMIT_CORE = 4;
+  RLIMIT_NPROC = 6;
+  RLIMIT_NOFILE = 7;
+  RLIMIT_MEMLOCK = 8;
+  RLIMIT_AS = 9;
+
   RTLD_LAZY = Int32(1);
   RTLD_NOW = Int32(2);
   RTLD_LOCAL = Int32(0);
@@ -151,6 +168,12 @@ const
   O_EXCL = Int32($80);
   O_TRUNC = Int32($200);
   O_APPEND = Int32($400);
+  O_SYNC = Int32($101000);
+  {$IFDEF NEXTPAS_AARCH64}
+  O_DIRECTORY = Int32($4000);
+  {$ELSE}
+  O_DIRECTORY = Int32($10000);
+  {$ENDIF}
   O_CLOEXEC = Int32($80000);
 
   SEEK_SET = Int32(0);
@@ -169,6 +192,15 @@ const
   W_OK = Int32(2);
   R_OK = Int32(4);
 
+  S_IFMT = UInt32($F000);
+  S_IFSOCK = UInt32($C000);
+  S_IFLNK = UInt32($A000);
+  S_IFREG = UInt32($8000);
+  S_IFBLK = UInt32($6000);
+  S_IFDIR = UInt32($4000);
+  S_IFCHR = UInt32($2000);
+  S_IFIFO = UInt32($1000);
+
   PLATFORM_ANDROID_AT_FDCWD = Int32(-100);
   PLATFORM_ANDROID_AT_SYMLINK_NOFOLLOW = Int32($100);
 
@@ -176,8 +208,10 @@ const
   ANDROID_SYSCALL_FSTAT = 5;
   ANDROID_SYSCALL_RT_SIGACTION = 13;
   ANDROID_SYSCALL_RT_SIGPROCMASK = 14;
+  ANDROID_SYSCALL_GETDENTS64 = 217;
   ANDROID_SYSCALL_NEWFSTATAT = 262;
   {$ELSEIF defined(NEXTPAS_AARCH64)}
+  ANDROID_SYSCALL_GETDENTS64 = 61;
   ANDROID_SYSCALL_NEWFSTATAT = 79;
   ANDROID_SYSCALL_FSTAT = 80;
   ANDROID_SYSCALL_RT_SIGACTION = 134;

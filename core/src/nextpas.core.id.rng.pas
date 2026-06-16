@@ -8,12 +8,7 @@ procedure IdRngReseed;
 
 implementation
 
-uses
-  SysUtils,
-  nextpas.core.atomic,
-  nextpas.core.base,
-  nextpas.core.errors,
-  nextpas.core.platform.random;
+uses nextpas.core.atomic, nextpas.core.base, nextpas.core.errors, nextpas.core.platform.random, nextpas.core.text.conv;
 
 const
   BUF_SIZE = 4096;

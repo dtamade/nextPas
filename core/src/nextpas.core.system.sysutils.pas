@@ -1,6 +1,7 @@
 unit nextpas.core.system.sysutils;
 {**
- * @desc Minimal SysUtils compatibility facade for proven compiler/bootstrap pressure.
+ * @desc Minimal SysUtils compatibility facade for exception formatting,
+ *   text conversion helpers, and case-insensitive comparison.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -18,38 +19,30 @@ type
   EAssertionFailed = nextpas.core.exception.EAssertionFailed;
 
 function Format(const AFmt: string; const AArgs: array of const): string;
-function SameText(const ALeft, ARight: string): Boolean;
+function SameText(const A, B: string): Boolean;
 function IntToStr(const AValue: Int64): string;
-function Trim(const AValue: string): string;
+function Trim(const AStr: string): string;
 
 implementation
-
-function FoldAsciiLower(const AByte: Byte): Byte; inline;
-begin
-  case AByte of
-    Ord('A')..Ord('Z'): Result := AByte or $20;
-  else
-    Result := AByte;
-  end;
-end;
 
 function Format(const AFmt: string; const AArgs: array of const): string;
 begin
   Result := nextpas.core.text.conv.Format(AFmt, AArgs);
 end;
 
-function SameText(const ALeft, ARight: string): Boolean;
+function SameText(const A, B: string): Boolean;
 var
-  LI, LLength: SizeInt;
+  I: SizeInt;
+  LLen: SizeInt;
 begin
-  LLength := System.Length(ALeft);
-  if LLength <> System.Length(ARight) then
+  LLen := Length(A);
+  if Length(B) <> LLen then
     Exit(False);
-
-  for LI := 1 to LLength do
-    if FoldAsciiLower(Byte(ALeft[LI])) <> FoldAsciiLower(Byte(ARight[LI])) then
+  for I := 1 to LLen do
+  begin
+    if UpCase(A[I]) <> UpCase(B[I]) then
       Exit(False);
-
+  end;
   Result := True;
 end;
 
@@ -58,9 +51,9 @@ begin
   Result := nextpas.core.text.conv.IntToStr(AValue);
 end;
 
-function Trim(const AValue: string): string;
+function Trim(const AStr: string): string;
 begin
-  Result := nextpas.core.text.conv.Trim(AValue);
+  Result := nextpas.core.text.conv.Trim(AStr);
 end;
 
 end.

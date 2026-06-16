@@ -4,9 +4,7 @@ unit nextpas.core.tls.verify.custom;
 
 interface
 
-uses
-  SysUtils,
-  nextpas.core.tls.base;
+uses nextpas.core.tls.base, nextpas.core.text.conv;
 
 type
   { TSSLPinningVerifier — verify server cert by SHA-256 pin }
@@ -35,9 +33,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.tls.exceptions,
-  nextpas.core.crypto.hash;
+uses nextpas.core.tls.exceptions, nextpas.core.crypto.hash, nextpas.core.text.conv;
 
 { TSSLPinningVerifier }
 

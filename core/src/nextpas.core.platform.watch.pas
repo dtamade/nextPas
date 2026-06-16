@@ -239,14 +239,31 @@ end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
+uses
+  nextpas.core.platform.windows.base;
+
 function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
-begin AWatcher.Fd := -1; Result := -1; end;
+begin
+  AWatcher.Fd := -1;
+  Result := Int32(ERROR_NOT_SUPPORTED);
+end;
+
 function platform_watch_add(var AWatcher: TPlatformWatcher; const APath: PAnsiChar): Int32;
-begin Result := -1; end;
+begin
+  Result := Int32(ERROR_NOT_SUPPORTED);
+end;
+
 function platform_watch_poll(var AWatcher: TPlatformWatcher; out AEvent: TPlatformWatchEvent; ATimeoutMs: Int32): Int32;
-begin FillChar(AEvent, SizeOf(AEvent), 0); Result := 0; end;
+begin
+  FillChar(AEvent, SizeOf(AEvent), 0);
+  Result := -Int32(ERROR_NOT_SUPPORTED);
+end;
+
 function platform_watch_close(var AWatcher: TPlatformWatcher): Int32;
-begin Result := -1; end;
+begin
+  AWatcher.Fd := -1;
+  Result := Int32(ERROR_NOT_SUPPORTED);
+end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD) and not defined(NEXTPAS_WINDOWS)}

@@ -9,8 +9,6 @@ unit nextpas.core.tls.tls13.finished;
 
 interface
 
-uses
-  SysUtils;
 
 function TLS13FinishedKeySHA256(const ATrafficSecret: TBytes): TBytes;
 function TLS13FinishedKeySHA384(const ATrafficSecret: TBytes): TBytes;
@@ -48,11 +46,7 @@ function TLS13VerifyFinishedForCipherSuite(
 
 implementation
 
-uses
-  nextpas.core.tls.errors,
-  nextpas.core.crypto.constant_time,
-  nextpas.core.crypto.hmac, nextpas.core.tls.keyschedule.labels,
-  nextpas.core.tls.tls13.keyschedule;
+uses nextpas.core.tls.errors, nextpas.core.crypto.constant_time, nextpas.core.crypto.hmac, nextpas.core.tls.keyschedule.labels, nextpas.core.tls.tls13.keyschedule;
 
 const
   TLS13_SHA256_HASH_SIZE = 32;

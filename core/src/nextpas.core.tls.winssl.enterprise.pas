@@ -6,7 +6,7 @@ unit nextpas.core.tls.winssl.enterprise;
 interface
 
 uses
-  SysUtils, Classes, Windows, Registry,
+  SysUtils,Windows, Registry,
   nextpas.core.tls.logging,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api;
@@ -17,8 +17,8 @@ type
   private
     FFIPSEnabled: Boolean;
     FPolicyLoaded: Boolean;
-    FTrustedRoots: TStringList;
-    FGroupPolicies: TStringList;
+    FTrustedRoots: TStringArray;
+    FGroupPolicies: TStringArray;
     
     function DetectFIPSMode: Boolean;
     function LoadGroupPolicies: Boolean;
@@ -44,7 +44,7 @@ type
     function IsEnterpriseCATrusted: Boolean;
     
     { 获取所有组策略键值对 }
-    function GetAllPolicies: TStringList;
+    function GetAllPolicies: TStringArray;
     
     { 重新加载配置 }
     procedure Reload;
@@ -62,6 +62,10 @@ function IsFIPSModeEnabled: Boolean;
 function GetEnterpriseTrustedRoots: TStringArray;
 
 implementation
+
+uses
+  nextpas.core.text.strings;
+
 
 const
   // FIPS 注册表路径
@@ -82,14 +86,10 @@ begin
   inherited Create;
   FFIPSEnabled := False;
   FPolicyLoaded := False;
-  FTrustedRoots := TStringList.Create;
-  FGroupPolicies := TStringList.Create;
 end;
 
 destructor TSSLEnterpriseConfig.Destroy;
 begin
-  FTrustedRoots.Free;
-  FGroupPolicies.Free;
   inherited Destroy;
 end;
 
@@ -116,7 +116,6 @@ begin
       end;
     end;
   finally
-    LReg.Free;
   end;
   
   FFIPSEnabled := Result;
@@ -125,7 +124,7 @@ end;
 function TSSLEnterpriseConfig.LoadGroupPolicies: Boolean;
 var
   LReg: TRegistry;
-  LKeys: TStringList;
+  LKeys: TStringArray;
   i: Integer;
   LValue: string;
 begin
@@ -133,7 +132,6 @@ begin
   FGroupPolicies.Clear;
   
   LReg := TRegistry.Create(KEY_READ);
-  LKeys := TStringList.Create;
   try
     LReg.RootKey := HKEY_LOCAL_MACHINE;
     
@@ -142,7 +140,7 @@ begin
     begin
       try
         LReg.GetValueNames(LKeys);
-        for i := 0 to LKeys.Count - 1 do
+        for i := 0 to Length(LKeys) - 1 do
         begin
           try
             LValue := LReg.ReadString(LKeys[i]);
@@ -160,8 +158,6 @@ begin
     
     FPolicyLoaded := Result;
   finally
-    LKeys.Free;
-    LReg.Free;
   end;
 end;
 
@@ -208,7 +204,7 @@ begin
       end;
     end;
     
-    Result := FTrustedRoots.Count > 0;
+    Result := Length(FTrustedRoots) > 0;
   finally
     CertCloseStore(LStoreHandle, 0);
   end;
@@ -249,8 +245,8 @@ function TSSLEnterpriseConfig.GetTrustedRoots: TStringArray;
 var
   i: Integer;
 begin
-  SetLength(Result, FTrustedRoots.Count);
-  for i := 0 to FTrustedRoots.Count - 1 do
+  SetLength(Result, Length(FTrustedRoots));
+  for i := 0 to Length(FTrustedRoots) - 1 do
     Result[i] := FTrustedRoots[i];
 end;
 
@@ -283,13 +279,11 @@ begin
     else
       Result := True; // 如果没有策略，默认信任
   finally
-    LReg.Free;
   end;
 end;
 
-function TSSLEnterpriseConfig.GetAllPolicies: TStringList;
+function TSSLEnterpriseConfig.GetAllPolicies: TStringArray;
 begin
-  Result := TStringList.Create;
   Result.Assign(FGroupPolicies);
 end;
 
@@ -319,7 +313,6 @@ begin
       end;
     end;
   finally
-    LReg.Free;
   end;
 end;
 
@@ -346,7 +339,6 @@ begin
       end;
     end;
   finally
-    LReg.Free;
   end;
 end;
 
@@ -357,11 +349,10 @@ var
   LSubject: string;
   LBuffer: array[0..1023] of Char;
   LSize: DWORD;
-  LList: TStringList;
+  LList: TStringArray;
   i: Integer;
 begin
   SetLength(Result, 0);
-  LList := TStringList.Create;
   try
     LStoreHandle := CertOpenSystemStoreW(0, PWideChar('ROOT'));
     if LStoreHandle = nil then
@@ -392,14 +383,13 @@ begin
         end;
       end;
       
-      SetLength(Result, LList.Count);
-      for i := 0 to LList.Count - 1 do
+      SetLength(Result, Length(LList));
+      for i := 0 to Length(LList) - 1 do
         Result[i] := LList[i];
     finally
       CertCloseStore(LStoreHandle, 0);
     end;
   finally
-    LList.Free;
   end;
 end;
 

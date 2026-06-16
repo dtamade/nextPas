@@ -7,14 +7,7 @@ unit nextpas.core.tui.widget.breadcrumb;
 
 interface
 
-uses
-  nextpas.core.tui.base,
-  nextpas.core.tui.color,
-  nextpas.core.tui.modifier,
-  nextpas.core.tui.style,
-  nextpas.core.tui.cell,
-  nextpas.core.tui.buffer,
-  nextpas.core.tui.widget.intf;
+uses nextpas.core.tui.base, nextpas.core.tui.color, nextpas.core.tui.modifier, nextpas.core.tui.style, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.widget.intf;
 
 type
   IBreadcrumb = interface(IWidget)
@@ -51,8 +44,7 @@ type
 
 implementation
 
-uses
-  SysUtils, nextpas.core.text.width;
+uses nextpas.core.text.width;
 
 class function TBreadcrumb.New(const AItems: array of AnsiString): IBreadcrumb;
 var LSelf: TBreadcrumb; I: Integer;

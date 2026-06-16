@@ -19,8 +19,30 @@ const WORKLOAD_NO_URL: &str = "no_url";
 const WORKLOAD_URL_PATH: &str = "url_path";
 const WORKLOAD_ADAPTER_NO_URL: &str = "adapter_no_url";
 const WORKLOAD_RESPONSE_1K: &str = "response_1k";
+const VALID_WORKLOADS_TEXT: &str = "no_url, url_path, adapter_no_url, or response_1k";
+const CLIENT_READ_MODE: &str = "header_plus_content_length";
 
-fn parse_options() -> (usize, usize, String) {
+fn is_valid_workload(value: &str) -> bool {
+    value == WORKLOAD_NO_URL
+        || value == WORKLOAD_URL_PATH
+        || value == WORKLOAD_ADAPTER_NO_URL
+        || value == WORKLOAD_RESPONSE_1K
+}
+
+fn reject_invalid_workload(value: &str) -> ! {
+    eprintln!(
+        "invalid --workload: {}; expected one of: {}",
+        value, VALID_WORKLOADS_TEXT
+    );
+    std::process::exit(2);
+}
+
+fn reject_invalid_positive_option(name: &str, value: &str) -> ! {
+    eprintln!("invalid {}: {}; expected positive integer", name, value);
+    std::process::exit(2);
+}
+
+fn parse_options() -> (usize, usize, usize, String) {
     let mut requests = 20_000usize;
     let mut threads = 4usize;
     let mut workload = WORKLOAD_NO_URL.to_string();
@@ -29,28 +51,22 @@ fn parse_options() -> (usize, usize, String) {
 
     while index < args.len() {
         if args[index] == "--requests" && index + 1 < args.len() {
-            if let Ok(value) = args[index + 1].parse::<usize>() {
-                if value > 0 {
-                    requests = value;
-                }
-            }
+            requests = match args[index + 1].parse::<usize>() {
+                Ok(value) if value > 0 => value,
+                _ => reject_invalid_positive_option("--requests", &args[index + 1]),
+            };
             index += 2;
         } else if args[index] == "--threads" && index + 1 < args.len() {
-            if let Ok(value) = args[index + 1].parse::<usize>() {
-                if value > 0 {
-                    threads = value;
-                }
-            }
+            threads = match args[index + 1].parse::<usize>() {
+                Ok(value) if value > 0 => value,
+                _ => reject_invalid_positive_option("--threads", &args[index + 1]),
+            };
             index += 2;
         } else if args[index] == "--workload" && index + 1 < args.len() {
-            if args[index + 1] == WORKLOAD_URL_PATH {
-                workload = WORKLOAD_URL_PATH.to_string();
-            } else if args[index + 1] == WORKLOAD_ADAPTER_NO_URL {
-                workload = WORKLOAD_ADAPTER_NO_URL.to_string();
-            } else if args[index + 1] == WORKLOAD_RESPONSE_1K {
-                workload = WORKLOAD_RESPONSE_1K.to_string();
+            if is_valid_workload(&args[index + 1]) {
+                workload = args[index + 1].clone();
             } else {
-                workload = WORKLOAD_NO_URL.to_string();
+                reject_invalid_workload(&args[index + 1]);
             }
             index += 2;
         } else {
@@ -58,11 +74,10 @@ fn parse_options() -> (usize, usize, String) {
         }
     }
 
-    if threads > requests {
-        threads = requests;
-    }
+    let requested_threads = threads;
+    let effective_threads = requested_threads.min(requests);
 
-    (requests, threads, workload)
+    (requests, requested_threads, effective_threads, workload)
 }
 
 fn requests_for_thread(index: usize, total_requests: usize, threads: usize) -> usize {
@@ -221,7 +236,8 @@ fn run_client(addr: SocketAddr, requests: usize, workload: String, completed: Ar
 
 fn print_results(
     requests: usize,
-    threads: usize,
+    requested_threads: usize,
+    effective_threads: usize,
     workload: &str,
     completed: usize,
     elapsed: Duration,
@@ -240,9 +256,17 @@ fn print_results(
 
     println!("operation=http.server.keepalive");
     println!("workload={}", workload);
-    println!("impl=rust");
+    println!("impl=rust_std");
+    println!("rust_profile=std_only");
+    println!("client_read_mode={}", CLIENT_READ_MODE);
+    println!(
+        "response_body_bytes={}",
+        response_body_len_for_workload(workload)
+    );
     println!("iterations={}", requests);
-    println!("threads={}", threads);
+    println!("requested_threads={}", requested_threads);
+    println!("effective_threads={}", effective_threads);
+    println!("threads={}", effective_threads);
     println!("completed={}", completed);
     println!("elapsed_ns={}", elapsed_ns);
     println!("ns/op={}", ns_per_op);
@@ -250,7 +274,7 @@ fn print_results(
 }
 
 fn main() {
-    let (requests, threads, workload) = parse_options();
+    let (requests, requested_threads, effective_threads, workload) = parse_options();
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     listener.set_nonblocking(true).expect("set nonblocking");
     let addr = listener.local_addr().expect("local addr");
@@ -264,9 +288,9 @@ fn main() {
     let mut clients = Vec::new();
 
     let start = Instant::now();
-    for index in 0..threads {
+    for index in 0..effective_threads {
         let client_completed = Arc::clone(&completed);
-        let client_requests = requests_for_thread(index, requests, threads);
+        let client_requests = requests_for_thread(index, requests, effective_threads);
         let client_workload = workload.clone();
         clients.push(thread::spawn(move || {
             run_client(addr, client_requests, client_workload, client_completed)
@@ -284,7 +308,8 @@ fn main() {
 
     print_results(
         requests,
-        threads,
+        requested_threads,
+        effective_threads,
         &workload,
         completed.load(Ordering::Relaxed),
         elapsed,

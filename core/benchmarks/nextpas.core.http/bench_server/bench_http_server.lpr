@@ -23,10 +23,14 @@ uses
 const
   DEFAULT_NUM_REQUESTS = 20000;
   DEFAULT_NUM_THREADS = 4;
+  BENCH_BACKEND_THREADED = 'threaded';
+  BENCH_BACKEND_EPOLL = 'epoll';
   WORKLOAD_NO_URL = 'no_url';
   WORKLOAD_URL_PATH = 'url_path';
   WORKLOAD_ADAPTER_NO_URL = 'adapter_no_url';
   WORKLOAD_RESPONSE_1K = 'response_1k';
+  VALID_WORKLOADS_TEXT = 'no_url, url_path, adapter_no_url, or response_1k';
+  VALID_BACKENDS_TEXT = 'threaded or epoll';
   SMALL_RESPONSE_BODY = 'Hello, World!';
   SMALL_RESPONSE_LEN = 13;
   SMALL_RESPONSE_LEN_TEXT = '13';
@@ -39,9 +43,50 @@ var
   GDone: Int32;
   GSuccess: Int32;
   GRequests: Int32;
+  GRequestedThreads: Int32;
   GThreads: Int32;
   GWorkload: string;
+  GBackend: TTcpServerBackend;
   GResponseBody1K: AnsiString;
+
+procedure RejectInvalidWorkload(const AValue: string);
+begin
+  WriteLn(StdErr, 'invalid --workload: ', AValue,
+    '; expected one of: ', VALID_WORKLOADS_TEXT);
+  Halt(2);
+end;
+
+procedure RejectInvalidPositiveOption(const AName, AValue: string);
+begin
+  WriteLn(StdErr, 'invalid ', AName, ': ', AValue,
+    '; expected positive integer');
+  Halt(2);
+end;
+
+procedure RejectInvalidBackend(const AValue: string);
+begin
+  WriteLn(StdErr, 'invalid --backend: ', AValue,
+    '; expected one of: ', VALID_BACKENDS_TEXT);
+  Halt(2);
+end;
+
+function ParsePositiveOption(const AName, AValue: string): Int32;
+var
+  LValue: Integer;
+begin
+  if (not TryStrToInt(AValue, LValue)) or (LValue < 1) then
+    RejectInvalidPositiveOption(AName, AValue);
+  Result := LValue;
+end;
+
+function ParseBackendOption(const AValue: string): TTcpServerBackend;
+begin
+  if AValue = BENCH_BACKEND_THREADED then
+    Exit(TCP_SERVER_BACKEND_THREADED);
+  if AValue = BENCH_BACKEND_EPOLL then
+    Exit(TCP_SERVER_BACKEND_EPOLL);
+  RejectInvalidBackend(AValue);
+end;
 
 function ResponseComplete(const ABuf: array of Byte; const ATotal: SizeUInt;
   const ABodyLen: SizeUInt): Boolean;
@@ -118,26 +163,24 @@ end;
 procedure ParseOptions;
 var
   LI: Integer;
-  LValue: Integer;
 begin
   GRequests := DEFAULT_NUM_REQUESTS;
+  GRequestedThreads := DEFAULT_NUM_THREADS;
   GThreads := DEFAULT_NUM_THREADS;
   GWorkload := WORKLOAD_NO_URL;
+  GBackend := TCP_SERVER_BACKEND_THREADED;
   LI := 1;
   while LI <= ParamCount do
   begin
     if (ParamStr(LI) = '--requests') and (LI < ParamCount) then
     begin
-      LValue := StrToIntDef(ParamStr(LI + 1), GRequests);
-      if LValue > 0 then
-        GRequests := LValue;
+      GRequests := ParsePositiveOption('--requests', ParamStr(LI + 1));
       Inc(LI, 2);
     end
     else if (ParamStr(LI) = '--threads') and (LI < ParamCount) then
     begin
-      LValue := StrToIntDef(ParamStr(LI + 1), GThreads);
-      if LValue > 0 then
-        GThreads := LValue;
+      GRequestedThreads := ParsePositiveOption('--threads', ParamStr(LI + 1));
+      GThreads := GRequestedThreads;
       Inc(LI, 2);
     end
     else if (ParamStr(LI) = '--workload') and (LI < ParamCount) then
@@ -146,7 +189,14 @@ begin
          (ParamStr(LI + 1) = WORKLOAD_URL_PATH) or
          (ParamStr(LI + 1) = WORKLOAD_ADAPTER_NO_URL) or
          (ParamStr(LI + 1) = WORKLOAD_RESPONSE_1K) then
-        GWorkload := ParamStr(LI + 1);
+        GWorkload := ParamStr(LI + 1)
+      else
+        RejectInvalidWorkload(ParamStr(LI + 1));
+      Inc(LI, 2);
+    end
+    else if (ParamStr(LI) = '--backend') and (LI < ParamCount) then
+    begin
+      GBackend := ParseBackendOption(ParamStr(LI + 1));
       Inc(LI, 2);
     end
     else
@@ -156,6 +206,18 @@ begin
     GThreads := GRequests;
 end;
 
+function BackendName: string;
+begin
+  case GBackend of
+    TCP_SERVER_BACKEND_THREADED:
+      Result := BENCH_BACKEND_THREADED;
+    TCP_SERVER_BACKEND_EPOLL:
+      Result := BENCH_BACKEND_EPOLL;
+  else
+    Result := 'unknown';
+  end;
+end;
+
 function ExpectedH1PathForWorkload: string;
 begin
   { All current benchmark requests are no-body HTTP/1.1 requests that should
@@ -163,9 +225,17 @@ begin
   Result := 'fast';
 end;
 
+function ResponseBodyBytesForWorkload: SizeUInt;
+begin
+  if GWorkload = WORKLOAD_RESPONSE_1K then
+    Exit(RESPONSE_1K_LEN);
+  Result := SMALL_RESPONSE_LEN;
+end;
+
 var
   LHandle: TPlatformThreadHandle;
   LHandles: array of TPlatformThreadHandle;
+  LServerOptions: THttpServerOptions;
   LI: Int32;
   LThreadRequests: Int32;
   LStart, LEnd: UInt64;
@@ -184,6 +254,8 @@ begin
   GDone := 0;
   GSuccess := 0;
 
+  LServerOptions := THttpServerOptions.Default;
+  LServerOptions.Backend := GBackend;
   GServer := THttpServer.Create(HandlerFunc(
     procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
@@ -193,17 +265,17 @@ begin
         AW.WriteHeader(404);
         Exit;
       end;
-      AW.Headers.Set_('content-type', 'text/plain');
+      AW.Headers.SetHeader('content-type', 'text/plain');
       if GWorkload = WORKLOAD_RESPONSE_1K then
-        AW.Headers.Set_('content-length', RESPONSE_1K_LEN_TEXT)
+        AW.Headers.SetHeader('content-length', RESPONSE_1K_LEN_TEXT)
       else
-        AW.Headers.Set_('content-length', SMALL_RESPONSE_LEN_TEXT);
+        AW.Headers.SetHeader('content-length', SMALL_RESPONSE_LEN_TEXT);
       AW.WriteHeader(200);
       if GWorkload = WORKLOAD_RESPONSE_1K then
         AW.Write(PAnsiChar(GResponseBody1K)^, Length(GResponseBody1K))
       else
         AW.Write(PAnsiChar(SMALL_RESPONSE_BODY)^, SMALL_RESPONSE_LEN);
-    end), THttpServerOptions.Default);
+    end), LServerOptions);
 
   platform_thread_create(LHandle, @ServerThread, nil);
   while GServer.LocalAddr.Port = 0 do
@@ -250,8 +322,13 @@ begin
   WriteLn('operation=http.server.keepalive');
   WriteLn('workload=', GWorkload);
   WriteLn('impl=nextpas');
+  WriteLn('backend=', BackendName);
   WriteLn('nextpas_h1_path=', ExpectedH1PathForWorkload);
+  WriteLn('client_read_mode=header_plus_content_length');
+  WriteLn('response_body_bytes=', ResponseBodyBytesForWorkload);
   WriteLn('iterations=', GRequests);
+  WriteLn('requested_threads=', GRequestedThreads);
+  WriteLn('effective_threads=', GThreads);
   WriteLn('threads=', GThreads);
   WriteLn('completed=', GSuccess);
   WriteLn('elapsed_ns=', LElapsedNs);

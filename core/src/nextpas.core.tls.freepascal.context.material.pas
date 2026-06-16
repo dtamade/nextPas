@@ -14,8 +14,7 @@ unit nextpas.core.tls.freepascal.context.material;
 interface
 
 uses
-  SysUtils, Classes,
-  nextpas.core.tls.base,
+  SysUtils,nextpas.core.tls.base,
   nextpas.core.tls.freepascal.session;
 
 type
@@ -55,7 +54,7 @@ type
     procedure ClearCRLMaterial;
     procedure AddCRLPEM(const APEM: string);
     procedure AddCRLFile(const AFileName: string);
-    function BuildCRLStore: TStringList;
+    function BuildCRLStore: TStringArray;
   end;
 
   IFreePascalContextServerStaplingMaterial = interface(ISSLServerOCSPStaplingContext)
@@ -82,5 +81,9 @@ type
   end;
 
 implementation
+
+uses
+  nextpas.core.text.strings;
+
 
 end.

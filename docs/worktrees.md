@@ -49,6 +49,23 @@ API、性能或架构质量，必须修正依赖模块或底座 contract，可�
 net、async、mem、base 等底层接口不顺、语义错误或性能路径不合理，应通过受控跨模块修改推动底层收敛，
 而不是在高层长期保留 workaround。最终 landing 时由验证和设计说明来判断哪套方案更合理。
 
+### Lane 命名一致性
+
+Lane 的 worktree 目录名、branch 名和实际责任范围必须保持一致：
+
+- worktree 目录推荐：`.worktrees/<module-or-line>`，例如 `core-http`、`core-platform`、`compiler`。
+- branch 推荐：`codex/<module-or-line>`，与目录同名。
+- 实际责任范围必须能由名字直接判断：`core-net-async-io` 只做 net + async + io 三模块的协同；
+  `core-config-formats` 不应该长期做 yaml-allocator 改造之外的工作；
+  `core-text-unicode` 不应该顺手做 strutils。
+- 如果一个 lane 实际工作范围在多 slice 间漂移到名字之外，必须做以下之一：
+  1. 在 `Ready` 报告里说明这是受控跨模块修改，并附 design reason；
+  2. 把超范围的 commit 拆出 cherry-pick 到独立 landing 候选分支；
+  3. 用 `archive/<lane>-pre-rename-YYYYMMDD` tag 后归档旧 lane，重新开命名一致的新 lane。
+
+历史上已经命名错位的 lane（例如 branch `codex/yaml-allocator` 实际承载 TOML audit）应在下一次
+自然 landing 节点修正，不要继续累积。
+
 ## 创建模块 Worktree
 
 使用项目脚本：
@@ -172,6 +189,22 @@ make hygiene
 <当前任务无关的 active 模块、dirty worktree、生成物、控制文件等>
 ```
 
+## Main Sync 节奏
+
+Lane 长期偏离 main 会让 raw merge debt 累积，最终 landing 成本越来越高。约束：
+
+- Lane 落后 main 超过 **50 commit** 时必须停下来评估同步策略，不要继续叠新 slice。
+- Lane 落后 main 超过 **100 commit** 时算 sync debt，必须在下一次 `Ready` 报告里说明计划
+  （rebase / merge / 等下次 landing 时一并处理 / archive 后重开新 lane）。
+- Lane 自己执行 `git merge main` 是 **临时手段**，每次 merge 会留下一个 merge commit 把
+  上游真相拉进 lane，但同时让 lane HEAD 不再是 main 的简单后裔，后续 ff-only landing 变难。
+  优先选择 cherry-pick 到 landing 候选分支（见下节），避免 lane 内 merge debt 累积。
+- 主动 sync 是 lane owner 自己的工作；接手 AI 或其他评审者不要替别人 sync 别人的 lane，
+  除非 lane owner 不在或已经明确授权。
+
+历史 lane 落后 main 100+ commit 的（例如 `core-tui` 148、`core-net-async-io` 104）必须在
+下一次自然 landing 前先评估 sync 策略，不要再叠多 slice 强行推。
+
 ## Landing 纪律
 
 worktree 位置正确不代表分支可以合并。
@@ -291,6 +324,48 @@ historical changed files。它会在 dirty、detached、`behind != 0`、worktree
 verification、heaptrc/no-leak 证据、source/compile/runtime truth 分类，也不能授权 raw merge
 长期 lane 到 `main`。
 
+### Landing 候选分支模板
+
+当 lane HEAD 准备进入 main 时，**优先用 cherry-pick 到候选分支**而非在 lane 自身上做 ff-only：
+
+```bash
+# 1. 从当前 main 创建候选分支
+git checkout -b landing/<lane>-YYYYMMDD main
+
+# 2. cherry-pick lane 上要 land 的 commit（按时间正序）
+git cherry-pick <oldest-commit> <...> <newest-commit>
+
+# 3. 验证候选分支
+make landing-check \
+  BASE_REF=main \
+  ALLOW_PATHS="<lane changed paths>" \
+  FOCUS=core/tests/<module>/<gate>
+
+# 4. ff-only merge 到 main + push
+git checkout main
+git merge --ff-only landing/<lane>-YYYYMMDD
+git push origin main
+
+# 5. 清理候选分支 + 给 lane HEAD 打 archive tag（保险）
+git branch -d landing/<lane>-YYYYMMDD
+git tag archive/<lane>-landed-YYYYMMDD <lane-head-sha>
+```
+
+为什么选 cherry-pick + 候选分支而不是 lane 自身 ff merge：
+
+- Lane 通常落后 main 多个 commit + 自身有 cross-lane merge / 实验性 commit。直接从 lane
+  HEAD ff merge 会污染 main 历史。
+- 候选分支是一次性的，cherry-pick 后只携带"真正想 land"的 commit，每个 commit 可以独立
+  review 和回滚。
+- `ALLOW_PATHS` 要精确列出 cherry-pick 触及的每个文件（不是宽前缀），因为 prefix 匹配按
+  完整路径组件，例如 `core/src/nextpas.core.text.` 不匹配 `core/src/nextpas.core.text.compare.pas`。
+  可用 `git diff --name-only main..HEAD | tr '\n' ' '` 一键拼。
+- 候选分支命名 `landing/<lane>-YYYYMMDD` 与 lane 分支区分清晰。
+
+lane HEAD 打 archive tag 是 landing 之后的安全网：
+- lane 的 SHA 跟 cherry-picked SHA 不同，archive tag 保留原始 lane HEAD 以备追溯
+- 不强制删除 lane worktree / branch；由 lane owner 决定继续推进还是 archive
+
 成功 landing 后清理：
 
 ```bash
@@ -332,6 +407,42 @@ focused verification 证据和 merge 建议。
 
 不要把根目录 `task_plan.md`、`findings.md`、`progress.md` 当作常规模块状态带进
 `main`。需要长期保存的记录，写到 `docs/plans/` 或对应模块的文档目录。
+
+## Lane Review 评审纪律
+
+接手 AI、新加入开发者或其他非 lane owner 对 active lane 做评审时，必须保持只读边界：
+
+- ❌ 不动 lane 代码（不写、不删、不重排）
+- ❌ 不在 lane 内创建 / 修改 `task_plan.md`、`findings.md`、`progress.md` 或 lane 自己的 docs
+- ✅ 可以 read-only 看 lane 源码、测试、配置、docs
+- ✅ 可以跑 lane 的 focused gate 验证（不修改任何文件，只编译运行）
+- ✅ 可以写 review 报告，但放到主仓 `docs/plans/support/YYYY-MM-DD-<lane>-lane-review.md`
+  而不是 lane 内
+- ✅ Review 必须明示 "初步意见、最终由 lane owner 判断"，并指出 lane owner 可以反驳的渠道
+
+Review 文档应至少包含：lane 概况、goal-tree 当前位置、dirty 改动评审、推荐 lane 下一步、
+评审纪律说明。如果发现跨模块改动、host portability 问题或其他设计风险，必须显式列为
+"高关注点"，提醒 lane owner 在 commit 前先解决。
+
+集中多个 lane 评审时，可以用 `docs/plans/support/YYYY-MM-DD-multi-lane-quick-review.md`
+合并文档；但每个 lane 至少有独立小节，不要把多个 lane 评审压缩到一段。
+
+## Status Board 刷新节奏
+
+`docs/plans/support/YYYY-MM-DD-module-status-board.md` 是当前仓库 worktree / 分支 / lane
+真实状态的快照，配合 `scripts/worktree-audit.sh` 一起读。它有强烈过期风险：
+
+- 推荐刷新频率：**每完成一轮 landing、或每周一次**，由总控或接手 AI 主动维护
+- 旧版 board 不删除，保留为历史记录；新版加入 `docs/plans/README.md` 当前入口列表
+- 刷新动作应基于 `git worktree list --porcelain` + 每个 worktree 的 `git log -3 +
+  git status --short` 取证，不要凭记忆或旧 board 推断
+- 如果 status board 已超过 2 周未刷新，下一次评审前必须先做新 board，否则评审结论
+  容易基于错误事实
+- Status board 应同时反映 `archive/*` tag 状态（哪些 lane 已 landed / archived /
+  仍 active）
+
+接手 AI 在做大动作前（例如 P0/P1 推进），必须先核对 status board 是否反映当前真实状态；
+如果不一致，先刷新 board 再继续。
 
 ## 禁止事项
 

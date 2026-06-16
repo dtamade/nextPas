@@ -79,7 +79,8 @@ function StringsToArray(AStrings: TStrings): TSSLStringArray;
 implementation
 
 uses
-  Math,
+  nextpas.core.text.strings,
+    Math,
   nextpas.core.tls.errors;
 
 { StringsToArray - Phase 3.2 统一实现 }
@@ -88,11 +89,11 @@ var
   I: Integer;
 begin
   SetLength(Result, 0);
-  if (AStrings = nil) or (AStrings.Count = 0) then
+  if (AStrings = nil) or (Length(AStrings) = 0) then
     Exit;
 
-  SetLength(Result, AStrings.Count);
-  for I := 0 to AStrings.Count - 1 do
+  SetLength(Result, Length(AStrings));
+  for I := 0 to Length(AStrings) - 1 do
     Result[I] := Trim(AStrings[I]);
 end;
 
@@ -114,21 +115,19 @@ end;
 
 class function TSSLUtils.PEMToDER(const APEM: string): TBytes;
 var
-  LLines: TStringList;
+  LLines: TStringArray;
   I: Integer;
   LInBlock: Boolean;
   LBase64: string;
 begin
   Result := nil;
   SetLength(Result, 0);
-  
-  LLines := TStringList.Create;
   try
     LLines.Text := APEM;
     LInBlock := False;
     LBase64 := '';
     
-    for I := 0 to LLines.Count - 1 do
+    for I := 0 to Length(LLines) - 1 do
     begin
       if Pos(PEM_BEGIN_MARKER, LLines[I]) > 0 then
       begin
@@ -149,14 +148,13 @@ begin
     if LBase64 <> '' then
       Result := TBase64Utils.Decode(LBase64);
   finally
-    LLines.Free;
   end;
 end;
 
 class function TSSLUtils.DERToPEM(const ADER: TBytes; const AType: string): string;
 var
   LBase64: string;
-  LLines: TStringList;
+  LLines: TStringArray;
   I: Integer;
 begin
   Result := '';
@@ -165,8 +163,6 @@ begin
     Exit;
 
   LBase64 := TBase64Utils.Encode(ADER);
-  
-  LLines := TStringList.Create;
   try
     LLines.Add(PEM_BEGIN_MARKER + AType + '-----');
     
@@ -182,7 +178,6 @@ begin
     
     Result := LLines.Text;
   finally
-    LLines.Free;
   end;
 end;
 
@@ -211,20 +206,19 @@ end;
 
 class function TSSLUtils.FormatCertificateSubject(const ASubject: string): string;
 var
-  LParts: TStringList;
+  LParts: TStringArray;
   I: Integer;
 begin
   LParts := ParseDistinguishedName(ASubject);
   try
     Result := '';
-    for I := 0 to LParts.Count - 1 do
+    for I := 0 to Length(LParts) - 1 do
     begin
       if Result <> '' then
         Result := Result + ', ';
       Result := Result + LParts[I];
     end;
   finally
-    LParts.Free;
   end;
 end;
 
@@ -233,7 +227,6 @@ var
   LParts: TStringArray;
   I: Integer;
 begin
-  Result := TStringList.Create;
   
   // 简单解析，实际应该更复杂
   LParts := ADN.Split([',', '/']);
@@ -395,7 +388,6 @@ begin
     
     Result := LSB.ToString;
   finally
-    LSB.Free;
   end;
 end;
 

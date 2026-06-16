@@ -5,10 +5,7 @@ unit nextpas.core.tls.winssl.errors;
 
 interface
 
-uses
-  SysUtils, Classes, Windows,
-  nextpas.core.tls.base,           // P2: TSSLErrorCode 统一错误码
-  nextpas.core.tls.winssl.base;
+uses SysUtils, Windows, nextpas.core.tls.base, // P2: TSSLErrorCode 统一错误码 nextpas.core.tls.winssl.base;
 
 type
   { 错误级别 }

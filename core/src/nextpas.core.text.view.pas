@@ -49,6 +49,9 @@ type
     function ToSpan: TByteSpan; inline;
   end;
 
+function IndexOfStr(const AValue, ASubStr: string): PtrInt;
+function LastIndexOfStr(const AValue, ASubStr: string): PtrInt;
+
 implementation
 
 uses
@@ -385,6 +388,31 @@ end;
 function TStringView.ToSpan: TByteSpan;
 begin
   Result := TByteSpan.Create(PByte(FData), FLen);
+end;
+
+function IndexOfStr(const AValue, ASubStr: string): PtrInt;
+begin
+  Result := TStringView.FromStr(AValue).IndexOfStr(TStringView.FromStr(ASubStr));
+end;
+
+function LastIndexOfStr(const AValue, ASubStr: string): PtrInt;
+var
+  LValue: TStringView;
+  LNeedle: TStringView;
+  I: PtrInt;
+begin
+  LValue := TStringView.FromStr(AValue);
+  LNeedle := TStringView.FromStr(ASubStr);
+
+  if (LNeedle.Len = 0) or (LNeedle.Len > LValue.Len) then
+    Exit(-1);
+  if LNeedle.Len = 1 then
+    Exit(LValue.LastIndexOf(LNeedle.Data[0]));
+
+  for I := PtrInt(LValue.Len - LNeedle.Len) downto 0 do
+    if LValue.Slice(SizeUInt(I), LNeedle.Len).Equals(LNeedle) then
+      Exit(I);
+  Result := -1;
 end;
 
 end.

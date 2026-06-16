@@ -5,8 +5,10 @@ program test_process_pipe_contract;
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils, Classes,
+  nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.errors,
+  nextpas.core.io.intf,
   nextpas.core.process.pipe
   {$IFDEF NEXTPAS_UNIX}
   , nextpas.core.platform.posix.base,
@@ -269,6 +271,57 @@ begin
   finally
     LWriter.Free;
   end;
+end;
+
+procedure TestPipeReaderExposesReadCloseContract;
+var
+  LPipe: array[0..1] of Int32;
+  LReader: IReader;
+  LReadCloser: IReadCloser;
+  LDrainReader: IPipeDrainReader;
+  LByte: Byte;
+begin
+  Check(pipe(@LPipe[0]) = 0, 'pipe created');
+  Check(write(LPipe[1], @GPipeTestByte, 1) = 1, 'write test byte');
+  Check(close(LPipe[1]) = 0, 'writer end closed');
+  LReader := TPipeReader.Create(LPipe[0]) as IReader;
+  Check(Supports(LReader, IReadCloser, LReadCloser),
+    'reader supports IReadCloser');
+  Check(Supports(LReader, IPipeDrainReader, LDrainReader),
+    'reader supports IPipeDrainReader');
+  CheckEqual(Int64(LPipe[0]), Int64(LDrainReader.NativeHandle),
+    'native handle matches constructor fd');
+  CheckEqual(Int64(1), Int64(LReadCloser.Read(LByte, 1)),
+    'read closer reads one byte');
+  CheckEqual(Int64(GPipeTestByte), Int64(LByte),
+    'read closer byte matches payload');
+  LReadCloser.Close;
+  LDrainReader := nil;
+  LReadCloser := nil;
+  LReader := nil;
+end;
+
+procedure TestPipeWriterExposesWriteCloseContract;
+var
+  LPipe: array[0..1] of Int32;
+  LWriter: IWriter;
+  LWriteCloser: IWriteCloser;
+  LReadByte: Byte;
+begin
+  Check(pipe(@LPipe[0]) = 0, 'pipe created');
+  LWriter := TPipeWriter.Create(LPipe[1]) as IWriter;
+  Check(Supports(LWriter, IWriteCloser, LWriteCloser),
+    'writer supports IWriteCloser');
+  CheckEqual(Int64(1), Int64(LWriteCloser.Write(GPipeTestByte, 1)),
+    'write closer writes one byte');
+  LWriteCloser.Close;
+  CheckEqual(Int64(1), Int64(read(LPipe[0], @LReadByte, 1)),
+    'reader receives one byte');
+  CheckEqual(Int64(GPipeTestByte), Int64(LReadByte),
+    'reader byte matches payload');
+  LWriteCloser := nil;
+  LWriter := nil;
+  Check(close(LPipe[0]) = 0, 'reader end closed');
 end;
 
 {$IFDEF NEXTPAS_UNIX}
@@ -797,6 +850,10 @@ begin
   T.Run('invalid writer fd raises', @TestPipeWriterInvalidFdRaises);
   T.Run('invalid reader close raises', @TestPipeReaderCloseInvalidFdRaises);
   T.Run('invalid writer close raises', @TestPipeWriterCloseInvalidFdRaises);
+  T.Run('reader exposes read-close and drain contracts',
+    @TestPipeReaderExposesReadCloseContract);
+  T.Run('writer exposes write-close contract',
+    @TestPipeWriterExposesWriteCloseContract);
   {$IFDEF NEXTPAS_UNIX}
   T.Run('reader zero-count returns 0', @TestPipeReaderZeroCountReturnsZero);
   T.Run('writer zero-count returns 0', @TestPipeWriterZeroCountReturnsZero);

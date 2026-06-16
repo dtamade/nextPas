@@ -6,7 +6,8 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.testing,
-  nextpas.core.mem.allocator,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.collections.base,
   nextpas.core.collections.element_manager,
   nextpas.core.collections.node,
@@ -142,7 +143,7 @@ var
   LValue: Integer;
   LBuffer: array[0..5] of Integer;
 begin
-  LManager := TIntManager.Create(GetRtlAllocator);
+  LManager := TIntManager.Create(DefaultAllocator);
   try
     CheckEqual(Int64(SizeOf(Integer)), Int64(LManager.ElementSize), 'integer element size');
     CheckEqual(False, LManager.IsManagedType, 'integer should be unmanaged');
@@ -183,7 +184,7 @@ var
   LSecond: TStringManager.PElement;
   LRaised: Boolean;
 begin
-  LManager := TStringManager.Create(GetRtlAllocator);
+  LManager := TStringManager.Create(DefaultAllocator);
   try
     CheckEqual(True, LManager.IsManagedType, 'string should be a managed type');
 
@@ -259,7 +260,7 @@ var
   LDest: TTrackedManager.PElement;
   I: SizeInt;
 begin
-  LManager := TTrackedManager.Create(GetRtlAllocator);
+  LManager := TTrackedManager.Create(DefaultAllocator);
   LSource := nil;
   LDest := nil;
   try
@@ -304,7 +305,7 @@ var
   LManager: TTrackedManager;
   LElements: TTrackedManager.PElement;
 begin
-  LManager := TTrackedManager.Create(GetRtlAllocator);
+  LManager := TTrackedManager.Create(DefaultAllocator);
   LElements := nil;
   try
     LElements := LManager.AllocElements(2);
@@ -342,7 +343,7 @@ var
 begin
   GManagedRecordAlive := 0;
   GManagedRecordBadFinalize := 0;
-  LManager := TManagedRecordManager.Create(GetRtlAllocator);
+  LManager := TManagedRecordManager.Create(DefaultAllocator);
   LElements := nil;
   try
     LElements := LManager.AllocElements(2);

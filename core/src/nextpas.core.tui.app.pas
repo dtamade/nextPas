@@ -4,15 +4,7 @@ unit nextpas.core.tui.app;
 
 interface
 
-uses
-  SysUtils,
-  nextpas.core.tui.base,
-  nextpas.core.tui.event,
-  nextpas.core.tui.terminal,
-  nextpas.core.tui.app.screen,
-  nextpas.core.tui.focus,
-  nextpas.core.tui.frame_budget,
-  nextpas.core.tui.task;
+uses nextpas.core.tui.base, nextpas.core.tui.event, nextpas.core.tui.terminal, nextpas.core.tui.app.screen, nextpas.core.tui.focus, nextpas.core.tui.frame_budget, nextpas.core.tui.task;
 
 type
   TApp = class;
@@ -95,10 +87,7 @@ type
 
 implementation
 
-uses
-  nextpas.core.platform.console, nextpas.core.platform.signal,
-  nextpas.core.platform.time,
-  nextpas.core.tui.error;
+uses nextpas.core.platform.console, nextpas.core.platform.signal, nextpas.core.platform.time, nextpas.core.tui.error;
 
 constructor TApp.Create;
 begin

@@ -2,8 +2,7 @@ unit nextpas.core.tui.task;
 {$I nextpas.core.settings.inc}
 
 interface
-uses
-  SysUtils{$IF FPC_FULLVERSION >= 30300}, Classes{$ENDIF};
+uses Classes;
 const
   TASK_QUEUE_CAPACITY = 32;
   MAX_CONCURRENT_TASKS = 8;

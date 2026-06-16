@@ -5,8 +5,7 @@ unit nextpas.core.tls.openssl.api.async;
 
 interface
 
-uses
-  Classes, SysUtils, nextpas.core.tls.openssl.base;
+uses Classes, nextpas.core.tls.openssl.base;
 
 type
   // ASYNC types
@@ -149,10 +148,7 @@ type
 
 implementation
 
-uses
-  {$IFDEF WINDOWS}Windows,{$ENDIF}
-  {$IFDEF UNIX}BaseUnix,{$ENDIF}
-  nextpas.core.tls.openssl.api.utils;
+uses Windows, BaseUnix, nextpas.core.tls.openssl.api.utils;
 
 procedure LoadASYNCFunctions(AHandle: TLibHandle);
 type
