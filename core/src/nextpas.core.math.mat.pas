@@ -34,10 +34,12 @@ type
     class operator * (const AMatrix: TMat3f; const AVector: TVec3f): TVec3f; inline;
     class operator * (const AA, AB: TMat3f): TMat3f;
     class function Equals(const AA, AB: TMat3f; const AEpsilon: Single): Boolean; static; inline;
+    class function Lerp(const AA, AB: TMat3f; const AT: Single): TMat3f; static; inline;
     function Transpose: TMat3f; inline;
     function Determinant: Single; inline;
     function TryInverse(out AInverse: TMat3f): Boolean;
     function Inverse: TMat3f;
+    function PerfectlyEquals(const AOther: TMat3f): Boolean; inline;
     property Items[const AColumn, ARow: TIndex]: Single read GetItems write SetItems; default;
     property Rows[const ARow: TIndex]: TVec3f read GetRows write SetRows;
     property Columns[const AColumn: TIndex]: TVec3f read GetColumns write SetColumns;
@@ -69,10 +71,14 @@ type
     class operator * (const AMatrix: TMat4f; const AVector: TVec4f): TVec4f; inline;
     class operator * (const AA, AB: TMat4f): TMat4f;
     class function Equals(const AA, AB: TMat4f; const AEpsilon: Single): Boolean; static; inline;
+    class function Lerp(const AA, AB: TMat4f; const AT: Single): TMat4f; static; inline;
     function Transpose: TMat4f; inline;
     function Determinant: Single;
     function TryInverse(out AInverse: TMat4f): Boolean;
     function Inverse: TMat4f;
+    function MultPoint(const AVec: TVec3f): TVec3f; inline;
+    function MultDirection(const AVec: TVec3f): TVec3f; inline;
+    function PerfectlyEquals(const AOther: TMat4f): Boolean; inline;
     property Items[const AColumn, ARow: TIndex]: Single read GetItems write SetItems; default;
     property Rows[const ARow: TIndex]: TVec4f read GetRows write SetRows;
     property Columns[const AColumn: TIndex]: TVec4f read GetColumns write SetColumns;
@@ -104,10 +110,12 @@ type
     class operator * (const AMatrix: TMat3d; const AVector: TVec3d): TVec3d; inline;
     class operator * (const AA, AB: TMat3d): TMat3d;
     class function Equals(const AA, AB: TMat3d; const AEpsilon: Double): Boolean; static; inline;
+    class function Lerp(const AA, AB: TMat3d; const AT: Double): TMat3d; static; inline;
     function Transpose: TMat3d; inline;
     function Determinant: Double; inline;
     function TryInverse(out AInverse: TMat3d): Boolean;
     function Inverse: TMat3d;
+    function PerfectlyEquals(const AOther: TMat3d): Boolean; inline;
     property Items[const AColumn, ARow: TIndex]: Double read GetItems write SetItems; default;
     property Rows[const ARow: TIndex]: TVec3d read GetRows write SetRows;
     property Columns[const AColumn: TIndex]: TVec3d read GetColumns write SetColumns;
@@ -139,10 +147,14 @@ type
     class operator * (const AMatrix: TMat4d; const AVector: TVec4d): TVec4d; inline;
     class operator * (const AA, AB: TMat4d): TMat4d;
     class function Equals(const AA, AB: TMat4d; const AEpsilon: Double): Boolean; static; inline;
+    class function Lerp(const AA, AB: TMat4d; const AT: Double): TMat4d; static; inline;
     function Transpose: TMat4d; inline;
     function Determinant: Double;
     function TryInverse(out AInverse: TMat4d): Boolean;
     function Inverse: TMat4d;
+    function MultPoint(const AVec: TVec3d): TVec3d; inline;
+    function MultDirection(const AVec: TVec3d): TVec3d; inline;
+    function PerfectlyEquals(const AOther: TMat4d): Boolean; inline;
     property Items[const AColumn, ARow: TIndex]: Double read GetItems write SetItems; default;
     property Rows[const ARow: TIndex]: TVec4d read GetRows write SetRows;
     property Columns[const AColumn: TIndex]: TVec4d read GetColumns write SetColumns;
@@ -587,6 +599,26 @@ begin
     raise EArgumentError.Create('TMat3f.Inverse: matrix is singular');
 end;
 
+class function TMat3f.Lerp(const AA, AB: TMat3f; const AT: Single): TMat3f;
+var
+  LC, LR: TIndex;
+begin
+  for LC := Low(TIndex) to High(TIndex) do
+    for LR := Low(TIndex) to High(TIndex) do
+      Result.Data[LC, LR] := nextpas.core.math.scalar.Lerp(AA.Data[LC, LR], AB.Data[LC, LR], AT);
+end;
+
+function TMat3f.PerfectlyEquals(const AOther: TMat3f): Boolean;
+var
+  LC, LR: TIndex;
+begin
+  Result := True;
+  for LC := Low(TIndex) to High(TIndex) do
+    for LR := Low(TIndex) to High(TIndex) do
+      if Data[LC, LR] <> AOther.Data[LC, LR] then
+        Exit(False);
+end;
+
 { TMat4f }
 
 function TMat4f.GetItems(const AColumn, ARow: TIndex): Single;
@@ -794,6 +826,42 @@ begin
     raise EArgumentError.Create('TMat4f.Inverse: matrix is singular');
 end;
 
+class function TMat4f.Lerp(const AA, AB: TMat4f; const AT: Single): TMat4f;
+var
+  LC, LR: TIndex;
+begin
+  for LC := Low(TIndex) to High(TIndex) do
+    for LR := Low(TIndex) to High(TIndex) do
+      Result.Data[LC, LR] := nextpas.core.math.scalar.Lerp(AA.Data[LC, LR], AB.Data[LC, LR], AT);
+end;
+
+function TMat4f.MultPoint(const AVec: TVec3f): TVec3f;
+begin
+  Result := TVec3f.Create(
+    Data[0, 0] * AVec.X + Data[1, 0] * AVec.Y + Data[2, 0] * AVec.Z + Data[3, 0],
+    Data[0, 1] * AVec.X + Data[1, 1] * AVec.Y + Data[2, 1] * AVec.Z + Data[3, 1],
+    Data[0, 2] * AVec.X + Data[1, 2] * AVec.Y + Data[2, 2] * AVec.Z + Data[3, 2]);
+end;
+
+function TMat4f.MultDirection(const AVec: TVec3f): TVec3f;
+begin
+  Result := TVec3f.Create(
+    Data[0, 0] * AVec.X + Data[1, 0] * AVec.Y + Data[2, 0] * AVec.Z,
+    Data[0, 1] * AVec.X + Data[1, 1] * AVec.Y + Data[2, 1] * AVec.Z,
+    Data[0, 2] * AVec.X + Data[1, 2] * AVec.Y + Data[2, 2] * AVec.Z);
+end;
+
+function TMat4f.PerfectlyEquals(const AOther: TMat4f): Boolean;
+var
+  LC, LR: TIndex;
+begin
+  Result := True;
+  for LC := Low(TIndex) to High(TIndex) do
+    for LR := Low(TIndex) to High(TIndex) do
+      if Data[LC, LR] <> AOther.Data[LC, LR] then
+        Exit(False);
+end;
+
 { TMat3d }
 
 function TMat3d.GetItems(const AColumn, ARow: TIndex): Double;
@@ -985,6 +1053,26 @@ function TMat3d.Inverse: TMat3d;
 begin
   if not TryInverse(Result) then
     raise EArgumentError.Create('TMat3d.Inverse: matrix is singular');
+end;
+
+class function TMat3d.Lerp(const AA, AB: TMat3d; const AT: Double): TMat3d;
+var
+  LC, LR: TIndex;
+begin
+  for LC := Low(TIndex) to High(TIndex) do
+    for LR := Low(TIndex) to High(TIndex) do
+      Result.Data[LC, LR] := nextpas.core.math.scalar.Lerp(AA.Data[LC, LR], AB.Data[LC, LR], AT);
+end;
+
+function TMat3d.PerfectlyEquals(const AOther: TMat3d): Boolean;
+var
+  LC, LR: TIndex;
+begin
+  Result := True;
+  for LC := Low(TIndex) to High(TIndex) do
+    for LR := Low(TIndex) to High(TIndex) do
+      if Data[LC, LR] <> AOther.Data[LC, LR] then
+        Exit(False);
 end;
 
 { TMat4d }
@@ -1192,6 +1280,42 @@ function TMat4d.Inverse: TMat4d;
 begin
   if not TryInverse(Result) then
     raise EArgumentError.Create('TMat4d.Inverse: matrix is singular');
+end;
+
+class function TMat4d.Lerp(const AA, AB: TMat4d; const AT: Double): TMat4d;
+var
+  LC, LR: TIndex;
+begin
+  for LC := Low(TIndex) to High(TIndex) do
+    for LR := Low(TIndex) to High(TIndex) do
+      Result.Data[LC, LR] := nextpas.core.math.scalar.Lerp(AA.Data[LC, LR], AB.Data[LC, LR], AT);
+end;
+
+function TMat4d.MultPoint(const AVec: TVec3d): TVec3d;
+begin
+  Result := TVec3d.Create(
+    Data[0, 0] * AVec.X + Data[1, 0] * AVec.Y + Data[2, 0] * AVec.Z + Data[3, 0],
+    Data[0, 1] * AVec.X + Data[1, 1] * AVec.Y + Data[2, 1] * AVec.Z + Data[3, 1],
+    Data[0, 2] * AVec.X + Data[1, 2] * AVec.Y + Data[2, 2] * AVec.Z + Data[3, 2]);
+end;
+
+function TMat4d.MultDirection(const AVec: TVec3d): TVec3d;
+begin
+  Result := TVec3d.Create(
+    Data[0, 0] * AVec.X + Data[1, 0] * AVec.Y + Data[2, 0] * AVec.Z,
+    Data[0, 1] * AVec.X + Data[1, 1] * AVec.Y + Data[2, 1] * AVec.Z,
+    Data[0, 2] * AVec.X + Data[1, 2] * AVec.Y + Data[2, 2] * AVec.Z);
+end;
+
+function TMat4d.PerfectlyEquals(const AOther: TMat4d): Boolean;
+var
+  LC, LR: TIndex;
+begin
+  Result := True;
+  for LC := Low(TIndex) to High(TIndex) do
+    for LR := Low(TIndex) to High(TIndex) do
+      if Data[LC, LR] <> AOther.Data[LC, LR] then
+        Exit(False);
 end;
 
 end.
