@@ -79,6 +79,8 @@ begin
     Result := nil;
     Exit;
   end;
+  if (SizeOf(PtrUInt) < 8) and (LSize > Int64(High(PtrUInt))) then
+    raise EIOError.Create('file too large for address space: ' + APath);
   SetLength(Result, LSize);
   LRead := 0;
   LResult := platform_fs_read_file_into(PAnsiChar(APath),
