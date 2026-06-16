@@ -11,20 +11,28 @@ type
       TIndex = 0..1;
     class function Create(const AX, AY: Single): TVec2f; static; inline;
     class function Zero: TVec2f; static; inline;
+    class function One: TVec2f; static; inline;
     class operator + (const AA, AB: TVec2f): TVec2f; inline;
     class operator - (const AA, AB: TVec2f): TVec2f; inline;
     class operator - (const AValue: TVec2f): TVec2f; inline;
     class operator * (const AValue: TVec2f; const AScalar: Single): TVec2f; inline;
     class operator * (const AScalar: Single; const AValue: TVec2f): TVec2f; inline;
     class operator / (const AValue: TVec2f; const AScalar: Single): TVec2f; inline;
-    class function MulComponents(const AA, AB: TVec2f): TVec2f; static; inline;
-    class function DivComponents(const AA, AB: TVec2f): TVec2f; static; inline;
-    class function Dot(const AA, AB: TVec2f): Single; static; inline;
-    class function Cross2D(const AA, AB: TVec2f): Single; static; inline;
-    class function Lerp(const AA, AB: TVec2f; const AT: Single): TVec2f; static; inline;
-    class function Equals(const AA, AB: TVec2f; const AEpsilon: Single): Boolean; static; inline;
-    class function Max(const AA, AB: TVec2f): TVec2f; static; inline;
-    class function Min(const AA, AB: TVec2f): TVec2f; static; inline;
+    function ComponentMul(const AOther: TVec2f): TVec2f; inline;
+    function ComponentDiv(const AOther: TVec2f): TVec2f; inline;
+    function Dot(const AOther: TVec2f): Single; inline;
+    function Cross2D(const AOther: TVec2f): Single; inline;
+    function Lerp(const ATarget: TVec2f; const AT: Single): TVec2f; inline;
+    function Equals(const AOther: TVec2f; const AEpsilon: Single): Boolean; inline;
+    function Max(const AOther: TVec2f): TVec2f; inline;
+    function Min(const AOther: TVec2f): TVec2f; inline;
+    function Distance(const AOther: TVec2f): Single; inline;
+    function DistanceSqr(const AOther: TVec2f): Single; inline;
+    function Reflect(const ANormal: TVec2f): TVec2f; inline;
+    function ProjectOnto(const ADirection: TVec2f): TVec2f; inline;
+    function RejectFrom(const ADirection: TVec2f): TVec2f; inline;
+    function TryNormalize: TVec2f; inline;
+    function IsNormalized: Boolean; inline;
     function LengthSqr: Single; inline;
     function Length: Single; inline;
     function Normalize: TVec2f; inline;
@@ -43,21 +51,29 @@ type
       TIndex = 0..2;
     class function Create(const AX, AY, AZ: Single): TVec3f; static; inline;
     class function Zero: TVec3f; static; inline;
+    class function One: TVec3f; static; inline;
     class operator + (const AA, AB: TVec3f): TVec3f; inline;
     class operator - (const AA, AB: TVec3f): TVec3f; inline;
     class operator - (const AValue: TVec3f): TVec3f; inline;
     class operator * (const AValue: TVec3f; const AScalar: Single): TVec3f; inline;
     class operator * (const AScalar: Single; const AValue: TVec3f): TVec3f; inline;
     class operator / (const AValue: TVec3f; const AScalar: Single): TVec3f; inline;
-    class function MulComponents(const AA, AB: TVec3f): TVec3f; static; inline;
-    class function DivComponents(const AA, AB: TVec3f): TVec3f; static; inline;
-    class function Dot(const AA, AB: TVec3f): Single; static; inline;
-    class function Cross(const AA, AB: TVec3f): TVec3f; static; inline;
-    class function Lerp(const AA, AB: TVec3f; const AT: Single): TVec3f; static; inline;
-    class function Equals(const AA, AB: TVec3f; const AEpsilon: Single): Boolean; static; inline;
-    class function Max(const AA, AB: TVec3f): TVec3f; static; inline;
-    class function Min(const AA, AB: TVec3f): TVec3f; static; inline;
-    class function Average(const AA, AB: TVec3f): TVec3f; static; inline;
+    function ComponentMul(const AOther: TVec3f): TVec3f; inline;
+    function ComponentDiv(const AOther: TVec3f): TVec3f; inline;
+    function Dot(const AOther: TVec3f): Single; inline;
+    function Cross(const AOther: TVec3f): TVec3f; inline;
+    function Lerp(const ATarget: TVec3f; const AT: Single): TVec3f; inline;
+    function Equals(const AOther: TVec3f; const AEpsilon: Single): Boolean; inline;
+    function Max(const AOther: TVec3f): TVec3f; inline;
+    function Min(const AOther: TVec3f): TVec3f; inline;
+    function Average(const AOther: TVec3f): TVec3f; inline;
+    function Distance(const AOther: TVec3f): Single; inline;
+    function DistanceSqr(const AOther: TVec3f): Single; inline;
+    function Reflect(const ANormal: TVec3f): TVec3f; inline;
+    function ProjectOnto(const ADirection: TVec3f): TVec3f; inline;
+    function RejectFrom(const ADirection: TVec3f): TVec3f; inline;
+    function TryNormalize: TVec3f; inline;
+    function IsNormalized: Boolean; inline;
     function LengthSqr: Single; inline;
     function Length: Single; inline;
     function Normalize: TVec3f; inline;
@@ -77,19 +93,27 @@ type
       TIndex = 0..3;
     class function Create(const AX, AY, AZ, AW: Single): TVec4f; static; inline;
     class function Zero: TVec4f; static; inline;
+    class function One: TVec4f; static; inline;
     class operator + (const AA, AB: TVec4f): TVec4f; inline;
     class operator - (const AA, AB: TVec4f): TVec4f; inline;
     class operator - (const AValue: TVec4f): TVec4f; inline;
     class operator * (const AValue: TVec4f; const AScalar: Single): TVec4f; inline;
     class operator * (const AScalar: Single; const AValue: TVec4f): TVec4f; inline;
     class operator / (const AValue: TVec4f; const AScalar: Single): TVec4f; inline;
-    class function MulComponents(const AA, AB: TVec4f): TVec4f; static; inline;
-    class function DivComponents(const AA, AB: TVec4f): TVec4f; static; inline;
-    class function Dot(const AA, AB: TVec4f): Single; static; inline;
-    class function Lerp(const AA, AB: TVec4f; const AT: Single): TVec4f; static; inline;
-    class function Equals(const AA, AB: TVec4f; const AEpsilon: Single): Boolean; static; inline;
-    class function Max(const AA, AB: TVec4f): TVec4f; static; inline;
-    class function Min(const AA, AB: TVec4f): TVec4f; static; inline;
+    function ComponentMul(const AOther: TVec4f): TVec4f; inline;
+    function ComponentDiv(const AOther: TVec4f): TVec4f; inline;
+    function Dot(const AOther: TVec4f): Single; inline;
+    function Lerp(const ATarget: TVec4f; const AT: Single): TVec4f; inline;
+    function Equals(const AOther: TVec4f; const AEpsilon: Single): Boolean; inline;
+    function Max(const AOther: TVec4f): TVec4f; inline;
+    function Min(const AOther: TVec4f): TVec4f; inline;
+    function Distance(const AOther: TVec4f): Single; inline;
+    function DistanceSqr(const AOther: TVec4f): Single; inline;
+    function Reflect(const ANormal: TVec4f): TVec4f; inline;
+    function ProjectOnto(const ADirection: TVec4f): TVec4f; inline;
+    function RejectFrom(const ADirection: TVec4f): TVec4f; inline;
+    function TryNormalize: TVec4f; inline;
+    function IsNormalized: Boolean; inline;
     function LengthSqr: Single; inline;
     function Length: Single; inline;
     function Normalize: TVec4f; inline;
@@ -109,20 +133,28 @@ type
       TIndex = 0..1;
     class function Create(const AX, AY: Double): TVec2d; static; inline;
     class function Zero: TVec2d; static; inline;
+    class function One: TVec2d; static; inline;
     class operator + (const AA, AB: TVec2d): TVec2d; inline;
     class operator - (const AA, AB: TVec2d): TVec2d; inline;
     class operator - (const AValue: TVec2d): TVec2d; inline;
     class operator * (const AValue: TVec2d; const AScalar: Double): TVec2d; inline;
     class operator * (const AScalar: Double; const AValue: TVec2d): TVec2d; inline;
     class operator / (const AValue: TVec2d; const AScalar: Double): TVec2d; inline;
-    class function MulComponents(const AA, AB: TVec2d): TVec2d; static; inline;
-    class function DivComponents(const AA, AB: TVec2d): TVec2d; static; inline;
-    class function Dot(const AA, AB: TVec2d): Double; static; inline;
-    class function Cross2D(const AA, AB: TVec2d): Double; static; inline;
-    class function Lerp(const AA, AB: TVec2d; const AT: Double): TVec2d; static; inline;
-    class function Equals(const AA, AB: TVec2d; const AEpsilon: Double): Boolean; static; inline;
-    class function Max(const AA, AB: TVec2d): TVec2d; static; inline;
-    class function Min(const AA, AB: TVec2d): TVec2d; static; inline;
+    function ComponentMul(const AOther: TVec2d): TVec2d; inline;
+    function ComponentDiv(const AOther: TVec2d): TVec2d; inline;
+    function Dot(const AOther: TVec2d): Double; inline;
+    function Cross2D(const AOther: TVec2d): Double; inline;
+    function Lerp(const ATarget: TVec2d; const AT: Double): TVec2d; inline;
+    function Equals(const AOther: TVec2d; const AEpsilon: Double): Boolean; inline;
+    function Max(const AOther: TVec2d): TVec2d; inline;
+    function Min(const AOther: TVec2d): TVec2d; inline;
+    function Distance(const AOther: TVec2d): Double; inline;
+    function DistanceSqr(const AOther: TVec2d): Double; inline;
+    function Reflect(const ANormal: TVec2d): TVec2d; inline;
+    function ProjectOnto(const ADirection: TVec2d): TVec2d; inline;
+    function RejectFrom(const ADirection: TVec2d): TVec2d; inline;
+    function TryNormalize: TVec2d; inline;
+    function IsNormalized: Boolean; inline;
     function LengthSqr: Double; inline;
     function Length: Double; inline;
     function Normalize: TVec2d; inline;
@@ -141,21 +173,29 @@ type
       TIndex = 0..2;
     class function Create(const AX, AY, AZ: Double): TVec3d; static; inline;
     class function Zero: TVec3d; static; inline;
+    class function One: TVec3d; static; inline;
     class operator + (const AA, AB: TVec3d): TVec3d; inline;
     class operator - (const AA, AB: TVec3d): TVec3d; inline;
     class operator - (const AValue: TVec3d): TVec3d; inline;
     class operator * (const AValue: TVec3d; const AScalar: Double): TVec3d; inline;
     class operator * (const AScalar: Double; const AValue: TVec3d): TVec3d; inline;
     class operator / (const AValue: TVec3d; const AScalar: Double): TVec3d; inline;
-    class function MulComponents(const AA, AB: TVec3d): TVec3d; static; inline;
-    class function DivComponents(const AA, AB: TVec3d): TVec3d; static; inline;
-    class function Dot(const AA, AB: TVec3d): Double; static; inline;
-    class function Cross(const AA, AB: TVec3d): TVec3d; static; inline;
-    class function Lerp(const AA, AB: TVec3d; const AT: Double): TVec3d; static; inline;
-    class function Equals(const AA, AB: TVec3d; const AEpsilon: Double): Boolean; static; inline;
-    class function Max(const AA, AB: TVec3d): TVec3d; static; inline;
-    class function Min(const AA, AB: TVec3d): TVec3d; static; inline;
-    class function Average(const AA, AB: TVec3d): TVec3d; static; inline;
+    function ComponentMul(const AOther: TVec3d): TVec3d; inline;
+    function ComponentDiv(const AOther: TVec3d): TVec3d; inline;
+    function Dot(const AOther: TVec3d): Double; inline;
+    function Cross(const AOther: TVec3d): TVec3d; inline;
+    function Lerp(const ATarget: TVec3d; const AT: Double): TVec3d; inline;
+    function Equals(const AOther: TVec3d; const AEpsilon: Double): Boolean; inline;
+    function Max(const AOther: TVec3d): TVec3d; inline;
+    function Min(const AOther: TVec3d): TVec3d; inline;
+    function Average(const AOther: TVec3d): TVec3d; inline;
+    function Distance(const AOther: TVec3d): Double; inline;
+    function DistanceSqr(const AOther: TVec3d): Double; inline;
+    function Reflect(const ANormal: TVec3d): TVec3d; inline;
+    function ProjectOnto(const ADirection: TVec3d): TVec3d; inline;
+    function RejectFrom(const ADirection: TVec3d): TVec3d; inline;
+    function TryNormalize: TVec3d; inline;
+    function IsNormalized: Boolean; inline;
     function LengthSqr: Double; inline;
     function Length: Double; inline;
     function Normalize: TVec3d; inline;
@@ -175,19 +215,27 @@ type
       TIndex = 0..3;
     class function Create(const AX, AY, AZ, AW: Double): TVec4d; static; inline;
     class function Zero: TVec4d; static; inline;
+    class function One: TVec4d; static; inline;
     class operator + (const AA, AB: TVec4d): TVec4d; inline;
     class operator - (const AA, AB: TVec4d): TVec4d; inline;
     class operator - (const AValue: TVec4d): TVec4d; inline;
     class operator * (const AValue: TVec4d; const AScalar: Double): TVec4d; inline;
     class operator * (const AScalar: Double; const AValue: TVec4d): TVec4d; inline;
     class operator / (const AValue: TVec4d; const AScalar: Double): TVec4d; inline;
-    class function MulComponents(const AA, AB: TVec4d): TVec4d; static; inline;
-    class function DivComponents(const AA, AB: TVec4d): TVec4d; static; inline;
-    class function Dot(const AA, AB: TVec4d): Double; static; inline;
-    class function Lerp(const AA, AB: TVec4d; const AT: Double): TVec4d; static; inline;
-    class function Equals(const AA, AB: TVec4d; const AEpsilon: Double): Boolean; static; inline;
-    class function Max(const AA, AB: TVec4d): TVec4d; static; inline;
-    class function Min(const AA, AB: TVec4d): TVec4d; static; inline;
+    function ComponentMul(const AOther: TVec4d): TVec4d; inline;
+    function ComponentDiv(const AOther: TVec4d): TVec4d; inline;
+    function Dot(const AOther: TVec4d): Double; inline;
+    function Lerp(const ATarget: TVec4d; const AT: Double): TVec4d; inline;
+    function Equals(const AOther: TVec4d; const AEpsilon: Double): Boolean; inline;
+    function Max(const AOther: TVec4d): TVec4d; inline;
+    function Min(const AOther: TVec4d): TVec4d; inline;
+    function Distance(const AOther: TVec4d): Double; inline;
+    function DistanceSqr(const AOther: TVec4d): Double; inline;
+    function Reflect(const ANormal: TVec4d): TVec4d; inline;
+    function ProjectOnto(const ADirection: TVec4d): TVec4d; inline;
+    function RejectFrom(const ADirection: TVec4d): TVec4d; inline;
+    function TryNormalize: TVec4d; inline;
+    function IsNormalized: Boolean; inline;
     function LengthSqr: Double; inline;
     function Length: Double; inline;
     function Normalize: TVec4d; inline;
@@ -200,6 +248,11 @@ type
         0: (X, Y, Z, W: Double);
         1: (Data: array[TIndex] of Double);
   end;
+
+function Vec3fExtend(const AVec: TVec3f; const AW: Single): TVec4f; inline;
+function Vec4fTruncate(const AVec: TVec4f): TVec3f; inline;
+function Vec3dExtend(const AVec: TVec3d; const AW: Double): TVec4d; inline;
+function Vec4dTruncate(const AVec: TVec4d): TVec3d; inline;
 
 implementation
 
@@ -1176,6 +1229,11 @@ begin
   Result := TVec2f.Create(0.0, 0.0);
 end;
 
+class function TVec2f.One: TVec2f;
+begin
+  Result := TVec2f.Create(1.0, 1.0);
+end;
+
 class operator TVec2f.+ (const AA, AB: TVec2f): TVec2f;
 begin
   Result := TVec2f.Create(AA.X + AB.X, AA.Y + AB.Y);
@@ -1207,32 +1265,32 @@ begin
   Result := TVec2f.Create(AValue.X / AScalar, AValue.Y / AScalar);
 end;
 
-class function TVec2f.MulComponents(const AA, AB: TVec2f): TVec2f;
+function TVec2f.ComponentMul(const AOther: TVec2f): TVec2f;
 begin
-  Result := TVec2f.Create(AA.X * AB.X, AA.Y * AB.Y);
+  Result := TVec2f.Create(X * AOther.X, Y * AOther.Y);
 end;
 
-class function TVec2f.DivComponents(const AA, AB: TVec2f): TVec2f;
+function TVec2f.ComponentDiv(const AOther: TVec2f): TVec2f;
 begin
-  ValidateComponentDivisor('TVec2f.DivComponents', AB);
-  Result := TVec2f.Create(AA.X / AB.X, AA.Y / AB.Y);
+  ValidateComponentDivisor('TVec2f.ComponentDiv', AOther);
+  Result := TVec2f.Create(X / AOther.X, Y / AOther.Y);
 end;
 
-class function TVec2f.Dot(const AA, AB: TVec2f): Single;
+function TVec2f.Dot(const AOther: TVec2f): Single;
 begin
-  Result := StableVec2Dot(AA.X, AA.Y, AB.X, AB.Y);
+  Result := StableVec2Dot(X, Y, AOther.X, AOther.Y);
 end;
 
-class function TVec2f.Lerp(const AA, AB: TVec2f; const AT: Single): TVec2f;
+function TVec2f.Lerp(const ATarget: TVec2f; const AT: Single): TVec2f;
 begin
   Result := TVec2f.Create(
-    nextpas.core.math.scalar.Lerp(AA.X, AB.X, AT),
-    nextpas.core.math.scalar.Lerp(AA.Y, AB.Y, AT));
+    nextpas.core.math.scalar.Lerp(X, ATarget.X, AT),
+    nextpas.core.math.scalar.Lerp(Y, ATarget.Y, AT));
 end;
 
-class function TVec2f.Equals(const AA, AB: TVec2f; const AEpsilon: Single): Boolean;
+function TVec2f.Equals(const AOther: TVec2f; const AEpsilon: Single): Boolean;
 begin
-  Result := SingleEquals(AA.X, AB.X, AEpsilon) and SingleEquals(AA.Y, AB.Y, AEpsilon);
+  Result := SingleEquals(X, AOther.X, AEpsilon) and SingleEquals(Y, AOther.Y, AEpsilon);
 end;
 
 function TVec2f.LengthSqr: Single;
@@ -1251,23 +1309,70 @@ begin
   Result := NormalizeFiniteVec2(Self);
 end;
 
-class function TVec2f.Cross2D(const AA, AB: TVec2f): Single;
+function TVec2f.Cross2D(const AOther: TVec2f): Single;
 begin
-  Result := AA.X * AB.Y - AA.Y * AB.X;
+  Result := X * AOther.Y - Y * AOther.X;
 end;
 
-class function TVec2f.Max(const AA, AB: TVec2f): TVec2f;
+function TVec2f.Max(const AOther: TVec2f): TVec2f;
 begin
   Result := TVec2f.Create(
-    nextpas.core.math.scalar.Max(AA.X, AB.X),
-    nextpas.core.math.scalar.Max(AA.Y, AB.Y));
+    nextpas.core.math.scalar.Max(X, AOther.X),
+    nextpas.core.math.scalar.Max(Y, AOther.Y));
 end;
 
-class function TVec2f.Min(const AA, AB: TVec2f): TVec2f;
+function TVec2f.Min(const AOther: TVec2f): TVec2f;
 begin
   Result := TVec2f.Create(
-    nextpas.core.math.scalar.Min(AA.X, AB.X),
-    nextpas.core.math.scalar.Min(AA.Y, AB.Y));
+    nextpas.core.math.scalar.Min(X, AOther.X),
+    nextpas.core.math.scalar.Min(Y, AOther.Y));
+end;
+
+function TVec2f.Distance(const AOther: TVec2f): Single;
+begin
+  Result := (Self - AOther).Length;
+end;
+
+function TVec2f.DistanceSqr(const AOther: TVec2f): Single;
+begin
+  Result := (Self - AOther).LengthSqr;
+end;
+
+function TVec2f.Reflect(const ANormal: TVec2f): TVec2f;
+begin
+  Result := Self - ANormal * (2.0 * Self.Dot(ANormal));
+end;
+
+function TVec2f.ProjectOnto(const ADirection: TVec2f): TVec2f;
+var
+  LLenSqr: Single;
+begin
+  LLenSqr := ADirection.LengthSqr;
+  if LLenSqr = 0.0 then
+    Exit(TVec2f.Zero);
+  Result := ADirection * (Self.Dot(ADirection) / LLenSqr);
+end;
+
+function TVec2f.RejectFrom(const ADirection: TVec2f): TVec2f;
+begin
+  Result := Self - Self.ProjectOnto(ADirection);
+end;
+
+function TVec2f.TryNormalize: TVec2f;
+var
+  LLen: Single;
+begin
+  if not IsFinite(Self) then
+    Exit(TVec2f.Zero);
+  LLen := Length;
+  if (LLen = 0.0) or (not IsFinite(LLen)) then
+    Exit(TVec2f.Zero);
+  Result := NormalizeFiniteVec2(Self);
+end;
+
+function TVec2f.IsNormalized: Boolean;
+begin
+  Result := SingleEquals(LengthSqr, 1.0, Single(0.00001));
 end;
 
 function TVec2f.Abs: TVec2f;
@@ -1295,6 +1400,11 @@ end;
 class function TVec3f.Zero: TVec3f;
 begin
   Result := TVec3f.Create(0.0, 0.0, 0.0);
+end;
+
+class function TVec3f.One: TVec3f;
+begin
+  Result := TVec3f.Create(1.0, 1.0, 1.0);
 end;
 
 class operator TVec3f.+ (const AA, AB: TVec3f): TVec3f;
@@ -1328,40 +1438,40 @@ begin
   Result := TVec3f.Create(AValue.X / AScalar, AValue.Y / AScalar, AValue.Z / AScalar);
 end;
 
-class function TVec3f.MulComponents(const AA, AB: TVec3f): TVec3f;
+function TVec3f.ComponentMul(const AOther: TVec3f): TVec3f;
 begin
-  Result := TVec3f.Create(AA.X * AB.X, AA.Y * AB.Y, AA.Z * AB.Z);
+  Result := TVec3f.Create(X * AOther.X, Y * AOther.Y, Z * AOther.Z);
 end;
 
-class function TVec3f.DivComponents(const AA, AB: TVec3f): TVec3f;
+function TVec3f.ComponentDiv(const AOther: TVec3f): TVec3f;
 begin
-  ValidateComponentDivisor('TVec3f.DivComponents', AB);
-  Result := TVec3f.Create(AA.X / AB.X, AA.Y / AB.Y, AA.Z / AB.Z);
+  ValidateComponentDivisor('TVec3f.ComponentDiv', AOther);
+  Result := TVec3f.Create(X / AOther.X, Y / AOther.Y, Z / AOther.Z);
 end;
 
-class function TVec3f.Dot(const AA, AB: TVec3f): Single;
+function TVec3f.Dot(const AOther: TVec3f): Single;
 begin
-  Result := StableVec3Dot(AA.X, AA.Y, AA.Z, AB.X, AB.Y, AB.Z);
+  Result := StableVec3Dot(X, Y, Z, AOther.X, AOther.Y, AOther.Z);
 end;
 
-class function TVec3f.Cross(const AA, AB: TVec3f): TVec3f;
+function TVec3f.Cross(const AOther: TVec3f): TVec3f;
 begin
-  Result := StableVec3Cross(AA.X, AA.Y, AA.Z, AB.X, AB.Y, AB.Z);
+  Result := StableVec3Cross(X, Y, Z, AOther.X, AOther.Y, AOther.Z);
 end;
 
-class function TVec3f.Lerp(const AA, AB: TVec3f; const AT: Single): TVec3f;
+function TVec3f.Lerp(const ATarget: TVec3f; const AT: Single): TVec3f;
 begin
   Result := TVec3f.Create(
-    nextpas.core.math.scalar.Lerp(AA.X, AB.X, AT),
-    nextpas.core.math.scalar.Lerp(AA.Y, AB.Y, AT),
-    nextpas.core.math.scalar.Lerp(AA.Z, AB.Z, AT));
+    nextpas.core.math.scalar.Lerp(X, ATarget.X, AT),
+    nextpas.core.math.scalar.Lerp(Y, ATarget.Y, AT),
+    nextpas.core.math.scalar.Lerp(Z, ATarget.Z, AT));
 end;
 
-class function TVec3f.Equals(const AA, AB: TVec3f; const AEpsilon: Single): Boolean;
+function TVec3f.Equals(const AOther: TVec3f; const AEpsilon: Single): Boolean;
 begin
-  Result := SingleEquals(AA.X, AB.X, AEpsilon) and
-    SingleEquals(AA.Y, AB.Y, AEpsilon) and
-    SingleEquals(AA.Z, AB.Z, AEpsilon);
+  Result := SingleEquals(X, AOther.X, AEpsilon) and
+    SingleEquals(Y, AOther.Y, AEpsilon) and
+    SingleEquals(Z, AOther.Z, AEpsilon);
 end;
 
 function TVec3f.LengthSqr: Single;
@@ -1380,28 +1490,80 @@ begin
   Result := NormalizeFiniteVec3(Self);
 end;
 
-class function TVec3f.Max(const AA, AB: TVec3f): TVec3f;
+function TVec3f.Max(const AOther: TVec3f): TVec3f;
 begin
   Result := TVec3f.Create(
-    nextpas.core.math.scalar.Max(AA.X, AB.X),
-    nextpas.core.math.scalar.Max(AA.Y, AB.Y),
-    nextpas.core.math.scalar.Max(AA.Z, AB.Z));
+    nextpas.core.math.scalar.Max(X, AOther.X),
+    nextpas.core.math.scalar.Max(Y, AOther.Y),
+    nextpas.core.math.scalar.Max(Z, AOther.Z));
 end;
 
-class function TVec3f.Min(const AA, AB: TVec3f): TVec3f;
+function TVec3f.Min(const AOther: TVec3f): TVec3f;
 begin
   Result := TVec3f.Create(
-    nextpas.core.math.scalar.Min(AA.X, AB.X),
-    nextpas.core.math.scalar.Min(AA.Y, AB.Y),
-    nextpas.core.math.scalar.Min(AA.Z, AB.Z));
+    nextpas.core.math.scalar.Min(X, AOther.X),
+    nextpas.core.math.scalar.Min(Y, AOther.Y),
+    nextpas.core.math.scalar.Min(Z, AOther.Z));
 end;
 
-class function TVec3f.Average(const AA, AB: TVec3f): TVec3f;
+function TVec3f.Average(const AOther: TVec3f): TVec3f;
 begin
   Result := TVec3f.Create(
-    (AA.X + AB.X) * 0.5,
-    (AA.Y + AB.Y) * 0.5,
-    (AA.Z + AB.Z) * 0.5);
+    (X + AOther.X) * 0.5,
+    (Y + AOther.Y) * 0.5,
+    (Z + AOther.Z) * 0.5);
+end;
+
+function TVec3f.Distance(const AOther: TVec3f): Single;
+begin
+  Result := (Self - AOther).Length;
+end;
+
+function TVec3f.DistanceSqr(const AOther: TVec3f): Single;
+begin
+  Result := (Self - AOther).LengthSqr;
+end;
+
+function TVec3f.Reflect(const ANormal: TVec3f): TVec3f;
+begin
+  Result := Self - ANormal * (2.0 * Self.Dot(ANormal));
+end;
+
+function TVec3f.ProjectOnto(const ADirection: TVec3f): TVec3f;
+var
+  LLenSqr: Single;
+begin
+  LLenSqr := ADirection.LengthSqr;
+  if LLenSqr = 0.0 then
+    Exit(TVec3f.Zero);
+  Result := ADirection * (Self.Dot(ADirection) / LLenSqr);
+end;
+
+function TVec3f.RejectFrom(const ADirection: TVec3f): TVec3f;
+begin
+  Result := Self - Self.ProjectOnto(ADirection);
+end;
+
+function TVec3f.TryNormalize: TVec3f;
+var
+  LLen: Single;
+begin
+  if not IsFinite(Self) then
+    Exit(TVec3f.Zero);
+  LLen := Length;
+  if (LLen = 0.0) or (not IsFinite(LLen)) then
+    Exit(TVec3f.Zero);
+  Result := NormalizeFiniteVec3(Self);
+end;
+
+function TVec3f.IsNormalized: Boolean;
+begin
+  Result := SingleEquals(LengthSqr, 1.0, Single(0.00001));
+end;
+
+function Vec3fExtend(const AVec: TVec3f; const AW: Single): TVec4f;
+begin
+  Result := TVec4f.Create(AVec.X, AVec.Y, AVec.Z, AW);
 end;
 
 function TVec3f.AdjustToLength(const ALength: Single): TVec3f;
@@ -1443,6 +1605,11 @@ begin
   Result := TVec4f.Create(0.0, 0.0, 0.0, 0.0);
 end;
 
+class function TVec4f.One: TVec4f;
+begin
+  Result := TVec4f.Create(1.0, 1.0, 1.0, 1.0);
+end;
+
 class operator TVec4f.+ (const AA, AB: TVec4f): TVec4f;
 begin
   Result := TVec4f.Create(AA.X + AB.X, AA.Y + AB.Y, AA.Z + AB.Z, AA.W + AB.W);
@@ -1476,37 +1643,37 @@ begin
     AValue.Z / AScalar, AValue.W / AScalar);
 end;
 
-class function TVec4f.MulComponents(const AA, AB: TVec4f): TVec4f;
+function TVec4f.ComponentMul(const AOther: TVec4f): TVec4f;
 begin
-  Result := TVec4f.Create(AA.X * AB.X, AA.Y * AB.Y, AA.Z * AB.Z, AA.W * AB.W);
+  Result := TVec4f.Create(X * AOther.X, Y * AOther.Y, Z * AOther.Z, W * AOther.W);
 end;
 
-class function TVec4f.DivComponents(const AA, AB: TVec4f): TVec4f;
+function TVec4f.ComponentDiv(const AOther: TVec4f): TVec4f;
 begin
-  ValidateComponentDivisor('TVec4f.DivComponents', AB);
-  Result := TVec4f.Create(AA.X / AB.X, AA.Y / AB.Y, AA.Z / AB.Z, AA.W / AB.W);
+  ValidateComponentDivisor('TVec4f.ComponentDiv', AOther);
+  Result := TVec4f.Create(X / AOther.X, Y / AOther.Y, Z / AOther.Z, W / AOther.W);
 end;
 
-class function TVec4f.Dot(const AA, AB: TVec4f): Single;
+function TVec4f.Dot(const AOther: TVec4f): Single;
 begin
-  Result := StableVec4Dot(AA.X, AA.Y, AA.Z, AA.W, AB.X, AB.Y, AB.Z, AB.W);
+  Result := StableVec4Dot(X, Y, Z, W, AOther.X, AOther.Y, AOther.Z, AOther.W);
 end;
 
-class function TVec4f.Lerp(const AA, AB: TVec4f; const AT: Single): TVec4f;
+function TVec4f.Lerp(const ATarget: TVec4f; const AT: Single): TVec4f;
 begin
   Result := TVec4f.Create(
-    nextpas.core.math.scalar.Lerp(AA.X, AB.X, AT),
-    nextpas.core.math.scalar.Lerp(AA.Y, AB.Y, AT),
-    nextpas.core.math.scalar.Lerp(AA.Z, AB.Z, AT),
-    nextpas.core.math.scalar.Lerp(AA.W, AB.W, AT));
+    nextpas.core.math.scalar.Lerp(X, ATarget.X, AT),
+    nextpas.core.math.scalar.Lerp(Y, ATarget.Y, AT),
+    nextpas.core.math.scalar.Lerp(Z, ATarget.Z, AT),
+    nextpas.core.math.scalar.Lerp(W, ATarget.W, AT));
 end;
 
-class function TVec4f.Equals(const AA, AB: TVec4f; const AEpsilon: Single): Boolean;
+function TVec4f.Equals(const AOther: TVec4f; const AEpsilon: Single): Boolean;
 begin
-  Result := SingleEquals(AA.X, AB.X, AEpsilon) and
-    SingleEquals(AA.Y, AB.Y, AEpsilon) and
-    SingleEquals(AA.Z, AB.Z, AEpsilon) and
-    SingleEquals(AA.W, AB.W, AEpsilon);
+  Result := SingleEquals(X, AOther.X, AEpsilon) and
+    SingleEquals(Y, AOther.Y, AEpsilon) and
+    SingleEquals(Z, AOther.Z, AEpsilon) and
+    SingleEquals(W, AOther.W, AEpsilon);
 end;
 
 function TVec4f.LengthSqr: Single;
@@ -1525,22 +1692,74 @@ begin
   Result := NormalizeFiniteVec4(Self);
 end;
 
-class function TVec4f.Max(const AA, AB: TVec4f): TVec4f;
+function TVec4f.Max(const AOther: TVec4f): TVec4f;
 begin
   Result := TVec4f.Create(
-    nextpas.core.math.scalar.Max(AA.X, AB.X),
-    nextpas.core.math.scalar.Max(AA.Y, AB.Y),
-    nextpas.core.math.scalar.Max(AA.Z, AB.Z),
-    nextpas.core.math.scalar.Max(AA.W, AB.W));
+    nextpas.core.math.scalar.Max(X, AOther.X),
+    nextpas.core.math.scalar.Max(Y, AOther.Y),
+    nextpas.core.math.scalar.Max(Z, AOther.Z),
+    nextpas.core.math.scalar.Max(W, AOther.W));
 end;
 
-class function TVec4f.Min(const AA, AB: TVec4f): TVec4f;
+function TVec4f.Min(const AOther: TVec4f): TVec4f;
 begin
   Result := TVec4f.Create(
-    nextpas.core.math.scalar.Min(AA.X, AB.X),
-    nextpas.core.math.scalar.Min(AA.Y, AB.Y),
-    nextpas.core.math.scalar.Min(AA.Z, AB.Z),
-    nextpas.core.math.scalar.Min(AA.W, AB.W));
+    nextpas.core.math.scalar.Min(X, AOther.X),
+    nextpas.core.math.scalar.Min(Y, AOther.Y),
+    nextpas.core.math.scalar.Min(Z, AOther.Z),
+    nextpas.core.math.scalar.Min(W, AOther.W));
+end;
+
+function TVec4f.Distance(const AOther: TVec4f): Single;
+begin
+  Result := (Self - AOther).Length;
+end;
+
+function TVec4f.DistanceSqr(const AOther: TVec4f): Single;
+begin
+  Result := (Self - AOther).LengthSqr;
+end;
+
+function TVec4f.Reflect(const ANormal: TVec4f): TVec4f;
+begin
+  Result := Self - ANormal * (2.0 * Self.Dot(ANormal));
+end;
+
+function TVec4f.ProjectOnto(const ADirection: TVec4f): TVec4f;
+var
+  LLenSqr: Single;
+begin
+  LLenSqr := ADirection.LengthSqr;
+  if LLenSqr = 0.0 then
+    Exit(TVec4f.Zero);
+  Result := ADirection * (Self.Dot(ADirection) / LLenSqr);
+end;
+
+function TVec4f.RejectFrom(const ADirection: TVec4f): TVec4f;
+begin
+  Result := Self - Self.ProjectOnto(ADirection);
+end;
+
+function TVec4f.TryNormalize: TVec4f;
+var
+  LLen: Single;
+begin
+  if not IsFinite(Self) then
+    Exit(TVec4f.Zero);
+  LLen := Length;
+  if (LLen = 0.0) or (not IsFinite(LLen)) then
+    Exit(TVec4f.Zero);
+  Result := NormalizeFiniteVec4(Self);
+end;
+
+function TVec4f.IsNormalized: Boolean;
+begin
+  Result := SingleEquals(LengthSqr, 1.0, Single(0.00001));
+end;
+
+function Vec4fTruncate(const AVec: TVec4f): TVec3f;
+begin
+  Result := TVec3f.Create(AVec.X, AVec.Y, AVec.Z);
 end;
 
 function TVec4f.ToPosition: TVec3f;
@@ -1577,6 +1796,11 @@ begin
   Result := TVec2d.Create(0.0, 0.0);
 end;
 
+class function TVec2d.One: TVec2d;
+begin
+  Result := TVec2d.Create(1.0, 1.0);
+end;
+
 class operator TVec2d.+ (const AA, AB: TVec2d): TVec2d;
 begin
   Result := TVec2d.Create(AA.X + AB.X, AA.Y + AB.Y);
@@ -1608,32 +1832,32 @@ begin
   Result := TVec2d.Create(AValue.X / AScalar, AValue.Y / AScalar);
 end;
 
-class function TVec2d.MulComponents(const AA, AB: TVec2d): TVec2d;
+function TVec2d.ComponentMul(const AOther: TVec2d): TVec2d;
 begin
-  Result := TVec2d.Create(AA.X * AB.X, AA.Y * AB.Y);
+  Result := TVec2d.Create(X * AOther.X, Y * AOther.Y);
 end;
 
-class function TVec2d.DivComponents(const AA, AB: TVec2d): TVec2d;
+function TVec2d.ComponentDiv(const AOther: TVec2d): TVec2d;
 begin
-  ValidateComponentDivisor('TVec2d.DivComponents', AB);
-  Result := TVec2d.Create(AA.X / AB.X, AA.Y / AB.Y);
+  ValidateComponentDivisor('TVec2d.ComponentDiv', AOther);
+  Result := TVec2d.Create(X / AOther.X, Y / AOther.Y);
 end;
 
-class function TVec2d.Dot(const AA, AB: TVec2d): Double;
+function TVec2d.Dot(const AOther: TVec2d): Double;
 begin
-  Result := StableVec2Dot(AA.X, AA.Y, AB.X, AB.Y);
+  Result := StableVec2Dot(X, Y, AOther.X, AOther.Y);
 end;
 
-class function TVec2d.Lerp(const AA, AB: TVec2d; const AT: Double): TVec2d;
+function TVec2d.Lerp(const ATarget: TVec2d; const AT: Double): TVec2d;
 begin
   Result := TVec2d.Create(
-    nextpas.core.math.scalar.Lerp(AA.X, AB.X, AT),
-    nextpas.core.math.scalar.Lerp(AA.Y, AB.Y, AT));
+    nextpas.core.math.scalar.Lerp(X, ATarget.X, AT),
+    nextpas.core.math.scalar.Lerp(Y, ATarget.Y, AT));
 end;
 
-class function TVec2d.Equals(const AA, AB: TVec2d; const AEpsilon: Double): Boolean;
+function TVec2d.Equals(const AOther: TVec2d; const AEpsilon: Double): Boolean;
 begin
-  Result := DoubleEquals(AA.X, AB.X, AEpsilon) and DoubleEquals(AA.Y, AB.Y, AEpsilon);
+  Result := DoubleEquals(X, AOther.X, AEpsilon) and DoubleEquals(Y, AOther.Y, AEpsilon);
 end;
 
 function TVec2d.LengthSqr: Double;
@@ -1652,23 +1876,70 @@ begin
   Result := NormalizeFiniteVec2(Self);
 end;
 
-class function TVec2d.Cross2D(const AA, AB: TVec2d): Double;
+function TVec2d.Cross2D(const AOther: TVec2d): Double;
 begin
-  Result := AA.X * AB.Y - AA.Y * AB.X;
+  Result := X * AOther.Y - Y * AOther.X;
 end;
 
-class function TVec2d.Max(const AA, AB: TVec2d): TVec2d;
+function TVec2d.Max(const AOther: TVec2d): TVec2d;
 begin
   Result := TVec2d.Create(
-    nextpas.core.math.scalar.Max(AA.X, AB.X),
-    nextpas.core.math.scalar.Max(AA.Y, AB.Y));
+    nextpas.core.math.scalar.Max(X, AOther.X),
+    nextpas.core.math.scalar.Max(Y, AOther.Y));
 end;
 
-class function TVec2d.Min(const AA, AB: TVec2d): TVec2d;
+function TVec2d.Min(const AOther: TVec2d): TVec2d;
 begin
   Result := TVec2d.Create(
-    nextpas.core.math.scalar.Min(AA.X, AB.X),
-    nextpas.core.math.scalar.Min(AA.Y, AB.Y));
+    nextpas.core.math.scalar.Min(X, AOther.X),
+    nextpas.core.math.scalar.Min(Y, AOther.Y));
+end;
+
+function TVec2d.Distance(const AOther: TVec2d): Double;
+begin
+  Result := (Self - AOther).Length;
+end;
+
+function TVec2d.DistanceSqr(const AOther: TVec2d): Double;
+begin
+  Result := (Self - AOther).LengthSqr;
+end;
+
+function TVec2d.Reflect(const ANormal: TVec2d): TVec2d;
+begin
+  Result := Self - ANormal * (2.0 * Self.Dot(ANormal));
+end;
+
+function TVec2d.ProjectOnto(const ADirection: TVec2d): TVec2d;
+var
+  LLenSqr: Double;
+begin
+  LLenSqr := ADirection.LengthSqr;
+  if LLenSqr = 0.0 then
+    Exit(TVec2d.Zero);
+  Result := ADirection * (Self.Dot(ADirection) / LLenSqr);
+end;
+
+function TVec2d.RejectFrom(const ADirection: TVec2d): TVec2d;
+begin
+  Result := Self - Self.ProjectOnto(ADirection);
+end;
+
+function TVec2d.TryNormalize: TVec2d;
+var
+  LLen: Double;
+begin
+  if not IsFinite(Self) then
+    Exit(TVec2d.Zero);
+  LLen := Length;
+  if (LLen = 0.0) or (not IsFinite(LLen)) then
+    Exit(TVec2d.Zero);
+  Result := NormalizeFiniteVec2(Self);
+end;
+
+function TVec2d.IsNormalized: Boolean;
+begin
+  Result := DoubleEquals(LengthSqr, 1.0, 0.00001);
 end;
 
 function TVec2d.Abs: TVec2d;
@@ -1696,6 +1967,11 @@ end;
 class function TVec3d.Zero: TVec3d;
 begin
   Result := TVec3d.Create(0.0, 0.0, 0.0);
+end;
+
+class function TVec3d.One: TVec3d;
+begin
+  Result := TVec3d.Create(1.0, 1.0, 1.0);
 end;
 
 class operator TVec3d.+ (const AA, AB: TVec3d): TVec3d;
@@ -1729,40 +2005,40 @@ begin
   Result := TVec3d.Create(AValue.X / AScalar, AValue.Y / AScalar, AValue.Z / AScalar);
 end;
 
-class function TVec3d.MulComponents(const AA, AB: TVec3d): TVec3d;
+function TVec3d.ComponentMul(const AOther: TVec3d): TVec3d;
 begin
-  Result := TVec3d.Create(AA.X * AB.X, AA.Y * AB.Y, AA.Z * AB.Z);
+  Result := TVec3d.Create(X * AOther.X, Y * AOther.Y, Z * AOther.Z);
 end;
 
-class function TVec3d.DivComponents(const AA, AB: TVec3d): TVec3d;
+function TVec3d.ComponentDiv(const AOther: TVec3d): TVec3d;
 begin
-  ValidateComponentDivisor('TVec3d.DivComponents', AB);
-  Result := TVec3d.Create(AA.X / AB.X, AA.Y / AB.Y, AA.Z / AB.Z);
+  ValidateComponentDivisor('TVec3d.ComponentDiv', AOther);
+  Result := TVec3d.Create(X / AOther.X, Y / AOther.Y, Z / AOther.Z);
 end;
 
-class function TVec3d.Dot(const AA, AB: TVec3d): Double;
+function TVec3d.Dot(const AOther: TVec3d): Double;
 begin
-  Result := StableVec3Dot(AA.X, AA.Y, AA.Z, AB.X, AB.Y, AB.Z);
+  Result := StableVec3Dot(X, Y, Z, AOther.X, AOther.Y, AOther.Z);
 end;
 
-class function TVec3d.Cross(const AA, AB: TVec3d): TVec3d;
+function TVec3d.Cross(const AOther: TVec3d): TVec3d;
 begin
-  Result := StableVec3Cross(AA.X, AA.Y, AA.Z, AB.X, AB.Y, AB.Z);
+  Result := StableVec3Cross(X, Y, Z, AOther.X, AOther.Y, AOther.Z);
 end;
 
-class function TVec3d.Lerp(const AA, AB: TVec3d; const AT: Double): TVec3d;
+function TVec3d.Lerp(const ATarget: TVec3d; const AT: Double): TVec3d;
 begin
   Result := TVec3d.Create(
-    nextpas.core.math.scalar.Lerp(AA.X, AB.X, AT),
-    nextpas.core.math.scalar.Lerp(AA.Y, AB.Y, AT),
-    nextpas.core.math.scalar.Lerp(AA.Z, AB.Z, AT));
+    nextpas.core.math.scalar.Lerp(X, ATarget.X, AT),
+    nextpas.core.math.scalar.Lerp(Y, ATarget.Y, AT),
+    nextpas.core.math.scalar.Lerp(Z, ATarget.Z, AT));
 end;
 
-class function TVec3d.Equals(const AA, AB: TVec3d; const AEpsilon: Double): Boolean;
+function TVec3d.Equals(const AOther: TVec3d; const AEpsilon: Double): Boolean;
 begin
-  Result := DoubleEquals(AA.X, AB.X, AEpsilon) and
-    DoubleEquals(AA.Y, AB.Y, AEpsilon) and
-    DoubleEquals(AA.Z, AB.Z, AEpsilon);
+  Result := DoubleEquals(X, AOther.X, AEpsilon) and
+    DoubleEquals(Y, AOther.Y, AEpsilon) and
+    DoubleEquals(Z, AOther.Z, AEpsilon);
 end;
 
 function TVec3d.LengthSqr: Double;
@@ -1781,28 +2057,80 @@ begin
   Result := NormalizeFiniteVec3(Self);
 end;
 
-class function TVec3d.Max(const AA, AB: TVec3d): TVec3d;
+function TVec3d.Max(const AOther: TVec3d): TVec3d;
 begin
   Result := TVec3d.Create(
-    nextpas.core.math.scalar.Max(AA.X, AB.X),
-    nextpas.core.math.scalar.Max(AA.Y, AB.Y),
-    nextpas.core.math.scalar.Max(AA.Z, AB.Z));
+    nextpas.core.math.scalar.Max(X, AOther.X),
+    nextpas.core.math.scalar.Max(Y, AOther.Y),
+    nextpas.core.math.scalar.Max(Z, AOther.Z));
 end;
 
-class function TVec3d.Min(const AA, AB: TVec3d): TVec3d;
+function TVec3d.Min(const AOther: TVec3d): TVec3d;
 begin
   Result := TVec3d.Create(
-    nextpas.core.math.scalar.Min(AA.X, AB.X),
-    nextpas.core.math.scalar.Min(AA.Y, AB.Y),
-    nextpas.core.math.scalar.Min(AA.Z, AB.Z));
+    nextpas.core.math.scalar.Min(X, AOther.X),
+    nextpas.core.math.scalar.Min(Y, AOther.Y),
+    nextpas.core.math.scalar.Min(Z, AOther.Z));
 end;
 
-class function TVec3d.Average(const AA, AB: TVec3d): TVec3d;
+function TVec3d.Average(const AOther: TVec3d): TVec3d;
 begin
   Result := TVec3d.Create(
-    (AA.X + AB.X) * 0.5,
-    (AA.Y + AB.Y) * 0.5,
-    (AA.Z + AB.Z) * 0.5);
+    (X + AOther.X) * 0.5,
+    (Y + AOther.Y) * 0.5,
+    (Z + AOther.Z) * 0.5);
+end;
+
+function TVec3d.Distance(const AOther: TVec3d): Double;
+begin
+  Result := (Self - AOther).Length;
+end;
+
+function TVec3d.DistanceSqr(const AOther: TVec3d): Double;
+begin
+  Result := (Self - AOther).LengthSqr;
+end;
+
+function TVec3d.Reflect(const ANormal: TVec3d): TVec3d;
+begin
+  Result := Self - ANormal * (2.0 * Self.Dot(ANormal));
+end;
+
+function TVec3d.ProjectOnto(const ADirection: TVec3d): TVec3d;
+var
+  LLenSqr: Double;
+begin
+  LLenSqr := ADirection.LengthSqr;
+  if LLenSqr = 0.0 then
+    Exit(TVec3d.Zero);
+  Result := ADirection * (Self.Dot(ADirection) / LLenSqr);
+end;
+
+function TVec3d.RejectFrom(const ADirection: TVec3d): TVec3d;
+begin
+  Result := Self - Self.ProjectOnto(ADirection);
+end;
+
+function TVec3d.TryNormalize: TVec3d;
+var
+  LLen: Double;
+begin
+  if not IsFinite(Self) then
+    Exit(TVec3d.Zero);
+  LLen := Length;
+  if (LLen = 0.0) or (not IsFinite(LLen)) then
+    Exit(TVec3d.Zero);
+  Result := NormalizeFiniteVec3(Self);
+end;
+
+function TVec3d.IsNormalized: Boolean;
+begin
+  Result := DoubleEquals(LengthSqr, 1.0, 0.00001);
+end;
+
+function Vec3dExtend(const AVec: TVec3d; const AW: Double): TVec4d;
+begin
+  Result := TVec4d.Create(AVec.X, AVec.Y, AVec.Z, AW);
 end;
 
 function TVec3d.AdjustToLength(const ALength: Double): TVec3d;
@@ -1844,6 +2172,11 @@ begin
   Result := TVec4d.Create(0.0, 0.0, 0.0, 0.0);
 end;
 
+class function TVec4d.One: TVec4d;
+begin
+  Result := TVec4d.Create(1.0, 1.0, 1.0, 1.0);
+end;
+
 class operator TVec4d.+ (const AA, AB: TVec4d): TVec4d;
 begin
   Result := TVec4d.Create(AA.X + AB.X, AA.Y + AB.Y, AA.Z + AB.Z, AA.W + AB.W);
@@ -1877,37 +2210,37 @@ begin
     AValue.Z / AScalar, AValue.W / AScalar);
 end;
 
-class function TVec4d.MulComponents(const AA, AB: TVec4d): TVec4d;
+function TVec4d.ComponentMul(const AOther: TVec4d): TVec4d;
 begin
-  Result := TVec4d.Create(AA.X * AB.X, AA.Y * AB.Y, AA.Z * AB.Z, AA.W * AB.W);
+  Result := TVec4d.Create(X * AOther.X, Y * AOther.Y, Z * AOther.Z, W * AOther.W);
 end;
 
-class function TVec4d.DivComponents(const AA, AB: TVec4d): TVec4d;
+function TVec4d.ComponentDiv(const AOther: TVec4d): TVec4d;
 begin
-  ValidateComponentDivisor('TVec4d.DivComponents', AB);
-  Result := TVec4d.Create(AA.X / AB.X, AA.Y / AB.Y, AA.Z / AB.Z, AA.W / AB.W);
+  ValidateComponentDivisor('TVec4d.ComponentDiv', AOther);
+  Result := TVec4d.Create(X / AOther.X, Y / AOther.Y, Z / AOther.Z, W / AOther.W);
 end;
 
-class function TVec4d.Dot(const AA, AB: TVec4d): Double;
+function TVec4d.Dot(const AOther: TVec4d): Double;
 begin
-  Result := StableVec4Dot(AA.X, AA.Y, AA.Z, AA.W, AB.X, AB.Y, AB.Z, AB.W);
+  Result := StableVec4Dot(X, Y, Z, W, AOther.X, AOther.Y, AOther.Z, AOther.W);
 end;
 
-class function TVec4d.Lerp(const AA, AB: TVec4d; const AT: Double): TVec4d;
+function TVec4d.Lerp(const ATarget: TVec4d; const AT: Double): TVec4d;
 begin
   Result := TVec4d.Create(
-    nextpas.core.math.scalar.Lerp(AA.X, AB.X, AT),
-    nextpas.core.math.scalar.Lerp(AA.Y, AB.Y, AT),
-    nextpas.core.math.scalar.Lerp(AA.Z, AB.Z, AT),
-    nextpas.core.math.scalar.Lerp(AA.W, AB.W, AT));
+    nextpas.core.math.scalar.Lerp(X, ATarget.X, AT),
+    nextpas.core.math.scalar.Lerp(Y, ATarget.Y, AT),
+    nextpas.core.math.scalar.Lerp(Z, ATarget.Z, AT),
+    nextpas.core.math.scalar.Lerp(W, ATarget.W, AT));
 end;
 
-class function TVec4d.Equals(const AA, AB: TVec4d; const AEpsilon: Double): Boolean;
+function TVec4d.Equals(const AOther: TVec4d; const AEpsilon: Double): Boolean;
 begin
-  Result := DoubleEquals(AA.X, AB.X, AEpsilon) and
-    DoubleEquals(AA.Y, AB.Y, AEpsilon) and
-    DoubleEquals(AA.Z, AB.Z, AEpsilon) and
-    DoubleEquals(AA.W, AB.W, AEpsilon);
+  Result := DoubleEquals(X, AOther.X, AEpsilon) and
+    DoubleEquals(Y, AOther.Y, AEpsilon) and
+    DoubleEquals(Z, AOther.Z, AEpsilon) and
+    DoubleEquals(W, AOther.W, AEpsilon);
 end;
 
 function TVec4d.LengthSqr: Double;
@@ -1926,22 +2259,74 @@ begin
   Result := NormalizeFiniteVec4(Self);
 end;
 
-class function TVec4d.Max(const AA, AB: TVec4d): TVec4d;
+function TVec4d.Max(const AOther: TVec4d): TVec4d;
 begin
   Result := TVec4d.Create(
-    nextpas.core.math.scalar.Max(AA.X, AB.X),
-    nextpas.core.math.scalar.Max(AA.Y, AB.Y),
-    nextpas.core.math.scalar.Max(AA.Z, AB.Z),
-    nextpas.core.math.scalar.Max(AA.W, AB.W));
+    nextpas.core.math.scalar.Max(X, AOther.X),
+    nextpas.core.math.scalar.Max(Y, AOther.Y),
+    nextpas.core.math.scalar.Max(Z, AOther.Z),
+    nextpas.core.math.scalar.Max(W, AOther.W));
 end;
 
-class function TVec4d.Min(const AA, AB: TVec4d): TVec4d;
+function TVec4d.Min(const AOther: TVec4d): TVec4d;
 begin
   Result := TVec4d.Create(
-    nextpas.core.math.scalar.Min(AA.X, AB.X),
-    nextpas.core.math.scalar.Min(AA.Y, AB.Y),
-    nextpas.core.math.scalar.Min(AA.Z, AB.Z),
-    nextpas.core.math.scalar.Min(AA.W, AB.W));
+    nextpas.core.math.scalar.Min(X, AOther.X),
+    nextpas.core.math.scalar.Min(Y, AOther.Y),
+    nextpas.core.math.scalar.Min(Z, AOther.Z),
+    nextpas.core.math.scalar.Min(W, AOther.W));
+end;
+
+function TVec4d.Distance(const AOther: TVec4d): Double;
+begin
+  Result := (Self - AOther).Length;
+end;
+
+function TVec4d.DistanceSqr(const AOther: TVec4d): Double;
+begin
+  Result := (Self - AOther).LengthSqr;
+end;
+
+function TVec4d.Reflect(const ANormal: TVec4d): TVec4d;
+begin
+  Result := Self - ANormal * (2.0 * Self.Dot(ANormal));
+end;
+
+function TVec4d.ProjectOnto(const ADirection: TVec4d): TVec4d;
+var
+  LLenSqr: Double;
+begin
+  LLenSqr := ADirection.LengthSqr;
+  if LLenSqr = 0.0 then
+    Exit(TVec4d.Zero);
+  Result := ADirection * (Self.Dot(ADirection) / LLenSqr);
+end;
+
+function TVec4d.RejectFrom(const ADirection: TVec4d): TVec4d;
+begin
+  Result := Self - Self.ProjectOnto(ADirection);
+end;
+
+function TVec4d.TryNormalize: TVec4d;
+var
+  LLen: Double;
+begin
+  if not IsFinite(Self) then
+    Exit(TVec4d.Zero);
+  LLen := Length;
+  if (LLen = 0.0) or (not IsFinite(LLen)) then
+    Exit(TVec4d.Zero);
+  Result := NormalizeFiniteVec4(Self);
+end;
+
+function TVec4d.IsNormalized: Boolean;
+begin
+  Result := DoubleEquals(LengthSqr, 1.0, 0.00001);
+end;
+
+function Vec4dTruncate(const AVec: TVec4d): TVec3d;
+begin
+  Result := TVec3d.Create(AVec.X, AVec.Y, AVec.Z);
 end;
 
 function TVec4d.ToPosition: TVec3d;

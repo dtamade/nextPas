@@ -6,7 +6,6 @@ uses
   SysUtils,
   nextpas.core.errors,
   nextpas.core.testing,
-  nextpas.core.math.base,
   nextpas.core.math.scalar;
 
 {$IF (SizeOf(Extended) > SizeOf(Double)) AND (DEFINED(CPUX86_64) OR DEFINED(CPUX86) OR DEFINED(CPUI386))}
@@ -268,16 +267,6 @@ begin
       Fail(AName + ': expected EArgumentError, got ' + E.ClassName);
   end;
   Fail(AName + ': expected EArgumentError');
-end;
-
-procedure RaiseSmoothStepSingleReversedFiniteEdges;
-begin
-  SmoothStep(Single(2.0), Single(1.0), Single(1.5));
-end;
-
-procedure RaiseSmoothStepDoubleReversedFiniteEdges;
-begin
-  SmoothStep(2.0, 1.0, 1.5);
 end;
 
 procedure TestConstants;

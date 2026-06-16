@@ -635,15 +635,15 @@ REQUIRED_VEC_QUAT_STABLE_DOC_TRUTH = (
     ),
     (
         "docs/math/README.md",
-        "Vector scalar division and `DivComponents` reject zero, NaN, and infinite divisors with `EArgumentError`.",
+        "Vector scalar division and `ComponentDiv` reject zero, NaN, and infinite divisors with `EArgumentError`.",
     ),
     (
         "docs/math/API.md",
-        "Vector scalar division and `DivComponents` reject zero, NaN, and infinite divisors with `EArgumentError`.",
+        "Vector scalar division and `ComponentDiv` reject zero, NaN, and infinite divisors with `EArgumentError`.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "Vector scalar division and `DivComponents` reject zero, NaN, and infinite divisors with `EArgumentError`.",
+        "Vector scalar division and `ComponentDiv` reject zero, NaN, and infinite divisors with `EArgumentError`.",
     ),
     (
         "docs/math/README.md",
@@ -1297,15 +1297,11 @@ INTERNAL_IMPL_TEST_PREFIXES = (
 
 CONSUMER_FACING_UNITS = {
     "nextpas.core.math",
-    "nextpas.core.math.base",
     "nextpas.core.math.scalar",
     "nextpas.core.math.trig",
     "nextpas.core.math.vec",
-    "nextpas.core.math.vec.base",
     "nextpas.core.math.mat",
-    "nextpas.core.math.mat.base",
     "nextpas.core.math.quat",
-    "nextpas.core.math.quat.base",
     "nextpas.core.math.transform",
     "nextpas.core.math.easing",
     "nextpas.core.math.random",
@@ -1685,10 +1681,23 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("vec-type-2d", r"\bTVec2d\s*=\s*packed\s+record\b"),
         ("vec-type-3d", r"\bTVec3d\s*=\s*packed\s+record\b"),
         ("vec-type-4d", r"\bTVec4d\s*=\s*packed\s+record\b"),
-        ("vec-dot", r"\bclass\s+function\s+Dot\s*\("),
-        ("vec-cross", r"\bclass\s+function\s+Cross\s*\("),
-        ("vec-mul-components", r"\bclass\s+function\s+MulComponents\s*\("),
-        ("vec-div-components", r"\bclass\s+function\s+DivComponents\s*\("),
+        ("vec-dot", r"\bfunction\s+Dot\s*\("),
+        ("vec-cross", r"\bfunction\s+Cross\s*\("),
+        ("vec-cross2d", r"\bfunction\s+Cross2D\s*\("),
+        ("vec-mul-components", r"\bfunction\s+ComponentMul\s*\("),
+        ("vec-div-components", r"\bfunction\s+ComponentDiv\s*\("),
+        ("vec-one", r"\bclass\s+function\s+One\s*:"),
+        ("vec-distance", r"\bfunction\s+Distance\s*\("),
+        ("vec-distancesqr", r"\bfunction\s+DistanceSqr\s*\("),
+        ("vec-reflect", r"\bfunction\s+Reflect\s*\("),
+        ("vec-projectonto", r"\bfunction\s+ProjectOnto\s*\("),
+        ("vec-rejectfrom", r"\bfunction\s+RejectFrom\s*\("),
+        ("vec-trynormalize", r"\bfunction\s+TryNormalize\s*:"),
+        ("vec-isnormalized", r"\bfunction\s+IsNormalized\s*:\s*Boolean\b"),
+        ("vec3f-extend", r"\bfunction\s+Vec3fExtend\s*\("),
+        ("vec4f-truncate", r"\bfunction\s+Vec4fTruncate\s*\("),
+        ("vec3d-extend", r"\bfunction\s+Vec3dExtend\s*\("),
+        ("vec4d-truncate", r"\bfunction\s+Vec4dTruncate\s*\("),
     ),
     "src/nextpas.core.math.mat.pas": (
         ("mat-type-3f", r"\bTMat3f\s*=\s*packed\s+record\b"),
@@ -1771,7 +1780,7 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
     "src/nextpas.core.math.impl.simd.pas": (
         ("impl-simd-vec4f-add", r"\bfunction\s+SimdVec4fAdd\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*TVec4f\s*\)\s*:\s*TVec4f\b"),
         ("impl-simd-vec4f-sub", r"\bfunction\s+SimdVec4fSub\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*TVec4f\s*\)\s*:\s*TVec4f\b"),
-        ("impl-simd-vec4f-mul-components", r"\bfunction\s+SimdVec4fMulComponents\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*TVec4f\s*\)\s*:\s*TVec4f\b"),
+        ("impl-simd-vec4f-mul-components", r"\bfunction\s+SimdVec4fComponentMul\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*TVec4f\s*\)\s*:\s*TVec4f\b"),
         ("impl-simd-vec4f-scale", r"\bfunction\s+SimdVec4fScale\s*\(\s*const\s+AValue\s*:\s*TVec4f\s*;\s*const\s+AScalar\s*:\s*Single\s*\)\s*:\s*TVec4f\b"),
         ("impl-simd-vec4f-dot", r"\bfunction\s+SimdVec4fDot\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*TVec4f\s*\)\s*:\s*Single\b"),
         ("impl-simd-vec4f-length", r"\bfunction\s+SimdVec4fLength\s*\(\s*const\s+AValue\s*:\s*TVec4f\s*\)\s*:\s*Single\b"),
@@ -1790,12 +1799,12 @@ REQUIRED_VECTOR_LENGTH_SQR_RECORD_CONTRACTS = (
     ("vec-4d-lengthsqr", "TVec4d", "Double"),
 )
 REQUIRED_VECTOR_PUBLIC_RECORD_CONTRACTS = (
-    ("vec-2f", "TVec2f", "Single", ("X", "Y"), "0..1", False),
-    ("vec-3f", "TVec3f", "Single", ("X", "Y", "Z"), "0..2", True),
-    ("vec-4f", "TVec4f", "Single", ("X", "Y", "Z", "W"), "0..3", False),
-    ("vec-2d", "TVec2d", "Double", ("X", "Y"), "0..1", False),
-    ("vec-3d", "TVec3d", "Double", ("X", "Y", "Z"), "0..2", True),
-    ("vec-4d", "TVec4d", "Double", ("X", "Y", "Z", "W"), "0..3", False),
+    ("vec-2f", "TVec2f", "Single", ("X", "Y"), "0..1", False, True, False),
+    ("vec-3f", "TVec3f", "Single", ("X", "Y", "Z"), "0..2", True, False, True),
+    ("vec-4f", "TVec4f", "Single", ("X", "Y", "Z", "W"), "0..3", False, False, False),
+    ("vec-2d", "TVec2d", "Double", ("X", "Y"), "0..1", False, True, False),
+    ("vec-3d", "TVec3d", "Double", ("X", "Y", "Z"), "0..2", True, False, True),
+    ("vec-4d", "TVec4d", "Double", ("X", "Y", "Z", "W"), "0..3", False, False, False),
 )
 REQUIRED_MATRIX_PUBLIC_RECORD_CONTRACTS = (
     ("mat-3f", "TMat3f", "Single", "TVec3f", "0..2", True),
@@ -3425,7 +3434,7 @@ def scan_vector_public_record_contract(root: Path, path: Path, text: str) -> lis
         return findings
 
     code = interface_text(text)
-    for rule, record_name, scalar_type, fields, index_range, has_cross in REQUIRED_VECTOR_PUBLIC_RECORD_CONTRACTS:
+    for rule, record_name, scalar_type, fields, index_range, has_cross, has_cross2d, has_average in REQUIRED_VECTOR_PUBLIC_RECORD_CONTRACTS:
         record_match = re.search(
             rf"\b{record_name}\s*=\s*packed\s+record\b(?P<body>.*?)\bend\s*;",
             code,
@@ -3486,23 +3495,23 @@ def scan_vector_public_record_contract(root: Path, path: Path, text: str) -> lis
             ),
             (
                 "mul-components",
-                rf"\bclass\s+function\s+MulComponents\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*static\s*;\s*inline\s*;",
+                rf"\bfunction\s+ComponentMul\s*\(\s*const\s+AOther\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;",
             ),
             (
                 "div-components",
-                rf"\bclass\s+function\s+DivComponents\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*static\s*;\s*inline\s*;",
+                rf"\bfunction\s+ComponentDiv\s*\(\s*const\s+AOther\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;",
             ),
             (
                 "dot",
-                rf"\bclass\s+function\s+Dot\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*\)\s*:\s*{scalar_type}\s*;\s*static\s*;\s*inline\s*;",
+                rf"\bfunction\s+Dot\s*\(\s*const\s+AOther\s*:\s*{record_name}\s*\)\s*:\s*{scalar_type}\s*;\s*inline\s*;",
             ),
             (
                 "lerp",
-                rf"\bclass\s+function\s+Lerp\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*;\s*const\s+AT\s*:\s*{scalar_type}\s*\)\s*:\s*{record_name}\s*;\s*static\s*;\s*inline\s*;",
+                rf"\bfunction\s+Lerp\s*\(\s*const\s+ATarget\s*:\s*{record_name}\s*;\s*const\s+AT\s*:\s*{scalar_type}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;",
             ),
             (
                 "equals",
-                rf"\bclass\s+function\s+Equals\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*;\s*const\s+AEpsilon\s*:\s*{scalar_type}\s*\)\s*:\s*Boolean\s*;\s*static\s*;\s*inline\s*;",
+                rf"\bfunction\s+Equals\s*\(\s*const\s+AOther\s*:\s*{record_name}\s*;\s*const\s+AEpsilon\s*:\s*{scalar_type}\s*\)\s*:\s*Boolean\s*;\s*inline\s*;",
             ),
             (
                 "lengthsqr",
@@ -3515,6 +3524,46 @@ def scan_vector_public_record_contract(root: Path, path: Path, text: str) -> lis
             (
                 "normalize",
                 rf"\bfunction\s+Normalize\s*:\s*{record_name}\s*;\s*inline\s*;",
+            ),
+            (
+                "one",
+                rf"\bclass\s+function\s+One\s*:\s*{record_name}\s*;\s*static\s*;\s*inline\s*;",
+            ),
+            (
+                "max",
+                rf"\bfunction\s+Max\s*\(\s*const\s+AOther\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;",
+            ),
+            (
+                "min",
+                rf"\bfunction\s+Min\s*\(\s*const\s+AOther\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;",
+            ),
+            (
+                "distance",
+                rf"\bfunction\s+Distance\s*\(\s*const\s+AOther\s*:\s*{record_name}\s*\)\s*:\s*{scalar_type}\s*;\s*inline\s*;",
+            ),
+            (
+                "distancesqr",
+                rf"\bfunction\s+DistanceSqr\s*\(\s*const\s+AOther\s*:\s*{record_name}\s*\)\s*:\s*{scalar_type}\s*;\s*inline\s*;",
+            ),
+            (
+                "reflect",
+                rf"\bfunction\s+Reflect\s*\(\s*const\s+ANormal\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;",
+            ),
+            (
+                "projectonto",
+                rf"\bfunction\s+ProjectOnto\s*\(\s*const\s+ADirection\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;",
+            ),
+            (
+                "rejectfrom",
+                rf"\bfunction\s+RejectFrom\s*\(\s*const\s+ADirection\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;",
+            ),
+            (
+                "trynormalize",
+                rf"\bfunction\s+TryNormalize\s*:\s*{record_name}\s*;\s*inline\s*;",
+            ),
+            (
+                "isnormalized",
+                rf"\bfunction\s+IsNormalized\s*:\s*Boolean\s*;\s*inline\s*;",
             ),
             (
                 "data-alias",
@@ -3535,7 +3584,7 @@ def scan_vector_public_record_contract(root: Path, path: Path, text: str) -> lis
             )
 
         cross_pattern = (
-            rf"\bclass\s+function\s+Cross\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*static\s*;\s*inline\s*;"
+            rf"\bfunction\s+Cross\s*\(\s*const\s+AOther\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;"
         )
         has_cross_signature = re.search(
             cross_pattern,
@@ -3543,7 +3592,7 @@ def scan_vector_public_record_contract(root: Path, path: Path, text: str) -> lis
             re.IGNORECASE | re.DOTALL,
         ) is not None
         has_cross_declaration = re.search(
-            r"\bclass\s+function\s+Cross\s*\(",
+            r"\bfunction\s+Cross\s*\(",
             body,
             re.IGNORECASE | re.DOTALL,
         ) is not None
@@ -3566,6 +3615,70 @@ def scan_vector_public_record_contract(root: Path, path: Path, text: str) -> lis
                 record_name + ".Cross must stay 3D-only",
             )
 
+        cross2d_pattern = (
+            rf"\bfunction\s+Cross2D\s*\(\s*const\s+AOther\s*:\s*{record_name}\s*\)\s*:\s*{scalar_type}\s*;\s*inline\s*;"
+        )
+        has_cross2d_signature = re.search(
+            cross2d_pattern,
+            body,
+            re.IGNORECASE | re.DOTALL,
+        ) is not None
+        has_cross2d_declaration = re.search(
+            r"\bfunction\s+Cross2D\s*\(",
+            body,
+            re.IGNORECASE | re.DOTALL,
+        ) is not None
+        if has_cross2d and not has_cross2d_signature:
+            add_finding(
+                findings,
+                "missing-vector-public-contract:" + rule + ":cross2d",
+                root,
+                path,
+                record_line,
+                "missing " + record_name + ".Cross2D",
+            )
+        if (not has_cross2d) and has_cross2d_declaration:
+            add_finding(
+                findings,
+                "unexpected-vector-public-contract:" + rule + ":cross2d",
+                root,
+                path,
+                record_line,
+                record_name + ".Cross2D must stay 2D-only",
+            )
+
+        average_pattern = (
+            rf"\bfunction\s+Average\s*\(\s*const\s+AOther\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;\s*inline\s*;"
+        )
+        has_average_signature = re.search(
+            average_pattern,
+            body,
+            re.IGNORECASE | re.DOTALL,
+        ) is not None
+        has_average_declaration = re.search(
+            r"\bfunction\s+Average\s*\(",
+            body,
+            re.IGNORECASE | re.DOTALL,
+        ) is not None
+        if has_average and not has_average_signature:
+            add_finding(
+                findings,
+                "missing-vector-public-contract:" + rule + ":average",
+                root,
+                path,
+                record_line,
+                "missing " + record_name + ".Average",
+            )
+        if (not has_average) and has_average_declaration:
+            add_finding(
+                findings,
+                "unexpected-vector-public-contract:" + rule + ":average",
+                root,
+                path,
+                record_line,
+                record_name + ".Average must stay 3D-only",
+            )
+
         vector_multiply_pattern = (
             rf"\bclass\s+operator\s+\*\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*{record_name}\s*\)\s*:\s*{record_name}\s*;"
         )
@@ -3576,7 +3689,7 @@ def scan_vector_public_record_contract(root: Path, path: Path, text: str) -> lis
                 root,
                 path,
                 record_line,
-                record_name + " must use Dot or MulComponents instead of vector-vector operator *",
+                record_name + " must use Dot or ComponentMul instead of vector-vector operator *",
             )
     return findings
 
@@ -3931,8 +4044,8 @@ def run_vector_public_record_contract_self_tests() -> None:
             "    class operator * (const AScalar: Single; const AValue: TVec2f): TVec2f; inline;\n"
             "    class operator * (const AA, AB: TVec2f): TVec2f; inline;\n"
             "    class operator / (const AValue: TVec2f; const AScalar: Single): TVec2f; inline;\n"
-            "    class function MulComponents(const AA, AB: TVec2f): TVec2f; static; inline;\n"
-            "    class function DivComponents(const AA, AB: TVec2f): TVec2f; static; inline;\n"
+            "    class function ComponentMul(const AA, AB: TVec2f): TVec2f; static; inline;\n"
+            "    class function ComponentDiv(const AA, AB: TVec2f): TVec2f; static; inline;\n"
             "    class function Dot(const AA, AB: TVec2f): Single; static; inline;\n"
             "    class function Cross(const AA, AB: TVec2f): Single; static; inline;\n"
             "    class function Lerp(const AA, AB: TVec2f; const AT: Single): TVec2f; static; inline;\n"
@@ -3981,8 +4094,8 @@ def run_vector_public_record_contract_self_tests() -> None:
             "    class operator * (const AValue: TVec2f; const AScalar: Single): TVec2f; inline;\n"
             "    class operator * (const AScalar: Single; const AValue: TVec2f): TVec2f; inline;\n"
             "    class operator / (const AValue: TVec2f; const AScalar: Single): TVec2f; inline;\n"
-            "    class function MulComponents(const AA, AB: TVec2f): TVec2f; static; inline;\n"
-            "    class function DivComponents(const AA, AB: TVec2f): TVec2f; static; inline;\n"
+            "    class function ComponentMul(const AA, AB: TVec2f): TVec2f; static; inline;\n"
+            "    class function ComponentDiv(const AA, AB: TVec2f): TVec2f; static; inline;\n"
             "    class function Dot(const AA, AB: TVec2f): Single; static; inline;\n"
             "    class function Lerp(const AA, AB: TVec2f; const AT: Single): TVec2f; static; inline;\n"
             "    class function Equals(const AA, AB: TVec2f; const AEpsilon: Single): Boolean; static; inline;\n"
@@ -4006,8 +4119,8 @@ def run_vector_public_record_contract_self_tests() -> None:
             "    class operator * (const AValue: TVec3f; const AScalar: Single): TVec3f; inline;\n"
             "    class operator * (const AScalar: Single; const AValue: TVec3f): TVec3f; inline;\n"
             "    class operator / (const AValue: TVec3f; const AScalar: Single): TVec3f; inline;\n"
-            "    class function MulComponents(const AA, AB: TVec3f): TVec3f; static; inline;\n"
-            "    class function DivComponents(const AA, AB: TVec3f): TVec3f; static; inline;\n"
+            "    class function ComponentMul(const AA, AB: TVec3f): TVec3f; static; inline;\n"
+            "    class function ComponentDiv(const AA, AB: TVec3f): TVec3f; static; inline;\n"
             "    class function Dot(const AA, AB: TVec3f): Single; static; inline;\n"
             "    class function Cross(const AA, AB: TVec3f): TVec3f; static; inline;\n"
             "    class function Lerp(const AA, AB: TVec3f; const AT: Single): TVec3f; static; inline;\n"
@@ -4864,7 +4977,7 @@ def run_math_impl_simd_public_seam_self_tests() -> None:
             "  nextpas.core.math.vec;\n"
             "function SimdVec4fAdd(const AA, AB: TVec4f): TVec4f;\n"
             "function SimdVec4fSub(const AA, AB: TVec4f): TVec4f;\n"
-            "function SimdVec4fMulComponents(const AA, AB: TVec4f): TVec4f;\n"
+            "function SimdVec4fComponentMul(const AA, AB: TVec4f): TVec4f;\n"
             "function SimdVec4fScale(const AValue: TVec4f; const AScalar: Single): TVec4f;\n"
             "function SimdVec4fDot(const AA, AB: TVec4f): Single;\n"
             "function SimdVec4fLength(const AValue: TVec4f): Single;\n"
@@ -5551,7 +5664,7 @@ def run_required_impl_simd_win64_compile_gate_self_tests() -> None:
             "  M := TMat4f.Identity;\n"
             "  Q := TQuatf.Identity;\n"
             "  V4 := SimdVec4fAdd(V4, SimdVec4fSub(V4, V4));\n"
-            "  V4 := SimdVec4fMulComponents(V4, SimdVec4fScale(V4, 1.0));\n"
+            "  V4 := SimdVec4fComponentMul(V4, SimdVec4fScale(V4, 1.0));\n"
             "  V4 := SimdMat4fMulVec4f(M, V4);\n"
             "  V3 := SimdVec3fCross(V3, SimdQuatfRotate(Q, V3));\n"
             "  if SimdVec4fDot(V4, V4) + SimdVec4fLength(V4) + SimdVec3fDot(V3, V3) < 0.0 then\n"
@@ -6370,7 +6483,7 @@ def scan_required_impl_simd_win64_compile_gate(root: Path) -> list[Finding]:
         required_markers = (
             ("vec4f-add-touch", "SimdVec4fAdd("),
             ("vec4f-sub-touch", "SimdVec4fSub("),
-            ("vec4f-mul-components-touch", "SimdVec4fMulComponents("),
+            ("vec4f-mul-components-touch", "SimdVec4fComponentMul("),
             ("vec4f-scale-touch", "SimdVec4fScale("),
             ("vec4f-dot-touch", "SimdVec4fDot("),
             ("vec4f-length-touch", "SimdVec4fLength("),

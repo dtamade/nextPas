@@ -153,8 +153,8 @@ begin
 
   CheckVec4f(6.0, 8.0, 10.0, 12.0, SimdVec4fAdd(A, B), 'SimdVec4fAdd');
   CheckVec4f(-4.0, -4.0, -4.0, -4.0, SimdVec4fSub(A, B), 'SimdVec4fSub');
-  CheckVec4f(5.0, 12.0, 21.0, 32.0, SimdVec4fMulComponents(A, B),
-    'SimdVec4fMulComponents');
+  CheckVec4f(5.0, 12.0, 21.0, 32.0, SimdVec4fComponentMul(A, B),
+    'SimdVec4fComponentMul');
   CheckVec4f(2.5, 5.0, 7.5, 10.0, SimdVec4fScale(A, 2.5), 'SimdVec4fScale');
   CheckNear(70.0, SimdVec4fDot(A, B), 0.000001, 'SimdVec4fDot');
   CheckNear(5.0, SimdVec4fLength(TVec4f.Create(0.0, 0.0, 3.0, 4.0)), 0.000001,
@@ -224,11 +224,11 @@ begin
   B4 := TVec4f.Create(1.25, -4.0, 0.5, -2.0);
   CheckVec4fValue(A4 + B4, SimdVec4fAdd(A4, B4), 'SimdVec4fAdd public parity');
   CheckVec4fValue(A4 - B4, SimdVec4fSub(A4, B4), 'SimdVec4fSub public parity');
-  CheckVec4fValue(TVec4f.MulComponents(A4, B4), SimdVec4fMulComponents(A4, B4),
-    'SimdVec4fMulComponents public parity');
+  CheckVec4fValue(A4.ComponentMul(B4), SimdVec4fComponentMul(A4, B4),
+    'SimdVec4fComponentMul public parity');
   CheckVec4fValue(A4 * Single(-1.75), SimdVec4fScale(A4, -1.75),
     'SimdVec4fScale public parity');
-  CheckNear(TVec4f.Dot(A4, B4), SimdVec4fDot(A4, B4), 0.000001,
+  CheckNear(A4.Dot(B4), SimdVec4fDot(A4, B4), 0.000001,
     'SimdVec4fDot public parity');
   CheckNear(A4.Length, SimdVec4fLength(A4), 0.000001, 'SimdVec4fLength public parity');
   V4 := TVec4f.Create(10000000000000000000.0, -10000000000000000000.0, 0.0, 0.0);
@@ -237,13 +237,13 @@ begin
 
   A3 := TVec3f.Create(-2.0, 5.0, 0.25);
   B3 := TVec3f.Create(4.5, -1.5, 3.0);
-  CheckNear(TVec3f.Dot(A3, B3), SimdVec3fDot(A3, B3), 0.000001,
+  CheckNear(A3.Dot(B3), SimdVec3fDot(A3, B3), 0.000001,
     'SimdVec3fDot public parity');
-  CheckVec3fValue(TVec3f.Cross(A3, B3), SimdVec3fCross(A3, B3),
+  CheckVec3fValue(A3.Cross(B3), SimdVec3fCross(A3, B3),
     'SimdVec3fCross public parity');
-  CheckVec3fValue(TVec3f.Cross(A3, A3), SimdVec3fCross(A3, A3),
+  CheckVec3fValue(A3.Cross(A3), SimdVec3fCross(A3, A3),
     'SimdVec3fCross parallel public parity');
-  CheckVec3fValue(TVec3f.Cross(TVec3f.Create(0.0, 0.0, 0.0), B3),
+  CheckVec3fValue(TVec3f.Create(0.0, 0.0, 0.0).Cross(B3),
     SimdVec3fCross(TVec3f.Create(0.0, 0.0, 0.0), B3),
     'SimdVec3fCross zero public parity');
 
@@ -291,17 +291,17 @@ begin
 
   HugeDot4A := TVec4f.Create(Single(3.0e20), Single(3.0e20), 0.0, 0.0);
   HugeDot4B := TVec4f.Create(Single(3.0e20), Single(-3.0e20), 0.0, 0.0);
-  CheckNear(TVec4f.Dot(HugeDot4A, HugeDot4B), SimdVec4fDot(HugeDot4A, HugeDot4B),
+  CheckNear(HugeDot4A.Dot(HugeDot4B), SimdVec4fDot(HugeDot4A, HugeDot4B),
     0.0, 'SimdVec4fDot cancelling huge finite stable public parity');
 
   HugeDot3A := TVec3f.Create(Single(3.0e20), Single(3.0e20), 1.0);
   HugeDot3B := TVec3f.Create(Single(3.0e20), Single(-3.0e20), 0.0);
-  CheckNear(TVec3f.Dot(HugeDot3A, HugeDot3B), SimdVec3fDot(HugeDot3A, HugeDot3B),
+  CheckNear(HugeDot3A.Dot(HugeDot3B), SimdVec3fDot(HugeDot3A, HugeDot3B),
     0.0, 'SimdVec3fDot cancelling huge finite stable public parity');
 
   HugeCrossA := TVec3f.Create(Single(2.0e19), Single(2.0e19), 0.0);
   HugeCrossB := TVec3f.Create(HugeCrossA.X, Single(2.00002e19), 0.0);
-  ExpectedCross := TVec3f.Cross(HugeCrossA, HugeCrossB);
+  ExpectedCross := HugeCrossA.Cross(HugeCrossB);
   ActualCross := SimdVec3fCross(HugeCrossA, HugeCrossB);
   Check((not IsNaN(ActualCross.Z)) and (not IsInfinite(ActualCross.Z)),
     'SimdVec3fCross cancelling huge finite stable public parity stays finite');
@@ -359,8 +359,8 @@ begin
 
   A := TVec4f.Create(SingleNegativeZero, Single(0.0), SingleInfinity, SingleNaN);
   B := TVec4f.Create(Single(2.0), Single(-3.0), Single(-2.0), Single(1.0));
-  CheckVec4fIeeeParity(TVec4f.MulComponents(A, B), SimdVec4fMulComponents(A, B),
-    'SimdVec4fMulComponents lane IEEE parity');
+  CheckVec4fIeeeParity(A.ComponentMul(B), SimdVec4fComponentMul(A, B),
+    'SimdVec4fComponentMul lane IEEE parity');
 
   A := TVec4f.Create(SingleNegativeZero, Single(0.0), SingleInfinity, SingleNaN);
   CheckVec4fIeeeParity(A * Single(-2.0), SimdVec4fScale(A, Single(-2.0)),
@@ -374,21 +374,21 @@ var
 begin
   A := TVec4f.Create(SingleNegativeZero, Single(0.0), SingleNegativeZero, Single(0.0));
   B := TVec4f.Create(Single(1.0), Single(-1.0), Single(2.0), Single(-2.0));
-  CheckSingleIeeeParity(TVec4f.Dot(A, B), SimdVec4fDot(A, B),
+  CheckSingleIeeeParity(A.Dot(B), SimdVec4fDot(A, B),
     'SimdVec4fDot signed-zero reduction IEEE parity');
   CheckSingleIeeeParity(A.Length, SimdVec4fLength(A),
     'SimdVec4fLength signed-zero reduction IEEE parity');
 
   A := TVec4f.Create(SingleInfinity, Single(3.0), Single(4.0), Single(0.0));
   B := TVec4f.Create(Single(2.0), Single(0.0), Single(0.0), Single(0.0));
-  CheckSingleIeeeParity(TVec4f.Dot(A, B), SimdVec4fDot(A, B),
+  CheckSingleIeeeParity(A.Dot(B), SimdVec4fDot(A, B),
     'SimdVec4fDot infinity reduction IEEE parity');
   CheckSingleIeeeParity(A.Length, SimdVec4fLength(A),
     'SimdVec4fLength infinity reduction IEEE parity');
 
   A := TVec4f.Create(SingleNaN, Single(3.0), Single(4.0), Single(0.0));
   B := TVec4f.Create(Single(2.0), Single(0.0), Single(0.0), Single(0.0));
-  CheckSingleIeeeParity(TVec4f.Dot(A, B), SimdVec4fDot(A, B),
+  CheckSingleIeeeParity(A.Dot(B), SimdVec4fDot(A, B),
     'SimdVec4fDot NaN reduction IEEE parity');
   CheckSingleIeeeParity(A.Length, SimdVec4fLength(A),
     'SimdVec4fLength NaN reduction IEEE parity');

@@ -23,7 +23,7 @@ begin
   Q := TQuatf.Identity;
 
   V4 := SimdVec4fAdd(V4, SimdVec4fSub(V4, V4));
-  V4 := SimdVec4fMulComponents(V4, SimdVec4fScale(V4, 1.0));
+  V4 := SimdVec4fComponentMul(V4, SimdVec4fScale(V4, 1.0));
   V4 := SimdMat4fMulVec4f(M, V4);
   V3 := SimdVec3fCross(V3, SimdQuatfRotate(Q, V3));
   S := SimdVec4fDot(V4, V4) + SimdVec4fLength(V4) + SimdVec3fDot(V3, V3);
