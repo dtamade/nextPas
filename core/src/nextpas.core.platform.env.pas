@@ -17,6 +17,8 @@ function platform_env_exists(const AName: PAnsiChar): Boolean;
 function platform_env_enumerate(ACallback: TPlatformEnvEnumerateCallback;
   AData: Pointer): Int32;
 function platform_env_names_case_sensitive: Boolean;
+{** String-returning wrapper around platform_env_get. Returns '' if not found. *}
+function platform_env_get_str(const AName: PAnsiChar): AnsiString;
 
 implementation
 
@@ -270,6 +272,19 @@ begin
 {$ELSE}
   Result := True;
 {$ENDIF}
+end;
+
+function platform_env_get_str(const AName: PAnsiChar): AnsiString;
+var
+  LLen: Int32;
+begin
+  Result := '';
+  if platform_env_get(AName, nil, 0, LLen) <> 0 then
+    Exit;
+  if LLen <= 0 then
+    Exit;
+  SetLength(Result, LLen);
+  platform_env_get(AName, PAnsiChar(Result), LLen + 1, LLen);
 end;
 
 end.

@@ -181,12 +181,16 @@ begin
 end;
 
 function TextStartsWithI(const AStr, APrefix: string): Boolean;
-var I: SizeInt;
+var
+  LFoldedStr: string;
+  LFoldedPrefix: string;
 begin
-  if Length(APrefix) > Length(AStr) then Exit(False);
-  for I := 1 to Length(APrefix) do
-    if ToLower(Byte(AStr[I])) <> ToLower(Byte(APrefix[I])) then Exit(False);
-  Result := True;
+  if IsAsciiPair(AStr, APrefix) then
+    Exit(PrefixEqualsAsciiI(AStr, APrefix));
+
+  LFoldedStr := UTF8CaseFoldSimple(AStr);
+  LFoldedPrefix := UTF8CaseFoldSimple(APrefix);
+  Result := TextStartsWith(LFoldedStr, LFoldedPrefix);
 end;
 
 function TextEndsWith(const AStr, ASuffix: string): Boolean;
@@ -200,13 +204,16 @@ begin
 end;
 
 function TextEndsWithI(const AStr, ASuffix: string): Boolean;
-var I, Offset: SizeInt;
+var
+  LFoldedStr: string;
+  LFoldedSuffix: string;
 begin
-  if Length(ASuffix) > Length(AStr) then Exit(False);
-  Offset := Length(AStr) - Length(ASuffix);
-  for I := 1 to Length(ASuffix) do
-    if ToLower(Byte(AStr[Offset + I])) <> ToLower(Byte(ASuffix[I])) then Exit(False);
-  Result := True;
+  if IsAsciiPair(AStr, ASuffix) then
+    Exit(SuffixEqualsAsciiI(AStr, ASuffix));
+
+  LFoldedStr := UTF8CaseFoldSimple(AStr);
+  LFoldedSuffix := UTF8CaseFoldSimple(ASuffix);
+  Result := TextEndsWith(LFoldedStr, LFoldedSuffix);
 end;
 
 function TextContains(const AStr, ASub: string): Boolean;
@@ -218,29 +225,15 @@ end;
 
 function TextContainsI(const AStr, ASub: string): Boolean;
 var
-  I, J, LenStr, LenSub: SizeInt;
+  LFoldedStr: string;
   LFoldedSub: string;
-  Match: Boolean;
 begin
-  LenStr := Length(AStr);
-  LenSub := Length(ASub);
-  if LenSub = 0 then Exit(True);
-  if LenSub > LenStr then Exit(False);
-  SetLength(LFoldedSub, LenSub);
-  for J := 1 to LenSub do
-    LFoldedSub[J] := AnsiChar(ToLower(Byte(ASub[J])));
-  for I := 1 to LenStr - LenSub + 1 do
-  begin
-    Match := True;
-    for J := 1 to LenSub do
-      if ToLower(Byte(AStr[I + J - 1])) <> Byte(LFoldedSub[J]) then
-      begin
-        Match := False;
-        Break;
-      end;
-    if Match then Exit(True);
-  end;
-  Result := False;
+  if IsAsciiPair(AStr, ASub) then
+    Exit(ContainsAsciiI(AStr, ASub));
+
+  LFoldedStr := UTF8CaseFoldSimple(AStr);
+  LFoldedSub := UTF8CaseFoldSimple(ASub);
+  Result := TextContains(LFoldedStr, LFoldedSub);
 end;
 
 end.

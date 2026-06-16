@@ -152,18 +152,6 @@ type
 
 implementation
 
-function PlatformEnvGetStr(const AName: PAnsiChar): AnsiString;
-var
-  LLen: Int32;
-begin
-  Result := '';
-  if platform_env_get(AName, nil, 0, LLen) <> 0 then
-    Exit;
-  if LLen <= 0 then
-    Exit;
-  SetLength(Result, LLen);
-  platform_env_get(AName, PAnsiChar(Result), LLen + 1, LLen);
-end;
 
 var
   GResizePending: LongInt = 0;
@@ -547,11 +535,11 @@ procedure TTerminal.DetectCapabilities;
 var
   LCT, LTP, LT, LTF, LKittyWindowId: AnsiString;
 begin
-  LCT := PlatformEnvGetStr('COLORTERM');
-  LTP := PlatformEnvGetStr('TERM_PROGRAM');
-  LT := PlatformEnvGetStr('TERM');
-  LTF := PlatformEnvGetStr('TERM_FEATURES');
-  LKittyWindowId := PlatformEnvGetStr('KITTY_WINDOW_ID');
+  LCT := platform_env_get_str('COLORTERM');
+  LTP := platform_env_get_str('TERM_PROGRAM');
+  LT := platform_env_get_str('TERM');
+  LTF := platform_env_get_str('TERM_FEATURES');
+  LKittyWindowId := platform_env_get_str('KITTY_WINDOW_ID');
   FCapabilityProfile := DetectCapabilityProfileFromHints(
     LCT, LTP, LT, LTF, LKittyWindowId);
 end;

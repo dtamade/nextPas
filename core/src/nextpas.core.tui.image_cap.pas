@@ -33,18 +33,6 @@ implementation
 uses
   nextpas.core.platform.env;
 
-function PlatformEnvGetStr(const AName: PAnsiChar): AnsiString;
-var
-  LLen: Int32;
-begin
-  Result := '';
-  if platform_env_get(AName, nil, 0, LLen) <> 0 then
-    Exit;
-  if LLen <= 0 then
-    Exit;
-  SetLength(Result, LLen);
-  platform_env_get(AName, PAnsiChar(Result), LLen + 1, LLen);
-end;
 
 
 function DetectImageProtocolFromHints(const ATerm, ATermProgram,
@@ -74,10 +62,10 @@ end;
 function DetectImageProtocol: TImageProtocol;
 begin
   Result := DetectImageProtocolFromHints(
-    PlatformEnvGetStr('TERM'),
-    PlatformEnvGetStr('TERM_PROGRAM'),
-    PlatformEnvGetStr('TERM_FEATURES'),
-    PlatformEnvGetStr('KITTY_WINDOW_ID'));
+    platform_env_get_str('TERM'),
+    platform_env_get_str('TERM_PROGRAM'),
+    platform_env_get_str('TERM_FEATURES'),
+    platform_env_get_str('KITTY_WINDOW_ID'));
 end;
 
 end.
