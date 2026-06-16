@@ -40,6 +40,24 @@ type
     function Traits: TAllocatorTraits;
   end;
 
+  TCountingAllocator = class(TInterfacedObject, IAllocator)
+  private
+    FAllocations: SizeUInt;
+    FDeallocations: SizeUInt;
+  public
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
+    function GetMem(aSize: SizeUInt): Pointer;
+    function AllocMem(aSize: SizeUInt): Pointer;
+    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+    procedure FreeMem(aDst: Pointer);
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(aPtr: Pointer);
+    function Traits: TAllocatorTraits;
+    function OutstandingAllocations: SizeUInt;
+  end;
+
 constructor TFailingReallocateAllocator.Create(const AFailOnReallocateCall: SizeUInt);
 begin
   inherited Create;
@@ -115,6 +133,82 @@ begin
   Result.ThreadSafe := False;
   Result.HasMemSize := False;
   Result.SupportsAligned := False;
+end;
+
+function TCountingAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TCountingAllocator.Reallocate(const APtr: Pointer;
+  const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TCountingAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
+end;
+
+function TCountingAllocator.GetMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Result := System.GetMem(aSize);
+  Inc(FAllocations);
+end;
+
+function TCountingAllocator.AllocMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Result := System.AllocMem(aSize);
+  Inc(FAllocations);
+end;
+
+function TCountingAllocator.ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+  begin
+    FreeMem(aDst);
+    Exit(nil);
+  end;
+  if aDst = nil then
+    Exit(GetMem(aSize));
+  Result := System.ReallocMem(aDst, aSize);
+end;
+
+procedure TCountingAllocator.FreeMem(aDst: Pointer);
+begin
+  if aDst <> nil then
+  begin
+    System.FreeMem(aDst);
+    Inc(FDeallocations);
+  end;
+end;
+
+function TCountingAllocator.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+begin
+  Result := GetMem(aSize);
+end;
+
+procedure TCountingAllocator.FreeAligned(aPtr: Pointer);
+begin
+  FreeMem(aPtr);
+end;
+
+function TCountingAllocator.Traits: TAllocatorTraits;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.HasMemSize := False;
+  Result.SupportsAligned := False;
+end;
+
+function TCountingAllocator.OutstandingAllocations: SizeUInt;
+begin
+  Result := FAllocations - FDeallocations;
 end;
 
 function ReadSourceFile(const APath: string): string;
@@ -263,6 +357,10 @@ begin
     'node growth must guard nil reallocate');
   CheckSourceContains(LSource, 'lnewptr := fallocator.reallocate(pointer(fanchors),',
     'anchor growth must stage reallocate result');
+  CheckSourceContains(LSource, 'if adoc.fnodes <> nil then',
+    'parse with allocator must clean an existing document first');
+  CheckSourceContains(LSource, 'adoc.done;',
+    'reparse path must release old buffers before re-init');
   CheckSourceAbsent(LSource, 'function addnode(var adoc: tyamldocument): uint32;',
     'free AddNode helper must be removed');
   CheckSourceAbsent(LSource, 'procedure registeranchor(var adoc: tyamldocument;',
@@ -331,6 +429,34 @@ begin
   finally
     LDoc.Done;
   end;
+end;
+
+procedure TestParserReparseReleasesPriorDocument;
+var
+  LAllocatorObj: TCountingAllocator;
+  LAllocator: IAllocator;
+  LDoc: TYamlDocument;
+  LInput: string;
+begin
+  LAllocatorObj := TCountingAllocator.Create;
+  LAllocator := LAllocatorObj as IAllocator;
+
+  LInput := '{svc: api}';
+  YamlDocParseWith(LDoc, @LInput[1], Length(LInput), LAllocator);
+  CheckEqual(Int64(2), Int64(LAllocatorObj.OutstandingAllocations),
+    'first parse owns nodes and anchors');
+
+  LInput := '[1, 2, 3]';
+  YamlDocParseViewWith(LDoc, TStringView.FromStr(LInput), LAllocator);
+  try
+    Check(not LDoc.HasError, 'reparse succeeds');
+    CheckEqual(Int64(2), Int64(LAllocatorObj.OutstandingAllocations),
+      'reparse reuses ownership without leaking prior document');
+  finally
+    LDoc.Done;
+  end;
+  CheckEqual(Int64(0), Int64(LAllocatorObj.OutstandingAllocations),
+    'final done releases all YAML buffers');
 end;
 
 { Real-world YAML scenarios }
@@ -474,6 +600,8 @@ begin
     @TestParserNodeGrowthOOMFailsClosed);
   T.Run('Parser anchor growth OOM fails closed',
     @TestParserAnchorGrowthOOMFailsClosed);
+  T.Run('Parser reparse releases prior document',
+    @TestParserReparseReleasesPriorDocument);
   T.Run('K8s pod spec', @TestK8sPodSpec);
   T.Run('Docker compose', @TestDockerCompose);
   T.Run('GitHub Actions', @TestGitHubActions);

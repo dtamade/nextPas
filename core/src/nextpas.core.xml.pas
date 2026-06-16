@@ -55,6 +55,8 @@ const
 function XmlParse(const AInput: string): TXmlDocument; inline;
 function XmlParseWith(const AInput: string; const AAllocator: IAllocator): TXmlDocument;
 function TryXmlParse(const AInput: string; out ADoc: TXmlDocument): Boolean;
+function TryXmlParseWith(const AInput: string; const AAllocator: IAllocator;
+  out ADoc: TXmlDocument): Boolean;
 function XmlTokenize(const AInput: string): TXmlTokenArray;
 function XmlTokenizeWith(const AInput: string; const AAllocator: IAllocator): TXmlTokenArray;
 function XmlDecodeEntities(const AStr: string): string; inline;
@@ -122,14 +124,21 @@ end;
 
 function TryXmlParse(const AInput: string; out ADoc: TXmlDocument): Boolean;
 begin
+  Result := TryXmlParseWith(AInput, DefaultAllocator, ADoc);
+end;
+
+function TryXmlParseWith(const AInput: string; const AAllocator: IAllocator;
+  out ADoc: TXmlDocument): Boolean;
+begin
   ADoc := TXmlDocument.None;
   try
-    ADoc := XmlParse(AInput);
+    ADoc := TXmlDocument.ParseWith(AInput, AAllocator);
     Result := True;
   except
     on EXmlError do
     begin
-      ADoc.Done;
+      if ADoc.IsAssigned then
+        ADoc.Done;
       ADoc := TXmlDocument.None;
       Result := False;
     end;

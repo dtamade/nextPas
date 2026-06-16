@@ -31,6 +31,7 @@ type
     FParseDepth: Int32;
     FError: TYamlError;
     FHasError: Boolean;
+    FInitMagic: QWord;
     procedure RegisterAnchor(const AName: TStringView; ANodeIdx: UInt32);
   public
     procedure Init(const AAllocator: IAllocator);
@@ -66,6 +67,7 @@ uses
 
 const
   INITIAL_CAPACITY = 64;
+  YAML_DOCUMENT_INIT_MAGIC = QWord($59414D4C444F4331);
 
 procedure TYamlDocument.Init(const AAllocator: IAllocator);
 begin
@@ -86,10 +88,13 @@ begin
   FError.Col := 0;
   FError.Offset := 0;
   FHasError := False;
+  FInitMagic := YAML_DOCUMENT_INIT_MAGIC;
 end;
 
 procedure TYamlDocument.Done;
 begin
+  if FInitMagic <> YAML_DOCUMENT_INIT_MAGIC then
+    Exit;
   if FNodes <> nil then
   begin
     FAllocator.Deallocate(Pointer(FNodes));
@@ -111,6 +116,8 @@ begin
   FError.Col := 0;
   FError.Offset := 0;
   FHasError := False;
+  FAllocator := nil;
+  FInitMagic := 0;
 end;
 
 function TYamlDocument.AddNode: UInt32;
@@ -228,6 +235,22 @@ end;
 procedure YamlDocInitWith(var ADoc: TYamlDocument; const AAllocator: IAllocator);
 begin
   ADoc.Init(AAllocator);
+end;
+
+procedure PrepareYamlDocumentForParse(var ADoc: TYamlDocument);
+begin
+  if ADoc.FInitMagic = YAML_DOCUMENT_INIT_MAGIC then
+  begin
+    if ADoc.FNodes <> nil then
+    begin
+      ADoc.Done;
+      Exit;
+    end
+    else
+      FillChar(ADoc, SizeOf(ADoc), 0);
+    Exit;
+  end;
+  FillChar(ADoc, SizeOf(ADoc), 0);
 end;
 
 function ResolveAlias(var ADoc: TYamlDocument; const AName: TStringView): UInt32;
@@ -1016,6 +1039,7 @@ var
   LScanner: TYamlScanner;
   LTok: TYamlToken;
 begin
+  PrepareYamlDocumentForParse(ADoc);
   ADoc.Init(AAllocator);
   if (AInput = nil) or (ALen = 0) then
   begin

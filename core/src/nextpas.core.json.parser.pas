@@ -34,6 +34,8 @@ type
     FIndices: PJsonObjectIndex;
     FIndexCap: UInt32;
     FCombinedAlloc: Boolean;
+    FInited: Boolean;
+    procedure SetOutOfMemoryError;
     function AddNode: UInt32;
     function AllocStrBuf(ASize: SizeUInt): PAnsiChar;
   public
@@ -95,12 +97,21 @@ begin
   FIndices := nil;
   FIndexCap := 0;
   FCombinedAlloc := True;
+  FInited := True;
+end;
+
+procedure TJsonDocument.SetOutOfMemoryError;
+begin
+  FError.Message := TStringView.Create(PAnsiChar('out of memory'), 13);
+  FHasError := True;
 end;
 
 procedure TJsonDocument.Done;
 var
   I: UInt32;
 begin
+  if not FInited then
+    Exit;
   if FIndices <> nil then
   begin
     for I := 0 to FIndexCap - 1 do
@@ -145,6 +156,8 @@ begin
   FStrArenaUsed := 0;
   FStrArenaCap := 0;
   FStrOverflowCount := 0;
+  FStrOverflowCap := 0;
+  FInited := False;
 end;
 
 function TJsonDocument.AddNode: UInt32;
@@ -170,7 +183,13 @@ begin
     end
     else
     begin
-      FNodes := FAllocator.Reallocate(FNodes, LNewCap * SizeOf(TJsonNode));
+      LNewNodes := FAllocator.Reallocate(FNodes, LNewCap * SizeOf(TJsonNode));
+      if LNewNodes = nil then
+      begin
+        SetOutOfMemoryError;
+        Exit(JSON_NODE_NONE);
+      end;
+      FNodes := LNewNodes;
     end;
     FNodeCap := LNewCap;
   end;
@@ -183,6 +202,7 @@ end;
 function TJsonDocument.AllocStrBuf(ASize: SizeUInt): PAnsiChar;
 var
   LNewCap: UInt32;
+  LNewOverflow: PPointer;
 begin
   if FStrArenaUsed + UInt32(ASize) <= FStrArenaCap then
   begin
@@ -197,7 +217,15 @@ begin
       LNewCap := 8
     else
       LNewCap := FStrOverflowCap * 2;
-    FStrOverflow := FAllocator.Reallocate(FStrOverflow, LNewCap * SizeOf(Pointer));
+    LNewOverflow := FAllocator.Reallocate(FStrOverflow, LNewCap * SizeOf(Pointer));
+    if LNewOverflow = nil then
+    begin
+      FAllocator.Deallocate(Result);
+      Result := nil;
+      SetOutOfMemoryError;
+      Exit;
+    end;
+    FStrOverflow := LNewOverflow;
     FStrOverflowCap := LNewCap;
   end;
   PPointer(PByte(FStrOverflow) + FStrOverflowCount * SizeOf(Pointer))^ := Result;
@@ -350,6 +378,8 @@ begin
     Exit(JSON_NODE_NONE);
 
   LIdx := Doc^.AddNode;
+  if LIdx = JSON_NODE_NONE then
+    Exit(JSON_NODE_NONE);
   Doc^.FNodes[LIdx].Kind := AKind;
   if AKind = jnkBool then
     Doc^.FNodes[LIdx].BoolVal := ABoolVal;
@@ -445,10 +475,14 @@ begin
     (not ValidateJsonParserEscapes(Self, LRaw, SizeUInt(LStartPos) + 1, I)) then
     Exit(JSON_NODE_NONE);
   LIdx := Doc^.AddNode;
+  if LIdx = JSON_NODE_NONE then
+    Exit(JSON_NODE_NONE);
   Doc^.FNodes[LIdx].Kind := jnkString;
   if LHasEscape then
   begin
     LBuf := Doc^.AllocStrBuf(LRaw.Len);
+    if LBuf = nil then
+      Exit(JSON_NODE_NONE);
     LDecLen := JsonUnescapeToBuffer(LRaw.Data, LRaw.Len, LBuf, LErr);
     if LErr <> ueNone then
     begin
@@ -506,6 +540,8 @@ begin
       Exit(JSON_NODE_NONE);
     end;
     LIdx := Doc^.AddNode;
+    if LIdx = JSON_NODE_NONE then
+      Exit(JSON_NODE_NONE);
     Doc^.FNodes[LIdx].Kind := jnkReal;
     Doc^.FNodes[LIdx].RealVal := LFloat;
   end
@@ -517,6 +553,8 @@ begin
       Exit(JSON_NODE_NONE);
     end;
     LIdx := Doc^.AddNode;
+    if LIdx = JSON_NODE_NONE then
+      Exit(JSON_NODE_NONE);
     Doc^.FNodes[LIdx].Kind := jnkInt;
     Doc^.FNodes[LIdx].IntVal := LInt;
   end;
@@ -566,6 +604,8 @@ begin
     Exit(JSON_NODE_NONE);
   end;
   LIdx := Doc^.AddNode;
+  if LIdx = JSON_NODE_NONE then
+    Exit(JSON_NODE_NONE);
   Doc^.FNodes[LIdx].Kind := jnkArray;
   ConsumeStruct;
   LCount := 0;
@@ -631,6 +671,8 @@ begin
     Exit(JSON_NODE_NONE);
   end;
   LIdx := Doc^.AddNode;
+  if LIdx = JSON_NODE_NONE then
+    Exit(JSON_NODE_NONE);
   Doc^.FNodes[LIdx].Kind := jnkObject;
   ConsumeStruct;
   LCount := 0;
@@ -744,6 +786,7 @@ var
   I: UInt32;
   LBase: PAnsiChar;
   LTrailingOffset: SizeUInt;
+  LNewNodes: PJsonNode;
 begin
   FInput := AInput;
   FNodeCount := 0;
@@ -783,7 +826,15 @@ begin
       FCombinedAlloc := False;
     end
     else
-      FNodes := FAllocator.Reallocate(FNodes, LEstimate * SizeOf(TJsonNode));
+    begin
+      LNewNodes := FAllocator.Reallocate(FNodes, LEstimate * SizeOf(TJsonNode));
+      if LNewNodes = nil then
+      begin
+        SetOutOfMemoryError;
+        Exit(False);
+      end;
+      FNodes := LNewNodes;
+    end;
     FNodeCap := LEstimate;
   end;
   LState.Doc := @Self;

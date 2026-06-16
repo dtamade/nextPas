@@ -4,7 +4,9 @@ program test_toml_parser;
 
 uses
   SysUtils,
+  Classes,
   nextpas.core.text.view,
+  nextpas.core.mem.intf,
   nextpas.core.mem.default,
   nextpas.core.toml.base,
   nextpas.core.toml.parser,
@@ -12,6 +14,137 @@ uses
 
 var
   T: TTestRunner;
+
+const
+  TOML_PARSER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.toml.parser.pas';
+  TOML_PARSER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.toml.parser.pas';
+
+type
+  TFailingReallocateAllocator = class(TInterfacedObject, IAllocator)
+  private
+    FFailOnReallocateCall: SizeUInt;
+    FReallocateCalls: SizeUInt;
+  public
+    constructor Create(const AFailOnReallocateCall: SizeUInt);
+    function Allocate(const ASize: SizeUInt): Pointer;
+    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
+    procedure Deallocate(const APtr: Pointer);
+    function GetMem(aSize: SizeUInt): Pointer;
+    function AllocMem(aSize: SizeUInt): Pointer;
+    function ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
+    procedure FreeMem(aDst: Pointer);
+    function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(aPtr: Pointer);
+    function Traits: TAllocatorTraits;
+  end;
+
+constructor TFailingReallocateAllocator.Create(
+  const AFailOnReallocateCall: SizeUInt);
+begin
+  inherited Create;
+  FFailOnReallocateCall := AFailOnReallocateCall;
+  FReallocateCalls := 0;
+end;
+
+function TFailingReallocateAllocator.Allocate(const ASize: SizeUInt): Pointer;
+begin
+  Result := GetMem(ASize);
+end;
+
+function TFailingReallocateAllocator.Reallocate(const APtr: Pointer;
+  const ANewSize: SizeUInt): Pointer;
+begin
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+procedure TFailingReallocateAllocator.Deallocate(const APtr: Pointer);
+begin
+  FreeMem(APtr);
+end;
+
+function TFailingReallocateAllocator.GetMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Result := System.GetMem(aSize);
+end;
+
+function TFailingReallocateAllocator.AllocMem(aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+    Exit(nil);
+  Result := System.AllocMem(aSize);
+end;
+
+function TFailingReallocateAllocator.ReallocMem(aDst: Pointer;
+  aSize: SizeUInt): Pointer;
+begin
+  if aSize = 0 then
+  begin
+    FreeMem(aDst);
+    Exit(nil);
+  end;
+  if aDst = nil then
+    Exit(GetMem(aSize));
+  Inc(FReallocateCalls);
+  if (FFailOnReallocateCall > 0) and
+    (FReallocateCalls = FFailOnReallocateCall) then
+    Exit(nil);
+  Result := System.ReallocMem(aDst, aSize);
+end;
+
+procedure TFailingReallocateAllocator.FreeMem(aDst: Pointer);
+begin
+  if aDst <> nil then
+    System.FreeMem(aDst);
+end;
+
+function TFailingReallocateAllocator.AllocAligned(aSize,
+  aAlignment: SizeUInt): Pointer;
+begin
+  Result := GetMem(aSize);
+end;
+
+procedure TFailingReallocateAllocator.FreeAligned(aPtr: Pointer);
+begin
+  FreeMem(aPtr);
+end;
+
+function TFailingReallocateAllocator.Traits: TAllocatorTraits;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.HasMemSize := False;
+  Result.SupportsAligned := False;
+end;
+
+function ReadSourceFile(const APath: string): string;
+var
+  LText: TStringList;
+begin
+  LText := TStringList.Create;
+  try
+    LText.LoadFromFile(APath);
+    Result := LowerCase(LText.Text);
+  finally
+    LText.Free;
+  end;
+end;
+
+function ResolveSourcePath(const APathFromTest: string;
+  const APathFromRoot: string): string;
+begin
+  if FileExists(APathFromTest) then
+    Exit(APathFromTest);
+  if FileExists(APathFromRoot) then
+    Exit(APathFromRoot);
+  Result := APathFromTest;
+end;
+
+procedure CheckSourceContains(const ASource, ANeedle, AMessage: string);
+begin
+  Check(Pos(LowerCase(ANeedle), ASource) > 0, AMessage);
+end;
 
 function MustParse(const AToml: string): TTomlDocument;
 begin
@@ -559,6 +692,81 @@ begin
   LDoc.Done;
 end;
 
+function BuildTomlKeyValuePairs(const ACount: Integer): string;
+var
+  LI: Integer;
+begin
+  Result := '';
+  for LI := 0 to ACount - 1 do
+    Result := Result + 'k' + IntToStr(LI) + ' = ' + IntToStr(LI) + #10;
+end;
+
+function BuildTomlEscapedStrings(const ACount: Integer): string;
+var
+  LI: Integer;
+begin
+  Result := '';
+  for LI := 0 to ACount - 1 do
+    Result := Result + 'k' + IntToStr(LI) + ' = "\n"' + #10;
+end;
+
+procedure TestNodeGrowthOOMFailsClosed;
+var
+  LAllocatorObj: TFailingReallocateAllocator;
+  LAllocator: IAllocator;
+  LDoc: TTomlDocument;
+begin
+  LAllocatorObj := TFailingReallocateAllocator.Create(1);
+  LAllocator := LAllocatorObj as IAllocator;
+  LDoc.Init(LAllocator);
+  try
+    Check(not LDoc.Parse(TStringView.FromStr(BuildTomlKeyValuePairs(80))),
+      'node growth OOM rejects parse');
+    Check(LDoc.HasError, 'node growth OOM sets error');
+    CheckEqual('out of memory', LDoc.Error.Message.ToString,
+      'node growth OOM message');
+  finally
+    LDoc.Done;
+  end;
+end;
+
+procedure TestOwnedBufferGrowthOOMFailsClosed;
+var
+  LAllocatorObj: TFailingReallocateAllocator;
+  LAllocator: IAllocator;
+  LDoc: TTomlDocument;
+begin
+  LAllocatorObj := TFailingReallocateAllocator.Create(1);
+  LAllocator := LAllocatorObj as IAllocator;
+  LDoc.Init(LAllocator);
+  try
+    Check(not LDoc.Parse(TStringView.FromStr(BuildTomlEscapedStrings(17))),
+      'owned buffer growth OOM rejects parse');
+    Check(LDoc.HasError, 'owned buffer growth OOM sets error');
+    CheckEqual('out of memory', LDoc.Error.Message.ToString,
+      'owned buffer growth OOM message');
+  finally
+    LDoc.Done;
+  end;
+end;
+
+procedure TestParserSourceTracksOOMAndInitGuards;
+var
+  LSource: string;
+begin
+  LSource := ReadSourceFile(ResolveSourcePath(
+    TOML_PARSER_SOURCE_PATH_FROM_TEST,
+    TOML_PARSER_SOURCE_PATH_FROM_ROOT));
+  CheckSourceContains(LSource, 'finited: boolean;',
+    'document tracks initialized state');
+  CheckSourceContains(LSource, 'if not finited then',
+    'done must guard uninited records');
+  CheckSourceContains(LSource, 'lnewbufs := ppointer(fallocator.reallocate(pointer(fownedbufs), lnewcap * sizeof(pointer)));',
+    'owned buffer growth must stage reallocate');
+  CheckSourceContains(LSource, 'lnewnodes := fallocator.reallocate(fnodes, lnewcap * sizeof(ttomlnode));',
+    'node growth must stage reallocate');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml.parser');
   T.Run('empty input', @TestEmptyInput);
@@ -603,6 +811,11 @@ begin
   T.Run('duplicate key reject', @TestDuplicateKeyReject);
   T.Run('trailing comma array', @TestTrailingCommaArray);
   T.Run('comment after value', @TestCommentAfterValue);
+  T.Run('node growth OOM fails closed', @TestNodeGrowthOOMFailsClosed);
+  T.Run('owned buffer growth OOM fails closed',
+    @TestOwnedBufferGrowthOOMFailsClosed);
+  T.Run('parser source tracks OOM and init guards',
+    @TestParserSourceTracksOOMAndInitGuards);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

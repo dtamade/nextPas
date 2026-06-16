@@ -72,6 +72,30 @@ begin
   Check(not LDoc.IsAssigned, 'doc remains nil on failure');
 end;
 
+procedure TestTryXmlParseWithSuccess;
+var
+  LDoc: TXmlDocument;
+begin
+  Check(TryXmlParseWith('<root><item>ok</item></root>', DefaultAllocator, LDoc),
+    'try parse with allocator success');
+  try
+    Check(LDoc.IsAssigned, 'doc assigned');
+    CheckEqual('ok', LDoc.Root.FindChild('item').Text, 'item text');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestTryXmlParseWithFailureReturnsNil;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.None;
+  Check(not TryXmlParseWith('<root><unclosed>', DefaultAllocator, LDoc),
+    'try parse with allocator failure');
+  Check(not LDoc.IsAssigned, 'doc remains nil on allocator parse failure');
+end;
+
 { === XmlTokenize（转发 TXmlReader 流式 token） === }
 
 procedure TestXmlTokenizeBasic;
@@ -826,6 +850,9 @@ begin
   T.Run('XmlParseNested', @TestXmlParseNested);
   T.Run('TryXmlParseSuccess', @TestTryXmlParseSuccess);
   T.Run('TryXmlParseFailureReturnsNil', @TestTryXmlParseFailureReturnsNil);
+  T.Run('TryXmlParseWithSuccess', @TestTryXmlParseWithSuccess);
+  T.Run('TryXmlParseWithFailureReturnsNil',
+    @TestTryXmlParseWithFailureReturnsNil);
   T.Run('XmlTokenizeBasic', @TestXmlTokenizeBasic);
   T.Run('XmlTokenizeEmpty', @TestXmlTokenizeEmpty);
   T.Run('XmlTokenizeText', @TestXmlTokenizeText);
