@@ -1,8 +1,3 @@
-{
-  nextpas.core.math.impl.simd.pas
-  SIMD-accelerated implementations for math module hot paths.
-  Internal implementation module — not part of public API.
-}
 unit nextpas.core.math.impl.simd;
 
 {$I nextpas.core.settings.inc}
@@ -10,173 +5,161 @@ unit nextpas.core.math.impl.simd;
 interface
 
 uses
-  nextpas.core.simd,
-  nextpas.core.simd.base;
+  nextpas.core.math.mat,
+  nextpas.core.math.quat,
+  nextpas.core.math.vec;
 
-{ Vec4f SIMD operations }
-function SimdVec4fDot(const AX, AY, AZ, AW, BX, BY, BZ, BW: Single): Single;
-function SimdVec4fLength(const AX, AY, AZ, AW: Single): Single;
-procedure SimdVec4fNormalize(const AX, AY, AZ, AW: Single; out OX, OY, OZ, OW: Single);
-
-{ Vec3f SIMD operations }
-function SimdVec3fDot(const AX, AY, AZ, BX, BY, BZ: Single): Single;
-function SimdVec3fLength(const AX, AY, AZ: Single): Single;
-procedure SimdVec3fNormalize(const AX, AY, AZ: Single; out OX, OY, OZ: Single);
-procedure SimdVec3fCross(const AX, AY, AZ, BX, BY, BZ: Single; out OX, OY, OZ: Single);
-
-{ Mat4f SIMD operations — row-major FData[0..3, 0..3] }
-
-type
-  PMat4fData = ^TMat4fData;
-  TMat4fData = array[0..15] of Single;
-
-procedure SimdMat4fMul(
-  const AData, BData: PMat4fData;
-  const CData: PMat4fData);
-procedure SimdMat4fMulVec4f(
-  const MData: PMat4fData;
-  const VX, VY, VZ, VW: Single;
-  out OX, OY, OZ, OW: Single);
-
-{ Quatf SIMD operations }
-procedure SimdQuatfMul(
-  const AX, AY, AZ, AW, BX, BY, BZ, BW: Single;
-  out OX, OY, OZ, OW: Single);
+function SimdVec4fAdd(const AA, AB: TVec4f): TVec4f; inline;
+function SimdVec4fSub(const AA, AB: TVec4f): TVec4f; inline;
+function SimdVec4fMulComponents(const AA, AB: TVec4f): TVec4f; inline;
+function SimdVec4fScale(const AValue: TVec4f; const AScalar: Single): TVec4f; inline;
+function SimdVec4fDot(const AA, AB: TVec4f): Single; inline;
+function SimdVec4fLength(const AValue: TVec4f): Single; inline;
+function SimdVec3fDot(const AA, AB: TVec3f): Single; inline;
+function SimdVec3fCross(const AA, AB: TVec3f): TVec3f; inline;
+function SimdMat4fMulVec4f(const AMatrix: TMat4f; const AVector: TVec4f): TVec4f; inline;
+function SimdQuatfRotate(const AQuat: TQuatf; const AVector: TVec3f): TVec3f; inline;
 
 implementation
 
-{ === Vec4f === }
+uses
+  nextpas.core.errors,
+  nextpas.core.math.scalar,
+  nextpas.core.simd;
 
-function SimdVec4fDot(const AX, AY, AZ, AW, BX, BY, BZ, BW: Single): Single;
-var
-  LA, LB: TVecF32x4;
+function Vec4fToSimd(const AValue: TVec4f): TVecF32x4; inline;
 begin
-  LA := VecF32x4Make(AX, AY, AZ, AW);
-  LB := VecF32x4Make(BX, BY, BZ, BW);
-  Result := VecF32x4Dot(LA, LB);
+  Result := VecF32x4Make(AValue.X, AValue.Y, AValue.Z, AValue.W);
 end;
 
-function SimdVec4fLength(const AX, AY, AZ, AW: Single): Single;
-var
-  LV: TVecF32x4;
+function Vec3fToSimd(const AValue: TVec3f): TVecF32x4; inline;
 begin
-  LV := VecF32x4Make(AX, AY, AZ, AW);
-  Result := VecF32x4Length(LV);
+  Result := VecF32x4Make(AValue.X, AValue.Y, AValue.Z, 0.0);
 end;
 
-procedure SimdVec4fNormalize(const AX, AY, AZ, AW: Single; out OX, OY, OZ, OW: Single);
-var
-  LV, LR: TVecF32x4;
+function QuatfVectorToSimd(const AQuat: TQuatf): TVecF32x4; inline;
 begin
-  LV := VecF32x4Make(AX, AY, AZ, AW);
-  LR := VecF32x4Normalize(LV);
-  OX := LR.f[0];
-  OY := LR.f[1];
-  OZ := LR.f[2];
-  OW := LR.f[3];
+  Result := VecF32x4Make(AQuat.X, AQuat.Y, AQuat.Z, 0.0);
 end;
 
-{ === Vec3f === }
-
-function SimdVec3fDot(const AX, AY, AZ, BX, BY, BZ: Single): Single;
-var
-  LA, LB: TVecF32x4;
+function Mat4fColumnToSimd(const AMatrix: TMat4f; const AColumn: TMat4f.TIndex): TVecF32x4; inline;
 begin
-  LA := VecF32x4Make(AX, AY, AZ, 0.0);
-  LB := VecF32x4Make(BX, BY, BZ, 0.0);
-  Result := VecF32x3Dot(LA, LB);
+  Result := VecF32x4Make(
+    AMatrix.Data[AColumn, 0],
+    AMatrix.Data[AColumn, 1],
+    AMatrix.Data[AColumn, 2],
+    AMatrix.Data[AColumn, 3]);
 end;
 
-function SimdVec3fLength(const AX, AY, AZ: Single): Single;
-var
-  LV: TVecF32x4;
+function SimdToVec4f(const AValue: TVecF32x4): TVec4f; inline;
 begin
-  LV := VecF32x4Make(AX, AY, AZ, 0.0);
-  Result := VecF32x3Length(LV);
+  Result := TVec4f.Create(
+    VecF32x4Extract(AValue, 0),
+    VecF32x4Extract(AValue, 1),
+    VecF32x4Extract(AValue, 2),
+    VecF32x4Extract(AValue, 3));
 end;
 
-procedure SimdVec3fNormalize(const AX, AY, AZ: Single; out OX, OY, OZ: Single);
-var
-  LV, LR: TVecF32x4;
+function SimdToVec3f(const AValue: TVecF32x4): TVec3f; inline;
 begin
-  LV := VecF32x4Make(AX, AY, AZ, 0.0);
-  LR := VecF32x3Normalize(LV);
-  OX := LR.f[0];
-  OY := LR.f[1];
-  OZ := LR.f[2];
+  Result := TVec3f.Create(
+    VecF32x4Extract(AValue, 0),
+    VecF32x4Extract(AValue, 1),
+    VecF32x4Extract(AValue, 2));
 end;
 
-procedure SimdVec3fCross(const AX, AY, AZ, BX, BY, BZ: Single; out OX, OY, OZ: Single);
-var
-  LA, LB, LR: TVecF32x4;
+function SingleIsFinite(const AValue: Single): Boolean; inline;
 begin
-  LA := VecF32x4Make(AX, AY, AZ, 0.0);
-  LB := VecF32x4Make(BX, BY, BZ, 0.0);
-  LR := VecF32x3Cross(LA, LB);
-  OX := LR.f[0];
-  OY := LR.f[1];
-  OZ := LR.f[2];
+  Result := (not nextpas.core.math.scalar.IsNaN(AValue)) and
+    (not nextpas.core.math.scalar.IsInfinite(AValue));
 end;
 
-{ === Mat4f === }
-{ Column-major: Data[Row, Col], stored row-major in memory as Data[0..3, 0..3]
-  Memory layout: [R0C0, R0C1, R0C2, R0C3, R1C0, R1C1, ...]
-  Each row is 4 contiguous Singles → loadable as TVecF32x4 }
-
-procedure SimdMat4fMul(
-  const AData, BData: PMat4fData;
-  const CData: PMat4fData);
-var
-  LRowA, LColB: TVecF32x4;
-  LRow, LCol: Integer;
+function QuatfIsFinite(const AValue: TQuatf): Boolean; inline;
 begin
-  for LRow := 0 to 3 do
-  begin
-    LRowA := VecF32x4Load(@AData^[LRow * 4]);
-    for LCol := 0 to 3 do
-    begin
-      LColB := VecF32x4Make(
-        BData^[LCol], BData^[4 + LCol], BData^[8 + LCol], BData^[12 + LCol]);
-      CData^[LRow * 4 + LCol] := VecF32x4Dot(LRowA, LColB);
-    end;
-  end;
+  Result := SingleIsFinite(AValue.X) and SingleIsFinite(AValue.Y) and
+    SingleIsFinite(AValue.Z) and SingleIsFinite(AValue.W);
 end;
 
-procedure SimdMat4fMulVec4f(
-  const MData: PMat4fData;
-  const VX, VY, VZ, VW: Single;
-  out OX, OY, OZ, OW: Single);
-var
-  LV, LRow: TVecF32x4;
+function Vec3fIsFinite(const AValue: TVec3f): Boolean; inline;
 begin
-  LV := VecF32x4Make(VX, VY, VZ, VW);
-  LRow := VecF32x4Load(@MData^[0]);
-  OX := VecF32x4Dot(LRow, LV);
-  LRow := VecF32x4Load(@MData^[4]);
-  OY := VecF32x4Dot(LRow, LV);
-  LRow := VecF32x4Load(@MData^[8]);
-  OZ := VecF32x4Dot(LRow, LV);
-  LRow := VecF32x4Load(@MData^[12]);
-  OW := VecF32x4Dot(LRow, LV);
+  Result := SingleIsFinite(AValue.X) and SingleIsFinite(AValue.Y) and
+    SingleIsFinite(AValue.Z);
 end;
 
-{ === Quatf === }
-{ Quaternion multiply: (a * b)
-  x = a.w*b.x + a.x*b.w + a.y*b.z - a.z*b.y
-  y = a.w*b.y - a.x*b.z + a.y*b.w + a.z*b.x
-  z = a.w*b.z + a.x*b.y - a.y*b.x + a.z*b.w
-  w = a.w*b.w - a.x*b.x - a.y*b.y - a.z*b.z }
-
-procedure SimdQuatfMul(
-  const AX, AY, AZ, AW, BX, BY, BZ, BW: Single;
-  out OX, OY, OZ, OW: Single);
+function SimdVec4fAdd(const AA, AB: TVec4f): TVec4f;
 begin
-  { Quaternion multiply — cross-term shuffling makes pure SIMD less efficient
-    than scalar for single quaternion operations. Use scalar for clarity. }
-  OX := AW * BX + AX * BW + AY * BZ - AZ * BY;
-  OY := AW * BY - AX * BZ + AY * BW + AZ * BX;
-  OZ := AW * BZ + AX * BY - AY * BX + AZ * BW;
-  OW := AW * BW - AX * BX - AY * BY - AZ * BZ;
+  Result := SimdToVec4f(VecF32x4Add(Vec4fToSimd(AA), Vec4fToSimd(AB)));
+end;
+
+function SimdVec4fSub(const AA, AB: TVec4f): TVec4f;
+begin
+  Result := SimdToVec4f(VecF32x4Sub(Vec4fToSimd(AA), Vec4fToSimd(AB)));
+end;
+
+function SimdVec4fMulComponents(const AA, AB: TVec4f): TVec4f;
+begin
+  Result := SimdToVec4f(VecF32x4Mul(Vec4fToSimd(AA), Vec4fToSimd(AB)));
+end;
+
+function SimdVec4fScale(const AValue: TVec4f; const AScalar: Single): TVec4f;
+begin
+  Result := SimdToVec4f(VecF32x4Mul(Vec4fToSimd(AValue), VecF32x4Splat(AScalar)));
+end;
+
+function SimdVec4fDot(const AA, AB: TVec4f): Single;
+begin
+  Result := TVec4f.Dot(AA, AB);
+end;
+
+function SimdVec4fLength(const AValue: TVec4f): Single;
+begin
+  Result := AValue.Length;
+end;
+
+function SimdVec3fDot(const AA, AB: TVec3f): Single;
+begin
+  Result := TVec3f.Dot(AA, AB);
+end;
+
+function SimdVec3fCross(const AA, AB: TVec3f): TVec3f;
+begin
+  Result := TVec3f.Cross(AA, AB);
+end;
+
+function SimdMat4fMulVec4f(const AMatrix: TMat4f; const AVector: TVec4f): TVec4f;
+var
+  LResult: TVecF32x4;
+begin
+  LResult := VecF32x4Mul(Mat4fColumnToSimd(AMatrix, 0), VecF32x4Splat(AVector.X));
+  LResult := VecF32x4Add(LResult,
+    VecF32x4Mul(Mat4fColumnToSimd(AMatrix, 1), VecF32x4Splat(AVector.Y)));
+  LResult := VecF32x4Add(LResult,
+    VecF32x4Mul(Mat4fColumnToSimd(AMatrix, 2), VecF32x4Splat(AVector.Z)));
+  LResult := VecF32x4Add(LResult,
+    VecF32x4Mul(Mat4fColumnToSimd(AMatrix, 3), VecF32x4Splat(AVector.W)));
+  Result := SimdToVec4f(LResult);
+end;
+
+function SimdQuatfRotate(const AQuat: TQuatf; const AVector: TVec3f): TVec3f;
+var
+  LQuat: TQuatf;
+  LQuatVec: TVecF32x4;
+  LVector: TVecF32x4;
+  LT: TVecF32x4;
+  LResult: TVecF32x4;
+begin
+  if not QuatfIsFinite(AQuat) then
+    raise EArgumentError.Create('TQuatf.Rotate: quaternion must be finite');
+  if not Vec3fIsFinite(AVector) then
+    raise EArgumentError.Create('TQuatf.Rotate: AVector must be finite');
+
+  LQuat := AQuat.Normalize;
+  LQuatVec := QuatfVectorToSimd(LQuat);
+  LVector := Vec3fToSimd(AVector);
+  LT := VecF32x4Mul(VecF32x3Cross(LQuatVec, LVector), VecF32x4Splat(2.0));
+  LResult := VecF32x4Add(LVector, VecF32x4Mul(LT, VecF32x4Splat(LQuat.W)));
+  LResult := VecF32x4Add(LResult, VecF32x3Cross(LQuatVec, LT));
+  Result := SimdToVec3f(LResult);
 end;
 
 end.

@@ -1,7 +1,6 @@
 # nextPas Core Framework — 目标树
 
-> 最后更新: 2026-06-08 | 本轮证据: 本地 Linux x86_64 focused gate: atomic 43/43 + lockfree 46/46 + lockfree stress 12/12, heaptrc 0
-> 证据边界: 未有目标机 runtime gate 的平台只声明 source-contract 覆盖，不声明跨平台实机全绿。
+> 最后更新: 2026-06-09 | 真相口径: source-contract / focused runtime / forced compile / CI matrix
 
 ## 定位
 
@@ -19,8 +18,8 @@ nextPas Core 是 FreePascal 领域最优秀的框架之一。分三层：
 | `errors` | 异常层级 (ENextPasError 体系) | ✅ 完成 |
 | `platform` | OS API 封装 (posix/linux/darwin/windows) | ✅ 完成 (Tier 1 全绿) |
 | `mem` | 内存管理 (IAllocator/Pool/Arena/StackPool) | ✅ 完成 |
-| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | source-contract / forced compile / focused runtime: public contract hardening, typed records, memory-order/CAS/fence contracts, 32/64-bit compile-surface gate parity, compat legacy alias coverage, refcount zero-state/concurrent-borrow/terminal-race contracts; local Linux x86_64 focused runtime evidence only |
-| `math` | 数学函数 (Min/Max/Clamp/Abs/Pow/Trig) | ✅ 完成 |
+| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | ✅ 完成 |
+| `math` | 数学函数 (Min/Max/Clamp/Abs/Pow/Trig) | 🔶 M8 partial: source-contract + Linux focused runtime/heaptrc; Win64 forced compile; macOS/Windows host runtime and CI matrix pending |
 | `simd` | SIMD 抽象 (SSE2/AVX2/NEON, 统一宽度 API) | ✅ 完成 |
 
 ## L1 模块状态

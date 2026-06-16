@@ -1,0 +1,327 @@
+program bench_simd_seam;
+
+{$I nextpas.core.settings.inc}
+
+uses
+  nextpas.core.bench,
+  nextpas.core.math.mat,
+  nextpas.core.math.quat,
+  nextpas.core.math.vec,
+  nextpas.core.math.impl.simd;
+
+const
+  SAMPLE_COUNT = 16;
+
+var
+  B: TBenchRunner;
+  GVec4A: array[0..SAMPLE_COUNT - 1] of TVec4f;
+  GVec4B: array[0..SAMPLE_COUNT - 1] of TVec4f;
+  GVec3A: array[0..SAMPLE_COUNT - 1] of TVec3f;
+  GVec3B: array[0..SAMPLE_COUNT - 1] of TVec3f;
+  GMat4A: array[0..SAMPLE_COUNT - 1] of TMat4f;
+  GMat4B: array[0..SAMPLE_COUNT - 1] of TMat4f;
+  GQuatA: array[0..SAMPLE_COUNT - 1] of TQuatf;
+  GVec4Sink: TVec4f;
+  GVec3Sink: TVec3f;
+  GMat4Sink: TMat4f;
+  GFloatSink: Single;
+
+procedure InitInputs;
+var
+  I: Integer;
+  LBase: Single;
+begin
+  for I := 0 to SAMPLE_COUNT - 1 do
+  begin
+    LBase := I + 1;
+    GVec4A[I] := TVec4f.Create(LBase, LBase + 0.25, LBase + 0.5, LBase + 0.75);
+    GVec4B[I] := TVec4f.Create(LBase * 1.5, LBase * 1.75, LBase * 2.0, LBase * 2.25);
+    GVec3A[I] := TVec3f.Create(LBase, LBase + 1.0, LBase + 2.0);
+    GVec3B[I] := TVec3f.Create(LBase * 2.0, LBase * 2.5, LBase * 3.0);
+    GMat4A[I] := TMat4f.Create(
+      TVec4f.Create(LBase + 0.00, LBase + 0.25, LBase + 0.50, LBase + 0.75),
+      TVec4f.Create(LBase + 1.00, LBase + 1.25, LBase + 1.50, LBase + 1.75),
+      TVec4f.Create(LBase + 2.00, LBase + 2.25, LBase + 2.50, LBase + 2.75),
+      TVec4f.Create(LBase + 3.00, LBase + 3.25, LBase + 3.50, LBase + 3.75));
+    GMat4B[I] := TMat4f.Create(
+      TVec4f.Create(LBase * 0.50, LBase * 0.75, LBase * 1.00, LBase * 1.25),
+      TVec4f.Create(LBase * 1.50, LBase * 1.75, LBase * 2.00, LBase * 2.25),
+      TVec4f.Create(LBase * 2.50, LBase * 2.75, LBase * 3.00, LBase * 3.25),
+      TVec4f.Create(LBase * 3.50, LBase * 3.75, LBase * 4.00, LBase * 4.25));
+    GQuatA[I] := TQuatf.FromAxisAngle(TVec3f.Create(0.25 + LBase, 0.5, 1.0), LBase * 0.03125);
+  end;
+
+  GVec4Sink := TVec4f.Zero;
+  GVec3Sink := TVec3f.Zero;
+  GMat4Sink := TMat4f.Zero;
+  GFloatSink := 0.0;
+end;
+
+function SampleIndex(const AIteration: Int64): Integer; inline;
+begin
+  Result := Integer(AIteration and (SAMPLE_COUNT - 1));
+end;
+
+procedure BenchVec4fScalarAdd(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: TVec4f;
+begin
+  LValue := GVec4Sink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := LValue + (GVec4A[LIndex] + GVec4B[LIndex]);
+  end;
+  GVec4Sink := LValue;
+end;
+
+procedure BenchVec4fSimdAdd(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: TVec4f;
+begin
+  LValue := GVec4Sink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := SimdVec4fAdd(LValue, SimdVec4fAdd(GVec4A[LIndex], GVec4B[LIndex]));
+  end;
+  GVec4Sink := LValue;
+end;
+
+procedure BenchVec4fScalarScale(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: TVec4f;
+begin
+  LValue := GVec4Sink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := LValue + (GVec4A[LIndex] * 1.75);
+  end;
+  GVec4Sink := LValue;
+end;
+
+procedure BenchVec4fSimdScale(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: TVec4f;
+begin
+  LValue := GVec4Sink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := SimdVec4fAdd(LValue, SimdVec4fScale(GVec4A[LIndex], 1.75));
+  end;
+  GVec4Sink := LValue;
+end;
+
+procedure BenchVec4fScalarDot(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: Single;
+begin
+  LValue := GFloatSink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := LValue + TVec4f.Dot(GVec4A[LIndex], GVec4B[LIndex]);
+  end;
+  GFloatSink := LValue;
+end;
+
+procedure BenchVec4fSimdDot(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: Single;
+begin
+  LValue := GFloatSink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := LValue + SimdVec4fDot(GVec4A[LIndex], GVec4B[LIndex]);
+  end;
+  GFloatSink := LValue;
+end;
+
+procedure BenchVec4fScalarLength(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: Single;
+begin
+  LValue := GFloatSink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := LValue + GVec4A[LIndex].Length;
+  end;
+  GFloatSink := LValue;
+end;
+
+procedure BenchVec4fSimdLength(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: Single;
+begin
+  LValue := GFloatSink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := LValue + SimdVec4fLength(GVec4A[LIndex]);
+  end;
+  GFloatSink := LValue;
+end;
+
+procedure BenchVec3fScalarCross(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: TVec3f;
+begin
+  LValue := GVec3Sink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := LValue + TVec3f.Cross(GVec3A[LIndex], GVec3B[LIndex]);
+  end;
+  GVec3Sink := LValue;
+end;
+
+procedure BenchVec3fSimdCross(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: TVec3f;
+begin
+  LValue := GVec3Sink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := LValue + SimdVec3fCross(GVec3A[LIndex], GVec3B[LIndex]);
+  end;
+  GVec3Sink := LValue;
+end;
+
+procedure BenchMat4fScalarMatVec(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: TVec4f;
+begin
+  LValue := GVec4Sink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := LValue + (GMat4A[LIndex] * GVec4A[LIndex]);
+  end;
+  GVec4Sink := LValue;
+end;
+
+procedure BenchMat4fSimdMatVec(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: TVec4f;
+begin
+  LValue := GVec4Sink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := LValue + SimdMat4fMulVec4f(GMat4A[LIndex], GVec4A[LIndex]);
+  end;
+  GVec4Sink := LValue;
+end;
+
+procedure BenchMat4fScalarMatMat(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: TMat4f;
+begin
+  LValue := GMat4Sink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := LValue + (GMat4A[LIndex] * GMat4B[LIndex]);
+  end;
+  GMat4Sink := LValue;
+end;
+
+procedure BenchQuatfScalarRotate(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: TVec3f;
+begin
+  LValue := GVec3Sink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := LValue + GQuatA[LIndex].Rotate(GVec3A[LIndex]);
+  end;
+  GVec3Sink := LValue;
+end;
+
+procedure BenchQuatfSimdRotate(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: TVec3f;
+begin
+  LValue := GVec3Sink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := LValue + SimdQuatfRotate(GQuatA[LIndex], GVec3A[LIndex]);
+  end;
+  GVec3Sink := LValue;
+end;
+
+begin
+  InitInputs;
+
+  B := TBenchRunner.Create;
+  try
+    WriteLn('=== nextpas.core.math SIMD seam benchmark ===');
+    WriteLn('compiler-flags=-MObjFPC -Sh -O2');
+    WriteLn('input-set=16 fixed vector/matrix/quaternion samples');
+    WriteLn('scope=public scalar vector methods vs internal SIMD helper seam plus scalar candidate baselines');
+    WriteLn('decision-note=internal SIMD seam only; public value methods stay scalar');
+    WriteLn('public-cutover=not-approved-without-profiled-runtime-and-public-simd-contracts');
+    WriteLn;
+
+    B.Run('TVec4f scalar add', @BenchVec4fScalarAdd);
+    B.Run('TVec4f simd seam add', @BenchVec4fSimdAdd);
+    B.Run('TVec4f scalar scale', @BenchVec4fScalarScale);
+    B.Run('TVec4f simd seam scale', @BenchVec4fSimdScale);
+    B.Run('TVec4f scalar dot', @BenchVec4fScalarDot);
+    B.Run('TVec4f simd seam dot', @BenchVec4fSimdDot);
+    B.Run('TVec4f scalar length', @BenchVec4fScalarLength);
+    B.Run('TVec4f simd seam length', @BenchVec4fSimdLength);
+    B.Run('TVec3f scalar cross', @BenchVec3fScalarCross);
+    B.Run('TVec3f simd seam cross', @BenchVec3fSimdCross);
+    B.Run('TMat4f scalar mat-vec', @BenchMat4fScalarMatVec);
+    B.Run('TMat4f simd seam mat-vec', @BenchMat4fSimdMatVec);
+    B.Run('TMat4f scalar mat-mat', @BenchMat4fScalarMatMat);
+    B.Run('TQuatf scalar rotate', @BenchQuatfScalarRotate);
+    B.Run('TQuatf simd seam rotate', @BenchQuatfSimdRotate);
+    WriteLn;
+    B.Summary;
+  finally
+    B.Free;
+  end;
+
+  WriteLn;
+  WriteLn('sink=', GFloatSink:0:3, ':', GVec4Sink.X:0:3, ':', GVec3Sink.X:0:3, ':',
+    GMat4Sink.Data[0, 0]:0:3);
+end.

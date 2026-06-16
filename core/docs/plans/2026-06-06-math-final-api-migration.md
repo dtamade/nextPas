@@ -1,10 +1,19 @@
 # Math Final API Migration Implementation Plan
 
-> Target branch: `codex/math-final-api-20260606`
+> Target branch: `codex/core-math`
 
 ## Goal
 
 Move reusable math capability from `fafafa.game` into `nextpas.core` and make `nextpas.core.math.*` the only official framework math API.
+
+## Current Status
+
+Current status: M0/M1 complete for current scope; M2 local Linux complete with macOS/Windows host proof pending; M7/M8 partial; M9 not started.
+
+This file is the historical migration checklist. Current roadmap truth lives in
+`docs/math/GOAL_TREE.md`; detailed public behavior lives in `docs/math/API.md`.
+Do not read unchecked historical subtasks below as current RED status unless the
+Current Status line or `GOAL_TREE.md` also marks them pending.
 
 ## Architecture
 
@@ -36,11 +45,11 @@ Files:
 
 Steps:
 
-- [ ] Record the math goal tree and current roadmap position.
-- [ ] Record the final API architecture and rejected approaches.
-- [ ] Record implementation tasks, commit order, and verification gates.
-- [ ] Run `git diff --check`.
-- [ ] Commit with `docs(math): plan final api migration`.
+- [x] Record the math goal tree and current roadmap position.
+- [x] Record the final API architecture and rejected approaches.
+- [x] Record implementation tasks, commit order, and verification gates.
+- [x] Run `git diff --check`.
+- [x] Commit with `docs(math): plan final api migration`.
 
 Expected result:
 
@@ -67,18 +76,18 @@ Files:
 
 Steps:
 
-- [ ] Resolve and document pre-implementation policy choices: constructor names, singular `Inverse`, zero normalize, random invalid inputs, facade re-export breadth, and whether `TTransform3f/TTransform3d` is in the first cut.
-- [ ] Write scalar/trig tests for constants, `Min`, `Max`, `Clamp`, `Lerp`, `Floor`, `Ceil`, `Sqrt`, `Sin`, `Cos`, `Tan`, `Power`, and degree/radian conversion.
-- [ ] Write facade-only tests that `uses nextpas.core.math` and calls canonical final APIs without importing implementation units.
-- [ ] Write Vec tests for final type names and operators.
-- [ ] Write Mat tests for column-major identity/zero/multiply/inverse behavior.
-- [ ] Write Quat tests for identity, axis-angle, rotation matrix, rotate, slerp, and nlerp.
-- [ ] Write Transform tests with known matrices and transformed vectors.
-- [ ] Write Easing tests for every public function.
-- [ ] Write Random/Noise tests for seed determinism, boundaries, and invalid inputs.
-- [ ] Write surface tests that reject `nextpas.core.math.ffi`, naked `external 'm'`, public `Vectors` names, public `uses nextpas.core.math.impl.*`, backend-private SIMD dependencies, and untested public symbols.
-- [ ] Run each test project and confirm RED failures only because final API does not exist.
-- [ ] Commit with `test(math): lock final api contracts`.
+- [x] Resolve and document pre-implementation policy choices: constructor names, singular `Inverse`, zero normalize, random invalid inputs, facade re-export breadth, and whether `TTransform3f/TTransform3d` is in the first cut.
+- [x] Write scalar/trig tests for constants, `Min`, `Max`, `Clamp`, `Lerp`, `Floor`, `Ceil`, `Sqrt`, `Sin`, `Cos`, `Tan`, `Power`, and degree/radian conversion.
+- [x] Write facade-only tests that `uses nextpas.core.math` and calls canonical final APIs without importing implementation units.
+- [x] Write Vec tests for final type names and operators.
+- [x] Write Mat tests for column-major identity/zero/multiply/inverse behavior.
+- [x] Write Quat tests for identity, axis-angle, rotation matrix, rotate, slerp, and nlerp.
+- [x] Write Transform tests with known matrices and transformed vectors.
+- [x] Write Easing tests for every public function.
+- [x] Write Random/Noise tests for seed determinism, boundaries, and invalid inputs.
+- [x] Write surface tests that reject `nextpas.core.math.ffi`, naked `external 'm'`, public `Vectors` names, public `uses nextpas.core.math.impl.*`, backend-private SIMD dependencies, and untested public symbols.
+- [x] Run each test project and confirm RED failures only because final API does not exist.
+- [x] Commit with `test(math): lock final api contracts`.
 
 Expected result:
 
@@ -98,15 +107,15 @@ Files:
 
 Steps:
 
-- [ ] Move scalar helpers into `nextpas.core.math.scalar`.
-- [ ] Keep `nextpas.core.math` as explicit facade/re-export.
-- [ ] Remove `test_trig` dependency on `nextpas.core.math.ffi`.
-- [ ] Route trig through safe scalar/platform implementation.
-- [ ] Do not delete `math.ffi` before the RED surface test proves the new boundary; deprecate or delete only after all public/test consumers are removed.
-- [ ] Ensure no source contains `external 'm'` under `nextpas.core.math*`.
+- [x] Move scalar helpers into `nextpas.core.math.scalar`.
+- [x] Keep `nextpas.core.math` as explicit facade/re-export.
+- [x] Remove `test_trig` dependency on `nextpas.core.math.ffi`.
+- [x] Route trig through safe scalar/platform implementation.
+- [x] Do not delete `math.ffi` before the RED surface test proves the new boundary; deprecate or delete only after all public/test consumers are removed.
+- [x] Ensure no source contains `external 'm'` under `nextpas.core.math*`.
 - [ ] Run local Linux trig/facade link tests; record macOS/Windows host link-smoke status or explicitly mark final cross-platform completion as blocked.
-- [ ] Run scalar/trig/surface tests with heaptrc.
-- [ ] Commit with `feat(math): add scalar and safe trig foundation`.
+- [x] Run scalar/trig/surface tests with heaptrc.
+- [x] Commit with `feat(math): add scalar and safe trig foundation`.
 
 Expected result:
 
@@ -123,13 +132,13 @@ Files:
 
 Steps:
 
-- [ ] Implement `TVec2f`, `TVec3f`, `TVec4f`.
-- [ ] Implement `TVec2d`, `TVec3d`, `TVec4d`.
-- [ ] Implement final operators and methods.
-- [ ] Implement component multiply/divide as explicit `MulComponents` and `DivComponents` unless final RED tests intentionally lock Hadamard vector `*`/`/`.
-- [ ] Define and test zero normalize behavior.
-- [ ] Run `test_vec` and `test_api_surface`.
-- [ ] Commit with `feat(math): add final vector types`.
+- [x] Implement `TVec2f`, `TVec3f`, `TVec4f`.
+- [x] Implement `TVec2d`, `TVec3d`, `TVec4d`.
+- [x] Implement final operators and methods.
+- [x] Implement component multiply/divide as explicit `MulComponents` and `DivComponents` unless final RED tests intentionally lock Hadamard vector `*`/`/`.
+- [x] Define and test zero normalize behavior.
+- [x] Run `test_vec` and `test_api_surface`.
+- [x] Commit with `feat(math): add final vector types`.
 
 Expected result:
 
@@ -145,16 +154,19 @@ Files:
 
 Steps:
 
-- [ ] Implement `TMat3f`, `TMat4f`, `TMat3d`, `TMat4d`.
-- [ ] Preserve column-major `Data[column, row]`.
-- [ ] Implement matrix/vector and matrix/matrix multiply.
-- [ ] Implement determinant, inverse, try-inverse, transpose, identity, zero.
-- [ ] Run `test_mat` and `test_api_surface`.
-- [ ] Commit with `feat(math): add final matrix types`.
+- [x] Implement `TMat3f`, `TMat4f`, `TMat3d`, `TMat4d`.
+- [x] Preserve column-major `Data[column, row]`.
+- [x] Implement matrix/vector and matrix/matrix multiply.
+- [x] Implement determinant, inverse, try-inverse, transpose, identity, zero.
+- [x] Run `test_mat` and `test_api_surface`.
+- [x] Commit with `feat(math): add final matrix types`.
 
 Expected result:
 
 - Matrix conventions and singular inverse behavior are locked by tests.
+- `nextpas.core.math.mat` is intentionally kept as one cohesive matrix value-type unit for this slice;
+  it exceeds the 800-line soft split guideline, but common inversion/determinant helpers are already
+  extracted and a forced split is deferred until a later maintainability slice has evidence.
 
 ### Task 5: Quat Final Types
 
@@ -166,11 +178,11 @@ Files:
 
 Steps:
 
-- [ ] Implement `TQuatf` and `TQuatd`.
-- [ ] Implement identity, normalize, conjugate, multiply.
-- [ ] Implement axis-angle, rotation matrix, rotate, slerp, nlerp.
-- [ ] Run `test_quat`, `test_mat`, and `test_api_surface`.
-- [ ] Commit with `feat(math): add final quaternion types`.
+- [x] Implement `TQuatf` and `TQuatd`.
+- [x] Implement identity, normalize, conjugate, multiply.
+- [x] Implement axis-angle, rotation matrix, rotate, slerp, nlerp.
+- [x] Run `test_quat`, `test_mat`, and `test_api_surface`.
+- [x] Commit with `feat(math): add final quaternion types`.
 
 Expected result:
 
@@ -186,11 +198,11 @@ Files:
 
 Steps:
 
-- [ ] Implement `Ortho`, `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`, `RotateY`, `RotateZ`, `Camera2D`.
-- [ ] Use final vec/mat types only.
-- [ ] Test known transformed points and matrix elements.
-- [ ] Run `test_transform`, `test_mat`, `test_vec`, and `test_api_surface`.
-- [ ] Commit with `feat(math): add transform builders`.
+- [x] Implement `Ortho`, `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`, `RotateY`, `RotateZ`, `Camera2D`.
+- [x] Use final vec/mat types only.
+- [x] Test known transformed points and matrix elements.
+- [x] Run `test_transform`, `test_mat`, `test_vec`, and `test_api_surface`.
+- [x] Commit with `feat(math): add transform builders`.
 
 Expected result:
 
@@ -206,11 +218,11 @@ Files:
 
 Steps:
 
-- [ ] Implement every easing function from the final public list.
-- [ ] Depend on `nextpas.core.math.trig`, not FPC `Math`.
-- [ ] Test endpoints and representative midpoints.
-- [ ] Run `test_easing`, `test_trig`, and `test_api_surface`.
-- [ ] Commit with `feat(math): add easing functions`.
+- [x] Implement every easing function from the final public list.
+- [x] Depend on `nextpas.core.math.trig`, not FPC `Math`.
+- [x] Test endpoints and representative midpoints.
+- [x] Run `test_easing`, `test_trig`, and `test_api_surface`.
+- [x] Commit with `feat(math): add easing functions`.
 
 Expected result:
 
@@ -227,19 +239,21 @@ Files:
 
 Steps:
 
-- [ ] Implement deterministic random state.
-- [ ] Implement range, bool, gaussian, circle, dice, weighted choice, shuffle.
-- [ ] Implement deterministic noise and FBM.
-- [ ] Avoid global heap-owned public singletons.
-- [ ] Test invalid input behavior and object release under heaptrc.
-- [ ] Run `make -C tests/nextpas.core.math/test_random clean test`.
-- [ ] Run `make -C tests/nextpas.core.math/test_noise clean test`.
-- [ ] Run `make -C tests/nextpas.core.math/test_api_surface clean test`.
-- [ ] Commit with `feat(math): add deterministic random and noise`.
+- [x] Implement deterministic random state.
+- [x] Implement range, bool, gaussian, circle, dice, weighted choice, shuffle.
+- [x] Implement deterministic noise and FBM.
+- [x] Avoid global heap-owned public singletons.
+- [x] Test invalid input behavior and object release under heaptrc.
+- [x] Run `make -C core/tests/nextpas.core.math/test_random clean test`.
+- [x] Run `make -C core/tests/nextpas.core.math/test_noise clean test`.
+- [x] Run `make -C core/tests/nextpas.core.math/test_api_surface clean test`.
+- [x] Commit with `feat(math): add deterministic random and noise`.
 
 Expected result:
 
 - Random/noise behavior is deterministic and leak-free.
+- `nextpas.core.math.random` exposes `TRandomState`, `TRandomGen`, and `TNoiseGen` with explicit
+  ownership and no public global singleton.
 
 ### Task 9: SIMD Implementation Seam
 
@@ -248,42 +262,74 @@ Files:
 - Create: `src/nextpas.core.math.impl.simd.pas`
 - Modify: `src/nextpas.core.math.vec.pas`, `mat.pas`, or `quat.pas` only if tests justify acceleration.
 - Modify or add `nextpas.core.simd` files only for missing public primitives.
+- Create: `tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr`
+- Modify: `tests/nextpas.core.math/test_api_surface/test_api_surface.py`
 - Add matching SIMD tests if new primitives are added.
 
 Steps:
 
-- [ ] Identify scalar-hot operations worth accelerating.
-- [ ] Use only `nextpas.core.simd` public APIs such as `VecF32x4*`, `Array*`, and public utility functions.
-- [ ] Do not call `nextpas.core.simd.direct`, `GetDirectDispatchTable`, dispatch internals, dataplane internals, or backend-private units.
-- [ ] Add missing SIMD primitives with dedicated SIMD tests before math consumes them.
-- [ ] Run math tests plus relevant SIMD tests.
-- [ ] Commit with a precise message for each primitive or math acceleration.
+- [x] Identify an initial public-SIMD-safe helper seam: `TVec4f` add/sub/component-multiply/scale,
+  dot, length, and `TVec3f` dot/cross.
+- [x] Use only `nextpas.core.simd` public APIs such as `VecF32x4*`, `Array*`, and public utility functions.
+- [x] Do not call `nextpas.core.simd.direct`, `GetDirectDispatchTable`, dispatch internals, dataplane internals, or backend-private units.
+- [x] Add source-contract coverage requiring the internal seam file and declarations.
+- [x] Add internal helper behavior coverage in `test_impl_simd`.
+- [x] Add no new SIMD primitives; existing public `VecF32x4*` primitives were sufficient for this slice.
+- [x] Run full math tests plus relevant SIMD tests.
+- [x] Commit the internal helper seam; no public math acceleration was wired in this slice.
+- [x] Add `bench_simd_seam` as a local Linux benchmark harness for scalar-vs-internal-seam evidence.
+- [x] Run the benchmark with `NEXTPAS_BENCH_MAX_ITERS=20000`; current public-facade SIMD seam is slower
+  than scalar public vector methods for the measured helpers, so public `TVec*` routing remains
+  intentionally unwired.
+- [x] Extend `bench_simd_seam` with scalar-only baselines for broader M7 candidates
+  (`TMat4f * TVec4f`, `TMat4f * TMat4f`, and `TQuatf.Rotate`) and protect those benchmark labels in
+  `test_api_surface`.
+- [x] Extend `nextpas.core.math.impl.simd` with a candidate internal `TMat4f * TVec4f` helper using
+  only public `VecF32x4*` operations, then lock its declaration and behavior in
+  `test_api_surface` and `test_impl_simd`.
+- [x] Run the same benchmark on the candidate `TMat4f * TVec4f` seam; local x86_64/Linux evidence is
+  negative (`26.7 ns/op` scalar vs `437.3 ns/op` seam), so the public operator remains intentionally
+  scalar.
 
 Expected result:
 
 - SIMD acceleration is optional, tested, and not a public math API dependency.
+- Current status is an internal helper seam only; public math value types still run their scalar paths
+  until a later profiling-backed acceleration slice wires them intentionally. The current local
+  benchmark results are negative evidence for wiring the existing seam shape directly into public
+  vector or matrix-vector methods.
 
 ### Task 10: Documentation And Closeout Gates
 
 Files:
 
 - Create: `docs/math/README.md`
+- Create: `docs/math/API.md`
 - Update: `docs/math/FINAL_API_MIGRATION_DESIGN.md`
 - Update: `docs/math/GOAL_TREE.md`
 - Update: `task_plan.md`, `findings.md`, `progress.md`
 
 Steps:
 
-- [ ] Document public modules and conventions.
-- [ ] Run all `tests/nextpas.core.math` projects.
-- [ ] Run API surface checker.
-- [ ] Run heaptrc checks and record evidence.
-- [ ] Run `git diff --check`.
-- [ ] Commit with `docs(math): document final api`.
+- [x] Document public modules and conventions.
+- [x] Document grouped public API reference.
+- [x] Run all `tests/nextpas.core.math` projects on the local Linux gate.
+- [x] Run API surface checker.
+- [x] Run heaptrc checks and record local zero-leak evidence.
+- [x] Run `git diff --check`.
+- [x] Review `docs/math/API.md` and `docs/math/README.md` against current public declarations.
+- [x] Commit current documentation and local gate evidence.
+- [x] Add a facade-only overview example and run its focused compile/run gate.
+- [x] Re-audit root facade constants, public type aliases, and public function names against
+  `docs/math/API.md`.
+- [x] Add an automated `test_api_surface` rule that fails when root facade API names are missing from
+  `docs/math/API.md`; RED was verified by removing `Fmod` in a temporary copy.
 
 Expected result:
 
-- Math module is ready for `fafafa.game` cutover.
+- Public docs explain the current module API and conventions.
+- Math is not ready for `fafafa.game` cutover until M7 acceleration decisions and host trig link
+  evidence are closed.
 
 ### Task 11: fafafa.game Cutover
 

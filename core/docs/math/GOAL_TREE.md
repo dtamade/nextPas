@@ -1,200 +1,118 @@
 # nextpas.core.math Goal Tree
 
-> Last updated: 2026-06-06
-> Goal: make `nextpas.core.math.*` the only official framework math API for scalar math, trig, vectors, matrices, quaternions, transforms, easing, random, and noise.
+> Last updated: 2026-06-09
+> Goal: make `nextpas.core.math.*` the only official framework math API for
+> scalar math, trig, vectors, matrices, quaternions, transforms, easing, random,
+> and noise via `nextpas.core.math.random.TNoiseGen`.
 
 ## North Star
 
-`nextpas.core.math` should become the Free Pascal ecosystem's best general-purpose framework math layer:
+`nextpas.core.math` should become the Free Pascal ecosystem's best general-purpose
+framework math layer:
 
-- Correct first: every public API has behavior tests before it is considered complete.
-- Final API first: no long-term dependency on `fafafa.game` `Vectors` or compatibility bridge names.
-- Cross-platform: trig must not fail to link on Linux, macOS, or Windows because of a naked `external 'm'`.
+- Correct first: public behavior is locked by focused tests before completion.
+- Final API first: no long-term dependency on `fafafa.game` `Vectors` names.
+- Cross-platform: trig must not rely on a naked host `external 'm'` route.
 - Framework-owned: SIMD acceleration uses `nextpas.core.simd` public surfaces only.
-- Maintainable: each module owns one clear responsibility and follows `docs/design-conventions.md`.
-- Verifiable: every implementation batch closes with focused tests, API surface checks, heaptrc leak evidence, and a small commit.
+- Verifiable: every implementation batch closes with focused tests, API surface
+  checks, heaptrc evidence where relevant, `git diff --check`, hygiene, and a
+  small commit.
+
+Detailed behavior contracts live in `API.md`; this goal tree stays compact.
 
 ## Current Position
 
-This branch is at **M1/M2 focused scalar + trig + symbol-conflict slice**.
+Current roadmap position: M8 partial, M7 partial, M9 not started.
 
-- M0 design/control is committed as `21e1f510 docs(math): plan final api migration`.
-- This slice adds scalar/trig/facade/symbol-scope tests only; it does not complete Vec/Mat/Quat/Transform/Easing/Random/Noise.
-- `nextpas.core.math.scalar` and `nextpas.core.math.impl.scalar` now exist.
-- `nextpas.core.math` is now a scalar/trig facade.
-- `nextpas.core.math.trig` no longer depends on `nextpas.core.math.ffi`.
-- `nextpas.core.math.ffi.pas` is deleted in this branch.
-- `nextpas.core.simd.mathutil` no longer exports common bare math-compatible helper names.
-- Added scalar `Single` overloads, `GCD`, `LCM`, `Hypot`, `Fmod`, `SmoothStep`, guarded `Abs(Low(...))`, and IEEE-style `SimdLnF32` boundaries.
-- Edge-case fixes are locked by tests for guarded integer conversion, `Abs(Low(...))`, `Hypot(+Inf,+Inf)`, trig NaN/out-of-domain/double-infinity cases, and `SimdLnF32(NaN)`.
-- Linux-focused math/SIMD tests pass locally; macOS/Windows trig link smokes remain a later host-gate requirement before final cross-platform completion.
+- The final facade and public units exist for scalar, trig, vec, mat, quat,
+  transform, easing, and random; noise is exposed through `random.TNoiseGen`.
+- `nextpas.core.math.ffi.pas` is deleted in this lane and must not return.
+- Public docs/source-contract gates reject legacy vector bridge type names,
+  old vector imports/paths, public impl consumers, naked `external 'm'`, and
+  `math.ffi` consumers.
+- Linux-focused local math gates have passed in prior slices, with heaptrc zero
+  evidence on Pascal behavior/facade tests where those gates were run.
+- Direct `Single`/`Double` trig/transcendental non-finite overload parity is
+  source-contract guarded by `test_trig` and `test_api_surface`.
+- `nextpas.core.math.impl.simd` is an internal seam only. Public value-type
+  methods are not wired through it.
+- `bench_simd_seam` is source-contract guarded as internal-seam evidence only:
+  it must not import private SIMD backend/dispatch/CPUInfo/direct/dataplane units
+  and cannot approve public SIMD cutover by itself.
+- macOS and Windows host trig link/runtime proof is still pending.
 
-## Map
+M8 cannot be marked complete without source-contract, focused runtime, heaptrc, and CI matrix evidence.
+
+## Roadmap
 
 ```text
 nextpas.core.math final migration
-├── M0: Control, design, and audit                       [complete]
-├── M1: RED behavior tests for final API                 [partial: scalar/trig/facade/surface]
-├── M2: Scalar + trig foundation                         [partial: scalar/trig Linux local gate passed]
-├── M3: Vec/Mat/Quat value types                         [not started]
-├── M4: Transform builders                               [not started]
-├── M5: Easing                                           [not started]
-├── M6: Random + noise                                   [not started]
-├── M7: SIMD-backed implementation seams                 [not started]
-├── M8: API surface, docs, leak proof, and module gates   [not started]
-└── M9: fafafa.game cutover and old Vectors retirement    [not started]
+├── M0: Control, design, and audit                     [complete]
+├── M1: RED behavior tests for final API               [complete for current scope]
+├── M2: Scalar + trig foundation                       [partial: host proof pending]
+├── M3: Vec/Mat/Quat value types                       [complete for current API]
+├── M4: Transform builders                             [complete for current API]
+├── M5: Easing                                         [complete for current API]
+├── M6: Random + noise                                 [complete for current API]
+├── M7: SIMD-backed implementation seams               [partial]
+├── M8: API surface, docs, leak proof, module gates     [partial]
+└── M9: fafafa.game cutover and old Vectors retirement  [not started]
 ```
 
-## M0: Control, Design, And Audit
+## Milestone Gates
 
-Goal: establish the target architecture, migration boundaries, test gates, and task order before implementation.
+### M0: Control, Design, And Audit
 
-Deliverables:
+- Gate: design files exist, plan exists, `git diff --check` passes.
+- Status: complete in this lane.
 
-- `docs/math/FINAL_API_MIGRATION_DESIGN.md`
-- `docs/plans/2026-06-06-math-final-api-migration.md`
-- `task_plan.md`, `findings.md`, and `progress.md` updated for this lane.
+### M1: RED Behavior Tests For Final API
 
-Completion gate:
+- Gate: public API behavior tests exist for the current final API scope, and
+  `test_api_surface` rejects legacy/impl/FFI drift.
+- Status: complete for the current public API scope.
 
-- Design and plan files exist.
-- `git diff --check` passes.
-- This branch has a design-only commit.
+### M2: Scalar + Trig Foundation
 
-Status:
+- Gate: scalar/trig focused tests pass with heaptrc, no public `math.ffi`
+  dependency remains, and Linux/macOS/Windows trig link/runtime routes are proven.
+- Status: partial. Local Linux proof exists; macOS/Windows host truth remains.
 
-- Complete in commit `21e1f510 docs(math): plan final api migration`.
+### M3-M6: Value Types, Transforms, Easing, Random, Noise
 
-## M1: RED Behavior Tests For Final API
+- Gate: focused behavior tests cover public constructors, operators, methods,
+  guard messages, layout/aliasing, and resource ownership where applicable.
+- Status: complete for the current API scope; see `API.md` for behavior truth.
 
-Goal: lock the final public API before implementation.
+### M7: SIMD-Backed Implementation Seams
 
-Test projects:
+- Gate: internal seam tests pass, public API does not leak backend details, and
+  benchmark evidence justifies any public cutover.
+- Status: partial. Internal seam exists; public cutover is not approved.
 
-- `tests/nextpas.core.math/test_api_surface`
-- `tests/nextpas.core.math/test_facade`
-- `tests/nextpas.core.math/test_scalar`
-- `tests/nextpas.core.math/test_trig`
-- `tests/nextpas.core.math/test_vec`
-- `tests/nextpas.core.math/test_mat`
-- `tests/nextpas.core.math/test_quat`
-- `tests/nextpas.core.math/test_transform`
-- `tests/nextpas.core.math/test_easing`
-- `tests/nextpas.core.math/test_random`
-- `tests/nextpas.core.math/test_noise`
+### M8: API Surface, Docs, Leak Proof, Module Gates
 
-Completion gate:
+- Gate: API/docs/source-contract gate passes, focused runtime gates pass,
+  heaptrc evidence is available for Pascal behavior tests, and the CI matrix
+  records remaining host-specific truth.
+- Status: partial. This control map is being compacted; `API.md` is the detailed
+  public contract.
 
-- Tests compile or fail only because the new final API does not exist yet.
-- Each public function/type required by the target design has at least one contract test.
-- `test_api_surface` rejects `nextpas.core.math.ffi`, naked `external 'm'`, public `Vectors` bridge names, and public symbols that lack matching behavior tests.
-- `test_facade` proves a consumer can `uses nextpas.core.math` and call the canonical final API without importing implementation or legacy bridge units.
+### M9: fafafa.game Cutover And Old Vectors Retirement
 
-Status:
+- Gate: `fafafa.game` consumes final `nextpas.core.math.*` names, old `Vectors`
+  is no longer public, and bridge/leak/API/source-contract smokes pass there.
+- Status: not started.
 
-- Partial. This slice covers API surface, facade, scalar, trig, and symbol-scope tests.
-- Vec/Mat/Quat/Transform/Easing/Random/Noise tests remain pending.
+## Active Backlog
 
-## M2: Scalar + Trig Foundation
-
-Goal: make `nextpas.core.math` and `nextpas.core.math.trig` safe framework-owned foundations.
-
-Target files:
-
-- `src/nextpas.core.math.pas`
-- `src/nextpas.core.math.scalar.pas`
-- `src/nextpas.core.math.trig.pas`
-- `src/nextpas.core.math.impl.scalar.pas`
-- platform-owned trig helpers as needed
-
-Completion gate:
-
-- No public `nextpas.core.math.ffi` dependency remains.
-- Trig links on Linux/macOS/Windows route without naked `external 'm'`.
-- Scalar and trig tests pass with heaptrc `0 unfreed memory blocks`.
-
-Status:
-
-- Partial. Linux local scalar/trig/facade/symbol-scope tests pass with heaptrc `0 unfreed memory blocks`.
-- `nextpas.core.math.ffi.pas` is deleted in this branch.
-- API surface checks reject naked `external 'm'`, public/test `math.ffi` consumers, public impl consumers, and legacy vector bridge names.
-- macOS/Windows host link smokes are not run in this local round.
-
-## M3: Vec/Mat/Quat Value Types
-
-Goal: provide final public value types:
-
-- `TVec2f`, `TVec3f`, `TVec4f`
-- `TMat3f`, `TMat4f`
-- `TQuatf`
-- `TVec2d`, `TVec3d`, `TVec4d`
-- `TMat3d`, `TMat4d`
-- `TQuatd`
-
-Completion gate:
-
-- Vec/Mat/Quat tests cover every public constructor, operator, and method.
-- Singular matrix inversion uses a documented `TryInverse` path and does not return silent garbage.
-- Normalize of zero vectors/quaternions is explicitly defined and tested.
-
-## M4: Transform Builders
-
-Goal: provide transform builders under `nextpas.core.math.transform`.
-
-Completion gate:
-
-- Ortho, Perspective, LookAt, Translate, Scale, RotateX/Y/Z, and Camera2D are tested against known vectors/matrices.
-- Matrix convention is documented and source tests verify column-major layout.
-
-## M5: Easing
-
-Goal: migrate easing functions into `nextpas.core.math.easing`.
-
-Completion gate:
-
-- Every public easing function has endpoint and representative midpoint tests.
-- Functions use `nextpas.core.math.trig`/scalar helpers, not FPC `Math`.
-
-## M6: Random + Noise
-
-Goal: provide deterministic RNG and noise APIs under `nextpas.core.math.random`.
-
-Completion gate:
-
-- Seed determinism, range boundaries, invalid ranges, probability clamps, dice rules, weighted choice, shuffle, and noise repeatability are tested.
-- No global heap-owned random/noise singletons are part of the public API.
-- Heaptrc confirms object lifetimes are clean.
-
-## M7: SIMD-Backed Implementation Seams
-
-Goal: add `nextpas.core.math.impl.simd` without making SIMD a public math API shape.
-
-Completion gate:
-
-- `math.impl.simd` depends only on supported `nextpas.core.simd` public APIs.
-- `math.impl.simd` does not call `nextpas.core.simd.direct`, dispatch tables, dataplane internals, or backend-private units.
-- Any missing primitive is added to `nextpas.core.simd` with its own tests before math consumes it.
-- `VectorsSIMD.pas` is never copied into core.
-- Public consumers and public tests do not `uses nextpas.core.math.impl.*`.
-
-## M8: API Surface, Docs, Leak Proof, And Module Gates
-
-Goal: close nextPas/core math as a framework-quality module.
-
-Completion gate:
-
-- All math tests pass.
-- API surface checker passes.
-- Trig link safety is proven by surface checks plus host link smokes. Linux runs locally; macOS/Windows must run in their host gates or be recorded as pending blockers before final completion.
-- Heaptrc leak evidence is recorded for tests that allocate.
-- Docs explain the module entry points and matrix/quaternion conventions.
-
-## M9: fafafa.game Cutover And Old Vectors Retirement
-
-Goal: switch `fafafa.game` to `nextpas.core.math.*` and remove or internalize the old `Vectors` system.
-
-Completion gate:
-
-- `fafafa.game` uses final `nextpas.core.math.*` names.
-- Old `Vectors` is not a public API.
-- Bridge tests, leak checks, API freeze checks, and source-contract smokes pass in the active `fafafa.game` worktree.
+- Docs-control: keep `README.md`, `GOAL_TREE.md`, and design record compact while
+  `API.md` remains the detailed public behavior contract.
+- Scalar: integer conversion NaN/Inf/range boundary markers and Single huge
+  finite wrap parity are locked; keep adding source-contract markers when new
+  scalar edge semantics land.
+- Trig: obtain host matrix runtime truth for macOS/Windows.
+- Vector: finish full non-finite measure and signed-zero matrix coverage.
+- SIMD: finish profiled runtime evidence and public SIMD contract design before
+  any public cutover.
+- Host matrix: obtain macOS/Windows trig host link/runtime evidence.

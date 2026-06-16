@@ -9,11 +9,8 @@ uses
   nextpas.core.math.scalar,
   nextpas.core.math.trig,
   nextpas.core.math.vec,
-  nextpas.core.math.vec.base,
   nextpas.core.math.mat,
-  nextpas.core.math.mat.base,
   nextpas.core.math.quat,
-  nextpas.core.math.quat.base,
   nextpas.core.math.transform,
   nextpas.core.math.easing,
   nextpas.core.math.random;
@@ -38,6 +35,24 @@ type
   TRandomState = nextpas.core.math.random.TRandomState;
 
 { scalar functions }
+
+type
+  TVec2f = nextpas.core.math.vec.TVec2f;
+  TVec3f = nextpas.core.math.vec.TVec3f;
+  TVec4f = nextpas.core.math.vec.TVec4f;
+  TVec2d = nextpas.core.math.vec.TVec2d;
+  TVec3d = nextpas.core.math.vec.TVec3d;
+  TVec4d = nextpas.core.math.vec.TVec4d;
+  TMat3f = nextpas.core.math.mat.TMat3f;
+  TMat4f = nextpas.core.math.mat.TMat4f;
+  TMat3d = nextpas.core.math.mat.TMat3d;
+  TMat4d = nextpas.core.math.mat.TMat4d;
+  TQuatf = nextpas.core.math.quat.TQuatf;
+  TQuatd = nextpas.core.math.quat.TQuatd;
+  TEasingFunction = nextpas.core.math.easing.TEasingFunction;
+  TRandomState = nextpas.core.math.random.TRandomState;
+  TRandomGen = nextpas.core.math.random.TRandomGen;
+  TNoiseGen = nextpas.core.math.random.TNoiseGen;
 
 function IsAddOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
 function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;
@@ -102,6 +117,9 @@ function Hypot(const AX, AY: Double): Double; overload; inline;
 function Hypot(const AX, AY: Single): Single; overload; inline;
 function Fmod(const AX, AY: Double): Double; overload; inline;
 function Fmod(const AX, AY: Single): Single; overload; inline;
+{$IF SizeOf(Extended) > SizeOf(Double)}
+function Fmod(const AX, AY: Extended): Extended; overload; inline;
+{$ENDIF}
 
 function Sin(const AX: Double): Double; overload; inline;
 function Sin(const AX: Single): Single; overload; inline;
@@ -130,63 +148,49 @@ function Power(const ABase, AExponent: Single): Single; overload; inline;
 function Sqrt(const AX: Double): Double; overload; inline;
 function Sqrt(const AX: Single): Single; overload; inline;
 
-function Sinh(const AX: Double): Double; overload; inline;
-function Sinh(const AX: Single): Single; overload; inline;
-function Cosh(const AX: Double): Double; overload; inline;
-function Cosh(const AX: Single): Single; overload; inline;
-function Tanh(const AX: Double): Double; overload; inline;
-function Tanh(const AX: Single): Single; overload; inline;
-function ArcSinh(const AX: Double): Double; overload; inline;
-function ArcSinh(const AX: Single): Single; overload; inline;
-function ArcCosh(const AX: Double): Double; overload; inline;
-function ArcCosh(const AX: Single): Single; overload; inline;
-function ArcTanh(const AX: Double): Double; overload; inline;
-function ArcTanh(const AX: Single): Single; overload; inline;
+function Ortho(const ALeft, ARight, ABottom, ATop, ANear, AFar: Single): TMat4f; overload; inline;
+function Ortho(const ALeft, ARight, ABottom, ATop, ANear, AFar: Double): TMat4d; overload; inline;
+function Perspective(const AFovYRad, AAspect, ANear, AFar: Single): TMat4f; overload; inline;
+function Perspective(const AFovYRad, AAspect, ANear, AFar: Double): TMat4d; overload; inline;
+function LookAt(const AEye, ATarget, AUp: TVec3f): TMat4f; overload; inline;
+function LookAt(const AEye, ATarget, AUp: TVec3d): TMat4d; overload; inline;
+function Translate(const AX, AY, AZ: Single): TMat4f; overload; inline;
+function Translate(const AX, AY, AZ: Double): TMat4d; overload; inline;
+function Scale(const AX, AY, AZ: Single): TMat4f; overload; inline;
+function Scale(const AX, AY, AZ: Double): TMat4d; overload; inline;
+function RotateX(const ARadians: Single): TMat4f; overload; inline;
+function RotateX(const ARadians: Double): TMat4d; overload; inline;
+function RotateY(const ARadians: Single): TMat4f; overload; inline;
+function RotateY(const ARadians: Double): TMat4d; overload; inline;
+function RotateZ(const ARadians: Single): TMat4f; overload; inline;
+function RotateZ(const ARadians: Double): TMat4d; overload; inline;
+function Camera2D(const ACenterX, ACenterY, AZoom: Single;
+  const AViewportWidth, AViewportHeight: Integer): TMat4f; overload; inline;
+function Camera2D(const ACenterX, ACenterY, AZoom: Double;
+  const AViewportWidth, AViewportHeight: Integer): TMat4d; overload; inline;
 
-function Sec(const AX: Double): Double; overload; inline;
-function Sec(const AX: Single): Single; overload; inline;
-function Csc(const AX: Double): Double; overload; inline;
-function Csc(const AX: Single): Single; overload; inline;
-
-function LogN(const ABase, AX: Double): Double; overload; inline;
-function LogN(const ABase, AX: Single): Single; overload; inline;
-function IntPower(const ABase: Double; AExponent: Int64): Double; overload; inline;
-function IntPower(const ABase: Single; AExponent: Int64): Single; overload; inline;
-function Ldexp(const AX: Double; AExp: Integer): Double; overload; inline;
-function Ldexp(const AX: Single; AExp: Integer): Single; overload; inline;
-
-{ vec constructors }
-function Vec2f(AX, AY: Single): TVec2f; inline;
-function Vec3f(AX, AY, AZ: Single): TVec3f; inline;
-function Vec4f(AX, AY, AZ, AW: Single): TVec4f; inline;
-function Vec2d(AX, AY: Double): TVec2d; inline;
-function Vec3d(AX, AY, AZ: Double): TVec3d; inline;
-function Vec4d(AX, AY, AZ, AW: Double): TVec4d; inline;
-
-{ mat constructors (column-based) }
-function Mat3f(ACol0, ACol1, ACol2: TVec3f): TMat3f; inline;
-function Mat4f(ACol0, ACol1, ACol2, ACol3: TVec4f): TMat4f; inline;
-function Mat3d(ACol0, ACol1, ACol2: TVec3d): TMat3d; inline;
-function Mat4d(ACol0, ACol1, ACol2, ACol3: TVec4d): TMat4d; inline;
-
-{ mat identity/zero }
-function Mat3fIdentity: TMat3f; inline;
-function Mat4fIdentity: TMat4f; inline;
-function Mat3fZero: TMat3f; inline;
-function Mat4fZero: TMat4f; inline;
-function Mat3dIdentity: TMat3d; inline;
-function Mat4dIdentity: TMat4d; inline;
-function Mat3dZero: TMat3d; inline;
-function Mat4dZero: TMat4d; inline;
-
-{ quat constructors }
-function Quatf(AX, AY, AZ, AW: Single): TQuatf; inline;
-function Quatd(AX, AY, AZ, AW: Double): TQuatd; inline;
-function QuatfIdentity: TQuatf; inline;
-function QuatdIdentity: TQuatd; inline;
-
-{ random }
-function RandomCreate(ASeed: UInt64): TRandomState; inline;
+function EaseLinear(const AT: Double): Double; inline;
+function EaseInQuad(const AT: Double): Double; inline;
+function EaseOutQuad(const AT: Double): Double; inline;
+function EaseInOutQuad(const AT: Double): Double; inline;
+function EaseInCubic(const AT: Double): Double; inline;
+function EaseOutCubic(const AT: Double): Double; inline;
+function EaseInOutCubic(const AT: Double): Double; inline;
+function EaseInQuart(const AT: Double): Double; inline;
+function EaseOutQuart(const AT: Double): Double; inline;
+function EaseInOutQuart(const AT: Double): Double; inline;
+function EaseInExpo(const AT: Double): Double; inline;
+function EaseOutExpo(const AT: Double): Double; inline;
+function EaseInOutExpo(const AT: Double): Double; inline;
+function EaseInElastic(const AT: Double): Double; inline;
+function EaseOutElastic(const AT: Double): Double; inline;
+function EaseInOutElastic(const AT: Double): Double; inline;
+function EaseInBack(const AT: Double): Double; inline;
+function EaseOutBack(const AT: Double): Double; inline;
+function EaseInOutBack(const AT: Double): Double; inline;
+function EaseInBounce(const AT: Double): Double; inline;
+function EaseOutBounce(const AT: Double): Double; inline;
+function EaseInOutBounce(const AT: Double): Double; inline;
 
 implementation
 
@@ -485,6 +489,13 @@ begin
   Result := nextpas.core.math.scalar.Fmod(AX, AY);
 end;
 
+{$IF SizeOf(Extended) > SizeOf(Double)}
+function Fmod(const AX, AY: Extended): Extended;
+begin
+  Result := nextpas.core.math.scalar.Fmod(AX, AY);
+end;
+{$ENDIF}
+
 function Sin(const AX: Single): Single;
 begin
   Result := nextpas.core.math.trig.Sin(AX);
@@ -615,285 +626,208 @@ begin
   Result := nextpas.core.math.trig.Sqrt(AX);
 end;
 
-function Sinh(const AX: Double): Double;
+function Ortho(const ALeft, ARight, ABottom, ATop, ANear, AFar: Single): TMat4f;
 begin
-  Result := nextpas.core.math.trig.Sinh(AX);
+  Result := nextpas.core.math.transform.Ortho(ALeft, ARight, ABottom, ATop, ANear, AFar);
 end;
 
-function Sinh(const AX: Single): Single;
+function Ortho(const ALeft, ARight, ABottom, ATop, ANear, AFar: Double): TMat4d;
 begin
-  Result := nextpas.core.math.trig.Sinh(AX);
+  Result := nextpas.core.math.transform.Ortho(ALeft, ARight, ABottom, ATop, ANear, AFar);
 end;
 
-function Cosh(const AX: Double): Double;
+function Perspective(const AFovYRad, AAspect, ANear, AFar: Single): TMat4f;
 begin
-  Result := nextpas.core.math.trig.Cosh(AX);
+  Result := nextpas.core.math.transform.Perspective(AFovYRad, AAspect, ANear, AFar);
 end;
 
-function Cosh(const AX: Single): Single;
+function Perspective(const AFovYRad, AAspect, ANear, AFar: Double): TMat4d;
 begin
-  Result := nextpas.core.math.trig.Cosh(AX);
+  Result := nextpas.core.math.transform.Perspective(AFovYRad, AAspect, ANear, AFar);
 end;
 
-function Tanh(const AX: Double): Double;
+function LookAt(const AEye, ATarget, AUp: TVec3f): TMat4f;
 begin
-  Result := nextpas.core.math.trig.Tanh(AX);
+  Result := nextpas.core.math.transform.LookAt(AEye, ATarget, AUp);
 end;
 
-function Tanh(const AX: Single): Single;
+function LookAt(const AEye, ATarget, AUp: TVec3d): TMat4d;
 begin
-  Result := nextpas.core.math.trig.Tanh(AX);
+  Result := nextpas.core.math.transform.LookAt(AEye, ATarget, AUp);
 end;
 
-function ArcSinh(const AX: Double): Double;
+function Translate(const AX, AY, AZ: Single): TMat4f;
 begin
-  Result := nextpas.core.math.trig.ArcSinh(AX);
+  Result := nextpas.core.math.transform.Translate(AX, AY, AZ);
 end;
 
-function ArcSinh(const AX: Single): Single;
+function Translate(const AX, AY, AZ: Double): TMat4d;
 begin
-  Result := nextpas.core.math.trig.ArcSinh(AX);
+  Result := nextpas.core.math.transform.Translate(AX, AY, AZ);
 end;
 
-function ArcCosh(const AX: Double): Double;
+function Scale(const AX, AY, AZ: Single): TMat4f;
 begin
-  Result := nextpas.core.math.trig.ArcCosh(AX);
+  Result := nextpas.core.math.transform.Scale(AX, AY, AZ);
 end;
 
-function ArcCosh(const AX: Single): Single;
+function Scale(const AX, AY, AZ: Double): TMat4d;
 begin
-  Result := nextpas.core.math.trig.ArcCosh(AX);
+  Result := nextpas.core.math.transform.Scale(AX, AY, AZ);
 end;
 
-function ArcTanh(const AX: Double): Double;
+function RotateX(const ARadians: Single): TMat4f;
 begin
-  Result := nextpas.core.math.trig.ArcTanh(AX);
+  Result := nextpas.core.math.transform.RotateX(ARadians);
 end;
 
-function ArcTanh(const AX: Single): Single;
+function RotateX(const ARadians: Double): TMat4d;
 begin
-  Result := nextpas.core.math.trig.ArcTanh(AX);
+  Result := nextpas.core.math.transform.RotateX(ARadians);
 end;
 
-function Sec(const AX: Double): Double;
+function RotateY(const ARadians: Single): TMat4f;
 begin
-  Result := nextpas.core.math.trig.Sec(AX);
+  Result := nextpas.core.math.transform.RotateY(ARadians);
 end;
 
-function Sec(const AX: Single): Single;
+function RotateY(const ARadians: Double): TMat4d;
 begin
-  Result := nextpas.core.math.trig.Sec(AX);
+  Result := nextpas.core.math.transform.RotateY(ARadians);
 end;
 
-function Csc(const AX: Double): Double;
+function RotateZ(const ARadians: Single): TMat4f;
 begin
-  Result := nextpas.core.math.trig.Csc(AX);
+  Result := nextpas.core.math.transform.RotateZ(ARadians);
 end;
 
-function Csc(const AX: Single): Single;
+function RotateZ(const ARadians: Double): TMat4d;
 begin
-  Result := nextpas.core.math.trig.Csc(AX);
+  Result := nextpas.core.math.transform.RotateZ(ARadians);
 end;
 
-function LogN(const ABase, AX: Double): Double;
+function Camera2D(const ACenterX, ACenterY, AZoom: Single;
+  const AViewportWidth, AViewportHeight: Integer): TMat4f;
 begin
-  Result := nextpas.core.math.trig.LogN(ABase, AX);
+  Result := nextpas.core.math.transform.Camera2D(ACenterX, ACenterY, AZoom, AViewportWidth,
+    AViewportHeight);
 end;
 
-function LogN(const ABase, AX: Single): Single;
+function Camera2D(const ACenterX, ACenterY, AZoom: Double;
+  const AViewportWidth, AViewportHeight: Integer): TMat4d;
 begin
-  Result := nextpas.core.math.trig.LogN(ABase, AX);
+  Result := nextpas.core.math.transform.Camera2D(ACenterX, ACenterY, AZoom, AViewportWidth,
+    AViewportHeight);
 end;
 
-function IntPower(const ABase: Double; AExponent: Int64): Double;
+function EaseLinear(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.trig.IntPower(ABase, AExponent);
+  Result := nextpas.core.math.easing.EaseLinear(AT);
 end;
 
-function IntPower(const ABase: Single; AExponent: Int64): Single;
+function EaseInQuad(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.trig.IntPower(ABase, AExponent);
+  Result := nextpas.core.math.easing.EaseInQuad(AT);
 end;
 
-function Ldexp(const AX: Double; AExp: Integer): Double;
+function EaseOutQuad(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.trig.Ldexp(AX, AExp);
+  Result := nextpas.core.math.easing.EaseOutQuad(AT);
 end;
 
-function Ldexp(const AX: Single; AExp: Integer): Single;
+function EaseInOutQuad(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.trig.Ldexp(AX, AExp);
+  Result := nextpas.core.math.easing.EaseInOutQuad(AT);
 end;
 
-{ Vec constructors }
-
-function Vec2f(AX, AY: Single): TVec2f;
+function EaseInCubic(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.vec.Vec2f(AX, AY);
+  Result := nextpas.core.math.easing.EaseInCubic(AT);
 end;
 
-function Vec3f(AX, AY, AZ: Single): TVec3f;
+function EaseOutCubic(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.vec.Vec3f(AX, AY, AZ);
+  Result := nextpas.core.math.easing.EaseOutCubic(AT);
 end;
 
-function Vec4f(AX, AY, AZ, AW: Single): TVec4f;
+function EaseInOutCubic(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.vec.Vec4f(AX, AY, AZ, AW);
+  Result := nextpas.core.math.easing.EaseInOutCubic(AT);
 end;
 
-function Vec2d(AX, AY: Double): TVec2d;
+function EaseInQuart(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.vec.Vec2d(AX, AY);
+  Result := nextpas.core.math.easing.EaseInQuart(AT);
 end;
 
-function Vec3d(AX, AY, AZ: Double): TVec3d;
+function EaseOutQuart(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.vec.Vec3d(AX, AY, AZ);
+  Result := nextpas.core.math.easing.EaseOutQuart(AT);
 end;
 
-function Vec4d(AX, AY, AZ, AW: Double): TVec4d;
+function EaseInOutQuart(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.vec.Vec4d(AX, AY, AZ, AW);
+  Result := nextpas.core.math.easing.EaseInOutQuart(AT);
 end;
 
-{ Mat constructors (column-based) }
-
-function Mat3f(ACol0, ACol1, ACol2: TVec3f): TMat3f;
+function EaseInExpo(const AT: Double): Double;
 begin
-  Result[0, 0] := ACol0.X;
-  Result[1, 0] := ACol0.Y;
-  Result[2, 0] := ACol0.Z;
-  Result[0, 1] := ACol1.X;
-  Result[1, 1] := ACol1.Y;
-  Result[2, 1] := ACol1.Z;
-  Result[0, 2] := ACol2.X;
-  Result[1, 2] := ACol2.Y;
-  Result[2, 2] := ACol2.Z;
+  Result := nextpas.core.math.easing.EaseInExpo(AT);
 end;
 
-function Mat4f(ACol0, ACol1, ACol2, ACol3: TVec4f): TMat4f;
+function EaseOutExpo(const AT: Double): Double;
 begin
-  Result[0, 0] := ACol0.X;
-  Result[1, 0] := ACol0.Y;
-  Result[2, 0] := ACol0.Z;
-  Result[3, 0] := ACol0.W;
-  Result[0, 1] := ACol1.X;
-  Result[1, 1] := ACol1.Y;
-  Result[2, 1] := ACol1.Z;
-  Result[3, 1] := ACol1.W;
-  Result[0, 2] := ACol2.X;
-  Result[1, 2] := ACol2.Y;
-  Result[2, 2] := ACol2.Z;
-  Result[3, 2] := ACol2.W;
-  Result[0, 3] := ACol3.X;
-  Result[1, 3] := ACol3.Y;
-  Result[2, 3] := ACol3.Z;
-  Result[3, 3] := ACol3.W;
+  Result := nextpas.core.math.easing.EaseOutExpo(AT);
 end;
 
-function Mat3d(ACol0, ACol1, ACol2: TVec3d): TMat3d;
+function EaseInOutExpo(const AT: Double): Double;
 begin
-  Result[0, 0] := ACol0.X;
-  Result[1, 0] := ACol0.Y;
-  Result[2, 0] := ACol0.Z;
-  Result[0, 1] := ACol1.X;
-  Result[1, 1] := ACol1.Y;
-  Result[2, 1] := ACol1.Z;
-  Result[0, 2] := ACol2.X;
-  Result[1, 2] := ACol2.Y;
-  Result[2, 2] := ACol2.Z;
+  Result := nextpas.core.math.easing.EaseInOutExpo(AT);
 end;
 
-function Mat4d(ACol0, ACol1, ACol2, ACol3: TVec4d): TMat4d;
+function EaseInElastic(const AT: Double): Double;
 begin
-  Result[0, 0] := ACol0.X;
-  Result[1, 0] := ACol0.Y;
-  Result[2, 0] := ACol0.Z;
-  Result[3, 0] := ACol0.W;
-  Result[0, 1] := ACol1.X;
-  Result[1, 1] := ACol1.Y;
-  Result[2, 1] := ACol1.Z;
-  Result[3, 1] := ACol1.W;
-  Result[0, 2] := ACol2.X;
-  Result[1, 2] := ACol2.Y;
-  Result[2, 2] := ACol2.Z;
-  Result[3, 2] := ACol2.W;
-  Result[0, 3] := ACol3.X;
-  Result[1, 3] := ACol3.Y;
-  Result[2, 3] := ACol3.Z;
-  Result[3, 3] := ACol3.W;
+  Result := nextpas.core.math.easing.EaseInElastic(AT);
 end;
 
-{ Mat identity/zero }
-
-function Mat3fIdentity: TMat3f;
+function EaseOutElastic(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.mat.base.Mat3fIdentity;
+  Result := nextpas.core.math.easing.EaseOutElastic(AT);
 end;
 
-function Mat4fIdentity: TMat4f;
+function EaseInOutElastic(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.mat.base.Mat4fIdentity;
+  Result := nextpas.core.math.easing.EaseInOutElastic(AT);
 end;
 
-function Mat3fZero: TMat3f;
+function EaseInBack(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.mat.base.Mat3fZero;
+  Result := nextpas.core.math.easing.EaseInBack(AT);
 end;
 
-function Mat4fZero: TMat4f;
+function EaseOutBack(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.mat.base.Mat4fZero;
+  Result := nextpas.core.math.easing.EaseOutBack(AT);
 end;
 
-function Mat3dIdentity: TMat3d;
+function EaseInOutBack(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.mat.base.Mat3dIdentity;
+  Result := nextpas.core.math.easing.EaseInOutBack(AT);
 end;
 
-function Mat4dIdentity: TMat4d;
+function EaseInBounce(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.mat.base.Mat4dIdentity;
+  Result := nextpas.core.math.easing.EaseInBounce(AT);
 end;
 
-function Mat3dZero: TMat3d;
+function EaseOutBounce(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.mat.base.Mat3dZero;
+  Result := nextpas.core.math.easing.EaseOutBounce(AT);
 end;
 
-function Mat4dZero: TMat4d;
+function EaseInOutBounce(const AT: Double): Double;
 begin
-  Result := nextpas.core.math.mat.base.Mat4dZero;
-end;
-
-{ Quat constructors }
-
-function Quatf(AX, AY, AZ, AW: Single): TQuatf;
-begin
-  Result := nextpas.core.math.quat.Quatf(AX, AY, AZ, AW);
-end;
-
-function Quatd(AX, AY, AZ, AW: Double): TQuatd;
-begin
-  Result := nextpas.core.math.quat.Quatd(AX, AY, AZ, AW);
-end;
-
-function QuatfIdentity: TQuatf;
-begin
-  Result := nextpas.core.math.quat.base.QuatfIdentity;
-end;
-
-function QuatdIdentity: TQuatd;
-begin
-  Result := nextpas.core.math.quat.base.QuatdIdentity;
-end;
-
-{ Random }
-
-function RandomCreate(ASeed: UInt64): TRandomState;
-begin
-  Result := nextpas.core.math.random.RandomCreate(ASeed);
+  Result := nextpas.core.math.easing.EaseInOutBounce(AT);
 end;
 
 end.

@@ -3,138 +3,1344 @@ program test_quat;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.math.quat.base,
-  nextpas.core.math.quat,
-  nextpas.core.math.vec.base,
-  nextpas.core.math.mat.base;
+  nextpas.core.testing,
+  nextpas.core.errors,
+  nextpas.core.math.scalar,
+  nextpas.core.math.vec,
+  nextpas.core.math.mat,
+  nextpas.core.math.quat;
 
 var
-  GPass, GFail: Integer;
+  T: TTestRunner;
 
-procedure Check(const AName: string; ACond: Boolean);
-begin
-  if ACond then begin Inc(GPass); WriteLn('  PASS: ', AName); end
-  else begin Inc(GFail); WriteLn('  FAIL: ', AName); end;
-end;
+type
+  TSingleBitCast = packed record
+    case Integer of
+      0: (Value: Single);
+      1: (Bits: LongWord);
+  end;
 
-procedure CheckFloat(const AName: string; AExpected, AActual, AEps: Double);
+  TDoubleBitCast = packed record
+    case Integer of
+      0: (Value: Double);
+      1: (Bits: QWord);
+  end;
+
+procedure CheckNear(const AExpected, AActual, AEpsilon: Double; const AMessage: string);
 var
   LDelta: Double;
 begin
   LDelta := AExpected - AActual;
-  if LDelta < 0 then LDelta := -LDelta;
-  Check(AName, LDelta < AEps);
+  if LDelta < 0.0 then
+    LDelta := -LDelta;
+  Check(LDelta <= AEpsilon, AMessage);
 end;
 
-procedure TestQuatfCreateAndIdentity;
+procedure CheckPointerOffset(const ABase, AField: Pointer; const AExpectedOffset: PtrUInt;
+  const AMessage: string);
+begin
+  CheckEqual(Int64(AExpectedOffset), Int64(PtrUInt(AField) - PtrUInt(ABase)), AMessage);
+end;
+
+procedure CheckVec3f(const AExpectedX, AExpectedY, AExpectedZ: Single; const AActual: TVec3f;
+  const AMessage: string);
+begin
+  CheckNear(AExpectedX, AActual.X, 0.000001, AMessage + '.X');
+  CheckNear(AExpectedY, AActual.Y, 0.000001, AMessage + '.Y');
+  CheckNear(AExpectedZ, AActual.Z, 0.000001, AMessage + '.Z');
+end;
+
+procedure CheckVec3d(const AExpectedX, AExpectedY, AExpectedZ: Double; const AActual: TVec3d;
+  const AMessage: string);
+begin
+  CheckNear(AExpectedX, AActual.X, 0.000000000001, AMessage + '.X');
+  CheckNear(AExpectedY, AActual.Y, 0.000000000001, AMessage + '.Y');
+  CheckNear(AExpectedZ, AActual.Z, 0.000000000001, AMessage + '.Z');
+end;
+
+procedure CheckQuatf(const AExpectedX, AExpectedY, AExpectedZ, AExpectedW: Single;
+  const AActual: TQuatf; const AMessage: string);
+begin
+  CheckNear(AExpectedX, AActual.X, 0.000001, AMessage + '.X');
+  CheckNear(AExpectedY, AActual.Y, 0.000001, AMessage + '.Y');
+  CheckNear(AExpectedZ, AActual.Z, 0.000001, AMessage + '.Z');
+  CheckNear(AExpectedW, AActual.W, 0.000001, AMessage + '.W');
+end;
+
+procedure CheckQuatd(const AExpectedX, AExpectedY, AExpectedZ, AExpectedW: Double;
+  const AActual: TQuatd; const AMessage: string);
+begin
+  CheckNear(AExpectedX, AActual.X, 0.000000000001, AMessage + '.X');
+  CheckNear(AExpectedY, AActual.Y, 0.000000000001, AMessage + '.Y');
+  CheckNear(AExpectedZ, AActual.Z, 0.000000000001, AMessage + '.Z');
+  CheckNear(AExpectedW, AActual.W, 0.000000000001, AMessage + '.W');
+end;
+
+function QuatLengthSqr(const AValue: TQuatf): Single; overload;
+begin
+  Result := AValue.X * AValue.X + AValue.Y * AValue.Y +
+    AValue.Z * AValue.Z + AValue.W * AValue.W;
+end;
+
+function QuatLengthSqr(const AValue: TQuatd): Double; overload;
+begin
+  Result := AValue.X * AValue.X + AValue.Y * AValue.Y +
+    AValue.Z * AValue.Z + AValue.W * AValue.W;
+end;
+
+procedure CheckSingleNegativeZero(const AActual: Single; const AMessage: string);
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AActual;
+  CheckEqual(Int64($80000000), Int64(LValue.Bits), AMessage);
+end;
+
+procedure CheckDoubleNegativeZero(const AActual: Double; const AMessage: string);
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Value := AActual;
+  Check(LValue.Bits = (QWord(1) shl 63), AMessage);
+end;
+
+procedure CheckMat3fIdentity(const AActual: TMat3f; const AMessage: string);
+begin
+  Check(TMat3f.Equals(TMat3f.Identity, AActual, Single(0.000001)), AMessage);
+end;
+
+procedure CheckMat3dIdentity(const AActual: TMat3d; const AMessage: string);
+begin
+  Check(TMat3d.Equals(TMat3d.Identity, AActual, 0.000000000001), AMessage);
+end;
+
+procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string; const AProc: TTestProc);
+begin
+  try
+    AProc;
+  except
+    on E: EArgumentError do
+    begin
+      CheckEqual(AExpectedMessage, E.Message, AName + ' message');
+      Exit;
+    end;
+    on E: Exception do
+      Fail(AName + ': expected EArgumentError, got ' + E.ClassName);
+  end;
+  Fail(AName + ': expected EArgumentError');
+end;
+
+function SingleNaN: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7FC00000;
+  Result := LValue.Value;
+end;
+
+function SingleInfinity: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7F800000;
+  Result := LValue.Value;
+end;
+
+function SingleNegativeInfinity: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $FF800000;
+  Result := LValue.Value;
+end;
+
+function SingleNegativeZero: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $80000000;
+  Result := LValue.Value;
+end;
+
+function SingleMaxFinite: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7F7FFFFF;
+  Result := LValue.Value;
+end;
+
+function DoubleNaN: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FF8000000000000;
+  Result := LValue.Value;
+end;
+
+function DoubleInfinity: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FF0000000000000;
+  Result := LValue.Value;
+end;
+
+function DoubleNegativeInfinity: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := QWord($FFF0000000000000);
+  Result := LValue.Value;
+end;
+
+function DoubleNegativeZero: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := QWord(1) shl 63;
+  Result := LValue.Value;
+end;
+
+function DoubleMaxFinite: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FEFFFFFFFFFFFFF;
+  Result := LValue.Value;
+end;
+
+procedure RaiseQuatfFromAxisAngleNaNAngle;
+begin
+  TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), SingleNaN);
+end;
+
+procedure RaiseQuatfFromAxisAngleNaNAxis;
+begin
+  TQuatf.FromAxisAngle(TVec3f.Create(SingleNaN, 0.0, 1.0), Single(HALF_PI));
+end;
+
+procedure RaiseQuatfFromAxisAngleInfiniteAxis;
+begin
+  TQuatf.FromAxisAngle(TVec3f.Create(SingleInfinity, 0.0, 1.0), Single(HALF_PI));
+end;
+
+procedure RaiseQuatfFromAxisAngleInfiniteAngle;
+begin
+  TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), SingleInfinity);
+end;
+
+procedure RaiseQuatdFromAxisAngleNaNAngle;
+begin
+  TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), DoubleNaN);
+end;
+
+procedure RaiseQuatdFromAxisAngleNaNAxis;
+begin
+  TQuatd.FromAxisAngle(TVec3d.Create(DoubleNaN, 0.0, 1.0), HALF_PI);
+end;
+
+procedure RaiseQuatdFromAxisAngleInfiniteAxis;
+begin
+  TQuatd.FromAxisAngle(TVec3d.Create(DoubleInfinity, 0.0, 1.0), HALF_PI);
+end;
+
+procedure RaiseQuatdFromAxisAngleInfiniteAngle;
+begin
+  TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), DoubleInfinity);
+end;
+
+procedure RaiseQuatfSlerpNaNT;
+begin
+  TQuatf.Slerp(TQuatf.Identity,
+    TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI)), SingleNaN);
+end;
+
+procedure RaiseQuatfSlerpInfiniteT;
+begin
+  TQuatf.Slerp(TQuatf.Identity,
+    TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI)), -SingleInfinity);
+end;
+
+procedure RaiseQuatfNlerpInfiniteT;
+begin
+  TQuatf.Nlerp(TQuatf.Identity,
+    TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI)), SingleInfinity);
+end;
+
+procedure RaiseQuatfNlerpNaNT;
+begin
+  TQuatf.Nlerp(TQuatf.Identity,
+    TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI)), SingleNaN);
+end;
+
+procedure RaiseQuatdSlerpNaNT;
+begin
+  TQuatd.Slerp(TQuatd.Identity, TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), HALF_PI),
+    DoubleNaN);
+end;
+
+procedure RaiseQuatdSlerpInfiniteT;
+begin
+  TQuatd.Slerp(TQuatd.Identity, TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), HALF_PI),
+    -DoubleInfinity);
+end;
+
+procedure RaiseQuatdNlerpInfiniteT;
+begin
+  TQuatd.Nlerp(TQuatd.Identity, TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), HALF_PI),
+    DoubleInfinity);
+end;
+
+procedure RaiseQuatdNlerpNaNT;
+begin
+  TQuatd.Nlerp(TQuatd.Identity, TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), HALF_PI),
+    DoubleNaN);
+end;
+
+procedure RaiseQuatfNormalizeNaN;
+begin
+  TQuatf.Create(SingleNaN, 0.0, 0.0, 1.0).Normalize;
+end;
+
+procedure RaiseQuatfNormalizeInfinite;
+begin
+  TQuatf.Create(SingleInfinity, 0.0, 0.0, 1.0).Normalize;
+end;
+
+procedure RaiseQuatfToAxisAngleNaN;
+var
+  Axis: TVec3f;
+  Angle: Single;
+begin
+  TQuatf.Create(0.0, SingleNaN, 0.0, 1.0).ToAxisAngle(Axis, Angle);
+end;
+
+procedure RaiseQuatfToRotationMatrixInfinite;
+begin
+  TQuatf.Create(0.0, 0.0, SingleInfinity, 1.0).ToRotationMatrix;
+end;
+
+procedure RaiseQuatfRotateInfinite;
+begin
+  TQuatf.Create(0.0, 0.0, 0.0, SingleInfinity).Rotate(TVec3f.Create(1.0, 0.0, 0.0));
+end;
+
+procedure RaiseQuatfRotateNaNVector;
+begin
+  TQuatf.Identity.Rotate(TVec3f.Create(SingleNaN, 0.0, 0.0));
+end;
+
+procedure RaiseQuatfRotateInfiniteVector;
+begin
+  TQuatf.Identity.Rotate(TVec3f.Create(0.0, SingleInfinity, 0.0));
+end;
+
+procedure RaiseQuatfSlerpNaNStart;
+begin
+  TQuatf.Slerp(TQuatf.Create(SingleNaN, 0.0, 0.0, 1.0), TQuatf.Identity, Single(0.5));
+end;
+
+procedure RaiseQuatfSlerpInfiniteEnd;
+begin
+  TQuatf.Slerp(TQuatf.Identity, TQuatf.Create(0.0, SingleInfinity, 0.0, 1.0), Single(0.5));
+end;
+
+procedure RaiseQuatfNlerpInfiniteStart;
+begin
+  TQuatf.Nlerp(TQuatf.Create(0.0, 0.0, SingleInfinity, 1.0), TQuatf.Identity, Single(0.5));
+end;
+
+procedure RaiseQuatfNlerpNaNEnd;
+begin
+  TQuatf.Nlerp(TQuatf.Identity, TQuatf.Create(0.0, 0.0, 0.0, SingleNaN), Single(0.5));
+end;
+
+procedure RaiseQuatdNormalizeNaN;
+begin
+  TQuatd.Create(DoubleNaN, 0.0, 0.0, 1.0).Normalize;
+end;
+
+procedure RaiseQuatdNormalizeInfinite;
+begin
+  TQuatd.Create(DoubleInfinity, 0.0, 0.0, 1.0).Normalize;
+end;
+
+procedure RaiseQuatdToAxisAngleNaN;
+var
+  Axis: TVec3d;
+  Angle: Double;
+begin
+  TQuatd.Create(0.0, DoubleNaN, 0.0, 1.0).ToAxisAngle(Axis, Angle);
+end;
+
+procedure RaiseQuatdToRotationMatrixInfinite;
+begin
+  TQuatd.Create(0.0, 0.0, DoubleInfinity, 1.0).ToRotationMatrix;
+end;
+
+procedure RaiseQuatdRotateInfinite;
+begin
+  TQuatd.Create(0.0, 0.0, 0.0, DoubleInfinity).Rotate(TVec3d.Create(1.0, 0.0, 0.0));
+end;
+
+procedure RaiseQuatdRotateNaNVector;
+begin
+  TQuatd.Identity.Rotate(TVec3d.Create(DoubleNaN, 0.0, 0.0));
+end;
+
+procedure RaiseQuatdRotateInfiniteVector;
+begin
+  TQuatd.Identity.Rotate(TVec3d.Create(0.0, DoubleInfinity, 0.0));
+end;
+
+procedure RaiseQuatdSlerpNaNStart;
+begin
+  TQuatd.Slerp(TQuatd.Create(DoubleNaN, 0.0, 0.0, 1.0), TQuatd.Identity, 0.5);
+end;
+
+procedure RaiseQuatdSlerpInfiniteEnd;
+begin
+  TQuatd.Slerp(TQuatd.Identity, TQuatd.Create(0.0, DoubleInfinity, 0.0, 1.0), 0.5);
+end;
+
+procedure RaiseQuatdNlerpInfiniteStart;
+begin
+  TQuatd.Nlerp(TQuatd.Create(0.0, 0.0, DoubleInfinity, 1.0), TQuatd.Identity, 0.5);
+end;
+
+procedure RaiseQuatdNlerpNaNEnd;
+begin
+  TQuatd.Nlerp(TQuatd.Identity, TQuatd.Create(0.0, 0.0, 0.0, DoubleNaN), 0.5);
+end;
+
+function QuarterTurnZf: TQuatf;
+begin
+  Result := TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI));
+end;
+
+function QuarterTurnZd: TQuatd;
+begin
+  Result := TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), HALF_PI);
+end;
+
+procedure TestQuatfContracts;
 var
   Q: TQuatf;
+  NegatedQ: TQuatf;
+  Axis: TVec3f;
+  Angle: Single;
+  HalfTurn: TQuatf;
+  Matrix: TMat3f;
+  ScaledIdentity: TQuatf;
+  ScaledQ: TQuatf;
 begin
-  WriteLn('--- Quatf Create and Identity ---');
-  Q := Quatf(1, 2, 3, 4);
-  Check('Quatf Create X', Q.X = 1.0);
-  Check('Quatf Create Y', Q.Y = 2.0);
-  Check('Quatf Create Z', Q.Z = 3.0);
-  Check('Quatf Create W', Q.W = 4.0);
+  Q := QuarterTurnZf;
 
-  Q := QuatfIdentity;
-  Check('Quatf Identity X', Q.X = 0.0);
-  Check('Quatf Identity Y', Q.Y = 0.0);
-  Check('Quatf Identity Z', Q.Z = 0.0);
-  Check('Quatf Identity W', Q.W = 1.0);
+  CheckEqual(Int64(SizeOf(Single) * 4), Int64(SizeOf(TQuatf)), 'TQuatf is compact value type');
+  CheckQuatf(0.0, 0.0, 0.0, 1.0, TQuatf.Identity, 'TQuatf identity');
+  CheckQuatf(1.0, 2.0, 3.0, 4.0, TQuatf.Create(1.0, 2.0, 3.0, 4.0), 'TQuatf create');
+  CheckNear(Q.Z, Q.Data[2], 0.0, 'TQuatf Data alias');
+  Check(TQuatf.Equals(TQuatf.Create(0.0, 0.0, 0.0, 0.0).Normalize, TQuatf.Identity, Single(0.0)),
+    'TQuatf zero normalize returns identity');
+  CheckQuatf(0.0, 0.0, -Q.Z, Q.W, Q.Conjugate, 'TQuatf conjugate');
+
+  Q.ToAxisAngle(Axis, Angle);
+  CheckVec3f(0.0, 0.0, 1.0, Axis, 'TQuatf ToAxisAngle axis');
+  CheckNear(HALF_PI, Angle, 0.000001, 'TQuatf ToAxisAngle angle');
+  TQuatf.Create(0.0, 0.0, 0.0, 0.0).ToAxisAngle(Axis, Angle);
+  CheckVec3f(0.0, 0.0, 1.0, Axis, 'TQuatf ToAxisAngle zero rotation axis');
+  CheckNear(0.0, Angle, 0.0, 'TQuatf ToAxisAngle zero rotation angle');
+  CheckVec3f(1.0, 2.0, 3.0, TQuatf.Create(0.0, 0.0, 0.0, 0.0).Rotate(TVec3f.Create(1.0, 2.0, 3.0)),
+    'TQuatf zero quaternion Rotate behaves like identity');
+  CheckMat3fIdentity(TQuatf.Create(0.0, 0.0, 0.0, 0.0).ToRotationMatrix,
+    'TQuatf zero quaternion ToRotationMatrix returns identity');
+
+  CheckVec3f(0.0, 1.0, 0.0, Q.Rotate(TVec3f.Create(1.0, 0.0, 0.0)), 'TQuatf Rotate');
+  Matrix := Q.ToRotationMatrix;
+  CheckVec3f(0.0, 1.0, 0.0, Matrix * TVec3f.Create(1.0, 0.0, 0.0),
+    'TQuatf ToRotationMatrix');
+
+  HalfTurn := Q * Q;
+  CheckVec3f(-1.0, 0.0, 0.0, HalfTurn.Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf multiply composes rotations');
+  CheckVec3f(0.7071068, 0.7071068, 0.0,
+    TQuatf.Slerp(TQuatf.Identity, Q, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Slerp midpoint');
+  CheckVec3f(0.7071068, 0.7071068, 0.0,
+    TQuatf.Nlerp(TQuatf.Identity, Q, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Nlerp midpoint');
+  NegatedQ := TQuatf.Create(-Q.X, -Q.Y, -Q.Z, -Q.W);
+  CheckVec3f(0.7071068, 0.7071068, 0.0,
+    TQuatf.Slerp(TQuatf.Identity, NegatedQ, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Slerp follows shortest path for opposite-sign endpoint');
+  CheckVec3f(0.7071068, 0.7071068, 0.0,
+    TQuatf.Nlerp(TQuatf.Identity, NegatedQ, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Nlerp follows shortest path for opposite-sign endpoint');
+  ScaledIdentity := TQuatf.Create(0.0, 0.0, 0.0, 2.0);
+  ScaledQ := TQuatf.Create(Q.X * 3.0, Q.Y * 3.0, Q.Z * 3.0, Q.W * 3.0);
+  ScaledQ.ToAxisAngle(Axis, Angle);
+  CheckVec3f(0.0, 0.0, 1.0, Axis, 'TQuatf ToAxisAngle normalizes scaled input axis');
+  CheckNear(HALF_PI, Angle, 0.000001, 'TQuatf ToAxisAngle normalizes scaled input angle');
+  CheckVec3f(0.0, 1.0, 0.0,
+    ScaledQ.Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Rotate normalizes scaled input');
+  CheckVec3f(0.0, 1.0, 0.0,
+    ScaledQ.ToRotationMatrix * TVec3f.Create(1.0, 0.0, 0.0),
+    'TQuatf ToRotationMatrix normalizes scaled input');
+  CheckVec3f(0.7071068, 0.7071068, 0.0,
+    TQuatf.Slerp(ScaledIdentity, ScaledQ, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Slerp normalizes scaled inputs');
+  CheckVec3f(0.7071068, 0.7071068, 0.0,
+    TQuatf.Nlerp(ScaledIdentity, ScaledQ, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Nlerp normalizes scaled inputs');
+  Check(TQuatf.Equals(Q, TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 2.0), Single(HALF_PI)),
+    Single(0.000001)), 'TQuatf FromAxisAngle normalizes axis');
+  Check(TQuatf.Equals(TQuatf.Identity, TQuatf.FromAxisAngle(TVec3f.Zero, Single(HALF_PI)),
+    Single(0.0)), 'TQuatf FromAxisAngle zero axis returns identity');
+  Check(TQuatf.Equals(Q, TQuatf.Create(Q.X + Single(0.0000001), Q.Y, Q.Z, Q.W), Single(0.000001)),
+    'TQuatf Equals uses component epsilon');
+  Check(not TQuatf.Equals(Q, NegatedQ, Single(0.000001)),
+    'TQuatf Equals does not canonicalize opposite-sign rotations');
+  Check(not TQuatf.Equals(Q, Q, Single(-0.000001)), 'TQuatf Equals rejects negative epsilon');
 end;
 
-procedure TestQuatfNormalize;
-var
-  Q: TQuatf;
-begin
-  WriteLn('--- Quatf Normalize ---');
-  Q := Quatf(2, 0, 0, 0).Normalize;
-  CheckFloat('Quatf Normalize length', 1.0, Q.Length, 1e-6);
-  Check('Quatf Normalize X', Q.X = 1.0);
-  Check('Quatf Normalize W', Q.W = 0.0);
-end;
-
-procedure TestQuatfConjugate;
-var
-  Q: TQuatf;
-begin
-  WriteLn('--- Quatf Conjugate ---');
-  Q := Quatf(1, 2, 3, 4).Conjugate;
-  Check('Quatf Conjugate X', Q.X = -1.0);
-  Check('Quatf Conjugate Y', Q.Y = -2.0);
-  Check('Quatf Conjugate Z', Q.Z = -3.0);
-  Check('Quatf Conjugate W', Q.W = 4.0);
-end;
-
-procedure TestQuatfFromAxisAngle;
-var
-  Q: TQuatf;
-begin
-  WriteLn('--- Quatf FromAxisAngle ---');
-  // 90 degrees around Z axis
-  Q := TQuatf.FromAxisAngle(TVec3f.Create(0, 0, 1), 90.0 * 3.14159265 / 180.0);
-  Q := Q.Normalize;
-  CheckFloat('Quatf AxisAngle Z90 W', 0.7071068, Q.W, 1e-5);
-  CheckFloat('Quatf AxisAngle Z90 Z', 0.7071068, Q.Z, 1e-5);
-end;
-
-procedure TestQuatfRotateVec;
-var
-  Q: TQuatf;
-  V: TVec3f;
-begin
-  WriteLn('--- Quatf RotateVec ---');
-  // 90 degrees around Z axis: (1,0,0) -> (0,1,0)
-  Q := TQuatf.FromAxisAngle(TVec3f.Create(0, 0, 1), 90.0 * 3.14159265 / 180.0);
-  Q := Q.Normalize;
-  V := Q.RotateVec(TVec3f.Create(1, 0, 0));
-  CheckFloat('Quatf RotateVec X->Y: X', 0.0, V.X, 1e-5);
-  CheckFloat('Quatf RotateVec X->Y: Y', 1.0, V.Y, 1e-5);
-  CheckFloat('Quatf RotateVec X->Y: Z', 0.0, V.Z, 1e-5);
-end;
-
-procedure TestQuatfToMat4;
-var
-  Q: TQuatf;
-  M: TMat4f;
-begin
-  WriteLn('--- Quatf ToMat4f ---');
-  Q := QuatfIdentity;
-  M := Q.ToMat4f;
-  Check('Quatf Identity->Mat4 [0,0]', M[0,0] = 1.0);
-  Check('Quatf Identity->Mat4 [1,1]', M[1,1] = 1.0);
-  Check('Quatf Identity->Mat4 [3,3]', M[3,3] = 1.0);
-  Check('Quatf Identity->Mat4 [0,1]', M[0,1] = 0.0);
-end;
-
-procedure TestQuatdCreateAndIdentity;
+procedure TestQuatdContracts;
 var
   Q: TQuatd;
+  NegatedQ: TQuatd;
+  Axis: TVec3d;
+  Angle: Double;
+  HalfTurn: TQuatd;
+  ScaledIdentity: TQuatd;
+  ScaledQ: TQuatd;
 begin
-  WriteLn('--- Quatd Create and Identity ---');
-  Q := QuatdIdentity;
-  Check('Quatd Identity X', Q.X = 0.0);
-  Check('Quatd Identity Y', Q.Y = 0.0);
-  Check('Quatd Identity Z', Q.Z = 0.0);
-  Check('Quatd Identity W', Q.W = 1.0);
+  Q := TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), HALF_PI);
+
+  CheckEqual(Int64(SizeOf(Double) * 4), Int64(SizeOf(TQuatd)), 'TQuatd is compact value type');
+  CheckQuatd(1.0, 2.0, 3.0, 4.0, TQuatd.Create(1.0, 2.0, 3.0, 4.0), 'TQuatd create');
+  CheckNear(0.0, TQuatd.Identity.X, 0.0, 'TQuatd identity vector');
+  CheckNear(1.0, TQuatd.Identity.W, 0.0, 'TQuatd identity real');
+  CheckNear(Q.Z, Q.Data[2], 0.0, 'TQuatd Data alias');
+  Check(TQuatd.Equals(TQuatd.Create(0.0, 0.0, 0.0, 0.0).Normalize, TQuatd.Identity, 0.0),
+    'TQuatd zero normalize returns identity');
+  CheckQuatd(0.0, 0.0, -Q.Z, Q.W, Q.Conjugate, 'TQuatd conjugate');
+  Q.ToAxisAngle(Axis, Angle);
+  CheckVec3d(0.0, 0.0, 1.0, Axis, 'TQuatd ToAxisAngle axis');
+  CheckNear(HALF_PI, Angle, 0.000000000001, 'TQuatd ToAxisAngle angle');
+  TQuatd.Create(0.0, 0.0, 0.0, 0.0).ToAxisAngle(Axis, Angle);
+  CheckVec3d(0.0, 0.0, 1.0, Axis, 'TQuatd ToAxisAngle zero rotation axis');
+  CheckNear(0.0, Angle, 0.0, 'TQuatd ToAxisAngle zero rotation angle');
+  CheckVec3d(1.0, 2.0, 3.0, TQuatd.Create(0.0, 0.0, 0.0, 0.0).Rotate(TVec3d.Create(1.0, 2.0, 3.0)),
+    'TQuatd zero quaternion Rotate behaves like identity');
+  CheckMat3dIdentity(TQuatd.Create(0.0, 0.0, 0.0, 0.0).ToRotationMatrix,
+    'TQuatd zero quaternion ToRotationMatrix returns identity');
+  CheckVec3d(0.0, 1.0, 0.0, Q.Rotate(TVec3d.Create(1.0, 0.0, 0.0)), 'TQuatd Rotate');
+  CheckVec3d(0.0, 1.0, 0.0,
+    Q.ToRotationMatrix * TVec3d.Create(1.0, 0.0, 0.0),
+    'TQuatd ToRotationMatrix');
+  HalfTurn := Q * Q;
+  CheckVec3d(-1.0, 0.0, 0.0, HalfTurn.Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd multiply composes rotations');
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Slerp(TQuatd.Identity, Q, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Slerp midpoint');
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Nlerp(TQuatd.Identity, Q, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Nlerp midpoint');
+  NegatedQ := TQuatd.Create(-Q.X, -Q.Y, -Q.Z, -Q.W);
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Slerp(TQuatd.Identity, NegatedQ, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Slerp follows shortest path for opposite-sign endpoint');
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Nlerp(TQuatd.Identity, NegatedQ, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Nlerp follows shortest path for opposite-sign endpoint');
+  ScaledIdentity := TQuatd.Create(0.0, 0.0, 0.0, 2.0);
+  ScaledQ := TQuatd.Create(Q.X * 3.0, Q.Y * 3.0, Q.Z * 3.0, Q.W * 3.0);
+  ScaledQ.ToAxisAngle(Axis, Angle);
+  CheckVec3d(0.0, 0.0, 1.0, Axis, 'TQuatd ToAxisAngle normalizes scaled input axis');
+  CheckNear(HALF_PI, Angle, 0.000000000001, 'TQuatd ToAxisAngle normalizes scaled input angle');
+  CheckVec3d(0.0, 1.0, 0.0,
+    ScaledQ.Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Rotate normalizes scaled input');
+  CheckVec3d(0.0, 1.0, 0.0,
+    ScaledQ.ToRotationMatrix * TVec3d.Create(1.0, 0.0, 0.0),
+    'TQuatd ToRotationMatrix normalizes scaled input');
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Slerp(ScaledIdentity, ScaledQ, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Slerp normalizes scaled inputs');
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Nlerp(ScaledIdentity, ScaledQ, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Nlerp normalizes scaled inputs');
+  Check(TQuatd.Equals(Q, TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 2.0), HALF_PI),
+    0.000000000001), 'TQuatd FromAxisAngle normalizes axis');
+  Check(TQuatd.Equals(TQuatd.Identity, TQuatd.FromAxisAngle(TVec3d.Zero, HALF_PI), 0.0),
+    'TQuatd FromAxisAngle zero axis returns identity');
+  Check(TQuatd.Equals(Q, TQuatd.Create(Q.X + 0.0000000000001, Q.Y, Q.Z, Q.W), 0.000000000001),
+    'TQuatd Equals uses component epsilon');
+  Check(not TQuatd.Equals(Q, NegatedQ, 0.000000000001),
+    'TQuatd Equals does not canonicalize opposite-sign rotations');
+  Check(not TQuatd.Equals(Q, Q, -0.000000000001), 'TQuatd Equals rejects negative epsilon');
+end;
+
+procedure TestQuaternionDataAliasesWriteThrough;
+var
+  Qf: TQuatf;
+  Qd: TQuatd;
+begin
+  Qf := TQuatf.Create(1.0, 2.0, 3.0, 4.0);
+  Qf.Data[0] := -10.0;
+  Qf.Data[1] := -20.0;
+  Qf.Data[2] := -30.0;
+  Qf.Data[3] := -40.0;
+  CheckQuatf(-10.0, -20.0, -30.0, -40.0, Qf,
+    'TQuatf Data indexed writes update named fields');
+  Qf.X := 11.0;
+  Qf.Y := 22.0;
+  Qf.Z := 33.0;
+  Qf.W := 44.0;
+  CheckNear(11.0, Qf.Data[0], 0.0, 'TQuatf X writes Data[0]');
+  CheckNear(22.0, Qf.Data[1], 0.0, 'TQuatf Y writes Data[1]');
+  CheckNear(33.0, Qf.Data[2], 0.0, 'TQuatf Z writes Data[2]');
+  CheckNear(44.0, Qf.Data[3], 0.0, 'TQuatf W writes Data[3]');
+
+  Qd := TQuatd.Create(1.0, 2.0, 3.0, 4.0);
+  Qd.Data[0] := -100.0;
+  Qd.Data[1] := -200.0;
+  Qd.Data[2] := -300.0;
+  Qd.Data[3] := -400.0;
+  CheckQuatd(-100.0, -200.0, -300.0, -400.0, Qd,
+    'TQuatd Data indexed writes update named fields');
+  Qd.X := 111.0;
+  Qd.Y := 222.0;
+  Qd.Z := 333.0;
+  Qd.W := 444.0;
+  CheckNear(111.0, Qd.Data[0], 0.0, 'TQuatd X writes Data[0]');
+  CheckNear(222.0, Qd.Data[1], 0.0, 'TQuatd Y writes Data[1]');
+  CheckNear(333.0, Qd.Data[2], 0.0, 'TQuatd Z writes Data[2]');
+  CheckNear(444.0, Qd.Data[3], 0.0, 'TQuatd W writes Data[3]');
+end;
+
+procedure TestQuaternionDataAliasesPreserveSignedZeroBits;
+var
+  Qf: TQuatf;
+  Qd: TQuatd;
+begin
+  Qf := TQuatf.Identity;
+  Qf.Data[0] := SingleNegativeZero;
+  CheckSingleNegativeZero(Qf.X, 'TQuatf Data[0] preserves negative-zero bits');
+
+  Qf.W := SingleNegativeZero;
+  CheckSingleNegativeZero(Qf.Data[3], 'TQuatf W preserves negative-zero bits in Data[3]');
+
+  Qd := TQuatd.Identity;
+  Qd.Data[1] := DoubleNegativeZero;
+  CheckDoubleNegativeZero(Qd.Y, 'TQuatd Data[1] preserves negative-zero bits');
+
+  Qd.W := DoubleNegativeZero;
+  CheckDoubleNegativeZero(Qd.Data[3], 'TQuatd W preserves negative-zero bits in Data[3]');
+end;
+
+procedure TestQuaternionDataAliasOffsets;
+var
+  Qf: TQuatf;
+  Qd: TQuatd;
+begin
+  CheckPointerOffset(@Qf, @Qf.X, 0, 'TQuatf X starts at record base');
+  CheckPointerOffset(@Qf, @Qf.Y, PtrUInt(SizeOf(Single)), 'TQuatf Y packed offset');
+  CheckPointerOffset(@Qf, @Qf.Z, PtrUInt(2 * SizeOf(Single)), 'TQuatf Z packed offset');
+  CheckPointerOffset(@Qf, @Qf.W, PtrUInt(3 * SizeOf(Single)), 'TQuatf W packed offset');
+  CheckPointerOffset(@Qf, @Qf.Data[0], 0, 'TQuatf Data[0] aliases X offset');
+  CheckPointerOffset(@Qf, @Qf.Data[1], PtrUInt(SizeOf(Single)),
+    'TQuatf Data[1] aliases Y offset');
+  CheckPointerOffset(@Qf, @Qf.Data[2], PtrUInt(2 * SizeOf(Single)),
+    'TQuatf Data[2] aliases Z offset');
+  CheckPointerOffset(@Qf, @Qf.Data[3], PtrUInt(3 * SizeOf(Single)),
+    'TQuatf Data[3] aliases W offset');
+
+  CheckPointerOffset(@Qd, @Qd.X, 0, 'TQuatd X starts at record base');
+  CheckPointerOffset(@Qd, @Qd.Y, PtrUInt(SizeOf(Double)), 'TQuatd Y packed offset');
+  CheckPointerOffset(@Qd, @Qd.Z, PtrUInt(2 * SizeOf(Double)), 'TQuatd Z packed offset');
+  CheckPointerOffset(@Qd, @Qd.W, PtrUInt(3 * SizeOf(Double)), 'TQuatd W packed offset');
+  CheckPointerOffset(@Qd, @Qd.Data[0], 0, 'TQuatd Data[0] aliases X offset');
+  CheckPointerOffset(@Qd, @Qd.Data[1], PtrUInt(SizeOf(Double)),
+    'TQuatd Data[1] aliases Y offset');
+  CheckPointerOffset(@Qd, @Qd.Data[2], PtrUInt(2 * SizeOf(Double)),
+    'TQuatd Data[2] aliases Z offset');
+  CheckPointerOffset(@Qd, @Qd.Data[3], PtrUInt(3 * SizeOf(Double)),
+    'TQuatd Data offsets match packed named fields');
+end;
+
+procedure TestFromAxisAngleRejectsNonFiniteInputs;
+begin
+  ExpectArgumentErrorMessage('TQuatf.FromAxisAngle: AAngleRad must be finite',
+    'TQuatf FromAxisAngle NaN angle', @RaiseQuatfFromAxisAngleNaNAngle);
+  ExpectArgumentErrorMessage('TQuatf.FromAxisAngle: AAngleRad must be finite',
+    'TQuatf FromAxisAngle infinite angle', @RaiseQuatfFromAxisAngleInfiniteAngle);
+  ExpectArgumentErrorMessage('TQuatf.FromAxisAngle: AAxis must be finite',
+    'TQuatf FromAxisAngle NaN axis', @RaiseQuatfFromAxisAngleNaNAxis);
+  ExpectArgumentErrorMessage('TQuatf.FromAxisAngle: AAxis must be finite',
+    'TQuatf FromAxisAngle infinite axis', @RaiseQuatfFromAxisAngleInfiniteAxis);
+  ExpectArgumentErrorMessage('TQuatd.FromAxisAngle: AAngleRad must be finite',
+    'TQuatd FromAxisAngle NaN angle', @RaiseQuatdFromAxisAngleNaNAngle);
+  ExpectArgumentErrorMessage('TQuatd.FromAxisAngle: AAngleRad must be finite',
+    'TQuatd FromAxisAngle infinite angle', @RaiseQuatdFromAxisAngleInfiniteAngle);
+  ExpectArgumentErrorMessage('TQuatd.FromAxisAngle: AAxis must be finite',
+    'TQuatd FromAxisAngle NaN axis', @RaiseQuatdFromAxisAngleNaNAxis);
+  ExpectArgumentErrorMessage('TQuatd.FromAxisAngle: AAxis must be finite',
+    'TQuatd FromAxisAngle infinite axis', @RaiseQuatdFromAxisAngleInfiniteAxis);
+end;
+
+procedure TestFromAxisAngleNormalizesHugeFiniteAxis;
+begin
+  CheckVec3f(0.0, 1.0, 0.0,
+    TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, Single(3.0e20)), Single(HALF_PI))
+      .Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf FromAxisAngle huge finite axis normalizes');
+  CheckVec3d(0.0, 1.0, 0.0,
+    TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 3.0e200), HALF_PI)
+      .Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd FromAxisAngle huge finite axis normalizes');
+end;
+
+procedure TestHugeFiniteNormalize;
+var
+  BaseQf: TQuatf;
+  BaseQd: TQuatd;
+  Qf: TQuatf;
+  Qd: TQuatd;
+begin
+  Qf := TQuatf.Create(0.0, 0.0, Single(3.0e20), Single(4.0e20)).Normalize;
+  CheckQuatf(0.0, 0.0, 0.6, 0.8, Qf, 'TQuatf huge finite normalize preserves direction');
+
+  Qd := TQuatd.Create(0.0, 0.0, 3.0e200, 4.0e200).Normalize;
+  CheckQuatd(0.0, 0.0, 0.6, 0.8, Qd, 'TQuatd huge finite normalize preserves direction');
+
+  BaseQf := QuarterTurnZf;
+  Qf := TQuatf.Create(BaseQf.X * Single(3.0e20), BaseQf.Y * Single(3.0e20),
+    BaseQf.Z * Single(3.0e20), BaseQf.W * Single(3.0e20)).Normalize;
+  Check(TQuatf.Equals(BaseQf, Qf, Single(0.000001)),
+    'TQuatf huge finite normalized rotation matches base');
+  CheckVec3f(0.0, 1.0, 0.0, Qf.Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf huge finite normalized rotation remains usable');
+
+  BaseQd := QuarterTurnZd;
+  Qd := TQuatd.Create(BaseQd.X * 3.0e200, BaseQd.Y * 3.0e200,
+    BaseQd.Z * 3.0e200, BaseQd.W * 3.0e200).Normalize;
+  Check(TQuatd.Equals(BaseQd, Qd, 0.000000000001),
+    'TQuatd huge finite normalized rotation matches base');
+  CheckVec3d(0.0, 1.0, 0.0, Qd.Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd huge finite normalized rotation remains usable');
+end;
+
+procedure TestMaxFiniteNormalize;
+var
+  BaseQf: TQuatf;
+  BaseQd: TQuatd;
+  Qf: TQuatf;
+  Qd: TQuatd;
+begin
+  Qf := TQuatf.Create(0.0, 0.0, SingleMaxFinite, SingleMaxFinite).Normalize;
+  CheckQuatf(0.0, 0.0, 0.70710677, 0.70710677, Qf,
+    'TQuatf max finite normalize preserves direction');
+  CheckNear(1.0, Qf.X * Qf.X + Qf.Y * Qf.Y + Qf.Z * Qf.Z + Qf.W * Qf.W,
+    0.000001, 'TQuatf max finite normalize preserves unit length');
+
+  BaseQf := QuarterTurnZf;
+  Qf := TQuatf.Create(BaseQf.X * SingleMaxFinite, BaseQf.Y * SingleMaxFinite,
+    BaseQf.Z * SingleMaxFinite, BaseQf.W * SingleMaxFinite).Normalize;
+  Check(TQuatf.Equals(BaseQf, Qf, Single(0.000001)),
+    'TQuatf max finite normalized rotation matches base');
+  CheckVec3f(0.0, 1.0, 0.0, Qf.Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf max finite normalized rotation remains usable');
+
+  Qd := TQuatd.Create(0.0, 0.0, DoubleMaxFinite, DoubleMaxFinite).Normalize;
+  CheckQuatd(0.0, 0.0, 0.7071067811865475, 0.7071067811865475, Qd,
+    'TQuatd max finite normalize preserves direction');
+  CheckNear(1.0, Qd.X * Qd.X + Qd.Y * Qd.Y + Qd.Z * Qd.Z + Qd.W * Qd.W,
+    0.000000000001, 'TQuatd max finite normalize preserves unit length');
+
+  BaseQd := QuarterTurnZd;
+  Qd := TQuatd.Create(BaseQd.X * DoubleMaxFinite, BaseQd.Y * DoubleMaxFinite,
+    BaseQd.Z * DoubleMaxFinite, BaseQd.W * DoubleMaxFinite).Normalize;
+  Check(TQuatd.Equals(BaseQd, Qd, 0.000000000001),
+    'TQuatd max finite normalized rotation matches base');
+  CheckVec3d(0.0, 1.0, 0.0, Qd.Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd max finite normalized rotation remains usable');
+end;
+
+procedure TestInterpolationRejectsNonFiniteT;
+begin
+  ExpectArgumentErrorMessage('TQuatf.Slerp: AT must be finite',
+    'TQuatf Slerp NaN t', @RaiseQuatfSlerpNaNT);
+  ExpectArgumentErrorMessage('TQuatf.Slerp: AT must be finite',
+    'TQuatf Slerp infinite t', @RaiseQuatfSlerpInfiniteT);
+  ExpectArgumentErrorMessage('TQuatf.Nlerp: AT must be finite',
+    'TQuatf Nlerp NaN t', @RaiseQuatfNlerpNaNT);
+  ExpectArgumentErrorMessage('TQuatf.Nlerp: AT must be finite',
+    'TQuatf Nlerp infinite t', @RaiseQuatfNlerpInfiniteT);
+  ExpectArgumentErrorMessage('TQuatd.Slerp: AT must be finite',
+    'TQuatd Slerp NaN t', @RaiseQuatdSlerpNaNT);
+  ExpectArgumentErrorMessage('TQuatd.Slerp: AT must be finite',
+    'TQuatd Slerp infinite t', @RaiseQuatdSlerpInfiniteT);
+  ExpectArgumentErrorMessage('TQuatd.Nlerp: AT must be finite',
+    'TQuatd Nlerp NaN t', @RaiseQuatdNlerpNaNT);
+  ExpectArgumentErrorMessage('TQuatd.Nlerp: AT must be finite',
+    'TQuatd Nlerp infinite t', @RaiseQuatdNlerpInfiniteT);
+end;
+
+procedure TestRawQuaternionNonFiniteInputsFailFast;
+begin
+  ExpectArgumentErrorMessage('TQuatf.Normalize: quaternion must be finite',
+    'TQuatf Normalize NaN quaternion', @RaiseQuatfNormalizeNaN);
+  ExpectArgumentErrorMessage('TQuatf.Normalize: quaternion must be finite',
+    'TQuatf Normalize infinite quaternion', @RaiseQuatfNormalizeInfinite);
+  ExpectArgumentErrorMessage('TQuatf.ToAxisAngle: quaternion must be finite',
+    'TQuatf ToAxisAngle NaN quaternion', @RaiseQuatfToAxisAngleNaN);
+  ExpectArgumentErrorMessage('TQuatf.ToRotationMatrix: quaternion must be finite',
+    'TQuatf ToRotationMatrix infinite quaternion', @RaiseQuatfToRotationMatrixInfinite);
+  ExpectArgumentErrorMessage('TQuatf.Rotate: quaternion must be finite',
+    'TQuatf Rotate infinite quaternion', @RaiseQuatfRotateInfinite);
+  ExpectArgumentErrorMessage('TQuatf.Slerp: AA must be finite',
+    'TQuatf Slerp NaN start quaternion', @RaiseQuatfSlerpNaNStart);
+  ExpectArgumentErrorMessage('TQuatf.Slerp: AB must be finite',
+    'TQuatf Slerp infinite end quaternion', @RaiseQuatfSlerpInfiniteEnd);
+  ExpectArgumentErrorMessage('TQuatf.Nlerp: AA must be finite',
+    'TQuatf Nlerp infinite start quaternion', @RaiseQuatfNlerpInfiniteStart);
+  ExpectArgumentErrorMessage('TQuatf.Nlerp: AB must be finite',
+    'TQuatf Nlerp NaN end quaternion', @RaiseQuatfNlerpNaNEnd);
+
+  ExpectArgumentErrorMessage('TQuatd.Normalize: quaternion must be finite',
+    'TQuatd Normalize NaN quaternion', @RaiseQuatdNormalizeNaN);
+  ExpectArgumentErrorMessage('TQuatd.Normalize: quaternion must be finite',
+    'TQuatd Normalize infinite quaternion', @RaiseQuatdNormalizeInfinite);
+  ExpectArgumentErrorMessage('TQuatd.ToAxisAngle: quaternion must be finite',
+    'TQuatd ToAxisAngle NaN quaternion', @RaiseQuatdToAxisAngleNaN);
+  ExpectArgumentErrorMessage('TQuatd.ToRotationMatrix: quaternion must be finite',
+    'TQuatd ToRotationMatrix infinite quaternion', @RaiseQuatdToRotationMatrixInfinite);
+  ExpectArgumentErrorMessage('TQuatd.Rotate: quaternion must be finite',
+    'TQuatd Rotate infinite quaternion', @RaiseQuatdRotateInfinite);
+  ExpectArgumentErrorMessage('TQuatd.Slerp: AA must be finite',
+    'TQuatd Slerp NaN start quaternion', @RaiseQuatdSlerpNaNStart);
+  ExpectArgumentErrorMessage('TQuatd.Slerp: AB must be finite',
+    'TQuatd Slerp infinite end quaternion', @RaiseQuatdSlerpInfiniteEnd);
+  ExpectArgumentErrorMessage('TQuatd.Nlerp: AA must be finite',
+    'TQuatd Nlerp infinite start quaternion', @RaiseQuatdNlerpInfiniteStart);
+  ExpectArgumentErrorMessage('TQuatd.Nlerp: AB must be finite',
+    'TQuatd Nlerp NaN end quaternion', @RaiseQuatdNlerpNaNEnd);
+end;
+
+procedure TestRotateRejectsNonFiniteVectorInputs;
+begin
+  ExpectArgumentErrorMessage('TQuatf.Rotate: AVector must be finite',
+    'TQuatf Rotate NaN vector', @RaiseQuatfRotateNaNVector);
+  ExpectArgumentErrorMessage('TQuatf.Rotate: AVector must be finite',
+    'TQuatf Rotate infinite vector', @RaiseQuatfRotateInfiniteVector);
+
+  ExpectArgumentErrorMessage('TQuatd.Rotate: AVector must be finite',
+    'TQuatd Rotate NaN vector', @RaiseQuatdRotateNaNVector);
+  ExpectArgumentErrorMessage('TQuatd.Rotate: AVector must be finite',
+    'TQuatd Rotate infinite vector', @RaiseQuatdRotateInfiniteVector);
+end;
+
+procedure TestInterpolationAllowsFiniteExtrapolation;
+var
+  Qf: TQuatf;
+  Qd: TQuatd;
+begin
+  Qf := QuarterTurnZf;
+  CheckVec3f(0.7071068, -0.7071068, 0.0,
+    TQuatf.Slerp(TQuatf.Identity, Qf, Single(-0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Slerp extrapolates below zero');
+  CheckVec3f(0.8263093, -0.5632167, 0.0,
+    TQuatf.Nlerp(TQuatf.Identity, Qf, Single(-0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Nlerp extrapolates below zero');
+  CheckVec3f(-0.7071068, 0.7071068, 0.0,
+    TQuatf.Slerp(TQuatf.Identity, Qf, Single(1.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Slerp extrapolates above one');
+  CheckVec3f(-0.5632167, 0.8263093, 0.0,
+    TQuatf.Nlerp(TQuatf.Identity, Qf, Single(1.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Nlerp extrapolates above one');
+
+  Qd := QuarterTurnZd;
+  CheckVec3d(0.7071067811865475, -0.7071067811865475, 0.0,
+    TQuatd.Slerp(TQuatd.Identity, Qd, -0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Slerp extrapolates below zero');
+  CheckVec3d(0.8263092599131795, -0.5632166607813849, 0.0,
+    TQuatd.Nlerp(TQuatd.Identity, Qd, -0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Nlerp extrapolates below zero');
+  CheckVec3d(-0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Slerp(TQuatd.Identity, Qd, 1.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Slerp extrapolates above one');
+  CheckVec3d(-0.5632166607813849, 0.8263092599131795, 0.0,
+    TQuatd.Nlerp(TQuatd.Identity, Qd, 1.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Nlerp extrapolates above one');
+end;
+
+procedure TestInterpolationEndpointContracts;
+var
+  Qf: TQuatf;
+  ZeroQuatf: TQuatf;
+  NegatedQf: TQuatf;
+  ScaledIdentityf: TQuatf;
+  ScaledQf: TQuatf;
+  Qd: TQuatd;
+  ZeroQuatd: TQuatd;
+  NegatedQd: TQuatd;
+  ScaledIdentityd: TQuatd;
+  ScaledQd: TQuatd;
+begin
+  Qf := QuarterTurnZf;
+  ZeroQuatf := TQuatf.Create(0.0, 0.0, 0.0, 0.0);
+  NegatedQf := TQuatf.Create(-Qf.X, -Qf.Y, -Qf.Z, -Qf.W);
+  ScaledIdentityf := TQuatf.Create(0.0, 0.0, 0.0, 2.0);
+  ScaledQf := TQuatf.Create(Qf.X * 3.0, Qf.Y * 3.0, Qf.Z * 3.0, Qf.W * 3.0);
+  Check(TQuatf.Equals(TQuatf.Slerp(ZeroQuatf, Qf, Single(0.0)), TQuatf.Identity,
+    Single(0.000001)), 'TQuatf Slerp t=0 normalizes zero start');
+  Check(TQuatf.Equals(TQuatf.Nlerp(ZeroQuatf, Qf, Single(0.0)), TQuatf.Identity,
+    Single(0.000001)), 'TQuatf Nlerp t=0 normalizes zero start');
+  Check(TQuatf.Equals(TQuatf.Slerp(Qf, ZeroQuatf, Single(1.0)), TQuatf.Identity,
+    Single(0.000001)), 'TQuatf Slerp t=1 normalizes zero end');
+  Check(TQuatf.Equals(TQuatf.Nlerp(Qf, ZeroQuatf, Single(1.0)), TQuatf.Identity,
+    Single(0.000001)), 'TQuatf Nlerp t=1 normalizes zero end');
+  Check(TQuatf.Equals(TQuatf.Slerp(ScaledIdentityf, ScaledQf, Single(0.0)), TQuatf.Identity,
+    Single(0.000001)), 'TQuatf Slerp t=0 returns normalized start');
+  Check(TQuatf.Equals(TQuatf.Nlerp(ScaledIdentityf, ScaledQf, Single(0.0)), TQuatf.Identity,
+    Single(0.000001)), 'TQuatf Nlerp t=0 returns normalized start');
+  Check(TQuatf.Equals(TQuatf.Slerp(ScaledIdentityf, ScaledQf, Single(1.0)), Qf,
+    Single(0.000001)), 'TQuatf Slerp t=1 returns normalized end');
+  Check(TQuatf.Equals(TQuatf.Nlerp(ScaledIdentityf, ScaledQf, Single(1.0)), Qf,
+    Single(0.000001)), 'TQuatf Nlerp t=1 returns normalized end');
+  Check(TQuatf.Equals(TQuatf.Slerp(TQuatf.Identity, NegatedQf, Single(1.0)), Qf,
+    Single(0.000001)), 'TQuatf Slerp t=1 canonicalizes opposite-sign end');
+  Check(TQuatf.Equals(TQuatf.Nlerp(TQuatf.Identity, NegatedQf, Single(1.0)), Qf,
+    Single(0.000001)), 'TQuatf Nlerp t=1 canonicalizes opposite-sign end');
+
+  Qd := QuarterTurnZd;
+  ZeroQuatd := TQuatd.Create(0.0, 0.0, 0.0, 0.0);
+  NegatedQd := TQuatd.Create(-Qd.X, -Qd.Y, -Qd.Z, -Qd.W);
+  ScaledIdentityd := TQuatd.Create(0.0, 0.0, 0.0, 2.0);
+  ScaledQd := TQuatd.Create(Qd.X * 3.0, Qd.Y * 3.0, Qd.Z * 3.0, Qd.W * 3.0);
+  Check(TQuatd.Equals(TQuatd.Slerp(ZeroQuatd, Qd, 0.0), TQuatd.Identity, 0.000000000001),
+    'TQuatd Slerp t=0 normalizes zero start');
+  Check(TQuatd.Equals(TQuatd.Nlerp(ZeroQuatd, Qd, 0.0), TQuatd.Identity, 0.000000000001),
+    'TQuatd Nlerp t=0 normalizes zero start');
+  Check(TQuatd.Equals(TQuatd.Slerp(Qd, ZeroQuatd, 1.0), TQuatd.Identity, 0.000000000001),
+    'TQuatd Slerp t=1 normalizes zero end');
+  Check(TQuatd.Equals(TQuatd.Nlerp(Qd, ZeroQuatd, 1.0), TQuatd.Identity, 0.000000000001),
+    'TQuatd Nlerp t=1 normalizes zero end');
+  Check(TQuatd.Equals(TQuatd.Slerp(ScaledIdentityd, ScaledQd, 0.0), TQuatd.Identity,
+    0.000000000001), 'TQuatd Slerp t=0 returns normalized start');
+  Check(TQuatd.Equals(TQuatd.Nlerp(ScaledIdentityd, ScaledQd, 0.0), TQuatd.Identity,
+    0.000000000001), 'TQuatd Nlerp t=0 returns normalized start');
+  Check(TQuatd.Equals(TQuatd.Slerp(ScaledIdentityd, ScaledQd, 1.0), Qd, 0.000000000001),
+    'TQuatd Slerp t=1 returns normalized end');
+  Check(TQuatd.Equals(TQuatd.Nlerp(ScaledIdentityd, ScaledQd, 1.0), Qd, 0.000000000001),
+    'TQuatd Nlerp t=1 returns normalized end');
+  Check(TQuatd.Equals(TQuatd.Slerp(TQuatd.Identity, NegatedQd, 1.0), Qd, 0.000000000001),
+    'TQuatd Slerp t=1 canonicalizes opposite-sign end');
+  Check(TQuatd.Equals(TQuatd.Nlerp(TQuatd.Identity, NegatedQd, 1.0), Qd, 0.000000000001),
+    'TQuatd Nlerp t=1 canonicalizes opposite-sign end');
+end;
+
+procedure TestInterpolationFollowsShortestPathForOppositeSignStart;
+var
+  Qf: TQuatf;
+  NegatedIdentityf: TQuatf;
+  Qd: TQuatd;
+  NegatedIdentityd: TQuatd;
+begin
+  Qf := QuarterTurnZf;
+  NegatedIdentityf := TQuatf.Create(0.0, 0.0, 0.0, -1.0);
+  CheckVec3f(0.7071068, 0.7071068, 0.0,
+    TQuatf.Slerp(NegatedIdentityf, Qf, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Slerp follows shortest path for opposite-sign start');
+  CheckVec3f(0.7071068, 0.7071068, 0.0,
+    TQuatf.Nlerp(NegatedIdentityf, Qf, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Nlerp follows shortest path for opposite-sign start');
+
+  Qd := QuarterTurnZd;
+  NegatedIdentityd := TQuatd.Create(0.0, 0.0, 0.0, -1.0);
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Slerp(NegatedIdentityd, Qd, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Slerp follows shortest path for opposite-sign start');
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Nlerp(NegatedIdentityd, Qd, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Nlerp follows shortest path for opposite-sign start');
+end;
+
+procedure TestInterpolationFollowsShortestPathForOppositeSignEnd;
+var
+  NegatedQf: TQuatf;
+  NegatedQd: TQuatd;
+begin
+  NegatedQf := TQuatf.Create(-QuarterTurnZf.X, -QuarterTurnZf.Y, -QuarterTurnZf.Z, -QuarterTurnZf.W);
+  CheckVec3f(0.7071068, 0.7071068, 0.0,
+    TQuatf.Slerp(TQuatf.Identity, NegatedQf, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Slerp follows shortest path for opposite-sign end');
+  CheckVec3f(0.7071068, 0.7071068, 0.0,
+    TQuatf.Nlerp(TQuatf.Identity, NegatedQf, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Nlerp follows shortest path for opposite-sign end');
+
+  NegatedQd := TQuatd.Create(-QuarterTurnZd.X, -QuarterTurnZd.Y, -QuarterTurnZd.Z, -QuarterTurnZd.W);
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Slerp(TQuatd.Identity, NegatedQd, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Slerp follows shortest path for opposite-sign end');
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Nlerp(TQuatd.Identity, NegatedQd, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Nlerp follows shortest path for opposite-sign end');
+end;
+
+procedure TestInterpolationStaysStableForEquivalentEndpoints;
+var
+  Qf: TQuatf;
+  ScaledQf: TQuatf;
+  NegatedQf: TQuatf;
+  Qd: TQuatd;
+  ScaledQd: TQuatd;
+  NegatedQd: TQuatd;
+begin
+  Qf := QuarterTurnZf;
+  ScaledQf := TQuatf.Create(Qf.X * 3.0, Qf.Y * 3.0, Qf.Z * 3.0, Qf.W * 3.0);
+  NegatedQf := TQuatf.Create(-Qf.X, -Qf.Y, -Qf.Z, -Qf.W);
+  Check(TQuatf.Equals(TQuatf.Slerp(Qf, Qf, Single(0.25)), Qf, Single(0.000001)),
+    'TQuatf Slerp keeps identical endpoints stable');
+  Check(TQuatf.Equals(TQuatf.Nlerp(Qf, Qf, Single(0.25)), Qf, Single(0.000001)),
+    'TQuatf Nlerp keeps identical endpoints stable');
+  Check(TQuatf.Equals(TQuatf.Slerp(Qf, ScaledQf, Single(0.25)), Qf, Single(0.000001)),
+    'TQuatf Slerp keeps scaled-equivalent endpoints stable');
+  Check(TQuatf.Equals(TQuatf.Nlerp(Qf, ScaledQf, Single(0.25)), Qf, Single(0.000001)),
+    'TQuatf Nlerp keeps scaled-equivalent endpoints stable');
+  Check(TQuatf.Equals(TQuatf.Slerp(Qf, NegatedQf, Single(0.5)), Qf, Single(0.000001)),
+    'TQuatf Slerp keeps opposite-sign midpoint stable');
+  Check(TQuatf.Equals(TQuatf.Nlerp(Qf, NegatedQf, Single(0.5)), Qf, Single(0.000001)),
+    'TQuatf Nlerp keeps opposite-sign midpoint stable');
+
+  Qd := QuarterTurnZd;
+  ScaledQd := TQuatd.Create(Qd.X * 3.0, Qd.Y * 3.0, Qd.Z * 3.0, Qd.W * 3.0);
+  NegatedQd := TQuatd.Create(-Qd.X, -Qd.Y, -Qd.Z, -Qd.W);
+  Check(TQuatd.Equals(TQuatd.Slerp(Qd, Qd, 0.25), Qd, 0.000000000001),
+    'TQuatd Slerp keeps identical endpoints stable');
+  Check(TQuatd.Equals(TQuatd.Nlerp(Qd, Qd, 0.25), Qd, 0.000000000001),
+    'TQuatd Nlerp keeps identical endpoints stable');
+  Check(TQuatd.Equals(TQuatd.Slerp(Qd, ScaledQd, 0.25), Qd, 0.000000000001),
+    'TQuatd Slerp keeps scaled-equivalent endpoints stable');
+  Check(TQuatd.Equals(TQuatd.Nlerp(Qd, ScaledQd, 0.25), Qd, 0.000000000001),
+    'TQuatd Nlerp keeps scaled-equivalent endpoints stable');
+  Check(TQuatd.Equals(TQuatd.Slerp(Qd, NegatedQd, 0.5), Qd, 0.000000000001),
+    'TQuatd Slerp keeps opposite-sign midpoint stable');
+  Check(TQuatd.Equals(TQuatd.Nlerp(Qd, NegatedQd, 0.5), Qd, 0.000000000001),
+    'TQuatd Nlerp keeps opposite-sign midpoint stable');
+end;
+
+procedure TestInterpolationStaysStableForNearIdenticalEndpoints;
+var
+  StartQf: TQuatf;
+  EndQf: TQuatf;
+  MidSlerpf: TQuatf;
+  MidNlerpf: TQuatf;
+  Axisf: TVec3f;
+  Anglef: Single;
+  StartQd: TQuatd;
+  EndQd: TQuatd;
+  MidSlerpd: TQuatd;
+  MidNlerpd: TQuatd;
+  Axisd: TVec3d;
+  Angled: Double;
+begin
+  StartQf := QuarterTurnZf;
+  EndQf := TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI + 0.0000019));
+  MidSlerpf := TQuatf.Slerp(StartQf, EndQf, Single(0.75));
+  MidNlerpf := TQuatf.Nlerp(StartQf, EndQf, Single(0.75));
+  Check(TQuatf.Equals(MidSlerpf, MidNlerpf, Single(0.000001)),
+    'TQuatf Slerp stays stable for near-identical endpoints');
+  MidSlerpf.ToAxisAngle(Axisf, Anglef);
+  CheckVec3f(0.0, 0.0, 1.0, Axisf, 'TQuatf Slerp near-identical axis');
+  CheckNear(HALF_PI + 0.000001425, Anglef, 0.000001,
+    'TQuatf Slerp near-identical angle');
+
+  StartQd := QuarterTurnZd;
+  EndQd := TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), HALF_PI + 0.0000000000019);
+  MidSlerpd := TQuatd.Slerp(StartQd, EndQd, 0.75);
+  MidNlerpd := TQuatd.Nlerp(StartQd, EndQd, 0.75);
+  Check(TQuatd.Equals(MidSlerpd, MidNlerpd, 0.000000000001),
+    'TQuatd Slerp stays stable for near-identical endpoints');
+  MidSlerpd.ToAxisAngle(Axisd, Angled);
+  CheckVec3d(0.0, 0.0, 1.0, Axisd, 'TQuatd Slerp near-identical axis');
+  CheckNear(HALF_PI + 0.000000000001425, Angled, 0.000000000001,
+    'TQuatd Slerp near-identical angle');
+end;
+
+procedure TestToAxisAngleCanonicalizesOppositeSignRotations;
+var
+  Axisf: TVec3f;
+  Angledf: Single;
+  Axisd: TVec3d;
+  Angledd: Double;
+begin
+  TQuatf.Create(0.0, 0.0, 0.0, -1.0).ToAxisAngle(Axisf, Angledf);
+  CheckVec3f(0.0, 0.0, 1.0, Axisf, 'TQuatf ToAxisAngle canonicalizes negated identity axis');
+  CheckNear(0.0, Angledf, 0.0, 'TQuatf ToAxisAngle canonicalizes negated identity angle');
+
+  TQuatf.Create(0.0, 0.0, -0.7071068, -0.7071068).ToAxisAngle(Axisf, Angledf);
+  CheckVec3f(0.0, 0.0, 1.0, Axisf,
+    'TQuatf ToAxisAngle canonicalizes negated quarter-turn axis');
+  CheckNear(HALF_PI, Angledf, 0.000001,
+    'TQuatf ToAxisAngle canonicalizes negated quarter-turn angle');
+
+  TQuatf.Create(0.0, 0.0, -1.0, 0.0).ToAxisAngle(Axisf, Angledf);
+  CheckVec3f(0.0, 0.0, 1.0, Axisf, 'TQuatf ToAxisAngle canonicalizes half-turn axis');
+  CheckNear(PI_VALUE, Angledf, 0.000001, 'TQuatf ToAxisAngle canonicalizes half-turn angle');
+
+  TQuatf.Create(-1.0, 0.0, 0.0, 0.0).ToAxisAngle(Axisf, Angledf);
+  CheckVec3f(1.0, 0.0, 0.0, Axisf, 'TQuatf ToAxisAngle canonicalizes x half-turn axis');
+  CheckNear(PI_VALUE, Angledf, 0.000001, 'TQuatf ToAxisAngle canonicalizes x half-turn angle');
+
+  TQuatf.Create(0.0, -1.0, 0.0, 0.0).ToAxisAngle(Axisf, Angledf);
+  CheckVec3f(0.0, 1.0, 0.0, Axisf, 'TQuatf ToAxisAngle canonicalizes y half-turn axis');
+  CheckNear(PI_VALUE, Angledf, 0.000001, 'TQuatf ToAxisAngle canonicalizes y half-turn angle');
+
+  TQuatd.Create(0.0, 0.0, 0.0, -1.0).ToAxisAngle(Axisd, Angledd);
+  CheckVec3d(0.0, 0.0, 1.0, Axisd, 'TQuatd ToAxisAngle canonicalizes negated identity axis');
+  CheckNear(0.0, Angledd, 0.0, 'TQuatd ToAxisAngle canonicalizes negated identity angle');
+
+  TQuatd.Create(0.0, 0.0, -0.7071067811865475, -0.7071067811865475).ToAxisAngle(Axisd, Angledd);
+  CheckVec3d(0.0, 0.0, 1.0, Axisd,
+    'TQuatd ToAxisAngle canonicalizes negated quarter-turn axis');
+  CheckNear(HALF_PI, Angledd, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes negated quarter-turn angle');
+
+  TQuatd.Create(0.0, 0.0, -1.0, 0.0).ToAxisAngle(Axisd, Angledd);
+  CheckVec3d(0.0, 0.0, 1.0, Axisd, 'TQuatd ToAxisAngle canonicalizes half-turn axis');
+  CheckNear(PI_VALUE, Angledd, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes half-turn angle');
+
+  TQuatd.Create(-1.0, 0.0, 0.0, 0.0).ToAxisAngle(Axisd, Angledd);
+  CheckVec3d(1.0, 0.0, 0.0, Axisd, 'TQuatd ToAxisAngle canonicalizes x half-turn axis');
+  CheckNear(PI_VALUE, Angledd, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes x half-turn angle');
+
+  TQuatd.Create(0.0, -1.0, 0.0, 0.0).ToAxisAngle(Axisd, Angledd);
+  CheckVec3d(0.0, 1.0, 0.0, Axisd, 'TQuatd ToAxisAngle canonicalizes y half-turn axis');
+  CheckNear(PI_VALUE, Angledd, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes y half-turn angle');
+end;
+
+procedure TestToAxisAngleCanonicalizesMultiTurnInputs;
+var
+  Axisf: TVec3f;
+  Anglef: Single;
+  Axisd: TVec3d;
+  Angled: Double;
+begin
+  TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(3.0 * HALF_PI)).ToAxisAngle(Axisf, Anglef);
+  CheckVec3f(0.0, 0.0, -1.0, Axisf, 'TQuatf ToAxisAngle canonicalizes positive multi-turn axis');
+  CheckNear(HALF_PI, Anglef, 0.000001,
+    'TQuatf ToAxisAngle canonicalizes positive multi-turn angle');
+
+  TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(-3.0 * HALF_PI)).ToAxisAngle(Axisf, Anglef);
+  CheckVec3f(0.0, 0.0, 1.0, Axisf, 'TQuatf ToAxisAngle canonicalizes negative multi-turn axis');
+  CheckNear(HALF_PI, Anglef, 0.000001,
+    'TQuatf ToAxisAngle canonicalizes negative multi-turn angle');
+
+  TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), 3.0 * HALF_PI).ToAxisAngle(Axisd, Angled);
+  CheckVec3d(0.0, 0.0, -1.0, Axisd, 'TQuatd ToAxisAngle canonicalizes positive multi-turn axis');
+  CheckNear(HALF_PI, Angled, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes positive multi-turn angle');
+
+  TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), -3.0 * HALF_PI).ToAxisAngle(Axisd, Angled);
+  CheckVec3d(0.0, 0.0, 1.0, Axisd, 'TQuatd ToAxisAngle canonicalizes negative multi-turn axis');
+  CheckNear(HALF_PI, Angled, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes negative multi-turn angle');
+end;
+
+procedure TestToAxisAngleCanonicalizesFromAxisAngleHalfTurns;
+var
+  Axisf: TVec3f;
+  Anglef: Single;
+  Axisd: TVec3d;
+  Angled: Double;
+begin
+  TQuatf.FromAxisAngle(TVec3f.Create(0.0, -1.0, 0.0), Single(PI_VALUE)).ToAxisAngle(Axisf, Anglef);
+  CheckVec3f(0.0, 1.0, 0.0, Axisf,
+    'TQuatf ToAxisAngle canonicalizes FromAxisAngle negative y half-turn axis');
+  CheckNear(PI_VALUE, Anglef, 0.000001,
+    'TQuatf ToAxisAngle canonicalizes FromAxisAngle negative y half-turn angle');
+
+  TQuatf.FromAxisAngle(TVec3f.Create(1.0, -1.0, 0.0), Single(PI_VALUE)).ToAxisAngle(Axisf, Anglef);
+  CheckVec3f(0.70710678, -0.70710678, 0.0, Axisf,
+    'TQuatf ToAxisAngle canonicalizes mixed-axis half-turn with positive X precedence');
+  CheckNear(PI_VALUE, Anglef, 0.000001,
+    'TQuatf ToAxisAngle canonicalizes mixed-axis half-turn angle');
+
+  TQuatf.FromAxisAngle(TVec3f.Create(0.0, 1.0, -1.0), Single(PI_VALUE)).ToAxisAngle(Axisf, Anglef);
+  CheckVec3f(0.0, 0.70710678, -0.70710678, Axisf,
+    'TQuatf ToAxisAngle canonicalizes mixed-axis half-turn with positive Y precedence');
+  CheckNear(PI_VALUE, Anglef, 0.000001,
+    'TQuatf ToAxisAngle canonicalizes mixed-axis positive Y half-turn angle');
+
+  TQuatd.FromAxisAngle(TVec3d.Create(0.0, -1.0, 0.0), PI_VALUE).ToAxisAngle(Axisd, Angled);
+  CheckVec3d(0.0, 1.0, 0.0, Axisd,
+    'TQuatd ToAxisAngle canonicalizes FromAxisAngle negative y half-turn axis');
+  CheckNear(PI_VALUE, Angled, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes FromAxisAngle negative y half-turn angle');
+
+  TQuatd.FromAxisAngle(TVec3d.Create(1.0, -1.0, 0.0), PI_VALUE).ToAxisAngle(Axisd, Angled);
+  CheckVec3d(0.7071067811865475, -0.7071067811865475, 0.0, Axisd,
+    'TQuatd ToAxisAngle canonicalizes mixed-axis half-turn with positive X precedence');
+  CheckNear(PI_VALUE, Angled, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes mixed-axis half-turn angle');
+
+  TQuatd.FromAxisAngle(TVec3d.Create(0.0, 1.0, -1.0), PI_VALUE).ToAxisAngle(Axisd, Angled);
+  CheckVec3d(0.0, 0.7071067811865475, -0.7071067811865475, Axisd,
+    'TQuatd ToAxisAngle canonicalizes mixed-axis half-turn with positive Y precedence');
+  CheckNear(PI_VALUE, Angled, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes mixed-axis positive Y half-turn angle');
+end;
+
+procedure TestToAxisAngleOverwritesOutParameters;
+var
+  Axisf: TVec3f;
+  Anglef: Single;
+  Axisd: TVec3d;
+  Angled: Double;
+begin
+  Axisf := TVec3f.Create(-11.0, -12.0, -13.0);
+  Anglef := -14.0;
+  TQuatf.Create(0.0, 0.0, 0.0, 0.0).ToAxisAngle(Axisf, Anglef);
+  CheckVec3f(0.0, 0.0, 1.0, Axisf, 'TQuatf ToAxisAngle overwrites fallback axis');
+  CheckNear(0.0, Anglef, 0.0, 'TQuatf ToAxisAngle overwrites fallback angle');
+
+  Axisf := TVec3f.Create(-21.0, -22.0, -23.0);
+  Anglef := -24.0;
+  TQuatf.FromAxisAngle(TVec3f.Create(1.0, 1.0, 0.0), Single(HALF_PI)).ToAxisAngle(Axisf, Anglef);
+  CheckVec3f(0.7071068, 0.7071068, 0.0, Axisf, 'TQuatf ToAxisAngle overwrites ordinary axis');
+  CheckNear(HALF_PI, Anglef, 0.000001, 'TQuatf ToAxisAngle overwrites ordinary angle');
+
+  Axisd := TVec3d.Create(-11.0, -12.0, -13.0);
+  Angled := -14.0;
+  TQuatd.Create(0.0, 0.0, 0.0, 0.0).ToAxisAngle(Axisd, Angled);
+  CheckVec3d(0.0, 0.0, 1.0, Axisd, 'TQuatd ToAxisAngle overwrites fallback axis');
+  CheckNear(0.0, Angled, 0.0, 'TQuatd ToAxisAngle overwrites fallback angle');
+
+  Axisd := TVec3d.Create(-21.0, -22.0, -23.0);
+  Angled := -24.0;
+  TQuatd.FromAxisAngle(TVec3d.Create(1.0, 1.0, 0.0), HALF_PI).ToAxisAngle(Axisd, Angled);
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0, Axisd,
+    'TQuatd ToAxisAngle overwrites ordinary axis');
+  CheckNear(HALF_PI, Angled, 0.000000000001, 'TQuatd ToAxisAngle overwrites ordinary angle');
+end;
+
+procedure TestQuaternionMultiplicationIsNonCommutativeAndRightFirst;
+var
+  Qxf: TQuatf;
+  Qyf: TQuatf;
+  Qxd: TQuatd;
+  Qyd: TQuatd;
+  RawAf: TQuatf;
+  RawBf: TQuatf;
+  RawProductf: TQuatf;
+  RawAd: TQuatd;
+  RawBd: TQuatd;
+  RawProductd: TQuatd;
+begin
+  Qxf := TQuatf.FromAxisAngle(TVec3f.Create(1.0, 0.0, 0.0), Single(HALF_PI));
+  Qyf := TQuatf.FromAxisAngle(TVec3f.Create(0.0, 1.0, 0.0), Single(HALF_PI));
+  CheckVec3f(1.0, 0.0, 0.0,
+    (Qxf * Qyf).Rotate(TVec3f.Create(0.0, 0.0, 1.0)),
+    'TQuatf multiplication applies right operand first');
+  CheckVec3f(0.0, -1.0, 0.0,
+    (Qyf * Qxf).Rotate(TVec3f.Create(0.0, 0.0, 1.0)),
+    'TQuatf multiplication is non-commutative');
+
+  Qxd := TQuatd.FromAxisAngle(TVec3d.Create(1.0, 0.0, 0.0), HALF_PI);
+  Qyd := TQuatd.FromAxisAngle(TVec3d.Create(0.0, 1.0, 0.0), HALF_PI);
+  CheckVec3d(1.0, 0.0, 0.0,
+    (Qxd * Qyd).Rotate(TVec3d.Create(0.0, 0.0, 1.0)),
+    'TQuatd multiplication applies right operand first');
+  CheckVec3d(0.0, -1.0, 0.0,
+    (Qyd * Qxd).Rotate(TVec3d.Create(0.0, 0.0, 1.0)),
+    'TQuatd multiplication is non-commutative');
+
+  RawAf := TQuatf.Create(1.0, 2.0, 3.0, 4.0);
+  RawBf := TQuatf.Create(5.0, 6.0, 7.0, 8.0);
+  RawProductf := RawAf * RawBf;
+  CheckQuatf(24.0, 48.0, 48.0, -6.0, RawProductf,
+    'TQuatf operator multiply is raw Hamilton product without normalization');
+  CheckNear(5220.0, QuatLengthSqr(RawProductf), 0.0,
+    'TQuatf raw Hamilton product keeps non-unit length');
+
+  RawAd := TQuatd.Create(1.0, 2.0, 3.0, 4.0);
+  RawBd := TQuatd.Create(5.0, 6.0, 7.0, 8.0);
+  RawProductd := RawAd * RawBd;
+  CheckQuatd(24.0, 48.0, 48.0, -6.0, RawProductd,
+    'TQuatd operator multiply is raw Hamilton product without normalization');
+  CheckNear(5220.0, QuatLengthSqr(RawProductd), 0.0,
+    'TQuatd raw Hamilton product keeps non-unit length');
+end;
+
+procedure TestQuaternionEqualsNonFiniteComparisonContracts;
+var
+  Qf: TQuatf;
+  Qd: TQuatd;
+begin
+  Qf := TQuatf.Identity;
+  Qf.X := SingleNaN;
+  Check(not TQuatf.Equals(Qf, Qf, Single(0.0)), 'TQuatf Equals rejects NaN components');
+  Qf.X := SingleInfinity;
+  Check(TQuatf.Equals(Qf, Qf, Single(0.0)), 'TQuatf Equals accepts matching infinity');
+  Check(not TQuatf.Equals(Qf, TQuatf.Identity, Single(0.0)), 'TQuatf Equals rejects finite vs infinity');
+  Check(not TQuatf.Equals(TQuatf.Identity, TQuatf.Identity, SingleNaN), 'TQuatf Equals rejects NaN epsilon');
+  Check(not TQuatf.Equals(TQuatf.Identity, TQuatf.Identity, SingleNegativeInfinity),
+    'TQuatf Equals rejects negative infinite epsilon');
+
+  Qd := TQuatd.Identity;
+  Qd.X := DoubleNaN;
+  Check(not TQuatd.Equals(Qd, Qd, 0.0), 'TQuatd Equals rejects NaN components');
+  Qd.X := DoubleNegativeInfinity;
+  Check(TQuatd.Equals(Qd, Qd, 0.0), 'TQuatd Equals accepts matching infinity');
+  Check(not TQuatd.Equals(Qd, TQuatd.Identity, 0.0), 'TQuatd Equals rejects finite vs infinity');
+  Check(not TQuatd.Equals(TQuatd.Identity, TQuatd.Identity, DoubleNaN), 'TQuatd Equals rejects NaN epsilon');
+  Check(not TQuatd.Equals(TQuatd.Identity, TQuatd.Identity, DoubleNegativeInfinity),
+    'TQuatd Equals rejects negative infinite epsilon');
 end;
 
 begin
-  GPass := 0;
-  GFail := 0;
-  WriteLn('=== nextpas.core.math.quat tests ===');
-  WriteLn;
-
-  TestQuatfCreateAndIdentity;
-  TestQuatfNormalize;
-  TestQuatfConjugate;
-  TestQuatfFromAxisAngle;
-  TestQuatfRotateVec;
-  TestQuatfToMat4;
-  TestQuatdCreateAndIdentity;
-
-  WriteLn;
-  WriteLn('=== Results: ', GPass, ' passed, ', GFail, ' failed ===');
-  if GFail > 0 then Halt(1);
+  T := TTestRunner.Create('nextpas.core.math.quat');
+  T.Run('TQuatf contracts', @TestQuatfContracts);
+  T.Run('TQuatd contracts', @TestQuatdContracts);
+  T.Run('quaternion Data aliases write through', @TestQuaternionDataAliasesWriteThrough);
+  T.Run('quaternion Data aliases preserve signed-zero bits',
+    @TestQuaternionDataAliasesPreserveSignedZeroBits);
+  T.Run('quaternion Data alias ABI offsets', @TestQuaternionDataAliasOffsets);
+  T.Run('FromAxisAngle rejects non-finite inputs', @TestFromAxisAngleRejectsNonFiniteInputs);
+  T.Run('FromAxisAngle normalizes huge finite axis', @TestFromAxisAngleNormalizesHugeFiniteAxis);
+  T.Run('huge finite normalize', @TestHugeFiniteNormalize);
+  T.Run('max finite normalize', @TestMaxFiniteNormalize);
+  T.Run('Interpolation rejects non-finite t', @TestInterpolationRejectsNonFiniteT);
+  T.Run('raw quaternion non-finite inputs fail fast', @TestRawQuaternionNonFiniteInputsFailFast);
+  T.Run('Rotate rejects non-finite vector inputs', @TestRotateRejectsNonFiniteVectorInputs);
+  T.Run('Interpolation allows finite extrapolation', @TestInterpolationAllowsFiniteExtrapolation);
+  T.Run('Interpolation endpoint contracts', @TestInterpolationEndpointContracts);
+  T.Run('Interpolation follows shortest path for opposite-sign start',
+    @TestInterpolationFollowsShortestPathForOppositeSignStart);
+  T.Run('Interpolation follows shortest path for opposite-sign end',
+    @TestInterpolationFollowsShortestPathForOppositeSignEnd);
+  T.Run('Interpolation stays stable for equivalent endpoints',
+    @TestInterpolationStaysStableForEquivalentEndpoints);
+  T.Run('Interpolation stays stable for near-identical endpoints',
+    @TestInterpolationStaysStableForNearIdenticalEndpoints);
+  T.Run('ToAxisAngle canonicalizes opposite-sign rotations',
+    @TestToAxisAngleCanonicalizesOppositeSignRotations);
+  T.Run('ToAxisAngle canonicalizes multi-turn inputs',
+    @TestToAxisAngleCanonicalizesMultiTurnInputs);
+  T.Run('ToAxisAngle canonicalizes FromAxisAngle half-turns',
+    @TestToAxisAngleCanonicalizesFromAxisAngleHalfTurns);
+  T.Run('ToAxisAngle overwrites out parameters',
+    @TestToAxisAngleOverwritesOutParameters);
+  T.Run('Quaternion multiplication is non-commutative and right-first',
+    @TestQuaternionMultiplicationIsNonCommutativeAndRightFirst);
+  T.Run('quaternion Equals non-finite comparison contracts',
+    @TestQuaternionEqualsNonFiniteComparisonContracts);
+  T.Summary;
 end.
