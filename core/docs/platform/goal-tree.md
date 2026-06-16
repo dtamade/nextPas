@@ -78,6 +78,24 @@ Not covered by Wine runtime smoke: platform.signal, platform.console, platform.a
 Wine-unsupported; console relies on Wine pseudo-TTY behavior not suitable for
 evidence; args uses FPC RTL ParamStr which is cross-platform).
 
+## Windows Real Runtime Evidence (Wine-Not-Sufficient)
+
+The following modules have additional Real Windows runtime tests that go beyond
+Wine coverage. These tests validate behaviors that Wine does not support (IOCP
+completion, Winsock-specific behaviors, AcceptEx/ConnectEx).
+
+| Module | Gate path | Tests | Win64 | Known gaps |
+| --- | --- | --- | :-: | --- |
+| platform.io | `tests/nextpas.core.platform/test_platform_io_windows_real/` | 10 | ✅ | IOCP/AcceptEx/ConnectEx not tested (Wine uses WSAPoll) |
+| platform.socket | `tests/nextpas.core.platform.socket/test_platform_socket_windows_real/` | 16 | ✅ | AcceptEx/ConnectEx/TransmitFile not tested |
+
+These tests are:
+- Cross-compiled to Win64 PE and deployed to real Windows VM via SCP+SSH
+- Use `nextpas.core.testing` framework (TTestRunner)
+- Include `-gh` heaptrc for memory leak detection
+- Have `try/finally` resource protection for all socket/poller handles
+- Use port 0 + `getsockname` to avoid port conflicts
+
 ## Readiness And Completion Boundaries
 
 The Windows readiness poller remains separate from IOCP completion. The
@@ -93,7 +111,7 @@ and forced Windows compile gates.
 | Milestone | Goal | Current truth | Next proof |
 | --- | --- | --- | --- |
 | P1 Host ABI inventory | Host constants, records, handles, raw declarations | ✅ complete | keep gap matrix current |
-| P2 Feature facades | Portable APIs for time, sync, thread, files, io, process, mmap, env, random, path, fs | ✅ 14/14 focused-runtime on Windows | expand consumer coverage |
+| P2 Feature facades | Portable APIs for time, sync, thread, files, io, process, mmap, env, random, path, fs | ✅ 14/14 focused-runtime on Windows; 26 additional Windows Real tests (io 10 + socket 16) | expand consumer coverage |
 | P3 Readiness lane | `platform_poller_*`, wake, userdata, empty-interest, net readiness consumers | Linux runtime; Windows source/compile; Wine CI matrix ✅ | real-Windows CI runner |
 | P4 Completion lane | IOCP/proactor ownership and async loop completion consumers | ✅ focused-runtime (AsyncSend/Recv/Accept/Connect + close/timeout drain) | promote to ci-matrix |
 | P5 Tier 2 targets | Windows aarch64, Linux riscv64/arm32, FreeBSD/Android | riscv64/aarch64/arm32: 13-module compile gate via cross CI matrix; runtime smoke deferred | FreeBSD/Android compile gate; QEMU runtime smoke |
