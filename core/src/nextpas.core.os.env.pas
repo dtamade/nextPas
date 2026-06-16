@@ -1,5 +1,14 @@
 unit nextpas.core.os.env;
 
+{**
+ * nextpas.core.os.env — Environment variable access
+ *
+ * @note Thread safety: this module is NOT thread-safe, consistent with the
+ *       C standard library (POSIX.1 does not require getenv/setenv to be
+ *       thread-safe). Callers that access environment variables from multiple
+ *       threads must provide their own synchronization.
+ *}
+
 {$I nextpas.core.settings.inc}
 
 interface
