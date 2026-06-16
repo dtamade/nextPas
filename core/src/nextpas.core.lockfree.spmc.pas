@@ -23,7 +23,13 @@ type
     FCapacity: PtrUInt;
     FMask: PtrUInt;
     FEnqueuePos: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadEnqueue: TCacheLinePad;
+    {$POP}
     FDequeuePos: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadDequeue: TCacheLinePad;
+    {$POP}
     FSpaceEpoch: Int32;
     FSpaceWaiters: Int32;
     FDataEpoch: Int32;

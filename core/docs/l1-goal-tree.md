@@ -1,6 +1,6 @@
 # L0 atomic/lockfree 目标树
 
-> 最后更新: 2026-06-16 | 真相口径: source-contract / focused runtime / forced compile / CI matrix
+> 所属: L0 内核层 | 更新: 2026-06-16
 
 ## 北极星
 
@@ -8,16 +8,6 @@
 性能对标: Go channel + Rust crossbeam
 
 ---
-
-| 模块 | 职责 | 状态 |
-|------|------|------|
-| `base` | 核心类型、异常、TByteSpan、契约 | ✅ 完成 |
-| `errors` | 异常层级 (ENextPasError 体系) | ✅ 完成 |
-| `platform` | OS API 封装 (posix/linux/darwin/windows) | ✅ 完成 (Tier 1 全绿) |
-| `mem` | 内存管理 (IAllocator/Pool/Arena/StackPool) | ✅ 完成 |
-| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | ✅ 完成 |
-| `math` | 数学函数 (Min/Max/Clamp/Abs/Pow/Trig) | 🔶 M8 partial: source-contract + Linux focused runtime/heaptrc; Win64 forced compile; macOS/Windows host runtime and CI matrix pending |
-| `simd` | SIMD 抽象 (SSE2/AVX2/NEON, 统一宽度 API) | ✅ 完成 |
 
 ## 目标分解
 
@@ -34,18 +24,16 @@ Treiber Stack, WorkStealing Deque | ABA stress 通过
 EBR (Epoch-Based Reclamation) | Hazard Pointer ⏳ 待定
 
 ### C4: 基准对照 🚧 进行中
-- [ ] 自动化对比脚本
-- [ ] 补全 SPMC/EBR 基准
-- [ ] Go/Rust/C++ 实战对比
-- [ ] 性能报告
+- [x] Pascal/Go/C++ 基准运行
+- [ ] Rust 基准 (crossbeam)
+- [ ] 完整对比报告
 
 ### C5: SIMD 加速 📋 规划中
-- [ ] batch 批量操作 SSE/AVX
-- [ ] segment 初始化 SIMD 清零
+- [ ] Codex 已否决通用 SIMD batch 方案
+- [ ] 替代: SPSC 连续段 Move 优化
 
 ### C6: 文档体系 📋 规划中
 - [ ] API 参考手册
-- [ ] 性能调优指南
 - [ ] 选型决策树
 
 ---
@@ -64,6 +52,6 @@ EBR (Epoch-Based Reclamation) | Hazard Pointer ⏳ 待定
 | 数据结构 | 当前 (M ops/s) | 目标 |
 |----------|---------------|------|
 | SPSC 1P+1C | 4.4 | 6.0+ |
-| MPMC 2P+2C | 1.2 | 2.0+ |
+| MPMC 2P+2C | 1.29 | 2.0+ |
 | SegQueue 2P+2C | 1.5 | 2.5+ |
 | SPMC 1P+2C | 2.6 | 4.0+ |

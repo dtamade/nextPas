@@ -7,10 +7,12 @@ interface
 uses
   nextpas.core.errors,
   nextpas.core.atomic,
+  nextpas.core.lockfree.base,
   nextpas.core.lockfree.ebr;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = 32;
+  SEGQUEUE_FREE_POOL_LIMIT = 4;
 
 type
   generic TSegQueueImpl<T> = class
@@ -30,10 +32,18 @@ type
     FHead: PSegment;
     FTail: PSegment;
     FEnqueuePos: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadEnqueue: TCacheLinePad;
+    {$POP}
     FDequeuePos: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadDequeue: TCacheLinePad;
+    {$POP}
+    FFreePool: PSegment;
+    FFreePoolCount: Integer;
     FEbr: TEbrDomain;
     class procedure SegQueueReclaimSegment(const AData: Pointer; const AUserData: Pointer); static;
-    class function AllocSegment(const AStartIndex: Int64): PSegment; static;
+    function AllocSegment(const AStartIndex: Int64): PSegment;
   public
     {** @desc 创建无界 MPSC 队列（EBR 回收段） }
     constructor Create;
@@ -53,10 +63,22 @@ type
 
 implementation
 
-class function TSegQueueImpl.AllocSegment(const AStartIndex: Int64): PSegment;
+function TSegQueueImpl.AllocSegment(const AStartIndex: Int64): PSegment;
 var
   LI: Integer;
 begin
+  Result := nil;
+  if (FFreePool <> nil) and (FFreePoolCount > 0) then
+  begin
+    Result := FFreePool;
+    FFreePool := Result^.Next;
+    Dec(FFreePoolCount);
+    Result^.Next := nil;
+    Result^.StartIndex := AStartIndex;
+    for LI := 0 to SEGQUEUE_SEGMENT_CAPACITY - 1 do
+      Result^.Slots[LI].Sequence := AStartIndex + LI;
+    Exit;
+  end;
   Result := GetMem(SizeOf(TSegment));
   FillChar(Result^, SizeOf(TSegment), 0);
   Result^.StartIndex := AStartIndex;
@@ -74,6 +96,8 @@ begin
   FTail := FHead;
   FEnqueuePos := 0;
   FDequeuePos := 0;
+  FFreePool := nil;
+  FFreePoolCount := 0;
 end;
 
 destructor TSegQueueImpl.Destroy;
@@ -88,13 +112,32 @@ begin
     FreeMem(LSeg);
     LSeg := LNext;
   end;
+  LSeg := FFreePool;
+  while LSeg <> nil do
+  begin
+    LNext := LSeg^.Next;
+    FreeMem(LSeg);
+    LSeg := LNext;
+  end;
   FEbr.Free;
   inherited;
 end;
 
 class procedure TSegQueueImpl.SegQueueReclaimSegment(const AData: Pointer; const AUserData: Pointer);
+var
+  LSeg: PSegment;
+  LQueue: TSegQueueImpl;
 begin
-  FreeMem(AData);
+  LQueue := TSegQueueImpl(AUserData);
+  LSeg := PSegment(AData);
+  if LQueue.FFreePoolCount < SEGQUEUE_FREE_POOL_LIMIT then
+  begin
+    LSeg^.Next := LQueue.FFreePool;
+    LQueue.FFreePool := LSeg;
+    Inc(LQueue.FFreePoolCount);
+  end
+  else
+    FreeMem(AData);
 end;
 
 procedure TSegQueueImpl.Enqueue(const AValue: T);
@@ -167,7 +210,7 @@ begin
         if AtomicCompareExchangePtr(Pointer(FHead), LOldHead, LNext, moAcqRel) = LOldHead then
         begin
           AtomicCompareExchangePtr(Pointer(FTail), LOldHead, LNext, moRelease);
-          FEbr.Retire(LOldHead, @SegQueueReclaimSegment);
+          FEbr.Retire(LOldHead, @SegQueueReclaimSegment, Self);
           LSeg := LNext;
         end
         else
