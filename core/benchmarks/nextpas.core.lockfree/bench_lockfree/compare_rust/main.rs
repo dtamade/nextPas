@@ -1,142 +1,153 @@
-use std::time::Instant;
-use std::io::Write;
-use std::fs::File;
+use std::collections::VecDeque;
+use std::hint::black_box;
 use std::sync::mpsc;
 use std::sync::{Arc, Condvar, Mutex};
-use crossbeam::queue::{ArrayQueue, SegQueue};
+use std::thread;
+use std::time::{Duration, Instant};
 
-const OPS: u64 = 1_000_000;
-const CAP: usize = 1024;
+const N: usize = 1_000_000;
+const CAPACITY: usize = 1024;
+
+struct BoundedQueue {
+    state: Mutex<VecDeque<u64>>,
+    not_empty: Condvar,
+    not_full: Condvar,
+}
+
+impl BoundedQueue {
+    fn new() -> Self {
+        Self {
+            state: Mutex::new(VecDeque::with_capacity(CAPACITY)),
+            not_empty: Condvar::new(),
+            not_full: Condvar::new(),
+        }
+    }
+
+    fn push(&self, value: u64) {
+        let mut state = self.state.lock().unwrap();
+        while state.len() >= CAPACITY {
+            state = self.not_full.wait(state).unwrap();
+        }
+        state.push_back(value);
+        self.not_empty.notify_one();
+    }
+
+    fn pop(&self) -> u64 {
+        let mut state = self.state.lock().unwrap();
+        loop {
+            if let Some(value) = state.pop_front() {
+                self.not_full.notify_one();
+                return value;
+            }
+            state = self.not_empty.wait(state).unwrap();
+        }
+    }
+}
+
+fn print_result(name: &str, elapsed: Duration, operations: usize) {
+    let elapsed_ns = elapsed.as_nanos().max(1) as f64;
+    let ns_per_op = elapsed_ns / operations as f64;
+    let mops = operations as f64 / (elapsed_ns / 1_000_000_000.0) / 1_000_000.0;
+    println!(
+        "  {:<34} {:>8.2} ms  {:>6.1} M ops/sec  {:>5.1} ns/op",
+        name,
+        elapsed_ns / 1_000_000.0,
+        mops,
+        ns_per_op
+    );
+}
+
+fn bench_std_mpsc_spsc() -> u64 {
+    let start = Instant::now();
+    let (tx, rx) = mpsc::channel::<u64>();
+    let producer = thread::spawn(move || {
+        for value in 1..=(N as u64) {
+            tx.send(value).unwrap();
+        }
+    });
+    let consumer = thread::spawn(move || {
+        let mut sum = 0u64;
+        for _ in 0..N {
+            sum = sum.wrapping_add(rx.recv().unwrap());
+        }
+        sum
+    });
+    producer.join().unwrap();
+    let sum = consumer.join().unwrap();
+    print_result("std::sync::mpsc 1P+1C", start.elapsed(), N);
+    sum
+}
+
+fn bench_bounded_mutex_condvar_mpmc() -> u64 {
+    let start = Instant::now();
+    let queue = Arc::new(BoundedQueue::new());
+    let mut producers = Vec::new();
+    let mut consumers = Vec::new();
+
+    for _ in 0..2 {
+        let queue = queue.clone();
+        producers.push(thread::spawn(move || {
+            for value in 1..=((N / 2) as u64) {
+                queue.push(value);
+            }
+        }));
+    }
+
+    for _ in 0..2 {
+        let queue = queue.clone();
+        consumers.push(thread::spawn(move || {
+            let mut sum = 0u64;
+            for _ in 0..(N / 2) {
+                sum = sum.wrapping_add(queue.pop());
+            }
+            sum
+        }));
+    }
+
+    for producer in producers {
+        producer.join().unwrap();
+    }
+
+    let sum = consumers
+        .into_iter()
+        .map(|consumer| consumer.join().unwrap())
+        .fold(0u64, |acc, value| acc.wrapping_add(value));
+
+    print_result("Mutex+Condvar VecDeque 2P+2C", start.elapsed(), N);
+    sum
+}
+
+fn bench_mutex_vecdeque_single_thread() -> u64 {
+    let queue = Mutex::new(VecDeque::<u64>::with_capacity(CAPACITY));
+    let start = Instant::now();
+    let mut sink = 0u64;
+
+    for value in 1..=(N as u64) {
+        {
+            let mut queue = queue.lock().unwrap();
+            queue.push_back(value);
+            sink = sink.wrapping_add(queue.pop_front().unwrap());
+        }
+    }
+
+    print_result("Mutex<VecDeque> 1T", start.elapsed(), N);
+    sink
+}
 
 fn main() {
-    let mut out = File::create("/tmp/rust_bench_results.txt").unwrap();
-    writeln!(out, "Rust crossbeam queue benchmarks (ops={OPS}, capacity={CAP})").unwrap();
-    writeln!(out, "===========================================================").unwrap();
+    println!("=== Rust std lockfree comparison (1M ops) ===");
+    println!("Platform: {} {}", std::env::consts::OS, std::env::consts::ARCH);
+    println!("Compiler flags: rustc -C opt-level=3 (recommended manual command)");
+    println!("Input size: OPS=1000000; capacity=1024; scenarios=std::sync::mpsc 1P+1C, Mutex+Condvar VecDeque 2P+2C, Mutex<VecDeque> 1T");
+    println!("Baselines: Rust std synchronization primitives only; manual comparison source, not auto-run by Pascal benchmark");
+    println!();
 
-    // --- SPSC Try* single-threaded ---
-    {
-        let q = ArrayQueue::<u64>::new(CAP);
-        let start = Instant::now();
-        for i in 0..OPS {
-            while q.push(i).is_err() {}
-            let _ = q.pop().unwrap();
-        }
-        let elapsed = start.elapsed().as_secs_f64();
-        let ops_sec = OPS as f64 / elapsed / 1_000_000.0;
-        writeln!(out, "SPSC ArrayQueue Try* 1T: {ops_sec:.1} M ops/sec  ({:.0} ns/op)", elapsed * 1e9 / OPS as f64).unwrap();
-    }
+    let mut sink = bench_std_mpsc_spsc();
+    sink = sink.wrapping_add(bench_bounded_mutex_condvar_mpmc());
+    sink = sink.wrapping_add(bench_mutex_vecdeque_single_thread());
+    black_box(sink);
 
-    // --- SPSC 1P+1C threaded ---
-    {
-        let q = std::sync::Arc::new(ArrayQueue::<u64>::new(CAP));
-        let q_send = q.clone();
-        let q_recv = q.clone();
-        let start = Instant::now();
-        let sender = std::thread::spawn(move || {
-            for i in 0..OPS {
-                while q_send.push(i).is_err() {}
-            }
-        });
-        let receiver = std::thread::spawn(move || {
-            let mut sum: u64 = 0;
-            for _ in 0..OPS {
-                loop {
-                    if let Some(v) = q_recv.pop() {
-                        sum = sum.wrapping_add(v);
-                        break;
-                    }
-                }
-            }
-            sum
-        });
-        sender.join().unwrap();
-        let _sum = receiver.join().unwrap();
-        let elapsed = start.elapsed().as_secs_f64();
-        let ops_sec = OPS as f64 / elapsed / 1_000_000.0;
-        writeln!(out, "SPSC ArrayQueue 1P+1C:   {ops_sec:.1} M ops/sec  ({:.0} ns/op)", elapsed * 1e9 / OPS as f64).unwrap();
-    }
-
-    // --- MPMC 2P+2C threaded ---
-    {
-        let q = std::sync::Arc::new(ArrayQueue::<u64>::new(CAP));
-        let q_send1 = q.clone();
-        let q_send2 = q.clone();
-        let q_recv1 = q.clone();
-        let q_recv2 = q.clone();
-        let start = Instant::now();
-        let s1 = std::thread::spawn(move || {
-            for i in 0..OPS/2 {
-                while q_send1.push(i).is_err() {}
-            }
-        });
-        let s2 = std::thread::spawn(move || {
-            for i in 0..OPS/2 {
-                while q_send2.push(i + OPS).is_err() {}
-            }
-        });
-        let r1 = std::thread::spawn(move || {
-            let mut sum: u64 = 0;
-            for _ in 0..OPS/2 {
-                loop {
-                    if let Some(v) = q_recv1.pop() {
-                        sum = sum.wrapping_add(v);
-                        break;
-                    }
-                }
-            }
-            sum
-        });
-        let r2 = std::thread::spawn(move || {
-            let mut sum: u64 = 0;
-            for _ in 0..OPS/2 {
-                loop {
-                    if let Some(v) = q_recv2.pop() {
-                        sum = sum.wrapping_add(v);
-                        break;
-                    }
-                }
-            }
-            sum
-        });
-        s1.join().unwrap();
-        s2.join().unwrap();
-        r1.join().unwrap();
-        r2.join().unwrap();
-        let elapsed = start.elapsed().as_secs_f64();
-        let ops_sec = OPS as f64 / elapsed / 1_000_000.0;
-        writeln!(out, "MPMC ArrayQueue 2P+2C:   {ops_sec:.1} M ops/sec  ({:.0} ns/op)", elapsed * 1e9 / OPS as f64).unwrap();
-    }
-
-    // --- SegQueue (unbounded MPSC) ---
-    {
-        let q = std::sync::Arc::new(SegQueue::<u64>::new());
-        let q_send = q.clone();
-        let q_recv = q.clone();
-        let start = Instant::now();
-        let sender = std::thread::spawn(move || {
-            for i in 0..OPS {
-                q_send.push(i);
-            }
-        });
-        let receiver = std::thread::spawn(move || {
-            let mut sum: u64 = 0;
-            for _ in 0..OPS {
-                loop {
-                    if let Some(v) = q_recv.pop() {
-                        sum = sum.wrapping_add(v);
-                        break;
-                    }
-                }
-            }
-            sum
-        });
-        sender.join().unwrap();
-        let _sum = receiver.join().unwrap();
-        let elapsed = start.elapsed().as_secs_f64();
-        let ops_sec = OPS as f64 / elapsed / 1_000_000.0;
-        writeln!(out, "SegQueue unbounded 1P+1C: {ops_sec:.1} M ops/sec  ({:.0} ns/op)", elapsed * 1e9 / OPS as f64).unwrap();
-    }
-
-    writeln!(out, "===========================================================").unwrap();
-    writeln!(out, "Done.").unwrap();
+    println!();
+    println!("Sink: {}", sink);
+    println!("Done.");
 }
