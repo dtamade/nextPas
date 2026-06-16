@@ -50,10 +50,13 @@ function ASCIIBytesToString(const AData: TBytes): string;
 function StringToASCIIBytes(const AStr: string): TBytes;
 function BigEndianUnicodeBytesToString(const AData: TBytes): string;
 
+function SameText(const A, B: string): Boolean; inline;
+
 implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.text.compare,
   nextpas.core.text.format,
   nextpas.core.text.number,
   nextpas.core.text.utils;
@@ -368,6 +371,11 @@ begin
   for I := 0 to LCount - 1 do
     LWChars[I] := WideChar((UInt16(AData[I * 2]) shl 8) or AData[I * 2 + 1]);
   SetString(Result, PWideChar(LWChars), LCount);
+end;
+
+function SameText(const A, B: string): Boolean;
+begin
+  Result := nextpas.core.text.compare.SameText(A, B);
 end;
 
 end.

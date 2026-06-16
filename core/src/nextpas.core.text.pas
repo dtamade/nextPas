@@ -363,7 +363,7 @@ end;
 
 function SameText(const A, B: string): Boolean;
 begin
-  Result := nextpas.core.text.conv.SameText(A, B);
+  Result := nextpas.core.text.compare.SameText(A, B);
 end;
 
 end.
