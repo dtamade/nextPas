@@ -3475,6 +3475,9 @@ begin
   LMpscSource := ReadUtf8TextFile(MpscSourcePath);
   LDequeSource := ReadUtf8TextFile(DequeSourcePath);
   LWaitSource := ReadUtf8TextFile(WaitSourcePath);
+  LChannelSource := ReadUtf8TextFile(ChannelSourcePath);
+  LHashMapSource := ReadUtf8TextFile(HashMapSourcePath);
+  LHazardSource := ReadUtf8TextFile(HazardSourcePath);
   LBenchMakefile := ReadUtf8TextFile(BenchMakefilePath);
   LBenchSource := ReadUtf8TextFile(BenchSourcePath);
   LRustCompareSource := ReadUtf8TextFile(BenchRustComparePath);
