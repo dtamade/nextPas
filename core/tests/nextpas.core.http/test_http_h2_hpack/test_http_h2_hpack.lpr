@@ -62,6 +62,21 @@ begin
   SetString(Result, ASpan.Ptr, ASpan.Len);
 end;
 
+procedure CheckDecoderRejectsBlock(const ABlock: AnsiString;
+  const ATableSize: UInt32; const AMessage: string);
+var
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..7] of THPackHeader;
+  LViews: array[0..7] of THPackHeaderView;
+begin
+  LDecoder.Init(ATableSize);
+  Check(not LDecoder.Decode(ABlock, LHeaders),
+    AMessage + ' (Decode)');
+  LDecoder.Init(ATableSize);
+  Check(not LDecoder.DecodeView(ABlock, LViews),
+    AMessage + ' (DecodeView)');
+end;
+
 { ---------- Roundtrip tests ---------- }
 
 procedure TestSingleByteRoundtrips;
@@ -317,6 +332,25 @@ begin
     'Dynamic-table value should match');
 end;
 
+procedure TestRejectsDynamicTableSizeUpdateAfterHeaderRepresentation;
+begin
+  CheckDecoderRejectsBlock(AnsiString(#0#3'foo'#3'bar'#$20),
+    HPACK_DEFAULT_DYNAMIC_TABLE_SIZE,
+    'Dynamic table size update after header representation must be rejected');
+end;
+
+procedure TestRejectsDynamicTableSizeUpdateAboveMax;
+begin
+  CheckDecoderRejectsBlock(AnsiString(#$3F#$2A), 32,
+    'Dynamic table size update above negotiated maximum must be rejected');
+end;
+
+procedure TestRejectsDynamicTableSizeUpdateUInt32Overflow;
+begin
+  CheckDecoderRejectsBlock(AnsiString(#$3F#$80#$80#$80#$80#$10), High(UInt32),
+    'Dynamic table size update integer overflow must be rejected');
+end;
+
 begin
   with TTestRunner.Create('nextpas.core.http.impl.h2.hpack') do
   begin
@@ -335,6 +369,12 @@ begin
     Run('DecodeView roundtrip', @TestDecodeViewRoundtrip);
     Run('DecodeView raw inline name/value', @TestDecodeViewRawInlineNameValue);
     Run('DecodeView dynamic table reuse', @TestDecodeViewDynamicTableReuse);
+    Run('Reject dynamic table size update after header representation',
+      @TestRejectsDynamicTableSizeUpdateAfterHeaderRepresentation);
+    Run('Reject dynamic table size update above negotiated max',
+      @TestRejectsDynamicTableSizeUpdateAboveMax);
+    Run('Reject dynamic table size update UInt32 overflow',
+      @TestRejectsDynamicTableSizeUpdateUInt32Overflow);
 
     Summary;
   end;
